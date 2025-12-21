@@ -180,6 +180,7 @@ class MacroEditGui {
         MySoftData.MacroEditGui := this
         this.InitGuiMenu()
         this.Init(CommandStr, ShowSaveBtn)
+        this.MacroTreeViewCon.Focus()
     }
 
     AddGui() {
@@ -357,6 +358,9 @@ class MacroEditGui {
         this.SaveBtnCtrl.OnEvent("Click", (*) => this.OnSaveBtnClick())
 
         MyGui.Show(Format("w{} h{}", 920, 570))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
+
+        OnMessage(0x100, this.OnWM_KEYDOWN.Bind(this))     ; 重新注册
     }
 
     InitGuiMenu() {
@@ -446,6 +450,7 @@ class MacroEditGui {
 
         this.SureBtnAction := ""
         this.Gui.Hide()
+        OnMessage(0x100, this.OnWM_KEYDOWN.Bind(this), 0)  ; 移除注册
 
         action := this.SaveBtnAction
         action()
@@ -457,7 +462,15 @@ class MacroEditGui {
         macroStr := GetLangMacro(macroStr, 2)
         action := this.SureBtnAction
         action(macroStr)
+        OnMessage(0x100, this.OnWM_KEYDOWN.Bind(this), 0)  ; 移除注册
 
+        this.SureBtnAction := ""
+        this.Gui.Hide()
+        this.SureFocusCon.Focus()
+    }
+
+    OnGuiClose(*) {
+        OnMessage(0x100, this.OnWM_KEYDOWN.Bind(this), 0)  ; 移除注册
         this.SureBtnAction := ""
         this.Gui.Hide()
         this.SureFocusCon.Focus()
@@ -872,6 +885,7 @@ class MacroEditGui {
         }
         MySoftData.RecordToggleCon := this.RecordMacroCon
         MySoftData.MacroEditGui := this
+        this.MacroTreeViewCon.Focus()
     }
 
     ;添加指令
@@ -1133,4 +1147,28 @@ class MacroEditGui {
         }
         return ItemNumber
     }
+
+    OnWM_KEYDOWN(wParam, lParam, msg, hwnd) {
+        ; VK_DELETE = 0x2E (46)
+        if (wParam = 46) {
+            ; 确保GUI和TreeView控件都存在
+            if (this.Gui && this.MacroTreeViewCon) {
+                ; 检查窗口是否激活
+                if (WinActive("ahk_id " this.Gui.hwnd)) {
+                    ; 获取当前焦点控件
+                    focusedHwnd := DllCall("GetFocus", "Ptr")
+                    ; 只有当焦点在 TreeView 上时才处理
+                    if (focusedHwnd = this.MacroTreeViewCon.hwnd) {
+                        selectedItem := this.MacroTreeViewCon.GetSelection()
+                        if (selectedItem != 0) {
+                            this.CurItemID := selectedItem
+                            this.OnDeleteCmd()
+                            return 0  ; 表示消息已被处理
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
