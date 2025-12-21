@@ -1,0 +1,63 @@
+name: Run progress bar batch tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["add-progressbar-tests-workflow", "main"]
+
+jobs:
+  run-tests:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Chocolatey (if missing)
+        shell: powershell
+        run: |
+          if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+            Set-ExecutionPolicy Bypass -Scope Process -Force
+            iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+          }
+
+      - name: Install AutoHotkey (try portable v2, fallback to autohotkey)
+        shell: powershell
+        run: |
+          choco install autohotkey.portable -y -y || choco install autohotkey -y || choco install autohotkey.v2 -y || true
+          Write-Output "Installed packages (if available)"
+
+      - name: Verify AutoHotkey presence
+        shell: powershell
+        run: |
+          if (Get-Command AutoHotkey.exe -ErrorAction SilentlyContinue) {
+            & AutoHotkey.exe /?
+          } elseif (Get-Command AutoHotkey64.exe -ErrorAction SilentlyContinue) {
+            & AutoHotkey64.exe /?
+          } else {
+            Write-Error 'AutoHotkey not found after install steps'
+            exit 1
+          }
+
+      - name: Run Named Value Batch Test
+        env:
+          SAVE_DEBUG: true
+        shell: powershell
+        run: |
+          $exe = $null
+          if (Get-Command AutoHotkey.exe -ErrorAction SilentlyContinue) { $exe = (Get-Command AutoHotkey.exe).Source }
+          elseif (Get-Command AutoHotkey64.exe -ErrorAction SilentlyContinue) { $exe = (Get-Command AutoHotkey64.exe).Source }
+          else { Write-Error 'AutoHotkey executable not found'; exit 1 }
+
+          Write-Output "Using AutoHotkey: $exe"
+          & $exe "Test\RunNamedValueBatchTest.ahk"
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: progressbar-test-results
+          path: |
+            Test/NamedValueTestResults.csv
+            Test/NamedValueTestSummary.txt
+            Test/debug/**
+          retention-days: 7
