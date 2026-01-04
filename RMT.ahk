@@ -60,6 +60,25 @@ global ToolCheckInfo := ToolCheck()
 global IniFile := A_WorkingDir "\Setting\MainSettings.ini"
 global LangDir := A_WorkingDir "\Lang"
 LoadMainSetting()       ;加载配置
+global IsMinStart := false
+
+if (A_Args.Length > 0) {
+    loop A_Args.Length {
+        arg := A_Args[A_Index]
+        if ((arg = "/load" || arg = "-load") && A_Index < A_Args.Length) {
+            targetConfigName := A_Args[A_Index + 1]
+            targetPath := A_WorkingDir "\Setting\" targetConfigName
+            if (DirExist(targetPath)) {
+                MySoftData.CurSettingName := targetConfigName
+            } else {
+                MsgBox("启动参数错误：`n找不到名为 [" targetConfigName "] 的配置。`n`n软件将加载默认配置启动。", "RMT 启动提示", 48)
+            }
+        }
+        if (arg = "/min" || arg = "-min") {
+            IsMinStart := true
+        }
+    }
+}
 
 global MyTriggerKeyGui := TriggerKeyGui()
 global MyTriggerStrGui := TriggerStrGui()
