@@ -31,6 +31,9 @@ OnOpen() {
         IniWrite(true, IniFile, IniSection, "AgreeAgreement")
     }
 
+    if (IsSet(IsMinStart) && IsMinStart)
+        return
+
     uptimeMs := DllCall("GetTickCount64", "Int64")
     if (uptimeMs <= 120 * 1000 && IsBootStart() && !MySoftData.IsReload)
         return
@@ -974,3 +977,4 @@ CustomTrayMenu() {
     A_TrayMenu.Default := GetLang("显示窗口")
     TraySetIcon(, , true)
 }
+
