@@ -52,7 +52,7 @@
         dllDir := A_ScriptDir "\..\Plugins\OpenCV"
         ; 使用 SetDllDirectory 将 dllDir 添加到 DLL 搜索路径中
         DllCall("SetDllDirectory", "Str", dllDir)
-    
+
         DllCall('LoadLibrary', 'str', OpenCvPath, "Ptr")
         DllCall('LoadLibrary', 'str', IBPath)
     }
@@ -98,10 +98,10 @@
     }
 
     OnWorkStopMacro(wParam, lParam, msg, hwnd) {
-        loop MySoftData.TableInfo.Length {
-            tableItem := MySoftData.TableInfo[A_Index]
-            KillSingleTableMacro(tableItem)
-        }
+        tableIndex := wParam
+        itemIndex := lParam
+        tableItem := MySoftData.TableInfo[tableIndex]
+        KillTableItemMacro(tableItem, itemIndex)
     }
 
     OnExit(wParam, lParam, msg, hwnd) {

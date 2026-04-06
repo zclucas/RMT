@@ -106,7 +106,7 @@ OnKillAllMacro(*) {
             WorkerIndex := tableItem.IsWorkIndexArr[index]
             if (WorkerIndex != 0) {
                 workPath := MyWorkPool.GetWorkPath(WorkerIndex)
-                MyWorkPool.PostMessage(WM_STOP_MACRO, workPath, 0, 0)
+                MyWorkPool.PostMessage(WM_STOP_MACRO, workPath, tableItem.Index, index)
             }
         }
     }

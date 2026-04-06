@@ -326,7 +326,7 @@ class TriggerKeyInfo {
                 WorkerIndex := tableItem.IsWorkIndexArr[this.itemIndex]
                 if (WorkerIndex != 0) {
                     workPath := MyWorkPool.GetWorkPath(WorkerIndex)
-                    MyWorkPool.PostMessage(WM_STOP_MACRO, workPath, 0, 0)
+                    MyWorkPool.PostMessage(WM_STOP_MACRO, workPath, this.tableIndex, this.itemIndex)
                     return
                 }
                 KillTableItemMacro(tableItem, this.itemIndex)

@@ -158,8 +158,9 @@ SplitMacro(macroStr) {
     resultArr := []
 
     for value in cmdArr {
-        if (value != "")
-            resultArr.Push(value)
+        curCmd := Trim(value)
+        if (curCmd != "")
+            resultArr.Push(curCmd)
     }
     return resultArr
 }

@@ -1,7 +1,8 @@
 #Requires AutoHotkey v2.0
 SendKeyWrapper(KeyArrStr, holdTime, tableItem, index, keyType, Action) {
     static BrightKeyMap := Map("Bright_Up", 0, "Bright_Down", 0)
-    static LogicNoKeyMap := Map("Volume_Up", 0, "Volume_Down", 0, "Volume_Mute", 0)
+    static LogicNoKeyMap := Map("Volume_Up", 0, "Volume_Down", 0, "Volume_Mute", 0, "LButton", 0,
+    "MButton", 0, "RButton", 0, "WheelDown", 0, "WheelUp", 0, "XButton1", 0, "XButton2", 0)
     static OnlyDownKeyMap := Map("WheelDown", 0, "WheelUp", 0)
     KeyArrStr := StrReplace(KeyArrStr, "逗号", ",")
     KeyArr := GetPressKeyArr(KeyArrStr)
