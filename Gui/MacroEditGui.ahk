@@ -23,7 +23,10 @@
 #Include InputGui.ahk
 
 class MacroEditGui {
+    static Instances := []
+
     __new() {
+        MacroEditGui.Instances.Push(this)
         this.ParentTile := ""
         this.Gui := ""
         this.GuiMenu := ""
