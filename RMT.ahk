@@ -4,7 +4,6 @@
 #Include Plugins\CLR.ahk
 #Include Plugins\IbInputSimulator.ahk
 #Include Plugins\ViGEm\AHK-ViGEm-Bus-v2.ahk
-#Include Main\Util\WinEvent.ahk
 #Include Main\JoyMacro.ahk
 #Include Main\RecordJoyUtil.ahk
 #Include Main\LineOverlay.ahk
