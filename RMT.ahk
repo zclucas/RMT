@@ -12,6 +12,7 @@
 #Include Main\WorkPool.ahk
 #Include Main\UIUtil.ahk
 #Include Main\TimingUtil.ahk
+#Include Main\WindowHotkeyManager.ahk
 #Include Main\BindUtil.ahk
 #Include Main\VariableUtil.ahk
 #Include Main\TriggerKeyData.ahk

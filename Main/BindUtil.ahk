@@ -575,12 +575,14 @@ BindSoftHotKey() {
         mapKey := Trim(value, "~")
         mapKey := StrLower(mapKey)
 
-        if (mapKey == "f5" || mapKey == "f6" || mapKey == "delete" || mapKey == "numpaddot") {
+        if (WindowHotkeyManager.IsManaged(mapKey)) {
             key := "$*" mapKey
             actionDown := OnBindKeyDown.Bind(value)
             actionUp := OnBindKeyUp.Bind(value)
             Hotkey(key, actionDown, "On")
             Hotkey(key " up", actionUp, "On")
+            if (MySoftData.TriggerKeyMap.Has(mapKey))
+                MySoftData.TriggerKeyMap[mapKey]._forwardHotkey := true
             continue
         }
 

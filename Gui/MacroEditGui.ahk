@@ -23,10 +23,10 @@
 #Include InputGui.ahk
 
 class MacroEditGui {
-    static Instances := []
+    static Hotkeys := ["f5", "f6", "delete", "numpaddot"]
 
     __new() {
-        MacroEditGui.Instances.Push(this)
+        WindowHotkeyManager.Register(this, MacroEditGui.Hotkeys, this.OnSoftKey.Bind(this))
         this.ParentTile := ""
         this.Gui := ""
         this.GuiMenu := ""
