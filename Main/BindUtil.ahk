@@ -581,8 +581,6 @@ BindSoftHotKey() {
             actionUp := OnBindKeyUp.Bind(value)
             Hotkey(key, actionDown, "On")
             Hotkey(key " up", actionUp, "On")
-            if (MySoftData.TriggerKeyMap.Has(mapKey))
-                MySoftData.TriggerKeyMap[mapKey]._forwardHotkey := true
             continue
         }
 

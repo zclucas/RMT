@@ -16,8 +16,6 @@ class TriggerKeyData {
         this.TogArr := []
         this.HoldArr := []
 
-        this._forwardHotkey := false
-
         this.InitState()
     }
 
@@ -98,7 +96,7 @@ class TriggerKeyData {
         this.HandleSoftHotKeyDown()
         if (isMenuBtnHotKey && isOpenMenu)
             return
-        if (this._forwardHotkey && WindowHotkeyManager.IsAnyWindowActive(this.Key))
+        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
             return
         for index, value in this.DownArr {
             if (index == 1 && SubStr(value.GetTK(), 1, 1) != "~")
@@ -121,7 +119,7 @@ class TriggerKeyData {
     OnTriggerKeyUp() {
         this.UpdataArr()
         this.HandleSoftHotKeyUp()
-        if (this._forwardHotkey && WindowHotkeyManager.IsAnyWindowActive(this.Key))
+        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
             return
         for index, value in this.LoosenArr {
             value.Action()
@@ -201,7 +199,7 @@ class TriggerKeyData {
         if (isMenuBtnHotKey)
             MyMenuWheel.OnSoftKey(this.Key, true)
 
-        if (this._forwardHotkey) {
+        if (WindowHotkeyManager.IsManaged(this.Key)) {
             if (WindowHotkeyManager.HandleKey(this.Key, true))
                 return
             SendLevel 1
@@ -227,7 +225,7 @@ class TriggerKeyData {
             MyColorPanel.OnEnterUp(this.Key)
         }
 
-        if (this._forwardHotkey) {
+        if (WindowHotkeyManager.IsManaged(this.Key)) {
             if (WindowHotkeyManager.HandleKey(this.Key, false))
                 return
             SendLevel 1
