@@ -16,6 +16,9 @@ class TriggerKeyData {
         this.TogArr := []
         this.HoldArr := []
 
+        this._suppressKeyDown := false
+        this._suppressKeyUp := false
+
         this.InitState()
     }
 
@@ -96,6 +99,14 @@ class TriggerKeyData {
         this.HandleSoftHotKeyDown()
         if (isMenuBtnHotKey && isOpenMenu)
             return
+        if (this.Key == "f5" || this.Key == "f6" || this.Key == "delete" || this.Key == "numpaddot") {
+            for instance in MacroEditGui.Instances {
+                try {
+                    if (instance.Gui && WinActive("ahk_id " instance.Gui.Hwnd))
+                        return
+                }
+            }
+        }
         for index, value in this.DownArr {
             if (index == 1 && SubStr(value.GetTK(), 1, 1) != "~")
                 LoosenModifyKey(value.GetTK())
@@ -117,6 +128,14 @@ class TriggerKeyData {
     OnTriggerKeyUp() {
         this.UpdataArr()
         this.HandleSoftHotKeyUp()
+        if (this.Key == "f5" || this.Key == "f6" || this.Key == "delete" || this.Key == "numpaddot") {
+            for instance in MacroEditGui.Instances {
+                try {
+                    if (instance.Gui && WinActive("ahk_id " instance.Gui.Hwnd))
+                        return
+                }
+            }
+        }
         for index, value in this.LoosenArr {
             value.Action()
         }
@@ -196,13 +215,23 @@ class TriggerKeyData {
             MyMenuWheel.OnSoftKey(this.Key, true)
 
         if (this.Key == "f5" || this.Key == "f6" || this.Key == "delete" || this.Key == "numpaddot") {
+            if (this._suppressKeyDown) {
+                this._suppressKeyDown := false
+                return
+            }
+            handled := false
             for instance in MacroEditGui.Instances {
                 try {
                     if (instance.Gui && WinActive("ahk_id " instance.Gui.Hwnd)) {
                         instance.OnSoftKey(this.Key, true)
+                        handled := true
                         break
                     }
                 }
+            }
+            if (!handled) {
+                this._suppressKeyDown := true
+                Send("{Blind}{" this.Key "}")
             }
         }
     }
@@ -223,6 +252,27 @@ class TriggerKeyData {
 
         if (this.Key == "enter") {
             MyColorPanel.OnEnterUp(this.Key)
+        }
+
+        if (this.Key == "f5" || this.Key == "f6" || this.Key == "delete" || this.Key == "numpaddot") {
+            if (this._suppressKeyUp) {
+                this._suppressKeyUp := false
+                return
+            }
+            handled := false
+            for instance in MacroEditGui.Instances {
+                try {
+                    if (instance.Gui && WinActive("ahk_id " instance.Gui.Hwnd)) {
+                        instance.OnSoftKey(this.Key, false)
+                        handled := true
+                        break
+                    }
+                }
+            }
+            if (!handled) {
+                this._suppressKeyUp := true
+                Send("{Blind}{" this.Key " up}")
+            }
         }
     }
 }

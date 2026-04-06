@@ -570,20 +570,19 @@ OnTriggerKeyUp(tableIndex, itemIndex, *) {
     Data.OnTriggerKeyUp()
 }
 
-IsMacroEditWindowActive() {
-    for instance in MacroEditGui.Instances {
-        try {
-            if (instance.Gui && WinActive("ahk_id " instance.Gui.Hwnd))
-                return true
-        }
-    }
-    return false
-}
-
 BindSoftHotKey() {
     for index, value in MySoftData.SoftHotKeyArr {
         mapKey := Trim(value, "~")
         mapKey := StrLower(mapKey)
+
+        if (mapKey == "f5" || mapKey == "f6" || mapKey == "delete" || mapKey == "numpaddot") {
+            key := "$*" mapKey
+            actionDown := OnBindKeyDown.Bind(value)
+            actionUp := OnBindKeyUp.Bind(value)
+            Hotkey(key, actionDown, "On")
+            Hotkey(key " up", actionUp, "On")
+            continue
+        }
 
         isMenuBtnHotKey := CheckIfMenuBtnHotKey(mapKey)
         isOpenMenu := MySoftData.CurMenuWheelIndex != -1
