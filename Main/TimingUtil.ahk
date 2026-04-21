@@ -257,15 +257,12 @@ TimeStrToStamp(timeStr) {
 }
 
 GetTimingInterval(Data) {
-    static IntervalMap := Map(2, 3600, 3, 86400, 4, 604800)
+    IntervalMap := Map(2, 3600, 3, 86400, 4, 604800)
     if (IntervalMap.Has(Data.Type))
         return IntervalMap[Data.Type]
 
-    interval := Data.HasOwnProp("CustomInterval") ? Data.CustomInterval : 3600
-    unit := Data.HasOwnProp("CustomUnit") ? Data.CustomUnit : 1 ; 0: Sec, 1: Min, 2: Hour, 3: Day, 4: Week
-    static MultiplierMap := Map(0, 1, 1, 60, 2, 3600, 3, 86400, 4, 604800)
-    multiplier := MultiplierMap.Has(unit) ? MultiplierMap[unit] : 60
-    return interval * multiplier
+    MultiplierMap := [1, 60, 3600, 86400, 604800]
+    return Data.CustomInterval * MultiplierMap[Data.CustomUnit]
 }
 
 TimingCheckItemIfValid(tableItem, index) {

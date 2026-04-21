@@ -75,7 +75,7 @@ class MacroEditGui {
         "Icon14", GetLang("运算"), "Icon15", GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"),
         "Icon2", GetLang("真"), "Icon18", GetLang("假"), "Icon19", GetLang("循环次数"), "Icon20", GetLang("条件"), "Icon21",
         GetLang("循环体"), "Icon22", GetLang("文本处理"), "Icon23", GetLang("数组"), "Icon24", GetLang("输入"), "Icon25",
-        GetLang("文件读写"), "Icon26")
+        GetLang("文件读写"), "Icon26", GetLang("流程控制"), "Icon27")
 
         this.InitSubGui()
     }
@@ -204,7 +204,8 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\TextOps.png")
             IL_Add(ImageListID, "Images\Soft\Arr.png")
             IL_Add(ImageListID, "Images\Soft\Input.png")
-            IL_Add(ImageListID, "Images\Soft\FileIO.png")   ;26
+            IL_Add(ImageListID, "Images\Soft\FileIO.png")   ;26 标记一下
+            IL_Add(ImageListID, "Images\Soft\Condition.png")    ;todo
         }
 
         MySoftData.RecordToggleCon := this.RecordMacroCon
@@ -225,91 +226,91 @@ class MacroEditGui {
 
         PosY += 20
         PosX := 10
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Interval.png", 
-        GetLang("间隔"), (*) => this.OnOpenSubGui(this.IntervalGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Interval.png",
+            GetLang("间隔"), (*) => this.OnOpenSubGui(this.IntervalGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png", 
-        GetLang("按键"), (*) => this.OnOpenSubGui(this.KeyGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png",
+            GetLang("按键"), (*) => this.OnOpenSubGui(this.KeyGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Search.png", 
-        GetLang("搜索"), (*) => this.OnOpenSubGui(this.SearchGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Search.png",
+            GetLang("搜索"), (*) => this.OnOpenSubGui(this.SearchGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\SearchPro.png", 
-        GetLang("搜索Pro"), (*) => this.OnOpenSubGui(this.SearchProGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\SearchPro.png",
+            GetLang("搜索Pro"), (*) => this.OnOpenSubGui(this.SearchProGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Move.png", 
-        GetLang("移动"), (*) => this.OnOpenSubGui(this.MoveMoveGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Move.png",
+            GetLang("移动"), (*) => this.OnOpenSubGui(this.MoveMoveGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\MovePro.png", 
-        GetLang("移动Pro"), (*) => this.OnOpenSubGui(this.MMProGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\MovePro.png",
+            GetLang("移动Pro"), (*) => this.OnOpenSubGui(this.MMProGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Input.png", 
-        GetLang("输入"), (*) => this.OnOpenSubGui(this.InputGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Input.png",
+            GetLang("输入"), (*) => this.OnOpenSubGui(this.InputGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Output.png", 
-        GetLang("输出"), (*) => this.OnOpenSubGui(this.OutputGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Output.png",
+            GetLang("输出"), (*) => this.OnOpenSubGui(this.OutputGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Loop.png", 
-        GetLang("循环"), (*) => this.OnOpenSubGui(this.LoopGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Loop.png",
+            GetLang("循环"), (*) => this.OnOpenSubGui(this.LoopGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Sub.png", 
-        GetLang("宏操作"), (*) => this.OnOpenSubGui(this.SubMacroGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Sub.png",
+            GetLang("宏操作"), (*) => this.OnOpenSubGui(this.SubMacroGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Var.png", 
-        GetLang("变量"), (*) => this.OnOpenSubGui(this.VariableGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Var.png",
+            GetLang("变量"), (*) => this.OnOpenSubGui(this.VariableGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Extract.png", 
-        GetLang("变量提取"), (*) => this.OnOpenSubGui(this.ExVariableGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Extract.png",
+            GetLang("变量提取"), (*) => this.OnOpenSubGui(this.ExVariableGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\If.png", 
-        GetLang("如果"), (*) => this.OnOpenSubGui(this.CompareGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\If.png",
+            GetLang("如果"), (*) => this.OnOpenSubGui(this.CompareGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\IfPro.png", 
-        GetLang("如果Pro"), (*) => this.OnOpenSubGui(this.CompareProGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\IfPro.png",
+            GetLang("如果Pro"), (*) => this.OnOpenSubGui(this.CompareProGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Operation.png", 
-        GetLang("运算"), (*) => this.OnOpenSubGui(this.OperationGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Operation.png",
+            GetLang("运算"), (*) => this.OnOpenSubGui(this.OperationGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Run.png", 
-        GetLang("运行"), (*) => this.OnOpenSubGui(this.RunGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Run.png",
+            GetLang("运行"), (*) => this.OnOpenSubGui(this.RunGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\FileIO.png", 
-        GetLang("文件读写"), (*) => this.OnOpenSubGui(this.FileIOGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\FileIO.png",
+            GetLang("文件读写"), (*) => this.OnOpenSubGui(this.FileIOGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\TextOps.png", 
-        GetLang("文本处理"), (*) => this.OnOpenSubGui(this.TextOpsGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\TextOps.png",
+            GetLang("文本处理"), (*) => this.OnOpenSubGui(this.TextOpsGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Arr.png", 
-        GetLang("数组"), (*) => this.OnOpenSubGui(this.ArrayGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Arr.png",
+            GetLang("数组"), (*) => this.OnOpenSubGui(this.ArrayGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\rabit.png", 
-        GetLang("RMT指令"), (*) => this.OnOpenSubGui(this.RMTCMDGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\rabit.png",
+            GetLang("RMT指令"), (*) => this.OnOpenSubGui(this.RMTCMDGui))
 
         PosX := 10
         PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Mouse.png", 
-        GetLang("后台鼠标"), (*) => this.OnOpenSubGui(this.BGMouseGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Mouse.png",
+            GetLang("后台鼠标"), (*) => this.OnOpenSubGui(this.BGMouseGui))
         PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png", 
-        GetLang("后台按键"), (*) => this.OnOpenSubGui(this.BGKeyGui))
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png",
+            GetLang("后台按键"), (*) => this.OnOpenSubGui(this.BGKeyGui))
 
         PosX := 225
         PosY := 15
@@ -808,11 +809,12 @@ class MacroEditGui {
             }
             case GetLang("共享复制"):
             {
-                A_Clipboard := itemText
+                SetClipboard(itemText)
             }
             case GetLang("完全复制"):
             {
-                A_Clipboard := FullCopyCmd(itemText)
+                newCmd := FullCopyCmd(itemText)
+                SetClipboard(newCmd)
             }
             case GetLang("上方粘贴"):
             {
@@ -894,10 +896,12 @@ class MacroEditGui {
             iconStr := this.GetCmdIconStr(GetLang("真"))
             trueRoot := this.MacroTreeViewCon.Add(GetLang("真"), root, iconStr)
             this.TreeAddSubTree(trueRoot, TrueMacro)
+            this.TreeAddControl(trueRoot, Data.TrueControlType)
 
             iconStr := this.GetCmdIconStr(GetLang("假"))
             falseRoot := this.MacroTreeViewCon.Add(GetLang("假"), root, iconStr)
             this.TreeAddSubTree(falseRoot, FalseMacro)
+            this.TreeAddControl(falseRoot, Data.FalseControlType)
         }
         else if (IsLoop) {
             iconStr := this.GetCmdIconStr(GetLang("循环次数"))
@@ -923,13 +927,24 @@ class MacroEditGui {
                 CondiRoot := this.MacroTreeViewCon.Add(CondiStr, root, iconStr)
                 MacroStr := GetLangMacro(Data.MacroArr[A_Index], 1)
                 this.TreeAddSubTree(CondiRoot, MacroStr)
+                this.TreeAddControl(CondiRoot, Data.ControlTypeArr[A_Index])
             }
 
             CondiStr := GetLang("条件：以上都不是")
             CondiRoot := this.MacroTreeViewCon.Add(CondiStr, root, iconStr)
             DefaultMacro := GetLangMacro(Data.DefaultMacro, 1)
             this.TreeAddSubTree(CondiRoot, DefaultMacro)
+            this.TreeAddControl(CondiRoot, Data.DefaultControlType)
         }
+    }
+
+    TreeAddControl(root, ControlType) {
+        if (ControlType == "无")
+            return
+
+        iconStr := this.GetCmdIconStr(GetLang("流程控制"))
+        ItemStr := GetLang("⎖流程控制：") . GetLang(ControlType)
+        this.MacroTreeViewCon.Add(ItemStr, root, iconStr)
     }
 
     TreeAddSubTree(root, CommandStr) {
@@ -963,6 +978,11 @@ class MacroEditGui {
 
     ;确定子指令编辑器
     OnSubGuiSureBtnClick(CommandStr) {
+        style := WinGetStyle(this.Gui.Hwnd)
+        isVisible := (style & 0x10000000)  ; 0x10000000 = WS_VISIBLE
+        if (!isVisible)                    
+            return
+    
         if (this.CmdEditType == 1) {
             this.OnAddCmd(CommandStr)
         }
@@ -1026,6 +1046,11 @@ class MacroEditGui {
             MsgBox(GetLang("已经是第一个指令了，无法上移"))
             return
         }
+        PreText := this.MacroTreeViewCon.GetText(PreItemID)
+        if (PreText == "" || SubStr(PreText, 1, 1) == "⎖") {
+            MsgBox(GetLang("不可与特殊指令进行交换"))
+            return
+        }
         this.OnSwitchCmd(PreItemID, this.CurItemID)
     }
 
@@ -1033,6 +1058,11 @@ class MacroEditGui {
         NextItemID := this.MacroTreeViewCon.GetNext(this.CurItemID)
         if (NextItemID == 0) {
             MsgBox(GetLang("已经是最后的指令了，无法下移"))
+            return
+        }
+        NextText := this.MacroTreeViewCon.GetText(NextItemID)
+        if (NextText == "" || SubStr(NextText, 1, 1) == "⎖") {
+            MsgBox(GetLang("不可与特殊指令进行交换"))
             return
         }
         this.OnSwitchCmd(this.CurItemID, NextItemID)
@@ -1169,7 +1199,9 @@ class MacroEditGui {
         rootItemID := this.MacroTreeViewCon.GetChild(ItemID)
         while (rootItemID) {
             cmdStr := this.MacroTreeViewCon.GetText(rootItemID)
-            macroStr .= cmdStr ","
+            if (cmdStr != "" && SubStr(cmdStr, 1, 1) != "⎖")
+                macroStr .= cmdStr ","
+
             rootItemID := this.MacroTreeViewCon.GetNext(rootItemID)
         }
         macroStr := Trim(macroStr, ",")

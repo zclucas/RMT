@@ -57,7 +57,11 @@ class CompareGui {
         this.LogicalTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX + 80, PosY - 3, 70), GetLangArr([
             "且", "或"]))
 
-        PosY += 35
+        PosX := 400
+        Con := MyGui.Add("Button", Format("x{} y{} w30", PosX, PosY - 5), "?")
+        Con.OnEvent("Click", this.OnClickTypeHelpBtn.Bind(this))
+
+        PosY += 30
         PosX := 15
         con := MyGui.Add("Checkbox", Format("x{} y{} w{}", PosX, PosY, 30))
         con.OnEvent("Click", this.OnRefresh.Bind(this))
@@ -140,7 +144,7 @@ class CompareGui {
         PosY += 45
         PosX := 10
         SplitPosY := PosY
-        MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 150, 20), GetLang("结果真的指令:（可选）"))
+        MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 150, 20), GetLang("真-分支指令:（可选）"))
 
         PosX += 155
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 5, 60, 28), GetLang("编辑"))
@@ -152,7 +156,7 @@ class CompareGui {
 
         PosY := SplitPosY
         PosX := 235
-        MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 150, 20), GetLang("结果假的指令:（可选）"))
+        MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 150, 20), GetLang("假-分支指令:（可选）"))
 
         PosX += 155
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 5, 60, 28), GetLang("编辑"))
@@ -164,17 +168,26 @@ class CompareGui {
 
         PosY += 65
         PosX := 10
-        MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 340, 110), GetLang("结果保存到变量中"))
+        MyGui.Add("Text", Format("x{} y{}", PosX, PosY + 3), GetLang("真-流程控制："))
+        PosX += 90
+        this.TrueControlCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY, 125), GetLangArr(["无",
+            "循环-跳过本轮", "循环-跳出", "分支-跳出"]))
+        this.TrueControlCon.Value := 1
 
-        PosX := 55
-        PosY += 25
-        this.ResultConArr := []
-        this.IsIgnoreExistCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 180, 20), GetLang(
-            "如果变量存在则不改变数值"))
-        this.ResultConArr.Push(this.IsIgnoreExistCon)
+        PosX := 235
+        MyGui.Add("Text", Format("x{} y{}", PosX, PosY + 3), GetLang("假-流程控制："))
+        PosX += 90
+        this.FalseControlCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY, 125), GetLangArr(["无",
+            "循环-跳过本轮", "循环-跳出", "分支-跳出"]))
+        this.FalseControlCon.Value := 1
+
+        PosY += 40
+        PosX := 10
+        MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 340, 90), GetLang("结果保存"))
 
         PosX := 15
-        PosY += 25
+        PosY += 30
+        this.ResultConArr := []
         MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("开关"))
 
         PosX += 50
@@ -204,7 +217,7 @@ class CompareGui {
         PosX := 360
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 90, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
-        MyGui.Show(Format("w{} h{}", 480, 440))
+        MyGui.Show(Format("w{} h{}", 480, 450))
     }
 
     Init(cmd) {
@@ -214,6 +227,8 @@ class CompareGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr(1)
 
+        this.TrueControlCon.Text := GetLang(this.Data.TrueControlType)
+        this.FalseControlCon.Text := GetLang(this.Data.FalseControlType)
         this.TrueMacroCon.Value := GetLangMacro(this.Data.TrueMacro, 1)
         this.FalseMacroCon.Value := GetLangMacro(this.Data.FalseMacro, 1)
         this.SaveToggleCon.Value := this.Data.SaveToggle
@@ -223,7 +238,6 @@ class CompareGui {
         this.TrueValueCon.Value := this.Data.TrueValue
         this.FalseValueCon.Value := this.Data.FalseValue
         this.LogicalTypeCon.Value := this.Data.LogicalType
-        this.IsIgnoreExistCon.Value := this.Data.IsIgnoreExist
         loop this.Data.ToggleArr.Length {
             this.ToggleConArr[A_Index].Value := this.Data.ToggleArr[A_Index]
             this.NameConArr[A_Index].Delete()
@@ -259,6 +273,16 @@ class CompareGui {
         else {
             Hotkey("!l", MacroAction, "Off")
         }
+    }
+
+    OnClickTypeHelpBtn(*) {
+        str1 := GetLang("无：不进行任何流程控制操作")
+        str1 := GetLang("循环-跳过本轮：跳过后续循环体指令，继续上层循环")
+        str2 := GetLang("循环-跳出：跳出上层循环")
+        str3 := GetLang("分支-跳出：跳出上层分支")
+
+        str := Format("{}`n{}`n{}", str1, str2, str3)
+        MsgBox(str, GetLang("流程控制说明"))
     }
 
     OnRefresh(*) {
@@ -335,6 +359,8 @@ class CompareGui {
     }
 
     SaveCompareData() {
+        this.Data.TrueControlType := GetLangKey(this.TrueControlCon.Text)
+        this.Data.FalseControlType := GetLangKey(this.FalseControlCon.Text)
         this.Data.TrueMacro := GetLangMacro(this.TrueMacroCon.Value, 2)
         this.Data.FalseMacro := GetLangMacro(this.FalseMacroCon.Value, 2)
         this.Data.SaveToggle := this.SaveToggleCon.Value
@@ -342,7 +368,6 @@ class CompareGui {
         this.Data.TrueValue := this.TrueValueCon.Value
         this.Data.FalseValue := this.FalseValueCon.Value
         this.Data.LogicalType := this.LogicalTypeCon.Value
-        this.Data.IsIgnoreExist := this.IsIgnoreExistCon.Value
         loop 4 {
             this.Data.ToggleArr[A_Index] := this.ToggleConArr[A_Index].Value
             this.Data.NameArr[A_Index] := GetLangKey(this.NameConArr[A_Index].Text)

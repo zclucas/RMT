@@ -161,7 +161,7 @@ OnClickToolRecordSettingBtn(*) {
 
 OnToolTextFilterScreenShot(*) {
     if (MySoftData.ScreenShotTypeCtrl.Value == 1) {
-        A_Clipboard := ""  ; 清空剪贴板
+        SetClipboard("")  ; 清空剪贴板
         Run("ms-screenclip:")
         SetTimer(OnToolTextCheckScreenShot, 500)  ; 每 500 毫秒检查一次剪贴板
     }
@@ -197,7 +197,7 @@ RunScreenCapture(callback := "") {
     scPath := A_WorkingDir "\Plugins\ScreenCapture\ScreenCapture.exe"
     if !FileExist(scPath)
         return
-    A_Clipboard := ""
+    SetClipboard("")
     if (callback != "") {
         SetTimer(callback, 500)
     }
@@ -356,7 +356,7 @@ OnRecordAddMacroStr(keyName, isDown) {
         ToolCheckInfo.RecordMacroStr .= Format("{}_{}_{},", GetLang("按键"), keyName, keySymbol)
     }
 
-    if (IsMouse && ToolCheckInfo.RecordMouse) {
+    if (IsMouse && ToolCheckInfo.RecordMouse && ToolCheckInfo.RecordMouseKeyPoint) {
         CoordMode("Mouse", "Screen")
         MouseGetPos &mouseX, &mouseY
         if (ToolCheckInfo.RecordLastMousePos[1] != mouseX || ToolCheckInfo.RecordLastMousePos[2] != mouseY) {   ;鼠标位置发生改变
@@ -396,7 +396,19 @@ OnFinishRecordMacro() {
     }
     macroLineStr := StrReplace(macroStr, ",", "`n")
     ToolCheckInfo.ToolTextCtrl.Value := macroLineStr
-    A_Clipboard := macroLineStr
+    SetClipboard(macroLineStr)
+}
+
+OnClickKeyDownDownHelpBtn(*) {
+    str1 := GetLang("当宏按键已经处于按下状态，再次触发按下指令时特别处理")
+    str2 := GetLang("自动松开：再次按下前，先松开该按键（确保指令正常执行）")
+    str3 := GetLang("忽略重复按下：保持按键之前的状态，忽略后续的按下指令")
+    str4 := GetLang("允许重复按下：再次按下宏按键（罗技按键可能卡死）")
+    str5 := GetLang("Tip1：按下时再次按下，真实键盘无法触发这个行为，这个行为通常是无效的")
+    str6 := GetLang("Tip2：按下时再次按下，按键检测网站可能无法检测，但记事本中可以有效输出")
+
+    str := Format("{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5)
+    MsgBox(str, GetLang("按下时按下说明"))
 }
 
 ;绑定热键

@@ -30,7 +30,7 @@ class CompareProEditItemGui {
         this.CondiNumber := CondiNumber
         EditType := CondiNumber <= Data.VariNameArr.Length ? 1 : 2
         if (EditType == 2) {
-            this.ShowGui(EditType, [[], [], []], GetLang("且"), Data.DefaultMacro)
+            this.ShowGui(EditType, [[], [], []], GetLang("且"), Data.DefaultMacro, Data.DefaultControlType)
             return
         }
 
@@ -40,10 +40,11 @@ class CompareProEditItemGui {
         DataArr.Push(Data.VariableArr[CondiNumber])
         logicStr := Data.LogicTypeArr[CondiNumber] == 1 ? GetLang("且") : GetLang("或")
         macro := Data.MacroArr[CondiNumber]
-        this.ShowGui(EditType, DataArr, logicStr, macro)
+        controlType := Data.ControlTypeArr[CondiNumber]
+        this.ShowGui(EditType, DataArr, logicStr, macro, controlType)
     }
 
-    ShowGui(EditType, DataArr, logicStr, macro) {
+    ShowGui(EditType, DataArr, logicStr, macro, controlType) {
         if (this.Gui != "") {
             this.Gui.Show()
         }
@@ -51,7 +52,7 @@ class CompareProEditItemGui {
             this.AddGui()
         }
 
-        this.Init(EditType, DataArr, logicStr, macro)
+        this.Init(EditType, DataArr, logicStr, macro, controlType)
         this.OnRefresh()
     }
 
@@ -159,21 +160,30 @@ class CompareProEditItemGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 5, 60, 25), GetLang("编辑"))
         btnCon.OnEvent("Click", (*) => this.OnEditMacroBtnClick())
 
-        PosY += 20
+        PosY += 25
         PosX := 10
-        this.MacroCon := MyGui.Add("Edit", Format("x{} y{} w{} h{}", PosX, PosY, 370, 80), "")
+        this.MacroCon := MyGui.Add("Edit", Format("x{} y{} w{} h{}", PosX, PosY, 370, 60), "")
 
-        PosY += 90
+        PosY += 65
+        PosX := 10
+        MyGui.Add("Text", Format("x{} y{}", PosX, PosY + 3), GetLang("流程控制："))
+        PosX += 80
+        this.ControlTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY, 125), GetLangArr(["无",
+            "循环-跳过本轮", "循环-跳出", "分支-跳出"]))
+        this.ControlTypeCon.Value := 1
+
+        PosY += 40
         PosX := 170
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
-        MyGui.Show(Format("w{} h{}", 420, 370))
+        MyGui.Show(Format("w{} h{}", 420, 400))
     }
 
-    Init(EditType, DataArr, logicStr, macro) {
+    Init(EditType, DataArr, logicStr, macro, controlType) {
         this.EditType := EditType
         this.LogicalTypeCon.Text := logicStr == "" ? GetLang("且") : logicStr
         this.MacroCon.Value := macro
+        this.ControlTypeCon.Text := GetLang(controlType)
         this.DLVariableArr := GetGuiVarArr(1)
 
         VariNameArr := DataArr[1]
@@ -211,8 +221,10 @@ class CompareProEditItemGui {
     OnClickSureBtn() {
         action := this.SureBtnAction
         if (this.IsSubMacroEdit) {
-            if (this.EditType == 2)
-                this.Data.DefaultMacro := this.MacroCon.Value
+            if (this.EditType == 2) {
+                this.Data.DefaultMacro := GetLangStr(this.MacroCon.Value, 2)
+                this.Data.DefaultControlType := GetLangKey(this.ControlTypeCon.Text)
+            }
             else {
                 VariNameArr := []
                 CompareTypeArr := []
@@ -224,11 +236,12 @@ class CompareProEditItemGui {
                         VariableArr.Push(this.VariableConArr[A_Index].Text)
                     }
                 }
-                this.Data.VariNameArr[this.CondiNumber] := VariNameArr
-                this.Data.CompareTypeArr[this.CondiNumber] := CompareTypeArr
-                this.Data.VariableArr[this.CondiNumber] := VariableArr
+                this.Data.VariNameArr[this.CondiNumber] := GetLangKeyArr(VariNameArr)
+                this.Data.CompareTypeArr[this.CondiNumber] := GetLangKeyArr(CompareTypeArr)
+                this.Data.VariableArr[this.CondiNumber] := GetLangKeyArr(VariableArr)
                 this.Data.LogicTypeArr[this.CondiNumber] := this.LogicalTypeCon.Value
-                this.Data.MacroArr[this.CondiNumber] := this.MacroCon.Value
+                this.Data.MacroArr[this.CondiNumber] := GetLangStr(this.MacroCon.Value, 2)
+                this.Data.ControlTypeArr[this.CondiNumber] := GetLangKey(this.ControlTypeCon.Text)
             }
             saveStr := JSON.stringify(this.Data, 0)
             IniWrite(saveStr, CompareProFile, IniSection, this.Data.SerialStr)
@@ -255,10 +268,12 @@ class CompareProEditItemGui {
             condiStr := Trim(condiStr, "⎖")
             logicStr := this.LogicalTypeCon.Text
             macro := this.MacroCon.Value
-            action(condiStr, logicStr, macro)
+            controlType := GetLangKey(this.ControlTypeCon.Text)
+            action(condiStr, logicStr, macro, controlType)
         }
         else {
-            action(GetLang("以上都不是"), "", this.MacroCon.Value)
+            controlType := GetLangKey(this.ControlTypeCon.Text)
+            action(GetLang("以上都不是"), "", this.MacroCon.Value, controlType)
         }
 
         this.SureBtnAction := ""

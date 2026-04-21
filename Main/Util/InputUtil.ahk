@@ -1,15 +1,12 @@
 #Requires AutoHotkey v2.0
 
 InputPopUp(Data, tableItem, index) {
-    if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.SaveName))
-        return
-
     if (Data.PauseType == "暂停所有宏")
         MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
 
     isHide := false
     InputBoxSureAction(Content) {
-        MySetGlobalVariable([Data.SaveName], [Content], Data.IsIgnoreExist)
+        MySetGlobalVariable([Data.SaveName], [Content], false)
     }
     InputBoxHideAction() {
         isHide := true
@@ -30,18 +27,15 @@ InputPopUp(Data, tableItem, index) {
 }
 
 InputStateValue(Data, tableItem, index) {
-    if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.SaveName))
-        return
-
     if (Data.PauseType == "暂停所有宏")
         MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
 
     isHide := false
     InputBoxTrueAction() {
-        MySetGlobalVariable([Data.SaveName], [1], Data.IsIgnoreExist)
+        MySetGlobalVariable([Data.SaveName], [1], false)
     }
     InputBoxFalseAction() {
-        MySetGlobalVariable([Data.SaveName], [0], Data.IsIgnoreExist)
+        MySetGlobalVariable([Data.SaveName], [0], false)
     }
     InputBoxHideAciton() {
         isHide := true
@@ -58,9 +52,6 @@ InputStateValue(Data, tableItem, index) {
 }
 
 InputContinue(Data, tableItem, index) {
-    if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.SaveName))
-        return
-
     if (Data.PauseType == "暂停所有宏")
         MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
 
@@ -78,9 +69,6 @@ InputContinue(Data, tableItem, index) {
 }
 
 InputContinueAndCencel(Data, tableItem, index) {
-    if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.SaveName))
-        return
-
     if (Data.PauseType == "暂停所有宏")
         MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
 

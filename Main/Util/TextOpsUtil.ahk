@@ -34,7 +34,7 @@ TextOpsReplace(Data, tableItem, index) {
     ReplaceText := IsHas ? ReplaceText : Data.Replace
 
     Res := StrReplace(SourceText, SearchText, ReplaceText)
-    MySetGlobalVariable([Data.SaveName], [Res], Data.IsIgnoreExist)
+    MySetGlobalVariable([Data.SaveName], [Res], false)
 }
 
 TextOpsEx(Data, tableItem, index) {
@@ -67,7 +67,7 @@ TextOpsTrimSpace(Data, tableItem, index) {
     else if (Data.ArgsType == "去除所有空白字符") {
         Res := RegExReplace(SourceText, "\s+", "")
     }
-    MySetGlobalVariable([Data.SaveName], [Res], Data.IsIgnoreExist)
+    MySetGlobalVariable([Data.SaveName], [Res], false)
 }
 
 TextOpsUpOrLow(Data, tableItem, index) {
@@ -82,7 +82,7 @@ TextOpsUpOrLow(Data, tableItem, index) {
     else if (Data.ArgsType == "首字母大写") {
         Res := StrTitle(SourceText)
     }
-    MySetGlobalVariable([Data.SaveName], [Res], Data.IsIgnoreExist)
+    MySetGlobalVariable([Data.SaveName], [Res], false)
 }
 
 TextOpsStatistics(Data, tableItem, index) {
@@ -99,7 +99,7 @@ TextOpsStatistics(Data, tableItem, index) {
         Lines := StrSplit(SourceText, ["`r`n", "`r", "`n"])
         Res := Lines.Length
     }
-    MySetGlobalVariable([Data.SaveName], [Res], Data.IsIgnoreExist)
+    MySetGlobalVariable([Data.SaveName], [Res], false)
 }
 
 ;辅助函数

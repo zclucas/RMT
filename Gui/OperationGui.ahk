@@ -10,7 +10,6 @@ class OperationGui {
         this.Data := ""
         this.OperationSubGui := ""
 
-        this.IsIgnoreExistCon := ""
         this.ToggleConArr := []
         this.ExprConArr := []
         this.UpdateNameConArr := []
@@ -37,10 +36,6 @@ class OperationGui {
         MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 50, 30), GetLang("备注："))
         PosX += 50
         this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 150), "")
-
-        PosX += 220
-        this.IsIgnoreExistCon := MyGui.Add("Checkbox", Format("x{} y{} w{}", PosX, PosY - 5, 180), GetLang(
-            "如果变量存在则不改变数值"))
 
         PosX := 10
         PosY += 35
@@ -86,7 +81,6 @@ class OperationGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()
 
-        this.IsIgnoreExistCon.Value := this.Data.IsIgnoreExist
         loop this.Data.ToggleArr.Length {
             this.ToggleConArr[A_Index].Value := this.Data.ToggleArr[A_Index]
             this.ExprConArr[A_Index].Value := GetLangStr(this.Data.ExpressionArr[A_Index], 1)
@@ -155,7 +149,6 @@ class OperationGui {
     }
 
     SaveOperationData() {
-        this.Data.IsIgnoreExist := this.IsIgnoreExistCon.Value
         loop this.Data.ToggleArr.Length {
             this.Data.ToggleArr[A_Index] := this.ToggleConArr[A_Index].Value
             this.Data.ExpressionArr[A_Index] := GetLangStr(this.ExprConArr[A_Index].Value, 2)

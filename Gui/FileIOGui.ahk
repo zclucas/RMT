@@ -14,7 +14,7 @@ class FileIOGui {
             GetLang("读取文本文件"),
             GetLangArr(["读取全部内容", "逐行读取", "指定行"]),
             GetLang("写入文本文件"),
-            GetLangArr(["覆盖写入", "追加写入", "指定行", "行号自增"])
+            GetLangArr(["覆盖写入", "追加写入", "追加写入-行", "指定行", "行号自增"])
         )
     }
 
@@ -97,7 +97,7 @@ class FileIOGui {
         con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY + 5, 80), GetLang("表名或序号:"))
         this.ExcelConArr.Push(con)
         PosX += 80
-        this.NameOrSerialCon := MyGui.Add("ComboBox", Format("x{} y{} w{} h{}", PosX, PosY, 150, 30), [])
+        this.NameOrSerialCon := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY, 150), [])
         this.ExcelConArr.Push(this.NameOrSerialCon)
 
         PosX := 20
@@ -139,17 +139,11 @@ class FileIOGui {
             PosX := 10
             PosY := FlagY
             this.ResultConArr := []
-            Con := MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 510, 100), GetLang("结果保存选项:"))
+            Con := MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 510, 70), GetLang("结果保存"))
             this.ResultConArr.Push(Con)
 
             PosX := 20
-            PosY += 20
-            this.IsIgnoreExistCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h30", PosX, PosY, 200), GetLang(
-                "如果变量存在则不改变数值"))
-            this.ResultConArr.Push(this.IsIgnoreExistCon)
-
-            PosX := 20
-            PosY += 40
+            PosY += 30
             Con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("结果："))
             this.ResultConArr.Push(Con)
 
@@ -233,7 +227,6 @@ class FileIOGui {
         this.OperTypeCon.Text := GetLang(this.Data.OperType)
         this.EncodingCon.Text := GetShowEncoding(this.Data.Encoding)
         this.FilePathCon.Text := this.Data.FilePath
-        this.IsIgnoreExistCon.Value := this.Data.IsIgnoreExist
         this.ContentCon.Text := GetLangStr(this.Data.Content, 1)
         this.SaveTypeCon.Text := GetLang(this.Data.SaveType)
         this.SaveNameCon.Text := this.Data.SaveName
@@ -302,7 +295,13 @@ class FileIOGui {
     }
 
     OnSelectPathBtnClick() {
-        path := FileSelect(1, , GetLang("选择输入的源文件"))
+        CurType := this.OperTypeCon.Text
+        IsExcel := CurType == GetLang("读取Excel") || CurType == GetLang("写入Excel")
+        IsText := CurType == GetLang("读取文本文件") || CurType == GetLang("写入文本文件")
+        SymbolStr := IsExcel ? "Excel Files(*.xlsx)" : ""
+        SymbolStr := IsText ? "Text Files(*.txt)" : SymbolStr
+    
+        path := FileSelect(1, , GetLang("选择输入的源文件"), SymbolStr)
         this.FilePathCon.Value := path
     }
 
@@ -395,7 +394,6 @@ class FileIOGui {
 
         this.Data.SaveType := GetLangKey(this.SaveTypeCon.Text)
         this.Data.SaveName := GetVarName(this.SaveNameCon.Text)
-        this.Data.IsIgnoreExist := this.IsIgnoreExistCon.Value
 
         if (this.SaveNameCon.Visible) {
             if (this.Data.SaveType == "变量")

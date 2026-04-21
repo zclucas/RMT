@@ -328,7 +328,7 @@ class SearchGui {
 
     OnImageShotBtnClick() {
         if (MySoftData.ScreenShotTypeCtrl.Value == 1) {
-            A_Clipboard := ""  ; 清空剪贴板
+            SetClipboard("")  ; 清空剪贴板
             Run("ms-screenclip:")
             SetTimer(this.CheckClipboardAction, 500)  ; 每 500 毫秒检查一次剪贴板
             TogGetSelectArea(true, this.OnGetArea.Bind(this))

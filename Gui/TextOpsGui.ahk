@@ -122,15 +122,10 @@ class TextOpsGui {
         {
             PosX := 10
             PosY += 45
-            MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 510, 100), GetLang("结果保存选项:"))
+            MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 510, 70), GetLang("结果保存"))
 
             PosX := 20
-            PosY += 20
-            this.IsIgnoreExistCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h30", PosX, PosY, 200), GetLang(
-                "如果变量存在则不改变数值"))
-
-            PosX := 20
-            PosY += 40
+            PosY += 30
             this.ResultConArr := []
             Con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("结果："))
             this.ResultConArr.Push(Con)
@@ -153,7 +148,7 @@ class TextOpsGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.Gui.Hide())
-        MyGui.Show(Format("w{} h{}", 535, 350))
+        MyGui.Show(Format("w{} h{}", 535, 320))
     }
 
     Init(cmd) {
@@ -172,7 +167,6 @@ class TextOpsGui {
         SetDLConValue(this.SearchCon, GetGuiVarArr(2), this.Data.Search)
         SetDLConValue(this.ReplaceCon, GetGuiVarArr(2), this.Data.Replace)
 
-        this.IsIgnoreExistCon.Value := this.Data.IsIgnoreExist
         this.SaveTypeCon.Text := GetLang(this.Data.SaveType)
         this.SaveNameCon.Text := this.Data.SaveName
     }
@@ -293,7 +287,6 @@ class TextOpsGui {
         ArgsName := GetLangKey(this.ArgsNameCon.Text)
         ArgsName := ArgsName == "制表符" ? "`t" : ArgsName
 
-        this.Data.IsIgnoreExist := this.IsIgnoreExistCon.Value
         this.Data.Type := GetLangKey(this.TypeCon.Text)
         this.Data.Name := this.NameCon.Text
         this.Data.ArgsType := GetLangKey(this.ArgsTypeCon.Text)

@@ -16,9 +16,6 @@ SetFileIOGlobalData(Data) {
 }
 
 ReadExcel(Data, tableItem, index) {
-    if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.SaveName))
-        return
-
     HasRow := TryGetTabVarValue(&Row, tableItem, index, Data.RowVar, true)
     HasCol := TryGetTabVarValue(&Col, tableItem, index, Data.ColVar, true)
     if (!HasRow || !HasCol)
@@ -28,7 +25,7 @@ ReadExcel(Data, tableItem, index) {
         case "单元格":
             IsOk := ExcelCellToRead(Data.FilePath, Data.NameOrSerial, Row, Col, &ResArr)
             if (IsOk)
-                MySetGlobalVariable([Data.SaveName], [ResArr], Data.IsIgnoreExist)
+                MySetGlobalVariable([Data.SaveName], [ResArr], false)
         case "指定行":
             IsOk := ExcelRowToRead(Data.FilePath, Data.NameOrSerial, Row, Col, &ResArr)
             if (IsOk)
@@ -84,13 +81,10 @@ WriteExcel(Data, tableItem, index) {
 }
 
 ReadTextFile(Data, tableItem, index) {
-    if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.SaveName))
-        return
-
     switch Data.OperMode {
         case "读取全部内容":
             Content := FileRead(Data.FilePath, Data.Encoding)
-            MySetGlobalVariable([Data.SaveName], [Content], Data.IsIgnoreExist)
+            MySetGlobalVariable([Data.SaveName], [Content], false)
         case "逐行读取":
             ResArr := []
             hasRowValue := TryGetTabVarValue(&RowValue, tableItem, index, Data.TextRowVar)
@@ -114,7 +108,7 @@ ReadTextFile(Data, tableItem, index) {
                         break
                     }
                 }
-                MySetGlobalVariable([Data.SaveName], [Content], Data.IsIgnoreExist)
+                MySetGlobalVariable([Data.SaveName], [Content], false)
             }
     }
 }
@@ -132,6 +126,11 @@ WriteTextFile(Data, tableItem, index) {
             FileObj.Close()
         case "追加写入":
             FileObj := FileOpen(Data.FilePath, "a", Data.Encoding)
+            FileObj.Write(Content)
+            FileObj.Close()
+        case "追加写入-行":
+            FileObj := FileOpen(Data.FilePath, "a", Data.Encoding)
+            FileObj.WriteLine("")
             FileObj.Write(Content)
             FileObj.Close()
         case "指定行":

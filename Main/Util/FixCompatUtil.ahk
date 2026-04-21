@@ -206,7 +206,7 @@ CompatTiming(filePath) {
 
         ; Ensure CustomUnit exists
         if (!ObjHasOwnProp(Data, "CustomUnit")) {
-            Data.CustomUnit := 1 ; Default to Minutes
+            Data.CustomUnit := 2 ; Default to Minutes
             curFix := true
         }
 
@@ -363,7 +363,7 @@ CompatOutput(filePath) {
     hasFix := false
     if (!FileExist(FilePath))
         return hasFix
-    FixTypeMap := Map("1", "发送内容", "2", "粘贴内容", "3", "临时提示", 
+    FixTypeMap := Map("1", "发送内容", "2", "粘贴内容", "3", "临时提示",
         "4", "指令窗口", "5", "软件弹窗", "6", "系统语音", "7", "复制到剪切板")
     hasFix := CompatSerial(filePath, "Output", "输出")
     newContent := "[UserSettings]"
@@ -520,6 +520,12 @@ CompatCompare(filePath) {
             curFix := curFix || isFix
         }
 
+        if (!ObjHasOwnProp(Data, "TrueControlType")) {
+            Data.TrueControlType := "无"
+            Data.FalseControlType := "无"
+            curFix := true
+        }
+
         hasFix := hasFix || curFix
         saveStr := JSON.stringify(Data, 0)
         newContent .= Format("`n{}={}", Data.SerialStr, saveStr)
@@ -555,6 +561,16 @@ CompatComparePro(filePath) {
         if (Data.DefaultMacro != "") {
             Data.DefaultMacro := CompatMacro(Data.DefaultMacro, &isFix)
             curFix := curFix || isFix
+        }
+
+        if (!ObjHasOwnProp(Data, "ControlTypeArr")) {
+            ControlTypeArr := []
+            loop Data.MacroArr.Length {
+                ControlTypeArr.Push("无")
+            }
+            Data.ControlTypeArr := ControlTypeArr
+            Data.DefaultControlType := "无"
+            curFix := true
         }
 
         hasFix := hasFix || curFix

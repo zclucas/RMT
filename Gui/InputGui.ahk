@@ -46,7 +46,7 @@ class InputGui {
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("输入类型:"))
         PosX += 80
         TypeArr := GetLangArr(["弹窗", "状态", "继续", "继续&取消"])
-        this.TypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 3, 150), TypeArr)
+        this.TypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 3, 130), TypeArr)
         this.TypeCon.OnEvent("Change", this.OnRefreshType.Bind(this))
 
         PosX := 20
@@ -56,7 +56,7 @@ class InputGui {
         this.InterConArr.Push(con)
         PosX += 80
         TypeArr := GetLangArr(["暂停当前宏", "暂停所有宏"])
-        this.PauseTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 3, 150), TypeArr)
+        this.PauseTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 3, 130), TypeArr)
         this.InterConArr.Push(this.PauseTypeCon)
 
         PosX := 280
@@ -65,28 +65,22 @@ class InputGui {
         this.CancelConArr.Push(con)
         PosX += 80
         TypeArr := GetLangArr(["终止当前宏", "终止所有宏"])
-        this.CancelTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{} R5", PosX, PosY - 3, 150), TypeArr)
+        this.CancelTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{} R5", PosX, PosY - 3, 130), TypeArr)
         this.CancelConArr.Push(this.CancelTypeCon)
 
         PosX := 10
         PosY += 40
         this.ResultConArr := []
-        Con := MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 510, 100), GetLang("结果保存选项:"))
+        Con := MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 490, 70), GetLang("结果保存"))
         this.ResultConArr.Push(Con)
 
         PosX := 20
-        PosY += 20
-        this.IsIgnoreExistCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h30", PosX, PosY, 200), GetLang(
-            "如果变量存在则不改变数值"))
-        this.ResultConArr.Push(this.IsIgnoreExistCon)
-
-        PosX := 20
-        PosY += 40
-        Con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("结果："))
+        PosY += 35
+        Con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("变量："))
         this.ResultConArr.Push(Con)
 
         PosX += 50
-        this.SaveNameCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R8", PosX, PosY - 5, 150), [])
+        this.SaveNameCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R8", PosX, PosY - 5, 130), [])
         this.ResultConArr.Push(this.SaveNameCon)
 
         PosY += 50
@@ -95,7 +89,7 @@ class InputGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.Gui.Hide())
-        MyGui.Show(Format("w{} h{}", 535, 285))
+        MyGui.Show(Format("w{} h{}", 510, 275))
     }
 
     Init(cmd) {
@@ -109,7 +103,6 @@ class InputGui {
         this.TypeCon.Text := GetLang(this.Data.Type)
         this.PauseTypeCon.Text := GetLang(this.Data.PauseType)
         this.CancelTypeCon.Text := GetLang(this.Data.CancelType)
-        this.IsIgnoreExistCon.Value := this.Data.IsIgnoreExist
         this.SaveNameCon.Text := this.Data.SaveName
         SetDLConValue(this.SaveNameCon, GetGuiVarArr(), this.SaveNameCon.Text)
     }
@@ -195,7 +188,6 @@ class InputGui {
         this.Data.Type := GetLangKey(this.TypeCon.Text)
         this.Data.PauseType := GetLangKey(this.PauseTypeCon.Text)
         this.Data.CancelType := GetLangKey(this.CancelTypeCon.Text)
-        this.Data.IsIgnoreExist := this.IsIgnoreExistCon.Value
         this.Data.SaveName := GetVarName(this.SaveNameCon.Text)
 
         if (this.SaveNameCon.Visible) {

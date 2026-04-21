@@ -201,16 +201,24 @@ class CompareProGui {
         this.ItemEditGui.ParentTile := ParentTile "-"
 
         this.ItemEditGui.DLVariableArr := this.DLVariableArr
+        NumberIndex := item
         EditType := this.LVCon.GetText(item, 1) == GetLang("以上都不是") ? 2 : 1
         DataArr := this.GetCondiStrDataArr(this.LVCon.GetText(item, 1))
         logicStr := this.LVCon.GetText(item, 2)
         macro := this.LVCon.GetText(item, 3)
-        this.ItemEditGui.ShowGui(EditType, DataArr, logicStr, macro)
+        controlType := EditType == 1 ? this.Data.ControlTypeArr[NumberIndex] : this.Data.DefaultControlType
+        this.ItemEditGui.ShowGui(EditType, DataArr, logicStr, macro, controlType)
         this.ItemEditGui.SureBtnAction := this.OnSureEditItem.Bind(this, item)
     }
 
-    OnSureEditItem(item, condiStr, logicStr, macro) {
+    OnSureEditItem(item, condiStr, logicStr, macro, controlType) {
         this.LVCon.Modify(item, , condiStr, logicStr, macro)
+        NumberIndex := item
+        EditType := this.LVCon.GetText(item, 1) == GetLang("以上都不是") ? 2 : 1
+        if (EditType == 1)
+            this.Data.ControlTypeArr[NumberIndex] := controlType
+        else 
+            this.Data.DefaultControlType := controlType
     }
 
     OnClickSureBtn() {
@@ -240,6 +248,16 @@ class CompareProGui {
         CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
         CommandStr := CorrectRemark(CommandStr, this.RemarkCon.Value)
         return CommandStr
+    }
+
+    GetItemNumber(nodeItemID) {
+        ItemNumber := 1
+        PreItemID := this.LVCon.GetPrev(nodeItemID)
+        while (PreItemID != 0) {
+            ItemNumber += 1
+            PreItemID := this.LVCon.GetPrev(PreItemID)
+        }
+        return ItemNumber
     }
 
     GetCondiStrDataArr(condiStr) {
