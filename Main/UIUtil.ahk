@@ -463,9 +463,19 @@ AddSettingUI(index) {
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 440, posY - 4), MySoftData.CoordYFloat, tableItem)
     MySoftData.CoordYFloatCon := con
 
-    AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(0~10)："), tableItem)
+    AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(-1~10)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum, tableItem)
     MySoftData.MutiThreadNumCtrl := con
+
+    ; posY += 40
+    ; AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("核心池大小(1~10)："), tableItem)
+    ; con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.DynamicCorePoolSize, tableItem)
+    ; MySoftData.DynamicCorePoolSizeCtrl := con
+
+    ; posY += 40
+    ; AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("弹性超时(秒)："), tableItem)
+    ; con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.ElasticTimeout, tableItem)
+    ; MySoftData.ElasticTimeoutCtrl := con
 
     posY += 40
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("软件背景颜色："), tableItem)

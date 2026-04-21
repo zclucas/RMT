@@ -652,12 +652,14 @@ OnToggleTriggerMacro(tableIndex, itemIndex) {
     hasWorker := MyWorkPool.CheckHasFreeWorker()
 
     if (hasWorker) {
-        SetTableItemState(tableItem.index, itemIndex, 1)
         workerPath := MyWorkPool.Get()
-        workerIndex := MyWorkPool.GetWorkIndex(workerPath)
-        tableItem.IsWorkIndexArr[itemIndex] := workerIndex
-        MyWorkPool.PostMessage(WM_TR_MACRO, workerPath, tableIndex, itemIndex)
-        return
+        if (workerPath != "") {
+            SetTableItemState(tableItem.index, itemIndex, 1)
+            workerIndex := MyWorkPool.GetWorkIndex(workerPath)
+            tableItem.IsWorkIndexArr[itemIndex] := workerIndex
+            MyWorkPool.PostMessage(WM_TR_MACRO, workerPath, tableIndex, itemIndex)
+            return
+        }
     }
 
     isTrigger := tableItem.ToggleStateArr[itemIndex]
@@ -689,11 +691,12 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
     SetTableItemState(tableItem.index, itemIndex, 1)
     if (hasWork) {
         workPath := MyWorkPool.Get()
-        workIndex := MyWorkPool.GetWorkIndex(workPath)
-        tableItem.IsWorkIndexArr[itemIndex] := workIndex
-        MyWorkPool.PostMessage(WM_TR_MACRO, workPath, tableIndex, itemIndex)
+        if (workPath != "") {
+            workIndex := MyWorkPool.GetWorkIndex(workPath)
+            tableItem.IsWorkIndexArr[itemIndex] := workIndex
+            MyWorkPool.PostMessage(WM_TR_MACRO, workPath, tableIndex, itemIndex)
+            return
+        }
     }
-    else {
-        OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
-    }
+    OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
 }
