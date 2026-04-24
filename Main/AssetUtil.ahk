@@ -1360,7 +1360,7 @@ GetReplaceVarText(tableItem, tableIndex, text) {
     ResText := text
     ; 替换普通变量
     for index, value in matches {
-        hasValue := TryGetTabVarValue(&variValue, tableItem, tableIndex, value, false)
+        hasValue := TryGetTabVarValue(&variValue, tableItem, tableIndex, value, true)
         if (hasValue)
             ResText := StrReplace(ResText, "{" value "}", variValue)
     }
