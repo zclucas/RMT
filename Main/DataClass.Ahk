@@ -570,7 +570,7 @@ class LoopData {
         CommandStr := ""
         symbolStr := Data.LogicType == 1 ? GetLang("且") : GetLang("或")
         CompareTypeStrArr := GetLangArr(["大于", "大于等于", "等于", "小于等于",
-            "小于", "字符包含", "变量存在"])
+            "小于", "字符包含", "变量存在", "正则匹配"])
 
         loop 4 {
             if (!Data.ToggleArr[A_Index])
