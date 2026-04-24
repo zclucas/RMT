@@ -462,7 +462,7 @@ class CompareProData {
         CommandStr := ""
         symbolStr := Data.LogicTypeArr[itemIndex] == 1 ? GetLang("且") : GetLang("或")
         CompareTypeStrArr := GetLangArr(["大于", "大于等于", "等于", "小于等于",
-            "小于", "字符包含", "变量存在"])
+            "小于", "字符包含", "变量存在", "正则匹配"])
 
         loop Data.VariNameArr[itemIndex].Length {
             VariName := GetLang(Data.VariNameArr[itemIndex][A_Index])
