@@ -1,5 +1,8 @@
 ﻿# RMT 帮助文档 - 一键打包（单文件 HTML）
 # 用法: 右键 → 使用 PowerShell 运行
+# 参数: -NoWait  跳过最后的"按任意键退出"（供 Build.ps1 调用时使用）
+
+param([switch]$NoWait)
 
 $ErrorActionPreference = "Stop"
 $Host.UI.RawUI.WindowTitle = "RMT 文档打包工具"
@@ -13,8 +16,7 @@ $WebDir = Join-Path $ScriptDir "Web/JS"
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "[错误] 未找到 Node.js，请先安装: https://nodejs.org/" -ForegroundColor Red
-    Write-Host "`n按任意键退出..." -ForegroundColor Yellow
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    if (-not $NoWait) { Write-Host "`n按任意键退出..." -ForegroundColor Yellow; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") }
     exit 1
 }
 Write-Host "[1/1] Node.js $(node -v)  正在打包 ..." -ForegroundColor Green
@@ -36,5 +38,4 @@ if (Test-Path $OutputFile) {
     Write-Host "`n[警告] 未找到输出文件，打包可能失败！" -ForegroundColor Red
 }
 
-Write-Host "按任意键退出..." -ForegroundColor Yellow
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+if (-not $NoWait) { Write-Host "按任意键退出..." -ForegroundColor Yellow; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") }
