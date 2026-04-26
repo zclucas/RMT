@@ -59,6 +59,9 @@ SearchOnce(tableItem, Data, index) {
 
     ; 执行搜索
     ImagePath := GetReplaceVarText(tableItem, index, Data.SearchImagePath)
+    if (!ValidateCmdPath(&Data, "SearchImagePath", GetLang("选择搜索图片"), "PNG Files (*.png)", tableItem, index))
+        return false
+    ImagePath := Data.SearchImagePath
     ResXList := [], ResYList := [], ResHwndList := []
     found := DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYList, &ResHwndList)
 

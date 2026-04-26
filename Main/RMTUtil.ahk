@@ -1072,3 +1072,59 @@ UpdateMacroRunningCount(LastState, State) {
         MyCMDTipGui.OnToggleMacroWorkState()
     }
 }
+
+ValidateCmdPath(&Data, pathFieldName, selectTitle, filter, tableItem := "", index := 1, showSelect := true) {
+    if (!ObjHasOwnProp(Data, pathFieldName))
+        return true
+
+    rawPath := Data.%pathFieldName%
+    hasVariable := InStr(rawPath, "{") && InStr(rawPath, "}")
+
+    if (!hasVariable) {
+        if (rawPath == "" || FileExist(rawPath))
+            return true
+
+        if (!showSelect)
+            return false
+
+        tipStr := Format(GetLang("路径 '{}' 不存在，请重新选择"), rawPath)
+        result := CustomMsgBox(tipStr, GetLang("路径缺失"), GetLang("选择文件|跳过本条指令"))
+
+        if (result == 2)
+            return false
+
+        newPath := FileSelect(1, , GetLang(selectTitle), filter)
+        if (newPath == "")
+            return false
+
+        Data.%pathFieldName% := newPath
+        SaveMacroCMDData(Data)
+        return true
+    }
+
+    actualPath := GetReplaceVarText(tableItem, index, rawPath)
+
+    if (actualPath != "" && FileExist(actualPath))
+        return true
+
+    if (!showSelect)
+        return false
+
+    tipStr := Format("{}`n`n{}: {}`n{}: {}",
+        GetLang("变量路径解析后文件不存在"),
+        GetLang("原始配置"), rawPath,
+        GetLang("解析为"), actualPath == "" ? GetLang("(空值)") : actualPath)
+
+    result := CustomMsgBox(tipStr, GetLang("变量路径错误"), GetLang("覆盖变量|跳过本条指令"))
+
+    if (result == 2)
+        return false
+
+    newPath := FileSelect(1, , GetLang(selectTitle), filter)
+    if (newPath == "")
+        return false
+
+    Data.%pathFieldName% := newPath
+    SaveMacroCMDData(Data)
+    return true
+}

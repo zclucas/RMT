@@ -16,7 +16,7 @@ SetFileIOGlobalData(Data) {
 }
 
 ReadExcel(Data, tableItem, index) {
-    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    FilePath := Data.FilePath
     HasRow := TryGetTabVarValue(&Row, tableItem, index, Data.RowVar, true)
     HasCol := TryGetTabVarValue(&Col, tableItem, index, Data.ColVar, true)
     if (!HasRow || !HasCol)
@@ -55,7 +55,7 @@ ReadExcel(Data, tableItem, index) {
 }
 
 WriteExcel(Data, tableItem, index) {
-    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    FilePath := Data.FilePath
     Content := GetReplaceVarText(tableItem, index, Data.Content)
     hasRowValue := TryGetTabVarValue(&RowValue, tableItem, index, Data.RowVar)
     hasColValue := TryGetTabVarValue(&ColValue, tableItem, index, Data.ColVar)
@@ -83,7 +83,7 @@ WriteExcel(Data, tableItem, index) {
 }
 
 ReadTextFile(Data, tableItem, index) {
-    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    FilePath := Data.FilePath
     switch Data.OperMode {
         case "读取全部内容":
             Content := FileRead(FilePath, Data.Encoding)
@@ -117,7 +117,7 @@ ReadTextFile(Data, tableItem, index) {
 }
 
 WriteTextFile(Data, tableItem, index) {
-    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    FilePath := Data.FilePath
     Content := GetReplaceVarText(tableItem, index, Data.Content)
 
     switch Data.OperMode {
