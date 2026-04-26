@@ -35,7 +35,6 @@ if defined VCTOOLS (
 ) else (
     echo [错误] 未找到 MSVC 编译器！
     echo 请安装 Build Tools 并勾选「使用 C++ 的桌面开发」
-    pause
     popd
     exit /b 1
 )
@@ -83,4 +82,3 @@ echo [清理] 删除中间文件...
 del /q "%BUILD_DIR%\RMT_OpenCv.obj" >nul 2>&1
 echo       已清理完毕
 popd
-pause
