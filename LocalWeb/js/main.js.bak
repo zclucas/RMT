@@ -1,0 +1,916 @@
+// RMT 主界面 JavaScript
+// 处理与 AHK 的双向通信
+
+let currentData = {};
+let currentTabIndex = 1;
+let tabDataCache = {};  // Tab数据缓存
+
+// 获取 ahk 宿主对象（同步方式）
+function getAhkObj() {
+    if (window.chrome && window.chrome.webview && window.chrome.webview.hostObjects) {
+        return window.chrome.webview.hostObjects.sync.ahk;
+    }
+    return null;
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    initTabs();
+    loadInitialData();
+});
+
+// 初始化 Tab 点击事件
+function initTabs() {
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            switchTab(index);
+        });
+    });
+}
+
+// 获取指定Tab的数据
+function loadTabData(tabIndex) {
+    var ahk = getAhkObj();
+    if (!ahk || !ahk.GetMacroData) {
+        console.log('loadTabData: ahk或GetMacroData不存在');
+        return null;
+    }
+
+    try {
+        var result = ahk.GetMacroData(tabIndex);
+        console.log('loadTabData tab' + tabIndex + '原始返回:', result);
+
+        // 如果返回的是JSON字符串，解析它
+        var data = typeof result === 'string' ? JSON.parse(result) : result;
+        console.log('loadTabData解析后:', JSON.stringify(data).substring(0, 1000));
+        return data;
+    } catch(e) {
+        console.log('GetMacroData error:', e.message || e);
+        return null;
+    }
+}
+
+// 加载初始数据
+function loadInitialData() {
+    var ahk = getAhkObj();
+
+    if (!ahk) {
+        console.log('等待 ahk 对象...');
+        setTimeout(loadInitialData, 500);
+        return;
+    }
+
+    try {
+        // 同步调用 GetInitialData
+        var result = ahk.GetInitialData();
+        console.log('GetInitialData 返回:', result);
+
+        if (result && result.configName) {
+            renderUI(result);
+        } else {
+            // 返回数据为空，1秒后重试
+            setTimeout(loadInitialData, 1000);
+        }
+    } catch(e) {
+        console.log('GetInitialData 错误:', e.message || e);
+        setTimeout(loadInitialData, 1000);
+    }
+}
+
+// 渲染 UI
+function renderUI(data) {
+    if (!data) return;
+
+    var ahk = getAhkObj();
+
+    // 配置名称
+    document.getElementById('configName').textContent = data.configName || '未设置';
+
+    // 格式化热键显示
+    var formatHotkey = function(hk) {
+        if (!hk) return '-';
+        if (ahk && ahk.FormatHotkey) {
+            try {
+                return ahk.FormatHotkey(hk);
+            } catch(e) {}
+        }
+        // 备用手动转换
+        return hk.replace(/^!/gi, 'Alt+')
+                 .replace(/^\+/gi, 'Shift+')
+                 .replace(/^#/gi, 'Win+')
+                 .replace(/^\^/gi, 'Ctrl+');
+    };
+
+    // 休眠状态
+    document.getElementById('suspendToggle').checked = data.isSuspend || false;
+    document.getElementById('suspendHotkey').textContent = formatHotkey(data.suspendHotkey);
+
+    // 暂停状态
+    document.getElementById('pauseToggle').checked = data.isPause || false;
+    document.getElementById('pauseHotkey').textContent = formatHotkey(data.pauseHotkey);
+
+    // 终止热键
+    document.getElementById('killHotkey').textContent = formatHotkey(data.killHotkey);
+
+    // Tab
+    if (data.tabIndex) {
+        switchTab(data.tabIndex);
+    }
+
+    // Tab 名称
+    if (data.tabNames && data.tabNames.length > 0) {
+        updateTabNames(data.tabNames);
+    }
+
+    // 背景色
+    if (data.bgColor) {
+        document.body.style.backgroundColor = '#' + data.bgColor;
+    }
+}
+
+// 更新 Tab 名称
+function updateTabNames(names) {
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach((tab, index) => {
+        if (names[index]) {
+            tab.textContent = names[index];
+        }
+    });
+}
+
+// 切换 Tab
+function switchTab(index) {
+    if (index === currentTabIndex) return;
+
+    currentTabIndex = index;
+
+    // 更新 Tab 样式
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+        const tabIndex = parseInt(tab.getAttribute('data-index'));
+        if (tabIndex === index) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+
+    // 通知 AHK
+    if (window.ahk && window.ahk.TabChange) {
+        window.ahk.TabChange(index);
+    }
+
+    // 更新内容区
+    updateTabContent(index);
+}
+
+// 更新 Tab 内容 - 各tab完整UI
+function updateTabContent(index) {
+    const content = document.getElementById('tabContent');
+
+    // Tab 内容渲染函数映射
+    const tabRenderers = {
+        1: renderKeyMacroTab,      // 按键宏
+        2: renderStrMacroTab,      // 字串宏
+        3: renderMenuMacroTab,     // 菜单宏
+        4: renderTimingMacroTab,    // 定时宏
+        5: renderMacroTab,        // 宏
+        6: renderReplaceKeyTab,    // 按键替换
+        7: renderToolTab,         // 工具
+        8: renderSettingTab,       // 设置
+        9: renderHelpTab,         // 帮助
+        10: renderDonateTab,       // 打赏
+        11: renderThanksTab       // 感谢
+    };
+
+    const renderer = tabRenderers[index];
+    if (renderer) {
+        content.innerHTML = renderer();
+    } else {
+        content.innerHTML = '<div class="placeholder"><p>未知 Tab</p></div>';
+    }
+}
+
+// ========== Tab1: 按键宏 ==========
+function renderKeyMacroTab() {
+    // 获取数据
+    var data = loadTabData(1);
+
+    // 如果没有数据，显示空状态
+    if (!data || !data.folds || data.folds.length === 0) {
+        return renderEmptyKeyMacroTab();
+    }
+
+    var html = '<div class="tab-panel tab-keymacro">';
+    html += '<div class="fold-container" id="keyMacroContainer">';
+
+    // 遍历每个折叠模块
+    for (var f = 0; f < data.folds.length; f++) {
+        var fold = data.folds[f];
+        var foldState = fold.foldState ? '展开' : '折叠';
+        var foldToggleIcon = fold.foldState ? '🞃' : '❯';
+
+        html += '<div class="fold-item" data-fold-index="' + f + '">';
+        html += '<div class="fold-header">';
+        html += '<div class="fold-title">';
+        html += '<input type="text" class="remark-input" placeholder="备注" value="' + escapeHtml(fold.remark || '') + '">';
+        html += '<span class="fold-label">前台:</span>';
+        html += '<input type="text" class="front-input" placeholder="前台窗口" value="' + escapeHtml(fold.frontInfo || '') + '">';
+        html += '<button class="btn-edit-front">编辑</button>';
+        html += '</div>';
+        html += '<div class="fold-actions">';
+        html += '<button class="btn-add-macro">新增宏</button>';
+        html += '<button class="btn-add-fold">新增模块</button>';
+        html += '<button class="btn-del-fold">删除模块</button>';
+        html += '<label class="checkbox-forbid">';
+        html += '<input type="checkbox" ' + (fold.forbid ? 'checked' : '') + '>';
+        html += '<span>禁用</span>';
+        html += '</label>';
+        html += '<button class="btn-fold-toggle">' + foldToggleIcon + '</button>';
+        html += '</div></div>';  // fold-header
+
+        // 折叠内容区域
+        if (fold.foldState) {
+            html += '<div class="fold-content" style="display:none;">';
+        } else {
+            html += '<div class="fold-content">';
+        }
+
+        html += '<div class="item-header">';
+        html += '<span class="col-name">宏名称</span>';
+        html += '<span class="col-trigger">触发编辑器</span>';
+        html += '<span class="col-type">触发类型</span>';
+        html += '<span class="col-loop">循环次数</span>';
+        html += '<span class="col-setting">宏设置</span>';
+        html += '<span class="col-edit">宏编辑器</span>';
+        html += '</div>';
+
+        // 获取该fold下的macros
+        var macros = data.macros || [];
+        var indexSpan = fold.indexSpan.split('-');
+        var startIdx = parseInt(indexSpan[0]);
+        var endIdx = parseInt(indexSpan[1]);
+
+        if (startIdx && endIdx) {
+            for (var m = 0; m < macros.length; m++) {
+                var macro = macros[m];
+                if (macro.index >= startIdx && macro.index <= endIdx) {
+                    html += renderMacroItemHtml(macro, f);
+                }
+            }
+        }
+
+        html += '</div></div>';  // fold-content, fold-item
+    }
+
+    html += '</div></div>';  // fold-container, tab-panel
+    return html;
+}
+
+// 渲染单个宏项HTML
+function renderMacroItemHtml(macro, foldIndex) {
+    var triggerTypeArr = ['按下', '松开', '松止', '开关', '长按'];
+    var triggerType = macro.triggerType || 1;
+
+    var html = '<div class="macro-item" data-index="' + macro.index + '" data-fold="' + foldIndex + '">';
+    html += '<span class="item-color"' + (macro.color ? ' style="background:' + macro.color + '"' : '') + '></span>';
+    html += '<span class="item-index">' + macro.index + '.</span>';
+    html += '<input type="text" class="item-remark" placeholder="备注" value="' + escapeHtml(macro.remark || '') + '">';
+    html += '<button class="item-trigger">' + escapeHtml(macro.tk || '') + '</button>';
+
+    // 触发类型下拉
+    html += '<select class="item-type">';
+    for (var t = 0; t < triggerTypeArr.length; t++) {
+        html += '<option value="' + (t + 1) + '"' + (triggerType == t + 1 ? ' selected' : '') + '>' + triggerTypeArr[t] + '</option>';
+    }
+    html += '</select>';
+
+    html += '<input type="text" class="item-loop" value="' + escapeHtml(macro.loopCount || '1') + '">';
+    html += '<button class="item-setting">设置</button>';
+    html += '<button class="item-edit">编辑</button>';
+    html += '<button class="item-move-up">↑</button>';
+    html += '<button class="item-move-down">↓</button>';
+    html += '<label class="item-forbid">';
+    html += '<input type="checkbox" ' + (macro.forbid ? 'checked' : '') + '>';
+    html += '<span>禁用</span>';
+    html += '</label>';
+    html += '<button class="item-del">删除</button>';
+    html += '</div>';
+
+    return html;
+}
+
+// 空状态的按键宏Tab
+function renderEmptyKeyMacroTab() {
+    return `
+<div class="tab-panel tab-keymacro">
+    <div class="empty-tip">
+        <p>暂无宏配置</p>
+        <p>点击"新增宏"或"新增模块"开始创建宏</p>
+    </div>
+</div>`;
+}
+
+// HTML转义
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;')
+               .replace(/</g, '&lt;')
+               .replace(/>/g, '&gt;')
+               .replace(/"/g, '&quot;')
+               .replace(/'/g, '&#039;');
+}
+
+// ========== Tab2: 字串宏 ==========
+// ========== Tab2: 字串宏 ==========
+function renderStrMacroTab() {
+    return renderCommonMacroTab(2);
+}
+
+// ========== Tab3: 菜单宏 ==========
+function renderMenuMacroTab() {
+    return renderCommonMacroTab(3);
+}
+        <div class="fold-item" data-fold-index="0">
+            <div class="fold-header">
+                <div class="fold-title">
+                    <input type="text" class="remark-input" placeholder="备注" value="">
+                    <span class="fold-label">前台:</span>
+                    <input type="text" class="front-input" placeholder="前台窗口" value="">
+                    <button class="btn-edit-front">编辑</button>
+                </div>
+                <div class="fold-actions">
+                    <button class="btn-add-macro">新增宏</button>
+                    <button class="btn-add-fold">新增模块</button>
+                    <button class="btn-del-fold">删除模块</button>
+                    <label class="checkbox-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="btn-fold-toggle">❯</button>
+                </div>
+            </div>
+            <div class="fold-content">
+                <div class="item-header">
+                    <span class="col-name">宏名称</span>
+                    <span class="col-trigger">触发编辑器</span>
+                    <span class="col-type">触发类型</span>
+                    <span class="col-loop">循环次数</span>
+                    <span class="col-setting">宏设置</span>
+                    <span class="col-edit">宏编辑器</span>
+                </div>
+                <div class="macro-item" data-index="1">
+                    <span class="item-color"></span>
+                    <span class="item-index">1.</span>
+                    <input type="text" class="item-remark" placeholder="备注" value="">
+                    <button class="item-trigger">编辑</button>
+                    <select class="item-type">
+                        <option value="1" selected>按下</option>
+                        <option value="2">松开</option>
+                        <option value="3">松止</option>
+                        <option value="4">开关</option>
+                        <option value="5">长按</option>
+                    </select>
+                    <input type="text" class="item-loop" value="1">
+                    <button class="item-setting">设���</button>
+                    <button class="item-edit">编辑</button>
+                    <button class="item-move-up">↑</button>
+                    <button class="item-move-down">↓</button>
+                    <label class="item-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="item-del">删除</button>
+                </div>
+                <div class="macro-item" data-index="2">
+                    <span class="item-color"></span>
+                    <span class="item-index">2.</span>
+                    <input type="text" class="item-remark" placeholder="备注" value="">
+                    <button class="item-trigger">编辑</button>
+                    <select class="item-type">
+                        <option value="1" selected>按下</option>
+                        <option value="2">松开</option>
+                        <option value="3">松止</option>
+                        <option value="4">开关</option>
+                        <option value="5">长按</option>
+                    </select>
+                    <input type="text" class="item-loop" value="1">
+                    <button class="item-setting">设置</button>
+                    <button class="item-edit">编辑</button>
+                    <button class="item-move-up">↑</button>
+                    <button class="item-move-down">↓</button>
+                    <label class="item-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="item-del">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>`;
+}
+
+// ========== Tab4: 定时宏 ==========
+function renderTimingMacroTab() {
+    return `
+<div class="tab-panel tab-timingmacro">
+    <div class="fold-container" id="timingMacroContainer">
+        <div class="fold-item" data-fold-index="0">
+            <div class="fold-header">
+                <div class="fold-title">
+                    <input type="text" class="remark-input" placeholder="备注" value="">
+                    <span class="fold-label">前台:</span>
+                    <input type="text" class="front-input" placeholder="前台窗口" value="">
+                    <button class="btn-edit-front">编辑</button>
+                </div>
+                <div class="fold-actions">
+                    <button class="btn-add-macro">新增宏</button>
+                    <button class="btn-add-fold">新增模块</button>
+                    <button class="btn-del-fold">删除模块</button>
+                    <label class="checkbox-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="btn-fold-toggle">❯</button>
+                </div>
+            </div>
+            <div class="fold-content">
+                <div class="item-header">
+                    <span class="col-name">宏名称</span>
+                    <span class="col-trigger">触发编辑器</span>
+                    <span class="col-type">触发类型</span>
+                    <span class="col-loop">循环次数</span>
+                    <span class="col-setting">宏设置</span>
+                    <span class="col-edit">宏编辑器</span>
+                </div>
+                <div class="macro-item" data-index="1">
+                    <span class="item-color"></span>
+                    <span class="item-index">1.</span>
+                    <input type="text" class="item-remark" placeholder="备注" value="">
+                    <button class="item-trigger">定时</button>
+                    <select class="item-type">
+                        <option value="1" selected>按下</option>
+                        <option value="2">松开</option>
+                        <option value="3">松止</option>
+                        <option value="4">开关</option>
+                        <option value="5">长按</option>
+                    </select>
+                    <input type="text" class="item-loop" value="1">
+                    <button class="item-setting">设置</button>
+                    <button class="item-edit">编辑</button>
+                    <button class="item-move-up">↑</button>
+                    <button class="item-move-down">↓</button>
+                    <label class="item-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="item-del">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>`;
+}
+
+// ========== Tab5: 宏 ==========
+function renderMacroTab() {
+    return `
+<div class="tab-panel tab-macro">
+    <div class="fold-container" id="macroContainer">
+        <div class="fold-item" data-fold-index="0">
+            <div class="fold-header">
+                <div class="fold-title">
+                    <input type="text" class="remark-input" placeholder="备注" value="">
+                    <span class="fold-label">前台:</span>
+                    <input type="text" class="front-input" placeholder="前台窗口" value="">
+                    <button class="btn-edit-front">编辑</button>
+                </div>
+                <div class="fold-actions">
+                    <button class="btn-add-macro">新增宏</button>
+                    <button class="btn-add-fold">新增模块</button>
+                    <button class="btn-del-fold">删除模块</button>
+                    <label class="checkbox-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="btn-fold-toggle">❯</button>
+                </div>
+            </div>
+            <div class="fold-content">
+                <div class="item-header">
+                    <span class="col-name">宏名称</span>
+                    <span class="col-trigger">触发编辑器</span>
+                    <span class="col-type">触发类型</span>
+                    <span class="col-loop">循环次数</span>
+                    <span class="col-setting">宏设置</span>
+                    <span class="col-edit">宏编辑器</span>
+                </div>
+                <div class="macro-item" data-index="1">
+                    <span class="item-color"></span>
+                    <span class="item-index">1.</span>
+                    <input type="text" class="item-remark" placeholder="备注" value="">
+                    <button class="item-trigger">编辑</button>
+                    <select class="item-type">
+                        <option value="1" selected>按下</option>
+                        <option value="2">松开</option>
+                        <option value="3">松止</option>
+                        <option value="4">开关</option>
+                        <option value="5">长按</option>
+                    </select>
+                    <input type="text" class="item-loop" value="1">
+                    <button class="item-setting">设置</button>
+                    <button class="item-edit">编辑</button>
+                    <button class="item-move-up">↑</button>
+                    <button class="item-move-down">↓</button>
+                    <label class="item-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="item-del">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>`;
+}
+
+// ========== Tab6: 按键替换 ==========
+function renderReplaceKeyTab() {
+    return `
+<div class="tab-panel tab-replacekey">
+    <div class="fold-container" id="replaceKeyContainer">
+        <div class="fold-item" data-fold-index="0">
+            <div class="fold-header">
+                <div class="fold-title">
+                    <input type="text" class="remark-input" placeholder="备注" value="">
+                    <span class="fold-label">前台:</span>
+                    <input type="text" class="front-input" placeholder="前台窗口" value="">
+                </div>
+                <div class="fold-actions">
+                    <button class="btn-add-macro">新增</button>
+                    <button class="btn-add-fold">新增模块</button>
+                    <button class="btn-del-fold">删除模块</button>
+                    <label class="checkbox-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="btn-fold-toggle">❯</button>
+                </div>
+            </div>
+            <div class="fold-content">
+                <div class="item-header">
+                    <span class="col-name">名称</span>
+                    <span class="col-trigger">原按键</span>
+                    <span class="col-type">替换为</span>
+                    <span class="col-loop">循环次数</span>
+                    <span class="col-setting">设置</span>
+                    <span class="col-edit">编辑器</span>
+                </div>
+                <div class="macro-item" data-index="1">
+                    <span class="item-color"></span>
+                    <span class="item-index">1.</span>
+                    <input type="text" class="item-remark" placeholder="备注" value="">
+                    <button class="item-trigger">a</button>
+                    <input type="text" class="item-type" value="b">
+                    <input type="text" class="item-loop" value="1">
+                    <button class="item-setting">设置</button>
+                    <button class="item-edit">编辑</button>
+                    <button class="item-move-up">↑</button>
+                    <button class="item-move-down">↓</button>
+                    <label class="item-forbid">
+                        <input type="checkbox">
+                        <span>禁用</span>
+                    </label>
+                    <button class="item-del">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>`;
+}
+
+// ========== Tab7: 工具 ==========
+function renderToolTab() {
+    return `
+<div class="tab-panel tab-tool">
+    <div class="tool-grid">
+        <div class="tool-card" onclick="openTool('record')">
+            <div class="tool-icon">🎤</div>
+            <div class="tool-name">录制宏</div>
+            <div class="tool-desc">录制键盘鼠标操作</div>
+        </div>
+        <div class="tool-card" onclick="openTool('searchImg')">
+            <div class="tool-icon">🔍</div>
+            <div class="tool-name">图片搜索</div>
+            <div class="tool-desc">查找屏幕上指定图片</div>
+        </div>
+        <div class="tool-card" onclick="openTool('searchColor')">
+            <div class="tool-icon">🎨</div>
+            <div class="tool-name">颜色搜索</div>
+            <div class="tool-desc">查找屏幕上指定颜色</div>
+        </div>
+        <div class="tool-card" onclick="openTool('ocr')">
+            <div class="tool-icon">📝</div>
+            <div class="tool-name">文字识别</div>
+            <div class="tool-desc">OCR 识别屏幕文字</div>
+        </div>
+        <div class="tool-card" onclick="openTool('run')">
+            <div class="tool-icon">⚡</div>
+            <div class="tool-name">运行程序</div>
+            <div class="tool-desc">运行外部程序</div>
+        </div>
+        <div class="tool-card" onclick="openTool('variable')">
+            <div class="tool-icon">📦</div>
+            <div class="tool-name">变量管理</div>
+            <div class="tool-desc">管理系统变量</div>
+        </div>
+        <div class="tool-card" onclick="openTool('compare')">
+            <div class="tool-icon">📋</div>
+            <div class="tool-name">文本对比</div>
+            <div class="tool-desc">对比两份文本差异</div>
+        </div>
+        <div class="tool-card" onclick="openTool('loop')">
+            <div class="tool-icon">🔁</div>
+            <div class="tool-name">循环测试</div>
+            <div class="tool-desc">测试宏循环执行</div>
+        </div>
+        <div class="tool-card" onclick="openTool('input')">
+            <div class="tool-icon">⌨️</div>
+            <div class="tool-name">自定义输入</div>
+            <div class="tool-desc">自定义键盘输入</div>
+        </div>
+        <div class="tool-card" onclick="openTool('mouse')">
+            <div class="tool-icon">🖱️</div>
+            <div class="tool-name">鼠标录制</div>
+            <div class="tool-desc">录制鼠标操作</div>
+        </div>
+        <div class="tool-card" onclick="openTool('bgmouse')">
+            <div class="tool-icon">📍</div>
+            <div class="tool-name">后台鼠标</div>
+            <div class="tool-desc">后台鼠标操作</div>
+        </div>
+        <div class="tool-card" onclick="openTool('output')">
+            <div class="tool-icon">💬</div>
+            <div class="tool-name">输出信息</div>
+            <div class="tool-desc">输出提示信息</div>
+        </div>
+    </div>
+</div>`;
+}
+
+// ========== Tab8: 设置 ==========
+function renderSettingTab() {
+    return `
+<div class="tab-panel tab-setting">
+    <div class="settings-section">
+        <div class="settings-section-title">常规设置</div>
+        <div class="settings-item">
+            <span class="item-label">启动时自动运行</span>
+            <span class="item-value">
+                <input type="checkbox" checked>
+            </span>
+        </div>
+        <div class="settings-item">
+            <span class="item-label">启动后自动休眠</span>
+            <span class="item-value">
+                <input type="checkbox">
+            </span>
+        </div>
+        <div class="settings-item">
+            <span class="item-label">启动��自��最小化</span>
+            <span class="item-value">
+                <input type="checkbox">
+            </span>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <div class="settings-section-title">热键设置</div>
+        <div class="settings-item">
+            <span class="item-label">休眠切换</span>
+            <span class="item-value">F9</span>
+        </div>
+        <div class="settings-item">
+            <span class="item-label">暂停切换</span>
+            <span class="item-value">F10</span>
+        </div>
+        <div class="settings-item">
+            <span class="item-label">终止所有宏</span>
+            <span class="item-value">F11</span>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <div class="settings-section-title">输出设置</div>
+        <div class="settings-item">
+            <span class="item-label">显示执行提示</span>
+            <span class="item-value">
+                <input type="checkbox" checked>
+            </span>
+        </div>
+        <div class="settings-item">
+            <span class="item-label">显示执行时间</span>
+            <span class="item-value">
+                <input type="checkbox" checked>
+            </span>
+        </div>
+        <div class="settings-item">
+            <span class="item-label">提示音</span>
+            <span class="item-value">
+                <input type="checkbox" checked>
+            </span>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <div class="settings-section-title">高级设置</div>
+        <div class="settings-item">
+            <span class="item-label">线程数</span>
+            <span class="item-value">3</span>
+        </div>
+        <div class="settings-item">
+            <span class="item-label">最大循环次数</span>
+            <span class="item-value">9999</span>
+        </div>
+    </div>
+</div>`;
+}
+
+// ========== Tab9: 帮助 ==========
+function renderHelpTab() {
+    return `
+<div class="tab-panel tab-help">
+    <div class="help-content">
+        <div class="help-section">
+            <h3>快速入门</h3>
+            <p>欢迎使用 RMT 若梦兔按键宏！本软件可以帮助您自动化键盘鼠标操作。</p>
+            <p><strong>基本操作：</strong></p>
+            <p>1. 点击"新增宏"创建新的宏</p>
+            <p>2. 设置触发按键和触发类型</p>
+            <p>3. 编写宏指令内容</p>
+            <p>4. 保存配置并启用</p>
+        </div>
+
+        <div class="help-section">
+            <h3>触发类型</h3>
+            <p><strong>按下</strong> - 按住按键时执行</p>
+            <p><strong>松开</strong> - 松开按键时执行</p>
+            <p><strong>松止</strong> - 松开按键后开始计时执行</p>
+            <p><strong>开关</strong> - 按一下执行，再按一下停止</p>
+            <p><strong>长按</strong> - 按住一定时间后执行</p>
+        </div>
+
+        <div class="help-section">
+            <h3>常用指令</h3>
+            <p><strong>键盘指令：</strong></p>
+            <div class="help-code">KeyPress a        ; 按下 a 键
+KeyDown a        ; 按住 a 键
+KeyUp a          ; 松开 a 键
+KeyWait a       ; 等待按键</div>
+
+            <p><strong>鼠标指令：</strong></p>
+            <div class="help-code">Click 100, 200     ; 点击坐标
+Move 100, 200   ; 移动鼠标
+WheelDown        ; 向下滚动</div>
+
+            <p><strong>延时指令：</strong></p>
+            <div class="help-code">Sleep 1000       ; 延时 1 秒</div>
+        </div>
+
+        <div class="help-section">
+            <h3>注意事项</h3>
+            <p>1. 使用前台窗口限定可以避免宏在不需要的窗口触发</p>
+            <p>2. 建议先在测试窗口验证宏功能</p>
+            <p>3. 如果宏无法执行，检查是否被休眠或暂停</p>
+        </div>
+    </div>
+</div>`;
+}
+
+// ========== Tab10: 打赏 ==========
+function renderDonateTab() {
+    return `
+<div class="tab-panel tab-donate">
+    <div class="donate-card">
+        <div class="donate-icon">❤️</div>
+        <h2>支持 RMT</h2>
+        <p>如果您觉得 RMT 若梦兔按键宏对您有帮助，欢迎打赏支持作者的开发和维护工作！</p>
+        <div class="donate-qr">
+            <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIwIiBmaWxsPSIjMzMzIj7lvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHlvIDlj5HmqKHnvqHpmaKHmiYDmnInpgYflnoDkuLrkuJrkuLLlu7rliqglv4alog70ifTwvdGV4dD48L3N2Zz4=" alt="打赏二维码">
+        </div>
+        <p>扫码打赏，金额随意，感谢支持！</p>
+    </div>
+</div>`;
+}
+
+// ========== Tab11: 感谢 ==========
+function renderThanksTab() {
+    return `
+<div class="tab-panel tab-thanks">
+    <div class="thanks-card">
+        <div class="thanks-icon">🙏</div>
+        <h2>感谢名单</h2>
+        <p>感谢以下朋友对 RMT 的支持和赞助！</p>
+        <div class="thanks-list">
+            <div class="thanks-item">😀 朋友A</div>
+            <div class="thanks-item">😀 朋友B</div>
+            <div class="thanks-item">😀 朋友C</div>
+        </div>
+        <p style="margin-top: 30px;">感谢大家的陪伴与支持！</p>
+    </div>
+</div>`;
+}
+
+// ========== 工具函数 ==========
+
+// 休眠切换
+function onSuspendChange() {
+    if (window.ahk && window.ahk.SuspendToggle) {
+        window.ahk.SuspendToggle();
+    }
+}
+
+// 暂停切换
+function onPauseChange() {
+    if (window.ahk && window.ahk.PauseToggle) {
+        window.ahk.PauseToggle();
+    }
+}
+
+// 终止所有宏
+function killAllMacro() {
+    var ahk = getAhkObj();
+    if (ahk) {
+        ahk.KillAllMacro();
+    }
+}
+
+// 保存设置
+function saveSetting() {
+    var ahk = getAhkObj();
+    if (ahk && ahk.SaveSetting) {
+        try {
+            ahk.SaveSetting();
+            console.log('保存成功');
+            // 保存后刷新当前Tab数据
+            var content = document.getElementById('tabContent');
+            if (content && currentTabIndex >= 1 && currentTabIndex <= 6) {
+                // 刷新宏编辑Tab
+                updateTabContent(currentTabIndex);
+            }
+        } catch(e) {
+            console.log('保存失败:', e.message || e);
+        }
+    }
+}
+
+// 重载
+function reloadApp() {
+    var ahk = getAhkObj();
+    if (ahk) {
+        ahk.Reload();
+    }
+}
+
+// 打开配置管理
+function openSettingMgr() {
+    var ahk = getAhkObj();
+    if (ahk) {
+        ahk.ShowSettingMgr();
+    }
+}
+
+// 打开工具
+function openTool(toolName) {
+    var ahk = getAhkObj();
+    if (ahk && ahk.OpenTool) {
+        ahk.OpenTool(toolName);
+    }
+}
+
+// 显示帮助
+function showHelp() {
+    var ahk = getAhkObj();
+    if (ahk) {
+        ahk.ShowHelp();
+    } else {
+        window.location.href = 'RMT帮助文档.html';
+    }
+}
+
+// 接收 AHK 消息
+function onAHKMessage(msg) {
+    console.log('收到 AHK 消息:', msg);
+
+    if (msg.action === 'initData' && msg.data) {
+        renderUI(msg.data);
+    } else if (msg.action === 'tabChanged' && msg.data) {
+        switchTab(msg.data.tabIndex);
+    }
+}
+
+// 导出给 AHK 调用
+window.onAHKMessage = onAHKMessage;

@@ -6,7 +6,10 @@
       "Bash(comm -23 /tmp/getlang_sorted.txt /tmp/chinese_sorted.txt)",
       "Read(//tmp/**)",
       "Bash(echo -e \"a\\\\nb\\\\nc\")",
-      "Bash(echo -e \"b\\\\nc\\\\nd\")"
+      "Bash(echo -e \"b\\\\nc\\\\nd\")",
+      "WebSearch",
+      "WebFetch(domain:gitee.com)",
+      "Bash(Start /wait /b ahk2.exe /e \"Main\\\\WebView2UI.ahk\")"
     ]
   }
 }

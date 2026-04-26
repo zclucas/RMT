@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RMT - 若梦兔按键宏</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/tab-panel.css">
+    <style>
+        /* 字体优先级：微软雅黑优先，然后其他中文兼容字体 */
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', 'Roboto', Arial, sans-serif !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 左侧侧边栏 -->
+        <aside class="sidebar">
+            <div class="current-config">
+                <div class="config-label">当前配置</div>
+                <div class="config-name" id="configName">加载中...</div>
+                <button class="btn btn-primary" onclick="openSettingMgr()">配置管理</button>
+            </div>
+
+            <div class="global-actions">
+                <div class="group-title">全局操作</div>
+
+                <!-- 休眠 -->
+                <div class="action-row checkbox-action">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="suspendToggle" onchange="onSuspendChange()">
+                        <span>休眠</span>
+                    </label>
+                    <span class="hotkey" id="suspendHotkey">-</span>
+                </div>
+
+                <!-- 暂停 -->
+                <div class="action-row checkbox-action">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="pauseToggle" onchange="onPauseChange()">
+                        <span>暂停</span>
+                    </label>
+                    <span class="hotkey" id="pauseHotkey">-</span>
+                </div>
+
+                <!-- 终止所有宏 -->
+                <div class="action-row">
+                    <button class="btn btn-danger" onclick="killAllMacro()">终止宏</button>
+                    <span class="hotkey" id="killHotkey" style="text-align:center;">-</span>
+                </div>
+
+                <!-- 重载 -->
+                <div class="action-row">
+                    <button class="btn btn-secondary" onclick="reloadApp()">重载</button>
+                </div>
+
+                <!-- 帮助 -->
+                <div class="action-row">
+                    <button class="btn btn-info" onclick="showHelp()">帮助</button>
+                </div>
+
+                <!-- 保存 -->
+                <div class="action-row save-row">
+                    <button class="btn btn-primary" onclick="saveSetting()">保存</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 右侧主内容区 -->
+        <main class="content">
+            <!-- Tab 导航 -->
+            <div class="tabs" id="tabNav">
+                <button class="tab active" data-index="1">按键宏</button>
+                <button class="tab" data-index="2">字串宏</button>
+                <button class="tab" data-index="3">菜单宏</button>
+                <button class="tab" data-index="4">定时宏</button>
+                <button class="tab" data-index="5">宏</button>
+                <button class="tab" data-index="6">按键替换</button>
+                <button class="tab" data-index="7">工具</button>
+                <button class="tab" data-index="8">设置</button>
+                <button class="tab" data-index="9">帮助</button>
+                <button class="tab" data-index="10">打赏</button>
+                <button class="tab" data-index="11">感谢</button>
+            </div>
+
+            <!-- Tab 内容区域 -->
+            <div class="tab-content" id="tabContent">
+                <div class="placeholder">
+                    <p>正在加载 RMT 主界面...</p>
+                    <p class="sub-text">Material Design UI</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@
 #Include Plugins\CLR.ahk
 #Include Plugins\IbInputSimulator.ahk
 #Include Plugins\ViGEm\AHK-ViGEm-Bus-v2.ahk
+#Include Plugins\WebView2\WebView2.ahk
 #Include Main\JoyMacro.ahk
 #Include Main\RecordJoyUtil.ahk
 #Include Main\LineOverlay.ahk
@@ -11,6 +12,7 @@
 #Include Main\RMTUtil.ahk
 #Include Main\WorkPool.ahk
 #Include Main\UIUtil.ahk
+#Include Main\WebView2UI.ahk
 #Include Main\TimingUtil.ahk
 #Include Main\BindUtil.ahk
 #Include Main\VariableUtil.ahk
@@ -23,7 +25,7 @@ LoadCurMacroSetting()   ;加载当前配置宏
 HandleOpenArg()         ;处理打开软件的参数
 EditListen()        ;右键编辑数据监听
 InitData()          ;初始化软件数据
-InitUI()            ;初始化UI
+WebView2UI.Init()    ;初始化 WebView2 UI
 SetEditData()      ;缓存编辑器数据
 
 ;放后面初始化，因为这初始化时间比较长
