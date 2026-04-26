@@ -998,8 +998,9 @@ OnFileIO(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
-    if (!FileExist(Data.FilePath)) {
-        MsgBox(GetLang("{}文件不存在"), Data.FilePath)
+    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    if (!FileExist(FilePath)) {
+        MsgBox(GetLang("{}文件不存在"), FilePath)
         return
     }
 
