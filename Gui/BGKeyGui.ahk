@@ -6,6 +6,7 @@ class BGKeyGui {
         this.Gui := ""
         this.SureBtnAction := ""
         this.SaveBtnAction := ""
+        this.OwnerHwnd := ""
 
         this.SerialStr := ""
         this.Data := ""
@@ -29,12 +30,21 @@ class BGKeyGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
             for key, value in this.ConMap {
                 this.ConHwndMap.Set(value.Hwnd, value)
+            }
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
             }
         }
 
@@ -46,6 +56,9 @@ class BGKeyGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("后台按键编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 20
@@ -761,7 +774,18 @@ class BGKeyGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} h{} w{} center", PosX, PosY, 40, 100), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnSureBtnClick())
 
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 1260, 420))
+    }
+
+    OnGuiClose() {
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     Init(cmd) {
@@ -921,6 +945,12 @@ class BGKeyGui {
         this.SaveBGKeyData()
         action := this.SureBtnAction
         action(this.GetCommandStr())
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 

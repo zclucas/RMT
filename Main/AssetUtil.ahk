@@ -385,6 +385,7 @@ LoadMainSetting() {
     MySoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", false)
     MySoftData.ShowSplitLine := IniRead(IniFile, IniSection, "ShowSplitLine", false)
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
+    MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
     MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", 3)
     MySoftData.SoftBGColor := IniRead(IniFile, IniSection, "SoftBGColor", "f0f0f0")
     MySoftData.NoVariableTip := IniRead(IniFile, IniSection, "NoVariableTip", true)

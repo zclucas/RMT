@@ -294,6 +294,13 @@ class CompareProEditItemGui {
             this.MacroGui.ParentTile := ParentTile "-"
         }
 
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MacroGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MacroGui.OwnerHwnd := ""
+        }
+
         this.MacroGui.SureBtnAction := (command) => this.OnMacroBtnClick(command)
         this.MacroGui.ShowGui(this.MacroCon.Value, false)
     }
