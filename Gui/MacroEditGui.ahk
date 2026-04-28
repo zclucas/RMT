@@ -22,6 +22,7 @@
 #Include ArrayGui.ahk
 #Include InputGui.ahk
 #Include FileIOGui.ahk
+#Include WindowManageGui.ahk
 
 class MacroEditGui {
     __new() {
@@ -54,7 +55,7 @@ class MacroEditGui {
         this.SubMacroLastIndex := 0
 
         this.CMDStrArr := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "移动", "移动Pro", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键"])
+            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
@@ -66,14 +67,15 @@ class MacroEditGui {
             "Images\Soft\Operation.png", "Images\Soft\Run.png",
             "Images\Soft\FileIO.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
-            "Images\Soft\Mouse.png", "Images\Soft\Key.png"]
+            "Images\Soft\Mouse.png", "Images\Soft\Key.png",
+            "Images\Soft\WindowManage.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("搜索"), "Icon3", GetLang("搜索Pro"),
         "Icon4", GetLang("移动"), "Icon5", GetLang("移动Pro"),
         "Icon6", GetLang("输出"), "Icon7", GetLang("运行"), "Icon8", GetLang("循环"), "Icon9", GetLang("宏操作"), "Icon10",
         GetLang("变量"), "Icon11", GetLang("变量提取"), "Icon12", GetLang("如果"), "Icon13", GetLang("如果Pro"),
         "Icon14", GetLang("运算"), "Icon15", GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"),
-        "Icon2", GetLang("真"), "Icon18", GetLang("假"), "Icon19", GetLang("循环次数"), "Icon20", GetLang("条件"), "Icon21",
+        "Icon18", GetLang("窗口管理"), "Icon22", GetLang("真"), "Icon18", GetLang("假"), "Icon19", GetLang("循环次数"), "Icon20", GetLang("条件"), "Icon21",
         GetLang("循环体"), "Icon22", GetLang("文本处理"), "Icon23", GetLang("数组"), "Icon24", GetLang("输入"), "Icon25",
         GetLang("文件读写"), "Icon26", GetLang("流程控制"), "Icon27")
 
@@ -168,6 +170,10 @@ class MacroEditGui {
         this.FileIOGui := FileIOGui()
         this.FileIOGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
         this.SubGuiMap.Set(GetLang("文件读写"), this.FileIOGui)
+
+        this.WindowManageGui := WindowManageGui()
+        this.WindowManageGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
+        this.SubGuiMap.Set(GetLang("窗口管理"), this.WindowManageGui)
     }
 
     ShowGui(CommandStr, ShowSaveBtn) {
@@ -177,7 +183,7 @@ class MacroEditGui {
         }
         else {
             this.AddGui()
-            ImageListID := IL_Create(26)
+            ImageListID := IL_Create(27)
             this.MacroTreeViewCon.SetImageList(ImageListID)
             IL_Add(ImageListID, "Images\Soft\Interval.png")
             IL_Add(ImageListID, "Images\Soft\Key.png")
@@ -196,6 +202,8 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\Operation.png")
             IL_Add(ImageListID, "Images\Soft\rabit.png")
             IL_Add(ImageListID, "Images\Soft\Mouse.png")
+            IL_Add(ImageListID, "Images\Soft\Key.png")
+            IL_Add(ImageListID, "Images\Soft\WindowManage.png")   ;18 窗口管理
             IL_Add(ImageListID, "Images\Soft\True.png")
             IL_Add(ImageListID, "Images\Soft\False.png")
             IL_Add(ImageListID, "Images\Soft\LoopCount.png")
@@ -311,6 +319,11 @@ class MacroEditGui {
         PosX += 105
         this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png",
             GetLang("后台按键"), (*) => this.OnOpenSubGui(this.BGKeyGui))
+
+        PosX := 10
+        PosY += 40
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\WindowManage.png",
+            GetLang("窗口管理"), (*) => this.OnOpenSubGui(this.WindowManageGui))
 
         PosX := 225
         PosY := 15

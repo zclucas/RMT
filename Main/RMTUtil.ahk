@@ -264,6 +264,7 @@ InitFilePath() {
     FileInstall("Images\Soft\TextOps.png", "Images\Soft\TextOps.png", 1)
     FileInstall("Images\Soft\FileIO.png", "Images\Soft\FileIO.png", 1)
     FileInstall("Images\Soft\Control.png", "Images\Soft\Control.png", 1)
+    FileInstall("Images\Soft\WindowManage.png", "Images\Soft\WindowManage.png", 1)
 
     global VBSPath := A_WorkingDir "\VBS\PlayAudio.vbs"
     global StartTipAudio := A_WorkingDir "\Audio\Start.wav"
@@ -289,6 +290,7 @@ InitFilePath() {
     global BGMouseFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\BGMouseFile.ini"
     global InputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\InputFile.ini"
     global FileIOFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\FileIOFile.ini"
+    global WindowManageFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WindowManageFile.ini"
 }
 
 SubMacroStopAction(tableIndex, itemIndex) {

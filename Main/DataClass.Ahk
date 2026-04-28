@@ -800,3 +800,17 @@ class InputData {
         this.SaveName := "Data"             ;保存的变量名或数组名
     }
 }
+
+class WindowManageData {
+    __New() {
+        this.SerialStr := ""
+        this.ActionType := 1                ;1激活窗口 2最大化窗口 3最小化窗口 4还原窗口 5关闭窗口 6移动窗口 7调整大小 8置顶窗口 9取消置顶 10修改标题
+        this.SearchType := 1                ;1标题 2类名 3进程名
+        this.SearchValue := ""              ;查找值
+        this.PosX := 0                      ;移动窗口X坐标（移动窗口时使用）
+        this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
+        this.Width := 0                     ;窗口宽度（调整大小时使用）
+        this.Height := 0                    ;窗口高度（调整大小时使用）
+        this.NewTitle := ""                 ;新标题（修改标题时使用）
+    }
+}
