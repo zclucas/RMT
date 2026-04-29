@@ -1,4 +1,4 @@
-﻿# RMT 自动打包脚本
+# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work1.exe
 
 $Host.UI.RawUI.WindowTitle = "RMT 打包工具"
@@ -21,6 +21,11 @@ $Base64Paths = @(
 # 32位 Base 编译器路径
 $Base32Paths = @(
     "C:\Program Files\AutoHotkey\v2\AutoHotkey32.exe"
+)
+
+# UPX 压缩工具路径
+$UpxPaths = @(
+    (Join-Path $PSScriptRoot "Plugins\upx.exe")
 )
 
 # ============================================================
@@ -197,6 +202,46 @@ function Pack-HelpDoc {
     return $false
 }
 
+function Invoke-UpxCompress {
+    param([string]$ReleaseDir)
+
+    if (-not $UpxExe) {
+        Write-Log "未找到 UPX，跳过压缩" "Yellow"
+        return
+    }
+
+    Write-Section "UPX 压缩"
+
+    $Exts = @("*.exe", "*.dll")
+    $CompressedCount = 0
+    $TotalSizeBefore = 0
+    $TotalSizeAfter = 0
+
+    foreach ($Ext in $Exts) {
+        Get-ChildItem -Path $ReleaseDir -Recurse -File -Filter $Ext | ForEach-Object {
+            $sizeBefore = $_.Length
+            $TotalSizeBefore += $sizeBefore
+            Start-Process -FilePath $UpxExe -ArgumentList "--best", "--lzma", $_.FullName -Wait -WindowStyle Hidden 2>&1 | Out-Null
+            $sizeAfter = (Get-Item $_.FullName).Length
+            $TotalSizeAfter += $sizeAfter
+            if ($sizeAfter -lt $sizeBefore) {
+                $ratio = [math]::Round((1 - $sizeAfter / $sizeBefore) * 100, 1)
+                Write-Log "  ✓ $($_.Name)  ${ratio}% 缩减" "DarkGray"
+                $CompressedCount++
+            } else {
+                Write-Log "  - $($_.Name)" "DarkGray"
+            }
+        }
+    }
+
+    $TotalBeforeMB = [math]::Round($TotalSizeBefore / 1MB, 2)
+    $TotalAfterMB = [math]::Round($TotalSizeAfter / 1MB, 2)
+    $SavedMB = [math]::Round(($TotalSizeBefore - $TotalSizeAfter) / 1MB, 2)
+
+    Write-Log "压缩完成: $CompressedCount 个文件" "White"
+    Write-Log "原始: ${TotalBeforeMB} MB → 压缩后: ${TotalAfterMB} MB (节省 ${SavedMB} MB)" "Green"
+}
+
 # ============================================================
 # 发行版函数
 # ============================================================
@@ -309,6 +354,14 @@ function New-Release {
         Copy-Item -Path "$PSScriptRoot\ReleaseX32\*" -Destination $destX32 -Recurse -Force
     }
 
+    # UPX 压缩（在 zip 之前）
+    if ($Type -eq "x64" -or $Type -eq "both") {
+        Invoke-UpxCompress -ReleaseDir (Join-Path $versionDir "RMTv${version}_x64")
+    }
+    if ($Type -eq "x32" -or $Type -eq "both") {
+        Invoke-UpxCompress -ReleaseDir (Join-Path $versionDir "RMTv${version}_x32")
+    }
+
     Write-Section "压缩发行包"
     if ($Type -eq "x64" -or $Type -eq "both") {
         Compress-ReleaseZip -SourceDir (Join-Path $versionDir "RMTv${version}_x64") -ZipPath (Join-Path $rmtReleaseDir "RMTv${version}_x64.zip")
@@ -394,6 +447,8 @@ function Main {
 
         $Base32Exe = Find-Exe "32Base (AutoHotkey32.exe)" $Base32Paths
 
+        $UpxExe = Find-Exe "UPX" $UpxPaths
+
         # 步骤 3: 清理旧文件
         Write-Step 3 "清理旧文件"
         Remove-OldFiles -Dir $WorkDir -Filter "Work*.exe"
@@ -413,7 +468,8 @@ function Main {
 
         # 步骤 6: 询问是否生成发行版
         Write-Step 6 "生成发行版"
-        $choice = Ask-Choice "请选择发行版类型:" @("不生成", "测试版 (仅 X64)", "正式版 (X64 + X32)")
+        $upxHint = if ($UpxExe) { " (含UPX压缩)" } else { " (无UPX)" }
+        $choice = Ask-Choice "请选择发行版类型:$upxHint" @("不生成", "测试版 (仅 X64)", "正式版 (X64 + X32)")
 
         if ($choice -eq 2) {
             if (-not (New-Release -Type "x64")) {

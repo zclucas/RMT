@@ -35,7 +35,6 @@ if defined VCTOOLS (
 ) else (
     echo [错误] 未找到 MSVC 编译器！
     echo 请安装 Build Tools 并勾选「使用 C++ 的桌面开发」
-    pause
     popd
     exit /b 1
 )
@@ -60,7 +59,7 @@ if %ERRORLEVEL% neq 0 (
 echo.
 echo [2/3] 正在链接 RMT_OpenCv.dll ...
 
-link /DLL /MACHINE:x64 /OUT:"%OUT_DIR%\RMT_OpenCv.dll" ^
+link /DLL /MACHINE:x64 /OUT:"%~dp0RMT_OpenCv.dll" ^
    "%BUILD_DIR%\RMT_OpenCv.obj" ^
    "%OPENCV_DIR%\x64\vc16\lib\opencv_world481.lib" ^
    Dwmapi.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ^
@@ -71,16 +70,32 @@ if %ERRORLEVEL% neq 0 (
     goto :cleanup
 )
 
+:: UPX 压缩
+echo.
+echo [3/3] 正在使用 UPX 压缩...
+set "UPX_EXE=%~dp0..\upx.exe"
+if exist "%UPX_EXE%" (
+    "%UPX_EXE%" --best --lzma "%~dp0RMT_OpenCv.dll"
+    if %ERRORLEVEL% equ 0 (
+        echo        UPX 压缩完成
+    ) else (
+        echo        [警告] UPX 压缩失败，保留未压缩文件
+    )
+) else (
+    echo        [警告] 未找到 UPX: %UPX_EXE%，跳过压缩
+)
+
 echo.
 echo ========================================
 echo   编译成功！输出路径：
-echo   %~dp0%OUT_DIR%\RMT_OpenCv.dll
+echo   %~dp0RMT_OpenCv.dll
 echo ========================================
 goto :cleanup
 
 :cleanup
 echo [清理] 删除中间文件...
 del /q "%BUILD_DIR%\RMT_OpenCv.obj" >nul 2>&1
+del /q "%~dp0RMT_OpenCv.exp" >nul 2>&1
+del /q "%~dp0RMT_OpenCv.lib" >nul 2>&1
 echo       已清理完毕
 popd
-pause
