@@ -1021,46 +1021,53 @@ OnWindowManage(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
 
     searchValue := GetReplaceVarText(tableItem, index, Data.SearchValue)
+    if (searchValue == "")
+        return
+
+    infoArr := StrSplit(searchValue, "⎖")
+    titleStr := infoArr.Length >= 1 ? infoArr[1] : ""
+    classStr := infoArr.Length >= 2 ? infoArr[2] : ""
+    processStr := infoArr.Length >= 3 ? infoArr[3] : ""
+
     winTitle := ""
+    if (titleStr != "")
+        winTitle .= (winTitle != "" ? " " : "") titleStr
+    if (classStr != "")
+        winTitle .= (winTitle != "" ? " " : "") "ahk_class " classStr
+    if (processStr != "")
+        winTitle .= (winTitle != "" ? " " : "") "ahk_exe " processStr
 
-    switch Data.SearchType {
-        case 1:
-            winTitle := searchValue
-        case 2:
-            winTitle := "ahk_class " searchValue
-        case 3:
-            winTitle := "ahk_exe " searchValue
-    }
-
-    switch Data.ActionType {
-        case 1:
-            WinActivate(winTitle)
-        case 2:
-            WinMaximize(winTitle)
-        case 3:
-            WinMinimize(winTitle)
-        case 4:
-            WinRestore(winTitle)
-        case 5:
-            WinClose(winTitle)
-        case 6:
-            hasPosX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosX)
-            hasPosY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosY)
-            if (hasPosX && hasPosY) {
-                WinMove(winTitle, , Integer(PosX), Integer(PosY))
-            }
-        case 7:
-            hasWidth := TryGetTabVarValue(&Width, tableItem, index, Data.Width)
-            hasHeight := TryGetTabVarValue(&Height, tableItem, index, Data.Height)
-            if (hasWidth && hasHeight) {
-                WinMove(winTitle, , , Integer(Width), Integer(Height))
-            }
-        case 8:
-            WinSetAlwaysOnTop(winTitle, "On")
-        case 9:
-            WinSetAlwaysOnTop(winTitle, "Off")
-        case 10:
-            newTitle := GetReplaceVarText(tableItem, index, Data.NewTitle)
-            WinSetTitle(winTitle, , newTitle)
+    try {
+        switch Data.ActionType {
+            case 1:
+                WinActivate(winTitle)
+            case 2:
+                WinMaximize(winTitle)
+            case 3:
+                WinMinimize(winTitle)
+            case 4:
+                WinRestore(winTitle)
+            case 5:
+                WinClose(winTitle)
+            case 6:
+                hasPosX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosX)
+                hasPosY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosY)
+                if (hasPosX && hasPosY) {
+                    WinMove(Integer(PosX), Integer(PosY), , , winTitle )
+                }
+            case 7:
+                hasWidth := TryGetTabVarValue(&Width, tableItem, index, Data.Width)
+                hasHeight := TryGetTabVarValue(&Height, tableItem, index, Data.Height)
+                if (hasWidth && hasHeight) {
+                    WinMove(, , Integer(Width), Integer(Height), winTitle)
+                }
+            case 8:
+                WinSetAlwaysOnTop(1, winTitle)
+            case 9:
+                WinSetAlwaysOnTop(0, winTitle)
+            case 10:
+                newTitle := GetReplaceVarText(tableItem, index, Data.NewTitle)
+                WinSetTitle(newTitle, winTitle)
+        }
     }
 }
