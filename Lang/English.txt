@@ -135,7 +135,6 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 全部小写=lowercase
 共享上传=Upload
 共享上传文件：=Share Upload
-共享复制=Share Copy
 关系=Logic
 关闭变量监视=Disable Watch
 关闭指令显示=Hide Inst
@@ -321,7 +320,7 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 字符数=Character Count
 字节=bytes
 字节，实际读取=bytes, read
-完全复制=Full Copy
+复制=Copy
 完整统计=Full Statistics
 宏=Macro
 宏名称=Macro Name

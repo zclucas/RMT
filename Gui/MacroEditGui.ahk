@@ -605,8 +605,7 @@ class MacroEditGui {
             this.ContextMenu.Add(GetLang("下方插入"), subMenu)  ; 将子菜单添加到主菜单
 
             this.ContextMenu.Add()  ; 分隔线
-            this.ContextMenu.Add(GetLang("共享复制"), (*) => this.ContentMenuHandler(GetLang("共享复制")))
-            this.ContextMenu.Add(GetLang("完全复制"), (*) => this.ContentMenuHandler(GetLang("完全复制")))
+            this.ContextMenu.Add(GetLang("复制"), (*) => this.ContentMenuHandler(GetLang("复制")))
             this.ContextMenu.Add(GetLang("上方粘贴"), (*) => this.ContentMenuHandler(GetLang("上方粘贴")))
             this.ContextMenu.Add(GetLang("下方粘贴"), (*) => this.ContentMenuHandler(GetLang("下方粘贴")))
 
@@ -876,11 +875,7 @@ class MacroEditGui {
             {
                 this.OnNextMoveCmd()
             }
-            case GetLang("共享复制"):
-            {
-                SetClipboard(itemText)
-            }
-            case GetLang("完全复制"):
+            case GetLang("复制"):
             {
                 newCmd := FullCopyCmd(itemText)
                 SetClipboard(newCmd)
