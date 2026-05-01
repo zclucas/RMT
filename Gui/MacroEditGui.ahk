@@ -715,6 +715,13 @@ class MacroEditGui {
             this.CompareProEditItemGui.IsSubMacroEdit := true
             this.CompareProEditItemGui.SureBtnAction := this.OnSubNodeEdit.Bind(this, this.CurItemID)
 
+            if (MySoftData.IsModalSubGui && this.Gui != "") {
+                this.CompareProEditItemGui.OwnerHwnd := this.Gui.Hwnd
+            }
+            else {
+                this.CompareProEditItemGui.OwnerHwnd := ""
+            }
+
             ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
             CommndStr := this.MacroTreeViewCon.GetText(ParentID)
             ItemNumber := this.GetItemNumber(this.CurItemID)

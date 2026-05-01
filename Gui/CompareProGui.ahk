@@ -225,6 +225,13 @@ class CompareProGui {
         ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
         this.ItemEditGui.ParentTile := ParentTile "-"
 
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.ItemEditGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.ItemEditGui.OwnerHwnd := ""
+        }
+
         this.ItemEditGui.DLVariableArr := this.DLVariableArr
         NumberIndex := item
         EditType := this.LVCon.GetText(item, 1) == GetLang("以上都不是") ? 2 : 1

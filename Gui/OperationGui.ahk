@@ -139,6 +139,13 @@ class OperationGui {
         ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
         this.OperationSubGui.ParentTile := ParentTile "-"
 
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.OperationSubGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.OperationSubGui.OwnerHwnd := ""
+        }
+
         this.OperationSubGui.SureBtnAction := (Index, ExpressStr) => this.OnSureOperationBtnClick(
             Index, ExpressStr)
 

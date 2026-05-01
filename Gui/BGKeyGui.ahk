@@ -903,6 +903,12 @@ class BGKeyGui {
     }
 
     OnClickEditBtn(*) {
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            MyFrontInfoGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
         MyFrontInfoGui.ShowGui(this.FrontCon)
     }
 

@@ -3,6 +3,7 @@
 class FrontInfoGui {
     __new() {
         this.Gui := ""
+        this.OwnerHwnd := ""
         this.InfoAction := () => this.RefreshMouseInfo()
         this.HideAction := ""
         this.SureAction := ""
@@ -16,11 +17,21 @@ class FrontInfoGui {
 
     ShowGui(winInfoCon, isFront := false) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
         }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
+        }
+
         this.isFront := isFront
         this.Init(winInfoCon)
         this.ToggleFunc(true)
@@ -58,6 +69,9 @@ class FrontInfoGui {
     AddGui() {
         MyGui := Gui(, GetLang("前台信息编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S11 W550 Q2", MySoftData.FontType)
         PosX := 10
         PosY := 10
@@ -167,6 +181,11 @@ class FrontInfoGui {
 
     OnClose(*) {
         this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         if (this.HideAction != "") {
             action := this.HideAction
             action()
@@ -242,6 +261,11 @@ class FrontInfoGui {
 
         this.winInfoCon.Value := this.GetInfoStr()
         this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
         this.OnClose()
         if (this.SureAction != "") {

@@ -407,6 +407,12 @@ class SearchProGui {
 
     OnClickWinEditBtn(*) {
         MyFrontInfoGui.HideAction := () => this.ToggleFunc(true)
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            MyFrontInfoGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
         MyFrontInfoGui.ShowGui(this.WinInfoCon)
     }
 
@@ -461,6 +467,12 @@ class SearchProGui {
                 MsgBox(GetLang("修改成功"))
             }
             this.WinRuleGui.SureAction := SureAction
+            if (MySoftData.IsModalSubGui && this.Gui != "") {
+                this.WinRuleGui.OwnerHwnd := this.Gui.Hwnd
+            }
+            else {
+                this.WinRuleGui.OwnerHwnd := ""
+            }
             this.WinRuleGui.ShowGui()
         }
         else if (Str == GetLang("增加"))
@@ -511,6 +523,12 @@ class SearchProGui {
             MsgBox(Format("{} 配置添加成功", ConfigName))
         }
         this.WinRuleGui.SureAction := SureAction
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.WinRuleGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.WinRuleGui.OwnerHwnd := ""
+        }
         this.WinRuleGui.ShowGui()
     }
 

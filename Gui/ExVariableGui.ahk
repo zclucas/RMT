@@ -317,11 +317,23 @@ class ExVariableGui {
 
     OnClickWinEditBtn(*) {
         MyFrontInfoGui.HideAction := () => this.ToggleFunc(true)
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            MyFrontInfoGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
         MyFrontInfoGui.ShowGui(this.WinInfoCon)
     }
 
     OnClickExtractBtn(*) {
         this.MyEditGui.SureAction := this.OnSureExtractAction.Bind(this)
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MyEditGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MyEditGui.OwnerHwnd := ""
+        }
         this.MyEditGui.ShowGui(this.ExtractStrCon.Value)
     }
 

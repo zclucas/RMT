@@ -4,6 +4,7 @@ class OperationSubGui {
     __new() {
         this.ParentTile := ""
         this.Gui := ""
+        this.OwnerHwnd := ""
         this.SureBtnAction := ""
         this.FocusCon := ""
         this.Index := 0
@@ -13,10 +14,19 @@ class OperationSubGui {
 
     ShowGui(Index, ExpressStr) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.DLVariableArr := GetGuiVarArr(6)
@@ -33,6 +43,9 @@ class OperationSubGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("运算编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -90,7 +103,17 @@ class OperationSubGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX + 220, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
+        MyGui.OnEvent("Close", (*) => this.OnClose())
         MyGui.Show(Format("w{} h{}", 370, 310))
+    }
+
+    OnClose(*) {
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     OnClickOperatorBtn(Symbol) {
@@ -236,6 +259,11 @@ class OperationSubGui {
 
         action := this.SureBtnAction
         action(this.Index, expression)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 

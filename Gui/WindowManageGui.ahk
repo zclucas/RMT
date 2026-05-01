@@ -5,6 +5,7 @@ class WindowManageGui {
         this.ParentTile := ""
         this.Gui := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.RemarkCon := ""
         this.ActionTypeCon := ""
 
@@ -26,10 +27,19 @@ class WindowManageGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -88,6 +98,9 @@ class WindowManageGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("窗口管理编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S11 W550 Q2", MySoftData.FontType)
         PosX := 10
         PosY := 10
@@ -273,6 +286,11 @@ class WindowManageGui {
 
     OnClose(*) {
         Hotkey("F1", (*) => this.OnF1(), "Off")
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 
@@ -282,6 +300,11 @@ class WindowManageGui {
         this.SaveData()
         CommandStr := this.GetCommandStr()
         this.SureBtnAction.Call(CommandStr)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.OnClose()
     }
 
