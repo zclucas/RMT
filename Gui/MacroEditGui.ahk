@@ -424,10 +424,12 @@ class MacroEditGui {
                 this.ToolMenu.Check(GetLang("指令显示"))
         }
 
-        exStyle := DllCall("GetWindowLongPtr", "Ptr", this.Gui.Hwnd, "Int", -20, "UInt") ; GWL_EXSTYLE = -20
-        isTop := (exStyle & 0x00000008)
-        if (isTop) {
-            this.ToolMenu.Check(GetLang("窗口置顶"))
+        try {
+            exStyle := DllCall("GetWindowLongPtr", "Ptr", this.Gui.Hwnd, "Int", -20, "UInt") ; GWL_EXSTYLE = -20
+            isTop := (exStyle & 0x00000008)
+            if (isTop) {
+                this.ToolMenu.Check(GetLang("窗口置顶"))
+            }
         }
 
         this.Gui.MenuBar := MyMenuBar

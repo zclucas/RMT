@@ -658,11 +658,6 @@ class SearchProGui {
             }
         }
 
-        ; if (isColor && !RegExMatch(this.HexColorCon.Text, "^([0-9A-Fa-f]{6})$")) {
-        ;     MsgBox(GetLang("请输入正确的颜色值"))
-        ;     return false
-        ; }
-
         if (isText) {
             if (this.StartPosXCon.Text == this.EndPosXCon.Text) ||
             this.StartPosYCon.Text == Number(this.EndPosYCon.Text) {
@@ -679,6 +674,13 @@ class SearchProGui {
         if (this.ResultToggleCon.Value) {
             if (!CheckVarNameIfValid(this.ResultSaveNameCon.Text))
                 return false
+        }
+
+        if (this.MouseActionTypeCon.Value != 1 && !isWin) {
+            if (!IsNumber(this.SpeedCon.Value) || this.SpeedCon.Value < 0 || this.SpeedCon.Value > 100) {
+                MsgBox(GetLang("移动速度请输入0~100的数字"))
+                return false
+            }
         }
 
         return true

@@ -203,7 +203,9 @@ class SoftData {
         this.FixedMenuWheel := false    ;固定菜单轮
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型
-        this.MutiThreadNum := 3         ;多线程数
+        this.MutiThreadNum := 3         ;多线程数(-1动态)
+        this.DynamicCorePoolSize := 1   ;动态模式核心池大小
+        this.ElasticTimeout := 30       ;弹性Worker超时(秒)
         this.IsSuspend := false         ;休眠
         this.SuspendHotkey := ""        ;休眠快捷键
         this.IsPause := false           ;暂停

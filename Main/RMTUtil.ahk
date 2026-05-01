@@ -311,9 +311,9 @@ SetGlobalArray(Name, Value) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, CMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
         }
     }
 }
@@ -324,9 +324,9 @@ CloneGlobalArray(SourceArr, NewArrName) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, CMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
         }
     }
 }
@@ -337,9 +337,9 @@ DeleteGlobalArray(ArrName) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, CMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
         }
     }
 }
@@ -352,9 +352,9 @@ ModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, CMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
         }
     }
 }
@@ -367,9 +367,9 @@ InsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, CMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
         }
     }
 }
@@ -381,9 +381,9 @@ RemoveAtGlobalArray(ArrName, MainIndex, Index) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, CMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
         }
     }
 }
@@ -412,9 +412,9 @@ SetGlobalVariable(NameArr, ValueArr, ignoreExist) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, NameValueCMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], NameValueCMDStr)
         }
     }
 }
@@ -436,9 +436,9 @@ DelGlobalVariable(NameArr) {
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, NameValueCMDStr)
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], NameValueCMDStr)
         }
     }
 }
@@ -446,10 +446,10 @@ DelGlobalVariable(NameArr) {
 SetCMDTipValue(value) {
     IsMuti := MyWorkPool.CheckEnableMutiThread()
     if (IsMuti) {
-        loop MyWorkPool.maxSize {
-            workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
+        workerList := MyWorkPool.GetActiveWorkerList()
+        loop workerList.Length {
             str := Format("CMDTip_{}", value)
-            MyWorkPool.SendMessage(WM_COPYDATA, workPath, str)
+            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], str)
         }
     }
 }

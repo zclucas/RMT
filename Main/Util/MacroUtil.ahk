@@ -293,7 +293,12 @@ OnOutput(tableItem, cmd, index) {
     Content := GetReplaceVarText(tableItem, index, Data.Text)
 
     if (Data.OutputType == "发送内容") {     ;send
+        ; SendText(Content)
+        savedMode := A_SendMode
+        SendMode("Input")
+        SetKeyDelay(10, 10)
         SendText(Content)
+        SendMode(savedMode)
     }
     else if (Data.OutputType == "粘贴内容") {    ;粘贴文本
         SetClipboard(Content)

@@ -1078,3 +1078,4 @@ tip2:请确保上述指令运行过=tip2:Please ensure the above commands have b
 循环-跳出=Loop-Exit
 循环-跳过本轮=Loop-Continue
 分支-跳出=Branch-Exit
+移动速度请输入0~100的数字=Please enter the number 0 to 100 for the moving speed

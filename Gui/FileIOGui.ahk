@@ -321,7 +321,7 @@ class FileIOGui {
         CurType := this.OperTypeCon.Text
         IsExcel := CurType == GetLang("读取Excel") || CurType == GetLang("写入Excel")
         IsText := CurType == GetLang("读取文本文件") || CurType == GetLang("写入文本文件")
-        SymbolStr := IsExcel ? "Excel Files(*.xlsx)" : ""
+        SymbolStr := IsExcel ? "Excel Files(*.xlsx; *.xls)" : ""
         SymbolStr := IsText ? "Text Files(*.txt)" : SymbolStr
 
         path := FileSelect(1, , GetLang("选择输入的源文件"), SymbolStr)
