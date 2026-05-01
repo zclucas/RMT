@@ -4,7 +4,7 @@ class WorkPool {
         this.maxSize := MySoftData.MutiThreadNum
         this.pool := []              ; 对象池数组
         this.isDynamic := (this.maxSize == -1)
-        this.dynamicMaxLimit := 10
+        this.dynamicMaxLimit := 16
         this.corePoolSize := MySoftData.DynamicCorePoolSize
         this.elasticTimeout := MySoftData.ElasticTimeout * 1000
         this.dynamicMinSize := this.corePoolSize
@@ -76,8 +76,10 @@ class WorkPool {
 
     CheckHasFreeWorker() {
         if (this.isDynamic) {
+            if (this.pool.Length >= 1)
+                return true
             activeCount := this.activeWorkers.Count
-            return this.pool.Length >= 1 || activeCount < this.dynamicMaxLimit
+            return activeCount < this.dynamicMaxLimit
         }
         return this.pool.Length >= 1
     }
@@ -97,13 +99,26 @@ class WorkPool {
         workPath := ""
         if (this.pool.Length >= 1) {
             workPath := this.pool.Pop()
-            workerIndex := this.GetWorkIndex(workPath)
-            this.workerIdleTime.Delete(workerIndex)
+            this.RemoveFromPool(workPath)
+            if (this.isDynamic)
+                this.PreAllocateWorker()
         } else if (this.isDynamic && this.activeWorkers.Count < this.dynamicMaxLimit) {
             newIndex := this.GetNextWorkerIndex()
             this.CreateWorker(newIndex)
+            if (this.activeWorkers.Count < this.dynamicMaxLimit)
+                this.PreAllocateWorker()
         }
         return workPath
+    }
+
+    PreAllocateWorker() {
+        if (this.pool.Length >= 1)
+            return
+        if (this.activeWorkers.Count >= this.dynamicMaxLimit)
+            return
+
+        newIndex := this.GetNextWorkerIndex()
+        this.CreateWorker(newIndex)
     }
 
     GetWorkPath(workIndex) {
@@ -114,6 +129,18 @@ class WorkPool {
         workIndex := StrReplace(workPath, A_ScriptDir "\Thread\Work")
         workIndex := StrReplace(workIndex, ".exe")
         return workIndex
+    }
+
+    AddToPool(workPath) {
+        workerIndex := this.GetWorkIndex(workPath)
+        this.pool.Push(workPath)
+        this.workerIdleTime.Set(workerIndex, A_TickCount)
+    }
+
+    RemoveFromPool(workPath) {
+        workerIndex := this.GetWorkIndex(workPath)
+        if (this.workerIdleTime.Has(workerIndex))
+            this.workerIdleTime.Delete(workerIndex)
     }
 
     GetWorkHwnd(workPath) {
@@ -193,7 +220,6 @@ class WorkPool {
             workPath := A_ScriptDir "\Thread\Work" targetIndex ".exe"
             this.PostMessage(WM_CLEAR_WORK, workPath, 0, 0)
             this.activeWorkers.Delete(targetIndex)
-            this.workerIdleTime.Delete(targetIndex)
             this.hwndMap.Delete(workPath)
             this.pidMap.Delete(targetIndex)
             this.recycledIndices.Push(targetIndex)
@@ -206,6 +232,7 @@ class WorkPool {
             }
             if (poolIndex > 0) {
                 this.pool.RemoveAt(poolIndex)
+                this.workerIdleTime.Delete(targetIndex)
             }
         }
     }
@@ -216,8 +243,7 @@ class WorkPool {
         tableItem := MySoftData.TableInfo[tableIndex]
         workerIndex := tableItem.IsWorkIndexArr[itemIndex]
         workPath := A_ScriptDir "\Thread\Work" workerIndex ".exe"
-        this.pool.Push(workPath)
-        this.workerIdleTime.Set(workerIndex, A_TickCount)
+        this.AddToPool(workPath)
         tableItem.IsWorkIndexArr[itemIndex] := false
     }
 
@@ -231,9 +257,10 @@ class WorkPool {
             }
         }
         if (!isInPool) {
-            this.pool.Push(workPath)
+            this.AddToPool(workPath)
+        } else {
+            this.workerIdleTime.Set(wParam, A_TickCount)
         }
-        this.workerIdleTime.Set(wParam, A_TickCount)
         if (!this.activeWorkers.Has(wParam)) {
             this.activeWorkers.Set(wParam, workPath)
         }

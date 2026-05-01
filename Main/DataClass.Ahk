@@ -204,7 +204,7 @@ class SoftData {
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型
         this.MutiThreadNum := -1         ;多线程数(-1动态)
-        this.DynamicCorePoolSize := 1   ;动态模式核心池大小
+        this.DynamicCorePoolSize := 2   ;动态模式核心池大小
         this.ElasticTimeout := 30       ;弹性Worker超时(秒)
         this.IsSuspend := false         ;休眠
         this.SuspendHotkey := ""        ;休眠快捷键
