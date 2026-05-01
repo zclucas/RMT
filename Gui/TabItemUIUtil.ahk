@@ -133,7 +133,7 @@ LoadItemFoldTK(tableItem, foldIndex, PosY) {
     tableItem.AllConArr.Push(conInfo)
 
     TriggerTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", MySoftData.TabPosX + 100, posY - 3, 70),
-    GetLangArr(["按下", "松开", "松止", "开关", "长按"]))
+    GetLangArr(["按下", "松开", "松止", "开关", "长按", "双击"]))
     TriggerTypeCon.Value := FoldInfo.TKTypeArr[foldIndex]
     TriggerTypeCon.OnEvent("Change", OnFlodTKTypeChange.Bind(tableItem))
     conInfo := ItemConInfo(TriggerTypeCon, tableItem, foldIndex)
@@ -419,9 +419,9 @@ OnItemCustomEditTriggerStr(tableItem, index, *) {
 OnItemEditTriggerKey(tableItem, index, *) {
     triggerKey := tableItem.TKArr[index]
 
-    SureAction(sureTriggerKey, holdTime) {
+    SureAction(sureTriggerKey, timeValue) {
         tableItem.TKArr[index] := sureTriggerKey
-        tableItem.HoldTimeArr[index] := holdTime
+        tableItem.HoldTimeArr[index] := timeValue
         ItemUsePool := ItemUseConPoolMap[tableItem.Index]
         if (ItemUsePool.Has(index)) {
             ItemConObj := ItemUsePool[index]
@@ -559,10 +559,10 @@ OnFlodTKChange(tableItem, con, *) {
 OnFlodTKEditClick(TKEditCon, tableItem, con, *) {
     foldInfo := tableItem.FoldInfo
     foldIndex := tableItem.ConIndexMap[con].itemConInfo.FoldIndex
-    SureAction(sureTriggerKey, holdTime) {
+    SureAction(sureTriggerKey, timeValue) {
         TKEditCon.Value := sureTriggerKey
         foldInfo.TKArr[foldIndex] := sureTriggerKey
-        foldInfo.HoldTimeArr[foldIndex] := holdTime
+        foldInfo.HoldTimeArr[foldIndex] := timeValue
     }
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
@@ -744,7 +744,7 @@ LoadTabSingleItem(tableItem, ItemConObj) {
 
     ;触发类型
     TKTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", TabPosX + 360, -1000, 70),
-    GetLangArr(["按下", "松开", "松止", "开关", "长按"]))
+    GetLangArr(["按下", "松开", "松止", "开关", "长按", "双击"]))
     TKTypeCon.Enabled := isNormal
     TKTypeCon.OriPosX := TabPosX + 360
 

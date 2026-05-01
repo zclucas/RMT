@@ -1021,6 +1021,10 @@ as=None
 长度=Length
 长按=Hold
 长按多次录制=Multi-press record
+双击=Double Click
+双击间隔时间（毫秒）：=Double Click Interval (ms):
+时间参数（毫秒）:=Time Parameter (ms):
+（长按模式=长按时间，双击模式=双击间隔）=(Hold mode = hold time, Double Click mode = interval)
 间隔=Interval
 间隔指令浮动=Inst interval fluctuation
 间隔指令浮动(%)：=Inst Interval Float (%):

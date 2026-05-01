@@ -4,7 +4,7 @@ class TableItem {
         this.ColorStateArr := []
         this.TKArr := []        ;触发键
         this.MacroArr := []     ;宏内容
-        this.HoldTimeArr := []  ;按住时间
+        this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
         this.ForbidArr := []    ;禁止
         this.LoopCountArr := [] ;循环次数
         this.RemarkArr := []    ;备注
@@ -47,7 +47,7 @@ class ItemFoldInfo {
         ;菜单栏功能
         this.TKTypeArr := []    ;触发类型
         this.TKArr := []        ;触发按键，菜单栏功能
-        this.HoldTimeArr := []  ;长按时间
+        this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
     }
 }
 
