@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Main\Util\JsonUtil.ahk
 ItemFreeConPoolMap := Map()
 ItemUseConPoolMap := Map()
 
@@ -87,21 +88,29 @@ LoadItemFoldTitle(tableItem, foldIndex, PosY) {
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
 
-    con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 560, posY - 1), GetLang("新增模块"))
+    con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 560, posY - 1), GetLang("粘贴宏"))
+    con.OnEvent("Click", OnItemPasteMacroBtnClick.bind(tableItem))
+    con.Visible := !isMenu
+    conInfo := ItemConInfo(con, tableItem, foldIndex)
+    conInfo.IsTitle := true
+    tableItem.AllConArr.Push(conInfo)
+    tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
+
+    con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 630, posY - 1), GetLang("新增模块"))
     con.OnEvent("Click", OnItemAddFoldBtnClick.Bind(tableItem))
     conInfo := ItemConInfo(con, tableItem, foldIndex)
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
 
-    con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 645, posY - 1), GetLang("删除模块"))
+    con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 715, posY - 1), GetLang("删除模块"))
     con.OnEvent("Click", OnItemDelFoldBtnClick.Bind(tableItem))
     conInfo := ItemConInfo(con, tableItem, foldIndex)
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
 
-    con := MyGui.Add("CheckBox", Format("x{} y{}", MySoftData.TabPosX + 750, posY + 2), GetLang("禁用"))
+    con := MyGui.Add("CheckBox", Format("x{} y{}", MySoftData.TabPosX + 750 + 40, posY + 2), GetLang("禁用"))
     con.Value := FoldInfo.ForbidStateArr[foldIndex]
     con.OnEvent("Click", OnFoldForbidChange.Bind(tableItem))
     conInfo := ItemConInfo(con, tableItem, foldIndex)
@@ -765,22 +774,27 @@ LoadTabSingleItem(tableItem, ItemConObj) {
 
     ;上
     PreCon := MyGui.Add("Button", Format("x{} y{} w20 h28", TabPosX + 700, -1000), "↑")
-    PreCon.OriPosX := TabPosX + 700
+    PreCon.OriPosX := TabPosX + 650
 
     ;下
     NextCon := MyGui.Add("Button", Format("x{} y{} w20 h28", TabPosX + 725, -1000), "↓")
-    NextCon.OriPosX := TabPosX + 725
+    NextCon.OriPosX := TabPosX + 675
 
     ;禁用
-    ForbidCon := MyGui.Add("Checkbox", Format("x{} y{}", TabPosX + 755, -1000), GetLang("禁用"))
+    ForbidCon := MyGui.Add("Checkbox", Format("x{} y{}", TabPosX + 735, -1000), GetLang("禁用"))
     ForbidCon.OffsetY := 4
-    ForbidCon.OriPosX := TabPosX + 755
+    ForbidCon.OriPosX := TabPosX + 705
+
+    ;复制
+    CopyCon := MyGui.Add("Button", Format("x{} y{} w50 h29", TabPosX + 785, -1000), GetLang("复制"))
+    CopyCon.OffsetY := -1
+    CopyCon.OriPosX := TabPosX + 765
 
     ;删除
-    DelCon := MyGui.Add("Button", Format("x{} y{} w60 h29", TabPosX + 810, -1000), GetLang("删除"))
+    DelCon := MyGui.Add("Button", Format("x{} y{} w50 h29", TabPosX + 810, -1000), GetLang("删除"))
     DelCon.Enabled := !isMenu
     DelCon.OffsetY := -1
-    DelCon.OriPosX := TabPosX + 810
+    DelCon.OriPosX := TabPosX + 820
 
     ;分割线
     LineCon := ""
@@ -801,11 +815,12 @@ LoadTabSingleItem(tableItem, ItemConObj) {
     ItemConObj.PreCon := PreCon
     ItemConObj.NextCon := NextCon
     ItemConObj.ForbidCon := ForbidCon
+    ItemConObj.CopyCon := CopyCon
     ItemConObj.DelCon := DelCon
     ItemConObj.LineCon := LineCon
 
     ItemConObj.ConArr := [ColorCon, IndexCon, RemarkCon, TKBtnCon, TKTypeCon, LoopCon, SettingCon,
-        EditCon, PreCon, NextCon, ForbidCon, DelCon, LineCon]
+        EditCon, PreCon, NextCon, ForbidCon, CopyCon, DelCon, LineCon]
 
     MySoftData.TabCtrl.UseTab()
 }
@@ -929,7 +944,8 @@ GetItemConObj(tableItem, itemIndex) {
     TabItemOnEvent(ItemConObj.EditCon, "Click", EditMacroAction.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.PreCon, "Click", OnItemMoveUp.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.NextCon, "Click", OnItemMoveDown.Bind(tableItem, itemIndex))
-    TabItemOnEvent(ItemConObj.DelCon, "Click", OnItemDelMacroBtnClick.Bind(tableItem, itemIndex))
+    TabItemOnEvent(ItemConObj.CopyCon, "Click", OnItemCopyMacroBtnClick.bind(tableItem, itemIndex))
+    TabItemOnEvent(ItemConObj.DelCon, "Click", OnItemDelMacroBtnClick.bind(tableItem, itemIndex))
     return ItemConObj
 }
 
