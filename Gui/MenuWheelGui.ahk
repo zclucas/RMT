@@ -1,6 +1,8 @@
 #Requires AutoHotkey v2.0
 
 class MenuWheelGui {
+    static Hotkeys := ["1", "2", "3", "4", "5", "6", "7", "8"]
+
     __new() {
         this.Gui := ""
         this.MenuIndex := 1
@@ -13,6 +15,8 @@ class MenuWheelGui {
         this.DrawAction := this.DrawLine.Bind(this)
 
         this.DPIScale := A_ScreenDPI / 96
+
+        WindowHotkeyManager.Register(this, MenuWheelGui.Hotkeys, this.OnSoftKey.Bind(this))
     }
 
     ; DPI缩放适配的坐标转换
@@ -133,17 +137,20 @@ class MenuWheelGui {
     }
 
     OnSoftKey(key, isDown) {
+        if (!isDown)
+            return
+
         numberArr := ["1", "2", "3", "4", "5", "6", "7", "8"]
         loop numberArr.Length {
             if (key == numberArr[A_Index]) {
                 index := Integer(key)
-                if (!IsObject(MyMenuWheel.Gui))
+                if (!IsObject(this.Gui))
                     return
 
-                style := WinGetStyle(MyMenuWheel.Gui.Hwnd)
+                style := WinGetStyle(this.Gui.Hwnd)
                 isVisible := (style & 0x10000000)  ; 0x10000000 = WS_VISIBLE
                 if (isVisible)
-                    MyMenuWheel.OnBtnClick(index)
+                    this.OnBtnClick(index)
             }
         }
     }
@@ -165,10 +172,26 @@ class MenuWheelGui {
         if (state) {
             LineOverlay.Init()
             SetTimer(this.DrawAction, 15) ; 60fps
+            this.RegisterGlobalHotkeys()
         } else {
             SetTimer(this.DrawAction, 0)
             LineOverlay.BeginFrame()
             LineOverlay.EndFrame()
+            this.UnregisterGlobalHotkeys()
+        }
+    }
+
+    RegisterGlobalHotkeys() {
+        for key in MenuWheelGui.Hotkeys {
+            capturedKey := key
+            Hotkey("$*" capturedKey, ((*) => this.OnSoftKey(capturedKey, true)).Bind(this), "On")
+        }
+    }
+
+    UnregisterGlobalHotkeys() {
+        for key in MenuWheelGui.Hotkeys {
+            capturedKey := key
+            Hotkey("$*" capturedKey, ((*) => this.OnSoftKey(capturedKey, true)).Bind(this), "Off")
         }
     }
 
