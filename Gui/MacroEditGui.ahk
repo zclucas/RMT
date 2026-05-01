@@ -38,6 +38,7 @@ class MacroEditGui {
         this.EditModeCon := ""
         this.SubMacroEditGui := ""
         this.CompareProEditItemGui := ""
+        this.OwnerHwnd := ""
 
         this.SureBtnAction := ""
         this.SaveBtnAction := ""
@@ -179,6 +180,9 @@ class MacroEditGui {
     ShowGui(CommandStr, ShowSaveBtn) {
         global MySoftData
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
@@ -216,6 +220,12 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\Control.png")    ;todo
         }
 
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
+        }
+
         MySoftData.RecordToggleCon := this.RecordMacroCon
         MySoftData.MacroEditGui := this
         this.DebugStepNum := 0
@@ -226,6 +236,9 @@ class MacroEditGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("宏指令编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosY := 10
@@ -374,6 +387,7 @@ class MacroEditGui {
         this.SaveBtnCtrl.OnEvent("Click", (*) => this.OnSaveBtnClick())
 
         MyGui.Show(Format("w{} h{}", 945, 570))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
     }
 
     AddIconBtn(MyGui, PosX, PosY, ImgFile, LabelText, ClickAction) {
@@ -423,10 +437,12 @@ class MacroEditGui {
                 this.ToolMenu.Check(GetLang("指令显示"))
         }
 
-        exStyle := DllCall("GetWindowLongPtr", "Ptr", this.Gui.Hwnd, "Int", -20, "UInt") ; GWL_EXSTYLE = -20
-        isTop := (exStyle & 0x00000008)
-        if (isTop) {
-            this.ToolMenu.Check(GetLang("窗口置顶"))
+        try {
+            exStyle := DllCall("GetWindowLongPtr", "Ptr", this.Gui.Hwnd, "Int", -20, "UInt") ; GWL_EXSTYLE = -20
+            isTop := (exStyle & 0x00000008)
+            if (isTop) {
+                this.ToolMenu.Check(GetLang("窗口置顶"))
+            }
         }
 
         this.Gui.MenuBar := MyMenuBar
@@ -498,6 +514,13 @@ class MacroEditGui {
         action(macroStr)
 
         this.SureBtnAction := ""
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+
         this.Gui.Hide()
 
         action := this.SaveBtnAction
@@ -512,8 +535,24 @@ class MacroEditGui {
         action(macroStr)
 
         this.SureBtnAction := ""
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+
         this.Gui.Hide()
         this.SureFocusCon.Focus()
+    }
+
+    OnGuiClose() {
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     GetMacroStr() {
@@ -659,6 +698,13 @@ class MacroEditGui {
             this.SubMacroEditGui.SureFocusCon := this.MacroTreeViewCon
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             this.SubMacroEditGui.ParentTile := ParentTile "-"
+
+            if (MySoftData.IsModalSubGui && this.Gui != "") {
+                this.SubMacroEditGui.OwnerHwnd := this.Gui.Hwnd
+            }
+            else {
+                this.SubMacroEditGui.OwnerHwnd := ""
+            }
 
             this.SubMacroEditGui.ShowGui(macroStr, false)
             return
@@ -980,6 +1026,13 @@ class MacroEditGui {
         if ObjHasOwnProp(subGui, "ParentTile") {
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             subGui.ParentTile := ParentTile "-"
+        }
+
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            subGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            subGui.OwnerHwnd := ""
         }
 
         if (modeType == 2) {

@@ -8,6 +8,7 @@ class SearchProGui {
         this.Gui := ""
         this.RuleMenu := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.PosAction := () => this.RefreshMouseInfo()
         this.F1Action := (x1, y1, x2, y2) => this.OnF1SetAreaAction(x1, y1, x2, y2)
         this.CheckClipboardAction := () => this.CheckClipboard()
@@ -28,10 +29,19 @@ class SearchProGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -41,6 +51,9 @@ class SearchProGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("搜索Pro编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -314,7 +327,7 @@ class SearchProGui {
         PosX := 300
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
-        MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 700, 600))
     }
 
@@ -645,11 +658,6 @@ class SearchProGui {
             }
         }
 
-        ; if (isColor && !RegExMatch(this.HexColorCon.Text, "^([0-9A-Fa-f]{6})$")) {
-        ;     MsgBox(GetLang("请输入正确的颜色值"))
-        ;     return false
-        ; }
-
         if (isText) {
             if (this.StartPosXCon.Text == this.EndPosXCon.Text) ||
             this.StartPosYCon.Text == Number(this.EndPosYCon.Text) {
@@ -666,6 +674,13 @@ class SearchProGui {
         if (this.ResultToggleCon.Value) {
             if (!CheckVarNameIfValid(this.ResultSaveNameCon.Text))
                 return false
+        }
+
+        if (this.MouseActionTypeCon.Value != 1 && !isWin) {
+            if (!IsNumber(this.SpeedCon.Value) || this.SpeedCon.Value < 0 || this.SpeedCon.Value > 100) {
+                MsgBox(GetLang("移动速度请输入0~100的数字"))
+                return false
+            }
         }
 
         return true
@@ -758,6 +773,22 @@ class SearchProGui {
         action := this.SureBtnAction
         action(this.GetCommandStr())
         this.ToggleFunc(false)
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
+    }
+
+    OnGuiClose() {
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 
@@ -849,6 +880,13 @@ class SearchProGui {
             this.MacroGui.ParentTile := ParentTile "-"
         }
 
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MacroGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MacroGui.OwnerHwnd := ""
+        }
+
         this.MacroGui.SureBtnAction := (command) => this.OnSureFoundMacroBtnClick(command)
         this.MacroGui.ShowGui(this.TrueMacroCon.Value, false)
     }
@@ -862,6 +900,14 @@ class SearchProGui {
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             this.MacroGui.ParentTile := ParentTile "-"
         }
+
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MacroGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MacroGui.OwnerHwnd := ""
+        }
+
         this.MacroGui.SureBtnAction := (command) => this.OnSureUnFoundMacroBtnClick(command)
         this.MacroGui.ShowGui(this.FalseMacroCon.Value, false)
     }

@@ -1106,3 +1106,4 @@ tip2:请确保上述指令运行过=tip2:Please ensure the above commands have b
 坐标请输入数字！=Coordinates must be numbers!
 宽高请输入数字！=Width and height must be numbers!
 新标题不能为空！=New title cannot be empty!
+移动速度请输入0~100的数字=Please enter the number 0 to 100 for the moving speed
