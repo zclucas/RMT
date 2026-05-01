@@ -25,7 +25,10 @@
 #Include WindowManageGui.ahk
 
 class MacroEditGui {
+    static Hotkeys := ["f5", "f6", "delete", "numpaddot"]
+
     __new() {
+        WindowHotkeyManager.Register(this, MacroEditGui.Hotkeys, this.OnSoftKey.Bind(this))
         this.ParentTile := ""
         this.Gui := ""
         this.GuiMenu := ""

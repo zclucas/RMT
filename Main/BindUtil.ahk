@@ -622,6 +622,16 @@ BindSoftHotKey() {
     for index, value in MySoftData.SoftHotKeyArr {
         mapKey := Trim(value, "~")
         mapKey := StrLower(mapKey)
+
+        if (WindowHotkeyManager.IsManaged(mapKey)) {
+            key := "$*" mapKey
+            actionDown := OnBindKeyDown.Bind(value)
+            actionUp := OnBindKeyUp.Bind(value)
+            Hotkey(key, actionDown, "On")
+            Hotkey(key " up", actionUp, "On")
+            continue
+        }
+
         isMenuBtnHotKey := CheckIfMenuBtnHotKey(mapKey)
         isOpenMenu := MySoftData.CurMenuWheelIndex != -1
         IsOnlySoftHotkey := MySoftData.TriggerKeyMap[mapKey].IsOnlySoftHotkey()
@@ -723,3 +733,5 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
     }
     OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
 }
+
+

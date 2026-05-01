@@ -96,6 +96,8 @@ class TriggerKeyData {
         this.HandleSoftHotKeyDown()
         if (isMenuBtnHotKey && isOpenMenu)
             return
+        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
+            return
         for index, value in this.DownArr {
             if (index == 1 && SubStr(value.GetTK(), 1, 1) != "~")
                 LoosenModifyKey(value.GetTK())
@@ -117,6 +119,8 @@ class TriggerKeyData {
     OnTriggerKeyUp() {
         this.UpdataArr()
         this.HandleSoftHotKeyUp()
+        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
+            return
         for index, value in this.LoosenArr {
             value.Action()
         }
@@ -195,10 +199,11 @@ class TriggerKeyData {
         if (isMenuBtnHotKey)
             MyMenuWheel.OnSoftKey(this.Key, true)
 
-        if (this.Key == "f5" || this.Key == "f6" || this.Key == "delete" || this.Key == "numpaddot") {
-            if (MySoftData.MacroEditGui != "" && WinActive("ahk_id " MySoftData.MacroEditGui.Gui.Hwnd)) {
-                MySoftData.MacroEditGui.OnSoftKey(this.Key, true)
-            }
+        if (WindowHotkeyManager.IsManaged(this.Key)) {
+            if (WindowHotkeyManager.HandleKey(this.Key, true))
+                return
+            SendLevel 1
+            Send("{Blind}{" this.Key "}")
         }
     }
 
@@ -218,6 +223,13 @@ class TriggerKeyData {
 
         if (this.Key == "enter") {
             MyColorPanel.OnEnterUp(this.Key)
+        }
+
+        if (WindowHotkeyManager.IsManaged(this.Key)) {
+            if (WindowHotkeyManager.HandleKey(this.Key, false))
+                return
+            SendLevel 1
+            Send("{Blind}{" this.Key " up}")
         }
     }
 }
