@@ -58,18 +58,22 @@ SearchOnce(tableItem, Data, index) {
     TryGetTabVarValue(&Text, tableItem, index, Data.SearchText, false)
 
     ; 执行搜索
+    ImagePath := GetReplaceVarText(tableItem, index, Data.SearchImagePath)
+    if (!ValidateCmdPath(&Data, "SearchImagePath", GetLang("选择搜索图片"), "PNG Files (*.png)", tableItem, index))
+        return false
+    ImagePath := Data.SearchImagePath
     ResXList := [], ResYList := [], ResHwndList := []
-    found := DoSearch(Data, X1, Y1, X2, Y2, Text, &ResX, &ResY, &ResXList, &ResYList, &ResHwndList)
+    found := DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYList, &ResHwndList)
 
     ; 处理搜索结果
     if (found) {
-        return HandleSearchResult(tableItem, Data, index, ResXList, ResYList, ResHwndList)
+        return HandleSearchResult(tableItem, Data, index, ImagePath, ResXList, ResYList, ResHwndList)
     }
 
     return false
 }
 
-DoSearch(Data, X1, Y1, X2, Y2, Text, &ResX, &ResY, &ResXList, &ResYList, &ResHwndList) {
+DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYList, &ResHwndList) {
     CoordMode("Pixel", "Screen")
     ResX := 0, ResY := 0, found := false
     ResXList := [], ResYList := [], ResHwndList := []
@@ -80,7 +84,7 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, &ResX, &ResY, &ResXList, &ResYList, &ResHwn
     }
 
     if (Data.SearchType == 1) {     ;屏幕图片
-        found := SearchImage(Data, X1, Y1, X2, Y2, &ResX, &ResY)
+        found := SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY)
     }
     else if (Data.SearchType == 2) {    ;屏幕颜色
         found := SearchColor(Data, X1, Y1, X2, Y2, &ResX, &ResY)
@@ -89,7 +93,7 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, &ResX, &ResY, &ResXList, &ResYList, &ResHwn
         found := SearchText(Data, X1, Y1, X2, Y2, &ResX, &ResY, Text)
     }
     else if (Data.SearchType == 4) {    ;窗口图片
-        found := SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList)
+        found := SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, &ResHwndList)
     }
     else if (Data.SearchType == 5) {    ;窗口颜色
         found := SearchWinColor(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList)
@@ -106,13 +110,13 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, &ResX, &ResY, &ResXList, &ResYList, &ResHwn
     return found
 }
 
-SearchImage(Data, X1, Y1, X2, Y2, &ResX, &ResY) {
+SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY) {
     if (Data.SearchImageType == 1) {
-        return FindScreenImage(&ResX, &ResY, Data.SearchImagePath, X1, Y1, X2, Y2, Data.Similar)
+        return FindScreenImage(&ResX, &ResY, ImagePath, X1, Y1, X2, Y2, Data.Similar)
     }
     else {
         Similar := Integer(-2.55 * Data.Similar + 255)
-        SearchInfo := Format("*{} *w0 *h0 {}", Similar, Data.SearchImagePath)
+        SearchInfo := Format("*{} *w0 *h0 {}", Similar, ImagePath)
         return ImageSearch(&ResX, &ResY, X1, Y1, X2, Y2, SearchInfo)
     }
 }
@@ -128,12 +132,12 @@ SearchText(Data, X1, Y1, X2, Y2, &ResX, &ResY, Text) {
     return FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, Text, Data.OCRType)
 }
 
-SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList) {
+SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, &ResHwndList) {
     found := false
     ResXList := [], ResYList := [], ResHwndList := []
     for i, hwnd in hwndList {
         ResX := 0, ResY := 0
-        isFound := FindWinImage(&ResX, &ResY, Data.SearchImagePath, hwnd, X1, Y1, X2, Y2, Data.Similar)
+        isFound := FindWinImage(&ResX, &ResY, ImagePath, hwnd, X1, Y1, X2, Y2, Data.Similar)
         if (isFound) {
             found := true
             ResHwndList.Push(hwnd)
@@ -178,7 +182,7 @@ SearchWinText(Data, hwndList, X1, Y1, X2, Y2, searchText, &ResXList, &ResYList, 
     return found
 }
 
-HandleSearchResult(tableItem, Data, index, ResXList, ResYList, ResHwndList) {
+HandleSearchResult(tableItem, Data, index, ImagePath, ResXList, ResYList, ResHwndList) {
     CoordMode("Mouse", "Screen")
     SendMode("Event")
     Speed := 100 - Data.Speed
@@ -193,7 +197,7 @@ HandleSearchResult(tableItem, Data, index, ResXList, ResYList, ResHwndList) {
 
         ; 计算图片中心点
         if (Data.SearchType == 1) {
-            imageSize := GetImageSize(Data.SearchImagePath)
+            imageSize := GetImageSize(ImagePath)
             Pos := [ResX + imageSize[1] / 2, ResY + imageSize[2] / 2]
         }
 

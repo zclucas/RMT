@@ -1006,10 +1006,12 @@ OnFileIO(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
-    if (!FileExist(Data.FilePath)) {
-        MsgBox(GetLang("{}文件不存在"), Data.FilePath)
+    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    isExcel := Data.OperType == "读取Excel" || Data.OperType == "写入Excel"
+    filter := isExcel ? "Excel Files (*.xlsx)" : "Text Files (*.txt)"
+    if (!ValidateCmdPath(&Data, "FilePath", GetLang("选择文件"), filter, tableItem, index))
         return
-    }
+    FilePath := Data.FilePath
 
     switch Data.OperType {
         case "读取Excel":

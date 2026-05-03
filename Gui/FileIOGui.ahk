@@ -85,13 +85,13 @@ class FileIOGui {
         PosY += 35
         con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY + 5, 80), GetLang("文件路径:"))
         PosX += 80
-        this.FilePathCon := MyGui.Add("Edit", Format("x{} y{} w{} h{}", PosX, PosY, 320, 30))
+        this.FilePathCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R5", PosX, PosY, 320), [])
         PosX += 330
-        con := MyGui.Add("Button", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("选择文件"))
+        con := MyGui.Add("Button", Format("x{} y{} w{}", PosX, PosY - 5, 80), GetLang("选择文件"))
         con.OnEvent("Click", (*) => this.OnSelectPathBtnClick())
 
         PosX := 20
-        PosY += 40
+        PosY += 35
         con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY + 5, 80), GetLang("操作模式:"))
         PosX += 80
         this.OperModeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY, 150), GetLangArr([]))
@@ -248,6 +248,8 @@ class FileIOGui {
 
         this.OperTypeCon.Text := GetLang(this.Data.OperType)
         this.EncodingCon.Text := GetShowEncoding(this.Data.Encoding)
+        this.FilePathCon.Delete()
+        this.FilePathCon.Add(GetGuiVarArr(2))
         this.FilePathCon.Text := this.Data.FilePath
         this.ContentCon.Text := GetLangStr(this.Data.Content, 1)
         this.SaveTypeCon.Text := GetLang(this.Data.SaveType)
@@ -325,7 +327,7 @@ class FileIOGui {
         SymbolStr := IsText ? "Text Files(*.txt)" : SymbolStr
 
         path := FileSelect(1, , GetLang("选择输入的源文件"), SymbolStr)
-        this.FilePathCon.Value := path
+        this.FilePathCon.Text := path
     }
 
     OnRefreshContentVarType(*) {
