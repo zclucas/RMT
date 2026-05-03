@@ -376,9 +376,8 @@ class SearchGui {
         ; 如果剪贴板中有图像
         if DllCall("IsClipboardFormatAvailable", "uint", 8)  ; 8 是 CF_BITMAP 格式
         {
-            ; 获取当前日期和时间，用于生成唯一的文件名
-            CurrentDateTime := FormatTime(, "HHmmss")
-            filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" CurrentDateTime ".png"
+            imageSerial := GetNextImageSerial()
+            filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
             SaveClipToBitmap(filePath)
             this.ImagePathCon.Text := filePath
             this.ImageCon.Value := filePath
@@ -418,8 +417,8 @@ class SearchGui {
     }
 
     OnScreenShotGetArea(x1, y1, x2, y2) {
-        CurrentDateTime := FormatTime(, "HHmmss")
-        filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" CurrentDateTime ".png"
+        imageSerial := GetNextImageSerial()
+        filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
 
         ScreenShot(x1, y1, x2, y2, filePath)
         this.ImagePathCon.Text := filePath

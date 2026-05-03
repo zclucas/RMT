@@ -205,6 +205,23 @@ GetImageSize(imageFile) {
     return [width, height]
 }
 
+GetNextImageSerial(baseDir := "") {
+    if (baseDir == "")
+        baseDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot"
+
+    maxSerial := 0
+    Loop Files, baseDir "\*.png" {
+        if (RegExMatch(A_LoopFileName, "^(\d+)\.png$", &match)) {
+            serial := Integer(match[1])
+            if (serial > maxSerial)
+                maxSerial := serial
+        }
+    }
+
+    nextSerial := maxSerial + 1
+    return Format("{:03d}", nextSerial)
+}
+
 SplitMacro(macroStr) {
     cmdArr := StrSplit(macroStr, [",", "，", "`n", "⫶"])
     resultArr := []
