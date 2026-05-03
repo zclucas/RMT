@@ -102,6 +102,38 @@ TextOpsStatistics(Data, tableItem, index) {
     MySetGlobalVariable([Data.SaveName], [Res], false)
 }
 
+TextOpsConcat(Data, tableItem, index) {
+    IsHas := TryGetTabVarValue(&ConcatArgs, tableItem, index, Data.ArgsName, false)
+    ConcatArgs := IsHas ? ConcatArgs : Data.ArgsName
+
+    ResultStr := ConcatArgs
+    loop 100 {
+        startPos := InStr(ResultStr, "{")
+        if (startPos == 0)
+            break
+        
+        endPos := InStr(ResultStr, "}", false, startPos)
+        if (endPos == 0)
+            break
+        
+        VarName := SubStr(ResultStr, startPos + 1, endPos - startPos - 1)
+        Value := "{" VarName "}"
+        try {
+            if (MySoftData.VariableMap.Has(VarName))
+                Value := MySoftData.VariableMap[VarName]
+        }
+        catch {
+            Value := VarName
+        }
+        
+        Part1 := SubStr(ResultStr, 1, startPos - 1)
+        Part2 := SubStr(ResultStr, endPos + 1)
+        ResultStr := Part1 Value Part2
+    }
+    
+    MySetGlobalVariable([Data.SaveName], [ResultStr], false)
+}
+
 ;辅助函数
 TextSplitByLength(Text, Length) {
     ResArr := []

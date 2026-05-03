@@ -6,6 +6,8 @@ class TextOpsGui {
         this.Gui := ""
         this.SureBtnAction := ""
         this.RemarkCon := ""
+        this.ArgsNameOptions := []
+        this.lastArgsNameConText := ""
 
         this.ArgsTypeMap := Map(
             GetLang("去除空格"), [
@@ -32,11 +34,15 @@ class TextOpsGui {
             GetLang("文本分割"), [
                 GetLang("内容分割"),
                 GetLang("定长分割"),
+            ],
+            GetLang("文本拼接"), [
+                GetLang("拼接文本"),
             ])
 
         this.ArgsTipMap := Map(
             GetLang("内容分割"), GetLang("分割文本："),
-            GetLang("定长分割"), GetLang("分割长度："))
+            GetLang("定长分割"), GetLang("分割长度："),
+            GetLang("拼接文本"), GetLang("拼接内容："))
     }
 
     ShowGui(cmd) {
@@ -49,6 +55,7 @@ class TextOpsGui {
 
         this.Init(cmd)
         this.OnRefresh()
+        this.lastArgsNameConText := ""
     }
 
     AddGui() {
@@ -76,12 +83,12 @@ class TextOpsGui {
         PosY += 40
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY - 3, 75), GetLang("处理类型:"))
         PosX += 75
-        TypeArr := GetLangArr(["文本分割", "文本提取", "文本替换", "去除空格", "大小写转换", "文本统计"])
+        TypeArr := GetLangArr(["文本分割", "文本提取", "文本替换", "去除空格", "大小写转换", "文本统计", "文本拼接"])
         this.TypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 5, 150), TypeArr)
         this.TypeCon.OnEvent("Change", this.OnRefresh.Bind(this))
 
         PosX := 275
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY - 3, 75), GetLang("文本来源:"))
+        this.NameConTip := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY - 3, 75), GetLang("文本来源:"))
         PosX += 75
         this.NameCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R8", PosX, PosY - 5, 150), [])
 
@@ -101,6 +108,7 @@ class TextOpsGui {
         this.ArgsNameConTip := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 75), GetLang("类型参数:"))
         PosX += 75
         this.ArgsNameCon := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY - 5, 150), [])
+        this.ArgsNameCon.OnEvent("Change", this.OnArgsNameConChange.Bind(this))
 
         PosY += 35
         PosX := 20
@@ -159,10 +167,12 @@ class TextOpsGui {
         this.DLArrayArr := GetGuiArrNameArr()
         ArgsNameArr := GetGuiVarArr(2)
         ArgsNameArr.InsertAt(1, GetLang("制表符"))
+        this.ArgsNameOptions := ArgsNameArr.Clone()
 
         this.TypeCon.Text := GetLang(this.Data.Type)
         SetDLConValue(this.NameCon, GetGuiVarArr(), this.Data.Name)
         SetDLConValue(this.ArgsNameCon, ArgsNameArr, this.Data.ArgsName)
+        this.lastArgsNameConText := this.ArgsNameCon.Text
 
         SetDLConValue(this.SearchCon, GetGuiVarArr(2), this.Data.Search)
         SetDLConValue(this.ReplaceCon, GetGuiVarArr(2), this.Data.Replace)
@@ -178,6 +188,7 @@ class TextOpsGui {
         IsSpace := this.TypeCon.Text == GetLang("去除空格")
         IsUpLow := this.TypeCon.Text == GetLang("大小写转换")
         IsStatistics := this.TypeCon.Text == GetLang("文本统计")
+        IsConcat := this.TypeCon.Text == GetLang("文本拼接")
 
         ArgsDLArr := []
         this.ArgsTypeCon.Delete()
@@ -194,8 +205,8 @@ class TextOpsGui {
             }
         }
 
-        ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics
-        ShowArgsName := IsSplit
+        ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics || IsConcat
+        ShowArgsName := IsSplit || IsConcat
         this.ArgsTypeConTip.Enabled := ShowArgsType
         this.ArgsTypeCon.Enabled := ShowArgsType
         this.ArgsNameConTip.Enabled := ShowArgsName
@@ -204,7 +215,10 @@ class TextOpsGui {
             this.ReplaceConArr[A_Index].Enabled := IsReplace
         }
 
-        OnlyResVar := IsReplace || IsSpace || IsUpLow || IsStatistics
+        this.NameConTip.Enabled := !IsConcat
+        this.NameCon.Enabled := !IsConcat
+
+        OnlyResVar := IsReplace || IsSpace || IsUpLow || IsStatistics || IsConcat
         OnlyResArr := IsSplit || IsGetEx
         this.SaveTypeCon.Value := OnlyResVar ? 1 : 2
         this.OnRefreshArgsType()
@@ -216,12 +230,46 @@ class TextOpsGui {
         if (this.ArgsTipMap.Has(this.ArgsTypeCon.Text))
             tipText := this.ArgsTipMap[this.ArgsTypeCon.Text]
         this.ArgsNameConTip.Text := tipText
+        this.lastArgsNameConText := this.ArgsNameCon.Text
     }
 
     OnRefreshDataType(*) {
         IsResVar := this.SaveTypeCon.Text == GetLang("变量")
         ResArr := IsResVar ? GetGuiVarArr() : this.DLArrayArr
         SetDLConValue(this.SaveNameCon, ResArr, this.SaveNameCon.Text)
+        this.lastArgsNameConText := this.ArgsNameCon.Text
+    }
+
+    OnArgsNameConChange(*) {
+        IsConcat := this.TypeCon.Text == GetLang("文本拼接")
+        if (!IsConcat) {
+            this.lastArgsNameConText := this.ArgsNameCon.Text
+            return
+        }
+        
+        newText := this.ArgsNameCon.Text
+        if (newText == "") {
+            this.lastArgsNameConText := ""
+            return
+        }
+        
+        isFromDropdown := false
+        if (this.ArgsNameOptions != "") {
+            loop this.ArgsNameOptions.Length {
+                if (this.ArgsNameOptions[A_Index] == newText) {
+                    isFromDropdown := true
+                    break
+                }
+            }
+        }
+        
+        if (isFromDropdown && this.lastArgsNameConText != "" && newText != this.lastArgsNameConText) {
+            this.ArgsNameCon.Text := this.lastArgsNameConText "{" newText "}"
+        }
+        else if (isFromDropdown && (this.lastArgsNameConText == "" || newText == this.lastArgsNameConText)) {
+            this.ArgsNameCon.Text := "{" newText "}"
+        }
+        this.lastArgsNameConText := this.ArgsNameCon.Text
     }
 
     OnClickSureBtn() {

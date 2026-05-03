@@ -593,6 +593,9 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 文本替换=Text Replace
 文本来源:=Source:
 文本统计=Text Statistics
+文本拼接=Text Concat
+拼接文本=Concat Text
+拼接内容：=Concat Content:
 文本识别模型：=Model:
 新增宏=Macro+
 新增模块=Module+
