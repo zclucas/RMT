@@ -9,6 +9,7 @@ class SearchGui {
         this.OwnerHwnd := ""
         this.RemarkCon := ""
         this.PosAction := () => this.RefreshMouseInfo()
+        this.F1Action := (x1, y1, x2, y2) => this.OnF1SetAreaAction(x1, y1, x2, y2)
         this.SetAreaAction := (x1, y1, x2, y2) => this.OnSetSearchArea(x1, y1, x2, y2)
         this.CheckClipboardAction := () => this.CheckClipboard()
         this.Data := ""
@@ -251,6 +252,7 @@ class SearchGui {
     }
 
     CheckIfValid() {
+        this.Data.SearchImagePath := this.ImagePathCon.Text
         if (!IsNumber(this.StartPosXCon.Value) || !IsNumber(this.StartPosYCon.Value) || !IsNumber(this.EndPosXCon.Value
         ) || !IsNumber(this.EndPosYCon.Value)) {
             MsgBox(GetLang("坐标中请输入数字"))
@@ -518,17 +520,22 @@ class SearchGui {
     OnClickSelectToggle() {
         state := this.SelectToggleCon.Value
         if (state == 1)
-            ; TogSelectArea(true, this.SetAreaAction)
-            TogGetSelectArea(true, this.SetAreaAction)
+            TogSelectArea(true, this.SetAreaAction)
         else
-            ; TogSelectArea(false)
-            TogGetSelectArea(false)
+            TogSelectArea(false)
     }
 
     OnF1() {
         this.SelectToggleCon.Value := 1
-        ; TogSelectArea(true, this.SetAreaAction)
-        TogGetSelectArea(true, this.F1Action)
+        TogSelectArea(true, this.F1Action)
+    }
+
+    OnF1SetAreaAction(x1, y1, x2, y2) {
+        this.SelectToggleCon.Value := 0
+        this.StartPosXCon.Value := x1
+        this.StartPosYCon.Value := y1
+        this.EndPosXCon.Value := x2
+        this.EndPosYCon.Value := y2
     }
 
     OnSetSearchArea(x1, y1, x2, y2) {

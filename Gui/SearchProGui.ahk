@@ -672,6 +672,7 @@ class SearchProGui {
         isText := curType == 3 || curType == 6
         isWin := curType == 4 || curType == 5 || curType == 6
 
+        this.Data.SearchImagePath := this.ImagePathCon.Text
         if (IsNumber(this.StartPosXCon.Text) && IsNumber(this.StartPosYCon.Text) && IsNumber(this.EndPosXCon.Text
         ) && IsNumber(this.EndPosYCon.Text)) {
             if (Number(this.StartPosXCon.Text) > Number(this.EndPosXCon.Text) || Number(this.StartPosYCon.Text) >
