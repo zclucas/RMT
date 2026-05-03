@@ -49,11 +49,13 @@ class BGMouseGui {
         con := MyGui.Add("Hotkey", Format("x{} y{} w{}", PosX, PosY - 3, 70), "!l")
         con.Enabled := false
 
-        PosX += 90
+        PosX += 80
         btnCon := MyGui.Add("Button", Format("x{} y{} w{}", PosX, PosY - 5, 80), GetLang("执行指令"))
         btnCon.OnEvent("Click", (*) => this.TriggerMacro())
+        Con := MyGui.Add("Button", Format("x{} y{} w30", PosX + 82, PosY - 5), "?")
+        Con.OnEvent("Click", (*) => this.OnClickHelpBtn())
 
-        PosX += 90
+        PosX += 120
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("备注："))
         PosX += 50
         this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 150), "")
@@ -281,5 +283,15 @@ class BGMouseGui {
         this.Data.ScrollH := this.ScrollHCon.Value
 
         SaveMacroCMDData(this.Data)
+    }
+
+    OnClickHelpBtn() {
+        str1 := GetLang("该指令需要管理员身份运行软件")
+        str2 := GetLang("该指令部分窗口可能无效")
+        str3 := GetLang("tip1:可通过对浏览器界面配置检测指令的正确性")
+        str4 := GetLang("tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持后台功能")
+
+        str := Format("{}`n{}`n{}`n{}", str1, str2, str3, str4)
+        MsgBox(str, GetLang("后台操作说明"))
     }
 }
