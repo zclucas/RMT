@@ -14,6 +14,7 @@
 #Include Util\InputUtil.ahk
 #Include Util\SearchUtil.ahk
 #Include Util\FileIOUtil.ahk
+#Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\PluginUtil.ahk
 #Include Util\MacroClipboardUtil.ahk

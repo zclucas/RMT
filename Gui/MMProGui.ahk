@@ -22,6 +22,7 @@ class MMProGui {
         this.SpeedCon := ""
         this.CountCon := ""
         this.IntervalCon := ""
+        this.HumanMouseTogCon := ""
 
         this.ConfigDLArr := []
     }
@@ -135,9 +136,13 @@ class MMProGui {
         PosX := 90
         this.IsRelativeCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("相对位移"))
 
-        PosX := 320
+        PosX := 200
         this.IsGameViewCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("游戏视角"))
         this.isGameViewCon.OnEvent("Click", (*) => this.OnTypeChange())
+
+        PosX := 320
+        this.HumanMouseTogCon := MyGui.Add("Checkbox", Format("x{} y{} w{}", PosX, PosY, 150), GetLang("启用拟真轨迹"))
+        this.HumanMouseTogCon.OnEvent("Click", (*) => this.OnHumanMouseTogClick())
 
         PosX := 10
         PosY += 30
@@ -182,8 +187,10 @@ class MMProGui {
         this.SpeedCon.Value := this.Data.Speed
         this.CountCon.Value := this.Data.Count
         this.IntervalCon.Value := this.Data.Interval
+        this.HumanMouseTogCon.Value := ObjHasOwnProp(this.Data, "IsHumanMouse") ? this.Data.IsHumanMouse : 0
 
         this.OnTypeChange()
+        this.OnHumanMouseTogClick()
     }
 
     TriggerMacro() {
@@ -407,11 +414,17 @@ class MMProGui {
             this.IsRelativeCon.Enabled := false
             this.ActionTypeCon.Enabled := false
             this.SpeedCon.Enabled := false
+
+            if (this.HumanMouseTogCon.Value == 1) {
+                this.HumanMouseTogCon.Value := 0
+            }
+            this.HumanMouseTogCon.Enabled := false
         }
         else {
             this.IsRelativeCon.Enabled := true
             this.ActionTypeCon.Enabled := true
             this.SpeedCon.Enabled := true
+            this.HumanMouseTogCon.Enabled := true
         }
 
         this.CountTipCon.Visible := isGameView
@@ -461,6 +474,27 @@ class MMProGui {
         this.PosVarYCon.Text := mouseY
     }
 
+    OnHumanMouseTogClick(*) {
+        isEnabled := this.HumanMouseTogCon.Value == 1
+
+        if (isEnabled) {
+            if (this.isGameViewCon.Value == 1) {
+                this.isGameViewCon.Value := 0
+                this.OnTypeChange()
+            }
+
+            if (this.ActionTypeCon.Value != 1) {
+                this.ActionTypeCon.Value := 1
+            }
+            this.ActionTypeCon.Enabled := false
+            this.isGameViewCon.Enabled := false
+        }
+        else {
+            this.ActionTypeCon.Enabled := true
+            this.isGameViewCon.Enabled := true
+        }
+    }
+
     SaveMMProData() {
         this.Data.PosVarX := GetLangKey(this.PosVarXCon.Text)
         this.Data.PosVarY := GetLangKey(this.PosVarYCon.Text)
@@ -470,6 +504,7 @@ class MMProGui {
         this.Data.Speed := this.SpeedCon.Value
         this.Data.Count := this.CountCon.Value
         this.Data.Interval := this.IntervalCon.Value
+        this.Data.IsHumanMouse := this.HumanMouseTogCon.Value
         SaveMacroCMDData(this.Data)
     }
 }
