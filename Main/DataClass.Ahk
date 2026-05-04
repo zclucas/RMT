@@ -4,7 +4,7 @@ class TableItem {
         this.ColorStateArr := []
         this.TKArr := []        ;触发键
         this.MacroArr := []     ;宏内容
-        this.HoldTimeArr := []  ;按住时间
+        this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
         this.ForbidArr := []    ;禁止
         this.LoopCountArr := [] ;循环次数
         this.RemarkArr := []    ;备注
@@ -47,7 +47,7 @@ class ItemFoldInfo {
         ;菜单栏功能
         this.TKTypeArr := []    ;触发类型
         this.TKArr := []        ;触发按键，菜单栏功能
-        this.HoldTimeArr := []  ;长按时间
+        this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
     }
 }
 
@@ -203,13 +203,15 @@ class SoftData {
         this.FixedMenuWheel := false    ;固定菜单轮
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型
-        this.MutiThreadNum := 3         ;多线程数
+        this.MutiThreadNum := -1         ;多线程数(-1动态)
+        this.DynamicCorePoolSize := 2   ;动态模式核心池大小
+        this.ElasticTimeout := 30       ;弹性Worker超时(秒)
         this.IsSuspend := false         ;休眠
         this.SuspendHotkey := ""        ;休眠快捷键
         this.IsPause := false           ;暂停
         this.PauseHotkey := ""          ;暂停快捷键
         this.KillMacroHotkey := ""      ;终止所有宏快捷键
-        this.HoldFloat := 0             ;按住时间浮动数值
+        this.HoldFloat := 0             ;点击时间浮动数值
         this.PreIntervalFloat := 0      ;每次间隔浮动数值
         this.IntervalFloat := 0         ;间隔指令浮动数值
         this.CoordXFloat := 0           ;坐标X浮动数值
@@ -502,6 +504,8 @@ class RunData {
         this.SerialStr := ""
         this.RunPath := ""
         this.BackPlay := false
+        this.RunMode := 1
+        this.SaveNameArr := ["ExitCode", "StdOut", "StdErr"]
     }
 }
 
@@ -798,5 +802,18 @@ class InputData {
         this.PauseType := "暂停当前宏"      ;交互时：不暂停 暂停当前宏  暂停所有宏
         this.CancelType := "终止当前宏"     ;取消时  终止当前宏  终止所有宏
         this.SaveName := "Data"             ;保存的变量名或数组名
+    }
+}
+
+class WindowManageData {
+    __New() {
+        this.SerialStr := ""
+        this.ActionType := 1                ;1激活窗口 2最大化窗口 3最小化窗口 4还原窗口 5关闭窗口 6移动窗口 7调整大小 8置顶窗口 9取消置顶 10修改标题
+        this.SearchValue := ""              ;查找值（格式：标题⎖类名⎖进程名，空表示未选择）
+        this.PosX := 0                      ;移动窗口X坐标（移动窗口时使用）
+        this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
+        this.Width := 0                     ;窗口宽度（调整大小时使用）
+        this.Height := 0                    ;窗口高度（调整大小时使用）
+        this.NewTitle := ""                 ;新标题（修改标题时使用）
     }
 }

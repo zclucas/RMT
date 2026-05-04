@@ -5,6 +5,7 @@ class RMTCMDGui {
         this.ParentTile := ""
         this.Gui := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.CategoriesArr := [GetLang("全部"), GetLang("图文"), GetLang("输入控制"),
         GetLang("宏控制"), GetLang("窗口"), GetLang("调试"), GetLang("软件自身")]
         this.CategoriesMap := Map(
@@ -44,10 +45,19 @@ class RMTCMDGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -84,6 +94,9 @@ class RMTCMDGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("RMT指令编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S11 W550 Q2", MySoftData.FontType)
 
         PosX := 15
@@ -137,7 +150,17 @@ class RMTCMDGui {
         PosY += 40
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
+
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show("w300 h190")
+    }
+
+    OnGuiClose() {
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
     }
 
     OnTypeChane(*) {
@@ -169,6 +192,12 @@ class RMTCMDGui {
 
         CommandStr := this.GetCommandStr()
         this.SureBtnAction.Call(CommandStr)
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 

@@ -204,6 +204,23 @@ GetImageSize(imageFile) {
     return [width, height]
 }
 
+GetNextImageSerial(baseDir := "") {
+    if (baseDir == "")
+        baseDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot"
+
+    maxSerial := 0
+    Loop Files, baseDir "\*.png" {
+        if (RegExMatch(A_LoopFileName, "^(\d+)\.png$", &match)) {
+            serial := Integer(match[1])
+            if (serial > maxSerial)
+                maxSerial := serial
+        }
+    }
+
+    nextSerial := maxSerial + 1
+    return Format("{:03d}", nextSerial)
+}
+
 SplitMacro(macroStr) {
     cmdArr := StrSplit(macroStr, [",", "，", "`n", "⫶"])
     resultArr := []
@@ -326,12 +343,12 @@ InitData() {
         "输出", OutputFile, "运行", RunFile, "循环", LoopFile, "宏操作", SubMacroFile, "变量", VariableFile,
         "变量提取", ExVariableFile, "如果", CompareFile, "如果Pro", CompareProFile, "运算", OperationFile,
         "后台鼠标", BGMouseFile, "后台按键", BGKeyFile, "文本处理", TextOpsFile, "Timing", TimingFile, "数组", ArrayFile,
-        "输入", InputFile, "文件读写", FileIOFile)
+        "输入", InputFile, "文件读写", FileIOFile, "窗口管理", WindowManageFile)
     MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "移动Pro", MMProData,
         "输出", OutputData, "运行", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
         "变量提取", ExVariableData, "如果", CompareData, "如果Pro", CompareProData, "运算", OperationData,
         "后台鼠标", BGMouseData, "后台按键", BGKeyData, "文本处理", TextOpsData, "Timing", TimingData, "数组", ArrayData,
-        "输入", InputData, "文件读写", FileIOData)
+        "输入", InputData, "文件读写", FileIOData, "窗口管理", WindowManageData)
 }
 
 InitLogitechGHubNew() {
@@ -385,7 +402,10 @@ LoadMainSetting() {
     MySoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", false)
     MySoftData.ShowSplitLine := IniRead(IniFile, IniSection, "ShowSplitLine", false)
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
-    MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", 3)
+    MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
+    MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", -1)
+    MySoftData.DynamicCorePoolSize := IniRead(IniFile, IniSection, "DynamicCorePoolSize", 2)
+    MySoftData.ElasticTimeout := IniRead(IniFile, IniSection, "ElasticTimeout", 30)
     MySoftData.SoftBGColor := IniRead(IniFile, IniSection, "SoftBGColor", "f0f0f0")
     MySoftData.NoVariableTip := IniRead(IniFile, IniSection, "NoVariableTip", true)
     MySoftData.CMDTip := IniRead(IniFile, IniSection, "CMDTip", false)
@@ -1823,4 +1843,60 @@ SetClipboard(Content) {
         }
     }
     return false  ; 5次都失败
+}
+
+ValidateCmdPath(&Data, pathFieldName, selectTitle, filter, tableItem := "", index := 1, showSelect := true) {
+    if (!ObjHasOwnProp(Data, pathFieldName))
+        return true
+
+    rawPath := Data.%pathFieldName%
+    hasVariable := InStr(rawPath, "{") && InStr(rawPath, "}")
+
+    if (!hasVariable) {
+        if (rawPath == "" || FileExist(rawPath))
+            return true
+
+        if (!showSelect)
+            return false
+
+        tipStr := Format(GetLang("路径 '{}' 不存在，请重新选择"), rawPath)
+        result := CustomMsgBox(tipStr, GetLang("路径缺失"), GetLang("选择文件|跳过本条指令"))
+
+        if (result == 2)
+            return false
+
+        newPath := FileSelect(1, , GetLang(selectTitle), filter)
+        if (newPath == "")
+            return false
+
+        Data.%pathFieldName% := newPath
+        SaveMacroCMDData(Data)
+        return true
+    }
+
+    actualPath := GetReplaceVarText(tableItem, index, rawPath)
+
+    if (actualPath != "" && FileExist(actualPath))
+        return true
+
+    if (!showSelect)
+        return false
+
+    tipStr := Format("{}`n`n{}: {}`n{}: {}",
+        GetLang("变量路径解析后文件不存在"),
+        GetLang("原始配置"), rawPath,
+        GetLang("解析为"), actualPath == "" ? GetLang("(空值)") : actualPath)
+
+    result := CustomMsgBox(tipStr, GetLang("变量路径错误"), GetLang("覆盖变量|跳过本条指令"))
+
+    if (result == 2)
+        return false
+
+    newPath := FileSelect(1, , GetLang(selectTitle), filter)
+    if (newPath == "")
+        return false
+
+    Data.%pathFieldName% := newPath
+    SaveMacroCMDData(Data)
+    return true
 }

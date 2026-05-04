@@ -8,6 +8,7 @@ class SearchProGui {
         this.Gui := ""
         this.RuleMenu := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.PosAction := () => this.RefreshMouseInfo()
         this.F1Action := (x1, y1, x2, y2) => this.OnF1SetAreaAction(x1, y1, x2, y2)
         this.CheckClipboardAction := () => this.CheckClipboard()
@@ -24,14 +25,26 @@ class SearchProGui {
         this.ResultTogArr := []
         this.CoordTogArr := []
         this.FalseConArr := []
+        this.ImageVariArr := []
+        this.ColorArr := []
+        this.TextArr := []
     }
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -41,6 +54,9 @@ class SearchProGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("搜索Pro编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -176,6 +192,7 @@ class SearchProGui {
 
         PosX := 10
         PosY += 35
+        LeftMacroPosY := PosY
         MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 170, 20), GetLang("找到后的指令：（可选）"))
         PosX += 180
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 5, 50, 25), GetLang("编辑"))
@@ -233,48 +250,73 @@ class SearchProGui {
         this.SimilarArr.Push(this.SimilarCon)
 
         PosY += 35
+        BasePosY := PosY
         PosX := 360
-        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 5, 70, 30), GetLang("选择图片"))
+        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 7, 80, 30), GetLang("截图"))
+        btnCon.OnEvent("Click", (*) => this.OnScreenShotBtnClick())
+        this.ScreenshotBtn := btnCon
+        this.ImageVariArr.Push(this.ScreenshotBtn)
+
+        ; Row2: [识别模型] [下拉] + ImageCon 原版位置(570,145)
+        PosY := BasePosY + 35
+        PosX := 360
+        this.SearchImageTypeTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("识别模型："))
+        this.ImageVariArr.Push(this.SearchImageTypeTipCon)
+        PosX += 80
+        this.SearchImageTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{} Center", PosX, PosY - 3, 80), [
+            "OpenCV",
+            "RMT识图"])
+        this.ImageVariArr.Push(this.SearchImageTypeCon)
+        this.ImageCon := MyGui.Add("Picture", Format("x{} y{} w{} h{}", 570, 145, 100, 100), "")
+        this.ImageVariArr.Push(this.ImageCon)
+
+        PosY := BasePosY + 70
+        PosX := 360
+        this.SearchImagePathTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("图片路径："))
+        this.ImageVariArr.Push(this.SearchImagePathTipCon)
+        PosX += 80
+        this.ImagePathCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R5", PosX, PosY - 5, 160), [])
+        this.ImageVariArr.Push(this.ImagePathCon)
+        PosX += 160
+        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 7, 70, 30), GetLang("选择图片"))
         btnCon.OnEvent("Click", (*) => this.OnClickSetPicBtn())
         btnCon.Focus()
         this.ImageSelectBtn := btnCon
+        this.ImageVariArr.Push(this.ImageSelectBtn)
 
-        PosX += 80
-        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 5, 80, 30), GetLang("截图"))
-        btnCon.OnEvent("Click", (*) => this.OnScreenShotBtnClick())
-        this.ScreenshotBtn := btnCon
-
-        PosY += 35
-        PosX := 360
-        this.SearchImageTypeTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("识别模型："))
-        PosX += 80
-        this.SearchImageTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{} Center", PosX, PosY - 3, 120), [
-            "OpenCV",
-            "RMT识图"])
-        this.ImageCon := MyGui.Add("Picture", Format("x{} y{} w{} h{}", 570, 145, 100, 100), "")
-
-        PosY += 35
+        ; === 颜色搜索区域（与图片重叠） ===
+        PosY := BasePosY
         PosX := 360
         this.ColorLabelCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("搜索颜色："))
+        this.ColorArr.Push(this.ColorLabelCon)
         PosX += 80
         this.HexColorCon := MyGui.Add("ComboBox", Format("x{} y{} w{} Center R5", PosX, PosY - 3, 120), [])
+        this.ColorArr.Push(this.HexColorCon)
         PosX += 130
         this.HexColorTipCon := MyGui.Add("Text", Format("x{} y{} w{} Background{}", PosX, PosY, 20, "FF0000"), "")
+        this.ColorArr.Push(this.HexColorTipCon)
 
-        PosY += 35
+        ; === 文本搜索区域（与图片重叠） ===
+        PosY := BasePosY
         PosX := 360
         this.TextTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("搜索文本："))
+        this.TextArr.Push(this.TextTipCon)
         PosX += 80
         this.TextCon := MyGui.Add("ComboBox", Format("x{} y{} w{} Center R5", PosX, PosY - 3, 120), [])
-        PosY += 35
+        this.TextArr.Push(this.TextCon)
+
+        PosY := BasePosY + 35
         PosX := 360
         this.OCRLabelCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("识别模型："))
+        this.TextArr.Push(this.OCRLabelCon)
         PosX += 80
         this.OCRTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{} Center", PosX, PosY - 3, 120), GetLangArr([
             "中文",
             "英文"]))
+        this.TextArr.Push(this.OCRTypeCon)
 
-        PosY += 35
+        PosY := Max(BasePosY + 98, LeftMacroPosY)
+
         PosX := 360
         con := MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 170, 20), GetLang("未找到后的指令：（可选）"))
         this.FalseConArr.Push(con)
@@ -314,7 +356,7 @@ class SearchProGui {
         PosX := 300
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
-        MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 700, 600))
     }
 
@@ -332,6 +374,9 @@ class SearchProGui {
         this.OCRTypeCon.Value := this.Data.OCRType
         this.WinInfoCon.Value := this.Data.WinInfo
         this.SearchImageTypeCon.Value := this.Data.SearchImageType
+        this.ImagePathCon.Delete()
+        this.ImagePathCon.Add(this.DLVariableArr)
+        this.ImagePathCon.Text := this.Data.SearchImagePath
         this.ImageCon.GetPos(&imagePosX, &imagePosY)
         this.ImageCon.Value := this.Data.SearchImagePath
         this.ImageCon.Move(imagePosX, imagePosY, 100, 100)
@@ -394,6 +439,12 @@ class SearchProGui {
 
     OnClickWinEditBtn(*) {
         MyFrontInfoGui.HideAction := () => this.ToggleFunc(true)
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            MyFrontInfoGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
         MyFrontInfoGui.ShowGui(this.WinInfoCon)
     }
 
@@ -448,6 +499,12 @@ class SearchProGui {
                 MsgBox(GetLang("修改成功"))
             }
             this.WinRuleGui.SureAction := SureAction
+            if (MySoftData.IsModalSubGui && this.Gui != "") {
+                this.WinRuleGui.OwnerHwnd := this.Gui.Hwnd
+            }
+            else {
+                this.WinRuleGui.OwnerHwnd := ""
+            }
             this.WinRuleGui.ShowGui()
         }
         else if (Str == GetLang("增加"))
@@ -498,6 +555,12 @@ class SearchProGui {
             MsgBox(Format("{} 配置添加成功", ConfigName))
         }
         this.WinRuleGui.SureAction := SureAction
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.WinRuleGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.WinRuleGui.OwnerHwnd := ""
+        }
         this.WinRuleGui.ShowGui()
     }
 
@@ -609,6 +672,7 @@ class SearchProGui {
         isText := curType == 3 || curType == 6
         isWin := curType == 4 || curType == 5 || curType == 6
 
+        this.Data.SearchImagePath := this.ImagePathCon.Text
         if (IsNumber(this.StartPosXCon.Text) && IsNumber(this.StartPosYCon.Text) && IsNumber(this.EndPosXCon.Text
         ) && IsNumber(this.EndPosYCon.Text)) {
             if (Number(this.StartPosXCon.Text) > Number(this.EndPosXCon.Text) || Number(this.StartPosYCon.Text) >
@@ -645,11 +709,6 @@ class SearchProGui {
             }
         }
 
-        ; if (isColor && !RegExMatch(this.HexColorCon.Text, "^([0-9A-Fa-f]{6})$")) {
-        ;     MsgBox(GetLang("请输入正确的颜色值"))
-        ;     return false
-        ; }
-
         if (isText) {
             if (this.StartPosXCon.Text == this.EndPosXCon.Text) ||
             this.StartPosYCon.Text == Number(this.EndPosYCon.Text) {
@@ -666,6 +725,13 @@ class SearchProGui {
         if (this.ResultToggleCon.Value) {
             if (!CheckVarNameIfValid(this.ResultSaveNameCon.Text))
                 return false
+        }
+
+        if (this.MouseActionTypeCon.Value != 1 && !isWin) {
+            if (!IsNumber(this.SpeedCon.Value) || this.SpeedCon.Value < 0 || this.SpeedCon.Value > 100) {
+                MsgBox(GetLang("移动速度请输入0~100的数字"))
+                return false
+            }
         }
 
         return true
@@ -758,6 +824,22 @@ class SearchProGui {
         action := this.SureBtnAction
         action(this.GetCommandStr())
         this.ToggleFunc(false)
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
+    }
+
+    OnGuiClose() {
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 
@@ -768,9 +850,8 @@ class SearchProGui {
             newPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" name
             if (path != newPath) {
                 if (FileExist(newPath)) {
-                    CurrentDateTime := FormatTime(, "HHmmss")
-                    newPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" name_no_ext .
-                        CurrentDateTime ".png"
+                    imageSerial := GetNextImageSerial()
+                    newPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
                 }
                 FileCopy(path, newPath)
                 path := newPath
@@ -778,6 +859,7 @@ class SearchProGui {
         }
         this.ImageCon.Value := path
         this.Data.SearchImagePath := path
+        this.ImagePathCon.Text := path
     }
 
     OnScreenShotBtnClick() {
@@ -800,12 +882,12 @@ class SearchProGui {
         ; 如果剪贴板中有图像
         if DllCall("IsClipboardFormatAvailable", "uint", 8)  ; 8 是 CF_BITMAP 格式
         {
-            ; 获取当前日期和时间，用于生成唯一的文件名
-            CurrentDateTime := FormatTime(, "HHmmss")
-            filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" CurrentDateTime ".png"
+            imageSerial := GetNextImageSerial()
+            filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
             SaveClipToBitmap(filePath)
             this.ImageCon.Value := filePath
             this.Data.SearchImagePath := filePath
+            this.ImagePathCon.Text := filePath
             ; 停止监听
             SetTimer(, 0)
         }
@@ -820,11 +902,12 @@ class SearchProGui {
     }
 
     OnScreenShotGetArea(x1, y1, x2, y2) {
-        CurrentDateTime := FormatTime(, "HHmmss")
-        filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" CurrentDateTime ".png"
+        imageSerial := GetNextImageSerial()
+        filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
         ScreenShot(x1, y1, x2, y2, filePath)
         this.ImageCon.Value := filePath
         this.Data.SearchImagePath := filePath
+        this.ImagePathCon.Text := filePath
 
         this.OnGetArea(x1, y1, x2, y2)
     }
@@ -849,6 +932,13 @@ class SearchProGui {
             this.MacroGui.ParentTile := ParentTile "-"
         }
 
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MacroGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MacroGui.OwnerHwnd := ""
+        }
+
         this.MacroGui.SureBtnAction := (command) => this.OnSureFoundMacroBtnClick(command)
         this.MacroGui.ShowGui(this.TrueMacroCon.Value, false)
     }
@@ -862,12 +952,19 @@ class SearchProGui {
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             this.MacroGui.ParentTile := ParentTile "-"
         }
+
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MacroGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MacroGui.OwnerHwnd := ""
+        }
+
         this.MacroGui.SureBtnAction := (command) => this.OnSureUnFoundMacroBtnClick(command)
         this.MacroGui.ShowGui(this.FalseMacroCon.Value, false)
     }
 
     OnChangeType(*) {
-        ;1屏幕图片  2屏幕颜色  3屏幕文本 4窗口图片 5窗口颜色 6窗口文本
         curType := this.SearchTypeCon.Value
         isImage := curType == 1 || curType == 4
         isColor := curType == 2 || curType == 5
@@ -876,26 +973,18 @@ class SearchProGui {
         isInfinite := this.SearchCountCon.Text == GetLang("无限")
         showColorTip := isColor && RegExMatch(this.HexColorCon.Text, "^([0-9A-Fa-f]{6})$")
 
-        this.ImageSelectBtn.Visible := isImage
-        this.ScreenshotBtn.Visible := isImage
-        this.SearchImageTypeCon.Visible := isImage && A_PtrSize == 8
-        this.SearchImageTypeTipCon.Visible := isImage
-        this.ImageCon.Visible := isImage
-        if (A_PtrSize != 8)
+        this.SetConArrState(this.ImageVariArr, false, isImage)
+        if (isImage && A_PtrSize != 8)
             this.SearchImageTypeCon.Value := 2
 
-        this.HexColorCon.Visible := isColor
-        this.ColorLabelCon.Visible := isColor
+        this.SetConArrState(this.ColorArr, false, isColor)
         this.HexColorTipCon.Visible := showColorTip
         if (showColorTip) {
             this.HexColorTipCon.Opt(Format("+Background0x{}", this.HexColorCon.Text))
             this.HexColorTipCon.Redraw()
         }
 
-        this.TextCon.Visible := isText
-        this.OCRLabelCon.Visible := isText
-        this.OCRTypeCon.Visible := isText
-        this.TextTipCon.Visible := isText
+        this.SetConArrState(this.TextArr, false, isText)
         this.MousePosCon.Focus()
 
         this.SetConArrState(this.SimilarArr, false, !isText)
@@ -996,6 +1085,7 @@ class SearchProGui {
 
     SaveSearchData() {
         data := this.Data
+        data.SearchImagePath := this.ImagePathCon.Text
         data.Similar := this.SimilarCon.Value
         data.OCRType := this.OCRTypeCon.Value
         data.SearchImageType := this.SearchImageTypeCon.Value

@@ -6,6 +6,7 @@ class CompareProGui {
         this.ParentTile := ""
         this.Gui := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.RemarkCon := ""
         this.MacroGui := ""
         this.FocusCon := ""
@@ -23,10 +24,19 @@ class CompareProGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -36,6 +46,9 @@ class CompareProGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("如果Pro编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -71,8 +84,18 @@ class CompareProGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
         this.FocusCon := btnCon
 
-        MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 500, 380))
+    }
+
+    OnGuiClose() {
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     Init(cmd) {
@@ -202,6 +225,13 @@ class CompareProGui {
         ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
         this.ItemEditGui.ParentTile := ParentTile "-"
 
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.ItemEditGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.ItemEditGui.OwnerHwnd := ""
+        }
+
         this.ItemEditGui.DLVariableArr := this.DLVariableArr
         NumberIndex := item
         EditType := this.LVCon.GetText(item, 1) == GetLang("以上都不是") ? 2 : 1
@@ -232,6 +262,12 @@ class CompareProGui {
         CommandStr := this.GetCommandStr()
         action := this.SureBtnAction
         action(CommandStr)
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 

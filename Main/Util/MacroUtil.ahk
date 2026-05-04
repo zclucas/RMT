@@ -84,7 +84,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         "文本处理", OnTextOps,
         "数组", OnArray,
         "输入", OnInput,
-        "文件读写", OnFileIO
+        "文件读写", OnFileIO,
+        "窗口管理", OnWindowManage
     )
 
     cmdArr := SplitMacro(macro)
@@ -150,7 +151,38 @@ OnRunFile(tableItem, cmd, index) {
         return
     }
     processedPath := GetReplaceVarText(tableItem, index, Data.RunPath)
-    Run(processedPath)
+
+    if (Data.RunMode == 1) {
+        Run(processedPath)
+
+    } else if (Data.RunMode == 2) {
+        exitCode := RunWait(processedPath)
+        MySetGlobalVariable([Data.SaveNameArr[1]], [exitCode], false)
+
+    } else if (Data.RunMode == 3) {
+        shell := ComObject("WScript.Shell")
+        exec := shell.Exec(processedPath)
+
+        output := ""
+        err := ""
+
+        while (!exec.StdOut.AtEndOfStream || !exec.StdErr.AtEndOfStream) {
+
+            if !exec.StdOut.AtEndOfStream
+                output .= exec.StdOut.Read(1024)
+
+            if !exec.StdErr.AtEndOfStream
+                err .= exec.StdErr.Read(1024)
+
+            Sleep(10)
+        }
+
+        MySetGlobalVariable(
+            [Data.SaveNameArr[2], Data.SaveNameArr[3], Data.SaveNameArr[1]],
+            [output, err, exec.ExitCode],
+            false
+        )
+    }
 }
 
 OnCompare(tableItem, cmd, index) {
@@ -293,7 +325,12 @@ OnOutput(tableItem, cmd, index) {
     Content := GetReplaceVarText(tableItem, index, Data.Text)
 
     if (Data.OutputType == "发送内容") {     ;send
+        ; SendText(Content)
+        savedMode := A_SendMode
+        SendMode("Input")
+        SetKeyDelay(10, 10)
         SendText(Content)
+        SendMode(savedMode)
     }
     else if (Data.OutputType == "粘贴内容") {    ;粘贴文本
         SetClipboard(Content)
@@ -933,6 +970,8 @@ OnTextOps(tableItem, cmd, index) {
             TextOpsUpOrLow(Data, tableItem, index)
         case "文本统计":
             TextOpsStatistics(Data, tableItem, index)
+        case "文本拼接":
+            TextOpsConcat(Data, tableItem, index)
     }
 }
 
@@ -998,10 +1037,12 @@ OnFileIO(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
-    if (!FileExist(Data.FilePath)) {
-        MsgBox(GetLang("{}文件不存在"), Data.FilePath)
+    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    isExcel := Data.OperType == "读取Excel" || Data.OperType == "写入Excel"
+    filter := isExcel ? "Excel Files (*.xlsx)" : "Text Files (*.txt)"
+    if (!ValidateCmdPath(&Data, "FilePath", GetLang("选择文件"), filter, tableItem, index))
         return
-    }
+    FilePath := Data.FilePath
 
     switch Data.OperType {
         case "读取Excel":
@@ -1012,5 +1053,61 @@ OnFileIO(tableItem, cmd, index) {
             ReadTextFile(Data, tableItem, index)
         case "写入文本文件":
             WriteTextFile(Data, tableItem, index)
+    }
+}
+
+OnWindowManage(tableItem, cmd, index) {
+    paramArr := StrSplit(cmd, "_")
+    Data := GetMacroCMDData(paramArr[1])
+
+    searchValue := GetReplaceVarText(tableItem, index, Data.SearchValue)
+    if (searchValue == "")
+        return
+
+    infoArr := StrSplit(searchValue, "⎖")
+    titleStr := infoArr.Length >= 1 ? infoArr[1] : ""
+    classStr := infoArr.Length >= 2 ? infoArr[2] : ""
+    processStr := infoArr.Length >= 3 ? infoArr[3] : ""
+
+    winTitle := ""
+    if (titleStr != "")
+        winTitle .= (winTitle != "" ? " " : "") titleStr
+    if (classStr != "")
+        winTitle .= (winTitle != "" ? " " : "") "ahk_class " classStr
+    if (processStr != "")
+        winTitle .= (winTitle != "" ? " " : "") "ahk_exe " processStr
+
+    try {
+        switch Data.ActionType {
+            case 1:
+                WinActivate(winTitle)
+            case 2:
+                WinMaximize(winTitle)
+            case 3:
+                WinMinimize(winTitle)
+            case 4:
+                WinRestore(winTitle)
+            case 5:
+                WinClose(winTitle)
+            case 6:
+                hasPosX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosX)
+                hasPosY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosY)
+                if (hasPosX && hasPosY) {
+                    WinMove(Integer(PosX), Integer(PosY), , , winTitle )
+                }
+            case 7:
+                hasWidth := TryGetTabVarValue(&Width, tableItem, index, Data.Width)
+                hasHeight := TryGetTabVarValue(&Height, tableItem, index, Data.Height)
+                if (hasWidth && hasHeight) {
+                    WinMove(, , Integer(Width), Integer(Height), winTitle)
+                }
+            case 8:
+                WinSetAlwaysOnTop(1, winTitle)
+            case 9:
+                WinSetAlwaysOnTop(0, winTitle)
+            case 10:
+                newTitle := GetReplaceVarText(tableItem, index, Data.NewTitle)
+                WinSetTitle(newTitle, winTitle)
+        }
     }
 }

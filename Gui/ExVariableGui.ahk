@@ -6,6 +6,7 @@ class ExVariableGui {
         this.ParentTile := ""
         this.Gui := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.RemarkCon := ""
         this.SetAreaAction := (x1, y1, x2, y2) => this.OnSetSearchArea(x1, y1, x2, y2)
 
@@ -21,10 +22,19 @@ class ExVariableGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -35,6 +45,9 @@ class ExVariableGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("变量提取编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -220,8 +233,18 @@ class ExVariableGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{} Center", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
-        MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 560, 450))
+    }
+
+    OnGuiClose() {
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     Init(cmd) {
@@ -294,11 +317,23 @@ class ExVariableGui {
 
     OnClickWinEditBtn(*) {
         MyFrontInfoGui.HideAction := () => this.ToggleFunc(true)
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            MyFrontInfoGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
         MyFrontInfoGui.ShowGui(this.WinInfoCon)
     }
 
     OnClickExtractBtn(*) {
         this.MyEditGui.SureAction := this.OnSureExtractAction.Bind(this)
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MyEditGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MyEditGui.OwnerHwnd := ""
+        }
         this.MyEditGui.ShowGui(this.ExtractStrCon.Value)
     }
 
@@ -319,6 +354,12 @@ class ExVariableGui {
         CommandStr := this.GetCommandStr()
         action := this.SureBtnAction
         action(CommandStr)
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 

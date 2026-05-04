@@ -5,6 +5,7 @@ class BGMouseGui {
         this.ParentTile := ""
         this.Gui := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.RemarkCon := ""
         this.RefreshInfoAction := () => this.RefreshInfo()
 
@@ -26,10 +27,19 @@ class BGMouseGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -40,6 +50,9 @@ class BGMouseGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("后台鼠标编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -49,18 +62,20 @@ class BGMouseGui {
         con := MyGui.Add("Hotkey", Format("x{} y{} w{}", PosX, PosY - 3, 70), "!l")
         con.Enabled := false
 
-        PosX += 90
+        PosX += 80
         btnCon := MyGui.Add("Button", Format("x{} y{} w{}", PosX, PosY - 5, 80), GetLang("执行指令"))
         btnCon.OnEvent("Click", (*) => this.TriggerMacro())
+        Con := MyGui.Add("Button", Format("x{} y{} w30", PosX + 82, PosY - 5), "?")
+        Con.OnEvent("Click", (*) => this.OnClickHelpBtn())
 
-        PosX += 90
+        PosX += 120
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("备注："))
         PosX += 50
         this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 150), "")
 
         PosY += 25
         PosX := 10
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 500), GetLang("F1:选取信息和位置 F2:选取当前窗口信息   F3:选取当前窗口位置"))
+        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 500), GetLang("F1:确定信息"))
 
         PosX := 10
         PosY += 20
@@ -129,8 +144,18 @@ class BGMouseGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
-        MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 500, 335))
+    }
+
+    OnGuiClose() {
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     Init(cmd) {
@@ -166,24 +191,15 @@ class BGMouseGui {
             SetTimer this.RefreshInfoAction, 100
             Hotkey("!l", MacroAction, "On")
             Hotkey("F1", (*) => this.OnF1(), "On")
-            Hotkey("F2", (*) => this.OnF2(), "On")
-            Hotkey("F3", (*) => this.OnF3(), "On")
         }
         else {
             SetTimer this.RefreshInfoAction, 0
             Hotkey("!l", MacroAction, "Off")
             Hotkey("F1", (*) => this.OnF1(), "Off")
-            Hotkey("F2", (*) => this.OnF2(), "Off")
-            Hotkey("F3", (*) => this.OnF3(), "Off")
         }
     }
 
     OnF1() {
-        this.OnF2()
-        this.OnF3()
-    }
-
-    OnF2() {
         CoordMode("Mouse", "Window")
         MouseGetPos &mouseX, &mouseY, &winId
         try {
@@ -198,9 +214,7 @@ class BGMouseGui {
             }
             this.TargetTitleCon.Value := title "⎖" className "⎖" process
         }
-    }
 
-    OnF3() {
         PosArr := GetCurWinPos()
         this.PosVarXCon.Text := PosArr[1]
         this.PosVarYCon.Text := PosArr[2]
@@ -229,6 +243,12 @@ class BGMouseGui {
     }
 
     OnClickEditBtn(*) {
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            MyFrontInfoGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
         MyFrontInfoGui.ShowGui(this.TargetTitleCon)
     }
 
@@ -241,6 +261,12 @@ class BGMouseGui {
         CommandStr := this.GetCommandStr()
         action := this.SureBtnAction
         action(CommandStr)
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 
@@ -281,5 +307,15 @@ class BGMouseGui {
         this.Data.ScrollH := this.ScrollHCon.Value
 
         SaveMacroCMDData(this.Data)
+    }
+
+    OnClickHelpBtn() {
+        str1 := GetLang("该指令需要管理员身份运行软件")
+        str2 := GetLang("该指令部分窗口可能无效")
+        str3 := GetLang("tip1:可通过对浏览器界面配置检测指令的正确性")
+        str4 := GetLang("tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持后台功能")
+
+        str := Format("{}`n{}`n{}`n{}", str1, str2, str3, str4)
+        MsgBox(str, GetLang("后台操作说明"))
     }
 }

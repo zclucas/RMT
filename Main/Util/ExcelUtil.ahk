@@ -22,7 +22,7 @@ ExcelCellToWrite(wbPath, sheetIdentifier, row, col, value) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close()
             xlApp.Quit()
         }
@@ -58,7 +58,7 @@ ExcelRowToWrite(wbPath, sheetIdentifier, row, col, value) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close()
             xlApp.Quit()
         }
@@ -94,7 +94,7 @@ ExcelColToWrite(wbPath, sheetIdentifier, row, col,  value) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close()
             xlApp.Quit()
         }
@@ -142,7 +142,7 @@ ExcelRangeRowToWrite(xlPath, SheetIdentifier, Row, Col, Arr) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close()
             xlApp.Quit()
         }
@@ -190,7 +190,7 @@ ExcelRangeColToWrite(xlPath, SheetIdentifier, Row, Col, Arr) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close()
             xlApp.Quit()
         }
@@ -220,7 +220,7 @@ ExcelCellToRead(wbPath, sheetIdentifier, row, col, &ResValue) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close(false)
             xlApp.Quit()
         }
@@ -260,7 +260,7 @@ ExcelRowToRead(xlPath, SheetIdentifier, Row, Col, &ResArr) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close(false)
             xlApp.Quit()
         }
@@ -300,7 +300,7 @@ ExcelColToRead(xlPath, SheetIdentifier, Row, Col, &ResArr) {
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close(false)
             xlApp.Quit()
         }
@@ -338,7 +338,7 @@ ExcelRangeRowToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr) 
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close(false)
             xlApp.Quit()
         }
@@ -376,7 +376,7 @@ ExcelRangeColToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr) 
         return false
     }
     finally {
-        if (!xlApp.Visible) {
+        if (IsSet(xlApp) && !xlApp.Visible) {
             xlWorkbook.Close(false)
             xlApp.Quit()
         }

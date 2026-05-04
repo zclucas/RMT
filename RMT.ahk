@@ -14,11 +14,13 @@
 #Include Main\UIUtil.ahk
 #Include Main\WebView2UI.ahk
 #Include Main\TimingUtil.ahk
+#Include Main\WindowHotkeyManager.ahk
 #Include Main\BindUtil.ahk
 #Include Main\VariableUtil.ahk
 #Include Main\TriggerKeyData.ahk
 #Include Main\FolderPackager.ahk
 #Include Main\GlobalUtil.ahk
+#Include Main\Util\MacroClipboardUtil.ahk
 
 InitFilePath()          ;初始化文件路径
 LoadCurMacroSetting()   ;加载当前配置宏

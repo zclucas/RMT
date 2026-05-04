@@ -6,6 +6,7 @@ class CompareProEditItemGui {
         this.ParentTile := ""
         this.Gui := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
         this.RemarkCon := ""
         this.FocusCon := ""
         this.MacroGui := ""
@@ -46,10 +47,19 @@ class CompareProEditItemGui {
 
     ShowGui(EditType, DataArr, logicStr, macro, controlType) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(EditType, DataArr, logicStr, macro, controlType)
@@ -59,6 +69,9 @@ class CompareProEditItemGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("如果Pro分支编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -176,7 +189,17 @@ class CompareProEditItemGui {
         PosX := 170
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
+        MyGui.OnEvent("Close", (*) => this.OnClose())
         MyGui.Show(Format("w{} h{}", 420, 400))
+    }
+
+    OnClose(*) {
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     Init(EditType, DataArr, logicStr, macro, controlType) {
@@ -277,6 +300,11 @@ class CompareProEditItemGui {
         }
 
         this.SureBtnAction := ""
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 
@@ -292,6 +320,13 @@ class CompareProEditItemGui {
 
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             this.MacroGui.ParentTile := ParentTile "-"
+        }
+
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            this.MacroGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.MacroGui.OwnerHwnd := ""
         }
 
         this.MacroGui.SureBtnAction := (command) => this.OnMacroBtnClick(command)

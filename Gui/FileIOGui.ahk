@@ -5,6 +5,7 @@ class FileIOGui {
         this.ParentTile := ""
         this.Gui := ""
         this.SureBtnAction := ""
+        this.OwnerHwnd := ""
 
         this.OperModeMap := Map(
             GetLang("读取Excel"),
@@ -20,10 +21,19 @@ class FileIOGui {
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         this.Init(cmd)
@@ -33,6 +43,9 @@ class FileIOGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("文件读写编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosX := 10
@@ -72,13 +85,13 @@ class FileIOGui {
         PosY += 35
         con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY + 5, 80), GetLang("文件路径:"))
         PosX += 80
-        this.FilePathCon := MyGui.Add("Edit", Format("x{} y{} w{} h{}", PosX, PosY, 320, 30))
+        this.FilePathCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R5", PosX, PosY, 320), [])
         PosX += 330
-        con := MyGui.Add("Button", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("选择文件"))
+        con := MyGui.Add("Button", Format("x{} y{} w{}", PosX, PosY - 5, 80), GetLang("选择文件"))
         con.OnEvent("Click", (*) => this.OnSelectPathBtnClick())
 
         PosX := 20
-        PosY += 40
+        PosY += 35
         con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY + 5, 80), GetLang("操作模式:"))
         PosX += 80
         this.OperModeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY, 150), GetLangArr([]))
@@ -211,8 +224,17 @@ class FileIOGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{} Center", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
-        MyGui.OnEvent("Close", (*) => this.Gui.Hide())
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 535, 400))
+    }
+
+    OnGuiClose() {
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     Init(cmd) {
@@ -226,6 +248,8 @@ class FileIOGui {
 
         this.OperTypeCon.Text := GetLang(this.Data.OperType)
         this.EncodingCon.Text := GetShowEncoding(this.Data.Encoding)
+        this.FilePathCon.Delete()
+        this.FilePathCon.Add(GetGuiVarArr(2))
         this.FilePathCon.Text := this.Data.FilePath
         this.ContentCon.Text := GetLangStr(this.Data.Content, 1)
         this.SaveTypeCon.Text := GetLang(this.Data.SaveType)
@@ -299,11 +323,11 @@ class FileIOGui {
         CurType := this.OperTypeCon.Text
         IsExcel := CurType == GetLang("读取Excel") || CurType == GetLang("写入Excel")
         IsText := CurType == GetLang("读取文本文件") || CurType == GetLang("写入文本文件")
-        SymbolStr := IsExcel ? "Excel Files(*.xlsx)" : ""
+        SymbolStr := IsExcel ? "Excel Files(*.xlsx; *.xls)" : ""
         SymbolStr := IsText ? "Text Files(*.txt)" : SymbolStr
 
         path := FileSelect(1, , GetLang("选择输入的源文件"), SymbolStr)
-        this.FilePathCon.Value := path
+        this.FilePathCon.Text := path
     }
 
     OnRefreshContentVarType(*) {
@@ -329,6 +353,12 @@ class FileIOGui {
         CommandStr := this.GetCommandStr()
         action := this.SureBtnAction
         action(CommandStr)
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
         this.Gui.Hide()
     }
 

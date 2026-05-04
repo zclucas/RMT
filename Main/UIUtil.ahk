@@ -2,7 +2,7 @@
 InitUI() {
     global MySoftData
     MyGui := Gui()
-    MyGui.Title := "RMTv1.1.1"
+    MyGui.Title := "RMTv2.0"
     MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
     isValidCollor := RegExMatch(MySoftData.SoftBGColor, "^([0-9A-Fa-f]{6})$")
     BGColor := isValidCollor ? MySoftData.SoftBGColor : "f0f0f0"
@@ -192,7 +192,7 @@ AddOperBtnUI() {
     posY += 40
 
     posY := 505
-    btnHelp := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("帮助"))
+    btnHelp := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("RMT文档"))
     btnHelp.OnEvent("Click", (*) => Run(A_WorkingDir "\RMT帮助文档.html"))
 
     posY := 540
@@ -441,7 +441,7 @@ AddSettingUI(index) {
     con := AddTableControl("GroupBox", Format("x{} y{} w870 h140", posX + 10, posY), GetLang("数值选项"), tableItem)
     tableItem.AllGroup.Push(con)
     posY += 30
-    AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("按住时间浮动(%)："), tableItem)
+    AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("点击时间浮动(%)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 145, posY - 4), MySoftData.HoldFloat, tableItem
     )
     MySoftData.HoldFloatCtrl := con
@@ -467,10 +467,19 @@ AddSettingUI(index) {
     tableItem)
     MySoftData.CoordYFloatCon := con
 
-    AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(0~10)："), tableItem)
-    con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum,
-    tableItem)
+    AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(-1~10)："), tableItem)
+    con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum, tableItem)
     MySoftData.MutiThreadNumCtrl := con
+
+    ; posY += 40
+    ; AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("核心池大小(1~10)："), tableItem)
+    ; con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.DynamicCorePoolSize, tableItem)
+    ; MySoftData.DynamicCorePoolSizeCtrl := con
+
+    ; posY += 40
+    ; AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("弹性超时(秒)："), tableItem)
+    ; con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.ElasticTimeout, tableItem)
+    ; MySoftData.ElasticTimeoutCtrl := con
 
     posY += 40
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("软件背景颜色："), tableItem)
@@ -479,7 +488,7 @@ AddSettingUI(index) {
     MySoftData.SoftBGColorCon := con
 
     posY += 40
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("开关选项"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w870 h150", posX + 10, posY), GetLang("开关选项"), tableItem)
     tableItem.AllGroup.Push(con)
     posY += 30
 
@@ -510,6 +519,11 @@ AddSettingUI(index) {
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("分割线"), tableItem)
     MySoftData.SplitLineCtrl := con
     MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
+
+    posY += 40
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("模态子窗口"), tableItem)
+    MySoftData.ModalSubGuiCtrl := con
+    MySoftData.ModalSubGuiCtrl.Value := MySoftData.IsModalSubGui
 
     posY += 40
     con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)

@@ -414,6 +414,32 @@ CompatRun(filePath) {
     if (!FileExist(FilePath))
         return hasFix
     hasFix := CompatSerial(filePath, "Run", "运行")
+
+    newContent := "[UserSettings]"
+    FileEncoding("UTF-16")
+    loop read, filePath {
+        Data := CompatGetData(A_LoopReadLine, filePath)
+        if (Data == "")
+            continue
+
+        curFix := false
+        if (!ObjHasOwnProp(Data, "RunMode")) {
+            Data.RunMode := 1
+            Data.SaveNameArr := ["Var1", "Var2", "Var3"]
+            curFix := true
+        } else if (ObjHasOwnProp(Data, "SaveName")) {
+            Data.SaveNameArr := [Data.SaveName, "Var2", "Var3"]
+            Data.DeleteProp("SaveName")
+            curFix := true
+        }
+
+        hasFix := hasFix || curFix
+        saveStr := JSON.stringify(Data, 0)
+        newContent .= Format("`n{}={}", Data.SerialStr, saveStr)
+    }
+    FileDelete(filePath)
+    FileAppend(newContent, filePath, "UTF-16")
+
     return hasFix
 }
 

@@ -22,9 +22,13 @@
 #Include ArrayGui.ahk
 #Include InputGui.ahk
 #Include FileIOGui.ahk
+#Include WindowManageGui.ahk
 
 class MacroEditGui {
+    static Hotkeys := ["f5", "f6", "delete", "numpaddot"]
+
     __new() {
+        WindowHotkeyManager.Register(this, MacroEditGui.Hotkeys, this.OnSoftKey.Bind(this))
         this.ParentTile := ""
         this.Gui := ""
         this.GuiMenu := ""
@@ -37,6 +41,7 @@ class MacroEditGui {
         this.EditModeCon := ""
         this.SubMacroEditGui := ""
         this.CompareProEditItemGui := ""
+        this.OwnerHwnd := ""
 
         this.SureBtnAction := ""
         this.SaveBtnAction := ""
@@ -54,7 +59,7 @@ class MacroEditGui {
         this.SubMacroLastIndex := 0
 
         this.CMDStrArr := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "移动", "移动Pro", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键"])
+            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
@@ -66,17 +71,17 @@ class MacroEditGui {
             "Images\Soft\Operation.png", "Images\Soft\Run.png",
             "Images\Soft\FileIO.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
-            "Images\Soft\Mouse.png", "Images\Soft\Key.png"]
+            "Images\Soft\Mouse.png", "Images\Soft\Key.png",
+            "Images\Soft\WindowManage.png"]
 
-        this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("搜索"), "Icon3", GetLang("搜索Pro"),
-        "Icon4", GetLang("移动"), "Icon5", GetLang("移动Pro"),
-        "Icon6", GetLang("输出"), "Icon7", GetLang("运行"), "Icon8", GetLang("循环"), "Icon9", GetLang("宏操作"), "Icon10",
-        GetLang("变量"), "Icon11", GetLang("变量提取"), "Icon12", GetLang("如果"), "Icon13", GetLang("如果Pro"),
-        "Icon14", GetLang("运算"), "Icon15", GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"),
-        "Icon2", GetLang("真"), "Icon18", GetLang("假"), "Icon19", GetLang("循环次数"), "Icon20", GetLang("条件"), "Icon21",
-        GetLang("循环体"), "Icon22", GetLang("文本处理"), "Icon23", GetLang("数组"), "Icon24", GetLang("输入"), "Icon25",
-        GetLang("文件读写"), "Icon26", GetLang("流程控制"), "Icon27")
-
+        this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("搜索"), "Icon3",
+        GetLang("搜索Pro"), "Icon4", GetLang("移动"), "Icon5", GetLang("移动Pro"), "Icon6", GetLang("输出"), "Icon7",
+        GetLang("运行"), "Icon8", GetLang("循环"), "Icon9", GetLang("宏操作"), "Icon10", GetLang("变量"), "Icon11",
+        GetLang("变量提取"), "Icon12", GetLang("如果"), "Icon13", GetLang("如果Pro"), "Icon14", GetLang("运算"), "Icon15",
+        GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
+        GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
+        GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27",
+        GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29")
         this.InitSubGui()
     }
 
@@ -168,16 +173,23 @@ class MacroEditGui {
         this.FileIOGui := FileIOGui()
         this.FileIOGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
         this.SubGuiMap.Set(GetLang("文件读写"), this.FileIOGui)
+
+        this.WindowManageGui := WindowManageGui()
+        this.WindowManageGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
+        this.SubGuiMap.Set(GetLang("窗口管理"), this.WindowManageGui)
     }
 
     ShowGui(CommandStr, ShowSaveBtn) {
         global MySoftData
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
-            ImageListID := IL_Create(26)
+            ImageListID := IL_Create(29)
             this.MacroTreeViewCon.SetImageList(ImageListID)
             IL_Add(ImageListID, "Images\Soft\Interval.png")
             IL_Add(ImageListID, "Images\Soft\Key.png")
@@ -196,16 +208,25 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\Operation.png")
             IL_Add(ImageListID, "Images\Soft\rabit.png")
             IL_Add(ImageListID, "Images\Soft\Mouse.png")
+            IL_Add(ImageListID, "Images\Soft\Key.png")
             IL_Add(ImageListID, "Images\Soft\True.png")
             IL_Add(ImageListID, "Images\Soft\False.png")
             IL_Add(ImageListID, "Images\Soft\LoopCount.png")
+            IL_Add(ImageListID, "Images\Soft\Condition.png")    ;循环次数
             IL_Add(ImageListID, "Images\Soft\Condition.png")
             IL_Add(ImageListID, "Images\Soft\LoopBody.png")
             IL_Add(ImageListID, "Images\Soft\TextOps.png")
             IL_Add(ImageListID, "Images\Soft\Arr.png")
             IL_Add(ImageListID, "Images\Soft\Input.png")
             IL_Add(ImageListID, "Images\Soft\FileIO.png")   ;26 标记一下
-            IL_Add(ImageListID, "Images\Soft\Control.png")    ;todo
+            IL_Add(ImageListID, "Images\Soft\Control.png")
+            IL_Add(ImageListID, "Images\Soft\WindowManage.png")   ;28 窗口管理
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
         }
 
         MySoftData.RecordToggleCon := this.RecordMacroCon
@@ -218,6 +239,9 @@ class MacroEditGui {
     AddGui() {
         MyGui := Gui(, this.ParentTile GetLang("宏指令编辑器"))
         this.Gui := MyGui
+        if (this.OwnerHwnd != "") {
+            MyGui.Opt("+Owner" this.OwnerHwnd)
+        }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
         PosY := 10
@@ -312,6 +336,11 @@ class MacroEditGui {
         this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png",
             GetLang("后台按键"), (*) => this.OnOpenSubGui(this.BGKeyGui))
 
+        PosX := 10
+        PosY += 40
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\WindowManage.png",
+            GetLang("窗口管理"), (*) => this.OnOpenSubGui(this.WindowManageGui))
+
         PosX := 225
         PosY := 15
         MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("编辑模式："))
@@ -361,6 +390,7 @@ class MacroEditGui {
         this.SaveBtnCtrl.OnEvent("Click", (*) => this.OnSaveBtnClick())
 
         MyGui.Show(Format("w{} h{}", 945, 570))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
     }
 
     AddIconBtn(MyGui, PosX, PosY, ImgFile, LabelText, ClickAction) {
@@ -410,10 +440,12 @@ class MacroEditGui {
                 this.ToolMenu.Check(GetLang("指令显示"))
         }
 
-        exStyle := DllCall("GetWindowLongPtr", "Ptr", this.Gui.Hwnd, "Int", -20, "UInt") ; GWL_EXSTYLE = -20
-        isTop := (exStyle & 0x00000008)
-        if (isTop) {
-            this.ToolMenu.Check(GetLang("窗口置顶"))
+        try {
+            exStyle := DllCall("GetWindowLongPtr", "Ptr", this.Gui.Hwnd, "Int", -20, "UInt") ; GWL_EXSTYLE = -20
+            isTop := (exStyle & 0x00000008)
+            if (isTop) {
+                this.ToolMenu.Check(GetLang("窗口置顶"))
+            }
         }
 
         this.Gui.MenuBar := MyMenuBar
@@ -485,6 +517,13 @@ class MacroEditGui {
         action(macroStr)
 
         this.SureBtnAction := ""
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+
         this.Gui.Hide()
 
         action := this.SaveBtnAction
@@ -499,8 +538,24 @@ class MacroEditGui {
         action(macroStr)
 
         this.SureBtnAction := ""
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+
         this.Gui.Hide()
         this.SureFocusCon.Focus()
+    }
+
+    OnGuiClose() {
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     GetMacroStr() {
@@ -550,8 +605,7 @@ class MacroEditGui {
             this.ContextMenu.Add(GetLang("下方插入"), subMenu)  ; 将子菜单添加到主菜单
 
             this.ContextMenu.Add()  ; 分隔线
-            this.ContextMenu.Add(GetLang("共享复制"), (*) => this.ContentMenuHandler(GetLang("共享复制")))
-            this.ContextMenu.Add(GetLang("完全复制"), (*) => this.ContentMenuHandler(GetLang("完全复制")))
+            this.ContextMenu.Add(GetLang("复制"), (*) => this.ContentMenuHandler(GetLang("复制")))
             this.ContextMenu.Add(GetLang("上方粘贴"), (*) => this.ContentMenuHandler(GetLang("上方粘贴")))
             this.ContextMenu.Add(GetLang("下方粘贴"), (*) => this.ContentMenuHandler(GetLang("下方粘贴")))
 
@@ -647,6 +701,13 @@ class MacroEditGui {
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             this.SubMacroEditGui.ParentTile := ParentTile "-"
 
+            if (MySoftData.IsModalSubGui && this.Gui != "") {
+                this.SubMacroEditGui.OwnerHwnd := this.Gui.Hwnd
+            }
+            else {
+                this.SubMacroEditGui.OwnerHwnd := ""
+            }
+
             this.SubMacroEditGui.ShowGui(macroStr, false)
             return
         }
@@ -655,6 +716,13 @@ class MacroEditGui {
                 this.CompareProEditItemGui := CompareProEditItemGui()
             this.CompareProEditItemGui.IsSubMacroEdit := true
             this.CompareProEditItemGui.SureBtnAction := this.OnSubNodeEdit.Bind(this, this.CurItemID)
+
+            if (MySoftData.IsModalSubGui && this.Gui != "") {
+                this.CompareProEditItemGui.OwnerHwnd := this.Gui.Hwnd
+            }
+            else {
+                this.CompareProEditItemGui.OwnerHwnd := ""
+            }
 
             ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
             CommndStr := this.MacroTreeViewCon.GetText(ParentID)
@@ -807,11 +875,7 @@ class MacroEditGui {
             {
                 this.OnNextMoveCmd()
             }
-            case GetLang("共享复制"):
-            {
-                SetClipboard(itemText)
-            }
-            case GetLang("完全复制"):
+            case GetLang("复制"):
             {
                 newCmd := FullCopyCmd(itemText)
                 SetClipboard(newCmd)
@@ -967,6 +1031,13 @@ class MacroEditGui {
         if ObjHasOwnProp(subGui, "ParentTile") {
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             subGui.ParentTile := ParentTile "-"
+        }
+
+        if (MySoftData.IsModalSubGui && this.Gui != "") {
+            subGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            subGui.OwnerHwnd := ""
         }
 
         if (modeType == 2) {

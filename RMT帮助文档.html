@@ -84,7 +84,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 </tr>
 <tr>
 <td>💾 <strong>应用并保存</strong></td>
-<td>保存并立即应用所有修改，未点击前不会生效。</td>
+<td>保存并立即应用所有修改，未点击前修改配置不会生效。</td>
 </tr>
 </tbody></table>
 <hr>
@@ -154,7 +154,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 </thead>
 <tbody><tr>
 <td>🎯 <strong>触发键</strong></td>
-<td>设置宏的触发按键与方式：<br> - <strong>按下</strong>：按下即触发，未松开可能重复触发<br> - <strong>松开</strong>：松开时触发<br> - <strong>松止</strong>：按下启动，松开停止<br> - <strong>开关</strong>：首次启动，再次停止<br> - <strong>长按</strong>：持续按下到指定时间后触发</td>
+<td>设置宏的触发按键与方式：<br> - <strong>按下</strong>：按下即触发，未松开可重复触发<br> - <strong>松开</strong>：松开时触发<br> - <strong>松止</strong>：按下触发，松开终止<br> - <strong>开关</strong>：首次触发，再次终止<br> - <strong>长按</strong>：持续按下到指定时间后触发</td>
 </tr>
 <tr>
 <td>📜 <strong>宏指令</strong></td>
@@ -204,16 +204,16 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 </tr>
 </thead>
 <tbody><tr>
-<td>⏱️ <strong>按住时间浮动（%）</strong></td>
-<td>📊 模拟按键持续时间的浮动范围。例如：设为 10，原 50ms → 最终 45~55ms。</td>
+<td>⏱️ <strong>点击时间浮动（%）</strong></td>
+<td>📊 按键点击时间的浮动范围。例如：设为 10，原 50ms → 最终 45~55ms。</td>
 </tr>
 <tr>
 <td>⏳ <strong>每次间隔时间浮动（%）</strong></td>
-<td>📉 每个按键动作间隔的浮动范围。例如：设为 10，原 500ms → 实际 450~550ms。</td>
+<td>📉 多次点击、多次搜索、多次提取间隔浮动范围。例如：设为 10，原 500ms → 实际 450~550ms。</td>
 </tr>
 <tr>
 <td>⌛ <strong>间隔指令时间浮动（%）</strong></td>
-<td>📈 每组指令之间的等待时间浮动范围。例如：设为 10，原 3000ms → 实际 2700~3300ms。</td>
+<td>📈 间隔指令的浮动范围。例如：设为 10，原 3000ms → 实际 2700~3300ms。</td>
 </tr>
 <tr>
 <td>📐 <strong>坐标 X 浮动（px）</strong></td>
@@ -224,8 +224,8 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <td>↕️ 模拟点击时 Y 坐标的浮动范围。例如：设为 50，原 Y=400 → 实际 350~450。</td>
 </tr>
 <tr>
-<td>🧵 <strong>多线程数（0~10）</strong></td>
-<td>🌀 大于 0 时启用多线程。</td>
+<td>🧵 <strong>多线程数（-1~10）</strong></td>
+<td>🌀 -1 和大于 0 时启用多线程。</td>
 </tr>
 <tr>
 <td>⚡ <strong>开机自动启动</strong></td>
@@ -1435,18 +1435,27 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <hr>
 </div></div>
     <div class="page hidden" id="page6"><div class="content"><h1>更新日志</h1>
-<h2>RMTv1.2更新内容</h2>
+<h2>RMTv2.0更新内容</h2>
 <blockquote>
 <p>兔子要和生活对线，期待开发者提交PR完善下面的内容</p>
 </blockquote>
-<h3>待优化</h3>
-<p>指令录制表现需要增强<br>菜单宏八个按钮太丑了，需要搞成8个按钮围成车轮那样<br>路径需要支持作为变量可实时替换<br>搜索图片路径不再使用随机数，使用自增数字，且指令界面要显示图片路径<br>路径相关优化（若不存在则弹窗进行选择）<br>软件目前打开编辑窗口会盖住下方窗口，层数多了很乱不知道那个是哪个<br>（主界面打开宏编辑器时：主界面左移一半，宏编辑器中间打开）<br>（宏编辑器打开指令编辑器时，宏编辑器向左上移动，指令编辑器中间打开）<br>（指令编辑器打开新的编辑窗口，指令编辑器移动到左下，新编辑器中间打开）<br>（如上，感觉编辑起来会方便很多）<br>主界面新增复制按钮</p>
-<h3>待更新</h3>
-<p>快捷键可以任意选择组合（特别是手柄需要支持）<br>增加双击触发类型（虽然字串宏也能做到，但是ctrl这种做不到）<br>新增窗口管理指令（控制窗口置顶，窗口关闭，窗口显示，窗口移动等等）<br>配置合并（这样案例就可以作为通用模版，效果会增强）<br>语音宏（通过语言内容触发）<br>界面宏（特定界面添加常驻按钮，点击触发宏）<br>yolo（等yun完善，想看看这玩意到底是什么）</p>
-<h3>待删除</h3>
+<h3>优化</h3>
+<p>增加窗口模态<br>增加动态线程池<br>菜单宏使用窗口热键<br>主界面新增复制按钮<br>路径支持作为变量可实时替换<br>搜索图片路径使用自增数字<br>指令界面要显示图片路径<br>路径不存在则弹窗选择<br>运行新增运行等待+返回值、等待+完整输出</p>
+<h3>更新</h3>
+<p>新增窗口管理指令<br>新增双击触发类型</p>
+<h3>修复</h3>
+<p>修复发送内容缓冲区异常问题</p>
+<h3>删除</h3>
 <p>共享复制</p>
+<h3>待优化</h3>
+<p>窗口管理优化</p>
+<ul>
+<li>操作类型右侧-新增目标窗口选项：当前窗口，窗口句柄，窗口信息（标题+窗口类+进程名）<br>指令录制表现需要增强<br>菜单宏八个按钮太丑了，需要搞成8个按钮围成车轮那样</li>
+</ul>
+<h3>待更新</h3>
+<p>快捷键可以任意选择组合（特别是手柄需要支持）<br>配置合并（这样案例就可以作为通用模版，效果会增强）<br>语音宏（通过语言内容触发）<br>界面宏（特定界面添加常驻按钮，点击触发宏）<br>yolo（等yun完善，想看看这玩意到底是什么）</p>
 <hr>
-<h2>RMTv1.1.1更新</h2>
+<h2>RMTv1.1.2更新</h2>
 <h3>优化</h3>
 <p>窗口信息编辑变量下拉内容优化<br>更新日志改成倒序</p>
 <h3>修复</h3>

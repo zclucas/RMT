@@ -1096,9 +1096,9 @@ class TriggerKeyGui {
 
         PosY += 30
         PosX := 20
-        this.HoldTimeLabelCon := MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("触发键长按时间："))
+        this.HoldTimeLabelCon := MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("长按时间/双击时间："))
         this.HoldTimeCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX + 120, PosY - 2, 100), "500")
-        this.HoldTimeTipCon := MyGui.Add("Text", Format("x{} y{}", PosX + 220, PosY), GetLang("（此设置只在触发模式是【长按】时有效）"))
+        this.HoldTimeTipCon := MyGui.Add("Text", Format("x{} y{}", PosX + 220, PosY), GetLang("（此设置只在触发模式是【长按】/【双击】时有效）"))
 
         PosY += 25
         con := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 180, 20), GetLang("保留触发键原本功能"))

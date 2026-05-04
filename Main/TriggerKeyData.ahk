@@ -8,6 +8,7 @@ class TriggerKeyData {
         this.OriLoosenStopArr := []    ;松止
         this.OriTogArr := []   ;开关
         this.OriHoldArr := []  ;按长按
+        this.OriDblClickArr := []  ;双击触发
         this.HoldActionMap := Map()
 
         this.DownArr := []
@@ -15,6 +16,10 @@ class TriggerKeyData {
         this.LoosenStopArr := []
         this.TogArr := []
         this.HoldArr := []
+        this.DblClickArr := []
+
+        this.LastKeyDownTime := 0  ;上次按下时间（用于双击检测）
+        this.DblClickInterval := 300  ;双击间隔时间（毫秒）
 
         this.InitState()
     }
@@ -42,12 +47,14 @@ class TriggerKeyData {
             return false
         if (this.OriHoldArr.Length >= 1)
             return false
+        if (this.OriDblClickArr.Length >= 1)
+            return false
 
         return true
     }
 
     AddData(info) {
-        static PropNames := ["OriDownArr", "OriLoosenArr", "OriLoosenStopArr", "OriTogArr", "OriHoldArr"]
+        static PropNames := ["OriDownArr", "OriLoosenArr", "OriLoosenStopArr", "OriTogArr", "OriHoldArr", "OriDblClickArr"]
         this.%PropNames[info.GetTriggerType()]%.Push(info)
     }
 
@@ -57,6 +64,7 @@ class TriggerKeyData {
         this.LoosenStopArr := []
         this.TogArr := []
         this.HoldArr := []
+        this.DblClickArr := []
 
         MyMouseInfo.UpdateInfo()
         this.UpdateArrByFront(this.OriDownArr, this.DownArr)
@@ -64,6 +72,18 @@ class TriggerKeyData {
         this.UpdateArrByFront(this.OriLoosenStopArr, this.LoosenStopArr)
         this.UpdateArrByFront(this.OriTogArr, this.TogArr)
         this.UpdateArrByFront(this.OriHoldArr, this.HoldArr)
+        this.UpdateArrByFront(this.OriDblClickArr, this.DblClickArr)
+
+        ;更新双击间隔时间为所有双击宏中的最小值
+        if (this.DblClickArr.Length > 0) {
+            minInterval := 300
+            for index, value in this.DblClickArr {
+                interval := value.GetDblClickInterval()
+                if (interval < minInterval)
+                    minInterval := interval
+            }
+            this.DblClickInterval := minInterval
+        }
     }
 
     UpdateArrByFront(OriArr, ResArr) {
@@ -96,6 +116,14 @@ class TriggerKeyData {
         this.HandleSoftHotKeyDown()
         if (isMenuBtnHotKey && isOpenMenu)
             return
+        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
+            return
+
+        ;双击检测逻辑
+        currentTime := A_TickCount
+        isDblClick := (currentTime - this.LastKeyDownTime) <= this.DblClickInterval && this.LastKeyDownTime != 0
+        this.LastKeyDownTime := currentTime
+
         for index, value in this.DownArr {
             if (index == 1 && SubStr(value.GetTK(), 1, 1) != "~")
                 LoosenModifyKey(value.GetTK())
@@ -111,12 +139,21 @@ class TriggerKeyData {
             value.Action()
         }
 
+        ;如果检测到双击，则触发双击宏
+        if (isDblClick) {
+            for index, value in this.DblClickArr {
+                value.Action()
+            }
+        }
+
         this.SetHoldTimeChecker()
     }
 
     OnTriggerKeyUp() {
         this.UpdataArr()
         this.HandleSoftHotKeyUp()
+        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
+            return
         for index, value in this.LoosenArr {
             value.Action()
         }
@@ -195,10 +232,11 @@ class TriggerKeyData {
         if (isMenuBtnHotKey)
             MyMenuWheel.OnSoftKey(this.Key, true)
 
-        if (this.Key == "f5" || this.Key == "f6" || this.Key == "delete" || this.Key == "numpaddot") {
-            if (MySoftData.MacroEditGui != "" && WinActive("ahk_id " MySoftData.MacroEditGui.Gui.Hwnd)) {
-                MySoftData.MacroEditGui.OnSoftKey(this.Key, true)
-            }
+        if (WindowHotkeyManager.IsManaged(this.Key)) {
+            if (WindowHotkeyManager.HandleKey(this.Key, true))
+                return
+            SendLevel 1
+            Send("{Blind}{" this.Key "}")
         }
     }
 
@@ -218,6 +256,13 @@ class TriggerKeyData {
 
         if (this.Key == "enter") {
             MyColorPanel.OnEnterUp(this.Key)
+        }
+
+        if (WindowHotkeyManager.IsManaged(this.Key)) {
+            if (WindowHotkeyManager.HandleKey(this.Key, false))
+                return
+            SendLevel 1
+            Send("{Blind}{" this.Key " up}")
         }
     }
 }
@@ -270,6 +315,10 @@ class TriggerKeyInfo {
             return tableItem.FoldInfo.HoldTimeArr[this.foldIndex]
         }
         return 500
+    }
+
+    GetDblClickInterval() {
+        return this.GetHoldTime()
     }
 
     GetWorkState() {
