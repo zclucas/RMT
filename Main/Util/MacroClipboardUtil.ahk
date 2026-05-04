@@ -284,10 +284,14 @@ FindDependentSerials(dataObj) {
 
 ; 批量生成唯一的序列码（避免与现有配置及同批次内其他配置冲突）
 GenerateUniqueSerialBatch(baseSerial, usedSerials) {
+    if (baseSerial == "") {
+        return "Item" A_Now
+    }
+
     textOnly := RegExReplace(baseSerial, "\d+$")
     numbersOnly := RegExReplace(baseSerial, "\D")
 
-    if (numbersOnly == "") {
+    if (numbersOnly == "" || !IsNumber(numbersOnly)) {
         baseSerial := textOnly "1"
         textOnly := textOnly
         numbersOnly := "1"
@@ -298,7 +302,8 @@ GenerateUniqueSerialBatch(baseSerial, usedSerials) {
         candidate := textOnly numbersOnly
 
         if (usedSerials.Has(candidate)) {
-            numbersOnly := Integer(numbersOnly) + 1
+            currentNum := Integer(numbersOnly)
+            numbersOnly := (currentNum + 1) ""
             continue
         }
 
@@ -308,7 +313,8 @@ GenerateUniqueSerialBatch(baseSerial, usedSerials) {
             if (DataFile != "") {
                 existingData := IniRead(DataFile, IniSection, candidate, "")
                 if (existingData != "") {
-                    numbersOnly := Integer(numbersOnly) + 1
+                    currentNum := Integer(numbersOnly)
+                    numbersOnly := (currentNum + 1) ""
                     continue
                 }
             }
