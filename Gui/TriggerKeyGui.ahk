@@ -123,7 +123,7 @@ class TriggerKeyGui {
                 normalKeyNum += 1
         }
 
-        if (joyKeyNum > 1)
+        if (joyKeyNum > 2)
             return false
 
         if (joyKeyNum >= 1 && (hasModifyKey || normalKeyNum > 0 || mouseKeyNum > 0))
@@ -223,10 +223,12 @@ class TriggerKeyGui {
         modifyKeyArr := []
         normalKeyArr := []
         mouseKeyArr := []
+        joyKeyArr := []
 
         for index, value in this.CheckedArr {
             if (RegExMatch(value, "Joy")) {
                 hasJoy := true
+                joyKeyArr.Push(value)
             }
 
             if (this.ModifyKeyMap.Has(value)) {
@@ -251,17 +253,26 @@ class TriggerKeyGui {
             allNormalKeys.Push(value)
         }
 
-        if (allNormalKeys.Length == 2) {
-            prefix1 := keepOriginal ? "~" : ""
-            prefix2 := keepOriginal ? "~" : ""
-            triggerKey .= prefix1 allNormalKeys[1] " & " prefix2 allNormalKeys[2]
+        if (hasJoy) {
+            if (joyKeyArr.Length == 2) {
+                triggerKey .= joyKeyArr[1] " & " joyKeyArr[2]
+            }
+            else if (joyKeyArr.Length == 1) {
+                triggerKey .= joyKeyArr[1]
+            }
         }
-        else if (allNormalKeys.Length == 1) {
-            prefix := keepOriginal ? "~" : ""
-            triggerKey .= prefix allNormalKeys[1]
+        else {
+            if (allNormalKeys.Length == 2) {
+                prefix1 := keepOriginal ? "~" : ""
+                prefix2 := keepOriginal ? "~" : ""
+                triggerKey .= prefix1 allNormalKeys[1] " & " prefix2 allNormalKeys[2]
+            }
+            else if (allNormalKeys.Length == 1) {
+                prefix := keepOriginal ? "~" : ""
+                triggerKey .= prefix allNormalKeys[1]
+            }
         }
 
-        OutputDebug("RMT: GetTriggerKey='" triggerKey "' CheckedArr=" this.CheckedArr.Length)
         return triggerKey
     }
 
@@ -1173,7 +1184,7 @@ class TriggerKeyGui {
         MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650),
         GetLang("勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中只能 勾选一/二个按键 或 不选"))
         PosY += 25
-        MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650), GetLang("勾选规则2：手柄按钮、摇杆只能单独选"))
+        MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650), GetLang("勾选规则2：手柄按钮、摇杆可选1-2个按键组合"))
         FlagEY := PosY
 
         PosY := FlagEY + 30

@@ -117,7 +117,7 @@ SetPauseState(state) {
 }
 
 OnKillAllMacro(*) {
-    global MySoftData ; 访问全局变量
+    global MySoftData, MyWorkPool ; 访问全局变量
 
     CloseMenuWheel()    ;关闭菜单按钮
 
@@ -502,6 +502,7 @@ BindMenuHotKey() {
 BindTabHotKey() {
     tableIndex := 0
     MyJoyMacro.MacroMap := Map()
+    MyJoyMacro.ComboMacroMap := Map()
     registerMsg := "=== Registered Hotkeys ===`n"
     loop MySoftData.TabNameArr.Length {
         tableItem := MySoftData.TableInfo[A_Index]
