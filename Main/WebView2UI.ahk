@@ -14,7 +14,7 @@ class WebView2UI {
 
         ; 创建主窗口
         this.gui := Gui()
-        this.gui.Title := "RMTv1.1"
+        this.gui.Title := "RMTv2.0"
         this.gui.SetFont("S10 W550 Q2", "微软雅黑")
 
         ; 读取背景色配置
