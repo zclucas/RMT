@@ -26,16 +26,36 @@ BindShortcut(triggerInfo, action) {
         Hotstring(triggerInfo, action)
     }
     else {
-        key := "$*~" triggerInfo
-        Hotkey(key, action)
+        isCombo := IsComboKey(triggerInfo)
+        if (isCombo) {
+            key := triggerInfo
+        }
+        else {
+            key := "$*~" triggerInfo
+        }
+        try {
+            Hotkey(key, action)
+        }
+        catch as e {
+        }
     }
 }
 
 BindSuspendHotkey() {
     global MySoftData
     if (MySoftData.SuspendHotkey != "") {
-        key := "$*~" MySoftData.SuspendHotkey
-        Hotkey(key, OnSuspendHotkey, "S")
+        isCombo := IsComboKey(MySoftData.SuspendHotkey)
+        if (isCombo) {
+            key := MySoftData.SuspendHotkey
+        }
+        else {
+            key := "$*~" MySoftData.SuspendHotkey
+        }
+        try {
+            Hotkey(key, OnSuspendHotkey, "S")
+        }
+        catch as e {
+        }
     }
 }
 
@@ -441,7 +461,13 @@ BindMenuHotKey() {
             continue
 
         oriKey := FoldInfo.TKArr[index]
-        key := "$*" oriKey
+        isCombo := IsComboKey(oriKey)
+        if (isCombo) {
+            key := oriKey
+        }
+        else {
+            key := "$*" oriKey
+        }
         actionArr := GetBindMacroAction(oriKey)
         isJoyKey := RegExMatch(oriKey, "Joy")
         frontInfo := FoldInfo.FrontInfoArr[index]
@@ -456,11 +482,15 @@ BindMenuHotKey() {
             MyJoyMacro.AddMacro(oriKey, actionArr[1], frontInfo)
         }
         else {
-            if (actionArr[1] != "")
-                Hotkey(key, actionArr[1])
+            try {
+                if (actionArr[1] != "")
+                    Hotkey(key, actionArr[1])
 
-            if (actionArr[2] != "")
-                Hotkey(key " up", actionArr[2])
+                if (actionArr[2] != "" && !isCombo)
+                    Hotkey(key " up", actionArr[2])
+            }
+            catch as e {
+            }
         }
 
         if (realFrontStr != "") {
@@ -472,6 +502,7 @@ BindMenuHotKey() {
 BindTabHotKey() {
     tableIndex := 0
     MyJoyMacro.MacroMap := Map()
+    registerMsg := "=== Registered Hotkeys ===`n"
     loop MySoftData.TabNameArr.Length {
         tableItem := MySoftData.TableInfo[A_Index]
         tableIndex := A_Index
@@ -489,30 +520,48 @@ BindTabHotKey() {
             if (tableItem.MacroArr[index] == "")
                 continue
 
-            key := "$*" tableItem.TKArr[index]
+            rawKey := tableItem.TKArr[index]
+            isCombo := IsComboKey(rawKey)
+            if (isCombo) {
+                key := rawKey
+            }
+            else if (SubStr(rawKey, 1, 1) == "~") {
+                key := "$*" rawKey
+            }
+            else {
+                key := "$*" rawKey
+            }
             actionArr := GetMacroAction(tableIndex, index)
-            isJoyKey := RegExMatch(tableItem.TKArr[index], "Joy")
-            isHotstring := SubStr(tableItem.TKArr[index], 1, 1) == ":"
+            isJoyKey := RegExMatch(rawKey, "Joy")
+            isHotstring := SubStr(rawKey, 1, 1) == ":"
             frontInfo := GetItemFrontInfo(tableItem, index)
             groupSymbolStr := "Group" tableIndex "_" index
             realFrontStr := GetParamsWinInfoStr(frontInfo, groupSymbolStr)
+
+            registerMsg .= "rawKey: '" rawKey "' → key: '" key "' (isCombo=" isCombo ")`n"
 
             if (realFrontStr != "") {
                 HotIfWinActive(realFrontStr)
             }
 
             if (isJoyKey) {
-                MyJoyMacro.AddMacro(tableItem.TKArr[index], actionArr[1], frontInfo)
+                MyJoyMacro.AddMacro(rawKey, actionArr[1], frontInfo)
             }
             else if (isHotstring) {
-                Hotstring(tableItem.TKArr[index], actionArr[1])
+                Hotstring(rawKey, actionArr[1])
             }
             else {
-                if (actionArr[1] != "")
-                    Hotkey(key, actionArr[1], "On")
+                try {
+                    if (actionArr[1] != "") {
+                        Hotkey(key, actionArr[1], "On")
+                    }
 
-                if (actionArr[2] != "")
-                    Hotkey(key " up", actionArr[2], "On")
+                    if (actionArr[2] != "" && !isCombo)
+                        Hotkey(key " up", actionArr[2], "On")
+                }
+                catch as e {
+                    registerMsg .= "❌ Failed: " e.Message "`n"
+                }
             }
 
             if (realFrontStr != "") {
@@ -596,7 +645,8 @@ GetMacroAction(tableIndex, index) {
 
 OnTriggerKeyDown(tableIndex, itemIndex, *) {
     tableItem := MySoftData.TableInfo[tableIndex]
-    key := LTrim(tableItem.TKArr[itemIndex], "~")
+    rawTK := tableItem.TKArr[itemIndex]
+    key := LTrim(rawTK, "~")
     key := StrLower(key)
 
     if (!MySoftData.TriggerKeyMap.Has(key))
@@ -622,13 +672,19 @@ BindSoftHotKey() {
     for index, value in MySoftData.SoftHotKeyArr {
         mapKey := Trim(value, "~")
         mapKey := StrLower(mapKey)
+        isCombo := IsComboKey(mapKey)
 
         if (WindowHotkeyManager.IsManaged(mapKey)) {
-            key := "$*" mapKey
+            key := isCombo ? mapKey : ("$*" mapKey)
             actionDown := OnBindKeyDown.Bind(value)
             actionUp := OnBindKeyUp.Bind(value)
-            Hotkey(key, actionDown, "On")
-            Hotkey(key " up", actionUp, "On")
+            try {
+                Hotkey(key, actionDown, "On")
+                if (!isCombo)
+                    Hotkey(key " up", actionUp, "On")
+            }
+            catch as e {
+            }
             continue
         }
 
@@ -636,20 +692,34 @@ BindSoftHotKey() {
         isOpenMenu := MySoftData.CurMenuWheelIndex != -1
         IsOnlySoftHotkey := MySoftData.TriggerKeyMap[mapKey].IsOnlySoftHotkey()
 
-        key := "$*" value
+        if (isCombo) {
+            key := value
+        }
+        else if (SubStr(value, 1, 1) == "~") {
+            key := "$" value
+        }
+        else {
+            key := "$" value
+        }
         actionDown := OnBindKeyDown.Bind(value)
         actionUp := OnBindKeyUp.Bind(value)
 
         if (isMenuBtnHotKey && !isOpenMenu && IsOnlySoftHotkey) {
             Hotkey(key, actionDown, "Off")
-            Hotkey(key " up", actionUp, "Off")
+            if (!isCombo)
+                Hotkey(key " up", actionUp, "Off")
         }
 
         if (isMenuBtnHotKey && !isOpenMenu)
             continue
 
-        Hotkey(key, actionDown, "On")
-        Hotkey(key " up", actionUp, "On")
+        try {
+            Hotkey(key, actionDown, "On")
+            if (!isCombo)
+                Hotkey(key " up", actionUp, "On")
+        }
+        catch as e {
+        }
     }
 }
 
@@ -733,5 +803,4 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
     }
     OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
 }
-
 

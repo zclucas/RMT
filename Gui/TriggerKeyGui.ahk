@@ -10,6 +10,7 @@ class TriggerKeyGui {
         this.CheckedArr := []
         this.ConMap := Map()
         this.ConHwndMap := Map()
+        this.ConStateMap := Map()
         this.ShowSaveBtn := false
         this.IsToolEdit := ""
         this.ModifyKeyMap := Map("LAlt", "<!", "RAlt", ">!", "Alt", "!", "LWin", "<#", "RWin", ">#", "Win", "#",
@@ -60,13 +61,13 @@ class TriggerKeyGui {
         }
 
         if (isSelected) {
-            con.State := 0
+            this.ConStateMap.Set(key, 0)
             con.Opt(this.UnSelectColor)
             con.Redraw()
             this.CheckedArr.RemoveAt(arrayIndex)
         }
         else {
-            con.State := 1
+            this.ConStateMap.Set(key, 1)
             con.Opt(this.SelectColor)
             con.Redraw()
             if (isModifyKey) {
@@ -83,7 +84,7 @@ class TriggerKeyGui {
     ClearCheckedArr() {
         for index, value in this.CheckedArr {
             con := this.ConMap.Get(value)
-            con.State := 0
+            this.ConStateMap.Set(value, 0)
             con.Opt(this.UnSelectColor)
             con.Redraw()
         }
@@ -94,6 +95,7 @@ class TriggerKeyGui {
     CheckConfigValid() {
         normalKeyNum := 0
         joyKeyNum := 0
+        mouseKeyNum := 0
         hasModifyKey := false
         for index, value in this.CheckedArr {
             isSpecialKey := false
@@ -101,6 +103,11 @@ class TriggerKeyGui {
             subValue := SubStr(value, 1, 3)
             if (subValue == "Joy") {
                 joyKeyNum += 1
+                isSpecialKey := true
+            }
+
+            if (value == "LButton" || value == "RButton" || value == "MButton" || value == "XButton1" || value == "XButton2") {
+                mouseKeyNum += 1
                 isSpecialKey := true
             }
 
@@ -116,10 +123,19 @@ class TriggerKeyGui {
                 normalKeyNum += 1
         }
 
-        if (normalKeyNum + joyKeyNum > 1)
+        if (joyKeyNum > 1)
             return false
 
-        if (joyKeyNum == 1 && hasModifyKey)
+        if (joyKeyNum >= 1 && (hasModifyKey || normalKeyNum > 0 || mouseKeyNum > 0))
+            return false
+
+        if (mouseKeyNum > 2)
+            return false
+
+        if (hasModifyKey && (normalKeyNum + mouseKeyNum) > 1)
+            return false
+
+        if ((normalKeyNum + mouseKeyNum) > 2)
             return false
 
         return true
@@ -138,6 +154,7 @@ class TriggerKeyGui {
                 if (subTriggerKey == value) {
                     this.CheckedArr.Push(key)
                     triggerKey := SubStr(triggerKey, length + 1)
+                    triggerKey := LTrim(triggerKey)
                     hasModifyKey := true
                     break
                 }
@@ -152,18 +169,37 @@ class TriggerKeyGui {
                 break
         }
 
-        for key, value in this.ConMap {
-            if (StrCompare(key, triggerKey, false) == 0)
-                this.CheckedArr.Push(key)
+        if (InStr(triggerKey, " & ")) {
+            keyParts := StrSplit(triggerKey, " & ")
+            for index, keyPart in keyParts {
+                keyPart := Trim(keyPart)
+                for key, value in this.ConMap {
+                    if (StrCompare(key, keyPart, false) == 0) {
+                        this.CheckedArr.Push(key)
+                        break
+                    }
+                }
+            }
+            for key, value in this.ConMap {
+                this.ConStateMap.Set(key, 0)
+                value.Opt(this.UnSelectColor)
+                value.Redraw()
+            }
+        }
+        else {
+            for key, value in this.ConMap {
+                if (StrCompare(key, Trim(triggerKey), false) == 0)
+                    this.CheckedArr.Push(key)
 
-            value.State := 0
-            value.Opt(this.UnSelectColor)
-            value.Redraw()
+                this.ConStateMap.Set(key, 0)
+                value.Opt(this.UnSelectColor)
+                value.Redraw()
+            }
         }
 
         for index, value in this.CheckedArr {
             con := this.ConMap.Get(value)
-            con.State := 1
+            this.ConStateMap.Set(value, 1)
             con.Opt(this.SelectColor)
             con.Redraw()
         }
@@ -184,27 +220,48 @@ class TriggerKeyGui {
     GetTriggerKey() {
         triggerKey := ""
         hasJoy := false
-        onlyModifyKey := true
+        modifyKeyArr := []
+        normalKeyArr := []
+        mouseKeyArr := []
+
         for index, value in this.CheckedArr {
             if (RegExMatch(value, "Joy")) {
                 hasJoy := true
             }
 
-            if (!this.ModifyKeyMap.Has(value)) {
-                onlyModifyKey := false
+            if (this.ModifyKeyMap.Has(value)) {
+                modifyKeyArr.Push(value)
+            }
+            else if (value == "LButton" || value == "RButton" || value == "MButton" || value == "XButton1" || value == "XButton2") {
+                mouseKeyArr.Push(value)
+            }
+            else {
+                normalKeyArr.Push(value)
             }
         }
 
-        for index, value in this.CheckedArr {
-            isKeyMap := this.ModifyKeyMap.Has(value)
-            isLast := index == this.CheckedArr.Length
-            subTriggerKey := (isKeyMap && !isLast) ? this.ModifyKeyMap.Get(value) : value
-            triggerKey .= subTriggerKey
+        keepOriginal := !hasJoy && this.EnableTriggerKeyCon.Value
+
+        for index, value in modifyKeyArr {
+            triggerKey .= this.ModifyKeyMap.Get(value)
         }
 
-        if (!hasJoy && this.EnableTriggerKeyCon.Value) {
-            triggerKey := "~" triggerKey
+        allNormalKeys := normalKeyArr.Clone()
+        for index, value in mouseKeyArr {
+            allNormalKeys.Push(value)
         }
+
+        if (allNormalKeys.Length == 2) {
+            prefix1 := keepOriginal ? "~" : ""
+            prefix2 := keepOriginal ? "~" : ""
+            triggerKey .= prefix1 allNormalKeys[1] " & " prefix2 allNormalKeys[2]
+        }
+        else if (allNormalKeys.Length == 1) {
+            prefix := keepOriginal ? "~" : ""
+            triggerKey .= prefix allNormalKeys[1]
+        }
+
+        OutputDebug("RMT: GetTriggerKey='" triggerKey "' CheckedArr=" this.CheckedArr.Length)
         return triggerKey
     }
 
@@ -1114,7 +1171,7 @@ class TriggerKeyGui {
         MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650), GetLang("普通按键：除特殊按键的其他按键"))
         PosY += 25
         MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650),
-        GetLang("勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中只能 勾选一个按键 或 不选"))
+        GetLang("勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中只能 勾选一/二个按键 或 不选"))
         PosY += 25
         MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650), GetLang("勾选规则2：手柄按钮、摇杆只能单独选"))
         FlagEY := PosY
@@ -1211,7 +1268,14 @@ class TriggerKeyGui {
         IsLeven := this.HoverCon != "" && !this.ConHwndMap.Has(hwnd)
         IsUpdate := this.ConHwndMap.Has(hwnd) && this.ConHwndMap.Get(hwnd) != this.HoverCon
         if ((IsLeven || IsUpdate) && this.HoverCon != "") {
-            ColorStr := this.HoverCon.State ? this.SelectColor : this.UnSelectColor
+            hoverKey := ""
+            for key, con in this.ConMap {
+                if (con == this.HoverCon) {
+                    hoverKey := key
+                    break
+                }
+            }
+            ColorStr := (hoverKey != "" && this.ConStateMap.Get(hoverKey, 0)) ? this.SelectColor : this.UnSelectColor
             this.HoverCon.Opt(ColorStr)
             this.HoverCon.Redraw()
             this.HoverCon := IsLeven ? "" : this.ConHwndMap.Get(hwnd)
@@ -1219,7 +1283,14 @@ class TriggerKeyGui {
 
         if (IsUpdate) {
             this.HoverCon := this.ConHwndMap.Get(hwnd)
-            ColorStr := this.HoverCon.State ? this.SelectHoverColor : this.UnSelectHoverColor
+            hoverKey := ""
+            for key, con in this.ConMap {
+                if (con == this.HoverCon) {
+                    hoverKey := key
+                    break
+                }
+            }
+            ColorStr := (hoverKey != "" && this.ConStateMap.Get(hoverKey, 0)) ? this.SelectHoverColor : this.UnSelectHoverColor
             this.HoverCon.Opt(ColorStr)
             this.HoverCon.Redraw()
         }
