@@ -155,8 +155,8 @@ SwapArrValue(Arr, indexA, indexB, valueType := 1) {
 
 PluginInit() {
     global MyWorkPool := WorkPool()
-    global MyChineseOcr := RapidOcr(A_ScriptDir)
-    global MyEnglishOcr := RapidOcr(A_ScriptDir, 2)
+    global MyChineseOcr := 0  ; 懒加载：首次使用时才初始化
+    global MyEnglishOcr := 0   ; 懒加载：首次使用时才初始化
     global MyPToken := Gdip_Startup()
 
     if (MySoftData.HasJoyMacro)
@@ -175,6 +175,8 @@ PluginInit() {
     RMTPath := A_ScriptDir "\Plugins\RMT\RMT.dll"
     RMT_ASM := CLR_LoadLibrary(RMTPath)   ;加载RMT程序集
     global RMT_Http := RMT_ASM.CreateInstance("RMT.Http")     ; 创建对象实例
+
+    SetTimer(CheckOcrIdle, 60000)
 }
 
 OnToolAlwaysOnTop(*) {
@@ -644,7 +646,7 @@ ScreenShot(X1, Y1, X2, Y2, FileName) {
 OnToolTextFilterGetArea(x1, y1, x2, y2) {
     filePath := A_WorkingDir "\Images\ScreenShot\TextFilter.png"
     ScreenShot(x1, y1, x2, y2, filePath)
-    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? MyChineseOcr : MyEnglishOcr
+    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? GetChineseOcr() : GetEnglishOcr()
     result := ocr.ocr_from_file(filePath)
     ToolCheckInfo.ToolTextCtrl.Value := result
     SetClipboard(result)
@@ -656,7 +658,7 @@ OnToolTextCheckScreenShot() {
     {
         filePath := A_WorkingDir "\Images\ScreenShot\TextFilter.png"
         SaveClipToBitmap(filePath)
-        ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? MyChineseOcr : MyEnglishOcr
+        ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? GetChineseOcr() : GetEnglishOcr()
         result := ocr.ocr_from_file(filePath)
         ToolCheckInfo.ToolTextCtrl.Value := result
         SetClipboard(result)
@@ -1074,60 +1076,4 @@ UpdateMacroRunningCount(LastState, State) {
         MySoftData.IsMacroWorking := curState
         MyCMDTipGui.OnToggleMacroWorkState()
     }
-}
-
-ValidateCmdPath(&Data, pathFieldName, selectTitle, filter, tableItem := "", index := 1, showSelect := true) {
-    if (!ObjHasOwnProp(Data, pathFieldName))
-        return true
-
-    rawPath := Data.%pathFieldName%
-    hasVariable := InStr(rawPath, "{") && InStr(rawPath, "}")
-
-    if (!hasVariable) {
-        if (rawPath == "" || FileExist(rawPath))
-            return true
-
-        if (!showSelect)
-            return false
-
-        tipStr := Format(GetLang("路径 '{}' 不存在，请重新选择"), rawPath)
-        result := CustomMsgBox(tipStr, GetLang("路径缺失"), GetLang("选择文件|跳过本条指令"))
-
-        if (result == 2)
-            return false
-
-        newPath := FileSelect(1, , GetLang(selectTitle), filter)
-        if (newPath == "")
-            return false
-
-        Data.%pathFieldName% := newPath
-        SaveMacroCMDData(Data)
-        return true
-    }
-
-    actualPath := GetReplaceVarText(tableItem, index, rawPath)
-
-    if (actualPath != "" && FileExist(actualPath))
-        return true
-
-    if (!showSelect)
-        return false
-
-    tipStr := Format("{}`n`n{}: {}`n{}: {}",
-        GetLang("变量路径解析后文件不存在"),
-        GetLang("原始配置"), rawPath,
-        GetLang("解析为"), actualPath == "" ? GetLang("(空值)") : actualPath)
-
-    result := CustomMsgBox(tipStr, GetLang("变量路径错误"), GetLang("覆盖变量|跳过本条指令"))
-
-    if (result == 2)
-        return false
-
-    newPath := FileSelect(1, , GetLang(selectTitle), filter)
-    if (newPath == "")
-        return false
-
-    Data.%pathFieldName% := newPath
-    SaveMacroCMDData(Data)
-    return true
 }

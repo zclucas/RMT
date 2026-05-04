@@ -891,7 +891,7 @@ OnToolTextFilterSelectImage(*) {
     path := FileSelect(, , GetLang("选择图片"))
     if (path == "")
         return
-    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? MyChineseOcr : MyEnglishOcr
+    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? GetChineseOcr() : GetEnglishOcr()
     result := ocr.ocr_from_file(path)
     ToolCheckInfo.ToolTextCtrl.Value := result
     SetClipboard(result)

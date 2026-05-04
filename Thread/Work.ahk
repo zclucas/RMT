@@ -25,9 +25,8 @@ LoadCurMacroSetting()   ;加载当前配置宏
 InitData()
 InitWork()
 
-;放后面初始化，因为这初始化时间比较长
-global MyChineseOcr := RapidOcr(A_ScriptDir "\..")
-global MyEnglishOcr := RapidOcr(A_ScriptDir "\..", 2)
+global MyChineseOcr := 0  ; 懒加载：首次使用时才初始化
+global MyEnglishOcr := 0   ; 懒加载：首次使用时才初始化
 global MyPToken := Gdip_Startup()
 global MyInputGui := CustomInputGui()
 global MyInputBtnGui := InputBtnGui()
