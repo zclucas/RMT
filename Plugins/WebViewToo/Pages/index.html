@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="description" content="">
+		<meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
+		<meta name="generator" content="Hugo 0.115.4">
+		<title>Sidebars · Bootstrap v5.3</title>
+
+		<script src="Bootstrap/color-modes.js"></script>
+		<script src="Bootstrap/bootstrap.bundle.min.js"></script>
+		<script src="Bootstrap/sidebars.js"></script>
+
+		<link href="Bootstrap/sidebars.css" rel="stylesheet">
+		<link href="Bootstrap/bootstrap.min.css" rel="stylesheet">
+
+		<link rel="icon" href="data:image/svg+xml," />
+
+		<style>
+			:root {
+				--FauxTitleBarHeight: calc(33.25px);
+			}
+
+			main {
+				height: calc(100vh - (var(--FauxTitleBarHeight)));
+			}
+			
+			/* These definitions are for the Web-based TitleBar */
+			.ahk-titleBar {
+				cursor: default;
+				user-select: none;
+				/* background-color: #4a525b; */
+			}
+				
+			.ahk-title-btn {
+				padding: 0.35em 1.0em;
+				cursor: pointer;
+				vertical-align: bottom;
+				font-family: Webdings;
+				font-size: 11pt;
+			}
+
+			#ahkTitleBar {
+				-webkit-app-region: drag;
+			}
+						
+			body .ahk-title-btn-restore {
+				display: none
+			}
+
+			body.ahk-maximized .ahk-title-btn-restore {
+				display: block;
+			}
+
+			body.ahk-maximized .ahk-title-btn-maximize {
+				display: none;
+			}
+
+			.ahk-title-btn:hover {
+				background: rgba(0, 0, 0, .2);
+			}
+
+			.ahk-title-btn-close:hover {
+				background: #dc3545;
+			}
+			/* End Web-based TitleBar */
+
+			.bd-placeholder-img {
+				font-size: 1.125rem;
+				text-anchor: middle;
+				-webkit-user-select: none;
+				-moz-user-select: none;
+				user-select: none;
+			}
+
+			@media (min-width: 768px) {
+				.bd-placeholder-img-lg {
+					font-size: 3.5rem;
+				}
+			}
+
+			.b-example-divider {
+				width: 100%;
+				height: 3rem;
+				background-color: rgba(0, 0, 0, .1);
+				border: solid rgba(0, 0, 0, .15);
+				border-width: 0;
+				box-shadow: inset 0 .5em 1.5em rgba(0, 0, 0, .1), inset 0 .125em .5em rgba(0, 0, 0, .15);
+			}
+
+			.b-example-vr {
+				flex-shrink: 0;
+				width: 1.5rem;
+				height: 100vh;
+			}
+
+			.bi {
+				vertical-align: -.125em;
+				fill: currentColor;
+			}
+
+			.nav-scroller {
+				position: relative;
+				z-index: 2;
+				height: 2.75rem;
+				overflow-y: hidden;
+			}
+
+			.nav-scroller .nav {
+				display: flex;
+				flex-wrap: nowrap;
+				padding-bottom: 1rem;
+				margin-top: -1px;
+				overflow-x: auto;
+				text-align: center;
+				white-space: nowrap;
+				-webkit-overflow-scrolling: touch;
+			}
+
+			.btn-bd-primary {
+				--bd-violet-bg: #712cf9;
+				--bd-violet-rgb: 112.520718, 44.062154, 249.437846;
+
+				--bs-btn-font-weight: 600;
+				--bs-btn-color: var(--bs-white);
+				--bs-btn-bg: var(--bd-violet-bg);
+				--bs-btn-border-color: var(--bd-violet-bg);
+				--bs-btn-hover-color: var(--bs-white);
+				--bs-btn-hover-bg: #6528e0;
+				--bs-btn-hover-border-color: #6528e0;
+				--bs-btn-focus-shadow-rgb: var(--bd-violet-rgb);
+				--bs-btn-active-color: var(--bs-btn-hover-color);
+				--bs-btn-active-bg: #5a23c8;
+				--bs-btn-active-border-color: #5a23c8;
+			}
+
+			.bd-mode-toggle {
+				z-index: 1500;
+			}
+
+			.tab-content, .tab-pane {
+				width: 100%;
+			}
+
+			.tab-container {
+				padding: 1em;
+			}
+
+			.collapse-panel {
+				right: 0;
+				position: absolute;
+				border-radius: 1rem;
+				background-color: #0d6efd;
+				padding: 4px 8px;
+			}
+
+			.nav-text {
+				margin-left: 0.5rem;
+			}
+
+			#page-content {
+				scrollbar-gutter: stable;
+			}
+
+			.title-icon {
+				padding: 0.5em 1.0em;
+				cursor: pointer;
+				vertical-align: bottom;
+			}
+
+			.title-icon:hover {
+				background: rgba(0, 0, 0, .2);
+			}
+		</style>
+
+		<script>
+			function collapsePanel(element) {
+				var navText = document.getElementsByClassName("nav-text");
+				for (i = 0; i < navText.length; i++) {
+					if (navText[i].style.display === "none") {
+						navText[i].style.display = "inline-block";
+						element.innerText = "Collaspe Panel";
+					}
+					else {
+						navText[i].style.display = "none";
+						element.innerText = "Expand Panel";
+					}
+				}
+			}
+		</script>
+	</head>
+	<body class="bg-body-tertiary">
+		<div class="ahk-titleBar d-flex align-items-stretch bg-body-secondary">
+			<span class="flex-grow-1 px-2 py-1" id="ahkTitleBar">WebViewToo Example</span>
+			<span class="ahk-title-btn" onclick="ahk.gui.Minimize()">0</span>
+			<span class='ahk-title-btn ahk-title-btn-maximize' onclick="ahk.gui.Maximize()">1</span>
+			<span class='ahk-title-btn ahk-title-btn-restore' onclick="ahk.gui.Restore()">2</span>
+			<span class="ahk-title-btn ahk-title-btn-close" onclick="ahk.global.WinClose('A')">r</span>
+		</div>
+		<div class="b-example-divider bg-body-tertiary" style="height:1px;"></div>
+
+		<svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+			<symbol id="check2" viewBox="0 0 16 16">
+			<path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+			</symbol>
+			<symbol id="circle-half" viewBox="0 0 16 16">
+			<path d="M8 15A7 7 0 1 0 8 1v14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16z"/>
+			</symbol>
+			<symbol id="moon-stars-fill" viewBox="0 0 16 16">
+			<path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+			<path d="M10.794 3.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387a1.734 1.734 0 0 0-1.097 1.097l-.387 1.162a.217.217 0 0 1-.412 0l-.387-1.162A1.734 1.734 0 0 0 9.31 6.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387a1.734 1.734 0 0 0 1.097-1.097l.387-1.162zM13.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a1.156 1.156 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a1.156 1.156 0 0 0-.732-.732l-.774-.258a.145.145 0 0 1 0-.274l.774-.258c.346-.115.617-.386.732-.732L13.863.1z"/>
+			</symbol>
+			<symbol id="sun-fill" viewBox="0 0 16 16">
+			<path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
+			</symbol>
+		</svg>
+
+		<div class="dropdown position-fixed bottom-0 end-0 mb-3 me-3 bd-mode-toggle">
+			<button class="btn btn-bd-primary py-2 dropdown-toggle d-flex align-items-center"
+					id="bd-theme"
+					type="button"
+					aria-expanded="false"
+					data-bs-toggle="dropdown"
+					aria-label="Toggle theme (auto)">
+				<svg class="bi my-1 theme-icon-active" width="1em" height="1em"><use href="#circle-half"></use></svg>
+				<span class="visually-hidden" id="bd-theme-text">Toggle theme</span>
+			</button>
+			<ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="bd-theme-text">
+			<li>
+				<button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="light" aria-pressed="false">
+					<svg class="bi me-2 opacity-50 theme-icon" width="1em" height="1em"><use href="#sun-fill"></use></svg>
+						Light
+					<svg class="bi ms-auto d-none" width="1em" height="1em"><use href="#check2"></use></svg>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="dark" aria-pressed="false">
+					<svg class="bi me-2 opacity-50 theme-icon" width="1em" height="1em"><use href="#moon-stars-fill"></use></svg>
+						Dark
+					<svg class="bi ms-auto d-none" width="1em" height="1em"><use href="#check2"></use></svg>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="dropdown-item d-flex align-items-center active" data-bs-theme-value="auto" aria-pressed="true">
+					<svg class="bi me-2 opacity-50 theme-icon" width="1em" height="1em"><use href="#circle-half"></use></svg>
+						Auto
+					<svg class="bi ms-auto d-none" width="1em" height="1em"><use href="#check2"></use></svg>
+				</button>
+			</li>
+			</ul>
+		</div>
+
+		<svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+			<symbol id="bootstrap" viewBox="0 0 118 94">
+				<title>Bootstrap</title>
+				<path fill-rule="evenodd" clip-rule="evenodd" d="M24.509 0c-6.733 0-11.715 5.893-11.492 12.284.214 6.14-.064 14.092-2.066 20.577C8.943 39.365 5.547 43.485 0 44.014v5.972c5.547.529 8.943 4.649 10.951 11.153 2.002 6.485 2.28 14.437 2.066 20.577C12.794 88.106 17.776 94 24.51 94H93.5c6.733 0 11.714-5.893 11.491-12.284-.214-6.14.064-14.092 2.066-20.577 2.009-6.504 5.396-10.624 10.943-11.153v-5.972c-5.547-.529-8.934-4.649-10.943-11.153-2.002-6.484-2.28-14.437-2.066-20.577C105.214 5.894 100.233 0 93.5 0H24.508zM80 57.863C80 66.663 73.436 72 62.543 72H44a2 2 0 01-2-2V24a2 2 0 012-2h18.437c9.083 0 15.044 4.92 15.044 12.474 0 5.302-4.01 10.049-9.119 10.88v.277C75.317 46.394 80 51.21 80 57.863zM60.521 28.34H49.948v14.934h8.905c6.884 0 10.68-2.772 10.68-7.727 0-4.643-3.264-7.207-9.012-7.207zM49.948 49.2v16.458H60.91c7.167 0 10.964-2.876 10.964-8.281 0-5.406-3.903-8.178-11.425-8.178H49.948z"></path>
+			</symbol>
+			<symbol id="home" viewBox="0 0 16 16">
+				<path d="M8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4.5a.5.5 0 0 0 .5-.5v-4h2v4a.5.5 0 0 0 .5.5H14a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146zM2.5 14V7.707l5.5-5.5 5.5 5.5V14H10v-4a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v4H2.5z"/>
+			</symbol>
+			<symbol id="speedometer2" viewBox="0 0 16 16">
+				<path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/>
+				<path fill-rule="evenodd" d="M0 10a8 8 0 1 1 15.547 2.661c-.442 1.253-1.845 1.602-2.932 1.25C11.309 13.488 9.475 13 8 13c-1.474 0-3.31.488-4.615.911-1.087.352-2.49.003-2.932-1.25A7.988 7.988 0 0 1 0 10zm8-7a7 7 0 0 0-6.603 9.329c.203.575.923.876 1.68.63C4.397 12.533 6.358 12 8 12s3.604.532 4.923.96c.757.245 1.477-.056 1.68-.631A7 7 0 0 0 8 3z"/>
+			</symbol>
+			<symbol id="table" viewBox="0 0 16 16">
+				<path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+			</symbol>
+			<symbol id="people-circle" viewBox="0 0 16 16">
+				<path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+				<path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"/>
+			</symbol>
+			<symbol id="grid" viewBox="0 0 16 16">
+				<path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
+			</symbol>
+		</svg>
+
+		<main class="d-flex flex-nowrap">
+			<div class="d-flex flex-column flex-shrink-0 p-3 bg-body-tertiary">
+				<a href="#" style="margin: 0 auto;" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none"
+					onmouseenter="ahk.Tooltip('Example Tooltip')">
+					<svg class="bi pe-none" width="40" height="32"><use xlink:href="#bootstrap"/></svg>
+					<span class="fs-4 nav-text">Sidebar</span>
+				</a>
+				<div class="b-example-divider bg-body-tertiary" style="height:1px;margin:1rem 0;"></div>
+				<ul class="nav nav-pills flex-column mb-auto" role="tablist" aria-orientation="vertical">
+					<li class="nav-item"><a class="nav-link link-body-emphasis active" data-bs-toggle="pill" role="tab" href="#v-pills-home" id="v-pills-home-tab" aria-controls="v-pills-home" aria-selected="true">
+						<svg class="bi pe-none " width="16" height="16"><use xlink:href="#home"/></svg><span class="nav-text">Home</span></a>
+					</li>
+					<li><a class="nav-link link-body-emphasis" data-bs-toggle="pill" role="tab" href="#v-pills-buttons" id="v-pills-buttons-tab" aria-controls="v-pills-buttons" aria-selected="false">
+						<svg class="bi pe-none " width="16" height="16"><use xlink:href="#speedometer2"/></svg><span class="nav-text">Buttons</span></a>
+					</li>
+					<li><a class="nav-link link-body-emphasis" data-bs-toggle="pill" role="tab" href="#v-pills-forms" id="v-pills-forms-tab" aria-controls="v-pills-forms" aria-selected="false">
+						<svg class="bi pe-none " width="16" height="16"><use xlink:href="#table"/></svg><span class="nav-text">Forms</span></a>
+					</li>
+					<li><a class="nav-link link-body-emphasis" data-bs-toggle="pill" role="tab" href="#v-pills-icons" id="v-pills-icons-tab" aria-controls="v-pills-icons" aria-selected="false">
+						<svg class="bi pe-none " width="16" height="16"><use xlink:href="#grid"/></svg><span class="nav-text">Icons</span></a>
+					</li>
+					<li><a class="nav-link link-body-emphasis" data-bs-toggle="pill" role="tab" href="#v-pills-documentation" id="v-pills-documentation-tab" aria-controls="v-pills-documentation" aria-selected="false">
+						<svg class="bi pe-none " width="16" height="16"><use xlink:href="#people-circle"/></svg><span class="nav-text">Documentation</span></a>
+					</li>
+				</ul>
+				<div class="b-example-divider bg-body-tertiary" style="height:1px;margin:1rem 0;"></div>
+				<div class="dropdown">
+					<a href="#" class="d-flex-1 align-items-center link-body-emphasis text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+						<img id="UserIcon" src="https://avatars.githubusercontent.com/u/119650557?v=4" alt="" width="32" height="32" class="rounded-circle ">
+						<span id="UserName" class="nav-text"><strong>The-CoDingman</strong></span>
+					</a>
+					<ul class="dropdown-menu dropdown-menu-dark text-small shadow">
+						<li><a class="dropdown-item" href="#" onclick="alert('The documentation for WebViewToo is currently being reworked. Sorry for the inconvenience.')">Documentation</a></li>
+						<li><a class="dropdown-item" href="#" onclick="ahk.global.MsgBox('You clicked \'Settings\'', 'ahk.global.MsgBox()')">Settings</a></li>
+						<li><a class="dropdown-item" href="#">Profile</a></li>
+						<li><a class="dropdown-item" href="#" onclick="collapsePanel(this)">Collapse Panel</a></li>
+						<li><hr class="dropdown-divider"></li>
+						<li><a class="dropdown-item" href="#">Sign out</a></li>
+					</ul>
+				</div>
+			</div>
+
+			<div class="b-example-divider b-example-vr bg-body-tertiary" style="width: 1px;"></div>
+			
+			<!-- Page Content -->
+			<div class="flex-grow-1 flex-column bg-body-tertiary overflow-auto" id="page-content" style="padding-left:1rem;padding-right:.25rem;">
+				<div class="sticky-top">
+					<nav class="navbar navbar-expand-sm bg-body-tertiary" aria-label="Tenth navbar example">
+						<div class="container-fluid">
+							<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsExample08" aria-controls="navbarsExample08" aria-expanded="false" aria-label="Toggle navigation">
+								<span class="navbar-toggler-icon"></span>
+							</button>
+					
+							<div class="collapse navbar-collapse justify-content-md-center" id="navbarsExample08">
+								<ul class="navbar-nav">
+									<li class="nav-item">
+									<a class="nav-link active" aria-current="page" href="#">Centered nav only</a>
+									</li>
+									<li class="nav-item">
+									<a class="nav-link" href="https://www.google.com">Link</a>
+									</li>
+									<li class="nav-item">
+									<a class="nav-link disabled" aria-disabled="true">Disabled</a>
+									</li>
+									<li class="nav-item dropdown">
+									<a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false">Dropdown</a>
+									<ul class="dropdown-menu">
+										<li><a class="dropdown-item" href="#">Action</a></li>
+										<li><a class="dropdown-item" href="#">Another action</a></li>
+										<li><a class="dropdown-item" href="#">Something else here</a></li>
+									</ul>
+									</li>
+								</ul>	
+							</div>
+						</div>
+					</nav>
+					<div class="b-example-divider bg-body-tertiary" style="height:1px;"></div>
+				</div>
+				
+				<div class="tab-content" id="v-pills-tabContent">
+					<!-- v-pills-home -->
+					<div class="tab-pane fade show active" id="v-pills-home" role="tabpanel" aria-labelledby="v-pills-home-tab">
+						<div class="tab-container">
+						<h1>Welcome to WebViewToo</h1>
+						<p>
+							The WebViewToo class provides an easy to use method for building Web-based GUIs with AutoHotkey. It
+							uses the same WebView2 framework from Microsoft present in Microsoft Edge.
+						</p>
+						<p>
+							This example is designed to show how you can use third party web frameworks like Bootstrap to build advanced
+							user interfaces, while still keeping all the code local. Only minimal resources will need to be extracted 
+							from the compiled file.
+						</p>
+						<p>
+							As this example is more advanced, it assumes a stronger familiarity with the technology and may gloss over
+							some parts more than other examples. If you're just getting started it may be helpful to work with some of
+							the other example scripts first.
+						</p>
+						</div>
+					</div>
+					<!-- End v-pills-home -->
+
+					<!-- v-pills-buttons -->
+					<div class="tab-pane fade" id="v-pills-buttons" role="tabpanel" aria-labelledby="v-pills-buttons-tab">
+						<div class="tab-container">
+						<h1>Buttons!</h1>
+
+						<h2>Colored Buttons:</h2>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-primary">Primary</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-secondary">Secondary</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-success">Success</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-danger">Danger</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-warning">Warning</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-info">Info</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-light">Light</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-dark">Dark</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-link">Link</button>
+
+						<h2>Outline Buttons:</h2>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-primary">Primary</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-secondary">Secondary</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-success">Success</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-danger">Danger</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-warning">Warning</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-info">Info</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-light">Light</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-dark">Dark</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-outline-link">Link</button>
+
+						<h2>Block Buttons:</h2>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-block btn-primary">Block level button</button>
+						<button type="button" onclick="ahkButtonClick(this)" class="btn btn-block btn-outline-primary">Block level button</button>
+						</div>
+					</div>
+					<!-- End v-pills-buttons -->
+
+					<!-- v-pills-forms -->
+					<div class="tab-pane fade" id="v-pills-forms" role="tabpanel" aria-labelledby="v-pills-forms-tab">
+						<div class="tab-container">
+						<h1>Forms!</h1>
+						<form id="Form1" name="Form1" onsubmit="ahk.SubmitForm((() => {return Object.fromEntries(new FormData(this));})());return false;">
+							<div class="form-row">
+								<div class="form-group col-md-6">
+									<label for="Email">Email</label>
+									<input type="email" class="form-control" id="Email" name="Email" placeholder="Email" required>
+								</div>
+								
+								<div class="form-group col-md-6">
+									<label for="Password">Password</label>
+									<input type="password" class="form-control" id="Password" name="Password" placeholder="Password" autocomplete="off" required>
+								</div>
+							</div>
+							
+							<div class="form-group">
+								<label for="Address">Address</label>
+								<input type="text" class="form-control" id="Address" name="Address" placeholder="1234 Main St">
+							</div>
+							
+							<div class="form-group">
+								<label for="Address2">Address 2</label>
+								<input type="text" class="form-control" id="Address2" name="Address2" placeholder="Apartment, studio, or floor">
+							</div>
+							
+							<div class="form-row">
+								<div class="form-group col-md-6">
+									<label for="City">City</label>
+									<input type="text" class="form-control" id="City" name="City">
+								</div>
+								
+								<div class="form-group col-md-4">
+									<label for="State">State</label>
+									<select id="State" name="State" class="form-control">
+									<option selected>Choose...</option>
+									<option>...</option>
+									</select>
+								</div>
+								
+								<div class="form-group col-md-2">
+									<label for="Zip">Zip</label>
+									<input type="text" class="form-control" id="Zip" name="Zip">
+								</div>
+							</div>
+							
+							<div class="form-group">
+								<div class="form-check">
+									<input class="form-check-input" type="checkbox" id="Check" name="Check">
+									<label class="form-check-label" for="Check">
+									Check me out
+									</label>
+								</div>
+							</div>
+							<br>
+							<button type="submit" class="btn btn-primary">Sign in</button>
+						</form>
+						</div>
+					</div>
+					<!-- End v-pills-forms -->
+
+					<!-- v-pills-icons -->
+					<div class="tab-pane fade" id="v-pills-icons" role="tabpanel" aria-labelledby="v-pills-icons-tab">
+						<div class="tab-container">
+							<h4>Glyphicons</h4><br>
+							<span class="title-icon glyphicon glyphicon-asterisk" aria-hidden="true" data-toggle="tooltip" title="asterisk" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-plus" aria-hidden="true" data-toggle="tooltip" title="plus" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-minus" aria-hidden="true" data-toggle="tooltip" title="minus" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-euro" aria-hidden="true" data-toggle="tooltip" title="euro" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-cloud" aria-hidden="true" data-toggle="tooltip" title="cloud" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-envelope" aria-hidden="true" data-toggle="tooltip" title="envelope" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-pencil" aria-hidden="true" data-toggle="tooltip" title="pencil" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-glass" aria-hidden="true" data-toggle="tooltip" title="glass" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-music" aria-hidden="true" data-toggle="tooltip" title="music" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-search" aria-hidden="true" data-toggle="tooltip" title="search" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-heart" aria-hidden="true" data-toggle="tooltip" title="heart" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-star" aria-hidden="true" data-toggle="tooltip" title="star" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-star-empty" aria-hidden="true" data-toggle="tooltip" title="star-empty" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-user" aria-hidden="true" data-toggle="tooltip" title="user" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-film" aria-hidden="true" data-toggle="tooltip" title="film" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-th-large" aria-hidden="true" data-toggle="tooltip" title="th-large" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-th" aria-hidden="true" data-toggle="tooltip" title="th" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-th-list" aria-hidden="true" data-toggle="tooltip" title="th-list" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-ok" aria-hidden="true" data-toggle="tooltip" title="ok" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-remove" aria-hidden="true" data-toggle="tooltip" title="remove" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-zoom-in" aria-hidden="true" data-toggle="tooltip" title="zoom-in" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-zoom-out" aria-hidden="true" data-toggle="tooltip" title="zoom-out" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-off" aria-hidden="true" data-toggle="tooltip" title="off" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-signal" aria-hidden="true" data-toggle="tooltip" title="signal" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-cog" aria-hidden="true" data-toggle="tooltip" title="cog" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-trash" aria-hidden="true" data-toggle="tooltip" title="trash" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-home" aria-hidden="true" data-toggle="tooltip" title="home" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-file" aria-hidden="true" data-toggle="tooltip" title="file" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-time" aria-hidden="true" data-toggle="tooltip" title="time" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-road" aria-hidden="true" data-toggle="tooltip" title="road" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-download-alt" aria-hidden="true" data-toggle="tooltip" title="download-alt" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-download" aria-hidden="true" data-toggle="tooltip" title="download" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-upload" aria-hidden="true" data-toggle="tooltip" title="upload" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-inbox" aria-hidden="true" data-toggle="tooltip" title="inbox" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-play-circle" aria-hidden="true" data-toggle="tooltip" title="play-circle" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-repeat" aria-hidden="true" data-toggle="tooltip" title="repeat" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-refresh" aria-hidden="true" data-toggle="tooltip" title="refresh" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-list-alt" aria-hidden="true" data-toggle="tooltip" title="list-alt" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-lock" aria-hidden="true" data-toggle="tooltip" title="lock" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-flag" aria-hidden="true" data-toggle="tooltip" title="flag" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-headphones" aria-hidden="true" data-toggle="tooltip" title="headphones" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-volume-off" aria-hidden="true" data-toggle="tooltip" title="volume-off" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-volume-down" aria-hidden="true" data-toggle="tooltip" title="volume-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-volume-up" aria-hidden="true" data-toggle="tooltip" title="volume-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-qrcode" aria-hidden="true" data-toggle="tooltip" title="qrcode" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-barcode" aria-hidden="true" data-toggle="tooltip" title="barcode" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tag" aria-hidden="true" data-toggle="tooltip" title="tag" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tags" aria-hidden="true" data-toggle="tooltip" title="tags" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-book" aria-hidden="true" data-toggle="tooltip" title="book" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-bookmark" aria-hidden="true" data-toggle="tooltip" title="bookmark" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-print" aria-hidden="true" data-toggle="tooltip" title="print" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-camera" aria-hidden="true" data-toggle="tooltip" title="camera" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-font" aria-hidden="true" data-toggle="tooltip" title="font" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-bold" aria-hidden="true" data-toggle="tooltip" title="bold" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-italic" aria-hidden="true" data-toggle="tooltip" title="italic" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-text-height" aria-hidden="true" data-toggle="tooltip" title="text-height" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-text-width" aria-hidden="true" data-toggle="tooltip" title="text-width" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-align-left" aria-hidden="true" data-toggle="tooltip" title="align-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-align-center" aria-hidden="true" data-toggle="tooltip" title="align-center" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-align-right" aria-hidden="true" data-toggle="tooltip" title="align-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-align-justify" aria-hidden="true" data-toggle="tooltip" title="align-justify" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-list" aria-hidden="true" data-toggle="tooltip" title="list" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-indent-left" aria-hidden="true" data-toggle="tooltip" title="indent-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-indent-right" aria-hidden="true" data-toggle="tooltip" title="indent-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-facetime-video" aria-hidden="true" data-toggle="tooltip" title="facetime-video" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-picture" aria-hidden="true" data-toggle="tooltip" title="picture" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-map-marker" aria-hidden="true" data-toggle="tooltip" title="map-marker" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-adjust" aria-hidden="true" data-toggle="tooltip" title="adjust" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tint" aria-hidden="true" data-toggle="tooltip" title="tint" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-edit" aria-hidden="true" data-toggle="tooltip" title="edit" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-share" aria-hidden="true" data-toggle="tooltip" title="share" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-check" aria-hidden="true" data-toggle="tooltip" title="check" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-move" aria-hidden="true" data-toggle="tooltip" title="move" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-step-backward" aria-hidden="true" data-toggle="tooltip" title="step-backward" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-fast-backward" aria-hidden="true" data-toggle="tooltip" title="fast-backward" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-backward" aria-hidden="true" data-toggle="tooltip" title="backward" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-play" aria-hidden="true" data-toggle="tooltip" title="play" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-pause" aria-hidden="true" data-toggle="tooltip" title="pause" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-stop" aria-hidden="true" data-toggle="tooltip" title="stop" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-forward" aria-hidden="true" data-toggle="tooltip" title="forward" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-fast-forward" aria-hidden="true" data-toggle="tooltip" title="fast-forward" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-step-forward" aria-hidden="true" data-toggle="tooltip" title="step-forward" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-eject" aria-hidden="true" data-toggle="tooltip" title="eject" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-chevron-left" aria-hidden="true" data-toggle="tooltip" title="chevron-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-chevron-right" aria-hidden="true" data-toggle="tooltip" title="chevron-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-plus-sign" aria-hidden="true" data-toggle="tooltip" title="plus-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-minus-sign" aria-hidden="true" data-toggle="tooltip" title="minus-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-remove-sign" aria-hidden="true" data-toggle="tooltip" title="remove-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-ok-sign" aria-hidden="true" data-toggle="tooltip" title="ok-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-question-sign" aria-hidden="true" data-toggle="tooltip" title="question-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-info-sign" aria-hidden="true" data-toggle="tooltip" title="info-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-screenshot" aria-hidden="true" data-toggle="tooltip" title="screenshot" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-remove-circle" aria-hidden="true" data-toggle="tooltip" title="remove-circle" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-ok-circle" aria-hidden="true" data-toggle="tooltip" title="ok-circle" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-ban-circle" aria-hidden="true" data-toggle="tooltip" title="ban-circle" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-arrow-left" aria-hidden="true" data-toggle="tooltip" title="arrow-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-arrow-right" aria-hidden="true" data-toggle="tooltip" title="arrow-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-arrow-up" aria-hidden="true" data-toggle="tooltip" title="arrow-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-arrow-down" aria-hidden="true" data-toggle="tooltip" title="arrow-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-share-alt" aria-hidden="true" data-toggle="tooltip" title="share-alt" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-resize-full" aria-hidden="true" data-toggle="tooltip" title="resize-full" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-resize-small" aria-hidden="true" data-toggle="tooltip" title="resize-small" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-exclamation-sign" aria-hidden="true" data-toggle="tooltip" title="exclamation-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-gift" aria-hidden="true" data-toggle="tooltip" title="gift" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-leaf" aria-hidden="true" data-toggle="tooltip" title="leaf" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-fire" aria-hidden="true" data-toggle="tooltip" title="fire" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-eye-open" aria-hidden="true" data-toggle="tooltip" title="eye-open" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-eye-close" aria-hidden="true" data-toggle="tooltip" title="eye-close" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-warning-sign" aria-hidden="true" data-toggle="tooltip" title="warning-sign" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-plane" aria-hidden="true" data-toggle="tooltip" title="plane" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-calendar" aria-hidden="true" data-toggle="tooltip" title="calendar" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-random" aria-hidden="true" data-toggle="tooltip" title="random" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-comment" aria-hidden="true" data-toggle="tooltip" title="comment" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-magnet" aria-hidden="true" data-toggle="tooltip" title="magnet" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-chevron-up" aria-hidden="true" data-toggle="tooltip" title="chevron-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-chevron-down" aria-hidden="true" data-toggle="tooltip" title="chevron-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-retweet" aria-hidden="true" data-toggle="tooltip" title="retweet" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-shopping-cart" aria-hidden="true" data-toggle="tooltip" title="shopping-cart" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-folder-close" aria-hidden="true" data-toggle="tooltip" title="folder-close" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-folder-open" aria-hidden="true" data-toggle="tooltip" title="folder-open" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-resize-vertical" aria-hidden="true" data-toggle="tooltip" title="resize-vertical" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-resize-horizontal" aria-hidden="true" data-toggle="tooltip" title="resize-horizontal" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-hdd" aria-hidden="true" data-toggle="tooltip" title="hdd" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-bullhorn" aria-hidden="true" data-toggle="tooltip" title="bullhorn" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-bell" aria-hidden="true" data-toggle="tooltip" title="bell" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-certificate" aria-hidden="true" data-toggle="tooltip" title="certificate" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-thumbs-up" aria-hidden="true" data-toggle="tooltip" title="thumbs-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-thumbs-down" aria-hidden="true" data-toggle="tooltip" title="thumbs-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-hand-right" aria-hidden="true" data-toggle="tooltip" title="hand-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-hand-left" aria-hidden="true" data-toggle="tooltip" title="hand-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-hand-up" aria-hidden="true" data-toggle="tooltip" title="hand-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-hand-down" aria-hidden="true" data-toggle="tooltip" title="hand-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-circle-arrow-right" aria-hidden="true" data-toggle="tooltip" title="circle-arrow-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-circle-arrow-left" aria-hidden="true" data-toggle="tooltip" title="circle-arrow-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-circle-arrow-up" aria-hidden="true" data-toggle="tooltip" title="circle-arrow-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-circle-arrow-down" aria-hidden="true" data-toggle="tooltip" title="circle-arrow-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-globe" aria-hidden="true" data-toggle="tooltip" title="globe" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-wrench" aria-hidden="true" data-toggle="tooltip" title="wrench" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tasks" aria-hidden="true" data-toggle="tooltip" title="tasks" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-filter" aria-hidden="true" data-toggle="tooltip" title="filter" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-briefcase" aria-hidden="true" data-toggle="tooltip" title="briefcase" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-fullscreen" aria-hidden="true" data-toggle="tooltip" title="fullscreen" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-dashboard" aria-hidden="true" data-toggle="tooltip" title="dashboard" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-paperclip" aria-hidden="true" data-toggle="tooltip" title="paperclip" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-heart-empty" aria-hidden="true" data-toggle="tooltip" title="heart-empty" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-link" aria-hidden="true" data-toggle="tooltip" title="link" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-phone" aria-hidden="true" data-toggle="tooltip" title="phone" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-pushpin" aria-hidden="true" data-toggle="tooltip" title="pushpin" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-usd" aria-hidden="true" data-toggle="tooltip" title="usd" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-gbp" aria-hidden="true" data-toggle="tooltip" title="gbp" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sort" aria-hidden="true" data-toggle="tooltip" title="sort" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sort-by-alphabet" aria-hidden="true" data-toggle="tooltip" title="sort-by-alphabet" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sort-by-alphabet-alt" aria-hidden="true" data-toggle="tooltip" title="sort-by-alphabet-alt" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sort-by-order" aria-hidden="true" data-toggle="tooltip" title="sort-by-order" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sort-by-order-alt" aria-hidden="true" data-toggle="tooltip" title="sort-by-order-alt" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sort-by-attributes" aria-hidden="true" data-toggle="tooltip" title="sort-by-attributes" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sort-by-attributes-alt" aria-hidden="true" data-toggle="tooltip" title="sort-by-attributes-alt" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-unchecked" aria-hidden="true" data-toggle="tooltip" title="unchecked" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-expand" aria-hidden="true" data-toggle="tooltip" title="expand" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-collapse-down" aria-hidden="true" data-toggle="tooltip" title="collapse-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-collapse-up" aria-hidden="true" data-toggle="tooltip" title="collapse-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-log-in" aria-hidden="true" data-toggle="tooltip" title="log-in" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-flash" aria-hidden="true" data-toggle="tooltip" title="flash" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-log-out" aria-hidden="true" data-toggle="tooltip" title="log-out" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-new-window" aria-hidden="true" data-toggle="tooltip" title="new-window" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-record" aria-hidden="true" data-toggle="tooltip" title="record" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-save" aria-hidden="true" data-toggle="tooltip" title="save" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-open" aria-hidden="true" data-toggle="tooltip" title="open" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-saved" aria-hidden="true" data-toggle="tooltip" title="saved" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-import" aria-hidden="true" data-toggle="tooltip" title="import" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-export" aria-hidden="true" data-toggle="tooltip" title="export" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-send" aria-hidden="true" data-toggle="tooltip" title="send" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-floppy-disk" aria-hidden="true" data-toggle="tooltip" title="floppy-disk" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-floppy-saved" aria-hidden="true" data-toggle="tooltip" title="floppy-saved" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-floppy-remove" aria-hidden="true" data-toggle="tooltip" title="floppy-remove" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-floppy-save" aria-hidden="true" data-toggle="tooltip" title="floppy-save" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-floppy-open" aria-hidden="true" data-toggle="tooltip" title="floppy-open" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-credit-card" aria-hidden="true" data-toggle="tooltip" title="credit-card" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-transfer" aria-hidden="true" data-toggle="tooltip" title="transfer" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-cutlery" aria-hidden="true" data-toggle="tooltip" title="cutlery" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-header" aria-hidden="true" data-toggle="tooltip" title="header" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-compressed" aria-hidden="true" data-toggle="tooltip" title="compressed" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-earphone" aria-hidden="true" data-toggle="tooltip" title="earphone" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-phone-alt" aria-hidden="true" data-toggle="tooltip" title="phone-alt" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tower" aria-hidden="true" data-toggle="tooltip" title="tower" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-stats" aria-hidden="true" data-toggle="tooltip" title="stats" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sd-video" aria-hidden="true" data-toggle="tooltip" title="sd-video" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-hd-video" aria-hidden="true" data-toggle="tooltip" title="hd-video" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-subtitles" aria-hidden="true" data-toggle="tooltip" title="subtitles" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sound-stereo" aria-hidden="true" data-toggle="tooltip" title="sound-stereo" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sound-dolby" aria-hidden="true" data-toggle="tooltip" title="sound-dolby" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sound-5-1" aria-hidden="true" data-toggle="tooltip" title="sound-5-1" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sound-6-1" aria-hidden="true" data-toggle="tooltip" title="sound-6-1" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sound-7-1" aria-hidden="true" data-toggle="tooltip" title="sound-7-1" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-copyright-mark" aria-hidden="true" data-toggle="tooltip" title="copyright-mark" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-registration-mark" aria-hidden="true" data-toggle="tooltip" title="registration-mark" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-cloud-download" aria-hidden="true" data-toggle="tooltip" title="cloud-download" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-cloud-upload" aria-hidden="true" data-toggle="tooltip" title="cloud-upload" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tree-conifer" aria-hidden="true" data-toggle="tooltip" title="tree-conifer" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tree-deciduous" aria-hidden="true" data-toggle="tooltip" title="tree-deciduous" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-cd" aria-hidden="true" data-toggle="tooltip" title="cd" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-save-file" aria-hidden="true" data-toggle="tooltip" title="save-file" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-open-file" aria-hidden="true" data-toggle="tooltip" title="open-file" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-level-up" aria-hidden="true" data-toggle="tooltip" title="level-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-copy" aria-hidden="true" data-toggle="tooltip" title="copy" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-paste" aria-hidden="true" data-toggle="tooltip" title="paste" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-alert" aria-hidden="true" data-toggle="tooltip" title="alert" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-equalizer" aria-hidden="true" data-toggle="tooltip" title="equalizer" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-king" aria-hidden="true" data-toggle="tooltip" title="king" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-queen" aria-hidden="true" data-toggle="tooltip" title="queen" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-pawn" aria-hidden="true" data-toggle="tooltip" title="pawn" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-bishop" aria-hidden="true" data-toggle="tooltip" title="bishop" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-knight" aria-hidden="true" data-toggle="tooltip" title="knight" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-baby-formula" aria-hidden="true" data-toggle="tooltip" title="baby-formula" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-tent" aria-hidden="true" data-toggle="tooltip" title="tent" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-blackboard" aria-hidden="true" data-toggle="tooltip" title="blackboard" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-bed" aria-hidden="true" data-toggle="tooltip" title="bed" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-apple" aria-hidden="true" data-toggle="tooltip" title="apple" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-erase" aria-hidden="true" data-toggle="tooltip" title="erase" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-hourglass" aria-hidden="true" data-toggle="tooltip" title="hourglass" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-lamp" aria-hidden="true" data-toggle="tooltip" title="lamp" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-duplicate" aria-hidden="true" data-toggle="tooltip" title="duplicate" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-piggy-bank" aria-hidden="true" data-toggle="tooltip" title="piggy-bank" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-scissors" aria-hidden="true" data-toggle="tooltip" title="scissors" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-bitcoin" aria-hidden="true" data-toggle="tooltip" title="bitcoin" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-yen" aria-hidden="true" data-toggle="tooltip" title="yen" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-ruble" aria-hidden="true" data-toggle="tooltip" title="ruble" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-scale" aria-hidden="true" data-toggle="tooltip" title="scale" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-ice-lolly" aria-hidden="true" data-toggle="tooltip" title="ice-lolly" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-ice-lolly-tasted" aria-hidden="true" data-toggle="tooltip" title="ice-lolly-tasted" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-education" aria-hidden="true" data-toggle="tooltip" title="education" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-option-horizontal" aria-hidden="true" data-toggle="tooltip" title="option-horizontal" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-option-vertical" aria-hidden="true" data-toggle="tooltip" title="option-vertical" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-menu-hamburger" aria-hidden="true" data-toggle="tooltip" title="menu-hamburger" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-modal-window" aria-hidden="true" data-toggle="tooltip" title="modal-window" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-oil" aria-hidden="true" data-toggle="tooltip" title="oil" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-grain" aria-hidden="true" data-toggle="tooltip" title="grain" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-sunglasses" aria-hidden="true" data-toggle="tooltip" title="sunglasses" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-text-size" aria-hidden="true" data-toggle="tooltip" title="text-size" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-text-color" aria-hidden="true" data-toggle="tooltip" title="text-color" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-text-background" aria-hidden="true" data-toggle="tooltip" title="text-background" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-object-align-top" aria-hidden="true" data-toggle="tooltip" title="object-align-top" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-object-align-bottom" aria-hidden="true" data-toggle="tooltip" title="object-align-bottom" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-object-align-horizontal" aria-hidden="true" data-toggle="tooltip" title="object-align-horizontal" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-object-align-left" aria-hidden="true" data-toggle="tooltip" title="object-align-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-object-align-vertical" aria-hidden="true" data-toggle="tooltip" title="object-align-vertical" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-object-align-right" aria-hidden="true" data-toggle="tooltip" title="object-align-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-triangle-right" aria-hidden="true" data-toggle="tooltip" title="triangle-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-triangle-left" aria-hidden="true" data-toggle="tooltip" title="triangle-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-triangle-bottom" aria-hidden="true" data-toggle="tooltip" title="triangle-bottom" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-triangle-top" aria-hidden="true" data-toggle="tooltip" title="triangle-top" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-superscript" aria-hidden="true" data-toggle="tooltip" title="superscript" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-subscript" aria-hidden="true" data-toggle="tooltip" title="subscript" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-menu-left" aria-hidden="true" data-toggle="tooltip" title="menu-left" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-menu-right" aria-hidden="true" data-toggle="tooltip" title="menu-right" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-menu-down" aria-hidden="true" data-toggle="tooltip" title="menu-down" onclick="ahk.CopyGlyphCode(this.title)"></span>
+							<span class="title-icon glyphicon glyphicon-menu-up" aria-hidden="true" data-toggle="tooltip" title="menu-up" onclick="ahk.CopyGlyphCode(this.title)"></span>
+						</div>
+					</div>
+					<!-- End v-pills-icons -->
+
+					<!-- v-pills-documentation -->
+					<div class="tab-pane fade" id="v-pills-documentation" role="tabpanel" aria-labelledby="v-pills-documentation-tab">
+						<div class="tab-container">
+							<div style='padding:100px;'>The documentation for <b>WebViewToo</b> is currently being reworked. Sorry for the inconvenience.</div>
+						</div>
+					</div>
+					<!-- End v-pills-documentation -->
+				</div>
+			</div>
+			<!-- End Page Content -->
+		</main>
+	</body>
+	<script>
+		window.chrome.webview.addEventListener('message', ahkWebMessage);
+		function ahkWebMessage(Msg) {
+			console.log(Msg.data);
+		}
+
+		function ahkButtonClick(ele) {
+			if (ele.Id != null || "") {
+				var eleInfo = ele.Id;
+			}
+			else if (ele.Name != null || "") {
+				var eleInfo = ele.Name;
+			}
+			else if (ele.innerText != null || "") {
+				var eleInfo = ele.innerText;
+			}
+			else {
+				var eleInfo = ele.outerHTML;
+			}
+			ahk.ButtonClick.Func(eleInfo);
+		}
+	</script>
+</html>
