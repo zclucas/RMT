@@ -75,7 +75,7 @@ class BGMouseGui {
 
         PosY += 25
         PosX := 10
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 500), GetLang("F1:选取信息和位置 F2:选取当前窗口信息   F3:选取当前窗口位置"))
+        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 500), GetLang("F1:确定信息"))
 
         PosX := 10
         PosY += 20
@@ -191,24 +191,15 @@ class BGMouseGui {
             SetTimer this.RefreshInfoAction, 100
             Hotkey("!l", MacroAction, "On")
             Hotkey("F1", (*) => this.OnF1(), "On")
-            Hotkey("F2", (*) => this.OnF2(), "On")
-            Hotkey("F3", (*) => this.OnF3(), "On")
         }
         else {
             SetTimer this.RefreshInfoAction, 0
             Hotkey("!l", MacroAction, "Off")
             Hotkey("F1", (*) => this.OnF1(), "Off")
-            Hotkey("F2", (*) => this.OnF2(), "Off")
-            Hotkey("F3", (*) => this.OnF3(), "Off")
         }
     }
 
     OnF1() {
-        this.OnF2()
-        this.OnF3()
-    }
-
-    OnF2() {
         CoordMode("Mouse", "Window")
         MouseGetPos &mouseX, &mouseY, &winId
         try {
@@ -223,9 +214,7 @@ class BGMouseGui {
             }
             this.TargetTitleCon.Value := title "⎖" className "⎖" process
         }
-    }
 
-    OnF3() {
         PosArr := GetCurWinPos()
         this.PosVarXCon.Text := PosArr[1]
         this.PosVarYCon.Text := PosArr[2]

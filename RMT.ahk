@@ -18,6 +18,7 @@
 #Include Main\TriggerKeyData.ahk
 #Include Main\FolderPackager.ahk
 #Include Main\GlobalUtil.ahk
+#Include Main\Util\MacroClipboardUtil.ahk
 
 InitFilePath()          ;初始化文件路径
 LoadCurMacroSetting()   ;加载当前配置宏

@@ -120,13 +120,31 @@ function Get-Version {
         return $null
     }
     $content = Get-Content $uiUtil -Raw
-    if ($content -match 'MyGui\.Title\s*:=\s*"RMTv(\d+\.\d+\.\d+)"') {
+    # 匹配 RMTv2.1.2 或 RMTv2.0 格式
+    if ($content -match 'MyGui\.Title\s*:=\s*"RMTv(\d+(?:\.\d+)?(?:\.\d+)?)"') {
         $version = $matches[1]
         Write-Log "  版本号: v$version" "Gray"
         return $version
     }
     Write-Log "  ✗ 无法从 UIUtil.ahk 解析版本号" "Red"
     return $null
+}
+
+# ============================================================
+# 进程检查函数
+# ============================================================
+
+function Stop-RunningRMT {
+    Write-Log "检查 RMT.ahk 是否正在运行..." "Gray"
+    $rmtProcess = Get-CimInstance Win32_Process -Filter "Name LIKE '%AutoHotkey%'" | Where-Object { $_.CommandLine -like "*RMT.ahk*" }
+    if ($rmtProcess) {
+        Write-Log "RMT.ahk 正在运行，正在关闭..." "Yellow"
+        $rmtProcess | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+        Start-Sleep -Seconds 1
+        Write-Log "RMT.ahk 已关闭" "Green"
+    } else {
+        Write-Log "RMT.ahk 未运行" "Green"
+    }
 }
 
 # ============================================================
@@ -394,25 +412,29 @@ function Main {
 
         $Base32Exe = Find-Exe "32Base (AutoHotkey32.exe)" $Base32Paths
 
-        # 步骤 3: 清理旧文件
-        Write-Step 3 "清理旧文件"
+        # 步骤 3: 关闭正在运行的 RMT.ahk
+        Write-Step 3 "关闭正在运行的 RMT.ahk"
+        Stop-RunningRMT
+
+        # 步骤 4: 清理旧文件
+        Write-Step 4 "清理旧文件"
         Remove-OldFiles -Dir $WorkDir -Filter "Work*.exe"
 
-        # 步骤 4: 编译 Work1.exe
-        Write-Step 4 "编译 Work1.exe"
+        # 步骤 5: 编译 Work1.exe
+        Write-Step 5 "编译 Work1.exe"
         $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
         $result = Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$WorkDir\Work1.exe" -IconPath $IconPath -Name "Work1.exe"
         if (-not $result) { Wait-KeyPress; exit 1 }
 
-        # 步骤 5: 打包帮助文档
-        Write-Step 5 "打包帮助文档"
+        # 步骤 6: 打包帮助文档
+        Write-Step 6 "打包帮助文档"
         if (-not (Pack-HelpDoc)) {
             Write-Log "警告: 帮助文档打包失败" "Yellow"
         }
         Write-Log "运行环境work编译完成" "Green"
 
-        # 步骤 6: 询问是否生成发行版
-        Write-Step 6 "生成发行版"
+        # 步骤 7: 询问是否生成发行版
+        Write-Step 7 "生成发行版"
         $choice = Ask-Choice "请选择发行版类型:" @("不生成", "测试版 (仅 X64)", "正式版 (X64 + X32)")
 
         if ($choice -eq 2) {
