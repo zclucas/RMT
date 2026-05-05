@@ -9,6 +9,7 @@
 - Refined the WebView macro table density, column sizing, and sticky row actions for the default window size.
 - Expanded the WebView tools and settings panels with mouse inspection, OCR output, recorder controls, and legacy hotkey editor entry points.
 - Migrated the remaining WebView help, reward, and thanks pages from placeholders to maintained React content.
+- Added a repeatable verification script and maintenance docs for development, the WebView bridge, and config compatibility.
 
 ## v1.1.3
 

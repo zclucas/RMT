@@ -3,8 +3,8 @@
 ## Current checkpoint
 
 - Branch: `codex-rmt-webview-ui-migration`
-- Checkpoint commit: `a7fea32`
 - State: the main `RMT.ahk` window is hosted by `WebViewToo` and loads the React/TypeScript app from `WebViewApp/dist`.
+- Migrated areas: macro table parity, tools/settings parity, help, reward, and thanks pages.
 - Verified bridge: React can call `window.ahk.RmtAction({ type: "getState" })` and receive version, tabs, settings, and tools state.
 
 ## Ownership boundary
@@ -119,7 +119,5 @@ Acceptance:
 
 ```powershell
 cd C:\Users\T8numen\Documents\Playground\rmt-test\RMT-Dev_WebView2
-npm.cmd run build --prefix WebViewApp
-& "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
-git diff --check
+.\scripts\verify.ps1
 ```
