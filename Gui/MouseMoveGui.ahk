@@ -12,6 +12,7 @@ class MouseMoveGui {
         this.PosYCon := ""
         this.SpeedCon := ""
         this.IsRelativeCon := ""
+        this.IsRawInputCon := ""
         this.CommandStrCon := ""
         this.MousePosCon := ""
     }
@@ -93,6 +94,10 @@ class MouseMoveGui {
         this.IsRelativeCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("相对位移"))
         this.IsRelativeCon.OnEvent("Click", (*) => this.OnChangeEditValue())
 
+        PosX += 110
+        this.IsRawInputCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("原始输入"))
+        this.IsRawInputCon.OnEvent("Click", (*) => this.OnChangeEditValue())
+
         PosY += 25
         PosX := 10
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 350), GetLang("移动速度0~100，100为瞬移"))
@@ -107,7 +112,7 @@ class MouseMoveGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 400, 280))
+        MyGui.Show(Format("w{} h{}", 500, 280))
     }
 
     OnGuiClose() {
@@ -126,11 +131,13 @@ class MouseMoveGui {
         PosY := cmdArr.Length >= 3 ? cmdArr[3] : 0
         Speed := cmdArr.Length >= 4 ? cmdArr[4] : 90
         IsRelative := cmdArr.Length >= 5 ? cmdArr[5] : 0
+        IsRawInput := cmdArr.Length >= 6 ? cmdArr[6] : (ToolCheckInfo.RecordMouseRawInput ? 1 : 0)
 
         this.PosXCon.Value := PosX
         this.PosYCon.Value := PosY
         this.SpeedCon.Value := Speed
         this.IsRelativeCon.Value := IsRelative
+        this.IsRawInputCon.Value := IsRawInput
         this.UpdateCommandStr()
     }
 
@@ -155,6 +162,7 @@ class MouseMoveGui {
 
     UpdateCommandStr() {
         showRelative := this.IsRelativeCon.Value == 1
+        showRawInput := this.IsRawInputCon.Value == 1
         showSpeed := true
 
         CommandStr := GetLang("移动")
@@ -166,6 +174,9 @@ class MouseMoveGui {
         }
         if (showRelative) {
             CommandStr .= "_" this.IsRelativeCon.Value
+        }
+        if (showRawInput) {
+            CommandStr .= "_" this.IsRawInputCon.Value
         }
 
         this.CommandStrCon.Value := CommandStr
