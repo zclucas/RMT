@@ -38,6 +38,8 @@ Useful scoped checks:
 .\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"
 ```
 
+For manual release or large-change checks, also follow `docs/regression-checklist.md`.
+
 ## WebView UI Work
 
 - React owns layout, rendering, and input collection.
