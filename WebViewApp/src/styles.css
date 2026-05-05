@@ -38,8 +38,10 @@ button {
   cursor: pointer;
   display: inline-flex;
   gap: 6px;
+  line-height: 1.2;
   min-height: 32px;
   padding: 5px 10px;
+  white-space: nowrap;
 }
 
 button:hover {
@@ -73,6 +75,7 @@ textarea {
   border-radius: 6px;
   color: #17202a;
   min-height: 32px;
+  min-width: 0;
   padding: 5px 8px;
   width: 100%;
 }
@@ -314,18 +317,20 @@ h2 {
 .macro-view {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .toolbar {
+  align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .fold-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .fold-section,
@@ -344,9 +349,9 @@ h2 {
   background: #f8fafb;
   border-bottom: 1px solid #d8e0e6;
   display: grid;
-  gap: 8px;
-  grid-template-columns: 32px minmax(140px, 1.2fr) minmax(160px, 1.4fr) auto auto auto;
-  padding: 8px;
+  gap: 7px;
+  grid-template-columns: 32px minmax(128px, 1.1fr) minmax(150px, 1.2fr) min-content max-content max-content;
+  padding: 7px;
 }
 
 .icon-button,
@@ -385,9 +390,9 @@ h2 {
   align-items: center;
   border-bottom: 1px solid #edf1f4;
   display: grid;
-  gap: 8px;
-  grid-template-columns: 140px minmax(160px, 1fr) 32px 120px;
-  padding: 8px;
+  gap: 7px;
+  grid-template-columns: 112px minmax(130px, 1fr) 32px 88px;
+  padding: 7px;
 }
 
 .item-table-wrap {
@@ -396,16 +401,17 @@ h2 {
 
 .item-table {
   border-collapse: collapse;
-  min-width: 1260px;
+  min-width: 1200px;
+  table-layout: fixed;
   width: 100%;
 }
 
 .item-table th,
 .item-table td {
   border-bottom: 1px solid #edf1f4;
-  padding: 7px;
+  padding: 6px;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .item-table th {
@@ -415,9 +421,100 @@ h2 {
   font-weight: 700;
 }
 
+.item-table tbody tr:hover {
+  background: #fbfcfd;
+}
+
+.item-table th:nth-child(1),
+.item-table td:nth-child(1) {
+  width: 44px;
+}
+
+.item-table th:nth-child(2),
+.item-table td:nth-child(2) {
+  width: 118px;
+}
+
+.item-table th:nth-child(3),
+.item-table td:nth-child(3) {
+  width: 150px;
+}
+
+.item-table th:nth-child(4),
+.item-table td:nth-child(4) {
+  width: 96px;
+}
+
+.item-table th:nth-child(5),
+.item-table td:nth-child(5) {
+  width: 66px;
+}
+
+.item-table th:nth-child(6),
+.item-table td:nth-child(6) {
+  width: 220px;
+}
+
+.item-table th:nth-child(7),
+.item-table td:nth-child(7) {
+  width: 108px;
+}
+
+.item-table th:nth-child(8),
+.item-table td:nth-child(8) {
+  width: 76px;
+}
+
+.item-table th:nth-child(9),
+.item-table td:nth-child(9) {
+  width: 124px;
+}
+
+.item-table th:nth-child(10),
+.item-table td:nth-child(10) {
+  width: 78px;
+}
+
+.item-table th:nth-child(11),
+.item-table td:nth-child(11) {
+  width: 146px;
+}
+
+.item-table th:nth-child(11),
+.item-table td:nth-child(11) {
+  background: #ffffff;
+  box-shadow: -1px 0 0 #edf1f4;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+}
+
+.item-table td:nth-child(11) {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.item-table th:nth-child(11) {
+  background: #fbfcfd;
+  z-index: 2;
+}
+
+.item-table tbody tr:hover td:nth-child(11) {
+  background: #fbfcfd;
+}
+
+.item-table td:nth-child(6) {
+  vertical-align: top;
+}
+
+.item-table td:nth-child(6) textarea {
+  max-height: 68px;
+  min-height: 38px;
+}
+
 .index-cell {
   color: #64727e;
-  width: 54px;
+  text-align: center;
 }
 
 .empty-cell {
@@ -427,20 +524,27 @@ h2 {
 }
 
 .row-actions {
-  display: flex;
+  display: grid;
   gap: 4px;
+  grid-template-columns: repeat(4, 30px);
+}
+
+.row-actions button {
+  justify-content: center;
+  min-height: 30px;
+  padding: 0;
+  width: 30px;
 }
 
 .trigger-cell {
   display: grid;
-  gap: 5px;
-  grid-template-columns: minmax(120px, 1fr) 32px;
+  gap: 4px;
+  grid-template-columns: minmax(96px, 1fr) 32px;
 }
 
 .sound-stack {
   display: grid;
-  gap: 5px;
-  min-width: 128px;
+  gap: 4px;
 }
 
 .state-pill {
@@ -449,7 +553,7 @@ h2 {
   color: #61717f;
   display: inline-flex;
   font-size: 12px;
-  margin-top: 6px;
+  margin-top: 4px;
   padding: 2px 8px;
 }
 
@@ -514,6 +618,6 @@ h2 {
   }
 
   .fold-header {
-    grid-template-columns: 32px minmax(120px, 1fr) minmax(140px, 1fr);
+    grid-template-columns: 32px minmax(120px, 1fr) minmax(140px, 1fr) min-content;
   }
 }

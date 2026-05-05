@@ -6,6 +6,7 @@
 - Expanded the React macro table with mode, hold-time, tip-sound controls, and full-table move button parity.
 - Fixed macro row movement so the key mode moves with the macro item.
 - Added WebView entry points for legacy trigger editors and delete confirmations in the macro table.
+- Refined the WebView macro table density, column sizing, and sticky row actions for the default window size.
 
 ## v1.1.3
 

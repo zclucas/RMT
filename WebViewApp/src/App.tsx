@@ -1,4 +1,6 @@
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -568,7 +570,7 @@ function MacroTable({
                               onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: -1 })}
                               type="button"
                             >
-                              ↑
+                              <ArrowUp size={15} />
                             </button>
                             <button
                               title="下移"
@@ -576,7 +578,7 @@ function MacroTable({
                               onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: 1 })}
                               type="button"
                             >
-                              ↓
+                              <ArrowDown size={15} />
                             </button>
                             <button
                               className="danger icon-only"
