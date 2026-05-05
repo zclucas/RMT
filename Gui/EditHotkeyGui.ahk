@@ -62,6 +62,7 @@ class EditHotkeyGui {
         this.KeyCon.Enabled := false
         this.KeyCon.Visible := true
         this.ShowCon.Visible := false
+        try RmtPostState()
     }
 
     OnHotStrSureBtn(sureTriggerStr) {
@@ -69,6 +70,7 @@ class EditHotkeyGui {
         this.KeyCon.Enabled := false
         this.KeyCon.Visible := true
         this.ShowCon.Visible := false
+        try RmtPostState()
     }
 }
 

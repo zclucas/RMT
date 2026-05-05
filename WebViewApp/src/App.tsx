@@ -3,10 +3,14 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronRight,
+  Clipboard,
+  Eraser,
   ExternalLink,
   HelpCircle,
+  Image as ImageIcon,
   Maximize2,
   Minus,
+  MousePointer2,
   Pause,
   Play,
   Plus,
@@ -30,6 +34,7 @@ const startTipLabels = ["无", "触发提示", "循环首次提示"];
 const endTipLabels = ["无", "结束提示", "循环结束提示"];
 const screenshotLabels = ["微软截图", "RMT截图", "SC截图"];
 const keyDownLabels = ["自动松开", "忽略重复按下", "允许重复按下"];
+const ocrLabels = ["中文", "英文"];
 
 function cloneState(state: RmtState): RmtState {
   return structuredClone(state);
@@ -619,40 +624,116 @@ function ToolPanel({
   updateTool: (field: keyof RmtToolState, value: unknown) => void;
   runAction: (type: string, payload?: PatchPayload) => void;
 }) {
+  const toolInfoRows = [
+    ["屏幕坐标", tools.mousePos],
+    ["窗口坐标", tools.mouseWinPos],
+    ["窗口标题", tools.processTitle],
+    ["进程名", tools.processName],
+    ["窗口类", tools.processClass],
+    ["PID", tools.processPid],
+    ["句柄", tools.processId],
+    ["位置颜色", tools.color]
+  ];
+
   return (
-    <section className="panel-grid">
+    <section className="panel-grid tool-layout">
       <div className="section-block">
         <h2>工具热键</h2>
-        <Field label="鼠标信息">
-          <TextInput value={tools.toolCheckHotKey} onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} />
-        </Field>
-        <Field label="指令录制">
-          <TextInput value={tools.toolRecordMacroHotKey} onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} />
-        </Field>
-        <Field label="截图识别">
-          <TextInput value={tools.toolTextFilterHotKey} onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} />
-        </Field>
-        <Field label="截图">
-          <TextInput value={tools.screenShotHotKey} onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} />
-        </Field>
-        <Field label="自由粘贴">
-          <TextInput value={tools.freePasteHotKey} onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} />
-        </Field>
+        <HotkeyField label="鼠标信息" value={tools.toolCheckHotKey} target="toolCheckHotKey" onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} runAction={runAction} />
+        <HotkeyField label="指令录制" value={tools.toolRecordMacroHotKey} target="toolRecordMacroHotKey" onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} runAction={runAction} />
+        <HotkeyField label="截图识别" value={tools.toolTextFilterHotKey} target="toolTextFilterHotKey" onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} runAction={runAction} />
+        <HotkeyField label="截图" value={tools.screenShotHotKey} target="screenShotHotKey" onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} runAction={runAction} />
+        <HotkeyField label="自由粘贴" value={tools.freePasteHotKey} target="freePasteHotKey" onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} runAction={runAction} />
       </div>
+
       <div className="section-block">
         <h2>工具窗口</h2>
-        <button onClick={() => runAction("openVarMonitor")} type="button">
-          <Play size={16} />
-          打开变量监视器
-        </button>
-        <button onClick={() => runAction("openToolRecordSetting")} type="button">
-          <Settings size={16} />
-          录制选项
-        </button>
-        <button onClick={() => runAction("editCmdTip")} type="button">
-          <SquarePen size={16} />
-          指令显示
-        </button>
+        <div className="button-row">
+          <button onClick={() => runAction("openVarMonitor")} type="button">
+            <Play size={16} />
+            变量监视器
+          </button>
+          <button onClick={() => runAction("openFreePaste")} type="button">
+            <Clipboard size={16} />
+            自由粘贴
+          </button>
+          <button onClick={() => runAction("openToolRecordSetting")} type="button">
+            <Settings size={16} />
+            录制选项
+          </button>
+          <button onClick={() => runAction("editCmdTip")} type="button">
+            <SquarePen size={16} />
+            指令显示
+          </button>
+        </div>
+      </div>
+
+      <div className="section-block span-2">
+        <h2>鼠标信息</h2>
+        <div className="button-row">
+          <button className={classNames(tools.isToolCheck && "primary")} onClick={() => runAction("toggleToolCheck")} type="button">
+            <MousePointer2 size={16} />
+            {tools.isToolCheck ? "停止检测" : "开始检测"}
+          </button>
+          <label className="check-row block inline-check">
+            <input
+              type="checkbox"
+              checked={tools.alwaysOnTop}
+              onChange={(event) => {
+                patchLocalTools("alwaysOnTop", event.target.checked);
+                updateTool("alwaysOnTop", event.target.checked);
+              }}
+            />
+            窗口置顶
+          </label>
+        </div>
+        <div className="info-grid">
+          {toolInfoRows.map(([label, value]) => (
+            <div className="info-item" key={label}>
+              <span>{label}</span>
+              <strong title={value}>{value || "-"}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="section-block span-2">
+        <h2>文本识别与录制输出</h2>
+        <Field label="识别模型">
+          <select
+            value={tools.ocrType}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              patchLocalTools("ocrType", value);
+              updateTool("ocrType", value);
+            }}
+          >
+            {ocrLabels.map((label, index) => (
+              <option key={label} value={index + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="button-row">
+          <button onClick={() => runAction("toolTextFilterScreenShot")} type="button">
+            <Clipboard size={16} />
+            截图提取文本
+          </button>
+          <button onClick={() => runAction("toolTextFilterSelectImage")} type="button">
+            <ImageIcon size={16} />
+            从图片提取
+          </button>
+          <button className="danger" onClick={() => runAction("clearToolText")} type="button">
+            <Eraser size={16} />
+            清空内容
+          </button>
+          <button className={classNames(tools.isToolRecord && "primary")} onClick={() => runAction("toggleToolRecord")} type="button">
+            {tools.isToolRecord ? <Pause size={16} /> : <Play size={16} />}
+            {tools.isToolRecord ? "停止录制" : "开始录制"}
+          </button>
+        </div>
+        <textarea className="tool-output" readOnly value={tools.toolText} />
       </div>
     </section>
   );
@@ -673,15 +754,9 @@ function SettingsPanel({
     <section className="panel-grid">
       <div className="section-block">
         <h2>快捷键</h2>
-        <Field label="休眠">
-          <TextInput value={settings.suspendHotkey} onLocal={(value) => patchLocalSettings("suspendHotkey", value)} onCommit={(value) => updateSetting("suspendHotkey", value)} />
-        </Field>
-        <Field label="暂停">
-          <TextInput value={settings.pauseHotkey} onLocal={(value) => patchLocalSettings("pauseHotkey", value)} onCommit={(value) => updateSetting("pauseHotkey", value)} />
-        </Field>
-        <Field label="终止所有宏">
-          <TextInput value={settings.killMacroHotkey} onLocal={(value) => patchLocalSettings("killMacroHotkey", value)} onCommit={(value) => updateSetting("killMacroHotkey", value)} />
-        </Field>
+        <HotkeyField label="休眠" value={settings.suspendHotkey} target="suspendHotkey" onLocal={(value) => patchLocalSettings("suspendHotkey", value)} onCommit={(value) => updateSetting("suspendHotkey", value)} runAction={runAction} />
+        <HotkeyField label="暂停" value={settings.pauseHotkey} target="pauseHotkey" onLocal={(value) => patchLocalSettings("pauseHotkey", value)} onCommit={(value) => updateSetting("pauseHotkey", value)} runAction={runAction} />
+        <HotkeyField label="终止所有宏" value={settings.killMacroHotkey} target="killMacroHotkey" onLocal={(value) => patchLocalSettings("killMacroHotkey", value)} onCommit={(value) => updateSetting("killMacroHotkey", value)} runAction={runAction} />
       </div>
 
       <div className="section-block">
@@ -830,6 +905,10 @@ function SettingsPanel({
           <HelpCircle size={16} />
           说明
         </button>
+        <button onClick={() => runAction("openSettingManager")} type="button">
+          <Settings size={16} />
+          配置管理
+        </button>
       </div>
     </section>
   );
@@ -884,6 +963,33 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span>{label}</span>
       {children}
     </label>
+  );
+}
+
+function HotkeyField({
+  label,
+  value,
+  target,
+  onLocal,
+  onCommit,
+  runAction
+}: {
+  label: string;
+  value: string;
+  target: string;
+  onLocal: (value: string) => void;
+  onCommit: (value: string) => void;
+  runAction: (type: string, payload?: PatchPayload) => void;
+}) {
+  return (
+    <Field label={label}>
+      <div className="hotkey-edit-cell">
+        <TextInput value={value} onLocal={onLocal} onCommit={onCommit} />
+        <button className="icon-button" title="打开快捷方式编辑器" onClick={() => runAction("openHotkeyEditor", { target })} type="button">
+          <SquarePen size={15} />
+        </button>
+      </div>
+    </Field>
   );
 }
 

@@ -413,6 +413,7 @@ OnFinishRecordMacro() {
     macroLineStr := StrReplace(macroStr, ",", "`n")
     ToolCheckInfo.ToolTextCtrl.Value := macroLineStr
     SetClipboard(macroLineStr)
+    try RmtPostState()
 }
 
 OnClickKeyDownDownHelpBtn(*) {

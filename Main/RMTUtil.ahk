@@ -652,6 +652,7 @@ OnToolTextFilterGetArea(x1, y1, x2, y2) {
     result := ocr.ocr_from_file(filePath)
     ToolCheckInfo.ToolTextCtrl.Value := result
     SetClipboard(result)
+    try RmtPostState()
 }
 
 OnToolTextCheckScreenShot() {
@@ -664,6 +665,7 @@ OnToolTextCheckScreenShot() {
         result := ocr.ocr_from_file(filePath)
         ToolCheckInfo.ToolTextCtrl.Value := result
         SetClipboard(result)
+        try RmtPostState()
         ; 停止监听
         SetTimer(, 0)
     }

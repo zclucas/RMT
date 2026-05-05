@@ -573,6 +573,14 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
+.tool-layout {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
 .section-block {
   padding: 14px;
 }
@@ -591,6 +599,71 @@ h2 {
 
 .field-row span {
   color: #566674;
+}
+
+.hotkey-edit-cell {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 32px;
+}
+
+.hotkey-edit-cell button {
+  margin: 0;
+}
+
+.button-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.button-row button,
+.button-row .inline-check {
+  margin: 0;
+}
+
+.inline-check {
+  background: #f8fafb;
+  border: 1px solid #d8e0e6;
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+
+.info-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.info-item {
+  background: #f8fafb;
+  border: 1px solid #edf1f4;
+  border-radius: 6px;
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.info-item span {
+  color: #71808d;
+  display: block;
+  font-size: 12px;
+}
+
+.info-item strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-output {
+  min-height: 128px;
+  resize: vertical;
 }
 
 .readable {
@@ -619,5 +692,9 @@ h2 {
 
   .fold-header {
     grid-template-columns: 32px minmax(120px, 1fr) minmax(140px, 1fr) min-content;
+  }
+
+  .span-2 {
+    grid-column: span 1;
   }
 }

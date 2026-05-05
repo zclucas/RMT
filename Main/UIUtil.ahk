@@ -298,11 +298,36 @@ RmtDispatchWebAction(actionType, payload) {
         case "openVarMonitor":
             MyVarListenGui.ShowGui()
             return ""
+        case "openSettingManager":
+            MySettingMgrGui.ShowGui()
+            return ""
         case "openToolRecordSetting":
             OnClickToolRecordSettingBtn()
             return ""
         case "editCmdTip":
             OnEditCMDTipGui()
+            return ""
+        case "openFreePaste":
+            OnToolFreePaste()
+            return ""
+        case "toggleToolCheck":
+            RmtToggleToolCheck()
+            return ""
+        case "toggleToolRecord":
+            RmtToggleToolRecord()
+            return ""
+        case "toolTextFilterScreenShot":
+            OnToolTextFilterScreenShot()
+            return ""
+        case "toolTextFilterSelectImage":
+            OnToolTextFilterSelectImage()
+            return ""
+        case "clearToolText":
+            OnClearToolText()
+            RmtPostState()
+            return ""
+        case "openHotkeyEditor":
+            RmtOpenHotkeyEditorAction(payload)
             return ""
         case "keyDownHelp":
             OnClickKeyDownDownHelpBtn()
@@ -523,7 +548,17 @@ RmtBuildTools() {
     tools["freePasteHotKey"] := RmtControlValue(ToolCheckInfo.FreePasteHotKeyCtrl, ToolCheckInfo.FreePasteHotKey)
     tools["isToolCheck"] := RmtJsonBool(ToolCheckInfo.IsToolCheck)
     tools["isToolRecord"] := RmtJsonBool(RmtControlValue(ToolCheckInfo.ToolCheckRecordMacroCtrl, ToolCheckInfo.IsToolRecord))
+    tools["alwaysOnTop"] := RmtJsonBool(RmtControlValue(ToolCheckInfo.AlwaysOnTopCtrl, false))
     tools["ocrType"] := RmtInt(RmtControlValue(ToolCheckInfo.OCRTypeCtrl, ToolCheckInfo.OCRTypeValue), 1)
+    tools["mousePos"] := RmtControlValue(ToolCheckInfo.ToolMousePosCtrl, ToolCheckInfo.PosStr)
+    tools["mouseWinPos"] := RmtControlValue(ToolCheckInfo.ToolMouseWinPosCtrl, ToolCheckInfo.WinPosStr)
+    tools["processTitle"] := RmtControlValue(ToolCheckInfo.ToolProcessTileCtrl, ToolCheckInfo.ProcessTile)
+    tools["processName"] := RmtControlValue(ToolCheckInfo.ToolProcessNameCtrl, ToolCheckInfo.ProcessName)
+    tools["processClass"] := RmtControlValue(ToolCheckInfo.ToolProcessClassCtrl, ToolCheckInfo.ProcessClass)
+    tools["processPid"] := String(RmtControlValue(ToolCheckInfo.ToolProcessPidCtrl, ToolCheckInfo.ProcessPid))
+    tools["processId"] := String(RmtControlValue(ToolCheckInfo.ToolProcessIdCtrl, ToolCheckInfo.ProcessId))
+    tools["color"] := RmtControlValue(ToolCheckInfo.ToolColorCtrl, ToolCheckInfo.Color)
+    tools["toolText"] := RmtControlValue(ToolCheckInfo.ToolTextCtrl, "")
     return tools
 }
 
@@ -641,10 +676,65 @@ RmtUpdateTool(field, value) {
         case "isToolRecord":
             ToolCheckInfo.IsToolRecord := RmtBool(value)
             RmtSetControl(ToolCheckInfo.ToolCheckRecordMacroCtrl, ToolCheckInfo.IsToolRecord)
+        case "alwaysOnTop":
+            RmtSetControl(ToolCheckInfo.AlwaysOnTopCtrl, RmtBool(value))
+            OnToolAlwaysOnTop()
         case "ocrType":
             ToolCheckInfo.OCRTypeValue := RmtInt(value, 1)
             RmtSetControl(ToolCheckInfo.OCRTypeCtrl, ToolCheckInfo.OCRTypeValue)
     }
+}
+
+RmtToggleToolCheck() {
+    OnToolCheckHotkey()
+}
+
+RmtToggleToolRecord() {
+    global ToolCheckInfo
+    nextState := !RmtBool(RmtControlValue(ToolCheckInfo.ToolCheckRecordMacroCtrl, ToolCheckInfo.IsToolRecord))
+    ToolCheckInfo.IsToolRecord := nextState
+    RmtSetControl(ToolCheckInfo.ToolCheckRecordMacroCtrl, nextState)
+    OnToolRecordMacro(false)
+    RmtPostState()
+}
+
+RmtOpenHotkeyEditorAction(payload) {
+    global MySoftData, ToolCheckInfo, MyEditHotkeyGui
+    target := RmtGet(payload, "target", "")
+    onlyTriggerKey := false
+
+    switch target {
+        case "suspendHotkey":
+            keyCon := MySoftData.SuspendHotkeyCtrl
+            currentValue := RmtControlValue(keyCon, MySoftData.SuspendHotkey)
+            onlyTriggerKey := true
+        case "pauseHotkey":
+            keyCon := MySoftData.PauseHotkeyCtrl
+            currentValue := RmtControlValue(keyCon, MySoftData.PauseHotkey)
+        case "killMacroHotkey":
+            keyCon := MySoftData.KillMacroHotkeyCtrl
+            currentValue := RmtControlValue(keyCon, MySoftData.KillMacroHotkey)
+        case "toolCheckHotKey":
+            keyCon := ToolCheckInfo.ToolCheckHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ToolCheckHotKey)
+        case "toolRecordMacroHotKey":
+            keyCon := ToolCheckInfo.ToolRecordMacroHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ToolRecordMacroHotKey)
+        case "toolTextFilterHotKey":
+            keyCon := ToolCheckInfo.ToolTextFilterHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ToolTextFilterHotKey)
+        case "screenShotHotKey":
+            keyCon := ToolCheckInfo.ScreenShotHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ScreenShotHotKey)
+        case "freePasteHotKey":
+            keyCon := ToolCheckInfo.FreePasteHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.FreePasteHotKey)
+        default:
+            throw Error("Unsupported hotkey target: " target)
+    }
+
+    showCon := RmtWebValueControl(currentValue)
+    MyEditHotkeyGui.ShowGui(showCon, keyCon, onlyTriggerKey)
 }
 
 RmtUpdateItem(payload) {

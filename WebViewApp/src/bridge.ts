@@ -56,7 +56,17 @@ const fallbackState: RmtState = {
     freePasteHotKey: "!F2",
     isToolCheck: false,
     isToolRecord: false,
-    ocrType: 1
+    alwaysOnTop: false,
+    ocrType: 1,
+    mousePos: "",
+    mouseWinPos: "",
+    processTitle: "",
+    processName: "",
+    processClass: "",
+    processPid: "",
+    processId: "",
+    color: "",
+    toolText: ""
   },
   tabs: [
     {

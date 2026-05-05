@@ -7,6 +7,7 @@
 - Fixed macro row movement so the key mode moves with the macro item.
 - Added WebView entry points for legacy trigger editors and delete confirmations in the macro table.
 - Refined the WebView macro table density, column sizing, and sticky row actions for the default window size.
+- Expanded the WebView tools and settings panels with mouse inspection, OCR output, recorder controls, and legacy hotkey editor entry points.
 
 ## v1.1.3
 

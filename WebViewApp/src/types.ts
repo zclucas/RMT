@@ -83,7 +83,17 @@ export interface RmtToolState {
   freePasteHotKey: string;
   isToolCheck: boolean;
   isToolRecord: boolean;
+  alwaysOnTop: boolean;
   ocrType: number;
+  mousePos: string;
+  mouseWinPos: string;
+  processTitle: string;
+  processName: string;
+  processClass: string;
+  processPid: string;
+  processId: string;
+  color: string;
+  toolText: string;
 }
 
 export interface RmtState {
