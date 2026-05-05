@@ -204,7 +204,7 @@ function Pack-HelpDoc {
     $null = Start-Process -FilePath "node" -ArgumentList "SingleHtml.js" -NoNewWindow -Wait -PassThru
     Pop-Location
 
-    $OutputFile = Join-Path $PSScriptRoot "RMT帮助文档.html"
+    $OutputFile = Join-Path $PSScriptRoot "index.html"
     if (Test-Path $OutputFile) {
         $size = [math]::Round((Get-Item $OutputFile).Length / 1024, 1)
         $size = [math]::Round((Get-Item $OutputFile).Length / 1MB, 2)
@@ -250,8 +250,12 @@ function New-Release {
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
-        # 复制帮助文档
-        Copy-IfExist (Join-Path $PSScriptRoot "RMT帮助文档.html") $releaseDir
+        # 复制帮助文档（根目录为 index.html，发布目录重命名为 RMT帮助文档.html）
+        $helpSrc = Join-Path $PSScriptRoot "index.html"
+        if (Test-Path $helpSrc) {
+            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
+            Write-Log "  已复制: RMT帮助文档.html" "Gray"
+        }
 
         # 删除旧 Work*.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
@@ -282,8 +286,12 @@ function New-Release {
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
-        # 复制帮助文档
-        Copy-IfExist (Join-Path $PSScriptRoot "RMT帮助文档.html") $releaseDir
+        # 复制帮助文档（根目录为 index.html，发布目录重命名为 RMT帮助文档.html）
+        $helpSrc = Join-Path $PSScriptRoot "index.html"
+        if (Test-Path $helpSrc) {
+            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
+            Write-Log "  已复制: RMT帮助文档.html" "Gray"
+        }
 
         # 删除旧 Work*.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"

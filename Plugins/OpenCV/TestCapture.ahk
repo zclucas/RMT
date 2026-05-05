@@ -118,8 +118,12 @@ OnRunAll(*) {
     winMat := DllCall(dllPath "\CaptureWinMat", "Int", hwnd,
         "Int", r.x, "Int", r.y, "Int", r.w, "Int", r.h, "Ptr")
     t2w := A_TickCount
-    if (winMat)
+    if (winMat) {
+        ts := FormatTime(, "yyyy-MM-dd_HH-mm-ss")
+        winFile := saveDir "dwm_" ts ".png"
+        retW := DllCall(dllPath "\SaveMatToFile", "Ptr", winMat, "AStr", winFile, "Int")
         DllCall(dllPath "\ReleaseMat", "Ptr", winMat)
+    }
     memW2 := GetProcessMemory()
     msW := t2w - t1w
 
@@ -135,8 +139,12 @@ OnRunAll(*) {
     screenMat := DllCall(dllPath "\CaptureScreenMat",
         "Int", r.x, "Int", r.y, "Int", r.w, "Int", r.h, "Ptr")
     t2s := A_TickCount
-    if (screenMat)
+    if (screenMat) {
+        ts := FormatTime(, "yyyy-MM-dd_HH-mm-ss")
+        screenFile := saveDir "bitblt_" ts ".png"
+        retS := DllCall(dllPath "\SaveMatToFile", "Ptr", screenMat, "AStr", screenFile, "Int")
         DllCall(dllPath "\ReleaseMat", "Ptr", screenMat)
+    }
     memS2 := GetProcessMemory()
     msS := t2s - t1s
 

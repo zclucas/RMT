@@ -14,6 +14,7 @@
 #Include Util\InputUtil.ahk
 #Include Util\SearchUtil.ahk
 #Include Util\FileIOUtil.ahk
+#Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\PluginUtil.ahk
 global WM_COPYDATA := 0x4a ;传递字符串，系统信息
@@ -209,7 +210,7 @@ GetNextImageSerial(baseDir := "") {
         baseDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot"
 
     maxSerial := 0
-    Loop Files, baseDir "\*.png" {
+    loop files, baseDir "\*.png" {
         if (RegExMatch(A_LoopFileName, "^(\d+)\.png$", &match)) {
             serial := Integer(match[1])
             if (serial > maxSerial)
@@ -1086,6 +1087,10 @@ CheckIfHasModifyKey(keyCombo) {
     return false
 }
 
+IsComboKey(keyCombo) {
+    return InStr(keyCombo, " & ")
+}
+
 LoosenModifyKey(keyCombo) {
     modifiers := []
     modPrefixes := ["^", "<^", ">^", "!", "<!", ">!", "+", "<+", ">+", "#", "<#", ">#"]
@@ -1899,4 +1904,70 @@ ValidateCmdPath(&Data, pathFieldName, selectTitle, filter, tableItem := "", inde
     Data.%pathFieldName% := newPath
     SaveMacroCMDData(Data)
     return true
+}
+
+; ===== 项目根目录 / OCR 懒加载/定时回收函数 =====
+
+GetProjectRoot() {
+    root := A_ScriptDir
+    if !FileExist(root '\Plugins\RapidOcr') {
+        root .= '\..'
+        loop files, root {
+            root := A_LoopFileFullPath
+            break
+        }
+    }
+    return root
+}
+
+global LastChineseOcrUseTime := 0
+global LastEnglishOcrUseTime := 0
+global OCR_IDLE_TIMEOUT := 300000
+
+GetChineseOcr() {
+    global MyChineseOcr, LastChineseOcrUseTime
+    if (!MyChineseOcr) {
+        MyChineseOcr := RapidOcr(GetProjectRoot())
+    }
+    LastChineseOcrUseTime := A_TickCount
+    return MyChineseOcr
+}
+
+GetEnglishOcr() {
+    global MyEnglishOcr, LastEnglishOcrUseTime
+    if (!MyEnglishOcr) {
+        MyEnglishOcr := RapidOcr(GetProjectRoot(), 2)
+    }
+    LastEnglishOcrUseTime := A_TickCount
+    return MyEnglishOcr
+}
+
+UnloadChineseOcr() {
+    global MyChineseOcr
+    if (MyChineseOcr) {
+        MyChineseOcr.Destroy()
+        MyChineseOcr := ""
+    }
+}
+
+UnloadEnglishOcr() {
+    global MyEnglishOcr
+    if (MyEnglishOcr) {
+        MyEnglishOcr.Destroy()
+        MyEnglishOcr := ""
+    }
+}
+
+CheckOcrIdle() {
+    global MyChineseOcr, MyEnglishOcr, LastChineseOcrUseTime, LastEnglishOcrUseTime, OCR_IDLE_TIMEOUT
+
+    currentTime := A_TickCount
+
+    if (MyChineseOcr && (currentTime - LastChineseOcrUseTime > OCR_IDLE_TIMEOUT)) {
+        UnloadChineseOcr()
+    }
+
+    if (MyEnglishOcr && (currentTime - LastEnglishOcrUseTime > OCR_IDLE_TIMEOUT)) {
+        UnloadEnglishOcr()
+    }
 }

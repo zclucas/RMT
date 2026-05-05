@@ -121,7 +121,7 @@
     OnWorkGetCmdStr(wParam, lParam, msg, hwnd) {
         StringAddress := NumGet(lParam, 2 * A_PtrSize, "Ptr")  ; 检索 CopyDataStruct 的 lpData 成员.
         Cmd := StrGet(StringAddress)  ; 从结构中复制字符串.
-        paramArr := StrSplit(cmd, "_")
+        paramArr := StrSplit(cmd, "⫶")
         switch paramArr[1] {
             case "SetVari":
                 GetNameAndValueByParamArr(&NameArr, &ValueArr, paramArr)
@@ -187,35 +187,35 @@
 {
     WorkSetGlobalArray(Name, Value) {
         MySoftData.ArrayMap[Name] := Value
-        CmdStr := Format("SetArray_{}_{}", Name, GetArrayStr(Value))
+        CmdStr := Format("SetArray⫶{}⫶{}", Name, GetArrayStr(Value))
         MsgSendHandler(CmdStr)
     }
 
     WorkCloneGlobalArray(SourceArr, NewArrName) {
         MySoftData.ArrayMap[NewArrName] := SourceArr.Clone()
-        CMDStr := Format("CloneArray_{}_{}", GetArrayStr(SourceArr), NewArrName)
+        CMDStr := Format("CloneArray⫶{}⫶{}", GetArrayStr(SourceArr), NewArrName)
         MsgSendHandler(CmdStr)
     }
 
     WorkDeleteGlobalArray(ArrName) {
-        CMDStr := Format("DeleteArray_{}", ArrName)
+        CMDStr := Format("DeleteArray⫶{}", ArrName)
         MsgSendHandler(CmdStr)
     }
 
     WorkModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
         ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-        CMDStr := Format("ModifyArray_{}_{}_{}_{}_{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
+        CMDStr := Format("ModifyArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
         MsgSendHandler(CmdStr)
     }
 
     WorkInsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
         ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-        CMDStr := Format("InsertArray_{}_{}_{}_{}_{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
+        CMDStr := Format("InsertArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
         MsgSendHandler(CmdStr)
     }
 
     WorkRemoveAtGlobalArray(ArrName, MainIndex, Index) {
-        CMDStr := Format("RemoveAtArray_{}_{}_{}", ArrName, MainIndex, Index)
+        CMDStr := Format("RemoveAtArray⫶{}⫶{}⫶{}", ArrName, MainIndex, Index)
         MsgSendHandler(CmdStr)
     }
 
@@ -237,7 +237,7 @@
             return
 
         loop RealNameArr.Length {
-            NameValueCMDStr .= Format("_{}_{}", RealNameArr[A_Index], RealValueArr[A_Index])
+            NameValueCMDStr .= Format("⫶{}⫶{}", RealNameArr[A_Index], RealValueArr[A_Index])
             MySoftData.VariableMap[RealNameArr[A_Index]] := ValueArr[A_Index]
         }
         MsgSendHandler(NameValueCMDStr)
@@ -248,7 +248,7 @@
         NameValueCMDStr := "DelVari"
         loop NameArr.Length {
             if (MySoftData.VariableMap.Has(NameArr[A_Index])) {
-                NameValueCMDStr .= Format("_{}", NameArr[A_Index])
+                NameValueCMDStr .= Format("⫶{}", NameArr[A_Index])
                 MySoftData.VariableMap.Delete(NameArr[A_Index])
                 RealNameArr.Push(NameArr[A_Index])
             }
@@ -277,12 +277,12 @@
     }
 
     WorkSetTableItemState(tableIndex, itemIndex, state) {
-        str := Format("ItemState_{}_{}_{}", tableIndex, itemIndex, state)
+        str := Format("ItemState⫶{}⫶{}⫶{}", tableIndex, itemIndex, state)
         MsgSendHandler(str)
     }
 
     WorkSetItemPauseState(tableIndex, itemIndex, state) {
-        str := Format("PauseState_{}_{}_{}", tableIndex, itemIndex, state)
+        str := Format("PauseState⫶{}⫶{}⫶{}", tableIndex, itemIndex, state)
         MsgSendHandler(str)
     }
 }
@@ -290,7 +290,7 @@
 ;子程序告诉主程动作
 {
     WorkCMDReport(cmdStr) {
-        str := Format("Report_{}", cmdStr)
+        str := Format("Report⫶{}", cmdStr)
         MsgSendHandler(str)
     }
 
@@ -299,22 +299,22 @@
     }
 
     WorkMsgBoxContent(content) {
-        str := Format("MsgBox_{}", content)
+        str := Format("MsgBox⫶{}", content)
         MsgSendHandler(str)
     }
 
     WorkToolTipContent(content) {
-        str := Format("ToolTip_{}", content)
+        str := Format("ToolTip⫶{}", content)
         MsgSendHandler(str)
     }
 
     WorkMacroCount(content) {
-        str := Format("MacroCount_{}", content)
+        str := Format("MacroCount⫶{}", content)
         MsgSendHandler(str)
     }
 
     WorkViGJoySetState(JoyType, Key, Value) {
-        str := Format("Joy_{}_{}_{}", JoyType, Key, Value)
+        str := Format("Joy⫶{}⫶{}⫶{}", JoyType, Key, Value)
         MsgSendHandler(str)
     }
 }

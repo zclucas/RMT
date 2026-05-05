@@ -64,7 +64,7 @@ GetScreenTextObjArr(X1, Y1, X2, Y2, mode) {
     }
 
     ; 调用 ocr_from_bitmapdata 方法
-    ocr := mode == 1 ? MyChineseOcr : MyEnglishOcr
+    ocr := mode == 1 ? GetChineseOcr() : GetEnglishOcr()
     result := ocr.ocr_from_bitmapdata(BITMAP_DATA, , true)
 
     ; 解锁位图
@@ -99,7 +99,7 @@ GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode) {
     searchH := Y2 - Y1
     matPtr := DllCall("RMT_OpenCV.dll\CaptureWinMat", "Int", hwnd, "Int", searchX, "Int", searchY,
         "Int", searchW, "Int", searchH, "Cdecl Ptr")
-    ocr := mode == 1 ? MyChineseOcr : MyEnglishOcr
+    ocr := mode == 1 ? GetChineseOcr() : GetEnglishOcr()
 
     res := ocr.ocr_from_mat(matPtr, , true)
     DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")    ;释放mat，防止内存泄露

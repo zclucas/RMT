@@ -155,8 +155,8 @@ SwapArrValue(Arr, indexA, indexB, valueType := 1) {
 
 PluginInit() {
     global MyWorkPool := WorkPool()
-    global MyChineseOcr := RapidOcr(A_ScriptDir)
-    global MyEnglishOcr := RapidOcr(A_ScriptDir, 2)
+    global MyChineseOcr := 0  ; 懒加载：首次使用时才初始化
+    global MyEnglishOcr := 0   ; 懒加载：首次使用时才初始化
     global MyPToken := Gdip_Startup()
 
     if (MySoftData.HasJoyMacro)
@@ -175,6 +175,8 @@ PluginInit() {
     RMTPath := A_ScriptDir "\Plugins\RMT\RMT.dll"
     RMT_ASM := CLR_LoadLibrary(RMTPath)   ;加载RMT程序集
     global RMT_Http := RMT_ASM.CreateInstance("RMT.Http")     ; 创建对象实例
+
+    SetTimer(CheckOcrIdle, 60000)
 }
 
 OnToolAlwaysOnTop(*) {
@@ -308,7 +310,7 @@ SubMacroStopAction(tableIndex, itemIndex) {
 }
 
 SetGlobalArray(Name, Value) {
-    CMDStr := Format("SetArray_{}_{}", Name, GetArrayStr(Value))
+    CMDStr := Format("SetArray⫶{}⫶{}", Name, GetArrayStr(Value))
     MySoftData.ArrayMap[Name] := Value
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
@@ -321,7 +323,7 @@ SetGlobalArray(Name, Value) {
 }
 
 CloneGlobalArray(SourceArr, NewArrName) {
-    CMDStr := Format("CloneArray_{}_{}", GetArrayStr(SourceArr), NewArrName)
+    CMDStr := Format("CloneArray⫶{}⫶{}", GetArrayStr(SourceArr), NewArrName)
     MySoftData.ArrayMap[NewArrName] := SourceArr.Clone()
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
@@ -334,7 +336,7 @@ CloneGlobalArray(SourceArr, NewArrName) {
 }
 
 DeleteGlobalArray(ArrName) {
-    CMDStr := Format("DeleteArray_{}", ArrName)
+    CMDStr := Format("DeleteArray⫶{}", ArrName)
     MySoftData.ArrayMap.Delete(ArrName)
     MyVarListenGui.Refresh()
     IsMuti := MyWorkPool.CheckEnableMutiThread()
@@ -348,7 +350,7 @@ DeleteGlobalArray(ArrName) {
 
 ModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
     ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-    CMDStr := Format("ModifyArray_{}_{}_{}_{}_{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
+    CMDStr := Format("ModifyArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
     SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
     SourceArr[Index] := Value
     MyVarListenGui.Refresh()
@@ -363,7 +365,7 @@ ModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
 
 InsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
     ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-    CMDStr := Format("InsertArray_{}_{}_{}_{}_{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
+    CMDStr := Format("InsertArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
     SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
     SourceArr.InsertAt(Index, Value)
     MyVarListenGui.Refresh()
@@ -377,7 +379,7 @@ InsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
 }
 
 RemoveAtGlobalArray(ArrName, MainIndex, Index) {
-    CMDStr := Format("RemoveAtArray_{}_{}_{}", ArrName, MainIndex, Index)
+    CMDStr := Format("RemoveAtArray⫶{}⫶{}⫶{}", ArrName, MainIndex, Index)
     SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
     SourceArr.RemoveAt(Index)
     MyVarListenGui.Refresh()
@@ -408,7 +410,7 @@ SetGlobalVariable(NameArr, ValueArr, ignoreExist) {
         return
 
     loop RealNameArr.Length {
-        NameValueCMDStr .= Format("_{}_{}", RealNameArr[A_Index], RealValueArr[A_Index])
+        NameValueCMDStr .= Format("⫶{}⫶{}", RealNameArr[A_Index], RealValueArr[A_Index])
         MySoftData.VariableMap[RealNameArr[A_Index]] := ValueArr[A_Index]
     }
     MyVarListenGui.Refresh()
@@ -426,7 +428,7 @@ DelGlobalVariable(NameArr) {
     NameValueCMDStr := "DelVari"
     loop NameArr.Length {
         if (MySoftData.VariableMap.Has(NameArr[A_Index])) {
-            NameValueCMDStr .= Format("_{}", NameArr[A_Index])
+            NameValueCMDStr .= Format("⫶{}", NameArr[A_Index])
             MySoftData.VariableMap.Delete(NameArr[A_Index])
             RealNameArr.Push(NameArr[A_Index])
         }
@@ -450,7 +452,7 @@ SetCMDTipValue(value) {
     if (IsMuti) {
         workerList := MyWorkPool.GetActiveWorkerList()
         loop workerList.Length {
-            str := Format("CMDTip_{}", value)
+            str := Format("CMDTip⫶{}", value)
             MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], str)
         }
     }
@@ -515,7 +517,7 @@ SetItemPauseState(tableIndex, itemIndex, state) {
 
     if (WorkerIndex != 0) {
         workPath := MyWorkPool.GetWorkPath(WorkerIndex)
-        str := Format("PauseState_{}_{}_{}", tableIndex, itemIndex, state)
+        str := Format("PauseState⫶{}⫶{}⫶{}", tableIndex, itemIndex, state)
         MyWorkPool.SendMessage(WM_COPYDATA, workPath, str)
     }
 }
@@ -565,7 +567,7 @@ ToolTipTimer() {
 }
 
 ExcuteRMTCMDAction(Cmd) {
-    paramArr := StrSplit(Cmd, "_")
+    paramArr := StrSplit(Cmd, "⫶")
     switch paramArr[2] {
         case "截图":
             OnToolScreenShot()
@@ -644,7 +646,7 @@ ScreenShot(X1, Y1, X2, Y2, FileName) {
 OnToolTextFilterGetArea(x1, y1, x2, y2) {
     filePath := A_WorkingDir "\Images\ScreenShot\TextFilter.png"
     ScreenShot(x1, y1, x2, y2, filePath)
-    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? MyChineseOcr : MyEnglishOcr
+    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? GetChineseOcr() : GetEnglishOcr()
     result := ocr.ocr_from_file(filePath)
     ToolCheckInfo.ToolTextCtrl.Value := result
     SetClipboard(result)
@@ -656,7 +658,7 @@ OnToolTextCheckScreenShot() {
     {
         filePath := A_WorkingDir "\Images\ScreenShot\TextFilter.png"
         SaveClipToBitmap(filePath)
-        ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? MyChineseOcr : MyEnglishOcr
+        ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? GetChineseOcr() : GetEnglishOcr()
         result := ocr.ocr_from_file(filePath)
         ToolCheckInfo.ToolTextCtrl.Value := result
         SetClipboard(result)

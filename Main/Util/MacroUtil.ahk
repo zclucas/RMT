@@ -302,11 +302,29 @@ OnMMProOnce(tableItem, index, Data) {
         DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE, "UInt", PosX, "UInt", PosY, "UInt", 0, "UInt", 0)
     }
     else if (Data.ActionType == 1) {
-        if (Data.IsRelative) {
-            MouseMove(PosX, PosY, Speed, "R")
+        IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
+        if (IsHumanMouse) {
+            hm := HumanMouse.GetInstance()
+            hm.SetParams({
+                IsEnabled: true,
+                Speed: Speed
+            })
+
+            if (Data.IsRelative) {
+                MouseGetPos(&curX, &curY)
+                hm.Move(curX + PosX, curY + PosY)
+            }
+            else {
+                hm.Move(PosX, PosY)
+            }
         }
-        else
-            MouseMove(PosX, PosY, Speed)
+        else {
+            if (Data.IsRelative) {
+                MouseMove(PosX, PosY, Speed, "R")
+            }
+            else
+                MouseMove(PosX, PosY, Speed)
+        }
     }
     else if (Data.ActionType == 2 || Data.ActionType == 3) {
         SetDefaultMouseSpeed(Speed)
@@ -826,6 +844,7 @@ OnRMTCMD(tableItem, cmd, index) {
         BlockInput true
     }
     else {
+        cmd := StrReplace(cmd, "_", "⫶")
         MyExcuteRMTCMDAction(cmd)
     }
 }
@@ -922,7 +941,7 @@ OnToolTextFilterSelectImage(*) {
     path := FileSelect(, , GetLang("选择图片"))
     if (path == "")
         return
-    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? MyChineseOcr : MyEnglishOcr
+    ocr := ToolCheckInfo.OCRTypeCtrl.Value == 1 ? GetChineseOcr() : GetEnglishOcr()
     result := ocr.ocr_from_file(path)
     ToolCheckInfo.ToolTextCtrl.Value := result
     SetClipboard(result)

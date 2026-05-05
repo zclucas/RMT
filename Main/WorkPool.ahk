@@ -312,7 +312,7 @@ class WorkPool {
         this.OnRecordMessage(wParam)
         StringAddress := NumGet(lParam, 2 * A_PtrSize, "Ptr")  ; 检索 CopyDataStruct 的 lpData 成员.
         Cmd := StrGet(StringAddress)  ; 从结构中复制字符串.
-        paramArr := StrSplit(Cmd, "_")
+        paramArr := StrSplit(Cmd, "⫶")
         switch paramArr[1] {
             case "SetVari":
                 GetNameAndValueByParamArr(&NameArr, &ValueArr, paramArr)
@@ -330,7 +330,7 @@ class WorkPool {
             case "PauseState":
                 SetItemPauseState(paramArr[2], Integer(paramArr[3]), Integer(paramArr[4]))
             case "MsgBox":
-                paramArr := StrSplit(Cmd, "_", , 2)
+                paramArr := StrSplit(Cmd, "⫶", , 2)
                 MsgBoxContent(paramArr[2])
             case "ToolTip":
                 ToolTipContent(paramArr[2])

@@ -21,6 +21,7 @@ class JoyMacro {
 
     __New() {
         this.MacroMap := Map()
+        this.ComboMacroMap := Map()
         this.interval := 50
         this.controllerNum := 10
         this.joyBtnNum := 32
@@ -48,6 +49,24 @@ class JoyMacro {
     }
 
     AddMacro(key, action, processName) {
+        if (InStr(key, " & ")) {
+            keyParts := StrSplit(key, " & ")
+            if (keyParts.Length == 2) {
+                ahkKey1 := MySoftData.JoyXboxToAhkMap[keyParts[1]]
+                ahkKey2 := MySoftData.JoyXboxToAhkMap[keyParts[2]]
+
+                if (ahkKey1 == "" || ahkKey2 == "") {
+                    return
+                }
+
+                comboKey := ahkKey1 " & " ahkKey2
+                macro := JoyMacro.MacroInfo(action, processName)
+                this.ComboMacroMap.Set(comboKey, macro)
+                this.Enable()
+                return
+            }
+        }
+
         macro := JoyMacro.MacroInfo(action, processName)
         ahkKey := MySoftData.JoyXboxToAhkMap[key]
         this.MacroMap.Set(ahkKey, macro)
@@ -55,7 +74,7 @@ class JoyMacro {
     }
 
     Enable() {
-        if (this.MacroMap.Count == 0)
+        if (this.MacroMap.Count == 0 && this.ComboMacroMap.Count == 0)
             return
         this.JoyIndexArr := []
         loop this.controllerNum {
@@ -68,6 +87,12 @@ class JoyMacro {
     }
 
     CheckMacro() {
+        if (this.ComboMacroMap.Count > 0) {
+            for key, macro in this.ComboMacroMap {
+                this.CheckComboMacro(key)
+            }
+        }
+
         for key, macro in this.MacroMap {
             isJoyAxis := this.joyAxises.Has(key)
             isJoyPOV := this.joyPOVMap.Has(key)
@@ -95,6 +120,118 @@ class JoyMacro {
         }
 
         this.CheckXboxBtnOrPOVMacro(joyBtnSymbol)
+    }
+
+    CheckComboMacro(comboKey) {
+        keyParts := StrSplit(comboKey, " & ")
+        if (keyParts.Length != 2)
+            return
+
+        key1 := keyParts[1]
+        key2 := keyParts[2]
+
+        isAxis1 := this.joyAxises.Has(key1)
+        isPOV1 := this.joyPOVMap.Has(key1)
+        isAxis2 := this.joyAxises.Has(key2)
+        isPOV2 := this.joyPOVMap.Has(key2)
+
+        isBtn1 := !isAxis1 && !isPOV1
+        isBtn2 := !isAxis2 && !isPOV2
+
+        loop this.JoyIndexArr.Length {
+            index := this.JoyIndexArr[A_Index]
+            pressed1 := false
+            pressed2 := false
+
+            if (isBtn1) {
+                pressed1 := GetKeyState(index "" key1)
+            }
+            else if (isPOV1) {
+                cont_info := GetKeyState(index "JoyInfo")
+                if InStr(cont_info, "P") {
+                    state := GetKeyState(index "JoyPOV")
+                    value := this.joyPOVMap.Get(key1)
+                    pressed1 := (state == value)
+                }
+            }
+            else if (isAxis1) {
+                cont_info := GetKeyState(index "JoyInfo")
+                if (cont_info != "ZRUPD") {
+                    joyAxisName := SubStr(key1, 1, 4)
+                    state := GetKeyState(index joyAxisName)
+                    valueSection := this.GetAxisTriggerSection(key1, false)
+                    pressed1 := (IsNumber(state) && state >= valueSection[1] && state <= valueSection[2])
+                }
+            }
+
+            if (isBtn2) {
+                pressed2 := GetKeyState(index "" key2)
+            }
+            else if (isPOV2) {
+                cont_info := GetKeyState(index "JoyInfo")
+                if InStr(cont_info, "P") {
+                    state := GetKeyState(index "JoyPOV")
+                    value := this.joyPOVMap.Get(key2)
+                    pressed2 := (state == value)
+                }
+            }
+            else if (isAxis2) {
+                cont_info := GetKeyState(index "JoyInfo")
+                if (cont_info != "ZRUPD") {
+                    joyAxisName := SubStr(key2, 1, 4)
+                    state := GetKeyState(index joyAxisName)
+                    valueSection := this.GetAxisTriggerSection(key2, false)
+                    pressed2 := (IsNumber(state) && state >= valueSection[1] && state <= valueSection[2])
+                }
+            }
+
+            if (pressed1 && pressed2) {
+                this.ComboMacroMap.Get(comboKey).Action()
+                return
+            }
+        }
+
+        this.CheckXboxComboMacro(comboKey)
+    }
+
+    CheckXboxComboMacro(comboKey) {
+        keyParts := StrSplit(comboKey, " & ")
+        if (keyParts.Length != 2)
+            return
+
+        key1 := keyParts[1]
+        key2 := keyParts[2]
+
+        State := this.XInputState(0)
+        if (State == 0)
+            return
+
+        pressed1 := false
+        pressed2 := false
+
+        if (this.xboxJoyBtnMap.Has(key1)) {
+            bitSymbol1 := this.xboxJoyBtnMap.Get(key1)
+            pressed1 := (State.wButtons >> bitSymbol1) & 1
+        }
+        else if (this.xboxJosAxisMap.Has(key1)) {
+            value1 := this.GetXboxAxisValue(key1)
+            valueSection1 := this.GetAxisTriggerSection(key1, true)
+            pressed1 := (value1 != 0 && value1 >= valueSection1[1] && value1 <= valueSection1[2])
+        }
+
+        if (this.xboxJoyBtnMap.Has(key2)) {
+            bitSymbol2 := this.xboxJoyBtnMap.Get(key2)
+            pressed2 := (State.wButtons >> bitSymbol2) & 1
+        }
+        else if (this.xboxJosAxisMap.Has(key2)) {
+            value2 := this.GetXboxAxisValue(key2)
+            valueSection2 := this.GetAxisTriggerSection(key2, true)
+            pressed2 := (value2 != 0 && value2 >= valueSection2[1] && value2 <= valueSection2[2])
+        }
+
+        if (pressed1 && pressed2) {
+            this.ComboMacroMap.Get(comboKey).Action()
+        }
     }
 
     CheckPOVMacro(joyPOVSymbol) {
