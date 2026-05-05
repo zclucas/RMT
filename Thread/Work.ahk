@@ -50,6 +50,7 @@ global MyModifyGlobalArray := WorkModifyGlobalArray
 global MyInsertGlobalArray := WorkInsertGlobalArray
 global MyRemoveAtGlobalArray := WorkRemoveAtGlobalArray
 WorkOpenCVLoadDll()
+SetTimer(CheckOcrIdle, 60000)
 
 ; 注册消息
 OnMessage(WM_TR_MACRO, OnWorkTriggerMacro)

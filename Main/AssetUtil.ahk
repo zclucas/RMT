@@ -17,8 +17,6 @@
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\PluginUtil.ahk
-#Include Util\MacroClipboardUtil.ahk
-#Include Util\MergeUtil.ahk
 global WM_COPYDATA := 0x4a ;传递字符串，系统信息
 
 global WM_LOAD_WORK := 0x500  ;资源加载完成事件
@@ -1908,7 +1906,19 @@ ValidateCmdPath(&Data, pathFieldName, selectTitle, filter, tableItem := "", inde
     return true
 }
 
-; ===== OCR 懒加载/定时回收函数 =====
+; ===== 项目根目录 / OCR 懒加载/定时回收函数 =====
+
+GetProjectRoot() {
+    root := A_ScriptDir
+    if !FileExist(root '\Plugins\RapidOcr') {
+        root .= '\..'
+        loop files, root {
+            root := A_LoopFileFullPath
+            break
+        }
+    }
+    return root
+}
 
 global LastChineseOcrUseTime := 0
 global LastEnglishOcrUseTime := 0
@@ -1917,7 +1927,7 @@ global OCR_IDLE_TIMEOUT := 300000
 GetChineseOcr() {
     global MyChineseOcr, LastChineseOcrUseTime
     if (!MyChineseOcr) {
-        MyChineseOcr := RapidOcr(A_ScriptDir)
+        MyChineseOcr := RapidOcr(GetProjectRoot())
     }
     LastChineseOcrUseTime := A_TickCount
     return MyChineseOcr
@@ -1926,7 +1936,7 @@ GetChineseOcr() {
 GetEnglishOcr() {
     global MyEnglishOcr, LastEnglishOcrUseTime
     if (!MyEnglishOcr) {
-        MyEnglishOcr := RapidOcr(A_ScriptDir, 2)
+        MyEnglishOcr := RapidOcr(GetProjectRoot(), 2)
     }
     LastEnglishOcrUseTime := A_TickCount
     return MyEnglishOcr
@@ -1935,6 +1945,7 @@ GetEnglishOcr() {
 UnloadChineseOcr() {
     global MyChineseOcr
     if (MyChineseOcr) {
+        MyChineseOcr.Destroy()
         MyChineseOcr := ""
     }
 }
@@ -1942,6 +1953,7 @@ UnloadChineseOcr() {
 UnloadEnglishOcr() {
     global MyEnglishOcr
     if (MyEnglishOcr) {
+        MyEnglishOcr.Destroy()
         MyEnglishOcr := ""
     }
 }

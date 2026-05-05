@@ -8,229 +8,97 @@
  ***********************************************************************/
 
 class RapidOcr {
-    static _dllHandle := 0
-    static _initialized := false
-
     ptr := 0
-
+    static dllModule := 0
+    static instanceCount := 0
     /**
-     * @param {String} scriptDir - 脚本所在目录，通常传入 A_ScriptDir
-     * @param {Integer} [mode] - 语言模式：1=中文(ch_models)，0=英文(en_models)，默认1
-     * @param {Map|Object} [config] - 可选配置，覆盖默认模型路径
-     *   - models: 模型目录路径
-     *   - det: det模型文件名
-     *   - rec: rec模型文件名
-     *   - cls: cls模型文件名
-     *   - keys:keys文件路径
-     *   - numThread:线程数，默认2
+     * @param {Map|Object} config Set det, rec, cls model location path, keys.txt path, thread number.
+     * @param {String} [config.models] dir of model files
+     * @param {String} [config.det] model file name of det
+     * @param {String} [config.rec] model file name of rec
+     * @param {String} [config.keys] keys file name
+     * @param {String} [config.cls] model file name of cls
+     * @param {Integer} [config.numThread] The thread number, default: 2
+     * @param {String} dllpath The path of RapidOcrOnnx.dll
      * @example
      * param := RapidOcr.OcrParam()
-     * param.doAngle := false
-     * ocr := RapidOcr.New(A_ScriptDir)
+     * param.doAngle := false ;, param.maxSideLen := 300
+     * ocr := RapidOcr({ models: A_ScriptDir '\models' })
      * MsgBox ocr.ocr_from_file('1.jpg', param)
      */
-    __New(scriptDir, mode := 1, config := 0) {
-        ; 加载DLL
-        if !RapidOcr._LoadDll(scriptDir) {
-            MsgBox 'Failed to load RapidOcrOnnx.dll'
-            return
-        }
-
-        ; 构建配置
-        cfg := RapidOcr._BuildConfig(scriptDir, mode, config)
-
-        ; 验证模型文件
-        if !RapidOcr._ValidateModels(cfg)
-            return
-
-        ; 初始化OCR
-        this.ptr := DllCall('RapidOcrOnnx\OcrInit', 'str', cfg['det_model'], 'str', cfg['cls_model'], 'str', cfg[
-            'rec_model'],
-            'str', cfg['keys_dict'], 'int', cfg['numThread'], 'Cdecl')
-        if !this.ptr {
-            MsgBox 'Failed to initialize OCR engine'
-            return
-        }
-    }
-
-    __Delete() {
-        if this.ptr {
-            DllCall('RapidOcrOnnx\OcrDestroy', 'ptr', this, 'Cdecl')
-        }
-    }
-
-    ; ===== Private Methods =====
-
-    /**
-     * 加载 RapidOcrOnnx.dll
-     * @param {String} scriptDir
-     * @returns {Boolean} 是否成功
-     */
-    static _LoadDll(scriptDir) {
-        if RapidOcr._dllHandle
-            return true
-
-        arch := (A_PtrSize * 8) 'bit'
-        dllPath := scriptDir '\Plugins\RapidOcr\' arch '\RapidOcrOnnx.dll'
-
-        RapidOcr._dllHandle := DllCall('LoadLibrary', 'str', dllPath, 'ptr')
-        return RapidOcr._dllHandle != 0
-    }
-
-    /**
-     * 构建配置对象
-     * @param {String} scriptDir
-     * @param {Integer} mode
-     * @param {Map|Object} config
-     * @returns {Map}
-     */
-    static _BuildConfig(scriptDir, mode, config) {
-        ; 默认模型目录
-        modelDir := (mode = 1 ? 'ch_models' : 'en_models')
-        defaultModels := scriptDir '\Plugins\RapidOcr\' modelDir
-
-        ; 解析传入的配置
-        if !config {
-            cfg := Map('models', defaultModels, 'numThread', 2)
-        } else if config.Has('models') {
-            cfg := config.Clone()
-        } else {
-            cfg := Map('models', defaultModels, 'numThread', 2)
-            for k, v in (config is Map ? config : config.OwnProps())
-                if k != 'models'
-                    cfg[k] := v
-        }
-
-        ; 添加路径分隔符
-        modelsPath := cfg['models']
-        if !(modelsPath ~= '[/\\]$')
-            modelsPath .= '\'
-        cfg['models'] := modelsPath
-
-        return this._FindModels(cfg)
-    }
-
-    /**
-     * 自动查找模型文件
-     * @param {Map} cfg
-     * @returns {Map}
-     */
-    static _FindModels(cfg) {
-        modelsPath := cfg['models']
-
-        ; 查找keys文件
-        if !cfg.Has('keys_dict') {
-            loop files modelsPath '*.txt' {
-                if A_LoopFileName ~= 'i)_keys|\.dict[_]' {
-                    cfg['keys_dict'] := A_LoopFileFullPath
-                    break
-                }
+    __New(path, mode := 1) {
+        modelDire := mode := 1 ? "ch_models" : "en_models"
+        config := { models: path "\Plugins\RapidOcr\" modelDire }
+        dllpath := path "\Plugins\RapidOcr\" (A_PtrSize * 8) "bit\RapidOcrOnnx.dll"
+        if (!RapidOcr.dllModule) {
+            RapidOcr.dllModule := DllCall('LoadLibrary', 'str', dllpath ?? A_LineFile '\..\' (A_PtrSize * 8) 'bit\RapidOcrOnnx.dll',
+            'ptr')
+            if (!RapidOcr.dllModule) {
+                return
             }
         }
-
-        ; 查找onnx模型文件
-        if !cfg.Has('det_model')
-            cfg['det_model'] := ''
-        if !cfg.Has('rec_model')
-            cfg['rec_model'] := ''
-        if !cfg.Has('cls_model')
-            cfg['cls_model'] := ''
-
-        loop files modelsPath '*.onnx' {
-            if RegExMatch(A_LoopFileName, 'i)_(det|cls|rec)[_.]', &m) {
-                key := m[1] '_model'
-                if !cfg.Has(key) || !cfg[key] {
-                    cfg[key] := A_LoopFileFullPath
-                }
-            }
-            ; 找到所有必需模型后可提前退出
-            if cfg['det_model'] && cfg['rec_model'] && cfg['cls_model']
-                break
-        }
-
-        return cfg
-    }
-
-    /**
-     * 验证模型文件
-     * @param {Map} cfg
-     */
-    static _ValidateModels(cfg) {
-        required := ['det_model', 'rec_model', 'keys_dict']
-        optional := ['cls_model']
-
-        for key in required {
-            if !cfg.Has(key) || !cfg[key] {
-                MsgBox 'Required model not found: ' key
-                return false
-            }
-            if !FileExist(cfg[key]) {
-                MsgBox 'Model file does not exist: ' cfg[key]
-                return false
+        if !IsSet(config)
+            config := { models: A_LineFile '\..\models' }
+        else if !HasProp(config, 'models')
+            config.models := A_LineFile '\..\models'
+        if !FileExist(config.models)
+            config.models := unset
+        det_model := cls_model := rec_model := keys_dict := '', numThread := 2
+        for k, v in (config is Map ? config : config.OwnProps()) {
+            switch k, false {
+                case 'det', 'cls', 'rec': %k%_model := v
+                case 'keys', 'dict': keys_dict := v
+                case 'det_model', 'cls_model', 'rec_model', 'keys_dict', 'numThread': %k% := v
+                case 'models', 'modelpath':
+                    if !(v ~= '[/\\]$')
+                        v .= '\'
+                    if !keys_dict {
+                        loop files v '*.txt'
+                            if A_LoopFileName ~= 'i)_(keys|dict)[_.]' {
+                                keys_dict := A_LoopFileFullPath
+                                break
+                            }
+                    }
+                    loop files v '*.onnx' {
+                        if RegExMatch(A_LoopFileName, 'i)_(det|cls|rec)[_.]', &m) && !%m[1]%_model
+                            %m[1]%_model := A_LoopFileFullPath
+                    } until det_model && cls_model && rec_model
             }
         }
-        return true
+        for k in ['keys_dict', 'det_model', 'cls_model', 'rec_model']
+            if !%k% {
+                if k != 'cls_model'
+                    throw ValueError('No value is specified: ' k)
+            } else if !FileExist(%k%)
+                throw TargetError('file "' k '" does not exist')
+
+        this.ptr := DllCall('RapidOcrOnnx\OcrInit', 'str', det_model, 'str', cls_model, 'str', rec_model, 'str',
+            keys_dict, 'int', numThread, 'Cdecl')
+        if (this.ptr)
+            RapidOcr.instanceCount++
+    }
+    __Delete() => this.ptr && RapidOcr._releaseInstance(this)
+
+    Destroy() {
+        if (this.ptr) {
+            RapidOcr._releaseInstance(this)
+            this.ptr := 0
+        }
     }
 
-    ; ===== Public Methods =====
-
-    /**
-     * 从Mat执行OCR
-     * @param {Integer} mat
-     * @param {RapidOcr.OcrParam} param
-     * @param {Boolean} allresult
-     * @returns {RapidOcr.OcrResult}
-     */
-    ocr_from_mat(mat, param := 0, allresult := false) {
-        return DllCall('RapidOcrOnnx\OcrDetectMat', 'ptr', this, 'ptr', mat,
-            'ptr', param, 'ptr', RapidOcr._cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl Int') ? res : ''
+    static _releaseInstance(instance) {
+        DllCall('RapidOcrOnnx\OcrDestroy', 'ptr', instance, 'Cdecl')
+        RapidOcr.instanceCount--
+        if (RapidOcr.instanceCount <= 0 && RapidOcr.dllModule) {
+            DllCall('FreeLibrary', 'ptr', RapidOcr.dllModule)
+            RapidOcr.dllModule := 0
+            RapidOcr.instanceCount := 0
+        }
     }
 
-    /**
-     * 从图片文件执行OCR
-     * @param {String} picpath
-     * @param {RapidOcr.OcrParam} param
-     * @param {Boolean} allresult
-     * @returns {RapidOcr.OcrResult}
-     */
-    ocr_from_file(picpath, param := 0, allresult := false) {
-        return DllCall('RapidOcrOnnx\OcrDetectFile', 'ptr', this, 'astr',
-            picpath, 'ptr', param, 'ptr', RapidOcr._cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res : ''
-    }
-
-    /**
-     * 从二进制数据执行OCR
-     * @param {Buffer} data
-     * @param {Integer} size
-     * @param {RapidOcr.OcrParam} param
-     * @param {Boolean} allresult
-     * @returns {RapidOcr.OcrResult}
-     */
-    ocr_from_binary(data, size, param := 0, allresult := false) {
-        return DllCall('RapidOcrOnnx\OcrDetectBinary', 'ptr', this,
-            'ptr', data, 'uptr', size, 'ptr', param, 'ptr', RapidOcr._cb(2 - !allresult), 'ptr', ObjPtr(&res)) ? res :
-            ''
-    }
-
-    /**
-     * 从Bitmap数据执行OCR
-     * @param {Buffer} data
-     * @param {RapidOcr.OcrParam} param
-     * @param {Boolean} allresult
-     * @returns {RapidOcr.OcrResult}
-     */
-    ocr_from_bitmapdata(data, param := 0, allresult := false) {
-        return DllCall('RapidOcrOnnx\OcrDetectBitmapData', 'ptr',
-            this, 'ptr', data, 'ptr', param, 'ptr', RapidOcr._cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res :
-            ''
-    }
-
-    ; ===== Static Callbacks =====
-
-    static _cb(i) {
-        static cbs := [
-            { ptr: CallbackCreate(get_text), __Delete: this => CallbackFree(this.ptr) }, 
-            { ptr: CallbackCreate(get_result), __Delete: this => CallbackFree(this.ptr) },]
+    static __cb(i) {
+        static cbs := [{ ptr: CallbackCreate(get_text), __Delete: this => CallbackFree(this.ptr) }, { ptr: CallbackCreate(
+            get_result), __Delete: this => CallbackFree(this.ptr) },]
         return cbs[i]
         get_text(userdata, ptext, presult) => %ObjFromPtrAddRef(userdata)% := StrGet(ptext, 'utf-8')
         get_result(userdata, ptext, presult) {
@@ -240,7 +108,21 @@ class RapidOcr {
         }
     }
 
-    ; ===== Nested Classes =====
+    ; opencv4.8.0 Mat
+    ocr_from_mat(mat, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectMat', 'ptr', this, 'ptr', mat,
+        'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl Int') ? res : ''
+
+    ; path of pic
+    ocr_from_file(picpath, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectFile', 'ptr', this, 'astr',
+        picpath, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res : ''
+
+    ; Image binary data
+    ocr_from_binary(data, size, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectBinary', 'ptr', this,
+        'ptr', data, 'uptr', size, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res)) ? res : ''
+
+    ; `struct BITMAP_DATA { void *bits; uint pitch; int width, height, bytespixel;};`
+    ocr_from_bitmapdata(data, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectBitmapData', 'ptr',
+        this, 'ptr', data, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res : ''
 
     class OcrParam extends Buffer {
         __New(param?) {
@@ -252,49 +134,42 @@ class RapidOcr {
                 if this.Base.HasOwnProp(k)
                     this.%k% := v
         }
-
         ; default: 50
         padding {
             get => NumGet(this, 0, 'int')
             set => NumPut('int', Value, this, 0)
         }
-
         ; default: 1024
         maxSideLen {
             get => NumGet(this, 4, 'int')
             set => NumPut('int', Value, this, 4)
         }
-
-        ; default: 0.6
+        ; default: 0.5
         boxScoreThresh {
             get => NumGet(this, 8, 'float')
             set => NumPut('float', Value, this, 8)
         }
-
         ; default: 0.3
         boxThresh {
             get => NumGet(this, 12, 'float')
             set => NumPut('float', Value, this, 12)
         }
-
-        ; default: 2.0
+        ; default: 1.6
         unClipRatio {
             get => NumGet(this, 16, 'float')
             set => NumPut('float', Value, this, 16)
         }
-
-        ; default: 1
+        ; default: false
         doAngle {
             get => NumGet(this, 20, 'int')
             set => NumPut('int', Value, this, 20)
         }
-
-        ; default: 1
+        ; default: false
         mostAngle {
             get => NumGet(this, 24, 'int')
             set => NumPut('int', Value, this, 24)
         }
-
+        ; Output path of image with the boxes
         outputPath {
             get => StrGet(NumGet(this, 24 + A_PtrSize, 'ptr') || StrPtr(''), 'cp0')
             set => (StrPut(Value, this.__outputbuf := Buffer(StrPut(Value, 'cp0')), 'cp0'), NumPut('ptr', this.__outputbuf

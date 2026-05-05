@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Main\Util\MergeUtil.ahk
 
 class ConfigMergeGui {
     __New() {
