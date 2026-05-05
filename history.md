@@ -18,6 +18,7 @@
 - Added a WebView settings diagnostics entry that copies runtime and packaging context for support.
 - Ignored local runtime settings and generated worker executables to avoid accidental commits.
 - Tightened React bridge action typing so payloads are checked per WebView action.
+- Added non-interactive packaging options, local Ahk2Exe discovery, and an Ahk2Exe ComSpec shim for release automation.
 
 ## v1.1.3
 

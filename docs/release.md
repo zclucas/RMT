@@ -40,6 +40,14 @@ Run the existing packaging script from the repository root:
 .\PackRMT.ps1
 ```
 
+For non-interactive release packaging:
+
+```powershell
+.\PackRMT.ps1 -ReleaseType both -NoWait
+```
+
+The script creates a local `.tools\ComSpecShim\cmd.exe` helper when needed to avoid AutoHotkey 2.0.26 hanging during Ahk2Exe's automatic `/iLib` scan.
+
 Packaging behavior:
 
 - Reads the version from `Main/UIUtil.ahk`.
