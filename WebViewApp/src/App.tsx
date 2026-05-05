@@ -52,10 +52,84 @@ type ActionArgs<T extends RmtActionType> = [RmtActionPayload<T>] extends [never]
   ? [payload?: never]
   : [payload: RmtActionPayload<T>];
 type RunAction = <T extends RmtActionType>(type: T, ...args: ActionArgs<T>) => void | Promise<void>;
+type RmtThemeMode = "light" | "dark";
+type RmtColorPreset = {
+  id: string;
+  name: string;
+  primaryColor: string;
+  secondaryColor: string;
+  primaryHoverColor: string;
+  primaryTextColor: string;
+  titleTextColor: string;
+  mode: RmtThemeMode;
+};
 
 const uiDesignWidth = 1360;
 const uiDesignHeight = 720;
 const minUiScale = 0.65;
+const colorPresets: RmtColorPreset[] = [
+  {
+    id: "rmt-green",
+    name: "若梦绿",
+    primaryColor: "#178a56",
+    secondaryColor: "#dff5e8",
+    primaryHoverColor: "#116b43",
+    primaryTextColor: "#ffffff",
+    titleTextColor: "#0b2819",
+    mode: "light"
+  },
+  {
+    id: "day-white",
+    name: "日间白",
+    primaryColor: "#f8fafc",
+    secondaryColor: "#ffffff",
+    primaryHoverColor: "#eef2f6",
+    primaryTextColor: "#17202a",
+    titleTextColor: "#17202a",
+    mode: "light"
+  },
+  {
+    id: "night-black",
+    name: "夜间黑",
+    primaryColor: "#111418",
+    secondaryColor: "#2a3036",
+    primaryHoverColor: "#1c2228",
+    primaryTextColor: "#f8fafc",
+    titleTextColor: "#f8fafc",
+    mode: "dark"
+  },
+  {
+    id: "sea-blue",
+    name: "海蓝",
+    primaryColor: "#1f6fb2",
+    secondaryColor: "#dceeff",
+    primaryHoverColor: "#17578d",
+    primaryTextColor: "#ffffff",
+    titleTextColor: "#10283d",
+    mode: "light"
+  },
+  {
+    id: "warm-amber",
+    name: "暖琥珀",
+    primaryColor: "#9a6a00",
+    secondaryColor: "#fff2cc",
+    primaryHoverColor: "#765100",
+    primaryTextColor: "#ffffff",
+    titleTextColor: "#362605",
+    mode: "light"
+  },
+  {
+    id: "soft-rose",
+    name: "柔玫",
+    primaryColor: "#a04655",
+    secondaryColor: "#fde5ea",
+    primaryHoverColor: "#7f3643",
+    primaryTextColor: "#ffffff",
+    titleTextColor: "#3b131a",
+    mode: "light"
+  }
+];
+const defaultColorPreset = colorPresets[0];
 
 function cloneState(state: RmtState): RmtState {
   return structuredClone(state);
@@ -63,6 +137,38 @@ function cloneState(state: RmtState): RmtState {
 
 function classNames(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
+}
+
+function getColorPreset(presetId?: string): RmtColorPreset {
+  return colorPresets.find((preset) => preset.id === presetId) ?? defaultColorPreset;
+}
+
+function getThemeStyle(preset: RmtColorPreset, uiScale: number): React.CSSProperties {
+  const darkMode = preset.mode === "dark";
+  return {
+    "--rmt-ui-scale": String(uiScale),
+    "--rmt-primary": preset.primaryColor,
+    "--rmt-primary-hover": preset.primaryHoverColor,
+    "--rmt-primary-text": preset.primaryTextColor,
+    "--rmt-primary-soft": preset.secondaryColor,
+    "--rmt-title-bg": preset.secondaryColor,
+    "--rmt-title-text": preset.titleTextColor,
+    "--rmt-title-bottom": preset.primaryColor,
+    "--rmt-app-mark-bg": preset.primaryColor,
+    "--rmt-app-mark-text": preset.primaryTextColor,
+    "--rmt-bg": darkMode ? "#121417" : "#f5f5f5",
+    "--rmt-surface": darkMode ? "#1d2228" : "#ffffff",
+    "--rmt-surface-muted": darkMode ? "#252b32" : "#f8fafb",
+    "--rmt-border": darkMode ? "#343c45" : "#d8dfe6",
+    "--rmt-border-strong": darkMode ? "#46505b" : "#cfd7df",
+    "--rmt-text": darkMode ? "#eef3f8" : "#17202a",
+    "--rmt-muted": darkMode ? "#a7b1bd" : "#566674",
+    "--rmt-button-bg": darkMode ? "#252b32" : "#ffffff",
+    "--rmt-button-hover": darkMode ? "#303740" : "#f1f5f8",
+    "--rmt-danger": darkMode ? "#f87171" : "#f3423a",
+    "--rmt-info": darkMode ? "#5db4f4" : "#2698e6",
+    "--rmt-neutral-action": darkMode ? "#5b6570" : "#777777"
+  } as React.CSSProperties;
 }
 
 export default function App() {
@@ -175,14 +281,13 @@ export default function App() {
     void runAction("updateTool", { field, value });
   }
 
-  const scaleStyle = {
-    "--rmt-ui-scale": String(uiScale)
-  } as React.CSSProperties;
+  const colorPreset = useMemo(() => getColorPreset(state.settings.colorPresetId), [state.settings.colorPresetId]);
+  const scaleStyle = getThemeStyle(colorPreset, uiScale);
 
   return (
     <div className="rmt-scale-viewport" ref={scaleHostRef}>
       <div className="rmt-scale-content" style={scaleStyle}>
-        <div className="app-shell classic-app">
+        <div className="app-shell classic-app" data-theme-mode={colorPreset.mode}>
           <TitleBar state={state} runAction={runAction} />
 
           <div className="classic-body">
@@ -293,8 +398,7 @@ function TopTabs({
   runAction: RunAction;
 }) {
   const hiddenSet = new Set(hiddenTopButtonIndexes);
-  const visibleTabs = state.tabs.filter((tab) => !hiddenSet.has(tab.index));
-  const hiddenTabs = state.tabs.filter((tab) => hiddenSet.has(tab.index));
+  const visibleTabs = state.tabs.filter((tab) => tab.kind === "settings" || !hiddenSet.has(tab.index));
 
   return (
     <nav className="classic-tabs" aria-label={uiCopy.tabs.ariaLabel}>
@@ -312,30 +416,6 @@ function TopTabs({
           </button>
         );
       })}
-      {hiddenTabs.length > 0 && (
-        <details className="top-tabs-overflow">
-          <summary title={uiCopy.tabs.hiddenTopButtons}>
-            <MenuIcon size={15} />
-            <span>{uiCopy.tabs.more}</span>
-          </summary>
-          <div className="top-tabs-overflow-menu">
-            {hiddenTabs.map((tab) => {
-              const Icon = getTabIcon(tab);
-              return (
-                <button
-                  className={classNames(tab.index === state.activeTabIndex && "active")}
-                  key={tab.index}
-                  onClick={() => runAction("setTab", { tabIndex: tab.index })}
-                  type="button"
-                >
-                  <Icon size={15} />
-                  <span>{getTabLabel(tab)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </details>
-      )}
     </nav>
   );
 }
@@ -925,8 +1005,15 @@ function SettingsPanel({
   runAction: RunAction;
 }) {
   const hiddenTopButtonSet = new Set(settings.hiddenTopButtonIndexes);
+  const topButtonTabs = state.tabs.filter((tab) => tab.kind !== "settings");
+  const activeColorPreset = getColorPreset(settings.colorPresetId);
 
   function setTopButtonVisible(tabIndex: number, visible: boolean) {
+    const targetTab = state.tabs.find((tab) => tab.index === tabIndex);
+    if (targetTab?.kind === "settings") {
+      return;
+    }
+
     const hiddenIndexes = new Set(settings.hiddenTopButtonIndexes);
     if (visible) {
       hiddenIndexes.delete(tabIndex);
@@ -936,6 +1023,11 @@ function SettingsPanel({
     const nextValue = Array.from(hiddenIndexes).sort((a, b) => a - b);
     patchLocalSettings("hiddenTopButtonIndexes", nextValue);
     updateSetting("hiddenTopButtonIndexes", nextValue);
+  }
+
+  function setColorPreset(presetId: string) {
+    patchLocalSettings("colorPresetId", presetId);
+    updateSetting("colorPresetId", presetId);
   }
 
   return (
@@ -1027,9 +1119,30 @@ function SettingsPanel({
           {uiCopy.settings.showSplitLine}
         </label>
         <div className="settings-subsection">
+          <h3>{uiCopy.settings.colorPreset}</h3>
+          <div className="color-preset-grid">
+            {colorPresets.map((preset) => (
+              <button
+                aria-pressed={preset.id === activeColorPreset.id}
+                className={classNames("color-preset-button", preset.id === activeColorPreset.id && "active")}
+                key={preset.id}
+                onClick={() => setColorPreset(preset.id)}
+                title={`${preset.name}: ${preset.primaryColor} / ${preset.secondaryColor}`}
+                type="button"
+              >
+                <span className="color-preset-swatch" aria-hidden="true">
+                  <span style={{ background: preset.primaryColor }} />
+                  <span style={{ background: preset.secondaryColor }} />
+                </span>
+                <span>{preset.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-subsection">
           <h3>{uiCopy.settings.topButtonVisibility}</h3>
           <div className="top-button-toggle-grid">
-            {state.tabs.map((tab) => (
+            {topButtonTabs.map((tab) => (
               <label className="check-row block" key={tab.index}>
                 <input
                   type="checkbox"

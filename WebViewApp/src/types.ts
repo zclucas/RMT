@@ -63,6 +63,7 @@ export interface RmtSettings {
   bootStart: boolean;
   showSplitLine: boolean;
   hiddenTopButtonIndexes: number[];
+  colorPresetId: string;
   fixedMenuWheel: boolean;
   mutiThreadNum: string;
   softBGColor: string;

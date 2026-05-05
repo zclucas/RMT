@@ -28,6 +28,7 @@
 - Fixed worker startup warnings caused by WebView state sync calls in shared macro utilities.
 - Tightened the borderless WebView resize hit area and added a setting to hide or show the top tab buttons.
 - Replaced the top tab visibility setting with per-tab show/hide controls and an overflow entry for hidden tabs.
+- Removed the hidden-tab overflow entry, kept the settings tab always visible, and added persisted WebView color presets.
 
 ## v1.1.4
 

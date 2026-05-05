@@ -109,6 +109,7 @@ export const uiCopy = {
     fixedMenuWheel: "菜单轮位置固定",
     showSplitLine: "分割线",
     topButtonVisibility: "顶部按钮显示",
+    colorPreset: "颜色方案",
     lang: "语言",
     fontType: "字体",
     screenshotType: "截图方式",

@@ -137,7 +137,7 @@ test.describe("tool and settings views", () => {
 
     await expect(page.locator(".diagnostics-block")).toBeVisible();
     await expect(page.locator(".panel-grid select")).toHaveCount(4);
-    await expect(page.locator(".panel-grid input[type='checkbox']")).toHaveCount(16);
+    await expect(page.locator(".panel-grid input[type='checkbox']")).toHaveCount(15);
     await expectShellFits(page);
 
     await expect(page).toHaveScreenshot("settings-1070x590.png", {

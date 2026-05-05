@@ -12,6 +12,7 @@ const baseSettings: RmtSettings = {
   bootStart: false,
   showSplitLine: false,
   hiddenTopButtonIndexes: [],
+  colorPresetId: "rmt-green",
   fixedMenuWheel: false,
   mutiThreadNum: "3",
   softBGColor: "f0f0f0",
@@ -124,7 +125,7 @@ function createState(overrides: Partial<RmtState> = {}): RmtState {
   const folds = [createFold(1, [createItem(1, { forbid: true }), createItem(2), createItem(3, { pause: true })])];
 
   return {
-    version: "RMTv2.0.1",
+    version: "RMTv2.0.2",
     currentSettingName: "RMT默认配置",
     activeTabIndex: 1,
     isSuspend: false,
