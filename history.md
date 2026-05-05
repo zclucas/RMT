@@ -5,6 +5,7 @@
 - Added the WebView UI deep migration plan and bridge ownership boundaries.
 - Expanded the React macro table with mode, hold-time, tip-sound controls, and full-table move button parity.
 - Fixed macro row movement so the key mode moves with the macro item.
+- Added WebView entry points for legacy trigger editors and delete confirmations in the macro table.
 
 ## v1.1.3
 

@@ -349,6 +349,9 @@ RmtDispatchWebAction(actionType, payload) {
         case "deleteFold":
             RmtDeleteFoldAction(payload)
             return ""
+        case "openTriggerEditor":
+            RmtOpenTriggerEditorAction(payload)
+            return ""
         case "openMacroEditor":
             RmtOpenMacroEditorAction(payload)
             return ""
@@ -850,6 +853,61 @@ RmtOpenMacroEditorAction(payload) {
     MyMacroGui.SureBtnAction := SureMacro
     MyMacroGui.SaveBtnAction := OnSaveSetting
     MyMacroGui.ShowGui(tableItem.MacroArr[itemIndex], true)
+}
+
+RmtOpenTriggerEditorAction(payload) {
+    global MySoftData, MyTriggerKeyGui, MyTriggerStrGui, MyTimingGui
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    tableItem := RmtGetTableItem(tableIndex)
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+
+    if (foldIndex > 0) {
+        foldInfo := tableItem.FoldInfo
+        RmtValidateFoldIndex(foldInfo, foldIndex)
+
+        SureFoldTrigger(sureTriggerKey, holdTime) {
+            foldInfo.TKArr[foldIndex] := sureTriggerKey
+            foldInfo.HoldTimeArr[foldIndex] := holdTime
+            RmtPostState()
+        }
+
+        MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
+        MyTriggerKeyGui.SureBtnAction := SureFoldTrigger
+        MyTriggerKeyGui.SureFocusCon := MySoftData.BtnSave
+        MyTriggerKeyGui.ShowGui(foldInfo.TKArr[foldIndex], foldInfo.HoldTimeArr[foldIndex], false)
+        return
+    }
+
+    RmtValidateItemIndex(tableItem, itemIndex)
+    if (CheckIsTimingMacroTable(tableIndex)) {
+        MyTimingGui.ShowGui(tableItem.TimingSerialArr[itemIndex])
+        return
+    }
+
+    if (CheckIsStringMacroTable(tableIndex)) {
+        SureStringTrigger(sureTriggerKey) {
+            tableItem.TKArr[itemIndex] := sureTriggerKey
+            RmtPostState()
+        }
+
+        MyTriggerStrGui.SaveBtnAction := OnSaveSetting
+        MyTriggerStrGui.SureBtnAction := SureStringTrigger
+        MyTriggerStrGui.SureFocusCon := MySoftData.BtnSave
+        MyTriggerStrGui.ShowGui(tableItem.TKArr[itemIndex], 0, false)
+        return
+    }
+
+    SureKeyTrigger(sureTriggerKey, holdTime) {
+        tableItem.TKArr[itemIndex] := sureTriggerKey
+        tableItem.HoldTimeArr[itemIndex] := holdTime
+        RmtPostState()
+    }
+
+    MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
+    MyTriggerKeyGui.SureBtnAction := SureKeyTrigger
+    MyTriggerKeyGui.SureFocusCon := MySoftData.BtnSave
+    MyTriggerKeyGui.ShowGui(tableItem.TKArr[itemIndex], tableItem.HoldTimeArr[itemIndex], false)
 }
 
 RmtAddItem(tableIndex, foldIndex, tipSound := 1) {

@@ -386,7 +386,7 @@ h2 {
   border-bottom: 1px solid #edf1f4;
   display: grid;
   gap: 8px;
-  grid-template-columns: 140px minmax(160px, 1fr) 120px;
+  grid-template-columns: 140px minmax(160px, 1fr) 32px 120px;
   padding: 8px;
 }
 
@@ -429,6 +429,12 @@ h2 {
 .row-actions {
   display: flex;
   gap: 4px;
+}
+
+.trigger-cell {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: minmax(120px, 1fr) 32px;
 }
 
 .sound-stack {

@@ -275,6 +275,11 @@ function MacroTable({
 }) {
   const table = tab.table!;
   const itemCount = table.folds.reduce((count, fold) => count + fold.items.length, 0);
+  const confirmAction = (message: string, type: string, payload?: PatchPayload) => {
+    if (window.confirm(message)) {
+      runAction(type, payload);
+    }
+  };
 
   return (
     <section className="macro-view">
@@ -332,7 +337,12 @@ function MacroTable({
               </button>
               <button
                 className="danger"
-                onClick={() => runAction("deleteFold", { tableIndex: table.index, foldIndex: fold.index })}
+                onClick={() =>
+                  confirmAction("确认删除当前模块以及模块中的所有宏配置？", "deleteFold", {
+                    tableIndex: table.index,
+                    foldIndex: fold.index
+                  })
+                }
                 type="button"
               >
                 <Trash2 size={16} />
@@ -362,6 +372,14 @@ function MacroTable({
                   onChange={(event) => patchLocalFold(table.index, fold.index, "trigger", event.target.value)}
                   onBlur={(event) => updateFold(table.index, fold.index, "trigger", event.target.value)}
                 />
+                <button
+                  className="icon-button"
+                  title="编辑菜单触发键"
+                  onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, foldIndex: fold.index })}
+                  type="button"
+                >
+                  <SquarePen size={15} />
+                </button>
                 <input
                   type="number"
                   min={0}
@@ -411,12 +429,22 @@ function MacroTable({
                           />
                         </td>
                         <td>
-                          <input
-                            value={item.trigger}
-                            placeholder={table.isTimingTable ? "定时配置" : "触发键"}
-                            onChange={(event) => patchLocalItem(table.index, item.index, "trigger", event.target.value)}
-                            onBlur={(event) => updateItem(table.index, item.index, "trigger", event.target.value)}
-                          />
+                          <div className="trigger-cell">
+                            <input
+                              value={item.trigger}
+                              placeholder={table.isTimingTable ? "定时配置" : "触发键"}
+                              onChange={(event) => patchLocalItem(table.index, item.index, "trigger", event.target.value)}
+                              onBlur={(event) => updateItem(table.index, item.index, "trigger", event.target.value)}
+                            />
+                            <button
+                              className="icon-button"
+                              title={table.isTimingTable ? "编辑定时配置" : table.isStringTable ? "编辑字串触发" : "编辑触发键"}
+                              onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, itemIndex: item.index })}
+                              type="button"
+                            >
+                              <SquarePen size={15} />
+                            </button>
+                          </div>
                         </td>
                         <td>
                           <select
@@ -553,7 +581,12 @@ function MacroTable({
                             <button
                               className="danger icon-only"
                               title="删除"
-                              onClick={() => runAction("deleteItem", { tableIndex: table.index, itemIndex: item.index })}
+                              onClick={() =>
+                                confirmAction("确认删除当前宏？", "deleteItem", {
+                                  tableIndex: table.index,
+                                  itemIndex: item.index
+                                })
+                              }
                               type="button"
                             >
                               <Trash2 size={15} />
