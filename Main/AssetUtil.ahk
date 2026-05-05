@@ -14,8 +14,11 @@
 #Include Util\InputUtil.ahk
 #Include Util\SearchUtil.ahk
 #Include Util\FileIOUtil.ahk
+#Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\PluginUtil.ahk
+#Include Util\MacroClipboardUtil.ahk
+#Include Util\MergeUtil.ahk
 global WM_COPYDATA := 0x4a ;传递字符串，系统信息
 
 global WM_LOAD_WORK := 0x500  ;资源加载完成事件
@@ -1086,6 +1089,10 @@ CheckIfHasModifyKey(keyCombo) {
     return false
 }
 
+IsComboKey(keyCombo) {
+    return InStr(keyCombo, " & ")
+}
+
 LoosenModifyKey(keyCombo) {
     modifiers := []
     modPrefixes := ["^", "<^", ">^", "!", "<!", ">!", "+", "<+", ">+", "#", "<#", ">#"]
@@ -1844,8 +1851,6 @@ SetClipboard(Content) {
     }
     return false  ; 5次都失败
 }
-
-; ===== 路径验证工具函数 =====
 
 ValidateCmdPath(&Data, pathFieldName, selectTitle, filter, tableItem := "", index := 1, showSelect := true) {
     if (!ObjHasOwnProp(Data, pathFieldName))

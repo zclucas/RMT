@@ -498,7 +498,7 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 按下=Press
 按两次a触发=Trigger by pressing A twice
 按住时间浮动=Hold fluctuation
-按住时间浮动(%)：=Hold Float (%):
+点击时间浮动(%)：=Hold Float (%):
 按钮=Btn
 按键=Key
 按键宏=Key

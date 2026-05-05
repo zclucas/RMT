@@ -71,8 +71,8 @@ class SettingMgrGui {
         con.OnEvent("Click", this.OnUnpackBtnClick.Bind(this))
 
         PosX := 280
-        con := MyGui.Add("Button", Format("x{} y{} w100", PosX, PosY), GetLang("复制配置"))
-        con.OnEvent("Click", this.OnCopyBtnClick.Bind(this))
+        con := MyGui.Add("Button", Format("x{} y{} w100", PosX, PosY), GetLang("合并导入"))
+        con.OnEvent("Click", (*) => MyConfigMergeGui.ShowGui())
 
         PosX := 10
         PosY += 50

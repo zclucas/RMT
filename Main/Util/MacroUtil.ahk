@@ -151,7 +151,38 @@ OnRunFile(tableItem, cmd, index) {
         return
     }
     processedPath := GetReplaceVarText(tableItem, index, Data.RunPath)
-    Run(processedPath)
+
+    if (Data.RunMode == 1) {
+        Run(processedPath)
+
+    } else if (Data.RunMode == 2) {
+        exitCode := RunWait(processedPath)
+        MySetGlobalVariable([Data.SaveNameArr[1]], [exitCode], false)
+
+    } else if (Data.RunMode == 3) {
+        shell := ComObject("WScript.Shell")
+        exec := shell.Exec(processedPath)
+
+        output := ""
+        err := ""
+
+        while (!exec.StdOut.AtEndOfStream || !exec.StdErr.AtEndOfStream) {
+
+            if !exec.StdOut.AtEndOfStream
+                output .= exec.StdOut.Read(1024)
+
+            if !exec.StdErr.AtEndOfStream
+                err .= exec.StdErr.Read(1024)
+
+            Sleep(10)
+        }
+
+        MySetGlobalVariable(
+            [Data.SaveNameArr[2], Data.SaveNameArr[3], Data.SaveNameArr[1]],
+            [output, err, exec.ExitCode],
+            false
+        )
+    }
 }
 
 OnCompare(tableItem, cmd, index) {
@@ -271,11 +302,29 @@ OnMMProOnce(tableItem, index, Data) {
         DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE, "UInt", PosX, "UInt", PosY, "UInt", 0, "UInt", 0)
     }
     else if (Data.ActionType == 1) {
-        if (Data.IsRelative) {
-            MouseMove(PosX, PosY, Speed, "R")
+        IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
+        if (IsHumanMouse) {
+            hm := HumanMouse.GetInstance()
+            hm.SetParams({
+                IsEnabled: true,
+                Speed: Speed
+            })
+
+            if (Data.IsRelative) {
+                MouseGetPos(&curX, &curY)
+                hm.Move(curX + PosX, curY + PosY)
+            }
+            else {
+                hm.Move(PosX, PosY)
+            }
         }
-        else
-            MouseMove(PosX, PosY, Speed)
+        else {
+            if (Data.IsRelative) {
+                MouseMove(PosX, PosY, Speed, "R")
+            }
+            else
+                MouseMove(PosX, PosY, Speed)
+        }
     }
     else if (Data.ActionType == 2 || Data.ActionType == 3) {
         SetDefaultMouseSpeed(Speed)

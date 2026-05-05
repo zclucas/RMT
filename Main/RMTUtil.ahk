@@ -82,7 +82,7 @@ CheckValueSettingValid(Name, Value) {
 }
 
 CheckAllValueSettingValid() {
-    if (!CheckValueSettingValid(GetLang("按住时间浮动"), MySoftData.HoldFloatCtrl.Value))
+    if (!CheckValueSettingValid(GetLang("点击时间浮动"), MySoftData.HoldFloatCtrl.Value))
         return false
 
     if (!CheckValueSettingValid(GetLang("每次间隔浮动"), MySoftData.PreIntervalFloatCtrl.Value))
