@@ -23,7 +23,9 @@ import type { RmtFold, RmtItem, RmtSettings, RmtState, RmtTab, RmtToolState } fr
 type PatchPayload = Record<string, unknown>;
 
 const triggerTypeLabels = ["按下", "松开", "松止", "开关", "长按"];
-const modeLabels = ["AHK Send", "拟真", "罗技"];
+const modeLabels = ["AHK Send", "keybd_event", "罗技"];
+const startTipLabels = ["无", "触发提示", "循环首次提示"];
+const endTipLabels = ["无", "结束提示", "循环结束提示"];
 const screenshotLabels = ["微软截图", "RMT截图", "SC截图"];
 const keyDownLabels = ["自动松开", "忽略重复按下", "允许重复按下"];
 
@@ -272,6 +274,7 @@ function MacroTable({
   runAction: (type: string, payload?: PatchPayload) => void;
 }) {
   const table = tab.table!;
+  const itemCount = table.folds.reduce((count, fold) => count + fold.items.length, 0);
 
   return (
     <section className="macro-view">
@@ -359,6 +362,14 @@ function MacroTable({
                   onChange={(event) => patchLocalFold(table.index, fold.index, "trigger", event.target.value)}
                   onBlur={(event) => updateFold(table.index, fold.index, "trigger", event.target.value)}
                 />
+                <input
+                  type="number"
+                  min={0}
+                  value={fold.holdTime}
+                  title="长按时长"
+                  onChange={(event) => patchLocalFold(table.index, fold.index, "holdTime", Number(event.target.value))}
+                  onBlur={(event) => updateFold(table.index, fold.index, "holdTime", Number(event.target.value))}
+                />
               </div>
             )}
 
@@ -373,6 +384,9 @@ function MacroTable({
                       <th>触发类型</th>
                       <th>循环</th>
                       <th>宏指令</th>
+                      <th>模式</th>
+                      <th>时长</th>
+                      <th>提示音</th>
                       <th>状态</th>
                       <th>操作</th>
                     </tr>
@@ -380,12 +394,12 @@ function MacroTable({
                   <tbody>
                     {fold.items.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="empty-cell">
+                        <td colSpan={11} className="empty-cell">
                           当前模块没有宏。
                         </td>
                       </tr>
                     )}
-                    {fold.items.map((item, localIndex) => (
+                    {fold.items.map((item) => (
                       <tr key={item.serial || item.index}>
                         <td className="index-cell">{item.index}</td>
                         <td>
@@ -437,6 +451,65 @@ function MacroTable({
                           />
                         </td>
                         <td>
+                          <select
+                            value={item.mode}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              patchLocalItem(table.index, item.index, "mode", value);
+                              updateItem(table.index, item.index, "mode", value);
+                            }}
+                          >
+                            {modeLabels.map((label, index) => (
+                              <option key={label} value={index + 1}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min={0}
+                            value={item.holdTime}
+                            onChange={(event) => patchLocalItem(table.index, item.index, "holdTime", Number(event.target.value))}
+                            onBlur={(event) => updateItem(table.index, item.index, "holdTime", Number(event.target.value))}
+                          />
+                        </td>
+                        <td>
+                          <div className="sound-stack">
+                            <select
+                              value={item.startTipSound}
+                              aria-label="开始提示音"
+                              onChange={(event) => {
+                                const value = Number(event.target.value);
+                                patchLocalItem(table.index, item.index, "startTipSound", value);
+                                updateItem(table.index, item.index, "startTipSound", value);
+                              }}
+                            >
+                              {startTipLabels.map((label, index) => (
+                                <option key={label} value={index + 1}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={item.endTipSound}
+                              aria-label="结束提示音"
+                              onChange={(event) => {
+                                const value = Number(event.target.value);
+                                patchLocalItem(table.index, item.index, "endTipSound", value);
+                                updateItem(table.index, item.index, "endTipSound", value);
+                              }}
+                            >
+                              {endTipLabels.map((label, index) => (
+                                <option key={label} value={index + 1}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </td>
+                        <td>
                           <label className="check-row">
                             <input
                               type="checkbox"
@@ -463,7 +536,7 @@ function MacroTable({
                             </button>
                             <button
                               title="上移"
-                              disabled={localIndex === 0}
+                              disabled={item.index === 1}
                               onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: -1 })}
                               type="button"
                             >
@@ -471,7 +544,7 @@ function MacroTable({
                             </button>
                             <button
                               title="下移"
-                              disabled={localIndex === fold.items.length - 1}
+                              disabled={item.index === itemCount}
                               onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: 1 })}
                               type="button"
                             >
