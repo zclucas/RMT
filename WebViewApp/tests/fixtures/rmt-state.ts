@@ -11,7 +11,7 @@ const baseSettings: RmtSettings = {
   killMacroHotkey: "!k",
   bootStart: false,
   showSplitLine: false,
-  showTopButtons: true,
+  hiddenTopButtonIndexes: [],
   fixedMenuWheel: false,
   mutiThreadNum: "3",
   softBGColor: "f0f0f0",
@@ -208,6 +208,7 @@ export const settingsVisualState = createState({
     intervalFloat: "80",
     coordXFloat: "15",
     coordYFloat: "24",
-    mutiThreadNum: "8"
+    mutiThreadNum: "8",
+    hiddenTopButtonIndexes: [9, 10, 11]
   }
 });

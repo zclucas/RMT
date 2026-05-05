@@ -195,7 +195,7 @@ RmtInitWebStateControls() {
     MySoftData.KillMacroHotkeyCtrl := RmtWebValueControl(MySoftData.KillMacroHotkey)
     MySoftData.BootStartCtrl := RmtWebValueControl(MySoftData.IsBootStart)
     MySoftData.SplitLineCtrl := RmtWebValueControl(MySoftData.ShowSplitLine)
-    MySoftData.ShowTopButtonsCtrl := RmtWebValueControl(MySoftData.ShowTopButtons)
+    MySoftData.HiddenTopButtonIndexesCtrl := RmtWebValueControl(MySoftData.HiddenTopButtonIndexes)
     MySoftData.FixedMenuWheelCtrl := RmtWebValueControl(MySoftData.FixedMenuWheel)
     MySoftData.MutiThreadNumCtrl := RmtWebValueControl(MySoftData.MutiThreadNum)
     MySoftData.SoftBGColorCon := RmtWebValueControl(MySoftData.SoftBGColor)
@@ -528,7 +528,7 @@ RmtBuildSettings() {
     settings["killMacroHotkey"] := RmtControlValue(MySoftData.KillMacroHotkeyCtrl, MySoftData.KillMacroHotkey)
     settings["bootStart"] := RmtJsonBool(RmtControlValue(MySoftData.BootStartCtrl, MySoftData.IsBootStart))
     settings["showSplitLine"] := RmtJsonBool(RmtControlValue(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine))
-    settings["showTopButtons"] := RmtJsonBool(RmtControlValue(MySoftData.ShowTopButtonsCtrl, MySoftData.ShowTopButtons))
+    settings["hiddenTopButtonIndexes"] := RmtCloneArray(RmtControlValue(MySoftData.HiddenTopButtonIndexesCtrl, MySoftData.HiddenTopButtonIndexes))
     settings["fixedMenuWheel"] := RmtJsonBool(RmtControlValue(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel))
     settings["mutiThreadNum"] := String(RmtControlValue(MySoftData.MutiThreadNumCtrl, MySoftData.MutiThreadNum))
     settings["softBGColor"] := RmtControlValue(MySoftData.SoftBGColorCon, MySoftData.SoftBGColor)
@@ -667,9 +667,9 @@ RmtUpdateSetting(field, value) {
         case "showSplitLine":
             MySoftData.ShowSplitLine := RmtBool(value)
             RmtSetControl(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine)
-        case "showTopButtons":
-            MySoftData.ShowTopButtons := RmtBool(value)
-            RmtSetControl(MySoftData.ShowTopButtonsCtrl, MySoftData.ShowTopButtons)
+        case "hiddenTopButtonIndexes":
+            MySoftData.HiddenTopButtonIndexes := RmtNormalizeIndexArray(value, MySoftData.TabNameArr.Length)
+            RmtSetControl(MySoftData.HiddenTopButtonIndexesCtrl, MySoftData.HiddenTopButtonIndexes)
         case "fixedMenuWheel":
             MySoftData.FixedMenuWheel := RmtBool(value)
             RmtSetControl(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel)
@@ -1170,6 +1170,27 @@ RmtCloneArray(arr) {
         clone.Push(value)
     }
     return clone
+}
+
+RmtNormalizeIndexArray(value, maxIndex := 0) {
+    if (value is Array)
+        return RmtFilterIndexArray(value, maxIndex)
+    return RmtParseIndexList(value, maxIndex)
+}
+
+RmtFilterIndexArray(values, maxIndex := 0) {
+    indexes := []
+    seen := Map()
+    for _, value in values {
+        if (!IsInteger(value))
+            continue
+        index := Integer(value)
+        if (index < 1 || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
+            continue
+        seen[index] := true
+        indexes.Push(index)
+    }
+    return indexes
 }
 
 RmtGet(obj, key, fallback := "") {

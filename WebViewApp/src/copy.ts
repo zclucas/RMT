@@ -13,7 +13,8 @@ export const uiCopy = {
     ariaLabel: "RMT 功能页签",
     rewardShort: "打赏",
     thanksShort: "感谢",
-    showTopButtons: "显示顶部按钮"
+    more: "更多",
+    hiddenTopButtons: "隐藏的顶部按钮"
   },
   sidebar: {
     currentConfig: "当前配置",
@@ -107,7 +108,7 @@ export const uiCopy = {
     noVariableTip: "无变量提醒",
     fixedMenuWheel: "菜单轮位置固定",
     showSplitLine: "分割线",
-    showTopButtons: "顶部按钮",
+    topButtonVisibility: "顶部按钮显示",
     lang: "语言",
     fontType: "字体",
     screenshotType: "截图方式",

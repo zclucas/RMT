@@ -1018,25 +1018,69 @@ h2 {
   font-weight: 700;
 }
 
-.classic-tabs-collapsed {
-  align-items: center;
-  background: #ffffff;
-  border-bottom: 1px solid #dde3e8;
-  display: flex;
-  min-height: 30px;
-  padding: 3px 14px;
-}
-
-.classic-tabs-collapsed button {
-  color: #54626f;
-  font-size: 13px;
-  min-height: 24px;
-  padding: 2px 8px;
-}
-
 .classic-message {
   border-radius: 0;
   margin: 0;
+}
+
+.top-tabs-overflow {
+  position: relative;
+}
+
+.top-tabs-overflow summary {
+  align-items: center;
+  color: #54626f;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  list-style: none;
+  min-height: 50px;
+  padding: 8px 12px;
+}
+
+.top-tabs-overflow summary::-webkit-details-marker {
+  display: none;
+}
+
+.top-tabs-overflow-menu {
+  background: #ffffff;
+  border: 1px solid #cfd7df;
+  box-shadow: 0 8px 20px rgba(26, 40, 55, 0.14);
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: 48px;
+  z-index: 20;
+}
+
+.top-tabs-overflow-menu button {
+  border: 0;
+  border-radius: 4px;
+  justify-content: flex-start;
+  min-height: 30px;
+}
+
+.settings-subsection {
+  border-top: 1px solid #edf1f4;
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.settings-subsection h3 {
+  color: #566674;
+  font-size: 13px;
+  margin: 0;
+}
+
+.top-button-toggle-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
 }
 
 .classic-content {

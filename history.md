@@ -27,6 +27,7 @@
 - Added `RmtBuildState()` fixture compatibility checks and a lightweight WebView GitHub Actions workflow.
 - Fixed worker startup warnings caused by WebView state sync calls in shared macro utilities.
 - Tightened the borderless WebView resize hit area and added a setting to hide or show the top tab buttons.
+- Replaced the top tab visibility setting with per-tab show/hide controls and an overflow entry for hidden tabs.
 
 ## v1.1.4
 

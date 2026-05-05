@@ -200,7 +200,7 @@ class SoftData {
         this.AgreeAgreement := false    ;同意协议
         this.IsBootStart := false       ;开机自启
         this.ShowSplitLine := false     ;显示分割线
-        this.ShowTopButtons := true     ;显示顶部按钮
+        this.HiddenTopButtonIndexes := [] ;隐藏的顶部按钮
         this.FixedMenuWheel := false    ;固定菜单轮
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型

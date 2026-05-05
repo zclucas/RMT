@@ -191,11 +191,7 @@ export default function App() {
             <section className="classic-main">
               <TopTabs
                 state={state}
-                showTopButtons={state.settings.showTopButtons}
-                setShowTopButtons={(value) => {
-                  patchLocalSettings("showTopButtons", value);
-                  updateSetting("showTopButtons", value);
-                }}
+                hiddenTopButtonIndexes={state.settings.hiddenTopButtonIndexes}
                 runAction={runAction}
               />
 
@@ -289,29 +285,20 @@ function TitleBar({
 
 function TopTabs({
   state,
-  showTopButtons,
-  setShowTopButtons,
+  hiddenTopButtonIndexes,
   runAction
 }: {
   state: RmtState;
-  showTopButtons: boolean;
-  setShowTopButtons: (value: boolean) => void;
+  hiddenTopButtonIndexes: number[];
   runAction: RunAction;
 }) {
-  if (!showTopButtons) {
-    return (
-      <div className="classic-tabs-collapsed">
-        <button onClick={() => setShowTopButtons(true)} title={uiCopy.tabs.showTopButtons} type="button">
-          <MenuIcon size={15} />
-          <span>{uiCopy.tabs.showTopButtons}</span>
-        </button>
-      </div>
-    );
-  }
+  const hiddenSet = new Set(hiddenTopButtonIndexes);
+  const visibleTabs = state.tabs.filter((tab) => !hiddenSet.has(tab.index));
+  const hiddenTabs = state.tabs.filter((tab) => hiddenSet.has(tab.index));
 
   return (
     <nav className="classic-tabs" aria-label={uiCopy.tabs.ariaLabel}>
-      {state.tabs.map((tab) => {
+      {visibleTabs.map((tab) => {
         const Icon = getTabIcon(tab);
         return (
           <button
@@ -325,6 +312,30 @@ function TopTabs({
           </button>
         );
       })}
+      {hiddenTabs.length > 0 && (
+        <details className="top-tabs-overflow">
+          <summary title={uiCopy.tabs.hiddenTopButtons}>
+            <MenuIcon size={15} />
+            <span>{uiCopy.tabs.more}</span>
+          </summary>
+          <div className="top-tabs-overflow-menu">
+            {hiddenTabs.map((tab) => {
+              const Icon = getTabIcon(tab);
+              return (
+                <button
+                  className={classNames(tab.index === state.activeTabIndex && "active")}
+                  key={tab.index}
+                  onClick={() => runAction("setTab", { tabIndex: tab.index })}
+                  type="button"
+                >
+                  <Icon size={15} />
+                  <span>{getTabLabel(tab)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </details>
+      )}
     </nav>
   );
 }
@@ -913,6 +924,20 @@ function SettingsPanel({
   updateSetting: (field: keyof RmtSettings, value: unknown) => void;
   runAction: RunAction;
 }) {
+  const hiddenTopButtonSet = new Set(settings.hiddenTopButtonIndexes);
+
+  function setTopButtonVisible(tabIndex: number, visible: boolean) {
+    const hiddenIndexes = new Set(settings.hiddenTopButtonIndexes);
+    if (visible) {
+      hiddenIndexes.delete(tabIndex);
+    } else {
+      hiddenIndexes.add(tabIndex);
+    }
+    const nextValue = Array.from(hiddenIndexes).sort((a, b) => a - b);
+    patchLocalSettings("hiddenTopButtonIndexes", nextValue);
+    updateSetting("hiddenTopButtonIndexes", nextValue);
+  }
+
   return (
     <section className="panel-grid">
       <div className="section-block">
@@ -1001,17 +1026,21 @@ function SettingsPanel({
           />
           {uiCopy.settings.showSplitLine}
         </label>
-        <label className="check-row block">
-          <input
-            type="checkbox"
-            checked={settings.showTopButtons}
-            onChange={(event) => {
-              patchLocalSettings("showTopButtons", event.target.checked);
-              updateSetting("showTopButtons", event.target.checked);
-            }}
-          />
-          {uiCopy.settings.showTopButtons}
-        </label>
+        <div className="settings-subsection">
+          <h3>{uiCopy.settings.topButtonVisibility}</h3>
+          <div className="top-button-toggle-grid">
+            {state.tabs.map((tab) => (
+              <label className="check-row block" key={tab.index}>
+                <input
+                  type="checkbox"
+                  checked={!hiddenTopButtonSet.has(tab.index)}
+                  onChange={(event) => setTopButtonVisible(tab.index, event.target.checked)}
+                />
+                {getTabLabel(tab)}
+              </label>
+            ))}
+          </div>
+        </div>
 
         <Field label={uiCopy.settings.lang}>
           <select

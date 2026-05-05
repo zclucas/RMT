@@ -127,7 +127,7 @@ SetupState() {
     MySoftData.KillMacroHotkey := "!k"
     MySoftData.IsBootStart := false
     MySoftData.ShowSplitLine := false
-    MySoftData.ShowTopButtons := true
+    MySoftData.HiddenTopButtonIndexes := []
     MySoftData.FixedMenuWheel := false
     MySoftData.MutiThreadNum := "3"
     MySoftData.SoftBGColor := "f0f0f0"
@@ -150,7 +150,7 @@ SetupState() {
     MySoftData.KillMacroHotkeyCtrl := CreateControl(MySoftData.KillMacroHotkey)
     MySoftData.BootStartCtrl := CreateControl(MySoftData.IsBootStart)
     MySoftData.SplitLineCtrl := CreateControl(MySoftData.ShowSplitLine)
-    MySoftData.ShowTopButtonsCtrl := CreateControl(MySoftData.ShowTopButtons)
+    MySoftData.HiddenTopButtonIndexesCtrl := CreateControl(MySoftData.HiddenTopButtonIndexes)
     MySoftData.FixedMenuWheelCtrl := CreateControl(MySoftData.FixedMenuWheel)
     MySoftData.MutiThreadNumCtrl := CreateControl(MySoftData.MutiThreadNum)
     MySoftData.SoftBGColorCon := CreateControl(MySoftData.SoftBGColor)
@@ -204,7 +204,7 @@ RunFixture("default state shape", (*) => (
     Assert(state["tabs"][1]["kind"] == "macro", "first tab should be macro"),
     Assert(state["tabs"][7]["kind"] == "tool", "tool tab kind mismatch"),
     Assert(state["tabs"][8]["kind"] == "settings", "settings tab kind mismatch"),
-    Assert(RmtBool(state["settings"]["showTopButtons"]), "top buttons should default to visible"),
+    Assert(state["settings"]["hiddenTopButtonIndexes"].Length == 0, "top buttons should default to visible"),
     Assert(state["settings"]["screenShotType"] == 3, "screenshot type should preserve default"),
     Assert(state["tools"]["ocrType"] == 1, "tool OCR type should preserve default")
 ))

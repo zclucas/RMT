@@ -402,7 +402,10 @@ LoadMainSetting() {
     ToolCheckInfo.OCRTypeValue := IniRead(IniFile, IniSection, "OCRType", 1)
     MySoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", false)
     MySoftData.ShowSplitLine := IniRead(IniFile, IniSection, "ShowSplitLine", false)
-    MySoftData.ShowTopButtons := IniRead(IniFile, IniSection, "ShowTopButtons", true)
+    hiddenTopButtonText := IniRead(IniFile, IniSection, "HiddenTopButtonIndexes", "")
+    if (hiddenTopButtonText == "" && StrLower(IniRead(IniFile, IniSection, "ShowTopButtons", "true")) == "false")
+        hiddenTopButtonText := RmtIndexListToString(RmtCreateIndexList(MySoftData.TabNameArr.Length))
+    MySoftData.HiddenTopButtonIndexes := RmtParseIndexList(hiddenTopButtonText, MySoftData.TabNameArr.Length)
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
     MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
     MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", -1)
@@ -438,6 +441,48 @@ LoadMainSetting() {
     SetFontList()
     LangInitSetting()
     LangKeysInit()
+}
+
+RmtCreateIndexList(count) {
+    indexes := []
+    loop Integer(count)
+        indexes.Push(A_Index)
+    return indexes
+}
+
+RmtParseIndexList(value, maxIndex := 0) {
+    indexes := []
+    seen := Map()
+    for _, part in StrSplit(String(value), ",") {
+        part := Trim(part)
+        if (!IsInteger(part))
+            continue
+        index := Integer(part)
+        if (index < 1 || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
+            continue
+        seen[index] := true
+        indexes.Push(index)
+    }
+    return indexes
+}
+
+RmtIndexListToString(indexes) {
+    parts := []
+    if (indexes is Array) {
+        for _, index in indexes
+            parts.Push(String(index))
+    }
+    return StrJoin(parts, ",")
+}
+
+StrJoin(values, separator) {
+    result := ""
+    for index, value in values {
+        if (index > 1)
+            result .= separator
+        result .= value
+    }
+    return result
 }
 
 SetFontList() {
