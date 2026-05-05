@@ -306,65 +306,35 @@ class RapidOcr {
         __New(ptr) {
             this.dbNetTime := NumGet(ptr, 'double')
             this.detectTime := NumGet(ptr, 8, 'double')
-            RapidOcr.OcrResult._read_vector(this, &ptr += 16, RapidOcr.OcrResult._read_textblock)
-        }
-
-        static _align(ptr, begin, to_align) {
-            return begin + ((ptr - begin + --to_align) & ~to_align)
-        }
-
-        static _read_double(&ptr) {
-            v := NumGet(ptr, 'double')
-            ptr += 8
-            return v
-        }
-
-        static _read_float(&ptr) {
-            v := NumGet(ptr, 'float')
-            ptr += 4
-            return v
-        }
-
-        static _read_int(&ptr) {
-            v := NumGet(ptr, 'int')
-            ptr += 4
-            return v
-        }
-
-        static _read_point(&ptr) {
-            return { x: RapidOcr.OcrResult._read_int(&ptr), y: RapidOcr.OcrResult._read_int(&ptr) }
-        }
-
-        static _read_string(&ptr) {
-            static size := 2 * A_PtrSize + 16
-            sz := NumGet(ptr + 16, 'uptr')
-            p := sz < 16 ? ptr : NumGet(ptr, 'ptr')
-            ptr += size
-            return StrGet(p, sz, 'utf-8')
-        }
-
-        static _read_vector(arr, &ptr, read_element) {
-            static size := 3 * A_PtrSize
-            pend := NumGet(ptr, A_PtrSize, 'ptr')
-            p := NumGet(ptr, 'ptr')
-            ptr += size
-            while p < pend
-                arr.push(read_element(&p))
-            return arr
-        }
-
-        static _read_textblock(&ptr, begin) {
-            ptr_bak := ptr
-            return {
-                boxPoint: RapidOcr.OcrResult._read_vector([], &ptr, RapidOcr.OcrResult._read_point),
-                boxScore: RapidOcr.OcrResult._read_float(&ptr),
-                angleIndex: RapidOcr.OcrResult._read_int(&ptr),
-                angleScore: RapidOcr.OcrResult._read_float(&ptr),
-                angleTime: RapidOcr.OcrResult._read_float(&ptr := RapidOcr.OcrResult._align(ptr, begin, 8)),
-                text: RapidOcr.OcrResult._read_string(&ptr),
-                charScores: RapidOcr.OcrResult._read_vector([], &ptr, RapidOcr.OcrResult._read_float),
-                crnnTime: RapidOcr.OcrResult._read_float(&ptr := RapidOcr.OcrResult._align(ptr, begin, 8)),
-                blockTime: RapidOcr.OcrResult._read_float(&ptr)
+            read_vector(this, &ptr += 16, read_textblock)
+            align(ptr, begin, to_align) => begin + ((ptr - begin + --to_align) & ~to_align)
+            read_textblock(&ptr, begin := ptr) => {
+                boxPoint: read_vector([], &ptr, read_point),
+                boxScore: read_float(&ptr),
+                angleIndex: read_int(&ptr),
+                angleScore: read_float(&ptr),
+                angleTime: read_double(&ptr := align(ptr, begin, 8)),
+                text: read_string(&ptr),
+                charScores: read_vector([], &ptr, read_float),
+                crnnTime: read_double(&ptr := align(ptr, begin, 8)),
+                blockTime: read_double(&ptr)
+            }
+            read_double(&ptr) => (v := NumGet(ptr, 'double'), ptr += 8, v)
+            read_float(&ptr) => (v := NumGet(ptr, 'float'), ptr += 4, v)
+            read_int(&ptr) => (v := NumGet(ptr, 'int'), ptr += 4, v)
+            read_point(&ptr) => { x: read_int(&ptr), y: read_int(&ptr) }
+            read_string(&ptr) {
+                static size := 2 * A_PtrSize + 16
+                sz := NumGet(ptr + 16, 'uptr'), p := sz < 16 ? ptr : NumGet(ptr, 'ptr'), ptr += size
+                s := StrGet(p, sz, 'utf-8')
+                return s
+            }
+            read_vector(arr, &ptr, read_element) {
+                static size := 3 * A_PtrSize
+                pend := NumGet(ptr, A_PtrSize, 'ptr'), p := NumGet(ptr, 'ptr'), ptr += size
+                while p < pend
+                    arr.Push(read_element(&p))
+                return arr
             }
         }
     }

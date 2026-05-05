@@ -12,11 +12,11 @@ extern "C" IMAGEFINDER_API void* __cdecl CaptureWinMat(     // 窗口截图返�
     int width,                  // 捕获区域宽度
     int height);                // 捕获区域高度
 
-// extern "C" IMAGEFINDER_API void* __cdecl CaptureScreenMat(   // 屏幕截图返回Mat对象 (BitBlt)
-//     int x,                      // 捕获区域左上角X坐标
-//     int y,                      // 捕获区域左上角Y坐标
-//     int width,                  // 捕获区域宽度
-//     int height);                // 捕获区域高度
+extern "C" IMAGEFINDER_API void* __cdecl CaptureScreenMat(   // 屏幕截图返回Mat对象 (BitBlt)
+    int x,                      // 捕获区域左上角X坐标
+    int y,                      // 捕获区域左上角Y坐标
+    int width,                  // 捕获区域宽度
+    int height);                // 捕获区域高度
 
 extern "C" IMAGEFINDER_API void __cdecl ReleaseMat(void* matPtr);   // 释放Mat对象，防止内存泄漏
 

@@ -25,8 +25,9 @@ SetGlobalData(macroStr, visitMap) {
         IsArray := InStr(paramArr[1], "数组")
         IsInput := InStr(paramArr[1], "输入")
         IsFileIO := InStr(paramArr[1], "文件读写")
+        IsRun := InStr(paramArr[1], "运行")
         IsVarRelate := IsVariable || IsExVariable || IsTextOps || IsIf || IsOpera || IsSearch || IsSearchPro
-            || IsLoop || IsIfPro || IsArray || IsInput || IsFileIO
+            || IsLoop || IsIfPro || IsArray || IsInput || IsFileIO || IsRun
         if (!MySoftData.HasJoyMacro && IsPressKey && !IsBGKey) {
             MySoftData.HasJoyMacro := InStr(paramArr[2], "Joy")
         }
@@ -80,6 +81,20 @@ SetGlobalData(macroStr, visitMap) {
         }
         else if (IsFileIO) {
             SetFileIOGlobalData(Data)
+        }
+        else if (IsRun) {
+            if (ObjHasOwnProp(Data, "RunMode")) {
+                if (Data.RunMode == 2) {
+                    if (Data.SaveNameArr[1] != "")
+                        VariableMap[Data.SaveNameArr[1]] := true
+                }
+                else if (Data.RunMode == 3) {
+                    loop 3 {
+                        if (Data.SaveNameArr[A_Index] != "")
+                            VariableMap[Data.SaveNameArr[A_Index]] := true
+                    }
+                }
+            }
         }
 
         if (IsIf || IsSearch || IsSearchPro) {

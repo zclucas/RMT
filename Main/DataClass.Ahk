@@ -211,7 +211,7 @@ class SoftData {
         this.IsPause := false           ;暂停
         this.PauseHotkey := ""          ;暂停快捷键
         this.KillMacroHotkey := ""      ;终止所有宏快捷键
-        this.HoldFloat := 0             ;按住时间浮动数值
+        this.HoldFloat := 0             ;点击时间浮动数值
         this.PreIntervalFloat := 0      ;每次间隔浮动数值
         this.IntervalFloat := 0         ;间隔指令浮动数值
         this.CoordXFloat := 0           ;坐标X浮动数值
@@ -504,6 +504,8 @@ class RunData {
         this.SerialStr := ""
         this.RunPath := ""
         this.BackPlay := false
+        this.RunMode := 1
+        this.SaveNameArr := ["ExitCode", "StdOut", "StdErr"]
     }
 }
 

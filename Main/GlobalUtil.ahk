@@ -22,6 +22,7 @@
 #Include ..\Gui\CustomMsgBoxGui.ahk
 #Include ..\Gui\CustomInputGui.ahk
 #Include ..\Gui\InputBtnGui.ahk
+#Include ..\Gui\ConfigMergeGui.ahk
 #Include ..\Gui\ThankUIUtil.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
 
@@ -60,6 +61,7 @@ global MyInputBtnGui := InputBtnGui()
 global MyCMDTipSettingGui := CMDTipSettingGui()
 global MyToolRecordSettingGui := ToolRecordSettingGui()
 global MyUseExplainGui := UseExplainGui()
+global MyConfigMergeGui := ConfigMergeGui()
 global MySubMacroStopAction := SubMacroStopAction
 global MyTriggerSubMacro := TriggerMacroHandler
 global MySetGlobalVariable := SetGlobalVariable
