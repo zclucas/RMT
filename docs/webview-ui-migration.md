@@ -82,6 +82,7 @@ Acceptance:
 - Each migrated dialog has a matching `RmtAction` set.
 - AHK remains the source of truth for saved data and validation.
 - Legacy dialog can be removed only after equivalent WebView flow is verified.
+- Legacy cleanup ownership is tracked in `docs/legacy-gui-cleanup.md`.
 
 ### Phase 4: Packaging and release hardening
 
