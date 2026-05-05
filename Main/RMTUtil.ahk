@@ -130,6 +130,7 @@ SwapTableContent(tableItem, indexA, indexB) {
     SwapArrValue(tableItem.TriggerTypeArr, indexA, indexB)
     SwapArrValue(tableItem.HoldTimeArr, indexA, indexB)
     SwapArrValue(tableItem.MacroArr, indexA, indexB)
+    SwapArrValue(tableItem.ModeArr, indexA, indexB)
     SwapArrValue(tableItem.LoopCountArr, indexA, indexB)
     SwapArrValue(tableItem.ForbidArr, indexA, indexB)
 }
