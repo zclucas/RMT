@@ -12,3 +12,5 @@ installed
 .idea
 WebViewApp/node_modules/
 WebViewApp/*.tsbuildinfo
+Setting/
+Thread/Work[0-9]*.exe

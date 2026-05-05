@@ -14,6 +14,8 @@
 - Added a release workflow covering version updates, packaging, release output inspection, and packaged smoke tests.
 - Added a legacy AHKGui cleanup audit to separate required fallback dialogs from later migration candidates.
 - Added a WebView settings diagnostics entry that copies runtime and packaging context for support.
+- Ignored local runtime settings and generated worker executables to avoid accidental commits.
+- Tightened React bridge action typing so payloads are checked per WebView action.
 
 ## v1.1.3
 

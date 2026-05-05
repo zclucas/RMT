@@ -116,7 +116,49 @@ export interface RmtResult {
   state: RmtState;
 }
 
-export interface RmtAction {
-  type: string;
-  payload?: unknown;
+export type RmtAction =
+  | { type: "getState" }
+  | { type: "setTab"; payload: { tabIndex: number } }
+  | { type: "toggleSuspend" }
+  | { type: "togglePause" }
+  | { type: "killAll" }
+  | { type: "save" }
+  | { type: "reload" }
+  | { type: "openHelp" }
+  | { type: "openUrl"; payload: { url: string } }
+  | { type: "openVarMonitor" }
+  | { type: "openSettingManager" }
+  | { type: "openToolRecordSetting" }
+  | { type: "editCmdTip" }
+  | { type: "openFreePaste" }
+  | { type: "toggleToolCheck" }
+  | { type: "toggleToolRecord" }
+  | { type: "toolTextFilterScreenShot" }
+  | { type: "toolTextFilterSelectImage" }
+  | { type: "clearToolText" }
+  | { type: "copyDiagnostics" }
+  | { type: "openHotkeyEditor"; payload: { target: keyof RmtSettings | keyof RmtToolState } }
+  | { type: "keyDownHelp" }
+  | { type: "minimize" }
+  | { type: "maximize" }
+  | { type: "close" }
+  | { type: "updateSetting"; payload: { field: keyof RmtSettings; value: unknown } }
+  | { type: "updateTool"; payload: { field: keyof RmtToolState; value: unknown } }
+  | { type: "updateItem"; payload: { tableIndex: number; itemIndex: number; field: keyof RmtItem; value: unknown } }
+  | { type: "updateFold"; payload: { tableIndex: number; foldIndex: number; field: keyof RmtFold; value: unknown } }
+  | { type: "toggleFold"; payload: { tableIndex: number; foldIndex: number } }
+  | { type: "addItem"; payload: { tableIndex: number; foldIndex: number } }
+  | { type: "deleteItem"; payload: { tableIndex: number; itemIndex: number } }
+  | { type: "moveItem"; payload: { tableIndex: number; itemIndex: number; direction: -1 | 1 } }
+  | { type: "addFold"; payload: { tableIndex: number; afterFoldIndex: number } }
+  | { type: "deleteFold"; payload: { tableIndex: number; foldIndex: number } }
+  | { type: "openTriggerEditor"; payload: { tableIndex: number; itemIndex?: number; foldIndex?: number } }
+  | { type: "openMacroEditor"; payload: { tableIndex: number; itemIndex: number } };
+
+export type RmtActionType = RmtAction["type"];
+
+export type RmtActionPayload<T extends RmtActionType> = Extract<RmtAction, { type: T }> extends {
+  payload: infer Payload;
 }
+  ? Payload
+  : never;

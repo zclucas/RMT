@@ -24,9 +24,22 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { callRmt, getFallbackState } from "./bridge";
-import type { RmtFold, RmtItem, RmtSettings, RmtState, RmtTab, RmtToolState } from "./types";
+import type {
+  RmtAction,
+  RmtActionPayload,
+  RmtActionType,
+  RmtFold,
+  RmtItem,
+  RmtSettings,
+  RmtState,
+  RmtTab,
+  RmtToolState
+} from "./types";
 
-type PatchPayload = Record<string, unknown>;
+type ActionArgs<T extends RmtActionType> = [RmtActionPayload<T>] extends [never]
+  ? [payload?: never]
+  : [payload: RmtActionPayload<T>];
+type RunAction = <T extends RmtActionType>(type: T, ...args: ActionArgs<T>) => void | Promise<void>;
 
 const triggerTypeLabels = ["按下", "松开", "松止", "开关", "长按"];
 const modeLabels = ["AHK Send", "keybd_event", "罗技"];
@@ -61,9 +74,11 @@ export default function App() {
     };
   }, []);
 
-  async function runAction(type: string, payload?: unknown) {
+  async function runAction<T extends RmtActionType>(type: T, ...args: ActionArgs<T>) {
     try {
-      const result = await callRmt({ type, payload });
+      const payload = args[0];
+      const action = (payload === undefined ? { type } : { type, payload }) as RmtAction;
+      const result = await callRmt(action);
       setState(result.state);
       setMessage(result.message || (result.ok ? "" : "操作失败"));
     } catch (error) {
@@ -243,7 +258,7 @@ function TitleBar({
   runAction
 }: {
   state: RmtState;
-  runAction: (type: string, payload?: PatchPayload) => void;
+  runAction: RunAction;
 }) {
   return (
     <header className="titlebar">
@@ -279,13 +294,13 @@ function MacroTable({
   patchLocalFold: (tableIndex: number, foldIndex: number, field: keyof RmtFold, value: unknown) => void;
   updateItem: (tableIndex: number, itemIndex: number, field: keyof RmtItem, value: unknown) => void;
   updateFold: (tableIndex: number, foldIndex: number, field: keyof RmtFold, value: unknown) => void;
-  runAction: (type: string, payload?: PatchPayload) => void;
+  runAction: RunAction;
 }) {
   const table = tab.table!;
   const itemCount = table.folds.reduce((count, fold) => count + fold.items.length, 0);
-  const confirmAction = (message: string, type: string, payload?: PatchPayload) => {
+  const confirmAction = <T extends RmtActionType>(message: string, type: T, ...args: ActionArgs<T>) => {
     if (window.confirm(message)) {
-      runAction(type, payload);
+      void runAction(type, ...args);
     }
   };
 
@@ -623,7 +638,7 @@ function ToolPanel({
   tools: RmtToolState;
   patchLocalTools: (field: keyof RmtToolState, value: unknown) => void;
   updateTool: (field: keyof RmtToolState, value: unknown) => void;
-  runAction: (type: string, payload?: PatchPayload) => void;
+  runAction: RunAction;
 }) {
   const toolInfoRows = [
     ["屏幕坐标", tools.mousePos],
@@ -751,7 +766,7 @@ function SettingsPanel({
   settings: RmtSettings;
   patchLocalSettings: (field: keyof RmtSettings, value: unknown) => void;
   updateSetting: (field: keyof RmtSettings, value: unknown) => void;
-  runAction: (type: string, payload?: PatchPayload) => void;
+  runAction: RunAction;
 }) {
   return (
     <section className="panel-grid">
@@ -945,20 +960,20 @@ function SettingsPanel({
   );
 }
 
-function HelpPanel({ runAction }: { runAction: (type: string, payload?: PatchPayload) => void }) {
-  const links = [
-    ["快速上手/指令手册", "openHelp"],
-    ["版本更新视频", "openUrl", "https://www.bilibili.com/video/BV1oWVRzaEzk"],
-    ["配置共享仓库", "openUrl", "https://zclucas.github.io/RMT-Setting/"],
-    ["GitHub", "openUrl", "https://github.com/zclucas/RMT"],
-    ["Gitee", "openUrl", "https://gitee.com/fateman/RMT"],
-    ["GitHub 讨论", "openUrl", "https://github.com/zclucas/RMT/discussions"],
-    ["QQ群", "openUrl", "https://qm.qq.com/q/DgpDumEPzq"],
-    ["QQ频道", "openUrl", "https://pd.qq.com/s/5wyjvj7zw"],
-    ["Discord", "openUrl", "https://discord.gg/m8ewvgtzat"],
-    ["Bug 文档", "openUrl", "https://docs.qq.com/sheet/DVWJIdEVMV1pHUVJj"],
-    ["需求文档", "openUrl", "https://docs.qq.com/sheet/DVWRQaXBFUVV5bERo"],
-    ["使用备注", "openUrl", "https://docs.qq.com/sheet/DVVNwWHJEd3NOWXhR?tab=BB08J2"]
+function HelpPanel({ runAction }: { runAction: RunAction }) {
+  const links: Array<{ label: string; action: "openHelp" } | { label: string; action: "openUrl"; url: string }> = [
+    { label: "快速上手/指令手册", action: "openHelp" },
+    { label: "版本更新视频", action: "openUrl", url: "https://www.bilibili.com/video/BV1oWVRzaEzk" },
+    { label: "配置共享仓库", action: "openUrl", url: "https://zclucas.github.io/RMT-Setting/" },
+    { label: "GitHub", action: "openUrl", url: "https://github.com/zclucas/RMT" },
+    { label: "Gitee", action: "openUrl", url: "https://gitee.com/fateman/RMT" },
+    { label: "GitHub 讨论", action: "openUrl", url: "https://github.com/zclucas/RMT/discussions" },
+    { label: "QQ群", action: "openUrl", url: "https://qm.qq.com/q/DgpDumEPzq" },
+    { label: "QQ频道", action: "openUrl", url: "https://pd.qq.com/s/5wyjvj7zw" },
+    { label: "Discord", action: "openUrl", url: "https://discord.gg/m8ewvgtzat" },
+    { label: "Bug 文档", action: "openUrl", url: "https://docs.qq.com/sheet/DVWJIdEVMV1pHUVJj" },
+    { label: "需求文档", action: "openUrl", url: "https://docs.qq.com/sheet/DVWRQaXBFUVV5bERo" },
+    { label: "使用备注", action: "openUrl", url: "https://docs.qq.com/sheet/DVVNwWHJEd3NOWXhR?tab=BB08J2" }
   ];
 
   return (
@@ -967,10 +982,14 @@ function HelpPanel({ runAction }: { runAction: (type: string, payload?: PatchPay
       <p>本软件按原样提供，使用者需要自行承担使用、修改或分发带来的风险。</p>
       <p>请勿将本软件用于违法用途，包括但不限于游戏作弊、未经授权的系统访问或数据篡改。</p>
       <div className="link-list">
-        {links.map(([label, action, url]) => (
-          <button key={label} onClick={() => runAction(action, url ? { url } : undefined)} type="button">
+        {links.map((link) => (
+          <button
+            key={link.label}
+            onClick={() => (link.action === "openUrl" ? runAction("openUrl", { url: link.url }) : runAction("openHelp"))}
+            type="button"
+          >
             <ExternalLink size={16} />
-            {label}
+            {link.label}
           </button>
         ))}
       </div>
@@ -1001,7 +1020,7 @@ function RewardPanel({ macroTotalCount }: { macroTotalCount: number }) {
   );
 }
 
-function ThanksPanel({ runAction }: { runAction: (type: string, payload?: PatchPayload) => void }) {
+function ThanksPanel({ runAction }: { runAction: RunAction }) {
   const developers = [
     ["GushuLily", "https://github.com/GushuLily"],
     ["张正波", "https://gitee.com/bogezzb"],
@@ -1077,10 +1096,10 @@ function HotkeyField({
 }: {
   label: string;
   value: string;
-  target: string;
+  target: RmtActionPayload<"openHotkeyEditor">["target"];
   onLocal: (value: string) => void;
   onCommit: (value: string) => void;
-  runAction: (type: string, payload?: PatchPayload) => void;
+  runAction: RunAction;
 }) {
   return (
     <Field label={label}>

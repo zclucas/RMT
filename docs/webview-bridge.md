@@ -36,6 +36,8 @@ The source of truth for the frontend shape is `WebViewApp/src/types.ts`.
 
 The source of truth for state construction is `RmtBuildState()` in `Main/UIUtil.ahk`.
 
+The frontend action contract is the `RmtAction` union in `WebViewApp/src/types.ts`.
+
 When adding a state field:
 
 1. Add it to `RmtBuildState()` or a nested builder such as `RmtBuildSettings()`/`RmtBuildTools()`.
