@@ -27,6 +27,7 @@ The script checks:
 
 - `RMT_WEBVIEW_VERSION`, `WebViewApp/package.json`, and the bridge fallback version match.
 - The WebView state/action contract matches between TypeScript and `Main/UIUtil.ahk`.
+- The runtime include graph loads only the WebViewToo WebView2 wrapper.
 - `RMT.ahk` passes AutoHotkey validation.
 - React/TypeScript builds successfully and writes `WebViewApp/dist`.
 - `git diff --check` reports no whitespace errors.
@@ -37,6 +38,7 @@ Useful scoped checks:
 .\scripts\verify.ps1 -SkipWebBuild
 .\scripts\verify.ps1 -SkipAhkValidate
 .\scripts\verify.ps1 -SkipBridgeContract
+.\scripts\verify.ps1 -SkipWebViewWrapperCheck
 .\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"
 ```
 

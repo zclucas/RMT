@@ -14,6 +14,7 @@ Expected result:
 
 - Version consistency passes.
 - WebView bridge contract passes.
+- WebView2 wrapper check passes.
 - `RMT.ahk` validates.
 - React/TypeScript builds and updates `WebViewApp/dist`.
 - `git diff --check` has no errors.

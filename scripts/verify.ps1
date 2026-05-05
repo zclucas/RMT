@@ -3,6 +3,7 @@ param(
     [string]$AhkExe = "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe",
     [switch]$SkipAhkValidate,
     [switch]$SkipBridgeContract,
+    [switch]$SkipWebViewWrapperCheck,
     [switch]$SkipWebBuild,
     [switch]$SkipWhitespaceCheck
 )
@@ -79,6 +80,10 @@ Invoke-Check "Version consistency" {
 
 if (-not $SkipBridgeContract) {
     Invoke-Native "WebView bridge contract" "node" @("scripts\verify-webview-contract.mjs")
+}
+
+if (-not $SkipWebViewWrapperCheck) {
+    Invoke-Native "WebView2 wrapper check" "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\verify-webview2-wrapper.ps1")
 }
 
 if (-not $SkipAhkValidate) {

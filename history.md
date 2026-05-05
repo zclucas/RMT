@@ -20,6 +20,7 @@
 - Added a WebView bridge contract check that compares TypeScript state/action types with the AHK state builders and dispatcher.
 - Added Playwright visual regression coverage for the scaled WebView macro layout, scrollbars, visible action/status columns, and disabled controls.
 - Centralized WebView UI copy and fallback state text to reduce future mojibake and half-localized frontend changes.
+- Added an AutoHotkey help asset note and a WebView2 wrapper check to prevent loading both WebViewToo and the legacy WebView2 plugin.
 
 ## v1.1.4
 
