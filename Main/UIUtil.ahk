@@ -326,6 +326,8 @@ RmtDispatchWebAction(actionType, payload) {
             OnClearToolText()
             RmtPostState()
             return ""
+        case "copyDiagnostics":
+            return RmtCopyDiagnostics()
         case "openHotkeyEditor":
             RmtOpenHotkeyEditorAction(payload)
             return ""
@@ -561,6 +563,46 @@ RmtBuildTools() {
     tools["color"] := RmtControlValue(ToolCheckInfo.ToolColorCtrl, ToolCheckInfo.Color)
     tools["toolText"] := RmtControlValue(ToolCheckInfo.ToolTextCtrl, "")
     return tools
+}
+
+RmtCopyDiagnostics() {
+    global MySoftData, RMT_WEBVIEW_VERSION
+    A_Clipboard := RmtBuildDiagnosticsText()
+    return "诊断信息已复制到剪贴板"
+}
+
+RmtBuildDiagnosticsText() {
+    global MySoftData, RMT_WEBVIEW_VERSION
+    webViewIndex := A_WorkingDir "\WebViewApp\dist\index.html"
+    loaderPath := A_WorkingDir "\Plugins\WebViewToo\Lib\" (A_PtrSize * 8) "bit\WebView2Loader.dll"
+    settingsDir := A_WorkingDir "\Setting"
+    workExe := A_WorkingDir "\Thread\Work1.exe"
+
+    text := "RMT Diagnostics`r`n"
+    text .= "GeneratedAt: " FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss") "`r`n"
+    text .= "Version: " RMT_WEBVIEW_VERSION "`r`n"
+    text .= "AutoHotkeyVersion: " A_AhkVersion "`r`n"
+    text .= "Compiled: " (A_IsCompiled ? "true" : "false") "`r`n"
+    text .= "Bitness: " (A_PtrSize * 8) "`r`n"
+    text .= "OSVersion: " A_OSVersion "`r`n"
+    text .= "WorkingDir: " A_WorkingDir "`r`n"
+    text .= "ScriptPath: " A_ScriptFullPath "`r`n"
+    text .= "CurrentSetting: " MySoftData.CurSettingName "`r`n"
+    text .= "ActiveTabIndex: " MySoftData.TableIndex "`r`n"
+    text .= "MacroRunningCount: " MySoftData.MacroRunningCount "`r`n"
+    text .= "MacroTotalCount: " MySoftData.MacroTotalCount "`r`n"
+    text .= "IsSuspend: " (MySoftData.IsSuspend ? "true" : "false") "`r`n"
+    text .= "IsPause: " (MySoftData.IsPause ? "true" : "false") "`r`n"
+    text .= "IsMacroWorking: " (MySoftData.IsMacroWorking ? "true" : "false") "`r`n"
+    text .= "WebViewIndex: " RmtFileStatus(webViewIndex) " - " webViewIndex "`r`n"
+    text .= "WebView2Loader: " RmtFileStatus(loaderPath) " - " loaderPath "`r`n"
+    text .= "SettingsDir: " RmtFileStatus(settingsDir) " - " settingsDir "`r`n"
+    text .= "WorkExe: " RmtFileStatus(workExe) " - " workExe "`r`n"
+    return text
+}
+
+RmtFileStatus(path) {
+    return FileExist(path) ? "present" : "missing"
 }
 
 RmtGetTabKind(index) {

@@ -221,6 +221,7 @@ export default function App() {
 
           {activeTab?.kind === "settings" && (
             <SettingsPanel
+              state={state}
               settings={state.settings}
               patchLocalSettings={patchLocalSettings}
               updateSetting={updateSetting}
@@ -740,11 +741,13 @@ function ToolPanel({
 }
 
 function SettingsPanel({
+  state,
   settings,
   patchLocalSettings,
   updateSetting,
   runAction
 }: {
+  state: RmtState;
   settings: RmtSettings;
   patchLocalSettings: (field: keyof RmtSettings, value: unknown) => void;
   updateSetting: (field: keyof RmtSettings, value: unknown) => void;
@@ -909,6 +912,34 @@ function SettingsPanel({
           <Settings size={16} />
           配置管理
         </button>
+      </div>
+
+      <div className="section-block diagnostics-block">
+        <h2>诊断</h2>
+        <div className="info-grid">
+          <div className="info-item">
+            <span>版本</span>
+            <strong>{state.version}</strong>
+          </div>
+          <div className="info-item">
+            <span>配置</span>
+            <strong title={state.currentSettingName}>{state.currentSettingName}</strong>
+          </div>
+          <div className="info-item">
+            <span>运行中</span>
+            <strong>{state.macroRunningCount}</strong>
+          </div>
+          <div className="info-item">
+            <span>累计执行</span>
+            <strong>{state.macroTotalCount}</strong>
+          </div>
+        </div>
+        <div className="button-row diagnostics-actions">
+          <button onClick={() => runAction("copyDiagnostics")} type="button">
+            <Clipboard size={16} />
+            复制诊断信息
+          </button>
+        </div>
       </div>
     </section>
   );

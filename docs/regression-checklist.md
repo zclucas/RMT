@@ -59,6 +59,7 @@ Expected result:
 - Change screenshot and key-down modes.
 - Toggle boot start, split line, fixed menu wheel, no-variable-tip, and command tip settings.
 - Open hotkey editors for app and tool hotkeys.
+- Copy diagnostic information and confirm the success message appears.
 - Save, restart, and confirm settings persist.
 
 ## Legacy Dialogs Still Used

@@ -661,6 +661,14 @@ h2 {
   white-space: nowrap;
 }
 
+.diagnostics-block .info-grid {
+  margin-bottom: 10px;
+}
+
+.diagnostics-actions {
+  margin-bottom: 0;
+}
+
 .tool-output {
   min-height: 128px;
   resize: vertical;

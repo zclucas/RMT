@@ -56,6 +56,7 @@ Current action groups:
 - Navigation/help: `openHelp`, `openUrl`, `openVarMonitor`
 - Tool/settings dialogs: `openSettingManager`, `openToolRecordSetting`, `editCmdTip`, `openFreePaste`, `openHotkeyEditor`, `keyDownHelp`
 - Tool runtime: `toggleToolCheck`, `toggleToolRecord`, `toolTextFilterScreenShot`, `toolTextFilterSelectImage`, `clearToolText`
+- Diagnostics: `copyDiagnostics`
 - Data update: `updateSetting`, `updateTool`, `updateItem`, `updateFold`, `toggleFold`
 - Structure update: `addItem`, `deleteItem`, `moveItem`, `addFold`, `deleteFold`
 - Editors: `openTriggerEditor`, `openMacroEditor`
