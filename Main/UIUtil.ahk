@@ -195,6 +195,7 @@ RmtInitWebStateControls() {
     MySoftData.KillMacroHotkeyCtrl := RmtWebValueControl(MySoftData.KillMacroHotkey)
     MySoftData.BootStartCtrl := RmtWebValueControl(MySoftData.IsBootStart)
     MySoftData.SplitLineCtrl := RmtWebValueControl(MySoftData.ShowSplitLine)
+    MySoftData.ShowTopButtonsCtrl := RmtWebValueControl(MySoftData.ShowTopButtons)
     MySoftData.FixedMenuWheelCtrl := RmtWebValueControl(MySoftData.FixedMenuWheel)
     MySoftData.MutiThreadNumCtrl := RmtWebValueControl(MySoftData.MutiThreadNum)
     MySoftData.SoftBGColorCon := RmtWebValueControl(MySoftData.SoftBGColor)
@@ -527,6 +528,7 @@ RmtBuildSettings() {
     settings["killMacroHotkey"] := RmtControlValue(MySoftData.KillMacroHotkeyCtrl, MySoftData.KillMacroHotkey)
     settings["bootStart"] := RmtJsonBool(RmtControlValue(MySoftData.BootStartCtrl, MySoftData.IsBootStart))
     settings["showSplitLine"] := RmtJsonBool(RmtControlValue(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine))
+    settings["showTopButtons"] := RmtJsonBool(RmtControlValue(MySoftData.ShowTopButtonsCtrl, MySoftData.ShowTopButtons))
     settings["fixedMenuWheel"] := RmtJsonBool(RmtControlValue(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel))
     settings["mutiThreadNum"] := String(RmtControlValue(MySoftData.MutiThreadNumCtrl, MySoftData.MutiThreadNum))
     settings["softBGColor"] := RmtControlValue(MySoftData.SoftBGColorCon, MySoftData.SoftBGColor)
@@ -665,6 +667,9 @@ RmtUpdateSetting(field, value) {
         case "showSplitLine":
             MySoftData.ShowSplitLine := RmtBool(value)
             RmtSetControl(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine)
+        case "showTopButtons":
+            MySoftData.ShowTopButtons := RmtBool(value)
+            RmtSetControl(MySoftData.ShowTopButtonsCtrl, MySoftData.ShowTopButtons)
         case "fixedMenuWheel":
             MySoftData.FixedMenuWheel := RmtBool(value)
             RmtSetControl(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel)

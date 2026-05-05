@@ -960,7 +960,7 @@ h2 {
   color: #3b3f45;
   display: block;
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   padding: 4px 8px;
   text-align: right;
@@ -1016,6 +1016,22 @@ h2 {
   border-bottom-color: #35b65a;
   color: #2cad4c;
   font-weight: 700;
+}
+
+.classic-tabs-collapsed {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #dde3e8;
+  display: flex;
+  min-height: 30px;
+  padding: 3px 14px;
+}
+
+.classic-tabs-collapsed button {
+  color: #54626f;
+  font-size: 13px;
+  min-height: 24px;
+  padding: 2px 8px;
 }
 
 .classic-message {

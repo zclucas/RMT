@@ -62,6 +62,7 @@ export interface RmtSettings {
   killMacroHotkey: string;
   bootStart: boolean;
   showSplitLine: boolean;
+  showTopButtons: boolean;
   fixedMenuWheel: boolean;
   mutiThreadNum: string;
   softBGColor: string;

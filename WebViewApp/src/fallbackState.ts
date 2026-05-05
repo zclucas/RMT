@@ -21,6 +21,7 @@ export const fallbackState: RmtState = {
     killMacroHotkey: "!k",
     bootStart: false,
     showSplitLine: false,
+    showTopButtons: true,
     fixedMenuWheel: false,
     mutiThreadNum: "3",
     softBGColor: "f0f0f0",

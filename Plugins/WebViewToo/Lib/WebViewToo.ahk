@@ -247,6 +247,8 @@ class WebViewSizer extends Gui {
     /**
      * Helper class for adding sizing handles to a caption-free WebViewGui
      */
+    static BorderSize := 6
+
     static __New() {
         OnMessage(0x0024, (Params*) => WebViewSizer.WM_GETMINMAXINFO(Params*))
         OnMessage(0x0083, (Params*) => WebViewSizer.WM_NCCALCSIZE(Params*))
@@ -256,7 +258,7 @@ class WebViewSizer extends Gui {
 
     /** Tests if the cursor intersects with the sizing handles */
     static HitTest(lParam, Hwnd, &X?, &Y?) {
-        static BorderSize := 29
+        BorderSize := WebViewSizer.BorderSize
         X := lParam << 48 >> 48, Y := lParam << 32 >> 48
         WinGetPos &gX, &gY, &gW, &gH, Hwnd
         Hit := (X < gX + BorderSize && 1) + (X >= gX + gW - BorderSize && 2)
@@ -365,8 +367,9 @@ class WebViewSizer extends Gui {
     Move(X, Y, Width, Height) {
         ; Adjust the sizing handles to fit the GUI, first punching a big hole
         ; in the center for click-through, then resizing it to fit the GUI.
+        BorderSize := WebViewSizer.BorderSize
         hRgn1 := DllCall("CreateRectRgn", "Int", 0, "Int", 0, "Int", Width, "Int", Height, "Ptr")
-        hRgn2 := DllCall("CreateRectRgn", "Int", 6, "Int", 6, "Int", Width - 6, "Int", Height - 6, "Ptr")
+        hRgn2 := DllCall("CreateRectRgn", "Int", BorderSize, "Int", BorderSize, "Int", Width - BorderSize, "Int", Height - BorderSize, "Ptr")
         DllCall("CombineRgn", "Ptr", hRgn1, "Ptr", hRgn1, "Ptr", hRgn2, "Int", RGN_DIFF := 4)
         DllCall("SetWindowRgn", "Ptr", this.Hwnd, "Ptr", hRgn1, "Int", true)
 

@@ -189,7 +189,15 @@ export default function App() {
             <GlobalSidebar state={state} runAction={runAction} />
 
             <section className="classic-main">
-              <TopTabs state={state} runAction={runAction} />
+              <TopTabs
+                state={state}
+                showTopButtons={state.settings.showTopButtons}
+                setShowTopButtons={(value) => {
+                  patchLocalSettings("showTopButtons", value);
+                  updateSetting("showTopButtons", value);
+                }}
+                runAction={runAction}
+              />
 
               {message && <div className="message classic-message">{message}</div>}
 
@@ -279,7 +287,28 @@ function TitleBar({
   );
 }
 
-function TopTabs({ state, runAction }: { state: RmtState; runAction: RunAction }) {
+function TopTabs({
+  state,
+  showTopButtons,
+  setShowTopButtons,
+  runAction
+}: {
+  state: RmtState;
+  showTopButtons: boolean;
+  setShowTopButtons: (value: boolean) => void;
+  runAction: RunAction;
+}) {
+  if (!showTopButtons) {
+    return (
+      <div className="classic-tabs-collapsed">
+        <button onClick={() => setShowTopButtons(true)} title={uiCopy.tabs.showTopButtons} type="button">
+          <MenuIcon size={15} />
+          <span>{uiCopy.tabs.showTopButtons}</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <nav className="classic-tabs" aria-label={uiCopy.tabs.ariaLabel}>
       {state.tabs.map((tab) => {
@@ -971,6 +1000,17 @@ function SettingsPanel({
             }}
           />
           {uiCopy.settings.showSplitLine}
+        </label>
+        <label className="check-row block">
+          <input
+            type="checkbox"
+            checked={settings.showTopButtons}
+            onChange={(event) => {
+              patchLocalSettings("showTopButtons", event.target.checked);
+              updateSetting("showTopButtons", event.target.checked);
+            }}
+          />
+          {uiCopy.settings.showTopButtons}
         </label>
 
         <Field label={uiCopy.settings.lang}>
