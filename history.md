@@ -25,6 +25,7 @@
 - Added verification guards for `WebViewApp/dist` sync, help Markdown local links/images, and packaged release layout.
 - Expanded Playwright visual coverage for dense/narrow macro modules, active tools, and populated settings.
 - Added `RmtBuildState()` fixture compatibility checks and a lightweight WebView GitHub Actions workflow.
+- Fixed worker startup warnings caused by WebView state sync calls in shared macro utilities.
 
 ## v1.1.4
 
