@@ -18,7 +18,7 @@ declare global {
 }
 
 const fallbackState: RmtState = {
-  version: "RMTv1.1.3",
+  version: "RMTv1.1.4",
   currentSettingName: "RMT默认配置",
   activeTabIndex: 1,
   isSuspend: false,

@@ -1,6 +1,6 @@
 #Include ..\Plugins\WebViewToo\Lib\WebViewToo.ahk
 
-RMT_WEBVIEW_VERSION := "RMTv1.1.3"
+RMT_WEBVIEW_VERSION := "RMTv1.1.4"
 
 class RmtWebViewGui extends WebViewGui {
     Submit(Hide := true) {
