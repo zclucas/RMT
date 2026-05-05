@@ -4,6 +4,7 @@ param(
     [switch]$SkipAhkValidate,
     [switch]$SkipBridgeContract,
     [switch]$SkipWebViewWrapperCheck,
+    [switch]$SkipHelpDocsCheck,
     [switch]$SkipWebBuild,
     [switch]$SkipWhitespaceCheck
 )
@@ -84,6 +85,10 @@ if (-not $SkipBridgeContract) {
 
 if (-not $SkipWebViewWrapperCheck) {
     Invoke-Native "WebView2 wrapper check" "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\verify-webview2-wrapper.ps1")
+}
+
+if (-not $SkipHelpDocsCheck) {
+    Invoke-Native "Help documentation generation" "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\verify-help-docs.ps1")
 }
 
 if (-not $SkipAhkValidate) {

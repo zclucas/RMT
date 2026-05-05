@@ -21,6 +21,7 @@
 - Added Playwright visual regression coverage for the scaled WebView macro layout, scrollbars, visible action/status columns, and disabled controls.
 - Centralized WebView UI copy and fallback state text to reduce future mojibake and half-localized frontend changes.
 - Added an AutoHotkey help asset note and a WebView2 wrapper check to prevent loading both WebViewToo and the legacy WebView2 plugin.
+- Added a generated-help verification guard so `Web/*.md` changes cannot drift from `RMT帮助文档.html` and `index.html`.
 
 ## v1.1.4
 

@@ -28,6 +28,7 @@ The script checks:
 - `RMT_WEBVIEW_VERSION`, `WebViewApp/package.json`, and the bridge fallback version match.
 - The WebView state/action contract matches between TypeScript and `Main/UIUtil.ahk`.
 - The runtime include graph loads only the WebViewToo WebView2 wrapper.
+- Generated RMT help HTML matches the current `Web/*.md` sources and help assets.
 - `RMT.ahk` passes AutoHotkey validation.
 - React/TypeScript builds successfully and writes `WebViewApp/dist`.
 - `git diff --check` reports no whitespace errors.
@@ -39,6 +40,7 @@ Useful scoped checks:
 .\scripts\verify.ps1 -SkipAhkValidate
 .\scripts\verify.ps1 -SkipBridgeContract
 .\scripts\verify.ps1 -SkipWebViewWrapperCheck
+.\scripts\verify.ps1 -SkipHelpDocsCheck
 .\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"
 ```
 
@@ -50,6 +52,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check-active-worktree.ps1
 
 For manual release or large-change checks, also follow `docs/regression-checklist.md`.
 For packaging a public build, follow `docs/release.md`.
+
+When changing `Web/*.md`, `Web/CSS/*`, or help search scripts, run:
+
+```powershell
+node Web\JS\SingleHtml.js
+.\scripts\verify-help-docs.ps1
+```
 
 ## WebView UI Work
 

@@ -18,6 +18,7 @@
   - `.\scripts\verify.ps1 -SkipAhkValidate`
   - `.\scripts\verify.ps1 -SkipBridgeContract`
   - `.\scripts\verify.ps1 -SkipWebViewWrapperCheck`
+  - `.\scripts\verify.ps1 -SkipHelpDocsCheck`
   - `.\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"`
 - Run WebView visual regression checks from `WebViewApp` with `npm.cmd run test:visual` after layout-sensitive changes.
 - Run packaging from the repo root with `.\PackRMT.ps1`.
@@ -47,6 +48,7 @@
 
 - `scripts\verify.ps1` requires the AHK, package, and bridge versions to match.
 - `PackRMT.ps1` copies root `index.html` into release folders as `RMT帮助文档.html`.
+- `Web\JS\SingleHtml.js --check` verifies that generated RMT help HTML is current without rewriting it.
 - The WebView runtime loader files live under `Plugins\WebViewToo\Lib`.
 - The AutoHotkey runtime error Help button opens the installed AutoHotkey help file, not an RMT-owned document.
 - If React build fails with `spawn EPERM` in a sandboxed environment, rerun the same command outside the sandbox.
