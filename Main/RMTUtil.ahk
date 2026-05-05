@@ -473,16 +473,19 @@ SetTableItemState(tableIndex, itemIndex, State) {
 
     UpdateMacroRunningCount(LastState, State)
     tableItem.ColorStateArr[itemIndex] := State
-    ItemUsePool := ItemUseConPoolMap[tableItem.Index]
-    if (ItemUsePool.Has(itemIndex)) {
-        ItemConObj := ItemUsePool[itemIndex]
-        ItemConObj.ColorCon.Value := GetItemColorValue(tableItem.ColorStateArr[itemIndex])
-        ItemConObj.ColorCon.Visible := isVisible
+    if (ItemUseConPoolMap.Has(tableItem.Index)) {
+        ItemUsePool := ItemUseConPoolMap[tableItem.Index]
+        if (ItemUsePool.Has(itemIndex)) {
+            ItemConObj := ItemUsePool[itemIndex]
+            ItemConObj.ColorCon.Value := GetItemColorValue(tableItem.ColorStateArr[itemIndex])
+            ItemConObj.ColorCon.Visible := isVisible
+        }
     }
 
     if (State == 3) {
         SetTimer(CancelTableItemStopState.Bind(tableIndex, itemIndex), -5000)
     }
+    try RmtPostState()
 }
 
 CancelTableItemStopState(tableIndex, itemIndex) {
@@ -490,12 +493,15 @@ CancelTableItemStopState(tableIndex, itemIndex) {
     if (tableItem.ColorStateArr[itemIndex] == 3) {
         tableItem.ColorStateArr[itemIndex] := 0
 
-        ItemUsePool := ItemUseConPoolMap[tableItem.Index]
-        if (ItemUsePool.Has(itemIndex)) {
-            ItemConObj := ItemUsePool[itemIndex]
-            ItemConObj.ColorCon.Value := ""
-            ItemConObj.ColorCon.Visible := false
+        if (ItemUseConPoolMap.Has(tableItem.Index)) {
+            ItemUsePool := ItemUseConPoolMap[tableItem.Index]
+            if (ItemUsePool.Has(itemIndex)) {
+                ItemConObj := ItemUsePool[itemIndex]
+                ItemConObj.ColorCon.Value := ""
+                ItemConObj.ColorCon.Visible := false
+            }
         }
+        try RmtPostState()
     }
 }
 

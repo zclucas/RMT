@@ -120,6 +120,11 @@ function Get-Version {
         return $null
     }
     $content = Get-Content $uiUtil -Raw
+    if ($content -match 'RMT_WEBVIEW_VERSION\s*:=\s*"RMTv(\d+\.\d+\.\d+)"') {
+        $version = $matches[1]
+        Write-Log "  版本号: v$version" "Gray"
+        return $version
+    }
     if ($content -match 'MyGui\.Title\s*:=\s*"RMTv(\d+\.\d+\.\d+)"') {
         $version = $matches[1]
         Write-Log "  版本号: v$version" "Gray"
@@ -197,6 +202,36 @@ function Pack-HelpDoc {
     return $false
 }
 
+function Copy-WebViewAssets {
+    param([string]$ReleaseDir)
+
+    $distDir = Join-Path $PSScriptRoot "WebViewApp\dist"
+    $distIndex = Join-Path $distDir "index.html"
+    if (-not (Test-Path $distIndex)) {
+        Write-Log "  ✗ 未找到 WebViewApp\dist\index.html，请先运行 npm.cmd run build" "Red"
+        return $false
+    }
+
+    $destWebViewApp = Join-Path $ReleaseDir "WebViewApp"
+    if (Test-Path $destWebViewApp) {
+        Remove-Item $destWebViewApp -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $destWebViewApp -Force | Out-Null
+    Copy-Item -Path $distDir -Destination (Join-Path $destWebViewApp "dist") -Force -Recurse
+    Write-Log "  已复制 WebViewApp\dist" "Gray"
+
+    $webViewTooLib = Join-Path $PSScriptRoot "Plugins\WebViewToo\Lib"
+    $destWebViewToo = Join-Path $ReleaseDir "Plugins\WebViewToo"
+    $destWebViewTooLib = Join-Path $destWebViewToo "Lib"
+    if (Test-Path $destWebViewTooLib) {
+        Remove-Item $destWebViewTooLib -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $destWebViewToo -Force | Out-Null
+    Copy-Item -Path $webViewTooLib -Destination $destWebViewTooLib -Force -Recurse
+    Write-Log "  已复制 WebViewToo 运行库" "Gray"
+    return $true
+}
+
 # ============================================================
 # 发行版函数
 # ============================================================
@@ -235,6 +270,11 @@ function New-Release {
         # 复制帮助文档
         Copy-IfExist (Join-Path $PSScriptRoot "RMT帮助文档.html") $releaseDir
 
+        # 复制 WebView2 前端和运行库
+        if (-not (Copy-WebViewAssets $releaseDir)) {
+            return $false
+        }
+
         # 删除旧 Work*.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
 
@@ -266,6 +306,11 @@ function New-Release {
 
         # 复制帮助文档
         Copy-IfExist (Join-Path $PSScriptRoot "RMT帮助文档.html") $releaseDir
+
+        # 复制 WebView2 前端和运行库
+        if (-not (Copy-WebViewAssets $releaseDir)) {
+            return $false
+        }
 
         # 删除旧 Work*.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"

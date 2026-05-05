@@ -61,6 +61,7 @@ OnSuspendHotkey(*) {
     if (MySoftData.CMDTip)
         MyCMDReportAciton(tipStr)
 
+    try RmtPostState()
     Suspend(MySoftData.IsSuspend)
 }
 
@@ -80,6 +81,7 @@ OnPauseHotKey(*) {
         MyCMDReportAciton(tipStr)
 
     MySoftData.SpecialTableItem.PauseArr[1] := MySoftData.IsPause
+    try RmtPostState()
 }
 
 SetPauseState(state) {
@@ -94,6 +96,7 @@ SetPauseState(state) {
     }
 
     MySoftData.SpecialTableItem.PauseArr[1] := state
+    try RmtPostState()
 }
 
 OnKillAllMacro(*) {
@@ -121,6 +124,7 @@ OnKillAllMacro(*) {
     tipStr := GetLang("终止所有宏")
     if (MySoftData.CMDTip)
         MyCMDReportAciton(tipStr)
+    try RmtPostState()
 }
 
 OnToolCheckHotkey(*) {
@@ -134,6 +138,7 @@ OnToolCheckHotkey(*) {
     }
     else
         ToolCheckInfo.MouseInfoTimer := ""
+    try RmtPostState()
 }
 
 SetToolCheckInfo() {

@@ -10,3 +10,5 @@ installed
 */build*
 .codebuddy/
 .idea
+WebViewApp/node_modules/
+WebViewApp/*.tsbuildinfo
