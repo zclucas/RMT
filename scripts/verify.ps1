@@ -54,7 +54,7 @@ function Invoke-Check {
 
 Invoke-Check "Version consistency" {
     $uiUtilPath = Join-Path $RepoRoot "Main\UIUtil.ahk"
-    $bridgePath = Join-Path $RepoRoot "WebViewApp\src\bridge.ts"
+    $fallbackStatePath = Join-Path $RepoRoot "WebViewApp\src\fallbackState.ts"
     $packagePath = Join-Path $RepoRoot "WebViewApp\package.json"
 
     $uiUtil = Get-Content -LiteralPath $uiUtilPath -Raw
@@ -68,10 +68,10 @@ Invoke-Check "Version consistency" {
         throw "Version mismatch: Main\UIUtil.ahk has $ahkVersion, WebViewApp\package.json has $packageVersion"
     }
 
-    $bridge = Get-Content -LiteralPath $bridgePath -Raw
+    $bridge = Get-Content -LiteralPath $fallbackStatePath -Raw
     $expectedBridgeVersion = 'version:\s*"RMTv' + [regex]::Escape($ahkVersion) + '"'
     if ($bridge -notmatch $expectedBridgeVersion) {
-        throw "Version mismatch: WebViewApp\src\bridge.ts fallback is not RMTv$ahkVersion"
+        throw "Version mismatch: WebViewApp\src\fallbackState.ts fallback is not RMTv$ahkVersion"
     }
 
     Write-Host "RMTv$ahkVersion"

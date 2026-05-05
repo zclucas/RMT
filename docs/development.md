@@ -66,4 +66,4 @@ Do not bump the version for routine unreleased commits. Bump all version sources
 
 - `Main/UIUtil.ahk`
 - `WebViewApp/package.json`
-- `WebViewApp/src/bridge.ts`
+- `WebViewApp/src/fallbackState.ts`

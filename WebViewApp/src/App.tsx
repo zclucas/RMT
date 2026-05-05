@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { callRmt, getFallbackState } from "./bridge";
+import { uiCopy } from "./copy";
 import type {
   RmtAction,
   RmtActionPayload,
@@ -52,13 +53,6 @@ type ActionArgs<T extends RmtActionType> = [RmtActionPayload<T>] extends [never]
   : [payload: RmtActionPayload<T>];
 type RunAction = <T extends RmtActionType>(type: T, ...args: ActionArgs<T>) => void | Promise<void>;
 
-const triggerTypeLabels = ["按下", "松开", "松止", "开关", "长按"];
-const modeLabels = ["AHK Send", "keybd_event", "罗技"];
-const startTipLabels = ["无", "触发提示", "循环首次提示"];
-const endTipLabels = ["无", "结束提示", "循环结束提示"];
-const screenshotLabels = ["微软截图", "RMT截图", "SC截图"];
-const keyDownLabels = ["自动松开", "忽略重复按下", "允许重复按下"];
-const ocrLabels = ["中文", "英文"];
 const uiDesignWidth = 1360;
 const uiDesignHeight = 720;
 const minUiScale = 0.65;
@@ -129,7 +123,7 @@ export default function App() {
       const action = (payload === undefined ? { type } : { type, payload }) as RmtAction;
       const result = await callRmt(action);
       setState(result.state);
-      setMessage(result.message || (result.ok ? "" : "操作失败"));
+      setMessage(result.message || (result.ok ? "" : uiCopy.common.actionFailed));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -221,7 +215,7 @@ export default function App() {
                     </div>
                     <div className="runtime-summary">
                       <span className={classNames("dot", state.isMacroWorking && "running")} />
-                      <span>运行中 {state.macroRunningCount}</span>
+                      <span>{uiCopy.settings.running} {state.macroRunningCount}</span>
                     </div>
                   </div>
 
@@ -271,13 +265,13 @@ function TitleBar({
         <span>{state.version}</span>
       </div>
       <div className="window-actions">
-        <button title="最小化" onClick={() => runAction("minimize")} type="button">
+        <button title={uiCopy.window.minimize} onClick={() => runAction("minimize")} type="button">
           <Minus size={16} />
         </button>
-        <button title="最大化/还原" onClick={() => runAction("maximize")} type="button">
+        <button title={uiCopy.window.maximize} onClick={() => runAction("maximize")} type="button">
           <Maximize2 size={15} />
         </button>
-        <button className="close" title="关闭" onClick={() => runAction("close")} type="button">
+        <button className="close" title={uiCopy.window.close} onClick={() => runAction("close")} type="button">
           <X size={16} />
         </button>
       </div>
@@ -287,7 +281,7 @@ function TitleBar({
 
 function TopTabs({ state, runAction }: { state: RmtState; runAction: RunAction }) {
   return (
-    <nav className="classic-tabs" aria-label="RMT 功能页签">
+    <nav className="classic-tabs" aria-label={uiCopy.tabs.ariaLabel}>
       {state.tabs.map((tab) => {
         const Icon = getTabIcon(tab);
         return (
@@ -344,10 +338,10 @@ function getTabIcon(tab: RmtTab) {
 
 function getTabLabel(tab: RmtTab): string {
   if (tab.kind === "reward") {
-    return "打赏";
+    return uiCopy.tabs.rewardShort;
   }
   if (tab.kind === "thanks") {
-    return "感谢";
+    return uiCopy.tabs.thanksShort;
   }
   return tab.name;
 }
@@ -356,18 +350,18 @@ function GlobalSidebar({ state, runAction }: { state: RmtState; runAction: RunAc
   return (
     <aside className="classic-global-sidebar">
       <div className="sidebar-section">
-        <span className="side-label">当前配置</span>
+        <span className="side-label">{uiCopy.sidebar.currentConfig}</span>
         <button className="config-select-button" onClick={() => runAction("openSettingManager")} title={state.currentSettingName} type="button">
           {state.currentSettingName}
         </button>
         <button className="side-button green" onClick={() => runAction("openSettingManager")} type="button">
           <Settings size={15} />
-          配置管理
+          {uiCopy.sidebar.configManager}
         </button>
       </div>
 
       <div className="sidebar-section global-actions">
-        <span className="side-label">全局操作</span>
+        <span className="side-label">{uiCopy.sidebar.globalActions}</span>
         <button
           className={classNames("side-card", state.isSuspend && "is-active")}
           onClick={() => runAction("toggleSuspend")}
@@ -375,7 +369,7 @@ function GlobalSidebar({ state, runAction }: { state: RmtState; runAction: RunAc
         >
           <span>
             <Pause size={15} />
-            休眠
+            {uiCopy.sidebar.suspend}
           </span>
           <kbd>{formatHotkey(state.settings.suspendHotkey)}</kbd>
         </button>
@@ -386,29 +380,29 @@ function GlobalSidebar({ state, runAction }: { state: RmtState; runAction: RunAc
         >
           <span>
             <Square size={15} />
-            暂停
+            {uiCopy.sidebar.pause}
           </span>
           <kbd>{formatHotkey(state.settings.pauseHotkey)}</kbd>
         </button>
         <button className="side-button red" onClick={() => runAction("killAll")} type="button">
           <Square size={15} />
-          终止宏
+          {uiCopy.sidebar.killMacro}
         </button>
         <kbd className="shortcut-line">{formatHotkey(state.settings.killMacroHotkey)}</kbd>
         <button className="side-button gray" onClick={() => runAction("reload")} type="button">
           <RefreshCw size={15} />
-          重载
+          {uiCopy.sidebar.reload}
         </button>
         <button className="side-button blue" onClick={() => runAction("openHelp")} type="button">
           <HelpCircle size={15} />
-          帮助
+          {uiCopy.sidebar.help}
         </button>
       </div>
 
       <div className="sidebar-save">
         <button className="side-button green" onClick={() => runAction("save")} type="button">
           <Save size={15} />
-          保存
+          {uiCopy.sidebar.save}
         </button>
       </div>
     </aside>
@@ -432,7 +426,7 @@ function formatHotkey(value: string): string {
 
   const mainKey = key.replace(/[{}]/g, "").trim();
   const parts = [...modifiers, mainKey].filter(Boolean);
-  return parts.length > 0 ? parts.join("+") : "未设置";
+  return parts.length > 0 ? parts.join("+") : uiCopy.common.unsetHotkey;
 }
 
 function MacroTable({
@@ -464,7 +458,7 @@ function MacroTable({
         <div className="module-empty-row">
           <button onClick={() => runAction("addFold", { tableIndex: table.index, afterFoldIndex: 0 })} type="button">
             <Plus size={16} />
-            新增模块
+            {uiCopy.macro.addModule}
           </button>
         </div>
       )}
@@ -473,38 +467,38 @@ function MacroTable({
           <section className={classNames("macro-module-section", fold.forbid && "is-disabled")} key={fold.index}>
             <div className="module-config-row">
               <label className="module-field remark-field">
-                <span>备注:</span>
+                <span>{uiCopy.macro.remark}</span>
                 <input
                   value={fold.remark}
-                  placeholder={`模块 ${fold.index}`}
+                  placeholder={`${uiCopy.macro.modulePlaceholder} ${fold.index}`}
                   onChange={(event) => patchLocalFold(table.index, fold.index, "remark", event.target.value)}
                   onBlur={(event) => updateFold(table.index, fold.index, "remark", event.target.value)}
                 />
               </label>
               <label className="module-field front-field">
-                <span>前台:</span>
+                <span>{uiCopy.macro.front}</span>
                 <input
                   value={fold.frontInfo}
-                  placeholder="窗口标题 / 进程规则"
+                  placeholder={uiCopy.macro.frontPlaceholder}
                   onChange={(event) => patchLocalFold(table.index, fold.index, "frontInfo", event.target.value)}
                   onBlur={(event) => updateFold(table.index, fold.index, "frontInfo", event.target.value)}
                 />
               </label>
               <button onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, foldIndex: fold.index })} type="button">
                 <SquarePen size={15} />
-                编辑
+                {uiCopy.macro.edit}
               </button>
               <button onClick={() => runAction("addItem", { tableIndex: table.index, foldIndex: fold.index })} type="button">
                 <Plus size={15} />
-                新增宏
+                {uiCopy.macro.addMacro}
               </button>
               <button onClick={() => runAction("addFold", { tableIndex: table.index, afterFoldIndex: fold.index })} type="button">
                 <Plus size={15} />
-                新增模块
+                {uiCopy.macro.addModule}
               </button>
               <button
                 onClick={() =>
-                  confirmAction("确认删除当前模块以及模块中的所有宏配置？", "deleteFold", {
+                  confirmAction(uiCopy.macro.confirmDeleteModule, "deleteFold", {
                     tableIndex: table.index,
                     foldIndex: fold.index
                   })
@@ -512,7 +506,7 @@ function MacroTable({
                 type="button"
               >
                 <Trash2 size={15} />
-                删除模块
+                {uiCopy.macro.deleteModule}
               </button>
               <label className="inline-check module-disabled">
                 <input
@@ -523,12 +517,12 @@ function MacroTable({
                     updateFold(table.index, fold.index, "forbid", event.target.checked);
                   }}
                 />
-                禁用
+                {uiCopy.macro.disabled}
               </label>
               <button
                 className="module-expand-button"
                 onClick={() => runAction("toggleFold", { tableIndex: table.index, foldIndex: fold.index })}
-                title={fold.collapsed ? "展开模块" : "折叠模块"}
+                title={fold.collapsed ? uiCopy.macro.expandModule : uiCopy.macro.collapseModule}
                 type="button"
               >
                 {fold.collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
@@ -539,18 +533,12 @@ function MacroTable({
               <div className="module-macro-list">
                 <div className="module-macro-header">
                   <span />
-                  <span>宏名称</span>
-                  <span>触发编辑器</span>
-                  <span>触发类型</span>
-                  <span>循环次数</span>
-                  <span>宏设置</span>
-                  <span>宏编辑器</span>
-                  <span>移动</span>
-                  <span>状态</span>
-                  <span>操作</span>
+                  {uiCopy.macro.headers.map((header) => (
+                    <span key={header}>{header}</span>
+                  ))}
                 </div>
 
-                {fold.items.length === 0 && <div className="module-empty-row">当前模块没有宏。</div>}
+                {fold.items.length === 0 && <div className="module-empty-row">{uiCopy.macro.emptyModule}</div>}
 
                 {fold.items.map((item) => (
                   <div
@@ -558,24 +546,24 @@ function MacroTable({
                     key={item.serial || item.index}
                   >
                     <div className="macro-row-index">
-                      <span className="drag-handle" title="可用移动按钮调整顺序">
+                      <span className="drag-handle" title={uiCopy.macro.dragHint}>
                         <GripVertical size={16} />
                       </span>
                       <strong>{item.index}.</strong>
                     </div>
                     <input
                       value={item.remark}
-                      placeholder="宏名称"
+                      placeholder={uiCopy.macro.macroName}
                       onChange={(event) => patchLocalItem(table.index, item.index, "remark", event.target.value)}
                       onBlur={(event) => updateItem(table.index, item.index, "remark", event.target.value)}
                     />
                     <button
                       className="trigger-editor-button"
-                      title={table.isTimingTable ? "编辑定时配置" : table.isStringTable ? "编辑字串触发" : "编辑触发键"}
+                      title={table.isTimingTable ? uiCopy.macro.editTiming : table.isStringTable ? uiCopy.macro.editStringTrigger : uiCopy.macro.editTriggerKey}
                       onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, itemIndex: item.index })}
                       type="button"
                     >
-                      {item.trigger || "编辑"}
+                      {item.trigger || uiCopy.macro.edit}
                     </button>
                     <select
                       className="select-cell"
@@ -587,7 +575,7 @@ function MacroTable({
                         updateItem(table.index, item.index, "triggerType", value);
                       }}
                     >
-                      {triggerTypeLabels.map((label, index) => (
+                      {uiCopy.macro.triggerTypeLabels.map((label, index) => (
                         <option key={label} value={index + 1}>
                           {label}
                         </option>
@@ -606,17 +594,17 @@ function MacroTable({
                     />
                     <button
                       onClick={() => runAction("openMacroEditor", { tableIndex: table.index, itemIndex: item.index })}
-                      title={item.macro || "编辑宏"}
+                      title={item.macro || uiCopy.macro.editMacro}
                       type="button"
                     >
                       <SquarePen size={14} />
-                      编辑
+                      {uiCopy.macro.edit}
                     </button>
                     <div className="move-buttons">
                       <button
                         disabled={item.index <= 1}
                         onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: -1 })}
-                        title="上移"
+                        title={uiCopy.macro.moveUp}
                         type="button"
                       >
                         <ArrowUp size={14} />
@@ -624,7 +612,7 @@ function MacroTable({
                       <button
                         disabled={item.index >= itemCount}
                         onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: 1 })}
-                        title="下移"
+                        title={uiCopy.macro.moveDown}
                         type="button"
                       >
                         <ArrowDown size={14} />
@@ -639,12 +627,12 @@ function MacroTable({
                           updateItem(table.index, item.index, "forbid", event.target.checked);
                         }}
                       />
-                      禁用
+                      {uiCopy.macro.disabled}
                     </label>
                     <button
                       className="danger"
                       onClick={() =>
-                        confirmAction("确认删除当前宏？", "deleteItem", {
+                        confirmAction(uiCopy.macro.confirmDeleteMacro, "deleteItem", {
                           tableIndex: table.index,
                           itemIndex: item.index
                         })
@@ -652,14 +640,18 @@ function MacroTable({
                       type="button"
                     >
                       <Trash2 size={14} />
-                      删除
+                      {uiCopy.macro.delete}
                     </button>
                   </div>
                 ))}
               </div>
             )}
 
-            {fold.collapsed && <div className="module-collapsed-note">模块 {fold.index} 已折叠，点击右侧箭头展开。</div>}
+            {fold.collapsed && (
+              <div className="module-collapsed-note">
+                {uiCopy.macro.collapsedPrefix} {fold.index} {uiCopy.macro.collapsedSuffix}
+              </div>
+            )}
           </section>
       ))}
     </section>
@@ -681,11 +673,11 @@ function MacroSettingsControl({
     <details className="macro-settings-cell">
       <summary>
         <SlidersHorizontal size={14} />
-        设置
+        {uiCopy.macro.settings}
       </summary>
       <div className="macro-settings-panel">
         <label>
-          <span>模式</span>
+          <span>{uiCopy.macro.mode}</span>
           <select
             value={item.mode}
             onChange={(event) => {
@@ -694,7 +686,7 @@ function MacroSettingsControl({
               updateItem(tableIndex, item.index, "mode", value);
             }}
           >
-            {modeLabels.map((label, index) => (
+            {uiCopy.macro.modeLabels.map((label, index) => (
               <option key={label} value={index + 1}>
                 {label}
               </option>
@@ -702,7 +694,7 @@ function MacroSettingsControl({
           </select>
         </label>
         <label>
-          <span>时长</span>
+          <span>{uiCopy.macro.holdTime}</span>
           <input
             type="number"
             min={0}
@@ -712,7 +704,7 @@ function MacroSettingsControl({
           />
         </label>
         <label>
-          <span>开始音</span>
+          <span>{uiCopy.macro.startSound}</span>
           <select
             value={item.startTipSound}
             onChange={(event) => {
@@ -721,7 +713,7 @@ function MacroSettingsControl({
               updateItem(tableIndex, item.index, "startTipSound", value);
             }}
           >
-            {startTipLabels.map((label, index) => (
+            {uiCopy.macro.startTipLabels.map((label, index) => (
               <option key={label} value={index + 1}>
                 {label}
               </option>
@@ -729,7 +721,7 @@ function MacroSettingsControl({
           </select>
         </label>
         <label>
-          <span>结束音</span>
+          <span>{uiCopy.macro.endSound}</span>
           <select
             value={item.endTipSound}
             onChange={(event) => {
@@ -738,7 +730,7 @@ function MacroSettingsControl({
               updateItem(tableIndex, item.index, "endTipSound", value);
             }}
           >
-            {endTipLabels.map((label, index) => (
+            {uiCopy.macro.endTipLabels.map((label, index) => (
               <option key={label} value={index + 1}>
                 {label}
               </option>
@@ -761,56 +753,59 @@ function ToolPanel({
   updateTool: (field: keyof RmtToolState, value: unknown) => void;
   runAction: RunAction;
 }) {
-  const toolInfoRows = [
-    ["屏幕坐标", tools.mousePos],
-    ["窗口坐标", tools.mouseWinPos],
-    ["窗口标题", tools.processTitle],
-    ["进程名", tools.processName],
-    ["窗口类", tools.processClass],
-    ["PID", tools.processPid],
-    ["句柄", tools.processId],
-    ["位置颜色", tools.color]
-  ];
+  const toolInfoRows = uiCopy.tool.infoRows.map((label, index) => {
+    const values = [
+      tools.mousePos,
+      tools.mouseWinPos,
+      tools.processTitle,
+      tools.processName,
+      tools.processClass,
+      tools.processPid,
+      tools.processId,
+      tools.color
+    ];
+    return [label, values[index]] as const;
+  });
 
   return (
     <section className="panel-grid tool-layout">
       <div className="section-block">
-        <h2>工具热键</h2>
-        <HotkeyField label="鼠标信息" value={tools.toolCheckHotKey} target="toolCheckHotKey" onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} runAction={runAction} />
-        <HotkeyField label="指令录制" value={tools.toolRecordMacroHotKey} target="toolRecordMacroHotKey" onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} runAction={runAction} />
-        <HotkeyField label="截图识别" value={tools.toolTextFilterHotKey} target="toolTextFilterHotKey" onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} runAction={runAction} />
-        <HotkeyField label="截图" value={tools.screenShotHotKey} target="screenShotHotKey" onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} runAction={runAction} />
-        <HotkeyField label="自由粘贴" value={tools.freePasteHotKey} target="freePasteHotKey" onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} runAction={runAction} />
+        <h2>{uiCopy.tool.hotkeys}</h2>
+        <HotkeyField label={uiCopy.tool.mouseInfoHotkey} value={tools.toolCheckHotKey} target="toolCheckHotKey" onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} runAction={runAction} />
+        <HotkeyField label={uiCopy.tool.recordHotkey} value={tools.toolRecordMacroHotKey} target="toolRecordMacroHotKey" onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} runAction={runAction} />
+        <HotkeyField label={uiCopy.tool.textFilterHotkey} value={tools.toolTextFilterHotKey} target="toolTextFilterHotKey" onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} runAction={runAction} />
+        <HotkeyField label={uiCopy.tool.screenshotHotkey} value={tools.screenShotHotKey} target="screenShotHotKey" onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} runAction={runAction} />
+        <HotkeyField label={uiCopy.tool.freePasteHotkey} value={tools.freePasteHotKey} target="freePasteHotKey" onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} runAction={runAction} />
       </div>
 
       <div className="section-block">
-        <h2>工具窗口</h2>
+        <h2>{uiCopy.tool.toolWindows}</h2>
         <div className="button-row">
           <button onClick={() => runAction("openVarMonitor")} type="button">
             <Play size={16} />
-            变量监视器
+            {uiCopy.tool.variableMonitor}
           </button>
           <button onClick={() => runAction("openFreePaste")} type="button">
             <Clipboard size={16} />
-            自由粘贴
+            {uiCopy.tool.freePaste}
           </button>
           <button onClick={() => runAction("openToolRecordSetting")} type="button">
             <Settings size={16} />
-            录制选项
+            {uiCopy.tool.recordOptions}
           </button>
           <button onClick={() => runAction("editCmdTip")} type="button">
             <SquarePen size={16} />
-            指令显示
+            {uiCopy.tool.commandDisplay}
           </button>
         </div>
       </div>
 
       <div className="section-block span-2">
-        <h2>鼠标信息</h2>
+        <h2>{uiCopy.tool.mouseInfo}</h2>
         <div className="button-row">
           <button className={classNames(tools.isToolCheck && "primary")} onClick={() => runAction("toggleToolCheck")} type="button">
             <MousePointer2 size={16} />
-            {tools.isToolCheck ? "停止检测" : "开始检测"}
+            {tools.isToolCheck ? uiCopy.tool.stopDetect : uiCopy.tool.startDetect}
           </button>
           <label className="check-row block inline-check">
             <input
@@ -821,7 +816,7 @@ function ToolPanel({
                 updateTool("alwaysOnTop", event.target.checked);
               }}
             />
-            窗口置顶
+            {uiCopy.tool.alwaysOnTop}
           </label>
         </div>
         <div className="info-grid">
@@ -835,8 +830,8 @@ function ToolPanel({
       </div>
 
       <div className="section-block span-2">
-        <h2>文本识别与录制输出</h2>
-        <Field label="识别模型">
+        <h2>{uiCopy.tool.textAndRecord}</h2>
+        <Field label={uiCopy.tool.ocrModel}>
           <select
             value={tools.ocrType}
             onChange={(event) => {
@@ -845,7 +840,7 @@ function ToolPanel({
               updateTool("ocrType", value);
             }}
           >
-            {ocrLabels.map((label, index) => (
+            {uiCopy.tool.ocrLabels.map((label, index) => (
               <option key={label} value={index + 1}>
                 {label}
               </option>
@@ -855,19 +850,19 @@ function ToolPanel({
         <div className="button-row">
           <button onClick={() => runAction("toolTextFilterScreenShot")} type="button">
             <Clipboard size={16} />
-            截图提取文本
+            {uiCopy.tool.extractFromScreenshot}
           </button>
           <button onClick={() => runAction("toolTextFilterSelectImage")} type="button">
             <ImageIcon size={16} />
-            从图片提取
+            {uiCopy.tool.extractFromImage}
           </button>
           <button className="danger" onClick={() => runAction("clearToolText")} type="button">
             <Eraser size={16} />
-            清空内容
+            {uiCopy.tool.clearContent}
           </button>
           <button className={classNames(tools.isToolRecord && "primary")} onClick={() => runAction("toggleToolRecord")} type="button">
             {tools.isToolRecord ? <Pause size={16} /> : <Play size={16} />}
-            {tools.isToolRecord ? "停止录制" : "开始录制"}
+            {tools.isToolRecord ? uiCopy.tool.stopRecord : uiCopy.tool.startRecord}
           </button>
         </div>
         <textarea className="tool-output" readOnly value={tools.toolText} />
@@ -892,36 +887,36 @@ function SettingsPanel({
   return (
     <section className="panel-grid">
       <div className="section-block">
-        <h2>快捷键</h2>
-        <HotkeyField label="休眠" value={settings.suspendHotkey} target="suspendHotkey" onLocal={(value) => patchLocalSettings("suspendHotkey", value)} onCommit={(value) => updateSetting("suspendHotkey", value)} runAction={runAction} />
-        <HotkeyField label="暂停" value={settings.pauseHotkey} target="pauseHotkey" onLocal={(value) => patchLocalSettings("pauseHotkey", value)} onCommit={(value) => updateSetting("pauseHotkey", value)} runAction={runAction} />
-        <HotkeyField label="终止所有宏" value={settings.killMacroHotkey} target="killMacroHotkey" onLocal={(value) => patchLocalSettings("killMacroHotkey", value)} onCommit={(value) => updateSetting("killMacroHotkey", value)} runAction={runAction} />
+        <h2>{uiCopy.settings.hotkeys}</h2>
+        <HotkeyField label={uiCopy.settings.suspend} value={settings.suspendHotkey} target="suspendHotkey" onLocal={(value) => patchLocalSettings("suspendHotkey", value)} onCommit={(value) => updateSetting("suspendHotkey", value)} runAction={runAction} />
+        <HotkeyField label={uiCopy.settings.pause} value={settings.pauseHotkey} target="pauseHotkey" onLocal={(value) => patchLocalSettings("pauseHotkey", value)} onCommit={(value) => updateSetting("pauseHotkey", value)} runAction={runAction} />
+        <HotkeyField label={uiCopy.settings.killAllMacros} value={settings.killMacroHotkey} target="killMacroHotkey" onLocal={(value) => patchLocalSettings("killMacroHotkey", value)} onCommit={(value) => updateSetting("killMacroHotkey", value)} runAction={runAction} />
       </div>
 
       <div className="section-block">
-        <h2>执行参数</h2>
-        <Field label="按住时间浮动">
+        <h2>{uiCopy.settings.execution}</h2>
+        <Field label={uiCopy.settings.holdFloat}>
           <TextInput value={settings.holdFloat} onLocal={(value) => patchLocalSettings("holdFloat", value)} onCommit={(value) => updateSetting("holdFloat", value)} />
         </Field>
-        <Field label="每次间隔浮动">
+        <Field label={uiCopy.settings.preIntervalFloat}>
           <TextInput value={settings.preIntervalFloat} onLocal={(value) => patchLocalSettings("preIntervalFloat", value)} onCommit={(value) => updateSetting("preIntervalFloat", value)} />
         </Field>
-        <Field label="间隔指令浮动">
+        <Field label={uiCopy.settings.intervalFloat}>
           <TextInput value={settings.intervalFloat} onLocal={(value) => patchLocalSettings("intervalFloat", value)} onCommit={(value) => updateSetting("intervalFloat", value)} />
         </Field>
-        <Field label="坐标 X 浮动">
+        <Field label={uiCopy.settings.coordXFloat}>
           <TextInput value={settings.coordXFloat} onLocal={(value) => patchLocalSettings("coordXFloat", value)} onCommit={(value) => updateSetting("coordXFloat", value)} />
         </Field>
-        <Field label="坐标 Y 浮动">
+        <Field label={uiCopy.settings.coordYFloat}>
           <TextInput value={settings.coordYFloat} onLocal={(value) => patchLocalSettings("coordYFloat", value)} onCommit={(value) => updateSetting("coordYFloat", value)} />
         </Field>
-        <Field label="多线程数">
+        <Field label={uiCopy.settings.multiThreadNum}>
           <TextInput value={settings.mutiThreadNum} onLocal={(value) => patchLocalSettings("mutiThreadNum", value)} onCommit={(value) => updateSetting("mutiThreadNum", value)} />
         </Field>
       </div>
 
       <div className="section-block">
-        <h2>界面与开关</h2>
+        <h2>{uiCopy.settings.uiSwitches}</h2>
         <label className="check-row block">
           <input
             type="checkbox"
@@ -931,7 +926,7 @@ function SettingsPanel({
               updateSetting("bootStart", event.target.checked);
             }}
           />
-          开机自启
+          {uiCopy.settings.bootStart}
         </label>
         <label className="check-row block">
           <input
@@ -942,7 +937,7 @@ function SettingsPanel({
               updateSetting("cmdTip", event.target.checked);
             }}
           />
-          指令显示
+          {uiCopy.settings.cmdTip}
         </label>
         <label className="check-row block">
           <input
@@ -953,7 +948,7 @@ function SettingsPanel({
               updateSetting("noVariableTip", event.target.checked);
             }}
           />
-          无变量提醒
+          {uiCopy.settings.noVariableTip}
         </label>
         <label className="check-row block">
           <input
@@ -964,7 +959,7 @@ function SettingsPanel({
               updateSetting("fixedMenuWheel", event.target.checked);
             }}
           />
-          菜单轮位置固定
+          {uiCopy.settings.fixedMenuWheel}
         </label>
         <label className="check-row block">
           <input
@@ -975,10 +970,10 @@ function SettingsPanel({
               updateSetting("showSplitLine", event.target.checked);
             }}
           />
-          分割线
+          {uiCopy.settings.showSplitLine}
         </label>
 
-        <Field label="语言">
+        <Field label={uiCopy.settings.lang}>
           <select
             value={settings.lang}
             onChange={(event) => {
@@ -993,7 +988,7 @@ function SettingsPanel({
             ))}
           </select>
         </Field>
-        <Field label="字体">
+        <Field label={uiCopy.settings.fontType}>
           <select
             value={settings.fontType}
             onChange={(event) => {
@@ -1008,7 +1003,7 @@ function SettingsPanel({
             ))}
           </select>
         </Field>
-        <Field label="截图方式">
+        <Field label={uiCopy.settings.screenshotType}>
           <select
             value={settings.screenShotType}
             onChange={(event) => {
@@ -1017,14 +1012,14 @@ function SettingsPanel({
               updateSetting("screenShotType", value);
             }}
           >
-            {screenshotLabels.map((label, index) => (
+            {uiCopy.settings.screenshotLabels.map((label, index) => (
               <option key={label} value={index + 1}>
                 {label}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="按下时按下">
+        <Field label={uiCopy.settings.keyDownMode}>
           <select
             value={settings.keyDownDownType}
             onChange={(event) => {
@@ -1033,7 +1028,7 @@ function SettingsPanel({
               updateSetting("keyDownDownType", value);
             }}
           >
-            {keyDownLabels.map((label, index) => (
+            {uiCopy.settings.keyDownLabels.map((label, index) => (
               <option key={label} value={index + 1}>
                 {label}
               </option>
@@ -1042,38 +1037,38 @@ function SettingsPanel({
         </Field>
         <button onClick={() => runAction("keyDownHelp")} type="button">
           <HelpCircle size={16} />
-          说明
+          {uiCopy.settings.help}
         </button>
         <button onClick={() => runAction("openSettingManager")} type="button">
           <Settings size={16} />
-          配置管理
+          {uiCopy.settings.configManager}
         </button>
       </div>
 
       <div className="section-block diagnostics-block">
-        <h2>诊断</h2>
+        <h2>{uiCopy.settings.diagnostics}</h2>
         <div className="info-grid">
           <div className="info-item">
-            <span>版本</span>
+            <span>{uiCopy.settings.version}</span>
             <strong>{state.version}</strong>
           </div>
           <div className="info-item">
-            <span>配置</span>
+            <span>{uiCopy.settings.config}</span>
             <strong title={state.currentSettingName}>{state.currentSettingName}</strong>
           </div>
           <div className="info-item">
-            <span>运行中</span>
+            <span>{uiCopy.settings.running}</span>
             <strong>{state.macroRunningCount}</strong>
           </div>
           <div className="info-item">
-            <span>累计执行</span>
+            <span>{uiCopy.settings.totalRuns}</span>
             <strong>{state.macroTotalCount}</strong>
           </div>
         </div>
         <div className="button-row diagnostics-actions">
           <button onClick={() => runAction("copyDiagnostics")} type="button">
             <Clipboard size={16} />
-            复制诊断信息
+            {uiCopy.settings.copyDiagnostics}
           </button>
         </div>
       </div>
@@ -1082,28 +1077,14 @@ function SettingsPanel({
 }
 
 function HelpPanel({ runAction }: { runAction: RunAction }) {
-  const links: Array<{ label: string; action: "openHelp" } | { label: string; action: "openUrl"; url: string }> = [
-    { label: "快速上手/指令手册", action: "openHelp" },
-    { label: "版本更新视频", action: "openUrl", url: "https://www.bilibili.com/video/BV1oWVRzaEzk" },
-    { label: "配置共享仓库", action: "openUrl", url: "https://zclucas.github.io/RMT-Setting/" },
-    { label: "GitHub", action: "openUrl", url: "https://github.com/zclucas/RMT" },
-    { label: "Gitee", action: "openUrl", url: "https://gitee.com/fateman/RMT" },
-    { label: "GitHub 讨论", action: "openUrl", url: "https://github.com/zclucas/RMT/discussions" },
-    { label: "QQ群", action: "openUrl", url: "https://qm.qq.com/q/DgpDumEPzq" },
-    { label: "QQ频道", action: "openUrl", url: "https://pd.qq.com/s/5wyjvj7zw" },
-    { label: "Discord", action: "openUrl", url: "https://discord.gg/m8ewvgtzat" },
-    { label: "Bug 文档", action: "openUrl", url: "https://docs.qq.com/sheet/DVWJIdEVMV1pHUVJj" },
-    { label: "需求文档", action: "openUrl", url: "https://docs.qq.com/sheet/DVWRQaXBFUVV5bERo" },
-    { label: "使用备注", action: "openUrl", url: "https://docs.qq.com/sheet/DVVNwWHJEd3NOWXhR?tab=BB08J2" }
-  ];
-
   return (
     <section className="section-block readable">
-      <h2>免责声明</h2>
-      <p>本软件按原样提供，使用者需要自行承担使用、修改或分发带来的风险。</p>
-      <p>请勿将本软件用于违法用途，包括但不限于游戏作弊、未经授权的系统访问或数据篡改。</p>
+      <h2>{uiCopy.help.title}</h2>
+      {uiCopy.help.body.map((paragraph) => (
+        <p key={paragraph}>{paragraph}</p>
+      ))}
       <div className="link-list">
-        {links.map((link) => (
+        {uiCopy.help.links.map((link) => (
           <button
             key={link.label}
             onClick={() => (link.action === "openUrl" ? runAction("openUrl", { url: link.url }) : runAction("openHelp"))}
@@ -1123,51 +1104,34 @@ function RewardPanel({ macroTotalCount }: { macroTotalCount: number }) {
 
   return (
     <section className="section-block reward-panel">
-      <h2>打赏作者</h2>
-      <p>若梦兔（RMT）是一款完全免费的开源软件，始终陪在你身边。</p>
-      <p>至今已为您执行 {totalText} 次宏指令。诚邀本月打赏成为若梦兔的“守护者”，一起让若梦兔走得更远。</p>
+      <h2>{uiCopy.reward.title}</h2>
+      <p>{uiCopy.reward.intro}</p>
+      <p>
+        {uiCopy.reward.totalPrefix} {totalText} {uiCopy.reward.totalSuffix}
+      </p>
       <div className="qr-grid">
         <figure>
-          <img alt="微信打赏二维码" src="/Images/Soft/WeiXin.png" />
-          <figcaption>微信打赏</figcaption>
+          <img alt={uiCopy.reward.wechatAlt} src="/Images/Soft/WeiXin.png" />
+          <figcaption>{uiCopy.reward.wechat}</figcaption>
         </figure>
         <figure>
-          <img alt="支付宝打赏二维码" src="/Images/Soft/ZhiFuBao.png" />
-          <figcaption>支付宝打赏</figcaption>
+          <img alt={uiCopy.reward.alipayAlt} src="/Images/Soft/ZhiFuBao.png" />
+          <figcaption>{uiCopy.reward.alipay}</figcaption>
         </figure>
       </div>
-      <p>当然，如果你暂时不方便，分享给朋友也是很棒的支持。开发不易，感谢你的每一份温暖。</p>
+      <p>{uiCopy.reward.closing}</p>
     </section>
   );
 }
 
 function ThanksPanel({ runAction }: { runAction: RunAction }) {
-  const developers = [
-    ["GushuLily", "https://github.com/GushuLily"],
-    ["张正波", "https://gitee.com/bogezzb"],
-    ["yun", "https://github.com/yunkuangao"],
-    ["boxstudy", "https://github.com/boxstudy"],
-    ["sovaedv776", "https://github.com/sovaedv776"]
-  ];
-  const projects = [
-    ["OpenCV", "https://github.com/opencv/opencv"],
-    ["ahk2_lib", "https://github.com/thqby/ahk2_lib"],
-    ["RapidOCR", "https://github.com/RapidAI/RapidOCR"],
-    ["AHK-CvJoyInterface", "https://github.com/evilC/AHK-CvJoyInterface"],
-    ["IbInputSimulator", "https://github.com/Chaoses-Ib/IbInputSimulator"],
-    ["AHK-ViGEm-Bus", "https://github.com/evilC/AHK-ViGEm-Bus"],
-    ["AHK-ViGEm-Bus-v2", "https://github.com/CesarHlp1/AHK-ViGEm-Bus-v2.ahk"],
-    ["ScreenCapture", "https://github.com/xland/ScreenCapture"]
-  ];
-  const community = ["AYu", "万年置伞", "别说*不下啦", "仰望", "话听", "yun"];
-
   return (
     <section className="section-block thanks-panel">
-      <h2>特别感谢</h2>
+      <h2>{uiCopy.thanks.title}</h2>
       <div className="thanks-group">
-        <h3>项目贡献者</h3>
+        <h3>{uiCopy.thanks.contributors}</h3>
         <div className="tag-list">
-          {developers.map(([label, url]) => (
+          {uiCopy.thanks.developers.map(([label, url]) => (
             <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
               {label}
             </button>
@@ -1175,9 +1139,9 @@ function ThanksPanel({ runAction }: { runAction: RunAction }) {
         </div>
       </div>
       <div className="thanks-group">
-        <h3>开源项目</h3>
+        <h3>{uiCopy.thanks.openSource}</h3>
         <div className="tag-list">
-          {projects.map(([label, url]) => (
+          {uiCopy.thanks.projects.map(([label, url]) => (
             <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
               {label}
             </button>
@@ -1185,15 +1149,16 @@ function ThanksPanel({ runAction }: { runAction: RunAction }) {
         </div>
       </div>
       <div className="thanks-group">
-        <h3>社区支持</h3>
+        <h3>{uiCopy.thanks.community}</h3>
         <div className="tag-list muted-tags">
-          {community.map((name) => (
+          {uiCopy.thanks.communityNames.map((name) => (
             <span key={name}>{name}</span>
           ))}
         </div>
       </div>
-      <p>感谢所有打赏支持若梦兔的守护者，以及参与完善 Bug 和需求文档的朋友。</p>
-      <p>感谢每一位陪伴项目成长的粉丝和群友们。每一次鼓励、每一条建议，都是这个项目继续迭代的动力。</p>
+      {uiCopy.thanks.body.map((paragraph) => (
+        <p key={paragraph}>{paragraph}</p>
+      ))}
     </section>
   );
 }
@@ -1226,7 +1191,7 @@ function HotkeyField({
     <Field label={label}>
       <div className="hotkey-edit-cell">
         <TextInput value={value} onLocal={onLocal} onCommit={onCommit} />
-        <button className="icon-button" title="打开快捷方式编辑器" onClick={() => runAction("openHotkeyEditor", { target })} type="button">
+        <button className="icon-button" title={uiCopy.settings.openHotkeyEditor} onClick={() => runAction("openHotkeyEditor", { target })} type="button">
           <SquarePen size={15} />
         </button>
       </div>

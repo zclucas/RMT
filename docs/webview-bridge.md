@@ -42,7 +42,7 @@ When adding a state field:
 
 1. Add it to `RmtBuildState()` or a nested builder such as `RmtBuildSettings()`/`RmtBuildTools()`.
 2. Add it to `WebViewApp/src/types.ts`.
-3. Add a fallback value in `WebViewApp/src/bridge.ts`.
+3. Add a fallback value in `WebViewApp/src/fallbackState.ts`.
 4. Render or consume it in React.
 5. Run `node .\scripts\verify-webview-contract.mjs`.
 6. Run `.\scripts\verify.ps1`.

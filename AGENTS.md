@@ -38,7 +38,7 @@
   - `Main/UIUtil.ahk`: `RMT_WEBVIEW_VERSION`
   - `WebViewApp/package.json`: `version`
   - `WebViewApp/package-lock.json`: root package versions
-  - `WebViewApp/src/bridge.ts`: fallback state `version`
+  - `WebViewApp/src/fallbackState.ts`: fallback state `version`
 - Follow `docs/release.md` for public release packaging and smoke testing.
 - Keep generated release archives outside source control unless the release process explicitly requires committing them.
 

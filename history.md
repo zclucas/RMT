@@ -19,6 +19,7 @@
 - Bumped the WebView version to RMTv2.0.1 and added active-worktree diagnostics for avoiding accidental launches from older local clones.
 - Added a WebView bridge contract check that compares TypeScript state/action types with the AHK state builders and dispatcher.
 - Added Playwright visual regression coverage for the scaled WebView macro layout, scrollbars, visible action/status columns, and disabled controls.
+- Centralized WebView UI copy and fallback state text to reduce future mojibake and half-localized frontend changes.
 
 ## v1.1.4
 

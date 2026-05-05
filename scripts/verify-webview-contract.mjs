@@ -7,7 +7,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const webViewApp = path.join(repoRoot, "WebViewApp");
 const typesPath = path.join(webViewApp, "src", "types.ts");
-const bridgePath = path.join(webViewApp, "src", "bridge.ts");
+const fallbackStatePath = path.join(webViewApp, "src", "fallbackState.ts");
 const uiUtilPath = path.join(repoRoot, "Main", "UIUtil.ahk");
 
 const requireFromWebView = createRequire(path.join(webViewApp, "package.json"));
@@ -21,10 +21,10 @@ try {
 }
 
 const typesSource = fs.readFileSync(typesPath, "utf8");
-const bridgeSource = fs.readFileSync(bridgePath, "utf8");
+const fallbackStateSource = fs.readFileSync(fallbackStatePath, "utf8");
 const uiUtilSource = fs.readFileSync(uiUtilPath, "utf8");
 const typesFile = ts.createSourceFile(typesPath, typesSource, ts.ScriptTarget.Latest, true);
-const bridgeFile = ts.createSourceFile(bridgePath, bridgeSource, ts.ScriptTarget.Latest, true);
+const fallbackStateFile = ts.createSourceFile(fallbackStatePath, fallbackStateSource, ts.ScriptTarget.Latest, true);
 
 const errors = [];
 
@@ -103,7 +103,7 @@ function findVariableInitializer(sourceFile, variableName) {
       }
     }
   }
-  throw new Error(`Unable to find ${variableName} in WebViewApp/src/bridge.ts`);
+  throw new Error(`Unable to find ${variableName} in WebViewApp/src/fallbackState.ts`);
 }
 
 function getObjectProperty(objectLiteral, propertyName) {
@@ -212,9 +212,9 @@ function extractDispatchCases() {
   return sortedUnique(cases);
 }
 
-const fallbackRoot = findVariableInitializer(bridgeFile, "fallbackState");
+const fallbackRoot = findVariableInitializer(fallbackStateFile, "fallbackState");
 if (!fallbackRoot || !ts.isObjectLiteralExpression(fallbackRoot)) {
-  throw new Error("fallbackState must be an object literal in WebViewApp/src/bridge.ts");
+  throw new Error("fallbackState must be an object literal in WebViewApp/src/fallbackState.ts");
 }
 
 for (const [interfaceName, builder] of Object.entries(interfaceToAhkBuilder)) {
@@ -238,4 +238,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log("WebView bridge contract matches types.ts, bridge.ts, and Main/UIUtil.ahk.");
+console.log("WebView bridge contract matches types.ts, fallbackState.ts, and Main/UIUtil.ahk.");
