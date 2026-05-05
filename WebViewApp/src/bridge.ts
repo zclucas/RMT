@@ -25,6 +25,7 @@ const fallbackState: RmtState = {
   isPause: false,
   isMacroWorking: false,
   macroRunningCount: 0,
+  macroTotalCount: 0,
   settings: {
     holdFloat: "0",
     preIntervalFloat: "0",
@@ -119,7 +120,9 @@ const fallbackState: RmtState = {
     },
     { index: 7, name: "工具", symbol: "Tool", kind: "tool" },
     { index: 8, name: "设置", symbol: "Setting", kind: "settings" },
-    { index: 9, name: "帮助", symbol: "Help", kind: "help" }
+    { index: 9, name: "帮助", symbol: "Help", kind: "help" },
+    { index: 10, name: "打赏作者", symbol: "Reward", kind: "reward" },
+    { index: 11, name: "特别感谢", symbol: "Thank", kind: "thanks" }
   ]
 };
 

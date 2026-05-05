@@ -8,6 +8,7 @@
 - Added WebView entry points for legacy trigger editors and delete confirmations in the macro table.
 - Refined the WebView macro table density, column sizing, and sticky row actions for the default window size.
 - Expanded the WebView tools and settings panels with mouse inspection, OCR output, recorder controls, and legacy hotkey editor entry points.
+- Migrated the remaining WebView help, reward, and thanks pages from placeholders to maintained React content.
 
 ## v1.1.3
 

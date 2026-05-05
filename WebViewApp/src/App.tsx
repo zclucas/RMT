@@ -229,8 +229,8 @@ export default function App() {
           )}
 
           {activeTab?.kind === "help" && <HelpPanel runAction={runAction} />}
-          {activeTab?.kind === "reward" && <RewardPanel />}
-          {activeTab?.kind === "thanks" && <ThanksPanel />}
+          {activeTab?.kind === "reward" && <RewardPanel macroTotalCount={state.macroTotalCount} />}
+          {activeTab?.kind === "thanks" && <ThanksPanel runAction={runAction} />}
         </main>
       </div>
     </div>
@@ -917,9 +917,17 @@ function SettingsPanel({
 function HelpPanel({ runAction }: { runAction: (type: string, payload?: PatchPayload) => void }) {
   const links = [
     ["快速上手/指令手册", "openHelp"],
+    ["版本更新视频", "openUrl", "https://www.bilibili.com/video/BV1oWVRzaEzk"],
     ["配置共享仓库", "openUrl", "https://zclucas.github.io/RMT-Setting/"],
     ["GitHub", "openUrl", "https://github.com/zclucas/RMT"],
-    ["Gitee", "openUrl", "https://gitee.com/fateman/RMT"]
+    ["Gitee", "openUrl", "https://gitee.com/fateman/RMT"],
+    ["GitHub 讨论", "openUrl", "https://github.com/zclucas/RMT/discussions"],
+    ["QQ群", "openUrl", "https://qm.qq.com/q/DgpDumEPzq"],
+    ["QQ频道", "openUrl", "https://pd.qq.com/s/5wyjvj7zw"],
+    ["Discord", "openUrl", "https://discord.gg/m8ewvgtzat"],
+    ["Bug 文档", "openUrl", "https://docs.qq.com/sheet/DVWJIdEVMV1pHUVJj"],
+    ["需求文档", "openUrl", "https://docs.qq.com/sheet/DVWRQaXBFUVV5bERo"],
+    ["使用备注", "openUrl", "https://docs.qq.com/sheet/DVVNwWHJEd3NOWXhR?tab=BB08J2"]
   ];
 
   return (
@@ -939,20 +947,82 @@ function HelpPanel({ runAction }: { runAction: (type: string, payload?: PatchPay
   );
 }
 
-function RewardPanel() {
+function RewardPanel({ macroTotalCount }: { macroTotalCount: number }) {
+  const totalText = new Intl.NumberFormat("zh-CN").format(macroTotalCount);
+
   return (
-    <section className="section-block readable">
+    <section className="section-block reward-panel">
       <h2>打赏作者</h2>
-      <p>当前 WebView 主界面保留原项目打赏入口，二维码资源仍由原项目 `Images/Soft` 维护。</p>
+      <p>若梦兔（RMT）是一款完全免费的开源软件，始终陪在你身边。</p>
+      <p>至今已为您执行 {totalText} 次宏指令。诚邀本月打赏成为若梦兔的“守护者”，一起让若梦兔走得更远。</p>
+      <div className="qr-grid">
+        <figure>
+          <img alt="微信打赏二维码" src="/Images/Soft/WeiXin.png" />
+          <figcaption>微信打赏</figcaption>
+        </figure>
+        <figure>
+          <img alt="支付宝打赏二维码" src="/Images/Soft/ZhiFuBao.png" />
+          <figcaption>支付宝打赏</figcaption>
+        </figure>
+      </div>
+      <p>当然，如果你暂时不方便，分享给朋友也是很棒的支持。开发不易，感谢你的每一份温暖。</p>
     </section>
   );
 }
 
-function ThanksPanel() {
+function ThanksPanel({ runAction }: { runAction: (type: string, payload?: PatchPayload) => void }) {
+  const developers = [
+    ["GushuLily", "https://github.com/GushuLily"],
+    ["张正波", "https://gitee.com/bogezzb"],
+    ["yun", "https://github.com/yunkuangao"],
+    ["boxstudy", "https://github.com/boxstudy"],
+    ["sovaedv776", "https://github.com/sovaedv776"]
+  ];
+  const projects = [
+    ["OpenCV", "https://github.com/opencv/opencv"],
+    ["ahk2_lib", "https://github.com/thqby/ahk2_lib"],
+    ["RapidOCR", "https://github.com/RapidAI/RapidOCR"],
+    ["AHK-CvJoyInterface", "https://github.com/evilC/AHK-CvJoyInterface"],
+    ["IbInputSimulator", "https://github.com/Chaoses-Ib/IbInputSimulator"],
+    ["AHK-ViGEm-Bus", "https://github.com/evilC/AHK-ViGEm-Bus"],
+    ["AHK-ViGEm-Bus-v2", "https://github.com/CesarHlp1/AHK-ViGEm-Bus-v2.ahk"],
+    ["ScreenCapture", "https://github.com/xland/ScreenCapture"]
+  ];
+  const community = ["AYu", "万年置伞", "别说*不下啦", "仰望", "话听", "yun"];
+
   return (
-    <section className="section-block readable">
+    <section className="section-block thanks-panel">
       <h2>特别感谢</h2>
-      <p>感谢名单数据仍沿用项目原始资料，后续可以单独迁移为前端可维护的 JSON 数据。</p>
+      <div className="thanks-group">
+        <h3>项目贡献者</h3>
+        <div className="tag-list">
+          {developers.map(([label, url]) => (
+            <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="thanks-group">
+        <h3>开源项目</h3>
+        <div className="tag-list">
+          {projects.map(([label, url]) => (
+            <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="thanks-group">
+        <h3>社区支持</h3>
+        <div className="tag-list muted-tags">
+          {community.map((name) => (
+            <span key={name}>{name}</span>
+          ))}
+        </div>
+      </div>
+      <p>感谢所有打赏支持若梦兔的守护者，以及参与完善 Bug 和需求文档的朋友。</p>
+      <p>感谢每一位陪伴项目成长的粉丝和群友们。每一次鼓励、每一条建议，都是这个项目继续迭代的动力。</p>
     </section>
   );
 }

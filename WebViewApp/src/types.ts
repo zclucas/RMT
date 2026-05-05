@@ -104,6 +104,7 @@ export interface RmtState {
   isPause: boolean;
   isMacroWorking: boolean;
   macroRunningCount: number;
+  macroTotalCount: number;
   tabs: RmtTab[];
   settings: RmtSettings;
   tools: RmtToolState;

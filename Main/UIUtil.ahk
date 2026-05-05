@@ -415,6 +415,7 @@ RmtBuildState() {
     state["isPause"] := RmtJsonBool(MySoftData.IsPause)
     state["isMacroWorking"] := RmtJsonBool(MySoftData.IsMacroWorking)
     state["macroRunningCount"] := RmtInt(MySoftData.MacroRunningCount, 0)
+    state["macroTotalCount"] := RmtInt(MySoftData.MacroTotalCount, 0)
     state["tabs"] := RmtBuildTabs()
     state["settings"] := RmtBuildSettings()
     state["tools"] := RmtBuildTools()

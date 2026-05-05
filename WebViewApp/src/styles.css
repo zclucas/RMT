@@ -681,6 +681,76 @@ h2 {
   margin-top: 14px;
 }
 
+.reward-panel,
+.thanks-panel {
+  max-width: 900px;
+}
+
+.reward-panel p,
+.thanks-panel p {
+  margin: 8px 0;
+}
+
+.qr-grid {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 260px));
+  margin: 22px 0 18px;
+}
+
+.qr-grid figure {
+  margin: 0;
+  text-align: center;
+}
+
+.qr-grid img {
+  background: #ffffff;
+  border: 1px solid #d8e0e6;
+  border-radius: 6px;
+  display: block;
+  height: 220px;
+  object-fit: contain;
+  padding: 8px;
+  width: 220px;
+}
+
+.qr-grid figcaption {
+  color: #566674;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.thanks-group {
+  border-top: 1px solid #edf1f4;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.thanks-group h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.link-chip {
+  margin: 0;
+}
+
+.muted-tags span {
+  background: #f8fafb;
+  border: 1px solid #d8e0e6;
+  border-radius: 6px;
+  color: #566674;
+  display: inline-flex;
+  min-height: 32px;
+  padding: 5px 10px;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     min-width: 760px;
