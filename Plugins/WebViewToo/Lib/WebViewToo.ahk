@@ -99,11 +99,11 @@ class WebViewGui extends Gui {
     ;Default GUI Overrides
     /** @throws {Error} Not applicable for a WebViewGui. */
     NotApplicableError(Msg := "") {
-        throw Error("Not applicable for a WebViewGui. " Msg, -2)
+        throw Error("此操作不适用于 WebViewGui。" (Msg ? " " Msg : ""), -2)
     }
 
     /** @throws {Error} Not applicable for a WebViewGui. */
-    Add(ControlType := "", Options := "", Value := "") => this.NotApplicableError("Did you mean AddRoute()?")
+    Add(ControlType := "", Options := "", Value := "") => this.NotApplicableError("如果要添加 Web 资源，请使用 AddRoute()。")
 
     /** @throws {Error} Not applicable for a WebViewGui. */
     AddActiveX(Options := "", Value := "") => this.NotApplicableError()
@@ -178,7 +178,7 @@ class WebViewGui extends Gui {
     AddTab3(Options := "", Value := "") => this.NotApplicableError()
 
     /** @throws {Error} Not applicable for a WebViewGui. */
-    AddText(Options := "", Value := "") => this.NotApplicableError("Did you mean AddTextRoute()?")
+    AddText(Options := "", Value := "") => this.NotApplicableError("如果要添加文本路由，请使用 AddTextRoute()。")
 
     /** @throws {Error} Not applicable for a WebViewGui. */
     AddTreeView(Options := "", Value := "") => this.NotApplicableError()
@@ -418,7 +418,7 @@ class WebViewCtrl extends Gui.Custom {
 
     static Template.Css := "html, body {width: 100%; height: 100%;margin: 0; padding: 0;font-family: sans-serif;} body {display: flex;flex-direction: column;} .main {flex-grow: 1;overflow: hidden;}"
     static Template.Name := "Template.html"
-    static Template.Html := "<div style='padding:100px;'>The documentation for <b>WebViewToo</b> is currently being reworked. Sorry for the inconvenience.</div>"
+    static Template.Html := "<div style='padding:100px;'>WebViewToo 文档正在整理中，给您带来的不便敬请谅解。</div>"
     static Template.JavaScript := ""
 
     static UniqueId => WebViewCtrl.CreateUniqueID()
@@ -517,7 +517,7 @@ class WebViewCtrl extends Gui.Custom {
      */
     BrowseExe(Path?, Host := this._DefaultHost) {
         if (IsSet(Path)) {
-            throw Error("Not yet supported")
+            throw Error("暂不支持该功能。")
         }
 
         this._CompileRoutesForHost(Host, [['**', (Uri) => WebViewCtrl.ExeRead(Uri.Path)]])
@@ -849,14 +849,14 @@ class WebViewCtrl extends Gui.Custom {
         if (!PrintPromise.Result) {
             ErrorMsg()
         } else {
-            if (MsgBox("Would you like to open this PDF?", "Print to PDF", "262148") = "Yes") {
+            if (MsgBox("PDF 已保存，是否立即打开？", "打印到 PDF", "262148") = "Yes") {
                 Run(FileName)
             }
         }
 
-        ErrorMsg() => MsgBox("An error occurred while attempting to save the file.`n" FileName, "Print to PDF", "262144")
-        CancelMsg() => MsgBox("Print Canceled", "Print to PDF", "262144")
-        OverwriteMsg() => MsgBox(OutFileName " already exist.`nWould you like to overwrite it?", "Confirm Save As", "262195")
+        ErrorMsg() => MsgBox("保存文件时发生错误。`n" FileName, "打印到 PDF", "262144")
+        CancelMsg() => MsgBox("已取消打印。", "打印到 PDF", "262144")
+        OverwriteMsg() => MsgBox(OutFileName " 已存在。`n是否覆盖？", "确认另存为", "262195")
     }
 
     ;-------------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 #Include ..\Plugins\WebViewToo\Lib\WebViewToo.ahk
 
-RMT_WEBVIEW_VERSION := "RMTv2.0.0"
+RMT_WEBVIEW_VERSION := "RMTv2.0.1"
 
 class RmtWebViewGui extends WebViewGui {
     Submit(Hide := true) {
@@ -383,7 +383,7 @@ RmtDispatchWebAction(actionType, payload) {
             RmtOpenMacroEditorAction(payload)
             return ""
     }
-    throw Error("Unsupported WebView action: " actionType)
+    throw Error("不支持的 WebView 操作：" actionType)
 }
 
 RmtWebResult(ok, message := "") {
@@ -625,7 +625,7 @@ RmtGetTabKind(index) {
 RmtSetActiveTab(tabIndex) {
     global MySoftData
     if (tabIndex < 1 || tabIndex > MySoftData.TabNameArr.Length)
-        throw Error("Invalid tab index: " tabIndex)
+        throw Error("无效的标签页序号：" tabIndex)
 
     MySoftData.TabCtrl.Value := tabIndex
     MySoftData.TableIndex := tabIndex
@@ -773,7 +773,7 @@ RmtOpenHotkeyEditorAction(payload) {
             keyCon := ToolCheckInfo.FreePasteHotKeyCtrl
             currentValue := RmtControlValue(keyCon, ToolCheckInfo.FreePasteHotKey)
         default:
-            throw Error("Unsupported hotkey target: " target)
+            throw Error("不支持的热键目标：" target)
     }
 
     showCon := RmtWebValueControl(currentValue)
@@ -862,7 +862,7 @@ RmtDeleteItemAction(payload) {
     itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
     foldIndex := GetItemFoldIndex(tableItem, itemIndex)
     if (!foldIndex)
-        throw Error("Cannot find fold for item: " itemIndex)
+        throw Error("找不到宏条目所属模块：" itemIndex)
     RmtRemoveItem(tableItem, itemIndex, foldIndex)
 }
 
@@ -916,7 +916,7 @@ RmtDeleteFoldAction(payload) {
     foldInfo := tableItem.FoldInfo
     RmtValidateFoldIndex(foldInfo, foldIndex)
     if (foldInfo.IndexSpanArr.Length == 1)
-        throw Error("The last fold cannot be deleted.")
+        throw Error("不能删除最后一个模块。")
 
     span := StrSplit(foldInfo.IndexSpanArr[foldIndex], "-")
     if (span.Length == 2 && IsInteger(span[1]) && IsInteger(span[2])) {
@@ -1112,18 +1112,18 @@ RmtCreateVariableMap() {
 RmtGetTableItem(tableIndex) {
     global MySoftData
     if (tableIndex < 1 || tableIndex > MySoftData.TableInfo.Length)
-        throw Error("Invalid table index: " tableIndex)
+        throw Error("无效的表格序号：" tableIndex)
     return MySoftData.TableInfo[tableIndex]
 }
 
 RmtValidateFoldIndex(foldInfo, foldIndex) {
     if (foldIndex < 1 || foldIndex > foldInfo.IndexSpanArr.Length)
-        throw Error("Invalid fold index: " foldIndex)
+        throw Error("无效的模块序号：" foldIndex)
 }
 
 RmtValidateItemIndex(tableItem, itemIndex) {
     if (itemIndex < 1 || itemIndex > tableItem.ModeArr.Length)
-        throw Error("Invalid item index: " itemIndex)
+        throw Error("无效的宏条目序号：" itemIndex)
 }
 
 RmtRemoveArrayAt(arr, index) {

@@ -13,9 +13,24 @@ Run from the repository root:
 Expected result:
 
 - Version consistency passes.
+- WebView bridge contract passes.
 - `RMT.ahk` validates.
 - React/TypeScript builds and updates `WebViewApp/dist`.
 - `git diff --check` has no errors.
+
+Run the visual regression checks after layout-sensitive WebView changes:
+
+```powershell
+cd WebViewApp
+npm.cmd run test:visual
+```
+
+Expected result:
+
+- The default `1070x590` window has no horizontal page scrollbar.
+- The left global sidebar has no independent scrollbar.
+- The macro operation/status columns stay visible.
+- Disabled macro controls stay on one line.
 
 ## Startup
 

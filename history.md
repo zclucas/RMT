@@ -12,6 +12,13 @@
 - Refined UI proposal A with a fixed left control rail, icon tab bar, collapsible module panel, and static macro row reordering interactions.
 - Updated UI proposal A so each module owns the macro rows directly beneath it while preserving button and drag row reordering.
 - Updated UI proposal A row movement so macros can swap across adjacent module boundaries while disabled modules render slightly dimmed.
+- Applied UI proposal A to the live WebView main screen with the fixed global sidebar, top icon tabs, and module-based macro rows.
+- Tightened the live WebView proposal A styling with compact macro columns, fixed checkbox sizing, and sidebar spacing closer to the reference screenshot.
+- Added automatic proportional scaling to the live WebView UI and removed the unnecessary left sidebar and horizontal macro scrollbars.
+- Restored a visible scaled-window boundary and fixed disabled status controls so they stay on one line.
+- Bumped the WebView version to RMTv2.0.1 and added active-worktree diagnostics for avoiding accidental launches from older local clones.
+- Added a WebView bridge contract check that compares TypeScript state/action types with the AHK state builders and dispatcher.
+- Added Playwright visual regression coverage for the scaled WebView macro layout, scrollbars, visible action/status columns, and disabled controls.
 
 ## v1.1.4
 

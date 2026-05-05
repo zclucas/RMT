@@ -12,10 +12,13 @@
 - Install frontend dependencies from `WebViewApp` with `npm.cmd install`.
 - Build the WebView frontend from `WebViewApp` with `npm.cmd run build`.
 - Run full repository verification from the repo root with `.\scripts\verify.ps1`.
+- If multiple local RMT clones exist, confirm the active launch entry with `powershell -ExecutionPolicy Bypass -File .\scripts\check-active-worktree.ps1`.
 - Use scoped verification when needed:
   - `.\scripts\verify.ps1 -SkipWebBuild`
   - `.\scripts\verify.ps1 -SkipAhkValidate`
+  - `.\scripts\verify.ps1 -SkipBridgeContract`
   - `.\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"`
+- Run WebView visual regression checks from `WebViewApp` with `npm.cmd run test:visual` after layout-sensitive changes.
 - Run packaging from the repo root with `.\PackRMT.ps1`.
 - For non-interactive packaging, use `.\PackRMT.ps1 -ReleaseType both -NoWait`.
 
@@ -25,6 +28,7 @@
 - Keep `WebViewApp/src/types.ts` aligned with the state returned by `RmtBuildState()` in `Main/UIUtil.ahk`.
 - Add WebView behavior through explicit bridge actions instead of bypassing the AHK state model.
 - Commit updated `WebViewApp/dist` outputs when changing `WebViewApp` source.
+- Run `node .\scripts\verify-webview-contract.mjs` when changing WebView bridge state or actions.
 - Record user-visible or maintenance-significant changes in `history.md` under `Unreleased`.
 
 ## Versioning And Release

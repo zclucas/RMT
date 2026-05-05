@@ -1,28 +1,39 @@
 import {
   ArrowDown,
   ArrowUp,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clipboard,
   Eraser,
   ExternalLink,
+  FileText,
+  Gift,
+  GripVertical,
   HelpCircle,
   Image as ImageIcon,
+  Keyboard,
+  ListTree,
   Maximize2,
+  Menu as MenuIcon,
   Minus,
   MousePointer2,
   Pause,
   Play,
   Plus,
   RefreshCw,
+  Repeat2,
   Save,
   Settings,
+  SlidersHorizontal,
   Square,
   SquarePen,
+  Timer,
   Trash2,
+  Wrench,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { callRmt, getFallbackState } from "./bridge";
 import type {
   RmtAction,
@@ -48,6 +59,9 @@ const endTipLabels = ["无", "结束提示", "循环结束提示"];
 const screenshotLabels = ["微软截图", "RMT截图", "SC截图"];
 const keyDownLabels = ["自动松开", "忽略重复按下", "允许重复按下"];
 const ocrLabels = ["中文", "英文"];
+const uiDesignWidth = 1360;
+const uiDesignHeight = 720;
+const minUiScale = 0.65;
 
 function cloneState(state: RmtState): RmtState {
   return structuredClone(state);
@@ -60,6 +74,8 @@ function classNames(...values: Array<string | false | null | undefined>): string
 export default function App() {
   const [state, setState] = useState<RmtState>(() => getFallbackState());
   const [message, setMessage] = useState("");
+  const scaleHostRef = useRef<HTMLDivElement>(null);
+  const [uiScale, setUiScale] = useState(1);
   const activeTab = useMemo(
     () => state.tabs.find((tab) => tab.index === state.activeTabIndex) ?? state.tabs[0],
     [state.activeTabIndex, state.tabs]
@@ -71,6 +87,39 @@ export default function App() {
 
     return () => {
       delete window.__rmtReceiveState;
+    };
+  }, []);
+
+  useEffect(() => {
+    const host = scaleHostRef.current;
+    if (!host) {
+      return;
+    }
+
+    const updateScale = () => {
+      const { width, height } = host.getBoundingClientRect();
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+      const nextScale = Math.max(Math.min(width / uiDesignWidth, height / uiDesignHeight, 1), minUiScale);
+      const roundedScale = Number(nextScale.toFixed(3));
+      setUiScale((current) => (Math.abs(current - roundedScale) > 0.005 ? roundedScale : current));
+    };
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    if (typeof ResizeObserver === "undefined") {
+      return () => {
+        window.removeEventListener("resize", updateScale);
+      };
+    }
+
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(host);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateScale);
     };
   }, []);
 
@@ -132,122 +181,77 @@ export default function App() {
     void runAction("updateTool", { field, value });
   }
 
+  const scaleStyle = {
+    "--rmt-ui-scale": String(uiScale)
+  } as React.CSSProperties;
+
   return (
-    <div className="app-shell">
-      <TitleBar state={state} runAction={runAction} />
+    <div className="rmt-scale-viewport" ref={scaleHostRef}>
+      <div className="rmt-scale-content" style={scaleStyle}>
+        <div className="app-shell classic-app">
+          <TitleBar state={state} runAction={runAction} />
 
-      <div className="workspace">
-        <aside className="sidebar">
-          <div className="config-block">
-            <div className="label">当前配置</div>
-            <div className="config-name" title={state.currentSettingName}>
-              {state.currentSettingName}
-            </div>
+          <div className="classic-body">
+            <GlobalSidebar state={state} runAction={runAction} />
+
+            <section className="classic-main">
+              <TopTabs state={state} runAction={runAction} />
+
+              {message && <div className="message classic-message">{message}</div>}
+
+              {activeTab?.kind === "macro" && activeTab.table && (
+                <div className="classic-work-area module-list-layout">
+                  <MacroTable
+                    tab={activeTab}
+                    patchLocalItem={patchLocalItem}
+                    patchLocalFold={patchLocalFold}
+                    updateItem={updateItem}
+                    updateFold={updateFold}
+                    runAction={runAction}
+                  />
+                </div>
+              )}
+
+              {activeTab && activeTab.kind !== "macro" && (
+                <main className="content classic-content">
+                  <div className="content-header">
+                    <div>
+                      <div className="eyebrow">{activeTab.symbol}</div>
+                      <h1>{activeTab.name}</h1>
+                    </div>
+                    <div className="runtime-summary">
+                      <span className={classNames("dot", state.isMacroWorking && "running")} />
+                      <span>运行中 {state.macroRunningCount}</span>
+                    </div>
+                  </div>
+
+                  {activeTab.kind === "tool" && (
+                    <ToolPanel
+                      tools={state.tools}
+                      patchLocalTools={patchLocalTools}
+                      updateTool={updateTool}
+                      runAction={runAction}
+                    />
+                  )}
+
+                  {activeTab.kind === "settings" && (
+                    <SettingsPanel
+                      state={state}
+                      settings={state.settings}
+                      patchLocalSettings={patchLocalSettings}
+                      updateSetting={updateSetting}
+                      runAction={runAction}
+                    />
+                  )}
+
+                  {activeTab.kind === "help" && <HelpPanel runAction={runAction} />}
+                  {activeTab.kind === "reward" && <RewardPanel macroTotalCount={state.macroTotalCount} />}
+                  {activeTab.kind === "thanks" && <ThanksPanel runAction={runAction} />}
+                </main>
+              )}
+            </section>
           </div>
-
-          <div className="status-grid">
-            <button
-              className={classNames("status-tile", state.isSuspend && "is-danger")}
-              onClick={() => runAction("toggleSuspend")}
-              type="button"
-            >
-              <Pause size={16} />
-              <span>休眠</span>
-              <strong>{state.isSuspend ? "开启" : "关闭"}</strong>
-            </button>
-            <button
-              className={classNames("status-tile", state.isPause && "is-warn")}
-              onClick={() => runAction("togglePause")}
-              type="button"
-            >
-              <Square size={16} />
-              <span>暂停</span>
-              <strong>{state.isPause ? "开启" : "关闭"}</strong>
-            </button>
-          </div>
-
-          <nav className="tab-list" aria-label="RMT sections">
-            {state.tabs.map((tab) => (
-              <button
-                key={tab.index}
-                className={classNames("tab-button", tab.index === state.activeTabIndex && "active")}
-                onClick={() => runAction("setTab", { tabIndex: tab.index })}
-                type="button"
-              >
-                <span className="tab-index">{tab.index}</span>
-                <span>{tab.name}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="sidebar-actions">
-            <button className="primary" onClick={() => runAction("save")} type="button">
-              <Save size={16} />
-              应用并保存
-            </button>
-            <button onClick={() => runAction("killAll")} type="button">
-              <Square size={16} />
-              终止所有宏
-            </button>
-            <button onClick={() => runAction("reload")} type="button">
-              <RefreshCw size={16} />
-              重载
-            </button>
-            <button onClick={() => runAction("openHelp")} type="button">
-              <HelpCircle size={16} />
-              帮助文档
-            </button>
-          </div>
-        </aside>
-
-        <main className="content">
-          <div className="content-header">
-            <div>
-              <div className="eyebrow">{activeTab?.symbol}</div>
-              <h1>{activeTab?.name}</h1>
-            </div>
-            <div className="runtime-summary">
-              <span className={classNames("dot", state.isMacroWorking && "running")} />
-              <span>运行中 {state.macroRunningCount}</span>
-            </div>
-          </div>
-
-          {message && <div className="message">{message}</div>}
-
-          {activeTab?.kind === "macro" && activeTab.table && (
-            <MacroTable
-              tab={activeTab}
-              patchLocalItem={patchLocalItem}
-              patchLocalFold={patchLocalFold}
-              updateItem={updateItem}
-              updateFold={updateFold}
-              runAction={runAction}
-            />
-          )}
-
-          {activeTab?.kind === "tool" && (
-            <ToolPanel
-              tools={state.tools}
-              patchLocalTools={patchLocalTools}
-              updateTool={updateTool}
-              runAction={runAction}
-            />
-          )}
-
-          {activeTab?.kind === "settings" && (
-            <SettingsPanel
-              state={state}
-              settings={state.settings}
-              patchLocalSettings={patchLocalSettings}
-              updateSetting={updateSetting}
-              runAction={runAction}
-            />
-          )}
-
-          {activeTab?.kind === "help" && <HelpPanel runAction={runAction} />}
-          {activeTab?.kind === "reward" && <RewardPanel macroTotalCount={state.macroTotalCount} />}
-          {activeTab?.kind === "thanks" && <ThanksPanel runAction={runAction} />}
-        </main>
+        </div>
       </div>
     </div>
   );
@@ -281,6 +285,156 @@ function TitleBar({
   );
 }
 
+function TopTabs({ state, runAction }: { state: RmtState; runAction: RunAction }) {
+  return (
+    <nav className="classic-tabs" aria-label="RMT 功能页签">
+      {state.tabs.map((tab) => {
+        const Icon = getTabIcon(tab);
+        return (
+          <button
+            className={classNames(tab.index === state.activeTabIndex && "active")}
+            key={tab.index}
+            onClick={() => runAction("setTab", { tabIndex: tab.index })}
+            type="button"
+          >
+            <Icon size={16} />
+            <span>{getTabLabel(tab)}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function getTabIcon(tab: RmtTab) {
+  if (tab.kind === "macro") {
+    switch (tab.table?.index ?? tab.index) {
+      case 1:
+        return Keyboard;
+      case 2:
+        return FileText;
+      case 3:
+        return MenuIcon;
+      case 4:
+        return Timer;
+      case 5:
+        return ListTree;
+      case 6:
+        return Repeat2;
+      default:
+        return Keyboard;
+    }
+  }
+
+  switch (tab.kind) {
+    case "tool":
+      return Wrench;
+    case "settings":
+      return Settings;
+    case "help":
+      return HelpCircle;
+    case "reward":
+      return Gift;
+    case "thanks":
+      return CheckCircle2;
+    default:
+      return Keyboard;
+  }
+}
+
+function getTabLabel(tab: RmtTab): string {
+  if (tab.kind === "reward") {
+    return "打赏";
+  }
+  if (tab.kind === "thanks") {
+    return "感谢";
+  }
+  return tab.name;
+}
+
+function GlobalSidebar({ state, runAction }: { state: RmtState; runAction: RunAction }) {
+  return (
+    <aside className="classic-global-sidebar">
+      <div className="sidebar-section">
+        <span className="side-label">当前配置</span>
+        <button className="config-select-button" onClick={() => runAction("openSettingManager")} title={state.currentSettingName} type="button">
+          {state.currentSettingName}
+        </button>
+        <button className="side-button green" onClick={() => runAction("openSettingManager")} type="button">
+          <Settings size={15} />
+          配置管理
+        </button>
+      </div>
+
+      <div className="sidebar-section global-actions">
+        <span className="side-label">全局操作</span>
+        <button
+          className={classNames("side-card", state.isSuspend && "is-active")}
+          onClick={() => runAction("toggleSuspend")}
+          type="button"
+        >
+          <span>
+            <Pause size={15} />
+            休眠
+          </span>
+          <kbd>{formatHotkey(state.settings.suspendHotkey)}</kbd>
+        </button>
+        <button
+          className={classNames("side-card", state.isPause && "is-active")}
+          onClick={() => runAction("togglePause")}
+          type="button"
+        >
+          <span>
+            <Square size={15} />
+            暂停
+          </span>
+          <kbd>{formatHotkey(state.settings.pauseHotkey)}</kbd>
+        </button>
+        <button className="side-button red" onClick={() => runAction("killAll")} type="button">
+          <Square size={15} />
+          终止宏
+        </button>
+        <kbd className="shortcut-line">{formatHotkey(state.settings.killMacroHotkey)}</kbd>
+        <button className="side-button gray" onClick={() => runAction("reload")} type="button">
+          <RefreshCw size={15} />
+          重载
+        </button>
+        <button className="side-button blue" onClick={() => runAction("openHelp")} type="button">
+          <HelpCircle size={15} />
+          帮助
+        </button>
+      </div>
+
+      <div className="sidebar-save">
+        <button className="side-button green" onClick={() => runAction("save")} type="button">
+          <Save size={15} />
+          保存
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function formatHotkey(value: string): string {
+  const modifierLabels: Record<string, string> = {
+    "!": "Alt",
+    "^": "Ctrl",
+    "+": "Shift",
+    "#": "Win"
+  };
+  const modifiers: string[] = [];
+  let key = value.trim();
+
+  while (key.length > 0 && modifierLabels[key[0]]) {
+    modifiers.push(modifierLabels[key[0]]);
+    key = key.slice(1);
+  }
+
+  const mainKey = key.replace(/[{}]/g, "").trim();
+  const parts = [...modifiers, mainKey].filter(Boolean);
+  return parts.length > 0 ? parts.join("+") : "未设置";
+}
+
 function MacroTable({
   tab,
   patchLocalItem,
@@ -305,45 +459,62 @@ function MacroTable({
   };
 
   return (
-    <section className="macro-view">
-      <div className="toolbar">
-        <button onClick={() => runAction("addFold", { tableIndex: table.index, afterFoldIndex: table.folds.length })} type="button">
-          <Plus size={16} />
-          新增模块
-        </button>
-        <button onClick={() => runAction("openMacroEditor", { tableIndex: table.index, itemIndex: 0 })} type="button">
-          <SquarePen size={16} />
-          打开宏编辑器
-        </button>
-      </div>
+    <section className="macro-view classic-module-stack">
+      {table.folds.length === 0 && (
+        <div className="module-empty-row">
+          <button onClick={() => runAction("addFold", { tableIndex: table.index, afterFoldIndex: 0 })} type="button">
+            <Plus size={16} />
+            新增模块
+          </button>
+        </div>
+      )}
 
-      <div className="fold-list">
-        {table.folds.map((fold) => (
-          <section className="fold-section" key={fold.index}>
-            <div className="fold-header">
+      {table.folds.map((fold) => (
+          <section className={classNames("macro-module-section", fold.forbid && "is-disabled")} key={fold.index}>
+            <div className="module-config-row">
+              <label className="module-field remark-field">
+                <span>备注:</span>
+                <input
+                  value={fold.remark}
+                  placeholder={`模块 ${fold.index}`}
+                  onChange={(event) => patchLocalFold(table.index, fold.index, "remark", event.target.value)}
+                  onBlur={(event) => updateFold(table.index, fold.index, "remark", event.target.value)}
+                />
+              </label>
+              <label className="module-field front-field">
+                <span>前台:</span>
+                <input
+                  value={fold.frontInfo}
+                  placeholder="窗口标题 / 进程规则"
+                  onChange={(event) => patchLocalFold(table.index, fold.index, "frontInfo", event.target.value)}
+                  onBlur={(event) => updateFold(table.index, fold.index, "frontInfo", event.target.value)}
+                />
+              </label>
+              <button onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, foldIndex: fold.index })} type="button">
+                <SquarePen size={15} />
+                编辑
+              </button>
+              <button onClick={() => runAction("addItem", { tableIndex: table.index, foldIndex: fold.index })} type="button">
+                <Plus size={15} />
+                新增宏
+              </button>
+              <button onClick={() => runAction("addFold", { tableIndex: table.index, afterFoldIndex: fold.index })} type="button">
+                <Plus size={15} />
+                新增模块
+              </button>
               <button
-                className="icon-button"
-                onClick={() => runAction("toggleFold", { tableIndex: table.index, foldIndex: fold.index })}
-                title={fold.collapsed ? "展开" : "折叠"}
+                onClick={() =>
+                  confirmAction("确认删除当前模块以及模块中的所有宏配置？", "deleteFold", {
+                    tableIndex: table.index,
+                    foldIndex: fold.index
+                  })
+                }
                 type="button"
               >
-                {fold.collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                <Trash2 size={15} />
+                删除模块
               </button>
-              <input
-                className="fold-title-input"
-                value={fold.remark}
-                placeholder={`模块 ${fold.index}`}
-                onChange={(event) => patchLocalFold(table.index, fold.index, "remark", event.target.value)}
-                onBlur={(event) => updateFold(table.index, fold.index, "remark", event.target.value)}
-              />
-              <input
-                className="front-input"
-                value={fold.frontInfo}
-                placeholder="前台窗口规则"
-                onChange={(event) => patchLocalFold(table.index, fold.index, "frontInfo", event.target.value)}
-                onBlur={(event) => updateFold(table.index, fold.index, "frontInfo", event.target.value)}
-              />
-              <label className="check-row">
+              <label className="inline-check module-disabled">
                 <input
                   type="checkbox"
                   checked={fold.forbid}
@@ -354,278 +525,228 @@ function MacroTable({
                 />
                 禁用
               </label>
-              <button onClick={() => runAction("addItem", { tableIndex: table.index, foldIndex: fold.index })} type="button">
-                <Plus size={16} />
-                新增宏
-              </button>
               <button
-                className="danger"
-                onClick={() =>
-                  confirmAction("确认删除当前模块以及模块中的所有宏配置？", "deleteFold", {
-                    tableIndex: table.index,
-                    foldIndex: fold.index
-                  })
-                }
+                className="module-expand-button"
+                onClick={() => runAction("toggleFold", { tableIndex: table.index, foldIndex: fold.index })}
+                title={fold.collapsed ? "展开模块" : "折叠模块"}
                 type="button"
               >
-                <Trash2 size={16} />
-                删除模块
+                {fold.collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
               </button>
             </div>
 
-            {table.isMenuTable && (
-              <div className="menu-fold-fields">
-                <select
-                  value={fold.triggerType}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    patchLocalFold(table.index, fold.index, "triggerType", value);
-                    updateFold(table.index, fold.index, "triggerType", value);
-                  }}
-                >
-                  {triggerTypeLabels.map((label, index) => (
-                    <option key={label} value={index + 1}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={fold.trigger}
-                  placeholder="菜单触发键"
-                  onChange={(event) => patchLocalFold(table.index, fold.index, "trigger", event.target.value)}
-                  onBlur={(event) => updateFold(table.index, fold.index, "trigger", event.target.value)}
-                />
-                <button
-                  className="icon-button"
-                  title="编辑菜单触发键"
-                  onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, foldIndex: fold.index })}
-                  type="button"
-                >
-                  <SquarePen size={15} />
-                </button>
-                <input
-                  type="number"
-                  min={0}
-                  value={fold.holdTime}
-                  title="长按时长"
-                  onChange={(event) => patchLocalFold(table.index, fold.index, "holdTime", Number(event.target.value))}
-                  onBlur={(event) => updateFold(table.index, fold.index, "holdTime", Number(event.target.value))}
-                />
+            {!fold.collapsed && (
+              <div className="module-macro-list">
+                <div className="module-macro-header">
+                  <span />
+                  <span>宏名称</span>
+                  <span>触发编辑器</span>
+                  <span>触发类型</span>
+                  <span>循环次数</span>
+                  <span>宏设置</span>
+                  <span>宏编辑器</span>
+                  <span>移动</span>
+                  <span>状态</span>
+                  <span>操作</span>
+                </div>
+
+                {fold.items.length === 0 && <div className="module-empty-row">当前模块没有宏。</div>}
+
+                {fold.items.map((item) => (
+                  <div
+                    className={classNames("module-macro-row", (item.forbid || item.pause) && "row-muted")}
+                    key={item.serial || item.index}
+                  >
+                    <div className="macro-row-index">
+                      <span className="drag-handle" title="可用移动按钮调整顺序">
+                        <GripVertical size={16} />
+                      </span>
+                      <strong>{item.index}.</strong>
+                    </div>
+                    <input
+                      value={item.remark}
+                      placeholder="宏名称"
+                      onChange={(event) => patchLocalItem(table.index, item.index, "remark", event.target.value)}
+                      onBlur={(event) => updateItem(table.index, item.index, "remark", event.target.value)}
+                    />
+                    <button
+                      className="trigger-editor-button"
+                      title={table.isTimingTable ? "编辑定时配置" : table.isStringTable ? "编辑字串触发" : "编辑触发键"}
+                      onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, itemIndex: item.index })}
+                      type="button"
+                    >
+                      {item.trigger || "编辑"}
+                    </button>
+                    <select
+                      className="select-cell"
+                      value={item.triggerType}
+                      disabled={table.isTimingTable}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        patchLocalItem(table.index, item.index, "triggerType", value);
+                        updateItem(table.index, item.index, "triggerType", value);
+                      }}
+                    >
+                      {triggerTypeLabels.map((label, index) => (
+                        <option key={label} value={index + 1}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={item.loopCount}
+                      onChange={(event) => patchLocalItem(table.index, item.index, "loopCount", event.target.value)}
+                      onBlur={(event) => updateItem(table.index, item.index, "loopCount", event.target.value)}
+                    />
+                    <MacroSettingsControl
+                      item={item}
+                      tableIndex={table.index}
+                      patchLocalItem={patchLocalItem}
+                      updateItem={updateItem}
+                    />
+                    <button
+                      onClick={() => runAction("openMacroEditor", { tableIndex: table.index, itemIndex: item.index })}
+                      title={item.macro || "编辑宏"}
+                      type="button"
+                    >
+                      <SquarePen size={14} />
+                      编辑
+                    </button>
+                    <div className="move-buttons">
+                      <button
+                        disabled={item.index <= 1}
+                        onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: -1 })}
+                        title="上移"
+                        type="button"
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        disabled={item.index >= itemCount}
+                        onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: 1 })}
+                        title="下移"
+                        type="button"
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                    </div>
+                    <label className="inline-check row-disabled">
+                      <input
+                        type="checkbox"
+                        checked={item.forbid}
+                        onChange={(event) => {
+                          patchLocalItem(table.index, item.index, "forbid", event.target.checked);
+                          updateItem(table.index, item.index, "forbid", event.target.checked);
+                        }}
+                      />
+                      禁用
+                    </label>
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        confirmAction("确认删除当前宏？", "deleteItem", {
+                          tableIndex: table.index,
+                          itemIndex: item.index
+                        })
+                      }
+                      type="button"
+                    >
+                      <Trash2 size={14} />
+                      删除
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 
-            {!fold.collapsed && (
-              <div className="item-table-wrap">
-                <table className="item-table">
-                  <thead>
-                    <tr>
-                      <th>序号</th>
-                      <th>备注</th>
-                      <th>{table.isTimingTable ? "定时" : "触发"}</th>
-                      <th>触发类型</th>
-                      <th>循环</th>
-                      <th>宏指令</th>
-                      <th>模式</th>
-                      <th>时长</th>
-                      <th>提示音</th>
-                      <th>状态</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fold.items.length === 0 && (
-                      <tr>
-                        <td colSpan={11} className="empty-cell">
-                          当前模块没有宏。
-                        </td>
-                      </tr>
-                    )}
-                    {fold.items.map((item) => (
-                      <tr key={item.serial || item.index}>
-                        <td className="index-cell">{item.index}</td>
-                        <td>
-                          <input
-                            value={item.remark}
-                            placeholder="备注"
-                            onChange={(event) => patchLocalItem(table.index, item.index, "remark", event.target.value)}
-                            onBlur={(event) => updateItem(table.index, item.index, "remark", event.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <div className="trigger-cell">
-                            <input
-                              value={item.trigger}
-                              placeholder={table.isTimingTable ? "定时配置" : "触发键"}
-                              onChange={(event) => patchLocalItem(table.index, item.index, "trigger", event.target.value)}
-                              onBlur={(event) => updateItem(table.index, item.index, "trigger", event.target.value)}
-                            />
-                            <button
-                              className="icon-button"
-                              title={table.isTimingTable ? "编辑定时配置" : table.isStringTable ? "编辑字串触发" : "编辑触发键"}
-                              onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, itemIndex: item.index })}
-                              type="button"
-                            >
-                              <SquarePen size={15} />
-                            </button>
-                          </div>
-                        </td>
-                        <td>
-                          <select
-                            value={item.triggerType}
-                            disabled={table.isTimingTable}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              patchLocalItem(table.index, item.index, "triggerType", value);
-                              updateItem(table.index, item.index, "triggerType", value);
-                            }}
-                          >
-                            {triggerTypeLabels.map((label, index) => (
-                              <option key={label} value={index + 1}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            value={item.loopCount}
-                            onChange={(event) => patchLocalItem(table.index, item.index, "loopCount", event.target.value)}
-                            onBlur={(event) => updateItem(table.index, item.index, "loopCount", event.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <textarea
-                            value={item.macro}
-                            placeholder="宏指令"
-                            onChange={(event) => patchLocalItem(table.index, item.index, "macro", event.target.value)}
-                            onBlur={(event) => updateItem(table.index, item.index, "macro", event.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            value={item.mode}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              patchLocalItem(table.index, item.index, "mode", value);
-                              updateItem(table.index, item.index, "mode", value);
-                            }}
-                          >
-                            {modeLabels.map((label, index) => (
-                              <option key={label} value={index + 1}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            min={0}
-                            value={item.holdTime}
-                            onChange={(event) => patchLocalItem(table.index, item.index, "holdTime", Number(event.target.value))}
-                            onBlur={(event) => updateItem(table.index, item.index, "holdTime", Number(event.target.value))}
-                          />
-                        </td>
-                        <td>
-                          <div className="sound-stack">
-                            <select
-                              value={item.startTipSound}
-                              aria-label="开始提示音"
-                              onChange={(event) => {
-                                const value = Number(event.target.value);
-                                patchLocalItem(table.index, item.index, "startTipSound", value);
-                                updateItem(table.index, item.index, "startTipSound", value);
-                              }}
-                            >
-                              {startTipLabels.map((label, index) => (
-                                <option key={label} value={index + 1}>
-                                  {label}
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              value={item.endTipSound}
-                              aria-label="结束提示音"
-                              onChange={(event) => {
-                                const value = Number(event.target.value);
-                                patchLocalItem(table.index, item.index, "endTipSound", value);
-                                updateItem(table.index, item.index, "endTipSound", value);
-                              }}
-                            >
-                              {endTipLabels.map((label, index) => (
-                                <option key={label} value={index + 1}>
-                                  {label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-                        <td>
-                          <label className="check-row">
-                            <input
-                              type="checkbox"
-                              checked={item.forbid}
-                              onChange={(event) => {
-                                patchLocalItem(table.index, item.index, "forbid", event.target.checked);
-                                updateItem(table.index, item.index, "forbid", event.target.checked);
-                              }}
-                            />
-                            禁用
-                          </label>
-                          <span className={classNames("state-pill", item.colorState === 1 && "run", item.pause && "pause")}>
-                            {item.pause ? "暂停" : item.colorState === 1 ? "运行" : "空闲"}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="row-actions">
-                            <button
-                              title="编辑宏"
-                              onClick={() => runAction("openMacroEditor", { tableIndex: table.index, itemIndex: item.index })}
-                              type="button"
-                            >
-                              <SquarePen size={15} />
-                            </button>
-                            <button
-                              title="上移"
-                              disabled={item.index === 1}
-                              onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: -1 })}
-                              type="button"
-                            >
-                              <ArrowUp size={15} />
-                            </button>
-                            <button
-                              title="下移"
-                              disabled={item.index === itemCount}
-                              onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: 1 })}
-                              type="button"
-                            >
-                              <ArrowDown size={15} />
-                            </button>
-                            <button
-                              className="danger icon-only"
-                              title="删除"
-                              onClick={() =>
-                                confirmAction("确认删除当前宏？", "deleteItem", {
-                                  tableIndex: table.index,
-                                  itemIndex: item.index
-                                })
-                              }
-                              type="button"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {fold.collapsed && <div className="module-collapsed-note">模块 {fold.index} 已折叠，点击右侧箭头展开。</div>}
           </section>
-        ))}
-      </div>
+      ))}
     </section>
+  );
+}
+
+function MacroSettingsControl({
+  item,
+  tableIndex,
+  patchLocalItem,
+  updateItem
+}: {
+  item: RmtItem;
+  tableIndex: number;
+  patchLocalItem: (tableIndex: number, itemIndex: number, field: keyof RmtItem, value: unknown) => void;
+  updateItem: (tableIndex: number, itemIndex: number, field: keyof RmtItem, value: unknown) => void;
+}) {
+  return (
+    <details className="macro-settings-cell">
+      <summary>
+        <SlidersHorizontal size={14} />
+        设置
+      </summary>
+      <div className="macro-settings-panel">
+        <label>
+          <span>模式</span>
+          <select
+            value={item.mode}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              patchLocalItem(tableIndex, item.index, "mode", value);
+              updateItem(tableIndex, item.index, "mode", value);
+            }}
+          >
+            {modeLabels.map((label, index) => (
+              <option key={label} value={index + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>时长</span>
+          <input
+            type="number"
+            min={0}
+            value={item.holdTime}
+            onChange={(event) => patchLocalItem(tableIndex, item.index, "holdTime", Number(event.target.value))}
+            onBlur={(event) => updateItem(tableIndex, item.index, "holdTime", Number(event.target.value))}
+          />
+        </label>
+        <label>
+          <span>开始音</span>
+          <select
+            value={item.startTipSound}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              patchLocalItem(tableIndex, item.index, "startTipSound", value);
+              updateItem(tableIndex, item.index, "startTipSound", value);
+            }}
+          >
+            {startTipLabels.map((label, index) => (
+              <option key={label} value={index + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>结束音</span>
+          <select
+            value={item.endTipSound}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              patchLocalItem(tableIndex, item.index, "endTipSound", value);
+              updateItem(tableIndex, item.index, "endTipSound", value);
+            }}
+          >
+            {endTipLabels.map((label, index) => (
+              <option key={label} value={index + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </details>
   );
 }
 

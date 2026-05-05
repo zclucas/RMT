@@ -26,6 +26,7 @@ Run the full local verification from the repository root:
 The script checks:
 
 - `RMT_WEBVIEW_VERSION`, `WebViewApp/package.json`, and the bridge fallback version match.
+- The WebView state/action contract matches between TypeScript and `Main/UIUtil.ahk`.
 - `RMT.ahk` passes AutoHotkey validation.
 - React/TypeScript builds successfully and writes `WebViewApp/dist`.
 - `git diff --check` reports no whitespace errors.
@@ -35,7 +36,14 @@ Useful scoped checks:
 ```powershell
 .\scripts\verify.ps1 -SkipWebBuild
 .\scripts\verify.ps1 -SkipAhkValidate
+.\scripts\verify.ps1 -SkipBridgeContract
 .\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"
+```
+
+Confirm the local worktree and launch entry when multiple RMT clones exist:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-active-worktree.ps1
 ```
 
 For manual release or large-change checks, also follow `docs/regression-checklist.md`.
@@ -48,6 +56,7 @@ For packaging a public build, follow `docs/release.md`.
 - Add or change behavior through an explicit bridge action in `Main/UIUtil.ahk`.
 - Keep `WebViewApp/src/types.ts` aligned with the state returned by `RmtBuildState()`.
 - Run `npm.cmd run build` before committing frontend changes so `WebViewApp/dist` stays current.
+- Run `npm.cmd run test:visual` from `WebViewApp` after layout-sensitive WebView changes.
 
 ## Release Notes
 

@@ -14,6 +14,8 @@ installed
 .tmp-*
 WebViewApp/node_modules/
 WebViewApp/*.tsbuildinfo
+WebViewApp/playwright-report/
+WebViewApp/test-results/
 ReleaseX32/Plugins/WebViewToo/
 ReleaseX32/WebViewApp/
 ReleaseX64/Plugins/WebViewToo/

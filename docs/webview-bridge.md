@@ -44,7 +44,8 @@ When adding a state field:
 2. Add it to `WebViewApp/src/types.ts`.
 3. Add a fallback value in `WebViewApp/src/bridge.ts`.
 4. Render or consume it in React.
-5. Run `.\scripts\verify.ps1`.
+5. Run `node .\scripts\verify-webview-contract.mjs`.
+6. Run `.\scripts\verify.ps1`.
 
 Keep field names stable once released. If a rename is unavoidable, support the old field until config and UI migration are covered.
 
@@ -69,7 +70,8 @@ When adding an action:
 2. Validate payload values in AHK before mutating state.
 3. Return a fresh state snapshot after successful mutation.
 4. Keep legacy dialogs as fallback until the WebView flow reaches parity.
-5. Document the action here if it becomes part of normal UI behavior.
+5. Run `node .\scripts\verify-webview-contract.mjs`.
+6. Document the action here if it becomes part of normal UI behavior.
 
 ## Error Handling
 
