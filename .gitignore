@@ -10,3 +10,13 @@ installed
 */build*
 .codebuddy/
 .idea
+.tools/
+.tmp-*
+WebViewApp/node_modules/
+WebViewApp/*.tsbuildinfo
+ReleaseX32/Plugins/WebViewToo/
+ReleaseX32/WebViewApp/
+ReleaseX64/Plugins/WebViewToo/
+ReleaseX64/WebViewApp/
+Setting/
+Thread/Work[0-9]*.exe

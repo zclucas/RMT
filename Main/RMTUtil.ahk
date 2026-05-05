@@ -131,6 +131,7 @@ SwapTableContent(tableItem, indexA, indexB) {
     SwapArrValue(tableItem.TriggerTypeArr, indexA, indexB)
     SwapArrValue(tableItem.HoldTimeArr, indexA, indexB)
     SwapArrValue(tableItem.MacroArr, indexA, indexB)
+    SwapArrValue(tableItem.ModeArr, indexA, indexB)
     SwapArrValue(tableItem.LoopCountArr, indexA, indexB)
     SwapArrValue(tableItem.ForbidArr, indexA, indexB)
 }
@@ -478,16 +479,19 @@ SetTableItemState(tableIndex, itemIndex, State) {
 
     UpdateMacroRunningCount(LastState, State)
     tableItem.ColorStateArr[itemIndex] := State
-    ItemUsePool := ItemUseConPoolMap[tableItem.Index]
-    if (ItemUsePool.Has(itemIndex)) {
-        ItemConObj := ItemUsePool[itemIndex]
-        ItemConObj.ColorCon.Value := GetItemColorValue(tableItem.ColorStateArr[itemIndex])
-        ItemConObj.ColorCon.Visible := isVisible
+    if (ItemUseConPoolMap.Has(tableItem.Index)) {
+        ItemUsePool := ItemUseConPoolMap[tableItem.Index]
+        if (ItemUsePool.Has(itemIndex)) {
+            ItemConObj := ItemUsePool[itemIndex]
+            ItemConObj.ColorCon.Value := GetItemColorValue(tableItem.ColorStateArr[itemIndex])
+            ItemConObj.ColorCon.Visible := isVisible
+        }
     }
 
     if (State == 3) {
         SetTimer(CancelTableItemStopState.Bind(tableIndex, itemIndex), -5000)
     }
+    try RmtPostState()
 }
 
 CancelTableItemStopState(tableIndex, itemIndex) {
@@ -495,12 +499,15 @@ CancelTableItemStopState(tableIndex, itemIndex) {
     if (tableItem.ColorStateArr[itemIndex] == 3) {
         tableItem.ColorStateArr[itemIndex] := 0
 
-        ItemUsePool := ItemUseConPoolMap[tableItem.Index]
-        if (ItemUsePool.Has(itemIndex)) {
-            ItemConObj := ItemUsePool[itemIndex]
-            ItemConObj.ColorCon.Value := ""
-            ItemConObj.ColorCon.Visible := false
+        if (ItemUseConPoolMap.Has(tableItem.Index)) {
+            ItemUsePool := ItemUseConPoolMap[tableItem.Index]
+            if (ItemUsePool.Has(itemIndex)) {
+                ItemConObj := ItemUsePool[itemIndex]
+                ItemConObj.ColorCon.Value := ""
+                ItemConObj.ColorCon.Visible := false
+            }
         }
+        try RmtPostState()
     }
 }
 
@@ -650,6 +657,7 @@ OnToolTextFilterGetArea(x1, y1, x2, y2) {
     result := ocr.ocr_from_file(filePath)
     ToolCheckInfo.ToolTextCtrl.Value := result
     SetClipboard(result)
+    try RmtPostState()
 }
 
 OnToolTextCheckScreenShot() {
@@ -662,6 +670,7 @@ OnToolTextCheckScreenShot() {
         result := ocr.ocr_from_file(filePath)
         ToolCheckInfo.ToolTextCtrl.Value := result
         SetClipboard(result)
+        try RmtPostState()
         ; 停止监听
         SetTimer(, 0)
     }

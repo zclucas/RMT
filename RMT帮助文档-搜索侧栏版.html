@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RMT 帮助文档</title>
+<title>RMT 帮助文档 - 搜索侧栏版</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5f7fa;color:#333;display:flex;height:100vh;overflow:hidden}
@@ -37,7 +37,8 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 .hidden{display:none!important}
 @media(max-width:800px){.sidebar{width:56px}.sidebar h1{font-size:11px;padding:14px 6px;text-align:center}.nav button{padding:10px 6px;font-size:11px;text-align:center}.nav button span:last-child{display:none}}
 </style>
-<style>.sidebar{width:280px}
+<style>
+.sidebar{width:280px}
 .sidebar-search{position:relative;padding:10px;border-bottom:1px solid #2a2a4a;background:#151c34}
 .search-label{display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:#dbe7ff}
 .doc-search-input{width:100%;height:34px;border:1px solid #384767;border-radius:6px;background:#f8fafc;color:#1f2937;font-size:13px;padding:0 10px;outline:none}
@@ -82,7 +83,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
     <button id="docSearchClear" class="doc-search-clear" type="button">清空搜索</button>
     <div class="search-options">
       <label class="search-toggle" data-tip="开启后，鼠标悬停搜索结果会临时跳到对应位置；移开后返回原阅读位置。"><input id="docSearchPreviewToggle" type="checkbox" checked> 预览</label>
-      <label class="search-toggle" data-tip="开启后按 JavaScript 正则表达式搜索，例如 脚本|变量 或 \d+。正则错误会直接提示。"><input id="docSearchRegexToggle" type="checkbox"> 正则</label>
+      <label class="search-toggle" data-tip="开启后按 JavaScript 正则表达式搜索，例如 脚本|变量 或 \\d+。正则错误会直接提示。"><input id="docSearchRegexToggle" type="checkbox"> 正则</label>
     </div>
     <div id="docSearchStatus" class="search-status">输入关键词搜索全部章节</div>
     <div id="docSearchResults" class="search-results" aria-live="polite"></div>
@@ -3023,14 +3024,9 @@ function showPage(i){
     return Boolean(a && b && a.pageIndex === b.pageIndex && a.pageMatchIndex === b.pageMatchIndex && a.query === b.query && a.isRegex === b.isRegex);
   }
 
-  function clearPreviewTimer() {
-    clearTimeout(previewTimer);
-    previewTimer = null;
-  }
-
   function startPreview(result) {
     if (!previewToggle.checked || previewState || getQuery() !== result.query || regexToggle.checked !== result.isRegex) return;
-    clearPreviewTimer();
+    clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
       if (previewState || getQuery() !== result.query || regexToggle.checked !== result.isRegex) return;
       previewState = { pageIndex: activePageIndex, scrollTop: contentArea.scrollTop, result };
@@ -3040,7 +3036,6 @@ function showPage(i){
   }
 
   function commitPreview(result) {
-    clearPreviewTimer();
     if (!isSameResult(previewState && previewState.result, result)) return false;
     previewState = null;
     activePageIndex = result.pageIndex;
@@ -3048,7 +3043,8 @@ function showPage(i){
   }
 
   function endPreview() {
-    clearPreviewTimer();
+    clearTimeout(previewTimer);
+    previewTimer = null;
     if (!previewState) return;
     const state = previewState;
     previewState = null;
@@ -3122,7 +3118,6 @@ function showPage(i){
       item.addEventListener('focus', () => startPreview(result));
       item.addEventListener('blur', endPreview);
       item.addEventListener('click', () => {
-        clearPreviewTimer();
         if (commitPreview(result)) return;
         previewState = null;
         goToResult(result, false);
@@ -3169,7 +3164,6 @@ function showPage(i){
 
   renderSearchResults();
 })();
-
 </script>
 </body>
 </html>

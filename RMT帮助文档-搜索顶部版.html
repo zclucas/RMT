@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RMT 帮助文档</title>
+<title>RMT 帮助文档 - 搜索顶部版</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5f7fa;color:#333;display:flex;height:100vh;overflow:hidden}
@@ -37,28 +37,29 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 .hidden{display:none!important}
 @media(max-width:800px){.sidebar{width:56px}.sidebar h1{font-size:11px;padding:14px 6px;text-align:center}.nav button{padding:10px 6px;font-size:11px;text-align:center}.nav button span:last-child{display:none}}
 </style>
-<style>.sidebar{width:280px}
-.sidebar-search{position:relative;padding:10px;border-bottom:1px solid #2a2a4a;background:#151c34}
-.search-label{display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:#dbe7ff}
-.doc-search-input{width:100%;height:34px;border:1px solid #384767;border-radius:6px;background:#f8fafc;color:#1f2937;font-size:13px;padding:0 10px;outline:none}
-.doc-search-input:focus{border-color:#7fa0ff;box-shadow:0 0 0 3px rgba(127,160,255,.18)}
-.doc-search-clear{width:100%;height:32px;margin-top:7px;border:1px solid #384767;border-radius:6px;background:#202b4a;color:#e6edff;font-size:12.5px;cursor:pointer}
-.doc-search-clear:hover{background:#2b3b68;border-color:#536897}
-.search-options{display:flex;align-items:center;gap:12px;margin-top:8px}
-.search-toggle{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#dbe7ff;white-space:nowrap}
-.search-toggle input{accent-color:#7fa0ff}
+<style>
+.search-toolbar{display:flex;align-items:center;gap:14px;padding:14px 24px;background:#f8fafc;border-bottom:1px solid #dbe4f0;flex-shrink:0}
+.search-input-group{display:flex;align-items:center;gap:8px;flex:1;min-width:0;max-width:680px;flex-wrap:nowrap}
+.search-label{font-size:13px;font-weight:600;color:#2c3e70;white-space:nowrap}
+.doc-search-input{width:100%;min-width:0;height:36px;border:1px solid #c8d3e3;border-radius:6px;background:#fff;color:#1f2937;font-size:14px;padding:0 12px;outline:none}
+.doc-search-input:focus{border-color:#4a6cf7;box-shadow:0 0 0 3px rgba(74,108,247,.14)}
+.doc-search-clear{height:36px;flex:0 0 auto;border:1px solid #c8d3e3;border-radius:6px;background:#fff;color:#3a5080;font-size:13px;padding:0 12px;white-space:nowrap;cursor:pointer}
+.doc-search-clear:hover{background:#eef3ff;border-color:#aebdea;color:#1f3f96}
+.search-options{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.search-toggle{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#3a5080;white-space:nowrap}
+.search-toggle input{accent-color:#4a6cf7}
 .search-toggle[data-tip]{position:relative}
-.search-toggle[data-tip]:hover::after,.search-toggle[data-tip]:focus-within::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:0;width:220px;padding:8px 10px;border:1px solid #384767;border-radius:6px;background:#f8fafc;color:#334155;font-size:12px;line-height:1.45;white-space:normal;box-shadow:0 8px 20px rgba(0,0,0,.28);z-index:40}
-.search-status{margin-top:7px;font-size:12px;line-height:1.45;color:#9fb0ca}
-.search-results{display:none;position:absolute;left:10px;right:10px;top:calc(100% - 1px);max-height:calc(100vh - 190px);overflow:auto;border:1px solid #2a3758;border-radius:7px;background:#10182d;box-shadow:0 12px 28px rgba(0,0,0,.34);z-index:30}
+.search-toggle[data-tip]:hover::after,.search-toggle[data-tip]:focus-within::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:0;width:220px;padding:8px 10px;border:1px solid #c8d3e3;border-radius:6px;background:#fff;color:#334155;font-size:12px;line-height:1.45;white-space:normal;box-shadow:0 8px 20px rgba(15,23,42,.14);z-index:40}
+.search-status{font-size:12.5px;color:#64748b;white-space:nowrap}
+.search-results{display:none;position:fixed;left:8px;top:58px;width:184px;max-height:calc(100vh - 72px);overflow:auto;background:#fff;border:1px solid #dbe4f0;border-radius:8px;box-shadow:0 12px 28px rgba(15,23,42,.18);z-index:30}
 .search-results.visible{display:block}
-.search-empty,.search-result-head{padding:8px 9px;font-size:12px;color:#9fb0ca;border-bottom:1px solid #263453}
-.search-result-item{display:block;width:100%;border:0;border-bottom:1px solid #263453;background:#10182d;text-align:left;padding:9px;cursor:pointer}
-.search-result-item:hover,.search-result-item:focus{background:#1b2745;outline:none}
-.search-result-title{font-size:12.5px;font-weight:600;color:#f1f5ff;margin-bottom:4px}
-.search-result-snippet{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-height:4.5em;font-size:12px;line-height:1.5;color:#c2cce0}
-.doc-search-mark,.search-result-snippet mark{background:#fff2a8;color:#1a1a2e;border-radius:3px;padding:0 2px}
-.doc-search-active-mark{background:#ff7a45;color:#111827;box-shadow:0 0 0 2px rgba(255,122,69,.45)}
+.search-empty,.search-result-head{padding:10px 24px;font-size:12.5px;color:#64748b;border-bottom:1px solid #edf2f7}
+.search-result-item{display:block;width:100%;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;padding:9px 10px;cursor:pointer}
+.search-result-item:hover,.search-result-item:focus{background:#f5f8ff;outline:none}
+.search-result-title{font-size:13.5px;font-weight:600;color:#263963;margin-bottom:4px}
+.search-result-snippet{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-height:4.65em;font-size:12.5px;line-height:1.55;color:#475569}
+.doc-search-mark,.search-result-snippet mark{background:#fff2a8;color:inherit;border-radius:3px;padding:0 2px}
+.doc-search-active-mark{background:#ff7a45;color:#111827;box-shadow:0 0 0 2px rgba(255,122,69,.38)}
 .doc-outline{width:220px;flex:0 0 220px;background:#f8fafc;border-left:1px solid #dbe4f0;padding:16px 12px;overflow-y:auto}
 .outline-title{font-size:13px;font-weight:700;color:#2c3e70;margin-bottom:10px}
 .outline-empty{font-size:12.5px;color:#64748b;line-height:1.6}
@@ -69,24 +70,13 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 .outline-h2{padding-left:14px}
 .outline-h3{padding-left:24px;color:#64748b}
 @media(max-width:1000px){.doc-outline{display:none}}
-@media(max-width:800px){body{flex-direction:column}.sidebar{width:100%;max-height:48vh}.sidebar h1{font-size:13px;padding:10px 12px;text-align:left}.sidebar-search{position:relative;padding:9px 10px}.search-results{left:10px;right:10px;top:calc(100% - 1px);max-height:22vh}.nav{flex-direction:row;flex:0 0 auto;overflow-x:auto}.nav button{padding:8px 10px;font-size:12px;text-align:left}.main{min-height:0}.content-area{padding:20px 16px}}
+@media(max-width:800px){.search-toolbar{align-items:stretch;flex-direction:column;padding:10px 12px;gap:8px}.search-input-group{max-width:none;width:100%}.search-options{flex-wrap:wrap}.search-status{white-space:normal}.search-results{left:8px;right:auto;top:96px;width:min(280px,calc(100vw - 16px));max-height:50vh}.search-result-item,.search-empty,.search-result-head{padding-left:14px;padding-right:14px}}
 </style>
 <style>pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5px}.hljs{background:#fff;color:#000}.hljs-comment,.hljs-quote,.hljs-variable{color:green}.hljs-built_in,.hljs-keyword,.hljs-name,.hljs-selector-tag,.hljs-tag{color:#00f}.hljs-addition,.hljs-attribute,.hljs-literal,.hljs-section,.hljs-string,.hljs-template-tag,.hljs-template-variable,.hljs-title,.hljs-type{color:#a31515}.hljs-deletion,.hljs-meta,.hljs-selector-attr,.hljs-selector-pseudo{color:#2b91af}.hljs-doctag{color:grey}.hljs-attr{color:red}.hljs-bullet,.hljs-link,.hljs-symbol{color:#00b0e8}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:700}</style>
 </head>
 <body>
 <div class="sidebar">
   <h1>🐰 RMT 文档</h1>
-  <div class="sidebar-search" role="search">
-    <label class="search-label" for="docSearchInput">搜索全部章节</label>
-    <input id="docSearchInput" class="doc-search-input" type="search" placeholder="输入关键词" autocomplete="off">
-    <button id="docSearchClear" class="doc-search-clear" type="button">清空搜索</button>
-    <div class="search-options">
-      <label class="search-toggle" data-tip="开启后，鼠标悬停搜索结果会临时跳到对应位置；移开后返回原阅读位置。"><input id="docSearchPreviewToggle" type="checkbox" checked> 预览</label>
-      <label class="search-toggle" data-tip="开启后按 JavaScript 正则表达式搜索，例如 脚本|变量 或 \d+。正则错误会直接提示。"><input id="docSearchRegexToggle" type="checkbox"> 正则</label>
-    </div>
-    <div id="docSearchStatus" class="search-status">输入关键词搜索全部章节</div>
-    <div id="docSearchResults" class="search-results" aria-live="polite"></div>
-  </div>
   <div class="nav">
         <button class="tab active" onclick="showPage(0)">📘 软件介绍</button>
         <button class="tab" onclick="showPage(1)">🚀 快速上手</button>
@@ -98,6 +88,19 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
       </div>
 </div>
 <div class="main">
+  <div class="search-toolbar" role="search">
+    <div class="search-input-group">
+      <label class="search-label" for="docSearchInput">搜索</label>
+      <input id="docSearchInput" class="doc-search-input" type="search" placeholder="搜索帮助文档 / 跳转内容" autocomplete="off">
+      <button id="docSearchClear" class="doc-search-clear" type="button">清空</button>
+    </div>
+    <div class="search-options">
+      <label class="search-toggle" data-tip="开启后，鼠标悬停搜索结果会临时跳到对应位置；移开后返回原阅读位置。"><input id="docSearchPreviewToggle" type="checkbox" checked> 预览</label>
+      <label class="search-toggle" data-tip="开启后按 JavaScript 正则表达式搜索，例如 脚本|变量 或 \\d+。正则错误会直接提示。"><input id="docSearchRegexToggle" type="checkbox"> 正则</label>
+    </div>
+    <div id="docSearchStatus" class="search-status">输入关键词搜索全部章节</div>
+  </div>
+  <div id="docSearchResults" class="search-results" aria-live="polite"></div>
   <div class="content-area" id="contentArea">
       <div class="page" id="page0"><div class="content"><h1>📘 词条介绍</h1>
 <p>本页用于介绍软件中各类名词与功能的含义说明。</p>
@@ -2825,7 +2828,6 @@ function showPage(i){
   const maxResults = 200;
   let activePageIndex = Math.max(0, pages.findIndex(page => !page.classList.contains('hidden')));
   let previewState = null;
-  let previewTimer = null;
   let suppressPreviewCancel = false;
   let focusedResult = null;
 
@@ -2988,33 +2990,11 @@ function showPage(i){
     }
   }
 
-  function getActiveSearchConfig() {
-    const query = getQuery();
-    const searchConfig = getSearchConfig(query);
-    return query && !searchConfig.error ? searchConfig : null;
-  }
-
-  function switchPageSilently(index, activeMatchIndex = -1) {
-    if (!pages[index]) return;
-    activePageIndex = index;
-    restoreHighlights();
-    pages.forEach(page => page.classList.add('hidden'));
-    tabs.forEach(tab => tab.classList.remove('active'));
-    pages[index].classList.remove('hidden');
-    if (tabs[index]) tabs[index].classList.add('active');
-    const searchConfig = getActiveSearchConfig();
-    if (searchConfig) highlightPage(index, searchConfig, activeMatchIndex);
-    buildOutline();
-  }
-
   function goToResult(result, isPreview) {
     focusedResult = { pageIndex: result.pageIndex, pageMatchIndex: result.pageMatchIndex };
-    if (isPreview) {
-      switchPageSilently(result.pageIndex, result.pageMatchIndex);
-    } else {
-      suppressPreviewCancel = false;
-      window.showPage(result.pageIndex);
-    }
+    suppressPreviewCancel = Boolean(isPreview);
+    window.showPage(result.pageIndex);
+    suppressPreviewCancel = false;
     focusedResult = null;
     scrollToMatch(result.pageIndex, result.pageMatchIndex, isPreview);
   }
@@ -3023,24 +3003,13 @@ function showPage(i){
     return Boolean(a && b && a.pageIndex === b.pageIndex && a.pageMatchIndex === b.pageMatchIndex && a.query === b.query && a.isRegex === b.isRegex);
   }
 
-  function clearPreviewTimer() {
-    clearTimeout(previewTimer);
-    previewTimer = null;
-  }
-
   function startPreview(result) {
     if (!previewToggle.checked || previewState || getQuery() !== result.query || regexToggle.checked !== result.isRegex) return;
-    clearPreviewTimer();
-    previewTimer = setTimeout(() => {
-      if (previewState || getQuery() !== result.query || regexToggle.checked !== result.isRegex) return;
-      previewState = { pageIndex: activePageIndex, scrollTop: contentArea.scrollTop, result };
-      goToResult(result, true);
-      previewTimer = null;
-    }, 140);
+    previewState = { pageIndex: activePageIndex, scrollTop: contentArea.scrollTop, result };
+    goToResult(result, true);
   }
 
   function commitPreview(result) {
-    clearPreviewTimer();
     if (!isSameResult(previewState && previewState.result, result)) return false;
     previewState = null;
     activePageIndex = result.pageIndex;
@@ -3048,11 +3017,10 @@ function showPage(i){
   }
 
   function endPreview() {
-    clearPreviewTimer();
     if (!previewState) return;
     const state = previewState;
     previewState = null;
-    switchPageSilently(state.pageIndex);
+    window.showPage(state.pageIndex);
     contentArea.scrollTop = state.scrollTop;
     setTimeout(() => {
       contentArea.scrollTop = state.scrollTop;
@@ -3122,7 +3090,6 @@ function showPage(i){
       item.addEventListener('focus', () => startPreview(result));
       item.addEventListener('blur', endPreview);
       item.addEventListener('click', () => {
-        clearPreviewTimer();
         if (commitPreview(result)) return;
         previewState = null;
         goToResult(result, false);
@@ -3169,7 +3136,6 @@ function showPage(i){
 
   renderSearchResults();
 })();
-
 </script>
 </body>
 </html>
