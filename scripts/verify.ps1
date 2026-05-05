@@ -5,7 +5,10 @@ param(
     [switch]$SkipBridgeContract,
     [switch]$SkipWebViewWrapperCheck,
     [switch]$SkipHelpDocsCheck,
+    [switch]$SkipHelpLinkCheck,
+    [switch]$SkipBuildStateFixtures,
     [switch]$SkipWebBuild,
+    [switch]$SkipWebViewDistSync,
     [switch]$SkipWhitespaceCheck
 )
 
@@ -91,10 +94,21 @@ if (-not $SkipHelpDocsCheck) {
     Invoke-Native "Help documentation generation" "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\verify-help-docs.ps1")
 }
 
-if (-not $SkipAhkValidate) {
+if (-not $SkipHelpLinkCheck) {
+    Invoke-Native "Help Markdown local links" "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\verify-help-links.ps1")
+}
+
+if ((-not $SkipBuildStateFixtures) -or (-not $SkipAhkValidate)) {
     if (-not (Test-Path -LiteralPath $AhkExe)) {
         throw "AutoHotkey executable not found: $AhkExe"
     }
+}
+
+if (-not $SkipBuildStateFixtures) {
+    Invoke-Native "RmtBuildState fixture compatibility" "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\verify-rmt-build-state-fixtures.ps1", "-AhkExe", $AhkExe)
+}
+
+if (-not $SkipAhkValidate) {
     Invoke-Native "AHK validate" $AhkExe @("/ErrorStdOut=UTF-8", "/Validate", ".\RMT.ahk")
 }
 
@@ -114,6 +128,10 @@ if (-not $SkipWebBuild) {
             throw "Missing WebViewApp\dist\assets CSS bundle"
         }
         Write-Host "dist/index.html and assets are present"
+    }
+
+    if (-not $SkipWebViewDistSync) {
+        Invoke-Native "WebView dist sync" "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\verify-webview-dist-sync.ps1")
     }
 }
 

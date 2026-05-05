@@ -19,18 +19,24 @@
   - `.\scripts\verify.ps1 -SkipBridgeContract`
   - `.\scripts\verify.ps1 -SkipWebViewWrapperCheck`
   - `.\scripts\verify.ps1 -SkipHelpDocsCheck`
+  - `.\scripts\verify.ps1 -SkipHelpLinkCheck`
+  - `.\scripts\verify.ps1 -SkipBuildStateFixtures`
+  - `.\scripts\verify.ps1 -SkipWebViewDistSync`
   - `.\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"`
 - Run WebView visual regression checks from `WebViewApp` with `npm.cmd run test:visual` after layout-sensitive changes.
 - Run packaging from the repo root with `.\PackRMT.ps1`.
 - For non-interactive packaging, use `.\PackRMT.ps1 -ReleaseType both -NoWait`.
+- After packaging, run `.\scripts\verify-release-layout.ps1` to inspect required release files under the default desktop `RMTRelease\RMTv{version}` output, or pass `-ReleaseRoot`/`-ReleaseDir`.
 
 ## Coding Conventions
 
 - Keep AutoHotkey code compatible with AutoHotkey v2.
 - Keep `WebViewApp/src/types.ts` aligned with the state returned by `RmtBuildState()` in `Main/UIUtil.ahk`.
 - Add WebView behavior through explicit bridge actions instead of bypassing the AHK state model.
-- Commit updated `WebViewApp/dist` outputs when changing `WebViewApp` source.
+- Commit updated `WebViewApp/dist` outputs when changing `WebViewApp` source; `verify.ps1` fails if a build leaves untracked or unstaged `WebViewApp/dist` changes.
 - Run `node .\scripts\verify-webview-contract.mjs` when changing WebView bridge state or actions.
+- Run `.\scripts\verify-help-links.ps1` when changing local links or images in `Web/*.md`.
+- Run `.\scripts\verify-rmt-build-state-fixtures.ps1` when changing `RmtBuildState()` output shape or compatibility defaults.
 - Record user-visible or maintenance-significant changes in `history.md` under `Unreleased`.
 
 ## Versioning And Release
@@ -49,6 +55,7 @@
 - `scripts\verify.ps1` requires the AHK, package, and bridge versions to match.
 - `PackRMT.ps1` copies root `index.html` into release folders as `RMT帮助文档.html`.
 - `Web\JS\SingleHtml.js --check` verifies that generated RMT help HTML is current without rewriting it.
+- `.github\workflows\webview-verify.yml` intentionally runs only Node-reproducible checks: bridge contract, help docs/link checks, React build, and `WebViewApp/dist` sync.
 - The WebView runtime loader files live under `Plugins\WebViewToo\Lib`.
 - The AutoHotkey runtime error Help button opens the installed AutoHotkey help file, not an RMT-owned document.
 - If React build fails with `spawn EPERM` in a sandboxed environment, rerun the same command outside the sandbox.

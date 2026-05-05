@@ -8,7 +8,7 @@ Update the version in all version sources:
 
 - `Main/UIUtil.ahk`: `RMT_WEBVIEW_VERSION`
 - `WebViewApp/package.json`: `version`
-- `WebViewApp/src/bridge.ts`: fallback `version`
+- `WebViewApp/src/fallbackState.ts`: fallback `version`
 
 Move completed `history.md` entries from `Unreleased` into a new version section.
 
@@ -76,6 +76,14 @@ For each generated release folder, confirm these files or directories exist:
 - `RMT帮助文档.html`
 
 Confirm `node_modules` is not included.
+
+Run the release layout smoke check after packaging:
+
+```powershell
+.\scripts\verify-release-layout.ps1
+```
+
+Pass `-ReleaseRoot` or one or more `-ReleaseDir` values when inspecting a package outside the default desktop `RMTRelease\RMTv{version}` location.
 
 ## 6. Smoke Test Packaged Build
 

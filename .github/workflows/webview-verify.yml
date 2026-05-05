@@ -1,0 +1,48 @@
+name: WebView Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - Dev_UI
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  webview:
+    name: Contract, help docs, and build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: WebViewApp/package-lock.json
+
+      - name: Install WebView dependencies
+        working-directory: WebViewApp
+        run: npm ci
+
+      - name: Verify WebView bridge contract
+        run: node scripts\verify-webview-contract.mjs
+
+      - name: Verify generated help docs
+        run: powershell -ExecutionPolicy Bypass -File scripts\verify-help-docs.ps1
+
+      - name: Verify help Markdown links
+        run: powershell -ExecutionPolicy Bypass -File scripts\verify-help-links.ps1
+
+      - name: Build WebView frontend
+        working-directory: WebViewApp
+        run: npm run build
+
+      - name: Verify WebView dist sync
+        run: powershell -ExecutionPolicy Bypass -File scripts\verify-webview-dist-sync.ps1

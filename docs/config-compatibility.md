@@ -38,3 +38,13 @@ Use this checklist before release when saved data behavior changes:
 - Macro table edits still round-trip through existing save/load code.
 - Hotkeys remain registered or show a clear failure.
 - A backup exists before any destructive migration.
+
+## Fixture Check
+
+Run this check after changing `RmtBuildState()` or saved field defaults:
+
+```powershell
+.\scripts\verify-rmt-build-state-fixtures.ps1
+```
+
+The fixture script builds representative old in-memory state, including missing newer item arrays and multi-fold disabled/collapsed modules, and verifies the WebView state shape remains stable.

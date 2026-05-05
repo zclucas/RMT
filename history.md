@@ -22,6 +22,9 @@
 - Centralized WebView UI copy and fallback state text to reduce future mojibake and half-localized frontend changes.
 - Added an AutoHotkey help asset note and a WebView2 wrapper check to prevent loading both WebViewToo and the legacy WebView2 plugin.
 - Added a generated-help verification guard so `Web/*.md` changes cannot drift from `RMT帮助文档.html` and `index.html`.
+- Added verification guards for `WebViewApp/dist` sync, help Markdown local links/images, and packaged release layout.
+- Expanded Playwright visual coverage for dense/narrow macro modules, active tools, and populated settings.
+- Added `RmtBuildState()` fixture compatibility checks and a lightweight WebView GitHub Actions workflow.
 
 ## v1.1.4
 

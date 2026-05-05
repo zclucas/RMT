@@ -9,26 +9,34 @@
 
 ## Current State
 - Completed: WebView UI stabilization, proportional scaling, no horizontal/left-sidebar scrollbars, disabled control fixes, Chinese WebView copy, fallback state split, bridge contract guard, WebView2 wrapper guard, generated-help guard.
+- Completed: Added verification guards for `WebViewApp/dist` sync, help Markdown local links/images, and packaged release layout.
+- Completed: Expanded Playwright visual coverage for default/wide/dense-narrow macro layouts plus active tool and populated settings views.
+- Completed: Added `RmtBuildState()` fixture compatibility checks and a lightweight WebView GitHub Actions workflow.
 - Completed: Latest completed maintenance commit before this handoff is `d7d6ecc chore: verify generated help docs`.
 - Completed: Pushed current `Dev_UI` to `https://github.com/T8numen/RMT/tree/Dev_UI`; remote branch points to `d7d6ecc6a4e570b9358a7c0cb740d4aae3d3299a`.
-- Worktree: Clean when this handoff was created.
-- Important uncommitted changes: None expected after committing this handoff file.
+- Worktree: Contains uncommitted verification-guard changes from this session until committed.
+- Important uncommitted changes: verification scripts/fixtures, Playwright visual tests and snapshots, `.github/workflows/webview-verify.yml`, docs, `AGENTS.md`, `history.md`, and this handoff.
 
 ## How To Continue
-- Next steps: Add a `WebViewApp/dist` sync check so source changes cannot pass verification without committed generated assets.
-- Next steps: Add a packaging smoke check for required release files: executable/script, `WebViewApp/dist`, `Plugins/WebViewToo`, and `RMT帮助文档.html`.
-- Next steps: Add help Markdown local link/image checks for `Web/*.md`.
-- Next steps: Expand Playwright visual states for multiple modules, disabled modules, long macro names, narrow windows, tools, and settings.
-- Next steps: Add fixture-based config compatibility checks for `RmtBuildState()` using representative old configs.
-- Next steps: Consider GitHub Actions for contract check, help-doc check, and TypeScript build before adding heavier AHK/Playwright checks.
+- Next steps: Monitor the new GitHub Actions workflow after pushing this branch.
+- Next steps: Before release packaging, run manual runtime smoke testing for `RMT.ahk` and packaged output.
 - Recommended commands: `powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1`
+- Recommended commands: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-release-layout.ps1` after packaging.
 - Recommended commands: `cd WebViewApp; npm.cmd run test:visual`
 - Recommended commands: `powershell -ExecutionPolicy Bypass -File .\scripts\check-active-worktree.ps1`
-- Notes: The most useful next implementation is the `WebViewApp/dist` sync check because it is low risk and prevents a common release mistake.
+- Notes: The current prioritized maintenance plan has been implemented locally; remaining work is release/runtime validation and CI observation.
 
 ## Validation
 - Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1` passed after adding the generated-help guard.
 - Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-help-docs.ps1` passed after refreshing `RMT帮助文档.html` and `index.html`.
+- Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-help-links.ps1` passed.
+- Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-webview-dist-sync.ps1` passed.
+- Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-release-layout.ps1 -ReleaseRoot .\__missing_release_root__` failed with the expected missing release root message, confirming script parsing and early validation.
+- Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-release-layout.ps1 -ReleaseDir .\.codex-temp-release-check\RMTv2.0.1_x64` passed against a temporary minimal release layout; the temporary directory was removed.
+- Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-rmt-build-state-fixtures.ps1` passed.
+- Ran: `npm.cmd run test:visual:update` passed and wrote new snapshots.
+- Ran: `npm.cmd run test:visual` passed with 5 tests.
+- Ran: `powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1` passed outside the sandbox after sandboxed React/Vite build hit `spawn EPERM`.
 - Ran: `git push https://github.com/T8numen/RMT.git HEAD:Dev_UI` succeeded.
 - Ran: `git ls-remote https://github.com/T8numen/RMT.git refs/heads/Dev_UI` confirmed remote `Dev_UI` points to `d7d6ecc6a4e570b9358a7c0cb740d4aae3d3299a`.
 - Not run: Manual launch of `RMT.ahk` after the last docs-only guard commit.
@@ -37,7 +45,7 @@
 
 ## Risks
 - Known risks: Multiple local RMT clones exist, so launching the wrong `RMT.ahk` can make fixes appear missing.
-- Known risks: `PackRMT.ps1` copies root `index.html` as release `RMT帮助文档.html`; stale generated help is now guarded, but packaging contents still need smoke checks.
+- Known risks: `PackRMT.ps1` copies root `index.html` as release `RMT帮助文档.html`; stale generated help and release layout are guarded, but manual packaged runtime smoke testing is still needed.
 - Known risks: AutoHotkey runtime error dialog Help opens the installed AutoHotkey CHM, not an RMT-owned document.
 - Known risks: React/Vite build may fail under sandbox with `spawn EPERM`; rerun outside sandbox when needed.
 - Blockers: None observed.
