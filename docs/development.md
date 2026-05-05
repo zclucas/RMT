@@ -39,6 +39,7 @@ Useful scoped checks:
 ```
 
 For manual release or large-change checks, also follow `docs/regression-checklist.md`.
+For packaging a public build, follow `docs/release.md`.
 
 ## WebView UI Work
 

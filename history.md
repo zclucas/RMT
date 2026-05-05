@@ -11,6 +11,7 @@
 - Migrated the remaining WebView help, reward, and thanks pages from placeholders to maintained React content.
 - Added a repeatable verification script and maintenance docs for development, the WebView bridge, and config compatibility.
 - Added a regression checklist for release and large WebView change validation.
+- Added a release workflow covering version updates, packaging, release output inspection, and packaged smoke tests.
 
 ## v1.1.3
 

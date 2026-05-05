@@ -96,6 +96,7 @@ Acceptance:
 - Packaging script parses `RMT_WEBVIEW_VERSION`.
 - Release folders contain `WebViewApp/dist/index.html`.
 - Release smoke can open the WebView page without source files.
+- Release steps are documented in `docs/release.md`.
 
 ## Current bridge actions
 
