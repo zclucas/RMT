@@ -34,7 +34,7 @@ class ConfigMergeGui {
         PosY := 12
 
         MyGui.SetFont("S11 W600 Q2", MySoftData.FontType)
-        MyGui.Add("GroupBox", Format("x{} y{} w690 h55", PosX, PosY), GetLang("源配置选择"))
+        MyGui.Add("GroupBox", Format("x{} y{} w690 h80", PosX, PosY), GetLang("源配置选择"))
 
         PosX += 15
         PosY += 22
@@ -46,53 +46,38 @@ class ConfigMergeGui {
         this.LocalRadio := MyGui.Add("Radio", Format("x{} y{} w160", PosX, PosY), GetLang("从本地配置导入"))
         this.LocalRadio.OnEvent("Click", (*) => this.OnSourceTypeChange("local"))
 
-        PosX := 85
+        PosX := 50
         PosY += 24
         this.SelectFileBtn := MyGui.Add("Button", Format("x{} y{} w100 h26", PosX, PosY), GetLang("选择文件..."))
         this.SelectFileBtn.OnEvent("Click", (*) => this.OnSelectFile())
 
-        PosX += 115
+        PosX += 180
         this.LocalConfigDDL := MyGui.Add("DropDownList", Format("x{} y{} w180 R5 Disabled", PosX, PosY), [])
         this.LocalConfigDDL.OnEvent("Change", (*) => this.OnLocalConfigChange())
 
-        PosX := 430
-        this.LocalConfigDDL.Move(PosX, PosY)
-
-        PosX := 15
-        PosY += 40
-        MyGui.SetFont("S11 W600 Q2", MySoftData.FontType)
-        MyGui.Add("GroupBox", Format("x{} y{} w690 h340", PosX, PosY), GetLang("宏选择"))
-
-        PosX += 10
-        PosY += 25
-
+        PosX := 20
+        PosY += 30
         MyGui.Add("Text", Format("x{} y{}", PosX, PosY + 3), GetLang("已选择") ":")
         PosX += 50
         this.SelectedCountText := MyGui.Add("Text", Format("x{} y{} w50", PosX, PosY + 3), "0")
 
-        PosX := 25
+        PosX := 20
         PosY += 28
-        headerArr := [GetLang("选择"), GetLang("宏名称"), GetLang("触发键/类型"), GetLang("备注")]
+        headerArr := [GetLang("选择"), GetLang("宏名称"), GetLang("触发键/类型")]
 
-        this.ListView := MyGui.Add("ListView", Format("x{} y{} w665 h280 Checked", PosX, PosY), headerArr)
+        this.ListView := MyGui.Add("ListView", Format("x{} y{} w665 h460 Checked", PosX, PosY), headerArr)
         this.ListView.ModifyCol(1, "AutoHdr Center")
-        this.ListView.ModifyCol(2, "AutoHdr 240")
-        this.ListView.ModifyCol(3, "AutoHdr Center")
-        this.ListView.ModifyCol(4, "AutoHdr")
+        this.ListView.ModifyCol(2, "AutoHdr 280")
+        this.ListView.ModifyCol(3, "AutoHdr Center 150")
         this.ListView.OnEvent("Click", (*) => this.OnListViewClick())
         this.ListView.OnEvent("ItemCheck", (*) => this.OnItemCheck())
 
         PosX := 15
-        PosY += 358
-        MyGui.SetFont("S11 W600 Q2", MySoftData.FontType)
-        MyGui.Add("GroupBox", Format("x{} y{} w690 h38", PosX, PosY), GetLang("导入选项"))
-
-        PosX += 15
-        PosY += 25
-        MyGui.Add("Text", Format("x{} y{} w660", PosX, PosY + 3), GetLang("导入的宏将按原模块结构创建新模块"))
+        PosY += 465
+        MyGui.Add("Text", Format("x{} y{} w660", PosX, PosY + 3), GetLang("合并说明:合并的宏将按原模块结构创建新模块"))
 
         PosX := 480
-        PosY += 25
+        PosY += 35
         this.CancelBtn := MyGui.Add("Button", Format("x{} y{} w100 h32", PosX, PosY), GetLang("取消"))
         this.CancelBtn.OnEvent("Click", (*) => this.OnClose())
 
@@ -184,17 +169,16 @@ class ConfigMergeGui {
         for tabNode in this.TreeRoot.Children {
             tabRow := ++row
             tabChecked := MergeUtil.HasAnyCheckedItem(tabNode) ? "Check" : ""
-            this.ListView.Add(tabChecked, "", "  " tabNode.DisplayName)
+            this.ListView.Add(tabChecked, "", tabNode.DisplayName)
             tabNode.ListViewRow := tabRow
             tabNode.IsTabNode := true
             this.ItemNodeMap[tabRow] := tabNode
-
             isMenuTab := (tabNode.TabIndex == 3)
 
             for moduleNode in tabNode.Children {
                 moduleRow := ++row
                 moduleChecked := MergeUtil.HasAnyCheckedItem(moduleNode) ? "Check" : ""
-                moduleIndent := isMenuTab ? "  " : "    "
+                moduleIndent := "  "
                 this.ListView.Add(moduleChecked, "", moduleIndent moduleNode.DisplayName)
                 moduleNode.ListViewRow := moduleRow
                 moduleNode.IsModuleNode := true
@@ -205,9 +189,8 @@ class ConfigMergeGui {
                         itemRow := ++row
                         checkedStr := itemNode.IsChecked ? "Check" : ""
                         triggerDisplay := itemNode.TriggerKey != "" ? itemNode.TriggerKey : GetLang("无触发键")
-                        remarkDisplay := itemNode.Remark != "" ? itemNode.Remark : ""
 
-                        this.ListView.Add(checkedStr, "", "      " itemNode.DisplayName, triggerDisplay, remarkDisplay)
+                        this.ListView.Add(checkedStr, "", "      " itemNode.DisplayName, triggerDisplay)
                         this.ItemNodeMap[itemRow] := itemNode
                         itemNode.ListViewRow := itemRow
                     }

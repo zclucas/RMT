@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const WEB_DIR = path.dirname(__dirname);
-const OUTPUT = path.join(path.dirname(WEB_DIR), 'RMT帮助文档.html');
+const OUTPUT = path.join(path.dirname(WEB_DIR), 'index.html');
 
 const iconMap = { '软件介绍':'📘','快速上手':'🚀','指令手册':'📖','常见问题':'❓','常见报错':'⚠️','开发指南':'🛠️','更新日志':'📝' };
 const defaultIcons = ['📄','📋','📑','🗂️','📒','📁','🗃️','📚','💡','✨'];

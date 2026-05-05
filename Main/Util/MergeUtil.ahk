@@ -39,13 +39,9 @@ class MergeUtil {
     static TempMergeDir := ""
 
     static GetMergeTabConfig() {
-        return [
-            {Index: 1, Symbol: "Normal", Name: "按键宏"},
-            {Index: 2, Symbol: "String", Name: "字串宏"},
-            {Index: 3, Symbol: "Menu", Name: "菜单宏"},
-            {Index: 4, Symbol: "Timing", Name: "定时宏"},
-            {Index: 5, Symbol: "SubMacro", Name: "宏"},
-            {Index: 6, Symbol: "Replace", Name: "按键替换"}
+        return [{ Index: 1, Symbol: "Normal", Name: "按键宏" }, { Index: 2, Symbol: "String", Name: "字串宏" }, { Index: 3,
+            Symbol: "Menu", Name: "菜单宏" }, { Index: 4, Symbol: "Timing", Name: "定时宏" }, { Index: 5, Symbol: "SubMacro",
+                Name: "宏" }, { Index: 6, Symbol: "Replace", Name: "按键替换" }
         ]
     }
 
@@ -77,8 +73,7 @@ class MergeUtil {
                 }
                 tabNode.Children.Push(moduleNode)
             }
-            tabNode.DisplayName := tabInfo.Name " (" itemCount GetLang("项") ") (" moduleNodes.Length GetLang("个模块") ")"
-
+            tabNode.DisplayName := "📁" tabInfo.Name " (" moduleNodes.Length GetLang("个模块") ")"
             if (moduleNodes.Length > 0)
                 root.Children.Push(tabNode)
         }
@@ -93,12 +88,14 @@ class MergeUtil {
 
         tkArrStr := IniRead(macroFile, "UserSettings", symbol "TKArr", "")
         remarkArrStr := IniRead(macroFile, "UserSettings", symbol "RemarkArr", "")
+        modeArrStr := IniRead(macroFile, "UserSettings", symbol "ModeArr", "")
 
+        modeArr := StrSplit(modeArrStr, "π")
         tkArr := StrSplit(tkArrStr, "π")
         remarkArr := StrSplit(remarkArrStr, "π")
 
         allItems := []
-        loop tkArr.Length {
+        loop modeArr.Length {
             node := MergeTreeNode()
             node.Type := "Item"
             node.TabIndex := tabIndex
@@ -108,7 +105,7 @@ class MergeUtil {
 
             displayKey := node.TriggerKey != "" ? node.TriggerKey : GetLang("无触发键")
             displayRemark := node.Remark != "" ? node.Remark : ""
-            node.DisplayName := "[" displayKey "] " displayRemark
+            node.DisplayName := A_Index ". " displayRemark
 
             macroStr := IniRead(macroFile, "UserSettings", symbol "MacroArr" A_Index, "")
             macroStr := StrReplace(macroStr, "⫶", "`n")
@@ -121,11 +118,12 @@ class MergeUtil {
 
         foldInfo := MergeUtil.ParseFoldInfo(settingDir, symbol)
 
-        if (!foldInfo || !ObjHasOwnProp(foldInfo, "IndexSpanArr") || !IsObject(foldInfo.IndexSpanArr) || foldInfo.IndexSpanArr.Length == 0) {
+        if (!foldInfo || !ObjHasOwnProp(foldInfo, "IndexSpanArr") || !IsObject(foldInfo.IndexSpanArr) || foldInfo.IndexSpanArr
+        .Length == 0) {
             defaultModule := MergeTreeNode()
             defaultModule.Type := "Module"
             defaultModule.ModuleName := GetLang("默认模块")
-            defaultModule.DisplayName := "📁 " GetLang("默认模块") " (" allItems.Length GetLang("项") ")"
+            defaultModule.DisplayName := "📦" GetLang("默认模块") " (" allItems.Length GetLang("项") ")"
             defaultModule.Children := allItems
             return [defaultModule]
         }
@@ -142,7 +140,7 @@ class MergeUtil {
             defaultModule := MergeTreeNode()
             defaultModule.Type := "Module"
             defaultModule.ModuleName := GetLang("默认模块")
-            defaultModule.DisplayName := "📁 " GetLang("默认模块") " (" allItems.Length GetLang("项") ")"
+            defaultModule.DisplayName := "📦" GetLang("默认模块") " (" allItems.Length GetLang("项") ")"
             defaultModule.Children := allItems
             return [defaultModule]
         }
@@ -156,7 +154,8 @@ class MergeUtil {
             if (spanStr == "")
                 continue
 
-            moduleName := (IsObject(remarkArr) && remarkArr.Has(foldIndex)) ? String(remarkArr[foldIndex]) : GetLang("模块") foldIndex
+            moduleName := (IsObject(remarkArr) && remarkArr.Has(foldIndex)) ? String(remarkArr[foldIndex]) : GetLang(
+                "模块") foldIndex
 
             spanParts := StrSplit(spanStr, "-")
             startPart := Trim(spanParts[1])
@@ -171,7 +170,7 @@ class MergeUtil {
             moduleNode.ModuleName := moduleName
             moduleNode.StartIndex := startIndex
             moduleNode.EndIndex := endIndex
-            moduleNode.DisplayName := "📁 " moduleName " (" (endIndex - startIndex + 1) GetLang("项") ")"
+            moduleNode.DisplayName := "📦" moduleName " (" (endIndex - startIndex + 1) GetLang("项") ")"
 
             loop (endIndex - startIndex + 1) {
                 idx := startIndex + A_Index - 1
@@ -202,7 +201,7 @@ class MergeUtil {
             unassignedModule := MergeTreeNode()
             unassignedModule.Type := "Module"
             unassignedModule.ModuleName := GetLang("未分类")
-            unassignedModule.DisplayName := "📁 " GetLang("未分类") " (" unassignedItems.Length GetLang("项") ")"
+            unassignedModule.DisplayName := "📦" GetLang("未分类") " (" unassignedItems.Length GetLang("项") ")"
             unassignedModule.Children := unassignedItems
             moduleNodes.Push(unassignedModule)
         }
@@ -457,7 +456,8 @@ class MergeUtil {
                 if (!collectedConfigs.Has(depSerial)) {
                     depCmdType := MergeUtil.FindSerialTypeFromSource(depSerial, sourceDataFileMap)
                     if (depCmdType != "") {
-                        depData := MergeUtil.ReadSourceConfigData(sourceSettingDir, depSerial, depCmdType, sourceDataFileMap)
+                        depData := MergeUtil.ReadSourceConfigData(sourceSettingDir, depSerial, depCmdType,
+                            sourceDataFileMap)
                         if (IsObject(depData)) {
                             depJson := JSON.stringify(depData, 0)
                             collectedConfigs.Set(depSerial, Map("类型", depCmdType, "配置", depJson))
@@ -583,7 +583,7 @@ class MergeUtil {
                 break
         }
 
-        return {ReplaceMap: serialReplaceMap, ParsedConfigs: parsedConfigs}
+        return { ReplaceMap: serialReplaceMap, ParsedConfigs: parsedConfigs }
     }
 
     static ProcessAndSaveRenamedConfigs(replaceInfo, sourceSettingDir, result) {
@@ -596,12 +596,13 @@ class MergeUtil {
             newSerialStr := Data.SerialStr
 
             if (newSerialStr != oldSerialStr && serialReplaceMap.Has(oldSerialStr)) {
-                imageRenameCount := MergeUtil.RenameImagesForSerial(Data, oldSerialStr, newSerialStr, sourceSettingDir, result)
+                imageRenameCount := MergeUtil.RenameImagesForSerial(Data, oldSerialStr, newSerialStr, sourceSettingDir,
+                    result)
             }
 
             try {
                 SaveMacroCMDData(Data)
-                result.RenamedResources.Push({OldSerial: oldSerialStr, NewSerial: newSerialStr})
+                result.RenamedResources.Push({ OldSerial: oldSerialStr, NewSerial: newSerialStr })
             } catch as e {
             }
         }
@@ -645,7 +646,7 @@ class MergeUtil {
             if (FileExist(targetImagePath)) {
                 Data.SearchImagePath := targetImagePath
                 renamedCount++
-                result.CopiedImages.Push({SourcePath: sourceImagePath, TargetPath: targetImagePath})
+                result.CopiedImages.Push({ SourcePath: sourceImagePath, TargetPath: targetImagePath })
             }
         } catch as e {
         }
@@ -805,12 +806,12 @@ class MergeUtil {
         if (!DirExist(targetImagesDir))
             DirCreate(targetImagesDir)
 
-        Loop Files, sourceImagesDir "\*.*", "FR" {
+        loop files, sourceImagesDir "\*.*", "FR" {
             targetPath := targetImagesDir "\" A_LoopFileName
             if (!FileExist(targetPath)) {
                 try {
                     FileCopy(A_LoopFilePath, targetPath, true)
-                    result.CopiedImages.Push({SourcePath: A_LoopFilePath, TargetPath: targetPath})
+                    result.CopiedImages.Push({ SourcePath: A_LoopFilePath, TargetPath: targetPath })
                 }
             }
         }
@@ -823,12 +824,12 @@ class MergeUtil {
                 if (!DirExist(tgtSub))
                     DirCreate(tgtSub)
 
-                Loop Files, srcSub "\*.*", "FR" {
+                loop files, srcSub "\*.*", "FR" {
                     tgtPath := tgtSub "\" A_LoopFileName
                     if (!FileExist(tgtPath)) {
                         try {
                             FileCopy(A_LoopFilePath, tgtPath, true)
-                            result.CopiedImages.Push({SourcePath: A_LoopFilePath, TargetPath: tgtPath})
+                            result.CopiedImages.Push({ SourcePath: A_LoopFilePath, TargetPath: tgtPath })
                         }
                     }
                 }
