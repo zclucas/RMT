@@ -1,16 +1,77 @@
+#Include ..\Plugins\WebViewToo\Lib\WebViewToo.ahk
+
+RMT_WEBVIEW_VERSION := "RMTv2.0"
+RmtCopiedWebItem := ""
+
+class RmtWebViewGui extends WebViewGui {
+    Submit(Hide := true) {
+        return {}
+    }
+}
+
+class RmtWebValueControl {
+    __New(Value := "", Text := unset) {
+        this.Value := Value
+        this.Text := IsSet(Text) ? Text : Value
+        this.Visible := true
+        this.Enabled := true
+    }
+
+    Focus(*) {
+    }
+
+    Move(*) {
+    }
+
+    Redraw(*) {
+    }
+
+    OnEvent(*) {
+    }
+
+    SetFont(*) {
+    }
+
+    Delete(*) {
+    }
+
+    Add(*) {
+    }
+
+    Hide(*) {
+        this.Visible := false
+    }
+
+    Show(*) {
+        this.Visible := true
+    }
+
+    Opt(*) {
+    }
+
+    GetPos(&x?, &y?, &w?, &h?) {
+        try x := 0
+        try y := 0
+        try w := 0
+        try h := 0
+    }
+}
+
+class RmtWebTabControl extends RmtWebValueControl {
+    UseTab(*) {
+    }
+}
+
 ;窗口&UI刷新
 InitUI() {
-    global MySoftData
-    MyGui := Gui()
-    MyGui.Title := "RMTv1.1.2"
-    MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
-    isValidCollor := RegExMatch(MySoftData.SoftBGColor, "^([0-9A-Fa-f]{6})$")
-    BGColor := isValidCollor ? MySoftData.SoftBGColor : "f0f0f0"
-    if (BGColor != "f0f0f0")
-        MyGui.BackColor := BGColor
-
+    global MySoftData, RMT_WEBVIEW_VERSION
+    MyGui := RmtWebViewGui("+Resize -Caption", RMT_WEBVIEW_VERSION, , RmtGetWebViewSettings())
+    MyGui.Title := RMT_WEBVIEW_VERSION
     MySoftData.MyGui := MyGui
-    AddUI()
+    RmtInitWebStateControls()
+    RegisterRmtWebCallbacks(MyGui)
+    MyGui.BrowseFolder(A_WorkingDir)
+    MyGui.Navigate("WebViewApp/dist/index.html")
     CustomTrayMenu()
     OnOpen()
 
@@ -45,13 +106,15 @@ RefreshGui() {
     WinPosArr := StrSplit(LastWinPosStr, "π")
     IniWrite(false, IniFile, IniSection, "IsReload")
 
-    if (WinPosArr.Length == 2 && IsNumber(WinPosArr[1]) && IsNumber(WinPosArr[2])) {
+    if ((WinPosArr.Length == 2 || WinPosArr.Length == 4) && IsNumber(WinPosArr[1]) && IsNumber(WinPosArr[2])) {
         VirtualWidth := SysGet(78)
         VirtualHeight := SysGet(79)
         isXValid := WinPosArr[1] > 0 && WinPosArr[1] < VirtualWidth
         isYValid := WinPosArr[2] > 0 && WinPosArr[2] < VirtualHeight
         if (isXValid && isYValid) {
-            MySoftData.MyGui.Show(Format("x{} y{} w{} h{}", WinPosArr[1], WinPosArr[2], 1070, 590))
+            winW := WinPosArr.Length == 4 && IsNumber(WinPosArr[3]) ? Max(Integer(WinPosArr[3]), 880) : 1070
+            winH := WinPosArr.Length == 4 && IsNumber(WinPosArr[4]) ? Max(Integer(WinPosArr[4]), 520) : 590
+            MySoftData.MyGui.Show(Format("x{} y{} w{} h{}", WinPosArr[1], WinPosArr[2], winW, winH))
             RefreshListenVarGui()
             return
         }
@@ -100,6 +163,1213 @@ RefreshToolUI() {
     ToolCheckInfo.ToolProcessIdCtrl.Value := ToolCheckInfo.ProcessId
     ToolCheckInfo.ToolColorCtrl.Value := ToolCheckInfo.Color
     ToolCheckInfo.ToolMouseWinPosCtrl.Value := ToolCheckInfo.WinPosStr
+}
+
+RmtGetWebViewSettings() {
+    settings := { DefaultWidth: 1070, DefaultHeight: 590 }
+    settings.DataDir := A_WorkingDir "\Setting\WebView2UserData"
+    dllPath := A_WorkingDir "\Plugins\WebViewToo\Lib\" (A_PtrSize * 8) "bit\WebView2Loader.dll"
+    if (FileExist(dllPath)) {
+        settings.DllPath := dllPath
+    }
+    else if (A_IsCompiled) {
+        try {
+            WebViewCtrl.CreateFileFromResource((A_PtrSize * 8) "bit\WebView2Loader.dll", WebViewCtrl.TempDir)
+            settings.DllPath := WebViewCtrl.TempDir "\" (A_PtrSize * 8) "bit\WebView2Loader.dll"
+        }
+    }
+
+    runtimeDir := RmtFindBundledWebViewRuntime()
+    if (runtimeDir != "") {
+        settings.EdgeRuntime := runtimeDir
+    }
+    return settings
+}
+
+RmtFindBundledWebViewRuntime() {
+    arch := A_PtrSize == 8 ? "x64" : "x86"
+    bitDir := (A_PtrSize * 8) "bit"
+    candidates := [
+        A_WorkingDir "\Runtimes\WebView2\Fixed\" arch,
+        A_WorkingDir "\Runtimes\WebView2\Fixed\" bitDir,
+        A_WorkingDir "\Runtimes\WebView2\" arch,
+        A_WorkingDir "\Runtimes\WebView2\" bitDir
+    ]
+
+    for _, candidate in candidates {
+        foundDir := RmtResolveWebViewRuntimeDir(candidate)
+        if (foundDir != "")
+            return foundDir
+    }
+    return ""
+}
+
+RmtResolveWebViewRuntimeDir(rootDir) {
+    if (!DirExist(rootDir))
+        return ""
+    if (FileExist(rootDir "\msedgewebview2.exe"))
+        return rootDir
+    loop files rootDir "\*", "D" {
+        if (FileExist(A_LoopFileFullPath "\msedgewebview2.exe"))
+            return A_LoopFileFullPath
+    }
+    return ""
+}
+
+RmtInitWebStateControls() {
+    global MySoftData, ToolCheckInfo, MyTriggerKeyGui, MyTriggerStrGui, MyReplaceKeyGui
+    global ItemFreeConPoolMap, ItemUseConPoolMap
+
+    MySoftData.TabCtrl := RmtWebTabControl(MySoftData.TableIndex)
+    MySoftData.BtnSave := RmtWebValueControl("")
+    MySoftData.SuspendToggleCtrl := RmtWebValueControl(MySoftData.IsSuspend)
+    MySoftData.PauseToggleCtrl := RmtWebValueControl(MySoftData.IsPause)
+    MySoftData.HoldFloatCtrl := RmtWebValueControl(MySoftData.HoldFloat)
+    MySoftData.PreIntervalFloatCtrl := RmtWebValueControl(MySoftData.PreIntervalFloat)
+    MySoftData.IntervalFloatCtrl := RmtWebValueControl(MySoftData.IntervalFloat)
+    MySoftData.CoordXFloatCon := RmtWebValueControl(MySoftData.CoordXFloat)
+    MySoftData.CoordYFloatCon := RmtWebValueControl(MySoftData.CoordYFloat)
+    MySoftData.SuspendHotkeyCtrl := RmtWebValueControl(MySoftData.SuspendHotkey)
+    MySoftData.PauseHotkeyCtrl := RmtWebValueControl(MySoftData.PauseHotkey)
+    MySoftData.KillMacroHotkeyCtrl := RmtWebValueControl(MySoftData.KillMacroHotkey)
+    MySoftData.BootStartCtrl := RmtWebValueControl(MySoftData.IsBootStart)
+    MySoftData.SplitLineCtrl := RmtWebValueControl(MySoftData.ShowSplitLine)
+    MySoftData.HiddenTopButtonIndexesCtrl := RmtWebValueControl(MySoftData.HiddenTopButtonIndexes)
+    MySoftData.ColorPresetIdCtrl := RmtWebValueControl(MySoftData.ColorPresetId)
+    MySoftData.UiScaleCtrl := RmtWebValueControl(MySoftData.UiScale)
+    MySoftData.FixedMenuWheelCtrl := RmtWebValueControl(MySoftData.FixedMenuWheel)
+    MySoftData.MutiThreadNumCtrl := RmtWebValueControl(MySoftData.MutiThreadNum)
+    MySoftData.SoftBGColorCon := RmtWebValueControl(MySoftData.SoftBGColor)
+    MySoftData.NoVariableTipCtrl := RmtWebValueControl(MySoftData.NoVariableTip)
+    MySoftData.CMDTipCtrl := RmtWebValueControl(MySoftData.CMDTip)
+    MySoftData.ScreenShotTypeCtrl := RmtWebValueControl(MySoftData.ScreenShotType)
+    MySoftData.KeyDownDownCon := RmtWebValueControl(MySoftData.KeyDownDownType)
+    MySoftData.LangCtrl := RmtWebValueControl(MySoftData.Lang, MySoftData.Lang)
+    MySoftData.FontTypeCtrl := RmtWebValueControl(MySoftData.FontType, MySoftData.FontType)
+    MySoftData.RecordToggleCon := RmtWebValueControl(false)
+
+    ToolCheckInfo.AlwaysOnTopCtrl := RmtWebValueControl(false)
+    ToolCheckInfo.ToolCheckCtrl := RmtWebValueControl(ToolCheckInfo.IsToolCheck)
+    ToolCheckInfo.ToolCheckHotKeyCtrl := RmtWebValueControl(ToolCheckInfo.ToolCheckHotKey)
+    ToolCheckInfo.ToolMousePosCtrl := RmtWebValueControl(ToolCheckInfo.PosStr)
+    ToolCheckInfo.ToolMouseWinPosCtrl := RmtWebValueControl(ToolCheckInfo.WinPosStr)
+    ToolCheckInfo.ToolProcessNameCtrl := RmtWebValueControl(ToolCheckInfo.ProcessName)
+    ToolCheckInfo.ToolProcessTileCtrl := RmtWebValueControl(ToolCheckInfo.ProcessTile)
+    ToolCheckInfo.ToolProcessPidCtrl := RmtWebValueControl(ToolCheckInfo.ProcessPid)
+    ToolCheckInfo.ToolProcessClassCtrl := RmtWebValueControl(ToolCheckInfo.ProcessClass)
+    ToolCheckInfo.ToolProcessIdCtrl := RmtWebValueControl(ToolCheckInfo.ProcessId)
+    ToolCheckInfo.ToolColorCtrl := RmtWebValueControl(ToolCheckInfo.Color)
+    ToolCheckInfo.ToolTextFilterHotKeyCtrl := RmtWebValueControl(ToolCheckInfo.ToolTextFilterHotKey)
+    ToolCheckInfo.ToolTextCtrl := RmtWebValueControl("")
+    ToolCheckInfo.ToolRecordMacroHotKeyCtrl := RmtWebValueControl(ToolCheckInfo.ToolRecordMacroHotKey)
+    ToolCheckInfo.ToolCheckRecordMacroCtrl := RmtWebValueControl(ToolCheckInfo.IsToolRecord)
+    ToolCheckInfo.ScreenShotHotKeyCtrl := RmtWebValueControl(ToolCheckInfo.ScreenShotHotKey)
+    ToolCheckInfo.FreePasteHotKeyCtrl := RmtWebValueControl(ToolCheckInfo.FreePasteHotKey)
+    ToolCheckInfo.OCRTypeCtrl := RmtWebValueControl(ToolCheckInfo.OCRTypeValue)
+
+    loop MySoftData.TableInfo.Length {
+        tableItem := MySoftData.TableInfo[A_Index]
+        tableItem.AllConArr := []
+        tableItem.AllGroup := []
+        tableItem.FoldBtnArr := []
+        tableItem.FoldOffsetArr := []
+        if (IsObject(tableItem.FoldInfo)) {
+            loop tableItem.FoldInfo.IndexSpanArr.Length {
+                tableItem.FoldOffsetArr.Push(0)
+            }
+        }
+        tableItem.ConIndexMap := Map()
+        ItemFreeConPoolMap.Set(A_Index, [])
+        ItemUseConPoolMap.Set(A_Index, Map())
+    }
+
+    MyTriggerKeyGui.SureFocusCon := MySoftData.BtnSave
+    MyTriggerStrGui.SureFocusCon := MySoftData.BtnSave
+    MyReplaceKeyGui.SureFocusCon := MySoftData.BtnSave
+}
+
+RegisterRmtWebCallbacks(MyGui) {
+    MyGui.AddCallbackToScript("RmtAction", RmtWebAction)
+}
+
+RmtWebAction(WebView, JsonText) {
+    try {
+        action := JSON.parse(JsonText, false, false)
+        actionType := RmtGet(action, "type", "")
+        payload := RmtGet(action, "payload", {})
+        message := RmtDispatchWebAction(actionType, payload)
+        return RmtWebResult(true, message)
+    }
+    catch as e {
+        return RmtWebResult(false, e.Message)
+    }
+}
+
+RmtDispatchWebAction(actionType, payload) {
+    global MySoftData
+    switch actionType {
+        case "getState":
+            return ""
+        case "setTab":
+            tabIndex := RmtInt(RmtGet(payload, "tabIndex", 1), 1)
+            RmtSetActiveTab(tabIndex)
+            return ""
+        case "toggleSuspend":
+            OnSuspendHotkey()
+            return ""
+        case "togglePause":
+            OnPauseHotKey()
+            return ""
+        case "killAll":
+            OnKillAllMacro()
+            return ""
+        case "save":
+            OnSaveSetting()
+            return ""
+        case "reload":
+            MenuReload()
+            return ""
+        case "openHelp":
+            Run(A_WorkingDir "\RMT帮助文档.html")
+            return ""
+        case "openUrl":
+            url := RmtGet(payload, "url", "")
+            if (url ~= "i)^https?://")
+                Run(url)
+            return ""
+        case "openVarMonitor":
+            MyVarListenGui.ShowGui()
+            return ""
+        case "openSettingManager":
+            MySettingMgrGui.ShowGui()
+            return ""
+        case "openToolRecordSetting":
+            OnClickToolRecordSettingBtn()
+            return ""
+        case "editCmdTip":
+            OnEditCMDTipGui()
+            return ""
+        case "openFreePaste":
+            OnToolFreePaste()
+            return ""
+        case "toggleToolCheck":
+            RmtToggleToolCheck()
+            return ""
+        case "toggleToolRecord":
+            RmtToggleToolRecord()
+            return ""
+        case "toolTextFilterScreenShot":
+            OnToolTextFilterScreenShot()
+            return ""
+        case "toolTextFilterSelectImage":
+            OnToolTextFilterSelectImage()
+            return ""
+        case "clearToolText":
+            OnClearToolText()
+            RmtPostState()
+            return ""
+        case "openHotkeyEditor":
+            RmtOpenHotkeyEditorAction(payload)
+            return ""
+        case "keyDownHelp":
+            OnClickKeyDownDownHelpBtn()
+            return ""
+        case "minimize":
+            WinMinimize("ahk_id " MySoftData.MyGui.Hwnd)
+            return ""
+        case "maximize":
+            if (WinGetMinMax("ahk_id " MySoftData.MyGui.Hwnd) == 1)
+                WinRestore("ahk_id " MySoftData.MyGui.Hwnd)
+            else
+                WinMaximize("ahk_id " MySoftData.MyGui.Hwnd)
+            return ""
+        case "close":
+            ExitApp()
+            return ""
+        case "updateSetting":
+            RmtUpdateSetting(RmtGet(payload, "field", ""), RmtGet(payload, "value", ""))
+            return ""
+        case "updateTool":
+            RmtUpdateTool(RmtGet(payload, "field", ""), RmtGet(payload, "value", ""))
+            return ""
+        case "updateItem":
+            RmtUpdateItem(payload)
+            return ""
+        case "updateFold":
+            RmtUpdateFold(payload)
+            return ""
+        case "toggleFold":
+            RmtToggleFold(payload)
+            return ""
+        case "addItem":
+            RmtAddItemAction(payload)
+            return ""
+        case "deleteItem":
+            RmtDeleteItemAction(payload)
+            return ""
+        case "moveItem":
+            RmtMoveItemAction(payload)
+            return ""
+        case "moveItemTo":
+            RmtMoveItemToAction(payload)
+            return ""
+        case "copyItem":
+            RmtCopyItemAction(payload)
+            return "已复制宏"
+        case "pasteItem":
+            RmtPasteItemAction(payload)
+            return "已粘贴宏"
+        case "addFold":
+            RmtAddFoldAction(payload)
+            return ""
+        case "deleteFold":
+            RmtDeleteFoldAction(payload)
+            return ""
+        case "openTriggerEditor":
+            RmtOpenTriggerEditorAction(payload)
+            return ""
+        case "openMacroEditor":
+            RmtOpenMacroEditorAction(payload)
+            return ""
+    }
+    throw Error("不支持的 WebView 操作：" actionType)
+}
+
+RmtWebResult(ok, message := "") {
+    result := Map()
+    result["ok"] := RmtJsonBool(ok)
+    result["message"] := message
+    try {
+        result["state"] := RmtBuildState()
+    }
+    catch {
+        result["state"] := Map()
+    }
+    return JSON.stringify(result, 0)
+}
+
+RmtPostState(*) {
+    global MySoftData
+    try {
+        stateJson := JSON.stringify(RmtBuildState(), 0)
+        MySoftData.MyGui.ExecuteScriptAsync("window.__rmtReceiveState && window.__rmtReceiveState(" stateJson ");")
+    }
+}
+
+RmtBuildState() {
+    global MySoftData, RMT_WEBVIEW_VERSION
+    state := Map()
+    state["version"] := RMT_WEBVIEW_VERSION
+    state["currentSettingName"] := MySoftData.CurSettingName
+    state["activeTabIndex"] := RmtInt(RmtControlValue(MySoftData.TabCtrl, MySoftData.TableIndex), 1)
+    state["isSuspend"] := RmtJsonBool(MySoftData.IsSuspend)
+    state["isPause"] := RmtJsonBool(MySoftData.IsPause)
+    state["isMacroWorking"] := RmtJsonBool(MySoftData.IsMacroWorking)
+    state["macroRunningCount"] := RmtInt(MySoftData.MacroRunningCount, 0)
+    state["macroTotalCount"] := RmtInt(MySoftData.MacroTotalCount, 0)
+    state["tabs"] := RmtBuildTabs()
+    state["settings"] := RmtBuildSettings()
+    state["tools"] := RmtBuildTools()
+    return state
+}
+
+RmtBuildTabs() {
+    global MySoftData
+    tabs := []
+    loop MySoftData.TabNameArr.Length {
+        tab := Map()
+        tab["index"] := A_Index
+        tab["name"] := MySoftData.TabNameArr[A_Index]
+        tab["symbol"] := MySoftData.TabSymbolArr[A_Index]
+        tab["kind"] := RmtGetTabKind(A_Index)
+        if (CheckIsItemTable(A_Index))
+            tab["table"] := RmtBuildTable(A_Index)
+        tabs.Push(tab)
+    }
+    return tabs
+}
+
+RmtBuildTable(index) {
+    global MySoftData
+    tableItem := MySoftData.TableInfo[index]
+    table := Map()
+    table["index"] := index
+    table["symbol"] := GetTableSymbol(index)
+    table["name"] := MySoftData.TabNameArr[index]
+    table["isMacroTable"] := RmtJsonBool(CheckIsMacroTable(index))
+    table["isMenuTable"] := RmtJsonBool(CheckIsMenuMacroTable(index))
+    table["isTimingTable"] := RmtJsonBool(CheckIsTimingMacroTable(index))
+    table["isStringTable"] := RmtJsonBool(CheckIsStringMacroTable(index))
+    table["isReplaceTable"] := RmtJsonBool(GetTableSymbol(index) == "Replace")
+    table["folds"] := RmtBuildFolds(tableItem)
+    return table
+}
+
+RmtBuildFolds(tableItem) {
+    folds := []
+    foldInfo := tableItem.FoldInfo
+    for foldIndex, indexSpan in foldInfo.IndexSpanArr {
+        fold := Map()
+        fold["index"] := foldIndex
+        fold["remark"] := RmtArrayGet(foldInfo.RemarkArr, foldIndex, "")
+        fold["frontInfo"] := RmtArrayGet(foldInfo.FrontInfoArr, foldIndex, "")
+        fold["indexSpan"] := indexSpan
+        fold["forbid"] := RmtJsonBool(RmtArrayGet(foldInfo.ForbidStateArr, foldIndex, false))
+        fold["collapsed"] := RmtJsonBool(RmtArrayGet(foldInfo.FoldStateArr, foldIndex, false))
+        fold["triggerType"] := RmtInt(RmtArrayGet(foldInfo.TKTypeArr, foldIndex, 1), 1)
+        fold["trigger"] := RmtArrayGet(foldInfo.TKArr, foldIndex, "")
+        fold["holdTime"] := RmtInt(RmtArrayGet(foldInfo.HoldTimeArr, foldIndex, 500), 500)
+        fold["items"] := RmtBuildFoldItems(tableItem, indexSpan)
+        folds.Push(fold)
+    }
+    return folds
+}
+
+RmtBuildFoldItems(tableItem, indexSpan) {
+    items := []
+    span := StrSplit(indexSpan, "-")
+    if (span.Length != 2 || !IsInteger(span[1]) || !IsInteger(span[2]))
+        return items
+
+    startIndex := Integer(span[1])
+    endIndex := Integer(span[2])
+    loop endIndex - startIndex + 1 {
+        itemIndex := startIndex + A_Index - 1
+        items.Push(RmtBuildItem(tableItem, itemIndex))
+    }
+    return items
+}
+
+RmtBuildItem(tableItem, itemIndex) {
+    item := Map()
+    item["index"] := itemIndex
+    item["serial"] := RmtArrayGet(tableItem.SerialArr, itemIndex, "")
+    item["colorState"] := RmtInt(RmtArrayGet(tableItem.ColorStateArr, itemIndex, 0), 0)
+    if (CheckIsTimingMacroTable(tableItem.Index))
+        item["trigger"] := RmtArrayGet(tableItem.TimingSerialArr, itemIndex, "")
+    else
+        item["trigger"] := RmtArrayGet(tableItem.TKArr, itemIndex, "")
+    item["triggerType"] := RmtInt(RmtArrayGet(tableItem.TriggerTypeArr, itemIndex, 1), 1)
+    item["macro"] := RmtArrayGet(tableItem.MacroArr, itemIndex, "")
+    item["mode"] := RmtInt(RmtArrayGet(tableItem.ModeArr, itemIndex, 1), 1)
+    item["forbid"] := RmtJsonBool(RmtArrayGet(tableItem.ForbidArr, itemIndex, false))
+    item["remark"] := RmtArrayGet(tableItem.RemarkArr, itemIndex, "")
+    item["loopCount"] := String(RmtArrayGet(tableItem.LoopCountArr, itemIndex, "1"))
+    item["holdTime"] := RmtInt(RmtArrayGet(tableItem.HoldTimeArr, itemIndex, 500), 500)
+    item["timingSerial"] := RmtArrayGet(tableItem.TimingSerialArr, itemIndex, "")
+    item["startTipSound"] := RmtInt(RmtArrayGet(tableItem.StartTipSoundArr, itemIndex, 1), 1)
+    item["endTipSound"] := RmtInt(RmtArrayGet(tableItem.EndTipSoundArr, itemIndex, 1), 1)
+    item["pause"] := RmtJsonBool(RmtArrayGet(tableItem.PauseArr, itemIndex, false))
+    return item
+}
+
+RmtBuildSettings() {
+    global MySoftData
+    settings := Map()
+    settings["holdFloat"] := String(RmtControlValue(MySoftData.HoldFloatCtrl, MySoftData.HoldFloat))
+    settings["preIntervalFloat"] := String(RmtControlValue(MySoftData.PreIntervalFloatCtrl, MySoftData.PreIntervalFloat))
+    settings["intervalFloat"] := String(RmtControlValue(MySoftData.IntervalFloatCtrl, MySoftData.IntervalFloat))
+    settings["coordXFloat"] := String(RmtControlValue(MySoftData.CoordXFloatCon, MySoftData.CoordXFloat))
+    settings["coordYFloat"] := String(RmtControlValue(MySoftData.CoordYFloatCon, MySoftData.CoordYFloat))
+    settings["suspendHotkey"] := RmtControlValue(MySoftData.SuspendHotkeyCtrl, MySoftData.SuspendHotkey)
+    settings["pauseHotkey"] := RmtControlValue(MySoftData.PauseHotkeyCtrl, MySoftData.PauseHotkey)
+    settings["killMacroHotkey"] := RmtControlValue(MySoftData.KillMacroHotkeyCtrl, MySoftData.KillMacroHotkey)
+    settings["bootStart"] := RmtJsonBool(RmtControlValue(MySoftData.BootStartCtrl, MySoftData.IsBootStart))
+    settings["showSplitLine"] := RmtJsonBool(RmtControlValue(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine))
+    settings["hiddenTopButtonIndexes"] := RmtCloneArray(RmtControlValue(MySoftData.HiddenTopButtonIndexesCtrl, MySoftData.HiddenTopButtonIndexes))
+    settings["colorPresetId"] := RmtControlValue(MySoftData.ColorPresetIdCtrl, MySoftData.ColorPresetId)
+    settings["uiScale"] := RmtClampUiScale(RmtControlValue(MySoftData.UiScaleCtrl, MySoftData.UiScale))
+    settings["fixedMenuWheel"] := RmtJsonBool(RmtControlValue(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel))
+    settings["mutiThreadNum"] := String(RmtControlValue(MySoftData.MutiThreadNumCtrl, MySoftData.MutiThreadNum))
+    settings["softBGColor"] := RmtControlValue(MySoftData.SoftBGColorCon, MySoftData.SoftBGColor)
+    settings["noVariableTip"] := RmtJsonBool(RmtControlValue(MySoftData.NoVariableTipCtrl, MySoftData.NoVariableTip))
+    settings["cmdTip"] := RmtJsonBool(RmtControlValue(MySoftData.CMDTipCtrl, MySoftData.CMDTip))
+    settings["screenShotType"] := RmtInt(RmtControlValue(MySoftData.ScreenShotTypeCtrl, MySoftData.ScreenShotType), 3)
+    settings["keyDownDownType"] := RmtInt(RmtControlValue(MySoftData.KeyDownDownCon, MySoftData.KeyDownDownType), 1)
+    settings["lang"] := RmtControlText(MySoftData.LangCtrl, MySoftData.Lang)
+    settings["fontType"] := RmtControlText(MySoftData.FontTypeCtrl, MySoftData.FontType)
+    settings["langOptions"] := RmtCloneArray(MySoftData.LangArr)
+    settings["fontOptions"] := RmtCloneArray(MySoftData.FontList)
+    return settings
+}
+
+RmtBuildTools() {
+    global ToolCheckInfo
+    tools := Map()
+    tools["toolCheckHotKey"] := RmtControlValue(ToolCheckInfo.ToolCheckHotKeyCtrl, ToolCheckInfo.ToolCheckHotKey)
+    tools["toolRecordMacroHotKey"] := RmtControlValue(ToolCheckInfo.ToolRecordMacroHotKeyCtrl, ToolCheckInfo.ToolRecordMacroHotKey)
+    tools["toolTextFilterHotKey"] := RmtControlValue(ToolCheckInfo.ToolTextFilterHotKeyCtrl, ToolCheckInfo.ToolTextFilterHotKey)
+    tools["screenShotHotKey"] := RmtControlValue(ToolCheckInfo.ScreenShotHotKeyCtrl, ToolCheckInfo.ScreenShotHotKey)
+    tools["freePasteHotKey"] := RmtControlValue(ToolCheckInfo.FreePasteHotKeyCtrl, ToolCheckInfo.FreePasteHotKey)
+    tools["isToolCheck"] := RmtJsonBool(ToolCheckInfo.IsToolCheck)
+    tools["isToolRecord"] := RmtJsonBool(RmtControlValue(ToolCheckInfo.ToolCheckRecordMacroCtrl, ToolCheckInfo.IsToolRecord))
+    tools["alwaysOnTop"] := RmtJsonBool(RmtControlValue(ToolCheckInfo.AlwaysOnTopCtrl, false))
+    tools["ocrType"] := RmtInt(RmtControlValue(ToolCheckInfo.OCRTypeCtrl, ToolCheckInfo.OCRTypeValue), 1)
+    tools["mousePos"] := RmtControlValue(ToolCheckInfo.ToolMousePosCtrl, ToolCheckInfo.PosStr)
+    tools["mouseWinPos"] := RmtControlValue(ToolCheckInfo.ToolMouseWinPosCtrl, ToolCheckInfo.WinPosStr)
+    tools["processTitle"] := RmtControlValue(ToolCheckInfo.ToolProcessTileCtrl, ToolCheckInfo.ProcessTile)
+    tools["processName"] := RmtControlValue(ToolCheckInfo.ToolProcessNameCtrl, ToolCheckInfo.ProcessName)
+    tools["processClass"] := RmtControlValue(ToolCheckInfo.ToolProcessClassCtrl, ToolCheckInfo.ProcessClass)
+    tools["processPid"] := String(RmtControlValue(ToolCheckInfo.ToolProcessPidCtrl, ToolCheckInfo.ProcessPid))
+    tools["processId"] := String(RmtControlValue(ToolCheckInfo.ToolProcessIdCtrl, ToolCheckInfo.ProcessId))
+    tools["color"] := RmtControlValue(ToolCheckInfo.ToolColorCtrl, ToolCheckInfo.Color)
+    tools["toolText"] := RmtControlValue(ToolCheckInfo.ToolTextCtrl, "")
+    return tools
+}
+
+RmtGetTabKind(index) {
+    symbol := GetTableSymbol(index)
+    switch symbol {
+        case "Tool":
+            return "tool"
+        case "Setting":
+            return "settings"
+        case "Help":
+            return "help"
+        case "Reward":
+            return "reward"
+        case "Thank":
+            return "thanks"
+    }
+    return "macro"
+}
+
+RmtSetActiveTab(tabIndex) {
+    global MySoftData
+    if (tabIndex < 1 || tabIndex > MySoftData.TabNameArr.Length)
+        throw Error("无效的标签页序号：" tabIndex)
+
+    MySoftData.TabCtrl.Value := tabIndex
+    MySoftData.TableIndex := tabIndex
+}
+
+RmtUpdateSetting(field, value) {
+    global MySoftData
+    switch field {
+        case "holdFloat":
+            MySoftData.HoldFloat := value
+            RmtSetControl(MySoftData.HoldFloatCtrl, value)
+        case "preIntervalFloat":
+            MySoftData.PreIntervalFloat := value
+            RmtSetControl(MySoftData.PreIntervalFloatCtrl, value)
+        case "intervalFloat":
+            MySoftData.IntervalFloat := value
+            RmtSetControl(MySoftData.IntervalFloatCtrl, value)
+        case "coordXFloat":
+            MySoftData.CoordXFloat := value
+            RmtSetControl(MySoftData.CoordXFloatCon, value)
+        case "coordYFloat":
+            MySoftData.CoordYFloat := value
+            RmtSetControl(MySoftData.CoordYFloatCon, value)
+        case "suspendHotkey":
+            MySoftData.SuspendHotkey := value
+            RmtSetControl(MySoftData.SuspendHotkeyCtrl, value)
+        case "pauseHotkey":
+            MySoftData.PauseHotkey := value
+            RmtSetControl(MySoftData.PauseHotkeyCtrl, value)
+        case "killMacroHotkey":
+            MySoftData.KillMacroHotkey := value
+            RmtSetControl(MySoftData.KillMacroHotkeyCtrl, value)
+        case "bootStart":
+            MySoftData.IsBootStart := RmtBool(value)
+            RmtSetControl(MySoftData.BootStartCtrl, MySoftData.IsBootStart)
+            try OnBootStartChanged()
+        case "showSplitLine":
+            MySoftData.ShowSplitLine := RmtBool(value)
+            RmtSetControl(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine)
+        case "hiddenTopButtonIndexes":
+            MySoftData.HiddenTopButtonIndexes := RmtNormalizeIndexArray(value, MySoftData.TabNameArr.Length)
+            RmtSetControl(MySoftData.HiddenTopButtonIndexesCtrl, MySoftData.HiddenTopButtonIndexes)
+        case "colorPresetId":
+            MySoftData.ColorPresetId := value
+            RmtSetControl(MySoftData.ColorPresetIdCtrl, value)
+        case "uiScale":
+            MySoftData.UiScale := RmtClampUiScale(value)
+            RmtSetControl(MySoftData.UiScaleCtrl, MySoftData.UiScale)
+            IniWrite(MySoftData.UiScale, IniFile, IniSection, "UiScale")
+        case "fixedMenuWheel":
+            MySoftData.FixedMenuWheel := RmtBool(value)
+            RmtSetControl(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel)
+        case "mutiThreadNum":
+            MySoftData.MutiThreadNum := value
+            RmtSetControl(MySoftData.MutiThreadNumCtrl, value)
+        case "softBGColor":
+            MySoftData.SoftBGColor := value
+            RmtSetControl(MySoftData.SoftBGColorCon, value)
+        case "noVariableTip":
+            MySoftData.NoVariableTip := RmtBool(value)
+            RmtSetControl(MySoftData.NoVariableTipCtrl, MySoftData.NoVariableTip)
+        case "cmdTip":
+            MySoftData.CMDTip := RmtBool(value)
+            RmtSetControl(MySoftData.CMDTipCtrl, MySoftData.CMDTip)
+        case "screenShotType":
+            MySoftData.ScreenShotType := RmtInt(value, 3)
+            RmtSetControl(MySoftData.ScreenShotTypeCtrl, MySoftData.ScreenShotType)
+        case "keyDownDownType":
+            MySoftData.KeyDownDownType := RmtInt(value, 1)
+            RmtSetControl(MySoftData.KeyDownDownCon, MySoftData.KeyDownDownType)
+        case "lang":
+            MySoftData.Lang := value
+            RmtSetControl(MySoftData.LangCtrl, value, value)
+        case "fontType":
+            MySoftData.FontType := value
+            RmtSetControl(MySoftData.FontTypeCtrl, value, value)
+    }
+}
+
+RmtUpdateTool(field, value) {
+    global ToolCheckInfo
+    switch field {
+        case "toolCheckHotKey":
+            ToolCheckInfo.ToolCheckHotKey := value
+            RmtSetControl(ToolCheckInfo.ToolCheckHotKeyCtrl, value)
+        case "toolRecordMacroHotKey":
+            ToolCheckInfo.ToolRecordMacroHotKey := value
+            RmtSetControl(ToolCheckInfo.ToolRecordMacroHotKeyCtrl, value)
+        case "toolTextFilterHotKey":
+            ToolCheckInfo.ToolTextFilterHotKey := value
+            RmtSetControl(ToolCheckInfo.ToolTextFilterHotKeyCtrl, value)
+        case "screenShotHotKey":
+            ToolCheckInfo.ScreenShotHotKey := value
+            RmtSetControl(ToolCheckInfo.ScreenShotHotKeyCtrl, value)
+        case "freePasteHotKey":
+            ToolCheckInfo.FreePasteHotKey := value
+            RmtSetControl(ToolCheckInfo.FreePasteHotKeyCtrl, value)
+        case "isToolCheck":
+            ToolCheckInfo.IsToolCheck := RmtBool(value)
+            RmtSetControl(ToolCheckInfo.ToolCheckCtrl, ToolCheckInfo.IsToolCheck)
+        case "isToolRecord":
+            ToolCheckInfo.IsToolRecord := RmtBool(value)
+            RmtSetControl(ToolCheckInfo.ToolCheckRecordMacroCtrl, ToolCheckInfo.IsToolRecord)
+        case "alwaysOnTop":
+            RmtSetControl(ToolCheckInfo.AlwaysOnTopCtrl, RmtBool(value))
+            OnToolAlwaysOnTop()
+        case "ocrType":
+            ToolCheckInfo.OCRTypeValue := RmtInt(value, 1)
+            RmtSetControl(ToolCheckInfo.OCRTypeCtrl, ToolCheckInfo.OCRTypeValue)
+    }
+}
+
+RmtToggleToolCheck() {
+    OnToolCheckHotkey()
+}
+
+RmtToggleToolRecord() {
+    global ToolCheckInfo
+    nextState := !RmtBool(RmtControlValue(ToolCheckInfo.ToolCheckRecordMacroCtrl, ToolCheckInfo.IsToolRecord))
+    ToolCheckInfo.IsToolRecord := nextState
+    RmtSetControl(ToolCheckInfo.ToolCheckRecordMacroCtrl, nextState)
+    OnToolRecordMacro(false)
+    RmtPostState()
+}
+
+RmtOpenHotkeyEditorAction(payload) {
+    global MySoftData, ToolCheckInfo, MyEditHotkeyGui
+    target := RmtGet(payload, "target", "")
+    onlyTriggerKey := false
+
+    switch target {
+        case "suspendHotkey":
+            keyCon := MySoftData.SuspendHotkeyCtrl
+            currentValue := RmtControlValue(keyCon, MySoftData.SuspendHotkey)
+            onlyTriggerKey := true
+        case "pauseHotkey":
+            keyCon := MySoftData.PauseHotkeyCtrl
+            currentValue := RmtControlValue(keyCon, MySoftData.PauseHotkey)
+        case "killMacroHotkey":
+            keyCon := MySoftData.KillMacroHotkeyCtrl
+            currentValue := RmtControlValue(keyCon, MySoftData.KillMacroHotkey)
+        case "toolCheckHotKey":
+            keyCon := ToolCheckInfo.ToolCheckHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ToolCheckHotKey)
+        case "toolRecordMacroHotKey":
+            keyCon := ToolCheckInfo.ToolRecordMacroHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ToolRecordMacroHotKey)
+        case "toolTextFilterHotKey":
+            keyCon := ToolCheckInfo.ToolTextFilterHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ToolTextFilterHotKey)
+        case "screenShotHotKey":
+            keyCon := ToolCheckInfo.ScreenShotHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.ScreenShotHotKey)
+        case "freePasteHotKey":
+            keyCon := ToolCheckInfo.FreePasteHotKeyCtrl
+            currentValue := RmtControlValue(keyCon, ToolCheckInfo.FreePasteHotKey)
+        default:
+            throw Error("不支持的热键目标：" target)
+    }
+
+    showCon := RmtWebValueControl(currentValue)
+    MyEditHotkeyGui.ShowGui(showCon, keyCon, onlyTriggerKey)
+}
+
+RmtUpdateItem(payload) {
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    field := RmtGet(payload, "field", "")
+    value := RmtGet(payload, "value", "")
+    tableItem := RmtGetTableItem(tableIndex)
+    RmtValidateItemIndex(tableItem, itemIndex)
+
+    switch field {
+        case "trigger":
+            if (CheckIsTimingMacroTable(tableIndex))
+                tableItem.TimingSerialArr[itemIndex] := value
+            else
+                tableItem.TKArr[itemIndex] := value
+        case "triggerType":
+            tableItem.TriggerTypeArr[itemIndex] := RmtInt(value, 1)
+        case "macro":
+            tableItem.MacroArr[itemIndex] := value
+        case "mode":
+            tableItem.ModeArr[itemIndex] := RmtInt(value, 1)
+        case "forbid":
+            tableItem.ForbidArr[itemIndex] := RmtBool(value)
+        case "remark":
+            tableItem.RemarkArr[itemIndex] := value
+        case "loopCount":
+            tableItem.LoopCountArr[itemIndex] := value
+        case "holdTime":
+            tableItem.HoldTimeArr[itemIndex] := RmtInt(value, 500)
+        case "timingSerial":
+            tableItem.TimingSerialArr[itemIndex] := value
+        case "startTipSound":
+            tableItem.StartTipSoundArr[itemIndex] := RmtInt(value, 1)
+        case "endTipSound":
+            tableItem.EndTipSoundArr[itemIndex] := RmtInt(value, 1)
+    }
+}
+
+RmtUpdateFold(payload) {
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    field := RmtGet(payload, "field", "")
+    value := RmtGet(payload, "value", "")
+    tableItem := RmtGetTableItem(tableIndex)
+    foldInfo := tableItem.FoldInfo
+    RmtValidateFoldIndex(foldInfo, foldIndex)
+
+    switch field {
+        case "remark":
+            foldInfo.RemarkArr[foldIndex] := value
+        case "frontInfo":
+            foldInfo.FrontInfoArr[foldIndex] := value
+        case "forbid":
+            foldInfo.ForbidStateArr[foldIndex] := RmtBool(value)
+        case "collapsed":
+            foldInfo.FoldStateArr[foldIndex] := RmtBool(value)
+        case "triggerType":
+            foldInfo.TKTypeArr[foldIndex] := RmtInt(value, 1)
+        case "trigger":
+            foldInfo.TKArr[foldIndex] := value
+        case "holdTime":
+            foldInfo.HoldTimeArr[foldIndex] := RmtInt(value, 500)
+    }
+}
+
+RmtToggleFold(payload) {
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    RmtValidateFoldIndex(tableItem.FoldInfo, foldIndex)
+    tableItem.FoldInfo.FoldStateArr[foldIndex] := !tableItem.FoldInfo.FoldStateArr[foldIndex]
+}
+
+RmtAddItemAction(payload) {
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    RmtAddItem(tableIndex, foldIndex)
+}
+
+RmtDeleteItemAction(payload) {
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    foldIndex := GetItemFoldIndex(tableItem, itemIndex)
+    if (!foldIndex)
+        throw Error("找不到宏条目所属模块：" itemIndex)
+    RmtRemoveItem(tableItem, itemIndex, foldIndex)
+}
+
+RmtMoveItemAction(payload) {
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    direction := RmtInt(RmtGet(payload, "direction", 0), 0)
+    targetIndex := itemIndex + direction
+    RmtValidateItemIndex(tableItem, itemIndex)
+    RmtValidateItemIndex(tableItem, targetIndex)
+    RmtSwapItemData(tableItem, itemIndex, targetIndex)
+}
+
+RmtMoveItemToAction(payload) {
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    targetIndex := RmtInt(RmtGet(payload, "targetItemIndex", 0), 0)
+    RmtValidateItemIndex(tableItem, itemIndex)
+    RmtValidateItemIndex(tableItem, targetIndex)
+    if (itemIndex == targetIndex)
+        return
+
+    sourceFoldIndex := GetItemFoldIndex(tableItem, itemIndex)
+    targetFoldIndex := GetItemFoldIndex(tableItem, targetIndex)
+    if (sourceFoldIndex != targetFoldIndex)
+        throw Error("拖拽排序仅支持同一模块内调整")
+
+    direction := itemIndex < targetIndex ? 1 : -1
+    while (itemIndex != targetIndex) {
+        nextIndex := itemIndex + direction
+        RmtSwapItemData(tableItem, itemIndex, nextIndex)
+        itemIndex := nextIndex
+    }
+}
+
+RmtSwapItemData(tableItem, indexA, indexB) {
+    SwapTableContent(tableItem, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ColorStateArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.TimingSerialArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.StartTipSoundArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.EndTipSoundArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.IsWorkIndexArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.KilledArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.PauseArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ActionCount, indexA, indexB)
+    RmtSwapArrayValue(tableItem.HoldKeyArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ToggleStateArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ToggleActionArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.VariableMapArr, indexA, indexB)
+}
+
+RmtCopyItemAction(payload) {
+    global RmtCopiedWebItem
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    RmtValidateItemIndex(tableItem, itemIndex)
+    RmtCopiedWebItem := RmtBuildCopiedItem(tableItem, itemIndex)
+}
+
+RmtPasteItemAction(payload) {
+    global MySoftData, RmtCopiedWebItem
+    if (!IsObject(RmtCopiedWebItem))
+        throw Error("请先复制宏")
+
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    tableItem := RmtGetTableItem(tableIndex)
+    foldInfo := tableItem.FoldInfo
+    RmtValidateFoldIndex(foldInfo, foldIndex)
+
+    addIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
+    UpdateFoldIndexInfo(foldInfo, addIndex, foldIndex, true)
+    foldInfo.FoldStateArr[foldIndex] := false
+
+    copyMap := Map()
+    newMacro := FullCopyMacro(RmtCopiedWebItem["macro"], copyMap)
+    newTimingSerial := GetCMDSerialStr("Timing")
+    RmtCopyTimingData(RmtCopiedWebItem["timingSerial"], newTimingSerial)
+
+    tableItem.ColorStateArr.InsertAt(addIndex, RmtCopiedWebItem["colorState"])
+    tableItem.TKArr.InsertAt(addIndex, RmtCopiedWebItem["trigger"])
+    tableItem.TriggerTypeArr.InsertAt(addIndex, RmtCopiedWebItem["triggerType"])
+    tableItem.MacroArr.InsertAt(addIndex, newMacro)
+    tableItem.ModeArr.InsertAt(addIndex, RmtCopiedWebItem["mode"])
+    tableItem.ForbidArr.InsertAt(addIndex, RmtCopiedWebItem["forbid"])
+    tableItem.RemarkArr.InsertAt(addIndex, RmtCopiedWebItem["remark"])
+    tableItem.LoopCountArr.InsertAt(addIndex, RmtCopiedWebItem["loopCount"])
+    tableItem.HoldTimeArr.InsertAt(addIndex, RmtCopiedWebItem["holdTime"])
+    tableItem.SerialArr.InsertAt(addIndex, GetCMDSerialStr("Item"))
+    tableItem.TimingSerialArr.InsertAt(addIndex, newTimingSerial)
+    tableItem.StartTipSoundArr.InsertAt(addIndex, RmtCopiedWebItem["startTipSound"])
+    tableItem.EndTipSoundArr.InsertAt(addIndex, RmtCopiedWebItem["endTipSound"])
+    tableItem.IsWorkIndexArr.InsertAt(addIndex, 0)
+    tableItem.HoldKeyArr.InsertAt(addIndex, Map())
+    tableItem.KilledArr.InsertAt(addIndex, false)
+    tableItem.PauseArr.InsertAt(addIndex, MySoftData.IsPause)
+    tableItem.ActionCount.InsertAt(addIndex, 0)
+    tableItem.ToggleStateArr.InsertAt(addIndex, false)
+    tableItem.ToggleActionArr.InsertAt(addIndex, "")
+    tableItem.VariableMapArr.InsertAt(addIndex, RmtCloneVariableMap(RmtCopiedWebItem["variableMap"]))
+}
+
+RmtBuildCopiedItem(tableItem, itemIndex) {
+    copiedItem := Map()
+    copiedItem["colorState"] := RmtArrayGet(tableItem.ColorStateArr, itemIndex, 0)
+    copiedItem["trigger"] := RmtArrayGet(tableItem.TKArr, itemIndex, "")
+    copiedItem["triggerType"] := RmtArrayGet(tableItem.TriggerTypeArr, itemIndex, 1)
+    copiedItem["macro"] := RmtArrayGet(tableItem.MacroArr, itemIndex, "")
+    copiedItem["mode"] := RmtArrayGet(tableItem.ModeArr, itemIndex, 1)
+    copiedItem["forbid"] := RmtArrayGet(tableItem.ForbidArr, itemIndex, false)
+    copiedItem["remark"] := RmtArrayGet(tableItem.RemarkArr, itemIndex, "")
+    copiedItem["loopCount"] := RmtArrayGet(tableItem.LoopCountArr, itemIndex, "1")
+    copiedItem["holdTime"] := RmtArrayGet(tableItem.HoldTimeArr, itemIndex, 500)
+    copiedItem["timingSerial"] := RmtArrayGet(tableItem.TimingSerialArr, itemIndex, "")
+    copiedItem["startTipSound"] := RmtArrayGet(tableItem.StartTipSoundArr, itemIndex, 1)
+    copiedItem["endTipSound"] := RmtArrayGet(tableItem.EndTipSoundArr, itemIndex, 1)
+    copiedItem["variableMap"] := RmtCloneVariableMap(RmtArrayGet(tableItem.VariableMapArr, itemIndex, RmtCreateVariableMap()))
+    return copiedItem
+}
+
+RmtCopyTimingData(sourceSerial, targetSerial) {
+    if (sourceSerial == "" || targetSerial == "")
+        return
+    try {
+        data := GetMacroCMDData(sourceSerial).Clone()
+        data.SerialStr := targetSerial
+        SaveMacroCMDData(data)
+    }
+    catch {
+    }
+}
+
+RmtCloneVariableMap(variableMap) {
+    if (!IsObject(variableMap))
+        return RmtCreateVariableMap()
+    clone := Map()
+    for key, value in variableMap {
+        clone[key] := value
+    }
+    return clone
+}
+
+RmtAddFoldAction(payload) {
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    afterFoldIndex := RmtInt(RmtGet(payload, "afterFoldIndex", 0), 0)
+    tableItem := RmtGetTableItem(tableIndex)
+    foldInfo := tableItem.FoldInfo
+    insertIndex := Min(Max(afterFoldIndex + 1, 1), foldInfo.IndexSpanArr.Length + 1)
+    foldInfo.RemarkArr.InsertAt(insertIndex, "")
+    foldInfo.FrontInfoArr.InsertAt(insertIndex, "")
+    foldInfo.IndexSpanArr.InsertAt(insertIndex, RmtEmptySpan())
+    foldInfo.ForbidStateArr.InsertAt(insertIndex, false)
+    foldInfo.FoldStateArr.InsertAt(insertIndex, false)
+    foldInfo.TKTypeArr.InsertAt(insertIndex, 1)
+    foldInfo.TKArr.InsertAt(insertIndex, "")
+    foldInfo.HoldTimeArr.InsertAt(insertIndex, 500)
+    tableItem.FoldOffsetArr.InsertAt(insertIndex, CheckIsMenuMacroTable(tableIndex) ? 85 : 55)
+    if (CheckIsMenuMacroTable(tableIndex)) {
+        loop 8 {
+            RmtAddItem(tableIndex, insertIndex, 0)
+        }
+    }
+}
+
+RmtDeleteFoldAction(payload) {
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    foldInfo := tableItem.FoldInfo
+    RmtValidateFoldIndex(foldInfo, foldIndex)
+    if (foldInfo.IndexSpanArr.Length == 1)
+        throw Error("不能删除最后一个模块。")
+
+    span := StrSplit(foldInfo.IndexSpanArr[foldIndex], "-")
+    if (span.Length == 2 && IsInteger(span[1]) && IsInteger(span[2])) {
+        endIndex := Integer(span[2])
+        loop endIndex - Integer(span[1]) + 1 {
+            RmtRemoveItem(tableItem, endIndex - A_Index + 1, foldIndex)
+        }
+    }
+    foldInfo.RemarkArr.RemoveAt(foldIndex)
+    foldInfo.FrontInfoArr.RemoveAt(foldIndex)
+    foldInfo.IndexSpanArr.RemoveAt(foldIndex)
+    foldInfo.ForbidStateArr.RemoveAt(foldIndex)
+    foldInfo.FoldStateArr.RemoveAt(foldIndex)
+    foldInfo.TKTypeArr.RemoveAt(foldIndex)
+    foldInfo.TKArr.RemoveAt(foldIndex)
+    foldInfo.HoldTimeArr.RemoveAt(foldIndex)
+    if (tableItem.FoldOffsetArr.Length >= foldIndex)
+        tableItem.FoldOffsetArr.RemoveAt(foldIndex)
+}
+
+RmtOpenMacroEditorAction(payload) {
+    global MySoftData, MyMacroGui, MyReplaceKeyGui, MyTimingGui
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    tableItem := RmtGetTableItem(tableIndex)
+    if (itemIndex < 1) {
+        MyMacroGui.SureFocusCon := MySoftData.BtnSave
+        MyMacroGui.SaveBtnAction := OnSaveSetting
+        MyMacroGui.ShowGui("", true)
+        return
+    }
+
+    RmtValidateItemIndex(tableItem, itemIndex)
+    if (CheckIsTimingMacroTable(tableIndex)) {
+        MyTimingGui.ShowGui(tableItem.TimingSerialArr[itemIndex])
+        return
+    }
+    if (GetTableSymbol(tableIndex) == "Replace") {
+        SureReplace(sureMacro) {
+            tableItem.MacroArr[itemIndex] := sureMacro
+            RmtPostState()
+        }
+        MyReplaceKeyGui.SureBtnAction := SureReplace
+        MyReplaceKeyGui.ShowGui(tableItem.MacroArr[itemIndex])
+        return
+    }
+
+    SureMacro(sureMacro) {
+        tableItem.MacroArr[itemIndex] := sureMacro
+        RmtPostState()
+    }
+
+    MySoftData.SpecialTableItem.ModeArr[1] := tableItem.ModeArr[itemIndex]
+    if (MyMacroGui.Gui != "") {
+        style := WinGetStyle(MyMacroGui.Gui.Hwnd)
+        isVisible := (style & 0x10000000)
+        if (isVisible) {
+            MacroGui := MacroEditGui()
+            MacroGui.SureFocusCon := MySoftData.BtnSave
+            MacroGui.SureBtnAction := SureMacro
+            MacroGui.SaveBtnAction := OnSaveSetting
+            MacroGui.ShowGui(tableItem.MacroArr[itemIndex], true)
+            return
+        }
+    }
+    MyMacroGui.SureFocusCon := MySoftData.BtnSave
+    MyMacroGui.SureBtnAction := SureMacro
+    MyMacroGui.SaveBtnAction := OnSaveSetting
+    MyMacroGui.ShowGui(tableItem.MacroArr[itemIndex], true)
+}
+
+RmtOpenTriggerEditorAction(payload) {
+    global MySoftData, MyTriggerKeyGui, MyTriggerStrGui, MyTimingGui
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    tableItem := RmtGetTableItem(tableIndex)
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+
+    if (foldIndex > 0) {
+        foldInfo := tableItem.FoldInfo
+        RmtValidateFoldIndex(foldInfo, foldIndex)
+
+        SureFoldTrigger(sureTriggerKey, holdTime) {
+            foldInfo.TKArr[foldIndex] := sureTriggerKey
+            foldInfo.HoldTimeArr[foldIndex] := holdTime
+            RmtPostState()
+        }
+
+        MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
+        MyTriggerKeyGui.SureBtnAction := SureFoldTrigger
+        MyTriggerKeyGui.SureFocusCon := MySoftData.BtnSave
+        MyTriggerKeyGui.ShowGui(foldInfo.TKArr[foldIndex], foldInfo.HoldTimeArr[foldIndex], false)
+        return
+    }
+
+    RmtValidateItemIndex(tableItem, itemIndex)
+    if (CheckIsTimingMacroTable(tableIndex)) {
+        MyTimingGui.ShowGui(tableItem.TimingSerialArr[itemIndex])
+        return
+    }
+
+    if (CheckIsStringMacroTable(tableIndex)) {
+        SureStringTrigger(sureTriggerKey) {
+            tableItem.TKArr[itemIndex] := sureTriggerKey
+            RmtPostState()
+        }
+
+        MyTriggerStrGui.SaveBtnAction := OnSaveSetting
+        MyTriggerStrGui.SureBtnAction := SureStringTrigger
+        MyTriggerStrGui.SureFocusCon := MySoftData.BtnSave
+        MyTriggerStrGui.ShowGui(tableItem.TKArr[itemIndex], 0, false)
+        return
+    }
+
+    SureKeyTrigger(sureTriggerKey, holdTime) {
+        tableItem.TKArr[itemIndex] := sureTriggerKey
+        tableItem.HoldTimeArr[itemIndex] := holdTime
+        RmtPostState()
+    }
+
+    MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
+    MyTriggerKeyGui.SureBtnAction := SureKeyTrigger
+    MyTriggerKeyGui.SureFocusCon := MySoftData.BtnSave
+    MyTriggerKeyGui.ShowGui(tableItem.TKArr[itemIndex], tableItem.HoldTimeArr[itemIndex], false)
+}
+
+RmtAddItem(tableIndex, foldIndex, tipSound := 1) {
+    global MySoftData
+    tableItem := RmtGetTableItem(tableIndex)
+    foldInfo := tableItem.FoldInfo
+    RmtValidateFoldIndex(foldInfo, foldIndex)
+    addIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
+    UpdateFoldIndexInfo(foldInfo, addIndex, foldIndex, true)
+    foldInfo.FoldStateArr[foldIndex] := false
+    tableItem.ColorStateArr.InsertAt(addIndex, 0)
+    tableItem.TKArr.InsertAt(addIndex, "")
+    tableItem.TriggerTypeArr.InsertAt(addIndex, 1)
+    tableItem.MacroArr.InsertAt(addIndex, "")
+    tableItem.ModeArr.InsertAt(addIndex, 1)
+    tableItem.ForbidArr.InsertAt(addIndex, 0)
+    tableItem.RemarkArr.InsertAt(addIndex, "")
+    tableItem.LoopCountArr.InsertAt(addIndex, "1")
+    tableItem.HoldTimeArr.InsertAt(addIndex, 500)
+    tableItem.SerialArr.InsertAt(addIndex, GetCMDSerialStr("Item"))
+    tableItem.TimingSerialArr.InsertAt(addIndex, GetCMDSerialStr("Timing"))
+    tableItem.StartTipSoundArr.InsertAt(addIndex, tipSound)
+    tableItem.EndTipSoundArr.InsertAt(addIndex, tipSound)
+    tableItem.IsWorkIndexArr.InsertAt(addIndex, 0)
+    tableItem.HoldKeyArr.InsertAt(addIndex, Map())
+    tableItem.KilledArr.InsertAt(addIndex, false)
+    tableItem.PauseArr.InsertAt(addIndex, MySoftData.IsPause)
+    tableItem.ActionCount.InsertAt(addIndex, 0)
+    tableItem.ToggleStateArr.InsertAt(addIndex, false)
+    tableItem.ToggleActionArr.InsertAt(addIndex, "")
+    tableItem.VariableMapArr.InsertAt(addIndex, RmtCreateVariableMap())
+}
+
+RmtRemoveItem(tableItem, itemIndex, foldIndex) {
+    RmtValidateItemIndex(tableItem, itemIndex)
+    UpdateFoldIndexInfo(tableItem.FoldInfo, itemIndex, foldIndex, false)
+    RmtRemoveArrayAt(tableItem.ColorStateArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.SerialArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.TKArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.MacroArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.LoopCountArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.ModeArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.ForbidArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.HoldTimeArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.RemarkArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.TriggerTypeArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.TimingSerialArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.StartTipSoundArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.EndTipSoundArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.IsWorkIndexArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.HoldKeyArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.KilledArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.PauseArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.ActionCount, itemIndex)
+    RmtRemoveArrayAt(tableItem.ToggleStateArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.ToggleActionArr, itemIndex)
+    RmtRemoveArrayAt(tableItem.VariableMapArr, itemIndex)
+}
+
+RmtCreateVariableMap() {
+    variableMap := Map()
+    variableMap["宏循环次数"] := 0
+    variableMap["循环-跳过本轮"] := false
+    variableMap["循环-跳出"] := false
+    variableMap["分支-跳出"] := false
+    return variableMap
+}
+
+RmtGetTableItem(tableIndex) {
+    global MySoftData
+    if (tableIndex < 1 || tableIndex > MySoftData.TableInfo.Length)
+        throw Error("无效的表格序号：" tableIndex)
+    return MySoftData.TableInfo[tableIndex]
+}
+
+RmtValidateFoldIndex(foldInfo, foldIndex) {
+    if (foldIndex < 1 || foldIndex > foldInfo.IndexSpanArr.Length)
+        throw Error("无效的模块序号：" foldIndex)
+}
+
+RmtValidateItemIndex(tableItem, itemIndex) {
+    if (itemIndex < 1 || itemIndex > tableItem.ModeArr.Length)
+        throw Error("无效的宏条目序号：" itemIndex)
+}
+
+RmtRemoveArrayAt(arr, index) {
+    if (arr.Length >= index)
+        arr.RemoveAt(index)
+}
+
+RmtSwapArrayValue(arr, indexA, indexB) {
+    if (arr.Length < indexA || arr.Length < indexB)
+        return
+    temp := arr[indexA]
+    arr[indexA] := arr[indexB]
+    arr[indexB] := temp
+}
+
+RmtSetControl(control, value, text := unset) {
+    control.Value := value
+    control.Text := IsSet(text) ? text : value
+}
+
+RmtControlValue(control, fallback := "") {
+    try return control.Value
+    return fallback
+}
+
+RmtControlText(control, fallback := "") {
+    try return control.Text
+    return fallback
+}
+
+RmtArrayGet(arr, index, fallback := "") {
+    try return arr[index]
+    return fallback
+}
+
+RmtCloneArray(arr) {
+    clone := []
+    for index, value in arr {
+        clone.Push(value)
+    }
+    return clone
+}
+
+RmtNormalizeIndexArray(value, maxIndex := 0) {
+    if (value is Array)
+        return RmtFilterIndexArray(value, maxIndex)
+    return RmtParseIndexList(value, maxIndex)
+}
+
+RmtFilterIndexArray(values, maxIndex := 0) {
+    indexes := []
+    seen := Map()
+    for _, value in values {
+        if (!IsInteger(value))
+            continue
+        index := Integer(value)
+        if (index < 1 || RmtIsFixedTopButtonIndex(index) || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
+            continue
+        seen[index] := true
+        indexes.Push(index)
+    }
+    return indexes
+}
+
+RmtIsFixedTopButtonIndex(index) {
+    return index == 1 || index >= 7
+}
+
+RmtGet(obj, key, fallback := "") {
+    if (!IsObject(obj))
+        return fallback
+    if (obj is Map)
+        return obj.Has(key) ? obj[key] : fallback
+    if (ObjHasOwnProp(obj, key))
+        return obj.%key%
+    return fallback
+}
+
+RmtInt(value, fallback := 0) {
+    try {
+        if (IsInteger(value))
+            return Integer(value)
+    }
+    return fallback
+}
+
+RmtClampUiScale(value) {
+    try scale := Float(value)
+    catch
+        scale := 1
+    return Max(Min(scale, 1), 0.65)
+}
+
+RmtBool(value) {
+    if (value is String) {
+        value := StrLower(value)
+        return value == "true" || value == "1"
+    }
+    return !!value
+}
+
+RmtJsonBool(value) {
+    return RmtBool(value) ? JSON.true : JSON.false
+}
+
+RmtEmptySpan() {
+    return "无-无"
 }
 
 ; 添加控件到表格中，自动记录位置信息
@@ -192,8 +1462,8 @@ AddOperBtnUI() {
     posY += 40
 
     posY := 505
-    btnHelp := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("帮助"))
-    btnHelp.OnEvent("Click", (*) => Run(A_WorkingDir "\RMT帮助文档.html"))
+    btnHelp := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("RMT文档"))
+    btnHelp.OnEvent("Click", (*) => Run(A_WorkingDir "\index.html"))
 
     posY := 540
     MySoftData.BtnSave := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("应用并保存"))
@@ -441,7 +1711,7 @@ AddSettingUI(index) {
     con := AddTableControl("GroupBox", Format("x{} y{} w870 h140", posX + 10, posY), GetLang("数值选项"), tableItem)
     tableItem.AllGroup.Push(con)
     posY += 30
-    AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("按住时间浮动(%)："), tableItem)
+    AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("点击时间浮动(%)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 145, posY - 4), MySoftData.HoldFloat, tableItem
     )
     MySoftData.HoldFloatCtrl := con
@@ -467,10 +1737,19 @@ AddSettingUI(index) {
     tableItem)
     MySoftData.CoordYFloatCon := con
 
-    AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(0~10)："), tableItem)
-    con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum,
-    tableItem)
+    AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(-1~10)："), tableItem)
+    con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum, tableItem)
     MySoftData.MutiThreadNumCtrl := con
+
+    ; posY += 40
+    ; AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("核心池大小(1~10)："), tableItem)
+    ; con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.DynamicCorePoolSize, tableItem)
+    ; MySoftData.DynamicCorePoolSizeCtrl := con
+
+    ; posY += 40
+    ; AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("弹性超时(秒)："), tableItem)
+    ; con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.ElasticTimeout, tableItem)
+    ; MySoftData.ElasticTimeoutCtrl := con
 
     posY += 40
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("软件背景颜色："), tableItem)
@@ -479,7 +1758,7 @@ AddSettingUI(index) {
     MySoftData.SoftBGColorCon := con
 
     posY += 40
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("开关选项"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w870 h150", posX + 10, posY), GetLang("开关选项"), tableItem)
     tableItem.AllGroup.Push(con)
     posY += 30
 
@@ -510,6 +1789,11 @@ AddSettingUI(index) {
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("分割线"), tableItem)
     MySoftData.SplitLineCtrl := con
     MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
+
+    posY += 40
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("模态子窗口"), tableItem)
+    MySoftData.ModalSubGuiCtrl := con
+    MySoftData.ModalSubGuiCtrl.Value := MySoftData.IsModalSubGui
 
     posY += 40
     con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)
@@ -608,7 +1892,7 @@ AddHelpUI(index) {
 
     posY += 30
     posX := MySoftData.TabPosX + 15
-    LinkStr := A_WorkingDir "\RMT帮助文档.html"
+    LinkStr := A_WorkingDir "\index.html"
     AddTableControl("Text", Format("x{} y{} w{} h{}", posX, posY, 130, 30), GetLang("操作说明文档："), tableItem).SetFont((
         Format("S{} W{} Q{}", 12, 600, 0)))
     AddTableControl("Link", Format("x{} y{} w{} h{}", posX + 130, posY, 500, 30), Format('<a href="{}">{}</a>', LinkStr,
@@ -726,7 +2010,7 @@ CustomTrayMenu() {
     tipStr := MySoftData.MyGui.Title
     if (A_IsAdmin)
         tipStr .= "`n" GetLang("管理员权限")
-    
+
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("显示窗口"), (*) => RefreshGui())
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("休眠"), (*) => OnSuspendHotkey())
     A_TrayMenu.Delete("&Pause Script")

@@ -1,0 +1,11 @@
+# History
+
+## 2.0
+
+- Migrated the main window to the WebView UI and updated the displayed version to `RMTv2.0`.
+- Added module-local drag sorting, macro copy, and module paste actions.
+- Kept required tabs always visible and removed the unused settings diagnostics block.
+- Restored tool/settings hotkey display formatting, including `!o` as `Alt+O`.
+- Restored the menu macro module trigger control, compacted help/reward/thanks pages, and removed extra tool-page controls.
+- Persisted the WebView scale/window size across restarts.
+- Removed the WebView validation-only `scripts` directory from the source tree.

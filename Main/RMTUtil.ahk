@@ -26,6 +26,10 @@ OnSaveSetting(*) {
     IniWrite(MySoftData.KillMacroHotkeyCtrl.Value, IniFile, IniSection, "KillMacroHotkey")
     IniWrite(MySoftData.BootStartCtrl.Value, IniFile, IniSection, "IsBootStart")
     IniWrite(MySoftData.SplitLineCtrl.Value, IniFile, IniSection, "ShowSplitLine")
+    MySoftData.HiddenTopButtonIndexes := RmtNormalizeIndexArray(MySoftData.HiddenTopButtonIndexesCtrl.Value, MySoftData.TabNameArr.Length)
+    IniWrite(RmtIndexListToString(MySoftData.HiddenTopButtonIndexes), IniFile, IniSection, "HiddenTopButtonIndexes")
+    IniWrite(MySoftData.ColorPresetIdCtrl.Value, IniFile, IniSection, "ColorPresetId")
+    IniWrite(MySoftData.UiScale, IniFile, IniSection, "UiScale")
     IniWrite(MySoftData.FixedMenuWheelCtrl.Value, IniFile, IniSection, "FixedMenuWheel")
     IniWrite(MySoftData.MutiThreadNumCtrl.Value, IniFile, IniSection, "MutiThreadNum")
     IniWrite(MySoftData.SoftBGColorCon.Value, IniFile, IniSection, "SoftBGColor")
@@ -105,7 +109,7 @@ CheckAllValueSettingValid() {
 SaveCurWinPos() {
     MyGui := MySoftData.MyGui
     MyGui.GetPos(&x, &y, &w, &h)
-    IniWrite(Format("{}π{}", x, y), IniFile, IniSection, "LastWinPos")
+    IniWrite(Format("{}π{}π{}π{}", x, y, w, h), IniFile, IniSection, "LastWinPos")
 
     ListenGui := MyVarListenGui.Gui
     if (MyVarListenGui.Gui != "") {
