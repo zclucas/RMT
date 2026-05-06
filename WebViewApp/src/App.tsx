@@ -4,22 +4,17 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Clipboard,
-  Eraser,
   ExternalLink,
   FileText,
   Gift,
   GripVertical,
   HelpCircle,
-  Image as ImageIcon,
   Keyboard,
   ListTree,
   Maximize2,
   Menu as MenuIcon,
   Minus,
-  MousePointer2,
   Pause,
-  Play,
   Plus,
   RefreshCw,
   Repeat2,
@@ -317,16 +312,18 @@ export default function App() {
 
               {activeTab && activeTab.kind !== "macro" && (
                 <main className="content classic-content">
-                  <div className="content-header">
-                    <div>
-                      <div className="eyebrow">{activeTab.symbol}</div>
-                      <h1>{activeTab.name}</h1>
+                  {activeTab.kind !== "tool" && activeTab.kind !== "settings" && (
+                    <div className="content-header">
+                      <div>
+                        <div className="eyebrow">{activeTab.symbol}</div>
+                        <h1>{activeTab.name}</h1>
+                      </div>
+                      <div className="runtime-summary">
+                        <span className={classNames("dot", state.isMacroWorking && "running")} />
+                        <span>{uiCopy.settings.running} {state.macroRunningCount}</span>
+                      </div>
                     </div>
-                    <div className="runtime-summary">
-                      <span className={classNames("dot", state.isMacroWorking && "running")} />
-                      <span>{uiCopy.settings.running} {state.macroRunningCount}</span>
-                    </div>
-                  </div>
+                  )}
 
                   {activeTab.kind === "tool" && (
                     <ToolPanel
@@ -341,8 +338,11 @@ export default function App() {
                     <SettingsPanel
                       state={state}
                       settings={state.settings}
+                      tools={state.tools}
                       patchLocalSettings={patchLocalSettings}
+                      patchLocalTools={patchLocalTools}
                       updateSetting={updateSetting}
+                      updateTool={updateTool}
                       runAction={runAction}
                     />
                   )}
@@ -862,6 +862,64 @@ function MacroSettingsControl({
   );
 }
 
+function LegacyGroup({
+  title,
+  className,
+  children
+}: {
+  title: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className={classNames("legacy-group", className)}>
+      <legend>{title}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+function LegacyHotkeyCell({
+  label,
+  value,
+  target,
+  onLocal,
+  onCommit,
+  runAction
+}: {
+  label: string;
+  value: string;
+  target: RmtActionPayload<"openHotkeyEditor">["target"];
+  onLocal: (value: string) => void;
+  onCommit: (value: string) => void;
+  runAction: RunAction;
+}) {
+  return (
+    <div className="legacy-hotkey-cell">
+      <span>{label}:</span>
+      <TextInput value={value} onLocal={onLocal} onCommit={onCommit} />
+      <button onClick={() => runAction("openHotkeyEditor", { target })} type="button">
+        {uiCopy.macro.edit}
+      </button>
+    </div>
+  );
+}
+
+function LegacyField({
+  label,
+  children
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="legacy-field">
+      <span>{label}:</span>
+      {children}
+    </div>
+  );
+}
+
 function ToolPanel({
   tools,
   patchLocalTools,
@@ -888,46 +946,23 @@ function ToolPanel({
   });
 
   return (
-    <section className="panel-grid tool-layout">
-      <div className="section-block">
-        <h2>{uiCopy.tool.hotkeys}</h2>
-        <HotkeyField label={uiCopy.tool.mouseInfoHotkey} value={tools.toolCheckHotKey} target="toolCheckHotKey" onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} runAction={runAction} />
-        <HotkeyField label={uiCopy.tool.recordHotkey} value={tools.toolRecordMacroHotKey} target="toolRecordMacroHotKey" onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} runAction={runAction} />
-        <HotkeyField label={uiCopy.tool.textFilterHotkey} value={tools.toolTextFilterHotKey} target="toolTextFilterHotKey" onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} runAction={runAction} />
-        <HotkeyField label={uiCopy.tool.screenshotHotkey} value={tools.screenShotHotKey} target="screenShotHotKey" onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} runAction={runAction} />
-        <HotkeyField label={uiCopy.tool.freePasteHotkey} value={tools.freePasteHotKey} target="freePasteHotKey" onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} runAction={runAction} />
-      </div>
-
-      <div className="section-block">
-        <h2>{uiCopy.tool.toolWindows}</h2>
-        <div className="button-row">
-          <button onClick={() => runAction("openVarMonitor")} type="button">
-            <Play size={16} />
-            {uiCopy.tool.variableMonitor}
-          </button>
-          <button onClick={() => runAction("openFreePaste")} type="button">
-            <Clipboard size={16} />
-            {uiCopy.tool.freePaste}
-          </button>
-          <button onClick={() => runAction("openToolRecordSetting")} type="button">
-            <Settings size={16} />
-            {uiCopy.tool.recordOptions}
-          </button>
-          <button onClick={() => runAction("editCmdTip")} type="button">
-            <SquarePen size={16} />
-            {uiCopy.tool.commandDisplay}
+    <section className="legacy-page tool-legacy-page">
+      <LegacyGroup title={uiCopy.tool.toolWindows}>
+        <div className="legacy-row legacy-row-compact">
+          <span className="legacy-label">{uiCopy.tool.variableMonitor}:</span>
+          <button className="legacy-command" onClick={() => runAction("openVarMonitor")} type="button">
+            {uiCopy.tool.openMonitor}
           </button>
         </div>
-      </div>
 
-      <div className="section-block span-2">
-        <h2>{uiCopy.tool.mouseInfo}</h2>
-        <div className="button-row">
-          <button className={classNames(tools.isToolCheck && "primary")} onClick={() => runAction("toggleToolCheck")} type="button">
-            <MousePointer2 size={16} />
-            {tools.isToolCheck ? uiCopy.tool.stopDetect : uiCopy.tool.startDetect}
-          </button>
-          <label className="check-row block inline-check">
+        <div className="legacy-row tool-hotkey-row">
+          <span className="legacy-label">{uiCopy.tool.mouseInfoHotkey}:</span>
+          <TextInput value={tools.toolCheckHotKey} onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} />
+          <label className="legacy-check">
+            <input type="checkbox" checked={tools.isToolCheck} onChange={() => runAction("toggleToolCheck")} />
+            {uiCopy.tool.toggle}
+          </label>
+          <label className="legacy-check">
             <input
               type="checkbox"
               checked={tools.alwaysOnTop}
@@ -939,19 +974,42 @@ function ToolPanel({
             {uiCopy.tool.alwaysOnTop}
           </label>
         </div>
-        <div className="info-grid">
+
+        <div className="legacy-info-form">
           {toolInfoRows.map(([label, value]) => (
-            <div className="info-item" key={label}>
-              <span>{label}</span>
-              <strong title={value}>{value || "-"}</strong>
+            <div className="legacy-readonly-row" key={label}>
+              <span>{label}:</span>
+              <input readOnly title={value} value={value || ""} />
             </div>
           ))}
         </div>
-      </div>
 
-      <div className="section-block span-2">
-        <h2>{uiCopy.tool.textAndRecord}</h2>
-        <Field label={uiCopy.tool.ocrModel}>
+        <div className="legacy-row tool-hotkey-row">
+          <span className="legacy-label">{uiCopy.tool.recordHotkey}:</span>
+          <TextInput value={tools.toolRecordMacroHotKey} onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} />
+          <label className="legacy-check">
+            <input type="checkbox" checked={tools.isToolRecord} onChange={() => runAction("toggleToolRecord")} />
+            {uiCopy.tool.toggle}
+          </label>
+          <button className="legacy-command" onClick={() => runAction("openToolRecordSetting")} type="button">
+            {uiCopy.tool.recordOptions}
+          </button>
+        </div>
+
+        <div className="legacy-row tool-text-row">
+          <span className="legacy-label">{uiCopy.tool.textFilterHotkey}:</span>
+          <TextInput value={tools.toolTextFilterHotKey} onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} />
+          <button className="legacy-command" onClick={() => runAction("toolTextFilterScreenShot")} type="button">
+            {uiCopy.tool.extractFromScreenshot}
+          </button>
+          <button className="legacy-command" onClick={() => runAction("toolTextFilterSelectImage")} type="button">
+            {uiCopy.tool.extractFromImage}
+          </button>
+        </div>
+
+        <div className="legacy-row tool-options-row">
+          <span className="legacy-label">{uiCopy.tool.relatedOptions}:</span>
+          <span>{uiCopy.tool.ocrModel}:</span>
           <select
             value={tools.ocrType}
             onChange={(event) => {
@@ -966,27 +1024,29 @@ function ToolPanel({
               </option>
             ))}
           </select>
-        </Field>
-        <div className="button-row">
-          <button onClick={() => runAction("toolTextFilterScreenShot")} type="button">
-            <Clipboard size={16} />
-            {uiCopy.tool.extractFromScreenshot}
+          <button className="legacy-command" onClick={() => runAction("openFreePaste")} type="button">
+            {uiCopy.tool.freePaste}
           </button>
-          <button onClick={() => runAction("toolTextFilterSelectImage")} type="button">
-            <ImageIcon size={16} />
-            {uiCopy.tool.extractFromImage}
-          </button>
-          <button className="danger" onClick={() => runAction("clearToolText")} type="button">
-            <Eraser size={16} />
-            {uiCopy.tool.clearContent}
-          </button>
-          <button className={classNames(tools.isToolRecord && "primary")} onClick={() => runAction("toggleToolRecord")} type="button">
-            {tools.isToolRecord ? <Pause size={16} /> : <Play size={16} />}
-            {tools.isToolRecord ? uiCopy.tool.stopRecord : uiCopy.tool.startRecord}
+          <button className="legacy-command" onClick={() => runAction("editCmdTip")} type="button">
+            {uiCopy.tool.commandDisplay}
           </button>
         </div>
-        <textarea className="tool-output" readOnly value={tools.toolText} />
-      </div>
+
+        <div className="legacy-row tool-extra-hotkeys">
+          <span className="legacy-label">{uiCopy.tool.screenshotHotkey}:</span>
+          <TextInput value={tools.screenShotHotKey} onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} />
+          <span>{uiCopy.tool.freePasteHotkey}:</span>
+          <TextInput value={tools.freePasteHotKey} onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} />
+        </div>
+
+        <div className="legacy-output-label">
+          {uiCopy.tool.textAndRecord}
+          <button className="legacy-command danger" onClick={() => runAction("clearToolText")} type="button">
+            {uiCopy.tool.clearContent}
+          </button>
+        </div>
+        <textarea className="tool-output legacy-tool-output" readOnly value={tools.toolText} />
+      </LegacyGroup>
     </section>
   );
 }
@@ -994,14 +1054,20 @@ function ToolPanel({
 function SettingsPanel({
   state,
   settings,
+  tools,
   patchLocalSettings,
+  patchLocalTools,
   updateSetting,
+  updateTool,
   runAction
 }: {
   state: RmtState;
   settings: RmtSettings;
+  tools: RmtToolState;
   patchLocalSettings: (field: keyof RmtSettings, value: unknown) => void;
+  patchLocalTools: (field: keyof RmtToolState, value: unknown) => void;
   updateSetting: (field: keyof RmtSettings, value: unknown) => void;
+  updateTool: (field: keyof RmtToolState, value: unknown) => void;
   runAction: RunAction;
 }) {
   const hiddenTopButtonSet = new Set(settings.hiddenTopButtonIndexes);
@@ -1031,229 +1097,161 @@ function SettingsPanel({
   }
 
   return (
-    <section className="panel-grid">
-      <div className="section-block">
-        <h2>{uiCopy.settings.hotkeys}</h2>
-        <HotkeyField label={uiCopy.settings.suspend} value={settings.suspendHotkey} target="suspendHotkey" onLocal={(value) => patchLocalSettings("suspendHotkey", value)} onCommit={(value) => updateSetting("suspendHotkey", value)} runAction={runAction} />
-        <HotkeyField label={uiCopy.settings.pause} value={settings.pauseHotkey} target="pauseHotkey" onLocal={(value) => patchLocalSettings("pauseHotkey", value)} onCommit={(value) => updateSetting("pauseHotkey", value)} runAction={runAction} />
-        <HotkeyField label={uiCopy.settings.killAllMacros} value={settings.killMacroHotkey} target="killMacroHotkey" onLocal={(value) => patchLocalSettings("killMacroHotkey", value)} onCommit={(value) => updateSetting("killMacroHotkey", value)} runAction={runAction} />
-      </div>
-
-      <div className="section-block">
-        <h2>{uiCopy.settings.execution}</h2>
-        <Field label={uiCopy.settings.holdFloat}>
-          <TextInput value={settings.holdFloat} onLocal={(value) => patchLocalSettings("holdFloat", value)} onCommit={(value) => updateSetting("holdFloat", value)} />
-        </Field>
-        <Field label={uiCopy.settings.preIntervalFloat}>
-          <TextInput value={settings.preIntervalFloat} onLocal={(value) => patchLocalSettings("preIntervalFloat", value)} onCommit={(value) => updateSetting("preIntervalFloat", value)} />
-        </Field>
-        <Field label={uiCopy.settings.intervalFloat}>
-          <TextInput value={settings.intervalFloat} onLocal={(value) => patchLocalSettings("intervalFloat", value)} onCommit={(value) => updateSetting("intervalFloat", value)} />
-        </Field>
-        <Field label={uiCopy.settings.coordXFloat}>
-          <TextInput value={settings.coordXFloat} onLocal={(value) => patchLocalSettings("coordXFloat", value)} onCommit={(value) => updateSetting("coordXFloat", value)} />
-        </Field>
-        <Field label={uiCopy.settings.coordYFloat}>
-          <TextInput value={settings.coordYFloat} onLocal={(value) => patchLocalSettings("coordYFloat", value)} onCommit={(value) => updateSetting("coordYFloat", value)} />
-        </Field>
-        <Field label={uiCopy.settings.multiThreadNum}>
-          <TextInput value={settings.mutiThreadNum} onLocal={(value) => patchLocalSettings("mutiThreadNum", value)} onCommit={(value) => updateSetting("mutiThreadNum", value)} />
-        </Field>
-      </div>
-
-      <div className="section-block">
-        <h2>{uiCopy.settings.uiSwitches}</h2>
-        <label className="check-row block">
-          <input
-            type="checkbox"
-            checked={settings.bootStart}
-            onChange={(event) => {
-              patchLocalSettings("bootStart", event.target.checked);
-              updateSetting("bootStart", event.target.checked);
-            }}
-          />
-          {uiCopy.settings.bootStart}
-        </label>
-        <label className="check-row block">
-          <input
-            type="checkbox"
-            checked={settings.cmdTip}
-            onChange={(event) => {
-              patchLocalSettings("cmdTip", event.target.checked);
-              updateSetting("cmdTip", event.target.checked);
-            }}
-          />
-          {uiCopy.settings.cmdTip}
-        </label>
-        <label className="check-row block">
-          <input
-            type="checkbox"
-            checked={settings.noVariableTip}
-            onChange={(event) => {
-              patchLocalSettings("noVariableTip", event.target.checked);
-              updateSetting("noVariableTip", event.target.checked);
-            }}
-          />
-          {uiCopy.settings.noVariableTip}
-        </label>
-        <label className="check-row block">
-          <input
-            type="checkbox"
-            checked={settings.fixedMenuWheel}
-            onChange={(event) => {
-              patchLocalSettings("fixedMenuWheel", event.target.checked);
-              updateSetting("fixedMenuWheel", event.target.checked);
-            }}
-          />
-          {uiCopy.settings.fixedMenuWheel}
-        </label>
-        <label className="check-row block">
-          <input
-            type="checkbox"
-            checked={settings.showSplitLine}
-            onChange={(event) => {
-              patchLocalSettings("showSplitLine", event.target.checked);
-              updateSetting("showSplitLine", event.target.checked);
-            }}
-          />
-          {uiCopy.settings.showSplitLine}
-        </label>
-        <div className="settings-subsection">
-          <h3>{uiCopy.settings.colorPreset}</h3>
-          <div className="color-preset-grid">
-            {colorPresets.map((preset) => (
-              <button
-                aria-pressed={preset.id === activeColorPreset.id}
-                className={classNames("color-preset-button", preset.id === activeColorPreset.id && "active")}
-                key={preset.id}
-                onClick={() => setColorPreset(preset.id)}
-                title={`${preset.name}: ${preset.primaryColor} / ${preset.secondaryColor}`}
-                type="button"
-              >
-                <span className="color-preset-swatch" aria-hidden="true">
-                  <span style={{ background: preset.primaryColor }} />
-                  <span style={{ background: preset.secondaryColor }} />
-                </span>
-                <span>{preset.name}</span>
-              </button>
-            ))}
-          </div>
+    <section className="legacy-page settings-legacy-page">
+      <LegacyGroup title={uiCopy.settings.hotkeys}>
+        <div className="legacy-hotkey-grid">
+          <LegacyHotkeyCell label={uiCopy.settings.suspend} value={settings.suspendHotkey} target="suspendHotkey" onLocal={(value) => patchLocalSettings("suspendHotkey", value)} onCommit={(value) => updateSetting("suspendHotkey", value)} runAction={runAction} />
+          <LegacyHotkeyCell label={uiCopy.settings.pause} value={settings.pauseHotkey} target="pauseHotkey" onLocal={(value) => patchLocalSettings("pauseHotkey", value)} onCommit={(value) => updateSetting("pauseHotkey", value)} runAction={runAction} />
+          <LegacyHotkeyCell label={uiCopy.settings.killAllMacros} value={settings.killMacroHotkey} target="killMacroHotkey" onLocal={(value) => patchLocalSettings("killMacroHotkey", value)} onCommit={(value) => updateSetting("killMacroHotkey", value)} runAction={runAction} />
+          <LegacyHotkeyCell label={uiCopy.tool.recordHotkey} value={tools.toolRecordMacroHotKey} target="toolRecordMacroHotKey" onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} runAction={runAction} />
+          <LegacyHotkeyCell label={uiCopy.tool.textFilterHotkey} value={tools.toolTextFilterHotKey} target="toolTextFilterHotKey" onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} runAction={runAction} />
+          <LegacyHotkeyCell label={uiCopy.tool.screenshotHotkey} value={tools.screenShotHotKey} target="screenShotHotKey" onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} runAction={runAction} />
+          <LegacyHotkeyCell label={uiCopy.tool.freePasteHotkey} value={tools.freePasteHotKey} target="freePasteHotKey" onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} runAction={runAction} />
+          <LegacyHotkeyCell label={uiCopy.tool.mouseInfoHotkey} value={tools.toolCheckHotKey} target="toolCheckHotKey" onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} runAction={runAction} />
         </div>
-        <div className="settings-subsection">
-          <h3>{uiCopy.settings.topButtonVisibility}</h3>
-          <div className="top-button-toggle-grid">
-            {topButtonTabs.map((tab) => (
-              <label className="check-row block" key={tab.index}>
-                <input
-                  type="checkbox"
-                  checked={!hiddenTopButtonSet.has(tab.index)}
-                  onChange={(event) => setTopButtonVisible(tab.index, event.target.checked)}
-                />
-                {getTabLabel(tab)}
-              </label>
-            ))}
-          </div>
-        </div>
+      </LegacyGroup>
 
-        <Field label={uiCopy.settings.lang}>
-          <select
-            value={settings.lang}
-            onChange={(event) => {
-              patchLocalSettings("lang", event.target.value);
-              updateSetting("lang", event.target.value);
-            }}
-          >
-            {settings.langOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={uiCopy.settings.fontType}>
-          <select
-            value={settings.fontType}
-            onChange={(event) => {
-              patchLocalSettings("fontType", event.target.value);
-              updateSetting("fontType", event.target.value);
-            }}
-          >
-            {settings.fontOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={uiCopy.settings.screenshotType}>
-          <select
-            value={settings.screenShotType}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              patchLocalSettings("screenShotType", value);
-              updateSetting("screenShotType", value);
-            }}
-          >
-            {uiCopy.settings.screenshotLabels.map((label, index) => (
-              <option key={label} value={index + 1}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={uiCopy.settings.keyDownMode}>
-          <select
-            value={settings.keyDownDownType}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              patchLocalSettings("keyDownDownType", value);
-              updateSetting("keyDownDownType", value);
-            }}
-          >
-            {uiCopy.settings.keyDownLabels.map((label, index) => (
-              <option key={label} value={index + 1}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <button onClick={() => runAction("keyDownHelp")} type="button">
-          <HelpCircle size={16} />
-          {uiCopy.settings.help}
-        </button>
-        <button onClick={() => runAction("openSettingManager")} type="button">
-          <Settings size={16} />
-          {uiCopy.settings.configManager}
-        </button>
-      </div>
-
-      <div className="section-block diagnostics-block">
-        <h2>{uiCopy.settings.diagnostics}</h2>
-        <div className="info-grid">
-          <div className="info-item">
-            <span>{uiCopy.settings.version}</span>
-            <strong>{state.version}</strong>
-          </div>
-          <div className="info-item">
-            <span>{uiCopy.settings.config}</span>
-            <strong title={state.currentSettingName}>{state.currentSettingName}</strong>
-          </div>
-          <div className="info-item">
-            <span>{uiCopy.settings.running}</span>
-            <strong>{state.macroRunningCount}</strong>
-          </div>
-          <div className="info-item">
-            <span>{uiCopy.settings.totalRuns}</span>
-            <strong>{state.macroTotalCount}</strong>
-          </div>
+      <LegacyGroup title={uiCopy.settings.numericOptions}>
+        <div className="legacy-numeric-grid">
+          <LegacyField label={uiCopy.settings.holdFloat}>
+            <TextInput value={settings.holdFloat} onLocal={(value) => patchLocalSettings("holdFloat", value)} onCommit={(value) => updateSetting("holdFloat", value)} />
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.preIntervalFloat}>
+            <TextInput value={settings.preIntervalFloat} onLocal={(value) => patchLocalSettings("preIntervalFloat", value)} onCommit={(value) => updateSetting("preIntervalFloat", value)} />
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.intervalFloat}>
+            <TextInput value={settings.intervalFloat} onLocal={(value) => patchLocalSettings("intervalFloat", value)} onCommit={(value) => updateSetting("intervalFloat", value)} />
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.coordXFloat}>
+            <TextInput value={settings.coordXFloat} onLocal={(value) => patchLocalSettings("coordXFloat", value)} onCommit={(value) => updateSetting("coordXFloat", value)} />
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.coordYFloat}>
+            <TextInput value={settings.coordYFloat} onLocal={(value) => patchLocalSettings("coordYFloat", value)} onCommit={(value) => updateSetting("coordYFloat", value)} />
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.multiThreadNum}>
+            <TextInput value={settings.mutiThreadNum} onLocal={(value) => patchLocalSettings("mutiThreadNum", value)} onCommit={(value) => updateSetting("mutiThreadNum", value)} />
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.softBGColor}>
+            <TextInput value={settings.softBGColor} onLocal={(value) => patchLocalSettings("softBGColor", value)} onCommit={(value) => updateSetting("softBGColor", value)} />
+          </LegacyField>
         </div>
-        <div className="button-row diagnostics-actions">
-          <button onClick={() => runAction("copyDiagnostics")} type="button">
-            <Clipboard size={16} />
-            {uiCopy.settings.copyDiagnostics}
+      </LegacyGroup>
+
+      <LegacyGroup title={uiCopy.settings.switchOptions}>
+        <div className="legacy-switch-grid">
+          <label className="legacy-check">
+            <input type="checkbox" checked={settings.bootStart} onChange={(event) => { patchLocalSettings("bootStart", event.target.checked); updateSetting("bootStart", event.target.checked); }} />
+            {uiCopy.settings.bootStart}
+          </label>
+          <label className="legacy-check">
+            <input type="checkbox" checked={settings.cmdTip} onChange={(event) => { patchLocalSettings("cmdTip", event.target.checked); updateSetting("cmdTip", event.target.checked); }} />
+            {uiCopy.settings.cmdTip}
+          </label>
+          <button className="legacy-command" onClick={() => runAction("editCmdTip")} type="button">
+            {uiCopy.tool.commandDisplay}
           </button>
+          <button className="legacy-command" onClick={() => runAction("openToolRecordSetting")} type="button">
+            {uiCopy.tool.recordOptions}
+          </button>
+          <label className="legacy-check">
+            <input type="checkbox" checked={settings.noVariableTip} onChange={(event) => { patchLocalSettings("noVariableTip", event.target.checked); updateSetting("noVariableTip", event.target.checked); }} />
+            {uiCopy.settings.noVariableTip}
+          </label>
+          <label className="legacy-check">
+            <input type="checkbox" checked={settings.fixedMenuWheel} onChange={(event) => { patchLocalSettings("fixedMenuWheel", event.target.checked); updateSetting("fixedMenuWheel", event.target.checked); }} />
+            {uiCopy.settings.fixedMenuWheel}
+          </label>
+          <label className="legacy-check">
+            <input type="checkbox" checked={settings.showSplitLine} onChange={(event) => { patchLocalSettings("showSplitLine", event.target.checked); updateSetting("showSplitLine", event.target.checked); }} />
+            {uiCopy.settings.showSplitLine}
+          </label>
         </div>
-      </div>
+      </LegacyGroup>
+
+      <LegacyGroup title={uiCopy.settings.dropdownOptions}>
+        <div className="legacy-dropdown-grid">
+          <LegacyField label={uiCopy.settings.lang}>
+            <select value={settings.lang} onChange={(event) => { patchLocalSettings("lang", event.target.value); updateSetting("lang", event.target.value); }}>
+              {settings.langOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.fontType}>
+            <select value={settings.fontType} onChange={(event) => { patchLocalSettings("fontType", event.target.value); updateSetting("fontType", event.target.value); }}>
+              {settings.fontOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.screenshotType}>
+            <select value={settings.screenShotType} onChange={(event) => { const value = Number(event.target.value); patchLocalSettings("screenShotType", value); updateSetting("screenShotType", value); }}>
+              {uiCopy.settings.screenshotLabels.map((label, index) => (
+                <option key={label} value={index + 1}>{label}</option>
+              ))}
+            </select>
+          </LegacyField>
+          <LegacyField label={uiCopy.settings.keyDownMode}>
+            <div className="legacy-help-field">
+              <select value={settings.keyDownDownType} onChange={(event) => { const value = Number(event.target.value); patchLocalSettings("keyDownDownType", value); updateSetting("keyDownDownType", value); }}>
+                {uiCopy.settings.keyDownLabels.map((label, index) => (
+                  <option key={label} value={index + 1}>{label}</option>
+                ))}
+              </select>
+              <button onClick={() => runAction("keyDownHelp")} type="button">?</button>
+            </div>
+          </LegacyField>
+        </div>
+      </LegacyGroup>
+
+      <LegacyGroup title={uiCopy.settings.interfaceOptions}>
+        <div className="legacy-interface-grid">
+          <div>
+            <span className="legacy-subtitle">{uiCopy.settings.colorPreset}</span>
+            <div className="color-preset-grid">
+              {colorPresets.map((preset) => (
+                <button
+                  aria-pressed={preset.id === activeColorPreset.id}
+                  className={classNames("color-preset-button", preset.id === activeColorPreset.id && "active")}
+                  key={preset.id}
+                  onClick={() => setColorPreset(preset.id)}
+                  title={`${preset.name}: ${preset.primaryColor} / ${preset.secondaryColor}`}
+                  type="button"
+                >
+                  <span className="color-preset-swatch" aria-hidden="true">
+                    <span style={{ background: preset.primaryColor }} />
+                    <span style={{ background: preset.secondaryColor }} />
+                  </span>
+                  <span>{preset.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="legacy-subtitle">{uiCopy.settings.topButtonVisibility}</span>
+            <div className="top-button-toggle-grid">
+              {topButtonTabs.map((tab) => (
+                <label className="legacy-check" key={tab.index}>
+                  <input type="checkbox" checked={!hiddenTopButtonSet.has(tab.index)} onChange={(event) => setTopButtonVisible(tab.index, event.target.checked)} />
+                  {getTabLabel(tab)}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </LegacyGroup>
+
+      <LegacyGroup title={uiCopy.settings.diagnostics} className="diagnostics-block legacy-diagnostics">
+        <div className="info-grid">
+          <div className="info-item"><span>{uiCopy.settings.version}</span><strong>{state.version}</strong></div>
+          <div className="info-item"><span>{uiCopy.settings.config}</span><strong title={state.currentSettingName}>{state.currentSettingName}</strong></div>
+          <div className="info-item"><span>{uiCopy.settings.running}</span><strong>{state.macroRunningCount}</strong></div>
+          <div className="info-item"><span>{uiCopy.settings.totalRuns}</span><strong>{state.macroTotalCount}</strong></div>
+        </div>
+        <button className="legacy-command" onClick={() => runAction("copyDiagnostics")} type="button">
+          {uiCopy.settings.copyDiagnostics}
+        </button>
+      </LegacyGroup>
     </section>
   );
 }
@@ -1342,42 +1340,6 @@ function ThanksPanel({ runAction }: { runAction: RunAction }) {
         <p key={paragraph}>{paragraph}</p>
       ))}
     </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="field-row">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function HotkeyField({
-  label,
-  value,
-  target,
-  onLocal,
-  onCommit,
-  runAction
-}: {
-  label: string;
-  value: string;
-  target: RmtActionPayload<"openHotkeyEditor">["target"];
-  onLocal: (value: string) => void;
-  onCommit: (value: string) => void;
-  runAction: RunAction;
-}) {
-  return (
-    <Field label={label}>
-      <div className="hotkey-edit-cell">
-        <TextInput value={value} onLocal={onLocal} onCommit={onCommit} />
-        <button className="icon-button" title={uiCopy.settings.openHotkeyEditor} onClick={() => runAction("openHotkeyEditor", { target })} type="button">
-          <SquarePen size={15} />
-        </button>
-      </div>
-    </Field>
   );
 }
 

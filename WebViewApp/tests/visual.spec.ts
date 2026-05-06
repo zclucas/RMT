@@ -122,7 +122,7 @@ test.describe("tool and settings views", () => {
   test("keeps the tool panel stable with active detector and recorder output", async ({ page }) => {
     await loadState(page, toolVisualState);
 
-    await expect(page.locator(".tool-layout")).toBeVisible();
+    await expect(page.locator(".tool-legacy-page")).toBeVisible();
     await expect(page.locator(".tool-output")).toContainText("OCR 第 1 行");
     await expectShellFits(page);
 
@@ -136,8 +136,8 @@ test.describe("tool and settings views", () => {
     await loadState(page, settingsVisualState);
 
     await expect(page.locator(".diagnostics-block")).toBeVisible();
-    await expect(page.locator(".panel-grid select")).toHaveCount(4);
-    await expect(page.locator(".panel-grid input[type='checkbox']")).toHaveCount(15);
+    await expect(page.locator(".settings-legacy-page select")).toHaveCount(4);
+    await expect(page.locator(".settings-legacy-page input[type='checkbox']")).toHaveCount(15);
     await expectShellFits(page);
 
     await expect(page).toHaveScreenshot("settings-1070x590.png", {
