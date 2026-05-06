@@ -297,10 +297,30 @@ OnMMProOnce(tableItem, index, Data) {
     PosX := GetFloatValue(PosX, MySoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MySoftData.CoordYFloat)
     ClickCount := Data.ActionType == 2 ? 1 : 2
-    if (Data.IsGameView || Data.IsRelative) {
+    if (Data.IsGameView) {
         MOUSEEVENTF_MOVE := 0x0001
         DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE
             , "Int", PosX, "Int", PosY, "UInt", 0, "UInt", 0)
+    }
+    else if (Data.IsRelative) {
+        IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
+        if (IsHumanMouse && Data.ActionType == 1) {
+            CoordMode("Mouse", "Screen")
+            MouseGetPos(&curX, &curY)
+            hm := HumanMouse.GetInstance()
+            hm.SetParams({
+                IsEnabled: true,
+                Speed: Speed
+            })
+            hm.Move(curX + PosX, curY + PosY)
+        }
+        else if (Data.ActionType == 1) {
+            MouseMove(PosX, PosY, Speed, "R")
+        }
+        else if (Data.ActionType == 2 || Data.ActionType == 3) {
+            SetDefaultMouseSpeed(Speed)
+            Click(Format("{} {} {} Relative"), PosX, PosY, ClickCount)
+        }
     }
     else if (Data.ActionType == 1) {
         IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
