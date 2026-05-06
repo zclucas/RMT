@@ -5,6 +5,11 @@
 #Include "..\Plugins\RapidOcr\RapidOcr.ahk"
 #Include "..\Plugins\IbInputSimulator.ahk"
 #Include WorkUtil.ahk
+
+RmtPostState(*) {
+    ; Worker processes do not own the WebView; shared macro utilities can call this safely.
+}
+
 #SingleInstance Force
 DetectHiddenWindows true
 Persistent

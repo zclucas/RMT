@@ -1,11 +1,25 @@
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const WEB_DIR = path.dirname(__dirname);
-const OUTPUT = path.join(path.dirname(WEB_DIR), 'index.html');
+const ROOT_DIR = path.dirname(WEB_DIR);
+const OUTPUTS = [
+  path.join(ROOT_DIR, 'RMT帮助文档.html'),
+  path.join(ROOT_DIR, 'index.html')
+];
+const CHECK_ONLY = process.argv.includes('--check');
 
-const iconMap = { '软件介绍':'📘','快速上手':'🚀','指令手册':'📖','常见问题':'❓','常见报错':'⚠️','开发指南':'🛠️','更新日志':'📝' };
-const defaultIcons = ['📄','📋','📑','🗂️','📒','📁','🗃️','📚','💡','✨'];
+const iconMap = {
+  '软件介绍': '📘',
+  '快速上手': '🚀',
+  '指令手册': '📖',
+  '常见问题': '❓',
+  '常见报错': '⚠️',
+  '开发指南': '🛠️',
+  '更新日志': '📝'
+};
+const defaultIcons = ['📄', '📋', '📌', '🧭', '📎', '📧', '🗂️', '📎', '💡', '✓'];
 const orderList = Object.keys(iconMap);
 const mdFiles = fs.readdirSync(WEB_DIR).filter(f => f.endsWith('.md'));
 mdFiles.sort((a, b) => {
@@ -20,6 +34,10 @@ const PAGES = mdFiles.map((f, i) => {
   const name = path.basename(f, '.md');
   return { md: f, title: name, icon: iconMap[name] || defaultIcons[i % defaultIcons.length] };
 });
+
+function readWebText(...parts) {
+  return fs.readFileSync(path.join(WEB_DIR, ...parts), 'utf-8');
+}
 
 function fixImagePaths(mdContent) {
   return mdContent.replace(/!\[([^\]]*)\]\(\/RMT\/Web\/([^)]+)\)/g, '![$1]($2)');
@@ -41,11 +59,11 @@ function convertImagesInHtml(html) {
   });
 }
 
-const vm = require('vm');
-
-const markedSrc = fs.readFileSync(path.join(WEB_DIR, 'JS', 'marked.min.js'), 'utf-8');
-const hljsSrc = fs.readFileSync(path.join(WEB_DIR, 'JS', 'highlight.min.js'), 'utf-8');
-const vsCss = fs.readFileSync(path.join(WEB_DIR, 'CSS', 'vs.min.css'), 'utf-8');
+const markedSrc = readWebText('JS', 'marked.min.js');
+const hljsSrc = readWebText('JS', 'highlight.min.js');
+const vsCss = readWebText('CSS', 'vs.min.css');
+const searchCss = readWebText('CSS', 'help-search-sidebar.css');
+const searchScript = readWebText('JS', 'help-search-sidebar.js');
 
 const ctx = vm.createContext({ ...global, exports: {}, module: { exports: {} } });
 vm.runInContext(markedSrc, ctx);
@@ -60,11 +78,11 @@ const pageContents = PAGES.map(p => {
   return { ...p, body: htmlBody };
 });
 
-let navTabs = pageContents.map((p, i) =>
+const navTabs = pageContents.map((p, i) =>
   `<button class="tab${i === 0 ? ' active' : ''}" onclick="showPage(${i})">${p.icon} ${p.title}</button>`
 ).join('\n        ');
 
-let pageDivs = pageContents.map((p, i) =>
+const pageDivs = pageContents.map((p, i) =>
   `<div class="page${i === 0 ? '' : ' hidden'}" id="page${i}"><div class="content">${p.body}</div></div>`
 ).join('\n    ');
 
@@ -107,11 +125,23 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 .hidden{display:none!important}
 @media(max-width:800px){.sidebar{width:56px}.sidebar h1{font-size:11px;padding:14px 6px;text-align:center}.nav button{padding:10px 6px;font-size:11px;text-align:center}.nav button span:last-child{display:none}}
 </style>
+<style>${searchCss}</style>
 <style>${vsCss}</style>
 </head>
 <body>
 <div class="sidebar">
   <h1>🐰 RMT 文档</h1>
+  <div class="sidebar-search" role="search">
+    <label class="search-label" for="docSearchInput">搜索全部章节</label>
+    <input id="docSearchInput" class="doc-search-input" type="search" placeholder="输入关键词" autocomplete="off">
+    <button id="docSearchClear" class="doc-search-clear" type="button">清空搜索</button>
+    <div class="search-options">
+      <label class="search-toggle" data-tip="开启后，鼠标悬停搜索结果会临时跳到对应位置；移开后返回原阅读位置。"><input id="docSearchPreviewToggle" type="checkbox" checked> 预览</label>
+      <label class="search-toggle" data-tip="开启后按 JavaScript 正则表达式搜索，例如 脚本|变量 或 \\d+。正则错误会直接提示。"><input id="docSearchRegexToggle" type="checkbox"> 正则</label>
+    </div>
+    <div id="docSearchStatus" class="search-status">输入关键词搜索全部章节</div>
+    <div id="docSearchResults" class="search-results" aria-live="polite"></div>
+  </div>
   <div class="nav">
         ${navTabs}
       </div>
@@ -121,6 +151,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
       ${pageDivs}
     </div>
 </div>
+<aside id="docOutline" class="doc-outline" aria-label="目录大纲"></aside>
 
 <script>
 ${markedSrc}
@@ -136,14 +167,57 @@ function showPage(i){
   hljs.highlightAll();
 }
 </script>
+<script>
+${searchScript}
+</script>
 </body>
 </html>`;
 
-fs.writeFileSync(OUTPUT, fullHtml, 'utf-8');
+function writeOutputs(html) {
+  OUTPUTS.forEach(output => fs.writeFileSync(output, html, 'utf-8'));
 
-const sizeKB = Math.round(fs.statSync(OUTPUT).size / 1024);
-console.log(`\n✅ 打包完成!`);
-console.log(`   输出文件: ${OUTPUT}`);
-console.log(`   文件大小: ${sizeKB} KB`);
-console.log(`   包含页面: ${PAGES.length} 个`);
-console.log(`   双击即可在浏览器中打开，无需任何依赖\n`);
+  const sizeKB = Math.round(fs.statSync(OUTPUTS[0]).size / 1024);
+  console.log('\n✅ 打包完成!');
+  OUTPUTS.forEach(output => console.log(`   输出文件: ${output}`));
+  console.log(`   文件大小: ${sizeKB} KB`);
+  console.log(`   包含页面: ${PAGES.length} 个`);
+  console.log('   双击即可在浏览器中打开，无需任何依赖\n');
+}
+
+function checkOutputs(html) {
+  const missing = [];
+  const stale = [];
+
+  OUTPUTS.forEach(output => {
+    if (!fs.existsSync(output)) {
+      missing.push(output);
+      return;
+    }
+
+    const current = fs.readFileSync(output, 'utf-8');
+    if (current !== html) {
+      stale.push(output);
+    }
+  });
+
+  if (missing.length > 0 || stale.length > 0) {
+    console.error('\n❌ 帮助文档不是最新的。');
+    missing.forEach(output => console.error(`   缺失文件: ${output}`));
+    stale.forEach(output => console.error(`   需要重新生成: ${output}`));
+    console.error('   请运行: node Web\\JS\\SingleHtml.js\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  const sizeKB = Math.round(Buffer.byteLength(html, 'utf-8') / 1024);
+  console.log('\n✅ 帮助文档已是最新。');
+  OUTPUTS.forEach(output => console.log(`   已检查: ${output}`));
+  console.log(`   文件大小: ${sizeKB} KB`);
+  console.log(`   包含页面: ${PAGES.length} 个\n`);
+}
+
+if (CHECK_ONLY) {
+  checkOutputs(fullHtml);
+} else {
+  writeOutputs(fullHtml);
+}

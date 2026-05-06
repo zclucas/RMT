@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="auto">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebViewToo 帮助</title>
+    <script src="Bootstrap/color-modes.js"></script>
+    <script src="Bootstrap/bootstrap.bundle.min.js"></script>
+    <link href="Bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,">
+    <style>
+      :root { --titlebar-height: 34px; }
+      body { margin: 0; min-height: 100vh; }
+      .ahk-titlebar {
+        height: var(--titlebar-height);
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        user-select: none;
+      }
+      .ahk-drag { -webkit-app-region: drag; flex: 1; padding-left: 14px; font-weight: 600; }
+      .ahk-title-btn {
+        width: 46px;
+        height: var(--titlebar-height);
+        border: 0;
+        background: transparent;
+        font-family: Webdings;
+        line-height: var(--titlebar-height);
+      }
+      .ahk-title-btn:hover { background: rgba(0, 0, 0, .12); }
+      .ahk-title-btn.close-btn:hover { background: #dc3545; color: #fff; }
+      .layout { min-height: calc(100vh - var(--titlebar-height)); display: grid; grid-template-columns: 260px 1fr; }
+      .sidebar { border-right: 1px solid var(--bs-border-color); padding: 18px 14px; background: var(--bs-tertiary-bg); }
+      .content { padding: 28px 34px 48px; max-width: 980px; }
+      .nav-link { color: var(--bs-body-color); border-radius: 6px; }
+      .nav-link:hover { background: var(--bs-secondary-bg); }
+      section { padding: 10px 0 24px; border-bottom: 1px solid var(--bs-border-color); }
+      section:last-child { border-bottom: 0; }
+      code { color: #b02a37; }
+      pre { background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color); border-radius: 6px; padding: 12px; }
+      .callout { border-left: 4px solid #0d6efd; background: var(--bs-tertiary-bg); padding: 12px 14px; border-radius: 4px; }
+      @media (max-width: 760px) {
+        .layout { grid-template-columns: 1fr; }
+        .sidebar { border-right: 0; border-bottom: 1px solid var(--bs-border-color); }
+        .content { padding: 22px 18px 40px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ahk-titlebar">
+      <div class="ahk-drag">WebViewToo 帮助</div>
+      <button class="ahk-title-btn" type="button" title="最小化" onclick="ahk?.gui?.Minimize?.()">0</button>
+      <button class="ahk-title-btn" type="button" title="最大化/还原" onclick="ahk?.gui?.Maximize?.()">1</button>
+      <button class="ahk-title-btn close-btn" type="button" title="关闭" onclick="ahk?.global?.WinClose?.('A')">r</button>
+    </div>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <h5 class="mb-3">目录</h5>
+        <nav class="nav flex-column gap-1">
+          <a class="nav-link" href="#overview">概览</a>
+          <a class="nav-link" href="#classes">主要类</a>
+          <a class="nav-link" href="#routing">路由与资源</a>
+          <a class="nav-link" href="#bridge">AHK 与 JS 交互</a>
+          <a class="nav-link" href="#rmt">RMT 集成</a>
+          <a class="nav-link" href="#errors">常见报错</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <section id="overview">
+          <h1>WebViewToo 帮助</h1>
+          <p>WebViewToo 是面向 AutoHotkey v2 的 WebView2 封装库。它让 AHK 程序可以使用本地 HTML、CSS 和 JavaScript 构建界面，同时继续由 AHK 负责窗口、文件、热键和运行时逻辑。</p>
+          <div class="callout">RMT 当前使用 WebViewToo 驱动主界面，只应加载 WebViewToo 自带的 WebView2 封装，不能再同时加载旧的 `Plugins\WebView2\WebView2.ahk`。</div>
+        </section>
+
+        <section id="classes">
+          <h2>主要类</h2>
+          <ul>
+            <li><code>WebViewGui</code>：直接创建一个 WebView 窗口，适合完整 Web UI。</li>
+            <li><code>WebViewCtrl</code>：把 WebView2 控件嵌入普通 AHK `Gui`。</li>
+            <li><code>WebViewSizer</code>：为无标题栏窗口提供缩放手柄，通常由 `WebViewGui` 内部使用。</li>
+          </ul>
+        </section>
+
+        <section id="routing">
+          <h2>路由与资源</h2>
+          <p>WebViewToo 可以把本地目录、单个文件或文本内容映射到 WebView 页面可访问的地址。</p>
+          <pre><code>MyGui.BrowseFolder(A_WorkingDir)
+MyGui.Navigate("WebViewApp/dist/index.html")</code></pre>
+          <p>RMT 使用这种方式加载 `WebViewApp\dist\index.html`，因此前端改动后必须重新构建 `WebViewApp\dist`。</p>
+        </section>
+
+        <section id="bridge">
+          <h2>AHK 与 JS 交互</h2>
+          <p>AHK 可以向页面暴露回调，页面通过 JSON 调用 AHK，再由 AHK 返回新的状态。</p>
+          <pre><code>MyGui.AddCallbackToScript("RmtAction", RmtWebAction)</code></pre>
+          <p>RMT 的桥接入口在 `Main\UIUtil.ahk`，前端类型定义在 `WebViewApp\src\types.ts`。</p>
+        </section>
+
+        <section id="rmt">
+          <h2>RMT 集成</h2>
+          <ul>
+            <li>主入口：`RMT.ahk` 调用 `InitUI()` 初始化 WebView 界面。</li>
+            <li>AHK 桥接：`Main\UIUtil.ahk`。</li>
+            <li>前端源码：`WebViewApp\src`。</li>
+            <li>前端构建产物：`WebViewApp\dist`。</li>
+            <li>WebView2 loader：`Plugins\WebViewToo\Lib\32bit` 和 `Plugins\WebViewToo\Lib\64bit`。</li>
+          </ul>
+        </section>
+
+        <section id="errors">
+          <h2>常见报错</h2>
+          <h5>`class WebView2 conflicts with an existing Class`</h5>
+          <p>原因是同时 include 了两份 WebView2 封装。保留 WebViewToo，移除旧 `Plugins\WebView2\WebView2.ahk` include。</p>
+          <h5>WebView 页面空白</h5>
+          <p>检查 `WebViewApp\dist\index.html`、`WebViewApp\dist\assets`、WebView2 loader DLL 和 Microsoft Edge WebView2 Runtime 是否存在。</p>
+          <h5>修改前端后没有变化</h5>
+          <p>进入 `WebViewApp` 执行：</p>
+          <pre><code>npm.cmd run build</code></pre>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

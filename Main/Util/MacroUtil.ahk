@@ -945,10 +945,12 @@ OnToolTextFilterSelectImage(*) {
     result := ocr.ocr_from_file(path)
     ToolCheckInfo.ToolTextCtrl.Value := result
     SetClipboard(result)
+    try RmtPostState()
 }
 
 OnClearToolText(*) {
     ToolCheckInfo.ToolTextCtrl.Value := ""
+    try RmtPostState()
 }
 
 OnBootStartChanged(*) {

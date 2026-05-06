@@ -1,6 +1,12 @@
 ﻿# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work1.exe
 
+param(
+    [ValidateSet("interactive", "none", "x64", "both")]
+    [string]$ReleaseType = "interactive",
+    [switch]$NoWait
+)
+
 $Host.UI.RawUI.WindowTitle = "RMT 打包工具"
 $ErrorActionPreference = "Stop"
 
@@ -10,16 +16,20 @@ $ErrorActionPreference = "Stop"
 
 # Ahk2Exe 编译器路径
 $Ahk2ExePaths = @(
+    "$PSScriptRoot\.tools\AutoHotkey\Compiler\Ahk2Exe.exe",
+    "$PSScriptRoot\.tools\Ahk2Exe\Ahk2Exe.exe",
     "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
 )
 
 # 64位 Base 编译器路径
 $Base64Paths = @(
+    "$PSScriptRoot\.tools\AutoHotkey\v2\AutoHotkey64.exe",
     "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
 )
 
 # 32位 Base 编译器路径
 $Base32Paths = @(
+    "$PSScriptRoot\.tools\AutoHotkey\v2\AutoHotkey32.exe",
     "C:\Program Files\AutoHotkey\v2\AutoHotkey32.exe"
 )
 
@@ -47,6 +57,7 @@ function Write-Section {
 
 function Wait-KeyPress {
     param([string]$Message = "按任意键退出...", [int]$TimeoutSeconds = 0)
+    if ($NoWait) { return }
     Write-Host "`n$Message" -ForegroundColor Yellow
     if ($TimeoutSeconds -gt 0) {
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -121,6 +132,11 @@ function Get-Version {
     }
     $content = Get-Content $uiUtil -Raw
     # 匹配 RMTv2.1.2 或 RMTv2.0 格式
+    if ($content -match 'RMT_WEBVIEW_VERSION\s*:=\s*"RMTv(\d+(?:\.\d+)?(?:\.\d+)?)"') {
+        $version = $matches[1]
+        Write-Log "  版本号: v$version" "Gray"
+        return $version
+    }
     if ($content -match 'MyGui\.Title\s*:=\s*"RMTv(\d+(?:\.\d+)?(?:\.\d+)?)"') {
         $version = $matches[1]
         Write-Log "  版本号: v$version" "Gray"
@@ -128,6 +144,34 @@ function Get-Version {
     }
     Write-Log "  ✗ 无法从 UIUtil.ahk 解析版本号" "Red"
     return $null
+}
+
+function Get-Ahk2ExeComSpecShim {
+    $shimDir = Join-Path $PSScriptRoot ".tools\ComSpecShim"
+    $shimPath = Join-Path $shimDir "cmd.exe"
+    if (Test-Path $shimPath) {
+        return $shimPath
+    }
+
+    try {
+        New-Item -ItemType Directory -Path $shimDir -Force | Out-Null
+        $source = @'
+using System;
+public static class Program
+{
+    public static int Main(string[] args)
+    {
+        return 0;
+    }
+}
+'@
+        Add-Type -TypeDefinition $source -OutputAssembly $shimPath -OutputType ConsoleApplication -ErrorAction Stop
+        return $shimPath
+    }
+    catch {
+        Write-Log "  警告: 无法创建 Ahk2Exe ComSpec shim: $($_.Exception.Message)" "Yellow"
+        return $null
+    }
 }
 
 # ============================================================
@@ -164,11 +208,24 @@ function Compile {
         "/in", "`"$AhkFile`"",
         "/icon", "`"$IconPath`"",
         "/base", "`"$BaseExe`"",
-        "/out", "`"$OutputExe`""
+        "/cp", "65001",
+        "/out", "`"$OutputExe`"",
+        "/silent", "verbose"
     )
 
     Write-Log "  执行: Ahk2Exe /in ... /base ... /out ..." "Gray"
-    $process = Start-Process -FilePath $Ahk2exe -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+    $oldComSpec = $env:ComSpec
+    $comSpecShim = Get-Ahk2ExeComSpecShim
+    if ($comSpecShim) {
+        # AutoHotkey 2.0.26 can hang in Ahk2Exe's cmd.exe-based /iLib scan.
+        $env:ComSpec = $comSpecShim
+    }
+    try {
+        $process = Start-Process -FilePath $Ahk2exe -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+    }
+    finally {
+        $env:ComSpec = $oldComSpec
+    }
 
     if ($process.ExitCode -ne 0) {
         Write-Log "  ✗ 进程退出码: $($process.ExitCode)" "Red"
@@ -215,6 +272,36 @@ function Pack-HelpDoc {
     return $false
 }
 
+function Copy-WebViewAssets {
+    param([string]$ReleaseDir)
+
+    $distDir = Join-Path $PSScriptRoot "WebViewApp\dist"
+    $distIndex = Join-Path $distDir "index.html"
+    if (-not (Test-Path $distIndex)) {
+        Write-Log "  ✗ 未找到 WebViewApp\dist\index.html，请先运行 npm.cmd run build" "Red"
+        return $false
+    }
+
+    $destWebViewApp = Join-Path $ReleaseDir "WebViewApp"
+    if (Test-Path $destWebViewApp) {
+        Remove-Item $destWebViewApp -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $destWebViewApp -Force | Out-Null
+    Copy-Item -Path $distDir -Destination (Join-Path $destWebViewApp "dist") -Force -Recurse
+    Write-Log "  已复制 WebViewApp\dist" "Gray"
+
+    $webViewTooLib = Join-Path $PSScriptRoot "Plugins\WebViewToo\Lib"
+    $destWebViewToo = Join-Path $ReleaseDir "Plugins\WebViewToo"
+    $destWebViewTooLib = Join-Path $destWebViewToo "Lib"
+    if (Test-Path $destWebViewTooLib) {
+        Remove-Item $destWebViewTooLib -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $destWebViewToo -Force | Out-Null
+    Copy-Item -Path $webViewTooLib -Destination $destWebViewTooLib -Force -Recurse
+    Write-Log "  已复制 WebViewToo 运行库" "Gray"
+    return $true
+}
+
 # ============================================================
 # 发行版函数
 # ============================================================
@@ -257,6 +344,11 @@ function New-Release {
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
         }
 
+        # 复制 WebView2 前端和运行库
+        if (-not (Copy-WebViewAssets $releaseDir)) {
+            return $false
+        }
+
         # 删除旧 Work*.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
 
@@ -291,6 +383,11 @@ function New-Release {
         if (Test-Path $helpSrc) {
             Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
+        }
+
+        # 复制 WebView2 前端和运行库
+        if (-not (Copy-WebViewAssets $releaseDir)) {
+            return $false
         }
 
         # 删除旧 Work*.exe
@@ -443,7 +540,18 @@ function Main {
 
         # 步骤 7: 询问是否生成发行版
         Write-Step 7 "生成发行版"
-        $choice = Ask-Choice "请选择发行版类型:" @("不生成", "测试版 (仅 X64)", "正式版 (X64 + X32)")
+        if ($ReleaseType -eq "interactive") {
+            $choice = Ask-Choice "请选择发行版类型:" @("不生成", "测试版 (仅 X64)", "正式版 (X64 + X32)")
+        }
+        elseif ($ReleaseType -eq "none") {
+            $choice = 1
+        }
+        elseif ($ReleaseType -eq "x64") {
+            $choice = 2
+        }
+        else {
+            $choice = 3
+        }
 
         if ($choice -eq 2) {
             if (-not (New-Release -Type "x64")) {
