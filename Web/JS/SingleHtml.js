@@ -5,10 +5,8 @@ const vm = require('vm');
 const WEB_DIR = path.dirname(__dirname);
 const ROOT_DIR = path.dirname(WEB_DIR);
 const OUTPUTS = [
-  path.join(ROOT_DIR, 'RMT帮助文档.html'),
   path.join(ROOT_DIR, 'index.html')
 ];
-const CHECK_ONLY = process.argv.includes('--check');
 
 const iconMap = {
   '软件介绍': '📘',
@@ -173,51 +171,11 @@ ${searchScript}
 </body>
 </html>`;
 
-function writeOutputs(html) {
-  OUTPUTS.forEach(output => fs.writeFileSync(output, html, 'utf-8'));
+OUTPUTS.forEach(output => fs.writeFileSync(output, fullHtml, 'utf-8'));
 
-  const sizeKB = Math.round(fs.statSync(OUTPUTS[0]).size / 1024);
-  console.log('\n✅ 打包完成!');
-  OUTPUTS.forEach(output => console.log(`   输出文件: ${output}`));
-  console.log(`   文件大小: ${sizeKB} KB`);
-  console.log(`   包含页面: ${PAGES.length} 个`);
-  console.log('   双击即可在浏览器中打开，无需任何依赖\n');
-}
-
-function checkOutputs(html) {
-  const missing = [];
-  const stale = [];
-
-  OUTPUTS.forEach(output => {
-    if (!fs.existsSync(output)) {
-      missing.push(output);
-      return;
-    }
-
-    const current = fs.readFileSync(output, 'utf-8');
-    if (current !== html) {
-      stale.push(output);
-    }
-  });
-
-  if (missing.length > 0 || stale.length > 0) {
-    console.error('\n❌ 帮助文档不是最新的。');
-    missing.forEach(output => console.error(`   缺失文件: ${output}`));
-    stale.forEach(output => console.error(`   需要重新生成: ${output}`));
-    console.error('   请运行: node Web\\JS\\SingleHtml.js\n');
-    process.exitCode = 1;
-    return;
-  }
-
-  const sizeKB = Math.round(Buffer.byteLength(html, 'utf-8') / 1024);
-  console.log('\n✅ 帮助文档已是最新。');
-  OUTPUTS.forEach(output => console.log(`   已检查: ${output}`));
-  console.log(`   文件大小: ${sizeKB} KB`);
-  console.log(`   包含页面: ${PAGES.length} 个\n`);
-}
-
-if (CHECK_ONLY) {
-  checkOutputs(fullHtml);
-} else {
-  writeOutputs(fullHtml);
-}
+const sizeKB = Math.round(fs.statSync(OUTPUTS[0]).size / 1024);
+console.log('\n✅ 打包完成!');
+OUTPUTS.forEach(output => console.log(`   输出文件: ${output}`));
+console.log(`   文件大小: ${sizeKB} KB`);
+console.log(`   包含页面: ${PAGES.length} 个`);
+console.log('   双击即可在浏览器中打开，无需任何依赖\n');

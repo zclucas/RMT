@@ -18,7 +18,45 @@
     const tabText = tabs[index] ? tabs[index].textContent.replace(/\s+/g, ' ').trim() : '';
     const title = (titleEl ? titleEl.textContent : tabText || `第 ${index + 1} 页`).replace(/\s+/g, ' ').trim();
     const text = page.textContent.replace(/\s+/g, ' ').trim();
-    return { index, title, text, lowerText: text.toLowerCase() };
+    const searchable = !(/更新日志|开发指南/.test(tabText));
+    const shortTitle = tabText.includes(' ') ? tabText.slice(tabText.indexOf(' ') + 1).trim() : title;
+    return { index, title, shortTitle, text, lowerText: text.toLowerCase(), searchable };
+  });
+  const pageSectionInfo = pages.map((page) => {
+    const contentEl = page.querySelector('.content');
+    if (!contentEl) return { h1Range: null, sections: [] };
+    const fullText = contentEl.textContent.replace(/\s+/g, ' ').trim();
+    const h1El = contentEl.querySelector('h1');
+    const h2Elements = Array.from(contentEl.querySelectorAll('h2'));
+    let h1Range = null;
+    let searchOffset = 0;
+    if (h1El) {
+      const h1Text = h1El.textContent.replace(/\s+/g, ' ').trim();
+      const idx = fullText.indexOf(h1Text);
+      if (idx !== -1) {
+        h1Range = { start: idx, end: idx + h1Text.length };
+        searchOffset = h1Range.end;
+      }
+    }
+    const sections = [];
+    h2Elements.forEach((h2, i) => {
+      const h2Text = h2.textContent.replace(/\s+/g, ' ').trim();
+      const start = fullText.indexOf(h2Text, searchOffset);
+      if (start === -1) return;
+      const headingEnd = start + h2Text.length;
+      searchOffset = headingEnd;
+      const nextH2 = h2Elements[i + 1];
+      let end;
+      if (nextH2) {
+        const nextText = nextH2.textContent.replace(/\s+/g, ' ').trim();
+        const nextStart = fullText.indexOf(nextText, searchOffset);
+        end = nextStart !== -1 ? nextStart : fullText.length;
+      } else {
+        end = fullText.length;
+      }
+      sections.push({ heading: h2Text, headingStart: start, headingEnd, sectionEnd: end });
+    });
+    return { h1Range, sections };
   });
   const highlightedPages = new Set();
   const maxResults = 200;
@@ -44,7 +82,7 @@
 
   function buildOutline() {
     if (!outlineBox || !pages[activePageIndex]) return;
-    const headings = Array.from(pages[activePageIndex].querySelectorAll('.content h1,.content h2,.content h3'))
+    const headings = Array.from(pages[activePageIndex].querySelectorAll('.content h2'))
       .filter(heading => heading.textContent.trim());
     outlineBox.innerHTML = '';
     const title = document.createElement('div');
@@ -183,7 +221,7 @@
     const marks = pages[pageIndex].querySelectorAll('mark.doc-search-mark');
     const target = pages[pageIndex].querySelector('mark.doc-search-active-mark') || marks[Math.min(matchIndex, Math.max(0, marks.length - 1))];
     if (target) {
-      target.scrollIntoView({ behavior: isPreview ? 'auto' : 'smooth', block: 'center' });
+      target.scrollIntoView({ behavior: 'auto', block: 'center' });
     }
   }
 
@@ -195,14 +233,27 @@
 
   function switchPageSilently(index, activeMatchIndex = -1) {
     if (!pages[index]) return;
+    const samePage = index === activePageIndex;
     activePageIndex = index;
-    restoreHighlights();
-    pages.forEach(page => page.classList.add('hidden'));
-    tabs.forEach(tab => tab.classList.remove('active'));
-    pages[index].classList.remove('hidden');
-    if (tabs[index]) tabs[index].classList.add('active');
+    if (!samePage) {
+      restoreHighlights();
+      pages.forEach(page => page.classList.add('hidden'));
+      tabs.forEach(tab => tab.classList.remove('active'));
+      pages[index].classList.remove('hidden');
+      if (tabs[index]) tabs[index].classList.add('active');
+    }
     const searchConfig = getActiveSearchConfig();
-    if (searchConfig) highlightPage(index, searchConfig, activeMatchIndex);
+    if (searchConfig) {
+      if (samePage) {
+        const marks = pages[index].querySelectorAll('mark.doc-search-mark');
+        marks.forEach(m => m.classList.remove('doc-search-active-mark'));
+        if (activeMatchIndex >= 0 && activeMatchIndex < marks.length) {
+          marks[activeMatchIndex].classList.add('doc-search-active-mark');
+        }
+      } else {
+        highlightPage(index, searchConfig, activeMatchIndex);
+      }
+    }
     buildOutline();
   }
 
@@ -210,6 +261,13 @@
     focusedResult = { pageIndex: result.pageIndex, pageMatchIndex: result.pageMatchIndex };
     if (isPreview) {
       switchPageSilently(result.pageIndex, result.pageMatchIndex);
+    } else if (result.pageIndex === activePageIndex) {
+      const marks = pages[result.pageIndex].querySelectorAll('mark.doc-search-mark');
+      marks.forEach(m => m.classList.remove('doc-search-active-mark'));
+      if (result.pageMatchIndex >= 0 && result.pageMatchIndex < marks.length) {
+        marks[result.pageMatchIndex].classList.add('doc-search-active-mark');
+      }
+      buildOutline();
     } else {
       suppressPreviewCancel = false;
       window.showPage(result.pageIndex);
@@ -279,43 +337,81 @@
       return;
     }
 
-    const results = [];
-    let total = 0;
+    const rawMatches = [];
     pageData.forEach(data => {
+      if (!data.searchable) return;
+      const secInfo = pageSectionInfo[data.index];
       findMatches(data.text, searchConfig).forEach((match, pageMatchIndex) => {
-        total += 1;
-        if (results.length < maxResults) {
-          results.push({
-            pageIndex: data.index,
-            pageMatchIndex,
-            query,
-            isRegex: searchConfig.isRegex,
-            title: data.title,
-            snippet: makeSnippet(data.text, match.index, match.text)
-          });
+        if (secInfo.h1Range && match.index >= secInfo.h1Range.start && match.index < secInfo.h1Range.end) return;
+        let secIdx = -1, isHeading = false, secHeading = '';
+        if (secInfo.sections.length) {
+          for (let si = 0; si < secInfo.sections.length; si++) {
+            const sec = secInfo.sections[si];
+            if (match.index >= sec.headingStart && match.index < sec.sectionEnd) {
+              secIdx = si;
+              secHeading = sec.heading;
+              isHeading = match.index < sec.headingEnd;
+              break;
+            }
+          }
+          if (secIdx === -1) return;
         }
+        rawMatches.push({
+          pageIndex: data.index,
+          pageMatchIndex,
+          sectionIndex: secIdx,
+          sectionHeading: secHeading,
+          isHeadingMatch: isHeading,
+          query,
+          isRegex: searchConfig.isRegex,
+          title: data.shortTitle,
+          matchIndex: match.index,
+          matchText: match.text,
+          text: data.text
+        });
       });
     });
 
+    const results = [];
+    const seenSections = new Set();
+    rawMatches.forEach(r => {
+      const key = `${r.pageIndex}-${r.sectionIndex}`;
+      if (!seenSections.has(key)) {
+        seenSections.add(key);
+        if (results.length < maxResults) results.push(r);
+      }
+    });
+
+    results.sort((a, b) => {
+      if (a.isHeadingMatch !== b.isHeadingMatch) return a.isHeadingMatch ? -1 : 1;
+      if (a.pageIndex !== b.pageIndex) return a.pageIndex - b.pageIndex;
+      return a.sectionIndex - b.sectionIndex;
+    });
+
+    const total = results.length;
+
     resultsBox.classList.add('visible');
     if (!total) {
-      statusBox.textContent = `未找到“${query}”`;
+      statusBox.textContent = `未找到"${query}"`;
       resultsBox.innerHTML = '<div class="search-empty">没有匹配结果</div>';
       buildOutline();
       return;
     }
 
-    statusBox.textContent = `找到 ${total} 条结果${results.length < total ? `，显示前 ${results.length} 条` : ''}`;
+    statusBox.textContent = `找到 ${total} 条结果`;
     const head = document.createElement('div');
     head.className = 'search-result-head';
-    head.textContent = `搜索结果 ${results.length}/${total}`;
+    head.textContent = `搜索结果 ${total}`;
     resultsBox.appendChild(head);
 
     results.forEach(result => {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'search-result-item';
-      item.innerHTML = `<div class="search-result-title">${escapeHTML(result.title)}</div><div class="search-result-snippet">${result.snippet}</div>`;
+      const cleanHeading = result.sectionHeading ? result.sectionHeading.replace(/^RMT（若梦兔）[-—–]?\s*/, '') : '';
+      const headingLabel = cleanHeading ? ` - ${escapeHTML(cleanHeading)}` : '';
+      const badge = result.isHeadingMatch ? ' <span class="search-badge">标题匹配</span>' : '';
+      item.innerHTML = `<div class="search-result-title">${escapeHTML(result.title)}${headingLabel}${badge}</div><div class="search-result-snippet">${makeSnippet(result.text, result.matchIndex, result.matchText)}</div>`;
       item.addEventListener('mouseenter', () => startPreview(result));
       item.addEventListener('mouseleave', endPreview);
       item.addEventListener('focus', () => startPreview(result));
