@@ -225,7 +225,8 @@ export const uiCopy = {
       ["张正波", "https://gitee.com/bogezzb"],
       ["yun", "https://github.com/yunkuangao"],
       ["boxstudy", "https://github.com/boxstudy"],
-      ["sovaedv776", "https://github.com/sovaedv776"]
+      ["sovaedv776", "https://github.com/sovaedv776"],
+      ["T8numen", "https://github.com/T8numen"]
     ],
     projects: [
       ["OpenCV", "https://github.com/opencv/opencv"],

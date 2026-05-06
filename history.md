@@ -9,3 +9,4 @@
 - Restored the menu macro module trigger control, compacted help/reward/thanks pages, and removed extra tool-page controls.
 - Persisted the WebView scale/window size across restarts.
 - Removed the WebView validation-only `scripts` directory from the source tree.
+- Added the T8numen contributor entry with delayed handbook-inspired hover effects.

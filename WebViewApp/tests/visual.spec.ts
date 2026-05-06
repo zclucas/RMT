@@ -1,7 +1,14 @@
 import { expect, type Page, test } from "@playwright/test";
 import { uiCopy } from "../src/copy";
 import type { RmtState } from "../src/types";
-import { darkMacroState, denseMacroState, settingsVisualState, toolVisualState, visualState } from "./fixtures/rmt-state";
+import {
+  darkMacroState,
+  denseMacroState,
+  settingsVisualState,
+  thanksVisualState,
+  toolVisualState,
+  visualState
+} from "./fixtures/rmt-state";
 
 const macroScenarios = [
   { name: "default-1070x590", width: 1070, height: 590, state: visualState, expectedRows: 3 },
@@ -222,5 +229,67 @@ test.describe("tool and settings views", () => {
       animations: "disabled",
       maxDiffPixelRatio: 0.02
     });
+  });
+});
+
+test.describe("thanks view", () => {
+  test.use({ viewport: { width: 1070, height: 590 } });
+
+  test("shows the T8numen contributor note with handbook effects", async ({ page }) => {
+    await loadState(page, thanksVisualState);
+
+    const contributor = page.getByRole("button", { name: "T8numen" });
+    await expect(contributor).toBeVisible();
+    await expect(page.locator("#t8numen-contributor-note")).toBeHidden();
+
+    const buttonEffectBeforeHover = await contributor.evaluate((element) => ({
+      beforeOpacity: window.getComputedStyle(element, "::before").opacity,
+      iconWidth: window.getComputedStyle(element.querySelector(".t8numen-toc-icon")!).width
+    }));
+
+    expect(buttonEffectBeforeHover.beforeOpacity).toBe("0");
+    expect(buttonEffectBeforeHover.iconWidth).toBe("0px");
+
+    await contributor.hover();
+    await page.waitForTimeout(1800);
+
+    const buttonEffectBeforeDelay = await contributor.evaluate((element) => ({
+      beforeOpacity: window.getComputedStyle(element, "::before").opacity,
+      iconWidth: window.getComputedStyle(element.querySelector(".t8numen-toc-icon")!).width
+    }));
+
+    expect(buttonEffectBeforeDelay.beforeOpacity).toBe("0");
+    expect(buttonEffectBeforeDelay.iconWidth).toBe("0px");
+    await expect(page.locator("#t8numen-contributor-note")).toBeHidden();
+
+    await page.waitForTimeout(1500);
+
+    const buttonEffectAfterDelay = await contributor.evaluate((element) => ({
+      beforeOpacity: window.getComputedStyle(element, "::before").opacity,
+      iconWidth: parseFloat(window.getComputedStyle(element.querySelector(".t8numen-toc-icon")!).width)
+    }));
+
+    expect(Number(buttonEffectAfterDelay.beforeOpacity)).toBeGreaterThan(0.8);
+    expect(buttonEffectAfterDelay.iconWidth).toBeGreaterThan(14);
+    await expect(page.locator("#t8numen-contributor-note")).toBeHidden();
+
+    await page.waitForTimeout(1900);
+
+    const popover = page.locator("#t8numen-contributor-note");
+    await expect(popover).toBeVisible();
+    await expect(popover).toContainText("2.0版本的webview修改请求");
+    await expect(contributor.locator(".t8numen-toc-letter")).toHaveCount(14);
+
+    const popoverStyle = await popover.evaluate((element) => {
+      const style = window.getComputedStyle(element);
+      return {
+        animationName: style.animationName,
+        backgroundImage: style.backgroundImage
+      };
+    });
+
+    expect(popoverStyle.animationName).toBe("t8numen-chapter-slide");
+    expect(popoverStyle.backgroundImage).toContain("linear-gradient");
+    await expectShellFits(page);
   });
 });

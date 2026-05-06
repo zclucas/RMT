@@ -21,6 +21,7 @@ import {
   Save,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   Square,
   SquarePen,
   Timer,
@@ -66,6 +67,9 @@ const uiDesignHeight = 720;
 const minUiScale = 0.65;
 const maxUiScale = 1;
 const scalePersistDelayMs = 300;
+const t8numenContributorLabel = "T8numen";
+const t8numenContributorNote =
+  "2.0版本的webview修改请求由QQ尾号2808的<等风也等你>提出，由RMT作者进行指导，我进行实际ui替换，使用codex的5.5模型，从2026.5.5的2时开始，到5.6的22时已完成大部分ui迁移";
 const colorPresets: RmtColorPreset[] = [
   {
     id: "rmt-green",
@@ -1433,11 +1437,15 @@ function ThanksPanel({ runAction }: { runAction: RunAction }) {
       <div className="thanks-group">
         <h3>{uiCopy.thanks.contributors}</h3>
         <div className="tag-list">
-          {uiCopy.thanks.developers.map(([label, url]) => (
-            <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
-              {label}
-            </button>
-          ))}
+          {uiCopy.thanks.developers.map(([label, url]) =>
+            label === t8numenContributorLabel ? (
+              <T8numenContributor key={label} runAction={runAction} url={url} />
+            ) : (
+              <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
+                {label}
+              </button>
+            )
+          )}
         </div>
       </div>
       <div className="thanks-group">
@@ -1462,6 +1470,41 @@ function ThanksPanel({ runAction }: { runAction: RunAction }) {
         <p key={paragraph}>{paragraph}</p>
       ))}
     </section>
+  );
+}
+
+function T8numenContributor({ runAction, url }: { runAction: RunAction; url: string }) {
+  return (
+    <span className="t8numen-contributor">
+      <span className="t8numen-popover" id="t8numen-contributor-note" role="tooltip">
+        {t8numenContributorNote}
+      </span>
+      <button
+        aria-describedby="t8numen-contributor-note"
+        aria-label={t8numenContributorLabel}
+        className="link-chip t8numen-toc-button"
+        onClick={() => runAction("openUrl", { url })}
+        type="button"
+      >
+        <Sparkles aria-hidden="true" className="t8numen-toc-icon" strokeWidth={1.8} />
+        <span aria-hidden="true" className="t8numen-toc-text">
+          <span className="t8numen-toc-text-row">
+            {Array.from(t8numenContributorLabel).map((letter, index) => (
+              <span className="t8numen-toc-letter" key={`primary-${letter}-${index}`}>
+                {letter}
+              </span>
+            ))}
+          </span>
+          <span className="t8numen-toc-text-row">
+            {Array.from(t8numenContributorLabel).map((letter, index) => (
+              <span className="t8numen-toc-letter" key={`secondary-${letter}-${index}`}>
+                {letter}
+              </span>
+            ))}
+          </span>
+        </span>
+      </button>
+    </span>
   );
 }
 

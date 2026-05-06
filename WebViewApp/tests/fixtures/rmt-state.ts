@@ -225,3 +225,7 @@ export const settingsVisualState = createState({
     hiddenTopButtonIndexes: [9, 10, 11]
   }
 });
+
+export const thanksVisualState = createState({
+  activeTabIndex: 11
+});
