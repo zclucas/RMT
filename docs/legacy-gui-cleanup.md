@@ -53,6 +53,14 @@ These dialogs are not just main-window UI and should remain until their runtime 
 - `Gui\TargetGui.ahk`, `Gui\ColorPanelGui.ahk`, `Gui\FrontInfoGui.ahk`, `Gui\WinRuleGui.ahk`: helper pickers used by editor dialogs.
 - `Gui\UseExplainGui.ahk`: setting/package help flow.
 
+## Prototype And Reference Files
+
+These files are not the active main window, but keep them until their reference value is intentionally retired:
+
+- `WebViewApp\ui-proposals.html`, `WebViewApp\src\ui-proposals.tsx`, `WebViewApp\src\ui-proposals.css`: archived WebView layout proposals for comparing later UI changes.
+- `LocalWeb\`: older local Web UI assets that can help trace migration decisions and static resource behavior.
+- `Plugins\WebViewToo\WebViewGui Example.ahk`, `Plugins\WebViewToo\Simple Browser.ahk`, `Plugins\WebViewToo\Pages\`: upstream plugin examples/assets. Avoid editing or deleting them during project UI work; project-specific fixes should live outside `Plugins\WebViewToo` unless the plugin itself is deliberately updated.
+
 ## Candidates For Later Migration
 
 Good later WebView migration candidates:

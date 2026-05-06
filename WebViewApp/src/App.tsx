@@ -336,7 +336,7 @@ export default function App() {
   const scaleStyle = getThemeStyle(colorPreset, uiScale);
 
   return (
-    <div className="rmt-scale-viewport" ref={scaleHostRef}>
+    <div className="rmt-scale-viewport" onContextMenuCapture={(event) => event.preventDefault()} ref={scaleHostRef}>
       <div className="rmt-scale-content" style={scaleStyle}>
         <div className="app-shell classic-app" data-theme-mode={colorPreset.mode}>
           <TitleBar state={state} runAction={runAction} />
@@ -1282,6 +1282,10 @@ function SettingsPanel({
           <label className="legacy-check">
             <input type="checkbox" checked={settings.fixedMenuWheel} onChange={(event) => { patchLocalSettings("fixedMenuWheel", event.target.checked); updateSetting("fixedMenuWheel", event.target.checked); }} />
             {uiCopy.settings.fixedMenuWheel}
+          </label>
+          <label className="legacy-check">
+            <input type="checkbox" checked={settings.modalSubGui} onChange={(event) => { patchLocalSettings("modalSubGui", event.target.checked); updateSetting("modalSubGui", event.target.checked); }} />
+            {uiCopy.settings.modalSubGui}
           </label>
           <label className="legacy-check">
             <input type="checkbox" checked={settings.showSplitLine} onChange={(event) => { patchLocalSettings("showSplitLine", event.target.checked); updateSetting("showSplitLine", event.target.checked); }} />

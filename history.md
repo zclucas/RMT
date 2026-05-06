@@ -1,5 +1,12 @@
 # History
 
+## Unreleased
+
+- Fixed WebView edge resize hitboxes and disabled the default WebView context menu.
+- Restored the modal sub-window setting initialization and WebView settings binding.
+- Added WebView contract and dist asset verification scripts for maintenance checks.
+- Clarified WebView dist asset staging requirements and named local resize overlay constants.
+
 ## 2.0
 
 - Migrated the main window to the WebView UI and updated the displayed version to `RMTv2.0`.

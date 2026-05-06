@@ -10,15 +10,21 @@ Run from the repository root:
 cd WebViewApp
 npm.cmd run build
 cd ..
+node .\scripts\verify-webview-contract.mjs
+node .\scripts\verify-webview-dist.mjs
 & "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
 git diff --check
 ```
 
 Expected result:
 
+- WebView settings and saved compatibility controls are complete across AHK and React files.
+- `WebViewApp/dist/index.html` references only existing tracked assets.
 - `RMT.ahk` validates.
 - React/TypeScript builds and updates `WebViewApp/dist`.
 - `git diff --check` has no errors.
+
+If the build creates renamed dist assets, stage `WebViewApp/dist` before running the dist asset release check.
 
 Run the visual regression checks after layout-sensitive WebView changes:
 
@@ -76,6 +82,7 @@ Expected result:
 - Change numeric interval/coordinate/thread settings and save.
 - Change screenshot and key-down modes.
 - Toggle boot start, split line, fixed menu wheel, no-variable-tip, and command tip settings.
+- Toggle modal sub-window, save, restart, and confirm it persists.
 - Open hotkey editors for app and tool hotkeys.
 - Save, restart, and confirm settings persist.
 
@@ -86,6 +93,14 @@ Expected result:
 - Open variable monitor.
 - Open configuration manager.
 - Open key-down help.
+
+## Window Chrome
+
+- Right-click buttons, blank areas, and input fields without showing the WebView default context menu.
+- Keyboard copy and paste still work in input fields.
+- Hover below toolbar buttons, tab labels, and blank content without seeing a resize cursor.
+- Hover and drag the outer left, right, top, bottom edges and four corners to resize.
+- Maximize the window and confirm resize cursors disappear, then restore and confirm edge resize works again.
 
 ## Help And Static Content
 

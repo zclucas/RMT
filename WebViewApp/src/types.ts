@@ -66,6 +66,7 @@ export interface RmtSettings {
   colorPresetId: string;
   uiScale: number;
   fixedMenuWheel: boolean;
+  modalSubGui: boolean;
   mutiThreadNum: string;
   softBGColor: string;
   noVariableTip: boolean;

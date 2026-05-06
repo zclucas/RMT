@@ -44,8 +44,10 @@ When adding a state field:
 2. Add it to `WebViewApp/src/types.ts`.
 3. Add a fallback value in `WebViewApp/src/fallbackState.ts`.
 4. Render or consume it in React.
-5. Run `npm.cmd run build` from `WebViewApp`.
-6. Run AutoHotkey validation on `RMT.ahk`.
+5. Update `WebViewApp/tests/fixtures/rmt-state.ts` if visual or interaction tests consume the field.
+6. Run `node .\scripts\verify-webview-contract.mjs` from the repository root.
+7. Run `npm.cmd run build` from `WebViewApp`.
+8. Run AutoHotkey validation on `RMT.ahk`.
 
 Keep field names stable once released. If a rename is unavoidable, support the old field until config and UI migration are covered.
 

@@ -4,8 +4,161 @@ RMT_WEBVIEW_VERSION := "RMTv2.0"
 RmtCopiedWebItem := ""
 
 class RmtWebViewGui extends WebViewGui {
+    static DefaultWidth := 640
+    static DefaultHeight := 480
+
+    __New(Options?, Title?, EventObj?, WebViewSettings := {}) {
+        super.__New(Options?, Title?, EventObj?, WebViewSettings)
+        try this.Sizers.Destroy()
+        this.Sizers := RmtEdgeResizeOverlay(this)
+        defaultWidth := WebViewSettings.HasProp("DefaultWidth") ? WebViewSettings.DefaultWidth : RmtWebViewGui.DefaultWidth
+        defaultHeight := WebViewSettings.HasProp("DefaultHeight") ? WebViewSettings.DefaultHeight : RmtWebViewGui.DefaultHeight
+        this.Sizers.Move(0, 0, defaultWidth, defaultHeight)
+        WebViewSizer.ToggleSizer(this)
+        try this.Control.AreDefaultContextMenusEnabled := false
+    }
+
     Submit(Hide := true) {
         return {}
+    }
+}
+
+class RmtEdgeResizeOverlay {
+    static BorderSize := 5
+    static CornerMinSize := 22
+    static CornerBorderMultiplier := 4
+    static WM_SETCURSOR := 0x0020
+    static WM_LBUTTONDOWN := 0x0201
+    static WM_NCLBUTTONDOWN := 0x00A1
+    static SetWindowPosShowFlags := 0x0250
+    static HTLEFT := 10
+    static HTRIGHT := 11
+    static HTTOP := 12
+    static HTTOPLEFT := 13
+    static HTTOPRIGHT := 14
+    static HTBOTTOM := 15
+    static HTBOTTOMLEFT := 16
+    static HTBOTTOMRIGHT := 17
+    static IDC_SIZENWSE := 32642
+    static IDC_SIZENESW := 32643
+    static IDC_SIZEWE := 32644
+    static IDC_SIZENS := 32645
+    static HandleMap := Map()
+    static Registered := false
+
+    __New(Parent) {
+        RmtEdgeResizeOverlay.Register()
+        this.Parent := Parent
+        this.Visible := false
+        this.Handles := []
+        this.AddHandle("topLeft", RmtEdgeResizeOverlay.HTTOPLEFT, RmtEdgeResizeOverlay.IDC_SIZENWSE)
+        this.AddHandle("top", RmtEdgeResizeOverlay.HTTOP, RmtEdgeResizeOverlay.IDC_SIZENS)
+        this.AddHandle("topRight", RmtEdgeResizeOverlay.HTTOPRIGHT, RmtEdgeResizeOverlay.IDC_SIZENESW)
+        this.AddHandle("right", RmtEdgeResizeOverlay.HTRIGHT, RmtEdgeResizeOverlay.IDC_SIZEWE)
+        this.AddHandle("bottomRight", RmtEdgeResizeOverlay.HTBOTTOMRIGHT, RmtEdgeResizeOverlay.IDC_SIZENWSE)
+        this.AddHandle("bottom", RmtEdgeResizeOverlay.HTBOTTOM, RmtEdgeResizeOverlay.IDC_SIZENS)
+        this.AddHandle("bottomLeft", RmtEdgeResizeOverlay.HTBOTTOMLEFT, RmtEdgeResizeOverlay.IDC_SIZENESW)
+        this.AddHandle("left", RmtEdgeResizeOverlay.HTLEFT, RmtEdgeResizeOverlay.IDC_SIZEWE)
+    }
+
+    static Register() {
+        if (RmtEdgeResizeOverlay.Registered)
+            return
+        OnMessage(RmtEdgeResizeOverlay.WM_SETCURSOR, (Params*) => RmtEdgeResizeOverlay.HandleSetCursor(Params*))
+        OnMessage(RmtEdgeResizeOverlay.WM_LBUTTONDOWN, (Params*) => RmtEdgeResizeOverlay.HandleLeftButtonDown(Params*))
+        RmtEdgeResizeOverlay.Registered := true
+    }
+
+    static HandleSetCursor(wParam, lParam, Msg, Hwnd) {
+        if (!RmtEdgeResizeOverlay.HandleMap.Has(Hwnd))
+            return
+        info := RmtEdgeResizeOverlay.HandleMap[Hwnd]
+        cursor := DllCall("LoadCursor", "Ptr", 0, "Ptr", info.Cursor, "Ptr")
+        DllCall("SetCursor", "Ptr", cursor)
+        return 1
+    }
+
+    static HandleLeftButtonDown(wParam, lParam, Msg, Hwnd) {
+        if (!RmtEdgeResizeOverlay.HandleMap.Has(Hwnd))
+            return
+        info := RmtEdgeResizeOverlay.HandleMap[Hwnd]
+        MouseGetPos(&mouseX, &mouseY)
+        packedPos := (mouseX & 0xFFFF) | ((mouseY & 0xFFFF) << 16)
+        DllCall("ReleaseCapture")
+        DllCall("PostMessage", "Ptr", info.ParentHwnd, "UInt", RmtEdgeResizeOverlay.WM_NCLBUTTONDOWN, "Ptr", info.Hit, "Ptr", packedPos)
+        return 0
+    }
+
+    AddHandle(Name, Hit, Cursor) {
+        handleGui := Gui("-Caption +ToolWindow +E0x08000000 +Parent" this.Parent.Hwnd)
+        handleGui.BackColor := "000000"
+        handleGui.Show("x0 y0 w1 h1 Hide")
+        try WinSetTransparent(1, "ahk_id " handleGui.Hwnd)
+        handle := { Name: Name, Gui: handleGui, Hit: Hit, Cursor: Cursor, X: 0, Y: 0, W: 1, H: 1 }
+        this.Handles.Push(handle)
+        RmtEdgeResizeOverlay.HandleMap[handleGui.Hwnd] := { ParentHwnd: this.Parent.Hwnd, Hit: Hit, Cursor: Cursor }
+    }
+
+    Move(X, Y, Width, Height) {
+        border := RmtEdgeResizeOverlay.BorderSize
+        corner := Max(border * RmtEdgeResizeOverlay.CornerBorderMultiplier, RmtEdgeResizeOverlay.CornerMinSize)
+        innerWidth := Max(1, Width - corner * 2)
+        innerHeight := Max(1, Height - corner * 2)
+        this.SetHandle("topLeft", 0, 0, corner, corner)
+        this.SetHandle("top", corner, 0, innerWidth, border)
+        this.SetHandle("topRight", Width - corner, 0, corner, corner)
+        this.SetHandle("right", Width - border, corner, border, innerHeight)
+        this.SetHandle("bottomRight", Width - corner, Height - corner, corner, corner)
+        this.SetHandle("bottom", corner, Height - border, innerWidth, border)
+        this.SetHandle("bottomLeft", 0, Height - corner, corner, corner)
+        this.SetHandle("left", 0, corner, border, innerHeight)
+    }
+
+    SetHandle(Name, X, Y, W, H) {
+        for handle in this.Handles {
+            if (handle.Name != Name)
+                continue
+            handle.X := X
+            handle.Y := Y
+            handle.W := W
+            handle.H := H
+            if (this.Visible)
+                this.ApplyHandle(handle)
+            return
+        }
+    }
+
+    ApplyHandle(handle) {
+        DllCall(
+            "SetWindowPos",
+            "Ptr", handle.Gui.Hwnd,
+            "Ptr", 0,
+            "Int", handle.X,
+            "Int", handle.Y,
+            "Int", handle.W,
+            "Int", handle.H,
+            "UInt", RmtEdgeResizeOverlay.SetWindowPosShowFlags
+        )
+    }
+
+    Show(*) {
+        this.Visible := true
+        for handle in this.Handles
+            this.ApplyHandle(handle)
+    }
+
+    Hide(*) {
+        this.Visible := false
+        for handle in this.Handles
+            DllCall("ShowWindow", "Ptr", handle.Gui.Hwnd, "Int", 0)
+    }
+
+    Destroy() {
+        for handle in this.Handles {
+            RmtEdgeResizeOverlay.HandleMap.Delete(handle.Gui.Hwnd)
+            handle.Gui.Destroy()
+        }
+        this.Handles := []
     }
 }
 
@@ -238,6 +391,7 @@ RmtInitWebStateControls() {
     MySoftData.ColorPresetIdCtrl := RmtWebValueControl(MySoftData.ColorPresetId)
     MySoftData.UiScaleCtrl := RmtWebValueControl(MySoftData.UiScale)
     MySoftData.FixedMenuWheelCtrl := RmtWebValueControl(MySoftData.FixedMenuWheel)
+    MySoftData.ModalSubGuiCtrl := RmtWebValueControl(MySoftData.IsModalSubGui)
     MySoftData.MutiThreadNumCtrl := RmtWebValueControl(MySoftData.MutiThreadNum)
     MySoftData.SoftBGColorCon := RmtWebValueControl(MySoftData.SoftBGColor)
     MySoftData.NoVariableTipCtrl := RmtWebValueControl(MySoftData.NoVariableTip)
@@ -580,6 +734,7 @@ RmtBuildSettings() {
     settings["colorPresetId"] := RmtControlValue(MySoftData.ColorPresetIdCtrl, MySoftData.ColorPresetId)
     settings["uiScale"] := RmtClampUiScale(RmtControlValue(MySoftData.UiScaleCtrl, MySoftData.UiScale))
     settings["fixedMenuWheel"] := RmtJsonBool(RmtControlValue(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel))
+    settings["modalSubGui"] := RmtJsonBool(RmtControlValue(MySoftData.ModalSubGuiCtrl, MySoftData.IsModalSubGui))
     settings["mutiThreadNum"] := String(RmtControlValue(MySoftData.MutiThreadNumCtrl, MySoftData.MutiThreadNum))
     settings["softBGColor"] := RmtControlValue(MySoftData.SoftBGColorCon, MySoftData.SoftBGColor)
     settings["noVariableTip"] := RmtJsonBool(RmtControlValue(MySoftData.NoVariableTipCtrl, MySoftData.NoVariableTip))
@@ -690,6 +845,9 @@ RmtUpdateSetting(field, value) {
         case "fixedMenuWheel":
             MySoftData.FixedMenuWheel := RmtBool(value)
             RmtSetControl(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel)
+        case "modalSubGui":
+            MySoftData.IsModalSubGui := RmtBool(value)
+            RmtSetControl(MySoftData.ModalSubGuiCtrl, MySoftData.IsModalSubGui)
         case "mutiThreadNum":
             MySoftData.MutiThreadNum := value
             RmtSetControl(MySoftData.MutiThreadNumCtrl, value)

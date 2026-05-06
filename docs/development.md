@@ -23,6 +23,8 @@ Run the local verification from the repository root:
 cd WebViewApp
 npm.cmd run build
 cd ..
+node .\scripts\verify-webview-contract.mjs
+node .\scripts\verify-webview-dist.mjs
 & "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
 git diff --check
 ```
@@ -30,8 +32,12 @@ git diff --check
 This checks:
 
 - React/TypeScript builds successfully and writes `WebViewApp/dist`.
+- WebView setting fields stay aligned across TypeScript state, fallback data, fixtures, and AHK state builders.
+- `WebViewApp/dist/index.html` only references built assets that exist and are tracked by Git.
 - `RMT.ahk` passes AutoHotkey validation.
 - `git diff --check` reports no whitespace errors.
+
+If `npm.cmd run build` creates renamed `WebViewApp/dist/assets/main-*.js` files, stage the rebuilt `WebViewApp/dist` assets before treating `verify-webview-dist.mjs` as a release-blocking check.
 
 For manual release or large-change checks, also follow `docs/regression-checklist.md`.
 For packaging a public build, follow `docs/release.md`.
@@ -49,6 +55,8 @@ node Web\JS\SingleHtml.js
 - Add or change behavior through an explicit bridge action in `Main/UIUtil.ahk`.
 - Keep `WebViewApp/src/types.ts` aligned with the state returned by `RmtBuildState()`.
 - Run `npm.cmd run build` before committing frontend changes so `WebViewApp/dist` stays current.
+- Run `node .\scripts\verify-webview-contract.mjs` after changing WebView settings or saved setting compatibility controls.
+- Run `node .\scripts\verify-webview-dist.mjs` after rebuilding and staging `WebViewApp/dist`.
 - Run `npm.cmd run test:visual` from `WebViewApp` after layout-sensitive WebView changes.
 
 ## Release Notes

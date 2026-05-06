@@ -25,6 +25,7 @@ export const fallbackState: RmtState = {
     colorPresetId: "rmt-green",
     uiScale: 1,
     fixedMenuWheel: false,
+    modalSubGui: false,
     mutiThreadNum: "3",
     softBGColor: "f0f0f0",
     noVariableTip: true,

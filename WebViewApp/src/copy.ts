@@ -114,6 +114,7 @@ export const uiCopy = {
     cmdTip: "指令显示",
     noVariableTip: "无变量提醒",
     fixedMenuWheel: "菜单轮位置固定",
+    modalSubGui: "模态子窗口",
     showSplitLine: "分割线",
     topButtonVisibility: "顶部按钮显示",
     colorPreset: "颜色方案",

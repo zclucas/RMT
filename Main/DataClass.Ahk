@@ -204,6 +204,7 @@ class SoftData {
         this.ColorPresetId := "rmt-green"
         this.UiScale := 1               ;WebView界面缩放
         this.FixedMenuWheel := false    ;固定菜单轮
+        this.IsModalSubGui := false     ;模态子窗口
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型
         this.MutiThreadNum := -1         ;多线程数(-1动态)

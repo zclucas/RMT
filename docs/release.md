@@ -20,11 +20,14 @@ Run from the repository root:
 cd WebViewApp
 npm.cmd run build
 cd ..
+node .\scripts\verify-webview-contract.mjs
+node .\scripts\verify-webview-dist.mjs
 & "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
 git diff --check
 ```
 
 If the React build fails with `spawn EPERM` in a sandboxed environment, rerun `npm.cmd run build` outside the sandbox.
+If the build creates renamed dist assets, stage `WebViewApp/dist` before running `verify-webview-dist.mjs` as the final release check.
 
 ## 3. Manual Regression
 
@@ -35,6 +38,7 @@ docs/regression-checklist.md
 ```
 
 At minimum, verify startup, macro table save/reload, settings persistence, tool toggles, and help/static content.
+Also verify window chrome behavior from the checklist after WebView sizing or context-menu changes.
 
 ## 4. Package
 

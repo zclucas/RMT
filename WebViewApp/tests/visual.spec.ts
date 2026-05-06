@@ -222,13 +222,32 @@ test.describe("tool and settings views", () => {
 
     await expect(page.locator(".diagnostics-block")).toHaveCount(0);
     await expect(page.locator(".settings-legacy-page select")).toHaveCount(4);
-    await expect(page.locator(".settings-legacy-page input[type='checkbox']")).toHaveCount(10);
+    await expect(page.locator(".settings-legacy-page input[type='checkbox']")).toHaveCount(11);
     await expectShellFits(page);
 
     await expect(page).toHaveScreenshot("settings-1070x590.png", {
       animations: "disabled",
       maxDiffPixelRatio: 0.02
     });
+  });
+});
+
+test.describe("context menu handling", () => {
+  test.use({ viewport: { width: 1070, height: 590 } });
+
+  test("prevents the default WebView context menu from the app root", async ({ page }) => {
+    await loadState(page, visualState);
+
+    const wasCanceled = await page.locator(".classic-app").evaluate((element) => {
+      const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        button: 2,
+        cancelable: true
+      });
+      return !element.dispatchEvent(event);
+    });
+
+    expect(wasCanceled).toBe(true);
   });
 });
 

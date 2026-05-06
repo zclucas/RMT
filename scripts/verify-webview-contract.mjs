@@ -8,7 +8,9 @@ const repoRoot = path.resolve(scriptDir, "..");
 const webViewApp = path.join(repoRoot, "WebViewApp");
 const typesPath = path.join(webViewApp, "src", "types.ts");
 const fallbackStatePath = path.join(webViewApp, "src", "fallbackState.ts");
+const stateFixturesPath = path.join(webViewApp, "tests", "fixtures", "rmt-state.ts");
 const uiUtilPath = path.join(repoRoot, "Main", "UIUtil.ahk");
+const rmtUtilPath = path.join(repoRoot, "Main", "RMTUtil.ahk");
 
 const requireFromWebView = createRequire(path.join(webViewApp, "package.json"));
 let ts;
@@ -22,11 +24,15 @@ try {
 
 const typesSource = fs.readFileSync(typesPath, "utf8");
 const fallbackStateSource = fs.readFileSync(fallbackStatePath, "utf8");
+const stateFixturesSource = fs.readFileSync(stateFixturesPath, "utf8");
 const uiUtilSource = fs.readFileSync(uiUtilPath, "utf8");
+const rmtUtilSource = fs.readFileSync(rmtUtilPath, "utf8");
 const typesFile = ts.createSourceFile(typesPath, typesSource, ts.ScriptTarget.Latest, true);
 const fallbackStateFile = ts.createSourceFile(fallbackStatePath, fallbackStateSource, ts.ScriptTarget.Latest, true);
+const stateFixturesFile = ts.createSourceFile(stateFixturesPath, stateFixturesSource, ts.ScriptTarget.Latest, true);
 
 const errors = [];
+const outputOnlySettings = new Set(["langOptions", "fontOptions"]);
 
 const interfaceToAhkBuilder = {
   RmtState: { functionName: "RmtBuildState", variableName: "state" },
@@ -92,7 +98,7 @@ function getInterfaceFields(interfaceName) {
   );
 }
 
-function findVariableInitializer(sourceFile, variableName) {
+function findVariableInitializer(sourceFile, variableName, sourceLabel) {
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) {
       continue;
@@ -103,7 +109,7 @@ function findVariableInitializer(sourceFile, variableName) {
       }
     }
   }
-  throw new Error(`Unable to find ${variableName} in WebViewApp/src/fallbackState.ts`);
+  throw new Error(`Unable to find ${variableName} in ${sourceLabel}`);
 }
 
 function getObjectProperty(objectLiteral, propertyName) {
@@ -156,32 +162,36 @@ function getFallbackNode(root, nodePath) {
   return current;
 }
 
-function extractAhkFunctionBody(functionName) {
+function extractAhkFunctionBody(functionName, source, sourceLabel) {
   const definitionPattern = new RegExp(`(^|\\r?\\n)${functionName}\\s*\\([^)]*\\)\\s*\\{`, "m");
-  const match = definitionPattern.exec(uiUtilSource);
+  const match = definitionPattern.exec(source);
   if (!match) {
-    throw new Error(`Unable to find ${functionName}() in Main/UIUtil.ahk`);
+    throw new Error(`Unable to find ${functionName}() in ${sourceLabel}`);
   }
 
   let index = match.index + match[0].lastIndexOf("{");
   let depth = 0;
-  for (; index < uiUtilSource.length; index += 1) {
-    const char = uiUtilSource[index];
+  for (; index < source.length; index += 1) {
+    const char = source[index];
     if (char === "{") {
       depth += 1;
     } else if (char === "}") {
       depth -= 1;
       if (depth === 0) {
-        return uiUtilSource.slice(match.index, index + 1);
+        return source.slice(match.index, index + 1);
       }
     }
   }
 
-  throw new Error(`Unable to read ${functionName}() body in Main/UIUtil.ahk`);
+  throw new Error(`Unable to read ${functionName}() body in ${sourceLabel}`);
+}
+
+function extractUiUtilFunctionBody(functionName) {
+  return extractAhkFunctionBody(functionName, uiUtilSource, "Main/UIUtil.ahk");
 }
 
 function extractAhkMapKeys(functionName, variableName) {
-  const body = extractAhkFunctionBody(functionName);
+  const body = extractUiUtilFunctionBody(functionName);
   const pattern = new RegExp(`${variableName}\\["([^"]+)"\\]\\s*:=`, "g");
   const keys = [];
   let match;
@@ -201,8 +211,8 @@ function extractActionTypes() {
   return sortedUnique(actions);
 }
 
-function extractDispatchCases() {
-  const body = extractAhkFunctionBody("RmtDispatchWebAction");
+function extractCases(functionName) {
+  const body = extractUiUtilFunctionBody(functionName);
   const casePattern = /case\s+"([^"]+)":/g;
   const cases = [];
   let match;
@@ -212,7 +222,15 @@ function extractDispatchCases() {
   return sortedUnique(cases);
 }
 
-const fallbackRoot = findVariableInitializer(fallbackStateFile, "fallbackState");
+function extractSavedControlRefs() {
+  const body = extractAhkFunctionBody("OnSaveSetting", rmtUtilSource, "Main/RMTUtil.ahk");
+  return Array.from(body.matchAll(/\b(MySoftData|ToolCheckInfo)\.([A-Za-z0-9_]+)\.Value\b/g), (match) => ({
+    scope: match[1],
+    prop: match[2]
+  }));
+}
+
+const fallbackRoot = findVariableInitializer(fallbackStateFile, "fallbackState", "WebViewApp/src/fallbackState.ts");
 if (!fallbackRoot || !ts.isObjectLiteralExpression(fallbackRoot)) {
   throw new Error("fallbackState must be an object literal in WebViewApp/src/fallbackState.ts");
 }
@@ -227,7 +245,27 @@ for (const [interfaceName, builder] of Object.entries(interfaceToAhkBuilder)) {
   compareSets(`${interfaceName} vs fallbackState.${interfaceToFallbackPath[interfaceName].join(".") || "(root)"}`, interfaceFields, fallbackFields);
 }
 
-compareSets("RmtAction vs RmtDispatchWebAction()", extractActionTypes(), extractDispatchCases());
+const settingsFields = getInterfaceFields("RmtSettings");
+const baseSettings = findVariableInitializer(stateFixturesFile, "baseSettings", "WebViewApp/tests/fixtures/rmt-state.ts");
+if (!baseSettings || !ts.isObjectLiteralExpression(baseSettings)) {
+  throw new Error("baseSettings must be an object literal in WebViewApp/tests/fixtures/rmt-state.ts");
+}
+
+compareSets("RmtSettings vs tests/fixtures baseSettings", settingsFields, getObjectKeys(baseSettings));
+compareSets(
+  "RmtSettings mutable fields vs RmtUpdateSetting()",
+  settingsFields.filter((field) => !outputOnlySettings.has(field)),
+  extractCases("RmtUpdateSetting")
+);
+compareSets("RmtAction vs RmtDispatchWebAction()", extractActionTypes(), extractCases("RmtDispatchWebAction"));
+
+const initControlsBody = extractUiUtilFunctionBody("RmtInitWebStateControls");
+const uniqueControlRefs = new Map(extractSavedControlRefs().map((ref) => [`${ref.scope}.${ref.prop}`, ref]));
+for (const { scope, prop } of uniqueControlRefs.values()) {
+  if (!initControlsBody.includes(`${scope}.${prop} :=`)) {
+    errors.push(`RmtInitWebStateControls() does not initialize ${scope}.${prop}, but OnSaveSetting() reads its Value.`);
+  }
+}
 
 if (errors.length > 0) {
   console.error("WebView bridge contract check failed:");
@@ -238,4 +276,6 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log("WebView bridge contract matches types.ts, fallbackState.ts, and Main/UIUtil.ahk.");
+console.log(
+  `Verified WebView bridge contract, ${settingsFields.length} setting field(s), and ${uniqueControlRefs.size} saved control reference(s).`
+);
