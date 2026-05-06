@@ -1295,6 +1295,10 @@ h2 {
   min-width: 0;
 }
 
+.color-preset-swatch span + span {
+  border-left: 1px solid var(--rmt-border-strong);
+}
+
 .top-button-toggle-grid {
   display: grid;
   gap: 6px;

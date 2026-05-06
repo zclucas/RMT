@@ -210,6 +210,7 @@ export const settingsVisualState = createState({
     coordXFloat: "15",
     coordYFloat: "24",
     mutiThreadNum: "8",
+    colorPresetId: "day-white",
     hiddenTopButtonIndexes: [9, 10, 11]
   }
 });

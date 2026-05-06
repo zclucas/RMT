@@ -53,6 +53,8 @@ type RmtColorPreset = {
   name: string;
   primaryColor: string;
   secondaryColor: string;
+  accentColor: string;
+  accentHoverColor: string;
   primaryHoverColor: string;
   primaryTextColor: string;
   titleTextColor: string;
@@ -68,6 +70,8 @@ const colorPresets: RmtColorPreset[] = [
     name: "若梦绿",
     primaryColor: "#178a56",
     secondaryColor: "#dff5e8",
+    accentColor: "#178a56",
+    accentHoverColor: "#116b43",
     primaryHoverColor: "#116b43",
     primaryTextColor: "#ffffff",
     titleTextColor: "#0b2819",
@@ -78,8 +82,10 @@ const colorPresets: RmtColorPreset[] = [
     name: "日间白",
     primaryColor: "#f8fafc",
     secondaryColor: "#ffffff",
+    accentColor: "#475569",
+    accentHoverColor: "#334155",
     primaryHoverColor: "#eef2f6",
-    primaryTextColor: "#17202a",
+    primaryTextColor: "#ffffff",
     titleTextColor: "#17202a",
     mode: "light"
   },
@@ -88,8 +94,10 @@ const colorPresets: RmtColorPreset[] = [
     name: "夜间黑",
     primaryColor: "#111418",
     secondaryColor: "#2a3036",
+    accentColor: "#d1d5db",
+    accentHoverColor: "#f3f4f6",
     primaryHoverColor: "#1c2228",
-    primaryTextColor: "#f8fafc",
+    primaryTextColor: "#111418",
     titleTextColor: "#f8fafc",
     mode: "dark"
   },
@@ -98,6 +106,8 @@ const colorPresets: RmtColorPreset[] = [
     name: "海蓝",
     primaryColor: "#1f6fb2",
     secondaryColor: "#dceeff",
+    accentColor: "#1f6fb2",
+    accentHoverColor: "#17578d",
     primaryHoverColor: "#17578d",
     primaryTextColor: "#ffffff",
     titleTextColor: "#10283d",
@@ -108,6 +118,8 @@ const colorPresets: RmtColorPreset[] = [
     name: "暖琥珀",
     primaryColor: "#9a6a00",
     secondaryColor: "#fff2cc",
+    accentColor: "#9a6a00",
+    accentHoverColor: "#765100",
     primaryHoverColor: "#765100",
     primaryTextColor: "#ffffff",
     titleTextColor: "#362605",
@@ -118,6 +130,8 @@ const colorPresets: RmtColorPreset[] = [
     name: "柔玫",
     primaryColor: "#a04655",
     secondaryColor: "#fde5ea",
+    accentColor: "#a04655",
+    accentHoverColor: "#7f3643",
     primaryHoverColor: "#7f3643",
     primaryTextColor: "#ffffff",
     titleTextColor: "#3b131a",
@@ -142,14 +156,14 @@ function getThemeStyle(preset: RmtColorPreset, uiScale: number): React.CSSProper
   const darkMode = preset.mode === "dark";
   return {
     "--rmt-ui-scale": String(uiScale),
-    "--rmt-primary": preset.primaryColor,
-    "--rmt-primary-hover": preset.primaryHoverColor,
+    "--rmt-primary": preset.accentColor,
+    "--rmt-primary-hover": preset.accentHoverColor,
     "--rmt-primary-text": preset.primaryTextColor,
     "--rmt-primary-soft": preset.secondaryColor,
     "--rmt-title-bg": preset.secondaryColor,
     "--rmt-title-text": preset.titleTextColor,
-    "--rmt-title-bottom": preset.primaryColor,
-    "--rmt-app-mark-bg": preset.primaryColor,
+    "--rmt-title-bottom": preset.accentColor,
+    "--rmt-app-mark-bg": preset.accentColor,
     "--rmt-app-mark-text": preset.primaryTextColor,
     "--rmt-bg": darkMode ? "#121417" : "#f5f5f5",
     "--rmt-surface": darkMode ? "#1d2228" : "#ffffff",
