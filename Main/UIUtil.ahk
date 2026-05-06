@@ -1,6 +1,6 @@
 #Include ..\Plugins\WebViewToo\Lib\WebViewToo.ahk
 
-RMT_WEBVIEW_VERSION := "RMTv2.0.1"
+RMT_WEBVIEW_VERSION := "RMTv2.0.2"
 
 class RmtWebViewGui extends WebViewGui {
     Submit(Hide := true) {
@@ -196,6 +196,7 @@ RmtInitWebStateControls() {
     MySoftData.BootStartCtrl := RmtWebValueControl(MySoftData.IsBootStart)
     MySoftData.SplitLineCtrl := RmtWebValueControl(MySoftData.ShowSplitLine)
     MySoftData.HiddenTopButtonIndexesCtrl := RmtWebValueControl(MySoftData.HiddenTopButtonIndexes)
+    MySoftData.ColorPresetIdCtrl := RmtWebValueControl(MySoftData.ColorPresetId)
     MySoftData.FixedMenuWheelCtrl := RmtWebValueControl(MySoftData.FixedMenuWheel)
     MySoftData.MutiThreadNumCtrl := RmtWebValueControl(MySoftData.MutiThreadNum)
     MySoftData.SoftBGColorCon := RmtWebValueControl(MySoftData.SoftBGColor)
@@ -529,6 +530,7 @@ RmtBuildSettings() {
     settings["bootStart"] := RmtJsonBool(RmtControlValue(MySoftData.BootStartCtrl, MySoftData.IsBootStart))
     settings["showSplitLine"] := RmtJsonBool(RmtControlValue(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine))
     settings["hiddenTopButtonIndexes"] := RmtCloneArray(RmtControlValue(MySoftData.HiddenTopButtonIndexesCtrl, MySoftData.HiddenTopButtonIndexes))
+    settings["colorPresetId"] := RmtControlValue(MySoftData.ColorPresetIdCtrl, MySoftData.ColorPresetId)
     settings["fixedMenuWheel"] := RmtJsonBool(RmtControlValue(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel))
     settings["mutiThreadNum"] := String(RmtControlValue(MySoftData.MutiThreadNumCtrl, MySoftData.MutiThreadNum))
     settings["softBGColor"] := RmtControlValue(MySoftData.SoftBGColorCon, MySoftData.SoftBGColor)
@@ -670,6 +672,9 @@ RmtUpdateSetting(field, value) {
         case "hiddenTopButtonIndexes":
             MySoftData.HiddenTopButtonIndexes := RmtNormalizeIndexArray(value, MySoftData.TabNameArr.Length)
             RmtSetControl(MySoftData.HiddenTopButtonIndexesCtrl, MySoftData.HiddenTopButtonIndexes)
+        case "colorPresetId":
+            MySoftData.ColorPresetId := value
+            RmtSetControl(MySoftData.ColorPresetIdCtrl, value)
         case "fixedMenuWheel":
             MySoftData.FixedMenuWheel := RmtBool(value)
             RmtSetControl(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel)
@@ -1185,7 +1190,7 @@ RmtFilterIndexArray(values, maxIndex := 0) {
         if (!IsInteger(value))
             continue
         index := Integer(value)
-        if (index < 1 || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
+        if (index < 1 || index == 8 || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
             continue
         seen[index] := true
         indexes.Push(index)

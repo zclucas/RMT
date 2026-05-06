@@ -128,6 +128,7 @@ SetupState() {
     MySoftData.IsBootStart := false
     MySoftData.ShowSplitLine := false
     MySoftData.HiddenTopButtonIndexes := []
+    MySoftData.ColorPresetId := "rmt-green"
     MySoftData.FixedMenuWheel := false
     MySoftData.MutiThreadNum := "3"
     MySoftData.SoftBGColor := "f0f0f0"
@@ -151,6 +152,7 @@ SetupState() {
     MySoftData.BootStartCtrl := CreateControl(MySoftData.IsBootStart)
     MySoftData.SplitLineCtrl := CreateControl(MySoftData.ShowSplitLine)
     MySoftData.HiddenTopButtonIndexesCtrl := CreateControl(MySoftData.HiddenTopButtonIndexes)
+    MySoftData.ColorPresetIdCtrl := CreateControl(MySoftData.ColorPresetId)
     MySoftData.FixedMenuWheelCtrl := CreateControl(MySoftData.FixedMenuWheel)
     MySoftData.MutiThreadNumCtrl := CreateControl(MySoftData.MutiThreadNum)
     MySoftData.SoftBGColorCon := CreateControl(MySoftData.SoftBGColor)
@@ -205,6 +207,7 @@ RunFixture("default state shape", (*) => (
     Assert(state["tabs"][7]["kind"] == "tool", "tool tab kind mismatch"),
     Assert(state["tabs"][8]["kind"] == "settings", "settings tab kind mismatch"),
     Assert(state["settings"]["hiddenTopButtonIndexes"].Length == 0, "top buttons should default to visible"),
+    Assert(state["settings"]["colorPresetId"] == "rmt-green", "color preset should preserve default"),
     Assert(state["settings"]["screenShotType"] == 3, "screenshot type should preserve default"),
     Assert(state["tools"]["ocrType"] == 1, "tool OCR type should preserve default")
 ))

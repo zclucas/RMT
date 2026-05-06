@@ -406,6 +406,7 @@ LoadMainSetting() {
     if (hiddenTopButtonText == "" && StrLower(IniRead(IniFile, IniSection, "ShowTopButtons", "true")) == "false")
         hiddenTopButtonText := RmtIndexListToString(RmtCreateIndexList(MySoftData.TabNameArr.Length))
     MySoftData.HiddenTopButtonIndexes := RmtParseIndexList(hiddenTopButtonText, MySoftData.TabNameArr.Length)
+    MySoftData.ColorPresetId := IniRead(IniFile, IniSection, "ColorPresetId", "rmt-green")
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
     MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
     MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", -1)
@@ -445,8 +446,11 @@ LoadMainSetting() {
 
 RmtCreateIndexList(count) {
     indexes := []
-    loop Integer(count)
+    loop Integer(count) {
+        if (A_Index == 8)
+            continue
         indexes.Push(A_Index)
+    }
     return indexes
 }
 
@@ -458,7 +462,7 @@ RmtParseIndexList(value, maxIndex := 0) {
         if (!IsInteger(part))
             continue
         index := Integer(part)
-        if (index < 1 || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
+        if (index < 1 || index == 8 || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
             continue
         seen[index] := true
         indexes.Push(index)
