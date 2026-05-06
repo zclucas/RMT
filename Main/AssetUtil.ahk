@@ -603,6 +603,8 @@ GetGetTableItemDefaultMacro(index) {
         return "按键_a_点击_100_10_200,间隔_3000"
     else if (symbol == "Replace")
         return "Left,a"
+    else if (symbol == "UI")
+        return "按键_a_点击_100_10_200,间隔_3000"
     return ""
 }
 
@@ -659,6 +661,19 @@ GetTableItemDefaultInfo(index) {
             "Timing3πTiming4πTiming5πTiming6πTiming7πTiming8πTiming12πTiming13"
         savedStartTipSoundStr := "1π1π1π1π1π1π1π1"
         savedEndTipSoundStr := "1π1π1π1π1π1π1π1"
+    }
+    else if (symbol == "UI") {
+        savedTKArrStr := ""
+        savedHoldTimeArrStr := "500"
+        savedModeArrStr := "1"
+        savedForbidArrStr := "1"
+        savedRemarkArrStr := GetLang("在指定界面显示常驻按钮")
+        savedLoopCountStr := "1"
+        savedTriggerTypeStr := "1"
+        savedSerialeArrStr := "14"
+        savedTimingSerialStr := "Timing14"
+        savedStartTipSoundStr := "1"
+        savedEndTipSoundStr := "1"
     }
     else if (symbol == "Timing") {
         savedTKArrStr := ""
@@ -948,6 +963,8 @@ CheckIsItemTable(index) {
         return true
     if (symbol == "Replace")
         return true
+    if (symbol == "UI")
+        return true
     return false
 }
 
@@ -962,6 +979,8 @@ CheckIsMacroTable(index) {
     if (symbol == "Timing")
         return true
     if (symbol == "Menu")
+        return true
+    if (symbol == "UI")
         return true
     return false
 }
@@ -994,6 +1013,8 @@ CheckIsNoTriggerKey(index) {
     if (symbol == "Timing")
         return true
     if (symbol == "Menu")
+        return true
+    if (symbol == "UI")
         return true
     return false
 }

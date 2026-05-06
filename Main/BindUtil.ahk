@@ -444,12 +444,14 @@ OnClickKeyDownDownHelpBtn(*) {
 
 ;绑定热键
 OnExitSoft(*) {
-    global MyPToken, MyChineseOcr
+    global MyPToken, MyChineseOcr, MyUIMacroGui
     Gdip_Shutdown(MyPToken)
     IbSendDestroy()
     MyChineseOcr := ""
     MyEnglishOcr := ""
     MyWorkPool.Clear()
+    if (IsSet(MyUIMacroGui) && MyUIMacroGui != "")
+        MyUIMacroGui.StopMonitor()
 
     IniWrite(MySoftData.MacroTotalCount, IniFile, IniSection, "MacroTotalCount")
 }

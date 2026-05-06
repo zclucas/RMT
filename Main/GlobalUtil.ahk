@@ -10,6 +10,8 @@
 #Include ..\Gui\FreePasteGui.ahk
 #Include ..\Gui\MacroEditGui.ahk
 #Include ..\Gui\MenuWheelGui.ahk
+#Include ..\Gui\UIMacroGui.ahk
+#Include ..\Gui\UIMacroSettingGui.ahk
 #Include ..\Gui\ReplaceKeyGui.ahk
 #Include ..\Gui\UseExplainGui.ahk
 #Include ..\Gui\TargetGui.ahk
@@ -46,6 +48,8 @@ global MyMacroSettingGui := MacroSettingGui()
 global MyVarListenGui := VarListenGui()
 global MyMacroGui := MacroEditGui()
 global MyMenuWheel := MenuWheelGui()
+global MyUIMacroGui := UIMacroGui()
+global MyUIMacroSettingGui := UIMacroSettingGui()
 global MyReplaceKeyGui := ReplaceKeyGui()
 global MyFreePasteGui := FreePasteGui()
 global MySettingMgrGui := SettingMgrGui()
