@@ -407,11 +407,11 @@ LoadMainSetting() {
         hiddenTopButtonText := RmtIndexListToString(RmtCreateIndexList(MySoftData.TabNameArr.Length))
     MySoftData.HiddenTopButtonIndexes := RmtParseIndexList(hiddenTopButtonText, MySoftData.TabNameArr.Length)
     MySoftData.ColorPresetId := IniRead(IniFile, IniSection, "ColorPresetId", "rmt-green")
+    try MySoftData.UiScale := Max(Min(Float(IniRead(IniFile, IniSection, "UiScale", 1)), 1), 0.65)
+    catch
+        MySoftData.UiScale := 1
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
-    MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
-    MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", -1)
-    MySoftData.DynamicCorePoolSize := IniRead(IniFile, IniSection, "DynamicCorePoolSize", 2)
-    MySoftData.ElasticTimeout := IniRead(IniFile, IniSection, "ElasticTimeout", 30)
+    MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", 3)
     MySoftData.SoftBGColor := IniRead(IniFile, IniSection, "SoftBGColor", "f0f0f0")
     MySoftData.NoVariableTip := IniRead(IniFile, IniSection, "NoVariableTip", true)
     MySoftData.CMDTip := IniRead(IniFile, IniSection, "CMDTip", false)

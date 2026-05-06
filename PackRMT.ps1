@@ -4,6 +4,8 @@
 param(
     [ValidateSet("interactive", "none", "x64", "both")]
     [string]$ReleaseType = "interactive",
+    [ValidateSet("both", "lite", "runtime")]
+    [string]$Distribution = "both",
     [switch]$NoWait
 )
 
@@ -131,7 +133,7 @@ function Get-Version {
         return $null
     }
     $content = Get-Content $uiUtil -Raw
-    # 匹配 RMTv2.1.2 或 RMTv2.0 格式
+    # 匹配 RMTv1.1.2 或 RMTv1.1 格式
     if ($content -match 'RMT_WEBVIEW_VERSION\s*:=\s*"RMTv(\d+(?:\.\d+)?(?:\.\d+)?)"') {
         $version = $matches[1]
         Write-Log "  版本号: v$version" "Gray"
@@ -302,6 +304,104 @@ function Copy-WebViewAssets {
     return $true
 }
 
+function Get-ReleaseVariants {
+    param([string]$DistributionType)
+    if ($DistributionType -eq "both") {
+        return @("lite", "runtime")
+    }
+    return @($DistributionType)
+}
+
+function Get-RuntimeArchName {
+    param([string]$ReleaseArch)
+    if ($ReleaseArch -eq "x64") {
+        return "x64"
+    }
+    return "x86"
+}
+
+function Resolve-WebViewFixedRuntimeSource {
+    param([string]$ArchName)
+
+    $roots = @(
+        (Join-Path $PSScriptRoot "Runtimes\WebView2\Fixed\$ArchName"),
+        (Join-Path $PSScriptRoot ".tools\WebView2Runtime\Fixed\$ArchName"),
+        (Join-Path $PSScriptRoot ".tools\WebView2Runtime\$ArchName")
+    )
+
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+        if (Test-Path -LiteralPath (Join-Path $root "msedgewebview2.exe")) {
+            return (Resolve-Path -LiteralPath $root).Path
+        }
+
+        $match = Get-ChildItem -LiteralPath $root -Directory -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "msedgewebview2.exe") } |
+            Select-Object -First 1
+        if ($match) {
+            return $match.FullName
+        }
+    }
+
+    return $null
+}
+
+function Copy-WebViewFixedRuntime {
+    param(
+        [string]$ReleaseDir,
+        [string]$ArchName
+    )
+
+    $source = Resolve-WebViewFixedRuntimeSource -ArchName $ArchName
+    if (-not $source) {
+        Write-Log "  ✗ 未找到 WebView2 Fixed Runtime ($ArchName)" "Red"
+        Write-Log "    请放到 Runtimes\WebView2\Fixed\$ArchName 或 .tools\WebView2Runtime\Fixed\$ArchName" "Yellow"
+        return $false
+    }
+
+    $dest = Join-Path $ReleaseDir "Runtimes\WebView2\Fixed\$ArchName"
+    if (Test-Path -LiteralPath $dest) {
+        Remove-Item -LiteralPath $dest -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $dest -Force | Out-Null
+    Copy-Item -Path (Join-Path $source "*") -Destination $dest -Force -Recurse
+    Write-Log "  已复制 WebView2 Fixed Runtime ($ArchName)" "Gray"
+    return $true
+}
+
+function Copy-ReleaseVariant {
+    param(
+        [string]$SourceDir,
+        [string]$VersionDir,
+        [string]$Version,
+        [string]$ReleaseArch,
+        [string]$Variant
+    )
+
+    $dest = Join-Path $VersionDir "RMTv${Version}_${ReleaseArch}_${Variant}"
+    if (Test-Path -LiteralPath $dest) {
+        Remove-Item -LiteralPath $dest -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $dest -Force | Out-Null
+    Write-Log "复制 $SourceDir → $dest ..." "Gray"
+    Copy-Item -Path (Join-Path $SourceDir "*") -Destination $dest -Recurse -Force
+
+    $runtimeRoot = Join-Path $dest "Runtimes\WebView2"
+    if ($Variant -eq "runtime") {
+        $runtimeArch = Get-RuntimeArchName -ReleaseArch $ReleaseArch
+        if (-not (Copy-WebViewFixedRuntime -ReleaseDir $dest -ArchName $runtimeArch)) {
+            return $null
+        }
+    }
+    elseif (Test-Path -LiteralPath $runtimeRoot) {
+        Remove-Item -LiteralPath $runtimeRoot -Recurse -Force
+    }
+
+    return $dest
+}
+
 # ============================================================
 # 发行版函数
 # ============================================================
@@ -337,8 +437,8 @@ function New-Release {
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
-        # 复制帮助文档（根目录为 index.html，发布目录重命名为 RMT帮助文档.html）
-        $helpSrc = Join-Path $PSScriptRoot "index.html"
+        # 复制帮助文档
+        $helpSrc = Join-Path $PSScriptRoot "RMT帮助文档.html"
         if (Test-Path $helpSrc) {
             Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
@@ -378,8 +478,8 @@ function New-Release {
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
-        # 复制帮助文档（根目录为 index.html，发布目录重命名为 RMT帮助文档.html）
-        $helpSrc = Join-Path $PSScriptRoot "index.html"
+        # 复制帮助文档
+        $helpSrc = Join-Path $PSScriptRoot "RMT帮助文档.html"
         if (Test-Path $helpSrc) {
             Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
@@ -408,7 +508,6 @@ function New-Release {
     $desktop = [Environment]::GetFolderPath("Desktop")
     $rmtReleaseDir = Join-Path $desktop "RMTRelease"
 
-    # 删除旧的 RMTRelease 目录
     if (Test-Path $rmtReleaseDir) {
         Write-Log "删除旧 RMTRelease 目录..." "Yellow"
         Remove-Item $rmtReleaseDir -Recurse -Force
@@ -418,26 +517,36 @@ function New-Release {
     New-Item -ItemType Directory -Path $versionDir -Force | Out-Null
     Write-Log "创建 $versionDir" "Gray"
 
+    $variants = Get-ReleaseVariants -DistributionType $Distribution
+    $packageDirs = @()
+
     if ($Type -eq "x64" -or $Type -eq "both") {
-        $destX64 = Join-Path $versionDir "RMTv${version}_x64"
-        New-Item -ItemType Directory -Path $destX64 -Force | Out-Null
-        Write-Log "复制 ReleaseX64 → $destX64 ..." "Gray"
-        Copy-Item -Path "$PSScriptRoot\ReleaseX64\*" -Destination $destX64 -Recurse -Force
+        foreach ($variant in $variants) {
+            $destX64 = Copy-ReleaseVariant -SourceDir (Join-Path $PSScriptRoot "ReleaseX64") -VersionDir $versionDir -Version $version -ReleaseArch "x64" -Variant $variant
+            if (-not $destX64) {
+                return $false
+            }
+            $packageDirs += $destX64
+        }
     }
 
     if ($Type -eq "x32" -or $Type -eq "both") {
-        $destX32 = Join-Path $versionDir "RMTv${version}_x32"
-        New-Item -ItemType Directory -Path $destX32 -Force | Out-Null
-        Write-Log "复制 ReleaseX32 → $destX32 ..." "Gray"
-        Copy-Item -Path "$PSScriptRoot\ReleaseX32\*" -Destination $destX32 -Recurse -Force
+        foreach ($variant in $variants) {
+            $destX32 = Copy-ReleaseVariant -SourceDir (Join-Path $PSScriptRoot "ReleaseX32") -VersionDir $versionDir -Version $version -ReleaseArch "x32" -Variant $variant
+            if (-not $destX32) {
+                return $false
+            }
+            $packageDirs += $destX32
+        }
     }
 
     Write-Section "压缩发行包"
-    if ($Type -eq "x64" -or $Type -eq "both") {
-        Compress-ReleaseZip -SourceDir (Join-Path $versionDir "RMTv${version}_x64") -ZipPath (Join-Path $rmtReleaseDir "RMTv${version}_x64.zip")
-    }
-    if ($Type -eq "x32" -or $Type -eq "both") {
-        Compress-ReleaseZip -SourceDir (Join-Path $versionDir "RMTv${version}_x32") -ZipPath (Join-Path $rmtReleaseDir "RMTv${version}_x32.zip")
+    $zipPaths = @()
+    foreach ($packageDir in $packageDirs) {
+        $zipName = "$(Split-Path $packageDir -Leaf).zip"
+        $zipPath = Join-Path $rmtReleaseDir $zipName
+        Compress-ReleaseZip -SourceDir $packageDir -ZipPath $zipPath
+        $zipPaths += $zipPath
     }
 
     # 删除 ReleaseX64/ReleaseX32 下的 RMT*.exe
@@ -458,13 +567,11 @@ function New-Release {
     }
 
     Write-Section "发行版创建完成"
-    Write-Log "→ $versionDir\RMTv${version}_x64" "White"
-    if ($Type -eq "both") {
-        Write-Log "→ $versionDir\RMTv${version}_x32" "White"
+    foreach ($packageDir in $packageDirs) {
+        Write-Log "→ $packageDir" "White"
     }
-    Write-Log "→ $rmtReleaseDir\RMTv${version}_x64.zip" "White"
-    if ($Type -eq "both") {
-        Write-Log "→ $rmtReleaseDir\RMTv${version}_x32.zip" "White"
+    foreach ($zipPath in $zipPaths) {
+        Write-Log "→ $zipPath" "White"
     }
     return $true
 }
@@ -491,6 +598,7 @@ function Main {
         Write-Section "RMT 打包工具"
         Write-Log "PowerShell $($PSVersionTable.PSVersion)" "Gray"
         Write-Log "工作目录: $PSScriptRoot" "Gray"
+        Write-Log "分发版本: $Distribution" "Gray"
 
         if (-not $PSScriptRoot) {
             Write-Log "错误: 无法确定脚本目录" "Red"

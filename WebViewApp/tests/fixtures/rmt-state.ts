@@ -13,6 +13,7 @@ const baseSettings: RmtSettings = {
   showSplitLine: false,
   hiddenTopButtonIndexes: [],
   colorPresetId: "rmt-green",
+  uiScale: 1,
   fixedMenuWheel: false,
   mutiThreadNum: "3",
   softBGColor: "f0f0f0",
@@ -125,7 +126,7 @@ function createState(overrides: Partial<RmtState> = {}): RmtState {
   const folds = [createFold(1, [createItem(1, { forbid: true }), createItem(2), createItem(3, { pause: true })])];
 
   return {
-    version: "RMTv2.0.2",
+    version: "RMTv2.0",
     currentSettingName: "RMT默认配置",
     activeTabIndex: 1,
     isSuspend: false,
@@ -172,6 +173,16 @@ export const denseMacroState = createState({
   tabs: createBaseTabs(denseFolds)
 });
 
+export const darkMacroState = createState({
+  macroRunningCount: 2,
+  macroTotalCount: 128,
+  settings: {
+    ...baseSettings,
+    colorPresetId: "night-black"
+  },
+  tabs: createBaseTabs(denseFolds)
+});
+
 export const toolVisualState = createState({
   activeTabIndex: 7,
   isMacroWorking: true,
@@ -213,4 +224,8 @@ export const settingsVisualState = createState({
     colorPresetId: "day-white",
     hiddenTopButtonIndexes: [9, 10, 11]
   }
+});
+
+export const thanksVisualState = createState({
+  activeTabIndex: 11
 });

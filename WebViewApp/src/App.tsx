@@ -1,9 +1,9 @@
 import {
-  ArrowDown,
-  ArrowUp,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  ClipboardPaste,
+  Copy,
   ExternalLink,
   FileText,
   Gift,
@@ -21,6 +21,7 @@ import {
   Save,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   Square,
   SquarePen,
   Timer,
@@ -28,7 +29,7 @@ import {
   Wrench,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { callRmt, getFallbackState } from "./bridge";
 import { uiCopy } from "./copy";
 import type {
@@ -64,6 +65,11 @@ type RmtColorPreset = {
 const uiDesignWidth = 1360;
 const uiDesignHeight = 720;
 const minUiScale = 0.65;
+const maxUiScale = 1;
+const scalePersistDelayMs = 300;
+const t8numenContributorLabel = "T8numen";
+const t8numenContributorNote =
+  "2.0版本的webview修改请求由QQ尾号2808的<等风也等你>提出，由RMT作者进行指导，我进行实际ui替换，使用codex的5.5模型，从2026.5.5的2时开始，到5.6的22时已完成大部分ui迁移";
 const colorPresets: RmtColorPreset[] = [
   {
     id: "rmt-green",
@@ -152,6 +158,14 @@ function getColorPreset(presetId?: string): RmtColorPreset {
   return colorPresets.find((preset) => preset.id === presetId) ?? defaultColorPreset;
 }
 
+function clampUiScale(value: unknown): number {
+  const nextValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(nextValue)) {
+    return maxUiScale;
+  }
+  return Math.max(Math.min(nextValue, maxUiScale), minUiScale);
+}
+
 function getThemeStyle(preset: RmtColorPreset, uiScale: number): React.CSSProperties {
   const darkMode = preset.mode === "dark";
   return {
@@ -184,6 +198,8 @@ export default function App() {
   const [state, setState] = useState<RmtState>(() => getFallbackState());
   const [message, setMessage] = useState("");
   const scaleHostRef = useRef<HTMLDivElement>(null);
+  const scalePersistTimerRef = useRef<number | null>(null);
+  const lastPersistedScaleRef = useRef(0);
   const [uiScale, setUiScale] = useState(1);
   const activeTab = useMemo(
     () => state.tabs.find((tab) => tab.index === state.activeTabIndex) ?? state.tabs[0],
@@ -200,6 +216,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const savedScale = clampUiScale(state.settings.uiScale);
+    lastPersistedScaleRef.current = savedScale;
+    setUiScale((current) => (Math.abs(current - savedScale) > 0.005 ? savedScale : current));
+  }, [state.settings.uiScale]);
+
+  useEffect(() => {
     const host = scaleHostRef.current;
     if (!host) {
       return;
@@ -210,9 +232,10 @@ export default function App() {
       if (width <= 0 || height <= 0) {
         return;
       }
-      const nextScale = Math.max(Math.min(width / uiDesignWidth, height / uiDesignHeight, 1), minUiScale);
+      const nextScale = clampUiScale(Math.min(width / uiDesignWidth, height / uiDesignHeight));
       const roundedScale = Number(nextScale.toFixed(3));
       setUiScale((current) => (Math.abs(current - roundedScale) > 0.005 ? roundedScale : current));
+      persistUiScale(roundedScale);
     };
 
     updateScale();
@@ -220,6 +243,9 @@ export default function App() {
     if (typeof ResizeObserver === "undefined") {
       return () => {
         window.removeEventListener("resize", updateScale);
+        if (scalePersistTimerRef.current !== null) {
+          window.clearTimeout(scalePersistTimerRef.current);
+        }
       };
     }
 
@@ -229,8 +255,24 @@ export default function App() {
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", updateScale);
+      if (scalePersistTimerRef.current !== null) {
+        window.clearTimeout(scalePersistTimerRef.current);
+      }
     };
   }, []);
+
+  function persistUiScale(nextScale: number) {
+    if (Math.abs(lastPersistedScaleRef.current - nextScale) <= 0.005) {
+      return;
+    }
+    lastPersistedScaleRef.current = nextScale;
+    if (scalePersistTimerRef.current !== null) {
+      window.clearTimeout(scalePersistTimerRef.current);
+    }
+    scalePersistTimerRef.current = window.setTimeout(() => {
+      void runAction("updateSetting", { field: "uiScale", value: nextScale });
+    }, scalePersistDelayMs);
+  }
 
   async function runAction<T extends RmtActionType>(type: T, ...args: ActionArgs<T>) {
     try {
@@ -412,7 +454,7 @@ function TopTabs({
   runAction: RunAction;
 }) {
   const hiddenSet = new Set(hiddenTopButtonIndexes);
-  const visibleTabs = state.tabs.filter((tab) => tab.kind === "settings" || !hiddenSet.has(tab.index));
+  const visibleTabs = state.tabs.filter((tab) => isFixedTopTab(tab) || !hiddenSet.has(tab.index));
 
   return (
     <nav className="classic-tabs" aria-label={uiCopy.tabs.ariaLabel}>
@@ -432,6 +474,10 @@ function TopTabs({
       })}
     </nav>
   );
+}
+
+function isFixedTopTab(tab: RmtTab): boolean {
+  return tab.kind !== "macro" || tab.table?.index === 1;
 }
 
 function getTabIcon(tab: RmtTab) {
@@ -544,6 +590,16 @@ function GlobalSidebar({ state, runAction }: { state: RmtState; runAction: RunAc
 }
 
 function formatHotkey(value: string): string {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return uiCopy.common.unsetHotkey;
+  }
+
+  const segments = trimmedValue.split(/[π⫶]/).map((segment) => formatHotkeySegment(segment)).filter(Boolean);
+  return segments.length > 0 ? segments.join(" / ") : uiCopy.common.unsetHotkey;
+}
+
+function formatHotkeySegment(value: string): string {
   const modifierLabels: Record<string, string> = {
     "!": "Alt",
     "^": "Ctrl",
@@ -551,16 +607,59 @@ function formatHotkey(value: string): string {
     "#": "Win"
   };
   const modifiers: string[] = [];
-  let key = value.trim();
+  let key = value.trim().replace(/^[~*$]+/, "");
 
   while (key.length > 0 && modifierLabels[key[0]]) {
     modifiers.push(modifierLabels[key[0]]);
     key = key.slice(1);
   }
 
-  const mainKey = key.replace(/[{}]/g, "").trim();
+  if (modifiers.length === 0 && !/^\{.*\}$/.test(key)) {
+    return value.trim();
+  }
+
+  const mainKey = normalizeHotkeyMainKey(key);
   const parts = [...modifiers, mainKey].filter(Boolean);
-  return parts.length > 0 ? parts.join("+") : uiCopy.common.unsetHotkey;
+  return parts.length > 0 ? parts.join("+") : value.trim();
+}
+
+function normalizeHotkeyMainKey(value: string): string {
+  const keyLabelMap: Record<string, string> = {
+    esc: "Esc",
+    escape: "Esc",
+    space: "Space",
+    tab: "Tab",
+    enter: "Enter",
+    return: "Enter",
+    backspace: "Backspace",
+    delete: "Delete",
+    del: "Delete",
+    insert: "Insert",
+    ins: "Insert",
+    home: "Home",
+    end: "End",
+    pgup: "PgUp",
+    pgdn: "PgDn",
+    up: "Up",
+    down: "Down",
+    left: "Left",
+    right: "Right"
+  };
+  const rawKey = value.replace(/[{}]/g, "").trim();
+  if (!rawKey) {
+    return "";
+  }
+  const lowerKey = rawKey.toLowerCase();
+  if (keyLabelMap[lowerKey]) {
+    return keyLabelMap[lowerKey];
+  }
+  if (/^f\d{1,2}$/i.test(rawKey)) {
+    return rawKey.toUpperCase();
+  }
+  if (/^[a-z]$/i.test(rawKey)) {
+    return rawKey.toUpperCase();
+  }
+  return rawKey;
 }
 
 function MacroTable({
@@ -579,12 +678,32 @@ function MacroTable({
   runAction: RunAction;
 }) {
   const table = tab.table!;
-  const itemCount = table.folds.reduce((count, fold) => count + fold.items.length, 0);
+  const [draggingItem, setDraggingItem] = useState<{ tableIndex: number; foldIndex: number; itemIndex: number } | null>(null);
   const confirmAction = <T extends RmtActionType>(message: string, type: T, ...args: ActionArgs<T>) => {
     if (window.confirm(message)) {
       void runAction(type, ...args);
     }
   };
+
+  function allowItemDrop(foldIndex: number, event: DragEvent<HTMLDivElement>) {
+    if (draggingItem?.tableIndex === table.index && draggingItem.foldIndex === foldIndex) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    }
+  }
+
+  function moveDraggedItem(foldIndex: number, targetItemIndex: number, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!draggingItem || draggingItem.tableIndex !== table.index || draggingItem.foldIndex !== foldIndex || draggingItem.itemIndex === targetItemIndex) {
+      return;
+    }
+    void runAction("moveItemTo", {
+      tableIndex: table.index,
+      itemIndex: draggingItem.itemIndex,
+      targetItemIndex
+    });
+    setDraggingItem(null);
+  }
 
   return (
     <section className="macro-view classic-module-stack">
@@ -599,7 +718,7 @@ function MacroTable({
 
       {table.folds.map((fold) => (
           <section className={classNames("macro-module-section", fold.forbid && "is-disabled")} key={fold.index}>
-            <div className="module-config-row">
+            <div className={classNames("module-config-row", !table.isMenuTable && "without-module-trigger")}>
               <label className="module-field remark-field">
                 <span>{uiCopy.macro.remark}</span>
                 <input
@@ -618,13 +737,19 @@ function MacroTable({
                   onBlur={(event) => updateFold(table.index, fold.index, "frontInfo", event.target.value)}
                 />
               </label>
-              <button onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, foldIndex: fold.index })} type="button">
-                <SquarePen size={15} />
-                {uiCopy.macro.edit}
-              </button>
+              {table.isMenuTable && (
+                <button className="module-trigger-button" onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, foldIndex: fold.index })} type="button">
+                  <SquarePen size={15} />
+                  {fold.trigger || uiCopy.macro.editTriggerKey}
+                </button>
+              )}
               <button onClick={() => runAction("addItem", { tableIndex: table.index, foldIndex: fold.index })} type="button">
                 <Plus size={15} />
                 {uiCopy.macro.addMacro}
+              </button>
+              <button onClick={() => runAction("pasteItem", { tableIndex: table.index, foldIndex: fold.index })} type="button">
+                <ClipboardPaste size={15} />
+                {uiCopy.macro.pasteMacro}
               </button>
               <button onClick={() => runAction("addFold", { tableIndex: table.index, afterFoldIndex: fold.index })} type="button">
                 <Plus size={15} />
@@ -676,8 +801,23 @@ function MacroTable({
 
                 {fold.items.map((item) => (
                   <div
-                    className={classNames("module-macro-row", (item.forbid || item.pause) && "row-muted")}
+                    className={classNames(
+                      "module-macro-row",
+                      (item.forbid || item.pause) && "row-muted",
+                      item.forbid && "is-forbidden",
+                      item.pause && "is-paused",
+                      draggingItem?.tableIndex === table.index && draggingItem.itemIndex === item.index && "is-dragging"
+                    )}
+                    draggable
                     key={item.serial || item.index}
+                    onDragEnd={() => setDraggingItem(null)}
+                    onDragOver={(event) => allowItemDrop(fold.index, event)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", `${table.index}:${fold.index}:${item.index}`);
+                      setDraggingItem({ tableIndex: table.index, foldIndex: fold.index, itemIndex: item.index });
+                    }}
+                    onDrop={(event) => moveDraggedItem(fold.index, item.index, event)}
                   >
                     <div className="macro-row-index">
                       <span className="drag-handle" title={uiCopy.macro.dragHint}>
@@ -697,7 +837,7 @@ function MacroTable({
                       onClick={() => runAction("openTriggerEditor", { tableIndex: table.index, itemIndex: item.index })}
                       type="button"
                     >
-                      {item.trigger || uiCopy.macro.edit}
+                      {table.isTimingTable ? uiCopy.macro.editTiming : formatHotkey(item.trigger)}
                     </button>
                     <select
                       className="select-cell"
@@ -734,24 +874,6 @@ function MacroTable({
                       <SquarePen size={14} />
                       {uiCopy.macro.edit}
                     </button>
-                    <div className="move-buttons">
-                      <button
-                        disabled={item.index <= 1}
-                        onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: -1 })}
-                        title={uiCopy.macro.moveUp}
-                        type="button"
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        disabled={item.index >= itemCount}
-                        onClick={() => runAction("moveItem", { tableIndex: table.index, itemIndex: item.index, direction: 1 })}
-                        title={uiCopy.macro.moveDown}
-                        type="button"
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                    </div>
                     <label className="inline-check row-disabled">
                       <input
                         type="checkbox"
@@ -763,27 +885,27 @@ function MacroTable({
                       />
                       {uiCopy.macro.disabled}
                     </label>
-                    <button
-                      className="danger"
-                      onClick={() =>
-                        confirmAction(uiCopy.macro.confirmDeleteMacro, "deleteItem", {
-                          tableIndex: table.index,
-                          itemIndex: item.index
-                        })
-                      }
-                      type="button"
-                    >
-                      <Trash2 size={14} />
-                      {uiCopy.macro.delete}
-                    </button>
+                    <div className="row-actions">
+                      <button onClick={() => runAction("copyItem", { tableIndex: table.index, itemIndex: item.index })} title={uiCopy.macro.copyMacro} type="button">
+                        <Copy size={14} />
+                        {uiCopy.macro.copy}
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() =>
+                          confirmAction(uiCopy.macro.confirmDeleteMacro, "deleteItem", {
+                            tableIndex: table.index,
+                            itemIndex: item.index
+                          })
+                        }
+                        type="button"
+                      >
+                        <Trash2 size={14} />
+                        {uiCopy.macro.delete}
+                      </button>
+                    </div>
                   </div>
                 ))}
-              </div>
-            )}
-
-            {fold.collapsed && (
-              <div className="module-collapsed-note">
-                {uiCopy.macro.collapsedPrefix} {fold.index} {uiCopy.macro.collapsedSuffix}
               </div>
             )}
           </section>
@@ -897,8 +1019,6 @@ function LegacyHotkeyCell({
   label,
   value,
   target,
-  onLocal,
-  onCommit,
   runAction
 }: {
   label: string;
@@ -911,12 +1031,16 @@ function LegacyHotkeyCell({
   return (
     <div className="legacy-hotkey-cell">
       <span>{label}:</span>
-      <TextInput value={value} onLocal={onLocal} onCommit={onCommit} />
+      <HotkeyDisplay value={value} />
       <button onClick={() => runAction("openHotkeyEditor", { target })} type="button">
         {uiCopy.macro.edit}
       </button>
     </div>
   );
+}
+
+function HotkeyDisplay({ value }: { value: string }) {
+  return <input className="hotkey-display" readOnly title={value} value={formatHotkey(value)} />;
 }
 
 function LegacyField({
@@ -971,7 +1095,7 @@ function ToolPanel({
 
         <div className="legacy-row tool-hotkey-row">
           <span className="legacy-label">{uiCopy.tool.mouseInfoHotkey}:</span>
-          <TextInput value={tools.toolCheckHotKey} onLocal={(value) => patchLocalTools("toolCheckHotKey", value)} onCommit={(value) => updateTool("toolCheckHotKey", value)} />
+          <HotkeyDisplay value={tools.toolCheckHotKey} />
           <label className="legacy-check">
             <input type="checkbox" checked={tools.isToolCheck} onChange={() => runAction("toggleToolCheck")} />
             {uiCopy.tool.toggle}
@@ -1000,19 +1124,16 @@ function ToolPanel({
 
         <div className="legacy-row tool-hotkey-row">
           <span className="legacy-label">{uiCopy.tool.recordHotkey}:</span>
-          <TextInput value={tools.toolRecordMacroHotKey} onLocal={(value) => patchLocalTools("toolRecordMacroHotKey", value)} onCommit={(value) => updateTool("toolRecordMacroHotKey", value)} />
+          <HotkeyDisplay value={tools.toolRecordMacroHotKey} />
           <label className="legacy-check">
             <input type="checkbox" checked={tools.isToolRecord} onChange={() => runAction("toggleToolRecord")} />
             {uiCopy.tool.toggle}
           </label>
-          <button className="legacy-command" onClick={() => runAction("openToolRecordSetting")} type="button">
-            {uiCopy.tool.recordOptions}
-          </button>
         </div>
 
         <div className="legacy-row tool-text-row">
           <span className="legacy-label">{uiCopy.tool.textFilterHotkey}:</span>
-          <TextInput value={tools.toolTextFilterHotKey} onLocal={(value) => patchLocalTools("toolTextFilterHotKey", value)} onCommit={(value) => updateTool("toolTextFilterHotKey", value)} />
+          <HotkeyDisplay value={tools.toolTextFilterHotKey} />
           <button className="legacy-command" onClick={() => runAction("toolTextFilterScreenShot")} type="button">
             {uiCopy.tool.extractFromScreenshot}
           </button>
@@ -1038,19 +1159,6 @@ function ToolPanel({
               </option>
             ))}
           </select>
-          <button className="legacy-command" onClick={() => runAction("openFreePaste")} type="button">
-            {uiCopy.tool.freePaste}
-          </button>
-          <button className="legacy-command" onClick={() => runAction("editCmdTip")} type="button">
-            {uiCopy.tool.commandDisplay}
-          </button>
-        </div>
-
-        <div className="legacy-row tool-extra-hotkeys">
-          <span className="legacy-label">{uiCopy.tool.screenshotHotkey}:</span>
-          <TextInput value={tools.screenShotHotKey} onLocal={(value) => patchLocalTools("screenShotHotKey", value)} onCommit={(value) => updateTool("screenShotHotKey", value)} />
-          <span>{uiCopy.tool.freePasteHotkey}:</span>
-          <TextInput value={tools.freePasteHotKey} onLocal={(value) => patchLocalTools("freePasteHotKey", value)} onCommit={(value) => updateTool("freePasteHotKey", value)} />
         </div>
 
         <div className="legacy-output-label">
@@ -1085,12 +1193,12 @@ function SettingsPanel({
   runAction: RunAction;
 }) {
   const hiddenTopButtonSet = new Set(settings.hiddenTopButtonIndexes);
-  const topButtonTabs = state.tabs.filter((tab) => tab.kind !== "settings");
+  const topButtonTabs = state.tabs.filter((tab) => !isFixedTopTab(tab));
   const activeColorPreset = getColorPreset(settings.colorPresetId);
 
   function setTopButtonVisible(tabIndex: number, visible: boolean) {
     const targetTab = state.tabs.find((tab) => tab.index === tabIndex);
-    if (targetTab?.kind === "settings") {
+    if (!targetTab || isFixedTopTab(targetTab)) {
       return;
     }
 
@@ -1254,39 +1362,43 @@ function SettingsPanel({
           </div>
         </div>
       </LegacyGroup>
-
-      <LegacyGroup title={uiCopy.settings.diagnostics} className="diagnostics-block legacy-diagnostics">
-        <div className="info-grid">
-          <div className="info-item"><span>{uiCopy.settings.version}</span><strong>{state.version}</strong></div>
-          <div className="info-item"><span>{uiCopy.settings.config}</span><strong title={state.currentSettingName}>{state.currentSettingName}</strong></div>
-          <div className="info-item"><span>{uiCopy.settings.running}</span><strong>{state.macroRunningCount}</strong></div>
-          <div className="info-item"><span>{uiCopy.settings.totalRuns}</span><strong>{state.macroTotalCount}</strong></div>
-        </div>
-        <button className="legacy-command" onClick={() => runAction("copyDiagnostics")} type="button">
-          {uiCopy.settings.copyDiagnostics}
-        </button>
-      </LegacyGroup>
     </section>
   );
 }
 
 function HelpPanel({ runAction }: { runAction: RunAction }) {
   return (
-    <section className="section-block readable">
+    <section className="section-block help-legacy-page">
       <h2>{uiCopy.help.title}</h2>
-      {uiCopy.help.body.map((paragraph) => (
-        <p key={paragraph}>{paragraph}</p>
-      ))}
-      <div className="link-list">
-        {uiCopy.help.links.map((link) => (
-          <button
-            key={link.label}
-            onClick={() => (link.action === "openUrl" ? runAction("openUrl", { url: link.url }) : runAction("openHelp"))}
-            type="button"
-          >
-            <ExternalLink size={16} />
-            {link.label}
-          </button>
+      <p className="help-supplement">{uiCopy.help.supplement}</p>
+      <div className="help-disclaimer">
+        {uiCopy.help.body.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
+      </div>
+      <p className="help-stop">{uiCopy.help.stopUse}</p>
+      <div className="help-resource-list">
+        {uiCopy.help.resourceRows.map((row) => (
+          <div className="help-resource-row" key={row.label}>
+            <strong>{row.label}</strong>
+            <span>
+              {"links" in row && row.links.map((link, index) => (
+                <span key={link.label}>
+                  {index > 0 && "、"}
+                  <button
+                    className="link-button"
+                    onClick={() => (link.action === "openUrl" ? runAction("openUrl", { url: link.url }) : runAction("openHelp"))}
+                    type="button"
+                  >
+                    <ExternalLink size={14} />
+                    {link.label}
+                  </button>
+                </span>
+              ))}
+              {"text" in row && row.text}
+              {"suffix" in row && row.suffix}
+            </span>
+          </div>
         ))}
       </div>
     </section>
@@ -1325,11 +1437,15 @@ function ThanksPanel({ runAction }: { runAction: RunAction }) {
       <div className="thanks-group">
         <h3>{uiCopy.thanks.contributors}</h3>
         <div className="tag-list">
-          {uiCopy.thanks.developers.map(([label, url]) => (
-            <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
-              {label}
-            </button>
-          ))}
+          {uiCopy.thanks.developers.map(([label, url]) =>
+            label === t8numenContributorLabel ? (
+              <T8numenContributor key={label} runAction={runAction} url={url} />
+            ) : (
+              <button className="link-chip" key={label} onClick={() => runAction("openUrl", { url })} type="button">
+                {label}
+              </button>
+            )
+          )}
         </div>
       </div>
       <div className="thanks-group">
@@ -1354,6 +1470,41 @@ function ThanksPanel({ runAction }: { runAction: RunAction }) {
         <p key={paragraph}>{paragraph}</p>
       ))}
     </section>
+  );
+}
+
+function T8numenContributor({ runAction, url }: { runAction: RunAction; url: string }) {
+  return (
+    <span className="t8numen-contributor">
+      <span className="t8numen-popover" id="t8numen-contributor-note" role="tooltip">
+        {t8numenContributorNote}
+      </span>
+      <button
+        aria-describedby="t8numen-contributor-note"
+        aria-label={t8numenContributorLabel}
+        className="link-chip t8numen-toc-button"
+        onClick={() => runAction("openUrl", { url })}
+        type="button"
+      >
+        <Sparkles aria-hidden="true" className="t8numen-toc-icon" strokeWidth={1.8} />
+        <span aria-hidden="true" className="t8numen-toc-text">
+          <span className="t8numen-toc-text-row">
+            {Array.from(t8numenContributorLabel).map((letter, index) => (
+              <span className="t8numen-toc-letter" key={`primary-${letter}-${index}`}>
+                {letter}
+              </span>
+            ))}
+          </span>
+          <span className="t8numen-toc-text-row">
+            {Array.from(t8numenContributorLabel).map((letter, index) => (
+              <span className="t8numen-toc-letter" key={`secondary-${letter}-${index}`}>
+                {letter}
+              </span>
+            ))}
+          </span>
+        </span>
+      </button>
+    </span>
   );
 }
 

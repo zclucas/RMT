@@ -39,12 +39,11 @@ Use this checklist before release when saved data behavior changes:
 - Hotkeys remain registered or show a clear failure.
 - A backup exists before any destructive migration.
 
-## Fixture Check
+## Manual Compatibility Check
 
-Run this check after changing `RmtBuildState()` or saved field defaults:
+After changing `RmtBuildState()` or saved field defaults:
 
-```powershell
-.\scripts\verify-rmt-build-state-fixtures.ps1
-```
-
-The fixture script builds representative old in-memory state, including missing newer item arrays and multi-fold disabled/collapsed modules, and verifies the WebView state shape remains stable.
+- Start with an older copied `Setting/` directory.
+- Open `RMT.ahk` and confirm the WebView state renders.
+- Save settings, restart, and confirm macro tables still load.
+- Run the verification commands in `docs/development.md`.

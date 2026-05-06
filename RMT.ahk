@@ -21,18 +21,17 @@
 #Include Main\Util\MacroClipboardUtil.ahk
 
 try {
-    InitFilePath()          ;初始化文件路径
-    LoadCurMacroSetting()   ;加载当前配置宏
-    HandleOpenArg()         ;处理打开软件的参数
-    EditListen()        ;右键编辑数据监听
-    InitData()          ;初始化软件数据
-    InitUI()            ;初始化UI
-    SetEditData()      ;缓存编辑器数据
+    InitFilePath()
+    LoadCurMacroSetting()
+    HandleOpenArg()
+    EditListen()
+    InitData()
+    InitUI()
+    SetEditData()
 
-    ;放后面初始化，因为这初始化时间比较长
     PluginInit()
-    TimingCheck()       ;轮询检测触发
-    BindKey()           ;绑定快捷键
+    TimingCheck()
+    BindKey()
 }
 catch as e {
     RmtShowStartupError(e)
@@ -40,13 +39,13 @@ catch as e {
 }
 
 RmtShowStartupError(e) {
-    message := "RMT 启动失败。`n`n"
-    message .= "错误信息：" e.Message "`n"
+    message := "RMT startup failed.`n`n"
+    message .= "Message: " e.Message "`n"
     if (e.File)
-        message .= "文件：" e.File "`n"
+        message .= "File: " e.File "`n"
     if (e.Line)
-        message .= "行号：" e.Line "`n"
+        message .= "Line: " e.Line "`n"
     if (e.Extra)
-        message .= "详情：" e.Extra "`n"
-    MsgBox(message, "RMT 错误", "Iconx")
+        message .= "Extra: " e.Extra "`n"
+    MsgBox(message, "RMT Error", "Iconx")
 }

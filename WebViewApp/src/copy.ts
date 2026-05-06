@@ -44,20 +44,19 @@ export const uiCopy = {
     disabled: "禁用",
     expandModule: "展开模块",
     collapseModule: "折叠模块",
-    headers: ["宏名称", "触发编辑器", "触发类型", "循环次数", "宏设置", "宏编辑器", "移动", "状态", "操作"],
+    headers: ["宏名称", "触发编辑器", "触发类型", "循环次数", "宏设置", "宏编辑器", "状态", "操作"],
     emptyModule: "当前模块没有宏。",
-    dragHint: "可用移动按钮调整顺序",
+    dragHint: "拖拽调整顺序",
     macroName: "宏名称",
     editTiming: "编辑定时配置",
     editStringTrigger: "编辑字串触发",
     editTriggerKey: "编辑触发键",
     editMacro: "编辑宏",
-    moveUp: "上移",
-    moveDown: "下移",
+    copy: "复制",
+    copyMacro: "复制宏",
+    pasteMacro: "粘贴宏",
     delete: "删除",
     confirmDeleteMacro: "确认删除当前宏？",
-    collapsedPrefix: "模块",
-    collapsedSuffix: "已折叠，点击右侧箭头展开。",
     settings: "设置",
     mode: "模式",
     holdTime: "时长",
@@ -124,21 +123,71 @@ export const uiCopy = {
     keyDownMode: "按下时按下",
     help: "说明",
     configManager: "配置管理",
-    diagnostics: "诊断",
     version: "版本",
     config: "配置",
     running: "运行中",
     totalRuns: "累计执行",
-    copyDiagnostics: "复制诊断信息",
     openHotkeyEditor: "打开快捷方式编辑器",
     screenshotLabels: ["微软截图", "RMT截图", "SC截图"],
     keyDownLabels: ["自动松开", "忽略重复按下", "允许重复按下"]
   },
   help: {
     title: "免责声明",
+    supplement: "本文件是对 GNU Affero General Public License v3.0 的补充说明，不影响原协议效力",
     body: [
-      "本软件按原样提供，使用者需要自行承担使用、修改或分发带来的风险。",
-      "请勿将本软件用于违法用途，包括但不限于游戏作弊、未经授权的系统访问或数据篡改。"
+      "1. 本软件按“原样”提供，开发者不承担因使用、修改或分发导致的任何法律责任。",
+      "2. 严禁用于违法用途，包括但不限于：游戏作弊、未经授权的系统访问或数据篡改。",
+      "3. 使用者需自行承担所有风险，开发者对因违反法律或第三方条款导致的后果概不负责。",
+      "4. 通过使用本软件，您确认：不会将其用于任何非法目的、已充分了解并接受所有潜在法律风险、同意免除开发者因滥用行为导致的一切追责权利。"
+    ],
+    stopUse: "若不同意上述条款，请立即停止使用本软件。",
+    resourceRows: [
+      {
+        label: "更新视频合集：",
+        links: [{ label: "版本更新视频，直播交流问答", action: "openUrl" as const, url: "https://www.bilibili.com/video/BV1oWVRzaEzk" }]
+      },
+      {
+        label: "操作说明文档：",
+        links: [{ label: "快速上手，指令手册、常见问题、常见报错、更新日志等", action: "openHelp" as const }]
+      },
+      {
+        label: "配置共享仓库：",
+        links: [{ label: "案例学习、获取他人分享的宏配置（支持下载导入）", action: "openUrl" as const, url: "https://zclucas.github.io/RMT-Setting/" }]
+      },
+      {
+        label: "国内开源网址：",
+        links: [{ label: "https://gitee.com/fateman/RMT", action: "openUrl" as const, url: "https://gitee.com/fateman/RMT" }]
+      },
+      {
+        label: "国外开源网址：",
+        links: [{ label: "https://github.com/zclucas/RMT", action: "openUrl" as const, url: "https://github.com/zclucas/RMT" }]
+      },
+      {
+        label: "软件检查更新：",
+        text: "浏览开源网址，查看右侧发行版处即可知道软件最新版本"
+      },
+      {
+        label: "软件交流渠道：",
+        links: [
+          { label: "QQ群（837661891）", action: "openUrl" as const, url: "https://qm.qq.com/q/DgpDumEPzq" },
+          { label: "QQ频道", action: "openUrl" as const, url: "https://pd.qq.com/s/5wyjvj7zw" },
+          { label: "GitHub 论坛", action: "openUrl" as const, url: "https://github.com/zclucas/RMT/discussions" },
+          { label: "Discord", action: "openUrl" as const, url: "https://discord.gg/m8ewvgtzat" }
+        ]
+      },
+      {
+        label: "软件反馈表格：",
+        suffix: "（仅交流群成员有编辑权限）",
+        links: [
+          { label: "bug文档", action: "openUrl" as const, url: "https://docs.qq.com/sheet/DVWJIdEVMV1pHUVJj" },
+          { label: "需求文档", action: "openUrl" as const, url: "https://docs.qq.com/sheet/DVWRQaXBFUVV5bERo" },
+          { label: "使用备注", action: "openUrl" as const, url: "https://docs.qq.com/sheet/DVVNwWHJEd3NOWXhR?tab=BB08J2" }
+        ]
+      },
+      {
+        label: "软件开源协议：",
+        text: "AGPL-3.0"
+      }
     ],
     links: [
       { label: "快速上手/指令手册", action: "openHelp" as const },
@@ -176,7 +225,8 @@ export const uiCopy = {
       ["张正波", "https://gitee.com/bogezzb"],
       ["yun", "https://github.com/yunkuangao"],
       ["boxstudy", "https://github.com/boxstudy"],
-      ["sovaedv776", "https://github.com/sovaedv776"]
+      ["sovaedv776", "https://github.com/sovaedv776"],
+      ["T8numen", "https://github.com/T8numen"]
     ],
     projects: [
       ["OpenCV", "https://github.com/opencv/opencv"],

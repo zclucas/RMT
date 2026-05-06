@@ -16,9 +16,13 @@ WebViewApp/node_modules/
 WebViewApp/*.tsbuildinfo
 WebViewApp/playwright-report/
 WebViewApp/test-results/
+RMT帮助文档.html
+Runtimes/WebView2/Fixed/
 ReleaseX32/Plugins/WebViewToo/
 ReleaseX32/WebViewApp/
+ReleaseX32/Runtimes/
 ReleaseX64/Plugins/WebViewToo/
 ReleaseX64/WebViewApp/
+ReleaseX64/Runtimes/
 Setting/
 Thread/Work[0-9]*.exe

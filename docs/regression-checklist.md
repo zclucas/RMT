@@ -7,14 +7,15 @@ Use this checklist before release and after large WebView or macro behavior chan
 Run from the repository root:
 
 ```powershell
-.\scripts\verify.ps1
+cd WebViewApp
+npm.cmd run build
+cd ..
+& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
+git diff --check
 ```
 
 Expected result:
 
-- Version consistency passes.
-- WebView bridge contract passes.
-- WebView2 wrapper check passes.
 - `RMT.ahk` validates.
 - React/TypeScript builds and updates `WebViewApp/dist`.
 - `git diff --check` has no errors.
@@ -48,7 +49,8 @@ Expected result:
 - Edit an item trigger, trigger type, macro text, mode, loop count, hold time, timing serial, tip sound, pause, forbid, and remark.
 - Add and delete one item.
 - Add and delete one fold.
-- Move an item up and down.
+- Drag an item within its module and confirm the order changes.
+- Copy one macro and paste it into a module.
 - Save, reload, and confirm the edited values remain.
 
 ## Runtime Controls
@@ -75,7 +77,6 @@ Expected result:
 - Change screenshot and key-down modes.
 - Toggle boot start, split line, fixed menu wheel, no-variable-tip, and command tip settings.
 - Open hotkey editors for app and tool hotkeys.
-- Copy diagnostic information and confirm the success message appears.
 - Save, restart, and confirm settings persist.
 
 ## Legacy Dialogs Still Used

@@ -9,7 +9,7 @@ A legacy GUI can be removed only after all of these are true:
 - No `#Include` path requires the file.
 - No `ShowGui()` or constructor call is reachable from `RMT.ahk`, `Thread\Work.ahk`, a bridge action, hotkey flow, macro execution flow, or packaging flow.
 - The WebView replacement has matching validation and save behavior.
-- `.\scripts\verify.ps1` passes.
+- React build, AutoHotkey validation, and `git diff --check` pass.
 - The relevant path in `docs/regression-checklist.md` passes.
 
 ## Still Required By WebView Bridge

@@ -107,7 +107,7 @@ Acceptance:
 - Navigation/help: `openHelp`, `openUrl`, `openVarMonitor`
 - Tool/settings dialogs: `openToolRecordSetting`, `editCmdTip`, `keyDownHelp`
 - Data update: `updateSetting`, `updateTool`, `updateItem`, `updateFold`, `toggleFold`
-- Structure update: `addItem`, `deleteItem`, `moveItem`, `addFold`, `deleteFold`
+- Structure update: `addItem`, `deleteItem`, `moveItem`, `moveItemTo`, `copyItem`, `pasteItem`, `addFold`, `deleteFold`
 - Editors: `openMacroEditor`
 
 ## Known risks
@@ -120,6 +120,10 @@ Acceptance:
 ## Verification commands
 
 ```powershell
-cd C:\Users\T8numen\Documents\Playground\rmt-test\RMT-Dev_WebView2
-.\scripts\verify.ps1
+cd C:\Users\T8numen\Documents\Playground\rmt-test\RMT-zclucas-v1.1.2
+cd WebViewApp
+npm.cmd run build
+cd ..
+& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
+git diff --check
 ```

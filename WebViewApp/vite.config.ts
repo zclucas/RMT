@@ -9,8 +9,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: "index.html",
-        uiProposals: "ui-proposals.html"
+        main: "index.html"
       }
     }
   }

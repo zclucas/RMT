@@ -64,6 +64,7 @@ export interface RmtSettings {
   showSplitLine: boolean;
   hiddenTopButtonIndexes: number[];
   colorPresetId: string;
+  uiScale: number;
   fixedMenuWheel: boolean;
   mutiThreadNum: string;
   softBGColor: string;
@@ -138,7 +139,6 @@ export type RmtAction =
   | { type: "toolTextFilterScreenShot" }
   | { type: "toolTextFilterSelectImage" }
   | { type: "clearToolText" }
-  | { type: "copyDiagnostics" }
   | { type: "openHotkeyEditor"; payload: { target: keyof RmtSettings | keyof RmtToolState } }
   | { type: "keyDownHelp" }
   | { type: "minimize" }
@@ -152,6 +152,9 @@ export type RmtAction =
   | { type: "addItem"; payload: { tableIndex: number; foldIndex: number } }
   | { type: "deleteItem"; payload: { tableIndex: number; itemIndex: number } }
   | { type: "moveItem"; payload: { tableIndex: number; itemIndex: number; direction: -1 | 1 } }
+  | { type: "moveItemTo"; payload: { tableIndex: number; itemIndex: number; targetItemIndex: number } }
+  | { type: "copyItem"; payload: { tableIndex: number; itemIndex: number } }
+  | { type: "pasteItem"; payload: { tableIndex: number; foldIndex: number } }
   | { type: "addFold"; payload: { tableIndex: number; afterFoldIndex: number } }
   | { type: "deleteFold"; payload: { tableIndex: number; foldIndex: number } }
   | { type: "openTriggerEditor"; payload: { tableIndex: number; itemIndex?: number; foldIndex?: number } }
