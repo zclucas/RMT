@@ -15,8 +15,13 @@
   --rmt-border-strong: #cfd7df;
   --rmt-text: #17202a;
   --rmt-muted: #566674;
-  --rmt-button-bg: #ffffff;
-  --rmt-button-hover: #f1f5f8;
+  --rmt-button-bg: #dff5e8;
+  --rmt-button-hover: #178a56;
+  --rmt-button-border: #178a56;
+  --rmt-button-text: #0b2819;
+  --rmt-button-hover-text: #ffffff;
+  --rmt-danger-soft: #fff1f1;
+  --rmt-disabled-text: #7c8994;
   --rmt-danger: #f3423a;
   --rmt-info: #2698e6;
   --rmt-neutral-action: #777777;
@@ -53,9 +58,9 @@ textarea {
 button {
   align-items: center;
   background: var(--rmt-button-bg);
-  border: 1px solid var(--rmt-border-strong);
+  border: 1px solid var(--rmt-button-border);
   border-radius: 6px;
-  color: var(--rmt-text);
+  color: var(--rmt-button-text);
   cursor: pointer;
   display: inline-flex;
   gap: 6px;
@@ -67,10 +72,11 @@ button {
 
 button:hover {
   background: var(--rmt-button-hover);
+  color: var(--rmt-button-hover-text);
 }
 
 button:disabled {
-  color: #98a4af;
+  color: var(--rmt-disabled-text);
   cursor: default;
 }
 
@@ -85,7 +91,9 @@ button.primary:hover {
 }
 
 button.danger {
-  color: #a03434;
+  background: var(--rmt-danger-soft);
+  border-color: var(--rmt-danger);
+  color: var(--rmt-danger);
 }
 
 input,
@@ -732,29 +740,43 @@ h2 {
 
 .legacy-command,
 .legacy-page button {
-  background: #dedede;
-  border-color: #a9a9a9;
-  color: #000000;
+  background: var(--rmt-button-bg);
+  border-color: var(--rmt-button-border);
+  color: var(--rmt-button-text);
   justify-content: center;
+}
+
+.legacy-command:hover,
+.legacy-page button:hover {
+  background: var(--rmt-button-hover);
+  color: var(--rmt-button-hover-text);
+}
+
+.legacy-command.danger,
+.legacy-page button.danger {
+  background: var(--rmt-danger-soft);
+  border-color: var(--rmt-danger);
+  color: var(--rmt-danger);
 }
 
 .legacy-page input,
 .legacy-page select {
-  background: #f1f1f1;
-  border-color: #a9a9a9;
-  color: #000000;
+  background: var(--rmt-surface-muted);
+  border-color: var(--rmt-border-strong);
+  color: var(--rmt-text);
 }
 
 .classic-app[data-theme-mode="dark"] .legacy-command,
 .classic-app[data-theme-mode="dark"] .legacy-page button {
   background: var(--rmt-button-bg);
-  border-color: var(--rmt-border-strong);
-  color: var(--rmt-text);
+  border-color: var(--rmt-button-border);
+  color: var(--rmt-button-text);
 }
 
 .classic-app[data-theme-mode="dark"] .legacy-command:hover,
 .classic-app[data-theme-mode="dark"] .legacy-page button:hover {
   background: var(--rmt-button-hover);
+  color: var(--rmt-button-hover-text);
 }
 
 .classic-app[data-theme-mode="dark"] .legacy-page input,
@@ -854,8 +876,17 @@ h2 {
 
 .legacy-switch-grid {
   display: grid;
-  gap: 18px 86px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 12px 28px;
+  grid-template-columns: repeat(4, max-content);
+}
+
+.legacy-switch-grid .legacy-check,
+.legacy-switch-grid .legacy-command {
+  margin: 0;
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .legacy-interface-grid {
@@ -900,6 +931,8 @@ h2 {
 .help-legacy-page,
 .reward-panel,
 .thanks-panel {
+  font-size: 16px;
+  line-height: 1.65;
   max-width: none;
 }
 
@@ -910,13 +943,13 @@ h2 {
 }
 
 .help-legacy-page h2 {
-  font-size: 22px;
+  font-size: 24px;
   margin: 0;
   text-align: center;
 }
 
 .help-supplement {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
   text-align: center;
@@ -962,7 +995,7 @@ h2 {
   border: 0;
   color: var(--rmt-info);
   display: inline-flex;
-  font-size: 15px;
+  font-size: 16px;
   gap: 4px;
   margin: 0;
   min-height: 0;
@@ -1006,7 +1039,7 @@ h2 {
 }
 
 .thanks-group h3 {
-  font-size: 14px;
+  font-size: 16px;
   margin: 0 0 8px;
 }
 
@@ -1401,28 +1434,32 @@ h2 {
   background: var(--rmt-title-bg);
   border-bottom: 2px solid var(--rmt-title-bottom);
   color: var(--rmt-title-text);
-  height: 48px;
+  height: 40px;
 }
 
 .classic-app .drag-region {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
+  gap: 8px;
+  padding: 0 9px;
 }
 
-.classic-app .app-mark {
-  background: var(--rmt-app-mark-bg);
-  border-radius: 5px;
-  color: var(--rmt-app-mark-text);
-  font-size: 13px;
-  height: 24px;
-  width: 34px;
+.classic-app .app-icon {
+  flex: 0 0 auto;
+  height: 28px;
+  object-fit: contain;
+  width: 28px;
+}
+
+.classic-app .version-label {
+  line-height: 1;
 }
 
 .classic-app .window-actions button {
   border-left: 1px solid rgba(0, 0, 0, 0.08);
   color: var(--rmt-title-text);
-  height: 48px;
-  min-height: 48px;
+  height: 40px;
+  min-height: 40px;
 }
 
 .classic-app .window-actions button:hover {
@@ -1437,7 +1474,7 @@ h2 {
 .classic-body {
   display: grid;
   flex: 1;
-  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-columns: 218px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -1446,18 +1483,18 @@ h2 {
   border-right: 1px solid var(--rmt-border);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
   overflow: hidden;
-  padding: 14px 18px 14px;
+  padding: 12px 14px 12px;
   z-index: 2;
 }
 
 .sidebar-section {
   border-bottom: 1px solid var(--rmt-border);
   display: grid;
-  gap: 10px;
-  padding-bottom: 16px;
+  gap: 9px;
+  padding-bottom: 14px;
 }
 
 .sidebar-section.global-actions {
@@ -1472,10 +1509,10 @@ h2 {
 
 .config-select-button {
   justify-content: flex-start;
-  font-size: 16px;
-  min-height: 58px;
+  font-size: 15px;
+  min-height: 50px;
   overflow: hidden;
-  padding: 8px 14px;
+  padding: 7px 12px;
   text-overflow: ellipsis;
   width: 100%;
 }
@@ -1484,35 +1521,36 @@ h2 {
 .side-card {
   border-radius: 5px;
   justify-content: center;
-  min-height: 42px;
+  min-height: 38px;
   width: 100%;
 }
 
-.side-button.green {
-  background: var(--rmt-primary);
-  border-color: var(--rmt-primary);
-  color: var(--rmt-primary-text);
+.side-button.green,
+.side-button.red,
+.side-button.gray,
+.side-button.blue {
+  background: var(--rmt-button-bg);
+  border-color: var(--rmt-button-border);
+  color: var(--rmt-button-text);
+  font-weight: 600;
 }
 
 .side-button.red {
-  background: var(--rmt-danger);
+  background: var(--rmt-danger-soft);
   border-color: var(--rmt-danger);
-  color: #ffffff;
-  font-weight: 700;
+  color: var(--rmt-danger);
 }
 
-.side-button.gray {
-  background: var(--rmt-neutral-action);
-  border-color: var(--rmt-neutral-action);
-  color: #ffffff;
-  font-weight: 700;
+.side-button.green:hover,
+.side-button.gray:hover,
+.side-button.blue:hover {
+  background: var(--rmt-button-hover);
+  color: var(--rmt-button-hover-text);
 }
 
-.side-button.blue {
-  background: var(--rmt-info);
-  border-color: var(--rmt-info);
+.side-button.red:hover {
+  background: var(--rmt-danger);
   color: #ffffff;
-  font-weight: 700;
 }
 
 .side-card {
@@ -1521,8 +1559,8 @@ h2 {
   display: grid;
   gap: 7px;
   justify-content: stretch;
-  min-height: 86px;
-  padding: 10px 14px;
+  min-height: 76px;
+  padding: 9px 12px;
   text-align: left;
 }
 
@@ -1561,7 +1599,7 @@ h2 {
 }
 
 .sidebar-save .side-button {
-  min-height: 42px;
+  min-height: 40px;
 }
 
 .classic-main {
@@ -1719,14 +1757,14 @@ h2 {
   display: grid;
   gap: 8px;
   grid-template-columns:
-    minmax(220px, 1.1fr)
-    minmax(190px, 0.95fr)
-    122px
+    minmax(180px, 1.05fr)
+    minmax(150px, 0.9fr)
+    minmax(178px, 0.85fr)
     96px
     96px
-    112px
-    112px
-    70px
+    104px
+    104px
+    68px
     42px;
   padding: 12px 16px 6px;
 }
@@ -1749,13 +1787,27 @@ h2 {
   min-width: 0;
 }
 
-.module-config-row button {
+.module-config-row button,
+.module-trigger-type-select {
   border-radius: 0;
   justify-content: center;
   min-height: 40px;
   overflow: hidden;
   padding: 5px 6px;
   text-overflow: ellipsis;
+}
+
+.module-trigger-controls {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(86px, 1fr) 78px;
+}
+
+.module-trigger-type-select {
+  background: var(--rmt-surface-muted);
+  border-color: var(--rmt-border-strong);
+  color: var(--rmt-text);
+  font-size: 15px;
 }
 
 .module-field {
@@ -1805,17 +1857,16 @@ h2 {
 .module-macro-row {
   align-items: center;
   display: grid;
-  gap: 7px;
+  gap: 6px;
   grid-template-columns:
     42px
-    minmax(188px, 1fr)
-    128px
-    86px
-    72px
-    78px
-    78px
-    70px
-    136px;
+    minmax(142px, 0.72fr)
+    132px
+    84px
+    68px
+    82px
+    84px
+    214px;
   min-width: 0;
 }
 
@@ -1880,10 +1931,17 @@ h2 {
 
 .module-macro-row button,
 .macro-settings-cell summary {
-  background: #e1e1e1;
-  color: var(--rmt-text);
+  background: var(--rmt-button-bg);
+  border-color: var(--rmt-button-border);
+  color: var(--rmt-button-text);
   gap: 4px;
   justify-content: center;
+}
+
+.module-macro-row button:hover,
+.macro-settings-cell summary:hover {
+  background: var(--rmt-button-hover);
+  color: var(--rmt-button-hover-text);
 }
 
 .classic-app[data-theme-mode="dark"] .module-field input,
@@ -1899,21 +1957,24 @@ h2 {
 .classic-app[data-theme-mode="dark"] .module-macro-row button,
 .classic-app[data-theme-mode="dark"] .macro-settings-cell summary {
   background: var(--rmt-button-bg);
-  border-color: var(--rmt-border-strong);
-  color: var(--rmt-text);
+  border-color: var(--rmt-button-border);
+  color: var(--rmt-button-text);
 }
 
 .classic-app[data-theme-mode="dark"] .module-macro-row button:hover,
 .classic-app[data-theme-mode="dark"] .macro-settings-cell summary:hover {
   background: var(--rmt-button-hover);
+  color: var(--rmt-button-hover-text);
 }
 
 .module-macro-row .danger {
-  color: var(--rmt-text);
+  background: var(--rmt-danger-soft);
+  border-color: var(--rmt-danger);
+  color: var(--rmt-danger);
 }
 
 .classic-app[data-theme-mode="dark"] .module-macro-row .danger {
-  color: #fecaca;
+  color: var(--rmt-danger);
 }
 
 .macro-row-index {
@@ -2005,13 +2066,15 @@ h2 {
 .row-actions {
   display: grid;
   gap: 4px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 62px 78px 62px;
 }
 
-.row-actions button {
+.row-actions button,
+.row-actions .row-disabled {
   min-width: 0;
   padding-left: 4px;
   padding-right: 4px;
+  width: 100%;
 }
 
 .macro-settings-cell {
@@ -2069,7 +2132,7 @@ h2 {
 
 @media (max-width: 1180px) {
   .classic-body {
-    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-columns: 218px minmax(0, 1fr);
   }
 
   .classic-tabs button {
