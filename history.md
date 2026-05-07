@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added a manual GitHub Actions packaging workflow with release artifact upload and on-demand WebView2 Fixed Runtime download.
+- Aligned release packaging with the upstream single-file help output at `index.html`.
 - Converted `ReleaseX32` and `ReleaseX64` into generated packaging staging directories instead of tracked duplicate runtime trees.
 - Added a Windows verification workflow and maintenance fixes for version checks, release output paths, release layout checks, and tracked AutoHotkey tool ignore rules.
 - Added a repository-local Chinese AutoHotkey runtime for packaged RMT error dialogs, including a Chinese error help page and rebuild notes.

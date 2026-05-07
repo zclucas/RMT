@@ -5,9 +5,8 @@ RMT ships its own help content. It does not currently include a local mirror of 
 ## Project Help Files
 
 - `Web/*.md` are the source documents for RMT user help.
-- `RMT帮助文档.html` and `index.html` are generated offline HTML outputs for RMT help.
-- `Web/JS/SingleHtml.js` regenerates those outputs. Use `node Web\JS\SingleHtml.js --check` to check whether they are current without rewriting files.
-- `RMT帮助文档-搜索侧栏版.html` and `RMT帮助文档-搜索顶部版.html` are local search variants.
+- `index.html` is the generated offline HTML output for RMT help.
+- `Web/JS/SingleHtml.js` regenerates this output. Use `node Web\JS\SingleHtml.js --check` to check whether it is current without rewriting files.
 - `Plugins/WebViewToo/Pages/index.html` is the local WebViewToo help page.
 
 ## AutoHotkey Error Help

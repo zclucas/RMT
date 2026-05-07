@@ -77,7 +77,7 @@ Packaging behavior:
 - Reads the version from `Main/UIUtil.ahk`.
 - Recreates `ReleaseX64` and `ReleaseX32` from canonical source resources before compiling; these directories are generated packaging staging areas.
 - Compiles `Thread\Work.ahk` to `Work1.exe`.
-- Packages `RMT帮助文档.html` when Node.js and `Web/JS/SingleHtml.js` are available.
+- Packages `index.html` as the offline RMT help document when Node.js and `Web/JS/SingleHtml.js` are available.
 - Copies `WebViewApp\dist` into release output.
 - Copies `Plugins\WebViewToo\Lib` into release output.
 - Creates output under `RMTRelease\RMTv{version}` by default, or under `-OutputDir`, with `_lite` and/or `_runtime` suffixes.
@@ -98,7 +98,7 @@ For each generated release folder, confirm these files or directories exist:
 - `WebViewApp\dist\index.html`
 - `WebViewApp\dist\assets\*.js`
 - `WebViewApp\dist\assets\*.css`
-- `RMT帮助文档.html`
+- `index.html`
 
 Confirm `node_modules` is not included. For `_lite` packages, confirm `Runtimes\WebView2\Fixed` is not included. For `_runtime` packages, confirm `Runtimes\WebView2\Fixed\{arch}\msedgewebview2.exe` exists.
 

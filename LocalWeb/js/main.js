@@ -429,7 +429,7 @@ function openTool(toolName) {
 function showHelp() {
     var ahk = getAhkObj();
     if (ahk) { ahk.ShowHelp(); }
-    else { window.location.href = 'RMT帮助文档.html'; }
+    else { window.location.href = 'index.html'; }
 }
 function onAHKMessage(msg) {
     console.log('收到 AHK 消息:', msg);

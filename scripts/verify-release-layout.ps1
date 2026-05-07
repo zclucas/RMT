@@ -8,8 +8,6 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$HelpDocName = "RMT" + [char]0x5e2e + [char]0x52a9 + [char]0x6587 + [char]0x6863 + ".html"
-
 function Get-RmtVersion {
     $uiUtilPath = Join-Path $RepoRoot "Main\UIUtil.ahk"
     $content = Get-Content -LiteralPath $uiUtilPath -Raw
@@ -98,7 +96,7 @@ function Test-ReleaseDir {
     Assert-PathExists $releasePath "Plugins\WebViewToo\Lib\WebViewToo.ahk" "WebViewToo wrapper" $problems
     Assert-PathExists $releasePath "Plugins\WebViewToo\Lib\WebView2.ahk" "WebView2 wrapper" $problems
     Assert-PathExists $releasePath "WebViewApp\dist\index.html" "WebView dist index" $problems
-    Assert-PathExists $releasePath $HelpDocName "help document" $problems
+    Assert-PathExists $releasePath "index.html" "help document" $problems
     Assert-GlobExists $releasePath "WebViewApp\dist\assets" "*.js" "WebView JavaScript bundle" $problems
     Assert-GlobExists $releasePath "WebViewApp\dist\assets" "*.css" "WebView CSS bundle" $problems
 

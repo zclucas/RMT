@@ -897,7 +897,7 @@ function showHelp() {
     if (ahk) {
         ahk.ShowHelp();
     } else {
-        window.location.href = 'RMT帮助文档.html';
+        window.location.href = 'index.html';
     }
 }
 

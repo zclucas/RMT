@@ -526,7 +526,7 @@ RmtDispatchWebAction(actionType, payload) {
             MenuReload()
             return ""
         case "openHelp":
-            Run(A_WorkingDir "\RMT帮助文档.html")
+            Run(A_WorkingDir "\index.html")
             return ""
         case "openUrl":
             url := RmtGet(payload, "url", "")

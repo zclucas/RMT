@@ -19,6 +19,8 @@ WebViewApp/*.tsbuildinfo
 WebViewApp/playwright-report/
 WebViewApp/test-results/
 Runtimes/WebView2/Fixed/
+RMT帮助文档.html
+RMT帮助文档-搜索*.html
 ReleaseX32/
 ReleaseX64/
 Setting/

@@ -94,7 +94,7 @@ class WebView2UI {
                 case "showSettingMgr":
                     MySettingMgrGui.ShowGui()
                 case "showHelp":
-                    Run(A_WorkingDir "\RMT帮助文档.html")
+                    Run(A_WorkingDir "\index.html")
                 case "tabChange":
                     this.OnTabChanged(tabIndex)
                 ; 忽略未知动作
@@ -386,7 +386,7 @@ WebMessageHandlerInvoke(interface, args) {
 
 ; 帮助打开函数
 ShowHelpOpen() {
-    Run(A_WorkingDir "\RMT帮助文档.html")
+    Run(A_WorkingDir "\index.html")
 }
 
 ; 格式化热键显示（JS调用）

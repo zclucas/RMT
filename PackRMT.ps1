@@ -354,10 +354,7 @@ function Initialize-ReleaseDir {
             -Destination (Join-Path $ReleaseDir $dirName)
     }
 
-    $helpSrc = Join-Path $PSScriptRoot "RMT帮助文档.html"
-    if (Test-Path -LiteralPath $helpSrc) {
-        Copy-RequiredFile -Source $helpSrc -DestDir $ReleaseDir
-    }
+    Copy-RequiredFile -Source (Join-Path $PSScriptRoot "index.html") -DestDir $ReleaseDir
 
     $pluginsDir = Join-Path $ReleaseDir "Plugins"
     New-Item -ItemType Directory -Path $pluginsDir -Force | Out-Null
