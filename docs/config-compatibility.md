@@ -21,6 +21,18 @@ For future config changes:
 5. Save the new format only after the app has a complete valid state.
 6. Log or surface a concise message if migration fails.
 
+## Change Template
+
+Use this template in a PR or maintenance note before changing saved data:
+
+- Saved file and section:
+- Existing field or command format:
+- New field or command format:
+- Default value for missing data:
+- Backup behavior:
+- Rollback behavior:
+- Verification data set:
+
 ## WebView-Specific Rules
 
 - React may request updates through bridge actions such as `updateSetting`, `updateTool`, `updateItem`, and `updateFold`.

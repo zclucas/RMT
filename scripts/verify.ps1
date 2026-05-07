@@ -57,29 +57,40 @@ function Invoke-Check {
     & $Check
 }
 
+function Convert-ToSemVer {
+    param([string]$Version)
+
+    $parts = $Version.Split(".")
+    if ($parts.Count -eq 2) {
+        return "$Version.0"
+    }
+    return $Version
+}
+
 Invoke-Check "Version consistency" {
     $uiUtilPath = Join-Path $RepoRoot "Main\UIUtil.ahk"
     $fallbackStatePath = Join-Path $RepoRoot "WebViewApp\src\fallbackState.ts"
     $packagePath = Join-Path $RepoRoot "WebViewApp\package.json"
 
     $uiUtil = Get-Content -LiteralPath $uiUtilPath -Raw
-    if ($uiUtil -notmatch 'RMT_WEBVIEW_VERSION\s*:=\s*"RMTv(?<version>\d+\.\d+\.\d+)"') {
+    if ($uiUtil -notmatch 'RMT_WEBVIEW_VERSION\s*:=\s*"RMTv(?<version>\d+\.\d+(?:\.\d+)?)"') {
         throw "Unable to read RMT_WEBVIEW_VERSION from Main\UIUtil.ahk"
     }
-    $ahkVersion = $matches["version"]
+    $displayVersion = $matches["version"]
+    $packageComparableVersion = Convert-ToSemVer $displayVersion
 
     $packageVersion = (Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json).version
-    if ($ahkVersion -ne $packageVersion) {
-        throw "Version mismatch: Main\UIUtil.ahk has $ahkVersion, WebViewApp\package.json has $packageVersion"
+    if ($packageComparableVersion -ne $packageVersion) {
+        throw "Version mismatch: Main\UIUtil.ahk has $displayVersion, WebViewApp\package.json has $packageVersion"
     }
 
     $bridge = Get-Content -LiteralPath $fallbackStatePath -Raw
-    $expectedBridgeVersion = 'version:\s*"RMTv' + [regex]::Escape($ahkVersion) + '"'
+    $expectedBridgeVersion = 'version:\s*"RMTv' + [regex]::Escape($displayVersion) + '"'
     if ($bridge -notmatch $expectedBridgeVersion) {
-        throw "Version mismatch: WebViewApp\src\fallbackState.ts fallback is not RMTv$ahkVersion"
+        throw "Version mismatch: WebViewApp\src\fallbackState.ts fallback is not RMTv$displayVersion"
     }
 
-    Write-Host "RMTv$ahkVersion"
+    Write-Host "RMTv$displayVersion"
 }
 
 if (-not $SkipBridgeContract) {

@@ -1,0 +1,35 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+      - "codex/**"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: WebViewApp/package-lock.json
+
+      - name: Install WebView dependencies
+        working-directory: WebViewApp
+        run: npm ci
+
+      - name: Run repository verification
+        shell: powershell
+        run: >
+          .\scripts\verify.ps1
+          -AhkExe ".\.tools\AutoHotkey\v2\AutoHotkey64.exe"

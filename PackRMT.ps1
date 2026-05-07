@@ -6,6 +6,7 @@ param(
     [string]$ReleaseType = "interactive",
     [ValidateSet("both", "lite", "runtime")]
     [string]$Distribution = "both",
+    [string]$OutputDir = "",
     [switch]$NoWait
 )
 
@@ -138,6 +139,31 @@ function Copy-IfExist {
         Copy-Item $Source -Destination $dest -Force -ErrorAction SilentlyContinue
         if ($?) { Write-Log "  已复制: $(Split-Path $Source -Leaf)" "Gray" }
     }
+}
+
+function Copy-RequiredFile {
+    param([string]$Source, [string]$DestDir)
+
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "缺少发行资源: $Source"
+    }
+    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+    Copy-Item -LiteralPath $Source -Destination $DestDir -Force
+    Write-Log "  已复制: $(Split-Path $Source -Leaf)" "Gray"
+}
+
+function Copy-RequiredDirectory {
+    param([string]$Source, [string]$Destination)
+
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "缺少发行资源目录: $Source"
+    }
+    if (Test-Path -LiteralPath $Destination) {
+        Remove-Item -LiteralPath $Destination -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path (Split-Path $Destination -Parent) -Force | Out-Null
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force -Recurse
+    Write-Log "  已复制: $(Split-Path $Source -Leaf)" "Gray"
 }
 
 function Get-Version {
@@ -309,6 +335,54 @@ function Copy-WebViewAssets {
     return $true
 }
 
+function Initialize-ReleaseDir {
+    param(
+        [string]$ReleaseDir,
+        [ValidateSet("x64", "x32")]
+        [string]$ReleaseArch
+    )
+
+    if (Test-Path -LiteralPath $ReleaseDir) {
+        Remove-Item -LiteralPath $ReleaseDir -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
+
+    Write-Log "初始化 $ReleaseArch 发行目录..." "Gray"
+    foreach ($dirName in @("Audio", "Joy", "VBS", "Lang")) {
+        Copy-RequiredDirectory `
+            -Source (Join-Path $PSScriptRoot $dirName) `
+            -Destination (Join-Path $ReleaseDir $dirName)
+    }
+
+    $helpSrc = Join-Path $PSScriptRoot "RMT帮助文档.html"
+    if (Test-Path -LiteralPath $helpSrc) {
+        Copy-RequiredFile -Source $helpSrc -DestDir $ReleaseDir
+    }
+
+    $pluginsDir = Join-Path $ReleaseDir "Plugins"
+    New-Item -ItemType Directory -Path $pluginsDir -Force | Out-Null
+    Copy-RequiredFile -Source (Join-Path $PSScriptRoot "Plugins\IbInputSimulator.dll") -DestDir $pluginsDir
+
+    $openCvDir = Join-Path $pluginsDir "OpenCV"
+    Copy-RequiredFile -Source (Join-Path $PSScriptRoot "Plugins\OpenCV\opencv_world481.dll") -DestDir $openCvDir
+    Copy-RequiredFile -Source (Join-Path $PSScriptRoot "Plugins\OpenCV\RMT_OpenCV.dll") -DestDir $openCvDir
+
+    $rmtPluginDir = Join-Path $pluginsDir "RMT"
+    Copy-RequiredFile -Source (Join-Path $PSScriptRoot "Plugins\RMT\RMT.dll") -DestDir $rmtPluginDir
+
+    $screenCaptureDir = Join-Path $pluginsDir "ScreenCapture"
+    Copy-RequiredFile -Source (Join-Path $PSScriptRoot "Plugins\ScreenCapture\ScreenCapture.exe") -DestDir $screenCaptureDir
+
+    $vigemDir = Join-Path $pluginsDir "ViGEm"
+    Copy-RequiredFile -Source (Join-Path $PSScriptRoot "Plugins\ViGEm\ViGEmWrapper.dll") -DestDir $vigemDir
+
+    $rapidOcrDir = Join-Path $pluginsDir "RapidOcr"
+    $rapidOcrArchDir = if ($ReleaseArch -eq "x64") { "64bit" } else { "32bit" }
+    Copy-RequiredDirectory -Source (Join-Path $PSScriptRoot "Plugins\RapidOcr\$rapidOcrArchDir") -Destination (Join-Path $rapidOcrDir $rapidOcrArchDir)
+    Copy-RequiredDirectory -Source (Join-Path $PSScriptRoot "Plugins\RapidOcr\ch_models") -Destination (Join-Path $rapidOcrDir "ch_models")
+    Copy-RequiredDirectory -Source (Join-Path $PSScriptRoot "Plugins\RapidOcr\en_models") -Destination (Join-Path $rapidOcrDir "en_models")
+}
+
 function Get-ReleaseVariants {
     param([string]$DistributionType)
     if ($DistributionType -eq "both") {
@@ -323,6 +397,16 @@ function Get-RuntimeArchName {
         return "x64"
     }
     return "x86"
+}
+
+function Get-ReleaseOutputRoot {
+    if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+        return (Join-Path ([Environment]::GetFolderPath("Desktop")) "RMTRelease")
+    }
+    if ([System.IO.Path]::IsPathRooted($OutputDir)) {
+        return $OutputDir
+    }
+    return (Join-Path $PSScriptRoot $OutputDir)
 }
 
 function Resolve-WebViewFixedRuntimeSource {
@@ -430,24 +514,11 @@ function New-Release {
     if ($Type -eq "x64" -or $Type -eq "both") {
         Write-Step 1 "生成 ReleaseX64"
         $releaseDir = Join-Path $PSScriptRoot "ReleaseX64"
+        Initialize-ReleaseDir -ReleaseDir $releaseDir -ReleaseArch "x64"
         $releaseThread = Join-Path $releaseDir "Thread"
 
         # 创建目录
         New-Item -ItemType Directory -Path $releaseThread -Force | Out-Null
-
-        # 复制 Lang 目录
-        Write-Log "复制 Lang 目录..." "Gray"
-        if (Test-Path "$releaseDir\Lang") {
-            Remove-Item "$releaseDir\Lang" -Recurse -Force
-        }
-        Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
-
-        # 复制帮助文档
-        $helpSrc = Join-Path $PSScriptRoot "RMT帮助文档.html"
-        if (Test-Path $helpSrc) {
-            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
-            Write-Log "  已复制: RMT帮助文档.html" "Gray"
-        }
 
         # 复制 WebView2 前端和运行库
         if (-not (Copy-WebViewAssets $releaseDir)) {
@@ -471,24 +542,11 @@ function New-Release {
     if ($Type -eq "x32" -or $Type -eq "both") {
         Write-Step 2 "生成 ReleaseX32"
         $releaseDir = Join-Path $PSScriptRoot "ReleaseX32"
+        Initialize-ReleaseDir -ReleaseDir $releaseDir -ReleaseArch "x32"
         $releaseThread = Join-Path $releaseDir "Thread"
 
         # 创建目录
         New-Item -ItemType Directory -Path $releaseThread -Force | Out-Null
-
-        # 复制 Lang 目录
-        Write-Log "复制 Lang 目录..." "Gray"
-        if (Test-Path "$releaseDir\Lang") {
-            Remove-Item "$releaseDir\Lang" -Recurse -Force
-        }
-        Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
-
-        # 复制帮助文档
-        $helpSrc = Join-Path $PSScriptRoot "RMT帮助文档.html"
-        if (Test-Path $helpSrc) {
-            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
-            Write-Log "  已复制: RMT帮助文档.html" "Gray"
-        }
 
         # 复制 WebView2 前端和运行库
         if (-not (Copy-WebViewAssets $releaseDir)) {
@@ -509,16 +567,18 @@ function New-Release {
         }
     }
 
-    Write-Section "创建发行包到桌面"
-    $desktop = [Environment]::GetFolderPath("Desktop")
-    $rmtReleaseDir = Join-Path $desktop "RMTRelease"
+    Write-Section "创建发行包"
+    $rmtReleaseDir = Get-ReleaseOutputRoot
 
-    if (Test-Path $rmtReleaseDir) {
-        Write-Log "删除旧 RMTRelease 目录..." "Yellow"
-        Remove-Item $rmtReleaseDir -Recurse -Force
+    if (-not (Test-Path -LiteralPath $rmtReleaseDir)) {
+        New-Item -ItemType Directory -Path $rmtReleaseDir -Force | Out-Null
     }
 
     $versionDir = Join-Path $rmtReleaseDir "RMTv$version"
+    if (Test-Path -LiteralPath $versionDir) {
+        Write-Log "删除旧版本目录: $versionDir" "Yellow"
+        Remove-Item -LiteralPath $versionDir -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $versionDir -Force | Out-Null
     Write-Log "创建 $versionDir" "Gray"
 
@@ -604,6 +664,7 @@ function Main {
         Write-Log "PowerShell $($PSVersionTable.PSVersion)" "Gray"
         Write-Log "工作目录: $PSScriptRoot" "Gray"
         Write-Log "分发版本: $Distribution" "Gray"
+        Write-Log "输出目录: $(Get-ReleaseOutputRoot)" "Gray"
 
         if (-not $PSScriptRoot) {
             Write-Log "错误: 无法确定脚本目录" "Red"

@@ -17,13 +17,7 @@ Move completed `history.md` entries from `Unreleased` into a new version section
 Run from the repository root:
 
 ```powershell
-cd WebViewApp
-npm.cmd run build
-cd ..
-node .\scripts\verify-webview-contract.mjs
-node .\scripts\verify-webview-dist.mjs
-& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
-git diff --check
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -AhkExe .\.tools\AutoHotkey\v2\AutoHotkey64.exe
 ```
 
 If the React build fails with `spawn EPERM` in a sandboxed environment, rerun `npm.cmd run build` outside the sandbox.
@@ -54,6 +48,20 @@ For non-interactive release packaging:
 .\PackRMT.ps1 -ReleaseType both -Distribution both -NoWait
 ```
 
+GitHub Actions can also create release zips without committing generated output. Open the `Package` workflow from the Actions tab, run it manually, and choose:
+
+- `release_type`: `x64` for a test package, or `both` for x64 and x32 packages.
+- `distribution`: `lite`, `runtime`, or `both`.
+- `retention_days`: how long GitHub keeps the uploaded workflow artifact.
+
+The workflow uploads the generated zip files as run artifacts. It downloads and expands Microsoft WebView2 Fixed Runtime only when `distribution` is `runtime` or `both`.
+
+Use `-OutputDir` for repeatable local or CI packaging without deleting the desktop `RMTRelease` directory:
+
+```powershell
+.\PackRMT.ps1 -ReleaseType both -Distribution lite -OutputDir C:\tmp\RMTRelease -NoWait
+```
+
 The script prefers the repository-local Chinese AutoHotkey runtime and Ahk2Exe files under `.tools\AutoHotkey`. See `docs\ahk-chinese-error-runtime.md` for the runtime source patch, license notes, and rebuild steps.
 
 Distribution variants:
@@ -62,14 +70,17 @@ Distribution variants:
 - `-Distribution runtime`: bundles WebView2 Fixed Runtime from `Runtimes\WebView2\Fixed\x64`, `Runtimes\WebView2\Fixed\x86`, or `.tools\WebView2Runtime\Fixed\{arch}`.
 - `-Distribution both`: creates both variants.
 
+For GitHub Actions packaging, `scripts\prepare-webview2-runtime.ps1` reads the official Microsoft WebView2 download page, downloads the selected Fixed Version Runtime cab files, expands them with `expand.exe`, and stores them under `.tools\WebView2Runtime\Fixed`.
+
 Packaging behavior:
 
 - Reads the version from `Main/UIUtil.ahk`.
+- Recreates `ReleaseX64` and `ReleaseX32` from canonical source resources before compiling; these directories are generated packaging staging areas.
 - Compiles `Thread\Work.ahk` to `Work1.exe`.
 - Packages `RMT帮助文档.html` when Node.js and `Web/JS/SingleHtml.js` are available.
 - Copies `WebViewApp\dist` into release output.
 - Copies `Plugins\WebViewToo\Lib` into release output.
-- Creates desktop output under `RMTRelease\RMTv{version}` with `_lite` and/or `_runtime` suffixes.
+- Creates output under `RMTRelease\RMTv{version}` by default, or under `-OutputDir`, with `_lite` and/or `_runtime` suffixes.
 
 Choose:
 
@@ -92,6 +103,15 @@ For each generated release folder, confirm these files or directories exist:
 Confirm `node_modules` is not included. For `_lite` packages, confirm `Runtimes\WebView2\Fixed` is not included. For `_runtime` packages, confirm `Runtimes\WebView2\Fixed\{arch}\msedgewebview2.exe` exists.
 
 Manually inspect the release layout when packaging outside the default desktop `RMTRelease\RMTv{version}` location.
+
+For `_runtime` packages using WebView2 Fixed Runtime v120 or newer on Windows 10, Microsoft documents an AppContainer permission requirement for unpackaged Win32 apps. If a Windows 10 target shows WebView2 startup failures with the bundled runtime, grant read/execute permissions to the deployed Fixed Runtime folder:
+
+```powershell
+icacls ".\Runtimes\WebView2\Fixed\x64" /grant *S-1-15-2-2:(OI)(CI)(RX)
+icacls ".\Runtimes\WebView2\Fixed\x64" /grant *S-1-15-2-1:(OI)(CI)(RX)
+```
+
+Use `x86` instead of `x64` for the x32 package.
 
 ## 6. Smoke Test Packaged Build
 

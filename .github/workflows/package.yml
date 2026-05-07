@@ -1,0 +1,92 @@
+name: Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release architecture set"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - "x64"
+          - "both"
+      distribution:
+        description: "Distribution variant"
+        required: true
+        default: "lite"
+        type: choice
+        options:
+          - "lite"
+          - "runtime"
+          - "both"
+      retention_days:
+        description: "Artifact retention days"
+        required: true
+        default: "14"
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    env:
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      DISTRIBUTION: ${{ inputs.distribution }}
+      OUTPUT_DIR: ${{ runner.temp }}\RMTRelease
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: WebViewApp/package-lock.json
+
+      - name: Install WebView dependencies
+        working-directory: WebViewApp
+        run: npm ci
+
+      - name: Run repository verification
+        shell: powershell
+        run: >
+          .\scripts\verify.ps1
+          -AhkExe ".\.tools\AutoHotkey\v2\AutoHotkey64.exe"
+
+      - name: Prepare WebView2 Fixed Runtime
+        if: ${{ inputs.distribution != 'lite' }}
+        shell: powershell
+        run: >
+          .\scripts\prepare-webview2-runtime.ps1
+          -DestinationRoot ".\.tools\WebView2Runtime\Fixed"
+
+      - name: Package release
+        shell: powershell
+        run: >
+          .\PackRMT.ps1
+          -ReleaseType $env:RELEASE_TYPE
+          -Distribution $env:DISTRIBUTION
+          -OutputDir $env:OUTPUT_DIR
+          -NoWait
+
+      - name: Verify release layout
+        shell: powershell
+        run: |
+          $uiUtil = Get-Content -LiteralPath ".\Main\UIUtil.ahk" -Raw
+          if ($uiUtil -notmatch 'RMT_WEBVIEW_VERSION\s*:=\s*"RMTv(?<version>\d+(?:\.\d+){1,2})"') {
+            throw "Unable to read RMT_WEBVIEW_VERSION from Main\UIUtil.ahk"
+          }
+          $releaseRoot = Join-Path $env:OUTPUT_DIR "RMTv$($matches.version)"
+          .\scripts\verify-release-layout.ps1 -ReleaseRoot $releaseRoot
+
+      - name: Upload release zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmt-${{ inputs.distribution }}-${{ github.run_number }}
+          path: ${{ runner.temp }}\RMTRelease\*.zip
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+          compression-level: 0

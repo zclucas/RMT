@@ -42,7 +42,7 @@ function Resolve-ReleaseDirs {
     }
 
     $dirs = @(Get-ChildItem -LiteralPath $releaseRootPath -Directory |
-        Where-Object { $_.Name -match '^RMTv.+_x(64|32)$' } |
+        Where-Object { $_.Name -match '^RMTv.+_x(64|32)(?:_(?:lite|runtime))?$' } |
         ForEach-Object { $_.FullName })
 
     if ($dirs.Count -eq 0) {
@@ -102,10 +102,10 @@ function Test-ReleaseDir {
     Assert-GlobExists $releasePath "WebViewApp\dist\assets" "*.js" "WebView JavaScript bundle" $problems
     Assert-GlobExists $releasePath "WebViewApp\dist\assets" "*.css" "WebView CSS bundle" $problems
 
-    if ((Split-Path -Leaf $releasePath) -match '_x64$') {
+    if ((Split-Path -Leaf $releasePath) -match '_x64(?:_|$)') {
         Assert-PathExists $releasePath "Plugins\WebViewToo\Lib\64bit\WebView2Loader.dll" "64-bit WebView2 loader" $problems
     }
-    elseif ((Split-Path -Leaf $releasePath) -match '_x32$') {
+    elseif ((Split-Path -Leaf $releasePath) -match '_x32(?:_|$)') {
         Assert-PathExists $releasePath "Plugins\WebViewToo\Lib\32bit\WebView2Loader.dll" "32-bit WebView2 loader" $problems
     }
     else {
