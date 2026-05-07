@@ -29,6 +29,7 @@ export const uiCopy = {
   },
   macro: {
     triggerTypeLabels: ["按下", "松开", "松止", "开关", "长按"],
+    triggerType: "触发类型",
     modeLabels: ["AHK Send", "keybd_event", "罗技"],
     startTipLabels: ["无", "触发提示", "循环首次提示"],
     endTipLabels: ["无", "结束提示", "循环结束提示"],
@@ -44,7 +45,7 @@ export const uiCopy = {
     disabled: "禁用",
     expandModule: "展开模块",
     collapseModule: "折叠模块",
-    headers: ["宏名称", "触发编辑器", "触发类型", "循环次数", "宏设置", "宏编辑器", "状态", "操作"],
+    headers: ["宏名称", "触发编辑器", "触发类型", "循环次数", "宏设置", "宏编辑器", "操作"],
     emptyModule: "当前模块没有宏。",
     dragHint: "拖拽调整顺序",
     macroName: "宏名称",

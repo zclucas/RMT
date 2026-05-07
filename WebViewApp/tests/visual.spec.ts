@@ -4,6 +4,7 @@ import type { RmtState } from "../src/types";
 import {
   darkMacroState,
   denseMacroState,
+  menuVisualState,
   settingsVisualState,
   thanksVisualState,
   toolVisualState,
@@ -13,6 +14,7 @@ import {
 const macroScenarios = [
   { name: "default-1070x590", width: 1070, height: 590, state: visualState, expectedRows: 3 },
   { name: "wide-1360x720", width: 1360, height: 720, state: visualState, expectedRows: 3 },
+  { name: "menu-1070x590", width: 1070, height: 590, state: menuVisualState, expectedRows: 3 },
   { name: "dense-narrow-900x590", width: 900, height: 590, state: denseMacroState, expectedRows: 5 },
   { name: "dark-1070x590", width: 1070, height: 590, state: darkMacroState, expectedRows: 5 }
 ];
@@ -24,13 +26,31 @@ async function loadState(page: Page, state: RmtState) {
       ahk?: {
         RmtAction?: (json: string) => Promise<string>;
       };
+      __rmtActions?: Array<{ type: string; payload?: Record<string, unknown> }>;
     };
 
+    bridgeWindow.__rmtActions = [];
     bridgeWindow.ahk = {
       RmtAction: async (json: string) => {
-        const action = JSON.parse(json) as { type: string; payload?: { tabIndex?: number } };
-        if (action.type === "setTab" && action.payload?.tabIndex) {
+        const action = JSON.parse(json) as { type: string; payload?: Record<string, unknown> };
+        bridgeWindow.__rmtActions?.push(action);
+        if (action.type === "setTab" && typeof action.payload?.tabIndex === "number") {
           currentState = { ...currentState, activeTabIndex: action.payload.tabIndex };
+        }
+        if (
+          action.type === "updateFold" &&
+          typeof action.payload?.tableIndex === "number" &&
+          typeof action.payload.foldIndex === "number" &&
+          typeof action.payload.field === "string"
+        ) {
+          const nextState = structuredClone(currentState) as RmtState;
+          const targetFold = nextState.tabs
+            .find((tab) => tab.table?.index === action.payload?.tableIndex)
+            ?.table?.folds.find((fold) => fold.index === action.payload?.foldIndex);
+          if (targetFold) {
+            (targetFold as unknown as Record<string, unknown>)[action.payload.field] = action.payload.value;
+            currentState = nextState;
+          }
         }
 
         return JSON.stringify({
@@ -126,7 +146,7 @@ async function expectDarkControlsReadable(page: Page) {
 
     return Array.from(
       document.querySelectorAll<HTMLElement>(
-        ".module-macro-row input:not([type='checkbox']), .module-macro-row select, .module-macro-row button, .row-disabled, .module-disabled"
+        ".module-macro-row input:not([type='checkbox']), .module-macro-row select, .module-macro-row button, .row-disabled, .module-disabled, .module-trigger-controls button, .module-trigger-controls select"
       )
     ).map((element) => {
       const [red, green, blue] = parseRgb(getComputedStyle(element).color);
@@ -200,6 +220,36 @@ for (const scenario of macroScenarios) {
     });
   });
 }
+
+test.describe("menu macro module controls", () => {
+  test.use({ viewport: { width: 1070, height: 590 } });
+
+  test("updates module trigger type through the fold bridge path", async ({ page }) => {
+    await loadState(page, menuVisualState);
+
+    const firstControls = page.locator(".module-trigger-controls").first();
+    await expect(page.locator(".module-trigger-controls")).toHaveCount(2);
+    await expect(firstControls.locator("button")).toContainText("Alt+M");
+
+    await firstControls.locator("select").selectOption("4");
+
+    const updateActions = await page.evaluate(() => {
+      const actions = (window as Window & { __rmtActions?: Array<{ type: string; payload?: Record<string, unknown> }> }).__rmtActions ?? [];
+      return actions.filter((action) => action.type === "updateFold");
+    });
+
+    expect(updateActions).toContainEqual({
+      type: "updateFold",
+      payload: {
+        tableIndex: 3,
+        foldIndex: 1,
+        field: "triggerType",
+        value: 4
+      }
+    });
+    await expect(firstControls.locator("select")).toHaveValue("4");
+  });
+});
 
 test.describe("tool and settings views", () => {
   test.use({ viewport: { width: 1070, height: 590 } });

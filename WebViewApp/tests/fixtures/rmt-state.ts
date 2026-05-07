@@ -108,10 +108,31 @@ function createMacroTab(index: number, symbol: string, name: string, folds: RmtF
 }
 
 function createBaseTabs(folds: RmtFold[]): RmtTab[] {
+  const menuFolds = [
+    createFold(
+      1,
+      [
+        createItem(1, { trigger: "F1", remark: "菜单项 1" }),
+        createItem(2, { trigger: "F2", remark: "菜单项 2" })
+      ],
+      {
+        remark: "菜单配置 1",
+        trigger: "!m",
+        triggerType: 3
+      }
+    ),
+    createFold(2, [createItem(3, { trigger: "F3", remark: "菜单项 3" })], {
+      remark: "菜单配置 2",
+      frontInfo: "GameWindow",
+      trigger: "XButton1",
+      triggerType: 4
+    })
+  ];
+
   return [
     createMacroTab(1, "Normal", "按键宏", folds),
     createMacroTab(2, "String", "字串宏", [createFold(1, [createItem(1, { trigger: "hello", remark: "文本展开" })])]),
-    createMacroTab(3, "Menu", "菜单宏", []),
+    createMacroTab(3, "Menu", "菜单宏", menuFolds),
     createMacroTab(4, "Timing", "定时宏", [createFold(1, [createItem(1, { trigger: "08:30", remark: "早间任务" })])]),
     createMacroTab(5, "Multi", "宏", []),
     createMacroTab(6, "Replace", "按键替换", []),
@@ -182,6 +203,10 @@ export const darkMacroState = createState({
     colorPresetId: "night-black"
   },
   tabs: createBaseTabs(denseFolds)
+});
+
+export const menuVisualState = createState({
+  activeTabIndex: 3
 });
 
 export const toolVisualState = createState({
