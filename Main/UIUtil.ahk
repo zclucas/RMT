@@ -1,6 +1,8 @@
 #Include ..\Plugins\WebViewToo\Lib\WebViewToo.ahk
 
 RMT_WEBVIEW_VERSION := "RMTv2.0"
+RMT_WEBVIEW_DIST_ENTRY := "WebViewApp/dist/index.html"
+RMT_WEBVIEW_DEV_DEFAULT_URL := "http://127.0.0.1:5173/"
 RmtCopiedWebItem := ""
 
 class RmtWebViewGui extends WebViewGui {
@@ -224,10 +226,50 @@ InitUI() {
     RmtInitWebStateControls()
     RegisterRmtWebCallbacks(MyGui)
     MyGui.BrowseFolder(A_WorkingDir)
-    MyGui.Navigate("WebViewApp/dist/index.html")
+    MyGui.Navigate(RmtGetWebViewEntry())
     CustomTrayMenu()
     OnOpen()
 
+}
+
+RmtGetWebViewEntry() {
+    global RMT_WEBVIEW_DIST_ENTRY
+    devUrl := RmtGetWebViewDevUrl()
+    if (devUrl != "" && RmtIsWebViewDevServerReady(devUrl))
+        return devUrl
+    return RMT_WEBVIEW_DIST_ENTRY
+}
+
+RmtGetWebViewDevUrl() {
+    global RMT_WEBVIEW_DEV_DEFAULT_URL
+    devUrl := Trim(EnvGet("RMT_WEBVIEW_DEV_URL"))
+    if (devUrl != "")
+        return RmtNormalizeWebViewDevUrl(devUrl)
+
+    devFlag := StrLower(Trim(EnvGet("RMT_WEBVIEW_DEV")))
+    if (devFlag == "1" || devFlag == "true" || devFlag == "yes" || devFlag == "on")
+        return RMT_WEBVIEW_DEV_DEFAULT_URL
+    return ""
+}
+
+RmtNormalizeWebViewDevUrl(devUrl) {
+    devUrl := Trim(devUrl)
+    if !RegExMatch(devUrl, "i)^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/.*)?$")
+        return ""
+    return RegExMatch(devUrl, "/$") ? devUrl : devUrl "/"
+}
+
+RmtIsWebViewDevServerReady(devUrl) {
+    try {
+        req := ComObject("WinHttp.WinHttpRequest.5.1")
+        req.SetTimeouts(500, 500, 500, 500)
+        req.Open("GET", devUrl, false)
+        req.Send()
+        return req.Status >= 200 && req.Status < 500
+    }
+    catch {
+        return false
+    }
 }
 
 OnOpen() {

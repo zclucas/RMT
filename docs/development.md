@@ -59,6 +59,35 @@ node Web\JS\SingleHtml.js
 - Run `node .\scripts\verify-webview-dist.mjs` after rebuilding and staging `WebViewApp/dist`.
 - Run `npm.cmd run test:visual` from `WebViewApp` after layout-sensitive WebView changes.
 
+### WebView Dev Server
+
+By default, RMT loads the built UI from `WebViewApp/dist/index.html`. This remains the release path.
+
+For frontend development, start Vite in one terminal:
+
+```powershell
+cd WebViewApp
+npm.cmd run dev -- --host 127.0.0.1 --port 5173
+```
+
+Then start RMT with the dev switch in another terminal:
+
+```powershell
+$env:RMT_WEBVIEW_DEV = "1"
+& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" .\RMT.ahk
+```
+
+RMT will load `http://127.0.0.1:5173/` only when that local server responds. If the server is not running, it falls back to `WebViewApp/dist/index.html`.
+
+To use a different local Vite port:
+
+```powershell
+$env:RMT_WEBVIEW_DEV_URL = "http://127.0.0.1:5174/"
+& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" .\RMT.ahk
+```
+
+Only `localhost`, `127.0.0.1`, and `[::1]` URLs are accepted for the dev switch.
+
 ## Release Notes
 
 Record user-visible or maintenance-significant changes in `history.md` under `Unreleased`.
