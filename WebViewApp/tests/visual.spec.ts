@@ -184,13 +184,23 @@ for (const scenario of macroScenarios) {
             text: element.textContent?.trim() ?? ""
           };
         });
+        const rowActionButtons = Array.from(document.querySelectorAll<HTMLElement>(".row-actions button")).map((element) => ({
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+          text: element.textContent?.trim() ?? ""
+        }));
+        const rowActionGroups = Array.from(document.querySelectorAll<HTMLElement>(".row-actions")).map((group) =>
+          Array.from(group.children).map((element) => element.textContent?.trim() ?? "")
+        );
         const disabledModules = Array.from(document.querySelectorAll<HTMLElement>(".macro-module-section.is-disabled"));
 
         return {
           disabledModuleCount: disabledModules.length,
           operationRight: Math.max(...operationCells.map((element) => element.getBoundingClientRect().right)),
           viewportWidth: window.innerWidth,
-          disabledCells
+          disabledCells,
+          rowActionButtons,
+          rowActionGroups
         };
       });
 
@@ -202,6 +212,16 @@ for (const scenario of macroScenarios) {
         expect(cell.text).toContain(uiCopy.macro.disabled);
         expect(cell.scrollWidth).toBeLessThanOrEqual(cell.clientWidth + 1);
         expect(cell.height).toBeLessThanOrEqual(42);
+      }
+
+      for (const button of metrics.rowActionButtons) {
+        expect(button.scrollWidth, `${button.text} action width`).toBeLessThanOrEqual(button.clientWidth + 1);
+      }
+
+      for (const group of metrics.rowActionGroups) {
+        expect(group[0]).toContain(uiCopy.macro.copy);
+        expect(group[1]).toContain(uiCopy.macro.disabled);
+        expect(group[2]).toContain(uiCopy.macro.delete);
       }
 
       if (scenario.name.includes("dense")) {
@@ -258,6 +278,8 @@ test.describe("tool and settings views", () => {
     await loadState(page, toolVisualState);
 
     await expect(page.locator(".tool-legacy-page")).toBeVisible();
+    await expect(page.locator(".content-header")).toHaveCount(0);
+    await expect(page.getByText(uiCopy.tool.toolWindows)).toHaveCount(0);
     await expect(page.locator(".tool-output")).toContainText("OCR 第 1 行");
     await expectShellFits(page);
 
@@ -273,6 +295,13 @@ test.describe("tool and settings views", () => {
     await expect(page.locator(".diagnostics-block")).toHaveCount(0);
     await expect(page.locator(".settings-legacy-page select")).toHaveCount(4);
     await expect(page.locator(".settings-legacy-page input[type='checkbox']")).toHaveCount(11);
+    await expect(page.locator(".content-header")).toHaveCount(0);
+
+    const switchLabels = await page.locator(".legacy-switch-grid > *").evaluateAll((elements) =>
+      elements.map((element) => element.textContent?.trim() ?? "")
+    );
+    expect(switchLabels[3]).toContain(uiCopy.tool.recordOptions);
+    expect(switchLabels[4]).toContain(uiCopy.settings.fixedMenuWheel);
     await expectShellFits(page);
 
     await expect(page).toHaveScreenshot("settings-1070x590.png", {
@@ -280,6 +309,31 @@ test.describe("tool and settings views", () => {
       maxDiffPixelRatio: 0.02
     });
   });
+});
+
+test.describe("static content views", () => {
+  test.use({ viewport: { width: 1070, height: 590 } });
+
+  const staticScenarios = [
+    { name: "help", tabIndex: 9, selector: ".help-legacy-page" },
+    { name: "reward", tabIndex: 10, selector: ".reward-panel" },
+    { name: "thanks", tabIndex: 11, selector: ".thanks-panel" }
+  ];
+
+  for (const scenario of staticScenarios) {
+    test(`${scenario.name} view has no runtime header and keeps larger content text`, async ({ page }) => {
+      await loadState(page, { ...visualState, activeTabIndex: scenario.tabIndex });
+
+      await expect(page.locator(scenario.selector)).toBeVisible();
+      await expect(page.locator(".content-header")).toHaveCount(0);
+
+      const fontSize = await page.locator(scenario.selector).evaluate((element) =>
+        Number.parseFloat(window.getComputedStyle(element).fontSize)
+      );
+      expect(fontSize).toBeGreaterThanOrEqual(17);
+      await expectShellFits(page);
+    });
+  }
 });
 
 test.describe("context menu handling", () => {

@@ -1307,6 +1307,9 @@ function SettingsPanel({
           <button className="legacy-command" onClick={() => runAction("editCmdTip")} type="button">
             {uiCopy.tool.commandDisplay}
           </button>
+          <button className="legacy-command" onClick={() => runAction("openToolRecordSetting")} type="button">
+            {uiCopy.tool.recordOptions}
+          </button>
           <label className="legacy-check">
             <input type="checkbox" checked={settings.fixedMenuWheel} onChange={(event) => { patchLocalSettings("fixedMenuWheel", event.target.checked); updateSetting("fixedMenuWheel", event.target.checked); }} />
             {uiCopy.settings.fixedMenuWheel}
@@ -1315,9 +1318,6 @@ function SettingsPanel({
             <input type="checkbox" checked={settings.noVariableTip} onChange={(event) => { patchLocalSettings("noVariableTip", event.target.checked); updateSetting("noVariableTip", event.target.checked); }} />
             {uiCopy.settings.noVariableTip}
           </label>
-          <button className="legacy-command" onClick={() => runAction("openToolRecordSetting")} type="button">
-            {uiCopy.tool.recordOptions}
-          </button>
           <label className="legacy-check">
             <input type="checkbox" checked={settings.modalSubGui} onChange={(event) => { patchLocalSettings("modalSubGui", event.target.checked); updateSetting("modalSubGui", event.target.checked); }} />
             {uiCopy.settings.modalSubGui}

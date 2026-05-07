@@ -15,6 +15,7 @@
 - Linked WebView button colors to the active UI color preset across sidebar, legacy, and macro row controls.
 - Added menu macro module trigger type controls and covered the fold update path with visual tests.
 - Added an opt-in WebView Vite dev server mode while keeping `WebViewApp/dist` as the default release path.
+- Refined the WebView UI shell, sidebar, macro rows, settings switches, and static content pages for tighter legacy-style layout.
 
 ## 2.0
 
