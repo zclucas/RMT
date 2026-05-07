@@ -23,14 +23,28 @@ $Ahk2ExePaths = @(
     "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
 )
 
-# 64位 Base 编译器路径
+# 64位 Ahk2Exe base 路径
 $Base64Paths = @(
+    "$PSScriptRoot\.tools\AutoHotkey\v2\Unicode 64-bit.bin",
     "$PSScriptRoot\.tools\AutoHotkey\v2\AutoHotkey64.exe",
     "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
 )
 
-# 32位 Base 编译器路径
+# 32位 Ahk2Exe base 路径
 $Base32Paths = @(
+    "$PSScriptRoot\.tools\AutoHotkey\v2\Unicode 32-bit.bin",
+    "$PSScriptRoot\.tools\AutoHotkey\v2\AutoHotkey32.exe",
+    "C:\Program Files\AutoHotkey\v2\AutoHotkey32.exe"
+)
+
+# 64位 AutoHotkey 运行器路径，用于 Ahk2Exe 的 /ahk 自动 include 扫描
+$Ahk64Paths = @(
+    "$PSScriptRoot\.tools\AutoHotkey\v2\AutoHotkey64.exe",
+    "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
+)
+
+# 32位 AutoHotkey 运行器路径，用于 Ahk2Exe 的 /ahk 自动 include 扫描
+$Ahk32Paths = @(
     "$PSScriptRoot\.tools\AutoHotkey\v2\AutoHotkey32.exe",
     "C:\Program Files\AutoHotkey\v2\AutoHotkey32.exe"
 )
@@ -201,6 +215,7 @@ function Compile {
     param(
         [string]$AhkFile,
         [string]$BaseExe,
+        [string]$AhkExe,
         [string]$OutputExe,
         [string]$IconPath,
         [string]$Name = "编译"
@@ -210,24 +225,14 @@ function Compile {
         "/in", "`"$AhkFile`"",
         "/icon", "`"$IconPath`"",
         "/base", "`"$BaseExe`"",
+        "/ahk", "`"$AhkExe`"",
         "/cp", "65001",
         "/out", "`"$OutputExe`"",
         "/silent", "verbose"
     )
 
-    Write-Log "  执行: Ahk2Exe /in ... /base ... /out ..." "Gray"
-    $oldComSpec = $env:ComSpec
-    $comSpecShim = Get-Ahk2ExeComSpecShim
-    if ($comSpecShim) {
-        # AutoHotkey 2.0.26 can hang in Ahk2Exe's cmd.exe-based /iLib scan.
-        $env:ComSpec = $comSpecShim
-    }
-    try {
-        $process = Start-Process -FilePath $Ahk2exe -ArgumentList $arguments -NoNewWindow -Wait -PassThru
-    }
-    finally {
-        $env:ComSpec = $oldComSpec
-    }
+    Write-Log "  执行: Ahk2Exe /in ... /base ... /ahk ... /out ..." "Gray"
+    $process = Start-Process -FilePath $Ahk2exe -ArgumentList $arguments -NoNewWindow -Wait -PassThru
 
     if ($process.ExitCode -ne 0) {
         Write-Log "  ✗ 进程退出码: $($process.ExitCode)" "Red"
@@ -453,12 +458,12 @@ function New-Release {
         Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
 
         # 编译 Work1.exe
-        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
+        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -AhkExe $Ahk64Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
             return $false
         }
 
         # 编译主程序 RMTv{version}.exe
-        if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base64Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
+        if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base64Exe -AhkExe $Ahk64Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
             return $false
         }
     }
@@ -494,12 +499,12 @@ function New-Release {
         Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
 
         # 编译 Work1.exe (32位)
-        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base32Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
+        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base32Exe -AhkExe $Ahk32Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
             return $false
         }
 
         # 编译主程序 RMTv{version}.exe
-        if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base32Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
+        if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base32Exe -AhkExe $Ahk32Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
             return $false
         }
     }
@@ -620,10 +625,15 @@ function Main {
         $Ahk2exe = Find-Exe "Ahk2Exe" $Ahk2ExePaths
         if (-not $Ahk2exe) { Wait-KeyPress; exit 1 }
 
-        $Base64Exe = Find-Exe "64Base (AutoHotkey64.exe)" $Base64Paths
+        $Base64Exe = Find-Exe "64Base (Unicode 64-bit.bin)" $Base64Paths
         if (-not $Base64Exe) { Wait-KeyPress; exit 1 }
 
-        $Base32Exe = Find-Exe "32Base (AutoHotkey32.exe)" $Base32Paths
+        $Base32Exe = Find-Exe "32Base (Unicode 32-bit.bin)" $Base32Paths
+
+        $Ahk64Exe = Find-Exe "64Runtime (AutoHotkey64.exe)" $Ahk64Paths
+        if (-not $Ahk64Exe) { Wait-KeyPress; exit 1 }
+
+        $Ahk32Exe = Find-Exe "32Runtime (AutoHotkey32.exe)" $Ahk32Paths
 
         # 步骤 3: 关闭正在运行的 RMT.ahk
         Write-Step 3 "关闭正在运行的 RMT.ahk"
@@ -631,12 +641,12 @@ function Main {
 
         # 步骤 4: 清理旧文件
         Write-Step 4 "清理旧文件"
-        Remove-OldFiles -Dir $WorkDir -Filter "Work*.exe"
+        Remove-OldFiles -Dir $WorkDir -Filter "Work1.exe"
 
         # 步骤 5: 编译 Work1.exe
         Write-Step 5 "编译 Work1.exe"
         $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
-        $result = Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$WorkDir\Work1.exe" -IconPath $IconPath -Name "Work1.exe"
+        $result = Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -AhkExe $Ahk64Exe -OutputExe "$WorkDir\Work1.exe" -IconPath $IconPath -Name "Work1.exe"
         if (-not $result) { Wait-KeyPress; exit 1 }
 
         # 步骤 6: 打包帮助文档
@@ -667,13 +677,13 @@ function Main {
             }
         }
         elseif ($choice -eq 3) {
-            if ($Base32Exe) {
+            if ($Base32Exe -and $Ahk32Exe) {
                 if (-not (New-Release -Type "both")) {
                     Write-Log "发行版创建失败" "Red"
                 }
             }
             else {
-                Write-Log "未找到 32 位编译器，生成 X64 测试版" "Yellow"
+                Write-Log "未找到 32 位 base 或运行器，生成 X64 测试版" "Yellow"
                 if (-not (New-Release -Type "x64")) {
                     Write-Log "发行版创建失败" "Red"
                 }

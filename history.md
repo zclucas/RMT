@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a repository-local Chinese AutoHotkey runtime for packaged RMT error dialogs, including a Chinese error help page and rebuild notes.
 - Fixed WebView edge resize hitboxes and disabled the default WebView context menu.
 - Restored the modal sub-window setting initialization and WebView settings binding.
 - Added WebView contract and dist asset verification scripts for maintenance checks.

@@ -54,7 +54,7 @@ For non-interactive release packaging:
 .\PackRMT.ps1 -ReleaseType both -Distribution both -NoWait
 ```
 
-The script creates a local `.tools\ComSpecShim\cmd.exe` helper when needed to avoid AutoHotkey 2.0.26 hanging during Ahk2Exe's automatic `/iLib` scan.
+The script prefers the repository-local Chinese AutoHotkey runtime and Ahk2Exe files under `.tools\AutoHotkey`. See `docs\ahk-chinese-error-runtime.md` for the runtime source patch, license notes, and rebuild steps.
 
 Distribution variants:
 

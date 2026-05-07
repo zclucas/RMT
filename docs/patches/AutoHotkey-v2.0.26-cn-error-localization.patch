@@ -1,0 +1,732 @@
+diff --git a/Config.vcxproj b/Config.vcxproj
+index d1c66a7a..ef378d0d 100644
+--- a/Config.vcxproj
++++ b/Config.vcxproj
+@@ -36,6 +36,7 @@
+       <FunctionLevelLinking>true</FunctionLevelLinking>
+       <WarningLevel>Level3</WarningLevel>
+       <MultiProcessorCompilation>true</MultiProcessorCompilation>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       
+       <!-- default -->
+       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+diff --git a/source/error.cpp b/source/error.cpp
+index c58c0881..7d9d829c 100644
+--- a/source/error.cpp
++++ b/source/error.cpp
+@@ -20,7 +20,9 @@ GNU General Public License for more details.
+ #include "window.h"
+ #include "TextIO.h"
+ #include "abi.h"
++#include "StringConv.h"
+ #include <richedit.h>
++#include <initializer_list>
+ 
+ 
+ Line *Line::PreparseError(LPTSTR aErrorText, LPTSTR aExtraInfo)
+@@ -198,9 +200,9 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
+ {
+ 	#define STD_ERROR_FORMAT _T("%s (%d) : ==> %s%s\n")
+ 	int n = sntprintf(aBuf, aBufSize, STD_ERROR_FORMAT, Line::sSourceFile[aFileIndex], aLineNumber
+-		, aWarn ? _T("Warning: ") : _T(""), aErrorText);
++		, aWarn ? _T("警告: ") : _T(""), aErrorText);
+ 	if (*aExtraInfo)
+-		n += sntprintf(aBuf + n, aBufSize - n, _T("     Specifically: %s\n"), aExtraInfo);
++		n += sntprintf(aBuf + n, aBufSize - n, _T("     具体信息: %s\n"), aExtraInfo);
+ 	return n;
+ }
+ 
+@@ -287,6 +289,196 @@ struct ErrorBoxParam
+ #endif
+ };
+ 
++static bool ContainsAny(LPCTSTR aText, std::initializer_list<LPCTSTR> aNeedles)
++{
++	if (!aText)
++		return false;
++	for (auto needle : aNeedles)
++		if (needle && *needle && _tcsstr(aText, needle))
++			return true;
++	return false;
++}
++
++static bool ErrorContainsAny(ErrorBoxParam &error, std::initializer_list<LPCTSTR> aNeedles)
++{
++	return ContainsAny(error.text, aNeedles) || ContainsAny(error.info, aNeedles);
++}
++
++static void AppendHtmlEscaped(CStringW &html, LPCTSTR text)
++{
++	if (!text)
++		return;
++	CStringW converted;
++	auto src = StringTCharToWChar(text, converted);
++	for (auto ch = src; *ch; ++ch)
++	{
++		switch (*ch)
++		{
++		case L'&': html += L"&amp;"; break;
++		case L'<': html += L"&lt;"; break;
++		case L'>': html += L"&gt;"; break;
++		case L'"': html += L"&quot;"; break;
++		default: html += *ch;
++		}
++	}
++}
++
++static void AppendHelpRow(CStringW &html, LPCWSTR label, LPCTSTR value)
++{
++	if (!value || !*value)
++		return;
++	html += L"<dt>";
++	html += label;
++	html += L"</dt><dd>";
++	AppendHtmlEscaped(html, value);
++	html += L"</dd>";
++}
++
++static void AppendAdvice(CStringW &html, LPCWSTR title, LPCWSTR body, LPCWSTR link = nullptr)
++{
++	html += L"<li><b>";
++	html += title;
++	html += L"</b><p>";
++	html += body;
++	if (link && *link)
++	{
++		html += L" <a href=\"";
++		html += link;
++		html += L"\">打开相关中文文档</a>";
++	}
++	html += L"</p></li>";
++}
++
++static void AppendErrorAdvice(CStringW &html, ErrorBoxParam &error)
++{
++	int advice_count = 0;
++	html += L"<ol>";
++	auto add_advice = [&](LPCWSTR title, LPCWSTR body, LPCWSTR link = nullptr)
++	{
++		AppendAdvice(html, title, body, link);
++		++advice_count;
++	};
++
++	if (ErrorContainsAny(error, {_T("参数"), _T("Parameter"), _T("invalid"), _T("Invalid"), _T("无效")}))
++		add_advice(L"参数不符合要求",
++			L"当前指令或函数收到的参数数量、类型或取值不符合 AutoHotkey v2 的要求。先检查“具体信息”中显示的那一项，再对照该函数的语法。RMT 宏里通常对应某条指令的参数填写错误。",
++			L"https://wyagd001.github.io/v2/docs/Functions.htm");
++
++	if (ErrorContainsAny(error, {_T("需要"), _T("Expected"), _T("类型"), _T("type"), _T("Type")}))
++		add_advice(L"类型不匹配",
++			L"某个位置需要数字、字符串、对象、数组或回调，但实际传入了另一种值。优先检查变量是否为空、是否被当成数字使用、数组/对象字段是否存在。",
++			L"https://wyagd001.github.io/v2/docs/Variables.htm");
++
++	if (ErrorContainsAny(error, {_T("未设置"), _T("unset"), _T("Unset"), _T("尚未")}))
++		add_advice(L"变量还没有赋值",
++			L"脚本正在读取一个尚未赋值的变量。给变量设置默认值，或在读取前用 IsSet 判断。RMT 中常见原因是宏变量名写错、上一步指令没有产生输出、或变量作用域不一致。",
++			L"https://wyagd001.github.io/v2/docs/Variables.htm");
++
++	if (ErrorContainsAny(error, {_T("找不到"), _T("不存在"), _T("not found"), _T("Not found"), _T("cannot find"), _T("does not exist")}))
++		add_advice(L"文件、窗口、资源或成员不存在",
++			L"检查路径是否真实存在、相对路径是否以当前工作目录为准、文件是否已随发行包复制。若错误来自窗口/控件操作，确认目标窗口标题、进程名、类名或句柄仍然有效。",
++			L"https://wyagd001.github.io/v2/docs/lib/FileExist.htm");
++
++	if (ErrorContainsAny(error, {_T("Missing"), _T("缺少"), _T("括号"), _T("引号"), _T("\")"), _T("\"]"), _T("\"}")}))
++		add_advice(L"语法结构不完整",
++			L"常见原因是少了右括号、右方括号、右大括号、引号或逗号。检查高亮行和它上一行，尤其是跨行表达式、函数调用和数组/对象字面量。",
++			L"https://wyagd001.github.io/v2/docs/Language.htm");
++
++	if (ErrorContainsAny(error, {_T("没有名为"), _T("no method"), _T("no property"), _T("method"), _T("property")}))
++		add_advice(L"对象属性或方法名不正确",
++			L"检查对象是否为预期类型、属性/方法名是否拼写正确，以及是否把数组、字符串或空值当成对象使用。",
++			L"https://wyagd001.github.io/v2/docs/Objects.htm");
++
++	if (ErrorContainsAny(error, {_T("无法"), _T("cannot"), _T("failed"), _T("Failed"), _T("拒绝访问"), _T("access")}))
++		add_advice(L"系统调用或外部程序失败",
++			L"检查权限、目标程序是否存在、路径是否带引号、文件是否被占用。涉及游戏或管理员窗口时，RMT 和目标程序的权限级别也需要一致。",
++			L"https://wyagd001.github.io/v2/docs/lib/Run.htm");
++
++	if (!advice_count)
++		add_advice(L"先从高亮行定位",
++			L"当前错误没有匹配到更具体的规则。先看弹窗中的错误文本、具体信息、文件和行号；如果来自 RMT 的 Work1.exe，通常是正在执行的某条宏指令参数或变量状态异常。",
++			L"https://wyagd001.github.io/v2/docs/");
++
++	html += L"</ol>";
++}
++
++static bool WriteUtf8File(LPCTSTR path, LPCWSTR text)
++{
++	CStringA utf8;
++	StringWCharToUTF8(text, utf8);
++	HANDLE file = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
++	if (file == INVALID_HANDLE_VALUE)
++		return false;
++
++	DWORD written;
++	BYTE bom[] = { 0xEF, 0xBB, 0xBF };
++	bool ok = WriteFile(file, bom, sizeof(bom), &written, NULL)
++		&& written == sizeof(bom)
++		&& WriteFile(file, utf8.GetString(), (DWORD)utf8.GetLength(), &written, NULL);
++	CloseHandle(file);
++	return ok;
++}
++
++static void OpenErrorHelp(ErrorBoxParam &error)
++{
++	TCHAR help_file[MAX_PATH];
++	TCHAR temp_dir[MAX_PATH];
++	if (!GetTempPath(_countof(temp_dir), temp_dir))
++	{
++		MsgBox(_T("无法创建错误帮助页面。"));
++		return;
++	}
++	sntprintf(help_file, _countof(help_file), _T("%sAutoHotkey-ErrorHelp-%lu.html"), temp_dir, GetCurrentProcessId());
++
++	CStringW html;
++	html += L"<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><title>AutoHotkey 错误帮助</title>";
++	html += L"<style>body{font-family:\"Microsoft YaHei\",Segoe UI,sans-serif;line-height:1.6;margin:28px;max-width:960px;color:#17202a}"
++		L"h1{font-size:24px;margin:0 0 12px}h2{font-size:18px;margin-top:24px}.box{border:1px solid #d8dfe6;border-radius:6px;padding:14px 16px;background:#f8fafb}"
++		L"dt{font-weight:700;margin-top:10px}dd{margin:4px 0 0 0;white-space:pre-wrap}.code{font-family:Consolas,monospace;background:#fff;border:1px solid #d8dfe6;border-radius:4px;padding:8px}"
++		L"a{color:#1769aa}li{margin:10px 0}</style></head><body>";
++	html += L"<h1>AutoHotkey 错误帮助</h1><p>这是根据当前错误自动生成的中文说明，供定位问题时参考。</p>";
++
++	html += L"<section class=\"box\"><h2>当前错误</h2><dl>";
++	AppendHelpRow(html, L"错误", error.text);
++	AppendHelpRow(html, L"具体信息", error.info);
++	if (error.line)
++	{
++		TCHAR line_number[32];
++		sntprintf(line_number, _countof(line_number), _T("%d"), error.line->mLineNumber);
++		AppendHelpRow(html, L"文件", Line::sSourceFile[error.line->mFileIndex]);
++		AppendHelpRow(html, L"行号", line_number);
++		TCHAR line_text[LINE_SIZE];
++		error.line->ToText(line_text, _countof(line_text), true);
++		html += L"<dt>代码</dt><dd class=\"code\">";
++		AppendHtmlEscaped(html, line_text);
++		html += L"</dd>";
++	}
++	else
++	{
++		TCHAR line_number[32];
++		sntprintf(line_number, _countof(line_number), _T("%d"), g_script.CurrentLine());
++		AppendHelpRow(html, L"文件", g_script.CurrentFile());
++		AppendHelpRow(html, L"行号", line_number);
++	}
++	html += L"</dl></section>";
++
++	html += L"<section><h2>可能原因和解决办法</h2>";
++	AppendErrorAdvice(html, error);
++	html += L"</section>";
++
++	html += L"<section><h2>中文文档</h2><p><a href=\"https://wyagd001.github.io/v2/docs/\">AutoHotkey v2 中文文档首页</a>。"
++		L"如果是 RMT 宏执行时报错，先回到 RMT 中检查正在运行的宏、当前指令和变量输出。</p></section>";
++	html += L"</body></html>";
++
++	if (!WriteUtf8File(help_file, html))
++	{
++		MsgBox(_T("无法写入错误帮助页面。"));
++		return;
++	}
++	if (!g_script.ActionExec(help_file, NULL, NULL, false))
++		MsgBox(_T("无法打开错误帮助页面。"));
++}
++
+ 
+ #ifdef CONFIG_DEBUGGER
+ void InsertCallStack(HWND re, ErrorBoxParam &error)
+@@ -309,7 +501,7 @@ void InsertCallStack(HWND re, ErrorBoxParam &error)
+ 	cfBold.dwMask = CFM_BOLD | CFM_LINK;
+ 	cfBold.dwEffects = CFE_BOLD;
+ 	SendMessage(re, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cfBold);
+-	SendMessage(re, EM_REPLACESEL, FALSE, (LPARAM)_T("Call stack:\n"));
++	SendMessage(re, EM_REPLACESEL, FALSE, (LPARAM)_T("调用堆栈:\n"));
+ 	cfBold.dwEffects = 0;
+ 	SendMessage(re, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cfBold);
+ 
+@@ -401,8 +593,8 @@ void InitErrorBox(HWND hwnd, ErrorBoxParam &error)
+ 	SendMessage(re, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+ 	
+ 	sntprintf(buf, _countof(buf), _T("%s: %.500s\n\n")
+-		, error.type == CRITICAL_ERROR ? _T("Critical Error")
+-			: error.type == WARN ? _T("Warning") : _T("Error")
++		, error.type == CRITICAL_ERROR ? _T("严重错误")
++			: error.type == WARN ? _T("警告") : _T("错误")
+ 		, error.text);
+ 	SendMessage(re, EM_REPLACESEL, FALSE, (LPARAM)buf);
+ 	
+@@ -410,9 +602,9 @@ void InitErrorBox(HWND hwnd, ErrorBoxParam &error)
+ 	{
+ 		UINT suffix = _tcslen(error.info) > 80 ? 8230 : 0;
+ 		if (error.line)
+-			sntprintf(buf, _countof(buf), _T("Specifically: %.80s%s\n\n"), error.info, &suffix);
++			sntprintf(buf, _countof(buf), _T("具体信息: %.80s%s\n\n"), error.info, &suffix);
+ 		else
+-			sntprintf(buf, _countof(buf), _T("Text:\t%.80s%s\n"), error.info, &suffix);
++			sntprintf(buf, _countof(buf), _T("文本:\t%.80s%s\n"), error.info, &suffix);
+ 		SendMessage(re, EM_REPLACESEL, FALSE, (LPARAM)buf);
+ 	}
+ 
+@@ -463,7 +655,7 @@ void InitErrorBox(HWND hwnd, ErrorBoxParam &error)
+ 	}
+ 	else
+ 	{
+-		sntprintf(buf, _countof(buf), _T("Line:\t%d\nFile:\t"), g_script.CurrentLine());
++		sntprintf(buf, _countof(buf), _T("行:\t%d\n文件:\t"), g_script.CurrentLine());
+ 		SendMessage(re, EM_REPLACESEL, FALSE, (LPARAM)buf);
+ 		cf.dwMask = CFM_LINK;
+ 		cf.dwEffects = CFE_LINK; // Mark it as a link.
+@@ -502,7 +694,7 @@ void InitErrorBox(HWND hwnd, ErrorBoxParam &error)
+ 		for (int i = footer ? 2 : 1; i; --i)
+ 			SendMessage(re, EM_REPLACESEL, FALSE, (LPARAM)_T("\n"));
+ 		SendMessage(re, EM_EXGETSEL, 0, (LPARAM)&cr);
+-#define SHOW_CALL_STACK_TEXT _T("Show call stack »")
++#define SHOW_CALL_STACK_TEXT _T("显示调用堆栈 »")
+ 		SendMessage(re, EM_REPLACESEL, FALSE, (LPARAM)SHOW_CALL_STACK_TEXT);
+ 		cr.cpMax = -1; // Select to end.
+ 		SendMessage(re, EM_EXSETSEL, 0, (LPARAM)&cr);
+@@ -564,6 +756,13 @@ INT_PTR CALLBACK ErrorBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+ 				g_script.Edit(Line::sSourceFile[error.line->mFileIndex]);
+ 				return TRUE;
+ 			}
++			break;
++		}
++		case ID_HELP_USERMANUAL:
++		{
++			auto &error = *(ErrorBoxParam*)GetWindowLongPtr(hwnd, DWLP_USER);
++			OpenErrorHelp(error);
++			return TRUE;
+ 		}
+ 		default:
+ 			if (LOWORD(wParam) >= ID_FILE_RELOADSCRIPT)
+@@ -710,7 +909,7 @@ ResultType Script::ScriptError(LPCTSTR aErrorText, LPCTSTR aExtraInfo)
+ 	// has not yet been successfully added to the linked list.  Such errors will always result
+ 	// in the program exiting.
+ 	if (!aErrorText)
+-		aErrorText = _T("Unk"); // Placeholder since it shouldn't be NULL.
++		aErrorText = _T("未知"); // Placeholder since it shouldn't be NULL.
+ 	if (!aExtraInfo) // In case the caller explicitly called it with NULL.
+ 		aExtraInfo = _T("");
+ 	
+@@ -737,7 +936,7 @@ LPCTSTR VarKindForErrorMessage(Var *aVar)
+ {
+ 	switch (aVar->Type())
+ 	{
+-	case VAR_VIRTUAL: return _T("built-in variable");
++	case VAR_VIRTUAL: return _T("内置变量");
+ 	case VAR_CONSTANT: return aVar->Object()->Type();
+ 	default: return Var::DeclarationType(aVar->Scope());
+ 	}
+@@ -746,7 +945,7 @@ LPCTSTR VarKindForErrorMessage(Var *aVar)
+ ResultType Script::ConflictingDeclarationError(LPCTSTR aDeclType, Var *aExisting)
+ {
+ 	TCHAR buf[127];
+-	sntprintf(buf, _countof(buf), _T("This %s declaration conflicts with an existing %s.")
++	sntprintf(buf, _countof(buf), _T("此 %s 声明与现有 %s 冲突。")
+ 		, aDeclType, VarKindForErrorMessage(aExisting));
+ 	return ScriptError(buf, aExisting->mName);
+ }
+@@ -765,11 +964,11 @@ ResultType Line::ValidateVarUsage(Var *aVar, int aUsage)
+ ResultType Script::VarIsReadOnlyError(Var *aVar, int aErrorType)
+ {
+ 	TCHAR buf[127];
+-	sntprintf(buf, _countof(buf), _T("This %s cannot %s.")
++	sntprintf(buf, _countof(buf), _T("此 %s 不能%s。")
+ 		, VarKindForErrorMessage(aVar)
+-		, aErrorType == VARREF_LVALUE ? _T("be assigned a value")
+-		: aErrorType == VARREF_REF ? _T("have its reference taken")
+-		: _T("be used as an output variable"));
++		, aErrorType == VARREF_LVALUE ? _T("被赋值")
++		: aErrorType == VARREF_REF ? _T("取引用")
++		: _T("用作输出变量"));
+ 	return ScriptError(buf, aVar->mName);
+ }
+ 
+@@ -783,7 +982,7 @@ ResultType Line::VarIsReadOnlyError(Var *aVar, int aErrorType)
+ ResultType Line::LineUnexpectedError()
+ {
+ 	TCHAR buf[127];
+-	sntprintf(buf, _countof(buf), _T("Unexpected \"%s\""), g_act[mActionType].Name);
++	sntprintf(buf, _countof(buf), _T("意外的 \"%s\""), g_act[mActionType].Name);
+ 	return LineError(buf);
+ }
+ 
+@@ -889,8 +1088,8 @@ ResultType ResultToken::UnknownMemberError(ExprTokenType &aObject, int aFlags, L
+ 	TCHAR msg[512];
+ 	if (!aMember)
+ 		aMember = (aFlags & IT_CALL) ? _T("Call") : _T("__Item");
+-	sntprintf(msg, _countof(msg), _T("This value of type \"%s\" has no %s named \"%s\".")
+-		, TokenTypeString(aObject), (aFlags & IT_CALL) ? _T("method") : _T("property"), aMember);
++	sntprintf(msg, _countof(msg), _T("类型为 \"%s\" 的值没有名为 \"%s\" 的%s。")
++		, TokenTypeString(aObject), aMember, (aFlags & IT_CALL) ? _T("方法") : _T("属性"));
+ 	return Error(msg, nullptr, (aFlags & IT_CALL) ? ErrorPrototype::Method : ErrorPrototype::Property);
+ }
+ 
+@@ -907,9 +1106,9 @@ ResultType ResultToken::Win32Error(DWORD aError)
+ void TokenTypeAndValue(ExprTokenType &aToken, LPCTSTR &aType, LPCTSTR &aValue, TCHAR *aNBuf)
+ {
+ 	if (aToken.symbol == SYM_VAR && aToken.var->IsUninitializedNormalVar())
+-		aType = _T("unset variable"), aValue = aToken.var->mName;
++		aType = _T("未设置变量"), aValue = aToken.var->mName;
+ 	else if (TokenIsEmptyString(aToken))
+-		aType = _T("empty string"), aValue = _T("");
++		aType = _T("空字符串"), aValue = _T("");
+ 	else
+ 		aType = TokenTypeString(aToken), aValue = TokenToString(aToken, aNBuf);
+ }
+@@ -928,12 +1127,9 @@ ResultType TypeError(LPCTSTR aExpectedType, ExprTokenType &aActualValue)
+ 
+ ResultType TypeError(LPCTSTR aExpectedType, LPCTSTR aActualType, LPCTSTR aExtraInfo)
+ {
+-	auto an = [](LPCTSTR thing) {
+-		return _tcschr(_T("aeiou"), ctolower(*thing)) ? _T("n") : _T("");
+-	};
+ 	TCHAR msg[512];
+-	sntprintf(msg, _countof(msg), _T("Expected a%s %s but got a%s %s.")
+-		, an(aExpectedType), aExpectedType, an(aActualType), aActualType);
++	sntprintf(msg, _countof(msg), _T("需要 %s，但收到 %s。")
++		, aExpectedType, aActualType);
+ 	return g_script.RuntimeError(msg, aExtraInfo, FAIL_OR_OK, nullptr, ErrorPrototype::Type);
+ }
+ 
+@@ -951,9 +1147,6 @@ FResult FTypeError(LPCTSTR aExpectedType, ExprTokenType &aActualValue)
+ __declspec(noinline)
+ ResultType ParamError(int aIndex, ExprTokenType *aParam, LPCTSTR aExpectedType, LPCTSTR aFunction)
+ {
+-	auto an = [](LPCTSTR thing) {
+-		return _tcschr(_T("aeiou"), ctolower(*thing)) ? _T("n") : _T("");
+-	};
+ 	TCHAR msg[512];
+ 	TCHAR number_buf[MAX_NUMBER_SIZE];
+ 	LPCTSTR actual_type, value_as_string;
+@@ -964,10 +1157,10 @@ ResultType ParamError(int aIndex, ExprTokenType *aParam, LPCTSTR aExpectedType,
+ 	if (!aParam || aParam->symbol == SYM_MISSING)
+ 	{
+ #ifdef CONFIG_DEBUGGER
+-		sntprintf(msg, _countof(msg), _T("Parameter #%i of %s must not be omitted in this case.")
+-			, aIndex + 1, aFunction);
++		sntprintf(msg, _countof(msg), _T("函数 %s 的参数 #%i 在此情况下不可省略。")
++			, aFunction, aIndex + 1);
+ #else
+-		sntprintf(msg, _countof(msg), _T("Parameter #%i must not be omitted in this case.")
++		sntprintf(msg, _countof(msg), _T("参数 #%i 在此情况下不可省略。")
+ 			, aIndex + 1);
+ #endif
+ 		return g_script.RuntimeError(msg, nullptr, FAIL_OR_OK, nullptr, ErrorPrototype::Value);
+@@ -977,16 +1170,16 @@ ResultType ParamError(int aIndex, ExprTokenType *aParam, LPCTSTR aExpectedType,
+ 		value_as_string = actual_type;
+ #ifdef CONFIG_DEBUGGER
+ 	if (aExpectedType)
+-		sntprintf(msg, _countof(msg), _T("Parameter #%i of %s requires a%s %s, but received a%s %s.")
+-			, aIndex + 1, aFunction, an(aExpectedType), aExpectedType, an(actual_type), actual_type);
++		sntprintf(msg, _countof(msg), _T("函数 %s 的参数 #%i 需要 %s，但收到 %s。")
++			, aFunction, aIndex + 1, aExpectedType, actual_type);
+ 	else
+-		sntprintf(msg, _countof(msg), _T("Parameter #%i of %s is invalid."), aIndex + 1, g_Debugger.WhatThrew());
++		sntprintf(msg, _countof(msg), _T("函数 %s 的参数 #%i 无效。"), g_Debugger.WhatThrew(), aIndex + 1);
+ #else
+ 	if (aExpectedType)
+-		sntprintf(msg, _countof(msg), _T("Parameter #%i requires a%s %s, but received a%s %s.")
+-			, aIndex + 1, an(aExpectedType), aExpectedType, an(actual_type), actual_type);
++		sntprintf(msg, _countof(msg), _T("参数 #%i 需要 %s，但收到 %s。")
++			, aIndex + 1, aExpectedType, actual_type);
+ 	else
+-		sntprintf(msg, _countof(msg), _T("Parameter #%i invalid."), aIndex + 1);
++		sntprintf(msg, _countof(msg), _T("参数 #%i 无效。"), aIndex + 1);
+ #endif
+ 	return g_script.RuntimeError(msg, value_as_string, FAIL_OR_OK, nullptr
+ 		, aExpectedType ? ErrorPrototype::Type : ErrorPrototype::Value);
+@@ -1167,7 +1360,7 @@ ResultType Script::UnhandledException(Line* aLine, ResultType aErrorType)
+ 
+ 	// If message is empty (or a string or number was thrown), display a default message for clarity.
+ 	if (!*message)
+-		message = _T("Unhandled exception.");
++		message = _T("未处理的异常。");
+ 
+ 	if (ShowError(message, aErrorType, extra, aLine, TokenToObject(*token)) == OK)
+ 	{
+@@ -1261,7 +1454,7 @@ void Script::WarnUnassignedVar(Var *var, Line *aLine)
+ 	// No check for a global variable is done because var is unassigned and therefore should
+ 	// have resolved to a global if there was one, unless it was declared local.
+ 	TCHAR buf[1024];
+-	sntprintf(buf, _countof(buf), _T("This %s appears to never be assigned a value."), Var::DeclarationType(var->Scope()));
++	sntprintf(buf, _countof(buf), _T("此 %s 似乎从未被赋值。"), Var::DeclarationType(var->Scope()));
+ 	ScriptWarning(warnMode, buf, var->mName, aLine);
+ }
+ 
+@@ -1272,8 +1465,8 @@ ResultType Script::VarUnsetError(Var *var)
+ 	TCHAR buf[1024];
+ 	bool isUndeclaredLocal = (var->Scope() & (VAR_LOCAL | VAR_DECLARED)) == VAR_LOCAL;
+ 	bool sameNameAsGlobal = isUndeclaredLocal && FindGlobalVar(var->mName);
+-	sntprintf(buf, _countof(buf), _T("This %s has not been assigned a value.%s"), Var::DeclarationType(var->Scope())
+-		, sameNameAsGlobal ? _T("\nA global declaration inside the function may be required.") : _T(""));
++	sntprintf(buf, _countof(buf), _T("此 %s 尚未被赋值。%s"), Var::DeclarationType(var->Scope())
++		, sameNameAsGlobal ? _T("\n可能需要在函数内添加 global 声明。") : _T(""));
+ 	return RuntimeError(buf, var->mName, FAIL_OR_OK, nullptr, ErrorPrototype::Unset);
+ }
+ 
+@@ -1288,6 +1481,6 @@ void Script::WarnLocalSameAsGlobal(LPCTSTR aVarName)
+ {
+ 	auto func_name = g->CurrentFunc ? g->CurrentFunc->mName : _T("");
+ 	TCHAR buf[DIALOG_TITLE_SIZE];
+-	sntprintf(buf, _countof(buf), _T("%s  (in function %s)"), aVarName, func_name);
++	sntprintf(buf, _countof(buf), _T("%s  (函数 %s 中)"), aVarName, func_name);
+ 	ScriptWarning(g_Warn_LocalSameAsGlobal, WARNING_LOCAL_SAME_AS_GLOBAL, buf);
+ }
+diff --git a/source/resources/AutoHotkey.rc b/source/resources/AutoHotkey.rc
+index b3b95d64..309f8116 100644
+--- a/source/resources/AutoHotkey.rc
++++ b/source/resources/AutoHotkey.rc
+@@ -19,7 +19,7 @@
+ #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+ #ifdef _WIN32
+ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+-#pragma code_page(1252)
++#pragma code_page(65001)
+ #endif //_WIN32
+ 
+ /////////////////////////////////////////////////////////////////////////////
+@@ -138,18 +138,18 @@ IDD_ERRORBOX DIALOGEX 0, 0, 380, 176
+ // and ShowWindow() hasn't been called yet (i.e. a load-time error/warning is displayed before Script::CreateWindows()).
+ STYLE DS_SETFONT | DS_MODALFRAME | DS_SETFOREGROUND | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE
+ EXSTYLE WS_EX_APPWINDOW
+-CAPTION "Error"
++CAPTION "错误"
+ FONT 8, "Segoe UI", 400, 0, 0x0
+ BEGIN
+-    DEFPUSHBUTTON   "&Abort",IDCANCEL,319,155,50,14
++    DEFPUSHBUTTON   "中止",IDCANCEL,319,155,50,14
+     CONTROL         "",IDC_ERR_EDIT,MSFTEDIT_CLASS,ES_MULTILINE|ES_READONLY|ES_AUTOHSCROLL,0,0,380,148
+-    PUSHBUTTON      "&Help",ID_HELP_USERMANUAL,10,155,50,14
++    PUSHBUTTON      "帮助",ID_HELP_USERMANUAL,10,155,50,14
+ #ifndef AUTOHOTKEYSC
+-    PUSHBUTTON      "&Edit",ID_FILE_EDITSCRIPT,66,155,50,14
++    PUSHBUTTON      "编辑",ID_FILE_EDITSCRIPT,66,155,50,14
+ #endif
+-    PUSHBUTTON      "&Reload",ID_FILE_RELOADSCRIPT,122,155,50,14
+-    PUSHBUTTON      "E&xitApp",ID_FILE_EXIT,178,155,50,14
+-    PUSHBUTTON      "&Continue",IDCONTINUE,263,155,50,14
++    PUSHBUTTON      "重载",ID_FILE_RELOADSCRIPT,122,155,50,14
++    PUSHBUTTON      "退出",ID_FILE_EXIT,178,155,50,14
++    PUSHBUTTON      "继续",IDCONTINUE,263,155,50,14
+ END
+ 
+ 
+diff --git a/source/script.h b/source/script.h
+index 72932452..79c45ee1 100644
+--- a/source/script.h
++++ b/source/script.h
+@@ -121,111 +121,111 @@ enum CommandIDs {CONTROL_ID_FIRST = IDCANCEL + 1
+ //    a matching HWND.
+ 
+ 
+-#define ERR_ABORT_NO_SPACES _T("The current thread will exit.")
++#define ERR_ABORT_NO_SPACES _T("当前线程将退出。")
+ #define ERR_ABORT _T("  ") ERR_ABORT_NO_SPACES
+-#define WILL_EXIT _T("The program will exit.")
+-#define UNSTABLE_WILL_EXIT _T("The program is now unstable and will exit.")
+-#define OLD_STILL_IN_EFFECT _T("The script was not reloaded; the old version will remain in effect.")
+-#define ERR_SCRIPT_NOT_FOUND _T("Script file not found.")
+-#define ERR_ABORT_DELETE _T("__Delete will now return.")
+-#define ERR_WARNING_FOOTER _T("For more details, read the documentation for #Warn.")
+-#define ERR_UNRECOGNIZED_ACTION _T("This line does not contain a recognized action.")
+-#define ERR_NONEXISTENT_HOTKEY _T("Nonexistent hotkey.")
+-#define ERR_NONEXISTENT_VARIANT _T("Nonexistent hotkey variant (HotIf).")
+-#define ERR_NONEXISTENT_HOTSTRING _T("Nonexistent hotstring.")
+-#define ERR_INVALID_HOTKEY _T("Invalid hotkey.")
+-#define ERR_INVALID_KEYNAME _T("Invalid key name.")
+-#define ERR_UNSUPPORTED_PREFIX _T("Unsupported prefix key.")
+-#define ERR_ALTTAB_MODLR _T("This AltTab hotkey must specify which key (L or R).")
+-#define ERR_ALTTAB_ONEMOD _T("This AltTab hotkey must have exactly one modifier/prefix.")
+-#define ERR_NONEXISTENT_FUNCTION _T("Call to nonexistent function.")
+-#define ERR_INVALID_INDEX _T("Invalid index.")
+-#define ERR_INVALID_VALUE _T("Invalid value.")
+-#define ERR_INVALID_FUNCTOR _T("Invalid callback function.")
+-#define ERR_PARAM_INVALID _T("Invalid parameter(s).")
+-#define ERR_PARAM_COUNT_INVALID _T("Invalid number of parameters.")
+-#define ERR_PARAM1_INVALID _T("Parameter #1 invalid.")
+-#define ERR_PARAM2_INVALID _T("Parameter #2 invalid.")
+-#define ERR_PARAM3_INVALID _T("Parameter #3 invalid.")
+-#define ERR_PARAM4_INVALID _T("Parameter #4 invalid.")
+-#define ERR_PARAM5_INVALID _T("Parameter #5 invalid.")
+-#define ERR_PARAM6_INVALID _T("Parameter #6 invalid.")
+-#define ERR_PARAM7_INVALID _T("Parameter #7 invalid.")
+-#define ERR_PARAM8_INVALID _T("Parameter #8 invalid.")
+-#define ERR_PARAM1_REQUIRED _T("Parameter #1 required")
+-#define ERR_PARAM2_REQUIRED _T("Parameter #2 required")
+-#define ERR_PARAM3_REQUIRED _T("Parameter #3 required")
+-#define ERR_PARAM1_MUST_NOT_BE_BLANK _T("Parameter #1 must not be blank in this case.")
+-#define ERR_MISSING_OPEN_PAREN _T("Missing \"(\"")
+-#define ERR_MISSING_OPEN_BRACE _T("Missing \"{\"")
+-#define ERR_MISSING_CLOSE_PAREN _T("Missing \")\"")
+-#define ERR_MISSING_CLOSE_BRACE _T("Missing \"}\"")
+-#define ERR_MISSING_CLOSE_BRACKET _T("Missing \"]\"") // L31
+-#define ERR_UNEXPECTED_OPEN_BRACE _T("Unexpected \"{\"")
+-#define ERR_PROPERTY_EMPTY_BRACKETS _T("Empty [] not permitted.")
+-#define ERR_BAD_AUTO_CONCAT _T("Missing space or operator before this.")
+-#define ERR_MISSING_CLOSE_QUOTE _T("Missing close-quote") // No period after short phrases.
+-#define ERR_MISSING_COMMA _T("Missing comma")             //
+-#define ERR_MISSING_COLON _T("Missing \":\"")             //
+-#define ERR_MISSING_PARAM_NAME _T("Missing parameter name.")
+-#define ERR_PARAM_REQUIRED _T("Missing a required parameter.")
+-#define ERR_TOO_MANY_PARAMS _T("Too many parameters passed to function.") // L31
+-#define ERR_TOO_FEW_PARAMS _T("Too few parameters passed to function.") // L31
+-#define ERR_BAD_OPTIONAL_PARAM _T("Expected \":=\"")
+-#define ERR_HOTKEY_FUNC_PARAMS _T("Only the first parameter of a hotkey function is permitted to be non-optional.")
+-#define ERR_HOTKEY_MISSING_BRACE _T("Hotkey or hotstring is missing its opening brace.")
+-#define ERR_BAD_JUMP_INSIDE_FINALLY _T("Jumps cannot exit a FINALLY block.")
+-#define ERR_OUTOFMEM _T("Out of memory.")  // Used by RegEx too, so don't change it without also changing RegEx to keep the former string.
+-#define ERR_NO_LABEL _T("Label not found in current scope.")
+-#define ERR_INVALID_MENU_TYPE _T("Invalid menu type.")
+-#define ERR_INVALID_MENU_ITEM _T("Nonexistent menu item.")
+-#define ERR_DIVIDEBYZERO _T("Divide by zero.")
+-#define ERR_EXP_ILLEGAL_CHAR _T("Illegal character in expression.")
+-#define ERR_DUPLICATE_DECLARATION _T("Duplicate declaration.")
+-#define ERR_UNEXPECTED_DECL _T("Unexpected declaration.")
+-#define ERR_INVALID_VARDECL _T("Invalid variable declaration.")
+-#define ERR_INVALID_FUNCDECL _T("Invalid function declaration.")
+-#define ERR_INVALID_CLASS_VAR _T("Invalid class variable declaration.")
+-#define ERR_INVALID_LINE_IN_CLASS_DEF _T("Not a valid method, class or property definition.")
+-#define ERR_INVALID_LINE_IN_PROPERTY_DEF _T("Not a valid property getter/setter.")
+-#define ERR_INVALID_OPTION _T("Invalid option.") // Generic message used by the Gui system.
+-#define ERR_GUI_NO_WINDOW _T("Gui has no window.")
+-#define ERR_GUI_NOT_FOR_THIS_TYPE _T("Not supported for this control type.") // Used by GuiControl object and Control functions.
+-#define ERR_DYNAMIC_BLANK _T("This dynamic variable is blank.")
+-#define ERR_DYNAMIC_UPVAR _T("This dynamic variable is not included in this closure.")
+-#define ERR_DYNAMIC_NOT_FOUND _T("Variable not found.")
+-#define ERR_DYNAMIC_BAD_GLOBAL _T("This dynamic assignment requires a \"global\" declaration.")
+-#define ERR_HOTKEY_IF_EXPR _T("Parameter #1 must match an existing #HotIf expression.")
+-#define ERR_EXCEPTION _T("An exception was thrown.")
+-#define ERR_INVALID_ASSIGNMENT _T("Invalid assignment.")
+-#define ERR_EXPR_EVAL _T("Error evaluating expression.")
+-#define ERR_EXPR_SYNTAX _T("Syntax error.")
+-#define ERR_EXPR_MISSING_OPERAND _T("Missing operand.")
+-#define ERR_TYPE_MISMATCH _T("Type mismatch.")
+-#define ERR_NOT_ENUMERABLE _T("Value not enumerable.")
+-#define ERR_PROPERTY_READONLY _T("Property is read-only.")
+-#define ERR_ITEM_UNSET _T("Item has no value.")
+-#define ERR_NO_PROCESS _T("Target process not found.")
+-#define ERR_NO_WINDOW _T("Target window not found.")
+-#define ERR_NO_CONTROL _T("Target control not found.")
+-#define ERR_NO_STATUSBAR _T("No StatusBar.")
+-#define ERR_WINDOW_HAS_NO_MENU _T("Non-existent or unsupported menu.")
+-#define ERR_PCRE_EXEC _T("PCRE execution error.")
+-#define ERR_INVALID_ARG_TYPE _T("Invalid arg type.")
+-#define ERR_INVALID_RETURN_TYPE _T("Invalid return type.")
+-#define ERR_INVALID_LENGTH _T("Invalid Length.")
+-#define ERR_INVALID_ENCODING _T("Invalid Encoding.")
+-#define ERR_INVALID_USAGE _T("Invalid usage.")
+-#define ERR_INVALID_BASE _T("Invalid base.")
+-#define ERR_INTERNAL_CALL _T("An internal function call failed.") // Win32 function failed.  Eventually an error message should be generated based on GetLastError().
+-#define ERR_FAILED _T("Failed") // A function failed to achieve its primary purpose for unspecified reason.  Equivalent to v1 throwing 1 (ErrorLevel).
+-#define ERR_LOAD_ICON _T("Can't load icon.")
+-#define ERR_STRING_NOT_TERMINATED _T("String not null-terminated.")
+-#define ERR_SOUND_DEVICE _T("Device not found")
+-#define ERR_SOUND_COMPONENT _T("Component not found")
+-#define ERR_SOUND_CONTROLTYPE _T("Component doesn't support this control type")
+-#define ERR_TIMEOUT _T("Timeout")
+-#define WARNING_LOCAL_SAME_AS_GLOBAL _T("This local variable has the same name as a global variable.")
++#define WILL_EXIT _T("程序将退出。")
++#define UNSTABLE_WILL_EXIT _T("程序状态不稳定，将退出。")
++#define OLD_STILL_IN_EFFECT _T("脚本未重新加载；旧版本将继续生效。")
++#define ERR_SCRIPT_NOT_FOUND _T("找不到脚本文件。")
++#define ERR_ABORT_DELETE _T("__Delete 将立即返回。")
++#define ERR_WARNING_FOOTER _T("更多详情请阅读 #Warn 文档。")
++#define ERR_UNRECOGNIZED_ACTION _T("此行不包含可识别的操作。")
++#define ERR_NONEXISTENT_HOTKEY _T("热键不存在。")
++#define ERR_NONEXISTENT_VARIANT _T("热键变体不存在 (HotIf)。")
++#define ERR_NONEXISTENT_HOTSTRING _T("热字串不存在。")
++#define ERR_INVALID_HOTKEY _T("热键无效。")
++#define ERR_INVALID_KEYNAME _T("按键名称无效。")
++#define ERR_UNSUPPORTED_PREFIX _T("不支持的前缀键。")
++#define ERR_ALTTAB_MODLR _T("此 AltTab 热键必须指定左键或右键 (L 或 R)。")
++#define ERR_ALTTAB_ONEMOD _T("此 AltTab 热键必须只有一个修饰键/前缀。")
++#define ERR_NONEXISTENT_FUNCTION _T("调用了不存在的函数。")
++#define ERR_INVALID_INDEX _T("索引无效。")
++#define ERR_INVALID_VALUE _T("值无效。")
++#define ERR_INVALID_FUNCTOR _T("回调函数无效。")
++#define ERR_PARAM_INVALID _T("参数无效。")
++#define ERR_PARAM_COUNT_INVALID _T("参数数量无效。")
++#define ERR_PARAM1_INVALID _T("参数 #1 无效。")
++#define ERR_PARAM2_INVALID _T("参数 #2 无效。")
++#define ERR_PARAM3_INVALID _T("参数 #3 无效。")
++#define ERR_PARAM4_INVALID _T("参数 #4 无效。")
++#define ERR_PARAM5_INVALID _T("参数 #5 无效。")
++#define ERR_PARAM6_INVALID _T("参数 #6 无效。")
++#define ERR_PARAM7_INVALID _T("参数 #7 无效。")
++#define ERR_PARAM8_INVALID _T("参数 #8 无效。")
++#define ERR_PARAM1_REQUIRED _T("需要参数 #1")
++#define ERR_PARAM2_REQUIRED _T("需要参数 #2")
++#define ERR_PARAM3_REQUIRED _T("需要参数 #3")
++#define ERR_PARAM1_MUST_NOT_BE_BLANK _T("参数 #1 在此情况下不能为空。")
++#define ERR_MISSING_OPEN_PAREN _T("缺少 \"(\"")
++#define ERR_MISSING_OPEN_BRACE _T("缺少 \"{\"")
++#define ERR_MISSING_CLOSE_PAREN _T("缺少 \")\"")
++#define ERR_MISSING_CLOSE_BRACE _T("缺少 \"}\"")
++#define ERR_MISSING_CLOSE_BRACKET _T("缺少 \"]\"") // L31
++#define ERR_UNEXPECTED_OPEN_BRACE _T("意外的 \"{\"")
++#define ERR_PROPERTY_EMPTY_BRACKETS _T("不允许空的 []。")
++#define ERR_BAD_AUTO_CONCAT _T("此处前面缺少空格或运算符。")
++#define ERR_MISSING_CLOSE_QUOTE _T("缺少右引号") // No period after short phrases.
++#define ERR_MISSING_COMMA _T("缺少逗号")             //
++#define ERR_MISSING_COLON _T("缺少 \":\"")             //
++#define ERR_MISSING_PARAM_NAME _T("缺少参数名。")
++#define ERR_PARAM_REQUIRED _T("缺少必需参数。")
++#define ERR_TOO_MANY_PARAMS _T("传给函数的参数过多。") // L31
++#define ERR_TOO_FEW_PARAMS _T("传给函数的参数过少。") // L31
++#define ERR_BAD_OPTIONAL_PARAM _T("应为 \":=\"")
++#define ERR_HOTKEY_FUNC_PARAMS _T("热键函数只允许第一个参数为非可选参数。")
++#define ERR_HOTKEY_MISSING_BRACE _T("热键或热字串缺少左花括号。")
++#define ERR_BAD_JUMP_INSIDE_FINALLY _T("跳转不能离开 FINALLY 块。")
++#define ERR_OUTOFMEM _T("内存不足。")  // Used by RegEx too, so don't change it without also changing RegEx to keep the former string.
++#define ERR_NO_LABEL _T("当前作用域中找不到标签。")
++#define ERR_INVALID_MENU_TYPE _T("菜单类型无效。")
++#define ERR_INVALID_MENU_ITEM _T("菜单项不存在。")
++#define ERR_DIVIDEBYZERO _T("除以零。")
++#define ERR_EXP_ILLEGAL_CHAR _T("表达式中有非法字符。")
++#define ERR_DUPLICATE_DECLARATION _T("重复声明。")
++#define ERR_UNEXPECTED_DECL _T("意外的声明。")
++#define ERR_INVALID_VARDECL _T("变量声明无效。")
++#define ERR_INVALID_FUNCDECL _T("函数声明无效。")
++#define ERR_INVALID_CLASS_VAR _T("类变量声明无效。")
++#define ERR_INVALID_LINE_IN_CLASS_DEF _T("不是有效的方法、类或属性定义。")
++#define ERR_INVALID_LINE_IN_PROPERTY_DEF _T("不是有效的属性 getter/setter。")
++#define ERR_INVALID_OPTION _T("选项无效。") // Generic message used by the Gui system.
++#define ERR_GUI_NO_WINDOW _T("Gui 没有窗口。")
++#define ERR_GUI_NOT_FOR_THIS_TYPE _T("此控件类型不支持该操作。") // Used by GuiControl object and Control functions.
++#define ERR_DYNAMIC_BLANK _T("此动态变量为空。")
++#define ERR_DYNAMIC_UPVAR _T("此动态变量未包含在此闭包中。")
++#define ERR_DYNAMIC_NOT_FOUND _T("找不到变量。")
++#define ERR_DYNAMIC_BAD_GLOBAL _T("此动态赋值需要 \"global\" 声明。")
++#define ERR_HOTKEY_IF_EXPR _T("参数 #1 必须匹配现有的 #HotIf 表达式。")
++#define ERR_EXCEPTION _T("抛出了异常。")
++#define ERR_INVALID_ASSIGNMENT _T("赋值无效。")
++#define ERR_EXPR_EVAL _T("计算表达式时出错。")
++#define ERR_EXPR_SYNTAX _T("语法错误。")
++#define ERR_EXPR_MISSING_OPERAND _T("缺少操作数。")
++#define ERR_TYPE_MISMATCH _T("类型不匹配。")
++#define ERR_NOT_ENUMERABLE _T("值不可枚举。")
++#define ERR_PROPERTY_READONLY _T("属性为只读。")
++#define ERR_ITEM_UNSET _T("项目没有值。")
++#define ERR_NO_PROCESS _T("找不到目标进程。")
++#define ERR_NO_WINDOW _T("找不到目标窗口。")
++#define ERR_NO_CONTROL _T("找不到目标控件。")
++#define ERR_NO_STATUSBAR _T("没有 StatusBar。")
++#define ERR_WINDOW_HAS_NO_MENU _T("菜单不存在或不受支持。")
++#define ERR_PCRE_EXEC _T("PCRE 执行错误。")
++#define ERR_INVALID_ARG_TYPE _T("参数类型无效。")
++#define ERR_INVALID_RETURN_TYPE _T("返回类型无效。")
++#define ERR_INVALID_LENGTH _T("Length 无效。")
++#define ERR_INVALID_ENCODING _T("Encoding 无效。")
++#define ERR_INVALID_USAGE _T("用法无效。")
++#define ERR_INVALID_BASE _T("base 无效。")
++#define ERR_INTERNAL_CALL _T("内部函数调用失败。") // Win32 function failed.  Eventually an error message should be generated based on GetLastError().
++#define ERR_FAILED _T("失败") // A function failed to achieve its primary purpose for unspecified reason.  Equivalent to v1 throwing 1 (ErrorLevel).
++#define ERR_LOAD_ICON _T("无法加载图标。")
++#define ERR_STRING_NOT_TERMINATED _T("字符串未以 null 结尾。")
++#define ERR_SOUND_DEVICE _T("找不到设备")
++#define ERR_SOUND_COMPONENT _T("找不到组件")
++#define ERR_SOUND_CONTROLTYPE _T("组件不支持此控件类型")
++#define ERR_TIMEOUT _T("超时")
++#define WARNING_LOCAL_SAME_AS_GLOBAL _T("此局部变量与某个全局变量同名。")
+ 
+ //----------------------------------------------------------------------------------
+ 
