@@ -17,10 +17,17 @@ Move completed `history.md` entries from `Unreleased` into a new version section
 Run from the repository root:
 
 ```powershell
-.\scripts\verify.ps1
+cd WebViewApp
+npm.cmd run build
+cd ..
+node .\scripts\verify-webview-contract.mjs
+node .\scripts\verify-webview-dist.mjs
+& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
+git diff --check
 ```
 
-If the React build fails with `spawn EPERM` in a sandboxed environment, rerun the same command outside the sandbox.
+If the React build fails with `spawn EPERM` in a sandboxed environment, rerun `npm.cmd run build` outside the sandbox.
+If the build creates renamed dist assets, stage `WebViewApp/dist` before running `verify-webview-dist.mjs` as the final release check.
 
 ## 3. Manual Regression
 
@@ -31,6 +38,7 @@ docs/regression-checklist.md
 ```
 
 At minimum, verify startup, macro table save/reload, settings persistence, tool toggles, and help/static content.
+Also verify window chrome behavior from the checklist after WebView sizing or context-menu changes.
 
 ## 4. Package
 
@@ -43,10 +51,16 @@ Run the existing packaging script from the repository root:
 For non-interactive release packaging:
 
 ```powershell
-.\PackRMT.ps1 -ReleaseType both -NoWait
+.\PackRMT.ps1 -ReleaseType both -Distribution both -NoWait
 ```
 
 The script creates a local `.tools\ComSpecShim\cmd.exe` helper when needed to avoid AutoHotkey 2.0.26 hanging during Ahk2Exe's automatic `/iLib` scan.
+
+Distribution variants:
+
+- `-Distribution lite`: no bundled WebView2 Fixed Runtime. The target machine must already have Microsoft Edge WebView2 Runtime.
+- `-Distribution runtime`: bundles WebView2 Fixed Runtime from `Runtimes\WebView2\Fixed\x64`, `Runtimes\WebView2\Fixed\x86`, or `.tools\WebView2Runtime\Fixed\{arch}`.
+- `-Distribution both`: creates both variants.
 
 Packaging behavior:
 
@@ -55,7 +69,7 @@ Packaging behavior:
 - Packages `RMT帮助文档.html` when Node.js and `Web/JS/SingleHtml.js` are available.
 - Copies `WebViewApp\dist` into release output.
 - Copies `Plugins\WebViewToo\Lib` into release output.
-- Creates desktop output under `RMTRelease\RMTv{version}`.
+- Creates desktop output under `RMTRelease\RMTv{version}` with `_lite` and/or `_runtime` suffixes.
 
 Choose:
 
@@ -75,15 +89,9 @@ For each generated release folder, confirm these files or directories exist:
 - `WebViewApp\dist\assets\*.css`
 - `RMT帮助文档.html`
 
-Confirm `node_modules` is not included.
+Confirm `node_modules` is not included. For `_lite` packages, confirm `Runtimes\WebView2\Fixed` is not included. For `_runtime` packages, confirm `Runtimes\WebView2\Fixed\{arch}\msedgewebview2.exe` exists.
 
-Run the release layout smoke check after packaging:
-
-```powershell
-.\scripts\verify-release-layout.ps1
-```
-
-Pass `-ReleaseRoot` or one or more `-ReleaseDir` values when inspecting a package outside the default desktop `RMTRelease\RMTv{version}` location.
+Manually inspect the release layout when packaging outside the default desktop `RMTRelease\RMTv{version}` location.
 
 ## 6. Smoke Test Packaged Build
 

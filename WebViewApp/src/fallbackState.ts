@@ -2,7 +2,7 @@ import { uiCopy } from "./copy";
 import type { RmtState } from "./types";
 
 export const fallbackState: RmtState = {
-  version: "RMTv2.0.2",
+  version: "RMTv2.0",
   currentSettingName: uiCopy.fallback.configName,
   activeTabIndex: 1,
   isSuspend: false,
@@ -23,7 +23,9 @@ export const fallbackState: RmtState = {
     showSplitLine: false,
     hiddenTopButtonIndexes: [],
     colorPresetId: "rmt-green",
+    uiScale: 1,
     fixedMenuWheel: false,
+    modalSubGui: false,
     mutiThreadNum: "3",
     softBGColor: "f0f0f0",
     noVariableTip: true,

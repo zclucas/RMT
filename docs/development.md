@@ -17,44 +17,27 @@ npm.cmd install
 
 ## Verify A Change
 
-Run the full local verification from the repository root:
+Run the local verification from the repository root:
 
 ```powershell
-.\scripts\verify.ps1
+cd WebViewApp
+npm.cmd run build
+cd ..
+node .\scripts\verify-webview-contract.mjs
+node .\scripts\verify-webview-dist.mjs
+& "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /ErrorStdOut=UTF-8 /Validate .\RMT.ahk
+git diff --check
 ```
 
-The script checks:
+This checks:
 
-- `RMT_WEBVIEW_VERSION`, `WebViewApp/package.json`, and the bridge fallback version match.
-- The WebView state/action contract matches between TypeScript and `Main/UIUtil.ahk`.
-- The runtime include graph loads only the WebViewToo WebView2 wrapper.
-- Generated RMT help HTML matches the current `Web/*.md` sources and help assets.
-- Local links and images in `Web/*.md` resolve to existing files.
-- `RmtBuildState()` keeps representative old in-memory config fixtures compatible with the WebView state shape.
-- `RMT.ahk` passes AutoHotkey validation.
 - React/TypeScript builds successfully and writes `WebViewApp/dist`.
-- `WebViewApp/dist` stays synced with the tracked generated assets after build.
+- WebView setting fields stay aligned across TypeScript state, fallback data, fixtures, and AHK state builders.
+- `WebViewApp/dist/index.html` only references built assets that exist and are tracked by Git.
+- `RMT.ahk` passes AutoHotkey validation.
 - `git diff --check` reports no whitespace errors.
 
-Useful scoped checks:
-
-```powershell
-.\scripts\verify.ps1 -SkipWebBuild
-.\scripts\verify.ps1 -SkipAhkValidate
-.\scripts\verify.ps1 -SkipBridgeContract
-.\scripts\verify.ps1 -SkipWebViewWrapperCheck
-.\scripts\verify.ps1 -SkipHelpDocsCheck
-.\scripts\verify.ps1 -SkipHelpLinkCheck
-.\scripts\verify.ps1 -SkipBuildStateFixtures
-.\scripts\verify.ps1 -SkipWebViewDistSync
-.\scripts\verify.ps1 -AhkExe "C:\Program Files\AutoHotkey\UX\AutoHotkeyUX.exe"
-```
-
-Confirm the local worktree and launch entry when multiple RMT clones exist:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\check-active-worktree.ps1
-```
+If `npm.cmd run build` creates renamed `WebViewApp/dist/assets/main-*.js` files, stage the rebuilt `WebViewApp/dist` assets before treating `verify-webview-dist.mjs` as a release-blocking check.
 
 For manual release or large-change checks, also follow `docs/regression-checklist.md`.
 For packaging a public build, follow `docs/release.md`.
@@ -63,8 +46,6 @@ When changing `Web/*.md`, `Web/CSS/*`, or help search scripts, run:
 
 ```powershell
 node Web\JS\SingleHtml.js
-.\scripts\verify-help-docs.ps1
-.\scripts\verify-help-links.ps1
 ```
 
 ## WebView UI Work
@@ -73,9 +54,9 @@ node Web\JS\SingleHtml.js
 - AHK owns runtime behavior, saved data, macro execution, OCR, hotkeys, and legacy dialogs.
 - Add or change behavior through an explicit bridge action in `Main/UIUtil.ahk`.
 - Keep `WebViewApp/src/types.ts` aligned with the state returned by `RmtBuildState()`.
-- Update `scripts/fixtures/rmt-build-state-fixtures.ahk` when adding state fields that need old-config defaults.
 - Run `npm.cmd run build` before committing frontend changes so `WebViewApp/dist` stays current.
-- Run `.\scripts\verify-webview-dist-sync.ps1` after frontend builds when checking generated assets without the full verifier.
+- Run `node .\scripts\verify-webview-contract.mjs` after changing WebView settings or saved setting compatibility controls.
+- Run `node .\scripts\verify-webview-dist.mjs` after rebuilding and staging `WebViewApp/dist`.
 - Run `npm.cmd run test:visual` from `WebViewApp` after layout-sensitive WebView changes.
 
 ## Release Notes

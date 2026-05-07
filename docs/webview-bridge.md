@@ -44,8 +44,10 @@ When adding a state field:
 2. Add it to `WebViewApp/src/types.ts`.
 3. Add a fallback value in `WebViewApp/src/fallbackState.ts`.
 4. Render or consume it in React.
-5. Run `node .\scripts\verify-webview-contract.mjs`.
-6. Run `.\scripts\verify.ps1`.
+5. Update `WebViewApp/tests/fixtures/rmt-state.ts` if visual or interaction tests consume the field.
+6. Run `node .\scripts\verify-webview-contract.mjs` from the repository root.
+7. Run `npm.cmd run build` from `WebViewApp`.
+8. Run AutoHotkey validation on `RMT.ahk`.
 
 Keep field names stable once released. If a rename is unavoidable, support the old field until config and UI migration are covered.
 
@@ -59,9 +61,8 @@ Current action groups:
 - Navigation/help: `openHelp`, `openUrl`, `openVarMonitor`
 - Tool/settings dialogs: `openSettingManager`, `openToolRecordSetting`, `editCmdTip`, `openFreePaste`, `openHotkeyEditor`, `keyDownHelp`
 - Tool runtime: `toggleToolCheck`, `toggleToolRecord`, `toolTextFilterScreenShot`, `toolTextFilterSelectImage`, `clearToolText`
-- Diagnostics: `copyDiagnostics`
 - Data update: `updateSetting`, `updateTool`, `updateItem`, `updateFold`, `toggleFold`
-- Structure update: `addItem`, `deleteItem`, `moveItem`, `addFold`, `deleteFold`
+- Structure update: `addItem`, `deleteItem`, `moveItem`, `moveItemTo`, `copyItem`, `pasteItem`, `addFold`, `deleteFold`
 - Editors: `openTriggerEditor`, `openMacroEditor`
 
 When adding an action:
@@ -70,7 +71,7 @@ When adding an action:
 2. Validate payload values in AHK before mutating state.
 3. Return a fresh state snapshot after successful mutation.
 4. Keep legacy dialogs as fallback until the WebView flow reaches parity.
-5. Run `node .\scripts\verify-webview-contract.mjs`.
+5. Run `npm.cmd run build` from `WebViewApp`.
 6. Document the action here if it becomes part of normal UI behavior.
 
 ## Error Handling

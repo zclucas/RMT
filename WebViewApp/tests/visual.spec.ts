@@ -1,12 +1,20 @@
 import { expect, type Page, test } from "@playwright/test";
 import { uiCopy } from "../src/copy";
 import type { RmtState } from "../src/types";
-import { denseMacroState, settingsVisualState, toolVisualState, visualState } from "./fixtures/rmt-state";
+import {
+  darkMacroState,
+  denseMacroState,
+  settingsVisualState,
+  thanksVisualState,
+  toolVisualState,
+  visualState
+} from "./fixtures/rmt-state";
 
 const macroScenarios = [
   { name: "default-1070x590", width: 1070, height: 590, state: visualState, expectedRows: 3 },
   { name: "wide-1360x720", width: 1360, height: 720, state: visualState, expectedRows: 3 },
-  { name: "dense-narrow-900x590", width: 900, height: 590, state: denseMacroState, expectedRows: 5 }
+  { name: "dense-narrow-900x590", width: 900, height: 590, state: denseMacroState, expectedRows: 5 },
+  { name: "dark-1070x590", width: 1070, height: 590, state: darkMacroState, expectedRows: 5 }
 ];
 
 async function loadState(page: Page, state: RmtState) {
@@ -62,6 +70,79 @@ async function expectShellFits(page: Page) {
   expect(metrics.sidebarScrollHeight).toBeLessThanOrEqual(metrics.sidebarClientHeight + 1);
 }
 
+async function expectDarkControlsReadable(page: Page) {
+  const contrastMetrics = await page.evaluate(() => {
+    function channelToLinear(channel: number) {
+      const srgb = channel / 255;
+      return srgb <= 0.03928 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+    }
+
+    function parseRgb(value: string): [number, number, number, number] {
+      const match = value.match(/rgba?\(([^)]+)\)/);
+      if (!match) {
+        return [0, 0, 0, 1];
+      }
+      const parts = match[1].split(",").map((part) => Number(part.trim()));
+      return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0, parts[3] ?? 1];
+    }
+
+    function luminance(rgb: [number, number, number]) {
+      const [red, green, blue] = rgb.map(channelToLinear);
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    }
+
+    function contrast(foreground: [number, number, number], background: [number, number, number]) {
+      const fg = luminance(foreground);
+      const bg = luminance(background);
+      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    }
+
+    function blend(
+      foreground: [number, number, number, number],
+      background: [number, number, number]
+    ): [number, number, number] {
+      const [red, green, blue, alpha] = foreground;
+      return [
+        red * alpha + background[0] * (1 - alpha),
+        green * alpha + background[1] * (1 - alpha),
+        blue * alpha + background[2] * (1 - alpha)
+      ];
+    }
+
+    function effectiveBackground(element: Element | null): [number, number, number] {
+      let node: Element | null = element;
+      while (node) {
+        const [red, green, blue, alpha] = parseRgb(getComputedStyle(node).backgroundColor);
+        if (alpha >= 1) {
+          return [red, green, blue] as [number, number, number];
+        }
+        if (alpha > 0) {
+          return blend([red, green, blue, alpha], effectiveBackground(node.parentElement));
+        }
+        node = node.parentElement;
+      }
+      return [18, 20, 23] as [number, number, number];
+    }
+
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        ".module-macro-row input:not([type='checkbox']), .module-macro-row select, .module-macro-row button, .row-disabled, .module-disabled"
+      )
+    ).map((element) => {
+      const [red, green, blue] = parseRgb(getComputedStyle(element).color);
+      return {
+        text: element.textContent?.trim() || element.getAttribute("value") || element.tagName,
+        ratio: contrast([red, green, blue], effectiveBackground(element))
+      };
+    });
+  });
+
+  expect(contrastMetrics.length).toBeGreaterThan(0);
+  for (const metric of contrastMetrics) {
+    expect(metric.ratio, `${metric.text} contrast`).toBeGreaterThanOrEqual(4.5);
+  }
+}
+
 for (const scenario of macroScenarios) {
   test.describe(`macro layout ${scenario.name}`, () => {
     test.use({ viewport: { width: scenario.width, height: scenario.height } });
@@ -105,7 +186,11 @@ for (const scenario of macroScenarios) {
 
       if (scenario.name.includes("dense")) {
         expect(metrics.disabledModuleCount).toBe(1);
-        await expect(page.locator(".module-collapsed-note")).toBeVisible();
+        await expect(page.locator(".module-collapsed-note")).toHaveCount(0);
+      }
+
+      if (scenario.name.includes("dark")) {
+        await expectDarkControlsReadable(page);
       }
 
       await expect(page).toHaveScreenshot(`macro-${scenario.name}.png`, {
@@ -132,17 +217,98 @@ test.describe("tool and settings views", () => {
     });
   });
 
-  test("keeps the settings panel stable with populated diagnostics", async ({ page }) => {
+  test("keeps the settings panel stable without diagnostics", async ({ page }) => {
     await loadState(page, settingsVisualState);
 
-    await expect(page.locator(".diagnostics-block")).toBeVisible();
+    await expect(page.locator(".diagnostics-block")).toHaveCount(0);
     await expect(page.locator(".settings-legacy-page select")).toHaveCount(4);
-    await expect(page.locator(".settings-legacy-page input[type='checkbox']")).toHaveCount(15);
+    await expect(page.locator(".settings-legacy-page input[type='checkbox']")).toHaveCount(11);
     await expectShellFits(page);
 
     await expect(page).toHaveScreenshot("settings-1070x590.png", {
       animations: "disabled",
       maxDiffPixelRatio: 0.02
     });
+  });
+});
+
+test.describe("context menu handling", () => {
+  test.use({ viewport: { width: 1070, height: 590 } });
+
+  test("prevents the default WebView context menu from the app root", async ({ page }) => {
+    await loadState(page, visualState);
+
+    const wasCanceled = await page.locator(".classic-app").evaluate((element) => {
+      const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        button: 2,
+        cancelable: true
+      });
+      return !element.dispatchEvent(event);
+    });
+
+    expect(wasCanceled).toBe(true);
+  });
+});
+
+test.describe("thanks view", () => {
+  test.use({ viewport: { width: 1070, height: 590 } });
+
+  test("shows the T8numen contributor note with handbook effects", async ({ page }) => {
+    await loadState(page, thanksVisualState);
+
+    const contributor = page.getByRole("button", { name: "T8numen" });
+    await expect(contributor).toBeVisible();
+    await expect(page.locator("#t8numen-contributor-note")).toBeHidden();
+
+    const buttonEffectBeforeHover = await contributor.evaluate((element) => ({
+      beforeOpacity: window.getComputedStyle(element, "::before").opacity,
+      iconWidth: window.getComputedStyle(element.querySelector(".t8numen-toc-icon")!).width
+    }));
+
+    expect(buttonEffectBeforeHover.beforeOpacity).toBe("0");
+    expect(buttonEffectBeforeHover.iconWidth).toBe("0px");
+
+    await contributor.hover();
+    await page.waitForTimeout(1800);
+
+    const buttonEffectBeforeDelay = await contributor.evaluate((element) => ({
+      beforeOpacity: window.getComputedStyle(element, "::before").opacity,
+      iconWidth: window.getComputedStyle(element.querySelector(".t8numen-toc-icon")!).width
+    }));
+
+    expect(buttonEffectBeforeDelay.beforeOpacity).toBe("0");
+    expect(buttonEffectBeforeDelay.iconWidth).toBe("0px");
+    await expect(page.locator("#t8numen-contributor-note")).toBeHidden();
+
+    await page.waitForTimeout(1500);
+
+    const buttonEffectAfterDelay = await contributor.evaluate((element) => ({
+      beforeOpacity: window.getComputedStyle(element, "::before").opacity,
+      iconWidth: parseFloat(window.getComputedStyle(element.querySelector(".t8numen-toc-icon")!).width)
+    }));
+
+    expect(Number(buttonEffectAfterDelay.beforeOpacity)).toBeGreaterThan(0.8);
+    expect(buttonEffectAfterDelay.iconWidth).toBeGreaterThan(14);
+    await expect(page.locator("#t8numen-contributor-note")).toBeHidden();
+
+    await page.waitForTimeout(1900);
+
+    const popover = page.locator("#t8numen-contributor-note");
+    await expect(popover).toBeVisible();
+    await expect(popover).toContainText("2.0版本的webview修改请求");
+    await expect(contributor.locator(".t8numen-toc-letter")).toHaveCount(14);
+
+    const popoverStyle = await popover.evaluate((element) => {
+      const style = window.getComputedStyle(element);
+      return {
+        animationName: style.animationName,
+        backgroundImage: style.backgroundImage
+      };
+    });
+
+    expect(popoverStyle.animationName).toBe("t8numen-chapter-slide");
+    expect(popoverStyle.backgroundImage).toContain("linear-gradient");
+    await expectShellFits(page);
   });
 });

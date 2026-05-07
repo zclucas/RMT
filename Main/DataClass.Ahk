@@ -200,9 +200,11 @@ class SoftData {
         this.AgreeAgreement := false    ;同意协议
         this.IsBootStart := false       ;开机自启
         this.ShowSplitLine := false     ;显示分割线
-        this.HiddenTopButtonIndexes := [] ;隐藏的顶部按钮
-        this.ColorPresetId := "rmt-green" ;颜色方案
+        this.HiddenTopButtonIndexes := []
+        this.ColorPresetId := "rmt-green"
+        this.UiScale := 1               ;WebView界面缩放
         this.FixedMenuWheel := false    ;固定菜单轮
+        this.IsModalSubGui := false     ;模态子窗口
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型
         this.MutiThreadNum := -1         ;多线程数(-1动态)

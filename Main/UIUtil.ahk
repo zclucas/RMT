@@ -1,10 +1,164 @@
 #Include ..\Plugins\WebViewToo\Lib\WebViewToo.ahk
 
-RMT_WEBVIEW_VERSION := "RMTv2.0.2"
+RMT_WEBVIEW_VERSION := "RMTv2.0"
+RmtCopiedWebItem := ""
 
 class RmtWebViewGui extends WebViewGui {
+    static DefaultWidth := 640
+    static DefaultHeight := 480
+
+    __New(Options?, Title?, EventObj?, WebViewSettings := {}) {
+        super.__New(Options?, Title?, EventObj?, WebViewSettings)
+        try this.Sizers.Destroy()
+        this.Sizers := RmtEdgeResizeOverlay(this)
+        defaultWidth := WebViewSettings.HasProp("DefaultWidth") ? WebViewSettings.DefaultWidth : RmtWebViewGui.DefaultWidth
+        defaultHeight := WebViewSettings.HasProp("DefaultHeight") ? WebViewSettings.DefaultHeight : RmtWebViewGui.DefaultHeight
+        this.Sizers.Move(0, 0, defaultWidth, defaultHeight)
+        WebViewSizer.ToggleSizer(this)
+        try this.Control.AreDefaultContextMenusEnabled := false
+    }
+
     Submit(Hide := true) {
         return {}
+    }
+}
+
+class RmtEdgeResizeOverlay {
+    static BorderSize := 5
+    static CornerMinSize := 22
+    static CornerBorderMultiplier := 4
+    static WM_SETCURSOR := 0x0020
+    static WM_LBUTTONDOWN := 0x0201
+    static WM_NCLBUTTONDOWN := 0x00A1
+    static SetWindowPosShowFlags := 0x0250
+    static HTLEFT := 10
+    static HTRIGHT := 11
+    static HTTOP := 12
+    static HTTOPLEFT := 13
+    static HTTOPRIGHT := 14
+    static HTBOTTOM := 15
+    static HTBOTTOMLEFT := 16
+    static HTBOTTOMRIGHT := 17
+    static IDC_SIZENWSE := 32642
+    static IDC_SIZENESW := 32643
+    static IDC_SIZEWE := 32644
+    static IDC_SIZENS := 32645
+    static HandleMap := Map()
+    static Registered := false
+
+    __New(Parent) {
+        RmtEdgeResizeOverlay.Register()
+        this.Parent := Parent
+        this.Visible := false
+        this.Handles := []
+        this.AddHandle("topLeft", RmtEdgeResizeOverlay.HTTOPLEFT, RmtEdgeResizeOverlay.IDC_SIZENWSE)
+        this.AddHandle("top", RmtEdgeResizeOverlay.HTTOP, RmtEdgeResizeOverlay.IDC_SIZENS)
+        this.AddHandle("topRight", RmtEdgeResizeOverlay.HTTOPRIGHT, RmtEdgeResizeOverlay.IDC_SIZENESW)
+        this.AddHandle("right", RmtEdgeResizeOverlay.HTRIGHT, RmtEdgeResizeOverlay.IDC_SIZEWE)
+        this.AddHandle("bottomRight", RmtEdgeResizeOverlay.HTBOTTOMRIGHT, RmtEdgeResizeOverlay.IDC_SIZENWSE)
+        this.AddHandle("bottom", RmtEdgeResizeOverlay.HTBOTTOM, RmtEdgeResizeOverlay.IDC_SIZENS)
+        this.AddHandle("bottomLeft", RmtEdgeResizeOverlay.HTBOTTOMLEFT, RmtEdgeResizeOverlay.IDC_SIZENESW)
+        this.AddHandle("left", RmtEdgeResizeOverlay.HTLEFT, RmtEdgeResizeOverlay.IDC_SIZEWE)
+    }
+
+    static Register() {
+        if (RmtEdgeResizeOverlay.Registered)
+            return
+        OnMessage(RmtEdgeResizeOverlay.WM_SETCURSOR, (Params*) => RmtEdgeResizeOverlay.HandleSetCursor(Params*))
+        OnMessage(RmtEdgeResizeOverlay.WM_LBUTTONDOWN, (Params*) => RmtEdgeResizeOverlay.HandleLeftButtonDown(Params*))
+        RmtEdgeResizeOverlay.Registered := true
+    }
+
+    static HandleSetCursor(wParam, lParam, Msg, Hwnd) {
+        if (!RmtEdgeResizeOverlay.HandleMap.Has(Hwnd))
+            return
+        info := RmtEdgeResizeOverlay.HandleMap[Hwnd]
+        cursor := DllCall("LoadCursor", "Ptr", 0, "Ptr", info.Cursor, "Ptr")
+        DllCall("SetCursor", "Ptr", cursor)
+        return 1
+    }
+
+    static HandleLeftButtonDown(wParam, lParam, Msg, Hwnd) {
+        if (!RmtEdgeResizeOverlay.HandleMap.Has(Hwnd))
+            return
+        info := RmtEdgeResizeOverlay.HandleMap[Hwnd]
+        MouseGetPos(&mouseX, &mouseY)
+        packedPos := (mouseX & 0xFFFF) | ((mouseY & 0xFFFF) << 16)
+        DllCall("ReleaseCapture")
+        DllCall("PostMessage", "Ptr", info.ParentHwnd, "UInt", RmtEdgeResizeOverlay.WM_NCLBUTTONDOWN, "Ptr", info.Hit, "Ptr", packedPos)
+        return 0
+    }
+
+    AddHandle(Name, Hit, Cursor) {
+        handleGui := Gui("-Caption +ToolWindow +E0x08000000 +Parent" this.Parent.Hwnd)
+        handleGui.BackColor := "000000"
+        handleGui.Show("x0 y0 w1 h1 Hide")
+        try WinSetTransparent(1, "ahk_id " handleGui.Hwnd)
+        handle := { Name: Name, Gui: handleGui, Hit: Hit, Cursor: Cursor, X: 0, Y: 0, W: 1, H: 1 }
+        this.Handles.Push(handle)
+        RmtEdgeResizeOverlay.HandleMap[handleGui.Hwnd] := { ParentHwnd: this.Parent.Hwnd, Hit: Hit, Cursor: Cursor }
+    }
+
+    Move(X, Y, Width, Height) {
+        border := RmtEdgeResizeOverlay.BorderSize
+        corner := Max(border * RmtEdgeResizeOverlay.CornerBorderMultiplier, RmtEdgeResizeOverlay.CornerMinSize)
+        innerWidth := Max(1, Width - corner * 2)
+        innerHeight := Max(1, Height - corner * 2)
+        this.SetHandle("topLeft", 0, 0, corner, corner)
+        this.SetHandle("top", corner, 0, innerWidth, border)
+        this.SetHandle("topRight", Width - corner, 0, corner, corner)
+        this.SetHandle("right", Width - border, corner, border, innerHeight)
+        this.SetHandle("bottomRight", Width - corner, Height - corner, corner, corner)
+        this.SetHandle("bottom", corner, Height - border, innerWidth, border)
+        this.SetHandle("bottomLeft", 0, Height - corner, corner, corner)
+        this.SetHandle("left", 0, corner, border, innerHeight)
+    }
+
+    SetHandle(Name, X, Y, W, H) {
+        for handle in this.Handles {
+            if (handle.Name != Name)
+                continue
+            handle.X := X
+            handle.Y := Y
+            handle.W := W
+            handle.H := H
+            if (this.Visible)
+                this.ApplyHandle(handle)
+            return
+        }
+    }
+
+    ApplyHandle(handle) {
+        DllCall(
+            "SetWindowPos",
+            "Ptr", handle.Gui.Hwnd,
+            "Ptr", 0,
+            "Int", handle.X,
+            "Int", handle.Y,
+            "Int", handle.W,
+            "Int", handle.H,
+            "UInt", RmtEdgeResizeOverlay.SetWindowPosShowFlags
+        )
+    }
+
+    Show(*) {
+        this.Visible := true
+        for handle in this.Handles
+            this.ApplyHandle(handle)
+    }
+
+    Hide(*) {
+        this.Visible := false
+        for handle in this.Handles
+            DllCall("ShowWindow", "Ptr", handle.Gui.Hwnd, "Int", 0)
+    }
+
+    Destroy() {
+        for handle in this.Handles {
+            RmtEdgeResizeOverlay.HandleMap.Delete(handle.Gui.Hwnd)
+            handle.Gui.Destroy()
+        }
+        this.Handles := []
     }
 }
 
@@ -105,13 +259,15 @@ RefreshGui() {
     WinPosArr := StrSplit(LastWinPosStr, "π")
     IniWrite(false, IniFile, IniSection, "IsReload")
 
-    if (WinPosArr.Length == 2 && IsNumber(WinPosArr[1]) && IsNumber(WinPosArr[2])) {
+    if ((WinPosArr.Length == 2 || WinPosArr.Length == 4) && IsNumber(WinPosArr[1]) && IsNumber(WinPosArr[2])) {
         VirtualWidth := SysGet(78)
         VirtualHeight := SysGet(79)
         isXValid := WinPosArr[1] > 0 && WinPosArr[1] < VirtualWidth
         isYValid := WinPosArr[2] > 0 && WinPosArr[2] < VirtualHeight
         if (isXValid && isYValid) {
-            MySoftData.MyGui.Show(Format("x{} y{} w{} h{}", WinPosArr[1], WinPosArr[2], 1070, 590))
+            winW := WinPosArr.Length == 4 && IsNumber(WinPosArr[3]) ? Max(Integer(WinPosArr[3]), 880) : 1070
+            winH := WinPosArr.Length == 4 && IsNumber(WinPosArr[4]) ? Max(Integer(WinPosArr[4]), 520) : 590
+            MySoftData.MyGui.Show(Format("x{} y{} w{} h{}", WinPosArr[1], WinPosArr[2], winW, winH))
             RefreshListenVarGui()
             return
         }
@@ -164,6 +320,7 @@ RefreshToolUI() {
 
 RmtGetWebViewSettings() {
     settings := { DefaultWidth: 1070, DefaultHeight: 590 }
+    settings.DataDir := A_WorkingDir "\Setting\WebView2UserData"
     dllPath := A_WorkingDir "\Plugins\WebViewToo\Lib\" (A_PtrSize * 8) "bit\WebView2Loader.dll"
     if (FileExist(dllPath)) {
         settings.DllPath := dllPath
@@ -174,7 +331,42 @@ RmtGetWebViewSettings() {
             settings.DllPath := WebViewCtrl.TempDir "\" (A_PtrSize * 8) "bit\WebView2Loader.dll"
         }
     }
+
+    runtimeDir := RmtFindBundledWebViewRuntime()
+    if (runtimeDir != "") {
+        settings.EdgeRuntime := runtimeDir
+    }
     return settings
+}
+
+RmtFindBundledWebViewRuntime() {
+    arch := A_PtrSize == 8 ? "x64" : "x86"
+    bitDir := (A_PtrSize * 8) "bit"
+    candidates := [
+        A_WorkingDir "\Runtimes\WebView2\Fixed\" arch,
+        A_WorkingDir "\Runtimes\WebView2\Fixed\" bitDir,
+        A_WorkingDir "\Runtimes\WebView2\" arch,
+        A_WorkingDir "\Runtimes\WebView2\" bitDir
+    ]
+
+    for _, candidate in candidates {
+        foundDir := RmtResolveWebViewRuntimeDir(candidate)
+        if (foundDir != "")
+            return foundDir
+    }
+    return ""
+}
+
+RmtResolveWebViewRuntimeDir(rootDir) {
+    if (!DirExist(rootDir))
+        return ""
+    if (FileExist(rootDir "\msedgewebview2.exe"))
+        return rootDir
+    loop files rootDir "\*", "D" {
+        if (FileExist(A_LoopFileFullPath "\msedgewebview2.exe"))
+            return A_LoopFileFullPath
+    }
+    return ""
 }
 
 RmtInitWebStateControls() {
@@ -197,7 +389,9 @@ RmtInitWebStateControls() {
     MySoftData.SplitLineCtrl := RmtWebValueControl(MySoftData.ShowSplitLine)
     MySoftData.HiddenTopButtonIndexesCtrl := RmtWebValueControl(MySoftData.HiddenTopButtonIndexes)
     MySoftData.ColorPresetIdCtrl := RmtWebValueControl(MySoftData.ColorPresetId)
+    MySoftData.UiScaleCtrl := RmtWebValueControl(MySoftData.UiScale)
     MySoftData.FixedMenuWheelCtrl := RmtWebValueControl(MySoftData.FixedMenuWheel)
+    MySoftData.ModalSubGuiCtrl := RmtWebValueControl(MySoftData.IsModalSubGui)
     MySoftData.MutiThreadNumCtrl := RmtWebValueControl(MySoftData.MutiThreadNum)
     MySoftData.SoftBGColorCon := RmtWebValueControl(MySoftData.SoftBGColor)
     MySoftData.NoVariableTipCtrl := RmtWebValueControl(MySoftData.NoVariableTip)
@@ -290,7 +484,7 @@ RmtDispatchWebAction(actionType, payload) {
             MenuReload()
             return ""
         case "openHelp":
-            Run(A_WorkingDir "\index.html")
+            Run(A_WorkingDir "\RMT帮助文档.html")
             return ""
         case "openUrl":
             url := RmtGet(payload, "url", "")
@@ -328,8 +522,6 @@ RmtDispatchWebAction(actionType, payload) {
             OnClearToolText()
             RmtPostState()
             return ""
-        case "copyDiagnostics":
-            return RmtCopyDiagnostics()
         case "openHotkeyEditor":
             RmtOpenHotkeyEditorAction(payload)
             return ""
@@ -372,6 +564,15 @@ RmtDispatchWebAction(actionType, payload) {
         case "moveItem":
             RmtMoveItemAction(payload)
             return ""
+        case "moveItemTo":
+            RmtMoveItemToAction(payload)
+            return ""
+        case "copyItem":
+            RmtCopyItemAction(payload)
+            return "已复制宏"
+        case "pasteItem":
+            RmtPasteItemAction(payload)
+            return "已粘贴宏"
         case "addFold":
             RmtAddFoldAction(payload)
             return ""
@@ -531,7 +732,9 @@ RmtBuildSettings() {
     settings["showSplitLine"] := RmtJsonBool(RmtControlValue(MySoftData.SplitLineCtrl, MySoftData.ShowSplitLine))
     settings["hiddenTopButtonIndexes"] := RmtCloneArray(RmtControlValue(MySoftData.HiddenTopButtonIndexesCtrl, MySoftData.HiddenTopButtonIndexes))
     settings["colorPresetId"] := RmtControlValue(MySoftData.ColorPresetIdCtrl, MySoftData.ColorPresetId)
+    settings["uiScale"] := RmtClampUiScale(RmtControlValue(MySoftData.UiScaleCtrl, MySoftData.UiScale))
     settings["fixedMenuWheel"] := RmtJsonBool(RmtControlValue(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel))
+    settings["modalSubGui"] := RmtJsonBool(RmtControlValue(MySoftData.ModalSubGuiCtrl, MySoftData.IsModalSubGui))
     settings["mutiThreadNum"] := String(RmtControlValue(MySoftData.MutiThreadNumCtrl, MySoftData.MutiThreadNum))
     settings["softBGColor"] := RmtControlValue(MySoftData.SoftBGColorCon, MySoftData.SoftBGColor)
     settings["noVariableTip"] := RmtJsonBool(RmtControlValue(MySoftData.NoVariableTipCtrl, MySoftData.NoVariableTip))
@@ -567,46 +770,6 @@ RmtBuildTools() {
     tools["color"] := RmtControlValue(ToolCheckInfo.ToolColorCtrl, ToolCheckInfo.Color)
     tools["toolText"] := RmtControlValue(ToolCheckInfo.ToolTextCtrl, "")
     return tools
-}
-
-RmtCopyDiagnostics() {
-    global MySoftData, RMT_WEBVIEW_VERSION
-    A_Clipboard := RmtBuildDiagnosticsText()
-    return "诊断信息已复制到剪贴板"
-}
-
-RmtBuildDiagnosticsText() {
-    global MySoftData, RMT_WEBVIEW_VERSION
-    webViewIndex := A_WorkingDir "\WebViewApp\dist\index.html"
-    loaderPath := A_WorkingDir "\Plugins\WebViewToo\Lib\" (A_PtrSize * 8) "bit\WebView2Loader.dll"
-    settingsDir := A_WorkingDir "\Setting"
-    workExe := A_WorkingDir "\Thread\Work1.exe"
-
-    text := "RMT Diagnostics`r`n"
-    text .= "GeneratedAt: " FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss") "`r`n"
-    text .= "Version: " RMT_WEBVIEW_VERSION "`r`n"
-    text .= "AutoHotkeyVersion: " A_AhkVersion "`r`n"
-    text .= "Compiled: " (A_IsCompiled ? "true" : "false") "`r`n"
-    text .= "Bitness: " (A_PtrSize * 8) "`r`n"
-    text .= "OSVersion: " A_OSVersion "`r`n"
-    text .= "WorkingDir: " A_WorkingDir "`r`n"
-    text .= "ScriptPath: " A_ScriptFullPath "`r`n"
-    text .= "CurrentSetting: " MySoftData.CurSettingName "`r`n"
-    text .= "ActiveTabIndex: " MySoftData.TableIndex "`r`n"
-    text .= "MacroRunningCount: " MySoftData.MacroRunningCount "`r`n"
-    text .= "MacroTotalCount: " MySoftData.MacroTotalCount "`r`n"
-    text .= "IsSuspend: " (MySoftData.IsSuspend ? "true" : "false") "`r`n"
-    text .= "IsPause: " (MySoftData.IsPause ? "true" : "false") "`r`n"
-    text .= "IsMacroWorking: " (MySoftData.IsMacroWorking ? "true" : "false") "`r`n"
-    text .= "WebViewIndex: " RmtFileStatus(webViewIndex) " - " webViewIndex "`r`n"
-    text .= "WebView2Loader: " RmtFileStatus(loaderPath) " - " loaderPath "`r`n"
-    text .= "SettingsDir: " RmtFileStatus(settingsDir) " - " settingsDir "`r`n"
-    text .= "WorkExe: " RmtFileStatus(workExe) " - " workExe "`r`n"
-    return text
-}
-
-RmtFileStatus(path) {
-    return FileExist(path) ? "present" : "missing"
 }
 
 RmtGetTabKind(index) {
@@ -675,9 +838,16 @@ RmtUpdateSetting(field, value) {
         case "colorPresetId":
             MySoftData.ColorPresetId := value
             RmtSetControl(MySoftData.ColorPresetIdCtrl, value)
+        case "uiScale":
+            MySoftData.UiScale := RmtClampUiScale(value)
+            RmtSetControl(MySoftData.UiScaleCtrl, MySoftData.UiScale)
+            IniWrite(MySoftData.UiScale, IniFile, IniSection, "UiScale")
         case "fixedMenuWheel":
             MySoftData.FixedMenuWheel := RmtBool(value)
             RmtSetControl(MySoftData.FixedMenuWheelCtrl, MySoftData.FixedMenuWheel)
+        case "modalSubGui":
+            MySoftData.IsModalSubGui := RmtBool(value)
+            RmtSetControl(MySoftData.ModalSubGuiCtrl, MySoftData.IsModalSubGui)
         case "mutiThreadNum":
             MySoftData.MutiThreadNum := value
             RmtSetControl(MySoftData.MutiThreadNumCtrl, value)
@@ -883,19 +1053,136 @@ RmtMoveItemAction(payload) {
     targetIndex := itemIndex + direction
     RmtValidateItemIndex(tableItem, itemIndex)
     RmtValidateItemIndex(tableItem, targetIndex)
-    SwapTableContent(tableItem, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.ColorStateArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.TimingSerialArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.StartTipSoundArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.EndTipSoundArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.IsWorkIndexArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.KilledArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.PauseArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.ActionCount, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.HoldKeyArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.ToggleStateArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.ToggleActionArr, itemIndex, targetIndex)
-    RmtSwapArrayValue(tableItem.VariableMapArr, itemIndex, targetIndex)
+    RmtSwapItemData(tableItem, itemIndex, targetIndex)
+}
+
+RmtMoveItemToAction(payload) {
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    targetIndex := RmtInt(RmtGet(payload, "targetItemIndex", 0), 0)
+    RmtValidateItemIndex(tableItem, itemIndex)
+    RmtValidateItemIndex(tableItem, targetIndex)
+    if (itemIndex == targetIndex)
+        return
+
+    sourceFoldIndex := GetItemFoldIndex(tableItem, itemIndex)
+    targetFoldIndex := GetItemFoldIndex(tableItem, targetIndex)
+    if (sourceFoldIndex != targetFoldIndex)
+        throw Error("拖拽排序仅支持同一模块内调整")
+
+    direction := itemIndex < targetIndex ? 1 : -1
+    while (itemIndex != targetIndex) {
+        nextIndex := itemIndex + direction
+        RmtSwapItemData(tableItem, itemIndex, nextIndex)
+        itemIndex := nextIndex
+    }
+}
+
+RmtSwapItemData(tableItem, indexA, indexB) {
+    SwapTableContent(tableItem, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ColorStateArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.TimingSerialArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.StartTipSoundArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.EndTipSoundArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.IsWorkIndexArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.KilledArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.PauseArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ActionCount, indexA, indexB)
+    RmtSwapArrayValue(tableItem.HoldKeyArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ToggleStateArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.ToggleActionArr, indexA, indexB)
+    RmtSwapArrayValue(tableItem.VariableMapArr, indexA, indexB)
+}
+
+RmtCopyItemAction(payload) {
+    global RmtCopiedWebItem
+    tableItem := RmtGetTableItem(RmtInt(RmtGet(payload, "tableIndex", 0), 0))
+    itemIndex := RmtInt(RmtGet(payload, "itemIndex", 0), 0)
+    RmtValidateItemIndex(tableItem, itemIndex)
+    RmtCopiedWebItem := RmtBuildCopiedItem(tableItem, itemIndex)
+}
+
+RmtPasteItemAction(payload) {
+    global MySoftData, RmtCopiedWebItem
+    if (!IsObject(RmtCopiedWebItem))
+        throw Error("请先复制宏")
+
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    tableItem := RmtGetTableItem(tableIndex)
+    foldInfo := tableItem.FoldInfo
+    RmtValidateFoldIndex(foldInfo, foldIndex)
+
+    addIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
+    UpdateFoldIndexInfo(foldInfo, addIndex, foldIndex, true)
+    foldInfo.FoldStateArr[foldIndex] := false
+
+    copyMap := Map()
+    newMacro := FullCopyMacro(RmtCopiedWebItem["macro"], copyMap)
+    newTimingSerial := GetCMDSerialStr("Timing")
+    RmtCopyTimingData(RmtCopiedWebItem["timingSerial"], newTimingSerial)
+
+    tableItem.ColorStateArr.InsertAt(addIndex, RmtCopiedWebItem["colorState"])
+    tableItem.TKArr.InsertAt(addIndex, RmtCopiedWebItem["trigger"])
+    tableItem.TriggerTypeArr.InsertAt(addIndex, RmtCopiedWebItem["triggerType"])
+    tableItem.MacroArr.InsertAt(addIndex, newMacro)
+    tableItem.ModeArr.InsertAt(addIndex, RmtCopiedWebItem["mode"])
+    tableItem.ForbidArr.InsertAt(addIndex, RmtCopiedWebItem["forbid"])
+    tableItem.RemarkArr.InsertAt(addIndex, RmtCopiedWebItem["remark"])
+    tableItem.LoopCountArr.InsertAt(addIndex, RmtCopiedWebItem["loopCount"])
+    tableItem.HoldTimeArr.InsertAt(addIndex, RmtCopiedWebItem["holdTime"])
+    tableItem.SerialArr.InsertAt(addIndex, GetCMDSerialStr("Item"))
+    tableItem.TimingSerialArr.InsertAt(addIndex, newTimingSerial)
+    tableItem.StartTipSoundArr.InsertAt(addIndex, RmtCopiedWebItem["startTipSound"])
+    tableItem.EndTipSoundArr.InsertAt(addIndex, RmtCopiedWebItem["endTipSound"])
+    tableItem.IsWorkIndexArr.InsertAt(addIndex, 0)
+    tableItem.HoldKeyArr.InsertAt(addIndex, Map())
+    tableItem.KilledArr.InsertAt(addIndex, false)
+    tableItem.PauseArr.InsertAt(addIndex, MySoftData.IsPause)
+    tableItem.ActionCount.InsertAt(addIndex, 0)
+    tableItem.ToggleStateArr.InsertAt(addIndex, false)
+    tableItem.ToggleActionArr.InsertAt(addIndex, "")
+    tableItem.VariableMapArr.InsertAt(addIndex, RmtCloneVariableMap(RmtCopiedWebItem["variableMap"]))
+}
+
+RmtBuildCopiedItem(tableItem, itemIndex) {
+    copiedItem := Map()
+    copiedItem["colorState"] := RmtArrayGet(tableItem.ColorStateArr, itemIndex, 0)
+    copiedItem["trigger"] := RmtArrayGet(tableItem.TKArr, itemIndex, "")
+    copiedItem["triggerType"] := RmtArrayGet(tableItem.TriggerTypeArr, itemIndex, 1)
+    copiedItem["macro"] := RmtArrayGet(tableItem.MacroArr, itemIndex, "")
+    copiedItem["mode"] := RmtArrayGet(tableItem.ModeArr, itemIndex, 1)
+    copiedItem["forbid"] := RmtArrayGet(tableItem.ForbidArr, itemIndex, false)
+    copiedItem["remark"] := RmtArrayGet(tableItem.RemarkArr, itemIndex, "")
+    copiedItem["loopCount"] := RmtArrayGet(tableItem.LoopCountArr, itemIndex, "1")
+    copiedItem["holdTime"] := RmtArrayGet(tableItem.HoldTimeArr, itemIndex, 500)
+    copiedItem["timingSerial"] := RmtArrayGet(tableItem.TimingSerialArr, itemIndex, "")
+    copiedItem["startTipSound"] := RmtArrayGet(tableItem.StartTipSoundArr, itemIndex, 1)
+    copiedItem["endTipSound"] := RmtArrayGet(tableItem.EndTipSoundArr, itemIndex, 1)
+    copiedItem["variableMap"] := RmtCloneVariableMap(RmtArrayGet(tableItem.VariableMapArr, itemIndex, RmtCreateVariableMap()))
+    return copiedItem
+}
+
+RmtCopyTimingData(sourceSerial, targetSerial) {
+    if (sourceSerial == "" || targetSerial == "")
+        return
+    try {
+        data := GetMacroCMDData(sourceSerial).Clone()
+        data.SerialStr := targetSerial
+        SaveMacroCMDData(data)
+    }
+    catch {
+    }
+}
+
+RmtCloneVariableMap(variableMap) {
+    if (!IsObject(variableMap))
+        return RmtCreateVariableMap()
+    clone := Map()
+    for key, value in variableMap {
+        clone[key] := value
+    }
+    return clone
 }
 
 RmtAddFoldAction(payload) {
@@ -1190,12 +1477,16 @@ RmtFilterIndexArray(values, maxIndex := 0) {
         if (!IsInteger(value))
             continue
         index := Integer(value)
-        if (index < 1 || index == 8 || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
+        if (index < 1 || RmtIsFixedTopButtonIndex(index) || (maxIndex > 0 && index > maxIndex) || seen.Has(index))
             continue
         seen[index] := true
         indexes.Push(index)
     }
     return indexes
+}
+
+RmtIsFixedTopButtonIndex(index) {
+    return index == 1 || index >= 7
 }
 
 RmtGet(obj, key, fallback := "") {
@@ -1214,6 +1505,13 @@ RmtInt(value, fallback := 0) {
             return Integer(value)
     }
     return fallback
+}
+
+RmtClampUiScale(value) {
+    try scale := Float(value)
+    catch
+        scale := 1
+    return Max(Min(scale, 1), 0.65)
 }
 
 RmtBool(value) {
@@ -1870,7 +2168,7 @@ CustomTrayMenu() {
     tipStr := MySoftData.MyGui.Title
     if (A_IsAdmin)
         tipStr .= "`n" GetLang("管理员权限")
-    
+
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("显示窗口"), (*) => RefreshGui())
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("休眠"), (*) => OnSuspendHotkey())
     A_TrayMenu.Delete("&Pause Script")
