@@ -60,37 +60,45 @@ class UIMacroSettingGui {
         PosY += 85
         PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("句柄ID"))
+        con.Value := false
         con.OnEvent("Click", (*) => this.OnInfoTogClick())
         this.InfoTogArrCon := [con]
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
+        con.Enabled := false
         this.InfoTextArrCon := [con]
 
         PosY += 35
         PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("标题"))
+        con.Value := false
         con.OnEvent("Click", (*) => this.OnInfoTogClick())
         this.InfoTogArrCon.Push(con)
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
+        con.Enabled := false
         this.InfoTextArrCon.Push(con)
 
         PosY += 35
         PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("类名"))
+        con.Value := false
         con.OnEvent("Click", (*) => this.OnInfoTogClick())
         this.InfoTogArrCon.Push(con)
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
+        con.Enabled := false
         this.InfoTextArrCon.Push(con)
 
         PosY += 35
         PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("进程名"))
+        con.Value := false
         con.OnEvent("Click", (*) => this.OnInfoTogClick())
         this.InfoTogArrCon.Push(con)
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
+        con.Enabled := false
         this.InfoTextArrCon.Push(con)
 
         ;右侧：按钮位置区域
@@ -100,19 +108,21 @@ class UIMacroSettingGui {
 
         PosY += 28
         PosX := 340
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), "X:")
-        this.PosXEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 18, PosY - 3),
+        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 60), "坐标X：")
+        this.PosXEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 60, PosY - 3),
             tableItem.HoldTimeArr.Has(macroIndex) ? tableItem.HoldTimeArr[macroIndex] : "500")
-        MyGui.Add("Text", Format("x{} y{}", PosX + 85, PosY), "Y:")
-        this.PosYEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 103, PosY - 3),
+        MyGui.Add("Text", Format("x{} y{} w{}", PosX + 120, PosY, 60), "坐标Y：")
+        this.PosYEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 180, PosY - 3),
             tableItem.UIPosYArr.Has(macroIndex) ? tableItem.UIPosYArr[macroIndex] : "10")
 
         PosY += 35
         PosX := 340
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("宽度:"))
-        this.BtnWidthEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 45, PosY - 3), "100")
-        MyGui.Add("Text", Format("x{} y{}", PosX + 115, PosY), GetLang("高度:"))
-        this.BtnHeightEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 160, PosY - 3), "30")
+        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 60), GetLang("宽度："))
+        this.BtnWidthEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 60, PosY - 3),
+            tableItem.UIBtnWidthArr.Has(macroIndex) ? tableItem.UIBtnWidthArr[macroIndex] : "100")
+        MyGui.Add("Text", Format("x{} y{} w{}", PosX + 120, PosY, 60), GetLang("高度："))
+        this.BtnHeightEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 180, PosY - 3),
+            tableItem.UIBtnHeightArr.Has(macroIndex) ? tableItem.UIBtnHeightArr[macroIndex] : "30")
 
         PosY += 38
         PosX := 340
@@ -134,20 +144,21 @@ class UIMacroSettingGui {
         this.CancelBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX + 115, PosY), GetLang("取消"))
         this.CancelBtn.OnEvent("Click", (*) => this.OnCancel())
 
-        MyGui.Show("w560 h390")
+        MyGui.Show("w650 h390")
 
-        ;初始化数据
         frontValue := tableItem.UIWindowArr.Has(macroIndex) ? tableItem.UIWindowArr[macroIndex] : ""
+
         if (frontValue != "") {
             if (InStr(frontValue, "❖")) {
                 idStr := StrReplace(frontValue, "❖", "")
                 infoArr := [idStr, "", "", ""]
             } else {
-                infoArr := StrSplit(frontValue, "⎖")
-                if (infoArr.Length != 4)
-                    infoArr := ["", "", "", ""]
-                else
-                    infoArr.InsertAt(1, "")
+                if (frontValue != "")
+                    infoArr := StrSplit(frontValue, "⎖")
+                if (frontValue == "" || infoArr.Length < 3)
+                    infoArr := ["", "", ""]
+
+                infoArr.InsertAt(1, "")
             }
 
             loop 4 {
@@ -155,6 +166,8 @@ class UIMacroSettingGui {
                 this.InfoTextArrCon[A_Index].Value := infoArr[A_Index]
             }
         }
+
+        this.OnInfoTogClick()
 
         this.TopTogCon.Value := true
         this.StartCoordMonitor()
@@ -230,9 +243,11 @@ class UIMacroSettingGui {
             this.InfoTextArrCon[3].Value := className
             this.InfoTextArrCon[4].Value := process
 
-            loop 4 {
-                this.InfoTogArrCon[A_Index].Value := this.InfoTextArrCon[A_Index].Value != ""
-            }
+            this.InfoTogArrCon[1].Value := false
+            this.InfoTogArrCon[2].Value := title != ""
+            this.InfoTogArrCon[3].Value := className != ""
+            this.InfoTogArrCon[4].Value := process != ""
+            this.OnInfoTogClick()
         }
     }
 
@@ -273,15 +288,35 @@ class UIMacroSettingGui {
             frontValue := this.GetFrontInfo()
             targetHwnd := ""
             if (frontValue != "") {
-                hwndList := GetHwndList(frontValue)
-                if (hwndList.Length > 0 && hwndList[1] && WinExist(hwndList[1]))
-                    targetHwnd := hwndList[1]
+                paramStr := GetParamsWinInfoStr(frontValue, "UIPreview")
+                if (paramStr != "") {
+                    hwndList := WinGetList(paramStr)
+                    if (hwndList.Length > 0 && hwndList[1])
+                        targetHwnd := hwndList[1]
+                }
             }
 
             if (targetHwnd) {
-                this.PreviewGui := Gui("+Owner" targetHwnd " +AlwaysOnTop +ToolWindow -Caption")
+                try {
+                    this.PreviewGui := Gui("+Owner" targetHwnd " +AlwaysOnTop +ToolWindow -Caption")
+                    this.PreviewGui.Opt("+Parent" targetHwnd)
+                }
+                catch as e {
+                    this.PreviewGui := Gui("+AlwaysOnTop +ToolWindow -Caption +DPIScale")
+                }
             } else {
                 this.PreviewGui := Gui("+AlwaysOnTop +ToolWindow -Caption +DPIScale")
+            }
+
+            if (targetHwnd && this.PreviewGui.Hwnd) {
+                try {
+                    parentHwnd := DllCall("GetParent", "Ptr", this.PreviewGui.Hwnd, "Ptr")
+                    if (parentHwnd != 0) {
+                        WinGetPos(&winX, &winY, , , "ahk_id " targetHwnd)
+                        posX -= winX
+                        posY -= winY
+                    }
+                }
             }
 
             this.PreviewGui.SetFont("S11 W550", MySoftData.FontType)
@@ -312,31 +347,22 @@ class UIMacroSettingGui {
     }
 
     GetFrontInfo() {
-        activeCount := 0
-        resultArr := []
-        for index, con in this.InfoTogArrCon {
-            if (con.Value) {
-                activeCount++
-                resultArr.Push(this.InfoTextArrCon[index].Value)
-            }
-        }
+        if (this.InfoTogArrCon[1].Value)
+            return "❖" this.InfoTextArrCon[1].Value
 
-        if (activeCount == 0)
+        Str := ""
+        loop 4 {
+            if (A_Index == 1)
+                continue
+            if (this.InfoTogArrCon[A_Index].Value) {
+                Str .= this.InfoTextArrCon[A_Index].Value
+            }
+            if (A_Index != 4)
+                Str .= "⎖"
+        }
+        if (Str == "⎖⎖")
             return ""
-
-        if (resultArr[1] != "") {
-            return "❖" resultArr[1]
-        } else {
-            finalStr := ""
-            for index, value in resultArr {
-                if (index > 1 && value != "") {
-                    if (finalStr != "")
-                        finalStr .= "⎖"
-                    finalStr .= value
-                }
-            }
-            return finalStr
-        }
+        return Str
     }
 
     OnSave(tableItem) {
@@ -345,6 +371,8 @@ class UIMacroSettingGui {
         frontValue := this.GetFrontInfo()
         posXValue := Integer(this.PosXEdit.Value)
         posYValue := Integer(this.PosYEdit.Value)
+        btnWidthValue := Integer(this.BtnWidthEdit.Value)
+        btnHeightValue := Integer(this.BtnHeightEdit.Value)
 
         if (tableItem.UIWindowArr.Has(macroIndex))
             tableItem.UIWindowArr[macroIndex] := frontValue
@@ -361,21 +389,33 @@ class UIMacroSettingGui {
         else
             tableItem.UIPosYArr.Push(posYValue)
 
+        if (tableItem.UIBtnWidthArr.Has(macroIndex))
+            tableItem.UIBtnWidthArr[macroIndex] := btnWidthValue
+        else
+            tableItem.UIBtnWidthArr.Push(btnWidthValue)
+
+        if (tableItem.UIBtnHeightArr.Has(macroIndex))
+            tableItem.UIBtnHeightArr[macroIndex] := btnHeightValue
+        else
+            tableItem.UIBtnHeightArr.Push(btnHeightValue)
+
         this.StopCoordMonitor()
         this.ToggleFunc(false)
         this.DestroyPreview()
+
+        SaveTableItemInfo(tableItem.Index)
+
         MyUIMacroGui.RefreshButtons()
         MySlider.RefreshTab()
 
-        this.Gui.Close()
-        MsgBox(GetLang("保存成功"))
+        this.Gui.Destroy()
     }
 
     OnCancel() {
         this.StopCoordMonitor()
         this.ToggleFunc(false)
         this.DestroyPreview()
-        this.Gui.Close()
+        this.Gui.Destroy()
     }
 
     OnClose() {

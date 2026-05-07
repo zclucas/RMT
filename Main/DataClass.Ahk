@@ -23,6 +23,8 @@ class TableItem {
         this.VariableMapArr := []    ;  每条宏对应的变量映射:内置变量
         this.UIWindowArr := []       ;界面宏：每个按钮的目标窗口信息
         this.UIPosYArr := []         ;界面宏：每个按钮的Y坐标
+        this.UIBtnWidthArr := []     ;界面宏：每个按钮的宽度
+        this.UIBtnHeightArr := []    ;界面宏：每个按钮的高度
 
         this.UnderPosY := 0         ; table的最大PosY
         this.Index := 0             ;   table的Index
