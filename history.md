@@ -16,6 +16,7 @@
 - Added menu macro module trigger type controls and covered the fold update path with visual tests.
 - Added an opt-in WebView Vite dev server mode while keeping `WebViewApp/dist` as the default release path.
 - Refined the WebView UI shell, sidebar, macro rows, settings switches, and static content pages for tighter legacy-style layout.
+- Fixed remaining WebView UI parity issues for sidebar toggles, help document routing, macro module editing, disabled row states, tool output sizing, reward layout, and settings numeric labels.
 
 ## 2.0
 

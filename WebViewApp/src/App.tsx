@@ -542,7 +542,6 @@ function GlobalSidebar({ state, runAction }: { state: RmtState; runAction: RunAc
   return (
     <aside className="classic-global-sidebar">
       <div className="sidebar-section">
-        <span className="side-label">{uiCopy.sidebar.currentConfig}</span>
         <button className="config-select-button" onClick={() => runAction("openSettingManager")} title={state.currentSettingName} type="button">
           {state.currentSettingName}
         </button>
@@ -554,33 +553,29 @@ function GlobalSidebar({ state, runAction }: { state: RmtState; runAction: RunAc
 
       <div className="sidebar-section global-actions">
         <span className="side-label">{uiCopy.sidebar.globalActions}</span>
-        <button
-          className={classNames("side-card", state.isSuspend && "is-active")}
-          onClick={() => runAction("toggleSuspend")}
-          type="button"
-        >
-          <span>
+        <label className={classNames("side-toggle", state.isSuspend && "is-active")}>
+          <span className="side-toggle-main">
+            <input checked={state.isSuspend} onChange={() => runAction("toggleSuspend")} type="checkbox" />
             <Pause size={15} />
             {uiCopy.sidebar.suspend}
           </span>
           <kbd>{formatHotkey(state.settings.suspendHotkey)}</kbd>
-        </button>
-        <button
-          className={classNames("side-card", state.isPause && "is-active")}
-          onClick={() => runAction("togglePause")}
-          type="button"
-        >
-          <span>
+        </label>
+        <label className={classNames("side-toggle", state.isPause && "is-active")}>
+          <span className="side-toggle-main">
+            <input checked={state.isPause} onChange={() => runAction("togglePause")} type="checkbox" />
             <Square size={15} />
             {uiCopy.sidebar.pause}
           </span>
           <kbd>{formatHotkey(state.settings.pauseHotkey)}</kbd>
+        </label>
+        <button className="side-button side-command red" onClick={() => runAction("killAll")} type="button">
+          <span>
+            <Square size={15} />
+            {uiCopy.sidebar.killMacro}
+          </span>
+          <kbd>{formatHotkey(state.settings.killMacroHotkey)}</kbd>
         </button>
-        <button className="side-button red" onClick={() => runAction("killAll")} type="button">
-          <Square size={15} />
-          {uiCopy.sidebar.killMacro}
-        </button>
-        <kbd className="shortcut-line">{formatHotkey(state.settings.killMacroHotkey)}</kbd>
         <button className="side-button gray" onClick={() => runAction("reload")} type="button">
           <RefreshCw size={15} />
           {uiCopy.sidebar.reload}
@@ -740,15 +735,23 @@ function MacroTable({
                   onBlur={(event) => updateFold(table.index, fold.index, "remark", event.target.value)}
                 />
               </label>
-              <label className="module-field front-field">
-                <span>{uiCopy.macro.front}</span>
+              <div className="module-front-control">
                 <input
+                  aria-label={uiCopy.macro.front}
                   value={fold.frontInfo}
                   placeholder={uiCopy.macro.frontPlaceholder}
                   onChange={(event) => patchLocalFold(table.index, fold.index, "frontInfo", event.target.value)}
                   onBlur={(event) => updateFold(table.index, fold.index, "frontInfo", event.target.value)}
                 />
-              </label>
+                <button
+                  onClick={() => runAction("openFrontInfoEditor", { tableIndex: table.index, foldIndex: fold.index })}
+                  title={uiCopy.macro.editFront}
+                  type="button"
+                >
+                  <SquarePen size={15} />
+                  {uiCopy.macro.edit}
+                </button>
+              </div>
               {table.isMenuTable && (
                 <div className="module-trigger-controls">
                   <button
@@ -1287,9 +1290,6 @@ function SettingsPanel({
           </LegacyField>
           <LegacyField label={uiCopy.settings.multiThreadNum}>
             <TextInput value={settings.mutiThreadNum} onLocal={(value) => patchLocalSettings("mutiThreadNum", value)} onCommit={(value) => updateSetting("mutiThreadNum", value)} />
-          </LegacyField>
-          <LegacyField label={uiCopy.settings.softBGColor}>
-            <TextInput value={settings.softBGColor} onLocal={(value) => patchLocalSettings("softBGColor", value)} onCommit={(value) => updateSetting("softBGColor", value)} />
           </LegacyField>
         </div>
       </LegacyGroup>

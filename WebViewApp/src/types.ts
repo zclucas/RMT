@@ -145,6 +145,7 @@ export type RmtAction =
   | { type: "minimize" }
   | { type: "maximize" }
   | { type: "close" }
+  | { type: "openFrontInfoEditor"; payload: { tableIndex: number; foldIndex: number } }
   | { type: "updateSetting"; payload: { field: keyof RmtSettings; value: unknown } }
   | { type: "updateTool"; payload: { field: keyof RmtToolState; value: unknown } }
   | { type: "updateItem"; payload: { tableIndex: number; itemIndex: number; field: keyof RmtItem; value: unknown } }

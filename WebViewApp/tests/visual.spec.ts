@@ -52,6 +52,22 @@ async function loadState(page: Page, state: RmtState) {
             currentState = nextState;
           }
         }
+        if (
+          action.type === "updateItem" &&
+          typeof action.payload?.tableIndex === "number" &&
+          typeof action.payload.itemIndex === "number" &&
+          typeof action.payload.field === "string"
+        ) {
+          const nextState = structuredClone(currentState) as RmtState;
+          const targetItem = nextState.tabs
+            .find((tab) => tab.table?.index === action.payload?.tableIndex)
+            ?.table?.folds.flatMap((fold) => fold.items)
+            .find((item) => item.index === action.payload?.itemIndex);
+          if (targetItem) {
+            (targetItem as unknown as Record<string, unknown>)[action.payload.field] = action.payload.value;
+            currentState = nextState;
+          }
+        }
 
         return JSON.stringify({
           ok: true,
@@ -250,6 +266,8 @@ test.describe("menu macro module controls", () => {
     const firstControls = page.locator(".module-trigger-controls").first();
     await expect(page.locator(".module-trigger-controls")).toHaveCount(2);
     await expect(firstControls.locator("button")).toContainText("Alt+M");
+    await expect(page.locator(".module-config-row").first().getByRole("button", { name: uiCopy.macro.addMacro })).toBeVisible();
+    await expect(page.locator(".module-config-row").first().getByRole("button", { name: uiCopy.macro.pasteMacro })).toBeVisible();
 
     await firstControls.locator("select").selectOption("4");
 
@@ -269,6 +287,36 @@ test.describe("menu macro module controls", () => {
     });
     await expect(firstControls.locator("select")).toHaveValue("4");
   });
+
+  test("keeps menu item trigger controls editable", async ({ page }) => {
+    await loadState(page, menuVisualState);
+
+    const firstRow = page.locator(".module-macro-row").first();
+    await firstRow.locator(".trigger-editor-button").click();
+    await firstRow.locator(".select-cell").selectOption("5");
+
+    const actions = await page.evaluate(() => {
+      return (window as Window & { __rmtActions?: Array<{ type: string; payload?: Record<string, unknown> }> }).__rmtActions ?? [];
+    });
+
+    expect(actions).toContainEqual({
+      type: "openTriggerEditor",
+      payload: {
+        tableIndex: 3,
+        itemIndex: 1
+      }
+    });
+    expect(actions).toContainEqual({
+      type: "updateItem",
+      payload: {
+        tableIndex: 3,
+        itemIndex: 1,
+        field: "triggerType",
+        value: 5
+      }
+    });
+    await expect(firstRow.locator(".select-cell")).toHaveValue("5");
+  });
 });
 
 test.describe("tool and settings views", () => {
@@ -281,6 +329,7 @@ test.describe("tool and settings views", () => {
     await expect(page.locator(".content-header")).toHaveCount(0);
     await expect(page.getByText(uiCopy.tool.toolWindows)).toHaveCount(0);
     await expect(page.locator(".tool-output")).toContainText("OCR 第 1 行");
+    await expect(page.locator(".legacy-tool-output")).toHaveCSS("min-height", "280px");
     await expectShellFits(page);
 
     await expect(page).toHaveScreenshot("tool-active-1070x590.png", {
@@ -296,6 +345,17 @@ test.describe("tool and settings views", () => {
     await expect(page.locator(".settings-legacy-page select")).toHaveCount(4);
     await expect(page.locator(".settings-legacy-page input[type='checkbox']")).toHaveCount(11);
     await expect(page.locator(".content-header")).toHaveCount(0);
+    await expect(page.locator(".settings-legacy-page")).not.toContainText(uiCopy.settings.softBGColor);
+    for (const label of [
+      uiCopy.settings.holdFloat,
+      uiCopy.settings.preIntervalFloat,
+      uiCopy.settings.intervalFloat,
+      uiCopy.settings.coordXFloat,
+      uiCopy.settings.coordYFloat,
+      uiCopy.settings.multiThreadNum
+    ]) {
+      await expect(page.locator(".legacy-numeric-grid")).toContainText(label);
+    }
 
     const switchLabels = await page.locator(".legacy-switch-grid > *").evaluateAll((elements) =>
       elements.map((element) => element.textContent?.trim() ?? "")
@@ -331,6 +391,22 @@ test.describe("static content views", () => {
         Number.parseFloat(window.getComputedStyle(element).fontSize)
       );
       expect(fontSize).toBeGreaterThanOrEqual(17);
+      if (scenario.name === "reward") {
+        const rewardMetrics = await page.locator(".reward-panel").evaluate((element) => {
+          const style = window.getComputedStyle(element);
+          const qrGrid = element.querySelector<HTMLElement>(".qr-grid");
+          return {
+            alignItems: style.alignItems,
+            minHeight: style.minHeight,
+            textAlign: style.textAlign,
+            qrJustifyContent: qrGrid ? window.getComputedStyle(qrGrid).justifyContent : ""
+          };
+        });
+        expect(rewardMetrics.alignItems).toBe("center");
+        expect(rewardMetrics.minHeight).toBe("100%");
+        expect(rewardMetrics.textAlign).toBe("center");
+        expect(rewardMetrics.qrJustifyContent).toBe("center");
+      }
       await expectShellFits(page);
     });
   }

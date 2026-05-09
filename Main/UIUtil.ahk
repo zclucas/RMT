@@ -27,6 +27,8 @@ class RmtWebViewGui extends WebViewGui {
 
 class RmtEdgeResizeOverlay {
     static BorderSize := 5
+    static CaptionButtonReserveWidth := 132
+    static CaptionButtonReserveHeight := 34
     static CornerMinSize := 22
     static CornerBorderMultiplier := 4
     static WM_SETCURSOR := 0x0020
@@ -104,16 +106,21 @@ class RmtEdgeResizeOverlay {
     Move(X, Y, Width, Height) {
         border := RmtEdgeResizeOverlay.BorderSize
         corner := Max(border * RmtEdgeResizeOverlay.CornerBorderMultiplier, RmtEdgeResizeOverlay.CornerMinSize)
-        innerWidth := Max(1, Width - corner * 2)
-        innerHeight := Max(1, Height - corner * 2)
+        captionReserveWidth := RmtEdgeResizeOverlay.CaptionButtonReserveWidth
+        captionReserveHeight := RmtEdgeResizeOverlay.CaptionButtonReserveHeight
+        topRightX := Max(corner, Width - captionReserveWidth - corner)
+        topInnerWidth := Max(1, topRightX - corner)
+        rightInnerHeight := Max(1, Height - captionReserveHeight - corner)
+        leftInnerHeight := Max(1, Height - corner * 2)
+        bottomInnerWidth := Max(1, Width - corner * 2)
         this.SetHandle("topLeft", 0, 0, corner, corner)
-        this.SetHandle("top", corner, 0, innerWidth, border)
-        this.SetHandle("topRight", Width - corner, 0, corner, corner)
-        this.SetHandle("right", Width - border, corner, border, innerHeight)
+        this.SetHandle("top", corner, 0, topInnerWidth, border)
+        this.SetHandle("topRight", topRightX, 0, corner, corner)
+        this.SetHandle("right", Width - border, captionReserveHeight, border, rightInnerHeight)
         this.SetHandle("bottomRight", Width - corner, Height - corner, corner, corner)
-        this.SetHandle("bottom", corner, Height - border, innerWidth, border)
+        this.SetHandle("bottom", corner, Height - border, bottomInnerWidth, border)
         this.SetHandle("bottomLeft", 0, Height - corner, corner, corner)
-        this.SetHandle("left", 0, corner, border, innerHeight)
+        this.SetHandle("left", 0, corner, border, leftInnerHeight)
     }
 
     SetHandle(Name, X, Y, W, H) {
@@ -238,6 +245,27 @@ RmtGetWebViewEntry() {
     if (devUrl != "" && RmtIsWebViewDevServerReady(devUrl))
         return devUrl
     return RMT_WEBVIEW_DIST_ENTRY
+}
+
+RmtOpenHelpDocument() {
+    helpPath := RmtGetHelpDocumentPath()
+    if (helpPath == "")
+        throw Error("找不到 RMT 说明文档 index.html")
+    Run(helpPath)
+}
+
+RmtGetHelpDocumentPath() {
+    candidates := [
+        A_WorkingDir "\index.html",
+        A_ScriptDir "\index.html",
+        A_WorkingDir "\Web\index.html",
+        A_ScriptDir "\Web\index.html"
+    ]
+    for _, candidate in candidates {
+        if (FileExist(candidate))
+            return candidate
+    }
+    return ""
 }
 
 RmtGetWebViewDevUrl() {
@@ -526,7 +554,7 @@ RmtDispatchWebAction(actionType, payload) {
             MenuReload()
             return ""
         case "openHelp":
-            Run(A_WorkingDir "\index.html")
+            RmtOpenHelpDocument()
             return ""
         case "openUrl":
             url := RmtGet(payload, "url", "")
@@ -581,6 +609,9 @@ RmtDispatchWebAction(actionType, payload) {
             return ""
         case "close":
             ExitApp()
+            return ""
+        case "openFrontInfoEditor":
+            RmtOpenFrontInfoEditorAction(payload)
             return ""
         case "updateSetting":
             RmtUpdateSetting(RmtGet(payload, "field", ""), RmtGet(payload, "value", ""))
@@ -1327,6 +1358,24 @@ RmtOpenMacroEditorAction(payload) {
     MyMacroGui.ShowGui(tableItem.MacroArr[itemIndex], true)
 }
 
+RmtOpenFrontInfoEditorAction(payload) {
+    global MyFrontInfoGui
+    tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
+    foldIndex := RmtInt(RmtGet(payload, "foldIndex", 0), 0)
+    tableItem := RmtGetTableItem(tableIndex)
+    foldInfo := tableItem.FoldInfo
+    RmtValidateFoldIndex(foldInfo, foldIndex)
+
+    frontInfoCon := RmtWebValueControl(foldInfo.FrontInfoArr[foldIndex])
+    SureFrontInfo() {
+        foldInfo.FrontInfoArr[foldIndex] := frontInfoCon.Value
+        RmtPostState()
+    }
+
+    MyFrontInfoGui.SureAction := SureFrontInfo
+    MyFrontInfoGui.ShowGui(frontInfoCon, true)
+}
+
 RmtOpenTriggerEditorAction(payload) {
     global MySoftData, MyTriggerKeyGui, MyTriggerStrGui, MyTimingGui
     tableIndex := RmtInt(RmtGet(payload, "tableIndex", 0), 0)
@@ -1662,8 +1711,8 @@ AddOperBtnUI() {
     posY += 40
 
     posY := 505
-    btnHelp := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("RMT文档"))
-    btnHelp.OnEvent("Click", (*) => Run(A_WorkingDir "\index.html"))
+    btnHelp := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("RMT说明文档"))
+    btnHelp.OnEvent("Click", (*) => RmtOpenHelpDocument())
 
     posY := 540
     MySoftData.BtnSave := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("应用并保存"))
@@ -2092,7 +2141,7 @@ AddHelpUI(index) {
 
     posY += 30
     posX := MySoftData.TabPosX + 15
-    LinkStr := A_WorkingDir "\index.html"
+    LinkStr := RmtGetHelpDocumentPath()
     AddTableControl("Text", Format("x{} y{} w{} h{}", posX, posY, 130, 30), GetLang("操作说明文档："), tableItem).SetFont((
         Format("S{} W{} Q{}", 12, 600, 0)))
     AddTableControl("Link", Format("x{} y{} w{} h{}", posX + 130, posY, 500, 30), Format('<a href="{}">{}</a>', LinkStr,
