@@ -10,7 +10,7 @@ class TableItem {
         this.RemarkArr := []    ;备注
         this.TriggerTypeArr := []   ;触发类型
         this.TimingSerialArr := []  ;定时配置序列码
-        this.ModeArr := []      ;按键模式   1.send 2.拟真 3.罗技
+        this.ModeArr := []      ;按键模式   1.AHK Send 2.keybd_event 3.罗技 4.AHI
         this.StartTipSoundArr := [] ;开始提示音 1.无   2.触发提示  3.循环首次提示
         this.EndTipSoundArr := [] ;结束提示音 1.无   2.结束提示  3.循环结束提示
 

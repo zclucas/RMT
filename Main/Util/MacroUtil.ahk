@@ -878,7 +878,7 @@ OnPressKey(tableItem, cmd, index) {
     isJoyKey := InStr(paramArr[2], "Joy")
     isJoyAxis := InStr(paramArr[2], "JoyAxis")
     isJoyDpad := InStr(paramArr[2], "JoyDpad")
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey)
+    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
     keyTypeMap := Map("按下", 1, "松开", 2, "点击", 3)
     action := actionMap[Integer(tableItem.ModeArr[index])]
     action := isJoyKey ? SendJoyBtnKey : action
@@ -908,7 +908,7 @@ OnPressKey(tableItem, cmd, index) {
 OnReplaceDownKey(tableItem, info, index, *) {
     infos := StrSplit(info, ",")
     mode := Integer(tableItem.ModeArr[index])
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey)
+    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
     action := actionMap[mode]
     loop infos.Length {
         assistKey := infos[A_Index]
@@ -920,7 +920,7 @@ OnReplaceDownKey(tableItem, info, index, *) {
 OnReplaceUpKey(tableItem, info, index, *) {
     infos := StrSplit(info, ",")
     mode := Integer(tableItem.ModeArr[index])
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey)
+    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
     action := actionMap[mode]
     loop infos.Length {
         assistKey := infos[A_Index]
