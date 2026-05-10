@@ -202,6 +202,7 @@ AddOperBtnUI() {
     MyTriggerKeyGui.SureFocusCon := MySoftData.BtnSave
     MyTriggerStrGui.SureFocusCon := MySoftData.BtnSave
     MyReplaceKeyGui.SureFocusCon := MySoftData.BtnSave
+    MyUIMacroSettingGui.SureFocusCon := MySoftData.BtnSave
 }
 
 GetUIAddFunc(index) {

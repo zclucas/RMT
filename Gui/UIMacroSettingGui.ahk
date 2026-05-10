@@ -7,6 +7,8 @@ class UIMacroSettingGui {
         this.PreviewGui := ""
         this.CoordTimer := ""
         this.InfoAction := () => this.RefreshMouseInfo()
+        this.SaveBtnAction := ""
+        this.SureFocusCon := ""
     }
 
     ShowGui(tableItem, macroIndex) {
@@ -19,7 +21,7 @@ class UIMacroSettingGui {
         }
         this.CurrentMacroIndex := macroIndex
 
-        MyGui := Gui("+Owner" MySoftData.MyGui.Hwnd, GetLang("界面宏按钮配置"))
+        MyGui := Gui(, GetLang("界面宏按钮配置"))
         this.Gui := MyGui
         MyGui.SetFont("S11 Q2", MySoftData.FontType)
         MyGui.OnEvent("Close", (*) => this.OnClose())
@@ -139,12 +141,14 @@ class UIMacroSettingGui {
         ;底部按钮（居中）
         PosY := 330
         PosX := 200
-        this.SaveBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("保存"))
-        this.SaveBtn.OnEvent("Click", (*) => this.OnSave(tableItem))
+        this.SaveBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
+        this.SaveBtn.OnEvent("Click", (*) => this.OnSureBtnClick(tableItem))
         this.CancelBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX + 115, PosY), GetLang("取消"))
         this.CancelBtn.OnEvent("Click", (*) => this.OnCancel())
+        this.ApplySaveBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX + 230, PosY), GetLang("应用并保存"))
+        this.ApplySaveBtn.OnEvent("Click", (*) => this.OnSaveBtnClick(tableItem))
 
-        MyGui.Show("w650 h390")
+        MyGui.Show("w800 h390")
 
         frontValue := tableItem.UIWindowArr.Has(macroIndex) ? tableItem.UIWindowArr[macroIndex] : ""
 
@@ -365,7 +369,34 @@ class UIMacroSettingGui {
         return Str
     }
 
-    OnSave(tableItem) {
+    OnSureBtnClick(tableItem) {
+        this.UpdateTableItem(tableItem)
+        this.StopCoordMonitor()
+        this.ToggleFunc(false)
+        this.DestroyPreview()
+        this.Gui.Hide()
+        if (this.SureFocusCon != "")
+            this.SureFocusCon.Focus()
+    }
+
+    OnSaveBtnClick(tableItem) {
+        this.UpdateTableItem(tableItem)
+        this.StopCoordMonitor()
+        this.ToggleFunc(false)
+        this.DestroyPreview()
+        this.Gui.Hide()
+
+        action := this.SaveBtnAction
+        if (action != "")
+            action()
+        
+        MyUIMacroGui.RefreshButtons()
+        
+        if (this.SureFocusCon != "")
+            this.SureFocusCon.Focus()
+    }
+
+    UpdateTableItem(tableItem) {
         macroIndex := this.CurrentMacroIndex
 
         frontValue := this.GetFrontInfo()
@@ -398,24 +429,13 @@ class UIMacroSettingGui {
             tableItem.UIBtnHeightArr[macroIndex] := btnHeightValue
         else
             tableItem.UIBtnHeightArr.Push(btnHeightValue)
-
-        this.StopCoordMonitor()
-        this.ToggleFunc(false)
-        this.DestroyPreview()
-
-        SaveTableItemInfo(tableItem.Index)
-
-        MyUIMacroGui.RefreshButtons()
-        MySlider.RefreshTab()
-
-        this.Gui.Destroy()
     }
 
     OnCancel() {
         this.StopCoordMonitor()
         this.ToggleFunc(false)
         this.DestroyPreview()
-        this.Gui.Destroy()
+        this.Gui.Hide()
     }
 
     OnClose() {

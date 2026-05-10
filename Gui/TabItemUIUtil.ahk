@@ -1035,5 +1035,6 @@ RecycleTabSingleItem(tableItem, itemIndex) {
 }
 
 OnUIMacroSettingClick(tableItem, macroIndex, *) {
+    MyUIMacroSettingGui.SaveBtnAction := OnSaveSetting
     MyUIMacroSettingGui.ShowGui(tableItem, macroIndex)
 }
