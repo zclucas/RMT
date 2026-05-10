@@ -46,6 +46,7 @@ export const uiCopy = {
     expandModule: "展开模块",
     collapseModule: "折叠模块",
     headers: ["宏名称", "触发编辑器", "触发类型", "循环次数", "宏设置", "宏编辑器", "操作"],
+    infiniteLoop: "无限",
     emptyModule: "当前模块没有宏。",
     dragHint: "拖拽调整顺序",
     macroName: "宏名称",

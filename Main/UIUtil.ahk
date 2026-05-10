@@ -377,6 +377,7 @@ RefreshListenVarGui(isForce := false) {
 
 RefreshToolUI() {
     global ToolCheckInfo
+    static lastPostTick := 0
 
     ToolCheckInfo.ToolMousePosCtrl.Value := ToolCheckInfo.PosStr
     ToolCheckInfo.ToolProcessNameCtrl.Value := ToolCheckInfo.ProcessName
@@ -386,6 +387,10 @@ RefreshToolUI() {
     ToolCheckInfo.ToolProcessIdCtrl.Value := ToolCheckInfo.ProcessId
     ToolCheckInfo.ToolColorCtrl.Value := ToolCheckInfo.Color
     ToolCheckInfo.ToolMouseWinPosCtrl.Value := ToolCheckInfo.WinPosStr
+    if (A_TickCount - lastPostTick >= 250) {
+        lastPostTick := A_TickCount
+        try RmtPostState()
+    }
 }
 
 RmtGetWebViewSettings() {

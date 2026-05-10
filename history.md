@@ -17,6 +17,7 @@
 - Added an opt-in WebView Vite dev server mode while keeping `WebViewApp/dist` as the default release path.
 - Refined the WebView UI shell, sidebar, macro rows, settings switches, and static content pages for tighter legacy-style layout.
 - Fixed remaining WebView UI parity issues for sidebar toggles, help document routing, macro module editing, disabled row states, tool output sizing, reward layout, and settings numeric labels.
+- Tightened WebView menu macro item permissions, loop-count editing, sidebar config/kill controls, tool mouse-info syncing, and static page fill behavior.
 
 ## 2.0
 

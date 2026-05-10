@@ -37,6 +37,15 @@ async function loadState(page: Page, state: RmtState) {
         if (action.type === "setTab" && typeof action.payload?.tabIndex === "number") {
           currentState = { ...currentState, activeTabIndex: action.payload.tabIndex };
         }
+        if (action.type === "toggleToolCheck") {
+          currentState = {
+            ...currentState,
+            tools: {
+              ...currentState.tools,
+              isToolCheck: !currentState.tools.isToolCheck
+            }
+          };
+        }
         if (
           action.type === "updateFold" &&
           typeof action.payload?.tableIndex === "number" &&
@@ -80,6 +89,9 @@ async function loadState(page: Page, state: RmtState) {
 
   await page.goto("/");
   await expect(page.locator(".classic-app")).toBeVisible();
+  await page.waitForFunction(() => {
+    return (window as Window & { __rmtActions?: Array<{ type: string }> }).__rmtActions?.some((action) => action.type === "getState");
+  });
 }
 
 async function expectShellFits(page: Page) {
@@ -104,6 +116,15 @@ async function expectShellFits(page: Page) {
   expect(metrics.shellRight).toBeLessThanOrEqual(metrics.viewportWidth + 1);
   expect(metrics.mainRight).toBeLessThanOrEqual(metrics.viewportWidth + 1);
   expect(metrics.sidebarScrollHeight).toBeLessThanOrEqual(metrics.sidebarClientHeight + 1);
+}
+
+async function expectClassicContentFits(page: Page) {
+  const metrics = await page.locator(".classic-content").evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight
+  }));
+
+  expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight + 1);
 }
 
 async function expectDarkControlsReadable(page: Page) {
@@ -222,7 +243,11 @@ for (const scenario of macroScenarios) {
 
       await expectShellFits(page);
       expect(metrics.operationRight).toBeLessThanOrEqual(metrics.viewportWidth + 1);
-      expect(metrics.disabledCells.length).toBeGreaterThan(0);
+      if (scenario.name.includes("menu")) {
+        expect(metrics.disabledCells.length).toBe(0);
+      } else {
+        expect(metrics.disabledCells.length).toBeGreaterThan(0);
+      }
 
       for (const cell of metrics.disabledCells) {
         expect(cell.text).toContain(uiCopy.macro.disabled);
@@ -235,9 +260,14 @@ for (const scenario of macroScenarios) {
       }
 
       for (const group of metrics.rowActionGroups) {
-        expect(group[0]).toContain(uiCopy.macro.copy);
-        expect(group[1]).toContain(uiCopy.macro.disabled);
-        expect(group[2]).toContain(uiCopy.macro.delete);
+        if (scenario.name.includes("menu")) {
+          expect(group).toHaveLength(1);
+          expect(group[0]).toContain(uiCopy.macro.copy);
+        } else {
+          expect(group[0]).toContain(uiCopy.macro.copy);
+          expect(group[1]).toContain(uiCopy.macro.disabled);
+          expect(group[2]).toContain(uiCopy.macro.delete);
+        }
       }
 
       if (scenario.name.includes("dense")) {
@@ -266,8 +296,8 @@ test.describe("menu macro module controls", () => {
     const firstControls = page.locator(".module-trigger-controls").first();
     await expect(page.locator(".module-trigger-controls")).toHaveCount(2);
     await expect(firstControls.locator("button")).toContainText("Alt+M");
-    await expect(page.locator(".module-config-row").first().getByRole("button", { name: uiCopy.macro.addMacro })).toBeVisible();
-    await expect(page.locator(".module-config-row").first().getByRole("button", { name: uiCopy.macro.pasteMacro })).toBeVisible();
+    await expect(page.locator(".module-config-row").first().getByRole("button", { name: uiCopy.macro.addMacro })).toHaveCount(0);
+    await expect(page.locator(".module-config-row").first().getByRole("button", { name: uiCopy.macro.pasteMacro })).toHaveCount(0);
 
     await firstControls.locator("select").selectOption("4");
 
@@ -288,34 +318,62 @@ test.describe("menu macro module controls", () => {
     await expect(firstControls.locator("select")).toHaveValue("4");
   });
 
-  test("keeps menu item trigger controls editable", async ({ page }) => {
+  test("keeps menu item trigger controls and destructive actions disabled", async ({ page }) => {
     await loadState(page, menuVisualState);
 
     const firstRow = page.locator(".module-macro-row").first();
-    await firstRow.locator(".trigger-editor-button").click();
-    await firstRow.locator(".select-cell").selectOption("5");
+    await expect(firstRow.locator(".trigger-editor-button")).toBeDisabled();
+    await expect(firstRow.locator(".select-cell")).toBeDisabled();
+    await expect(firstRow.getByRole("button", { name: uiCopy.macro.delete })).toHaveCount(0);
+    await expect(firstRow.locator(".row-disabled")).toHaveCount(0);
 
     const actions = await page.evaluate(() => {
       return (window as Window & { __rmtActions?: Array<{ type: string; payload?: Record<string, unknown> }> }).__rmtActions ?? [];
     });
 
-    expect(actions).toContainEqual({
-      type: "openTriggerEditor",
-      payload: {
-        tableIndex: 3,
-        itemIndex: 1
-      }
+    expect(actions.some((action) => action.type === "openTriggerEditor" && action.payload?.tableIndex === 3)).toBe(false);
+    expect(actions.some((action) => action.type === "updateItem" && action.payload?.field === "triggerType")).toBe(false);
+  });
+});
+
+test.describe("macro loop count editing", () => {
+  test.use({ viewport: { width: 1070, height: 590 } });
+
+  test("supports the infinite option while keeping custom text editable", async ({ page }) => {
+    await loadState(page, visualState);
+
+    const loopInput = page.locator(".module-macro-row").first().locator("input[list]");
+    await loopInput.fill(uiCopy.macro.infiniteLoop);
+    await loopInput.blur();
+    await expect(loopInput).toHaveValue(uiCopy.macro.infiniteLoop);
+
+    await loopInput.fill("变量次数");
+    await loopInput.blur();
+    await expect(loopInput).toHaveValue("变量次数");
+
+    const loopUpdates = await page.evaluate(() => {
+      const actions = (window as Window & { __rmtActions?: Array<{ type: string; payload?: Record<string, unknown> }> }).__rmtActions ?? [];
+      return actions.filter((action) => action.type === "updateItem" && action.payload?.field === "loopCount");
     });
-    expect(actions).toContainEqual({
+
+    expect(loopUpdates).toContainEqual({
       type: "updateItem",
       payload: {
-        tableIndex: 3,
+        tableIndex: 1,
         itemIndex: 1,
-        field: "triggerType",
-        value: 5
+        field: "loopCount",
+        value: "-1"
       }
     });
-    await expect(firstRow.locator(".select-cell")).toHaveValue("5");
+    expect(loopUpdates).toContainEqual({
+      type: "updateItem",
+      payload: {
+        tableIndex: 1,
+        itemIndex: 1,
+        field: "loopCount",
+        value: "变量次数"
+      }
+    });
   });
 });
 
@@ -329,8 +387,19 @@ test.describe("tool and settings views", () => {
     await expect(page.locator(".content-header")).toHaveCount(0);
     await expect(page.getByText(uiCopy.tool.toolWindows)).toHaveCount(0);
     await expect(page.locator(".tool-output")).toContainText("OCR 第 1 行");
-    await expect(page.locator(".legacy-tool-output")).toHaveCSS("min-height", "280px");
+    await expect(page.locator(".legacy-tool-output")).toHaveCSS("min-height", "136px");
+    const mouseInfoToggle = page.locator(".tool-hotkey-row").first().locator("input[type='checkbox']").first();
+    await expect(mouseInfoToggle).toBeChecked();
+    await mouseInfoToggle.click();
+    await expect(mouseInfoToggle).not.toBeChecked();
+    await mouseInfoToggle.click();
+    await expect(mouseInfoToggle).toBeChecked();
+    const toolActions = await page.evaluate(() => {
+      return (window as Window & { __rmtActions?: Array<{ type: string }> }).__rmtActions ?? [];
+    });
+    expect(toolActions.some((action) => action.type === "toggleToolCheck")).toBe(true);
     await expectShellFits(page);
+    await expectClassicContentFits(page);
 
     await expect(page).toHaveScreenshot("tool-active-1070x590.png", {
       animations: "disabled",
@@ -390,7 +459,16 @@ test.describe("static content views", () => {
       const fontSize = await page.locator(scenario.selector).evaluate((element) =>
         Number.parseFloat(window.getComputedStyle(element).fontSize)
       );
-      expect(fontSize).toBeGreaterThanOrEqual(17);
+      expect(fontSize).toBeGreaterThanOrEqual(16);
+      const contentMetrics = await page.locator(scenario.selector).evaluate((element) => {
+        const panelRect = element.getBoundingClientRect();
+        const contentRect = element.parentElement?.getBoundingClientRect();
+        return {
+          panelHeight: panelRect.height,
+          contentHeight: contentRect?.height ?? 0
+        };
+      });
+      expect(contentMetrics.panelHeight).toBeGreaterThanOrEqual(contentMetrics.contentHeight - 1);
       if (scenario.name === "reward") {
         const rewardMetrics = await page.locator(".reward-panel").evaluate((element) => {
           const style = window.getComputedStyle(element);
@@ -408,6 +486,7 @@ test.describe("static content views", () => {
         expect(rewardMetrics.qrJustifyContent).toBe("center");
       }
       await expectShellFits(page);
+      await expectClassicContentFits(page);
     });
   }
 });
