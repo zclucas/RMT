@@ -1083,18 +1083,9 @@ OnWindowManage(tableItem, cmd, index) {
     if (searchValue == "")
         return
 
-    infoArr := StrSplit(searchValue, "⎖")
-    titleStr := infoArr.Length >= 1 ? infoArr[1] : ""
-    classStr := infoArr.Length >= 2 ? infoArr[2] : ""
-    processStr := infoArr.Length >= 3 ? infoArr[3] : ""
-
-    winTitle := ""
-    if (titleStr != "")
-        winTitle .= (winTitle != "" ? " " : "") titleStr
-    if (classStr != "")
-        winTitle .= (winTitle != "" ? " " : "") "ahk_class " classStr
-    if (processStr != "")
-        winTitle .= (winTitle != "" ? " " : "") "ahk_exe " processStr
+    winTitle := GetParamsWinInfoStr(searchValue, "WindowManageGroup" index)
+    if (winTitle == "")
+        return
 
     try {
         switch Data.ActionType {

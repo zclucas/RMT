@@ -23,6 +23,11 @@ class WindowManageGui {
         this.TitleRelateArrCon := []
 
         this.TopTogCon := ""
+        this.InfoAction := () => this.RefreshMouseInfo()
+        this.CurWinInfoCon := ""
+        this.VarConArr := []
+        this.VariCon := ""
+        this.VariTipCon := ""
     }
 
     ShowGui(cmd) {
@@ -44,6 +49,7 @@ class WindowManageGui {
 
         this.Init(cmd)
         this.OnActionChange()
+        SetTimer this.InfoAction, 100
     }
 
     Init(cmd) {
@@ -57,11 +63,13 @@ class WindowManageGui {
 
         infoStr := this.Data.SearchValue
         if (infoStr == "")
-            infoArr := ["", "", ""]
+            infoArr := ["", "", "", ""]
+        else if (InStr(infoStr, "❖"))
+            infoArr := [StrReplace(infoStr, "❖", ""), "", "", ""]
         else
             infoArr := StrSplit(infoStr, "⎖")
 
-        loop 3 {
+        loop 4 {
             index := A_Index + 0
             if (index <= infoArr.Length) {
                 this.InfoTogArrCon[index].Value := infoArr[index] != ""
@@ -73,6 +81,10 @@ class WindowManageGui {
         }
 
         DLVariableArr := GetGuiVarArr(4)
+        this.VariCon.Delete()
+        this.VariCon.Add(DLVariableArr)
+        this.VariCon.Value := 1
+        this.OnTogClick()
 
         this.PosXCon.Delete()
         this.PosXCon.Add(DLVariableArr)
@@ -107,21 +119,84 @@ class WindowManageGui {
 
         PosX := 10
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("窗口置顶"))
-        con.OnEvent("Click", (*) => this.OnTopTogClick())
+        con.OnEvent("Click", this.OnTogClick.Bind(this))
         this.TopTogCon := con
 
-        PosX := 160
+        PosX := 130
         con := MyGui.Add("Edit", Format("x{} y{} w{} Center", PosX, PosY - 5, 30), "F1")
         con.Enabled := false
         PosX += 30
         MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("确定信息"))
 
-        PosX := 320
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("备注："))
+        PosX += 80
+        Con := MyGui.Add("Button", Format("x{} y{} w30", PosX, PosY - 4), "?")
+        Con.OnEvent("Click", this.OnClickTypeHelpBtn.Bind(this))
+
+        PosX += 80
+        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("备注："))
         PosX += 50
-        this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 150), "")
+        this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 130), "")
 
         PosY += 30
+        PosX := 10
+        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("当前鼠标下窗口信息："))
+
+        PosY += 25
+        PosX := 10
+        this.CurWinInfoCon := MyGui.Add("Text", Format("x{} y{} w800 h90", PosX, PosY))
+
+        PosY += 95
+        PosX := 20
+        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("句柄ID"))
+        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        this.InfoTogArrCon.Push(con)
+        PosX := 95
+        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
+        this.InfoTextArrCon.Push(con)
+
+        PosY += 32
+        PosX := 175
+        this.VarConArr := []
+        this.VariTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 150), GetLang("变量:"))
+        this.VarConArr.Push(this.VariTipCon)
+
+        PosX += 45
+        this.VariCon := MyGui.Add("DropDownList", Format("x{} y{} w{} R5", PosX, PosY - 3, 130), [])
+        this.VarConArr.Push(this.VariCon)
+
+        PosX += 135
+        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 5, 100, 30), GetLang("追加变量值"))
+        btnCon.OnEvent("Click", (*) => this.OnClickAddVarValueBtn())
+        this.VarConArr.Push(btnCon)
+
+        PosY += 35
+        PosX := 20
+        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("标题"))
+        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        this.InfoTogArrCon.Push(con)
+        PosX := 95
+        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
+        this.InfoTextArrCon.Push(con)
+
+        PosY += 35
+        PosX := 20
+        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("窗口类"))
+        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        this.InfoTogArrCon.Push(con)
+        PosX := 95
+        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
+        this.InfoTextArrCon.Push(con)
+
+        PosY += 35
+        PosX := 20
+        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("进程名"))
+        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        this.InfoTogArrCon.Push(con)
+        PosX := 95
+        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
+        this.InfoTextArrCon.Push(con)
+
+        PosY += 35
         PosX := 10
         MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("操作类型："))
         PosX += 80
@@ -142,33 +217,6 @@ class WindowManageGui {
             ]
         )
         this.ActionTypeCon.OnEvent("Change", this.OnActionChange.Bind(this))
-
-        PosY += 35
-        PosX := 10
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("标题"))
-        con.OnEvent("Click", (*) => this.OnSearchTogClick())
-        this.InfoTogArrCon.Push(con)
-        PosX := 80
-        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
-        this.InfoTextArrCon.Push(con)
-
-        PosY += 32
-        PosX := 10
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("窗口类"))
-        con.OnEvent("Click", (*) => this.OnSearchTogClick())
-        this.InfoTogArrCon.Push(con)
-        PosX := 80
-        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
-        this.InfoTextArrCon.Push(con)
-
-        PosY += 32
-        PosX := 10
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("进程名"))
-        con.OnEvent("Click", (*) => this.OnSearchTogClick())
-        this.InfoTogArrCon.Push(con)
-        PosX := 80
-        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
-        this.InfoTextArrCon.Push(con)
 
         SplitPosY := PosY + 38
 
@@ -224,7 +272,7 @@ class WindowManageGui {
         Hotkey("F1", (*) => this.OnF1(), "On")
 
         MyGui.OnEvent("Close", (*) => this.OnClose())
-        MyGui.Show(Format("w{} h{}", 520, 290))
+        MyGui.Show(Format("w{} h{}", 520, 540))
     }
 
     OnActionChange(*) {
@@ -244,20 +292,42 @@ class WindowManageGui {
             con.Visible := isShowTitle
     }
 
-    OnSearchTogClick(*) {
-        loop 3 {
-            Enable := this.InfoTogArrCon[A_Index].Value
-            this.InfoTextArrCon[A_Index].Enabled := Enable
-        }
-    }
 
-    OnTopTogClick() {
+
+    OnTogClick(*) {
         if (this.TopTogCon.Value) {
             this.Gui.Opt("+AlwaysOnTop")
         }
         else {
             this.Gui.Opt("-AlwaysOnTop")
         }
+
+        isHwndID := this.InfoTogArrCon[1].Value
+        this.InfoTextArrCon[1].Enabled := isHwndID
+        loop this.VarConArr.Length {
+            con := this.VarConArr[A_Index]
+            con.Enabled := isHwndID
+        }
+        loop 4 {
+            if (A_Index == 1)
+                continue
+            if (isHwndID) {
+                this.InfoTogArrCon[A_Index].Value := false
+                this.InfoTextArrCon[A_Index].Enabled := false
+            }
+            else {
+                Enable := this.InfoTogArrCon[A_Index].Value
+                this.InfoTextArrCon[A_Index].Enabled := Enable
+            }
+        }
+    }
+
+    OnClickTypeHelpBtn(*) {
+        str1 := GetLang("优先级：句柄ID > 标题 + 窗口类 + 进程名")
+        str2 := GetLang("句柄ID支持多ID任意适配")
+
+        str := Format("{}`n{}", str1, str2)
+        MsgBox(str, GetLang("窗口信息说明"), "Owner" this.Gui.Hwnd)
     }
 
     OnF1() {
@@ -273,15 +343,52 @@ class WindowManageGui {
             catch {
                 process := ""
             }
-
-            this.InfoTextArrCon[1].Value := title
-            this.InfoTextArrCon[2].Value := className
-            this.InfoTextArrCon[3].Value := process
-            loop 3 {
-                this.InfoTogArrCon[A_Index].Value := true
+            this.InfoTextArrCon[1].Value := winId
+            this.InfoTextArrCon[2].Value := title
+            this.InfoTextArrCon[3].Value := className
+            this.InfoTextArrCon[4].Value := process
+            loop 4 {
+                state := A_Index != 1
+                this.InfoTogArrCon[A_Index].Value := state
             }
-            this.OnSearchTogClick()
+            this.OnTogClick()
         }
+    }
+
+    RefreshMouseInfo() {
+        CoordMode("Mouse", "Screen")
+        MouseGetPos &mouseX, &mouseY, &winId
+        try {
+            title := WinGetTitle(winId)
+            className := WinGetClass(winId)
+            try {
+                WinPID := WinGetPID("ahk_id " winId)
+                process := ProcessGetName(WinPID)
+            }
+            catch {
+                process := ""
+            }
+
+            tipStr := Format("{}{}`n{}{}`n{}{}`n{}{}", GetLang("句柄ID："), winId, GetLang("标题："), title, GetLang("窗口类："),
+            className, GetLang("进程名："),
+            process)
+            this.CurWinInfoCon.Value := tipStr
+        }
+    }
+
+    OnClickAddVarValueBtn() {
+        Symbol := this.InfoTextArrCon[1].Text == "" ? "" : "|"
+        VarStr := "{" this.VariCon.Text "}"
+        if (this.VariCon.Text == "") {
+            MsgBox("请勿添加空字符变量", "", "Owner" this.Gui.Hwnd)
+            return
+        }
+        if (InStr(this.InfoTextArrCon[1].Text, VarStr)) {
+            MsgBox("请勿重复添加变量", "", "Owner" this.Gui.Hwnd)
+            return
+        }
+
+        this.InfoTextArrCon[1].Text .= Symbol VarStr
     }
 
     OnClose(*) {
@@ -310,12 +417,20 @@ class WindowManageGui {
 
     CheckIfValid() {
         hasAnySearch := false
+        if (this.InfoTogArrCon[1].Value) {
+            hasAnySearch := true
+            if (this.InfoTextArrCon[1].Value == "") {
+                MsgBox(GetLang("勾选句柄ID后，句柄ID内容不能为空"), "", "Owner" this.Gui.Hwnd)
+                return false
+            }
+        }
         loop 3 {
-            if (this.InfoTogArrCon[A_Index].Value) {
+            index := A_Index + 1
+            if (this.InfoTogArrCon[index].Value) {
                 hasAnySearch := true
-                if (this.InfoTextArrCon[A_Index].Value == "") {
+                if (this.InfoTextArrCon[index].Value == "") {
                     typeNames := [GetLang("标题"), GetLang("窗口类"), GetLang("进程名")]
-                    MsgBox(Format(GetLang("勾选{}后，内容不能为空！"), typeNames[A_Index]), "", "Owner" this.Gui.Hwnd)
+                    MsgBox(Format(GetLang("勾选{}后，内容不能为空！"), typeNames[index]), "", "Owner" this.Gui.Hwnd)
                     return false
                 }
             }
@@ -358,13 +473,19 @@ class WindowManageGui {
     SaveData() {
         this.Data.ActionType := this.ActionTypeCon.Value
 
-        searchStr := ""
-        loop 3 {
-            if (this.InfoTogArrCon[A_Index].Value) {
-                searchStr .= this.InfoTextArrCon[A_Index].Value
+        if (this.InfoTogArrCon[1].Value) {
+            searchStr := "❖" this.InfoTextArrCon[1].Value
+        }
+        else {
+            searchStr := ""
+            loop 3 {
+                index := A_Index + 1
+                if (this.InfoTogArrCon[index].Value) {
+                    searchStr .= this.InfoTextArrCon[index].Value
+                }
+                if (A_Index != 3)
+                    searchStr .= "⎖"
             }
-            if (A_Index != 3)
-                searchStr .= "⎖"
         }
         this.Data.SearchValue := GetLangStr(searchStr, 2)
 
