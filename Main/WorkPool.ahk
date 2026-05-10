@@ -20,11 +20,13 @@ class TaskQueue {
 }
 
 class Future {
-    __New(id) {
+    __New(id, tableIndex := 0, itemIndex := 0) {
         this.id := id
         this.done := false
         this.result := ""
         this.hEvent := CreateEvent()
+        this.tableIndex := tableIndex
+        this.itemIndex := itemIndex
     }
 
     __Delete() {
@@ -162,10 +164,10 @@ class WorkPool {
         this.workerProcs[idx] := hProc
     }
 
-    Submit(cmd) {
+    Submit(cmd, tableIndex := 0, itemIndex := 0) {
         this.taskCounter++
         id := this.taskCounter
-        fut := Future(id)
+        fut := Future(id, tableIndex, itemIndex)
 
         this.futures.Set(id, fut)
         this.futureCreateTime.Set(id, A_TickCount)
@@ -243,7 +245,17 @@ class WorkPool {
                 switch type {
                     case MsgType.RESULT:
                         if (this.futures.Has(id)) {
-                            this.futures[id].SetResult(result)
+                            fut := this.futures[id]
+                            fut.SetResult(result)
+                            
+                            ; 重置IsWorkIndexArr，允许宏再次触发
+                            if (fut.tableIndex > 0 && fut.itemIndex > 0) {
+                                tableItem := MySoftData.TableInfo[fut.tableIndex]
+                                if (tableItem.IsWorkIndexArr.Length >= fut.itemIndex) {
+                                    tableItem.IsWorkIndexArr[fut.itemIndex] := 0
+                                }
+                            }
+                            
                             this.futures.Delete(id)
                             this.futureCreateTime.Delete(id)
                         }

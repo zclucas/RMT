@@ -758,7 +758,7 @@ OnToggleTriggerMacro(tableIndex, itemIndex) {
     if (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1) {
         SetTableItemState(tableItem.index, itemIndex, 1)
         cmd := JSON.stringify(["TR_MACRO", tableIndex, itemIndex])
-        fut := MyWorkPool.Submit(cmd)
+        fut := MyWorkPool.Submit(cmd, tableIndex, itemIndex)
         tableItem.IsWorkIndexArr[itemIndex] := fut.id
         return
     }
@@ -791,10 +791,9 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
     SetTableItemState(tableItem.index, itemIndex, 1)
     if (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1) {
         cmd := JSON.stringify(["TR_MACRO", tableIndex, itemIndex])
-        fut := MyWorkPool.Submit(cmd)
+        fut := MyWorkPool.Submit(cmd, tableIndex, itemIndex)
         tableItem.IsWorkIndexArr[itemIndex] := fut.id
         return
     }
     OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
 }
-
