@@ -11,8 +11,7 @@ class MouseMoveGui {
         this.PosXCon := ""
         this.PosYCon := ""
         this.SpeedCon := ""
-        this.IsRelativeCon := ""
-        this.IsRawInputCon := ""
+        this.MouseMoveModeCon := ""
         this.CommandStrCon := ""
         this.MousePosCon := ""
     }
@@ -91,12 +90,8 @@ class MouseMoveGui {
         this.SpeedCon.OnEvent("Change", (*) => this.OnChangeEditValue())
 
         PosX += 120
-        this.IsRelativeCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("相对位移"))
-        this.IsRelativeCon.OnEvent("Click", (*) => this.OnChangeEditValue())
-
-        PosX += 110
-        this.IsRawInputCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("原始输入"))
-        this.IsRawInputCon.OnEvent("Click", (*) => this.OnChangeEditValue())
+        this.MouseMoveModeCon := MyGui.Add("DropDownList", Format("x{} y{} w120 Choose1", PosX, PosY), ["移动", "相对移动", "游戏视角"])
+        this.MouseMoveModeCon.OnEvent("Change", (*) => this.OnChangeEditValue())
 
         PosY += 25
         PosX := 10
@@ -130,14 +125,15 @@ class MouseMoveGui {
         PosX := cmdArr.Length >= 2 ? cmdArr[2] : 0
         PosY := cmdArr.Length >= 3 ? cmdArr[3] : 0
         Speed := cmdArr.Length >= 4 ? cmdArr[4] : 90
-        IsRelative := cmdArr.Length >= 5 ? cmdArr[5] : 0
-        IsRawInput := cmdArr.Length >= 6 ? cmdArr[6] : (ToolCheckInfo.RecordMouseRawInput ? 1 : 0)
+        MoveMode := ToolCheckInfo.RecordMouseMoveMode
+
+        if (cmdArr.Length >= 5)
+            MoveMode := Integer(cmdArr[5])
 
         this.PosXCon.Value := PosX
         this.PosYCon.Value := PosY
         this.SpeedCon.Value := Speed
-        this.IsRelativeCon.Value := IsRelative
-        this.IsRawInputCon.Value := IsRawInput
+        this.MouseMoveModeCon.Value := MoveMode + 1
         this.UpdateCommandStr()
     }
 
@@ -161,22 +157,14 @@ class MouseMoveGui {
     }
 
     UpdateCommandStr() {
-        showRelative := this.IsRelativeCon.Value == 1
-        showRawInput := this.IsRawInputCon.Value == 1
-        showSpeed := true
-
+        MoveMode := this.MouseMoveModeCon.Value - 1
         CommandStr := GetLang("移动")
         CommandStr .= "_" this.PosXCon.Value
         CommandStr .= "_" this.PosYCon.Value
+        CommandStr .= "_" this.SpeedCon.Value
 
-        if (showSpeed) {
-            CommandStr .= "_" this.SpeedCon.Value
-        }
-        if (showRelative) {
-            CommandStr .= "_" this.IsRelativeCon.Value
-        }
-        if (showRawInput) {
-            CommandStr .= "_" this.IsRawInputCon.Value
+        if (MoveMode != 0) {
+            CommandStr .= "_" MoveMode
         }
 
         this.CommandStrCon.Value := CommandStr

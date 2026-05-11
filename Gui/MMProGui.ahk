@@ -17,8 +17,7 @@ class MMProGui {
         this.PosVarXCon := ""
         this.PosVarYCon := ""
         this.ActionTypeCon := ""
-        this.IsRelativeCon := ""
-        this.isGameViewCon := ""
+        this.MouseMoveModeCon := ""
         this.SpeedCon := ""
         this.CountCon := ""
         this.IntervalCon := ""
@@ -134,13 +133,10 @@ class MMProGui {
 
         PosY += 30
         PosX := 90
-        this.IsRelativeCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("相对位移"))
+        this.MouseMoveModeCon := MyGui.Add("DropDownList", Format("x{} y{} w120 Choose1", PosX, PosY), ["移动", "相对移动", "游戏视角"])
+        this.MouseMoveModeCon.OnEvent("Change", (*) => this.OnTypeChange())
 
-        PosX := 200
-        this.IsGameViewCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 20), GetLang("游戏视角"))
-        this.isGameViewCon.OnEvent("Click", (*) => this.OnTypeChange())
-
-        PosX := 320
+        PosX := 230
         this.HumanMouseTogCon := MyGui.Add("Checkbox", Format("x{} y{} w{}", PosX, PosY, 150), GetLang("启用拟真轨迹"))
         this.HumanMouseTogCon.OnEvent("Click", (*) => this.OnHumanMouseTogClick())
 
@@ -182,8 +178,12 @@ class MMProGui {
         this.PosVarYCon.Add(this.DLVariableArr)
         this.PosVarYCon.Text := GetLang(this.Data.PosVarY)
         this.ActionTypeCon.Value := this.Data.ActionType
-        this.IsRelativeCon.Value := this.Data.IsRelative
-        this.isGameViewCon.Value := this.Data.IsGameView
+
+        MoveMode := ToolCheckInfo.RecordMouseMoveMode
+        if (ObjHasOwnProp(this.Data, "MouseMoveMode"))
+            MoveMode := this.Data.MouseMoveMode
+        this.MouseMoveModeCon.Value := MoveMode + 1
+
         this.SpeedCon.Value := this.Data.Speed
         this.CountCon.Value := this.Data.Count
         this.IntervalCon.Value := this.Data.Interval
@@ -299,8 +299,7 @@ class MMProGui {
             LastConfig.PosVarX := GetLangKey(this.PosVarXCon.Text)
             LastConfig.PosVarY := GetLangKey(this.PosVarYCon.Text)
             LastConfig.ActionType := this.ActionTypeCon.Value
-            LastConfig.IsRelative := this.IsRelativeCon.Value
-            LastConfig.IsGameView := this.isGameViewCon.Value
+            LastConfig.MouseMoveMode := this.MouseMoveModeCon.Value - 1
             LastConfig.Speed := this.SpeedCon.Value
             LastConfig.Count := this.CountCon.Value
             LastConfig.Interval := this.IntervalCon.Value
@@ -332,8 +331,7 @@ class MMProGui {
         this.Data.PosVarX := ConfigData.PosVarX
         this.Data.PosVarY := ConfigData.PosVarY
         this.Data.ActionType := ConfigData.ActionType
-        this.Data.IsRelative := ConfigData.IsRelative
-        this.Data.IsGameView := ConfigData.IsGameView
+        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : ToolCheckInfo.RecordMouseMoveMode
         this.Data.Speed := ConfigData.Speed
         this.Data.Count := ConfigData.Count
         this.Data.Interval := ConfigData.Interval
@@ -350,8 +348,7 @@ class MMProGui {
         LastConfig.PosVarX := GetLangKey(this.PosVarXCon.Text)
         LastConfig.PosVarY := GetLangKey(this.PosVarYCon.Text)
         LastConfig.ActionType := this.ActionTypeCon.Value
-        LastConfig.IsRelative := this.IsRelativeCon.Value
-        LastConfig.IsGameView := this.isGameViewCon.Value
+        LastConfig.MouseMoveMode := this.MouseMoveModeCon.Value - 1
         LastConfig.Speed := this.SpeedCon.Value
         LastConfig.Count := this.CountCon.Value
         LastConfig.Interval := this.IntervalCon.Value
@@ -369,8 +366,7 @@ class MMProGui {
         this.Data.PosVarX := ConfigData.PosVarX
         this.Data.PosVarY := ConfigData.PosVarY
         this.Data.ActionType := ConfigData.ActionType
-        this.Data.IsRelative := ConfigData.IsRelative
-        this.Data.IsGameView := ConfigData.IsGameView
+        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : ToolCheckInfo.RecordMouseMoveMode
         this.Data.Speed := ConfigData.Speed
         this.Data.Count := ConfigData.Count
         this.Data.Interval := ConfigData.Interval
@@ -405,13 +401,12 @@ class MMProGui {
     }
 
     OnTypeChange() {
-        isGameView := this.isGameViewCon.Value
+        MoveMode := this.MouseMoveModeCon.Value - 1
+        isGameView := MoveMode == 2
 
         if (isGameView) {
-            this.IsRelativeCon.Value := 1
             this.ActionTypeCon.Value := 1
             this.SpeedCon.Value := 100
-            this.IsRelativeCon.Enabled := false
             this.ActionTypeCon.Enabled := false
             this.SpeedCon.Enabled := false
 
@@ -421,7 +416,6 @@ class MMProGui {
             this.HumanMouseTogCon.Enabled := false
         }
         else {
-            this.IsRelativeCon.Enabled := true
             this.ActionTypeCon.Enabled := true
             this.SpeedCon.Enabled := true
             this.HumanMouseTogCon.Enabled := true
@@ -478,8 +472,8 @@ class MMProGui {
         isEnabled := this.HumanMouseTogCon.Value == 1
 
         if (isEnabled) {
-            if (this.isGameViewCon.Value == 1) {
-                this.isGameViewCon.Value := 0
+            if (this.MouseMoveModeCon.Value - 1 == 2) {
+                this.MouseMoveModeCon.Value := 1
                 this.OnTypeChange()
             }
 
@@ -487,11 +481,11 @@ class MMProGui {
                 this.ActionTypeCon.Value := 1
             }
             this.ActionTypeCon.Enabled := false
-            this.isGameViewCon.Enabled := false
+            this.MouseMoveModeCon.Enabled := false
         }
         else {
             this.ActionTypeCon.Enabled := true
-            this.isGameViewCon.Enabled := true
+            this.MouseMoveModeCon.Enabled := true
         }
     }
 
@@ -499,8 +493,7 @@ class MMProGui {
         this.Data.PosVarX := GetLangKey(this.PosVarXCon.Text)
         this.Data.PosVarY := GetLangKey(this.PosVarYCon.Text)
         this.Data.ActionType := this.ActionTypeCon.Value
-        this.Data.IsRelative := this.IsRelativeCon.Value
-        this.Data.IsGameView := this.isGameViewCon.Value
+        this.Data.MouseMoveMode := this.MouseMoveModeCon.Value - 1
         this.Data.Speed := this.SpeedCon.Value
         this.Data.Count := this.CountCon.Value
         this.Data.Interval := this.IntervalCon.Value

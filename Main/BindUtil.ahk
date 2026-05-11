@@ -414,6 +414,8 @@ OnToolRecordMacro(isHotkey, *) {
     loop 255 {
         if (isSingleKey && GetKeyVK(RecordHotKey) == A_Index)
             continue
+        if (A_Index == 0x01 || A_Index == 0x02 || A_Index == 0x04)
+            continue
 
         key := Format("$*~vk{:X}", A_Index)
         if (ToolCheckInfo.RecordSpecialKeyMap.Has(A_Index)) {
@@ -440,6 +442,12 @@ OnToolRecordMacro(isHotkey, *) {
 
     if (state) {
         MySoftData.IsTogStartRecord := isHotkey == ""
+        try Hotkey("$*~LButton", OnRecordMacroKeyDown, "On")
+        try Hotkey("$*~LButton Up", OnRecordMacroKeyUp, "On")
+        try Hotkey("$*~RButton", OnRecordMacroKeyDown, "On")
+        try Hotkey("$*~RButton Up", OnRecordMacroKeyUp, "On")
+        try Hotkey("$*~MButton", OnRecordMacroKeyDown, "On")
+        try Hotkey("$*~MButton Up", OnRecordMacroKeyUp, "On")
         if (ToolCheckInfo.RecordJoy)
             RecordJoy()
 
@@ -457,39 +465,47 @@ RecordMouseTrail() {
         return
 
     global RI_isActive, RI_scaleFactor, RI_btnQueue, RI_keyQueue
-    IsRelative := ToolCheckInfo.RecordMouseRelative
-    IsRawInput := ToolCheckInfo.RecordMouseRawInput
+    MoveMode := ToolCheckInfo.RecordMouseMoveMode
 
-    if (IsRelative && !RI_isActive)
+    if (MoveMode == 2 && !RI_isActive)
         RI_StartRecord()
 
-    if (IsRelative) {
+    if (MoveMode == 2) {
         rawDelta := RI_StopRecord()
         riPx := Round(rawDelta[1] / RI_scaleFactor)
         riPy := Round(rawDelta[2] / RI_scaleFactor)
-
         RI_StartRecord()
 
-        if (riPx == 0 && riPy == 0) {
-            SetTimer(RecordMouseTrail, -ToolCheckInfo.RecordMouseTrailInterval)
-            return
+        if (riPx != 0 || riPy != 0) {
+            ToolCheckInfo.RecordMacroStr .= GetLang("移动") "_" riPx "_" riPy "_" 100 "_2,"
+            span := GetCurMSec() - ToolCheckInfo.RecordLastTime
+            ToolCheckInfo.RecordLastTime := GetCurMSec()
+            ToolCheckInfo.RecordMacroStr .= GetLang("间隔") "_" span ","
         }
+    }
+    else if (MoveMode == 1) {
+        CoordMode("Mouse", "Screen")
+        MouseGetPos &mouseX, &mouseY
 
-        len := Abs(riPx) + Abs(riPy)
-        if (len <= ToolCheckInfo.RecordMouseTrailLen) {
-            SetTimer(RecordMouseTrail, -ToolCheckInfo.RecordMouseTrailInterval)
-            return
+        if (ToolCheckInfo.RecordLastMousePos[1] != mouseX || ToolCheckInfo.RecordLastMousePos[2] != mouseY) {
+            len := Abs(ToolCheckInfo.RecordLastMousePos[1] - mouseX)
+            len += Abs(ToolCheckInfo.RecordLastMousePos[2] - mouseY)
+            if (len <= ToolCheckInfo.RecordMouseTrailLen) {
+                SetTimer(RecordMouseTrail, -ToolCheckInfo.RecordMouseTrailInterval)
+                return
+            }
+
+            speed := ToolCheckInfo.RecordMouseTrailSpeed
+            targetX := mouseX - ToolCheckInfo.RecordLastMousePos[1]
+            targetY := mouseY - ToolCheckInfo.RecordLastMousePos[2]
+            CommandStr := GetLang("移动") "_" targetX "_" targetY "_" speed "_1"
+            ToolCheckInfo.RecordMacroStr .= CommandStr ","
+            ToolCheckInfo.RecordLastMousePos := [mouseX, mouseY]
+
+            span := GetCurMSec() - ToolCheckInfo.RecordLastTime
+            ToolCheckInfo.RecordLastTime := GetCurMSec()
+            ToolCheckInfo.RecordMacroStr .= GetLang("间隔") "_" span ","
         }
-
-        speed := ToolCheckInfo.RecordMouseTrailSpeed
-        symbol := "_" speed "_1"
-        if (IsRawInput)
-            symbol .= "_1"
-        ToolCheckInfo.RecordMacroStr .= GetLang("移动") "_" riPx "_" riPy symbol ","
-
-        span := GetCurMSec() - ToolCheckInfo.RecordLastTime
-        ToolCheckInfo.RecordLastTime := GetCurMSec()
-        ToolCheckInfo.RecordMacroStr .= GetLang("间隔") "_" span ","
     }
     else {
         CoordMode("Mouse", "Screen")
@@ -524,18 +540,11 @@ RecordMouseTrail() {
     }
 
     while (RI_keyQueue.Length > 0) {
-        if (!ToolCheckInfo.RecordKeyboardRawInput)
-            break
-        key := RI_keyQueue.RemoveAt(1)
-        span := GetCurMSec() - ToolCheckInfo.RecordLastTime
-        ToolCheckInfo.RecordLastTime := GetCurMSec()
-        ToolCheckInfo.RecordMacroStr .= GetLang("间隔") "_" span ","
-        ToolCheckInfo.RecordMacroStr .= GetLang("按键") "_" key["name"] "_" key["state"] ","
+        RI_keyQueue.RemoveAt(1)
     }
 
     SetTimer(RecordMouseTrail, -ToolCheckInfo.RecordMouseTrailInterval)
 }
-
 OnRecordMacroKeyDown(*) {
 
     key := StrReplace(A_ThisHotkey, "$", "")
@@ -576,23 +585,33 @@ OnRecordAddMacroStr(keyName, isDown) {
     IsMouse := keyName == "LButton" || keyName == "RButton" || keyName == "MButton"
     IsKeyboard := !IsMouse && !IsJoy
 
-    if (IsJoy || (IsKeyboard && ToolCheckInfo.RecordKeyboard && !ToolCheckInfo.RecordKeyboardRawInput)) {
+    if (IsJoy || (IsKeyboard && ToolCheckInfo.RecordKeyboard)) {
         keyName := keyName == "," ? GetLang("逗号") : keyName
         ToolCheckInfo.RecordMacroStr .= Format("{}_{},", GetLang("间隔"), span)
         ToolCheckInfo.RecordMacroStr .= Format("{}_{}_{},", GetLang("按键"), keyName, keySymbol)
     }
 
-    if (IsMouse && ToolCheckInfo.RecordMouse && ToolCheckInfo.RecordMouseKeyPoint) {
-        if (ToolCheckInfo.RecordMouseRelative) {
+    if (IsMouse && ToolCheckInfo.RecordMouse && ToolCheckInfo.RecordMouseTrail) {
+        MoveMode := ToolCheckInfo.RecordMouseMoveMode
+        if (MoveMode == 2) {
             rawDelta := RI_StopRecord()
             riPx := Round(rawDelta[1] / RI_scaleFactor)
             riPy := Round(rawDelta[2] / RI_scaleFactor)
             RI_StartRecord()
 
             if (riPx != 0 || riPy != 0) {
+                ToolCheckInfo.RecordMacroStr .= GetLang("移动") "_" riPx "_" riPy "_" 100 "_2,"
+            }
+        }
+        else if (MoveMode == 1) {
+            CoordMode("Mouse", "Screen")
+            MouseGetPos &mouseX, &mouseY
+            if (ToolCheckInfo.RecordLastMousePos[1] != mouseX || ToolCheckInfo.RecordLastMousePos[2] != mouseY) {
                 speed := Max(100 - Integer(span * 0.02), 90)
-                speed := ToolCheckInfo.RecordMouseTrail ? 100 : speed
-                ToolCheckInfo.RecordMacroStr .= GetLang("移动") "_" riPx "_" riPy "_" speed "_1,"
+                targetX := mouseX - ToolCheckInfo.RecordLastMousePos[1]
+                targetY := mouseY - ToolCheckInfo.RecordLastMousePos[2]
+                ToolCheckInfo.RecordMacroStr .= GetLang("移动") "_" targetX "_" targetY "_" speed "_1,"
+                ToolCheckInfo.RecordLastMousePos := [mouseX, mouseY]
             }
         }
         else {
@@ -606,6 +625,9 @@ OnRecordAddMacroStr(keyName, isDown) {
                 ToolCheckInfo.RecordLastMousePos := [mouseX, mouseY]
             }
         }
+    }
+
+    if (IsMouse && ToolCheckInfo.RecordMouse) {
         ToolCheckInfo.RecordMacroStr .= GetLang("间隔") "_" span ","
         ToolCheckInfo.RecordMacroStr .= GetLang("按键") "_" keyName "_" keySymbol ","
     }
@@ -1008,4 +1030,5 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
     }
     OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
 }
+
 
