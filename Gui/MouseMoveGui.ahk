@@ -134,6 +134,7 @@ class MouseMoveGui {
         this.PosYCon.Value := PosY
         this.SpeedCon.Value := Speed
         this.MouseMoveModeCon.Value := MoveMode + 1
+        this.OnMoveModeChange()
         this.UpdateCommandStr()
     }
 
@@ -191,7 +192,19 @@ class MouseMoveGui {
     }
 
     OnChangeEditValue() {
+        this.OnMoveModeChange()
         this.UpdateCommandStr()
+    }
+
+    OnMoveModeChange() {
+        MoveMode := this.MouseMoveModeCon.Value - 1
+        if (MoveMode == 2) {
+            this.SpeedCon.Value := 100
+            this.SpeedCon.Enabled := false
+        }
+        else {
+            this.SpeedCon.Enabled := true
+        }
     }
 
     OnSureTarget(PosX, PosY, Color) {
