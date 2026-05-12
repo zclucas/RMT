@@ -1,49 +1,125 @@
 #Requires AutoHotkey v2.0
+#Include Util\SharedMemory.ahk
+#Include Util\RingBuffer.ahk
+#Include Util\JsonUtil.ahk
+
+class MsgType {
+    static TASK := 1
+    static RESULT := 2
+    static EVENT := 3
+    static CONTROL := 4
+}
+
+class TaskQueue {
+    __New() {
+        this.queue := []
+    }
+    Push(task) => this.queue.Push(task)
+    Pop() => (this.queue.Length == 0) ? "" : this.queue.RemoveAt(1)
+    Size() => this.queue.Length
+}
+
+class Future {
+    __New(id, tableIndex := 0, itemIndex := 0) {
+        this.id := id
+        this.done := false
+        this.result := ""
+        this.hEvent := CreateEvent()
+        this.tableIndex := tableIndex
+        this.itemIndex := itemIndex
+    }
+
+    __Delete() {
+        if (this.hEvent) {
+            CloseHandle(this.hEvent)
+            this.hEvent := 0
+        }
+    }
+
+    SetResult(result) {
+        this.result := result
+        this.done := true
+        ; The worker signals the event, but we can also signal it here for safety/timeouts
+        SetEvent(this.hEvent)
+    }
+
+    IsReady() {
+        return DllCall("WaitForSingleObject", "ptr", this.hEvent, "uint", 0) == 0
+    }
+
+    GetResult(timeout := 5000) {
+        start := A_TickCount
+        while (!this.done) {
+            if (A_TickCount - start > timeout)
+                throw Error("Future timeout")
+            
+            ; If the event is signaled but PollResult hasn't run yet, 
+            ; we can manually trigger a PollResult for faster response.
+            if (this.IsReady()) {
+                ; We could call this.parent.PollResult() here if we had a reference
+                ; For now, Sleep -1 will let the timer fire very quickly.
+                Sleep -1
+                if (this.done)
+                    break
+            }
+            Sleep -1
+        }
+        return this.result
+    }
+}
+
 class WorkPool {
     __New() {
+        this.workerExe := A_ScriptDir "\Thread\Work.exe"
         this.maxSize := MySoftData.MutiThreadNum
-        this.pool := []              ; 对象池数组
         this.isDynamic := (this.maxSize == -1)
         this.dynamicMaxLimit := 16
         this.corePoolSize := MySoftData.DynamicCorePoolSize
         this.elasticTimeout := MySoftData.ElasticTimeout * 1000
         this.dynamicMinSize := this.corePoolSize
-        this.currentMaxIndex := 0
-        this.activeWorkers := Map()
+        
+        this.pool := []
+        this.active := Map()            ; workerIndex -> hwnd
+        this.pending := Map()
+        
+        this.tx := Map()
+        this.rx := Map()
+        this.evt := Map()
+        this.shmTx := Map()
+        this.shmRx := Map()
+
+        this.queue := TaskQueue()
+        this.futures := Map()
+        this.futureCreateTime := Map()
+        this.futureTimeout := 10000
+
         this.workerIdleTime := Map()
-        this.recycledIndices := []
-        this.shrinkTimerFunc := ""
-        this.hwndMap := Map()
-        this.pidMap := Map()
-        this.MessageArr := []   ;消息数组，避免消息重复处理
-        this.MessageMap := Map()
-        this.mainPID := DllCall("GetCurrentProcessId")  ; 获取主进程PID
+        this.workerPIDs := Map()
+        this.workerProcs := Map()
+        this.workerIndex := 0
+        this.mainPID := DllCall("GetCurrentProcessId")
+        this.taskCounter := 0
+        
+        OnMessage(WM_LOAD_WORK, ObjBindMethod(this, "OnWorkerReady"))
+        OnMessage(WM_STOP_MACRO, ObjBindMethod(this, "OnStopMacro"))
 
-        if (this.isDynamic) {
-            loop this.dynamicMinSize {
-                this.CreateWorker(A_Index)
-            }
-        } else {
-            loop this.maxSize {
-                workPath := A_ScriptDir "\Thread\Work" A_Index ".exe"
-                if (!FileExist(workPath) && this.maxSize <= 10) {
-                    FileCopy(A_ScriptDir "\Thread\Work1.exe", workPath)
-                }
-                Run (Format("{} {} {} {}", workPath, MySoftData.MyGui.Hwnd, A_Index, this.mainPID))
-                this.activeWorkers.Set(A_Index, workPath)
-                this.currentMaxIndex := A_Index
-            }
-        }
-
-        OnMessage(WM_LOAD_WORK, this.OnFinishLoad.Bind(this))  ; 工作器完成工作回调
-        OnMessage(WM_RELEASE_WORK, this.OnRelease.Bind(this))  ; 工作器完成工作回调
-        OnMessage(WM_STOP_MACRO, this.OnStopMacro.Bind(this))  ;终止其他宏
-        OnMessage(WM_TR_MACRO, this.OnTriggerMacro.Bind(this)) ;触发宏
-        OnMessage(WM_COPYDATA, this.OnGetCmd.Bind(this)) ;接收到命令
-
+        SetTimer(ObjBindMethod(this, "Dispatch"), 10)
+        SetTimer(ObjBindMethod(this, "CheckFutures"), 1000)
+        SetTimer(ObjBindMethod(this, "PollResult"), 1)  ; Hybrid polling
+        
         if (this.isDynamic) {
             this.shrinkTimerFunc := ObjBindMethod(this, "IdleShrinkCheck")
             SetTimer(this.shrinkTimerFunc, 10000)
+        }
+
+        if (this.isDynamic) {
+            loop this.dynamicMinSize {
+                this.CreateWorker()
+            }
+        } else {
+            loop this.maxSize {
+                this.CreateWorker()
+            }
         }
     }
 
@@ -55,150 +131,226 @@ class WorkPool {
         this.Clear()
     }
 
-    GetNextWorkerIndex() {
-        if (this.recycledIndices.Length >= 1) {
-            return this.recycledIndices.Pop()
+    CreateWorker() {
+        this.workerIndex++
+        idx := this.workerIndex
+
+        txName := "RMT_TX_" idx
+        rxName := "RMT_RX_" idx
+        evtName := "RMT_EVT_" idx
+
+        ; Allocate capacity + 128 for headers
+        this.shmTx[idx] := SharedMemory(txName, 1048576 + 128)
+        this.tx[idx] := RingBuffer(this.shmTx[idx].ptr, 1048576)
+        
+        this.shmRx[idx] := SharedMemory(rxName, 1048576 + 128)
+        this.rx[idx] := RingBuffer(this.shmRx[idx].ptr, 1048576)
+        
+        this.evt[idx] := CreateEvent(evtName)
+        this.pending[idx] := true
+
+        Run(Format('"{}" {} {} {} "{}" "{}" "{}"'
+            , this.workerExe
+            , MySoftData.MyGui.Hwnd
+            , idx
+            , this.mainPID
+            , txName
+            , rxName
+            , evtName), , , &pid)
+        
+        this.workerPIDs[idx] := pid
+        ; Open handle with PROCESS_DUP_HANDLE | PROCESS_TERMINATE
+        hProc := DllCall("OpenProcess", "uint", 0x0040 | 0x0001, "int", false, "uint", pid, "ptr")
+        this.workerProcs[idx] := hProc
+    }
+
+    Submit(cmd, tableIndex := 0, itemIndex := 0) {
+        this.taskCounter++
+        id := this.taskCounter
+        fut := Future(id, tableIndex, itemIndex)
+
+        this.futures.Set(id, fut)
+        this.futureCreateTime.Set(id, A_TickCount)
+        this.queue.Push({ id: id, cmd: cmd, hEvent: fut.hEvent })
+
+        return fut
+    }
+
+    Dispatch() {
+        while (this.queue.Size() > 0 && this.pool.Length > 0) {
+            idx := this.pool.Pop()
+
+            if (!this.IsAlive(idx)) {
+                this.CleanupWorker(idx)
+                this.CreateWorker()
+                continue
+            }
+
+            task := this.queue.Pop()
+            
+            ; Duplicate handle for worker
+            hTargetEvent := 0
+            if (!DllCall("DuplicateHandle"
+                , "ptr", DllCall("GetCurrentProcess")
+                , "ptr", task.hEvent
+                , "ptr", this.workerProcs[idx]
+                , "ptr*", &hTargetEvent
+                , "uint", 0
+                , "int", false
+                , "uint", 2)) ; DUPLICATE_SAME_ACCESS
+            {
+                ; Fallback if duplication fails
+                hTargetEvent := 0
+            }
+
+            if (!this.tx[idx].Push(MsgType.TASK, task.id, task.cmd, hTargetEvent)) {
+                ; Buffer full
+                if (hTargetEvent) {
+                    ; If it failed to push, we should probably close the duplicated handle in the worker
+                    ; but since we can't easily, we'll just let it leak or retry.
+                    ; Better: only duplicate IF push is likely to succeed.
+                }
+                this.queue.queue.InsertAt(1, task)
+                this.pool.Push(idx)
+                break
+            }
+            SetEvent(this.evt[idx])
+            
+            if (this.workerIdleTime.Has(idx))
+                this.workerIdleTime.Delete(idx)
         }
-        return this.currentMaxIndex + 1
-    }
 
-    CreateWorker(workerIndex) {
-        workPath := A_ScriptDir "\Thread\Work" workerIndex ".exe"
-        if (!FileExist(workPath)) {
-            FileCopy(A_ScriptDir "\Thread\Work1.exe", workPath)
-        }
-        Run (Format("{} {} {} {}", workPath, MySoftData.MyGui.Hwnd, workerIndex, this.mainPID))
-        this.activeWorkers.Set(workerIndex, workPath)
-        if (workerIndex > this.currentMaxIndex) {
-            this.currentMaxIndex := workerIndex
+        if (this.isDynamic && this.queue.Size() > 0 && (this.active.Count + this.pending.Count) < this.dynamicMaxLimit) {
+            this.CreateWorker()
         }
     }
-
-    CheckHasFreeWorker() {
-        if (this.isDynamic) {
-            if (this.pool.Length >= 1)
-                return true
-            activeCount := this.activeWorkers.Count
-            return activeCount < this.dynamicMaxLimit
-        }
-        return this.pool.Length >= 1
-    }
-
-    CheckEnableMutiThread() {
-        if (this.isDynamic)
-            return true
-        return this.maxSize >= 1
-    }
-
-    GetActiveCount() {
-        return this.activeWorkers.Count - this.pool.Length
-    }
-
-    ; 从池中获取一个对象
-    Get() {
-        workPath := ""
-        if (this.pool.Length >= 1) {
-            workPath := this.pool.Pop()
-            this.RemoveFromPool(workPath)
-            if (this.isDynamic)
-                this.PreAllocateWorker()
-        } else if (this.isDynamic && this.activeWorkers.Count < this.dynamicMaxLimit) {
-            newIndex := this.GetNextWorkerIndex()
-            this.CreateWorker(newIndex)
-            if (this.activeWorkers.Count < this.dynamicMaxLimit)
-                this.PreAllocateWorker()
-        }
-        return workPath
-    }
-
-    PreAllocateWorker() {
-        if (this.pool.Length >= 1)
+    
+    Broadcast(action, args*) {
+        if (!this.isDynamic && this.maxSize < 1)
             return
-        if (this.activeWorkers.Count >= this.dynamicMaxLimit)
-            return
-
-        newIndex := this.GetNextWorkerIndex()
-        this.CreateWorker(newIndex)
-    }
-
-    GetWorkPath(workIndex) {
-        return A_ScriptDir "\Thread\Work" workIndex ".exe"
-    }
-
-    GetWorkIndex(workPath) {
-        workIndex := StrReplace(workPath, A_ScriptDir "\Thread\Work")
-        workIndex := StrReplace(workIndex, ".exe")
-        return workIndex
-    }
-
-    AddToPool(workPath) {
-        workerIndex := this.GetWorkIndex(workPath)
-        this.pool.Push(workPath)
-        this.workerIdleTime.Set(workerIndex, A_TickCount)
-    }
-
-    RemoveFromPool(workPath) {
-        workerIndex := this.GetWorkIndex(workPath)
-        if (this.workerIdleTime.Has(workerIndex))
-            this.workerIdleTime.Delete(workerIndex)
-    }
-
-    GetWorkHwnd(workPath) {
-        if (!this.hwndMap.Has(workPath)) {
-            workIndex := StrReplace(workPath, A_ScriptDir "\Thread\Work")
-            workIndex := StrReplace(workIndex, ".exe")
-            try {
-                hwnd := WinGetID("RMTWork" workIndex)
-                this.hwndMap.Set(workPath, hwnd)
+        
+        payload := JSON.stringify([action, args*])
+        for idx in this.active {
+            if this.tx.Has(idx) {
+                this.tx[idx].Push(MsgType.EVENT, 0, payload)
+                SetEvent(this.evt[idx])
             }
         }
-        return this.hwndMap.Get(workPath, 0)
     }
 
-    GetActiveWorkerList() {
-        list := []
-        if (this.isDynamic) {
-            for workPath in this.activeWorkers {
-                list.Push(workPath)
-            }
-        } else {
-            loop this.maxSize {
-                list.Push(A_ScriptDir "\Thread\Work" A_Index ".exe")
+    PollResult() {
+        for idx, rb in this.rx {
+            ; Hybrid Polling: Non-blocking pop all available results
+            while (rb.Pop(&type, &id, &result)) {
+                switch type {
+                    case MsgType.RESULT:
+                        if (this.futures.Has(id)) {
+                            fut := this.futures[id]
+                            fut.SetResult(result)
+                            
+                            ; 重置IsWorkIndexArr，允许宏再次触发
+                            if (fut.tableIndex > 0 && fut.itemIndex > 0) {
+                                tableItem := MySoftData.TableInfo[fut.tableIndex]
+                                if (tableItem.IsWorkIndexArr.Length >= fut.itemIndex) {
+                                    tableItem.IsWorkIndexArr[fut.itemIndex] := 0
+                                }
+                            }
+                            
+                            this.futures.Delete(id)
+                            this.futureCreateTime.Delete(id)
+                        }
+                        this.pool.Push(idx)
+                        this.workerIdleTime.Set(idx, A_TickCount)
+                    case MsgType.EVENT:
+                        this.OnWorkerEvent(idx, result)
+                    case MsgType.CONTROL:
+                        ; reserved for control messages from worker
+                }
             }
         }
-        return list
     }
 
-    ; 清空对象池
+    CheckFutures() {
+        now := A_TickCount
+        toDelete := []
+        for id, createTime in this.futureCreateTime {
+            if ((now - createTime) >= this.futureTimeout) {
+                if (this.futures.Has(id)) {
+                    this.futures[id].SetResult("timeout")
+                    this.futures.Delete(id)
+                }
+                toDelete.Push(id)
+            }
+        }
+        for id in toDelete {
+            this.futureCreateTime.Delete(id)
+        }
+    }
+
+    IsAlive(idx) {
+        return this.active.Has(idx) && WinExist("ahk_id " this.active[idx])
+    }
+
+    OnWorkerReady(wParam, lParam, msg, hwnd) {
+        idx := wParam
+        workerHwnd := lParam > 0 ? lParam : hwnd
+        
+        if (this.pending.Has(idx))
+            this.pending.Delete(idx)
+            
+        this.active.Set(idx, workerHwnd)
+        this.pool.Push(idx)
+        this.workerIdleTime.Set(idx, A_TickCount)
+    }
+
+    CleanupWorker(idx) {
+        if (this.active.Has(idx))
+            this.active.Delete(idx)
+        if (this.workerIdleTime.Has(idx))
+            this.workerIdleTime.Delete(idx)
+        if (this.workerProcs.Has(idx)) {
+            CloseHandle(this.workerProcs[idx])
+            this.workerProcs.Delete(idx)
+        }
+        if (this.workerPIDs.Has(idx))
+            this.workerPIDs.Delete(idx)
+    }
+
     Clear() {
-        workerList := this.GetActiveWorkerList()
-        loop workerList.Length {
-            this.PostMessage(WM_CLEAR_WORK, workerList[A_Index], 0, 0)
+        for idx, hwnd in this.active {
+            this.PostMessage(WM_CLEAR_WORK, idx, 0, 0)
         }
+        
         this.pool := []
-        this.activeWorkers := Map()
+        this.active := Map()
+        this.pending := Map()
         this.workerIdleTime := Map()
-        this.recycledIndices := []
-        this.currentMaxIndex := 0
+        
+        for idx, hProc in this.workerProcs
+            CloseHandle(hProc)
+        this.workerProcs := Map()
+        this.workerPIDs := Map()
+
+        this.futures := Map()
+        this.futureCreateTime := Map()
+        this.queue := TaskQueue()
+        this.workerIndex := 0
+        
+        ; Close RingBuffers
+        this.tx := Map()
+        this.rx := Map()
+        this.shmTx := Map()
+        this.shmRx := Map()
+        for idx, h in this.evt
+            ResetEvent(h) ; Optional
     }
 
-    PostMessage(type, workPath, wParam, lParam) {
-        hwnd := this.GetWorkHwnd(workPath)
-        try {
-            PostMessage(type, wParam, lParam, , "ahk_id " hwnd)
-        }
-    }
-
-    SendMessage(type, workPath, str) {
-        CopyDataStruct := Buffer(3 * A_PtrSize)  ; 分配结构的内存区域.
-        ; 首先设置结构的 cbData 成员为字符串的大小, 包括它的零终止符:
-        SizeInBytes := (StrLen(str) + 1) * 2
-        NumPut("Ptr", SizeInBytes  ; 操作系统要求这个需要完成.
-            , "Ptr", StrPtr(str)  ; 设置 lpData 为到字符串自身的指针.
-            , CopyDataStruct, A_PtrSize)
-        hwnd := this.GetWorkHwnd(workPath)
-        try {
-            SendMessage(type, 0, CopyDataStruct, , "ahk_id " hwnd)
+    PostMessage(type, idx, wParam, lParam) {
+        if (this.active.Has(idx)) {
+            hwnd := this.active[idx]
+            try {
+                PostMessage(type, wParam, lParam, , "ahk_id " hwnd)
+            }
         }
     }
 
@@ -207,65 +359,30 @@ class WorkPool {
             return
         now := A_TickCount
         shrinkIndices := []
-        for workerIndex, idleTick in this.workerIdleTime {
-            if ((now - idleTick) >= this.elasticTimeout) {
-                shrinkIndices.Push(workerIndex)
-            }
+        for idx, idleTick in this.workerIdleTime {
+            if ((now - idleTick) >= this.elasticTimeout)
+                shrinkIndices.Push(idx)
         }
         maxShrink := this.pool.Length - this.corePoolSize
         if (shrinkIndices.Length == 0 || maxShrink <= 0)
             return
+            
         loop Min(shrinkIndices.Length, maxShrink) {
             targetIndex := shrinkIndices[A_Index]
-            workPath := A_ScriptDir "\Thread\Work" targetIndex ".exe"
-            this.PostMessage(WM_CLEAR_WORK, workPath, 0, 0)
-            this.activeWorkers.Delete(targetIndex)
-            this.hwndMap.Delete(workPath)
-            this.pidMap.Delete(targetIndex)
-            this.recycledIndices.Push(targetIndex)
+            this.PostMessage(WM_CLEAR_WORK, targetIndex, 0, 0)
+            this.active.Delete(targetIndex)
+            if (this.workerIdleTime.Has(targetIndex))
+                this.workerIdleTime.Delete(targetIndex)
+                
             poolIndex := 0
             loop this.pool.Length {
-                if (this.GetWorkIndex(this.pool[A_Index]) == targetIndex) {
+                if (this.pool[A_Index] == targetIndex) {
                     poolIndex := A_Index
                     break
                 }
             }
-            if (poolIndex > 0) {
+            if (poolIndex > 0)
                 this.pool.RemoveAt(poolIndex)
-                this.workerIdleTime.Delete(targetIndex)
-            }
-        }
-    }
-
-    OnRelease(wParam, lParam, msg, hwnd) {
-        tableIndex := wParam
-        itemIndex := lParam
-        tableItem := MySoftData.TableInfo[tableIndex]
-        workerIndex := tableItem.IsWorkIndexArr[itemIndex]
-        workPath := A_ScriptDir "\Thread\Work" workerIndex ".exe"
-        this.AddToPool(workPath)
-        tableItem.IsWorkIndexArr[itemIndex] := false
-    }
-
-    OnFinishLoad(wParam, lParam, msg, hwnd) {
-        workPath := A_ScriptDir "\Thread\Work" wParam ".exe"
-        isInPool := false
-        loop this.pool.Length {
-            if (this.pool[A_Index] == workPath) {
-                isInPool := true
-                break
-            }
-        }
-        if (!isInPool) {
-            this.AddToPool(workPath)
-        } else {
-            this.workerIdleTime.Set(wParam, A_TickCount)
-        }
-        if (!this.activeWorkers.Has(wParam)) {
-            this.activeWorkers.Set(wParam, workPath)
-        }
-        if (wParam > this.currentMaxIndex) {
-            this.currentMaxIndex := wParam
         }
     }
 
@@ -273,83 +390,59 @@ class WorkPool {
         tableIndex := wParam
         itemIndex := lParam
         tableItem := MySoftData.TableInfo[tableIndex]
-        WorkerIndex := tableItem.IsWorkIndexArr[itemIndex]
-        if (WorkerIndex != 0) {
-            workPath := MyWorkPool.GetWorkPath(WorkerIndex)
-            MyWorkPool.PostMessage(WM_STOP_MACRO, workPath, tableIndex, itemIndex)
-            return
+        ; WorkerIndex tracking is handled via futures now, or we can broadcast STOP_MACRO
+        ; to all workers since we don't strictly track which worker is running which macro.
+        for idx, workerHwnd in this.active {
+            this.PostMessage(WM_STOP_MACRO, idx, tableIndex, itemIndex)
         }
-
         KillTableItemMacro(tableItem, itemIndex)
     }
 
-    OnTriggerMacro(wParam, lParam, msg, hwnd) {
-        TriggerMacroHandler(wParam, lParam)
-    }
+    OnWorkerEvent(idx, payload) {
+        try {
+            paramArr := JSON.parse(payload)
+            action := paramArr[1]
+            args := []
+            loop paramArr.Length - 1 {
+                args.Push(paramArr[A_Index + 1])
+            }
 
-    OnRecordMessage(Timestamp) {
-        if (this.MessageMap.Has(Timestamp))
-            return
-
-        this.MessageMap.Set(Timestamp, 1)
-        this.MessageArr.Push(Timestamp)
-        if (this.MessageArr.Length >= 125) {
-            delTimestamp := this.MessageArr.RemoveAt(1)
-            this.MessageMap.Delete(delTimestamp)
-        }
-    }
-
-    OnGetCmd(wParam, lParam, msg, hwnd) {
-        workerList := this.GetActiveWorkerList()
-        ;告知一下子进程收到信息
-        loop workerList.Length {
-            MyWorkPool.PostMessage(WM_RECEIVE_INFO, workerList[A_Index], wParam, 0)
-        }
-
-        if (this.MessageMap.Has(wParam))    ;接收过就不用再处理了
-            return
-
-        this.OnRecordMessage(wParam)
-        StringAddress := NumGet(lParam, 2 * A_PtrSize, "Ptr")  ; 检索 CopyDataStruct 的 lpData 成员.
-        Cmd := StrGet(StringAddress)  ; 从结构中复制字符串.
-        paramArr := StrSplit(Cmd, "⫶")
-        switch paramArr[1] {
-            case "SetVari":
-                GetNameAndValueByParamArr(&NameArr, &ValueArr, paramArr)
-                SetGlobalVariable(NameArr, ValueArr, false)
-            case "DelVari":
-                NameArr := paramArr.Clone()
-                NameArr.RemoveAt(1)
-                DelGlobalVariable(NameArr)
-            case "Report":
-                CMDReport(SubStr(Cmd, 8))
-            case "RMT指令":
-                ExcuteRMTCMDAction(Cmd)
-            case "ItemState":
-                SetTableItemState(paramArr[2], Integer(paramArr[3]), Integer(paramArr[4]))
-            case "PauseState":
-                SetItemPauseState(paramArr[2], Integer(paramArr[3]), Integer(paramArr[4]))
-            case "MsgBox":
-                paramArr := StrSplit(Cmd, "⫶", , 2)
-                MsgBoxContent(paramArr[2])
-            case "ToolTip":
-                ToolTipContent(paramArr[2])
-            case "MacroCount":
-                MacroCount(paramArr[2])
-            case "Joy":
-                ViGJoySetState(paramArr[2], paramArr[3], paramArr[4])
-            case "SetArray":
-                SetGlobalArray(paramArr[2], GetArray(paramArr[3]))
-            case "CloneArray":
-                CloneGlobalArray(GetArray(paramArr[2]), paramArr[3])
-            case "DeleteArray":
-                DeleteGlobalArray(paramArr[2])
-            case "ModifyArray":
-                ModifyGlobalArray(paramArr[2], paramArr[3], paramArr[4], paramArr[5], paramArr[6])
-            case "InsertArray":
-                InsertGlobalArray(paramArr[2], paramArr[3], paramArr[4], paramArr[5], paramArr[6])
-            case "RemoveAtArray":
-                RemoveAtGlobalArray(paramArr[2], paramArr[3], paramArr[4])
+            switch action {
+                case "SetVari":
+                    SetGlobalVariable(args[1], args[2], false)
+                case "DelVari":
+                    DelGlobalVariable(args[1])
+                case "Report":
+                    CMDReport(args[1])
+                case "RMT指令":
+                    ExcuteRMTCMDAction(args[1])
+                case "ItemState":
+                    SetTableItemState(args[1], args[2], args[3])
+                case "PauseState":
+                    SetItemPauseState(args[1], args[2], args[3])
+                case "MsgBox":
+                    MsgBoxContent(args[1])
+                case "ToolTip":
+                    ToolTipContent(args[1])
+                case "MacroCount":
+                    MacroCount(args[1])
+                case "Joy":
+                    ViGJoySetState(args[1], args[2], args[3])
+                case "SetArray":
+                    SetGlobalArray(args[1], GetArray(args[2]))
+                case "CloneArray":
+                    CloneGlobalArray(GetArray(args[1]), args[2])
+                case "DeleteArray":
+                    DeleteGlobalArray(args[1])
+                case "ModifyArray":
+                    ModifyGlobalArray(args[1], args[2], args[3], args[4], args[5])
+                case "InsertArray":
+                    InsertGlobalArray(args[1], args[2], args[3], args[4], args[5])
+                case "RemoveAtArray":
+                    RemoveAtGlobalArray(args[1], args[2], args[3])
+            }
+        } catch as e {
+            ; JSON parse error or invalid event
         }
     }
 }

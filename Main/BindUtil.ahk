@@ -269,8 +269,7 @@ OnKillAllMacro(*) {
         for index, value in tableItem.ModeArr {
             WorkerIndex := tableItem.IsWorkIndexArr[index]
             if (WorkerIndex != 0) {
-                workPath := MyWorkPool.GetWorkPath(WorkerIndex)
-                MyWorkPool.PostMessage(WM_STOP_MACRO, workPath, tableItem.Index, index)
+                MyWorkPool.OnStopMacro(tableItem.Index, index, 0, 0)
             }
         }
     }
@@ -630,12 +629,14 @@ OnClickKeyDownDownHelpBtn(*) {
 
 ;绑定热键
 OnExitSoft(*) {
-    global MyPToken, MyChineseOcr
+    global MyPToken, MyChineseOcr, MyUIMacroGui
     Gdip_Shutdown(MyPToken)
     IbSendDestroy()
     MyChineseOcr := ""
     MyEnglishOcr := ""
     MyWorkPool.Clear()
+    if (IsSet(MyUIMacroGui) && MyUIMacroGui != "")
+        MyUIMacroGui.StopMonitor()
 
     IniWrite(MySoftData.MacroTotalCount, IniFile, IniSection, "MacroTotalCount")
 }
@@ -939,17 +940,13 @@ OnBindKeyUp(key, *) {
 OnToggleTriggerMacro(tableIndex, itemIndex) {
     tableItem := MySoftData.TableInfo[tableIndex]
     macro := tableItem.MacroArr[itemIndex]
-    hasWorker := MyWorkPool.CheckHasFreeWorker()
 
-    if (hasWorker) {
-        workerPath := MyWorkPool.Get()
-        if (workerPath != "") {
-            SetTableItemState(tableItem.index, itemIndex, 1)
-            workerIndex := MyWorkPool.GetWorkIndex(workerPath)
-            tableItem.IsWorkIndexArr[itemIndex] := workerIndex
-            MyWorkPool.PostMessage(WM_TR_MACRO, workerPath, tableIndex, itemIndex)
-            return
-        }
+    if (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1) {
+        SetTableItemState(tableItem.index, itemIndex, 1)
+        cmd := JSON.stringify(["TR_MACRO", tableIndex, itemIndex])
+        fut := MyWorkPool.Submit(cmd, tableIndex, itemIndex)
+        tableItem.IsWorkIndexArr[itemIndex] := fut.id
+        return
     }
 
     isTrigger := tableItem.ToggleStateArr[itemIndex]
@@ -974,21 +971,15 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
     tableItem := MySoftData.TableInfo[tableIndex]
     macro := tableItem.MacroArr[itemIndex]
     isWork := tableItem.IsWorkIndexArr[itemIndex]
-    hasWork := MyWorkPool.CheckHasFreeWorker()
     if (isWork)
         return
 
     SetTableItemState(tableItem.index, itemIndex, 1)
-    if (hasWork) {
-        workPath := MyWorkPool.Get()
-        if (workPath != "") {
-            workIndex := MyWorkPool.GetWorkIndex(workPath)
-            tableItem.IsWorkIndexArr[itemIndex] := workIndex
-            MyWorkPool.PostMessage(WM_TR_MACRO, workPath, tableIndex, itemIndex)
-            return
-        }
+    if (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1) {
+        cmd := JSON.stringify(["TR_MACRO", tableIndex, itemIndex])
+        fut := MyWorkPool.Submit(cmd, tableIndex, itemIndex)
+        tableItem.IsWorkIndexArr[itemIndex] := fut.id
+        return
     }
     OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
 }
-
-

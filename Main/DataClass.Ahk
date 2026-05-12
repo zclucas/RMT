@@ -21,6 +21,11 @@ class TableItem {
         this.ToggleStateArr := []   ; 触发键开关状态
         this.ToggleActionArr := []   ; 触发键开关Action
         this.VariableMapArr := []    ;  每条宏对应的变量映射:内置变量
+        this.UIWindowArr := []       ;界面宏：每个按钮的目标窗口信息
+        this.UIPosYArr := []         ;界面宏：每个按钮的Y坐标
+        this.UIBtnWidthArr := []     ;界面宏：每个按钮的宽度
+        this.UIBtnHeightArr := []    ;界面宏：每个按钮的高度
+
         this.UnderPosY := 0         ; table的最大PosY
         this.Index := 0             ;   table的Index
         this.SliderValue := 0       ;   滑动值
@@ -240,9 +245,9 @@ class SoftData {
         this.IsMinStart := false        ;最小化启动
 
         ;Tab所有页签
-        this.TabNameArr := ["按键宏", "字串宏", "菜单宏", "定时宏", "宏", "按键替换", "工具", "设置", "帮助", "打赏作者", "特别感谢"]
+        this.TabNameArr := ["按键宏", "字串宏", "菜单宏", "界面宏", "定时宏", "宏", "按键替换", "工具", "设置", "帮助", "打赏作者", "特别感谢"]
         ;Tab页签对应的英文
-        this.TabSymbolArr := ["Normal", "String", "Menu", "Timing", "SubMacro", "Replace", "Tool", "Setting", "Help",
+        this.TabSymbolArr := ["Normal", "String", "Menu", "UI", "Timing", "SubMacro", "Replace", "Tool", "Setting", "Help",
             "Reward", "Thank"]
 
         ;特殊的按键，因为含有下划线，所有要特殊处理

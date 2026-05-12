@@ -24,6 +24,7 @@ LoadItemFold(index) {
             continue
 
         LoadItemFoldTip(tableItem, foldIndex, tableItem.UnderPosY)
+
         ;行高40 titleTip 25 group间隔5
         AllItemHeight := FoldInfo.FoldStateArr[foldIndex] ? 0 : (IndexSpan[2] - IndexSpan[1] + 1) * 40 + 25
         UpdateUnderPosY(index, AllItemHeight)
@@ -79,6 +80,13 @@ LoadItemFoldTitle(tableItem, foldIndex, PosY) {
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
+
+    ;界面宏时禁用前台信息控件
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    if (isUI) {
+        FrontCon.Enabled := false
+        con.Enabled := false
+    }
 
     con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 490, posY - 1), GetLang("新增宏"))
     con.OnEvent("Click", OnItemAddMacroBtnClick.Bind(tableItem))
@@ -170,8 +178,11 @@ LoadItemFoldTK(tableItem, foldIndex, PosY) {
 
 LoadItemFoldTip(tableItem, foldIndex, PosY) {
     MyGui := MySoftData.MyGui
+
     con := MyGui.Add("Text", Format("x{} y{}", MySoftData.TabPosX + 70, posY), GetLang("宏名称"))
     tableItem.AllConArr.Push(ItemConInfo(con, tableItem, foldIndex))
+
+    ;所有宏类型使用相同的列布局
     con := MyGui.Add("Text", Format("x{} y{}", MySoftData.TabPosX + 265, posY), GetLang("触发编辑器"))
     tableItem.AllConArr.Push(ItemConInfo(con, tableItem, foldIndex))
     con := MyGui.Add("Text", Format("x{} y{}", MySoftData.TabPosX + 360, posY), GetLang("触发类型"))
@@ -727,6 +738,7 @@ LoadTabSingleItem(tableItem, ItemConObj) {
     isMenu := CheckIsMenuMacroTable(tableIndex)
     isSubMacro := CheckIsSubMacroTable(tableIndex)
     isNoTriggerKey := CheckIsNoTriggerKey(tableIndex)
+    isUI := GetTableSymbol(tableIndex) == "UI"
 
     MySoftData.TabCtrl.UseTab(tableItem.Index)
     ;颜色
@@ -819,6 +831,7 @@ LoadTabSingleItem(tableItem, ItemConObj) {
     ItemConObj.DelCon := DelCon
     ItemConObj.LineCon := LineCon
 
+    ;所有宏类型使用相同的控件数组
     ItemConObj.ConArr := [ColorCon, IndexCon, RemarkCon, TKBtnCon, TKTypeCon, LoopCon, SettingCon,
         EditCon, PreCon, NextCon, ForbidCon, CopyCon, DelCon, LineCon]
 
@@ -922,6 +935,7 @@ GetItemConObj(tableItem, itemIndex) {
     isTiming := CheckIsTimingMacroTable(tableItem.Index)
     isMacro := CheckIsMacroTable(tableItem.Index)
     isTriggerStr := CheckIsStringMacroTable(tableItem.Index)
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
     TKBtnStr := isTiming ? GetLang("定时") : tableItem.TKArr[ItemIndex]
     TKBtnStr := TKBtnStr == "" ? GetLang("编辑") : TKBtnStr
     LoopStr := tableItem.LoopCountArr[ItemIndex] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[ItemIndex]
@@ -938,8 +952,18 @@ GetItemConObj(tableItem, itemIndex) {
     ItemConObj.LoopCon.Text := LoopStr
     ItemConObj.ForbidCon.Value := tableItem.ForbidArr[ItemIndex]
 
-    TabItemOnEvent(ItemConObj.TKBtnCon, "Click", EditTKAction.Bind(tableItem, itemIndex))
-    TabItemOnEvent(ItemConObj.TKBtnCon, "ContextMenu", OnItemCustomEditTriggerStr.Bind(tableItem, itemIndex))
+    if (isUI) {
+        ;UI宏：触发类型固定为"开关"（索引4）
+        tableItem.TriggerTypeArr[itemIndex] := 4
+        ItemConObj.TKTypeCon.Value := 4
+        ItemConObj.TKTypeCon.Enabled := false
+
+        ;UI宏：触发编辑器打开界面宏按钮配置（参考定时宏的处理方式）
+        EditTKAction := OnUIMacroSettingClick.bind(tableItem, itemIndex)
+    }
+
+    TabItemOnEvent(ItemConObj.TKBtnCon, "Click", EditTKAction.bind(tableItem, itemIndex))
+    TabItemOnEvent(ItemConObj.TKBtnCon, "ContextMenu", OnItemCustomEditTriggerStr.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.SettingCon, "Click", OnItemEditMacroSetting.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.EditCon, "Click", EditMacroAction.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.PreCon, "Click", OnItemMoveUp.Bind(tableItem, itemIndex))
@@ -1008,4 +1032,9 @@ RecycleTabSingleItem(tableItem, itemIndex) {
             continue
         Con.Move(Con.OriPosX, -1000)
     }
+}
+
+OnUIMacroSettingClick(tableItem, macroIndex, *) {
+    MyUIMacroSettingGui.SaveBtnAction := OnSaveSetting
+    MyUIMacroSettingGui.ShowGui(tableItem, macroIndex)
 }

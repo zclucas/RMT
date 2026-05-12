@@ -193,7 +193,7 @@ AddOperBtnUI() {
 
     posY := 505
     btnHelp := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("RMT文档"))
-    btnHelp.OnEvent("Click", (*) => Run(A_WorkingDir "\RMT帮助文档.html"))
+    btnHelp.OnEvent("Click", (*) => Run(A_WorkingDir "\index.html"))
 
     posY := 540
     MySoftData.BtnSave := MyGui.Add("Button", Format("x{} y{} w{} h{} center", 15, posY, 100, 30), GetLang("应用并保存"))
@@ -202,10 +202,11 @@ AddOperBtnUI() {
     MyTriggerKeyGui.SureFocusCon := MySoftData.BtnSave
     MyTriggerStrGui.SureFocusCon := MySoftData.BtnSave
     MyReplaceKeyGui.SureFocusCon := MySoftData.BtnSave
+    MyUIMacroSettingGui.SureFocusCon := MySoftData.BtnSave
 }
 
 GetUIAddFunc(index) {
-    UIAddFuncArr := [LoadItemFold, LoadItemFold, LoadItemFold, LoadItemFold, LoadItemFold, LoadItemFold,
+    UIAddFuncArr := [LoadItemFold, LoadItemFold, LoadItemFold, LoadItemFold, LoadItemFold, LoadItemFold, LoadItemFold,
         AddToolUI, AddSettingUI, AddHelpUI, AddRewardUI, AddThankUI]
     return UIAddFuncArr[index]
 }
@@ -622,7 +623,7 @@ AddHelpUI(index) {
 
     posY += 30
     posX := MySoftData.TabPosX + 15
-    LinkStr := A_WorkingDir "\RMT帮助文档.html"
+    LinkStr := A_WorkingDir "\index.html"
     AddTableControl("Text", Format("x{} y{} w{} h{}", posX, posY, 130, 30), GetLang("操作说明文档："), tableItem).SetFont((
         Format("S{} W{} Q{}", 12, 600, 0)))
     AddTableControl("Link", Format("x{} y{} w{} h{}", posX + 130, posY, 500, 30), Format('<a href="{}">{}</a>', LinkStr,

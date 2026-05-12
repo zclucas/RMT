@@ -66,39 +66,15 @@
         PostMessage(type, wParam, lParam, , "ahk_id " parentHwnd)
     }
 
-    MsgSendHandler(str, Timestamp := "") {
-        if (Timestamp == "") {
-            currentDateTime := FormatTime(, "HHmmss")
-            randomNum := Random(0, 9) Random(0, 9) Random(0, 9)
-            Timestamp := CurrentDateTime randomNum
-            data := ReceiveCheckData()
-            data.Timestamp := Timestamp
-            data.Str := str
-            ReceiveInfoMap.Set(Timestamp, data)
-        }
-        if (!ReceiveInfoMap.Has(Timestamp))
-            return
-        data := ReceiveInfoMap[Timestamp]
-        data.EnableCheckAction()
-
-        CopyDataStruct := Buffer(3 * A_PtrSize)  ; 分配结构的内存区域.
-        ; 首先设置结构的 cbData 成员为字符串的大小, 包括它的零终止符:
-        SizeInBytes := (StrLen(str) + 1) * 2
-        NumPut("Ptr", SizeInBytes  ; 操作系统要求这个需要完成.
-            , "Ptr", StrPtr(str)  ; 设置 lpData 为到字符串自身的指针.
-            , CopyDataStruct, A_PtrSize)
-        SendMessage(WM_COPYDATA, Timestamp, CopyDataStruct, , "ahk_id " parentHwnd)
+    MsgSendHandler(action, args*) {
+        global rx
+        payload := JSON.stringify([action, args*])
+        rx.Push(MsgType.EVENT, 0, payload)
     }
-
 }
 
 ;接受主程序指令后回调
 {
-    OnWorkTriggerMacro(wParam, lParam, msg, hwnd) {
-        TriggerMacro(wParam, lParam)
-        MsgPostHandler(WM_RELEASE_WORK, wParam, lParam)
-    }
-
     OnWorkStopMacro(wParam, lParam, msg, hwnd) {
         tableIndex := wParam
         itemIndex := lParam
@@ -118,67 +94,65 @@
 
     SetTimer(CheckParentProcess, 2000)
 
-    OnWorkGetCmdStr(wParam, lParam, msg, hwnd) {
-        StringAddress := NumGet(lParam, 2 * A_PtrSize, "Ptr")  ; 检索 CopyDataStruct 的 lpData 成员.
-        Cmd := StrGet(StringAddress)  ; 从结构中复制字符串.
-        paramArr := StrSplit(cmd, "⫶")
-        switch paramArr[1] {
-            case "SetVari":
-                GetNameAndValueByParamArr(&NameArr, &ValueArr, paramArr)
-                loop NameArr.Length {
-                    MySoftData.VariableMap[NameArr[A_Index]] := ValueArr[A_Index]
-                }
-            case "DelVari":
-                NameArr := paramArr.Clone()
-                NameArr.RemoveAt(1)
-                loop NameArr.Length {
-                    if (MySoftData.VariableMap.Has(NameArr[A_Index]))
-                        MySoftData.VariableMap.Delete(NameArr[A_Index])
-                }
-            case "CMDTip":
-                MySoftData.CMDTip := paramArr[2]
-            case "PauseState":
-                tableItem := MySoftData.TableInfo[paramArr[2]]
-                tableItem.PauseArr[paramArr[3]] := paramArr[4]
-            case "SetArray":
-                Name := paramArr[2]
-                Value := GetArray(paramArr[3])
-                MySoftData.ArrayMap[Name] := Value
-            case "CloneArray":
-                SourceArr := GetArray(paramArr[2])
-                NewArrName := paramArr[3]
-                MySoftData.ArrayMap[NewArrName] := SourceArr
-            case "DeleteArray":
-                if (MySoftData.ArrayMap.Has(paramArr[2]))
-                    MySoftData.ArrayMap.Delete(paramArr[2])
-            case "ModifyArray":
-                ArrName := paramArr[2]
-                MainIndex := paramArr[3]
-                Index := paramArr[4]
-                SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-                Value := paramArr[5] ? GetArray(paramArr[6]) : paramArr[6]
-                SourceArr[Index] := Value
-            case "InsertArray":
-                ArrName := paramArr[2]
-                MainIndex := paramArr[3]
-                Index := paramArr[4]
-                SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-                Value := paramArr[5] ? GetArray(paramArr[6]) : paramArr[6]
-                SourceArr.InsertAt(Index, Value)
-            case "RemoveAtArray":
-                ArrName := paramArr[2]
-                MainIndex := paramArr[3]
-                Index := paramArr[4]
-                SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-                SourceArr.RemoveAt(Index)
-        }
-    }
-
-    OnMainReceiveInfo(wParam, lParam, msg, hwnd) {
-        Timestamp := String(wParam)
-
-        if (ReceiveInfoMap.Has(Timestamp)) {
-            ReceiveInfoMap[Timestamp].Destroy()
+    OnEventMessage(cmd) {
+        try {
+            paramArr := JSON.parse(cmd)
+            action := paramArr[1]
+            args := []
+            loop paramArr.Length - 1 {
+                args.Push(paramArr[A_Index + 1])
+            }
+            switch action {
+                case "SetVari":
+                    NameArr := args[1]
+                    ValueArr := args[2]
+                    loop NameArr.Length {
+                        MySoftData.VariableMap[NameArr[A_Index]] := ValueArr[A_Index]
+                    }
+                case "DelVari":
+                    NameArr := args[1]
+                    loop NameArr.Length {
+                        if (MySoftData.VariableMap.Has(NameArr[A_Index]))
+                            MySoftData.VariableMap.Delete(NameArr[A_Index])
+                    }
+                case "CMDTip":
+                    MySoftData.CMDTip := args[1]
+                case "PauseState":
+                    tableItem := MySoftData.TableInfo[args[1]]
+                    tableItem.PauseArr[args[2]] := args[3]
+                case "SetArray":
+                    Name := args[1]
+                    Value := GetArray(args[2])
+                    MySoftData.ArrayMap[Name] := Value
+                case "CloneArray":
+                    SourceArr := GetArray(args[1])
+                    NewArrName := args[2]
+                    MySoftData.ArrayMap[NewArrName] := SourceArr
+                case "DeleteArray":
+                    if (MySoftData.ArrayMap.Has(args[1]))
+                        MySoftData.ArrayMap.Delete(args[1])
+                case "ModifyArray":
+                    ArrName := args[1]
+                    MainIndex := args[2]
+                    Index := args[3]
+                    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
+                    Value := args[4] ? GetArray(args[5]) : args[5]
+                    SourceArr[Index] := Value
+                case "InsertArray":
+                    ArrName := args[1]
+                    MainIndex := args[2]
+                    Index := args[3]
+                    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
+                    Value := args[4] ? GetArray(args[5]) : args[5]
+                    SourceArr.InsertAt(Index, Value)
+                case "RemoveAtArray":
+                    ArrName := args[1]
+                    MainIndex := args[2]
+                    Index := args[3]
+                    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
+                    SourceArr.RemoveAt(Index)
+            }
+        } catch {
         }
     }
 }
@@ -187,42 +161,36 @@
 {
     WorkSetGlobalArray(Name, Value) {
         MySoftData.ArrayMap[Name] := Value
-        CmdStr := Format("SetArray⫶{}⫶{}", Name, GetArrayStr(Value))
-        MsgSendHandler(CmdStr)
+        MsgSendHandler("SetArray", Name, GetArrayStr(Value))
     }
 
     WorkCloneGlobalArray(SourceArr, NewArrName) {
         MySoftData.ArrayMap[NewArrName] := SourceArr.Clone()
-        CMDStr := Format("CloneArray⫶{}⫶{}", GetArrayStr(SourceArr), NewArrName)
-        MsgSendHandler(CmdStr)
+        MsgSendHandler("CloneArray", GetArrayStr(SourceArr), NewArrName)
     }
 
     WorkDeleteGlobalArray(ArrName) {
-        CMDStr := Format("DeleteArray⫶{}", ArrName)
-        MsgSendHandler(CmdStr)
+        MsgSendHandler("DeleteArray", ArrName)
     }
 
     WorkModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
         ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-        CMDStr := Format("ModifyArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
-        MsgSendHandler(CmdStr)
+        MsgSendHandler("ModifyArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
     }
 
     WorkInsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
         ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-        CMDStr := Format("InsertArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
-        MsgSendHandler(CmdStr)
+        MsgSendHandler("InsertArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
     }
 
     WorkRemoveAtGlobalArray(ArrName, MainIndex, Index) {
-        CMDStr := Format("RemoveAtArray⫶{}⫶{}⫶{}", ArrName, MainIndex, Index)
-        MsgSendHandler(CmdStr)
+        MsgSendHandler("RemoveAtArray", ArrName, MainIndex, Index)
     }
 
     WorkSetGlobalVariable(NameArr, ValueArr, ignoreExist) {
         RealNameArr := NameArr.Clone()
         RealValueArr := ValueArr.Clone()
-        NameValueCMDStr := "SetVari"
+        
         if (ignoreExist) {
             RealNameArr := []
             RealValueArr := []
@@ -237,18 +205,15 @@
             return
 
         loop RealNameArr.Length {
-            NameValueCMDStr .= Format("⫶{}⫶{}", RealNameArr[A_Index], RealValueArr[A_Index])
             MySoftData.VariableMap[RealNameArr[A_Index]] := ValueArr[A_Index]
         }
-        MsgSendHandler(NameValueCMDStr)
+        MsgSendHandler("SetVari", RealNameArr, RealValueArr)
     }
 
     WorkDelGlobalVariable(NameArr) {
         RealNameArr := []
-        NameValueCMDStr := "DelVari"
         loop NameArr.Length {
             if (MySoftData.VariableMap.Has(NameArr[A_Index])) {
-                NameValueCMDStr .= Format("⫶{}", NameArr[A_Index])
                 MySoftData.VariableMap.Delete(NameArr[A_Index])
                 RealNameArr.Push(NameArr[A_Index])
             }
@@ -256,7 +221,7 @@
 
         if (RealNameArr.Length == 0)
             return
-        MsgSendHandler(NameValueCMDStr)
+        MsgSendHandler("DelVari", RealNameArr)
     }
 }
 
@@ -277,84 +242,37 @@
     }
 
     WorkSetTableItemState(tableIndex, itemIndex, state) {
-        str := Format("ItemState⫶{}⫶{}⫶{}", tableIndex, itemIndex, state)
-        MsgSendHandler(str)
+        MsgSendHandler("ItemState", tableIndex, itemIndex, state)
     }
 
     WorkSetItemPauseState(tableIndex, itemIndex, state) {
-        str := Format("PauseState⫶{}⫶{}⫶{}", tableIndex, itemIndex, state)
-        MsgSendHandler(str)
+        MsgSendHandler("PauseState", tableIndex, itemIndex, state)
     }
 }
 
 ;子程序告诉主程动作
 {
     WorkCMDReport(cmdStr) {
-        str := Format("Report⫶{}", cmdStr)
-        MsgSendHandler(str)
+        MsgSendHandler("Report", cmdStr)
     }
 
     WorkExcuteRMTCMDAction(cmdStr) {
-        MsgSendHandler(cmdStr)
+        MsgSendHandler("RMT指令", cmdStr)
     }
 
     WorkMsgBoxContent(content) {
-        str := Format("MsgBox⫶{}", content)
-        MsgSendHandler(str)
+        MsgSendHandler("MsgBox", content)
     }
 
     WorkToolTipContent(content) {
-        str := Format("ToolTip⫶{}", content)
-        MsgSendHandler(str)
+        MsgSendHandler("ToolTip", content)
     }
 
     WorkMacroCount(content) {
-        str := Format("MacroCount⫶{}", content)
-        MsgSendHandler(str)
+        MsgSendHandler("MacroCount", content)
     }
 
     WorkViGJoySetState(JoyType, Key, Value) {
-        str := Format("Joy⫶{}⫶{}⫶{}", JoyType, Key, Value)
-        MsgSendHandler(str)
-    }
-}
-
-;通信校验
-{
-    CheckIfReceiveInfo(Timestamp) {
-        ;不存在表示已经接收了，就不用处理
-        if (!ReceiveInfoMap.Has(Timestamp))
-            return
-
-        MsgSendHandler(ReceiveInfoMap[Timestamp].Str, Timestamp)
-    }
-
-    class ReceiveCheckData {
-        __New() {
-            this.Timestamp := ""
-            this.Str := ""
-            this.Count := 0
-            this.CheckAction := ""
-        }
-
-        EnableCheckAction() {
-            this.Count++
-            if (this.Count <= 3) {
-                action := CheckIfReceiveInfo.Bind(this.Timestamp)
-                this.CheckAction := action
-                SetTimer(action, -30)
-            }
-        }
-
-        Destroy() {
-            if (ReceiveInfoMap.Has(this.Timestamp)) {
-                if (this.CheckAction != "") {
-                    action := this.CheckAction
-                    SetTimer(action, 0)
-                }
-
-                ReceiveInfoMap.Delete(this.Timestamp)
-            }
-        }
+        MsgSendHandler("Joy", JoyType, Key, Value)
     }
 }

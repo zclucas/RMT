@@ -298,104 +298,56 @@ InitFilePath() {
 
 SubMacroStopAction(tableIndex, itemIndex) {
     tableItem := MySoftData.TableInfo[tableIndex]
-    KillTableItemMacro(tableItem, itemIndex)
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (!IsMuti)
-        return
     WorkerIndex := tableItem.IsWorkIndexArr[itemIndex]
     if (WorkerIndex != 0) {
-        workPath := MyWorkPool.GetWorkPath(WorkerIndex)
-        MyWorkPool.PostMessage(WM_STOP_MACRO, workPath, tableIndex, itemIndex)
+        MyWorkPool.OnStopMacro(tableIndex, itemIndex, 0, 0)
     }
 }
 
 SetGlobalArray(Name, Value) {
-    CMDStr := Format("SetArray⫶{}⫶{}", Name, GetArrayStr(Value))
     MySoftData.ArrayMap[Name] := Value
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("SetArray", Name, GetArrayStr(Value))
 }
 
 CloneGlobalArray(SourceArr, NewArrName) {
-    CMDStr := Format("CloneArray⫶{}⫶{}", GetArrayStr(SourceArr), NewArrName)
     MySoftData.ArrayMap[NewArrName] := SourceArr.Clone()
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("CloneArray", GetArrayStr(SourceArr), NewArrName)
 }
 
 DeleteGlobalArray(ArrName) {
-    CMDStr := Format("DeleteArray⫶{}", ArrName)
     MySoftData.ArrayMap.Delete(ArrName)
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("DeleteArray", ArrName)
 }
 
 ModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
     ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-    CMDStr := Format("ModifyArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
     SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
     SourceArr[Index] := Value
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("ModifyArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
 }
 
 InsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
     ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-    CMDStr := Format("InsertArray⫶{}⫶{}⫶{}⫶{}⫶{}", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
     SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
     SourceArr.InsertAt(Index, Value)
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("InsertArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
 }
 
 RemoveAtGlobalArray(ArrName, MainIndex, Index) {
-    CMDStr := Format("RemoveAtArray⫶{}⫶{}⫶{}", ArrName, MainIndex, Index)
     SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
     SourceArr.RemoveAt(Index)
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], CMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("RemoveAtArray", ArrName, MainIndex, Index)
 }
 
 SetGlobalVariable(NameArr, ValueArr, ignoreExist) {
     RealNameArr := NameArr.Clone()
     RealValueArr := ValueArr.Clone()
-    NameValueCMDStr := "SetVari"
     if (ignoreExist) {
         RealNameArr := []
         RealValueArr := []
@@ -410,25 +362,16 @@ SetGlobalVariable(NameArr, ValueArr, ignoreExist) {
         return
 
     loop RealNameArr.Length {
-        NameValueCMDStr .= Format("⫶{}⫶{}", RealNameArr[A_Index], RealValueArr[A_Index])
         MySoftData.VariableMap[RealNameArr[A_Index]] := ValueArr[A_Index]
     }
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], NameValueCMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("SetVari", RealNameArr, RealValueArr)
 }
 
 DelGlobalVariable(NameArr) {
     RealNameArr := []
-    NameValueCMDStr := "DelVari"
     loop NameArr.Length {
         if (MySoftData.VariableMap.Has(NameArr[A_Index])) {
-            NameValueCMDStr .= Format("⫶{}", NameArr[A_Index])
             MySoftData.VariableMap.Delete(NameArr[A_Index])
             RealNameArr.Push(NameArr[A_Index])
         }
@@ -438,24 +381,11 @@ DelGlobalVariable(NameArr) {
         return
 
     MyVarListenGui.Refresh()
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], NameValueCMDStr)
-        }
-    }
+    MyWorkPool.Broadcast("DelVari", RealNameArr)
 }
 
 SetCMDTipValue(value) {
-    IsMuti := MyWorkPool.CheckEnableMutiThread()
-    if (IsMuti) {
-        workerList := MyWorkPool.GetActiveWorkerList()
-        loop workerList.Length {
-            str := Format("CMDTip⫶{}", value)
-            MyWorkPool.SendMessage(WM_COPYDATA, workerList[A_Index], str)
-        }
-    }
+    MyWorkPool.Broadcast("CMDTip", value)
 }
 
 CMDReport(CMDStr) {
@@ -507,7 +437,6 @@ CancelTableItemStopState(tableIndex, itemIndex) {
 SetItemPauseState(tableIndex, itemIndex, state) {
     tableItem := MySoftData.TableInfo[tableIndex]
     tableItem.PauseArr[itemIndex] := state
-    WorkerIndex := tableItem.IsWorkIndexArr[itemIndex]
 
     LastColorState := tableItem.ColorStateArr[itemIndex]
     if (LastColorState == 1 && state == 1)
@@ -515,11 +444,7 @@ SetItemPauseState(tableIndex, itemIndex, state) {
     else if (LastColorState == 2 && state == 0)
         SetTableItemState(tableIndex, itemIndex, 1)
 
-    if (WorkerIndex != 0) {
-        workPath := MyWorkPool.GetWorkPath(WorkerIndex)
-        str := Format("PauseState⫶{}⫶{}⫶{}", tableIndex, itemIndex, state)
-        MyWorkPool.SendMessage(WM_COPYDATA, workPath, str)
-    }
+    MyWorkPool.Broadcast("PauseState", tableIndex, itemIndex, state)
 }
 
 MsgBoxContent(content) {
