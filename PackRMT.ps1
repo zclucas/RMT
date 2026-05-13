@@ -1,5 +1,5 @@
 ﻿# RMT 自动打包脚本
-# 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work1.exe
+# 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
 
 $Host.UI.RawUI.WindowTitle = "RMT 打包工具"
 $ErrorActionPreference = "Stop"
@@ -206,7 +206,6 @@ function Pack-HelpDoc {
 
     $OutputFile = Join-Path $PSScriptRoot "index.html"
     if (Test-Path $OutputFile) {
-        $size = [math]::Round((Get-Item $OutputFile).Length / 1024, 1)
         $size = [math]::Round((Get-Item $OutputFile).Length / 1MB, 2)
         Write-Log "✓ 帮助文档打包成功 (${size} MB)" "Green"
         return $true
@@ -257,11 +256,11 @@ function New-Release {
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
         }
 
-        # 删除旧 Work*.exe
-        Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
+        # 删除旧 Work.exe
+        Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
 
-        # 编译 Work1.exe
-        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
+        # 编译 Work.exe
+        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$releaseThread\Work.exe" -IconPath $IconPath -Name "Work.exe")) {
             return $false
         }
 
@@ -293,11 +292,11 @@ function New-Release {
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
         }
 
-        # 删除旧 Work*.exe
-        Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
+        # 删除旧 Work.exe
+        Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
 
-        # 编译 Work1.exe (32位)
-        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base32Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
+        # 编译 Work.exe (32位)
+        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base32Exe -OutputExe "$releaseThread\Work.exe" -IconPath $IconPath -Name "Work.exe")) {
             return $false
         }
 
@@ -426,12 +425,12 @@ function Main {
 
         # 步骤 4: 清理旧文件
         Write-Step 4 "清理旧文件"
-        Remove-OldFiles -Dir $WorkDir -Filter "Work*.exe"
+        Remove-OldFiles -Dir $WorkDir -Filter "Work.exe"
 
-        # 步骤 5: 编译 Work1.exe
-        Write-Step 5 "编译 Work1.exe"
+        # 步骤 5: 编译 Work.exe
+        Write-Step 5 "编译 Work.exe"
         $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
-        $result = Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$WorkDir\Work1.exe" -IconPath $IconPath -Name "Work1.exe"
+        $result = Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$WorkDir\Work.exe" -IconPath $IconPath -Name "Work.exe"
         if (-not $result) { Wait-KeyPress; exit 1 }
 
         # 步骤 6: 打包帮助文档

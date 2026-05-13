@@ -33,6 +33,15 @@ DetectHiddenWindows true
 Persistent
 A_MaxHotkeysPerInterval := 400
 
+UnblockZoneIdentifier() {
+    try {
+        psCmd := 'Get-ChildItem -Path "' A_ScriptDir '" -Recurse -File | ForEach-Object { try { Unblock-File -Path $_.FullName -ErrorAction Stop } catch {} }'
+        RunWait('powershell.exe -NoProfile -WindowStyle Hidden -Command "' psCmd '"', , "Hide")
+    }
+}
+
+UnblockZoneIdentifier()
+
 global MyJoyMacro := JoyMacro()
 global MyMouseInfo := MouseWinData()
 global MySoftData := SoftData()
