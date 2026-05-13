@@ -1,4 +1,4 @@
-﻿#include "RMT_OpenCv.h"
+#include "RMT_OpenCv.h"
 #include <opencv2/opencv.hpp>
 #include <windows.h>
 #include <dwmapi.h>
@@ -107,7 +107,7 @@ static ThumbnailCache* GetOrCreateCache(HWND targetHwnd) {
 
 // 后台截图（使用缓存，避免每次创建/销毁窗口）
 cv::Mat captureScreen(int hwnd, int x, int y, int width, int height) {
-    HWND targetHwnd = (HWND)hwnd;
+    HWND targetHwnd = (HWND)(intptr_t)hwnd;
     if (!targetHwnd || !IsWindow(targetHwnd))
         return cv::Mat();
 

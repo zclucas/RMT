@@ -1,4 +1,4 @@
-﻿# RMT 自动打包脚本
+# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
 
 $Host.UI.RawUI.WindowTitle = "RMT 打包工具"
@@ -268,6 +268,10 @@ function New-Release {
         if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base64Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
             return $false
         }
+
+        # 复制 OpenCV DLL (x64)
+        Write-Log "复制 OpenCV DLL (x64)..." "Gray"
+        Copy-OpenCV -ReleaseDir $releaseDir -Arch "x64"
     }
 
     if ($Type -eq "x32" -or $Type -eq "both") {
@@ -304,6 +308,10 @@ function New-Release {
         if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base32Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
             return $false
         }
+
+        # 复制 OpenCV DLL (x86)
+        Write-Log "复制 OpenCV DLL (x86)..." "Gray"
+        Copy-OpenCV -ReleaseDir $releaseDir -Arch "x86"
     }
 
     Write-Section "创建发行包到桌面"
@@ -369,6 +377,25 @@ function New-Release {
         Write-Log "→ $rmtReleaseDir\RMTv${version}_x32.zip" "White"
     }
     return $true
+}
+
+function Copy-OpenCV {
+    param([string]$ReleaseDir, [string]$Arch)
+
+    $srcDir = Join-Path $PSScriptRoot "Plugins\OpenCV\$Arch"
+    $dstDir = Join-Path $ReleaseDir "Plugins\OpenCV\$Arch"
+
+    if (-not (Test-Path $srcDir)) {
+        Write-Log "  ✗ OpenCV 源目录不存在: $srcDir" "Yellow"
+        return
+    }
+
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+
+    Get-ChildItem $srcDir -File | ForEach-Object {
+        Copy-Item $_.FullName -Destination $dstDir -Force
+        Write-Log "  已复制: OpenCV/$Arch/$($_.Name)" "Gray"
+    }
 }
 
 function Compress-ReleaseZip {

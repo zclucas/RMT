@@ -974,8 +974,6 @@ class SearchProGui {
         showColorTip := isColor && RegExMatch(this.HexColorCon.Text, "^([0-9A-Fa-f]{6})$")
 
         this.SetConArrState(this.ImageVariArr, false, isImage)
-        if (isImage && A_PtrSize != 8)
-            this.SearchImageTypeCon.Value := 2
 
         this.SetConArrState(this.ColorArr, false, isColor)
         this.HexColorTipCon.Visible := showColorTip

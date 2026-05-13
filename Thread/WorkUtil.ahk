@@ -47,11 +47,12 @@
     }
 
     WorkOpenCVLoadDll() {
-        OpenCvPath := A_ScriptDir "\..\Plugins\OpenCV\RMT_OpenCV.dll"
+        ; 根据进程位数自动选择 x86 或 x64
+        archDir := (A_PtrSize = 4) ? "x86" : "x64"
+        dllDir := A_ScriptDir "\..\Plugins\OpenCV\" archDir
+        OpenCvPath := dllDir "\RMT_OpenCV.dll"
         IBPath := A_ScriptDir "\..\Plugins\IbInputSimulator.dll"
 
-        ; 构建包含 DLL 文件的目录路径
-        dllDir := A_ScriptDir "\..\Plugins\OpenCV"
         ; 使用 SetDllDirectory 将 dllDir 添加到 DLL 搜索路径中
         DllCall("SetDllDirectory", "Str", dllDir)
 

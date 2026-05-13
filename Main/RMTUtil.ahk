@@ -162,12 +162,13 @@ PluginInit() {
     if (MySoftData.HasJoyMacro)
         global ViGJoy := ViGEmXb360()
 
-    ; 构建包含 DLL 文件的目录路径
-    dllDir := A_ScriptDir "\Plugins\OpenCV"
+    ; 构建包含 DLL 文件的目录路径（根据进程位数自动选择 x86 或 x64）
+    archDir := (A_PtrSize = 4) ? "x86" : "x64"
+    dllDir := A_ScriptDir "\Plugins\OpenCV\" archDir
     ; 使用 SetDllDirectory 将 dllDir 添加到 DLL 搜索路径中
     DllCall("SetDllDirectory", "Str", dllDir)
 
-    OpenCvPath := A_ScriptDir "\Plugins\OpenCV\RMT_OpenCV.dll"
+    OpenCvPath := dllDir "\RMT_OpenCV.dll"
     IBPath := A_ScriptDir "\Plugins\IbInputSimulator.dll"
     DllCall('LoadLibrary', 'str', OpenCvPath, "Ptr")
     DllCall("LoadLibrary", "Str", IBPath)
