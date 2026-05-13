@@ -85,7 +85,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         "数组", OnArray,
         "输入", OnInput,
         "文件读写", OnFileIO,
-        "窗口管理", OnWindowManage
+        "窗口管理", OnWindowManage,
+        "按键检测", OnKeyCheck
     )
 
     cmdArr := SplitMacro(macro)
@@ -1131,4 +1132,44 @@ OnWindowManage(tableItem, cmd, index) {
                 WinSetTitle(newTitle, winTitle)
         }
     }
+}
+
+OnKeyCheck(tableItem, cmd, index) {
+    paramArr := StrSplit(cmd, "_")
+    Data := GetMacroCMDData(paramArr[1])
+
+    keyArrStr := paramArr.Length >= 2 ? paramArr[2] : ""
+    checkType := paramArr.Length >= 3 ? Integer(paramArr[3]) : 1
+    varName := paramArr.Length >= 4 ? paramArr[4] : "Var1"
+    trueValue := paramArr.Length >= 5 ? paramArr[5] : "1"
+    falseValue := paramArr.Length >= 6 ? paramArr[6] : "0"
+
+    keyArr := GetPressKeyArr(keyArrStr)
+    if (keyArr.Length == 0)
+        return
+
+    isAllPressed := true
+    isAnyPressed := false
+
+    for index, key in keyArr {
+        try {
+            isPressed := GetKeyState(key, "P")
+            if (isPressed) {
+                isAnyPressed := true
+            } else {
+                isAllPressed := false
+            }
+        } catch {
+            isAllPressed := false
+        }
+    }
+
+    result := ""
+    if (checkType == 1) {
+        result := isAllPressed ? trueValue : falseValue
+    } else {
+        result := isAnyPressed ? trueValue : falseValue
+    }
+
+    MySetGlobalVariable([varName], [result], false)
 }
