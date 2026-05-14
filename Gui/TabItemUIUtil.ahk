@@ -223,6 +223,18 @@ OnItemAddMacroBtnClick(tableItem, btn, *) {
     tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
     tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
     tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
+    tableItem.KilledArr.InsertAt(AddIndex, false)
+    tableItem.PauseArr.InsertAt(AddIndex, false)
+    tableItem.ActionCount.InsertAt(AddIndex, 0)
+    tableItem.HoldKeyArr.InsertAt(AddIndex, Map())
+    tableItem.ToggleStateArr.InsertAt(AddIndex, false)
+    tableItem.ToggleActionArr.InsertAt(AddIndex, "")
+    VariableMap := Map()
+    VariableMap["宏循环次数"] := 0
+    VariableMap["循环-跳过本轮"] := false
+    VariableMap["循环-跳出"] := false
+    VariableMap["分支-跳出"] := false
+    tableItem.VariableMapArr.InsertAt(AddIndex, VariableMap)
 
     PosY := 1000000
     for index, value in tableItem.AllConArr {
@@ -280,6 +292,13 @@ OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
     tableItem.StartTipSoundArr.RemoveAt(itemIndex)
     tableItem.EndTipSoundArr.RemoveAt(itemIndex)
     tableItem.IsWorkIndexArr.RemoveAt(itemIndex)
+    tableItem.KilledArr.RemoveAt(itemIndex)
+    tableItem.PauseArr.RemoveAt(itemIndex)
+    tableItem.ActionCount.RemoveAt(itemIndex)
+    tableItem.HoldKeyArr.RemoveAt(itemIndex)
+    tableItem.ToggleStateArr.RemoveAt(itemIndex)
+    tableItem.ToggleActionArr.RemoveAt(itemIndex)
+    tableItem.VariableMapArr.RemoveAt(itemIndex)
 }
 
 ;增加宏模块
@@ -338,6 +357,18 @@ OnItemAddMenuItem(tableItem, foldIndex) {
         tableItem.StartTipSoundArr.InsertAt(AddIndex, 0)
         tableItem.EndTipSoundArr.InsertAt(AddIndex, 0)
         tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
+        tableItem.KilledArr.InsertAt(AddIndex, false)
+        tableItem.PauseArr.InsertAt(AddIndex, false)
+        tableItem.ActionCount.InsertAt(AddIndex, 0)
+        tableItem.HoldKeyArr.InsertAt(AddIndex, Map())
+        tableItem.ToggleStateArr.InsertAt(AddIndex, false)
+        tableItem.ToggleActionArr.InsertAt(AddIndex, "")
+        VariableMap := Map()
+        VariableMap["宏循环次数"] := 0
+        VariableMap["循环-跳过本轮"] := false
+        VariableMap["循环-跳出"] := false
+        VariableMap["分支-跳出"] := false
+        tableItem.VariableMapArr.InsertAt(AddIndex, VariableMap)
 
         PosY := 1000000
         for index, value in tableItem.AllConArr {

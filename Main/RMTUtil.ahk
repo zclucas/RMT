@@ -306,6 +306,8 @@ SubMacroStopAction(tableIndex, itemIndex) {
         MyWorkPool.BroadcastStop(tableIndex, itemIndex)
         tableItem.IsWorkIndexArr[itemIndex] := 0
     }
+    else
+        KillTableItemMacro(tableItem, itemIndex)
 }
 
 SetGlobalArray(Name, Value) {
@@ -410,6 +412,7 @@ SetTableItemState(tableIndex, itemIndex, State) {
         return
 
     if (State == 3) {
+        StopCancelTableItemTimer(tableIndex, itemIndex)
         timerFunc := CancelTableItemStopState.Bind(tableIndex, itemIndex)
         timerKey := tableIndex "|" itemIndex
         CancelTableItemTimerMap[timerKey] := timerFunc
@@ -1002,8 +1005,12 @@ OnTriggerSepcialItemMacro(MacroStr) {
     tableItem.ActionCount[1] := 0
     tableItem.index := 1
     tableItem.ColorStateArr[1] := 1
+    UpdateMacroRunningCount(0, 1)
+    RefreshItemColorUI(tableItem.Index, 1)
     OnTriggerMacroOnce(tableItem, MacroStr, 1)
-    tableItem.ColorStateArr[1] := 0 ;默认状态
+    tableItem.ColorStateArr[1] := 0
+    UpdateMacroRunningCount(1, 0)
+    RefreshItemColorUI(tableItem.Index, 1)
 }
 
 HandleOpenArg() {
