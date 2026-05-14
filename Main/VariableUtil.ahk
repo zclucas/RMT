@@ -11,8 +11,9 @@ SetGlobalData(macroStr, visitMap) {
         if (visitMap.Has(paramArr[1]))
             continue
         SetCMDSerialData(cmdArr[A_Index])
-        IsPressKey := InStr(paramArr[1], "按键")
+        IsPressKey := InStr(paramArr[1], "按键") && !InStr(paramArr[1], "按键检测")
         IsBGKey := InStr(paramArr[1], "后台按键")
+        IsKeyCheck := InStr(paramArr[1], "按键检测")
         IsExVariable := InStr(paramArr[1], "变量提取")
         IsVariable := InStr(paramArr[1], "变量") && !IsExVariable
         IsTextOps := InStr(paramArr[1], "文本处理")
@@ -27,8 +28,8 @@ SetGlobalData(macroStr, visitMap) {
         IsFileIO := InStr(paramArr[1], "文件读写")
         IsRun := InStr(paramArr[1], "运行")
         IsVarRelate := IsVariable || IsExVariable || IsTextOps || IsIf || IsOpera || IsSearch || IsSearchPro
-            || IsLoop || IsIfPro || IsArray || IsInput || IsFileIO || IsRun
-        if (!MySoftData.HasJoyMacro && IsPressKey && !IsBGKey) {
+            || IsLoop || IsIfPro || IsArray || IsInput || IsFileIO || IsRun || IsKeyCheck
+        if (!MySoftData.HasJoyMacro && IsPressKey && !IsBGKey && paramArr.Length >= 3) {
             MySoftData.HasJoyMacro := InStr(paramArr[2], "Joy")
         }
 
@@ -53,6 +54,11 @@ SetGlobalData(macroStr, visitMap) {
         else if (IsIf) {
             if (Data.SaveToggle) {
                 VariableMap[Data.SaveName] := true
+            }
+        }
+        else if (IsKeyCheck) {
+            if (Data.SaveToggle) {
+                VariableMap[Data.VarName] := true
             }
         }
         else if (IsOpera) {

@@ -737,7 +737,7 @@ DiscardRecordTriggerKey(MacroStr, isFront) {
 }
 
 CheckIfDiscardCMD(triggerMap, cmd) {
-    if (!InStr(cmd, GetLang("按键")))
+    if (!InStr(cmd, GetLang("按键")) || InStr(cmd, GetLang("按键检测")))
         return false
 
     paramArr := SplitCommand(cmd)

@@ -1138,28 +1138,35 @@ OnKeyCheck(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
-    keyArrStr := paramArr.Length >= 2 ? paramArr[2] : ""
-    checkType := paramArr.Length >= 3 ? Integer(paramArr[3]) : 1
-    varName := paramArr.Length >= 4 ? paramArr[4] : "Var1"
-    trueValue := paramArr.Length >= 5 ? paramArr[5] : "1"
-    falseValue := paramArr.Length >= 6 ? paramArr[6] : "0"
-
-    keyArr := GetPressKeyArr(keyArrStr)
+    keyArr := Data.KeyArr
     if (keyArr.Length == 0)
         return
 
+    checkType := Data.CheckType
+    stateType := Data.StateType
+    varName := Data.VarName
+    trueValue := Data.TrueValue
+    falseValue := Data.FalseValue
+
+    stateMode := stateType == 1 ? "P" : ""
     isAllPressed := true
     isAnyPressed := false
 
     for index, key in keyArr {
-        try {
-            isPressed := GetKeyState(key, "P")
-            if (isPressed) {
-                isAnyPressed := true
-            } else {
-                isAllPressed := false
+        isPressed := GetKeyState(key, stateMode)
+        if (isPressed) {
+            if (checkType == 2) {
+                if (Data.SaveToggle)
+                    MySetGlobalVariable([varName], [trueValue], false)
+                return
             }
-        } catch {
+            isAnyPressed := true
+        } else {
+            if (checkType == 1) {
+                if (Data.SaveToggle)
+                    MySetGlobalVariable([varName], [falseValue], false)
+                return
+            }
             isAllPressed := false
         }
     }
@@ -1171,5 +1178,6 @@ OnKeyCheck(tableItem, cmd, index) {
         result := isAnyPressed ? trueValue : falseValue
     }
 
-    MySetGlobalVariable([varName], [result], false)
+    if (Data.SaveToggle)
+        MySetGlobalVariable([varName], [result], false)
 }

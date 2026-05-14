@@ -827,6 +827,8 @@ class KeyCheckData {
         this.SerialStr := ""
         this.KeyArr := []                   ;检测的按键数组
         this.CheckType := 1                 ;1同时按下 2有一个按下
+        this.StateType := 1                 ;1物理状态 2逻辑状态
+        this.SaveToggle := true             ;结果保存开关
         this.VarName := ""                  ;变量名
         this.TrueValue := "1"               ;真值文本
         this.FalseValue := "0"              ;假值文本
