@@ -269,8 +269,7 @@ OnKillAllMacro(*) {
         loop tableItem.ColorStateArr.Length {
             if (tableItem.ColorStateArr[A_Index] == 1) {
                 tableItem.IsWorkIndexArr[A_Index] := 0
-                SetTableItemState(tableItem.Index, A_Index, 3)
-                MyWorkPool.OnStopMacro(tableItem.Index, A_Index, 0, 0)
+                MyWorkPool.BroadcastStop(tableItem.Index, A_Index)
             }
         }
     }

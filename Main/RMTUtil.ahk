@@ -303,7 +303,8 @@ SubMacroStopAction(tableIndex, itemIndex) {
     tableItem := MySoftData.TableInfo[tableIndex]
     WorkerIndex := tableItem.IsWorkIndexArr[itemIndex]
     if (WorkerIndex != 0) {
-        MyWorkPool.OnStopMacro(tableIndex, itemIndex, 0, 0)
+        MyWorkPool.BroadcastStop(tableIndex, itemIndex)
+        tableItem.IsWorkIndexArr[itemIndex] := 0
     }
 }
 

@@ -397,15 +397,19 @@ class WorkPool {
         }
     }
 
-    OnStopMacro(wParam, lParam, msg, hwnd) {
-        tableIndex := wParam
-        itemIndex := lParam
-        tableItem := MySoftData.TableInfo[tableIndex]
+    BroadcastStop(tableIndex, itemIndex) {
         for idx, workerHwnd in this.active {
             this.PostMessage(WM_STOP_MACRO, idx, tableIndex, itemIndex)
         }
+        tableItem := MySoftData.TableInfo[tableIndex]
         KillTableItemMacro(tableItem, itemIndex)
         SetTableItemState(tableIndex, itemIndex, 3)
+    }
+
+    OnStopMacro(wParam, lParam, msg, hwnd) {
+        tableIndex := wParam
+        itemIndex := lParam
+        this.BroadcastStop(tableIndex, itemIndex)
     }
 
     OnWorkerEvent(idx, payload) {
