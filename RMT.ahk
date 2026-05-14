@@ -27,6 +27,7 @@ EditListen()        ;右键编辑数据监听
 InitData()          ;初始化软件数据
 InitUI()            ;初始化UI
 SetEditData()      ;缓存编辑器数据
+RecoverAllDirtyStates()  ;恢复意外退出残留的脏状态
 
 ;放后面初始化，因为这初始化时间比较长
 PluginInit()

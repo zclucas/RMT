@@ -399,41 +399,61 @@ CMDReport(CMDStr) {
 SetTableItemState(tableIndex, itemIndex, State) {
     tableItem := MySoftData.TableInfo[tableIndex]
     LastState := tableItem.ColorStateArr[itemIndex]
-    isVisible := State != 0
 
-    if (LastState == 0 && (State == 2 || State == 3))  ;默认状态不可暂停，终止
+    if (LastState == 0 && (State == 2 || State == 3))
         return
 
-    if (State == 2 && LastState != 1)  ;非运行状态 不可暂停
+    if (State == 2 && LastState != 1)
         return
-    if (State == 3 && LastState == 3)  ;终止状态，不能再次终止
+    if (State == 3 && LastState == 3)
         return
+
+    if (State == 3) {
+        timerFunc := CancelTableItemStopState.Bind(tableIndex, itemIndex)
+        timerKey := tableIndex "|" itemIndex
+        CancelTableItemTimerMap[timerKey] := timerFunc
+        SetTimer(timerFunc, -5000)
+    }
+    else if (LastState == 3)
+        StopCancelTableItemTimer(tableIndex, itemIndex)
 
     UpdateMacroRunningCount(LastState, State)
     tableItem.ColorStateArr[itemIndex] := State
+    RefreshItemColorUI(tableIndex, itemIndex)
+}
+
+RefreshItemColorUI(tableIndex, itemIndex) {
+    tableItem := MySoftData.TableInfo[tableIndex]
+    State := tableItem.ColorStateArr[itemIndex]
+    isVisible := State != 0
+
     ItemUsePool := ItemUseConPoolMap[tableItem.Index]
     if (ItemUsePool.Has(itemIndex)) {
         ItemConObj := ItemUsePool[itemIndex]
-        ItemConObj.ColorCon.Value := GetItemColorValue(tableItem.ColorStateArr[itemIndex])
+        ItemConObj.ColorCon.Value := GetItemColorValue(State)
         ItemConObj.ColorCon.Visible := isVisible
-    }
-
-    if (State == 3) {
-        SetTimer(CancelTableItemStopState.Bind(tableIndex, itemIndex), -5000)
     }
 }
 
 CancelTableItemStopState(tableIndex, itemIndex) {
     tableItem := MySoftData.TableInfo[tableIndex]
     if (tableItem.ColorStateArr[itemIndex] == 3) {
-        tableItem.ColorStateArr[itemIndex] := 0
+        if (tableItem.IsWorkIndexArr.Length >= itemIndex && tableItem.IsWorkIndexArr[itemIndex] != 0)
+            return
 
-        ItemUsePool := ItemUseConPoolMap[tableItem.Index]
-        if (ItemUsePool.Has(itemIndex)) {
-            ItemConObj := ItemUsePool[itemIndex]
-            ItemConObj.ColorCon.Value := ""
-            ItemConObj.ColorCon.Visible := false
-        }
+        tableItem.ColorStateArr[itemIndex] := 0
+        UpdateMacroRunningCount(3, 0)
+        RefreshItemColorUI(tableIndex, itemIndex)
+    }
+}
+
+global CancelTableItemTimerMap := Map()
+
+StopCancelTableItemTimer(tableIndex, itemIndex) {
+    timerKey := tableIndex "|" itemIndex
+    if (CancelTableItemTimerMap.Has(timerKey)) {
+        SetTimer(CancelTableItemTimerMap[timerKey], 0)
+        CancelTableItemTimerMap.Delete(timerKey)
     }
 }
 
@@ -448,6 +468,38 @@ SetItemPauseState(tableIndex, itemIndex, state) {
         SetTableItemState(tableIndex, itemIndex, 1)
 
     MyWorkPool.Broadcast("PauseState", tableIndex, itemIndex, state)
+}
+
+RecoverAllDirtyStates() {
+    loop MySoftData.TableInfo.Length {
+        tableItem := MySoftData.TableInfo[A_Index]
+        if (!tableItem.ColorStateArr.Length)
+            continue
+        loop tableItem.ColorStateArr.Length {
+            if (tableItem.ColorStateArr[A_Index] != 0) {
+                tableItem.ColorStateArr[A_Index] := 0
+                if (tableItem.IsWorkIndexArr.Length >= A_Index)
+                    tableItem.IsWorkIndexArr[A_Index] := 0
+                RefreshItemColorUI(tableItem.Index, A_Index)
+            }
+        }
+    }
+
+    tableItem := MySoftData.SpecialTableItem
+    if (tableItem.ColorStateArr.Length >= 1 && tableItem.ColorStateArr[1] != 0) {
+        tableItem.ColorStateArr[1] := 0
+        RefreshItemColorUI(tableItem.Index, 1)
+    }
+
+    if (MySoftData.MacroRunningCount != 0) {
+        MySoftData.MacroRunningCount := 0
+        MySoftData.IsMacroWorking := false
+        MyCMDTipGui.OnToggleMacroWorkState()
+    }
+}
+
+CleanupAllMacroStates() {
+    RecoverAllDirtyStates()
 }
 
 MsgBoxContent(content) {

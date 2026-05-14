@@ -248,12 +248,14 @@ class WorkPool {
                             fut := this.futures[id]
                             fut.SetResult(result)
                             
-                            ; 重置IsWorkIndexArr，允许宏再次触发
                             if (fut.tableIndex > 0 && fut.itemIndex > 0) {
                                 tableItem := MySoftData.TableInfo[fut.tableIndex]
                                 if (tableItem.IsWorkIndexArr.Length >= fut.itemIndex) {
                                     tableItem.IsWorkIndexArr[fut.itemIndex] := 0
                                 }
+
+                                itemState := tableItem.KilledArr.Length >= fut.itemIndex && tableItem.KilledArr[fut.itemIndex] ? 3 : 0
+                                SetTableItemState(fut.tableIndex, fut.itemIndex, itemState)
                             }
                             
                             this.futures.Delete(id)
@@ -276,7 +278,16 @@ class WorkPool {
         for id, createTime in this.futureCreateTime {
             if ((now - createTime) >= this.futureTimeout) {
                 if (this.futures.Has(id)) {
-                    this.futures[id].SetResult("timeout")
+                    fut := this.futures[id]
+                    fut.SetResult("timeout")
+
+                    if (fut.tableIndex > 0 && fut.itemIndex > 0) {
+                        tableItem := MySoftData.TableInfo[fut.tableIndex]
+                        if (tableItem.IsWorkIndexArr.Length >= fut.itemIndex)
+                            tableItem.IsWorkIndexArr[fut.itemIndex] := 0
+                        SetTableItemState(fut.tableIndex, fut.itemIndex, 3)
+                    }
+
                     this.futures.Delete(id)
                 }
                 toDelete.Push(id)
@@ -390,12 +401,11 @@ class WorkPool {
         tableIndex := wParam
         itemIndex := lParam
         tableItem := MySoftData.TableInfo[tableIndex]
-        ; WorkerIndex tracking is handled via futures now, or we can broadcast STOP_MACRO
-        ; to all workers since we don't strictly track which worker is running which macro.
         for idx, workerHwnd in this.active {
             this.PostMessage(WM_STOP_MACRO, idx, tableIndex, itemIndex)
         }
         KillTableItemMacro(tableItem, itemIndex)
+        SetTableItemState(tableIndex, itemIndex, 3)
     }
 
     OnWorkerEvent(idx, payload) {

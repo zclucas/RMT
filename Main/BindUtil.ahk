@@ -256,20 +256,21 @@ SetPauseState(state) {
 }
 
 OnKillAllMacro(*) {
-    global MySoftData, MyWorkPool ; 访问全局变量
+    global MySoftData, MyWorkPool
 
-    CloseMenuWheel()    ;关闭菜单按钮
+    CloseMenuWheel()
 
-    MySoftData.MacroRunningCount := 0   ;运行计数重置
+    MySoftData.MacroRunningCount := 0
     UpdateMacroRunningCount(0, 0)
 
     loop MySoftData.TableInfo.Length {
         tableItem := MySoftData.TableInfo[A_Index]
         KillSingleTableMacro(tableItem)
-        for index, value in tableItem.ModeArr {
-            WorkerIndex := tableItem.IsWorkIndexArr[index]
-            if (WorkerIndex != 0) {
-                MyWorkPool.OnStopMacro(tableItem.Index, index, 0, 0)
+        loop tableItem.ColorStateArr.Length {
+            if (tableItem.ColorStateArr[A_Index] == 1) {
+                tableItem.IsWorkIndexArr[A_Index] := 0
+                SetTableItemState(tableItem.Index, A_Index, 3)
+                MyWorkPool.OnStopMacro(tableItem.Index, A_Index, 0, 0)
             }
         }
     }
@@ -634,6 +635,7 @@ OnExitSoft(*) {
     IbSendDestroy()
     MyChineseOcr := ""
     MyEnglishOcr := ""
+    CleanupAllMacroStates()
     MyWorkPool.Clear()
     if (IsSet(MyUIMacroGui) && MyUIMacroGui != "")
         MyUIMacroGui.StopMonitor()
@@ -963,6 +965,7 @@ OnToggleTriggerMacro(tableIndex, itemIndex) {
             return
 
         KillTableItemMacro(tableItem, itemIndex)
+        SetTableItemState(tableItem.index, itemIndex, 3)
         SetTimer(action, 0)
     }
 }
