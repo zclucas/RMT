@@ -489,42 +489,43 @@ AddSettingUI(index) {
     MySoftData.SoftBGColorCon := con
 
     posY += 40
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h150", posX + 10, posY), GetLang("开关选项"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w870 h140", posX + 10, posY), GetLang("开关选项"), tableItem)
     tableItem.AllGroup.Push(con)
     posY += 30
 
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("开机自启"), tableItem)
-    MySoftData.BootStartCtrl := con
-    MySoftData.BootStartCtrl.Value := MySoftData.IsBootStart
-    MySoftData.BootStartCtrl.OnEvent("Click", OnBootStartChanged)
-
-    con := AddTableControl("CheckBox", Format("x{} y{} -Wrap w15", posX + 315, posY), "", tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{} -Wrap w15", posX + 25, posY), "", tableItem)
     MySoftData.CMDTipCtrl := con
     MySoftData.CMDTipCtrl.Value := MySoftData.CMDTip
-    con := AddTableControl("Button", Format("x{} y{}", posX + 315 + 15, posY - 5), GetLang("指令显示"), tableItem)
+    con := AddTableControl("Button", Format("x{} y{}", posX + 25 + 15, posY - 5), GetLang("指令显示"), tableItem)
     con.OnEvent("Click", (*) => OnEditCMDTipGui())
 
-    con := AddTableControl("Button", Format("x{} y{} w{}", posX + 635, posY - 5, 100), GetLang("录制选项"), tableItem)
+    con := AddTableControl("Button", Format("x{} y{} w{}", posX + 315, posY - 5, 100), GetLang("录制选项"), tableItem)
     con.OnEvent("Click", OnClickToolRecordSettingBtn)
 
-    posY += 40
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("无变量提醒"), tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("无变量提醒"), tableItem)
     MySoftData.NoVariableTipCtrl := con
     MySoftData.NoVariableTipCtrl.Value := MySoftData.NoVariableTip
 
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("菜单轮位置固定"), tableItem)
+    posY += 40
+
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("菜单轮位置固定"), tableItem)
     MySoftData.FixedMenuWheelCtrl := con
     MySoftData.FixedMenuWheelCtrl.Value := MySoftData.FixedMenuWheel
     MySoftData.FixedMenuWheelCtrl.OnEvent("Click", OnMenuWheelPosChanged)
 
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("分割线"), tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("分割线"), tableItem)
     MySoftData.SplitLineCtrl := con
     MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
 
-    posY += 40
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("模态子窗口"), tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("模态子窗口"), tableItem)
     MySoftData.ModalSubGuiCtrl := con
     MySoftData.ModalSubGuiCtrl.Value := MySoftData.IsModalSubGui
+
+    posY += 40
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("管理员启动"), tableItem)
+    MySoftData.AdminStartCtrl := con
+    MySoftData.AdminStartCtrl.Value := MySoftData.IsAdminStart
+    MySoftData.AdminStartCtrl.OnEvent("Click", OnAdminStartChanged)
 
     posY += 40
     con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)
@@ -560,6 +561,11 @@ AddSettingUI(index) {
     MySoftData.KeyDownDownCon.Value := MySoftData.KeyDownDownType
     Con := AddTableControl("Button", Format("x{} y{} h27", posX + 231, posY - 4), "?", tableItem)
     Con.OnEvent("Click", OnClickKeyDownDownHelpBtn)
+
+    AddTableControl("Text", Format("x{} y{}", posX + 315, posY), GetLang("开机自启："), tableItem)
+    con := AddTableControl("DropDownList", Format("x{} y{} w120", posX + 390, posY - 4), GetLangArr(["否", "是", "管理员"]), tableItem)
+    MySoftData.BootStartCtrl := con
+    MySoftData.BootStartCtrl.Value := MySoftData.IsBootStart + 1
 
     posY += 30
     tableItem.UnderPosY := posY

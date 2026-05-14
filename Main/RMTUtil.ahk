@@ -24,13 +24,14 @@ OnSaveSetting(*) {
     IniWrite(MySoftData.SuspendHotkeyCtrl.Value, IniFile, IniSection, "SuspendHotkey")
     IniWrite(MySoftData.PauseHotkeyCtrl.Value, IniFile, IniSection, "PauseHotkey")
     IniWrite(MySoftData.KillMacroHotkeyCtrl.Value, IniFile, IniSection, "KillMacroHotkey")
-    IniWrite(MySoftData.BootStartCtrl.Value, IniFile, IniSection, "IsBootStart")
+    IniWrite(MySoftData.BootStartCtrl.Value - 1, IniFile, IniSection, "IsBootStart")
     IniWrite(MySoftData.SplitLineCtrl.Value, IniFile, IniSection, "ShowSplitLine")
     IniWrite(MySoftData.FixedMenuWheelCtrl.Value, IniFile, IniSection, "FixedMenuWheel")
     IniWrite(MySoftData.ModalSubGuiCtrl.Value, IniFile, IniSection, "IsModalSubGui")
     IniWrite(MySoftData.MutiThreadNumCtrl.Value, IniFile, IniSection, "MutiThreadNum")
     IniWrite(MySoftData.SoftBGColorCon.Value, IniFile, IniSection, "SoftBGColor")
     IniWrite(MySoftData.NoVariableTipCtrl.Value, IniFile, IniSection, "NoVariableTip")
+    IniWrite(MySoftData.AdminStartCtrl.Value, IniFile, IniSection, "IsAdminStart")
     IniWrite(MySoftData.CMDTipCtrl.Value, IniFile, IniSection, "CMDTip")
     IniWrite(MySoftData.ScreenShotTypeCtrl.Value, IniFile, IniSection, "ScreenShotType")
     IniWrite(MySoftData.KeyDownDownCon.Value, IniFile, IniSection, "KeyDownDown")
@@ -953,8 +954,11 @@ OnTriggerSepcialItemMacro(MacroStr) {
 }
 
 HandleOpenArg() {
-    if (A_Args.Length <= 0)
+    if (A_Args.Length <= 0) {
+        if (MySoftData.IsAdminStart && !A_IsAdmin)
+            ElevateToAdmin()
         return
+    }
 
     loop A_Args.Length {
         arg := A_Args[A_Index]
@@ -962,6 +966,25 @@ HandleOpenArg() {
             MySoftData.IsMinStart := true
             continue
         }
+        if (arg == "-elevate") {
+            if (!A_IsAdmin) {
+                ElevateToAdmin()
+            }
+            continue
+        }
+    }
+}
+
+ElevateToAdmin() {
+    args := ""
+    loop A_Args.Length {
+        arg := A_Args[A_Index]
+        if (arg != "-elevate")
+            args .= ' "' arg '"'
+    }
+    try {
+        Run('*RunAs "' A_ScriptFullPath '" ' args)
+        ExitApp()
     }
 }
 

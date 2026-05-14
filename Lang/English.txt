@@ -1078,6 +1078,7 @@ Tip2：按下时再次按下，按键检测网站可能无法检测，但记事�
 不可与特殊指令进行交换=Cannot be exchanged with special commands
 ⎖流程控制：=⎖Flow Control:
 管理员权限=Administrator Privileges
+管理员启动=Admin Startup
 tip1:请确保有创建变量-{}的相关指令=tip1:Please ensure there are related commands to create variables-{}
 tip2:请确保上述指令运行过=tip2:Please ensure the above commands have been executed
 循环-跳出=Loop-Exit
