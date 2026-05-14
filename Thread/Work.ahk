@@ -7,11 +7,14 @@
 #Include "..\Main\Util\SharedMemory.ahk"
 #Include "..\Main\Util\RingBuffer.ahk"
 #Include "..\Main\Util\JsonUtil.ahk"
+#Include "..\Main\Util\ErrorHandler.ahk"
 #Include WorkUtil.ahk
 #SingleInstance Force
 DetectHiddenWindows true
 Persistent
 #NoTrayIcon
+
+OnError(ErrHandler)
 
 class MsgType {
     static TASK := 1
