@@ -965,17 +965,17 @@ OnClearToolText(*) {
 
 OnBootStartChanged(*) {
     global MySoftData
-    MySoftData.IsBootStart := MySoftData.BootStartCtrl.Value - 1
+    MySoftData.IsBootStart := MySoftData.BootStartCtrl.Value
     regPath := "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"
     softPath := A_ScriptFullPath
-    if (MySoftData.IsBootStart == 0) {
+    if (!MySoftData.IsBootStart) {
         RegDelete(regPath, "RMT")
     }
-    else if (MySoftData.IsBootStart == 1) {
-        RegWrite(softPath " -min", "REG_SZ", regPath, "RMT")
+    else if (MySoftData.IsAdminStart) {
+        RegWrite(softPath " -min -admin", "REG_SZ", regPath, "RMT")
     }
     else {
-        RegWrite(softPath " -min -elevate", "REG_SZ", regPath, "RMT")
+        RegWrite(softPath " -min", "REG_SZ", regPath, "RMT")
     }
     IniWrite(MySoftData.IsBootStart, IniFile, IniSection, "IsBootStart")
 }
@@ -984,6 +984,14 @@ OnAdminStartChanged(*) {
     global MySoftData
     MySoftData.IsAdminStart := MySoftData.AdminStartCtrl.Value
     IniWrite(MySoftData.IsAdminStart, IniFile, IniSection, "IsAdminStart")
+    if (MySoftData.IsBootStart) {
+        regPath := "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"
+        softPath := A_ScriptFullPath
+        if (MySoftData.IsAdminStart)
+            RegWrite(softPath " -min -admin", "REG_SZ", regPath, "RMT")
+        else
+            RegWrite(softPath " -min", "REG_SZ", regPath, "RMT")
+    }
 }
 
 OnMenuWheelPosChanged(*) {

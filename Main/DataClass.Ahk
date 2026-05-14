@@ -203,7 +203,7 @@ class SoftData {
         this.ToolTipText := ""          ;临时提示文本
         this.ToolTipEndTime := ""       ;临时提示结束时间
         this.AgreeAgreement := false    ;同意协议
-        this.IsBootStart := 0             ;开机自启（0=否 1=是 2=管理员）
+        this.IsBootStart := false        ;开机自启
         this.IsAdminStart := false        ;管理员启动
         this.ShowSplitLine := false     ;显示分割线
         this.FixedMenuWheel := false    ;固定菜单轮

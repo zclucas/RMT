@@ -24,7 +24,7 @@ OnSaveSetting(*) {
     IniWrite(MySoftData.SuspendHotkeyCtrl.Value, IniFile, IniSection, "SuspendHotkey")
     IniWrite(MySoftData.PauseHotkeyCtrl.Value, IniFile, IniSection, "PauseHotkey")
     IniWrite(MySoftData.KillMacroHotkeyCtrl.Value, IniFile, IniSection, "KillMacroHotkey")
-    IniWrite(MySoftData.BootStartCtrl.Value - 1, IniFile, IniSection, "IsBootStart")
+    IniWrite(MySoftData.BootStartCtrl.Value, IniFile, IniSection, "IsBootStart")
     IniWrite(MySoftData.SplitLineCtrl.Value, IniFile, IniSection, "ShowSplitLine")
     IniWrite(MySoftData.FixedMenuWheelCtrl.Value, IniFile, IniSection, "FixedMenuWheel")
     IniWrite(MySoftData.ModalSubGuiCtrl.Value, IniFile, IniSection, "IsModalSubGui")
@@ -966,7 +966,7 @@ HandleOpenArg() {
             MySoftData.IsMinStart := true
             continue
         }
-        if (arg == "-elevate") {
+        if (arg == "-admin") {
             if (!A_IsAdmin) {
                 ElevateToAdmin()
             }
@@ -979,7 +979,7 @@ ElevateToAdmin() {
     args := ""
     loop A_Args.Length {
         arg := A_Args[A_Index]
-        if (arg != "-elevate")
+        if (arg != "-admin")
             args .= ' "' arg '"'
     }
     try {

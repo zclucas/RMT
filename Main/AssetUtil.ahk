@@ -401,13 +401,13 @@ LoadMainSetting() {
     ToolCheckInfo.RecordMouseTrailInterval := IniRead(IniFile, IniSection, "MouseTrailInterval", 300)
     ToolCheckInfo.RecordJoyInterval := IniRead(IniFile, IniSection, "RecordJoyInterval", 50)
     ToolCheckInfo.OCRTypeValue := IniRead(IniFile, IniSection, "OCRType", 1)
-    MySoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", 0)
-    if (MySoftData.IsBootStart == "false")
-        MySoftData.IsBootStart := 0
-    else if (MySoftData.IsBootStart == "true")
-        MySoftData.IsBootStart := 1
+    MySoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", false)
+    if (MySoftData.IsBootStart == 1 || MySoftData.IsBootStart == 2)
+        MySoftData.IsBootStart := true
+    else if (MySoftData.IsBootStart == "false" || MySoftData.IsBootStart == 0)
+        MySoftData.IsBootStart := false
     else
-        MySoftData.IsBootStart := Integer(MySoftData.IsBootStart)
+        MySoftData.IsBootStart := !!MySoftData.IsBootStart
     MySoftData.IsAdminStart := IniRead(IniFile, IniSection, "IsAdminStart", false)
     MySoftData.ShowSplitLine := IniRead(IniFile, IniSection, "ShowSplitLine", false)
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
