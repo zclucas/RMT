@@ -372,7 +372,12 @@ class MacroEditGui {
 
         PosX := 215
         PosY += 25
-        MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 720, 460), GetLang("当前宏指令"))
+        MyGui.Add("GroupBox", Format("x{} y{} w{} h{}", PosX, PosY, 100, 460), GetLang("当前宏指令"))
+        expandBtn := MyGui.Add("Button", Format("x{} y{} w{} h{} center", PosX + 100, PosY, 100, 20), GetLang("全部展开"))
+        expandBtn.OnEvent("Click", (*) => this.ExpandAll())
+        collapseBtn := MyGui.Add("Button", Format("x{} y{} w{} h{} center", PosX + 200, PosY, 100, 20), GetLang("全部折叠"))
+        collapseBtn.OnEvent("Click", (*) => this.CollapseAll())
+
         PosY += 20
         this.MacroTreeViewCon := MyGui.Add("TreeView", Format("x{} y{} w{} h{}", PosX + 5, PosY, 710, 435),
         "")
@@ -1275,6 +1280,46 @@ class MacroEditGui {
             this.TreeExpand(rootItemID, Num - 1)
             rootItemID := this.MacroTreeViewCon.GetNext(rootItemID)
         }
+    }
+
+    ExpandAll() {
+        this.MacroTreeViewCon.Opt("-Redraw")
+        rootItemID := this.MacroTreeViewCon.GetNext(0)
+        while (rootItemID) {
+            this.MacroTreeViewCon.Modify(rootItemID, "Expand")
+            this.TreeExpandRecursive(rootItemID)
+            rootItemID := this.MacroTreeViewCon.GetNext(rootItemID)
+        }
+        this.MacroTreeViewCon.Opt("+Redraw")
+    }
+
+    TreeExpandRecursive(ItemID) {
+        childID := this.MacroTreeViewCon.GetChild(ItemID)
+        while (childID) {
+            this.MacroTreeViewCon.Modify(childID, "Expand")
+            this.TreeExpandRecursive(childID)
+            childID := this.MacroTreeViewCon.GetNext(childID)
+        }
+    }
+
+    CollapseAll() {
+        this.MacroTreeViewCon.Opt("-Redraw")
+        itemID := this.MacroTreeViewCon.GetNext(0)
+        while (itemID) {
+            this.TreeCollapse(itemID)
+            itemID := this.MacroTreeViewCon.GetNext(itemID)
+        }
+        this.MacroTreeViewCon.Opt("+Redraw")
+    }
+
+    TreeCollapse(ItemID) {
+        childID := this.MacroTreeViewCon.GetChild(ItemID)
+        while (childID) {
+            this.TreeCollapse(childID)
+            childID := this.MacroTreeViewCon.GetNext(childID)
+        }
+        if (this.MacroTreeViewCon.GetChild(ItemID))
+            SendMessage(0x1102, 0x1, ItemID, this.MacroTreeViewCon)
     }
 
     GetTreeMacroStr(ItemID) {

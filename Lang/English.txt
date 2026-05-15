@@ -389,6 +389,8 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 弹窗=Dialog
 当前宏=This Macro
 当前宏指令=Current Macro
+全部展开=Expand All
+全部折叠=Collapse All
 当前指令：=Current:
 当前指令：无=Current: None
 当前指令：移动_0_0_0=Current: Move_0_0_0
