@@ -1511,6 +1511,9 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map()) {
         case "当前秒":
             Value := A_Sec
             return true
+        case "当前星期几":
+            Value := A_WDay == 1 ? 7 : A_WDay - 1
+            return true
         case "当前鼠标颜色":
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
@@ -1859,7 +1862,7 @@ GetBrightness() {
 
 GetSystemVarArr() {
     return [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("句柄ID"), GetLang("当前鼠标颜色"), GetLang("当前鼠标坐标X"),
-    GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间"), GetLang("当前时间(秒)"), GetLang("当前秒")]
+    GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间"), GetLang("当前时间(秒)"), GetLang("当前秒"), GetLang("当前星期几")]
 }
 
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {

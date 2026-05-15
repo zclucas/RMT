@@ -402,6 +402,8 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 当前环境不存在数组=Array not found
 当前秒=Current Second
 当前秒：实时获取当前秒（形如58）=Current Sec: (58)
+当前星期几=Weekday
+当前星期几：实时获取星期几（形如1-7，1代表周一）=Weekday: (1-7, 1=Monday)
 当前窗口信息:=Current Window Info:
 当前窗口信息:RMT=Current Window Info: RMT
 当前窗口坐标:=Current Window Pos:
