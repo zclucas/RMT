@@ -978,6 +978,7 @@ as=None
 选取运行时背景=Pick Runtime BG
 选择/输入=Select/Input
 选择/输入1不可为空=Input 1 required
+选择GIF=Select GIF
 选择图片=Select
 选择文件=Choose File
 选择要共享上传的 RMT 文件=Select RMT to upload

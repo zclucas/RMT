@@ -17,6 +17,8 @@
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\PluginUtil.ahk
+#Include Util\RM_GifPlayer.ahk
+#Include Util\RadialMenuRenderer.ahk
 global WM_COPYDATA := 0x4a ;传递字符串，系统信息
 
 global WM_LOAD_WORK := 0x500  ;资源加载完成事件
@@ -499,6 +501,7 @@ ReadTableItemInfo(index) {
     savedTimingSerialStr := IniRead(MacroFile, IniSection, symbol "TimingSerialArr", "")
     savedStartTipSoundStr := IniRead(MacroFile, IniSection, symbol "StartTipSoundArr", "")
     savedEndTipSoundStr := IniRead(MacroFile, IniSection, symbol "EndTipSoundArr", "")
+    savedGifPathArrStr := IniRead(MacroFile, IniSection, symbol "GifPathArr", "")
     savedFoldInfoStr := IniRead(MacroFile, IniSection, symbol "FoldInfo", "")
 
     ;不存在折叠筐就初始化，并读取默认配置
@@ -541,6 +544,10 @@ ReadTableItemInfo(index) {
     SetArr(savedTimingSerialStr, "π", tableItem.TimingSerialArr)
     SetArr(savedStartTipSoundStr, "π", tableItem.StartTipSoundArr)
     SetArr(savedEndTipSoundStr, "π", tableItem.EndTipSoundArr)
+
+    if (!tableItem.HasProp("GifPathArr"))
+        tableItem.GifPathArr := []
+    SetArr(savedGifPathArrStr, "π", tableItem.GifPathArr)
 
     if (symbol == "UI") {
         savedUIWindowArrStr := IniRead(MacroFile, IniSection, symbol "UIWindowArr", "")
@@ -748,6 +755,9 @@ SaveTableItemInfo(index) {
     IniWrite(SavedInfo[10], MacroFile, IniSection, symbol "StartTipSoundArr")
     IniWrite(SavedInfo[11], MacroFile, IniSection, symbol "EndTipSoundArr")
 
+    GifPathArrStr := SavedInfo.Has(16) ? SavedInfo[16] : ""
+    IniWrite(GifPathArrStr, MacroFile, IniSection, symbol "GifPathArr")
+
     if (symbol == "UI") {
         UIWindowArrStr := SavedInfo.Has(12) ? SavedInfo[12] : ""
         UIPosYArrStr := SavedInfo.Has(13) ? SavedInfo[13] : ""
@@ -792,6 +802,7 @@ GetSavedTableItemInfo(index) {
     TimingSerialArrStr := ""
     StartTipSoundArrStr := ""
     EndTipSoundArrStr := ""
+    GifPathArrStr := ""
 
     UIWindowArrStr := ""
     UIPosYArrStr := ""
@@ -814,6 +825,9 @@ GetSavedTableItemInfo(index) {
         StartTipSoundArrStr .= tableItem.StartTipSoundArr[A_Index]
         EndTipSoundArrStr .= tableItem.EndTipSoundArr[A_Index]
 
+        GifPathArrValue := tableItem.HasProp("GifPathArr") && tableItem.GifPathArr.Has(A_Index) ? tableItem.GifPathArr[A_Index] : ""
+        GifPathArrStr .= GifPathArrValue
+
         UIWindowArrValue := tableItem.UIWindowArr.Has(A_Index) ? tableItem.UIWindowArr[A_Index] : ""
         UIPosYArrValue := tableItem.UIPosYArr.Has(A_Index) ? tableItem.UIPosYArr[A_Index] : ""
         UIBtnWidthArrValue := tableItem.UIBtnWidthArr.Has(A_Index) ? tableItem.UIBtnWidthArr[A_Index] : ""
@@ -835,6 +849,7 @@ GetSavedTableItemInfo(index) {
             TimingSerialArrStr .= "π"
             StartTipSoundArrStr .= "π"
             EndTipSoundArrStr .= "π"
+            GifPathArrStr .= "π"
             UIWindowArrStr .= "π"
             UIPosYArrStr .= "π"
             UIBtnWidthArrStr .= "π"
@@ -844,7 +859,7 @@ GetSavedTableItemInfo(index) {
 
     return [TKArrStr, ModeArrStr, HoldTimeArrStr, ForbidArrStr, RemarkArrStr,
         LoopCountArrStr, TriggerTypeArrStr, SerialArrStr, TimingSerialArrStr, StartTipSoundArrStr, EndTipSoundArrStr,
-        UIWindowArrStr, UIPosYArrStr, UIBtnWidthArrStr, UIBtnHeightArrStr]
+        UIWindowArrStr, UIPosYArrStr, UIBtnWidthArrStr, UIBtnHeightArrStr, GifPathArrStr]
 }
 
 ;Table信息相关

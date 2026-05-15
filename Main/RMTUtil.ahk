@@ -133,6 +133,9 @@ SwapTableContent(tableItem, indexA, indexB) {
     SwapArrValue(tableItem.MacroArr, indexA, indexB)
     SwapArrValue(tableItem.LoopCountArr, indexA, indexB)
     SwapArrValue(tableItem.ForbidArr, indexA, indexB)
+    if (tableItem.HasProp("GifPathArr")) {
+        SwapArrValue(tableItem.GifPathArr, indexA, indexB)
+    }
 }
 
 SwapArrValue(Arr, indexA, indexB, valueType := 1) {
