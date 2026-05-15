@@ -711,6 +711,7 @@ class TextOpsData {
         this.ArgsName := ","        ;参数变量名或文本
         this.Search := "" ; 查找文本
         this.Replace := "" ; 替换文本
+        this.MatchType := "普通文本"
         this.SaveType := "变量"     ;保存类型  变量或数组
         this.SaveName := "Data"     ;保存的变量名或数组名
     }

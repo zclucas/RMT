@@ -36,6 +36,10 @@ class TextOpsGui {
                 GetLang("内容分割"),
                 GetLang("定长分割"),
             ],
+            GetLang("文本替换"), [
+                GetLang("普通文本"),
+                GetLang("正则匹配"),
+            ],
             GetLang("文本拼接"), [
                 GetLang("拼接文本"),
             ])
@@ -227,7 +231,7 @@ class TextOpsGui {
             }
         }
 
-        ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics || IsConcat
+        ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics || IsConcat || IsReplace
         ShowArgsName := IsSplit || IsConcat
         this.ArgsTypeConTip.Enabled := ShowArgsType
         this.ArgsTypeCon.Enabled := ShowArgsType
@@ -313,8 +317,8 @@ class TextOpsGui {
 
     CheckIfValid() {
         if (this.TypeCon.Text == GetLang("文本替换")) {
-            if (this.SearchCon.Text == "" || this.ReplaceCon.Text == "") {
-                MsgBox(GetLang("搜索文本和替换文本不能为空"))
+            if (this.SearchCon.Text == "") {
+                MsgBox(GetLang("搜索文本不能为空"))
                 return false
             }
         }
@@ -369,6 +373,7 @@ class TextOpsGui {
         this.Data.ArgsName := ArgsName
         this.Data.Search := GetLangKey(this.SearchCon.Text)
         this.Data.Replace := GetLangKey(this.ReplaceCon.Text)
+        this.Data.MatchType := GetLangKey(this.ArgsTypeCon.Text)
         this.Data.SaveType := GetLangKey(this.SaveTypeCon.Text)
         this.Data.SaveName := GetVarName(this.SaveNameCon.Text)
 
