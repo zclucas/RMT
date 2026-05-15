@@ -29,7 +29,8 @@ SendKeyWrapper(KeyArrStr, holdTime, tableItem, index, keyType, Action) {
     }
 
     if (keyType == 2 || keyType == 3) {     ;松开-点击
-        for key in KeyArr {
+        loop KeyArr.Length {
+            key := KeyArr[KeyArr.Length - A_Index + 1]
             RealAction := Action
             if (BrightKeyMap.Has(key) || OnlyDownKeyMap.Has(key))
                 continue

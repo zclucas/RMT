@@ -60,9 +60,8 @@ class RingBuffer {
     ; Push: [Type][ID][hEvent (optional)][Len][Payload]
     Push(type, id, str := "", hEvent := 0) {
         len := (StrLen(str) + 1) * 2
-        ; if hEvent is provided, we need 8 extra bytes
-        headerSize := hEvent ? 20 : 12 ; 4 type + 4 ID + (8 hEvent) + 4 len
-        total := headerSize + len
+        headerSize := 20 ; Fixed header: 4 type + 4 ID + 8 hEvent + 4 len
+        total := (headerSize + len + 7) & ~7 ; 8-byte aligned
 
         head := this.GetHead()
         tail := this.GetTail()
@@ -90,14 +89,9 @@ class RingBuffer {
 
         NumPut("UInt", type, this.bufPtr, pos)
         NumPut("UInt", id, this.bufPtr, pos + 4)
-        if (hEvent) {
-            NumPut("Int64", hEvent, this.bufPtr, pos + 8)
-            NumPut("UInt", len, this.bufPtr, pos + 16)
-            StrPut(str, this.bufPtr + pos + 20)
-        } else {
-            NumPut("UInt", len, this.bufPtr, pos + 8)
-            StrPut(str, this.bufPtr + pos + 12)
-        }
+        NumPut("Int64", hEvent, this.bufPtr, pos + 8)
+        NumPut("UInt", len, this.bufPtr, pos + 16)
+        StrPut(str, this.bufPtr + pos + 20)
 
         this.SetHead(head + total)
         return true
@@ -121,26 +115,14 @@ class RingBuffer {
 
         type := NumGet(this.bufPtr, pos, "UInt")
         id := NumGet(this.bufPtr, pos + 4, "UInt")
-
-        ; We need to know if the message HAS an hEvent.
-        ; For now, let's assume type TASK has hEvent, others don't.
-        ; Or we can add a flag to the type.
-        ; Let's assume hEvent is present if the caller expects it (passed by reference).
-        ; Actually, it's better to store a flag or use the 'type' field.
-        ; For RMT: TASK (1) has hEvent, others don't.
-
-        if (type == 1) { ; MsgType.TASK
-            hEvent := NumGet(this.bufPtr, pos + 8, "Int64")
-            len := NumGet(this.bufPtr, pos + 16, "UInt")
-            str := StrGet(this.bufPtr + pos + 20, len // 2)
-            this.SetTail(tail + 20 + len)
-        } else {
-            hEvent := 0
-            len := NumGet(this.bufPtr, pos + 8, "UInt")
-            str := StrGet(this.bufPtr + pos + 12, len // 2)
-            this.SetTail(tail + 12 + len)
-        }
-
+        hEvent := NumGet(this.bufPtr, pos + 8, "Int64")
+        len := NumGet(this.bufPtr, pos + 16, "UInt")
+        
+        ; Read string, stopping at first null terminator
+        str := StrGet(this.bufPtr + pos + 20)
+        
+        total := (20 + len + 7) & ~7
+        this.SetTail(tail + total)
         return true
     }
 }

@@ -143,9 +143,4 @@ OnControlMessage(cmd) {
 OnMessage(WM_STOP_MACRO, OnWorkStopMacro)
 OnMessage(WM_CLEAR_WORK, OnExit)
 
-myTitle := "RMTWork" workIndex
-mygui := Gui("+ToolWindow")          ; 创建 GUI，无标题栏
-mygui.Title := myTitle               ; 设置窗口标题（这才是 WinGetTitle 能读到的）
-mygui.Show("Hide")                   ; 隐藏窗口
-global myHwnd := mygui.Hwnd
 MsgPostHandler(WM_LOAD_WORK, workIndex, A_ScriptHwnd)
