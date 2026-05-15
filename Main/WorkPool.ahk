@@ -133,11 +133,11 @@ class WorkPool {
         rxName := "RMT_RX_" idx
         evtName := "RMT_EVT_" idx
 
-        ; Allocate capacity + 128 for headers
-        this.shmTx[idx] := SharedMemory(txName, 1048576 + 128)
+        ; Allocate capacity + 192 for headers
+        this.shmTx[idx] := SharedMemory(txName, 1048576 + 192)
         this.tx[idx] := RingBuffer(this.shmTx[idx].ptr, 1048576)
         
-        this.shmRx[idx] := SharedMemory(rxName, 1048576 + 128)
+        this.shmRx[idx] := SharedMemory(rxName, 1048576 + 192)
         this.rx[idx] := RingBuffer(this.shmRx[idx].ptr, 1048576)
         
         this.evt[idx] := CreateEvent(evtName)

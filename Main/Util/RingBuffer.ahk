@@ -1,9 +1,10 @@
 #Requires AutoHotkey v2.0
 ; RingBuffer for Single Producer / Single Consumer
 ; Layout:
-; offset 0:  head (uint)
-; offset 64: tail (uint)
-; offset 128: buf
+; offset 0:   head (uint)
+; offset 64:  tail (uint)
+; offset 128: notifyFlag (int)
+; offset 192: buf (data area)
 class RingBuffer {
     __New(ptr, cap) {
         if (cap & (cap - 1))
@@ -12,7 +13,8 @@ class RingBuffer {
         this.basePtr := ptr
         this.headPtr := ptr
         this.tailPtr := ptr + 64
-        this.bufPtr := ptr + 128
+        this.notifyPtr := ptr + 128
+        this.bufPtr := ptr + 192
         this.cap := cap
         this.mask := cap - 1
     }
@@ -23,8 +25,8 @@ class RingBuffer {
     GetTail() => NumGet(this.tailPtr, 0, "UInt")
     SetTail(v) => NumPut("UInt", v, this.tailPtr)
 
-    GetNotifyFlag() => NumGet(this.basePtr, 32, "Int")
-    SetNotifyFlag(v) => NumPut("Int", v, this.basePtr, 32)
+    GetNotifyFlag() => NumGet(this.notifyPtr, 0, "Int")
+    SetNotifyFlag(v) => NumPut("Int", v, this.notifyPtr, 0)
 
     ExchangeNotifyFlag(v) {
         static pXchg := 0
@@ -50,14 +52,14 @@ class RingBuffer {
         }
 
         return DllCall(pXchg
-            , "ptr", this.basePtr + 32
+            , "ptr", this.notifyPtr
             , "int", v
             , "int")
     }
 
     IsEmpty() => this.GetHead() == this.GetTail()
 
-    ; Push: [Type][ID][hEvent (optional)][Len][Payload]
+    ; Push: [Type][ID][hEvent][Len][Payload]
     Push(type, id, str := "", hEvent := 0) {
         len := (StrLen(str) + 1) * 2
         headerSize := 20 ; Fixed header: 4 type + 4 ID + 8 hEvent + 4 len
@@ -117,10 +119,10 @@ class RingBuffer {
         id := NumGet(this.bufPtr, pos + 4, "UInt")
         hEvent := NumGet(this.bufPtr, pos + 8, "Int64")
         len := NumGet(this.bufPtr, pos + 16, "UInt")
-        
+
         ; Read string, stopping at first null terminator
         str := StrGet(this.bufPtr + pos + 20)
-        
+
         total := (20 + len + 7) & ~7
         this.SetTail(tail + total)
         return true
