@@ -454,6 +454,8 @@ class WorkPool {
                     InsertGlobalArray(args[1], args[2], args[3], args[4], args[5])
                 case "RemoveAtArray":
                     RemoveAtGlobalArray(args[1], args[2], args[3])
+                case "Error":
+                    MyErrorMsgBoxGui.ShowGui(args[1])
             }
         } catch as e {
             ; JSON parse error or invalid event

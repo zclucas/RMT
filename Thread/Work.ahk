@@ -7,14 +7,11 @@
 #Include "..\Main\Util\SharedMemory.ahk"
 #Include "..\Main\Util\RingBuffer.ahk"
 #Include "..\Main\Util\JsonUtil.ahk"
-#Include "..\Main\Util\ErrorHandler.ahk"
 #Include WorkUtil.ahk
 #SingleInstance Force
 DetectHiddenWindows true
 Persistent
 #NoTrayIcon
-
-OnError(ErrHandler)
 
 class MsgType {
     static TASK := 1
@@ -105,14 +102,47 @@ ExecTask(cmd) {
             TriggerMacro(paramArr[2], paramArr[3])
             return 1
         }
-    } catch {
-        ; fallback to old string execution if any
+    } catch as e {
+        if (IsSet(MsgSendHandler))
+            MsgSendHandler("Error", GetFullErrorInfo(e))
     }
     
     if (IsSet(MyExcuteRMTCMDAction)) {
         try return MyExcuteRMTCMDAction(cmd)
+        catch as e {
+            if (IsSet(MsgSendHandler))
+                MsgSendHandler("Error", GetFullErrorInfo(e))
+        }
     }
     return 1
+}
+
+GetFullErrorInfo(exception) {
+    what := ""
+    msg := ""
+    extra := ""
+    stack := ""
+    fullMsg := ""
+    
+    if (IsObject(exception)) {
+        try what := exception.What
+        try msg := exception.Message
+        try extra := exception.Extra
+        try stack := exception.Stack
+    } else {
+        msg := "" . exception
+    }
+    
+    if (what != "")
+        fullMsg := what
+    if (msg != "")
+        fullMsg := fullMsg (fullMsg ? " | " : "") . msg
+    if (extra != "")
+        fullMsg := fullMsg "`nSpecifically: " extra
+    if (stack != "")
+        fullMsg := fullMsg "`n" stack
+    
+    return fullMsg
 }
 
 OnControlMessage(cmd) {

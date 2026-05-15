@@ -22,6 +22,7 @@
 #Include ..\Gui\FrontInfoGui.ahk
 #Include ..\Gui\CMDTipSettingGui.ahk
 #Include ..\Gui\CustomMsgBoxGui.ahk
+#Include ..\Gui\ErrorMsgBoxGui.ahk
 #Include ..\Gui\CustomInputGui.ahk
 #Include ..\Gui\InputBtnGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
@@ -69,6 +70,7 @@ global MySlider := VerticalSlider()
 global MyTargetGui := TargetGui()
 global MyColorPanel := ColorPanelGui()
 global MyMsgboxGui := CustomMsgBoxGui()
+global MyErrorMsgBoxGui := ErrorMsgBoxGui()
 global MyInputGui := CustomInputGui()
 global MyInputBtnGui := InputBtnGui()
 global MyCMDTipSettingGui := CMDTipSettingGui()

@@ -29,9 +29,26 @@ _HandleError(exception) {
 
     ; DLL加载失败 —— 静默
     if (RegExMatch(fullInfo, "Failed to load DLL.") || (msg && RegExMatch(msg, "Failed to load DLL."))){
-        MsgBox("DLL加载失败,检查DLL是否存在并解锁：" extra "`n堆栈信息：`n" stack)
+        _ShowError("DLL加载失败,检查DLL是否存在并解锁：" extra, stack)
         return true
     }
 
     return false
+}
+
+_ShowError(msg, stack := "") {
+    if (IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker) {
+        if (IsSet(MsgSendHandler)) {
+            fullMsg := msg
+            if (stack != "")
+                fullMsg .= "`n堆栈信息：`n" stack
+            MsgSendHandler("Error", fullMsg)
+            return
+        }
+    }
+    
+    if (stack != "")
+        msgbox(msg "`n堆栈信息：`n" stack)
+    else
+        msgbox(msg)
 }
