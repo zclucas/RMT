@@ -53,16 +53,10 @@ class Future {
             if (A_TickCount - start > timeout)
                 throw Error("Future timeout")
             
-            ; If the event is signaled but PollResult hasn't run yet, 
-            ; we can manually trigger a PollResult for faster response.
-            if (this.IsReady()) {
-                ; We could call this.parent.PollResult() here if we had a reference
-                ; For now, Sleep -1 will let the timer fire very quickly.
-                Sleep -1
-                if (this.done)
-                    break
-            }
-            Sleep -1
+            ; MsgWaitForMultipleObjects: Wait for the future event OR any UI message (like WM_RESULT_NOTIFY)
+            ; This is better than Sleep -1 because it actually waits for an OS signal.
+            DllCall("MsgWaitForMultipleObjects", "uint", 1, "ptr*", this.hEvent, "int", false, "uint", 100, "uint", 0xFF)
+            Sleep -1 ; Ensure AHK message queue is processed
         }
         return this.result
     }
@@ -99,13 +93,13 @@ class WorkPool {
         this.workerIndex := 0
         this.mainPID := DllCall("GetCurrentProcessId")
         this.taskCounter := 0
+        this.isDispatching := false
         
         OnMessage(WM_LOAD_WORK, ObjBindMethod(this, "OnWorkerReady"))
         OnMessage(WM_STOP_MACRO, ObjBindMethod(this, "OnStopMacro"))
+        OnMessage(WM_RESULT_NOTIFY, ObjBindMethod(this, "PollResult"))
 
-        SetTimer(ObjBindMethod(this, "Dispatch"), 10)
         SetTimer(ObjBindMethod(this, "CheckFutures"), 1000)
-        SetTimer(ObjBindMethod(this, "PollResult"), 1)  ; Hybrid polling
         
         if (this.isDynamic) {
             this.shrinkTimerFunc := ObjBindMethod(this, "IdleShrinkCheck")
@@ -173,55 +167,59 @@ class WorkPool {
         this.futureCreateTime.Set(id, A_TickCount)
         this.queue.Push({ id: id, cmd: cmd, hEvent: fut.hEvent })
 
+        this.Dispatch()
         return fut
     }
 
     Dispatch() {
-        while (this.queue.Size() > 0 && this.pool.Length > 0) {
-            idx := this.pool.Pop()
+        if (this.isDispatching)
+            return
+        this.isDispatching := true
 
-            if (!this.IsAlive(idx)) {
-                this.CleanupWorker(idx)
-                this.CreateWorker()
-                continue
-            }
+        try {
+            while (this.queue.Size() > 0 && this.pool.Length > 0) {
+                idx := this.pool.Pop()
 
-            task := this.queue.Pop()
-            
-            ; Duplicate handle for worker
-            hTargetEvent := 0
-            if (!DllCall("DuplicateHandle"
-                , "ptr", DllCall("GetCurrentProcess")
-                , "ptr", task.hEvent
-                , "ptr", this.workerProcs[idx]
-                , "ptr*", &hTargetEvent
-                , "uint", 0
-                , "int", false
-                , "uint", 2)) ; DUPLICATE_SAME_ACCESS
-            {
-                ; Fallback if duplication fails
-                hTargetEvent := 0
-            }
-
-            if (!this.tx[idx].Push(MsgType.TASK, task.id, task.cmd, hTargetEvent)) {
-                ; Buffer full
-                if (hTargetEvent) {
-                    ; If it failed to push, we should probably close the duplicated handle in the worker
-                    ; but since we can't easily, we'll just let it leak or retry.
-                    ; Better: only duplicate IF push is likely to succeed.
+                if (!this.IsAlive(idx)) {
+                    this.CleanupWorker(idx)
+                    this.CreateWorker()
+                    continue
                 }
-                this.queue.queue.InsertAt(1, task)
-                this.pool.Push(idx)
-                break
-            }
-            SetEvent(this.evt[idx])
-            
-            if (this.workerIdleTime.Has(idx))
-                this.workerIdleTime.Delete(idx)
-        }
 
-        if (this.isDynamic && this.queue.Size() > 0 && (this.active.Count + this.pending.Count) < this.dynamicMaxLimit) {
-            this.CreateWorker()
+                task := this.queue.Pop()
+                
+                ; Duplicate handle for worker
+                hTargetEvent := 0
+                DllCall("DuplicateHandle"
+                    , "ptr", DllCall("GetCurrentProcess")
+                    , "ptr", task.hEvent
+                    , "ptr", this.workerProcs[idx]
+                    , "ptr*", &hTargetEvent
+                    , "uint", 0
+                    , "int", false
+                    , "uint", 2) ; DUPLICATE_SAME_ACCESS
+
+                if (!this.tx[idx].Push(MsgType.TASK, task.id, task.cmd, hTargetEvent)) {
+                    ; Buffer full
+                    this.queue.queue.InsertAt(1, task)
+                    this.pool.Push(idx)
+                    break
+                }
+                
+                ; Edge-triggered notification with atomic flag
+                if (this.tx[idx].ExchangeNotifyFlag(1) == 0) {
+                    this.PostMessage(WM_WORK_NOTIFY, idx, 0, 0)
+                }
+                
+                if (this.workerIdleTime.Has(idx))
+                    this.workerIdleTime.Delete(idx)
+            }
+
+            if (this.isDynamic && this.queue.Size() > 0 && (this.active.Count + this.pending.Count) < this.dynamicMaxLimit) {
+                this.CreateWorker()
+            }
+        } finally {
+            this.isDispatching := false
         }
     }
     
@@ -233,42 +231,63 @@ class WorkPool {
         for idx in this.active {
             if this.tx.Has(idx) {
                 this.tx[idx].Push(MsgType.EVENT, 0, payload)
-                SetEvent(this.evt[idx])
+                if (this.tx[idx].ExchangeNotifyFlag(1) == 0) {
+                    this.PostMessage(WM_WORK_NOTIFY, idx)
+                }
             }
         }
     }
 
-    PollResult() {
-        for idx, rb in this.rx {
-            ; Hybrid Polling: Non-blocking pop all available results
-            while (rb.Pop(&type, &id, &result)) {
-                switch type {
-                    case MsgType.RESULT:
-                        if (this.futures.Has(id)) {
-                            fut := this.futures[id]
-                            fut.SetResult(result)
-                            
-                            if (fut.tableIndex > 0 && fut.itemIndex > 0) {
-                                tableItem := MySoftData.TableInfo[fut.tableIndex]
-                                if (tableItem.IsWorkIndexArr.Length >= fut.itemIndex) {
-                                    tableItem.IsWorkIndexArr[fut.itemIndex] := 0
-                                }
-
-                                itemState := tableItem.KilledArr.Length >= fut.itemIndex && tableItem.KilledArr[fut.itemIndex] ? 3 : 0
-                                SetTableItemState(fut.tableIndex, fut.itemIndex, itemState)
-                            }
-                            
-                            this.futures.Delete(id)
-                            this.futureCreateTime.Delete(id)
-                        }
-                        this.pool.Push(idx)
-                        this.workerIdleTime.Set(idx, A_TickCount)
-                    case MsgType.EVENT:
-                        this.OnWorkerEvent(idx, result)
-                    case MsgType.CONTROL:
-                        ; reserved for control messages from worker
-                }
+    PollResult(wParam := 0, lParam := 0, msg := 0, hwnd := 0) {
+        ; If triggered by OnMessage, wParam is the worker index
+        if (wParam > 0) {
+            this._ProcessWorkerBuffer(wParam)
+        } else {
+            for idx, rb in this.rx {
+                this._ProcessWorkerBuffer(idx)
             }
+        }
+    }
+
+    _ProcessWorkerBuffer(idx) {
+        if (!this.rx.Has(idx))
+            return
+
+        rb := this.rx[idx]
+        rb.SetNotifyFlag(0) ; Clear notification flag
+        
+        while (rb.Pop(&type, &id, &result)) {
+            switch type {
+                case MsgType.RESULT:
+                    if (this.futures.Has(id)) {
+                        fut := this.futures[id]
+                        fut.SetResult(result)
+                        
+                        if (fut.tableIndex > 0 && fut.itemIndex > 0) {
+                            tableItem := MySoftData.TableInfo[fut.tableIndex]
+                            if (tableItem.IsWorkIndexArr.Length >= fut.itemIndex) {
+                                tableItem.IsWorkIndexArr[fut.itemIndex] := 0
+                            }
+
+                            itemState := tableItem.KilledArr.Length >= fut.itemIndex && tableItem.KilledArr[fut.itemIndex] ? 3 : 0
+                            SetTableItemState(fut.tableIndex, fut.itemIndex, itemState)
+                        }
+                        
+                        this.futures.Delete(id)
+                        this.futureCreateTime.Delete(id)
+                    }
+                    this.pool.Push(idx)
+                    this.workerIdleTime.Set(idx, A_TickCount)
+                    this.Dispatch() ; Immediately try to dispatch new tasks to this worker
+                case MsgType.EVENT:
+                    this.OnWorkerEvent(idx, result)
+            }
+        }
+
+        ; Re-check for level-triggered notification (if data arrived after while loop)
+        if (!rb.IsEmpty()) {
+            if (rb.ExchangeNotifyFlag(1) == 0)
+                this.PollResult(idx) ; Process again or re-trigger via message
         }
     }
 
@@ -312,6 +331,8 @@ class WorkPool {
         this.active.Set(idx, workerHwnd)
         this.pool.Push(idx)
         this.workerIdleTime.Set(idx, A_TickCount)
+
+        this.Dispatch()
     }
 
     CleanupWorker(idx) {
@@ -356,7 +377,7 @@ class WorkPool {
             ResetEvent(h) ; Optional
     }
 
-    PostMessage(type, idx, wParam, lParam) {
+    PostMessage(type, idx, wParam := 0, lParam := 0) {
         if (this.active.Has(idx)) {
             hwnd := this.active[idx]
             try {

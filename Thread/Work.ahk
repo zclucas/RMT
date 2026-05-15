@@ -75,26 +75,46 @@ global tx := RingBuffer(shmTx.ptr, 1048576)
 global rx := RingBuffer(shmRx.ptr, 1048576)
 global hEvent := OpenEvent(evtName)
 
-SetTimer(ProcessQueue, 1)
+OnMessage(WM_WORK_NOTIFY, OnWorkNotify)
+
+OnWorkNotify(wParam, lParam, msg, hwnd) {
+    ProcessQueue()
+}
+
 ProcessQueue() {
-    global tx, rx, hEvent
-    if (DllCall("WaitForSingleObject", "ptr", hEvent, "uint", 0) == 0) {
-        while (tx.Pop(&type, &id, &cmd, &hTaskEvent)) {
-            switch type {
-                case MsgType.TASK:
-                    result := ExecTask(cmd)
-                    rx.Push(MsgType.RESULT, id, result)
-                    if (hTaskEvent) {
-                        SetEvent(hTaskEvent)
-                        CloseHandle(hTaskEvent)
-                    }
-                case MsgType.CONTROL:
-                    OnControlMessage(cmd)
-                case MsgType.EVENT:
-                    OnEventMessage(cmd)
-            }
+    global tx, rx, hEvent, workIndex
+    
+    tx.SetNotifyFlag(0)
+    
+    maxBatch := 10
+    processed := 0
+    
+    while (processed < maxBatch && tx.Pop(&type, &id, &cmd, &hTaskEvent)) {
+        processed++
+        switch type {
+            case MsgType.TASK:
+                result := ExecTask(cmd)
+                rx.Push(MsgType.RESULT, id, result)
+                
+                ; Notify parent
+                if (rx.ExchangeNotifyFlag(1) == 0)
+                    MsgPostHandler(WM_RESULT_NOTIFY, workIndex, 0)
+
+                if (hTaskEvent) {
+                    SetEvent(hTaskEvent)
+                    CloseHandle(hTaskEvent)
+                }
+            case MsgType.CONTROL:
+                OnControlMessage(cmd)
+            case MsgType.EVENT:
+                OnEventMessage(cmd)
         }
-        ResetEvent(hEvent)
+    }
+
+    ; Level-triggered re-check
+    if (!tx.IsEmpty()) {
+        if (tx.ExchangeNotifyFlag(1) == 0)
+            PostMessage(WM_WORK_NOTIFY, 0, 0, , "ahk_id " A_ScriptHwnd)
     }
 }
 

@@ -17,17 +17,13 @@
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\PluginUtil.ahk
-global WM_COPYDATA := 0x4a ;传递字符串，系统信息
 
 global WM_LOAD_WORK := 0x500  ;资源加载完成事件
-global WM_RELEASE_WORK := 0x501  ;资源释放事件
 global WM_CLEAR_WORK := 0x502  ;资源释放事件
 global WM_TR_MACRO := 0x503 ;触发宏事件
 global WM_STOP_MACRO := 0x504 ;停止宏事件
-global WM_SET_VARI := 0x505    ;设置变量
-global WM_DEL_VARI := 0x506    ;删除变量
-global WM_RECEIVE_INFO := 0x507    ;主进程接受到子进程信息，防止信息丢失
-global WM_WORK_DONE := 0x508       ;工作器完成任务回调
+global WM_WORK_NOTIFY := 0x509     ;工作器任務通知
+global WM_RESULT_NOTIFY := 0x50A   ;結果就緒通知
 
 ; 功能函数
 GetFloatTime(oriTime, floatValue) {
@@ -1248,30 +1244,30 @@ AreKeysPressed(keyCombo) {
     for mod in modifiers {
         switch mod {
             case "^": if (!GetKeyState("Ctrl"))
-                return false
+                    return false
             case "<^": if !GetKeyState("LCtrl")
-                return false
+                    return false
             case ">^": if !GetKeyState("RCtrl")
-                return false
+                    return false
 
             case "!": if !(GetKeyState("Alt"))
-                return false
+                    return false
             case "<!": if !GetKeyState("LAlt")
-                return false
+                    return false
             case ">!": if !GetKeyState("RAlt")
-                return false
+                    return false
             case "+": if !(GetKeyState("Shift"))
-                return false
+                    return false
             case "<+": if !GetKeyState("LShift")
-                return false
+                    return false
             case ">+": if !GetKeyState("RShift")
-                return false
+                    return false
             case "#": if (!GetKeyState("LWin") && !GetKeyState("RWin"))
-                return false
+                    return false
             case "<#": if !GetKeyState("LWin")
-                return false
+                    return false
             case ">#": if !GetKeyState("RWin")
-                return false
+                    return false
 
             default: return false  ; 未知修饰键
         }
@@ -1859,7 +1855,7 @@ GetBrightness() {
 
 GetSystemVarArr() {
     return [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("句柄ID"), GetLang("当前鼠标颜色"), GetLang("当前鼠标坐标X"),
-    GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间"), GetLang("当前时间(秒)"), GetLang("当前秒")]
+        GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间"), GetLang("当前时间(秒)"), GetLang("当前秒")]
 }
 
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {

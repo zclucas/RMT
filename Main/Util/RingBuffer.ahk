@@ -1,5 +1,4 @@
 #Requires AutoHotkey v2.0
-
 ; RingBuffer for Single Producer / Single Consumer
 ; Layout:
 ; offset 0:  head (uint)
@@ -23,6 +22,40 @@ class RingBuffer {
 
     GetTail() => NumGet(this.tailPtr, 0, "UInt")
     SetTail(v) => NumPut("UInt", v, this.tailPtr)
+
+    GetNotifyFlag() => NumGet(this.basePtr, 32, "Int")
+    SetNotifyFlag(v) => NumPut("Int", v, this.basePtr, 32)
+
+    ExchangeNotifyFlag(v) {
+        static pXchg := 0
+
+        if (!pXchg) {
+            mcodeHex := A_PtrSize == 8
+                ? "89D0F08701C3"
+                : "8B4424088B542404F08702C3"
+
+            size := StrLen(mcodeHex) // 2
+
+            pXchg := DllCall("Kernel32\VirtualAlloc"
+                , "ptr", 0
+                , "ptr", size
+                , "uint", 0x1000
+                , "uint", 0x40
+                , "ptr")
+
+            Loop size {
+                byte := "0x" . SubStr(mcodeHex, (A_Index - 1) * 2 + 1, 2)
+                NumPut("UChar", Integer(byte), pXchg + A_Index - 1)
+            }
+        }
+
+        return DllCall(pXchg
+            , "ptr", this.basePtr + 32
+            , "int", v
+            , "int")
+    }
+
+    IsEmpty() => this.GetHead() == this.GetTail()
 
     ; Push: [Type][ID][hEvent (optional)][Len][Payload]
     Push(type, id, str := "", hEvent := 0) {
