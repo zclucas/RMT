@@ -234,7 +234,7 @@ class UIMacroGui {
                     posY := Integer(tableItem.UIPosYArr[macroIndex])
 
                 if (frontInfo != "") {
-                    paramStr := GetParamsWinInfoStr(frontInfo, "UIMacro_" macroIndex)
+                    paramStr := GetParamsWinInfoStr(frontInfo)
                     hwndList := []
                     if (paramStr != "") {
                         hwndList := WinGetList(paramStr)

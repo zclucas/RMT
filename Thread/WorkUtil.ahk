@@ -3,7 +3,7 @@
 ;初始化数据
 {
     InitWorkFilePath() {
-        global VBSPath := A_WorkingDir "\..\VBS\PlayAudio.vbs"
+        global VBSPath := A_WorkingDir "\..\MinTool\PlayAudio.vbs"
         global StartTipAudio := A_WorkingDir "\..\Audio\Start.wav"
         global EndTipAudio := A_WorkingDir "\..\Audio\End.wav"
         global ViGEmDllPath := A_WorkingDir "\..\Plugins\ViGEm\ViGEmWrapper.dll"
@@ -28,6 +28,7 @@
         global InputFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\InputFile.ini"
         global FileIOFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\FileIOFile.ini"
         global WindowManageFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\WindowManageFile.ini"
+        global KeyCheckFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\KeyCheckFile.ini"
         global IniSection := "UserSettings"
 
         ;利用机制把路径中的\..转换掉
@@ -47,11 +48,12 @@
     }
 
     WorkOpenCVLoadDll() {
-        OpenCvPath := A_ScriptDir "\..\Plugins\OpenCV\RMT_OpenCV.dll"
+        ; 根据进程位数自动选择 x86 或 x64
+        archDir := (A_PtrSize = 4) ? "x86" : "x64"
+        dllDir := A_ScriptDir "\..\Plugins\OpenCV\" archDir
+        OpenCvPath := dllDir "\RMT_OpenCV.dll"
         IBPath := A_ScriptDir "\..\Plugins\IbInputSimulator.dll"
 
-        ; 构建包含 DLL 文件的目录路径
-        dllDir := A_ScriptDir "\..\Plugins\OpenCV"
         ; 使用 SetDllDirectory 将 dllDir 添加到 DLL 搜索路径中
         DllCall("SetDllDirectory", "Str", dllDir)
 

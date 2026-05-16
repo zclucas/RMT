@@ -644,6 +644,8 @@ OnItemPasteMacroBtnClick(tableItem, btn, *) {
         tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
         tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
         tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
+        tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
+        tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
     } else {
         tableItem.ColorStateArr.InsertAt(AddIndex, 0)
         tableItem.TKArr.InsertAt(AddIndex, "")
@@ -656,6 +658,8 @@ OnItemPasteMacroBtnClick(tableItem, btn, *) {
         tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
         tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
         tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
+        tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
+        tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
     }
 
     PosY := 1000000

@@ -2,7 +2,7 @@
 InitUI() {
     global MySoftData
     MyGui := Gui()
-    MyGui.Title := "RMTv2.0"
+    MyGui.Title := "RMTv1.2"
     MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
     isValidCollor := RegExMatch(MySoftData.SoftBGColor, "^([0-9A-Fa-f]{6})$")
     BGColor := isValidCollor ? MySoftData.SoftBGColor : "f0f0f0"
@@ -489,26 +489,31 @@ AddSettingUI(index) {
     MySoftData.SoftBGColorCon := con
 
     posY += 40
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("开关选项"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w870 h140", posX + 10, posY), GetLang("开关选项"), tableItem)
     tableItem.AllGroup.Push(con)
-    posY += 30
 
+    posY += 30
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("开机自启"), tableItem)
     MySoftData.BootStartCtrl := con
     MySoftData.BootStartCtrl.Value := MySoftData.IsBootStart
     MySoftData.BootStartCtrl.OnEvent("Click", OnBootStartChanged)
 
-    con := AddTableControl("CheckBox", Format("x{} y{} -Wrap w15", posX + 315, posY), "", tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("管理员启动"), tableItem)
+    MySoftData.AdminStartCtrl := con
+    MySoftData.AdminStartCtrl.Value := MySoftData.IsAdminStart
+    MySoftData.AdminStartCtrl.OnEvent("Click", OnAdminStartChanged)
+
+    con := AddTableControl("CheckBox", Format("x{} y{} -Wrap w15", posX + 635, posY), "", tableItem)
     MySoftData.CMDTipCtrl := con
     MySoftData.CMDTipCtrl.Value := MySoftData.CMDTip
-    con := AddTableControl("Button", Format("x{} y{}", posX + 315 + 15, posY - 5), GetLang("指令显示"), tableItem)
+    con := AddTableControl("Button", Format("x{} y{}", posX +635 + 15, posY - 5), GetLang("指令显示"), tableItem)
     con.OnEvent("Click", (*) => OnEditCMDTipGui())
 
-    con := AddTableControl("Button", Format("x{} y{} w{}", posX + 635, posY - 5, 100), GetLang("录制选项"), tableItem)
+    posY += 40
+    con := AddTableControl("Button", Format("x{} y{} w{}", posX + 25, posY - 5, 100), GetLang("录制选项"), tableItem)
     con.OnEvent("Click", OnClickToolRecordSettingBtn)
 
-    posY += 40
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("无变量提醒"), tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("无变量提醒"), tableItem)
     MySoftData.NoVariableTipCtrl := con
     MySoftData.NoVariableTipCtrl.Value := MySoftData.NoVariableTip
 

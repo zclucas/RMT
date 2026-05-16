@@ -23,6 +23,7 @@
 #Include ..\Gui\FrontInfoGui.ahk
 #Include ..\Gui\CMDTipSettingGui.ahk
 #Include ..\Gui\CustomMsgBoxGui.ahk
+#Include ..\Gui\ErrorMsgBoxGui.ahk
 #Include ..\Gui\CustomInputGui.ahk
 #Include ..\Gui\InputBtnGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
@@ -33,6 +34,15 @@ SetWorkingDir A_ScriptDir
 DetectHiddenWindows true
 Persistent
 A_MaxHotkeysPerInterval := 400
+
+UnblockZoneIdentifier() {
+    try {
+        psCmd := 'Get-ChildItem -Path "' A_ScriptDir '" -Recurse -File | ForEach-Object { try { Unblock-File -Path $_.FullName -ErrorAction Stop } catch {} }'
+        RunWait('powershell.exe -NoProfile -WindowStyle Hidden -Command "' psCmd '"', , "Hide")
+    }
+}
+
+UnblockZoneIdentifier()
 
 global MyJoyMacro := JoyMacro()
 global MyMouseInfo := MouseWinData()
@@ -62,6 +72,7 @@ global MySlider := VerticalSlider()
 global MyTargetGui := TargetGui()
 global MyColorPanel := ColorPanelGui()
 global MyMsgboxGui := CustomMsgBoxGui()
+global MyErrorMsgBoxGui := ErrorMsgBoxGui()
 global MyInputGui := CustomInputGui()
 global MyInputBtnGui := InputBtnGui()
 global MyCMDTipSettingGui := CMDTipSettingGui()

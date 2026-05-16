@@ -160,7 +160,7 @@ class FileIOGui {
             Con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("结果："))
             this.ResultConArr.Push(Con)
 
-            PosX += 50
+            PosX += 80
             this.SaveTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 5, 100), GetLangArr(["变量",
                 "数组"]))
             this.SaveTypeCon.Enabled := false

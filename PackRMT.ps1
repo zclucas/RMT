@@ -1,6 +1,6 @@
 ﻿# RMT 自动打包脚本
-# 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work1.exe
-
+# 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
+# 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 $Host.UI.RawUI.WindowTitle = "RMT 打包工具"
 $ErrorActionPreference = "Stop"
 
@@ -86,9 +86,9 @@ function Ask-Choice {
 function Find-Exe {
     param([string]$Name, [string[]]$Paths)
     foreach ($path in $Paths) {
-        if (Test-Path $path) { Write-Log "  ✓ 找到 $Name" "Green"; return $path }
+        if (Test-Path $path) { Write-Log "  [OK] 找到 $Name" "Green"; return $path }
     }
-    Write-Log "  ✗ 未找到 $Name" "Red"
+    Write-Log "  [ERROR] 未找到 $Name" "Red"
     return $null
 }
 
@@ -116,7 +116,7 @@ function Copy-IfExist {
 function Get-Version {
     $uiUtil = Join-Path $PSScriptRoot "Main\UIUtil.ahk"
     if (-not (Test-Path $uiUtil)) {
-        Write-Log "  ✗ 未找到 UIUtil.ahk，无法获取版本号" "Red"
+        Write-Log "  [ERROR] 未找到 UIUtil.ahk，无法获取版本号" "Red"
         return $null
     }
     $content = Get-Content $uiUtil -Raw
@@ -126,7 +126,7 @@ function Get-Version {
         Write-Log "  版本号: v$version" "Gray"
         return $version
     }
-    Write-Log "  ✗ 无法从 UIUtil.ahk 解析版本号" "Red"
+    Write-Log "  [ERROR] 无法从 UIUtil.ahk 解析版本号" "Red"
     return $null
 }
 
@@ -171,19 +171,19 @@ function Compile {
     $process = Start-Process -FilePath $Ahk2exe -ArgumentList $arguments -NoNewWindow -Wait -PassThru
 
     if ($process.ExitCode -ne 0) {
-        Write-Log "  ✗ 进程退出码: $($process.ExitCode)" "Red"
+        Write-Log "  [ERROR] 进程退出码: $($process.ExitCode)" "Red"
         return $false
     }
 
     Start-Sleep -Milliseconds 500
 
     if (-not (Test-Path $OutputExe)) {
-        Write-Log "  ✗ 输出文件不存在" "Red"
+        Write-Log "  [ERROR] 输出文件不存在" "Red"
         return $false
     }
 
     $size = [math]::Round((Get-Item $OutputExe).Length / 1MB, 2)
-    Write-Log "  ✓ $Name 成功 (${size} MB)" "Green"
+    Write-Log "  [OK] $Name 成功 (${size} MB)" "Green"
     return $true
 }
 
@@ -206,9 +206,8 @@ function Pack-HelpDoc {
 
     $OutputFile = Join-Path $PSScriptRoot "index.html"
     if (Test-Path $OutputFile) {
-        $size = [math]::Round((Get-Item $OutputFile).Length / 1024, 1)
         $size = [math]::Round((Get-Item $OutputFile).Length / 1MB, 2)
-        Write-Log "✓ 帮助文档打包成功 (${size} MB)" "Green"
+        Write-Log "[OK] 帮助文档打包成功 (${size} MB)" "Green"
         return $true
     }
     Write-Log "帮助文档打包失败" "Red"
@@ -257,11 +256,11 @@ function New-Release {
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
         }
 
-        # 删除旧 Work*.exe
-        Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
+        # 删除旧 Work.exe
+        Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
 
-        # 编译 Work1.exe
-        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
+        # 编译 Work.exe
+        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$releaseThread\Work.exe" -IconPath $IconPath -Name "Work.exe")) {
             return $false
         }
 
@@ -269,6 +268,10 @@ function New-Release {
         if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base64Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
             return $false
         }
+
+        # 复制 OpenCV DLL (x64)
+        Write-Log "复制 OpenCV DLL (x64)..." "Gray"
+        Copy-OpenCV -ReleaseDir $releaseDir -Arch "x64"
     }
 
     if ($Type -eq "x32" -or $Type -eq "both") {
@@ -293,11 +296,11 @@ function New-Release {
             Write-Log "  已复制: RMT帮助文档.html" "Gray"
         }
 
-        # 删除旧 Work*.exe
-        Remove-OldFiles -Dir $releaseThread -Filter "Work*.exe"
+        # 删除旧 Work.exe
+        Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
 
-        # 编译 Work1.exe (32位)
-        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base32Exe -OutputExe "$releaseThread\Work1.exe" -IconPath $IconPath -Name "Work1.exe")) {
+        # 编译 Work.exe (32位)
+        if (-not (Compile -AhkFile $WorkAhk -BaseExe $Base32Exe -OutputExe "$releaseThread\Work.exe" -IconPath $IconPath -Name "Work.exe")) {
             return $false
         }
 
@@ -305,6 +308,10 @@ function New-Release {
         if (-not (Compile -AhkFile $RmtAhk -BaseExe $Base32Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
             return $false
         }
+
+        # 复制 OpenCV DLL (x86)
+        Write-Log "复制 OpenCV DLL (x86)..." "Gray"
+        Copy-OpenCV -ReleaseDir $releaseDir -Arch "x86"
     }
 
     Write-Section "创建发行包到桌面"
@@ -324,14 +331,14 @@ function New-Release {
     if ($Type -eq "x64" -or $Type -eq "both") {
         $destX64 = Join-Path $versionDir "RMTv${version}_x64"
         New-Item -ItemType Directory -Path $destX64 -Force | Out-Null
-        Write-Log "复制 ReleaseX64 → $destX64 ..." "Gray"
+        Write-Log "复制 ReleaseX64 to $destX64 ..." "Gray"
         Copy-Item -Path "$PSScriptRoot\ReleaseX64\*" -Destination $destX64 -Recurse -Force
     }
 
     if ($Type -eq "x32" -or $Type -eq "both") {
         $destX32 = Join-Path $versionDir "RMTv${version}_x32"
         New-Item -ItemType Directory -Path $destX32 -Force | Out-Null
-        Write-Log "复制 ReleaseX32 → $destX32 ..." "Gray"
+        Write-Log "复制 ReleaseX32 to $destX32 ..." "Gray"
         Copy-Item -Path "$PSScriptRoot\ReleaseX32\*" -Destination $destX32 -Recurse -Force
     }
 
@@ -361,15 +368,34 @@ function New-Release {
     }
 
     Write-Section "发行版创建完成"
-    Write-Log "→ $versionDir\RMTv${version}_x64" "White"
+    Write-Log "to $versionDir\RMTv${version}_x64" "White"
     if ($Type -eq "both") {
-        Write-Log "→ $versionDir\RMTv${version}_x32" "White"
+        Write-Log "to $versionDir\RMTv${version}_x32" "White"
     }
-    Write-Log "→ $rmtReleaseDir\RMTv${version}_x64.zip" "White"
+    Write-Log "to $rmtReleaseDir\RMTv${version}_x64.zip" "White"
     if ($Type -eq "both") {
-        Write-Log "→ $rmtReleaseDir\RMTv${version}_x32.zip" "White"
+        Write-Log "to $rmtReleaseDir\RMTv${version}_x32.zip" "White"
     }
     return $true
+}
+
+function Copy-OpenCV {
+    param([string]$ReleaseDir, [string]$Arch)
+
+    $srcDir = Join-Path $PSScriptRoot "Plugins\OpenCV\$Arch"
+    $dstDir = Join-Path $ReleaseDir "Plugins\OpenCV\$Arch"
+
+    if (-not (Test-Path $srcDir)) {
+        Write-Log "  [ERROR] OpenCV 源目录不存在: $srcDir" "Yellow"
+        return
+    }
+
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+
+    Get-ChildItem $srcDir -File | ForEach-Object {
+        Copy-Item $_.FullName -Destination $dstDir -Force
+        Write-Log "  已复制: OpenCV/$Arch/$($_.Name)" "Gray"
+    }
 }
 
 function Compress-ReleaseZip {
@@ -382,7 +408,7 @@ function Compress-ReleaseZip {
     }
     Compress-Archive -Path "$SourceDir\*" -DestinationPath $ZipPath -CompressionLevel Optimal
     $size = [math]::Round((Get-Item $ZipPath).Length / 1MB, 2)
-    Write-Log "  ✓ $zipName ($size MB)" "Green"
+    Write-Log "  [OK] $zipName ($size MB)" "Green"
 }
 
 # ============================================================
@@ -408,7 +434,7 @@ function Main {
             Write-Log "错误: 找不到 $WorkAhk" "Red"
             Wait-KeyPress; exit 1
         }
-        Write-Log "✓ Work.ahk 存在" "Green"
+        Write-Log "[OK] Work.ahk 存在" "Green"
 
         # 步骤 2: 查找编译工具
         Write-Step 2 "查找编译工具"
@@ -426,12 +452,12 @@ function Main {
 
         # 步骤 4: 清理旧文件
         Write-Step 4 "清理旧文件"
-        Remove-OldFiles -Dir $WorkDir -Filter "Work*.exe"
+        Remove-OldFiles -Dir $WorkDir -Filter "Work.exe"
 
-        # 步骤 5: 编译 Work1.exe
-        Write-Step 5 "编译 Work1.exe"
+        # 步骤 5: 编译 Work.exe
+        Write-Step 5 "编译 Work.exe"
         $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
-        $result = Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$WorkDir\Work1.exe" -IconPath $IconPath -Name "Work1.exe"
+        $result = Compile -AhkFile $WorkAhk -BaseExe $Base64Exe -OutputExe "$WorkDir\Work.exe" -IconPath $IconPath -Name "Work.exe"
         if (-not $result) { Wait-KeyPress; exit 1 }
 
         # 步骤 6: 打包帮助文档

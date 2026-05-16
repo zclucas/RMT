@@ -85,7 +85,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         "数组", OnArray,
         "输入", OnInput,
         "文件读写", OnFileIO,
-        "窗口管理", OnWindowManage
+        "窗口管理", OnWindowManage,
+        "按键检测", OnKeyCheck
     )
 
     cmdArr := SplitMacro(macro)
@@ -143,13 +144,6 @@ OnExVariableWrapper(tableItem, cmdStr, index) {
 OnRunFile(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
-
-    isMp3 := RegExMatch(Data.RunPath, ".mp3$")
-    if (isMp3 && Data.BackPlay) {
-        playAudioCmd := Format('wscript.exe "{}" "{}"', VBSPath, Data.RunPath)
-        Run(playAudioCmd)
-        return
-    }
     processedPath := GetReplaceVarText(tableItem, index, Data.RunPath)
 
     if (Data.RunMode == 1) {
@@ -269,7 +263,8 @@ OnMMPro(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
 
     LastSumTime := 0
-    Data.Count := Data.IsGameView ? data.Count : 1
+    MoveMode := ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : 0
+    Data.Count := MoveMode == 2 ? Data.Count : 1
     loop Data.Count {
         WaitIfPaused(tableItem, index)
 
@@ -287,6 +282,7 @@ OnMMProOnce(tableItem, index, Data) {
     SendMode("Event")
     CoordMode("Mouse", "Screen")
     Speed := 100 - Data.Speed
+    MoveMode := ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : 0
 
     hasPosVarX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosVarX)
     hasPosVarY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosVarY)
@@ -297,9 +293,30 @@ OnMMProOnce(tableItem, index, Data) {
     PosX := GetFloatValue(PosX, MySoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MySoftData.CoordYFloat)
     ClickCount := Data.ActionType == 2 ? 1 : 2
-    if (Data.IsGameView) {
+    if (MoveMode == 2) {
         MOUSEEVENTF_MOVE := 0x0001
-        DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE, "UInt", PosX, "UInt", PosY, "UInt", 0, "UInt", 0)
+        DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE
+            , "Int", PosX, "Int", PosY, "UInt", 0, "UInt", 0)
+    }
+    else if (MoveMode == 1) {
+        IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
+        if (IsHumanMouse && Data.ActionType == 1) {
+            CoordMode("Mouse", "Screen")
+            MouseGetPos(&curX, &curY)
+            hm := HumanMouse.GetInstance()
+            hm.SetParams({
+                IsEnabled: true,
+                Speed: Speed
+            })
+            hm.Move(curX + PosX, curY + PosY)
+        }
+        else if (Data.ActionType == 1) {
+            MouseMove(PosX, PosY, Speed, "R")
+        }
+        else if (Data.ActionType == 2 || Data.ActionType == 3) {
+            SetDefaultMouseSpeed(Speed)
+            Click(Format("{} {} {} Relative"), PosX, PosY, ClickCount)
+        }
     }
     else if (Data.ActionType == 1) {
         IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
@@ -309,31 +326,15 @@ OnMMProOnce(tableItem, index, Data) {
                 IsEnabled: true,
                 Speed: Speed
             })
-
-            if (Data.IsRelative) {
-                MouseGetPos(&curX, &curY)
-                hm.Move(curX + PosX, curY + PosY)
-            }
-            else {
-                hm.Move(PosX, PosY)
-            }
+            hm.Move(PosX, PosY)
         }
         else {
-            if (Data.IsRelative) {
-                MouseMove(PosX, PosY, Speed, "R")
-            }
-            else
-                MouseMove(PosX, PosY, Speed)
+            MouseMove(PosX, PosY, Speed)
         }
     }
     else if (Data.ActionType == 2 || Data.ActionType == 3) {
         SetDefaultMouseSpeed(Speed)
-        if (Data.IsRelative) {
-            Click(Format("{} {} {} Relative"), PosX, PosY, ClickCount)
-        }
-        else {
-            Click(Format("{} {} {}"), PosX, PosY, ClickCount)
-        }
+        Click(Format("{} {} {}"), PosX, PosY, ClickCount)
     }
 }
 
@@ -820,13 +821,17 @@ OnMouseMove(tableItem, cmd, index) {
     PosX := Integer(paramArr[2])
     PosY := Integer(paramArr[3])
     Speed := paramArr.Length >= 4 ? 100 - Integer(paramArr[4]) : 0
-    IsRelative := paramArr.Length >= 5 ? Integer(paramArr[5]) : 0
+    MoveMode := paramArr.Length >= 5 ? Integer(paramArr[5]) : 0
 
     PosX := GetFloatValue(PosX, MySoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MySoftData.CoordYFloat)
     SendMode("Event")
     CoordMode("Mouse", "Screen")
-    if (IsRelative) {
+    if (MoveMode == 2) {
+        MOUSEEVENTF_MOVE := 0x0001
+        DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE, "Int", PosX, "Int", PosY, "UInt", 0, "Ptr", 0)
+    }
+    else if (MoveMode == 1) {
         MouseMove(PosX, PosY, Speed, "R")
     }
     else {
@@ -952,18 +957,34 @@ OnClearToolText(*) {
 }
 
 OnBootStartChanged(*) {
-    global MySoftData ; 访问全局变量
+    global MySoftData
     MySoftData.IsBootStart := MySoftData.BootStartCtrl.Value
     regPath := "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"
     softPath := A_ScriptFullPath
-    params := " -min"
-    if (MySoftData.IsBootStart) {
-        RegWrite(softPath params, "REG_SZ", regPath, "RMT")
-    }
-    else {
+    if (!MySoftData.IsBootStart) {
         RegDelete(regPath, "RMT")
     }
-    IniWrite(MySoftData.BootStartCtrl.Value, IniFile, IniSection, "IsBootStart")
+    else if (MySoftData.IsAdminStart) {
+        RegWrite(softPath " -min -admin", "REG_SZ", regPath, "RMT")
+    }
+    else {
+        RegWrite(softPath " -min", "REG_SZ", regPath, "RMT")
+    }
+    IniWrite(MySoftData.IsBootStart, IniFile, IniSection, "IsBootStart")
+}
+
+OnAdminStartChanged(*) {
+    global MySoftData
+    MySoftData.IsAdminStart := MySoftData.AdminStartCtrl.Value
+    IniWrite(MySoftData.IsAdminStart, IniFile, IniSection, "IsAdminStart")
+    if (MySoftData.IsBootStart) {
+        regPath := "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"
+        softPath := A_ScriptFullPath
+        if (MySoftData.IsAdminStart)
+            RegWrite(softPath " -min -admin", "REG_SZ", regPath, "RMT")
+        else
+            RegWrite(softPath " -min", "REG_SZ", regPath, "RMT")
+    }
 }
 
 OnTextOps(tableItem, cmd, index) {
@@ -1074,44 +1095,91 @@ OnWindowManage(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
 
     searchValue := GetReplaceVarText(tableItem, index, Data.SearchValue)
-    if (searchValue == "")
-        return
+    if (searchValue == "") {    ;空的话就说明是针对当前鼠标下窗口
+        winId := 0
+        try {
+            CoordMode("Mouse", "Screen")
+            MouseGetPos &mouseX, &mouseY, &winId
+        }
+        searchValue == winId != 0 ? "❖" winId : ""
+    }
 
-    winTitle := GetParamsWinInfoStr(searchValue, "WindowManageGroup" index)
+    winTitle := GetParamsWinInfoStr(searchValue)
     if (winTitle == "")
         return
 
     try {
         switch Data.ActionType {
-            case 1:
+            case "激活窗口":
                 WinActivate(winTitle)
-            case 2:
+            case "最大化窗口":
                 WinMaximize(winTitle)
-            case 3:
+            case "最小化窗口":
                 WinMinimize(winTitle)
-            case 4:
+            case "还原窗口":
                 WinRestore(winTitle)
-            case 5:
+            case "关闭窗口":
                 WinClose(winTitle)
-            case 6:
+            case "移动窗口":
                 hasPosX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosX)
                 hasPosY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosY)
                 if (hasPosX && hasPosY) {
-                    WinMove(Integer(PosX), Integer(PosY), , , winTitle )
+                    WinMove(Integer(PosX), Integer(PosY), , , winTitle)
                 }
-            case 7:
+            case "调整大小":
                 hasWidth := TryGetTabVarValue(&Width, tableItem, index, Data.Width)
                 hasHeight := TryGetTabVarValue(&Height, tableItem, index, Data.Height)
                 if (hasWidth && hasHeight) {
                     WinMove(, , Integer(Width), Integer(Height), winTitle)
                 }
-            case 8:
+            case "置顶窗口":
                 WinSetAlwaysOnTop(1, winTitle)
-            case 9:
+            case "取消置顶":
                 WinSetAlwaysOnTop(0, winTitle)
-            case 10:
+            case "修改标题":
                 newTitle := GetReplaceVarText(tableItem, index, Data.NewTitle)
                 WinSetTitle(newTitle, winTitle)
         }
     }
+}
+
+OnKeyCheck(tableItem, cmd, index) {
+    paramArr := StrSplit(cmd, "_")
+    Data := GetMacroCMDData(paramArr[1])
+
+    keyArr := Data.KeyArr
+    if (keyArr.Length == 0)
+        return
+
+    checkType := Data.CheckType
+    stateType := Data.StateType
+    varName := Data.VarName
+    trueValue := 1
+    falseValue := 0
+
+    stateMode := stateType == 1 ? "P" : ""
+    isAllPressed := true
+    isAnyPressed := false
+
+    for index, key in keyArr {
+        isPressed := GetKeyState(key, stateMode)
+        if (isPressed) {
+            isAnyPressed := true
+            if (checkType == 2)
+                break
+        } else {
+            isAllPressed := false
+            if (checkType == 1)
+                break
+        }
+    }
+
+    result := ""
+    if (checkType == 1) {
+        result := isAllPressed ? trueValue : falseValue
+    } else {
+        result := isAnyPressed ? trueValue : falseValue
+    }
+
+    MySetGlobalVariable([varName], [result], false)
 }

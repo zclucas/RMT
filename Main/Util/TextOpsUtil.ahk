@@ -33,7 +33,18 @@ TextOpsReplace(Data, tableItem, index) {
     IsHas := TryGetTabVarValue(&ReplaceText, tableItem, index, Data.Replace, false)
     ReplaceText := IsHas ? ReplaceText : Data.Replace
 
-    Res := StrReplace(SourceText, SearchText, ReplaceText)
+    if (Data.MatchType == "正则匹配") {
+        try {
+            Res := RegExReplace(SourceText, SearchText, ReplaceText)
+        } catch as e {
+            tip1 := GetLang("正则替换出错")
+            tip2 := Format(GetLang("错误信息：{}"), e.Message)
+            MsgBox(tip1 "`n" tip2)
+            return
+        }
+    } else {
+        Res := StrReplace(SourceText, SearchText, ReplaceText)
+    }
     MySetGlobalVariable([Data.SaveName], [Res], false)
 }
 

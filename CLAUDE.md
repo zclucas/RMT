@@ -12,7 +12,7 @@ RMT（若梦兔）是一款基于 **AutoHotkey v2** 的免费开源按键宏工�
 ## 运行项目
 
 - **调试模式**：直接双击 `RMT.ahk` 运行
-- **Worker线程编译**：如果修改了 `Thread/Work.ahk`，需要通过 AutoHotkey Dash → Compile 重新编译为 Work1.exe/Work2.exe/Work3.exe（或者删除 .exe 文件，运行时会自动重新生成）
+- **Worker线程编译**：如果修改了 `Thread/Work.ahk`，需要通过 AutoHotkey Dash → Compile 重新编译为 Work.exe（或者删除 .exe 文件，运行时会自动重新生成）
 
 ## 项目架构
 
@@ -47,7 +47,7 @@ RMT（若梦兔）是一款基于 **AutoHotkey v2** 的免费开源按键宏工�
 - `IbInputSimulator.ahk` - 输入模拟
 
 ### 线程Worker (`Thread/`)
-- `Work.ahk` - 工作脚本，编译为 Work1.exe、Work2.exe、Work3.exe 用于并行执行宏
+- `Work.ahk` - 工作脚本，编译为 Work.exe 用于并行执行宏
 - `WorkUtil.ahk` - Worker工具函数
 
 ### 国际化 (`Lang/`)

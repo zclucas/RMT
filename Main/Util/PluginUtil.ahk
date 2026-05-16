@@ -1,6 +1,9 @@
 #Requires AutoHotkey v2.0
 ; 窗口颜色识别 x，y 窗口坐标
 FindWinColor(ResXPtr, ResYPtr, colorStr, hwnd, X1, Y1, X2, Y2, matchThreshold) {
+    if (A_PtrSize != 8) ;非64位不可用
+        return false
+
     colorStr := Format("{:06X}", ("0x" colorStr) + 0)
     searchX := X1
     searchY := Y1
@@ -12,6 +15,9 @@ FindWinColor(ResXPtr, ResYPtr, colorStr, hwnd, X1, Y1, X2, Y2, matchThreshold) {
 }
 
 ReleaseAllCaches() {
+    if (A_PtrSize != 8) ;非64位不可用，直接退出
+        return
+
     DllCall("RMT_OpenCV.dll\ReleaseAllCaches", "Cdecl")
 }
 
@@ -75,6 +81,9 @@ GetScreenTextObjArr(X1, Y1, X2, Y2, mode) {
 }
 
 FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, text, mode) {
+    if (A_PtrSize != 8) ;非64位不可用，直接退出
+        return false
+
     result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode)
     if (result == "" || !result)
         return false
@@ -109,6 +118,9 @@ GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode) {
 
 ; OpenCV屏幕图片识别
 FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold) {
+    if (A_PtrSize != 8) ;非64位不可用，直接退出
+        return false
+
     searchX := X1
     searchY := Y1
     searchW := X2 - X1
@@ -120,6 +132,9 @@ FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold) {
 
 ; OpenCV窗口图片识别    返回窗口的坐标
 FindWinImage(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold) {
+    if (A_PtrSize != 8) ;非64位不可用，直接退出
+        return false
+    
     searchX := X1
     searchY := Y1
     searchW := X2 - X1

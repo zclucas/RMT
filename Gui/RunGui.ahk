@@ -8,15 +8,12 @@ class RunGui {
         this.SureBtnAction := ""
         this.OwnerHwnd := ""
         this.PathTextCon := ""
-        this.MouseProNameCon := ""
-        this.BackPlayCon := ""
         this.VariCon := ""
         this.VariTipCon := ""
         this.RunModeCon := ""
         this.SaveNameConArr := []
         this.SaveNameTipConArr := []
 
-        this.RefreshAction := () => this.RefreshProcessName()
         this.Data := ""
     }
 
@@ -65,17 +62,8 @@ class RunGui {
         PosX += 50
         this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 150), "")
 
-        PosY += 30
         PosX := 10
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 400), GetLang("F1：确定鼠标下进程"))
-
-        PosX := 10
-        PosY += 20
-        this.MouseProNameCon := MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 380, 20), GetLang(
-            "鼠标下进程名:Zone.exe"))
-
-        PosX := 10
-        PosY += 30
+        PosY += 40
         MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 20), GetLang("模式："))
 
         PosX += 40
@@ -87,24 +75,24 @@ class RunGui {
         tip1 := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("返回值"))
         this.SaveNameTipConArr.Push(tip1)
         PosX += 50
-        con1 := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY - 3, 70), [])
+        con1 := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY - 3, 80), [])
         this.SaveNameConArr.Push(con1)
 
-        PosX += 80
+        PosX += 90
         tip2 := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 40), GetLang("输出"))
         this.SaveNameTipConArr.Push(tip2)
         PosX += 40
-        con2 := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY - 3, 70), [])
+        con2 := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY - 3, 80), [])
         this.SaveNameConArr.Push(con2)
 
-        PosX += 80
+        PosX += 90
         tip3 := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 40), GetLang("错误"))
         this.SaveNameTipConArr.Push(tip3)
         PosX += 40
-        con3 := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY - 3, 60), [])
+        con3 := MyGui.Add("ComboBox", Format("x{} y{} w{}", PosX, PosY - 3, 80), [])
         this.SaveNameConArr.Push(con3)
 
-        PosY += 30
+        PosY += 35
         PosX := 10
         this.VariTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 150), GetLang("变量："))
 
@@ -121,38 +109,30 @@ class RunGui {
 
         PosX := 10
         PosY += 35
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("路径："))
+        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("目标："))
 
         PosX += 40
-        this.PathTextCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 3, 350))
+        this.PathTextCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 3, 440))
 
-        PosX += 355
+        PosX += 445
         btnCon := MyGui.Add("Button", Format("x{} y{}", PosX, PosY - 5), GetLang("选择文件"))
         btnCon.OnEvent("Click", (*) => this.OnClickFileSelectBtn())
 
         PosY += 25
         PosX := 10
-        MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 20), GetLang("支持类别：进程、网址、文件等等"))
+        MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 20), GetLang("支持类别：CMD指令、网址、文件等等"))
 
         PosY += 25
         PosX := 10
-        MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 20), GetLang("支持文件后缀：进程名、网址、exe、txt、bat、mp4、vbs、mp3等等"))
-
-        PosX := 10
-        PosY += 25
-        this.BackPlayCon := MyGui.Add("Checkbox", Format("x{} y{} w{}", PosX, PosY, 400), GetLang("后台播放mp3文件"))
-
-        PosY += 30
-        PosX := 10
-        MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 400, 20), GetLang("路径是进程时：该进程务必属于系统软件，或者有系统变量环境"))
+        MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 20), GetLang("支持文件后缀：exe、txt、bat、vbs、mp4、mp3、py等等"))
 
         PosY += 35
-        PosX := 200
+        PosX := 240
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 600, 360))
+        MyGui.Show(Format("w{} h{}", 580, 260))
     }
 
     OnModeChange() {
@@ -184,7 +164,6 @@ class RunGui {
         this.Data := GetMacroCMDData(this.SerialStr)
 
         this.PathTextCon.Value := this.Data.RunPath
-        this.BackPlayCon.Value := this.Data.BackPlay
 
         DLVariableArr := GetGuiVarArr(1)
         this.VariCon.Delete()
@@ -211,46 +190,11 @@ class RunGui {
     ToggleFunc(state) {
         MacroAction := (*) => this.TriggerMacro()
         if (state) {
-            SetTimer this.RefreshAction, 100
             Hotkey("!l", MacroAction, "On")
-            Hotkey("F1", (*) => this.SureProcessName(), "On")
         }
         else {
-            SetTimer this.RefreshAction, 0
             Hotkey("!l", MacroAction, "Off")
-            Hotkey("F1", (*) => this.SureProcessName(), "Off")
         }
-    }
-
-    RefreshProcessName() {
-        CoordMode("Mouse", "Screen")
-        MouseGetPos &mouseX, &mouseY, &winId
-        try {
-            try {
-                WinPID := WinGetPID("ahk_id " winId)
-                processName := ProcessGetName(WinPID)
-            }
-            catch {
-                processName := ""
-            }
-            this.MouseProNameCon.Value := Format(GetLang("当前鼠标下进程名:{}"), processName)
-        }
-    }
-
-    SureProcessName() {
-        CoordMode("Mouse", "Screen")
-        MouseGetPos &mouseX, &mouseY, &winId
-        try {
-            try {
-                WinPID := WinGetPID("ahk_id " winId)
-                processName := ProcessGetName(WinPID)
-            }
-            catch {
-                processName := ""
-            }
-            this.PathTextCon.Value := processName
-        }
-
     }
 
     OnClickFileSelectBtn() {
@@ -290,7 +234,7 @@ class RunGui {
 
     CheckIfValid() {
         if (this.PathTextCon.Value == "") {
-            MsgBox(GetLang("路径不能为空！"))
+            MsgBox(GetLang("目标不能为空！"))
             return false
         }
         return true
@@ -303,7 +247,6 @@ class RunGui {
 
     SaveRunData() {
         this.Data.RunPath := GetLangStr(this.PathTextCon.Value, 2)
-        this.Data.BackPlay := this.BackPlayCon.Value
         this.Data.RunMode := this.RunModeCon.Value
         loop 3 {
             this.Data.SaveNameArr[A_Index] := this.SaveNameConArr[A_Index].Text

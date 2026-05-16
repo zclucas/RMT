@@ -249,16 +249,9 @@ class SearchProGui {
         this.SimilarCon := MyGui.Add("Edit", Format("x{} y{} w{} Center", PosX, PosY - 5, 80))
         this.SimilarArr.Push(this.SimilarCon)
 
+        ; Row2: [识别模型] [下拉] + ImageCon 原版位置(570,145)
         PosY += 35
         BasePosY := PosY
-        PosX := 360
-        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 7, 80, 30), GetLang("截图"))
-        btnCon.OnEvent("Click", (*) => this.OnScreenShotBtnClick())
-        this.ScreenshotBtn := btnCon
-        this.ImageVariArr.Push(this.ScreenshotBtn)
-
-        ; Row2: [识别模型] [下拉] + ImageCon 原版位置(570,145)
-        PosY := BasePosY + 35
         PosX := 360
         this.SearchImageTypeTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("识别模型："))
         this.ImageVariArr.Push(this.SearchImageTypeTipCon)
@@ -270,19 +263,27 @@ class SearchProGui {
         this.ImageCon := MyGui.Add("Picture", Format("x{} y{} w{} h{}", 570, 145, 100, 100), "")
         this.ImageVariArr.Push(this.ImageCon)
 
+        PosY += 35
+        PosX := 360
+        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 7, 70, 30), GetLang("截图"))
+        btnCon.OnEvent("Click", (*) => this.OnScreenShotBtnClick())
+        this.ScreenshotBtn := btnCon
+        this.ImageVariArr.Push(this.ScreenshotBtn)
+
+        PosX += 80
+        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 7, 80, 30), GetLang("选择图片"))
+        btnCon.OnEvent("Click", (*) => this.OnClickSetPicBtn())
+        btnCon.Focus()
+        this.ImageSelectBtn := btnCon
+        this.ImageVariArr.Push(this.ImageSelectBtn)
+
         PosY := BasePosY + 70
         PosX := 360
         this.SearchImagePathTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("图片路径："))
         this.ImageVariArr.Push(this.SearchImagePathTipCon)
         PosX += 80
-        this.ImagePathCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R5", PosX, PosY - 5, 160), [])
+        this.ImagePathCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R5", PosX, PosY - 5, 250), [])
         this.ImageVariArr.Push(this.ImagePathCon)
-        PosX += 160
-        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 7, 70, 30), GetLang("选择图片"))
-        btnCon.OnEvent("Click", (*) => this.OnClickSetPicBtn())
-        btnCon.Focus()
-        this.ImageSelectBtn := btnCon
-        this.ImageVariArr.Push(this.ImageSelectBtn)
 
         ; === 颜色搜索区域（与图片重叠） ===
         PosY := BasePosY
@@ -844,7 +845,8 @@ class SearchProGui {
     }
 
     OnClickSetPicBtn() {
-        path := FileSelect(1, , GetLang("选择图片"), "PNG Files (*.png)")
+        curPath := this.ImagePathCon.Text
+        path := FileSelect(1, curPath, GetLang("选择图片"), "PNG Files (*.png)")
         if (path != "") {
             SplitPath path, &name, &dir, &ext, &name_no_ext, &drive
             newPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" name
@@ -856,10 +858,13 @@ class SearchProGui {
                 FileCopy(path, newPath)
                 path := newPath
             }
+
+            this.ImageCon.GetPos(&imagePosX, &imagePosY)
+            this.ImageCon.Value := path
+            this.ImageCon.Move(imagePosX, imagePosY, 100, 100)
+            this.Data.SearchImagePath := path
+            this.ImagePathCon.Text := path
         }
-        this.ImageCon.Value := path
-        this.Data.SearchImagePath := path
-        this.ImagePathCon.Text := path
     }
 
     OnScreenShotBtnClick() {
@@ -885,7 +890,10 @@ class SearchProGui {
             imageSerial := GetNextImageSerial()
             filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
             SaveClipToBitmap(filePath)
+
+            this.ImageCon.GetPos(&imagePosX, &imagePosY)
             this.ImageCon.Value := filePath
+            this.ImageCon.Move(imagePosX, imagePosY, 100, 100)
             this.Data.SearchImagePath := filePath
             this.ImagePathCon.Text := filePath
             ; 停止监听
@@ -905,7 +913,10 @@ class SearchProGui {
         imageSerial := GetNextImageSerial()
         filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
         ScreenShot(x1, y1, x2, y2, filePath)
+
+        this.ImageCon.GetPos(&imagePosX, &imagePosY)
         this.ImageCon.Value := filePath
+        this.ImageCon.Move(imagePosX, imagePosY, 100, 100)
         this.Data.SearchImagePath := filePath
         this.ImagePathCon.Text := filePath
 
@@ -974,8 +985,6 @@ class SearchProGui {
         showColorTip := isColor && RegExMatch(this.HexColorCon.Text, "^([0-9A-Fa-f]{6})$")
 
         this.SetConArrState(this.ImageVariArr, false, isImage)
-        if (isImage && A_PtrSize != 8)
-            this.SearchImageTypeCon.Value := 2
 
         this.SetConArrState(this.ColorArr, false, isColor)
         this.HexColorTipCon.Visible := showColorTip

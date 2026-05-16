@@ -108,13 +108,13 @@ class ExVariableGui {
 
         PosX := 20
         PosY += 25
-        con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY + 3, 75), GetLang("识别模型："))
-        this.OCROptConArr.Push(con)
-        PosX += 75
-        this.OCRTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{} Center", PosX, PosY - 2, 75), GetLangArr(["中文",
-            "英文"]))
-        this.OCRTypeCon.Value := 1
-        this.OCROptConArr.Push(this.OCRTypeCon)
+        con := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY, 25), "F1")
+        con.Enabled := false
+        PosX += 30
+        this.SelectToggleCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{} Left", PosX, PosY, 150, 25),
+        GetLang("左键框选搜索范围"))
+        this.SelectToggleCon.OnEvent("Click", (*) => this.OnClickSelectToggle())
+        this.OCROptConArr.Push(this.SelectToggleCon)
 
         PosX := 200
         con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("起始坐标X："))
@@ -132,13 +132,13 @@ class ExVariableGui {
 
         PosX := 20
         PosY += 35
-        con := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY, 25), "F1")
-        con.Enabled := false
-        PosX += 30
-        this.SelectToggleCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{} Left", PosX, PosY, 150, 25),
-        GetLang("左键框选搜索范围"))
-        this.SelectToggleCon.OnEvent("Click", (*) => this.OnClickSelectToggle())
-        this.OCROptConArr.Push(this.SelectToggleCon)
+        con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY + 3, 75), GetLang("识别模型："))
+        this.OCROptConArr.Push(con)
+        PosX += 75
+        this.OCRTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{} Center", PosX, PosY - 2, 75), GetLangArr(["中文",
+            "英文"]))
+        this.OCRTypeCon.Value := 1
+        this.OCROptConArr.Push(this.OCRTypeCon)
 
         PosX := 200
         con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("终止坐标X："))

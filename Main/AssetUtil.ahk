@@ -101,7 +101,7 @@ GetHwndList(infoStr) {
     return HwndList
 }
 
-GetParamsWinInfoStr(infoStr, symbolStr := "default") {
+GetParamsWinInfoStr(infoStr) {
     if (infoStr == "")
         return ""
 
@@ -109,9 +109,9 @@ GetParamsWinInfoStr(infoStr, symbolStr := "default") {
         infoStr := StrReplace(infoStr, "❖")
         hwndList := StrSplit(infoStr, "|")
         for index, hwnd in hwndList {
-            GroupAdd(symbolStr, "ahk_id " hwnd)
+            GroupAdd(infoStr, "ahk_id " hwnd)
         }
-        ResStr := "ahk_group " symbolStr
+        ResStr := "ahk_group " infoStr
         return ResStr
     }
 
@@ -346,12 +346,12 @@ InitData() {
         "输出", OutputFile, "运行", RunFile, "循环", LoopFile, "宏操作", SubMacroFile, "变量", VariableFile,
         "变量提取", ExVariableFile, "如果", CompareFile, "如果Pro", CompareProFile, "运算", OperationFile,
         "后台鼠标", BGMouseFile, "后台按键", BGKeyFile, "文本处理", TextOpsFile, "Timing", TimingFile, "数组", ArrayFile,
-        "输入", InputFile, "文件读写", FileIOFile, "窗口管理", WindowManageFile)
+        "输入", InputFile, "文件读写", FileIOFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile)
     MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "移动Pro", MMProData,
         "输出", OutputData, "运行", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
         "变量提取", ExVariableData, "如果", CompareData, "如果Pro", CompareProData, "运算", OperationData,
         "后台鼠标", BGMouseData, "后台按键", BGKeyData, "文本处理", TextOpsData, "Timing", TimingData, "数组", ArrayData,
-        "输入", InputData, "文件读写", FileIOData, "窗口管理", WindowManageData)
+        "输入", InputData, "文件读写", FileIOData, "窗口管理", WindowManageData, "按键检测", KeyCheckData)
 }
 
 InitLogitechGHubNew() {
@@ -393,8 +393,8 @@ LoadMainSetting() {
     ToolCheckInfo.RecordMouse := IniRead(IniFile, IniSection, "RecordMouse", true)
     ToolCheckInfo.RecordJoy := IniRead(IniFile, IniSection, "RecordJoy", false)
     ToolCheckInfo.RecordMouseKeyPoint := IniRead(IniFile, IniSection, "RecordMouseKeyPoint", true)
-    ToolCheckInfo.RecordMouseRelative := IniRead(IniFile, IniSection, "RecordMouseRelative", false)
-    ToolCheckInfo.RecordMouseTrail := IniRead(IniFile, IniSection, "RecordMouseTrail", false)
+    ToolCheckInfo.RecordMouseMoveMode := IniRead(IniFile, IniSection, "RecordMouseMoveMode", 0)
+    ToolCheckInfo.RecordMouseTrail := IniRead(IniFile, IniSection, "RecordMouseTrail", true)
     ToolCheckInfo.RecordMouseTrailLen := IniRead(IniFile, IniSection, "RecordMouseTrailLen", 100)
     ToolCheckInfo.RecordMouseTrailSpeed := IniRead(IniFile, IniSection, "RecordMouseTrailSpeed", 95)
     ToolCheckInfo.RecordHoldMuti := IniRead(IniFile, IniSection, "RecordHoldMuti", false)
@@ -403,6 +403,13 @@ LoadMainSetting() {
     ToolCheckInfo.RecordJoyInterval := IniRead(IniFile, IniSection, "RecordJoyInterval", 50)
     ToolCheckInfo.OCRTypeValue := IniRead(IniFile, IniSection, "OCRType", 1)
     MySoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", false)
+    if (MySoftData.IsBootStart == 1 || MySoftData.IsBootStart == 2)
+        MySoftData.IsBootStart := true
+    else if (MySoftData.IsBootStart == "false" || MySoftData.IsBootStart == 0)
+        MySoftData.IsBootStart := false
+    else
+        MySoftData.IsBootStart := !!MySoftData.IsBootStart
+    MySoftData.IsAdminStart := IniRead(IniFile, IniSection, "IsAdminStart", false)
     MySoftData.ShowSplitLine := IniRead(IniFile, IniSection, "ShowSplitLine", false)
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
     MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
@@ -1518,6 +1525,9 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map()) {
         case "当前秒":
             Value := A_Sec
             return true
+        case "当前星期几":
+            Value := A_WDay == 1 ? 7 : A_WDay - 1
+            return true
         case "当前鼠标颜色":
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
@@ -1866,7 +1876,7 @@ GetBrightness() {
 
 GetSystemVarArr() {
     return [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("句柄ID"), GetLang("当前鼠标颜色"), GetLang("当前鼠标坐标X"),
-    GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间"), GetLang("当前时间(秒)"), GetLang("当前秒")]
+    GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间"), GetLang("当前时间(秒)"), GetLang("当前秒"), GetLang("当前星期几")]
 }
 
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {

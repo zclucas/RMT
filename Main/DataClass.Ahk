@@ -182,7 +182,7 @@ class ToolCheck {
         this.RecordKeyboard := ""
         this.RecordMouse := ""
         this.RecordMouseKeyPoint := ""  ;关键点位
-        this.RecordMouseRelative := ""
+        this.RecordMouseMoveMode := ""   ;鼠标移动模式 0=移动 1=相对移动 2=游戏视角
         this.RecordMouseTrail := ""
         this.RecordMouseTrailLen := ""
         this.RecordMouseTrailSpeed := ""
@@ -203,7 +203,8 @@ class SoftData {
         this.ToolTipText := ""          ;临时提示文本
         this.ToolTipEndTime := ""       ;临时提示结束时间
         this.AgreeAgreement := false    ;同意协议
-        this.IsBootStart := false       ;开机自启
+        this.IsBootStart := false        ;开机自启
+        this.IsAdminStart := false        ;管理员启动
         this.ShowSplitLine := false     ;显示分割线
         this.FixedMenuWheel := false    ;固定菜单轮
         this.NoVariableTip := false     ;无变量提醒
@@ -496,8 +497,7 @@ class MMProData {
         this.PosVarX := 100
         this.PosVarY := 100
         this.ActionType := 1          ;鼠标动作 1移动 2移动点击1次 3移动点击2次
-        this.IsRelative := 0         ;相对位移
-        this.IsGameView := 0        ;游戏视角
+        this.MouseMoveMode := 0      ;鼠标移动模式 0=移动 1=相对移动 2=游戏视角
         this.Speed := 90           ;移动速度
         this.Count := 1
         this.Interval := 1000
@@ -508,7 +508,6 @@ class RunData {
     __New() {
         this.SerialStr := ""
         this.RunPath := ""
-        this.BackPlay := false
         this.RunMode := 1
         this.SaveNameArr := ["ExitCode", "StdOut", "StdErr"]
     }
@@ -712,6 +711,7 @@ class TextOpsData {
         this.ArgsName := ","        ;参数变量名或文本
         this.Search := "" ; 查找文本
         this.Replace := "" ; 替换文本
+        this.MatchType := "普通文本"
         this.SaveType := "变量"     ;保存类型  变量或数组
         this.SaveName := "Data"     ;保存的变量名或数组名
     }
@@ -812,13 +812,23 @@ class InputData {
 
 class WindowManageData {
     __New() {
-        this.SerialStr := ""
-        this.ActionType := 1                ;1激活窗口 2最大化窗口 3最小化窗口 4还原窗口 5关闭窗口 6移动窗口 7调整大小 8置顶窗口 9取消置顶 10修改标题
+        this.SerialStr := ""                 ;类型尽量使用中文 当做枚举使用  程序中有语义、也可以随时调整顺序
+        this.ActionType := "激活窗口"        ;1激活窗口 2最大化窗口 3最小化窗口 4还原窗口 5关闭窗口 6移动窗口 7调整大小 8置顶窗口 9取消置顶 10修改标题
         this.SearchValue := ""              ;查找值（格式：标题⎖类名⎖进程名，空表示未选择）
         this.PosX := 0                      ;移动窗口X坐标（移动窗口时使用）
         this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
         this.Width := 0                     ;窗口宽度（调整大小时使用）
         this.Height := 0                    ;窗口高度（调整大小时使用）
         this.NewTitle := ""                 ;新标题（修改标题时使用）
+    }
+}
+
+class KeyCheckData {
+    __New() {
+        this.SerialStr := ""
+        this.KeyArr := []                   ;检测的按键数组
+        this.CheckType := 1                 ;1同时按下 2有一个按下
+        this.StateType := 1                 ;1物理状态 2逻辑状态
+        this.VarName := ""                  ;变量名
     }
 }

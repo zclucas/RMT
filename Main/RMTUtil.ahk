@@ -30,6 +30,7 @@ OnSaveSetting(*) {
     IniWrite(MySoftData.MutiThreadNumCtrl.Value, IniFile, IniSection, "MutiThreadNum")
     IniWrite(MySoftData.SoftBGColorCon.Value, IniFile, IniSection, "SoftBGColor")
     IniWrite(MySoftData.NoVariableTipCtrl.Value, IniFile, IniSection, "NoVariableTip")
+    IniWrite(MySoftData.AdminStartCtrl.Value, IniFile, IniSection, "IsAdminStart")
     IniWrite(MySoftData.CMDTipCtrl.Value, IniFile, IniSection, "CMDTip")
     IniWrite(MySoftData.ScreenShotTypeCtrl.Value, IniFile, IniSection, "ScreenShotType")
     IniWrite(MySoftData.KeyDownDownCon.Value, IniFile, IniSection, "KeyDownDown")
@@ -42,7 +43,7 @@ OnSaveSetting(*) {
     IniWrite(ToolCheckInfo.RecordMouse, IniFile, IniSection, "RecordMouse")
     IniWrite(ToolCheckInfo.RecordJoy, IniFile, IniSection, "RecordJoy")
     IniWrite(ToolCheckInfo.RecordMouseKeyPoint, IniFile, IniSection, "RecordMouseKeyPoint")
-    IniWrite(ToolCheckInfo.RecordMouseRelative, IniFile, IniSection, "RecordMouseRelative")
+    IniWrite(ToolCheckInfo.RecordMouseMoveMode, IniFile, IniSection, "RecordMouseMoveMode")
     IniWrite(ToolCheckInfo.RecordMouseTrail, IniFile, IniSection, "RecordMouseTrail")
     IniWrite(ToolCheckInfo.RecordMouseTrailLen, IniFile, IniSection, "RecordMouseTrailLen")
     IniWrite(ToolCheckInfo.RecordMouseTrailSpeed, IniFile, IniSection, "RecordMouseTrailSpeed")
@@ -164,12 +165,13 @@ PluginInit() {
     if (MySoftData.HasJoyMacro)
         global ViGJoy := ViGEmXb360()
 
-    ; 构建包含 DLL 文件的目录路径
-    dllDir := A_ScriptDir "\Plugins\OpenCV"
+    ; 构建包含 DLL 文件的目录路径（根据进程位数自动选择 x86 或 x64）
+    archDir := (A_PtrSize = 4) ? "x86" : "x64"
+    dllDir := A_ScriptDir "\Plugins\OpenCV\" archDir
     ; 使用 SetDllDirectory 将 dllDir 添加到 DLL 搜索路径中
     DllCall("SetDllDirectory", "Str", dllDir)
 
-    OpenCvPath := A_ScriptDir "\Plugins\OpenCV\RMT_OpenCV.dll"
+    OpenCvPath := dllDir "\RMT_OpenCV.dll"
     IBPath := A_ScriptDir "\Plugins\IbInputSimulator.dll"
     DllCall('LoadLibrary', 'str', OpenCvPath, "Ptr")
     DllCall("LoadLibrary", "Str", IBPath)
@@ -271,7 +273,7 @@ InitFilePath() {
     FileInstall("Images\Soft\Control.png", "Images\Soft\Control.png", 1)
     FileInstall("Images\Soft\WindowManage.png", "Images\Soft\WindowManage.png", 1)
 
-    global VBSPath := A_WorkingDir "\VBS\PlayAudio.vbs"
+    global VBSPath := A_WorkingDir "\MinTool\PlayAudio.vbs"
     global StartTipAudio := A_WorkingDir "\Audio\Start.wav"
     global EndTipAudio := A_WorkingDir "\Audio\End.wav"
     global ViGEmDllPath := A_WorkingDir "\Plugins\ViGEm\ViGEmWrapper.dll"
@@ -296,14 +298,18 @@ InitFilePath() {
     global InputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\InputFile.ini"
     global FileIOFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\FileIOFile.ini"
     global WindowManageFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WindowManageFile.ini"
+    global KeyCheckFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyCheckFile.ini"
 }
 
 SubMacroStopAction(tableIndex, itemIndex) {
     tableItem := MySoftData.TableInfo[tableIndex]
     WorkerIndex := tableItem.IsWorkIndexArr[itemIndex]
     if (WorkerIndex != 0) {
-        MyWorkPool.OnStopMacro(tableIndex, itemIndex, 0, 0)
+        MyWorkPool.BroadcastStop(tableIndex, itemIndex)
+        tableItem.IsWorkIndexArr[itemIndex] := 0
     }
+    else
+        KillTableItemMacro(tableItem, itemIndex)
 }
 
 SetGlobalArray(Name, Value) {
@@ -398,41 +404,62 @@ CMDReport(CMDStr) {
 SetTableItemState(tableIndex, itemIndex, State) {
     tableItem := MySoftData.TableInfo[tableIndex]
     LastState := tableItem.ColorStateArr[itemIndex]
-    isVisible := State != 0
 
-    if (LastState == 0 && (State == 2 || State == 3))  ;默认状态不可暂停，终止
+    if (LastState == 0 && (State == 2 || State == 3))
         return
 
-    if (State == 2 && LastState != 1)  ;非运行状态 不可暂停
+    if (State == 2 && LastState != 1)
         return
-    if (State == 3 && LastState == 3)  ;终止状态，不能再次终止
+    if (State == 3 && LastState == 3)
         return
+
+    if (State == 3) {
+        StopCancelTableItemTimer(tableIndex, itemIndex)
+        timerFunc := CancelTableItemStopState.Bind(tableIndex, itemIndex)
+        timerKey := tableIndex "|" itemIndex
+        CancelTableItemTimerMap[timerKey] := timerFunc
+        SetTimer(timerFunc, -5000)
+    }
+    else if (LastState == 3)
+        StopCancelTableItemTimer(tableIndex, itemIndex)
 
     UpdateMacroRunningCount(LastState, State)
     tableItem.ColorStateArr[itemIndex] := State
+    RefreshItemColorUI(tableIndex, itemIndex)
+}
+
+RefreshItemColorUI(tableIndex, itemIndex) {
+    tableItem := MySoftData.TableInfo[tableIndex]
+    State := tableItem.ColorStateArr[itemIndex]
+    isVisible := State != 0
+
     ItemUsePool := ItemUseConPoolMap[tableItem.Index]
     if (ItemUsePool.Has(itemIndex)) {
         ItemConObj := ItemUsePool[itemIndex]
-        ItemConObj.ColorCon.Value := GetItemColorValue(tableItem.ColorStateArr[itemIndex])
+        ItemConObj.ColorCon.Value := GetItemColorValue(State)
         ItemConObj.ColorCon.Visible := isVisible
-    }
-
-    if (State == 3) {
-        SetTimer(CancelTableItemStopState.Bind(tableIndex, itemIndex), -5000)
     }
 }
 
 CancelTableItemStopState(tableIndex, itemIndex) {
     tableItem := MySoftData.TableInfo[tableIndex]
     if (tableItem.ColorStateArr[itemIndex] == 3) {
-        tableItem.ColorStateArr[itemIndex] := 0
+        if (tableItem.IsWorkIndexArr.Length >= itemIndex && tableItem.IsWorkIndexArr[itemIndex] != 0)
+            return
 
-        ItemUsePool := ItemUseConPoolMap[tableItem.Index]
-        if (ItemUsePool.Has(itemIndex)) {
-            ItemConObj := ItemUsePool[itemIndex]
-            ItemConObj.ColorCon.Value := ""
-            ItemConObj.ColorCon.Visible := false
-        }
+        tableItem.ColorStateArr[itemIndex] := 0
+        UpdateMacroRunningCount(3, 0)
+        RefreshItemColorUI(tableIndex, itemIndex)
+    }
+}
+
+global CancelTableItemTimerMap := Map()
+
+StopCancelTableItemTimer(tableIndex, itemIndex) {
+    timerKey := tableIndex "|" itemIndex
+    if (CancelTableItemTimerMap.Has(timerKey)) {
+        SetTimer(CancelTableItemTimerMap[timerKey], 0)
+        CancelTableItemTimerMap.Delete(timerKey)
     }
 }
 
@@ -447,6 +474,38 @@ SetItemPauseState(tableIndex, itemIndex, state) {
         SetTableItemState(tableIndex, itemIndex, 1)
 
     MyWorkPool.Broadcast("PauseState", tableIndex, itemIndex, state)
+}
+
+RecoverAllDirtyStates() {
+    loop MySoftData.TableInfo.Length {
+        tableItem := MySoftData.TableInfo[A_Index]
+        if (!tableItem.ColorStateArr.Length)
+            continue
+        loop tableItem.ColorStateArr.Length {
+            if (tableItem.ColorStateArr[A_Index] != 0) {
+                tableItem.ColorStateArr[A_Index] := 0
+                if (tableItem.IsWorkIndexArr.Length >= A_Index)
+                    tableItem.IsWorkIndexArr[A_Index] := 0
+                RefreshItemColorUI(tableItem.Index, A_Index)
+            }
+        }
+    }
+
+    tableItem := MySoftData.SpecialTableItem
+    if (tableItem.ColorStateArr.Length >= 1 && tableItem.ColorStateArr[1] != 0) {
+        tableItem.ColorStateArr[1] := 0
+        RefreshItemColorUI(tableItem.Index, 1)
+    }
+
+    if (MySoftData.MacroRunningCount != 0) {
+        MySoftData.MacroRunningCount := 0
+        MySoftData.IsMacroWorking := false
+        MyCMDTipGui.OnToggleMacroWorkState()
+    }
+}
+
+CleanupAllMacroStates() {
+    RecoverAllDirtyStates()
 }
 
 MsgBoxContent(content) {
@@ -737,7 +796,7 @@ DiscardRecordTriggerKey(MacroStr, isFront) {
 }
 
 CheckIfDiscardCMD(triggerMap, cmd) {
-    if (!InStr(cmd, GetLang("按键")))
+    if (!InStr(cmd, GetLang("按键")) || InStr(cmd, GetLang("按键检测")))
         return false
 
     paramArr := SplitCommand(cmd)
@@ -948,13 +1007,20 @@ OnTriggerSepcialItemMacro(MacroStr) {
     tableItem.ActionCount[1] := 0
     tableItem.index := 1
     tableItem.ColorStateArr[1] := 1
+    UpdateMacroRunningCount(0, 1)
+    RefreshItemColorUI(tableItem.Index, 1)
     OnTriggerMacroOnce(tableItem, MacroStr, 1)
-    tableItem.ColorStateArr[1] := 0 ;默认状态
+    tableItem.ColorStateArr[1] := 0
+    UpdateMacroRunningCount(1, 0)
+    RefreshItemColorUI(tableItem.Index, 1)
 }
 
 HandleOpenArg() {
-    if (A_Args.Length <= 0)
+    if (A_Args.Length <= 0) {
+        if (MySoftData.IsAdminStart && !A_IsAdmin)
+            ElevateToAdmin()
         return
+    }
 
     loop A_Args.Length {
         arg := A_Args[A_Index]
@@ -962,6 +1028,25 @@ HandleOpenArg() {
             MySoftData.IsMinStart := true
             continue
         }
+        if (arg == "-admin") {
+            if (!A_IsAdmin) {
+                ElevateToAdmin()
+            }
+            continue
+        }
+    }
+}
+
+ElevateToAdmin() {
+    args := ""
+    loop A_Args.Length {
+        arg := A_Args[A_Index]
+        if (arg != "-admin")
+            args .= ' "' arg '"'
+    }
+    try {
+        Run('*RunAs "' A_ScriptFullPath '" ' args)
+        ExitApp()
     }
 }
 

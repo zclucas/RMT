@@ -292,7 +292,7 @@ class UIMacroSettingGui {
             frontValue := this.GetFrontInfo()
             targetHwnd := ""
             if (frontValue != "") {
-                paramStr := GetParamsWinInfoStr(frontValue, "UIPreview")
+                paramStr := GetParamsWinInfoStr(frontValue)
                 if (paramStr != "") {
                     hwndList := WinGetList(paramStr)
                     if (hwndList.Length > 0 && hwndList[1])
