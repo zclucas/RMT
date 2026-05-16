@@ -966,12 +966,6 @@ OnBootStartChanged(*) {
     IniWrite(MySoftData.BootStartCtrl.Value, IniFile, IniSection, "IsBootStart")
 }
 
-OnMenuWheelPosChanged(*) {
-    global MySoftData ; 访问全局变量
-    MySoftData.FixedMenuWheel := !MySoftData.FixedMenuWheel
-    IniWrite(MySoftData.FixedMenuWheel, IniFile, IniSection, "FixedMenuWheel")
-}
-
 OnTextOps(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])

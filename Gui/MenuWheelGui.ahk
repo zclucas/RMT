@@ -3,20 +3,11 @@
 class MenuWheelGui {
     __new() {
         this.MenuIndex := 1
-        this.CurCenterPosX := 500
-        this.CurCenterPosY := 500
     }
 
     ShowGui(MenuIndex) {
         PreviousActiveWindow := WinExist("A")
-
-        if (MySoftData.FixedMenuWheel) {
-            this.CurCenterPosX := A_ScreenWidth * 0.5
-            this.CurCenterPosY := A_ScreenHeight * 0.70
-        }
-
         this.ShowRadialMenu(MenuIndex)
-
         try {
             WinActivate(PreviousActiveWindow)
         }

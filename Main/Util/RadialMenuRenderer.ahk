@@ -72,21 +72,14 @@ class RadialMenuRenderer {
   Show() {
     SectName := ""
     CoordMode "Mouse", "Screen"
-    MouseGetPos &X_Center, &Y_Center, &hwndUnderMouse
-    if (hwndUnderMouse && WinExist("ahk_id " hwndUnderMouse)) {
-      WinGetPos &X_Win, &Y_Win,,, "ahk_id " hwndUnderMouse
-    } else {
-      X_Win := 0
-      Y_Win := 0
-    }
-    CoordMode "Mouse", "Window"
+    MouseGetPos &X_Center, &Y_Center
     R_1 := 100
     R_2 := R_1 * 0.2
     Offset := 2
     R_3 := R_1 + Offset * 2 + 10
     
-    X_Gui := X_Center - R_3 + X_Win
-    Y_Gui := Y_Center - R_3 + Y_Win
+    X_Gui := X_Center - R_3
+    Y_Gui := Y_Center - R_3
     Height_Gui := R_3 * 2
     Width_Gui := R_3 * 2
     
@@ -108,10 +101,9 @@ class RadialMenuRenderer {
     MyGui.Show("NA x" X_Gui " y" Y_Gui " w" Width_Gui " h" Height_Gui)
     hwnd1 := WinExist()
     
-    MouseGetPos &X_Center, &Y_Center
     ColorBackGround := "FCFCFC"
     ColorLineBackGround := "C6DFFC"
-    ColorSelected := "C6DFFC"
+    ColorSelected := "B8D4F8"
     ColorLineSelected := "F5E5D6"
     
     pBitmap := Map()
@@ -184,8 +176,8 @@ class RadialMenuRenderer {
     
     Counter := 0
     Loop this.menu.Sections {
-      SectionAngle := 2 * 3.141592653589793 / this.menu.Sections * (A_Index - 1)
-      
+      SectionAngle := -1.5707963267948966 + 2 * 3.141592653589793 / this.menu.Sections * (A_Index - 1)
+
       X_Bitmap[A_Index] := R_3 + (R_1 - 30) * Cos(SectionAngle) - 16
       Y_Bitmap[A_Index] := R_3 + (R_1 - 30) * Sin(SectionAngle) - 16
       
@@ -204,6 +196,12 @@ class RadialMenuRenderer {
     G := 0
     X_Mouse_P := 0
     Y_Mouse_P := 0
+    
+    hbm := CreateDIBSection(Width, Height)
+    hdc := CreateCompatibleDC()
+    obm := SelectObject(hdc, hbm)
+    G := Gdip_GraphicsFromHDC(hdc)
+    Gdip_SetSmoothingMode(G, 4)
     
     Loop {
       currentTime := A_TickCount
@@ -228,14 +226,16 @@ class RadialMenuRenderer {
         RM_KeyState_D := 1
       }
       if (RM_KeyState == 0 and RM_KeyState_D == 1) {
-        Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center)
+        MouseGetPos &X_Mouse, &Y_Mouse
+        Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center, X_Mouse, Y_Mouse)
         if (Section_Mouse != 0) {
           break
         }
         RM_KeyState_D := 0
       }
       if (GetKeyState("LButton")) {
-        Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center)
+        MouseGetPos &X_Mouse, &Y_Mouse
+        Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center, X_Mouse, Y_Mouse)
         if (Section_Mouse != 0) {
           break
         }
@@ -255,7 +255,7 @@ class RadialMenuRenderer {
       Y_Rel := Y_Mouse - Y_Center
       Center_Distance := Sqrt(X_Rel * X_Rel + Y_Rel * Y_Rel)
       
-      Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center)
+      Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center, X_Mouse, Y_Mouse)
       
       if (Center_Distance > R_1) {
         break
@@ -270,8 +270,8 @@ class RadialMenuRenderer {
         
         if ((X_Mouse_P != X_Mouse) or (Y_Mouse_P != Y_Mouse) or SectName_N != SectName or Counter > 500) {
           SectName := SectName_N
-          CoordMode "Mouse", "Window"
-          MouseGetPos &X_Mouse_P, &Y_Mouse_P
+          X_Mouse_P := X_Mouse
+          Y_Mouse_P := Y_Mouse
           if (Counter > 500 or SectName_N != SectName) {
             ToolTip(SectName)
             Counter := 0
@@ -279,20 +279,12 @@ class RadialMenuRenderer {
         }
       }
       if (Section_Mouse != Section_Mouse_Prev or A_Index == 1 or needsRedraw) {
-        if (G) {
-          Gdip_GraphicsClear(G)
-        }
-        hbm := CreateDIBSection(Width, Height)
-        hdc := CreateCompatibleDC()
-        obm := SelectObject(hdc, hbm)
-        G := Gdip_GraphicsFromHDC(hdc)
-        
-        Gdip_SetSmoothingMode(G, 4)
+        Gdip_GraphicsClear(G)
         Gdip_FillEllipse(G, pBrushC, R_3 - R_1, R_3 - R_1, 2 * R_1, 2 * R_1)
         
         Loop this.menu.Sections {
-          SectionAngle := 2 * 3.141592653589793 / this.menu.Sections * (A_Index - 1)
-          SectName := this.menu.Sect_Name.Has(A_Index) ? this.menu.Sect_Name[A_Index] : ""
+          SectionAngle := -1.5707963267948966 + 2 * 3.141592653589793 / this.menu.Sections * (A_Index - 1)
+          drawName := this.menu.Sect_Name.Has(A_Index) ? this.menu.Sect_Name[A_Index] : ""
           if (A_Index == Section_Mouse) {
             Gdip_FillPolygon(G, pBrushA, Points[A_Index])
             Gdip_DrawLines(G, pPenA, Points[A_Index])
@@ -311,9 +303,9 @@ class RadialMenuRenderer {
           } else if (pBitmap.Has(A_Index) && pBitmap[A_Index]) {
             Gdip_DrawImage(G, pBitmap[A_Index], X_Bitmap[A_Index], Y_Bitmap[A_Index], 32, 32 * bHeight[A_Index] / bWidth[A_Index], 0, 0, bWidth[A_Index], bHeight[A_Index])
           }
-          if (SectName != "") {
+          if (drawName != "") {
             if (SectImg == "") {
-              Gdip_TextToGraphics(G, SectName, "vCenter x" (X_Bitmap[A_Index] - 40 + 16) " y" (Y_Bitmap[A_Index] - 40 + 16), "", "64", "64")
+              Gdip_TextToGraphics(G, drawName, "vCenter x" (X_Bitmap[A_Index] - 40 + 16) " y" (Y_Bitmap[A_Index] - 40 + 16), "", "64", "64")
             }
           } else {
             Gdip_TextToGraphics(G, A_Index, "vCenter cFF888888 x" (X_Bitmap[A_Index] - 40 + 16) " y" (Y_Bitmap[A_Index] - 40 + 16), "", "64", "64")
@@ -321,14 +313,6 @@ class RadialMenuRenderer {
         }
         
         UpdateLayeredWindow(hwnd1, hdc, X_Gui, Y_Gui, Width, Height)
-        if (hdc) {
-          SelectObject(hdc, obm)
-          DeleteObject(hbm)
-          DeleteDC(hdc)
-        }
-        if (G) {
-          Gdip_DeleteGraphics(G)
-        }
       }
       Section_Mouse_Prev := Section_Mouse
     }
@@ -361,7 +345,8 @@ class RadialMenuRenderer {
     Gdip_Shutdown(this.pToken)
     this.pToken := 0
     MyGui.Destroy()
-    Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center)
+    MouseGetPos &X_Mouse, &Y_Mouse
+    Section_Mouse := RM_GetSection(this.menu.Sections, R_2, X_Center, Y_Center, X_Mouse, Y_Mouse)
     
     finalName := ""
     if (Section_Mouse > 0 && this.menu.Sect_Name.Has(Section_Mouse)) {
@@ -388,7 +373,7 @@ Gdip_GetPointsSection(X_Center, Y_Center, R_1, R_2, Sections, Offset, Section :=
   SweepAngle_2 := ACos((R_2 * Cos(SectionAngle / 2) + Offset * Sin(SectionAngle / 2)) / R_2) * 2  
   
   Loop_Sections := Round(R_1 * SweepAngle)
-  StartAngle := -SweepAngle / 2 + SectionAngle * (Section)
+  StartAngle := -SweepAngle / 2 - 1.5707963267948966 + SectionAngle * (Section)
   Points := ""
   Loop Loop_Sections {
     Angle := StartAngle + (A_Index - 1) * SweepAngle / (Loop_Sections - 1)
@@ -404,7 +389,7 @@ Gdip_GetPointsSection(X_Center, Y_Center, R_1, R_2, Sections, Offset, Section :=
   }
   
   Loop_Sections := Round(R_2 * SweepAngle_2)
-  StartAngle_2 := SweepAngle_2 / 2 + SectionAngle * (Section)
+  StartAngle_2 := SweepAngle_2 / 2 - 1.5707963267948966 + SectionAngle * (Section)
   Loop Loop_Sections {
     Angle := StartAngle_2 - (A_Index - 1) * SweepAngle_2 / (Loop_Sections - 1)
     X_Arc := Round(X_Center + R_2 * Cos(Angle))
@@ -417,10 +402,8 @@ Gdip_GetPointsSection(X_Center, Y_Center, R_1, R_2, Sections, Offset, Section :=
   return Points
 }
 
-RM_GetSection(Sections, R_2, X_Center, Y_Center) {
+RM_GetSection(Sections, R_2, X_Center, Y_Center, X_Mouse, Y_Mouse) {
   Section_Mouse := 0
-  CoordMode "Mouse", "Window"
-  MouseGetPos &X_Mouse, &Y_Mouse
   X_Rel := X_Mouse - X_Center
   Y_Rel := Y_Mouse - Y_Center 
   Distance_Center := Sqrt(X_Rel * X_Rel + Y_Rel * Y_Rel)
@@ -436,9 +419,18 @@ RM_GetSection(Sections, R_2, X_Center, Y_Center) {
   } else if (Distance_Center > R_2) {
     a := X_Rel == 0 ? (Y_Rel == 0 ? 0 : Y_Rel > 0 ? 90 : 270) : ATan(Y_Rel / X_Rel) * 57.2957795130823209
     Angle := X_Rel < 0 ? 180 + a : a < 0 ? 360 + a : a
-    Section_Mouse := 1 + Round(Angle / 360 * Sections)
-    if (Section_Mouse > Sections) {
-      Section_Mouse := 1
+    MouseAngle := Mod(Angle + 90, 360)
+    MinDist := 999
+    Section_Mouse := 1
+    Loop Sections {
+      CenterAngle := 360 * (A_Index - 1) / Sections
+      Dist := Abs(MouseAngle - CenterAngle)
+      if (Dist > 180)
+        Dist := 360 - Dist
+      if (Dist < MinDist) {
+        MinDist := Dist
+        Section_Mouse := A_Index
+      }
     }
   }
   return Section_Mouse

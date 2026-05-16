@@ -19,6 +19,7 @@
 #Include Main\FolderPackager.ahk
 #Include Main\GlobalUtil.ahk
 #Include Main\Util\MacroClipboardUtil.ahk
+#Include Main\Util\RadialMenuRenderer.ahk
 
 InitFilePath()          ;初始化文件路径
 LoadCurMacroSetting()   ;加载当前配置宏
