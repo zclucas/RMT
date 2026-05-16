@@ -33,6 +33,7 @@ class TableItem {
         this.AllConArr := []        ;   table中所有的con
         this.AllGroup := []         ; table中所有的group
         this.IsWorkIndexArr := []        ;work正在执行中
+        this.GifPathArr := []             ;菜单宏GIF路径
 
         this.FoldInfo := ""          ; 折叠筐保存信息
         this.FoldOffsetArr := []    ;和初始状态的高度偏移值

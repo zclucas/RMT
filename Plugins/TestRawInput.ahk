@@ -44,6 +44,12 @@ try {
 scaleFactor := (mouseSpeed / 10.0) * (dpiX / 96.0)
 
 outFile := A_ScriptDir "\ri_test.txt"
+try {
+    if FileExist(outFile)
+        FileDelete(outFile)
+} catch as e {
+    outFile := A_ScriptDir "\ri_test_" A_Now ".txt"
+}
 
 ToolTip("录制中...`n移动+左键+右键+键盘`nF2: 保存 | ESC: 退出")
 SetTimer () => ToolTip(), -4000
@@ -73,10 +79,12 @@ OnWMInput(wParam, lParam, msg, hwnd) {
             x := NumGet(rawInput, 36, "Int")
             y := NumGet(rawInput, 40, "Int")
             btnFlags := NumGet(rawInput, 28, "UShort")
+            buttonData := NumGet(rawInput, 30, "Short")
         } else {
             x := NumGet(rawInput, 32, "Int")
             y := NumGet(rawInput, 36, "Int")
             btnFlags := NumGet(rawInput, 24, "UShort")
+            buttonData := NumGet(rawInput, 26, "Short")
         }
 
         if (x != 0 || y != 0) {
@@ -88,10 +96,21 @@ OnWMInput(wParam, lParam, msg, hwnd) {
         static btnMap := Map(
             0x0001, "LBtn_Down", 0x0002, "LBtn_Up",
             0x0004, "RBtn_Down", 0x0008, "RBtn_Up",
-            0x0010, "MBtn_Down", 0x0020, "MBtn_Up"
+            0x0010, "MBtn_Down", 0x0020, "MBtn_Up",
+            0x0040, "X1Btn_Down", 0x0080, "X1Btn_Up",
+            0x0100, "X2Btn_Down", 0x0200, "X2Btn_Up"
         )
         if (btnMap.Has(btnFlags))
             events.Push(Map("type", "btn", "name", btnMap[btnFlags], "t", t))
+
+        if (btnFlags & 0x0400) {
+            wheelName := buttonData > 0 ? "WheelUp" : "WheelDown"
+            events.Push(Map("type", "btn", "name", wheelName, "wheelValue", buttonData, "t", t))
+        }
+        else if (btnFlags & 0x0800) {
+            wheelName := buttonData > 0 ? "WheelRight" : "WheelLeft"
+            events.Push(Map("type", "btn", "name", wheelName, "wheelValue", buttonData, "t", t))
+        }
     }
     else if (dwType == 1) {
         vKey := 0
@@ -128,6 +147,14 @@ SaveResult(*) {
     rUp := 0
     mDown := 0
     mUp := 0
+    x1Down := 0
+    x1Up := 0
+    x2Down := 0
+    x2Up := 0
+    wheelUp := 0
+    wheelDown := 0
+    wheelLeft := 0
+    wheelRight := 0
     kDown := 0
     kUp := 0
 
@@ -151,6 +178,22 @@ SaveResult(*) {
                 mDown++
             else if (n = "MBtn_Up")
                 mUp++
+            else if (n = "X1Btn_Down")
+                x1Down++
+            else if (n = "X1Btn_Up")
+                x1Up++
+            else if (n = "X2Btn_Down")
+                x2Down++
+            else if (n = "X2Btn_Up")
+                x2Up++
+            else if (n = "WheelUp")
+                wheelUp++
+            else if (n = "WheelDown")
+                wheelDown++
+            else if (n = "WheelLeft")
+                wheelLeft++
+            else if (n = "WheelRight")
+                wheelRight++
         }
         else if (e["type"] = "key") {
             if (e["state"] = "Down")
@@ -175,6 +218,8 @@ SaveResult(*) {
     s .= "----------------------------------------`n"
     s .= "移动: " moveCount " 次  |  dx=" totalDx " dy=" totalDy "px  距离≈" Round(dist) "px  方向=" Round(angle, 1) "°`n"
     s .= "左键: " lDown "/" lUp "  |  右键: " rDown "/" rUp "  |  中键: " mDown "/" mUp "`n"
+    s .= "侧键1: " x1Down "/" x1Up "  |  侧键2: " x2Down "/" x2Up "`n"
+    s .= "滚轮↑: " wheelUp "  ↓: " wheelDown "  ←: " wheelLeft "  →: " wheelRight "`n"
     s .= "键盘: " kDown "/" kUp "  |  总事件: " events.Length "`n"
     s .= "----------------------------------------`n"
 
@@ -184,8 +229,12 @@ SaveResult(*) {
         desc := ""
         if (e["type"] = "move")
             desc := Format("{:+5d},{:+5d}px", e["dx"], e["dy"])
-        else if (e["type"] = "btn")
-            desc := "[" e["name"] "]"
+        else if (e["type"] = "btn") {
+            if (e.Has("wheelValue"))
+                desc := "[" . e["name"] . "(" . e["wheelValue"] . ")]"
+            else
+                desc := "[" . e["name"] . "]"
+        }
         else if (e["type"] = "key")
             desc := Format("[{} {}]", e["name"], e["state"])
         w := StrLen(desc)
@@ -206,14 +255,21 @@ SaveResult(*) {
         relT := e["t"] - startTime
         if (e["type"] = "move")
             desc := Format("{:+5d},{:+5d}px", e["dx"], e["dy"])
-        else if (e["type"] = "btn")
-            desc := "[" e["name"] "]"
+        else if (e["type"] = "btn") {
+            if (e.Has("wheelValue"))
+                desc := "[" . e["name"] . "(" . e["wheelValue"] . ")]"
+            else
+                desc := "[" . e["name"] . "]"
+        }
         else
             desc := Format("[{} {}]", e["name"], e["state"])
         s .= Format("{:" maxW1 "}d  {:-" maxW2 "}s  {:7d}`n", A_Index, desc, relT)
     }
 
-    FileDelete(outFile)
+    try {
+        if FileExist(outFile)
+            FileDelete(outFile)
+    }
     FileAppend(s, outFile)
     ; Run(outFile)
     MsgBox(
@@ -221,6 +277,8 @@ SaveResult(*) {
         "时长: " (duration / 1000) "s`n"
         "移动: " moveCount " 点, 距离≈" Round(dist) "px`n"
         "左键: " lDown "/" lUp "  右键: " rDown "/" rUp "`n"
+        "侧键1: " x1Down "/" x1Up "  侧键2: " x2Down "/" x2Up "`n"
+        "滚轮↑: " wheelUp " ↓: " wheelDown " ←: " wheelLeft " →: " wheelRight "`n"
         "键盘: " kDown "/" kUp "`n"
         "总事件: " events.Length, "完成"
     )

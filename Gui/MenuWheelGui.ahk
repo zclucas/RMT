@@ -62,9 +62,7 @@ class MenuWheelGui {
     }
 
     CreateMenuHookFunc(ArcNr, MenuIndex) {
-        return (section, name) {
-            this.OnRadialMenuSelect(ArcNr, MenuIndex)
-        }
+        return (section, name) => this.OnRadialMenuSelect(ArcNr, MenuIndex)
     }
 
     OnRadialMenuSelect(ArcNr, MenuIndex) {

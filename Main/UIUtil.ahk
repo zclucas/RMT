@@ -517,10 +517,12 @@ AddSettingUI(index) {
     MySoftData.NoVariableTipCtrl := con
     MySoftData.NoVariableTipCtrl.Value := MySoftData.NoVariableTip
 
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("分割线"), tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("分割线"), tableItem)
     MySoftData.SplitLineCtrl := con
     MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("模态子窗口"), tableItem)
+
+    posY += 40
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("模态子窗口"), tableItem)
     MySoftData.ModalSubGuiCtrl := con
     MySoftData.ModalSubGuiCtrl.Value := MySoftData.IsModalSubGui
 

@@ -296,7 +296,7 @@ OnMMProOnce(tableItem, index, Data) {
     if (MoveMode == 2) {
         MOUSEEVENTF_MOVE := 0x0001
         DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE
-            , "Int", PosX, "Int", PosY, "UInt", 0, "UInt", 0)
+            , "Int", PosX, "Int", PosY, "UInt", 0, "Ptr", 0)
     }
     else if (MoveMode == 1) {
         IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
