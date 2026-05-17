@@ -768,7 +768,8 @@ SendBGKey(Data, tableItem, index) {
 
     if (Data.Type == 2 || Data.Type == 3) {
         for hwnd in hwndList {
-            for key in Data.KeyArr {
+            loop Data.KeyArr.Length {
+                key := Data.KeyArr[Data.KeyArr.Length - A_Index + 1]
                 SendBGKeyState(hwnd, key, 0, tableItem, index)
             }
         }

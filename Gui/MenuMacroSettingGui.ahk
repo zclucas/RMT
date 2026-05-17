@@ -3,8 +3,6 @@
 class MenuMacroSettingGui {
     __new() {
         this.Gui := ""
-        this.SureBtnAction := ""
-        this.SaveBtnAction := ""
         this.SureFocusCon := ""
         this.CurrentIndex := 0
         this.TableIndex := 0
@@ -18,7 +16,7 @@ class MenuMacroSettingGui {
     ShowGui(tableIndex, index) {
         this.TableIndex := tableIndex
         this.CurrentIndex := index
-        
+
         tableItem := MySoftData.TableInfo[tableIndex]
         if (tableItem.HasProp("GifPathArr") && tableItem.GifPathArr.Length >= index && tableItem.GifPathArr[index] != "") {
             this.StoredGifPath := tableItem.GifPathArr[index]
@@ -39,13 +37,13 @@ class MenuMacroSettingGui {
 
         posY := 20
 
-        con := MyGui.Add("Text", Format("x{} y{}", 20, posY), GetLang("GIF文件:"))
+        con := MyGui.Add("Text", Format("x{} y{}", 20, posY), GetLang("图标文件:"))
         posY += 30
 
         this.GifPathEdit := MyGui.Add("Edit", Format("x{} y{} w300 h27", 20, posY), this.StoredGifPath)
         this.GifPathEdit.Opt("ReadOnly")
-        
-        browseBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 330, posY - 1), GetLang("浏览"))
+
+        browseBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 330, posY - 1), GetLang("选择"))
         browseBtn.OnEvent("Click", (*) => this.OnBrowseClick())
         posY += 35
 
@@ -54,7 +52,7 @@ class MenuMacroSettingGui {
 
         this.PreviewCon := MyGui.Add("Picture", Format("x{} y{} w300 h200 BackgroundDDDDDD", 20, posY), "")
         this.PreviewCon.Opt("0x2000000")
-        
+
         if (this.StoredGifPath != "") {
             fullPath := this.GetFullGifPath(this.StoredGifPath)
             if (FileExist(fullPath)) {
@@ -66,7 +64,7 @@ class MenuMacroSettingGui {
 
         sureBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 100, posY), GetLang("确定"))
         sureBtn.OnEvent("Click", (*) => this.OnSureClick())
-        
+
         cancelBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 200, posY), GetLang("取消"))
         cancelBtn.OnEvent("Click", (*) => this.OnCancelClick())
 
@@ -75,13 +73,14 @@ class MenuMacroSettingGui {
     }
 
     OnBrowseClick() {
-        file := FileSelect(1, , GetLang("选择GIF"), "GIF Files (*.gif)")
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Gif\"
+        file := FileSelect(1, fullPath, GetLang("选择GIF"), "Img Files (*.gif; *.png; .jpg)")
         if (file == "")
             return
 
         this.OriginalGifPath := file
         this.GifPathEdit.Value := file
-        
+
         if (FileExist(file)) {
             this.ShowGifPreview(file)
         }
@@ -116,12 +115,12 @@ class MenuMacroSettingGui {
 
     OnSureClick() {
         tableItem := MySoftData.TableInfo[this.TableIndex]
-        
+
         finalPath := ""
         if (this.OriginalGifPath != "" && FileExist(this.OriginalGifPath)) {
             finalPath := this.CopyGifToImagesFolder(this.OriginalGifPath)
         }
-        
+
         if (!tableItem.HasProp("GifPathArr")) {
             tableItem.GifPathArr := []
         }
@@ -130,10 +129,6 @@ class MenuMacroSettingGui {
         }
         tableItem.GifPathArr[this.CurrentIndex] := finalPath
 
-        if (this.SaveBtnAction != "") {
-            this.SaveBtnAction()
-        }
-        
         this.Cleanup()
         this.Gui.Destroy()
     }

@@ -469,7 +469,8 @@ AddSettingUI(index) {
     MySoftData.CoordYFloatCon := con
 
     AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(-1~10)："), tableItem)
-    con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum, tableItem)
+    con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum,
+    tableItem)
     MySoftData.MutiThreadNumCtrl := con
 
     ; posY += 40
@@ -506,14 +507,11 @@ AddSettingUI(index) {
     con := AddTableControl("CheckBox", Format("x{} y{} -Wrap w15", posX + 635, posY), "", tableItem)
     MySoftData.CMDTipCtrl := con
     MySoftData.CMDTipCtrl.Value := MySoftData.CMDTip
-    con := AddTableControl("Button", Format("x{} y{}", posX +635 + 15, posY - 5), GetLang("指令显示"), tableItem)
+    con := AddTableControl("Button", Format("x{} y{}", posX + 635 + 15, posY - 5), GetLang("指令显示"), tableItem)
     con.OnEvent("Click", (*) => OnEditCMDTipGui())
 
     posY += 40
-    con := AddTableControl("Button", Format("x{} y{} w{}", posX + 25, posY - 5, 100), GetLang("录制选项"), tableItem)
-    con.OnEvent("Click", OnClickToolRecordSettingBtn)
-
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("无变量提醒"), tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("无变量提醒"), tableItem)
     MySoftData.NoVariableTipCtrl := con
     MySoftData.NoVariableTipCtrl.Value := MySoftData.NoVariableTip
 
@@ -525,6 +523,14 @@ AddSettingUI(index) {
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("模态子窗口"), tableItem)
     MySoftData.ModalSubGuiCtrl := con
     MySoftData.ModalSubGuiCtrl.Value := MySoftData.IsModalSubGui
+
+    con := AddTableControl("Button", Format("x{} y{} w{}", posX + 635, posY - 5, 100), GetLang("录制选项"), tableItem)
+    con.OnEvent("Click", OnClickToolRecordSettingBtn)
+
+    posY += 40
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("分割线"), tableItem)
+    MySoftData.SplitLineCtrl := con
+    MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
 
     posY += 40
     con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)
@@ -741,7 +747,7 @@ CustomTrayMenu() {
     tipStr := MySoftData.MyGui.Title
     if (A_IsAdmin)
         tipStr .= "`n" GetLang("管理员权限")
-    
+
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("显示窗口"), (*) => RefreshGui())
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("休眠"), (*) => OnSuspendHotkey())
     A_TrayMenu.Delete("&Pause Script")

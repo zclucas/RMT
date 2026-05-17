@@ -25,7 +25,6 @@ global workIndex := A_Args[2]
 global parentPID := A_Args[3]
 global txName := A_Args[4]
 global rxName := A_Args[5]
-global evtName := A_Args[6]
 
 global ReceiveInfoMap := Map()
 global MySoftData := SoftData()
@@ -66,21 +65,36 @@ global MyRemoveAtGlobalArray := WorkRemoveAtGlobalArray
 WorkOpenCVLoadDll()
 SetTimer(CheckOcrIdle, 60000)
 
-global shmTx := SharedMemory(txName, 1048576 + 128)
-global shmRx := SharedMemory(rxName, 1048576 + 128)
+global shmTx := SharedMemory(txName, 1048576 + 192)
+global shmRx := SharedMemory(rxName, 1048576 + 192)
 global tx := RingBuffer(shmTx.ptr, 1048576)
 global rx := RingBuffer(shmRx.ptr, 1048576)
-global hEvent := OpenEvent(evtName)
 
-SetTimer(ProcessQueue, 1)
+; 注册消息
+OnMessage(WM_STOP_MACRO, OnWorkStopMacro)
+OnMessage(WM_CLEAR_WORK, OnExit)
+OnMessage(WM_WORK_NOTIFY, OnWorkNotify)
+MsgPostHandler(WM_LOAD_WORK, workIndex, A_ScriptHwnd)
+
+OnWorkNotify(wParam, lParam, msg, hwnd) {
+    ProcessQueue()
+}
+
 ProcessQueue() {
-    global tx, rx, hEvent
-    if (DllCall("WaitForSingleObject", "ptr", hEvent, "uint", 0) == 0) {
+    global tx, rx, workIndex
+
+    Loop {
+        tx.ExchangeNotifyFlag(1)
+
         while (tx.Pop(&type, &id, &cmd, &hTaskEvent)) {
             switch type {
                 case MsgType.TASK:
                     result := ExecTask(cmd)
                     rx.Push(MsgType.RESULT, id, result)
+
+                    if (rx.ExchangeNotifyFlag(1) == 0)
+                        MsgPostHandler(WM_RESULT_NOTIFY, workIndex, 0)
+
                     if (hTaskEvent) {
                         SetEvent(hTaskEvent)
                         CloseHandle(hTaskEvent)
@@ -90,8 +104,14 @@ ProcessQueue() {
                 case MsgType.EVENT:
                     OnEventMessage(cmd)
             }
+
         }
-        ResetEvent(hEvent)
+
+        ; Double Check Pattern
+        tx.ExchangeNotifyFlag(0) ; Full barrier to mark as idle
+
+        if (tx.IsEmpty())
+            break
     }
 }
 
@@ -106,7 +126,7 @@ ExecTask(cmd) {
         if (IsSet(MsgSendHandler))
             MsgSendHandler("Error", GetFullErrorInfo(e))
     }
-    
+
     if (IsSet(MyExcuteRMTCMDAction)) {
         try return MyExcuteRMTCMDAction(cmd)
         catch as e {
@@ -148,14 +168,3 @@ GetFullErrorInfo(exception) {
 OnControlMessage(cmd) {
     ; Handle any JSON control messages
 }
-
-; 注册消息
-OnMessage(WM_STOP_MACRO, OnWorkStopMacro)
-OnMessage(WM_CLEAR_WORK, OnExit)
-
-myTitle := "RMTWork" workIndex
-mygui := Gui("+ToolWindow")          ; 创建 GUI，无标题栏
-mygui.Title := myTitle               ; 设置窗口标题（这才是 WinGetTitle 能读到的）
-mygui.Show("Hide")                   ; 隐藏窗口
-global myHwnd := mygui.Hwnd
-MsgPostHandler(WM_LOAD_WORK, workIndex, A_ScriptHwnd)

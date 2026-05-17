@@ -69,9 +69,13 @@
     }
 
     MsgSendHandler(action, args*) {
-        global rx
+        global rx, workIndex
         payload := JSON.stringify([action, args*])
         rx.Push(MsgType.EVENT, 0, payload)
+        
+        ; Notify parent if not already notified
+        if (rx.ExchangeNotifyFlag(1) == 0)
+            MsgPostHandler(WM_RESULT_NOTIFY, workIndex, 0)
     }
 }
 

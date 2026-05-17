@@ -39,7 +39,7 @@ class MenuWheelGui {
                 }
             }
 
-            hookFunc := this.CreateMenuHookFunc(ArcNr, MenuIndex)
+            hookFunc := this.OnRadialMenuSelect.Bind(this)
             menuObj.Add(btnName, gifPath, ArcNr, 0)
             menuObj.AddHookFunc(ArcNr, hookFunc)
         }

@@ -448,6 +448,9 @@ CancelTableItemStopState(tableIndex, itemIndex) {
             return
 
         tableItem.ColorStateArr[itemIndex] := 0
+        ; 同步清除 KilledArr，確保狀態完全恢復可再次觸發
+        if (tableItem.KilledArr.Length >= itemIndex)
+            tableItem.KilledArr[itemIndex] := false
         UpdateMacroRunningCount(3, 0)
         RefreshItemColorUI(tableIndex, itemIndex)
     }

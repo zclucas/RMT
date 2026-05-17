@@ -73,10 +73,15 @@ class RadialMenuRenderer {
     SectName := ""
     CoordMode "Mouse", "Screen"
     MouseGetPos &X_Center, &Y_Center
-    R_1 := 100
-    R_2 := R_1 * 0.2
-    Offset := 2
-    R_3 := R_1 + Offset * 2 + 10
+    R_1 := 172          ;轮盘外径
+    R_2 := R_1 * 0.4    ;轮盘内径
+    Offset := 2         ;预选偏移
+    PreLen := 12        ;预选 径向宽度
+    R_3 := R_1 + Offset * 2 + PreLen  ;预选半径
+    R_Icon := R_1 - 45  ;图标绘制半径
+    iconWid := 64
+    IconHei := 64
+    
     
     X_Gui := X_Center - R_3
     Y_Gui := Y_Center - R_3
@@ -144,8 +149,8 @@ class RadialMenuRenderer {
                 gifRealW[A_Index] := Gdip_GetImageWidth(pGifBitmap[A_Index])
                 gifRealH[A_Index] := Gdip_GetImageHeight(pGifBitmap[A_Index])
                 pBitmap[A_Index] := 0
-                bWidth[A_Index] := 32
-                bHeight[A_Index] := 32
+                bWidth[A_Index] := iconWid
+                bHeight[A_Index] := 50
               } else {
                 pBitmap[A_Index] := pGifBitmap[A_Index]
                 pGifBitmap[A_Index] := 0
@@ -169,8 +174,8 @@ class RadialMenuRenderer {
         bWidth[A_Index] := Gdip_GetImageWidth(pBitmap[A_Index])
         bHeight[A_Index] := Gdip_GetImageHeight(pBitmap[A_Index])
       } else if (!isGifAnim[A_Index]) {
-        bWidth[A_Index] := 32
-        bHeight[A_Index] := 32
+        bWidth[A_Index] := iconWid
+        bHeight[A_Index] := IconHei
       }
     }
     
@@ -178,10 +183,12 @@ class RadialMenuRenderer {
     Loop this.menu.Sections {
       SectionAngle := -1.5707963267948966 + 2 * 3.141592653589793 / this.menu.Sections * (A_Index - 1)
 
-      X_Bitmap[A_Index] := R_3 + (R_1 - 30) * Cos(SectionAngle) - 16
-      Y_Bitmap[A_Index] := R_3 + (R_1 - 30) * Sin(SectionAngle) - 16
+      drawnW := isGifAnim[A_Index] ? iconWid : iconWid
+      drawnH := isGifAnim[A_Index] ? IconHei : (pBitmap.Has(A_Index) && pBitmap[A_Index]) ? IconHei * bHeight[A_Index] / bWidth[A_Index] : IconHei
+      X_Bitmap[A_Index] := R_3 + R_Icon * Cos(SectionAngle) - drawnW / 2
+      Y_Bitmap[A_Index] := R_3 + R_Icon * Sin(SectionAngle) - drawnH / 2
       
-      PointsA[A_Index] := Gdip_GetPointsSection(R_3, R_3, R_1 + Offset * 2 + 10, R_1 + Offset * 2, this.menu.Sections, Offset, A_Index)
+      PointsA[A_Index] := Gdip_GetPointsSection(R_3, R_3, R_1 + Offset * 2 + PreLen, R_1 + Offset * 2, this.menu.Sections, Offset, A_Index)
       Points[A_Index] := Gdip_GetPointsSection(R_3, R_3, R_1, R_2, this.menu.Sections, Offset, A_Index)
     }
     
@@ -297,11 +304,11 @@ class RadialMenuRenderer {
           SectImg := this.menu.Sect_Img.Has(A_Index) ? this.menu.Sect_Img[A_Index] : ""
           if (isGifAnim.Has(A_Index) && isGifAnim[A_Index] && pGifBitmap.Has(A_Index) && pGifBitmap[A_Index]) {
             DllCall("gdiplus\GdipImageSelectActiveFrame", "ptr", pGifBitmap[A_Index], "ptr", gifDimensionIDs[A_Index], "int", gifCurrentFrame[A_Index])
-            gw := gifRealW.Has(A_Index) ? gifRealW[A_Index] : 32
-            gh := gifRealH.Has(A_Index) ? gifRealH[A_Index] : 32
-            Gdip_DrawImage(G, pGifBitmap[A_Index], X_Bitmap[A_Index], Y_Bitmap[A_Index], 32, 32, 0, 0, gw, gh)
+            gw := gifRealW.Has(A_Index) ? gifRealW[A_Index] : iconWid
+            gh := gifRealH.Has(A_Index) ? gifRealH[A_Index] : IconHei
+            Gdip_DrawImage(G, pGifBitmap[A_Index], X_Bitmap[A_Index], Y_Bitmap[A_Index], iconWid, IconHei, 0, 0, gw, gh)
           } else if (pBitmap.Has(A_Index) && pBitmap[A_Index]) {
-            Gdip_DrawImage(G, pBitmap[A_Index], X_Bitmap[A_Index], Y_Bitmap[A_Index], 32, 32 * bHeight[A_Index] / bWidth[A_Index], 0, 0, bWidth[A_Index], bHeight[A_Index])
+            Gdip_DrawImage(G, pBitmap[A_Index], X_Bitmap[A_Index], Y_Bitmap[A_Index], iconWid, IconHei * bHeight[A_Index] / bWidth[A_Index], 0, 0, bWidth[A_Index], bHeight[A_Index])
           }
           if (drawName != "") {
             if (SectImg == "") {
