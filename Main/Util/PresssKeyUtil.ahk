@@ -164,6 +164,24 @@ SendLogicKey(Key, state, tableItem, index) {
     }
 }
 
+SendAHIKey(Key, state, tableItem, index) {
+    if (!InitAHI())
+        return
+
+    AhiSendKey(Key, state)
+
+    if (MySoftData.OnlyDownKeyMap.Has(Key))
+        return
+    if (state == 1) {
+        tableItem.HoldKeyArr[index][Key] := "AHI"
+    }
+    else {
+        if (tableItem.HoldKeyArr[index].Has(Key)) {
+            tableItem.HoldKeyArr[index].Delete(Key)
+        }
+    }
+}
+
 SendJoyBtnKey(key, state, tableItem, index) {
     JoyBtnName := SubStr(key, 4)
     if (JoyBtnName == "LT" || JoyBtnName == "RT") {

@@ -40,7 +40,7 @@ class MacroSettingGui {
         MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("按键类型："))
         PosX += 90
         this.TKTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w150", PosX, PosY - 3), GetLangArr(["AHK Send",
-            "keybd_event", "罗技"]))
+            "keybd_event", "罗技", "AHI"]))
         Con := MyGui.Add("Button", Format("x{} y{} w30 h29", PosX + 155, PosY - 4), "?")
         Con.OnEvent("Click", this.OnClickModeHelpBtn.Bind(this))
 
@@ -69,10 +69,11 @@ class MacroSettingGui {
         str1 := GetLang("AHK Send：通用方式，适合办公软件与大多数游戏（管理员权限可以让更多游戏有效）。")
         str2 := GetLang("keybd_event：调用 Win 系统接口模拟按键，适用比较旧的软件或游戏（需管理员权限）。")
         str3 := GetLang("罗技：调用 罗技驱动 模拟按键（需管理员权限并且运行过G HUB）。")
-        str4 := GetLang("Tip:罗技的鼠标功能需要使用旧G HUB版本（2022.2.1154及以前版本）")
-        str5 := GetLang( "**keybd_event 和 罗技 的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**")
+        str4 := GetLang("AHI：调用 Interception 驱动模拟按键（需安装 Interception 驱动）。")
+        str5 := GetLang("Tip:罗技的鼠标功能需要使用旧G HUB版本（2022.2.1154及以前版本）") "`n" GetLang("Tip:AHI驱动需要安装Interception驱动并以管理员权限运行")
+        str6 := GetLang( "**keybd_event、罗技、AHI 的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**")
 
-        str := Format("{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5)
+        str := Format("{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6)
         MsgBox(str)
     }
 
