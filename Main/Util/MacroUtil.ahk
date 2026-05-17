@@ -294,9 +294,7 @@ OnMMProOnce(tableItem, index, Data) {
     PosY := GetFloatValue(PosY, MySoftData.CoordYFloat)
     ClickCount := Data.ActionType == 2 ? 1 : 2
     if (MoveMode == 2) {
-        MOUSEEVENTF_MOVE := 0x0001
-        DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE
-            , "Int", PosX, "Int", PosY, "UInt", 0, "Ptr", 0)
+        SendInput("{Click " Round(PosX) " " Round(PosY) " 0 Relative}")
     }
     else if (MoveMode == 1) {
         IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
@@ -828,8 +826,7 @@ OnMouseMove(tableItem, cmd, index) {
     SendMode("Event")
     CoordMode("Mouse", "Screen")
     if (MoveMode == 2) {
-        MOUSEEVENTF_MOVE := 0x0001
-        DllCall("mouse_event", "UInt", MOUSEEVENTF_MOVE, "Int", PosX, "Int", PosY, "UInt", 0, "Ptr", 0)
+        SendInput("{Click " Round(PosX) " " Round(PosY) " 0 Relative}")
     }
     else if (MoveMode == 1) {
         MouseMove(PosX, PosY, Speed, "R")
