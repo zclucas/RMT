@@ -183,7 +183,7 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 勾选标题后，标题内容不能为空=Title required if checked
 勾选窗口类后，窗口类内容不能为空=Class required if checked
 勾选结束时间后，结束时间必须大于开始时间！！！=End time must be after start.
-勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中只能 勾选一个按键 或 不选=Rule1: Special: multi, Normal: single.
+勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中可以 同时勾选多个按键 或 不选=Rule1: Special: multi, Normal: multi.
 勾选规则2：手柄按钮、摇杆只能单独选=Rule2: Joystick: single.
 勾选进程名后，进程名内容不能为空=Process required if checked
 包含=Contains

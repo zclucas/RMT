@@ -116,10 +116,10 @@ class TriggerKeyGui {
                 normalKeyNum += 1
         }
 
-        if (normalKeyNum + joyKeyNum > 1)
+        if (joyKeyNum > 1)
             return false
 
-        if (joyKeyNum == 1 && hasModifyKey)
+        if (joyKeyNum == 1 && (hasModifyKey || normalKeyNum > 0))
             return false
 
         return true
@@ -152,10 +152,17 @@ class TriggerKeyGui {
                 break
         }
 
-        for key, value in this.ConMap {
-            if (StrCompare(key, triggerKey, false) == 0)
-                this.CheckedArr.Push(key)
+        normalKeys := StrSplit(triggerKey, " & ")
+        for index, nk in normalKeys {
+            if (nk == "")
+                continue
+            for key, value in this.ConMap {
+                if (StrCompare(key, nk, false) == 0)
+                    this.CheckedArr.Push(key)
+            }
+        }
 
+        for key, value in this.ConMap {
             value.State := 0
             value.Opt(this.UnSelectColor)
             value.Redraw()
@@ -184,22 +191,33 @@ class TriggerKeyGui {
     GetTriggerKey() {
         triggerKey := ""
         hasJoy := false
-        onlyModifyKey := true
+        normalKeys := []
+        modifierStr := ""
         for index, value in this.CheckedArr {
             if (RegExMatch(value, "Joy")) {
                 hasJoy := true
             }
 
-            if (!this.ModifyKeyMap.Has(value)) {
-                onlyModifyKey := false
+            if (this.ModifyKeyMap.Has(value)) {
+                modifierStr .= this.ModifyKeyMap.Get(value)
+            }
+            else {
+                normalKeys.Push(value)
             }
         }
 
-        for index, value in this.CheckedArr {
-            isKeyMap := this.ModifyKeyMap.Has(value)
-            isLast := index == this.CheckedArr.Length
-            subTriggerKey := (isKeyMap && !isLast) ? this.ModifyKeyMap.Get(value) : value
-            triggerKey .= subTriggerKey
+        if (normalKeys.Length > 1) {
+            triggerKey := modifierStr
+            for index, value in normalKeys {
+                triggerKey .= value
+                if (index < normalKeys.Length)
+                    triggerKey .= " & "
+            }
+        }
+        else {
+            triggerKey := modifierStr
+            if (normalKeys.Length == 1)
+                triggerKey .= normalKeys[1]
         }
 
         if (!hasJoy && this.EnableTriggerKeyCon.Value) {
@@ -1114,7 +1132,7 @@ class TriggerKeyGui {
         MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650), GetLang("普通按键：除特殊按键的其他按键"))
         PosY += 25
         MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650),
-        GetLang("勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中只能 勾选一个按键 或 不选"))
+        GetLang("勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中可以 同时勾选多个按键 或 不选"))
         PosY += 25
         MyGui.Add("Text", Format("x{} y{} h{} w{}", PosX, PosY, 20, 650), GetLang("勾选规则2：手柄按钮、摇杆只能单独选"))
         FlagEY := PosY

@@ -441,7 +441,7 @@ BindMenuHotKey() {
             continue
 
         oriKey := FoldInfo.TKArr[index]
-        key := "$*" oriKey
+        key := "$*" GetBindableHotkey(oriKey)
         actionArr := GetBindMacroAction(oriKey)
         isJoyKey := RegExMatch(oriKey, "Joy")
         frontInfo := FoldInfo.FrontInfoArr[index]
@@ -489,7 +489,7 @@ BindTabHotKey() {
             if (tableItem.MacroArr[index] == "")
                 continue
 
-            key := "$*" tableItem.TKArr[index]
+            key := "$*" GetBindableHotkey(tableItem.TKArr[index])
             actionArr := GetMacroAction(tableIndex, index)
             isJoyKey := RegExMatch(tableItem.TKArr[index], "Joy")
             isHotstring := SubStr(tableItem.TKArr[index], 1, 1) == ":"
@@ -599,6 +599,9 @@ OnTriggerKeyDown(tableIndex, itemIndex, *) {
     key := LTrim(tableItem.TKArr[itemIndex], "~")
     key := StrLower(key)
 
+    if (!CheckExtraKeysPressed(key))
+        return
+
     if (!MySoftData.TriggerKeyMap.Has(key))
         return
 
@@ -652,6 +655,8 @@ GetBindMacroAction(key) {
 OnBindKeyDown(key, *) {
     key := LTrim(key, "~")
     key := StrLower(key)
+    if (!CheckExtraKeysPressed(key))
+        return
     if (!MySoftData.TriggerKeyMap.Has(key))
         return
 

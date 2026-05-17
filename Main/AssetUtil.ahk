@@ -1143,8 +1143,8 @@ AreKeysPressed(keyCombo) {
             break
     }
 
-    ; 剩余部分是主键
-    mainKey := keyCombo
+    ; 剩余部分可能包含多个普通键（用 & 分隔）
+    mainKeys := StrSplit(keyCombo, " & ")
 
     ; 检查所有修饰键是否按下
     for mod in modifiers {
@@ -1179,25 +1179,92 @@ AreKeysPressed(keyCombo) {
         }
     }
 
-    isJoyKey := RegExMatch(mainKey, "Joy")
-    if (mainKey == "") {
-        return true
-    }
-    if (isJoyKey) {
-        isJoyAxis := RegExMatch(mainKey, "Min") || RegExMatch(mainKey, "Max")
-        joyName := isJoyAxis ? SubStr(mainKey, 1, 4) : mainKey
-
-        loop 4 {
-            state := GetKeyState(A_Index joyName)
-            if (state)
-                return true
+    for index, mainKey in mainKeys {
+        if (mainKey == "")
+            continue
+        isJoyKey := RegExMatch(mainKey, "Joy")
+        if (isJoyKey) {
+            isJoyAxis := RegExMatch(mainKey, "Min") || RegExMatch(mainKey, "Max")
+            joyName := isJoyAxis ? SubStr(mainKey, 1, 4) : mainKey
+            found := false
+            loop 4 {
+                state := GetKeyState(A_Index joyName)
+                if (state) {
+                    found := true
+                    break
+                }
+            }
+            if (!found)
+                return false
+        }
+        else if (!GetKeyState(mainKey, "P")) {
+            return false
         }
     }
-    else if (GetKeyState(mainKey, "P")) {  ; 检查主键（如果有）
-        return true
-    }
 
-    return false
+    return true
+}
+
+GetBindableHotkey(triggerKey) {
+    if (!InStr(triggerKey, " & "))
+        return triggerKey
+    tilde := ""
+    if (SubStr(triggerKey, 1, 1) == "~") {
+        tilde := "~"
+        triggerKey := SubStr(triggerKey, 2)
+    }
+    modPrefixes := ["<^", ">^", "<!", ">!", "<+", ">+", "<#", ">#", "^", "!", "+", "#"]
+    modStr := ""
+    loop {
+        hasAdd := false
+        for prefix in modPrefixes {
+            if (SubStr(triggerKey, 1, StrLen(prefix)) == prefix) {
+                modStr .= prefix
+                triggerKey := SubStr(triggerKey, StrLen(prefix) + 1)
+                hasAdd := true
+                break
+            }
+        }
+        if (!hasAdd)
+            break
+    }
+    parts := StrSplit(triggerKey, " & ")
+    lastKey := parts[parts.Length]
+    return tilde modStr lastKey
+}
+
+GetExtraNormalKeys(triggerKey) {
+    triggerKey := LTrim(triggerKey, "~")
+    modPrefixes := ["<^", ">^", "<!", ">!", "<+", ">+", "<#", ">#", "^", "!", "+", "#"]
+    loop {
+        hasAdd := false
+        for prefix in modPrefixes {
+            if (SubStr(triggerKey, 1, StrLen(prefix)) == prefix) {
+                triggerKey := SubStr(triggerKey, StrLen(prefix) + 1)
+                hasAdd := true
+                break
+            }
+        }
+        if (!hasAdd)
+            break
+    }
+    if (!InStr(triggerKey, " & "))
+        return []
+    parts := StrSplit(triggerKey, " & ")
+    extraKeys := []
+    loop parts.Length - 1 {
+        extraKeys.Push(parts[A_Index])
+    }
+    return extraKeys
+}
+
+CheckExtraKeysPressed(triggerKey) {
+    extraKeys := GetExtraNormalKeys(triggerKey)
+    for index, key in extraKeys {
+        if (!GetKeyState(key, "P"))
+            return false
+    }
+    return true
 }
 
 GetRecordTriggerKeyMap() {
