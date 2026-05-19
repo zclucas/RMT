@@ -8,16 +8,13 @@ class ToolRecordSettingGui {
         this.HoldMutiCon := ""
         this.KeyboardTogCon := ""
         this.MouseTogCon := ""
-        this.MouseMoveModeCon := ""
-        this.MouseTrailTogCon := ""
-        this.MouseTrailIntervalCon := ""
-        this.MouseTrailLenCon := ""
+        this.MouseTrailModeCon := ""
         this.MouseTrailSpeedCon := ""
         this.JoyTogCon := ""
         this.JoyIntervalCon := ""
 
-        this.TrailTipCon1 := ""
-        this.TrailTipCon2 := ""
+        this.ShowBorderCon := ""
+
         this.TrailTipCon3 := ""
         this.JoyTipCon := ""
     }
@@ -37,15 +34,13 @@ class ToolRecordSettingGui {
         this.HoldMutiCon.Value := ToolCheckInfo.RecordHoldMuti
         this.KeyboardTogCon.Value := ToolCheckInfo.RecordKeyboard
         this.MouseTogCon.Value := ToolCheckInfo.RecordMouse
-        this.MouseMoveModeCon.Value := ToolCheckInfo.RecordMouseMoveMode + 1
-        this.MouseTrailTogCon.Value := ToolCheckInfo.RecordMouseTrail
-        this.MouseTrailIntervalCon.Value := ToolCheckInfo.RecordMouseTrailInterval
-        this.MouseTrailLenCon.Value := ToolCheckInfo.RecordMouseTrailLen
+        this.MouseTrailModeCon.Value := ToolCheckInfo.RecordMouseTrail + 1
         this.MouseTrailSpeedCon.Value := ToolCheckInfo.RecordMouseTrailSpeed
         this.JoyTogCon.Value := ToolCheckInfo.RecordJoy
         this.JoyIntervalCon.Value := ToolCheckInfo.RecordJoyInterval
+        this.ShowBorderCon.Value := ToolCheckInfo.RecordShowBorder
         this.OnTogClick()
-        this.OnMoveModeChange()
+        this.OnTrailModeChange()
     }
 
     AddGui() {
@@ -55,7 +50,7 @@ class ToolRecordSettingGui {
 
         PosX := 5
         PosY := 10
-        MyGui.Add("GroupBox", Format("x{} y{} w510 h345", PosX, PosY), GetLang("通用选项"))
+        MyGui.Add("GroupBox", Format("x{} y{} w510 h320", PosX, PosY), GetLang("通用选项"))
 
         PosX := 20
         PosY += 25
@@ -74,35 +69,21 @@ class ToolRecordSettingGui {
 
         PosX := 10
         PosY += 40
-        MyGui.Add("GroupBox", Format("x{} y{} w500 h150", PosX, PosY), GetLang("鼠标选项"))
+        MyGui.Add("GroupBox", Format("x{} y{} w500 h100", PosX, PosY), GetLang("鼠标选项"))
 
         PosX := 20
         PosY += 25
         this.MouseTogCon := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("录制开关"))
         this.MouseTogCon.OnEvent("Click", (*) => this.OnTogClick())
 
-        PosX := 20
+        PosX += 245
+        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("鼠标轨迹"))
+        PosX += 70
+        this.MouseTrailModeCon := MyGui.Add("DropDownList", Format("x{} y{} w120 Choose2", PosX, PosY - 5), [GetLang("不录制"), GetLang("关键点位"), GetLang("关键点相对位移"), GetLang("全量")])
+        this.MouseTrailModeCon.OnEvent("Change", (*) => this.OnTrailModeChange())
+
         PosY += 30
-        this.MouseTrailTogCon := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("鼠标轨迹"))
-        this.MouseTrailTogCon.OnEvent("Click", (*) => this.OnTogClick())
-
-        PosX += 120
-        this.MouseMoveModeCon := MyGui.Add("DropDownList", Format("x{} y{} w120 Choose1", PosX, PosY), ["移动", "相对移动", "游戏视角"])
-        this.MouseMoveModeCon.OnEvent("Change", (*) => this.OnMoveModeChange())
-
         PosX := 20
-        PosY += 30
-        this.TrailTipCon1 := MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("轨迹点间隔(ms)："))
-        PosX += 130
-        this.MouseTrailIntervalCon := MyGui.Add("Edit", Format("x{} y{} w60 h25", PosX, PosY - 3), "300")
-
-        PosX += 115
-        this.TrailTipCon2 := MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("轨迹点距离(px)："))
-        PosX += 130
-        this.MouseTrailLenCon := MyGui.Add("Edit", Format("x{} y{} w60 h25", PosX, PosY - 3), "100")
-
-        PosX := 20
-        PosY += 30
         this.TrailTipCon3 := MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("轨迹速度(0~100)："))
         PosX += 130
         this.MouseTrailSpeedCon := MyGui.Add("Edit", Format("x{} y{} w60 h25", PosX, PosY - 3), "95")
@@ -121,8 +102,12 @@ class ToolRecordSettingGui {
         PosX += 130
         this.JoyIntervalCon := MyGui.Add("Edit", Format("x{} y{} w60 h25", PosX, PosY - 3), "50")
 
+        PosX := 20
+        PosY += 35
+        this.ShowBorderCon := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("录制显示边框"))
+
         PosX := 100
-        PosY += 45
+        PosY += 40
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("恢复默认"))
         con.OnEvent("Click", (*) => this.OnRevertBtnClick())
 
@@ -130,7 +115,7 @@ class ToolRecordSettingGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
 
-        MyGui.Show(Format("w{} h{}", 525, 425))
+        MyGui.Show(Format("w{} h{}", 525, 395))
     }
 
     CheckIfValid() {
@@ -139,42 +124,20 @@ class ToolRecordSettingGui {
 
     OnTogClick() {
         IsMouse := this.MouseTogCon.Value
-        IsTrail := this.MouseTrailTogCon.Value && IsMouse
         IsJoy := this.JoyTogCon.Value
-        this.MouseMoveModeCon.Enabled := IsTrail
-        this.MouseTrailTogCon.Enabled := IsMouse
-        this.MouseTrailIntervalCon.Enabled := IsTrail
-        this.MouseTrailLenCon.Enabled := IsTrail
-        this.MouseTrailSpeedCon.Enabled := IsTrail
-        this.TrailTipCon1.Enabled := IsTrail
-        this.TrailTipCon2.Enabled := IsTrail
-        this.TrailTipCon3.Enabled := IsTrail
+        trailMode := this.MouseTrailModeCon.Value - 1
+        isKeyPointTrail := (trailMode == 1 || trailMode == 2)
+        isTrailSettingsEnabled := IsMouse && isKeyPointTrail
+
+        this.MouseTrailModeCon.Enabled := IsMouse
+        this.MouseTrailSpeedCon.Enabled := isTrailSettingsEnabled
+        this.TrailTipCon3.Enabled := isTrailSettingsEnabled
         this.JoyIntervalCon.Enabled := IsJoy
-        this.JoyTipCon.Enabled := IsTrail
+        this.JoyTipCon.Enabled := isTrailSettingsEnabled
     }
 
-    OnMoveModeChange() {
-        MoveMode := this.MouseMoveModeCon.Value - 1
-        isGameView := MoveMode == 2
-
-        if (isGameView) {
-            this.MouseTrailIntervalCon.Enabled := false
-            this.MouseTrailLenCon.Enabled := false
-            this.MouseTrailSpeedCon.Enabled := false
-            this.TrailTipCon1.Enabled := false
-            this.TrailTipCon2.Enabled := false
-            this.TrailTipCon3.Enabled := false
-        }
-        else {
-            IsMouse := this.MouseTogCon.Value
-            IsTrail := this.MouseTrailTogCon.Value && IsMouse
-            this.MouseTrailIntervalCon.Enabled := IsTrail
-            this.MouseTrailLenCon.Enabled := IsTrail
-            this.MouseTrailSpeedCon.Enabled := IsTrail
-            this.TrailTipCon1.Enabled := IsTrail
-            this.TrailTipCon2.Enabled := IsTrail
-            this.TrailTipCon3.Enabled := IsTrail
-        }
+    OnTrailModeChange() {
+        this.OnTogClick()
     }
 
     OnRevertBtnClick() {
@@ -182,13 +145,11 @@ class ToolRecordSettingGui {
         this.HoldMutiCon.Value := false
         this.KeyboardTogCon.Value := true
         this.MouseTogCon.Value := true
-        this.MouseMoveModeCon.Value := 1
-        this.MouseTrailTogCon.Value := false
-        this.MouseTrailIntervalCon.Value := 300
-        this.MouseTrailLenCon.Value := 100
+        this.MouseTrailModeCon.Value := 2
         this.MouseTrailSpeedCon.Value := 95
         this.JoyTogCon.Value := false
         this.JoyIntervalCon.Value := 50
+        this.ShowBorderCon.Value := true
     }
 
     OnSureBtnClick() {
@@ -205,12 +166,10 @@ class ToolRecordSettingGui {
         ToolCheckInfo.RecordHoldMuti := this.HoldMutiCon.Value
         ToolCheckInfo.RecordKeyboard := this.KeyboardTogCon.Value
         ToolCheckInfo.RecordMouse := this.MouseTogCon.Value
-        ToolCheckInfo.RecordMouseMoveMode := this.MouseMoveModeCon.Value - 1
-        ToolCheckInfo.RecordMouseTrailInterval := this.MouseTrailIntervalCon.Value
-        ToolCheckInfo.RecordMouseTrail := this.MouseTrailTogCon.Value
-        ToolCheckInfo.RecordMouseTrailLen := this.MouseTrailLenCon.Value
+        ToolCheckInfo.RecordMouseTrail := this.MouseTrailModeCon.Value - 1
         ToolCheckInfo.RecordMouseTrailSpeed := this.MouseTrailSpeedCon.Value
         ToolCheckInfo.RecordJoy := this.JoyTogCon.Value
         ToolCheckInfo.RecordJoyInterval := this.JoyIntervalCon.Value
+        ToolCheckInfo.RecordShowBorder := this.ShowBorderCon.Value
     }
 }

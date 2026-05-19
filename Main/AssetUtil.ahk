@@ -389,15 +389,12 @@ LoadMainSetting() {
     ToolCheckInfo.RecordKeyboard := IniRead(IniFile, IniSection, "RecordKeyboard", true)
     ToolCheckInfo.RecordMouse := IniRead(IniFile, IniSection, "RecordMouse", true)
     ToolCheckInfo.RecordJoy := IniRead(IniFile, IniSection, "RecordJoy", false)
-    ToolCheckInfo.RecordMouseKeyPoint := IniRead(IniFile, IniSection, "RecordMouseKeyPoint", true)
-    ToolCheckInfo.RecordMouseMoveMode := IniRead(IniFile, IniSection, "RecordMouseMoveMode", 0)
-    ToolCheckInfo.RecordMouseTrail := IniRead(IniFile, IniSection, "RecordMouseTrail", false)
-    ToolCheckInfo.RecordMouseTrailLen := IniRead(IniFile, IniSection, "RecordMouseTrailLen", 100)
+    ToolCheckInfo.RecordMouseTrail := IniRead(IniFile, IniSection, "RecordMouseTrail", 1)
     ToolCheckInfo.RecordMouseTrailSpeed := IniRead(IniFile, IniSection, "RecordMouseTrailSpeed", 95)
     ToolCheckInfo.RecordHoldMuti := IniRead(IniFile, IniSection, "RecordHoldMuti", false)
     ToolCheckInfo.RecordAutoLoosen := IniRead(IniFile, IniSection, "RecordAutoLoosen", true)
-    ToolCheckInfo.RecordMouseTrailInterval := IniRead(IniFile, IniSection, "MouseTrailInterval", 300)
     ToolCheckInfo.RecordJoyInterval := IniRead(IniFile, IniSection, "RecordJoyInterval", 50)
+    ToolCheckInfo.RecordShowBorder := IniRead(IniFile, IniSection, "RecordShowBorder", true)
     ToolCheckInfo.OCRTypeValue := IniRead(IniFile, IniSection, "OCRType", 1)
     MySoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", false)
     if (MySoftData.IsBootStart == 1 || MySoftData.IsBootStart == 2)
@@ -1333,7 +1330,7 @@ GetRecordTriggerKeyMap() {
     ; 剩余部分是主键
     resultMap := Map()
     if (triggerKey != "")
-        resultMap.Set(triggerKey, true)
+        resultMap.Set(triggerKey, 0)
 
     for index, value in modifiers {
         if (value == "^" || value == "<^" || value == ">^") {

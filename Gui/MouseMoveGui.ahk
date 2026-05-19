@@ -125,7 +125,7 @@ class MouseMoveGui {
         PosX := cmdArr.Length >= 2 ? cmdArr[2] : 0
         PosY := cmdArr.Length >= 3 ? cmdArr[3] : 0
         Speed := cmdArr.Length >= 4 ? cmdArr[4] : 90
-        MoveMode := ToolCheckInfo.RecordMouseMoveMode
+        MoveMode := 0
 
         if (cmdArr.Length >= 5)
             MoveMode := Integer(cmdArr[5])

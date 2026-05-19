@@ -179,7 +179,7 @@ class MMProGui {
         this.PosVarYCon.Text := GetLang(this.Data.PosVarY)
         this.ActionTypeCon.Value := this.Data.ActionType
 
-        MoveMode := ToolCheckInfo.RecordMouseMoveMode
+        MoveMode := 0
         if (ObjHasOwnProp(this.Data, "MouseMoveMode"))
             MoveMode := this.Data.MouseMoveMode
         this.MouseMoveModeCon.Value := MoveMode + 1
@@ -331,7 +331,7 @@ class MMProGui {
         this.Data.PosVarX := ConfigData.PosVarX
         this.Data.PosVarY := ConfigData.PosVarY
         this.Data.ActionType := ConfigData.ActionType
-        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : ToolCheckInfo.RecordMouseMoveMode
+        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : 0
         this.Data.Speed := ConfigData.Speed
         this.Data.Count := ConfigData.Count
         this.Data.Interval := ConfigData.Interval
@@ -366,7 +366,7 @@ class MMProGui {
         this.Data.PosVarX := ConfigData.PosVarX
         this.Data.PosVarY := ConfigData.PosVarY
         this.Data.ActionType := ConfigData.ActionType
-        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : ToolCheckInfo.RecordMouseMoveMode
+        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : 0
         this.Data.Speed := ConfigData.Speed
         this.Data.Count := ConfigData.Count
         this.Data.Interval := ConfigData.Interval

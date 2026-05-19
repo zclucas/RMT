@@ -42,15 +42,12 @@ OnSaveSetting(*) {
     IniWrite(ToolCheckInfo.RecordKeyboard, IniFile, IniSection, "RecordKeyboard")
     IniWrite(ToolCheckInfo.RecordMouse, IniFile, IniSection, "RecordMouse")
     IniWrite(ToolCheckInfo.RecordJoy, IniFile, IniSection, "RecordJoy")
-    IniWrite(ToolCheckInfo.RecordMouseKeyPoint, IniFile, IniSection, "RecordMouseKeyPoint")
-    IniWrite(ToolCheckInfo.RecordMouseMoveMode, IniFile, IniSection, "RecordMouseMoveMode")
     IniWrite(ToolCheckInfo.RecordMouseTrail, IniFile, IniSection, "RecordMouseTrail")
-    IniWrite(ToolCheckInfo.RecordMouseTrailLen, IniFile, IniSection, "RecordMouseTrailLen")
     IniWrite(ToolCheckInfo.RecordMouseTrailSpeed, IniFile, IniSection, "RecordMouseTrailSpeed")
     IniWrite(ToolCheckInfo.RecordHoldMuti, IniFile, IniSection, "RecordHoldMuti")
     IniWrite(ToolCheckInfo.RecordAutoLoosen, IniFile, IniSection, "RecordAutoLoosen")
-    IniWrite(ToolCheckInfo.RecordMouseTrailInterval, IniFile, IniSection, "MouseTrailInterval")
     IniWrite(ToolCheckInfo.RecordJoyInterval, IniFile, IniSection, "RecordJoyInterval")
+    IniWrite(ToolCheckInfo.RecordShowBorder, IniFile, IniSection, "RecordShowBorder")
     IniWrite(ToolCheckInfo.OCRTypeCtrl.Value, IniFile, IniSection, "OCRType")
     IniWrite(MySoftData.TabCtrl.Value, IniFile, IniSection, "TableIndex")
     IniWrite(MySoftData.LangCtrl.Text, IniFile, IniSection, "Lang")
@@ -781,6 +778,12 @@ DiscardRecordTriggerKey(MacroStr, isFront) {
             else {
                 if (InStr(cmd, GetLang("间隔")))
                     continue
+
+                if (!isFront) {
+                    moveArr := SplitCommand(cmd)
+                    if (moveArr.Length >= 4 && moveArr[moveArr.Length] == "2")
+                        continue
+                }
 
                 if (CheckIfDiscardCMD(triggerMap, cmd))
                     continue

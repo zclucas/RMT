@@ -173,23 +173,18 @@ class ToolCheck {
 
         this.MacroGui := ""
 
-        this.RecordLastMousePos := []
         this.RecordLastTime := ""
         this.RecordMacroStr := ""
         this.RecordHoldKeyMap := Map()
-        this.RecordSpecialKeyMap := Map(33, 0, 34, 0, 35, 0, 36, 0, 37, 0, 38, 0, 39, 0, 40, 0, 45, 0, 46, 0)
         this.RecordHoldMuti := ""
         this.RecordAutoLoosen := ""
         this.RecordKeyboard := ""
         this.RecordMouse := ""
-        this.RecordMouseKeyPoint := ""  ;关键点位
-        this.RecordMouseMoveMode := ""   ;鼠标移动模式 0=移动 1=相对移动 2=游戏视角
-        this.RecordMouseTrail := ""
-        this.RecordMouseTrailLen := ""
+        this.RecordMouseTrail := ""      ;鼠标轨迹 0=不录制 1=关键点位 2=关键点相对位移 3=全量
         this.RecordMouseTrailSpeed := ""
-        this.RecordMouseTrailInterval := ""
         this.RecordJoy := ""
         this.RecordJoyInterval := ""
+        this.RecordShowBorder := ""      ;录制边框 0=关闭 1=开启
         this.OCRTypeCtrl := ""
         this.OCRTypeValue := 1
     }

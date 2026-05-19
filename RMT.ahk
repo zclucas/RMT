@@ -7,6 +7,7 @@
 #Include Plugins\AhiDriver\AhiDriver.ahk
 #Include Main\JoyMacro.ahk
 #Include Main\RecordJoyUtil.ahk
+#Include Main\RecordUtil.ahk
 #Include Main\LineOverlay.ahk
 #Include Main\AssetUtil.ahk
 #Include Main\RMTUtil.ahk
