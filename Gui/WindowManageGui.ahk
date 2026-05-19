@@ -83,10 +83,6 @@ class WindowManageGui {
         this.ActionTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w130 R10", PosX, PosY - 3), this.ActionTypeArr)
         this.ActionTypeCon.OnEvent("Change", this.OnActionChange.Bind(this))
 
-        PosX := 330
-        this.MouseWinTog := MyGui.Add("CheckBox", Format("x{} y{}", PosX, PosY), GetLang("鼠标下窗口"))
-        this.MouseWinTog.OnEvent("Click", this.OnMouseWinTog.Bind(this))
-
         PosX := 10
         PosY += 35
         this.WinInfoConArr := []
@@ -196,6 +192,11 @@ class WindowManageGui {
 
     CheckIfValid() {
         actionType := this.ActionTypeCon.Text
+        if (this.SearchValueCon.Value == "") {
+            MsgBox(GetLang("目标窗口信息不能为空"))
+            return false
+        }
+
         if (actionType == GetLang("修改标题")) {
             if (this.NewTitleCon.Value == "") {
                 MsgBox(GetLang("新标题不能为空！"), "", "Owner" this.Gui.Hwnd)
@@ -208,6 +209,7 @@ class WindowManageGui {
 
     SaveData() {
         this.Data.ActionType := GetLangKey(this.ActionTypeCon.Text)
+        this.Data.SearchValue := this.SearchValueCon.Value
         this.Data.PosX := this.PosXCon.Value
         this.Data.PosY := this.PosYCon.Value
         this.Data.Width := this.WidthCon.Value
@@ -238,15 +240,6 @@ class WindowManageGui {
         this.SaveData()
         CommandStr := this.GetCommandStr()
         OnTriggerSepcialItemMacro(CommandStr)
-    }
-
-    OnMouseWinTog(*) {
-        if (this.MouseWinTog.Value)
-            this.SearchValueCon.Value := ""
-
-        Enabled := !this.MouseWinTog.Value
-        for _, con in this.WinInfoConArr
-            con.Enabled := Enabled
     }
 
     OnClickWinEditBtn(*) {

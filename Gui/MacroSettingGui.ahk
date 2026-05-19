@@ -3,6 +3,7 @@
 class MacroSettingGui {
     __new() {
         this.Gui := ""
+        this.OwnerHwnd := ""
         this.tableItem := ""
         this.itemIndex := ""
 
@@ -13,11 +14,21 @@ class MacroSettingGui {
 
     ShowGui(tableIndex, itemIndex) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
         }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+            }
+        }
+
         this.Init(tableIndex, itemIndex)
     }
 
@@ -62,7 +73,17 @@ class MacroSettingGui {
         PosY += 40
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 300, 190))
+    }
+
+    OnGuiClose() {
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     OnClickModeHelpBtn(*) {
@@ -70,8 +91,9 @@ class MacroSettingGui {
         str2 := GetLang("keybd_event：调用 Win 系统接口模拟按键，适用比较旧的软件或游戏（需管理员权限）。")
         str3 := GetLang("罗技：调用 罗技驱动 模拟按键（需管理员权限并且运行过G HUB）。")
         str4 := GetLang("AHI：调用 Interception 驱动模拟按键（需安装 Interception 驱动）。")
-        str5 := GetLang("Tip:罗技的鼠标功能需要使用旧G HUB版本（2022.2.1154及以前版本）") "`n" GetLang("Tip:AHI驱动需要安装Interception驱动并以管理员权限运行")
-        str6 := GetLang( "**keybd_event、罗技、AHI 的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**")
+        str5 := GetLang("Tip:罗技的鼠标功能需要使用旧G HUB版本（2022.2.1154及以前版本）") "`n" GetLang(
+            "Tip:AHI驱动需要安装Interception驱动并以管理员权限运行")
+        str6 := GetLang("**keybd_event、罗技、AHI 的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**")
 
         str := Format("{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6)
         MsgBox(str)
@@ -81,6 +103,6 @@ class MacroSettingGui {
         this.tableItem.ModeArr[this.itemIndex] := this.TKTypeCon.Value
         this.tableItem.StartTipSoundArr[this.itemIndex] := this.StartTipCon.Value
         this.tableItem.EndTipSoundArr[this.itemIndex] := this.EndTipCon.Value
-        this.Gui.Hide()
+        this.OnGuiClose()
     }
 }

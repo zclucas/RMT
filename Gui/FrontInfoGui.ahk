@@ -43,7 +43,7 @@ class FrontInfoGui {
         infoStr := winInfoCon.Value
         if (InStr(infoStr, "❖")) {
             idStr := StrReplace(infoStr, "❖", "")
-            infoArr := [idStr, "", "", ""]
+            infoArr := ["", idStr, "", "", ""]
         }
         else {
             if (infoStr != "")
@@ -52,9 +52,10 @@ class FrontInfoGui {
                 infoArr := ["", "", ""]
 
             infoArr.InsertAt(1, "")
+            infoArr.InsertAt(1, "")
         }
 
-        loop 4 {
+        loop 5 {
             this.InfoTogArrCon[A_Index].Value := infoArr[A_Index] != ""
             this.InfoTextArrCon[A_Index].Value := infoArr[A_Index]
         }
@@ -63,7 +64,13 @@ class FrontInfoGui {
         this.VariCon.Delete()
         this.VariCon.Add(DLVariableArr)
         this.VariCon.Value := 1
-        this.OnTogClick()
+
+        loop 5 {
+            if (this.InfoTogArrCon[A_Index].Value) {
+                this.OnTogClick(A_Index)
+                break
+            }
+        }
     }
 
     AddGui() {
@@ -78,7 +85,7 @@ class FrontInfoGui {
 
         PosX := 10
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("窗口置顶"))
-        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        con.OnEvent("Click", this.OnTopTogClick.Bind(this))
         this.TopTogCon := con
 
         PosX := 160
@@ -101,8 +108,17 @@ class FrontInfoGui {
 
         PosY += 95
         PosX := 20
+        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("运行时鼠标下窗口"))
+        con.OnEvent("Click", this.OnTogClick.Bind(this, 1))
+        this.InfoTogArrCon.Push(con)
+        con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
+        con.Visible := false
+        this.InfoTextArrCon.Push(con)
+
+        PosY += 35
+        PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("句柄ID"))
-        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        con.OnEvent("Click", this.OnTogClick.Bind(this, 2))
         this.InfoTogArrCon.Push(con)
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
@@ -126,7 +142,7 @@ class FrontInfoGui {
         PosY += 35
         PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("标题"))
-        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        con.OnEvent("Click", this.OnTogClick.Bind(this, 3))
         this.InfoTogArrCon.Push(con)
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
@@ -135,7 +151,7 @@ class FrontInfoGui {
         PosY += 35
         PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("窗口类"))
-        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        con.OnEvent("Click", this.OnTogClick.Bind(this, 4))
         this.InfoTogArrCon.Push(con)
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
@@ -144,7 +160,7 @@ class FrontInfoGui {
         PosY += 35
         PosX := 20
         con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("进程名"))
-        con.OnEvent("Click", this.OnTogClick.Bind(this))
+        con.OnEvent("Click", this.OnTogClick.Bind(this, 5))
         this.InfoTogArrCon.Push(con)
         PosX := 95
         con := MyGui.Add("Edit", Format("x{} y{} w360", PosX, PosY - 3), "")
@@ -155,7 +171,7 @@ class FrontInfoGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
         MyGui.OnEvent("Close", this.OnClose.Bind(this))
-        MyGui.Show(Format("w{} h{}", 500, 400))
+        MyGui.Show(Format("w{} h{}", 500, 430))
     }
 
     RefreshMouseInfo() {
@@ -205,28 +221,28 @@ class FrontInfoGui {
     }
 
     CheckIfValid() {
-        if (this.InfoTextArrCon[1].Value && this.InfoTextArrCon[1].Value == "") {
+        if (this.InfoTextArrCon[2].Value && this.InfoTextArrCon[2].Value == "") {
             MsgBox(GetLang("勾选句柄ID后，句柄ID内容不能为空"), "", "Owner" this.Gui.Hwnd)
             return false
         }
 
-        if (this.InfoTextArrCon[2].Value && this.InfoTextArrCon[2].Value == "") {
+        if (this.InfoTextArrCon[3].Value && this.InfoTextArrCon[3].Value == "") {
             MsgBox(GetLang("勾选标题后，标题内容不能为空"), "", "Owner" this.Gui.Hwnd)
             return false
         }
 
-        if (this.InfoTextArrCon[3].Value && this.InfoTextArrCon[3].Value == "") {
+        if (this.InfoTextArrCon[4].Value && this.InfoTextArrCon[4].Value == "") {
             MsgBox(GetLang("勾选窗口类后，窗口类内容不能为空"), "", "Owner" this.Gui.Hwnd)
             return false
         }
 
-        if (this.InfoTextArrCon[4].Value && this.InfoTextArrCon[4].Value == "") {
+        if (this.InfoTextArrCon[5].Value && this.InfoTextArrCon[5].Value == "") {
             MsgBox(GetLang("勾选进程名后，进程名内容不能为空"), "", "Owner" this.Gui.Hwnd)
             return false
         }
 
-        if (this.isFront && this.InfoTogArrCon[1].Value) {
-            if (InStr(this.InfoTextArrCon[1].Value, "{")) {
+        if (this.isFront && this.InfoTogArrCon[2].Value) {
+            if (InStr(this.InfoTextArrCon[2].Value, "{")) {
                 MsgBox(GetLang("前台窗口信息句柄ID不能使用变量"), "", "Owner" this.Gui.Hwnd)
                 return false
             }
@@ -236,17 +252,17 @@ class FrontInfoGui {
     }
 
     GetInfoStr() {
-        if (this.InfoTogArrCon[1].Value)
-            return "❖" this.InfoTextArrCon[1].Value
+        if (this.InfoTogArrCon[2].Value)
+            return "❖" this.InfoTextArrCon[2].Value
 
         Str := ""
-        loop 4 {
-            if (A_Index == 1)
+        loop 5 {
+            if (A_Index == 1 || A_Index == 2)
                 continue
             if (this.InfoTogArrCon[A_Index].Value) {
                 Str .= this.InfoTextArrCon[A_Index].Value
             }
-            if (A_Index != 4)
+            if (A_Index != 5)
                 Str .= "⎖"
         }
         if (Str == "⎖⎖")
@@ -275,30 +291,62 @@ class FrontInfoGui {
         }
     }
 
-    OnTogClick(*) {
+    OnTopTogClick(*) {
         if (this.TopTogCon.Value) {
             this.Gui.Opt("+AlwaysOnTop")
         }
         else {
             this.Gui.Opt("-AlwaysOnTop")
         }
+    }
 
-        isHwndID := this.InfoTogArrCon[1].Value
-        this.InfoTextArrCon[1].Enabled := isHwndID
-        loop this.VarConArr.Length {
-            con := this.VarConArr[A_Index]
-            con.Enabled := isHwndID
-        }
-        loop 4 {
-            if (A_Index == 1)
-                continue
-            if (isHwndID) {
-                this.InfoTogArrCon[A_Index].Value := false
-                this.InfoTextArrCon[A_Index].Enabled := false
+    OnTogClick(index, *) {
+        isOn := this.InfoTogArrCon[index].Value
+        if (!isOn)
+            return
+
+        switch (index) {
+            case 1:
+            {
+                loop this.InfoTogArrCon.Length {
+                    this.InfoTogArrCon[A_Index].Value := false
+                }
+                this.InfoTogArrCon[1].Value := true
+                this.InfoTogArrCon[2].Value := true
+                this.InfoTextArrCon[2].Value := "{" GetLang("句柄ID") "}"
+                this.InfoTextArrCon[2].Enabled := false
+                loop this.VarConArr.Length {
+                    this.VarConArr[A_Index].Enabled := false
+                }
+                this.InfoTextArrCon[3].Enabled := false
+                this.InfoTextArrCon[4].Enabled := false
+                this.InfoTextArrCon[5].Enabled := false
             }
-            else {
-                Enable := this.InfoTogArrCon[A_Index].Value
-                this.InfoTextArrCon[A_Index].Enabled := Enable
+            case 2:
+            {
+                loop this.InfoTogArrCon.Length {
+                    this.InfoTogArrCon[A_Index].Value := false
+                }
+                this.InfoTogArrCon[2].Value := true
+                this.InfoTextArrCon[2].Enabled := true
+                loop this.VarConArr.Length {
+                    this.VarConArr[A_Index].Enabled := true
+                }
+                this.InfoTextArrCon[3].Enabled := false
+                this.InfoTextArrCon[4].Enabled := false
+                this.InfoTextArrCon[5].Enabled := false
+            }
+            default:
+            {
+                this.InfoTogArrCon[1].Value := false
+                this.InfoTogArrCon[2].Value := false
+                this.InfoTextArrCon[2].Enabled := false
+                loop this.VarConArr.Length {
+                    this.VarConArr[A_Index].Enabled := false
+                }
+                this.InfoTextArrCon[3].Enabled := true
+                this.InfoTextArrCon[4].Enabled := true
+                this.InfoTextArrCon[5].Enabled := true
             }
         }
     }
@@ -316,15 +364,22 @@ class FrontInfoGui {
             catch {
                 process := ""
             }
-            this.InfoTextArrCon[1].Value := winId
-            this.InfoTextArrCon[2].Value := title
-            this.InfoTextArrCon[3].Value := className
-            this.InfoTextArrCon[4].Value := process
-            loop 4 {
-                state := A_Index != 1
-                this.InfoTogArrCon[A_Index].Value := state
+
+            this.InfoTogArrCon[3].Value := true
+            this.InfoTogArrCon[4].Value := true
+            this.InfoTogArrCon[5].Value := true
+            this.InfoTogArrCon[2].Value := false
+            this.InfoTextArrCon[2].Enabled := false
+            loop this.VarConArr.Length {
+                con := this.VarConArr[A_Index]
+                con.Enabled := false
             }
-            this.OnTogClick()
+
+            this.InfoTextArrCon[2].Value := winId
+            this.InfoTextArrCon[3].Value := title
+            this.InfoTextArrCon[4].Value := className
+            this.InfoTextArrCon[5].Value := process
+            this.OnTogClick(3)
         }
     }
 
@@ -337,17 +392,17 @@ class FrontInfoGui {
     }
 
     OnClickAddVarValueBtn() {
-        Symbol := this.InfoTextArrCon[1].Text == "" ? "" : "|"
+        Symbol := this.InfoTextArrCon[2].Text == "" ? "" : "|"
         VarStr := "{" this.VariCon.Text "}"
         if (this.VariCon.Text == "") {
             MsgBox("请勿添加空字符变量", "", "Owner" this.Gui.Hwnd)
             return
         }
-        if (InStr(this.InfoTextArrCon[1].Text, VarStr)) {
+        if (InStr(this.InfoTextArrCon[2].Text, VarStr)) {
             MsgBox("请勿重复添加变量", "", "Owner" this.Gui.Hwnd)
             return
         }
 
-        this.InfoTextArrCon[1].Text .= Symbol VarStr
+        this.InfoTextArrCon[2].Text .= Symbol VarStr
     }
 }

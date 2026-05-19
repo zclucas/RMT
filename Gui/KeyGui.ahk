@@ -4,6 +4,7 @@ class KeyGui {
     __new() {
         this.ParentTile := ""
         this.Gui := ""
+        this.OwnerHwnd := ""
         this.SureBtnAction := ""
         this.SaveBtnAction := ""
 
@@ -91,8 +92,7 @@ class KeyGui {
 
         action := this.SureBtnAction
         action(this.CommandStr)
-        this.ToggleFunc(false)
-        this.Gui.Hide()
+        this.OnGuiClose()
     }
 
     AddGui() {
@@ -962,7 +962,7 @@ class KeyGui {
             "松开", "点击"]))
         this.KeyTypeCon.OnEvent("Change", (*) => this.OnChangeEditValue())
         this.KeyTypeCon.Value := 1
-                
+
         PosX += 85
         Con := MyGui.Add("Button", Format("x{} y{} w30", PosX, PosY - 4), "?")
         Con.OnEvent("Click", this.OnClickTypeHelpBtn.Bind(this))
@@ -996,18 +996,27 @@ class KeyGui {
         PosX += 450
         btnCon := MyGui.Add("Button", Format("x{} y{} h{} w{} center", PosX, PosY, 40, 100), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnSureBtnClick())
-        MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
+        MyGui.OnEvent("Close", (*) => this.OnGuiClose())
         MyGui.Show(Format("w{} h{}", 1280, 585))
     }
 
     ShowGui(cmd) {
         if (this.Gui != "") {
+            if (this.OwnerHwnd != "") {
+                this.Gui.Opt("+Owner" this.OwnerHwnd)
+            }
             this.Gui.Show()
         }
         else {
             this.AddGui()
             for key, value in this.ConMap {
                 this.ConHwndMap.Set(value.Hwnd, value)
+            }
+        }
+
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
             }
         }
 
@@ -1045,6 +1054,16 @@ class KeyGui {
             }
 
         }
+    }
+
+    OnGuiClose() {
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 
     ToggleFunc(state) {
@@ -1135,13 +1154,13 @@ class KeyGui {
 
         this.HoldTimeTipCon.Visible := isShowHoldTime
         this.HoldTimeCon.Visible := isShowHoldTime
-        
+
         this.KeyCountTipCon.Visible := isShowCount
         this.KeyCountCon.Visible := isShowCount
-        
+
         this.PerIntervalTipCon.Visible := isShowInterval
         this.PerIntervalCon.Visible := isShowInterval
-    
+
         this.CommandStrCon.Value := Format("{}{}", GetLang("当前指令："), this.CommandStr)
     }
 

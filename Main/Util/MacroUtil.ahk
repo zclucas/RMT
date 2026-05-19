@@ -1093,15 +1093,6 @@ OnWindowManage(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
 
     searchValue := GetReplaceVarText(tableItem, index, Data.SearchValue)
-    if (searchValue == "") {    ;空的话就说明是针对当前鼠标下窗口
-        winId := 0
-        try {
-            CoordMode("Mouse", "Screen")
-            MouseGetPos &mouseX, &mouseY, &winId
-        }
-        searchValue == winId != 0 ? "❖" winId : ""
-    }
-
     winTitle := GetParamsWinInfoStr(searchValue)
     if (winTitle == "")
         return

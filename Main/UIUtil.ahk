@@ -340,7 +340,7 @@ AddSettingUI(index) {
 
     posY += 30
     posX := MySoftData.TabPosX
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h140", posX + 10, posY), GetLang("快捷键修改"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w890 h140", posX + 10, posY), GetLang("快捷键修改"), tableItem)
     tableItem.AllGroup.Push(con)
 
     posY += 30
@@ -439,7 +439,7 @@ AddSettingUI(index) {
 
     posY += 40
     posX := MySoftData.TabPosX
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h140", posX + 10, posY), GetLang("数值选项"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w890 h140", posX + 10, posY), GetLang("数值选项"), tableItem)
     tableItem.AllGroup.Push(con)
     posY += 30
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("点击时间浮动(%)："), tableItem)
@@ -472,6 +472,8 @@ AddSettingUI(index) {
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MySoftData.MutiThreadNum,
     tableItem)
     MySoftData.MutiThreadNumCtrl := con
+    Con := AddTableControl("Button", Format("x{} y{} h27", posX + 865, posY - 4), "?", tableItem)
+    Con.OnEvent("Click", OnClickMutiThreadHelpBtn)
 
     ; posY += 40
     ; AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("核心池大小(1~10)："), tableItem)
@@ -490,7 +492,7 @@ AddSettingUI(index) {
     MySoftData.SoftBGColorCon := con
 
     posY += 40
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h140", posX + 10, posY), GetLang("开关选项"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w890 h140", posX + 10, posY), GetLang("开关选项"), tableItem)
     tableItem.AllGroup.Push(con)
 
     posY += 30
@@ -515,12 +517,7 @@ AddSettingUI(index) {
     MySoftData.NoVariableTipCtrl := con
     MySoftData.NoVariableTipCtrl.Value := MySoftData.NoVariableTip
 
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("分割线"), tableItem)
-    MySoftData.SplitLineCtrl := con
-    MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
-
-    posY += 40
-    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("模态子窗口"), tableItem)
+    con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("模态子窗口"), tableItem)
     MySoftData.ModalSubGuiCtrl := con
     MySoftData.ModalSubGuiCtrl.Value := MySoftData.IsModalSubGui
 
@@ -533,7 +530,7 @@ AddSettingUI(index) {
     MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
 
     posY += 40
-    con := AddTableControl("GroupBox", Format("x{} y{} w870 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)
+    con := AddTableControl("GroupBox", Format("x{} y{} w890 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)
     tableItem.AllGroup.Push(con)
 
     ;语言/Lang： 如果外国人打开中文的话，或者中国人打开英语，方便都能找到调整的选项

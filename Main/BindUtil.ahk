@@ -244,7 +244,7 @@ OnClickKeyDownDownHelpBtn(*) {
     str5 := GetLang("Tip1：按下时再次按下，真实键盘无法触发这个行为，这个行为通常是无效的")
     str6 := GetLang("Tip2：按下时再次按下，按键检测网站可能无法检测，但记事本中可以有效输出")
 
-    str := Format("{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5)
+    str := Format("{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6)
     MsgBox(str, GetLang("按下时按下说明"))
 }
 

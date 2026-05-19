@@ -500,6 +500,7 @@ OnItemEditTiming(tableItem, index, *) {
 }
 
 OnItemEditMacroSetting(tableItem, index, *) {
+    MyMacroSettingGui.OwnerHwnd := MySoftData.MyGui.Hwnd
     MyMacroSettingGui.ShowGui(tableItem.Index, index)
 }
 
