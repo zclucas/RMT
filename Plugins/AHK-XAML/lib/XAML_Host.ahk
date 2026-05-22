@@ -170,8 +170,8 @@ class XAMLHost {
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\" baseDllName
 
-        if (A_IsCompiled && FileExist(A_ScriptDir "\" baseDllName)) {
-            targetExe := A_ScriptDir "\" baseDllName
+        if (A_IsCompiled && FileExist(A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName)) {
+            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName
         } else if (!A_IsCompiled) {
             if !FileExist(sharedExe) {
                 if !XAMLHost.CompileEngine(libDir, sharedExe)
@@ -195,8 +195,8 @@ class XAMLHost {
                 }
             }
         } else {
-            if !FileExist(targetExe)
-                FileInstall("ahk-xaml.dll", targetExe, 1)
+            MsgBox("Error: " baseDllName " not found.`nExpected: " A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName, "AHK-XAML", "Iconx")
+            return
         }
 
         logArg := (IsSet(XAML_ENABLE_LOGGING) && !XAML_ENABLE_LOGGING) ? ' --no-log' : ''
@@ -454,8 +454,8 @@ class XAMLHost {
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\ahk-xaml.dll"
 
-        if (A_IsCompiled && FileExist(A_ScriptDir "\ahk-xaml.dll")) {
-            targetExe := A_ScriptDir "\ahk-xaml.dll"
+        if (A_IsCompiled && FileExist(A_ScriptDir "\Plugins\AHK-XAML\lib\ahk-xaml.dll")) {
+            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\ahk-xaml.dll"
         } else if (!A_IsCompiled) {
             if !FileExist(sharedExe) {
                 if !XAMLHost.CompileEngine(libDir, sharedExe)
@@ -522,7 +522,7 @@ class XAMLHost {
                 embeddedRes .= ' /resource:"' res '"'
         }
 
-        cmd := A_ComSpec ' /c ""' cscPath '" /nologo /target:winexe /out:"' sharedExe '" /lib:"' wpfDir '" /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll /reference:PresentationFramework.dll /reference:PresentationCore.dll /reference:WindowsBase.dll /reference:System.Xaml.dll /reference:UIAutomationProvider.dll /reference:UIAutomationTypes.dll' wvRefs gifRef wvDef embeddedRes ' "' sourceCs '" > "' errLog '" 2>&1"'
+        cmd := A_ComSpec ' /c ""' cscPath '" /nologo /target:winexe /platform:anycpu /out:"' sharedExe '" /lib:"' wpfDir '" /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll /reference:PresentationFramework.dll /reference:PresentationCore.dll /reference:WindowsBase.dll /reference:System.Xaml.dll /reference:UIAutomationProvider.dll /reference:UIAutomationTypes.dll' wvRefs gifRef wvDef embeddedRes ' "' sourceCs '" > "' errLog '" 2>&1"'
         RunWait(cmd, "", "Hide")
 
         if !FileExist(sharedExe) {
@@ -611,8 +611,8 @@ class XAMLHost {
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\" baseDllName
 
-        if (A_IsCompiled && FileExist(A_ScriptDir "\" baseDllName)) {
-            targetExe := A_ScriptDir "\" baseDllName
+        if (A_IsCompiled && FileExist(A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName)) {
+            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName
         } else if (!A_IsCompiled) {
             sourceCs := libDir "\XAML_AHK_Bridge.cs"
             if (FileExist(sourceCs) && FileExist(sharedExe) && FileGetTime(sourceCs) > FileGetTime(sharedExe)) {
@@ -651,8 +651,8 @@ class XAMLHost {
                 }
             }
         } else {
-            if !FileExist(targetExe)
-                FileInstall("ahk-xaml.dll", targetExe, 1)
+            MsgBox("Error: " baseDllName " not found.`nExpected: " A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName, "AHK-XAML", "Iconx")
+            return
         }
 
         if FileExist(this.errLog)

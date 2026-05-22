@@ -272,6 +272,10 @@ function New-Release {
         # 复制 OpenCV DLL (x64)
         Write-Log "复制 OpenCV DLL (x64)..." "Gray"
         Copy-OpenCV -ReleaseDir $releaseDir -Arch "x64"
+
+        # 复制 AHK-XAML DLL
+        Write-Log "复制 AHK-XAML DLL..." "Gray"
+        Copy-XamlDlls -ReleaseDir $releaseDir
     }
 
     if ($Type -eq "x32" -or $Type -eq "both") {
@@ -312,6 +316,10 @@ function New-Release {
         # 复制 OpenCV DLL (x86)
         Write-Log "复制 OpenCV DLL (x86)..." "Gray"
         Copy-OpenCV -ReleaseDir $releaseDir -Arch "x86"
+
+        # 复制 AHK-XAML DLL
+        Write-Log "复制 AHK-XAML DLL..." "Gray"
+        Copy-XamlDlls -ReleaseDir $releaseDir
     }
 
     Write-Section "创建发行包到桌面"
@@ -395,6 +403,26 @@ function Copy-OpenCV {
     Get-ChildItem $srcDir -File | ForEach-Object {
         Copy-Item $_.FullName -Destination $dstDir -Force
         Write-Log "  已复制: OpenCV/$Arch/$($_.Name)" "Gray"
+    }
+}
+
+function Copy-XamlDlls {
+    param([string]$ReleaseDir)
+
+    $srcDir = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib"
+    $dstDir = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib"
+    $dlls = @("ahk-xaml.dll", "WpfAnimatedGif.dll")
+
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+
+    foreach ($dll in $dlls) {
+        $src = Join-Path $srcDir $dll
+        if (Test-Path $src) {
+            Copy-Item $src -Destination $dstDir -Force
+            Write-Log "  已复制: AHK-XAML/lib/$dll" "Gray"
+        } else {
+            Write-Log "  [WARN] 未找到: AHK-XAML/lib/$dll" "Yellow"
+        }
     }
 }
 
