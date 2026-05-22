@@ -1,0 +1,294 @@
+class XAMLElement {
+    __New(tag, textContent := "") {
+        this._Tag := tag
+        this._Props := Map()
+        this._Children := []
+        this._TextContent := textContent
+        this._Parent := ""
+        this._Defaults := Map()
+        this._TrackCaller()
+    }
+
+    _TrackCaller(depth := -2) {
+        if (IsSet(XAML_ENABLE_TRACING) && XAML_ENABLE_TRACING) {
+            try {
+                err := Error("", depth)
+                SplitPath err.File, &outFile
+                this._AhkFile := outFile
+                this._AhkLine := err.Line
+            } catch {
+                this._AhkFile := ""
+                this._AhkLine := ""
+            }
+        } else {
+            this._AhkFile := ""
+            this._AhkLine := ""
+        }
+    }
+
+    ; Sets default properties for a specific tag within this element's scope.
+    ; Children added to this element (or its descendants) will inherit these cascading properties.
+    SetDefaults(tag, propsObj) {
+        this._Defaults[tag] := propsObj
+        return this
+    }
+
+    ; Instantly apply a map or object of properties to this specific element
+    Apply(propsObj) {
+        this._TrackCaller()
+        for k, v in (Type(propsObj) == "Map" ? propsObj : propsObj.OwnProps()) {
+            propName := StrReplace(k, "_", ".")
+            this._Props[propName] := v
+        }
+        return this
+    }
+
+    ; Define a named template at the root level so it can be reused anywhere
+    DefineTemplate(name, templateObjOrFunc) {
+        root := this
+        while root._Parent
+            root := root._Parent
+        
+        if !root.HasProp("_Templates")
+            root._Templates := Map()
+            
+        root._Templates[name] := templateObjOrFunc
+        return this
+    }
+
+    ; Apply a template. Can be a string (named template), an object of properties, or a callback function.
+    Use(template) {
+        this._TrackCaller()
+        if (Type(template) == "String") {
+            root := this
+            while root._Parent
+                root := root._Parent
+                
+            if (root.HasProp("_Templates") && root._Templates.Has(template)) {
+                template := root._Templates[template]
+            } else {
+                throw Error("Template not found: " template)
+            }
+        }
+        
+        if HasMethod(template) {
+            template(this)
+        } else {
+            this.Apply(template)
+        }
+        return this
+    }
+
+    ; Add a child element and return the child for chaining
+    Add(tag, textContent := "") {
+        child := XAMLElement(tag, textContent)
+        child._TrackCaller()
+        child._Parent := this
+        
+        ; Collect inheritance path (from Root down to this node)
+        parents := []
+        curr := this
+        while curr {
+            parents.InsertAt(1, curr)
+            curr := curr._Parent
+        }
+        
+        ; Apply defaults top-down (CSS-style cascading)
+        for p in parents {
+            if p._Defaults.Has(tag) {
+                defObj := p._Defaults[tag]
+                if (defObj == "" || defObj == false) {
+                    child._Props.Clear() ; Firewall: reset accumulated defaults
+                } else {
+                    for k, v in (Type(defObj) == "Map" ? defObj : defObj.OwnProps()) {
+                        propName := StrReplace(k, "_", ".")
+                        child._Props[propName] := v
+                    }
+                }
+            }
+        }
+        
+        this._Children.Push(child)
+        return child
+    }
+
+    ; Navigate back to the parent element
+    Parent() {
+        return this._Parent
+    }
+
+    ; Find a descendant element by its Name or x:Name
+    Find(name) {
+        if (this._Props.Has("Name") && this._Props["Name"] == name)
+            return this
+        if (this._Props.Has("x:Name") && this._Props["x:Name"] == name)
+            return this
+            
+        for child in this._Children {
+            if (found := child.Find(name))
+                return found
+        }
+        return ""
+    }
+
+    ; Intercept unknown methods to dynamically set properties
+    __Call(name, params) {
+        this._TrackCaller()
+        ; Convert underscores in method names to dots (e.g. Grid_Column -> Grid.Column)
+        propName := StrReplace(name, "_", ".")
+        
+        if (params.Length == 1) {
+            val := params[1]
+            
+            ; Auto-detect mixed Icon and Text to prevent square rendering
+            if ((name == "Text" || name == "Content") && Type(val) == "String") {
+                hasIcon := false
+                hasText := false
+                Loop Parse, val {
+                    code := Ord(A_LoopField)
+                    if (code >= 0xE000 && code <= 0xF8FF)
+                        hasIcon := true
+                    else if (code > 32)
+                        hasText := true
+                }
+                
+                if (hasIcon && hasText) {
+                    runs := ""
+                    currentType := -1 ; 0 = text, 1 = icon
+                    currentStr := ""
+                    
+                    Flush := () => (
+                        currentStr != "" ? (
+                            safeStr := StrReplace(currentStr, "&", "&amp;"),
+                            safeStr := StrReplace(safeStr, "<", "&lt;"),
+                            safeStr := StrReplace(safeStr, ">", "&gt;"),
+                            safeStr := StrReplace(safeStr, '"', "&quot;"),
+                            safeStr := StrReplace(safeStr, "'", "&apos;"),
+                            runs .= (currentType == 1) ? '<Run FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="' safeStr '"/>' : '<Run FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif" Text="' safeStr '"/>',
+                            currentStr := ""
+                        ) : ""
+                    )
+                    
+                    Loop Parse, val {
+                        code := Ord(A_LoopField)
+                        isIcon := (code >= 0xE000 && code <= 0xF8FF)
+                        
+                        if (code == 32) {
+                            currentStr .= A_LoopField
+                            continue
+                        }
+                        
+                        if (currentType == -1)
+                            currentType := isIcon
+                            
+                        if (isIcon != currentType) {
+                            Flush()
+                            currentType := isIcon
+                        }
+                        currentStr .= A_LoopField
+                    }
+                    Flush()
+                    
+                    if (this._Tag != "TextBlock") {
+                        this._TextContent := '<TextBlock VerticalAlignment="Center" HorizontalAlignment="Center">' runs '</TextBlock>'
+                    } else {
+                        this._TextContent := runs
+                    }
+                    return this
+                }
+            }
+            
+            this._Props[propName] := val
+            return this
+        } else if (params.Length == 0) {
+            ; For booleans without parameters, default to "True"
+            this._Props[propName] := "True"
+            return this
+        }
+        throw Error("Method " name " requires 0 or 1 parameters.")
+    }
+
+    ; Explicitly set a property if method interception isn't ideal
+    SetProp(name, value) {
+        this._TrackCaller()
+        this._Props[name] := value
+        return this
+    }
+
+    ; ==========================================
+    ; SHORTHAND BUILDERS
+    ; ==========================================
+
+    Cols(widths*) {
+        cols := XAMLElement("Grid.ColumnDefinitions")
+        for w in widths
+            cols.Add("ColumnDefinition").Width(w)
+        this._Children.InsertAt(1, cols) ; Insert layout definitions at the top
+        return this
+    }
+
+    Rows(heights*) {
+        rows := XAMLElement("Grid.RowDefinitions")
+        for h in heights
+            rows.Add("RowDefinition").Height(h)
+        this._Children.InsertAt(1, rows)
+        return this
+    }
+
+    ; Inject raw XAML resources into this element
+    InjectResources(rawXamlString) {
+        res := XAMLElement(this._Tag ".Resources")
+        res._TextContent := rawXamlString
+        this._Children.InsertAt(1, res)
+        return this
+    }
+
+    ; Generate XAML string recursively
+    ToString(indent := "") {
+        attrStr := ""
+        for k, v in this._Props {
+            val := StrReplace(String(v), "&", "&amp;")
+            val := StrReplace(val, "<", "&lt;")
+            val := StrReplace(val, ">", "&gt;")
+            val := StrReplace(val, '"', "&quot;")
+            val := StrReplace(val, "'", "&apos;")
+            val := StrReplace(val, "`r`n", "&#10;")
+            val := StrReplace(val, "`n", "&#10;")
+            val := StrReplace(val, "`r", "&#10;")
+            attrStr .= ' ' k '="' val '"'
+        }
+        
+        tracker := ""
+        if (this.HasProp("_AhkLine") && this._AhkLine != "") {
+            filePrefix := (this.HasProp("_AhkFile") && this._AhkFile != "") ? this._AhkFile ":" : ""
+            tracker := "<!-- [ahk:" filePrefix this._AhkLine "] -->"
+        }
+        
+        if (this._Children.Length == 0 && this._TextContent == "")
+            return indent tracker "<" this._Tag attrStr " />`n"
+        
+        out := indent tracker "<" this._Tag attrStr ">"
+        
+        if (this._TextContent != "") {
+            out .= this._TextContent
+        } else {
+            out .= "`n"
+            for child in this._Children
+                out .= child.ToString(indent "    ")
+            out .= indent
+        }
+        out .= "</" this._Tag ">`n"
+        return out
+    }
+}
+
+class XAML_Generator extends XAMLElement {
+    __New(tag := "Grid") {
+        super.__New(tag)
+        this._TrackCaller()
+    }
+
+    Compile() {
+        return this.ToString("")
+    }
+}

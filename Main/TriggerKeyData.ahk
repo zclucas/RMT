@@ -372,7 +372,8 @@ class TriggerKeyInfo {
         else {
             if (triggerType == 3)
                 this.forbidTrigger := false
-            CloseMenuWheel()
+            if (triggerType != 4)
+                CloseMenuWheel()
         }
     }
 }

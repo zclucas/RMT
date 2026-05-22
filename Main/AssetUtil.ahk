@@ -17,7 +17,6 @@
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\PluginUtil.ahk
-#Include Util\RM_GifPlayer.ahk
 
 #Include ..\Plugins\CLR.ahk
 #Include "..\Plugins\RapidOcr\RapidOcr.ahk"
@@ -412,6 +411,8 @@ LoadMainSetting() {
     MySoftData.IsAdminStart := IniRead(IniFile, IniSection, "IsAdminStart", false)
     MySoftData.ShowSplitLine := IniRead(IniFile, IniSection, "ShowSplitLine", false)
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
+    MySoftData.MenuWheelSelectMode := IniRead(IniFile, IniSection, "MenuWheelSelectMode", 1)
+    MySoftData.MenuWheelShowTooltip := IniRead(IniFile, IniSection, "MenuWheelShowTooltip", true)
     MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
     MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", -1)
     MySoftData.DynamicCorePoolSize := IniRead(IniFile, IniSection, "DynamicCorePoolSize", 2)
@@ -551,9 +552,9 @@ ReadTableItemInfo(index) {
     SetArr(savedStartTipSoundStr, "π", tableItem.StartTipSoundArr)
     SetArr(savedEndTipSoundStr, "π", tableItem.EndTipSoundArr)
 
-    if (!tableItem.HasProp("GifPathArr"))
-        tableItem.GifPathArr := []
     SetArr(savedGifPathArrStr, "π", tableItem.GifPathArr)
+    while (tableItem.GifPathArr.Length < tableItem.ModeArr.Length)
+        tableItem.GifPathArr.Push("")
 
     if (symbol == "UI") {
         savedUIWindowArrStr := IniRead(MacroFile, IniSection, symbol "UIWindowArr", "")
@@ -1071,6 +1072,12 @@ CheckIsMenuMacroTable(index) {
     if (symbol == "Menu")
         return true
     return false
+}
+
+InitArray(tableItem, arrName) {
+    if (!tableItem.HasProp(arrName)) {
+        tableItem.%arrName% := []
+    }
 }
 
 CheckIsNoTriggerKey(index) {

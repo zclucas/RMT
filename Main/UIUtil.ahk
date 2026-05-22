@@ -529,6 +529,9 @@ AddSettingUI(index) {
     MySoftData.SplitLineCtrl := con
     MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
 
+    con := AddTableControl("Button", Format("x{} y{} w{}", posX + 315, posY - 5, 100), GetLang("轮盘选项"), tableItem)
+    con.OnEvent("Click", (*) => MenuWheelGlobalSettingGui().ShowGui())
+
     posY += 40
     con := AddTableControl("GroupBox", Format("x{} y{} w890 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)
     tableItem.AllGroup.Push(con)

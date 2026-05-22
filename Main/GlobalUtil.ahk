@@ -3,7 +3,6 @@
 #Include JoyMacro.ahk
 #Include RecordJoyUtil.ahk
 #Include RecordUtil.ahk
-#Include LineOverlay.ahk
 #Include RMTUtil.ahk
 #Include WorkPool.ahk
 #Include UIUtil.ahk
@@ -14,7 +13,6 @@
 #Include TriggerKeyData.ahk
 #Include FolderPackager.ahk
 #Include Util\MacroClipboardUtil.ahk
-#Include Util\RadialMenuRenderer.ahk
 #Include Util\ErrorHandler.ahk
 #Include ..\Plugins\ViGEm\AHK-ViGEm-Bus-v2.ahk
 
@@ -27,6 +25,9 @@
 #Include ..\Gui\EditHotkeyGui.ahk
 #Include ..\Gui\FreePasteGui.ahk
 #Include ..\Gui\MacroEditGui.ahk
+#Include ..\Gui\MenuWheelGlobalSettingGui.ahk
+#Include ..\Gui\MenuWheelModuleStyleGui.ahk
+#Include ..\Gui\MenuWheelGlobalSettingGui.ahk
 #Include ..\Gui\MenuWheelGui.ahk
 #Include ..\Gui\MenuMacroSettingGui.ahk
 #Include ..\Gui\UIMacroGui.ahk

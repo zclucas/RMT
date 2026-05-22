@@ -174,6 +174,14 @@ LoadItemFoldTK(tableItem, foldIndex, PosY) {
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[TKBtnCon] := MacroItemInfo(-10000, conInfo)
+
+    ;轮盘样式
+    WheelStyleCon := MyGui.Add("Button", Format("x{} y{} w50 h29", MySoftData.TabPosX + 345, posY - 4), GetLang("轮盘"))
+    WheelStyleCon.OnEvent("Click", (*) => MenuWheelModuleStyleGui().ShowGui(foldIndex + 1))
+    conInfo := ItemConInfo(WheelStyleCon, tableItem, foldIndex)
+    conInfo.IsTitle := true
+    tableItem.AllConArr.Push(conInfo)
+    tableItem.ConIndexMap[WheelStyleCon] := MacroItemInfo(-10000, conInfo)
 }
 
 LoadItemFoldTip(tableItem, foldIndex, PosY) {
@@ -223,11 +231,7 @@ OnItemAddMacroBtnClick(tableItem, btn, *) {
     tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
     tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
     tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
-    if (isMenu) {
-        if (!tableItem.HasProp("GifPathArr"))
-            tableItem.GifPathArr := []
-        tableItem.GifPathArr.InsertAt(AddIndex, "")
-    }
+    tableItem.GifPathArr.InsertAt(AddIndex, "")
     tableItem.KilledArr.InsertAt(AddIndex, false)
     tableItem.PauseArr.InsertAt(AddIndex, false)
     tableItem.ActionCount.InsertAt(AddIndex, 0)
@@ -365,6 +369,7 @@ OnItemAddMenuItem(tableItem, foldIndex) {
         tableItem.StartTipSoundArr.InsertAt(AddIndex, 0)
         tableItem.EndTipSoundArr.InsertAt(AddIndex, 0)
         tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
+        tableItem.GifPathArr.InsertAt(AddIndex, "")
         tableItem.KilledArr.InsertAt(AddIndex, false)
         tableItem.PauseArr.InsertAt(AddIndex, false)
         tableItem.ActionCount.InsertAt(AddIndex, 0)
@@ -824,9 +829,9 @@ LoadTabSingleItem(tableItem, ItemConObj) {
     SettingCon.OriPosX := TabPosX + 510
 
     ;编辑
-    EditCon := MyGui.Add("Button", Format("x{} y{} w60 h29", TabPosX + 580, -1000 - 1), GetLang("编辑"))
+    EditCon := MyGui.Add("Button", Format("x{} y{} w60 h29", TabPosX + 575, -1000 - 1), GetLang("编辑"))
     EditCon.OffsetY := -1
-    EditCon.OriPosX := TabPosX + 580
+    EditCon.OriPosX := TabPosX + 575
 
     ;上
     PreCon := MyGui.Add("Button", Format("x{} y{} w20 h28", TabPosX + 700, -1000), "↑")
@@ -1011,7 +1016,7 @@ GetItemConObj(tableItem, itemIndex) {
     TabItemOnEvent(ItemConObj.TKBtnCon, "Click", EditTKAction.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.TKBtnCon, "ContextMenu", OnItemCustomEditTriggerStr.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.SettingCon, "Click", OnItemEditMacroSetting.Bind(tableItem, itemIndex))
-    TabItemOnEvent(ItemConObj.EditCon, "Click", EditMacroAction.Bind(tableItem, itemIndex))
+    TabItemOnEvent(ItemConObj.EditCon, "Click", EditMacroAction.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.PreCon, "Click", OnItemMoveUp.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.NextCon, "Click", OnItemMoveDown.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.CopyCon, "Click", OnItemCopyMacroBtnClick.bind(tableItem, itemIndex))

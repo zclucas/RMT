@@ -130,9 +130,7 @@ SwapTableContent(tableItem, indexA, indexB) {
     SwapArrValue(tableItem.MacroArr, indexA, indexB)
     SwapArrValue(tableItem.LoopCountArr, indexA, indexB)
     SwapArrValue(tableItem.ForbidArr, indexA, indexB)
-    if (tableItem.HasProp("GifPathArr")) {
-        SwapArrValue(tableItem.GifPathArr, indexA, indexB)
-    }
+    SwapArrValue(tableItem.GifPathArr, indexA, indexB)
 }
 
 SwapArrValue(Arr, indexA, indexB, valueType := 1) {
@@ -952,7 +950,7 @@ CheckIfMenuBtnHotKey(key) {
 }
 
 OpenMenuWheel(MenuIndex, isTog) {
-    if (MySoftData.CurMenuWheelIndex == MenuIndex) {
+    if (IsObject(MyMenuWheel) && MyMenuWheel.isOpen && MySoftData.CurMenuWheelIndex == MenuIndex) {
         if (isTog)
             CloseMenuWheel()
         return
@@ -968,21 +966,7 @@ OpenMenuWheel(MenuIndex, isTog) {
 }
 
 CloseMenuWheel() {
-    MySoftData.CurMenuWheelIndex := -1
-    if (!IsObject(MyMenuWheel.Gui))
-        return
-
-    style := WinGetStyle(MyMenuWheel.Gui.Hwnd)
-    isVisible := (style & 0x10000000)  ; 0x10000000 = WS_VISIBLE
-    if (isVisible) {
-        MyMenuWheel.ToggleFunc(false)
-        MyMenuWheel.Gui.Hide()
-
-        ;重新绑定一下，让菜单按钮快捷键不会被输入
-        BindSoftHotKey()
-        BindMenuHotKey()
-        BindTabHotKey()
-    }
+    MyMenuWheel.Close()
 }
 
 IsBootStart() {
