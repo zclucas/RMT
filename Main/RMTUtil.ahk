@@ -1100,8 +1100,16 @@ UpdateMacroRunningCount(LastState, State) {
 
 ;批量移除文件的“来自互联网”标记（Zone.Identifier）。 防止文件被锁定
 UnblockZoneIdentifier() {
+    markerFile := A_WorkingDir "\Setting\.unblocked"
+    if (FileExist(markerFile)) {
+        markerTime := FileGetTime(markerFile)
+        exeTime := FileGetTime(A_ScriptFullPath)
+        if (exeTime <= markerTime)
+            return
+    }
+
     try {
-        psCmd := 'Get-ChildItem -Path "' A_ScriptDir '" -Recurse -File | ForEach-Object { try { Unblock-File -Path $_.FullName -ErrorAction Stop } catch {} }'
-        RunWait('powershell.exe -NoProfile -WindowStyle Hidden -Command "' psCmd '"', , "Hide")
+        fullCmd := 'powershell.exe -NoProfile -WindowStyle Hidden -Command "Get-ChildItem -Path "' A_ScriptDir '" -Recurse -File | ForEach-Object { try { Unblock-File -Path $_.FullName -ErrorAction Stop } catch {} }; if ($?) { New-Item -Path "' markerFile '" -ItemType File -Force | Out-Null }"'
+        Run(fullCmd, , "Hide")
     }
 }

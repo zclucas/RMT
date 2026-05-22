@@ -56,7 +56,7 @@ A_MaxHotkeysPerInterval := 400
 
 
 OnError(ErrHandler)             ;注册全局错误处理器
-UnblockZoneIdentifier()         ;移除文件的Zone.Identifier标记 防止文件被锁定
+UnblockZoneIdentifier()         ;异步移除文件的Zone.Identifier标记 防止文件被锁定
 global MySoftData := SoftData()
 global ToolCheckInfo := ToolCheck()
 global IniFile := A_WorkingDir "\Setting\MainSettings.ini"
