@@ -28,6 +28,7 @@
 #Include ..\Gui\MenuWheelGlobalSettingGui.ahk
 #Include ..\Gui\MenuWheelModuleStyleGui.ahk
 #Include ..\Gui\MenuWheelGlobalSettingGui.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Host.ahk
 #Include ..\Gui\MenuWheelGui.ahk
 #Include ..\Gui\MenuMacroSettingGui.ahk
 #Include ..\Gui\UIMacroGui.ahk

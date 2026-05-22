@@ -176,6 +176,8 @@ PluginInit() {
     global RMT_Http := RMT_ASM.CreateInstance("RMT.Http")     ; 创建对象实例
 
     SetTimer(CheckOcrIdle, 60000)   ;60秒后，释放Ocr资源
+
+    XAMLHost.Prewarm()
 }
 
 OnToolAlwaysOnTop(*) {
