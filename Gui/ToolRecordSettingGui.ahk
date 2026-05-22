@@ -171,5 +171,16 @@ class ToolRecordSettingGui {
         ToolCheckInfo.RecordJoy := this.JoyTogCon.Value
         ToolCheckInfo.RecordJoyInterval := this.JoyIntervalCon.Value
         ToolCheckInfo.RecordShowBorder := this.ShowBorderCon.Value
+
+        global IniFile, IniSection
+        IniWrite(ToolCheckInfo.RecordAutoLoosen, IniFile, IniSection, "RecordAutoLoosen")
+        IniWrite(ToolCheckInfo.RecordHoldMuti, IniFile, IniSection, "RecordHoldMuti")
+        IniWrite(ToolCheckInfo.RecordKeyboard, IniFile, IniSection, "RecordKeyboard")
+        IniWrite(ToolCheckInfo.RecordMouse, IniFile, IniSection, "RecordMouse")
+        IniWrite(ToolCheckInfo.RecordMouseTrail, IniFile, IniSection, "RecordMouseTrail")
+        IniWrite(ToolCheckInfo.RecordMouseTrailSpeed, IniFile, IniSection, "RecordMouseTrailSpeed")
+        IniWrite(ToolCheckInfo.RecordJoy, IniFile, IniSection, "RecordJoy")
+        IniWrite(ToolCheckInfo.RecordJoyInterval, IniFile, IniSection, "RecordJoyInterval")
+        IniWrite(ToolCheckInfo.RecordShowBorder, IniFile, IniSection, "RecordShowBorder")
     }
 }

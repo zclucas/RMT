@@ -371,6 +371,7 @@ class UIMacroSettingGui {
 
     OnSureBtnClick(tableItem) {
         this.UpdateTableItem(tableItem)
+        this.SaveData(tableItem)
         this.StopCoordMonitor()
         this.ToggleFunc(false)
         this.DestroyPreview()
@@ -381,6 +382,7 @@ class UIMacroSettingGui {
 
     OnSaveBtnClick(tableItem) {
         this.UpdateTableItem(tableItem)
+        this.SaveData(tableItem)
         this.StopCoordMonitor()
         this.ToggleFunc(false)
         this.DestroyPreview()
@@ -389,9 +391,9 @@ class UIMacroSettingGui {
         action := this.SaveBtnAction
         if (action != "")
             action()
-        
+
         MyUIMacroGui.RefreshButtons()
-        
+
         if (this.SureFocusCon != "")
             this.SureFocusCon.Focus()
     }
@@ -429,6 +431,35 @@ class UIMacroSettingGui {
             tableItem.UIBtnHeightArr[macroIndex] := btnHeightValue
         else
             tableItem.UIBtnHeightArr.Push(btnHeightValue)
+    }
+
+    SaveData(tableItem) {
+        global MacroFile, IniSection
+
+        UIWindowArrStr := ""
+        UIPosYArrStr := ""
+        UIBtnWidthArrStr := ""
+        UIBtnHeightArrStr := ""
+
+        loop tableItem.ModeArr.Length {
+            index := A_Index
+            UIWindowArrStr .= tableItem.UIWindowArr.Has(index) ? tableItem.UIWindowArr[index] : ""
+            UIPosYArrStr .= tableItem.UIPosYArr.Has(index) ? tableItem.UIPosYArr[index] : ""
+            UIBtnWidthArrStr .= tableItem.UIBtnWidthArr.Has(index) ? tableItem.UIBtnWidthArr[index] : ""
+            UIBtnHeightArrStr .= tableItem.UIBtnHeightArr.Has(index) ? tableItem.UIBtnHeightArr[index] : ""
+
+            if (tableItem.ModeArr.Length > index) {
+                UIWindowArrStr .= "π"
+                UIPosYArrStr .= "π"
+                UIBtnWidthArrStr .= "π"
+                UIBtnHeightArrStr .= "π"
+            }
+        }
+
+        IniWrite(UIWindowArrStr, MacroFile, IniSection, "UIUIWindowArr")
+        IniWrite(UIPosYArrStr, MacroFile, IniSection, "UIUIPosYArr")
+        IniWrite(UIBtnWidthArrStr, MacroFile, IniSection, "UIUIBtnWidthArr")
+        IniWrite(UIBtnHeightArrStr, MacroFile, IniSection, "UIUIBtnHeightArr")
     }
 
     OnCancel() {

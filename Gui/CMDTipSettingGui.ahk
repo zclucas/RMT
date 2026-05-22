@@ -168,6 +168,11 @@ class CMDTipSettingGui {
             return false
         }
 
+        if (!RegExMatch(this.RunBGColorCon.Value, "^([0-9A-Fa-f]{6})$")) {
+            MsgBox(GetLang("运行时背景：请输入正确的颜色值"))
+            return false
+        }
+
         return true
     }
 
@@ -196,6 +201,18 @@ class CMDTipSettingGui {
         MySoftData.CMDTransparency := this.TransparencyCon.Value
         MySoftData.CMDFontSize := this.FontSizeCon.Value
         MySoftData.CMDFontColor := this.FontColorCon.Value
+
+        global IniFile, IniSection
+        IniWrite(MySoftData.CMDPosX, IniFile, IniSection, "CMDPosX")
+        IniWrite(MySoftData.CMDPosY, IniFile, IniSection, "CMDPosY")
+        IniWrite(MySoftData.CMDWidth, IniFile, IniSection, "CMDWidth")
+        IniWrite(MySoftData.CMDHeight, IniFile, IniSection, "CMDHeight")
+        IniWrite(MySoftData.CMDBGColor, IniFile, IniSection, "CMDBGColor")
+        IniWrite(MySoftData.CMDRunBGColor, IniFile, IniSection, "CMDRunBGColor")
+        IniWrite(MySoftData.CMDTransparency, IniFile, IniSection, "CMDTransparency")
+        IniWrite(MySoftData.CMDFontSize, IniFile, IniSection, "CMDFontSize")
+        IniWrite(MySoftData.CMDFontColor, IniFile, IniSection, "CMDFontColor")
+
         this.ToggleFunc(false)
         this.Gui.Hide()
     }
