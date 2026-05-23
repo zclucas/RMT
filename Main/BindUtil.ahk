@@ -27,7 +27,10 @@ BindShortcut(triggerInfo, action) {
     }
     else {
         isCombo := IsComboKey(triggerInfo)
-        if (isCombo) {
+        mapKey := StrLower(Trim(triggerInfo, "~"))
+        if (WindowHotkeyManager.IsManaged(mapKey)) {
+            key := "$~" mapKey
+        } else if (isCombo) {
             key := triggerInfo
         }
         else {
@@ -281,6 +284,8 @@ BindMenuHotKey() {
             continue
 
         oriKey := FoldInfo.TKArr[index]
+        if (WindowHotkeyManager.IsManaged(StrLower(oriKey)))
+            continue
         isCombo := IsComboKey(oriKey)
         if (isCombo) {
             key := oriKey
@@ -341,6 +346,8 @@ BindTabHotKey() {
                 continue
 
             rawKey := tableItem.TKArr[index]
+            if (WindowHotkeyManager.IsManaged(StrLower(rawKey)))
+                continue
             isCombo := IsComboKey(rawKey)
             if (isCombo) {
                 key := rawKey
@@ -493,43 +500,18 @@ BindSoftHotKey() {
         isCombo := IsComboKey(mapKey)
 
         if (WindowHotkeyManager.IsManaged(mapKey)) {
-            key := isCombo ? mapKey : ("$*" mapKey)
-            actionDown := OnBindKeyDown.Bind(value)
-            actionUp := OnBindKeyUp.Bind(value)
-            try {
-                Hotkey(key, actionDown, "On")
-                if (!isCombo)
-                    Hotkey(key " up", actionUp, "On")
-            }
-            catch as e {
-            }
-            continue
-        }
-
-        isMenuBtnHotKey := CheckIfMenuBtnHotKey(mapKey)
-        isOpenMenu := MySoftData.CurMenuWheelIndex != -1
-        IsOnlySoftHotkey := MySoftData.TriggerKeyMap[mapKey].IsOnlySoftHotkey()
-
-        if (isCombo) {
+            key := "$~" mapKey
+        } else if (isCombo) {
             key := value
         }
         else if (SubStr(value, 1, 1) == "~") {
             key := "$" value
         }
         else {
-            key := "$" value
+            key := "$*" value
         }
         actionDown := OnBindKeyDown.Bind(value)
         actionUp := OnBindKeyUp.Bind(value)
-
-        if (isMenuBtnHotKey && !isOpenMenu && IsOnlySoftHotkey) {
-            Hotkey(key, actionDown, "Off")
-            if (!isCombo)
-                Hotkey(key " up", actionUp, "Off")
-        }
-
-        if (isMenuBtnHotKey && !isOpenMenu)
-            continue
 
         try {
             Hotkey(key, actionDown, "On")

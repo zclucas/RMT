@@ -29,7 +29,6 @@ class MacroEditGui {
     static Hotkeys := ["f5", "f6", "delete", "numpaddot"]
 
     __new() {
-        WindowHotkeyManager.Register(this, MacroEditGui.Hotkeys, this.OnSoftKey.Bind(this))
         this.ParentTile := ""
         this.Gui := ""
         this.GuiMenu := ""
@@ -227,6 +226,8 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\WindowManage.png")   ;29 窗口管理
             IL_Add(ImageListID, "Images\Soft\KeyCheck.png")   ;30 按键检测
         }
+
+        WindowHotkeyManager.Register(this, MacroEditGui.Hotkeys, this.OnSoftKey.Bind(this), this._IsAlive.Bind(this))
 
         if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
             try {
@@ -564,6 +565,7 @@ class MacroEditGui {
     }
 
     OnGuiClose() {
+        WindowHotkeyManager.Unregister(this)
         if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
             try {
                 GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
@@ -669,13 +671,18 @@ class MacroEditGui {
         }
     }
 
-    OnSoftKey(key, isDown) {
+    _IsAlive() {
         if (!IsObject(this.Gui))
-            return
+            return false
+        hwnd := this.Gui.Hwnd
+        if (!hwnd || !WinExist("ahk_id " hwnd))
+            return false
+        style := WinGetStyle(hwnd)
+        return !!(style & 0x10000000) && WinActive("ahk_id " hwnd)
+    }
 
-        style := WinGetStyle(this.Gui.Hwnd)
-        isVisible := (style & 0x10000000)  ; 0x10000000 = WS_VISIBLE
-        if (!isVisible || !isDown)
+    OnSoftKey(key, isDown) {
+        if (!isDown)
             return
 
         if (key == "f5")

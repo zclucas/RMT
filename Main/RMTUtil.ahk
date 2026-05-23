@@ -942,13 +942,6 @@ FormatIntegerWithCommas(num) {
     return RegExReplace(num, "(\d)(?=(\d{3})+$)", "$1,")
 }
 
-CheckIfMenuBtnHotKey(key) {
-    if (IsNumber(key)) {
-        return Integer(key) >= 1 && Integer(key) <= 8
-    }
-    return false
-}
-
 OpenMenuWheel(MenuIndex, isTog) {
     if (IsObject(MyMenuWheel) && MyMenuWheel.isOpen && MySoftData.CurMenuWheelIndex == MenuIndex) {
         if (isTog)
@@ -958,11 +951,6 @@ OpenMenuWheel(MenuIndex, isTog) {
 
     MySoftData.CurMenuWheelIndex := MenuIndex
     MyMenuWheel.ShowGui(MenuIndex)
-
-    ;重新绑定一下，让菜单按钮快捷键不会被输入
-    BindMenuHotKey()
-    BindTabHotKey()
-    BindSoftHotKey()
 }
 
 CloseMenuWheel() {

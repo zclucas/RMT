@@ -3,6 +3,8 @@
 #Include "..\Plugins\AHK-XAML\lib\XAML_Generator.ahk"
 
 class MenuWheelGui {
+    static Hotkeys := ["1", "2", "3", "4", "5", "6", "7", "8"]
+
     __new() {
         this.MenuIndex := 1
         this.Gui := ""
@@ -143,16 +145,9 @@ class MenuWheelGui {
     OnSoftKey(key, isDown) {
         if (!isDown || !this.isOpen)
             return
-        numberArr := ["1", "2", "3", "4", "5", "6", "7", "8"]
-        loop numberArr.Length {
-            if (key == numberArr[A_Index]) {
-                idx := Integer(key)
-                if (idx >= 1 && idx <= 8 && IsObject(this.ui)) {
-                    this.DoSelect(idx, "")
-                }
-                return
-            }
-        }
+        idx := Integer(key)
+        if (idx >= 1 && idx <= MenuWheelGui.Hotkeys.Length && IsObject(this.ui))
+            this.DoSelect(idx, "")
     }
 
     Close() {
@@ -345,7 +340,6 @@ class MenuWheelGui {
         this.ui := XAMLHost(win.ToString(), "", 0)
         this.closed := false
         this.swipeTriggered := false
-        this.Gui := { Hwnd: this.ui.wpfHwnd }
         this.isOpen := true
 
         Loop itemCount {
@@ -380,6 +374,13 @@ class MenuWheelGui {
             if (this.HasProp("ui") && IsObject(this.ui))
                 this.ui.Update("SwipeLine", "Visibility", "Collapsed")
         }
+        this._aliveHwnd := this.ui.wpfHwnd
+        this.Gui := { Hwnd: this.ui.wpfHwnd }
+        WindowHotkeyManager.Register(this, MenuWheelGui.Hotkeys, this.OnSoftKey.Bind(this), this._IsAlive.Bind(this))
+    }
+
+    _IsAlive() {
+        return WinExist("ahk_id " this._aliveHwnd)
     }
 
     static _H(menu, idx) {
@@ -466,6 +467,7 @@ class MenuWheelGui {
     }
 
     _Cleanup() {
+        WindowHotkeyManager.Unregister(this)
         this.isOpen := false
         this._CancelPendingSelect()
         if (IsObject(this.swipe))
@@ -479,9 +481,6 @@ class MenuWheelGui {
         }
         this.ui := ""
         this.Gui := ""
-        BindSoftHotKey()
-        BindMenuHotKey()
-        BindTabHotKey()
     }
 
     DoCancel() {

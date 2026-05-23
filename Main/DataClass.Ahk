@@ -291,9 +291,8 @@ class SoftData {
         this.VarListenHeight := 420
 
         this.TriggerKeyMap := Map()     ;所有的按键宏，包括软件自身的快捷键
-        this.SoftHotKeyArr := ["~WheelUp", "~WheelDown", "~LButton", "~Left", "~Right", "~Up", "~Down", "~Enter", "1",
-            "2", "3", "4", "5", "6", "7", "8", "~F5", "~F6", "~Delete", "~NumpadDot"]
-        ; this.SoftHotKeyArr := ["1", "2", "3", "4", "5", "6", "7", "8"]      ;测试时候启动
+        this.SoftHotKeyArr := ["~WheelUp", "~WheelDown", "~LButton", "~Left", "~Right", "~Up", "~Down", "~Enter", "~1",
+            "~2", "~3", "~4", "~5", "~6", "~7", "~8", "~F5", "~F6", "~Delete", "~NumpadDot"]
 
         this.SelectAreaAction := "" ;左键框选范围回调   显示框选范围       正常
         this.GetAreaAction := ""    ;左键框选范围回调   不显示框选范围      系统截图获取截图范围
