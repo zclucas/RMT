@@ -17,6 +17,9 @@ global XAML_COMPONENTS_LOAD_MODE := "BAML"
 ; for rapid iteration. Disable in production for a cleaner user experience.
 global XAML_DIAGNOSTICS_ENABLED := true
 
+; Enable to dump the AXML Abstract Syntax Tree to a local file when parsing AXML files
+global XAML_AXML_DEBUG_MODE := true
+
 ; --- Logging System ---
 ; When true, the framework writes trace and error logs to disk (e.g., AhkWpfError.log).
 ; Set to false to disable all disk I/O for logging.

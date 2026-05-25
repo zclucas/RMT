@@ -2,7 +2,7 @@
 InitUI() {
     global MySoftData
     MyGui := Gui()
-    MyGui.Title := "RMTv1.2F3"
+    MyGui.Title := "RMTv1.2F4"
     MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
     isValidCollor := RegExMatch(MySoftData.SoftBGColor, "^([0-9A-Fa-f]{6})$")
     BGColor := isValidCollor ? MySoftData.SoftBGColor : "f0f0f0"
@@ -530,7 +530,7 @@ AddSettingUI(index) {
     MySoftData.SplitLineCtrl.Value := MySoftData.ShowSplitLine
 
     con := AddTableControl("Button", Format("x{} y{} w{}", posX + 315, posY - 5, 100), GetLang("轮盘选项"), tableItem)
-    con.OnEvent("Click", (*) => MenuWheelGlobalSettingGui().ShowGui())
+    con.OnEvent("Click", (*) => MenuWheelGlobalSettingGui.ShowGui())
 
     posY += 40
     con := AddTableControl("GroupBox", Format("x{} y{} w890 h100", posX + 10, posY), GetLang("下拉框选项"), tableItem)

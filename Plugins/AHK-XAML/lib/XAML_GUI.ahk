@@ -21,6 +21,8 @@ class XAML_GUI {
         this.showMinMax := hasOpt("MinMaxButtons") ? getOpt("MinMaxButtons") : true
         this.showIcon := hasOpt("AppIcon") ? getOpt("AppIcon") : true
         this.titleBarHeight := hasOpt("TitleBarHeight") ? getOpt("TitleBarHeight") : 50
+        this.winWidth := hasOpt("Width") ? getOpt("Width") : ""
+        this.winHeight := hasOpt("Height") ? getOpt("Height") : ""
 
         ; Expose the root generator for customization
         this.X := XAML_Generator("Grid").Name("AppGrid").Background("{DynamicResource BgColor}").Focusable("True")
@@ -178,6 +180,11 @@ class XAML_GUI {
             this.xamlString := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", this.titleBarHeight)
             this.xamlString := StrReplace(this.xamlString, "%app%", this.X.Compile())
             this.xamlString := StrReplace(this.xamlString, "%resources%", "")
+            if (this.winWidth != "" || this.winHeight != "") {
+                w := this.winWidth != "" ? this.winWidth : "940"
+                h := this.winHeight != "" ? this.winHeight : "700"
+                this.xamlString := StrReplace(this.xamlString, 'Width="940" Height="700"', 'Width="' w '" Height="' h '"')
+            }
             this.host := XAMLHost(this.xamlString, outFile, options*)
         }
         this.BindBaseEvents()
@@ -212,7 +219,6 @@ class XAML_GUI {
 
     BindBaseEvents() {
         this.host.OnEvent("Window", "Loaded", ObjBindMethod(this, "OnUIReady"))
-        this.host.OnEvent("Window", "Closed", (*) => ExitApp())
 
         this.host.OnEvent("ComboTheme", "SelectionChanged", ObjBindMethod(this, "ThemeChanged"))
         this.host.OnEvent("ComboScale", "SelectionChanged", ObjBindMethod(this, "ScaleChanged"))
@@ -410,6 +416,8 @@ class XAML_GUI {
         this.ScaleChanged(state, ctrl, event)
         this.RadiusChanged(state, ctrl, event)
 
+        SetTimer(ObjBindMethod(this, "ApplySavedTheme"), -50)
+
         for _, tok in this.tokenizers {
             tok.RenderTags()
         }
@@ -444,6 +452,26 @@ class XAML_GUI {
             }
         } catch {
             ; Do nothing
+        }
+        try {
+            if (IsObject(MySoftData) && MySoftData.HasProp("XAMLTheme")) {
+                MySoftData.XAMLTheme := theme
+                global IniFile, IniSection
+                if (IsSet(IniFile) && IsSet(IniSection))
+                    IniWrite(theme, IniFile, IniSection, "XAMLTheme")
+            }
+        }
+    }
+
+    ApplySavedTheme() {
+        try {
+            if (!IsObject(MySoftData) || !MySoftData.HasProp("XAMLTheme"))
+                return
+            saved := MySoftData.XAMLTheme
+            if (saved == "")
+                return
+            this.ThemeChanged(Map("ComboTheme", saved), "", "")
+        } catch {
         }
     }
 
@@ -627,6 +655,7 @@ class XAML_GUI {
 
 FindThemesIni() {
     paths := [
+        A_WorkingDir "\Setting\themes.ini",
         "themes.ini",
         A_ScriptDir "\themes.ini",
         A_ScriptDir "\..\themes.ini",

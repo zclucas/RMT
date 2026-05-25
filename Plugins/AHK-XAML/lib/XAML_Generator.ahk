@@ -239,7 +239,7 @@ class XAMLElement {
     InjectResources(rawXamlString) {
         res := XAMLElement(this._Tag ".Resources")
         res._TextContent := rawXamlString
-        this._Children.InsertAt(1, res)
+        this._Children.InsertAt(0, res)
         return this
     }
 

@@ -174,14 +174,6 @@ LoadItemFoldTK(tableItem, foldIndex, PosY) {
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[TKBtnCon] := MacroItemInfo(-10000, conInfo)
-
-    ;轮盘样式
-    WheelStyleCon := MyGui.Add("Button", Format("x{} y{} w50 h29", MySoftData.TabPosX + 345, posY - 4), GetLang("轮盘"))
-    WheelStyleCon.OnEvent("Click", (*) => MenuWheelModuleStyleGui().ShowGui(foldIndex + 1))
-    conInfo := ItemConInfo(WheelStyleCon, tableItem, foldIndex)
-    conInfo.IsTitle := true
-    tableItem.AllConArr.Push(conInfo)
-    tableItem.ConIndexMap[WheelStyleCon] := MacroItemInfo(-10000, conInfo)
 }
 
 LoadItemFoldTip(tableItem, foldIndex, PosY) {

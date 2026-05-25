@@ -114,10 +114,10 @@ class XDialog {
             btnEl := btnSp.Add("Button").Name("Btn" index).Content(btnText).Width(120).Margin("5,0").Cursor("Hand")
 
             if (isPrimary) {
-                btnEl.Style("{StaticResource DialogPrimaryBtn}")
+                btnEl.Style("{DynamicResource DialogPrimaryBtn}")
                 btnEl.IsDefault("True")
             } else {
-                btnEl.Style("{StaticResource DialogBtn}")
+                btnEl.Style("{DynamicResource DialogBtn}")
                 if (isCancel) {
                     btnEl.IsCancel("True")
                 }

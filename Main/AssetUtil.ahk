@@ -413,6 +413,8 @@ LoadMainSetting() {
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
     MySoftData.MenuWheelSelectMode := IniRead(IniFile, IniSection, "MenuWheelSelectMode", 1)
     MySoftData.MenuWheelShowTooltip := IniRead(IniFile, IniSection, "MenuWheelShowTooltip", true)
+    MySoftData.XAMLTheme := IniRead(IniFile, IniSection, "XAMLTheme", "RMT Light")
+    EnsureXAMLThemesIni()
     MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
     MySoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", -1)
     MySoftData.DynamicCorePoolSize := IniRead(IniFile, IniSection, "DynamicCorePoolSize", 2)
@@ -447,6 +449,47 @@ LoadMainSetting() {
     SetFontList()
     LangInitSetting()
     LangKeysInit()
+}
+
+EnsureXAMLThemesIni() {
+    static done := false
+    if (done)
+        return
+    iniPath := A_ScriptDir "\Setting\themes.ini"
+    if (FileExist(iniPath)) {
+        done := true
+        return
+    }
+    if (!DirExist(A_ScriptDir "\Setting"))
+        DirCreate(A_ScriptDir "\Setting")
+    IniWrite("2,0", iniPath, "RMT Light", "Window_DWM")
+    IniWrite("CornerRadius:8", iniPath, "RMT Light", "Resource_WindowRadius")
+    IniWrite("#FFF0F0F0", iniPath, "RMT Light", "Resource_BgColor")
+    IniWrite("#20E0E0E0", iniPath, "RMT Light", "Resource_SidebarColor")
+    IniWrite("#FF1A1A1A", iniPath, "RMT Light", "Resource_TextMain")
+    IniWrite("#FF666666", iniPath, "RMT Light", "Resource_TextSub")
+    IniWrite("#FFFFFFFF", iniPath, "RMT Light", "Resource_ControlBg")
+    IniWrite("#FFD0D0D0", iniPath, "RMT Light", "Resource_ControlBorder")
+    IniWrite("#FFFFFFFF", iniPath, "RMT Light", "Resource_DropdownBg")
+    IniWrite("#FF0078D7", iniPath, "RMT Light", "Resource_Accent")
+    IniWrite("Double:8", iniPath, "RMT Light", "Resource_ScrollBarWidth")
+    IniWrite("CornerRadius:4", iniPath, "RMT Light", "Resource_ScrollBarRadius")
+    IniWrite("#FF0078D7", iniPath, "RMT Light", "Resource_ScrollBarHover")
+
+    IniWrite("2,1", iniPath, "RMT Dark", "Window_DWM")
+    IniWrite("CornerRadius:8", iniPath, "RMT Dark", "Resource_WindowRadius")
+    IniWrite("#FF1E1E1E", iniPath, "RMT Dark", "Resource_BgColor")
+    IniWrite("#20000000", iniPath, "RMT Dark", "Resource_SidebarColor")
+    IniWrite("#FFFFFFFF", iniPath, "RMT Dark", "Resource_TextMain")
+    IniWrite("#FFAAAAAA", iniPath, "RMT Dark", "Resource_TextSub")
+    IniWrite("#15252525", iniPath, "RMT Dark", "Resource_ControlBg")
+    IniWrite("#20333333", iniPath, "RMT Dark", "Resource_ControlBorder")
+    IniWrite("#FF252525", iniPath, "RMT Dark", "Resource_DropdownBg")
+    IniWrite("#FF0A84FF", iniPath, "RMT Dark", "Resource_Accent")
+    IniWrite("Double:8", iniPath, "RMT Dark", "Resource_ScrollBarWidth")
+    IniWrite("CornerRadius:4", iniPath, "RMT Dark", "Resource_ScrollBarRadius")
+    IniWrite("#FF0A84FF", iniPath, "RMT Dark", "Resource_ScrollBarHover")
+    done := true
 }
 
 SetFontList() {

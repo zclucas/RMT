@@ -26,9 +26,11 @@
 #Include ..\Gui\FreePasteGui.ahk
 #Include ..\Gui\MacroEditGui.ahk
 #Include ..\Gui\MenuWheelGlobalSettingGui.ahk
-#Include ..\Gui\MenuWheelModuleStyleGui.ahk
-#Include ..\Gui\MenuWheelGlobalSettingGui.ahk
 #Include ..\Plugins\AHK-XAML\lib\XAML_Host.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Generator.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_GUI.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Components.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Dialog.ahk
 #Include ..\Gui\MenuWheelGui.ahk
 #Include ..\Gui\MenuMacroSettingGui.ahk
 #Include ..\Gui\UIMacroGui.ahk

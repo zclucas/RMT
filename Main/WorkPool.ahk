@@ -90,6 +90,7 @@ class WorkPool {
 
         OnMessage(WM_LOAD_WORK, ObjBindMethod(this, "OnWorkerReady"))
         OnMessage(WM_STOP_MACRO, ObjBindMethod(this, "OnStopMacro"))
+        OnMessage(WM_TR_MACRO, ObjBindMethod(this, "OnTriggerMacro"))
         OnMessage(WM_RESULT_NOTIFY, ObjBindMethod(this, "PollResult"))
 
         SetTimer(ObjBindMethod(this, "CheckFutures"), 1000)
@@ -428,6 +429,10 @@ class WorkPool {
         tableIndex := wParam
         itemIndex := lParam
         this.BroadcastStop(tableIndex, itemIndex)
+    }
+
+    OnTriggerMacro(wParam, lParam, msg, hwnd) {
+        TriggerMacroHandler(wParam, lParam)
     }
 
     OnWorkerEvent(idx, payload) {

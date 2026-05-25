@@ -546,15 +546,36 @@ public class AhkWpfEngine {
             InheritWindowIconAndTitle(win, ownerHwndStr);
             DumpState("Window", "Loaded");
         };
-        win.Closing += (s, e) => { 
+        win.Closing += (s, e) => {
             var ownHwnd = new WindowInteropHelper(win).Owner;
             if (ownHwnd != IntPtr.Zero) {
                 SetWindowPos(ownHwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0003);
                 SetForegroundWindow(ownHwnd);
             }
-            SendToAhk("EVENT|" + winId + "|Window|Closing\n"); 
+            SendToAhk("EVENT|" + winId + "|Window|Closing\n");
         };
-        win.Closed += (s, e) => { SendToAhk("EVENT|" + winId + "|Window|Closed\n"); };
+        win.Closed += (s, e) => {
+            SendToAhk("EVENT|" + winId + "|Window|Closed\n");
+            var _winRef = win;
+            var _trackedRef = tracked;
+            var _canvasModesRef = canvasModes;
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() => {
+                try {
+                    try { _winRef.Content = null; } catch { }
+                    _winRef.Close();
+                    _winRef = null;
+                    _trackedRef = null;
+                    if (_canvasModesRef != null) _canvasModesRef.Clear();
+                    selectionBox = null;
+                    tempConnection = null;
+                    connectionSourcePort = null;
+                    canvasModes.Clear();
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect(0);
+                } catch { }
+            }));
+        };
         
         // Bind events
         if (!string.IsNullOrEmpty(eventsContent)) {
@@ -942,15 +963,36 @@ public class AhkWpfEngine {
             };
             timer.Start();
         };
-        win.Closing += (s, e) => { 
+        win.Closing += (s, e) => {
             var ownerHwnd = new System.Windows.Interop.WindowInteropHelper(win).Owner;
             if (ownerHwnd != IntPtr.Zero) {
                 SetWindowPos(ownerHwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0003);
                 SetForegroundWindow(ownerHwnd);
             }
-            SendToAhk("EVENT|" + winId + "|Window|Closing\n"); 
+            SendToAhk("EVENT|" + winId + "|Window|Closing\n");
         };
-        win.Closed += (s, e) => { SendToAhk("EVENT|" + winId + "|Window|Closed\n"); };
+        win.Closed += (s, e) => {
+            SendToAhk("EVENT|" + winId + "|Window|Closed\n");
+            var _w2 = win;
+            var _t2 = tracked;
+            var _cm2 = canvasModes;
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() => {
+                try {
+                    try { _w2.Content = null; } catch { }
+                    _w2.Close();
+                    _w2 = null;
+                    _t2 = null;
+                    if (_cm2 != null) _cm2.Clear();
+                    selectionBox = null;
+                    tempConnection = null;
+                    connectionSourcePort = null;
+                    canvasModes.Clear();
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect(0);
+                } catch { }
+            }));
+        };
 
         // Unified event binding — merge all event sources
         // eventsContent may come from: inline data, .bin, or BAML companion .events file
@@ -1401,6 +1443,12 @@ public class AhkWpfEngine {
     }
 
     private void ProcessMessage(IntPtr hwnd, string text) {
+        foreach (string line in text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) {
+            ProcessSingleMessage(hwnd, line);
+        }
+    }
+
+    private void ProcessSingleMessage(IntPtr hwnd, string text) {
         string[] parts = text.Split(new[] { '|' }, 3);
         if (parts.Length < 3) return;
         if (parts[0] == "Window" && parts[1] == "DWM") {

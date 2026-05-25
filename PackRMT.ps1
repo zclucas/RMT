@@ -249,11 +249,11 @@ function New-Release {
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
-        # 复制帮助文档（根目录为 index.html，发布目录重命名为 RMT帮助文档.html）
+        # 复制帮助文档（index.html）
         $helpSrc = Join-Path $PSScriptRoot "index.html"
         if (Test-Path $helpSrc) {
-            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
-            Write-Log "  已复制: RMT帮助文档.html" "Gray"
+            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "index.html") -Force
+            Write-Log "  已复制: index.html" "Gray"
         }
 
         # 删除旧 Work.exe
@@ -293,11 +293,11 @@ function New-Release {
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
-        # 复制帮助文档（根目录为 index.html，发布目录重命名为 RMT帮助文档.html）
+        # 复制帮助文档（index.html）
         $helpSrc = Join-Path $PSScriptRoot "index.html"
         if (Test-Path $helpSrc) {
-            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "RMT帮助文档.html") -Force
-            Write-Log "  已复制: RMT帮助文档.html" "Gray"
+            Copy-Item $helpSrc -Destination (Join-Path $releaseDir "index.html") -Force
+            Write-Log "  已复制: index.html" "Gray"
         }
 
         # 删除旧 Work.exe

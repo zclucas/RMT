@@ -23,7 +23,7 @@
 #Include InputGui.ahk
 #Include FileIOGui.ahk
 #Include WindowManageGui.ahk
-#Include KeyCheckGui.ahk
+#include KeyCheckGui.ahk
 
 class MacroEditGui {
     static Hotkeys := ["f5", "f6", "delete", "numpaddot"]
@@ -233,6 +233,7 @@ class MacroEditGui {
             try {
                 GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
             }
+            IL_Add(ImageListID, "Images\Soft\KeyCheck.png")           ;按键检测
         }
 
         MySoftData.RecordToggleCon := this.RecordMacroCon

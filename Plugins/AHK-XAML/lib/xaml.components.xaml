@@ -7,6 +7,19 @@
     <SolidColorBrush x:Key="ControlBorder" Color="#20FFFFFF"/>
     <SolidColorBrush x:Key="DropdownBg" Color="#1E1E1E"/>
     <SolidColorBrush x:Key="Accent" Color="#0A84FF"/>
+    
+    <SolidColorBrush x:Key="FocusVisualBrush" Color="#80FFFFFF"/>
+
+    <!-- Global Focus Visual Style -->
+    <Style x:Key="GlobalFocusVisual">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="-4" BorderThickness="2" BorderBrush="{DynamicResource FocusVisualBrush}" CornerRadius="6" Background="Transparent" SnapsToDevicePixels="true" IsHitTestVisible="false"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <!-- Scrollbar defaults (overridden per-theme via IPC) -->
     <sys:Double x:Key="ScrollBarWidth">8</sys:Double>
@@ -111,6 +124,7 @@
 
     <Style TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Margin" Value="0,0,0,12"/>
         <Setter Property="Template">
@@ -141,6 +155,8 @@
 
     <Style x:Key="ToggleSwitch" TargetType="CheckBox">
         <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -163,6 +179,7 @@
     </Style>
 
     <Style TargetType="Slider">
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
@@ -268,6 +285,7 @@
 
     <Style TargetType="TextBox">
         <Setter Property="Background" Value="{DynamicResource ControlBg}"/>
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
@@ -288,6 +306,7 @@
     
     <Style TargetType="PasswordBox">
         <Setter Property="Background" Value="{DynamicResource ControlBg}"/>
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
@@ -308,6 +327,7 @@
 
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Background" Value="{DynamicResource ControlBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -508,6 +528,7 @@
 
     <Style TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Background" Value="#10FFFFFF"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -534,6 +555,7 @@
 
     <Style TargetType="CheckBox">
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">

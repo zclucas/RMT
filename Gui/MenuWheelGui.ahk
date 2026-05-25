@@ -1,6 +1,4 @@
 #Requires AutoHotkey v2.0
-#Include "..\Plugins\AHK-XAML\lib\XAML_Host.ahk"
-#Include "..\Plugins\AHK-XAML\lib\XAML_Generator.ahk"
 
 class MenuWheelGui {
     static Hotkeys := ["1", "2", "3", "4", "5", "6", "7", "8"]
@@ -33,27 +31,13 @@ class MenuWheelGui {
         this.showTooltip := !!MySoftData.MenuWheelShowTooltip
         tableItem := MySoftData.TableInfo[3]
 
-        arrayOffset := (MenuIndex - 1) * 8
-
-        modNormalFill := "#FFFCFCFC"
-        modNormalStroke := "#FFC6DFFC"
-        modHoverFill := "#FFFDE8E8"
-        modHoverStroke := "#FFE81123"
-        modSelectedFill := "#FF0078D7"
-        modSelectedStroke := "#FFFFFFFF"
-
-        if (tableItem.HasProp("WheelNormalFillArr") && tableItem.WheelNormalFillArr.Length > arrayOffset)
-            modNormalFill := tableItem.WheelNormalFillArr[arrayOffset + 1]
-        if (tableItem.HasProp("WheelNormalStrokeArr") && tableItem.WheelNormalStrokeArr.Length > arrayOffset)
-            modNormalStroke := tableItem.WheelNormalStrokeArr[arrayOffset + 1]
-        if (tableItem.HasProp("WheelHoverFillArr") && tableItem.WheelHoverFillArr.Length > arrayOffset)
-            modHoverFill := tableItem.WheelHoverFillArr[arrayOffset + 1]
-        if (tableItem.HasProp("WheelHoverStrokeArr") && tableItem.WheelHoverStrokeArr.Length > arrayOffset)
-            modHoverStroke := tableItem.WheelHoverStrokeArr[arrayOffset + 1]
-        if (tableItem.HasProp("WheelSelectedFillArr") && tableItem.WheelSelectedFillArr.Length > arrayOffset)
-            modSelectedFill := tableItem.WheelSelectedFillArr[arrayOffset + 1]
-        if (tableItem.HasProp("WheelSelectedStrokeArr") && tableItem.WheelSelectedStrokeArr.Length > arrayOffset)
-            modSelectedStroke := tableItem.WheelSelectedStrokeArr[arrayOffset + 1]
+        iniPath := A_WorkingDir "\Setting\MainSettings.ini"
+        modNormalFill := IniRead(iniPath, "MenuWheel", "NormalFill", "#FFFCFCFC")
+        modNormalStroke := IniRead(iniPath, "MenuWheel", "NormalStroke", "#FFC6DFFC")
+        modHoverFill := IniRead(iniPath, "MenuWheel", "HoverFill", "#FFFDE8E8")
+        modHoverStroke := IniRead(iniPath, "MenuWheel", "HoverStroke", "#FFE81123")
+        modSelectedFill := IniRead(iniPath, "MenuWheel", "SelectedFill", "#FF0078D7")
+        modSelectedStroke := IniRead(iniPath, "MenuWheel", "SelectedStroke", "#FFFFFFFF")
 
         items := []
         loop 8 {
@@ -76,29 +60,10 @@ class MenuWheelGui {
             arcNr := A_Index
             h := MenuWheelGui._MakeCallback(this, arcNr, MenuIndex)
 
-            secNormalFill := modNormalFill
-            secHoverFill := modHoverFill
-            secSelectedFill := modSelectedFill
-
-            useSecColor := false
-            if (tableItem.HasProp("SectorUseColorArr") && tableItem.SectorUseColorArr.Length >= macroIndex)
-                useSecColor := !!tableItem.SectorUseColorArr[macroIndex]
-            if (useSecColor) {
-                if (tableItem.HasProp("SectorNormalFillArr") && tableItem.SectorNormalFillArr.Length >= macroIndex && tableItem.SectorNormalFillArr[macroIndex] != "")
-                    secNormalFill := tableItem.SectorNormalFillArr[macroIndex]
-                if (tableItem.HasProp("SectorHoverFillArr") && tableItem.SectorHoverFillArr.Length >= macroIndex && tableItem.SectorHoverFillArr[macroIndex] != "")
-                    secHoverFill := tableItem.SectorHoverFillArr[macroIndex]
-                if (tableItem.HasProp("SectorSelectedFillArr") && tableItem.SectorSelectedFillArr.Length >= macroIndex && tableItem.SectorSelectedFillArr[macroIndex] != "")
-                    secSelectedFill := tableItem.SectorSelectedFillArr[macroIndex]
-            }
-
             items.Push({
                 Name: btnName,
                 Image: gifPath,
-                Callback: h,
-                NormalFill: secNormalFill,
-                HoverFill: secHoverFill,
-                SelectedFill: secSelectedFill
+                Callback: h
             })
         }
 
@@ -115,16 +80,16 @@ class MenuWheelGui {
             InnerRadius: 60,
             IconSize: 50,
             FontSize: 11,
-            NormalFill: "#FFFCFCFC",
-            NormalStroke: "#FFC6DFFC",
+            NormalFill: modNormalFill,
+            NormalStroke: modNormalStroke,
             NormalText: "#CC333333",
             NormalThickness: 1,
-            HoverFill: "#FFFDE8E8",
-            HoverStroke: "#FFE81123",
+            HoverFill: modHoverFill,
+            HoverStroke: modHoverStroke,
             HoverText: "#FFE81123",
             HoverThickness: 2,
-            SelectedFill: "#FF0078D7",
-            SelectedStroke: "#FFFFFFFF",
+            SelectedFill: modSelectedFill,
+            SelectedStroke: modSelectedStroke,
             SelectedText: "#FFFFFFFF",
             SelectedThickness: 2,
             IconPosRatio: 0.72,
@@ -195,9 +160,8 @@ class MenuWheelGui {
         this.labelPosRatio := labelPosRatio
         this.centerPosRatio := centerPosRatio
 
-        dpiX := 0
-        DllCall("shcore\GetDpiForMonitor", "Ptr", DllCall("user32\MonitorFromPoint", "Int64", (x != "" ? x : A_ScreenWidth / 2) & 0xFFFFFFFF | ((y != "" ? y : A_ScreenHeight / 2) << 32), "UInt", 2, "Ptr"), "Int", 0, "UInt*", &dpiX, "UInt", 0)
-        dpiScale := dpiX > 0 ? dpiX / 96.0 : 1.0
+        dpiScale := A_ScreenDPI / 96.0
+        this.dpiScale := dpiScale
 
         itemCount := items.Length
         if (itemCount < 1)
@@ -205,12 +169,12 @@ class MenuWheelGui {
         if (itemCount > 16)
             itemCount := 16
 
-        radius := Round(radius * dpiScale)
-        innerR := Round(innerR * dpiScale)
-        iconSize := Round(iconSize * dpiScale)
-        fontSize := Round(fontSize * dpiScale)
+        radius := Round(radius * this.dpiScale)
+        innerR := Round(innerR * this.dpiScale)
+        iconSize := Round(iconSize * this.dpiScale)
+        fontSize := Round(fontSize * this.dpiScale)
 
-        pad := Round(4 * dpiScale)
+        pad := Round(4 * this.dpiScale)
         cx := radius + pad
         cy := radius + pad
         winW := (radius + pad) * 2
@@ -225,8 +189,8 @@ class MenuWheelGui {
             finalX := mx
             finalY := my
         }
-        winLeft := Round(finalX) - cx
-        winTop := Round(finalY) - cy
+        winLeft := finalX / this.dpiScale - cx
+        winTop := finalY / this.dpiScale - cy
 
         angleStep := 360.0 / itemCount
 
@@ -239,10 +203,7 @@ class MenuWheelGui {
             name := itemDef.HasProp("Name") ? itemDef.Name : ("Sector" idx)
             imgPath := itemDef.HasProp("Image") ? itemDef.Image : ""
             cb := itemDef.HasProp("Callback") ? itemDef.Callback : 0
-            secNormalFill := itemDef.HasProp("NormalFill") ? itemDef.NormalFill : ""
-            secHoverFill := itemDef.HasProp("HoverFill") ? itemDef.HoverFill : ""
-            secSelectedFill := itemDef.HasProp("SelectedFill") ? itemDef.SelectedFill : ""
-            this.sectors.Push(MenuWheelGui.WheelSector(idx, name, imgPath, cb, startAngle, endAngle, midAngle, secNormalFill, secHoverFill, secSelectedFill))
+            this.sectors.Push(MenuWheelGui.WheelSector(idx, name, imgPath, cb, startAngle, endAngle, midAngle))
         }
 
         win := XAML_Generator("Window")
@@ -341,6 +302,7 @@ class MenuWheelGui {
         this.closed := false
         this.swipeTriggered := false
         this.isOpen := true
+        try FileAppend("[WHEEL-OPEN] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
 
         Loop itemCount {
             idx := A_Index
@@ -467,6 +429,7 @@ class MenuWheelGui {
     }
 
     _Cleanup() {
+        try FileAppend("[WHEEL-CLEANUP] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
         WindowHotkeyManager.Unregister(this)
         this.isOpen := false
         this._CancelPendingSelect()
@@ -477,6 +440,7 @@ class MenuWheelGui {
         if (this.HasProp("ui") && IsObject(this.ui)) {
             try {
                 this.ui.Update("Window", "Close", "")
+                this.ui.Dispose()
             }
         }
         this.ui := ""
@@ -520,11 +484,8 @@ class MenuWheelGui {
         StartAngle := 0
         EndAngle := 0
         MidAngle := 0
-        NormalFill := ""
-        HoverFill := ""
-        SelectedFill := ""
 
-        __New(idx, name, imagePath, callback, startAng, endAng, midAng, normalFill := "", hoverFill := "", selectedFill := "") {
+        __New(idx, name, imagePath, callback, startAng, endAng, midAng) {
             this.Index := idx
             this.Name := name
             this.ImagePath := imagePath
@@ -533,17 +494,15 @@ class MenuWheelGui {
             this.EndAngle := endAng
             this.MidAngle := midAng
             this.State := 0
-            this.NormalFill := normalFill
-            this.HoverFill := hoverFill
-            this.SelectedFill := selectedFill
         }
 
         RenderNormal(menu) {
+            this.State := 0
             p := this.Index
             ui := menu.ui
             if (!IsObject(ui))
                 return
-            fill := this.NormalFill != "" ? this.NormalFill : menu.normalFill
+            fill := menu.normalFill
             stroke := menu.normalStroke
             ui.Update("Wedge_" p, "Fill", fill)
             ui.Update("Wedge_" p, "Stroke", stroke)
@@ -560,7 +519,7 @@ class MenuWheelGui {
             ui := menu.ui
             if (!IsObject(ui))
                 return
-            fill := this.HoverFill != "" ? this.HoverFill : menu.hoverFill
+            fill := menu.hoverFill
             stroke := menu.hoverStroke
             ui.Update("Wedge_" p, "Fill", fill)
             ui.Update("Wedge_" p, "Stroke", stroke)
@@ -582,7 +541,7 @@ class MenuWheelGui {
             ui := menu.ui
             if (!IsObject(ui))
                 return
-            fill := this.SelectedFill != "" ? this.SelectedFill : menu.selectedFill
+            fill := menu.selectedFill
             stroke := menu.selectedStroke
             ui.Update("Wedge_" p, "Fill", fill)
             ui.Update("Wedge_" p, "Stroke", stroke)
@@ -645,8 +604,8 @@ class MenuWheelGui {
             NumPut("Int", mx, pt, 0)
             NumPut("Int", my, pt, 4)
             DllCall("user32\ScreenToClient", "Ptr", hwnd, "Ptr", pt)
-            relX := NumGet(pt, 0, "Int")
-            relY := NumGet(pt, 4, "Int")
+            relX := NumGet(pt, 0, "Int") / this.menu.dpiScale
+            relY := NumGet(pt, 4, "Int") / this.menu.dpiScale
 
             this.menu.ui.Update("SwipeLine", "X2", relX)
             this.menu.ui.Update("SwipeLine", "Y2", relY)
