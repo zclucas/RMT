@@ -255,24 +255,6 @@ InitFilePath() {
         DirCreate(A_WorkingDir "\Images\FreePaste")
     }
 
-    iconDir := A_WorkingDir "\Images\Soft"
-    static iconList := ["WeiXin.png", "ZhiFuBao.png", "rabit.ico", "IcoPause.ico",
-        "GreenColor.png", "RedColor.png", "YellowColor.png", "Target.png",
-        "Key.png", "Interval.png", "Search.png", "SearchPro.png",
-        "Move.png", "MovePro.png", "Output.png", "Run.png",
-        "Var.png", "Extract.png", "Operation.png", "If.png",
-        "rabit.png", "Sub.png", "Mouse.png", "True.png",
-        "False.png", "Loop.png", "LoopBody.png", "LoopCount.png",
-        "Condition.png", "IfPro.png", "Arr.png", "Input.png",
-        "TextOps.png", "FileIO.png", "Control.png", "WindowManage.png",
-        "KeyCheck.png"]
-
-    for iconName in iconList {
-        dstPath := iconDir "\" iconName
-        if (!FileExist(dstPath))
-            FileInstall("Images\Soft\" iconName, dstPath, 1)
-    }
-
     global VBSPath := A_WorkingDir "\MinTool\PlayAudio.vbs"
     global StartTipAudio := A_WorkingDir "\Audio\Start.wav"
     global EndTipAudio := A_WorkingDir "\Audio\End.wav"

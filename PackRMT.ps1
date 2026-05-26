@@ -249,6 +249,13 @@ function New-Release {
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
+        # 复制 Images 目录
+        Write-Log "复制 Images 目录..." "Gray"
+        if (Test-Path "$releaseDir\Images") {
+            Remove-Item "$releaseDir\Images" -Recurse -Force
+        }
+        Copy-Item -Path "$PSScriptRoot\Images" -Destination "$releaseDir\Images" -Force -Recurse -ErrorAction SilentlyContinue
+
         # 复制帮助文档（index.html）
         $helpSrc = Join-Path $PSScriptRoot "index.html"
         if (Test-Path $helpSrc) {
@@ -292,6 +299,13 @@ function New-Release {
             Remove-Item "$releaseDir\Lang" -Recurse -Force
         }
         Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
+
+        # 复制 Images 目录
+        Write-Log "复制 Images 目录..." "Gray"
+        if (Test-Path "$releaseDir\Images") {
+            Remove-Item "$releaseDir\Images" -Recurse -Force
+        }
+        Copy-Item -Path "$PSScriptRoot\Images" -Destination "$releaseDir\Images" -Force -Recurse -ErrorAction SilentlyContinue
 
         # 复制帮助文档（index.html）
         $helpSrc = Join-Path $PSScriptRoot "index.html"

@@ -402,9 +402,10 @@ class XAML_GUI {
         this.host.Update("Window", "DWM", "2,1")
         this.host.Update("Window", "Title", this.title)
 
-        hIcon := LoadPicture("shell32.dll", "Icon26", &ImageType := 1)
+        iconPath := A_WorkingDir "\Images\Soft\rabit.ico"
+        hIcon := LoadPicture(iconPath)
         this.host.Update("Window", "Icon", "HICON:" hIcon)
-        TraySetIcon("shell32.dll", 26)
+        TraySetIcon(iconPath)
 
         this.host.Update("AppTitle", "Text", this.title)
 
