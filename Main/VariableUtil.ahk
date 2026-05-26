@@ -3,41 +3,65 @@
 SetGlobalData(macroStr, visitMap) {
     if (macroStr == "")
         return
+        
+    ; 预构建指令类型映射表（使用static局部变量，避免重复的InStr调用和全局变量声明问题）
+    static CmdTypeMap := ""
+    if (CmdTypeMap == "") {
+        CmdTypeMap := Map()
+        typeList := ["按键", "后台按键", "按键检测", "变量提取", "变量", "文本处理", "运算",
+            "搜索Pro", "搜索", "循环", "如果Pro", "如果", "数组", "输入", "文件读写", "运行"]
+        
+        for typeName in typeList
+            CmdTypeMap.Set(typeName, true)
+        
+        CmdTypeMap.Set("__VarRelateTypes", Map("变量", true, "变量提取", true, "文本处理", true,
+            "如果", true, "运算", true, "搜索", true, "搜索Pro", true,
+            "循环", true, "如果Pro", true, "数组", true, "输入", true,
+            "文件读写", true, "运行", true, "按键检测", true))
+    }
+    
     VariableMap := MySoftData.GlobalVariMap
     cmdArr := SplitMacro(macroStr)
+    
     loop cmdArr.Length {
         paramArr := StrSplit(cmdArr[A_Index], "_")
-        paramArr[1] := GetCmdStr(paramArr[1])
-        if (visitMap.Has(paramArr[1]))
+        cmdName := GetCmdStr(paramArr[1])
+        
+        if (visitMap.Has(cmdName))
             continue
+            
         SetCMDSerialData(cmdArr[A_Index])
-        IsPressKey := InStr(paramArr[1], "按键") && !InStr(paramArr[1], "按键检测")
-        IsBGKey := InStr(paramArr[1], "后台按键")
-        IsKeyCheck := InStr(paramArr[1], "按键检测")
-        IsExVariable := InStr(paramArr[1], "变量提取")
-        IsVariable := InStr(paramArr[1], "变量") && !IsExVariable
-        IsTextOps := InStr(paramArr[1], "文本处理")
-        IsOpera := InStr(paramArr[1], "运算")
-        IsSearchPro := InStr(paramArr[1], "搜索Pro")
-        IsSearch := InStr(paramArr[1], "搜索") && !IsSearchPro
-        IsLoop := InStr(paramArr[1], "循环")
-        IsIfPro := InStr(paramArr[1], "如果Pro")
-        IsIf := InStr(paramArr[1], "如果") && !IsIfPro
-        IsArray := InStr(paramArr[1], "数组")
-        IsInput := InStr(paramArr[1], "输入")
-        IsFileIO := InStr(paramArr[1], "文件读写")
-        IsRun := InStr(paramArr[1], "运行")
-        IsVarRelate := IsVariable || IsExVariable || IsTextOps || IsIf || IsOpera || IsSearch || IsSearchPro
-            || IsLoop || IsIfPro || IsArray || IsInput || IsFileIO || IsRun || IsKeyCheck
+        
+        ; 优化：使用预提取的基础名称进行单次InStr匹配
+        baseCmd := RegExReplace(cmdName, "\d+")
+        
+        IsPressKey := InStr(baseCmd, "按键") && !InStr(baseCmd, "按键检测")
+        IsBGKey := InStr(baseCmd, "后台按键")
+        IsKeyCheck := InStr(baseCmd, "按键检测")
+        IsExVariable := InStr(baseCmd, "变量提取")
+        IsVariable := InStr(baseCmd, "变量") && !IsExVariable
+        IsTextOps := InStr(baseCmd, "文本处理")
+        IsOpera := InStr(baseCmd, "运算")
+        IsSearchPro := InStr(baseCmd, "搜索Pro")
+        IsSearch := InStr(baseCmd, "搜索") && !IsSearchPro
+        IsLoop := InStr(baseCmd, "循环")
+        IsIfPro := InStr(baseCmd, "如果Pro")
+        IsIf := InStr(baseCmd, "如果") && !IsIfPro
+        IsArray := InStr(baseCmd, "数组")
+        IsInput := InStr(baseCmd, "输入")
+        IsFileIO := InStr(baseCmd, "文件读写")
+        IsRun := InStr(baseCmd, "运行")
+        IsVarRelate := CmdTypeMap["__VarRelateTypes"].Has(baseCmd)
+        
         if (!MySoftData.HasJoyMacro && IsPressKey && !IsBGKey && paramArr.Length >= 3) {
             MySoftData.HasJoyMacro := InStr(paramArr[2], "Joy")
         }
 
         if (!IsVarRelate)
             continue
-        visitMap[paramArr[1]] := true
-        Cmd := RegExReplace(paramArr[1], "\d+")
-        Data := GetMacroCMDData(paramArr[1])
+            
+        visitMap[cmdName] := true
+        Data := GetMacroCMDData(cmdName)
 
         if (IsVariable || IsExVariable) {
             loop Data.ToggleArr.Length {

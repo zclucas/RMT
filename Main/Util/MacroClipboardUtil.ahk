@@ -288,8 +288,16 @@ GenerateUniqueSerialBatch(baseSerial, usedSerials) {
         return "Item" A_Now
     }
 
-    textOnly := RegExReplace(baseSerial, "\d+$")
-    numbersOnly := RegExReplace(baseSerial, "\D")
+    ; 优化：使用单次遍历拆分（替代2次RegExReplace）
+    textOnly := ""
+    numbersOnly := ""
+    loop parse baseSerial {
+        ch := A_LoopField
+        if (IsInteger(ch))
+            numbersOnly .= ch
+        else
+            textOnly .= ch
+    }
 
     if (numbersOnly == "" || !IsNumber(numbersOnly)) {
         baseSerial := textOnly "1"

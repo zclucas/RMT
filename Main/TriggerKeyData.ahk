@@ -21,6 +21,10 @@ class TriggerKeyData {
         this.LastKeyDownTime := 0  ;上次按下时间（用于双击检测）
         this.DblClickInterval := 300  ;双击间隔时间（毫秒）
 
+        ; 缓存相关字段（性能优化）
+        this.cacheTime := 0          ;上次更新缓存的时间戳
+        this.cacheValidDuration := 200  ;缓存有效期（毫秒），窗口切换通常不会频繁发生
+
         this.InitState()
     }
 
@@ -58,7 +62,13 @@ class TriggerKeyData {
         this.%PropNames[info.GetTriggerType()]%.Push(info)
     }
 
-    UpdataArr() {
+    UpdataArr(forceUpdate := false) {
+        now := A_TickCount
+
+        ; 缓存检查：如果缓存有效且不是强制更新，跳过重建
+        if (!forceUpdate && (now - this.cacheTime) < this.cacheValidDuration)
+            return
+
         this.DownArr := []
         this.LoosenArr := []
         this.LoosenStopArr := []
@@ -84,6 +94,9 @@ class TriggerKeyData {
             }
             this.DblClickInterval := minInterval
         }
+
+        ; 更新缓存时间戳
+        this.cacheTime := now
     }
 
     UpdateArrByFront(OriArr, ResArr) {
@@ -162,6 +175,11 @@ class TriggerKeyData {
         }
 
         this.DelHoldTimeChecker()
+    }
+
+    ; 强制刷新缓存（在配置重载、窗口切换等关键事件时调用）
+    ForceRefreshCache() {
+        this.cacheTime := 0  ; 使缓存失效
     }
 
     SetHoldTimeChecker() {

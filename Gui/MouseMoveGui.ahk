@@ -186,9 +186,13 @@ class MouseMoveGui {
     }
 
     RefreshMousePos() {
+        static posLabel := ""  ; 缓存语言标签（避免每次都调用GetLang）
+        if (posLabel == "")
+            posLabel := GetLang("当前鼠标位置:")
+            
         CoordMode("Mouse", "Screen")
         MouseGetPos &mouseX, &mouseY
-        this.MousePosCon.Value := Format("{}{},{}", GetLang("当前鼠标位置:"), mouseX, mouseY)
+        this.MousePosCon.Value := posLabel mouseX "," mouseY  ; 直接拼接，避免Format开销
     }
 
     OnChangeEditValue() {

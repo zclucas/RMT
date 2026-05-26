@@ -328,6 +328,10 @@ BindTabHotKey() {
     MyJoyMacro.MacroMap := Map()
     MyJoyMacro.ComboMacroMap := Map()
     registerMsg := "=== Registered Hotkeys ===`n"
+
+    ; 预计算缓存Map（避免重复的字符串处理和正则匹配）
+    keyCache := Map()
+
     loop MySoftData.TabNameArr.Length {
         tableItem := MySoftData.TableInfo[A_Index]
         tableIndex := A_Index
@@ -336,7 +340,9 @@ BindTabHotKey() {
             continue
 
         for index, value in tableItem.ModeArr {
-            if (GetItemFoldForbidState(tableItem, index))
+            ; 优化：一次调用获取所有Fold信息（避免重复遍历IndexSpanArr）
+            foldData := GetItemFoldData(tableItem, index)
+            if (foldData.forbidState)
                 continue
 
             if (tableItem.TKArr[index] == "" || tableItem.ForbidArr[index])
@@ -346,34 +352,44 @@ BindTabHotKey() {
                 continue
 
             rawKey := tableItem.TKArr[index]
-            if (WindowHotkeyManager.IsManaged(StrLower(rawKey)))
+
+            ; 使用缓存避免重复计算
+            cacheKey := rawKey "|" tableIndex "|" index
+            if (!keyCache.Has(cacheKey)) {
+                cacheData := {
+                    isManaged: WindowHotkeyManager.IsManaged(StrLower(rawKey)),
+                    isCombo: IsComboKey(rawKey),
+                    isJoy: !!RegExMatch(rawKey, "Joy"),
+                    isHotstring: SubStr(rawKey, 1, 1) == ":",
+                    firstChar: SubStr(rawKey, 1, 1),
+                    keyPrefix: (SubStr(rawKey, 1, 1) == "~" || !IsComboKey(rawKey)) ? "$*" : "",
+                    frontInfo: foldData.frontInfo,
+                    realFrontStr: ""
+                }
+
+                if (cacheData.frontInfo != "")
+                    cacheData.realFrontStr := GetParamsWinInfoStr(cacheData.frontInfo)
+
+                keyCache.Set(cacheKey, cacheData)
+            }
+            cache := keyCache[cacheKey]
+
+            if (cache.isManaged)
                 continue
-            isCombo := IsComboKey(rawKey)
-            if (isCombo) {
-                key := rawKey
-            }
-            else if (SubStr(rawKey, 1, 1) == "~") {
-                key := "$*" rawKey
-            }
-            else {
-                key := "$*" rawKey
-            }
+
+            key := cache.isCombo ? rawKey : cache.keyPrefix rawKey
             actionArr := GetMacroAction(tableIndex, index)
-            isJoyKey := RegExMatch(rawKey, "Joy")
-            isHotstring := SubStr(rawKey, 1, 1) == ":"
-            frontInfo := GetItemFrontInfo(tableItem, index)
-            realFrontStr := GetParamsWinInfoStr(frontInfo)
 
-            registerMsg .= "rawKey: '" rawKey "' → key: '" key "' (isCombo=" isCombo ")`n"
+            registerMsg .= "rawKey: '" rawKey "' → key: '" key "' (isCombo=" cache.isCombo ")`n"
 
-            if (realFrontStr != "") {
-                HotIfWinActive(realFrontStr)
+            if (cache.realFrontStr != "") {
+                HotIfWinActive(cache.realFrontStr)
             }
 
-            if (isJoyKey) {
-                MyJoyMacro.AddMacro(rawKey, actionArr[1], frontInfo)
+            if (cache.isJoy) {
+                MyJoyMacro.AddMacro(rawKey, actionArr[1], cache.frontInfo)
             }
-            else if (isHotstring) {
+            else if (cache.isHotstring) {
                 Hotstring(rawKey, actionArr[1])
             }
             else {
@@ -382,7 +398,7 @@ BindTabHotKey() {
                         Hotkey(key, actionArr[1], "On")
                     }
 
-                    if (actionArr[2] != "" && !isCombo)
+                    if (actionArr[2] != "" && !cache.isCombo)
                         Hotkey(key " up", actionArr[2], "On")
                 }
                 catch as e {
@@ -390,7 +406,7 @@ BindTabHotKey() {
                 }
             }
 
-            if (realFrontStr != "") {
+            if (cache.realFrontStr != "") {
                 HotIfWinActive
             }
         }

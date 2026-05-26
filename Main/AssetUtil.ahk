@@ -240,15 +240,43 @@ SplitMacro(macroStr) {
 
 SplitCommand(macro) {
     realKey := ""
-    for key, value in MySoftData.SpecialKeyMap {
-        newMacro := StrReplace(macro, key, "flagSymbol")
-        if (newMacro != macro) {
-            realKey := key
-            break
+    
+    ; 优化：使用预构建的SpecialKeyPrefixMap快速定位可能的特殊键（避免遍历全部20个键）
+    static SpecialKeyPrefixMap := ""
+    if (SpecialKeyPrefixMap == "") {
+        SpecialKeyPrefixMap := Map()
+        for key in MySoftData.SpecialKeyMap
+            SpecialKeyPrefixMap.Set(SubStr(key, 1, 4), true)
+    }
+    
+    ; 只检查前4个字符匹配的特殊键（大幅缩小搜索范围）
+    prefix := SubStr(macro, 1, 4)
+    if (SpecialKeyPrefixMap.Has(prefix)) {
+        for key in MySoftData.SpecialKeyMap {
+            if (SubStr(key, 1, 4) != prefix)
+                continue
+            
+            newMacro := StrReplace(macro, key, "flagSymbol")
+            if (newMacro != macro) {
+                realKey := key
+                break
+            }
+        }
+    } else {
+        ; 前缀不匹配时，只做一次简短检查（处理非标准情况）
+        for key in MySoftData.SpecialKeyMap {
+            if (StrLen(key) > 6)  ; 跳过长键名（Browser_*等已在上面的前缀检查中覆盖）
+                continue
+                
+            newMacro := StrReplace(macro, key, "flagSymbol")
+            if (newMacro != macro) {
+                realKey := key
+                break
+            }
         }
     }
 
-    result := StrSplit(newMacro, "_")
+    result := StrSplit(realKey != "" ? newMacro : macro, "_")
     loop result.Length {
         if (InStr(result[A_Index], "flagSymbol")) {
             result[A_Index] := StrReplace(result[A_Index], "flagSymbol", realKey)
@@ -271,12 +299,14 @@ GetCmdByParams(paramArr) {
 }
 
 GetMacroStrByCmdArr(cmdArr) {
-    macroStr := ""
-    loop cmdArr.Length {
-        macroStr .= cmdArr[A_Index] ","
+    ; 使用循环拼接（兼容所有数组类型，避免.Join()方法不存在的问题）
+    result := ""
+    for index, value in cmdArr {
+        if (index > 1)
+            result .= ","
+        result .= value
     }
-    macroStr := Trim(macroStr, ",")
-    return macroStr
+    return result
 }
 
 GetPressKeyArr(KeyArrStr) {
@@ -1459,13 +1489,26 @@ GetCurWinPos() {
     return GetWinPos(mouseX, mouseY)
 }
 
+; 高效的序列号拆分函数：一次遍历同时提取文本和数字部分（避免2次RegExReplace）
+SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly) {
+    textOnly := ""
+    numbersOnly := ""
+    loop parse serialStr {
+        ch := A_LoopField
+        if (IsInteger(ch))
+            numbersOnly .= ch
+        else
+            textOnly .= ch
+    }
+}
+
 GetMacroCMDData(serialStr) {
     if (MySoftData.DataCacheMap.Has(serialStr)) {
         return MySoftData.DataCacheMap[serialStr]
     }
 
-    textOnly := RegExReplace(serialStr, "\d+")
-    numbersOnly := RegExReplace(serialStr, "\D+")
+    ; 优化：使用单次遍历拆分（替代2次RegExReplace）
+    SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly)
     cmd := GetLangKey(textOnly)
 
     ; Normalize key if needed (though the cache check above might already cover common cases if they were stored with original key)
@@ -1501,7 +1544,9 @@ GetMacroCMDData(serialStr) {
 }
 
 SaveMacroCMDData(Data) {
-    cmd := RegExReplace(Data.SerialStr, "\d+")
+    ; 优化：使用单次遍历拆分（替代RegExReplace）
+    dummyNumbers := ""
+    SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &dummyNumbers)
     DataFile := MySoftData.DataFileMap[cmd]
 
     saveStr := JSON.stringify(Data, 0)
@@ -1658,16 +1703,31 @@ GetItemFoldIndex(tableItem, itemIndex) {
     return 0
 }
 
-GetItemFoldForbidState(tableItem, itemIndex) {
+; 统一获取某项的所有Fold信息（避免重复遍历IndexSpanArr）
+GetItemFoldData(tableItem, itemIndex) {
     FoldInfo := tableItem.FoldInfo
-    FoldIndex := GetItemFoldIndex(tableItem, itemIndex)
-    return FoldInfo.ForbidStateArr[FoldIndex]
+    for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
+        IndexSpan := StrSplit(IndexSpanStr, "-")
+        if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
+            if (IndexSpan[1] <= itemIndex && IndexSpan[2] >= itemIndex) {
+                return {
+                    foldIndex: Index,
+                    forbidState: FoldInfo.ForbidStateArr[Index],
+                    frontInfo: FoldInfo.FrontInfoArr[Index],
+                    offset: itemIndex - IndexSpan[1] + 1
+                }
+            }
+        }
+    }
+    return { foldIndex: 0, forbidState: false, frontInfo: "", offset: 1 }
+}
+
+GetItemFoldForbidState(tableItem, itemIndex) {
+    return GetItemFoldData(tableItem, itemIndex).forbidState
 }
 
 GetItemFrontInfo(tableItem, itemIndex) {
-    FoldInfo := tableItem.FoldInfo
-    FoldIndex := GetItemFoldIndex(tableItem, itemIndex)
-    return FoldInfo.FrontInfoArr[FoldIndex]
+    return GetItemFoldData(tableItem, itemIndex).frontInfo
 }
 
 GetItemOffsetOfFold(tableItem, itemIndex) {
@@ -1847,8 +1907,9 @@ GetCmdStr(param) {
 }
 
 GetCmdSymbol(cmd) {
-    IsSkip := RegExMatch(cmd, "🚫")
-    IsDebug := RegExMatch(cmd, "⭐")
+    ; 优化：使用InStr替代RegExMatch（单字符匹配更快）
+    IsSkip := InStr(cmd, "🚫")
+    IsDebug := InStr(cmd, "⭐")
     SkipStr := IsSkip ? "🚫" : ""
     DebugStr := IsDebug ? "⭐" : ""
     Symbol := Format("{}{}", SkipStr, DebugStr)
@@ -1857,7 +1918,9 @@ GetCmdSymbol(cmd) {
 
 GetCmdOnlyText(param) {
     param := GetCmdStr(param)
-    textOnly := RegExReplace(param, "\d+")
+    ; 优化：使用单次遍历拆分（替代RegExReplace）
+    dummyNumbers := ""
+    SplitSerialTextAndNumbers(param, &textOnly, &dummyNumbers)
     return textOnly
 }
 

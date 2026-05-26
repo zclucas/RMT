@@ -175,6 +175,16 @@ class FrontInfoGui {
     }
 
     RefreshMouseInfo() {
+        static labels := ""  ; 缓存语言标签（避免每次定时器回调都调用GetLang）
+        if (labels == "") {
+            labels := {
+                hwnd: GetLang("句柄ID："),
+                title: GetLang("标题："),
+                class: GetLang("窗口类："),
+                process: GetLang("进程名：")
+            }
+        }
+        
         CoordMode("Mouse", "Screen")
         MouseGetPos &mouseX, &mouseY, &winId
         try {
@@ -188,9 +198,8 @@ class FrontInfoGui {
                 process := ""
             }
 
-            tipStr := Format("{}{}`n{}{}`n{}{}`n{}{}", GetLang("句柄ID："), winId, GetLang("标题："), title, GetLang("窗口类："),
-            className, GetLang("进程名："),
-            process)
+            ; 优化：使用缓存的标签 + 直接拼接（避免4次GetLang + 1次Format）
+            tipStr := labels.hwnd winId "`n" labels.title title "`n" labels.class className "`n" labels.process process
             this.CurWinInfoCon.Value := tipStr
         }
     }
