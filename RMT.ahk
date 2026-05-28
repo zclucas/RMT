@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.0
-#Include Main\GlobalUtil.ahk
 #Include Main\AssetUtil.ahk
+#Include Main\GlobalUtil.ahk
 
 InitFilePath()              ;初始化文件路径
 LoadCurMacroSetting()       ;加载当前配置宏，宏指令

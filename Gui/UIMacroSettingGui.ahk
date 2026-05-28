@@ -135,8 +135,8 @@ class UIMacroSettingGui {
 
         PosY += 42
         PosX := 340
-        this.ScreenCoordText := MyGui.Add("Text", Format("x{} y{} w170", PosX, PosY),
-            Format(GetLang("屏幕: ({}, {})"), "---", "---"))
+        this.ScreenCoordText := MyGui.Add("Text", Format("x{} y{} w260", PosX, PosY),
+            Format(GetLang("屏幕: ({}, {})  窗口: ({}, {})"), "---", "---", "---", "---"))
 
         ;底部按钮（居中）
         PosY := 330
@@ -224,7 +224,16 @@ class UIMacroSettingGui {
                 GetLang("窗口类："), className, GetLang("进程名："), process)
             this.CurWinInfoCon.Value := tipStr
 
-            this.ScreenCoordText.Value := Format(GetLang("屏幕: ({}, {})"), mouseX, mouseY)
+            relX := "---"
+            relY := "---"
+            if (winId) {
+                try {
+                    WinGetPos(&winPosX, &winPosY, , , "ahk_id " winId)
+                    relX := mouseX - winPosX
+                    relY := mouseY - winPosY
+                }
+            }
+            this.ScreenCoordText.Value := Format(GetLang("屏幕: ({}, {})  窗口: ({}, {})"), mouseX, mouseY, relX, relY)
         }
     }
 
@@ -258,8 +267,45 @@ class UIMacroSettingGui {
     OnF2() {
         CoordMode("Mouse", "Screen")
         MouseGetPos &mouseX, &mouseY
-        this.PosXEdit.Value := mouseX
-        this.PosYEdit.Value := mouseY
+
+        frontValue := this.GetFrontInfo()
+        targetHwnd := ""
+        if (frontValue != "") {
+            paramStr := GetParamsWinInfoStr(frontValue)
+            if (paramStr != "") {
+                hwndList := WinGetList(paramStr)
+                isInTarget := false
+                matchedHwnd := 0
+                for idx, hwnd in hwndList {
+                    if (!hwnd)
+                        continue
+                    try {
+                        WinGetPos(&winX, &winY, &winW, &winH, "ahk_id " hwnd)
+                        if (mouseX >= winX && mouseX <= winX + winW && mouseY >= winY && mouseY <= winY + winH) {
+                            isInTarget := true
+                            matchedHwnd := hwnd
+                            break
+                        }
+                    }
+                }
+                if (!isInTarget) {
+                    MsgBox(GetLang("鼠标不在目标窗口内"), GetLang("提示"), 64)
+                    return
+                }
+                targetHwnd := matchedHwnd
+            }
+        }
+
+        if (targetHwnd) {
+            try {
+                WinGetPos(&winX, &winY, , , "ahk_id " targetHwnd)
+                this.PosXEdit.Value := mouseX - winX
+                this.PosYEdit.Value := mouseY - winY
+            }
+        } else {
+            this.PosXEdit.Value := mouseX
+            this.PosYEdit.Value := mouseY
+        }
         this.OnPreview()
     }
 
@@ -315,27 +361,29 @@ class UIMacroSettingGui {
             if (targetHwnd && this.PreviewGui.Hwnd) {
                 try {
                     parentHwnd := DllCall("GetParent", "Ptr", this.PreviewGui.Hwnd, "Ptr")
-                    if (parentHwnd != 0) {
+                    if (parentHwnd == 0) {
                         WinGetPos(&winX, &winY, , , "ahk_id " targetHwnd)
-                        posX -= winX
-                        posY -= winY
+                        posX += winX
+                        posY += winY
                     }
                 }
             }
 
-            this.PreviewGui.SetFont("S11 W550", MySoftData.FontType)
+            this.PreviewGui.SetFont("S10 W550", MySoftData.FontType)
             this.PreviewGui.BackColor := "4a90d9"
             WinSetTransColor("4a90d9", this.PreviewGui)
 
             remarkValue := ""
-            tableItem := MySoftData.TableInfo[4]
-            if (tableItem.RemarkArr.Has(this.CurrentMacroIndex))
-                remarkValue := tableItem.RemarkArr[this.CurrentMacroIndex]
-            btnText := remarkValue == "" ? GetLang("预览") : remarkValue
+        tableItem := MySoftData.TableInfo[4]
+        if (tableItem.RemarkArr.Has(this.CurrentMacroIndex))
+            remarkValue := tableItem.RemarkArr[this.CurrentMacroIndex]
+        btnText := remarkValue == "" ? GetLang("按钮") this.CurrentMacroIndex : remarkValue
 
-            this.PreviewGui.Add("Button", "x0 y0 w" btnW " h" btnH, btnText)
-            this.PreviewGui.Show(Format("x{} y{} NA", posX, posY))
-            this.PreviewGui.Move(, , btnW, btnH)
+        colorW := 22
+        this.PreviewGui.Add("Pic", "x0 y0 w" colorW " h" btnH " Hidden")
+        this.PreviewGui.Add("Button", "x" colorW " y0 w" btnW - colorW " h" btnH, btnText)
+        this.PreviewGui.Show(Format("x{} y{} NA", posX, posY))
+        this.PreviewGui.Move(, , btnW, btnH)
         }
         catch as e {
         }

@@ -109,11 +109,16 @@ GetParamsWinInfoStr(infoStr) {
 
     if (InStr(infoStr, "❖")) {
         infoStr := StrReplace(infoStr, "❖")
-        hwndList := StrSplit(infoStr, "|")
-        for index, hwnd in hwndList {
-            GroupAdd(infoStr, "ahk_id " hwnd)
+        groupName := "UIGroup_" infoStr
+        static groupCache := Map()
+        if (!groupCache.Has(groupName)) {
+            hwndList := StrSplit(infoStr, "|")
+            for index, hwnd in hwndList {
+                GroupAdd(groupName, "ahk_id " hwnd)
+            }
+            groupCache[groupName] := true
         }
-        ResStr := "ahk_group " infoStr
+        ResStr := "ahk_group " groupName
         return ResStr
     }
 

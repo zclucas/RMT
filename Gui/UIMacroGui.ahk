@@ -164,8 +164,8 @@ class UIMacroGui {
         con := uiGui.Add("Button", "x" colorW " y0 w" btnTextW " h" btnH, btnText)
         con.OnEvent("Click", (*) => this.OnButtonClick(macroIndex))
 
-        showX := posX
-        showY := posY
+        showX := posX - btnW // 2
+        showY := posY - btnH // 2
         if (!targetHwnd) {
         }
         else {
@@ -175,10 +175,10 @@ class UIMacroGui {
                     parentHwnd := DllCall("GetParent", "Ptr", uiGui.Hwnd, "Ptr")
                     isChild := (parentHwnd != 0)
                 }
-                if (isChild) {
+                if (!isChild) {
                     WinGetPos(&winX, &winY, , , "ahk_id " targetHwnd)
-                    showX -= winX
-                    showY -= winY
+                    showX += winX
+                    showY += winY
                 }
             }
         }
@@ -193,6 +193,9 @@ class UIMacroGui {
             Hwnd: targetHwnd,
             MacroIndex: macroIndex
         })
+
+        if (tableItem.ColorStateArr.Has(macroIndex) && tableItem.ColorStateArr[macroIndex] != 0)
+            this.UpdateButtonsState(macroIndex, tableItem.ColorStateArr[macroIndex])
     }
 
     CheckAllButtons() {
@@ -352,7 +355,6 @@ class UIMacroGui {
 
         this.RunningMap[macroIndex] := {IsRunning: true, TimerAction: action}
         SetTimer(action, -1)
-        this.UpdateButtonsState(macroIndex, UIMacroGui.STATE_RUNNING)
         MySetTableItemState(4, macroIndex, UIMacroGui.STATE_RUNNING)
     }
 
@@ -367,8 +369,6 @@ class UIMacroGui {
         if (this.RunningMap.Has(macroIndex))
             this.RunningMap.Delete(macroIndex)
 
-        this.UpdateButtonsState(macroIndex, UIMacroGui.STATE_STOPPED)
-
         MySetTableItemState(4, macroIndex, UIMacroGui.STATE_STOPPED)
     }
 
@@ -376,8 +376,6 @@ class UIMacroGui {
         if (this.IsMacroRunning(macroIndex)) {
             this.RunningMap.Delete(macroIndex)
             this.CancelRecoverTimer(macroIndex)
-            this.UpdateButtonsState(macroIndex, UIMacroGui.STATE_DEFAULT)
-
             MySetTableItemState(4, macroIndex, UIMacroGui.STATE_DEFAULT)
         }
     }
@@ -396,6 +394,12 @@ class UIMacroGui {
 
                 btnInfo.ColorCon.Value := colorValue
                 btnInfo.ColorCon.Visible := isVisible
+
+                if (state == UIMacroGui.STATE_PAUSED) {
+                    btnInfo.BtnCon.Enabled := false
+                } else {
+                    btnInfo.BtnCon.Enabled := true
+                }
 
                 if (state == UIMacroGui.STATE_STOPPED) {
                     this.CancelRecoverTimer(macroIndex)

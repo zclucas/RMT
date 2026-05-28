@@ -419,7 +419,7 @@ class MenuWheelGui {
         this._CancelPendingSelect()
         this.pendingIdx := idx
         this.pendingSelectTimer := ObjBindMethod(this, "_OnPendingSelectTick")
-        SetTimer(this.pendingSelectTimer, 50)
+        SetTimer(this.pendingSelectTimer, 10)
     }
 
     _CancelPendingSelect() {

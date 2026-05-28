@@ -408,6 +408,9 @@ SetTableItemState(tableIndex, itemIndex, State) {
     UpdateMacroRunningCount(LastState, State)
     tableItem.ColorStateArr[itemIndex] := State
     RefreshItemColorUI(tableIndex, itemIndex)
+
+    if (tableIndex == 4 && IsSet(MyUIMacroGui))
+        MyUIMacroGui.UpdateButtonsState(itemIndex, State)
 }
 
 RefreshItemColorUI(tableIndex, itemIndex) {
