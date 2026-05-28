@@ -285,6 +285,7 @@ OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
     tableItem.TKArr.RemoveAt(itemIndex)
     tableItem.MacroArr.RemoveAt(itemIndex)
     tableItem.LoopCountArr.RemoveAt(itemIndex)
+    tableItem.TriggerTypeArr.RemoveAt(itemIndex)
     tableItem.ModeArr.RemoveAt(itemIndex)
     tableItem.ForbidArr.RemoveAt(itemIndex)
     tableItem.HoldTimeArr.RemoveAt(itemIndex)

@@ -360,9 +360,21 @@ class MenuWheelGui {
         sec := this.sectors[idx]
         sec.RenderSelected(this)
         Sleep(150)
-        if (IsObject(sec.Callback))
-            try sec.Callback.Call(idx, sec.Name)
+        if (IsObject(sec.Callback)) {
+            this._pendingCallback := sec.Callback
+            this._pendingCallbackIdx := idx
+            this._pendingCallbackName := sec.Name
+            SetTimer(ObjBindMethod(this, "_ExecutePendingCallback"), -10)
+        }
         this._Cleanup()
+    }
+
+    _ExecutePendingCallback() {
+        cb := this._pendingCallback
+        idx := this._pendingCallbackIdx
+        name := this._pendingCallbackName
+        this._pendingCallback := ""
+        try cb.Call(idx, name)
     }
 
     DoHover(idx, *) {
@@ -457,7 +469,8 @@ class MenuWheelGui {
     OnRadialMenuSelect(ArcNr, MenuIndex) {
         tableItem := MySoftData.TableInfo[3]
         macroIndex := (MenuIndex - 1) * 8 + ArcNr
-        OnTriggerMacroOnce(tableItem, tableItem.MacroArr[macroIndex], macroIndex)
+        SetTableItemState(tableItem.index, macroIndex, 1)
+        OnTriggerMacroKeyAndInit(tableItem, tableItem.MacroArr[macroIndex], macroIndex)
     }
 
     GetFullGifPath(path) {

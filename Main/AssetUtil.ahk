@@ -485,7 +485,7 @@ EnsureXAMLThemesIni() {
     static done := false
     if (done)
         return
-    iniPath := A_ScriptDir "\Setting\themes.ini"
+    iniPath := IsSet(ThemesIniPath) ? ThemesIniPath : A_ScriptDir "\Setting\themes.ini"
     if (FileExist(iniPath)) {
         done := true
         return
