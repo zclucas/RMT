@@ -10,8 +10,8 @@ class MenuWheelGui {
         this.sectors := []
         this.hoveredIdx := 0
         this.closed := false
-        this.showTooltip := !!MySoftData.MenuWheelShowTooltip
-        this.selectMode := MySoftData.HasProp("MenuWheelSelectMode") ? MySoftData.MenuWheelSelectMode : 1
+        this.showTooltip := true
+        this.selectMode := 1
         this.swipe := ""
         this.swipeTriggered := false
         this.pendingSelectTimer := ""
@@ -29,6 +29,12 @@ class MenuWheelGui {
     ShowRadialMenu(MenuIndex) {
         this.MenuIndex := MenuIndex
         this.showTooltip := !!MySoftData.MenuWheelShowTooltip
+        this.selectMode := MySoftData.HasProp("MenuWheelSelectMode") ? MySoftData.MenuWheelSelectMode : 1
+        if (this.isOpen) {          ; 已有轮盘？先自清
+            this.closed := true
+            this._Cleanup()         ; 关闭旧窗 + sectors:=[] + 重置状态
+        }
+        
         tableItem := MySoftData.TableInfo[3]
 
         iniPath := A_WorkingDir "\Setting\MainSettings.ini"
@@ -96,6 +102,7 @@ class MenuWheelGui {
             LabelPosRatio: 0.35,
             CenterPosRatio: 0.58
         })
+        MySoftData.CurMenuWheelIndex := this.MenuIndex
     }
 
     static _MakeCallback(guiObj, arcNr, menuIdx) {
@@ -274,7 +281,8 @@ class MenuWheelGui {
                 lbl.FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif")
                 lbl.FontSize(fontSize).Foreground(this.normalText).FontWeight("SemiBold")
                 lbl.TextAlignment("Center")
-                lbl.Canvas_Left(lpx - 28).Canvas_Top(lpy - 8).Width(56).IsHitTestVisible("False")
+                lbl.TextTrimming("CharacterEllipsis")
+                lbl.Canvas_Left(lpx - 39).Canvas_Top(lpy - 8).Width(78).IsHitTestVisible("False")
             } else {
                 centerR := innerR + (radius - innerR) * this.centerPosRatio
                 cpx := Round(cx + centerR * Cos(midRad))
@@ -290,7 +298,8 @@ class MenuWheelGui {
                 lbl.FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif")
                 lbl.FontSize(fontSize).Foreground(this.normalText).FontWeight("SemiBold")
                 lbl.TextAlignment("Center")
-                lbl.Canvas_Left(cpx - 28).Canvas_Top(cpy - 8).Width(56).IsHitTestVisible("False")
+                lbl.TextTrimming("CharacterEllipsis")
+                lbl.Canvas_Left(cpx - 39).Canvas_Top(cpy - 8).Width(78).IsHitTestVisible("False")
             }
         }
 
@@ -302,7 +311,7 @@ class MenuWheelGui {
         this.closed := false
         this.swipeTriggered := false
         this.isOpen := true
-        try FileAppend("[WHEEL-OPEN] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
+        ; try FileAppend("[WHEEL-OPEN] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
 
         Loop itemCount {
             idx := A_Index
@@ -441,7 +450,7 @@ class MenuWheelGui {
     }
 
     _Cleanup() {
-        try FileAppend("[WHEEL-CLEANUP] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
+        ; try FileAppend("[WHEEL-CLEANUP] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
         WindowHotkeyManager.Unregister(this)
         this.isOpen := false
         this._CancelPendingSelect()
@@ -457,6 +466,7 @@ class MenuWheelGui {
         }
         this.ui := ""
         this.Gui := ""
+        this.sectors := []
     }
 
     DoCancel() {
