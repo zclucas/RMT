@@ -359,7 +359,7 @@ class MenuWheelGui {
             this.swipe.Stop()
         sec := this.sectors[idx]
         sec.RenderSelected(this)
-        Sleep(150)
+        ; Sleep(150)
         if (IsObject(sec.Callback)) {
             this._pendingCallback := sec.Callback
             this._pendingCallbackIdx := idx
@@ -419,7 +419,7 @@ class MenuWheelGui {
         this._CancelPendingSelect()
         this.pendingIdx := idx
         this.pendingSelectTimer := ObjBindMethod(this, "_OnPendingSelectTick")
-        SetTimer(this.pendingSelectTimer, 10)
+        SetTimer(this.pendingSelectTimer, 30)
     }
 
     _CancelPendingSelect() {
