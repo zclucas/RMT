@@ -988,7 +988,6 @@ IsBootStart() {
 
 CorrectRemark(CommandStr, Remark) {
     charsToRemove := [",", "，", "`n", "⫶", "_"]
-    ; 循环删除每个字符
     for char in charsToRemove {
         Remark := StrReplace(Remark, char)
     }

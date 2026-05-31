@@ -1,4 +1,7 @@
 #Requires AutoHotkey v2.0
+global RMT_VERSION := "1.2F7"
+#Include Main\SelfCheck.ahk
+SelfCheckMissingFiles()
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
 

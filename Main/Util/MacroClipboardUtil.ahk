@@ -434,7 +434,7 @@ OnItemCopyMacroBtnClick(tableItem, CopyIndex, *) {
     }
 
     exportData := Map()
-    exportData["版本"] := "RMTv1.2"
+    exportData["版本"] := "RMTv" RMT_VERSION
     exportData["导出时间"] := FormatTime(, "yyyy-MM-dd HH:mm:ss")
     exportData["指令列表"] := macroText
     
@@ -488,7 +488,7 @@ OnItemCopyMacroBtnClick(tableItem, CopyIndex, *) {
     } catch as e {
         jsonString := Format(
             "[RMT指令集]`n"
-            "版本: RMTv1.2`n"
+            "版本: RMTv" RMT_VERSION "`n"
             "导出时间: {}`n"
             "指令列表: {}",
             FormatTime(, "yyyy-MM-dd HH:mm:ss"),
