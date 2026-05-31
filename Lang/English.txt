@@ -1208,3 +1208,4 @@ RMT文档=RMT Doc
 假值:=False Value:
 请选择要检测的按键！=Please select keys to detect!
 请输入变量名！=Please enter variable name!
+Detected manual Admin mode run. Please use "Admin Startup" in Settings instead of right-click "Run as Administrator".
