@@ -1014,6 +1014,8 @@ OnTriggerSepcialItemMacro(MacroStr) {
 }
 
 HandleOpenArg() {
+    if (A_IsAdmin)
+        MsgBox(GetLang("检测到当前以管理员模式手动运行，建议使用设置中的`"管理员启动`"选项来自动以管理员身份启动，而非手动右键管理员运行。"), GetLang("提示"), 64)
     if (A_Args.Length <= 0) {
         if (MySoftData.IsAdminStart && !A_IsAdmin)
             ElevateToAdmin()
