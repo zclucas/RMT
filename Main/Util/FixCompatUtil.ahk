@@ -367,6 +367,17 @@ CompatMMPro(filePath) {
             curFix := true
         }
 
+        ;旧版使用IsRelative/IsGameView字段，新版统一为MouseMoveMode
+        if (!ObjHasOwnProp(Data, "MouseMoveMode")) {
+            MouseMoveMode := 0
+            if (ObjHasOwnProp(Data, "IsGameView") && Data.IsGameView == 1)
+                MouseMoveMode := 2
+            else if (ObjHasOwnProp(Data, "IsRelative") && Data.IsRelative == 1)
+                MouseMoveMode := 1
+            Data.MouseMoveMode := MouseMoveMode
+            curFix := true
+        }
+
         ;自动选择对应的窗口规则配置如果有的话
         if (!Data.ConfigArr.Length == 0) {
             curFix := CompatMMProConfig(Data) || curFix
