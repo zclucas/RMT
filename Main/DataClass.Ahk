@@ -203,6 +203,7 @@ class SoftData {
         this.IsAdminStart := false        ;管理员启动
         this.ShowSplitLine := false     ;显示分割线
         this.FixedMenuWheel := false    ;固定菜单轮
+        this.MenuWheelScale := 100      ;轮盘大小(百分比)
         this.XAMLTheme := "RMT Light"   ;XAML界面主题
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型

@@ -30,6 +30,7 @@ class MenuWheelGlobalSettingGui {
         this._fixedPos := false
         this._selectMode := 1
         this._showTooltip := true
+        this._wheelScale := 100
         this._currentTheme := "Default"
     }
 
@@ -51,7 +52,7 @@ class MenuWheelGlobalSettingGui {
         this.closed := false
 
         title := GetLang("轮盘选项")
-        this.app := XAML_GUI(title, { Sidebar: false, BurgerMenu: false, AppIcon: false, Width: 420, Height: 400 })
+        this.app := XAML_GUI(title, { Sidebar: false, BurgerMenu: false, AppIcon: false, Width: 420, Height: 440 })
         this.app.tabs.Visibility("Collapsed")
 
         this.LoadThemesFromIni()
@@ -66,12 +67,14 @@ class MenuWheelGlobalSettingGui {
         this.ui.Track("FixedPosCon")
         this.ui.Track("SelectModeCon")
         this.ui.Track("ShowTooltipCon")
+        this.ui.Track("WheelScaleCon")
 
         this.ui.OnEvent("FixedPosCon", "Checked", ObjBindMethod(this, "OnFixedPosChanged"))
         this.ui.OnEvent("FixedPosCon", "Unchecked", ObjBindMethod(this, "OnFixedPosChanged"))
         this.ui.OnEvent("SelectModeCon", "SelectionChanged", ObjBindMethod(this, "OnSelectModeChanged"))
         this.ui.OnEvent("ShowTooltipCon", "Checked", ObjBindMethod(this, "OnShowTooltipChanged"))
         this.ui.OnEvent("ShowTooltipCon", "Unchecked", ObjBindMethod(this, "OnShowTooltipChanged"))
+        this.ui.OnEvent("WheelScaleCon", "ValueChanged", ObjBindMethod(this, "OnWheelScaleChanged"))
 
         this.ui.OnEvent("BtnRevert", "Click", ObjBindMethod(this, "OnRevertClick"))
         this.ui.OnEvent("BtnConfirm", "Click", ObjBindMethod(this, "OnConfirmClick"))
@@ -168,6 +171,11 @@ class MenuWheelGlobalSettingGui {
         row3 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,8,0,0")
         row3.Add("CheckBox").Name("ShowTooltipCon").Content(GetLang("显示扇区名称提示")).Foreground("{DynamicResource TextMain}").Margin("0,0,0,0")
 
+        row4 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
+        row4.Add("TextBlock").Text(GetLang("轮盘大小")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(70)
+        scaleSlider := row4.Add("Slider").Name("WheelScaleCon").Width(160).Height(28).Margin("8,0,8,0").Minimum(50).Maximum(200).Value(100).IsSnapToTickEnabled("True").TickFrequency("10")
+        scaleValText := row4.Add("TextBlock").Name("WheelScaleValText").Foreground("{DynamicResource TextMain}").FontSize(12).VerticalAlignment("Center").Width(40)
+
         group3 := panel.Add("GroupBox").Header(GetLang("主题预设")).Margin("0,16,0,0")
         inner3 := group3.Add("StackPanel").Margin("14, 10")
 
@@ -194,6 +202,7 @@ class MenuWheelGlobalSettingGui {
         this._fixedPos := !!MySoftData.FixedMenuWheel
         this._selectMode := MySoftData.MenuWheelSelectMode
         this._showTooltip := !!MySoftData.MenuWheelShowTooltip
+        this._wheelScale := MySoftData.MenuWheelScale
 
         iniPath := A_WorkingDir "\Setting\MainSettings.ini"
         savedTheme := IniRead(iniPath, "MenuWheel", "CurrentTheme", "Default")
@@ -210,6 +219,8 @@ class MenuWheelGlobalSettingGui {
         this.ui.Update("FixedPosCon", "IsChecked", this._fixedPos ? "True" : "False")
         this.ui.Update("SelectModeCon", "SelectedIndex", String(this._selectMode - 1))
         this.ui.Update("ShowTooltipCon", "IsChecked", this._showTooltip ? "True" : "False")
+        this.ui.Update("WheelScaleCon", "Value", String(this._wheelScale))
+        this.ui.Update("WheelScaleValText", "Text", this._wheelScale "%")
 
         themeIdx := 0
         idx := 0
@@ -235,6 +246,12 @@ class MenuWheelGlobalSettingGui {
 
     OnShowTooltipChanged(state, ctrl, event) {
         this._showTooltip := (event == "Checked")
+    }
+
+    OnWheelScaleChanged(state, ctrl, event) {
+        valStr := state.Has("WheelScaleCon") ? state["WheelScaleCon"] : ""
+        this._wheelScale := Integer(valStr)
+        this.ui.Update("WheelScaleValText", "Text", this._wheelScale "%")
     }
 
     OnThemeSelectionChanged(state, ctrl, event) {
@@ -276,12 +293,15 @@ class MenuWheelGlobalSettingGui {
         this.ui.Update("FixedPosCon", "IsChecked", "False")
         this.ui.Update("SelectModeCon", "SelectedIndex", "0")
         this.ui.Update("ShowTooltipCon", "IsChecked", "True")
+        this.ui.Update("WheelScaleCon", "Value", "100")
+        this.ui.Update("WheelScaleValText", "Text", "100%")
         this.ui.Update("ThemeCombo", "SelectedIndex", "0")
         this.UpdateThemePreview(defaultTheme)
 
         this._fixedPos := false
         this._selectMode := 1
         this._showTooltip := true
+        this._wheelScale := 100
         this._currentTheme := "Default"
     }
 
@@ -306,12 +326,14 @@ class MenuWheelGlobalSettingGui {
         MySoftData.FixedMenuWheel := this._fixedPos
         MySoftData.MenuWheelSelectMode := this._selectMode
         MySoftData.MenuWheelShowTooltip := this._showTooltip
+        MySoftData.MenuWheelScale := this._wheelScale
 
         global IniFile, IniSection
         iniPath := A_WorkingDir "\Setting\MainSettings.ini"
         IniWrite(MySoftData.FixedMenuWheel, IniFile, IniSection, "FixedMenuWheel")
         IniWrite(MySoftData.MenuWheelSelectMode, IniFile, IniSection, "MenuWheelSelectMode")
         IniWrite(MySoftData.MenuWheelShowTooltip, IniFile, IniSection, "MenuWheelShowTooltip")
+        IniWrite(MySoftData.MenuWheelScale, IniFile, IniSection, "MenuWheelScale")
 
         IniWrite(this._currentTheme, iniPath, "MenuWheel", "CurrentTheme")
         for name in MenuWheelGlobalSettingGui.ColorNames

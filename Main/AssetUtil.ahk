@@ -448,6 +448,7 @@ LoadMainSetting() {
     MySoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
     MySoftData.MenuWheelSelectMode := IniRead(IniFile, IniSection, "MenuWheelSelectMode", 1)
     MySoftData.MenuWheelShowTooltip := IniRead(IniFile, IniSection, "MenuWheelShowTooltip", true)
+    MySoftData.MenuWheelScale := IniRead(IniFile, IniSection, "MenuWheelScale", 100)
     MySoftData.XAMLTheme := IniRead(IniFile, IniSection, "XAMLTheme", "RMT Light")
     EnsureXAMLThemesIni()
     MySoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)

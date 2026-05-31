@@ -73,19 +73,30 @@ class MenuWheelGui {
             })
         }
 
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&mx, &my)
         if (MySoftData.FixedMenuWheel) {
-            mx := Round(A_ScreenWidth * 0.5)
-            my := Round(A_ScreenHeight * 0.70)
-        } else {
-            CoordMode("Mouse", "Screen")
-            MouseGetPos(&mx, &my)
+            pt := Buffer(8, 0)
+            NumPut("Int", mx, pt, 0)
+            NumPut("Int", my, pt, 4)
+            hwndMon := DllCall("user32\MonitorFromPoint", "Ptr", pt, "UInt", 2, "Ptr")
+            monInfo := Buffer(40, 0)
+            NumPut("UInt", 40, monInfo, 0)
+            DllCall("user32\GetMonitorInfo", "Ptr", hwndMon, "Ptr", monInfo)
+            monLeft := NumGet(monInfo, 4, "Int")
+            monTop := NumGet(monInfo, 8, "Int")
+            monRight := NumGet(monInfo, 12, "Int")
+            monBottom := NumGet(monInfo, 16, "Int")
+            mx := Round((monLeft + monRight) * 0.5)
+            my := Round((monTop + monBottom) * 0.70)
         }
 
+        wheelScale := Max(Min(MySoftData.MenuWheelScale, 200), 30) / 100.0
         this._BuildAndShow(items, mx, my, {
-            Radius: 150,
-            InnerRadius: 60,
-            IconSize: 50,
-            FontSize: 11,
+            Radius: Round(150 * wheelScale),
+            InnerRadius: Round(60 * wheelScale),
+            IconSize: Round(50 * wheelScale),
+            FontSize: Max(Round(11 * wheelScale), 8),
             NormalFill: modNormalFill,
             NormalStroke: modNormalStroke,
             NormalText: "#CC333333",
@@ -167,8 +178,21 @@ class MenuWheelGui {
         this.labelPosRatio := labelPosRatio
         this.centerPosRatio := centerPosRatio
 
-        dpiScale := A_ScreenDPI / 96.0
-        this.dpiScale := dpiScale
+        finalX := x
+        finalY := y
+        if (finalX == "" or finalY == "") {
+            CoordMode("Mouse", "Screen")
+            MouseGetPos(&mx, &my)
+            finalX := mx
+            finalY := my
+        }
+        ptDpi := Buffer(8, 0)
+        NumPut("Int", finalX, ptDpi, 0)
+        NumPut("Int", finalY, ptDpi, 4)
+        hwndMon := DllCall("user32\MonitorFromPoint", "Ptr", ptDpi, "UInt", 2, "Ptr")
+        dpiX := 0, dpiY := 0
+        DllCall("shcore\GetDpiForMonitor", "Ptr", hwndMon, "Int", 0, "UInt*", &dpiX, "UInt*", &dpiY)
+        this.dpiScale := (dpiX > 0) ? (dpiX / 96.0) : (A_ScreenDPI / 96.0)
 
         itemCount := items.Length
         if (itemCount < 1)
@@ -188,14 +212,6 @@ class MenuWheelGui {
         winH := (radius + pad) * 2
         this.winSize := winW
 
-        finalX := x
-        finalY := y
-        if (finalX == "" or finalY == "") {
-            CoordMode("Mouse", "Screen")
-            MouseGetPos(&mx, &my)
-            finalX := mx
-            finalY := my
-        }
         winLeft := finalX / this.dpiScale - cx
         winTop := finalY / this.dpiScale - cy
 
@@ -250,6 +266,16 @@ class MenuWheelGui {
             wedge := canvas.Add("Path").Name("Wedge_" idx)
             wedge.Data(pathData).Fill(normalFill).Stroke(normalStroke).StrokeThickness(normalThickness).Cursor("Hand")
         }
+
+        centerCircle := canvas.Add("Ellipse").Name("CenterCircle")
+        centerCircle.Width(innerR * 2).Height(innerR * 2)
+        centerCircle.Canvas_Left(cx - innerR).Canvas_Top(cy - innerR)
+        centerCircle.Fill(normalFill).Stroke(normalStroke).StrokeThickness(normalThickness).Cursor("Hand")
+
+        closeIcon := canvas.Add("TextBlock").Name("CloseIcon")
+        closeIcon.Text("✕").FontSize(Round(fontSize * 1.4)).Foreground(this.normalText).FontWeight("SemiBold")
+        closeIcon.TextAlignment("Center").IsHitTestVisible("False")
+        closeIcon.Canvas_Left(cx - fontSize * 0.6).Canvas_Top(cy - Round(fontSize * 0.7))
 
         Loop itemCount {
             idx := A_Index
@@ -323,6 +349,10 @@ class MenuWheelGui {
             this.ui.OnEvent("Wedge_" idx, "MouseLeave", h.Leave)
             this.ui.OnEvent("IconBg_" idx, "MouseLeave", h.Leave)
         }
+
+        this.ui.OnEvent("CenterCircle", "PreviewMouseLeftButtonDown", (*) => this.DoCancel())
+        this.ui.OnEvent("CenterCircle", "MouseMove", (*) => this.DoCenterHover())
+        this.ui.OnEvent("CenterCircle", "MouseLeave", (*) => this.DoCenterLeave())
 
         this.ui.OnEvent("RootCanvas", "MouseMove", (*) => this.DoCanvasMove())
 
@@ -420,6 +450,31 @@ class MenuWheelGui {
             this._CancelPendingSelect()
             this.sectors[prevIdx].OnLeave(this)
             this.hoveredIdx := 0
+        }
+        ToolTip()
+    }
+
+    DoCenterHover(*) {
+        if (!this.isOpen || this.closed)
+            return
+        if (this.HasProp("ui") && IsObject(this.ui)) {
+            this.ui.Update("CenterCircle", "Fill", this.hoverFill)
+            this.ui.Update("CenterCircle", "Stroke", this.hoverStroke)
+            this.ui.Update("CenterCircle", "StrokeThickness", String(this.hoverThickness))
+            this.ui.Update("CloseIcon", "Foreground", this.hoverText)
+        }
+        if (this.showTooltip)
+            ToolTip(GetLang("关闭"))
+    }
+
+    DoCenterLeave(*) {
+        if (!this.isOpen || this.closed)
+            return
+        if (this.HasProp("ui") && IsObject(this.ui)) {
+            this.ui.Update("CenterCircle", "Fill", this.normalFill)
+            this.ui.Update("CenterCircle", "Stroke", this.normalStroke)
+            this.ui.Update("CenterCircle", "StrokeThickness", String(this.normalThickness))
+            this.ui.Update("CloseIcon", "Foreground", this.normalText)
         }
         ToolTip()
     }
