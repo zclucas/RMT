@@ -312,6 +312,20 @@ BindMenuHotKey() {
 
                 if (actionArr[2] != "" && !isCombo)
                     Hotkey(key " up", actionArr[2])
+
+                ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
+                if (isCombo && (!FoldInfo.UnorderedTriggerArr.Has(index) || !FoldInfo.UnorderedTriggerArr[index])) {
+                    reversedKey := GetReversedComboKey(oriKey)
+                    if (reversedKey != "") {
+                        try {
+                            Hotkey(reversedKey, actionArr[1])
+                            if (actionArr[2] != "" && !isCombo)
+                                Hotkey(reversedKey " up", actionArr[2])
+                        }
+                        catch as e {
+                        }
+                    }
+                }
             }
             catch as e {
             }
@@ -400,6 +414,22 @@ BindTabHotKey() {
 
                     if (actionArr[2] != "" && !cache.isCombo)
                         Hotkey(key " up", actionArr[2], "On")
+
+                    ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
+                    if (cache.isCombo && (!tableItem.UnorderedTriggerArr.Has(index) || !tableItem.UnorderedTriggerArr[index])) {
+                        reversedKey := GetReversedComboKey(rawKey)
+                        if (reversedKey != "") {
+                            try {
+                                Hotkey(reversedKey, actionArr[1], "On")
+                                if (actionArr[2] != "" && !cache.isCombo)
+                                    Hotkey(reversedKey " up", actionArr[2], "On")
+                                registerMsg .= "  ↩ Reversed: '" reversedKey "'`n"
+                            }
+                            catch as e {
+                                registerMsg .= "  ❌ Unordered Failed: " e.Message "`n"
+                            }
+                        }
+                    }
                 }
                 catch as e {
                     registerMsg .= "❌ Failed: " e.Message "`n"
@@ -436,6 +466,18 @@ InitTriggerKeyMap() {
         info.tableIndex := tableItem.Index
         info.itemIndex := index
         MySoftData.TriggerKeyMap[key].AddData(info)
+
+        ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
+        if (!tableItem.UnorderedTriggerArr.Has(index) || !tableItem.UnorderedTriggerArr[index]) {
+            reversedRaw := GetReversedComboKey(tableItem.TKArr[index])
+            if (reversedRaw != "") {
+                reversedKey := LTrim(reversedRaw, "~")
+                reversedKey := StrLower(reversedKey)
+                if (!MySoftData.TriggerKeyMap.Has(reversedKey)) {
+                    MySoftData.TriggerKeyMap[reversedKey] := MySoftData.TriggerKeyMap[key]
+                }
+            }
+        }
     }
 
     tableItem := MySoftData.TableInfo[3]
@@ -453,6 +495,18 @@ InitTriggerKeyMap() {
         info.macroType := 2
         info.foldIndex := index
         MySoftData.TriggerKeyMap[key].AddData(info)
+
+        ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
+        if (!FoldInfo.UnorderedTriggerArr.Has(index) || !FoldInfo.UnorderedTriggerArr[index]) {
+            reversedRaw := GetReversedComboKey(FoldInfo.TKArr[index])
+            if (reversedRaw != "") {
+                reversedKey := LTrim(reversedRaw, "~")
+                reversedKey := StrLower(reversedKey)
+                if (!MySoftData.TriggerKeyMap.Has(reversedKey)) {
+                    MySoftData.TriggerKeyMap[reversedKey] := MySoftData.TriggerKeyMap[key]
+                }
+            }
+        }
     }
 
     for index, value in MySoftData.SoftHotKeyArr {
@@ -611,4 +665,27 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
         return
     }
     OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
+}
+
+GetReversedComboKey(comboKey) {
+    if (!InStr(comboKey, " & "))
+        return ""
+
+    parts := StrSplit(comboKey, " & ")
+    if (parts.Length != 2)
+        return ""
+
+    part1 := Trim(parts[1])
+    part2 := Trim(parts[2])
+
+    hasTilde1 := SubStr(part1, 1, 1) == "~"
+    hasTilde2 := SubStr(part2, 1, 1) == "~"
+
+    key1 := hasTilde1 ? SubStr(part1, 2) : part1
+    key2 := hasTilde2 ? SubStr(part2, 2) : part2
+
+    prefix1 := hasTilde2 ? "~" : ""
+    prefix2 := hasTilde1 ? "~" : ""
+
+    return prefix1 key2 " & " prefix2 key1
 }

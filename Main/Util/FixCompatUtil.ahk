@@ -138,6 +138,7 @@ Compat1_0_8F4FlodInfo(FoldInfo) {
         FoldInfo.TKTypeArr.Push(1)
         FoldInfo.TKArr.Push("")
         FoldInfo.HoldTimeArr.Push(500)
+        FoldInfo.UnorderedTriggerArr.Push(false)
     }
 }
 

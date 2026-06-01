@@ -13,6 +13,8 @@ class TriggerKeyGui {
         this.ConStateMap := Map()
         this.ShowSaveBtn := false
         this.IsToolEdit := ""
+        this.UnorderedTriggerCon := ""
+        this.UnorderedTrigger := false
         this.ModifyKeyMap := Map("LAlt", "<!", "RAlt", ">!", "Alt", "!", "LWin", "<#", "RWin", ">#", "Win", "#",
             "LCtrl", "<^", "RCtrl", ">^", "Ctrl", "^", "LShift", "<+", "RShift", ">+", "Shift", "+")
 
@@ -208,12 +210,16 @@ class TriggerKeyGui {
         this.HoldTimeCon.Visible := !this.IsToolEdit
         this.HoldTimeLabelCon.Visible := !this.IsToolEdit
         this.HoldTimeTipCon.Visible := !this.IsToolEdit
+        this.UnorderedTriggerCon.Visible := !this.IsToolEdit
         if (!this.IsToolEdit) {
             this.HoldTimeCon.Value := this.HoldTime
+            this.UnorderedTriggerCon.Value := this.UnorderedTrigger
         }
         else {
             this.EnableTriggerKeyCon.Value := false
             this.EnableTriggerKeyCon.Enabled := false
+            this.UnorderedTriggerCon.Value := false
+            this.UnorderedTriggerCon.Enabled := false
         }
     }
 
@@ -285,8 +291,9 @@ class TriggerKeyGui {
         }
         triggerKey := this.GetTriggerKey()
         holdTime := this.HoldTimeCon.Value
+        unorderedTrigger := this.UnorderedTriggerCon.Value
         action := this.SureBtnAction
-        action(triggerKey, holdTime)
+        action(triggerKey, holdTime, unorderedTrigger)
         this.ToggleFunc(false)
         this.Gui.Hide()
         this.SureFocusCon.Focus()
@@ -301,8 +308,9 @@ class TriggerKeyGui {
 
         triggerKey := this.GetTriggerKey()
         holdTime := this.HoldTimeCon.Value
+        unorderedTrigger := this.UnorderedTriggerCon.Value
         action := this.SureBtnAction
-        action(triggerKey, holdTime)
+        action(triggerKey, holdTime, unorderedTrigger)
         this.ToggleFunc(false)
         this.Gui.Hide()
 
@@ -1173,6 +1181,11 @@ class TriggerKeyGui {
         con.OnEvent("Click", (*) => this.OnChangeEnableTriggerKey())
         this.EnableTriggerKeyCon := con
 
+        PosX += 200
+        con := MyGui.Add("Checkbox", Format("x{} y{} w{} h{}", PosX, PosY, 140, 20), GetLang("顺序触发"))
+        con.OnEvent("Click", (*) => this.OnChangeUnorderedTrigger())
+        this.UnorderedTriggerCon := con
+
         PosY := FlagSY
         PosY += 50
         PosX := 600
@@ -1272,6 +1285,10 @@ class TriggerKeyGui {
     }
 
     OnChangeEnableTriggerKey() {
+        this.Refresh()
+    }
+
+    OnChangeUnorderedTrigger() {
         this.Refresh()
     }
 

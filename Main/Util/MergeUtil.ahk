@@ -732,6 +732,7 @@ class MergeUtil {
                     tableItem.LoopCountArr.Push(1)
                     tableItem.TriggerTypeArr.Push(1)
                     tableItem.HoldTimeArr.Push(500)
+                    tableItem.UnorderedTriggerArr.Push(false)
                     tableItem.StartTipSoundArr.Push(1)
                     tableItem.EndTipSoundArr.Push(1)
                     tableItem.MacroArr.Push(item.MacroStr)
@@ -779,6 +780,7 @@ class MergeUtil {
                 foldInfo.TKTypeArr.Push(1)
                 foldInfo.TKArr.Push("")
                 foldInfo.HoldTimeArr.Push(500)
+                foldInfo.UnorderedTriggerArr.Push(false)
 
                 totalModuleCount++
             }

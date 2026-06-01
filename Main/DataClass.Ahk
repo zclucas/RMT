@@ -5,6 +5,7 @@ class TableItem {
         this.TKArr := []        ;触发键
         this.MacroArr := []     ;宏内容
         this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
+        this.UnorderedTriggerArr := []  ;顺序触发（勾选时只按顺序注册，不勾选则正反向都注册）
         this.ForbidArr := []    ;禁止
         this.LoopCountArr := [] ;循环次数
         this.RemarkArr := []    ;备注
@@ -54,6 +55,7 @@ class ItemFoldInfo {
         this.TKTypeArr := []    ;触发类型
         this.TKArr := []        ;触发按键，菜单栏功能
         this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
+        this.UnorderedTriggerArr := []  ;顺序触发（勾选时只按顺序注册，不勾选则正反向都注册）
     }
 }
 
@@ -810,13 +812,14 @@ class InputData {
 class WindowManageData {
     __New() {
         this.SerialStr := ""                 ;类型尽量使用中文 当做枚举使用  程序中有语义、也可以随时调整顺序
-        this.ActionType := "激活窗口"        ;1激活窗口 2最大化窗口 3最小化窗口 4还原窗口 5关闭窗口 6移动窗口 7调整大小 8置顶窗口 9取消置顶 10修改标题
+        this.ActionType := "激活窗口"        ;1激活窗口 2最大化窗口 3最小化窗口 4还原窗口 5关闭窗口 6移动窗口 7调整大小 8置顶窗口 9取消置顶 10修改标题 11修改透明度
         this.SearchValue := ""              ;查找值（格式：标题⎖类名⎖进程名，空表示未选择）
         this.PosX := 0                      ;移动窗口X坐标（移动窗口时使用）
         this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
         this.Width := 0                     ;窗口宽度（调整大小时使用）
         this.Height := 0                    ;窗口高度（调整大小时使用）
         this.NewTitle := ""                 ;新标题（修改标题时使用）
+        this.Transparency := "80"           ;透明度值 0-100（修改透明度时使用，80表示80%不透明度）
     }
 }
 

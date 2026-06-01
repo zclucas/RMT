@@ -590,10 +590,6 @@ ExcuteRMTCMDAction(Cmd) {
             BlockInput false
         case "禁用键鼠":
             BlockInput true
-        case "置顶或取消":
-            WinSetAlwaysOnTop -1, "A"
-        case "透明度":
-            WinSetTransparent Round(255 * (100 - paramArr[3]) / 100), "A"
         case "休眠":
             OnSuspendHotkey()
         case "暂停所有宏":

@@ -1136,6 +1136,12 @@ OnWindowManage(tableItem, cmd, index) {
             case "修改标题":
                 newTitle := GetReplaceVarText(tableItem, index, Data.NewTitle)
                 WinSetTitle(newTitle, winTitle)
+            case "修改透明度":
+                hasTransparency := TryGetTabVarValue(&Transparency, tableItem, index, Data.Transparency)
+                if (hasTransparency) {
+                    alphaValue := Round(255 * Integer(Transparency) / 100)
+                    WinSetTransparent(alphaValue, winTitle)
+                }
         }
     }
 }

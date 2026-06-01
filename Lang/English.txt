@@ -112,6 +112,7 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 侧键2=Side 2
 保存结果变量=Save Var
 保留触发键原本功能=Keep original function
+顺序触发=Ordered trigger
 信息刷新=Refresh
 修改=Modify
 修改成功=Modify Successfully

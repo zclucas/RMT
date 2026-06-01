@@ -11,7 +11,8 @@ class WindowManageGui {
 
         this.ActionTypeArr := [
             GetLang("激活窗口"), GetLang("最大化窗口"), GetLang("最小化窗口"), GetLang("还原窗口"), GetLang("关闭窗口"),
-            GetLang("移动窗口"), GetLang("调整大小"), GetLang("置顶窗口"), GetLang("取消置顶"), GetLang("修改标题")
+            GetLang("移动窗口"), GetLang("调整大小"), GetLang("置顶窗口"), GetLang("取消置顶"), GetLang("修改标题"),
+            GetLang("修改透明度")
         ]
     }
 
@@ -50,6 +51,8 @@ class WindowManageGui {
         SetDLConValue(this.WidthCon, DLVariableArr, this.Data.Width)
         SetDLConValue(this.HeightCon, DLVariableArr, this.Data.Height)
         SetDLConValue(this.NewTitleCon, DLVariableArr, this.Data.NewTitle)
+        SetDLConValue(this.TransparencyCon, DLVariableArr, this.Data.Transparency)
+        this.TransparencyCon.Add(["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"])
     }
 
     AddGui() {
@@ -141,6 +144,20 @@ class WindowManageGui {
         this.NewTitleCon := MyGui.Add("ComboBox", Format("x{} y{} w370 R8", PosX, PosY - 3), [])
         this.TitleRelateArrCon.Push(this.NewTitleCon)
 
+        PosX := 10
+        PosY := SplitPosY
+        this.TransparencyRelateArrCon := []
+
+        con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 75), GetLang("透明度："))
+        this.TransparencyRelateArrCon.Push(con)
+        PosX += 80
+        this.TransparencyCon := MyGui.Add(
+            "ComboBox",
+            Format("x{} y{} w130 R8", PosX, PosY - 3),
+            []
+        )
+        this.TransparencyRelateArrCon.Push(this.TransparencyCon)
+
         PosY := SplitPosY + 42
         PosX := 220
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
@@ -154,6 +171,7 @@ class WindowManageGui {
         isShowPos := (actionType == GetLang("移动窗口"))
         isShowSize := (actionType == GetLang("调整大小"))
         isShowTitle := (actionType == GetLang("修改标题"))
+        isShowTransparency := (actionType == GetLang("修改透明度"))
 
         for _, con in this.PosRelateArrCon
             con.Visible := isShowPos
@@ -163,6 +181,9 @@ class WindowManageGui {
 
         for _, con in this.TitleRelateArrCon
             con.Visible := isShowTitle
+
+        for _, con in this.TransparencyRelateArrCon
+            con.Visible := isShowTransparency
     }
 
     OnClose(*) {
@@ -215,6 +236,7 @@ class WindowManageGui {
         this.Data.Width := this.WidthCon.Value
         this.Data.Height := this.HeightCon.Value
         this.Data.NewTitle := this.NewTitleCon.Text
+        this.Data.Transparency := StrReplace(this.TransparencyCon.Text, "%")
         SaveMacroCMDData(this.Data)
     }
 

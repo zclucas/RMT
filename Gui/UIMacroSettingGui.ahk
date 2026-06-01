@@ -465,6 +465,11 @@ class UIMacroSettingGui {
         else
             tableItem.HoldTimeArr.Push(posXValue)
 
+        if (tableItem.UnorderedTriggerArr.Has(macroIndex))
+            tableItem.UnorderedTriggerArr[macroIndex] := 0
+        else
+            tableItem.UnorderedTriggerArr.Push(0)
+
         if (tableItem.UIPosYArr.Has(macroIndex))
             tableItem.UIPosYArr[macroIndex] := posYValue
         else

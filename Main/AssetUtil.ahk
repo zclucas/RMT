@@ -607,6 +607,7 @@ ReadTableItemInfo(index) {
     savedStartTipSoundStr := IniRead(MacroFile, IniSection, symbol "StartTipSoundArr", "")
     savedEndTipSoundStr := IniRead(MacroFile, IniSection, symbol "EndTipSoundArr", "")
     savedGifPathArrStr := IniRead(MacroFile, IniSection, symbol "GifPathArr", "")
+    savedUnorderedTriggerArrStr := IniRead(MacroFile, IniSection, symbol "UnorderedTriggerArr", "")
     savedFoldInfoStr := IniRead(MacroFile, IniSection, symbol "FoldInfo", "")
 
     ;不存在折叠筐就初始化，并读取默认配置
@@ -622,6 +623,7 @@ ReadTableItemInfo(index) {
         savedTimingSerialStr := defaultInfo[9]
         savedStartTipSoundStr := defaultInfo[10]
         savedEndTipSoundStr := defaultInfo[11]
+        savedUnorderedTriggerArrStr := defaultInfo[12]
 
         defaultFoldInfo := ItemFoldInfo()
         defaultFoldInfo.RemarkArr := [GetLang("RMT默认初始化配置")]
@@ -651,8 +653,11 @@ ReadTableItemInfo(index) {
     SetArr(savedEndTipSoundStr, "π", tableItem.EndTipSoundArr)
 
     SetArr(savedGifPathArrStr, "π", tableItem.GifPathArr)
+    SetIntArr(savedUnorderedTriggerArrStr, "π", tableItem.UnorderedTriggerArr)
     while (tableItem.GifPathArr.Length < tableItem.ModeArr.Length)
         tableItem.GifPathArr.Push("")
+    while (tableItem.UnorderedTriggerArr.Length < tableItem.ModeArr.Length)
+        tableItem.UnorderedTriggerArr.Push(0)
 
     if (symbol == "UI") {
         savedUIWindowArrStr := IniRead(MacroFile, IniSection, symbol "UIWindowArr", "")
@@ -745,6 +750,7 @@ GetTableItemDefaultInfo(index) {
     savedTimingSerialStr := ""
     savedStartTipSoundStr := ""
     savedEndTipSoundStr := ""
+    savedUnorderedTriggerArrStr := ""
     symbol := GetTableSymbol(index)
 
     if (symbol == "Normal") {
@@ -759,6 +765,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing1"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "String") {
         savedTKArrStr := ":?*:AA"
@@ -772,6 +779,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing2"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "Menu") {
         savedTKArrStr := "πππππππ"
@@ -786,6 +794,7 @@ GetTableItemDefaultInfo(index) {
             "Timing3πTiming4πTiming5πTiming6πTiming7πTiming8πTiming12πTiming13"
         savedStartTipSoundStr := "1π1π1π1π1π1π1π1"
         savedEndTipSoundStr := "1π1π1π1π1π1π1π1"
+        savedUnorderedTriggerArrStr := "0π0π0π0π0π0π0π0"
     }
     else if (symbol == "UI") {
         savedTKArrStr := ""
@@ -799,6 +808,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing14"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "Timing") {
         savedTKArrStr := ""
@@ -812,19 +822,21 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing9"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "SubMacro") {
         savedTKArrStr := ""
         savedHoldTimeArrStr := "500"
         savedModeArrStr := "1"
         savedForbidArrStr := "1"
-        savedRemarkArrStr := GetLang("只能通过宏操作调用")
+        savedRemarkArr := GetLang("只能通过宏操作调用")
         savedLoopCountStr := "1"
         savedTriggerTypeStr := "1"
         savedSerialeArrStr := "10"
         savedTimingSerialStr := "Timing10"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "Replace") {
         savedTKArrStr := "k"
@@ -838,10 +850,11 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing11"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedUnorderedTriggerArrStr := "0"
     }
     return [savedTKArrStr, savedHoldTimeArrStr, savedModeArrStr, savedForbidArrStr, savedRemarkArrStr,
         savedLoopCountStr, savedTriggerTypeStr, savedSerialeArrStr, savedTimingSerialStr, savedStartTipSoundStr,
-        savedEndTipSoundStr]
+        savedEndTipSoundStr, savedUnorderedTriggerArrStr]
 }
 
 SaveTableItemInfo(index) {
@@ -859,6 +872,9 @@ SaveTableItemInfo(index) {
     IniWrite(SavedInfo[9], MacroFile, IniSection, symbol "TimingSerialArr")
     IniWrite(SavedInfo[10], MacroFile, IniSection, symbol "StartTipSoundArr")
     IniWrite(SavedInfo[11], MacroFile, IniSection, symbol "EndTipSoundArr")
+
+    UnorderedTriggerArrStr := SavedInfo.Has(17) ? SavedInfo[17] : ""
+    IniWrite(UnorderedTriggerArrStr, MacroFile, IniSection, symbol "UnorderedTriggerArr")
 
     GifPathArrStr := SavedInfo.Has(16) ? SavedInfo[16] : ""
     IniWrite(GifPathArrStr, MacroFile, IniSection, symbol "GifPathArr")
@@ -908,6 +924,7 @@ GetSavedTableItemInfo(index) {
     StartTipSoundArrStr := ""
     EndTipSoundArrStr := ""
     GifPathArrStr := ""
+    UnorderedTriggerArrStr := ""
 
     UIWindowArrStr := ""
     UIPosYArrStr := ""
@@ -934,6 +951,9 @@ GetSavedTableItemInfo(index) {
             A_Index] : ""
         GifPathArrStr .= GifPathArrValue
 
+        UnorderedTriggerArrValue := tableItem.UnorderedTriggerArr.Has(A_Index) ? tableItem.UnorderedTriggerArr[A_Index] : 0
+        UnorderedTriggerArrStr .= UnorderedTriggerArrValue
+
         UIWindowArrValue := tableItem.UIWindowArr.Has(A_Index) ? tableItem.UIWindowArr[A_Index] : ""
         UIPosYArrValue := tableItem.UIPosYArr.Has(A_Index) ? tableItem.UIPosYArr[A_Index] : ""
         UIBtnWidthArrValue := tableItem.UIBtnWidthArr.Has(A_Index) ? tableItem.UIBtnWidthArr[A_Index] : ""
@@ -956,6 +976,7 @@ GetSavedTableItemInfo(index) {
             StartTipSoundArrStr .= "π"
             EndTipSoundArrStr .= "π"
             GifPathArrStr .= "π"
+            UnorderedTriggerArrStr .= "π"
             UIWindowArrStr .= "π"
             UIPosYArrStr .= "π"
             UIBtnWidthArrStr .= "π"
@@ -965,7 +986,7 @@ GetSavedTableItemInfo(index) {
 
     return [TKArrStr, ModeArrStr, HoldTimeArrStr, ForbidArrStr, RemarkArrStr,
         LoopCountArrStr, TriggerTypeArrStr, SerialArrStr, TimingSerialArrStr, StartTipSoundArrStr, EndTipSoundArrStr,
-        UIWindowArrStr, UIPosYArrStr, UIBtnWidthArrStr, UIBtnHeightArrStr, GifPathArrStr]
+        UIWindowArrStr, UIPosYArrStr, UIBtnWidthArrStr, UIBtnHeightArrStr, GifPathArrStr, UnorderedTriggerArrStr]
 }
 
 ;Table信息相关

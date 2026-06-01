@@ -241,8 +241,8 @@ class TextOpsGui {
             this.ReplaceConArr[A_Index].Enabled := IsReplace
         }
 
-        this.NameConTip.Enabled := !IsConcat
-        this.NameCon.Enabled := !IsConcat
+        this.NameConTip.Enabled := true
+        this.NameCon.Enabled := true
 
         OnlyResVar := IsReplace || IsSpace || IsUpLow || IsStatistics || IsConcat
         OnlyResArr := IsSplit || IsGetEx

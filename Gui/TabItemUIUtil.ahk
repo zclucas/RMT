@@ -476,9 +476,10 @@ OnItemCustomEditTriggerStr(tableItem, index, *) {
 OnItemEditTriggerKey(tableItem, index, *) {
     triggerKey := tableItem.TKArr[index]
 
-    SureAction(sureTriggerKey, timeValue) {
+    SureAction(sureTriggerKey, timeValue, unorderedTrigger) {
         tableItem.TKArr[index] := sureTriggerKey
         tableItem.HoldTimeArr[index] := timeValue
+        tableItem.UnorderedTriggerArr[index] := unorderedTrigger
         ItemUsePool := ItemUseConPoolMap[tableItem.Index]
         if (ItemUsePool.Has(index)) {
             ItemConObj := ItemUsePool[index]
@@ -488,6 +489,7 @@ OnItemEditTriggerKey(tableItem, index, *) {
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
     MyTriggerKeyGui.SureBtnAction := SureAction
+    MyTriggerKeyGui.UnorderedTrigger := tableItem.UnorderedTriggerArr.Has(index) ? tableItem.UnorderedTriggerArr[index] : false
     MyTriggerKeyGui.ShowGui(triggerKey, tableItem.HoldTimeArr[index], false)
 }
 
@@ -621,14 +623,16 @@ OnFlodTKChange(tableItem, con, *) {
 OnFlodTKEditClick(TKEditCon, tableItem, con, *) {
     foldInfo := tableItem.FoldInfo
     foldIndex := tableItem.ConIndexMap[con].itemConInfo.FoldIndex
-    SureAction(sureTriggerKey, timeValue) {
+    SureAction(sureTriggerKey, timeValue, unorderedTrigger) {
         TKEditCon.Value := sureTriggerKey
         foldInfo.TKArr[foldIndex] := sureTriggerKey
         foldInfo.HoldTimeArr[foldIndex] := timeValue
+        foldInfo.UnorderedTriggerArr[foldIndex] := unorderedTrigger
     }
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
     MyTriggerKeyGui.SureBtnAction := SureAction
+    MyTriggerKeyGui.UnorderedTrigger := foldInfo.UnorderedTriggerArr.Has(foldIndex) ? foldInfo.UnorderedTriggerArr[foldIndex] : false
     MyTriggerKeyGui.ShowGui(TKEditCon.Value, foldInfo.HoldTimeArr[foldIndex], false)
 }
 

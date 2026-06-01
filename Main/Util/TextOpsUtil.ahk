@@ -114,6 +114,7 @@ TextOpsStatistics(Data, tableItem, index) {
 }
 
 TextOpsConcat(Data, tableItem, index) {
+    SourceText := TextGetSource(Data, tableItem, index)
     IsHas := TryGetTabVarValue(&ConcatArgs, tableItem, index, Data.ArgsName, false)
     ConcatArgs := IsHas ? ConcatArgs : Data.ArgsName
 
@@ -142,6 +143,7 @@ TextOpsConcat(Data, tableItem, index) {
         ResultStr := Part1 Value Part2
     }
     
+    ResultStr := SourceText ResultStr
     MySetGlobalVariable([Data.SaveName], [ResultStr], false)
 }
 
