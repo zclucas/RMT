@@ -114,10 +114,10 @@ class XDialog {
             btnEl := btnSp.Add("Button").Name("Btn" index).Content(btnText).Width(120).Margin("5,0").Cursor("Hand")
 
             if (isPrimary) {
-                btnEl.Style("{DynamicResource DialogPrimaryBtn}")
+                btnEl.Style("{StaticResource DialogPrimaryBtn}")
                 btnEl.IsDefault("True")
             } else {
-                btnEl.Style("{DynamicResource DialogBtn}")
+                btnEl.Style("{StaticResource DialogBtn}")
                 if (isCancel) {
                     btnEl.IsCancel("True")
                 }
@@ -153,22 +153,27 @@ class XDialog {
             ui := XAMLHost("", exePath, actualOwner)
         } else {
             ; Use a lightweight template without the 75KB component library for speed
+            captionH := movable ? "30" : "0"
+            startupLoc := owner ? "CenterOwner" : "CenterScreen"
             dialogTemplate := '
             (
                 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                         Width="940" Height="700"
                         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-                        WindowStartupLocation="CenterScreen"
+                        ShowInTaskbar="False"
+                        WindowStartupLocation="%startupLoc%"
                         TextElement.Foreground="{DynamicResource TextMain}" FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif">
                     
                     <WindowChrome.WindowChrome>
-                        <WindowChrome GlassFrameThickness="-1" CaptionHeight="30" CornerRadius="{DynamicResource WindowRadius}" />
+                        <WindowChrome GlassFrameThickness="-1" CaptionHeight="%captionH%" CornerRadius="{DynamicResource WindowRadius}" />
                     </WindowChrome.WindowChrome>
                 
                     %app%
                 </Window>
             )'
+            dialogTemplate := StrReplace(dialogTemplate, "%startupLoc%", startupLoc)
+            dialogTemplate := StrReplace(dialogTemplate, "%captionH%", captionH)
             ui := XAMLHost(StrReplace(dialogTemplate, "%app%", main.ToString()), exePath, actualOwner)
         }
 

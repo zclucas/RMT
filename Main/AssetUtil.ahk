@@ -528,6 +528,25 @@ EnsureXAMLThemesIni() {
     done := true
 }
 
+ApplyXamlTheme(ui, themeName, iniPath := "") {
+    if (iniPath == "")
+        iniPath := A_WorkingDir "\Setting\themes.ini"
+    if !FileExist(iniPath)
+        return
+    try themeData := IniRead(iniPath, themeName)
+    Loop Parse, themeData, "`n", "`r" {
+        parts := StrSplit(A_LoopField, "=", " `t", 2)
+        if (parts.Length == 2) {
+            key := Trim(parts[1])
+            val := Trim(parts[2])
+            if (key == "Window_DWM")
+                ui.Update("Window", "DWM", val)
+            else if (InStr(key, "Resource_") == 1)
+                ui.Update("Resource", SubStr(key, 10), val)
+        }
+    }
+}
+
 SetFontList() {
     MySoftData.FontList := []
     callback := CallbackCreate(EnumFontFamilies)

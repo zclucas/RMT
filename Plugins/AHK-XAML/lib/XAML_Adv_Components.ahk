@@ -42,7 +42,9 @@ class XCommandBar {
 
 XAMLElement.Prototype.DefineProp("CommandBar", { Call: _CommandBar })
 _CommandBar(this, name := "") {
-    return XCommandBar(this, name)
+    comp := XCommandBar(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -130,7 +132,9 @@ class XNavigationView {
 
 XAMLElement.Prototype.DefineProp("NavigationView", { Call: _NavigationView })
 _NavigationView(this, name := "") {
-    return XNavigationView(this, name)
+    comp := XNavigationView(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -199,7 +203,7 @@ class XKanbanBoard {
 
     UpdateCounts() {
         for col in this.columns {
-            if (this.ui != "")
+            if (this.ui)
                 this.ui.Update(col.CountId, "Text", String(col.Data.Length))
         }
     }
@@ -265,7 +269,7 @@ class XKanbanBoard {
     OnItemDropped(dstColIdx, state, ctrl, event) {
         if !state.Has("ItemDropped")
             return
-        parts := StrSplit(state["ItemDropped"], "|")
+        parts := StrSplit(state["ItemDropped"], "|", , 2)
         if (parts.Length < 2)
             return
 
@@ -313,7 +317,11 @@ class XKanbanBoard {
         this.UpdateCounts()
     }
 
-    EnableDrag(ui) {
+    EnableDrag(ui?) {
+        if !IsSet(ui) {
+            this._dragEnabled := true
+            return this
+        }
         for col in this.columns {
             ui.Update(col.Id, "EnableListBoxDragDrop", "")
         }
@@ -326,7 +334,9 @@ class XKanbanBoard {
 
 XAMLElement.Prototype.DefineProp("KanbanBoard", { Call: _KanbanBoard })
 _KanbanBoard(this, name := "") {
-    return XKanbanBoard(this, name)
+    comp := XKanbanBoard(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 
@@ -362,7 +372,7 @@ class XNodeGraph {
         x += this.offsetX
         y += this.offsetY
         node := this.canvas.Add("Border").Name("Node_" id).Background("{DynamicResource DropdownBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").CornerRadius("6").Width("160").SetProp("Canvas.Left", String(x)).SetProp("Canvas.Top", String(y))
-        node.Add("Border.Effect").Add("DropShadowEffect").BlurRadius("8").ShadowDepth("2").Opacity("0.4").Direction("270").Color("Black")
+        node.Add("Border.Effect").Add("DropShadowEffect").BlurRadius("8").ShadowDepth("2").Opacity("0.4").Direction("270").SetProp('Color', "Black")
 
         grid := node.Add("Grid")
         grid.Rows("30", "*")
@@ -467,7 +477,7 @@ class XNodeGraph {
         if (initial && pathEl != "") {
             ; Set initial Data string on the Path element directly at XAML build time
             pathEl.SetProp("Data", geom)
-        } else if (this.ui != "")
+        } else if (this.ui)
             this.ui.Update(pathId, "Data", geom)
     }
 
@@ -498,8 +508,13 @@ class XNodeGraph {
             this.UpdatePath(conn.From, conn.To, conn.PathId)
     }
 
-    ; Called after UI is ready to enable drag on each node
-    EnableDrag(ui, snap := true) {
+    ; Called after UI is ready to enable drag on each node.
+    ; Call with no args to flag for auto-enable during Compile().
+    EnableDrag(ui?, snap := true) {
+        if !IsSet(ui) {
+            this._dragEnabled := true
+            return this
+        }
         ; Enable zoom and pan on the canvas
         ui.Update(this.id, "EnableZoomPan", "")
         mode := snap ? "grid=20" : ""
@@ -866,7 +881,9 @@ class XNodeGraph {
 
 XAMLElement.Prototype.DefineProp("NodeGraph", { Call: _NodeGraph })
 _NodeGraph(this, name := "") {
-    return XNodeGraph(this, name)
+    comp := XNodeGraph(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 
@@ -1083,7 +1100,9 @@ class XMediaPlayerEx {
 
 XAMLElement.Prototype.DefineProp("MediaPlayerEx", { Call: _MediaPlayerEx })
 _MediaPlayerEx(this, videoUri := "", name := "") {
-    return XMediaPlayerEx(this, videoUri, name)
+    comp := XMediaPlayerEx(this, videoUri, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 
@@ -1126,8 +1145,13 @@ class XImageCropper {
         ui.OnEvent(this.id "_BtnLoad", "Click", ObjBindMethod(this, "OnLoadImage"))
     }
 
-    ; Called after Window is Loaded to enable drag + resize
-    EnableDrag(ui) {
+    ; Called after Window is Loaded to enable drag + resize.
+    ; Call with no args to flag for auto-enable during Compile().
+    EnableDrag(ui?) {
+        if !IsSet(ui) {
+            this._dragEnabled := true
+            return this
+        }
         ui.Update(this.id "_Box", "EnableDrag", "crop")
     }
 
@@ -1150,7 +1174,9 @@ class XImageCropper {
 
 XAMLElement.Prototype.DefineProp("ImageCropper", { Call: _ImageCropper })
 _ImageCropper(this, imageUri := "", name := "") {
-    return XImageCropper(this, imageUri, name)
+    comp := XImageCropper(this, imageUri, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -1315,7 +1341,9 @@ class XWebViewer {
 
 XAMLElement.Prototype.DefineProp("WebViewer", { Call: _WebViewer })
 _WebViewer(this, name := "") {
-    return XWebViewer(this, name)
+    comp := XWebViewer(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -1324,6 +1352,7 @@ _WebViewer(this, name := "") {
 
 class XImageViewer {
     __New(parentXAML, name := "") {
+        this.parent := parentXAML
         this.id := name != "" ? name : "ImgViewer_" XImageViewer.Count()
 
         this.grid := parentXAML.Add("Grid").ClipToBounds("True")
@@ -1395,6 +1424,7 @@ class XImageViewer {
         }
     }
 
+
     static Count() {
         static counter := 0
         return ++counter
@@ -1403,7 +1433,9 @@ class XImageViewer {
 
 XAMLElement.Prototype.DefineProp("ImageViewer", { Call: _ImageViewer })
 _ImageViewer(this, name := "") {
-    return XImageViewer(this, name)
+    comp := XImageViewer(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -1411,9 +1443,9 @@ _ImageViewer(this, name := "") {
 ; ==============================================================================
 
 class XClock {
-    __New(parentXAML, id) {
+    __New(parentXAML, name := "") {
         this.parent := parentXAML
-        this.id := id
+        this.id := name != "" ? name : "Clock_" XClock.Count()
 
         this.isEditMode := false
         this.timerFn := ObjBindMethod(this, "Tick")
@@ -1424,7 +1456,7 @@ class XClock {
 
         ; Background glow effect
         glowCanvas := this.grid.Add("Canvas")
-        glowCanvas.Add("Ellipse").Width("300").Height("300").Fill("{DynamicResource Accent}").Opacity("0.1").Margin("-50,-50,0,0").Add("Ellipse.Effect").Add("BlurEffect").Radius("80")
+        glowCanvas.Add("Ellipse").Width("300").Height("300").Fill("{DynamicResource Accent}").Opacity("0.1").Margin("-50,-50,0,0").Add("Ellipse.Effect").Add("BlurEffect").SetProp('Radius', "80")
 
         ; Main Card
         card := this.grid.Add("Border").Use("CardPanel").Padding("30").Background("#10FFFFFF")
@@ -1551,11 +1583,19 @@ class XClock {
             this.Start()
         }
     }
+
+
+    static Count() {
+        static counter := 0
+        return ++counter
+    }
 }
 
 XAMLElement.Prototype.DefineProp("Clock", { Call: _Clock })
 _Clock(this, name := "") {
-    return XClock(this, name)
+    comp := XClock(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -1815,7 +1855,9 @@ class XCodeEditor {
 
 XAMLElement.Prototype.DefineProp("CodeEditor", { Call: _CodeEditorAdvanced })
 _CodeEditorAdvanced(this, initialCode := "") {
-    return XCodeEditor(this, initialCode)
+    comp := XCodeEditor(this, initialCode)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -1950,7 +1992,9 @@ class XPropertyGrid {
 
 XAMLElement.Prototype.DefineProp("PropertyGrid", { Call: _PropertyGrid })
 _PropertyGrid(this, dataObj, name := "") {
-    return XPropertyGrid(this, dataObj, name)
+    comp := XPropertyGrid(this, dataObj, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -2153,7 +2197,9 @@ class XDiffViewer {
 
 XAMLElement.Prototype.DefineProp("DiffViewer", { Call: _DiffViewer })
 _DiffViewer(this, name := "") {
-    return XDiffViewer(this, name)
+    comp := XDiffViewer(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 class XWebView extends XAMLElement {
@@ -2256,7 +2302,7 @@ class XWebView extends XAMLElement {
     OnWebMessage(state, ctrl, event) {
         if (state.Has("WebMessageReceived")) {
             msg := state["WebMessageReceived"]
-            if (this.OnMessageCallback != "") {
+            if (this.OnMessageCallback) {
                 cb := this.OnMessageCallback
                 cb(msg)
             }
@@ -2291,7 +2337,9 @@ class XWebView extends XAMLElement {
 
 XAMLElement.Prototype.DefineProp("WebView", { Call: _WebView })
 _WebView(this, name := "") {
-    return XWebView(this, name)
+    comp := XWebView(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -2345,7 +2393,7 @@ class XFlyout {
             this.container.ClipToBounds("False")
             
             ; Add a beautiful drop shadow for overlays
-            this.container.Add("Border.Effect").Add("DropShadowEffect").BlurRadius("30").ShadowDepth("0").Opacity("0.4").Color("Black")
+            this.container.Add("Border.Effect").Add("DropShadowEffect").BlurRadius("30").ShadowDepth("0").Opacity("0.4").SetProp('Color', "Black")
         } else {
             this.container.ClipToBounds("True")
             if (this.side == "Right")
@@ -2400,6 +2448,9 @@ class XFlyout {
             }
         }
         
+        ; Auto-register with XAML_GUI for auto-bind during Compile()
+        _AutoRegisterComponent(parent, this)
+
         return this.container
     }
     
@@ -2453,12 +2504,25 @@ class XFlyout {
         exitActions.Add("DoubleAnimation").Storyboard_TargetProperty("RenderTransform.(TranslateTransform." propName ")").To(toVal).Duration("0:0:0.2").DecelerationRatio("0.8")
     }
 
+    ; Set a hotkey that toggles this flyout. Stored and applied during auto-bind.
+    Hotkey(hotkeyStr) {
+        this._hotkey := hotkeyStr
+        return this
+    }
+
     Bind(ui, hotkeyStr := "") {
+        ; Guard against double-bind (e.g., when owned by XCommandPalette)
+        if (this.HasOwnProp("_bound") && this._bound)
+            return
+        this._bound := true
         this.ui := ui
         ui.Track(this.stateName)
         if (this.HasProp("scrimName")) {
             ui.OnEvent(this.scrimName, "Click", (*) => this.Toggle())
         }
+        ; Use stored hotkey if no explicit one provided
+        if (hotkeyStr == "" && this.HasOwnProp("_hotkey") && this._hotkey != "")
+            hotkeyStr := this._hotkey
         if (hotkeyStr != "") {
             Hotkey(hotkeyStr, (*) => this.Toggle(), "On")
         }
@@ -2563,6 +2627,12 @@ class XCommandPalette {
     ; BINDING & LIFECYCLE
     ; =========================================================================
 
+    ; Set a hotkey that opens this palette. Stored and applied during auto-bind.
+    Hotkey(hotkeyStr) {
+        this._hotkey := hotkeyStr
+        return this
+    }
+
     Bind(uiObj, hotkeyStr := "") {
         this.ui := uiObj
         this.flyout.Bind(uiObj, "")  ; Don't use flyout's hotkey — we manage our own
@@ -2574,6 +2644,9 @@ class XCommandPalette {
         ; Text changes drive filtering
         uiObj.OnEvent(this.id "_Search", "TextChanged", ObjBindMethod(this, "OnSearchChanged"))
 
+        ; Use stored hotkey if no explicit one provided
+        if (hotkeyStr == "" && this.HasOwnProp("_hotkey") && this._hotkey != "")
+            hotkeyStr := this._hotkey
         ; Register the global hotkey to open
         if (hotkeyStr != "") {
             this.openHotkey := hotkeyStr
@@ -2975,7 +3048,7 @@ class XCommandPalette {
         this.Close()
 
         ; Fire per-command callback if set
-        if (this.commands.Has(id) && this.commands[id].callback != "") {
+        if (this.commands.Has(id) && this.commands[id].callback) {
             try this.commands[id].callback.Call(id)
             return
         }
@@ -3012,7 +3085,9 @@ class XCommandPalette {
 
 XAMLElement.Prototype.DefineProp("CommandPalette", { Call: _CommandPalette })
 _CommandPalette(this, name := "") {
-    return XCommandPalette(this, name)
+    comp := XCommandPalette(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
 }
 
 ; ==============================================================================
@@ -3089,5 +3164,20 @@ class XCarousel {
 
 XAMLElement.Prototype.DefineProp("Carousel", { Call: _Carousel })
 _Carousel(this, name := "") {
-    return XCarousel(this, name)
+    comp := XCarousel(this, name)
+    _AutoRegisterComponent(this, comp)
+    return comp
+}
+
+; ==============================================================================
+; AUTO-REGISTRATION HELPER
+; ==============================================================================
+; Walks up the element tree to find the XAML_GUI and registers the component.
+; Called by all factory methods above.
+_AutoRegisterComponent(parentElement, component) {
+    try {
+        app := parentElement._FindApp()
+        if (app != "" && app.HasMethod("RegisterComponent"))
+            app.RegisterComponent(component)
+    }
 }

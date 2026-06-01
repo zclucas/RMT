@@ -127,6 +127,7 @@ public class AhkWpfEngine {
     public static extern uint ExtractIconEx(string szFileName, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons);
 
     string winId; IntPtr ahkHwnd; string[] tracked; Window win;
+    bool LightweightEvents = false; // When true, events only send the triggering control's value (use ui.Query() for others)
     System.Collections.Generic.Dictionary<string, string> canvasModes = new System.Collections.Generic.Dictionary<string, string>();
     System.Windows.Shapes.Rectangle selectionBox = null;
     Point selectionStart;
@@ -336,7 +337,7 @@ public class AhkWpfEngine {
                                                 AhkWpfEngine eng = new AhkWpfEngine();
                                                 eng.RunEngineInline(wId, ahkHwnd.ToString(), tCsv, sName, oHwnd, inlineData, true);
                                             } catch (Exception ex) {
-                                                byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(ex.Message)) + "\n");
+                                                byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + LengthPrefix(ex.Message) + "\n");
                                                 var c = new COPYDATASTRUCT { cbData = b.Length + 1, lpData = Marshal.AllocHGlobal(b.Length + 1) };
                                                 Marshal.Copy(b, 0, c.lpData, b.Length); Marshal.WriteByte(c.lpData, b.Length, 0);
                                                 SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref c);
@@ -359,7 +360,7 @@ public class AhkWpfEngine {
                                                 AhkWpfEngine eng = new AhkWpfEngine();
                                                 eng.RunEngine(wId, ahkHwnd.ToString(), tCsv, sName, xPath, ePath, oHwnd, true);
                                             } catch (Exception ex) {
-                                                byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(ex.Message)) + "\n");
+                                                byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + LengthPrefix(ex.Message) + "\n");
                                                 var c = new COPYDATASTRUCT { cbData = b.Length + 1, lpData = Marshal.AllocHGlobal(b.Length + 1) };
                                                 Marshal.Copy(b, 0, c.lpData, b.Length); Marshal.WriteByte(c.lpData, b.Length, 0);
                                                 SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref c);
@@ -414,8 +415,6 @@ public class AhkWpfEngine {
                     dummy.Content = prewarmPanel;
                     dummy.Show();
                     dummy.Hide();
-
-                    // app.Run();
 #if ENABLE_WEBVIEW
                     try {
                         var wv = new Microsoft.Web.WebView2.Wpf.WebView2();
@@ -429,6 +428,9 @@ public class AhkWpfEngine {
             if (args.Length >= 2 && args[0] == "--prewarm") {
                 try {
                     int pid = int.Parse(args[1]);
+                    var dummy = new Window { Width = 0, Height = 0, WindowStyle = WindowStyle.None, ShowInTaskbar = false, AllowsTransparency = true, Opacity = 0 };
+                    dummy.Show();
+                    dummy.Hide();
 #if ENABLE_WEBVIEW
                     try {
                         var wv = new Microsoft.Web.WebView2.Wpf.WebView2();
@@ -525,7 +527,10 @@ public class AhkWpfEngine {
                 }
                 snippet = sb.ToString().TrimEnd();
             }
-            throw new Exception("AHK_LINE:" + ahkLine + "\nXAML_SNIPPET:\n" + snippet + "\n\n" + ex.ToString());
+            string rootCause = ex.Message;
+            Exception inner = ex.InnerException;
+            while (inner != null) { rootCause = inner.Message; inner = inner.InnerException; }
+            throw new Exception("AHK_LINE:" + ahkLine + "\nXAML_SNIPPET:\n" + snippet + "\nREASON:\n" + rootCause + "\n\n" + ex.ToString());
         }
         
         // Bind standard window chrome handlers
@@ -537,7 +542,14 @@ public class AhkWpfEngine {
         if (btnMaximize != null) btnMaximize.Click += (s, e) => { win.WindowState = win.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; };
         var btnMinimize = win.FindName("BtnMinimize") as ButtonBase;
         if (btnMinimize != null) btnMinimize.Click += (s, e) => { win.WindowState = WindowState.Minimized; };
-
+        
+        win.Resources["BaseWindowRadius"] = new CornerRadius(12);
+        if (Application.Current != null) Application.Current.Resources["BaseWindowRadius"] = win.Resources["BaseWindowRadius"];
+        
+        win.StateChanged += (s, e) => UpdateSnapState(win);
+        win.LocationChanged += (s, e) => UpdateSnapState(win);
+        win.SizeChanged += (s, e) => UpdateSnapState(win);
+        
         win.Loaded += (s, e) => {
             IntPtr hwndVal = new WindowInteropHelper(win).Handle;
             HwndSource.FromHwnd(hwndVal).AddHook(WndProc);
@@ -546,36 +558,15 @@ public class AhkWpfEngine {
             InheritWindowIconAndTitle(win, ownerHwndStr);
             DumpState("Window", "Loaded");
         };
-        win.Closing += (s, e) => {
+        win.Closing += (s, e) => { 
             var ownHwnd = new WindowInteropHelper(win).Owner;
             if (ownHwnd != IntPtr.Zero) {
                 SetWindowPos(ownHwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0003);
                 SetForegroundWindow(ownHwnd);
             }
-            SendToAhk("EVENT|" + winId + "|Window|Closing\n");
+            SendToAhk("EVENT|" + winId + "|Window|Closing\n"); 
         };
-        win.Closed += (s, e) => {
-            SendToAhk("EVENT|" + winId + "|Window|Closed\n");
-            var _winRef = win;
-            var _trackedRef = tracked;
-            var _canvasModesRef = canvasModes;
-            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() => {
-                try {
-                    try { _winRef.Content = null; } catch { }
-                    _winRef.Close();
-                    _winRef = null;
-                    _trackedRef = null;
-                    if (_canvasModesRef != null) _canvasModesRef.Clear();
-                    selectionBox = null;
-                    tempConnection = null;
-                    connectionSourcePort = null;
-                    canvasModes.Clear();
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
-                    GC.Collect(0);
-                } catch { }
-            }));
-        };
+        win.Closed += (s, e) => { SendToAhk("EVENT|" + winId + "|Window|Closed\n"); };
         
         // Bind events
         if (!string.IsNullOrEmpty(eventsContent)) {
@@ -866,7 +857,10 @@ public class AhkWpfEngine {
                     }
                 }
             }
-            throw new Exception("AHK_LINE:" + ahkLine + "\nXAML_SNIPPET:\n" + snippet + "\n\n" + ex.ToString());
+            string rootCause = ex.Message;
+            Exception inner = ex.InnerException;
+            while (inner != null) { rootCause = inner.Message; inner = inner.InnerException; }
+            throw new Exception("AHK_LINE:" + ahkLine + "\nXAML_SNIPPET:\n" + snippet + "\nREASON:\n" + rootCause + "\n\n" + ex.ToString());
         }
         } // end text-based path
         if (!string.IsNullOrEmpty(scriptName)) {
@@ -916,6 +910,13 @@ public class AhkWpfEngine {
         var btnMinimize = win.FindName("BtnMinimize") as ButtonBase;
         if (btnMinimize != null) btnMinimize.Click += (s, e) => { win.WindowState = WindowState.Minimized; };
 
+        win.Resources["BaseWindowRadius"] = new CornerRadius(12);
+        if (Application.Current != null) Application.Current.Resources["BaseWindowRadius"] = win.Resources["BaseWindowRadius"];
+        
+        win.StateChanged += (s, e) => UpdateSnapState(win);
+        win.LocationChanged += (s, e) => UpdateSnapState(win);
+        win.SizeChanged += (s, e) => UpdateSnapState(win);
+        
         win.Loaded += async (s, e) => {
             IntPtr hwnd = new WindowInteropHelper(win).Handle;
             HwndSource.FromHwnd(hwnd).AddHook(WndProc);
@@ -934,14 +935,16 @@ public class AhkWpfEngine {
             });
             foreach (var wv in webViews) {
                 try {
-                    var env = await CoreWebView2Environment.CreateAsync(null, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWebView2Data"));
-                    await wv.EnsureCoreWebView2Async(env);
-                    wv.CoreWebView2.WebMessageReceived += (ws, we) => {
-                        SendToAhk("EVENT|" + winId + "|" + wv.Name + "|WebMessageReceived|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(we.TryGetWebMessageAsString())) + "\n");
+                    wv.WebMessageReceived += (ws, we) => {
+                        string debugMsg = we.WebMessageAsJson;
+                        try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWebViewDebug.log"), "C# WebMessageReceived: " + debugMsg + "\n"); } catch {}
+                        SendToAhk("EVENT|" + winId + "|" + wv.Name + "|WebMessageReceived|" + LengthPrefix(debugMsg) + "\n");
                     };
                     wv.NavigationCompleted += (ws, we) => {
-                        SendToAhk("EVENT|" + winId + "|" + wv.Name + "|NavigationCompleted|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(wv.Source != null ? wv.Source.ToString() : "")) + "\n");
+                        SendToAhk("EVENT|" + winId + "|" + wv.Name + "|NavigationCompleted|" + LengthPrefix(wv.Source != null ? wv.Source.ToString() : "") + "\n");
                     };
+                    var env = await CoreWebView2Environment.CreateAsync(null, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWebView2Data"));
+                    await wv.EnsureCoreWebView2Async(env);
                 } catch (Exception ex) {
                     System.Windows.MessageBox.Show("WebView Init Error:\n" + ex.ToString(), "AHK-XAML WebView Error");
                 }
@@ -963,36 +966,15 @@ public class AhkWpfEngine {
             };
             timer.Start();
         };
-        win.Closing += (s, e) => {
+        win.Closing += (s, e) => { 
             var ownerHwnd = new System.Windows.Interop.WindowInteropHelper(win).Owner;
             if (ownerHwnd != IntPtr.Zero) {
                 SetWindowPos(ownerHwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0003);
                 SetForegroundWindow(ownerHwnd);
             }
-            SendToAhk("EVENT|" + winId + "|Window|Closing\n");
+            SendToAhk("EVENT|" + winId + "|Window|Closing\n"); 
         };
-        win.Closed += (s, e) => {
-            SendToAhk("EVENT|" + winId + "|Window|Closed\n");
-            var _w2 = win;
-            var _t2 = tracked;
-            var _cm2 = canvasModes;
-            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() => {
-                try {
-                    try { _w2.Content = null; } catch { }
-                    _w2.Close();
-                    _w2 = null;
-                    _t2 = null;
-                    if (_cm2 != null) _cm2.Clear();
-                    selectionBox = null;
-                    tempConnection = null;
-                    connectionSourcePort = null;
-                    canvasModes.Clear();
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
-                    GC.Collect(0);
-                } catch { }
-            }));
-        };
+        win.Closed += (s, e) => { SendToAhk("EVENT|" + winId + "|Window|Closed\n"); };
 
         // Unified event binding — merge all event sources
         // eventsContent may come from: inline data, .bin, or BAML companion .events file
@@ -1227,7 +1209,7 @@ public class AhkWpfEngine {
                     ((UIElement)ctrl).Drop += (s, e) => {
                         if (e.Data.GetDataPresent(DataFormats.FileDrop)) {
                             string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-                            string fileList = Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Join("|", files)));
+                            string fileList = LengthPrefix(string.Join("|", files));
                             SendToAhk("EVENT|" + winId + "|" + ctrlName + "|Drop|" + fileList + "\n");
                         }
                     };
@@ -1253,51 +1235,269 @@ public class AhkWpfEngine {
         } catch { }
     }
 
+    // Length-prefixed encoding helper: encodes a value as "BYTELEN:rawvalue"
+    // This replaces Base64 encoding — zero overhead, binary-safe for any characters
+    // including emojis, pipes, newlines, null chars, CJK, etc.
+    private static string LengthPrefix(string val) {
+        if (val == null) val = "";
+        int byteLen = Encoding.UTF8.GetByteCount(val);
+        return byteLen + ":" + val;
+    }
+
+    // Reusable helper: extract the current value of a named control.
+    // Used by both CollectState() and MQUERY handler.
+    // Extract visible text from a TextBlock with Run elements (from emoji auto-detection)
+    private string GetTextFromInlines(TextBlock tb) {
+        var sb = new StringBuilder();
+        foreach (var inline in tb.Inlines) {
+            if (inline is System.Windows.Documents.Run) {
+                sb.Append(((System.Windows.Documents.Run)inline).Text);
+            }
+        }
+        return sb.ToString();
+    }
+
+    private string GetControlValue(string trackName) {
+        string cName = trackName;
+        string suffix = null;
+
+        // New: '>' delimiter for rich queries (e.g. "MyList>Count", "MyGrid>SelectedRow")
+        int gtIdx = cName.IndexOf('>');
+        if (gtIdx > 0) {
+            suffix = cName.Substring(gtIdx + 1);
+            cName = cName.Substring(0, gtIdx);
+        }
+        // Legacy: _CaretIndex backward compat
+        else if (cName.EndsWith("_CaretIndex")) {
+            cName = cName.Substring(0, cName.Length - 11);
+            suffix = "CaretIndex";
+        }
+        
+        var c = win.FindName(cName);
+        if (c == null) return null;
+        
+        string val = "";
+
+        // --- Suffix queries (rich component data) ---
+        if (suffix != null) {
+            switch (suffix) {
+                case "CaretIndex":
+                    if (c is TextBox) val = ((TextBox)c).CaretIndex.ToString();
+                    break;
+                case "Count":
+                    if (c is ItemsControl) val = ((ItemsControl)c).Items.Count.ToString();
+                    break;
+                case "SelectedIndex":
+                    if (c is System.Windows.Controls.Primitives.Selector)
+                        val = ((System.Windows.Controls.Primitives.Selector)c).SelectedIndex.ToString();
+                    else if (c is TabControl)
+                        val = ((TabControl)c).SelectedIndex.ToString();
+                    break;
+                case "SelectedHeader":
+                    if (c is TabControl) {
+                        TabControl _tc = (TabControl)c;
+                        if (_tc.SelectedItem is TabItem) {
+                            TabItem _ti = (TabItem)_tc.SelectedItem;
+                            val = _ti.Header != null ? _ti.Header.ToString() : "";
+                        }
+                    }
+                    break;
+                case "Items":
+                    if (c is ItemsControl) {
+                        ItemsControl _ic = (ItemsControl)c;
+                        var items = new System.Collections.Generic.List<string>();
+                        foreach (var item in _ic.Items) {
+                            if (item is ContentControl) {
+                                ContentControl _cc = (ContentControl)item;
+                                object _tag = _cc.Tag;
+                                object _content = _cc.Content;
+                                if (_tag != null && _tag.ToString() != "") {
+                                    items.Add(_tag.ToString());
+                                } else if (_content is TextBlock) {
+                                    // Handle emoji auto-detection: Content is a TextBlock with Runs
+                                    TextBlock _tb = (TextBlock)_content;
+                                    items.Add(_tb.Text != null && _tb.Text.Length > 0 ? _tb.Text : GetTextFromInlines(_tb));
+                                } else if (_content is string) {
+                                    items.Add((string)_content);
+                                } else if (_content != null) {
+                                    items.Add(_content.ToString());
+                                } else {
+                                    items.Add("");
+                                }
+                            } else {
+                                items.Add(item != null ? item.ToString() : "");
+                            }
+                        }
+                        val = string.Join("|", items);
+                    }
+                    break;
+                case "SelectedRow":
+                    // DataGrid: return pipe-delimited cell values of selected row
+                    if (c is DataGrid && ((DataGrid)c).SelectedItem != null) {
+                        DataGrid _dg = (DataGrid)c;
+                        var props = _dg.SelectedItem.GetType().GetProperties();
+                        var cells = new System.Collections.Generic.List<string>();
+                        foreach (var p in props) {
+                            try {
+                                object pv = p.GetValue(_dg.SelectedItem);
+                                cells.Add(pv != null ? pv.ToString() : "");
+                            } catch { }
+                        }
+                        val = string.Join("|", cells);
+                    }
+                    break;
+                case "FilteredCount":
+                    // DataGrid: count of visible rows in the current view
+                    if (c is DataGrid) {
+                        DataGrid _dg2 = (DataGrid)c;
+                        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_dg2.ItemsSource != null ? _dg2.ItemsSource : _dg2.Items);
+                        if (view != null) {
+                            int count = 0;
+                            foreach (var item in view) count++;
+                            val = count.ToString();
+                        } else {
+                            val = _dg2.Items.Count.ToString();
+                        }
+                    }
+                    break;
+                case "Nodes":
+                    // Canvas-based node editor: serialize node positions and data
+                    if (c is Canvas) {
+                        Canvas _canvas = (Canvas)c;
+                        var nodes = new System.Collections.Generic.List<string>();
+                        foreach (UIElement child in _canvas.Children) {
+                            if (child is FrameworkElement) {
+                                FrameworkElement _fe = (FrameworkElement)child;
+                                if (_fe.Name != null && _fe.Name != "") {
+                                    double x = Canvas.GetLeft(_fe); if (double.IsNaN(x)) x = 0;
+                                    double y = Canvas.GetTop(_fe); if (double.IsNaN(y)) y = 0;
+                                    string nodeTag = _fe.Tag as string;
+                                    if (nodeTag == null) nodeTag = "";
+                                    nodes.Add(_fe.Name + ":" + x + "," + y + (nodeTag != "" ? ":" + nodeTag : ""));
+                                }
+                            }
+                        }
+                        val = string.Join("|", nodes);
+                    }
+                    break;
+                case "Connections":
+                    // Canvas: find Path elements that represent connections (by Tag convention)
+                    if (c is Canvas) {
+                        Canvas _canvas2 = (Canvas)c;
+                        var conns = new System.Collections.Generic.List<string>();
+                        foreach (UIElement child in _canvas2.Children) {
+                            if (child is System.Windows.Shapes.Path) {
+                                System.Windows.Shapes.Path _path = (System.Windows.Shapes.Path)child;
+                                string connTag = _path.Tag as string;
+                                if (connTag != null && connTag.StartsWith("conn:")) {
+                                    conns.Add(connTag.Substring(5));
+                                }
+                            }
+                        }
+                        val = string.Join("|", conns);
+                    }
+                    break;
+                case "SelectedNode":
+                    // Canvas: find the focused/selected node element
+                    if (c is Canvas) {
+                        Canvas _canvas3 = (Canvas)c;
+                        foreach (UIElement child in _canvas3.Children) {
+                            if (child is FrameworkElement) {
+                                FrameworkElement _fe2 = (FrameworkElement)child;
+                                string _feTag = _fe2.Tag as string;
+                                if (_feTag != null && _feTag.Contains("selected")) {
+                                    val = _fe2.Name != null ? _fe2.Name : "";
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                default:
+                    // Generic: try to read an arbitrary dependency property by name
+                    if (c is FrameworkElement) {
+                        try {
+                            var pi = c.GetType().GetProperty(suffix);
+                            if (pi != null) {
+                                object pVal = pi.GetValue(c);
+                                val = pVal != null ? pVal.ToString() : "";
+                            }
+                        } catch { }
+                    }
+                    break;
+            }
+            return val;
+        }
+
+        // --- Default value extraction (no suffix) ---
+        if (c is TextBox) val = ((TextBox)c).Text;
+        else if (c is PasswordBox) val = ((PasswordBox)c).Password;
+        else if (c is ToggleButton) { bool? isChecked = ((ToggleButton)c).IsChecked; val = isChecked.HasValue ? isChecked.Value.ToString() : "False"; }
+        else if (c is RangeBase) val = ((RangeBase)c).Value.ToString();
+        else if (c is ComboBox) {
+            ComboBox cb = (ComboBox)c;
+            if (cb.SelectedItem is ComboBoxItem) {
+                object tag = ((ComboBoxItem)cb.SelectedItem).Tag;
+                object content = ((ComboBoxItem)cb.SelectedItem).Content;
+                if (tag != null && tag.ToString() != "") val = tag.ToString();
+                else if (content is TextBlock) val = GetTextFromInlines((TextBlock)content);
+                else if (content != null) val = content.ToString();
+                else val = "";
+            }
+            else val = cb.Text;
+        }
+        else if (c is TreeView) {
+            TreeView tv = (TreeView)c;
+            if (tv.SelectedItem is TreeViewItem) {
+                object tag = ((TreeViewItem)tv.SelectedItem).Tag;
+                val = tag != null && tag.ToString() != "" ? tag.ToString() : "";
+            }
+        }
+        else if (c is ListBox) {
+            ListBox lb = (ListBox)c;
+            if (lb.SelectedItem is ListBoxItem) {
+                object tag = ((ListBoxItem)lb.SelectedItem).Tag;
+                object content = ((ListBoxItem)lb.SelectedItem).Content;
+                if (tag != null && tag.ToString() != "") val = tag.ToString();
+                else if (content is TextBlock) val = GetTextFromInlines((TextBlock)content);
+                else if (content != null) val = content.ToString();
+                else val = "";
+            }
+            else if (lb.SelectedItem != null) val = lb.SelectedItem.ToString();
+        }
+        // New: TextBlock, TabControl, DataGrid, Image — previously unsupported
+        else if (c is TextBlock) val = ((TextBlock)c).Text;
+        else if (c is System.Windows.Controls.Image) {
+            var imgSrc = ((System.Windows.Controls.Image)c).Source;
+            val = imgSrc != null ? imgSrc.ToString() : "";
+        }
+        else if (c is TabControl) val = ((TabControl)c).SelectedIndex.ToString();
+        else if (c is DataGrid) val = ((DataGrid)c).SelectedIndex.ToString();
+
+        if (val == null) val = "";
+        return val;
+    }
+
     public string CollectState() {
         var sb = new StringBuilder();
         foreach (var t in tracked) {
-            string cName = t;
-            bool wantsCaret = false;
-            if (cName.EndsWith("_CaretIndex")) {
-                cName = cName.Substring(0, cName.Length - 11);
-                wantsCaret = true;
+            string val = GetControlValue(t);
+            if (val != null) {
+                sb.Append(t + "=" + LengthPrefix(val) + "\n");
             }
-            
-            var c = win.FindName(cName);
-            if (c != null) {
-                string val = "";
-                if (wantsCaret && c is TextBox) val = ((TextBox)c).CaretIndex.ToString();
-                else if (c is TextBox) val = ((TextBox)c).Text;
-                else if (c is PasswordBox) val = ((PasswordBox)c).Password;
-                else if (c is ToggleButton) { bool? isChecked = ((ToggleButton)c).IsChecked; val = isChecked.HasValue ? isChecked.Value.ToString() : "False"; }
-                else if (c is RangeBase) val = ((RangeBase)c).Value.ToString();
-                else if (c is ComboBox) {
-                    ComboBox cb = (ComboBox)c;
-                    if (cb.SelectedItem is ComboBoxItem) {
-                        object tag = ((ComboBoxItem)cb.SelectedItem).Tag;
-                        object content = ((ComboBoxItem)cb.SelectedItem).Content;
-                        val = tag != null ? tag.ToString() : (content != null ? content.ToString() : "");
-                    }
-                    else val = cb.Text;
-                }
-                else if (c is TreeView) {
-                    TreeView tv = (TreeView)c;
-                    if (tv.SelectedItem is TreeViewItem) {
-                        object tag = ((TreeViewItem)tv.SelectedItem).Tag;
-                        val = tag != null ? tag.ToString() : "";
-                    }
-                }
-                else if (c is ListBox) {
-                    ListBox lb = (ListBox)c;
-                    if (lb.SelectedItem is ListBoxItem) {
-                        object tag = ((ListBoxItem)lb.SelectedItem).Tag;
-                        object content = ((ListBoxItem)lb.SelectedItem).Content;
-                        val = tag != null ? tag.ToString() : (content != null ? content.ToString() : "");
-                    }
-                    else if (lb.SelectedItem != null) val = lb.SelectedItem.ToString();
-                }
-                if (val == null) val = "";
-                sb.Append(t + "=" + Convert.ToBase64String(Encoding.UTF8.GetBytes(val)) + "\n");
+        }
+        return sb.ToString();
+    }
+
+    // Collect state for specific control names only (used by MQUERY)
+    public string CollectStateFor(string[] names) {
+        var sb = new StringBuilder();
+        foreach (var name in names) {
+            string trimmed = name.Trim();
+            if (trimmed.Length == 0) continue;
+            string val = GetControlValue(trimmed);
+            if (val != null) {
+                sb.Append(trimmed + "=" + LengthPrefix(val) + "\n");
             }
         }
         return sb.ToString();
@@ -1309,6 +1509,14 @@ public class AhkWpfEngine {
         if (e is System.Windows.Input.KeyEventArgs) {
             eName += ":" + ((System.Windows.Input.KeyEventArgs)e).Key.ToString();
         }
+#if ENABLE_WEBVIEW
+        else if (e is Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs) {
+            var we = (Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs)e;
+            var sb = new StringBuilder("EVENT|" + winId + "|" + cName + "|" + eName + "|" + LengthPrefix(we.WebMessageAsJson) + "\n");
+            SendToAhk(sb.ToString());
+            return;
+        }
+#endif
         DumpState(cName, eName);
     }
 
@@ -1342,7 +1550,18 @@ public class AhkWpfEngine {
             lastSendMouseMove = DateTime.Now;
         }
         var sb = new StringBuilder("EVENT|" + winId + "|" + cName + "|" + eName + "\n");
-        sb.Append(CollectState());
+        if (LightweightEvents) {
+            // Lightweight mode: only send the triggering control's value.
+            // Callbacks should use ui.Query() for additional values.
+            string triggerVal = GetControlValue(cName);
+            if (triggerVal != null) {
+                sb.Append(cName + "=" + LengthPrefix(triggerVal) + "\n");
+            }
+        } else {
+            // Full mode (default): send all tracked controls' values.
+            // Backwards compatible — callbacks can read any tracked control from state map.
+            sb.Append(CollectState());
+        }
         SendToAhkAsync(sb.ToString());
     }
 
@@ -1444,12 +1663,48 @@ public class AhkWpfEngine {
 
     private void ProcessMessage(IntPtr hwnd, string text) {
         foreach (string line in text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) {
-            ProcessSingleMessage(hwnd, line);
+            try {
+                ProcessSingleMessage(hwnd, line);
+            } catch (Exception ex) {
+                if (EnableLogging) {
+                    try { System.IO.File.AppendAllText(System.Environment.ExpandEnvironmentVariables("%TEMP%\\AhkWpf\\AhkWpfDebug.log"), "ProcessMessage line failed: " + line + " => " + ex.Message + "\n"); } catch { }
+                }
+            }
         }
     }
 
     private void ProcessSingleMessage(IntPtr hwnd, string text) {
         string[] parts = text.Split(new[] { '|' }, 3);
+        if (parts.Length < 2) return;
+        if (parts.Length > 2) {
+            parts[2] = parts[2].Replace("&#x0A;", "\n").Replace("&#x0D;", "\r");
+        }
+
+        // MQUERY: batched targeted query — returns values for specific controls in one IPC call
+        // Format: MQUERY|ctrl1,ctrl2,ctrl3  or  MQUERY|*  (all tracked)
+        if (parts[0] == "MQUERY" && parts.Length >= 2) {
+            string query = parts.Length >= 3 ? parts[1] + "|" + parts[2] : parts[1];
+            string stateData;
+            if (query.Trim() == "*") {
+                stateData = CollectState();
+            } else {
+                string[] names = query.Split(',');
+                stateData = CollectStateFor(names);
+            }
+            int count = stateData.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            SendToAhk("MRESPONSE|" + winId + "|" + count + "\n" + stateData);
+            return;
+        }
+
+        // CONFIG: runtime configuration changes
+        // Format: CONFIG|Key|Value
+        if (parts[0] == "CONFIG" && parts.Length >= 3) {
+            if (parts[1] == "LightweightEvents") {
+                LightweightEvents = parts[2] == "1" || parts[2].ToLower() == "true";
+            }
+            return;
+        }
+
         if (parts.Length < 3) return;
         if (parts[0] == "Window" && parts[1] == "DWM") {
             string[] p = parts[2].Split(',');
@@ -1866,6 +2121,12 @@ public class AhkWpfEngine {
                     if (sb != null) sb.Begin();
                 } else if (parts[1] == "EnableListBoxDragDrop" && ctrl is ListBox) {
                     EnableListBoxDragDrop((ListBox)ctrl, parts[0]);
+                } else if (parts[1] == "EnableDragSource" && ctrl is UIElement) {
+                    string dragFormat = parts.Length > 2 ? parts[2] : "DragItem";
+                    EnableGenericDragSource((UIElement)ctrl, parts[0], dragFormat);
+                } else if (parts[1] == "EnableDropTarget" && ctrl is UIElement) {
+                    string dropFormat = parts.Length > 2 ? parts[2] : "DragItem";
+                    EnableGenericDropTarget((UIElement)ctrl, parts[0], dropFormat);
                 } else if (parts[1] == "Close" && ctrl is Window) {
                     var ownerHwnd = new System.Windows.Interop.WindowInteropHelper((Window)ctrl).Owner;
                     if (ownerHwnd != IntPtr.Zero) {
@@ -1934,8 +2195,7 @@ public class AhkWpfEngine {
                                 ImageBehavior.SetAnimatedSource((System.Windows.Controls.Image)ctrl, bmp);
                                 return;
                             } else {
-                                var bmp = new System.Windows.Media.Imaging.BitmapImage(new Uri(parts[2], UriKind.RelativeOrAbsolute));
-                                val = bmp;
+                                val = new System.Windows.Media.ImageSourceConverter().ConvertFromString(parts[2]);
                             }
                         }
                         else if (pt == "GridLength") val = new System.Windows.GridLengthConverter().ConvertFromString(parts[2]);
@@ -2032,7 +2292,7 @@ public class AhkWpfEngine {
             if ((DateTime.Now - lastSend).TotalMilliseconds > 50) {
                 lastSend = DateTime.Now;
                 SendToAhk("EVENT|" + winId + "|" + ctrlName + "|DragMove|" + 
-                    Convert.ToBase64String(Encoding.UTF8.GetBytes(newLeft.ToString("F0") + "," + newTop.ToString("F0"))) + "\n");
+                    LengthPrefix(newLeft.ToString("F0") + "," + newTop.ToString("F0")) + "\n");
             }
             e.Handled = true;
         };
@@ -2045,7 +2305,7 @@ public class AhkWpfEngine {
             double finalLeft = Canvas.GetLeft(ctrl);
             double finalTop = Canvas.GetTop(ctrl);
             SendToAhk("EVENT|" + winId + "|" + ctrlName + "|DragMove|" + 
-                Convert.ToBase64String(Encoding.UTF8.GetBytes(finalLeft.ToString("F0") + "," + finalTop.ToString("F0"))) + "\n");
+                LengthPrefix(finalLeft.ToString("F0") + "," + finalTop.ToString("F0")) + "\n");
             DumpState(ctrlName, "DragEnd");
             e.Handled = true;
         };
@@ -2253,7 +2513,7 @@ public class AhkWpfEngine {
         canvas.PreviewMouseRightButtonDown += (s, e) => {
             var pos = e.GetPosition(canvas);
             string coords = pos.X.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + pos.Y.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|ContextMenuOpened|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(coords)) + "\n");
+            SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|ContextMenuOpened|" + LengthPrefix(coords) + "\n");
         };
         
         // Mode logic: Left click on empty space (Canvas) triggers Pan or Select
@@ -2372,7 +2632,7 @@ public class AhkWpfEngine {
                     bool isCtrl = System.Windows.Input.Keyboard.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control);
                     string evName = isCtrl ? "CtrlSelectionBox" : "SelectionBox";
                     SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|" + evName + "|" + 
-                        Convert.ToBase64String(Encoding.UTF8.GetBytes(newSet)) + "\n");
+                        LengthPrefix(newSet) + "\n");
                 }
                 e.Handled = true;
             } else if (connectionSourcePort != null && tempConnection != null && tempConnection.Visibility == Visibility.Visible) {
@@ -2407,7 +2667,7 @@ public class AhkWpfEngine {
                         if (hitEl != null && hitEl.Name != null && hitEl.Name.Contains("_Path_") && hitEl.Visibility == Visibility.Visible) {
                             hitEl.Visibility = Visibility.Collapsed;
                             SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|DeleteConnection|" + 
-                                Convert.ToBase64String(Encoding.UTF8.GetBytes(hitEl.Name)) + "\n");
+                                LengthPrefix(hitEl.Name) + "\n");
                         }
                         return System.Windows.Media.HitTestResultBehavior.Continue;
                     }),
@@ -2500,7 +2760,7 @@ public class AhkWpfEngine {
                 
                 if (closestPort != null) {
                     SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|ConnectPorts|" + 
-                        Convert.ToBase64String(Encoding.UTF8.GetBytes(connectionSourcePort.Name + "," + closestPort.Name)) + "\n");
+                        LengthPrefix(connectionSourcePort.Name + "," + closestPort.Name) + "\n");
                 }
                 connectionSourcePort = null;
                 e.Handled = true;
@@ -2601,6 +2861,113 @@ public class AhkWpfEngine {
         }
     }
     
+    // Generic drag-source: enables any element to be dragged with a custom payload
+    // Usage from AHK: ui.Update("MyButton", "EnableDragSource", "DesignerComponent")
+    // The drag payload will be the element's Tag property (if set), or its x:Name
+    private System.Collections.Generic.Dictionary<UIElement, bool> dragSourceEnabled = new System.Collections.Generic.Dictionary<UIElement, bool>();
+    
+    private void EnableGenericDragSource(UIElement element, string ctrlName, string dataFormat) {
+        if (dragSourceEnabled.ContainsKey(element) && dragSourceEnabled[element]) return;
+        dragSourceEnabled[element] = true;
+        
+        Point dragStartPos = new Point();
+        bool mouseDown = false;
+        
+        element.PreviewMouseLeftButtonDown += (s, e) => {
+            dragStartPos = e.GetPosition(null);
+            mouseDown = true;
+        };
+        
+        element.PreviewMouseLeftButtonUp += (s, e) => {
+            mouseDown = false;
+        };
+        
+        element.PreviewMouseMove += (s, e) => {
+            if (!mouseDown || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) {
+                mouseDown = false;
+                return;
+            }
+            
+            Point pos = e.GetPosition(null);
+            if (Math.Abs(pos.X - dragStartPos.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                Math.Abs(pos.Y - dragStartPos.Y) > SystemParameters.MinimumVerticalDragDistance) {
+                
+                mouseDown = false;
+                
+                // Determine payload: use Tag if set, otherwise use control name
+                string payload = ctrlName;
+                var fe = element as FrameworkElement;
+                if (fe != null && fe.Tag != null && fe.Tag.ToString() != "" && fe.Tag.ToString() != "DragEnabled") {
+                    payload = fe.Tag.ToString();
+                }
+                
+                DataObject dragData = new DataObject(dataFormat, payload);
+                dragData.SetData("DragSourceName", ctrlName);
+                
+                try {
+                    DragDrop.DoDragDrop(element, dragData, DragDropEffects.Copy | DragDropEffects.Move);
+                } catch { }
+            }
+        };
+    }
+    
+    // Generic drop-target: enables any element to accept drops and sends events to AHK
+    // Usage from AHK: ui.Update("CanvasArea", "EnableDropTarget", "DesignerComponent")
+    // Events sent: DragEnter (with payload), DragLeave, Drop (with payload + source name)
+    private System.Collections.Generic.Dictionary<UIElement, bool> dropTargetEnabled = new System.Collections.Generic.Dictionary<UIElement, bool>();
+    
+    private void EnableGenericDropTarget(UIElement element, string ctrlName, string dataFormat) {
+        if (dropTargetEnabled.ContainsKey(element) && dropTargetEnabled[element]) return;
+        dropTargetEnabled[element] = true;
+        
+        element.AllowDrop = true;
+        
+        element.DragEnter += (s, e) => {
+            if (e.Data.GetDataPresent(dataFormat)) {
+                e.Effects = DragDropEffects.Copy;
+                string payload = e.Data.GetData(dataFormat) as string ?? "";
+                SendToAhk("EVENT|" + winId + "|" + ctrlName + "|DragEnter|" + 
+                    LengthPrefix(payload) + "\n");
+            } else if (e.Data.GetDataPresent(DataFormats.FileDrop)) {
+                e.Effects = DragDropEffects.Copy;
+            } else {
+                e.Effects = DragDropEffects.None;
+            }
+            e.Handled = true;
+        };
+        
+        element.DragOver += (s, e) => {
+            if (e.Data.GetDataPresent(dataFormat) || e.Data.GetDataPresent(DataFormats.FileDrop)) {
+                e.Effects = DragDropEffects.Copy;
+            } else {
+                e.Effects = DragDropEffects.None;
+            }
+            e.Handled = true;
+        };
+        
+        element.DragLeave += (s, e) => {
+            SendToAhk("EVENT|" + winId + "|" + ctrlName + "|DragLeave|\n");
+        };
+        
+        element.Drop += (s, e) => {
+            if (e.Data.GetDataPresent(dataFormat)) {
+                string payload = e.Data.GetData(dataFormat) as string ?? "";
+                string sourceName = e.Data.GetData("DragSourceName") as string ?? "";
+                var dropPos = e.GetPosition((UIElement)s);
+                string dropData = payload + "|" + sourceName + "|" + 
+                    dropPos.X.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "," + 
+                    dropPos.Y.ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
+                SendToAhk("EVENT|" + winId + "|" + ctrlName + "|Drop|" + 
+                    LengthPrefix(dropData) + "\n");
+            } else if (e.Data.GetDataPresent(DataFormats.FileDrop)) {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                SendToAhk("EVENT|" + winId + "|" + ctrlName + "|FileDrop|" + 
+                    LengthPrefix(string.Join("|", files)) + "\n");
+            }
+            e.Handled = true;
+        };
+    }
+
     private void EnableListBoxDragDrop(ListBox listBox, string ctrlName) {
         listBox.AllowDrop = true;
         Point dragStart = new Point();
@@ -2645,7 +3012,7 @@ public class AhkWpfEngine {
                 
                 if (sourceBox != ctrlName) {
                     SendToAhk("EVENT|" + winId + "|" + ctrlName + "|ItemDropped|" + 
-                        Convert.ToBase64String(Encoding.UTF8.GetBytes(sourceBox + "|" + content)) + "\n");
+                        LengthPrefix(sourceBox + "|" + content) + "\n");
                 }
             }
         };

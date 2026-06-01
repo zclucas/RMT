@@ -288,9 +288,17 @@ class ConfigMergeGui {
 
                 for moduleNode in node.Children {
                     hasChildren := true
-                    if (moduleNode.IsChecked)
+                    moduleAllChecked := true
+                    moduleAnyChecked := false
+                    for item in moduleNode.Children {
+                        if (item.IsChecked)
+                            moduleAnyChecked := true
+                        else
+                            moduleAllChecked := false
+                    }
+                    if (moduleAnyChecked)
                         anyModuleChecked := true
-                    else
+                    if (!moduleAllChecked || !moduleAnyChecked)
                         allModulesChecked := false
                 }
 

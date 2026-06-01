@@ -117,12 +117,12 @@ class XColorPicker {
         canvasGrid.Add("Border").Name("CanvasBg").Background("#FFFF0000").CornerRadius("6")
 
         wGr := canvasGrid.Add("Border").CornerRadius("6").Add("Border.Background").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
-        wGr.Add("GradientStop").Color("#FFFFFFFF").Offset("0")
-        wGr.Add("GradientStop").Color("#00FFFFFF").Offset("1")
+        wGr.Add("GradientStop").SetProp('Color', "#FFFFFFFF").Offset("0")
+        wGr.Add("GradientStop").SetProp('Color', "#00FFFFFF").Offset("1")
 
         bGr := canvasGrid.Add("Border").CornerRadius("6").Add("Border.Background").Add("LinearGradientBrush").StartPoint("0,1").EndPoint("0,0")
-        bGr.Add("GradientStop").Color("#FF000000").Offset("0")
-        bGr.Add("GradientStop").Color("#00000000").Offset("1")
+        bGr.Add("GradientStop").SetProp('Color', "#FF000000").Offset("0")
+        bGr.Add("GradientStop").SetProp('Color', "#00000000").Offset("1")
 
         canvasArea := canvasGrid.Add("Grid").Name("CanvasArea").Background("Transparent").Cursor("Cross")
         canvasArea.Add("Ellipse").Name("CanvasThumb").HorizontalAlignment("Left").VerticalAlignment("Top").Width("14").Height("14").Stroke("White").StrokeThickness("2").Fill("Transparent").Margin("-7,-7,0,0").IsHitTestVisible("False")
@@ -136,13 +136,13 @@ class XColorPicker {
         sliders := sliderGrid.Add("StackPanel").Grid_Column(1).VerticalAlignment("Center").Margin("0,0,15,0")
 
         hueBg := sliders.Add("Border").Height("10").CornerRadius("5").Margin("0,0,0,12").Add("Border.Background").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
-        hueBg.Add("GradientStop").Color("#FFFF0000").Offset("0")
-        hueBg.Add("GradientStop").Color("#FFFFFF00").Offset("0.16")
-        hueBg.Add("GradientStop").Color("#FF00FF00").Offset("0.33")
-        hueBg.Add("GradientStop").Color("#FF00FFFF").Offset("0.5")
-        hueBg.Add("GradientStop").Color("#FF0000FF").Offset("0.66")
-        hueBg.Add("GradientStop").Color("#FFFF00FF").Offset("0.83")
-        hueBg.Add("GradientStop").Color("#FFFF0000").Offset("1")
+        hueBg.Add("GradientStop").SetProp('Color', "#FFFF0000").Offset("0")
+        hueBg.Add("GradientStop").SetProp('Color', "#FFFFFF00").Offset("0.16")
+        hueBg.Add("GradientStop").SetProp('Color', "#FF00FF00").Offset("0.33")
+        hueBg.Add("GradientStop").SetProp('Color', "#FF00FFFF").Offset("0.5")
+        hueBg.Add("GradientStop").SetProp('Color', "#FF0000FF").Offset("0.66")
+        hueBg.Add("GradientStop").SetProp('Color', "#FFFF00FF").Offset("0.83")
+        hueBg.Add("GradientStop").SetProp('Color', "#FFFF0000").Offset("1")
         sliders.Add("Slider").Name("HueSlider").Minimum("0").Maximum("360").Value("0").Margin("0,-18,0,0")
 
         alphaBg := sliders.Add("Border").Height("10").CornerRadius("5").Background("Transparent").ClipToBounds("True")
@@ -150,8 +150,8 @@ class XColorPicker {
         ; Dynamic Fill overlay masked by a transparent-to-white gradient
         alphaFill := alphaBg.Add("Rectangle").Name("AlphaFillRect").Fill("White")
         mask := alphaFill.Add("Rectangle.OpacityMask").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
-        mask.Add("GradientStop").Color("Transparent").Offset("0")
-        mask.Add("GradientStop").Color("White").Offset("1")
+        mask.Add("GradientStop").SetProp('Color', "Transparent").Offset("0")
+        mask.Add("GradientStop").SetProp('Color', "White").Offset("1")
         sliders.Add("Slider").Name("AlphaSlider").Minimum("0").Maximum("255").Value("255").Margin("0,-14,0,0")
 
         sliderGrid.Add("Border").Name("ColorPreview").Grid_Column(2).Width("36").Height("36").CornerRadius("18").Background(defaultColor).BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
@@ -170,22 +170,22 @@ class XColorPicker {
         inGrid.Add("TextBox").Name("HexInput").Text(defaultColor).Width("85").Height("28").Padding("8,4").Grid_Row(2).Grid_Column(0)
 
         rgbSp := inGrid.Add("StackPanel").Grid_Row(2).Grid_Column(2).Orientation("Horizontal")
-        rgbSp.Add("TextBlock").Text("A:").Foreground("{DynamicResource TextSub}").FontSize("11").VerticalAlignment("Center").Margin("0,0,4,0")
-        rgbSp.Add("TextBox").Name("AInput").Text("255").Width("35").Height("28").Padding("2,4").HorizontalContentAlignment("Center")
         rgbSp.Add("TextBlock").Text("R:").Foreground("{DynamicResource TextSub}").FontSize("11").VerticalAlignment("Center").Margin("0,0,4,0")
         rgbSp.Add("TextBox").Name("RInput").Text("255").Width("35").Height("28").Padding("2,4").Margin("0,0,8,0").HorizontalContentAlignment("Center")
         rgbSp.Add("TextBlock").Text("G:").Foreground("{DynamicResource TextSub}").FontSize("11").VerticalAlignment("Center").Margin("0,0,4,0")
         rgbSp.Add("TextBox").Name("GInput").Text("0").Width("35").Height("28").Padding("2,4").Margin("0,0,8,0").HorizontalContentAlignment("Center")
         rgbSp.Add("TextBlock").Text("B:").Foreground("{DynamicResource TextSub}").FontSize("11").VerticalAlignment("Center").Margin("0,0,4,0")
         rgbSp.Add("TextBox").Name("BInput").Text("0").Width("35").Height("28").Padding("2,4").Margin("0,0,8,0").HorizontalContentAlignment("Center")
+        rgbSp.Add("TextBlock").Text("A:").Foreground("{DynamicResource TextSub}").FontSize("11").VerticalAlignment("Center").Margin("0,0,4,0")
+        rgbSp.Add("TextBox").Name("AInput").Text("255").Width("35").Height("28").Padding("2,4").HorizontalContentAlignment("Center")
 
         inGrid.Add("TextBlock").Text("Some information about this color").Foreground("{DynamicResource TextSub}").FontSize("11").Grid_Row(4).Grid_ColumnSpan(3).Margin("0,10,0,0")
 
         btnSp := main.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").Grid_Row(8).Margin("0,0,15,15")
         main.InjectResources('<Style x:Key="DialogBtn" TargetType="Button"><Setter Property="Background" Value="#10FFFFFF"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,6"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style><Style x:Key="DialogPrimaryBtn" TargetType="Button"><Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,6"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.85"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
 
-        btnSp.Add("Button").Name("BtnCancel").Content("Cancel").Style("{DynamicResource DialogBtn}").Width("100").Height("32").Cursor("Hand").Margin("0,0,10,0")
-        btnSp.Add("Button").Name("BtnConfirm").Content("Confirm").Style("{DynamicResource DialogPrimaryBtn}").Width("100").Height("32").Cursor("Hand")
+        btnSp.Add("Button").Name("BtnCancel").Content("Cancel").Style("{StaticResource DialogBtn}").Width("100").Height("32").Cursor("Hand").Margin("0,0,10,0")
+        btnSp.Add("Button").Name("BtnConfirm").Content("Confirm").Style("{StaticResource DialogPrimaryBtn}").Width("100").Height("32").Cursor("Hand")
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
@@ -745,6 +745,13 @@ class XRibbon {
         this.tabs := []
         this.isPinned := true
         this.container.ClipToBounds("False")
+
+        ; Auto-register with XAML_GUI for auto-bind during Compile()
+        try {
+            _app := parentXAML._FindApp()
+            if (_app != "" && _app.HasMethod("RegisterComponent"))
+                _app.RegisterComponent(this)
+        }
     }
 
     AddTab(title) {
@@ -753,6 +760,11 @@ class XRibbon {
         tab := XRibbonTab(wrapPanel)
         this.tabs.Push(tab)
         return tab
+    }
+
+    ; Auto-bind compatible alias
+    Bind(ui) {
+        this.BindEvents(ui)
     }
 
     BindEvents(ui) {
@@ -965,6 +977,13 @@ class DateRangePickerEx {
                 btnDay := cell.Add("Button").Name(this.id "_Day_" dayId).Width(32).Height(32).BorderThickness("0").Cursor("Hand")
                 btnDay.InjectResources('<Style TargetType="Button"><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="Background" Value="Transparent"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="16" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBgHover}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter><Style.Triggers><Trigger Property="Tag" Value="Selected"><Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="White"/></Trigger><Trigger Property="Tag" Value="Today"><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Trigger></Style.Triggers></Style>')
             }
+        }
+
+        ; Auto-register with XAML_GUI for auto-bind during Compile()
+        try {
+            _app := parent._FindApp()
+            if (_app != "" && _app.HasMethod("RegisterComponent"))
+                _app.RegisterComponent(this)
         }
     }
 
@@ -1291,7 +1310,7 @@ _AddRichPopover(this) {
     popup := this.Parent().Add("Popup").PlacementTarget("{Binding Source={x:Reference " elementName "}}").Placement("Bottom").StaysOpen("False").AllowsTransparency("True").IsOpen("{Binding Source={x:Reference " elementName "}, Path=IsChecked, Mode=TwoWay}")
     bdr := popup.Add("Border").Background("{DynamicResource DropdownBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1).CornerRadius(6).Padding("10").Margin("4")
 
-    bdr.Add("Border.Effect").Add("DropShadowEffect").BlurRadius(12).ShadowDepth(3).Opacity(0.25).Color("Black")
+    bdr.Add("Border.Effect").Add("DropShadowEffect").BlurRadius(12).ShadowDepth(3).Opacity(0.25).SetProp('Color', "Black")
 
     sp := bdr.Add("StackPanel")
     return sp
@@ -1994,10 +2013,6 @@ class DataGridEx {
             fSize := isCompact ? 11 : 12
             marginText := isCompact ? "10,4" : "10,12"
 
-            isCompact := (this.density == "compact")
-            fSize := isCompact ? 11 : 12
-            marginText := isCompact ? "10,4" : "10,12"
-
             for i, col in this.columns {
                 val := rowObj.HasProp(col) ? rowObj.%col% : ""
                 colIdx := (i - 1) * 2
@@ -2005,6 +2020,7 @@ class DataGridEx {
             }
 
             rowStr := rowGrid.Compile()
+            rowStr := RegExReplace(rowStr, "[\r\n]+", "")
             rowStr := RegExReplace(rowStr, "<!--.*?-->", "")
             rowStr := StrReplace(rowStr, "<Grid ", '<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" ')
             this.ui.Update(this.id "_Table_List", "AddXamlItem", rowStr)

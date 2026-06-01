@@ -36,7 +36,7 @@ global XAML_ENABLE_WEBVIEW := false
 ; --- Auto-Prewarm Engine ---
 ; When true, automatically spins up the background WPF engine as soon as the script launches.
 ; This completely eliminates the ~300ms cold-start delay when the dialog is shown!
-global XAML_AUTO_PREWARM := true
+global XAML_AUTO_PREWARM := false
 
 ; --- Backward Compatibility ---
 ; XAML_DEBUG is derived from the new flags for any scripts that still reference it.

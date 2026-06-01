@@ -1,6 +1,5 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
-#Include "XAML_Config.ahk"
 
 
 class CodeBox {
@@ -95,14 +94,34 @@ class XAMLHost {
     static daemonHwnd := 0
     static daemonReceiver := 0
     static instanceCounter := 0
+    static _appDir := ""
+
+    static GetAppDir() {
+        if (XAMLHost._appDir != "")
+            return XAMLHost._appDir
+        
+        ; 优先级: 1. 编译后的脚本目录 2. 库文件所在目录
+        if (A_IsCompiled) {
+            XAMLHost._appDir := A_ScriptDir
+        } else {
+            SplitPath(A_LineFile, , &libDir)
+            XAMLHost._appDir := libDir "\.."
+        }
+        
+        ; 创建必要的子目录
+        if !DirExist(XAMLHost._appDir "\Logs")
+            DirCreate(XAMLHost._appDir "\Logs")
+        if !DirExist(XAMLHost._appDir "\Cache")
+            DirCreate(XAMLHost._appDir "\Cache")
+            
+        return XAMLHost._appDir
+    }
 
     __New(xaml := "", exePath := "", ownerHwnd := 0) {
         XAMLHost.RestoreWebView2Dlls()
-        this._disposed := false
         XAMLHost.instanceCounter++
         this.id := "WPF_" A_TickCount "_" XAMLHost.instanceCounter "_" Random(1000, 9999)
         XAMLHost._instances[this.id] := this
-        try FileAppend("[AHK-NEW] " this.id " instances=" XAMLHost._instances.Length "`n", A_Temp "\AhkWpf\mem_trace.log")
         this.xaml := xaml
         this.exePath := exePath
         this.ownerHwnd := ownerHwnd
@@ -110,9 +129,7 @@ class XAMLHost {
         this.tracked := Map()
         this.wpfHwnd := 0
         this.pid := 0
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
-        this.errLog := A_Temp "\AhkWpf\AhkWpfError.log"
+        this.errLog := XAMLHost.GetAppDir() "\Logs\AhkWpfError.log"
 
 
         this.receiver := Gui()
@@ -139,7 +156,9 @@ class XAMLHost {
     Update(controlName, propertyName, valueStr) {
         if !this.wpfHwnd
             return
-        payload := controlName "|" propertyName "|" valueStr
+        val := StrReplace(valueStr, "`r", "&#x0D;")
+        val := StrReplace(val, "`n", "&#x0A;")
+        payload := controlName "|" propertyName "|" val
         buf := Buffer(StrPut(payload, "UTF-8"))
         StrPut(payload, buf, "UTF-8")
 
@@ -160,7 +179,10 @@ class XAMLHost {
             if (!updateObj.HasProp("ControlName") || !updateObj.HasProp("PropertyName") || !updateObj.HasProp("Value"))
                 continue
             
-            payload .= updateObj.ControlName "|" updateObj.PropertyName "|" String(updateObj.Value) "`n"
+            val := String(updateObj.Value)
+            val := StrReplace(val, "`r", "&#x0D;")
+            val := StrReplace(val, "`n", "&#x0A;")
+            payload .= updateObj.ControlName "|" updateObj.PropertyName "|" val "`n"
         }
         
         if (payload != "") {
@@ -176,6 +198,15 @@ class XAMLHost {
         }
     }
 
+    ; Enable lightweight event mode: events only include the triggering control's value.
+    ; Use ui.Query("TxtName") or ui.Query("*") for additional values.
+    ; This dramatically reduces IPC payload for UIs with many tracked controls.
+    SetLightweightEvents(enabled := true) {
+        if (!this.wpfHwnd)
+            return
+        this.Update("CONFIG", "LightweightEvents", enabled ? "1" : "0")
+    }
+
     static Prewarm(exePath := "") {
         if XAMLHost.daemonHwnd
             return
@@ -187,9 +218,6 @@ class XAMLHost {
                 XAMLHost._msgHooked := true
             }
         }
-
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
 
         baseDllName := (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW) ? "ahk-xaml-webview.dll" : "ahk-xaml.dll"
 
@@ -276,34 +304,7 @@ class XAMLHost {
         }
     }
 
-    Dispose() {
-        if (this._disposed)
-            return
-        this._disposed := true
-        try FileAppend("[AHK-DISPOSE] " this.id "`n", A_Temp "\AhkWpf\mem_trace.log")
-        SetTimer(ObjBindMethod(this, "CheckForCrashes"), 0)
-        if (XAMLHost._instances.Has(this.id))
-            XAMLHost._instances.Delete(this.id)
-        for ctrlName, eventMap in this.events {
-            for eventName, cbList in eventMap
-                cbList.Length := 0
-        }
-        this.events := ""
-        this.tracked := ""
-        this.xaml := ""
-        if (IsObject(this.receiver)) {
-            try {
-                this.receiver.Destroy()
-            }
-            this.receiver := ""
-        }
-    }
-
-    __Delete() {
-        this.Dispose()
-    }
-
-    static ShowErrorDialog(title, header, snippet, details, hasRetryOptions := false) {
+    static ShowErrorDialog(title, header, snippet, details, hasRetryOptions := false, reason := "") {
         ; Pre-format the error text for better readability
         details := StrReplace(details, " ---> ", "`r`n`r`n---> ")
         details := StrReplace(details, "`r`n", "`n")
@@ -317,6 +318,16 @@ class XAMLHost {
 
         errGui.SetFont("s13 bold cD00000", "Segoe UI")
         headerText := errGui.Add("Text", "w860", header)
+
+        if (reason != "") {
+            errGui.SetFont("s11 bold c003366", "Segoe UI")
+            reasonLbl := errGui.Add("Text", "y+15", "Root Cause:")
+            errGui.SetFont("s10 bold cWhite", "Consolas")
+            reasonEdit := CodeBox.Add(errGui, "y+5 w860 ReadOnly -Wrap -E0x200 Background1E1E1E", "`r`n  " reason "`r`n", 0xFFFFFF)
+        } else {
+            reasonLbl := ""
+            reasonEdit := ""
+        }
 
         exceptionMsg := ""
         stackTrace := details
@@ -445,6 +456,18 @@ class XAMLHost {
             headerText.Move(, , availW)
             currentY := ty + th + 10
 
+            if (reasonLbl != "") {
+                reasonLbl.GetPos(&rx, &ry, &rw, &rh)
+                reasonLbl.Move(, currentY)
+                currentY += rh + 5
+            }
+
+            if (reasonEdit != "") {
+                reasonEdit.GetPos(&rex, &rey, &rew, &reh)
+                reasonEdit.Move(, currentY, availW)
+                currentY += reh + 15
+            }
+
             if (excEdit != "") {
                 excEdit.GetPos(&ex, &ey, &ew, &eh)
                 excEdit.Move(, currentY, availW)
@@ -501,9 +524,7 @@ class XAMLHost {
 
         payload := this.xaml "`n---AHK-XAML-EVENTS---`n" eventBindings
 
-        tempTxt := A_Temp "\AhkWpf\gui_temp.txt"
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
+        tempTxt := XAMLHost.GetAppDir() "\Cache\gui_temp.txt"
 
         if FileExist(tempTxt)
             FileDelete(tempTxt)
@@ -550,7 +571,7 @@ class XAMLHost {
 
     static CompileEngine(libDir, sharedExe, extraResources := []) {
         XAMLHost.RestoreWebView2Dlls()
-        errLog := A_Temp "\AhkWpf\AhkWpfError.log"
+        errLog := XAMLHost.GetAppDir() "\Logs\AhkWpfError.log"
         sourceCs := libDir "\XAML_AHK_Bridge.cs"
         if !FileExist(sourceCs) {
             MsgBox("XAML_AHK_Bridge.cs not found in lib directory!`nCannot compile shared engine.", "AHK-XAML", "Iconx")
@@ -588,10 +609,11 @@ class XAMLHost {
         embeddedRes := ""
         bamlPath := libDir "\xaml.components.baml"
         xamlPath := libDir "\xaml.components.xaml"
-        if FileExist(bamlPath)
+        if FileExist(bamlPath) {
             embeddedRes .= ' /resource:"' bamlPath '"'
-        if FileExist(xamlPath)
+        } else if FileExist(xamlPath) {
             embeddedRes .= ' /resource:"' xamlPath '"'
+        }
 
         for _, res in extraResources {
             if FileExist(res)
@@ -613,10 +635,8 @@ class XAMLHost {
         cleanXaml := StrReplace(this.xaml, "%resources%", "")
         cleanXaml := StrReplace(cleanXaml, "%components%", "")
         
-        tempDir := A_Temp "\AhkWpf"
-        if !DirExist(tempDir)
-            DirCreate(tempDir)
-            
+        tempDir := XAMLHost.GetAppDir() "\Cache"
+        
         tempXaml := tempDir "\app_payload.xaml"
         tempBaml := tempDir "\app_payload.baml"
         tempEvents := tempDir "\app_payload.events"
@@ -680,8 +700,6 @@ class XAMLHost {
         if XAMLHost.daemonHwnd
             return sharedExe
 
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
         if FileExist(this.errLog)
             FileDelete(this.errLog)
 
@@ -771,6 +789,7 @@ class XAMLHost {
             ; Build event bindings from runtime registrations (includes events added after ExportBAML)
             eventBindings := this._BuildEventBindings()
             payload := "CREATE_WINDOW|" this.id "|" trackedCsv "|" A_ScriptName "|" String(this.ownerHwnd) "|" assetPath "|" eventBindings
+            this.wpfHwnd := 0
             this._SendToEngine(payload)
         } else {
             ; Inline mode: embed XAML + events directly in the CREATE_WINDOW message
@@ -779,10 +798,15 @@ class XAMLHost {
             cleanXaml := StrReplace(this.xaml, "%resources%", "")
             inlinePayload := cleanXaml "`n---AHK-XAML-EVENTS---`n" eventBindings
             payload := "CREATE_WINDOW_INLINE|" this.id "|" trackedCsv "|" A_ScriptName "|" String(this.ownerHwnd) "|" inlinePayload
+
+            ; CRITICAL: Reset wpfHwnd BEFORE sending, not after.
+            ; _SendToEngine uses SendMessageW which may trigger LoadedHwnd reentrantly
+            ; (the daemon's Dispatcher can process the BeginInvoke during the synchronous wait).
+            ; If we reset AFTER, we clobber the valid HWND set by the LoadedHwnd handler.
+            this.wpfHwnd := 0
             this._SendToEngine(payload)
         }
 
-        this.wpfHwnd := 0
         SetTimer(ObjBindMethod(this, "CheckForCrashes"), 50)
     }
 
@@ -793,15 +817,37 @@ class XAMLHost {
         lpData := NumGet(lParam, A_PtrSize * 2, "Ptr")
         payload := StrGet(lpData, "UTF-8")
         if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING)
-            try FileAppend("OnCopyData: " payload "`n", A_Temp "\AhkWpf\AhkTrace.log", "UTF-8")
-        if (!InStr(payload, "EVENT|") && !InStr(payload, "DAEMON|"))
+            try FileAppend("OnCopyData: " payload "`n", XAMLHost.GetAppDir() "\Logs\AhkTrace.log", "UTF-8")
+        if (!InStr(payload, "EVENT|") && !InStr(payload, "DAEMON|") && !InStr(payload, "MRESPONSE|"))
             return 0
             
         lines := StrSplit(payload, "`n", "`r")
-        parts := StrSplit(lines[1], "|")
+        parts := StrSplit(lines[1], "|", , 5)
         
         if (parts[1] == "DAEMON" && parts[2] == "Ready") {
             XAMLHost.daemonHwnd := Integer(parts[3])
+            return 1
+        }
+
+        ; Handle MQUERY responses (targeted query results)
+        if (parts[1] == "MRESPONSE") {
+            winId := parts[2]
+            if !XAMLHost._instances.Has(winId)
+                return 0
+            inst := XAMLHost._instances[winId]
+            ; Parse length-prefixed state lines from lines[2..n]
+            resultMap := Map()
+            Loop lines.Length {
+                if (A_Index == 1 || lines[A_Index] == "")
+                    continue
+                pos := InStr(lines[A_Index], "=")
+                if pos {
+                    k := SubStr(lines[A_Index], 1, pos - 1)
+                    resultMap[k] := XAMLHost.DecodeValue(SubStr(lines[A_Index], pos + 1))
+                }
+            }
+            inst._queryResult := resultMap
+            inst._queryWaiting := false
             return 1
         }
 
@@ -809,17 +855,34 @@ class XAMLHost {
             return 0
 
         winId := parts[2], ctrlName := parts[3], eventName := parts[4]
+        if (eventName == "WebMessageReceived") {
+            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", XAMLHost.GetAppDir() "\Logs\AhkWebViewDebug.log")
+        }
         if !XAMLHost._instances.Has(winId)
             return 0
 
         instance := XAMLHost._instances[winId]
 
         if (ctrlName == "Engine" && eventName == "Error") {
-            errorMsg := XAMLHost.Base64Decode(parts[5])
+            ; The payload contains newlines which were truncated by StrSplit(lines[1])
+            ; Re-extract from the original message to get the full exception!
+            pos := InStr(payload, "|Engine|Error|")
+            if (pos) {
+                rawPayload := SubStr(payload, pos + 14)
+                errorMsg := XAMLHost.DecodeValue(rawPayload)
+            } else {
+                errorMsg := XAMLHost.DecodeValue(parts[5])
+            }
             
             ahkLine := "Unknown"
             snippet := ""
-            if RegExMatch(errorMsg, "s)AHK_LINE:(.*?)\nXAML_SNIPPET:(.*?)\n\n(.*)", &m) {
+            reason := ""
+            if RegExMatch(errorMsg, "s)AHK_LINE:(.*?)\nXAML_SNIPPET:(.*?)\nREASON:(.*?)\n\n(.*)", &m) {
+                ahkLine := m[1]
+                snippet := m[2]
+                reason := m[3]
+                errorMsg := m[4]
+            } else if RegExMatch(errorMsg, "s)AHK_LINE:(.*?)\nXAML_SNIPPET:(.*?)\n\n(.*)", &m) {
                 ahkLine := m[1]
                 snippet := m[2]
                 errorMsg := m[3]
@@ -839,7 +902,7 @@ class XAMLHost {
             hasRetry := (IsSet(XAML_DIAGNOSTICS_ENABLED) && XAML_DIAGNOSTICS_ENABLED && lineNum > 0)
             
             while (true) {
-                action := XAMLHost.ShowErrorDialog("Engine Crash", header, snippet, errorMsg, hasRetry)
+                action := XAMLHost.ShowErrorDialog("Engine Crash", header, snippet, errorMsg, hasRetry, reason)
                 if (action == "skip_property") {
                     if (instance.SkipPropertyAndRetry(errorMsg, lineNum, colNum)) {
                         break
@@ -892,7 +955,7 @@ class XAMLHost {
 
         eventData := ""
         if (parts.Length >= 5) {
-            eventData := XAMLHost.Base64Decode(parts[5])
+            eventData := XAMLHost.DecodeValue(parts[5])
             if (eventData != "")
                 stateMap[eventName] := eventData
         }
@@ -910,7 +973,7 @@ class XAMLHost {
             pos := InStr(lines[A_Index], "=")
             if pos {
                 k := SubStr(lines[A_Index], 1, pos - 1)
-                stateMap[k] := XAMLHost.Base64Decode(SubStr(lines[A_Index], pos + 1))
+                stateMap[k] := XAMLHost.DecodeValue(SubStr(lines[A_Index], pos + 1))
             }
         }
 
@@ -943,6 +1006,108 @@ class XAMLHost {
         }
         return 1
     }
+
+    ; =========================================================================
+    ; Length-Prefixed Value Decoder (replaces Base64)
+    ; Format: "BYTELEN:rawvalue" — e.g. "16:Hello😀 Worl|d"
+    ; Falls back to base64 if value doesn't match length-prefix pattern.
+    ; =========================================================================
+
+    static DecodeValue(encoded) {
+        if (encoded == "")
+            return ""
+        ; Length-prefixed format: "123:actual value here"
+        if RegExMatch(encoded, "^(\d+):", &m) {
+            byteLen := Integer(m[1])
+            valueStart := m.Pos[0] + m.Len[0]
+            rawAfterColon := SubStr(encoded, valueStart)
+            if (byteLen == 0)
+                return ""
+            ; Count how many chars span byteLen UTF-8 bytes
+            charCount := XAMLHost.UTF8BytesToCharCount(rawAfterColon, byteLen)
+            return SubStr(rawAfterColon, 1, charCount)
+        }
+        ; Fallback: legacy base64 (safe to remove after long-term testing)
+        return XAMLHost.Base64Decode(encoded)
+    }
+
+    ; Count how many characters span targetBytes UTF-8 bytes starting from the beginning of str
+    static UTF8BytesToCharCount(str, targetBytes) {
+        bytes := 0
+        chars := 0
+        sLen := StrLen(str)
+        while (bytes < targetBytes && chars < sLen) {
+            cp := Ord(SubStr(str, chars + 1, 1))
+            if (cp <= 0x7F)
+                bytes += 1
+            else if (cp <= 0x7FF)
+                bytes += 2
+            else if (cp >= 0xD800 && cp <= 0xDBFF) {
+                ; Surrogate pair in UTF-16 → 4 bytes in UTF-8
+                bytes += 4
+                chars += 1  ; skip low surrogate
+            }
+            else if (cp <= 0xFFFF)
+                bytes += 3
+            else
+                bytes += 4
+            chars++
+        }
+        return chars
+    }
+
+    ; =========================================================================
+    ; Query API — on-demand value reads from the WPF process
+    ; Supports single, multi, and wildcard (*) queries
+    ; =========================================================================
+
+    ; Query specific control values on-demand.
+    ; Usage:
+    ;   val := ui.Query("TxtName")              ; single → string
+    ;   state := ui.Query("TxtName", "SldPower") ; multi → Map
+    ;   all := ui.Query("*")                     ; wildcard → Map of all tracked
+    Query(names*) {
+        if (!this.wpfHwnd || names.Length == 0)
+            return (names.Length == 1) ? "" : Map()
+
+        ; Build CSV of control names
+        csv := ""
+        for n in names
+            csv .= n ","
+        csv := RTrim(csv, ",")
+
+        ; Send MQUERY to the WPF engine
+        payload := "MQUERY|" csv
+        buf := Buffer(StrPut(payload, "UTF-8"))
+        StrPut(payload, buf, "UTF-8")
+        cds := Buffer(A_PtrSize * 3)
+        NumPut("Ptr", 0, cds, 0)
+        NumPut("UInt", buf.Size, cds, A_PtrSize)
+        NumPut("Ptr", buf.Ptr, cds, A_PtrSize * 2)
+
+        this._queryResult := Map()
+        this._queryWaiting := true
+        DllCall("user32\SendMessageW", "Ptr", this.wpfHwnd, "UInt", 0x004A, "Ptr", 0, "Ptr", cds.Ptr)
+
+        ; Wait for MRESPONSE (arrives via OnCopyData during message pump)
+        startTick := A_TickCount
+        while (this._queryWaiting && A_TickCount - startTick < 500)
+            Sleep(1)
+
+        result := this._queryResult
+        this._queryResult := ""
+        this._queryWaiting := false
+
+        ; Single query returns a plain string; multi returns Map
+        if (names.Length == 1 && names[1] != "*")
+            return result.Has(names[1]) ? result[names[1]] : ""
+        return result
+    }
+
+    ; =========================================================================
+    ; Legacy Base64 — DEPRECATED, kept as fallback during transition.
+    ; TODO: Remove after long-term testing confirms length-prefix works everywhere.
+    ; =========================================================================
 
     static Base64Encode(str) {
         if (str == "")
@@ -1167,7 +1332,7 @@ class XAMLHost {
                 FileCopy(sourceLoader, wvDir "\WebView2Loader.dll", 1)
                 
                 try FileDelete(libDir "\ahk-xaml-webview.dll")
-                try FileDelete(A_Temp "\AhkWpf\ahk-xaml-webview.dll")
+                try FileDelete(XAMLHost.GetAppDir() "\Cache\ahk-xaml-webview.dll")
                 
                 ToolTip("WebView2 DLLs successfully restored from NativeDOM!")
                 SetTimer(() => ToolTip(), -4000)

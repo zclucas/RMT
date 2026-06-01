@@ -33,11 +33,20 @@ class XAMLElement {
         return this
     }
 
-    ; Instantly apply a map or object of properties to this specific element
+    ; Instantly apply a map or object of properties to this specific element.
+    ; Resolves shorthands: {W: 120, Fg: "White", Bold: true} → {Width: 120, Foreground: "White", FontWeight: "Bold"}
     Apply(propsObj) {
         this._TrackCaller()
         for k, v in (Type(propsObj) == "Map" ? propsObj : propsObj.OwnProps()) {
-            propName := StrReplace(k, "_", ".")
+            ; Check zero-param shorthands (Bold: true, Wrap: true, Center: true, etc.)
+            if (XAMLElement._ZeroParamAliases.Has(k) && v == true) {
+                for pk, pv in XAMLElement._ZeroParamAliases[k]
+                    this._Props[pk] := pv
+                continue
+            }
+            ; Resolve alias
+            resolved := this._ResolveAlias(k)
+            propName := StrReplace(resolved, "_", ".")
             this._Props[propName] := v
         }
         return this
@@ -79,9 +88,12 @@ class XAMLElement {
         return this
     }
 
-    ; Add a child element and return the child for chaining
-    Add(tag, textContent := "") {
-        child := XAMLElement(tag, textContent)
+    ; Add a child element and return the child for chaining.
+    ; Second parameter can be:
+    ;   - A string (text content)
+    ;   - A Map or Object of properties: Add("Button", {Name: "Btn", W: 120, Bg: "Red"})
+    Add(tag, propsOrText := "") {
+        child := XAMLElement(tag, Type(propsOrText) == "String" ? propsOrText : "")
         child._TrackCaller()
         child._Parent := this
         
@@ -109,12 +121,27 @@ class XAMLElement {
         }
         
         this._Children.Push(child)
+
+        ; Apply object properties if provided
+        if (Type(propsOrText) != "String" && propsOrText != "") {
+            child.Apply(propsOrText)
+        }
+
         return child
     }
 
     ; Navigate back to the parent element
     Parent() {
         return this._Parent
+    }
+
+    ; Walk the parent chain to find the owning XAML_GUI instance (if any).
+    ; Returns the XAML_GUI or "" if the element is not attached to one.
+    _FindApp() {
+        root := this
+        while root._Parent
+            root := root._Parent
+        return root.HasOwnProp("_App") ? root._App : ""
     }
 
     ; Find a descendant element by its Name or x:Name
@@ -131,17 +158,96 @@ class XAMLElement {
         return ""
     }
 
+    ; ==========================================
+    ; SHORTHAND ALIASES — friendly mappings for
+    ; common WPF properties. Works in chaining,
+    ; object-style Add(), Apply(), and AXML.
+    ; ==========================================
+    static _Aliases := Map(
+        ; Layout shorthands (AHK2 Gui style)
+        "W", "Width",
+        "H", "Height",
+        "HAlign", "HorizontalAlignment",
+        "VAlign", "VerticalAlignment",
+        "HContentAlign", "HorizontalContentAlignment",
+        "VContentAlign", "VerticalContentAlignment",
+        ; Color shorthands
+        "Fg", "Foreground",
+        "Bg", "Background",
+        "Colour", "Foreground",
+        "BgColour", "Background",
+        "Color", "Foreground",
+        "BgColor", "Background",
+        "BorderColor", "BorderBrush",
+        ; Spacing shorthands
+        "Pad", "Padding",
+        "M", "Margin",
+        ; Typography shorthands
+        "Size", "FontSize",
+        "Weight", "FontWeight",
+        "Family", "FontFamily",
+        ; Visibility
+        "Show", "Visibility",
+        "Hidden", "Visibility",
+        ; Border
+        "Radius", "CornerRadius",
+        "Border", "BorderThickness"
+    )
+
+    ; Zero-param shorthands — calling .Bold() sets FontWeight="Bold", etc.
+    static _ZeroParamAliases := Map(
+        "Bold", Map("FontWeight", "Bold"),
+        "Italic", Map("FontStyle", "Italic"),
+        "Wrap", Map("TextWrapping", "Wrap"),
+        "NoWrap", Map("TextWrapping", "NoWrap"),
+        "Center", Map("HorizontalAlignment", "Center"),
+        "Left", Map("HorizontalAlignment", "Left"),
+        "Right", Map("HorizontalAlignment", "Right"),
+        "Stretch", Map("HorizontalAlignment", "Stretch"),
+        "Top", Map("VerticalAlignment", "Top"),
+        "Bottom", Map("VerticalAlignment", "Bottom"),
+        "VCenter", Map("VerticalAlignment", "Center"),
+        "Collapsed", Map("Visibility", "Collapsed"),
+        "Clip", Map("ClipToBounds", "True"),
+        "Mono", Map("FontFamily", "Cascadia Code, Consolas, Courier New")
+    )
+
+    ; Resolve a property name through the alias table.
+    ; Also handles tag-aware aliases like Text → Content on Buttons.
+    _ResolveAlias(name) {
+        ; Check alias table first
+        if (XAMLElement._Aliases.Has(name))
+            return XAMLElement._Aliases[name]
+
+        ; Tag-aware: Text() on non-TextBlock elements → Content
+        if (name == "Text" && this._Tag != "TextBlock" && this._Tag != "Run" && this._Tag != "TextBox")
+            return "Content"
+
+        return name
+    }
+
     ; Intercept unknown methods to dynamically set properties
     __Call(name, params) {
         this._TrackCaller()
+
+        ; Check zero-param shorthands first (Bold, Italic, Wrap, Center, etc.)
+        if (params.Length == 0 && XAMLElement._ZeroParamAliases.Has(name)) {
+            for k, v in XAMLElement._ZeroParamAliases[name]
+                this._Props[k] := v
+            return this
+        }
+
+        ; Resolve aliases
+        resolvedName := this._ResolveAlias(name)
+
         ; Convert underscores in method names to dots (e.g. Grid_Column -> Grid.Column)
-        propName := StrReplace(name, "_", ".")
+        propName := StrReplace(resolvedName, "_", ".")
         
         if (params.Length == 1) {
             val := params[1]
             
             ; Auto-detect mixed Icon and Text to prevent square rendering
-            if ((name == "Text" || name == "Content") && Type(val) == "String") {
+            if ((resolvedName == "Text" || resolvedName == "Content") && Type(val) == "String") {
                 hasIcon := false
                 hasText := false
                 Loop Parse, val {
@@ -239,7 +345,7 @@ class XAMLElement {
     InjectResources(rawXamlString) {
         res := XAMLElement(this._Tag ".Resources")
         res._TextContent := rawXamlString
-        this._Children.InsertAt(0, res)
+        this._Children.InsertAt(1, res)
         return this
     }
 
@@ -291,4 +397,49 @@ class XAML_Generator extends XAMLElement {
     Compile() {
         return this.ToString("")
     }
+}
+
+; ==============================================================================
+; Inline Event Registration: .On() and .Track()
+; These methods are defined via DefineProp to avoid __Call treating them as
+; XAML property setters (since __Call catches all unknown method names).
+; ==============================================================================
+
+; Register one or more events on an element (chainable).
+; Supports CSV: .On("Click,Focus", handler) and function names: .On("Click", "MyHandler")
+XAMLElement.Prototype.DefineProp("On", { Call: _XAMLElement_On })
+_XAMLElement_On(this, events, callback) {
+    if !this.HasOwnProp("_Events")
+        this._Events := []
+
+    ; Support CSV: "Click,Focus" → ["Click", "Focus"]
+    for evtName in StrSplit(events, ",", " ") {
+        if (Trim(evtName) != "")
+            this._Events.Push({ Event: Trim(evtName), Callback: callback })
+    }
+    return this  ; chainable
+}
+
+; Mark an element for state tracking (its value will be included in event state dumps).
+XAMLElement.Prototype.DefineProp("Track", { Call: _XAMLElement_Track })
+_XAMLElement_Track(this) {
+    this._Tracked := true
+    return this  ; chainable
+}
+
+; Register a global hotkey on an element (chainable).
+; action can be:
+;   - Omitted:  defaults to "Invoke" (programmatic click/toggle)
+;   - A string: "Invoke", "Click", "Focus", "Blur", "Toggle"
+;   - A callback: (*) => DoSomething()
+; Examples:
+;   .Hotkey("^+S")                         ; Ctrl+Shift+S → Invoke (click)
+;   .Hotkey("^+F", "Focus")                ; Ctrl+Shift+F → Focus the element
+;   .Hotkey("^+X", (*) => MsgBox("Hi"))    ; Ctrl+Shift+X → Custom callback
+XAMLElement.Prototype.DefineProp("Hotkey", { Call: _XAMLElement_Hotkey })
+_XAMLElement_Hotkey(this, key, action := "Invoke") {
+    if !this.HasOwnProp("_Hotkeys")
+        this._Hotkeys := []
+    this._Hotkeys.Push({ Key: key, Action: action })
+    return this  ; chainable
 }

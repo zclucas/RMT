@@ -14,7 +14,6 @@ class MenuWheelGlobalSettingGui {
     )
 
     __new() {
-        this.app := 0
         this.ui := 0
         this.closed := false
         this._instanceKey := ""
@@ -52,17 +51,89 @@ class MenuWheelGlobalSettingGui {
         this.closed := false
 
         title := GetLang("轮盘选项")
-        this.app := XAML_GUI(title, { Sidebar: false, BurgerMenu: false, AppIcon: false, Width: 420, Height: 440 })
-        this.app.tabs.Visibility("Collapsed")
+        titleHeight := "36"
 
         this.LoadThemesFromIni()
-        this.BuildContent()
 
-        this.ui := this.app.Compile()
-        this.ui.OnEvent("Window", "Closed", ObjBindMethod(this, "OnWindowClosed"))
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
+        main.Rows(titleHeight, "*")
 
-        this.ui.OnEvent("ThemeCombo", "SelectionChanged", ObjBindMethod(this, "OnThemeSelectionChanged"))
+        tb := main.Add("Border").Grid_Row(0).Background("Transparent").Name("DragArea")
+        tbInner := tb.Add("Grid")
+        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TextMain}").FontSize(12).FontWeight("SemiBold").VerticalAlignment("Center").Margin("15,0,0,0")
+
+        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
+
+        CloseBtnTemplate := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="#E0FF3333"/><Setter Property="Foreground" Value="White"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+
+        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0)
+        closeBtn.InjectResources(CloseBtnTemplate)
+        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+
+        body := main.Add("Border").Grid_Row(1).Background("{DynamicResource ControlBg}")
+
+        scrollViewer := body.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
+        panel := scrollViewer.Add("StackPanel").Margin("30, 16, 30, 20")
+
+        group1 := panel.Add("GroupBox").Header(GetLang("通用选项")).Margin("0,6,0,0")
+        inner1 := group1.Add("StackPanel").Margin("14, 12")
+
+        row1 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,4,0,0")
+        row1.Add("CheckBox").Name("FixedPosCon").Content(GetLang("固定位置（屏幕中下方）")).Foreground("{DynamicResource TextMain}").Margin("0,0,0,0")
+
+        row2 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,8,0,0")
+        row2.Add("TextBlock").Text(GetLang("选择模式")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(70)
+        modeCombo := row2.Add("ComboBox").Name("SelectModeCon").Width(140).Height(28).Margin("8,0,0,0")
+        modeCombo.Add("ComboBoxItem").Content(GetLang("点击选择"))
+        modeCombo.Add("ComboBoxItem").Content(GetLang("划线选择"))
+
+        row3 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,8,0,0")
+        row3.Add("CheckBox").Name("ShowTooltipCon").Content(GetLang("显示扇区名称提示")).Foreground("{DynamicResource TextMain}").Margin("0,0,0,0")
+
+        row4 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
+        row4.Add("TextBlock").Text(GetLang("轮盘大小")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(70)
+        scaleSlider := row4.Add("Slider").Name("WheelScaleCon").Width(160).Height(28).Margin("8,0,8,0").Minimum(50).Maximum(200).Value(100).IsSnapToTickEnabled("True").TickFrequency("10")
+        scaleValText := row4.Add("TextBlock").Name("WheelScaleValText").Foreground("{DynamicResource TextMain}").FontSize(12).VerticalAlignment("Center").Width(40)
+
+        group3 := panel.Add("GroupBox").Header(GetLang("主题预设")).Margin("0,16,0,0")
+        inner3 := group3.Add("StackPanel").Margin("14, 10")
+
+        selRow := inner3.Add("StackPanel").Orientation("Horizontal").Margin("0,4,0,0")
+        selRow.Add("TextBlock").Text(GetLang("选择主题")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(65)
+        themeCombo := selRow.Add("ComboBox").Name("ThemeCombo").Width(160).Height(28).Margin("6,0,0,0")
+        for themeKey, themeData in this.Themes
+            themeCombo.Add("ComboBoxItem").Content(themeData.Name)
+
+        previewRow := inner3.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Left").Margin("71,8,0,0")
+        this._themePrevNames := []
+        for name in MenuWheelGlobalSettingGui.ColorNames {
+            prevKey := "ThemePrev_" name
+            previewRow.Add("Border").Name(prevKey).Width(28).Height(14).CornerRadius("2").Margin("0,0,4,0").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Background("#FF333333")
+            this._themePrevNames.Push(prevKey)
+        }
+
+        PrimaryBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.85"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+
+        btnRow := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,18,0,10")
+        revertBtn := btnRow.Add("Button").Name("BtnRevert").Content(GetLang("恢复默认")).Background("{DynamicResource Accent}").Foreground("White").FontWeight("Bold").BorderThickness(0).FontSize(13).Cursor("Hand").Width(80).Height(32).Margin("0,0,16,0")
+        revertBtn.InjectResources(PrimaryBtnStyle)
+        okBtn := btnRow.Add("Button").Name("BtnConfirm").Content(GetLang("确定")).Background("{DynamicResource Accent}").Foreground("White").FontWeight("Bold").BorderThickness(0).FontSize(13).Cursor("Hand").Width(80).Height(32)
+        okBtn.InjectResources(PrimaryBtnStyle)
+
+        tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
+        this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="False" Width="420" Height="480"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
+
+        resourceInject := '<CornerRadius x:Key="PanelRadius">8</CornerRadius>'
+        this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', resourceInject)
+
+        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnConfirmClick"))
+
         this.ui.Track("ThemeCombo")
+        this.ui.OnEvent("ThemeCombo", "SelectionChanged", ObjBindMethod(this, "OnThemeSelectionChanged"))
 
         this.ui.Track("FixedPosCon")
         this.ui.Track("SelectModeCon")
@@ -81,7 +152,7 @@ class MenuWheelGlobalSettingGui {
 
         this.LoadInitValues()
 
-        this.app.Show()
+        this.ui.Show()
 
         SetTimer(ObjBindMethod(this, "ApplyValuesToUI"), -100)
     }
@@ -142,60 +213,16 @@ class MenuWheelGlobalSettingGui {
         this.LoadThemesFromIni()
     }
 
-    OnWindowClosed(state, ctrl, event) {
+    OnWindowClosing(state, ctrl, event) {
         this.closed := true
         if (this._instanceKey != "" && MenuWheelGlobalSettingGui.instances.Has(this._instanceKey))
             MenuWheelGlobalSettingGui.instances.Delete(this._instanceKey)
-        if IsObject(this.ui) {
-            this.ui.Dispose()
-            this.ui := ""
-        }
-        this.app := ""
+        this.ui := ""
     }
 
-    BuildContent() {
-        panel := this.app.main.Add("StackPanel").Margin("30, 20")
-
-        group1 := panel.Add("GroupBox").Header(GetLang("通用选项")).Margin("0,6,0,0")
-        inner1 := group1.Add("StackPanel").Margin("14, 12")
-
-        row1 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,4,0,0")
-        row1.Add("CheckBox").Name("FixedPosCon").Content(GetLang("固定位置（屏幕中下方）")).Foreground("{DynamicResource TextMain}").Margin("0,0,0,0")
-
-        row2 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,8,0,0")
-        row2.Add("TextBlock").Text(GetLang("选择模式")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(70)
-        modeCombo := row2.Add("ComboBox").Name("SelectModeCon").Width(140).Height(28).Margin("8,0,0,0")
-        modeCombo.Add("ComboBoxItem").Content(GetLang("点击选择"))
-        modeCombo.Add("ComboBoxItem").Content(GetLang("划线选择"))
-
-        row3 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,8,0,0")
-        row3.Add("CheckBox").Name("ShowTooltipCon").Content(GetLang("显示扇区名称提示")).Foreground("{DynamicResource TextMain}").Margin("0,0,0,0")
-
-        row4 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
-        row4.Add("TextBlock").Text(GetLang("轮盘大小")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(70)
-        scaleSlider := row4.Add("Slider").Name("WheelScaleCon").Width(160).Height(28).Margin("8,0,8,0").Minimum(50).Maximum(200).Value(100).IsSnapToTickEnabled("True").TickFrequency("10")
-        scaleValText := row4.Add("TextBlock").Name("WheelScaleValText").Foreground("{DynamicResource TextMain}").FontSize(12).VerticalAlignment("Center").Width(40)
-
-        group3 := panel.Add("GroupBox").Header(GetLang("主题预设")).Margin("0,16,0,0")
-        inner3 := group3.Add("StackPanel").Margin("14, 10")
-
-        selRow := inner3.Add("StackPanel").Orientation("Horizontal").Margin("0,4,0,0")
-        selRow.Add("TextBlock").Text(GetLang("选择主题")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(65)
-        themeCombo := selRow.Add("ComboBox").Name("ThemeCombo").Width(160).Height(28).Margin("6,0,0,0")
-        for themeKey, themeData in this.Themes
-            themeCombo.Add("ComboBoxItem").Content(themeData.Name)
-
-        previewRow := inner3.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Left").Margin("71,8,0,0")
-        this._themePrevNames := []
-        for name in MenuWheelGlobalSettingGui.ColorNames {
-            prevKey := "ThemePrev_" name
-            previewRow.Add("Border").Name(prevKey).Width(28).Height(14).CornerRadius("2").Margin("0,0,4,0").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Background("#FF333333")
-            this._themePrevNames.Push(prevKey)
-        }
-
-        btnRow := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,18,0,0")
-        revertBtn := btnRow.Add("Button").Name("BtnRevert").Content(GetLang("恢复默认")).Use("PrimaryBtn").Width(80).Height(32).Margin("0,0,16,0")
-        okBtn := btnRow.Add("Button").Name("BtnConfirm").Content(GetLang("确定")).Use("PrimaryBtn").Width(80).Height(32)
+    OnWindowLoad(state, ctrl, event) {
+        themeName := (IsSet(MySoftData) && MySoftData.HasProp("XAMLTheme")) ? MySoftData.XAMLTheme : "RMT Light"
+        ApplyXamlTheme(this.ui, themeName)
     }
 
     LoadInitValues() {
@@ -316,10 +343,8 @@ class MenuWheelGlobalSettingGui {
             try {
                 this.ui.Update("Window", "Close", "")
             }
-            this.ui.Dispose()
             this.ui := ""
         }
-        this.app := ""
     }
 
     SaveData() {

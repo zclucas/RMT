@@ -233,7 +233,6 @@ class MacroEditGui {
             try {
                 GuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
             }
-            IL_Add(ImageListID, "Images\Soft\KeyCheck.png")           ;按键检测
         }
 
         MySoftData.RecordToggleCon := this.RecordMacroCon
