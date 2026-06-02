@@ -86,7 +86,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         "输入", OnInput,
         "文件读写", OnFileIO,
         "窗口管理", OnWindowManage,
-        "按键检测", OnKeyCheck
+        "按键检测", OnKeyCheck,
+        "抓图", OnScreenShot
     )
 
     cmdArr := SplitMacro(macro)
@@ -1231,4 +1232,79 @@ OnKeyCheck(tableItem, cmd, index) {
     }
 
     MySetGlobalVariable([varName], [result], false)
+}
+
+OnScreenShot(tableItem, cmd, index) {
+    paramArr := StrSplit(cmd, "_")
+    Data := GetMacroCMDData(paramArr[1])
+
+    startX := GetReplaceVarText(tableItem, index, Data.StartPosX)
+    startY := GetReplaceVarText(tableItem, index, Data.StartPosY)
+    endX := GetReplaceVarText(tableItem, index, Data.EndPosX)
+    endY := GetReplaceVarText(tableItem, index, Data.EndPosY)
+
+    if (!IsNumber(startX) || !IsNumber(startY) || !IsNumber(endX) || !IsNumber(endY))
+        return
+
+    startX := Number(startX)
+    startY := Number(startY)
+    endX := Number(endX)
+    endY := Number(endY)
+    
+    shotWidth := endX - startX
+    shotHeight := endY - startY
+    if (shotWidth <= 0 || shotHeight <= 0)
+        return
+
+    baseDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Temp_ScreenShot"
+    if (!DirExist(baseDir))
+        DirCreate(baseDir)
+
+    if (Data.NameType == 2 && Data.FixedName != "") {
+        fileName := Data.FixedName ".png"
+    } else {
+        fileName := Data.SerialStr ".png"
+    }
+
+    filePath := baseDir "\" fileName
+
+    if (Data.ScreenShotType == 2) {
+        winInfo := GetReplaceVarText(tableItem, index, Data.WinInfo)
+        if (winInfo == "")
+            return
+
+        hwndList := GetHwndList(winInfo)
+        if (!hwndList || hwndList.Length == 0)
+            return
+
+        hwnd := hwndList[1]
+        
+        try {
+            matPtr := DllCall("RMT_OpenCV.dll\CaptureWinMat", "Int", hwnd, "Int", startX,
+                "Int", startY, "Int", shotWidth, "Int", shotHeight, "Cdecl Ptr")
+            if (!matPtr)
+                return
+            
+            DllCall("RMT_OpenCV.dll\SaveMatToFile", "ptr", matPtr, "AStr", filePath, "cdecl Int")
+            DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")
+        } catch as e {
+            return
+        }
+    } else {
+        try {
+            matPtr := DllCall("RMT_OpenCV.dll\CaptureScreenMat", "Int", startX,
+                "Int", startY, "Int", shotWidth, "Int", shotHeight, "Cdecl Ptr")
+            if (!matPtr)
+                return
+            
+            DllCall("RMT_OpenCV.dll\SaveMatToFile", "ptr", matPtr, "AStr", filePath, "cdecl Int")
+            DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")
+        } catch as e {
+            return
+        }
+    }
+
+    if (Data.ResultToggle) {
+        MySetGlobalVariable([Data.ResultSaveName], [filePath], false)
+    }
 }
