@@ -86,7 +86,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         "输入", OnInput,
         "文件读写", OnFileIO,
         "窗口管理", OnWindowManage,
-        "按键检测", OnKeyCheck
+        "按键检测", OnKeyCheck,
+        "注释", (*) => ""
     )
 
     cmdArr := SplitMacro(macro)

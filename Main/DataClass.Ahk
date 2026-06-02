@@ -833,6 +833,13 @@ class KeyCheckData {
     }
 }
 
+class CommentData {
+    __New() {
+        this.SerialStr := ""
+        this.Content := GetLang("请输入注释内容")
+    }
+}
+
 class MsgType {
     static TASK := 1    ;主线程-》Worker
     static RESULT := 2  ;Worker-》主线程
