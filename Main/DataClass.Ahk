@@ -517,6 +517,7 @@ class OutputData {
         this.SerialStr := ""
         this.Text := GetLang("将要输出的文本")
         this.OutputType := "发送内容"   ;sendtest  粘贴   粘贴
+        this.VariableName := ""         ;字符变量时的变量名
     }
 }
 
