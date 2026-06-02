@@ -575,6 +575,7 @@ OnFinishRecordMacro() {
     macroLineStr := StrReplace(macroStr, ",", "`n")
     ToolCheckInfo.ToolTextCtrl.Value := macroLineStr
     SetClipboard(macroLineStr)
+    MsgBox(GetLang("录制指令已复制到剪切板！`n`n请在【按键宏】页签下粘贴宏，`n配置触发键后，即可通过按键回放指令。"), GetLang("录制完成提示"))
 }
 
 FilterMoveCmd(macroStr) {
@@ -778,6 +779,36 @@ OnToolRecordMacro(isHotkey, *) {
             ToolCheckInfo.ToolTextCtrl.Value := ""
         }
     }
+}
+
+OnForceEndRecord() {
+    global RI_isActive, RI_eventQueue, CD_canceled
+    wasCountingDown := IsSet(CD_canceled) && !CD_canceled && (IsSet(RecordCountdownGui) && RecordCountdownGui != "")
+    isRecording := RI_isActive
+
+    if (wasCountingDown) {
+        HideRecordCountdown()
+        ToolCheckInfo.RecordMacroStr := ""
+        ToolCheckInfo.RecordHoldKeyMap := Map()
+        if (MySoftData.MacroEditGui != "") {
+            MySoftData.MacroEditGui.InitTreeView("")
+            MySoftData.MacroEditGui.InitMacroText("")
+        }
+        ToolCheckInfo.ToolTextCtrl.Value := ""
+        if (MySoftData.MacroEditGui != "")
+            MySoftData.RecordToggleCon.Value := false
+        return
+    }
+
+    if (!isRecording)
+        return
+
+    RI_isActive := false
+    RecordConsumeRI()
+    RI_eventQueue := []
+    HideRecordCountdown()
+    HideRecordBorder()
+    OnFinishRecordMacro()
 }
 
 ShowRecordBorder() {

@@ -750,6 +750,8 @@ CustomTrayMenu() {
 
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("显示窗口"), (*) => RefreshGui())
     A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("休眠"), (*) => OnSuspendHotkey())
+    A_TrayMenu.Insert(GetLang("休眠"), GetLang("开始录制"), (*) => OnTrayStartRecord())
+    A_TrayMenu.Insert(GetLang("休眠"), GetLang("结束录制"), (*) => OnTrayEndRecord())
     A_TrayMenu.Delete("&Pause Script")
     A_TrayMenu.Delete("&Suspend Hotkeys")
     A_TrayMenu.ClickCount := 1
@@ -757,4 +759,18 @@ CustomTrayMenu() {
     A_IconTip := tipStr  ; 鼠标悬停时显示此内容
     A_IconHidden := 0   ;0(可见) 和 1(隐藏)
     TraySetIcon("Images\Soft\rabit.ico")
+}
+
+OnTrayStartRecord(*) {
+    if (RI_isActive || (IsSet(CD_canceled) && !CD_canceled && (IsSet(RecordCountdownGui) && RecordCountdownGui != "")))
+        return
+    ToolCheckInfo.ToolCheckRecordMacroCtrl.Value := true
+    OnToolRecordMacro(false)
+}
+
+OnTrayEndRecord(*) {
+    if (!RI_isActive && !(IsSet(CD_canceled) && !CD_canceled && (IsSet(RecordCountdownGui) && RecordCountdownGui != "")))
+        return
+    ToolCheckInfo.ToolCheckRecordMacroCtrl.Value := false
+    OnForceEndRecord()
 }

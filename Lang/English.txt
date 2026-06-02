@@ -489,6 +489,10 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 指令下移=Move Down
 指令录制=Record
 指令录制：=Record:
+开始录制=Start Record
+结束录制=End Record
+录制完成提示=Recording Complete
+录制指令已复制到剪切板！`n`n请在【按键宏】页签下粘贴宏，`n配置触发键后，即可通过按键回放指令。=Recording commands have been copied to clipboard!`n`nPlease paste the macro in [Keyboard Macro] tab,`nthen configure a trigger key to replay via keystroke.
 指令显示=Show Inst
 指令显示编辑器=Command Display Editor
 指令窗口=Inst Window
