@@ -90,6 +90,7 @@ OnTriggerMacroOnce(tableItem, macro, index) {
     )
 
     cmdArr := SplitMacro(macro)
+    frontInfo := GetItemFrontInfo(tableItem, index)
 
     for value in cmdArr {
         if (tableItem.KilledArr[index])
@@ -98,6 +99,12 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         WaitIfPaused(tableItem, index)
         if (SubStr(cmdArr[A_Index], 1, 2) == "🚫")
             continue
+
+        ; 前台窗口检测：如果配置了前台信息，检查窗口是否存在和激活
+        if (frontInfo != "" && !CheckFrontWindowActive(frontInfo)) {
+            KillTableItemMacro(tableItem, index)
+            break
+        }
 
         cmdStr := GetCmdStr(cmdArr[A_Index])
         paramArr := StrSplit(cmdStr, "_")
@@ -125,6 +132,45 @@ OnTriggerMacroOnce(tableItem, macro, index) {
             break
         }
     }
+}
+
+; 检查前台窗口是否还存在并处于激活状态
+CheckFrontWindowActive(frontInfoStr) {
+    if (frontInfoStr == "")
+        return true
+
+    ; 句柄ID格式：❖hwnd1|hwnd2|...
+    if (InStr(frontInfoStr, "❖")) {
+        hwndList := StrSplit(StrReplace(frontInfoStr, "❖"), "|")
+        for hwnd in hwndList {
+            if (WinExist("ahk_id " hwnd) && WinActive("ahk_id " hwnd))
+                return true
+        }
+        return false
+    }
+
+    ; 窗口信息格式：标题⎖类名⎖进程名
+    infoArr := StrSplit(frontInfoStr, "⎖")
+    if (infoArr.Length != 3)
+        return true
+
+    title := infoArr[1]
+    className := infoArr[2]
+    process := infoArr[3]
+
+    ; 构建WinTitle字符串进行检测
+    winTitle := ""
+    if (title != "")
+        winTitle .= title
+    if (className != "")
+        winTitle .= " ahk_class " className
+    if (process != "")
+        winTitle .= " ahk_exe " process
+
+    if (winTitle == "")
+        return true
+
+    return !!(WinExist(winTitle) && WinActive(winTitle))
 }
 
 OnSearchWrapper(tableItem, cmdStr, index) {
