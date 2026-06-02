@@ -218,6 +218,7 @@ OnItemAddMacroBtnClick(tableItem, btn, *) {
     tableItem.RemarkArr.InsertAt(AddIndex, "")
     tableItem.LoopCountArr.InsertAt(AddIndex, "1")
     tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
+    tableItem.UnorderedTriggerArr.InsertAt(AddIndex, false)
     tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
     tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
     tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
@@ -289,6 +290,7 @@ OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
     tableItem.ModeArr.RemoveAt(itemIndex)
     tableItem.ForbidArr.RemoveAt(itemIndex)
     tableItem.HoldTimeArr.RemoveAt(itemIndex)
+    tableItem.UnorderedTriggerArr.RemoveAt(itemIndex)
     tableItem.RemarkArr.RemoveAt(itemIndex)
     tableItem.TimingSerialArr.RemoveAt(itemIndex)
     tableItem.StartTipSoundArr.RemoveAt(itemIndex)
@@ -318,9 +320,10 @@ OnItemAddFoldBtnClick(tableItem, btn, *) {
     foldInfo.ForbidStateArr.InsertAt(foldIndex + 1, false)
     foldInfo.FoldStateArr.InsertAt(foldIndex + 1, false)
     foldInfo.TKTypeArr.InsertAt(foldIndex + 1, 1)
-    foldInfo.TKArr.InsertAt(foldIndex + 1, "")
-    foldInfo.HoldTimeArr.InsertAt(foldIndex + 1, 500)
-    tableItem.FoldOffsetArr.InsertAt(foldIndex + 1, titleHeidht)
+        foldInfo.TKArr.InsertAt(foldIndex + 1, "")
+        foldInfo.HoldTimeArr.InsertAt(foldIndex + 1, 500)
+        foldInfo.UnorderedTriggerArr.InsertAt(foldIndex + 1, false)
+        tableItem.FoldOffsetArr.InsertAt(foldIndex + 1, titleHeidht)
 
     UpdateConFoldIndex(tableItem, foldIndex, true)
     LastGroupCon := tableItem.AllGroup[foldIndex]
@@ -357,6 +360,7 @@ OnItemAddMenuItem(tableItem, foldIndex) {
         tableItem.RemarkArr.InsertAt(AddIndex, "")
         tableItem.LoopCountArr.InsertAt(AddIndex, "1")
         tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
+        tableItem.UnorderedTriggerArr.InsertAt(AddIndex, false)
         tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
         tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
         tableItem.StartTipSoundArr.InsertAt(AddIndex, 0)
@@ -430,6 +434,7 @@ OnItemDelFoldBtnClick(tableItem, btn, *) {
     foldInfo.TKTypeArr.RemoveAt(foldIndex)
     foldInfo.TKArr.RemoveAt(foldIndex)
     foldInfo.HoldTimeArr.RemoveAt(foldIndex)
+    foldInfo.UnorderedTriggerArr.RemoveAt(foldIndex)
     tableItem.FoldOffsetArr.RemoveAt(foldIndex)
     tableItem.AllGroup.RemoveAt(foldIndex)
     MySlider.RefreshTab()
@@ -479,6 +484,8 @@ OnItemEditTriggerKey(tableItem, index, *) {
     SureAction(sureTriggerKey, timeValue, unorderedTrigger) {
         tableItem.TKArr[index] := sureTriggerKey
         tableItem.HoldTimeArr[index] := timeValue
+        while (tableItem.UnorderedTriggerArr.Length < index)
+            tableItem.UnorderedTriggerArr.Push(false)
         tableItem.UnorderedTriggerArr[index] := unorderedTrigger
         ItemUsePool := ItemUseConPoolMap[tableItem.Index]
         if (ItemUsePool.Has(index)) {
@@ -627,6 +634,8 @@ OnFlodTKEditClick(TKEditCon, tableItem, con, *) {
         TKEditCon.Value := sureTriggerKey
         foldInfo.TKArr[foldIndex] := sureTriggerKey
         foldInfo.HoldTimeArr[foldIndex] := timeValue
+        while (foldInfo.UnorderedTriggerArr.Length < foldIndex)
+            foldInfo.UnorderedTriggerArr.Push(false)
         foldInfo.UnorderedTriggerArr[foldIndex] := unorderedTrigger
     }
 

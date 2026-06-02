@@ -545,7 +545,7 @@ class MenuWheelGui {
         if (FileExist(path))
             return path
 
-        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Gif\" path
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon\" path
         if (FileExist(fullPath))
             return fullPath
 

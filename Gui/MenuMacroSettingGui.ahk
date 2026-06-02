@@ -16,7 +16,7 @@ class MenuMacroSettingGui {
 
         tableItem := MySoftData.TableInfo[tableIndex]
         if (tableItem.HasProp("GifPathArr") && tableItem.GifPathArr.Length >= index && tableItem.GifPathArr[index] != "") {
-            this.StoredGifPath := tableItem.GifPathArr[index]
+            this.StoredGifPath := this.GetFullGifPath(tableItem.GifPathArr[index])
         } else {
             this.StoredGifPath := ""
         }
@@ -53,10 +53,23 @@ class MenuMacroSettingGui {
     }
 
     OnBrowseClick() {
-        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Gif\"
-        file := FileSelect(1, fullPath, GetLang("选择GIF"), "Img Files (*.gif; *.png; .jpg)")
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon\"
+        file := FileSelect(1, fullPath, GetLang("选择图标"), "Image Files (*.gif; *.png; *.jpg; *.jpeg)")
         if (file == "")
             return
+
+        SplitPath file, &name, &dir, &ext, &name_no_ext, &drive
+        destDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon"
+        newPath := destDir "\" name
+
+        if (file != newPath) {
+            if (FileExist(newPath)) {
+                fileName := this.GetUniqueFileName(file)
+                newPath := destDir "\" fileName
+            }
+            FileCopy(file, newPath, 1)
+            file := newPath
+        }
 
         this.OriginalGifPath := file
         this.GifPathEdit.Value := file
@@ -69,7 +82,7 @@ class MenuMacroSettingGui {
         if (FileExist(path))
             return path
 
-        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Gif\" path
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon\" path
         if (FileExist(fullPath))
             return fullPath
 
@@ -97,28 +110,33 @@ class MenuMacroSettingGui {
     }
 
     CopyGifToImagesFolder(sourcePath) {
-        gifsDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Gif"
-        if (!FileExist(gifsDir)) {
-            DirCreate(gifsDir)
+        iconsDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon"
+        if (!FileExist(iconsDir)) {
+            DirCreate(iconsDir)
         }
 
-        fileName := this.GetUniqueFileName(sourcePath)
-        destPath := gifsDir "\" fileName
+        SplitPath sourcePath, &name, &dir, &ext, &name_no_ext, &drive
+        destPath := iconsDir "\" name
 
         if (sourcePath == destPath) {
-            return fileName
+            return name
+        }
+
+        if (FileExist(destPath)) {
+            name := this.GetUniqueFileName(sourcePath)
+            destPath := iconsDir "\" name
         }
 
         try {
             FileCopy(sourcePath, destPath, 1)
         }
 
-        return fileName
+        return name
     }
 
     GetUniqueFileName(sourcePath) {
         SplitPath sourcePath, , , &ext, &nameNoExt
-        destDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Gif"
+        destDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon"
 
         if (!FileExist(destDir "\" nameNoExt "." ext)) {
             return nameNoExt "." ext
