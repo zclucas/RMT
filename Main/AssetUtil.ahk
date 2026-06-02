@@ -1739,6 +1739,8 @@ WaitIfPaused(tableItem, itemIndex) {
 
 GetItemFoldIndex(tableItem, itemIndex) {
     FoldInfo := tableItem.FoldInfo
+    if (!IsObject(FoldInfo) || !FoldInfo.HasProp("IndexSpanArr"))
+        return 0
     for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
         IndexSpan := StrSplit(IndexSpanStr, "-")
         if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
@@ -1752,6 +1754,8 @@ GetItemFoldIndex(tableItem, itemIndex) {
 ; 统一获取某项的所有Fold信息（避免重复遍历IndexSpanArr）
 GetItemFoldData(tableItem, itemIndex) {
     FoldInfo := tableItem.FoldInfo
+    if (!IsObject(FoldInfo) || !FoldInfo.HasProp("IndexSpanArr"))
+        return { foldIndex: 0, forbidState: false, frontInfo: "", offset: 1 }
     for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
         IndexSpan := StrSplit(IndexSpanStr, "-")
         if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
@@ -1778,6 +1782,8 @@ GetItemFrontInfo(tableItem, itemIndex) {
 
 GetItemOffsetOfFold(tableItem, itemIndex) {
     FoldInfo := tableItem.FoldInfo
+    if (!IsObject(FoldInfo) || !FoldInfo.HasProp("IndexSpanArr"))
+        return 1
     for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
         IndexSpan := StrSplit(IndexSpanStr, "-")
         if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
