@@ -28,6 +28,10 @@ class SearchProGui {
         this.ImageVariArr := []
         this.ColorArr := []
         this.TextArr := []
+        this.PreviewGui := ""
+        this.PreviewBorderArr := []
+        this.PreviewFollowTimer := 0
+        this.PreviewFollowing := false
     }
 
     ShowGui(cmd) {
@@ -74,6 +78,11 @@ class SearchProGui {
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 50), GetLang("备注："))
         PosX += 50
         this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 150), "")
+
+        PosX += 170
+        this.PreviewAreaCon := MyGui.Add("Checkbox", Format("x{} y{} w{} h{} Left", PosX, PosY, 150, 25), GetLang(
+            "预览框选范围"))
+        this.PreviewAreaCon.OnEvent("Click", (*) => this.OnClickPreviewArea())
 
         PosY += 35
         PosX := 10
@@ -143,19 +152,23 @@ class SearchProGui {
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("起始坐标X："))
         PosX += 80
         this.StartPosXCon := MyGui.Add("ComboBox", Format("x{} y{} w{} Center", PosX, PosY - 5, 80))
+        this.StartPosXCon.OnEvent("Change", (*) => this.RefreshPreviewArea())
         PosX := 180
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("起始坐标Y："))
         PosX += 80
         this.StartPosYCon := MyGui.Add("ComboBox", Format("x{} y{} w{} Center", PosX, PosY - 5, 80))
+        this.StartPosYCon.OnEvent("Change", (*) => this.RefreshPreviewArea())
         PosY += 35
         PosX := 10
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("终止坐标X："))
         PosX += 80
         this.EndPosXCon := MyGui.Add("ComboBox", Format("x{} y{} w{} Center", PosX, PosY - 5, 80))
+        this.EndPosXCon.OnEvent("Change", (*) => this.RefreshPreviewArea())
         PosX := 180
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("终止坐标Y："))
         PosX += 80
         this.EndPosYCon := MyGui.Add("ComboBox", Format("x{} y{} w{} Center", PosX, PosY - 5, 80))
+        this.EndPosYCon.OnEvent("Change", (*) => this.RefreshPreviewArea())
         PosY += 35
         PosX := 10
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("搜索次数："))
@@ -834,16 +847,6 @@ class SearchProGui {
         this.Gui.Hide()
     }
 
-    OnGuiClose() {
-        this.ToggleFunc(false)
-        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
-            try {
-                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
-            }
-        }
-        this.Gui.Hide()
-    }
-
     OnClickSetPicBtn() {
         curPath := this.ImagePathCon.Text
         path := FileSelect(1, curPath, GetLang("选择图片"), "PNG Files (*.png)")
@@ -1024,6 +1027,7 @@ class SearchProGui {
         this.SetConArrState(this.CoordTogArr, true, isCoord)
 
         this.LastIsWin := isWin
+        this.RefreshPreviewArea()
     }
 
     SetConArrState(ConArr, isEnabled, state) {
@@ -1130,5 +1134,170 @@ class SearchProGui {
         }
 
         SaveMacroCMDData(data)
+    }
+
+    OnClickPreviewArea() {
+        this.RefreshPreviewArea()
+    }
+
+    RefreshPreviewArea() {
+        if (this.PreviewAreaCon.Value != 1) {
+            this.StopPreviewFollow()
+            this.HidePreviewRect()
+            return
+        }
+        startX := this.StartPosXCon.Text
+        startY := this.StartPosYCon.Text
+        endX := this.EndPosXCon.Text
+        endY := this.EndPosYCon.Text
+
+        if (!IsNumber(startX) || !IsNumber(startY) || !IsNumber(endX) || !IsNumber(endY)) {
+            this.StopPreviewFollow()
+            this.HidePreviewRect()
+            return
+        }
+
+        startX := Number(startX)
+        startY := Number(startY)
+        endX := Number(endX)
+        endY := Number(endY)
+
+        ; 窗口搜索类型时，将窗口相对坐标转换为屏幕绝对坐标
+        curType := this.SearchTypeCon.Value
+        isWin := curType == 4 || curType == 5 || curType == 6
+        if (isWin) {
+            hwndList := GetHwndList(this.WinInfoCon.Value)
+            if (hwndList.Length == 0) {
+                this.StopPreviewFollow()
+                this.HidePreviewRect()
+                return
+            }
+            targetHwnd := hwndList[1]
+            startPt := this.WinToScreen(targetHwnd, startX, startY)
+            endPt := this.WinToScreen(targetHwnd, endX, endY)
+            startX := startPt[1]
+            startY := startPt[2]
+            endX := endPt[1]
+            endY := endPt[2]
+        }
+
+        x := Min(startX, endX)
+        y := Min(startY, endY)
+        w := Abs(endX - startX)
+        h := Abs(endY - startY)
+
+        if (w == 0 || h == 0) {
+            this.StopPreviewFollow()
+            this.HidePreviewRect()
+            return
+        }
+
+        this.ShowPreviewRect(x, y, w, h)
+
+        ; 窗口搜索类型时启动跟随定时器
+        if (isWin && !this.PreviewFollowing) {
+            this.PreviewFollowing := true
+            this.PreviewFollowTimer := SetTimer(this.PreviewFollowTick.Bind(this), 100)
+        }
+        else if (!isWin && this.PreviewFollowing) {
+            this.StopPreviewFollow()
+        }
+    }
+
+    StopPreviewFollow() {
+        if (this.PreviewFollowTimer != 0) {
+            try {
+                SetTimer(this.PreviewFollowTimer, 0)
+            }
+            this.PreviewFollowTimer := 0
+        }
+        this.PreviewFollowing := false
+    }
+
+    PreviewFollowTick() {
+        if (this.PreviewAreaCon.Value != 1) {
+            this.StopPreviewFollow()
+            return
+        }
+        this.RefreshPreviewArea()
+    }
+
+    WinToScreen(hwnd, winX, winY) {
+        DllCall("SetProcessDPIAware")
+        GA_ROOT := 2
+        rootHwnd := DllCall("GetAncestor", "ptr", hwnd, "uint", GA_ROOT, "ptr")
+        pt := Buffer(8, 0)
+        NumPut("int", winX, pt, 0)
+        NumPut("int", winY, pt, 4)
+        DllCall("User32\ClientToScreen", "ptr", rootHwnd, "ptr", pt)
+        screenX := NumGet(pt, 0, "int")
+        screenY := NumGet(pt, 4, "int")
+        return [screenX, screenY]
+    }
+
+    ShowPreviewRect(x, y, w, h) {
+        borderW := 2
+        borderColor := "Red"
+
+        ; 复用已有边框窗口，避免销毁重建导致闪烁
+        if (this.PreviewBorderArr.Length == 0) {
+            ; 上边框
+            topGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
+            topGui.BackColor := borderColor
+            topGui.Show("NA x" x " y" y " w" w " h" borderW)
+            this.PreviewBorderArr.Push(topGui)
+
+            ; 下边框
+            bottomGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
+            bottomGui.BackColor := borderColor
+            bottomGui.Show("NA x" x " y" (y + h - borderW) " w" w " h" borderW)
+            this.PreviewBorderArr.Push(bottomGui)
+
+            ; 左边框
+            leftGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
+            leftGui.BackColor := borderColor
+            leftGui.Show("NA x" x " y" y " w" borderW " h" h)
+            this.PreviewBorderArr.Push(leftGui)
+
+            ; 右边框
+            rightGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
+            rightGui.BackColor := borderColor
+            rightGui.Show("NA x" (x + w - borderW) " y" y " w" borderW " h" h)
+            this.PreviewBorderArr.Push(rightGui)
+        }
+        else {
+            ; 仅移动已有窗口，不销毁重建
+            this.PreviewBorderArr[1].Move(x, y, w, borderW)
+            this.PreviewBorderArr[2].Move(x, y + h - borderW, w, borderW)
+            this.PreviewBorderArr[3].Move(x, y, borderW, h)
+            this.PreviewBorderArr[4].Move(x + w - borderW, y, borderW, h)
+        }
+    }
+
+    HidePreviewRect() {
+        for gui in this.PreviewBorderArr {
+            try {
+                gui.Destroy()
+            }
+        }
+        this.PreviewBorderArr := []
+        if (this.PreviewGui != "") {
+            try {
+                this.PreviewGui.Destroy()
+            }
+            this.PreviewGui := ""
+        }
+    }
+
+    OnGuiClose() {
+        this.StopPreviewFollow()
+        this.HidePreviewRect()
+        this.ToggleFunc(false)
+        if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
+            try {
+                GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+            }
+        }
+        this.Gui.Hide()
     }
 }
