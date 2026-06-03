@@ -104,7 +104,8 @@ class OperationSubGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnClose())
-        MyGui.Show(Format("w{} h{}", 370, 310))
+        pos := GetCenterPosOnActiveMonitor(370, 310)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 370, 310))
     }
 
     OnClose(*) {

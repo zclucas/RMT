@@ -560,6 +560,19 @@ OnItemEditMacro(tableItem, index, *) {
     MyMacroGui.ShowGui(macro, true)
 }
 
+;右键编辑按钮：打开节点化（蓝图式）宏编辑界面
+OnItemEditMacroGraph(tableItem, index, *) {
+    macro := tableItem.MacroArr[index]
+
+    SureAction(sureMacro) {
+        tableItem.MacroArr[index] := sureMacro
+    }
+
+    MyMacroGraphGui.OwnerHwnd := ""
+    MyMacroGraphGui.SureBtnAction := SureAction
+    MyMacroGraphGui.ShowGui(macro)
+}
+
 OnItemEditReplaceKey(tableItem, index, *) {
     replaceKey := tableItem.MacroArr[index]
 
@@ -1045,6 +1058,8 @@ GetItemConObj(tableItem, itemIndex) {
     TabItemOnEvent(ItemConObj.TKBtnCon, "ContextMenu", OnItemCustomEditTriggerStr.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.SettingCon, "Click", OnItemEditMacroSetting.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.EditCon, "Click", EditMacroAction.bind(tableItem, itemIndex))
+    if (isMacro)
+        TabItemOnEvent(ItemConObj.EditCon, "ContextMenu", OnItemEditMacroGraph.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.PreCon, "Click", OnItemMoveUp.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.NextCon, "Click", OnItemMoveDown.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.CopyCon, "Click", OnItemCopyMacroBtnClick.bind(tableItem, itemIndex))

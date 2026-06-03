@@ -23,17 +23,20 @@ class TimingScheduler {
         this.tableIndex := tableIndex
         this.heap := MinHeap()
         this.timerFunc := ObjBindMethod(this, "OnTimer")
+        this.endCheckTimerFunc := ObjBindMethod(this, "OnEndCheck")
         this.running := false
     }
 
     Start() {
         this.running := true
         this.Rebuild()
+        SetTimer(this.endCheckTimerFunc, 1000)
     }
 
     Stop() {
         this.running := false
         SetTimer(this.timerFunc, 0)
+        SetTimer(this.endCheckTimerFunc, 0)
         this.heap.Clear()
     }
 
@@ -90,6 +93,9 @@ class TimingScheduler {
 
             Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
 
+            if (Data.EndTime != "" && now >= TimeStrToStamp(Data.EndTime))
+                continue
+
             shouldTrigger := true
 
             if ((frontInfo := GetItemFrontInfo(tableItem, index)) != "") {
@@ -107,6 +113,31 @@ class TimingScheduler {
         }
 
         this.ScheduleNext()
+    }
+
+    OnEndCheck() {
+        if (!this.running)
+            return
+
+        tableItem := MySoftData.TableInfo[this.tableIndex]
+        now := UnixNow()
+
+        for index, _ in tableItem.ModeArr {
+
+            if (!TimingCheckItemIfValid(tableItem, index))
+                continue
+
+            if (index <= tableItem.ColorStateArr.Length && tableItem.ColorStateArr[index] == 3)
+                continue
+
+            Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
+
+            if (Data.EndTime == "" || now < TimeStrToStamp(Data.EndTime))
+                continue
+
+            if (index <= tableItem.IsWorkIndexArr.Length && tableItem.IsWorkIndexArr[index] != 0)
+                MyWorkPool.BroadcastStop(this.tableIndex, index)
+        }
     }
 }
 

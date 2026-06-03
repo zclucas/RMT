@@ -281,6 +281,10 @@ InitFilePath() {
     global FileIOFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\FileIOFile.ini"
     global WindowManageFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WindowManageFile.ini"
     global KeyCheckFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyCheckFile.ini"
+    global CommentFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CommentFile.ini"
+    global ScreenShotFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ScreenShotFile.ini"
+    global GraphNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphNodeFile.ini"
+    global GraphStartNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.ini"
 }
 
 SubMacroStopAction(tableIndex, itemIndex) {
@@ -1000,6 +1004,16 @@ OnTriggerSepcialItemMacro(MacroStr) {
     tableItem.ActionCount[1] := 0
     tableItem.index := 1
     tableItem.ColorStateArr[1] := 1
+
+    if (!tableItem.VariableMapArr.Has(1)) {
+        VariableMap := Map()
+        VariableMap["宏循环次数"] := 0
+        VariableMap["循环-跳过本轮"] := false
+        VariableMap["循环-跳出"] := false
+        VariableMap["分支-跳出"] := false
+        tableItem.VariableMapArr[1] := VariableMap
+    }
+
     UpdateMacroRunningCount(0, 1)
     RefreshItemColorUI(tableItem.Index, 1)
     OnTriggerMacroOnce(tableItem, MacroStr, 1)

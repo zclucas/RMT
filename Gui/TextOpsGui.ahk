@@ -31,10 +31,12 @@ class TextOpsGui {
                 GetLang("数字提取"),
                 GetLang("字母提取"),
                 GetLang("中文提取"),
+                GetLang("正则匹配"),
             ],
             GetLang("文本分割"), [
                 GetLang("内容分割"),
                 GetLang("定长分割"),
+                GetLang("正则匹配"),
             ],
             GetLang("文本替换"), [
                 GetLang("普通文本"),
@@ -47,6 +49,7 @@ class TextOpsGui {
         this.ArgsTipMap := Map(
             GetLang("内容分割"), GetLang("分割文本："),
             GetLang("定长分割"), GetLang("分割长度："),
+            GetLang("正则匹配"), GetLang("正则表达式："),
             GetLang("拼接文本"), GetLang("拼接内容："))
     }
 
@@ -173,7 +176,8 @@ class TextOpsGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 535, 320))
+        pos := GetCenterPosOnActiveMonitor(535, 320)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 535, 320))
     }
 
     OnGuiClose() {
@@ -232,7 +236,7 @@ class TextOpsGui {
         }
 
         ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics || IsConcat || IsReplace
-        ShowArgsName := IsSplit || IsConcat
+        ShowArgsName := IsSplit || IsConcat || IsGetEx
         this.ArgsTypeConTip.Enabled := ShowArgsType
         this.ArgsTypeCon.Enabled := ShowArgsType
         this.ArgsNameConTip.Enabled := ShowArgsName
@@ -326,6 +330,13 @@ class TextOpsGui {
         if (this.TypeCon.Text == GetLang("文本分割")) {
             if (this.ArgsNameCon.Text == "") {
                 MsgBox(GetLang("类型参数不能为空"))
+                return false
+            }
+        }
+
+        if (this.TypeCon.Text == GetLang("文本提取")) {
+            if (this.ArgsTypeCon.Text == GetLang("正则匹配") && this.ArgsNameCon.Text == "") {
+                MsgBox(GetLang("正则表达式不能为空"))
                 return false
             }
         }

@@ -777,7 +777,8 @@ class BGKeyGui {
         btnCon.OnEvent("Click", (*) => this.OnSureBtnClick())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 1260, 420))
+        pos := GetCenterPosOnActiveMonitor(1260, 420)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 1260, 420))
     }
 
     OnGuiClose() {

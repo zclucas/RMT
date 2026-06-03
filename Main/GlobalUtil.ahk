@@ -30,8 +30,10 @@
 #Include ..\Plugins\AHK-XAML\lib\XAML_Generator.ahk
 #Include ..\Plugins\AHK-XAML\lib\XAML_GUI.ahk
 #Include ..\Plugins\AHK-XAML\lib\XAML_Components.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Adv_Components.ahk
 #Include ..\Plugins\AHK-XAML\lib\XAML_Dialog.ahk
 #Include ..\Plugins\AHK-XAML\lib\AXML.ahk
+#Include ..\Gui\MacroGraphGui.ahk
 #Include ..\Gui\MenuWheelGui.ahk
 #Include ..\Gui\MenuMacroSettingGui.ahk
 #Include ..\Gui\UIMacroGui.ahk
@@ -76,6 +78,7 @@ global MyEditHotkeyGui := EditHotkeyGui()
 global MyMacroSettingGui := MacroSettingGui()
 global MyVarListenGui := VarListenGui()
 global MyMacroGui := MacroEditGui()
+global MyMacroGraphGui := MacroGraphGui()
 global MyMenuWheel := MenuWheelGui()
 global MyMenuMacroSettingGui := MenuMacroSettingGui()
 global MyUIMacroGui := UIMacroGui()

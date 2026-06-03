@@ -4,6 +4,7 @@
 #Include MouseMoveGui.ahk
 #Include SearchGui.ahk
 #Include SearchProGui.ahk
+#Include ScreenShotGui.ahk
 #Include RunGui.ahk
 #Include CompareGui.ahk
 #Include MMProGui.ahk
@@ -24,6 +25,7 @@
 #Include FileIOGui.ahk
 #Include WindowManageGui.ahk
 #include KeyCheckGui.ahk
+#Include CommentGui.ahk
 
 class MacroEditGui {
     static Hotkeys := ["f5", "f6", "delete", "numpaddot"]
@@ -59,7 +61,7 @@ class MacroEditGui {
         this.SubMacroLastIndex := 0
 
         this.CMDStrArr := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "移动", "移动Pro", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测"])
+            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测", "注释", "抓图"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
@@ -72,7 +74,8 @@ class MacroEditGui {
             "Images\Soft\FileIO.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\Key.png",
-            "Images\Soft\WindowManage.png", "Images\Soft\KeyCheck.png"]
+            "Images\Soft\WindowManage.png", "Images\Soft\KeyCheck.png",
+            "Images\Soft\ScreenShot.png", "Images\Soft\Comment.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("搜索"), "Icon3",
         GetLang("搜索Pro"), "Icon4", GetLang("移动"), "Icon5", GetLang("移动Pro"), "Icon6", GetLang("输出"), "Icon7",
@@ -81,7 +84,8 @@ class MacroEditGui {
         GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
         GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27",
-        GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("按键检测"), "Icon30")
+        GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("按键检测"), "Icon30", GetLang("注释"), "Icon31",
+        GetLang("抓图"), "Icon32")
         this.InitSubGui()
     }
 
@@ -181,6 +185,14 @@ class MacroEditGui {
         this.KeyCheckGui := KeyCheckGui()
         this.KeyCheckGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
         this.SubGuiMap.Set(GetLang("按键检测"), this.KeyCheckGui)
+
+        this.CommentGui := CommentGui()
+        this.CommentGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
+        this.SubGuiMap.Set(GetLang("注释"), this.CommentGui)
+        
+        this.ScreenShotGui := ScreenShotGui()
+        this.ScreenShotGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
+        this.SubGuiMap.Set(GetLang("抓图"), this.ScreenShotGui)
     }
 
     ShowGui(CommandStr, ShowSaveBtn) {
@@ -225,6 +237,8 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\Control.png")
             IL_Add(ImageListID, "Images\Soft\WindowManage.png")   ;29 窗口管理
             IL_Add(ImageListID, "Images\Soft\KeyCheck.png")   ;30 按键检测
+            IL_Add(ImageListID, "Images\Soft\Comment.png")   ;31 注释
+            IL_Add(ImageListID, "Images\Soft\ScreenShot.png")
         }
 
         WindowHotkeyManager.Register(this, MacroEditGui.Hotkeys, this.OnSoftKey.Bind(this), this._IsAlive.Bind(this))
@@ -346,10 +360,17 @@ class MacroEditGui {
         PosY += 40
         this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\WindowManage.png",
             GetLang("窗口管理"), (*) => this.OnOpenSubGui(this.WindowManageGui))
-
         PosX += 105
         this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\KeyCheck.png",
             GetLang("按键检测"), (*) => this.OnOpenSubGui(this.KeyCheckGui))
+
+        PosX := 10
+        PosY += 40
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Comment.png",
+            GetLang("注释"), (*) => this.OnOpenSubGui(this.CommentGui))
+        PosX += 105
+        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\ScreenShot.png",
+            GetLang("抓图"), (*) => this.OnOpenSubGui(this.ScreenShotGui))
 
         PosX := 225
         PosY := 15
@@ -404,7 +425,8 @@ class MacroEditGui {
         this.SaveBtnCtrl := MyGui.Add("Button", Format("x{} y{} h{} w{} center", PosX, PosY, 40, 100), GetLang("应用并保存"))
         this.SaveBtnCtrl.OnEvent("Click", (*) => this.OnSaveBtnClick())
 
-        MyGui.Show(Format("w{} h{}", 945, 570))
+        pos := GetCenterPosOnActiveMonitor(945, 570)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 945, 570))
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
     }
 
@@ -1361,6 +1383,7 @@ class MacroEditGui {
         fileMap := Map(
             GetLang("搜索"), SearchFile,
             GetLang("搜索Pro"), SearchProFile,
+            GetLang("抓图"), ScreenShotFile,
             GetLang("如果"), CompareFile,
             GetLang("如果Pro"), CompareProFile,
             GetLang("循环"), LoopFile

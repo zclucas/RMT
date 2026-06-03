@@ -150,7 +150,8 @@ class MMProGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 480, 340))
+        pos := GetCenterPosOnActiveMonitor(480, 340)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 480, 340))
     }
 
     OnGuiClose() {

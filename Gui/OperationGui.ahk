@@ -85,7 +85,8 @@ class OperationGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 550, 270))
+        pos := GetCenterPosOnActiveMonitor(550, 270)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 550, 270))
     }
 
     OnGuiClose() {

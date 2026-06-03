@@ -975,7 +975,8 @@ class ReplaceKeyGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} h{} w{} center", PosX, PosY, 40, 100), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnSureBtnClick())
         MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
-        MyGui.Show(Format("w{} h{}", 1260, 550))
+        pos := GetCenterPosOnActiveMonitor(1260, 550)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 1260, 550))
     }
 
     Refresh() {

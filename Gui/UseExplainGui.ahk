@@ -84,7 +84,8 @@ class UseExplainGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
         MyGui.OnEvent("Close", (*) => this.OnTriggerModeAction(false, false))
-        MyGui.Show(Format("w{} h{}", 600, 520))
+        pos := GetCenterPosOnActiveMonitor(600, 520)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 600, 520))
     }
 
     Init(SettingPath) {

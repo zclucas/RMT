@@ -54,7 +54,8 @@ class ErrorMsgBoxGui {
 
         MyGui.OnEvent("Close", (*) => this.Gui.Hide())
         
-        MyGui.Show(Format("w{} h{}", 520, 320))
+        pos := GetCenterPosOnActiveMonitor(520, 320)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 520, 320))
     }
 
     OnCopyBtnClick() {

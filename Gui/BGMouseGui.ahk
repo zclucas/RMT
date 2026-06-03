@@ -145,7 +145,8 @@ class BGMouseGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 500, 335))
+        pos := GetCenterPosOnActiveMonitor(500, 335)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 500, 335))
     }
 
     OnGuiClose() {

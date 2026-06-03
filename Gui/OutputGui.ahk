@@ -57,12 +57,20 @@ class OutputGui {
         this.RemarkCon := MyGui.Add("Edit", Format("x{} y{} w{}", PosX, PosY - 5, 150), "")
 
         PosX := 10
-        PosY += 40
+        PosY += 30
         MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 80, 20), GetLang("输出类型:"))
         PosX += 80
         this.OutputTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 5, 150), GetLangArr(["发送内容",
-            "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"]))
+            "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"]))
         this.OutputTypeCon.Value := 1
+        this.OutputTypeCon.OnEvent("Change", (*) => this.OnChangeOutputType())
+
+        PosX += 160
+        this.VariableNameTipCon := MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 80, 20), GetLang("变量输入框:"))
+        this.VariableNameTipCon.Visible := false
+        PosX += 80
+        this.VariableNameCon := MyGui.Add("ComboBox", Format("x{} y{} w{} R5", PosX, PosY - 5, 120), [])
+        this.VariableNameCon.Visible := false
 
         PosX := 10
         PosY += 30
@@ -91,7 +99,8 @@ class OutputGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 500, 240))
+        pos := GetCenterPosOnActiveMonitor(500, 240)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 500, 240))
     }
 
     OnGuiClose() {
@@ -113,9 +122,16 @@ class OutputGui {
 
         this.TextCon.Value := GetLangStr(this.Data.Text, 1)
         this.OutputTypeCon.Text := GetLang(this.Data.OutputType)
+
+        this.VariableNameCon.Delete()
+        this.VariableNameCon.Add(GetGuiVarArr())
+        this.VariableNameCon.Text := GetLang(this.Data.VariableName)
+
         this.VariCon.Delete()
         this.VariCon.Add(this.DLVariableArr)
         this.VariCon.Value := 1
+
+        this.OnChangeOutputType()
     }
 
     ToggleFunc(state) {
@@ -132,6 +148,12 @@ class OutputGui {
         IsResVar := this.VarTypeCon.Text == GetLang("变量")
         DLArr := IsResVar ? GetGuiVarArr(1) : GetGuiArrNameArr()
         SetDLConValue(this.VariCon, DLArr, this.VariCon.Text)
+    }
+
+    OnChangeOutputType(*) {
+        isCharVariable := this.OutputTypeCon.Text == GetLang("字符变量")
+        this.VariableNameTipCon.Visible := isCharVariable
+        this.VariableNameCon.Visible := isCharVariable
     }
 
     OnClickAddVarNameBtn() {
@@ -162,6 +184,10 @@ class OutputGui {
     }
 
     CheckIfValid() {
+        if (this.OutputTypeCon.Text == GetLang("字符变量")) {
+            if (!CheckVarNameIfValid(this.VariableNameCon.Text))
+                return false
+        }
         return true
     }
 
@@ -181,6 +207,11 @@ class OutputGui {
     SaveOutputData() {
         this.Data.Text := GetLangStr(this.TextCon.Value, 2)
         this.Data.OutputType := GetLangKey(this.OutputTypeCon.Text)
+        this.Data.VariableName := GetVarName(this.VariableNameCon.Text)
         SaveMacroCMDData(this.Data)
+
+        if (this.Data.OutputType == "字符变量") {
+            MySoftData.GlobalVariMap[this.Data.VariableName] := true
+        }
     }
 }

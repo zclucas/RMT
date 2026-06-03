@@ -383,12 +383,14 @@ InitData() {
         "输出", OutputFile, "运行", RunFile, "循环", LoopFile, "宏操作", SubMacroFile, "变量", VariableFile,
         "变量提取", ExVariableFile, "如果", CompareFile, "如果Pro", CompareProFile, "运算", OperationFile,
         "后台鼠标", BGMouseFile, "后台按键", BGKeyFile, "文本处理", TextOpsFile, "Timing", TimingFile, "数组", ArrayFile,
-        "输入", InputFile, "文件读写", FileIOFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile)
+        "输入", InputFile, "文件读写", FileIOFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile,
+        "注释", CommentFile, "抓图", ScreenShotFile, "图形节点", GraphNodeFile, "图形开始节点", GraphStartNodeFile)
     MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "移动Pro", MMProData,
         "输出", OutputData, "运行", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
         "变量提取", ExVariableData, "如果", CompareData, "如果Pro", CompareProData, "运算", OperationData,
         "后台鼠标", BGMouseData, "后台按键", BGKeyData, "文本处理", TextOpsData, "Timing", TimingData, "数组", ArrayData,
-        "输入", InputData, "文件读写", FileIOData, "窗口管理", WindowManageData, "按键检测", KeyCheckData)
+        "输入", InputData, "文件读写", FileIOData, "窗口管理", WindowManageData, "按键检测", KeyCheckData,
+        "注释", CommentData, "抓图", ScreenShotData, "图形节点", MacroGraphNode, "图形开始节点", MacroGraphStartNode)
 }
 
 InitLogitechGHubNew() {
@@ -424,8 +426,8 @@ LoadMainSetting() {
     ToolCheckInfo.ToolCheckHotKey := IniRead(IniFile, IniSection, "ToolCheckHotKey", "!o")
     ToolCheckInfo.ToolRecordMacroHotKey := IniRead(IniFile, IniSection, "RecordMacroHotKey", "!r")
     ToolCheckInfo.ToolTextFilterHotKey := IniRead(IniFile, IniSection, "ToolTextFilterHotKey", "!u")
-    ToolCheckInfo.ScreenShotHotKey := IniRead(IniFile, IniSection, "ScreenShotHotKey", "!F1")
-    ToolCheckInfo.FreePasteHotKey := IniRead(IniFile, IniSection, "FreePasteHotKey", "!F2")
+    ToolCheckInfo.ScreenShotHotKey := IniRead(IniFile, IniSection, "ScreenShotHotKey", "!y")
+    ToolCheckInfo.FreePasteHotKey := IniRead(IniFile, IniSection, "FreePasteHotKey", "!t")
     ToolCheckInfo.RecordKeyboard := IniRead(IniFile, IniSection, "RecordKeyboard", true)
     ToolCheckInfo.RecordMouse := IniRead(IniFile, IniSection, "RecordMouse", true)
     ToolCheckInfo.RecordJoy := IniRead(IniFile, IniSection, "RecordJoy", false)
@@ -1747,6 +1749,8 @@ WaitIfPaused(tableItem, itemIndex) {
 
 GetItemFoldIndex(tableItem, itemIndex) {
     FoldInfo := tableItem.FoldInfo
+    if (!IsObject(FoldInfo) || !FoldInfo.HasProp("IndexSpanArr"))
+        return 0
     for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
         IndexSpan := StrSplit(IndexSpanStr, "-")
         if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
@@ -1759,7 +1763,13 @@ GetItemFoldIndex(tableItem, itemIndex) {
 
 ; 统一获取某项的所有Fold信息（避免重复遍历IndexSpanArr）
 GetItemFoldData(tableItem, itemIndex) {
+    if (!tableItem.FoldInfo || !tableItem.FoldInfo.HasOwnProp("IndexSpanArr"))
+        return { foldIndex: 0, forbidState: false, frontInfo: "", offset: 1 }
+
     FoldInfo := tableItem.FoldInfo
+    if (!IsObject(FoldInfo) || !FoldInfo.HasProp("IndexSpanArr") || !FoldInfo.IndexSpanArr.Length) {
+        return { foldIndex: 0, forbidState: false, frontInfo: "", offset: 1 }
+    }
     for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
         IndexSpan := StrSplit(IndexSpanStr, "-")
         if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
@@ -1786,6 +1796,8 @@ GetItemFrontInfo(tableItem, itemIndex) {
 
 GetItemOffsetOfFold(tableItem, itemIndex) {
     FoldInfo := tableItem.FoldInfo
+    if (!IsObject(FoldInfo) || !FoldInfo.HasProp("IndexSpanArr"))
+        return 1
     for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
         IndexSpan := StrSplit(IndexSpanStr, "-")
         if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {

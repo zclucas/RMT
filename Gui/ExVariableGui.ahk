@@ -234,7 +234,8 @@ class ExVariableGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 560, 450))
+        pos := GetCenterPosOnActiveMonitor(560, 450)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 560, 450))
     }
 
     OnGuiClose() {

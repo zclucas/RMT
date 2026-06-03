@@ -190,7 +190,8 @@ class CompareProEditItemGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
         MyGui.OnEvent("Close", (*) => this.OnClose())
-        MyGui.Show(Format("w{} h{}", 420, 400))
+        pos := GetCenterPosOnActiveMonitor(420, 400)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 420, 400))
     }
 
     OnClose(*) {

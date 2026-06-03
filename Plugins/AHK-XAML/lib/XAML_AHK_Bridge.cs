@@ -126,7 +126,7 @@ public class AhkWpfEngine {
     [DllImport("shell32.dll", CharSet = CharSet.Auto)]
     public static extern uint ExtractIconEx(string szFileName, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons);
 
-    string winId; IntPtr ahkHwnd; string[] tracked; Window win;
+    string winId; IntPtr ahkHwnd; System.Collections.Generic.List<string> tracked; Window win;
     bool LightweightEvents = false; // When true, events only send the triggering control's value (use ui.Query() for others)
     System.Collections.Generic.Dictionary<string, string> canvasModes = new System.Collections.Generic.Dictionary<string, string>();
     System.Windows.Shapes.Rectangle selectionBox = null;
@@ -500,7 +500,7 @@ public class AhkWpfEngine {
         string eventsContent = parts.Length > 1 ? parts[1] : "";
         
         winId = id; ahkHwnd = (IntPtr)long.Parse(hwndStr);
-        tracked = trackedCsv.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+        tracked = new System.Collections.Generic.List<string>(trackedCsv.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
         
         byte[] xamlBytes = Encoding.UTF8.GetBytes(xamlContent);
         if (Application.Current == null) new Application();
@@ -598,7 +598,7 @@ public class AhkWpfEngine {
 
     public void RunEngine(string id, string hwndStr, string trackedCsv, string scriptName, string xamlFilePath, string eventsFilePath, string ownerHwndStr = "0", bool isDaemon = false) {
         winId = id; ahkHwnd = (IntPtr)long.Parse(hwndStr);
-        tracked = trackedCsv.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+        tracked = new System.Collections.Generic.List<string>(trackedCsv.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
         
         string xamlContent = "";
         string eventsContent = "";
@@ -917,7 +917,11 @@ public class AhkWpfEngine {
         win.LocationChanged += (s, e) => UpdateSnapState(win);
         win.SizeChanged += (s, e) => UpdateSnapState(win);
         
-        win.Loaded += async (s, e) => {
+        win.Loaded +=
+#if ENABLE_WEBVIEW
+        async
+#endif
+        (s, e) => {
             IntPtr hwnd = new WindowInteropHelper(win).Handle;
             HwndSource.FromHwnd(hwnd).AddHook(WndProc);
             SendToAhk("EVENT|" + winId + "|Window|LoadedHwnd|" + hwnd.ToString() + "\n");
@@ -1913,7 +1917,10 @@ public class AhkWpfEngine {
                 }
             }
             if (ctrl != null) {
-                if (parts[1] == "AddItem" && ctrl is ItemsControl) {
+                if (parts[1] == "Track") {
+                    // 运行时把动态注入的控件加入状态采集集合（CollectState 会读取其值）
+                    if (!tracked.Contains(parts[0])) tracked.Add(parts[0]);
+                } else if (parts[1] == "AddItem" && ctrl is ItemsControl) {
                     ((ItemsControl)ctrl).Items.Add(parts[2]);
                     if (ctrl is ListBox) {
                         ListBox lb = (ListBox)ctrl;
@@ -2069,7 +2076,6 @@ public class AhkWpfEngine {
                         var slider = win.FindName(sliderName) as Slider;
                         if (slider != null) {
                             bool isSeeking = false;
-                            bool isUpdating = false;
                             
                             // Detect user drag start/end via Thumb routed events
                             slider.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler((ds, de) => {
@@ -2091,10 +2097,8 @@ public class AhkWpfEngine {
                             var posTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
                             posTimer.Tick += (s, e) => {
                                 if (me.NaturalDuration.HasTimeSpan && !isSeeking) {
-                                    isUpdating = true;
                                     slider.Maximum = me.NaturalDuration.TimeSpan.TotalSeconds;
                                     slider.Value = me.Position.TotalSeconds;
-                                    isUpdating = false;
                                 }
                             };
                             posTimer.Start();
@@ -2495,6 +2499,8 @@ public class AhkWpfEngine {
         Point knifeStart = new Point();
         Point lastKnifePos = new Point();
         string lastSelectionSet = "";
+        string lastConnSet = "";        // 上一次框选命中的连线集合（避免重复回传）
+        bool pathJustClicked = false;   // 刚在 MouseDown 选中了连线 → 抑制本次 MouseUp 的"空白处清除选中"
         
         canvas.PreviewMouseDown += (s, e) => {
             if (e.ChangedButton == System.Windows.Input.MouseButton.Middle) {
@@ -2518,6 +2524,7 @@ public class AhkWpfEngine {
         
         // Mode logic: Left click on empty space (Canvas) triggers Pan or Select
         canvas.MouseLeftButtonDown += (s, e) => {
+            pathJustClicked = false;
             var el = e.OriginalSource as FrameworkElement;
             if (el != null && el.Name != null && el.Name.StartsWith("Port_")) {
                 connectionSourcePort = el;
@@ -2536,7 +2543,35 @@ public class AhkWpfEngine {
                 e.Handled = true;
                 return;
             }
-            
+
+            // Connection-path selection: thin Bezier curves are nearly impossible to click
+            // precisely, so accept a direct hit OR a tolerance hit-test near the cursor.
+            {
+                FrameworkElement hitPath = null;
+                if (el != null && el.Name != null && el.Name.Contains("_Path_") && el.Visibility == Visibility.Visible) {
+                    hitPath = el;
+                } else if (e.OriginalSource == canvas) {
+                    Point cp = e.GetPosition(canvas);
+                    System.Windows.Media.VisualTreeHelper.HitTest(canvas, null,
+                        new System.Windows.Media.HitTestResultCallback((result) => {
+                            var hitEl = result.VisualHit as FrameworkElement;
+                            if (hitEl != null && hitEl.Name != null && hitEl.Name.Contains("_Path_") && hitEl.Visibility == Visibility.Visible) {
+                                hitPath = hitEl;
+                                return System.Windows.Media.HitTestResultBehavior.Stop;
+                            }
+                            return System.Windows.Media.HitTestResultBehavior.Continue;
+                        }),
+                        new System.Windows.Media.GeometryHitTestParameters(new System.Windows.Media.EllipseGeometry(cp, 8, 8)));
+                }
+                if (hitPath != null) {
+                    SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|PathClicked|" +
+                        Convert.ToBase64String(Encoding.UTF8.GetBytes(hitPath.Name)) + "\n");
+                    pathJustClicked = true;
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             // If the user clicked on a node or anything else, let it handle its own drag
             if (e.OriginalSource != canvas) return;
             
@@ -2571,6 +2606,7 @@ public class AhkWpfEngine {
                 selectionBox.Height = 0;
                 selectionBox.Visibility = Visibility.Visible;
                 lastSelectionSet = "FORCE_UPDATE";
+                lastConnSet = "FORCE_UPDATE";
                 canvas.CaptureMouse();
                 e.Handled = true;
             } else if (mode == "Knife") {
@@ -2634,6 +2670,30 @@ public class AhkWpfEngine {
                     SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|" + evName + "|" + 
                         LengthPrefix(newSet) + "\n");
                 }
+
+                // Connection paths intersecting the selection rectangle (geometric box-select of lines)
+                var selPaths = new System.Collections.Generic.List<string>();
+                var selRectGeo = new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(x, y, w, h));
+                var hitPen = new System.Windows.Media.Pen(System.Windows.Media.Brushes.Black, 8);
+                foreach (UIElement child in canvas.Children) {
+                    var fe = child as FrameworkElement;
+                    if (fe != null && fe.Name != null && fe.Name.Contains("_Path_") && fe.Visibility == Visibility.Visible) {
+                        var pth = fe as System.Windows.Shapes.Path;
+                        if (pth != null && pth.Data != null) {
+                            try {
+                                var widened = pth.Data.GetWidenedPathGeometry(hitPen);
+                                var inter = System.Windows.Media.Geometry.Combine(widened, selRectGeo, System.Windows.Media.GeometryCombineMode.Intersect, null);
+                                if (inter != null && !inter.IsEmpty()) selPaths.Add(fe.Name);
+                            } catch { }
+                        }
+                    }
+                }
+                string newConnSet = string.Join(",", selPaths);
+                if (newConnSet != lastConnSet) {
+                    lastConnSet = newConnSet;
+                    SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|SelectionBoxConn|" + 
+                        Convert.ToBase64String(Encoding.UTF8.GetBytes(newConnSet)) + "\n");
+                }
                 e.Handled = true;
             } else if (connectionSourcePort != null && tempConnection != null && tempConnection.Visibility == Visibility.Visible) {
                 var pos = e.GetPosition(canvas);
@@ -2686,6 +2746,12 @@ public class AhkWpfEngine {
             }
         };
         canvas.MouseLeftButtonUp += (s, e) => {
+            // 刚在 MouseDown 选中了连线：本次释放不应触发"空白处清除选中"
+            if (pathJustClicked) {
+                pathJustClicked = false;
+                e.Handled = true;
+                return;
+            }
             if (isPanning) {
                 isPanning = false;
                 canvas.ReleaseMouseCapture();
@@ -2701,6 +2767,7 @@ public class AhkWpfEngine {
                     SendToAhk("EVENT|" + winId + "|" + canvas.Name + "|ClearSelection|\n");
                 }
                 lastSelectionSet = "";
+                lastConnSet = "";
                 e.Handled = true;
             } else if (connectionSourcePort != null && tempConnection != null && tempConnection.Visibility == Visibility.Visible) {
                 tempConnection.Visibility = Visibility.Collapsed;

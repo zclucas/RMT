@@ -101,7 +101,8 @@ class InputGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 510, 275))
+        pos := GetCenterPosOnActiveMonitor(510, 275)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 510, 275))
     }
 
     Init(cmd) {

@@ -59,7 +59,8 @@ class WinRuleGui {
         con := MyGui.Add("Button", Format("x{} y{} w80", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
         MyGui.OnEvent("Close", (*) => this.OnClose())
-        MyGui.Show(Format("w{} h{}", 220, 160))
+        pos := GetCenterPosOnActiveMonitor(220, 160)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 220, 160))
     }
 
     OnClose(*) {

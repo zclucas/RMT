@@ -115,7 +115,8 @@ class ToolRecordSettingGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
 
-        MyGui.Show(Format("w{} h{}", 525, 395))
+        pos := GetCenterPosOnActiveMonitor(525, 395)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 525, 395))
     }
 
     CheckIfValid() {

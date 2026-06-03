@@ -102,7 +102,8 @@ class SubMacroGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 500, 220))
+        pos := GetCenterPosOnActiveMonitor(500, 220)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 500, 220))
     }
 
     OnGuiClose() {

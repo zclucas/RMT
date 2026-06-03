@@ -89,7 +89,8 @@ class VarListenGui {
 
         MyGui.OnEvent("Close", this.OnClose.Bind(this))
         MyGui.OnEvent("Size", this.OnResize.Bind(this))
-        MyGui.Show(Format("w{} h{}", MySoftData.VarListenWidth, MySoftData.VarListenHeight))
+        pos := GetCenterPosOnActiveMonitor(MySoftData.VarListenWidth, MySoftData.VarListenHeight)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, MySoftData.VarListenWidth, MySoftData.VarListenHeight))
         MyGui.Opt("+MinSize400x420")
     }
 

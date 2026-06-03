@@ -85,7 +85,8 @@ class ConfigMergeGui {
         this.ExecuteBtn := MyGui.Add("Button", Format("x{} y{} w100 h32 Default", PosX, PosY), GetLang("开始合并导入"))
         this.ExecuteBtn.OnEvent("Click", (*) => this.OnExecuteMerge())
 
-        MyGui.Show(Format("w{} h{}", 720, 678))
+        pos := GetCenterPosOnActiveMonitor(720, 678)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 720, 678))
         this.RefreshLocalConfigList()
     }
 

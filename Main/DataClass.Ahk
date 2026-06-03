@@ -435,6 +435,24 @@ class SearchData {
 
 }
 
+class ScreenShotData {
+    __New() {
+        this.SerialStr := ""
+        this.ScreenShotType := 1        ;1屏幕抓图  2窗口抓图
+        this.WinInfo := ""              ;窗口信息（窗口抓图时使用）
+        this.StartPosX := 0
+        this.StartPosY := 0
+        this.EndPosX := A_ScreenWidth
+        this.EndPosY := A_ScreenHeight
+        this.NameType := 1              ;1默认（指令名+序号）  2固定名称
+        this.FixedName := ""            ;固定名称（NameType=2时使用）
+        this.SavePath := ""             ;保存路径（默认为Temp_ScreenShot）
+        this.ResultToggle := 0          ;是否保存结果到变量
+        this.ResultSaveName := GetLang("图片路径")  ;结果变量名
+    }
+
+}
+
 class CompareData {
     __New() {
         this.ToggleArr := [1, 0, 0, 0]
@@ -518,6 +536,7 @@ class OutputData {
         this.SerialStr := ""
         this.Text := GetLang("将要输出的文本")
         this.OutputType := "发送内容"   ;sendtest  粘贴   粘贴
+        this.VariableName := ""         ;字符变量时的变量名
     }
 }
 
@@ -834,9 +853,36 @@ class KeyCheckData {
     }
 }
 
+class CommentData {
+    __New() {
+        this.SerialStr := ""
+        this.Content := GetLang("请输入注释内容")
+    }
+}
+
 class MsgType {
     static TASK := 1    ;主线程-》Worker
     static RESULT := 2  ;Worker-》主线程
     static EVENT := 3   ;双向广播事件 例如Worker修改变量值后 告知主线程 主线程收到后 广播所有人
     static CONTROL := 4 ; 预留扩展
+}
+
+class MacroGraphNode{
+    __New() {
+        this.SerialStr := ""
+        this.CurCMD := "间隔_50"                   ;当前节点指令
+        this.NextNodeArr := []                     ;下一个节点指令数组（后继节点的 SerialStr）
+        this.X := 0                                ;图形编辑器中节点的逻辑坐标X
+        this.Y := 0                                ;图形编辑器中节点的逻辑坐标Y
+    }
+}
+
+class MacroGraphStartNode{
+    __New() {
+        this.SerialStr := ""
+        this.NodeArr := []                          ;下一个节点指令数组（后续MacroGraphNode节点的 SerialStr）
+        this.EmptyNode := []                        ;图形编辑器中空节点数组（没有前置节点MacroGraphNode节点的 SerialStr）
+        this.X := 0                                ;图形编辑器中节点的逻辑坐标X
+        this.Y := 0                                ;图形编辑器中节点的逻辑坐标Y
+    }
 }

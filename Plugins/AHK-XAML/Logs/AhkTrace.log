@@ -1,0 +1,3824 @@
+﻿OnCopyData: DAEMON|Ready|3936014
+
+OnCopyData: DAEMON|Ready|6558230
+
+OnCopyData: EVENT|WPF_110503046_1_2801|Engine|Error|4101:AHK_LINE:Unknown
+XAML_SNIPPET:
+   38|                         <!-- [ahk:MacroGraphGui.ahk:344] --><MenuItem Header="窗口管理" Name="MG_Add_23" />
+   39|                         <!-- [ahk:MacroGraphGui.ahk:344] --><MenuItem Header="按键检测" Name="MG_Add_24" />
+   40|                     </ContextMenu>
+   41|                 </FrameworkElement.ContextMenu>
+   42|                 <!-- [ahk:XAML_Adv_Components.ahk:368] --><Rectangle Fill="{DynamicResource GridPattern}" Height="20000" IsHitTestVisible="False" Width="20000" />
+   43|                 <!-- [ahk:MacroGraphGui.ahk:913] --><Border Background="{DynamicResource DropdownBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" Canvas.Left="10060" Canvas.Top="10220" CornerRadius="6" Name="Node_Start" Width="160">
+   44|                     <!-- [ahk:MacroGraphGui.ahk:914] --><Border.Effect>
+>> 45|                         <!-- [ahk:MacroGraphGui.ahk:914] --><DropShadowEffect BlurRadius="8" Direction="270" Foreground="Black" Opacity="0.4" ShadowDepth="2" />
+   46|                     </Border.Effect>
+   47|                     <!-- [ahk:MacroGraphGui.ahk:916] --><Grid>
+   48|                         <!-- [ahk:XAML_Generator.ahk:337] --><Grid.RowDefinitions>
+   49|                             <!-- [ahk:XAML_Generator.ahk:339] --><RowDefinition Height="30" />
+   50|                             <!-- [ahk:XAML_Generator.ahk:339] --><RowDefinition Height="*" />
+   51|                         </Grid.RowDefinitions>
+   52|                         <!-- [ahk:MacroGraphGui.ahk:919] --><Border Background="#2E5A2E" CornerRadius="5,5,0,0" Cursor="SizeAll" Grid.Row="0">
+   53|                             <!-- [ahk:MacroGraphGui.ahk:920] --><TextBlock FontSize="11" FontWeight="Bold" Foreground="White" Margin="10,0" Name="Title_Start" Text="开始" VerticalAlignment="Center" />
+   54|                         </Border>
+REASON:
+“无法设置未知成员“System.Windows.Media.Effects.DropShadowEffect.Foreground”。”，行号为“45”，行位置为“110”。
+
+System.Windows.Markup.XamlParseException: “无法设置未知成员“System.Windows.Media.Effects.DropShadowEffect.Foreground”。”，行号为“45”，行位置为“110”。 ---> System.Xaml.XamlObjectWriterException: “无法设置未知成员“System.Windows.Media.Effects.DropShadowEffect.Foreground”。”，行号为“45”，行位置为“110”。
+   在 System.Xaml.XamlObjectWriter.WriteStartMember(XamlMember property)
+   在 System.Windows.Markup.WpfXamlLoader.TransformNodes(XamlReader xamlReader, XamlObjectWriter xamlWriter, Boolean onlyLoadOneNode, Boolean skipJournaledProperties, Boolean shouldPassLineNumberInfo, IXamlLineInfo xamlLineInfo, IXamlLineInfoConsumer xamlLineInfoConsumer, XamlContextStack`1 stack, IStyleConnector styleConnector)
+   在 System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, IXamlObjectWriterFactory writerFactory, Boolean skipJournaledProperties, Object rootObject, XamlObjectWriterSettings settings, Uri baseUri)
+   --- 内部异常堆栈跟踪的结尾 ---
+   在 System.Windows.Markup.XamlReader.RewrapException(Exception e, IXamlLineInfo lineInfo, Uri baseUri)
+   在 System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, IXamlObjectWriterFactory writerFactory, Boolean skipJournaledProperties, Object rootObject, XamlObjectWriterSettings settings, Uri baseUri)
+   在 System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, Boolean skipJournaledProperties, Uri baseUri)
+   在 System.Windows.Markup.XamlReader.Load(XamlReader xamlReader, ParserContext parserContext)
+   在 System.Windows.Markup.XamlReader.Load(XmlReader reader, ParserContext parserContext, XamlParseMode parseMode, Boolean useRestrictiveXamlReader, List`1 safeTypes)
+   在 System.Windows.Markup.XamlReader.Load(Stream stream, ParserContext parserContext, Boolean useRestrictiveXamlReader)
+   在 AhkWpfEngine.RunEngineInline(String id, String hwndStr, String trackedCsv, String scriptName, String ownerHwndStr, String inlineData, Boolean isDaemon)
+
+OnCopyData: EVENT|WPF_110508562_2_5442|Engine|Error|4101:AHK_LINE:Unknown
+XAML_SNIPPET:
+   38|                         <!-- [ahk:MacroGraphGui.ahk:344] --><MenuItem Header="窗口管理" Name="MG_Add_23" />
+   39|                         <!-- [ahk:MacroGraphGui.ahk:344] --><MenuItem Header="按键检测" Name="MG_Add_24" />
+   40|                     </ContextMenu>
+   41|                 </FrameworkElement.ContextMenu>
+   42|                 <!-- [ahk:XAML_Adv_Components.ahk:368] --><Rectangle Fill="{DynamicResource GridPattern}" Height="20000" IsHitTestVisible="False" Width="20000" />
+   43|                 <!-- [ahk:MacroGraphGui.ahk:913] --><Border Background="{DynamicResource DropdownBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" Canvas.Left="10060" Canvas.Top="10220" CornerRadius="6" Name="Node_Start" Width="160">
+   44|                     <!-- [ahk:MacroGraphGui.ahk:914] --><Border.Effect>
+>> 45|                         <!-- [ahk:MacroGraphGui.ahk:914] --><DropShadowEffect BlurRadius="8" Direction="270" Foreground="Black" Opacity="0.4" ShadowDepth="2" />
+   46|                     </Border.Effect>
+   47|                     <!-- [ahk:MacroGraphGui.ahk:916] --><Grid>
+   48|                         <!-- [ahk:XAML_Generator.ahk:337] --><Grid.RowDefinitions>
+   49|                             <!-- [ahk:XAML_Generator.ahk:339] --><RowDefinition Height="30" />
+   50|                             <!-- [ahk:XAML_Generator.ahk:339] --><RowDefinition Height="*" />
+   51|                         </Grid.RowDefinitions>
+   52|                         <!-- [ahk:MacroGraphGui.ahk:919] --><Border Background="#2E5A2E" CornerRadius="5,5,0,0" Cursor="SizeAll" Grid.Row="0">
+   53|                             <!-- [ahk:MacroGraphGui.ahk:920] --><TextBlock FontSize="11" FontWeight="Bold" Foreground="White" Margin="10,0" Name="Title_Start" Text="开始" VerticalAlignment="Center" />
+   54|                         </Border>
+REASON:
+“无法设置未知成员“System.Windows.Media.Effects.DropShadowEffect.Foreground”。”，行号为“45”，行位置为“110”。
+
+System.Windows.Markup.XamlParseException: “无法设置未知成员“System.Windows.Media.Effects.DropShadowEffect.Foreground”。”，行号为“45”，行位置为“110”。 ---> System.Xaml.XamlObjectWriterException: “无法设置未知成员“System.Windows.Media.Effects.DropShadowEffect.Foreground”。”，行号为“45”，行位置为“110”。
+   在 System.Xaml.XamlObjectWriter.WriteStartMember(XamlMember property)
+   在 System.Windows.Markup.WpfXamlLoader.TransformNodes(XamlReader xamlReader, XamlObjectWriter xamlWriter, Boolean onlyLoadOneNode, Boolean skipJournaledProperties, Boolean shouldPassLineNumberInfo, IXamlLineInfo xamlLineInfo, IXamlLineInfoConsumer xamlLineInfoConsumer, XamlContextStack`1 stack, IStyleConnector styleConnector)
+   在 System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, IXamlObjectWriterFactory writerFactory, Boolean skipJournaledProperties, Object rootObject, XamlObjectWriterSettings settings, Uri baseUri)
+   --- 内部异常堆栈跟踪的结尾 ---
+   在 System.Windows.Markup.XamlReader.RewrapException(Exception e, IXamlLineInfo lineInfo, Uri baseUri)
+   在 System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, IXamlObjectWriterFactory writerFactory, Boolean skipJournaledProperties, Object rootObject, XamlObjectWriterSettings settings, Uri baseUri)
+   在 System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, Boolean skipJournaledProperties, Uri baseUri)
+   在 System.Windows.Markup.XamlReader.Load(XamlReader xamlReader, ParserContext parserContext)
+   在 System.Windows.Markup.XamlReader.Load(XmlReader reader, ParserContext parserContext, XamlParseMode parseMode, Boolean useRestrictiveXamlReader, List`1 safeTypes)
+   在 System.Windows.Markup.XamlReader.Load(Stream stream, ParserContext parserContext, Boolean useRestrictiveXamlReader)
+   在 AhkWpfEngine.RunEngineInline(String id, String hwndStr, String trackedCsv, String scriptName, String ownerHwndStr, String inlineData, Boolean isDaemon)
+
+OnCopyData: DAEMON|Ready|3675052
+
+OnCopyData: DAEMON|Ready|3215916
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Window|LoadedHwnd|6818928
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Window|Loaded
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_111089046_1_4603|RMTGraph|ContextMenuOpened|15:10466.2,10496.6
+
+OnCopyData: EVENT|WPF_111089046_1_4603|MG_Add_2|Click
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10460,10500
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10460,10500
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10460,10460
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10460,10440
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10460,10440
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10440,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10400,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10360,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10340,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10320,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10320,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10300,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10300,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+TypeCmb_Cmd3=6:点击
+Hold_Cmd3=3:100
+Count_Cmd3=1:1
+Inter_Cmd3=3:200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|RMTGraph|ConnectPorts|27:Port_Out_Start,Port_In_Cmd3
+
+OnCopyData: EVENT|WPF_111089046_1_4603|RMTGraph|ConnectPorts|26:Port_Out_Cmd3,Port_In_Cmd2
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd2|SelectNode|
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd2|DragMove|11:10540,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd2|DragMove|11:10540,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd2|DragMove|11:10600,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd2|DragMove|11:10660,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd2|DragMove|11:10680,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd2|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+TypeCmb_Cmd3=6:点击
+Hold_Cmd3=3:100
+Count_Cmd3=1:1
+Inter_Cmd3=3:200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|SelectNode|
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10300,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10300,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10340,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10400,10220
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10400,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10400,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10400,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10400,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10380,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10380,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10360,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10360,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10360,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10360,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10360,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10360,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10340,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10340,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10340,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragMove|11:10340,10200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd1|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+TypeCmb_Cmd3=6:点击
+Hold_Cmd3=3:100
+Count_Cmd3=1:1
+Inter_Cmd3=3:200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10300,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10300,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10320,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10340,10420
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+TypeCmb_Cmd3=6:点击
+Hold_Cmd3=3:100
+Count_Cmd3=1:1
+Inter_Cmd3=3:200
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Window|Closing
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Window|Closed
+
+OnCopyData: EVENT|WPF_111089046_1_4603|Window|Closed
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+TypeCmb_Cmd3=6:点击
+Hold_Cmd3=3:100
+Count_Cmd3=1:1
+Inter_Cmd3=3:200
+
+OnCopyData: DAEMON|Ready|68932
+
+OnCopyData: DAEMON|Ready|198772
+
+OnCopyData: DAEMON|Ready|264328
+
+OnCopyData: EVENT|WPF_171899843_1_8702|Window|LoadedHwnd|265622
+
+OnCopyData: EVENT|WPF_171899843_1_8702|Window|Loaded
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|ContextMenuOpened|24:10604.7454545455,10407.8
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBox|4:Cmd1
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBoxConn|Uk1UR3JhcGhfUGF0aF9DbWQxX0NtZDI=
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBox|9:Cmd1,Cmd2
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|ContextMenuOpened|33:10580.1797979798,10446.2646464646
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|ContextMenuOpened|33:10490.4828282828,10468.8909090909
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171899843_1_8702|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_171899843_1_8702|Window|Closing
+
+OnCopyData: EVENT|WPF_171899843_1_8702|Window|Closed
+
+OnCopyData: EVENT|WPF_171899843_1_8702|Window|Closed
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Window|LoadedHwnd|396694
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Window|Loaded
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ContextMenuOpened|15:10502.2,10438.2
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ContextMenuOpened|15:10502.2,10438.2
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ContextMenuOpened|15:10502.2,10438.2
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ContextMenuOpened|32:10594.5423510263,10071.288546018
+
+OnCopyData: EVENT|WPF_171929062_2_1832|MG_Add_5|Click
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10600,10080
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10600,10080
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10620,10080
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10660,10080
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10680,10080
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10680,10100
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10700,10100
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10700,10100
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10720,10100
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10720,10100
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|ContextMenuOpened|33:10796.9303463414,10118.1042744716
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|RMTGraph|SelectionBox|4:Cmd3
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10720,10100
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragMove|11:10720,10100
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Window|KeyDown:Delete
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Window|Closing
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Window|Closed
+
+OnCopyData: EVENT|WPF_171929062_2_1832|Window|Closed
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: DAEMON|Ready|199930
+
+OnCopyData: EVENT|WPF_172010203_1_9326|Window|LoadedHwnd|329770
+
+OnCopyData: EVENT|WPF_172010203_1_9326|Window|Loaded
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_172010203_1_9326|Window|Closing
+
+OnCopyData: EVENT|WPF_172010203_1_9326|Window|Closed
+
+OnCopyData: EVENT|WPF_172010203_1_9326|Window|Closed
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: DAEMON|Ready|723272
+
+OnCopyData: DAEMON|Ready|723182
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Window|LoadedHwnd|657520
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Window|Loaded
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|ContextMenuOpened|13:10651,10566.2
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|ContextMenuOpened|33:10484.2826446281,10451.2314049587
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|ContextMenuOpened|33:10495.8814610754,10422.3200693807
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|SelectionBox|0:
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|SelectionBoxConn|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|ContextMenuOpened|33:10566.2660790388,10368.9480432968
+
+OnCopyData: EVENT|WPF_173441953_1_5562|MG_Add_5|Click
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10560,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10560,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10580,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10600,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10620,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10620,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10620,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10620,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10620,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10600,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10600,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10600,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10580,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10540,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10480,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10440,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10420,10380
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10420,10380
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10420,10380
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10420,10380
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10420,10380
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10440,10360
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10460,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10460,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10480,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10480,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10480,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10480,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10480,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10500,10320
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10480,10340
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10440,10380
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10400,10380
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10400,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10380,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10380,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10360,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10360,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10360,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173441953_1_5562|RMTGraph|ConnectPorts|27:Port_Out_Start,Port_In_Cmd3
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10320,10420
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10320,10420
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10320,10420
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10300,10420
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragMove|11:10300,10420
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Window|KeyDown:System
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Window|Closing
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Hold_Cmd1|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Window|Closed
+
+OnCopyData: EVENT|WPF_173441953_1_5562|Window|Closed
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: DAEMON|Ready|200116
+
+OnCopyData: DAEMON|Ready|396554
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Window|LoadedHwnd|461356
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Window|Loaded
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_173646484_1_8164|RMTGraph|ContextMenuOpened|15:10521.4,10530.2
+
+OnCopyData: EVENT|WPF_173646484_1_8164|MG_Add_5|Click
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10520,10540
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10520,10540
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10480,10520
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10420,10500
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10400,10480
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10380,10480
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10380,10460
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10380,10460
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10360,10460
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10360,10440
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10340,10440
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10340,10440
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragMove|11:10340,10440
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Window|KeyDown:System
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Window|KeyDown:System
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Window|Closing
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Window|Closed
+
+OnCopyData: EVENT|WPF_173646484_1_8164|Window|Closed
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: DAEMON|Ready|592358
+
+OnCopyData: DAEMON|Ready|462086
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|LoadedHwnd|1445266
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|Loaded
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:固定
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|TypeCmb_Cmd1|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:固定
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:松开
+
+OnCopyData: EVENT|WPF_174615109_1_9308|TypeCmb_Cmd1|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:固定
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|TypeCmb_Cmd1|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:固定
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:松开
+
+OnCopyData: EVENT|WPF_174615109_1_9308|TypeCmb_Cmd1|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:固定
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:按下
+
+OnCopyData: EVENT|WPF_174615109_1_9308|TypeCmb_Cmd1|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:固定
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ITypeCmb_Cmd2|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Time_Cmd2|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ITypeCmb_Cmd2|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:固定
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ITypeCmb_Cmd2|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Time2_Cmd2|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|KeyDown:D1
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:3000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|KeyDown:D0
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=1:1
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|KeyDown:D0
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=2:10
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|KeyDown:D0
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=3:100
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|KeyDown:Return
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Time_Cmd2|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|RMTGraph|ContextMenuOpened|33:10470.7355371901,10494.5570247934
+
+OnCopyData: EVENT|WPF_174615109_1_9308|MG_Add_5|Click
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10480,10500
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10460,10500
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10460,10480
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10380,10420
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10360,10420
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10360,10420
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10360,10420
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10360,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|RMTGraph|ConnectPorts|27:Port_Out_Start,Port_In_Cmd3
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Time2_Cmd2|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10340,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10400
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10380
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10280,10380
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10280,10380
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10280,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10280,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10280,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10280,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10280,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Time_Cmd2|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ModeCmb_Cmd3|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=12:相对移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ModeCmb_Cmd3|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=2:90
+ModeCmb_Cmd3=12:游戏视角
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ModeCmb_Cmd3|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:相对移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ModeCmb_Cmd3|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=6:移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ModeCmb_Cmd3|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:游戏视角
+
+OnCopyData: EVENT|WPF_174615109_1_9308|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|RMTGraph|ClearSelection|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ModeCmb_Cmd3|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:相对移动
+
+OnCopyData: EVENT|WPF_174615109_1_9308|ModeCmb_Cmd3|SelectionChanged
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:游戏视角
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Hold_Cmd1|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:游戏视角
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|SelectNode|
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10320,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10360
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10380
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10380
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10380
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragMove|11:10300,10380
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Node_Cmd3|DragEnd
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:游戏视角
+
+OnCopyData: EVENT|WPF_174615109_1_9308|PosX_Cmd3|LostFocus
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:游戏视角
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|Closing
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|Closed
+
+OnCopyData: EVENT|WPF_174615109_1_9308|Window|Closed
+Count_Cmd1=2:10
+Hold_Cmd1=3:100
+ITypeCmb_Cmd2=6:随机
+Inter_Cmd1=3:200
+MG_Add_1=0:
+MG_Add_10=0:
+MG_Add_11=0:
+MG_Add_12=0:
+MG_Add_13=0:
+MG_Add_14=0:
+MG_Add_15=0:
+MG_Add_16=0:
+MG_Add_17=0:
+MG_Add_18=0:
+MG_Add_19=0:
+MG_Add_2=0:
+MG_Add_20=0:
+MG_Add_21=0:
+MG_Add_22=0:
+MG_Add_23=0:
+MG_Add_24=0:
+MG_Add_3=0:
+MG_Add_4=0:
+MG_Add_5=0:
+MG_Add_6=0:
+MG_Add_7=0:
+MG_Add_8=0:
+MG_Add_9=0:
+MG_BtnSave=0:
+Node_Cmd1=0:
+Node_Cmd2=0:
+Node_Start=0:
+RMTGraph=0:
+RMTGraph_BtnNewInput=0:
+RMTGraph_BtnNewMultiProcess=0:
+RMTGraph_BtnNewNode=0:
+RMTGraph_BtnNewOutput=0:
+RMTGraph_Path_Cmd1_Cmd2=0:
+RMTGraph_Path_Start_Cmd1=0:
+Time2_Cmd2=4:1000
+Time_Cmd2=4:1000
+TypeCmb_Cmd1=6:点击
+PosX_Cmd3=1:0
+PosY_Cmd3=1:0
+Speed_Cmd3=3:100
+ModeCmb_Cmd3=12:游戏视角
+

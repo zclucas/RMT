@@ -171,7 +171,8 @@ class FrontInfoGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
         MyGui.OnEvent("Close", this.OnClose.Bind(this))
-        MyGui.Show(Format("w{} h{}", 500, 430))
+        pos := GetCenterPosOnActiveMonitor(500, 430)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 500, 430))
     }
 
     RefreshMouseInfo() {

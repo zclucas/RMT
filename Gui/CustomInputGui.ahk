@@ -36,7 +36,8 @@ class CustomInputGui {
         con := MyGui.Add("Button", Format("x{} y{} w80", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", this.OnSureBtnClick.Bind(this))
         MyGui.OnEvent("Close", this.OnCloseBtnClick.Bind(this))
-        MyGui.Show(Format("w{} h{}", 365, 250))
+        pos := GetCenterPosOnActiveMonitor(365, 250)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 365, 250))
     }
 
     OnSureBtnClick(*) {
