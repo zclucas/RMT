@@ -37,7 +37,8 @@ class EditHotkeyGui {
         con.OnEvent("Click", (*) => this.OnEditHotKeyStr(MyTriggerStrGui))
         this.TriggerStrBtnCon := con
 
-        MyGui.Show(Format("w{} h{}", 420, 120))
+        pos := GetCenterPosOnActiveMonitor(420, 120)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 420, 120))
     }
 
     OnEditHotKey(gui) {

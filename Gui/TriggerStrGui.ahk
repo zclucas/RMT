@@ -476,7 +476,8 @@ class TriggerStrGui {
         this.SaveBtnCtrl := MyGui.Add("Button", Format("x{} y{} h{} w{} center", PosX, PosY, 40, 100), GetLang("应用并保存"))
         this.SaveBtnCtrl.OnEvent("Click", (*) => this.OnSaveBtnClick())
 
-        MyGui.Show(Format("w{} h{}", 1150, 460))
+        pos := GetCenterPosOnActiveMonitor(1150, 460)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 1150, 460))
     }
 
     ;按钮点击回调

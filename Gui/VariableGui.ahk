@@ -204,7 +204,8 @@ class VariableGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 680, 300))
+        pos := GetCenterPosOnActiveMonitor(680, 300)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 680, 300))
     }
 
     OnGuiClose() {

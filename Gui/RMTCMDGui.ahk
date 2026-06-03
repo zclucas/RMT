@@ -130,7 +130,8 @@ class RMTCMDGui {
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show("w300 h190")
+        pos := GetCenterPosOnActiveMonitor(300, 190)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 300, 190))
     }
 
     OnGuiClose() {

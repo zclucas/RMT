@@ -163,7 +163,8 @@ class WindowManageGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnClickSureBtn())
         MyGui.OnEvent("Close", (*) => this.OnClose())
-        MyGui.Show(Format("w{} h{}", 530, 215))
+        pos := GetCenterPosOnActiveMonitor(530, 215)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 530, 215))
     }
 
     OnActionChange(*) {

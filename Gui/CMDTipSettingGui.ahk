@@ -139,7 +139,8 @@ class CMDTipSettingGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
         MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
-        MyGui.Show(Format("w{} h{}", 480, 350))
+        pos := GetCenterPosOnActiveMonitor(480, 350)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 480, 350))
     }
 
     ToggleFunc(state) {

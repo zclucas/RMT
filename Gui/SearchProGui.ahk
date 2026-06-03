@@ -358,7 +358,8 @@ class SearchProGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 700, 600))
+        pos := GetCenterPosOnActiveMonitor(700, 600)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 700, 600))
     }
 
     Init(cmd) {

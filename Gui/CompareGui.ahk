@@ -231,7 +231,8 @@ class CompareGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 90, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 480, 450))
+        pos := GetCenterPosOnActiveMonitor(480, 450)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 480, 450))
     }
 
     OnGuiClose() {

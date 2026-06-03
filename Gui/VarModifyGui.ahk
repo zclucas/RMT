@@ -42,7 +42,8 @@ class VarModifyGui {
         PosX := 140
         con := MyGui.Add("Button", Format("x{} y{} w100", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
-        MyGui.Show(Format("w{} h{}", 380, 230))
+        pos := GetCenterPosOnActiveMonitor(380, 230)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 380, 230))
     }
 
     OnSureBtnClick() {

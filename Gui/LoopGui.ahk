@@ -182,7 +182,8 @@ class LoopGui {
         this.FocusCon := btnCon
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 470, 470))
+        pos := GetCenterPosOnActiveMonitor(470, 470)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 470, 470))
     }
 
     Init(cmd) {

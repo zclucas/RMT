@@ -116,7 +116,8 @@ class SettingMgrGui {
         con := MyGui.Add("Button", Format("x{} y{} w80", PosX, PosY - 5), GetLang("共享上传"))
         con.OnEvent("Click", this.OnRMTUploadBtnClick.Bind(this))
 
-        MyGui.Show(Format("w{} h{}", 420, 415))
+        pos := GetCenterPosOnActiveMonitor(420, 415)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 420, 415))
     }
 
     OnReNameBtnClick(*) {

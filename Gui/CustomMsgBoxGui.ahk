@@ -30,7 +30,8 @@ class CustomMsgBoxGui {
         PosX += 130
         con := MyGui.Add("Button", Format("x{} y{} w80", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
-        MyGui.Show(Format("w{} h{}", 365, 220))
+        pos := GetCenterPosOnActiveMonitor(365, 220)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 365, 220))
     }
 
     OnSureBtnClick() {

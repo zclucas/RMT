@@ -116,7 +116,8 @@ class ExVariableEditGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
         MyGui.OnEvent("Close", (*) => this.OnClose())
-        MyGui.Show(Format("w{} h{}", 480, 370))
+        pos := GetCenterPosOnActiveMonitor(480, 370)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 480, 370))
     }
 
     OnClose(*) {

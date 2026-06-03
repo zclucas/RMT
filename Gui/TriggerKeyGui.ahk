@@ -1224,7 +1224,8 @@ class TriggerKeyGui {
         this.SaveBtnCtrl := MyGui.Add("Button", Format("x{} y{} h{} w{} center", PosX, PosY, 40, 100), GetLang("应用并保存"))
         this.SaveBtnCtrl.OnEvent("Click", (*) => this.OnSaveBtnClick())
         MyGui.OnEvent("Close", (*) => this.ToggleFunc(false))
-        MyGui.Show(Format("w{} h{}", 1260, 660))
+        pos := GetCenterPosOnActiveMonitor(1260, 660)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 1260, 660))
     }
 
     ToggleFunc(state) {

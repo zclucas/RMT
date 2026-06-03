@@ -69,7 +69,8 @@ class TimingGui {
         PosY += 40
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
-        MyGui.Show(Format("w{} h{}", 620, 150))
+        pos := GetCenterPosOnActiveMonitor(620, 150)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 620, 150))
     }
 
     CheckIfValid() {

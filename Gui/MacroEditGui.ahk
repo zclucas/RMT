@@ -404,7 +404,8 @@ class MacroEditGui {
         this.SaveBtnCtrl := MyGui.Add("Button", Format("x{} y{} h{} w{} center", PosX, PosY, 40, 100), GetLang("应用并保存"))
         this.SaveBtnCtrl.OnEvent("Click", (*) => this.OnSaveBtnClick())
 
-        MyGui.Show(Format("w{} h{}", 945, 570))
+        pos := GetCenterPosOnActiveMonitor(945, 570)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 945, 570))
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
     }
 

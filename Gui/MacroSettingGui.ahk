@@ -74,7 +74,8 @@ class MacroSettingGui {
         con := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
         con.OnEvent("Click", (*) => this.OnSureBtnClick())
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 300, 190))
+        pos := GetCenterPosOnActiveMonitor(300, 190)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 300, 190))
     }
 
     OnGuiClose() {

@@ -225,7 +225,8 @@ class FileIOGui {
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 535, 400))
+        pos := GetCenterPosOnActiveMonitor(535, 400)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 535, 400))
     }
 
     OnGuiClose() {
