@@ -23,6 +23,16 @@ TextOpsSplit(Data, tableItem, index) {
 
         ResArr := TextSplitByLength(SourceText, SplitArgs)
     }
+    else if (Data.ArgsType == "正则匹配") {
+        try {
+            ResArr := TextSplitByRegex(SourceText, SplitArgs)
+        } catch as e {
+            tip1 := GetLang("正则分割出错")
+            tip2 := Format(GetLang("错误信息：{}"), e.Message)
+            MsgBox(tip1 "`n" tip2)
+            return
+        }
+    }
     MySetGlobalArray(Data.SaveName, ResArr)
 }
 
@@ -59,6 +69,18 @@ TextOpsEx(Data, tableItem, index) {
     }
     else if (Data.ArgsType == "中文提取") {
         ResArr := TextGetChineseBlocks(SourceText)
+    }
+    else if (Data.ArgsType == "正则匹配") {
+        IsHas := TryGetTabVarValue(&Pattern, tableItem, index, Data.ArgsName, false)
+        Pattern := IsHas ? Pattern : Data.ArgsName
+        try {
+            ResArr := TextGetByRegex(SourceText, Pattern)
+        } catch as e {
+            tip1 := GetLang("正则提取出错")
+            tip2 := Format(GetLang("错误信息：{}"), e.Message)
+            MsgBox(tip1 "`n" tip2)
+            return
+        }
     }
     MySetGlobalArray(Data.SaveName, ResArr)
 }
@@ -190,6 +212,34 @@ TextGetChineseBlocks(text) {
     while pos := RegExMatch(text, "[\x{4E00}-\x{9FFF}]+", &m, pos) {
         result.Push(m[0])
         pos += StrLen(m[0])
+    }
+    return result
+}
+
+TextSplitByRegex(text, pattern) {
+    result := []
+    pos := 1
+    lastEnd := 1
+    while pos <= StrLen(text) && pos := RegExMatch(text, pattern, &m, pos) {
+        matchPos := m.Pos[0]
+        matchLen := StrLen(m[0])
+        if (matchPos > lastEnd)
+            result.Push(SubStr(text, lastEnd, matchPos - lastEnd))
+        lastEnd := matchPos + matchLen
+        pos := matchLen > 0 ? lastEnd : lastEnd + 1
+    }
+    if (lastEnd <= StrLen(text))
+        result.Push(SubStr(text, lastEnd))
+    return result
+}
+
+TextGetByRegex(text, pattern) {
+    result := []
+    pos := 1
+    while pos := RegExMatch(text, pattern, &m, pos) {
+        result.Push(m[0])
+        matchLen := StrLen(m[0])
+        pos += matchLen > 0 ? matchLen : 1
     }
     return result
 }

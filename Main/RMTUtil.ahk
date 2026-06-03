@@ -282,6 +282,8 @@ InitFilePath() {
     global WindowManageFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WindowManageFile.ini"
     global KeyCheckFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyCheckFile.ini"
     global CommentFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CommentFile.ini"
+    global GraphNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphNodeFile.ini"
+    global GraphStartNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.ini"
 }
 
 SubMacroStopAction(tableIndex, itemIndex) {
