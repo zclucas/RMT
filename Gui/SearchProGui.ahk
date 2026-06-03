@@ -711,10 +711,13 @@ class SearchProGui {
         }
 
         if (isText) {
-            if (this.StartPosXCon.Text == this.EndPosXCon.Text) ||
-            this.StartPosYCon.Text == Number(this.EndPosYCon.Text) {
-                MsgBox(GetLang("搜索文本时：搜索范围中起始坐标不能和终止坐标相同"))
-                return false
+            if (IsNumber(this.StartPosXCon.Text) && IsNumber(this.StartPosYCon.Text)
+            && IsNumber(this.EndPosXCon.Text) && IsNumber(this.EndPosYCon.Text)) {
+                if (this.StartPosXCon.Text == this.EndPosXCon.Text ||
+                this.StartPosYCon.Text == this.EndPosYCon.Text) {
+                    MsgBox(GetLang("搜索文本时：搜索范围中起始坐标不能和终止坐标相同"))
+                    return false
+                }
             }
         }
 

@@ -501,6 +501,8 @@ class XNodeGraph {
         ui.OnEvent(this.id, "ClearSelection", ObjBindMethod(this, "OnClearSelection"))
         ui.OnEvent(this.id, "ConnectPorts", ObjBindMethod(this, "OnConnectPorts"))
         ui.OnEvent(this.id, "DeleteConnection", ObjBindMethod(this, "OnDeleteConnection"))
+        ui.OnEvent(this.id, "PathClicked", ObjBindMethod(this, "OnCanvasPathClicked"))
+        ui.OnEvent(this.id, "SelectionBoxConn", ObjBindMethod(this, "OnSelectionBoxConn"))
         ui.OnEvent(this.id, "ContextMenuOpened", ObjBindMethod(this, "OnContextMenuOpened"))
 
         ; Initial draw of connections
@@ -763,6 +765,10 @@ class XNodeGraph {
     }
 
     OnPathClicked(pathId, state, ctrl, event) {
+        ; 选中连线时清除节点选中，避免删除连线时误删节点（连线单击=仅选中该连线）
+        this.selectedNodes.Clear()
+        for node in this.nodes
+            this.ui.Update("Node_" node.Id, "BorderBrush", "{DynamicResource ControlBorder}")
         for conn in this.connections {
             if (conn.PathId == pathId) {
                 conn.Selected := true
@@ -771,6 +777,28 @@ class XNodeGraph {
                 conn.Selected := false
                 this.ui.Update(conn.PathId, "Stroke", "#60A0FF")
             }
+        }
+    }
+
+    ; 画布级连线点击（C# 端按命中容差找到连线后回传 PathClicked，连线名在 state["PathClicked"]）
+    OnCanvasPathClicked(state, ctrl, event) {
+        if !state.Has("PathClicked")
+            return
+        this.OnPathClicked(state["PathClicked"], state, ctrl, event)
+    }
+
+    ; 框选连线（C# 端按几何相交算出框中的连线集合，连线名列表在 state["SelectionBoxConn"]）
+    OnSelectionBoxConn(state, ctrl, event) {
+        selStr := state.Has("SelectionBoxConn") ? state["SelectionBoxConn"] : ""
+        selMap := Map()
+        if (selStr != "") {
+            for pid in StrSplit(selStr, ",")
+                selMap[pid] := true
+        }
+        for conn in this.connections {
+            sel := selMap.Has(conn.PathId)
+            conn.Selected := sel
+            this.ui.Update(conn.PathId, "Stroke", sel ? "White" : "#60A0FF")
         }
     }
 
