@@ -86,7 +86,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         "输入", OnInput,
         "文件读写", OnFileIO,
         "窗口管理", OnWindowManage,
-        "按键检测", OnKeyCheck
+        "按键检测", OnKeyCheck,
+        "注释", (*) => ""
     )
 
     cmdArr := SplitMacro(macro)
@@ -415,6 +416,13 @@ OnOutput(tableItem, cmd, index) {
     }
     else if (Data.OutputType == "复制到剪切板") {    ;剪切板
         SetClipboard(Content)
+    }
+    else if (Data.OutputType == "字符变量") {    ;字符变量 - 将内容保存到指定变量
+        VarName := GetReplaceVarText(tableItem, index, Data.VariableName)
+        if (VarName == "")
+            return
+        Content := GetReplaceVarText(tableItem, index, Data.Text)
+        MySetGlobalVariable([VarName], [Content], false)
     }
 }
 
