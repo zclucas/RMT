@@ -4,528 +4,183 @@ class UIMacroSettingGui {
     __new() {
         this.Gui := ""
         this.CurrentMacroIndex := 0
-        this.PreviewGui := ""
-        this.CoordTimer := ""
-        this.InfoAction := () => this.RefreshMouseInfo()
         this.SaveBtnAction := ""
         this.SureFocusCon := ""
+        this.OriginalIconPath := ""
+        this.StoredIconPath := ""
     }
 
     ShowGui(tableItem, macroIndex) {
-        if (this.Gui != "") {
-            try {
-                this.DestroyPreview()
-                this.ToggleFunc(false)
-                this.Gui.Destroy()
-            }
-        }
         this.CurrentMacroIndex := macroIndex
 
-        MyGui := Gui(, GetLang("界面宏按钮配置"))
+        ; 读取已保存的图标路径
+        if (tableItem.UIIconArr.Has(macroIndex) && tableItem.UIIconArr[macroIndex] != "") {
+            this.StoredIconPath := this.GetFullIconPath(tableItem.UIIconArr[macroIndex])
+        } else {
+            this.StoredIconPath := ""
+        }
+        this.OriginalIconPath := this.StoredIconPath
+
+        if (this.Gui != "") {
+            try this.Gui.Destroy()
+        }
+
+        MyGui := Gui("", GetLang("界面宏配置 - 图标") macroIndex)
+        MyGui.SetFont("S11 W550 Q2", MySoftData.FontType)
         this.Gui := MyGui
-        MyGui.SetFont("S11 Q2", MySoftData.FontType)
-        MyGui.OnEvent("Close", (*) => this.OnClose())
 
-        PosX := 10
-        PosY := 10
+        posY := 15
 
-        ;第一行：工具栏（模仿前台信息编辑器）
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("窗口置顶"))
-        con.OnEvent("Click", (*) => this.OnTopTogClick())
-        this.TopTogCon := con
+        con := MyGui.Add("Text", Format("x{} y{}", 20, posY), GetLang("图标文件:"))
+        posY += 28
 
-        PosX := 160
-        con := MyGui.Add("Edit", Format("x{} y{} w{} Center", PosX, PosY - 5, 30), "F1")
-        con.Enabled := false
-        PosX += 35
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("确定窗口"))
+        this.IconPathEdit := MyGui.Add("Edit", Format("x{} y{} w220 h27", 20, posY), this.StoredIconPath)
+        this.IconPathEdit.Opt("ReadOnly")
 
-        PosX := 300
-        con := MyGui.Add("Edit", Format("x{} y{} w{} Center", PosX, PosY - 5, 30), "F2")
-        con.Enabled := false
-        PosX += 35
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("确定位置"))
+        browseBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 250, posY - 1), GetLang("选择"))
+        browseBtn.OnEvent("Click", (*) => this.OnBrowseClick())
+        posY += 40
 
-        ;提示文字
-        PosY += 32
-        PosX := 10
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("留空则在屏幕上显示"))
+        sureBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 120, posY), GetLang("确定"))
+        sureBtn.OnEvent("Click", (*) => this.OnSureClick(tableItem))
 
-        ;第二行：左侧目标窗口信息区域
-        PosY += 28
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("当前鼠标下窗口信息："))
+        cancelBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 220, posY), GetLang("取消"))
+        cancelBtn.OnEvent("Click", (*) => this.OnCancelClick())
 
-        PosY += 25
-        this.CurWinInfoCon := MyGui.Add("Text", Format("x{} y{} w260 h80", PosX, PosY))
-
-        ;复选框和输入框（垂直排列）
-        PosY += 85
-        PosX := 20
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("句柄ID"))
-        con.Value := false
-        con.OnEvent("Click", (*) => this.OnInfoTogClick())
-        this.InfoTogArrCon := [con]
-        PosX := 95
-        con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
-        con.Enabled := false
-        this.InfoTextArrCon := [con]
-
-        PosY += 35
-        PosX := 20
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("标题"))
-        con.Value := false
-        con.OnEvent("Click", (*) => this.OnInfoTogClick())
-        this.InfoTogArrCon.Push(con)
-        PosX := 95
-        con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
-        con.Enabled := false
-        this.InfoTextArrCon.Push(con)
-
-        PosY += 35
-        PosX := 20
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("类名"))
-        con.Value := false
-        con.OnEvent("Click", (*) => this.OnInfoTogClick())
-        this.InfoTogArrCon.Push(con)
-        PosX := 95
-        con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
-        con.Enabled := false
-        this.InfoTextArrCon.Push(con)
-
-        PosY += 35
-        PosX := 20
-        con := MyGui.Add("Checkbox", Format("x{} y{}", PosX, PosY), GetLang("进程名"))
-        con.Value := false
-        con.OnEvent("Click", (*) => this.OnInfoTogClick())
-        this.InfoTogArrCon.Push(con)
-        PosX := 95
-        con := MyGui.Add("Edit", Format("x{} y{} w200", PosX, PosY - 3), "")
-        con.Enabled := false
-        this.InfoTextArrCon.Push(con)
-
-        ;右侧：按钮位置区域
-        PosY := 73
-        PosX := 340
-        MyGui.Add("Text", Format("x{} y{}", PosX, PosY), GetLang("按钮位置(中心点)"))
-
-        PosY += 28
-        PosX := 340
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 60), "坐标X：")
-        this.PosXEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 60, PosY - 3),
-            tableItem.HoldTimeArr.Has(macroIndex) ? tableItem.HoldTimeArr[macroIndex] : "500")
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX + 120, PosY, 60), "坐标Y：")
-        this.PosYEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 180, PosY - 3),
-            tableItem.UIPosYArr.Has(macroIndex) ? tableItem.UIPosYArr[macroIndex] : "10")
-
-        PosY += 35
-        PosX := 340
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 60), GetLang("宽度："))
-        this.BtnWidthEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 60, PosY - 3),
-            tableItem.UIBtnWidthArr.Has(macroIndex) ? tableItem.UIBtnWidthArr[macroIndex] : "100")
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX + 120, PosY, 60), GetLang("高度："))
-        this.BtnHeightEdit := MyGui.Add("Edit", Format("x{} y{} w55 Center", PosX + 180, PosY - 3),
-            tableItem.UIBtnHeightArr.Has(macroIndex) ? tableItem.UIBtnHeightArr[macroIndex] : "30")
-
-        PosY += 38
-        PosX := 340
-        this.PreviewBtn := MyGui.Add("Button", Format("x{} y{} w70 h32", PosX, PosY), GetLang("预览"))
-        this.PreviewBtn.OnEvent("Click", (*) => this.OnPreview())
-        this.HidePreviewBtn := MyGui.Add("Button", Format("x{} y{} w70 h32", PosX + 82, PosY), GetLang("隐藏"))
-        this.HidePreviewBtn.OnEvent("Click", (*) => this.DestroyPreview())
-
-        PosY += 42
-        PosX := 340
-        this.ScreenCoordText := MyGui.Add("Text", Format("x{} y{} w260", PosX, PosY),
-            Format(GetLang("屏幕: ({}, {})  窗口: ({}, {})"), "---", "---", "---", "---"))
-
-        ;底部按钮（居中）
-        PosY := 330
-        PosX := 200
-        this.SaveBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX, PosY), GetLang("确定"))
-        this.SaveBtn.OnEvent("Click", (*) => this.OnSureBtnClick(tableItem))
-        this.CancelBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX + 115, PosY), GetLang("取消"))
-        this.CancelBtn.OnEvent("Click", (*) => this.OnCancel())
-        this.ApplySaveBtn := MyGui.Add("Button", Format("x{} y{} w100 h40", PosX + 230, PosY), GetLang("应用并保存"))
-        this.ApplySaveBtn.OnEvent("Click", (*) => this.OnSaveBtnClick(tableItem))
-
-        MyGui.Show("w800 h390")
-
-        frontValue := tableItem.UIWindowArr.Has(macroIndex) ? tableItem.UIWindowArr[macroIndex] : ""
-
-        if (frontValue != "") {
-            if (InStr(frontValue, "❖")) {
-                idStr := StrReplace(frontValue, "❖", "")
-                infoArr := [idStr, "", "", ""]
-            } else {
-                if (frontValue != "")
-                    infoArr := StrSplit(frontValue, "⎖")
-                if (frontValue == "" || infoArr.Length < 3)
-                    infoArr := ["", "", ""]
-
-                infoArr.InsertAt(1, "")
-            }
-
-            loop 4 {
-                this.InfoTogArrCon[A_Index].Value := infoArr[A_Index] != ""
-                this.InfoTextArrCon[A_Index].Value := infoArr[A_Index]
-            }
-        }
-
-        this.OnInfoTogClick()
-
-        this.TopTogCon.Value := true
-        this.StartCoordMonitor()
-        this.ToggleFunc(true)
+        MyGui.OnEvent("Close", (*) => this.OnCancelClick())
+        MyGui.Show("w410 h" posY + 50)
     }
 
-    OnTopTogClick() {
-        try {
-            alwaysOnTop := this.TopTogCon.Value ? "AlwaysOnTop" : ""
-            this.Gui.Opt("+" alwaysOnTop)
-        }
-    }
-
-    OnInfoTogClick() {
-        for index, con in this.InfoTogArrCon {
-            if (!con.Value && this.InfoTextArrCon[index].Enabled)
-                this.InfoTextArrCon[index].Enabled := false
-            else if (con.Value && !this.InfoTextArrCon[index].Enabled)
-                this.InfoTextArrCon[index].Enabled := true
-        }
-    }
-
-    ToggleFunc(state) {
-        if (state) {
-            SetTimer this.InfoAction, 100
-            Hotkey("F1", (*) => this.OnF1(), "On")
-            Hotkey("F2", (*) => this.OnF2(), "On")
-        } else {
-            SetTimer this.InfoAction, 0
-            Hotkey("F1", "Off")
-            Hotkey("F2", "Off")
-        }
-    }
-
-    RefreshMouseInfo() {
-        CoordMode("Mouse", "Screen")
-        MouseGetPos &mouseX, &mouseY, &winId
-        try {
-            title := WinGetTitle(winId)
-            className := WinGetClass(winId)
-            try {
-                WinPID := WinGetPID("ahk_id " winId)
-                process := ProcessGetName(WinPID)
-            }
-            catch {
-                process := ""
-            }
-
-            tipStr := Format("{}{}`n{}{}`n{}{}`n{}{}", GetLang("句柄ID："), winId, GetLang("标题："), title,
-                GetLang("窗口类："), className, GetLang("进程名："), process)
-            this.CurWinInfoCon.Value := tipStr
-
-            relX := "---"
-            relY := "---"
-            if (winId) {
-                try {
-                    WinGetPos(&winPosX, &winPosY, , , "ahk_id " winId)
-                    relX := mouseX - winPosX
-                    relY := mouseY - winPosY
-                }
-            }
-            this.ScreenCoordText.Value := Format(GetLang("屏幕: ({}, {})  窗口: ({}, {})"), mouseX, mouseY, relX, relY)
-        }
-    }
-
-    OnF1() {
-        CoordMode("Mouse", "Screen")
-        MouseGetPos &mouseX, &mouseY, &winId
-        try {
-            title := WinGetTitle(winId)
-            className := WinGetClass(winId)
-            try {
-                WinPID := WinGetPID("ahk_id " winId)
-                process := ProcessGetName(WinPID)
-            }
-            catch {
-                process := ""
-            }
-
-            this.InfoTextArrCon[1].Value := winId
-            this.InfoTextArrCon[2].Value := title
-            this.InfoTextArrCon[3].Value := className
-            this.InfoTextArrCon[4].Value := process
-
-            this.InfoTogArrCon[1].Value := false
-            this.InfoTogArrCon[2].Value := title != ""
-            this.InfoTogArrCon[3].Value := className != ""
-            this.InfoTogArrCon[4].Value := process != ""
-            this.OnInfoTogClick()
-        }
-    }
-
-    OnF2() {
-        CoordMode("Mouse", "Screen")
-        MouseGetPos &mouseX, &mouseY
-
-        frontValue := this.GetFrontInfo()
-        targetHwnd := ""
-        if (frontValue != "") {
-            paramStr := GetParamsWinInfoStr(frontValue)
-            if (paramStr != "") {
-                hwndList := WinGetList(paramStr)
-                isInTarget := false
-                matchedHwnd := 0
-                for idx, hwnd in hwndList {
-                    if (!hwnd)
-                        continue
-                    try {
-                        WinGetPos(&winX, &winY, &winW, &winH, "ahk_id " hwnd)
-                        if (mouseX >= winX && mouseX <= winX + winW && mouseY >= winY && mouseY <= winY + winH) {
-                            isInTarget := true
-                            matchedHwnd := hwnd
-                            break
-                        }
-                    }
-                }
-                if (!isInTarget) {
-                    MsgBox(GetLang("鼠标不在目标窗口内"), GetLang("提示"), 64)
-                    return
-                }
-                targetHwnd := matchedHwnd
-            }
-        }
-
-        if (targetHwnd) {
-            try {
-                WinGetPos(&winX, &winY, , , "ahk_id " targetHwnd)
-                this.PosXEdit.Value := mouseX - winX
-                this.PosYEdit.Value := mouseY - winY
-            }
-        } else {
-            this.PosXEdit.Value := mouseX
-            this.PosYEdit.Value := mouseY
-        }
-        this.OnPreview()
-    }
-
-    StartCoordMonitor() {
-        if (this.CoordTimer != "")
+    OnBrowseClick() {
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon"
+        file := FileSelect(1, fullPath, GetLang("选择图标"), "Image Files (*.gif; *.png; *.jpg; *.jpeg)")
+        if (file == "")
             return
-        this.CoordTimer := Timer(this.RefreshMouseInfo.Bind(this), 200)
-        this.CoordTimer.On()
+
+        SplitPath file, &name, &dir, &ext, &name_no_ext, &drive
+        destDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon"
+        if (!FileExist(destDir))
+            DirCreate(destDir)
+        newPath := destDir "\" name
+
+        if (file != newPath) {
+            if (FileExist(newPath)) {
+                fileName := this.GetUniqueFileName(file)
+                newPath := destDir "\" fileName
+            }
+            FileCopy(file, newPath, 1)
+            file := newPath
+        }
+
+        this.OriginalIconPath := file
+        this.IconPathEdit.Value := file
     }
 
-    StopCoordMonitor() {
-        if (this.CoordTimer != "") {
-            this.CoordTimer.Off()
-            this.CoordTimer := ""
-        }
-    }
-
-    OnPreview() {
-        this.DestroyPreview()
-
-        try {
-            centerX := Integer(this.PosXEdit.Value)
-            centerY := Integer(this.PosYEdit.Value)
-            btnW := Integer(this.BtnWidthEdit.Value)
-            btnH := Integer(this.BtnHeightEdit.Value)
-
-            posX := centerX - btnW // 2
-            posY := centerY - btnH // 2
-
-            frontValue := this.GetFrontInfo()
-            targetHwnd := ""
-            if (frontValue != "") {
-                paramStr := GetParamsWinInfoStr(frontValue)
-                if (paramStr != "") {
-                    hwndList := WinGetList(paramStr)
-                    if (hwndList.Length > 0 && hwndList[1])
-                        targetHwnd := hwndList[1]
-                }
-            }
-
-            if (targetHwnd) {
-                try {
-                    this.PreviewGui := Gui("+Owner" targetHwnd " +AlwaysOnTop +ToolWindow -Caption")
-                    this.PreviewGui.Opt("+Parent" targetHwnd)
-                }
-                catch as e {
-                    this.PreviewGui := Gui("+AlwaysOnTop +ToolWindow -Caption +DPIScale")
-                }
-            } else {
-                this.PreviewGui := Gui("+AlwaysOnTop +ToolWindow -Caption +DPIScale")
-            }
-
-            if (targetHwnd && this.PreviewGui.Hwnd) {
-                try {
-                    parentHwnd := DllCall("GetParent", "Ptr", this.PreviewGui.Hwnd, "Ptr")
-                    if (parentHwnd == 0) {
-                        WinGetPos(&winX, &winY, , , "ahk_id " targetHwnd)
-                        posX += winX
-                        posY += winY
-                    }
-                }
-            }
-
-            this.PreviewGui.SetFont("S10 W550", MySoftData.FontType)
-            this.PreviewGui.BackColor := "4a90d9"
-            WinSetTransColor("4a90d9", this.PreviewGui)
-
-            remarkValue := ""
-        tableItem := MySoftData.TableInfo[4]
-        if (tableItem.RemarkArr.Has(this.CurrentMacroIndex))
-            remarkValue := tableItem.RemarkArr[this.CurrentMacroIndex]
-        btnText := remarkValue == "" ? GetLang("按钮") this.CurrentMacroIndex : remarkValue
-
-        colorW := 22
-        this.PreviewGui.Add("Pic", "x0 y0 w" colorW " h" btnH " Hidden")
-        this.PreviewGui.Add("Button", "x" colorW " y0 w" btnW - colorW " h" btnH, btnText)
-        this.PreviewGui.Show(Format("x{} y{} NA", posX, posY))
-        this.PreviewGui.Move(, , btnW, btnH)
-        }
-        catch as e {
-        }
-    }
-
-    DestroyPreview() {
-        if (this.PreviewGui != "") {
-            try {
-                this.PreviewGui.Destroy()
-            }
-            this.PreviewGui := ""
-        }
-    }
-
-    GetFrontInfo() {
-        if (this.InfoTogArrCon[1].Value)
-            return "❖" this.InfoTextArrCon[1].Value
-
-        Str := ""
-        loop 4 {
-            if (A_Index == 1)
-                continue
-            if (this.InfoTogArrCon[A_Index].Value) {
-                Str .= this.InfoTextArrCon[A_Index].Value
-            }
-            if (A_Index != 4)
-                Str .= "⎖"
-        }
-        if (Str == "⎖⎖")
+    GetFullIconPath(path) {
+        if (path == "")
             return ""
-        return Str
+
+        if (FileExist(path))
+            return path
+
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon" path
+        if (FileExist(fullPath))
+            return fullPath
+
+        return ""
     }
 
-    OnSureBtnClick(tableItem) {
-        this.UpdateTableItem(tableItem)
-        this.SaveData(tableItem)
-        this.StopCoordMonitor()
-        this.ToggleFunc(false)
-        this.DestroyPreview()
-        this.Gui.Hide()
-        if (this.SureFocusCon != "")
-            this.SureFocusCon.Focus()
-    }
+    OnSureClick(tableItem) {
+        macroIndex := this.CurrentMacroIndex
 
-    OnSaveBtnClick(tableItem) {
-        this.UpdateTableItem(tableItem)
+        finalPath := ""
+        if (this.OriginalIconPath != "" && FileExist(this.OriginalIconPath)) {
+            finalPath := this.CopyIconToImagesFolder(this.OriginalIconPath)
+        }
+
+        if (!tableItem.HasProp("UIIconArr")) {
+            tableItem.UIIconArr := []
+        }
+        while (tableItem.UIIconArr.Length < macroIndex) {
+            tableItem.UIIconArr.Push("")
+        }
+        tableItem.UIIconArr[macroIndex] := finalPath
+
+        ; 立即保存图标路径到配置文件（不触发重启）
         this.SaveData(tableItem)
-        this.StopCoordMonitor()
-        this.ToggleFunc(false)
-        this.DestroyPreview()
-        this.Gui.Hide()
 
         action := this.SaveBtnAction
         if (action != "")
             action()
 
-        MyUIMacroGui.RefreshButtons()
+        try this.Gui.Destroy()
+        this.Gui := ""
 
         if (this.SureFocusCon != "")
             this.SureFocusCon.Focus()
     }
 
-    UpdateTableItem(tableItem) {
-        macroIndex := this.CurrentMacroIndex
+    CopyIconToImagesFolder(sourcePath) {
+        iconsDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon"
+        if (!FileExist(iconsDir)) {
+            DirCreate(iconsDir)
+        }
 
-        frontValue := this.GetFrontInfo()
-        posXValue := Integer(this.PosXEdit.Value)
-        posYValue := Integer(this.PosYEdit.Value)
-        btnWidthValue := Integer(this.BtnWidthEdit.Value)
-        btnHeightValue := Integer(this.BtnHeightEdit.Value)
+        SplitPath sourcePath, &name, &dir, &ext, &name_no_ext, &drive
+        destPath := iconsDir "\" name
 
-        if (tableItem.UIWindowArr.Has(macroIndex))
-            tableItem.UIWindowArr[macroIndex] := frontValue
-        else
-            tableItem.UIWindowArr.Push(frontValue)
+        if (sourcePath == destPath) {
+            return name
+        }
 
-        if (tableItem.HoldTimeArr.Has(macroIndex))
-            tableItem.HoldTimeArr[macroIndex] := posXValue
-        else
-            tableItem.HoldTimeArr.Push(posXValue)
+        if (FileExist(destPath)) {
+            name := this.GetUniqueFileName(sourcePath)
+            destPath := iconsDir "\" name
+        }
 
-        if (tableItem.UnorderedTriggerArr.Has(macroIndex))
-            tableItem.UnorderedTriggerArr[macroIndex] := 0
-        else
-            tableItem.UnorderedTriggerArr.Push(0)
+        try {
+            FileCopy(sourcePath, destPath, 1)
+        }
 
-        if (tableItem.UIPosYArr.Has(macroIndex))
-            tableItem.UIPosYArr[macroIndex] := posYValue
-        else
-            tableItem.UIPosYArr.Push(posYValue)
+        return name
+    }
 
-        if (tableItem.UIBtnWidthArr.Has(macroIndex))
-            tableItem.UIBtnWidthArr[macroIndex] := btnWidthValue
-        else
-            tableItem.UIBtnWidthArr.Push(btnWidthValue)
+    GetUniqueFileName(sourcePath) {
+        SplitPath sourcePath, , , &ext, &nameNoExt
+        destDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon"
 
-        if (tableItem.UIBtnHeightArr.Has(macroIndex))
-            tableItem.UIBtnHeightArr[macroIndex] := btnHeightValue
-        else
-            tableItem.UIBtnHeightArr.Push(btnHeightValue)
+        if (!FileExist(destDir "\" nameNoExt "." ext)) {
+            return nameNoExt "." ext
+        }
+
+        counter := 1
+        while (true) {
+            newName := nameNoExt "_" counter "." ext
+            if (!FileExist(destDir "\" newName)) {
+                return newName
+            }
+            counter++
+        }
     }
 
     SaveData(tableItem) {
-        global MacroFile, IniSection
+        macroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.ini"
 
-        UIWindowArrStr := ""
-        UIPosYArrStr := ""
-        UIBtnWidthArrStr := ""
-        UIBtnHeightArrStr := ""
-
-        loop tableItem.ModeArr.Length {
-            index := A_Index
-            UIWindowArrStr .= tableItem.UIWindowArr.Has(index) ? tableItem.UIWindowArr[index] : ""
-            UIPosYArrStr .= tableItem.UIPosYArr.Has(index) ? tableItem.UIPosYArr[index] : ""
-            UIBtnWidthArrStr .= tableItem.UIBtnWidthArr.Has(index) ? tableItem.UIBtnWidthArr[index] : ""
-            UIBtnHeightArrStr .= tableItem.UIBtnHeightArr.Has(index) ? tableItem.UIBtnHeightArr[index] : ""
-
-            if (tableItem.ModeArr.Length > index) {
-                UIWindowArrStr .= "π"
-                UIPosYArrStr .= "π"
-                UIBtnWidthArrStr .= "π"
-                UIBtnHeightArrStr .= "π"
-            }
+        iconArrStr := ""
+        loop tableItem.UIIconArr.Length {
+            iconArrStr .= tableItem.UIIconArr[A_Index]
+            if (tableItem.UIIconArr.Length > A_Index)
+                iconArrStr .= "π"
         }
 
-        IniWrite(UIWindowArrStr, MacroFile, IniSection, "UIUIWindowArr")
-        IniWrite(UIPosYArrStr, MacroFile, IniSection, "UIUIPosYArr")
-        IniWrite(UIBtnWidthArrStr, MacroFile, IniSection, "UIUIBtnWidthArr")
-        IniWrite(UIBtnHeightArrStr, MacroFile, IniSection, "UIUIBtnHeightArr")
+        IniWrite(iconArrStr, macroFile, "UserSettings", "UIUIIconArr")
     }
 
-    OnCancel() {
-        this.StopCoordMonitor()
-        this.ToggleFunc(false)
-        this.DestroyPreview()
-        this.Gui.Hide()
-    }
-
-    OnClose() {
-        this.StopCoordMonitor()
-        this.ToggleFunc(false)
-        this.DestroyPreview()
+    OnCancelClick() {
+        try {
+            if (this.Gui != "")
+                this.Gui.Destroy()
+        }
         this.Gui := ""
     }
 }

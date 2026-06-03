@@ -13,7 +13,8 @@ LoadItemFold(index) {
     ItemFreeConPoolMap.Set(tableItem.Index, [])
     ItemUseConPoolMap.Set(tableItem.Index, Map())
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    titleHeight := isMenu ? 85 : 55
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    titleHeight := (isMenu || isUI) ? 85 : 55
     UpdateUnderPosY(index, 25)
     for foldIndex, IndexSpanStr in FoldInfo.IndexSpanArr {
         tableItem.FoldOffsetArr.Push(0)
@@ -37,8 +38,9 @@ LoadItemFoldTitle(tableItem, foldIndex, PosY) {
     FoldInfo := tableItem.FoldInfo
     MyGui := MySoftData.MyGui
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
 
-    GroupHeight := GetFoldGroupHeight(FoldInfo, foldIndex, isMenu)
+    GroupHeight := GetFoldGroupHeight(FoldInfo, foldIndex, isMenu, isUI)
     con := MyGui.Add("GroupBox", Format("x{} y{} w900 h{}", MySoftData.TabPosX + 10, posY + 2,
         GroupHeight))
     conInfo := ItemConInfo(con, tableItem, foldIndex)
@@ -81,11 +83,9 @@ LoadItemFoldTitle(tableItem, foldIndex, PosY) {
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
 
-    ;界面宏时禁用前台信息控件
-    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    ;界面宏时不禁用前台信息控件
     if (isUI) {
-        FrontCon.Enabled := false
-        con.Enabled := false
+        ; 前台信息可用，用于指定悬浮面板的目标窗口
     }
 
     con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 490, posY - 1), GetLang("新增宏"))
@@ -105,14 +105,14 @@ LoadItemFoldTitle(tableItem, foldIndex, PosY) {
     tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
 
     con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 630, posY - 1), GetLang("新增模块"))
-    con.OnEvent("Click", OnItemAddFoldBtnClick.Bind(tableItem))
+    con.OnEvent("Click", OnItemAddFoldBtnClick.bind(tableItem))
     conInfo := ItemConInfo(con, tableItem, foldIndex)
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[con] := MacroItemInfo(-10000, conInfo)
 
     con := MyGui.Add("Button", Format("x{} y{} h29", MySoftData.TabPosX + 715, posY - 1), GetLang("删除模块"))
-    con.OnEvent("Click", OnItemDelFoldBtnClick.Bind(tableItem))
+    con.OnEvent("Click", OnItemDelFoldBtnClick.bind(tableItem))
     conInfo := ItemConInfo(con, tableItem, foldIndex)
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
@@ -138,20 +138,28 @@ LoadItemFoldTitle(tableItem, foldIndex, PosY) {
 
     if (isMenu)
         LoadItemFoldTK(tableItem, foldIndex, PosY + 35)
+    if (isUI)
+        LoadItemFoldTK(tableItem, foldIndex, PosY + 35, true)
 }
 
-LoadItemFoldTK(tableItem, foldIndex, PosY) {
+LoadItemFoldTK(tableItem, foldIndex, PosY, isUI := false) {
     FoldInfo := tableItem.FoldInfo
     MyGui := MySoftData.MyGui
 
-    con := MyGui.Add("Text", Format("x{} y{}", MySoftData.TabPosX + 20, posY + 2), GetLang("菜单触发键："))
+    con := MyGui.Add("Text", Format("x{} y{}", MySoftData.TabPosX + 20, posY + 2), isUI ? GetLang("面板触发键：") : GetLang("菜单触发键："))
     conInfo := ItemConInfo(con, tableItem, foldIndex)
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
 
     TriggerTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", MySoftData.TabPosX + 100, posY - 3, 70),
     GetLangArr(["按下", "松开", "松止", "开关", "长按", "双击"]))
-    TriggerTypeCon.Value := FoldInfo.TKTypeArr[foldIndex]
+    ; 界面宏：触发类型固定为"开关"（索引4）
+    if (isUI) {
+        TriggerTypeCon.Value := 4
+        TriggerTypeCon.Enabled := false
+    } else {
+        TriggerTypeCon.Value := FoldInfo.TKTypeArr[foldIndex]
+    }
     TriggerTypeCon.OnEvent("Change", OnFlodTKTypeChange.Bind(tableItem))
     conInfo := ItemConInfo(TriggerTypeCon, tableItem, foldIndex)
     conInfo.IsTitle := true
@@ -159,9 +167,9 @@ LoadItemFoldTK(tableItem, foldIndex, PosY) {
     tableItem.ConIndexMap[TriggerTypeCon] := MacroItemInfo(-10000, conInfo)
 
     TkCon := MyGui.Add("Edit", Format("x{} y{} w{} Center", MySoftData.TabPosX + 175, posY - 3, 100,),
-    "")
+        "")
     TkCon.Value := FoldInfo.TKArr[foldIndex]
-    TkCon.OnEvent("Change", OnFlodTKChange.Bind(tableItem))
+    TkCon.OnEvent("Change", OnFlodTKChange.bind(tableItem))
     conInfo := ItemConInfo(TkCon, tableItem, foldIndex)
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
@@ -169,11 +177,16 @@ LoadItemFoldTK(tableItem, foldIndex, PosY) {
 
     btnStr := GetLang("编辑")
     TKBtnCon := MyGui.Add("Button", Format("x{} y{} w60 h29", MySoftData.TabPosX + 280, posY - 4), btnStr)
-    TKBtnCon.OnEvent("Click", OnFlodTKEditClick.Bind(TkCon, tableItem))
+    TKBtnCon.OnEvent("Click", OnFlodTKEditClick.bind(TkCon, tableItem))
     conInfo := ItemConInfo(TKBtnCon, tableItem, foldIndex)
     conInfo.IsTitle := true
     tableItem.AllConArr.Push(conInfo)
     tableItem.ConIndexMap[TKBtnCon] := MacroItemInfo(-10000, conInfo)
+
+    ; 界面宏：初始化时强制设置触发类型为"开关"
+    if (isUI) {
+        FoldInfo.TKTypeArr[foldIndex] := 4
+    }
 }
 
 LoadItemFoldTip(tableItem, foldIndex, PosY) {
@@ -201,7 +214,8 @@ OnItemAddMacroBtnClick(tableItem, btn, *) {
     foldInfo := tableItem.FoldInfo
     foldIndex := tableItem.ConIndexMap[btn].itemConInfo.FoldIndex
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    titleHeight := isMenu ? 85 : 55
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    titleHeight := (isMenu || isUI) ? 85 : 55
     AddIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
     if (foldInfo.FoldStateArr[foldIndex])  ;没开打的话，自动打开
         OnFoldBtnClick(tableItem, btn)
@@ -251,7 +265,7 @@ OnItemAddMacroBtnClick(tableItem, btn, *) {
         MySoftData.TabCtrl.UseTab()
     }
 
-    afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu)
+    afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu, isUI)
     tableItem.AllGroup[foldIndex].Move(, , , afterHei)
 
     addHei := isFirst ? 75 : 40
@@ -263,6 +277,8 @@ OnItemAddMacroBtnClick(tableItem, btn, *) {
 OnItemDelMacroBtnClick(tableItem, DelIndex, *) {
     foldInfo := tableItem.FoldInfo
     foldIndex := GetItemFoldIndex(tableItem, DelIndex)
+    isMenu := CheckIsMenuMacroTable(tableItem.Index)
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
     result := MsgBox(GetLang("是否删除当前宏"), GetLang("提示"), 1)
     if (result == "Cancel")
         return
@@ -274,10 +290,11 @@ OnItemDelMacroBtnClick(tableItem, DelIndex, *) {
 
 OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    beforeHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu)
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    beforeHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu, isUI)
     UpdateFoldIndexInfo(foldInfo, itemIndex, foldIndex, false)
     HandleItemTopLabel(foldInfo, tableItem, foldIndex)
-    afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu)
+    afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu, isUI)
     tableItem.FoldOffsetArr[foldIndex] += afterHei - beforeHei
     tableItem.AllGroup[foldIndex].Move(, , , afterHei)
 
@@ -311,7 +328,8 @@ OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
 ;增加宏模块
 OnItemAddFoldBtnClick(tableItem, btn, *) {
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    titleHeidht := isMenu ? 85 : 55
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    titleHeidht := (isMenu || isUI) ? 85 : 55
     foldInfo := tableItem.FoldInfo
     foldIndex := tableItem.ConIndexMap[btn].itemConInfo.FoldIndex
     foldInfo.RemarkArr.InsertAt(foldIndex + 1, "")
@@ -346,7 +364,8 @@ OnItemAddMenuItem(tableItem, foldIndex) {
     loop 8 {
         foldInfo := tableItem.FoldInfo
         isMenu := CheckIsMenuMacroTable(tableItem.Index)
-        titleHeight := isMenu ? 85 : 55
+        isUI := GetTableSymbol(tableItem.Index) == "UI"
+        titleHeight := (isMenu || isUI) ? 85 : 55
         AddIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
 
         isFirst := foldInfo.IndexSpanArr[foldIndex] == "无-无"
@@ -393,7 +412,7 @@ OnItemAddMenuItem(tableItem, foldIndex) {
             MySoftData.TabCtrl.UseTab()
         }
 
-        afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu)
+        afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu, isUI)
         tableItem.AllGroup[foldIndex].Move(, , , afterHei)
 
         addHei := isFirst ? 75 : 40
@@ -602,10 +621,11 @@ OnFoldBtnClick(tableItem, btn, *) {
     foldInfo := tableItem.FoldInfo
     foldIndex := tableItem.ConIndexMap[btn].itemConInfo.FoldIndex
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    beforeHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu)
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    beforeHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu, isUI)
     state := !foldInfo.FoldStateArr[foldIndex]
     foldInfo.FoldStateArr[foldIndex] := state
-    afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu)
+    afterHei := GetFoldGroupHeight(foldInfo, foldIndex, isMenu, isUI)
     tableItem.FoldOffsetArr[foldIndex] += afterHei - beforeHei
 
     btnStr := FoldInfo.FoldStateArr[foldIndex] ? "🞃" : "❯"
@@ -748,8 +768,8 @@ UpdateFoldIndexInfo(FoldInfo, OperIndex, FoldIndex, IsAdd) {
 }
 
 ;封装方法
-GetFoldGroupHeight(FoldInfo, index, isMenu) {
-    height := isMenu ? 85 : 55
+GetFoldGroupHeight(FoldInfo, index, isMenu, isUI := false) {
+    height := (isMenu || isUI) ? 85 : 55
     if (FoldInfo.FoldStateArr[index])
         return height
     IndexSpan := StrSplit(FoldInfo.IndexSpanArr[index], "-")
@@ -915,7 +935,8 @@ RefreshTabItem(tableItem) {
         IndexSpanStr := FoldInfo.IndexSpanArr[foldIndex]
         IndexSpan := StrSplit(IndexSpanStr, "-")
         isMenu := CheckIsMenuMacroTable(tableItem.Index)
-        titleHeight := isMenu ? 105 : 75
+        isUI := GetTableSymbol(tableItem.Index) == "UI"
+        titleHeight := (isMenu || isUI) ? 105 : 75
         OffsetNum := index - IndexSpan[1]
         PosY := OffsetNum * 40 + titleHeight + FoldY
         isOverScreen := PosY < -50 || PosY > 600
@@ -955,7 +976,8 @@ RefreshGroupItem(tableItem, foldIndex) {
         return
 
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    titleHeight := isMenu ? 105 : 75
+    isUI := GetTableSymbol(tableItem.Index) == "UI"
+    titleHeight := (isMenu || isUI) ? 105 : 75
     loop IndexSpan[2] - IndexSpan[1] + 1 {
         itemIndex := IndexSpan[1] + A_Index - 1
         PosY := (A_Index - 1) * 40 + titleHeight + FoldY
@@ -1021,7 +1043,7 @@ GetItemConObj(tableItem, itemIndex) {
 
     TabItemOnEvent(ItemConObj.TKBtnCon, "Click", EditTKAction.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.TKBtnCon, "ContextMenu", OnItemCustomEditTriggerStr.bind(tableItem, itemIndex))
-    TabItemOnEvent(ItemConObj.SettingCon, "Click", OnItemEditMacroSetting.Bind(tableItem, itemIndex))
+    TabItemOnEvent(ItemConObj.SettingCon, "Click", OnItemEditMacroSetting.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.EditCon, "Click", EditMacroAction.bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.PreCon, "Click", OnItemMoveUp.Bind(tableItem, itemIndex))
     TabItemOnEvent(ItemConObj.NextCon, "Click", OnItemMoveDown.Bind(tableItem, itemIndex))
@@ -1092,6 +1114,5 @@ RecycleTabSingleItem(tableItem, itemIndex) {
 }
 
 OnUIMacroSettingClick(tableItem, macroIndex, *) {
-    MyUIMacroSettingGui.SaveBtnAction := OnSaveSetting
     MyUIMacroSettingGui.ShowGui(tableItem, macroIndex)
 }

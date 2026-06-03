@@ -664,10 +664,12 @@ ReadTableItemInfo(index) {
         savedUIPosYArrStr := IniRead(MacroFile, IniSection, symbol "UIPosYArr", "")
         savedUIBtnWidthArrStr := IniRead(MacroFile, IniSection, symbol "UIBtnWidthArr", "")
         savedUIBtnHeightArrStr := IniRead(MacroFile, IniSection, symbol "UIBtnHeightArr", "")
+        savedUIIconArrStr := IniRead(MacroFile, IniSection, symbol "UIIconArr", "")
         SetArr(savedUIWindowArrStr, "π", tableItem.UIWindowArr)
         SetArr(savedUIPosYArrStr, "π", tableItem.UIPosYArr)
         SetArr(savedUIBtnWidthArrStr, "π", tableItem.UIBtnWidthArr)
         SetArr(savedUIBtnHeightArrStr, "π", tableItem.UIBtnHeightArr)
+        SetArr(savedUIIconArrStr, "π", tableItem.UIIconArr)
     }
 
     tableItem.FoldInfo := JSON.parse(savedFoldInfoStr, , false)
@@ -884,10 +886,12 @@ SaveTableItemInfo(index) {
         UIPosYArrStr := SavedInfo.Has(13) ? SavedInfo[13] : ""
         UIBtnWidthArrStr := SavedInfo.Has(14) ? SavedInfo[14] : ""
         UIBtnHeightArrStr := SavedInfo.Has(15) ? SavedInfo[15] : ""
+        UIIconArrStr := SavedInfo.Has(19) ? SavedInfo[19] : ""
         IniWrite(UIWindowArrStr, MacroFile, IniSection, symbol "UIWindowArr")
         IniWrite(UIPosYArrStr, MacroFile, IniSection, symbol "UIPosYArr")
         IniWrite(UIBtnWidthArrStr, MacroFile, IniSection, symbol "UIBtnWidthArr")
         IniWrite(UIBtnHeightArrStr, MacroFile, IniSection, symbol "UIBtnHeightArr")
+        IniWrite(UIIconArrStr, MacroFile, IniSection, symbol "UIIconArr")
     }
 
     FoldInfoStr := JSON.stringify(tableItem.FoldInfo, 0)
@@ -930,6 +934,7 @@ GetSavedTableItemInfo(index) {
     UIPosYArrStr := ""
     UIBtnWidthArrStr := ""
     UIBtnHeightArrStr := ""
+    UIIconArrStr := ""
 
     tableItem := MySoftData.TableInfo[index]
     symbol := GetTableSymbol(index)
@@ -958,10 +963,12 @@ GetSavedTableItemInfo(index) {
         UIPosYArrValue := tableItem.UIPosYArr.Has(A_Index) ? tableItem.UIPosYArr[A_Index] : ""
         UIBtnWidthArrValue := tableItem.UIBtnWidthArr.Has(A_Index) ? tableItem.UIBtnWidthArr[A_Index] : ""
         UIBtnHeightArrValue := tableItem.UIBtnHeightArr.Has(A_Index) ? tableItem.UIBtnHeightArr[A_Index] : ""
+        UIIconArrValue := tableItem.UIIconArr.Has(A_Index) ? tableItem.UIIconArr[A_Index] : ""
         UIWindowArrStr .= UIWindowArrValue
         UIPosYArrStr .= UIPosYArrValue
         UIBtnWidthArrStr .= UIBtnWidthArrValue
         UIBtnHeightArrStr .= UIBtnHeightArrValue
+        UIIconArrStr .= UIIconArrValue
 
         if (tableItem.ModeArr.Length > A_Index) {
             TKArrStr .= "π"
@@ -981,12 +988,13 @@ GetSavedTableItemInfo(index) {
             UIPosYArrStr .= "π"
             UIBtnWidthArrStr .= "π"
             UIBtnHeightArrStr .= "π"
+            UIIconArrStr .= "π"
         }
     }
 
     return [TKArrStr, ModeArrStr, HoldTimeArrStr, ForbidArrStr, RemarkArrStr,
         LoopCountArrStr, TriggerTypeArrStr, SerialArrStr, TimingSerialArrStr, StartTipSoundArrStr, EndTipSoundArrStr,
-        UIWindowArrStr, UIPosYArrStr, UIBtnWidthArrStr, UIBtnHeightArrStr, GifPathArrStr, UnorderedTriggerArrStr]
+        UIWindowArrStr, UIPosYArrStr, UIBtnWidthArrStr, UIBtnHeightArrStr, GifPathArrStr, UnorderedTriggerArrStr, UIIconArrStr]
 }
 
 ;Table信息相关

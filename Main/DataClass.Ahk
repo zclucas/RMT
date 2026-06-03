@@ -26,6 +26,7 @@ class TableItem {
         this.UIPosYArr := []         ;界面宏：每个按钮的Y坐标
         this.UIBtnWidthArr := []     ;界面宏：每个按钮的宽度
         this.UIBtnHeightArr := []    ;界面宏：每个按钮的高度
+        this.UIIconArr := []          ;界面宏：每个按钮的图标字符
 
         this.UnderPosY := 0         ; table的最大PosY
         this.Index := 0             ;   table的Index
