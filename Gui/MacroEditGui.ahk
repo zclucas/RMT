@@ -35,7 +35,7 @@ class MacroEditGui {
         this.Gui := ""
         this.GuiMenu := ""
         this.DebugItemID := 0
-        this.DebugStepNum := 0
+        this.CurrentItemID := 0
         this.ShowSaveBtn := false
         this.SureFocusCon := ""
         this.isContextEdit := false
@@ -251,7 +251,6 @@ class MacroEditGui {
 
         MySoftData.RecordToggleCon := this.RecordMacroCon
         MySoftData.MacroEditGui := this
-        this.DebugStepNum := 0
         this.InitGuiMenu()
         this.Init(CommandStr, ShowSaveBtn)
     }
@@ -668,22 +667,24 @@ class MacroEditGui {
         this.CurItemID := item
         this.MacroTreeViewCon.Modify(this.CurItemID, "Select")
         itemText := this.MacroTreeViewCon.GetText(this.CurItemID)
-        isCondi := SubStr(itemText, 1, StrLen(GetLang("条件"))) == GetLang("条件")
-        if (itemText == "" || SubStr(itemText, 1, 1) == "⎖")
+        ; 清理→前缀用于菜单状态判断（→是运行时临时标记，不影响逻辑状态）
+        cleanItemText := StrReplace(itemText, "→", "")
+        isCondi := SubStr(cleanItemText, 1, StrLen(GetLang("条件"))) == GetLang("条件")
+        if (cleanItemText == "" || SubStr(cleanItemText, 1, 1) == "⎖")
             return
         else if (itemText == GetLang("真") || itemText == GetLang("假") || itemText == GetLang("循环体") || isCondi) {
             this.BranchContextMenu.Show(x, y)
         }
         else {
             CurSkipMenuText := this.ContextMenu.IsSkip ? GetLang("跳过指令") : GetLang("取消跳过")
-            SkipMenuText := SubStr(itemText, 1, 2) == "🚫" ? GetLang("取消跳过") : GetLang("跳过指令")
+            SkipMenuText := SubStr(cleanItemText, 1, 2) == "🚫" ? GetLang("取消跳过") : GetLang("跳过指令")
             if (CurSkipMenuText != SkipMenuText) {
                 this.ContextMenu.Rename(CurSkipMenuText, SkipMenuText)
                 this.ContextMenu.IsSkip := !this.ContextMenu.IsSkip
             }
 
             CurDebugMenuText := this.ContextMenu.IsDebug ? GetLang("调试起点") : GetLang("取消调试起点")
-            DebugMenuText := SubStr(itemText, 1, 1) == "⭐" ? GetLang("取消调试起点") : GetLang("调试起点")
+            DebugMenuText := SubStr(cleanItemText, 1, 1) == "⭐" ? GetLang("取消调试起点") : GetLang("调试起点")
             if (CurDebugMenuText != DebugMenuText) {
                 this.ContextMenu.Rename(CurDebugMenuText, DebugMenuText)
                 this.ContextMenu.IsDebug := !this.ContextMenu.IsDebug
@@ -774,7 +775,9 @@ class MacroEditGui {
             return
         }
 
-        paramsArr := StrSplit(itemText, "_")
+        ; 清理→和⭐前缀
+        cleanText := StrReplace(StrReplace(itemText, "⭐", ""), "→", "")
+        paramsArr := StrSplit(cleanText, "_")
         cmd := GetCmdOnlyText(paramsArr[1])
         subGui := this.SubGuiMap[cmd]
         this.OnOpenSubGui(subGui, 2)
@@ -821,6 +824,7 @@ class MacroEditGui {
             }
             case GetLang("运行(F5)"):
             {
+                this.ResetDebugState()
                 MacroStr := this.GetMacroStr()
                 MacroStr := GetLangMacro(macroStr, 2)
                 ResArr := StrSplit(MacroStr, "⭐", 2)
@@ -836,44 +840,60 @@ class MacroEditGui {
                     return
                 }
 
+                ; 阶段1: 定位（首次F6或终止后，查找⭐起点或第一项）
                 if (this.DebugItemID == 0) {
                     MyCMDTipGui.Clear()
-                    this.DebugItemID := this.MacroTreeViewCon.GetNext(this.DebugItemID)
+                    this.DebugItemID := this.FindDebugStartItem()
+                    if (!this.DebugItemID) {
+                        this.DebugItemID := this.MacroTreeViewCon.GetNext(0)
+                    }
                 }
-                CurCMD := this.MacroTreeViewCon.GetText(this.DebugItemID)
-                CurCMD := StrReplace(CurCMD, "⭐", "")
-                CurLangCMD := GetLangMacro(CurCMD, 2)
-                OnTriggerSepcialItemMacro(CurLangCMD)
-                this.MacroTreeViewCon.Modify(this.DebugItemID, , CurCMD)
-                loop {
-                    if (this.DebugItemID == this.LastItemID) {
-                        this.DebugItemID := 0
-                        MsgBox(GetLang("单步运行结束"), "", "Owner" this.Gui.Hwnd)
+                if (!this.DebugItemID)
+                    return
+
+                try {
+                    CurCMD := this.MacroTreeViewCon.GetText(this.DebugItemID)
+                } catch {
+                    this.ResetDebugState()
+                    return
+                }
+
+                ; 阶段2: 跳过不可执行项（🚫禁用和⎖容器配置），自动推进不消耗步数
+                while (SubStr(CurCMD, 1, 2) == "🚫" || SubStr(CurCMD, 1, 1) == "⎖") {
+                    this.AdvanceToNext()
+                    if (!this.DebugItemID)
+                        return
+                    try {
+                        CurCMD := this.MacroTreeViewCon.GetText(this.DebugItemID)
+                    } catch {
+                        this.ResetDebugState()
                         return
                     }
-                    this.DebugItemID := this.MacroTreeViewCon.GetNext(this.DebugItemID)
-                    cmdNextStr := this.MacroTreeViewCon.GetText(this.DebugItemID)
-                    if (SubStr(cmdNextStr, 1, 2) == "🚫") {
-                        continue
-                    }
-                    break
                 }
-                cmdNextStr := StrReplace(cmdNextStr, "⭐", "")
-                cmdNextStr := "⭐" cmdNextStr
-                this.MacroTreeViewCon.Modify(this.DebugItemID, , cmdNextStr)
+
+                ; 阶段3: 标记当前位置 → 执行
+                this.MarkCurrentPosition(this.DebugItemID)
+
+                CleanCMD := StrReplace(StrReplace(CurCMD, "⭐", ""), "→", "")
+                CurLangCMD := GetLangMacro(CleanCMD, 2)
+                OnTriggerSepcialItemMacro(CurLangCMD)
+
+                ; 阶段4: 推进到下一项
+                this.AdvanceToNext()
             }
             case GetLang("终止"):
             {
-                this.DebugStepNum := 0
-                this.DebugItemID := 0
                 KillSingleTableMacro(MySoftData.SpecialTableItem)
-                MyCMDTipGui.AddCMD(GetLang("终止"))
+                this.ResetDebugState()
+                MyCMDTipGui.ShowGui(GetLang("终止"))
             }
         }
     }
 
     ContentMenuHandler(cmdStr, *) {
         itemText := this.MacroTreeViewCon.GetText(this.CurItemID)
+        ; 清理→前缀用于状态判断
+        cleanItemText := StrReplace(itemText, "→", "")
         paramsArr := StrSplit(cmdStr, "_")
         if (paramsArr.Length == 2) {
             modeType := paramsArr[1] == "Pre" ? 3 : paramsArr[1] == "Next" ? 4 : 5
@@ -886,29 +906,29 @@ class MacroEditGui {
         switch cmdStr {
             case GetLang("编辑"):
             {
-                paramsArr := StrSplit(itemText, "_")
+                paramsArr := StrSplit(cleanItemText, "_")
                 cmd := GetCmdOnlyText(paramsArr[1])
                 subGui := this.SubGuiMap[cmd]
                 this.OnOpenSubGui(subGui, 2)
             }
             case "Skip":
             {
-                if (SubStr(itemText, 1, 1) == "⭐") {
+                if (SubStr(cleanItemText, 1, 1) == "⭐") {
                     MsgBox(GetLang("调试起点不能跳过"), "", "Owner" this.Gui.Hwnd)
                     return
                 }
-                IsToSkip := SubStr(itemText, 1, 2) != "🚫"
-                CommandStr := IsToSkip ? "🚫" itemText : SubStr(itemText, 3)
+                IsToSkip := SubStr(cleanItemText, 1, 2) != "🚫"
+                CommandStr := IsToSkip ? "🚫" cleanItemText : SubStr(cleanItemText, 3)
                 this.OnModifyCmd(CommandStr)
             }
             case "Debug":
-                if (SubStr(itemText, 1, 2) == "🚫") {
+                if (SubStr(cleanItemText, 1, 2) == "🚫") {
                     MsgBox(GetLang("跳过指令不可设置为调试起点"), "", "Owner" this.Gui.Hwnd)
                     return
                 }
-                IsToDebug := SubStr(itemText, 1, 1) != "⭐"
-                CommandStr := IsToDebug ? "⭐" itemText : SubStr(itemText, 2)
-                this.DebugItemID := this.CurItemID
+                IsToDebug := SubStr(cleanItemText, 1, 1) != "⭐"
+                CommandStr := IsToDebug ? "⭐" cleanItemText : SubStr(cleanItemText, 2)
+                ; ⭐是持久标记，由F6单步时FindDebugStartItem查找，不直接设DebugItemID
                 this.OnModifyCmd(CommandStr)
             case GetLang("指令上移"):
             {
@@ -920,7 +940,7 @@ class MacroEditGui {
             }
             case GetLang("复制"):
             {
-                newCmd := FullCopyCmd(itemText)
+                newCmd := FullCopyCmd(cleanItemText)
                 SetClipboard(newCmd)
             }
             case GetLang("上方粘贴"):
@@ -938,22 +958,167 @@ class MacroEditGui {
         }
     }
 
+    ; 重置调试状态（清除位置和→标记）
+    ResetDebugState() {
+        this.DebugItemID := 0
+        this.ClearCurrentPosition()
+    }
+
+    ; 在指定项上加→前缀，表示当前位置（同时清除旧位置）
+    MarkCurrentPosition(itemID) {
+        ; 先清除旧的→标记
+        if (this.CurrentItemID && this.CurrentItemID != itemID) {
+            try {
+                oldText := this.MacroTreeViewCon.GetText(this.CurrentItemID)
+                if (SubStr(oldText, 1, 1) == "→") {
+                    this.MacroTreeViewCon.Modify(this.CurrentItemID, , SubStr(oldText, 2))
+                }
+            } catch {
+                ; 旧项可能已失效，忽略
+            }
+        }
+        ; 在新项上加→（保留⭐标记）
+        try {
+            text := this.MacroTreeViewCon.GetText(itemID)
+            hasStar := SubStr(text, 1, 1) == "⭐"
+            cleanText := StrReplace(text, "⭐", "")
+            cleanText := StrReplace(cleanText, "→", "")
+            if (SubStr(cleanText, 1, 2) != "🚫" && SubStr(cleanText, 1, 1) != "⎖") {
+                newText := hasStar ? "→⭐" cleanText : "→" cleanText
+                this.MacroTreeViewCon.Modify(itemID, , newText)
+            }
+        } catch {
+            ; 忽略
+        }
+        this.CurrentItemID := itemID
+    }
+
+    ; 清除当前项的→标记
+    ClearCurrentPosition() {
+        if (!this.CurrentItemID)
+            return
+        try {
+            text := this.MacroTreeViewCon.GetText(this.CurrentItemID)
+            if (SubStr(text, 1, 1) == "→") {
+                this.MacroTreeViewCon.Modify(this.CurrentItemID, , SubStr(text, 2))
+            }
+        } catch {
+            ; 忽略
+        }
+        this.CurrentItemID := 0
+    }
+
+    ; 推进到下一个可执行项，到达末尾时直接结束
+    AdvanceToNext() {
+        safeCount := 0
+        loop {
+            if (safeCount++ > 1000) {
+                this.ResetDebugState()
+                return
+            }
+            try
+                nextID := this.MacroTreeViewCon.GetNext(this.DebugItemID)
+            catch {
+                this.ResetDebugState()
+                MsgBox(GetLang("单步运行结束"), "", "Owner" this.Gui.Hwnd)
+                return
+            }
+            if (!nextID) {
+                ; 到达当前层级末尾，直接结束
+                this.ResetDebugState()
+                MsgBox(GetLang("单步运行结束"), "", "Owner" this.Gui.Hwnd)
+                return
+            }
+            this.DebugItemID := nextID
+
+            try {
+                cmdNextStr := this.MacroTreeViewCon.GetText(this.DebugItemID)
+            } catch {
+                this.ResetDebugState()
+                MsgBox(GetLang("单步运行结束"), "", "Owner" this.Gui.Hwnd)
+                return
+            }
+
+            ; 跳过禁用项和特殊容器配置项
+            if (SubStr(cmdNextStr, 1, 2) == "🚫" || SubStr(cmdNextStr, 1, 1) == "⎖")
+                continue
+
+            break
+        }
+        ; 到达下一个可执行项，标记为当前位置
+        this.MarkCurrentPosition(this.DebugItemID)
+    }
+
+    ; 递归遍历整个TreeView（含子分支），查找带⭐的调试起点项
+    FindDebugStartItem(startID := 0) {
+        itemID := this.MacroTreeViewCon.GetNext(startID)
+        while (itemID) {
+            try
+                text := this.MacroTreeViewCon.GetText(itemID)
+            catch {
+                try
+                    itemID := this.MacroTreeViewCon.GetNext(itemID)
+                catch
+                    break
+                continue
+            }
+            ; 当前项就是⭐起点
+            if (SubStr(text, 1, 1) == "⭐")
+                return itemID
+            ; 递归检查子分支（支持任意层级嵌套）
+            found := this._FindStarInChildren(itemID)
+            if (found)
+                return found
+            try
+                itemID := this.MacroTreeViewCon.GetNext(itemID)
+            catch
+                break
+        }
+        return 0
+    }
+
+    ; 在指定节点的所有后代中递归查找⭐
+    _FindStarInChildren(parentID) {
+        try
+            childID := this.MacroTreeViewCon.GetChild(parentID)
+        catch
+            return 0
+        while (childID) {
+            try
+                childText := this.MacroTreeViewCon.GetText(childID)
+            catch {
+                try
+                    childID := this.MacroTreeViewCon.GetNext(childID)
+                catch
+                    break
+                continue
+            }
+            if (SubStr(childText, 1, 1) == "⭐")
+                return childID
+            ; 递归深入子节点的子节点
+            deeper := this._FindStarInChildren(childID)
+            if (deeper)
+                return deeper
+            try
+                childID := this.MacroTreeViewCon.GetNext(childID)
+            catch
+                break
+        }
+        return 0
+    }
+
     InitTreeView(MacroStr) {
+        this.ResetDebugState()
         this.MacroTreeViewCon.Visible := this.EditModeCon.Value == 1
         cmdArr := SplitMacro(MacroStr)
         this.MacroTreeViewCon.Opt("-Redraw")
         this.MacroTreeViewCon.Delete()
         this.LastItemID := 0
-        isSetDebug := false
         for cmdStr in cmdArr {
             iconStr := this.GetCmdIconStr(cmdStr)
             root := this.MacroTreeViewCon.Add(cmdStr, 0, iconStr)
             this.LastItemID := root
             this.TreeAddBranch(root, cmdStr)
-            if (!isSetDebug && SubStr(cmdStr, 1, 1) == "⭐") {
-                isSetDebug := true
-                this.DebugItemID := root
-            }
         }
         this.MacroTreeViewCon.Opt("+Redraw")
     }
@@ -1085,6 +1250,8 @@ class MacroEditGui {
 
         if (modeType == 2) {
             ItemText := this.MacroTreeViewCon.GetText(this.CurItemID)
+            ; 清理→和⭐前缀
+            ItemText := StrReplace(StrReplace(ItemText, "⭐", ""), "→", "")
             CommandStr := GetCmdStr(ItemText)
             subGui.ShowGui(CommandStr)
             return
@@ -1120,6 +1287,7 @@ class MacroEditGui {
 
     ;添加指令
     OnAddCmd(CommandStr) {
+        this.ResetDebugState()
         if (this.EditModeCon.Value == 1) {
             iconStr := this.GetCmdIconStr(CommandStr)
             root := this.MacroTreeViewCon.Add(CommandStr, 0, iconStr)
@@ -1141,6 +1309,7 @@ class MacroEditGui {
 
     ;修改指令
     OnModifyCmd(CommandStr) {
+        this.ResetDebugState()
         this.MacroTreeViewCon.Modify(this.CurItemID, , CommandStr)
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
         if (ParentID == 0) {
@@ -1185,6 +1354,7 @@ class MacroEditGui {
     }
 
     OnSwitchCmd(ItemAID, ItemBID) {
+        this.ResetDebugState()
         LastItemID := this.MacroTreeViewCon.GetPrev(ItemAID)
         ParentID := this.MacroTreeViewCon.GetParent(ItemAID)
         NewACmdStr := this.MacroTreeViewCon.GetText(ItemBID)
@@ -1212,6 +1382,7 @@ class MacroEditGui {
     }
 
     OnDeleteCmd() {
+        this.ResetDebugState()
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
         if (ParentID == 0) {
             this.MacroTreeViewCon.Delete(this.CurItemID)
@@ -1242,6 +1413,7 @@ class MacroEditGui {
 
     ;插入指令
     OnPreInsertCmd(CommandStr) {
+        this.ResetDebugState()
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
         PreItemID := this.MacroTreeViewCon.GetPrev(this.CurItemID)
         Seq := PreItemID == 0 ? "First" : PreItemID
@@ -1261,6 +1433,7 @@ class MacroEditGui {
 
     ;插入指令
     OnNextInsertCmd(CommandStr) {
+        this.ResetDebugState()
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
         iconStr := this.GetCmdIconStr(CommandStr)
         newItemID := this.MacroTreeViewCon.Add(CommandStr, ParentID, this.CurItemID " " iconStr)

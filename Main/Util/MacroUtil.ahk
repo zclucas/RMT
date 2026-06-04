@@ -116,7 +116,11 @@ OnTriggerMacroOnce(tableItem, macro, index) {
 
         ; 移除末尾数字以匹配Map键 (例如 "搜索1" -> "搜索"), 但保留Pro等后缀
         cmdKey := RTrim(paramArr[1], "0123456789")
-        result := Actions[cmdKey](tableItem, cmdStr, index)
+        try {
+            result := Actions[cmdKey](tableItem, cmdStr, index)
+        } catch {
+            result := ""
+        }
         if (result != "") {
             cmdArr.InsertAt(A_Index + 1, result*)
         }
