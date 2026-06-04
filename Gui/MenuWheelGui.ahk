@@ -51,24 +51,15 @@ class MenuWheelGui {
             remark := tableItem.RemarkArr[macroIndex]
             btnName := remark != "" ? remark : "菜单" A_Index
 
-            gifPath := ""
-            if (tableItem.HasProp("GifPathArr") && tableItem.GifPathArr.Length >= macroIndex) {
-                gifPath := tableItem.GifPathArr[macroIndex]
-                if (gifPath != "") {
-                    fullPath := this.GetFullGifPath(gifPath)
-                    if (fullPath != "" && FileExist(fullPath))
-                        gifPath := fullPath
-                    else
-                        gifPath := ""
-                }
-            }
+            icoPath := ""
+            icoPath := tableItem.IcoPathArr[macroIndex]
 
             arcNr := A_Index
             h := MenuWheelGui._MakeCallback(this, arcNr, MenuIndex)
 
             items.Push({
                 Name: btnName,
-                Image: gifPath,
+                Image: icoPath,
                 Callback: h
             })
         }
@@ -538,7 +529,7 @@ class MenuWheelGui {
         OnTriggerMacroKeyAndInit(tableItem, tableItem.MacroArr[macroIndex], macroIndex)
     }
 
-    GetFullGifPath(path) {
+    GetFullIcoPath(path) {
         if (path == "")
             return ""
 

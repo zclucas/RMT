@@ -774,23 +774,3 @@ OnTrayEndRecord(*) {
     ToolCheckInfo.ToolCheckRecordMacroCtrl.Value := false
     OnForceEndRecord()
 }
-
-; 获取窗口在活动显示器上居中的坐标
-GetCenterPosOnActiveMonitor(winWidth, winHeight) {
-    MouseGetPos(&mouseX, &mouseY)
-    monCount := MonitorGetCount()
-    Loop monCount {
-        MonitorGet(A_Index, &mL, &mT, &mR, &mB)
-        if (mouseX >= mL && mouseX < mR && mouseY >= mT && mouseY < mB) {
-            MonitorGetWorkArea(A_Index, &waL, &waT, &waR, &waB)
-            x := Floor((waL + waR - winWidth) / 2)
-            y := Floor((waT + waB - winHeight) / 2)
-            return {x: x, y: y}
-        }
-    }
-    ; 默认主显示器
-    MonitorGetWorkArea(1, &waL, &waT, &waR, &waB)
-    x := Floor((waL + waR - winWidth) / 2)
-    y := Floor((waT + waB - winHeight) / 2)
-    return {x: x, y: y}
-}

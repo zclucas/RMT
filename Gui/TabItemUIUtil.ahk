@@ -238,7 +238,7 @@ OnItemAddMacroBtnClick(tableItem, btn, *) {
     tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
     tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
     tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
-    tableItem.GifPathArr.InsertAt(AddIndex, "")
+    tableItem.IcoPathArr.InsertAt(AddIndex, "")
     tableItem.KilledArr.InsertAt(AddIndex, false)
     tableItem.PauseArr.InsertAt(AddIndex, false)
     tableItem.ActionCount.InsertAt(AddIndex, 0)
@@ -313,9 +313,7 @@ OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
     tableItem.StartTipSoundArr.RemoveAt(itemIndex)
     tableItem.EndTipSoundArr.RemoveAt(itemIndex)
     tableItem.IsWorkIndexArr.RemoveAt(itemIndex)
-    if (tableItem.HasProp("GifPathArr") && tableItem.GifPathArr.Length >= itemIndex) {
-        tableItem.GifPathArr.RemoveAt(itemIndex)
-    }
+    tableItem.IcoPathArr.RemoveAt(itemIndex)
     tableItem.KilledArr.RemoveAt(itemIndex)
     tableItem.PauseArr.RemoveAt(itemIndex)
     tableItem.ActionCount.RemoveAt(itemIndex)
@@ -385,7 +383,7 @@ OnItemAddMenuItem(tableItem, foldIndex) {
         tableItem.StartTipSoundArr.InsertAt(AddIndex, 0)
         tableItem.EndTipSoundArr.InsertAt(AddIndex, 0)
         tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
-        tableItem.GifPathArr.InsertAt(AddIndex, "")
+        tableItem.IcoPathArr.InsertAt(AddIndex, "")
         tableItem.KilledArr.InsertAt(AddIndex, false)
         tableItem.PauseArr.InsertAt(AddIndex, false)
         tableItem.ActionCount.InsertAt(AddIndex, 0)
@@ -515,7 +513,7 @@ OnItemEditTriggerKey(tableItem, index, *) {
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
     MyTriggerKeyGui.SureBtnAction := SureAction
-    MyTriggerKeyGui.UnorderedTrigger := tableItem.UnorderedTriggerArr.Has(index) ? tableItem.UnorderedTriggerArr[index] : false
+    MyTriggerKeyGui.UnorderedTrigger := tableItem.UnorderedTriggerArr[index]
     MyTriggerKeyGui.ShowGui(triggerKey, tableItem.HoldTimeArr[index], false)
 }
 
@@ -1129,5 +1127,5 @@ RecycleTabSingleItem(tableItem, itemIndex) {
 }
 
 OnUIMacroSettingClick(tableItem, macroIndex, *) {
-    MyUIMacroSettingGui.ShowGui(tableItem, macroIndex)
+    MyUIMacroSettingGui.ShowGui(tableItem.Index, macroIndex)
 }

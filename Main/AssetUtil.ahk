@@ -608,7 +608,7 @@ ReadTableItemInfo(index) {
     savedTimingSerialStr := IniRead(MacroFile, IniSection, symbol "TimingSerialArr", "")
     savedStartTipSoundStr := IniRead(MacroFile, IniSection, symbol "StartTipSoundArr", "")
     savedEndTipSoundStr := IniRead(MacroFile, IniSection, symbol "EndTipSoundArr", "")
-    savedGifPathArrStr := IniRead(MacroFile, IniSection, symbol "GifPathArr", "")
+    savedIcoPathArrStr := IniRead(MacroFile, IniSection, symbol "IcoPathArr", "")
     savedUnorderedTriggerArrStr := IniRead(MacroFile, IniSection, symbol "UnorderedTriggerArr", "")
     savedFoldInfoStr := IniRead(MacroFile, IniSection, symbol "FoldInfo", "")
 
@@ -625,7 +625,8 @@ ReadTableItemInfo(index) {
         savedTimingSerialStr := defaultInfo[9]
         savedStartTipSoundStr := defaultInfo[10]
         savedEndTipSoundStr := defaultInfo[11]
-        savedUnorderedTriggerArrStr := defaultInfo[12]
+        savedIcoPathArrStr := defaultInfo[12]
+        savedUnorderedTriggerArrStr := defaultInfo[13]
 
         defaultFoldInfo := ItemFoldInfo()
         defaultFoldInfo.RemarkArr := [GetLang("RMT默认初始化配置")]
@@ -653,26 +654,8 @@ ReadTableItemInfo(index) {
     SetArr(savedTimingSerialStr, "π", tableItem.TimingSerialArr)
     SetArr(savedStartTipSoundStr, "π", tableItem.StartTipSoundArr)
     SetArr(savedEndTipSoundStr, "π", tableItem.EndTipSoundArr)
-
-    SetArr(savedGifPathArrStr, "π", tableItem.GifPathArr)
+    SetArr(savedIcoPathArrStr, "π", tableItem.IcoPathArr)
     SetIntArr(savedUnorderedTriggerArrStr, "π", tableItem.UnorderedTriggerArr)
-    while (tableItem.GifPathArr.Length < tableItem.ModeArr.Length)
-        tableItem.GifPathArr.Push("")
-    while (tableItem.UnorderedTriggerArr.Length < tableItem.ModeArr.Length)
-        tableItem.UnorderedTriggerArr.Push(0)
-
-    if (symbol == "UI") {
-        savedUIWindowArrStr := IniRead(MacroFile, IniSection, symbol "UIWindowArr", "")
-        savedUIPosYArrStr := IniRead(MacroFile, IniSection, symbol "UIPosYArr", "")
-        savedUIBtnWidthArrStr := IniRead(MacroFile, IniSection, symbol "UIBtnWidthArr", "")
-        savedUIBtnHeightArrStr := IniRead(MacroFile, IniSection, symbol "UIBtnHeightArr", "")
-        savedUIIconArrStr := IniRead(MacroFile, IniSection, symbol "UIIconArr", "")
-        SetArr(savedUIWindowArrStr, "π", tableItem.UIWindowArr)
-        SetArr(savedUIPosYArrStr, "π", tableItem.UIPosYArr)
-        SetArr(savedUIBtnWidthArrStr, "π", tableItem.UIBtnWidthArr)
-        SetArr(savedUIBtnHeightArrStr, "π", tableItem.UIBtnHeightArr)
-        SetArr(savedUIIconArrStr, "π", tableItem.UIIconArr)
-    }
 
     tableItem.FoldInfo := JSON.parse(savedFoldInfoStr, , false)
     SetSerialByArr(tableItem.SerialArr)
@@ -754,6 +737,7 @@ GetTableItemDefaultInfo(index) {
     savedTimingSerialStr := ""
     savedStartTipSoundStr := ""
     savedEndTipSoundStr := ""
+    savedIcoPathArrStr := ""
     savedUnorderedTriggerArrStr := ""
     symbol := GetTableSymbol(index)
 
@@ -769,6 +753,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing1"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedIcoPathArrStr := "0π"
         savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "String") {
@@ -783,6 +768,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing2"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedIcoPathArrStr := "00π"
         savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "Menu") {
@@ -798,6 +784,7 @@ GetTableItemDefaultInfo(index) {
             "Timing3πTiming4πTiming5πTiming6πTiming7πTiming8πTiming12πTiming13"
         savedStartTipSoundStr := "1π1π1π1π1π1π1π1"
         savedEndTipSoundStr := "1π1π1π1π1π1π1π1"
+        savedIcoPathArrStr := "0π0π0π0π0π0π0π0π"
         savedUnorderedTriggerArrStr := "0π0π0π0π0π0π0π0"
     }
     else if (symbol == "UI") {
@@ -812,6 +799,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing14"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedIcoPathArrStr := "0π0π"
         savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "Timing") {
@@ -826,6 +814,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing9"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedIcoPathArrStr := "00π"
         savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "SubMacro") {
@@ -840,6 +829,7 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing10"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedIcoPathArrStr := "00π"
         savedUnorderedTriggerArrStr := "0"
     }
     else if (symbol == "Replace") {
@@ -854,11 +844,12 @@ GetTableItemDefaultInfo(index) {
         savedTimingSerialStr := "Timing11"
         savedStartTipSoundStr := "1"
         savedEndTipSoundStr := "1"
+        savedIcoPathArrStr := "00π"
         savedUnorderedTriggerArrStr := "0"
     }
     return [savedTKArrStr, savedHoldTimeArrStr, savedModeArrStr, savedForbidArrStr, savedRemarkArrStr,
         savedLoopCountStr, savedTriggerTypeStr, savedSerialeArrStr, savedTimingSerialStr, savedStartTipSoundStr,
-        savedEndTipSoundStr, savedUnorderedTriggerArrStr]
+        savedEndTipSoundStr, savedIcoPathArrStr, savedUnorderedTriggerArrStr]
 }
 
 SaveTableItemInfo(index) {
@@ -866,8 +857,8 @@ SaveTableItemInfo(index) {
     symbol := GetTableSymbol(index)
     tableItem := MySoftData.TableInfo[index]
     IniWrite(SavedInfo[1], MacroFile, IniSection, symbol "TKArr")
-    IniWrite(SavedInfo[2], MacroFile, IniSection, symbol "ModeArr")
-    IniWrite(SavedInfo[3], MacroFile, IniSection, symbol "HoldTimeArr")
+    IniWrite(SavedInfo[2], MacroFile, IniSection, symbol "HoldTimeArr")
+    IniWrite(SavedInfo[3], MacroFile, IniSection, symbol "ModeArr")
     IniWrite(SavedInfo[4], MacroFile, IniSection, symbol "ForbidArr")
     IniWrite(SavedInfo[5], MacroFile, IniSection, symbol "RemarkArr")
     IniWrite(SavedInfo[6], MacroFile, IniSection, symbol "LoopCountArr")
@@ -876,28 +867,9 @@ SaveTableItemInfo(index) {
     IniWrite(SavedInfo[9], MacroFile, IniSection, symbol "TimingSerialArr")
     IniWrite(SavedInfo[10], MacroFile, IniSection, symbol "StartTipSoundArr")
     IniWrite(SavedInfo[11], MacroFile, IniSection, symbol "EndTipSoundArr")
-
-    UnorderedTriggerArrStr := SavedInfo.Has(17) ? SavedInfo[17] : ""
-    IniWrite(UnorderedTriggerArrStr, MacroFile, IniSection, symbol "UnorderedTriggerArr")
-
-    GifPathArrStr := SavedInfo.Has(16) ? SavedInfo[16] : ""
-    IniWrite(GifPathArrStr, MacroFile, IniSection, symbol "GifPathArr")
-
-    if (symbol == "UI") {
-        UIWindowArrStr := SavedInfo.Has(12) ? SavedInfo[12] : ""
-        UIPosYArrStr := SavedInfo.Has(13) ? SavedInfo[13] : ""
-        UIBtnWidthArrStr := SavedInfo.Has(14) ? SavedInfo[14] : ""
-        UIBtnHeightArrStr := SavedInfo.Has(15) ? SavedInfo[15] : ""
-        UIIconArrStr := SavedInfo.Has(19) ? SavedInfo[19] : ""
-        IniWrite(UIWindowArrStr, MacroFile, IniSection, symbol "UIWindowArr")
-        IniWrite(UIPosYArrStr, MacroFile, IniSection, symbol "UIPosYArr")
-        IniWrite(UIBtnWidthArrStr, MacroFile, IniSection, symbol "UIBtnWidthArr")
-        IniWrite(UIBtnHeightArrStr, MacroFile, IniSection, symbol "UIBtnHeightArr")
-        IniWrite(UIIconArrStr, MacroFile, IniSection, symbol "UIIconArr")
-    }
-
-    FoldInfoStr := JSON.stringify(tableItem.FoldInfo, 0)
-    IniWrite(FoldInfoStr, MacroFile, IniSection, symbol "FoldInfo")
+    IniWrite(SavedInfo[12], MacroFile, IniSection, symbol "IcoPathArr")
+    IniWrite(SavedInfo[13], MacroFile, IniSection, symbol "UnorderedTriggerArr")
+    IniWrite(JSON.stringify(tableItem.FoldInfo, 0), MacroFile, IniSection, symbol "FoldInfo")
 
     SaveTableItemMacro(index)
 }
@@ -906,7 +878,7 @@ SaveTableItemMacro(index) {
     tableItem := MySoftData.TableInfo[index]
     symbol := GetTableSymbol(index)
     loop tableItem.ModeArr.Length {
-        MacroStr := tableItem.MacroArr.Has(A_Index) ? tableItem.MacroArr[A_Index] : ""
+        MacroStr := tableItem.MacroArr[A_Index]
         MacroStr := Trim(MacroStr)
         MacroStr := Trim(MacroStr, "`n")
         MacroStr := Trim(MacroStr, ",")
@@ -919,8 +891,8 @@ GetSavedTableItemInfo(index) {
     Saved := MySoftData.MyGui.Submit()
 
     TKArrStr := ""
-    ModeArrStr := ""
     HoldTimeArrStr := ""
+    ModeArrStr := ""
     ForbidArrStr := ""
     RemarkArrStr := ""
     LoopCountArrStr := ""
@@ -929,23 +901,17 @@ GetSavedTableItemInfo(index) {
     TimingSerialArrStr := ""
     StartTipSoundArrStr := ""
     EndTipSoundArrStr := ""
-    GifPathArrStr := ""
+    IcoPathArrStr := ""
     UnorderedTriggerArrStr := ""
-
-    UIWindowArrStr := ""
-    UIPosYArrStr := ""
-    UIBtnWidthArrStr := ""
-    UIBtnHeightArrStr := ""
-    UIIconArrStr := ""
 
     tableItem := MySoftData.TableInfo[index]
     symbol := GetTableSymbol(index)
 
     loop tableItem.ModeArr.Length {
         TKArrStr .= tableItem.TKArr[A_Index]
+        HoldTimeArrStr .= tableItem.HoldTimeArr[A_Index]
         ModeArrStr .= tableItem.ModeArr[A_Index]
         ForbidArrStr .= tableItem.ForbidArr[A_Index]
-        HoldTimeArrStr .= tableItem.HoldTimeArr[A_Index]
         RemarkArrStr .= tableItem.RemarkArr[A_Index]
         TriggerTypeArrStr .= tableItem.TriggerTypeArr[A_Index]
         LoopCountArrStr .= tableItem.LoopCountArr[A_Index]
@@ -953,29 +919,13 @@ GetSavedTableItemInfo(index) {
         TimingSerialArrStr .= tableItem.TimingSerialArr[A_Index]
         StartTipSoundArrStr .= tableItem.StartTipSoundArr[A_Index]
         EndTipSoundArrStr .= tableItem.EndTipSoundArr[A_Index]
-
-        GifPathArrValue := tableItem.HasProp("GifPathArr") && tableItem.GifPathArr.Has(A_Index) ? tableItem.GifPathArr[
-            A_Index] : ""
-        GifPathArrStr .= GifPathArrValue
-
-        UnorderedTriggerArrValue := tableItem.UnorderedTriggerArr.Has(A_Index) ? tableItem.UnorderedTriggerArr[A_Index] : 0
-        UnorderedTriggerArrStr .= UnorderedTriggerArrValue
-
-        UIWindowArrValue := tableItem.UIWindowArr.Has(A_Index) ? tableItem.UIWindowArr[A_Index] : ""
-        UIPosYArrValue := tableItem.UIPosYArr.Has(A_Index) ? tableItem.UIPosYArr[A_Index] : ""
-        UIBtnWidthArrValue := tableItem.UIBtnWidthArr.Has(A_Index) ? tableItem.UIBtnWidthArr[A_Index] : ""
-        UIBtnHeightArrValue := tableItem.UIBtnHeightArr.Has(A_Index) ? tableItem.UIBtnHeightArr[A_Index] : ""
-        UIIconArrValue := tableItem.UIIconArr.Has(A_Index) ? tableItem.UIIconArr[A_Index] : ""
-        UIWindowArrStr .= UIWindowArrValue
-        UIPosYArrStr .= UIPosYArrValue
-        UIBtnWidthArrStr .= UIBtnWidthArrValue
-        UIBtnHeightArrStr .= UIBtnHeightArrValue
-        UIIconArrStr .= UIIconArrValue
+        UnorderedTriggerArrStr .= tableItem.UnorderedTriggerArr[A_Index]
+        IcoPathArrStr .= tableItem.IcoPathArr[A_Index]
 
         if (tableItem.ModeArr.Length > A_Index) {
             TKArrStr .= "π"
-            ModeArrStr .= "π"
             HoldTimeArrStr .= "π"
+            ModeArrStr .= "π"
             ForbidArrStr .= "π"
             RemarkArrStr .= "π"
             LoopCountArrStr .= "π"
@@ -984,19 +934,14 @@ GetSavedTableItemInfo(index) {
             TimingSerialArrStr .= "π"
             StartTipSoundArrStr .= "π"
             EndTipSoundArrStr .= "π"
-            GifPathArrStr .= "π"
+            IcoPathArrStr .= "π"
             UnorderedTriggerArrStr .= "π"
-            UIWindowArrStr .= "π"
-            UIPosYArrStr .= "π"
-            UIBtnWidthArrStr .= "π"
-            UIBtnHeightArrStr .= "π"
-            UIIconArrStr .= "π"
         }
     }
 
-    return [TKArrStr, ModeArrStr, HoldTimeArrStr, ForbidArrStr, RemarkArrStr,
+    return [TKArrStr, HoldTimeArrStr, ModeArrStr, ForbidArrStr, RemarkArrStr,
         LoopCountArrStr, TriggerTypeArrStr, SerialArrStr, TimingSerialArrStr, StartTipSoundArrStr, EndTipSoundArrStr,
-        UIWindowArrStr, UIPosYArrStr, UIBtnWidthArrStr, UIBtnHeightArrStr, GifPathArrStr, UnorderedTriggerArrStr, UIIconArrStr]
+        IcoPathArrStr, UnorderedTriggerArrStr]
 }
 
 ;Table信息相关
@@ -2226,6 +2171,26 @@ UnloadEnglishOcr() {
         MyEnglishOcr.Destroy()
         MyEnglishOcr := ""
     }
+}
+
+; 获取窗口在活动显示器上居中的坐标
+GetCenterPosOnActiveMonitor(winWidth, winHeight) {
+    MouseGetPos(&mouseX, &mouseY)
+    monCount := MonitorGetCount()
+    Loop monCount {
+        MonitorGet(A_Index, &mL, &mT, &mR, &mB)
+        if (mouseX >= mL && mouseX < mR && mouseY >= mT && mouseY < mB) {
+            MonitorGetWorkArea(A_Index, &waL, &waT, &waR, &waB)
+            x := Floor((waL + waR - winWidth) / 2)
+            y := Floor((waT + waB - winHeight) / 2)
+            return {x: x, y: y}
+        }
+    }
+    ; 默认主显示器
+    MonitorGetWorkArea(1, &waL, &waT, &waR, &waB)
+    x := Floor((waL + waR - winWidth) / 2)
+    y := Floor((waT + waB - winHeight) / 2)
+    return {x: x, y: y}
 }
 
 CheckOcrIdle() {

@@ -22,11 +22,6 @@ class TableItem {
         this.ToggleStateArr := []   ; 触发键开关状态
         this.ToggleActionArr := []   ; 触发键开关Action
         this.VariableMapArr := []    ;  每条宏对应的变量映射:内置变量
-        this.UIWindowArr := []       ;界面宏：每个按钮的目标窗口信息
-        this.UIPosYArr := []         ;界面宏：每个按钮的Y坐标
-        this.UIBtnWidthArr := []     ;界面宏：每个按钮的宽度
-        this.UIBtnHeightArr := []    ;界面宏：每个按钮的高度
-        this.UIIconArr := []          ;界面宏：每个按钮的图标字符
 
         this.UnderPosY := 0         ; table的最大PosY
         this.Index := 0             ;   table的Index
@@ -35,7 +30,7 @@ class TableItem {
         this.AllConArr := []        ;   table中所有的con
         this.AllGroup := []         ; table中所有的group
         this.IsWorkIndexArr := []        ;work正在执行中
-        this.GifPathArr := []             ;菜单宏GIF路径
+        this.IcoPathArr := []             ;菜单宏ICO路径
 
         this.FoldInfo := ""          ; 折叠筐保存信息
         this.FoldOffsetArr := []    ;和初始状态的高度偏移值

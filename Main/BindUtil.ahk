@@ -315,7 +315,7 @@ BindMenuHotKey() {
                     Hotkey(key " up", actionArr[2])
 
                 ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
-                if (isCombo && (!FoldInfo.UnorderedTriggerArr.Has(index) || !FoldInfo.UnorderedTriggerArr[index])) {
+                if (isCombo && !FoldInfo.UnorderedTriggerArr[index]) {
                     reversedKey := GetReversedComboKey(oriKey)
                     if (reversedKey != "") {
                         try {
@@ -440,7 +440,7 @@ BindTabHotKey() {
                         Hotkey(key " up", actionArr[2], "On")
 
                     ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
-                    if (cache.isCombo && (!tableItem.UnorderedTriggerArr.Has(index) || !tableItem.UnorderedTriggerArr[index])) {
+                    if (cache.isCombo && !tableItem.UnorderedTriggerArr[index]) {
                         reversedKey := GetReversedComboKey(rawKey)
                         if (reversedKey != "") {
                             try {
@@ -492,7 +492,7 @@ InitTriggerKeyMap() {
         MySoftData.TriggerKeyMap[key].AddData(info)
 
         ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
-        if (!tableItem.UnorderedTriggerArr.Has(index) || !tableItem.UnorderedTriggerArr[index]) {
+        if (!tableItem.UnorderedTriggerArr[index]) {
             reversedRaw := GetReversedComboKey(tableItem.TKArr[index])
             if (reversedRaw != "") {
                 reversedKey := LTrim(reversedRaw, "~")
@@ -521,7 +521,7 @@ InitTriggerKeyMap() {
         MySoftData.TriggerKeyMap[key].AddData(info)
 
         ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
-        if (!FoldInfo.UnorderedTriggerArr.Has(index) || !FoldInfo.UnorderedTriggerArr[index]) {
+        if (!FoldInfo.UnorderedTriggerArr[index]) {
             reversedRaw := GetReversedComboKey(FoldInfo.TKArr[index])
             if (reversedRaw != "") {
                 reversedKey := LTrim(reversedRaw, "~")

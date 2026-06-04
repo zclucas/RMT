@@ -3,26 +3,23 @@
 class UIMacroSettingGui {
     __new() {
         this.Gui := ""
-        this.CurrentMacroIndex := 0
-        this.SaveBtnAction := ""
         this.SureFocusCon := ""
+        this.CurrentMacroIndex := 0
+        this.TableIndex := 0
         this.OriginalIconPath := ""
         this.StoredIconPath := ""
     }
 
-    ShowGui(tableItem, macroIndex) {
+    ShowGui(tableIndex, macroIndex) {
+        this.TableIndex := tableIndex
         this.CurrentMacroIndex := macroIndex
 
-        ; 读取已保存的图标路径
-        if (tableItem.UIIconArr.Has(macroIndex) && tableItem.UIIconArr[macroIndex] != "") {
-            this.StoredIconPath := this.GetFullIconPath(tableItem.UIIconArr[macroIndex])
-        } else {
-            this.StoredIconPath := ""
-        }
+        tableItem := MySoftData.TableInfo[tableIndex]
+        this.StoredIconPath := this.GetFullIconPath(tableItem.IcoPathArr[macroIndex])
         this.OriginalIconPath := this.StoredIconPath
 
         if (this.Gui != "") {
-            try this.Gui.Destroy()
+            this.Gui.Destroy()
         }
 
         MyGui := Gui("", GetLang("界面宏配置 - 图标") macroIndex)
@@ -42,7 +39,7 @@ class UIMacroSettingGui {
         posY += 40
 
         sureBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 120, posY), GetLang("确定"))
-        sureBtn.OnEvent("Click", (*) => this.OnSureClick(tableItem))
+        sureBtn.OnEvent("Click", (*) => this.OnSureClick())
 
         cancelBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 220, posY), GetLang("取消"))
         cancelBtn.OnEvent("Click", (*) => this.OnCancelClick())
@@ -52,18 +49,18 @@ class UIMacroSettingGui {
     }
 
     OnBrowseClick() {
-        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon"
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon\"
         file := FileSelect(1, fullPath, GetLang("选择图标"), "Image Files (*.gif; *.png; *.jpg; *.jpeg)")
         if (file == "")
             return
 
         SplitPath file, &name, &dir, &ext, &name_no_ext, &drive
         destDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon"
-        if (!FileExist(destDir))
-            DirCreate(destDir)
         newPath := destDir "\" name
 
         if (file != newPath) {
+            if (!FileExist(destDir))
+                DirCreate(destDir)
             if (FileExist(newPath)) {
                 fileName := this.GetUniqueFileName(file)
                 newPath := destDir "\" fileName
@@ -83,41 +80,28 @@ class UIMacroSettingGui {
         if (FileExist(path))
             return path
 
-        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon" path
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon\" path
         if (FileExist(fullPath))
             return fullPath
 
         return ""
     }
 
-    OnSureClick(tableItem) {
-        macroIndex := this.CurrentMacroIndex
+    OnSureClick() {
+        tableItem := MySoftData.TableInfo[this.TableIndex]
+        idx := this.CurrentMacroIndex
 
         finalPath := ""
         if (this.OriginalIconPath != "" && FileExist(this.OriginalIconPath)) {
             finalPath := this.CopyIconToImagesFolder(this.OriginalIconPath)
         }
 
-        if (!tableItem.HasProp("UIIconArr")) {
-            tableItem.UIIconArr := []
+        while (tableItem.IcoPathArr.Length < idx) {
+            tableItem.IcoPathArr.Push("")
         }
-        while (tableItem.UIIconArr.Length < macroIndex) {
-            tableItem.UIIconArr.Push("")
-        }
-        tableItem.UIIconArr[macroIndex] := finalPath
+        tableItem.IcoPathArr[idx] := finalPath
 
-        ; 立即保存图标路径到配置文件（不触发重启）
-        this.SaveData(tableItem)
-
-        action := this.SaveBtnAction
-        if (action != "")
-            action()
-
-        try this.Gui.Destroy()
-        this.Gui := ""
-
-        if (this.SureFocusCon != "")
-            this.SureFocusCon.Focus()
+        this.Gui.Destroy()
     }
 
     CopyIconToImagesFolder(sourcePath) {
@@ -130,7 +114,7 @@ class UIMacroSettingGui {
         destPath := iconsDir "\" name
 
         if (sourcePath == destPath) {
-            return name
+            return sourcePath
         }
 
         if (FileExist(destPath)) {
@@ -142,7 +126,7 @@ class UIMacroSettingGui {
             FileCopy(sourcePath, destPath, 1)
         }
 
-        return name
+        return destPath
     }
 
     GetUniqueFileName(sourcePath) {
@@ -163,24 +147,7 @@ class UIMacroSettingGui {
         }
     }
 
-    SaveData(tableItem) {
-        macroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.ini"
-
-        iconArrStr := ""
-        loop tableItem.UIIconArr.Length {
-            iconArrStr .= tableItem.UIIconArr[A_Index]
-            if (tableItem.UIIconArr.Length > A_Index)
-                iconArrStr .= "π"
-        }
-
-        IniWrite(iconArrStr, macroFile, "UserSettings", "UIUIIconArr")
-    }
-
     OnCancelClick() {
-        try {
-            if (this.Gui != "")
-                this.Gui.Destroy()
-        }
-        this.Gui := ""
+        this.Gui.Destroy()
     }
 }

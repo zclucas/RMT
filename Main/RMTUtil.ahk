@@ -154,7 +154,7 @@ SwapTableContent(tableItem, indexA, indexB) {
     SwapArrValue(tableItem.MacroArr, indexA, indexB)
     SwapArrValue(tableItem.LoopCountArr, indexA, indexB)
     SwapArrValue(tableItem.ForbidArr, indexA, indexB)
-    SwapArrValue(tableItem.GifPathArr, indexA, indexB)
+    SwapArrValue(tableItem.IcoPathArr, indexA, indexB)
 }
 
 SwapArrValue(Arr, indexA, indexB, valueType := 1) {
@@ -1004,15 +1004,6 @@ OnTriggerSepcialItemMacro(MacroStr) {
     tableItem.ActionCount[1] := 0
     tableItem.index := 1
     tableItem.ColorStateArr[1] := 1
-
-    if (!tableItem.VariableMapArr.Has(1)) {
-        VariableMap := Map()
-        VariableMap["宏循环次数"] := 0
-        VariableMap["循环-跳过本轮"] := false
-        VariableMap["循环-跳出"] := false
-        VariableMap["分支-跳出"] := false
-        tableItem.VariableMapArr[1] := VariableMap
-    }
 
     UpdateMacroRunningCount(0, 1)
     RefreshItemColorUI(tableItem.Index, 1)

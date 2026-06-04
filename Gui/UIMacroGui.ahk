@@ -15,7 +15,8 @@ class UIMacroGui {
     )
 
     __new() {
-        this.PanelMap := Map()       ; foldIndex -> panelInfo {ui, wpfHwnd, visible, ...}
+        this.PanelMap := Map()       ; foldIndex -> panelInfo
+        this.PanelTimers := Map()     ; foldIndex -> FuncObj（SetTimer回调引用）
         this.IsCreating := false
         this.MonitorTimer := ""
         this.RunningMap := Map()
@@ -35,6 +36,9 @@ class UIMacroGui {
             this.MonitorTimer.Off()
             this.MonitorTimer := ""
         }
+        for foldIndex in this.PanelTimers.Clone() {
+            this.StopFollowTimer(foldIndex)
+        }
         this.HideAllPanels()
         for macroIndex in this.RunningMap {
             this.StopMacro(macroIndex)
@@ -44,9 +48,9 @@ class UIMacroGui {
         }
     }
 
-    ; ========== 面板管理 ==========
+    ; ========== 面板管理（严格对齐 floating_panel.ahk） ==========
 
-    ; 为指定模块创建悬浮面板
+    ; 创建面板入口（对齐 CreateFloatingPanel L182-265）
     CreatePanel(foldIndex) {
         tableItem := MySoftData.TableInfo[4]
         if (!tableItem || !tableItem.FoldInfo)
@@ -56,7 +60,6 @@ class UIMacroGui {
         if (foldIndex > foldInfo.RemarkArr.Length)
             return
 
-        ; 如果已有面板，先销毁
         if (this.PanelMap.Has(foldIndex))
             this.DestroyPanel(foldIndex)
 
@@ -68,19 +71,18 @@ class UIMacroGui {
         startIndex := Integer(indexSpan[1])
         endIndex := Integer(indexSpan[2])
 
-        ; 收集该模块下所有宏项
         btnItems := []
         Loop (endIndex - startIndex + 1) {
             macroIndex := startIndex + A_Index - 1
             if (macroIndex > tableItem.RemarkArr.Length)
                 continue
-            if (tableItem.ForbidArr.Has(macroIndex) && tableItem.ForbidArr[macroIndex])
+            if (tableItem.ForbidArr[macroIndex])
                 continue
-            if (!tableItem.MacroArr.Has(macroIndex) || tableItem.MacroArr[macroIndex] == "")
+            if (!tableItem.MacroArr[macroIndex] || tableItem.MacroArr[macroIndex] == "")
                 continue
 
-            remarkValue := tableItem.RemarkArr.Has(macroIndex) ? tableItem.RemarkArr[macroIndex] : ""
-            iconValue := tableItem.UIIconArr.Has(macroIndex) ? tableItem.UIIconArr[macroIndex] : ""
+            remarkValue := tableItem.RemarkArr[macroIndex]
+            iconValue := tableItem.IcoPathArr[macroIndex]
             btnText := remarkValue == "" ? GetLang("操作") A_Index : remarkValue
             displayIcon := iconValue == "" ? "" : iconValue
 
@@ -95,47 +97,38 @@ class UIMacroGui {
         if (btnItems.Length == 0)
             return
 
-        ; 获取目标窗口信息（使用第一个有窗口信息的宏）
+        ; 解析目标窗口（对齐 floating_panel 的 targetB_Hwnd）
+        frontInfo := foldInfo.FrontInfoArr[foldIndex]
         targetHwnd := 0
-        isScreenMode := false
-        for idx, item in btnItems {
-            mi := item.macroIndex
-            if (tableItem.UIWindowArr.Has(mi) && tableItem.UIWindowArr[mi] != "") {
-                frontValue := tableItem.UIWindowArr[mi]
-                paramStr := GetParamsWinInfoStr(frontValue)
-                if (paramStr != "") {
-                    hwndList := WinGetList(paramStr)
-                    if (hwndList.Length > 0 && hwndList[1])
-                        targetHwnd := hwndList[1]
-                }
-                break
-            }
+        isScreenMode := true
+
+        if (frontInfo != "") {
+            targetHwnd := this.ResolveTargetHwnd(frontInfo)
+            if (targetHwnd)
+                isScreenMode := false
         }
 
-        ; 如果没有找到目标窗口，使用屏幕模式
-        if (!targetHwnd)
-            isScreenMode := true
-
-        ; 窗口跟随模式：检查目标窗口是否有效且激活
         if (!isScreenMode && targetHwnd) {
             if (!DllCall("user32\IsWindow", "Ptr", targetHwnd))
                 return
+            ; 前台激活检查：目标窗口必须在前台才允许创建面板
             activeHwnd := WinGetID("A")
             if (activeHwnd != targetHwnd)
                 return
         }
 
-        ; 构建XAML面板
+        ; 构建面板（对齐 CreateFloatingPanel）
         panelInfo := this.BuildXAMLPanel(btnItems, foldIndex, targetHwnd, isScreenMode)
         if (!panelInfo)
             return
 
         this.PanelMap.Set(foldIndex, panelInfo)
 
-        ; 等待窗口就绪后设置属性
-        this.WaitForPanelReady(foldIndex, targetHwnd, isScreenMode)
+        ; 等待窗口就绪+初始化（对齐 WaitForHwnd + OnPanelReady）
+        this.WaitForPanelReady(foldIndex)
     }
 
+    ; 构建XAML面板（对齐 CreateFloatingPanel L182-264）
     BuildXAMLPanel(btnItems, foldIndex, targetHwnd, isScreenMode) {
         pw := 130
         titleBarH := 26
@@ -145,18 +138,16 @@ class UIMacroGui {
         bodyMarginV := 6
         wpfBorderPad := 22
 
-        ; 模块备注作为标题
         tableItem := MySoftData.TableInfo[4]
-        foldRemark := tableItem.FoldInfo.RemarkArr.Has(foldIndex) ? tableItem.FoldInfo.RemarkArr[foldIndex] : GetLang("面板") foldIndex
+        foldRemark := tableItem.FoldInfo.RemarkArr[foldIndex]
 
         contentH := btnItems.Length * btnItemH + (btnItems.Length - 1) * btnGap + bodyMarginV
         ph := titleBarH + toggleBtnH + contentH + wpfBorderPad
 
-        ; 计算初始位置：鼠标当前位置（使用屏幕坐标）
         CoordMode("Mouse", "Screen")
         MouseGetPos(&initX, &initY)
 
-        ; 计算相对于目标窗口的偏移量（用于窗口跟随模式）
+        ; 计算初始偏移（对齐 floating_panel g_offsetX/Y 初始化为鼠标位置）
         offsetX := initX
         offsetY := initY
         if (!isScreenMode && targetHwnd) {
@@ -167,26 +158,23 @@ class UIMacroGui {
             }
         }
 
-        g_isCollapsed := false
-        g_collapsedHeight := titleBarH + toggleBtnH + wpfBorderPad + 4
-        g_expandedHeight := ph
+        collapsedHeight := titleBarH + toggleBtnH + wpfBorderPad + 4
+        expandedHeight := ph
 
+        ; 构建XAML（与 floating_panel L213-233 完全一致的结构）
         main := XAML_Generator("Grid")
         main.Background("{x:Null}")
         main.Rows(titleBarH, "Auto", "*")
 
-        ; 标题栏
         titleBar := main.Add("Border").Grid_Row(0).Name("TitleBar").Background("#88000000")
         titleBar.Add("TextBlock").Name("TitleText").Text(foldRemark)
             .Foreground("#FFFFFF").FontSize(11).FontWeight("SemiBold")
             .VerticalAlignment("Center").HorizontalAlignment("Center").Margin("6,0,6,0")
 
-        ; 收起/展开按钮
         toggleBtn := main.Add("Button").Grid_Row(1).Name("BtnToggle").Content("▼ 收起").Height(toggleBtnH)
             .HorizontalAlignment("Center").Margin("0,0,0,0").FontSize(9).Foreground("#999")
         toggleBtn.Background("#00000000").BorderBrush("#00000000")
 
-        ; 按钮区域
         body := main.Add("StackPanel").Grid_Row(2).Name("BodyPanel").Margin("4,2,4,4")
 
         for i, item in btnItems {
@@ -198,14 +186,11 @@ class UIMacroGui {
             btn.Background("#333333").Foreground("#DDD").FontSize(11)
             btn.HorizontalAlignment("Stretch")
 
-            ; 按钮内容布局：[状态色点] [图标] [文字]
             sp := btn.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
 
-            ; 左侧状态色点（运行状态指示）
             sp.Add("Image").Name(item.name "_State")
                 .Width(10).Height(10).VerticalAlignment("Center").Margin("0,0,4,0")
 
-            ; 用户设置的图标
             if (item.icon != "") {
                 fullIconPath := this.GetFullIconPath(item.icon)
                 if (fullIconPath != "" && FileExist(fullIconPath)) {
@@ -217,6 +202,7 @@ class UIMacroGui {
             sp.Add("TextBlock").Text(item.text).VerticalAlignment("Center").Foreground("#DDD").FontSize(11)
         }
 
+        ; XAML字符串处理（对齐 floating_panel L235-244）
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleBarH)
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
 
@@ -228,17 +214,17 @@ class UIMacroGui {
         ui.xaml := StrReplace(ui.xaml, '%resources%', '<SolidColorBrush x:Key="TextMain" Color="White"/><CornerRadius x:Key="WindowRadius">8</CornerRadius><CornerRadius x:Key="CloseBtnRadius">0,8,0,0</CornerRadius>')
         ui.xaml := StrReplace(ui.xaml, '%components%', '')
 
-        ; 绑定按钮事件
+        ; 绑定事件（对齐 floating_panel L246-249）
         for i, item in btnItems {
             mi := item.macroIndex
             ui.OnEvent(item.name, "Click", (*) => this.OnButtonClick(mi))
         }
-
         ui.OnEvent("BtnToggle", "Click", (*) => this.OnToggleClick(foldIndex))
 
+        ; 显示窗口（对齐 floating_panel L254）
         ui.Show()
 
-        ; 等待wpfHwnd就绪
+        ; 等待wpfHwnd就绪（对齐 floating_panel L256-262）
         loop 20 {
             if (ui.HasProp("wpfHwnd") && ui.wpfHwnd) {
                 WinActivate("ahk_id " ui.wpfHwnd)
@@ -247,59 +233,171 @@ class UIMacroGui {
             Sleep(50)
         }
 
+        ; 返回面板信息（对齐 floating_panel 全局变量初始化 L207-L211, L251-L252）
         return {
             ui: ui,
             wpfHwnd: ui.wpfHwnd ? ui.wpfHwnd : 0,
             foldIndex: foldIndex,
             targetHwnd: targetHwnd,
             isScreenMode: isScreenMode,
+            frontInfo: tableItem.FoldInfo.FrontInfoArr[foldIndex],
             visible: true,
             isCollapsed: false,
-            expandedHeight: g_expandedHeight,
-            collapsedHeight: g_collapsedHeight,
+            expandedHeight: expandedHeight,
+            collapsedHeight: collapsedHeight,
             btnItems: btnItems,
             offsetX: offsetX,
             offsetY: offsetY,
-            isDragging: false
+            lastSetX: "",
+            lastSetY: "",
+            panelReady: false
         }
     }
 
-    WaitForPanelReady(foldIndex, targetHwnd, isScreenMode) {
+    ; 等待窗口就绪并执行初始化（= floating_panel WaitForHwnd L352-361 + OnPanelReady L363-389）
+    WaitForPanelReady(foldIndex) {
         panelInfo := this.PanelMap.Has(foldIndex) ? this.PanelMap[foldIndex] : ""
         if (!panelInfo)
             return
 
-        loop 30 {
+        ; 对齐 WaitForHwnd L352-361：循环等待wpfHwnd
+        loop 50 {
             if (panelInfo.ui && panelInfo.ui.HasProp("wpfHwnd") && panelInfo.ui.wpfHwnd) {
-                hwnd := panelInfo.ui.wpfHwnd
-                panelInfo.wpfHwnd := hwnd
-
-                ; 设置窗口样式
-                exStyle := DllCall("user32\GetWindowLongW", "Ptr", hwnd, "Int", -20, "Int")
-                DllCall("user32\SetWindowLongW", "Ptr", hwnd, "Int", -20, "Int"
-                    , (exStyle | 0x80 | 0x08000000) & ~0x40000)
-
-                if (isScreenMode) {
-                    WinSetAlwaysOnTop(1, "ahk_id " hwnd)
-                } else {
-                    ; 窗口跟随模式：设置owner关系
-                    if (targetHwnd) {
-                        try panelInfo.ui.Update("Window", "NativeOwner", String(targetHwnd))
-                    }
-                    DllCall("user32\SetWindowPos"
-                        , "Ptr", hwnd, "Ptr", 0
-                        , "Int", 0, "Int", 0, "Int", 0, "Int", 0
-                        , "UInt", 0x0002 | 0x0001 | 0x0004 | 0x0010 | 0x0020)
-                }
-
-                break
+                ; 对齐 L355: g_panelReady := true
+                panelInfo.panelReady := true
+                ; 对齐 L356: OnPanelReady()
+                this.OnPanelReady(foldIndex)
+                return
             }
             Sleep(50)
         }
     }
 
-    ; 切换面板可见性（由触发键调用）
+    ; 面板就绪后的初始化（严格对齐 floating_panel OnPanelReady L363-389）
+    OnPanelReady(foldIndex) {
+        panelInfo := this.PanelMap.Has(foldIndex) ? this.PanelMap[foldIndex] : ""
+        if (!panelInfo)
+            return
+
+        ; L364-L366: 设置 NativeOwner
+        if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
+            try panelInfo.ui.Update("Window", "NativeOwner", String(panelInfo.targetHwnd))
+        }
+
+        ; L368-L371: 获取窗口尺寸
+        hwnd := panelInfo.wpfHwnd
+        if (hwnd) {
+            rect := this.GetWindowRectCoords(hwnd)
+            panelInfo.expandedHeight := rect["bottom"] - rect["top"]
+        }
+
+        ; L373-L375: 设置窗口扩展样式
+        if (hwnd) {
+            exStyle := DllCall("user32\GetWindowLongW", "Ptr", hwnd, "Int", -20, "Int")
+            DllCall("user32\SetWindowLongW", "Ptr", hwnd, "Int", -20, "Int"
+                , (exStyle | 0x80 | 0x08000000) & ~0x40000)
+        }
+
+        ; L377-L384: 模式分支初始化
+        if (panelInfo.isScreenMode) {
+            WinSetAlwaysOnTop(1, "ahk_id " hwnd)
+        } else {
+            DllCall("user32\SetWindowPos"
+                , "Ptr", hwnd, "Ptr", 0
+                , "Int", 0, "Int", 0, "Int", 0, "Int", 0
+                , "UInt", 0x0002 | 0x0001 | 0x0004 | 0x0010 | 0x0020)
+        }
+
+        ; L387: 立即执行一次跟随
+        this.FollowSinglePanel(foldIndex)
+
+        ; L388: 启动定时器
+        this.StartFollowTimer(foldIndex)
+    }
+
+    ; 跟随逻辑（严格逐行对齐 floating_panel FollowTarget L391-440 + MovePanel L171-179）
+    FollowSinglePanel(foldIndex) {
+        if (!this.PanelMap.Has(foldIndex))
+            return
+
+        panelInfo := this.PanelMap[foldIndex]
+
+        ; L392: if (!g_panelReady) return
+        if (!panelInfo.panelReady)
+            return
+
+        ; L394-L396: 获取hwnd并验证
+        hwnd := panelInfo.wpfHwnd
+        if (!hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd))
+            return
+
+        ; L398-L409: 屏幕模式分支
+        if (panelInfo.isScreenMode) {
+            try WinSetAlwaysOnTop(1, "ahk_id " hwnd)
+            return
+        }
+
+        ; L411-L416: 目标窗口检查
+        if (!panelInfo.targetHwnd)
+            return
+        if (!DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd)) {
+            this.DestroyPanel(foldIndex)
+            return
+        }
+
+        ; ====== 位置变化检测（替代三阶段拖拽检测） ======
+        ; 原理：记录我们上次 SetWindowPos 设到的位置(lastSetX/Y)。
+        ;   - 如果实际位置 == lastSetX/Y → 没有外部干扰 → 正常跟随
+        ;   - 如果实际位置 != lastSetX/Y → 有外部力量移动了面板(用户拖拽等)
+        ;     → 立即更新 offset 来适配新位置 → 之后用新 offset 跟随
+        ; 这完全不依赖 LButton / hwndUnderMouse / isDragging，绕开了检测失效的问题。
+        if (!panelInfo.isScreenMode && panelInfo.lastSetX != "" && panelInfo.lastSetY != "") {
+            diagRect := this.GetWindowRectCoords(hwnd)
+            targetDiagRect := this.GetWindowRectCoords(panelInfo.targetHwnd)
+            devX := Abs(diagRect["left"] - panelInfo.lastSetX)
+            devY := Abs(diagRect["top"] - panelInfo.lastSetY)
+            if (devX > 3 || devY > 3) {
+                panelInfo.offsetX := diagRect["left"] - targetDiagRect["left"]
+                panelInfo.offsetY := diagRect["top"] - targetDiagRect["top"]
+            }
+        }
+
+        ; 阶段3 — 正常跟随移动（对齐 floating_panel MovePanel L171-179）
+        rect := this.GetWindowRectCoords(panelInfo.targetHwnd)
+        newX := rect["left"] + panelInfo.offsetX
+        newY := rect["top"] + panelInfo.offsetY
+        ownerHwnd := panelInfo.isScreenMode ? 0 : panelInfo.targetHwnd
+        DllCall("user32\SetWindowPos"
+            , "Ptr", hwnd
+            , "Ptr", ownerHwnd
+            , "Int", newX, "Int", newY
+            , "Int", 0, "Int", 0
+            , "UInt", 0x0001 | 0x0004 | 0x0010 | 0x4000)
+        ; 记录本次设置的目标位置，供下次回调对比
+        panelInfo.lastSetX := newX
+        panelInfo.lastSetY := newY
+    }
+
+    ; 切换可见性（严格对齐 floating_panel TogglePanelVisibility L490-513）
     TogglePanel(foldIndex) {
+        ; ====== 前置守卫：窗口跟随模式必须先通过前台激活检查 ======
+        tableItem := MySoftData.TableInfo[4]
+        if (tableItem && tableItem.FoldInfo) {
+            frontInfo := tableItem.FoldInfo.FrontInfoArr[foldIndex]
+            if (frontInfo != "") {
+                targetHwnd := this.ResolveTargetHwnd(frontInfo)
+                if (targetHwnd) {
+                    ; 目标窗口存在 → 必须在前台才允许操作面板
+                    activeHwnd := WinGetID("A")
+                    if (activeHwnd != targetHwnd)
+                        return
+                } else {
+                    ; 目标窗口不存在 → 不允许操作
+                    return
+                }
+            }
+        }
+
         if (!this.PanelMap.Has(foldIndex)) {
             this.CreatePanel(foldIndex)
             return
@@ -309,161 +407,92 @@ class UIMacroGui {
         if (!panelInfo.ui || !panelInfo.wpfHwnd)
             return
 
-        ; 窗口跟随模式：检查目标窗口是否有效且激活
-        if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
-            if (!DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd))
-                return
-            activeHwnd := WinGetID("A")
-            if (activeHwnd != panelInfo.targetHwnd)
-                return
-        }
-
-        try {
-            if (panelInfo.visible) {
-                DllCall("user32\ShowWindow", "Ptr", panelInfo.wpfHwnd, "Int", 0)  ; SW_HIDE
-                panelInfo.visible := false
-            } else {
-                ; 显示面板：用 SetWindowPos 一步完成定位+显示（SWP_SHOWWINDOW）
-                CoordMode("Mouse", "Screen")
-                MouseGetPos(&mx, &my)
-                DllCall("user32\SetWindowPos"
-                    , "Ptr", panelInfo.wpfHwnd, "Ptr", 0
-                    , "Int", mx, "Int", my
-                    , "Int", 0, "Int", 0
-                    , "UInt", 0x0001 | 0x0004 | 0x0040)  ; SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW
-                ; 更新相对于目标窗口的偏移量（窗口跟随模式）
-                if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
-                    try {
-                        rect := this.GetWindowRectCoords(panelInfo.targetHwnd)
-                        panelInfo.offsetX := mx - rect["left"]
-                        panelInfo.offsetY := my - rect["top"]
-                    }
-                }
-                if (panelInfo.isScreenMode) {
-                    WinSetAlwaysOnTop(1, "ahk_id " panelInfo.wpfHwnd)
-                }
-                WinActivate("ahk_id " panelInfo.wpfHwnd)
-                panelInfo.visible := true
-            }
-        }
-    }
-
-    ; 显示指定模块的面板
-    ShowPanel(foldIndex) {
-        if (!this.PanelMap.Has(foldIndex))
-            this.CreatePanel(foldIndex)
-
-        panelInfo := this.PanelMap.Has(foldIndex) ? this.PanelMap[foldIndex] : ""
-        if (!panelInfo || !panelInfo.wpfHwnd)
+        ; L498: 切换可见性
+        panelInfo.visible := !panelInfo.visible
+        hwnd := panelInfo.wpfHwnd
+        if (!hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd))
             return
 
-        try {
-            DllCall("user32\ShowWindow", "Ptr", panelInfo.wpfHwnd, "Int", 9)
-            if (panelInfo.isScreenMode) {
-                WinSetAlwaysOnTop(1, "ahk_id " panelInfo.wpfHwnd)
+        if (panelInfo.visible) {
+            ; L503-L509: 显示（严格对齐 floating_panel TogglePanelVisibility L503-L509：hwndAfter=0）
+            CoordMode("Mouse", "Screen")
+            MouseGetPos(&mx, &my)
+            DllCall("user32\SetWindowPos"
+                , "Ptr", hwnd, "Ptr", 0                                  ; 对齐 L506: hwndAfter=0
+                , "Int", mx, "Int", my                                   ; 对齐 L507
+                , "Int", 0, "Int", 0                                     ; 对齐 L507
+                , "UInt", 0x0001 | 0x0004 | 0x0010)                     ; 对齐 L508
+            DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 1)          ; 对齐 L509: SW_SHOW
+            ; 更新偏移量（窗口跟随模式）
+            if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
+                try {
+                    rect := this.GetWindowRectCoords(panelInfo.targetHwnd)
+                    panelInfo.offsetX := mx - rect["left"]
+                    panelInfo.offsetY := my - rect["top"]
+                }
             }
-            WinActivate("ahk_id " panelInfo.wpfHwnd)
-            panelInfo.visible := true
+        } else {
+            ; L510-L512: 隐藏 — SW_HIDE
+            DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 0)
         }
     }
 
-    ; 销毁指定模块的面板
+    ; 销毁面板（严格对齐 floating_panel ClosePanel L515-523）
     DestroyPanel(foldIndex) {
         if (!this.PanelMap.Has(foldIndex))
             return
 
+        ; L517: 停止定时器（对齐 SetTimer(FollowTarget, 0)）
+        this.StopFollowTimer(foldIndex)
+
         panelInfo := this.PanelMap[foldIndex]
+        ; L518-L520: 关闭窗口
         if (panelInfo.ui) {
-            try {
-                panelInfo.ui.Update("Window", "Close", "")
-            }
+            try panelInfo.ui.Update("Window", "Close", "")
         }
+        ; L521-L522: 清理
         this.PanelMap.Delete(foldIndex)
     }
 
+    ; 屏幕模式面板的定期检查（对齐 FollowTarget 中 L398-L409 的screenMode分支）
     CheckAllPanels() {
         for foldIndex, panelInfo in this.PanelMap {
             if (!panelInfo.ui || !panelInfo.wpfHwnd)
+                continue
+            if (!panelInfo.isScreenMode)
                 continue
             if (!panelInfo.visible)
                 continue
 
             hwnd := panelInfo.wpfHwnd
 
-            if (panelInfo.isScreenMode) {
-                ; 屏幕模式：检测拖拽 + 保持置顶
-                if (GetKeyState("LButton", "P")) {
-                    MouseGetPos(&mx, &my, &hwndUnderMouse)
-                    if (hwndUnderMouse == hwnd) {
-                        panelInfo.isDragging := true
-                    }
-                } else if (panelInfo.isDragging) {
-                    panelInfo.isDragging := false
-                }
-                WinSetAlwaysOnTop(1, "ahk_id " hwnd)
-            } else {
-                ; 窗口跟随模式
-                if (!panelInfo.targetHwnd)
-                    continue
-                if (!DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd))
-                    continue
-
-                ; 拖拽检测：用户拖拽面板时跳过跟随移动
-                if (GetKeyState("LButton", "P")) {
-                    MouseGetPos(&mx, &my, &hwndUnderMouse)
-                    if (hwndUnderMouse == hwnd) {
-                        panelInfo.isDragging := true
-                        this.DoFollowTarget(panelInfo, false)  ; 不移动，仅更新z-order
-                        continue
-                    }
-                }
-
-                ; 拖拽结束后，重新计算相对偏移
-                if (panelInfo.isDragging) {
-                    panelRect := this.GetWindowRectCoords(hwnd)
-                    targetRect := this.GetWindowRectCoords(panelInfo.targetHwnd)
-                    panelInfo.offsetX := panelRect["left"] - targetRect["left"]
-                    panelInfo.offsetY := panelRect["top"] - targetRect["top"]
-                    panelInfo.isDragging := false
-                }
-
-                this.DoFollowTarget(panelInfo, true)
-            }
+            WinSetAlwaysOnTop(1, "ahk_id " hwnd)
         }
     }
 
-    DoFollowTarget(panelInfo, doMove := true) {
-        if (!panelInfo.wpfHwnd || !panelInfo.targetHwnd)
+    ; 启动跟随定时器（对齐 floating_panel L388: SetTimer(FollowTarget, 50)）
+    StartFollowTimer(foldIndex) {
+        if (this.PanelTimers.Has(foldIndex)) {
+            oldCb := this.PanelTimers[foldIndex]
+            if (oldCb)
+                SetTimer(oldCb, 0)
+        }
+        cb := this.FollowSinglePanel.Bind(this, foldIndex)
+        this.PanelTimers[foldIndex] := cb
+        SetTimer(cb, 50)
+    }
+
+    ; 停止跟随定时器（对齐 floating_panel L517: SetTimer(FollowTarget, 0)）
+    StopFollowTimer(foldIndex) {
+        if (!this.PanelTimers.Has(foldIndex))
             return
-
-        rect := this.GetWindowRectCoords(panelInfo.targetHwnd)
-        newX := rect["left"] + panelInfo.offsetX
-        newY := rect["top"] + panelInfo.offsetY
-
-        ; 使用 MovePanel 模式：hWndInsertAfter 设为目标窗口（保持 z-order 关系）
-        DllCall("user32\SetWindowPos"
-            , "Ptr", panelInfo.wpfHwnd
-            , "Ptr", panelInfo.targetHwnd   ; owner/insertAfter = 目标窗口
-            , "Int", newX, "Int", newY
-            , "Int", 0, "Int", 0
-            , "UInt", 0x0001 | 0x0004 | 0x0010 | 0x4000)
+        cb := this.PanelTimers[foldIndex]
+        if (cb)
+            SetTimer(cb, 0)
+        this.PanelTimers.Delete(foldIndex)
     }
 
-    FollowTarget(panelInfo) {
-        ; 兼容旧调用，委托给 DoFollowTarget
-        this.DoFollowTarget(panelInfo, true)
-    }
-
-    HideAllPanels() {
-        for foldIndex, panelInfo in this.PanelMap {
-            try {
-                if (panelInfo.ui)
-                    panelInfo.ui.Update("Window", "Close", "")
-            }
-        }
-        this.PanelMap.Clear()
-    }
-
+    ; 收起/展开（严格对齐 floating_panel OnToggleClick L458-488）
     OnToggleClick(foldIndex) {
         if (!this.PanelMap.Has(foldIndex))
             return
@@ -471,22 +500,27 @@ class UIMacroGui {
         panelInfo := this.PanelMap[foldIndex]
         if (!panelInfo.ui || !panelInfo.wpfHwnd)
             return
+        if (!panelInfo.panelReady)
+            return
 
+        ; L467: 切换状态
         panelInfo.isCollapsed := !panelInfo.isCollapsed
         hwnd := panelInfo.wpfHwnd
 
         curRect := this.GetWindowRectCoords(hwnd)
         curW := curRect["right"] - curRect["left"]
 
+        ; L471-L478: 收起（严格对齐 floating_panel L471-L478：x=0,y=0 + SWP_NOMOVE）
         if (panelInfo.isCollapsed) {
             try panelInfo.ui.Update("BodyPanel", "Visibility", "Collapsed")
             try panelInfo.ui.Update("BtnToggle", "Content", "▲ 展开")
             DllCall("user32\SetWindowPos"
                 , "Ptr", hwnd, "Ptr", 0
-                , "Int", 0, "Int", 0
-                , "Int", curW, "Int", panelInfo.collapsedHeight
-                , "UInt", 0x0002 | 0x0004 | 0x0010 | 0x4000)
+                , "Int", 0, "Int", 0                                   ; 对齐 L476-L477
+                , "Int", curW, "Int", panelInfo.collapsedHeight         ; 对齐 L477
+                , "UInt", 0x0002 | 0x0004 | 0x0010 | 0x4000)          ; 对齐 L478
         } else {
+            ; L479-L487: 展开（严格对齐 floating_panel L479-L487）
             try panelInfo.ui.Update("BodyPanel", "Visibility", "Visible")
             try panelInfo.ui.Update("BtnToggle", "Content", "▼ 收起")
             DllCall("user32\SetWindowPos"
@@ -502,10 +536,10 @@ class UIMacroGui {
     OnButtonClick(macroIndex) {
         try {
             tableItem := MySoftData.TableInfo[4]
-            if (tableItem.ForbidArr.Has(macroIndex) && tableItem.ForbidArr[macroIndex])
+            if (tableItem.ForbidArr[macroIndex])
                 return
 
-            if (!tableItem.MacroArr.Has(macroIndex) || tableItem.MacroArr[macroIndex] == "")
+            if (!tableItem.MacroArr[macroIndex] || tableItem.MacroArr[macroIndex] == "")
                 return
 
             if (this.IsMacroRunning(macroIndex)) {
@@ -513,8 +547,26 @@ class UIMacroGui {
             } else {
                 this.StartMacro(macroIndex)
             }
+
+            ; 点击后面板抢走了焦点 → 立即将焦点还给目标窗口
+            this.RestoreTargetFocus(macroIndex)
         }
         catch as e {
+        }
+    }
+
+    ; 恢复目标窗口的前台状态（点击面板按钮后调用）
+    RestoreTargetFocus(macroIndex) {
+        for foldIndex, panelInfo in this.PanelMap {
+            if (!panelInfo.btnItems || !panelInfo.targetHwnd)
+                continue
+            for item in panelInfo.btnItems {
+                if (item.macroIndex == macroIndex) {
+                    if (panelInfo.targetHwnd && DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd))
+                        WinActivate("ahk_id " panelInfo.targetHwnd)
+                    return
+                }
+            }
         }
     }
 
@@ -568,7 +620,7 @@ class UIMacroGui {
         }
     }
 
-    ; 更新指定宏按钮的状态色点
+    ; 更新按钮状态色点
     UpdateButtonStatus(macroIndex, state) {
         for foldIndex, panelInfo in this.PanelMap {
             if (!panelInfo.ui || !panelInfo.btnItems)
@@ -584,6 +636,20 @@ class UIMacroGui {
                             panelInfo.ui.Update(stateName, "Visibility", "Visible")
                             panelInfo.ui.Update(stateName, "Source", imgPath)
                         }
+                    }
+                    ; ui.Update() 后恢复位置（对齐 MovePanel L171-179）
+                    if (!panelInfo.isScreenMode && panelInfo.panelReady && panelInfo.visible
+                        && panelInfo.wpfHwnd && panelInfo.targetHwnd
+                        && DllCall("user32\IsWindow", "Ptr", panelInfo.wpfHwnd)
+                        && DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd)) {
+                        targetRect := this.GetWindowRectCoords(panelInfo.targetHwnd)
+                        restoreX := targetRect["left"] + panelInfo.offsetX
+                        restoreY := targetRect["top"] + panelInfo.offsetY
+                        DllCall("user32\SetWindowPos"
+                            , "Ptr", panelInfo.wpfHwnd, "Ptr", panelInfo.targetHwnd
+                            , "Int", restoreX, "Int", restoreY
+                            , "Int", 0, "Int", 0
+                            , "UInt", 0x0001 | 0x0004 | 0x0010 | 0x4000)
                     }
                     return
                 }
@@ -604,8 +670,39 @@ class UIMacroGui {
         }
     }
 
+    HideAllPanels() {
+        for foldIndex in this.PanelTimers.Clone() {
+            this.StopFollowTimer(foldIndex)
+        }
+        for foldIndex, panelInfo in this.PanelMap.Clone() {
+            try {
+                if (panelInfo.ui)
+                    panelInfo.ui.Update("Window", "Close", "")
+            }
+        }
+        this.PanelMap.Clear()
+    }
+
     RefreshPanels() {
         this.HideAllPanels()
+    }
+
+    ShowPanel(foldIndex) {
+        if (!this.PanelMap.Has(foldIndex))
+            this.CreatePanel(foldIndex)
+
+        panelInfo := this.PanelMap.Has(foldIndex) ? this.PanelMap[foldIndex] : ""
+        if (!panelInfo || !panelInfo.wpfHwnd)
+            return
+
+        try {
+            DllCall("user32\ShowWindow", "Ptr", panelInfo.wpfHwnd, "Int", 9)
+            if (panelInfo.isScreenMode) {
+                WinSetAlwaysOnTop(1, "ahk_id " panelInfo.wpfHwnd)
+            }
+            WinActivate("ahk_id " panelInfo.wpfHwnd)
+            panelInfo.visible := true
+        }
     }
 
     GetFullIconPath(path) {
@@ -615,7 +712,7 @@ class UIMacroGui {
         if (FileExist(path))
             return path
 
-        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon" path
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UIIcon\" path
         if (FileExist(fullPath))
             return fullPath
 
@@ -630,6 +727,51 @@ class UIMacroGui {
         right := NumGet(rect, 8, "Int")
         bottom := NumGet(rect, 12, "Int")
         return Map("left", left, "top", top, "right", right, "bottom", bottom)
+    }
+
+    ResolveTargetHwnd(frontInfo) {
+        if (frontInfo == "")
+            return 0
+
+        if (InStr(frontInfo, "❖")) {
+            idStr := StrReplace(frontInfo, "❖")
+            hwndList := StrSplit(idStr, "|")
+            for index, hwnd in hwndList {
+                if (hwnd == "")
+                    continue
+                try {
+                    hwndVal := Integer(hwnd)
+                    if (DllCall("user32\IsWindow", "Ptr", hwndVal))
+                        return hwndVal
+                }
+            }
+            return 0
+        }
+
+        infoArr := StrSplit(frontInfo, "⎖")
+        if (infoArr.Length != 3)
+            return 0
+
+        title := infoArr[1]
+        className := infoArr[2]
+        process := infoArr[3]
+
+        winTitle := ""
+        if (title != "")
+            winTitle .= title
+        if (className != "")
+            winTitle .= " ahk_class " className
+        if (process != "")
+            winTitle .= " ahk_exe " process
+
+        if (winTitle == "")
+            return 0
+
+        try {
+            hwnd := WinExist(winTitle)
+            return hwnd ? hwnd : 0
+        }
+        return 0
     }
 
     __Delete() {

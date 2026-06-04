@@ -6,8 +6,8 @@ class MenuMacroSettingGui {
         this.SureFocusCon := ""
         this.CurrentIndex := 0
         this.TableIndex := 0
-        this.OriginalGifPath := ""
-        this.StoredGifPath := ""
+        this.OriginalIcoPath := ""
+        this.StoredIcoPath := ""
     }
 
     ShowGui(tableIndex, index) {
@@ -15,12 +15,9 @@ class MenuMacroSettingGui {
         this.CurrentIndex := index
 
         tableItem := MySoftData.TableInfo[tableIndex]
-        if (tableItem.HasProp("GifPathArr") && tableItem.GifPathArr.Length >= index && tableItem.GifPathArr[index] != "") {
-            this.StoredGifPath := this.GetFullGifPath(tableItem.GifPathArr[index])
-        } else {
-            this.StoredGifPath := ""
-        }
-        this.OriginalGifPath := this.StoredGifPath
+        this.StoredIcoPath := this.GetFullIcoPath(tableItem.IcoPathArr[index])
+
+        this.OriginalIcoPath := this.StoredIcoPath
 
         if (this.Gui != "") {
             this.Gui.Destroy()
@@ -35,8 +32,8 @@ class MenuMacroSettingGui {
         con := MyGui.Add("Text", Format("x{} y{}", 20, posY), GetLang("图标文件:"))
         posY += 28
 
-        this.GifPathEdit := MyGui.Add("Edit", Format("x{} y{} w220 h27", 20, posY), this.StoredGifPath)
-        this.GifPathEdit.Opt("ReadOnly")
+        this.IcoPathEdit := MyGui.Add("Edit", Format("x{} y{} w220 h27", 20, posY), this.StoredIcoPath)
+        this.IcoPathEdit.Opt("ReadOnly")
 
         browseBtn := MyGui.Add("Button", Format("x{} y{} w80 h29", 250, posY - 1), GetLang("选择"))
         browseBtn.OnEvent("Click", (*) => this.OnBrowseClick())
@@ -63,6 +60,8 @@ class MenuMacroSettingGui {
         newPath := destDir "\" name
 
         if (file != newPath) {
+            if (!FileExist(destDir))
+                DirCreate(destDir)
             if (FileExist(newPath)) {
                 fileName := this.GetUniqueFileName(file)
                 newPath := destDir "\" fileName
@@ -71,11 +70,11 @@ class MenuMacroSettingGui {
             file := newPath
         }
 
-        this.OriginalGifPath := file
-        this.GifPathEdit.Value := file
+        this.OriginalIcoPath := file
+        this.IcoPathEdit.Value := file
     }
 
-    GetFullGifPath(path) {
+     GetFullIcoPath(path) {
         if (path == "")
             return ""
 
@@ -94,22 +93,19 @@ class MenuMacroSettingGui {
         idx := this.CurrentIndex
 
         finalPath := ""
-        if (this.OriginalGifPath != "" && FileExist(this.OriginalGifPath)) {
-            finalPath := this.CopyGifToImagesFolder(this.OriginalGifPath)
+        if (this.OriginalIcoPath != "" && FileExist(this.OriginalIcoPath)) {
+            finalPath := this.CopyIcoToImagesFolder(this.OriginalIcoPath)
         }
 
-        if (!tableItem.HasProp("GifPathArr")) {
-            tableItem.GifPathArr := []
+        while (tableItem.IcoPathArr.Length < idx) {
+            tableItem.IcoPathArr.Push("")
         }
-        while (tableItem.GifPathArr.Length < idx) {
-            tableItem.GifPathArr.Push("")
-        }
-        tableItem.GifPathArr[idx] := finalPath
+        tableItem.IcoPathArr[idx] := finalPath
 
         this.Gui.Destroy()
     }
 
-    CopyGifToImagesFolder(sourcePath) {
+    CopyIcoToImagesFolder(sourcePath) {
         iconsDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon"
         if (!FileExist(iconsDir)) {
             DirCreate(iconsDir)
@@ -119,7 +115,7 @@ class MenuMacroSettingGui {
         destPath := iconsDir "\" name
 
         if (sourcePath == destPath) {
-            return name
+            return sourcePath
         }
 
         if (FileExist(destPath)) {
@@ -131,7 +127,7 @@ class MenuMacroSettingGui {
             FileCopy(sourcePath, destPath, 1)
         }
 
-        return name
+        return destPath
     }
 
     GetUniqueFileName(sourcePath) {

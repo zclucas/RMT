@@ -410,8 +410,10 @@ FollowTarget() {
     
     if (!targetB_Hwnd)
         return
-    if (!DllCall("user32\IsWindow", "Ptr", targetB_Hwnd))
+    if (!DllCall("user32\IsWindow", "Ptr", targetB_Hwnd)) {
+        ClosePanel()
         return
+    }
     
     if (GetKeyState("LButton", "P")) {
         MouseGetPos(&mx, &my, &hwndUnderMouse)
@@ -511,12 +513,13 @@ TogglePanelVisibility() {
 }
 
 ClosePanel() {
+    global floatingPanel
     SetTimer(FollowTarget, 0)
     if (floatingPanel) {
         try floatingPanel.Update("Window", "Close", "")
         floatingPanel := ""
     }
-    ExitApp()
+    global g_panelReady := false
 }
 
 ShowWindowSelector()
