@@ -163,6 +163,53 @@ CompatCMD(filePath) {
     hasFix := false
     if (!FileExist(FilePath))
         return hasFix
+
+    ; 兼容旧版缺失的结构数组字段（如UnorderedTriggerArr等），以ModeArr长度为基准补齐
+    arrFields := Map(
+        "UnorderedTriggerArr", "0",
+        "TriggerTypeArr", "1",
+        "HoldTimeArr", "500",
+        "LoopCountArr", "1",
+        "StartTipSoundArr", "1",
+        "EndTipSoundArr", "1",
+        "IcoPathArr", "",
+        "SerialArr", "0",
+        "TimingSerialArr", "0"
+    )
+    loop MySoftData.TabSymbolArr.Length {
+        symbol := GetTableSymbol(A_Index)
+        modeArrStr := IniRead(filePath, IniSection, symbol "ModeArr", "")
+        if (modeArrStr == "")
+            continue
+        baseLen := StrSplit(modeArrStr, "π").Length
+        for fieldName, defaultValue in arrFields {
+            savedStr := IniRead(filePath, IniSection, symbol fieldName, "")
+            if (savedStr == "") {
+                newStr := ""
+                loop baseLen {
+                    newStr .= defaultValue
+                    if (A_Index < baseLen)
+                        newStr .= "π"
+                }
+                IniWrite(newStr, filePath, IniSection, symbol fieldName)
+                hasFix := true
+            } else {
+                valueArr := StrSplit(savedStr, "π")
+                if (valueArr.Length < baseLen) {
+                    loop baseLen - valueArr.Length
+                        valueArr.Push(defaultValue)
+                    newStr := ""
+                    loop valueArr.Length {
+                        newStr .= valueArr[A_Index]
+                        if (A_Index < valueArr.Length)
+                            newStr .= "π"
+                    }
+                    IniWrite(newStr, filePath, IniSection, symbol fieldName)
+                    hasFix := true
+                }
+            }
+        }
+    }
     loop MySoftData.TabSymbolArr.Length {
         symbol := GetTableSymbol(A_Index)
         loop {
