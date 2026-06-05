@@ -126,36 +126,61 @@ CompatPath(FilePath, Data) {
 
 ;1.0.8F4到新版本兼容, 模块中新增菜单模块相关数据
 Compat1_0_8F4FlodInfo(FoldInfo) {
-    if (FoldInfo == "" || ObjHasOwnProp(FoldInfo, "FrontInfoArr"))
+    if (FoldInfo == "")
         return
 
-    FoldInfo.FrontInfoArr := []
-    FoldInfo.TKTypeArr := []
-    FoldInfo.TKArr := []
-    FoldInfo.HoldTimeArr := []
+    ; 逐字段检查，避免"有FrontInfoArr但缺UnorderedTriggerArr"的中间版本漏网
+    needsFix := !ObjHasOwnProp(FoldInfo, "FrontInfoArr")
+              || !ObjHasOwnProp(FoldInfo, "TKTypeArr")
+              || !ObjHasOwnProp(FoldInfo, "TKArr")
+              || !ObjHasOwnProp(FoldInfo, "HoldTimeArr")
+              || !ObjHasOwnProp(FoldInfo, "UnorderedTriggerArr")
+
+    if (!needsFix)
+        return
+
+    if (!ObjHasOwnProp(FoldInfo, "FrontInfoArr"))
+        FoldInfo.FrontInfoArr := []
+    if (!ObjHasOwnProp(FoldInfo, "TKTypeArr"))
+        FoldInfo.TKTypeArr := []
+    if (!ObjHasOwnProp(FoldInfo, "TKArr"))
+        FoldInfo.TKArr := []
+    if (!ObjHasOwnProp(FoldInfo, "HoldTimeArr"))
+        FoldInfo.HoldTimeArr := []
+    if (!ObjHasOwnProp(FoldInfo, "UnorderedTriggerArr"))
+        FoldInfo.UnorderedTriggerArr := []
+
     loop FoldInfo.RemarkArr.Length {
-        FoldInfo.FrontInfoArr.Push("")
-        FoldInfo.TKTypeArr.Push(1)
-        FoldInfo.TKArr.Push("")
-        FoldInfo.HoldTimeArr.Push(500)
-        FoldInfo.UnorderedTriggerArr.Push(false)
+        if (FoldInfo.FrontInfoArr.Length < A_Index)
+            FoldInfo.FrontInfoArr.Push("")
+        if (FoldInfo.TKTypeArr.Length < A_Index)
+            FoldInfo.TKTypeArr.Push(1)
+        if (FoldInfo.TKArr.Length < A_Index)
+            FoldInfo.TKArr.Push("")
+        if (FoldInfo.HoldTimeArr.Length < A_Index)
+            FoldInfo.HoldTimeArr.Push(500)
+        if (FoldInfo.UnorderedTriggerArr.Length < A_Index)
+            FoldInfo.UnorderedTriggerArr.Push(false)
     }
 }
 
-;1.0.9F1到新版本兼容 增加配置音选项
-Compat1_0_9F1TipSound(tableItem) {
+;旧版本兼容：确保各数组长度与ModeArr一致（新增字段补齐）
+CompatEnsureArrLength(tableItem) {
     if (tableItem.ModeArr.Length == tableItem.StartTipSoundArr.Length &&
-        tableItem.ModeArr.Length == tableItem.EndTipSoundArr.Length)
+        tableItem.ModeArr.Length == tableItem.EndTipSoundArr.Length &&
+        tableItem.ModeArr.Length == tableItem.IcoPathArr.Length &&
+        tableItem.ModeArr.Length == tableItem.UnorderedTriggerArr.Length)
         return
 
     for index, value in tableItem.ModeArr {
-        if (tableItem.StartTipSoundArr.Length < index) {
+        if (tableItem.StartTipSoundArr.Length < index)
             tableItem.StartTipSoundArr.Push(1)
-        }
-
-        if (tableItem.EndTipSoundArr.Length < index) {
+        if (tableItem.EndTipSoundArr.Length < index)
             tableItem.EndTipSoundArr.Push(1)
-        }
+        if (tableItem.IcoPathArr.Length < index)
+            tableItem.IcoPathArr.Push("")
+        if (tableItem.UnorderedTriggerArr.Length < index)
+            tableItem.UnorderedTriggerArr.Push(0)
     }
 }
 

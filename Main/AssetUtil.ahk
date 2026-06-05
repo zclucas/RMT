@@ -661,7 +661,7 @@ ReadTableItemInfo(index) {
     SetSerialByArr(tableItem.SerialArr)
     SetSerialByArr(tableItem.TimingSerialArr)
     Compat1_0_8F4FlodInfo(tableItem.FoldInfo)
-    Compat1_0_9F1TipSound(tableItem)
+    CompatEnsureArrLength(tableItem)
 
     if (tableItem.ModeArr.Length == 1) {
         if (tableItem.TKArr.Length == 0)
