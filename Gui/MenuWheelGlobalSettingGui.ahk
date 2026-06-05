@@ -3,14 +3,14 @@
 class MenuWheelGlobalSettingGui {
     static instances := Map()
 
-    static ColorNames := ["NormalFill", "NormalStroke", "HoverFill", "HoverStroke", "SelectedFill", "SelectedStroke"]
+    static ColorNames := ["NormalFill", "NormalStroke", "HoverFill", "HoverStroke", "SelectedFill", "SelectedStroke", "NormalText", "HoverText", "SelectedText", "SwipeLineColor"]
 
     static DefaultThemes := Map(
-        "Default", {Name: "默认", NormalFill: "#FFFCFCFC", NormalStroke: "#FFC6DFFC", HoverFill: "#FFFDE8E8", HoverStroke: "#FFE81123", SelectedFill: "#FF0078D7", SelectedStroke: "#FFFFFFFF"},
-        "DarkNight", {Name: "暗夜", NormalFill: "#FF2D2D2D", NormalStroke: "#FF555555", HoverFill: "#FF3D3D3D", HoverStroke: "#FF00BFFF", SelectedFill: "#FF1A1A2E", SelectedStroke: "#FFFFFFFF"},
-        "Neon", {Name: "霓虹", NormalFill: "#FF0D0D0D", NormalStroke: "#FFFF00FF", HoverFill: "#FF1A0A2E", HoverStroke: "#FF00FF41", SelectedFill: "#FF16213E", SelectedStroke: "#FFFFFFFF"},
-        "Ocean", {Name: "海洋", NormalFill: "#FFF0F8FF", NormalStroke: "#FF4682B4", HoverFill: "#FFE0F0FF", HoverStroke: "#FF1E90FF", SelectedFill: "#FF0066CC", SelectedStroke: "#FFFFFFFF"},
-        "WarmSun", {Name: "暖阳", NormalFill: "#FFFFF8DC", NormalStroke: "#FFDAA520", HoverFill: "#FFFFE4B5", HoverStroke: "#FFFF6347", SelectedFill: "#FFFF8C00", SelectedStroke: "#FFFFFFFF"}
+        "Default", {Name: "默认", NormalFill: "#FFFCFCFC", NormalStroke: "#FFC6DFFC", HoverFill: "#FFFDE8E8", HoverStroke: "#FFE81123", SelectedFill: "#FF0078D7", SelectedStroke: "#FFFFFFFF", NormalText: "#CC333333", HoverText: "#FFE81123", SelectedText: "#FFFFFFFF", SwipeLineColor: "#3A88F5"},
+        "DarkNight", {Name: "暗夜", NormalFill: "#FF2D2D2D", NormalStroke: "#FF555555", HoverFill: "#FF3D3D3D", HoverStroke: "#FF00BFFF", SelectedFill: "#FF1A1A2E", SelectedStroke: "#FFFFFFFF", NormalText: "#CCAAAAAA", HoverText: "#FF00BFFF", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF00BFFF"},
+        "Neon", {Name: "霓虹", NormalFill: "#FF0D0D0D", NormalStroke: "#FFFF00FF", HoverFill: "#FF1A0A2E", HoverStroke: "#FF00FF41", SelectedFill: "#FF16213E", SelectedStroke: "#FFFFFFFF", NormalText: "#CCDDDDDD", HoverText: "#FF00FF41", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF00FF41"},
+        "Ocean", {Name: "海洋", NormalFill: "#FFF0F8FF", NormalStroke: "#FF4682B4", HoverFill: "#FFE0F0FF", HoverStroke: "#FF1E90FF", SelectedFill: "#FF0066CC", SelectedStroke: "#FFFFFFFF", NormalText: "#CC2C5282", HoverText: "#FF1E90FF", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF1E90FF"},
+        "WarmSun", {Name: "暖阳", NormalFill: "#FFFFF8DC", NormalStroke: "#FFDAA520", HoverFill: "#FFFFE4B5", HoverStroke: "#FFFF6347", SelectedFill: "#FFFF8C00", SelectedStroke: "#FFFFFFFF", NormalText: "#CC8B4513", HoverText: "#FFFF6347", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FFFF6347"}
     )
 
     __new() {
@@ -24,7 +24,11 @@ class MenuWheelGlobalSettingGui {
             "HoverFill", "#FFFDE8E8",
             "HoverStroke", "#FFE81123",
             "SelectedFill", "#FF0078D7",
-            "SelectedStroke", "#FFFFFFFF"
+            "SelectedStroke", "#FFFFFFFF",
+            "NormalText", "#CC333333",
+            "HoverText", "#FFE81123",
+            "SelectedText", "#FFFFFFFF",
+            "SwipeLineColor", "#3A88F5"
         )
         this._fixedPos := false
         this._selectMode := 1

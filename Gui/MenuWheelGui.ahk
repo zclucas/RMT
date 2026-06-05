@@ -14,8 +14,6 @@ class MenuWheelGui {
         this.selectMode := 1
         this.swipe := ""
         this.swipeTriggered := false
-        this.pendingSelectTimer := ""
-        this.pendingIdx := 0
     }
 
     ShowGui(MenuIndex) {
@@ -44,6 +42,10 @@ class MenuWheelGui {
         modHoverStroke := IniRead(iniPath, "MenuWheel", "HoverStroke", "#FFE81123")
         modSelectedFill := IniRead(iniPath, "MenuWheel", "SelectedFill", "#FF0078D7")
         modSelectedStroke := IniRead(iniPath, "MenuWheel", "SelectedStroke", "#FFFFFFFF")
+        modNormalText := IniRead(iniPath, "MenuWheel", "NormalText", "#CC333333")
+        modHoverText := IniRead(iniPath, "MenuWheel", "HoverText", "#FFE81123")
+        modSelectedText := IniRead(iniPath, "MenuWheel", "SelectedText", "#FFFFFFFF")
+        modSwipeLine := IniRead(iniPath, "MenuWheel", "SwipeLineColor", "#3A88F5")
 
         items := []
         loop 8 {
@@ -51,7 +53,6 @@ class MenuWheelGui {
             remark := tableItem.RemarkArr[macroIndex]
             btnName := remark != "" ? remark : "菜单" A_Index
 
-            icoPath := ""
             icoPath := tableItem.IcoPathArr[macroIndex]
 
             arcNr := A_Index
@@ -90,16 +91,17 @@ class MenuWheelGui {
             FontSize: Max(Round(11 * wheelScale), 8),
             NormalFill: modNormalFill,
             NormalStroke: modNormalStroke,
-            NormalText: "#CC333333",
+            NormalText: modNormalText,
             NormalThickness: 1,
             HoverFill: modHoverFill,
             HoverStroke: modHoverStroke,
-            HoverText: "#FFE81123",
+            HoverText: modHoverText,
             HoverThickness: 2,
             SelectedFill: modSelectedFill,
             SelectedStroke: modSelectedStroke,
-            SelectedText: "#FFFFFFFF",
+            SelectedText: modSelectedText,
             SelectedThickness: 2,
+            SwipeLineColor: modSwipeLine,
             IconPosRatio: 0.72,
             LabelPosRatio: 0.35,
             CenterPosRatio: 0.58
@@ -128,7 +130,6 @@ class MenuWheelGui {
         if (!this.isOpen)
             return
         this.closed := true
-        this.ToggleFunc(false)
         this._Cleanup()
     }
 
@@ -152,6 +153,7 @@ class MenuWheelGui {
         iconPosRatio := options.HasProp("IconPosRatio") ? options.IconPosRatio : 0.72
         labelPosRatio := options.HasProp("LabelPosRatio") ? options.LabelPosRatio : 0.35
         centerPosRatio := options.HasProp("CenterPosRatio") ? options.CenterPosRatio : 0.58
+        swipeLineColor := options.HasProp("SwipeLineColor") ? options.SwipeLineColor : "#3A88F5"
 
         this.normalFill := normalFill
         this.normalStroke := normalStroke
@@ -168,15 +170,10 @@ class MenuWheelGui {
         this.iconPosRatio := iconPosRatio
         this.labelPosRatio := labelPosRatio
         this.centerPosRatio := centerPosRatio
+        this.swipeLineColor := swipeLineColor
 
         finalX := x
         finalY := y
-        if (finalX == "" or finalY == "") {
-            CoordMode("Mouse", "Screen")
-            MouseGetPos(&mx, &my)
-            finalX := mx
-            finalY := my
-        }
         ptDpi := Buffer(8, 0)
         NumPut("Int", finalX, ptDpi, 0)
         NumPut("Int", finalY, ptDpi, 4)
@@ -201,7 +198,6 @@ class MenuWheelGui {
         cy := radius + pad
         winW := (radius + pad) * 2
         winH := (radius + pad) * 2
-        this.winSize := winW
 
         winLeft := finalX / this.dpiScale - cx
         winTop := finalY / this.dpiScale - cy
@@ -210,8 +206,8 @@ class MenuWheelGui {
 
         Loop itemCount {
             idx := A_Index
-            startAngle := (idx - 1) * angleStep - 90
-            endAngle := idx * angleStep - 90
+            startAngle := (idx - 1) * angleStep - 90 - angleStep / 2
+            endAngle := idx * angleStep - 90 - angleStep / 2
             midAngle := (startAngle + endAngle) / 2
             itemDef := items.Has(idx) ? items[idx] : {}
             name := itemDef.HasProp("Name") ? itemDef.Name : ("Sector" idx)
@@ -228,6 +224,44 @@ class MenuWheelGui {
         win.WindowStyle("None").AllowsTransparency("True").Background("{x:Null}")
         win.ShowInTaskbar("False").Topmost("True").ResizeMode("NoResize")
         win.WindowStartupLocation("Manual")
+        ; 注入原生 WPF 悬停样式 + 圆角配置 + Tooltip 配置
+        wheelStyle := '<CornerRadius x:Key="PanelRadius">0,0,0,0</CornerRadius>'
+            . '<Style TargetType="{x:Type FrameworkElement}" x:Key="GlobalToolTipStyle">'
+            . '  <Setter Property="ToolTipService.InitialShowDelay" Value="200"/>'
+            . '</Style>'
+            . '<Style x:Key="WheelWedgeStyle" TargetType="Path">'
+            . '  <Setter Property="Fill" Value="' normalFill '"/>'
+            . '  <Setter Property="Stroke" Value="' normalStroke '"/>'
+            . '  <Setter Property="StrokeThickness" Value="' String(normalThickness) '"/>'
+            . '  <Style.Triggers>'
+            . '    <Trigger Property="IsMouseOver" Value="True">'
+            . '      <Setter Property="Fill" Value="' hoverFill '"/>'
+            . '      <Setter Property="Stroke" Value="' hoverStroke '"/>'
+            . '      <Setter Property="StrokeThickness" Value="' String(hoverThickness) '"/>'
+            . '    </Trigger>'
+            . '  </Style.Triggers>'
+            . '</Style>'
+            . '<Style x:Key="CenterCircleStyle" TargetType="Ellipse">'
+            . '  <Setter Property="Fill" Value="' normalFill '"/>'
+            . '  <Setter Property="Stroke" Value="' normalStroke '"/>'
+            . '  <Setter Property="StrokeThickness" Value="' String(normalThickness) '"/>'
+            . '  <Style.Triggers>'
+            . '    <Trigger Property="IsMouseOver" Value="True">'
+            . '      <Setter Property="Fill" Value="' hoverFill '"/>'
+            . '      <Setter Property="Stroke" Value="' hoverStroke '"/>'
+            . '      <Setter Property="StrokeThickness" Value="' String(hoverThickness) '"/>'
+            . '    </Trigger>'
+            . '  </Style.Triggers>'
+            . '</Style>'
+            . '<Style x:Key="CloseIconStyle" TargetType="TextBlock">'
+            . '  <Setter Property="Foreground" Value="' this.normalText '"/>'
+            . '  <Style.Triggers>'
+            . '    <DataTrigger Binding="{Binding IsMouseOver, ElementName=CenterCircle}" Value="True">'
+            . '      <Setter Property="Foreground" Value="' this.hoverText '"/>'
+            . '    </DataTrigger>'
+            . '  </Style.Triggers>'
+            . '</Style>'
+        win.InjectResources(wheelStyle)
 
         canvas := win.Add("Canvas").Name("RootCanvas")
         canvas.Width(winW).Height(winH).Background("#00000000")
@@ -255,17 +289,21 @@ class MenuWheelGui {
                 . " A " innerR "," innerR " 0 " largeArc " 0 " ix1 "," iy1 " Z"
 
             wedge := canvas.Add("Path").Name("Wedge_" idx)
-            wedge.Data(pathData).Fill(normalFill).Stroke(normalStroke).StrokeThickness(normalThickness).Cursor("Hand")
+            wedge.Data(pathData).Style("{StaticResource WheelWedgeStyle}").Cursor("Hand")
+            if (this.showTooltip)
+                wedge.ToolTip(sec.Name)
         }
 
         centerCircle := canvas.Add("Ellipse").Name("CenterCircle")
         centerCircle.Width(innerR * 2).Height(innerR * 2)
         centerCircle.Canvas_Left(cx - innerR).Canvas_Top(cy - innerR)
-        centerCircle.Fill(normalFill).Stroke(normalStroke).StrokeThickness(normalThickness).Cursor("Hand")
+        centerCircle.Style("{StaticResource CenterCircleStyle}").Cursor("Hand")
+        if (this.showTooltip)
+            centerCircle.ToolTip(GetLang("关闭"))
 
         closeIcon := canvas.Add("TextBlock").Name("CloseIcon")
-        closeIcon.Text("✕").FontSize(Round(fontSize * 1.4)).Foreground(this.normalText).FontWeight("SemiBold")
-        closeIcon.TextAlignment("Center").IsHitTestVisible("False")
+        closeIcon.Text("✕").FontSize(Round(fontSize * 1.4)).FontWeight("SemiBold")
+        closeIcon.Style("{StaticResource CloseIconStyle}").TextAlignment("Center").IsHitTestVisible("False")
         closeIcon.Canvas_Left(cx - fontSize * 0.6).Canvas_Top(cy - Round(fontSize * 0.7))
 
         Loop itemCount {
@@ -285,7 +323,7 @@ class MenuWheelGui {
                 iconBg := canvas.Add("Ellipse").Name("IconBg_" idx)
                 iconBg.Width(iconSize).Height(iconSize)
                 iconBg.Canvas_Left(ipx - iconSize / 2).Canvas_Top(ipy - iconSize / 2)
-                iconBg.Fill("#00FFFFFF").Stroke("#00FFFFFF").StrokeThickness(0).Cursor("Hand")
+                iconBg.Fill("#00FFFFFF").Stroke("#00FFFFFF").StrokeThickness(0).IsHitTestVisible("False")
 
                 iconEl := canvas.Add("Image").Name("Icon_" idx)
                 iconEl.Width(iconSize - 8).Height(iconSize - 8)
@@ -308,7 +346,7 @@ class MenuWheelGui {
                 iconBg := canvas.Add("Ellipse").Name("IconBg_" idx)
                 iconBg.Width(iconSize).Height(iconSize)
                 iconBg.Canvas_Left(cpx - iconSize / 2).Canvas_Top(cpy - iconSize / 2)
-                iconBg.Fill("#00FFFFFF").Stroke("#00FFFFFF").StrokeThickness(0).Cursor("Hand")
+                iconBg.Fill("#00FFFFFF").Stroke("#00FFFFFF").StrokeThickness(0).IsHitTestVisible("False")
 
                 lbl := canvas.Add("TextBlock").Name("Label_" idx)
                 lbl.Text(sec.Name)
@@ -320,32 +358,34 @@ class MenuWheelGui {
             }
         }
 
-        swipeLine := canvas.Add("Line").Name("SwipeLine")
-        swipeLine.X1(cx).Y1(cy).X2(cx).Y2(cy)
-        swipeLine.Stroke("#3A88F5").StrokeThickness(3).StrokeDashArray("4,2").IsHitTestVisible("False")
+        ; 划线模式：在主轮盘 Canvas 上添加划线（不创建独立窗口，避免遮挡事件）
+        if (this.selectMode == 2) {
+            swipeLine := canvas.Add("Line").Name("SwipeLine")
+            swipeLine.X1(cx).Y1(cy).X2(cx).Y2(cy)
+            swipeLine.Stroke(this.swipeLineColor).StrokeThickness(3).StrokeDashArray("4,2")
+            swipeLine.IsHitTestVisible("False")
+        }
 
         this.ui := XAMLHost(win.ToString(), "", 0)
         this.closed := false
         this.swipeTriggered := false
         this.isOpen := true
-        ; try FileAppend("[WHEEL-OPEN] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
 
         Loop itemCount {
             idx := A_Index
             h := MenuWheelGui._H(this, idx)
             this.ui.OnEvent("Wedge_" idx, "PreviewMouseLeftButtonDown", h.Select)
             this.ui.OnEvent("IconBg_" idx, "PreviewMouseLeftButtonDown", h.Select)
-            this.ui.OnEvent("Wedge_" idx, "MouseMove", h.Hover)
-            this.ui.OnEvent("IconBg_" idx, "MouseMove", h.Hover)
-            this.ui.OnEvent("Wedge_" idx, "MouseLeave", h.Leave)
-            this.ui.OnEvent("IconBg_" idx, "MouseLeave", h.Leave)
+            ; 划线模式需要悬停触发选中，绑定 MouseMove/MouseLeave
+            if (this.selectMode == 2) {
+                this.ui.OnEvent("Wedge_" idx, "MouseMove", h.Hover)
+                this.ui.OnEvent("IconBg_" idx, "MouseMove", h.Hover)
+                this.ui.OnEvent("Wedge_" idx, "MouseLeave", h.Leave)
+                this.ui.OnEvent("IconBg_" idx, "MouseLeave", h.Leave)
+            }
         }
 
         this.ui.OnEvent("CenterCircle", "PreviewMouseLeftButtonDown", (*) => this.DoCancel())
-        this.ui.OnEvent("CenterCircle", "MouseMove", (*) => this.DoCenterHover())
-        this.ui.OnEvent("CenterCircle", "MouseLeave", (*) => this.DoCenterLeave())
-
-        this.ui.OnEvent("RootCanvas", "MouseMove", (*) => this.DoCanvasMove())
 
         this.ui.Show()
 
@@ -363,8 +403,6 @@ class MenuWheelGui {
             this.swipe.Init()
         } else {
             this.swipe := ""
-            if (this.HasProp("ui") && IsObject(this.ui))
-                this.ui.Update("SwipeLine", "Visibility", "Collapsed")
         }
         this._aliveHwnd := this.ui.wpfHwnd
         this.Gui := { Hwnd: this.ui.wpfHwnd }
@@ -389,7 +427,6 @@ class MenuWheelGui {
             this.swipe.Stop()
         sec := this.sectors[idx]
         sec.RenderSelected(this)
-        ; Sleep(150)
         if (IsObject(sec.Callback)) {
             this._pendingCallback := sec.Callback
             this._pendingCallbackIdx := idx
@@ -410,96 +447,22 @@ class MenuWheelGui {
     DoHover(idx, *) {
         if (!this.isOpen || this.closed)
             return
-        prevIdx := this.hoveredIdx
-        if (prevIdx > 0 && prevIdx != idx)
-            this.sectors[prevIdx].OnLeave(this)
         this.hoveredIdx := idx
-        this.sectors[idx].OnHover(this)
-        if (this.showTooltip)
-            ToolTip(this.sectors[idx].Name)
-        if (this.selectMode == 2 && IsObject(this.swipe) && !this.swipeTriggered) {
-            this._StartPendingSelect(idx)
-        }
+        if (this.selectMode == 2 && IsObject(this.swipe) && !this.swipeTriggered)
+            this.DoSelect(idx, "")
     }
 
     DoLeave(idx, *) {
         if (!this.isOpen || this.closed)
             return
-        if (this.hoveredIdx == idx) {
+        if (this.hoveredIdx == idx)
             this.hoveredIdx := 0
-            this._CancelPendingSelect()
-            this.sectors[idx].OnLeave(this)
-            ToolTip()
-        }
-    }
-
-    DoCanvasMove(*) {
-        if (!this.isOpen || this.closed)
-            return
-        if (this.hoveredIdx > 0) {
-            prevIdx := this.hoveredIdx
-            this._CancelPendingSelect()
-            this.sectors[prevIdx].OnLeave(this)
-            this.hoveredIdx := 0
-        }
-        ToolTip()
-    }
-
-    DoCenterHover(*) {
-        if (!this.isOpen || this.closed)
-            return
-        if (this.HasProp("ui") && IsObject(this.ui)) {
-            this.ui.Update("CenterCircle", "Fill", this.hoverFill)
-            this.ui.Update("CenterCircle", "Stroke", this.hoverStroke)
-            this.ui.Update("CenterCircle", "StrokeThickness", String(this.hoverThickness))
-            this.ui.Update("CloseIcon", "Foreground", this.hoverText)
-        }
-        if (this.showTooltip)
-            ToolTip(GetLang("关闭"))
-    }
-
-    DoCenterLeave(*) {
-        if (!this.isOpen || this.closed)
-            return
-        if (this.HasProp("ui") && IsObject(this.ui)) {
-            this.ui.Update("CenterCircle", "Fill", this.normalFill)
-            this.ui.Update("CenterCircle", "Stroke", this.normalStroke)
-            this.ui.Update("CenterCircle", "StrokeThickness", String(this.normalThickness))
-            this.ui.Update("CloseIcon", "Foreground", this.normalText)
-        }
-        ToolTip()
-    }
-
-    _StartPendingSelect(idx) {
-        this._CancelPendingSelect()
-        this.pendingIdx := idx
-        this.pendingSelectTimer := ObjBindMethod(this, "_OnPendingSelectTick")
-        SetTimer(this.pendingSelectTimer, 30)
-    }
-
-    _CancelPendingSelect() {
-        if (this.pendingSelectTimer) {
-            SetTimer(this.pendingSelectTimer, 0)
-            this.pendingSelectTimer := ""
-        }
-        this.pendingIdx := 0
-    }
-
-    _OnPendingSelectTick() {
-        this.pendingSelectTimer := ""
-        if (!this.isOpen || this.closed)
-            return
-        idx := this.pendingIdx
-        if (idx > 0 && this.hoveredIdx == idx)
-            this.DoSelect(idx, "")
-        this.pendingIdx := 0
     }
 
     _Cleanup() {
-        ; try FileAppend("[WHEEL-CLEANUP] menu=" this.MenuIndex "`n", A_Temp "\AhkWpf\mem_trace.log")
+        this.ToggleFunc(false)
         WindowHotkeyManager.Unregister(this)
         this.isOpen := false
-        this._CancelPendingSelect()
         if (IsObject(this.swipe))
             this.swipe.Stop()
         MySoftData.CurMenuWheelIndex := -1
@@ -529,27 +492,12 @@ class MenuWheelGui {
         OnTriggerMacroKeyAndInit(tableItem, tableItem.MacroArr[macroIndex], macroIndex)
     }
 
-    GetFullIcoPath(path) {
-        if (path == "")
-            return ""
-
-        if (FileExist(path))
-            return path
-
-        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\MenuIcon\" path
-        if (FileExist(fullPath))
-            return fullPath
-
-        return ""
-    }
-
     ; ====== 内部轮盘实现 ======
     class WheelSector {
         Index := 0
         Name := ""
         ImagePath := ""
         Callback := 0
-        State := 0
         StartAngle := 0
         EndAngle := 0
         MidAngle := 0
@@ -562,61 +510,21 @@ class MenuWheelGui {
             this.StartAngle := startAng
             this.EndAngle := endAng
             this.MidAngle := midAng
-            this.State := 0
         }
 
-        RenderNormal(menu) {
-            this.State := 0
-            p := this.Index
-            ui := menu.ui
-            if (!IsObject(ui))
-                return
-            fill := menu.normalFill
-            stroke := menu.normalStroke
-            ui.Update("Wedge_" p, "Fill", fill)
-            ui.Update("Wedge_" p, "Stroke", stroke)
-            ui.Update("Wedge_" p, "StrokeThickness", String(menu.normalThickness))
-            ui.Update("IconBg_" p, "Fill", "#00FFFFFF")
-            ui.Update("Label_" p, "Foreground", menu.normalText)
-        }
-
-        OnHover(menu) {
-            if (this.State == 2)
-                return
-            this.State := 1
-            p := this.Index
-            ui := menu.ui
-            if (!IsObject(ui))
-                return
-            fill := menu.hoverFill
-            stroke := menu.hoverStroke
-            ui.Update("Wedge_" p, "Fill", fill)
-            ui.Update("Wedge_" p, "Stroke", stroke)
-            ui.Update("Wedge_" p, "StrokeThickness", String(menu.hoverThickness))
-            ui.Update("IconBg_" p, "Fill", "#00FFFFFF")
-            ui.Update("Label_" p, "Foreground", menu.hoverText)
-        }
-
-        OnLeave(menu) {
-            if (this.State == 0)
-                return
-            this.State := 0
-            this.RenderNormal(menu)
-        }
-
+        ; 选中时清除 Style（移除 IsMouseOver Trigger），再设选中色，避免被覆盖
         RenderSelected(menu) {
-            this.State := 2
             p := this.Index
             ui := menu.ui
             if (!IsObject(ui))
                 return
-            fill := menu.selectedFill
-            stroke := menu.selectedStroke
-            ui.Update("Wedge_" p, "Fill", fill)
-            ui.Update("Wedge_" p, "Stroke", stroke)
-            ui.Update("Wedge_" p, "StrokeThickness", String(menu.selectedThickness))
-            ui.Update("IconBg_" p, "Fill", "#00FFFFFF")
-            ui.Update("Label_" p, "Foreground", menu.selectedText)
+            ui.BatchUpdate([
+                { ControlName: "Wedge_" p, PropertyName: "Style", Value: "{x:Null}" },
+                { ControlName: "Wedge_" p, PropertyName: "Fill", Value: menu.selectedFill },
+                { ControlName: "Wedge_" p, PropertyName: "Stroke", Value: menu.selectedStroke },
+                { ControlName: "Wedge_" p, PropertyName: "StrokeThickness", Value: String(menu.selectedThickness) },
+                { ControlName: "Label_" p, PropertyName: "Foreground", Value: menu.selectedText }
+            ])
         }
     }
 
@@ -630,18 +538,14 @@ class MenuWheelGui {
 
         Init() {
             this.drawFn := ObjBindMethod(this, "_OnTick")
-            SetTimer(this.drawFn, 15)
-            if (IsObject(this.menu.ui))
-                this.menu.ui.Update("SwipeLine", "Visibility", "Visible")
+            SetTimer(this.drawFn, 16)
         }
 
         Toggle(state) {
             if (state) {
                 if (!this.drawFn)
                     this.drawFn := ObjBindMethod(this, "_OnTick")
-                SetTimer(this.drawFn, 15)
-                if (IsObject(this.menu.ui))
-                    this.menu.ui.Update("SwipeLine", "Visibility", "Visible")
+                SetTimer(this.drawFn, 16)
             } else {
                 this.Stop()
             }
@@ -652,32 +556,26 @@ class MenuWheelGui {
                 SetTimer(this.drawFn, 0)
                 this.drawFn := ""
             }
-            if (IsObject(this.menu.ui)) {
-                try {
-                    this.menu.ui.Update("SwipeLine", "Visibility", "Collapsed")
-                }
-            }
         }
 
         _OnTick() {
-            if (!this.menu.isOpen || this.menu.closed || !IsObject(this.menu.ui))
+            m := this.menu
+            if (!m.isOpen || m.closed || !IsObject(m.ui))
                 return
-            hwnd := this.menu.ui.wpfHwnd
+            ui := m.ui
+            hwnd := ui.wpfHwnd
             if (!hwnd)
                 return
 
             CoordMode("Mouse", "Screen")
             MouseGetPos(&mx, &my)
 
-            pt := Buffer(8, 0)
-            NumPut("Int", mx, pt, 0)
-            NumPut("Int", my, pt, 4)
-            DllCall("user32\ScreenToClient", "Ptr", hwnd, "Ptr", pt)
-            relX := NumGet(pt, 0, "Int") / this.menu.dpiScale
-            relY := NumGet(pt, 4, "Int") / this.menu.dpiScale
+            WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
+            relX := mx - wx
+            relY := my - wy
 
-            this.menu.ui.Update("SwipeLine", "X2", relX)
-            this.menu.ui.Update("SwipeLine", "Y2", relY)
+            ui.Update("SwipeLine", "X2", String(relX))
+            ui.Update("SwipeLine", "Y2", String(relY))
         }
     }
 }
