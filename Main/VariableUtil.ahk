@@ -81,9 +81,7 @@ SetGlobalData(macroStr, visitMap) {
             }
         }
         else if (IsKeyCheck) {
-            if (Data.SaveToggle) {
-                VariableMap[Data.VarName] := true
-            }
+            VariableMap[Data.VarName] := true
         }
         else if (IsOpera) {
             loop Data.ToggleArr.Length {

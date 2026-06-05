@@ -1057,9 +1057,7 @@ class KeyCheckGui {
         data.CheckType := this.CheckTypeCon.Value
         data.StateType := this.StateTypeCon.Value
         data.VarName := GetVarName(this.VarNameCon.Text)
-
-        if (data.SaveToggle)
-            MySoftData.GlobalVariMap[data.VarName] := true
+        MySoftData.GlobalVariMap[data.VarName] := true
 
         SaveMacroCMDData(data)
     }
