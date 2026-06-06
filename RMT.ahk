@@ -1,5 +1,5 @@
 #Requires AutoHotkey v2.0
-global RMT_VERSION := "1.2F9"
+global RMT_VERSION := "1.2F10"
 #Include Main\SelfCheck.ahk
 SelfCheckMissingFiles()
 #Include Main\AssetUtil.ahk
