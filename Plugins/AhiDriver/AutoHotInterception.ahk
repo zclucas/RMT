@@ -3,7 +3,7 @@ class AutoHotInterception {
 
 	__New() {
 		bitness := A_PtrSize == 8 ? "x64" : "x86"
-		baseDir := A_ScriptDir "\Plugins\AhiDriver"
+		baseDir := IsSet(AHIDllDir) ? AHIDllDir : A_LineFile "\.."
 
 		interceptionDllName := "interception.dll"
 		interceptionDllFile := baseDir "\" bitness "\" interceptionDllName
