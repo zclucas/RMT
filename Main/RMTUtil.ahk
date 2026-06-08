@@ -444,12 +444,11 @@ CancelTableItemStopState(tableIndex, itemIndex) {
         if (tableItem.IsWorkIndexArr.Length >= itemIndex && tableItem.IsWorkIndexArr[itemIndex] != 0)
             return
 
-        tableItem.ColorStateArr[itemIndex] := 0
         ; 同步清除 KilledArr，確保狀態完全恢復可再次觸發
         if (tableItem.KilledArr.Length >= itemIndex)
             tableItem.KilledArr[itemIndex] := false
-        UpdateMacroRunningCount(3, 0)
-        RefreshItemColorUI(tableIndex, itemIndex)
+        ; 通过 SetTableItemState 恢复默认状态（自动触发浮动画板同步等逻辑）
+        SetTableItemState(tableIndex, itemIndex, 0)
     }
 }
 

@@ -38,6 +38,7 @@
 #Include ..\Gui\MenuMacroSettingGui.ahk
 #Include ..\Gui\UIMacroGui.ahk
 #Include ..\Gui\UIMacroSettingGui.ahk
+#Include ..\Gui\UIMacroPanelSettingGui.ahk
 #Include ..\Gui\ReplaceKeyGui.ahk
 #Include ..\Gui\UseExplainGui.ahk
 #Include ..\Gui\TargetGui.ahk

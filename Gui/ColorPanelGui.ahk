@@ -188,4 +188,25 @@ class ColorPanelGui {
         }
         return "0xFFFFFF"
     }
+
+    ; 静态便捷方法：弹出颜色选择器，返回选中的颜色（#RRGGBB格式），取消返回空字符串
+    static PickColor(defaultColor := "") {
+        picker := ColorPanelGui()
+        if (defaultColor != "" && RegExMatch(defaultColor, "^#?([0-9A-Fa-f]{6})$", &m))
+            picker.ColorValue := Integer("0x" m[1])
+        result := ""
+        picker.SureAction := (x, y, color) => result := "#" color
+        ; 确保目标窗口已创建并显示，否则 RefreshCoord/RefreshMapImage 会报错
+        if (MyTargetGui.Gui == "")
+            MyTargetGui.AddGui()
+        MyTargetGui.Gui.Show()
+        picker.ShowGui()
+        ; 等待用户选择或关闭（最多等待60秒）
+        loop 600 {
+            if (result != "")
+                return result
+            Sleep(100)
+        }
+        return ""
+    }
 }

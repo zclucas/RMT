@@ -2,6 +2,7 @@
 
 class MenuWheelGlobalSettingGui {
     static instances := Map()
+    static _opening := false
 
     static ColorNames := ["NormalFill", "NormalStroke", "HoverFill", "HoverStroke", "SelectedFill", "SelectedStroke", "NormalText", "HoverText", "SelectedText", "SwipeLineColor"]
 
@@ -39,16 +40,33 @@ class MenuWheelGlobalSettingGui {
 
     static ShowGui() {
         key := "global"
+
+        ; 检查已有实例，有则激活并返回
         if (MenuWheelGlobalSettingGui.instances.Has(key)) {
             oldInst := MenuWheelGlobalSettingGui.instances[key]
+            if (!oldInst.closed && IsObject(oldInst.ui)) {
+                try WinActivate("ahk_id " oldInst.ui.wpfHwnd)
+                return
+            }
+            ; 实例已失效，清理
             if (!oldInst.closed)
                 oldInst.Close()
             MenuWheelGlobalSettingGui.instances.Delete(key)
         }
-        inst := MenuWheelGlobalSettingGui()
-        inst._instanceKey := key
-        inst._BuildAndShow()
-        MenuWheelGlobalSettingGui.instances[key] := inst
+
+        ; 防重入
+        if (MenuWheelGlobalSettingGui._opening)
+            return
+        MenuWheelGlobalSettingGui._opening := true
+
+        try {
+            inst := MenuWheelGlobalSettingGui()
+            inst._instanceKey := key
+            inst._BuildAndShow()
+            MenuWheelGlobalSettingGui.instances[key] := inst
+        } finally {
+            MenuWheelGlobalSettingGui._opening := false
+        }
     }
 
     _BuildAndShow() {
@@ -96,7 +114,7 @@ class MenuWheelGlobalSettingGui {
 
         row4 := inner1.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
         row4.Add("TextBlock").Text(GetLang("轮盘大小")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(70)
-        scaleSlider := row4.Add("Slider").Name("WheelScaleCon").Width(160).Height(28).Margin("8,0,8,0").Minimum(50).Maximum(200).Value(100).IsSnapToTickEnabled("True").TickFrequency("10")
+        scaleSlider := row4.Add("Slider").Name("WheelScaleCon").Width(160).Height(28).Margin("8,0,8,0").Minimum(50).Maximum(200).Value(100).IsSnapToTickEnabled("True").TickFrequency("10").Tag("Throttle:50")
         scaleValText := row4.Add("TextBlock").Name("WheelScaleValText").Foreground("{DynamicResource TextMain}").FontSize(12).VerticalAlignment("Center").Width(40)
 
         group3 := panel.Add("GroupBox").Header(GetLang("主题预设")).Margin("0,16,0,0")
@@ -157,6 +175,15 @@ class MenuWheelGlobalSettingGui {
         this.LoadInitValues()
 
         this.ui.Show()
+
+        ; 等待窗口就绪后激活到最前，避免被主界面挡住
+        loop 20 {
+            if (this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd) {
+                try WinActivate("ahk_id " this.ui.wpfHwnd)
+                break
+            }
+            Sleep(50)
+        }
 
         SetTimer(ObjBindMethod(this, "ApplyValuesToUI"), -100)
     }
@@ -219,6 +246,7 @@ class MenuWheelGlobalSettingGui {
 
     OnWindowClosing(state, ctrl, event) {
         this.closed := true
+        MenuWheelGlobalSettingGui._opening := false
         if (this._instanceKey != "" && MenuWheelGlobalSettingGui.instances.Has(this._instanceKey))
             MenuWheelGlobalSettingGui.instances.Delete(this._instanceKey)
         this.ui := ""

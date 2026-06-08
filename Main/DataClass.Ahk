@@ -203,6 +203,16 @@ class SoftData {
         this.FixedMenuWheel := false    ;固定菜单轮
         this.MenuWheelScale := 100      ;轮盘大小(百分比)
         this.XAMLTheme := "RMT Light"   ;XAML界面主题
+
+        ; 界面浮窗配置
+        this.UIPanelShowOnActive := true        ;界面激活时默认显示浮窗
+        this.UIPanelDefaultPos := 1             ;浮窗默认出现位置(1=左上,2=中上,3=右上,4=中左,5=中心,6=中右,7=左下,8=鼠标位置)
+        this.UIPanelBtnColor := "#FF333333"     ;按钮颜色
+        this.UIPanelBgColor := "#40FFB6C1"    ;背景颜色(半透明粉色)
+        this.UIPanelFontColor := "#FFDDDDDD"  ;字体颜色
+        this.UIPanelBtnHeight := 34            ;按钮高度
+        this.UIPanelBtnWidth := 80             ;按钮宽度
+        this.UIPanelCols := 3                   ;每行按钮个数
         this.NoVariableTip := false     ;无变量提醒
         this.ScreenShotType := 3        ;截图类型
         this.MutiThreadNum := -1         ;多线程数(-1动态)

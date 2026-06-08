@@ -143,7 +143,7 @@ class XColorPicker {
         hueBg.Add("GradientStop").SetProp('Color', "#FF0000FF").Offset("0.66")
         hueBg.Add("GradientStop").SetProp('Color', "#FFFF00FF").Offset("0.83")
         hueBg.Add("GradientStop").SetProp('Color', "#FFFF0000").Offset("1")
-        sliders.Add("Slider").Name("HueSlider").Minimum("0").Maximum("360").Value("0").Margin("0,-18,0,0")
+        sliders.Add("Slider").Name("HueSlider").Minimum("0").Maximum("360").Value("0").Margin("0,-18,0,0").Tag("Throttle:50")
 
         alphaBg := sliders.Add("Border").Height("10").CornerRadius("5").Background("Transparent").ClipToBounds("True")
 
@@ -152,7 +152,7 @@ class XColorPicker {
         mask := alphaFill.Add("Rectangle.OpacityMask").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
         mask.Add("GradientStop").SetProp('Color', "Transparent").Offset("0")
         mask.Add("GradientStop").SetProp('Color', "White").Offset("1")
-        sliders.Add("Slider").Name("AlphaSlider").Minimum("0").Maximum("255").Value("255").Margin("0,-14,0,0")
+        sliders.Add("Slider").Name("AlphaSlider").Minimum("0").Maximum("255").Value("255").Margin("0,-14,0,0").Tag("Throttle:50")
 
         sliderGrid.Add("Border").Name("ColorPreview").Grid_Column(2).Width("36").Height("36").CornerRadius("18").Background(defaultColor).BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
@@ -226,7 +226,12 @@ class XColorPicker {
 
         ui.Show()
 
-        while (resultObj.Status == "Cancel" && ProcessExist(ui.pid)) {
+        startTick := A_TickCount
+        while (resultObj.Status == "Cancel") {
+            if (ui.wpfHwnd && !WinExist("ahk_id " ui.wpfHwnd))
+                break
+            if (A_TickCount - startTick > 30000)
+                break
             Sleep(50)
         }
 
