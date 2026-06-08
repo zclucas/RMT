@@ -77,7 +77,6 @@ class WorkPool {
     }
 
     Clear() {
-        ; MsgBox("text")
         if (this.isDynamic && this.shrinkTimerFunc != "") {
             SetTimer(this.shrinkTimerFunc, 0)
             this.shrinkTimerFunc := ""

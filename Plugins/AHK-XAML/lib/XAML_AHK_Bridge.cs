@@ -315,11 +315,27 @@ public class AhkWpfEngine {
         return null;
     }
 
+    private static string _logDir = null;
+
+    private static string GetLogDir() {
+        if (_logDir == null) {
+            _logDir = System.Environment.GetEnvironmentVariable("RMT_LOG_DIR");
+            if (string.IsNullOrEmpty(_logDir)) {
+                _logDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
+            }
+        }
+        if (!System.IO.Directory.Exists(_logDir))
+            System.IO.Directory.CreateDirectory(_logDir);
+        return _logDir;
+    }
+
+    private static string GetLogPath(string filename) {
+        return System.IO.Path.Combine(GetLogDir(), filename);
+    }
+
     private static void LogDebug(string msg) {
         try {
-            string dir = System.IO.Path.Combine(System.Environment.ExpandEnvironmentVariables("%TEMP%"), "AhkWpf");
-            if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
-            System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "AhkWpfDebug.log"),
+            System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"),
                 System.DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\n");
         } catch { }
     }
@@ -401,7 +417,7 @@ public class AhkWpfEngine {
                 }
                 try {
                     if (EnableLogging) {
-                        try { System.IO.File.AppendAllText(@"C:\projects\ahk\ahk-xaml\daemon_log.txt", "Daemon started with args: " + string.Join(" ", args) + "\n"); } catch { }
+                        try { System.IO.File.AppendAllText(GetLogPath("daemon_log.txt"), "Daemon started with args: " + string.Join(" ", args) + "\n"); } catch { }
                     }
                     int ahkPid = int.Parse(args[1]);
                     IntPtr ahkHwnd = (IntPtr)long.Parse(args[2]);
@@ -497,7 +513,7 @@ public class AhkWpfEngine {
                         try {
                             string exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
                             string exeDir = System.IO.Path.GetDirectoryName(exePath);
-                            System.IO.File.AppendAllText(System.IO.Path.Combine(exeDir, "daemon_error.txt"), "Error loading components: " + ex.ToString() + "\n");
+                            System.IO.File.AppendAllText(GetLogPath("daemon_error.txt"), "Error loading components: " + ex.ToString() + "\n");
                         } catch { }
                     }
                     
@@ -568,9 +584,7 @@ public class AhkWpfEngine {
                         Application.Current.Dispatcher.Invoke(() => {
                             try {
                                 string state = engine.CollectState();
-                                string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
-                                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
-                                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "AhkWpf_StateDump_" + scriptName + ".ini"), state);
+                                System.IO.File.WriteAllText(GetLogPath("AhkWpf_StateDump_" + scriptName + ".ini"), state);
                             } catch { }
                             Environment.Exit(0);
                         });
@@ -582,9 +596,7 @@ public class AhkWpfEngine {
             engine.RunEngine(args[0], args[1], args[2], args.Length >= 5 ? args[4] : "", args.Length >= 6 ? args[5] : "", args.Length >= 7 ? args[6] : "", args.Length >= 8 ? args[7] : "0", false);
         } catch (Exception ex) {
             try {
-                string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
-                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
-                if (EnableLogging) System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "AhkWpfError.log"), ex.ToString());
+                if (EnableLogging) System.IO.File.WriteAllText(GetLogPath("AhkWpfError.log"), ex.ToString());
             } catch { }
             Environment.Exit(1);
         }
@@ -766,7 +778,7 @@ public class AhkWpfEngine {
                     }
                 } catch (Exception dx) {
                     if (EnableLogging) {
-                        try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "decomp_err.log"), dx.ToString()); } catch { }
+                        try { System.IO.File.WriteAllText(GetLogPath("decomp_err.log"), dx.ToString()); } catch { }
                     }
                     payload = Encoding.UTF8.GetString(compressed);
                 }
@@ -846,7 +858,7 @@ public class AhkWpfEngine {
                 if (EnableLogging) {
                     try {
                         System.IO.File.AppendAllText(
-                            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "baml_debug.log"),
+                            GetLogPath("baml_debug.log"),
                             DateTime.Now + " BAML NameScope: registered " + nameCount + " names. FindName test DGX_Table_List=" + (win.FindName("DGX_Table_List") != null) + "\n"
                         );
                     } catch { }
@@ -889,7 +901,7 @@ public class AhkWpfEngine {
                 if (EnableLogging) {
                     try {
                         System.IO.File.AppendAllText(
-                            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "baml_err.log"),
+                            GetLogPath("baml_err.log"),
                             DateTime.Now + " BAML load failed: " + bamlEx.ToString() + "\n"
                         );
                     } catch { }
@@ -965,7 +977,7 @@ public class AhkWpfEngine {
         }
         } // end text-based path
         if (!string.IsNullOrEmpty(scriptName)) {
-            string dumpPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpf_StateDump_" + scriptName + ".ini");
+            string dumpPath = GetLogPath("AhkWpf_StateDump_" + scriptName + ".ini");
             if (System.IO.File.Exists(dumpPath)) {
                 try {
                     string[] lines = System.IO.File.ReadAllLines(dumpPath);
@@ -1042,7 +1054,7 @@ public class AhkWpfEngine {
                 try {
                     wv.WebMessageReceived += (ws, we) => {
                         string debugMsg = we.WebMessageAsJson;
-                        try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWebViewDebug.log"), "C# WebMessageReceived: " + debugMsg + "\n"); } catch {}
+                        try { System.IO.File.AppendAllText(GetLogPath("AhkWebViewDebug.log"), "C# WebMessageReceived: " + debugMsg + "\n"); } catch {}
                         SendToAhk("EVENT|" + winId + "|" + wv.Name + "|WebMessageReceived|" + LengthPrefix(debugMsg) + "\n");
                     };
                     wv.NavigationCompleted += (ws, we) => {
@@ -1801,7 +1813,7 @@ public class AhkWpfEngine {
                 ProcessSingleMessage(hwnd, line);
             } catch (Exception ex) {
                 if (EnableLogging) {
-                    try { System.IO.File.AppendAllText(System.Environment.ExpandEnvironmentVariables("%TEMP%\\AhkWpf\\AhkWpfDebug.log"), "ProcessMessage line failed: " + line + " => " + ex.Message + "\n"); } catch { }
+                    try { System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"), "ProcessMessage line failed: " + line + " => " + ex.Message + "\n"); } catch { }
                 }
             }
         }
@@ -2043,7 +2055,7 @@ public class AhkWpfEngine {
             }
             if (ctrl == null && parts[0] != "Window") {
                 if (EnableLogging) {
-                    try { System.IO.File.AppendAllText(System.Environment.ExpandEnvironmentVariables("%TEMP%\\AhkWpf\\AhkWpfDebug.log"), "Control not found: " + parts[0] + "\n"); } catch { }
+                    try { System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"), "Control not found: " + parts[0] + "\n"); } catch { }
                 }
             }
             if (ctrl != null) {
@@ -2091,7 +2103,7 @@ public class AhkWpfEngine {
                         ((RichTextBox)ctrl).Document = doc;
                     } catch (Exception ex) {
                         if (EnableLogging) {
-                            try { System.IO.File.AppendAllText("xaml_parse_error.log", "Parse Error: " + ex.Message + "\n" + (ex.InnerException != null ? ex.InnerException.Message : "") + "\nString: " + parts[2] + "\n\n"); } catch { }
+                            try { System.IO.File.AppendAllText(GetLogPath("xaml_parse_error.log"), "Parse Error: " + ex.Message + "\n" + (ex.InnerException != null ? ex.InnerException.Message : "") + "\nString: " + parts[2] + "\n\n"); } catch { }
                         }
                     }
                 } else if (parts[1] == "Background") {

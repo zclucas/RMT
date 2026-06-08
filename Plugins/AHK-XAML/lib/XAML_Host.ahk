@@ -109,10 +109,13 @@ class XAMLHost {
         }
         
         ; 创建必要的子目录
-        if !DirExist(XAMLHost._appDir "\Logs")
-            DirCreate(XAMLHost._appDir "\Logs")
+        if !DirExist(A_WorkingDir "\Log")
+            DirCreate(A_WorkingDir "\Log")
         if !DirExist(XAMLHost._appDir "\Cache")
             DirCreate(XAMLHost._appDir "\Cache")
+
+        ; 设置日志目录环境变量，供 C# 引擎子进程使用
+        EnvSet("RMT_LOG_DIR", A_WorkingDir "\Log")
             
         return XAMLHost._appDir
     }
@@ -129,7 +132,7 @@ class XAMLHost {
         this.tracked := Map()
         this.wpfHwnd := 0
         this.pid := 0
-        this.errLog := XAMLHost.GetAppDir() "\Logs\AhkWpfError.log"
+        this.errLog := A_WorkingDir "\Log\AhkWpfError.log"
 
 
         this.receiver := Gui()
@@ -571,7 +574,7 @@ class XAMLHost {
 
     static CompileEngine(libDir, sharedExe, extraResources := []) {
         XAMLHost.RestoreWebView2Dlls()
-        errLog := XAMLHost.GetAppDir() "\Logs\AhkWpfError.log"
+        errLog := A_WorkingDir "\Log\AhkWpfError.log"
         sourceCs := libDir "\XAML_AHK_Bridge.cs"
         if !FileExist(sourceCs) {
             MsgBox("XAML_AHK_Bridge.cs not found in lib directory!`nCannot compile shared engine.", "AHK-XAML", "Iconx")
@@ -817,7 +820,7 @@ class XAMLHost {
         lpData := NumGet(lParam, A_PtrSize * 2, "Ptr")
         payload := StrGet(lpData, "UTF-8")
         if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING)
-            try FileAppend("OnCopyData: " payload "`n", XAMLHost.GetAppDir() "\Logs\AhkTrace.log", "UTF-8")
+            try FileAppend("OnCopyData: " payload "`n", A_WorkingDir "\Log\AhkTrace.log", "UTF-8")
         if (!InStr(payload, "EVENT|") && !InStr(payload, "DAEMON|") && !InStr(payload, "MRESPONSE|"))
             return 0
             
@@ -856,7 +859,7 @@ class XAMLHost {
 
         winId := parts[2], ctrlName := parts[3], eventName := parts[4]
         if (eventName == "WebMessageReceived") {
-            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", XAMLHost.GetAppDir() "\Logs\AhkWebViewDebug.log")
+            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_WorkingDir "\Log\AhkWebViewDebug.log")
         }
         if !XAMLHost._instances.Has(winId)
             return 0
@@ -991,7 +994,7 @@ class XAMLHost {
                 for k, v in stateMap
                     str .= k "=" v ", "
             if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING)
-                try FileAppend("OnCopyData SelectionBox: " str "`n", A_ScriptDir "\debug.log")
+                try FileAppend("OnCopyData SelectionBox: " str "`n", A_WorkingDir "\Log\debug.log")
             }
             evtList := instance.events[ctrlName][baseEventName]
             for evtObj in evtList {
