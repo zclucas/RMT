@@ -126,7 +126,7 @@ class UIMacroGui {
         this.WaitForPanelReady(foldIndex)
     }
 
-    ; 为指定 hwnd 创建自动面板（界面激活时默认显示），键为 foldIndex|hwnd
+    ; 为指定 hwnd 创建自动面板（界面激活时默认显示），键为 foldIndex|hwnd；targetHwnd=0 时创建屏幕模式面板
     CreateAutoPanel(foldIndex, panelKey, targetHwnd) {
         if (this.PanelMap.Has(panelKey))
             return
@@ -171,8 +171,9 @@ class UIMacroGui {
         if (btnItems.Length == 0)
             return
 
-        ; 自动面板始终有目标窗口（isScreenMode = false）
-        panelInfo := this.BuildXAMLPanel(btnItems, foldIndex, targetHwnd, false, true)
+        ; 自动面板：有目标窗口则窗口跟随模式，否则屏幕模式
+        isScreenMode := (targetHwnd == 0)
+        panelInfo := this.BuildXAMLPanel(btnItems, foldIndex, targetHwnd, isScreenMode, true)
         if (!panelInfo)
             return
 
@@ -203,7 +204,7 @@ class UIMacroGui {
             || panelInfo._cfg_FontColor != MySoftData.UIPanelFontColor) {
             parts := StrSplit(panelKey, "|")
             foldIndex := Integer(parts[1])
-            targetHwnd := Integer(parts[2])
+            targetHwnd := (parts.Length >= 2) ? Integer(parts[2]) : 0
             this.DestroyPanel(panelKey)
             this.CreateAutoPanel(foldIndex, panelKey, targetHwnd)
             return
@@ -419,7 +420,7 @@ class UIMacroGui {
             ; 移除系统菜单（标题栏右键菜单），保留SC_MOVE以支持拖拽
             hSysMenu := DllCall("user32\GetSystemMenu", "Ptr", hwnd, "Int", 0, "Ptr")
             if (hSysMenu) {
-                DllCall("user32\DeleteMenu", "Ptr", hSysMenu, "UInt", 0xF060, "UInt", 0)  ; SC_CLOSE
+                ; DllCall("user32\DeleteMenu", "Ptr", hSysMenu, "UInt", 0xF060, "UInt", 0)  ; SC_CLOSE
                 DllCall("user32\DeleteMenu", "Ptr", hSysMenu, "UInt", 0xF020, "UInt", 0)  ; SC_MINIMIZE
                 DllCall("user32\DeleteMenu", "Ptr", hSysMenu, "UInt", 0xF000, "UInt", 0)  ; SC_SIZE
                 DllCall("user32\DeleteMenu", "Ptr", hSysMenu, "UInt", 0xF030, "UInt", 0)  ; SC_MAXIMIZE
@@ -632,11 +633,11 @@ class UIMacroGui {
             this.DestroyPanel(panelKey)
         }
 
-        ; ====== 界面激活时默认显示 ======
+        ; ====== 界面激活时默认显示（同时支持有前台和无前台模块） ======
         try {
             if (MySoftData.UIPanelShowOnActive) {
                 activeHwnd := WinGetID("A")
-                if (activeHwnd && activeHwnd != this._lastActiveHwnd) {
+                if (activeHwnd != this._lastActiveHwnd) {
                     this._lastActiveHwnd := activeHwnd
 
                     tableItem := MySoftData.TableInfo[4]
@@ -647,18 +648,21 @@ class UIMacroGui {
                                 continue
 
                             frontInfo := foldInfo.FrontInfoArr[foldIndex]
-                            ; 直接用前台 hwnd 匹配 FrontInfo（支持多实例）
-                            if (frontInfo == "" || !this.IsHwndMatchFrontInfo(activeHwnd, frontInfo))
-                                continue
-
-                            ; 面板键: foldIndex|hwnd → 每个窗口实例一个独立面板
-                            panelKey := foldIndex "|" activeHwnd
-
-                            ; 面板与目标窗口 hwnd 绑定：存在则显示，不存在则创建
-                            if (!this.PanelMap.Has(panelKey))
-                                this.CreateAutoPanel(foldIndex, panelKey, activeHwnd)
-                            else
-                                this.ShowAutoPanel(panelKey)
+                            if (frontInfo == "") {
+                                ; 无前台模块（屏幕模式）：界面激活时也创建/显示自动面板
+                                panelKey := foldIndex
+                                if (!this.PanelMap.Has(panelKey))
+                                    this.CreateAutoPanel(foldIndex, panelKey, 0)
+                                else
+                                    this.ShowAutoPanel(panelKey)
+                            } else if (activeHwnd && this.IsHwndMatchFrontInfo(activeHwnd, frontInfo)) {
+                                ; 有前台模块：面板键为 foldIndex|hwnd（每个窗口实例独立面板）
+                                panelKey := foldIndex "|" activeHwnd
+                                if (!this.PanelMap.Has(panelKey))
+                                    this.CreateAutoPanel(foldIndex, panelKey, activeHwnd)
+                                else
+                                    this.ShowAutoPanel(panelKey)
+                            }
                         }
                     }
                 }
