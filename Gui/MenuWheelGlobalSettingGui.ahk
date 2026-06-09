@@ -6,19 +6,19 @@ class MenuWheelGlobalSettingGui {
 
     static ColorNames := ["NormalFill", "NormalStroke", "HoverFill", "HoverStroke", "SelectedFill", "SelectedStroke", "NormalText", "HoverText", "SelectedText", "SwipeLineColor"]
 
-    static DefaultThemes := Map(
-        "Default", {Name: "默认", NormalFill: "#FFFCFCFC", NormalStroke: "#FFC6DFFC", HoverFill: "#FFFDE8E8", HoverStroke: "#FFE81123", SelectedFill: "#FF0078D7", SelectedStroke: "#FFFFFFFF", NormalText: "#CC333333", HoverText: "#FFE81123", SelectedText: "#FFFFFFFF", SwipeLineColor: "#3A88F5"},
-        "DarkNight", {Name: "暗夜", NormalFill: "#FF2D2D2D", NormalStroke: "#FF555555", HoverFill: "#FF3D3D3D", HoverStroke: "#FF00BFFF", SelectedFill: "#FF1A1A2E", SelectedStroke: "#FFFFFFFF", NormalText: "#CCAAAAAA", HoverText: "#FF00BFFF", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF00BFFF"},
-        "Neon", {Name: "霓虹", NormalFill: "#FF0D0D0D", NormalStroke: "#FFFF00FF", HoverFill: "#FF1A0A2E", HoverStroke: "#FF00FF41", SelectedFill: "#FF16213E", SelectedStroke: "#FFFFFFFF", NormalText: "#CCDDDDDD", HoverText: "#FF00FF41", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF00FF41"},
-        "Ocean", {Name: "海洋", NormalFill: "#FFF0F8FF", NormalStroke: "#FF4682B4", HoverFill: "#FFE0F0FF", HoverStroke: "#FF1E90FF", SelectedFill: "#FF0066CC", SelectedStroke: "#FFFFFFFF", NormalText: "#CC2C5282", HoverText: "#FF1E90FF", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF1E90FF"},
-        "WarmSun", {Name: "暖阳", NormalFill: "#FFFFF8DC", NormalStroke: "#FFDAA520", HoverFill: "#FFFFE4B5", HoverStroke: "#FFFF6347", SelectedFill: "#FFFF8C00", SelectedStroke: "#FFFFFFFF", NormalText: "#CC8B4513", HoverText: "#FFFF6347", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FFFF6347"}
-    )
+    static DefaultThemes := [
+        {Key: "Default", Name: "默认", NormalFill: "#FFFCFCFC", NormalStroke: "#FFC6DFFC", HoverFill: "#FFFDE8E8", HoverStroke: "#FFE81123", SelectedFill: "#FF0078D7", SelectedStroke: "#FFFFFFFF", NormalText: "#CC333333", HoverText: "#FFE81123", SelectedText: "#FFFFFFFF", SwipeLineColor: "#3A88F5"},
+        {Key: "DarkNight", Name: "暗夜", NormalFill: "#FF2D2D2D", NormalStroke: "#FF555555", HoverFill: "#FF3D3D3D", HoverStroke: "#FF00BFFF", SelectedFill: "#FF1A1A2E", SelectedStroke: "#FFFFFFFF", NormalText: "#CCAAAAAA", HoverText: "#FF00BFFF", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF00BFFF"},
+        {Key: "Neon", Name: "霓虹", NormalFill: "#FF0D0D0D", NormalStroke: "#FFFF00FF", HoverFill: "#FF1A0A2E", HoverStroke: "#FF00FF41", SelectedFill: "#FF16213E", SelectedStroke: "#FFFFFFFF", NormalText: "#CCDDDDDD", HoverText: "#FF00FF41", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF00FF41"},
+        {Key: "Ocean", Name: "海洋", NormalFill: "#FFF0F8FF", NormalStroke: "#FF4682B4", HoverFill: "#FFE0F0FF", HoverStroke: "#FF1E90FF", SelectedFill: "#FF0066CC", SelectedStroke: "#FFFFFFFF", NormalText: "#CC2C5282", HoverText: "#FF1E90FF", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FF1E90FF"},
+        {Key: "WarmSun", Name: "暖阳", NormalFill: "#FFFFF8DC", NormalStroke: "#FFDAA520", HoverFill: "#FFFFE4B5", HoverStroke: "#FFFF6347", SelectedFill: "#FFFF8C00", SelectedStroke: "#FFFFFFFF", NormalText: "#CC8B4513", HoverText: "#FFFF6347", SelectedText: "#FFFFFFFF", SwipeLineColor: "#FFFF6347"}
+    ]
 
     __new() {
         this.ui := 0
         this.closed := false
         this._instanceKey := ""
-        this.Themes := Map()
+        this.Themes := []  ; [{Key:"Default", ...}, {Key:"DarkNight", ...}] 按配置文件读取顺序
         this.Colors := Map(
             "NormalFill", "#FFFCFCFC",
             "NormalStroke", "#FFC6DFFC",
@@ -75,6 +75,9 @@ class MenuWheelGlobalSettingGui {
         title := GetLang("轮盘选项")
         titleHeight := "36"
 
+        iniPath := A_WorkingDir "\Setting\WheelThemes.ini"
+        if (!FileExist(iniPath))
+            this.CreateDefaultIni(iniPath)
         this.LoadThemesFromIni()
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
@@ -123,8 +126,8 @@ class MenuWheelGlobalSettingGui {
         selRow := inner3.Add("StackPanel").Orientation("Horizontal").Margin("0,4,0,0")
         selRow.Add("TextBlock").Text(GetLang("选择主题")).Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center").Width(65)
         themeCombo := selRow.Add("ComboBox").Name("ThemeCombo").Width(160).Height(28).Margin("6,0,0,0")
-        for themeKey, themeData in this.Themes
-            themeCombo.Add("ComboBoxItem").Content(themeData.Name)
+        for item in this.Themes
+            themeCombo.Add("ComboBoxItem").Content(item.Name)
 
         previewRow := inner3.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Left").Margin("71,8,0,0")
         this._themePrevNames := []
@@ -190,10 +193,6 @@ class MenuWheelGlobalSettingGui {
 
     LoadThemesFromIni() {
         iniPath := A_WorkingDir "\Setting\WheelThemes.ini"
-        if (!FileExist(iniPath)) {
-            this.CreateDefaultIni(iniPath)
-        }
-
         sections := IniRead(iniPath)
         if (sections == "")
             return
@@ -222,26 +221,30 @@ class MenuWheelGlobalSettingGui {
                     hasValidData := true
             }
 
-            if (hasValidData)
-                this.Themes[themeKey] := dataObj
-        }
-
-        if (this.Themes.Count == 0) {
-            for key, data in MenuWheelGlobalSettingGui.DefaultThemes
-                this.Themes[key] := data
+            if (hasValidData) {
+                dataObj.Key := themeKey
+                this.Themes.Push(dataObj)
+            }
         }
     }
 
     CreateDefaultIni(iniPath) {
-        for themeKey, data in MenuWheelGlobalSettingGui.DefaultThemes {
-            section := "Theme_" themeKey
-            IniWrite(data.Name, iniPath, section, "Name")
+        for item in MenuWheelGlobalSettingGui.DefaultThemes {
+            section := "Theme_" item.Key
+            IniWrite(item.Name, iniPath, section, "Name")
             for name in MenuWheelGlobalSettingGui.ColorNames {
-                if (data.HasProp(name))
-                    IniWrite(data.%name%, iniPath, section, name)
+                if (item.HasProp(name))
+                    IniWrite(item.%name%, iniPath, section, name)
             }
         }
-        this.LoadThemesFromIni()
+    }
+
+    _FindTheme(key) {
+        for item in this.Themes {
+            if (item.Key == key)
+                return item
+        }
+        return ""
     }
 
     OnWindowClosing(state, ctrl, event) {
@@ -253,7 +256,7 @@ class MenuWheelGlobalSettingGui {
     }
 
     OnWindowLoad(state, ctrl, event) {
-        themeName := (IsSet(MySoftData) && MySoftData.HasProp("XAMLTheme")) ? MySoftData.XAMLTheme : "RMT Light"
+        themeName := (IsSet(MySoftData) && MySoftData.HasProp("Theme")) ? MySoftData.Theme : "RMT_Light"
         ApplyXamlTheme(this.ui, themeName)
     }
 
@@ -263,12 +266,11 @@ class MenuWheelGlobalSettingGui {
         this._showTooltip := !!MySoftData.MenuWheelShowTooltip
         this._wheelScale := MySoftData.MenuWheelScale
 
-        iniPath := A_WorkingDir "\Setting\MainSettings.ini"
-        savedTheme := IniRead(iniPath, "MenuWheel", "CurrentTheme", "Default")
-        if (this.Themes.Has(savedTheme))
+        savedTheme := IniRead(IniFile, IniSection, "MenuWheelTheme", "Default")
+        if (this._FindTheme(savedTheme) != "")
             this._currentTheme := savedTheme
 
-        themeData := this.Themes.Has(this._currentTheme) ? this.Themes[this._currentTheme] : MenuWheelGlobalSettingGui.DefaultThemes["Default"]
+        themeData := this._FindTheme(this._currentTheme) != "" ? this._FindTheme(this._currentTheme) : MenuWheelGlobalSettingGui.DefaultThemes[1]
         for name in MenuWheelGlobalSettingGui.ColorNames {
             this.Colors[name] := themeData.HasProp(name) ? themeData.%name% : ""
         }
@@ -283,15 +285,15 @@ class MenuWheelGlobalSettingGui {
 
         themeIdx := 0
         idx := 0
-        for k in this.Themes {
-            if (k == this._currentTheme)
+        for item in this.Themes {
+            if (item.Key == this._currentTheme)
                 themeIdx := idx
             idx++
         }
         this.ui.Update("ThemeCombo", "SelectedIndex", String(themeIdx))
 
-        if (this.Themes.Has(this._currentTheme))
-            this.UpdateThemePreview(this.Themes[this._currentTheme])
+        if (this._FindTheme(this._currentTheme) != "")
+            this.UpdateThemePreview(this._FindTheme(this._currentTheme))
     }
 
     OnFixedPosChanged(state, ctrl, event) {
@@ -317,22 +319,21 @@ class MenuWheelGlobalSettingGui {
         selText := state.Has("ThemeCombo") ? state["ThemeCombo"] : ""
         if (selText == "")
             return
-        themeKey := ""
-        for k, data in this.Themes {
-            if (data.Name == selText) {
-                themeKey := k
+        themeData := ""
+        for item in this.Themes {
+            if (item.Name == selText) {
+                themeData := item
                 break
             }
         }
-        if (themeKey == "")
+        if (!IsObject(themeData))
             return
-        themeData := this.Themes[themeKey]
         for name in MenuWheelGlobalSettingGui.ColorNames {
             if (themeData.HasProp(name))
                 this.Colors[name] := themeData.%name%
         }
         this.UpdateThemePreview(themeData)
-        this._currentTheme := themeKey
+        this._currentTheme := themeData.Key
     }
 
     UpdateThemePreview(themeData) {
@@ -344,7 +345,7 @@ class MenuWheelGlobalSettingGui {
     }
 
     OnRevertClick(state, ctrl, event) {
-        defaultTheme := this.Themes.Has("Default") ? this.Themes["Default"] : MenuWheelGlobalSettingGui.DefaultThemes["Default"]
+        defaultTheme := this._FindTheme("Default") != "" ? this._FindTheme("Default") : MenuWheelGlobalSettingGui.DefaultThemes[1]
         for name in MenuWheelGlobalSettingGui.ColorNames {
             if (defaultTheme.HasProp(name))
                 this.Colors[name] := defaultTheme.%name%
@@ -386,14 +387,10 @@ class MenuWheelGlobalSettingGui {
         MySoftData.MenuWheelScale := this._wheelScale
 
         global IniFile, IniSection
-        iniPath := A_WorkingDir "\Setting\MainSettings.ini"
         IniWrite(MySoftData.FixedMenuWheel, IniFile, IniSection, "FixedMenuWheel")
         IniWrite(MySoftData.MenuWheelSelectMode, IniFile, IniSection, "MenuWheelSelectMode")
         IniWrite(MySoftData.MenuWheelShowTooltip, IniFile, IniSection, "MenuWheelShowTooltip")
         IniWrite(MySoftData.MenuWheelScale, IniFile, IniSection, "MenuWheelScale")
-
-        IniWrite(this._currentTheme, iniPath, "MenuWheel", "CurrentTheme")
-        for name in MenuWheelGlobalSettingGui.ColorNames
-            IniWrite(this.Colors[name], iniPath, "MenuWheel", name)
+        IniWrite(this._currentTheme, IniFile, IniSection, "MenuWheelTheme")
     }
 }

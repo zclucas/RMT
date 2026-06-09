@@ -302,7 +302,7 @@ class UIMacroPanelSettingGui {
     }
 
     OnWindowLoad(state, ctrl, event) {
-        themeName := (IsSet(MySoftData) && MySoftData.HasProp("XAMLTheme")) ? MySoftData.XAMLTheme : "RMT Light"
+        themeName := (IsSet(MySoftData) && MySoftData.HasProp("Theme")) ? MySoftData.Theme : "RMT_Light"
         ApplyXamlTheme(this.ui, themeName)
     }
 

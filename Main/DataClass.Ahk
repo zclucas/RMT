@@ -202,7 +202,7 @@ class SoftData {
         this.ShowSplitLine := false     ;显示分割线
         this.FixedMenuWheel := false    ;固定菜单轮
         this.MenuWheelScale := 100      ;轮盘大小(百分比)
-        this.XAMLTheme := "RMT Light"   ;XAML界面主题
+        this.Theme := "RMT_Light"   ;XAML界面主题
 
         ; 界面浮窗配置
         this.UIPanelShowOnActive := true        ;界面激活时默认显示浮窗

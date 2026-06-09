@@ -49,6 +49,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("CMDTip", MySoftData.CMDTipCtrl.Value)
     CheckAndAddDirty("ScreenShotType", MySoftData.ScreenShotTypeCtrl.Value)
     CheckAndAddDirty("KeyDownDown", MySoftData.KeyDownDownCon.Value)
+    CheckAndAddDirty("Theme", MySoftData.Theme)
 
     ; 工具设置
     CheckAndAddDirty("ToolCheckHotKey", ToolCheckInfo.ToolCheckHotKeyCtrl.Value)
