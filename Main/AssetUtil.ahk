@@ -451,6 +451,7 @@ LoadMainSetting() {
     MySoftData.MenuWheelSelectMode := IniRead(IniFile, IniSection, "MenuWheelSelectMode", 1)
     MySoftData.MenuWheelShowTooltip := IniRead(IniFile, IniSection, "MenuWheelShowTooltip", true)
     MySoftData.MenuWheelScale := IniRead(IniFile, IniSection, "MenuWheelScale", 100)
+    MySoftData.MenuWheelTheme := IniRead(IniFile, IniSection, "MenuWheelTheme", "Default")
     MySoftData.Theme := IniRead(IniFile, IniSection, "Theme", "RMT_Light")
     ; 界面浮窗配置
     MySoftData.UIPanelShowOnActive := IniRead(IniFile, IniSection, "UIPanelShowOnActive", true)

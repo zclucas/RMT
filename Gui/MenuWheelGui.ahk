@@ -35,17 +35,20 @@ class MenuWheelGui {
         
         tableItem := MySoftData.TableInfo[3]
 
-        iniPath := A_WorkingDir "\Setting\MainSettings.ini"
-        modNormalFill := IniRead(iniPath, "MenuWheel", "NormalFill", "#FFFCFCFC")
-        modNormalStroke := IniRead(iniPath, "MenuWheel", "NormalStroke", "#FFC6DFFC")
-        modHoverFill := IniRead(iniPath, "MenuWheel", "HoverFill", "#FFFDE8E8")
-        modHoverStroke := IniRead(iniPath, "MenuWheel", "HoverStroke", "#FFE81123")
-        modSelectedFill := IniRead(iniPath, "MenuWheel", "SelectedFill", "#FF0078D7")
-        modSelectedStroke := IniRead(iniPath, "MenuWheel", "SelectedStroke", "#FFFFFFFF")
-        modNormalText := IniRead(iniPath, "MenuWheel", "NormalText", "#CC333333")
-        modHoverText := IniRead(iniPath, "MenuWheel", "HoverText", "#FFE81123")
-        modSelectedText := IniRead(iniPath, "MenuWheel", "SelectedText", "#FFFFFFFF")
-        modSwipeLine := IniRead(iniPath, "MenuWheel", "SwipeLineColor", "#3A88F5")
+        ; 从 WheelThemes.ini 读取当前主题的颜色值
+        themeKey := MySoftData.HasProp("MenuWheelTheme") ? MySoftData.MenuWheelTheme : "Default"
+        themesIniPath := A_WorkingDir "\Setting\WheelThemes.ini"
+        themeSection := "Theme_" themeKey
+        modNormalFill := IniRead(themesIniPath, themeSection, "NormalFill", "#FFFCFCFC")
+        modNormalStroke := IniRead(themesIniPath, themeSection, "NormalStroke", "#FFC6DFFC")
+        modHoverFill := IniRead(themesIniPath, themeSection, "HoverFill", "#FFFDE8E8")
+        modHoverStroke := IniRead(themesIniPath, themeSection, "HoverStroke", "#FFE81123")
+        modSelectedFill := IniRead(themesIniPath, themeSection, "SelectedFill", "#FF0078D7")
+        modSelectedStroke := IniRead(themesIniPath, themeSection, "SelectedStroke", "#FFFFFFFF")
+        modNormalText := IniRead(themesIniPath, themeSection, "NormalText", "#CC333333")
+        modHoverText := IniRead(themesIniPath, themeSection, "HoverText", "#FFE81123")
+        modSelectedText := IniRead(themesIniPath, themeSection, "SelectedText", "#FFFFFFFF")
+        modSwipeLine := IniRead(themesIniPath, themeSection, "SwipeLineColor", "#3A88F5")
 
         items := []
         loop 8 {
