@@ -151,7 +151,7 @@ class SettingMgrGui {
         SettingDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName
         this.OnRepairSetting(SettingDir)
         MsgBox(GetLang("重命名成功"))
-        Reload()
+        SafeReload()
     }
 
     OnReplaceBtnClick(*) {
@@ -186,7 +186,7 @@ class SettingMgrGui {
         MySoftData.MacroTotalCount := IniRead(IniFile, "UserSettings", "MacroTotalCount", 0)
         IniWrite(true, IniFile, IniSection, "IsReload")
         MsgBox(GetLang("配置迁移成功"))
-        Reload()
+        SafeReload()
     }
 
     OnRepairBtnClick(*) {
@@ -195,7 +195,7 @@ class SettingMgrGui {
         if (hasWork) {
             MsgBox("已校对")
             IniWrite(true, IniFile, IniSection, "IsReload")
-            Reload()
+            SafeReload()
         }
         else {
             tipStr := (
@@ -299,7 +299,7 @@ class SettingMgrGui {
             IniWrite(MySoftData.CurSettingName, IniFile, IniSection, "CurSettingName")
             IniWrite(true, IniFile, IniSection, "IsReload")
             MsgBox(fileNameNoExt GetLang("配置导入成功"))
-            Reload()
+            SafeReload()
         } catch as e {
             MsgBox(GetLang("解包失败: ") e.Message, GetLang("错误"), 0x10)
         }
@@ -309,7 +309,7 @@ class SettingMgrGui {
         MySoftData.CurSettingName := this.OperSettingCon.Text
         IniWrite(MySoftData.CurSettingName, IniFile, IniSection, "CurSettingName")
         IniWrite(true, IniFile, IniSection, "IsReload")
-        Reload()
+        SafeReload()
     }
 
     OnCourseBtnClick(*) {
@@ -361,7 +361,7 @@ class SettingMgrGui {
         MySoftData.SettingArrStr .= "π" newFileName.Value
         IniWrite(MySoftData.SettingArrStr, IniFile, IniSection, "SettingArrStr")
         MsgBox(GetLang("成功新增配置：") newFileName.Value)
-        Reload()
+        SafeReload()
     }
 
     OnCopyBtnClick(*) {
@@ -385,7 +385,7 @@ class SettingMgrGui {
 
         MySoftData.CurSettingName := newFileName.Value
         IniWrite(MySoftData.CurSettingName, IniFile, IniSection, "CurSettingName")
-        Reload()
+        SafeReload()
     }
 
     OnRepairSetting(SettringDir) {

@@ -94,7 +94,7 @@ OnSaveSetting(*) {
     for key, value in dirtySettings {
         IniWrite(value, IniFile, IniSection, key)
     }
-    Reload()
+    SafeReload()
 }
 
 CheckValueSettingValid(Name, Value) {
@@ -1027,8 +1027,24 @@ OnTriggerSepcialItemMacro(MacroStr) {
     RefreshItemColorUI(tableItem.Index, 1)
 }
 
+SafeReload() {
+    if (A_IsAdmin) {
+        Run('"' A_ScriptFullPath '" -elevated')
+        ExitApp()
+    } else {
+        Reload()
+    }
+}
+
 HandleOpenArg() {
-    if (A_IsAdmin)
+    isElevatedBySelf := false
+    loop A_Args.Length {
+        if (A_Args[A_Index] = "-elevated") {
+            isElevatedBySelf := true
+            break
+        }
+    }
+    if (A_IsAdmin && !isElevatedBySelf)
         MsgBox(GetLang("检测到当前以管理员模式手动运行，建议使用设置中的`"管理员启动`"选项来自动以管理员身份启动，而非手动右键管理员运行。"), GetLang("提示"), 64)
     if (A_Args.Length <= 0) {
         if (MySoftData.IsAdminStart && !A_IsAdmin)
@@ -1055,11 +1071,11 @@ ElevateToAdmin() {
     args := ""
     loop A_Args.Length {
         arg := A_Args[A_Index]
-        if (arg != "-admin")
+        if (arg != "-admin" && arg != "-elevated")
             args .= ' "' arg '"'
     }
     try {
-        Run('*RunAs "' A_ScriptFullPath '" ' args)
+        Run('*RunAs "' A_ScriptFullPath '" -elevated ' args)
         ExitApp()
     }
 }
