@@ -1154,12 +1154,44 @@ OnFileIO(tableItem, cmd, index) {
     }
 }
 
+; 将模糊的窗口标题条件解析为可见窗口的精确句柄
+; 仅当 winTitle 为纯进程名匹配（ahk_exe）时才做筛选，
+; 精确句柄(ahk_id/ahk_group)或带标题/类名的匹配直接原样返回
+ResolveVisibleWinHandle(winTitle) {
+    ; 已是精确句柄或句柄组，用户明确指定了目标，不做干预
+    if (InStr(winTitle, "ahk_id ") || InStr(winTitle, "ahk_group "))
+        return winTitle
+
+    ; 带标题或类名，匹配精度已足够，不需要额外筛选
+    if (!InStr(winTitle, "ahk_exe") || InStr(winTitle, "ahk_class"))
+        return winTitle
+
+    ; 纯进程名匹配（ahk_exe xxx），需要筛选出可见窗口避免命中隐藏窗口
+    try {
+        detectedHwnds := WinGetList(winTitle)
+        for hwnd in detectedHwnds {
+            if (!DllCall("IsWindowVisible", "ptr", hwnd))
+                continue
+            cls := WinGetClass("ahk_id " hwnd)
+            if (cls == "Progman" || cls == "WorkerW")
+                continue
+            return "ahk_id " hwnd
+        }
+    }
+    return ""
+}
+
 OnWindowManage(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
     searchValue := GetReplaceVarText(tableItem, index, Data.SearchValue)
     winTitle := GetParamsWinInfoStr(searchValue)
+    if (winTitle == "")
+        return
+
+    ; 将模糊匹配解析为可见窗口的精确句柄，避免命中隐藏窗口导致黑屏等异常
+    winTitle := ResolveVisibleWinHandle(winTitle)
     if (winTitle == "")
         return
 
