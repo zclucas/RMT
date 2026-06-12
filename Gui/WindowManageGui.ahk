@@ -46,6 +46,7 @@ class WindowManageGui {
         this.Data := GetMacroCMDData(this.SerialStr)
 
         this.ActionTypeCon.Text := this.Data.ActionType
+        this.SearchValueCon.Value := this.Data.SearchValue
         SetDLConValue(this.PosXCon, DLVariableArr, this.Data.PosX)
         SetDLConValue(this.PosYCon, DLVariableArr, this.Data.PosY)
         SetDLConValue(this.WidthCon, DLVariableArr, this.Data.Width)
