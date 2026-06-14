@@ -160,7 +160,7 @@ class MenuWheelGlobalSettingGui {
 
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnConfirmClick"))
+        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
 
         this.ui.Track("ThemeCombo")
         this.ui.OnEvent("ThemeCombo", "SelectionChanged", ObjBindMethod(this, "OnThemeSelectionChanged"))
@@ -372,6 +372,10 @@ class MenuWheelGlobalSettingGui {
 
     OnConfirmClick(state, ctrl, event) {
         this.SaveData()
+        this.ui.Update("Window", "Close", "")
+    }
+
+    OnCancelClick(state, ctrl, event) {
         this.ui.Update("Window", "Close", "")
     }
 
