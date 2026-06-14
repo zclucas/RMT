@@ -574,8 +574,8 @@ class MenuWheelGui {
             MouseGetPos(&mx, &my)
 
             WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
-            relX := mx - wx
-            relY := my - wy
+            relX := (mx - wx) / m.dpiScale
+            relY := (my - wy) / m.dpiScale
 
             ui.Update("SwipeLine", "X2", String(relX))
             ui.Update("SwipeLine", "Y2", String(relY))
