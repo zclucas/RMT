@@ -49,6 +49,10 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
 }
 
 OnFinishMacro(tableItem, macro, index) {
+    ; 开关模式下被kill终止时，补充播放循环结束提示音（类型3）
+    if (tableItem.KilledArr[index] && tableItem.EndTipSoundArr[index] == 3)
+        PlayTipSound(2)
+
     if (tableItem.TriggerTypeArr[index] == 4) { ;开关状态下
         tableItem.ToggleStateArr[index] := false
     }
