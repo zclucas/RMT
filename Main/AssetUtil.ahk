@@ -470,6 +470,7 @@ LoadMainSetting() {
     MySoftData.SoftBGColor := IniRead(IniFile, IniSection, "SoftBGColor", "f0f0f0")
     MySoftData.NoVariableTip := IniRead(IniFile, IniSection, "NoVariableTip", true)
     MySoftData.CMDTip := IniRead(IniFile, IniSection, "CMDTip", false)
+    MySoftData.CheckForeground := IniRead(IniFile, IniSection, "CheckForeground", true)
     MySoftData.ScreenShotType := IniRead(IniFile, IniSection, "ScreenShotType", 3)
     MySoftData.KeyDownDownType := IniRead(IniFile, IniSection, "KeyDownDown", 1)
     MySoftData.AgreeAgreement := IniRead(IniFile, IniSection, "AgreeAgreement", false)

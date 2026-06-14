@@ -105,8 +105,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         if (SubStr(cmdArr[A_Index], 1, 2) == "🚫")
             continue
 
-        ; 前台窗口检测：如果配置了前台信息，检查窗口是否存在和激活
-        if (frontInfo != "" && !CheckFrontWindowActive(frontInfo)) {
+        ; 前台窗口检测：如果配置了前台信息且"仅前台运行宏"已勾选，检查窗口是否存在和激活
+        if (MySoftData.CheckForeground && frontInfo != "" && !CheckFrontWindowActive(frontInfo)) {
             KillTableItemMacro(tableItem, index)
             break
         }

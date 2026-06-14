@@ -45,6 +45,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("MutiThreadNum", MySoftData.MutiThreadNumCtrl.Value)
     CheckAndAddDirty("SoftBGColor", MySoftData.SoftBGColorCon.Value)
     CheckAndAddDirty("NoVariableTip", MySoftData.NoVariableTipCtrl.Value)
+    CheckAndAddDirty("CheckForeground", MySoftData.CheckForegroundCtrl.Value)
     CheckAndAddDirty("IsAdminStart", MySoftData.AdminStartCtrl.Value)
     CheckAndAddDirty("CMDTip", MySoftData.CMDTipCtrl.Value)
     CheckAndAddDirty("ScreenShotType", MySoftData.ScreenShotTypeCtrl.Value)
