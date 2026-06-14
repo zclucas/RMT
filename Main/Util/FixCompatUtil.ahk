@@ -483,6 +483,10 @@ CompatOutput(filePath) {
             curFix := true
             Data.OutputType := FixTypeMap[String(Data.OutputType)]
         }
+        if (!Data.HasOwnProp("VariableName")) {
+            curFix := true
+            Data.VariableName := ""
+        }
 
         hasFix := hasFix || curFix
         saveStr := JSON.stringify(Data, 0)
