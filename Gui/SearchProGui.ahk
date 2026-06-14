@@ -917,6 +917,12 @@ class SearchProGui {
     }
 
     OnScreenShotGetArea(x1, y1, x2, y2) {
+        ; 确保截图区域至少为1x1像素，避免单像素点点击导致截图无效
+        if (x1 == x2)
+            x2++
+        if (y1 == y2)
+            y2++
+
         imageSerial := GetNextImageSerial()
         filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
         ScreenShot(x1, y1, x2, y2, filePath)
