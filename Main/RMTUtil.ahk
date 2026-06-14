@@ -1027,15 +1027,6 @@ OnTriggerSepcialItemMacro(MacroStr) {
     RefreshItemColorUI(tableItem.Index, 1)
 }
 
-SafeReload() {
-    if (A_IsAdmin) {
-        Run('"' A_ScriptFullPath '" -elevated')
-        ExitApp()
-    } else {
-        Reload()
-    }
-}
-
 HandleOpenArg() {
     isElevatedBySelf := false
     loop A_Args.Length {

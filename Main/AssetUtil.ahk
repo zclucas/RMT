@@ -2219,3 +2219,12 @@ CheckOcrIdle() {
         UnloadEnglishOcr()
     }
 }
+
+SafeReload() {
+    if (A_IsAdmin) {
+        Run('"' A_ScriptFullPath '" -elevated')
+        ExitApp()
+    } else {
+        Reload()
+    }
+}
