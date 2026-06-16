@@ -179,6 +179,7 @@
     </Style>
 
     <Style TargetType="Slider">
+        <Setter Property="IsMoveToPointEnabled" Value="True"/>
         <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -230,12 +231,12 @@
                 <ControlTemplate TargetType="Expander">
                     <Border BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="8" Background="{TemplateBinding Background}" Margin="0,0,0,20">
                         <StackPanel>
-                            <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" Cursor="Hand" Padding="15,12">
+                            <ToggleButton Content="{TemplateBinding Header}" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" Cursor="Hand" Padding="15,12">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
                                         <Border Background="Transparent">
                                             <Grid>
-                                                <ContentPresenter Content="{TemplateBinding Content}" ContentSource="Header" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
                                                 <TextBlock Text="▼" Foreground="{DynamicResource TextSub}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" x:Name="arrow"/>
                                             </Grid>
                                         </Border>
@@ -289,22 +290,16 @@
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
-        <Setter Property="Padding" Value="4,0"/>
+        <Setter Property="Padding" Value="12,0"/>
         <Setter Property="MinHeight" Value="36"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
-                    <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
                         <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                     </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
-                            <Setter TargetName="Bd" Property="Background" Value="#22000000"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -332,29 +327,53 @@
     </Style>
 
     <Style TargetType="ComboBox">
+        <Style.Resources>
+            <Style TargetType="TextBox">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="FontFamily" Value="{Binding Path=FontFamily, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                <Setter Property="FontSize" Value="{Binding Path=FontSize, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                <Setter Property="FontWeight" Value="{Binding Path=FontWeight, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                <Setter Property="Foreground" Value="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TextBox">
+                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" VerticalAlignment="Center" Margin="0"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Style.Resources>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
         <Setter Property="Background" Value="{DynamicResource ControlBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="MinHeight" Value="36"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBox">
-                    <Grid x:Name="cbGrid">
+                    <Grid>
                         <ToggleButton x:Name="ToggleButton" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Focusable="false" IsChecked="{Binding Path=IsDropDownOpen,Mode=TwoWay,RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press">
                             <ToggleButton.Template>
                                 <ControlTemplate TargetType="ToggleButton">
-                                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2">
-                                        <Path x:Name="Arrow" Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0" Data="M 0 0 L 4 4 L 8 0 Z"/>
+                                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                                        <Path x:Name="Arrow" Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" Data="M 0 0 L 4 4 L 8 0 Z"/>
                                     </Border>
                                 </ControlTemplate>
                             </ToggleButton.Template>
                         </ToggleButton>
-                        <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" Margin="4,0,24,0" VerticalAlignment="Center" HorizontalAlignment="Left" />
-                        <TextBox x:Name="PART_EditableTextBox" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="4,0,24,0" Padding="0" Focusable="True" Background="Transparent" Foreground="{TemplateBinding Foreground}" FontSize="{TemplateBinding FontSize}" BorderThickness="0" MinHeight="0" VerticalContentAlignment="Center" Visibility="Hidden" IsReadOnly="{TemplateBinding IsReadOnly}"/>
-                        <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
-                            <Border x:Name="DropDownBorder" Background="{DynamicResource DropdownBg}" BorderThickness="1" BorderBrush="{DynamicResource ControlBorder}" CornerRadius="2" Margin="0,4,0,0" MinWidth="{Binding ActualWidth, ElementName=ToggleButton}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
-                                <ScrollViewer Margin="2" SnapsToDevicePixels="True" Tag="ContainScroll">
+                        <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" Margin="12,0,30,0" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                        <TextBox x:Name="PART_EditableTextBox" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="12,0,30,0" Focusable="True" Background="Transparent" Foreground="{TemplateBinding Foreground}" BorderThickness="0" Visibility="Hidden" IsReadOnly="{TemplateBinding IsReadOnly}"/>
+                        <Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                            <Border x:Name="DropDownBorder" Background="{DynamicResource DropdownBg}" BorderThickness="1" BorderBrush="{DynamicResource ControlBorder}" CornerRadius="6" Margin="0,4,0,0" Width="{Binding ActualWidth, ElementName=ToggleButton}" MaxHeight="350">
+                                <ScrollViewer Margin="4" SnapsToDevicePixels="True" Tag="ContainScroll">
                                     <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
                                 </ScrollViewer>
                             </Border>
@@ -365,9 +384,6 @@
                             <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
                             <Setter TargetName="ContentSite" Property="Visibility" Value="Hidden" />
                         </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="cbGrid" Property="Opacity" Value="0.4"/>
-                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -376,7 +392,7 @@
     <Style TargetType="ComboBoxItem">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-        <Setter Property="Padding" Value="4,2"/>
+        <Setter Property="Padding" Value="10,8"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -568,7 +584,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <BulletDecorator x:Name="cbRoot" Background="Transparent" Cursor="Hand">
+                    <BulletDecorator Background="Transparent" Cursor="Hand">
                         <BulletDecorator.Bullet>
                             <Border x:Name="Border" Width="18" Height="18" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="4">
                                 <Path x:Name="CheckMark" Visibility="Collapsed" Data="M 4 9 L 7 12 L 13 5" Stroke="{DynamicResource Accent}" StrokeThickness="2" StrokeEndLineCap="Round" StrokeStartLineCap="Round" StrokeLineJoin="Round"/>
@@ -583,10 +599,6 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                             <Setter TargetName="Border" Property="Background" Value="{DynamicResource ControlBorder}"/>
-                        </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="cbRoot" Property="Opacity" Value="0.4"/>
-                            <Setter TargetName="cbRoot" Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1028,19 +1040,10 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <ContentPresenter ContentSource="Icon" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <ContentPresenter Grid.Column="1" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="2" Text="{TemplateBinding InputGestureText}" Foreground="{DynamicResource TextSub}" Margin="15,0,0,0" VerticalAlignment="Center"/>
-                            <Path Grid.Column="3" x:Name="ArrowPath" Data="M0,0 L4,4 L0,8 Z" Fill="{DynamicResource TextSub}" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
-                            <Popup x:Name="PART_Popup" AllowsTransparency="True" Placement="Right" PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}" IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
-                                <Border Background="{DynamicResource DropdownBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="6">
-                                    <ScrollViewer Margin="4" MaxHeight="600">
-                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
-                                    </ScrollViewer>
-                                </Border>
-                            </Popup>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -1053,9 +1056,6 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
-                        </Trigger>
-                        <Trigger Property="HasItems" Value="True">
-                            <Setter TargetName="ArrowPath" Property="Visibility" Value="Visible"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

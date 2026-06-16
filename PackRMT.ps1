@@ -423,21 +423,45 @@ function Copy-OpenCV {
 function Copy-XamlDlls {
     param([string]$ReleaseDir)
 
-    $srcDir = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib"
-    $dstDir = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib"
-    $dlls = @("ahk-xaml.dll", "WpfAnimatedGif.dll")
+    $depSrc = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib\dep"
+    $depDst = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib\dep"
 
-    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+    if (-not (Test-Path $depSrc)) {
+        Write-Log "  [ERROR] AHK-XAML dep 目录不存在: $depSrc" "Yellow"
+        return
+    }
 
-    foreach ($dll in $dlls) {
-        $src = Join-Path $srcDir $dll
+    New-Item -ItemType Directory -Path $depDst -Force | Out-Null
+
+    # 编译后的 exe 只需要引擎 DLL 和运行时依赖，不需要 .ahk 源码和 .cs
+    $dlls = @(
+        # 引擎本体
+        "ahk-xaml.dll",
+        # GIF 动画支持
+        "WpfAnimatedGif.dll",
+        # 组件资源
+        "xaml.components.baml",
+        "xaml.components.xaml",
+        # AvalonEdit (IDE 支持)
+        "AvalonEdit\ICSharpCode.AvalonEdit.dll",
+        # Document Editor
+        "OpenXml\DocumentFormat.OpenXml.dll"
+    )
+
+    foreach ($item in $dlls) {
+        $src = Join-Path $depSrc $item
         if (Test-Path $src) {
-            Copy-Item $src -Destination $dstDir -Force
-            Write-Log "  已复制: AHK-XAML/lib/$dll" "Gray"
+            $dst = Join-Path $depDst $item
+            $parent = Split-Path $dst
+            if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+            Copy-Item $src -Destination $dst -Force
+            Write-Log "  已复制: lib/dep/$item" "Gray"
         } else {
-            Write-Log "  [WARN] 未找到: AHK-XAML/lib/$dll" "Yellow"
+            Write-Log "  [WARN] 未找到: lib/dep/$item" "Yellow"
         }
     }
+
+    Write-Log "  [OK] AHK-XAML 运行时文件已复制" "Green"
 }
 
 function Compress-ReleaseZip {

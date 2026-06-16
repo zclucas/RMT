@@ -5,6 +5,9 @@ global RMT_VERSION := "1.2F14"
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
 
+global CUSTOM_DLL_BUNDLE_NAME := "ahk-xaml.dll"
+global XAML_ENGINE_BUILD_LOCATION := "lib/dep"
+
 InitFilePath()              ;初始化文件路径
 LoadCurMacroSetting()       ;加载当前配置宏，宏指令
 HandleOpenArg()             ;处理打开软件的参数

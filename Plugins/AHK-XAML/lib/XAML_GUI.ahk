@@ -2,6 +2,7 @@
 #Include "XAML_Host.ahk"
 #Include "XAML_Config.ahk"
 #Include "XAML_Generator.ahk"
+#Include "*i XAML_DevTools.ahk"
 
 class XAML_GUI {
     __New(title := "Fluid UI", options := {}) {
@@ -20,14 +21,34 @@ class XAML_GUI {
         this.showSidebar := hasOpt("Sidebar") ? getOpt("Sidebar") : true
         this.showBurger := hasOpt("BurgerMenu") ? getOpt("BurgerMenu") : true
         this.showMinMax := hasOpt("MinMaxButtons") ? getOpt("MinMaxButtons") : true
+        this.resize := hasOpt("Resize") ? getOpt("Resize") : true
+        this.showMax := hasOpt("MaxButton") ? getOpt("MaxButton") : (this.resize ? true : false)
         this.showIcon := hasOpt("AppIcon") ? getOpt("AppIcon") : true
         this.titleBarHeight := hasOpt("TitleBarHeight") ? getOpt("TitleBarHeight") : 50
+        this.windowState := hasOpt("WindowState") ? getOpt("WindowState") : "Normal"
+        this.closeAction := hasOpt("CloseAction") ? getOpt("CloseAction") : "ExitApp"
+        this.width := hasOpt("Width") ? getOpt("Width") : 940
+        this.height := hasOpt("Height") ? getOpt("Height") : 700
+        this.forceDynamic := hasOpt("ForceDynamic") ? getOpt("ForceDynamic") : false
+        this.disableBurgerShortcut := hasOpt("DisableBurgerShortcut") ? getOpt("DisableBurgerShortcut") : false
 
         ; Expose the root generator for customization
         this.X := XAML_Generator("Grid").Name("AppGrid").Background("{DynamicResource BgColor}").Focusable("True")
         this.X._App := this  ; Back-reference so components can auto-register via _FindApp()
         this.X.Add("Grid.LayoutTransform").Add("ScaleTransform").SetProp("x:Name", "AppScale").ScaleX(1).ScaleY(1)
         this.X.Cols("Auto", "*")
+
+        ; Global Nostalgia Resources
+        this.X.InjectResources('
+        (
+        <LinearGradientBrush x:Key="XpTitleBarBrush" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#FF0058E6" Offset="0.0"/>
+            <GradientStop Color="#FF3A8CFF" Offset="0.08"/>
+            <GradientStop Color="#FF0058E6" Offset="0.15"/>
+            <GradientStop Color="#FF00309C" Offset="0.85"/>
+            <GradientStop Color="#FF001875" Offset="1.0"/>
+        </LinearGradientBrush>
+        )')
 
         this.SetupTemplates(this.X)
 
@@ -49,7 +70,7 @@ class XAML_GUI {
             el
         ) })
 
-        dragArea := this.main.Add("Border").Name("DragArea").Grid_Row(0).Background("{x:Null}").Cursor("Arrow").SetProp("Panel.ZIndex", "100")
+        dragArea := this.main.Add("Border").Name("DragArea").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Cursor("Arrow").SetProp("Panel.ZIndex", "100")
         this.BuildWindowControls(dragArea)
 
         this.tabs := this.main.Add("TabControl").Name("MainTabs").Grid_Row(1).Margin("40,0,40,10")
@@ -65,6 +86,9 @@ class XAML_GUI {
         snackSp := snackbar.Add("StackPanel").Orientation("Horizontal")
         snackSp.Add("TextBlock").Text(Chr(0xE73E)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").Foreground("{DynamicResource Accent}").FontSize("16").VerticalAlignment("Center").Margin("0,0,10,0")
         snackSp.Add("TextBlock").Name("SnackbarText").Text("Action completed successfully.").Foreground("{DynamicResource TextMain}").VerticalAlignment("Center")
+
+        ; Outermost window border overlay (for themes like XP / Win97 that need a custom frame border)
+        this.windowBorder := this.X.Add("Border").Name("WindowBorderOverlay").Grid_Column(0).Grid_ColumnSpan(2).BorderBrush("{DynamicResource WindowBorderBrush}").BorderThickness("{DynamicResource WindowBorderThickness}").CornerRadius("{DynamicResource WindowRadius}").IsHitTestVisible("False").SetProp("Panel.ZIndex", "1000")
     }
 
     SetupTemplates(X) {
@@ -113,19 +137,22 @@ class XAML_GUI {
 
         sp.Add("TextBlock").Text("BORDER RADIUS").Margin("0,15,0,5")
         radiusCombo := sp.Add("ComboBox").Name("ComboRadius").Height(35).Margin("0,0,0,15")
-        radiusCombo.Add("ComboBoxItem").Content("Sharp (0)")
-        radiusCombo.Add("ComboBoxItem").Content("Rounded (4)")
-        radiusCombo.Add("ComboBoxItem").Content("Smooth (8)")
-        radiusCombo.Add("ComboBoxItem").Content("Extra Smooth (12)")
-        radiusCombo.Add("ComboBoxItem").Content("Fluid (16)")
-        radiusCombo.SelectedIndex(2) ; Default to Smooth (8)
+        radiusCombo.Add("ComboBoxItem").Content("Square (0)")
+        radiusCombo.Add("ComboBoxItem").Content("Routed (8)")
+        radiusCombo.SelectedIndex(1) ; Default to Smooth (8)
 
         ; Expose for customization
         this.sidebarPanel := sp
     }
 
     BuildWindowControls(container) {
-        grid := container.Add("Grid")
+        grid := container.Add("Grid").Name("XAML_GUI_TitleBarGrid")
+
+        ; Background gradient overlay for title bars
+        grid.Add("Border").Name("TitleBarGradientOverlay")
+            .Background("{StaticResource XpTitleBarBrush}")
+            .Opacity("{DynamicResource TitleBarGradientOpacity}")
+            .SetProp("Panel.ZIndex", "-1")
 
         leftSp := grid.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center").Margin("15,0,0,0")
 
@@ -134,7 +161,7 @@ class XAML_GUI {
             if (burgerSize < 20)
                 burgerSize := 20
             burgerFontSize := Min(16, Max(10, Round(burgerSize * 0.45)))
-            leftSp.Add("ToggleButton").Name("BtnToggleSidebar").Style("{StaticResource HamburgerButton}").Width(burgerSize).Height(burgerSize).FontSize(burgerFontSize).WindowChrome_IsHitTestVisibleInChrome("True").ToolTip("Toggle Sidebar (Ctrl+B)").Margin("0,0,10,0")
+            leftSp.Add("ToggleButton").Name("BtnToggleSidebar").Style("{StaticResource HamburgerButton}").Width(burgerSize).Height(burgerSize).FontSize(burgerFontSize).WindowChrome_IsHitTestVisibleInChrome("True").ToolTip("Toggle Sidebar (Ctrl+B)").Margin("0,0,10,0").Foreground("{DynamicResource TitleBarForeground}")
         }
 
         titleSp := leftSp.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center").IsHitTestVisible("False")
@@ -143,7 +170,7 @@ class XAML_GUI {
             titleSp.Add("Image").Name("AppIcon").Width(16).Height(16).Margin("0,0,10,0")
         }
 
-        titleSp.Add("TextBlock").Name("AppTitle").Text(this.title).Foreground("{DynamicResource TextMain}").FontSize(12).FontWeight("SemiBold")
+        titleSp.Add("TextBlock").Name("AppTitle").Text(this.title).Foreground("{DynamicResource TitleBarForeground}").FontSize(12).FontWeight("SemiBold")
 
         winBtns := grid.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Top")
 
@@ -151,18 +178,21 @@ class XAML_GUI {
         CloseBtnTemplate := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="#E0FF3333"/><Setter Property="Foreground" Value="White"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 
         if (this.showMinMax) {
-            minBtn := winBtns.Add("Button").Name("BtnMinimize").WindowChrome_IsHitTestVisibleInChrome("True").Width(45).Height(String(this.titleBarHeight)).Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0).Cursor("Hand").ToolTip("Minimize")
+            minBtn := winBtns.Add("Button").Name("BtnMinimize").WindowChrome_IsHitTestVisibleInChrome("True").Width(45).Height(String(this.titleBarHeight)).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0).Cursor("Hand").ToolTip("Minimize")
             minBtn.InjectResources(ChromeBtnTemplate)
             minBtn.Add("TextBlock").Text(Chr(0xE921)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
 
-            maxBtn := winBtns.Add("Button").Name("BtnMaximize").WindowChrome_IsHitTestVisibleInChrome("True").Width(45).Height(String(this.titleBarHeight)).Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0).Cursor("Hand").ToolTip("Maximize")
-            maxBtn.InjectResources(ChromeBtnTemplate)
-            maxBtn.Add("TextBlock").Name("BtnMaximizeTxt").Text(Chr(0xE922)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+            if (this.showMax) {
+                maxBtn := winBtns.Add("Button").Name("BtnMaximize").WindowChrome_IsHitTestVisibleInChrome("True").Width(45).Height(String(this.titleBarHeight)).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0).Cursor("Hand").ToolTip("Maximize")
+                maxBtn.InjectResources(ChromeBtnTemplate)
+                maxBtn.Add("TextBlock").Name("BtnMaximizeTxt").Text(Chr(0xE922)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+            }
         }
 
-        closeBtn := winBtns.Add("Button").Name("BtnClose").WindowChrome_IsHitTestVisibleInChrome("True").Width(45).Height(String(this.titleBarHeight)).Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0).Cursor("Hand").ToolTip("Close Application")
+        closeBtn := winBtns.Add("Button").Name("BtnClose").WindowChrome_IsHitTestVisibleInChrome("True").Width(45).Height(String(this.titleBarHeight)).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0).Cursor("Hand").ToolTip("Close Application")
         closeBtn.InjectResources(CloseBtnTemplate)
         closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+
     }
 
     AddTab(title, callback) {
@@ -175,12 +205,28 @@ class XAML_GUI {
         callback(this.bottomBar)
     }
 
+    GetBundleDllName() {
+        if (IsSet(CUSTOM_DLL_BUNDLE_NAME) && CUSTOM_DLL_BUNDLE_NAME != "")
+            return CUSTOM_DLL_BUNDLE_NAME
+        SplitPath(A_ScriptName, , , , &nameNoExt)
+        return nameNoExt "_bundled.dll"
+    }
+
     Compile(outFile := "", options*) {
+        if (A_IsCompiled && !this.forceDynamic) {
+            dllPath := (outFile != "") ? outFile : this.GetBundleDllName()
+            actualDll := FileExist(A_ScriptDir "\" dllPath) ? (A_ScriptDir "\" dllPath) : dllPath
+            return this.Load(actualDll, options*)
+        }
+
         if (outFile != "" && FileExist(outFile)) {
             this.xamlString := ""
             this.host := XAMLHost("", outFile, options*)
         } else {
             this.xamlString := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", this.titleBarHeight)
+            this.xamlString := StrReplace(this.xamlString, "%Width%", this.width)
+            this.xamlString := StrReplace(this.xamlString, "%Height%", this.height)
+            this.xamlString := StrReplace(this.xamlString, "%ResizeMode%", this.resize ? "CanResize" : "NoResize")
             this.xamlString := StrReplace(this.xamlString, "%app%", this.X.Compile())
             this.xamlString := StrReplace(this.xamlString, "%resources%", "")
             this.host := XAMLHost(this.xamlString, outFile, options*)
@@ -245,11 +291,18 @@ class XAML_GUI {
     ; Walk the element tree and harvest all .On() / .Track() registrations.
     ; Called automatically during Compile() — no separate AutoBind step needed.
     _CollectInlineEvents(el) {
+        static autoNameCounter := 0
         name := ""
         if (el._Props.Has("Name"))
             name := el._Props["Name"]
         else if (el._Props.Has("x:Name"))
             name := el._Props["x:Name"]
+
+        if (name == "" && ((el.HasOwnProp("_Events") && el._Events.Length > 0) || (el.HasOwnProp("_Tracked") && el._Tracked) || (el.HasOwnProp("_Hotkeys") && el._Hotkeys.Length > 0))) {
+            autoNameCounter++
+            name := "Auto_" el._Tag "_" autoNameCounter
+            el._Props["x:Name"] := name
+        }
 
         if (name != "") {
             ; Auto-track if explicitly marked
@@ -277,7 +330,9 @@ class XAML_GUI {
                     }
 
                     if (cb != "" && HasMethod(cb)) {
-                        this.host.OnEvent(name, evt.Event, cb)
+                        evtReg := this.host.OnEvent(name, evt.Event, cb)
+                        if (evt.HasProp("LimitFPS") && evt.LimitFPS > 0)
+                            evtReg.Limit(evt.LimitFPS, evt.QueueLimited)
                         ; Auto-track any element that has events registered
                         this.host.Track(name)
                     }
@@ -340,7 +395,11 @@ class XAML_GUI {
 
     BindBaseEvents() {
         this.host.OnEvent("Window", "Loaded", ObjBindMethod(this, "OnUIReady"))
-        this.host.OnEvent("Window", "Closed", (*) => ExitApp())
+        if (this.closeAction == "ExitApp") {
+            this.host.OnEvent("Window", "Closed", (*) => ExitApp())
+        } else if (IsObject(this.closeAction) && HasMethod(this.closeAction, "Call")) {
+            this.host.OnEvent("Window", "Closed", this.closeAction)
+        }
 
         this.host.OnEvent("ComboTheme", "SelectionChanged", ObjBindMethod(this, "ThemeChanged"))
         this.host.OnEvent("ComboScale", "SelectionChanged", ObjBindMethod(this, "ScaleChanged"))
@@ -454,14 +513,15 @@ class XAML_GUI {
     }
 
     ExportBundle(dllName := "") {
+        ;try FileDelete(A_ScriptDir "\export_bundle.log")
+        ;try FileAppend("ExportBundle called. dllName=" dllName " HasProp(host)=" (this.HasProp("host") ? "true" : "false") "`n", A_ScriptDir "\export_bundle.log", "UTF-8")
         if (!this.HasProp("host")) {
             MsgBox("Error: You must call app.Compile() before app.ExportBundle().", "AHK-XAML", "Iconx")
             return false
         }
 
         if (dllName == "") {
-            SplitPath(A_ScriptName, , , , &nameNoExt)
-            dllName := A_ScriptDir "\" nameNoExt "_bundled.dll"
+            dllName := this.GetBundleDllName()
         }
 
         return this.host.BundleCustomEngine(dllName)
@@ -484,6 +544,30 @@ class XAML_GUI {
         ; because the tree-building code (.Add(), .On() calls) always runs before Load().
         this._CollectInlineEvents(this.X)
 
+        ; Auto-bind registered composite components (KanbanBoard, NavigationView, etc.)
+        _dragComps := []
+        for comp in this._components {
+            if (comp.HasMethod("Bind")) {
+                if (comp.HasOwnProp("_hotkey") && comp._hotkey != "")
+                    comp.Bind(this.host, comp._hotkey)
+                else
+                    comp.Bind(this.host)
+            }
+            ; Collect drag-enabled components for deferred enable after window loads
+            if (comp.HasOwnProp("_dragEnabled") && comp._dragEnabled && comp.HasMethod("EnableDrag"))
+                _dragComps.Push(comp)
+        }
+        ; EnableDrag sends Update commands that need WPF elements to exist,
+        ; so defer to LoadedHwnd event
+        if (_dragComps.Length > 0) {
+            _host := this.host
+            _OnLoaded(s, c, e) {
+                for dc in _dragComps
+                    dc.EnableDrag(_host)
+            }
+            this.host.OnEvent("Window", "LoadedHwnd", _OnLoaded)
+        }
+
         for k, v in this.tokenizers {
             this.host.OnEvent(v.inputName, "GotFocus", ObjBindMethod(this, "OnInputFocus"))
             this.host.OnEvent(v.inputName, "LostFocus", ObjBindMethod(this, "OnInputBlur"))
@@ -495,6 +579,18 @@ class XAML_GUI {
             this.host.OnEvent("PART_UpButton", "Click", (s, c, e) => this.HandleSpinnerButton(v, true))
             this.host.OnEvent("PART_DownButton", "Click", (s, c, e) => this.HandleSpinnerButton(v, false))
             v.Bind()
+        }
+        for k, v in this.hotkeyBoxes {
+            this.host.OnEvent(k, "GotFocus", ObjBindMethod(this, "OnInputFocus"))
+            this.host.OnEvent(k, "LostFocus", ObjBindMethod(this, "OnInputBlur"))
+        }
+        for k, v in this.segmentedInputs {
+            v.Bind(this.host)
+        }
+        if (this.HasProp("sliderRanges")) {
+            for _, sr in this.sliderRanges {
+                sr.Bind(this.host)
+            }
         }
 
         return this.host
@@ -525,10 +621,45 @@ class XAML_GUI {
     ; ==============================================================================
 
     OnUIReady(state, ctrl, event) {
+        if (this.HasProp("SkipDefaultThemeOnLoad") && this.SkipDefaultThemeOnLoad) {
+            this.host.Update("Window", "Title", this.title)
+
+            hIcon := LoadPicture("shell32.dll", "Icon26", &ImageType := 1)
+            this.host.Update("Window", "Icon", "HICON:" hIcon)
+            TraySetIcon("shell32.dll", 26)
+
+            this.host.Update("AppTitle", "Text", this.title)
+
+            if (this.showIcon) {
+                this.host.Update("AppIcon", "Source", "HICON:" hIcon)
+            }
+
+            if (this.windowState != "Normal") {
+                this.host.Update("Window", "WindowState", this.windowState)
+            }
+
+            if (this.HasProp("lightweightEvents") && this.lightweightEvents)
+                this.host.SetLightweightEvents(true)
+
+            for _, tok in this.tokenizers {
+                tok.RenderTags()
+            }
+
+            if (this.host.wpfHwnd) {
+                try WinActivate("ahk_id " this.host.wpfHwnd)
+            }
+            return
+        }
+
         this.host.Update("Window", "DWM", "2,1")
         this.host.Update("Window", "Title", this.title)
 
-        hIcon := LoadPicture("shell32.dll", "Icon26", &ImageType := 1)
+        if (XAMLHost.LastIcon != 0) {
+            hIcon := XAMLHost.LastIcon
+        } else {
+            hIcon := LoadPicture("shell32.dll", "Icon26", &ImageType := 1)
+            XAMLHost.LastIcon := hIcon
+        }
         this.host.Update("Window", "Icon", "HICON:" hIcon)
         TraySetIcon("shell32.dll", 26)
 
@@ -538,17 +669,52 @@ class XAML_GUI {
             this.host.Update("AppIcon", "Source", "HICON:" hIcon)
         }
 
+        if (this.windowState != "Normal") {
+            this.host.Update("Window", "WindowState", this.windowState)
+        }
+
         ; Apply lightweight events if opted in
         if (this.HasProp("lightweightEvents") && this.lightweightEvents)
             this.host.SetLightweightEvents(true)
 
-        ; In lightweight mode, Window.Loaded state won't have sidebar combo values.
-        ; Query them explicitly so theme/scale/radius handlers still work on startup.
         if (!state.Has("ComboTheme") || !state.Has("ComboScale") || !state.Has("ComboRadius")) {
             sidebarState := this.host.Query("ComboTheme", "ComboScale", "ComboRadius")
             for k, v in sidebarState {
-                if !state.Has(k)
+                if (!state.Has(k) && v != "")
                     state[k] := v
+            }
+            
+            if !state.Has("ComboTheme") {
+                if (XAMLHost.LastTheme != "") {
+                    state["ComboTheme"] := XAMLHost.LastTheme
+                } else {
+                    try {
+                        iniPath := FindThemesIni()
+                        sections := IniRead(iniPath)
+                        Loop Parse, sections, "`n", "`r" {
+                            if (A_LoopField != "") {
+                                state["ComboTheme"] := A_LoopField
+                                break
+                            }
+                        }
+                    } catch {
+                        state["ComboTheme"] := "Dark Mica (Win 11)"
+                    }
+                }
+            }
+            if !state.Has("ComboScale") {
+                if (XAMLHost.LastScale != "") {
+                    state["ComboScale"] := XAMLHost.LastScale
+                } else {
+                    state["ComboScale"] := "Balanced"
+                }
+            }
+            if !state.Has("ComboRadius") {
+                if (XAMLHost.LastRadius != "") {
+                    state["ComboRadius"] := XAMLHost.LastRadius
+                } else {
+                    state["ComboRadius"] := "Smooth (8)"
+                }
             }
         }
 
@@ -572,20 +738,43 @@ class XAML_GUI {
         theme := state["ComboTheme"]
         try {
             iniPath := FindThemesIni()
+            this.currentThemeName := theme
+            this.currentIniPath := iniPath
+            XAMLHost.LastTheme := theme
+            XAMLHost.LastThemeIni := iniPath
             themeData := IniRead(iniPath, theme)
+            
+            themeKeys := Map()
             Loop Parse, themeData, "`n", "`r" {
                 parts := StrSplit(A_LoopField, "=", " `t", 2)
                 if (parts.Length == 2) {
-                    key := parts[1]
-                    val := parts[2]
-                    if (key == "Window_DWM")
-                        this.host.Update("Window", "DWM", val)
-                    else if (InStr(key, "Resource_") == 1)
-                        this.host.Update("Resource", SubStr(key, 10), val)
-                    else if (InStr(key, "LogList_") == 1) {
-                        if (InStr(this.host.xaml, 'Name="LogList"'))
-                            this.host.Update("LogList", SubStr(key, 9), val)
-                    }
+                    themeKeys[parts[1]] := parts[2]
+                }
+            }
+            
+            if !themeKeys.Has("Resource_TitleBarColor")
+                themeKeys["Resource_TitleBarColor"] := "Transparent"
+            if !themeKeys.Has("Resource_TitleBarForeground") {
+                if themeKeys.Has("Resource_TextMain")
+                    themeKeys["Resource_TitleBarForeground"] := themeKeys["Resource_TextMain"]
+                else
+                    themeKeys["Resource_TitleBarForeground"] := "#000000"
+            }
+            if !themeKeys.Has("Resource_WindowBorderBrush")
+                themeKeys["Resource_WindowBorderBrush"] := "Transparent"
+            if !themeKeys.Has("Resource_WindowBorderThickness")
+                themeKeys["Resource_WindowBorderThickness"] := "0"
+            if !themeKeys.Has("Resource_TitleBarGradientOpacity")
+                themeKeys["Resource_TitleBarGradientOpacity"] := "0"
+            
+            for key, val in themeKeys {
+                if (key == "Window_DWM")
+                    this.host.Update("Window", "DWM", val)
+                else if (InStr(key, "Resource_") == 1)
+                    this.host.Update("Resource", SubStr(key, 10), val)
+                else if (InStr(key, "LogList_") == 1) {
+                    if (InStr(this.host.xaml, 'Name="LogList"'))
+                        this.host.Update("LogList", SubStr(key, 9), val)
                 }
             }
         } catch {
@@ -597,6 +786,7 @@ class XAML_GUI {
         if !state.Has("ComboScale")
             return
         scale := state["ComboScale"]
+        XAMLHost.LastScale := scale
         if (scale == "Thin") {
             this.host.Update("AppScale", "ScaleX", "0.9")
             this.host.Update("AppScale", "ScaleY", "0.9")
@@ -611,14 +801,25 @@ class XAML_GUI {
 
     RadiusChanged(state, ctrl, event) {
         radText := state.Has("ComboRadius") ? state["ComboRadius"] : "Smooth (8)"
+        XAMLHost.LastRadius := radText
         RegExMatch(radText, "\((\d+)\)", &match)
         radius := match ? match[1] : "8"
 
+        ; If host window is snapped to any panel, force radius to 0 (square hover borders)
+        try {
+            pmClass := %"PanelManager"%
+            if (HasProp(pmClass, "isMainSnappedState") && pmClass.isMainSnappedState) {
+                radius := "0"
+            }
+        }
+
         ; Apply to window resources
         this.host.Update("Resource", "WindowRadius", "CornerRadius:" radius)
+        this.host.Update("Resource", "CloseBtnRadius", "CornerRadius:0," radius ",0,0")
 
         ; Apply to DWM for Win11 styling
-        if (this.host.wpfHwnd) {
+        isTransparent := (HasProp(this.host, "xaml") && (InStr(this.host.xaml, 'AllowsTransparency="True"') || InStr(this.host.xaml, 'AllowsTransparency="true"')))
+        if (this.host.wpfHwnd && !isTransparent) {
             cornerPref := Buffer(4)
             NumPut("Int", radius == "0" ? 1 : 0, cornerPref)
             DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", this.host.wpfHwnd, "UInt", 33, "Ptr", cornerPref.Ptr, "UInt", 4)
@@ -657,9 +858,20 @@ class XAML_GUI {
         this.numericInputs[num.id] := num
     }
 
-    RegisterHotKeyChange(element, callback) {
+    RegisterHotKeyChange(element, callback, oneKeyCatch := false) {
         id := element._Props["Name"]
-        this.hotkeyBoxes[id] := { id: id, onChange: callback }
+        isOneKey := oneKeyCatch
+        if (element._Props.Has("OneKeyCatch")) {
+            val := element._Props["OneKeyCatch"]
+            if (val = "True" || val = "1" || val = true)
+                isOneKey := true
+        }
+        this.hotkeyBoxes[id] := { id: id, onChange: callback, oneKeyCatch: isOneKey }
+        
+        if (this.HasProp("host") && this.host) {
+            this.host.OnEvent(id, "GotFocus", ObjBindMethod(this, "OnInputFocus"))
+            this.host.OnEvent(id, "LostFocus", ObjBindMethod(this, "OnInputBlur"))
+        }
     }
 
     RegisterSegmentedInput(seg) {
@@ -702,33 +914,72 @@ class XAML_GUI {
 
     StartHotKeyCapture(ctrl) {
         this.host.Update(ctrl, "Text", "Listening...")
-        this.ih := InputHook("L1 M")
-        this.ih.KeyOpt("{All}", "E")
-        this.ih.KeyOpt("{LCtrl}{RCtrl}{LAlt}{RAlt}{LShift}{RShift}{LWin}{RWin}", "-E")
-        this.ih.Start()
-        this.ih.Wait()
-
-        if (this.focusedInput != ctrl || !this.ih)
+        
+        ih := InputHook("I")
+        ih.KeyOpt("{All}", "N")
+        
+        pressedMods := Map()
+        
+        KeyDownHandler(ih, vk, sc) {
+            keyName := GetKeyName(Format("vk{:x}sc{:x}", vk, sc))
+            isMod := (keyName = "LControl" || keyName = "RControl" || keyName = "LAlt" || keyName = "RAlt" || keyName = "LShift" || keyName = "RShift" || keyName = "LWin" || keyName = "RWin" || keyName = "Control" || keyName = "Alt" || keyName = "Shift" || keyName = "Win")
+            
+            if (this.hotkeyBoxes[ctrl].oneKeyCatch || !isMod) {
+                ih.ResultKey := keyName
+                ih.Stop()
+            } else {
+                pressedMods[keyName] := true
+            }
+        }
+        
+        KeyUpHandler(ih, vk, sc) {
+            if (this.hotkeyBoxes[ctrl].oneKeyCatch)
+                return
+            keyName := GetKeyName(Format("vk{:x}sc{:x}", vk, sc))
+            if (pressedMods.Has(keyName)) {
+                ih.ResultKey := keyName
+                ih.Stop()
+            }
+        }
+        
+        ih.OnKeyDown := KeyDownHandler
+        ih.OnKeyUp := KeyUpHandler
+        
+        this.ih := ih
+        ih.Start()
+        ih.Wait()
+        
+        if (this.focusedInput != ctrl)
             return
-
-        key := this.ih.EndKey != "" ? this.ih.EndKey : this.ih.Input
+            
+        key := ih.HasProp("ResultKey") ? ih.ResultKey : ""
         this.ih := ""
-
+        
         if (key == "Escape") {
             this.host.Update("AppGrid", "Focus", "True")
             return
         }
-
+        
         mods := ""
-        if GetKeyState("Ctrl", "P")
-            mods .= "^"
-        if GetKeyState("Shift", "P")
-            mods .= "+"
-        if GetKeyState("Alt", "P")
-            mods .= "!"
-        if GetKeyState("LWin", "P") || GetKeyState("RWin", "P")
-            mods .= "#"
-
+        if (!this.hotkeyBoxes[ctrl].oneKeyCatch) {
+            if (key != "LControl" && key != "RControl" && key != "Control") {
+                if GetKeyState("Ctrl", "P")
+                    mods .= "^"
+            }
+            if (key != "LShift" && key != "RShift" && key != "Shift") {
+                if GetKeyState("Shift", "P")
+                    mods .= "+"
+            }
+            if (key != "LAlt" && key != "RAlt" && key != "Alt") {
+                if GetKeyState("Alt", "P")
+                    mods .= "!"
+            }
+            if (key != "LWin" && key != "RWin" && key != "Win") {
+                if (GetKeyState("LWin", "P") || GetKeyState("RWin", "P"))
+                    mods .= "#"
+            }
+        }
+        
         if (key == "Backspace") {
             newBind := ""
         } else if (key != "") {
@@ -736,11 +987,11 @@ class XAML_GUI {
         } else {
             newBind := ""
         }
-
+        
         this.host.Update(ctrl, "Text", newBind)
         if (this.hotkeyBoxes[ctrl].onChange)
             this.hotkeyBoxes[ctrl].onChange.Call(newBind)
-
+            
         this.host.Update("AppGrid", "Focus", "True")
     }
 
@@ -753,9 +1004,16 @@ class XAML_GUI {
         Hotkey "Escape", (*) => this.HandleEscapeKey(), "On"
         HotIf
 
+        HotIf (*) => (WinActive("ahk_id " this.host.wpfHwnd) && this.focusedInput != "" && this.tokenizers.Has(this.focusedInput))
+        Hotkey "Enter", (*) => this.HandleEnterKey(), "On"
+        Hotkey "NumpadEnter", (*) => this.HandleEnterKey(), "On"
+        HotIf
+
         HotIf (*) => WinActive("ahk_id " this.host.wpfHwnd)
-        if (this.showBurger)
+        if (this.showBurger && !this.disableBurgerShortcut)
             Hotkey "^b", (*) => this.host.Update("BtnToggleSidebar", "Invoke", "1"), "On"
+        if (IsSet(XAML_ENABLE_DEVTOOLS) && XAML_ENABLE_DEVTOOLS)
+            Hotkey "F12", (*) => XAML_DevTools.ShowFor(this), "On"
         HotIf
     }
 
@@ -775,11 +1033,16 @@ class XAML_GUI {
             this.host.Update("AppGrid", "Focus", "True")
         }
     }
+
+    HandleEnterKey() {
+        if (this.focusedInput != "" && this.tokenizers.Has(this.focusedInput)) {
+            this.tokenizers[this.focusedInput].ValidateCurrentInput()
+        }
+    }
 }
 
 FindThemesIni() {
     paths := [
-        A_WorkingDir "\Setting\themes.ini",
         "themes.ini",
         A_ScriptDir "\themes.ini",
         A_ScriptDir "\..\themes.ini",
