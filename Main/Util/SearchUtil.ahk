@@ -217,7 +217,7 @@ HandleSearchResult(tableItem, Data, index, ImagePath, ResXList, ResYList, ResHwn
         Pos[2] := GetFloatValue(Pos[2], MySoftData.CoordYFloat)
 
         ; 执行鼠标动作
-        DoMouseAction(Data, Pos, hwnd, Speed, isWin)
+        DoMouseAction(tableItem, Data, index, Pos, hwnd, Speed, isWin)
     }
 
     ; 执行成功宏
@@ -228,17 +228,45 @@ HandleSearchResult(tableItem, Data, index, ImagePath, ResXList, ResYList, ResHwn
     return true
 }
 
-DoMouseAction(Data, Pos, hwnd, Speed, isWin) {
+DoMouseAction(tableItem, Data, index, Pos, hwnd, Speed, isWin) {
+    isLogiMode := Integer(tableItem.ModeArr[index]) == 3
+    if (isLogiMode)
+        InitMouseControl()
+
     if (Data.MouseActionType == 4) {
-        SetDefaultMouseSpeed(Speed)
-        Click(Format("{} {} {}"), Pos[1], Pos[2], 2)
+        ; 双击
+        if (isLogiMode) {
+            MC_MoveAbsSmooth(Round(Pos[1]), Round(Pos[2]), Speed)
+            if (!InitLogitechGHubNew())
+                return
+            IbClick("Left", , , 2)
+        }
+        else {
+            SetDefaultMouseSpeed(Speed)
+            Click(Format("{} {} {}"), Pos[1], Pos[2], 2)
+        }
     }
     else if (!isWin && Data.MouseActionType == 3) {
-        SetDefaultMouseSpeed(Speed)
-        Click(Format("{} {} {}"), Pos[1], Pos[2], Data.ClickCount)
+        ; 点击
+        if (isLogiMode) {
+            MC_MoveAbsSmooth(Round(Pos[1]), Round(Pos[2]), Speed)
+            if (!InitLogitechGHubNew())
+                return
+            IbClick("Left", , , Data.ClickCount)
+        }
+        else {
+            SetDefaultMouseSpeed(Speed)
+            Click(Format("{} {} {}"), Pos[1], Pos[2], Data.ClickCount)
+        }
     }
     else if (!isWin && Data.MouseActionType == 2) {
-        MouseMove(Pos[1], Pos[2], Speed)
+        ; 移动
+        if (isLogiMode) {
+            MC_MoveAbsSmooth(Round(Pos[1]), Round(Pos[2]), Speed)
+        }
+        else {
+            MouseMove(Pos[1], Pos[2], Speed)
+        }
     }
     else if (isWin && Data.MouseActionType == 3) {
         lParam := (Pos[2] << 16) | (Pos[1] & 0xFFFF)

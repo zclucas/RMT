@@ -22,6 +22,7 @@
 #Include "..\Plugins\RapidOcr\RapidOcr.ahk"
 #Include "..\Plugins\AhiDriver\AhiDriver.ahk"
 #Include "..\Plugins\IbInputSimulator.ahk"
+#Include "..\Plugins\MouseControl.ahk"
 
 global WM_COPYDATA := 0x4a ;传递字符串，系统信息
 
@@ -402,6 +403,19 @@ InitLogitechGHubNew() {
         return false
 
     MySoftData.IsLogitechInit := true
+    return true
+}
+
+; 初始化 MouseControl.dll（用于 Logi 模式下的鼠标移动）
+InitMouseControl() {
+    if (MySoftData.IsMouseControlInit)
+        return true
+
+    res := MC_Init()
+    if (!res)
+        return false
+
+    MySoftData.IsMouseControlInit := true
     return true
 }
 

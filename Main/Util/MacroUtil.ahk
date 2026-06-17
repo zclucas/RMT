@@ -338,6 +338,9 @@ OnMMProOnce(tableItem, index, Data) {
     CoordMode("Mouse", "Screen")
     Speed := 100 - Data.Speed
     MoveMode := ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : 0
+    isLogiMode := Integer(tableItem.ModeArr[index]) == 3
+    if (isLogiMode)
+        InitMouseControl()
 
     hasPosVarX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosVarX)
     hasPosVarY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosVarY)
@@ -349,7 +352,17 @@ OnMMProOnce(tableItem, index, Data) {
     PosY := GetFloatValue(PosY, MySoftData.CoordYFloat)
     ClickCount := Data.ActionType == 2 ? 1 : 2
     if (MoveMode == 2) {
-        SendInput("{Click " Round(PosX) " " Round(PosY) " 0 Relative}")
+        ; 游戏视角（相对移动+点击）
+        if (isLogiMode) {
+            MC_MoveRSmooth(Integer(PosX), Integer(PosY), Speed)
+            Sleep(30)
+            if (!InitLogitechGHubNew())
+                return
+            IbClick("Left")
+        }
+        else {
+            SendInput("{Click " Round(PosX) " " Round(PosY) " 0 Relative}")
+        }
     }
     else if (MoveMode == 1) {
         IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
@@ -364,11 +377,25 @@ OnMMProOnce(tableItem, index, Data) {
             hm.Move(curX + PosX, curY + PosY)
         }
         else if (Data.ActionType == 1) {
-            MouseMove(PosX, PosY, Speed, "R")
+            if (isLogiMode) {
+                MC_MoveRSmooth(Integer(PosX), Integer(PosY), Speed)
+            }
+            else {
+                MouseMove(PosX, PosY, Speed, "R")
+            }
         }
         else if (Data.ActionType == 2 || Data.ActionType == 3) {
-            SetDefaultMouseSpeed(Speed)
-            Click(Format("{} {} {} Relative"), PosX, PosY, ClickCount)
+            if (isLogiMode) {
+                MC_MoveRSmooth(Integer(PosX), Integer(PosY), Speed)
+                Sleep(30)
+                if (!InitLogitechGHubNew())
+                    return
+                IbClick("Left", , , ClickCount)
+            }
+            else {
+                SetDefaultMouseSpeed(Speed)
+                Click(Format("{} {} {} Relative"), PosX, PosY, ClickCount)
+            }
         }
     }
     else if (Data.ActionType == 1) {
@@ -382,12 +409,25 @@ OnMMProOnce(tableItem, index, Data) {
             hm.Move(PosX, PosY)
         }
         else {
-            MouseMove(PosX, PosY, Speed)
+            if (isLogiMode) {
+                MC_MoveAbsSmooth(Round(PosX), Round(PosY), Speed)
+            }
+            else {
+                MouseMove(PosX, PosY, Speed)
+            }
         }
     }
     else if (Data.ActionType == 2 || Data.ActionType == 3) {
-        SetDefaultMouseSpeed(Speed)
-        Click(Format("{} {} {}"), PosX, PosY, ClickCount)
+        if (isLogiMode) {
+            MC_MoveAbsSmooth(Round(PosX), Round(PosY), Speed)
+            if (!InitLogitechGHubNew())
+                return
+            IbClick("Left", , , ClickCount)
+        }
+        else {
+            SetDefaultMouseSpeed(Speed)
+            Click(Format("{} {} {}"), PosX, PosY, ClickCount)
+        }
     }
 }
 
@@ -888,14 +928,38 @@ OnMouseMove(tableItem, cmd, index) {
     PosY := GetFloatValue(PosY, MySoftData.CoordYFloat)
     SendMode("Event")
     CoordMode("Mouse", "Screen")
+    isLogiMode := Integer(tableItem.ModeArr[index]) == 3
     if (MoveMode == 2) {
-        SendInput("{Click " Round(PosX) " " Round(PosY) " 0 Relative}")
+        ; 游戏视角（相对移动+点击）
+        if (isLogiMode) {
+            InitMouseControl()
+            MC_MoveRSmooth(Integer(PosX), Integer(PosY), Speed)
+            Sleep(30)
+            if (!InitLogitechGHubNew())
+                return
+            IbClick("Left")
+        }
+        else {
+            SendInput("{Click " Round(PosX) " " Round(PosY) " 0 Relative}")
+        }
     }
     else if (MoveMode == 1) {
-        MouseMove(PosX, PosY, Speed, "R")
+        if (isLogiMode) {
+            InitMouseControl()
+            MC_MoveRSmooth(Integer(PosX), Integer(PosY), Speed)
+        }
+        else {
+            MouseMove(PosX, PosY, Speed, "R")
+        }
     }
     else {
-        MouseMove(PosX, PosY, Speed)
+        if (isLogiMode) {
+            InitMouseControl()
+            MC_MoveAbsSmooth(Round(PosX), Round(PosY), Speed)
+        }
+        else {
+            MouseMove(PosX, PosY, Speed)
+        }
     }
 }
 

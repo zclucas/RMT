@@ -194,6 +194,7 @@ class SoftData {
         this.MacroRunningCount := 0     ;运行中的宏数量
         this.IsMacroWorking := false    ;宏正在运行
         this.IsLogitechInit := false    ;罗技按键初始化
+        this.IsMouseControlInit := false ;MouseControl.dll 初始化
         this.ToolTipText := ""          ;临时提示文本
         this.ToolTipEndTime := ""       ;临时提示结束时间
         this.AgreeAgreement := false    ;同意协议
