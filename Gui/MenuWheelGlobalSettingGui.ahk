@@ -271,7 +271,7 @@ class MenuWheelGlobalSettingGui {
         this._showTooltip := !!MySoftData.MenuWheelShowTooltip
         this._wheelScale := MySoftData.MenuWheelScale
 
-        savedTheme := IniRead(IniFile, IniSection, "MenuWheelTheme", "Default")
+        savedTheme := MySoftData.HasProp("MenuWheelTheme") ? MySoftData.MenuWheelTheme : "Default"
         if (this._FindTheme(savedTheme) != "")
             this._currentTheme := savedTheme
 
@@ -394,6 +394,7 @@ class MenuWheelGlobalSettingGui {
         MySoftData.MenuWheelSelectMode := this._selectMode
         MySoftData.MenuWheelShowTooltip := this._showTooltip
         MySoftData.MenuWheelScale := this._wheelScale
+        MySoftData.MenuWheelTheme := this._currentTheme
 
         global IniFile, IniSection
         IniWrite(MySoftData.FixedMenuWheel, IniFile, IniSection, "FixedMenuWheel")
