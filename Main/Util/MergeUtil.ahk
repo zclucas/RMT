@@ -100,7 +100,7 @@ class MergeUtil {
             node.Type := "Item"
             node.TabIndex := tabIndex
             node.ItemIndex := A_Index
-            node.TriggerKey := tkArr[A_Index]
+            node.TriggerKey := (A_Index <= tkArr.Length) ? tkArr[A_Index] : ""
 
             displayKey := node.TriggerKey != "" ? node.TriggerKey : GetLang("无触发键")
             displayRemark := node.Remark != "" ? node.Remark : ""
