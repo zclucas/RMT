@@ -36,31 +36,20 @@ class CommentGui {
         }
         MyGui.SetFont("S10 W550 Q2", MySoftData.FontType)
 
-        PosX := 10
         PosY := 10
-        MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("快捷方式："))
-        PosX += 80
-        con := MyGui.Add("Hotkey", Format("x{} y{} w{}", PosX, PosY - 3, 70), "!l")
-        con.Enabled := false
-
-        PosX += 90
-        btnCon := MyGui.Add("Button", Format("x{} y{} w{}", PosX, PosY - 5, 80), GetLang("执行指令"))
-        btnCon.OnEvent("Click", (*) => this.TriggerMacro())
-
         PosX := 10
-        PosY += 40
         MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("注释内容："))
 
         PosY += 25
-        this.ContentCon := MyGui.Add("Edit", Format("x{} y{} w{} h{} Multi VScroll", PosX, PosY, 480, 120), "")
+        this.ContentCon := MyGui.Add("Edit", Format("x{} y{} w{} h{} Multi VScroll", PosX, PosY, 480, 200), "")
 
-        PosY += 140
+        PosY += 210
         PosX := 210
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{} Center", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
 
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        MyGui.Show(Format("w{} h{}", 510, 275))
+        MyGui.Show(Format("w{} h{}", 510, 295))
     }
 
     Init(cmd) {
@@ -102,12 +91,6 @@ class CommentGui {
             return false
         }
         return true
-    }
-
-    TriggerMacro() {
-        this.SaveData()
-        CommandStr := this.GetCommandStr()
-        OnTriggerSepcialItemMacro(CommandStr)
     }
 
     GetCommandStr() {
