@@ -1367,7 +1367,7 @@ OnScreenShot(tableItem, cmd, index) {
     if (shotWidth <= 0 || shotHeight <= 0)
         return
 
-    baseDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\Temp_ScreenShot"
+    baseDir := ProjectRootDir "\Setting\" MySoftData.CurSettingName "\Images\Temp_ScreenShot"
     if (!DirExist(baseDir))
         DirCreate(baseDir)
 

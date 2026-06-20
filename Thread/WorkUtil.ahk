@@ -49,7 +49,14 @@
         global GraphStartNodeFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.ini"
         global IniSection := "UserSettings"
 
-        ;利用机制把路径中的\..转换掉
+    ;项目根目录（Worker进程A_WorkingDir指向Thread子目录，需回退到项目根）
+    global ProjectRootDir := A_WorkingDir '\..\'
+    loop files, ProjectRootDir {
+        ProjectRootDir := A_LoopFileFullPath
+        break
+    }
+
+    ;利用机制把路径中的\..转换掉
         loop files, StartTipAudio {
             StartTipAudio := A_LoopFileFullPath
             break

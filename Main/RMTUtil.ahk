@@ -289,6 +289,7 @@ InitFilePath() {
     global ScreenShotFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ScreenShotFile.ini"
     global GraphNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphNodeFile.ini"
     global GraphStartNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.ini"
+    global ProjectRootDir := A_ScriptDir
 }
 
 StopMacro(tableIndex, itemIndex) {
