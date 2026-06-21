@@ -132,7 +132,6 @@ OnKillAllMacro(*) {
         tableItem := MySoftData.TableInfo[A_Index]
         loop tableItem.ColorStateArr.Length {
             if (tableItem.ColorStateArr[A_Index] == 1 || tableItem.ColorStateArr[A_Index] == 2) {
-                tableItem.IsWorkIndexArr[A_Index] := 0
                 MyStopMacro(tableItem.Index, A_Index)
             }
         }
