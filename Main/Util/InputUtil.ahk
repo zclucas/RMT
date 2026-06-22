@@ -2,7 +2,7 @@
 
 InputPopUp(Data, tableItem, index) {
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_暂停所有宏")
 
     isHide := false
     InputBoxSureAction(Content) {
@@ -23,12 +23,12 @@ InputPopUp(Data, tableItem, index) {
         Sleep(200)
     }
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_恢复所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_恢复所有宏")
 }
 
 InputStateValue(Data, tableItem, index) {
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_暂停所有宏")
 
     isHide := false
     InputBoxTrueAction() {
@@ -48,12 +48,12 @@ InputStateValue(Data, tableItem, index) {
         Sleep(200)
     }
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_恢复所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_恢复所有宏")
 }
 
 InputContinue(Data, tableItem, index) {
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_暂停所有宏")
 
     isHide := false
     InputBtnHideAciton() {
@@ -65,19 +65,19 @@ InputContinue(Data, tableItem, index) {
         Sleep(200)
     }
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_恢复所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_恢复所有宏")
 }
 
 InputContinueAndCencel(Data, tableItem, index) {
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_暂停所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_暂停所有宏")
 
     isHide := false
     InputBtnCancelAciton() {
         if (Data.CancelType == "终止当前宏")
             MyStopMacro(tableItem.Index, index)
         if (Data.CancelType == "终止所有宏")
-            MyExcuteRMTCMDAction("RMT指令_终止所有宏")
+            MyExcuteRMTCMDAction("RMT指令_宏控制_终止所有宏")
     }
     InputBtnHideAciton() {
         isHide := true
@@ -89,5 +89,5 @@ InputContinueAndCencel(Data, tableItem, index) {
         Sleep(200)
     }
     if (Data.PauseType == "暂停所有宏")
-        MyExcuteRMTCMDAction("RMT指令_恢复所有宏")
+        MyExcuteRMTCMDAction("RMT指令_宏控制_恢复所有宏")
 }

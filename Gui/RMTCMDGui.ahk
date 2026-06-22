@@ -61,22 +61,17 @@ class RMTCMDGui {
     }
 
     Init(cmd) {
-        ; CMD格式: RMT指令_类别_指令_序号（新）或 RMT指令_指令_序号（旧兼容）
-        cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         ; 新格式: RMT指令_类别_指令 或 RMT指令_类别_指令_序号
-        ; 旧格式: RMT指令_指令
+        cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         if (cmdArr.Length >= 4) {
-            ; 新格式
             cmdCategory := cmdArr[2]
             cmdStr := cmdArr[3]
             menuDLIndex := cmdStr == GetLang("显示菜单") && cmdArr.Length >= 5 ? cmdArr[4] : 1
         } else if (cmdArr.Length >= 3) {
-            ; 旧格式：只有指令和序号，没有类别
-            cmdCategory := GetLang("全部")
-            cmdStr := cmdArr[2]
-            menuDLIndex := cmdStr == GetLang("显示菜单") && cmdArr.Length >= 4 ? cmdArr[3] : 1
+            cmdCategory := cmdArr[2]
+            cmdStr := cmdArr[3]
+            menuDLIndex := 1
         } else {
-            ; 无效格式，使用默认值
             cmdCategory := GetLang("全部")
             cmdStr := GetLang("截图")
             menuDLIndex := 1

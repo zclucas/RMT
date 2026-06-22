@@ -967,8 +967,9 @@ OnMouseMove(tableItem, cmd, index) {
 }
 
 OnRMTCMD(tableItem, cmd, index) {
+    ; 新格式: RMT指令_类别_指令 → paramArr[1]=RMT指令, paramArr[2]=类别, paramArr[3]=指令
     paramArr := StrSplit(cmd, "_")
-    cmdStr := paramArr[2]
+    cmdStr := paramArr[3]
     if (cmdStr == "启用键鼠") {
         BlockInput false
     }

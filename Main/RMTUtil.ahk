@@ -564,8 +564,9 @@ ToolTipTimer() {
 }
 
 ExcuteRMTCMDAction(Cmd) {
+    ; 新格式: RMT指令⫶类别⫶指令 → paramArr[1]=RMT指令, paramArr[2]=类别, paramArr[3]=指令
     paramArr := StrSplit(Cmd, "⫶")
-    switch paramArr[2] {
+    switch paramArr[3] {
         case "截图":
             OnToolScreenShot()
         case "截图提取文本":
