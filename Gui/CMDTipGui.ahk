@@ -8,6 +8,7 @@ class CMDTipGui {
         this.isLoadParams := false
         this.ShowCount := 0
         this.ContentCon := ""
+        this._wheelCb := ""
     }
 
     ShowGui(CMDStr) {
@@ -28,6 +29,13 @@ class CMDTipGui {
         }
 
         this.AddCMD(CMDStr)
+
+        ; 订阅滚轮热键（仅首次或窗口重建时）
+        if (!this._wheelCb) {
+            this._wheelCb := ObjBindMethod(this, "_OnWheel")
+            WinHotkey.SubscribeMouse("WheelUp", this._wheelCb)
+            WinHotkey.SubscribeMouse("WheelDown", this._wheelCb)
+        }
     }
 
     LoadParams() {
@@ -74,12 +82,24 @@ class CMDTipGui {
         SendMessage(0xB6, 0, 10000, this.ContentCon)
     }
 
-    Clear() {
+    Hide() {
         if (this.Gui == "")
             return
 
         this.ShowCount := 0
         this.ContentCon.Value := ""
+        this.Gui.Hide()
+
+        ; 取消订阅滚轮热键
+        if (this._wheelCb) {
+            WinHotkey.UnsubscribeMouse("WheelUp", this._wheelCb)
+            WinHotkey.UnsubscribeMouse("WheelDown", this._wheelCb)
+            this._wheelCb := ""
+        }
+    }
+
+    _OnWheel(key, *) {
+        this.OnScrollWheel(key)
     }
 
     OnToggleMacroWorkState() {

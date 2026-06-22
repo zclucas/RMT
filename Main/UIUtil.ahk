@@ -10,6 +10,7 @@ InitUI() {
         MyGui.BackColor := BGColor
 
     MySoftData.MyGui := MyGui
+    MyGui.OnEvent("Close", OnGuiClose)
     AddUI()
     CustomTrayMenu()
     OnOpen()
@@ -40,6 +41,16 @@ OnOpen() {
     RefreshGui()
 }
 
+; 主窗口关闭时清理所有鼠标热键订阅
+OnGuiClose(*) {
+    WinHotkey.UnsubscribeAllMouse()
+    ; 重置各组件的订阅状态，以便窗口重新显示时能重新订阅
+    MySlider._wheelCb := ""
+    MyCMDTipGui._wheelCb := ""
+    MyFreePasteGui._wheelCb := ""
+    MyTargetGui._lbuttonCb := ""
+}
+
 RefreshGui() {
     LastWinPosStr := IniRead(IniFile, IniSection, "LastWinPos", "")
     WinPosArr := StrSplit(LastWinPosStr, "π")
@@ -53,6 +64,9 @@ RefreshGui() {
         if (isXValid && isYValid) {
             MySoftData.MyGui.Show(Format("x{} y{} w{} h{}", WinPosArr[1], WinPosArr[2], 1070, 590))
             RefreshListenVarGui()
+            ; 恢复滑块滚轮热键订阅（窗口重新打开后需要重新订阅）
+            if (MySlider.tableItem != "" && MySlider.ShowSlider)
+                MySlider.SwitchTab(MySlider.tableItem)
             return
         }
     }
@@ -65,6 +79,9 @@ RefreshGui() {
 
     MySoftData.MyGui.Show(Format("w{} h{}", 1070, 590))
     RefreshListenVarGui()
+    ; 恢复滑块滚轮热键订阅（窗口重新打开后需要重新订阅）
+    if (MySlider.tableItem != "" && MySlider.ShowSlider)
+        MySlider.SwitchTab(MySlider.tableItem)
 }
 
 RefreshListenVarGui(isForce := false) {

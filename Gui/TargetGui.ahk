@@ -8,6 +8,8 @@ class TargetGui {
         this.GuiHeight := 64
 
         this.SureAction := ""
+        this._hkIds := []
+        this._lbuttonCb := ""
     }
 
     ShowGui() {
@@ -19,6 +21,26 @@ class TargetGui {
         }
         MyColorPanel.SureAction := this.SureAction
         MyColorPanel.ShowGui()
+        ; 注册方向键热键（目标窗口活动期间有效）
+        if (this._hkIds.Length == 0) {
+            this._hkIds := WinHotkey.Register(["Left", "Right", "Up", "Down"], ObjBindMethod(this, "_OnHotkey"))
+        }
+        ; 订阅 LButton 热键（目标窗口活动期间有效）
+        if (!this._lbuttonCb) {
+            this._lbuttonCb := ObjBindMethod(this, "_OnLButton")
+            WinHotkey.SubscribeMouse("LButton", this._lbuttonCb)
+        }
+    }
+
+    HideGui() {
+        if (this._hkIds.Length > 0) {
+            WinHotkey.UnregisterAll(this._hkIds)
+            this._hkIds := []
+        }
+        if (this._lbuttonCb) {
+            WinHotkey.UnsubscribeMouse("LButton", this._lbuttonCb)
+            this._lbuttonCb := ""
+        }
     }
 
     AddGui() {
@@ -44,6 +66,10 @@ class TargetGui {
     }
 
     OnLButtonUp(*) {
+        this._OnLButton()
+    }
+
+    _OnLButton(*) {
         if (this.Gui == "")
             return
         style := WinGetStyle(this.Gui.Hwnd)
@@ -51,6 +77,31 @@ class TargetGui {
         if (!isVisible)
             return
 
+        MyColorPanel.RefreshCoord()
+        MyColorPanel.RefreshMapImage()
+    }
+
+    _OnHotkey(key) {
+        if (this.Gui == "")
+            return
+        style := WinGetStyle(this.Gui.Hwnd)
+        isVisible := (style & 0x10000000)
+        if (!isVisible)
+            return
+
+        this.Gui.GetPos(&x, &y, &w, &h)
+        if (key == "Left")
+            x -= 1
+        else if (key == "Right")
+            x += 1
+        else if (key == "Up")
+            y -= 1
+        else if (key == "Down")
+            y += 1
+        else
+            return
+
+        this.Gui.Move(x, y)
         MyColorPanel.RefreshCoord()
         MyColorPanel.RefreshMapImage()
     }

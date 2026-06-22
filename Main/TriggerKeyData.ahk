@@ -29,32 +29,6 @@ class TriggerKeyData {
     }
 
     InitState() {
-        this.IsSoftHotKey := false
-        for index, value in MySoftData.SoftHotKeyArr {
-            key := LTrim(value, "~")
-            key := StrLower(key)
-            if (this.Key == key) {
-                this.IsSoftHotKey := true
-                break
-            }
-        }
-    }
-
-    IsOnlySoftHotkey() {
-        if (this.OriDownArr.Length >= 1)
-            return false
-        if (this.OriLoosenArr.Length >= 1)
-            return false
-        if (this.OriLoosenStopArr.Length >= 1)
-            return false
-        if (this.OriTogArr.Length >= 1)
-            return false
-        if (this.OriHoldArr.Length >= 1)
-            return false
-        if (this.OriDblClickArr.Length >= 1)
-            return false
-
-        return true
     }
 
     AddData(info) {
@@ -124,10 +98,6 @@ class TriggerKeyData {
 
     OnTriggerKeyDown() {
         this.UpdataArr()
-        this.HandleSoftHotKeyDown()
-
-        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
-            return
 
         ;双击检测逻辑
         currentTime := A_TickCount
@@ -161,10 +131,6 @@ class TriggerKeyData {
 
     OnTriggerKeyUp() {
         this.UpdataArr()
-        this.HandleSoftHotKeyUp()
-
-        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.IsAnyWindowActive(this.Key))
-            return
 
         for index, value in this.LoosenArr {
             value.Action()
@@ -210,65 +176,6 @@ class TriggerKeyData {
 
         if (AreKeysPressed(keyCombo))
             info.Action()
-    }
-
-    HandleSoftHotKeyDown() {
-        if (!this.IsSoftHotKey)
-            return
-
-        if (this.Key == "wheelup" || this.Key == "wheeldown") {
-            if (MyMouseInfo.CheckIfMatch("RMTv⎖⎖")) {
-                MySlider.OnScrollWheel(this.Key)
-            }
-
-            if (MyMouseInfo.CheckIfMatch("RMT-FreePaste⎖⎖")) {
-                MyFreePasteGui.OnScrollWheel(this.Key)
-            }
-
-            MyCMDTipGui.OnScrollWheel(this.Key)
-        }
-
-        isArrowKey1 := this.Key == "left" || this.Key == "right"
-        isArrowKey2 := this.Key == "up" || this.Key == "down"
-        isArrowKey := isArrowKey1 || isArrowKey2
-        if (isArrowKey) {
-            MyTargetGui.OnArrowKeyDown(this.Key)
-        }
-
-        if (this.Key == "lbutton") {
-            if (MySoftData.SelectAreaAction != "") {
-                SelectArea()
-            }
-
-            if (MySoftData.GetAreaAction != "") {
-                OnGetSelectAreaDown(this.Key)
-            }
-        }
-
-        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.HandleKey(this.Key, true))
-            return
-    }
-
-    HandleSoftHotKeyUp() {
-        if (!this.IsSoftHotKey)
-            return
-
-        if (this.Key == "lbutton") {
-            if (MyMouseInfo.CheckIfMatch("RMT-Target⎖⎖")) {
-                MyTargetGui.OnLButtonUp(this.Key)
-            }
-
-            if (MySoftData.GetAreaAction != "") {
-                OnGetSelectAreaUp(this.Key)
-            }
-        }
-
-        if (this.Key == "enter") {
-            MyColorPanel.OnEnterUp(this.Key)
-        }
-
-        if (WindowHotkeyManager.IsManaged(this.Key) && WindowHotkeyManager.HandleKey(this.Key, false))
-            return
     }
 }
 

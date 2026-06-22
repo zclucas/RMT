@@ -6,13 +6,6 @@ class UIMacroGui {
     static STATE_PAUSED := 2     ; 暂停中（黄色）
     static STATE_STOPPED := 3    ; 停止/终止（红色，5秒后自动恢复）
 
-    ; 状态色点颜色
-    static StateColors := Map(
-        UIMacroGui.STATE_RUNNING, "#FF4CAF50",
-        UIMacroGui.STATE_PAUSED,  "#FFFFC107",
-        UIMacroGui.STATE_STOPPED, "#FFF44336"
-    )
-
     __new() {
         this.PanelMap := Map()       ; foldIndex -> panelInfo
         this.PanelTimers := Map()     ; foldIndex -> FuncObj（SetTimer回调引用）
@@ -338,6 +331,11 @@ class UIMacroGui {
             btn.Padding("2,0,2,0")
 
             sp := btn.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
+
+            ; 运行状态色点（默认隐藏）
+            sp.Add("Ellipse").Name(item.name "_State")
+                .Width(8).Height(8).VerticalAlignment("Center").Margin("0,0,3,0")
+                .Visibility("Collapsed").IsHitTestVisible("False")
 
             if (item.icon != "") {
                 fullIconPath := this.GetFullIconPath(item.icon)
@@ -850,10 +848,10 @@ class UIMacroGui {
                     try {
                         if (state == UIMacroGui.STATE_DEFAULT) {
                             panelInfo.ui.Update(stateName, "Visibility", "Collapsed")
-                        } else if (UIMacroGui.StateColors.Has(state)) {
-                            color := UIMacroGui.StateColors[state]
+                        } else if (MacroStateColors.Has(state)) {
+                            color := MacroStateColors[state]
                             panelInfo.ui.Update(stateName, "Visibility", "Visible")
-                            panelInfo.ui.Update(stateName, "Background", color)
+                            panelInfo.ui.Update(stateName, "Fill", color)
                         }
                     }
                     ; ui.Update() 后恢复位置（对齐 MovePanel L171-179）

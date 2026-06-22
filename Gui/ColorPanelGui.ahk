@@ -18,6 +18,7 @@ class ColorPanelGui {
         this.GuiHeight := 150
 
         this.SureAction := ""
+        this._hkIds := []
     }
 
     ShowGui() {
@@ -27,6 +28,9 @@ class ColorPanelGui {
         else {
             this.AddGui()
         }
+        ; 注册 Enter 热键（颜色面板活动期间有效）
+        if (this._hkIds.Length == 0)
+            this._hkIds := WinHotkey.Register(["Enter"], ObjBindMethod(this, "_OnEnter"))
         this.RefreshCoord()
         this.RefreshMapImage()
     }
@@ -92,8 +96,7 @@ class ColorPanelGui {
         if (!isVisible)
             return
 
-        this.Gui.Hide()
-        MyTargetGui.Gui.Hide()
+        this._DoHide()
         if (this.SureAction == "")
             return
         action := this.SureAction
@@ -102,11 +105,22 @@ class ColorPanelGui {
     }
 
     OnClose(*) {
-        this.Gui.Hide()
-        MyTargetGui.Gui.Hide()
+        this._DoHide()
     }
 
-    OnEnterUp(*) {
+    _DoHide() {
+        if (this._hkIds.Length > 0) {
+            WinHotkey.UnregisterAll(this._hkIds)
+            MyTargetGui.HideGui()
+            this._hkIds := []
+        }
+        if (this.Gui != "")
+            this.Gui.Hide()
+        if (MyTargetGui.Gui != "")
+            MyTargetGui.Gui.Hide()
+    }
+
+    _OnEnter(key) {
         if (this.Gui == "")
             return
         style := WinGetStyle(this.Gui.Hwnd)
@@ -114,13 +128,12 @@ class ColorPanelGui {
         if (!isVisible)
             return
 
-        this.Gui.Hide()
-        MyTargetGui.Gui.Hide()
+        this._DoHide()
         if (this.SureAction == "")
             return
         action := this.SureAction
         colorStr := Format("{:06X}", this.ColorValue)
-        action(this.CoordX, this.CoordY,colorStr)
+        action(this.CoordX, this.CoordY, colorStr)
     }
 
     RefreshCoord() {

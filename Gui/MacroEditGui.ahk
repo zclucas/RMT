@@ -241,7 +241,8 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\ScreenShot.png")
         }
 
-        WindowHotkeyManager.Register(this, MacroEditGui.Hotkeys, this.OnSoftKey.Bind(this), this._IsAlive.Bind(this))
+        ; 注册快捷键热键（窗口打开期间全局有效，关闭时注销）
+        this._hkIds := WinHotkey.Register(["F5", "F6", "Delete"], ObjBindMethod(this, "_OnHotkey"))
 
         if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
             try {
@@ -586,7 +587,8 @@ class MacroEditGui {
     }
 
     OnGuiClose() {
-        WindowHotkeyManager.Unregister(this)
+        if (this._hkIds.Length > 0)
+            WinHotkey.UnregisterAll(this._hkIds)
         if (this.OwnerHwnd != "" && MySoftData.IsModalSubGui) {
             try {
                 GuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
@@ -694,14 +696,13 @@ class MacroEditGui {
         }
     }
 
-    _IsAlive() {
-        if (!IsObject(this.Gui))
-            return false
-        hwnd := this.Gui.Hwnd
-        if (!hwnd || !WinExist("ahk_id " hwnd))
-            return false
-        style := WinGetStyle(hwnd)
-        return !!(style & 0x10000000) && WinActive("ahk_id " hwnd)
+    _OnHotkey(key) {
+        if (key == "F5")
+            this.RunMacro()
+        else if (key == "F6")
+            this.StepRun()
+        else if (key == "Delete")
+            this.DeleteCurrentRow()
     }
 
     OnSoftKey(key, isDown) {
@@ -829,7 +830,7 @@ class MacroEditGui {
                 MacroStr := GetLangMacro(macroStr, 2)
                 ResArr := StrSplit(MacroStr, "⭐", 2)
                 MacroStr := ResArr.Length > 1 ? ResArr[2] : MacroStr
-                MyCMDTipGui.Clear()
+                MyCMDTipGui.Hide()
                 OnTriggerSepcialItemMacro(MacroStr)
                 MsgBox(GetLang("调试运行结束"), "", "Owner" this.Gui.Hwnd)
             }
@@ -842,7 +843,7 @@ class MacroEditGui {
 
                 ; 阶段1: 定位（首次F6或终止后，查找⭐起点或第一项）
                 if (this.DebugItemID == 0) {
-                    MyCMDTipGui.Clear()
+                    MyCMDTipGui.Hide()
                     this.DebugItemID := this.FindDebugStartItem()
                     if (!this.DebugItemID) {
                         this.DebugItemID := this.MacroTreeViewCon.GetNext(0)

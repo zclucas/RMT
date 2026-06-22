@@ -115,6 +115,8 @@ global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent
 global MyMacroCount := MacroCount
 global MyViGJoySetState := ViGJoySetState
+;宏运行状态颜色（0默认 1运行中 2暂停 3停止）
+global MacroStateColors := Map(1, "#FF4CAF50", 2, "#FFFFC107", 3, "#FFF44336")
 ;数组相关
 global MySetGlobalArray := SetGlobalArray
 global MyCloneGlobalArray := CloneGlobalArray

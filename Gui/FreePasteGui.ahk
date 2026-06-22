@@ -1,10 +1,30 @@
 class FreePasteGui {
     __new() {
         this.GuiMap := Map()
+        this._wheelCb := ""
     }
 
     ShowGui() {
         this.AddGui()
+        ; 订阅滚轮热键（粘贴窗口活动期间有效）
+        if (!this._wheelCb) {
+            this._wheelCb := ObjBindMethod(this, "_OnWheel")
+            WinHotkey.SubscribeMouse("WheelUp", this._wheelCb)
+            WinHotkey.SubscribeMouse("WheelDown", this._wheelCb)
+        }
+    }
+
+    DestroyGui(gui) {
+        hwnd := gui.Hwnd
+        gui.Destroy()
+        if (this.GuiMap.Has(hwnd))
+            this.GuiMap.Delete(hwnd)
+        ; 所有窗口都销毁后取消订阅滚轮热键
+        if (this.GuiMap.Count == 0 && this._wheelCb) {
+            WinHotkey.UnsubscribeMouse("WheelUp", this._wheelCb)
+            WinHotkey.UnsubscribeMouse("WheelDown", this._wheelCb)
+            this._wheelCb := ""
+        }
     }
 
     AddGui() {
@@ -69,13 +89,17 @@ class FreePasteGui {
     }
 
     DoubleClick(gui, *) {
-        gui.Destroy()
+        this.DestroyGui(gui)
         gui := ""
     }
 
     ; 拖动函数
     GuiDrag(gui, *) {
         PostMessage(0xA1, 2, , , gui)
+    }
+
+    _OnWheel(key) {
+        this.OnScrollWheel(key)
     }
 
     OnScrollWheel(key) {

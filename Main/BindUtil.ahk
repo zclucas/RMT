@@ -10,7 +10,6 @@ BindKey() {
     BindShortcut(ToolCheckInfo.FreePasteHotKey, OnToolFreePaste)
     BindShortcut(ToolCheckInfo.ToolRecordMacroHotKey, OnHotToolRecordMacro)
     InitTriggerKeyMap()
-    BindSoftHotKey()
     BindMenuHotKey()
     BindUIPanelHotKey()
     BindTabHotKey()
@@ -29,9 +28,7 @@ BindShortcut(triggerInfo, action) {
     else {
         isCombo := IsComboKey(triggerInfo)
         mapKey := StrLower(Trim(triggerInfo, "~"))
-        if (WindowHotkeyManager.IsManaged(mapKey)) {
-            key := "$~" mapKey
-        } else if (isCombo) {
+        if (isCombo) {
             key := triggerInfo
         }
         else {
@@ -288,8 +285,6 @@ BindMenuHotKey() {
             continue
 
         oriKey := FoldInfo.TKArr[index]
-        if (WindowHotkeyManager.IsManaged(StrLower(oriKey)))
-            continue
         isCombo := IsComboKey(oriKey)
         if (isCombo) {
             key := oriKey
@@ -353,8 +348,6 @@ BindUIPanelHotKey() {
             continue
 
         oriKey := FoldInfo.TKArr[Index]
-        if (WindowHotkeyManager.IsManaged(StrLower(oriKey)))
-            continue
 
         key := "$*" oriKey
         foldIndex := Index
@@ -398,7 +391,6 @@ BindTabHotKey() {
             cacheKey := rawKey "|" tableIndex "|" index
             if (!keyCache.Has(cacheKey)) {
                 cacheData := {
-                    isManaged: WindowHotkeyManager.IsManaged(StrLower(rawKey)),
                     isCombo: IsComboKey(rawKey),
                     isJoy: !!RegExMatch(rawKey, "Joy"),
                     isHotstring: SubStr(rawKey, 1, 1) == ":",
@@ -414,9 +406,6 @@ BindTabHotKey() {
                 keyCache.Set(cacheKey, cacheData)
             }
             cache := keyCache[cacheKey]
-
-            if (cache.isManaged)
-                continue
 
             key := cache.isCombo ? rawKey : cache.keyPrefix rawKey
             actionArr := GetMacroAction(tableIndex, index)
@@ -555,14 +544,6 @@ InitTriggerKeyMap() {
             MySoftData.TriggerKeyMap[key].AddData(info)
         }
     }
-
-    for index, value in MySoftData.SoftHotKeyArr {
-        key := LTrim(value, "~")
-        key := StrLower(key)
-        if (!MySoftData.TriggerKeyMap.Has(key)) {
-            MySoftData.TriggerKeyMap[key] := TriggerKeyData(key)
-        }
-    }
 }
 
 GetMacroAction(tableIndex, index) {
@@ -608,36 +589,6 @@ OnTriggerKeyUp(tableIndex, itemIndex, *) {
 
     Data := MySoftData.TriggerKeyMap[key]
     Data.OnTriggerKeyUp()
-}
-
-BindSoftHotKey() {
-    for index, value in MySoftData.SoftHotKeyArr {
-        mapKey := Trim(value, "~")
-        mapKey := StrLower(mapKey)
-        isCombo := IsComboKey(mapKey)
-
-        if (WindowHotkeyManager.IsManaged(mapKey)) {
-            key := "$~" mapKey
-        } else if (isCombo) {
-            key := value
-        }
-        else if (SubStr(value, 1, 1) == "~") {
-            key := "$" value
-        }
-        else {
-            key := "$*" value
-        }
-        actionDown := OnBindKeyDown.Bind(value)
-        actionUp := OnBindKeyUp.Bind(value)
-
-        try {
-            Hotkey(key, actionDown, "On")
-            if (!isCombo)
-                Hotkey(key " up", actionUp, "On")
-        }
-        catch as e {
-        }
-    }
 }
 
 GetBindMacroAction(key) {

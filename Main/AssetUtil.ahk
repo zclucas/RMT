@@ -665,7 +665,7 @@ ReadTableItemInfo(index) {
         defaultFoldInfo.FoldStateArr := [false]
         defaultFoldInfo.ForbidStateArr := [false]
 
-        defaultFoldInfo.TKTypeArr := [1]
+        defaultFoldInfo.TKTypeArr := [4]
         defaultFoldInfo.TKArr := [""]
         defaultFoldInfo.HoldTimeArr := [500]
         savedFoldInfoStr := JSON.stringify(defaultFoldInfo, 0)
@@ -807,7 +807,7 @@ GetTableItemDefaultInfo(index) {
         savedForbidArrStr := "0π0π0π0π0π0π0π0"
         savedRemarkArrStr := "πππππππ"
         savedLoopCountStr := "1π1π1π1π1π1π1π1"
-        savedTriggerTypeStr := "1π1π1π1π1π1π1π1"
+        savedTriggerTypeStr := "4π4π4π4π4π4π4π4"
         savedSerialeArrStr := "3π4π5π6π7π8π12π13"
         savedTimingSerialStr :=
             "Timing3πTiming4πTiming5πTiming6πTiming7πTiming8πTiming12πTiming13"

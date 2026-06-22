@@ -338,9 +338,15 @@ class MenuWheelGui {
                 lbl.Text(sec.Name)
                 lbl.FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif")
                 lbl.FontSize(fontSize).Foreground(this.normalText).FontWeight("SemiBold")
-                lbl.TextAlignment("Center")
-                lbl.TextTrimming("CharacterEllipsis")
-                lbl.Canvas_Left(lpx - 39).Canvas_Top(lpy - 8).Width(78).IsHitTestVisible("False")
+                lbl.TextAlignment("Center").TextTrimming("CharacterEllipsis")
+                lbl.Width(Round(78 * this.dpiScale)).Canvas_Left(lpx - Round(39 * this.dpiScale)).Canvas_Top(lpy - 8).IsHitTestVisible("False")
+
+                ; 运行状态色点（默认隐藏，放在文本下方居中）
+                dotSize := Round(8 * this.dpiScale)
+                stateDot := canvas.Add("Ellipse").Name("StateDot_" idx)
+                stateDot.Width(dotSize).Height(dotSize)
+                stateDot.Canvas_Left(lpx - Round(dotSize / 2)).Canvas_Top(lpy + fontSize + 2)
+                stateDot.Visibility("Collapsed").IsHitTestVisible("False")
             } else {
                 centerR := innerR + (radius - innerR) * this.centerPosRatio
                 cpx := Round(cx + centerR * Cos(midRad))
@@ -355,9 +361,15 @@ class MenuWheelGui {
                 lbl.Text(sec.Name)
                 lbl.FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif")
                 lbl.FontSize(fontSize).Foreground(this.normalText).FontWeight("SemiBold")
-                lbl.TextAlignment("Center")
-                lbl.TextTrimming("CharacterEllipsis")
-                lbl.Canvas_Left(cpx - 39).Canvas_Top(cpy - 8).Width(78).IsHitTestVisible("False")
+                lbl.TextAlignment("Center").TextTrimming("CharacterEllipsis")
+                lbl.Width(Round(78 * this.dpiScale)).Canvas_Left(cpx - Round(39 * this.dpiScale)).Canvas_Top(cpy - 8).IsHitTestVisible("False")
+
+                ; 运行状态色点（默认隐藏，放在文本下方居中）
+                dotSize := Round(8 * this.dpiScale)
+                stateDot := canvas.Add("Ellipse").Name("StateDot_" idx)
+                stateDot.Width(dotSize).Height(dotSize)
+                stateDot.Canvas_Left(cpx - Round(dotSize / 2)).Canvas_Top(cpy + fontSize + 2)
+                stateDot.Visibility("Collapsed").IsHitTestVisible("False")
             }
         }
 
@@ -407,13 +419,34 @@ class MenuWheelGui {
         } else {
             this.swipe := ""
         }
+
+        ; 显示宏运行状态颜色
+        tableItem := MySoftData.TableInfo[3]
+        Loop itemCount {
+            idx := A_Index
+            macroIndex := (this.MenuIndex - 1) * 8 + idx
+            isWorkRunning := tableItem.IsWorkIndexArr.Length >= macroIndex && tableItem.IsWorkIndexArr[macroIndex] != 0
+            state := isWorkRunning ? 1 : (tableItem.ColorStateArr.Length >= macroIndex ? tableItem.ColorStateArr[macroIndex] : 0)
+            if (state > 0 && MacroStateColors.Has(state))
+                this.sectors[idx].RenderState(this, MacroStateColors[state])
+        }
+
         this._aliveHwnd := this.ui.wpfHwnd
         this.Gui := { Hwnd: this.ui.wpfHwnd }
-        WindowHotkeyManager.Register(this, MenuWheelGui.Hotkeys, this.OnSoftKey.Bind(this), this._IsAlive.Bind(this))
+        ; 注册数字键热键（窗口打开期间全局有效，关闭时注销）
+        this._hkIds := WinHotkey.Register(MenuWheelGui.Hotkeys, ObjBindMethod(this, "_OnHotkey"))
     }
 
-    _IsAlive() {
-        return WinExist("ahk_id " this._aliveHwnd)
+    _OnHotkey(key) {
+        idx := 0
+        for i, k in MenuWheelGui.Hotkeys {
+            if (k == key) {
+                idx := i
+                break
+            }
+        }
+        if (idx > 0 && idx <= this.sectors.Length)
+            this.DoSelect(idx)
     }
 
     static _H(menu, idx) {
@@ -464,7 +497,10 @@ class MenuWheelGui {
 
     _Cleanup() {
         this.ToggleFunc(false)
-        WindowHotkeyManager.Unregister(this)
+        if (this._hkIds.Length > 0) {
+            WinHotkey.UnregisterAll(this._hkIds)
+            this._hkIds := []
+        }
         this.isOpen := false
         if (IsObject(this.swipe))
             this.swipe.Stop()
@@ -491,6 +527,22 @@ class MenuWheelGui {
     OnRadialMenuSelect(ArcNr, MenuIndex) {
         tableItem := MySoftData.TableInfo[3]
         macroIndex := (MenuIndex - 1) * 8 + ArcNr
+        triggerType := tableItem.TriggerTypeArr[macroIndex]
+
+        ; 开关模式：与按键宏保持一致，统一走 OnToggleTriggerMacro
+        if (triggerType == 4) {
+            WorkerIndex := tableItem.IsWorkIndexArr[macroIndex]
+            if (WorkerIndex != 0) {
+                ; Worker 运行中 → 停止
+                MyStopMacro(tableItem.Index, macroIndex)
+                return
+            }
+            ; 未运行或主进程内运行 → 走统一的开关逻辑（管理 ToggleStateArr）
+            OnToggleTriggerMacro(tableItem.Index, macroIndex)
+            return
+        }
+
+        ; 非开关模式：直接启动
         SetTableItemState(tableItem.index, macroIndex, 1)
         OnTriggerMacroKeyAndInit(tableItem, tableItem.MacroArr[macroIndex], macroIndex)
     }
@@ -527,6 +579,18 @@ class MenuWheelGui {
                 { ControlName: "Wedge_" p, PropertyName: "Stroke", Value: menu.selectedStroke },
                 { ControlName: "Wedge_" p, PropertyName: "StrokeThickness", Value: String(menu.selectedThickness) },
                 { ControlName: "Label_" p, PropertyName: "Foreground", Value: menu.selectedText }
+            ])
+        }
+
+        ; 按宏运行状态渲染色点（使用全局 MacroStateColors）
+        RenderState(menu, stateColor) {
+            p := this.Index
+            ui := menu.ui
+            if (!IsObject(ui))
+                return
+            ui.BatchUpdate([
+                { ControlName: "StateDot_" p, PropertyName: "Fill", Value: stateColor },
+                { ControlName: "StateDot_" p, PropertyName: "Visibility", Value: "Visible" }
             ])
         }
     }
