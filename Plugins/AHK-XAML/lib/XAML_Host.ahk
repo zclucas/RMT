@@ -309,10 +309,8 @@ class XAMLHost {
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\dep\" baseDllName
 
-        if (A_IsCompiled && FileExist(A_ScriptDir "\" baseDllName)) {
-            targetExe := A_ScriptDir "\" baseDllName
-        } else if (A_IsCompiled) {
-            return
+        if (A_IsCompiled) {
+            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\dep\" baseDllName
         } else if (!A_IsCompiled) {
             buildLoc := IsSet(XAML_ENGINE_BUILD_LOCATION) ? XAML_ENGINE_BUILD_LOCATION : "temp"
             if (exePath == "") {
@@ -719,8 +717,8 @@ class XAMLHost {
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\dep\" baseDllName
 
-        if (A_IsCompiled && FileExist(A_ScriptDir "\" baseDllName)) {
-            targetExe := A_ScriptDir "\" baseDllName
+        if (A_IsCompiled) {
+            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\dep\" baseDllName
         } else if (!A_IsCompiled) {
             if !FileExist(sharedExe) {
                 if !XAMLHost.CompileEngine(libDir, sharedExe)
@@ -1107,7 +1105,7 @@ class XAMLHost {
         sharedExe := libDir "\dep\" baseDllName
 
         if (A_IsCompiled) {
-            targetExe := sharedExe
+            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\dep\" baseDllName
         } else if (!A_IsCompiled) {
             sourceCs := libDir "\dep\XAML_AHK_Bridge.cs"
             configAhk := libDir "\XAML_Config.ahk"
