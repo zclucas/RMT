@@ -423,20 +423,31 @@ function Copy-OpenCV {
 function Copy-XamlDlls {
     param([string]$ReleaseDir)
 
-    $srcDir = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib"
-    $dstDir = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib"
-    $dlls = @("ahk-xaml.dll", "WpfAnimatedGif.dll")
+    $srcDepDir = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib\dep"
+    $dstDepDir = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib\dep"
+    $dlls = @("ahk-xaml.dll")
 
-    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $dstDepDir -Force | Out-Null
 
     foreach ($dll in $dlls) {
-        $src = Join-Path $srcDir $dll
+        $src = Join-Path $srcDepDir $dll
         if (Test-Path $src) {
-            Copy-Item $src -Destination $dstDir -Force
-            Write-Log "  已复制: AHK-XAML/lib/$dll" "Gray"
+            Copy-Item $src -Destination $dstDepDir -Force
+            Write-Log "  已复制: AHK-XAML/lib/dep/$dll" "Gray"
         } else {
-            Write-Log "  [WARN] 未找到: AHK-XAML/lib/$dll" "Yellow"
+            Write-Log "  [WARN] 未找到: AHK-XAML/lib/dep/$dll" "Yellow"
         }
+    }
+
+    # WpfAnimatedGif.dll 在 dep/WpfAnimatedGif 子目录
+    $gifSrc = Join-Path $srcDepDir "WpfAnimatedGif\WpfAnimatedGif.dll"
+    $gifDstDir = Join-Path $dstDepDir "WpfAnimatedGif"
+    if (Test-Path $gifSrc) {
+        New-Item -ItemType Directory -Path $gifDstDir -Force | Out-Null
+        Copy-Item $gifSrc -Destination $gifDstDir -Force
+        Write-Log "  已复制: AHK-XAML/lib/dep/WpfAnimatedGif/WpfAnimatedGif.dll" "Gray"
+    } else {
+        Write-Log "  [WARN] 未找到: AHK-XAML/lib/dep/WpfAnimatedGif/WpfAnimatedGif.dll" "Yellow"
     }
 }
 

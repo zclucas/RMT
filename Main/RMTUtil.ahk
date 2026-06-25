@@ -205,6 +205,15 @@ PluginInit() {
 
     SetTimer(CheckOcrIdle, 60000)   ;60秒后，释放Ocr资源
 
+    ; ===== AHK-XAML 生产模式配置 =====
+    global XAML_FORCE_DYNAMIC_COMPILE := false
+    global XAML_ENGINE_BUILD_LOCATION := "lib/dep"
+    global XAML_DIAGNOSTICS_ENABLED := false
+    global XAML_AXML_DEBUG_MODE := false
+    global XAML_ENABLE_LOGGING := false
+    global XAML_ENABLE_TRACING := false
+    global XAML_ENABLE_DEVTOOLS := false
+
     XAMLHost.Prewarm()
 }
 

@@ -25,8 +25,8 @@ class XDialog {
         owner := options.HasProp("Owner") ? options.Owner : 0
         alwaysOnTop := options.HasProp("AlwaysOnTop") ? options.AlwaysOnTop : false
         waitForResponse := options.HasProp("WaitForResponse") ? options.WaitForResponse : true
-        themeName := options.HasProp("Theme") ? options.Theme : "Dark Mica (Win 11)"
-        iniPath := options.HasProp("IniPath") ? options.IniPath : (FileExist("themes.ini") ? "themes.ini" : "../themes.ini")
+        themeName := options.HasProp("Theme") ? options.Theme : XAMLHost.LastTheme
+        iniPath := options.HasProp("IniPath") ? options.IniPath : (XAMLHost.LastThemeIni != "" ? XAMLHost.LastThemeIni : (FileExist("themes.ini") ? "themes.ini" : "../themes.ini"))
         soundFx := options.HasProp("Sound") ? options.Sound : ""
         disableAltF4 := options.HasProp("DisableAltF4") ? options.DisableAltF4 : false
         movable := options.HasProp("Movable") ? options.Movable : true
@@ -34,22 +34,19 @@ class XDialog {
         darkenOwner := options.HasProp("DarkenOwner") ? options.DarkenOwner : false
 
         bgRes := "DropdownBg"
-        if FileExist(iniPath) {
-            try {
-                themeData := IniRead(iniPath, themeName)
-                Loop Parse, themeData, "`n", "`r" {
-                    parts := StrSplit(A_LoopField, "=", " `t", 2)
-                    if (parts.Length == 2 && parts[1] == "Window_DWM") {
-                        if (SubStr(parts[2], 1, 1) == "2" || SubStr(parts[2], 1, 1) == "3")
-                            bgRes := "BgColor"
-                        break
-                    }
-                }
-            }
-        }
 
         ; --- BUILD LAYOUT ---
-        main := XAML_Generator("Grid").Background("{DynamicResource " bgRes "}")
+        main := XAML_Generator("Grid")
+        dialogResources := ""
+        if (options.HasProp("CustomBackground")) {
+            fn := options.CustomBackground
+            fn(main)
+        } else {
+            main.Background("Transparent")
+        }
+        if (options.HasProp("Resources")) {
+            dialogResources .= "`n" options.Resources
+        }
         main.Rows("40", "*", "Auto")
 
         ; Titlebar (draggable)
@@ -57,13 +54,36 @@ class XDialog {
         if (movable) {
             tb.Name("DragArea")
         }
-        tb.Add("TextBlock").Text(title).Foreground("{DynamicResource TextMain}").FontSize(12).VerticalAlignment("Center").Margin("15,0,0,0")
+        
+        titleTb := tb.Add("TextBlock").Text(title).FontSize(12).VerticalAlignment("Center").Margin("15,0,0,0")
+        titleTb.Foreground(options.HasProp("TitleForeground") ? options.TitleForeground : "{DynamicResource TextMain}")
+        if (options.HasProp("TitleFontFamily")) {
+            titleTb.FontFamily(options.TitleFontFamily)
+        }
+        if (options.HasProp("TitleFontWeight")) {
+            titleTb.FontWeight(options.TitleFontWeight)
+        }
+        if (options.HasProp("TitleFontSize")) {
+            titleTb.FontSize(options.TitleFontSize)
+        }
+        if (options.HasProp("TitleMargin")) {
+            titleTb.Margin(options.TitleMargin)
+        }
 
         if (showCloseBtn) {
-            CloseBtnTemplate := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="#E0FF3333"/><Setter Property="Foreground" Value="White"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
-            closeBtn := tb.Add("Button").Name("BtnClose").WindowChrome_IsHitTestVisibleInChrome("True").Width(45).HorizontalAlignment("Right").Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0)
-            closeBtn.InjectResources(CloseBtnTemplate)
-            closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+            closeBtn := tb.Add("Button").Name("BtnClose").WindowChrome_IsHitTestVisibleInChrome("True").HorizontalAlignment("Right").Background("Transparent").BorderThickness(0)
+            if (options.HasProp("CloseBtnTemplate")) {
+                if (options.HasProp("CloseBtnWidth")) closeBtn._Props["Width"] := options.CloseBtnWidth
+                if (options.HasProp("CloseBtnHeight")) closeBtn._Props["Height"] := options.CloseBtnHeight
+                if (options.HasProp("CloseBtnMargin")) closeBtn._Props["Margin"] := options.CloseBtnMargin
+                if (options.HasProp("CloseBtnVerticalAlignment")) closeBtn._Props["VerticalAlignment"] := options.CloseBtnVerticalAlignment
+                closeBtn.InjectResources(options.CloseBtnTemplate)
+            } else {
+                CloseBtnTemplate := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="#E0FF3333"/><Setter Property="Foreground" Value="White"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+                closeBtn.Width(45).Foreground("{DynamicResource TextMain}")
+                closeBtn.InjectResources(CloseBtnTemplate)
+                closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+            }
         }
 
         ; Content Body
@@ -71,12 +91,18 @@ class XDialog {
 
         ; Message & Icon row
         msgRow := body.Add("Grid").Margin("0,0,0,15")
+        msgTb := msgRow.Add("TextBlock").Text(msg).TextWrapping("Wrap").VerticalAlignment("Top")
         if (iconChar != "") {
             msgRow.Cols("40", "*")
             msgRow.Add("TextBlock").Text(iconChar).Foreground(iconColor).FontSize(18).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").VerticalAlignment("Top").Margin("0,2,0,0").Grid_Column(0)
-            msgRow.Add("TextBlock").Text(msg).Foreground("{DynamicResource TextMain}").TextWrapping("Wrap").VerticalAlignment("Top").Grid_Column(1)
-        } else {
-            msgRow.Add("TextBlock").Text(msg).Foreground("{DynamicResource TextMain}").TextWrapping("Wrap").VerticalAlignment("Top")
+            msgTb.Grid_Column(1)
+        }
+        msgTb.Foreground(options.HasProp("MessageForeground") ? options.MessageForeground : "{DynamicResource TextMain}")
+        if (options.HasProp("MessageFontFamily")) {
+            msgTb.FontFamily(options.MessageFontFamily)
+        }
+        if (options.HasProp("MessageFontSize")) {
+            msgTb.FontSize(options.MessageFontSize)
         }
 
         ; Detail Textbox
@@ -101,11 +127,14 @@ class XDialog {
         }
 
         ; Buttons Footer
-        footer := main.Add("Border").Grid_Row(2).Background("{DynamicResource ControlBg}").Padding("15").CornerRadius("0,0,8,8")
+        footerBg := options.HasProp("FooterBackground") ? options.FooterBackground : "{DynamicResource ControlBg}"
+        footer := main.Add("Border").Grid_Row(2).Background(footerBg).Padding("15").CornerRadius("0,0,10,10")
         btnSp := footer.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
 
-        ; Inject beautiful Win11 rounded button styles directly into the dialog resources
-        main.InjectResources('<Style x:Key="DialogBtn" TargetType="Button"><Setter Property="Background" Value="#10FFFFFF"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,6"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style><Style x:Key="DialogPrimaryBtn" TargetType="Button"><Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,6"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.85"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
+        ; Inject default button styles if not already provided in resources
+        if (!InStr(dialogResources, 'x:Key="DialogBtn"')) {
+            dialogResources .= '<Style x:Key="DialogBtn" TargetType="Button"><Setter Property="Background" Value="#10FFFFFF"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,6"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style><Style x:Key="DialogPrimaryBtn" TargetType="Button"><Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,6"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.85"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        }
 
         for index, btnText in buttons {
             isPrimary := (btnText == "OK" || btnText == "Confirm" || btnText == "Allow Execution" || btnText == "Yes" || btnText == "Save" || btnText == "Awesome")
@@ -149,12 +178,17 @@ class XDialog {
 
         actualOwner := overlayGui != "" ? overlayGui.Hwnd : owner
 
+        if (dialogResources != "") {
+            main.InjectResources(dialogResources)
+        }
+
         if (exePath != "" && FileExist(exePath)) {
             ui := XAMLHost("", exePath, actualOwner)
         } else {
             ; Use a lightweight template without the 75KB component library for speed
-            captionH := movable ? "30" : "0"
+            captionH := movable ? "45" : "0"
             startupLoc := owner ? "CenterOwner" : "CenterScreen"
+            fontF := options.HasProp("FontFamily") ? options.FontFamily : "Segoe UI Variable Display, Segoe UI, sans-serif"
             dialogTemplate := '
             (
                 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -163,17 +197,24 @@ class XDialog {
                         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
                         ShowInTaskbar="False"
                         WindowStartupLocation="%startupLoc%"
-                        TextElement.Foreground="{DynamicResource TextMain}" FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif">
+                        TextElement.Foreground="{DynamicResource TextMain}" FontFamily="%fontFamily%">
                     
                     <WindowChrome.WindowChrome>
                         <WindowChrome GlassFrameThickness="-1" CaptionHeight="%captionH%" CornerRadius="{DynamicResource WindowRadius}" />
                     </WindowChrome.WindowChrome>
                 
-                    %app%
+                    <Border Margin="15" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="{DynamicResource WindowRadius}" Background="{DynamicResource %bgRes%}">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="15" Direction="270" RenderingBias="Performance" ShadowDepth="2" Opacity="0.3" Color="Black" />
+                        </Border.Effect>
+                        %app%
+                    </Border>
                 </Window>
             )'
             dialogTemplate := StrReplace(dialogTemplate, "%startupLoc%", startupLoc)
             dialogTemplate := StrReplace(dialogTemplate, "%captionH%", captionH)
+            dialogTemplate := StrReplace(dialogTemplate, "%fontFamily%", fontF)
+            dialogTemplate := StrReplace(dialogTemplate, "%bgRes%", bgRes)
             ui := XAMLHost(StrReplace(dialogTemplate, "%app%", main.ToString()), exePath, actualOwner)
         }
 
@@ -193,7 +234,7 @@ class XDialog {
         hIcon := ""
         try hIcon := LoadPicture("shell32.dll", "Icon26", &ImageType := 1)
 
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" Width="' width '" ' heightAttr ' ' resizeAttr ' ' focusAttr (alwaysOnTop ? ' Topmost="True"' : ''))
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" Width="' (width + 30) '" ' heightAttr ' ' resizeAttr ' ' focusAttr (alwaysOnTop ? ' Topmost="True"' : ''))
 
         resultObj := { Button: "", Input: "", Instance: ui }
 
@@ -218,7 +259,7 @@ class XDialog {
 
         if (waitForResponse) {
             ; Wait for dialog to close
-            while (resultObj.Button == "" && ProcessExist(ui.pid)) {
+            while (resultObj.Button == "" && (ui.wpfHwnd == 0 || WinExist("ahk_id " ui.wpfHwnd))) {
                 Sleep(50)
             }
             if (resultObj.Button == "") {

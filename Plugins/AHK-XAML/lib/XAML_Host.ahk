@@ -89,18 +89,26 @@ class CodeBox {
 }
 
 class XAMLHost {
+    static LastTheme := "Dark Mica (Win 11)"
+    static LastThemeIni := ""
+    static LastScale := "Balanced"
+    static LastRadius := "Smooth (8)"
+    static LastIcon := 0
     static _instances := Map()
     static _msgHooked := false
     static daemonHwnd := 0
     static daemonReceiver := 0
     static instanceCounter := 0
     static _appDir := ""
+    static CLR_Started := false
+    static CLR_BridgeAssembly := ""
+    static CLR_AppDomain := ""
+    static CLR_BridgeClass := ""
 
     static GetAppDir() {
         if (XAMLHost._appDir != "")
             return XAMLHost._appDir
         
-        ; 优先级: 1. 编译后的脚本目录 2. 库文件所在目录
         if (A_IsCompiled) {
             XAMLHost._appDir := A_ScriptDir
         } else {
@@ -108,23 +116,58 @@ class XAMLHost {
             XAMLHost._appDir := libDir "\.."
         }
         
-        ; 创建必要的子目录
         if !DirExist(A_WorkingDir "\Log")
             DirCreate(A_WorkingDir "\Log")
         if !DirExist(XAMLHost._appDir "\Cache")
             DirCreate(XAMLHost._appDir "\Cache")
 
-        ; 设置日志目录环境变量，供 C# 引擎子进程使用
         EnvSet("RMT_LOG_DIR", A_WorkingDir "\Log")
             
         return XAMLHost._appDir
     }
 
+    static GetEngineDllName() {
+        global CUSTOM_DLL_BUNDLE_NAME, XAML_ENABLE_WEBVIEW, XAML_ENABLE_AVALONEDIT, XAML_ENABLE_DOCUMENT, XAML_ENABLE_SHADERS
+        if (IsSet(CUSTOM_DLL_BUNDLE_NAME) && CUSTOM_DLL_BUNDLE_NAME != "")
+            return CUSTOM_DLL_BUNDLE_NAME
+        if (A_Args.Length > 0 && A_Args[1] == "/build") {
+            if (A_Args.Length > 1 && A_Args[2] != "")
+                return A_Args[2]
+            SplitPath(A_ScriptName, , , , &nameNoExt)
+            return nameNoExt "_bundled.dll"
+        }
+        if (A_IsCompiled) {
+            return "ahk-xaml.dll"
+        }
+        suffix := ""
+        if (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW)
+            suffix .= "-wv2"
+        if (IsSet(XAML_ENABLE_AVALONEDIT) && XAML_ENABLE_AVALONEDIT)
+            suffix .= "-ava"
+        if (IsSet(XAML_ENABLE_DOCUMENT) && XAML_ENABLE_DOCUMENT)
+            suffix .= "-docs"
+        if (IsSet(XAML_ENABLE_SHADERS) && XAML_ENABLE_SHADERS)
+            suffix .= "-fx"
+        return "ahk-xaml" suffix ".dll"
+    }
+
     __New(xaml := "", exePath := "", ownerHwnd := 0) {
-        XAMLHost.RestoreWebView2Dlls()
+        if (!A_IsCompiled) {
+            XAMLHost.RestoreWebView2Dlls()
+            XAMLHost.RestoreAvalonEditDlls()
+            XAMLHost.RestoreDocumentDlls()
+        }
         XAMLHost.instanceCounter++
         this.id := "WPF_" A_TickCount "_" XAMLHost.instanceCounter "_" Random(1000, 9999)
         XAMLHost._instances[this.id] := this
+
+        if (InStr(xaml, "%Width%"))
+            xaml := StrReplace(xaml, "%Width%", "940")
+        if (InStr(xaml, "%Height%"))
+            xaml := StrReplace(xaml, "%Height%", "700")
+        if (InStr(xaml, "%ResizeMode%"))
+            xaml := StrReplace(xaml, "%ResizeMode%", "CanResize")
+
         this.xaml := xaml
         this.exePath := exePath
         this.ownerHwnd := ownerHwnd
@@ -132,6 +175,9 @@ class XAMLHost {
         this.tracked := Map()
         this.wpfHwnd := 0
         this.pid := 0
+        XAMLHost.GetAppDir()
+        if !DirExist(A_WorkingDir "\Log")
+            DirCreate(A_WorkingDir "\Log")
         this.errLog := A_WorkingDir "\Log\AhkWpfError.log"
 
 
@@ -149,19 +195,41 @@ class XAMLHost {
             this.events[controlName] := Map()
         if !this.events[controlName].Has(eventName)
             this.events[controlName][eventName] := []
-        this.events[controlName][eventName].Push({ Callback: callback, Priority: priority })
+
+        evtObj := { Callback: callback, Priority: priority, LimitFPS: 0, QueueLimited: false }
+        this.events[controlName][eventName].Push(evtObj)
+
+        ; Return a chainable config object for this event registration
+        return { Limit: (thisObj, fps, queue := false) => (evtObj.LimitFPS := fps, evtObj.QueueLimited := queue, this) }
     }
 
     Track(controlName) {
         this.tracked[controlName] := true
     }
 
+    IsDevToolsWindow() {
+        if (!IsSet(XAML_DevTools_Instance) || !IsObject(XAML_DevTools_Instance))
+            return false
+        try {
+            if (HasProp(XAML_DevTools_Instance, "app") && XAML_DevTools_Instance.app && HasProp(XAML_DevTools_Instance.app, "host") && XAML_DevTools_Instance.app.host)
+                return (this.id == XAML_DevTools_Instance.app.host.id)
+        }
+        return false
+    }
+
     Update(controlName, propertyName, valueStr) {
-        if !this.wpfHwnd
+        if !this.wpfHwnd {
+            if !this.HasOwnProp("_updateQueue")
+                this._updateQueue := []
+            this._updateQueue.Push({ type: "single", ctrl: controlName, prop: propertyName, val: valueStr })
             return
+        }
         val := StrReplace(valueStr, "`r", "&#x0D;")
         val := StrReplace(val, "`n", "&#x0A;")
         payload := controlName "|" propertyName "|" val
+        if (!this.IsDevToolsWindow()) {
+            XAMLHost.LogDevTools("OUT", payload)
+        }
         buf := Buffer(StrPut(payload, "UTF-8"))
         StrPut(payload, buf, "UTF-8")
 
@@ -174,21 +242,28 @@ class XAMLHost {
     }
 
     BatchUpdate(updatesArray) {
-        if (!this.wpfHwnd)
+        if !this.wpfHwnd {
+            if !this.HasOwnProp("_updateQueue")
+                this._updateQueue := []
+            this._updateQueue.Push({ type: "batch", arr: updatesArray })
             return
+        }
 
         payload := ""
         for updateObj in updatesArray {
             if (!updateObj.HasProp("ControlName") || !updateObj.HasProp("PropertyName") || !updateObj.HasProp("Value"))
                 continue
-            
+
             val := String(updateObj.Value)
             val := StrReplace(val, "`r", "&#x0D;")
             val := StrReplace(val, "`n", "&#x0A;")
             payload .= updateObj.ControlName "|" updateObj.PropertyName "|" val "`n"
         }
-        
+
         if (payload != "") {
+            if (!this.IsDevToolsWindow()) {
+                XAMLHost.LogDevTools("OUT", payload)
+            }
             buf := Buffer(StrPut(payload, "UTF-8"))
             StrPut(payload, buf, "UTF-8")
 
@@ -201,6 +276,7 @@ class XAMLHost {
         }
     }
 
+
     ; Enable lightweight event mode: events only include the triggering control's value.
     ; Use ui.Query("TxtName") or ui.Query("*") for additional values.
     ; This dramatically reduces IPC payload for UIs with many tracked controls.
@@ -211,6 +287,8 @@ class XAMLHost {
     }
 
     static Prewarm(exePath := "") {
+        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
+        EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         if XAMLHost.daemonHwnd
             return
         if (!XAMLHost.daemonReceiver) {
@@ -222,41 +300,138 @@ class XAMLHost {
             }
         }
 
-        baseDllName := (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW) ? "ahk-xaml-webview.dll" : "ahk-xaml.dll"
+        if !DirExist(A_Temp "\AhkWpf")
+            DirCreate(A_Temp "\AhkWpf")
+
+        baseDllName := XAMLHost.GetEngineDllName()
+        targetExe := (exePath != "") ? exePath : A_Temp "\AhkWpf\" baseDllName
 
         SplitPath(A_LineFile, , &libDir)
-        sharedExe := libDir "\" baseDllName
+        sharedExe := libDir "\dep\" baseDllName
 
-        if (A_IsCompiled && FileExist(A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName)) {
-            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName
+        if (A_IsCompiled && FileExist(A_ScriptDir "\" baseDllName)) {
+            targetExe := A_ScriptDir "\" baseDllName
+        } else if (A_IsCompiled) {
+            return
         } else if (!A_IsCompiled) {
-            sourceCs := libDir "\XAML_AHK_Bridge.cs"
-            if (FileExist(sourceCs) && FileExist(sharedExe) && FileGetTime(sourceCs) > FileGetTime(sharedExe)) {
-                try {
-                    while ProcessExist("ahk-xaml.dll") {
-                        ProcessClose("ahk-xaml.dll")
-                        Sleep(50)
-                    }
-                    while ProcessExist("ahk-xaml-webview.dll") {
-                        ProcessClose("ahk-xaml-webview.dll")
-                        Sleep(50)
+            buildLoc := IsSet(XAML_ENGINE_BUILD_LOCATION) ? XAML_ENGINE_BUILD_LOCATION : "temp"
+            if (exePath == "") {
+                if (buildLoc == "lib/dep") {
+                    targetExe := sharedExe
+                } else {
+                    targetExe := A_Temp "\AhkWpf\" baseDllName
+                }
+            }
+
+            if (buildLoc == "temp") {
+                if !FileExist(targetExe) {
+                    if FileExist(sharedExe) {
+                        try FileCopy(sharedExe, targetExe, 1)
+                    } else if !XAMLHost.CompileEngine(libDir, targetExe) {
+                        return
                     }
                 }
-                try FileDelete(sharedExe)
+            } else if (buildLoc == "lib/dep") {
+                if !FileExist(targetExe) {
+                    if !XAMLHost.CompileEngine(libDir, targetExe)
+                        return
+                }
+            } else { ; both
+                if !FileExist(sharedExe) {
+                    if !XAMLHost.CompileEngine(libDir, sharedExe)
+                        return
+                }
+                if (!FileExist(targetExe) || FileGetTime(sharedExe) != FileGetTime(targetExe)) {
+                    try FileCopy(sharedExe, targetExe, 1)
+                }
             }
-            if !FileExist(sharedExe) {
-                if !XAMLHost.CompileEngine(libDir, sharedExe)
-                    return
-            }
-            targetExe := sharedExe
+
             XAMLHost.RestoreWebView2Dlls()
+            XAMLHost.RestoreAvalonEditDlls()
+            XAMLHost.RestoreDocumentDlls()
+            SplitPath(targetExe, , &targetDir)
+            XAMLHost.CopyRequiredDlls(libDir, targetDir)
+
         } else {
-            MsgBox("Error: " baseDllName " not found.`nExpected: " A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName, "AHK-XAML", "Iconx")
-            return
+            ;;@Ahk2Exe-IgnoreBegin
+            ;if !FileExist(targetExe)
+            ;    FileInstall("dep\ahk-xaml.dll", targetExe, 1)
+            ;;@Ahk2Exe-IgnoreEnd
         }
 
         logArg := (IsSet(XAML_ENABLE_LOGGING) && !XAML_ENABLE_LOGGING) ? ' --no-log' : ''
-        Run('"' targetExe '" --daemon "' ProcessExist() '" "' String(XAMLHost.daemonReceiver.Hwnd) '"' logArg, "", "Hide")
+        XAMLHost.RunProcess(targetExe, '--daemon "' ProcessExist() '" "' String(XAMLHost.daemonReceiver.Hwnd) '"' logArg, "", true)
+    }
+
+    static RunProcess(exePath, args, workingDir := "", hide := true) {
+        cmdLine := '"' exePath '" ' args
+        siSize := A_PtrSize == 8 ? 104 : 68
+        si := Buffer(siSize, 0)
+        NumPut("UInt", siSize, si, 0) ; cb
+        if (hide) {
+            NumPut("UInt", 0x00000001, si, A_PtrSize == 8 ? 60 : 44) ; dwFlags = STARTF_USESHOWWINDOW
+            NumPut("UShort", 0, si, A_PtrSize == 8 ? 64 : 48)        ; wShowWindow = SW_HIDE
+        }
+        piSize := A_PtrSize == 8 ? 24 : 16
+        pi := Buffer(piSize, 0)
+        status := DllCall("kernel32\CreateProcessW",
+            "Ptr", 0,          ; lpApplicationName
+            "Str", cmdLine,    ; lpCommandLine
+            "Ptr", 0,          ; lpProcessAttributes
+            "Ptr", 0,          ; lpThreadAttributes
+            "Int", 0,          ; bInheritHandles
+            "UInt", 0,         ; dwCreationFlags
+            "Ptr", 0,          ; lpEnvironment
+            "Ptr", workingDir == "" ? 0 : StrPtr(workingDir), ; lpCurrentDirectory
+            "Ptr", si.Ptr,     ; lpStartupInfo
+            "Ptr", pi.Ptr,     ; lpProcessInformation
+            "Int"              ; Return type
+        )
+        if (!status)
+            return false
+        hProcess := NumGet(pi, 0, "Ptr")
+        hThread := NumGet(pi, A_PtrSize, "Ptr")
+        DllCall("kernel32\CloseHandle", "Ptr", hProcess)
+        DllCall("kernel32\CloseHandle", "Ptr", hThread)
+        return true
+    }
+
+    static RunProcessWait(exePath, args, workingDir := "", hide := true) {
+        cmdLine := '"' exePath '" ' args
+        siSize := A_PtrSize == 8 ? 104 : 68
+        si := Buffer(siSize, 0)
+        NumPut("UInt", siSize, si, 0) ; cb
+        if (hide) {
+            NumPut("UInt", 0x00000001, si, A_PtrSize == 8 ? 60 : 44) ; dwFlags = STARTF_USESHOWWINDOW
+            NumPut("UShort", 0, si, A_PtrSize == 8 ? 64 : 48)        ; wShowWindow = SW_HIDE
+        }
+        piSize := A_PtrSize == 8 ? 24 : 16
+        pi := Buffer(piSize, 0)
+        status := DllCall("kernel32\CreateProcessW",
+            "Ptr", 0,          ; lpApplicationName
+            "Str", cmdLine,    ; lpCommandLine
+            "Ptr", 0,          ; lpProcessAttributes
+            "Ptr", 0,          ; lpThreadAttributes
+            "Int", 0,          ; bInheritHandles
+            "UInt", 0,         ; dwCreationFlags
+            "Ptr", 0,          ; lpEnvironment
+            "Ptr", workingDir == "" ? 0 : StrPtr(workingDir), ; lpCurrentDirectory
+            "Ptr", si.Ptr,     ; lpStartupInfo
+            "Ptr", pi.Ptr,     ; lpProcessInformation
+            "Int"              ; Return type
+        )
+        if (!status)
+            return -1
+        hProcess := NumGet(pi, 0, "Ptr")
+        hThread := NumGet(pi, A_PtrSize, "Ptr")
+        DllCall("kernel32\WaitForSingleObject", "Ptr", hProcess, "UInt", 0xFFFFFFFF)
+        exitCode := 0
+        exitCodeBuf := Buffer(4, 0)
+        DllCall("kernel32\GetExitCodeProcess", "Ptr", hProcess, "Ptr", exitCodeBuf.Ptr)
+        exitCode := NumGet(exitCodeBuf, 0, "UInt")
+        DllCall("kernel32\CloseHandle", "Ptr", hProcess)
+        DllCall("kernel32\CloseHandle", "Ptr", hThread)
+        return exitCode
     }
 
     CheckForCrashes() {
@@ -265,13 +440,13 @@ class XAMLHost {
             return
         }
         if FileExist(this.errLog) {
-            SetTimer(ObjBindMethod(this, "CheckForCrashes"), 0)
-            err := FileRead(this.errLog)
-            FileDelete(this.errLog)
-
-            ; 空内容不是崩溃（例如编译成功时 csc 重定向留下的 0 字节文件），忽略避免弹空崩溃框
-            if (Trim(err, " `t`r`n") == "")
+            try {
+                err := FileRead(this.errLog)
+                FileDelete(this.errLog)
+            } catch {
                 return
+            }
+            SetTimer(ObjBindMethod(this, "CheckForCrashes"), 0)
 
             ahkLine := "Unknown"
             snippet := ""
@@ -293,7 +468,7 @@ class XAMLHost {
             }
 
             hasRetry := (IsSet(XAML_DIAGNOSTICS_ENABLED) && XAML_DIAGNOSTICS_ENABLED && lineNum > 0)
-            
+
             while (true) {
                 action := XAMLHost.ShowErrorDialog("Engine Crash", header, snippet, err, hasRetry)
                 if (action == "skip_property") {
@@ -377,7 +552,7 @@ class XAMLHost {
         snipLbl := "", snipEdit := ""
         if (snippet != "") {
             errGui.SetFont("s11 bold c003366", "Segoe UI")
-            snipLbl := errGui.Add("Text", "y+15", "Generated XAML Snippet:")
+            snipLbl := errGui.Add("Text", "y+15", InStr(title, "Compile Error") ? "Code Snippet:" : "Generated XAML Snippet:")
             errGui.SetFont("s9 norm cE0E0E0", "Consolas")
             snipEdit := CodeBox.Add(errGui, "y+5 w860 h150 ReadOnly +VScroll +HScroll -Wrap Background1E1E1E", "`r`n" snippet, 0xE0E0E0)
 
@@ -531,33 +706,22 @@ class XAMLHost {
 
         payload := this.xaml "`n---AHK-XAML-EVENTS---`n" eventBindings
 
-        tempTxt := XAMLHost.GetAppDir() "\Cache\gui_temp.txt"
+        tempTxt := A_Temp "\AhkWpf\gui_temp.txt"
+        if !DirExist(A_Temp "\AhkWpf")
+            DirCreate(A_Temp "\AhkWpf")
 
         if FileExist(tempTxt)
             FileDelete(tempTxt)
         FileAppend(payload, tempTxt, "UTF-8")
 
-        targetExe := (this.exePath != "") ? this.exePath : ""
+        baseDllName := XAMLHost.GetEngineDllName()
+        targetExe := (this.exePath != "") ? this.exePath : A_Temp "\AhkWpf\" baseDllName
         SplitPath(A_LineFile, , &libDir)
-        sharedExe := libDir "\ahk-xaml.dll"
+        sharedExe := libDir "\dep\" baseDllName
 
-        if (A_IsCompiled && FileExist(A_ScriptDir "\Plugins\AHK-XAML\lib\ahk-xaml.dll")) {
-            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\ahk-xaml.dll"
+        if (A_IsCompiled && FileExist(A_ScriptDir "\" baseDllName)) {
+            targetExe := A_ScriptDir "\" baseDllName
         } else if (!A_IsCompiled) {
-            sourceCs := libDir "\XAML_AHK_Bridge.cs"
-            if (FileExist(sourceCs) && FileExist(sharedExe) && FileGetTime(sourceCs) > FileGetTime(sharedExe)) {
-                try {
-                    while ProcessExist("ahk-xaml.dll") {
-                        ProcessClose("ahk-xaml.dll")
-                        Sleep(50)
-                    }
-                    while ProcessExist("ahk-xaml-webview.dll") {
-                        ProcessClose("ahk-xaml-webview.dll")
-                        Sleep(50)
-                    }
-                }
-                try FileDelete(sharedExe)
-            }
             if !FileExist(sharedExe) {
                 if !XAMLHost.CompileEngine(libDir, sharedExe)
                     return
@@ -566,26 +730,28 @@ class XAMLHost {
         }
 
         if !FileExist(targetExe) {
-            MsgBox("Fatal Error: Could not locate ahk-xaml.dll to perform compilation.", "AHK-XAML", "Iconx")
+            MsgBox("Fatal Error: Could not locate " baseDllName " to perform compilation.", "AHK-XAML", "Iconx")
             return
         }
 
-        RunWait('"' targetExe '" --compress "' tempTxt '" "' filePath '"', "", "Hide")
+        XAMLHost.RunProcessWait(targetExe, '--compress "' tempTxt '" "' filePath '"', "", true)
 
         if FileExist(tempTxt)
             FileDelete(tempTxt)
     }
 
-    static CompileEngine(libDir, sharedExe, extraResources := []) {
+    static CompileEngine(libDir, sharedExe, extraResources := [], embedDeps := false) {
+        global XAML_ENABLE_WEBVIEW, XAML_ENABLE_AVALONEDIT, XAML_ENABLE_DOCUMENT, XAML_ENABLE_SHADERS
+        if (A_IsCompiled) {
+            MsgBox("AHK-XAML: Dynamic compilation is not available when the script is compiled. Please compile the engine separately.")
+            return
+        }
+
         XAMLHost.RestoreWebView2Dlls()
-        ; 确保日志目录存在：否则 csc 的 ">" 输出重定向会因目录缺失而失败，
-        ; 导致编译命令根本不执行，既无 DLL 也无 errLog，只剩 "Unknown compilation error."
-        if !DirExist(A_WorkingDir "\Log")
-            DirCreate(A_WorkingDir "\Log")
-        errLog := A_WorkingDir "\Log\AhkWpfError.log"
-        sourceCs := libDir "\XAML_AHK_Bridge.cs"
+        errLog := A_Temp "\AhkWpf\AhkWpfError.log"
+        sourceCs := libDir "\dep\XAML_AHK_Bridge.cs"
         if !FileExist(sourceCs) {
-            MsgBox("XAML_AHK_Bridge.cs not found in lib directory!`nCannot compile shared engine.", "AHK-XAML", "Iconx")
+            MsgBox("XAML_AHK_Bridge.cs not found in lib\dep directory!`nCannot compile shared engine.", "AHK-XAML", "Iconx")
             return false
         }
 
@@ -599,27 +765,94 @@ class XAMLHost {
         wvRefs := ""
         wvDef := ""
         if (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW) {
-            coreDll := libDir "\WebView2\Microsoft.Web.WebView2.Core.dll"
-            wpfDll := libDir "\WebView2\Microsoft.Web.WebView2.Wpf.dll"
+            coreDll := libDir "\dep\WebView2\Microsoft.Web.WebView2.Core.dll"
+            wpfDll := libDir "\dep\WebView2\Microsoft.Web.WebView2.Wpf.dll"
             if (FileExist(coreDll) && FileExist(wpfDll)) {
                 wvRefs := ' /reference:"' coreDll '" /reference:"' wpfDll '"'
+                if (embedDeps) {
+                    wvRefs .= ' /resource:"' coreDll '",Microsoft.Web.WebView2.Core.dll /resource:"' wpfDll '",Microsoft.Web.WebView2.Wpf.dll'
+                }
                 wvDef := ' /define:ENABLE_WEBVIEW'
             } else {
-                ToolTip("WebView2 DLLs not found in lib\WebView2. Compiling without WebView2 support.")
+                ToolTip("WebView2 DLLs not found in lib\dep\WebView2. Compiling without WebView2 support.")
                 SetTimer(() => ToolTip(), -4000)
             }
         }
 
-        gifDll := libDir "\WpfAnimatedGif.dll"
-        gifRef := FileExist(gifDll) ? ' /reference:"' gifDll '"' : ""
+        ; --- AvalonEdit IDE Component ---
+        aeRefs := ""
+        aeDef := ""
+        if (IsSet(XAML_ENABLE_AVALONEDIT) && XAML_ENABLE_AVALONEDIT) {
+            aeDll := libDir "\dep\AvalonEdit\ICSharpCode.AvalonEdit.dll"
+            if (FileExist(aeDll)) {
+                aeRefs := ' /reference:"' aeDll '" /reference:System.Windows.Forms.dll /reference:WindowsFormsIntegration.dll'
+                if (embedDeps) {
+                    aeRefs .= ' /resource:"' aeDll '",ICSharpCode.AvalonEdit.dll'
+                }
+                aeDef := ' /define:ENABLE_AVALONEDIT'
+            } else {
+                ToolTip("AvalonEdit DLL not found in lib\dep\AvalonEdit. Compiling without IDE support.")
+                SetTimer(() => ToolTip(), -4000)
+            }
+        }
 
-        mdDll := libDir "\MaterialDesignThemes.Wpf.dll"
-        mdRef := FileExist(mdDll) ? ' /reference:"' mdDll '"' : ""
+        ; --- Document Editor (OpenXml + NPOI) ---
+        docRefs := ""
+        docDef := ""
+        if (IsSet(XAML_ENABLE_DOCUMENT) && XAML_ENABLE_DOCUMENT) {
+            oxDll := libDir "\dep\OpenXml\DocumentFormat.OpenXml.dll"
+            if (FileExist(oxDll)) {
+                docRefs := ' /reference:"' oxDll '"'
+                if (embedDeps) {
+                    docRefs .= ' /resource:"' oxDll '",DocumentFormat.OpenXml.dll'
+                }
+                ; Also add NPOI if available for .doc support
+                npoiDll := libDir "\dep\OpenXml\NPOI.dll"
+                if (FileExist(npoiDll)) {
+                    docRefs .= ' /reference:"' npoiDll '"'
+                    if (embedDeps) {
+                        docRefs .= ' /resource:"' npoiDll '",NPOI.dll'
+                    }
+                    npoiOoxmlDll := libDir "\dep\OpenXml\NPOI.OOXML.dll"
+                    npoiOpenXml4NetDll := libDir "\dep\OpenXml\NPOI.OpenXml4Net.dll"
+                    if (FileExist(npoiOoxmlDll)) {
+                        docRefs .= ' /reference:"' npoiOoxmlDll '"'
+                        if (embedDeps) {
+                            docRefs .= ' /resource:"' npoiOoxmlDll '",NPOI.OOXML.dll'
+                        }
+                    }
+                    if (FileExist(npoiOpenXml4NetDll)) {
+                        docRefs .= ' /reference:"' npoiOpenXml4NetDll '"'
+                        if (embedDeps) {
+                            docRefs .= ' /resource:"' npoiOpenXml4NetDll '",NPOI.OpenXml4Net.dll'
+                        }
+                    }
+                }
+                docDef := ' /define:ENABLE_DOCUMENT'
+            } else {
+                ToolTip("OpenXml DLL not found in lib\dep\OpenXml. Compiling without Document Editor support.")
+                SetTimer(() => ToolTip(), -4000)
+            }
+        }
+
+        shDef := ""
+        if (IsSet(XAML_ENABLE_SHADERS) && XAML_ENABLE_SHADERS) {
+            shDef := ' /define:ENABLE_SHADERS'
+        }
+
+        gifRef := ""
+        gifDll := libDir "\dep\WpfAnimatedGif\WpfAnimatedGif.dll"
+        if (FileExist(gifDll)) {
+            gifRef := ' /reference:"' gifDll '"'
+            if (embedDeps) {
+                gifRef .= ' /resource:"' gifDll '",WpfAnimatedGif.dll'
+            }
+        }
 
         ; Embed component resources directly into the DLL for zero-disk-IO loading
         embeddedRes := ""
-        bamlPath := libDir "\xaml.components.baml"
-        xamlPath := libDir "\xaml.components.xaml"
+        bamlPath := libDir "\dep\xaml.components.baml"
+        xamlPath := libDir "\dep\xaml.components.xaml"
         if FileExist(bamlPath) {
             embeddedRes .= ' /resource:"' bamlPath '"'
         } else if FileExist(xamlPath) {
@@ -627,134 +860,340 @@ class XAMLHost {
         }
 
         for _, res in extraResources {
-            if FileExist(res)
-                embeddedRes .= ' /resource:"' res '"'
+            if FileExist(res) {
+                SplitPath(res, &resName)
+                embeddedRes .= ' /resource:"' res '",' resName
+            }
         }
 
-        cmd := A_ComSpec ' /c ""' cscPath '" /nologo /target:winexe /platform:anycpu /out:"' sharedExe '" /lib:"' wpfDir '" /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll /reference:PresentationFramework.dll /reference:PresentationCore.dll /reference:WindowsBase.dll /reference:System.Xaml.dll /reference:UIAutomationProvider.dll /reference:UIAutomationTypes.dll' wvRefs gifRef mdRef wvDef embeddedRes ' "' sourceCs '" > "' errLog '" 2>&1"'
+        try FileDelete(sharedExe)
+        if FileExist(sharedExe) {
+            SplitPath(sharedExe, &sharedName)
+            MsgBox("Error: The target DLL '" sharedName "' is locked by a running process.`n`nPlease close all running instances of your application and try compiling again.", "Build Error", "Iconx")
+            return false
+        }
+
+        cmd := A_ComSpec ' /c ""' cscPath '" /nologo /target:winexe /out:"' sharedExe '" /lib:"' wpfDir '" /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll /reference:PresentationFramework.dll /reference:PresentationCore.dll /reference:WindowsBase.dll /reference:System.Xaml.dll /reference:UIAutomationProvider.dll /reference:UIAutomationTypes.dll' wvRefs wvDef aeRefs aeDef docRefs docDef shDef gifRef embeddedRes ' "' sourceCs '" > "' errLog '" 2>&1"'
         RunWait(cmd, "", "Hide")
 
         if !FileExist(sharedExe) {
             errOut := FileExist(errLog) ? FileRead(errLog) : "Unknown compilation error."
-            XAMLHost.ShowErrorDialog("Engine Compile Error", "Failed to compile background engine.", "", errOut)
+            snippet := ""
+            reason := ""
+
+            if RegExMatch(errOut, "m)^([a-zA-Z]:\\[^\(]+)\((\d+),(\d+)\):\s*error\s*(CS\d+:\s*[^\r\n]+)", &match) {
+                filePath := match[1]
+                lineNum := Integer(match[2])
+                colNum := Integer(match[3])
+                reason := match[4]
+
+                if FileExist(filePath) {
+                    try {
+                        lines := StrSplit(FileRead(filePath), "`n", "`r")
+                        if (lineNum > 0 && lineNum <= lines.Length) {
+                            codeLine := lines[lineNum]
+                            pointerLine := ""
+                            loop colNum - 1
+                                pointerLine .= " "
+                            pointerLine .= "^"
+
+                            startLine := Max(1, lineNum - 3)
+                            endLine := Min(lines.Length, lineNum + 3)
+
+                            for idx, lineStr in lines {
+                                if (idx >= startLine && idx <= endLine) {
+                                    if (idx == lineNum) {
+                                        snippet .= ">> " idx ":  " codeLine "`n"
+                                        snippet .= "   " RegExReplace(idx, ".", " ") "   " pointerLine "`n"
+                                    } else {
+                                        snippet .= "   " idx ":  " lineStr "`n"
+                                    }
+                                }
+                            }
+                            snippet := Trim(snippet, "`n")
+                        }
+                    }
+                }
+            }
+
+            XAMLHost.ShowErrorDialog("Engine Compile Error", "Failed to compile background engine.", snippet, errOut, false, reason)
             return false
         }
-        ; 编译成功：csc 的 ">" 重定向会留下一个 0 字节的 errLog，
-        ; 与运行期崩溃日志同名，会被 CheckForCrashes 误判为“引擎崩溃”。成功后清掉它。
-        if FileExist(errLog)
-            FileDelete(errLog)
+        try FileDelete(errLog)
         return true
     }
 
+    static CopyRequiredDlls(libDir, targetDir) {
+        depDir := libDir "\dep"
+        if (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW) {
+            if FileExist(depDir "\WebView2\WebView2Loader.dll") {
+                try FileCopy(depDir "\WebView2\WebView2Loader.dll", targetDir "\WebView2Loader.dll", 1)
+                try FileCopy(depDir "\WebView2\Microsoft.Web.WebView2.Core.dll", targetDir "\Microsoft.Web.WebView2.Core.dll", 1)
+                try FileCopy(depDir "\WebView2\Microsoft.Web.WebView2.Wpf.dll", targetDir "\Microsoft.Web.WebView2.Wpf.dll", 1)
+            }
+        }
+        if (IsSet(XAML_ENABLE_AVALONEDIT) && XAML_ENABLE_AVALONEDIT) {
+            if FileExist(depDir "\AvalonEdit\ICSharpCode.AvalonEdit.dll")
+                try FileCopy(depDir "\AvalonEdit\ICSharpCode.AvalonEdit.dll", targetDir "\ICSharpCode.AvalonEdit.dll", 1)
+        }
+        if (IsSet(XAML_ENABLE_DOCUMENT) && XAML_ENABLE_DOCUMENT) {
+            if FileExist(depDir "\OpenXml\DocumentFormat.OpenXml.dll")
+                try FileCopy(depDir "\OpenXml\DocumentFormat.OpenXml.dll", targetDir "\DocumentFormat.OpenXml.dll", 1)
+            if FileExist(depDir "\OpenXml\NPOI.dll")
+                try FileCopy(depDir "\OpenXml\NPOI.dll", targetDir "\NPOI.dll", 1)
+            if FileExist(depDir "\OpenXml\NPOI.OOXML.dll")
+                try FileCopy(depDir "\OpenXml\NPOI.OOXML.dll", targetDir "\NPOI.OOXML.dll", 1)
+            if FileExist(depDir "\OpenXml\NPOI.OpenXml4Net.dll")
+                try FileCopy(depDir "\OpenXml\NPOI.OpenXml4Net.dll", targetDir "\NPOI.OpenXml4Net.dll", 1)
+        }
+    }
+
+
     BundleCustomEngine(targetExe) {
+        if (A_IsCompiled) {
+            MsgBox("AHK-XAML: Dynamic compilation is not available when the script is compiled. Please compile the engine separately.")
+            return
+        }
+        ; If running in /build mode, write AXML metadata directly to the source script for standalone compiled execution
+        if (A_Args.Length > 0 && A_Args[1] == "/build" && IsSet(AXML) && HasProp(AXML, "ParsedData") && AXML.ParsedData.Length > 0) {
+            metadataStr := AXML.SerializeParsedData()
+            escapedMetadata := StrReplace(metadataStr, "`r", "")
+            escapedMetadata := StrReplace(escapedMetadata, "`n", "``n")
+            escapedMetadata := StrReplace(escapedMetadata, '"', '""')
+            metadataBlock := '`n;=== AXML METADATA ===`nAXML_METADATA := "' escapedMetadata '"`n;=== AXML METADATA END ===`n'
+
+            try {
+                scriptContent := FileRead(A_ScriptFullPath, "UTF-8")
+                ; Strip existing metadata block if present
+                scriptContent := RegExReplace(scriptContent, "s)(?:\r?\n)?[ \t]*;=== AXML METADATA ===.*;=== AXML METADATA END ===(?:\r?\n)?")
+
+                ; Insert at the top of the file, right after #Requires if present, otherwise at the very top
+                if (pos := RegExMatch(scriptContent, "mi)^[ \t]*#Requires\b")) {
+                    posLineEnd := InStr(scriptContent, "`n", , pos)
+                    left := SubStr(scriptContent, 1, posLineEnd)
+                    right := SubStr(scriptContent, posLineEnd + 1)
+                    scriptContent := left metadataBlock right
+                } else {
+                    scriptContent := metadataBlock scriptContent
+                }
+
+                FileDelete(A_ScriptFullPath)
+                FileAppend(scriptContent, A_ScriptFullPath, "UTF-8")
+            }
+        }
+
         cleanXaml := StrReplace(this.xaml, "%resources%", "")
         cleanXaml := StrReplace(cleanXaml, "%components%", "")
-        
-        tempDir := XAMLHost.GetAppDir() "\Cache"
-        
+
+        tempDir := A_Temp "\AhkWpf"
+        if !DirExist(tempDir)
+            DirCreate(tempDir)
+
         tempXaml := tempDir "\app_payload.xaml"
         tempBaml := tempDir "\app_payload.baml"
         tempEvents := tempDir "\app_payload.events"
-        
+
         try FileDelete(tempXaml)
         try FileDelete(tempBaml)
         try FileDelete(tempEvents)
-        
+
         FileAppend(cleanXaml, tempXaml, "UTF-8")
-        
+
         SplitPath(A_LineFile, , &libDir)
         toolPath := libDir "\..\tools\compile_baml.ps1"
-        if FileExist(toolPath) {
+        forceXaml := (IsSet(XAML_FORCE_XAML_BUNDLING) && XAML_FORCE_XAML_BUNDLING) || EnvGet("AHK_XAML_FORCE_XAML") == "1"
+        if (!forceXaml && FileExist(toolPath)) {
             cmd := 'powershell.exe -ExecutionPolicy Bypass -File "' toolPath '" -InputXaml "' tempXaml '" -OutputBaml "' tempBaml '"'
             RunWait(cmd, "", "Hide")
         }
-        
+
         eventsStr := ""
         for ctrlName, evtMap in this.events {
             for evtName, arr in evtMap {
-                eventsStr .= ctrlName ":" evtName ","
+                limit := 0
+                queue := false
+                for evtObj in arr {
+                    if (evtObj.HasProp("LimitFPS") && evtObj.LimitFPS > 0) {
+                        limit := evtObj.LimitFPS
+                        queue := evtObj.QueueLimited
+                    }
+                }
+
+                evtToken := ctrlName ":" evtName
+                if (limit > 0)
+                    evtToken .= "@" limit (queue ? "Q" : "")
+
+                eventsStr .= evtToken ","
             }
         }
         eventsStr := Trim(eventsStr, ",")
         if (eventsStr != "") {
             FileAppend(eventsStr, tempEvents, "UTF-8")
         }
-        
+
         resList := []
         if FileExist(tempBaml) {
             resList.Push(tempBaml)
         } else {
-            MsgBox("Failed to compile BAML during bundle export! Check the compiler log.", "AHK-XAML", "Iconx")
-            return false
+            ToolTip("Warning: BAML compilation failed. Falling back to XAML bundling...")
+            SetTimer(() => ToolTip(), -3000)
+            if FileExist(tempXaml) {
+                resList.Push(tempXaml)
+            } else {
+                MsgBox("Failed to bundle custom engine: XAML payload file not found.", "AHK-XAML", "Iconx")
+                return false
+            }
         }
-        
+
         if FileExist(tempEvents)
             resList.Push(tempEvents)
-            
+
+        tempAxml := tempDir "\app_payload.axml"
+        try FileDelete(tempAxml)
+        if (IsSet(AXML) && HasProp(AXML, "ParsedData") && AXML.ParsedData.Length > 0) {
+            FileAppend(AXML.SerializeParsedData(), tempAxml, "UTF-8")
+            resList.Push(tempAxml)
+        }
+
+        SplitPath(targetExe, &targetName)
         try {
-            while ProcessExist(targetExe) {
-                ProcessClose(targetExe)
+            while ProcessExist(targetName) {
+                ProcessClose(targetName)
                 Sleep(50)
             }
-            FileDelete(targetExe)
         }
-            
-        success := XAMLHost.CompileEngine(libDir, targetExe, resList)
-        
+        try FileDelete(targetExe)
+        if FileExist(targetExe) {
+            MsgBox("Error: The target DLL '" targetName "' is locked by a running process.`n`nPlease close all running instances of your application and try building again.", "Build Error", "Iconx")
+            return false
+        }
+
+        success := XAMLHost.CompileEngine(libDir, targetExe, resList, true)
+
+        if (success) {
+            SplitPath(targetExe, , &targetDir)
+            ; Copy native WebView2Loader.dll if WebView2 is enabled
+            if (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW) {
+                depDir := libDir "\dep"
+                if FileExist(depDir "\WebView2\WebView2Loader.dll") {
+                    try FileCopy(depDir "\WebView2\WebView2Loader.dll", targetDir "\WebView2Loader.dll", 1)
+                }
+            }
+        }
+
         try FileDelete(tempXaml)
         try FileDelete(tempBaml)
         try FileDelete(tempEvents)
-        
+        try FileDelete(tempAxml)
+
         return success
     }
 
     _EnsureDaemon() {
-        baseDllName := (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW) ? "ahk-xaml-webview.dll" : "ahk-xaml.dll"
-        SplitPath(A_LineFile, , &libDir)
-        sharedExe := libDir "\" baseDllName
+        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
+        EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
+        baseDllName := XAMLHost.GetEngineDllName()
+        targetExe := (this.exePath != "") ? this.exePath : A_Temp "\AhkWpf\" baseDllName
         if XAMLHost.daemonHwnd
-            return sharedExe
+            return targetExe
 
-        if FileExist(this.errLog)
-            FileDelete(this.errLog)
-
-        if (A_IsCompiled && FileExist(A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName)) {
-            targetExe := A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName
-        } else if (!A_IsCompiled) {
-            sourceCs := libDir "\XAML_AHK_Bridge.cs"
-            if (FileExist(sourceCs) && FileExist(sharedExe) && FileGetTime(sourceCs) > FileGetTime(sharedExe)) {
-                try {
-                    while ProcessExist("ahk-xaml.dll") {
-                        ProcessClose("ahk-xaml.dll")
-                        Sleep(50)
-                    }
-                    while ProcessExist("ahk-xaml-webview.dll") {
-                        ProcessClose("ahk-xaml-webview.dll")
-                        Sleep(50)
-                    }
-                }
-                try FileDelete(sharedExe)
-            }
-            if !FileExist(sharedExe) {
-                if !XAMLHost.CompileEngine(libDir, sharedExe)
-                    return ""
-            }
-            targetExe := sharedExe
-
-            XAMLHost.RestoreWebView2Dlls()
-        } else {
-            MsgBox("Error: " baseDllName " not found.`nExpected: " A_ScriptDir "\Plugins\AHK-XAML\lib\" baseDllName, "AHK-XAML", "Iconx")
-            return
+        if !DirExist(A_Temp "\AhkWpf")
+            DirCreate(A_Temp "\AhkWpf")
+        if FileExist(this.errLog) {
+            try FileDelete(this.errLog)
         }
 
-        if FileExist(this.errLog)
-            FileDelete(this.errLog)
+        SplitPath(A_LineFile, , &libDir)
+        sharedExe := libDir "\dep\" baseDllName
+
+        if (A_IsCompiled) {
+            targetExe := sharedExe
+        } else if (!A_IsCompiled) {
+            sourceCs := libDir "\dep\XAML_AHK_Bridge.cs"
+            configAhk := libDir "\XAML_Config.ahk"
+            configTime := FileExist(configAhk) ? FileGetTime(configAhk) : 0
+            forceCompile := IsSet(XAML_FORCE_DYNAMIC_COMPILE) && XAML_FORCE_DYNAMIC_COMPILE
+            buildLoc := IsSet(XAML_ENGINE_BUILD_LOCATION) ? XAML_ENGINE_BUILD_LOCATION : "temp"
+
+            if (buildLoc == "lib/dep") {
+                targetExe := sharedExe
+            } else {
+                targetExe := A_Temp "\AhkWpf\" baseDllName
+            }
+
+            if (forceCompile && FileExist(sourceCs)) {
+                compileTarget := (buildLoc == "temp") ? targetExe : sharedExe
+                if (!FileExist(compileTarget) || FileGetTime(sourceCs) > FileGetTime(compileTarget) || configTime > FileGetTime(compileTarget)) {
+                    try {
+                        while ProcessExist(baseDllName) {
+                            ProcessClose(baseDllName)
+                            Sleep(50)
+                        }
+                    }
+                    try FileDelete(compileTarget)
+                    if !XAMLHost.CompileEngine(libDir, compileTarget)
+                        return ""
+                }
+            }
+
+            if (!FileExist(targetExe)) {
+                if (buildLoc == "temp" && FileExist(sharedExe)) {
+                    try FileCopy(sharedExe, targetExe, 1)
+                } else if (!forceCompile) {
+                    if !XAMLHost.CompileEngine(libDir, targetExe)
+                        return ""
+                }
+            }
+
+            if (buildLoc == "both" && FileExist(sharedExe)) {
+                if (!FileExist(targetExe) || FileGetTime(sharedExe) != FileGetTime(targetExe)) {
+                    try FileCopy(sharedExe, targetExe, 1)
+                }
+            }
+
+            if (this.exePath != "" && !FileExist(targetExe)) {
+                MsgBox("Custom Engine DLL not found: " targetExe, "AHK-XAML", "Iconx")
+                return ""
+            }
+
+            XAMLHost.RestoreWebView2Dlls()
+            XAMLHost.RestoreAvalonEditDlls()
+            XAMLHost.RestoreDocumentDlls()
+            SplitPath(targetExe, , &targetDir)
+            XAMLHost.CopyRequiredDlls(libDir, targetDir)
+        } else {
+            ;@Ahk2Exe-IgnoreBegin
+            if !FileExist(targetExe)
+                FileInstall("dep\ahk-xaml.dll", targetExe, 1)
+            ;@Ahk2Exe-IgnoreEnd
+        }
+
+        if FileExist(this.errLog) {
+            try FileDelete(this.errLog)
+        }
 
         if !XAMLHost.daemonHwnd {
-            XAMLHost.Prewarm(targetExe)
-            startWait := A_TickCount
-            while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 5000) {
-                Sleep(10)
+            if (IsSet(XAML_IN_PROCESS_PREVIEW) && XAML_IN_PROCESS_PREVIEW) {
+                if (!XAMLHost.daemonReceiver) {
+                    XAMLHost.daemonReceiver := Gui()
+                    DllCall("user32\ChangeWindowMessageFilterEx", "Ptr", XAMLHost.daemonReceiver.Hwnd, "UInt", 0x004A, "UInt", 1, "Ptr", 0)
+                    if (!XAMLHost._msgHooked) {
+                        OnMessage(0x004A, ObjBindMethod(XAMLHost, "OnCopyData"), 255)
+                        XAMLHost._msgHooked := true
+                    }
+                }
+                XAMLHost.InitializeInProcess(targetExe)
+                engineType := XAMLHost.CLR_BridgeAssembly.GetType_2("AhkWpfEngine")
+                static nullObj := ComValue(13, 0)
+                args := ComObjArray(0xC, 1)
+                args[0] := String(XAMLHost.daemonReceiver.Hwnd)
+                XAMLHost.daemonHwnd := engineType.InvokeMember_3("StartInProcess", 0x158, nullObj, nullObj, args)
+            } else {
+                XAMLHost.Prewarm(targetExe)
+                startWait := A_TickCount
+                while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 5000) {
+                    Sleep(10)
+                }
             }
         }
         return targetExe
@@ -783,6 +1222,9 @@ class XAMLHost {
     }
 
     _SendToEngine(payload) {
+        if (!this.IsDevToolsWindow()) {
+            XAMLHost.LogDevTools("OUT", payload)
+        }
         buf := Buffer(StrPut(payload, "UTF-8"))
         StrPut(payload, buf, "UTF-8")
         cds := Buffer(A_PtrSize * 3)
@@ -825,20 +1267,46 @@ class XAMLHost {
         SetTimer(ObjBindMethod(this, "CheckForCrashes"), 50)
     }
 
+    static LogDevTools(dir, payload) {
+        try {
+            if (IsSet(XAML_DevTools_Instance) && IsObject(XAML_DevTools_Instance) && HasMethod(XAML_DevTools_Instance, "LogIPC")) {
+                SetTimer(LogIPCCallback, -1)
+            }
+        }
+
+        LogIPCCallback() {
+            try {
+                if (IsSet(XAML_DevTools_Instance) && IsObject(XAML_DevTools_Instance) && HasMethod(XAML_DevTools_Instance, "LogIPC")) {
+                    XAML_DevTools_Instance.LogIPC(dir, payload)
+                }
+            }
+        }
+    }
+
     static OnCopyData(wParam, lParam, msg, hwnd) {
         if (msg != 0x004A)
             return 0
 
         lpData := NumGet(lParam, A_PtrSize * 2, "Ptr")
         payload := StrGet(lpData, "UTF-8")
+        parts := StrSplit(payload, "|")
+        if (parts.Length >= 3) {
+            isDevTools := false
+            if (IsSet(XAML_DevTools_Instance) && IsObject(XAML_DevTools_Instance) && HasProp(XAML_DevTools_Instance, "app") && XAML_DevTools_Instance.app && HasProp(XAML_DevTools_Instance.app, "host") && XAML_DevTools_Instance.app.host) {
+                isDevTools := (parts[2] == XAML_DevTools_Instance.app.host.id)
+            }
+            if (!isDevTools) {
+                XAMLHost.LogDevTools("IN", payload)
+            }
+        }
         if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING)
-            try FileAppend("OnCopyData: " payload "`n", A_WorkingDir "\Log\AhkTrace.log", "UTF-8")
+            try FileAppend("OnCopyData: " payload "`n", A_Temp "\AhkWpf\AhkTrace.log", "UTF-8")
         if (!InStr(payload, "EVENT|") && !InStr(payload, "DAEMON|") && !InStr(payload, "MRESPONSE|"))
             return 0
-            
+
         lines := StrSplit(payload, "`n", "`r")
         parts := StrSplit(lines[1], "|", , 5)
-        
+
         if (parts[1] == "DAEMON" && parts[2] == "Ready") {
             XAMLHost.daemonHwnd := Integer(parts[3])
             return 1
@@ -871,7 +1339,7 @@ class XAMLHost {
 
         winId := parts[2], ctrlName := parts[3], eventName := parts[4]
         if (eventName == "WebMessageReceived") {
-            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_WorkingDir "\Log\AhkWebViewDebug.log")
+            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_Temp "\AhkWebViewDebug.log")
         }
         if !XAMLHost._instances.Has(winId)
             return 0
@@ -888,7 +1356,7 @@ class XAMLHost {
             } else {
                 errorMsg := XAMLHost.DecodeValue(parts[5])
             }
-            
+
             ahkLine := "Unknown"
             snippet := ""
             reason := ""
@@ -915,7 +1383,7 @@ class XAMLHost {
             }
 
             hasRetry := (IsSet(XAML_DIAGNOSTICS_ENABLED) && XAML_DIAGNOSTICS_ENABLED && lineNum > 0)
-            
+
             while (true) {
                 action := XAMLHost.ShowErrorDialog("Engine Crash", header, snippet, errorMsg, hasRetry, reason)
                 if (action == "skip_property") {
@@ -961,6 +1429,15 @@ class XAMLHost {
 
         if (ctrlName == "Window" && eventName == "LoadedHwnd") {
             instance.wpfHwnd := Integer(parts[5])
+            if instance.HasOwnProp("_updateQueue") {
+                for item in instance._updateQueue {
+                    if (item.type == "single")
+                        instance.Update(item.ctrl, item.prop, item.val)
+                    else if (item.type == "batch")
+                        instance.BatchUpdate(item.arr)
+                }
+                instance._updateQueue := []
+            }
         }
         if (ctrlName == "Window" && eventName == "Closed") {
             instance.wpfHwnd := 0
@@ -970,7 +1447,14 @@ class XAMLHost {
 
         eventData := ""
         if (parts.Length >= 5) {
-            eventData := XAMLHost.DecodeValue(parts[5])
+            prefix := "EVENT|" winId "|" ctrlName "|" eventName "|"
+            pos := InStr(payload, prefix)
+            if (pos) {
+                rawPayload := SubStr(payload, pos + StrLen(prefix))
+                eventData := XAMLHost.DecodeValue(rawPayload)
+            } else {
+                eventData := XAMLHost.DecodeValue(parts[5])
+            }
             if (eventData != "")
                 stateMap[eventName] := eventData
         }
@@ -1000,13 +1484,18 @@ class XAMLHost {
             extraArg := parts[2]
         }
 
+        hasEvent := instance.events.Has(ctrlName) && instance.events[ctrlName].Has(baseEventName)
+        if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING) {
+            try FileAppend("OnCopyData dispatch check: " ctrlName "." baseEventName " hasEvent=" (hasEvent ? "true" : "false") " eventsCount=" (instance.events.Has(ctrlName) ? instance.events[ctrlName].Count : 0) "`n", A_Temp "\AhkWpf\AhkTrace.log", "UTF-8")
+        }
+
         if (instance.events.Has(ctrlName) && instance.events[ctrlName].Has(baseEventName)) {
             if (baseEventName == "SelectionBox" || baseEventName == "CtrlSelectionBox") {
                 str := ""
                 for k, v in stateMap
                     str .= k "=" v ", "
-            if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING)
-                try FileAppend("OnCopyData SelectionBox: " str "`n", A_WorkingDir "\Log\debug.log")
+                if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING)
+                    try FileAppend("OnCopyData SelectionBox: " str "`n", A_ScriptDir "\debug.log")
             }
             evtList := instance.events[ctrlName][baseEventName]
             for evtObj in evtList {
@@ -1115,8 +1604,8 @@ class XAMLHost {
 
         ; Single query returns a plain string; multi returns Map
         if (names.Length == 1 && names[1] != "*")
-            return result.Has(names[1]) ? result[names[1]] : ""
-        return result
+            return (Type(result) == "Map" && result.Has(names[1])) ? result[names[1]] : ""
+        return Type(result) == "Map" ? result : Map()
     }
 
     ; =========================================================================
@@ -1173,13 +1662,13 @@ class XAMLHost {
         }
         if (!tagStart)
             return ""
-        
+
         ; Extract tag name
         subXaml := SubStr(xaml, tagStart)
         if (!RegExMatch(subXaml, "^<([\w:]+)", &m))
             return ""
         tagName := m[1]
-        
+
         ; Check if it's self-closing before any nested tag of same name
         firstGt := InStr(xaml, ">", , tagStart)
         if (firstGt) {
@@ -1188,7 +1677,7 @@ class XAMLHost {
                 return { start: tagStart, end: firstGt, tag: tagName }
             }
         }
-        
+
         ; Not self-closing, scan for matching </tagName>
         depth := 1
         pos := tagStart + 1
@@ -1245,28 +1734,28 @@ class XAMLHost {
             MsgBox("Could not locate the exact error position to skip the property.", "Skip Failed", "Iconx")
             return false
         }
-        
+
         charIndex := this.GetCharIndex(this.xaml, lineNum, colNum)
         if (charIndex <= 0) {
             MsgBox("Error position out of bounds.", "Skip Failed", "Iconx")
             return false
         }
-        
+
         elem := this.FindElementBoundaries(this.xaml, charIndex)
         if (!elem) {
             MsgBox("Could not find the element at the error line.", "Skip Failed", "Iconx")
             return false
         }
-        
+
         openingTagEnd := InStr(this.xaml, ">", , elem.start)
         if (!openingTagEnd || openingTagEnd > elem.end) {
             MsgBox("Malformed element opening tag.", "Skip Failed", "Iconx")
             return false
         }
         openingTag := SubStr(this.xaml, elem.start, openingTagEnd - elem.start + 1)
-        
+
         candidates := this.GetPropertyCandidates(errorMsg)
-        
+
         removed := false
         candidateName := ""
         for candidate in candidates {
@@ -1279,17 +1768,17 @@ class XAMLHost {
                 break
             }
         }
-        
+
         if (!removed) {
             MsgBox("Could not automatically identify the property to skip from error: " errorMsg, "Skip Failed", "Iconx")
             return false
         }
-        
+
         this.xaml := SubStr(this.xaml, 1, elem.start - 1) . openingTag . SubStr(this.xaml, openingTagEnd + 1)
-        
+
         ToolTip("Skipped property: " candidateName)
         SetTimer(() => ToolTip(), -3000)
-        
+
         SetTimer(() => this.Show(), -10)
         return true
     }
@@ -1299,64 +1788,294 @@ class XAMLHost {
             MsgBox("Could not locate the exact error position to skip the element.", "Skip Failed", "Iconx")
             return false
         }
-        
+
         charIndex := this.GetCharIndex(this.xaml, lineNum, colNum)
         if (charIndex <= 0) {
             MsgBox("Error position out of bounds.", "Skip Failed", "Iconx")
             return false
         }
-        
+
         elem := this.FindElementBoundaries(this.xaml, charIndex)
         if (!elem) {
             MsgBox("Could not find the element to skip at the error line.", "Skip Failed", "Iconx")
             return false
         }
-        
+
         this.xaml := SubStr(this.xaml, 1, elem.start - 1) . SubStr(this.xaml, elem.end + 1)
-        
+
         ToolTip("Skipped element: <" elem.tag ">")
         SetTimer(() => ToolTip(), -3000)
-        
+
         SetTimer(() => this.Show(), -10)
         return true
     }
 
     static RestoreWebView2Dlls() {
+        if (!IsSet(XAML_ENABLE_WEBVIEW) || !XAML_ENABLE_WEBVIEW)
+            return false
         libDir := ""
         SplitPath(A_LineFile, , &libDir)
-        wvDir := libDir "\WebView2"
-        
-        if (FileExist(wvDir "\Microsoft.Web.WebView2.Core.dll") && 
-            FileExist(wvDir "\Microsoft.Web.WebView2.Wpf.dll") && 
+        wvDir := libDir "\dep\WebView2"
+
+        if (FileExist(wvDir "\Microsoft.Web.WebView2.Core.dll") &&
+            FileExist(wvDir "\Microsoft.Web.WebView2.Wpf.dll") &&
             FileExist(wvDir "\WebView2Loader.dll")) {
             return false
         }
-        
-        nativeDomDir := "C:\projects\NativeDOM\examples\webview\plugin\sdk"
-        sourceCore := nativeDomDir "\lib\net45\Microsoft.Web.WebView2.Core.dll"
-        sourceWpf  := nativeDomDir "\lib\net45\Microsoft.Web.WebView2.Wpf.dll"
-        sourceLoader := nativeDomDir "\build\native\x64\WebView2Loader.dll"
-        
-        if (FileExist(sourceCore) && FileExist(sourceWpf) && FileExist(sourceLoader)) {
-            if (!DirExist(wvDir)) {
-                DirCreate(wvDir)
-            }
-            try {
-                FileCopy(sourceCore, wvDir "\Microsoft.Web.WebView2.Core.dll", 1)
-                FileCopy(sourceWpf, wvDir "\Microsoft.Web.WebView2.Wpf.dll", 1)
-                FileCopy(sourceLoader, wvDir "\WebView2Loader.dll", 1)
-                
-                try FileDelete(libDir "\ahk-xaml-webview.dll")
-                try FileDelete(XAMLHost.GetAppDir() "\Cache\ahk-xaml-webview.dll")
-                
-                ToolTip("WebView2 DLLs successfully restored from NativeDOM!")
-                SetTimer(() => ToolTip(), -4000)
-                return true
-            } catch as err {
-                ; Silently fail
-            }
+
+        loaderArch := (A_PtrSize == 8) ? "x64" : "x86"
+        targetDlls := [
+            wvDir "\Microsoft.Web.WebView2.Core.dll",
+            wvDir "\Microsoft.Web.WebView2.Wpf.dll",
+            wvDir "\WebView2Loader.dll"
+        ]
+
+        tmpDir := A_Temp "\AhkWpf\nuget_Microsoft_Web_WebView2"
+        extractCmds := "Copy-Item '" tmpDir "\lib\net45\Microsoft.Web.WebView2.Core.dll' '" wvDir "\Microsoft.Web.WebView2.Core.dll' -Force; "
+            . "Copy-Item '" tmpDir "\lib\net45\Microsoft.Web.WebView2.Wpf.dll' '" wvDir "\Microsoft.Web.WebView2.Wpf.dll' -Force; "
+            . "Copy-Item '" tmpDir "\build\native\" loaderArch "\WebView2Loader.dll' '" wvDir "\WebView2Loader.dll' -Force"
+
+        if XAMLHost.Downloader("Microsoft.Web.WebView2", "1.0.1722.45", "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.1722.45", wvDir, targetDlls, extractCmds) {
+            try FileDelete(libDir "\dep\ahk-xaml-webview.dll")
+            try FileDelete(A_Temp "\AhkWpf\ahk-xaml-webview.dll")
+            return true
         }
         return false
+    }
+
+    ; Auto-download AvalonEdit from NuGet if not present in lib/dep/AvalonEdit/
+    static RestoreAvalonEditDlls() {
+        if (!IsSet(XAML_ENABLE_AVALONEDIT) || !XAML_ENABLE_AVALONEDIT)
+            return false
+        libDir := ""
+        SplitPath(A_LineFile, , &libDir)
+        aeDir := libDir "\dep\AvalonEdit"
+        aeDll := aeDir "\ICSharpCode.AvalonEdit.dll"
+        if FileExist(aeDll)
+            return false
+
+        tmpDir := A_Temp "\AhkWpf\nuget_AvalonEdit"
+        extractCmds := "Copy-Item '" tmpDir "\lib\net462\ICSharpCode.AvalonEdit.dll' '" aeDll "' -Force"
+
+        if XAMLHost.Downloader("AvalonEdit", "6.3.0.90", "https://www.nuget.org/api/v2/package/AvalonEdit/6.3.0.90", aeDir, [aeDll], extractCmds) {
+            try FileDelete(libDir "\dep\ahk-xaml*.dll")
+            try FileDelete(A_Temp "\AhkWpf\ahk-xaml*.dll")
+            return true
+        }
+        return false
+    }
+
+    ; Auto-download DocumentFormat.OpenXml from NuGet if not present in lib/dep/OpenXml/
+    static RestoreDocumentDlls() {
+        if (!IsSet(XAML_ENABLE_DOCUMENT) || !XAML_ENABLE_DOCUMENT)
+            return false
+        libDir := ""
+        SplitPath(A_LineFile, , &libDir)
+        oxDir := libDir "\dep\OpenXml"
+        oxDll := oxDir "\DocumentFormat.OpenXml.dll"
+        if FileExist(oxDll)
+            return false
+
+        tmpDir := A_Temp "\AhkWpf\nuget_DocumentFormat_OpenXml"
+        extractCmds := "Copy-Item '" tmpDir "\lib\net46\DocumentFormat.OpenXml.dll' '" oxDll "' -Force"
+
+        if XAMLHost.Downloader("DocumentFormat.OpenXml", "2.20.0", "https://www.nuget.org/api/v2/package/DocumentFormat.OpenXml/2.20.0", oxDir, [oxDll], extractCmds) {
+            try FileDelete(libDir "\dep\ahk-xaml*.dll")
+            try FileDelete(A_Temp "\AhkWpf\ahk-xaml*.dll")
+            return true
+        }
+        return false
+    }
+
+    ; Shared non-blocking rich GUI downloader helper
+    static Downloader(packageName, version, url, installDir, targetDlls, extractCommands) {
+        ; Create modern dark GUI
+        pg := Gui("+AlwaysOnTop -MinimizeBox -SysMenu +ToolWindow", "AHK-XAML — Bootstrap Downloader")
+        pg.SetFont("s10 bold", "Segoe UI")
+        pg.BackColor := "0x11111b"
+
+        pg.Add("Text", "x15 y12 w270 c89B4FA", "📦 Restoring Dependency")
+        pg.SetFont("s9 norm", "Segoe UI")
+        statusText := pg.Add("Text", "x15 y35 w270 h18 cCDD6F4", "Downloading " packageName " " version "...")
+        progressBar := pg.Add("Progress", "x15 y58 w270 h6 c89B4FA Background313244 -Smooth +0x8", 50)
+        pg.Show("w300 h78 NoActivate")
+
+        ; Enable continuous marquee style (PBM_SETMARQUEE)
+        SendMessage(0x040A, 1, 30, progressBar.Hwnd)
+
+        tmpDir := A_Temp "\AhkWpf\nuget_" StrReplace(packageName, ".", "_")
+        nupkg := tmpDir "\package.nupkg.zip"
+
+        try {
+            if !DirExist(A_Temp "\AhkWpf")
+                DirCreate(A_Temp "\AhkWpf")
+            if DirExist(tmpDir)
+                DirDelete(tmpDir, true)
+            DirCreate(tmpDir)
+        }
+
+        ; Generate PowerShell command
+        q := Chr(34)
+        psCmd := "powershell.exe -NoProfile -Command " q
+            . "try { "
+            . "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; "
+            . "Invoke-WebRequest -Uri '" url "' -OutFile '" nupkg "' -UserAgent 'Mozilla/5.0'; "
+            . "Expand-Archive -Path '" nupkg "' -DestinationPath '" tmpDir "' -Force; "
+            . "if (!(Test-Path '" installDir "')) { New-Item -ItemType Directory -Force -Path '" installDir "' | Out-Null }; "
+            . extractCommands "; "
+            . "} catch { $_.Exception.Message | Out-File '" tmpDir "\err.txt' }"
+            . q
+
+        success := false
+        try {
+            ; Run background process
+            Run(psCmd, "", "Hide", &pid)
+
+            ; Wait and animate
+            dots := ""
+            loopCount := 0
+            while ProcessExist(pid) {
+                loopCount++
+                if (Mod(loopCount, 15) == 0) {
+                    dots .= "."
+                    if (StrLen(dots) > 3)
+                        dots := ""
+                    statusText.Value := "Downloading and extracting " dots
+                }
+                Sleep(50)
+            }
+
+            ; Inspect completion results
+            if FileExist(tmpDir "\err.txt") {
+                errContent := FileRead(tmpDir "\err.txt")
+                throw Error(errContent)
+            }
+
+            ; Check that all target DLLs now exist
+            for dll in targetDlls {
+                if !FileExist(dll)
+                    throw Error("Failed to extract: " dll)
+            }
+
+            success := true
+            statusText.Value := "✓ Installed successfully!"
+            progressBar.Opt("cA6E3A1") ; premium success green
+            progressBar.Value := 100
+            Sleep(800)
+        } catch as e {
+            success := false
+            statusText.Value := "✗ Failed!"
+            progressBar.Opt("cF38BA8") ; premium error red
+            progressBar.Value := 100
+
+            ; Show standard error dialog or tooltip
+            MsgBox("Failed to restore " packageName " " version ":`n`n" e.Message, "Bootstrap Restore Error", "Iconx AlwaysOnTop")
+        }
+
+        pg.Destroy()
+        try DirDelete(tmpDir, true)
+        return success
+    }
+
+    static InitializeInProcess(dllPath) {
+        if (XAMLHost.CLR_Started)
+            return XAMLHost.CLR_BridgeClass
+
+        CLSID := Buffer(16), IID := Buffer(16)
+        DllCall("ole32\CLSIDFromString", "WStr", "{CB2F6723-AB3A-11D2-9C40-00C04FA30A3E}", "Ptr", CLSID)
+        DllCall("ole32\CLSIDFromString", "WStr", "{CB2F6722-AB3A-11D2-9C40-00C04FA30A3E}", "Ptr", IID)
+
+        hr := DllCall("mscoree\CorBindToRuntimeEx"
+            , "WStr", "v4.0.30319"
+            , "Ptr", 0
+            , "UInt", 0
+            , "Ptr", CLSID, "Ptr", IID
+            , "Ptr*", &pHost := 0, "Int")
+        if (hr < 0)
+            throw Error("CorBindToRuntimeEx failed: " Format("0x{:08X}", hr))
+
+        ComCall(10, pHost, "Int")   ; ICorRuntimeHost::Start
+        ComCall(13, pHost, "Ptr*", &pDomain := 0, "Int")  ; GetDefaultDomain
+
+        XAMLHost.CLR_AppDomain := ComValue(9, pDomain)
+
+        domType := XAMLHost.CLR_AppDomain.GetType()
+        mscorlib := domType.Assembly
+        asmType := mscorlib.GetType_2("System.Reflection.Assembly")
+        static nullObj := ComValue(13, 0)
+
+        ; Pre-load all dependency DLLs in the directory first to ensure type loader references resolve successfully
+        SplitPath(dllPath, &dllName, &dllDir)
+        Loop Files, dllDir "\*.dll" {
+            if (A_LoopFileName == dllName)
+                continue
+            try {
+                depFileObj := FileOpen(A_LoopFileFullPath, "r")
+                depSize := depFileObj.Length
+                depBuf := Buffer(depSize)
+                depFileObj.Pos := 0
+                depFileObj.RawRead(depBuf, depSize)
+                depFileObj.Close()
+
+                depBytes := ComObjArray(0x11, depSize)
+                depPvData := 0
+                DllCall("oleaut32\SafeArrayAccessData", "Ptr", ComObjValue(depBytes), "Ptr*", &depPvData)
+                DllCall("ntdll\RtlMoveMemory", "Ptr", depPvData, "Ptr", depBuf.Ptr, "Ptr", depSize)
+                DllCall("oleaut32\SafeArrayUnaccessData", "Ptr", ComObjValue(depBytes))
+
+                depLoadArgs := ComObjArray(0xC, 1)
+                depLoadArgs[0] := depBytes
+                asmType.InvokeMember_3("Load", 0x158, nullObj, nullObj, depLoadArgs)
+            }
+        }
+
+        fileObj := FileOpen(dllPath, "r")
+        fileSize := fileObj.Length
+        rawBuf := Buffer(fileSize)
+        fileObj.Pos := 0
+        fileObj.RawRead(rawBuf, fileSize)
+        fileObj.Close()
+
+        bytes := ComObjArray(0x11, fileSize)
+        pvData := 0
+        DllCall("oleaut32\SafeArrayAccessData", "Ptr", ComObjValue(bytes), "Ptr*", &pvData)
+        DllCall("ntdll\RtlMoveMemory", "Ptr", pvData, "Ptr", rawBuf.Ptr, "Ptr", fileSize)
+        DllCall("oleaut32\SafeArrayUnaccessData", "Ptr", ComObjValue(bytes))
+
+        loadArgs := ComObjArray(0xC, 1)
+        loadArgs[0] := bytes
+        bridgeAsm := asmType.InvokeMember_3("Load", 0x158, nullObj, nullObj, loadArgs)
+
+        XAMLHost.CLR_BridgeAssembly := bridgeAsm
+        try bridgeAsm.CreateInstance("AhkInProcessBootstrapper") ; Hook AssemblyResolve event
+        XAMLHost.CLR_BridgeClass := bridgeAsm.CreateInstance("AhkWpfEngine")
+        XAMLHost.CLR_Started := true
+
+        return XAMLHost.CLR_BridgeClass
+    }
+
+    static DockWindow(childHwnd, parentHwnd, x := 0, y := 0, width := 0, height := 0) {
+        ; 1. Set the parent relationship
+        DllCall("user32\SetParent", "Ptr", childHwnd, "Ptr", parentHwnd, "Ptr")
+
+        ; 2. Modify window styles: clear WS_POPUP, WS_CAPTION, WS_THICKFRAME
+        ; and set WS_CHILD, WS_VISIBLE, WS_CLIPSIBLINGS
+        GWL_STYLE := -16
+        WS_POPUP := 0x80000000
+        WS_CHILD := 0x40000000
+        WS_VISIBLE := 0x10000000
+        WS_CLIPSIBLINGS := 0x04000000
+        WS_CAPTION := 0x00C00000
+        WS_THICKFRAME := 0x00040000
+
+        styles := DllCall("user32\GetWindowLongW", "Ptr", childHwnd, "Int", GWL_STYLE, "Int")
+        styles := (styles & ~WS_POPUP & ~WS_CAPTION & ~WS_THICKFRAME) | WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS
+        DllCall("user32\SetWindowLongW", "Ptr", childHwnd, "Int", GWL_STYLE, "Ptr", styles, "Ptr")
+
+        ; 3. Resize and position child window
+        if (width > 0 && height > 0) {
+            DllCall("user32\MoveWindow", "Ptr", childHwnd, "Int", x, "Int", y, "Int", width, "Int", height, "Int", 1, "Int")
+        }
     }
 }
 
@@ -1366,7 +2085,8 @@ XAML_TEMPLATE := '
             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
             xmlns:sys="clr-namespace:System;assembly=mscorlib"
             xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
-            Width="940" Height="700"
+            Width="%Width%" Height="%Height%"
+            ResizeMode="%ResizeMode%"
             WindowStyle="None" AllowsTransparency="False" Background="Transparent"
             WindowStartupLocation="CenterScreen"
             TextElement.Foreground="{DynamicResource TextMain}" FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif">
@@ -1376,6 +2096,19 @@ XAML_TEMPLATE := '
         </WindowChrome.WindowChrome>
     
         <Window.Resources>
+            <sys:Double x:Key="TitleBarHeight">%CaptionHeight%</sys:Double>
+            <SolidColorBrush x:Key="BgColor" Color="#1E1E1E" />
+            <SolidColorBrush x:Key="TitleBarColor" Color="Transparent" />
+            <SolidColorBrush x:Key="TitleBarForeground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TextMain" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TextSub" Color="#CCCCCC" />
+            <SolidColorBrush x:Key="SidebarColor" Color="#252526" />
+            <SolidColorBrush x:Key="ControlBg" Color="#333333" />
+            <SolidColorBrush x:Key="ControlBorder" Color="#2D2D2D" />
+            <CornerRadius x:Key="WindowRadius">12</CornerRadius>
+            <Thickness x:Key="WindowBorderThickness">0</Thickness>
+            <SolidColorBrush x:Key="WindowBorderBrush" Color="Transparent" />
+            <sys:Double x:Key="TitleBarGradientOpacity">0</sys:Double>
             %resources%
         </Window.Resources>
     

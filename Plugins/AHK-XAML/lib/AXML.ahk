@@ -1,6 +1,8 @@
 #Requires AutoHotkey v2.0
 #Include "XAML_Generator.ahk"
 
+global AXML_METADATA
+
 ; ==============================================================================
 ; AXML State Manager (Reactive Proxy)
 ; ==============================================================================
@@ -137,8 +139,139 @@ class AXML_State {
 ; AXML Parser and Binder
 ; ==============================================================================
 class AXML {
+    static ParsedData := []
     
+    static GetBasename(path) {
+        SplitPath(path, &name)
+        return name
+    }
+
+    static LoadStringResource(dllPath, resourceName, resourceType := 10) {
+        hModule := DllCall("LoadLibrary", "Str", dllPath, "Ptr")
+        if (!hModule)
+            return ""
+        hRes := DllCall("FindResource", "Ptr", hModule, "Str", resourceName, "Ptr", resourceType, "Ptr")
+        if (!hRes) {
+            DllCall("FreeLibrary", "Ptr", hModule)
+            return ""
+        }
+        hGlob := DllCall("LoadResource", "Ptr", hModule, "Ptr", hRes, "Ptr")
+        if (!hGlob) {
+            DllCall("FreeLibrary", "Ptr", hModule)
+            return ""
+        }
+        pData := DllCall("LockResource", "Ptr", hGlob, "Ptr")
+        size := DllCall("SizeofResource", "Ptr", hModule, "Ptr", hRes, "UInt")
+        if (!pData || size == 0) {
+            DllCall("FreeLibrary", "Ptr", hModule)
+            return ""
+        }
+        str := StrGet(pData, size, "UTF-8")
+        DllCall("FreeLibrary", "Ptr", hModule)
+        return str
+    }
+
+    static SerializeParsedData() {
+        out := ""
+        for item in AXML.ParsedData {
+            out .= "---AXML-FILE---`n"
+            out .= "Source: " item.Source "`n"
+            out .= "---BINDINGS---`n"
+            for b in item.Bindings {
+                out .= b.ControlName "|" b.PropName "|" b.StateKey "`n"
+            }
+            out .= "---EVENTS---`n"
+            for e in item.Events {
+                out .= e.ControlName "|" e.EventName "|" e.FuncName "`n"
+            }
+        }
+        return out
+    }
+
+    static DeserializeParsedData(str) {
+        parsed := []
+        lines := StrSplit(str, "`n", "`r")
+        currentItem := ""
+        currentSection := ""
+        
+        for line in lines {
+            if (line == "")
+                continue
+            if (line == "---AXML-FILE---") {
+                if (currentItem != "")
+                    parsed.Push(currentItem)
+                currentItem := { Source: "", Bindings: [], Events: [] }
+                currentSection := "FILE"
+                continue
+            }
+            if (line == "---BINDINGS---") {
+                currentSection := "BINDINGS"
+                continue
+            }
+            if (line == "---EVENTS---") {
+                currentSection := "EVENTS"
+                continue
+            }
+            
+            if (currentSection == "FILE") {
+                if RegExMatch(line, "^Source:\s*(.*)$", &m)
+                    currentItem.Source := m[1]
+            } else if (currentSection == "BINDINGS") {
+                parts := StrSplit(line, "|")
+                if (parts.Length >= 3)
+                    currentItem.Bindings.Push({ ControlName: parts[1], PropName: parts[2], StateKey: parts[3] })
+            } else if (currentSection == "EVENTS") {
+                parts := StrSplit(line, "|")
+                if (parts.Length >= 3)
+                    currentItem.Events.Push({ ControlName: parts[1], EventName: parts[2], FuncName: parts[3] })
+            }
+        }
+        if (currentItem != "")
+            parsed.Push(currentItem)
+        return parsed
+    }
+
     static ParseFile(filePath, generatorParent, stateObj := "") {
+        if (A_IsCompiled) {
+            if (IsSet(AXML_METADATA) && AXML_METADATA != "") {
+                parsed := AXML.DeserializeParsedData(AXML_METADATA)
+                for item in parsed {
+                    if (AXML.GetBasename(item.Source) == AXML.GetBasename(filePath)) {
+                        return { Bindings: item.Bindings, Events: item.Events }
+                    }
+                }
+            }
+            
+            dllName := ""
+            if (generatorParent && generatorParent.HasMethod("_FindApp")) {
+                app := generatorParent._FindApp()
+                if (app && app.HasMethod("GetBundleDllName")) {
+                    dllName := app.GetBundleDllName()
+                }
+            }
+            if (dllName == "") {
+                if (IsSet(CUSTOM_DLL_BUNDLE_NAME) && CUSTOM_DLL_BUNDLE_NAME != "")
+                    dllName := CUSTOM_DLL_BUNDLE_NAME
+                else {
+                    SplitPath(A_ScriptName, , , , &nameNoExt)
+                    dllName := nameNoExt "_bundled.dll"
+                }
+            }
+            
+            dllPath := FileExist(A_ScriptDir "\" dllName) ? (A_ScriptDir "\" dllName) : dllName
+            
+            axmlData := AXML.LoadStringResource(dllPath, "app_payload.axml", 10)
+            if (axmlData != "") {
+                parsed := AXML.DeserializeParsedData(axmlData)
+                for item in parsed {
+                    if (AXML.GetBasename(item.Source) == AXML.GetBasename(filePath)) {
+                        return { Bindings: item.Bindings, Events: item.Events }
+                    }
+                }
+            }
+            return { Bindings: [], Events: [] }
+        }
+
         content := FileRead(filePath, "UTF-8")
         SplitPath(filePath, &outFileName)
         return this.ParseString(content, generatorParent, stateObj, outFileName)
@@ -160,6 +293,10 @@ class AXML {
         bindings := []
         events := []
         this.RenderAST(astResult.Nodes, astResult.Templates, generatorParent, stateObj, bindings, events, sourceFile)
+        
+        if (!A_IsCompiled) {
+            AXML.ParsedData.Push({ Source: sourceFile, Bindings: bindings, Events: events })
+        }
         
         return { Bindings: bindings, Events: events }
     }
@@ -226,7 +363,7 @@ class AXML {
     ; --------------------------------------------------------------------------
     ; Internal Helpers
     ; --------------------------------------------------------------------------
-
+    
     static DumpNode(node, indent := 0) {
         if (Type(node) == "Array") {
             out := ""
@@ -255,8 +392,10 @@ class AXML {
         for k, v in node.Properties
             out .= pad "  - Prop: " k " = " v "`n"
             
-        for k, v in node.Events
-            out .= pad "  - Event: " k " = " v "`n"
+        if (node.HasProp("Events") && node.Events) {
+            for k, v in node.Events
+                out .= pad "  - Event: " k " = " v "`n"
+        }
             
         for child in node.Children
             out .= this.DumpNode(child, indent + 1)
@@ -269,7 +408,7 @@ class AXML {
         stack := [{ Indent: -1, Node: rootNode }]
         
         for index, line in lines {
-            if (Trim(line) == "" || SubStr(Trim(line), 1, 1) == "#" || SubStr(Trim(line), 1, 2) == "//" || SubStr(Trim(line), 1, 2) == "/*")
+            if (Trim(line) == "" || SubStr(Trim(line), 1, 1) == "#" || SubStr(Trim(line), 1, 1) == ";" || SubStr(Trim(line), 1, 2) == "//" || SubStr(Trim(line), 1, 2) == "/*")
                 continue
             
             indent := 0
@@ -386,8 +525,10 @@ class AXML {
             cloned.Properties[k] := newVal
         }
         
-        for k, v in node.Events {
-            cloned.Events[k] := v
+        if (node.HasProp("Events") && node.Events) {
+            for k, v in node.Events {
+                cloned.Events[k] := v
+            }
         }
         
         for child in node.Children {
@@ -436,13 +577,13 @@ class AXML {
             if (node.Name != "")
                 el.SetProp("x:Name", node.Name)
                 
-            for propName, propVal in node.Properties {
+             for propName, propVal in node.Properties {
                 if (SubStr(propVal, 1, 1) == "$") {
                     stateKey := SubStr(propVal, 2)
                     
                     if (node.Name == "") {
                         AXML._idCounter := (AXML.HasOwnProp("_idCounter") ? AXML._idCounter + 1 : 1)
-                        node.Name := "AXML_" node.Type "_" A_TickCount "_" AXML._idCounter
+                        node.Name := "AXML_" node.Type "_" AXML._idCounter
                         el.SetProp("x:Name", node.Name)
                     }
                     
@@ -453,12 +594,14 @@ class AXML {
                     else
                         propVal := ""
                 }
-                if (propName == "Cols") {
+                if (propVal == "")
+                    continue
+                if (propName == "Cols" || propName == "ColumnDefinitions" || propName == "ColDefs") {
                     colsArr := StrSplit(propVal, ",")
                     for index, val in colsArr
                         colsArr[index] := Trim(val)
                     el.Cols(colsArr*)
-                } else if (propName == "Rows") {
+                } else if (propName == "Rows" || propName == "RowDefinitions" || propName == "RowDefs") {
                     rowsArr := StrSplit(propVal, ",")
                     for index, val in rowsArr
                         rowsArr[index] := Trim(val)
@@ -471,18 +614,122 @@ class AXML {
                 }
             }
             
-            for evtName, fnName in node.Events {
-                if (node.Name == "") {
-                    AXML._idCounter := (AXML.HasOwnProp("_idCounter") ? AXML._idCounter + 1 : 1)
-                    node.Name := "AXML_" node.Type "_" A_TickCount "_" AXML._idCounter
-                    el.SetProp("x:Name", node.Name)
+            if (node.HasProp("Events") && node.Events) {
+                for evtName, fnName in node.Events {
+                    if (node.Name == "") {
+                        AXML._idCounter := (AXML.HasOwnProp("_idCounter") ? AXML._idCounter + 1 : 1)
+                        node.Name := "AXML_" node.Type "_" AXML._idCounter
+                        el.SetProp("x:Name", node.Name)
+                    }
+                    realEvtName := SubStr(evtName, 3) ; Strip "On"
+                    events.Push({ ControlName: node.Name, EventName: realEvtName, FuncName: fnName })
                 }
-                realEvtName := SubStr(evtName, 3) ; Strip "On"
-                events.Push({ ControlName: node.Name, EventName: realEvtName, FuncName: fnName })
             }
             
             if (node.Children.Length > 0) {
                 this.RenderAST(node.Children, templates, el, stateObj, bindings, events, sourceFile)
+            }
+        }
+    }
+
+    static SerializeAST(nodes, templates := "") {
+        out := ""
+        if (templates && Type(templates) == "Map") {
+            for tName, tNode in templates {
+                out .= AXML.SerializeNode(tNode, 0) "`n"
+            }
+        }
+        for node in nodes {
+            out .= AXML.SerializeNode(node, 0)
+        }
+        return out
+    }
+
+    static SerializeNode(node, indent) {
+        pad := ""
+        Loop indent
+            pad .= "  "
+
+        out := ""
+        if (node.HasProp("IsLoop") && node.IsLoop) {
+            out .= pad "@For " node.LoopStart ".." node.LoopEnd " as " node.LoopVar ":`n"
+        } else {
+            prefix := (node.HasProp("IsTemplate") && node.IsTemplate) ? "@Template " : ""
+            isGenerated := (node.HasProp("isGeneratedName") && node.isGeneratedName)
+            nameSuffix := (node.HasProp("Name") && node.Name != "" && !isGenerated) ? " (" node.Name ")" : ""
+            out .= pad prefix node.Type nameSuffix ":`n"
+        }
+
+        ; Properties
+        for k, v in node.Properties {
+            propName := StrReplace(k, ".", "_")
+            if (SubStr(v, 1, 1) == "$" || IsNumber(v)) {
+                out .= pad "  " propName ": " v "`n"
+            } else {
+                escapedVal := StrReplace(v, '"', '\"')
+                out .= pad "  " propName ": `"" escapedVal "`"`n"
+            }
+        }
+
+        ; Events
+        if (node.HasProp("Events") && node.Events) {
+            for k, v in node.Events {
+                out .= pad "  " k ": " v "`n"
+            }
+        }
+
+        ; Children
+        for child in node.Children {
+            out .= AXML.SerializeNode(child, indent + 1)
+        }
+
+        return out
+    }
+
+    static SaveBackup(filePath, content) {
+        if (!IsSet(XAML_DESIGNER_BACKUPS_ENABLED) || !XAML_DESIGNER_BACKUPS_ENABLED)
+            return
+
+        SplitPath(filePath, &name, &dir)
+        backupsDir := (dir != "" ? dir : A_ScriptDir) "\.backups"
+        if !DirExist(backupsDir) {
+            try {
+                DirCreate(backupsDir)
+            } catch {
+                return
+            }
+        }
+
+        timestamp := FormatTime(, "yyyyMMddHHmmss")
+        backupPath := backupsDir "\" name "." timestamp ".axml"
+        
+        try {
+            if FileExist(backupPath)
+                FileDelete(backupPath)
+            FileAppend(content, backupPath, "UTF-8")
+        } catch {
+            return
+        }
+
+        maxBackups := (IsSet(XAML_DESIGNER_MAX_BACKUPS) ? XAML_DESIGNER_MAX_BACKUPS : 50)
+        backupFiles := []
+        loop Files backupsDir "\" name ".*.axml" {
+            backupFiles.Push(A_LoopFileFullPath)
+        }
+
+        if (backupFiles.Length > maxBackups) {
+            fileList := ""
+            for file in backupFiles
+                fileList .= file "`n"
+            fileList := RTrim(fileList, "`n")
+            fileList := Sort(fileList)
+            sortedFiles := StrSplit(fileList, "`n")
+            
+            deleteCount := sortedFiles.Length - maxBackups
+            Loop deleteCount {
+                try {
+                    FileDelete(sortedFiles[A_Index])
+                }
             }
         }
     }

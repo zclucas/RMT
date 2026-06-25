@@ -1,6 +1,7 @@
 #Requires AutoHotkey v2.0
 #Include "XAML_Host.ahk"
 #Include "XAML_Generator.ahk"
+#Include "XAML_Dialog.ahk"
 ; ==============================================================================
 ; SIMPLE COMPONENTS (Prototype Extensions)
 ; ==============================================================================
@@ -135,7 +136,7 @@ class XColorPicker {
 
         sliders := sliderGrid.Add("StackPanel").Grid_Column(1).VerticalAlignment("Center").Margin("0,0,15,0")
 
-        hueBg := sliders.Add("Border").Height("10").CornerRadius("5").Margin("0,0,0,12").Add("Border.Background").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
+        hueBg := sliders.Add("Border").Height("10").CornerRadius("5").Margin("0,0,0,12").IsHitTestVisible("False").Add("Border.Background").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
         hueBg.Add("GradientStop").SetProp('Color', "#FFFF0000").Offset("0")
         hueBg.Add("GradientStop").SetProp('Color', "#FFFFFF00").Offset("0.16")
         hueBg.Add("GradientStop").SetProp('Color', "#FF00FF00").Offset("0.33")
@@ -143,16 +144,21 @@ class XColorPicker {
         hueBg.Add("GradientStop").SetProp('Color', "#FF0000FF").Offset("0.66")
         hueBg.Add("GradientStop").SetProp('Color', "#FFFF00FF").Offset("0.83")
         hueBg.Add("GradientStop").SetProp('Color', "#FFFF0000").Offset("1")
-        sliders.Add("Slider").Name("HueSlider").Minimum("0").Maximum("360").Value("0").Margin("0,-18,0,0").Tag("Throttle:50")
+        sliders.Add("Slider").Name("HueSlider").Minimum("0").Maximum("360").Value("0").Margin("0,-22,0,0")
+            .ThumbShape("Line").ThumbWidth(8).ThumbHeight(20).ThumbColor("#FFFFFF").ThumbBorderColor("#FF222222").ThumbBorderThickness(1.5).ThumbCornerRadius(1.5).ThumbShadow(true)
+            .TrackHeight(32).TrackColor("Transparent").TrackBg("Transparent")
 
-        alphaBg := sliders.Add("Border").Height("10").CornerRadius("5").Background("Transparent").ClipToBounds("True")
+         alphaBg := sliders.Add("Border").Height("10").CornerRadius("5").Background("Transparent").ClipToBounds("True").IsHitTestVisible("False")
 
-        ; Dynamic Fill overlay masked by a transparent-to-white gradient
-        alphaFill := alphaBg.Add("Rectangle").Name("AlphaFillRect").Fill("White")
-        mask := alphaFill.Add("Rectangle.OpacityMask").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
-        mask.Add("GradientStop").SetProp('Color', "Transparent").Offset("0")
-        mask.Add("GradientStop").SetProp('Color', "White").Offset("1")
-        sliders.Add("Slider").Name("AlphaSlider").Minimum("0").Maximum("255").Value("255").Margin("0,-14,0,0").Tag("Throttle:50")
+         ; Dynamic Fill overlay masked by a transparent-to-white gradient
+         alphaFill := alphaBg.Add("Rectangle").Name("AlphaFillRect").Fill("White")
+         mask := alphaFill.Add("Rectangle.OpacityMask").Add("LinearGradientBrush").StartPoint("0,0").EndPoint("1,0")
+         mask.Add("GradientStop").SetProp('Color', "Transparent").Offset("0")
+         mask.Add("GradientStop").SetProp('Color', "White").Offset("1")
+         
+         sliders.Add("Slider").Name("AlphaSlider").Minimum("0").Maximum("255").Value("255").Margin("0,-22,0,0")
+            .ThumbShape("Line").ThumbWidth(8).ThumbHeight(20).ThumbColor("#FFFFFF").ThumbBorderColor("#FF222222").ThumbBorderThickness(1.5).ThumbCornerRadius(1.5).ThumbShadow(true)
+            .TrackHeight(32).TrackColor("Transparent").TrackBg("Transparent")
 
         sliderGrid.Add("Border").Name("ColorPreview").Grid_Column(2).Width("36").Height("36").CornerRadius("18").Background(defaultColor).BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
@@ -189,7 +195,8 @@ class XColorPicker {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Width="360" SizeToContent="Height" ResizeMode="NoResize" Topmost="True"')
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Width="360" SizeToContent="Height" Topmost="True"')
+        ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
 
         resultObj := { Color: "", Status: "Cancel", Instance: ui, IsDragging: false, Hue: 0.0, Sat: 1.0, Val: 1.0, Alpha: 255, R: 0, G: 0, B: 0, LastMoveTime: 0 }
 
@@ -226,12 +233,7 @@ class XColorPicker {
 
         ui.Show()
 
-        startTick := A_TickCount
-        while (resultObj.Status == "Cancel") {
-            if (ui.wpfHwnd && !WinExist("ahk_id " ui.wpfHwnd))
-                break
-            if (A_TickCount - startTick > 30000)
-                break
+        while (resultObj.Status == "Cancel" && (ui.wpfHwnd == 0 || WinExist("ahk_id " ui.wpfHwnd))) {
             Sleep(50)
         }
 
@@ -548,7 +550,7 @@ class XTokenizer {
         this.ui.host.Track(this.inputName)
 
         this.ui.host.OnEvent(this.inputName, "TextChanged", ObjBindMethod(this, "OnTextChanged"))
-        this.ui.host.OnEvent(this.wpName, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "FocusInput"))
+        this.ui.host.OnEvent(this.wpName, "MouseLeftButtonDown", ObjBindMethod(this, "FocusInput"))
 
         Loop 15 {
             this.ui.host.OnEvent("BtnDeleteTag_" this.baseId "_" A_Index, "Click", ObjBindMethod(this, "OnDeleteClick"))
@@ -923,31 +925,83 @@ _SliderRange(this, title, minVal, maxVal, defaultStart, defaultEnd) {
 ; DateRangePickerEx — Advanced Date Range Selector
 ; ==============================================================================
 class DateRangePickerEx {
-    __New(id, defaultStart, defaultEnd) {
+    __New(id, defaultStart, defaultEnd, options := {}) {
         this.id := id
         this.startStr := StrReplace(defaultStart, "-")
         this.endStr := StrReplace(defaultEnd, "-")
-        this.viewYear := SubStr(this.startStr, 1, 4)
-        this.viewMonth := SubStr(this.startStr, 5, 2)
+        this.initStartStr := this.startStr
+        this.initEndStr := this.endStr
+        if (this.startStr == "") {
+            this.viewYear := FormatTime(A_Now, "yyyy")
+            this.viewMonth := FormatTime(A_Now, "MM")
+        } else {
+            this.viewYear := SubStr(this.startStr, 1, 4)
+            this.viewMonth := SubStr(this.startStr, 5, 2)
+        }
         this.startMode := true ; true = waiting for start date, false = waiting for end date
+        this.selectPeriod := options.HasProp("SelectPeriod") ? options.SelectPeriod : true
+        this.separator := options.HasProp("Separator") ? options.Separator : "  -  "
+        this.onChange := options.HasProp("OnChange") ? options.OnChange : ""
+        this.editingStart := true
+        this.thirdPressUpdatesEnd := options.HasProp("ThirdPressUpdatesEnd") ? options.ThirdPressUpdatesEnd : true
+    }
+
+    GetFormattedDate(dateStr) {
+        if (dateStr == "")
+            return "---- -- --"
+        return FormatTime(dateStr, "yyyy-MM-dd")
     }
 
     Build(parent) {
-        btn := parent.Add("ToggleButton").Name(this.id "_Btn").Background("Transparent").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Cursor("Hand").Padding("15,5").Height(35)
-        btn.InjectResources('<Style TargetType="ToggleButton"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource ControlBgHover}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
-        sp := btn.Add("StackPanel").Orientation("Horizontal")
-        sp.Add("TextBlock").Text(Chr(0xE787)).FontFamily("Segoe Fluent Icons").Margin("0,0,10,0").VerticalAlignment("Center").Foreground("{DynamicResource TextSub}")
-        sp.Add("TextBlock").Name(this.id "_Display").Text(FormatTime(this.startStr, "yyyy-MM-dd") "  -  " FormatTime(this.endStr, "yyyy-MM-dd")).VerticalAlignment("Center").FontWeight("SemiBold").Foreground("{DynamicResource TextMain}")
+        btn := parent.Add("ToggleButton").Name(this.id "_Btn").Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Cursor("Arrow").Padding("0").Height(38)
+        btn.InjectResources('<Style TargetType="ToggleButton"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
+
+        mainGrid := btn.Add("Grid").VerticalAlignment("Stretch").HorizontalAlignment("Stretch")
+        mainGrid.Cols("Auto", "1", "*", "1", "*")
+
+        iconBtn := mainGrid.Add("Button").Name(this.id "_IconBtn").Grid_Column(0).Width(38).Cursor("Hand")
+        iconBtn.Add("TextBlock").Text(Chr(0xE787)).FontFamily("Segoe Fluent Icons").FontSize(14).Foreground("{DynamicResource TextSub}").HorizontalAlignment("Center").VerticalAlignment("Center")
+        iconBtn.InjectResources('<Style TargetType="Button"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4,0,0,4"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBgHover}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
+
+        mainGrid.Add("Border").Width(1).Background("{DynamicResource ControlBorder}").VerticalAlignment("Stretch").Grid_Column(1)
+
+        startBtn := mainGrid.Add("Button").Name(this.id "_MainStartBtn").Content(this.GetFormattedDate(this.startStr)).Grid_Column(2).Cursor("Hand").FontWeight("SemiBold").Foreground("{DynamicResource TextMain}")
+        startBtn.InjectResources('<Style TargetType="Button"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="0"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBgHover}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
+
+        mainGrid.Add("Border").Width(1).Background("{DynamicResource ControlBorder}").VerticalAlignment("Stretch").Grid_Column(3)
+
+        endBtn := mainGrid.Add("Button").Name(this.id "_MainEndBtn").Content(this.GetFormattedDate(this.endStr)).Grid_Column(4).Cursor("Hand").FontWeight("SemiBold").Foreground("{DynamicResource TextMain}")
+        endBtn.InjectResources('<Style TargetType="Button"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="0,4,4,0"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBgHover}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
 
         pop := btn.AddRichPopover()
 
-        mainGrid := pop.Add("Grid").Margin("0,0,0,5")
-        mainGrid.Cols("Auto", "20", "Auto")
+        popGrid := pop.Add("Grid").Margin("0,0,0,5")
+        popGrid.Rows("Auto", "Auto", "Auto")
+
+        ; 1. Edit Target Selector Row
+        editSelector := popGrid.Add("Grid").Grid_Row(0).Margin("0,0,0,15")
+        editSelector.Cols("*", "10", "*")
+
+        startBtnVal := editSelector.Add("Button").Name(this.id "_EditStartBtn").Content("Start: " this.GetFormattedDate(this.startStr)).Grid_Column(0).Height(30).Cursor("Hand")
+        startBtnVal.InjectResources('<Style TargetType="Button"><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/><Style.Triggers><Trigger Property="Tag" Value="Active"><Setter Property="BorderThickness" Value="2"/><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter Property="FontWeight" Value="Bold"/></Trigger></Style.Triggers></Style>')
+
+        endBtnVal := editSelector.Add("Button").Name(this.id "_EditEndBtn").Content("End: " this.GetFormattedDate(this.endStr)).Grid_Column(2).Height(30).Cursor("Hand")
+        endBtnVal.InjectResources('<Style TargetType="Button"><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/><Style.Triggers><Trigger Property="Tag" Value="Active"><Setter Property="BorderThickness" Value="2"/><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter Property="FontWeight" Value="Bold"/></Trigger></Style.Triggers></Style>')
+
+        ; 2. Calendars Row
+        mainGridPop := popGrid.Add("Grid").Grid_Row(1)
+        mainGridPop.Cols("Auto", "20", "Auto")
+
+        ; 3. Footer Actions Row
+        footer := popGrid.Add("Grid").Grid_Row(2).Margin("0,15,0,0")
+        footer.Cols("*", "Auto")
+        resetBtn := footer.Add("Button").Name(this.id "_ResetBtn").Content("Reset Selection").Grid_Column(1).Padding("15,5").Height(30).Cursor("Hand")
+        resetBtn.InjectResources('<Style TargetType="Button"><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="#FF453A"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="#FF453A"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#10FF453A"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
 
         ; Build Two Calendars
         loop 2 {
             calIdx := A_Index
-            cBase := mainGrid.Add("StackPanel").Grid_Column(calIdx == 1 ? 0 : 2).Width(250)
+            cBase := mainGridPop.Add("StackPanel").Grid_Column(calIdx == 1 ? 0 : 2).Width(250)
 
             ; Header
             hdr := cBase.Add("Grid").Margin("0,0,0,15")
@@ -993,10 +1047,19 @@ class DateRangePickerEx {
     }
 
     Bind(uiHost) {
+        if (this.HasProp("bound") && this.bound)
+            return
+        this.bound := true
         this.ui := uiHost
         uiHost.OnEvent(this.id "_Btn", "Click", ObjBindMethod(this, "OnOpen"))
+        uiHost.OnEvent(this.id "_IconBtn", "Click", ObjBindMethod(this, "OnMainIconClick"))
+        uiHost.OnEvent(this.id "_MainStartBtn", "Click", ObjBindMethod(this, "OnMainStartClick"))
+        uiHost.OnEvent(this.id "_MainEndBtn", "Click", ObjBindMethod(this, "OnMainEndClick"))
         uiHost.OnEvent(this.id "_Prev", "Click", ObjBindMethod(this, "OnPrev"))
         uiHost.OnEvent(this.id "_Next", "Click", ObjBindMethod(this, "OnNext"))
+        uiHost.OnEvent(this.id "_EditStartBtn", "Click", ObjBindMethod(this, "OnSelectEditStart"))
+        uiHost.OnEvent(this.id "_EditEndBtn", "Click", ObjBindMethod(this, "OnSelectEditEnd"))
+        uiHost.OnEvent(this.id "_ResetBtn", "Click", ObjBindMethod(this, "OnResetClick"))
 
         loop 84 {
             this._BindDayBtn(uiHost, A_Index)
@@ -1029,33 +1092,100 @@ class DateRangePickerEx {
         this.Render()
     }
 
+    OnSelectEditStart(state, ctrl, ev) {
+        this.editingStart := true
+        this.Render()
+    }
+
+    OnSelectEditEnd(state, ctrl, ev) {
+        this.editingStart := false
+        this.Render()
+    }
+
+    OnMainIconClick(state, ctrl, ev) {
+        this.editingStart := true
+        this.ui.Update(this.id "_Btn", "IsChecked", "True")
+        this.Render()
+    }
+
+    OnMainStartClick(state, ctrl, ev) {
+        this.editingStart := true
+        this.ui.Update(this.id "_Btn", "IsChecked", "True")
+        this.Render()
+    }
+
+    OnMainEndClick(state, ctrl, ev) {
+        this.editingStart := false
+        this.ui.Update(this.id "_Btn", "IsChecked", "True")
+        this.Render()
+    }
+
+    OnResetClick(state, ctrl, ev) {
+        this.startStr := ""
+        this.endStr := ""
+        this.editingStart := true
+        this.Render()
+        if (this.onChange != "") {
+            try this.onChange(this.startStr, this.endStr)
+        }
+    }
+
+    SetThirdPressMode(enabled) {
+        this.thirdPressUpdatesEnd := enabled
+    }
+
     OnDayClick(state, idx) {
         if (!this.dayMap.Has(idx))
             return
 
         clickedDate := this.dayMap[idx]
 
-        if (this.startMode) {
+        if (this.editingStart) {
             this.startStr := clickedDate
-            this.endStr := clickedDate
-            this.startMode := false
-        } else {
-            if (clickedDate < this.startStr) {
+            if (this.endStr != "" && this.startStr > this.endStr) {
                 this.endStr := this.startStr
+            }
+            this.editingStart := false
+        } else {
+            if (this.startStr != "" && clickedDate < this.startStr) {
                 this.startStr := clickedDate
+                this.endStr := clickedDate
+                this.editingStart := false
             } else {
                 this.endStr := clickedDate
+                if (this.thirdPressUpdatesEnd) {
+                    this.editingStart := false
+                } else {
+                    this.editingStart := true
+                }
             }
-            this.startMode := true
         }
 
-        this.ui.Update(this.id "_Display", "Text", FormatTime(this.startStr, "yyyy-MM-dd") "  -  " FormatTime(this.endStr, "yyyy-MM-dd"))
         this.Render()
+
+        if (this.onChange != "") {
+            try this.onChange(this.startStr, this.endStr)
+        }
     }
 
     Render() {
         this.dayMap := Map()
         monthNames := ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+        ; Update the launcher button text
+        this.ui.Update(this.id "_MainStartBtn", "Content", this.GetFormattedDate(this.startStr))
+        this.ui.Update(this.id "_MainEndBtn", "Content", this.GetFormattedDate(this.endStr))
+
+        ; Highlight the active date segment with Accent color, inactive with TextMain
+        this.ui.Update(this.id "_MainStartBtn", "Foreground", this.editingStart ? "{DynamicResource Accent}" : "{DynamicResource TextMain}")
+        this.ui.Update(this.id "_MainEndBtn", "Foreground", !this.editingStart ? "{DynamicResource Accent}" : "{DynamicResource TextMain}")
+
+        ; Update the edit indicator buttons with current values and active tags
+        this.ui.Update(this.id "_EditStartBtn", "Content", "Start: " this.GetFormattedDate(this.startStr))
+        this.ui.Update(this.id "_EditEndBtn", "Content", "End: " this.GetFormattedDate(this.endStr))
+        
+        this.ui.Update(this.id "_EditStartBtn", "Tag", this.editingStart ? "Active" : "")
+        this.ui.Update(this.id "_EditEndBtn", "Tag", !this.editingStart ? "Active" : "")
 
         loop 2 {
             calIdx := A_Index
@@ -1092,10 +1222,10 @@ class DateRangePickerEx {
                     this.ui.Update(this.id "_Day_" dayId, "Content", dayNum)
                     this.ui.Update(this.id "_Day_" dayId, "IsEnabled", "True")
 
-                    isStart := (currentDate == this.startStr)
-                    isEnd := (currentDate == this.endStr)
-                    inRange := (currentDate >= this.startStr && currentDate <= this.endStr)
-                    isSingleDayRange := (this.startStr == this.endStr)
+                    isStart := (this.startStr != "" && currentDate == this.startStr)
+                    isEnd := (this.endStr != "" && currentDate == this.endStr)
+                    inRange := this.selectPeriod && (this.startStr != "" && this.endStr != "" && currentDate >= this.startStr && currentDate <= this.endStr)
+                    isSingleDayRange := (this.startStr != "" && this.startStr == this.endStr)
 
                     ; 1. Configure the Circular Button (Foreground)
                     if (isStart || isEnd) {
@@ -1300,6 +1430,42 @@ _BuildDataTableRow(parent, columns, rIndex, rowObj) {
 }
 
 
+_PopoverBorder_Add(this, tag, propsOrText := "") {
+    if (InStr(tag, ".")) {
+        return XAMLElement.Prototype.Add.Call(this, tag, propsOrText)
+    }
+
+    if (!this.HasOwnProp("_spHelper")) {
+        visualChildren := []
+        for child in this._Children {
+            if (!InStr(child._Tag, ".")) {
+                visualChildren.Push(child)
+            }
+        }
+
+        if (visualChildren.Length == 0) {
+            return XAMLElement.Prototype.Add.Call(this, tag, propsOrText)
+        } else {
+            sp := XAMLElement.Prototype.Add.Call(this, "StackPanel")
+            this._spHelper := sp
+
+            newChildren := []
+            for child in this._Children {
+                if (InStr(child._Tag, ".")) {
+                    newChildren.Push(child)
+                } else if (child != sp) {
+                    child._Parent := sp
+                    sp._Children.Push(child)
+                }
+            }
+            newChildren.Push(sp)
+            this._Children := newChildren
+        }
+    }
+
+    return this._spHelper.Add(tag, propsOrText)
+}
+
 XAMLElement.Prototype.DefineProp("AddRichPopover", { Call: _AddRichPopover })
 _AddRichPopover(this) {
     static popoverCounter := 0
@@ -1317,8 +1483,8 @@ _AddRichPopover(this) {
 
     bdr.Add("Border.Effect").Add("DropShadowEffect").BlurRadius(12).ShadowDepth(3).Opacity(0.25).SetProp('Color', "Black")
 
-    sp := bdr.Add("StackPanel")
-    return sp
+    bdr.DefineProp("Add", { Call: _PopoverBorder_Add })
+    return bdr
 }
 
 XAMLElement.Prototype.DefineProp("StatCard", { Call: _StatCard })
@@ -1584,7 +1750,24 @@ class DataGridEx {
         this.filterValues := opts.HasProp("FilterValues") ? opts.FilterValues : []
         this.filterStates := Map()
         this.showDensity := opts.HasProp("ShowDensity") ? opts.ShowDensity : true
-        this.density := "comfy"
+        this.density := opts.HasProp("Density") ? opts.Density : "comfy"
+
+        this.onRowSelect := opts.HasProp("OnRowSelect") ? opts.OnRowSelect : ""
+        this.onRowCheck := opts.HasProp("OnRowCheck") ? opts.OnRowCheck : ""
+        this.onRowAction := opts.HasProp("OnRowAction") ? opts.OnRowAction : ""
+        this.showCheckboxes := opts.HasProp("ShowCheckboxes") ? opts.ShowCheckboxes : false
+        this.showRowActions := opts.HasProp("ShowRowActions") ? opts.ShowRowActions : false
+        this.rowActionsHoverOnly := opts.HasProp("RowActionsHoverOnly") ? opts.RowActionsHoverOnly : false
+        this.rowActions := opts.HasProp("RowActions") ? opts.RowActions : [{Icon: Chr(0xE70F), Name: "Edit", ToolTip: "Edit Record"}, {Icon: Chr(0xE946), Name: "Details", ToolTip: "View Details"}, {Icon: Chr(0xE74D), Name: "Delete", ToolTip: "Delete Record"}]
+        this.rowActionsWidth := opts.HasProp("RowActionsWidth") ? opts.RowActionsWidth : "120"
+        this.checkedRows := Map()
+        this.stickyActions := opts.HasProp("StickyActions") ? opts.StickyActions : false
+
+        ; Ensure unique ID for row selection and memory tracking
+        for idx, rowObj in dataArray {
+            if !rowObj.HasProp("_uid")
+                rowObj._uid := String(idx)
+        }
 
         this.hiddenColumns := Map()
         if (opts.HasProp("HiddenColumns")) {
@@ -1594,13 +1777,17 @@ class DataGridEx {
 
         this.ui := ""
 
-        ; Auto-detect columns from first row
-        if (dataArray.Length > 0) {
-            for key, val in dataArray[1].OwnProps()
-                this.columns.Push(key)
-            if (this.sortCol == "")
-                this.sortCol := this.columns[1]
+        ; Auto-detect columns from first row if not explicitly provided
+        if (opts.HasProp("Columns")) {
+            this.columns := opts.Columns
+        } else if (dataArray.Length > 0) {
+            for key, val in dataArray[1].OwnProps() {
+                if (key != "_uid")
+                    this.columns.Push(key)
+            }
         }
+        if (this.sortCol == "" && this.columns.Length > 0)
+            this.sortCol := this.columns[1]
 
         ; Column widths: set defaults
         if (opts.HasProp("ColumnWidths")) {
@@ -1710,41 +1897,69 @@ class DataGridEx {
         ; --- Table ---
         tableBdr := grid.Add("Border").Grid_Row(1).Margin("0,0,15,0").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1).CornerRadius(6).Background("{DynamicResource ControlBg}").ClipToBounds("True")
 
-        tableSV := tableBdr.Add("ScrollViewer").Name(this.id "_TableSV").HorizontalScrollBarVisibility("Auto").VerticalScrollBarVisibility("Disabled")
+        tableSV := tableBdr.Add("ScrollViewer").Name(this.id "_TableSV").HorizontalScrollBarVisibility("Auto").VerticalScrollBarVisibility("Auto")
 
         tableGrid := tableSV.Add("Grid").MinWidth("{Binding ElementName=" this.id "_TableSV, Path=ViewportWidth}")
         tableGrid.Rows("30", "*")
         tableGrid.IsSharedSizeScope("True")
 
         ; Table Header
-        headerGrid := tableGrid.Add("Grid").Name(this.id "_HeaderGrid").Grid_Row(0).Background("{DynamicResource ControlBgHover}")
+        headerGrid := tableGrid.Add("Grid").Name(this.id "_HeaderGrid").Grid_Row(0).Background("{DynamicResource DropdownBg}")
+        headerGrid.SetProp("Panel.ZIndex", "1")
+        headerGrid.Add("Grid.RenderTransform").Add("TranslateTransform").Y("{Binding ElementName=" this.id "_TableSV, Path=VerticalOffset}")
         hColDefs := headerGrid.Add("Grid.ColumnDefinitions")
+        
+        ; Checkbox column definition (at index 0)
+        hColDefs.Add("ColumnDefinition").Name(this.id "_HeaderCol_Chk").Width(this.showCheckboxes ? "45" : "0")
+
         for i, col in this.columns {
             w := this._GetColWidth(col, i)
             hColDefs.Add("ColumnDefinition").Name(this.id "_HeaderCol_" i).Width(w)
-            hColDefs.Add("ColumnDefinition").Name(this.id "_HeaderSplit_" i).Width(w == "0" ? "0" : "Auto")
+            hColDefs.Add("ColumnDefinition").Name(this.id "_HeaderSplit_" i).Width(w == "0" ? "0" : "7")
         }
         ; Small buffer to allow resizing last column without massive empty scroll space
         hColDefs.Add("ColumnDefinition").Name(this.id "_HeaderDummy").Width("30")
 
+        ; Actions column definition
+        hColDefs.Add("ColumnDefinition").Name(this.id "_HeaderCol_Act").Width(this.showRowActions ? this.rowActionsWidth : "0")
+
         ; Dummy Grid to proxy explicit Widths into SharedSizeGroups (fixes GridSplitter bug)
         dummyGrid := tableGrid.Add("Grid").Height(0).IsHitTestVisible("False").Grid_Row(0)
         dColDefs := dummyGrid.Add("Grid.ColumnDefinitions")
+        
+        dColDefs.Add("ColumnDefinition").Name(this.id "_DummyCol_Chk").Width("{Binding ElementName=" this.id "_HeaderCol_Chk, Path=Width}")
+
         for i, col in this.columns {
             dColDefs.Add("ColumnDefinition").Width("{Binding ElementName=" this.id "_HeaderCol_" i ", Path=Width}").SharedSizeGroup("TableCol_" i)
             dColDefs.Add("ColumnDefinition").Width("{Binding ElementName=" this.id "_HeaderSplit_" i ", Path=Width}").SharedSizeGroup("TableSplit_" i)
         }
         dColDefs.Add("ColumnDefinition").Width("{Binding ElementName=" this.id "_HeaderDummy, Path=Width}").SharedSizeGroup("TableDummy")
+        
+        dColDefs.Add("ColumnDefinition").Name(this.id "_DummyCol_Act").Width("{Binding ElementName=" this.id "_HeaderCol_Act, Path=Width}")
 
+        ; Header checkbox
+        headerGrid.Add("CheckBox").Name(this.id "_Header_ChkAll").Grid_Column(0).HorizontalAlignment("Center").VerticalAlignment("Center").Margin("10,0,0,0").Visibility(this.showCheckboxes ? "Visible" : "Collapsed")
+
+        startColIdx := 1
         for i, col in this.columns {
-            colIdx := (i - 1) * 2
+            colIdx := startColIdx + (i - 1) * 2
             headerGrid.Add("Button").Name(this.id "_Table_Header_" StrReplace(col, " ", "")).Content(col).Grid_Column(colIdx).Background("Transparent").Foreground("{DynamicResource TextSub}").BorderThickness("0").FontSize(11).FontWeight("Bold").HorizontalContentAlignment("Left").Padding("10,0").Cursor("Hand")
             headerGrid.Add("Border").Grid_Column(colIdx + 1).Width(1).HorizontalAlignment("Center").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
             headerGrid.Add("GridSplitter").Name(this.id "_Table_Splitter_" i).Grid_Column(colIdx + 1).Width(7).HorizontalAlignment("Center").VerticalAlignment("Stretch").Background("Transparent").Cursor("SizeWE").ResizeBehavior("PreviousAndNext").ToolTip("Drag to resize, double-click to auto-fit")
         }
 
+        ; Header actions border wrapper
+        actionsColIdx := startColIdx + this.columns.Length * 2 + 1
+        bgVal := "{DynamicResource DropdownBg}"
+        alignVal := this.stickyActions ? "Left" : "Stretch"
+        actBdr := headerGrid.Add("Border").Name(this.id "_Header_ActBdr").Grid_Column(actionsColIdx).Background(bgVal).BorderThickness("1,0,0,0").BorderBrush("{DynamicResource ControlBorder}").Visibility(this.showRowActions ? "Visible" : "Collapsed").HorizontalAlignment(alignVal)
+        if (this.stickyActions) {
+            actBdr.Width(this.rowActionsWidth)
+        }
+        actBdr.Add("TextBlock").Name(this.id "_Header_ActTxt").Text("ACTIONS").Foreground("{DynamicResource TextSub}").FontSize(11).FontWeight("Bold").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("10,0")
+
         ; Table ListBox
-        lb := tableGrid.Add("ListBox").Name(this.id "_Table_List").Grid_Row(1).Background("Transparent").BorderThickness("0").ScrollViewer_HorizontalScrollBarVisibility("Disabled").VirtualizingPanel_IsVirtualizing("False").HorizontalContentAlignment("Stretch")
+        lb := tableGrid.Add("ListBox").Name(this.id "_Table_List").Grid_Row(1).Background("Transparent").BorderThickness("0").ScrollViewer_HorizontalScrollBarVisibility("Disabled").ScrollViewer_VerticalScrollBarVisibility("Disabled").VirtualizingPanel_IsVirtualizing("False").HorizontalContentAlignment("Stretch")
         lb.InjectResources('<Style TargetType="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="BorderThickness" Value="0"/></Style>')
 
         ; --- Pagination ---
@@ -1807,9 +2022,23 @@ class DataGridEx {
             uiHost.OnEvent(this.id "_BtnNext", "Click", (state, ctrl, ev) => this.ChangePage(state, 1))
         }
 
+        ; Always track and bind row selection
+        uiHost.Track(this.id "_Table_List")
+        uiHost.OnEvent(this.id "_Table_List", "SelectionChanged", (state, ctrl, ev) => this._OnRowSelected(state))
+
+        ; Always track and bind the header checkbox to support dynamic toggling
+        uiHost.Track(this.id "_Header_ChkAll")
+        uiHost.OnEvent(this.id "_Header_ChkAll", "Checked", (state, ctrl, ev) => this.ToggleCheckAll(state, true))
+        uiHost.OnEvent(this.id "_Header_ChkAll", "Unchecked", (state, ctrl, ev) => this.ToggleCheckAll(state, false))
+
         ; Initial Render on Load
         uiHost.Track(this.id "_MainGrid")
         uiHost.OnEvent(this.id "_MainGrid", "Loaded", (state, ctrl, ev) => this.Render(state))
+
+        ; Always track ScrollViewer properties and bind ScrollChanged for sticky columns
+        uiHost.Track(this.id "_TableSV>HorizontalOffset")
+        uiHost.Track(this.id "_TableSV>ScrollableWidth")
+        uiHost.OnEvent(this.id "_TableSV", "ScrollChanged", (state, ctrl, ev) => this.OnScroll(state)).Limit(60)
     }
 
     Sort(state, col) {
@@ -1986,6 +2215,36 @@ class DataGridEx {
         }
 
         ; --- 4. Clear & guard ---
+        ; Cleanup previous row events
+        for ctrlName, v in this.ui.events.Clone() {
+            if (SubStr(ctrlName, 1, StrLen(this.id "_Row_")) == this.id "_Row_") {
+                this.ui.events.Delete(ctrlName)
+                if (this.ui.tracked.Has(ctrlName))
+                    this.ui.tracked.Delete(ctrlName)
+            }
+        }
+
+        ; Sync Header visibility and sticky properties
+        this.ui.Update(this.id "_HeaderCol_Chk", "Width", this.showCheckboxes ? "45" : "0")
+        this.ui.Update(this.id "_HeaderCol_Act", "Width", this.showRowActions ? this.rowActionsWidth : "0")
+        this.ui.Update(this.id "_Header_ChkAll", "Visibility", this.showCheckboxes ? "Visible" : "Collapsed")
+        this.ui.Update(this.id "_Header_ActBdr", "Visibility", this.showRowActions ? "Visible" : "Collapsed")
+
+        if (this.showRowActions) {
+            if (this.stickyActions) {
+                this.ui.Update(this.id "_Header_ActBdr", "Background", "{DynamicResource DropdownBg}")
+                this.ui.Update(this.id "_Header_ActBdr", "HorizontalAlignment", "Left")
+                this.ui.Update(this.id "_Header_ActBdr", "Width", this.rowActionsWidth)
+            } else {
+                this.ui.Update(this.id "_Header_ActBdr", "Background", "{DynamicResource DropdownBg}")
+                this.ui.Update(this.id "_Header_ActBdr", "HorizontalAlignment", "Stretch")
+                this.ui.Update(this.id "_Header_ActBdr", "Width", "Auto")
+            }
+        }
+
+        ; Update header checkbox checked state based on current page selections
+        this.UpdateHeaderCheckboxState()
+
         this.ui.Update(this.id "_Table_List", "ClearItems", "")
         if (total == 0)
             return
@@ -1997,14 +2256,20 @@ class DataGridEx {
             return
 
         ; --- 5. Inject rows ---
+        this.currentPageUids := []
+        startColIdx := 1
         loop count {
             idx := startIdx + A_Index - 1
             rowObj := filtered[idx]
+            this.currentPageUids.Push(rowObj._uid)
 
             rowGrid := XAML_Generator()
             rowGrid.Background(Mod(A_Index, 2) == 0 ? "{DynamicResource ControlBg}" : "Transparent")
             rowGrid.MinWidth("{Binding ElementName=" this.id "_HeaderGrid, Path=ActualWidth}")
             rColDefs := rowGrid.Add("Grid.ColumnDefinitions")
+
+            ; Checkbox column definition
+            rColDefs.Add("ColumnDefinition").Width(this.showCheckboxes ? "45" : "0")
 
             for i, col in this.columns {
                 w := this._GetColWidth(col, i)
@@ -2014,21 +2279,288 @@ class DataGridEx {
             }
             rColDefs.Add("ColumnDefinition").Width("Auto").SharedSizeGroup("TableDummy")
 
+            ; Actions column definition
+            rColDefs.Add("ColumnDefinition").Width(this.showRowActions ? this.rowActionsWidth : "0")
+
             isCompact := (this.density == "compact")
             fSize := isCompact ? 11 : 12
             marginText := isCompact ? "10,4" : "10,12"
 
+            ; Checkbox cell
+            if (this.showCheckboxes) {
+                chkName := this.id "_Row_Chk_" rowObj._uid
+                isCheckedStr := (this.checkedRows.Has(rowObj._uid) && this.checkedRows[rowObj._uid]) ? "True" : "False"
+                rowGrid.Add("CheckBox").Name(chkName).Grid_Column(0).HorizontalAlignment("Center").VerticalAlignment("Center").Margin("10,0,0,0").IsChecked(isCheckedStr)
+            }
+
+            ; Standard cells
             for i, col in this.columns {
                 val := rowObj.HasProp(col) ? rowObj.%col% : ""
-                colIdx := (i - 1) * 2
+                colIdx := startColIdx + (i - 1) * 2
                 rowGrid.Add("TextBlock").Text(val).Grid_Column(colIdx).Foreground("{DynamicResource TextMain}").FontSize(fSize).VerticalAlignment("Center").Margin(marginText).TextTrimming("CharacterEllipsis").ToolTip(val)
+            }
+
+            ; Actions cell
+            if (this.showRowActions) {
+                actionsColIdx := startColIdx + this.columns.Length * 2 + 1
+                
+                if (this.stickyActions) {
+                    actBdr := rowGrid.Add("Border").Name(this.id "_Row_ActCell_" rowObj._uid).Grid_Column(actionsColIdx).Background("{DynamicResource DropdownBg}").BorderThickness("1,0,0,0").BorderBrush("{DynamicResource ControlBorder}").HorizontalAlignment("Left").Width(this.rowActionsWidth)
+                    actionSp := actBdr.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+                } else {
+                    actionSp := rowGrid.Add("StackPanel").Name(this.id "_Row_ActCell_" rowObj._uid).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Grid_Column(actionsColIdx)
+                }
+                
+                if (this.rowActionsHoverOnly) {
+                    styleNode := actionSp.Add("StackPanel.Style")
+                    style := styleNode.Add("Style").SetProp("TargetType", "StackPanel")
+                    style.Add("Setter").SetProp("Property", "Visibility").SetProp("Value", "Collapsed")
+                    
+                    triggers := style.Add("Style.Triggers")
+                    trigger := triggers.Add("DataTrigger")
+                    trigger.SetProp("Binding", "{Binding RelativeSource={RelativeSource AncestorType=Grid}, Path=IsMouseOver}")
+                    trigger.SetProp("Value", "True")
+                    trigger.Add("Setter").SetProp("Property", "Visibility").SetProp("Value", "Visible")
+                }
+
+                for aIdx, action in this.rowActions {
+                    btnName := this.id "_Row_Act_" rowObj._uid "_" action.Name
+                    btn := actionSp.Add("Button").Name(btnName).Style("{StaticResource IconButton}").Width(isCompact ? "22" : "28").Height(isCompact ? "22" : "28").Margin(isCompact ? "1,0" : "2,0").ToolTip(action.ToolTip)
+                    btn.Add("TextBlock").Text(action.Icon).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(isCompact ? 11 : 14).HorizontalAlignment("Center").VerticalAlignment("Center")
+                }
             }
 
             rowStr := rowGrid.Compile()
             rowStr := RegExReplace(rowStr, "[\r\n]+", "")
             rowStr := RegExReplace(rowStr, "<!--.*?-->", "")
-            rowStr := StrReplace(rowStr, "<Grid ", '<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" ')
+            rowStr := StrReplace(rowStr, "<Grid ", '<Grid ') ; Clean parent Grid namespaces
+            rowStr := '<ListBoxItem xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Tag="' rowObj._uid '">' rowStr '</ListBoxItem>'
+            
             this.ui.Update(this.id "_Table_List", "AddXamlItem", rowStr)
+
+            ; Register dynamic checkbox and button events on the host AFTER injecting
+            if (this.showCheckboxes) {
+                chkName := this.id "_Row_Chk_" rowObj._uid
+                this.ui.Track(chkName)
+                this.ui.OnEvent(chkName, "Checked", ((uid) => (state, ctrl, ev) => this.OnRowCheckChange(uid, true))(rowObj._uid))
+                this.ui.OnEvent(chkName, "Unchecked", ((uid) => (state, ctrl, ev) => this.OnRowCheckChange(uid, false))(rowObj._uid))
+                this.ui.Update(chkName, "BindEvent", "Checked")
+                this.ui.Update(chkName, "BindEvent", "Unchecked")
+            }
+
+            if (this.showRowActions) {
+                for aIdx, action in this.rowActions {
+                    btnName := this.id "_Row_Act_" rowObj._uid "_" action.Name
+                    this.ui.OnEvent(btnName, "Click", ((uid, actName) => (state, ctrl, ev) => this.OnRowActionClick(uid, actName))(rowObj._uid, action.Name))
+                    this.ui.Update(btnName, "BindEvent", "Click")
+                }
+            }
+        }
+
+        ; Adjust position to current scroll offset or reset if stickyActions is disabled
+        this.OnScroll(state)
+    }
+
+    GetCheckedRows() {
+        checked := []
+        for rowObj in this.data {
+            if (rowObj.HasProp("_uid") && this.checkedRows.Has(rowObj._uid)) {
+                checked.Push(rowObj)
+            }
+        }
+        return checked
+    }
+
+    ClearCheckedRows(state := "") {
+        this.checkedRows := Map()
+        if (this.showCheckboxes && this.ui) {
+            this.ui.Update(this.id "_Header_ChkAll", "IsChecked", "False")
+            if (state != "")
+                this.Render(state)
+        }
+    }
+
+    UpdateHeaderCheckboxState() {
+        if (!this.showCheckboxes || !this.ui)
+            return
+
+        ; Determine visible rows on the current page
+        filtered := []
+        for rowObj in this.data {
+            if (this.filterColumn != "" && rowObj.HasProp(this.filterColumn)) {
+                fVal := rowObj.%this.filterColumn%
+                if (this.filterStates.Has(fVal) && !this.filterStates[fVal])
+                    continue
+            }
+            if (this.searchQuery != "") {
+                found := false
+                for col in this.columns {
+                    if (rowObj.HasProp(col) && InStr(rowObj.%col%, this.searchQuery))
+                        found := true
+                }
+                if (!found)
+                    continue
+            }
+            filtered.Push(rowObj)
+        }
+
+        total := filtered.Length
+        if (total == 0) {
+            this.ui.Update(this.id "_Header_ChkAll", "IsChecked", "False")
+            return
+        }
+
+        startIdx := (this.page - 1) * this.pageSize + 1
+        endIdx := Min(startIdx + this.pageSize - 1, total)
+        count := endIdx - startIdx + 1
+
+        allChecked := true
+        loop count {
+            idx := startIdx + A_Index - 1
+            rowObj := filtered[idx]
+            if (!this.checkedRows.Has(rowObj._uid) || !this.checkedRows[rowObj._uid]) {
+                allChecked := false
+                break
+            }
+        }
+
+        this.ui.Update(this.id "_Header_ChkAll", "IsChecked", allChecked ? "True" : "False")
+    }
+
+    ToggleCheckAll(state, checkAll) {
+        filtered := []
+        for rowObj in this.data {
+            if (this.filterColumn != "" && rowObj.HasProp(this.filterColumn)) {
+                fVal := rowObj.%this.filterColumn%
+                if (this.filterStates.Has(fVal) && !this.filterStates[fVal])
+                    continue
+            }
+            if (this.searchQuery != "") {
+                found := false
+                for col in this.columns {
+                    if (rowObj.HasProp(col) && InStr(rowObj.%col%, this.searchQuery))
+                        found := true
+                }
+                if (!found)
+                    continue
+            }
+            filtered.Push(rowObj)
+        }
+
+        total := filtered.Length
+        if (total == 0)
+            return
+
+        startIdx := (this.page - 1) * this.pageSize + 1
+        endIdx := Min(startIdx + this.pageSize - 1, total)
+        count := endIdx - startIdx + 1
+
+        loop count {
+            idx := startIdx + A_Index - 1
+            rowObj := filtered[idx]
+            if (checkAll) {
+                this.checkedRows[rowObj._uid] := true
+            } else {
+                if (this.checkedRows.Has(rowObj._uid))
+                    this.checkedRows.Delete(rowObj._uid)
+            }
+        }
+
+        this.Render(state)
+
+        if (this.onRowCheck) {
+            this.onRowCheck.Call("", checkAll)
+        }
+    }
+
+    OnRowCheckChange(uid, isChecked) {
+        if (isChecked)
+            this.checkedRows[uid] := true
+        else if (this.checkedRows.Has(uid))
+            this.checkedRows.Delete(uid)
+
+        this.UpdateHeaderCheckboxState()
+
+        if (this.onRowCheck) {
+            for rowObj in this.data {
+                if (rowObj.HasProp("_uid") && rowObj._uid == uid) {
+                    this.onRowCheck.Call(rowObj, isChecked)
+                    break
+                }
+            }
+        }
+    }
+
+    OnRowActionClick(uid, actionName) {
+        selectedRow := ""
+        for rowObj in this.data {
+            if (rowObj.HasProp("_uid") && rowObj._uid == uid) {
+                selectedRow := rowObj
+                break
+            }
+        }
+        if (selectedRow != "" && this.onRowAction) {
+            this.onRowAction.Call(selectedRow, actionName)
+        }
+    }
+
+    _OnRowSelected(state) {
+        if !state.Has(this.id "_Table_List")
+            return
+        uid := state[this.id "_Table_List"]
+        if (uid == "")
+            return
+        selectedRow := ""
+        for rowObj in this.data {
+            if (rowObj.HasProp("_uid") && rowObj._uid == uid) {
+                selectedRow := rowObj
+                break
+            }
+        }
+        if (selectedRow != "" && this.onRowSelect) {
+            this.onRowSelect.Call(selectedRow)
+        }
+    }
+
+    OnScroll(state := "") {
+        if (!this.stickyActions) {
+            ; Reset margins when not sticky
+            if (this.showRowActions) {
+                this.ui.Update(this.id "_Header_ActBdr", "Margin", "0,0,0,0")
+                if (this.HasProp("currentPageUids")) {
+                    for uid in this.currentPageUids {
+                        this.ui.Update(this.id "_Row_ActCell_" uid, "Margin", "0,0,0,0")
+                    }
+                }
+            }
+            return
+        }
+
+        offset := 0.0
+        scrollable := 0.0
+
+        if (state != "" && state.Has(this.id "_TableSV>HorizontalOffset")) {
+            offset := Float(state[this.id "_TableSV>HorizontalOffset"])
+            scrollable := state.Has(this.id "_TableSV>ScrollableWidth") ? Float(state[this.id "_TableSV>ScrollableWidth"]) : 0.0
+        } else if (this.ui) {
+            res := this.ui.Query(this.id "_TableSV>HorizontalOffset", this.id "_TableSV>ScrollableWidth")
+            offset := res[this.id "_TableSV>HorizontalOffset"] != "" ? Float(res[this.id "_TableSV>HorizontalOffset"]) : 0.0
+            scrollable := res[this.id "_TableSV>ScrollableWidth"] != "" ? Float(res[this.id "_TableSV>ScrollableWidth"]) : 0.0
+        }
+
+        marginVal := String(offset - scrollable) ",0,0,0"
+
+        if (this.showRowActions) {
+            this.ui.Update(this.id "_Header_ActBdr", "Margin", marginVal)
+        }
+
+        if (this.showRowActions && this.HasProp("currentPageUids")) {
+            updates := []
+            for uid in this.currentPageUids {
+                updates.Push({ ControlName: this.id "_Row_ActCell_" uid, PropertyName: "Margin", Value: marginVal })
+            }
+            if (updates.Length > 0)
+                this.ui.BatchUpdate(updates)
         }
     }
 }
