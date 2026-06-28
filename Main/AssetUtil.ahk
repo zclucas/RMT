@@ -494,6 +494,7 @@ LoadMainSetting() {
     MainSoftData.TableIndex := IniRead(IniFile, IniSection, "TableIndex", 1)
     MainSoftData.Lang := IniRead(IniFile, IniSection, "Lang", "无语言")
     MainSoftData.FontType := IniRead(IniFile, IniSection, "FontType", "微软雅黑")
+    MainSoftData.JoyType := IniRead(IniFile, IniSection, "JoyType", "Xbox")
     MainSoftData.CMDPosX := IniRead(IniFile, IniSection, "CMDPosX", A_ScreenWidth - 225 - 55)
     MainSoftData.CMDPosY := IniRead(IniFile, IniSection, "CMDPosY", 0)
     MainSoftData.CMDWidth := IniRead(IniFile, IniSection, "CMDWidth", 225)

@@ -470,7 +470,7 @@ OnItemEditTriggerStr(tableItem, index, *) {
         ItemUsePool := ItemUseConPoolMap[tableItem.Index]
         if (ItemUsePool.Has(index)) {
             ItemConObj := ItemUsePool[index]
-            ItemConObj.TKBtnCon.Text := sureTriggerKey == "" ? GetLang("编辑") : sureTriggerKey
+            ItemConObj.TKBtnCon.Text := sureTriggerKey == "" ? GetLang("编辑") : MySoftData.FormatJoyTriggerKey(sureTriggerKey)
         }
     }
 
@@ -494,7 +494,7 @@ OnItemCustomEditTriggerStr(tableItem, index, *) {
     ItemUsePool := ItemUseConPoolMap[tableItem.Index]
     if (ItemUsePool.Has(index)) {
         ItemConObj := ItemUsePool[index]
-        ItemConObj.TKBtnCon.Text := CustomTK.Value == "" ? GetLang("编辑") : CustomTK.Value
+        ItemConObj.TKBtnCon.Text := CustomTK.Value == "" ? GetLang("编辑") : MySoftData.FormatJoyTriggerKey(CustomTK.Value)
     }
 }
 
@@ -511,7 +511,7 @@ OnItemEditTriggerKey(tableItem, index, *) {
         ItemUsePool := ItemUseConPoolMap[tableItem.Index]
         if (ItemUsePool.Has(index)) {
             ItemConObj := ItemUsePool[index]
-            ItemConObj.TKBtnCon.Text := sureTriggerKey == "" ? GetLang("编辑") : sureTriggerKey
+            ItemConObj.TKBtnCon.Text := sureTriggerKey == "" ? GetLang("编辑") : MySoftData.FormatJoyTriggerKey(sureTriggerKey)
         }
     }
 
@@ -1029,7 +1029,7 @@ GetItemConObj(tableItem, itemIndex) {
     isTriggerStr := CheckIsStringMacroTable(tableItem.Index)
     isUI := GetTableSymbol(tableItem.Index) == "UI"
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    TKBtnStr := isTiming ? GetLang("定时") : tableItem.TKArr[ItemIndex]
+    TKBtnStr := isTiming ? GetLang("定时") : MySoftData.FormatJoyTriggerKey(tableItem.TKArr[ItemIndex])
     TKBtnStr := TKBtnStr == "" ? GetLang("编辑") : TKBtnStr
     LoopStr := tableItem.LoopCountArr[ItemIndex] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[ItemIndex]
     EditTKAction := isTriggerStr ? OnItemEditTriggerStr : OnItemEditTriggerKey
@@ -1112,12 +1112,11 @@ RecycleTabSingleItem(tableItem, itemIndex) {
 
     ColorState := GetItemColorState(ItemConObj.ColorCon.Value)
     ColorState := ItemConObj.ColorCon.Visible ? ColorState : 0
-    BtnStr := ItemConObj.TKBtnCon.Text == GetLang("编辑") ? "" : ItemConObj.TKBtnCon.Text
+    ; TKArr 已由编辑回调直接更新，不从显示文本回读（显示文本经 FormatJoyTriggerKey 格式化后无法可靠还原）
     LoopValue := ItemConObj.LoopCon.Text == GetLang("无限") ? -1 : ItemConObj.LoopCon.Text
 
     ;记录可能修改的值
     tableItem.ColorStateArr[itemIndex] := ColorState
-    tableItem.TKArr[itemIndex] := BtnStr
     tableItem.TriggerTypeArr[itemIndex] := ItemConObj.TKTypeCon.Value
     tableItem.ForbidArr[itemIndex] := ItemConObj.ForbidCon.Value
     tableItem.RemarkArr[itemIndex] := ItemConObj.RemarkCon.Value

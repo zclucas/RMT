@@ -180,6 +180,9 @@ class MainConfig {
         this.Lang := "中文"             ; 当前语言
         this.LangArr := []              ; 可用语言列表
 
+        ; ========== 手柄 ==========
+        this.JoyType := "Xbox"          ; 手柄类型 (Xbox/PS5)
+
         ; ========== 提示选项 ==========
         this.NoVariableTip := false     ; 未找到变量时是否弹窗提醒
 
@@ -357,6 +360,55 @@ class SoftData {
             "JoyAxisRYMin", "JoyRMin",
             "JoyAxisRYMax", "JoyRMax"
         )
+        this.JoyPS5ToAhkMap := Map(
+            "JoyA", "Joy1",      ; □ Square
+            "JoyB", "Joy2",      ; × Cross
+            "JoyX", "Joy3",      ; ○ Circle
+            "JoyY", "Joy4",      ; △ Triangle
+            "JoyLB", "Joy5",     ; L1
+            "JoyRB", "Joy6",     ; R1
+            "JoyLT", "Joy7",     ; L2（数字按钮）
+            "JoyRT", "Joy8",     ; R2（数字按钮）
+            "JoyLS", "Joy11",     ; 左摇杆按下（L3）
+            "JoyRS", "Joy12",    ; 右摇杆按下（R3）
+            "JoyBack", "Joy9",    ; Create
+            "JoyStart", "Joy10",  ; Options
+            "JoyPad", "Joy14",    ; 触摸板按压
+            "JoyHome", "Joy13",   ; PS键
+            "JoyDpadUp", "JoyPOV_0",
+            "JoyDpadRight", "JoyPOV_9000",
+            "JoyDpadDown", "JoyPOV_18000",
+            "JoyDpadLeft", "JoyPOV_27000",
+            "JoyAxisLXMin", "JoyXMin",
+            "JoyAxisLXMax", "JoyXMax",
+            "JoyAxisLYMin", "JoyYMin",
+            "JoyAxisLYMax", "JoyYMax",
+            "JoyAxisRXMin", "JoyUMin",
+            "JoyAxisRXMax", "JoyUMax",
+            "JoyAxisRYMin", "JoyRMin",
+            "JoyAxisRYMax", "JoyRMax"
+        )
+        ; GUI按钮显示名称映射（内部名称 → {Xbox, PS5}）
+        this.JoyBtnDisplayMap := Map(
+            "JoyA", Map("Xbox", "A", "PS5", "□"),
+            "JoyB", Map("Xbox", "B", "PS5", "×"),
+            "JoyX", Map("Xbox", "X", "PS5", "○"),
+            "JoyY", Map("Xbox", "Y", "PS5", "△"),
+            "JoyLB", Map("Xbox", "LB", "PS5", "L1"),
+            "JoyRB", Map("Xbox", "RB", "PS5", "R1"),
+            "JoyLT", Map("Xbox", "LT", "PS5", "L2"),
+            "JoyRT", Map("Xbox", "RT", "PS5", "R2"),
+            "JoyLS", Map("Xbox", "LS", "PS5", "L3"),
+            "JoyRS", Map("Xbox", "RS", "PS5", "R3"),
+            "JoyBack", Map("Xbox", "Back", "PS5", "Crt"),
+            "JoyStart", Map("Xbox", "Start", "PS5", "Opt"),
+            "JoyPad", Map("Xbox", "Map", "PS5", "白板"),
+            "JoyHome", Map("Xbox", "XBOX", "PS5", "PS"),
+            "JoyDpadUp", Map("Xbox", "上", "PS5", "上"),
+            "JoyDpadDown", Map("Xbox", "下", "PS5", "下"),
+            "JoyDpadLeft", Map("Xbox", "左", "PS5", "左"),
+            "JoyDpadRight", Map("Xbox", "右", "PS5", "右")
+        )
         this.JoyAhkToXboxMap := Map(
             "Joy1", "JoyA",
             "Joy2", "JoyB",
@@ -383,6 +435,61 @@ class SoftData {
             "JoyRMin", "JoyAxisRYMin",
             "JoyRMax", "JoyAxisRYMax"
         )
+    }
+
+    GetJoyToAhkMap() {
+        joyType := MainSoftData.JoyType
+        if (joyType == "PS5")
+            return this.JoyPS5ToAhkMap
+        return this.JoyXboxToAhkMap
+    }
+
+    GetJoyDisplayName(joyKey) {
+        joyType := MainSoftData.JoyType
+        displayMap := this.JoyBtnDisplayMap
+        if (displayMap.Has(joyKey)) {
+            labelMap := displayMap[joyKey]
+            name := labelMap.Has(joyType) ? labelMap[joyType] : labelMap["Xbox"]
+            if (name != "")
+                return name
+        }
+        ; 轴类按键直接返回原名
+        return joyKey
+    }
+
+    ; 将触发键字符串中的Joy键名转换为显示名（如 JoyA → □ 或 A，取决于JoyType）
+    FormatJoyTriggerKey(triggerKey) {
+        if (triggerKey == "")
+            return ""
+        result := triggerKey
+        joyKeys := ["JoyPad", "JoyHome", "JoyA", "JoyB", "JoyX", "JoyY", "JoyLB", "JoyRB", "JoyLT", "JoyRT",
+            "JoyLS", "JoyRS", "JoyBack", "JoyStart",
+            "JoyDpadUp", "JoyDpadDown", "JoyDpadLeft", "JoyDpadRight",
+            "JoyAxisLXMin", "JoyAxisLXMax", "JoyAxisLYMin", "JoyAxisLYMax",
+            "JoyAxisRXMin", "JoyAxisRXMax", "JoyAxisRYMin", "JoyAxisRYMax"]
+        for key in joyKeys {
+            displayName := this.GetJoyDisplayName(key)
+            result := StrReplace(result, key, displayName, , , 1)
+        }
+        return result
+    }
+
+    ; 将显示名还原为内部Joy键名（反向映射）
+    ParseJoyTriggerKey(displayStr) {
+        if (displayStr == "")
+            return ""
+        result := displayStr
+        joyKeys := ["JoyPad", "JoyHome", "JoyA", "JoyB", "JoyX", "JoyY", "JoyLB", "JoyRB", "JoyLT", "JoyRT",
+            "JoyLS", "JoyRS", "JoyBack", "JoyStart",
+            "JoyDpadUp", "JoyDpadDown", "JoyDpadLeft", "JoyDpadRight",
+            "JoyAxisLXMin", "JoyAxisLXMax", "JoyAxisLYMin", "JoyAxisLYMax",
+            "JoyAxisRXMin", "JoyAxisRXMax", "JoyAxisRYMin", "JoyAxisRYMax"]
+        for key in joyKeys {
+            displayName := this.GetJoyDisplayName(key)
+            if (displayName != "")
+                result := StrReplace(result, displayName, key, , , 1)
+        }
+        return result
     }
 }
 

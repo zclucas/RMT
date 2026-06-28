@@ -301,7 +301,7 @@ BindMenuHotKey() {
         }
 
         if (isJoyKey) {
-            MyJoyMacro.AddMacro(oriKey, actionArr[1], frontInfo)
+            MyJoyMacro.AddMacro(oriKey, actionArr[1], frontInfo, actionArr[2])
         }
         else {
             try {
@@ -416,7 +416,7 @@ BindTabHotKey() {
             }
 
             if (cache.isJoy) {
-                MyJoyMacro.AddMacro(rawKey, actionArr[1], cache.frontInfo)
+                MyJoyMacro.AddMacro(rawKey, actionArr[1], cache.frontInfo, actionArr[2])
             }
             else if (cache.isHotstring) {
                 Hotstring(rawKey, actionArr[1])

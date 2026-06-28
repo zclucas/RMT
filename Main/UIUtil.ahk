@@ -608,6 +608,11 @@ AddSettingUI(index) {
     Con := AddTableControl("Button", Format("x{} y{} h27", posX + 231, posY - 4), "?", tableItem)
     Con.OnEvent("Click", OnClickKeyDownDownHelpBtn)
 
+    AddTableControl("Text", Format("x{} y{}", posX + 315, posY), GetLang("手柄类型："), tableItem)
+    con := AddTableControl("DropDownList", Format("x{} y{} w120", posX + 390, posY - 4), ["Xbox", "PS5"], tableItem)
+    con.Text := MainSoftData.JoyType
+    con.OnEvent("Change", (*) => MainSoftData.JoyType := con.Text)
+
     posY += 30
     tableItem.UnderPosY := posY
 }

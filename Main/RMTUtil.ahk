@@ -73,6 +73,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("TableIndex", MainSoftData.TabCtrl.Value)
     CheckAndAddDirty("Lang", MainSoftData.Lang)
     CheckAndAddDirty("FontType", MainSoftData.FontType)
+    CheckAndAddDirty("JoyType", MainSoftData.JoyType)
     CheckAndAddDirty("MacroTotalCount", MySoftData.MacroTotalCount)
     CheckAndAddDirty("LastShowMonth", MainSoftData.LastShowMonth)
     CheckAndAddDirty("HasSaved", true)
