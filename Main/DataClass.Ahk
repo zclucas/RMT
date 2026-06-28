@@ -347,6 +347,8 @@ class SoftData {
             "JoyRS", "Joy10",
             "JoyBack", "Joy7",
             "JoyStart", "Joy8",
+            "JoyPad", "Joy14",
+            "JoyHome", "Joy13",
             "JoyDpadUp", "JoyPOV_0",
             "JoyDpadRight", "JoyPOV_9000",
             "JoyDpadDown", "JoyPOV_18000",

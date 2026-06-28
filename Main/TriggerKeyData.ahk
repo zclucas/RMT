@@ -174,6 +174,13 @@ class TriggerKeyData {
         if (this.HoldActionMap.Has(info))
             this.HoldActionMap.Delete(info)
 
+        ; 手柄键长按检测：将友好名（如 JoyBack）转为 AHK 原始键名（如 Joy7）
+        if (RegExMatch(keyCombo, "Joy") && MySoftData && IsObject(MySoftData)) {
+            joyMap := MySoftData.GetJoyToAhkMap()
+            if (joyMap.Has(keyCombo))
+                keyCombo := joyMap[keyCombo]
+        }
+
         if (AreKeysPressed(keyCombo))
             info.Action()
     }
