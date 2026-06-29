@@ -698,11 +698,16 @@ class MacroEditGui {
 
     _OnHotkey(key) {
         if (key == "F5")
-            this.RunMacro()
+            this.MenuHandler(GetLang("运行(F5)"))
         else if (key == "F6")
-            this.StepRun()
-        else if (key == "Delete")
-            this.DeleteCurrentRow()
+            this.MenuHandler(GetLang("单步运行(F6)"))
+        else if (key == "Delete") {
+            selectedItem := this.MacroTreeViewCon.GetSelection()
+            if (selectedItem != 0) {
+                this.CurItemID := selectedItem
+                this.OnDeleteCmd()
+            }
+        }
     }
 
     OnSoftKey(key, isDown) {

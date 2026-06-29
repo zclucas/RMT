@@ -569,6 +569,30 @@ OnFinishRecordMacro() {
     macroStr := FilterMoveCmd(macroStr)
 
     if (MainSoftData.MacroEditGui != "") {
+        ; 弹出选择窗口：覆盖 / 追加 / 取消
+        choice := CustomMsgBox(
+            GetLang("录制完成！请选择如何处理录制的指令："),
+            GetLang("录制完成"),
+            GetLang("覆盖|追加到末尾|取消")
+        )
+
+        if (choice == 3) {
+            ; 取消：只复制到剪贴板，不修改编辑器
+            macroLineStr := StrReplace(macroStr, ",", "`n")
+            UIControls.ToolText.Value := macroLineStr
+            SetClipboard(macroLineStr)
+            MsgBox(GetLang("录制指令已复制到剪切板！`n`n请在【按键宏】页签下粘贴宏，`n配置触发键后，即可通过按键回放指令。"), GetLang("录制完成提示"))
+            return
+        }
+
+        if (choice == 2) {
+            ; 追加到末尾：保留现有内容，在末尾追加录制的指令
+            existingMacro := MainSoftData.MacroEditGui.GetMacroStr()
+            if (existingMacro != "")
+                macroStr := existingMacro "," macroStr
+        }
+
+        ; choice == 1 覆盖：直接按原逻辑走
         MainSoftData.MacroEditGui.InitTreeView(macroStr)
         MainSoftData.MacroEditGui.InitMacroText(MacroStr)
     }
@@ -772,10 +796,6 @@ OnToolRecordMacro(isHotkey, *) {
         } else {
             MainSoftData.RecordMacroStr := ""
             MainSoftData.RecordHoldKeyMap := Map()
-            if (MainSoftData.MacroEditGui != "") {
-                MainSoftData.MacroEditGui.InitTreeView("")
-                MainSoftData.MacroEditGui.InitMacroText("")
-            }
             UIControls.ToolText.Value := ""
         }
     }
@@ -790,10 +810,6 @@ OnForceEndRecord() {
         HideRecordCountdown()
         MainSoftData.RecordMacroStr := ""
         MainSoftData.RecordHoldKeyMap := Map()
-        if (MainSoftData.MacroEditGui != "") {
-            MainSoftData.MacroEditGui.InitTreeView("")
-            MainSoftData.MacroEditGui.InitMacroText("")
-        }
         UIControls.ToolText.Value := ""
         if (MainSoftData.MacroEditGui != "")
             UIControls.RecordToggle.Value := false
