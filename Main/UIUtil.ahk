@@ -1,4 +1,4 @@
-﻿; 全局 UI 控件容器（存放需要外部程序化更新的 GUI 控件对象）
+; 全局 UI 控件容器（存放需要外部程序化更新的 GUI 控件对象）
 ; 这些控件不在 MainSoftData/SoftData 中存储，仅在 UI 层访问
 global UIControls := {
     SuspendToggle: "",
@@ -479,33 +479,33 @@ AddSettingUI(index) {
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("点击时间浮动(%)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 145, posY - 4), MainSoftData.HoldFloat, tableItem
     )
-    con.OnEvent("Change", (*) => MainSoftData.HoldFloat := Integer(con.Value))
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.HoldFloat := Integer(ctrl.Value))
 
     AddTableControl("Text", Format("x{} y{}", posX + 315, posY), GetLang("每次间隔浮动(%)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 440, posY - 4), MainSoftData.PreIntervalFloat,
     tableItem)
-    con.OnEvent("Change", (*) => MainSoftData.PreIntervalFloat := Integer(con.Value))
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.PreIntervalFloat := Integer(ctrl.Value))
 
     AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("间隔指令浮动(%)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MainSoftData.IntervalFloat,
     tableItem)
-    con.OnEvent("Change", (*) => MainSoftData.IntervalFloat := Integer(con.Value))
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.IntervalFloat := Integer(ctrl.Value))
 
     posY += 40
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("坐标X浮动(px)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 145, posY - 4), MainSoftData.CoordXFloat,
     tableItem)
-    con.OnEvent("Change", (*) => MainSoftData.CoordXFloat := Integer(con.Value))
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.CoordXFloat := Integer(ctrl.Value))
 
     AddTableControl("Text", Format("x{} y{}", posX + 315, posY), GetLang("坐标Y浮动(px)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 440, posY - 4), MainSoftData.CoordYFloat,
     tableItem)
-    con.OnEvent("Change", (*) => MainSoftData.CoordYFloat := Integer(con.Value))
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.CoordYFloat := Integer(ctrl.Value))
 
     AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("多线程数(-1~10)："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 760, posY - 4), MainSoftData.MutiThreadNum,
     tableItem)
-    con.OnEvent("Change", (*) => MainSoftData.MutiThreadNum := Integer(con.Value))
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.MutiThreadNum := Integer(ctrl.Value))
     Con := AddTableControl("Button", Format("x{} y{} h27", posX + 865, posY - 4), "?", tableItem)
     Con.OnEvent("Click", OnClickMutiThreadHelpBtn)
 
@@ -523,7 +523,7 @@ AddSettingUI(index) {
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("软件背景颜色："), tableItem)
     con := AddTableControl("Edit", Format("x{} y{} w100 center", posX + 145, posY - 4), MainSoftData.SoftBGColor,
     tableItem)
-    con.OnEvent("Change", (*) => MainSoftData.SoftBGColor := con.Value)
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.SoftBGColor := ctrl.Value)
 
     posY += 40
     con := AddTableControl("GroupBox", Format("x{} y{} w890 h180", posX + 10, posY), GetLang("开关选项"), tableItem)
@@ -540,20 +540,20 @@ AddSettingUI(index) {
 
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("仅前台运行宏"), tableItem)
     con.Value := MainSoftData.CheckForeground
-    con.OnEvent("Click", (*) => MainSoftData.CheckForeground := con.Value)
+    con.OnEvent("Click", (ctrl, info) => MainSoftData.CheckForeground := ctrl.Value)
 
     posY += 40
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 25, posY), GetLang("无变量提醒"), tableItem)
     con.Value := MainSoftData.NoVariableTip
-    con.OnEvent("Click", (*) => MainSoftData.NoVariableTip := con.Value)
+    con.OnEvent("Click", (ctrl, info) => MainSoftData.NoVariableTip := ctrl.Value)
 
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 315, posY), GetLang("模态子窗口"), tableItem)
     con.Value := MainSoftData.IsModalSubGui
-    con.OnEvent("Click", (*) => MainSoftData.IsModalSubGui := con.Value)
+    con.OnEvent("Click", (ctrl, info) => MainSoftData.IsModalSubGui := ctrl.Value)
 
     con := AddTableControl("CheckBox", Format("x{} y{}", posX + 635, posY), GetLang("分割线"), tableItem)
     con.Value := MainSoftData.ShowSplitLine
-    con.OnEvent("Click", (*) => MainSoftData.ShowSplitLine := con.Value)
+    con.OnEvent("Click", (ctrl, info) => MainSoftData.ShowSplitLine := ctrl.Value)
 
     posY += 40
     con := AddTableControl("Button", Format("x{} y{} w{}", posX + 25, posY - 5, 100), GetLang("录制选项"), tableItem)
@@ -569,7 +569,7 @@ AddSettingUI(index) {
     con := AddTableControl("CheckBox", Format("x{} y{} -Wrap w15", posX + 25, posY), "", tableItem)
     UIControls.CMDTip := con
     con.Value := MySoftData.CMDTip
-    con.OnEvent("Click", (*) => MySoftData.CMDTip := con.Value)
+    con.OnEvent("Click", (ctrl, info) => MySoftData.CMDTip := ctrl.Value)
     con := AddTableControl("Button", Format("x{} y{}", posX + 25 + 15, posY - 5), GetLang("指令显示"), tableItem)
     con.OnEvent("Click", (*) => OnEditCMDTipGui())
 
@@ -584,34 +584,34 @@ AddSettingUI(index) {
     con.Delete()
     con.Add(MainSoftData.LangArr)
     con.Text := MainSoftData.Lang
-    con.OnEvent("Change", (*) => MainSoftData.Lang := con.Text)
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.Lang := ctrl.Text)
 
     AddTableControl("Text", Format("x{} y{}", posX + 315, posY), GetLang("软件字体："), tableItem)
     con := AddTableControl("DropDownList", Format("x{} y{} w180", posX + 390, posY - 4), [], tableItem)
     con.Delete()
     con.Add(MainSoftData.FontList)
     con.Text := MainSoftData.FontType
-    con.OnEvent("Change", (*) => MainSoftData.FontType := con.Text)
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.FontType := ctrl.Text)
 
     AddTableControl("Text", Format("x{} y{}", posX + 635, posY), GetLang("截图方式："), tableItem)
     con := AddTableControl("DropDownList", Format("x{} y{} w120", posX + 710, posY - 4), GetLangArr(["微软截图",
         "RMT截图", "SC截图"]), tableItem)
     con.Value := MainSoftData.ScreenShotType
-    con.OnEvent("Change", (*) => MainSoftData.ScreenShotType := con.Value)
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.ScreenShotType := ctrl.Value)
 
     posY += 40
     AddTableControl("Text", Format("x{} y{}", posX + 25, posY), GetLang("按下时按下："), tableItem)
     con := AddTableControl("DropDownList", Format("x{} y{} w120", posX + 110, posY - 4), GetLangArr(["自动松开", "忽略重复按下",
         "允许重复按下"]), tableItem)
     con.Value := MainSoftData.KeyDownDownType
-    con.OnEvent("Change", (*) => MainSoftData.KeyDownDownType := con.Value)
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.KeyDownDownType := ctrl.Value)
     Con := AddTableControl("Button", Format("x{} y{} h27", posX + 231, posY - 4), "?", tableItem)
     Con.OnEvent("Click", OnClickKeyDownDownHelpBtn)
 
     AddTableControl("Text", Format("x{} y{}", posX + 315, posY), GetLang("手柄类型："), tableItem)
     con := AddTableControl("DropDownList", Format("x{} y{} w120", posX + 390, posY - 4), ["Xbox", "PS5"], tableItem)
     con.Text := MainSoftData.JoyType
-    con.OnEvent("Change", (*) => MainSoftData.JoyType := con.Text)
+    con.OnEvent("Change", (ctrl, info) => MainSoftData.JoyType := ctrl.Text)
 
     posY += 30
     tableItem.UnderPosY := posY
