@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ;资源保存（带脏检查优化：只写入实际发生变化的配置项）
 OnSaveSetting(*) {
@@ -6,6 +6,8 @@ OnSaveSetting(*) {
     isValid := CheckAllValueSettingValid()
     if (!isValid)
         return
+
+    OnKillAllMacro()
 
     if (MyWorkPool != "") {
         MyWorkPool.Clear()
