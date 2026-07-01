@@ -116,14 +116,19 @@ class XAMLHost {
             XAMLHost._appDir := libDir "\.."
         }
         
-        if !DirExist(A_WorkingDir "\Log")
-            DirCreate(A_WorkingDir "\Log")
+        logDir := A_WorkingDir "\Log"
+        if !DirExist(logDir)
+            DirCreate(logDir)
         if !DirExist(XAMLHost._appDir "\Cache")
             DirCreate(XAMLHost._appDir "\Cache")
 
-        EnvSet("RMT_LOG_DIR", A_WorkingDir "\Log")
+        EnvSet("RMT_LOG_DIR", logDir)
             
         return XAMLHost._appDir
+    }
+
+    static GetLogDir() {
+        return A_WorkingDir "\Log"
     }
 
     static GetEngineDllName() {
@@ -287,6 +292,7 @@ class XAMLHost {
     }
 
     static Prewarm(exePath := "") {
+        ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR
         wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         if XAMLHost.daemonHwnd
@@ -746,7 +752,7 @@ class XAMLHost {
         }
 
         XAMLHost.RestoreWebView2Dlls()
-        errLog := A_Temp "\AhkWpf\AhkWpfError.log"
+        errLog := XAMLHost.GetLogDir() "\AhkWpfError.log"
         sourceCs := libDir "\dep\XAML_AHK_Bridge.cs"
         if !FileExist(sourceCs) {
             MsgBox("XAML_AHK_Bridge.cs not found in lib\dep directory!`nCannot compile shared engine.", "AHK-XAML", "Iconx")
@@ -1088,6 +1094,7 @@ class XAMLHost {
     }
 
     _EnsureDaemon() {
+        ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR, XAML_FORCE_DYNAMIC_COMPILE
         wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         baseDllName := XAMLHost.GetEngineDllName()
@@ -1298,7 +1305,7 @@ class XAMLHost {
             }
         }
         if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING)
-            try FileAppend("OnCopyData: " payload "`n", A_Temp "\AhkWpf\AhkTrace.log", "UTF-8")
+            try FileAppend("OnCopyData: " payload "`n", XAMLHost.GetLogDir() "\AhkTrace.log", "UTF-8")
         if (!InStr(payload, "EVENT|") && !InStr(payload, "DAEMON|") && !InStr(payload, "MRESPONSE|"))
             return 0
 
@@ -1484,7 +1491,7 @@ class XAMLHost {
 
         hasEvent := instance.events.Has(ctrlName) && instance.events[ctrlName].Has(baseEventName)
         if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING) {
-            try FileAppend("OnCopyData dispatch check: " ctrlName "." baseEventName " hasEvent=" (hasEvent ? "true" : "false") " eventsCount=" (instance.events.Has(ctrlName) ? instance.events[ctrlName].Count : 0) "`n", A_Temp "\AhkWpf\AhkTrace.log", "UTF-8")
+            try FileAppend("OnCopyData dispatch check: " ctrlName "." baseEventName " hasEvent=" (hasEvent ? "true" : "false") " eventsCount=" (instance.events.Has(ctrlName) ? instance.events[ctrlName].Count : 0) "`n", XAMLHost.GetLogDir() "\AhkTrace.log", "UTF-8")
         }
 
         if (instance.events.Has(ctrlName) && instance.events[ctrlName].Has(baseEventName)) {

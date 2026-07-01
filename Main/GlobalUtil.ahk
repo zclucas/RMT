@@ -3,6 +3,13 @@
 #Include JoyMacro.ahk
 #Include RecordJoyUtil.ahk
 #Include RecordUtil.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Host.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Generator.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_GUI.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Components.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Adv_Components.ahk
+#Include ..\Plugins\AHK-XAML\lib\XAML_Dialog.ahk
+#Include ..\Plugins\AHK-XAML\lib\AXML.ahk
 #Include RMTUtil.ahk
 #Include WorkPool.ahk
 #Include UIUtil.ahk
@@ -26,13 +33,6 @@
 #Include ..\Gui\FreePasteGui.ahk
 #Include ..\Gui\MacroEditGui.ahk
 #Include ..\Gui\MenuWheelGlobalSettingGui.ahk
-#Include ..\Plugins\AHK-XAML\lib\XAML_Host.ahk
-#Include ..\Plugins\AHK-XAML\lib\XAML_Generator.ahk
-#Include ..\Plugins\AHK-XAML\lib\XAML_GUI.ahk
-#Include ..\Plugins\AHK-XAML\lib\XAML_Components.ahk
-#Include ..\Plugins\AHK-XAML\lib\XAML_Adv_Components.ahk
-#Include ..\Plugins\AHK-XAML\lib\XAML_Dialog.ahk
-#Include ..\Plugins\AHK-XAML\lib\AXML.ahk
 #Include ..\Gui\MacroGraph\MacroGraphGui.ahk
 #Include ..\Gui\MenuWheelGui.ahk
 #Include ..\Gui\MenuMacroSettingGui.ahk

@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 class UIMacroGui {
     static STATE_DEFAULT := 0    ; 默认/空闲（隐藏色块）
@@ -360,7 +360,7 @@ class UIMacroGui {
 
         ; 窗口级按钮样式：覆盖全局默认样式，取消 hover 背景变化，改为 hover/按下时显示边框
         panelBtnStyle := '<Style TargetType="Button"><Setter Property="BorderThickness" Value="2"/><Setter Property="BorderBrush" Value="Transparent"/><Setter Property="Cursor" Value="Arrow"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="#FF0A84FF"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="#FF0A84FF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
-        ui.xaml := StrReplace(ui.xaml, '%resources%', '<SolidColorBrush x:Key="TextMain" Color="White"/><CornerRadius x:Key="WindowRadius">8</CornerRadius><CornerRadius x:Key="CloseBtnRadius">0,8,0,0</CornerRadius>' panelBtnStyle)
+        ui.xaml := StrReplace(ui.xaml, '%resources%', '<CornerRadius x:Key="CloseBtnRadius">0,8,0,0</CornerRadius>' panelBtnStyle)
         ui.xaml := StrReplace(ui.xaml, '%components%', '')
 
         ; 绑定事件（对齐 floating_panel L246-249）

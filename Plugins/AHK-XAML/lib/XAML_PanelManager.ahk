@@ -22,7 +22,10 @@ class PanelManager {
     static isMainSnappedState := false
 
     static Trace(msg) {
-        try FileAppend(msg "`n", A_Temp "\AhkWpf\AhkTrace.log", "UTF-8")
+        logDir := A_WorkingDir "\Log"
+        if !DirExist(logDir)
+            DirCreate(logDir)
+        try FileAppend(msg "`n", logDir "\AhkTrace.log", "UTF-8")
     }
 
     static GetWindowRects(hwnd) {

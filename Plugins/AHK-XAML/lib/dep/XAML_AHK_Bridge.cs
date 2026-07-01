@@ -892,7 +892,7 @@ public class AhkWpfEngine
                     try {
                         var wv = new Microsoft.Web.WebView2.Wpf.WebView2();
                         string customDir = Environment.GetEnvironmentVariable("AHK_XAML_WEBVIEW_DIR");
-                        string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "WebView2Data");
+                        string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(GetLogDir(), "WebView2Data");
                         wv.CreationProperties = new Microsoft.Web.WebView2.Wpf.CoreWebView2CreationProperties {
                             UserDataFolder = wvDataDir
                         };
@@ -916,7 +916,7 @@ public class AhkWpfEngine
                     try {
                         var wv = new Microsoft.Web.WebView2.Wpf.WebView2();
                         string customDir = Environment.GetEnvironmentVariable("AHK_XAML_WEBVIEW_DIR");
-                        string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "WebView2Data");
+                        string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(GetLogDir(), "WebView2Data");
                         wv.CreationProperties = new Microsoft.Web.WebView2.Wpf.CoreWebView2CreationProperties {
                             UserDataFolder = wvDataDir
                         };
@@ -970,9 +970,7 @@ public class AhkWpfEngine
                             try
                             {
                                 string state = engine.CollectState();
-                                string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
-                                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
-                                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "AhkWpf_StateDump_" + scriptName + ".ini"), state);
+                                System.IO.File.WriteAllText(GetLogPath("AhkWpf_StateDump_" + scriptName + ".ini"), state);
                             }
                             catch { }
                             Environment.Exit(0);
@@ -1185,7 +1183,7 @@ public class AhkWpfEngine
                     xamlExists = xamlStream != null;
                 }
                 System.IO.File.WriteAllText(
-                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "xaml_debug_startup.log"),
+                    GetLogPath("xaml_debug_startup.log"),
                     "Assembly: " + asm.FullName + "\n" +
                     "Resources: " + names + "\n" +
                     "app_payload.baml exists: " + bamlExists + "\n" +
@@ -1194,7 +1192,7 @@ public class AhkWpfEngine
             }
             catch (Exception ex)
             {
-                try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "xaml_debug_err.log"), ex.ToString()); } catch { }
+                try { System.IO.File.WriteAllText(GetLogPath("xaml_debug_err.log"), ex.ToString()); } catch { }
             }
         }
 
@@ -1288,7 +1286,7 @@ public class AhkWpfEngine
                 {
                     if (EnableLogging)
                     {
-                        try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "decomp_err.log"), dx.ToString()); } catch { }
+                        try { System.IO.File.WriteAllText(GetLogPath("decomp_err.log"), dx.ToString()); } catch { }
                     }
                     payload = Encoding.UTF8.GetString(compressed);
                 }
@@ -1324,7 +1322,7 @@ public class AhkWpfEngine
             {
                 if (EnableLogging)
                 {
-                    try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "xaml_load_err.log"), ex.ToString()); } catch { }
+                    try { System.IO.File.WriteAllText(GetLogPath("xaml_load_err.log"), ex.ToString()); } catch { }
                 }
             }
         }
@@ -1438,7 +1436,7 @@ public class AhkWpfEngine
                     try
                     {
                         System.IO.File.AppendAllText(
-                            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "baml_debug.log"),
+                            GetLogPath("baml_debug.log"),
                             DateTime.Now + " BAML NameScope: registered " + nameCount + " names. FindName test DGX_Table_List=" + (win.FindName("DGX_Table_List") != null) + "\n"
                         );
                     }
@@ -1485,7 +1483,7 @@ public class AhkWpfEngine
                     try
                     {
                         System.IO.File.AppendAllText(
-                            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "baml_err.log"),
+                            GetLogPath("baml_err.log"),
                             DateTime.Now + " BAML load failed: " + bamlEx.ToString() + "\n"
                         );
                     }
@@ -1516,7 +1514,7 @@ public class AhkWpfEngine
             // Text-based path (existing behavior)
             if (EnableLogging)
             {
-                try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "xaml_content_debug.log"), xamlContent ?? "NULL"); } catch { }
+                try { System.IO.File.WriteAllText(GetLogPath("xaml_content_debug.log"), xamlContent ?? "NULL"); } catch { }
             }
             byte[] xamlBytes;
             if (string.IsNullOrWhiteSpace(xamlContent))
@@ -1594,7 +1592,7 @@ public class AhkWpfEngine
         } // end text-based path
         if (!string.IsNullOrEmpty(scriptName))
         {
-            string dumpPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpf_StateDump_" + scriptName + ".ini");
+            string dumpPath = GetLogPath("AhkWpf_StateDump_" + scriptName + ".ini");
             if (System.IO.File.Exists(dumpPath))
             {
                 try
@@ -1958,7 +1956,7 @@ public class AhkWpfEngine
         if (string.IsNullOrEmpty(xaml)) return;
         try
         {
-            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWebViewDebug.log");
+            var logPath = GetLogPath("AhkWebViewDebug.log");
             System.IO.File.AppendAllText(logPath, "PreprocessXamlAndExtractWebViewSources called. XAML Length: " + xaml.Length + "\n");
             
             var regex = new System.Text.RegularExpressions.Regex(@"<wv2:WebView2\b[^>]*>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -1989,7 +1987,7 @@ public class AhkWpfEngine
         }
         catch (Exception ex)
         {
-            try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWebViewDebug.log"), "Regex Error: " + ex.ToString() + "\n"); } catch {}
+            try { System.IO.File.AppendAllText(GetLogPath("AhkWebViewDebug.log"), "Regex Error: " + ex.ToString() + "\n"); } catch {}
         }
     }
 
@@ -1998,7 +1996,7 @@ public class AhkWpfEngine
         try
         {
             string customDir = Environment.GetEnvironmentVariable("AHK_XAML_WEBVIEW_DIR");
-            string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "WebView2Data");
+            string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(GetLogDir(), "WebView2Data");
             
             WalkLogicalOrVisualTree(win, (DependencyObject d) =>
             {
@@ -2031,8 +2029,8 @@ public class AhkWpfEngine
             if (webViews.Count == 0) return;
 
             string customDir = Environment.GetEnvironmentVariable("AHK_XAML_WEBVIEW_DIR");
-            string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "WebView2Data");
-            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWebViewDebug.log");
+            string wvDataDir = !string.IsNullOrEmpty(customDir) ? customDir : System.IO.Path.Combine(GetLogDir(), "WebView2Data");
+            var logPath = GetLogPath("AhkWebViewDebug.log");
             
             System.IO.File.AppendAllText(logPath, "InitializeWebView2IfPresent called. Found " + webViews.Count + " WebViews. wvDataDir: " + wvDataDir + "\n");
             
@@ -2041,7 +2039,7 @@ public class AhkWpfEngine
                     System.IO.File.AppendAllText(logPath, "Initializing WebView with Name: '" + wv.Name + "'\n");
                     wv.WebMessageReceived += (ws, we) => {
                         string debugMsg = we.WebMessageAsJson;
-                        try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWebViewDebug.log"), "C# WebMessageReceived: " + debugMsg + "\n"); } catch {}
+                        try { System.IO.File.AppendAllText(GetLogPath("AhkWebViewDebug.log"), "C# WebMessageReceived: " + debugMsg + "\n"); } catch {}
                         SendToAhk("EVENT|" + winId + "|" + wv.Name + "|WebMessageReceived|" + LengthPrefix(debugMsg) + "\n");
                     };
                     wv.NavigationCompleted += (ws, we) => {
@@ -2069,7 +2067,7 @@ public class AhkWpfEngine
         }
         catch (Exception ex)
         {
-            try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWebViewDebug.log"), "InitializeWebView2IfPresent outer Exception: " + ex.ToString() + "\n"); } catch {}
+            try { System.IO.File.AppendAllText(GetLogPath("AhkWebViewDebug.log"), "InitializeWebView2IfPresent outer Exception: " + ex.ToString() + "\n"); } catch {}
         }
     }
 #endif
@@ -2165,7 +2163,7 @@ public class AhkWpfEngine
                 _boundEvents.Remove(eventKey);
                 try {
                     System.IO.File.AppendAllText(
-                        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpfDebug.log"),
+                        GetLogPath("AhkWpfDebug.log"),
                         string.Format("BindEvent info: Control '{0}' not found for event '{1}' (may be dynamic)\n", ctrlName, eventName)
                     );
                 } catch { }
@@ -2255,7 +2253,7 @@ public class AhkWpfEngine
             _boundEvents.Remove(eventKey);
             try {
                 System.IO.File.AppendAllText(
-                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpfDebug.log"),
+                    GetLogPath("AhkWpfDebug.log"),
                     string.Format("BindEvent exception: Control '{0}', Event '{1}' - {2}\n", ctrlName, eventName, ex.ToString())
                 );
             } catch { }
@@ -3043,7 +3041,7 @@ public class AhkWpfEngine
             {
                 if (EnableLogging)
                 {
-                    try { System.IO.File.AppendAllText(System.Environment.ExpandEnvironmentVariables("%TEMP%\\AhkWpf\\AhkWpfDebug.log"), "ProcessMessage line failed: " + line + " => " + ex.Message + "\n"); } catch { }
+                    try { System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"), "ProcessMessage line failed: " + line + " => " + ex.Message + "\n"); } catch { }
                 }
             }
         }
@@ -3608,7 +3606,7 @@ public class AhkWpfEngine
             {
                 if (EnableLogging)
                 {
-                    try { System.IO.File.AppendAllText(System.Environment.ExpandEnvironmentVariables("%TEMP%\\AhkWpf\\AhkWpfDebug.log"), "Control not found: " + parts[0] + "\n"); } catch { }
+                    try { System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"), "Control not found: " + parts[0] + "\n"); } catch { }
                 }
             }
             if (ctrl != null)
@@ -3685,7 +3683,7 @@ public class AhkWpfEngine
                                         var ns = NameScope.GetNameScope(win);
                                         try {
                                             System.IO.File.AppendAllText(
-                                                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpfDebug.log"),
+                                                GetLogPath("AhkWpfDebug.log"),
                                                 string.Format("AddXamlItem RegisterName: fe.Name={0}, ns is null={1}\n", fe.Name, ns == null)
                                             );
                                         } catch { }
@@ -3699,7 +3697,7 @@ public class AhkWpfEngine
                                     } catch (Exception ex) {
                                         try {
                                             System.IO.File.AppendAllText(
-                                                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpfDebug.log"),
+                                                GetLogPath("AhkWpfDebug.log"),
                                                 "RegisterName Error for " + fe.Name + ": " + ex.ToString() + "\n"
                                             );
                                         } catch { }
@@ -3709,7 +3707,7 @@ public class AhkWpfEngine
                                 {
                                     try {
                                         System.IO.File.AppendAllText(
-                                            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpfDebug.log"),
+                                            GetLogPath("AhkWpfDebug.log"),
                                             "RegisterName Warning: Element " + fe.GetType().Name + " has empty Name\n"
                                         );
                                     } catch { }
@@ -3762,7 +3760,7 @@ public class AhkWpfEngine
                         try
                         {
                             System.IO.File.AppendAllText(
-                                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf", "AhkWpfDebug.log"),
+                                GetLogPath("AhkWpfDebug.log"),
                                 "XamlParse Error in AddXamlItem:\n" + ex.ToString() + "\n\n"
                             );
                         }

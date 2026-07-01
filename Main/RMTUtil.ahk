@@ -1,5 +1,14 @@
 #Requires AutoHotkey v2.0
 
+; ===== AHK-XAML 生产模式配置 =====
+global XAML_FORCE_DYNAMIC_COMPILE := false
+global XAML_ENGINE_BUILD_LOCATION := "lib/dep"
+global XAML_DIAGNOSTICS_ENABLED := false
+global XAML_AXML_DEBUG_MODE := false
+global XAML_ENABLE_LOGGING := false
+global XAML_ENABLE_TRACING := false
+global XAML_ENABLE_DEVTOOLS := false
+
 ;资源保存（带脏检查优化：只写入实际发生变化的配置项）
 OnSaveSetting(*) {
     global MySoftData, MyWorkPool
@@ -207,15 +216,6 @@ PluginInit() {
     global RMT_Http := RMT_ASM.CreateInstance("RMT.Http")     ; 创建对象实例
 
     SetTimer(CheckOcrIdle, 60000)   ;60秒后，释放Ocr资源
-
-    ; ===== AHK-XAML 生产模式配置 =====
-    global XAML_FORCE_DYNAMIC_COMPILE := false
-    global XAML_ENGINE_BUILD_LOCATION := "lib/dep"
-    global XAML_DIAGNOSTICS_ENABLED := false
-    global XAML_AXML_DEBUG_MODE := false
-    global XAML_ENABLE_LOGGING := false
-    global XAML_ENABLE_TRACING := false
-    global XAML_ENABLE_DEVTOOLS := false
 
     XAMLHost.Prewarm()
 }
