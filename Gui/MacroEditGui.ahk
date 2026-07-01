@@ -100,7 +100,7 @@ class MacroEditGui {
             {class: KeyGui, name: "按键", icon: "Images\Soft\Key.png", propName: "KeyGui"},
             {class: SearchGui, name: "搜索", icon: "Images\Soft\Search.png", propName: "SearchGui"},
             {class: SearchProGui, name: "搜索Pro", icon: "Images\Soft\SearchPro.png", propName: "SearchProGui"},
-            {class: MouseMoveGui, name: "移动", icon: "Images\Soft\Move.png", propName: "MoveMoveGui"},
+            {class: MouseMoveGui, name: "移动", icon: "Images\Soft\Move.png", propName: "MouseMoveGui"},
             {class: MMProGui, name: "移动Pro", icon: "Images\Soft\MovePro.png", propName: "MMProGui"},
             {class: InputGui, name: "输入", icon: "Images\Soft\Input.png", propName: "InputGui"},
             {class: OutputGui, name: "输出", icon: "Images\Soft\Output.png", propName: "OutputGui"},
