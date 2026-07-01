@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #Include IntervalGui.ahk
 #Include KeyGui.ahk
 #Include MouseMoveGui.ahk
@@ -60,6 +60,12 @@ class MacroEditGui {
         this.DefaultFocusCon := ""
         this.SubMacroLastIndex := 0
 
+        this.InitCommandConfigs()
+        this.InitSubGuiConfigs()
+        this.InitSubGui()
+    }
+
+    InitCommandConfigs() {
         this.CMDStrArr := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "移动", "移动Pro", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
             "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测", "注释", "抓图"])
 
@@ -86,113 +92,47 @@ class MacroEditGui {
         GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27",
         GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("按键检测"), "Icon30", GetLang("注释"), "Icon31",
         GetLang("抓图"), "Icon32")
-        this.InitSubGui()
+    }
+
+    InitSubGuiConfigs() {
+        this.SubGuiConfig := [
+            {class: IntervalGui, name: "间隔", icon: "Images\Soft\Interval.png", propName: "IntervalGui"},
+            {class: KeyGui, name: "按键", icon: "Images\Soft\Key.png", propName: "KeyGui"},
+            {class: SearchGui, name: "搜索", icon: "Images\Soft\Search.png", propName: "SearchGui"},
+            {class: SearchProGui, name: "搜索Pro", icon: "Images\Soft\SearchPro.png", propName: "SearchProGui"},
+            {class: MouseMoveGui, name: "移动", icon: "Images\Soft\Move.png", propName: "MoveMoveGui"},
+            {class: MMProGui, name: "移动Pro", icon: "Images\Soft\MovePro.png", propName: "MMProGui"},
+            {class: InputGui, name: "输入", icon: "Images\Soft\Input.png", propName: "InputGui"},
+            {class: OutputGui, name: "输出", icon: "Images\Soft\Output.png", propName: "OutputGui"},
+            {class: LoopGui, name: "循环", icon: "Images\Soft\Loop.png", propName: "LoopGui"},
+            {class: SubMacroGui, name: "宏操作", icon: "Images\Soft\Sub.png", propName: "SubMacroGui"},
+            {class: VariableGui, name: "变量", icon: "Images\Soft\Var.png", propName: "VariableGui"},
+            {class: ExVariableGui, name: "变量提取", icon: "Images\Soft\Extract.png", propName: "ExVariableGui"},
+            {class: CompareGui, name: "如果", icon: "Images\Soft\If.png", propName: "CompareGui"},
+            {class: CompareProGui, name: "如果Pro", icon: "Images\Soft\IfPro.png", propName: "CompareProGui"},
+            {class: OperationGui, name: "运算", icon: "Images\Soft\Operation.png", propName: "OperationGui"},
+            {class: RunGui, name: "运行", icon: "Images\Soft\Run.png", propName: "RunGui"},
+            {class: FileIOGui, name: "文件读写", icon: "Images\Soft\FileIO.png", propName: "FileIOGui"},
+            {class: TextOpsGui, name: "文本处理", icon: "Images\Soft\TextOps.png", propName: "TextOpsGui"},
+            {class: ArrayGui, name: "数组", icon: "Images\Soft\Arr.png", propName: "ArrayGui"},
+            {class: RMTCMDGui, name: "RMT指令", icon: "Images\Soft\rabit.png", propName: "RMTCMDGui"},
+            {class: BGMouseGui, name: "后台鼠标", icon: "Images\Soft\Mouse.png", propName: "BGMouseGui"},
+            {class: BGKeyGui, name: "后台按键", icon: "Images\Soft\Key.png", propName: "BGKeyGui"},
+            {class: WindowManageGui, name: "窗口管理", icon: "Images\Soft\WindowManage.png", propName: "WindowManageGui"},
+            {class: KeyCheckGui, name: "按键检测", icon: "Images\Soft\KeyCheck.png", propName: "KeyCheckGui"},
+            {class: CommentGui, name: "注释", icon: "Images\Soft\Comment.png", propName: "CommentGui"},
+            {class: ScreenShotGui, name: "抓图", icon: "Images\Soft\ScreenShot.png", propName: "ScreenShotGui"}
+        ]
     }
 
     InitSubGui() {
-        this.IntervalGui := IntervalGui()
-        this.IntervalGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("间隔"), this.IntervalGui)
-
-        this.KeyGui := KeyGui()
-        this.KeyGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("按键"), this.KeyGui)
-
-        this.MoveMoveGui := MouseMoveGui()
-        this.MoveMoveGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("移动"), this.MoveMoveGui)
-
-        this.SearchGui := SearchGui()
-        this.SearchGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("搜索"), this.SearchGui)
-
-        this.SearchProGui := SearchProGui()
-        this.SearchProGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("搜索Pro"), this.SearchProGui)
-
-        this.RunGui := RunGui()
-        this.RunGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("运行"), this.RunGui)
-
-        this.CompareGui := CompareGui()
-        this.CompareGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("如果"), this.CompareGui)
-
-        this.CompareProGui := CompareProGui()
-        this.CompareProGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("如果Pro"), this.CompareProGui)
-
-        this.MMProGui := MMProGui()
-        this.MMProGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("移动Pro"), this.MMProGui)
-
-        this.OutputGui := OutputGui()
-        this.OutputGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("输出"), this.OutputGui)
-
-        this.VariableGui := VariableGui()
-        this.VariableGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("变量"), this.VariableGui)
-
-        this.ExVariableGui := ExVariableGui()
-        this.ExVariableGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("变量提取"), this.ExVariableGui)
-
-        this.TextOpsGui := TextOpsGui()
-        this.TextOpsGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("文本处理"), this.TextOpsGui)
-
-        this.ArrayGui := ArrayGui()
-        this.ArrayGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("数组"), this.ArrayGui)
-
-        this.SubMacroGui := SubMacroGui()
-        this.SubMacroGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("宏操作"), this.SubMacroGui)
-
-        this.LoopGui := LoopGui()
-        this.LoopGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("循环"), this.LoopGui)
-
-        this.OperationGui := OperationGui()
-        this.OperationGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("运算"), this.OperationGui)
-
-        this.BGMouseGui := BGMouseGui()
-        this.BGMouseGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("后台鼠标"), this.BGMouseGui)
-
-        this.BGKeyGui := BGKeyGui()
-        this.BGKeyGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("后台按键"), this.BGKeyGui)
-
-        this.RMTCMDGui := RMTCMDGui()
-        this.RMTCMDGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("RMT指令"), this.RMTCMDGui)
-
-        this.InputGui := InputGui()
-        this.InputGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("输入"), this.InputGui)
-
-        this.FileIOGui := FileIOGui()
-        this.FileIOGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("文件读写"), this.FileIOGui)
-
-        this.WindowManageGui := WindowManageGui()
-        this.WindowManageGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("窗口管理"), this.WindowManageGui)
-
-        this.KeyCheckGui := KeyCheckGui()
-        this.KeyCheckGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("按键检测"), this.KeyCheckGui)
-
-        this.CommentGui := CommentGui()
-        this.CommentGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("注释"), this.CommentGui)
-        
-        this.ScreenShotGui := ScreenShotGui()
-        this.ScreenShotGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
-        this.SubGuiMap.Set(GetLang("抓图"), this.ScreenShotGui)
+        for config in this.SubGuiConfig {
+            guiClass := config.class
+            guiInstance := guiClass()
+            guiInstance.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr)
+            this.SubGuiMap.Set(GetLang(config.name), guiInstance)
+            this.%config.propName% := guiInstance
+        }
     }
 
     ShowGui(CommandStr, ShowSaveBtn) {
@@ -270,107 +210,19 @@ class MacroEditGui {
 
         PosY += 20
         PosX := 10
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Interval.png",
-            GetLang("间隔"), (*) => this.OnOpenSubGui(this.IntervalGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png",
-            GetLang("按键"), (*) => this.OnOpenSubGui(this.KeyGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Search.png",
-            GetLang("搜索"), (*) => this.OnOpenSubGui(this.SearchGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\SearchPro.png",
-            GetLang("搜索Pro"), (*) => this.OnOpenSubGui(this.SearchProGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Move.png",
-            GetLang("移动"), (*) => this.OnOpenSubGui(this.MoveMoveGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\MovePro.png",
-            GetLang("移动Pro"), (*) => this.OnOpenSubGui(this.MMProGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Input.png",
-            GetLang("输入"), (*) => this.OnOpenSubGui(this.InputGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Output.png",
-            GetLang("输出"), (*) => this.OnOpenSubGui(this.OutputGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Loop.png",
-            GetLang("循环"), (*) => this.OnOpenSubGui(this.LoopGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Sub.png",
-            GetLang("宏操作"), (*) => this.OnOpenSubGui(this.SubMacroGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Var.png",
-            GetLang("变量"), (*) => this.OnOpenSubGui(this.VariableGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Extract.png",
-            GetLang("变量提取"), (*) => this.OnOpenSubGui(this.ExVariableGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\If.png",
-            GetLang("如果"), (*) => this.OnOpenSubGui(this.CompareGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\IfPro.png",
-            GetLang("如果Pro"), (*) => this.OnOpenSubGui(this.CompareProGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Operation.png",
-            GetLang("运算"), (*) => this.OnOpenSubGui(this.OperationGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Run.png",
-            GetLang("运行"), (*) => this.OnOpenSubGui(this.RunGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\FileIO.png",
-            GetLang("文件读写"), (*) => this.OnOpenSubGui(this.FileIOGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\TextOps.png",
-            GetLang("文本处理"), (*) => this.OnOpenSubGui(this.TextOpsGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Arr.png",
-            GetLang("数组"), (*) => this.OnOpenSubGui(this.ArrayGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\rabit.png",
-            GetLang("RMT指令"), (*) => this.OnOpenSubGui(this.RMTCMDGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Mouse.png",
-            GetLang("后台鼠标"), (*) => this.OnOpenSubGui(this.BGMouseGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Key.png",
-            GetLang("后台按键"), (*) => this.OnOpenSubGui(this.BGKeyGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\WindowManage.png",
-            GetLang("窗口管理"), (*) => this.OnOpenSubGui(this.WindowManageGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\KeyCheck.png",
-            GetLang("按键检测"), (*) => this.OnOpenSubGui(this.KeyCheckGui))
-
-        PosX := 10
-        PosY += 40
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\Comment.png",
-            GetLang("注释"), (*) => this.OnOpenSubGui(this.CommentGui))
-        PosX += 105
-        this.AddIconBtn(MyGui, PosX, PosY, "Images\Soft\ScreenShot.png",
-            GetLang("抓图"), (*) => this.OnOpenSubGui(this.ScreenShotGui))
+        index := 0
+        for config in this.SubGuiConfig {
+            guiInstance := this.%config.propName%
+            this.AddIconBtn(MyGui, PosX, PosY, config.icon,
+                GetLang(config.name), CreateSubGuiClickHandler(this, guiInstance))
+            index += 1
+            if (index & 1) {
+                PosX += 105
+            } else {
+                PosX := 10
+                PosY += 40
+            }
+        }
 
         PosX := 225
         PosY := 15
@@ -1617,4 +1469,8 @@ class MacroEditGui {
         }
         return ItemNumber
     }
+}
+
+CreateSubGuiClickHandler(self, guiInstance) {
+    return (*) => self.OnOpenSubGui(guiInstance)
 }
