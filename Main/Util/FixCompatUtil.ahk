@@ -80,6 +80,40 @@ CompatMacro(MacroStr, &isFix) {
             paramArr.Pop()
             CMDArr[A_Index] := GetCmdByParams(paramArr)
         }
+
+        ;RMT指令旧格式归一化: RMT指令_指令 → RMT指令_类别_指令, RMT指令_显示菜单_序号 → RMT指令_宏控制_显示菜单_序号
+        if (paramArr[1] == "RMT指令") {
+            static RMTCmdCategoryMap := Map(
+                "截图", "图文", "截图提取文本", "图文", "自由贴", "图文",
+                "启用键鼠", "输入控制", "禁用键鼠", "输入控制",
+                "显示菜单", "宏控制", "关闭菜单", "宏控制",
+                "暂停所有宏", "宏控制", "恢复所有宏", "宏控制", "终止所有宏", "宏控制", "全局暂停", "宏控制",
+                "开启变量监视", "调试", "关闭变量监视", "调试",
+                "开启指令显示", "调试", "关闭指令显示", "调试",
+                "关闭指令显示窗口", "调试", "切换指令显示开关", "调试",
+                "关闭软件", "软件自身", "休眠", "软件自身", "重载", "软件自身"
+            )
+            static RMTCmdRenameMap := Map(
+                "全局暂停", "暂停所有宏",
+                "关闭指令显示窗口", "关闭指令显示",
+                "切换指令显示开关", "开启指令显示"
+            )
+            IsOldRMTFormat := false
+            if (paramArr.Length == 2 && RMTCmdCategoryMap.Has(paramArr[2]))
+                IsOldRMTFormat := true
+            else if (paramArr.Length == 3 && paramArr[2] == "显示菜单")
+                IsOldRMTFormat := true
+
+            if (IsOldRMTFormat) {
+                isFix := true
+                oldCmdStr := paramArr[2]
+                if (RMTCmdRenameMap.Has(oldCmdStr))
+                    oldCmdStr := RMTCmdRenameMap[oldCmdStr]
+                paramArr[2] := RMTCmdCategoryMap[oldCmdStr]
+                paramArr.InsertAt(3, oldCmdStr)
+                CMDArr[A_Index] := GetCmdByParams(paramArr)
+            }
+        }
         CMDArr[A_Index] := cmdSymbol CMDArr[A_Index]
     }
     MacroStr := GetMacroStrByCmdArr(CMDArr)
