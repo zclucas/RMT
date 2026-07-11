@@ -96,6 +96,10 @@ class VerticalSlider {
         if (MainSoftData.MyGui != "" && !WinExist("ahk_id " MainSoftData.MyGui.Hwnd))
             return
 
+        ; 主窗口不激活时不处理（避免下拉框滚动时激活主窗口导致任务栏图标闪烁）
+        if (MainSoftData.MyGui != "" && DllCall("GetForegroundWindow", "Ptr") != MainSoftData.MyGui.Hwnd)
+            return
+
         isDown := InStr(key, "Down", "Off") ? true : false
         value := 80
         if ((value / this.BarMaxPosY) * (this.ContentHeight - this.AeraHeight - 2 * this.Vindent) >= 420) {
