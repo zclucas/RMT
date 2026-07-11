@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #Include Util\SharedMemory.ahk
 #Include Util\RingBuffer.ahk
 #Include Util\JsonUtil.ahk
@@ -706,6 +706,8 @@ class WorkPool {
             while (rb.Pop(&type, &id, &result)) {
                 switch type {
                     case MsgType.FINISH:
+                        if (!this.usePool.Has(wd.idx))
+                            continue
                         tIdx := wd.tableIndex
                         iIdx := wd.itemIndex
                         branchCount := 0
@@ -737,7 +739,8 @@ class WorkPool {
                             this.Dispatch()
                         } else {
                             this.ResetWorkerTaskState(wd, 0)
-                            this.usePool.Delete(wd.idx)
+                            if (this.usePool.Has(wd.idx))
+                                this.usePool.Delete(wd.idx)
                             this.freePool[wd.idx] := wd
                             wd.isGraphBranch := false
                             wd.idleTick := A_TickCount
