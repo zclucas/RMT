@@ -8,8 +8,21 @@ GraphPoolLogPath() {
 }
 
 ; 图形宏线程池调试日志（Master 行附带 Worker 池统计：闲置/忙碌/启动中/队列）
+; 使用内存缓冲 + SetTimer 异步刷新，避免磁盘IO阻塞按键处理
+global _graphPoolLogBuffer := ""
+global _graphPoolLogPath := ""
+global _graphPoolLogInitialized := false
+
 GraphPoolLog(tag, detail := "") {
-    global MyWorkPool, workIndex
+    global MyWorkPool, workIndex, _graphPoolLogBuffer, _graphPoolLogPath, _graphPoolLogInitialized
+    static flushSize := 1024 * 50   ; 50KB缓冲
+    
+    if (!_graphPoolLogInitialized) {
+        _graphPoolLogPath := GraphPoolLogPath()
+        _graphPoolLogInitialized := true
+        SetTimer(FlushLogBufferAsync, 5000)  ; 每5秒异步刷新一次
+    }
+    
     if (MySoftData.isWorker)
         head := Format("[{}] [W{}] {}", A_Now, workIndex, tag)
     else {
@@ -17,11 +30,28 @@ GraphPoolLog(tag, detail := "") {
         head := Format("[{}] [Master] {} ({})", A_Now, tag, stats)
     }
     line := detail != "" ? head " " detail "`n" : head "`n"
+    
+    _graphPoolLogBuffer .= line
+    
+    if (StrLen(_graphPoolLogBuffer) >= flushSize) {
+        SetTimer(FlushLogBufferAsync, -1)  ; 立即异步刷新（不阻塞当前线程）
+    }
+}
+
+FlushLogBufferAsync() {
+    global _graphPoolLogBuffer, _graphPoolLogPath, _graphPoolLogInitialized
+    
+    if (!_graphPoolLogInitialized || _graphPoolLogBuffer == "")
+        return
+    
+    buffer := _graphPoolLogBuffer
+    _graphPoolLogBuffer := ""
+    
     try {
         logDir := MySoftData.isWorker ? A_ScriptDir "\..\Log" : A_ScriptDir "\Log"
         if !DirExist(logDir)
             DirCreate(logDir)
-        FileAppend(line, GraphPoolLogPath(), "UTF-8")
+        FileAppend(buffer, _graphPoolLogPath, "UTF-8")
     }
 }
 
