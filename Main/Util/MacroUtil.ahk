@@ -1234,11 +1234,11 @@ ResolveVisibleWinHandle(winTitle) {
     if (InStr(winTitle, "ahk_id ") || InStr(winTitle, "ahk_group "))
         return winTitle
 
-    ; 带标题或类名，匹配精度已足够，不需要额外筛选
-    if (!InStr(winTitle, "ahk_exe") || InStr(winTitle, "ahk_class"))
+    ; 纯标题匹配（不包含ahk_exe和ahk_class），不需要额外筛选
+    if (!InStr(winTitle, "ahk_exe") && !InStr(winTitle, "ahk_class"))
         return winTitle
 
-    ; 纯进程名匹配（ahk_exe xxx），需要筛选出可见窗口避免命中隐藏窗口
+    ; 包含进程名或类名匹配，需要筛选出可见窗口避免命中隐藏窗口导致黑屏
     try {
         detectedHwnds := WinGetList(winTitle)
         for hwnd in detectedHwnds {
