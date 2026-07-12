@@ -39,7 +39,6 @@ class WorkerData {
         this.itemIndex := 0           ; Worker 当前正在处理的宏在表中的项索引（0=空闲）
         this.isGraphBranch := false   ; 是否为图形宏并行分支任务
         this.graphNodeSerial := ""    ; 图形分支起始节点（异常退出时重派）
-        this.lastJoySeq := 0          ; 上次接收的摇桿序列号
     }
 }
 
@@ -144,7 +143,7 @@ class WorkPool {
 
         txName := "RMT_TX_" idx
         rxName := "RMT_RX_" idx
-        evtName := "Global\RMT_EVT_" idx
+        evtName := "RMT_EVT_" idx
 
         wd.shmTx := SharedMemory(txName, 1048576 + 192)
         wd.tx := RingBuffer(wd.shmTx.ptr, 1048576)
@@ -156,14 +155,11 @@ class WorkPool {
         wd.createTick := A_TickCount
         this.pending[idx] := wd
 
-        Run(Format('"{}" --parentHwnd={} --idx={} --parentPID={} --txName="{}" --rxName="{}" --evtName="{}"'
+        Run(Format('"{}" {} {} {}'
             , this.workerExe
-            , MainSoftData.MyGui.Hwnd
             , idx
-            , this.mainPID
-            , txName
-            , rxName
-            , evtName), , , &pid)
+            , MainSoftData.MyGui.Hwnd
+            , this.mainPID), , , &pid)
 
         wd.pid := pid
         wd.hProc := DllCall("OpenProcess", "uint", 0x0040 | 0x0001, "int", false, "uint", pid, "ptr")

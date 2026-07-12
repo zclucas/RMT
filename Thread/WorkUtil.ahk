@@ -3,13 +3,12 @@
 ;初始化数据
 {
     HandleWorkOpenArg() {
-        argMap := MapArgs(A_Args)
-        global parentHwnd := argMap.Has("--parentHwnd") ? argMap["--parentHwnd"] : ""
-        global workIndex := argMap.Has("--idx") ? argMap["--idx"] : 0
-        global parentPID := argMap.Has("--parentPID") ? argMap["--parentPID"] : 0
-        global txName := argMap.Has("--txName") ? argMap["--txName"] : ""
-        global rxName := argMap.Has("--rxName") ? argMap["--rxName"] : ""
-        global evtName := argMap.Has("--evtName") ? argMap["--evtName"] : ""
+        global workIndex := A_Args[1]
+        global parentHwnd := A_Args[2]
+        global parentPID := A_Args[3]
+        global txName := "RMT_TX_" workIndex
+        global rxName := "RMT_RX_" workIndex
+        global evtName := "RMT_EVT_" workIndex
 
         global shmTx := SharedMemory(txName, 1048576 + 192)
         global shmRx := SharedMemory(rxName, 1048576 + 192)
@@ -96,7 +95,6 @@
 
         OnError(WorkOnError)
         SetTimer(CheckParentProcess, 10000)
-        SetTimer(CheckTxBuffer, 1000)  ; 兜底轮询：1000ms 检查一次环形缓冲区，防止 PostMessage 丢失
     }
 
     WorkOnError(e, mode) {
