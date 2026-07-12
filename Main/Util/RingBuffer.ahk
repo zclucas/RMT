@@ -108,12 +108,12 @@ class RingBuffer {
 }
 
 ; Event Helpers
-CreateEvent(name := 0) {
-    return DllCall("CreateEvent", "ptr", 0, "int", true, "int", false, "ptr", name ? StrPtr(name) : 0, "ptr")
+CreateEvent(name := "") {
+    return DllCall("CreateEventW", "ptr", 0, "int", false, "int", false, "ptr", name ? StrPtr(name) : 0, "ptr")
 }
 
 OpenEvent(name) {
-    return DllCall("OpenEvent", "uint", 0x1F0003, "int", 0, "str", name, "ptr")
+    return DllCall("OpenEventW", "uint", 0x00100002, "int", false, "ptr", StrPtr(name), "ptr")
 }
 
 SetEvent(h) {
@@ -126,4 +126,46 @@ ResetEvent(h) {
 
 CloseHandle(h) {
     DllCall("CloseHandle", "ptr", h)
+}
+
+EscapeIPC(str) {
+    str := StrReplace(str, Chr(3), Chr(3) Chr(3))
+    str := StrReplace(str, Chr(1), Chr(3) Chr(1))
+    str := StrReplace(str, Chr(2), Chr(3) Chr(2))
+    return str
+}
+
+UnescapeIPC(str) {
+    out := ""
+    escape := false
+    Loop Parse, str {
+        c := A_LoopField
+        if (escape) {
+            out .= c
+            escape := false
+        } else if (c == Chr(3)) {
+            escape := true
+        } else {
+            out .= c
+        }
+    }
+    if (escape)
+        out .= Chr(3)
+    return out
+}
+
+EncodeCommand(opcode, args*) {
+    packet := opcode
+    for arg in args {
+        packet .= Chr(1) EscapeIPC(String(arg))
+    }
+    return packet
+}
+
+EncodeBatch(commands*) {
+    packet := "R1"
+    for cmd in commands {
+        packet .= Chr(2) cmd
+    }
+    return packet
 }

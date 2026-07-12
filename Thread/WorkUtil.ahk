@@ -3,16 +3,34 @@
 ;初始化数据
 {
     HandleWorkOpenArg() {
-        global parentHwnd := A_Args[1]
-        global workIndex := A_Args[2]
-        global parentPID := A_Args[3]
-        global txName := A_Args[4]
-        global rxName := A_Args[5]
+        argMap := MapArgs(A_Args)
+        global parentHwnd := argMap.Has("--parentHwnd") ? argMap["--parentHwnd"] : ""
+        global workIndex := argMap.Has("--idx") ? argMap["--idx"] : 0
+        global parentPID := argMap.Has("--parentPID") ? argMap["--parentPID"] : 0
+        global txName := argMap.Has("--txName") ? argMap["--txName"] : ""
+        global rxName := argMap.Has("--rxName") ? argMap["--rxName"] : ""
+        global evtName := argMap.Has("--evtName") ? argMap["--evtName"] : ""
 
         global shmTx := SharedMemory(txName, 1048576 + 192)
         global shmRx := SharedMemory(rxName, 1048576 + 192)
         global tx := RingBuffer(shmTx.ptr, 1048576)
         global rx := RingBuffer(shmRx.ptr, 1048576)
+
+        global hEvt := 0
+        if (evtName) {
+            global hEvt := DllCall("OpenEventW", "uint", 0x00100002, "int", false, "ptr", StrPtr(evtName), "ptr")
+        }
+    }
+
+    MapArgs(args) {
+        result := Map()
+        for arg in args {
+            p := StrSplit(arg, "=", , 2)
+            if (p.Length == 2) {
+                result[p[1]] := p[2]
+            }
+        }
+        return result
     }
 
     InitWorkFilePath() {
@@ -95,6 +113,29 @@
         }
     }
 
+    WaitAndProcessTasks() {
+        global hEvt, workerTaskBusy, tx
+        if (!hEvt)
+            return
+
+        hArr := Buffer(A_PtrSize)
+        NumPut("ptr", hEvt, hArr)
+
+        while (true) {
+            if (!workerTaskBusy && !tx.IsEmpty()) {
+                CheckTxBuffer()
+                continue
+            }
+
+            r := DllCall("MsgWaitForMultipleObjects", "uint", 1, "ptr", hArr.Ptr, "int", false, "uint", -1, "uint", 0x4FF, "uint")
+            if (r == 0) {
+                CheckTxBuffer()
+            } else if (r == 1) {
+                Sleep(-1)
+            }
+        }
+    }
+
     WorkPluginInit() {
         ; 根据进程位数自动选择 x86 或 x64
         archDir := (A_PtrSize = 4) ? "x86" : "x64"
@@ -124,7 +165,88 @@
 
     MsgSendHandler(action, args*) {
         global rx, workIndex
-        payload := JSON.stringify([action, args*])
+        static joySeqCounter := 0
+
+        static actionMap := Map(
+            "SetArray", "SA",
+            "CloneArray", "CA",
+            "DeleteArray", "DA",
+            "ModifyArray", "MA",
+            "InsertArray", "IA",
+            "RemoveAtArray", "RA",
+            "SetVari", "SV",
+            "DelVari", "DV",
+            "StopMacro", "ST",
+            "TR_MACRO", "TR",
+            "GraphMacroBranches", "GB",
+            "ItemState", "IS",
+            "PauseState", "PS",
+            "Report", "RP",
+            "RMT指令", "RC",
+            "MsgBox", "MB",
+            "ToolTip", "TT",
+            "MacroCount", "MC",
+            "Joy", "JY"
+        )
+
+        opcode := actionMap.Has(action) ? actionMap[action] : action
+        realArgs := []
+
+        if (opcode == "JY") {
+            joySeqCounter++
+            realArgs.Push(workIndex, joySeqCounter)
+            for a in args
+                realArgs.Push(a)
+        } else if (opcode == "SV") {
+            commands := []
+            nameArr := args[1]
+            valueArr := args[2]
+            loop nameArr.Length {
+                commands.Push(EncodeCommand("SV", nameArr[A_Index], valueArr[A_Index]))
+            }
+            payload := EncodeBatch(commands*)
+            rx.Push(MsgType.EVENT, 0, payload)
+            MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+            return
+        } else if (opcode == "DV") {
+            commands := []
+            nameArr := args[1]
+            loop nameArr.Length {
+                commands.Push(EncodeCommand("DV", nameArr[A_Index]))
+            }
+            payload := EncodeBatch(commands*)
+            rx.Push(MsgType.EVENT, 0, payload)
+            MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+            return
+        } else if (opcode == "SA") {
+            name := args[1]
+            arr := GetArray(args[2])
+            realArgs.Push(name, arr.Length)
+            for item in arr
+                realArgs.Push(item)
+        } else if (opcode == "CA") {
+            realArgs.Push(args[1], args[2])
+        } else if (opcode == "MA" || opcode == "IA") {
+            path := args[2] "." args[3]
+            realArgs.Push(args[1], path, args[5])
+        } else if (opcode == "RA") {
+            path := args[2] "." args[3]
+            realArgs.Push(args[1], path)
+        } else if (opcode == "GB") {
+            tIdx := args[1]
+            iIdx := args[2]
+            branchCount := args[3]
+            nodeSerialArr := args[4]
+            realArgs.Push(tIdx, iIdx, branchCount)
+            for ns in nodeSerialArr
+                realArgs.Push(ns)
+        } else {
+            for a in args
+                realArgs.Push(a)
+        }
+
+        cmd := EncodeCommand(opcode, realArgs*)
+        payload := EncodeBatch(cmd)
         rx.Push(MsgType.EVENT, 0, payload)
         MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
     }
@@ -172,19 +294,35 @@
         global rx, workIndex, workerTaskBusy, workerPendingTasks
         workerTaskBusy := true
         try {
-            try {
-                paramArr := JSON.parse(cmd)
-            } catch as e {
-                GraphPoolLog("Worker任务解析失败", Format("id={1} err={2} cmd={3}", id, e.Message, SubStr(cmd, 1, 120)))
+            if (SubStr(cmd, 1, 2) != "R1") {
+                GraphPoolLog("Worker任务解析失败", Format("id={1} err=Protocol header missing cmd={2}", id, SubStr(cmd, 1, 120)))
                 return
             }
-            if (paramArr.Length >= 5) {
-                ; TR_MACRO 带 nodeSerial → 跳转到指定图形节点
-                GraphPoolLog("Worker开始执行", Format("tab={1} item={2} node={3}", paramArr[2], paramArr[3], paramArr[4]))
-                tableItem := MySoftData.TableInfo[paramArr[2]]
-                WalkGraphNode(tableItem, paramArr[4], paramArr[3])
-            } else {
-                TriggerMacro(paramArr[2], paramArr[3])
+            commandsStr := SubStr(cmd, 3)
+            for record in StrSplit(commandsStr, Chr(2)) {
+                if (record == "")
+                    continue
+                parts := StrSplit(record, Chr(1))
+                if (parts.Length == 0)
+                    continue
+                opcode := parts[1]
+                args := []
+                loop parts.Length - 1 {
+                    args.Push(UnescapeIPC(parts[A_Index + 1]))
+                }
+
+                if (opcode == "TR") {
+                    tIdx := args[1]
+                    iIdx := args[2]
+                    if (args.Length >= 3) {
+                        nodeSerial := args[3]
+                        GraphPoolLog("Worker开始执行", Format("tab={1} item={2} node={3}", tIdx, iIdx, nodeSerial))
+                        tableItem := MySoftData.TableInfo[tIdx]
+                        WalkGraphNode(tableItem, nodeSerial, iIdx)
+                    } else {
+                        TriggerMacro(tIdx, iIdx)
+                    }
+                }
             }
         } catch as e {
             GraphPoolLog("Worker任务异常", Format("id={1} err={2} line={3} cmd={4}"
@@ -202,85 +340,74 @@
     }
 
     OnEventMessage(cmd) {
-        try {
-            paramArr := JSON.parse(cmd)
-            actionStr := paramArr[1]
+        if (SubStr(cmd, 1, 2) != "R1")
+            return
+
+        commandsStr := SubStr(cmd, 3)
+        for record in StrSplit(commandsStr, Chr(2)) {
+            if (record == "")
+                continue
+
+            parts := StrSplit(record, Chr(1))
+            if (parts.Length == 0)
+                continue
+
+            opcode := parts[1]
             args := []
-            loop paramArr.Length - 1 {
-                args.Push(paramArr[A_Index + 1])
+            loop parts.Length - 1 {
+                args.Push(UnescapeIPC(parts[A_Index + 1]))
             }
-            switch actionStr {
-                case "SyncVarData":
-                    ; 全量同步：清空后用主线程状态覆盖
-                    VarArr := args[1]
-                    ArrArr := args[2]
-                    MySoftData.VariableMap.Clear()
-                    for entry in VarArr
-                        MySoftData.VariableMap[entry[1]] := entry[2]
-                    MySoftData.ArrayMap.Clear()
-                    for entry in ArrArr
-                        MySoftData.ArrayMap[entry[1]] := GetArray(entry[2])
-                case "SetVari":
-                    NameArr := args[1]
-                    ValueArr := args[2]
-                    loop NameArr.Length {
-                        MySoftData.VariableMap[NameArr[A_Index]] := ValueArr[A_Index]
-                    }
-                case "DelVari":
-                    NameArr := args[1]
-                    loop NameArr.Length {
-                        if (MySoftData.VariableMap.Has(NameArr[A_Index]))
-                            MySoftData.VariableMap.Delete(NameArr[A_Index])
-                    }
-                case "CMDTip":
-                    MySoftData.CMDTip := args[1]
-                case "PauseState":
-                    tableItem := MySoftData.TableInfo[args[1]]
-                    tableItem.PauseArr[args[2]] := args[3]
-                case "SetArray":
-                    Name := args[1]
-                    Value := GetArray(args[2])
-                    MySoftData.ArrayMap[Name] := Value
-                case "CloneArray":
-                    SourceArr := GetArray(args[1])
-                    NewArrName := args[2]
-                    MySoftData.ArrayMap[NewArrName] := SourceArr
-                case "DeleteArray":
-                    if (MySoftData.ArrayMap.Has(args[1]))
-                        MySoftData.ArrayMap.Delete(args[1])
-                case "ModifyArray":
-                    ArrName := args[1]
-                    MainIndex := args[2]
-                    Index := args[3]
-                    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex
-                        ]
-                    Value := args[4] ? GetArray(args[5]) : args[5]
-                    SourceArr[Index] := Value
-                case "InsertArray":
-                    ArrName := args[1]
-                    MainIndex := args[2]
-                    Index := args[3]
-                    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex
-                        ]
-                    Value := args[4] ? GetArray(args[5]) : args[5]
-                    SourceArr.InsertAt(Index, Value)
-                case "RemoveAtArray":
-                    ArrName := args[1]
-                    MainIndex := args[2]
-                    Index := args[3]
-                    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex
-                        ]
-                    SourceArr.RemoveAt(Index)
-                case "StopMacro":
-                    tableItem := MySoftData.TableInfo[args[1]]
-                    KillTableItemMacro(tableItem, args[2])
-                case "GraphBranchesAck":
-                    global graphBranchesAckKey, graphBranchesAckReceived
-                    key := args[1] "_" args[2]
-                    if (IsSet(graphBranchesAckKey) && graphBranchesAckKey == key)
-                        graphBranchesAckReceived := true
+
+            try {
+                switch opcode {
+                    case "SV":
+                        MySoftData.VariableMap[args[1]] := args[2]
+                    case "DV":
+                        if (MySoftData.VariableMap.Has(args[1]))
+                            MySoftData.VariableMap.Delete(args[1])
+                    case "CT":
+                        MySoftData.CMDTip := args[1]
+                    case "PS":
+                        tableItem := MySoftData.TableInfo[args[1]]
+                        tableItem.PauseArr[args[2]] := args[3]
+                    case "SA":
+                        name := args[1]
+                        count := Integer(args[2])
+                        arr := []
+                        loop count {
+                            arr.Push(args[A_Index + 2])
+                        }
+                        MySoftData.ArrayMap[name] := arr
+                    case "CA":
+                        sourceName := args[1]
+                        newArrName := args[2]
+                        MySoftData.ArrayMap[newArrName] := MySoftData.ArrayMap[sourceName].Clone()
+                    case "DA":
+                        if (MySoftData.ArrayMap.Has(args[1]))
+                            MySoftData.ArrayMap.Delete(args[1])
+                    case "MA":
+                        rootArr := MySoftData.ArrayMap[args[1]]
+                        currArr := GetArrayRefByPath(rootArr, args[2], &lastIdx)
+                        currArr[lastIdx] := args[3]
+                    case "IA":
+                        rootArr := MySoftData.ArrayMap[args[1]]
+                        currArr := GetArrayRefByPath(rootArr, args[2], &lastIdx)
+                        currArr.InsertAt(lastIdx, args[3])
+                    case "RA":
+                        rootArr := MySoftData.ArrayMap[args[1]]
+                        currArr := GetArrayRefByPath(rootArr, args[2], &lastIdx)
+                        currArr.RemoveAt(lastIdx)
+                    case "ST":
+                        tableItem := MySoftData.TableInfo[args[1]]
+                        KillTableItemMacro(tableItem, args[2])
+                    case "GA":
+                        global graphBranchesAckKey, graphBranchesAckReceived
+                        key := args[1] "_" args[2]
+                        if (IsSet(graphBranchesAckKey) && graphBranchesAckKey == key)
+                            graphBranchesAckReceived := true
+                }
+            } catch {
             }
-        } catch {
         }
     }
 }
@@ -294,7 +421,16 @@
 
     WorkCloneGlobalArray(SourceArr, NewArrName) {
         MySoftData.ArrayMap[NewArrName] := SourceArr.Clone()
-        MsgSendHandler("CloneArray", GetArrayStr(SourceArr), NewArrName)
+        sourceName := ""
+        for name, arr in MySoftData.ArrayMap {
+            if (arr == SourceArr && name != NewArrName) {
+                sourceName := name
+                break
+            }
+        }
+        if (sourceName == "")
+            sourceName := NewArrName
+        MsgSendHandler("CloneArray", sourceName, NewArrName)
     }
 
     WorkDeleteGlobalArray(ArrName) {
@@ -399,10 +535,17 @@
                     }
                     if (type == MsgType.EVENT) {
                         try {
-                            paramArr := JSON.parse(payload)
-                            if (paramArr[1] == "GraphBranchesAck" && paramArr[2] == tableIndex && paramArr[3] == itemIndex) {
-                                GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tableIndex, itemIndex))
-                                return
+                            if (SubStr(payload, 1, 2) == "R1") {
+                                commandsStr := SubStr(payload, 3)
+                                for record in StrSplit(commandsStr, Chr(2)) {
+                                    if (record == "")
+                                        continue
+                                    parts := StrSplit(record, Chr(1))
+                                    if (parts.Length >= 3 && parts[1] == "GA" && parts[2] == tableIndex && parts[3] == itemIndex) {
+                                        GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tableIndex, itemIndex))
+                                        return
+                                    }
+                                }
                             }
                         } catch {
                         }
@@ -494,4 +637,18 @@
         return fullMsg
     }
 
+    GetArrayRefByPath(rootArr, path, &lastIdx) {
+        parts := StrSplit(path, ".")
+        curr := rootArr
+        if (parts.Length == 2 && parts[1] == "0") {
+            lastIdx := Integer(parts[2])
+            return rootArr
+        }
+        loop parts.Length - 1 {
+            idx := Integer(parts[A_Index])
+            curr := curr[idx]
+        }
+        lastIdx := Integer(parts[parts.Length])
+        return curr
+    }
 }

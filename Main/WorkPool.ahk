@@ -39,6 +39,7 @@ class WorkerData {
         this.itemIndex := 0           ; Worker 当前正在处理的宏在表中的项索引（0=空闲）
         this.isGraphBranch := false   ; 是否为图形宏并行分支任务
         this.graphNodeSerial := ""    ; 图形分支起始节点（异常退出时重派）
+        this.lastJoySeq := 0          ; 上次接收的摇桿序列号
     }
 }
 
@@ -143,7 +144,7 @@ class WorkPool {
 
         txName := "RMT_TX_" idx
         rxName := "RMT_RX_" idx
-        evtName := "RMT_EVT_" idx
+        evtName := "Global\RMT_EVT_" idx
 
         wd.shmTx := SharedMemory(txName, 1048576 + 192)
         wd.tx := RingBuffer(wd.shmTx.ptr, 1048576)
@@ -155,7 +156,7 @@ class WorkPool {
         wd.createTick := A_TickCount
         this.pending[idx] := wd
 
-        Run(Format('"{}" {} {} {} "{}" "{}" "{}"'
+        Run(Format('"{}" --parentHwnd={} --idx={} --parentPID={} --txName="{}" --rxName="{}" --evtName="{}"'
             , this.workerExe
             , MainSoftData.MyGui.Hwnd
             , idx
@@ -201,28 +202,30 @@ class WorkPool {
     }
 
     ; 向所有 Worker 广播事件（master 本地发起，无需排除）
-    Broadcast(actionStr, args*) {
-        this.BroadcastEx(0, actionStr, args*)
+    Broadcast(opcode, args*) {
+        this.BroadcastEx(0, opcode, args*)
     }
 
     ; 向 Worker 广播事件，excludeIdx 为需要跳过的发起者 Worker idx（0=不跳过）。
-    ; exclude 通过参数显式传入，跟随调用栈，天然抗消息重入。
-    BroadcastEx(excludeIdx, actionStr, args*) {
+    BroadcastEx(excludeIdx, opcode, args*) {
+        cmd := EncodeCommand(opcode, args*)
+        payload := EncodeBatch(cmd)
+        this.BroadcastPayloadEx(excludeIdx, payload)
+    }
+
+    BroadcastPayloadEx(excludeIdx, payload) {
         if (!this.isDynamic && this.maxSize < 1)
             return
 
-        payload := JSON.stringify([actionStr, args*])
         for idx, wd in this.usePool {
             if (excludeIdx && idx == excludeIdx)
                 continue
-            wd.tx.Push(MsgType.EVENT, 0, payload)
-            this.PostMessage(WM_MASTER_TO_WORKER, wd)
+            this.PushTask(wd, MsgType.EVENT, 0, payload)
         }
         for idx, wd in this.freePool {
             if (excludeIdx && idx == excludeIdx)
                 continue
-            wd.tx.Push(MsgType.EVENT, 0, payload)
-            this.PostMessage(WM_MASTER_TO_WORKER, wd)
+            this.PushTask(wd, MsgType.EVENT, 0, payload)
         }
     }
 
@@ -267,8 +270,7 @@ class WorkPool {
         for idx, wd in this.usePool {
             if (wd.tableIndex != tableIndex || wd.itemIndex != itemIndex)
                 continue
-            wd.tx.Push(MsgType.EVENT, 0, payload)
-            this.PostMessage(WM_MASTER_TO_WORKER, wd)
+            this.PushTask(wd, MsgType.EVENT, 0, payload)
             KillTableItemMacro(MySoftData.TableInfo[tableIndex], itemIndex)
         }
         tableItem := MySoftData.TableInfo[tableIndex]
@@ -353,6 +355,8 @@ class WorkPool {
         }
         wd.idleTick := 0
 
+        if (wd.hEvt)
+            DllCall("SetEvent", "ptr", wd.hEvt)
         if (!this.PostMessage(WM_MASTER_TO_WORKER, wd)) {
             this.usePool.Delete(idx)
             this.freePool[idx] := wd
@@ -507,8 +511,7 @@ class WorkPool {
 
         if (VarArr.Length > 0 || ArrArr.Length > 0) {
             payload := JSON.stringify(["SyncVarData", VarArr, ArrArr])
-            wd.tx.Push(MsgType.EVENT, 0, payload)
-            this.PostMessage(WM_MASTER_TO_WORKER, wd)
+            this.PushTask(wd, MsgType.EVENT, 0, payload)
         }
     }
 
@@ -756,60 +759,99 @@ class WorkPool {
     }
 
     OnWorkerEvent(wd, payload) {
-        ; 发起者 idx 通过参数显式传入各处理函数，由其转发给 BroadcastEx 排除自身，
-        ; 避免发起者收到自己事件的回声而重复执行（非幂等操作会导致状态损坏）。
-        try {
-            paramArr := JSON.parse(payload)
-            action := paramArr[1]
+        if (SubStr(payload, 1, 2) != "R1")
+            return
+
+        commandsStr := SubStr(payload, 3)
+        for record in StrSplit(commandsStr, Chr(2)) {
+            if (record == "")
+                continue
+
+            parts := StrSplit(record, Chr(1))
+            if (parts.Length == 0)
+                continue
+
+            opcode := parts[1]
             args := []
-            loop paramArr.Length - 1 {
-                args.Push(paramArr[A_Index + 1])
+            loop parts.Length - 1 {
+                args.Push(UnescapeIPC(parts[A_Index + 1]))
             }
 
-            switch action {
-                case "SetVari":
-                    SetGlobalVariable(args[1], args[2], false, wd.idx)
-                case "DelVari":
-                    DelGlobalVariable(args[1], wd.idx)
-                case "Report":
-                    CMDReport(args[1])
-                case "RMT指令":
-                    ExcuteRMTCMDAction(args[1])
-                case "ItemState":
-                    SetTableItemState(args[1], args[2], args[3])
-                case "PauseState":
-                    SetItemPauseState(args[1], args[2], args[3], wd.idx)
-                case "MsgBox":
-                    MsgBoxContent(args[1])
-                case "ToolTip":
-                    ToolTipContent(args[1])
-                case "MacroCount":
-                    MacroCount(args[1])
-                case "Joy":
-                    ViGJoySetState(args[1], args[2], args[3])
-                case "SetArray":
-                    SetGlobalArray(args[1], GetArray(args[2]), wd.idx)
-                case "CloneArray":
-                    CloneGlobalArray(GetArray(args[1]), args[2], wd.idx)
-                case "DeleteArray":
-                    DeleteGlobalArray(args[1], wd.idx)
-                case "ModifyArray":
-                    ModifyGlobalArray(args[1], args[2], args[3], args[4], args[5], wd.idx)
-                case "InsertArray":
-                    InsertGlobalArray(args[1], args[2], args[3], args[4], args[5], wd.idx)
-                case "RemoveAtArray":
-                    RemoveAtGlobalArray(args[1], args[2], args[3], wd.idx)
-                case "Error":
-                    MyErrorMsgBoxGui.ShowGui(args[1])
-                case "StopMacro":
-                    StopMacro(args[1], args[2])
-                case "GraphMacroBranches":
-                    HandleWorkerGraphBranches(wd, args[1], args[2], args[3], args[4])
-                case "TR_MACRO":
-                    TriggerMacroHandler(args[1], args[2])
+            try {
+                switch opcode {
+                    case "SV":
+                        SetGlobalVariable([args[1]], [args[2]], false, wd.idx)
+                    case "DV":
+                        DelGlobalVariable([args[1]], wd.idx)
+                    case "RP":
+                        CMDReport(args[1])
+                    case "RC":
+                        ExcuteRMTCMDAction(args[1])
+                    case "IS":
+                        SetTableItemState(args[1], args[2], args[3])
+                    case "PS":
+                        SetItemPauseState(args[1], args[2], args[3], wd.idx)
+                    case "MB":
+                        MsgBoxContent(args[1])
+                    case "TT":
+                        ToolTipContent(args[1])
+                    case "MC":
+                        MacroCount(args[1])
+                    case "JY":
+                        seq := Integer(args[2])
+                        if (seq <= wd.lastJoySeq)
+                            continue
+                        wd.lastJoySeq := seq
+                        ViGJoySetState(args[3], args[4], args[5])
+                    case "SA":
+                        arr := []
+                        count := Integer(args[2])
+                        loop count {
+                            arr.Push(args[A_Index + 2])
+                        }
+                        SetGlobalArray(args[1], arr, wd.idx)
+                    case "CA":
+                        CloneGlobalArray(args[1], args[2], wd.idx)
+                    case "DA":
+                        DeleteGlobalArray(args[1], wd.idx)
+                    case "MA":
+                        p := StrSplit(args[2], ".")
+                        ModifyGlobalArray(args[1], p[1], p[2], false, args[3], wd.idx)
+                    case "IA":
+                        p := StrSplit(args[2], ".")
+                        InsertGlobalArray(args[1], p[1], p[2], false, args[3], wd.idx)
+                    case "RA":
+                        p := StrSplit(args[2], ".")
+                        RemoveAtGlobalArray(args[1], p[1], p[2], wd.idx)
+                    case "ER":
+                        MyErrorMsgBoxGui.ShowGui(args[1])
+                    case "ST":
+                        StopMacro(args[1], args[2])
+                    case "GB":
+                        tIdx := args[1]
+                        iIdx := args[2]
+                        branchCount := Integer(args[3])
+                        nodeSerials := []
+                        loop args.Length - 3 {
+                            nodeSerials.Push(args[A_Index + 3])
+                        }
+                        HandleWorkerGraphBranches(wd, tIdx, iIdx, branchCount, nodeSerials)
+                    case "TR":
+                        TriggerMacroHandler(args[1], args[2])
+                }
+            } catch {
             }
-        } catch as e {
         }
+    }
+
+    PushTask(wd, type, id, payload) {
+        if (wd.tx.Push(type, id, payload)) {
+            if (wd.hEvt)
+                DllCall("SetEvent", "ptr", wd.hEvt)
+            this.PostMessage(WM_MASTER_TO_WORKER, wd)
+            return true
+        }
+        return false
     }
 
     PostMessage(type, wd, wParam := 0, lParam := 0) {

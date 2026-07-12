@@ -312,11 +312,10 @@ StopMacro(tableIndex, itemIndex) {
     if (isWork) {
         ; 把 StopMacro 事件写入目标 Worker 的发送通道，再唤醒它在自身进程内停止宏。
         ; 此前只 PostMessage 而未投递 payload，Worker 取不到指令，宏不会真正停止。
-        payload := JSON.stringify(["StopMacro", tableIndex, itemIndex])
+        payload := EncodeBatch(EncodeCommand("ST", tableIndex, itemIndex))
         for idx, wd in MyWorkPool.usePool {
             if (wd.tableIndex == tableIndex && wd.itemIndex == itemIndex) {
-                wd.tx.Push(MsgType.EVENT, 0, payload)
-                MyWorkPool.PostMessage(WM_MASTER_TO_WORKER, wd)
+                MyWorkPool.PushTask(wd, MsgType.EVENT, 0, payload)
             }
         }
         ; 主进程侧设置 Killed 标记（供 Worker 完成回报时判定为"终止"状态）并释放残留按键
@@ -352,55 +351,76 @@ HandleWorkerGraphBranches(wd, tIdx, iIdx, branchCount, nodeArr) {
     }
     ; 入队各分支任务
     for nodeSerial in nodeArr
-        MyWorkPool.taskQueue.Push({ cmd: JSON.stringify(["TR_MACRO", tIdx, iIdx, nodeSerial]), tableIndex: tIdx, itemIndex: iIdx, isGraphBranch: true })
+        MyWorkPool.taskQueue.Push({ cmd: EncodeBatch(EncodeCommand("TR", tIdx, iIdx, nodeSerial)), tableIndex: tIdx, itemIndex: iIdx, isGraphBranch: true })
     if (MyWorkPool.isDispatching)
         MyWorkPool.dispatchPending := true
     else
         MyWorkPool.Dispatch()
     ; 回复 Worker 确认，唤醒继续执行分支1
-    wd.tx.Push(MsgType.EVENT, 0, JSON.stringify(["GraphBranchesAck", tIdx, iIdx]))
-    MyWorkPool.PostMessage(WM_MASTER_TO_WORKER, wd)
+    MyWorkPool.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("GA", tIdx, iIdx)))
+}
+
+GetArrayRefByPath(rootArr, path, &lastIdx) {
+    parts := StrSplit(path, ".")
+    curr := rootArr
+    if (parts.Length == 2 && parts[1] == "0") {
+        lastIdx := Integer(parts[2])
+        return rootArr
+    }
+    loop parts.Length - 1 {
+        idx := Integer(parts[A_Index])
+        curr := curr[idx]
+    }
+    lastIdx := Integer(parts[parts.Length])
+    return curr
 }
 
 SetGlobalArray(Name, Value, excludeIdx := 0) {
     MySoftData.ArrayMap[Name] := Value
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "SetArray", Name, GetArrayStr(Value))
+    args := [Name, Value.Length]
+    for item in Value
+        args.Push(item)
+    MyWorkPool.BroadcastEx(excludeIdx, "SA", args*)
 }
 
-CloneGlobalArray(SourceArr, NewArrName, excludeIdx := 0) {
-    MySoftData.ArrayMap[NewArrName] := SourceArr.Clone()
+CloneGlobalArray(SourceName, NewArrName, excludeIdx := 0) {
+    MySoftData.ArrayMap[NewArrName] := MySoftData.ArrayMap[SourceName].Clone()
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "CloneArray", GetArrayStr(SourceArr), NewArrName)
+    MyWorkPool.BroadcastEx(excludeIdx, "CA", SourceName, NewArrName)
 }
 
 DeleteGlobalArray(ArrName, excludeIdx := 0) {
     MySoftData.ArrayMap.Delete(ArrName)
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "DeleteArray", ArrName)
+    MyWorkPool.BroadcastEx(excludeIdx, "DA", ArrName)
 }
 
 ModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value, excludeIdx := 0) {
-    ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-    SourceArr[Index] := Value
+    path := MainIndex "." Index
+    rootArr := MySoftData.ArrayMap[ArrName]
+    currArr := GetArrayRefByPath(rootArr, path, &lastIdx)
+    currArr[lastIdx] := Value
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "ModifyArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
+    MyWorkPool.BroadcastEx(excludeIdx, "MA", ArrName, path, IsArrayValue ? GetArrayStr(Value) : Value)
 }
 
 InsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value, excludeIdx := 0) {
-    ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-    SourceArr.InsertAt(Index, Value)
+    path := MainIndex "." Index
+    rootArr := MySoftData.ArrayMap[ArrName]
+    currArr := GetArrayRefByPath(rootArr, path, &lastIdx)
+    currArr.InsertAt(lastIdx, Value)
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "InsertArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
+    MyWorkPool.BroadcastEx(excludeIdx, "IA", ArrName, path, IsArrayValue ? GetArrayStr(Value) : Value)
 }
 
 RemoveAtGlobalArray(ArrName, MainIndex, Index, excludeIdx := 0) {
-    SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-    SourceArr.RemoveAt(Index)
+    path := MainIndex "." Index
+    rootArr := MySoftData.ArrayMap[ArrName]
+    currArr := GetArrayRefByPath(rootArr, path, &lastIdx)
+    currArr.RemoveAt(lastIdx)
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "RemoveAtArray", ArrName, MainIndex, Index)
+    MyWorkPool.BroadcastEx(excludeIdx, "RA", ArrName, path)
 }
 
 SetGlobalVariable(NameArr, ValueArr, ignoreExist, excludeIdx := 0) {
@@ -419,11 +439,13 @@ SetGlobalVariable(NameArr, ValueArr, ignoreExist, excludeIdx := 0) {
     if (RealNameArr.Length == 0)
         return
 
+    commands := []
     loop RealNameArr.Length {
-        MySoftData.VariableMap[RealNameArr[A_Index]] := ValueArr[A_Index]
+        MySoftData.VariableMap[RealNameArr[A_Index]] := RealValueArr[A_Index]
+        commands.Push(EncodeCommand("SV", RealNameArr[A_Index], RealValueArr[A_Index]))
     }
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "SetVari", RealNameArr, RealValueArr)
+    MyWorkPool.BroadcastPayloadEx(excludeIdx, EncodeBatch(commands*))
 }
 
 DelGlobalVariable(NameArr, excludeIdx := 0) {
@@ -438,12 +460,16 @@ DelGlobalVariable(NameArr, excludeIdx := 0) {
     if (RealNameArr.Length == 0)
         return
 
+    commands := []
+    loop RealNameArr.Length {
+        commands.Push(EncodeCommand("DV", RealNameArr[A_Index]))
+    }
     MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "DelVari", RealNameArr)
+    MyWorkPool.BroadcastPayloadEx(excludeIdx, EncodeBatch(commands*))
 }
 
 SetCMDTipValue(value) {
-    MyWorkPool.Broadcast("CMDTip", value)
+    MyWorkPool.Broadcast("CT", value)
 }
 
 CMDReport(CMDStr) {

@@ -627,7 +627,7 @@ OnToggleTriggerMacro(tableIndex, itemIndex) {
         SetTableItemState(tableItem.Index, itemIndex, 1)
         MyWorkPool.PrepareItemRun(tableIndex, itemIndex)
         GraphPoolLog("宏触发", Format("tab={1} item={2} 来源=开关", tableIndex, itemIndex))
-        cmd := JSON.stringify(["TR_MACRO", tableIndex, itemIndex])
+        cmd := EncodeBatch(EncodeCommand("TR", tableIndex, itemIndex))
         MyWorkPool.Submit(cmd, tableIndex, itemIndex)
         tableItem.IsWorkIndexArr[itemIndex] := true
         return
@@ -665,7 +665,7 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
             GraphPoolLog("宏触发恢复", Format("tab={1} item={2} 清理上次残留", tableIndex, itemIndex))
         MyWorkPool.PrepareItemRun(tableIndex, itemIndex)
         GraphPoolLog("宏触发", Format("tab={1} item={2}", tableIndex, itemIndex))
-        cmd := JSON.stringify(["TR_MACRO", tableIndex, itemIndex])
+        cmd := EncodeBatch(EncodeCommand("TR", tableIndex, itemIndex))
         MyWorkPool.Submit(cmd, tableIndex, itemIndex)
         tableItem.IsWorkIndexArr[itemIndex] := true
         return
