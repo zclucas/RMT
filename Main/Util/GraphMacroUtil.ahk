@@ -66,7 +66,7 @@ ShouldUseGraphWorkers() {
     global MyWorkPool
     if (MySoftData.isWorker)
         return true
-    return MyWorkPool != "" && (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1)
+    return WorkPoolEnabled()
 }
 
 ShouldSkipGraphNextDispatch(cmdStr) {

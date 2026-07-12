@@ -2247,3 +2247,8 @@ SafeReload() {
         Reload()
     }
 }
+
+WorkPoolEnabled() {
+    global MyWorkPool
+    return MyWorkPool != "" && IsObject(MyWorkPool) && (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1)
+}

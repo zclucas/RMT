@@ -623,7 +623,7 @@ OnToggleTriggerMacro(tableIndex, itemIndex) {
     tableItem := MySoftData.TableInfo[tableIndex]
     macro := tableItem.MacroArr[itemIndex]
 
-    if (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1) {
+    if (WorkPoolEnabled()) {
         SetTableItemState(tableItem.Index, itemIndex, 1)
         MyWorkPool.PrepareItemRun(tableIndex, itemIndex)
         GraphPoolLog("宏触发", Format("tab={1} item={2} 来源=开关", tableIndex, itemIndex))
@@ -660,7 +660,7 @@ TriggerMacroHandler(tableIndex, itemIndex, *) {
         return
 
     SetTableItemState(tableItem.Index, itemIndex, 1)
-    if (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1) {
+    if (WorkPoolEnabled()) {
         if (isWork)
             GraphPoolLog("宏触发恢复", Format("tab={1} item={2} 清理上次残留", tableIndex, itemIndex))
         MyWorkPool.PrepareItemRun(tableIndex, itemIndex)
