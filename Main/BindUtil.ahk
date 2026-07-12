@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 BindKey() {
     BindSuspendHotkey()
@@ -600,6 +600,9 @@ OnBindKeyDown(key, *) {
     key := LTrim(key, "~")
     key := StrLower(key)
     if (!MySoftData.TriggerKeyMap.Has(key))
+        return
+
+    if (MainSoftData.SelectAreaAction != "")
         return
 
     Data := MySoftData.TriggerKeyMap[key]

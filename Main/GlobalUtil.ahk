@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 #Include JoyMacro.ahk
 #Include RecordJoyUtil.ahk
@@ -102,6 +102,8 @@ global MyToolRecordSettingGui := ToolRecordSettingGui()
 global MyUseExplainGui := UseExplainGui()
 global MyConfigMergeGui := ConfigMergeGui()
 global MyStopMacro := StopMacro
+global SelectAreaHo := HighlightOutlineSelectArea("Red", 150)
+global SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0}
 global MyTriggerSubMacro := TriggerMacroHandler
 global MySubmitGraphBranches := SubmitGraphBranchesHandler
 global MySetGlobalVariable := SetGlobalVariable

@@ -593,8 +593,9 @@ ViGJoySetState(JoyType, Key, Value) {
 
 ToolTipContent(content) {
     MySoftData.ToolTipText := content
-    MySoftData.ToolTipEndTime := A_TickCount + 5000  ; 设置5秒后结束的时间戳
-    SetTimer(ToolTipTimer, 100)  ; 启动/重置定时器，每100ms执行一次
+    MySoftData.ToolTipEndTime := A_TickCount + 5000
+    SetTimer(ToolTipTimer, 100)
+    ToolTip(content)
 }
 
 ToolTipTimer() {
@@ -736,58 +737,175 @@ OnGetSelectAreaUp(key, *) {
 }
 
 TogSelectArea(isEnable, action := "") {
+    global SelectAreaState
     if (isEnable && action != "") {
         MainSoftData.SelectAreaAction := action
         ToolTipContent(GetLang("请框选截图范围"))
-        actionDown := OnBindKeyDown.Bind("LButton")
-        Hotkey("LButton", actionDown)
+        SetSystemCursor("CROSS")
+        Hotkey("*LButton", SelectAreaDown, "On")
+        Hotkey("*LButton Up", SelectAreaUp, "On")
+        Hotkey("*RButton", SelectAreaCancel, "On")
+
+        SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0}
+        while (!SelectAreaState.breakFlag) {
+            Sleep(30)
+        }
+        SelectAreaHo.Hide()
+        SetSystemCursor()
+        Hotkey("*LButton", "Off")
+        Hotkey("*LButton Up", "Off")
+        Hotkey("*RButton", "Off")
+        MySoftData.ToolTipEndTime := 0
+        MainSoftData.SelectAreaAction := ""
+        ToolTip()
     }
     else {
         MySoftData.ToolTipEndTime := 0
         MainSoftData.SelectAreaAction := ""
+        SelectAreaState.breakFlag := true
+        SetTimer(SelectAreaDraw, 0)
+        Hotkey("*LButton", "Off")
+        Hotkey("*LButton Up", "Off")
+        Hotkey("*RButton", "Off")
+        SetSystemCursor()
+        SelectAreaHo.Hide()
+        ToolTip()
     }
 }
 
-SelectArea() {
+SelectAreaDown(*) {
+    global SelectAreaState
+    SelectAreaState.winPos := ""
+    SelectAreaState.firstPos := false
+    SetTimer(SelectAreaDraw, 30)
+}
+
+SelectAreaUp(*) {
+    global SelectAreaState
+    SetTimer(SelectAreaDraw, 0)
+
     action := MainSoftData.SelectAreaAction
-    TogSelectArea(false)
-    actionDown := OnBindKeyDown.Bind("LButton")
-    Hotkey("~LButton", actionDown, "On")
-    ; 获取起始点坐标
-    startX := startY := endX := endY := 0
-    CoordMode("Mouse", "Screen")
-    MouseGetPos(&startX, &startY)
-
-    ; 创建 GUI 用于绘制矩形框
-    MyGui := Gui("+ToolWindow -Caption +AlwaysOnTop -DPIScale")
-    MyGui.BackColor := "Red"
-    WinSetTransColor(" 150", MyGui)
-    MyGui.Opt("+LastFound")
-    GuiHwnd := WinExist()
-
-    ; 显示初始 GUI
-    MyGui.Show("NA x" startX " y" startY " w1 h1")
-
-    ; 跟踪鼠标移动
-    while GetKeyState("LButton", "P") {
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&endX, &endY)
-        width := Abs(endX - startX)
-        height := Abs(endY - startY)
-        x := Min(startX, endX)
-        y := Min(startY, endY)
-
-        MyGui.Show("NA x" x " y" y " w" width " h" height)
+    if (action != "") {
+        if (SelectAreaState.winPos != "") {
+            x1 := SelectAreaState.winPos.X
+            y1 := SelectAreaState.winPos.Y
+            x2 := x1 + SelectAreaState.winPos.W
+            y2 := y1 + SelectAreaState.winPos.H
+            action(x1, y1, x2, y2)
+        } else {
+            action(0, 0, 0, 0)
+        }
     }
-    ; 销毁 GUI
-    MyGui.Destroy()
-    ; 返回坐标
+    SelectAreaState.breakFlag := true
+}
 
-    x1 := Min(startX, endX)
-    y1 := Min(startY, endY)
-    x2 := Max(startX, endX)
-    y2 := Max(startY, endY)
-    action(x1, y1, x2, y2)
+SelectAreaCancel(*) {
+    global SelectAreaState
+    SelectAreaState.winPos := ""
+    SelectAreaUp()
+}
+
+SelectAreaDraw() {
+    global SelectAreaState
+    CoordMode("Mouse")
+    if (!SelectAreaState.firstPos) {
+        SelectAreaState.firstPos := true
+        mx := 0, my := 0
+        MouseGetPos(&mx, &my)
+        SelectAreaState.sx := mx
+        SelectAreaState.sy := my
+    } else {
+        ex := 0, ey := 0
+        MouseGetPos(&ex, &ey)
+        sx := SelectAreaState.sx, sy := SelectAreaState.sy
+        if (sx <= ex && sy <= ey)
+            SelectAreaState.winPos := {X: sx, Y: sy, W: ex - sx, H: ey - sy}
+        else if (sx > ex && sy <= ey)
+            SelectAreaState.winPos := {X: ex, Y: sy, W: sx - ex, H: ey - sy}
+        else if (sx <= ex && sy > ey)
+            SelectAreaState.winPos := {X: sx, Y: ey, W: ex - sx, H: sy - ey}
+        else if (sx > ex && sy > ey)
+            SelectAreaState.winPos := {X: ex, Y: ey, W: sx - ex, H: ey - sy}
+    }
+    if (SelectAreaState.winPos != "" && ObjHasOwnProp(SelectAreaState.winPos, "W") && SelectAreaState.winPos.W > 0 && SelectAreaState.winPos.H > 0) {
+        x1 := SelectAreaState.winPos.X
+        y1 := SelectAreaState.winPos.Y
+        x2 := x1 + SelectAreaState.winPos.W
+        y2 := y1 + SelectAreaState.winPos.H
+        SelectAreaHo.Show(x1, y1, x2, y2)
+        MySoftData.ToolTipText := "开始X:" x1 " 开始Y:" y1 "`n结束X:" x2 " 结束Y:" y2
+        MySoftData.ToolTipEndTime := A_TickCount + 5000
+    } else {
+        SelectAreaHo.Hide()
+    }
+}
+
+SetSystemCursor(Cursor:="") {
+    static SystemCursors := "32512IDC_ARROW|32513IDC_IBEAM|32514IDC_WAIT|32515IDC_CROSS|32516IDC_UPARROW|32642IDC_SIZENWSE|32643IDC_SIZENESW|32644IDC_SIZEWE|32645IDC_SIZENS|32646IDC_SIZEALL|32648IDC_NO|32649IDC_HAND|32650IDC_APPSTARTING|32651IDC_HELP"
+
+    if (Cursor == "")
+        return DllCall("SystemParametersInfo", "UInt", 0x57, "UInt", 0, "UInt", 0, "UInt", 0)
+
+    if (StrLen(SystemCursors) == 221) {
+        parts := StrSplit(SystemCursors, "|")
+        newParts := []
+        for _, part in parts {
+            cursorPtr := DllCall("LoadCursor", "UInt", 0, "Int", SubStr(part, 1, 5), "Ptr")
+            newParts.Push(Format("{} {}", cursorPtr, part))
+        }
+        SystemCursors := StrJoinSelectArea(newParts, "|")
+    }
+
+    p := (StrLen(SystemCursors) - 221) / 14
+    searchStr := "IDC_" Cursor "|"
+    pos := InStr(SystemCursors "|", searchStr)
+
+    if (!pos) {
+        MsgBox("无效的指针名字！", A_ScriptName " - SetSystemCursor(): Error", "Icon!")
+        return
+    }
+
+    cursorValue := SubStr(SystemCursors, pos - 5 - p, 5)
+
+    for part in StrSplit(SystemCursors, "|") {
+        DllCall("SetSystemCursor", "UInt", DllCall("CopyIcon", "UInt", cursorValue), "Int", SubStr(part, 6, p))
+    }
+}
+
+StrJoinSelectArea(arr, delimiter) {
+    if (arr.Length == 0)
+        return ""
+    result := arr[1]
+    loop arr.Length - 1 {
+        result .= delimiter arr[A_Index + 1]
+    }
+    return result
+}
+
+class HighlightOutlineSelectArea {
+    __New(Color:="Red", Transparent:=255) {
+        this.Guis := []
+        loop 4 {
+            MyGui := Gui("-Caption +AlwaysOnTop +ToolWindow -DPIScale +E0x20 +E0x00080000")
+            MyGui.BackColor := Color
+            GuiHwnd := MyGui.Hwnd
+            DllCall("SetLayeredWindowAttributes", "Ptr", GuiHwnd, "Uint", 0, "Uchar", Transparent, "int", 2)
+            this.Guis.Push(MyGui)
+        }
+    }
+
+    Show(x1, y1, x2, y2, b:=3) {
+        this.Guis[1].Show("NA x" (x1 - b) " y" (y1 - b) " w" (x2 - x1 + b * 2) " h" b)
+        this.Guis[2].Show("NA x" x2 " y" y1 " w" b " h" (y2 - y1))
+        this.Guis[3].Show("NA x" (x1 - b) " y" y2 " w" (x2 - x1 + 2 * b) " h" b)
+        this.Guis[4].Show("NA x" (x1 - b) " y" y1 " w" b " h" (y2 - y1))
+    }
+
+    Hide() {
+        for MyGui in this.Guis {
+            MyGui.Hide()
+        }
+    }
 }
 
 SimpleRecordMacroStr(MacroStr) {
