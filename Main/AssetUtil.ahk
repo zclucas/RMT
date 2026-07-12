@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #Include "DataClass.ahk"
 #Include Util\ExcelUtil.ahk
 #Include Util\SerialUtil.ahk
@@ -247,39 +247,19 @@ SplitMacro(macroStr) {
 
 SplitCommand(macro) {
     realKey := ""
-    
-    ; 优化：使用预构建的SpecialKeyPrefixMap快速定位可能的特殊键（避免遍历全部20个键）
-    static SpecialKeyPrefixMap := ""
-    if (SpecialKeyPrefixMap == "") {
-        SpecialKeyPrefixMap := Map()
-        for key in MySoftData.SpecialKeyMap
-            SpecialKeyPrefixMap.Set(SubStr(key, 1, 4), true)
-    }
-    
-    ; 只检查前4个字符匹配的特殊键（大幅缩小搜索范围）
-    prefix := SubStr(macro, 1, 4)
-    if (SpecialKeyPrefixMap.Has(prefix)) {
-        for key in MySoftData.SpecialKeyMap {
-            if (SubStr(key, 1, 4) != prefix)
-                continue
-            
-            newMacro := StrReplace(macro, key, "flagSymbol")
-            if (newMacro != macro) {
-                realKey := key
-                break
-            }
-        }
-    } else {
-        ; 前缀不匹配时，只做一次简短检查（处理非标准情况）
-        for key in MySoftData.SpecialKeyMap {
-            if (StrLen(key) > 6)  ; 跳过长键名（Browser_*等已在上面的前缀检查中覆盖）
-                continue
-                
-            newMacro := StrReplace(macro, key, "flagSymbol")
-            if (newMacro != macro) {
-                realKey := key
-                break
-            }
+    newMacro := macro
+
+    ; 直接遍历全部20个特殊键做 InStr 包含检测。
+    ; 原本的前4字符前缀优化是取 macro 开头的字符，但当特殊键不在指令开头时
+    ; （例如 "按键_Launch_App2_点击_100"，前4字符为 "按键_L" 而非 "Laun"），
+    ; 会导致所有长键名（Launch_App2 等）全部被漏检。
+    ; SpecialKeyMap 只有 20 个键，直接遍历性能完全足够。
+    for key in MySoftData.SpecialKeyMap {
+        replaced := StrReplace(macro, key, "flagSymbol")
+        if (replaced != macro) {
+            realKey := key
+            newMacro := replaced
+            break
         }
     }
 
