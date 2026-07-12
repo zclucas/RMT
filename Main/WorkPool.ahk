@@ -798,11 +798,7 @@ class WorkPool {
                     case "MC":
                         MacroCount(args[1])
                     case "JY":
-                        seq := Integer(args[2])
-                        if (seq <= wd.lastJoySeq)
-                            continue
-                        wd.lastJoySeq := seq
-                        ViGJoySetState(args[3], args[4], args[5])
+                        ViGJoySetState(args[1], args[2], args[3])
                     case "SA":
                         arr := []
                         count := Integer(args[2])

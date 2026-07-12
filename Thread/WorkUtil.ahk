@@ -165,7 +165,6 @@
 
     MsgSendHandler(action, args*) {
         global rx, workIndex
-        static joySeqCounter := 0
 
         static actionMap := Map(
             "SetArray", "SA",
@@ -192,57 +191,53 @@
         opcode := actionMap.Has(action) ? actionMap[action] : action
         realArgs := []
 
-        if (opcode == "JY") {
-            joySeqCounter++
-            realArgs.Push(workIndex, joySeqCounter)
-            for a in args
-                realArgs.Push(a)
-        } else if (opcode == "SV") {
-            commands := []
-            nameArr := args[1]
-            valueArr := args[2]
-            loop nameArr.Length {
-                commands.Push(EncodeCommand("SV", nameArr[A_Index], valueArr[A_Index]))
-            }
-            payload := EncodeBatch(commands*)
-            rx.Push(MsgType.EVENT, 0, payload)
-            MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
-            return
-        } else if (opcode == "DV") {
-            commands := []
-            nameArr := args[1]
-            loop nameArr.Length {
-                commands.Push(EncodeCommand("DV", nameArr[A_Index]))
-            }
-            payload := EncodeBatch(commands*)
-            rx.Push(MsgType.EVENT, 0, payload)
-            MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
-            return
-        } else if (opcode == "SA") {
-            name := args[1]
-            arr := GetArray(args[2])
-            realArgs.Push(name, arr.Length)
-            for item in arr
-                realArgs.Push(item)
-        } else if (opcode == "CA") {
-            realArgs.Push(args[1], args[2])
-        } else if (opcode == "MA" || opcode == "IA") {
-            path := args[2] "." args[3]
-            realArgs.Push(args[1], path, args[5])
-        } else if (opcode == "RA") {
-            path := args[2] "." args[3]
-            realArgs.Push(args[1], path)
-        } else if (opcode == "GB") {
-            tIdx := args[1]
-            iIdx := args[2]
-            branchCount := args[3]
-            nodeSerialArr := args[4]
-            realArgs.Push(tIdx, iIdx, branchCount)
-            for ns in nodeSerialArr
-                realArgs.Push(ns)
-        } else {
-            for a in args
-                realArgs.Push(a)
+        switch opcode {
+            case "SV":
+                commands := []
+                nameArr := args[1]
+                valueArr := args[2]
+                loop nameArr.Length {
+                    commands.Push(EncodeCommand("SV", nameArr[A_Index], valueArr[A_Index]))
+                }
+                payload := EncodeBatch(commands*)
+                rx.Push(MsgType.EVENT, 0, payload)
+                MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+                return
+            case "DV":
+                commands := []
+                nameArr := args[1]
+                loop nameArr.Length {
+                    commands.Push(EncodeCommand("DV", nameArr[A_Index]))
+                }
+                payload := EncodeBatch(commands*)
+                rx.Push(MsgType.EVENT, 0, payload)
+                MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+                return
+            case "SA":
+                name := args[1]
+                arr := GetArray(args[2])
+                realArgs.Push(name, arr.Length)
+                for item in arr
+                    realArgs.Push(item)
+            case "CA":
+                realArgs.Push(args[1], args[2])
+            case "MA", "IA":
+                path := args[2] "." args[3]
+                realArgs.Push(args[1], path, args[5])
+            case "RA":
+                path := args[2] "." args[3]
+                realArgs.Push(args[1], path)
+            case "GB":
+                tIdx := args[1]
+                iIdx := args[2]
+                branchCount := args[3]
+                nodeSerialArr := args[4]
+                realArgs.Push(tIdx, iIdx, branchCount)
+                for ns in nodeSerialArr
+                    realArgs.Push(ns)
+            default:
+                for a in args
+                    realArgs.Push(a)
         }
 
         cmd := EncodeCommand(opcode, realArgs*)
