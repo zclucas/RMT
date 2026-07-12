@@ -17,29 +17,12 @@ class RingBuffer {
         this.bufPtr := ptr + 192
         this.cap := cap
         this.mask := cap - 1
-
-        static mcodeHex := A_PtrSize == 8
-            ? "89D0F08701C3"
-            : "8B4424088B542404F08702C3"
-        this.pXchg := DllCall("GlobalAlloc", "uint", 0, "ptr", StrLen(mcodeHex) // 2, "ptr")
-        loop StrLen(mcodeHex) // 2
-            NumPut("uchar", "0x" . SubStr(mcodeHex, (A_Index - 1) * 2 + 1, 2), this.pXchg, A_Index - 1)
-        DllCall("VirtualProtect", "ptr", this.pXchg, "ptr", StrLen(mcodeHex) // 2, "uint", 0x40, "uint*", 0)
-    }
-
-    __Delete() {
-        if (this.pXchg)
-            DllCall("GlobalFree", "ptr", this.pXchg)
     }
 
     GetHead() => NumGet(this.headPtr, "UInt")
     SetHead(v) => NumPut("UInt", v, this.headPtr)
     GetTail() => NumGet(this.tailPtr, "UInt")
     SetTail(v) => NumPut("UInt", v, this.tailPtr)
-
-    ExchangeNotifyFlag(v) => DllCall(this.pXchg, "ptr", this.notifyFlagPtr, "int", v, "int")
-    SetNotifyFlag(v) => NumPut("Int", v, this.notifyFlagPtr)
-
     IsEmpty() => this.GetHead() == this.GetTail()
 
     ; Push: [Type][ID][hEvent][Len][Payload]
@@ -51,7 +34,6 @@ class RingBuffer {
         head := this.GetHead()
         tail := this.GetTail()
 
-        ; Unsigned 32-bit safe size
         size := (head - tail) & 0xFFFFFFFF
         if (size + total + 8 >= this.cap)
             return false
@@ -131,13 +113,9 @@ CloseHandle(h) {
 /*
 ====================================================================
 R1 輕量化分隔符協定 (取代 JSON)
-- 徹底移除底層通訊對 JSON 序列化/反序列化的依賴，解決字串解析效能瓶頸。
 - 採用自訂分隔符：`0x01` (欄位分隔)、`0x02` (指令分隔)、`0x03` (轉義字元)。
 - 實作防錯的 Escape/Unescape 迴圈解析器 (EscapeIPC / UnescapeIPC)，能正確處理尾端損壞的封包。
-- 指令重構：全面改用雙字元 Opcode (如 SV、SA、JY、TR 等) 進行封包路由與分派。
-
-陣列同步優化
-- 支援無限多維嵌套陣列同步：廢除原本受限於二維的 MainIndex/Index 系統，改用點狀路徑 (Dot Path, 如 1.2.3)。
+- 指令重構：改用雙字元 Opcode (如 SV、SA、JY、TR 等) 進行封包路由與分派。
 ====================================================================
 */
 

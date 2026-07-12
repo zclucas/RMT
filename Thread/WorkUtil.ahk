@@ -21,17 +21,6 @@
         }
     }
 
-    MapArgs(args) {
-        result := Map()
-        for arg in args {
-            p := StrSplit(arg, "=", , 2)
-            if (p.Length == 2) {
-                result[p[1]] := p[2]
-            }
-        }
-        return result
-    }
-
     InitWorkFilePath() {
         global VBSPath := A_WorkingDir "\..\MinTool\PlayAudio.vbs"
         global StartTipAudio := A_WorkingDir "\..\Audio\Start.wav"
@@ -186,7 +175,7 @@
             "Joy", "JY"
         )
 
-        opcode := actionMap.Has(action) ? actionMap[action] : action
+        opcode := actionMap[action]
         realArgs := []
 
         switch opcode {
