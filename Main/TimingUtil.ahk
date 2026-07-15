@@ -1,43 +1,52 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
-global MyTimingScheduler := ""
+global MyTimingScheduler := TimingScheduler()
 
 TimingCheck() {
-    if ((tableIndex := GetTimingTableIndex()) == "")
+    if ((tableIndex := GetTimingTableIndex()) = "")
         return
 
     tableItem := MySoftData.TableInfo[tableIndex]
     HandleOnSoftStart(tableItem)
 
-    global MyTimingScheduler
-    if (IsObject(MyTimingScheduler))
-        MyTimingScheduler.Stop()
-
-    MyTimingScheduler := TimingScheduler(tableIndex)
-    MyTimingScheduler.Start()
+    MyTimingScheduler.Start(tableIndex)
 }
 
 class TimingScheduler {
 
-    __New(tableIndex) {
-        this.tableIndex := tableIndex
+    __New() {
+        this.tableIndex := 0
         this.heap := MinHeap()
         this.timerFunc := ObjBindMethod(this, "OnTimer")
         this.endCheckTimerFunc := ObjBindMethod(this, "OnEndCheck")
         this.running := false
+        this.needEndCheck := false
     }
 
-    Start() {
+    Start(tableIndex) {
+        this.StopTimers()
+
+        this.tableIndex := tableIndex
         this.running := true
+        this.needEndCheck := false
+
         this.Rebuild()
-        SetTimer(this.endCheckTimerFunc, 1000)
+
+        if (this.needEndCheck)
+            SetTimer(this.endCheckTimerFunc, 1000)
     }
 
     Stop() {
         this.running := false
+        this.needEndCheck := false
+        this.tableIndex := 0
+        this.StopTimers()
+        this.heap.Clear()
+    }
+
+    StopTimers() {
         SetTimer(this.timerFunc, 0)
         SetTimer(this.endCheckTimerFunc, 0)
-        this.heap.Clear()
     }
 
     Rebuild() {
@@ -46,19 +55,21 @@ class TimingScheduler {
 
         SetTimer(this.timerFunc, 0)
         this.heap.Clear()
+        this.needEndCheck := false
 
         tableItem := MySoftData.TableInfo[this.tableIndex]
         now := UnixNow()
 
         for index, _ in tableItem.ModeArr {
-
             if (!TimingCheckItemIfValid(tableItem, index))
                 continue
 
             Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
 
-            nextTime := CalculateNextStamp(Data, now)
+            if (Data.HasOwnProp("EndStamp") && Data.EndStamp)
+                this.needEndCheck := true
 
+            nextTime := CalculateNextStamp(Data, now)
             if (nextTime)
                 this.heap.Push({ time: nextTime, index: index })
         }
@@ -71,7 +82,6 @@ class TimingScheduler {
             return
 
         next := this.heap.Peek()
-
         delay := (next.time - UnixNow()) * 1000
         if (delay < 1)
             delay := 1
@@ -86,14 +96,17 @@ class TimingScheduler {
         tableItem := MySoftData.TableInfo[this.tableIndex]
         now := UnixNow()
 
-        while (!this.heap.IsEmpty() && this.heap.Peek().time <= now) {
+        while (!this.heap.IsEmpty()) {
+            next := this.heap.Peek()
+            if (next.time > now)
+                break
 
             item := this.heap.Pop()
             index := item.index
 
             Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
 
-            if (Data.EndTime != "" && now >= TimeStrToStamp(Data.EndTime))
+            if (Data.HasOwnProp("EndStamp") && now >= Data.EndStamp)
                 continue
 
             shouldTrigger := true
@@ -107,7 +120,6 @@ class TimingScheduler {
                 TriggerMacroHandler(this.tableIndex, index)
 
             nextTime := CalculateNextStamp(Data, item.time)
-
             if (nextTime)
                 this.heap.Push({ time: nextTime, index: index })
         }
@@ -116,14 +128,13 @@ class TimingScheduler {
     }
 
     OnEndCheck() {
-        if (!this.running)
+        if (!this.running || !this.needEndCheck)
             return
 
         tableItem := MySoftData.TableInfo[this.tableIndex]
         now := UnixNow()
 
         for index, _ in tableItem.ModeArr {
-
             if (!TimingCheckItemIfValid(tableItem, index))
                 continue
 
@@ -132,7 +143,7 @@ class TimingScheduler {
 
             Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
 
-            if (Data.EndTime == "" || now < TimeStrToStamp(Data.EndTime))
+            if (!Data.HasOwnProp("EndStamp") || now < Data.EndStamp)
                 continue
 
             if (index <= tableItem.IsWorkIndexArr.Length && tableItem.IsWorkIndexArr[index] != 0)
@@ -209,7 +220,7 @@ class MinHeap {
 }
 
 CalculateNextStamp(Data, baseStamp) {
-    start := TimeStrToStamp(Data.StartTime)
+    start := Data.StartStamp
 
     if (baseStamp < start) ; 還沒開始
         return CheckEnd(Data, start)
@@ -240,19 +251,12 @@ NextMonthTime(start, baseStamp, interval) {
     baseStr := StampToTimeStr(baseStamp)
 
     monthsDiff := DateDiff(baseStr, startStr, "Months")
-
     nextStr := DateAdd(startStr, ((monthsDiff // interval) + 1) * interval, "Months")
     return TimeStrToStamp(nextStr)
 }
 
 CheckEnd(Data, nextTime) {
-    ; if (!nextTime) ; 一定會 > 0 所以沒意義
-    ;     return 0
-
-    if (Data.EndTime != "" && nextTime >= TimeStrToStamp(Data.EndTime))
-        return 0
-
-    return nextTime
+    return (Data.HasOwnProp("EndStamp") && nextTime >= Data.EndStamp) ? 0 : nextTime
 }
 
 UnixNow() {
@@ -268,15 +272,15 @@ StampToTimeStr(stamp) {
 }
 
 GetTimingInterval(Data) {
-    IntervalMap := [1, 60, 3600, 86400, 604800] ; 秒 分 時 天 週
+    static IntervalMap := [1, 60, 3600, 86400, 604800] ; 秒 分 時 天 週
     return Data.CustomInterval * IntervalMap[Data.CustomUnit]
 }
 
 TimingCheckItemIfValid(tableItem, index) {
-    return !GetItemFoldForbidState(tableItem, index)
-        && !tableItem.ForbidArr[index]
-        && tableItem.MacroArr.Length >= index
-        && tableItem.MacroArr[index] != ""
+    return (index <= tableItem.MacroArr.Length)
+        && (tableItem.MacroArr[index] != "")
+        && (index > tableItem.ForbidArr.Length || !tableItem.ForbidArr[index])
+        && !GetItemFoldForbidState(tableItem, index)
 }
 
 HandleOnSoftStart(tableItem) {

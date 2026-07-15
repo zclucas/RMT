@@ -66,9 +66,7 @@ OnSuspendHotkey(*) {
     UIControls.SuspendToggle.Value := MainSoftData.IsSuspend
     if (MainSoftData.IsSuspend) {
         OnKillAllMacro()
-        global MyTimingScheduler
-        if (IsObject(MyTimingScheduler))
-            MyTimingScheduler.Stop()
+        MyTimingScheduler.Stop()
         A_TrayMenu.Check(GetLang("休眠"))
         TraySetIcon("Images\Soft\IcoPause.ico")
     }

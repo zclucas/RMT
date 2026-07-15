@@ -818,12 +818,11 @@ class BGKeyData {
 class TimingData {
     __New() {
         this.SerialStr := ""
-        this.StartTime := A_Now
-        this.EndTime := ""
-        this.Type := 1  ;1单次 2每小时 3每天 4每周 5每月 6自定义
-        this.CustomInterval := "10"
-        this.CustomUnit := 2            ; 1: 秒 2: 分钟 3: 小時 4: 天 5: 週
-        this.NextTriggerTime := ""
+        this.StartStamp := DateDiff(A_Now, "19700101000000", "Seconds")  ; Unix timestamp
+        this.EndStamp := 0                                                 ; 0 = no end, omitted in JSON
+        this.Type := 1  ;1单次 2软件启动时 3自定义
+        this.CustomInterval := "10"  ; only relevant when Type == 3
+        this.CustomUnit := 2         ; 1:秒 2:分钟 3:小時 4:天 5:週 6:月
     }
 }
 

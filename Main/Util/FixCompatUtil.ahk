@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 CompatGetData(LineStr, FilePath) {
     FoundPos := InStr(LineStr, "=")
@@ -301,58 +301,20 @@ CompatTiming(filePath) {
             continue
 
         curFix := false
-        ; Upgrade 12-char timestamps to 14-char
-        if (StrLen(Data.StartTime) == 12) {
-            Data.StartTime .= "00"
-            curFix := true
-        }
-        if (Data.EndTime != "" && StrLen(Data.EndTime) == 12) {
-            Data.EndTime .= "00"
-            curFix := true
-        }
 
-        ; Ensure CustomUnit exists
-        if (!ObjHasOwnProp(Data, "CustomUnit")) {
-            Data.CustomUnit := 2 ; Default to Minutes
+        if (Data.HasOwnProp("StartTime")) {
+            Data.StartStamp := TimeStrToStamp(Data.StartTime)
+            Data.DeleteProp("StartTime")
             curFix := true
         }
-
-        ; Migrate old types to new scheme (1: Once, 2: Startup, 3: Custom)
-        if (Data.Type >= 2 && Data.Type <= 5) {
-            oldType := Data.Type
-            Data.Type := 3 ; Custom
-            Data.CustomInterval := 1
-            if (oldType == 2) ; Hourly
-                Data.CustomUnit := 3
-            else if (oldType == 3) ; Daily
-                Data.CustomUnit := 4
-            else if (oldType == 4) ; Weekly
-                Data.CustomUnit := 5
-            else if (oldType == 5) ; Monthly
-                Data.CustomUnit := 6
-            curFix := true
-        } else if (Data.Type == 6) { ; Old Startup
-            Data.Type := 2
-            curFix := true
-        } else if (Data.Type == 7) { ; Old Custom
-            Data.Type := 3
+        if (Data.HasOwnProp("EndTime")) {
+            Data.EndStamp := (Data.EndTime != "" ? TimeStrToStamp(Data.EndTime) : 0)
+            Data.DeleteProp("EndTime")
             curFix := true
         }
-
-        ; Force re-calculation of relative stamps
-        if (curFix || Data.HasOwnProp("StartStamp")) {
-            if (Data.HasOwnProp("StartStamp")) {
-                Data.DeleteProp("StartStamp")
-                curFix := true
-            }
-            if (Data.HasOwnProp("EndStamp")) {
-                Data.DeleteProp("EndStamp")
-                curFix := true
-            }
-            if (Data.HasOwnProp("NextStamp")) {
-                Data.DeleteProp("NextStamp")
-                curFix := true
-            }
+        if (Data.HasOwnProp("NextStamp")) {
+            Data.DeleteProp("NextStamp")
+            curFix := true
         }
 
         hasFix := hasFix || curFix

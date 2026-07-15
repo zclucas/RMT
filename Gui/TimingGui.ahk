@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 class TimingGui {
     __new() {
@@ -28,11 +28,11 @@ class TimingGui {
         this.SerialStr := SerialStr != "" ? SerialStr : GetCMDSerialStr("Timing")
         this.Data := this.GetTimingData(this.SerialStr)
 
-        this.StartTimeCon.Value := this.Data.StartTime
-        this.EndTimeCon.Value := this.Data.EndTime
-        this.TypeCon.Value := this.Data.Type
-        this.CustomIntervalCon.Value := this.Data.CustomInterval
-        this.IntervalUnitCon.Value := this.Data.CustomUnit
+        this.StartTimeCon.Value      := StampToTimeStr(this.Data.StartStamp)
+        this.EndTimeCon.Value        := (this.Data.HasOwnProp("EndStamp") && this.Data.EndStamp) ? StampToTimeStr(this.Data.EndStamp) : ""
+        this.TypeCon.Value           := this.Data.Type
+        this.CustomIntervalCon.Value := this.Data.HasOwnProp("CustomInterval") ? this.Data.CustomInterval : "10"
+        this.IntervalUnitCon.Value   := this.Data.HasOwnProp("CustomUnit")     ? this.Data.CustomUnit     : 2
     }
 
     AddGui() {
@@ -111,16 +111,29 @@ class TimingGui {
 
     SaveTimingData() {
         Data := this.Data
-        Data.StartTime := FormatTime(this.StartTimeCon.Value, "yyyyMMddHHmmss")
-        Data.EndTime := this.EndTimeCon.Value == "" ? "" : FormatTime(this.EndTimeCon.Value, "yyyyMMddHHmmss")
+        ; Convert AHK datetime string from controls to Unix stamps for storage
+        Data.StartStamp := TimeStrToStamp(FormatTime(this.StartTimeCon.Value, "yyyyMMddHHmmss"))
+        Data.EndStamp   := this.EndTimeCon.Value == "" ? 0 : TimeStrToStamp(FormatTime(this.EndTimeCon.Value, "yyyyMMddHHmmss"))
         Data.Type := this.TypeCon.Value
         Data.CustomInterval := this.CustomIntervalCon.Value
         Data.CustomUnit := this.IntervalUnitCon.Value
-        saveStr := JSON.stringify(Data, 0)
-        IniWrite(saveStr, TimingFile, IniSection, Data.SerialStr)
-        if (MySoftData.DataCacheMap.Has(this.Data.SerialStr)) {
-            MySoftData.DataCacheMap.Delete(this.Data.SerialStr)
+
+        ; Build a minimal object — only save fields that are actually needed
+        minimal := {}
+        minimal.StartStamp := Data.StartStamp
+        minimal.Type       := Data.Type
+        if (Data.EndStamp)                ; omit when 0 (no end)
+            minimal.EndStamp := Data.EndStamp
+        if (Data.Type == 3) {             ; custom repeat only
+            minimal.CustomInterval := Data.CustomInterval
+            minimal.CustomUnit     := Data.CustomUnit
         }
+
+        saveStr := JSON.stringify(minimal, 0)
+        IniWrite(saveStr, TimingFile, IniSection, Data.SerialStr)
+
+        if (MySoftData.DataCacheMap.Has(this.Data.SerialStr))
+            MySoftData.DataCacheMap.Delete(this.Data.SerialStr)
     }
 
     GetTimingData(SerialStr) {
@@ -132,6 +145,17 @@ class TimingGui {
         }
 
         data := JSON.parse(saveStr, , false)
+
+        ; SerialStr is omitted from JSON to avoid redundancy — restore it from the INI key
+        data.SerialStr := SerialStr
+
+        ; Migrate legacy StartTime/EndTime string fields to StartStamp/EndStamp
+        if (data.HasOwnProp("StartTime") && !data.HasOwnProp("StartStamp")) {
+            data.StartStamp := TimeStrToStamp(data.StartTime)
+            if (data.HasOwnProp("EndTime") && data.EndTime != "")
+                data.EndStamp := TimeStrToStamp(data.EndTime)
+        }
+
         return data
     }
 }
