@@ -4,6 +4,7 @@ global RMT_VERSION := "1.2F19"
 ; SelfCheckMissingFiles()   ;开发日常注释，打正式包启用，方便动态修改一些文件
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
+#Include Main\MainGlobalUtil.ahk
 
 InitFilePath()              ;初始化文件路径
 LoadCurMacroSetting()       ;加载当前配置宏，宏指令
@@ -15,7 +16,6 @@ SetEditData()               ;缓存编辑器数据，设置下拉框变量，检
 
 ;放后面初始化，因为这初始化时间比较长
 PluginInit()
-global MyTimingScheduler := TimingScheduler(GetTimingTableIndex()) ; Work不需要
 MyTimingScheduler.Start()
 BindKey()           ;绑定快捷键
 
