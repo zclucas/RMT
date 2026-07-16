@@ -8,7 +8,6 @@ class TimingScheduler {
         this.timerFunc := ObjBindMethod(this, "OnTimer")
         this.endCheckTimerFunc := ObjBindMethod(this, "OnEndCheck")
         this.running := false
-        this.needEndCheck := false
     }
 
     Start() {
@@ -27,7 +26,6 @@ class TimingScheduler {
 
     Stop() {
         this.running := false
-        this.needEndCheck := false
         this.StopTimers()
         this.heap.Clear()
     }
@@ -55,7 +53,6 @@ class TimingScheduler {
     Rebuild() {
         this.StopTimers()
         this.heap.Clear()
-        this.needEndCheck := false
 
         tableItem := MySoftData.TableInfo[this.tableIndex]
         now := UnixNow()
@@ -65,9 +62,6 @@ class TimingScheduler {
                 continue
 
             Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
-
-            if (Data.HasOwnProp("EndStamp") && Data.EndStamp)
-                this.needEndCheck := true
 
             nextTime := CalculateNextStamp(Data, now)
             if (nextTime)
@@ -88,7 +82,7 @@ class TimingScheduler {
     }
 
     ScheduleEndCheck() {
-        if (!this.running || !this.needEndCheck) {
+        if (!this.running) {
             SetTimer(this.endCheckTimerFunc, 0)
             return
         }
@@ -114,7 +108,6 @@ class TimingScheduler {
 
         if (!nextEnd) {
             SetTimer(this.endCheckTimerFunc, 0)
-            this.needEndCheck := false
             return
         }
 
@@ -170,7 +163,7 @@ class TimingScheduler {
     }
 
     OnEndCheck() {
-        if (!this.running || !this.needEndCheck)
+        if (!this.running)
             return
 
         tableItem := MySoftData.TableInfo[this.tableIndex]
