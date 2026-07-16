@@ -71,7 +71,7 @@ OnSuspendHotkey(*) {
         TraySetIcon("Images\Soft\IcoPause.ico")
     }
     else {
-        TimingCheck()
+        MyTimingScheduler.Start()
         A_TrayMenu.Uncheck(GetLang("休眠"))
         TraySetIcon("Images\Soft\rabit.ico")
     }
@@ -92,6 +92,13 @@ OnPauseHotKey(*) {
         for index, value in tableItem.ModeArr {
             SetItemPauseState(tableItem.index, index, MainSoftData.IsPause)
         }
+    }
+
+    if (MainSoftData.IsPause) {
+        MyTimingScheduler.Suspend()
+    }
+    else {
+        MyTimingScheduler.Resume()
     }
 
     tipStr := MainSoftData.IsPause ? GetLang("暂停所有宏") : GetLang("取消所有暂停")

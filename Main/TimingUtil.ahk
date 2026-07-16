@@ -1,21 +1,9 @@
 #Requires AutoHotkey v2.0
 
-global MyTimingScheduler := TimingScheduler()
-
-TimingCheck() {
-    if ((tableIndex := GetTimingTableIndex()) = "")
-        return
-
-    tableItem := MySoftData.TableInfo[tableIndex]
-    HandleOnSoftStart(tableItem)
-
-    MyTimingScheduler.Start(tableIndex)
-}
-
 class TimingScheduler {
 
-    __New() {
-        this.tableIndex := 0
+    __New(tableIndex) {
+        this.tableIndex := tableIndex
         this.heap := MinHeap()
         this.timerFunc := ObjBindMethod(this, "OnTimer")
         this.endCheckTimerFunc := ObjBindMethod(this, "OnEndCheck")
@@ -23,25 +11,40 @@ class TimingScheduler {
         this.needEndCheck := false
     }
 
-    Start(tableIndex) {
-        this.StopTimers()
+    Start() {
+        if (this.running)
+            return
 
-        this.tableIndex := tableIndex
+        if (this.tableIndex = "")
+            return
+        tableItem := MySoftData.TableInfo[this.tableIndex]
+        HandleOnSoftStart(tableItem)
+
         this.running := true
-        this.needEndCheck := false
 
         this.Rebuild()
-
-        if (this.needEndCheck)
-            SetTimer(this.endCheckTimerFunc, 1000)
     }
 
     Stop() {
         this.running := false
         this.needEndCheck := false
-        this.tableIndex := 0
         this.StopTimers()
         this.heap.Clear()
+    }
+
+    Suspend() {
+        if (!this.running)
+            return
+        this.running := true
+        this.StopTimers()
+    }
+
+    Resume() {
+        if (this.running)
+            return
+        this.running := false
+        this.ScheduleNext()
+        this.ScheduleEndCheck()
     }
 
     StopTimers() {
@@ -50,10 +53,7 @@ class TimingScheduler {
     }
 
     Rebuild() {
-        if (!this.running)
-            return
-
-        SetTimer(this.timerFunc, 0)
+        this.StopTimers()
         this.heap.Clear()
         this.needEndCheck := false
 
@@ -75,6 +75,7 @@ class TimingScheduler {
         }
 
         this.ScheduleNext()
+        this.ScheduleEndCheck()
     }
 
     ScheduleNext() {
@@ -83,10 +84,51 @@ class TimingScheduler {
 
         next := this.heap.Peek()
         delay := (next.time - UnixNow()) * 1000
-        if (delay < 1)
-            delay := 1
+        this.SetOneShotTimer(this.timerFunc, delay)
+    }
 
-        SetTimer(this.timerFunc, -delay)
+    ScheduleEndCheck() {
+        if (!this.running || !this.needEndCheck) {
+            SetTimer(this.endCheckTimerFunc, 0)
+            return
+        }
+
+        tableItem := MySoftData.TableInfo[this.tableIndex]
+        now := UnixNow()
+        nextEnd := 0
+
+        for index, _ in tableItem.ModeArr {
+            if (!TimingCheckItemIfValid(tableItem, index))
+                continue
+
+            if (index <= tableItem.ColorStateArr.Length && tableItem.ColorStateArr[index] == 3)
+                continue
+
+            Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
+            if (!Data.HasOwnProp("EndStamp") || !Data.EndStamp)
+                continue
+
+            if (!nextEnd || Data.EndStamp < nextEnd)
+                nextEnd := Data.EndStamp
+        }
+
+        if (!nextEnd) {
+            SetTimer(this.endCheckTimerFunc, 0)
+            this.needEndCheck := false
+            return
+        }
+
+        delay := (nextEnd - now) * 1000
+        this.SetOneShotTimer(this.endCheckTimerFunc, delay)
+    }
+
+    SetOneShotTimer(timerFunc, delayMs) {
+        if (delayMs < 1)
+            delayMs := 1
+        else if (delayMs > 2147483647)
+            delayMs := 2147483647 ; SetTimer 可用的最大毫秒數上限
+
+        SetTimer(timerFunc, -delayMs)
     }
 
     OnTimer() {
@@ -149,6 +191,9 @@ class TimingScheduler {
             if (index <= tableItem.IsWorkIndexArr.Length && tableItem.IsWorkIndexArr[index] != 0)
                 MyStopMacro(this.tableIndex, index)
         }
+
+        ; 只在真正需要時重新搜尋下一個 EndStamp，避免每秒掃描
+        this.ScheduleEndCheck()
     }
 }
 
