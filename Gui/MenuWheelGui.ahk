@@ -27,16 +27,16 @@ class MenuWheelGui {
     ShowRadialMenu(MenuIndex) {
         this.MenuIndex := MenuIndex
         this.showTooltip := !!MainSoftData.MenuWheelShowTooltip
-        this.selectMode := MySoftData.HasProp("MenuWheelSelectMode") ? MainSoftData.MenuWheelSelectMode : 2
+        this.selectMode := MainSoftData.HasProp("MenuWheelSelectMode") ? MainSoftData.MenuWheelSelectMode : 2
         if (this.isOpen) {          ; 已有轮盘？先自清
             this.closed := true
             this._Cleanup()         ; 关闭旧窗 + sectors:=[] + 重置状态
         }
-        
+
         tableItem := MySoftData.TableInfo[3]
 
         ; 从 WheelThemes.ini 读取当前主题的颜色值
-        themeKey := MySoftData.HasProp("MenuWheelTheme") ? MainSoftData.MenuWheelTheme : "Default"
+        themeKey := MainSoftData.HasProp("MenuWheelTheme") ? MainSoftData.MenuWheelTheme : "Default"
         themesIniPath := A_WorkingDir "\Setting\WheelThemes.ini"
         themeSection := "Theme_" themeKey
         modNormalFill := IniRead(themesIniPath, themeSection, "NormalFill", "#FFFCFCFC")

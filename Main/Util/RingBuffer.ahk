@@ -55,7 +55,7 @@ class RingBuffer {
         NumPut("UInt", id, this.bufPtr, pos + 4)
         NumPut("Int64", hEvent, this.bufPtr, pos + 8)
         NumPut("UInt", len, this.bufPtr, pos + 16)
-        StrPut(str, this.bufPtr + pos + 20)
+        StrPut(str, this.bufPtr + pos + 20, "UTF-16")
 
         this.SetHead(head + total)
         return true
@@ -81,7 +81,7 @@ class RingBuffer {
         id := NumGet(this.bufPtr, pos + 4, "UInt")
         hEvent := NumGet(this.bufPtr, pos + 8, "Int64")
         len := NumGet(this.bufPtr, pos + 16, "UInt")
-        str := StrGet(this.bufPtr + pos + 20)
+        str := StrGet(this.bufPtr + pos + 20, "UTF-16")
 
         total := (20 + len + 7) & ~7
         this.SetTail(tail + total)
@@ -118,37 +118,30 @@ R1 輕量化分隔符協定 (取代 JSON)
 - 指令重構：改用雙字元 Opcode (如 SV、SA、JY、TR 等) 進行封包路由與分派。
 ====================================================================
 */
+global IPC_SEP := Chr(1)
+global IPC_REC := Chr(2)
+global IPC_ESC := Chr(3)
 
 EscapeIPC(str) {
-    str := StrReplace(str, Chr(3), Chr(3) Chr(3))
-    str := StrReplace(str, Chr(1), Chr(3) Chr(1))
-    str := StrReplace(str, Chr(2), Chr(3) Chr(2))
+    str := StrReplace(str, IPC_ESC, IPC_ESC IPC_ESC)
+    str := StrReplace(str, IPC_SEP, IPC_ESC IPC_SEP)
+    str := StrReplace(str, IPC_REC, IPC_ESC IPC_REC)
     return str
 }
 
 UnescapeIPC(str) {
-    out := ""
-    escape := false
-    Loop Parse, str {
-        c := A_LoopField
-        if (escape) {
-            out .= c
-            escape := false
-        } else if (c == Chr(3)) {
-            escape := true
-        } else {
-            out .= c
-        }
+    if InStr(str, IPC_ESC) {
+        str := StrReplace(str, IPC_ESC IPC_REC, IPC_REC)
+        str := StrReplace(str, IPC_ESC IPC_SEP, IPC_SEP)
+        str := StrReplace(str, IPC_ESC IPC_ESC, IPC_ESC)
     }
-    if (escape)
-        out .= Chr(3)
-    return out
+    return str
 }
 
 EncodeCommand(opcode, args*) {
     packet := opcode
     for arg in args {
-        packet .= Chr(1) EscapeIPC(String(arg))
+        packet .= IPC_SEP EscapeIPC(String(arg))
     }
     return packet
 }
@@ -156,7 +149,7 @@ EncodeCommand(opcode, args*) {
 EncodeBatch(commands*) {
     packet := "R1"
     for cmd in commands {
-        packet .= Chr(2) cmd
+        packet .= IPC_REC cmd
     }
     return packet
 }

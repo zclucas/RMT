@@ -301,8 +301,6 @@ class WorkPool {
                 SetTimer(() => this.Dispatch(), -1)
             }
         }
-        if (this.taskQueue.Size() > 0 && this.freePool.Count > 0)
-            this.Dispatch()
     }
 
     ; 移除 freePool 中已失效的 Worker（进程退出或窗口不可达），并安排补建
@@ -759,11 +757,11 @@ class WorkPool {
             return
 
         commandsStr := SubStr(payload, 3)
-        for record in StrSplit(commandsStr, Chr(2)) {
+        for record in StrSplit(commandsStr, IPC_REC) {
             if (record == "")
                 continue
 
-            parts := StrSplit(record, Chr(1))
+            parts := StrSplit(record, IPC_SEP)
             if (parts.Length == 0)
                 continue
 

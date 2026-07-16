@@ -271,7 +271,7 @@ class MenuWheelGlobalSettingGui {
         this._showTooltip := !!MainSoftData.MenuWheelShowTooltip
         this._wheelScale := MainSoftData.MenuWheelScale
 
-        savedTheme := MySoftData.HasProp("MenuWheelTheme") ? MainSoftData.MenuWheelTheme : "Default"
+        savedTheme := MainSoftData.HasProp("MenuWheelTheme") ? MainSoftData.MenuWheelTheme : "Default"
         if (this._FindTheme(savedTheme) != "")
             this._currentTheme := savedTheme
 

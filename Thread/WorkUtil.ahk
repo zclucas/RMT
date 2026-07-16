@@ -281,10 +281,10 @@
                 return
             }
             commandsStr := SubStr(cmd, 3)
-            for record in StrSplit(commandsStr, Chr(2)) {
+            for record in StrSplit(commandsStr, IPC_REC) {
                 if (record == "")
                     continue
-                parts := StrSplit(record, Chr(1))
+                parts := StrSplit(record, IPC_SEP)
                 if (parts.Length == 0)
                     continue
                 opcode := parts[1]
@@ -326,11 +326,11 @@
             return
 
         commandsStr := SubStr(cmd, 3)
-        for record in StrSplit(commandsStr, Chr(2)) {
+        for record in StrSplit(commandsStr, IPC_REC) {
             if (record == "")
                 continue
 
-            parts := StrSplit(record, Chr(1))
+            parts := StrSplit(record, IPC_SEP)
             if (parts.Length == 0)
                 continue
 
@@ -519,10 +519,10 @@
                         try {
                             if (SubStr(payload, 1, 2) == "R1") {
                                 commandsStr := SubStr(payload, 3)
-                                for record in StrSplit(commandsStr, Chr(2)) {
+                                for record in StrSplit(commandsStr, IPC_REC) {
                                     if (record == "")
                                         continue
-                                    parts := StrSplit(record, Chr(1))
+                                    parts := StrSplit(record, IPC_SEP)
                                     if (parts.Length >= 3 && parts[1] == "GA" && parts[2] == tableIndex && parts[3] == itemIndex) {
                                         GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tableIndex, itemIndex))
                                         return
