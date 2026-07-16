@@ -42,7 +42,7 @@ class TimingScheduler {
             return
         this.running := true
         this.ScheduleNext()
-        this.ScheduleEndCheck()
+        this.OnEndCheck()
     }
 
     StopTimers() {
@@ -69,7 +69,7 @@ class TimingScheduler {
         }
 
         this.ScheduleNext()
-        this.ScheduleEndCheck()
+        this.OnEndCheck()
     }
 
     ScheduleNext() {
@@ -79,40 +79,6 @@ class TimingScheduler {
         next := this.heap.Peek()
         delay := (next.time - UnixNow()) * 1000
         this.SetOneShotTimer(this.timerFunc, delay)
-    }
-
-    ScheduleEndCheck() {
-        if (!this.running) {
-            SetTimer(this.endCheckTimerFunc, 0)
-            return
-        }
-
-        tableItem := MySoftData.TableInfo[this.tableIndex]
-        now := UnixNow()
-        nextEnd := 0
-
-        for index, _ in tableItem.ModeArr {
-            if (!TimingCheckItemIfValid(tableItem, index))
-                continue
-
-            if (index <= tableItem.ColorStateArr.Length && tableItem.ColorStateArr[index] == 3)
-                continue
-
-            Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
-            if (!Data.HasOwnProp("EndStamp") || !Data.EndStamp)
-                continue
-
-            if (!nextEnd || Data.EndStamp < nextEnd)
-                nextEnd := Data.EndStamp
-        }
-
-        if (!nextEnd) {
-            SetTimer(this.endCheckTimerFunc, 0)
-            return
-        }
-
-        delay := (nextEnd - now) * 1000
-        this.SetOneShotTimer(this.endCheckTimerFunc, delay)
     }
 
     SetOneShotTimer(timerFunc, delayMs) {
@@ -163,11 +129,14 @@ class TimingScheduler {
     }
 
     OnEndCheck() {
-        if (!this.running)
+        if (!this.running) {
+            SetTimer(this.endCheckTimerFunc, 0)
             return
+        }
 
         tableItem := MySoftData.TableInfo[this.tableIndex]
         now := UnixNow()
+        nextEnd := 0
 
         for index, _ in tableItem.ModeArr {
             if (!TimingCheckItemIfValid(tableItem, index))
@@ -177,16 +146,20 @@ class TimingScheduler {
                 continue
 
             Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
-
-            if (!Data.HasOwnProp("EndStamp") || now < Data.EndStamp)
+            if (!Data.HasOwnProp("EndStamp") || !Data.EndStamp)
                 continue
 
-            if (index <= tableItem.IsWorkIndexArr.Length && tableItem.IsWorkIndexArr[index] != 0)
-                MyStopMacro(this.tableIndex, index)
+            if (!nextEnd || Data.EndStamp < nextEnd)
+                nextEnd := Data.EndStamp
         }
 
-        ; 只在真正需要時重新搜尋下一個 EndStamp，避免每秒掃描
-        this.ScheduleEndCheck()
+        if (!nextEnd) {
+            SetTimer(this.endCheckTimerFunc, 0)
+            return
+        }
+
+        delay := (nextEnd - now) * 1000
+        this.SetOneShotTimer(this.endCheckTimerFunc, delay)
     }
 }
 
