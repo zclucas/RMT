@@ -125,5 +125,3 @@ global MyDeleteGlobalArray := DeleteGlobalArray
 global MyModifyGlobalArray := ModifyGlobalArray
 global MyInsertGlobalArray := InsertGlobalArray
 global MyRemoveAtGlobalArray := RemoveAtGlobalArray
-
-global MyTimingScheduler := TimingScheduler(GetTimingTableIndex())
