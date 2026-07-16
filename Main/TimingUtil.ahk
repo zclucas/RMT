@@ -35,14 +35,14 @@ class TimingScheduler {
     Suspend() {
         if (!this.running)
             return
-        this.running := true
+        this.running := false
         this.StopTimers()
     }
 
     Resume() {
         if (this.running)
             return
-        this.running := false
+        this.running := true
         this.ScheduleNext()
         this.ScheduleEndCheck()
     }
