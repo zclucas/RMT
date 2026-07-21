@@ -630,7 +630,8 @@ class UIMacroGui {
             try panelInfo.ui.Update("Window", "Close", "")
         }
         ; L521-L522: 清理
-        this.PanelMap.Delete(foldIndex)
+        if (this.PanelMap.Has(foldIndex))
+            this.PanelMap.Delete(foldIndex)
     }
 
     ; 屏幕模式面板的定期检查（对齐 FollowTarget 中 L398-L409 的screenMode分支）
