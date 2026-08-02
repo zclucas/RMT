@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 class TriggerKeyGui {
     __new() {
@@ -260,13 +260,21 @@ class TriggerKeyGui {
 
         keepOriginal := !hasJoy && this.EnableTriggerKeyCon.Value
 
-        for index, value in modifyKeyArr {
-            triggerKey .= this.ModifyKeyMap.Get(value)
-        }
-
         allNormalKeys := normalKeyArr.Clone()
         for index, value in mouseKeyArr {
             allNormalKeys.Push(value)
+        }
+
+        ; 当只有修饰键没有其他按键时，将修饰键作为普通按键处理
+        ; 这样单独的 Shift/Alt/Ctrl/Win 或它们的组合可以作为触发键
+        ; 否则 GetTriggerKey 会返回 "+" / "!" 等纯前缀，Hotkey 无法注册
+        if (modifyKeyArr.Length > 0 && allNormalKeys.Length == 0 && !hasJoy) {
+            allNormalKeys := modifyKeyArr.Clone()
+            modifyKeyArr := []
+        }
+
+        for index, value in modifyKeyArr {
+            triggerKey .= this.ModifyKeyMap.Get(value)
         }
 
         if (hasJoy) {
