@@ -185,8 +185,8 @@ class MacroEditGui {
             IL_Add(ImageListID, "Images\Soft\ScreenShot.png")
         }
 
-        ; 注册快捷键热键（窗口打开期间全局有效，关闭时注销）
-        this._hkIds := WinHotkey.Register(["F5", "F6", "Delete"], ObjBindMethod(this, "_OnHotkey"))
+        ; 注册快捷键热键（仅编辑器前台时拦截，失焦时按键透传给其他程序；关闭时注销）
+        this._hkIds := WinHotkey.Register(["F5", "F6", "Delete"], ObjBindMethod(this, "_OnHotkey"), this.Gui.Hwnd)
 
         ; 注册拖拽消息监听（先注销再注册，避免重复打开时叠多个处理器）
         OnMessage(0x0201, this._lbtnHandler, 0)
