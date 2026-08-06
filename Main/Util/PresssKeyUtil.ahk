@@ -230,8 +230,15 @@ SendJoyBtnKey(key, state, tableItem, index) {
     JoyBtnName := SubStr(key, 4)
     JoyDebugLog(Format("SendJoyBtnKey key={} state={} btnName={} MyViGJoySetState={}", key, state, JoyBtnName
         , Type(MyViGJoySetState)), "send")
-    if (JoyBtnName = "LT" || JoyBtnName = "RT")
-        MyViGJoySetState("Axis", JoyBtnName, state ? 100 : 0)
+
+    ; 兼容 LT/RT 的两种键名：
+    ;   - 友好名（JoyLT/JoyRT）→ btnName = LT/RT
+    ;   - 映射后的轴名（JoyZMin/JoyZMax）→ btnName = ZMin/ZMax
+    if (JoyBtnName = "LT" || JoyBtnName = "RT"
+        || JoyBtnName = "ZMin" || JoyBtnName = "ZMax") {
+        axisName := (JoyBtnName = "ZMin" || JoyBtnName = "LT") ? "LT" : "RT"
+        MyViGJoySetState("Axis", axisName, state ? 255 : 0)
+    }
     else
         MyViGJoySetState("Btn", JoyBtnName, state)
 

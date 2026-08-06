@@ -211,7 +211,7 @@ for e in btnList
 
 SetTimer LiveMonitor, 200
 LiveMonitor() {
-    global MonitorGui, joyCheckboxMap, axisStatic, diBtnStatic, xiStatic, activeMap, lastBtnState
+    global MonitorGui, joyCheckboxMap, axisStatic, diBtnStatic, xiStatic, activeMap, lastBtnState, foundXI
 
     ; ---- 更新按钮 Checkbox 状态（只改变化的值） ----
     diIndex := ctrlInfo["diIndex"]
@@ -224,11 +224,18 @@ LiveMonitor() {
             }
             ; 处理 JoyZMin/JoyZMax 等轴类映射
             pressed := 0
-            if (InStr(ahkKey, "ZMin"))
-                pressed := GetKeyState(diIndex "JoyZ") < 0 ? 1 : 0
-            else if (InStr(ahkKey, "ZMax"))
-                pressed := GetKeyState(diIndex "JoyZ") > 50 ? 1 : 0
-            else if (InStr(ahkKey, "POV"))
+            if (InStr(ahkKey, "ZMin") || InStr(ahkKey, "ZMax")) {
+                ; XInput 手柄的 LT/RT 通过 XInput 读取，DI 轴不可靠
+                isLT := InStr(ahkKey, "ZMin")
+                for xiIdx in foundXI {
+                    try xiState := XInput_GetState(xiIdx)
+                    if (xiState != 0) {
+                        pressed := isLT ? xiState.bLeftTrigger > 30 : xiState.bRightTrigger > 30
+                        if pressed
+                            break
+                    }
+                }
+            } else if (InStr(ahkKey, "POV"))
                 pressed := 0  ; 方向键通过轴按钮整体显示
             else
                 pressed := GetKeyState(diIndex ahkKey, "P") ? 1 : 0
