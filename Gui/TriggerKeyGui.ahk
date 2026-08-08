@@ -1118,6 +1118,14 @@ class TriggerKeyGui {
             con.OnEvent("Click", (*) => this.OnCheckedKey("JoyHome"))
             this.ConMap.Set("JoyHome", con)
 
+            ; 手柄类型切换下拉
+            PosX += 90
+            MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 25), GetLang("手柄类型"))
+            PosX += 70
+            joyTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w80", PosX, PosY - 2), ["Xbox", "PS5"])
+            joyTypeCon.Text := MainSoftData.JoyType
+            joyTypeCon.OnEvent("Change", (*) => (MainSoftData.JoyType := joyTypeCon.Text, this.UpdateJoyBtnDisplay()))
+
             PosY += 30
             PosX := 20
             MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 25), GetLang("手柄-方向键、摇杆"))

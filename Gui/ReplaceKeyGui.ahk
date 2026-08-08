@@ -889,8 +889,13 @@ class ReplaceKeyGui {
 
             PosX += 75
             con := MyGui.Add("Text", Format("x{} y{} w{} h{} Border Center +0x200", PosX, PosY, 60, 25), MySoftData.GetJoyDisplayName("JoyHome"))
-            con.OnEvent("Click", (*) => this.OnCheckedKey("JoyXbox"))
-            this.ConMap.Set("JoyXbox", con)
+            con.OnEvent("Click", (*) => this.OnCheckedKey("JoyHome"))
+            this.ConMap.Set("JoyHome", con)
+
+            PosX += 75
+            con := MyGui.Add("Text", Format("x{} y{} w{} h{} Border Center +0x200", PosX, PosY, 60, 25), MySoftData.GetJoyDisplayName("JoyPad"))
+            con.OnEvent("Click", (*) => this.OnCheckedKey("JoyPad"))
+            this.ConMap.Set("JoyPad", con)
 
             PosY += 30
             PosX := 20
@@ -987,16 +992,12 @@ class ReplaceKeyGui {
 
     UpdateJoyBtnDisplay() {
         joyBtnKeys := ["JoyA", "JoyB", "JoyX", "JoyY", "JoyLB", "JoyRB", "JoyLT", "JoyRT",
-            "JoyLS", "JoyRS", "JoyBack", "JoyStart"]
+            "JoyLS", "JoyRS", "JoyBack", "JoyStart", "JoyPad", "JoyHome"]
         for key in joyBtnKeys {
             if (this.ConMap.Has(key)) {
                 con := this.ConMap[key]
                 con.Value := MySoftData.GetJoyDisplayName(key)
             }
-        }
-        ; JoyXbox 按钮：Xbox 显示 XBOX，PS5 显示 PS
-        if (this.ConMap.Has("JoyXbox")) {
-            this.ConMap["JoyXbox"].Value := MySoftData.GetJoyDisplayName("JoyHome")
         }
     }
 

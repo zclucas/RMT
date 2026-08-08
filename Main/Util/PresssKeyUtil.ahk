@@ -228,6 +228,25 @@ SendJoyBtnKey(key, state, tableItem, index) {
     bucket := GetHoldBucket(tableItem, index)
 
     JoyBtnName := SubStr(key, 4)
+
+    ; PS5 模式：将 Xbox 风格的按钮名转为 DS4 风格
+    if (MainSoftData.JoyType == "PS5") {
+        static ps5BtnMap := Map(
+            "A", "Square",
+            "B", "Cross",
+            "X", "Circle",
+            "Y", "Triangle",
+            "LB", "L1",
+            "RB", "R1",
+            "Back", "Share",
+            "Start", "Options",
+            "Home", "Ps",
+            "Pad", "TouchPad"
+        )
+        if (ps5BtnMap.Has(JoyBtnName))
+            JoyBtnName := ps5BtnMap[JoyBtnName]
+    }
+
     JoyDebugLog(Format("SendJoyBtnKey key={} state={} btnName={} MyViGJoySetState={}", key, state, JoyBtnName
         , Type(MyViGJoySetState)), "send")
 

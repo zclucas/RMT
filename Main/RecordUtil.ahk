@@ -166,6 +166,21 @@ RI_Init() {
 
     DllCall("RegisterRawInputDevices", "Ptr", RID2.Ptr, "UInt", 1, "UInt", A_PtrSize == 8 ? 16 : 12)
 
+    ; 注册手柄 HID（Gamepad/Joystick）
+    RID_JOY := Buffer(A_PtrSize == 8 ? 16 : 12, 0)
+    NumPut("UShort", 0x01, RID_JOY, 0)    ; RIM_TYPEHID
+    NumPut("UShort", 0x01, RID_JOY, 2)    ; usUsagePage = Generic Desktop Controls
+    NumPut("UInt", 0x04, RID_JOY, 4)      ; usUsage = Joystick
+    NumPut("UPtr", RI_hwnd, RID_JOY, 8)
+    DllCall("RegisterRawInputDevices", "Ptr", RID_JOY.Ptr, "UInt", 1, "UInt", A_PtrSize == 8 ? 16 : 12)
+
+    RID_GAMEPAD := Buffer(A_PtrSize == 8 ? 16 : 12, 0)
+    NumPut("UShort", 0x01, RID_GAMEPAD, 0)  ; RIM_TYPEHID
+    NumPut("UShort", 0x01, RID_GAMEPAD, 2)  ; usUsagePage = Generic Desktop Controls
+    NumPut("UInt", 0x05, RID_GAMEPAD, 4)    ; usUsage = Gamepad
+    NumPut("UPtr", RI_hwnd, RID_GAMEPAD, 8)
+    DllCall("RegisterRawInputDevices", "Ptr", RID_GAMEPAD.Ptr, "UInt", 1, "UInt", A_PtrSize == 8 ? 16 : 12)
+
     mouseSpeed := 0
     DllCall("SystemParametersInfo", "UInt", 0x0070, "UInt", 0, "IntP", &mouseSpeed, "UInt", 0)
     dpiX := 96
@@ -525,19 +540,26 @@ OnRecordAddMacroStr(keyName, isDown, eventTime?) {
         return
     }
     else if (isDown) {
-        if (!MainSoftData.RecordHoldMuti && MainSoftData.RecordHoldKeyMap.Has(keyName))
+        if (MainSoftData.RecordHoldKeyMap.Has(keyName))
+            return
+        ; 防弹跳：松开后 100ms 内再次按下视为抖动，跳过
+        if (ObjHasOwnProp(MainSoftData, "RecordKeyDebounce") && MainSoftData.RecordKeyDebounce.Has(keyName) && A_TickCount - MainSoftData.RecordKeyDebounce[keyName] < 100)
             return
         MainSoftData.RecordHoldKeyMap[keyName] := true
     }
     else if (MainSoftData.RecordHoldKeyMap.Has(keyName)) {
         MainSoftData.RecordHoldKeyMap.Delete(keyName)
+        ; 防弹跳：记录松开时间，100ms 内不允许再次按下
+        if (!ObjHasOwnProp(MainSoftData, "RecordKeyDebounce"))
+            MainSoftData.RecordKeyDebounce := Map()
+        MainSoftData.RecordKeyDebounce[keyName] := A_TickCount
     }
 
     curTime := IsSet(eventTime) ? eventTime : A_TickCount
     span := curTime - MainSoftData.RecordLastTime
     keySymbol := isDown ? GetLang("按下") : GetLang("松开")
     MainSoftData.RecordLastTime := curTime
-    IsJoy := InStr(keyName, "Joy")
+    IsJoy := InStr(keyName, "Joy") || InStr(keyName, "Btn") || InStr(keyName, "Axis") || InStr(keyName, "Dpad")
     IsMouse := keyName == "LButton" || keyName == "RButton" || keyName == "MButton" || keyName == "XButton1" || keyName == "XButton2"
     IsKeyboard := !IsMouse && !IsJoy
 
@@ -558,6 +580,9 @@ OnFinishRecordMacro() {
     RI_isActive := false
     if (MainSoftData.RecordAutoLoosen) {
         for Key, Value in MainSoftData.RecordHoldKeyMap {
+            ; 跳过录制开始时就已经持有的按键（如摇杆偏移导致初始即按下）
+            if (MainSoftData.RecordInitialHoldMap.Has(Key) && MainSoftData.RecordInitialHoldMap[Key])
+                continue
             keyName := Key == "," ? GetLang("逗号") : Key
             MainSoftData.RecordMacroStr .= GetLang("按键") "_" keyName "_" GetLang("松开") ","
         }
@@ -796,6 +821,7 @@ OnToolRecordMacro(isHotkey, *) {
         } else {
             MainSoftData.RecordMacroStr := ""
             MainSoftData.RecordHoldKeyMap := Map()
+            MainSoftData.RecordInitialHoldMap := Map()
             UIControls.ToolText.Value := ""
         }
     }
@@ -810,6 +836,7 @@ OnForceEndRecord() {
         HideRecordCountdown()
         MainSoftData.RecordMacroStr := ""
         MainSoftData.RecordHoldKeyMap := Map()
+        MainSoftData.RecordInitialHoldMap := Map()
         UIControls.ToolText.Value := ""
         if (MainSoftData.MacroEditGui != "")
             UIControls.RecordToggle.Value := false

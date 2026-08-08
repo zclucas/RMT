@@ -853,6 +853,24 @@ class KeyCheckGui {
             con.OnEvent("Click", (*) => this.OnCheckedKey("JoyStart"))
             this.ConMap.Set("JoyStart", con)
 
+            PosX += 75
+            con := MyGui.Add("Text", Format("x{} y{} w{} h{} Border Center +0x200", PosX, PosY, 60, 25), MySoftData.GetJoyDisplayName("JoyHome"))
+            con.OnEvent("Click", (*) => this.OnCheckedKey("JoyHome"))
+            this.ConMap.Set("JoyHome", con)
+
+            PosX += 75
+            con := MyGui.Add("Text", Format("x{} y{} w{} h{} Border Center +0x200", PosX, PosY, 60, 25), MySoftData.GetJoyDisplayName("JoyPad"))
+            con.OnEvent("Click", (*) => this.OnCheckedKey("JoyPad"))
+            this.ConMap.Set("JoyPad", con)
+
+            ; 手柄类型切换下拉
+            PosX += 90
+            MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 25), GetLang("手柄类型"))
+            PosX += 70
+            joyTypeCon := MyGui.Add("DropDownList", Format("x{} y{} w80", PosX, PosY - 2), ["Xbox", "PS5"])
+            joyTypeCon.Text := MainSoftData.JoyType
+            joyTypeCon.OnEvent("Change", (*) => (MainSoftData.JoyType := joyTypeCon.Text, this.UpdateJoyBtnDisplay()))
+
             PosY += 30
             PosX := 20
             MyGui.Add("Text", Format("x{} y{} h{}", PosX, PosY, 25), GetLang("手柄-方向键、摇杆"))
@@ -1022,7 +1040,7 @@ class KeyCheckGui {
 
     UpdateJoyBtnDisplay() {
         joyBtnKeys := ["JoyA", "JoyB", "JoyX", "JoyY", "JoyLB", "JoyRB", "JoyLT", "JoyRT",
-            "JoyLS", "JoyRS", "JoyBack", "JoyStart"]
+            "JoyLS", "JoyRS", "JoyBack", "JoyStart", "JoyPad", "JoyHome"]
         for key in joyBtnKeys {
             if (this.ConMap.Has(key)) {
                 con := this.ConMap[key]

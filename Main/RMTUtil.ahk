@@ -208,15 +208,16 @@ PluginInit() {
     JoyDebugLog(Format("PluginInit HasJoyMacro={} MutiThreadNum={} WorkPoolEnabled={} IsAdmin={} Script={}"
         , MySoftData.HasJoyMacro, MainSoftData.MutiThreadNum, WorkPoolEnabled(), A_IsAdmin, A_ScriptFullPath), "init")
     if (MySoftData.HasJoyMacro) {
-        global ViGJoy := ViGEmXb360()
+        isPS5 := MainSoftData.JoyType = "PS5"
+        global ViGJoy := isPS5 ? ViGEmDS4() : ViGEmXb360()
         try instOk := (IsSet(ViGJoy) && ViGJoy.Instance != "")
         catch
             instOk := false
         try xidx := ViGJoy.ViGJoyXInputIdx
         catch
             xidx := "?"
-        JoyDebugLog(Format("PluginInit ViGEmXb360 created InstanceOK={} XInputIdx={} DllPath={}"
-            , instOk, xidx, IsSet(ViGEmDllPath) ? ViGEmDllPath : "(unset)"), "init")
+        JoyDebugLog(Format("PluginInit {} created InstanceOK={} XInputIdx={} DllPath={}"
+            , isPS5 ? "ViGEmDS4" : "ViGEmXb360", instOk, xidx, IsSet(ViGEmDllPath) ? ViGEmDllPath : "(unset)"), "init")
     } else {
         JoyDebugLog("PluginInit skip ViGEm (HasJoyMacro=false); will lazy-create on first Joy send", "init")
     }
@@ -622,8 +623,9 @@ ViGJoySetState(JoyType, Key, Value) {
         , JoyType, Key, Value, IsSet(ViGJoy)), "vigem")
 
     if (!IsSet(ViGJoy)) {
-        JoyDebugLog("ViGJoySetState lazy-create ViGEmXb360()", "vigem")
-        global ViGJoy := ViGEmXb360()
+        isPS5 := MainSoftData.JoyType = "PS5"
+        JoyDebugLog(Format("ViGJoySetState lazy-create {} (JoyType={})", isPS5 ? "ViGEmDS4" : "ViGEmXb360", MainSoftData.JoyType), "vigem")
+        global ViGJoy := isPS5 ? ViGEmDS4() : ViGEmXb360()
     }
 
     try instEmpty := (ViGJoy.Instance == "")
@@ -987,7 +989,11 @@ SimpleRecordMacroStr(MacroStr) {
             next2ParamArr := SplitCommand(CmdArr[A_Index + 2])
             isMatchFormat := next1ParamArr[1] == GetLang("间隔") && next2ParamArr[1] == GetLang("按键")
             if (isMatchFormat && paramArr[2] == next2ParamArr[2] && next2ParamArr[3] == "松开") {
-                SimpleCmdStr := Format("{}_{}_{}_{}", GetLang("按键"), paramArr[2], GetLang("点击"), next1ParamArr[2])
+                ; 时长保底：PS5 蓝牙有时按下+松开在同 tick，间隔=0
+                clickDuration := next1ParamArr[2]
+                if (clickDuration < 50)
+                    clickDuration := 50
+                SimpleCmdStr := Format("{}_{}_{}_{}", GetLang("按键"), paramArr[2], GetLang("点击"), clickDuration)
                 SimpleCmdArr.Push(SimpleCmdStr)
                 A_Index := A_Index + 2
                 continue

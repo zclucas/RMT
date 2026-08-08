@@ -1,24 +1,12 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 RecordControllerNum := 10
 RecordJoyFloat := 10
 RecordAxisMaxValue := 100
 RecordJoyIndexArr := []
-RecordAllJoyMap := Map("Joy1", 1, "Joy2", 1, "Joy3", 1, "Joy4", 1, "Joy5", 1, "Joy6", 1, "Joy7", 1, "Joy8", 1,
-    "Joy9", 1, "Joy10", 1, "Joy11", 1, "Joy12", 1, "Joy13", 1, "Joy14", 1, "Joy15", 1, "Joy16", 1,
-    "Joy17", 1, "Joy18", 1, "Joy19", 1, "Joy20", 1, "Joy21", 1, "Joy22", 1, "Joy23", 1, "Joy24", 1,
-    "Joy25", 1, "Joy26", 1, "Joy27", 1, "Joy28", 1, "Joy29", 1, "Joy30", 1, "Joy31", 1, "Joy32", 1,
-    "JoyXMin", 0, "JoyXMax", 100, "JoyYMin", 0, "JoyYMax", 100, "JoyZMin", 0, "JoyZMax", 100,
-    "JoyRMin", 0, "JoyRMax", 100, "JoyUMin", 0, "JoyUMax", 100, "JoyVMin", 0, "JoyVMax", 100,
-    "JoyPOV_0", 0, "JoyPOV_9000", 9000, "JoyPOV_18000", 18000, "JoyPOV_27000", 27000)
 
 RecordJoyAxises := Map("JoyXMin", 0, "JoyXMax", 100, "JoyYMin", 0, "JoyYMax", 100, "JoyZMin", 0, "JoyZMax", 100,
     "JoyRMin", 0, "JoyRMax", 100, "JoyUMin", 0, "JoyUMax", 100, "JoyVMin", 0, "JoyVMax", 100)
 RecordJoyPOVMap := Map("JoyPOV_0", 0, "JoyPOV_9000", 9000, "JoyPOV_18000", 18000, "JoyPOV_27000", 27000)
-
-RecordKeyMap := Map("JoyPOV_0", "Joy12", "JoyPOV_9000", "Joy15", "JoyPOV_18000", "Joy13", "JoyPOV_27000", "Joy14",
-    "JoyXMin", "JoyAxis1Min", "JoyXMax", "JoyAxis1Max", "JoyYMin", "JoyAxis2Min", "JoyYMax", "JoyAxis2Max",
-    "JoyUMin", "JoyAxis3Min", "JoyUMax", "JoyAxis3Max", "JoyRMin", "JoyAxis4Min", "JoyRMax", "JoyAxis4Max",
-    "JoyZMin", "Joy17", "JoyZMax", "Joy18")
 
 XboxJoyAndPOVMap := Map("Joy1", 12, "Joy2", 13, "Joy3", 14, "Joy4", 15, "Joy5", 8, "Joy6", 9, "Joy7", 5,
     "Joy8", 4, "Joy9", 6, "Joy10", 7,
@@ -28,59 +16,204 @@ XboxJosAxisMap := Map("JoyXMin", -32768, "JoyXMax", 32767, "JoyYMin", -32768, "J
     255, "JoyZMax", 255, "JoyRMin", -32768, "JoyRMax", 32767, "JoyUMin", -32768, "JoyUMax", 32767, "JoyVMin", -
     32768, "JoyVMax", 32767)
 
-; 物理手柄 XInput 状态列表（排除 ViGEm 虚拟手柄）
 RecordXInputStates := []
 
+DetectControllerJoyType(idx) {
+    ; XInput slot idx-1 → Xbox, 否则 PS5
+    ; Windows 上 XInput 用户 N 对应 DirectInput 索引 N+1
+    try {
+        xiState := Buffer(16)
+        err := DllCall("XInput1_4\XInputGetState", "uint", idx - 1, "ptr", xiState)
+        if (!err)
+            return "Xbox"
+    }
+    return "PS5"
+}
+
+CheckBtnOnIndex(rawKey, idx) {
+    return GetKeyState(idx rawKey)
+}
+
+CheckPOVOnIndex(rawKey, idx) {
+    cont_info := GetKeyState(idx "JoyInfo")
+    if !InStr(cont_info, "P")
+        return false
+    state := GetKeyState(idx "JoyPOV")
+    value := RecordJoyPOVMap.Get(rawKey)
+    return (state == value)
+}
+
 RecordJoyTimer() {
-    global RecordXInputStates
+    global RecordXInputStates, MainSoftData, MySoftData
 
     if (!UIControls.ToolCheckRecord.Value)
         return
 
+    static lastTick := 0
+    debounceMs := MainSoftData.RecordJoyInterval
+    if (debounceMs < 20)
+        debounceMs := 20
+    if (A_TickCount - lastTick < debounceMs)
+        return
+    lastTick := A_TickCount
+
+    static axisBase := Map()
+
     RecordRefreshJoyIndexArr()
     RecordXInputStates := RecordCollectXInputStates()
 
-    ahkToJoyMap := MySoftData.GetAhkToJoyMap()
-    for key, value in RecordAllJoyMap {
-        isJoyAxis := RecordJoyAxises.Has(key)
-        isJoyPOV := RecordJoyPOVMap.Has(key)
-        isJoyBtn := !isJoyAxis && !isJoyPOV
-        isHold := false
-        if (isJoyBtn) {
-            isHold := RecordJoyCheckBtnDown(key)
+    ; 收集所有通用键名（JoyN、Axis*、Dpad*）
+    allFriendlyKeys := Map()
+    for _, physMap in [MySoftData.PhysToXboxJoyMap, MySoftData.PhysToPS5JoyMap] {
+        for rawKey, btnKey in physMap {
+            if (allFriendlyKeys.Has(btnKey))
+                continue
+            allFriendlyKeys[btnKey] := true
         }
-        else if (isJoyPOV) {
-            isHold := RecordCheckPOVMacro(key)
-        }
-        else {
-            isHold := RecordCheckAxisMacro(key)
+    }
+
+    ; 对每个友好名，检查所有控制器
+    for friendlyKey in allFriendlyKeys {
+        isPressed := false
+        for idx in RecordJoyIndexArr {
+            ctrlType := DetectControllerJoyType(idx)
+            physMap := (ctrlType == "PS5") ? MySoftData.PhysToPS5JoyMap : MySoftData.PhysToXboxJoyMap
+
+            ; 在映射表中查通用键名对应的原始键
+            for rawKey, btnKey in physMap {
+                if (btnKey != friendlyKey)
+                    continue
+
+                if (RecordJoyAxises.Has(rawKey) && ctrlType == "Xbox") {
+                    for s in RecordXInputStates {
+                        if (rawKey == "JoyZMin" && s.bLeftTrigger > 30) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyZMax" && s.bRightTrigger > 30) {
+                            isPressed := true
+                            break
+                        }
+                        lx := s.sThumbLX
+                        ly := s.sThumbLY
+                        rx := s.sThumbRX
+                        ry := s.sThumbRY
+                        if (rawKey == "JoyXMin" && lx < -16384) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyXMax" && lx > 16384) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyYMin" && ly < -16384) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyYMax" && ly > 16384) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyUMin" && rx < -16384) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyUMax" && rx > 16384) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyRMin" && ry < -16384) {
+                            isPressed := true
+                            break
+                        }
+                        if (rawKey == "JoyRMax" && ry > 16384) {
+                            isPressed := true
+                            break
+                        }
+                    }
+                } else if (RecordJoyAxises.Has(rawKey) && ctrlType != "Xbox") {
+                    ; PS5 轴检测（按物理轴映射）：JoyX/Y=左摇杆, JoyZ/R=右摇杆, JoyU=R2, JoyV=L2
+                    joyAxisName := SubStr(rawKey, 1, 4)
+                    state := GetKeyState(idx joyAxisName)
+                    if (IsNumber(state)) {
+                        ; 自动检测值域（0-65535 或 0-100）
+                        maxRange := (state > 100) ? 65535 : 100
+                        minThresh := maxRange * 0.15
+                        maxThresh := maxRange * 0.85
+
+                        if (joyAxisName == "JoyX" || joyAxisName == "JoyY"
+                            || joyAxisName == "JoyZ" || joyAxisName == "JoyR") {
+                            ; 摇杆轴
+                            if InStr(rawKey, "Min") && state < minThresh
+                                isPressed := true
+                            else if InStr(rawKey, "Max") && state > maxThresh
+                                isPressed := true
+                        } else if (joyAxisName == "JoyU" || joyAxisName == "JoyV") {
+                            ; 扳机轴
+                            if InStr(rawKey, "Max") && state > maxThresh
+                                isPressed := true
+                        }
+                    }
+                } else if (RecordJoyPOVMap.Has(rawKey)) {
+                    if (CheckPOVOnIndex(rawKey, idx))
+                        isPressed := true
+                } else {
+                    ; 跳过轴键（非 Xbox 的轴不检测按钮路径）
+                    if (RecordJoyAxises.Has(rawKey))
+                        continue
+                    ; PS5 跳过 Joy7/Joy8（L2/R2 按钮噪声，LT/RT 已经通过 U/V 轴检测）
+                    if (ctrlType != "Xbox" && (rawKey == "Joy7" || rawKey == "Joy8"))
+                        continue
+                    if (CheckBtnOnIndex(rawKey, idx))
+                        isPressed := true
+                    if (!isPressed) {
+                        btnToPhysMap := MySoftData.GetJoyToPhysMap()
+                        r := btnToPhysMap.Has(friendlyKey) ? btnToPhysMap[friendlyKey] : ""
+                        if (r && XboxJoyAndPOVMap.Has(r))
+                            isPressed := XboxBtnOnXInput(r, RecordXInputStates)
+                    }
+                }
+
+                if (isPressed)
+                    break
+            }
+            if (isPressed)
+                break
         }
 
-        joyKey := key
-        if (ahkToJoyMap.Has(key))
-            joyKey := ahkToJoyMap[key]
-        if (isHold)
-            OnRecordAddMacroStr(joyKey, true)
-
-        if (MainSoftData.RecordHoldKeyMap.Has(joyKey) && !isHold)
-            OnRecordAddMacroStr(joyKey, false)
+        if (isPressed)
+            OnRecordAddMacroStr(friendlyKey, true)
+        else if (MainSoftData.RecordHoldKeyMap.Has(friendlyKey))
+            OnRecordAddMacroStr(friendlyKey, false)
     }
     SetTimer(RecordJoyTimer, -MainSoftData.RecordJoyInterval)
 }
 
 RecordJoy() {
-    global RecordJoyIndexArr
+    global RecordJoyIndexArr, MainSoftData
     RecordRefreshJoyIndexArr()
-    SetTimer(RecordJoyTimer, -10)
+    MainSoftData.RecordHoldKeyMap := Map()
+    MainSoftData.RecordInitialHoldMap := Map()
+    SetTimer(RecordJoyTimer, -50)
 }
 
 RecordRefreshJoyIndexArr() {
     global RecordJoyIndexArr
+    virtualXiIdx := RecordGetVirtualXInputIdx()
     RecordJoyIndexArr := []
     loop RecordControllerNum {
-        if GetKeyState(A_Index "JoyName") {
-            RecordJoyIndexArr.Push(A_Index)
+        if !GetKeyState(A_Index "JoyName")
+            continue
+        ; 跳过 ViGEm 虚拟手柄（输出设备，不参与输入检测）
+        if (virtualXiIdx >= 0) {
+            try {
+                vs := Buffer(16)
+                ve := DllCall("XInput1_4\XInputGetState", "uint", A_Index - 1, "ptr", vs)
+                if (!ve && A_Index - 1 == virtualXiIdx)
+                    continue
+            }
         }
+        RecordJoyIndexArr.Push(A_Index)
     }
 }
 
@@ -93,7 +226,6 @@ RecordGetVirtualXInputIdx() {
     return -1
 }
 
-; 采集所有物理手柄的 XInput 状态（跳过 ViGEm 虚拟手柄占用的槽位）
 RecordCollectXInputStates() {
     states := []
     virtualIdx := RecordGetVirtualXInputIdx()
@@ -110,72 +242,12 @@ RecordCollectXInputStates() {
     return states
 }
 
-RecordJoyCheckBtnDown(key) {
-    loop RecordJoyIndexArr.Length {
-        index := RecordJoyIndexArr[A_Index]
-        if (GetKeyState(index "" key)) {
-            return true
-        }
-    }
-    return CheckXboxBtnOrPOVMacro(key)
-}
-
-RecordCheckPOVMacro(key) {
-    loop RecordJoyIndexArr.Length {
-        index := RecordJoyIndexArr[A_Index]
-        cont_info := GetKeyState(index "JoyInfo")
-        if InStr(cont_info, "P") {
-            state := GetKeyState(index "JoyPOV")
-            value := RecordJoyPOVMap.Get(key)
-            if (state == value) {
-                return true
-            }
-        }
-    }
-
-    return CheckXboxBtnOrPOVMacro(key)
-}
-
-CheckXboxBtnOrPOVMacro(key) {
-    global RecordXInputStates
-    if (!XboxJoyAndPOVMap.Has(key))
+XboxBtnOnXInput(rawKey, xiStates) {
+    if (!XboxJoyAndPOVMap.Has(rawKey))
         return false
-    bitSymbol := XboxJoyAndPOVMap.Get(key)
-    for state in RecordXInputStates {
+    bitSymbol := XboxJoyAndPOVMap.Get(rawKey)
+    for state in xiStates {
         if ((state.wButtons >> bitSymbol) & 1)
-            return true
-    }
-    return false
-}
-
-RecordCheckAxisMacro(key) {
-    loop RecordJoyIndexArr.Length {
-        index := RecordJoyIndexArr[A_Index]
-        cont_info := GetKeyState(index "JoyInfo")
-        if (cont_info == "ZRUPD")
-            continue
-        joyAxisName := SubStr(key, 1, 4)
-        state := GetKeyState(index joyAxisName)
-        valueSection := GetAxisTriggerSection(key, false)
-        if (IsNumber(state) && state >= valueSection[1] && state <= valueSection[2]) {
-            return true
-        }
-    }
-
-    if (SubStr(key, 1, 4) == "JoyV") ; xbox 没有这个轴
-        return false
-
-    return CheckXboxAxisMacro(key)
-}
-
-CheckXboxAxisMacro(key) {
-    global RecordXInputStates
-    valueSection := GetAxisTriggerSection(key, true)
-    for state in RecordXInputStates {
-        value := GetXboxAxisValueFromState(key, state)
-        if (value == 0)
-            continue
-        if (value >= valueSection[1] && value <= valueSection[2])
             return true
     }
     return false
@@ -230,7 +302,7 @@ GetXboxAxisValueFromState(joyAxisSymbol, State) {
 RecordXInputState(UserIndex) {
     xiState := Buffer(16)
     if err := DllCall("XInput1_4\XInputGetState", "uint", UserIndex, "ptr", xiState) {
-        if err = 1167 ; ERROR_DEVICE_NOT_CONNECTED
+        if err = 1167
             return 0
         throw OSError(err, -1)
     }
@@ -246,7 +318,6 @@ RecordXInputState(UserIndex) {
     }
 }
 
-; 兼容旧调用名
 XInputState(UserIndex) {
     return RecordXInputState(UserIndex)
 }

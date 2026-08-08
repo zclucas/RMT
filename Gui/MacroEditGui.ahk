@@ -850,6 +850,8 @@ class MacroEditGui {
                 this.MarkCurrentPosition(this.DebugItemID)
 
                 CleanCMD := StrReplace(StrReplace(CurCMD, "⭐", ""), "→", "")
+                ; 还原格式化的手柄键名后执行
+                CleanCMD := MySoftData.ParseCmdJoyDisplay(CleanCMD)
                 CurLangCMD := GetLangMacro(CleanCMD, 2)
                 OnTriggerSepcialItemMacro(CurLangCMD)
 
@@ -1085,7 +1087,8 @@ class MacroEditGui {
         this.LastItemID := 0
         for cmdStr in cmdArr {
             iconStr := this.GetCmdIconStr(cmdStr)
-            root := this.MacroTreeViewCon.Add(cmdStr, 0, iconStr)
+            displayStr := MySoftData.FormatCmdJoyDisplay(cmdStr)
+            root := this.MacroTreeViewCon.Add(displayStr, 0, iconStr)
             this.LastItemID := root
             this.TreeAddBranch(root, cmdStr)
         }
@@ -1197,7 +1200,8 @@ class MacroEditGui {
         cmdArr := SplitMacro(CommandStr)
         for cmdStr in cmdArr {
             iconStr := this.GetCmdIconStr(cmdStr)
-            subRoot := this.MacroTreeViewCon.Add(cmdStr, root, iconStr)
+            displayStr := MySoftData.FormatCmdJoyDisplay(cmdStr)
+            subRoot := this.MacroTreeViewCon.Add(displayStr, root, iconStr)
             this.TreeAddBranch(subRoot, cmdStr)
         }
     }
@@ -1220,7 +1224,13 @@ class MacroEditGui {
         if (modeType == 2) {
             ItemText := this.MacroTreeViewCon.GetText(this.CurItemID)
             ; 清理→和⭐前缀
-            ItemText := StrReplace(StrReplace(ItemText, "⭐", ""), "→", "")
+            ; 只清理位置标记→（前缀，不是方向箭头显示名）
+            ItemText := StrReplace(ItemText, "⭐", "")
+            if SubStr(ItemText, 1, 1) = "→"
+                ItemText := SubStr(ItemText, 2)
+            ; 还原显示名 + 转 BtnN → Joy* 后传给旧 GUI 编辑器
+            ItemText := MySoftData.ParseCmdJoyDisplay(ItemText)
+            ItemText := MySoftData.CmdJoyNToJoyFriendly(ItemText)
             CommandStr := GetCmdStr(ItemText)
             subGui.ShowGui(CommandStr)
             return
@@ -1259,7 +1269,8 @@ class MacroEditGui {
         this.ResetDebugState()
         if (this.EditModeCon.Value == 1) {
             iconStr := this.GetCmdIconStr(CommandStr)
-            root := this.MacroTreeViewCon.Add(CommandStr, 0, iconStr)
+            displayStr := MySoftData.FormatCmdJoyDisplay(CommandStr)
+            root := this.MacroTreeViewCon.Add(displayStr, 0, iconStr)
             this.TreeAddBranch(root, CommandStr)
             this.LastItemID := root
         }
@@ -1279,7 +1290,7 @@ class MacroEditGui {
     ;修改指令
     OnModifyCmd(CommandStr) {
         this.ResetDebugState()
-        this.MacroTreeViewCon.Modify(this.CurItemID, , CommandStr)
+        this.MacroTreeViewCon.Modify(this.CurItemID, , MySoftData.FormatCmdJoyDisplay(CommandStr))
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
         if (ParentID == 0) {
             this.RefreshTree(this.CurItemID)
@@ -1383,11 +1394,12 @@ class MacroEditGui {
     ;插入指令
     OnPreInsertCmd(CommandStr) {
         this.ResetDebugState()
+        displayStr := MySoftData.FormatCmdJoyDisplay(CommandStr)
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
         PreItemID := this.MacroTreeViewCon.GetPrev(this.CurItemID)
         Seq := PreItemID == 0 ? "First" : PreItemID
         iconStr := this.GetCmdIconStr(CommandStr)
-        newItemID := this.MacroTreeViewCon.Add(CommandStr, ParentID, Seq " " iconStr)
+        newItemID := this.MacroTreeViewCon.Add(displayStr, ParentID, Seq " " iconStr)
         if (ParentID == 0) {
             this.TreeAddBranch(newItemID, CommandStr)
             return
@@ -1403,9 +1415,10 @@ class MacroEditGui {
     ;插入指令
     OnNextInsertCmd(CommandStr) {
         this.ResetDebugState()
+        displayStr := MySoftData.FormatCmdJoyDisplay(CommandStr)
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
         iconStr := this.GetCmdIconStr(CommandStr)
-        newItemID := this.MacroTreeViewCon.Add(CommandStr, ParentID, this.CurItemID " " iconStr)
+        newItemID := this.MacroTreeViewCon.Add(displayStr, ParentID, this.CurItemID " " iconStr)
         if (this.CurItemID == this.LastItemID)
             this.LastItemID := newItemID
 
@@ -1422,8 +1435,9 @@ class MacroEditGui {
     }
 
     OnSubNodeAddCmd(CommandStr) {
+        displayStr := MySoftData.FormatCmdJoyDisplay(CommandStr)
         iconStr := this.GetCmdIconStr(CommandStr)
-        newItemID := this.MacroTreeViewCon.Add(CommandStr, this.CurItemID, iconStr)
+        newItemID := this.MacroTreeViewCon.Add(displayStr, this.CurItemID, iconStr)
         macroStr := this.GetTreeMacroStr(this.CurItemID)
 
         RealItemID := this.MacroTreeViewCon.GetParent(this.CurItemID)
@@ -1498,7 +1512,7 @@ class MacroEditGui {
         while (rootItemID) {
             cmdStr := this.MacroTreeViewCon.GetText(rootItemID)
             if (cmdStr != "" && SubStr(cmdStr, 1, 1) != "⎖")
-                macroStr .= cmdStr ","
+                macroStr .= MySoftData.ParseCmdJoyDisplay(cmdStr) ","
 
             rootItemID := this.MacroTreeViewCon.GetNext(rootItemID)
         }

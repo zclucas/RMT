@@ -273,6 +273,7 @@ class MainConfig {
         this.RecordLastTime := ""       ; 上一条录制指令的时间戳
         this.RecordMacroStr := ""       ; 录制结果的宏指令字符串
         this.RecordHoldKeyMap := Map()  ; 录制中按住的按键映射
+        this.RecordInitialHoldMap := Map()  ; 录制开始时即已按住的按键（预采样基线）
         this.RecordHoldMuti := true     ; 录制时是否合并按住的多键
         this.RecordAutoLoosen := true   ; 录制时是否自动松开按键
         this.RecordKeyboard := true     ; 是否录制键盘
@@ -383,8 +384,8 @@ class SoftData {
             "JoyY", "Joy4",      ; △ Triangle
             "JoyLB", "Joy5",     ; L1
             "JoyRB", "Joy6",     ; R1
-            "JoyLT", "Joy7",     ; L2（数字按钮）
-            "JoyRT", "Joy8",     ; R2（数字按钮）
+            "JoyLT", "JoyVMax",  ; PS5蓝牙L2在V轴     ; L2（数字按钮）
+            "JoyRT", "JoyUMax",  ; PS5蓝牙R2在U轴     ; R2（数字按钮）
             "JoyLS", "Joy11",     ; 左摇杆按下（L3）
             "JoyRS", "Joy12",    ; 右摇杆按下（R3）
             "JoyBack", "Joy9",    ; Create
@@ -404,7 +405,131 @@ class SoftData {
             "JoyAxisRYMin", "JoyRMin",
             "JoyAxisRYMax", "JoyRMax"
         )
-        ; GUI按钮显示名称映射（内部名称 → {Xbox, PS5}）
+        ; ========== 通用键名映射（与设备无关） ==========
+        ; BtnN = 按物理位置编号的通用键名
+        ; 注意：前面版遗留的 JoyA/JoyB 等旧友好名不再使用，统一改为 BtnN
+        this.JoyToDispMap := Map(
+            "Joy1", Map("Xbox", "A", "PS5", "□"),
+            "Joy2", Map("Xbox", "B", "PS5", "×"),
+            "Joy3", Map("Xbox", "X", "PS5", "○"),
+            "Joy4", Map("Xbox", "Y", "PS5", "△"),
+            "Joy5", Map("Xbox", "LB", "PS5", "L1"),
+            "Joy6", Map("Xbox", "RB", "PS5", "R1"),
+            "Joy7", Map("Xbox", "LT", "PS5", "L2"),
+            "Joy8", Map("Xbox", "RT", "PS5", "R2"),
+            "Joy9", Map("Xbox", "LS", "PS5", "L3"),
+            "Joy10", Map("Xbox", "RS", "PS5", "R3"),
+            "Joy11", Map("Xbox", "Back", "PS5", "Crt"),
+            "Joy12", Map("Xbox", "Start", "PS5", "Opt"),
+            "Joy13", Map("Xbox", "XBOX", "PS5", "PS"),
+            "Joy14", Map("Xbox", "Map", "PS5", "白板"),
+            "AxisLXMin", Map("Xbox", "L←", "PS5", "L←"),
+            "AxisLXMax", Map("Xbox", "L→", "PS5", "L→"),
+            "AxisLYMin", Map("Xbox", "L↑", "PS5", "L↑"),
+            "AxisLYMax", Map("Xbox", "L↓", "PS5", "L↓"),
+            "AxisRXMin", Map("Xbox", "R←", "PS5", "R←"),
+            "AxisRXMax", Map("Xbox", "R→", "PS5", "R→"),
+            "AxisRYMin", Map("Xbox", "R↑", "PS5", "R↑"),
+            "AxisRYMax", Map("Xbox", "R↓", "PS5", "R↓"),
+            "AxisLT", Map("Xbox", "LT", "PS5", "L2"),
+            "AxisRT", Map("Xbox", "RT", "PS5", "R2"),
+            "DpadUp", Map("Xbox", "↑", "PS5", "↑"),
+            "DpadDown", Map("Xbox", "↓", "PS5", "↓"),
+            "DpadLeft", Map("Xbox", "←", "PS5", "←"),
+            "DpadRight", Map("Xbox", "→", "PS5", "→")
+        )
+        ; 物理原始键名 → 通用键名（Xbox）
+        this.PhysToXboxJoyMap := Map(
+            "Joy1", "Joy1",
+            "Joy2", "Joy2",
+            "Joy3", "Joy3",
+            "Joy4", "Joy4",
+            "Joy5", "Joy5",
+            "Joy6", "Joy6",
+            "Joy7", "Joy11",
+            "Joy8", "Joy12",
+            "Joy9", "Joy9",
+            "Joy10", "Joy10",
+            "Joy13", "Joy13",
+            "Joy14", "Joy14",
+            "JoyZMin", "AxisLT",
+            "JoyZMax", "AxisRT",
+            "JoyPOV_0", "DpadUp",
+            "JoyPOV_9000", "DpadRight",
+            "JoyPOV_18000", "DpadDown",
+            "JoyPOV_27000", "DpadLeft",
+            "JoyXMin", "AxisLXMin",
+            "JoyXMax", "AxisLXMax",
+            "JoyYMin", "AxisLYMin",
+            "JoyYMax", "AxisLYMax",
+            "JoyUMin", "AxisRXMin",
+            "JoyUMax", "AxisRXMax",
+            "JoyRMin", "AxisRYMin",
+            "JoyRMax", "AxisRYMax"
+        )
+        ; 物理原始键名 → 通用键名（PS5 蓝牙/DI）
+        this.PhysToPS5JoyMap := Map(
+            "Joy1", "Joy1",
+            "Joy2", "Joy2",
+            "Joy3", "Joy3",
+            "Joy4", "Joy4",
+            "Joy5", "Joy5",
+            "Joy6", "Joy6",
+            "Joy7", "Joy7",
+            "Joy8", "Joy8",
+            "Joy9", "Joy11",
+            "Joy10", "Joy12",
+            "Joy11", "Joy9",
+            "Joy12", "Joy10",
+            "Joy13", "Joy13",
+            "Joy14", "Joy14",
+            "JoyPOV_0", "DpadUp",
+            "JoyPOV_9000", "DpadRight",
+            "JoyPOV_18000", "DpadDown",
+            "JoyPOV_27000", "DpadLeft",
+            "JoyXMin", "AxisLXMin",
+            "JoyXMax", "AxisLXMax",
+            "JoyYMin", "AxisLYMin",
+            "JoyYMax", "AxisLYMax",
+            "JoyZMin", "AxisRXMin",
+            "JoyZMax", "AxisRXMax",
+            "JoyRMin", "AxisRYMin",
+            "JoyRMax", "AxisRYMax",
+            "JoyUMin", "AxisRT",
+            "JoyUMax", "AxisRT",
+            "JoyVMin", "AxisLT",
+            "JoyVMax", "AxisLT"
+        )
+        ; 通用键名 → 物理原始键名（Xbox，用于执行/绑定）
+        this.JoyToXboxPhysMap := Map(
+            "Joy1", "Joy1",   "Joy2", "Joy2",   "Joy3", "Joy3",   "Joy4", "Joy4",
+            "Joy5", "Joy5",   "Joy6", "Joy6",   "Joy7", "JoyZMin", "Joy8", "JoyZMax",
+            "Joy9", "Joy9",   "Joy10", "Joy10",  "Joy11", "Joy7",  "Joy12", "Joy8",
+            "Joy13", "Joy13", "Joy14", "Joy14",
+            "AxisLT", "JoyZMin", "AxisRT", "JoyZMax",
+            "AxisLXMin", "JoyXMin", "AxisLXMax", "JoyXMax",
+            "AxisLYMin", "JoyYMin", "AxisLYMax", "JoyYMax",
+            "AxisRXMin", "JoyUMin", "AxisRXMax", "JoyUMax",
+            "AxisRYMin", "JoyRMin", "AxisRYMax", "JoyRMax",
+            "DpadUp", "JoyPOV_0", "DpadDown", "JoyPOV_18000",
+            "DpadLeft", "JoyPOV_27000", "DpadRight", "JoyPOV_9000"
+        )
+        ; 通用键名 → 物理原始键名（PS5，用于执行/绑定）
+        this.JoyToPS5PhysMap := Map(
+            "Joy1", "Joy1",   "Joy2", "Joy2",   "Joy3", "Joy3",   "Joy4", "Joy4",
+            "Joy5", "Joy5",   "Joy6", "Joy6",   "Joy7", "Joy7",   "Joy8", "Joy8",
+            "Joy9", "Joy11",  "Joy10", "Joy12", "Joy11", "Joy9",  "Joy12", "Joy10",
+            "Joy13", "Joy13", "Joy14", "Joy14",
+            "AxisLT", "JoyVMin", "AxisRT", "JoyUMin",
+            "AxisLXMin", "JoyXMin", "AxisLXMax", "JoyXMax",
+            "AxisLYMin", "JoyYMin", "AxisLYMax", "JoyYMax",
+            "AxisRXMin", "JoyZMin", "AxisRXMax", "JoyZMax",
+            "AxisRYMin", "JoyRMin", "AxisRYMax", "JoyRMax",
+            "DpadUp", "JoyPOV_0", "DpadDown", "JoyPOV_18000",
+            "DpadLeft", "JoyPOV_27000", "DpadRight", "JoyPOV_9000"
+        )
+
+        ; 保留旧映射用于兼容
         this.JoyBtnDisplayMap := Map(
             "JoyA", Map("Xbox", "A", "PS5", "□"),
             "JoyB", Map("Xbox", "B", "PS5", "×"),
@@ -451,7 +576,8 @@ class SoftData {
             "JoyRMin", "JoyAxisRYMin",
             "JoyRMax", "JoyAxisRYMax"
         )
-        ; PS5：L2/R2/L3/R3 等为数字按钮；同时兼容以 XInput 扳机轴暴露的情况
+        ; PS5 原生 DI（蓝牙/有线）：和 Xbox 映射不同
+        ; JoyZ/R=右摇杆, JoyU=R2扳机, JoyV=L2扳机
         this.JoyAhkToPS5Map := Map(
             "Joy1", "JoyA",
             "Joy2", "JoyB",
@@ -467,8 +593,6 @@ class SoftData {
             "Joy12", "JoyRS",
             "Joy13", "JoyHome",
             "Joy14", "JoyPad",
-            "JoyZMin", "JoyLT",
-            "JoyZMax", "JoyRT",
             "JoyPOV_0", "JoyDpadUp",
             "JoyPOV_9000", "JoyDpadRight",
             "JoyPOV_18000", "JoyDpadDown",
@@ -477,13 +601,44 @@ class SoftData {
             "JoyXMax", "JoyAxisLXMax",
             "JoyYMin", "JoyAxisLYMin",
             "JoyYMax", "JoyAxisLYMax",
-            "JoyUMin", "JoyAxisRXMin",
-            "JoyUMax", "JoyAxisRXMax",
+            "JoyZMin", "JoyAxisRXMin",
+            "JoyZMax", "JoyAxisRXMax",
             "JoyRMin", "JoyAxisRYMin",
-            "JoyRMax", "JoyAxisRYMax"
+            "JoyRMax", "JoyAxisRYMax",
+            "JoyUMin", "JoyRT",
+            "JoyUMax", "JoyRT",
+            "JoyVMin", "JoyLT",
+            "JoyVMax", "JoyLT"
         )
     }
 
+    ; 物理原始键名 → 通用键名
+    GetPhysToJoyMap() {
+        joyType := MainSoftData.JoyType
+        if (joyType == "PS5")
+            return this.PhysToPS5JoyMap
+        return this.PhysToXboxJoyMap
+    }
+
+    ; 通用键名 → 物理原始键名（用于执行/绑定）
+    GetJoyToPhysMap() {
+        joyType := MainSoftData.JoyType
+        if (joyType == "PS5")
+            return this.JoyToPS5PhysMap
+        return this.JoyToXboxPhysMap
+    }
+
+    ; 通用键名 → 显示名
+    GetJoyNDisplayName(btnKey) {
+        joyType := MainSoftData.JoyType
+        if (this.JoyToDispMap.Has(btnKey)) {
+            labelMap := this.JoyToDispMap[btnKey]
+            return labelMap.Has(joyType) ? labelMap[joyType] : labelMap["Xbox"]
+        }
+        return btnKey
+    }
+
+    ; 旧映射保留兼容
     GetJoyToAhkMap() {
         joyType := MainSoftData.JoyType
         if (joyType == "PS5")
@@ -491,7 +646,39 @@ class SoftData {
         return this.JoyXboxToAhkMap
     }
 
-    ; 录制时 AHK 原始键名 → 友好名（按当前 JoyType）
+    ; 指令字符串中的 BtnN → Joy*（兼容旧 GUI）
+    CmdJoyNToJoyFriendly(cmdStr) {
+        if (cmdStr == "")
+            return cmdStr
+        paramArr := StrSplit(cmdStr, "_")
+        paramArr := StrSplit(cmdStr, "_")
+        if (paramArr.Length >= 2) {
+            keyPart := paramArr[2]
+            btnToJoyMap := Map(
+                "Joy1", "JoyA", "Joy2", "JoyB", "Joy3", "JoyX", "Joy4", "JoyY",
+                "Joy5", "JoyLB", "Joy6", "JoyRB", "Joy7", "JoyLT", "Joy8", "JoyRT",
+                "Joy9", "JoyLS", "Joy10", "JoyRS", "Joy11", "JoyBack", "Joy12", "JoyStart",
+                "Joy13", "JoyHome", "Joy14", "JoyPad",
+                "AxisLXMin", "JoyAxisLXMin", "AxisLXMax", "JoyAxisLXMax",
+                "AxisLYMin", "JoyAxisLYMin", "AxisLYMax", "JoyAxisLYMax",
+                "AxisRXMin", "JoyAxisRXMin", "AxisRXMax", "JoyAxisRXMax",
+                "AxisRYMin", "JoyAxisRYMin", "AxisRYMax", "JoyAxisRYMax",
+                "AxisLT", "JoyLT", "AxisRT", "JoyRT",
+                "DpadUp", "JoyDpadUp", "DpadDown", "JoyDpadDown",
+                "DpadLeft", "JoyDpadLeft", "DpadRight", "JoyDpadRight")
+            if (btnToJoyMap.Has(keyPart))
+                paramArr[2] := btnToJoyMap[keyPart]
+        }
+        result := ""
+        for i, p in paramArr {
+            if (i > 1)
+                result .= "_"
+            result .= p
+        }
+        return result
+    }
+
+    ; 旧：录制时 AHK 原始键名 → 友好名
     GetAhkToJoyMap() {
         joyType := MainSoftData.JoyType
         if (joyType == "PS5")
@@ -517,11 +704,12 @@ class SoftData {
         if (triggerKey == "")
             return ""
         result := triggerKey
-        joyKeys := ["JoyPad", "JoyHome", "JoyA", "JoyB", "JoyX", "JoyY", "JoyLB", "JoyRB", "JoyLT", "JoyRT",
-            "JoyLS", "JoyRS", "JoyBack", "JoyStart",
+        joyKeys := ["JoyAxisLXMin", "JoyAxisLXMax", "JoyAxisLYMin", "JoyAxisLYMax",
+            "JoyAxisRXMin", "JoyAxisRXMax", "JoyAxisRYMin", "JoyAxisRYMax",
             "JoyDpadUp", "JoyDpadDown", "JoyDpadLeft", "JoyDpadRight",
-            "JoyAxisLXMin", "JoyAxisLXMax", "JoyAxisLYMin", "JoyAxisLYMax",
-            "JoyAxisRXMin", "JoyAxisRXMax", "JoyAxisRYMin", "JoyAxisRYMax"]
+            "JoyPad", "JoyHome", "JoyBack", "JoyStart",
+            "JoyLB", "JoyRB", "JoyLT", "JoyRT", "JoyLS", "JoyRS",
+            "JoyA", "JoyB", "JoyX", "JoyY"]
         for key in joyKeys {
             displayName := this.GetJoyDisplayName(key)
             result := StrReplace(result, key, displayName, , , 1)
@@ -534,15 +722,72 @@ class SoftData {
         if (displayStr == "")
             return ""
         result := displayStr
-        joyKeys := ["JoyPad", "JoyHome", "JoyA", "JoyB", "JoyX", "JoyY", "JoyLB", "JoyRB", "JoyLT", "JoyRT",
-            "JoyLS", "JoyRS", "JoyBack", "JoyStart",
+        joyKeys := ["JoyAxisLXMin", "JoyAxisLXMax", "JoyAxisLYMin", "JoyAxisLYMax",
+            "JoyAxisRXMin", "JoyAxisRXMax", "JoyAxisRYMin", "JoyAxisRYMax",
             "JoyDpadUp", "JoyDpadDown", "JoyDpadLeft", "JoyDpadRight",
-            "JoyAxisLXMin", "JoyAxisLXMax", "JoyAxisLYMin", "JoyAxisLYMax",
-            "JoyAxisRXMin", "JoyAxisRXMax", "JoyAxisRYMin", "JoyAxisRYMax"]
+            "JoyPad", "JoyHome", "JoyBack", "JoyStart",
+            "JoyLB", "JoyRB", "JoyLT", "JoyRT", "JoyLS", "JoyRS",
+            "JoyA", "JoyB", "JoyX", "JoyY"]
         for key in joyKeys {
             displayName := this.GetJoyDisplayName(key)
             if (displayName != "")
                 result := StrReplace(result, displayName, key, , , 1)
+        }
+        return result
+    }
+
+    ; 格式化宏指令字符串中的 Joy 键名为 🎮× 格式（只替换第二个 _ 段）
+    ; 格式化宏指令字符串中的 通用键名 为 🎮显示名 格式（只替换第二个 _ 段）
+    FormatCmdJoyDisplay(cmdStr) {
+        if (cmdStr == "")
+            return cmdStr
+        if InStr(cmdStr, "🎮")
+            return cmdStr
+        paramArr := StrSplit(cmdStr, "_")
+        if (paramArr.Length >= 2) {
+            keyPart := paramArr[2]
+            if (RegExMatch(keyPart, "^(Joy\d+|JoyAxisL?[XYZ]M(in|ax)|JoyAxisR[XYZ]M(in|ax)|JoyDpad(Up|Down|Left|Right)|AxisLT|AxisRT|AxisL?[XYZ]M(in|ax)|AxisR[XYZ]M(in|ax)|Dpad(Up|Down|Left|Right))$")) {
+                displayName := this.GetJoyNDisplayName(keyPart)
+                if (displayName != "" && displayName != keyPart)
+                    keyPart := "🎮" displayName
+            }
+            paramArr[2] := keyPart
+        }
+        result := ""
+        for i, p in paramArr {
+            if (i > 1)
+                result .= "_"
+            result .= p
+        }
+        return result
+    }
+
+    ; 从 🎮显示名 格式还原为通用键名（只还原第二个 _ 段）
+    ParseCmdJoyDisplay(displayStr) {
+        if (displayStr == "")
+            return displayStr
+        if !InStr(displayStr, "🎮")
+            return displayStr
+        paramArr := StrSplit(displayStr, "_")
+        if (paramArr.Length >= 2 && InStr(paramArr[2], "🎮")) {
+            keyPart := paramArr[2]
+            ; 反向查找：遍历 BtnToDispMap，找到匹配的显示名→恢复为键名
+            global MainSoftData
+            for btnKey, labelMap in this.JoyToDispMap {
+                joyType := MainSoftData.JoyType
+                disp := labelMap.Has(joyType) ? labelMap[joyType] : labelMap["Xbox"]
+                if (disp != "" && InStr(keyPart, "🎮" disp)) {
+                    keyPart := btnKey
+                    break
+                }
+            }
+            paramArr[2] := keyPart
+        }
+        result := ""
+        for i, p in paramArr {
+            if (i > 1)
+                result .= "_"
+            result .= p
         }
         return result
     }

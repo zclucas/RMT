@@ -90,9 +90,41 @@ class JoyMacro {
         this.Enable()
     }
 
+    ; 自动检测连接的手柄类型
+    static DetectJoyType() {
+        global MainSoftData
+        diFound := false
+        loop 10 {
+            if GetKeyState(A_Index "JoyName") {
+                diFound := true
+                break
+            }
+        }
+        if (!diFound)
+            return
+        loop 4 {
+            try {
+                xiState := Buffer(16)
+                err := DllCall("XInput1_4\XInputGetState", "uint", A_Index - 1, "ptr", xiState)
+                if (!err) {
+                    if (MainSoftData.JoyType != "Xbox") {
+                        MainSoftData.JoyType := "Xbox"
+                        JoyDebugLog("JoyMacro: auto-detect JoyType=Xbox")
+                    }
+                    return
+                }
+            }
+        }
+        if (MainSoftData.JoyType != "PS5") {
+            MainSoftData.JoyType := "PS5"
+            JoyDebugLog("JoyMacro: auto-detect JoyType=PS5")
+        }
+    }
+
     Enable() {
         if (this.MacroMap.Count == 0 && this.ComboMacroMap.Count == 0)
             return
+        ; 手柄类型由用户通过 GUI 下拉框设置，此处不再自动覆盖
         this.JoyIndexArr := []
         loop this.controllerNum {
             if GetKeyState(A_Index "JoyName") {
