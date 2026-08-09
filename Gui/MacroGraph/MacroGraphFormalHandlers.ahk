@@ -456,14 +456,14 @@ class MacroGraphFormalHandlersMixin {
     ; RMT 类别对应的指令列表（与 RMTCMDGui.CategoriesMap 保持一致）
     _RmtCategoryOps(category) {
         allOps := GetLangArr(["截图", "截图提取文本", "自由贴", "启用鼠标", "启用键盘", "启用键鼠",
-            "禁用鼠标", "禁用键盘", "禁用键鼠", "显示菜单", "关闭菜单",
+            "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速", "显示菜单", "关闭菜单",
             "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
             "关闭指令显示", "关闭软件", "休眠", "重载"])
         if (category == GetLang("全部") || category == "")
             return allOps
         categoryOps := Map(
             GetLang("图文"), GetLangArr(["截图", "截图提取文本", "自由贴"]),
-            GetLang("输入控制"), GetLangArr(["启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠"]),
+            GetLang("输入控制"), GetLangArr(["启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速"]),
             GetLang("宏控制"), GetLangArr(["显示菜单", "关闭菜单", "暂停所有宏", "恢复所有宏", "终止所有宏"]),
             GetLang("调试"), GetLangArr(["开启变量监视", "关闭变量监视", "开启指令显示", "关闭指令显示"]),
             GetLang("软件自身"), GetLangArr(["关闭软件", "休眠", "重载"])

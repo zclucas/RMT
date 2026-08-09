@@ -20,7 +20,9 @@ class RMTCMDGui {
                 GetLang("启用键鼠"),
                 GetLang("禁用鼠标"),
                 GetLang("禁用键盘"),
-                GetLang("禁用键鼠")
+                GetLang("禁用键鼠"),
+                GetLang("启用鼠标加速"),
+                GetLang("禁用鼠标加速")
             ],
             GetLang("宏控制"), [
                 GetLang("显示菜单"),

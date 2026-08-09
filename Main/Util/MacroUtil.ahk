@@ -1176,8 +1176,25 @@ ApplyRmtInputControl(cmdStr) {
         case "禁用键盘":
             RmtBlockKeyboard(true)
             return true
+        case "启用鼠标加速":
+            SetMouseAccelState(true)
+            return true
+        case "禁用鼠标加速":
+            SetMouseAccelState(false)
+            return true
     }
     return false
+}
+
+; 鼠标加速（精准指针）控制；每次读取当前参数，只改 acceleration 字段，保留 threshold 不变
+SetMouseAccelState(enable) {
+    params := Buffer(12)
+    ; 读取当前鼠标参数 [threshold1, threshold2, acceleration]
+    DllCall("SystemParametersInfo", "UInt", 0x0003, "UInt", 0, "Ptr", params, "UInt", 0)  ; SPI_GETMOUSE
+    ; 只改 params[2] (acceleration)，保留 threshold1/2 不变
+    NumPut("Int", enable ? 1 : 0, params, 8)
+    ; 写回，SPIF_SENDCHANGE 广播变更，不写注册表
+    DllCall("SystemParametersInfo", "UInt", 0x0004, "UInt", 0, "Ptr", params, "UInt", 0x02)
 }
 
 ; 仅屏蔽键盘（InputHook）；与 BlockInput 鼠标模式相互独立
