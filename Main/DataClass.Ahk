@@ -411,12 +411,12 @@ class SoftData {
             "JoyAxisRYMax", "JoyRMax"
         )
         ; ========== 通用键名映射（与设备无关） ==========
-        ; BtnN = 按物理位置编号的通用键名
-        ; 注意：前面版遗留的 JoyA/JoyB 等旧友好名不再使用，统一改为 BtnN
+        ; JoyN = 按物理位置编号的通用键名（与设备无关）
+        ; Joy1=下, Joy2=右, Joy3=左, Joy4=上
         this.JoyToDispMap := Map(
-            "Joy1", Map("Xbox", "A", "PS5", "□"),
-            "Joy2", Map("Xbox", "B", "PS5", "×"),
-            "Joy3", Map("Xbox", "X", "PS5", "○"),
+            "Joy1", Map("Xbox", "A", "PS5", "×"),
+            "Joy2", Map("Xbox", "B", "PS5", "○"),
+            "Joy3", Map("Xbox", "X", "PS5", "□"),
             "Joy4", Map("Xbox", "Y", "PS5", "△"),
             "Joy5", Map("Xbox", "LB", "PS5", "L1"),
             "Joy6", Map("Xbox", "RB", "PS5", "R1"),
@@ -473,11 +473,12 @@ class SoftData {
             "JoyRMax", "AxisRYMax"
         )
         ; 物理原始键名 → 通用键名（PS5 蓝牙/DI）
+        ; 按物理位置映射：Joy1=下, Joy2=右, Joy3=左, Joy4=上
         this.PhysToPS5JoyMap := Map(
-            "Joy1", "Joy1",
-            "Joy2", "Joy2",
-            "Joy3", "Joy3",
-            "Joy4", "Joy4",
+            "Joy1", "Joy3",   ; □(左) → 左位置
+            "Joy2", "Joy1",   ; ×(下) → 下位置
+            "Joy3", "Joy2",   ; ○(右) → 右位置
+            "Joy4", "Joy4",   ; △(上) → 上位置
             "Joy5", "Joy5",
             "Joy6", "Joy6",
             "Joy7", "Joy7",
@@ -521,7 +522,7 @@ class SoftData {
         )
         ; 通用键名 → 物理原始键名（PS5，用于执行/绑定）
         this.JoyToPS5PhysMap := Map(
-            "Joy1", "Joy1",   "Joy2", "Joy2",   "Joy3", "Joy3",   "Joy4", "Joy4",
+            "Joy1", "Joy2",   "Joy2", "Joy3",   "Joy3", "Joy1",   "Joy4", "Joy4",
             "Joy5", "Joy5",   "Joy6", "Joy6",   "Joy7", "Joy7",   "Joy8", "Joy8",
             "Joy9", "Joy11",  "Joy10", "Joy12", "Joy11", "Joy9",  "Joy12", "Joy10",
             "Joy13", "Joy13", "Joy14", "Joy14",
@@ -536,9 +537,9 @@ class SoftData {
 
         ; 保留旧映射用于兼容
         this.JoyBtnDisplayMap := Map(
-            "JoyA", Map("Xbox", "A", "PS5", "□"),
-            "JoyB", Map("Xbox", "B", "PS5", "×"),
-            "JoyX", Map("Xbox", "X", "PS5", "○"),
+            "JoyA", Map("Xbox", "A", "PS5", "×"),
+            "JoyB", Map("Xbox", "B", "PS5", "○"),
+            "JoyX", Map("Xbox", "X", "PS5", "□"),
             "JoyY", Map("Xbox", "Y", "PS5", "△"),
             "JoyLB", Map("Xbox", "LB", "PS5", "L1"),
             "JoyRB", Map("Xbox", "RB", "PS5", "R1"),
@@ -584,9 +585,9 @@ class SoftData {
         ; PS5 原生 DI（蓝牙/有线）：和 Xbox 映射不同
         ; JoyZ/R=右摇杆, JoyU=R2扳机, JoyV=L2扳机
         this.JoyAhkToPS5Map := Map(
-            "Joy1", "JoyA",
-            "Joy2", "JoyB",
-            "Joy3", "JoyX",
+            "Joy1", "JoyX",
+            "Joy2", "JoyA",
+            "Joy3", "JoyB",
             "Joy4", "JoyY",
             "Joy5", "JoyLB",
             "Joy6", "JoyRB",

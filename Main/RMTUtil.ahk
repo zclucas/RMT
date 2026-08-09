@@ -211,15 +211,34 @@ PluginInit() {
         , MySoftData.HasJoyMacro, MainSoftData.MutiThreadNum, WorkPoolEnabled(), A_IsAdmin, A_ScriptFullPath), "init")
     if (MySoftData.HasJoyMacro) {
         isPS5 := MainSoftData.JoyType = "PS5"
+        ; 快照当前 DI 设备，用于识别虚拟手柄的 DI 索引
+        diBefore := Map()
+        loop 10 {
+            n := GetKeyState(A_Index "JoyName")
+            if (n != "")
+                diBefore[A_Index] := n
+        }
         global ViGJoy := isPS5 ? ViGEmDS4() : ViGEmXb360()
+        ; 通过 DI 快照差异检测虚拟手柄的 DI 索引
+        global VirtualJoyDiIdx := -1
+        try {
+            loop 10 {
+                n := GetKeyState(A_Index "JoyName")
+                if (n != "" && !diBefore.Has(A_Index)) {
+                    VirtualJoyDiIdx := A_Index
+                    break
+                }
+            }
+        }
         try instOk := (IsSet(ViGJoy) && ViGJoy.Instance != "")
         catch
             instOk := false
         try xidx := ViGJoy.ViGJoyXInputIdx
         catch
             xidx := "?"
-        JoyDebugLog(Format("PluginInit {} created InstanceOK={} XInputIdx={} DllPath={}"
-            , isPS5 ? "ViGEmDS4" : "ViGEmXb360", instOk, xidx, IsSet(ViGEmDllPath) ? ViGEmDllPath : "(unset)"), "init")
+        JoyDebugLog(Format("PluginInit {} created InstanceOK={} XInputIdx={} DiIdx={} DllPath={}"
+            , isPS5 ? "ViGEmDS4" : "ViGEmXb360", instOk, xidx, VirtualJoyDiIdx
+            , IsSet(ViGEmDllPath) ? ViGEmDllPath : "(unset)"), "init")
     } else {
         JoyDebugLog("PluginInit skip ViGEm (HasJoyMacro=false); will lazy-create on first Joy send", "init")
     }

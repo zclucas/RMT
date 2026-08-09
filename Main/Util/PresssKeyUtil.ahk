@@ -270,9 +270,9 @@ SendJoyBtnKey(key, state, tableItem, index) {
     ; PS5 模式：将 Xbox 风格的按钮名转为 DS4 风格
     if (MainSoftData.JoyType == "PS5") {
         static ps5BtnMap := Map(
-            "A", "Square",
-            "B", "Cross",
-            "X", "Circle",
+            "A", "Cross",
+            "B", "Circle",
+            "X", "Square",
             "Y", "Triangle",
             "LB", "L1",
             "RB", "R1",

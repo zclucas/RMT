@@ -19,13 +19,18 @@ XboxJosAxisMap := Map("JoyXMin", -32768, "JoyXMax", 32767, "JoyYMin", -32768, "J
 RecordXInputStates := []
 
 DetectControllerJoyType(idx) {
-    ; XInput slot idx-1 → Xbox, 否则 PS5
-    ; Windows 上 XInput 用户 N 对应 DirectInput 索引 N+1
-    try {
-        xiState := Buffer(16)
-        err := DllCall("XInput1_4\XInputGetState", "uint", idx - 1, "ptr", xiState)
-        if (!err)
-            return "Xbox"
+    ; 全局检测：有非虚拟 XInput 设备 → Xbox，否则 PS5
+    virtualXiIdx := RecordGetVirtualXInputIdx()
+    loop 4 {
+        try {
+            xiState := Buffer(16)
+            err := DllCall("XInput1_4\XInputGetState", "uint", A_Index - 1, "ptr", xiState)
+            if (!err) {
+                if (virtualXiIdx >= 0 && A_Index - 1 == virtualXiIdx)
+                    continue  ; 跳过虚拟手柄的 XInput 槽位
+                return "Xbox"
+            }
+        }
     }
     return "PS5"
 }
@@ -181,8 +186,9 @@ RecordJoyTimer() {
                 break
         }
 
-        if (isPressed)
+        if (isPressed) {
             OnRecordAddMacroStr(friendlyKey, true)
+        }
         else if (MainSoftData.RecordHoldKeyMap.Has(friendlyKey))
             OnRecordAddMacroStr(friendlyKey, false)
     }
@@ -198,21 +204,14 @@ RecordJoy() {
 }
 
 RecordRefreshJoyIndexArr() {
-    global RecordJoyIndexArr
-    virtualXiIdx := RecordGetVirtualXInputIdx()
+    global RecordJoyIndexArr, VirtualJoyDiIdx
     RecordJoyIndexArr := []
     loop RecordControllerNum {
         if !GetKeyState(A_Index "JoyName")
             continue
-        ; 跳过 ViGEm 虚拟手柄（输出设备，不参与输入检测）
-        if (virtualXiIdx >= 0) {
-            try {
-                vs := Buffer(16)
-                ve := DllCall("XInput1_4\XInputGetState", "uint", A_Index - 1, "ptr", vs)
-                if (!ve && A_Index - 1 == virtualXiIdx)
-                    continue
-            }
-        }
+        ; 跳过 ViGEm 虚拟手柄
+        if (IsSet(VirtualJoyDiIdx) && A_Index == VirtualJoyDiIdx)
+            continue
         RecordJoyIndexArr.Push(A_Index)
     }
 }
