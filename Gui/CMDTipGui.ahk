@@ -32,6 +32,14 @@ class CMDTipGui {
         this._viewPos := 0
         this._contentText := ""
         this.closed := true
+        ; 日志输出（异步写入缓冲区）
+        this._logFlushBuffer := ""
+        this._logFlushTimer := ""
+        this.LogToFile := false
+        this.LogFilePath := ""
+        ; 自动清理
+        this.AutoClear := 0          ; 0=从不 1=每天 2=每周
+        this._lastClearDate := ""
     }
 
     GetShowOptions() {
@@ -53,6 +61,9 @@ class CMDTipGui {
             this.OnToggleMacroWorkState()
         }
 
+        ; 自动清理检查
+        this._AutoClearCheck()
+
         this.AddCMD(CMDStr)
 
         if (!this._wheelCb) {
@@ -73,6 +84,13 @@ class CMDTipGui {
         this.BgAlpha := Integer((100 - MainSoftData.CMDTransparency) * 2.55)
         this.FontSize := MainSoftData.CMDFontSize
         this.FontColor := this._ToXamlColor(MainSoftData.CMDFontColor)
+        ; 日志输出
+        this.LogToFile := MainSoftData.HasProp("CMDLogToFile") ? MainSoftData.CMDLogToFile : false
+        rawPath := MainSoftData.HasProp("CMDLogFilePath") ? MainSoftData.CMDLogFilePath : ""
+        this.LogFilePath := (rawPath != "") ? rawPath : A_WorkingDir "\Log\CMDLog.txt"
+        this.AutoClear := MainSoftData.HasProp("CMDLogAutoClear") ? MainSoftData.CMDLogAutoClear : 0
+        if (this._lastClearDate == "")
+            this._lastClearDate := FormatTime(A_Now, "yyyyMMdd")
     }
 
     _ToRgb6(c) {
@@ -308,11 +326,74 @@ class CMDTipGui {
             this._textLen := StrLen(this._ToDisplayText(this._contentText))
             this._viewPos := this._textLen
         }
+
+        ; 异步写日志文件（不阻塞主线程）
+        if (this.LogToFile) {
+            this._LogToFile(CMDStr)
+        }
+    }
+
+    ; 写入日志文件（异步：积累缓冲，定时一次写入）
+    _LogToFile(text) {
+        if (this._logFlushTimer == "") {
+            this._logFlushTimer := ObjBindMethod(this, "_FlushLog")
+            SetTimer(this._logFlushTimer, -3000)  ; 3 秒后一次性写入
+        } else {
+            ; 已有定时器在等，刷新超时
+            SetTimer(this._logFlushTimer, 0)
+            SetTimer(this._logFlushTimer, -3000)
+        }
+        this._logFlushBuffer .= Format("`n{}", text)
+    }
+
+    _FlushLog() {
+        buf := this._logFlushBuffer
+        this._logFlushBuffer := ""
+        this._logFlushTimer := ""
+        if (buf == "")
+            return
+        ; 非阻塞写入：FileAppend 在 AHK v2 中是同步的，
+        ; 但 3s 积累批量写入比每行写一次开销小很多
+        try {
+            SplitPath this.LogFilePath, , &logDir
+            if (!DirExist(logDir))
+                DirCreate(logDir)
+            FileAppend buf, this.LogFilePath, "UTF-8-RAW"
+        }
+    }
+
+    ; 自动清理旧日志
+    _AutoClearCheck() {
+        if (this.AutoClear == 0 || this._contentText == "")
+            return
+        shouldClear := false
+        if (this.AutoClear == 1) {
+            ; 每天：日期不同就清理
+            shouldClear := FormatTime(A_Now, "yyyyMMdd") != this._lastClearDate
+        } else if (this.AutoClear == 2) {
+            ; 每周：跨周才清理
+            ; ISO 年份+周数一体（YWeek 为 v2.0 原生令牌，含零填充）
+            curWeek := FormatTime(A_Now, "YWeek")
+            lastWeek := FormatTime(this._lastClearDate, "YWeek")
+            shouldClear := curWeek != lastWeek
+        }
+        if (!shouldClear)
+            return
+        this._lastClearDate := FormatTime(A_Now, "yyyyMMdd")
+        this.ShowCount := 0
+        this._contentText := ""
+        this._textLen := 0
+        this._viewPos := 0
+        if (IsObject(this.ui) && !this.closed)
+            try this.ui.Update("ContentCon", "Text", "")
     }
 
     Hide() {
         if (this.closed || !IsObject(this.ui))
             return
+
+        ; 刷新最后一波日志
+        this._FlushLog()
 
         this.ShowCount := 0
         this._contentText := ""

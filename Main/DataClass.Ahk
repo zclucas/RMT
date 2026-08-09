@@ -231,6 +231,9 @@ class MainConfig {
         this.CMDTransparency := 50      ; CMD 背景透明度 (0=不透明，100=完全透明)
         this.CMDFontSize := "12"        ; CMD 字体大小
         this.CMDFontColor := "5C3317"   ; CMD 字体颜色 (由主题同步)
+        this.CMDLogToFile := false      ; 是否输出到日志文件
+        this.CMDLogFilePath := ""       ; 日志文件路径（空=默认，自动使用 Log/CMDLog.txt）
+        this.CMDLogAutoClear := 0       ; 自动清理 0=从不, 1=每天, 2=每周
 
         ; ========== 变量监视器 ==========
         this.VarListenTop := false      ; 变量监视器窗口是否置顶

@@ -16,10 +16,14 @@ class CMDTipSettingGui {
         this._height := 300
         this._fontSize := 12
         this._transparency := 50
+        this._logToFile := false
+        this._logAutoClear := 0
+        this._logFilePath := ""
         this._syncing := false
         this._hotkeysOn := false
         this._posAction := ObjBindMethod(this, "RefreshMousePos")
         this._f1Action := ObjBindMethod(this, "OnF1SetPos")
+        this._folderBrowseAction := ObjBindMethod(this, "OnBrowseLogPath")
     }
 
     static ShowGui() {
@@ -196,6 +200,49 @@ class CMDTipSettingGui {
         tip2 := panel.Add("TextBlock").Text(GetLang("透明度(0~100)：0不透明，100完全透明"))
             .Foreground("{DynamicResource TextSub}").FontSize(11).Margin("0,8,0,0")
 
+        ; ===== 日志与清理 =====
+        sep1 := panel.Add("Rectangle").Height(1).Margin("0,14,0,0")
+            .Fill("{DynamicResource DividerColor}").Stretch("Fill")
+        logHeader := panel.Add("TextBlock")
+            .Text(GetLang("日志文件输出")).FontWeight("SemiBold")
+            .Foreground(labelStyle.fg).FontSize(13).Margin("0,8,0,0")
+
+        ; 输出到文件复选框
+        rowLog := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,8,0,0")
+        rowLog.Add("CheckBox").Name("LogToFileCon")
+            .Content(GetLang("输出到文件"))
+            .Foreground(labelStyle.fg).FontSize(labelStyle.fs)
+
+        ; 日志文件路径
+        rowPath := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,6,0,0")
+        rowPath.Add("TextBlock").Text(GetLang("日志文件路径："))
+            .Foreground(labelStyle.fg).FontSize(labelStyle.fs)
+            .VerticalAlignment("Center").Width(labelStyle.w)
+        rowPath.Add("TextBox").Name("LogFilePathCon")
+            .Width(180).Height(24).MinHeight(24).VerticalContentAlignment("Center").Padding("4,0")
+            .Foreground("{DynamicResource InputText}")
+            .Background("{DynamicResource InputBg}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        browseBtn := rowPath.Add("Button").Name("BtnBrowseLogPath")
+            .Content("...").Width(28).Height(24).Margin("4,0,0,0")
+            .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1")
+            .FontSize(12).Cursor("Hand")
+
+        ; 自动清理
+        rowClear := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,6,0,0")
+        rowClear.Add("TextBlock").Text(GetLang("自动清理时间："))
+            .Foreground(labelStyle.fg).FontSize(labelStyle.fs)
+            .VerticalAlignment("Center").Width(labelStyle.w)
+        clearCombo := rowClear.Add("ComboBox").Name("AutoClearCon")
+            .Width(120).Height(24).MinHeight(24).VerticalAlignment("Center")
+            .Foreground("{DynamicResource InputText}")
+            .Background("{DynamicResource InputBg}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        clearNames := GetLangArr(["从不", "每天", "每周"])
+        for n in clearNames
+            clearCombo.Add("ComboBoxItem").Content(n)
+
         ; 底部按钮
         PrimaryBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 
@@ -214,7 +261,7 @@ class CMDTipSettingGui {
         ; 编译 XAML
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="False" Width="420" Height="330" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="False" Width="420" Height="430" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
@@ -248,6 +295,15 @@ class CMDTipSettingGui {
 
         this.ui.OnEvent("BtnRevert", "Click", ObjBindMethod(this, "OnRevertClick"))
         this.ui.OnEvent("BtnConfirm", "Click", ObjBindMethod(this, "OnConfirmClick"))
+
+        ; 日志输出控件
+        this.ui.Track("LogToFileCon")
+        this.ui.Track("LogFilePathCon")
+        this.ui.Track("AutoClearCon")
+        this.ui.OnEvent("LogToFileCon", "Click", ObjBindMethod(this, "OnLogToFileClick"))
+        this.ui.OnEvent("LogFilePathCon", "TextChanged", ObjBindMethod(this, "OnLogFilePathChanged"))
+        this.ui.OnEvent("AutoClearCon", "SelectionChanged", ObjBindMethod(this, "OnAutoClearChanged"))
+        this.ui.OnEvent("BtnBrowseLogPath", "Click", ObjBindMethod(this, "OnBrowseLogPath"))
 
         this.LoadInitValues()
         this.ApplyValuesToUI()
@@ -331,6 +387,10 @@ class CMDTipSettingGui {
         this._height := Max(40, Integer(MainSoftData.CMDHeight))
         this._fontSize := Max(8, Min(36, Integer(MainSoftData.CMDFontSize)))
         this._transparency := Max(0, Min(100, Integer(MainSoftData.CMDTransparency)))
+        this._logToFile := MainSoftData.HasProp("CMDLogToFile") ? MainSoftData.CMDLogToFile : false
+        rawPath := MainSoftData.HasProp("CMDLogFilePath") ? MainSoftData.CMDLogFilePath : ""
+        this._logFilePath := (rawPath != "") ? rawPath : A_WorkingDir "\Log\CMDLog.txt"
+        this._logAutoClear := MainSoftData.HasProp("CMDLogAutoClear") ? MainSoftData.CMDLogAutoClear : 0
     }
 
     ApplyValuesToUI() {
@@ -349,6 +409,10 @@ class CMDTipSettingGui {
             this.ui.Update("FontSizeValText", "Text", String(this._fontSize))
             this.ui.Update("TransparencyCon", "Value", String(this._transparency))
             this.ui.Update("TransparencyValText", "Text", String(this._transparency))
+            ; 日志输出
+            this.ui.Update("LogToFileCon", "IsChecked", this._logToFile ? "True" : "False")
+            this.ui.Update("LogFilePathCon", "Text", this._logFilePath)
+            this.ui.Update("AutoClearCon", "SelectedIndex", String(this._logAutoClear))
         } finally {
             this._syncing := false
         }
@@ -486,6 +550,42 @@ class CMDTipSettingGui {
         }
     }
 
+    OnLogToFileClick(state, ctrl, event) {
+        if (this._syncing)
+            return
+        this._logToFile := state.Has("LogToFileCon") && state["LogToFileCon"] == "True"
+    }
+
+    OnAutoClearChanged(state, ctrl, event) {
+        if (this._syncing)
+            return
+        ; state 里是选中项文本（如「从不」），索引用 Query 读
+        idx := this.ui.Query("AutoClearCon>SelectedIndex")
+        this._logAutoClear := (idx == "" || idx < 0) ? 0 : Integer(idx)
+    }
+
+    OnLogFilePathChanged(state, ctrl, event) {
+        if (this._syncing)
+            return
+        val := state.Has("LogFilePathCon") ? state["LogFilePathCon"] : ""
+        if (val != "")
+            this._logFilePath := val
+    }
+
+    OnBrowseLogPath(state, ctrl, event) {
+        static logDir := ""
+        if (logDir == "")
+            logDir := A_WorkingDir "\Log"
+        selected := FileSelect("D", logDir, GetLang("CMD日志文件"))
+        if (selected == "")
+            return
+        logDir := selected
+        this._logFilePath := selected "\CMDLog.txt"
+        this._syncing := true
+        try this.ui.Update("LogFilePathCon", "Text", this._logFilePath)
+        finally this._syncing := false
+    }
+
     OnRevertClick(state, ctrl, event) {
         ; 默认：宽按 DPI 缩放，高 300，X = 屏幕宽 - 显示宽
         this._width := GetDefaultCMDTipWidth()
@@ -524,6 +624,9 @@ class CMDTipSettingGui {
         MainSoftData.CMDHeight := this._height
         MainSoftData.CMDFontSize := this._fontSize
         MainSoftData.CMDTransparency := this._transparency
+        MainSoftData.CMDLogToFile := this._logToFile
+        MainSoftData.CMDLogFilePath := this._logFilePath
+        MainSoftData.CMDLogAutoClear := this._logAutoClear
 
         IniWrite(MainSoftData.CMDPosX, IniFile, IniSection, "CMDPosX")
         IniWrite(MainSoftData.CMDPosY, IniFile, IniSection, "CMDPosY")
@@ -531,6 +634,9 @@ class CMDTipSettingGui {
         IniWrite(MainSoftData.CMDHeight, IniFile, IniSection, "CMDHeight")
         IniWrite(MainSoftData.CMDFontSize, IniFile, IniSection, "CMDFontSize")
         IniWrite(MainSoftData.CMDTransparency, IniFile, IniSection, "CMDTransparency")
+        IniWrite(MainSoftData.CMDLogToFile, IniFile, IniSection, "CMDLogToFile")
+        IniWrite(MainSoftData.CMDLogFilePath, IniFile, IniSection, "CMDLogFilePath")
+        IniWrite(MainSoftData.CMDLogAutoClear, IniFile, IniSection, "CMDLogAutoClear")
 
         if (IsSet(MyCMDTipGui) && IsObject(MyCMDTipGui))
             MyCMDTipGui.ApplySettings()
