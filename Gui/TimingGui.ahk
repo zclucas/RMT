@@ -67,10 +67,13 @@ class TimingGui {
         this._endText := this._endEnabled
             ? this._FormatStamp(this.Data.EndStamp)
             : this._DefaultEndText()
+
         this._typeIndex := Integer(this.Data.Type)
         if (this._typeIndex < 1 || this._typeIndex > 3)
             this._typeIndex := 1
+
         this._intervalText := String(this.Data.HasOwnProp("CustomInterval") ? this.Data.CustomInterval : "10")
+
         this._unitIndex := Integer(this.Data.HasOwnProp("CustomUnit") ? this.Data.CustomUnit : 2)
         if (this._unitIndex < 1 || this._unitIndex > 6)
             this._unitIndex := 2
@@ -89,6 +92,37 @@ class TimingGui {
     _ParseTimeText(text) {
         t := RegExReplace(Trim(String(text)), "[^\d]", "")
         return (StrLen(t) == 14) ? t : ""
+    }
+
+    _NormalizeTimeInput(text, minVal, maxVal, fallback := "00") {
+        t := RegExReplace(Trim(String(text)), "[^\d]", "")
+        if (t = "")
+            return fallback
+        n := Integer(t)
+        if (n < minVal)
+            n := minVal
+        else if (n > maxVal)
+            n := maxVal
+        return Format("{:02}", n)
+    }
+
+    _ResolveComboIndex(text, names, fallback := 1) {
+        t := Trim(String(text))
+        if (t = "")
+            return fallback
+
+        loop names.Length {
+            if (t = names[A_Index])
+                return A_Index
+        }
+
+        if RegExMatch(t, "^\d+$") {
+            n := Integer(t)
+            if (n >= 1 && n <= names.Length)
+                return n
+        }
+
+        return fallback
     }
 
     _BuildAndShow() {
@@ -114,7 +148,7 @@ class TimingGui {
 
         body := main.Add("StackPanel").Grid_Row(1).Margin("18,8,18,8")
 
-        timeBoxW := "150"
+        timeBoxW := "170"
         labelW := "72"
         chkW := "22"
 
@@ -172,11 +206,13 @@ class TimingGui {
             .Grid_Row(2).Grid_Column(0).Margin("0,0,0,8")
         formBlock.Add("TextBlock").Text(GetLang("定时类型：")).Foreground("{DynamicResource TextMain}").FontSize(13)
             .VerticalAlignment("Center").Margin("0,0,4,8").Grid_Row(2).Grid_Column(1)
+
         typeNames := GetLangArr(["单次", "软件启动时", "自定义"])
         typeCmb := formBlock.Add("ComboBox").Name("TypeCon").Width(timeBoxW).Height(26).MinHeight(26)
             .Grid_Row(2).Grid_Column(2).Margin("0,0,0,8").VerticalAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .IsEditable("False")
         for n in typeNames
             typeCmb.Add("ComboBoxItem").Content(n)
 
@@ -189,11 +225,13 @@ class TimingGui {
             .Foreground("{DynamicResource TextMain}").FontSize(13)
             .VerticalAlignment("Center").Margin("0,0,4,0").Grid_Column(1)
         this._AddTextBox(intervalRow, "IntervalCon", "10", "70").Grid_Column(2)
+
         unitNames := GetLangArr(["秒", "分钟", "小时", "天", "周", "月"])
-        unitCmb := intervalRow.Add("ComboBox").Name("UnitCon").Width(72).Height(26).MinHeight(26)
+        unitCmb := intervalRow.Add("ComboBox").Name("UnitCon").Width(82).Height(26).MinHeight(26)
             .Grid_Column(3).Margin("6,0,0,0").VerticalAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .IsEditable("False")
         for n in unitNames
             unitCmb.Add("ComboBoxItem").Content(n)
 
@@ -300,7 +338,7 @@ class TimingGui {
 
     _ClosePicker() {
         if (IsObject(this._pickerGui)) {
-            try this._pickerGui.Destroy()
+            try this._pickerGui.Update("Window", "Close", "")
             this._pickerGui := ""
         }
     }
@@ -308,30 +346,28 @@ class TimingGui {
     _ApplyValuesToUI() {
         if (!IsObject(this.ui) || this.closed)
             return
+
+        typeNames := GetLangArr(["单次", "软件启动时", "自定义"])
+        unitNames := GetLangArr(["秒", "分钟", "小时", "天", "周", "月"])
+
         try this.ui.Update("StartTimeCon", "Text", this._startText)
         try this.ui.Update("EndTimeCon", "Text", this._endText)
         try this.ui.Update("EndEnableCon", "IsChecked", this._endEnabled ? "True" : "False")
+
+        try this.ui.Update("TypeCon", "Text", typeNames[this._typeIndex])
         try this.ui.Update("TypeCon", "SelectedIndex", this._typeIndex - 1)
+
         try this.ui.Update("IntervalCon", "Text", this._intervalText)
+
+        try this.ui.Update("UnitCon", "Text", unitNames[this._unitIndex])
         try this.ui.Update("UnitCon", "SelectedIndex", this._unitIndex - 1)
+
         this._RefreshIntervalVisibility()
         this._RefreshEndEnabled()
     }
 
     OnChangeType(state := unset, ctrl := unset, event := unset) {
-        if (IsSet(state) && IsObject(state) && state.Has("TypeCon") && state["TypeCon"] != "") {
-            names := GetLangArr(["单次", "软件启动时", "自定义"])
-            loop names.Length {
-                if (state["TypeCon"] == names[A_Index]) {
-                    this._typeIndex := A_Index
-                    break
-                }
-            }
-        } else if (IsObject(this.ui)) {
-            idx := this.ui.Query("TypeCon>SelectedIndex")
-            if (idx != "" && IsNumber(idx))
-                this._typeIndex := Integer(idx) + 1
-        }
+        this._ReadUIState(IsSet(state) ? state : unset)
         this._RefreshIntervalVisibility()
     }
 
@@ -428,31 +464,173 @@ class TimingGui {
         if (IsObject(this.ui) && this.ui.HasProp("wpfHwnd"))
             owner := this.ui.wpfHwnd
 
-        picker := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox", GetLang("选择时间"))
-        picker.SetFont("S10", MainSoftData.FontType)
-        if (owner)
-            picker.Opt("+Owner" owner)
+        year := FormatTime(A_Now, "yyyy")
+        month := FormatTime(A_Now, "MM")
+        day := FormatTime(A_Now, "dd")
+        hour := FormatTime(A_Now, "HH")
+        minute := FormatTime(A_Now, "mm")
+        second := FormatTime(A_Now, "ss")
 
-        picker.Add("Text", "x12 y14", GetLang("时间："))
-        dt := picker.Add("DateTime", "x60 y10 w220", "yyyy-MM-dd HH:mm:ss")
         raw := this._ParseTimeText(currentText)
-        if (raw != "")
-            try dt.Value := raw
+        if (raw != "" && StrLen(raw) == 14) {
+            year := SubStr(raw, 1, 4)
+            month := SubStr(raw, 5, 2)
+            day := SubStr(raw, 7, 2)
+            hour := SubStr(raw, 9, 2)
+            minute := SubStr(raw, 11, 2)
+            second := SubStr(raw, 13, 2)
+        }
 
-        okBtn := picker.Add("Button", "x70 y50 w80 h30 Default", GetLang("确定"))
-        cancelBtn := picker.Add("Button", "x170 y50 w80 h30", GetLang("取消"))
+        dateStr := year "-" month "-" day
+
+        title := GetLang("选择时间")
+        titleHeight := "36"
+        winW := 360
+        winH := 320
+
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
+        main.Rows(titleHeight, "*")
+
+        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
+        tbInner := tb.Add("Grid")
+        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(12).FontWeight("SemiBold").VerticalAlignment("Center").Margin("15,0,0,0")
+        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
+        CloseBtnTemplate := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="#E0FF3333"/><Setter Property="Foreground" Value="White"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        closeBtn := BtnGroup.Add("Button").Name("BtnClosePicker").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+        closeBtn.InjectResources(CloseBtnTemplate)
+        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+
+        body := main.Add("StackPanel").Grid_Row(1).Margin("15,8,15,8")
+
+        body.Add("Calendar").Name("CalendarCon").HorizontalAlignment("Center").BorderThickness(0).Background("Transparent").Margin("0,0,0,8")
+        body.Add("TextBlock").Name("HiddenDateText").Text("{Binding SelectedDate, ElementName=CalendarCon, StringFormat='{}{0:yyyy-MM-dd}'}").Visibility("Collapsed")
+
+        timeGrid := body.Add("Grid").Margin("0,8,0,8").HorizontalAlignment("Center")
+        timeGrid.Cols("Auto", "5", "62", "3", "62", "3", "62")
+
+        timeGrid.Add("TextBlock").Text(GetLang("时间：")).Foreground("{DynamicResource TextMain}").FontSize(13).VerticalAlignment("Center").Grid_Column(0)
+
+        hourCmb := timeGrid.Add("ComboBox").Name("HourCon").Height(26).MinHeight(26).Grid_Column(2)
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalAlignment("Center")
+            .IsEditable("True")
+        loop 24 {
+            v := Format("{:02}", A_Index - 1)
+            hourCmb.Add("ComboBoxItem").Content(v)
+        }
+
+        timeGrid.Add("TextBlock").Text(":").Foreground("{DynamicResource TextMain}").FontSize(13).VerticalAlignment("Center").HorizontalAlignment("Center").Grid_Column(3)
+
+        minCmb := timeGrid.Add("ComboBox").Name("MinCon").Height(26).MinHeight(26).Grid_Column(4)
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalAlignment("Center")
+            .IsEditable("True")
+        loop 60 {
+            v := Format("{:02}", A_Index - 1)
+            minCmb.Add("ComboBoxItem").Content(v)
+        }
+
+        timeGrid.Add("TextBlock").Text(":").Foreground("{DynamicResource TextMain}").FontSize(13).VerticalAlignment("Center").HorizontalAlignment("Center").Grid_Column(5)
+
+        secCmb := timeGrid.Add("ComboBox").Name("SecCon").Height(26).MinHeight(26).Grid_Column(6)
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalAlignment("Center")
+            .IsEditable("True")
+        loop 60 {
+            v := Format("{:02}", A_Index - 1)
+            secCmb.Add("ComboBoxItem").Content(v)
+        }
+
+        btnRow := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,12,0,0")
+
+        okBtn := btnRow.Add("Button").Name("BtnPickerConfirm").Content(GetLang("确定"))
+            .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").FontWeight("Bold")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1")
+            .FontSize(12).Cursor("Hand").Width(80).Height(28).Margin("0,0,10,0")
+        okBtn.InjectResources(this._btnStyle)
+
+        cancelBtn := btnRow.Add("Button").Name("BtnPickerCancel").Content(GetLang("取消"))
+            .Background("{DynamicResource EditBg}").Foreground("{DynamicResource EditText}")
+            .BorderBrush("{DynamicResource EditStroke}").BorderThickness("1")
+            .FontSize(12).Cursor("Hand").Width(80).Height(28)
+        cancelBtn.InjectResources(this._editBtnStyle)
+
+        pos := GetCenterPosOnActiveMonitor(winW, winH)
+        dipX := PhysToDip(pos.x)
+        dipY := PhysToDip(pos.y)
+        tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
+
+        picker := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
+        picker.xaml := StrReplace(picker.xaml, 'Width="940" Height="700"',
+            Format('Title="{}" ShowInTaskbar="False" Width="{}" Height="{}" Left="{}" Top="{}" Opacity="0"',
+                title, winW, winH, dipX, dipY))
+        picker.xaml := StrReplace(picker.xaml, 'WindowStartupLocation="CenterScreen"', 'WindowStartupLocation="Manual"')
+        picker.xaml := StrReplace(picker.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
+        picker.xaml := StrReplace(picker.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
+        picker.xaml := StrReplace(picker.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
+
+        picker.OnEvent("Window", "Closing", ObjBindMethod(this, "_OnPickerClosing"))
+        picker.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_OnPickerLoad", dateStr, hour, minute, second))
+        picker.OnEvent("BtnClosePicker", "Click", ObjBindMethod(this, "_OnPickerCancelClick"))
+        picker.OnEvent("BtnPickerConfirm", "Click", ObjBindMethod(this, "_OnPickerConfirmClick", which))
+        picker.OnEvent("BtnPickerCancel", "Click", ObjBindMethod(this, "_OnPickerCancelClick"))
+        picker.Track("HiddenDateText")
+        picker.Track("HourCon")
+        picker.Track("MinCon")
+        picker.Track("SecCon")
+
         this._pickerGui := picker
+        picker.Show()
 
-        okBtn.OnEvent("Click", (*) => this._OnPickerSure(which, dt, picker))
-        cancelBtn.OnEvent("Click", (*) => this._OnPickerCancel(picker))
-        picker.OnEvent("Close", (*) => this._OnPickerCancel(picker))
-
-        pos := GetCenterPosOnActiveMonitor(300, 100)
-        picker.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 300, 100))
+        loop 40 {
+            if (picker.HasProp("wpfHwnd") && picker.wpfHwnd) {
+                try picker.Update("Window", "Opacity", "1")
+                try WinActivate("ahk_id " picker.wpfHwnd)
+                break
+            }
+            Sleep(50)
+        }
     }
 
-    _OnPickerSure(which, dt, picker) {
-        text := FormatTime(dt.Value, "yyyy-MM-dd HH:mm:ss")
+    _OnPickerClosing(state := unset, ctrl := unset, event := unset) {
+        this._pickerGui := ""
+    }
+
+    _OnPickerLoad(dateStr, hour, minute, second, state := unset, ctrl := unset, event := unset) {
+        try {
+            themeName := MainSoftData.HasProp("Theme") ? MainSoftData.Theme : "RMT_Light"
+            ApplyXamlTheme(this._pickerGui, themeName)
+
+            this._pickerGui.Update("CalendarCon", "SelectedDate", dateStr)
+            this._pickerGui.Update("CalendarCon", "DisplayDate", dateStr)
+
+            this._pickerGui.Update("HourCon", "Text", Format("{:02}", Integer(hour)))
+            this._pickerGui.Update("MinCon", "Text", Format("{:02}", Integer(minute)))
+            this._pickerGui.Update("SecCon", "Text", Format("{:02}", Integer(second)))
+
+            this._pickerGui.Update("HourCon", "SelectedIndex", String(Integer(hour)))
+            this._pickerGui.Update("MinCon", "SelectedIndex", String(Integer(minute)))
+            this._pickerGui.Update("SecCon", "SelectedIndex", String(Integer(second)))
+        } finally {
+            this._pickerGui.Update("Window", "Opacity", "1")
+        }
+    }
+
+    _OnPickerConfirmClick(which, state := unset, ctrl := unset, event := unset) {
+        dateVal := this._pickerGui.Query("HiddenDateText")
+        hText := this._pickerGui.Query("HourCon")
+        mText := this._pickerGui.Query("MinCon")
+        sText := this._pickerGui.Query("SecCon")
+
+        if (dateVal == "")
+            dateVal := FormatTime(A_Now, "yyyy-MM-dd")
+
+        hStr := this._NormalizeTimeInput(hText, 0, 23, "00")
+        mStr := this._NormalizeTimeInput(mText, 0, 59, "00")
+        sStr := this._NormalizeTimeInput(sText, 0, 59, "00")
+
+        text := dateVal " " hStr ":" mStr ":" sStr
+
         if (which == "start") {
             this._startText := text
             try this.ui.Update("StartTimeCon", "Text", text)
@@ -463,14 +641,11 @@ class TimingGui {
             try this.ui.Update("EndEnableCon", "IsChecked", "True")
             this._RefreshEndEnabled()
         }
-        this._pickerGui := ""
-        try picker.Destroy()
+        this._ClosePicker()
     }
 
-    _OnPickerCancel(picker) {
-        if (this._pickerGui == picker)
-            this._pickerGui := ""
-        try picker.Destroy()
+    _OnPickerCancelClick(state := unset, ctrl := unset, event := unset) {
+        this._ClosePicker()
     }
 
     _ReadUIState(state := unset) {
