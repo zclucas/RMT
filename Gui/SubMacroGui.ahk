@@ -62,7 +62,7 @@ class SubMacroGui {
         PosX += 70
         this.TypeCon := MyGui.Add("DropDownList", Format("x{} y{} w{}", PosX, PosY - 5, 110), GetLangArr(["当前宏", "按键宏",
             "字串宏",
-            "菜单宏", "定时宏", "宏"]))
+            "菜单宏", "界面宏", "定时宏", "宏"]))
         this.TypeCon.Value := 1
         this.TypeCon.OnEvent("Change", (*) => this.OnRefresh())
 
@@ -123,7 +123,7 @@ class SubMacroGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr(2)
 
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
+        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "定时宏", "宏"])
         callTypes := GetLangArr(["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
         this.TypeCon.Value := this._LangArrIndex(macroTypes, this.Data.MacroType)
         this.CallTypeCon.Value := this._LangArrIndex(callTypes, this.Data.CallType)
@@ -169,7 +169,7 @@ class SubMacroGui {
     }
 
     OnRefresh() {
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
+        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "定时宏", "宏"])
         EnableIndex := this.TypeCon.Value != 1
         this.DropDownIndexCon.Enabled := EnableIndex
         if (EnableIndex) {
@@ -241,7 +241,7 @@ class SubMacroGui {
         if (Remark == "") {
             OperTipArr := GetLangArr(["插入", "触发", "暂停", "取消暂停", "终止"])
             IntervarlStr := MainSoftData.Lang == "中文" ? "" : " "
-            MacroTypeArr := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
+            MacroTypeArr := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "定时宏", "宏"])
             OperStr := OperTipArr[this.CallTypeCon.Value]
             TypeStr := MacroTypeArr[this.TypeCon.Value]
             SerialStr := this.TypeCon.Value == 1 ? "" : this.DropDownIndexCon.value
@@ -252,7 +252,7 @@ class SubMacroGui {
     }
 
     SaveSubMacroData() {
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
+        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "定时宏", "宏"])
         callTypes := GetLangArr(["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
         this.Data.MacroType := GetLangKey(macroTypes[this.TypeCon.Value])
         this.Data.Index := this.DropDownIndexCon.value
