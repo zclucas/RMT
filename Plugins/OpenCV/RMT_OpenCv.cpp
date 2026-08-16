@@ -124,7 +124,9 @@ cv::Mat captureScreen(int hwnd, int x, int y, int width, int height) {
     DWM_THUMBNAIL_PROPERTIES props;
     props.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE |
         DWM_TNP_SOURCECLIENTAREAONLY | DWM_TNP_OPACITY;
-    props.fSourceClientAreaOnly = FALSE;
+    // 这里必须按“客户区”抓取，以和 AHK 侧使用的窗口坐标系保持一致。
+    // 否则有标题栏/边框的窗口会把非客户区算进截图，造成偏移和裁剪错误。
+    props.fSourceClientAreaOnly = TRUE;
     props.fVisible = TRUE;
     props.opacity = 255;
     props.rcDestination = RECT{ -offset, -offset, size.cx - offset, size.cy - offset };
