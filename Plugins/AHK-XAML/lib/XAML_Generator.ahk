@@ -2,6 +2,7 @@ class XAMLElement {
     __New(tag, textContent := "") {
         this._Tag := tag
         this._Props := Map()
+        this._RawProps := Map()
         this._Children := []
         this._TextContent := textContent
         this._Parent := ""
@@ -321,6 +322,15 @@ class XAMLElement {
         return this
     }
 
+    ; 写入原始标记扩展字符串（如 {Binding ...} / {DynamicResource ...}），
+    ; 跳过 Text/Content 的 { 字面转义。用户文本用 .Text()/.Content() 即可，无需手动转义。
+    SetMarkup(name, value) {
+        this._TrackCaller()
+        this._Props[name] := value
+        this._RawProps[name] := true
+        return this
+    }
+
     ; ==========================================
     ; SHORTHAND BUILDERS
     ; ==========================================
@@ -373,6 +383,10 @@ class XAMLElement {
             val := StrReplace(val, "`r`n", "&#10;")
             val := StrReplace(val, "`n", "&#10;")
             val := StrReplace(val, "`r", "&#10;")
+            ; WPF 属性值以 { 开头会被当作标记扩展，字面文本需转义为 {} 前缀；
+            ; 故意写的标记扩展（{Binding...} 等）经 SetMarkup 标记为 raw，跳过此转义
+            if (!this._RawProps.Has(k) && (k == "Text" || k == "Content") && SubStr(val, 1, 1) == "{")
+                val := "{}" val
             attrStr .= ' ' k '="' val '"'
         }
         

@@ -128,7 +128,7 @@ class UIMacroPanelSettingGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .Text("{Binding Value, ElementName=OffsetXCon}")
+            .SetMarkup("Text", "{Binding Value, ElementName=OffsetXCon}")
 
         rowOffY := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
         rowOffY.Add("TextBlock").Text(GetLang("位置偏移Y") "：")
@@ -144,7 +144,7 @@ class UIMacroPanelSettingGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .Text("{Binding Value, ElementName=OffsetYCon}")
+            .SetMarkup("Text", "{Binding Value, ElementName=OffsetYCon}")
 
         ; 按钮宽度
         row6b := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
@@ -161,7 +161,7 @@ class UIMacroPanelSettingGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .Text("{Binding Value, ElementName=BtnWidthCon}")
+            .SetMarkup("Text", "{Binding Value, ElementName=BtnWidthCon}")
 
         ; 按钮高度
         row6 := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
@@ -178,7 +178,7 @@ class UIMacroPanelSettingGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .Text("{Binding Value, ElementName=BtnHeightCon}")
+            .SetMarkup("Text", "{Binding Value, ElementName=BtnHeightCon}")
 
         ; 按钮字体大小
         rowFont := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
@@ -195,7 +195,7 @@ class UIMacroPanelSettingGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .Text("{Binding Value, ElementName=FontSizeCon}")
+            .SetMarkup("Text", "{Binding Value, ElementName=FontSizeCon}")
 
         ; 按钮每行最大个数
         row7 := panel.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0")
@@ -212,7 +212,7 @@ class UIMacroPanelSettingGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .Text("{Binding Value, ElementName=ColsCon}")
+            .SetMarkup("Text", "{Binding Value, ElementName=ColsCon}")
 
         ; 底部按钮行
         PrimaryBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'

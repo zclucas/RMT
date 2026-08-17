@@ -503,7 +503,7 @@ class TimingGui {
         body := main.Add("StackPanel").Grid_Row(1).Margin("15,8,15,8")
 
         body.Add("Calendar").Name("CalendarCon").HorizontalAlignment("Center").BorderThickness(0).Background("Transparent").Margin("0,0,0,8")
-        body.Add("TextBlock").Name("HiddenDateText").Text("{Binding SelectedDate, ElementName=CalendarCon, StringFormat='{}{0:yyyy-MM-dd}'}").Visibility("Collapsed")
+        body.Add("TextBlock").Name("HiddenDateText").SetMarkup("Text", "{Binding SelectedDate, ElementName=CalendarCon, StringFormat='{}{0:yyyy-MM-dd}'}").Visibility("Collapsed")
 
         timeGrid := body.Add("Grid").Margin("0,8,0,8").HorizontalAlignment("Center")
         timeGrid.Cols("Auto", "5", "62", "3", "62", "3", "62")

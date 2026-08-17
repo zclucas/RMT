@@ -1,16 +1,6 @@
 #Requires AutoHotkey v2.0
 
 class MacroGraphFormalMixin {
-    ; 转义 XAML 特殊字符：{ } 在 XAML 中是标记扩展语法，需要转义
-    _XamlEscape(text) {
-        if (text == "")
-            return text
-        ; 如果文本以 { 开头，前面加 {} 转义
-        if (SubStr(text, 1, 1) == "{")
-            text := "{}" text
-        return text
-    }
-
     _FormalNodeTypes() {
         types := []
         for key in this._FormalIniCmdKeys()
@@ -317,7 +307,7 @@ class MacroGraphFormalMixin {
         h := this._CommentTextHeight(content)
         maxH := this._FormalConfigRowH() * 5
         block := body.Add("StackPanel").Name("CommentBlock_" id).Margin("0,5,0,0")
-        tb := block.Add("TextBox").Name("CommentText_" id).Text(this._XamlEscape(content))
+        tb := block.Add("TextBox").Name("CommentText_" id).Text(content)
             .Width(this._CommentContentW()).Height(String(h)).MinHeight(String(this._FormalConfigRowH() * 2))
             .MaxHeight(String(maxH)).FontSize(this._MGFontSize(12)).Padding("4,4").Margin("0,0,0,0")
             .HorizontalAlignment("Left")
@@ -534,7 +524,7 @@ class MacroGraphFormalMixin {
         exprRow := body.Add("StackPanel").Name(p "ExprRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         if (!(visible && on))
             exprRow.Visibility("Collapsed")
-        exprRow.Add("TextBox").Name(p "Expr_" id).Text(this._XamlEscape(ex)).Width("140").Height("20").MinHeight("0").FontSize("11").Padding("4,0").VerticalContentAlignment("Center").TextAlignment("Center").CaretBrush("{DynamicResource InputText}")
+        exprRow.Add("TextBox").Name(p "Expr_" id).Text(ex).Width("140").Height("20").MinHeight("0").FontSize("11").Padding("4,0").VerticalContentAlignment("Center").TextAlignment("Center").CaretBrush("{DynamicResource InputText}")
         editBtn := exprRow.Add("Button").Name(p "ExprEdit_" id).Content(GetLang("编辑")).Width("32").Height("20").FontSize(this._MGFontSize(10)).Padding("0").Margin("4,0,0,0").VerticalAlignment("Center").Cursor("Hand").Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").BorderThickness("1").BorderBrush("{DynamicResource ActionStroke}")
         this._ApplyActionBtnStyle(editBtn)
         ; 结果变量下拉
@@ -635,7 +625,7 @@ class MacroGraphFormalMixin {
             if (!info.on)
                 row.Visibility("Collapsed")
             row.Add("Ellipse").Width("7").Height("7").Fill("{DynamicResource GraphConnSel}").Margin("0,0,6,0").VerticalAlignment("Center")
-            row.Add("TextBlock").Name("OpSumTxt_" slot "_" id).Text(this._XamlEscape(info.text)).Foreground(fg).FontSize(this._MGFontSize(12)).VerticalAlignment("Center").TextTrimming("CharacterEllipsis")
+            row.Add("TextBlock").Name("OpSumTxt_" slot "_" id).Text(info.text).Foreground(fg).FontSize(this._MGFontSize(12)).VerticalAlignment("Center").TextTrimming("CharacterEllipsis")
         }
         emptyTb := box.Add("TextBlock").Name("OpSumEmpty_" id).Text(GetLang("未启用任何运算")).Foreground(fg).FontSize(this._MGFontSize(11)).Margin("0,5,0,0")
         if (anyOn)
@@ -716,7 +706,7 @@ class MacroGraphFormalMixin {
         if (!showStdIn)
             stdinRow.Visibility("Collapsed")
         stdinRow.Add("Label").Content(GetLang("输入：")).Width(lw).Height("22").FontSize("11").Foreground("{DynamicResource InputText}").VerticalContentAlignment("Center").Padding("0")
-        stdinRow.Add("TextBox").Name("RunStdIn_" id).Text(this._XamlEscape(stdinVal)).Width(cw).Height("22").MinHeight("0").FontSize("11").Padding("4,0").VerticalContentAlignment("Center")
+        stdinRow.Add("TextBox").Name("RunStdIn_" id).Text(stdinVal).Width(cw).Height("22").MinHeight("0").FontSize("11").Padding("4,0").VerticalContentAlignment("Center")
 
         loop 3 {
             i := A_Index

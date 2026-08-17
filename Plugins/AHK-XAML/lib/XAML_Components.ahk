@@ -940,12 +940,12 @@ _SliderRange(this, title, minVal, maxVal, defaultStart, defaultEnd) {
     tbGrid.Cols("*", "Auto", "*")
 
     bdrMin := tbGrid.Add("Border").Use("CardPanel").Padding("10,5").Grid_Column(0)
-    bdrMin.Add("TextBlock").Text("{Binding Value, ElementName=" minName ", StringFormat={}{0:0}}").Background("Transparent").Foreground("{DynamicResource TextSub}").HorizontalAlignment("Center")
+    bdrMin.Add("TextBlock").SetMarkup("Text", "{Binding Value, ElementName=" minName ", StringFormat={}{0:0}}").Background("Transparent").Foreground("{DynamicResource TextSub}").HorizontalAlignment("Center")
 
     tbGrid.Add("TextBlock").Text("-").Foreground("{DynamicResource TextSub}").VerticalAlignment("Center").Margin("10,0").Grid_Column(1).HorizontalAlignment("Center")
 
     bdrMax := tbGrid.Add("Border").Use("CardPanel").Padding("10,5").Grid_Column(2)
-    bdrMax.Add("TextBlock").Text("{Binding Value, ElementName=" maxName ", StringFormat={}{0:0}}").Background("Transparent").Foreground("{DynamicResource TextSub}").HorizontalAlignment("Center")
+    bdrMax.Add("TextBlock").SetMarkup("Text", "{Binding Value, ElementName=" maxName ", StringFormat={}{0:0}}").Background("Transparent").Foreground("{DynamicResource TextSub}").HorizontalAlignment("Center")
 }
 
 ; ==============================================================================
