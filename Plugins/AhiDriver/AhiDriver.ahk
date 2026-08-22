@@ -35,13 +35,13 @@ global AHI_MouseBtnMap := Map(
 GetAHIPluginDir() {
     if (IsSet(AHIPluginDir) && DirExist(AHIPluginDir))
         return AHIPluginDir
-    cand := A_WorkingDir "\Plugins\AHI"
+    cand := A_WorkingDir "\Plugins\AhiDriver\installer"
     if DirExist(cand)
         return cand
-    cand := A_WorkingDir "\..\Plugins\AHI"
+    cand := A_WorkingDir "\..\Plugins\AhiDriver\installer"
     if DirExist(cand)
         return cand
-    return A_WorkingDir "\Plugins\AHI"
+    return A_WorkingDir "\Plugins\AhiDriver\installer"
 }
 
 ; 读取文件 ProductName（用于判断 keyboard.sys / mouse.sys 是否为 Interception）
@@ -98,7 +98,7 @@ IsInterceptionInstalled() {
 ShowInterceptionInstallTip() {
     chosen := ""
     tipText := GetLang("使用AHI需要安装interception") "`n`n"
-        . GetLang("（Plugins/AHI/安装卸载bat 可以手动操作）")
+        . GetLang("（Plugins/AhiDriver/installer/安装卸载bat 可以手动操作）")
 
     g := Gui("+AlwaysOnTop -MinimizeBox", GetLang("提示"))
     try
@@ -133,7 +133,7 @@ ShowInterceptionInstallTip() {
     if (exitCode = 0) {
         MsgBox(GetLang("Interception 安装完成，可直接使用 AHI 按键类型"), GetLang("提示"), 64)
     } else {
-        MsgBox(GetLang("Interception 安装失败，可手动运行 Plugins/AHI/安装卸载.bat"), GetLang("提示"), 48)
+        MsgBox(GetLang("Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装卸载.bat"), GetLang("提示"), 48)
     }
     return true
 }
@@ -166,7 +166,7 @@ InitAHI() {
             "1. 是否已安装 Interception 驱动并已重启？`n"
             "2. Plugins\AhiDriver 下 interception.dll / AutoHotInterception.dll 是否存在？`n"
             "3. 是否以管理员权限运行？`n`n"
-            "也可手动运行 Plugins\AHI\安装卸载.bat",
+            "也可手动运行 Plugins\AhiDriver\installer\安装卸载.bat",
             "AHI 错误", 16
         )
         return false

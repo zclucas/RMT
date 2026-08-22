@@ -14,7 +14,7 @@ try {
 
 $ScriptPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $ScriptPath
-$Installer = Join-Path $Root "command line installer\install-interception.exe"
+$Installer = Join-Path $Root "install-interception.exe"
 $LogFile = Join-Path $Root "install-log.txt"
 $DriversDir = Join-Path $env:WINDIR "System32\drivers"
 $KbdSys = Join-Path $DriversDir "keyboard.sys"

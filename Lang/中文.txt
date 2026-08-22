@@ -1,4 +1,4 @@
-﻿(请在导出配置前，务必完善操作说明，该文件目录可下增加图片解释说明)[上传导出前请删除此行，否则判定没有完善使用说明]
+(请在导出配置前，务必完善操作说明，该文件目录可下增加图片解释说明)[上传导出前请删除此行，否则判定没有完善使用说明]
 (问题反馈，提出优化方案)
 **keybd_event、罗技和AHI的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**
 - 以管理员身份运行本软件，否则该指令无效。
@@ -980,11 +980,11 @@ AHI
 AHI：调用 Interception 驱动模拟按键（需安装 Interception 驱动）。
 Tip:AHI驱动需要安装Interception驱动并以管理员权限运行
 使用AHI需要安装interception
-（Plugins/AHI/安装卸载bat 可以手动操作）
+（Plugins/AhiDriver/installer/安装卸载bat 可以手动操作）
 自动安装
 未找到 Interception 安装脚本
 Interception 安装完成，可直接使用 AHI 按键类型
-Interception 安装失败，可手动运行 Plugins/AHI/安装卸载.bat
+Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装卸载.bat
 置顶或取消
 联系方式：(QQ或电话，仅用于告知您需要调整的地方)
 背景透明度：

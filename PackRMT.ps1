@@ -1,4 +1,4 @@
-﻿# RMT 自动打包脚本
+# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -336,10 +336,9 @@ function New-Release {
         Write-Log "复制 AHK-XAML DLL..." "Gray"
         Copy-XamlDlls -ReleaseDir $releaseDir
 
-        # 复制 AHI（Interception 安装包）与 AhiDriver
-        Write-Log "复制 AHI / AhiDriver..." "Gray"
-        Copy-AHI -ReleaseDir $releaseDir
-        Copy-AhiDriver -ReleaseDir $releaseDir
+        # 复制 AhiDriver（DLL + Interception 安装包）
+        Write-Log "复制 AhiDriver (x64)..." "Gray"
+        Copy-AhiDriver -ReleaseDir $releaseDir -Arch "x64"
 
         # 复制罗技输入相关 DLL（按键 + 鼠标移动）
         Write-Log "复制输入插件 DLL..." "Gray"
@@ -392,10 +391,9 @@ function New-Release {
         Write-Log "复制 AHK-XAML DLL..." "Gray"
         Copy-XamlDlls -ReleaseDir $releaseDir
 
-        # 复制 AHI（Interception 安装包）与 AhiDriver
-        Write-Log "复制 AHI / AhiDriver..." "Gray"
-        Copy-AHI -ReleaseDir $releaseDir
-        Copy-AhiDriver -ReleaseDir $releaseDir
+        # 复制 AhiDriver（DLL + Interception 安装包）
+        Write-Log "复制 AhiDriver (x86)..." "Gray"
+        Copy-AhiDriver -ReleaseDir $releaseDir -Arch "x86"
 
         # 复制罗技输入相关 DLL（按键 + 鼠标移动）
         Write-Log "复制输入插件 DLL..." "Gray"
@@ -542,34 +540,18 @@ function Copy-XamlDlls {
     }
 }
 
-function Copy-AHI {
-    param([string]$ReleaseDir)
-
-    $srcDir = Join-Path $PSScriptRoot "Plugins\AHI"
-    $dstDir = Join-Path $ReleaseDir "Plugins\AHI"
-
-    if (-not (Test-Path $srcDir)) {
-        Write-Log "  [WARN] AHI 源目录不存在: $srcDir" "Yellow"
-        return
-    }
-
-    if (Test-Path $dstDir) {
-        Remove-Item $dstDir -Recurse -Force
-    }
-    Copy-Item -Path $srcDir -Destination $dstDir -Recurse -Force
-    # 不把本机安装日志打进发行包
-    $logFile = Join-Path $dstDir "install-log.txt"
-    if (Test-Path $logFile) {
-        Remove-Item $logFile -Force -ErrorAction SilentlyContinue
-    }
-    Write-Log "  已复制: Plugins/AHI" "Gray"
-}
-
 function Copy-AhiDriver {
-    param([string]$ReleaseDir)
+    param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
 
     $srcDir = Join-Path $PSScriptRoot "Plugins\AhiDriver"
     $dstDir = Join-Path $ReleaseDir "Plugins\AhiDriver"
+
+    # 清理旧版 Plugins\AHI 目录（安装包已并入 AhiDriver\installer）
+    $legacyAhiDir = Join-Path $ReleaseDir "Plugins\AHI"
+    if (Test-Path $legacyAhiDir) {
+        Remove-Item $legacyAhiDir -Recurse -Force
+        Write-Log "  已清理旧目录: Plugins/AHI" "Yellow"
+    }
 
     if (-not (Test-Path $srcDir)) {
         Write-Log "  [WARN] AhiDriver 源目录不存在: $srcDir" "Yellow"
@@ -581,11 +563,10 @@ function Copy-AhiDriver {
     }
     New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
 
-    # 运行时只需 DLL；ahk 源文件已编译进主程序/Worker
+    # 运行时只需对应架构的 DLL；ahk 源文件已编译进主程序/Worker
     $files = @(
         "AutoHotInterception.dll",
-        "x64\interception.dll",
-        "x86\interception.dll"
+        "$Arch\interception.dll"
     )
     foreach ($rel in $files) {
         $src = Join-Path $srcDir $rel
@@ -600,6 +581,24 @@ function Copy-AhiDriver {
         } else {
             Write-Log "  [WARN] 未找到: AhiDriver/$rel" "Yellow"
         }
+    }
+
+    # Interception 安装包（installer 子目录：install.ps1 / 安装卸载.bat / install-interception.exe）
+    $installerSrc = Join-Path $srcDir "installer"
+    $installerDst = Join-Path $dstDir "installer"
+    if (Test-Path $installerSrc) {
+        if (Test-Path $installerDst) {
+            Remove-Item $installerDst -Recurse -Force
+        }
+        Copy-Item -Path $installerSrc -Destination $installerDst -Recurse -Force
+        # 不把本机安装日志打进发行包
+        $logFile = Join-Path $installerDst "install-log.txt"
+        if (Test-Path $logFile) {
+            Remove-Item $logFile -Force -ErrorAction SilentlyContinue
+        }
+        Write-Log "  已复制: AhiDriver/installer" "Gray"
+    } else {
+        Write-Log "  [WARN] 未找到: AhiDriver/installer" "Yellow"
     }
 }
 
@@ -666,11 +665,11 @@ function New-RMTAssets {
         @{ Dest = "RapidOcrOnnx.dll";                Src = "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll" },
         @{ Dest = "ScreenCapture.exe";               Src = "Plugins\ScreenCapture\ScreenCapture.exe" },
         @{ Dest = "AutoHotInterception.dll";         Src = "Plugins\AhiDriver\AutoHotInterception.dll" },
-        @{ Dest = "interception_x64.dll";            Src = "Plugins\AhiDriver\x64\interception.dll" },
-        @{ Dest = "interception_x86.dll";            Src = "Plugins\AhiDriver\x86\interception.dll" },
-        @{ Dest = "install.ps1";                     Src = "Plugins\AHI\install.ps1" },
-        @{ Dest = "InstallUninstall.bat";            Src = "Plugins\AHI\安装卸载.bat" },
-        @{ Dest = "install-interception.exe";        Src = "Plugins\AHI\command line installer\install-interception.exe" },
+        @{ Dest = "interception_$Arch.dll";          Src = "Plugins\AhiDriver\$Arch\interception.dll" },
+        @{ Dest = "install.ps1";                     Src = "Plugins\AhiDriver\installer\install.ps1" },
+        @{ Dest = "InstallUninstall.bat";            Src = "Plugins\AhiDriver\installer\安装卸载.bat" },
+        @{ Dest = "install-interception.exe";        Src = "Plugins\AhiDriver\installer\install-interception.exe" },
+        @{ Dest = "InstallReadme.txt";                 Src = "Plugins\AhiDriver\installer\使用说明.txt" },
         @{ Dest = "ch_PP-OCRv4_det_infer.onnx";      Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv4_det_infer.onnx" },
         @{ Dest = "ch_PP-OCRv4_rec_infer.onnx";      Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv4_rec_infer.onnx" },
         @{ Dest = "ppocr_keys_v1.txt";               Src = "Plugins\RapidOcr\ch_models\ppocr_keys_v1.txt" },

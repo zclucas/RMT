@@ -385,7 +385,7 @@ InitFilePath() {
     global EndTipAudio := A_WorkingDir "\Audio\End.wav"
     global ViGEmDllPath := A_WorkingDir "\Plugins\ViGEm\ViGEmWrapper.dll"
     global AHIDllDir := A_WorkingDir "\Plugins\AhiDriver"
-    global AHIPluginDir := A_WorkingDir "\Plugins\AHI"
+    global AHIPluginDir := A_WorkingDir "\Plugins\AhiDriver\installer"
     global ArrayFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ArrayFile.ini"
     global MacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.ini"
     global SearchFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchFile.ini"

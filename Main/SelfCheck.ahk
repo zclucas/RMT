@@ -29,11 +29,10 @@ SelfCheckMissingFiles() {
         "Plugins\RapidOcr\" bitArch "\RapidOcrOnnx.dll", "RapidOcrOnnx.dll",
         "Plugins\ScreenCapture\ScreenCapture.exe", "ScreenCapture.exe",
         "Plugins\AhiDriver\AutoHotInterception.dll", "AutoHotInterception.dll",
-        "Plugins\AhiDriver\x64\interception.dll", "interception_x64.dll",
-        "Plugins\AhiDriver\x86\interception.dll", "interception_x86.dll",
-        "Plugins\AHI\install.ps1", "install.ps1",
-        "Plugins\AHI\安装卸载.bat", "InstallUninstall.bat",
-        "Plugins\AHI\command line installer\install-interception.exe", "install-interception.exe",
+        "Plugins\AhiDriver\" arch "\interception.dll", "interception_" arch ".dll",
+        "Plugins\AhiDriver\installer\install.ps1", "install.ps1",
+        "Plugins\AhiDriver\installer\安装卸载.bat", "InstallUninstall.bat",
+        "Plugins\AhiDriver\installer\install-interception.exe", "install-interception.exe",
         "Plugins\RapidOcr\ch_models\ch_PP-OCRv4_det_infer.onnx", "ch_PP-OCRv4_det_infer.onnx",
         "Plugins\RapidOcr\ch_models\ch_PP-OCRv4_rec_infer.onnx", "ch_PP-OCRv4_rec_infer.onnx",
         "Plugins\RapidOcr\ch_models\ppocr_keys_v1.txt", "ppocr_keys_v1.txt",
@@ -48,7 +47,8 @@ SelfCheckMissingFiles() {
     optionalMap := Map(
         "Plugins\MouseControl.dll", "MouseControl.dll",
         "MinTool\PlayAudio.vbs", "PlayAudio.vbs",
-        "MinTool\CountDown.exe", "CountDown.exe")
+        "MinTool\CountDown.exe", "CountDown.exe",
+        "Plugins\AhiDriver\installer\使用说明.txt", "InstallReadme.txt")
 
     icoFileList := ["Arr.png", "Condition.png", "Control.png", "Extract.png", "False.png",
         "FileIO.png", "GreenColor.png", "IcoPause.ico", "If.png", "IfPro.png",

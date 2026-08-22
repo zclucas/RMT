@@ -9,22 +9,19 @@ Interception 驱动安装 / 卸载说明
 ------------
 
 安装卸载.bat
-  唯一启动入口。双击或右键“以管理员身份运行”。
+  唯一启动入口。双击或右键"以管理员身份运行"。
 
 install.ps1
   实际执行脚本（自动提权、安装/修复/卸载、写日志）。
 
-command line installer\install-interception.exe
-  官方命令行安装工具。
-
-library\
-  开发用头文件、DLL、LIB（x86 / x64）。
-
-licenses\
-  商业与非商业授权相关文件。
+install-interception.exe
+  官方命令行安装工具（与 install.ps1 同一目录）。
 
 install-log.txt
   运行后自动生成的操作日志。
+
+（上级目录 AhiDriver\ 下另有 x64\x86 运行库 interception.dll /
+  interception.lib，供程序运行时按架构加载。）
 
 
 二、推荐使用步骤
@@ -45,7 +42,7 @@ install-log.txt
 
 
 三、为什么官方安装会失败？
---------------------------
+-------------------------
 
 若系统里已经存在：
   C:\Windows\System32\drivers\keyboard.sys
@@ -53,7 +50,7 @@ install-log.txt
 官方安装器常会报错：
   Could not write to \system32\drivers
 
-这通常表示“文件已在，但覆盖失败”，并不一定是没管理员权限。
+这通常表示"文件已在，但覆盖失败"，并不一定是没管理员权限。
 此时应选择菜单 [3] 修复/补全安装：
   - 保留已有驱动文件
   - 补写服务项
@@ -61,7 +58,7 @@ install-log.txt
 
 
 四、怎样算安装完整？
---------------------
+-------------------
 
 同时满足以下条件：
 
@@ -77,7 +74,7 @@ install-log.txt
 
 
 五、卸载说明
-------------
+-----------
 
 1. 运行「安装卸载.bat」，选择 [2] 卸载
 2. 脚本会先移除注册表钩子，再尝试删除驱动文件
@@ -86,11 +83,11 @@ install-log.txt
 
 
 六、手动命令（可选）
---------------------
+-------------------
 
 以管理员身份打开 CMD：
 
-  cd /d "本目录\command line installer"
+  cd /d "本目录"
   install-interception.exe /install
   install-interception.exe /uninstall
 
@@ -99,20 +96,19 @@ install-log.txt
 
 
 七、注意事项
-------------
+-----------
 
 1. 必须管理员权限。
 2. 安装、修复、卸载后都建议重启。
 3. 若杀毒/勒索软件防护拦截驱动，请临时放行后再试。
-4. 请阅读 licenses 目录中的授权说明。
-5. 修改过滤驱动有风险。若重启后键鼠失灵：
+4. 修改过滤驱动有风险。若重启后键鼠失灵：
    - 进入安全模式
    - 再运行本脚本选择卸载
    - 或将 UpperFilters 恢复为 kbdclass / mouclass
 
 
 八、常见问题
-------------
+-----------
 
 Q：窗口提示 Could not write to \system32\drivers？
 A：优先选 [3] 修复/补全安装，不要反复点官方安装。
@@ -122,4 +118,4 @@ A：先重启；并确认程序加载的是对应架构的 interception.dll。
 
 Q：双击后没有中文菜单？
 A：请确认 install.ps1 与「安装卸载.bat」在同一目录，
-   并用右键“以管理员身份运行”再试。
+   并用右键"以管理员身份运行"再试。
