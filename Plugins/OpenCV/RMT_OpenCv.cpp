@@ -105,6 +105,20 @@ static ThumbnailCache* GetOrCreateCache(HWND targetHwnd) {
     return &g_thumbnailCache[key];
 }
 
+// 获取窗口菜单栏高度（物理像素，无菜单栏返回 0）。
+// DWM 缩略图开启 SOURCECLIENTAREAONLY 时，其“客户区”仍包含菜单栏区域，
+// 而 AHK 侧 ScreenToClient 客户区坐标从菜单栏下方算起，二者相差一个菜单栏高度。
+// 不补偿的话，带菜单栏的窗口（如 Everything）会把菜单栏算进截图，产生垂直偏移。
+static int GetMenuBarHeight(HWND hwnd) {
+    if (!GetMenu(hwnd))
+        return 0;
+    MENUBARINFO mbi = { sizeof(MENUBARINFO) };
+    if (GetMenuBarInfo(hwnd, OBJID_MENU, 0, &mbi) && mbi.rcBar.bottom > mbi.rcBar.top)
+        return mbi.rcBar.bottom - mbi.rcBar.top;
+    // GetMenuBarInfo 可能因目标窗口以管理员运行而失败，回退系统标准菜单栏高度
+    return GetSystemMetrics(SM_CYMENU);
+}
+
 // 后台截图（使用缓存，避免每次创建/销毁窗口）
 cv::Mat captureScreen(int hwnd, int x, int y, int width, int height) {
     HWND targetHwnd = (HWND)(intptr_t)hwnd;
@@ -127,6 +141,9 @@ cv::Mat captureScreen(int hwnd, int x, int y, int width, int height) {
     if (clientW <= 0 || clientH <= 0)
         return cv::Mat();
 
+    // 菜单栏高度补偿：DWM 客户区含菜单栏，AHK 客户区不含，源区域需从菜单栏下方开始
+    const int menuH = GetMenuBarHeight(targetHwnd);
+
     // IsIconic 时 DWM 缩略图有内部偏移，需要补偿
     const int offset = IsIconic(targetHwnd) ? 8 : 0;
 
@@ -140,7 +157,8 @@ cv::Mat captureScreen(int hwnd, int x, int y, int width, int height) {
     props.fSourceClientAreaOnly = TRUE;
     props.fVisible = TRUE;
     props.opacity = 255;
-    props.rcSource = RECT{ 0, 0, clientW, clientH };
+    // 源区域跳过菜单栏：rcSource 为 DWM 客户区坐标（含菜单栏），从 menuH 处开始取 clientH 高
+    props.rcSource = RECT{ 0, menuH, clientW, menuH + clientH };
     props.rcDestination = RECT{ -offset, -offset, clientW - offset, clientH - offset };
 
     HRESULT hr = DwmUpdateThumbnailProperties(thumbnail, &props);
