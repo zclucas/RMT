@@ -845,7 +845,9 @@ public partial class AhkWpfEngine
                 if (win.WindowStyle == WindowStyle.None && !win.AllowsTransparency)
                 {
                     var chrome = new System.Windows.Shell.WindowChrome();
-                    chrome.GlassFrameThickness = new Thickness(-1);
+                    // GlassFrame=0 禁用 DWM 系统玻璃（Win11 下 GlassFrame=-1 的系统玻璃色偏紫，首帧会闪紫）
+                    chrome.GlassFrameThickness = new Thickness(0);
+                    chrome.ResizeBorderThickness = new Thickness(6); // 四角缩放
                     double captionHeight = 50;
                     try
                     {
@@ -1222,6 +1224,15 @@ public partial class AhkWpfEngine
             // 提前建 HWND，让 SourceInitialized 在 Show 前就触发
             var helper = new System.Windows.Interop.WindowInteropHelper(win);
             helper.EnsureHandle();
+            // Show 前关 DWM backdrop（Win11 默认 Acrylic 偏紫，首帧会闪紫）
+            try
+            {
+                int noBackdrop = 0; // DWMSBT_NONE
+                int darkMode = 0;
+                DwmSetWindowAttribute(helper.Handle, 20, ref darkMode, 4);
+                DwmSetWindowAttribute(helper.Handle, 38, ref noBackdrop, 4);
+            }
+            catch { }
             ApplyNativeAlphaZero(win);
             // Show 前移到屏幕外：SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
             SetWindowPos(helper.Handle, IntPtr.Zero, -32000, -32000, 0, 0, 0x0001 | 0x0004 | 0x0010);

@@ -2369,7 +2369,7 @@ XAML_TEMPLATE := '
             SnapsToDevicePixels="True">
         
         <WindowChrome.WindowChrome>
-            <WindowChrome GlassFrameThickness="-1" CaptionHeight="%CaptionHeight%" CornerRadius="{DynamicResource WindowRadius}" />
+            <WindowChrome GlassFrameThickness="0" ResizeBorderThickness="6" CaptionHeight="%CaptionHeight%" CornerRadius="{DynamicResource WindowRadius}" />
         </WindowChrome.WindowChrome>
     
         <Window.Resources>

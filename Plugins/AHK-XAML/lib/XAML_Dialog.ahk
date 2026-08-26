@@ -199,7 +199,7 @@ class XDialog {
                         TextElement.Foreground="{DynamicResource TextMain}">
                     
                     <WindowChrome.WindowChrome>
-                        <WindowChrome GlassFrameThickness="-1" CaptionHeight="%captionH%" CornerRadius="{DynamicResource WindowRadius}" />
+                        <WindowChrome GlassFrameThickness="0" ResizeBorderThickness="6" CaptionHeight="%captionH%" CornerRadius="{DynamicResource WindowRadius}" />
                     </WindowChrome.WindowChrome>
                 
                     <Border Margin="15" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="{DynamicResource WindowRadius}" Background="{DynamicResource %bgRes%}">

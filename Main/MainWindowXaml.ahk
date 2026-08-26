@@ -248,7 +248,8 @@ class MainWin {
             startLoc := 'WindowStartupLocation="Manual" Left="' x '" Top="' y '"'
             wh := 'Width="' w '" Height="' h '"'
         }
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ' wh ' Opacity="0"')
+        ; 主界面不隐藏：直接 Show（WindowChrome+GlassFrame=0 下框架先出现、内容后填充，无黑/紫/白壳过渡）
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ' wh)
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', startLoc)
 
         ; ---- 壳级事件（初始 XAML 内，经 eventBindings 绑定） ----
@@ -279,21 +280,12 @@ class MainWin {
         loop 40 {
             if (this.ui.wpfHwnd) {
                 gotHwnd := true
-                ; 内容已入队并在 LoadedHwnd 刷入，立即揭盖（主题界面同款）
-                try this.ui.Update("Window", "Opacity", "1")
-                try WinActivate(this.ui.wpfHwnd)
+                XamlUiDiag("MainWin shown hwnd=" this.ui.wpfHwnd, "MainWin")
+                try WinActivate("ahk_id " this.ui.wpfHwnd)
                 break
             }
             Sleep(50)
         }
-        ; LoadedHwnd 若丢失则兜底强制显示
-        if (!gotHwnd)
-            SetTimer(ObjBindMethod(this, "_RevealFallback"), -800)
-    }
-
-    _RevealFallback(*) {
-        if (IsObject(this.ui) && this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd)
-            try this.ui.Update("Window", "Opacity", "1")
     }
 
     PopulateAll() {
@@ -321,18 +313,8 @@ class MainWin {
             this.LoadLeftBarValues()
         } catch as e {
             XamlUiDiag("MainWin OnWindowLoad err: " e.Message, "MainWin")
-        } finally {
-            ; BuildAndShow 已把 StartupLocation 改 Manual，此处 WinMove（物理像素）不会被 WPF 布局覆盖；
-            ; 位置尺寸定好后恢复可见（窗口全程透明至此）
-            try {
-                ; Loaded 事件可能被 PopulateAll 阻塞而晚到：用户若已双击标题栏最大化，
-                ; 此时 WinMove 会把窗口压回保存尺寸。最大化状态下跳过。
-                mmx := WinGetMinMax("ahk_id " this.ui.wpfHwnd)
-                pos := GetLastWinPos()
-                if (pos.Length && mmx != 1)
-                    WinMove(pos[1], pos[2], pos[3], pos[4], this.ui.wpfHwnd)
-            }
         }
+        ; 位置已由 BuildAndShow 注入 XAML（Manual+Left/Top），无需 WinMove
     }
 
     OnWindowClosing(state, ctrl, event) {
