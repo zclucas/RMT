@@ -1417,7 +1417,7 @@ OnToolTextFilterSelectImage(*) {
     path := FileSelect(, , GetLang("选择图片"))
     if (path == "")
         return
-    ocr := MainSoftData.OCRTypeValue == 1 ? GetChineseOcr() : GetEnglishOcr()
+    ocr := GetChineseOcr() ; v6 统一多语言模型，不再区分语言
     result := ocr.ocr_from_file(path)
     SetToolTextDisplay(result)
     SetClipboard(result)

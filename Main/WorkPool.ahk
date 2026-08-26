@@ -110,7 +110,7 @@ class WorkPool {
         this.lostWorkerCheckFunc := ""
         this.rxPollFunc := ""
         this.residualCheckFunc := ""
-        this._inputGuis := Map()      ; 活动输入弹窗实例（key=req）：每个 Worker 请求独立实例，支持并发弹窗
+        this._inputGuis := Map()      ; 活动输入弹窗实例（key=req）
 
         OnMessage(WM_LOAD_WORK, ObjBindMethod(this, "OnWorkerReady"))
         OnMessage(WM_WORKER_TO_MASTER, ObjBindMethod(this, "OnWorkerToMaster"))
@@ -1106,14 +1106,37 @@ class WorkPool {
         }
     }
 
-    ; Worker 输入弹窗：每个请求创建独立实例（不同宏/Worker 并发弹窗，互不阻塞；共享主进程 daemon）
+    ; 输入弹窗：每请求独立实例（并发互不阻塞）；Worker 请求结果跨进程回传，主进程宏请求写本地槽位
     _ShowInputDialog(wd, isBtn, args*) {
-        req := { wd: wd, done: false }
+        this._ShowInputDialogReq({ wd: wd, local: false, done: false }, isBtn, args*)
+    }
+
+    ; 主进程宏输入请求：SetTimer 异步弹窗（避免宏执行上下文同步 XAMLHost），结果写回 req.result
+    RequestLocalInput(isBtn, args*) {
+        req := { wd: { idx: 0 }, local: true, done: false, result: "" }
+        SetTimer((*) => this._ShowInputDialogReq(req, isBtn, args*), -10)
+        deadline := A_TickCount + 300000
+        loop {
+            Sleep(100)
+            if (req.done)
+                break
+            if (A_TickCount > deadline) {
+                ; 超时：关闭弹窗，返回 ""
+                try req.gui._CloseWindow()
+                catch
+                break
+            }
+        }
+        this._inputGuis.Delete(req)
+        return req.result
+    }
+
+    _ShowInputDialogReq(req, isBtn, args*) {
         this._inputGuis[req] := true   ; 追踪活动实例
-        GraphPoolLog("输入请求处理", Format("wd=#{1} type={2}", wd.idx, isBtn ? "btn" : "input"))
+        GraphPoolLog("输入请求处理", Format("wd=#{1} type={2}", req.wd.idx, isBtn ? "btn" : "input"))
         try {
             if (isBtn) {
-                ; 输入按钮条：独立 InputBtnXamlGui 实例（XAML，复用主进程 daemon，多窗口并发）
+                ; 输入按钮条
                 gui := InputBtnXamlGui()
                 req.gui := gui
                 gui.TrueAction := (*) => this._SendInputResult(req, "IBR", "true")
@@ -1123,7 +1146,7 @@ class WorkPool {
                 gui.HideAction := (*) => this._SendInputResult(req, "IBR", "cancel")
                 gui.ShowGui(Integer(args[1]))
             } else {
-                ; XAML 输入框：独立 CustomInputGui 实例（复用主进程 daemon，多窗口并发）
+                ; XAML 输入框
                 gui := CustomInputGui()
                 req.gui := gui
                 gui.SureAction := (val) => this._SendInputResult(req, "IPR", "1", val)
@@ -1132,12 +1155,12 @@ class WorkPool {
                 gui.ShowGui(args[1], args.Length >= 2 ? args[2] : "")
             }
         } catch as e {
-            GraphPoolLog("输入弹窗异常", Format("err={1} wd=#{2}", e.Message, wd.idx))
+            GraphPoolLog("输入弹窗异常", Format("err={1} wd=#{2}", e.Message, req.wd.idx))
             this._SendInputResult(req, "IPR", "0", "")
         }
     }
 
-    ; 回传输入结果给对应 Worker（同一请求只回传一次）；窗口由实例自身的关闭流程处理
+    ; 回传输入结果（同一请求只回传一次）
     _SendInputResult(req, opcode, args*) {
         if (req.done)
             return
@@ -1145,9 +1168,16 @@ class WorkPool {
         this._inputGuis.Delete(req)
         try req.gui := ""
         catch {
-            ; 注意：catch 必须带大括号。AHK v2 中 catch 后无大括号时，
-            ; 语句体延续到下一个 try/catch/finally，会把下方的回传 try 块整体吞掉
-            ; （曾因调试埋点清理删掉 catch 与 try 之间的日志行而触发，导致回传永不执行）
+            ; 注意：catch 必须带大括号，否则会吞掉下方回传 try 块
+        }
+        if (req.local) {
+            ; 主进程宏请求：结果直接写入本地槽位
+            req.result := args
+            argStr := ""
+            for a in args
+                argStr .= (argStr != "" ? "," : "") a
+            GraphPoolLog("输入回传", Format("wd=#{1} op={2} args=[{3}] local=1", req.wd.idx, opcode, argStr))
+            return
         }
         try {
             payload := EncodeBatch(EncodeCommand(opcode, args*))

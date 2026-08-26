@@ -25,8 +25,6 @@ global MyMainWin := ""
 
 ; 主进程输入弹窗（输入框/按钮条）回传结果缓存：OnEventMessage 收到 IPR/IBR 写入，WorkerInputRequest 读取
 global _workerInputResult := ""
-global MyInputGui := CustomInputGui()
-global MyInputBtnGui := InputBtnGui()
 global MyStopMacro := WorkStopMacro
 global MyTriggerSubMacro := WorkTriggerSubMacro
 global MySubmitGraphBranches := WorkSubmitGraphBranches

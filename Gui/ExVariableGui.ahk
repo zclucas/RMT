@@ -134,14 +134,10 @@ class ExVariableGui {
         ocr.Add("ComboBox").Grid_Row(0).Grid_Column(3).Name("StartPosX").Height(24).MinHeight(24).IsEditable("True")
         ocr.Add("TextBlock").Grid_Row(0).Grid_Column(4).Text(GetLang("起始坐标Y：")).VerticalAlignment("Center")
         ocr.Add("ComboBox").Grid_Row(0).Grid_Column(5).Name("StartPosY").Height(24).MinHeight(24).IsEditable("True")
-        ocr.Add("TextBlock").Grid_Row(1).Grid_Column(0).Grid_ColumnSpan(2).Text(GetLang("识别模型：")).VerticalAlignment("Center")
-        ocrType := ocr.Add("ComboBox").Grid_Row(1).Grid_Column(2).Name("OCRTypeCombo").Height(24).MinHeight(24)
-        ocrType.Add("ComboBoxItem").Content(GetLang("中文")).Tag("1")
-        ocrType.Add("ComboBoxItem").Content(GetLang("英文")).Tag("2")
-        ocr.Add("TextBlock").Grid_Row(1).Grid_Column(3).Text(GetLang("终止坐标X：")).VerticalAlignment("Center")
-        ocr.Add("ComboBox").Grid_Row(1).Grid_Column(4).Name("EndPosX").Height(24).MinHeight(24).IsEditable("True")
+        ocr.Add("TextBlock").Grid_Row(1).Grid_Column(0).Grid_ColumnSpan(2).Text(GetLang("终止坐标X：")).VerticalAlignment("Center")
+        ocr.Add("ComboBox").Grid_Row(1).Grid_Column(2).Name("EndPosX").Height(24).MinHeight(24).IsEditable("True")
+        ocr.Add("TextBlock").Grid_Row(1).Grid_Column(3).Text(GetLang("终止坐标Y：")).VerticalAlignment("Center")
         endY := ocr.Add("StackPanel").Grid_Row(1).Grid_Column(5).Orientation("Horizontal")
-        endY.Add("TextBlock").Text(GetLang("终止坐标Y：")).VerticalAlignment("Center")
         endY.Add("ComboBox").Name("EndPosY").Width(85).Height(24).MinHeight(24).IsEditable("True")
 
         ; 行5：结果保存选项 GroupBox
@@ -274,7 +270,6 @@ class ExVariableGui {
         this.ui.Update("ExtractStrCon", "Text", this.Data.ExtractStr)
         this.ui.Update("ExtractTypeCombo", "SelectedIndex", String(this.Data.ExtractType - 1))
         this.ui.Update("WinInfoCon", "Text", this.Data.WinInfo)
-        this.ui.Update("OCRTypeCombo", "SelectedIndex", String(this.Data.OCRType - 1))
 
         this._SetCombo("StartPosX", GetGuiVarArr(), this.Data.StartPosX)
         this._SetCombo("StartPosY", GetGuiVarArr(), this.Data.StartPosY)
@@ -522,7 +517,7 @@ class ExVariableGui {
         this.Data.ExtractStr := this.ui.Query("ExtractStrCon")
         this.Data.ExtractType := this._TypeValue()
         this.Data.WinInfo := this.ui.Query("WinInfoCon")
-        this.Data.OCRType := (IsObject(this.ui) && IsNumber(this.ui.Query("OCRTypeCombo"))) ? Integer(this.ui.Query("OCRTypeCombo")) : 1
+        this.Data.OCRType := 1 ; v6 统一多语言模型，不再区分
         this.Data.StartPosX := this.ui.Query("StartPosX")
         this.Data.StartPosY := this.ui.Query("StartPosY")
         this.Data.EndPosX := this.ui.Query("EndPosX")

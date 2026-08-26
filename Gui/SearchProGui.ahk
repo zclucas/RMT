@@ -28,7 +28,7 @@ class SearchProGui {
         ; 显隐/启停控件名数组（SetConArrState 用）
         this.ImageVariArr := ["SearchImageTypeTipCon", "SearchImageTypeCon", "ImageCon", "ScreenshotBtn", "ImageSelectBtn", "SearchImagePathTipCon", "ImagePathCon"]
         this.ColorArr := ["ColorLabelCon", "HexColorCon", "HexColorTipCon"]
-        this.TextArr := ["TextTipCon", "TextCon", "OCRLabelCon", "OCRTypeCon"]
+        this.TextArr := ["TextTipCon", "TextCon"]
         this.SimilarArr := ["SimilarTipCon", "SimilarCon"]
         this.WinInfoArr := ["WinInfoTipCon", "WinInfoCon", "WinInfoEditBtn"]
         this.FalseConArr := ["FalseMacroTipCon", "FalseMacroEditBtn", "FalseMacroCon"]
@@ -207,10 +207,6 @@ class SearchProGui {
         tx := right.Add("StackPanel").Orientation("Horizontal").Margin("0,4,0,0")
         tx.Add("TextBlock").Name("TextTipCon").Text(GetLang("搜索文本：")).VerticalAlignment("Center")
         tx.Add("ComboBox").Name("TextCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
-        tx.Add("TextBlock").Name("OCRLabelCon").Text(GetLang("识别模型：")).VerticalAlignment("Center").Margin("12,0,0,0")
-        ot := tx.Add("ComboBox").Name("OCRTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
-        for t in GetLangArr(["中文", "英文"])
-            ot.Add("ComboBoxItem").Content(t)
 
         ; === 找到/未找到后的指令（共享行，左右对齐）===
         macroRow := body.Add("Grid").Grid_Row(1).Grid_ColumnSpan(2).Margin("0,8,0,0")
@@ -470,7 +466,7 @@ class SearchProGui {
             LastConfig.SearchText := this.ui.Query("TextCon")
             LastConfig.SearchImagePath := this.Data.SearchImagePath
             LastConfig.Similar := this.ui.Query("SimilarCon")
-            LastConfig.OCRType := this.ui.Query("OCRTypeCon>SelectedIndex") + 1
+            LastConfig.OCRType := 1 ; v6 统一多语言模型，不再区分
             LastConfig.SearchImageType := this.ui.Query("SearchImageTypeCon>SelectedIndex") + 1
             LastConfig.StartPosX := this.ui.Query("StartPosXCon")
             LastConfig.StartPosY := this.ui.Query("StartPosYCon")
@@ -546,7 +542,7 @@ class SearchProGui {
         LastConfig.SearchText := this.ui.Query("TextCon")
         LastConfig.SearchImagePath := this.Data.SearchImagePath
         LastConfig.Similar := this.ui.Query("SimilarCon")
-        LastConfig.OCRType := this.ui.Query("OCRTypeCon>SelectedIndex") + 1
+        LastConfig.OCRType := 1 ; v6 统一多语言模型，不再区分
         LastConfig.SearchImageType := this.ui.Query("SearchImageTypeCon>SelectedIndex") + 1
         LastConfig.StartPosX := this.ui.Query("StartPosXCon")
         LastConfig.StartPosY := this.ui.Query("StartPosYCon")
@@ -996,7 +992,7 @@ class SearchProGui {
         data := this.Data
         data.SearchImagePath := this.ui.Query("ImagePathCon")
         data.Similar := this.ui.Query("SimilarCon")
-        data.OCRType := this.ui.Query("OCRTypeCon>SelectedIndex") + 1
+        data.OCRType := 1 ; v6 统一多语言模型，不再区分
         data.SearchImageType := this.ui.Query("SearchImageTypeCon>SelectedIndex") + 1
         data.SearchType := this._TypeIndex()
         data.WinInfo := this.ui.Query("WinInfoCon")
@@ -1223,7 +1219,6 @@ class SearchProGui {
         this.RefreshConfigDLArr()
         this.ui.Update("SearchTypeCon", "SelectedIndex", String(Integer(ObjHasOwnProp(this.Data, "SearchType") ? this.Data.SearchType : 1) - 1))
         this.ui.Update("SimilarCon", "Text", this.Data.Similar)
-        this.ui.Update("OCRTypeCon", "SelectedIndex", String((this.Data.OCRType ? this.Data.OCRType : 1) - 1))
         this.ui.Update("WinInfoCon", "Text", this.Data.WinInfo)
         this.ui.Update("SearchImageTypeCon", "SelectedIndex", String((this.Data.SearchImageType ? this.Data.SearchImageType : 1) - 1))
         this._SetCombo("ImagePathCon", this.DLVariableArr, this.Data.SearchImagePath)

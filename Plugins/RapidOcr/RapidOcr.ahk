@@ -27,7 +27,8 @@ class RapidOcr {
      * MsgBox ocr.ocr_from_file('1.jpg', param)
      */
     __New(path, mode := 1) {
-        modelDire := mode := 1 ? "ch_models" : "en_models"
+        ; PP-OCRv6 为统一多语言模型，中/英/数字共用同一份模型，mode 仅作兼容保留
+        modelDire := "ch_models"
         config := { models: path "\Plugins\RapidOcr\" modelDire }
         dllpath := path "\Plugins\RapidOcr\" (A_PtrSize * 8) "bit\RapidOcrOnnx.dll"
         if (!RapidOcr.dllModule) {

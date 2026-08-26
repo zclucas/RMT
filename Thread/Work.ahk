@@ -3,8 +3,6 @@
 #Include "..\Main\Util\LogUtil.ahk"
 #Include "..\Main\Util\SharedMemory.ahk"
 #Include "..\Main\Util\RingBuffer.ahk"
-#Include "..\Gui\CustomInputGui.ahk"
-#Include "..\Gui\InputBtnGui.ahk"
 #Include WorkUtil.ahk
 #Include WorkGlobalUtil.ahk
 

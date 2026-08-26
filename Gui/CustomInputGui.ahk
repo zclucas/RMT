@@ -46,17 +46,7 @@ class CustomInputGui {
         this._title := title
         titleHeight := "30"
 
-        ; Worker 无 XAML 引擎（AssetUtil XamlUiDiagDaemon 同款动态名模式）：
-        ; 动态名解析避免 Worker 编译期 #Warn UseUnsetLocal 与运行时崩溃
-        for key in ["XAML_Generator", "XAML_TEMPLATE", "XAMLHost"] {
-            if (!IsSet(%key%)) {
-                this._closed := true
-                return
-            }
-        }
-        genName := "XAML_Generator"
-        gen := %genName%
-        main := gen("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.GetDesignFontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.GetDesignFontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -80,12 +70,8 @@ class CustomInputGui {
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(80).Height(30).MinHeight(30)
 
         ; === 创建 XAMLHost ===
-        tmplName := "XAML_TEMPLATE"
-        tmpl := %tmplName%
-        tmp := StrReplace(tmpl, "%CaptionHeight%", titleHeight)
-        hostName := "XAMLHost"
-        hostCls := %hostName%
-        this.ui := hostCls(StrReplace(tmp, "%app%", main.ToString()), "", 0)
+        tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
+        this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="365" Height="252" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')

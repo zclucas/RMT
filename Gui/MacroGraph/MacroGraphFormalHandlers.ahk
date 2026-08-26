@@ -188,9 +188,7 @@ class MacroGraphFormalHandlersMixin {
         if (!IsObject(state))
             state := Map()
         extTypes := GetLangArr(["屏幕", "剪切板", "窗口"])
-        ocrTypes := GetLangArr(["中文", "英文"])
         this._EnsureComboInState(state, "ExTypeCmb_" id, extTypes)
-        this._EnsureComboInState(state, "ExOcrCmb_" id, ocrTypes)
         data.IsIgnoreExist := this._FormalReadToggle(state, "ExIgn_" id, data.IsIgnoreExist)
         if (state.Has("ExTypeCmb_" id) && state["ExTypeCmb_" id] != "")
             data.ExtractType := this._IndexInLangArr(extTypes, state["ExTypeCmb_" id]) + 1
@@ -198,8 +196,6 @@ class MacroGraphFormalHandlersMixin {
             data.ExtractStr := state["ExStr_" id]
         if (state.Has("ExWin_" id))
             data.WinInfo := state["ExWin_" id]
-        if (state.Has("ExOcrCmb_" id) && state["ExOcrCmb_" id] != "")
-            data.OCRType := this._IndexInLangArr(ocrTypes, state["ExOcrCmb_" id]) + 1
         if (state.Has("ExSX_" id) && state["ExSX_" id] != "")
             data.StartPosX := state["ExSX_" id]
         if (state.Has("ExSY_" id) && state["ExSY_" id] != "")
@@ -1211,7 +1207,6 @@ class MacroGraphFormalHandlersMixin {
         isWin := et == 3
         this._FormalSetVis(id, "ExStrRow_" id, true)   ; 模板：屏幕/剪切板/窗口 都需要
         this._FormalSetVis(id, "ExWinRow_" id, isWin)
-        this._FormalSetVis(id, "ExOcrRow_" id, isOcr)
         for nm in ["ExSXRow_", "ExSYRow_", "ExEXRow_", "ExEYRow_", "ExCntRow_", "ExIntRow_"]
             this._FormalSetVis(id, nm id, isOcr)
         ; 提取变量格（复选框+名称）始终可见，启用与否由复选框表达，不再随类型/勾选隐藏名称

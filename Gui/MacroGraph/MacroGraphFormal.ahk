@@ -453,16 +453,14 @@ class MacroGraphFormalMixin {
     }
 
     ; 变量提取节点（380 宽，双列布局）：提取类型/忽略、模板(带编辑按钮)、窗口信息、
-    ; OCR类型/次数、起止坐标、间隔，最后 6 个提取变量两两并排。
+    ; 起止坐标、次数/间隔，最后 6 个提取变量两两并排。
     _FillExVariableBody(id, d, body) {
         LW := "70", CW := "96"   ; 与搜索Pro一致：两列(标签70+控件96)并排恰好放进 380 宽节点
         varList := GetGuiVarArr()
         extTypes := GetLangArr(["屏幕", "剪切板", "窗口"])
-        ocrTypes := GetLangArr(["中文", "英文"])
         et := d.HasOwnProp("extractType") ? d.extractType : 1
         es := d.HasOwnProp("extractStr") ? d.extractStr : ""
         wi := d.HasOwnProp("winInfo") ? d.winInfo : ""
-        ocr := d.HasOwnProp("ocrType") ? d.ocrType : 1
         isOcr := et == 1 || et == 3
         isWin := et == 3
         ign := d.HasOwnProp("isIgnoreExist") ? d.isIgnoreExist : 0
@@ -480,10 +478,6 @@ class MacroGraphFormalMixin {
 
         ; 窗口信息（窗口类型才显示）
         this._AddFieldRow(body, "ExWinRow_" id, GetLang("窗口信息："), "ExWin_" id, wi, isWin, true, "", "", "", LW, "226")
-
-        ; OCR类型（单独一行）
-        r := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
-        this._ProCellCombo(r, "ExOcrRow_" id, GetLang("OCR类型："), "ExOcrCmb_" id, ocrTypes, ocr - 1, isOcr, LW, CW, false)
 
         ; 起始X | 起始Y
         r := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
@@ -1463,7 +1457,6 @@ class MacroGraphFormalMixin {
             this._FormalTrackField(id, "ExStr", h, runtime)
             this._BindCtrl("ExStrEdit_" id, "Click", this._OnFormalExTemplateEdit.Bind(this, id), runtime)
             this._FormalTrackField(id, "ExWin", h, runtime)
-            this._FormalTrackCombo(id, "ExOcrCmb", h, runtime)
             for nm in ["ExSX", "ExSY", "ExEX", "ExEY", "ExCnt"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
             this._FormalTrackField(id, "ExInt", h, runtime)

@@ -2707,6 +2707,7 @@ GetChineseOcr() {
     return MyChineseOcr
 }
 
+; 已弃用：PP-OCRv6 为统一多语言模型，GetChineseOcr/GetEnglishOcr 返回同一模型实例，保留仅为兼容旧调用
 GetEnglishOcr() {
     global MyEnglishOcr, LastEnglishOcrUseTime
     if (!MyEnglishOcr) {

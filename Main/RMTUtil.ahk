@@ -912,7 +912,7 @@ ScreenShot(X1, Y1, X2, Y2, FileName) {
 OnToolTextFilterGetArea(x1, y1, x2, y2) {
     filePath := A_WorkingDir "\Images\ScreenShot\TextFilter.png"
     ScreenShot(x1, y1, x2, y2, filePath)
-    ocr := MainSoftData.OCRTypeValue == 1 ? GetChineseOcr() : GetEnglishOcr()
+    ocr := GetChineseOcr() ; v6 统一多语言模型，不再区分语言
     result := ocr.ocr_from_file(filePath)
     UIControls.ToolText.Value := result
     SetClipboard(result)
@@ -924,7 +924,7 @@ OnToolTextCheckScreenShot() {
     {
         filePath := A_WorkingDir "\Images\ScreenShot\TextFilter.png"
         SaveClipToBitmap(filePath)
-        ocr := MainSoftData.OCRTypeValue == 1 ? GetChineseOcr() : GetEnglishOcr()
+        ocr := GetChineseOcr() ; v6 统一多语言模型，不再区分语言
         result := ocr.ocr_from_file(filePath)
         UIControls.ToolText.Value := result
         SetClipboard(result)
@@ -1510,7 +1510,13 @@ OnTriggerSepcialItemMacro(MacroStr) {
     tableItem.ActionCount[1] := 0
     tableItem.index := 1
     tableItem.ColorStateArr[1] := 1
-    tableItem.RemarkArr[1] := "" ; F5 单跑无备注，占位空值（业务日志读取需有该下标）
+    ; F5 单跑无备注，占位空值（业务日志读取需有该下标）。
+    ; SpecialTableItem 的 RemarkArr 未被 InitSingleTableState 填充（空数组），
+    ; AHK v2 不允许越界下标赋值（Invalid index），需先 Push 扩容
+    if (tableItem.RemarkArr.Length < 1)
+        tableItem.RemarkArr.Push("")
+    else
+        tableItem.RemarkArr[1] := ""
 
     UpdateMacroRunningCount(0, 1)
     RefreshItemColorUI(tableItem.Index, 1)

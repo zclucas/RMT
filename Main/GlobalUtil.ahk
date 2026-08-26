@@ -61,7 +61,6 @@
 #Include ..\Gui\LogCenterGui.ahk
 #Include ..\Gui\LogSettingGui.ahk
 #Include ..\Gui\CustomInputGui.ahk
-#Include ..\Gui\InputBtnGui.ahk
 #Include ..\Gui\InputBtnXamlGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
@@ -131,8 +130,6 @@ global MyTargetGui := TargetGui()
 global MyColorPanel := ColorPanelGui()
 global MyMsgboxGui := CustomMsgBoxGui()
 global MyErrorMsgBoxGui := ErrorMsgBoxGui()
-global MyInputGui := CustomInputGui()
-global MyInputBtnGui := InputBtnGui()
 global MyToolRecordSettingGui := ToolRecordSettingGui()
 global MyUseExplainGui := UseExplainGui()
 global MyConfigMergeGui := ConfigMergeGui()
