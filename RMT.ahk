@@ -16,4 +16,5 @@ SetEditData()               ;缓存编辑器数据，设置下拉框变量，检
 ;放后面初始化，因为这初始化时间比较长
 PluginInit()
 MyTimingScheduler.Start()
+InitVoiceEngine().Start()    ;启动语音触发监听（引擎 DLL 缺失时安全降级，不影响其余功能）
 BindKey()           ;绑定快捷键

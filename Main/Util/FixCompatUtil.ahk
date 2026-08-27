@@ -222,6 +222,8 @@ CompatCMD(filePath) {
         "LoopCountArr", "1",
         "StartTipSoundArr", "1",
         "EndTipSoundArr", "1",
+        "VoiceTriggerArr", "0",
+        "VoiceKeywordsArr", "",
         "IcoPathArr", "",
         "SerialArr", "0"
     )

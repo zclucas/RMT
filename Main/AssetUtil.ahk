@@ -922,6 +922,8 @@ ReadTableItemInfo(index) {
     savedEndTipSoundStr := IniRead(MacroFile, IniSection, symbol "EndTipSoundArr", "")
     savedIcoPathArrStr := IniRead(MacroFile, IniSection, symbol "IcoPathArr", "")
     savedUnorderedTriggerArrStr := IniRead(MacroFile, IniSection, symbol "UnorderedTriggerArr", "")
+    savedVoiceTriggerArrStr := IniRead(MacroFile, IniSection, symbol "VoiceTriggerArr", "")
+    savedVoiceKeywordsArrStr := IniRead(MacroFile, IniSection, symbol "VoiceKeywordsArr", "")
     savedFoldInfoStr := IniRead(MacroFile, IniSection, symbol "FoldInfo", "")
 
     ;不存在折叠筐就初始化，并读取默认配置
@@ -939,6 +941,8 @@ ReadTableItemInfo(index) {
         savedEndTipSoundStr := defaultInfo[11]
         savedIcoPathArrStr := defaultInfo[12]
         savedUnorderedTriggerArrStr := defaultInfo[13]
+        savedVoiceTriggerArrStr := defaultInfo[14]
+        savedVoiceKeywordsArrStr := defaultInfo[15]
 
         defaultFoldInfo := ItemFoldInfo()
         defaultFoldInfo.RemarkArr := [GetLang("RMT默认初始化配置")]
@@ -972,6 +976,8 @@ ReadTableItemInfo(index) {
     SetArr(savedEndTipSoundStr, "π", tableItem.EndTipSoundArr)
     SetArr(savedIcoPathArrStr, "π", tableItem.IcoPathArr)
     SetIntArr(savedUnorderedTriggerArrStr, "π", tableItem.UnorderedTriggerArr)
+    SetIntArr(savedVoiceTriggerArrStr, "π", tableItem.VoiceTriggerArr)
+    SetArr(savedVoiceKeywordsArrStr, "π", tableItem.VoiceKeywordsArr)
 
     tableItem.FoldInfo := JSON.parse(savedFoldInfoStr, , false)
     SetSerialByArr(tableItem.SerialArr)
@@ -1038,6 +1044,8 @@ GetGetTableItemDefaultMacro(index) {
         return "Left,a"
     else if (symbol == "UI")
         return "按键_a_点击_100_10_200,间隔_3000"
+    else if (symbol == "Voice")
+        return "按键_a_点击_100_10_200,间隔_3000"   ; 语音宏默认指令模板
     return ""
 }
 
@@ -1055,6 +1063,8 @@ GetTableItemDefaultInfo(index) {
     savedEndTipSoundStr := ""
     savedIcoPathArrStr := ""
     savedUnorderedTriggerArrStr := ""
+    savedVoiceTriggerArrStr := ""
+    savedVoiceKeywordsArrStr := ""
     symbol := GetTableSymbol(index)
 
     if (symbol == "Normal") {
@@ -1117,6 +1127,23 @@ GetTableItemDefaultInfo(index) {
         savedIcoPathArrStr := "0π0π0"
         savedUnorderedTriggerArrStr := "0π0π0"
     }
+    else if (symbol == "Voice") {
+        savedTKArrStr := "πππ"
+        savedHoldTimeArrStr := "0π0π0"
+        savedModeArrStr := "1π1π1"
+        savedForbidArrStr := "1π1π1"
+        savedRemarkArrStr := GetLang("语音宏示例1") "π" GetLang("语音宏示例2") "π" GetLang("语音宏示例3")
+        savedLoopCountStr := "1π1π1"
+        savedTriggerTypeStr := "1π1π1"
+        savedSerialeArrStr := "17π18π19"
+        savedTimingSerialStr := "Timing17πTiming18πTiming19"
+        savedStartTipSoundStr := "1π1π1"
+        savedEndTipSoundStr := "1π1π1"
+        savedIcoPathArrStr := "0π0π0"
+        savedUnorderedTriggerArrStr := "0π0π0"
+        savedVoiceTriggerArrStr := "1π1π1"        ; 语音宏默认启用语音触发
+        savedVoiceKeywordsArrStr := "你好π开始π停止"   ; 默认唤醒词
+    }
     else if (symbol == "Timing") {
         savedTKArrStr := ""
         savedHoldTimeArrStr := "500"
@@ -1162,9 +1189,23 @@ GetTableItemDefaultInfo(index) {
         savedIcoPathArrStr := "00π"
         savedUnorderedTriggerArrStr := "0"
     }
+    ; 语音字段默认值：非 Voice 表（普通按键/字串等宏）语音触发默认关闭(0)、唤醒词为空，
+    ; 避免 SetIntArr("") 把 VoiceTriggerArr 误填为 1（启用语音）导致普通宏被语音引擎误扫。
+    if (symbol != "Voice") {
+        if (savedVoiceTriggerArrStr == "") {
+            itemCount := StrSplit(savedModeArrStr, "π").Length
+            savedVoiceTriggerArrStr := ""
+            savedVoiceKeywordsArrStr := ""
+            loop itemCount {
+                if (A_Index > 1)
+                    savedVoiceTriggerArrStr .= "π"
+                savedVoiceTriggerArrStr .= "0"
+            }
+        }
+    }
     return [savedTKArrStr, savedHoldTimeArrStr, savedModeArrStr, savedForbidArrStr, savedRemarkArrStr,
         savedLoopCountStr, savedTriggerTypeStr, savedSerialeArrStr, savedTimingSerialStr, savedStartTipSoundStr,
-        savedEndTipSoundStr, savedIcoPathArrStr, savedUnorderedTriggerArrStr]
+        savedEndTipSoundStr, savedIcoPathArrStr, savedUnorderedTriggerArrStr, savedVoiceTriggerArrStr, savedVoiceKeywordsArrStr]
 }
 
 SaveTableItemInfo(index) {
@@ -1184,6 +1225,8 @@ SaveTableItemInfo(index) {
     IniWrite(SavedInfo[11], MacroFile, IniSection, symbol "EndTipSoundArr")
     IniWrite(SavedInfo[12], MacroFile, IniSection, symbol "IcoPathArr")
     IniWrite(SavedInfo[13], MacroFile, IniSection, symbol "UnorderedTriggerArr")
+    IniWrite(SavedInfo[14], MacroFile, IniSection, symbol "VoiceTriggerArr")
+    IniWrite(SavedInfo[15], MacroFile, IniSection, symbol "VoiceKeywordsArr")
     IniWrite(JSON.stringify(tableItem.FoldInfo, 0), MacroFile, IniSection, symbol "FoldInfo")
 
     SaveTableItemMacro(index)
@@ -1218,6 +1261,8 @@ GetSavedTableItemInfo(index) {
     EndTipSoundArrStr := ""
     IcoPathArrStr := ""
     UnorderedTriggerArrStr := ""
+    VoiceTriggerArrStr := ""
+    VoiceKeywordsArrStr := ""
 
     tableItem := MySoftData.TableInfo[index]
     symbol := GetTableSymbol(index)
@@ -1236,6 +1281,8 @@ GetSavedTableItemInfo(index) {
         EndTipSoundArrStr .= tableItem.EndTipSoundArr[A_Index]
         UnorderedTriggerArrStr .= tableItem.UnorderedTriggerArr[A_Index]
         IcoPathArrStr .= tableItem.IcoPathArr[A_Index]
+        VoiceTriggerArrStr .= tableItem.VoiceTriggerArr[A_Index]
+        VoiceKeywordsArrStr .= tableItem.VoiceKeywordsArr[A_Index]
 
         if (tableItem.ModeArr.Length > A_Index) {
             TKArrStr .= "π"
@@ -1251,12 +1298,14 @@ GetSavedTableItemInfo(index) {
             EndTipSoundArrStr .= "π"
             IcoPathArrStr .= "π"
             UnorderedTriggerArrStr .= "π"
+            VoiceTriggerArrStr .= "π"
+            VoiceKeywordsArrStr .= "π"
         }
     }
 
     return [TKArrStr, HoldTimeArrStr, ModeArrStr, ForbidArrStr, RemarkArrStr,
         LoopCountArrStr, TriggerTypeArrStr, SerialArrStr, TimingSerialArrStr, StartTipSoundArrStr, EndTipSoundArrStr,
-        IcoPathArrStr, UnorderedTriggerArrStr]
+        IcoPathArrStr, UnorderedTriggerArrStr, VoiceTriggerArrStr, VoiceKeywordsArrStr]
 }
 
 ;Table信息相关
@@ -1457,6 +1506,8 @@ CheckIsItemTable(index) {
         return true
     if (symbol == "UI")
         return true
+    if (symbol == "Voice")
+        return true
     return false
 }
 
@@ -1473,6 +1524,8 @@ CheckIsMacroTable(index) {
     if (symbol == "Menu")
         return true
     if (symbol == "UI")
+        return true
+    if (symbol == "Voice")
         return true
     return false
 }
@@ -1513,6 +1566,8 @@ CheckIsNoTriggerKey(index) {
     if (symbol == "Menu")
         return true
     if (symbol == "UI")
+        return true
+    if (symbol == "Voice")
         return true
     return false
 }

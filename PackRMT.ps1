@@ -1,4 +1,4 @@
-﻿# RMT 自动打包脚本
+# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -372,6 +372,10 @@ function New-Release {
         Write-Log "复制 OpenCV DLL (x64)..." "Gray"
         Copy-OpenCV -ReleaseDir $releaseDir -Arch "x64"
 
+        # 复制文字识别插件 RapidOcr (x64)
+        Write-Log "复制 RapidOcr 插件 (x64)..." "Gray"
+        Copy-RapidOcr -ReleaseDir $releaseDir -Arch "x64"
+
         # 复制 AHK-XAML DLL
         Write-Log "复制 AHK-XAML DLL..." "Gray"
         Copy-XamlDlls -ReleaseDir $releaseDir
@@ -383,6 +387,10 @@ function New-Release {
         # 复制罗技输入相关 DLL（按键 + 鼠标移动）
         Write-Log "复制输入插件 DLL..." "Gray"
         Copy-InputDlls -ReleaseDir $releaseDir
+
+        # 复制语音触发插件 Voice (x64)
+        Write-Log "复制 Voice 插件 (x64)..." "Gray"
+        Copy-Voice -ReleaseDir $releaseDir -Arch "x64"
     }
 
     if ($Type -eq "x86" -or $Type -eq "both") {
@@ -427,6 +435,10 @@ function New-Release {
         Write-Log "复制 OpenCV DLL (x86)..." "Gray"
         Copy-OpenCV -ReleaseDir $releaseDir -Arch "x86"
 
+        # 复制文字识别插件 RapidOcr (x86)
+        Write-Log "复制 RapidOcr 插件 (x86)..." "Gray"
+        Copy-RapidOcr -ReleaseDir $releaseDir -Arch "x86"
+
         # 复制 AHK-XAML DLL
         Write-Log "复制 AHK-XAML DLL..." "Gray"
         Copy-XamlDlls -ReleaseDir $releaseDir
@@ -438,6 +450,10 @@ function New-Release {
         # 复制罗技输入相关 DLL（按键 + 鼠标移动）
         Write-Log "复制输入插件 DLL..." "Gray"
         Copy-InputDlls -ReleaseDir $releaseDir
+
+        # 复制语音触发插件 Voice (x86)
+        Write-Log "复制 Voice 插件 (x86)..." "Gray"
+        Copy-Voice -ReleaseDir $releaseDir -Arch "x86"
     }
 
     Write-Section "创建发行包到桌面"
@@ -665,6 +681,76 @@ function Copy-InputDlls {
     }
 }
 
+# 语音触发插件（Voice）：按架构复制运行时 DLL + 共享 KWS 模型
+function Copy-Voice {
+    param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
+
+    $srcDir = Join-Path $PSScriptRoot "Plugins\Voice\$Arch"
+    $dstDir = Join-Path $ReleaseDir "Plugins\Voice\$Arch"
+
+    if (-not (Test-Path $srcDir)) {
+        Write-Log "  [WARN] Voice 源目录不存在: $srcDir" "Yellow"
+        return
+    }
+
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+
+    # 架构相关的运行时 DLL（VoiceDll + sherpa c-api + onnxruntime）
+    Get-ChildItem $srcDir -File | ForEach-Object {
+        Copy-Item $_.FullName -Destination $dstDir -Force
+        Write-Log "  已复制: Voice/$Arch/$($_.Name)" "Gray"
+    }
+
+    # 共享 KWS 模型（跨架构，缺才复制）
+    $modelSrc = Join-Path $PSScriptRoot "Plugins\Voice\models\kws"
+    $modelDst = Join-Path $ReleaseDir "Plugins\Voice\models\kws"
+    if (Test-Path $modelSrc) {
+        New-Item -ItemType Directory -Path $modelDst -Force | Out-Null
+        Get-ChildItem $modelSrc -File | ForEach-Object {
+            $dst = Join-Path $modelDst $_.Name
+            if (-not (Test-Path $dst)) {
+                Copy-Item $_.FullName -Destination $dst -Force
+                Write-Log "  已复制: Voice/models/kws/$($_.Name)" "Gray"
+            }
+        }
+    } else {
+        Write-Log "  [WARN] Voice 模型目录不存在: $modelSrc" "Yellow"
+    }
+}
+
+# 文字识别插件（RapidOcr）：按架构复制 DLL + PP-OCRv6 ch_models（v6 统一多语言模型，无 en_models）
+function Copy-RapidOcr {
+    param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
+
+    $bitArch = if ($Arch -eq "x64") { "64bit" } else { "32bit" }
+    $srcDll = Join-Path $PSScriptRoot "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll"
+    $dstDll = Join-Path $ReleaseDir "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll"
+
+    if (Test-Path $srcDll) {
+        New-Item -ItemType Directory -Path (Split-Path $dstDll -Parent) -Force | Out-Null
+        Copy-Item $srcDll -Destination $dstDll -Force
+        Write-Log "  已复制: RapidOcr/$bitArch/RapidOcrOnnx.dll" "Gray"
+    } else {
+        Write-Log "  [WARN] 未找到: RapidOcr/$bitArch/RapidOcrOnnx.dll" "Yellow"
+    }
+
+    # PP-OCRv6 ch_models（det/rec/dict，跨架构共用，缺才复制）
+    $modelSrc = Join-Path $PSScriptRoot "Plugins\RapidOcr\ch_models"
+    $modelDst = Join-Path $ReleaseDir "Plugins\RapidOcr\ch_models"
+    if (Test-Path $modelSrc) {
+        New-Item -ItemType Directory -Path $modelDst -Force | Out-Null
+        Get-ChildItem $modelSrc -File | ForEach-Object {
+            $dst = Join-Path $modelDst $_.Name
+            if (-not (Test-Path $dst)) {
+                Copy-Item $_.FullName -Destination $dst -Force
+                Write-Log "  已复制: RapidOcr/ch_models/$($_.Name)" "Gray"
+            }
+        }
+    } else {
+        Write-Log "  [WARN] RapidOcr 模型目录不存在: $modelSrc" "Yellow"
+    }
+}
+
 function Compress-ReleaseZip {
     param([string]$SourceDir, [string]$ZipPath)
 
@@ -702,6 +788,14 @@ function New-RMTAssets {
         @{ Dest = "WpfAnimatedGif.dll";              Src = "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll" },
         @{ Dest = "RMT_OpenCV.dll";                  Src = "Plugins\OpenCV\$Arch\RMT_OpenCV.dll" },
         @{ Dest = "opencv_world481.dll";             Src = "Plugins\OpenCV\$Arch\opencv_world481.dll" },
+        @{ Dest = "VoiceDll.dll";                    Src = "Plugins\Voice\$Arch\VoiceDll.dll" },
+        @{ Dest = "sherpa-onnx-c-api.dll";           Src = "Plugins\Voice\$Arch\sherpa-onnx-c-api.dll" },
+        @{ Dest = "onnxruntime.dll";                 Src = "Plugins\Voice\$Arch\onnxruntime.dll" },
+        @{ Dest = "onnxruntime_providers_shared.dll"; Src = "Plugins\Voice\$Arch\onnxruntime_providers_shared.dll" },
+        @{ Dest = "kws_decoder.onnx";                Src = "Plugins\Voice\models\kws\decoder-epoch-13-avg-2-chunk-16-left-64.onnx" },
+        @{ Dest = "kws_encoder.int8.onnx";           Src = "Plugins\Voice\models\kws\encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
+        @{ Dest = "kws_joiner.int8.onnx";            Src = "Plugins\Voice\models\kws\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
+        @{ Dest = "kws_tokens.txt";                  Src = "Plugins\Voice\models\kws\tokens.txt" },
         @{ Dest = "RapidOcrOnnx.dll";                Src = "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll" },
         @{ Dest = "ScreenCapture.exe";               Src = "Plugins\ScreenCapture\ScreenCapture.exe" },
         @{ Dest = "AutoHotInterception.dll";         Src = "Plugins\AhiDriver\AutoHotInterception.dll" },
@@ -710,12 +804,9 @@ function New-RMTAssets {
         @{ Dest = "InstallUninstall.bat";            Src = "Plugins\AhiDriver\installer\安装卸载.bat" },
         @{ Dest = "install-interception.exe";        Src = "Plugins\AhiDriver\installer\install-interception.exe" },
         @{ Dest = "InstallReadme.txt";                 Src = "Plugins\AhiDriver\installer\使用说明.txt" },
-        @{ Dest = "ch_PP-OCRv4_det_infer.onnx";      Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv4_det_infer.onnx" },
-        @{ Dest = "ch_PP-OCRv4_rec_infer.onnx";      Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv4_rec_infer.onnx" },
-        @{ Dest = "ppocr_keys_v1.txt";               Src = "Plugins\RapidOcr\ch_models\ppocr_keys_v1.txt" },
-        @{ Dest = "en_PP-OCRv3_det_infer.onnx";      Src = "Plugins\RapidOcr\en_models\en_PP-OCRv3_det_infer.onnx" },
-        @{ Dest = "en_PP-OCRv4_rec_infer.onnx";      Src = "Plugins\RapidOcr\en_models\en_PP-OCRv4_rec_infer.onnx" },
-        @{ Dest = "ppocr_keys_v1_en.txt";            Src = "Plugins\RapidOcr\en_models\ppocr_keys_v1.txt" },
+        @{ Dest = "ch_PP-OCRv6_det.onnx";            Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_det.onnx" },
+        @{ Dest = "ch_PP-OCRv6_rec.onnx";            Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_rec.onnx" },
+        @{ Dest = "ppocrv6_tiny_dict.txt";           Src = "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt" },
         @{ Dest = "chinese.txt";                     Src = "Lang\中文.txt" },
         @{ Dest = "English.txt";                     Src = "Lang\English.txt" },
         @{ Dest = "Work.exe";                        Src = "Release$Arch\Thread\Work.exe" },

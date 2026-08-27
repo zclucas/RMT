@@ -26,6 +26,8 @@
 #Include Util\LogUtil.ahk
 #Include Util\ErrorHandler.ahk
 #Include Util\FixCompatUtil.ahk
+#Include Util\HotReloadBus.ahk
+#Include Util\VoiceUtil.ahk
 #Include ..\Plugins\ViGEm\AHK-ViGEm-Bus-v2.ahk
 
 #Include ..\Gui\TriggerKeyGui.ahk
@@ -63,6 +65,7 @@
 #Include ..\Gui\CustomInputGui.ahk
 #Include ..\Gui\InputBtnXamlGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
+#Include ..\Gui\VoiceGui.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
 
 
@@ -133,6 +136,8 @@ global MyErrorMsgBoxGui := ErrorMsgBoxGui()
 global MyToolRecordSettingGui := ToolRecordSettingGui()
 global MyUseExplainGui := UseExplainGui()
 global MyConfigMergeGui := ConfigMergeGui()
+global MyVoiceGui := VoiceGui()
+global MyHotReloadBus := HotReloadBus()   ;配置热重载总线（编辑器广播变更，消费端空闲时重建）
 global MyStopMacro := StopMacro
 global SelectAreaHo := HighlightOutlineSelectArea("Red", 150)
 global SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0}

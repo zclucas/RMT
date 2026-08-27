@@ -18,6 +18,8 @@ class TableItem {
         this.HoldKeyArr := []       ;记录当前按下的按键，以便结束时松开
         this.KilledArr := []        ;标记结束状态
         this.PauseArr := []         ;暂停
+        this.VoiceTriggerArr := []  ;语音触发 1=启用 0=禁用（每 item 一个）
+        this.VoiceKeywordsArr := [] ;语音触发关键词（每 item 一个字符串，多个关键词用英文逗号 , 分隔）
         this.ActionCount := []      ; 记录执行次数，用于循环次数判断
         this.ToggleStateArr := []   ; 触发键开关状态
         this.ToggleActionArr := []   ; 触发键开关Action
@@ -144,8 +146,8 @@ class MainConfig {
         this.TableIndex := 1            ; 当前显示的 Tab 页索引
         this.TabPosX := 0               ; Tab 组件左上角 X 坐标
         this.TabPosY := 0               ; Tab 组件左上角 Y 坐标
-        this.TabNameArr := ["按键宏", "字串宏", "菜单宏", "界面宏", "定时宏", "宏", "按键替换", "工具", "设置", "帮助", "打赏作者", "特别感谢"]
-        this.TabSymbolArr := ["Normal", "String", "Menu", "UI", "Timing", "SubMacro", "Replace", "Tool", "Setting", "Help",
+        this.TabNameArr := ["按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "按键替换", "工具", "设置", "帮助", "打赏作者", "特别感谢"]
+        this.TabSymbolArr := ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace", "Tool", "Setting", "Help",
             "Reward", "Thank"]
 
         ; ========== 热键绑定 ==========

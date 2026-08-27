@@ -147,10 +147,10 @@ class MainWin {
         ; Epic5 虚拟列表：宏/模块显示区（tab1-7）全走 _vl 渲染（模板已支持全部表类型：
         ; Normal/String/Menu/UI/Timing/SubMacro/Replace 的标志行 + IsEnabled 绑定），
         ; 结构操作（增删/折叠/上下移）只发 VL_INIT/VL_FOLD/VL_MOVE 增量命令，不再整表重建，
-        ; 消除旧路径新增宏/折叠的界面闪烁与千条级卡顿；tab8-12 非宏页走 Panel_ 不受影响
+        ; tab1-8 宏页走虚拟列表；tab9-13 非宏页走 Panel_ 不受影响
         this._vl := ""
         this._useVirtual := Map()
-        loop 7 {
+        loop 8 {
             this._useVirtual[A_Index] := true
         }
     }
@@ -229,7 +229,7 @@ class MainWin {
                 tabItem.Tag("first")
             else if (idx == MainSoftData.TabNameArr.Length)
                 tabItem.Tag("last")
-            if (idx <= 7) {
+            if (idx <= 8) {
                 ; 宏/模块显示区：自适应剩余空间，外层边框包裹；上边距 -2 让内容框上边框与页签条下边框重叠
                 bd := tabItem.Add("Border").BorderThickness("1").BorderBrush("{DynamicResource InputStroke}").CornerRadius("4").Margin("4,-2,4,4").Padding("2,2")
                 if (this._useVirtual.Has(idx)) {
@@ -660,9 +660,16 @@ class MainWin {
         isTiming := CheckIsTimingMacroTable(t)
         isSubMacro := CheckIsSubMacroTable(t)
         isUI := GetTableSymbol(t) == "UI"
+        isVoice := GetTableSymbol(t) == "Voice"
 
-        tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
-        tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        if (isVoice) {
+            ; 语音宏：触发键列显示唤醒词
+            tkStr := (i <= tableItem.VoiceKeywordsArr.Length) ? tableItem.VoiceKeywordsArr[i] : ""
+            tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        } else {
+            tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
+            tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        }
         loopStr := tableItem.LoopCountArr[i] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[i]
         colorState := tableItem.ColorStateArr[i]
         colorHex := colorState == 1 ? "#2E7D32" : colorState == 2 ? "#F9A825" : colorState == 3 ? "#C62828" : "Transparent"
@@ -724,6 +731,8 @@ class MainWin {
         editMacro := isMacro ? OnItemEditMacro : OnItemEditReplaceKey
         if (isUI)
             editTK := OnUIMacroSettingClick
+        else if (GetTableSymbol(t) == "Voice")
+            editTK := OnItemVoiceTriggerSetting   ; 语音宏：触发键列点击 → 语音触发编辑弹窗（填唤醒词）
 
         loopStr := tableItem.LoopCountArr[i] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[i]
         this.ui.Update("Loop_" t "_" i, "Text", loopStr)
@@ -785,8 +794,15 @@ class MainWin {
         tableItem := MySoftData.TableInfo[t]
         isTiming := CheckIsTimingMacroTable(t)
         isUI := GetTableSymbol(t) == "UI"
-        tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
-        tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        isVoice := GetTableSymbol(t) == "Voice"
+        if (isVoice) {
+            ; 语音宏：触发键列显示唤醒词（无按键）
+            tkStr := (i <= tableItem.VoiceKeywordsArr.Length) ? tableItem.VoiceKeywordsArr[i] : ""
+            tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        } else {
+            tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
+            tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        }
         loopStr := tableItem.LoopCountArr[i] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[i]
         tkTypeIdx := tableItem.TriggerTypeArr[i] - 1
         if (isUI)

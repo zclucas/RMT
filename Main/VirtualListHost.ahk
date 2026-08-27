@@ -111,6 +111,11 @@ class VirtualListHost {
 
     _TKStr(tableItem, i, t) {
         isTiming := CheckIsTimingMacroTable(t)
+        if (GetTableSymbol(t) == "Voice") {
+            ; 语音宏：触发键列显示唤醒词
+            tkStr := (i <= tableItem.VoiceKeywordsArr.Length) ? tableItem.VoiceKeywordsArr[i] : ""
+            return tkStr == "" ? GetLang("编辑") : tkStr
+        }
         tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
         return tkStr == "" ? GetLang("编辑") : tkStr
     }
@@ -182,6 +187,8 @@ class VirtualListHost {
             OnItemMenuMacroSettingClick(tableItem, i, event)
         else if (GetTableSymbol(t) == "UI")
             OnUIMacroSettingClick(tableItem, i, event)
+        else if (GetTableSymbol(t) == "Voice")
+            OnItemVoiceTriggerSetting(tableItem, i, event)   ; 语音宏：触发编辑弹窗填唤醒词
         else
             OnItemEditTriggerKey(tableItem, i, event)
     }

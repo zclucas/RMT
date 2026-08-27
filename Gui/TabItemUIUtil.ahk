@@ -43,6 +43,8 @@ OnItemAddMacroBtnClick(tableItem, foldIndex, *) {
     tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
     tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
     tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
+    tableItem.VoiceTriggerArr.InsertAt(AddIndex, 0)
+    tableItem.VoiceKeywordsArr.InsertAt(AddIndex, "")
     tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
     tableItem.GraphBranchCountArr.InsertAt(AddIndex, 0)
     tableItem.IcoPathArr.InsertAt(AddIndex, "")
@@ -92,6 +94,8 @@ OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
     SafeRemoveAt(tableItem.TimingSerialArr, itemIndex)
     SafeRemoveAt(tableItem.StartTipSoundArr, itemIndex)
     SafeRemoveAt(tableItem.EndTipSoundArr, itemIndex)
+    SafeRemoveAt(tableItem.VoiceTriggerArr, itemIndex)
+    SafeRemoveAt(tableItem.VoiceKeywordsArr, itemIndex)
     SafeRemoveAt(tableItem.IsWorkIndexArr, itemIndex)
     SafeRemoveAt(tableItem.GraphBranchCountArr, itemIndex)
     SafeRemoveAt(tableItem.IcoPathArr, itemIndex)
@@ -156,6 +160,8 @@ OnItemAddMenuItem(tableItem, foldIndex, count := 4) {
         tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
         tableItem.StartTipSoundArr.InsertAt(AddIndex, 0)
         tableItem.EndTipSoundArr.InsertAt(AddIndex, 0)
+        tableItem.VoiceTriggerArr.InsertAt(AddIndex, 0)
+        tableItem.VoiceKeywordsArr.InsertAt(AddIndex, "")
         tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
         tableItem.GraphBranchCountArr.InsertAt(AddIndex, 0)
         tableItem.IcoPathArr.InsertAt(AddIndex, "")
@@ -223,18 +229,32 @@ OnItemEditTriggerStr(tableItem, index, *) {
     MyTriggerStrGui.ShowGui(triggerStr, 0, false)
 }
 
-;自定义编辑触发按键
+;自定义编辑触发按键（触发键按钮右键）
+;现提供菜单：语音触发设置 / 自定义触发串
 OnItemCustomEditTriggerStr(tableItem, index, *) {
     isNormal := CheckIsNormalTable(tableItem.Index)
-    if (!isNormal)
-        return
     MyMainWin.ReadTabValues(tableItem)
 
+    m := Menu()
+    m.Add(GetLang("语音触发"), (*) => OnItemVoiceTriggerSetting(tableItem, index))
+    if (isNormal)
+        m.Add(GetLang("自定义触发串"), (*) => OnItemCustomEditTriggerStrInput(tableItem, index))
+    handler := OnItemCustomEditTriggerStr.Bind(tableItem, index)
+    m.Show()
+}
+
+; 原「自定义触发串」InputBox 逻辑（保留，走菜单项）
+OnItemCustomEditTriggerStrInput(tableItem, index, *) {
     CustomTK := InputBox(GetLang("请输入自定义触发按键："), "修改", "w300 h100", tableItem.TKArr[index])
     if CustomTK.Result = "Cancel"
         return
     tableItem.TKArr[index] := CustomTK.Value
     MyMainWin.RenderTab(tableItem)
+}
+
+; 语音触发设置（语音关键词配置窗口入口）
+OnItemVoiceTriggerSetting(tableItem, index, *) {
+    MyVoiceGui.ShowGui(tableItem, index)
 }
 
 ;编辑按键宏触发键

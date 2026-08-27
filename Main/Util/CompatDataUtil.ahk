@@ -162,10 +162,20 @@ CompatEnsureRunData(Data) {
 
 ;旧版本兼容：确保各数组长度与ModeArr一致（新增字段补齐）
 CompatEnsureArrLength(tableItem) {
-    if (tableItem.ModeArr.Length == tableItem.StartTipSoundArr.Length &&
-        tableItem.ModeArr.Length == tableItem.EndTipSoundArr.Length &&
-        tableItem.ModeArr.Length == tableItem.IcoPathArr.Length &&
-        tableItem.ModeArr.Length == tableItem.UnorderedTriggerArr.Length)
+    needFill := false
+    if (tableItem.ModeArr.Length != tableItem.StartTipSoundArr.Length)
+        needFill := true
+    if (tableItem.ModeArr.Length != tableItem.EndTipSoundArr.Length)
+        needFill := true
+    if (tableItem.ModeArr.Length != tableItem.IcoPathArr.Length)
+        needFill := true
+    if (tableItem.ModeArr.Length != tableItem.UnorderedTriggerArr.Length)
+        needFill := true
+    if (tableItem.ModeArr.Length != tableItem.VoiceTriggerArr.Length)
+        needFill := true
+    if (tableItem.ModeArr.Length != tableItem.VoiceKeywordsArr.Length)
+        needFill := true
+    if (!needFill)
         return
 
     for index, value in tableItem.ModeArr {
@@ -177,5 +187,9 @@ CompatEnsureArrLength(tableItem) {
             tableItem.IcoPathArr.Push("")
         if (tableItem.UnorderedTriggerArr.Length < index)
             tableItem.UnorderedTriggerArr.Push(0)
+        if (tableItem.VoiceTriggerArr.Length < index)
+            tableItem.VoiceTriggerArr.Push(0)
+        if (tableItem.VoiceKeywordsArr.Length < index)
+            tableItem.VoiceKeywordsArr.Push("")
     }
 }

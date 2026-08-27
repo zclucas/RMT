@@ -67,11 +67,15 @@ OnSuspendHotkey(*) {
     if (MainSoftData.IsSuspend) {
         OnKillAllMacro()
         MyTimingScheduler.Stop()
+        if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
+            MyVoiceEngine.Suspend()
         A_TrayMenu.Check(GetLang("休眠"))
         TraySetIcon("Images\Soft\IcoPause.ico", , true)
     }
     else {
         MyTimingScheduler.Start()
+        if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
+            MyVoiceEngine.Resume()
         A_TrayMenu.Uncheck(GetLang("休眠"))
         TraySetIcon("Images\Soft\rabit.ico", , true)
     }
@@ -96,9 +100,13 @@ OnPauseHotKey(*) {
 
     if (MainSoftData.IsPause) {
         MyTimingScheduler.Suspend()
+        if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
+            MyVoiceEngine.Suspend()
     }
     else {
         MyTimingScheduler.Resume()
+        if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
+            MyVoiceEngine.Resume()
     }
 
     tipStr := MainSoftData.IsPause ? GetLang("暂停所有宏") : GetLang("取消所有暂停")

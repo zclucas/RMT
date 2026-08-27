@@ -1,0 +1,7 @@
+# VoiceDll 构建依赖/缓存（buildDll.ps1 自动下载生成，不提交 git）
+third_party/
+out*/
+*.obj
+*.lib
+*.exp
+_build_cl.bat

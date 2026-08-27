@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 class MergeTreeNode {
     __New() {
@@ -44,7 +44,7 @@ class MergeUtil {
     ; 1.2+ 源配置有 UI 数据 → 正常导入到界面宏页签。无需单独版本分支。
     static GetMergeTabConfig() {
         tabs := []
-        for symbol in ["Normal", "String", "Menu", "UI", "Timing", "SubMacro", "Replace"] {
+        for symbol in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace"] {
             idx := GetTableIndex(symbol)
             if (idx <= 0)
                 continue
@@ -1217,6 +1217,8 @@ class MergeUtil {
                     tableItem.UnorderedTriggerArr.Push(false)
                     tableItem.StartTipSoundArr.Push(1)
                     tableItem.EndTipSoundArr.Push(1)
+                    tableItem.VoiceTriggerArr.Push(0)
+                    tableItem.VoiceKeywordsArr.Push("")
                     tableItem.MacroArr.Push(item.MacroStr)
                     tableItem.SerialArr.Push(newSerial)
                     tableItem.TimingSerialArr.Push(newTimingSerial)

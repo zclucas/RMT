@@ -229,6 +229,8 @@ SwapTableContent(tableItem, indexA, indexB) {
     SwapArrValue(tableItem.ModeArr, indexA, indexB)
     SwapArrValue(tableItem.StartTipSoundArr, indexA, indexB)
     SwapArrValue(tableItem.EndTipSoundArr, indexA, indexB)
+    SwapArrValue(tableItem.VoiceTriggerArr, indexA, indexB)
+    SwapArrValue(tableItem.VoiceKeywordsArr, indexA, indexB)
     ; 运行时状态数组（与 ModeArr 等长，InitSingleTableState 统一初始化）
     ; 颜色点跟随宏内容：行移动后状态显示与新位置宏保持一致（原仅交换 9 数组导致颜色点错位）
     SwapArrValue(tableItem.ColorStateArr, indexA, indexB)
