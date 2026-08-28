@@ -162,16 +162,21 @@ CompatEnsureRunData(Data) {
 
 ;旧版本兼容：条目对象化后，确保每个 MacroItem 的运行时状态字段已初始化（迁移期）
 CompatEnsureArrLength(tableItem) {
+    static CtlKeys := Map(
+        "宏循环次数", 0,
+        "循环-跳过本轮", false,
+        "循环-跳出", false,
+        "分支-跳出", false
+    )
     for item in tableItem.Items {
         if (!item.HoldKey)
             item.HoldKey := Map()
-        if (!item.VariableMap) {
-            VariableMap := Map()
-            VariableMap["宏循环次数"] := 0
-            VariableMap["循环-跳过本轮"] := false
-            VariableMap["循环-跳出"] := false
-            VariableMap["分支-跳出"] := false
-            item.VariableMap := VariableMap
+        ; 空 Map() 是真值，需按缺失键补齐，不能只判 !item.VariableMap
+        if (!ObjHasOwnProp(item, "VariableMap"))   ;属性未创建
+            item.VariableMap := Map()
+        for key, def in CtlKeys {
+            if (!item.VariableMap.Has(key))
+                item.VariableMap[key] := def
         }
     }
 }

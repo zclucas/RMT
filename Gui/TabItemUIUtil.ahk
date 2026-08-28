@@ -28,9 +28,10 @@ OnItemAddMacroBtnClick(tableItem, foldIndex, *) {
         tableItem.Folds[foldIndex].FoldState := false  ;没开打的话，自动打开
 
     item := MacroItem()
-    item.ID := GetCMDSerialStr("Item")
-    item.TimingSerial := GetCMDSerialStr("Timing")
     item.FoldID := (foldIndex >= 1 && foldIndex <= tableItem.Folds.Length) ? tableItem.Folds[foldIndex].ID : ""
+    ; 路径身份：新宏 = foldSeg.Macro{max+1}（父模块路径）
+    item.ID := (item.FoldID != "") ? NewMacroPath(tableItem, item.FoldID) : GetCMDSerialStr("Item")
+    item.TimingSerial := GetCMDSerialStr("Timing")
     tableItem.Items.InsertAt(AddIndex, item)
 
     tableItem.RebuildIndex()
@@ -62,7 +63,7 @@ OnItemAddFoldBtnClick(tableItem, foldIndex, *) {
     MyMainWin.ReadTabValues(tableItem)
 
     fold := MacroFold()
-    fold.ID := GetFoldSerialStr()
+    fold.ID := NewModulePath(tableItem)   ; 路径身份 Normal.Module{max+1}
     tableItem.Folds.InsertAt(foldIndex + 1, fold)
 
     if (isMenu)
@@ -80,9 +81,10 @@ OnItemAddMenuItem(tableItem, foldIndex, count := 4) {
     loop count {
         AddIndex := GetFoldAddItemIndex(tableItem, foldIndex)
         item := MacroItem()
-        item.ID := GetCMDSerialStr("Item")
-        item.TimingSerial := GetCMDSerialStr("Timing")
         item.FoldID := fold.ID
+        ; 路径身份：新宏 = foldSeg.Macro{max+1}（父模块路径）
+        item.ID := NewMacroPath(tableItem, fold.ID)
+        item.TimingSerial := GetCMDSerialStr("Timing")
         tableItem.Items.InsertAt(AddIndex, item)
     }
     tableItem.RebuildIndex()

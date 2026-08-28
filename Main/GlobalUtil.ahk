@@ -147,6 +147,7 @@ global MySubmitGraphBranches := SubmitGraphBranchesHandler
 global MySetGlobalVariable := SetGlobalVariable
 global MyDelGlobalVariable := DelGlobalVariable
 global MyCMDReportAciton := CMDReport
+global MyCMDTipForceAction := CmdTipForceShow
 global MyExcuteRMTCMDAction := ExcuteRMTCMDAction
 global MySetTableItemState := SetTableItemState
 global MySetItemPauseState := SetItemPauseState

@@ -31,6 +31,7 @@ global MySubmitGraphBranches := WorkSubmitGraphBranches
 global MySetGlobalVariable := WorkSetGlobalVariable
 global MyDelGlobalVariable := WorkDelGlobalVariable
 global MyCMDReportAciton := WorkCMDReport
+global MyCMDTipForceAction := WorkCmdTipForceShow
 global MyExcuteRMTCMDAction := WorkExcuteRMTCMDAction
 global MySetTableItemState := WorkSetTableItemState
 global MySetItemPauseState := WorkSetItemPauseState

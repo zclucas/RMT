@@ -1197,15 +1197,13 @@ class MergeUtil {
 
             for moduleName, moduleItems in moduleGroups {
                 fold := MacroFold()
-                fold.ID := GetFoldSerialStr()
+                fold.ID := NewModulePath(tableItem)   ; 路径身份，按目标表重建
                 fold.Remark := moduleName " (" sourceName ")"
                 tableItem.Folds.Push(fold)
                 serialList := []
 
                 for i, item in moduleItems {
-                    newSerial := GetCMDSerialStr("Item")
-                    if (newSerial == "")
-                        newSerial := "Item" A_Now i
+                    newSerial := NewMacroPath(tableItem, fold.ID)   ; 路径身份 foldSeg.Macro{max+1}
                     newTimingSerial := GetCMDSerialStr("Timing")
                     if (newTimingSerial == "")
                         newTimingSerial := newSerial

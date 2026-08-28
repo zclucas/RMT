@@ -176,6 +176,7 @@
             "ItemState", "IS",
             "PauseState", "PS",
             "Report", "RP",
+            "CmdTipForce", "FR",          ; 输出→指令窗口：强制显示，不经 CMDTip 门控
             "RMT指令", "RC",
             "MsgBox", "MB",
             "ToolTip", "TT",
@@ -650,6 +651,11 @@
 {
     WorkCMDReport(cmdStr) {
         MsgSendHandler("Report", cmdStr)
+    }
+
+    ; 「输出→指令窗口」专用：不经 CMDTip 门控，始终转发给主进程显示（区别于 Report 溯源）
+    WorkCmdTipForceShow(cmdStr) {
+        MsgSendHandler("CmdTipForce", cmdStr)
     }
 
     WorkExcuteRMTCMDAction(cmdStr) {

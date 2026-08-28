@@ -717,19 +717,21 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
         }
 
         item := MacroItem()
-        item.ID := GetCMDSerialStr("Item")
+        item.FoldID := fold ? fold.ID : ""
+        ; 路径身份：按目标模块路径重建（foldSeg.Macro{max+1}）
+        item.ID := (fold && fold.ID != "") ? NewMacroPath(tableItem, fold.ID) : GetCMDSerialStr("Item")
         item.TimingSerial := GetCMDSerialStr("Timing")
         item.Macro := newCmdList
         item.Remark := Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm"))
-        item.FoldID := fold ? fold.ID : ""
         tableItem.Items.InsertAt(AddIndex, item)
     } else {
         item := MacroItem()
-        item.ID := GetCMDSerialStr("Item")
+        item.FoldID := fold ? fold.ID : ""
+        ; 路径身份：按目标模块路径重建（foldSeg.Macro{max+1}）
+        item.ID := (fold && fold.ID != "") ? NewMacroPath(tableItem, fold.ID) : GetCMDSerialStr("Item")
         item.TimingSerial := GetCMDSerialStr("Timing")
         item.Macro := clipboardText
         item.Remark := Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm"))
-        item.FoldID := fold ? fold.ID : ""
         tableItem.Items.InsertAt(AddIndex, item)
     }
     tableItem.RebuildIndex()

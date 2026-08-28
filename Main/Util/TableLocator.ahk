@@ -198,11 +198,17 @@ RenameTable(tableID, newName) {
 
 ; ===== 条目操作（表内） =====
 ; 表内新增条目（插到末尾），返回新 MacroItem
-AddTableItem(tableItem, item := "") {
+; 路径身份：item.FoldID 需先设为父模块路径（tableID.ModuleN），否则用 fallbackFoldSeg；item.ID = foldSeg.Macro{max+1}
+AddTableItem(tableItem, item := "", fallbackFoldSeg := "") {
     if (!item)
         item := MacroItem()
-    if (item.ID == "")
-        item.ID := GetCMDSerialStr("Item")
+    if (item.ID == "") {
+        parentSeg := (item.FoldID != "") ? item.FoldID : fallbackFoldSeg
+        if (parentSeg != "")
+            item.ID := NewMacroPath(tableItem, parentSeg)
+        else
+            item.ID := GetCMDSerialStr("Item")   ; 兜底（无模块归属时退回序列号，正常流程应有模块）
+    }
     tableItem.Items.Push(item)
     tableItem.RebuildIndex()
     RebuildTableLocator()
@@ -246,11 +252,12 @@ MoveTableItem(tableItem, fromItemID, toItemID := "") {
 
 ; ===== 折叠框操作（表内） =====
 ; 表内新增折叠框，返回 MacroFold
+; 路径身份：fold.ID = tableID.Module{max+1}
 AddTableFold(tableItem, fold := "") {
     if (!fold)
         fold := MacroFold()
     if (fold.ID == "")
-        fold.ID := GetFoldSerialStr()
+        fold.ID := NewModulePath(tableItem)
     tableItem.Folds.Push(fold)
     tableItem.RebuildIndex()
     return fold

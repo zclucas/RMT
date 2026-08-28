@@ -1060,6 +1060,9 @@ class WorkPool {
                         DelGlobalVariable([args[1]], wd.idx)
                     case "RP":
                         CMDReport(args[1])
+                    case "FR":
+                        ; 输出→指令窗口：强制显示，不经 CMDTip 门控
+                        CmdTipForceShow(args[1])
                     case "RC":
                         ExcuteRMTCMDAction(args[1])
                     case "IS":

@@ -723,7 +723,7 @@ OnOutput(tableItem, cmd, index) {
         MyToolTipContent(Content)
     }
     else if (Data.OutputType == "指令窗口") {    ;指令窗口
-        MyCMDReportAciton(Content)
+        MyCMDTipForceAction(Content)
     }
     else if (Data.OutputType == "软件弹窗") {    ;弹窗
         MyMsgBoxContent(Content)

@@ -649,6 +649,13 @@ CMDReport(CMDStr) {
     MyCMDTipGui.ShowGui(CMDStr)
 }
 
+; 「输出→指令窗口」专用：不经过 CMDTip 全局开关门控。
+; 设计语义：指令显示(CMDTip)=是否常驻显示指令流水；指令窗口输出=单独把内容送进并显示指令窗口。
+; 由 MyCMDTipForceAction 调用（主进程直接展示，Worker 经 FR 指令转发到本函数）。
+CmdTipForceShow(CMDStr) {
+    MyCMDTipGui.ShowGui(CMDStr)
+}
+
 ;0默认状态 1运行 2暂停 3终止
 ; 表身份 = TableItem 对象引用（位置不代表身份）
 SetTableItemState(tableItem, itemIndex, State) {
@@ -1542,6 +1549,9 @@ OnTriggerSepcialItemMacro(MacroStr) {
         tableItem.Items.Push(item)
         tableItem.RebuildIndex()
     }
+    ; 兜底初始化统一内置控制键（宏循环/循环-跳出/分支-跳出 等），
+    ; 否则新 scratch 条目的 VariableMap 为空 Map()，缺失键访问会抛 "No value was returned"
+    InitSingleTableState(tableItem)
     item := tableItem.Items[1]
     item.Killed := false
     item.Pause := false
