@@ -28,13 +28,17 @@ class MenuWheelGui {
         this.showTooltip := !!MainSoftData.MenuWheelShowTooltip
         this.selectMode := MainSoftData.HasProp("MenuWheelSelectMode") ? MainSoftData.MenuWheelSelectMode : 2
 
-        tableItem := MySoftData.TableInfo[3]
-        IndexSpan := StrSplit(tableItem.FoldInfo.IndexSpanArr[MenuIndex], "-")
-        if (!IsInteger(IndexSpan[1]) || !IsInteger(IndexSpan[2]))
+        tableItem := GetTableBySymbol("Menu")
+        if (!tableItem)
+            return
+        fold := tableItem.Folds[MenuIndex]
+        if (!fold)
+            return
+        foldItems := GetFoldItems(tableItem, fold)
+        if (foldItems.Length == 0)
             return
 
-        itemCount := IndexSpan[2] - IndexSpan[1] + 1
-        startIdx := IndexSpan[1]
+        itemCount := foldItems.Length
 
         if (this.isOpen) {          ; 已有轮盘？先自清
             this.closed := true
@@ -65,15 +69,14 @@ class MenuWheelGui {
         modNormalText := AppThemeUtil.GetWheelColor("NormalText", "#CC333333")
         modHoverText := AppThemeUtil.GetWheelColor("HoverText", "#FF0078D7")
         modSwipeLine := AppThemeUtil.GetWheelColor("SwipeLineColor", "#FF3A88F5")
-        startIdx := IndexSpan[1]
 
         items := []
         loop itemCount {
-            macroIndex := startIdx - 1 + A_Index
-            remark := tableItem.RemarkArr[macroIndex]
+            item := foldItems[A_Index]
+            remark := item.Remark
             btnName := remark != "" ? remark : "菜单" A_Index
 
-            icoPath := tableItem.IcoPathArr[macroIndex]
+            icoPath := item.IcoPath
 
             arcNr := A_Index
             h := MenuWheelGui._MakeCallback(this, arcNr, MenuIndex)
@@ -504,18 +507,22 @@ class MenuWheelGui {
             this.swipe := ""
         }
 
-        tableItem := MySoftData.TableInfo[3]
-        IndexSpan := StrSplit(tableItem.FoldInfo.IndexSpanArr[this.MenuIndex], "-")
-        if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-            startIdx := IndexSpan[1]
-            Loop itemCount {
-                idx := A_Index
-                macroIndex := startIdx - 1 + idx
-                isWorkRunning := tableItem.IsWorkIndexArr.Length >= macroIndex && tableItem.IsWorkIndexArr[macroIndex] != 0
-                state := isWorkRunning ? 1 : (tableItem.ColorStateArr.Length >= macroIndex ? tableItem.ColorStateArr[macroIndex] : 0)
-                if (state > 0 && MacroStateColors.Has(state))
-                    this.sectors[idx].RenderState(this, MacroStateColors[state])
-            }
+        tableItem := GetTableBySymbol("Menu")
+        if (!tableItem)
+            return
+        fold := tableItem.Folds[this.MenuIndex]
+        if (!fold)
+            return
+        foldItems := GetFoldItems(tableItem, fold)
+        Loop itemCount {
+            idx := A_Index
+            item := foldItems[idx]
+            if (!item)
+                continue
+            isWorkRunning := item.IsWorkIndex != 0
+            state := isWorkRunning ? 1 : item.ColorState
+            if (state > 0 && MacroStateColors.Has(state))
+                this.sectors[idx].RenderState(this, MacroStateColors[state])
         }
 
         if (IsObject(this.ui)) {
@@ -614,29 +621,35 @@ class MenuWheelGui {
     }
 
     OnRadialMenuSelect(ArcNr, MenuIndex) {
-        tableItem := MySoftData.TableInfo[3]
-        IndexSpan := StrSplit(tableItem.FoldInfo.IndexSpanArr[MenuIndex], "-")
-        if (!IsInteger(IndexSpan[1]) || !IsInteger(IndexSpan[2]))
+        tableItem := GetTableBySymbol("Menu")
+        if (!tableItem)
             return
-        macroIndex := IndexSpan[1] - 1 + ArcNr
-        triggerType := tableItem.TriggerTypeArr[macroIndex]
+        fold := tableItem.Folds[MenuIndex]
+        if (!fold)
+            return
+        foldItems := GetFoldItems(tableItem, fold)
+        item := foldItems[ArcNr]
+        if (!item)
+            return
+        macroIndex := GetItemIndexInTable(tableItem, item.ID)
+        triggerType := item.TriggerType
 
         ; 开关模式：与按键宏保持一致，统一走 OnToggleTriggerMacro
         if (triggerType == 4) {
-            WorkerIndex := tableItem.IsWorkIndexArr[macroIndex]
+            WorkerIndex := item.IsWorkIndex
             if (WorkerIndex != 0) {
                 ; Worker 运行中 → 停止
-                MyStopMacro(tableItem.Index, macroIndex)
+                MyStopMacro(tableItem, macroIndex)
                 return
             }
-            ; 未运行或主进程内运行 → 走统一的开关逻辑（管理 ToggleStateArr）
-            OnToggleTriggerMacro(tableItem.Index, macroIndex)
+            ; 未运行或主进程内运行 → 走统一的开关逻辑
+            OnToggleTriggerMacro(tableItem, macroIndex)
             return
         }
 
         ; 非开关模式：直接启动
-        SetTableItemState(tableItem.index, macroIndex, 1)
-        OnTriggerMacroKeyAndInit(tableItem, tableItem.MacroArr[macroIndex], macroIndex)
+        SetTableItemState(tableItem, macroIndex, 1)
+        OnTriggerMacroKeyAndInit(tableItem, item.Macro, macroIndex)
     }
 
     ; ====== 内部轮盘实现 ======

@@ -112,12 +112,12 @@ class MacroGraphFormalMixin {
         mt := GetLangKey(macroType)
         if (mt == "当前宏")
             return items
-        tableIndex := GetTableIndex(mt)
-        if (tableIndex == 0)
+        tableItem := GetTableBySymbol(mt)
+        if (!tableItem)
             return items
         try {
-            for index, remark in MySoftData.TableInfo[tableIndex].RemarkArr
-                items.Push(index ". " remark)
+            for i, item in tableItem.Items
+                items.Push(i ". " item.Remark)
         }
         return items
     }
@@ -125,9 +125,11 @@ class MacroGraphFormalMixin {
     _FormalMenuIndexItems() {
         items := []
         try {
-            foldInfo := MySoftData.TableInfo[3].FoldInfo
-            loop foldInfo.RemarkArr.Length
-                items.Push(A_Index ". " foldInfo.RemarkArr[A_Index])
+            tableItem := GetTableBySymbol("Menu")
+            if (tableItem) {
+                for f, fold in tableItem.Folds
+                    items.Push(f ". " fold.Remark)
+            }
         }
         return items
     }

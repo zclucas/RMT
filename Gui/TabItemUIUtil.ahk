@@ -11,12 +11,11 @@ RecycleTabItem(tableItem) {
 
 ;增加宏配置
 OnItemAddMacroBtnClick(tableItem, foldIndex, *) {
-    foldInfo := tableItem.FoldInfo
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
     if (isMenu) {
-        IndexSpan := StrSplit(foldInfo.IndexSpanArr[foldIndex], "-")
-        if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-            Count := IndexSpan[2] - IndexSpan[1] + 1
+        fold := tableItem.Folds[foldIndex]
+        if (fold) {
+            Count := GetFoldItemCount(tableItem, fold)
             if (Count >= 8) {
                 MsgBox(GetLang("轮盘最多只能添加8个"), GetLang("提示"))
                 return
@@ -24,203 +23,108 @@ OnItemAddMacroBtnClick(tableItem, foldIndex, *) {
         }
     }
     MyMainWin.ReadTabValues(tableItem)
-    AddIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
-    if (foldInfo.FoldStateArr[foldIndex])  ;没开打的话，自动打开
-        foldInfo.FoldStateArr[foldIndex] := false
+    AddIndex := GetFoldAddItemIndex(tableItem, foldIndex)
+    if (foldIndex >= 1 && foldIndex <= tableItem.Folds.Length)
+        tableItem.Folds[foldIndex].FoldState := false  ;没开打的话，自动打开
 
-    UpdateFoldIndexInfo(foldInfo, AddIndex, foldIndex, true)
-    tableItem.ColorStateArr.InsertAt(AddIndex, 0)
-    tableItem.TKArr.InsertAt(AddIndex, "")
-    tableItem.TriggerTypeArr.InsertAt(AddIndex, 1)
-    tableItem.MacroArr.InsertAt(AddIndex, "")
-    tableItem.ModeArr.InsertAt(AddIndex, 1)
-    tableItem.ForbidArr.InsertAt(AddIndex, 0)
-    tableItem.RemarkArr.InsertAt(AddIndex, "")
-    tableItem.LoopCountArr.InsertAt(AddIndex, "1")
-    tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
-    tableItem.UnorderedTriggerArr.InsertAt(AddIndex, false)
-    tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
-    tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
-    tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
-    tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
-    tableItem.VoiceTriggerArr.InsertAt(AddIndex, 0)
-    tableItem.VoiceKeywordsArr.InsertAt(AddIndex, "")
-    tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
-    tableItem.GraphBranchCountArr.InsertAt(AddIndex, 0)
-    tableItem.IcoPathArr.InsertAt(AddIndex, "")
-    tableItem.KilledArr.InsertAt(AddIndex, false)
-    tableItem.PauseArr.InsertAt(AddIndex, false)
-    tableItem.ActionCount.InsertAt(AddIndex, 0)
-    tableItem.HoldKeyArr.InsertAt(AddIndex, Map())
-    tableItem.ToggleStateArr.InsertAt(AddIndex, false)
-    tableItem.ToggleActionArr.InsertAt(AddIndex, "")
-    VariableMap := Map()
-    VariableMap["宏循环次数"] := 0
-    VariableMap["循环-跳过本轮"] := false
-    VariableMap["循环-跳出"] := false
-    VariableMap["分支-跳出"] := false
-    tableItem.VariableMapArr.InsertAt(AddIndex, VariableMap)
+    item := MacroItem()
+    item.ID := GetCMDSerialStr("Item")
+    item.TimingSerial := GetCMDSerialStr("Timing")
+    item.FoldID := (foldIndex >= 1 && foldIndex <= tableItem.Folds.Length) ? tableItem.Folds[foldIndex].ID : ""
+    tableItem.Items.InsertAt(AddIndex, item)
 
+    tableItem.RebuildIndex()
+    RebuildTableLocator()
     MyMainWin.RenderTab(tableItem)
 }
 
 ;删除宏配置
 OnItemDelMacroBtnClick(tableItem, DelIndex, *) {
-    foldInfo := tableItem.FoldInfo
-    foldIndex := GetItemFoldIndex(tableItem, DelIndex)
     result := MsgBox(GetLang("是否删除当前宏"), GetLang("提示"), 1)
     if (result == "Cancel")
         return
 
     MyMainWin.ReadTabValues(tableItem)
-    OnItemDelMacro(tableItem, DelIndex, foldInfo, foldIndex)
+    OnItemDelMacro(tableItem, DelIndex)
     MyMainWin.RenderTab(tableItem)
 }
 
-OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex) {
-    UpdateFoldIndexInfo(foldInfo, itemIndex, foldIndex, false)
-
-    SafeRemoveAt(tableItem.ColorStateArr, itemIndex)
-    SafeRemoveAt(tableItem.SerialArr, itemIndex)
-    SafeRemoveAt(tableItem.TKArr, itemIndex)
-    SafeRemoveAt(tableItem.MacroArr, itemIndex)
-    SafeRemoveAt(tableItem.LoopCountArr, itemIndex)
-    SafeRemoveAt(tableItem.TriggerTypeArr, itemIndex)
-    SafeRemoveAt(tableItem.ModeArr, itemIndex)
-    SafeRemoveAt(tableItem.ForbidArr, itemIndex)
-    SafeRemoveAt(tableItem.HoldTimeArr, itemIndex)
-    SafeRemoveAt(tableItem.UnorderedTriggerArr, itemIndex)
-    SafeRemoveAt(tableItem.RemarkArr, itemIndex)
-    SafeRemoveAt(tableItem.TimingSerialArr, itemIndex)
-    SafeRemoveAt(tableItem.StartTipSoundArr, itemIndex)
-    SafeRemoveAt(tableItem.EndTipSoundArr, itemIndex)
-    SafeRemoveAt(tableItem.VoiceTriggerArr, itemIndex)
-    SafeRemoveAt(tableItem.VoiceKeywordsArr, itemIndex)
-    SafeRemoveAt(tableItem.IsWorkIndexArr, itemIndex)
-    SafeRemoveAt(tableItem.GraphBranchCountArr, itemIndex)
-    SafeRemoveAt(tableItem.IcoPathArr, itemIndex)
-    SafeRemoveAt(tableItem.KilledArr, itemIndex)
-    SafeRemoveAt(tableItem.PauseArr, itemIndex)
-    SafeRemoveAt(tableItem.ActionCount, itemIndex)
-    SafeRemoveAt(tableItem.HoldKeyArr, itemIndex)
-    SafeRemoveAt(tableItem.ToggleStateArr, itemIndex)
-    SafeRemoveAt(tableItem.ToggleActionArr, itemIndex)
-    SafeRemoveAt(tableItem.VariableMapArr, itemIndex)
-}
-
-SafeRemoveAt(arr, index) {
-    if (index > 0 && index <= arr.Length)
-        arr.RemoveAt(index)
+OnItemDelMacro(tableItem, itemIndex) {
+    tableItem.Items.RemoveAt(itemIndex)
+    tableItem.RebuildIndex()
+    RebuildTableLocator()
 }
 
 ;增加宏模块
 OnItemAddFoldBtnClick(tableItem, foldIndex, *) {
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
     isUI := GetTableSymbol(tableItem.Index) == "UI"
-    foldInfo := tableItem.FoldInfo
     MyMainWin.ReadTabValues(tableItem)
 
-    foldInfo.RemarkArr.InsertAt(foldIndex + 1, "")
-    foldInfo.FrontInfoArr.InsertAt(foldIndex + 1, "")
-    foldInfo.IndexSpanArr.InsertAt(foldIndex + 1, "无-无")
-    foldInfo.ForbidStateArr.InsertAt(foldIndex + 1, false)
-    foldInfo.FoldStateArr.InsertAt(foldIndex + 1, false)
-    foldInfo.TKTypeArr.InsertAt(foldIndex + 1, 1)
-    foldInfo.TKArr.InsertAt(foldIndex + 1, "")
-    foldInfo.HoldTimeArr.InsertAt(foldIndex + 1, 500)
-    while (foldInfo.UnorderedTriggerArr.Length < foldIndex)
-        foldInfo.UnorderedTriggerArr.Push(false)
-    foldInfo.UnorderedTriggerArr.InsertAt(foldIndex + 1, false)
+    fold := MacroFold()
+    fold.ID := GetFoldSerialStr()
+    tableItem.Folds.InsertAt(foldIndex + 1, fold)
 
     if (isMenu)
         OnItemAddMenuItem(tableItem, foldIndex + 1, 4)
     else if (isUI)
         OnItemAddMenuItem(tableItem, foldIndex + 1, 3)
 
+    tableItem.RebuildIndex()
     MyMainWin.RenderTab(tableItem)
 }
 
 ; 菜单宏/界面宏新增模块时批量预置配置项（菜单默认 4、界面默认 3）
 OnItemAddMenuItem(tableItem, foldIndex, count := 4) {
+    fold := tableItem.Folds[foldIndex]
     loop count {
-        foldInfo := tableItem.FoldInfo
-        AddIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
-        UpdateFoldIndexInfo(foldInfo, AddIndex, foldIndex, true)
-        tableItem.ColorStateArr.InsertAt(AddIndex, 0)
-        tableItem.TKArr.InsertAt(AddIndex, "")
-        tableItem.TriggerTypeArr.InsertAt(AddIndex, 1)
-        tableItem.MacroArr.InsertAt(AddIndex, "")
-        tableItem.ModeArr.InsertAt(AddIndex, 1)
-        tableItem.ForbidArr.InsertAt(AddIndex, 0)
-        tableItem.RemarkArr.InsertAt(AddIndex, "")
-        tableItem.LoopCountArr.InsertAt(AddIndex, "1")
-        tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
-        tableItem.UnorderedTriggerArr.InsertAt(AddIndex, false)
-        tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
-        tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
-        tableItem.StartTipSoundArr.InsertAt(AddIndex, 0)
-        tableItem.EndTipSoundArr.InsertAt(AddIndex, 0)
-        tableItem.VoiceTriggerArr.InsertAt(AddIndex, 0)
-        tableItem.VoiceKeywordsArr.InsertAt(AddIndex, "")
-        tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
-        tableItem.GraphBranchCountArr.InsertAt(AddIndex, 0)
-        tableItem.IcoPathArr.InsertAt(AddIndex, "")
-        tableItem.KilledArr.InsertAt(AddIndex, false)
-        tableItem.PauseArr.InsertAt(AddIndex, false)
-        tableItem.ActionCount.InsertAt(AddIndex, 0)
-        tableItem.HoldKeyArr.InsertAt(AddIndex, Map())
-        tableItem.ToggleStateArr.InsertAt(AddIndex, false)
-        tableItem.ToggleActionArr.InsertAt(AddIndex, "")
-        VariableMap := Map()
-        VariableMap["宏循环次数"] := 0
-        VariableMap["循环-跳过本轮"] := false
-        VariableMap["循环-跳出"] := false
-        VariableMap["分支-跳出"] := false
-        tableItem.VariableMapArr.InsertAt(AddIndex, VariableMap)
+        AddIndex := GetFoldAddItemIndex(tableItem, foldIndex)
+        item := MacroItem()
+        item.ID := GetCMDSerialStr("Item")
+        item.TimingSerial := GetCMDSerialStr("Timing")
+        item.FoldID := fold.ID
+        tableItem.Items.InsertAt(AddIndex, item)
     }
+    tableItem.RebuildIndex()
+    RebuildTableLocator()
 }
 
 ;删除模块
 OnItemDelFoldBtnClick(tableItem, foldIndex, *) {
-    foldInfo := tableItem.FoldInfo
     result := MsgBox(GetLang("是否删除当前模块以及模块中所有的宏配置"), GetLang("提示"), 1)
     if (result == "Cancel")
         return
 
-    if (foldInfo.IndexSpanArr.Length == 1) {
+    if (tableItem.Folds.Length == 1) {
         MsgBox(GetLang("最后一个模块，不可删除！！！"))
         return
     }
 
     MyMainWin.ReadTabValues(tableItem)
-    hasSetting := foldInfo.IndexSpanArr[foldIndex] != "无-无"
-    if (hasSetting) {
-        IndexSpan := StrSplit(foldInfo.IndexSpanArr[foldIndex], "-")
-        loop IndexSpan[2] - IndexSpan[1] + 1 {
-            itemIndex := IndexSpan[2] - A_Index + 1
-            OnItemDelMacro(tableItem, itemIndex, foldInfo, foldIndex)
+    fold := tableItem.Folds[foldIndex]
+    if (fold) {
+        ; 删除归属该折叠框的所有条目
+        keep := []
+        for item in tableItem.Items {
+            if (item.FoldID != fold.ID)
+                keep.Push(item)
         }
+        tableItem.Items := keep
+        tableItem.Folds.RemoveAt(foldIndex)
+        tableItem.RebuildIndex()
+        RebuildTableLocator()
     }
-
-    foldInfo.RemarkArr.RemoveAt(foldIndex)
-    foldInfo.FrontInfoArr.RemoveAt(foldIndex)
-    foldInfo.IndexSpanArr.RemoveAt(foldIndex)
-    foldInfo.ForbidStateArr.RemoveAt(foldIndex)
-    foldInfo.FoldStateArr.RemoveAt(foldIndex)
-    foldInfo.TKTypeArr.RemoveAt(foldIndex)
-    foldInfo.TKArr.RemoveAt(foldIndex)
-    foldInfo.HoldTimeArr.RemoveAt(foldIndex)
-    foldInfo.UnorderedTriggerArr.RemoveAt(foldIndex)
     MyMainWin.RenderTab(tableItem)
 }
 
 ;编辑字串宏触发键
 OnItemEditTriggerStr(tableItem, index, *) {
     MyMainWin.ReadTabValues(tableItem)
-    triggerStr := tableItem.TKArr[index]
+    item := tableItem.Items[index]
+    triggerStr := item.TK
 
     SureAction(sureTriggerKey) {
-        tableItem.TKArr[index] := sureTriggerKey
+        item.TK := sureTriggerKey
         MyMainWin.RenderTab(tableItem)
     }
 
@@ -245,10 +149,11 @@ OnItemCustomEditTriggerStr(tableItem, index, *) {
 
 ; 原「自定义触发串」InputBox 逻辑（保留，走菜单项）
 OnItemCustomEditTriggerStrInput(tableItem, index, *) {
-    CustomTK := InputBox(GetLang("请输入自定义触发按键："), "修改", "w300 h100", tableItem.TKArr[index])
+    item := tableItem.Items[index]
+    CustomTK := InputBox(GetLang("请输入自定义触发按键："), "修改", "w300 h100", item.TK)
     if CustomTK.Result = "Cancel"
         return
-    tableItem.TKArr[index] := CustomTK.Value
+    item.TK := CustomTK.Value
     MyMainWin.RenderTab(tableItem)
 }
 
@@ -260,45 +165,46 @@ OnItemVoiceTriggerSetting(tableItem, index, *) {
 ;编辑按键宏触发键
 OnItemEditTriggerKey(tableItem, index, *) {
     MyMainWin.ReadTabValues(tableItem)
-    triggerKey := tableItem.TKArr[index]
+    item := tableItem.Items[index]
+    triggerKey := item.TK
 
     SureAction(sureTriggerKey, timeValue, unorderedTrigger) {
-        tableItem.TKArr[index] := sureTriggerKey
-        tableItem.HoldTimeArr[index] := timeValue
-        while (tableItem.UnorderedTriggerArr.Length < index)
-            tableItem.UnorderedTriggerArr.Push(false)
-        tableItem.UnorderedTriggerArr[index] := unorderedTrigger
+        item.TK := sureTriggerKey
+        item.HoldTime := timeValue
+        item.UnorderedTrigger := unorderedTrigger
         MyMainWin.RenderTab(tableItem)
     }
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
     MyTriggerKeyGui.SureBtnAction := SureAction
-    MyTriggerKeyGui.UnorderedTrigger := tableItem.UnorderedTriggerArr[index]
-    MyTriggerKeyGui.ShowGui(triggerKey, tableItem.HoldTimeArr[index], false)
+    MyTriggerKeyGui.UnorderedTrigger := item.UnorderedTrigger
+    MyTriggerKeyGui.ShowGui(triggerKey, item.HoldTime, false)
 }
 
 ;编辑定时器
 OnItemEditTiming(tableItem, index, *) {
-    SerialStr := tableItem.TimingSerialArr[index]
+    item := tableItem.Items[index]
+    SerialStr := item.TimingSerial
     if (!RegExMatch(SerialStr, "^Timing\d+$")) {
         SerialStr := GetCMDSerialStr("Timing")
-        tableItem.TimingSerialArr[index] := SerialStr
+        item.TimingSerial := SerialStr
     }
     MyTimingGui.ShowGui(SerialStr)
 }
 
 OnItemEditMacroSetting(tableItem, index, *) {
     MyMacroSettingGui.OwnerHwnd := MainSoftData.MyGui.Hwnd
-    MyMacroSettingGui.ShowGui(tableItem.Index, index)
+    MyMacroSettingGui.ShowGui(tableItem, index)
 }
 
 OnItemMenuMacroSettingClick(tableItem, index, *) {
-    MyMenuMacroSettingGui.ShowGui(tableItem.Index, index)
+    MyMenuMacroSettingGui.ShowGui(tableItem, index)
 }
 
 ; 打开逻辑树（宏指令）编辑器
 OpenItemMacroTreeEditor(tableItem, index, macro, SureAction) {
-    MySoftData.SpecialTableItem.ModeArr[1] := tableItem.ModeArr[index]
+    item := tableItem.Items[index]
+    MySoftData.SpecialTableItem.Items[1].Mode := item.Mode
     if (MyMacroGui.Gui != "") {
         style := WinGetStyle(MyMacroGui.Gui.Hwnd)
         isVisible := (style & 0x10000000)
@@ -326,10 +232,11 @@ OpenItemMacroGraphEditor(macro, SureAction) {
 
 ; 编辑按钮：空宏按「首选编辑器」；已有配置则看首条是否图形开始节点
 OnItemEditMacro(tableItem, index, *) {
-    macro := tableItem.MacroArr[index]
+    item := tableItem.Items[index]
+    macro := item.Macro
 
     SureAction(sureMacro) {
-        tableItem.MacroArr[index] := sureMacro
+        item.Macro := sureMacro
     }
 
     useGraph := false
@@ -345,10 +252,11 @@ OnItemEditMacro(tableItem, index, *) {
 }
 
 OnItemEditReplaceKey(tableItem, index, *) {
-    replaceKey := tableItem.MacroArr[index]
+    item := tableItem.Items[index]
+    replaceKey := item.Macro
 
     SureAction(sureMacro) {
-        tableItem.MacroArr[index] := sureMacro
+        item.Macro := sureMacro
     }
 
     MyReplaceKeyGui.SureBtnAction := SureAction
@@ -371,7 +279,7 @@ OnItemMoveUp(tableItem, index, *) {
 }
 
 OnItemMoveDown(tableItem, index, *) {
-    lastIndex := tableItem.ModeArr.length
+    lastIndex := tableItem.Items.Length
     if (lastIndex == index) {
         MsgBox(GetLang("下面没有元素，无法下移！！！"))
         return
@@ -386,127 +294,104 @@ OnItemMoveDown(tableItem, index, *) {
 }
 
 OnFoldFrontInfoEdit(tableItem, foldIndex, *) {
-    foldInfo := tableItem.FoldInfo
+    fold := tableItem.Folds[foldIndex]
     if (MyMainWin._useVirtual.Has(tableItem.Index)) {
         ; Epic5：fold 头 TextBox 在 DataTemplate 内无命名控件，读模型（点按钮前 LostFocus 已 VL_CHANGE 写回）
-        frontCtrl := { Value: foldInfo.FrontInfoArr[foldIndex] }
+        frontCtrl := { Value: fold.FrontInfo }
     } else {
         frontCtrl := CtrlAdapter("FoldFront_" tableItem.Index "_" foldIndex, MyMainWin.ui, "Text")
     }
     SureAction() {
         newInfo := frontCtrl.Value
-        oldInfo := foldInfo.FrontInfoArr[foldIndex]
-        foldInfo.FrontInfoArr[foldIndex] := newInfo
+        oldInfo := fold.FrontInfo
+        fold.FrontInfo := newInfo
         if (oldInfo != newInfo && IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
-            MyUIMacroGui.DestroyFoldPanels(foldIndex)
+            MyUIMacroGui.DestroyFoldPanels(fold.ID)
     }
     MyFrontInfoGui.SureAction := SureAction
     MyFrontInfoGui.ShowGui(frontCtrl, true)
 }
 
 OnFoldBtnClick(tableItem, foldIndex, *) {
-    foldInfo := tableItem.FoldInfo
+    fold := tableItem.Folds[foldIndex]
     MyMainWin.ReadTabValues(tableItem)
-    foldInfo.FoldStateArr[foldIndex] := !foldInfo.FoldStateArr[foldIndex]
+    fold.FoldState := !fold.FoldState
     t := tableItem.Index
     if (MyMainWin._useVirtual.Has(t)) {
         ; Epic5：折叠 = 集合移除行组 + 视口锚定（1 IPC），不重建整表
-        MyMainWin._vl.FoldToggle(t, foldIndex, foldInfo.FoldStateArr[foldIndex])
+        MyMainWin._vl.FoldToggle(t, foldIndex, fold.FoldState)
         return
     }
     ; A: 折叠只切整组容器 Visibility + 图标文字，不重建整表（千条级展开/折叠瞬间完成，滚动位置保留）
     ;    Update 路径不解 XAML 实体（仅解 &#x0A;/&#x0D;），须传实际字符非实体串，否则图标变字面 &#xE76C;
-    MyMainWin.ui.Update("FoldItems_" t "_" foldIndex, "Visibility", foldInfo.FoldStateArr[foldIndex] ? "Collapsed" : "Visible")
-    MyMainWin.ui.Update("FoldGlyph_" t "_" foldIndex, "Text", foldInfo.FoldStateArr[foldIndex] ? Chr(0xE76C) : Chr(0xE70D))
+    MyMainWin.ui.Update("FoldItems_" t "_" foldIndex, "Visibility", fold.FoldState ? "Collapsed" : "Visible")
+    MyMainWin.ui.Update("FoldGlyph_" t "_" foldIndex, "Text", fold.FoldState ? Chr(0xE76C) : Chr(0xE70D))
     ; 展开折叠：补绑组内行事件（渲染时折叠态行跳过了 BindEvent，_Bind 清旧再挂幂等）
-    if (!foldInfo.FoldStateArr[foldIndex]) {
-        span := StrSplit(foldInfo.IndexSpanArr[foldIndex], "-")
-        if (IsInteger(span[1]) && IsInteger(span[2])) {
-            loop span[2] - span[1] + 1 {
-                i := span[1] + A_Index - 1
+    if (!fold.FoldState) {
+        for i, item in tableItem.Items {
+            if (item.FoldID == fold.ID)
                 MyMainWin._BindItemRow(t, i)
-            }
         }
     }
 }
 
 OnFlodTKEditClick(tableItem, foldIndex, *) {
-    foldInfo := tableItem.FoldInfo
+    fold := tableItem.Folds[foldIndex]
     MyMainWin.ReadTabValues(tableItem)
     SureAction(sureTriggerKey, timeValue, unorderedTrigger) {
-        foldInfo.TKArr[foldIndex] := sureTriggerKey
-        foldInfo.HoldTimeArr[foldIndex] := timeValue
-        while (foldInfo.UnorderedTriggerArr.Length < foldIndex)
-            foldInfo.UnorderedTriggerArr.Push(false)
-        foldInfo.UnorderedTriggerArr[foldIndex] := unorderedTrigger
+        fold.TK := sureTriggerKey
+        fold.HoldTime := timeValue
+        fold.UnorderedTrigger := unorderedTrigger
         MyMainWin.RenderTab(tableItem)
     }
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
     MyTriggerKeyGui.SureBtnAction := SureAction
-    MyTriggerKeyGui.UnorderedTrigger := foldInfo.UnorderedTriggerArr.Has(foldIndex) ? foldInfo.UnorderedTriggerArr[foldIndex] : false
-    MyTriggerKeyGui.ShowGui(foldInfo.TKArr[foldIndex], foldInfo.HoldTimeArr[foldIndex], false)
+    MyTriggerKeyGui.UnorderedTrigger := fold.UnorderedTrigger
+    MyTriggerKeyGui.ShowGui(fold.TK, fold.HoldTime, false)
 }
 
-UpdateFoldIndexInfo(FoldInfo, OperIndex, FoldIndex, IsAdd) {
-    curMaxItemIndex := 0
-    for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
-        IndexSpan := StrSplit(IndexSpanStr, "-")
-        if (Index < FoldIndex) {
-            if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-                curMaxItemIndex := IndexSpan[2]
-            }
+; 折叠框内条目数（用于菜单宏 8 上限校验）
+GetFoldItemCount(tableItem, fold) {
+    count := 0
+    for item in tableItem.Items {
+        if (item.FoldID == fold.ID)
+            count++
+    }
+    return count
+}
+
+; 在折叠框内新增条目的插入下标（表内顺序）：
+; 归属该折叠框的条目之后；无归属条目时取该折叠框之前的最后条目之后（保持折叠框区块顺序）
+GetFoldAddItemIndex(tableItem, FoldIndex) {
+    fold := tableItem.Folds[FoldIndex]
+    if (!fold)
+        return tableItem.Items.Length + 1
+    lastIdx := 0
+    for i, item in tableItem.Items {
+        if (item.FoldID == fold.ID) {
+            lastIdx := i
+        } else if (lastIdx != 0) {
+            break   ; 已越过本折叠的条目区
+        }
+    }
+    if (lastIdx != 0)
+        return lastIdx + 1
+
+    ; 折叠框无条目：找前一个有序折叠框（FoldIndex-1 ... 1）的最后一个条目，插其后
+    loop FoldIndex - 1 {
+        f := FoldIndex - A_Index
+        prevFold := tableItem.Folds[f]
+        if (!prevFold)
             continue
-        }
-        if (Index == FoldIndex) {
-            if (IsAdd) {
-                if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-                    IndexSpan[2] := IndexSpan[2] + 1
-                }
-                else {
-                    IndexSpan[1] := curMaxItemIndex + 1
-                    IndexSpan[2] := curMaxItemIndex + 1
-                }
-            }
-            else {
-                IndexSpan[2] := IndexSpan[2] - 1
-                if (IndexSpan[2] < IndexSpan[1]) {
-                    IndexSpan[1] := "无"
-                    IndexSpan[2] := "无"
-                }
-            }
-        }
-        if (Index > FoldIndex) {
-            Value := IsAdd ? 1 : -1
-            if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-                IndexSpan[1] := IndexSpan[1] + Value
-                IndexSpan[2] := IndexSpan[2] + Value
-            }
-        }
-        FoldInfo.IndexSpanArr[Index] := IndexSpan[1] "-" IndexSpan[2]
-    }
-}
-
-GetFoldAddItemIndex(FoldInfo, FoldIndex) {
-    IndexSpan := StrSplit(FoldInfo.IndexSpanArr[FoldIndex], "-")
-    if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-        return IndexSpan[2] + 1
-    }
-
-    CurFoldLastIndex := 0
-    for index, value in FoldInfo.IndexSpanArr {
-        if (index > FoldIndex)
-            break
-
-        IndexSpan := StrSplit(value, "-")
-        if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-            CurFoldLastIndex := IndexSpan[2]
+        for i, item in tableItem.Items {
+            if (item.FoldID == prevFold.ID)
+                return i + 1
         }
     }
-
-    return CurFoldLastIndex + 1
+    return 1
 }
 
 OnUIMacroSettingClick(tableItem, macroIndex, *) {
-    MyUIMacroSettingGui.ShowGui(tableItem.Index, macroIndex)
+    MyUIMacroSettingGui.ShowGui(tableItem, macroIndex)
 }

@@ -66,6 +66,7 @@
 #Include ..\Gui\InputBtnXamlGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
 #Include ..\Gui\VoiceGui.ahk
+#Include ..\Gui\TableMgrGui.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
 
 

@@ -227,8 +227,8 @@ CompatCMD(filePath) {
         "IcoPathArr", "",
         "SerialArr", "0"
     )
-    loop MainSoftData.TabSymbolArr.Length {
-        symbol := GetTableSymbol(A_Index)
+    loop MySoftData.TableInfo.Length {
+        symbol := MySoftData.TableInfo[A_Index].Symbol
         modeArrStr := IniRead(filePath, IniSection, symbol "ModeArr", "")
         if (modeArrStr == "")
             continue
@@ -269,8 +269,8 @@ CompatCMD(filePath) {
             hasFix := true
         }
     }
-    loop MainSoftData.TabSymbolArr.Length {
-        symbol := GetTableSymbol(A_Index)
+    loop MySoftData.TableInfo.Length {
+        symbol := MySoftData.TableInfo[A_Index].Symbol
         loop {
             MacroLabel := symbol "MacroArr" A_Index
             MacroStr := IniRead(filePath, IniSection, MacroLabel, "默认空文本")

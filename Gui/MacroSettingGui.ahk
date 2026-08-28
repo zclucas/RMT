@@ -17,15 +17,15 @@ class MacroSettingGui {
         this.itemIndex := ""
     }
 
-    ShowGui(tableIndex, itemIndex) {
-        global MySoftData
+    ; 表身份 = TableItem 对象（位置不代表身份）
+    ShowGui(tableItem, itemIndex) {
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
         this._BuildAndShow()
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
         }
-        this.Init(tableIndex, itemIndex)
+        this.Init(tableItem, itemIndex)
     }
 
     Hwnd() {
@@ -152,12 +152,13 @@ class MacroSettingGui {
         return IsNumber(v) ? Integer(v) : 0
     }
 
-    Init(tableIndex, itemIndex) {
-        this.tableItem := MySoftData.TableInfo[tableIndex]
+    Init(tableItem, itemIndex) {
+        this.tableItem := tableItem
         this.itemIndex := itemIndex
-        this.ui.Update("TKTypeCombo", "SelectedIndex", String(this.tableItem.ModeArr[this.itemIndex] - 1))
-        this.ui.Update("StartTipCombo", "SelectedIndex", String(this.tableItem.StartTipSoundArr[this.itemIndex] - 1))
-        this.ui.Update("EndTipCombo", "SelectedIndex", String(this.tableItem.EndTipSoundArr[this.itemIndex] - 1))
+        item := this.tableItem.Items[itemIndex]
+        this.ui.Update("TKTypeCombo", "SelectedIndex", String(item.Mode - 1))
+        this.ui.Update("StartTipCombo", "SelectedIndex", String(item.StartTipSound - 1))
+        this.ui.Update("EndTipCombo", "SelectedIndex", String(item.EndTipSound - 1))
     }
 
     OnClickModeHelpBtn(state, ctrl, event) {
@@ -181,9 +182,10 @@ class MacroSettingGui {
             if (!IsInterceptionInstalled())
                 ShowInterceptionInstallTip()
         }
-        this.tableItem.ModeArr[this.itemIndex] := mode
-        this.tableItem.StartTipSoundArr[this.itemIndex] := this._SelIndex("StartTipCombo") + 1
-        this.tableItem.EndTipSoundArr[this.itemIndex] := this._SelIndex("EndTipCombo") + 1
+        item := this.tableItem.Items[this.itemIndex]
+        item.Mode := mode
+        item.StartTipSound := this._SelIndex("StartTipCombo") + 1
+        item.EndTipSound := this._SelIndex("EndTipCombo") + 1
         this._CloseWindow()
     }
 }

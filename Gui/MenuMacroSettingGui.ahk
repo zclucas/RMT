@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 菜单宏扇区图标配置：XAML，颜色跟随通用主题
 class MenuMacroSettingGui {
@@ -11,18 +11,18 @@ class MenuMacroSettingGui {
         this._instanceKey := ""
         this.SureFocusCon := ""
         this.CurrentIndex := 0
-        this.TableIndex := 0
+        this.TableItem := ""
         this.OriginalIcoPath := ""
         this.StoredIcoPath := ""
         this._pathText := ""
         this._editBtnStyle := ""
     }
 
-    ShowGui(tableIndex, index) {
-        this.TableIndex := tableIndex
+    ; 表身份 = TableItem 对象
+    ShowGui(tableItem, index) {
+        this.TableItem := tableItem
         this.CurrentIndex := index
-        tableItem := MySoftData.TableInfo[tableIndex]
-        this.StoredIcoPath := this.GetFullIcoPath(tableItem.IcoPathArr[index])
+        this.StoredIcoPath := this.GetFullIcoPath(tableItem.Items[index].IcoPath)
         this.OriginalIcoPath := this.StoredIcoPath
         this._pathText := this.StoredIcoPath
 
@@ -31,7 +31,7 @@ class MenuMacroSettingGui {
             oldInst := MenuMacroSettingGui.instances[key]
             hwnd := (IsObject(oldInst.ui) && oldInst.ui.HasProp("wpfHwnd")) ? oldInst.ui.wpfHwnd : 0
             if (!oldInst.closed && XAMLHost.CanReuseWindow(hwnd)) {
-                oldInst.TableIndex := tableIndex
+                oldInst.TableItem := tableItem
                 oldInst.CurrentIndex := index
                 oldInst.StoredIcoPath := this.StoredIcoPath
                 oldInst.OriginalIcoPath := this.OriginalIcoPath
@@ -245,14 +245,12 @@ class MenuMacroSettingGui {
 
     OnSureClick(state := unset, ctrl := unset, event := unset) {
         this.OnPathChanged(IsSet(state) ? state : unset)
-        tableItem := MySoftData.TableInfo[this.TableIndex]
+        tableItem := this.TableItem
         idx := this.CurrentIndex
         finalPath := ""
         if (this.OriginalIcoPath != "" && FileExist(this.OriginalIcoPath))
             finalPath := this.CopyIcoToImagesFolder(this.OriginalIcoPath)
-        while (tableItem.IcoPathArr.Length < idx)
-            tableItem.IcoPathArr.Push("")
-        tableItem.IcoPathArr[idx] := finalPath
+        tableItem.Items[idx].IcoPath := finalPath
         this.Close()
     }
 

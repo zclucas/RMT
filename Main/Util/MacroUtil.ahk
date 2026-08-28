@@ -1,29 +1,31 @@
 ;按键宏命令
 OnTriggerMacroKeyAndInit(tableItem, macro, index) {
     MyMacroCount("Add")
-    tableItem.KilledArr[index] := false
-    tableItem.PauseArr[index] := false
-    tableItem.ActionCount[index] := 0
-    if (tableItem.HoldKeyArr.Length >= index)
-        tableItem.HoldKeyArr[index] := Map()
-    tableItem.VariableMapArr[index]["宏循环次数"] := 1
-    tableItem.VariableMapArr[index]["循环次数"] := 0
-    isContinue := MySoftData.ContinueKeyMap.Has(tableItem.TKArr[index]) && tableItem.LoopCountArr[index] == 1
-    isLoop := tableItem.LoopCountArr[index] == -1
+    item := tableItem.Items[index]
+    if (!item)
+        return
+    item.Killed := false
+    item.Pause := false
+    item.ActionCount := 0
+    item.HoldKey := Map()
+    item.VariableMap["宏循环次数"] := 1
+    item.VariableMap["循环次数"] := 0
+    isContinue := MySoftData.ContinueKeyMap.Has(item.TK) && item.LoopCount == 1
+    isLoop := item.LoopCount == -1
     loop {
-        isFirst := tableItem.ActionCount[index] == 0
-        isLast := tableItem.ActionCount[index] == tableItem.LoopCountArr[index] - 1
-        isOver := tableItem.ActionCount[index] >= tableItem.LoopCountArr[index]
+        isFirst := item.ActionCount == 0
+        isLast := item.ActionCount == item.LoopCount - 1
+        isOver := item.ActionCount >= item.LoopCount
         WaitIfPaused(tableItem, index)
 
-        if (tableItem.KilledArr[index])
+        if (item.Killed)
             break
 
         if (!isLoop && !isContinue && isOver)
             break
 
         if (!isFirst && isContinue && isOver) {
-            key := MySoftData.ContinueKeyMap[tableItem.TKArr[index]]
+            key := MySoftData.ContinueKeyMap[item.TK]
             Sleep(MySoftData.ContinueIntervale)
 
             if (!GetKeyState(key, "P")) {
@@ -35,64 +37,68 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
         OnTriggerMacroOnce(tableItem, macro, index)
         HandTipSound(tableItem, index, 2, isFirst, isLast)
 
-        if (tableItem.VariableMapArr[index]["循环-跳过本轮"]) {
-            tableItem.VariableMapArr[index]["循环-跳过本轮"] := false
+        if (item.VariableMap["循环-跳过本轮"]) {
+            item.VariableMap["循环-跳过本轮"] := false
         }
 
-        if (tableItem.VariableMapArr[index]["循环-跳出"]) {
-            tableItem.VariableMapArr[index]["循环-跳出"] := false
+        if (item.VariableMap["循环-跳出"]) {
+            item.VariableMap["循环-跳出"] := false
             break
         }
 
-        tableItem.ActionCount[index]++
-        tableItem.VariableMapArr[index]["宏循环次数"] += 1
+        item.ActionCount++
+        item.VariableMap["宏循环次数"] += 1
     }
     ; 图形宏多分支时跳过 OnFinishMacro，由 Master 的 FinishGraphMacroItem 统一释放
-    skipFinish := tableItem.GraphBranchCountArr.Length >= index && tableItem.GraphBranchCountArr[index] > 0
+    skipFinish := item.GraphBranchCount > 0
     if (!skipFinish)
         OnFinishMacro(tableItem, macro, index)
 }
 
 OnFinishMacro(tableItem, macro, index) {
+    item := tableItem.Items[index]
+    if (!item)
+        return
     ; 开关模式下被kill终止时，补充播放循环结束提示音（类型3）
-    if (tableItem.KilledArr[index] && tableItem.EndTipSoundArr[index] == 3)
+    if (item.Killed && item.EndTipSound == 3)
         PlayTipSound(2)
 
-    if (tableItem.TriggerTypeArr[index] == 4) { ;开关状态下
-        tableItem.ToggleStateArr[index] := false
+    if (item.TriggerType == 4) { ;开关状态下
+        item.ToggleState := false
     }
 
     ; 结束时兜底松开仍按住的键：仅终止或开关触发类型需要松开；
     ; 按下/松开/双击/长按正常结束时保持按键按住，不在此松开
-    needRelease := tableItem.KilledArr[index] || tableItem.TriggerTypeArr[index] == 4
+    needRelease := item.Killed || item.TriggerType == 4
     GraphPoolLog("OnFinishMacro", Format("tab={1} item={2} killed={3} trig={4} hold={5} needRelease={6}"
-        , tableItem.Index, index, tableItem.KilledArr[index], tableItem.TriggerTypeArr[index]
-        , tableItem.HoldKeyArr.Length >= index ? tableItem.HoldKeyArr[index].Count : -1, needRelease))
+        , tableItem.ID, item.ID, item.Killed, item.TriggerType
+        , item.HoldKey.Count, needRelease))
     if (needRelease)
         ReleaseTableItemHoldKeys(tableItem, index)
     ReleaseAllCaches()
 
-    itemState := tableItem.KilledArr[index] ? 3 : 0
-    MySetTableItemState(tableItem.index, index, itemState)
+    itemState := item.Killed ? 3 : 0
+    MySetTableItemState(tableItem, index, itemState)
 }
 
 OnTriggerMacroOnce(tableItem, macro, index) {
     cmdArr := SplitMacro(macro)
+    item := tableItem.Items[index]
 
     for value in cmdArr {
-        if (tableItem.KilledArr[index])
+        if (item.Killed)
             break
         result := ExecuteMacroCmdOnce(tableItem, cmdArr[A_Index], index)
         if (result != "") {
             cmdArr.InsertAt(A_Index + 1, result*)
         }
-        if (tableItem.VariableMapArr[index]["分支-跳出"]) {
-            tableItem.VariableMapArr[index]["分支-跳出"] := false
+        if (item.VariableMap["分支-跳出"]) {
+            item.VariableMap["分支-跳出"] := false
             break
         }
-        if (tableItem.VariableMapArr[index]["循环-跳过本轮"])
+        if (item.VariableMap["循环-跳过本轮"])
             break
-        if (tableItem.VariableMapArr[index]["循环-跳出"])
+        if (item.VariableMap["循环-跳出"])
             break
     }
 }
@@ -130,10 +136,13 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "图形开始节点", OnGraphStartNode
     )
 
-    if (tableItem.KilledArr[index])
+    item := tableItem.Items[index]
+    if (!item)
+        return
+    if (item.Killed)
         return
     WaitIfPaused(tableItem, index)
-    if (tableItem.KilledArr[index])
+    if (item.Killed)
         return
     if (SubStr(cmdStr, 1, 2) == "🚫")
         return
@@ -153,7 +162,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         MyCMDReportAciton(cmdStr)
 
     ; 业务日志（C 项阶段3）：每指令执行流水（默认关，设置开启后生效；Worker 执行侧写入）
-    RMTLogBusiness("宏:(" tableItem.RemarkArr[index] ")", Format("tab{1} item{2} 指令: {3}", tableItem.Index, index, GetCmdStr(cmdStr)))
+    RMTLogBusiness("宏:(" item.Remark ")", Format("tab{1} item{2} 指令: {3}", tableItem.ID, item.ID, GetCmdStr(cmdStr)))
 
     cmdKey := RTrim(paramArr[1], "0123456789")
     try {
@@ -238,7 +247,8 @@ CheckFrontWindowActive(frontInfoStr) {
 
 OnSearchWrapper(tableItem, cmdStr, index) {
     isLoopFound := SearchOnTrigger(tableItem, cmdStr, index)
-    if (tableItem.KilledArr[index])
+    item := tableItem.Items[index]
+    if (item && item.Killed)
         return
     if (isLoopFound != "" && isLoopFound == false) {
         return [cmdStr]
@@ -661,7 +671,8 @@ OnMMPro(tableItem, cmd, index) {
     loop Data.Count {
         WaitIfPaused(tableItem, index)
 
-        if (tableItem.KilledArr[index])
+        item := tableItem.Items[index]
+        if (item && item.Killed)
             return
 
         FloatInterval := GetFloatTime(Data.Interval, MainSoftData.PreIntervalFloat)
@@ -739,22 +750,23 @@ OnLoop(tableItem, cmd, index) {
 
     if (Data.LoopCount == -1) {
         loop {
-            tableItem.VariableMapArr[index]["循环次数"] := A_Index
+            item := tableItem.Items[index]
+            item.VariableMap["循环次数"] := A_Index
             if (!GetLoopState(tableItem, cmd, index, Data))
                 break
 
-            if (tableItem.KilledArr[index])
+            if (item.Killed)
                 break
 
             WaitIfPaused(tableItem, index)
             OnTriggerMacroOnce(tableItem, Data.LoopBody, index)
 
-            if (tableItem.VariableMapArr[index]["循环-跳过本轮"]) {
-                tableItem.VariableMapArr[index]["循环-跳过本轮"] := false
+            if (item.VariableMap["循环-跳过本轮"]) {
+                item.VariableMap["循环-跳过本轮"] := false
             }
 
-            if (tableItem.VariableMapArr[index]["循环-跳出"]) {
-                tableItem.VariableMapArr[index]["循环-跳出"] := false
+            if (item.VariableMap["循环-跳出"]) {
+                item.VariableMap["循环-跳出"] := false
                 break
             }
         }
@@ -765,22 +777,23 @@ OnLoop(tableItem, cmd, index) {
             return
 
         loop Value {
-            tableItem.VariableMapArr[index]["循环次数"] := A_Index
+            item := tableItem.Items[index]
+            item.VariableMap["循环次数"] := A_Index
             if (!GetLoopState(tableItem, cmd, index, Data))
                 break
 
-            if (tableItem.KilledArr[index])
+            if (item.Killed)
                 break
 
             WaitIfPaused(tableItem, index)
             OnTriggerMacroOnce(tableItem, Data.LoopBody, index)
 
-            if (tableItem.VariableMapArr[index]["循环-跳过本轮"]) {
-                tableItem.VariableMapArr[index]["循环-跳过本轮"] := false
+            if (item.VariableMap["循环-跳过本轮"]) {
+                item.VariableMap["循环-跳过本轮"] := false
             }
 
-            if (tableItem.VariableMapArr[index]["循环-跳出"]) {
-                tableItem.VariableMapArr[index]["循环-跳出"] := false
+            if (item.VariableMap["循环-跳出"]) {
+                item.VariableMap["循环-跳出"] := false
                 break
             }
         }
@@ -826,21 +839,30 @@ OnSubMacro(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
     macroIndex := Data.MacroType == "当前宏" ? index : Data.Index
-    macroTableIndex := Data.MacroType == "当前宏" ? tableItem.Index : GetTableIndex(Data.MacroType)
-    macroItem := Data.MacroType == "当前宏" ? tableItem : MySoftData.TableInfo[macroTableIndex]
+    ; 目标表直接取对象（当前宏 → 本表；其它 → 按 Symbol 定位），身份 = 对象/ID，非位置
+    macroItem := Data.MacroType == "当前宏" ? tableItem : GetTableBySymbol(Data.MacroType)
+    if (!macroItem) {
+        GraphPoolLog("宏操作-目标表不存在", Format("type={1} index={2}", Data.MacroType, Data.Index))
+        return
+    }
+    macroTableID := macroItem.ID
+    targetItemID := macroItem.Items.Has(macroIndex) ? macroItem.Items[macroIndex].ID : ""
 
-    IsAbnormal := macroItem.SerialArr.Length < macroIndex || macroItem.SerialArr[macroIndex] != Data.MacroSerial
+    IsAbnormal := !macroItem.Items.Has(macroIndex) || macroItem.Items[macroIndex].ID != Data.MacroSerial
     if (Data.MacroType != "当前宏" && IsAbnormal) {
-        loop macroItem.ModeArr.Length {
-            if (Data.MacroSerial == macroItem.SerialArr[A_Index]) {
-                macroIndex := A_Index
+        for i, item in macroItem.Items {
+            if (Data.MacroSerial == item.ID) {
+                macroIndex := i
+                targetItemID := item.ID
                 break
             }
         }
     }
 
     if (Data.CallType == "插入到当前宏") {   ;插入
-        macro := macroItem.MacroArr[macroIndex]
+        if (!targetItemID)
+            return
+        macro := macroItem.GetItem(targetItemID).Macro
         resultMacro := ""
         isHas := TryGetTabVarValue(&Count, tableItem, index, Data.InsertCount, true)
         if (isHas) {
@@ -852,23 +874,23 @@ OnSubMacro(tableItem, cmd, index) {
         return SplitMacro(resultMacro)
     }
     else if (Data.CallType == "触发") {  ;触发
-        MyTriggerSubMacro(macroTableIndex, macroIndex)
+        MyTriggerSubMacro(macroTableID, targetItemID)
     }
     else if (Data.CallType == "暂停") {  ;暂停
-        MySetItemPauseState(macroTableIndex, macroIndex, 1)
+        MySetItemPauseState(macroTableID, targetItemID, 1)
     }
     else if (Data.CallType == "取消暂停") {  ;取消暂停
-        MySetItemPauseState(macroTableIndex, macroIndex, 0)
+        MySetItemPauseState(macroTableID, targetItemID, 0)
     }
     else if (Data.CallType == "终止") {  ;终止
-        MyStopMacro(macroTableIndex, macroIndex)
+        MyStopMacro(macroTableID, targetItemID)
     }
 }
 
 OnVariable(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
-    LocalVariableMap := tableItem.VariableMapArr[index]
+    LocalVariableMap := tableItem.Items[index].VariableMap
     DeleteNameArr := []
     VariableNameArr := []
     ValueArr := []
@@ -934,10 +956,11 @@ OnExVariable(tableItem, cmd, index) {
 
     if (Data.SearchCount == -1) {
         WaitIfPaused(tableItem, index)
-        if (tableItem.KilledArr[index])
+        item := tableItem.Items[index]
+        if (item.Killed)
             return
         isFound := OnExVariableOnce(tableItem, index, Data)
-        if (tableItem.KilledArr[index])
+        if (item.Killed)
             return
         if (!isFound) {
             FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
@@ -949,7 +972,8 @@ OnExVariable(tableItem, cmd, index) {
         loop Data.SearchCount {
             WaitIfPaused(tableItem, index)
 
-            if (tableItem.KilledArr[index])
+            item := tableItem.Items[index]
+            if (item.Killed)
                 return
 
             isFound := OnExVariableOnce(tableItem, index, Data)
@@ -1110,7 +1134,8 @@ OnBGKey(tableItem, cmd, index) {
     loop Data.ClickCount {
         WaitIfPaused(tableItem, index)
 
-        if (tableItem.KilledArr[index])
+        item := tableItem.Items[index]
+        if (item && item.Killed)
             break
 
         FloatHold := GetFloatTime(Data.ClickTime, MainSoftData.HoldFloat)
@@ -1177,10 +1202,10 @@ SendBGKeyState(hwnd, Key, state, tableItem, index) {
     }
 
     if (state == 1) {
-        tableItem.HoldKeyArr[index][Key] := "Normal"
+        tableItem.Items[index].HoldKey[Key] := "Normal"
     }
     else {
-        tableItem.HoldKeyArr[index].Delete(Key)
+        tableItem.Items[index].HoldKey.Delete(Key)
     }
 }
 
@@ -1352,8 +1377,9 @@ OnPressKey(tableItem, cmd, index) {
     isJoyKey := InStr(keyName, "Joy")
     isJoyAxis := InStr(keyName, "JoyAxis")
     isJoyDpad := InStr(keyName, "JoyDpad")
+    item := tableItem.Items[index]
     actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
-    action := actionMap[Integer(tableItem.ModeArr[index])]
+    action := actionMap[Integer(item.Mode)]
     action := isJoyKey ? SendJoyBtnKey : action
     action := isJoyAxis ? SendJoyAxisKey : action
     action := isJoyDpad ? SendJoyDpadKey : action
@@ -1361,15 +1387,15 @@ OnPressKey(tableItem, cmd, index) {
     if (isJoyKey || isJoyAxis || isJoyDpad) {
         actionName := isJoyDpad ? "SendJoyDpadKey" : (isJoyAxis ? "SendJoyAxisKey" : "SendJoyBtnKey")
         JoyDebugLog(Format("OnPressKey cmd={} key={} type={} mode={} action={} pool={} killed={} HasJoyMacro={}"
-            , cmd, keyName, keyTypeVal, tableItem.ModeArr[index], actionName
-            , WorkPoolEnabled(), tableItem.KilledArr[index], MySoftData.HasJoyMacro), "press")
+            , cmd, keyName, keyTypeVal, item.Mode, actionName
+            , WorkPoolEnabled(), item.Killed, MySoftData.HasJoyMacro), "press")
     }
 
     keyType := keyTypeVal
     loop count {
         WaitIfPaused(tableItem, index)
 
-        if (tableItem.KilledArr[index])
+        if (item.Killed)
             break
 
         FloatHold := GetFloatTime(holdTime, MainSoftData.HoldFloat)
@@ -1383,7 +1409,7 @@ OnPressKey(tableItem, cmd, index) {
 ;按键替换
 OnReplaceDownKey(tableItem, info, index, *) {
     infos := StrSplit(info, ",")
-    mode := Integer(tableItem.ModeArr[index])
+    mode := Integer(tableItem.Items[index].Mode)
     actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
     action := actionMap[mode]
     loop infos.Length {
@@ -1395,7 +1421,7 @@ OnReplaceDownKey(tableItem, info, index, *) {
 
 OnReplaceUpKey(tableItem, info, index, *) {
     infos := StrSplit(info, ",")
-    mode := Integer(tableItem.ModeArr[index])
+    mode := Integer(tableItem.Items[index].Mode)
     actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
     action := actionMap[mode]
     loop infos.Length {
@@ -1407,7 +1433,9 @@ OnReplaceUpKey(tableItem, info, index, *) {
 
 ;按钮回调
 MenuReload(*) {
-    IniWrite(MainSoftData.TabCtrl.Value, IniFile, IniSection, "TableIndex")
+    ; 持久化当前 tab 用 TableID（身份）；未切换过则回落 TabCtrl.Value
+    savedTab := MainSoftData.CurTableID != "" ? MainSoftData.CurTableID : MainSoftData.TabCtrl.Value
+    IniWrite(savedTab, IniFile, IniSection, "TableIndex")
     IniWrite(true, IniFile, IniSection, "IsReload")
     SafeReload()
 }

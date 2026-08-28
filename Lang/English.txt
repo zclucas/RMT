@@ -1228,6 +1228,14 @@ Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装�
 配置校准=Calibrate
 配置管理=Configs
 配置管理编辑器=Config Manager
+表管理=Table Manager
+新增表=Add Table
+重命名表=Rename Table
+删除表=Delete Table
+确定删除表「{1}」及其全部 {2} 条宏吗？=Delete table "{1}" and all its {2} macros?
+请输入新表名称：=Enter new table name:
+管理主窗口页签：可新增/重命名/删除表。删除表会同时删除其中的全部宏。=Manage main window tabs: add/rename/delete tables. Deleting a table removes all its macros.
+已新增表=Table added
 配置迁移=Migrate
 配置迁移成功=Migration succeeded
 配置选项：=Options:

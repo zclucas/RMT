@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 SearchOnTrigger(tableItem, cmdStr, index) {
     paramArr := StrSplit(cmdStr, "_")
@@ -26,10 +26,10 @@ TryGetUserDefinedVarValue(&Value, tableItem, index, varName) {
     varName := Trim(String(varName))
     if (varName == "")
         return false
-    if (IsObject(tableItem) && tableItem.VariableMapArr.Length >= index) {
-        TableVariableMap := tableItem.VariableMapArr[index]
-        if (TableVariableMap.Has(varName)) {
-            Value := TableVariableMap[varName]
+    if (IsObject(tableItem) && tableItem.Items.Has(index)) {
+        item := tableItem.Items[index]
+        if (item && item.VariableMap.Has(varName)) {
+            Value := item.VariableMap[varName]
             return true
         }
     }
@@ -43,10 +43,11 @@ TryGetUserDefinedVarValue(&Value, tableItem, index, varName) {
 SearchExecute(tableItem, Data, index) {
     if (Data.SearchCount == -1) {
         WaitIfPaused(tableItem, index)
-        if (tableItem.KilledArr[index])
+        item := tableItem.Items[index]
+        if (item && item.Killed)
             return
         isLoopFound := SearchOnce(tableItem, Data, index)
-        if (tableItem.KilledArr[index])
+        if (item && item.Killed)
             return
         if (!isLoopFound) {
             FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
@@ -58,7 +59,8 @@ SearchExecute(tableItem, Data, index) {
         loop Data.SearchCount {
             WaitIfPaused(tableItem, index)
 
-            if (tableItem.KilledArr[index])
+            item := tableItem.Items[index]
+            if (item && item.Killed)
                 return
 
             isFound := SearchOnce(tableItem, Data, index)

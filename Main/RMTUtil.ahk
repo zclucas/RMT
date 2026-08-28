@@ -36,18 +36,19 @@ OnSaveSetting(*) {
 
     ; Epic5：虚拟化列表保存前兜底提交实体化行全字段（覆盖纯键盘后未失焦路径）。
     ; VL_COMMIT_ALL 回传经 SetTimer(-1) 异步写模型，Sleep(-1) 处理 pending timer 后再读，防丢
-    for t in [1, 2, 3, 4, 5, 6, 7] {
+    for t, _ in MyMainWin._useVirtual {
         if (MyMainWin._useVirtual.Has(t)) {
             MyMainWin._vl.CommitAll(t)
             Sleep(-1)
         }
     }
 
-    loop MainSoftData.TabNameArr.Length {
+    loop MySoftData.TableInfo.Length {
         tableItem := MySoftData.TableInfo[A_Index]
         RecycleTabItem(tableItem)
-        SaveTableItemInfo(A_Index)
+        SaveTableItemInfo(tableItem)
     }
+    SaveTableCollection()
 
     ; 静态变量：保存上次写入的值，用于脏检查
     static lastSavedSettings := Map()
@@ -112,7 +113,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("OCRType", MainSoftData.OCRTypeValue)
 
     ; 状态设置（这些每次都变化，始终写入）
-    CheckAndAddDirty("TableIndex", MainSoftData.TabCtrl.Value)
+    CheckAndAddDirty("TableIndex", MainSoftData.CurTableID != "" ? MainSoftData.CurTableID : MainSoftData.TabCtrl.Value)
     CheckAndAddDirty("Lang", MainSoftData.Lang)
     CheckAndAddDirty("FontType", MainSoftData.FontType)
     CheckAndAddDirty("FontSize", MainSoftData.HasProp("FontSize") ? MainSoftData.FontSize : 15)
@@ -214,35 +215,12 @@ OnTabValueChanged(*) {
 }
 
 SwapTableContent(tableItem, indexA, indexB) {
-    ; 持久配置数组（保存到文件，必须跟随宏内容移动，否则上/下移后保存会错位）
-    SwapArrValue(tableItem.SerialArr, indexA, indexB)
-    SwapArrValue(tableItem.RemarkArr, indexA, indexB)
-    SwapArrValue(tableItem.TKArr, indexA, indexB)
-    SwapArrValue(tableItem.TriggerTypeArr, indexA, indexB)
-    SwapArrValue(tableItem.HoldTimeArr, indexA, indexB)
-    SwapArrValue(tableItem.MacroArr, indexA, indexB)
-    SwapArrValue(tableItem.LoopCountArr, indexA, indexB)
-    SwapArrValue(tableItem.ForbidArr, indexA, indexB)
-    SwapArrValue(tableItem.IcoPathArr, indexA, indexB)
-    SwapArrValue(tableItem.UnorderedTriggerArr, indexA, indexB)
-    SwapArrValue(tableItem.TimingSerialArr, indexA, indexB)
-    SwapArrValue(tableItem.ModeArr, indexA, indexB)
-    SwapArrValue(tableItem.StartTipSoundArr, indexA, indexB)
-    SwapArrValue(tableItem.EndTipSoundArr, indexA, indexB)
-    SwapArrValue(tableItem.VoiceTriggerArr, indexA, indexB)
-    SwapArrValue(tableItem.VoiceKeywordsArr, indexA, indexB)
-    ; 运行时状态数组（与 ModeArr 等长，InitSingleTableState 统一初始化）
-    ; 颜色点跟随宏内容：行移动后状态显示与新位置宏保持一致（原仅交换 9 数组导致颜色点错位）
-    SwapArrValue(tableItem.ColorStateArr, indexA, indexB)
-    SwapArrValue(tableItem.HoldKeyArr, indexA, indexB)
-    SwapArrValue(tableItem.KilledArr, indexA, indexB)
-    SwapArrValue(tableItem.PauseArr, indexA, indexB)
-    SwapArrValue(tableItem.ActionCount, indexA, indexB)
-    SwapArrValue(tableItem.ToggleStateArr, indexA, indexB)
-    SwapArrValue(tableItem.ToggleActionArr, indexA, indexB)
-    SwapArrValue(tableItem.VariableMapArr, indexA, indexB)
-    SwapArrValue(tableItem.IsWorkIndexArr, indexA, indexB)
-    SwapArrValue(tableItem.GraphBranchCountArr, indexA, indexB)
+    ; 对象化：条目所有字段（持久+运行时）都挂在 MacroItem 对象上，
+    ; 交换数组元素即完成全部字段同步移动，无需逐数组交换
+    temp := tableItem.Items[indexA]
+    tableItem.Items[indexA] := tableItem.Items[indexB]
+    tableItem.Items[indexB] := temp
+    tableItem.RebuildIndex()
 }
 
 SwapArrValue(Arr, indexA, indexB, valueType := 1) {
@@ -463,56 +441,78 @@ InitFilePath() {
     global ProjectRootDir := A_ScriptDir
 }
 
-StopMacro(tableIndex, itemIndex) {
-    tableItem := MySoftData.TableInfo[tableIndex]
-    if (tableItem.GraphBranchCountArr.Length >= itemIndex)
-        tableItem.GraphBranchCountArr[itemIndex] := 0
+StopMacro(tableItem, itemIndex) {
+    if (!IsObject(tableItem))
+        tableItem := GetTableByID(String(tableItem))
+    if (!tableItem)
+        return
+    if (IsObject(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
+    } else if (!IsNumber(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
+    }
+    if (itemIndex < 1)
+        return
+    item := tableItem.Items[itemIndex]
+    if (!item)
+        return
+    item.GraphBranchCount := 0
 
-    ; 多线程：搜图等 DllCall 会卡住 Worker，协作式 KilledArr/ST 不可靠，直接杀进程
+    ; 多线程：搜图等 DllCall 会卡住 Worker，协作式 Killed/ST 不可靠，直接杀进程
     if (WorkPoolEnabled()) {
-        hasWork := tableItem.IsWorkIndexArr[itemIndex] || MyWorkPool.HasItemWork(tableIndex, itemIndex)
+        hasWork := item.IsWorkIndex || MyWorkPool.HasItemWork(tableItem.ID, item.ID)
         if (hasWork) {
-            MyWorkPool.ForceStopItem(tableIndex, itemIndex)
+            MyWorkPool.ForceStopItem(tableItem.ID, item.ID)
             return
         }
     }
 
     ; 主进程内执行的宏：置 Killed 标记后，宏循环会自行退出并由 OnFinishMacro 设置终止状态
     KillTableItemMacro(tableItem, itemIndex)
-    if (tableItem.TriggerTypeArr.Length >= itemIndex && tableItem.TriggerTypeArr[itemIndex] == 4)
-        SetTableItemState(tableIndex, itemIndex, 3)
+    if (item.TriggerType == 4)
+        SetTableItemState(tableItem, itemIndex, 3)
 }
 
 ; Worker 多分支图形宏：接收 Worker 提交的分支节点列表，入队并分派，回复确认
 HandleWorkerGraphBranches(wd, tIdx, iIdx, branchCount, nodeArr) {
-    tableItem := MySoftData.TableInfo[tIdx]
+    ; Worker 协议已 ID 化：tIdx=TableID, iIdx=ItemID（兼容旧数字下发：反查对象再取 ID）
+    tableItem := IsObject(tIdx) ? tIdx : GetTableByID(String(tIdx))
+    if (!tableItem) {
+        GraphPoolLog("图形分支-表不存在", Format("tab={1} item={2}", tIdx, iIdx))
+        return
+    }
+    tableID := tableItem.ID
+    itemID := IsObject(iIdx) ? iIdx.ID : (tableItem.GetItem(String(iIdx)) ? String(iIdx) : "")
+    item := tableItem.GetItem(itemID)
+    if (!item) {
+        GraphPoolLog("图形分支-条目不存在", Format("tab={1} item={2}", tableID, iIdx))
+        return
+    }
+    itemIndex := GetItemIndexInTable(tableItem, itemID)
     if (branchCount > 0) {
         ; fromStart：设置总分支数，清空旧队列，重置终止标记
-        MyWorkPool.DrainItemTaskQueue(tIdx, iIdx)
-        if (tableItem.GraphBranchCountArr.Length >= iIdx)
-            tableItem.GraphBranchCountArr[iIdx] := branchCount
-        if (tableItem.KilledArr.Length >= iIdx)
-            tableItem.KilledArr[iIdx] := false
+        MyWorkPool.DrainItemTaskQueue(tableID, itemID)
+        item.GraphBranchCount := branchCount
+        item.Killed := false
         if (MyWorkPool.usePool.Has(wd.idx)) {
             w := MyWorkPool.usePool[wd.idx]
             w.isGraphBranch := true
-            w.tableIndex := tIdx
-            w.itemIndex := iIdx
+            w.tableID := tableID
+            w.itemID := itemID
         }
     } else {
         loop nodeArr.Length
-            if (tableItem.GraphBranchCountArr.Length >= iIdx)
-                tableItem.GraphBranchCountArr[iIdx]++
+            item.GraphBranchCount++
     }
     ; 入队各分支任务
     for nodeSerial in nodeArr
-        MyWorkPool.taskQueue.Push({ cmd: EncodeBatch(EncodeCommand("TR", tIdx, iIdx, nodeSerial)), tableIndex: tIdx, itemIndex: iIdx, isGraphBranch: true })
+        MyWorkPool.taskQueue.Push({ cmd: EncodeBatch(EncodeCommand("TR", tableID, itemID, nodeSerial)), tableID: tableID, itemID: itemID, isGraphBranch: true })
     if (MyWorkPool.isDispatching)
         MyWorkPool.dispatchPending := true
     else
         MyWorkPool.Dispatch()
     ; 回复 Worker 确认，唤醒继续执行分支1
-    MyWorkPool.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("GA", tIdx, iIdx)))
+    MyWorkPool.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("GA", tableID, itemID)))
 }
 
 GetArrayRefByPath(rootArr, path, &lastIdx) {
@@ -650,19 +650,30 @@ CMDReport(CMDStr) {
 }
 
 ;0默认状态 1运行 2暂停 3终止
-SetTableItemState(tableIndex, itemIndex, State) {
-    ; Worker 经 IPC 回发的 IS/PS 事件参数是字符串；Map 键类型敏感，若 ColorStateArr 混入
-    ; 字符串 "3"，GetItemColorValue 的整数键 Map 查不到，红色终止态将无法显示。统一转整数。
-    tableIndex := Integer(tableIndex)
-    itemIndex := Integer(itemIndex)
+; 表身份 = TableItem 对象引用（位置不代表身份）
+SetTableItemState(tableItem, itemIndex, State) {
+    ; Worker 经 IPC 回发的 IS/PS 事件参数是字符串；统一转整数。
     State := Integer(State)
 
-    tableItem := MySoftData.TableInfo[tableIndex]
-    LastState := tableItem.ColorStateArr[itemIndex]
+    if (!IsObject(tableItem))
+        tableItem := GetTableByID(String(tableItem))
+    if (!tableItem)
+        return
+    if (IsObject(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
+    } else if (!IsNumber(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
+    }
+    if (itemIndex < 1)
+        return
+    item := tableItem.Items[itemIndex]
+    if (!item)
+        return
+    LastState := item.ColorState
 
     if (LastState == 0 && (State == 2 || State == 3)) {
         ; 终止过程中宏已正常结束（状态已归 0），不再应用终止/暂停状态
-        GraphPoolLog("状态忽略-已正常结束", Format("tab={1} item={2} 收到状态={3} 当前=0", tableIndex, itemIndex, State))
+        GraphPoolLog("状态忽略-已正常结束", Format("tab={1} item={2} 收到状态={3} 当前=0", tableItem.ID, item.ID, State))
         return
     }
 
@@ -672,85 +683,103 @@ SetTableItemState(tableIndex, itemIndex, State) {
         return
 
     if (State == 3) {
-        StopCancelTableItemTimer(tableIndex, itemIndex)
-        timerFunc := CancelTableItemStopState.Bind(tableIndex, itemIndex)
-        timerKey := tableIndex "|" itemIndex
+        StopCancelTableItemTimer(tableItem, itemIndex)
+        timerFunc := CancelTableItemStopState.Bind(tableItem, itemIndex)
+        timerKey := tableItem.ID "|" item.ID
         CancelTableItemTimerMap[timerKey] := timerFunc
         SetTimer(timerFunc, -5000)
     }
     else if (LastState == 3)
-        StopCancelTableItemTimer(tableIndex, itemIndex)
+        StopCancelTableItemTimer(tableItem, itemIndex)
 
     UpdateMacroRunningCount(LastState, State)
-    tableItem.ColorStateArr[itemIndex] := State
-    RefreshItemColorUI(tableIndex, itemIndex)
+    item.ColorState := State
+    RefreshItemColorUI(tableItem, itemIndex)
 
-    if (tableIndex == 4 && IsSet(MyUIMacroGui))
+    if (tableItem.Symbol == "UI" && IsSet(MyUIMacroGui))
         MyUIMacroGui.UpdateButtonsState(itemIndex, State)
 }
 
-RefreshItemColorUI(tableIndex, itemIndex) {
+RefreshItemColorUI(tableItem, itemIndex) {
     global MyMainWin
-    MyMainWin.UpdateItemColor(tableIndex, itemIndex)
+    MyMainWin.UpdateItemColor(tableItem, itemIndex)
 }
 
-CancelTableItemStopState(tableIndex, itemIndex) {
-    tableItem := MySoftData.TableInfo[tableIndex]
-    if (tableItem.ColorStateArr[itemIndex] == 3) {
-        if (tableItem.IsWorkIndexArr.Length >= itemIndex && tableItem.IsWorkIndexArr[itemIndex] != 0)
+CancelTableItemStopState(tableItem, itemIndex) {
+    if (!IsObject(tableItem))
+        return
+    item := tableItem.Items[itemIndex]
+    if (!item)
+        return
+    if (item.ColorState == 3) {
+        if (item.IsWorkIndex != 0)
             return
 
-        ; 同步清除 KilledArr，確保狀態完全恢復可再次觸發
-        if (tableItem.KilledArr.Length >= itemIndex)
-            tableItem.KilledArr[itemIndex] := false
+        ; 同步清除 Killed，確保狀態完全恢復可再次觸發
+        item.Killed := false
         ; 通过 SetTableItemState 恢复默认状态（自动触发浮动画板同步等逻辑）
-        SetTableItemState(tableIndex, itemIndex, 0)
+        SetTableItemState(tableItem, itemIndex, 0)
     }
 }
 
 global CancelTableItemTimerMap := Map()
 
-StopCancelTableItemTimer(tableIndex, itemIndex) {
-    timerKey := tableIndex "|" itemIndex
+StopCancelTableItemTimer(tableItem, itemIndex) {
+    if (IsObject(tableItem)) {
+        item := tableItem.Items[itemIndex]
+        timerKey := tableItem.ID "|" (item ? item.ID : "")
+    } else {
+        timerKey := String(tableItem) "|" itemIndex
+    }
     if (CancelTableItemTimerMap.Has(timerKey)) {
         SetTimer(CancelTableItemTimerMap[timerKey], 0)
         CancelTableItemTimerMap.Delete(timerKey)
     }
 }
 
-SetItemPauseState(tableIndex, itemIndex, state, excludeIdx := 0) {
-    tableItem := MySoftData.TableInfo[tableIndex]
-    tableItem.PauseArr[itemIndex] := state
+SetItemPauseState(tableItem, itemIndex, state, excludeIdx := 0) {
+    if (!IsObject(tableItem))
+        tableItem := GetTableByID(String(tableItem))
+    if (!tableItem)
+        return
+    if (IsObject(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
+    } else if (!IsNumber(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
+    }
+    if (itemIndex < 1)
+        return
+    item := tableItem.Items[itemIndex]
+    if (!item)
+        return
+    item.Pause := state
 
-    LastColorState := tableItem.ColorStateArr[itemIndex]
+    LastColorState := item.ColorState
     if (LastColorState == 1 && state == 1)
-        SetTableItemState(tableIndex, itemIndex, 2)
+        SetTableItemState(tableItem, itemIndex, 2)
     else if (LastColorState == 2 && state == 0)
-        SetTableItemState(tableIndex, itemIndex, 1)
+        SetTableItemState(tableItem, itemIndex, 1)
 
-    MyWorkPool.BroadcastEx(excludeIdx, "PS", tableIndex, itemIndex, state)
+    MyWorkPool.BroadcastEx(excludeIdx, "PS", tableItem.ID, item.ID, state)
 }
 
 ;恢复意外退出残留的脏状态，后面要换成热重载就会要
 RecoverAllDirtyStates() {
     loop MySoftData.TableInfo.Length {
         tableItem := MySoftData.TableInfo[A_Index]
-        if (!tableItem.ColorStateArr.Length)
-            continue
-        loop tableItem.ColorStateArr.Length {
-            if (tableItem.ColorStateArr[A_Index] != 0) {
-                tableItem.ColorStateArr[A_Index] := 0
-                if (tableItem.IsWorkIndexArr.Length >= A_Index)
-                    tableItem.IsWorkIndexArr[A_Index] := 0
-                RefreshItemColorUI(tableItem.Index, A_Index)
+        for index, item in tableItem.Items {
+            if (item.ColorState != 0) {
+                item.ColorState := 0
+                item.IsWorkIndex := 0
+                RefreshItemColorUI(tableItem, index)
             }
         }
     }
 
     tableItem := MySoftData.SpecialTableItem
-    if (tableItem.ColorStateArr.Length >= 1 && tableItem.ColorStateArr[1] != 0) {
-        tableItem.ColorStateArr[1] := 0
-        RefreshItemColorUI(tableItem.Index, 1)
+    if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState != 0) {
+        tableItem.Items[1].ColorState := 0
+        RefreshItemColorUI(tableItem, 1)
     }
 
     if (MySoftData.MacroRunningCount != 0) {
@@ -1507,25 +1536,25 @@ ShouldAutoGenerateRemark(Remark) {
 
 OnTriggerSepcialItemMacro(MacroStr) {
     tableItem := MySoftData.SpecialTableItem
-    tableItem.KilledArr[1] := false
-    tableItem.PauseArr[1] := 0
-    tableItem.ActionCount[1] := 0
-    tableItem.index := 1
-    tableItem.ColorStateArr[1] := 1
-    ; F5 单跑无备注，占位空值（业务日志读取需有该下标）。
-    ; SpecialTableItem 的 RemarkArr 未被 InitSingleTableState 填充（空数组），
-    ; AHK v2 不允许越界下标赋值（Invalid index），需先 Push 扩容
-    if (tableItem.RemarkArr.Length < 1)
-        tableItem.RemarkArr.Push("")
-    else
-        tableItem.RemarkArr[1] := ""
+    if (tableItem.Items.Length == 0) {
+        item := MacroItem()
+        item.ID := GetCMDSerialStr("Item")
+        tableItem.Items.Push(item)
+        tableItem.RebuildIndex()
+    }
+    item := tableItem.Items[1]
+    item.Killed := false
+    item.Pause := false
+    item.ActionCount := 0
+    item.ColorState := 1
+    item.Remark := ""
 
     UpdateMacroRunningCount(0, 1)
-    RefreshItemColorUI(tableItem.Index, 1)
+    RefreshItemColorUI(tableItem, 1)
     OnTriggerMacroOnce(tableItem, MacroStr, 1)
-    tableItem.ColorStateArr[1] := 0
+    item.ColorState := 0
     UpdateMacroRunningCount(1, 0)
-    RefreshItemColorUI(tableItem.Index, 1)
+    RefreshItemColorUI(tableItem, 1)
 }
 
 HandleOpenArg() {
@@ -1581,19 +1610,18 @@ ElevateToAdmin() {
 
 SetEditData() {
     visitMap := Map()
-    loop MainSoftData.TabNameArr.Length {
+    loop MySoftData.TableInfo.Length {
         tableIndex := A_Index
         tableItem := MySoftData.TableInfo[tableIndex]
         isMacro := CheckIsMacroTable(tableIndex)
         if (!isMacro)
             continue
 
-        for index, value in tableItem.ModeArr {
-            if (tableItem.MacroArr.Length < index || tableItem.MacroArr[index] == "")
+        for item in tableItem.Items {
+            if (item.Macro == "")
                 continue
 
-            macroStr := tableItem.MacroArr[index]
-            SetGlobalData(macroStr, visitMap)
+            SetGlobalData(item.Macro, visitMap)
         }
     }
 }

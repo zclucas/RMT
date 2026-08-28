@@ -48,7 +48,7 @@ class MergeUtil {
             idx := GetTableIndex(symbol)
             if (idx <= 0)
                 continue
-            tabs.Push({ Index: idx, Symbol: symbol, Name: MainSoftData.TabNameArr[idx] })
+            tabs.Push({ Index: idx, Symbol: symbol, Name: MySoftData.TableInfo[idx].Name })
         }
         return tabs
     }
@@ -1196,7 +1196,10 @@ class MergeUtil {
             moduleGroups := MergeUtil.GroupItemsByModule(items)
 
             for moduleName, moduleItems in moduleGroups {
-                startIndex := tableItem.ModeArr.Length + 1
+                fold := MacroFold()
+                fold.ID := GetFoldSerialStr()
+                fold.Remark := moduleName " (" sourceName ")"
+                tableItem.Folds.Push(fold)
                 serialList := []
 
                 for i, item in moduleItems {
@@ -1207,64 +1210,34 @@ class MergeUtil {
                     if (newTimingSerial == "")
                         newTimingSerial := newSerial
 
-                    tableItem.TKArr.Push(item.TriggerKey)
-                    tableItem.ModeArr.Push(1)
-                    tableItem.ForbidArr.Push(0)
-                    tableItem.RemarkArr.Push(item.Remark)
-                    tableItem.LoopCountArr.Push(1)
-                    tableItem.TriggerTypeArr.Push(1)
-                    tableItem.HoldTimeArr.Push(500)
-                    tableItem.UnorderedTriggerArr.Push(false)
-                    tableItem.StartTipSoundArr.Push(1)
-                    tableItem.EndTipSoundArr.Push(1)
-                    tableItem.VoiceTriggerArr.Push(0)
-                    tableItem.VoiceKeywordsArr.Push("")
-                    tableItem.MacroArr.Push(item.MacroStr)
-                    tableItem.SerialArr.Push(newSerial)
-                    tableItem.TimingSerialArr.Push(newTimingSerial)
-                    ; 与 ModeArr 等长，否则 SaveTableItemInfo 访问 IcoPathArr 会 Invalid index
-                    tableItem.IcoPathArr.Push("")
+                    newItem := MacroItem()
+                    newItem.ID := newSerial
+                    newItem.TimingSerial := newTimingSerial
+                    newItem.TK := item.TriggerKey
+                    newItem.Mode := 1
+                    newItem.Forbid := 0
+                    newItem.Remark := item.Remark
+                    newItem.LoopCount := 1
+                    newItem.TriggerType := 1
+                    newItem.HoldTime := 500
+                    newItem.UnorderedTrigger := false
+                    newItem.StartTipSound := 1
+                    newItem.EndTipSound := 1
+                    newItem.VoiceKeywords := ""
+                    newItem.Macro := item.MacroStr
+                    newItem.IcoPath := ""
+                    newItem.FoldID := fold.ID
+                    tableItem.Items.Push(newItem)
                     serialList.Push(newSerial)
-
-                    tableItem.KilledArr.Push(false)
-                    tableItem.ActionCount.Push(0)
-                    tableItem.HoldKeyArr.Push(Map())
-                    tableItem.ToggleStateArr.Push(false)
-                    tableItem.ToggleActionArr.Push("")
-                    tableItem.IsWorkIndexArr.Push(false)
-                    tableItem.GraphBranchCountArr.Push(0)
-                    tableItem.PauseArr.Push(false)
-                    tableItem.ColorStateArr.Push(0)
-
-                    VariableMap := Map()
-                    VariableMap["宏循环次数"] := 0
-                    VariableMap["循环-跳过本轮"] := false
-                    VariableMap["循环-跳出"] := false
-                    VariableMap["分支-跳出"] := false
-                    tableItem.VariableMapArr.Push(VariableMap)
                 }
 
-                if (!IsObject(tableItem.FoldInfo))
-                    tableItem.FoldInfo := ItemFoldInfo()
-                foldInfo := tableItem.FoldInfo
-                endIndex := tableItem.ModeArr.Length
-
-                spanStr := startIndex "-" endIndex
-                foldInfo.RemarkArr.Push(moduleName " (" sourceName ")")
-                foldInfo.FrontInfoArr.Push("")
-                foldInfo.IndexSpanArr.Push(spanStr)
-                foldInfo.FoldStateArr.Push(false)
-                foldInfo.ForbidStateArr.Push(0)
-
-                foldInfo.TKTypeArr.Push(1)
-                foldInfo.TKArr.Push("")
-                foldInfo.HoldTimeArr.Push(500)
-                foldInfo.UnorderedTriggerArr.Push(false)
                 if (IsObject(tableItem.FoldOffsetArr))
                     tableItem.FoldOffsetArr.Push(0)
 
                 totalModuleCount++
             }
+            tableItem.RebuildIndex()
+            RebuildTableLocator()
 
             result.MergedItems.Set(tabIndex, [])
         }
@@ -1274,7 +1247,7 @@ class MergeUtil {
         ; 仅保存可导入的宏页签，避免工具/设置等非宏页签越界
         for _, tabInfo in MergeUtil.GetMergeTabConfig() {
             if (tabGrouped.Has(tabInfo.Index) && tabGrouped[tabInfo.Index].Length > 0)
-                SaveTableItemInfo(tabInfo.Index)
+                SaveTableItemInfo(MySoftData.TableInfo[tabInfo.Index])
         }
 
         return result

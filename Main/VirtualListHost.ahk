@@ -37,12 +37,13 @@ class VirtualListHost {
     ; 续行须行首 `.`（操作符），变量 US 行首不触发 AHK 续行
     RefreshRow(t, i) {
         tableItem := MySoftData.TableInfo[t]
+        item := tableItem.Items[i]
         val := "R" t "_" i
-            . US . this._Esc(tableItem.RemarkArr[i])
+            . US . this._Esc(item.Remark)
             . US . this._Esc(this._TKStr(tableItem, i, t))
             . US . this._TKType(tableItem, i, t)
             . US . this._Esc(this._Loop(tableItem, i))
-            . US . (tableItem.ForbidArr[i] ? "1" : "0")
+            . US . (item.Forbid ? "1" : "0")
             . US . this._Color(tableItem, i)
         this._ui.Update("FoldList_" t, "VL_ROW", val)
     }
@@ -78,59 +79,58 @@ class VirtualListHost {
             . US . (isMacro ? "1" : "0")
             . US . (isUI ? "0" : "1")
             . RS
-        fi := tableItem.FoldInfo
         showTKRow := (isMenu || isUI) ? "1" : "0"
-        for f, spanStr in fi.IndexSpanArr {
+        for f, fold in tableItem.Folds {
             records .= "F" t "_" f
-                . US . this._Esc(fi.RemarkArr[f])
-                . US . this._Esc(fi.FrontInfoArr[f])
-                . US . (fi.ForbidStateArr[f] ? "1" : "0")
-                . US . (fi.TKTypeArr[f] - 1)
-                . US . this._Esc(fi.TKArr[f])
-                . US . (fi.FoldStateArr[f] ? "1" : "0")
+                . US . this._Esc(fold.Remark)
+                . US . this._Esc(fold.FrontInfo)
+                . US . (fold.ForbidState ? "1" : "0")
+                . US . (fold.TKType - 1)
+                . US . this._Esc(fold.TK)
+                . US . (fold.FoldState ? "1" : "0")
                 . US . showTKRow
                 . RS
-            span := StrSplit(spanStr, "-")
-            if (IsInteger(span[1]) && IsInteger(span[2])) {
-                loop span[2] - span[1] + 1 {
-                    i := span[1] + A_Index - 1
-                    records .= "R" t "_" i
-                        . US . this._Esc(tableItem.RemarkArr[i])
-                        . US . this._Esc(this._TKStr(tableItem, i, t))
-                        . US . this._TKType(tableItem, i, t)
-                        . US . this._Esc(this._Loop(tableItem, i))
-                        . US . (tableItem.ForbidArr[i] ? "1" : "0")
-                        . US . this._Color(tableItem, i)
-                        . US . (i ".")
-                        . RS
-                }
+            for i, item in tableItem.Items {
+                if (item.FoldID != fold.ID)
+                    continue
+                records .= "R" t "_" i
+                    . US . this._Esc(item.Remark)
+                    . US . this._Esc(this._TKStr(tableItem, i, t))
+                    . US . this._TKType(tableItem, i, t)
+                    . US . this._Esc(this._Loop(tableItem, i))
+                    . US . (item.Forbid ? "1" : "0")
+                    . US . this._Color(tableItem, i)
+                    . US . (i ".")
+                    . RS
             }
         }
         return records
     }
 
     _TKStr(tableItem, i, t) {
+        item := tableItem.Items[i]
         isTiming := CheckIsTimingMacroTable(t)
         if (GetTableSymbol(t) == "Voice") {
             ; 语音宏：触发键列显示唤醒词
-            tkStr := (i <= tableItem.VoiceKeywordsArr.Length) ? tableItem.VoiceKeywordsArr[i] : ""
+            tkStr := item.VoiceKeywords
             return tkStr == "" ? GetLang("编辑") : tkStr
         }
-        tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
+        tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
         return tkStr == "" ? GetLang("编辑") : tkStr
     }
 
     _TKType(tableItem, i, t) {
+        item := tableItem.Items[i]
         isUI := GetTableSymbol(t) == "UI"
-        return isUI ? "3" : (tableItem.TriggerTypeArr[i] - 1)
+        return isUI ? "3" : (item.TriggerType - 1)
     }
 
     _Loop(tableItem, i) {
-        return tableItem.LoopCountArr[i] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[i]
+        return tableItem.Items[i].LoopCount == "-1" ? GetLang("无限") : tableItem.Items[i].LoopCount
     }
 
     _Color(tableItem, i) {
-        cs := tableItem.ColorStateArr[i]
+        cs := tableItem.Items[i].ColorState
         return cs == 1 ? "#2E7D32" : cs == 2 ? "#F9A825" : cs == 3 ? "#C62828" : "Transparent"
     }
 
@@ -214,25 +214,30 @@ class VirtualListHost {
         }
     }
 
-    ; 字段 → 模型数组映射（与旧 ReadTabValues 一致）
+    ; 字段 → 模型映射（对象化，与旧 ReadTabValues 一致）
     _ApplyChange(tableItem, id, field, value) {
         idx := Integer(SubStr(id, InStr(id, "_", , 2) + 1))
         if (SubStr(id, 1, 1) == "R") {
+            item := tableItem.Items[idx]
+            if (!item)
+                return
             switch field {
-                case "Remark": tableItem.RemarkArr[idx] := value
-                case "TKType": tableItem.TriggerTypeArr[idx] := Integer(value) + 1
-                case "Loop": tableItem.LoopCountArr[idx] := (value == GetLang("无限")) ? "-1" : value
-                case "Forbid": tableItem.ForbidArr[idx] := (value == "1")
+                case "Remark": item.Remark := value
+                case "TKType": item.TriggerType := Integer(value) + 1
+                case "Loop": item.LoopCount := (value == GetLang("无限")) ? "-1" : value
+                case "Forbid": item.Forbid := (value == "1")
             }
         }
         else {
-            fi := tableItem.FoldInfo
+            fold := tableItem.Folds[idx]
+            if (!fold)
+                return
             switch field {
-                case "FoldRemark": fi.RemarkArr[idx] := value
-                case "FoldFront": fi.FrontInfoArr[idx] := value
-                case "FoldTKType": fi.TKTypeArr[idx] := Integer(value) + 1
-                case "FoldForbid": fi.ForbidStateArr[idx] := (value == "1")
-                case "FoldTK": fi.TKArr[idx] := value
+                case "FoldRemark": fold.Remark := value
+                case "FoldFront": fold.FrontInfo := value
+                case "FoldTKType": fold.TKType := Integer(value) + 1
+                case "FoldForbid": fold.ForbidState := (value == "1")
+                case "FoldTK": fold.TK := value
             }
         }
     }

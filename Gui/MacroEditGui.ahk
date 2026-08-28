@@ -1444,7 +1444,7 @@ class MacroEditGui {
             case GetLang("单步运行(F6)"):
             {
                 tableItem := MySoftData.SpecialTableItem
-                if (tableItem.ColorStateArr[1] == 1) {
+                if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1) {
                     return
                 }
 

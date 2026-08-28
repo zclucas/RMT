@@ -2,21 +2,36 @@
 
 class TimingScheduler {
 
-    __New(tableIndex) {
-        this.tableIndex := tableIndex
+    __New(tableID) {
+        this.tableID := tableID
         this.heap := MinHeap()
         this.timerFunc := ObjBindMethod(this, "OnTimer")
         this.endCheckTimerFunc := ObjBindMethod(this, "OnEndCheck")
         this.running := false
     }
 
+    ; 表 ID 可能为 ""（include 阶段 TableInfo 未填充）；启动时解析一次
+    _ResolveTableID() {
+        if (this.tableID == "") {
+            t := GetTableBySymbol("Timing")
+            this.tableID := t ? t.ID : ""
+        }
+        return this.tableID
+    }
+
+    _GetTable() {
+        if (this._ResolveTableID() == "")
+            return ""
+        return GetTableByID(this.tableID)
+    }
+
     Start() {
         if (this.running)
             return
 
-        if (this.tableIndex = "")
+        tableItem := this._GetTable()
+        if (!tableItem)
             return
-        tableItem := MySoftData.TableInfo[this.tableIndex]
         HandleOnSoftStart(tableItem)
 
         this.running := true
@@ -54,14 +69,16 @@ class TimingScheduler {
         this.StopTimers()
         this.heap.Clear()
 
-        tableItem := MySoftData.TableInfo[this.tableIndex]
+        tableItem := this._GetTable()
+        if (!tableItem)
+            return
         now := UnixNow()
 
-        for index, _ in tableItem.ModeArr {
+        for index, item in tableItem.Items {
             if (!TimingCheckItemIfValid(tableItem, index))
                 continue
 
-            Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
+            Data := GetMacroCMDData(item.TimingSerial)
 
             nextTime := CalculateNextStamp(Data, now)
             if (nextTime)
@@ -87,18 +104,20 @@ class TimingScheduler {
             return
         }
 
-        tableItem := MySoftData.TableInfo[this.tableIndex]
+        tableItem := this._GetTable()
+        if (!tableItem)
+            return
         now := UnixNow()
         nextEnd := 0
 
-        for index, _ in tableItem.ModeArr {
+        for index, item in tableItem.Items {
             if (!TimingCheckItemIfValid(tableItem, index))
                 continue
 
-            if (index <= tableItem.ColorStateArr.Length && tableItem.ColorStateArr[index] == 3)
+            if (item.ColorState == 3)
                 continue
 
-            Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
+            Data := GetMacroCMDData(item.TimingSerial)
             if (!Data.HasOwnProp("EndStamp") || !Data.EndStamp)
                 continue
 
@@ -128,7 +147,9 @@ class TimingScheduler {
         if (!this.running)
             return
 
-        tableItem := MySoftData.TableInfo[this.tableIndex]
+        tableItem := this._GetTable()
+        if (!tableItem)
+            return
         now := UnixNow()
 
         while (!this.heap.IsEmpty()) {
@@ -138,8 +159,11 @@ class TimingScheduler {
 
             item := this.heap.Pop()
             index := item.index
+            itemObj := tableItem.Items[index]
+            if (!itemObj)
+                continue
 
-            Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
+            Data := GetMacroCMDData(itemObj.TimingSerial)
 
             if (Data.HasOwnProp("EndStamp") && now >= Data.EndStamp)
                 continue
@@ -152,7 +176,7 @@ class TimingScheduler {
             }
 
             if (shouldTrigger)
-                TriggerMacroHandler(this.tableIndex, index)
+                TriggerMacroHandler(tableItem, index)
 
             nextTime := CalculateNextStamp(Data, item.time)
             if (nextTime)
@@ -166,23 +190,25 @@ class TimingScheduler {
         if (!this.running)
             return
 
-        tableItem := MySoftData.TableInfo[this.tableIndex]
+        tableItem := this._GetTable()
+        if (!tableItem)
+            return
         now := UnixNow()
 
-        for index, _ in tableItem.ModeArr {
+        for index, item in tableItem.Items {
             if (!TimingCheckItemIfValid(tableItem, index))
                 continue
 
-            if (index <= tableItem.ColorStateArr.Length && tableItem.ColorStateArr[index] == 3)
+            if (item.ColorState == 3)
                 continue
 
-            Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
+            Data := GetMacroCMDData(item.TimingSerial)
 
             if (!Data.HasOwnProp("EndStamp") || now < Data.EndStamp)
                 continue
 
-            if (index <= tableItem.IsWorkIndexArr.Length && tableItem.IsWorkIndexArr[index] != 0)
-                MyStopMacro(this.tableIndex, index)
+            if (item.IsWorkIndex != 0)
+                MyStopMacro(tableItem, index)
         }
 
         ; 只在真正需要時重新搜尋下一個 EndStamp，避免每秒掃描
@@ -315,9 +341,10 @@ GetTimingInterval(Data) {
 }
 
 TimingCheckItemIfValid(tableItem, index) {
-    return (index <= tableItem.MacroArr.Length)
-        && (tableItem.MacroArr[index] != "")
-        && (index > tableItem.ForbidArr.Length || !tableItem.ForbidArr[index])
+    item := tableItem.Items[index]
+    return item
+        && (item.Macro != "")
+        && !item.Forbid
         && !GetItemFoldForbidState(tableItem, index)
 }
 
@@ -325,12 +352,12 @@ HandleOnSoftStart(tableItem) {
     if (MainSoftData.IsReload)
         return
 
-    for index, _ in tableItem.ModeArr {
+    for index, item in tableItem.Items {
         if (!TimingCheckItemIfValid(tableItem, index))
             continue
 
-        Data := GetMacroCMDData(tableItem.TimingSerialArr[index])
+        Data := GetMacroCMDData(item.TimingSerial)
         if (Data.Type == 2)
-            TriggerMacroHandler(tableItem.Index, index)
+            TriggerMacroHandler(tableItem, index)
     }
 }

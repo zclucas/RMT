@@ -52,7 +52,7 @@ _MM_KeyModeName(km) {
 ; 从宏项读取按键类型
 GetMacroKeyMode(tableItem, index) {
     try
-        return Integer(tableItem.ModeArr[index])
+        return Integer(tableItem.Items[index].Mode)
     catch
         return 1
 }

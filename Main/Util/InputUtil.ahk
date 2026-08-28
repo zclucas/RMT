@@ -88,7 +88,7 @@ InputContinueAndCencel(Data, tableItem, index) {
     result := InputRequest("IB", "3")
     if (IsObject(result) && result[1] == "cancel") {
         if (Data.CancelType == "终止当前宏")
-            MyStopMacro(tableItem.Index, index)
+            MyStopMacro(tableItem, index)
         if (Data.CancelType == "终止所有宏")
             MyExcuteRMTCMDAction("RMT指令_宏控制_终止所有宏")
     }

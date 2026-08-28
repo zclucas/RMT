@@ -243,10 +243,12 @@ class SubMacroGui {
             this.ui.Update("DropDownIndexCombo", "IsEnabled", EnableIndex ? "True" : "False")
             if (EnableIndex) {
                 lastIndex := Max(1, this._SelIndex("DropDownIndexCombo") + 1)
-                tableIndex := GetTableIndex(GetLangKey(macroTypes[typeValue]))
+                tableItem := GetTableBySymbol(GetLangKey(macroTypes[typeValue]))
                 DropDownArr := []
-                for index, Remark in MySoftData.TableInfo[tableIndex].RemarkArr {
-                    DropDownArr.Push(A_Index ". " Remark)
+                if (tableItem) {
+                    for i, item in tableItem.Items {
+                        DropDownArr.Push(i ". " item.Remark)
+                    }
                 }
                 this.ui.Update("DropDownIndexCombo", "ClearItems", "")
                 for it in DropDownArr
@@ -279,12 +281,12 @@ class SubMacroGui {
     }
 
     CheckIfValid() {
-        tableIndex := GetTableIndex(GetLangKey(this.ui.Query("TypeCombo")))
-        SerialArr := this._TypeValue() == 1 ? "" : MySoftData.TableInfo[tableIndex].SerialArr
+        tableItem := GetTableBySymbol(GetLangKey(this.ui.Query("TypeCombo")))
+        itemArr := this._TypeValue() == 1 ? "" : (tableItem ? tableItem.Items : "")
 
-        if (SerialArr != "") {
+        if (itemArr != "") {
             idx := this._SelIndex("DropDownIndexCombo") + 1
-            if (idx > SerialArr.Length || idx == 0) {
+            if (idx > itemArr.Length || idx == 0) {
                 MsgBox(GetLang("配置无效，序号不正确"))
                 return false
             }
@@ -323,9 +325,10 @@ class SubMacroGui {
         this.Data.CallType := GetLangKey(callTypes[this._CallValue()])
         this.Data.InsertCount := GetLangKey(this.ui.Query("InsertCountCombo"))
 
-        tableIndex := GetTableIndex(this.Data.MacroType)
-        SerialArr := this._TypeValue() == 1 ? "" : MySoftData.TableInfo[tableIndex].SerialArr
-        this.Data.MacroSerial := SerialArr != "" ? SerialArr[this.Data.Index] : ""
+        tableItem := GetTableBySymbol(this.Data.MacroType)
+        itemArr := this._TypeValue() == 1 ? "" : (tableItem ? tableItem.Items : "")
+        this.Data.MacroSerial := itemArr != "" && this.Data.Index >= 1 && this.Data.Index <= itemArr.Length
+            ? itemArr[this.Data.Index].ID : ""
         SaveMacroCMDData(this.Data)
     }
 

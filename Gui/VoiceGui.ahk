@@ -21,15 +21,16 @@ class VoiceGui {
 
     ; ShowGui(tableItem, index)
     ShowGui(tableItem, index, isUpdate := false) {
-        if (!CheckIsItemTable(tableItem.Index))
+        if (!CheckIsItemTable(GetTableIndexByID(tableItem.ID)))
             return
         this.tableItem := tableItem
         this.index := index
 
-        ; 读取当前关键词（数组可能未补到 index，容错）
+        ; 读取当前关键词（对象字段，容错）
         curKeywords := ""
-        if (index <= tableItem.VoiceKeywordsArr.Length)
-            curKeywords := tableItem.VoiceKeywordsArr[index]
+        item := tableItem.Items[index]
+        if (item)
+            curKeywords := item.VoiceKeywords
 
         ; 复用已存在窗口则刷新（单实例模式）
         if (this.hasGui && this.Gui != "") {
@@ -94,19 +95,17 @@ class VoiceGui {
         global MyVoiceEngine, MyHotReloadBus
         tableItem := this.tableItem
         index := this.index
-        while (tableItem.VoiceKeywordsArr.Length < index)
-            tableItem.VoiceKeywordsArr.Push("")
-        tableItem.VoiceKeywordsArr[index] := keywords
-        ; 启用/禁用由主界面「禁用」开关（ForbidArr）控制；此处仅保证该行语音字段有效
-        while (tableItem.VoiceTriggerArr.Length < index)
-            tableItem.VoiceTriggerArr.Push(1)
-        tableItem.VoiceTriggerArr[index] := keywords == "" ? 0 : 1
+        item := tableItem.Items[index]
+        if (!item)
+            return
+        item.VoiceKeywords := keywords
+        ; 启用/禁用由主界面「禁用」开关（Forbid）控制；此处仅保证该行语音字段有效
 
         ; 热重载：广播「本行配置已变更」，VoiceEngine 订阅者空闲时重建关键词集（不阻塞 UI）
         if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
-            MyHotReloadBus.Publish(tableItem.Index, index)
+            MyHotReloadBus.Publish(GetTableIndexByID(tableItem.ID), index)
         else if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
-            MyVoiceEngine.NotifyConfigChanged(tableItem.Index, index)
+            MyVoiceEngine.NotifyConfigChanged(GetTableIndexByID(tableItem.ID), index)
     }
 
     OnSureClick(*) {

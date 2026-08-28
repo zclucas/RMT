@@ -1,47 +1,121 @@
+; ============================================================
+; 条目对象（MacroItem）—— 替代原 TableItem 内 20+ 平行数组
+; 每条宏配置一个对象，字段即属性，跨表引用一律引用 ItemID
+; ============================================================
+class MacroItem {
+    __New() {
+        this.ID := ""           ;条目唯一 ID（复用 GetCMDSerialStr("Item") 机制，全局唯一）
+        this.TK := ""           ;触发键
+        this.Macro := ""        ;宏内容
+        this.HoldTime := 500    ;时间参数（长按=长按时间，双击=双击间隔）
+        this.UnorderedTrigger := false  ;顺序触发（勾选时只按顺序注册，不勾选则正反向都注册）
+        this.Forbid := 0        ;禁止
+        this.LoopCount := "1"   ;循环次数
+        this.Remark := ""       ;备注
+        this.TriggerType := 1   ;触发类型
+        this.TimingSerial := "" ;定时配置序列码
+        this.Mode := 1          ;按键模式   1.AHK Send 2.keybd_event 3.罗技 4.AHI
+        this.StartTipSound := 1 ;开始提示音 1.无   2.触发提示  3.循环首次提示
+        this.EndTipSound := 1   ;结束提示音 1.无   2.结束提示  3.循环结束提示
+        this.IcoPath := ""      ;菜单宏ICO路径
+        this.VoiceKeywords := "" ;语音触发关键词（多个用英文逗号 , 分隔）
+        this.FoldID := ""       ;所属折叠框 ID（FoldInfo 的 ID 引用，替代 IndexSpanArr 范围）
+
+        ; ===== 运行时状态（原平行数组） =====
+        this.ColorState := 0            ;颜色状态
+        this.IsWorkIndex := 0           ;work正在执行中（Worker 索引）
+        this.GraphBranchCount := 0      ;图形宏并行分支 Worker 引用计数
+        this.Killed := false            ;标记结束状态
+        this.Pause := false             ;暂停
+        this.ActionCount := 0           ;记录执行次数，用于循环次数判断
+        this.HoldKey := Map()           ;记录当前按下的按键，以便结束时松开
+        this.ToggleState := false       ;触发键开关状态
+        this.ToggleAction := ""         ;触发键开关Action
+        this.VariableMap := Map()       ;每条宏对应的变量映射:内置变量
+    }
+}
+
+; ============================================================
+; 折叠框对象（MacroFold）—— 替代 ItemFoldInfo 平行数组 + IndexSpanArr
+; 每个折叠框一个对象，ID 全局唯一；条目通过 MacroItem.FoldID 归属
+; ============================================================
+class MacroFold {
+    __New() {
+        this.ID := ""               ;折叠框唯一 ID
+        this.Remark := ""           ;折叠框备注
+        this.FrontInfo := ""        ;折叠框前台信息
+        this.ForbidState := false   ;禁用状态
+        this.FoldState := false     ;折叠状态
+        ;菜单栏功能
+        this.TKType := 4            ;触发类型
+        this.TK := ""               ;触发按键，菜单栏功能
+        this.HoldTime := 500        ;时间参数（长按=长按时间，双击=双击间隔）
+        this.UnorderedTrigger := false  ;顺序触发
+    }
+}
+
+; ============================================================
+; 表对象（TableItem）—— 替代原表级平行数组 + MainSoftData.TabNameArr/TabSymbolArr
+; 表集合动态化：ID 稳定唯一，Name 可改，Symbol 决定语义分派
+; ============================================================
 class TableItem {
     __New() {
-        this.SerialArr := []    ;每个item的序列码
-        this.ColorStateArr := []
-        this.TKArr := []        ;触发键
-        this.MacroArr := []     ;宏内容
-        this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
-        this.UnorderedTriggerArr := []  ;顺序触发（勾选时只按顺序注册，不勾选则正反向都注册）
-        this.ForbidArr := []    ;禁止
-        this.LoopCountArr := [] ;循环次数
-        this.RemarkArr := []    ;备注
-        this.TriggerTypeArr := []   ;触发类型
-        this.TimingSerialArr := []  ;定时配置序列码
-        this.ModeArr := []      ;按键模式   1.AHK Send 2.keybd_event 3.罗技 4.AHI
-        this.StartTipSoundArr := [] ;开始提示音 1.无   2.触发提示  3.循环首次提示
-        this.EndTipSoundArr := [] ;结束提示音 1.无   2.结束提示  3.循环结束提示
+        this.ID := ""           ;表身份：恒定等于 Symbol（Normal/String/...），不再用动态 t_xxx，彻底消除启动漂移
+        this.Name := ""         ;表显示名（动态可改）
+        this.Symbol := ""       ;表类型符号 Normal/String/Menu/UI/Voice/Timing/SubMacro/Replace/Tool/Setting/Help/Reward/Thank
+        this.Order := 0         ;显示顺序（TabControl 排序用）
+        this.PersistSeg := ""   ;存储段名：新格式段名=固定 Symbol(空=用 ID)；旧 t_xxx 数据迁移期的临时段名（迁移后清空）
 
-        this.HoldKeyArr := []       ;记录当前按下的按键，以便结束时松开
-        this.KilledArr := []        ;标记结束状态
-        this.PauseArr := []         ;暂停
-        this.VoiceTriggerArr := []  ;语音触发 1=启用 0=禁用（每 item 一个）
-        this.VoiceKeywordsArr := [] ;语音触发关键词（每 item 一个字符串，多个关键词用英文逗号 , 分隔）
-        this.ActionCount := []      ; 记录执行次数，用于循环次数判断
-        this.ToggleStateArr := []   ; 触发键开关状态
-        this.ToggleActionArr := []   ; 触发键开关Action
-        this.VariableMapArr := []    ;  每条宏对应的变量映射:内置变量
+        this.Items := []        ;MacroItem 对象数组（仅顺序）
+        this.ItemMap := Map()   ;ItemID -> MacroItem 快速索引
+        this.Folds := []        ;MacroFold 对象数组
+        this.FoldMap := Map()   ;FoldID -> MacroFold 快速索引
 
+        ; ===== UI 运行时状态 =====
         this.UnderPosY := 0         ; table的最大PosY
-        this.Index := 0             ;   table的Index
         this.SliderValue := 0       ;   滑动值
         this.OffSetPosY := 0        ;   偏移值
         this.AllConArr := []        ;   table中所有的con
         this.AllGroup := []         ; table中所有的group
-        this.IsWorkIndexArr := []        ;work正在执行中
-        this.GraphBranchCountArr := []   ;图形宏并行分支 Worker 引用计数
-        this.IcoPathArr := []             ;菜单宏ICO路径
-
-        this.FoldInfo := ""          ; 折叠筐保存信息
         this.FoldOffsetArr := []    ;和初始状态的高度偏移值
         this.FoldBtnArr := []       ;折叠筐按钮
         this.ConIndexMap := Map()
+        this.FoldInfo := ""         ; 旧格式折叠信息（迁移期临时字段，迁移后置空）
+    }
+
+    ; 便捷：按 ItemID 取条目（无则返回 ""）
+    GetItem(itemID) {
+        return this.ItemMap.Has(itemID) ? this.ItemMap[itemID] : ""
+    }
+
+    ; 便捷：按 FoldID 取折叠框（无则返回 ""）
+    GetFold(foldID) {
+        return this.FoldMap.Has(foldID) ? this.FoldMap[foldID] : ""
+    }
+
+    ; 显示顺序下标（1 基）：按 TableID 在 TableInfo 数组中的位置。
+    ; 新体系表身份是 ID；Index 仅代表 UI 渲染顺序 / 跨进程索引（主进程与 Worker 加载同一配置，顺序一致）。
+    Index => GetTableIndexByID(this.ID)
+
+    ; 重建 ItemMap/FoldMap 索引（条目数组增删后调用）
+    RebuildIndex() {
+        this.ItemMap := Map()
+        for item in this.Items {
+            if (item.ID != "")
+                this.ItemMap[item.ID] := item
+        }
+        this.FoldMap := Map()
+        for fold in this.Folds {
+            if (fold.ID != "")
+                this.FoldMap[fold.ID] := fold
+        }
     }
 }
 
+; ============================================================
+; 旧版折叠信息（ItemFoldInfo）—— 保留类定义仅为迁移期读取旧 JSON
+; 新体系使用 MacroFold；迁移完成后可删除
+; ============================================================
 class ItemFoldInfo {
     __New() {
         this.RemarkArr := []        ;折叠框备注
@@ -143,12 +217,12 @@ class MainConfig {
         this.IsModalSubGui := true      ; 子窗口是否模态（阻止主窗口操作）
 
         ; ========== Tab 页签 ==========
-        this.TableIndex := 1            ; 当前显示的 Tab 页索引
+        ; 表集合动态化：表定义（ID/Symbol/Name/Order）存于 MySoftData.TableInfo + 配置文件 [Tables] 段，
+        ; 不再使用固定 TabNameArr/TabSymbolArr 平行数组
+        this.TableIndex := 1            ; 当前显示的 Tab 页索引（1 基，UI 槽位，运行时同步）
+        this.CurTableID := ""           ; 当前显示的表 ID（身份，持久化用；空则回落 TableIndex）
         this.TabPosX := 0               ; Tab 组件左上角 X 坐标
         this.TabPosY := 0               ; Tab 组件左上角 Y 坐标
-        this.TabNameArr := ["按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "按键替换", "工具", "设置", "帮助", "打赏作者", "特别感谢"]
-        this.TabSymbolArr := ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace", "Tool", "Setting", "Help",
-            "Reward", "Thank"]
 
         ; ========== 热键绑定 ==========
         this.IsSuspend := false         ; 软件休眠状态
@@ -323,7 +397,9 @@ class SoftData {
         this.ToolTipEndTime := ""       ;临时提示结束时间
 
         ; ========== 宏表格数据 ==========
-        this.TableInfo := []            ;TableItem所有信息，每个宏的所有信息
+        this.TableInfo := []            ;TableItem 表对象数组（顺序即显示顺序，元素为 TableItem）
+        this.TableMap := Map()          ;TableID -> TableItem 快速索引（RebuildTableLocator 构建）
+        this.GlobalItemMap := Map()     ;ItemID -> {TableID, Item} 全局条目索引（RebuildTableLocator 构建）
 
         ; ========== 按键映射 ==========
         ;特殊的按键，因为含有下划线，所有要特殊处理

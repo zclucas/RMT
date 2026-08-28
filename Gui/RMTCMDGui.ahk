@@ -302,10 +302,12 @@ class RMTCMDGui {
         this._SetDDL("CategoryCombo", this.CategoriesArr, Category)
         this._SetDDL("CmdTypeCombo", CmdStrArr, cmdStr)
 
-        FoldInfo := MySoftData.TableInfo[3].FoldInfo
+        tableItem := GetTableBySymbol("Menu")
         DropDownArr := []
-        loop FoldInfo.RemarkArr.Length {
-            DropDownArr.Push(A_Index ". " FoldInfo.RemarkArr[A_Index])
+        if (tableItem) {
+            for f, fold in tableItem.Folds {
+                DropDownArr.Push(f ". " fold.Remark)
+            }
         }
         this.ui.Update("MenuDLCombo", "ClearItems", "")
         for it in DropDownArr

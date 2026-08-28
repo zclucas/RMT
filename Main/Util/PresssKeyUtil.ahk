@@ -3,7 +3,8 @@
 ; Helper
 ; ------------------------------------------------------------
 GetHoldBucket(tableItem, index) {
-    return tableItem.HoldKeyArr[index]
+    item := tableItem.Items[index]
+    return item ? item.HoldKey : Map()
 }
 
 ; Worker 启动时挂上同步回调；主进程保持为空，避免引用 Worker 专有函数
@@ -15,7 +16,10 @@ NotifyHoldKeyChange(tableItem, index, key, state, source := "") {
     if (MyHoldKeyNotify = "" || !IsObject(tableItem) || index < 1)
         return
     try {
-        MyHoldKeyNotify.Call(tableItem.Index, index, key, state, source)
+        item := tableItem.Items[index]
+        if (!item)
+            return
+        MyHoldKeyNotify.Call(tableItem.ID, item.ID, key, state, source)
     } catch {
     }
 }

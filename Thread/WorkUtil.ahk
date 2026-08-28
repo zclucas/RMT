@@ -302,19 +302,25 @@
                 }
 
                 if (opcode == "TR") {
-                    tIdx := args[1]
-                    iIdx := args[2]
+                    tIdx := args[1]          ; TableID 字符串
+                    iIdx := args[2]          ; ItemID 字符串
                     _bizCurTab := tIdx
                     _bizCurItem := iIdx
-                    tableItem := MySoftData.TableInfo[tIdx]
-                    _bizCurRemark := tableItem.RemarkArr[iIdx]
-                    RMTLogBusiness("宏:(" _bizCurRemark ")", Format("tab{1} item{2} 开始执行", tIdx, iIdx))
+                    tableItem := GetTableByID(tIdx)
+                    if (!tableItem) {
+                        GraphPoolLog("Worker任务-表不存在", Format("tab={1} item={2}", tIdx, iIdx))
+                        continue
+                    }
+                    itemIndex := GetItemIndexInTable(tableItem, iIdx)
+                    item := tableItem.Items[itemIndex]
+                    _bizCurRemark := item ? item.Remark : ""
+                    RMTLogBusiness("宏:(" _bizCurRemark ")", Format("tab={1} item={2} 开始执行", tIdx, iIdx))
                     if (args.Length >= 3) {
                         nodeSerial := args[3]
                         GraphPoolLog("Worker开始执行", Format("tab={1} item={2} node={3}", tIdx, iIdx, nodeSerial))
-                        WalkGraphNode(tableItem, nodeSerial, iIdx)
+                        WalkGraphNode(tableItem, nodeSerial, itemIndex)
                     } else {
-                        TriggerMacro(tIdx, iIdx)
+                        TriggerMacro(tableItem, itemIndex)
                     }
                 }
             }
@@ -374,8 +380,12 @@
                     case "CT":
                         MySoftData.CMDTip := (args[1] == "1")
                     case "PS":
-                        tableItem := MySoftData.TableInfo[args[1]]
-                        tableItem.PauseArr[args[2]] := args[3]
+                        tableItem := GetTableByID(args[1])
+                        if (tableItem) {
+                            itemIndex := GetItemIndexInTable(tableItem, args[2])
+                            if (itemIndex >= 1)
+                                tableItem.Items[itemIndex].Pause := args[3]
+                        }
                     case "SA":
                         ; 新协议：name + GetArrayStr；旧协议：name + count + items...
                         if (args.Length == 2) {
@@ -409,8 +419,11 @@
                         currArr := GetArrayRefByPath(rootArr, args[2], &lastIdx)
                         currArr.RemoveAt(lastIdx)
                     case "ST":
-                        tableItem := MySoftData.TableInfo[args[1]]
-                        KillTableItemMacro(tableItem, args[2])
+                        tableItem := GetTableByID(args[1])
+                        if (tableItem) {
+                            itemIndex := GetItemIndexInTable(tableItem, args[2])
+                            KillTableItemMacro(tableItem, itemIndex)
+                        }
                         GraphPoolLog("Worker收到终止指令", Format("tab={1} item={2}", args[1], args[2]))
                     case "GA":
                         global graphBranchesAckKey, graphBranchesAckReceived
@@ -509,34 +522,61 @@
     }
 }
 
-;宏指令相关函数
+; 宏指令相关函数
 {
-    TriggerMacro(tableIndex, itemIndex) {
-        tableItem := MySoftData.TableInfo[tableIndex]
-        macro := tableItem.MacroArr[itemIndex]
+    ; 表身份 = TableItem 对象（主/Worker 内存同一结构）；Worker 协议回传用 ID。
+    ; itemIndex 可能是：数字下标 / MacroItem 对象 / ItemID 字符串 → 统一解析为 ItemID
+    WorkResolveItemID(tableItem, itemIndex) {
+        if (IsObject(itemIndex))
+            return itemIndex.ID
+        if (IsObject(tableItem) && IsNumber(itemIndex) && itemIndex >= 1 && itemIndex <= tableItem.Items.Length)
+            return tableItem.Items[itemIndex].ID
+        return String(itemIndex)
+    }
+
+    TriggerMacro(tableItem, itemIndex) {
+        if (!IsObject(tableItem))
+            tableItem := GetTableByID(String(tableItem))
+        if (!tableItem)
+            return
+        if (IsObject(itemIndex)) {
+            itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
+        } else if (!IsNumber(itemIndex)) {
+            itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
+        }
+        if (itemIndex < 1)
+            return
+        item := tableItem.Items[itemIndex]
+        macro := item ? item.Macro : ""
         OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
     }
 
-    WorkStopMacro(tableIndex, itemIndex) {
-        MsgSendHandler("StopMacro", tableIndex, itemIndex)
+    WorkStopMacro(tableItem, itemIndex) {
+        tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
+        iID := WorkResolveItemID(tableItem, itemIndex)
+        MsgSendHandler("StopMacro", tID, iID)
     }
 
-    WorkTriggerSubMacro(tableIndex, itemIndex) {
-        MsgSendHandler("TR_MACRO", tableIndex, itemIndex)
+    WorkTriggerSubMacro(tableItem, itemIndex) {
+        tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
+        iID := WorkResolveItemID(tableItem, itemIndex)
+        MsgSendHandler("TR_MACRO", tID, iID)
     }
 
-    WorkSubmitGraphBranches(tableIndex, itemIndex, branchCount, nodeSerialArr) {
+    WorkSubmitGraphBranches(tableItem, itemIndex, branchCount, nodeSerialArr) {
         global tx, workIndex, graphBranchesWaiting, graphBranchesAckKey, graphBranchesAckReceived, workerPendingTasks
+        tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
+        iID := WorkResolveItemID(tableItem, itemIndex)
         nodes := ""
         for s in nodeSerialArr
             nodes .= (nodes != "" ? "," : "") s
         GraphPoolLog("Worker批量请求分支", Format("tab={1} item={2} 总数={3} 子分支=[{4}]"
-            , tableIndex, itemIndex, branchCount, nodes))
-        graphBranchesAckKey := tableIndex "_" itemIndex
+            , tID, iID, branchCount, nodes))
+        graphBranchesAckKey := tID "_" iID
         graphBranchesAckReceived := false
         graphBranchesWaiting := true
         try {
-            MsgSendHandler("GraphMacroBranches", tableIndex, itemIndex, branchCount, nodeSerialArr)
+            MsgSendHandler("GraphMacroBranches", tID, iID, branchCount, nodeSerialArr)
             start := A_TickCount
             loop {
                 while (tx.Pop(&type, &id, &payload)) {
@@ -553,8 +593,8 @@
                                     if (record == "")
                                         continue
                                     parts := StrSplit(record, IPC_SEP)
-                                    if (parts.Length >= 3 && parts[1] == "GA" && parts[2] == tableIndex && parts[3] == itemIndex) {
-                                        GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tableIndex, itemIndex))
+                                    if (parts.Length >= 3 && parts[1] == "GA" && parts[2] == tID && parts[3] == iID) {
+                                        GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tID, iID))
                                         return
                                     }
                                 }
@@ -565,11 +605,11 @@
                     }
                 }
                 if (graphBranchesAckReceived) {
-                    GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tableIndex, itemIndex))
+                    GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tID, iID))
                     return
                 }
                 if (A_TickCount - start >= 3000) {
-                    GraphPoolLog("Worker等待分支分配超时", Format("tab={1} item={2}", tableIndex, itemIndex))
+                    GraphPoolLog("Worker等待分支分配超时", Format("tab={1} item={2}", tID, iID))
                     return
                 }
                 Sleep(10)
@@ -581,14 +621,28 @@
         }
     }
 
-    WorkSetTableItemState(tableIndex, itemIndex, state) {
-        MsgSendHandler("ItemState", tableIndex, itemIndex, state)
+    WorkSetTableItemState(tableItem, itemIndex, state) {
+        tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
+        iID := WorkResolveItemID(tableItem, itemIndex)
+        MsgSendHandler("ItemState", tID, iID, state)
     }
 
-    WorkSetItemPauseState(tableIndex, itemIndex, state) {
-        tableItem := MySoftData.TableInfo[tableIndex]
-        tableItem.PauseArr[itemIndex] := state
-        MsgSendHandler("PauseState", tableIndex, itemIndex, state)
+    WorkSetItemPauseState(tableItem, itemIndex, state) {
+        tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
+        iID := WorkResolveItemID(tableItem, itemIndex)
+        if (IsObject(tableItem) && IsNumber(itemIndex)) {
+            item := tableItem.Items[itemIndex]
+            if (item)
+                item.Pause := state
+        } else {
+            tableItemObj := GetTableByID(tID)
+            if (tableItemObj) {
+                itemIndexNum := GetItemIndexInTable(tableItemObj, iID)
+                if (itemIndexNum >= 1)
+                    tableItemObj.Items[itemIndexNum].Pause := state
+            }
+        }
+        MsgSendHandler("PauseState", tID, iID, state)
     }
 }
 

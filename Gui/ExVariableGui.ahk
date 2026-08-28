@@ -423,10 +423,16 @@ class ExVariableGui {
         this.SaveExVariableData()
         CommandStr := this.GetCommandStr()
         tableItem := MySoftData.SpecialTableItem
-        tableItem.KilledArr[1] := false
-        tableItem.PauseArr[1] := 0
-        tableItem.ActionCount[1] := 0
-        tableItem.index := 1
+        if (tableItem.Items.Length == 0) {
+            item := MacroItem()
+            item.ID := GetCMDSerialStr("Item")
+            tableItem.Items.Push(item)
+            tableItem.RebuildIndex()
+        }
+        item := tableItem.Items[1]
+        item.Killed := false
+        item.Pause := false
+        item.ActionCount := 0
         this.TestExVariable(this.Data)
     }
 

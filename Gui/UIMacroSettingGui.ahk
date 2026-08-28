@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 界面宏图标配置：XAML，颜色跟随通用主题
 class UIMacroSettingGui {
@@ -11,18 +11,18 @@ class UIMacroSettingGui {
         this._instanceKey := ""
         this.SureFocusCon := ""
         this.CurrentMacroIndex := 0
-        this.TableIndex := 0
+        this.TableItem := ""
         this.OriginalIconPath := ""
         this.StoredIconPath := ""
         this._pathText := ""
         this._editBtnStyle := ""
     }
 
-    ShowGui(tableIndex, macroIndex) {
-        this.TableIndex := tableIndex
+    ; 表身份 = TableItem 对象
+    ShowGui(tableItem, macroIndex) {
+        this.TableItem := tableItem
         this.CurrentMacroIndex := macroIndex
-        tableItem := MySoftData.TableInfo[tableIndex]
-        this.StoredIconPath := this.GetFullIconPath(tableItem.IcoPathArr[macroIndex])
+        this.StoredIconPath := this.GetFullIconPath(tableItem.Items[macroIndex].IcoPath)
         this.OriginalIconPath := this.StoredIconPath
         this._pathText := this.StoredIconPath
 
@@ -31,7 +31,7 @@ class UIMacroSettingGui {
             oldInst := UIMacroSettingGui.instances[key]
             hwnd := (IsObject(oldInst.ui) && oldInst.ui.HasProp("wpfHwnd")) ? oldInst.ui.wpfHwnd : 0
             if (!oldInst.closed && XAMLHost.CanReuseWindow(hwnd)) {
-                oldInst.TableIndex := tableIndex
+                oldInst.TableItem := tableItem
                 oldInst.CurrentMacroIndex := macroIndex
                 oldInst.StoredIconPath := this.StoredIconPath
                 oldInst.OriginalIconPath := this.OriginalIconPath
@@ -245,14 +245,12 @@ class UIMacroSettingGui {
 
     OnSureClick(state := unset, ctrl := unset, event := unset) {
         this.OnPathChanged(IsSet(state) ? state : unset)
-        tableItem := MySoftData.TableInfo[this.TableIndex]
+        tableItem := this.TableItem
         idx := this.CurrentMacroIndex
         finalPath := ""
         if (this.OriginalIconPath != "" && FileExist(this.OriginalIconPath))
             finalPath := this.CopyIconToImagesFolder(this.OriginalIconPath)
-        while (tableItem.IcoPathArr.Length < idx)
-            tableItem.IcoPathArr.Push("")
-        tableItem.IcoPathArr[idx] := finalPath
+        tableItem.Items[idx].IcoPath := finalPath
         this.Close()
     }
 

@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 class TriggerKeyData {
     __New(Key) {
@@ -75,7 +75,8 @@ class TriggerKeyData {
     }
 
     UpdateArrByFront(OriArr, ResArr) {
-        tableItem := MySoftData.TableInfo[1]
+        ; 仅用 MyMouseInfo 匹配前台窗口，不依赖具体表；保留 tableItem 占位避免空引用
+        tableItem := GetTableBySymbol("Normal")
         for index, value in OriArr {
             infoStr := value.GetFrontStr()
             realInfoStr := GetParamsWinInfoStr(infoStr)
@@ -209,9 +210,9 @@ class TriggerKeyData {
 class TriggerKeyInfo {
     __New() {
         this.macroType := 1     ; 1:按键/字串等 item  2:菜单宏 fold  3:界面宏 fold
-        this.tableIndex := 1    ;table索引
-        this.itemIndex := 1     ;item索引
-        this.foldIndex := 1     ;折叠框索引
+        this.tableID := ""      ;表唯一 ID
+        this.itemID := ""       ;条目唯一 ID（macroType==1）
+        this.foldID := ""       ;折叠框唯一 ID（macroType==2/3）
 
         this.forbidTrigger := false
     }
@@ -221,30 +222,57 @@ class TriggerKeyInfo {
         return this.macroType == 2 || this.macroType == 3
     }
 
+    ; 解析目标表对象（无则 ""）
+    GetTable() {
+        return GetTableByID(this.tableID)
+    }
+
+    ; 解析条目对象（macroType==1；无则 ""）
+    GetItem() {
+        if (this.macroType != 1)
+            return ""
+        t := GetTableByID(this.tableID)
+        return t ? t.GetItem(this.itemID) : ""
+    }
+
+    ; 解析折叠框对象（macroType==2/3；无则 ""）
+    GetFold() {
+        if (!this.IsFoldMacro())
+            return ""
+        t := GetTableByID(this.tableID)
+        return t ? t.GetFold(this.foldID) : ""
+    }
+
     GetFrontStr() {
-        tableItem := MySoftData.TableInfo[this.tableIndex]
-        if (this.macroType == 1)
-            return GetItemFrontInfo(tableItem, this.itemIndex)
-        if (this.IsFoldMacro())
-            return tableItem.FoldInfo.FrontInfoArr[this.foldIndex]
-        return ""
+        if (this.macroType == 1) {
+            t := GetTableByID(this.tableID)
+            item := this.GetItem()
+            if (!t || !item)
+                return ""
+            return GetItemFrontInfo(t, GetItemIndexInTable(t, item.ID))
+        }
+        fold := this.GetFold()
+        return fold ? fold.FrontInfo : ""
     }
 
     GetTK() {
-        tableItem := MySoftData.TableInfo[this.tableIndex]
-        if (this.macroType == 1)
-            return tableItem.TKArr[this.itemIndex]
-        if (this.IsFoldMacro())
-            return tableItem.FoldInfo.TKArr[this.foldIndex]
-        return ""
+        if (this.macroType == 1) {
+            item := this.GetItem()
+            return item ? item.TK : ""
+        }
+        fold := this.GetFold()
+        return fold ? fold.TK : ""
     }
 
     GetTriggerType() {      ;触发类型   "按下", "松开", "松止", "开关", "长按"
-        tableItem := MySoftData.TableInfo[this.tableIndex]
-        if (this.macroType == 1)
-            return tableItem.TriggerTypeArr[this.itemIndex]
-        if (this.macroType == 2)
-            return tableItem.FoldInfo.TKTypeArr[this.foldIndex]
+        if (this.macroType == 1) {
+            item := this.GetItem()
+            return item ? item.TriggerType : 1
+        }
+        if (this.macroType == 2) {
+            fold := this.GetFold()
+            return fold ? fold.TKType : 1
+        }
         ; 界面宏固定按「按下」切换面板（与 BindUIPanelHotKey 约定一致）
         if (this.macroType == 3)
             return 1
@@ -252,11 +280,14 @@ class TriggerKeyInfo {
     }
 
     GetHoldTime() {
-        tableItem := MySoftData.TableInfo[this.tableIndex]
-        if (this.macroType == 1)
-            return tableItem.HoldTimeArr[this.itemIndex]
-        if (this.macroType == 2)
-            return tableItem.FoldInfo.HoldTimeArr[this.foldIndex]
+        if (this.macroType == 1) {
+            item := this.GetItem()
+            return item ? item.HoldTime : 500
+        }
+        if (this.macroType == 2) {
+            fold := this.GetFold()
+            return fold ? fold.HoldTime : 500
+        }
         return 500
     }
 
@@ -265,17 +296,26 @@ class TriggerKeyInfo {
     }
 
     GetWorkState() {
-        tableItem := MySoftData.TableInfo[this.tableIndex]
-        if (this.macroType == 1)
-            return tableItem.IsWorkIndexArr[this.itemIndex]
-        if (this.macroType == 2)
-            return MainSoftData.CurMenuWheelIndex == this.foldIndex
+        if (this.macroType == 1) {
+            item := this.GetItem()
+            return item ? item.IsWorkIndex : false
+        }
+        if (this.macroType == 2) {
+            t := GetTableByID(this.tableID)
+            if (t) {
+                for f, fold in t.Folds {
+                    if (fold.ID == this.foldID)
+                        return MainSoftData.CurMenuWheelIndex == f
+                }
+            }
+            return false
+        }
         if (this.macroType == 3) {
             ; 有任意该模块面板可见则视为工作中（长按等逻辑用）
             if (!IsSet(MyUIMacroGui) || !IsObject(MyUIMacroGui))
                 return false
             for key, panelInfo in MyUIMacroGui.PanelMap {
-                if (panelInfo.foldIndex == this.foldIndex && panelInfo.visible)
+                if (panelInfo.foldID == this.foldID && panelInfo.visible)
                     return true
             }
             return false
@@ -286,47 +326,59 @@ class TriggerKeyInfo {
     Action() {
         if (this.forbidTrigger)
             return
-        tableItem := MySoftData.TableInfo[this.tableIndex]
         triggerType := this.GetTriggerType()
         if (this.macroType == 1) {
+            t := GetTableByID(this.tableID)
+            item := this.GetItem()
+            if (!t || !item)
+                return
+            itemIndex := GetItemIndexInTable(t, item.ID)
             if (triggerType == 4) {
                 ; 占用标记或 usePool 中仍有该宏的 Worker，都视为运行中 → 停止（避免脏标记导致误启动）
-                isRunning := tableItem.IsWorkIndexArr[this.itemIndex]
-                if (!isRunning && WorkPoolEnabled() && MyWorkPool.HasItemWork(this.tableIndex, this.itemIndex))
+                isRunning := item.IsWorkIndex
+                if (!isRunning && WorkPoolEnabled() && MyWorkPool.HasItemWork(t.ID, item.ID))
                     isRunning := true
                 if (isRunning) {
-                    MyStopMacro(this.tableIndex, this.itemIndex)
+                    MyStopMacro(t, itemIndex)
                     return
                 }
-                OnToggleTriggerMacro(this.tableIndex, this.itemIndex)
+                OnToggleTriggerMacro(t, itemIndex)
             }
             else
-                TriggerMacroHandler(this.tableIndex, this.itemIndex)
+                TriggerMacroHandler(t, itemIndex)
         }
         else if (this.macroType == 2) {
+            t := GetTableByID(this.tableID)
+            if (!t)
+                return
+            foldIndex := GetFoldIndexInTable(t, this.foldID)
             if (triggerType == 3)
                 this.forbidTrigger := true
-            OpenMenuWheel(this.foldIndex, triggerType == 4)
+            OpenMenuWheel(foldIndex, triggerType == 4)
         }
         else if (this.macroType == 3) {
             ; 界面宏：切换悬浮面板，绝不能误开菜单轮盘
             if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
-                MyUIMacroGui.TogglePanel(this.foldIndex)
+                MyUIMacroGui.TogglePanel(this.foldID)
         }
     }
 
     CancelAction() {
-        tableItem := MySoftData.TableInfo[this.tableIndex]
         triggerType := this.GetTriggerType()
         if (this.macroType == 1) {
             if (triggerType == 3) {
-                WorkerIndex := tableItem.IsWorkIndexArr[this.itemIndex]
+                t := GetTableByID(this.tableID)
+                item := this.GetItem()
+                if (!t || !item)
+                    return
+                itemIndex := GetItemIndexInTable(t, item.ID)
+                WorkerIndex := item.IsWorkIndex
                 if (WorkerIndex != 0) {
-                    MyStopMacro(this.tableIndex, this.itemIndex)
-                    tableItem.IsWorkIndexArr[this.itemIndex] := 0
+                    MyStopMacro(t, itemIndex)
+                    item.IsWorkIndex := 0
                     return
                 }
-                KillTableItemMacro(tableItem, this.itemIndex)
+                KillTableItemMacro(t, itemIndex)
             }
         }
         else if (this.macroType == 2) {

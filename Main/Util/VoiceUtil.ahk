@@ -320,14 +320,13 @@ class VoiceEngineMgr {
         this.enabledItems := []
         scanList := []
         for t in MySoftData.TableInfo {
-            if (!CheckIsItemTable(t.Index))
+            if (!CheckIsItemTable(GetTableIndexByID(t.ID)))
                 continue
-            ; 启用/禁用由主界面「禁用」（ForbidArr）控制：禁用则跳过；关键词非空即可作为唤醒词
-            loop t.ModeArr.Length {
-                i := A_Index
-                if (i <= t.ForbidArr.Length && t.ForbidArr[i])
+            ; 启用/禁用由主界面「禁用」（Forbid）控制：禁用则跳过；关键词非空即可作为唤醒词
+            for i, item in t.Items {
+                if (item.Forbid)
                     continue
-                kwStr := (i <= t.VoiceKeywordsArr.Length) ? t.VoiceKeywordsArr[i] : ""
+                kwStr := item.VoiceKeywords
                 if (kwStr == "")
                     continue
                 for kw in StrSplit(kwStr, ",") {
@@ -338,8 +337,8 @@ class VoiceEngineMgr {
                         ; 避免同关键词重复；仅保留第一处
                         continue
                     }
-                    this.keywordMap[kw] := t.Index "|" i
-                    scanList.Push([kw, t.Index, i])
+                    this.keywordMap[kw] := t.ID "|" item.ID
+                    scanList.Push([kw, t.ID, item.ID])
                 }
             }
         }
@@ -403,10 +402,12 @@ class VoiceEngineMgr {
     }
 
     _ScanToEngineList() {
+        ; 引擎（Start/Rebuild）只消费 entry[1]（关键词）；p1/p2 为表 ID / 条目 ID 字符串，透传不使用。
+        ; 注意：表身份已固定为 Symbol（如 "Voice"，不再是数字 t_xxx），不能对 p[1]/p[2] 做 Integer()。
         list := []
         for kw, loc in this.keywordMap {
             p := StrSplit(loc, "|")
-            list.Push([kw, Integer(p[1]), Integer(p[2])])
+            list.Push([kw, p[1], p[2]])
         }
         return list
     }
@@ -425,16 +426,18 @@ class VoiceEngineMgr {
         p := StrSplit(loc, "|")
         if (p.Length != 2)
             return
-        t := Integer(p[1]), i := Integer(p[2])
+        tableID := p[1], itemID := p[2]
         ; 触发时做合法性复查：宏存在、未禁用（主界面禁用开关）
-        tableItem := MySoftData.TableInfo[t]
-        if (i > tableItem.ModeArr.Length)
+        tableItem := GetTableByID(tableID)
+        item := GetItemGlobal(itemID)
+        if (!tableItem || !item)
             return
-        if (i <= tableItem.ForbidArr.Length && tableItem.ForbidArr[i])
+        if (item.Forbid)
             return
-        if (i > tableItem.VoiceKeywordsArr.Length || tableItem.VoiceKeywordsArr[i] == "")
+        if (item.VoiceKeywords == "")
             return
-        TriggerMacroHandler(t, i)
+        ; TriggerMacroHandler 内部用表对象定位（tableItem.Index 仅作 UI 槽位），身份=ID
+        TriggerMacroHandler(GetItemTableGlobal(itemID), item)
     }
 }
 
@@ -449,7 +452,8 @@ InitVoiceEngine() {
 
 ; 工具函数：获取某宏的语音触发配置（供 GUI/其它模块读取）
 GetItemVoiceKeywords(tableItem, index) {
-    enable := (index <= tableItem.VoiceTriggerArr.Length) && tableItem.VoiceTriggerArr[index]
-    kw := (index <= tableItem.VoiceKeywordsArr.Length) ? tableItem.VoiceKeywordsArr[index] : ""
-    return { Enable: enable ? 1 : 0, Keywords: kw }
+    item := tableItem.Items[index]
+    if (!item)
+        return { Enable: 0, Keywords: "" }
+    return { Enable: item.VoiceKeywords == "" ? 0 : 1, Keywords: item.VoiceKeywords }
 }

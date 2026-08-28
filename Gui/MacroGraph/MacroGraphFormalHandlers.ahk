@@ -95,10 +95,10 @@ class MacroGraphFormalHandlersMixin {
             data.CallType := this._FormalLangKeyFromCombo(callTypes, state["SubCallCmb_" id])
         if (state.Has("SubIdxCmb_" id) && state["SubIdxCmb_" id] != "") {
             data.Index := this._FormalParseListIndex(state["SubIdxCmb_" id])
-            tableIndex := GetTableIndex(data.MacroType)
             try {
-                if (tableIndex && MySoftData.TableInfo[tableIndex].SerialArr.Length >= data.Index)
-                    data.MacroSerial := MySoftData.TableInfo[tableIndex].SerialArr[data.Index]
+                tableItem := GetTableBySymbol(data.MacroType)
+                if (tableItem && tableItem.Items.Length >= data.Index)
+                    data.MacroSerial := tableItem.Items[data.Index].ID
             }
         }
         if (state.Has("SubIns_" id) && state["SubIns_" id] != "")

@@ -58,40 +58,39 @@ class UIMacroGui {
 
     ; ========== 面板管理（严格对齐 floating_panel.ahk） ==========
 
+    ; 获取界面宏表 + 折叠框 + 折叠框内条目（统一入口，避免各处重复 TableInfo[4]/IndexSpan）
+    _GetFoldContext(foldIndex) {
+        tableItem := GetTableBySymbol("UI")
+        if (!tableItem)
+            return ""
+        fold := tableItem.Folds[foldIndex]
+        if (!fold)
+            return ""
+        return { tableItem: tableItem, fold: fold, items: GetFoldItems(tableItem, fold) }
+    }
+
     ; 创建面板入口（对齐 CreateFloatingPanel L182-265）
     CreatePanel(foldIndex) {
-        tableItem := MySoftData.TableInfo[4]
-        if (!tableItem || !tableItem.FoldInfo)
+        ctx := this._GetFoldContext(foldIndex)
+        if (!ctx || ctx.items.Length == 0)
             return
-
-        foldInfo := tableItem.FoldInfo
-        if (foldIndex > foldInfo.RemarkArr.Length)
-            return
+        tableItem := ctx.tableItem
+        fold := ctx.fold
 
         if (this.PanelMap.Has(foldIndex))
             this.DestroyPanel(foldIndex)
 
-        indexSpanStr := foldInfo.IndexSpanArr[foldIndex]
-        indexSpan := StrSplit(indexSpanStr, "-")
-        if (!IsInteger(indexSpan[1]) || !IsInteger(indexSpan[2]))
-            return
-
-        startIndex := Integer(indexSpan[1])
-        endIndex := Integer(indexSpan[2])
-
         btnItems := []
-        Loop (endIndex - startIndex + 1) {
-            macroIndex := startIndex + A_Index - 1
-            if (macroIndex > tableItem.RemarkArr.Length)
-                continue
-            if (Integer(tableItem.ForbidArr[macroIndex]) = 1)
+        for i, item in ctx.items {
+            if (item.Forbid)
                 continue
 
-            remarkValue := tableItem.RemarkArr[macroIndex]
-            iconValue := tableItem.IcoPathArr[macroIndex]
-            btnText := remarkValue == "" ? GetLang("操作") A_Index : remarkValue
+            remarkValue := item.Remark
+            iconValue := item.IcoPath
+            btnText := remarkValue == "" ? GetLang("操作") i : remarkValue
             displayIcon := iconValue == "" ? "" : iconValue
 
+            macroIndex := GetItemIndexInTable(tableItem, item.ID)
             btnItems.Push({
                 name: "Btn_" macroIndex,
                 text: btnText,
@@ -104,7 +103,7 @@ class UIMacroGui {
             return
 
         ; 解析目标窗口（对齐 floating_panel 的 targetB_Hwnd）
-        frontInfo := foldInfo.FrontInfoArr[foldIndex]
+        frontInfo := fold.FrontInfo
         targetHwnd := 0
         isScreenMode := true
 
@@ -149,35 +148,26 @@ class UIMacroGui {
         if (this.IsUserClosed(panelKey))
             return
 
-        tableItem := MySoftData.TableInfo[4]
-        if (!tableItem || !tableItem.FoldInfo)
+        ctx := this._GetFoldContext(foldIndex)
+        if (!ctx || ctx.items.Length == 0)
             return
+        tableItem := ctx.tableItem
+        fold := ctx.fold
 
-        foldInfo := tableItem.FoldInfo
-        if (foldIndex > foldInfo.RemarkArr.Length)
-            return
-
-        indexSpanStr := foldInfo.IndexSpanArr[foldIndex]
-        indexSpan := StrSplit(indexSpanStr, "-")
-        if (!IsInteger(indexSpan[1]) || !IsInteger(indexSpan[2]))
-            return
-
-        startIndex := Integer(indexSpan[1])
-        endIndex := Integer(indexSpan[2])
+        if (this.PanelMap.Has(foldIndex))
+            this.DestroyPanel(foldIndex)
 
         btnItems := []
-        Loop (endIndex - startIndex + 1) {
-            macroIndex := startIndex + A_Index - 1
-            if (macroIndex > tableItem.RemarkArr.Length)
-                continue
-            if (Integer(tableItem.ForbidArr[macroIndex]) = 1)
+        for i, item in ctx.items {
+            if (item.Forbid)
                 continue
 
-            remarkValue := tableItem.RemarkArr[macroIndex]
-            iconValue := tableItem.IcoPathArr[macroIndex]
-            btnText := remarkValue == "" ? GetLang("操作") A_Index : remarkValue
+            remarkValue := item.Remark
+            iconValue := item.IcoPath
+            btnText := remarkValue == "" ? GetLang("操作") i : remarkValue
             displayIcon := iconValue == "" ? "" : iconValue
 
+            macroIndex := GetItemIndexInTable(tableItem, item.ID)
             btnItems.Push({
                 name: "Btn_" macroIndex,
                 text: btnText,
@@ -271,8 +261,9 @@ class UIMacroGui {
         titleText := MainSoftData.UIPanelTitleText
         fontSize := Integer(MainSoftData.UIPanelFontSize)
 
-        tableItem := MySoftData.TableInfo[4]
-        foldRemark := tableItem.FoldInfo.RemarkArr[foldIndex]
+        tableItem := GetTableBySymbol("UI")
+        fold := tableItem ? tableItem.Folds[foldIndex] : ""
+        foldRemark := fold ? fold.Remark : ""
 
         rows := Ceil(btnItems.Length / cols)
         contentH := rows * btnItemH + (rows - 1) * btnGap + bodyMarginV
@@ -415,7 +406,7 @@ class UIMacroGui {
             foldIndex: foldIndex,
             targetHwnd: targetHwnd,
             isScreenMode: isScreenMode,
-            frontInfo: tableItem.FoldInfo.FrontInfoArr[foldIndex],
+            frontInfo: fold ? fold.FrontInfo : "",
             visible: true,
             btnItems: btnItems,
             anchorPos: MainSoftData.UIPanelDefaultPos,
@@ -590,11 +581,14 @@ class UIMacroGui {
         if (this.IsCreating)
             return
 
-        tableItem := MySoftData.TableInfo[4]
+        tableItem := GetTableBySymbol("UI")
         ; 每次触发实时读取，避免编辑前台后仍用旧判断
         frontInfo := ""
-        if (tableItem && tableItem.FoldInfo && foldIndex <= tableItem.FoldInfo.FrontInfoArr.Length)
-            frontInfo := tableItem.FoldInfo.FrontInfoArr[foldIndex]
+        if (tableItem) {
+            fold := tableItem.Folds[foldIndex]
+            if (fold)
+                frontInfo := fold.FrontInfo
+        }
 
         targetHwnd := 0
         panelKey := foldIndex
@@ -796,14 +790,13 @@ class UIMacroGui {
                 if (activeHwnd != this._lastActiveHwnd) {
                     this._lastActiveHwnd := activeHwnd
 
-                    tableItem := MySoftData.TableInfo[4]
-                    if (tableItem && tableItem.FoldInfo) {
-                        foldInfo := tableItem.FoldInfo
-                        for foldIndex, _ in foldInfo.IndexSpanArr {
-                            if (foldInfo.ForbidStateArr[foldIndex])
+                    tableItem := GetTableBySymbol("UI")
+                    if (tableItem) {
+                        for foldIndex, fold in tableItem.Folds {
+                            if (fold.ForbidState)
                                 continue
 
-                            frontInfo := foldInfo.FrontInfoArr[foldIndex]
+                            frontInfo := fold.FrontInfo
                             if (frontInfo == "") {
                                 ; 无前台模块（屏幕模式）：仅当 RMT 主界面被激活时才创建/显示，
                                 ; 避免点击任务栏或切到其它任意窗口也把已关闭的浮窗重新弹出。
@@ -866,11 +859,12 @@ class UIMacroGui {
 
     OnButtonClick(macroIndex, foldIndex, *) {
         try {
-            tableItem := MySoftData.TableInfo[4]
-            if (Integer(tableItem.ForbidArr[macroIndex]) = 1)
+            tableItem := GetTableBySymbol("UI")
+            item := tableItem ? tableItem.Items[macroIndex] : ""
+            if (!item || item.Forbid)
                 return
 
-            if (!tableItem.MacroArr[macroIndex] || tableItem.MacroArr[macroIndex] == "")
+            if (!item.Macro)
                 return
 
             if (this.IsMacroRunning(macroIndex)) {
@@ -919,8 +913,11 @@ class UIMacroGui {
         if (this.IsMacroRunning(macroIndex))
             return
 
-        tableItem := MySoftData.TableInfo[4]
-        macroStr := tableItem.MacroArr[macroIndex]
+        tableItem := GetTableBySymbol("UI")
+        item := tableItem ? tableItem.Items[macroIndex] : ""
+        if (!item)
+            return
+        macroStr := item.Macro
 
         this.CancelRecoverTimer(macroIndex)
 
@@ -932,22 +929,25 @@ class UIMacroGui {
 
         this.RunningMap[macroIndex] := {IsRunning: true, TimerAction: action}
         SetTimer(action, -1)
-        MySetTableItemState(4, macroIndex, UIMacroGui.STATE_RUNNING)
+        MySetTableItemState(tableItem, macroIndex, UIMacroGui.STATE_RUNNING)
         this.UpdateButtonStatus(macroIndex, UIMacroGui.STATE_RUNNING)
     }
 
     StopMacro(macroIndex) {
-        tableItem := MySoftData.TableInfo[4]
+        tableItem := GetTableBySymbol("UI")
 
         this.CancelRecoverTimer(macroIndex)
 
-        tableItem.KilledArr[macroIndex] := true
-        tableItem.PauseArr[macroIndex] := false
+        if (tableItem && tableItem.Items.Has(macroIndex)) {
+            item := tableItem.Items[macroIndex]
+            item.Killed := true
+            item.Pause := false
+        }
 
         if (this.RunningMap.Has(macroIndex))
             this.RunningMap.Delete(macroIndex)
 
-        MySetTableItemState(4, macroIndex, UIMacroGui.STATE_STOPPED)
+        MySetTableItemState(tableItem, macroIndex, UIMacroGui.STATE_STOPPED)
         this.UpdateButtonStatus(macroIndex, UIMacroGui.STATE_STOPPED)
     }
 
@@ -955,7 +955,9 @@ class UIMacroGui {
         if (this.IsMacroRunning(macroIndex)) {
             this.RunningMap.Delete(macroIndex)
             this.CancelRecoverTimer(macroIndex)
-            MySetTableItemState(4, macroIndex, UIMacroGui.STATE_DEFAULT)
+            tableItem := GetTableBySymbol("UI")
+            if (tableItem)
+                MySetTableItemState(tableItem, macroIndex, UIMacroGui.STATE_DEFAULT)
             this.UpdateButtonStatus(macroIndex, UIMacroGui.STATE_DEFAULT)
         }
     }

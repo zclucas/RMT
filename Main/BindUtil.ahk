@@ -91,10 +91,9 @@ OnPauseHotKey(*) {
     MainSoftData.IsPause := !MainSoftData.IsPause
     UIControls.PauseToggle.Value := MainSoftData.IsPause
 
-    loop MySoftData.TableInfo.Length {
-        tableItem := MySoftData.TableInfo[A_Index]
-        for index, value in tableItem.ModeArr {
-            SetItemPauseState(tableItem.index, index, MainSoftData.IsPause)
+    for tableItem in MySoftData.TableInfo {
+        for index, item in tableItem.Items {
+            SetItemPauseState(tableItem, index, MainSoftData.IsPause)
         }
     }
 
@@ -113,21 +112,22 @@ OnPauseHotKey(*) {
     if (MySoftData.CMDTip)
         MyCMDReportAciton(tipStr)
 
-    MySoftData.SpecialTableItem.PauseArr[1] := MainSoftData.IsPause
+    if (MySoftData.SpecialTableItem.Items.Length >= 1)
+        MySoftData.SpecialTableItem.Items[1].Pause := MainSoftData.IsPause
 }
 
 SetPauseState(state) {
     UIControls.PauseToggle.Value := state
     MainSoftData.IsPause := state
 
-    loop MySoftData.TableInfo.Length {
-        tableItem := MySoftData.TableInfo[A_Index]
-        for index, value in tableItem.ModeArr {
-            SetItemPauseState(tableItem.index, index, state)
+    for tableItem in MySoftData.TableInfo {
+        for index, item in tableItem.Items {
+            SetItemPauseState(tableItem, index, state)
         }
     }
 
-    MySoftData.SpecialTableItem.PauseArr[1] := state
+    if (MySoftData.SpecialTableItem.Items.Length >= 1)
+        MySoftData.SpecialTableItem.Items[1].Pause := state
 }
 
 OnKillAllMacro(*) {
@@ -138,11 +138,10 @@ OnKillAllMacro(*) {
     MySoftData.MacroRunningCount := 0
     UpdateMacroRunningCount(0, 0)
 
-    loop MySoftData.TableInfo.Length {
-        tableItem := MySoftData.TableInfo[A_Index]
-        loop tableItem.ColorStateArr.Length {
-            if (tableItem.ColorStateArr[A_Index] == 1 || tableItem.ColorStateArr[A_Index] == 2) {
-                MyStopMacro(tableItem.Index, A_Index)
+    for tableItem in MySoftData.TableInfo {
+        for index, item in tableItem.Items {
+            if (item.ColorState == 1 || item.ColorState == 2) {
+                MyStopMacro(tableItem, index)
             }
         }
     }
@@ -408,12 +407,14 @@ OnExitSoft(*) {
 }
 
 BindMenuHotKey() {
-    FoldInfo := MySoftData.TableInfo[3].FoldInfo
-    for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
-        if (FoldInfo.ForbidStateArr[Index] || FoldInfo.TKArr[index] == "")
+    tableItem := GetTableBySymbol("Menu")
+    if (!tableItem)
+        return
+    for index, fold in tableItem.Folds {
+        if (fold.ForbidState || fold.TK == "")
             continue
 
-        oriKey := FoldInfo.TKArr[index]
+        oriKey := fold.TK
         isCombo := IsComboKey(oriKey)
         if (isCombo) {
             key := oriKey
@@ -423,7 +424,7 @@ BindMenuHotKey() {
         }
         actionArr := GetBindMacroAction(oriKey)
         isJoyKey := RegExMatch(oriKey, "Joy")
-        frontInfo := FoldInfo.FrontInfoArr[index]
+        frontInfo := fold.FrontInfo
         realFrontStr := GetParamsWinInfoStr(frontInfo)
 
         if (realFrontStr != "") {
@@ -442,9 +443,7 @@ BindMenuHotKey() {
                     Hotkey(key " up", actionArr[2])
 
                 ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
-                while (FoldInfo.UnorderedTriggerArr.Length < index)
-                    FoldInfo.UnorderedTriggerArr.Push(false)
-                if (isCombo && !FoldInfo.UnorderedTriggerArr[index]) {
+                if (isCombo && !fold.UnorderedTrigger) {
                     reversedKey := GetReversedComboKey(oriKey)
                     if (reversedKey != "") {
                         try {
@@ -471,21 +470,20 @@ BindMenuHotKey() {
 ; 不可单独 Hotkey→TogglePanel：与按键宏共用同一键时会被 BindTabHotKey 覆盖，
 ; 且旧逻辑在 TriggerKeyInfo 里误把 macroType=3 当成菜单宏打开轮盘。
 BindUIPanelHotKey() {
-    tableItem := MySoftData.TableInfo[4]
-    if (!tableItem || !tableItem.FoldInfo)
+    tableItem := GetTableBySymbol("UI")
+    if (!tableItem)
         return
 
-    FoldInfo := tableItem.FoldInfo
-    for Index, IndexSpanStr in FoldInfo.IndexSpanArr {
-        if (FoldInfo.ForbidStateArr[Index] || FoldInfo.TKArr[Index] == "")
+    for index, fold in tableItem.Folds {
+        if (fold.ForbidState || fold.TK == "")
             continue
 
-        oriKey := FoldInfo.TKArr[Index]
+        oriKey := fold.TK
         isCombo := IsComboKey(oriKey)
         key := isCombo ? oriKey : ("$*" oriKey)
         actionArr := GetBindMacroAction(oriKey)
         isJoyKey := RegExMatch(oriKey, "Joy")
-        frontInfo := FoldInfo.FrontInfoArr[Index]
+        frontInfo := fold.FrontInfo
         realFrontStr := GetParamsWinInfoStr(frontInfo)
 
         if (realFrontStr != "")
@@ -519,26 +517,27 @@ BindTabHotKey() {
     ; 预计算缓存Map（避免重复的字符串处理和正则匹配）
     keyCache := Map()
 
-    loop MainSoftData.TabNameArr.Length {
+    loop MySoftData.TableInfo.Length {
         tableItem := MySoftData.TableInfo[A_Index]
         tableIndex := A_Index
-        canBind := tableIndex == 1 || tableIndex == 2 || tableIndex == 7
+        symbol := tableItem.Symbol
+        canBind := symbol == "Normal" || symbol == "String" || symbol == "SubMacro"
         if (!canBind)
             continue
 
-        for index, value in tableItem.ModeArr {
-            ; 优化：一次调用获取所有Fold信息（避免重复遍历IndexSpanArr）
+        for index, item in tableItem.Items {
+            ; 优化：一次调用获取所有Fold信息（避免重复遍历Folds）
             foldData := GetItemFoldData(tableItem, index)
             if (foldData.forbidState)
                 continue
 
-            if (tableItem.TKArr[index] == "" || tableItem.ForbidArr[index])
+            if (item.TK == "" || item.Forbid)
                 continue
 
-            if (tableItem.MacroArr[index] == "")
+            if (item.Macro == "")
                 continue
 
-            rawKey := tableItem.TKArr[index]
+            rawKey := item.TK
 
             ; 使用缓存避免重复计算
             cacheKey := rawKey "|" tableIndex "|" index
@@ -585,7 +584,7 @@ BindTabHotKey() {
                         Hotkey(key " up", actionArr[2], "On")
 
                     ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
-                    if (cache.isCombo && !tableItem.UnorderedTriggerArr[index]) {
+                    if (cache.isCombo && !item.UnorderedTrigger) {
                         reversedKey := GetReversedComboKey(rawKey)
                         if (reversedKey != "") {
                             try {
@@ -614,88 +613,89 @@ BindTabHotKey() {
 
 InitTriggerKeyMap() {
     MySoftData.TriggerKeyMap := Map()
-    tableItem := MySoftData.TableInfo[1]
-    for index, value in tableItem.ModeArr {
-        if (GetItemFoldForbidState(tableItem, index))
-            continue
-
-        if (tableItem.TKArr[index] == "" || tableItem.ForbidArr[index])
-            continue
-
-        if (tableItem.MacroArr[index] == "")
-            continue
-
-        key := LTrim(tableItem.TKArr[index], "~")
-        key := StrLower(key)
-        if (!MySoftData.TriggerKeyMap.Has(key)) {
-            MySoftData.TriggerKeyMap[key] := TriggerKeyData(key)
-        }
-        info := TriggerKeyInfo()
-        info.macroType := 1
-        info.tableIndex := tableItem.Index
-        info.itemIndex := index
-        MySoftData.TriggerKeyMap[key].AddData(info)
-
-        ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
-        if (!tableItem.UnorderedTriggerArr[index]) {
-            reversedRaw := GetReversedComboKey(tableItem.TKArr[index])
-            if (reversedRaw != "") {
-                reversedKey := LTrim(reversedRaw, "~")
-                reversedKey := StrLower(reversedKey)
-                if (!MySoftData.TriggerKeyMap.Has(reversedKey)) {
-                    MySoftData.TriggerKeyMap[reversedKey] := MySoftData.TriggerKeyMap[key]
-                }
-            }
-        }
-    }
-
-    tableItem := MySoftData.TableInfo[3]
-    FoldInfo := tableItem.FoldInfo
-    for index, IndexSpanStr in FoldInfo.IndexSpanArr {
-        if (FoldInfo.ForbidStateArr[index] || FoldInfo.TKArr[index] == "")
-            continue
-        key := LTrim(FoldInfo.TKArr[index], "~")
-        key := StrLower(key)
-        if (!MySoftData.TriggerKeyMap.Has(key)) {
-            MySoftData.TriggerKeyMap[key] := TriggerKeyData(key)
-        }
-        info := TriggerKeyInfo()
-        info.tableIndex := tableItem.Index
-        info.macroType := 2
-        info.foldIndex := index
-        MySoftData.TriggerKeyMap[key].AddData(info)
-
-        ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
-        while (FoldInfo.UnorderedTriggerArr.Length < index)
-            FoldInfo.UnorderedTriggerArr.Push(false)
-        if (!FoldInfo.UnorderedTriggerArr[index]) {
-            reversedRaw := GetReversedComboKey(FoldInfo.TKArr[index])
-            if (reversedRaw != "") {
-                reversedKey := LTrim(reversedRaw, "~")
-                reversedKey := StrLower(reversedKey)
-                if (!MySoftData.TriggerKeyMap.Has(reversedKey)) {
-                    MySoftData.TriggerKeyMap[reversedKey] := MySoftData.TriggerKeyMap[key]
-                }
-            }
-        }
-    }
-
-    ; 界面宏(TableIndex==4)的Fold触发键（悬浮面板切换）
-    tableItem := MySoftData.TableInfo[4]
-    if (tableItem && tableItem.FoldInfo) {
-        uiFoldInfo := tableItem.FoldInfo
-        for index, IndexSpanStr in uiFoldInfo.IndexSpanArr {
-            if (uiFoldInfo.ForbidStateArr[index] || uiFoldInfo.TKArr[index] == "")
+    tableItem := GetTableBySymbol("Normal")
+    if (tableItem) {
+        for index, item in tableItem.Items {
+            if (GetItemFoldForbidState(tableItem, index))
                 continue
-            key := LTrim(uiFoldInfo.TKArr[index], "~")
+
+            if (item.TK == "" || item.Forbid)
+                continue
+
+            if (item.Macro == "")
+                continue
+
+            key := LTrim(item.TK, "~")
             key := StrLower(key)
             if (!MySoftData.TriggerKeyMap.Has(key)) {
                 MySoftData.TriggerKeyMap[key] := TriggerKeyData(key)
             }
             info := TriggerKeyInfo()
-            info.tableIndex := tableItem.Index
+            info.macroType := 1
+            info.tableID := tableItem.ID
+            info.itemID := item.ID
+            MySoftData.TriggerKeyMap[key].AddData(info)
+
+            ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
+            if (!item.UnorderedTrigger) {
+                reversedRaw := GetReversedComboKey(item.TK)
+                if (reversedRaw != "") {
+                    reversedKey := LTrim(reversedRaw, "~")
+                    reversedKey := StrLower(reversedKey)
+                    if (!MySoftData.TriggerKeyMap.Has(reversedKey)) {
+                        MySoftData.TriggerKeyMap[reversedKey] := MySoftData.TriggerKeyMap[key]
+                    }
+                }
+            }
+        }
+    }
+
+    ; 菜单宏：模块级（折叠框）触发键
+    tableItem := GetTableBySymbol("Menu")
+    if (tableItem) {
+        for index, fold in tableItem.Folds {
+            if (fold.ForbidState || fold.TK == "")
+                continue
+            key := LTrim(fold.TK, "~")
+            key := StrLower(key)
+            if (!MySoftData.TriggerKeyMap.Has(key)) {
+                MySoftData.TriggerKeyMap[key] := TriggerKeyData(key)
+            }
+            info := TriggerKeyInfo()
+            info.tableID := tableItem.ID
+            info.macroType := 2
+            info.foldID := fold.ID
+            MySoftData.TriggerKeyMap[key].AddData(info)
+
+            ; 顺序触发（默认无序）：将反向组合键也加入映射；勾选顺序时不加
+            if (!fold.UnorderedTrigger) {
+                reversedRaw := GetReversedComboKey(fold.TK)
+                if (reversedRaw != "") {
+                    reversedKey := LTrim(reversedRaw, "~")
+                    reversedKey := StrLower(reversedKey)
+                    if (!MySoftData.TriggerKeyMap.Has(reversedKey)) {
+                        MySoftData.TriggerKeyMap[reversedKey] := MySoftData.TriggerKeyMap[key]
+                    }
+                }
+            }
+        }
+    }
+
+    ; 界面宏的Fold触发键（悬浮面板切换）
+    tableItem := GetTableBySymbol("UI")
+    if (tableItem) {
+        for index, fold in tableItem.Folds {
+            if (fold.ForbidState || fold.TK == "")
+                continue
+            key := LTrim(fold.TK, "~")
+            key := StrLower(key)
+            if (!MySoftData.TriggerKeyMap.Has(key)) {
+                MySoftData.TriggerKeyMap[key] := TriggerKeyData(key)
+            }
+            info := TriggerKeyInfo()
+            info.tableID := tableItem.ID
             info.macroType := 3  ; 界面宏面板类型
-            info.foldIndex := index
+            info.foldID := fold.ID
             MySoftData.TriggerKeyMap[key].AddData(info)
         }
     }
@@ -703,8 +703,9 @@ InitTriggerKeyMap() {
 
 GetMacroAction(tableIndex, index) {
     tableItem := MySoftData.TableInfo[tableIndex]
-    macro := tableItem.MacroArr[index]
-    tableSymbol := GetTableSymbol(tableIndex)
+    item := tableItem.Items[index]
+    macro := item.Macro
+    tableSymbol := tableItem.Symbol
     actionDown := ""
     actionUp := ""
 
@@ -724,7 +725,8 @@ GetMacroAction(tableIndex, index) {
 
 OnTriggerKeyDown(tableIndex, itemIndex, *) {
     tableItem := MySoftData.TableInfo[tableIndex]
-    rawTK := tableItem.TKArr[itemIndex]
+    item := tableItem.Items[itemIndex]
+    rawTK := item.TK
     key := LTrim(rawTK, "~")
     key := StrLower(key)
 
@@ -737,7 +739,8 @@ OnTriggerKeyDown(tableIndex, itemIndex, *) {
 
 OnTriggerKeyUp(tableIndex, itemIndex, *) {
     tableItem := MySoftData.TableInfo[tableIndex]
-    key := LTrim(tableItem.TKArr[itemIndex], "~")
+    item := tableItem.Items[itemIndex]
+    key := LTrim(item.TK, "~")
     key := StrLower(key)
     if (!MySoftData.TriggerKeyMap.Has(key))
         return
@@ -775,55 +778,84 @@ OnBindKeyUp(key, *) {
     Data.OnTriggerKeyUp()
 }
 
-OnToggleTriggerMacro(tableIndex, itemIndex) {
-    tableItem := MySoftData.TableInfo[tableIndex]
-    macro := tableItem.MacroArr[itemIndex]
+; 开关触发：表身份=TableItem 对象
+OnToggleTriggerMacro(tableItem, itemIndex) {
+    if (!IsObject(tableItem))
+        tableItem := GetTableByID(String(tableItem))
+    if (!tableItem)
+        return
+    if (IsObject(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
+    }
+    item := tableItem.Items[itemIndex]
+    if (!item)
+        return
+    macro := item.Macro
+    tableID := tableItem.ID
+    itemID := item.ID
 
     if (WorkPoolEnabled()) {
-        SetTableItemState(tableItem.Index, itemIndex, 1)
-        MyWorkPool.PrepareItemRun(tableIndex, itemIndex)
-        GraphPoolLog("宏触发", Format("tab={1} item={2} 来源=开关", tableIndex, itemIndex))
-        cmd := EncodeBatch(EncodeCommand("TR", tableIndex, itemIndex))
-        MyWorkPool.Submit(cmd, tableIndex, itemIndex)
-        tableItem.IsWorkIndexArr[itemIndex] := true
+        SetTableItemState(tableItem, itemIndex, 1)
+        MyWorkPool.PrepareItemRun(tableID, itemID)
+        GraphPoolLog("宏触发", Format("tab={1} item={2} 来源=开关", tableID, itemID))
+        cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID))
+        MyWorkPool.Submit(cmd, tableID, itemID)
+        item.IsWorkIndex := true
         return
     }
 
-    isTrigger := tableItem.ToggleStateArr[itemIndex]
+    isTrigger := item.ToggleState
     if (!isTrigger) {
-        tableItem.ToggleStateArr[itemIndex] := true
-        SetTableItemState(tableItem.index, itemIndex, 1)
+        item.ToggleState := true
+        SetTableItemState(tableItem, itemIndex, 1)
         action := OnTriggerMacroKeyAndInit.Bind(tableItem, macro, itemIndex)
-        tableItem.ToggleActionArr[itemIndex] := action
+        item.ToggleAction := action
         SetTimer(action, -1)
     }
     else {
-        action := tableItem.ToggleActionArr[itemIndex]
+        action := item.ToggleAction
         if (action == "")
             return
 
         KillTableItemMacro(tableItem, itemIndex)
-        SetTableItemState(tableItem.index, itemIndex, 3)
+        SetTableItemState(tableItem, itemIndex, 3)
         SetTimer(action, 0)
     }
 }
 
-TriggerMacroHandler(tableIndex, itemIndex, *) {
-    tableItem := MySoftData.TableInfo[tableIndex]
-    macro := tableItem.MacroArr[itemIndex]
-    isWork := tableItem.IsWorkIndexArr[itemIndex]
-    if (isWork && MyWorkPool != "" && IsObject(MyWorkPool) && MyWorkPool.HasItemWork(tableIndex, itemIndex))
+; 触发宏入口：表身份=TableItem 对象（位置不代表身份）
+TriggerMacroHandler(tableItem, itemIndex, *) {
+    if (!IsObject(tableItem))
+        tableItem := GetTableByID(String(tableItem))
+    if (!tableItem)
+        return
+    if (IsObject(itemIndex)) {
+        itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
+    } else if (!IsNumber(itemIndex)) {
+        ; 字符串 ItemID（跨模块 ID 引用）
+        itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
+    }
+    if (itemIndex < 1)
+        return
+    item := tableItem.Items[itemIndex]
+    if (!item)
+        return
+    macro := item.Macro
+    tableID := tableItem.ID
+    itemID := item.ID
+    isWork := item.IsWorkIndex
+    if (isWork && MyWorkPool != "" && IsObject(MyWorkPool) && MyWorkPool.HasItemWork(tableID, itemID))
         return
 
-    SetTableItemState(tableItem.Index, itemIndex, 1)
+    SetTableItemState(tableItem, itemIndex, 1)
     if (WorkPoolEnabled()) {
         if (isWork)
-            GraphPoolLog("宏触发恢复", Format("tab={1} item={2} 清理上次残留", tableIndex, itemIndex))
-        MyWorkPool.PrepareItemRun(tableIndex, itemIndex)
-        GraphPoolLog("宏触发", Format("tab={1} item={2}", tableIndex, itemIndex))
-        cmd := EncodeBatch(EncodeCommand("TR", tableIndex, itemIndex))
-        MyWorkPool.Submit(cmd, tableIndex, itemIndex)
-        tableItem.IsWorkIndexArr[itemIndex] := true
+            GraphPoolLog("宏触发恢复", Format("tab={1} item={2} 清理上次残留", tableID, itemID))
+        MyWorkPool.PrepareItemRun(tableID, itemID)
+        GraphPoolLog("宏触发", Format("tab={1} item={2}", tableID, itemID))
+        cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID))
+        MyWorkPool.Submit(cmd, tableID, itemID)
+        item.IsWorkIndex := true
         return
     }
     OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)

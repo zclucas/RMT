@@ -144,18 +144,34 @@ class MainWin {
         this._linkQueue := []
         ; 每页已渲染的宏条目索引（供 RefreshItemColorUI 判断是否需更新色点）
         this.RenderedItems := Map()
-        ; Epic5 虚拟列表：宏/模块显示区（tab1-7）全走 _vl 渲染（模板已支持全部表类型：
+        ; Epic5 虚拟列表：宏/模块显示区全走 _vl 渲染（模板已支持全部表类型：
         ; Normal/String/Menu/UI/Timing/SubMacro/Replace 的标志行 + IsEnabled 绑定），
         ; 结构操作（增删/折叠/上下移）只发 VL_INIT/VL_FOLD/VL_MOVE 增量命令，不再整表重建，
-        ; tab1-8 宏页走虚拟列表；tab9-13 非宏页走 Panel_ 不受影响
+        ; 宏页走虚拟列表；非宏页（Tool/Setting/Help/Reward/Thank）走 Panel_ 不受影响
         this._vl := ""
+        ; 注意：TableInfo 在 LoadCurMacroSetting 之后才填充（本类在 include 阶段实例化），
+        ; _useVirtual 由 BuildAndShow 调用 _InitUseVirtual() 惰性构建
         this._useVirtual := Map()
-        loop 8 {
-            this._useVirtual[A_Index] := true
+        this._useVirtualBuilt := false
+    }
+
+    ; 惰性构建虚拟表集合（须在 LoadCurMacroSetting 之后调用）
+    _InitUseVirtual() {
+        if (this._useVirtualBuilt)
+            return
+        this._useVirtual := Map()
+        for t in MySoftData.TableInfo {
+            if (CheckIsItemTable(t.Index))
+                this._useVirtual[t.Index] := true
         }
+        this._useVirtualBuilt := true
     }
 
     BuildAndShow() {
+        this._InitUseVirtual()
+        ; 动态表集合：配置持久化的 TableIndex 可能越界（表已删/表数变化），钳制到有效范围
+        if (MainSoftData.TableIndex < 1 || MainSoftData.TableIndex > MySoftData.TableInfo.Length)
+            MainSoftData.TableIndex := 1
         this.closed := false
         title := "RMTv" RMT_VERSION
         titleHeight := "36"
@@ -192,6 +208,7 @@ class MainWin {
         curNameBox := leftTop.Add("Viewbox").Margin("0,3,0,2").Stretch("Uniform").StretchDirection("DownOnly").HorizontalAlignment("Stretch")
         curNameBox.Add("TextBlock").Name("TxtCurSetting").Text(MySoftData.CurSettingName).TextAlignment("Center").HorizontalAlignment("Center").VerticalAlignment("Center").TextWrapping("NoWrap")
         leftTop.Add("Button").Name("BtnConfig").Content(GetLang("配置管理")).Height(33).MinHeight(33).Margin("0,3,0,2")
+        leftTop.Add("Button").Name("BtnTableMgr").Content(GetLang("表管理")).Height(33).MinHeight(33).Margin("0,3,0,2")
         leftTop.Add("Rectangle").Height(1).Margin("2,6,2,6").Fill("{DynamicResource ControlBorder}").Stretch("Fill")
         ; 全局操作标题 + 右侧展开按钮（控制休眠/暂停/终止所有宏的快捷键提示显隐，默认显示）
         globalOps := leftTop.Add("Grid").Margin("4,0,0,4")
@@ -221,31 +238,27 @@ class MainWin {
         ; ---- 右侧 TabControl ----
         right := main.Add("Grid").Grid_Row(1).Grid_Column(1).Margin("0,2,8,4")
         tab := right.Add("TabControl").Name("TabControl").Style("{StaticResource RmtMainTabCtrl}").Background("{DynamicResource BgColor}").SelectedIndex(String(MainSoftData.TableIndex - 1))
-        loop MainSoftData.TabNameArr.Length {
+        loop MySoftData.TableInfo.Length {
             idx := A_Index
-            tabItem := tab.Add("TabItem").Header(GetLang(MainSoftData.TabNameArr[idx]))
+            tableItem := MySoftData.TableInfo[idx]
+            tabItem := tab.Add("TabItem").Header(GetLang(tableItem.Name))
             ; 首个/末个页签打 Tag，模板按 Tag 适配圆角（首个左圆角、末个右圆角），末个同时隐藏分割线
             if (idx == 1)
                 tabItem.Tag("first")
-            else if (idx == MainSoftData.TabNameArr.Length)
+            else if (idx == MySoftData.TableInfo.Length)
                 tabItem.Tag("last")
-            if (idx <= 8) {
+            if (this._useVirtual.Has(idx)) {
                 ; 宏/模块显示区：自适应剩余空间，外层边框包裹；上边距 -2 让内容框上边框与页签条下边框重叠
                 bd := tabItem.Add("Border").BorderThickness("1").BorderBrush("{DynamicResource InputStroke}").CornerRadius("4").Margin("4,-2,4,4").Padding("2,2")
-                if (this._useVirtual.Has(idx)) {
-                    ; Epic5 虚拟列表：ListBox + DataTemplate + VirtualizingStackPanel(Recycling)，
-                    ; 行模板注入 Window.Resources，由 _vl.Init 一次 VL_INIT 填充
-                    vg := bd.Add("Grid")
-                    vg.Add("ListBox").Name("FoldList_" idx).SelectionMode("Single").BorderThickness("0").Background("Transparent")
-                        .Margin("4,2,4,2")
-                        .VirtualizingPanel_IsVirtualizing("True").VirtualizingPanel_VirtualizationMode("Recycling")
-                        .VirtualizingPanel_CacheLength("2,2").VirtualizingPanel_CacheLengthUnit("Page")
-                    ; 吸顶折叠头 overlay（sticky header）：滚动时当前模块头钉在列表顶部
-                    vg.Add("ContentControl").Name("VLSticky_" idx).VerticalAlignment("Top").HorizontalAlignment("Stretch").Visibility("Collapsed").Margin("4,2,4,2")
-                } else {
-                    sv := bd.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Auto")
-                    sv.Add("StackPanel").Name("FoldList_" idx).Margin("4,2,4,2")
-                }
+                ; Epic5 虚拟列表：ListBox + DataTemplate + VirtualizingStackPanel(Recycling)，
+                ; 行模板注入 Window.Resources，由 _vl.Init 一次 VL_INIT 填充
+                vg := bd.Add("Grid")
+                vg.Add("ListBox").Name("FoldList_" idx).SelectionMode("Single").BorderThickness("0").Background("Transparent")
+                    .Margin("4,2,4,2")
+                    .VirtualizingPanel_IsVirtualizing("True").VirtualizingPanel_VirtualizationMode("Recycling")
+                    .VirtualizingPanel_CacheLength("2,2").VirtualizingPanel_CacheLengthUnit("Page")
+                ; 吸顶折叠头 overlay（sticky header）：滚动时当前模块头钉在列表顶部
+                vg.Add("ContentControl").Name("VLSticky_" idx).VerticalAlignment("Top").HorizontalAlignment("Stretch").Visibility("Collapsed").Margin("4,2,4,2")
             } else {
                 sv := tabItem.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
                 sv.Add("StackPanel").Name("Panel_" idx).Margin("8,6,8,10")
@@ -364,6 +377,7 @@ class MainWin {
         this.ui.OnEvent("BtnMaximize", "Click", ObjBindMethod(this, "OnMaximizeClick"))
         this.ui.OnEvent("TabControl", "SelectionChanged", ObjBindMethod(this, "OnTabChanged"))
         this.ui.OnEvent("BtnConfig", "Click", (*) => SettingMgrGui.ShowGui())
+        this.ui.OnEvent("BtnTableMgr", "Click", (*) => TableMgrGui.ShowGui())
         this.ui.OnEvent("BtnSuspend", "Click", OnSuspendHotkey)
         this.ui.OnEvent("BtnSuspendActive", "Click", OnSuspendHotkey)
         this.ui.OnEvent("BtnPause", "Click", OnPauseHotKey)
@@ -463,6 +477,8 @@ class MainWin {
             return
         idx := Integer(v) + 1
         MainSoftData.TableIndex := idx
+        if (idx >= 1 && idx <= MySoftData.TableInfo.Length)
+            MainSoftData.CurTableID := MySoftData.TableInfo[idx].ID
         try MainSoftData.TabCtrl._value := idx
         OnTabValueChanged()
         ; 惰性渲染：该 tab 尚未构建过则首次切换时渲染（启动只渲染当前 tab）
@@ -498,21 +514,18 @@ class MainWin {
         t := tableItem.Index
         if (this._useVirtual.Has(t))
             return  ; Epic5：VL_CHANGE 已逐字段写回模型，此处 no-op
-        fi := tableItem.FoldInfo
         ; 收集所有需读取的控件名，单次批量 Query（一次 daemon 往返），替代逐项轮询
         names := []
-        for f, spanStr in fi.IndexSpanArr {
-            span := StrSplit(spanStr, "-")
-            if (IsInteger(span[1]) && IsInteger(span[2])) {
-                loop span[2] - span[1] + 1 {
-                    i := span[1] + A_Index - 1
-                    if (!this._IsRendered(t, i))
-                        continue
-                    names.Push("Remark_" t "_" i)
-                    names.Push("TKType_" t "_" i ">SelectedIndex")
-                    names.Push("Forbid_" t "_" i)
-                    names.Push("Loop_" t "_" i)
-                }
+        for f, fold in tableItem.Folds {
+            for i, item in tableItem.Items {
+                if (item.FoldID != fold.ID)
+                    continue
+                if (!this._IsRendered(t, i))
+                    continue
+                names.Push("Remark_" t "_" i)
+                names.Push("TKType_" t "_" i ">SelectedIndex")
+                names.Push("Forbid_" t "_" i)
+                names.Push("Loop_" t "_" i)
             }
             names.Push("FoldRemark_" t "_" f)
             names.Push("FoldFront_" t "_" f)
@@ -524,33 +537,31 @@ class MainWin {
             return
         state := this.ui.Query(names*)
 
-        for f, spanStr in fi.IndexSpanArr {
-            span := StrSplit(spanStr, "-")
-            if (IsInteger(span[1]) && IsInteger(span[2])) {
-                loop span[2] - span[1] + 1 {
-                    i := span[1] + A_Index - 1
-                    if (!this._IsRendered(t, i))
-                        continue
-                    if (state.Has("Remark_" t "_" i))
-                        try tableItem.RemarkArr[i] := state["Remark_" t "_" i]
-                    if (state.Has("TKType_" t "_" i ">SelectedIndex"))
-                        try tableItem.TriggerTypeArr[i] := Integer(state["TKType_" t "_" i ">SelectedIndex"]) + 1
-                    if (state.Has("Forbid_" t "_" i))
-                        try tableItem.ForbidArr[i] := state["Forbid_" t "_" i] == "True"
-                    if (state.Has("Loop_" t "_" i))
-                        try tableItem.LoopCountArr[i] := (state["Loop_" t "_" i] == GetLang("无限")) ? "-1" : state["Loop_" t "_" i]
-                }
+        for f, fold in tableItem.Folds {
+            for i, item in tableItem.Items {
+                if (item.FoldID != fold.ID)
+                    continue
+                if (!this._IsRendered(t, i))
+                    continue
+                if (state.Has("Remark_" t "_" i))
+                    try item.Remark := state["Remark_" t "_" i]
+                if (state.Has("TKType_" t "_" i ">SelectedIndex"))
+                    try item.TriggerType := Integer(state["TKType_" t "_" i ">SelectedIndex"]) + 1
+                if (state.Has("Forbid_" t "_" i))
+                    try item.Forbid := state["Forbid_" t "_" i] == "True"
+                if (state.Has("Loop_" t "_" i))
+                    try item.LoopCount := (state["Loop_" t "_" i] == GetLang("无限")) ? "-1" : state["Loop_" t "_" i]
             }
             if (state.Has("FoldRemark_" t "_" f))
-                try fi.RemarkArr[f] := state["FoldRemark_" t "_" f]
+                try fold.Remark := state["FoldRemark_" t "_" f]
             if (state.Has("FoldFront_" t "_" f))
-                try fi.FrontInfoArr[f] := state["FoldFront_" t "_" f]
+                try fold.FrontInfo := state["FoldFront_" t "_" f]
             if (state.Has("FoldForbid_" t "_" f))
-                try fi.ForbidStateArr[f] := state["FoldForbid_" t "_" f] == "True"
+                try fold.ForbidState := state["FoldForbid_" t "_" f] == "True"
             if (state.Has("FoldTKType_" t "_" f ">SelectedIndex"))
-                try fi.TKTypeArr[f] := Integer(state["FoldTKType_" t "_" f ">SelectedIndex"]) + 1
+                try fold.TKType := Integer(state["FoldTKType_" t "_" f ">SelectedIndex"]) + 1
             if (state.Has("FoldTK_" t "_" f))
-                try fi.TKArr[f] := state["FoldTK_" t "_" f]
+                try fold.TK := state["FoldTK_" t "_" f]
         }
     }
 
@@ -560,6 +571,9 @@ class MainWin {
 
     RenderTab(tableItem) {
         t := tableItem.Index
+        ; 非宏表（Tool/Setting/Help/Reward/Thank）用专用 Panel_ 构建，不走 FoldList 渲染
+        if (!this._useVirtual.Has(t) && !CheckIsItemTable(t))
+            return
         if (this._useVirtual.Has(t)) {
             ; Epic5：1 次 VL_INIT 填充虚拟列表（模型已由 VL_CHANGE 保持，视图全量重建成本 O(1) IPC）
             this._vl.Init(t, tableItem)
@@ -568,23 +582,20 @@ class MainWin {
         this.RenderedItems[t] := Map()
         listName := "FoldList_" t
         this.ui.Update(listName, "ClearItems", "")
-        fi := tableItem.FoldInfo
         ; B: 每模块 1 次 AddXamlItem 批量渲染（整组一个根 StackPanel），不再逐行 N 次桥接往返。
         ;    注意不能增量逐批加子项：StackPanel 每加一个子项就全量重测量（增量 = O(n²)），整组一次加 = O(n)。
         ; A: 折叠行也全渲染进 FoldItems_<t>_<f> 子容器，折叠切换只切容器 Visibility 不重建（千条级折叠/展开瞬间，滚动位置保留）
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-        for f, spanStr in fi.IndexSpanArr {
-            vis := fi.FoldStateArr[f] ? ' Visibility="Collapsed"' : ""
+        for f, fold in tableItem.Folds {
+            vis := fold.FoldState ? ' Visibility="Collapsed"' : ""
             xaml := '<StackPanel ' ns '>'
                 . this._BuildFoldTitleRow(t, f)
                 . '<StackPanel Name="FoldItems_' t '_' f '"' vis '>'
-            span := StrSplit(spanStr, "-")
-            if (IsInteger(span[1]) && IsInteger(span[2])) {
-                loop span[2] - span[1] + 1 {
-                    i := span[1] + A_Index - 1
-                    xaml .= this._BuildItemRow(t, i)
-                    this.RenderedItems[t][i] := true
-                }
+            for i, item in tableItem.Items {
+                if (item.FoldID != fold.ID)
+                    continue
+                xaml .= this._BuildItemRow(t, i)
+                this.RenderedItems[t][i] := true
             }
             xaml .= '</StackPanel></StackPanel>'
             this.ui.Update(listName, "AddXamlItem", xaml)
@@ -592,14 +603,12 @@ class MainWin {
         ; 绑定须在 AddXamlItem 之后（控件已存在）
         ; 折叠态行隐藏且事件不可达：跳过 BindEvent（千条级折叠组省 ~9×N 次桥接往返），
         ; 展开折叠时由 OnFoldBtnClick 补绑（_Bind 清旧再挂，幂等）
-        for f, spanStr in fi.IndexSpanArr {
-            span := StrSplit(spanStr, "-")
-            if (!IsInteger(span[1]) || !IsInteger(span[2]))
+        for f, fold in tableItem.Folds {
+            if (fold.FoldState)
                 continue
-            if (fi.FoldStateArr[f])
-                continue
-            loop span[2] - span[1] + 1 {
-                i := span[1] + A_Index - 1
+            for i, item in tableItem.Items {
+                if (item.FoldID != fold.ID)
+                    continue
                 this._BindItemRow(t, i)
             }
         }
@@ -607,11 +616,11 @@ class MainWin {
     }
 
     _BuildFoldTitleRow(t, f) {
-        fi := MySoftData.TableInfo[t].FoldInfo
+        fold := MySoftData.TableInfo[t].Folds[f]
         isMenu := CheckIsMenuMacroTable(t)
         isUI := GetTableSymbol(t) == "UI"
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-        foldGlyph := fi.FoldStateArr[f] ? "&#xE76C;" : "&#xE70D;"
+        foldGlyph := fold.FoldState ? "&#xE76C;" : "&#xE70D;"
         xaml := '<Border ' ns ' CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource InputStroke}" Background="{DynamicResource DropdownBg}" Margin="0,2,0,4" Padding="6,4">'
             . '<StackPanel>'
             . '<StackPanel Orientation="Horizontal" VerticalAlignment="Center">'
@@ -619,15 +628,15 @@ class MainWin {
             . '<TextBlock Name="FoldGlyph_' t '_' f '" Text="' foldGlyph '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Button>'
             . '<TextBlock Text="' GetLang("备注：") '" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
-            . '<TextBox Name="FoldRemark_' t '_' f '" Text="' this._XmlEsc(fi.RemarkArr[f]) '" Width="120" Height="26" MinHeight="26" Padding="4,0" Margin="2,0,8,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
+            . '<TextBox Name="FoldRemark_' t '_' f '" Text="' this._XmlEsc(fold.Remark) '" Width="120" Height="26" MinHeight="26" Padding="4,0" Margin="2,0,8,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '<TextBlock Text="' GetLang("前台:") '" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
-            . '<TextBox Name="FoldFront_' t '_' f '" Text="' this._XmlEsc(fi.FrontInfoArr[f]) '" Width="120" Height="26" MinHeight="26" Padding="4,0" Margin="2,0,8,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
+            . '<TextBox Name="FoldFront_' t '_' f '" Text="' this._XmlEsc(fold.FrontInfo) '" Width="120" Height="26" MinHeight="26" Padding="4,0" Margin="2,0,8,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '<Button Name="FoldFrontBtn_' t '_' f '" Content="' GetLang("编辑") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
             . '<Button Name="FoldAddBtn_' t '_' f '" Content="' GetLang("新增宏") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
             . '<Button Name="FoldPasteBtn_' t '_' f '" Content="' GetLang("粘贴宏") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
             . '<Button Name="FoldAddModBtn_' t '_' f '" Content="' GetLang("新增模块") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
             . '<Button Name="FoldDelModBtn_' t '_' f '" Content="' GetLang("删除模块") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<CheckBox Name="FoldForbid_' t '_' f '" Content="' GetLang("禁用") '" IsChecked="' (fi.ForbidStateArr[f] ? "True" : "False") '" VerticalAlignment="Center">'
+            . '<CheckBox Name="FoldForbid_' t '_' f '" Content="' GetLang("禁用") '" IsChecked="' (fold.ForbidState ? "True" : "False") '" VerticalAlignment="Center">'
             . '<CheckBox.Template><ControlTemplate TargetType="CheckBox">'
             . '<BulletDecorator Background="Transparent" Cursor="Hand">'
             . '<BulletDecorator.Bullet><Border x:Name="Border" Width="18" Height="18" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="3"><Path x:Name="CheckMark" Visibility="Collapsed" Data="M 4 9 L 7 12 L 13 5" Stroke="{DynamicResource Accent}" StrokeThickness="2" StrokeEndLineCap="Round" StrokeStartLineCap="Round" StrokeLineJoin="Round"/></Border></BulletDecorator.Bullet>'
@@ -642,10 +651,10 @@ class MainWin {
         if (isMenu || isUI) {
             xaml .= '<StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,0,0">'
                 . '<TextBlock Text="' (isUI ? GetLang("面板触发键：") : GetLang("菜单触发键：")) '" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
-                . '<ComboBox Name="FoldTKType_' t '_' f '" Width="70" Height="26" MinHeight="26" Margin="2,0,10,0" SelectedIndex="' (fi.TKTypeArr[f] - 1) '" IsEnabled="' (isUI ? "False" : "True") '">'
+                . '<ComboBox Name="FoldTKType_' t '_' f '" Width="70" Height="26" MinHeight="26" Margin="2,0,10,0" SelectedIndex="' (fold.TKType - 1) '" IsEnabled="' (isUI ? "False" : "True") '">'
                 . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
                 . '</ComboBox>'
-                . '<TextBox Name="FoldTK_' t '_' f '" Text="' this._XmlEsc(fi.TKArr[f]) '" Width="100" Height="26" VerticalContentAlignment="Center" TextAlignment="Center"/>'
+                . '<TextBox Name="FoldTK_' t '_' f '" Text="' this._XmlEsc(fold.TK) '" Width="100" Height="26" VerticalContentAlignment="Center" TextAlignment="Center"/>'
                 . '<Button Name="FoldTKEdit_' t '_' f '" Content="' GetLang("编辑") '" Height="26" MinHeight="26" Padding="8,0" Margin="6,0,0,0"/>'
                 . '</StackPanel>'
         }
@@ -655,6 +664,7 @@ class MainWin {
 
     _BuildItemRow(t, i) {
         tableItem := MySoftData.TableInfo[t]
+        item := tableItem.Items[i]
         isMacro := CheckIsMacroTable(t)
         isNormal := CheckIsNormalTable(t)
         isTiming := CheckIsTimingMacroTable(t)
@@ -664,16 +674,16 @@ class MainWin {
 
         if (isVoice) {
             ; 语音宏：触发键列显示唤醒词
-            tkStr := (i <= tableItem.VoiceKeywordsArr.Length) ? tableItem.VoiceKeywordsArr[i] : ""
+            tkStr := item.VoiceKeywords
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
         } else {
-            tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
+            tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
         }
-        loopStr := tableItem.LoopCountArr[i] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[i]
-        colorState := tableItem.ColorStateArr[i]
+        loopStr := item.LoopCount == "-1" ? GetLang("无限") : item.LoopCount
+        colorState := item.ColorState
         colorHex := colorState == 1 ? "#2E7D32" : colorState == 2 ? "#F9A825" : colorState == 3 ? "#C62828" : "Transparent"
-        tkTypeIdx := tableItem.TriggerTypeArr[i] - 1
+        tkTypeIdx := item.TriggerType - 1
         if (isUI)
             tkTypeIdx := 3
 
@@ -688,7 +698,7 @@ class MainWin {
             . '</Grid.ColumnDefinitions>'
             . '<Border Grid.Column="0" Name="Color_' t '_' i '" Width="12" Height="12" CornerRadius="6" Background="' colorHex '" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
             . '<TextBlock Grid.Column="1" Text="' i '." VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
-            . '<TextBox Grid.Column="2" Name="Remark_' t '_' i '" Text="' this._XmlEsc(tableItem.RemarkArr[i]) '" Height="26" MinHeight="26" Padding="4,0" Margin="0,0,6,0" VerticalContentAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
+            . '<TextBox Grid.Column="2" Name="Remark_' t '_' i '" Text="' this._XmlEsc(item.Remark) '" Height="26" MinHeight="26" Padding="4,0" Margin="0,0,6,0" VerticalContentAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '<Button Grid.Column="3" Name="TKBtn_' t '_' i '" Content="' this._XmlEsc(tkStr) '" Height="26" MinHeight="26" Margin="0,0,4,0" Cursor="Hand" Padding="4,0" IsEnabled="' (isSubMacro ? "False" : "True") '"/>'
             . '<ComboBox Grid.Column="4" Name="TKType_' t '_' i '" Height="26" MinHeight="26" Margin="0,0,4,0" SelectedIndex="' tkTypeIdx '" IsEnabled="' (isNormal ? "True" : "False") '">'
             . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
@@ -700,7 +710,7 @@ class MainWin {
             . '<Button Grid.Column="7" Name="Edit_' t '_' i '" Content="' GetLang("编辑") '" Height="26" MinHeight="26" Margin="0,0,4,0" Cursor="Hand" Padding="6,0"/>'
             . '<Button Grid.Column="8" Name="Pre_' t '_' i '" Content="&#x2191;" Height="26" MinHeight="26" Width="20" Padding="0" Cursor="Hand" FontSize="14" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>'
             . '<Button Grid.Column="9" Name="Next_' t '_' i '" Content="&#x2193;" Height="26" MinHeight="26" Width="20" Padding="0" Cursor="Hand" FontSize="14" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>'
-            . '<CheckBox Grid.Column="10" Name="Forbid_' t '_' i '" Content="' GetLang("禁用") '" IsChecked="' (tableItem.ForbidArr[i] ? "True" : "False") '" HorizontalAlignment="Left" Margin="2,0,0,0" VerticalAlignment="Center">'
+            . '<CheckBox Grid.Column="10" Name="Forbid_' t '_' i '" Content="' GetLang("禁用") '" IsChecked="' (item.Forbid ? "True" : "False") '" HorizontalAlignment="Left" Margin="2,0,0,0" VerticalAlignment="Center">'
             . '<CheckBox.Template><ControlTemplate TargetType="CheckBox">'
             . '<BulletDecorator Background="Transparent" Cursor="Hand">'
             . '<BulletDecorator.Bullet><Border x:Name="Border" Width="18" Height="18" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="3"><Path x:Name="CheckMark" Visibility="Collapsed" Data="M 4 9 L 7 12 L 13 5" Stroke="{DynamicResource Accent}" StrokeThickness="2" StrokeEndLineCap="Round" StrokeStartLineCap="Round" StrokeLineJoin="Round"/></Border></BulletDecorator.Bullet>'
@@ -734,7 +744,7 @@ class MainWin {
         else if (GetTableSymbol(t) == "Voice")
             editTK := OnItemVoiceTriggerSetting   ; 语音宏：触发键列点击 → 语音触发编辑弹窗（填唤醒词）
 
-        loopStr := tableItem.LoopCountArr[i] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[i]
+        loopStr := tableItem.Items[i].LoopCount == "-1" ? GetLang("无限") : tableItem.Items[i].LoopCount
         this.ui.Update("Loop_" t "_" i, "Text", loopStr)
 
         this._Bind("TKBtn_" t "_" i, "Click", editTK.Bind(tableItem, i))
@@ -749,8 +759,7 @@ class MainWin {
 
     _BindFoldRows(t) {
         tableItem := MySoftData.TableInfo[t]
-        fi := tableItem.FoldInfo
-        for f, spanStr in fi.IndexSpanArr {
+        for f, fold in tableItem.Folds {
             this._Bind("FoldFrontBtn_" t "_" f, "Click", OnFoldFrontInfoEdit.Bind(tableItem, f))
             this._Bind("FoldAddBtn_" t "_" f, "Click", OnItemAddMacroBtnClick.Bind(tableItem, f))
             this._Bind("FoldPasteBtn_" t "_" f, "Click", OnItemPasteMacroBtnClick.Bind(tableItem, f))
@@ -770,14 +779,21 @@ class MainWin {
         this.ui.Update(name, "BindEvent", evt)
     }
 
-    UpdateItemColor(t, i) {
+    ; 表身份 = tableItem 对象；t 仅作控件命名显示顺序槽位（内部解析）
+    UpdateItemColor(tableItem, i) {
+        if (!IsObject(tableItem))
+            tableItem := GetTableByID(String(tableItem))
+        if (!tableItem)
+            return
+        t := tableItem.Index
         if (this._useVirtual.Has(t)) {
             this._vl.UpdateColor(t, i)
             return
         }
         if (!this._IsRendered(t, i))
             return
-        state := MySoftData.TableInfo[t].ColorStateArr[i]
+        item := tableItem.Items[i]
+        state := item ? item.ColorState : 0
         colorHex := state == 1 ? "#2E7D32" : state == 2 ? "#F9A825" : state == 3 ? "#C62828" : "Transparent"
         this.ui.Update("Color_" t "_" i, "Background", colorHex)
     }
@@ -792,26 +808,29 @@ class MainWin {
         if (!this._IsRendered(t, i))
             return
         tableItem := MySoftData.TableInfo[t]
+        item := tableItem.Items[i]
+        if (!item)
+            return
         isTiming := CheckIsTimingMacroTable(t)
         isUI := GetTableSymbol(t) == "UI"
         isVoice := GetTableSymbol(t) == "Voice"
         if (isVoice) {
             ; 语音宏：触发键列显示唤醒词（无按键）
-            tkStr := (i <= tableItem.VoiceKeywordsArr.Length) ? tableItem.VoiceKeywordsArr[i] : ""
+            tkStr := item.VoiceKeywords
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
         } else {
-            tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(tableItem.TKArr[i]))
+            tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
         }
-        loopStr := tableItem.LoopCountArr[i] == "-1" ? GetLang("无限") : tableItem.LoopCountArr[i]
-        tkTypeIdx := tableItem.TriggerTypeArr[i] - 1
+        loopStr := item.LoopCount == "-1" ? GetLang("无限") : item.LoopCount
+        tkTypeIdx := item.TriggerType - 1
         if (isUI)
             tkTypeIdx := 3
-        this.ui.Update("Remark_" t "_" i, "Text", tableItem.RemarkArr[i])
+        this.ui.Update("Remark_" t "_" i, "Text", item.Remark)
         this.ui.Update("TKBtn_" t "_" i, "Content", tkStr)
         this.ui.Update("TKType_" t "_" i, "SelectedIndex", String(tkTypeIdx))
         this.ui.Update("Loop_" t "_" i, "Text", loopStr)
-        this.ui.Update("Forbid_" t "_" i, "IsChecked", tableItem.ForbidArr[i] ? "True" : "False")
+        this.ui.Update("Forbid_" t "_" i, "IsChecked", item.Forbid ? "True" : "False")
         this.UpdateItemColor(t, i)
     }
 
@@ -908,7 +927,8 @@ class MainWin {
 
     ; ============ 工具页 ============
     BuildToolTab() {
-        p := "Panel_8"
+        ; Panel_ 编号 = TableInfo 位置（工具表第 9 位；1-8 为宏表走虚拟列表，无 Panel_）
+        p := "Panel_9"
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
 
         Add(this._LabelRow("变量监视器：", '<StackPanel Orientation="Horizontal"><Button Name="BtnOpenVarListen" Content="' GetLang("打开监视器") '" Height="26" MinHeight="26" Padding="10,0" Margin="0,0,8,0"/><Button Name="BtnFileCheck" Content="' GetLang("文件校验") '" Height="26" MinHeight="26" Padding="10,0" Margin="0,0,8,0"/><Button Name="BtnFileCheckHelp" Content="?" Height="26" MinHeight="26" Width="30" Padding="0" Cursor="Hand" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/></StackPanel>'))
@@ -973,7 +993,7 @@ class MainWin {
 
     ; ============ 设置页 ============
     BuildSettingTab() {
-        p := "Panel_9"
+        p := "Panel_10"
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
 
@@ -1168,7 +1188,7 @@ class MainWin {
 
     ; ============ 帮助页 ============
     BuildHelpTab() {
-        p := "Panel_10"
+        p := "Panel_11"
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         Add('<TextBlock ' ns ' Text="' GetLang("免责声明") '" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,4"/>')
@@ -1213,7 +1233,7 @@ class MainWin {
 
     ; ============ 打赏页 ============
     BuildRewardTab() {
-        p := "Panel_11"
+        p := "Panel_12"
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         countStr := FormatIntegerWithCommas(MySoftData.MacroTotalCount)
         str := Format(GetLang("若梦兔（RMT）—— 这款完全免费的开源软件，始终陪在你身边。")) "`n"
@@ -1232,7 +1252,7 @@ class MainWin {
 
     ; ============ 特别感谢页 ============
     BuildThankTab() {
-        p := "Panel_12"
+        p := "Panel_13"
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         Add('<TextBlock ' ns ' Text="' GetLang("感谢以下开发者为项目付出的智慧与汗水（排名不分先后）：") '" FontWeight="Bold" TextWrapping="Wrap" Margin="0,8,0,4"/>')

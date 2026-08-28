@@ -494,7 +494,7 @@ ReplaceSerialInCmdList(cmdList, oldSerial, newSerial) {
 
 ; 复制宏指令集（完整复制所有指令及外部配置，用于跨设备迁移）
 OnItemCopyMacroBtnClick(tableItem, CopyIndex, *) {
-    macroText := tableItem.MacroArr[CopyIndex]
+    macroText := tableItem.Items[CopyIndex].Macro
     if (macroText == "") {
         MsgBox(GetLang("当前宏没有指令内容，无法复制"), GetLang("提示"))
         return
@@ -573,12 +573,11 @@ OnItemCopyMacroBtnClick(tableItem, CopyIndex, *) {
 
 ; 粘贴宏指令集（从剪贴板读取完整指令集及配置）
 OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
-    foldInfo := tableItem.FoldInfo
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
     if (isMenu) {
-        IndexSpan := StrSplit(foldInfo.IndexSpanArr[foldIndex], "-")
-        if (IsInteger(IndexSpan[1]) && IsInteger(IndexSpan[2])) {
-            Count := IndexSpan[2] - IndexSpan[1] + 1
+        fold := tableItem.Folds[foldIndex]
+        if (fold) {
+            Count := GetFoldItemCount(tableItem, fold)
             if (Count >= 8) {
                 MsgBox(GetLang("轮盘最多只能添加8个"), GetLang("提示"))
                 return
@@ -620,14 +619,12 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
     if (result == "Cancel")
         return
 
-    foldInfo := tableItem.FoldInfo
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
-    AddIndex := GetFoldAddItemIndex(foldInfo, foldIndex)
-    if (foldInfo.FoldStateArr[foldIndex])
-        foldInfo.FoldStateArr[foldIndex] := false
+    fold := tableItem.Folds.Has(foldIndex) ? tableItem.Folds[foldIndex] : ""
+    AddIndex := GetFoldAddItemIndex(tableItem, foldIndex)
+    if (fold && fold.FoldState)
+        fold.FoldState := false
 
-    isFirst := foldInfo.IndexSpanArr[foldIndex] == "无-无"
-    UpdateFoldIndexInfo(foldInfo, AddIndex, foldIndex, true)
     RecycleTabItem(tableItem)
 
     if (isRMTFormat && importData != "") {
@@ -719,70 +716,24 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
             newCmdList := clipboardText
         }
 
-        tableItem.ColorStateArr.InsertAt(AddIndex, 0)
-        tableItem.TKArr.InsertAt(AddIndex, "")
-        tableItem.TriggerTypeArr.InsertAt(AddIndex, 1)
-        tableItem.MacroArr.InsertAt(AddIndex, newCmdList)
-        tableItem.ModeArr.InsertAt(AddIndex, 1)
-        tableItem.ForbidArr.InsertAt(AddIndex, 0)
-        tableItem.RemarkArr.InsertAt(AddIndex, Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm")))
-        tableItem.LoopCountArr.InsertAt(AddIndex, "1")
-        tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
-        tableItem.UnorderedTriggerArr.InsertAt(AddIndex, false)
-        tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
-        tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
-        tableItem.VoiceTriggerArr.InsertAt(AddIndex, 0)
-        tableItem.VoiceKeywordsArr.InsertAt(AddIndex, "")
-        tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
-        tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
-        tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
-        tableItem.GraphBranchCountArr.InsertAt(AddIndex, 0)
-        tableItem.IcoPathArr.InsertAt(AddIndex, "")
-        tableItem.KilledArr.InsertAt(AddIndex, false)
-        tableItem.PauseArr.InsertAt(AddIndex, false)
-        tableItem.ActionCount.InsertAt(AddIndex, 0)
-        tableItem.HoldKeyArr.InsertAt(AddIndex, Map())
-        tableItem.ToggleStateArr.InsertAt(AddIndex, false)
-        tableItem.ToggleActionArr.InsertAt(AddIndex, "")
-        VariableMap := Map()
-        VariableMap["宏循环次数"] := 0
-        VariableMap["循环-跳过本轮"] := false
-        VariableMap["循环-跳出"] := false
-        VariableMap["分支-跳出"] := false
-        tableItem.VariableMapArr.InsertAt(AddIndex, VariableMap)
+        item := MacroItem()
+        item.ID := GetCMDSerialStr("Item")
+        item.TimingSerial := GetCMDSerialStr("Timing")
+        item.Macro := newCmdList
+        item.Remark := Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm"))
+        item.FoldID := fold ? fold.ID : ""
+        tableItem.Items.InsertAt(AddIndex, item)
     } else {
-        tableItem.ColorStateArr.InsertAt(AddIndex, 0)
-        tableItem.TKArr.InsertAt(AddIndex, "")
-        tableItem.TriggerTypeArr.InsertAt(AddIndex, 1)
-        tableItem.MacroArr.InsertAt(AddIndex, clipboardText)
-        tableItem.ModeArr.InsertAt(AddIndex, 1)
-        tableItem.ForbidArr.InsertAt(AddIndex, 0)
-        tableItem.RemarkArr.InsertAt(AddIndex, Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm")))
-        tableItem.LoopCountArr.InsertAt(AddIndex, "1")
-        tableItem.HoldTimeArr.InsertAt(AddIndex, 500)
-        tableItem.UnorderedTriggerArr.InsertAt(AddIndex, false)
-        tableItem.StartTipSoundArr.InsertAt(AddIndex, 1)
-        tableItem.EndTipSoundArr.InsertAt(AddIndex, 1)
-        tableItem.VoiceTriggerArr.InsertAt(AddIndex, 0)
-        tableItem.VoiceKeywordsArr.InsertAt(AddIndex, "")
-        tableItem.SerialArr.InsertAt(AddIndex, GetCMDSerialStr("Item"))
-        tableItem.TimingSerialArr.InsertAt(AddIndex, GetCMDSerialStr("Timing"))
-        tableItem.IsWorkIndexArr.InsertAt(AddIndex, 0)
-        tableItem.GraphBranchCountArr.InsertAt(AddIndex, 0)
-        tableItem.IcoPathArr.InsertAt(AddIndex, "")
-        tableItem.KilledArr.InsertAt(AddIndex, false)
-        tableItem.PauseArr.InsertAt(AddIndex, false)
-        tableItem.ActionCount.InsertAt(AddIndex, 0)
-        tableItem.HoldKeyArr.InsertAt(AddIndex, Map())
-        tableItem.ToggleStateArr.InsertAt(AddIndex, false)
-        tableItem.ToggleActionArr.InsertAt(AddIndex, "")
-        VariableMap := Map()
-        VariableMap["宏循环次数"] := 0
-        VariableMap["循环-跳过本轮"] := false
-        VariableMap["循环-跳出"] := false
-        VariableMap["分支-跳出"] := false
-        tableItem.VariableMapArr.InsertAt(AddIndex, VariableMap)
+        item := MacroItem()
+        item.ID := GetCMDSerialStr("Item")
+        item.TimingSerial := GetCMDSerialStr("Timing")
+        item.Macro := clipboardText
+        item.Remark := Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm"))
+        item.FoldID := fold ? fold.ID : ""
+        tableItem.Items.InsertAt(AddIndex, item)
     }
+    tableItem.RebuildIndex()
+    RebuildTableLocator()
 
     MyMainWin.RenderTab(tableItem)
 
