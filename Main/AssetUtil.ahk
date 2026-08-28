@@ -27,6 +27,7 @@
 #Include "..\Plugins\IbInputSimulator.ahk"
 #Include "..\Plugins\MouseControl.ahk"
 #Include Util\MouseMoveUtil.ahk
+#Include Util\TomlUtil.ahk
 
 global WM_COPYDATA := 0x4a ;传递字符串，系统信息
 
@@ -902,43 +903,110 @@ SetFontList() {
 }
 
 ; ============================================================
+; TOML 宏配置读写（MacroFile 现指向 MacroFile.toml，操作封装在 Util\TomlUtil.ahk）
+; 双模式：MacroFile 以 .toml 结尾走 TOML 新链路；一次性迁移期临时指向 .ini 走旧 INI 链路。
+; ============================================================
+IsMacroTomlMode() {
+    global MacroFile
+    return (SubStr(MacroFile, -4) == ".toml")
+}
+
+; ============================================================
 ; 加载当前配置方案的所有表（动态表集合）
 ; 新格式：[Tables] 段 List=TableID|Symbol|Name|Order 用 π 分隔
 ; 旧格式：无 [Tables] 段 → 使用默认 13 表定义（每条目按旧格式迁移）
 ; ============================================================
 LoadCurMacroSetting() {
-    global MySoftData
-    tableListStr := IniRead(MacroFile, "Tables", "List", "")
+    global MySoftData, MacroFile, MacroIniFile
     migrated := false
-    if (tableListStr != "") {
-        ; 新格式：解析动态表集合（JSON 数组 [[ID, Symbol, Name, Order], ...]）
-        ; 表身份固定 = Symbol（entry[2]）；entry[1] 若是旧动态 t_xxx 段名则记入 PersistSeg 供迁移读取
-        MySoftData.TableInfo := []
-        try {
-            tableArr := JSON.parse(tableListStr, , false)
-            if (IsObject(tableArr)) {
-                for entry in tableArr {
-                    if (!IsObject(entry) || entry.Length < 4)
-                        continue
-                    t := TableItem()
-                    t.Symbol := entry[2]
-                    t.ID := t.Symbol
-                    t.Name := entry[3]
-                    t.Order := Integer(entry[4])
-                    ; 仅旧式动态段名（t_ 前缀）视为迁移源（PersistSeg）；新固定 Symbol 或 Symbol_N 多实例不做迁移
-                    t.PersistSeg := (SubStr(entry[1], 1, 2) == "t_") ? entry[1] : ""
-                    MySoftData.TableInfo.Push(t)
+
+    ; ---- INI 迁移期（MacroFile 临时指向 .ini）：完全走旧链路 ----
+    if (!IsMacroTomlMode()) {
+        tableListStr := IniRead(MacroFile, "Tables", "List", "")
+        if (tableListStr != "") {
+            ; 新格式：解析动态表集合（JSON 数组 [[ID, Symbol, Name, Order], ...]）
+            ; 表身份固定 = Symbol（entry[2]）；entry[1] 若是旧动态 t_xxx 段名则记入 PersistSeg 供迁移读取
+            MySoftData.TableInfo := []
+            try {
+                tableArr := JSON.parse(tableListStr, , false)
+                if (IsObject(tableArr)) {
+                    for entry in tableArr {
+                        if (!IsObject(entry) || entry.Length < 4)
+                            continue
+                        t := TableItem()
+                        t.Symbol := entry[2]
+                        t.ID := t.Symbol
+                        t.Name := entry[3]
+                        t.Order := Integer(entry[4])
+                        ; 仅旧式动态段名（t_ 前缀）视为迁移源（PersistSeg）；新固定 Symbol 或 Symbol_N 多实例不做迁移
+                        t.PersistSeg := (SubStr(entry[1], 1, 2) == "t_") ? entry[1] : ""
+                        MySoftData.TableInfo.Push(t)
+                    }
                 }
+            } catch as e {
+                ; JSON 解析失败（异常损坏）→ 回退默认表集合
+                CreateTableItemArr()
             }
-        } catch as e {
-            ; JSON 解析失败（异常损坏）→ 回退默认表集合
+            if (MySoftData.TableInfo.Length == 0)
+                CreateTableItemArr()
+            RebuildTableLocator()
+        } else {
+            ; 旧格式：默认 13 表骨架（条目数据按旧格式逐表迁移）
             CreateTableItemArr()
+            migrated := true
         }
-        if (MySoftData.TableInfo.Length == 0)
-            CreateTableItemArr()
+        for tableItem in MySoftData.TableInfo {
+            if (ReadTableItemInfo(tableItem))
+                migrated := true
+            EnsureTableHasFold(tableItem)
+        }
+        ; 仅当发生过迁移（旧格式→新格式）才落盘表集合，避免 Worker 并发写
+        if (migrated)
+            SaveTableCollection()
         RebuildTableLocator()
+        ResolveCurTableIndex()
+        return
+    }
+
+    ; ---- 一次性迁移：.toml 不存在且 .ini 存在 → 读 INI 进内存 → 落盘 .toml → 回读校验后改名 .bak ----
+    if (!FileExist(MacroFile) && FileExist(MacroIniFile)) {
+        savedMacroFile := MacroFile
+        MacroFile := MacroIniFile
+        LoadCurMacroSetting()                ; 递归走 INI 分支（读旧格式进内存）
+        MacroFile := savedMacroFile
+        SaveAllTableItemInfo(MySoftData.TableInfo)   ; 表集合 + 各表三级段一次落盘 .toml
+        ; 回读校验：成功才把 .ini 改名 .bak，失败保留 .ini（下次启动仍会尝试迁移）
+        try {
+            chk := TomlUtil_Read()
+            if (TomlUtil_Valid(chk))
+                FileMove(MacroIniFile, MacroIniFile ".bak", 1)
+        } catch as e {
+            RMTLogSys(RMT_LV_ERROR, "LoadCurMacroSetting", Format("TOML 迁移校验失败，保留 INI: {1}", e.Message))
+        }
+        ResolveCurTableIndex()
+        return
+    }
+
+    ; ---- TOML 正常路径：表集合 [[table]] 数组 ----
+    t := TomlUtil_Read()
+    if (TomlUtil_Valid(t)) {
+        tables := TomlUtil_Tables(t, "table")
+        if (tables.Length > 0) {
+            MySoftData.TableInfo := []
+            for tbl in tables {
+                tblItem := TableItem()
+                tblItem.Symbol := TomlUtil_Str(tbl, "symbol", "")
+                tblItem.ID := TomlUtil_Str(tbl, "id", tblItem.Symbol)
+                tblItem.Name := TomlUtil_Str(tbl, "name", tblItem.Symbol)
+                tblItem.Order := TomlUtil_Int(tbl, "order", 1)
+                MySoftData.TableInfo.Push(tblItem)
+            }
+            RebuildTableLocator()
+        } else {
+            CreateTableItemArr()
+            migrated := true
+        }
     } else {
-        ; 旧格式：默认 13 表骨架（条目数据按旧格式逐表迁移）
         CreateTableItemArr()
         migrated := true
     }
@@ -951,7 +1019,12 @@ LoadCurMacroSetting() {
     if (migrated)
         SaveTableCollection()
     RebuildTableLocator()
-    ; 持久化的当前 tab 是 TableID（身份）：解析为显示顺序下标；无效则回落 1
+    ResolveCurTableIndex()
+}
+
+; 持久化的当前 tab 是 TableID（身份）：解析为显示顺序下标；无效则回落 1
+ResolveCurTableIndex() {
+    global MySoftData
     if (MainSoftData.CurTableID != "") {
         idx := GetTableIndexByID(MainSoftData.CurTableID)
         MainSoftData.TableIndex := idx > 0 ? idx : 1
@@ -1004,8 +1077,20 @@ ReadTableItemInfo(tableItem) {
 
 ; 判断某表是否存在三级段结构数据（ModuleOrder 键或 [表ID.*] 子段）
 HasThreeLevelData(tableID) {
-    if (IniRead(MacroFile, tableID, "ModuleOrder", "") != "")
-        return true
+    global MacroFile
+    if (!IsMacroTomlMode()) {
+        if (IniRead(MacroFile, tableID, "ModuleOrder", "") != "")
+            return true
+        return EnumerateDottedSubSegments(tableID).Length > 0
+    }
+    t := TomlUtil_Read()
+    if (!TomlUtil_Valid(t))
+        return false
+    tableSeg := TomlUtil_Table(t, tableID)
+    if (TomlUtil_Valid(tableSeg)) {
+        if (TomlUtil_List(tableSeg, "ModuleOrder").Length > 0)
+            return true
+    }
     return EnumerateDottedSubSegments(tableID).Length > 0
 }
 
@@ -1098,62 +1183,132 @@ SegTailNum(seg, prefix) {
 ;   段名序号 = 稳定身份（纯自增不复用、移动改路径），顺序由父段 Order 列表单独控制。
 ; ============================================================
 ReadTableItemInfoNew(tableItem, segID := "") {
+    global MacroFile
     tableID := (segID == "") ? tableItem.ID : segID
     tableItem.Items := []
     tableItem.ItemMap := Map()
     tableItem.Folds := []
     tableItem.FoldMap := Map()
 
-    ; ---- 模块级：按表段 ModuleOrder 列表顺序加载 [tableID.ModuleN] 段 ----
-    foldSegmentOrder := StrSplit(IniRead(MacroFile, tableID, "ModuleOrder", ""), "π")
-    foldSegs := EnumerateDottedSubSegments(tableID)   ; 合法子段集合（去重确认存在）
+    ; ---- INI 迁移期（MacroFile 临时指向 .ini）：旧链路 ----
+    if (!IsMacroTomlMode()) {
+        ; ---- 模块级：按表段 ModuleOrder 列表顺序加载 [tableID.ModuleN] 段 ----
+        foldSegmentOrder := StrSplit(IniRead(MacroFile, tableID, "ModuleOrder", ""), "π")
+        foldSegs := EnumerateDottedSubSegments(tableID)   ; 合法子段集合（去重确认存在）
+        for foldRef in foldSegmentOrder {
+            foldRef := Trim(foldRef, "`r`n ")
+            if (foldRef == "")
+                continue
+            foldSeg := tableID "." foldRef     ; 例 Normal.Module1
+            if (!HasSegment(foldSeg, foldSegs))
+                continue   ; 段不存在则跳过（避免读残留）
+            fold := MacroFold()
+            fold.ID := foldSeg                 ; 段名即模块身份（全局唯一路径）
+            fold.Remark := IniRead(MacroFile, foldSeg, "Remark", "")
+            fold.FrontInfo := IniRead(MacroFile, foldSeg, "FrontInfo", "")
+            fold.ForbidState := !!Integer(IniRead(MacroFile, foldSeg, "ForbidState", "0"))
+            fold.FoldState := !!Integer(IniRead(MacroFile, foldSeg, "FoldState", "0"))
+            fold.TKType := Integer(IniRead(MacroFile, foldSeg, "TKType", "4"))
+            fold.TK := IniRead(MacroFile, foldSeg, "TK", "")
+            fold.HoldTime := IniRead(MacroFile, foldSeg, "HoldTime", "500")
+            fold.UnorderedTrigger := !!Integer(IniRead(MacroFile, foldSeg, "UnorderedTrigger", "0"))
+            tableItem.Folds.Push(fold)
+            tableItem.FoldMap[foldSeg] := fold
+
+            ; ---- 宏级：按模块段 MacroOrder 列表顺序加载 [foldSeg.MacroM] 段 ----
+            macroSegs := EnumerateDottedSubSegments(foldSeg)
+            macroOrder := StrSplit(IniRead(MacroFile, foldSeg, "MacroOrder", ""), "π")
+            for macroRef in macroOrder {
+                macroRef := Trim(macroRef, "`r`n ")
+                if (macroRef == "")
+                    continue
+                macroSeg := foldSeg "." macroRef   ; 例 Normal.Module1.Macro1
+                if (!HasSegment(macroSeg, macroSegs))
+                    continue
+                item := MacroItem()
+                item.ID := macroSeg                ; 段名即宏身份（表内唯一路径）
+                item.TK := IniRead(MacroFile, macroSeg, "TK", "")
+                item.HoldTime := IniRead(MacroFile, macroSeg, "HoldTime", "500")
+                item.UnorderedTrigger := !!Integer(IniRead(MacroFile, macroSeg, "UnorderedTrigger", "0"))
+                item.Forbid := ParseBoolInt(IniRead(MacroFile, macroSeg, "Forbid", "0"))
+                item.LoopCount := IniRead(MacroFile, macroSeg, "LoopCount", "1")
+                item.Remark := IniRead(MacroFile, macroSeg, "Remark", "")
+                item.TriggerType := IniRead(MacroFile, macroSeg, "TriggerType", "1")
+                item.TimingSerial := IniRead(MacroFile, macroSeg, "TimingSerial", "")
+                item.Mode := IniRead(MacroFile, macroSeg, "Mode", "1")
+                item.StartTipSound := IniRead(MacroFile, macroSeg, "StartTipSound", "1")
+                item.EndTipSound := IniRead(MacroFile, macroSeg, "EndTipSound", "1")
+                item.IcoPath := IniRead(MacroFile, macroSeg, "IcoPath", "")
+                item.VoiceKeywords := IniRead(MacroFile, macroSeg, "VoiceKeywords", "")
+                item.Macro := IniRead(MacroFile, macroSeg, "Macro", "")
+                item.FoldID := foldSeg             ; 父模块路径身份
+                tableItem.Items.Push(item)
+                tableItem.ItemMap[macroSeg] := item
+            }
+        }
+        return
+    }
+
+    ; ---- TOML 新链路（操作封装在 Util\TomlUtil.ahk，含点键自动补引号）----
+    t := TomlUtil_Read()
+    if (!TomlUtil_Valid(t))
+        return
+    tableSeg := TomlUtil_Table(t, tableID)
+    foldSegmentOrder := TomlUtil_List(tableSeg, "ModuleOrder")
+    foldSegs := EnumerateDottedSubSegments(tableID)   ; root 键前缀枚举（存在性确认）
     for foldRef in foldSegmentOrder {
         foldRef := Trim(foldRef, "`r`n ")
         if (foldRef == "")
             continue
-        foldSeg := tableID "." foldRef     ; 例 Normal.Module1
+        foldSeg := tableID "." foldRef
         if (!HasSegment(foldSeg, foldSegs))
-            continue   ; 段不存在则跳过（避免读残留）
+            continue
+        fseg := TomlUtil_Table(t, foldSeg)
+        if (!TomlUtil_Valid(fseg))
+            continue
         fold := MacroFold()
-        fold.ID := foldSeg                 ; 段名即模块身份（全局唯一路径）
-        fold.Remark := IniRead(MacroFile, foldSeg, "Remark", "")
-        fold.FrontInfo := IniRead(MacroFile, foldSeg, "FrontInfo", "")
-        fold.ForbidState := !!Integer(IniRead(MacroFile, foldSeg, "ForbidState", "0"))
-        fold.FoldState := !!Integer(IniRead(MacroFile, foldSeg, "FoldState", "0"))
-        fold.TKType := Integer(IniRead(MacroFile, foldSeg, "TKType", "4"))
-        fold.TK := IniRead(MacroFile, foldSeg, "TK", "")
-        fold.HoldTime := IniRead(MacroFile, foldSeg, "HoldTime", "500")
-        fold.UnorderedTrigger := !!Integer(IniRead(MacroFile, foldSeg, "UnorderedTrigger", "0"))
+        fold.ID := foldSeg
+        fold.Remark := TomlUtil_Str(fseg, "Remark")
+        fold.FrontInfo := TomlUtil_Str(fseg, "FrontInfo")
+        fold.ForbidState := !!TomlUtil_Bool(fseg, "ForbidState")
+        fold.FoldState := !!TomlUtil_Bool(fseg, "FoldState")
+        fold.TKType := Integer(TomlUtil_Str(fseg, "TKType", "4"))
+        fold.TK := TomlUtil_Str(fseg, "TK")
+        fold.HoldTime := TomlUtil_Str(fseg, "HoldTime", "500")
+        fold.UnorderedTrigger := !!TomlUtil_Bool(fseg, "UnorderedTrigger")
         tableItem.Folds.Push(fold)
         tableItem.FoldMap[foldSeg] := fold
 
         ; ---- 宏级：按模块段 MacroOrder 列表顺序加载 [foldSeg.MacroM] 段 ----
         macroSegs := EnumerateDottedSubSegments(foldSeg)
-        macroOrder := StrSplit(IniRead(MacroFile, foldSeg, "MacroOrder", ""), "π")
+        macroOrder := TomlUtil_List(fseg, "MacroOrder")
         for macroRef in macroOrder {
             macroRef := Trim(macroRef, "`r`n ")
             if (macroRef == "")
                 continue
-            macroSeg := foldSeg "." macroRef   ; 例 Normal.Module1.Macro1
+            macroSeg := foldSeg "." macroRef
             if (!HasSegment(macroSeg, macroSegs))
                 continue
+            mseg := TomlUtil_Table(t, macroSeg)
+            if (!TomlUtil_Valid(mseg))
+                continue
             item := MacroItem()
-            item.ID := macroSeg                ; 段名即宏身份（表内唯一路径）
-            item.TK := IniRead(MacroFile, macroSeg, "TK", "")
-            item.HoldTime := IniRead(MacroFile, macroSeg, "HoldTime", "500")
-            item.UnorderedTrigger := !!Integer(IniRead(MacroFile, macroSeg, "UnorderedTrigger", "0"))
-            item.Forbid := ParseBoolInt(IniRead(MacroFile, macroSeg, "Forbid", "0"))
-            item.LoopCount := IniRead(MacroFile, macroSeg, "LoopCount", "1")
-            item.Remark := IniRead(MacroFile, macroSeg, "Remark", "")
-            item.TriggerType := IniRead(MacroFile, macroSeg, "TriggerType", "1")
-            item.TimingSerial := IniRead(MacroFile, macroSeg, "TimingSerial", "")
-            item.Mode := IniRead(MacroFile, macroSeg, "Mode", "1")
-            item.StartTipSound := IniRead(MacroFile, macroSeg, "StartTipSound", "1")
-            item.EndTipSound := IniRead(MacroFile, macroSeg, "EndTipSound", "1")
-            item.IcoPath := IniRead(MacroFile, macroSeg, "IcoPath", "")
-            item.VoiceKeywords := IniRead(MacroFile, macroSeg, "VoiceKeywords", "")
-            item.Macro := IniRead(MacroFile, macroSeg, "Macro", "")
-            item.FoldID := foldSeg             ; 父模块路径身份
+            item.ID := macroSeg
+            item.TK := TomlUtil_Str(mseg, "TK")
+            item.HoldTime := TomlUtil_Str(mseg, "HoldTime", "500")
+            item.UnorderedTrigger := !!TomlUtil_Bool(mseg, "UnorderedTrigger")
+            item.Forbid := TomlUtil_Bool(mseg, "Forbid")
+            item.LoopCount := TomlUtil_Str(mseg, "LoopCount", "1")
+            item.Remark := TomlUtil_Str(mseg, "Remark")
+            item.TriggerType := TomlUtil_Str(mseg, "TriggerType", "1")
+            item.TimingSerial := TomlUtil_Str(mseg, "TimingSerial")
+            item.Mode := TomlUtil_Str(mseg, "Mode", "1")
+            item.StartTipSound := TomlUtil_Str(mseg, "StartTipSound", "1")
+            item.EndTipSound := TomlUtil_Str(mseg, "EndTipSound", "1")
+            item.IcoPath := TomlUtil_Str(mseg, "IcoPath")
+            item.VoiceKeywords := TomlUtil_Str(mseg, "VoiceKeywords")
+            item.Macro := TomlUtil_Str(mseg, "Macro")
+            item.FoldID := foldSeg
             tableItem.Items.Push(item)
             tableItem.ItemMap[macroSeg] := item
         }
@@ -1181,30 +1336,54 @@ ParseBoolInt(x) {
 ; 仅返回比 prefix 多一节（不含更深层级）的段。
 ; ============================================================
 EnumerateDottedSubSegments(prefix) {
+    global MacroFile
     segs := []
     orderMap := Map()   ; 段名 -> 末节数字
-    try {
-        allSegs := IniRead(MacroFile)   ; 全部段名，换行分隔
-        for rawLine in StrSplit(allSegs, "`n") {
-            seg := Trim(rawLine, "`r`n ")
-            if (seg == "" || seg == prefix)
-                continue
-            ; 只接受 prefix + "." + 单节（tail 不含点 = 直接子段；含点 = 更深孙段跳过）
-            prefixDot := prefix "."
-            if (SubStr(seg, 1, StrLen(prefixDot)) != prefixDot)
-                continue
-            tail := SubStr(seg, StrLen(prefixDot) + 1)
-            if (InStr(tail, "."))
-                continue   ; 更深层级孙段
-            ; 提取末节序号（ModuleN / MacroN 的 N）
-            num := 0
-            if (RegExMatch(tail, "(\d+)$", &m))
-                num := Integer(m[1])
-            segs.Push(seg)
-            orderMap[seg] := num
+    ; ---- INI 迁移期：磁盘枚举全部段名 ----
+    if (!IsMacroTomlMode()) {
+        try {
+            allSegs := IniRead(MacroFile)   ; 全部段名，换行分隔
+            for rawLine in StrSplit(allSegs, "`n") {
+                seg := Trim(rawLine, "`r`n ")
+                if (seg == "" || seg == prefix)
+                    continue
+                ; 只接受 prefix + "." + 单节（tail 不含点 = 直接子段；含点 = 更深孙段跳过）
+                prefixDot := prefix "."
+                if (SubStr(seg, 1, StrLen(prefixDot)) != prefixDot)
+                    continue
+                tail := SubStr(seg, StrLen(prefixDot) + 1)
+                if (InStr(tail, "."))
+                    continue   ; 更深层级孙段
+                ; 提取末节序号（ModuleN / MacroN 的 N）
+                num := 0
+                if (RegExMatch(tail, "(\d+)$", &m))
+                    num := Integer(m[1])
+                segs.Push(seg)
+                orderMap[seg] := num
+            }
+        } catch as e {
+            RMTLogSys(RMT_LV_ERROR, "EnumerateDottedSubSegments", Format("枚举 {1} 子段失败: {2}", prefix, e.Message))
         }
-    } catch as e {
-        RMTLogSys(RMT_LV_ERROR, "EnumerateDottedSubSegments", Format("枚举 {1} 子段失败: {2}", prefix, e.Message))
+        ; 按末节数字自然升序
+        BuildSortIndex(segs, orderMap)
+        return segs
+    }
+    ; ---- TOML 新链路：root 键迭代（TomlUtil_RootMap 已剥离引号，不再枚举磁盘） ----
+    src := TomlUtil_RootMap()
+    prefixDot := prefix "."
+    for seg, _ in src {
+        if (seg == "" || seg == prefix)
+            continue
+        if (SubStr(seg, 1, StrLen(prefixDot)) != prefixDot)
+            continue
+        tail := SubStr(seg, StrLen(prefixDot) + 1)
+        if (InStr(tail, "."))
+            continue   ; 更深层级孙段
+        num := 0
+        if (RegExMatch(tail, "(\d+)$", &m))
+            num := Integer(m[1])
+        segs.Push(seg)
+        orderMap[seg] := num
     }
     ; 按末节数字自然升序
     BuildSortIndex(segs, orderMap)
@@ -1237,7 +1416,7 @@ BuildSortIndex(segs, orderMap) {
 ; 解析后迁移为新格式对象结构
 ; ============================================================
 ReadTableItemInfoLegacy(tableItem) {
-    global MySoftData
+    global MySoftData, MacroFile, IniSection
     symbol := tableItem.Symbol
     defaultInfo := GetTableItemDefaultInfo(tableItem)
     savedTKArrStr := IniRead(MacroFile, IniSection, symbol "TKArr", "")
@@ -1588,6 +1767,16 @@ WipeDottedSubSections(filename, tableID) {
 }
 
 SaveTableItemInfo(tableItem) {
+    ; 双模式分发：迁移期 MacroFile 临时指向 .ini 走旧链路；正常期 .toml 走 TOML 新链路
+    if (!IsMacroTomlMode()) {
+        SaveTableItemInfoIni(tableItem)
+        return
+    }
+    SaveTableItemInfoToml(tableItem)
+}
+
+SaveTableItemInfoIni(tableItem) {
+    global MacroFile, IniSection
     tableID := tableItem.ID
     symbol := tableItem.Symbol
 
@@ -1702,6 +1891,125 @@ SaveTableItemInfo(tableItem) {
     IniDelete(MacroFile, IniSection, symbol "FoldInfo")
 }
 
+; ============================================================
+; TOML 保存（MacroFile.toml）：整文件读-改-写，原子覆盖
+; 根表键即段名（扁平字面）：表段 [tableID]、模块段/宏段为含点路径身份（writer 自动引号）
+; 只重建本表全部段（先剔除旧段再写入），其他表段与 [[table]] 数组原样保留
+; ============================================================
+SaveTableItemInfoToml(tableItem) {
+    root := TomlUtil_RootMap()
+    SaveTableItemInfoTomlCore(root, tableItem)
+    TomlUtil_Write(root)
+}
+
+; 把单表三级段组装进 root（不写文件）：供单表保存与批量保存共用
+; 只重建本表全部段（先剔除旧段再写入），其他表段与 [[table]] 数组原样保留
+SaveTableItemInfoTomlCore(root, tableItem) {
+    tableID := tableItem.ID
+
+    ; 非配置表（Tool/Setting/Help/Reward/Thank 等静态页）：清空本表全部段，保证磁盘零配置、零残留。
+    if (IsStaticTable(tableItem)) {
+        TomlUtil_DeleteSegs(root, tableID)
+        return
+    }
+
+    ; 先剔除本表旧段（本次重建覆盖 + 孤儿自动清除），保留其他表段与 table 数组
+    TomlUtil_DeleteSegs(root, tableID)
+
+    ; 孤儿宏（FoldID 无匹配模块）先归入首模块，保证不丢失
+    fallbackFold := tableItem.Folds.Length > 0 ? tableItem.Folds[1] : ""
+    for item in tableItem.Items {
+        if ((item.FoldID == "" || !FoldIDBelongs(item.FoldID, tableItem)) && fallbackFold != "")
+            item.FoldID := fallbackFold.ID
+    }
+
+    ; ---- 表段 [tableID]：ModuleOrder = 模块尾节数组 ----
+    moduleOrder := []
+    for fold in tableItem.Folds {
+        foldSeg := fold.ID
+        if (foldSeg == "") {
+            RMTLogSys(RMT_LV_ERROR, "SaveTableItemInfo", "模块缺少路径身份(ID)，无法确定段名，跳过")
+            continue
+        }
+        moduleOrder.Push(GetSegTail(foldSeg))
+    }
+    tableSeg := Map()
+    tableSeg["ModuleOrder"] := moduleOrder
+    root[tableID] := tableSeg
+
+    ; ---- 模块段 + 宏段（含点路径身份键，TomlWriter 自动加引号） ----
+    for fold in tableItem.Folds {
+        foldSeg := fold.ID
+        if (foldSeg == "")
+            continue
+        fseg := Map()
+        fseg["Remark"] := fold.Remark
+        fseg["FrontInfo"] := fold.FrontInfo
+        fseg["ForbidState"] := fold.ForbidState ? 1 : 0
+        fseg["FoldState"] := fold.FoldState ? 1 : 0
+        fseg["TKType"] := String(fold.TKType)
+        fseg["TK"] := fold.TK
+        fseg["HoldTime"] := String(fold.HoldTime)
+        fseg["UnorderedTrigger"] := fold.UnorderedTrigger ? 1 : 0
+
+        macroOrder := []
+        for item in tableItem.Items {
+            if (item.FoldID != foldSeg)
+                continue   ; 宏归属按 FoldID（父路径）归入对应模块段
+            macroSeg := item.ID
+            if (macroSeg == "") {
+                RMTLogSys(RMT_LV_ERROR, "SaveTableItemInfo", Format("模块{1}内宏缺少路径身份(ID)，跳过", foldSeg))
+                continue
+            }
+            macroOrder.Push(GetSegTail(macroSeg))
+            mseg := Map()
+            mseg["TK"] := item.TK
+            mseg["HoldTime"] := String(item.HoldTime)
+            mseg["Mode"] := item.Mode
+            mseg["Forbid"] := item.Forbid ? 1 : 0
+            mseg["Remark"] := item.Remark
+            mseg["LoopCount"] := String(item.LoopCount)
+            mseg["TriggerType"] := String(item.TriggerType)
+            mseg["TimingSerial"] := item.TimingSerial
+            mseg["StartTipSound"] := String(item.StartTipSound)
+            mseg["EndTipSound"] := String(item.EndTipSound)
+            mseg["IcoPath"] := item.IcoPath
+            mseg["UnorderedTrigger"] := item.UnorderedTrigger ? 1 : 0
+            mseg["VoiceKeywords"] := item.VoiceKeywords
+            ; 宏内容：原样存储（多行换行由 TomlWriter 转义为 \n，读回自动还原，无需 ⫶ 编码）
+            mseg["Macro"] := item.Macro
+            root[macroSeg] := mseg
+        }
+        fseg["MacroOrder"] := macroOrder
+        root[foldSeg] := fseg
+    }
+}
+
+; ============================================================
+; 批量保存全部表（TOML 模式）：一次解析 root + 一次原子写
+; 含表集合 [[table]] 与各表三级段，替代 OnSaveSetting 的逐表读写（13 表 → 1 次解析 + 1 次写）
+; INI 模式（迁移期）退化为逐表旧链路
+; ============================================================
+SaveAllTableItemInfo(tableItems) {
+    if (!IsMacroTomlMode()) {
+        for tableItem in tableItems
+            SaveTableItemInfo(tableItem)
+        SaveTableCollection()
+        return
+    }
+    root := TomlUtil_RootMap()
+    ; 表集合 [[table]]（id/symbol/name/order）
+    tableArr := []
+    for tableItem in tableItems {
+        tableArr.Push(Map("id", tableItem.ID, "symbol", tableItem.Symbol, "name", tableItem.Name, "order", tableItem.Order))
+    }
+    root["table"] := tableArr
+    ; 各表三级段（共享同一 root，避免逐表读-改-写）
+    for tableItem in tableItems
+        SaveTableItemInfoTomlCore(root, tableItem)
+    TomlUtil_Write(root)
+}
+
 ; 判断某 FoldID 是否属于本表现有模块集合
 FoldIDBelongs(foldID, tableItem) {
     for fold in tableItem.Folds {
@@ -1728,14 +2036,25 @@ JoinPi(arr) {
     return out
 }
 
-; 保存整个表集合（[Tables] 段，动态表定义）
-; 用 JSON 数组序列化，避免表名含 | / π 等分隔符导致解析错位
+; 保存整个表集合（动态表定义）
+; INI 版：[Tables] 段 JSON 数组序列化；TOML 版：[[table]] 数组（id/symbol/name/order）
 SaveTableCollection() {
+    global MacroFile
+    if (!IsMacroTomlMode()) {
+        tableArr := []
+        for tableItem in MySoftData.TableInfo {
+            tableArr.Push([tableItem.ID, tableItem.Symbol, tableItem.Name, tableItem.Order])
+        }
+        IniWrite(JSON.stringify(tableArr, 0), MacroFile, "Tables", "List")
+        return
+    }
+    root := TomlUtil_RootMap()
     tableArr := []
     for tableItem in MySoftData.TableInfo {
-        tableArr.Push([tableItem.ID, tableItem.Symbol, tableItem.Name, tableItem.Order])
+        tableArr.Push(Map("id", tableItem.ID, "symbol", tableItem.Symbol, "name", tableItem.Name, "order", tableItem.Order))
     }
-    IniWrite(JSON.stringify(tableArr, 0), MacroFile, "Tables", "List")
+    root["table"] := tableArr
+    TomlUtil_Write(root)
 }
 
 ; ============================================================

@@ -46,9 +46,8 @@ OnSaveSetting(*) {
     loop MySoftData.TableInfo.Length {
         tableItem := MySoftData.TableInfo[A_Index]
         RecycleTabItem(tableItem)
-        SaveTableItemInfo(tableItem)
     }
-    SaveTableCollection()
+    SaveAllTableItemInfo(MySoftData.TableInfo)   ; 批量：一次解析 + 一次原子写（含表集合 [[table]]）
 
     ; 静态变量：保存上次写入的值，用于脏检查
     static lastSavedSettings := Map()
@@ -408,7 +407,8 @@ InitFilePath() {
     global AHIDllDir := A_WorkingDir "\Plugins\AhiDriver"
     global AHIPluginDir := A_WorkingDir "\Plugins\AhiDriver\installer"
     global ArrayFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ArrayFile.ini"
-    global MacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.ini"
+    global MacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.toml"
+    global MacroIniFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.ini"
     global SearchFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchFile.ini"
     global SearchProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchProFile.ini"
     global CompareFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareFile.ini"
