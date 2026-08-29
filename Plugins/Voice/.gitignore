@@ -5,3 +5,4 @@ out*/
 *.lib
 *.exp
 _build_cl.bat
+models/stt_stream/

@@ -7,6 +7,7 @@
       x64\           运行时产物（VoiceDll.dll + 依赖 DLL，64 位）
       x86\           运行时产物（VoiceDll.dll + 依赖 DLL，32 位）
       models\kws\    KWS 模型（跨架构共享）
+      models\stt_stream\  STT 流式模型（超 GitHub 100MB 单文件限制，git 忽略，按需下载）
       third_party\   依赖下载缓存（git 忽略）
       tools\         测试工具（VoiceTest.exe / zh_4.wav）
     sherpa-onnx 依赖库与 KWS 模型由本脚本自动下载到 third_party\ 下，
@@ -16,16 +17,22 @@
     .\buildDll.ps1            ; 默认 x64：一键下载依赖 + 编译 + 部署
     .\buildDll.ps1 -Arch x86  ; 编译 x86 版到 x86\
     .\buildDll.ps1 -NoPause   ; 编译后不等待按键（CI 用）
+    .\buildDll.ps1 -SkipSttModel  ; 跳过 STT 模型下载（只编 DLL）
 .PARAMETER Arch
     目标架构: x86 或 x64，默认 x64
 .PARAMETER NoPause
     结束后不等待按键
+.PARAMETER SkipSttModel
+    跳过 STT 流式模型（约 128MB）的下载部署。
+    该模型超 GitHub 单文件 100MB 限制、不进仓库；只改 C++ 代码时用本开关可省下载，
+    需要模型时单独跑 .\GetSttModel.ps1。
 #>
 
 param(
     [ValidateSet("x86", "x64")]
     [string]$Arch = "x64",
-    [switch]$NoPause
+    [switch]$NoPause,
+    [switch]$SkipSttModel
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,9 +47,12 @@ $ModelName   = "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20"
 $ModelChunk  = "chunk-16-left-64"
 $SherpaUrl   = "https://github.com/k2-fsa/sherpa-onnx/releases/download/$SherpaVer/$SherpaPkg.tar.bz2"
 $ModelUrl    = "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/$ModelName.tar.bz2"
-# STT 离线语音转文字模型（paraformer 中英小模型，~82MB；按需下载，不进发布包）
-$SttModelName = "sherpa-onnx-paraformer-zh-small-2024-03-09"
-$SttModelUrl  = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$SttModelName.tar.bz2"
+# STT 单模型方案：只用本地流式模型（transducer），不再需要离线 paraformer 精修。
+# 模型 sherpa-onnx-x-asr-<chunk>-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05
+#   chunk 可选 160ms / 480ms / 960ms / 1920ms：越大越准、首字延迟越高。默认 480ms。
+#   包体 ~128MB，解压后 encoder 149M + decoder 11M + joiner 2.5M。
+$SttStreamModelName = "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
+$SttStreamModelUrl  = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$SttStreamModelName.tar.bz2"
 
 # ==================== 目录 ====================
 # 依赖下载解压区（git 忽略）
@@ -56,9 +66,9 @@ $BuildDir   = Join-Path $DepDir ("out_" + $Arch)
 $RunDir     = Join-Path $VoiceDir $Arch
 # 运行时模型目录（跨架构共享）
 $RunModelDir = Join-Path $VoiceDir "models\kws"
-# STT 模型运行时目录（跨架构共享）
-$RunSttModelDir = Join-Path $VoiceDir "models\stt"
-New-Item -ItemType Directory -Force -Path $DlDir, $SherpaDir, $BuildDir, $RunDir, $RunModelDir, $RunSttModelDir | Out-Null
+# STT 流式模型运行时目录（跨架构共享；单模型方案，已无离线 paraformer）
+$RunSttStreamModelDir = Join-Path $VoiceDir "models\stt_stream"
+New-Item -ItemType Directory -Force -Path $DlDir, $SherpaDir, $BuildDir, $RunDir, $RunModelDir, $RunSttStreamModelDir | Out-Null
 
 # 源码在 src\ 子目录
 $Src      = Join-Path $VoiceDir "src\VoiceDll.cpp"
@@ -142,23 +152,31 @@ $modelSrcDir = Join-Path $DepDir $ModelName
 if (-not (Test-Path $modelSrcDir)) { Write-Host "[错误] 解压后未找到模型目录: $modelSrcDir" -ForegroundColor Red; if (-not $NoPause) { Read-Host "按回车退出" }; exit 1 }
 Write-Host "[OK] 模型源: $modelSrcDir" -ForegroundColor Green
 
-# --- STT paraformer 模型包（语音转文字；缺才部署，已有则跳过下载） ---
-$sttModelOk = (Test-Path (Join-Path $RunSttModelDir "model.int8.onnx")) -and (Test-Path (Join-Path $RunSttModelDir "tokens.txt"))
-if (-not $sttModelOk) {
-    $sttTar = Join-Path $DlDir "$SttModelName.tar.bz2"
-    Invoke-Download $SttModelUrl $sttTar "STT paraformer 中文模型"
-    Expand-TarBz2 $sttTar $DepDir
-    $sttSrcDir = Join-Path $DepDir $SttModelName
-    if (-not (Test-Path $sttSrcDir)) { Write-Host "[错误] 解压后未找到 STT 模型目录: $sttSrcDir" -ForegroundColor Red; if (-not $NoPause) { Read-Host "按回车退出" }; exit 1 }
-    foreach ($mf in @("model.int8.onnx", "tokens.txt")) {
-        $srcMf = Join-Path $sttSrcDir $mf
-        $dstMf = Join-Path $RunSttModelDir $mf
+# --- STT 流式模型包（transducer 三件套；缺才部署，已有则跳过下载） ---
+# 注：该模型超 GitHub 单文件 100MB 限制，不进仓库。
+#     -SkipSttModel 可跳过（只编 DLL 时用）；需要模型时单独跑 .\GetSttModel.ps1
+$SttStreamFiles = @("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", "bpe.model")
+$sttStreamModelOk = $true
+foreach ($mf in $SttStreamFiles) {
+    if (-not (Test-Path (Join-Path $RunSttStreamModelDir $mf))) { $sttStreamModelOk = $false; break }
+}
+if ($SkipSttModel) {
+    Write-Host "[跳过] STT 流式模型（-SkipSttModel）；需要时运行 .\GetSttModel.ps1" -ForegroundColor DarkGray
+} elseif (-not $sttStreamModelOk) {
+    $sttStreamTar = Join-Path $DlDir "$SttStreamModelName.tar.bz2"
+    Invoke-Download $SttStreamModelUrl $sttStreamTar "STT 流式模型（transducer，约 128MB）"
+    Expand-TarBz2 $sttStreamTar $DepDir
+    $sttStreamSrcDir = Join-Path $DepDir $SttStreamModelName
+    if (-not (Test-Path $sttStreamSrcDir)) { Write-Host "[错误] 解压后未找到 STT 流式模型目录: $sttStreamSrcDir" -ForegroundColor Red; if (-not $NoPause) { Read-Host "按回车退出" }; exit 1 }
+    foreach ($mf in $SttStreamFiles) {
+        $srcMf = Join-Path $sttStreamSrcDir $mf
+        $dstMf = Join-Path $RunSttStreamModelDir $mf
         if (Test-Path $srcMf) { Copy-Item $srcMf $dstMf -Force }
-        else { Write-Host "[警告] STT 模型文件缺失: $srcMf（跳过）" -ForegroundColor Yellow }
+        else { Write-Host "[警告] STT 流式模型文件缺失: $srcMf（跳过）" -ForegroundColor Yellow }
     }
-    Write-Host "[OK] STT 模型已就位: models\stt" -ForegroundColor Green
+    Write-Host "[OK] STT 流式模型已就位: models\stt_stream" -ForegroundColor Green
 } else {
-    Write-Host "[OK] STT 模型已缓存: $RunSttModelDir（跳过下载）" -ForegroundColor Green
+    Write-Host "[OK] STT 流式模型已缓存: $RunSttStreamModelDir（跳过下载）" -ForegroundColor Green
 }
 
 # ==================== 查找 MSVC 编译器（按架构选 vcvars32/64） ====================

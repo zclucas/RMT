@@ -26,6 +26,18 @@
 //   void  Stt_Close()
 //   int   Stt_TestWav(const wchar_t* wavPath, char* out, int outSize)
 //
+// STT 流式（本地在线识别，sherpa-onnx OnlineRecognizer + zipformer2 CTC，不联网）：
+//   int   SttStream_Init(const wchar_t* model, const wchar_t* tokens)
+//   int   SttStream_Begin()                   ; 建流 + 起采集
+//   int   SttStream_Poll(char* out, int outSize) ; 喂音频 + 增量解码 + 取当前文本（~150ms 调一次）
+//   int   SttStream_End(int refine)           ; 收尾解码；refine!=0 时再交给离线识别器精修
+//   int   SttStream_Cancel()
+//   int   SttStream_GetState()                ; 0空闲 1录音中 2精修中 3完成 4错误
+//   int   SttStream_GetResult(char* buf, int bufSize)
+//   int   SttStream_GetLastError(char* buf, int bufSize)
+//   void  SttStream_Close()
+//   int   SttStream_TestWav(const wchar_t* wavPath, char* out, int outSize)
+//
 // 编译：MSVC x64 + 链接 sherpa-onnx-c-api.lib + WASAPI(winmm/ole32? no)
 //       WASAPI 需要 avrt.lib 用于 MMCSS。COM CoInitializeEx + ole32.
 // 依赖运行时：sherpa-onnx-c-api.dll + onnxruntime.dll 与最新 DLL 同目录。
@@ -768,6 +780,314 @@ __declspec(dllexport) int Stt_TestWav(const wchar_t* wavPath, char* out, int out
         if (r) SherpaOnnxDestroyOfflineRecognizerResult(r);
         SherpaOnnxDestroyOfflineStream(s);
     }
+    SherpaOnnxFreeWave(wave);
+    return ok;
+}
+
+// ---------------------------------------------------------------------
+// STT 流式（本地在线识别）—— sherpa-onnx OnlineRecognizer + zipformer2 CTC
+// 全程本地推理，不联网。与上面的离线 Stt_* 完全独立：独立识别器/采集实例/状态机。
+// 流程：Begin 建流 + 起采集 → AHK 每 ~150ms 调 Poll（喂音频、增量解码、取当前文本）
+//      → End 收尾解码；refine!=0 时把整段音频再交给离线 paraformer 精修（two-pass）
+// 状态：0空闲 1录音中 2精修中 3完成 4错误
+// 注意：精修线程内绝不获取 g_ssMx / g_sttMx，Init/Close 才 join。
+// ---------------------------------------------------------------------
+static std::mutex g_ssMx;
+static const SherpaOnnxOnlineRecognizer* g_ssRec = nullptr;
+static const SherpaOnnxOnlineStream* g_ssStream = nullptr;
+static std::string g_ssModel, g_ssDec, g_ssJoin, g_ssTokens, g_ssBpe;
+static std::string g_ssError;
+static std::string g_ssResult;
+static std::vector<float> g_ssSamples;      // 整段音频，供精修使用
+static WasapiCapture g_ssCapture;           // 独立采集实例（与 KWS / 离线 STT 三者并存）
+static std::thread g_ssThread;
+static std::atomic<int> g_ssState{0};       // 0空闲 1录音中 2精修中 3完成 4错误
+
+static void SsSetErr(const std::string& s) { g_ssError = s; }
+
+static void DirOfUtf8(const std::string& p, std::string& outDir) {
+    size_t pos = p.find_last_of("\\/");
+    outDir = (pos == std::string::npos) ? std::string() : p.substr(0, pos);
+}
+
+static bool FileExistsUtf8(const std::string& p) {
+    if (p.empty()) return false;
+    DWORD a = GetFileAttributesA(p.c_str());
+    return (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY));
+}
+
+// 自动识别 BPE 词表：tokens.txt 同目录下的 bpe.model / bbpe.model
+// （x-asr transducer 用 bpe.model；部分 zipformer2 CTC 用 bbpe.model）
+static bool SsDetectBpe(const std::string& tokensPath, std::string& outVocab) {
+    std::string dir;
+    DirOfUtf8(tokensPath, dir);
+    if (dir.empty()) return false;
+    for (const char* name : {"bpe.model", "bbpe.model"}) {
+        std::string cand = dir + "\\" + name;
+        if (FileExistsUtf8(cand)) { outVocab = cand; return true; }
+    }
+    return false;
+}
+
+// 取当前累积文本（结果对象用完即释放）。用出参避免 extern "C" 返回 std::string（C4190）
+static void SsTakeText(std::string& outText) {
+    outText.clear();
+    if (!g_ssRec || !g_ssStream) return;
+    const SherpaOnnxOnlineRecognizerResult* r = SherpaOnnxGetOnlineStreamResult(g_ssRec, g_ssStream);
+    if (!r) return;
+    outText = (r->text ? r->text : "");
+    SherpaOnnxDestroyOnlineRecognizerResult(r);
+}
+
+// 把就绪的 chunk 全部解码
+static void SsDrain() {
+    if (!g_ssRec || !g_ssStream) return;
+    while (SherpaOnnxIsOnlineStreamReady(g_ssRec, g_ssStream))
+        SherpaOnnxDecodeOnlineStream(g_ssRec, g_ssStream);
+}
+
+// 精修线程：用离线识别器重识别整段（two-pass 的第二遍）
+static void SsRefineThread(std::vector<float> samples) {
+    // 直接读 g_sttRec（离线识别器），不持任何锁，避免与 Init/Close 死锁
+    if (g_sttRec) {
+        const SherpaOnnxOfflineStream* s = SherpaOnnxCreateOfflineStream(g_sttRec);
+        if (s) {
+            if (!samples.empty())
+                SherpaOnnxAcceptWaveformOffline(s, 16000, samples.data(), (int32_t)samples.size());
+            SherpaOnnxDecodeOfflineStream(g_sttRec, s);
+            const SherpaOnnxOfflineRecognizerResult* r = SherpaOnnxGetOfflineStreamResult(s);
+            if (r && r->text && strlen(r->text) > 0)
+                g_ssResult = r->text;
+            if (r) SherpaOnnxDestroyOfflineRecognizerResult(r);
+            SherpaOnnxDestroyOfflineStream(s);
+        }
+    }
+    g_ssState = 3;
+}
+
+// 加载流式模型。两种形态按参数自动判定：
+//   · transducer：encoder + decoder + joiner 均非空（如 x-asr zipformer2 transducer）
+//   · zipformer2 CTC：decoder/joiner 为空，encoder 即单个 onnx 模型路径
+__declspec(dllexport) int SttStream_Init(const wchar_t* encoder, const wchar_t* decoder,
+                                        const wchar_t* joiner, const wchar_t* tokens) {
+    std::lock_guard<std::mutex> lk(g_ssMx);
+    g_ssModel  = WToUtf8(encoder);
+    g_ssDec    = WToUtf8(decoder ? decoder : L"");
+    g_ssJoin   = WToUtf8(joiner  ? joiner  : L"");
+    g_ssTokens = WToUtf8(tokens);
+    if (g_ssModel.empty() || g_ssTokens.empty()) {
+        SsSetErr("流式模型路径不完整");
+        return 0;
+    }
+    bool isTransducer = (!g_ssDec.empty() && !g_ssJoin.empty());
+    if (g_ssThread.joinable()) g_ssThread.join();
+    if (g_ssStream) { SherpaOnnxDestroyOnlineStream(g_ssStream); g_ssStream = nullptr; }
+    if (g_ssRec)    { SherpaOnnxDestroyOnlineRecognizer(g_ssRec); g_ssRec = nullptr; }
+    SherpaOnnxOnlineRecognizerConfig c;
+    memset(&c, 0, sizeof(c));
+    c.feat_config.sample_rate = 16000;
+    c.feat_config.feature_dim = 80;
+    if (isTransducer) {
+        c.model_config.transducer.encoder = g_ssModel.c_str();
+        c.model_config.transducer.decoder = g_ssDec.c_str();
+        c.model_config.transducer.joiner  = g_ssJoin.c_str();
+    } else {
+        c.model_config.zipformer2_ctc.model = g_ssModel.c_str();
+    }
+    c.model_config.tokens   = g_ssTokens.c_str();
+    c.model_config.num_threads = 2;
+    c.model_config.provider = "cpu";
+    // 检测到 BPE 词表就显式启用（否则会按 cjkchar 解 tokens，输出乱码）；
+    // model_type 留空 → 由 sherpa 依据模型元数据自动判定
+    if (SsDetectBpe(g_ssTokens, g_ssBpe)) {
+        c.model_config.modeling_unit = "bpe";
+        c.model_config.bpe_vocab = g_ssBpe.c_str();
+        fprintf(stderr, "[SttStream] modeling_unit=bpe, bpe_vocab=%s\n", g_ssBpe.c_str());
+    }
+    c.decoding_method  = "greedy_search";
+    c.max_active_paths = 4;
+    c.enable_endpoint  = 0;                 // 由 AHK 手动控制起止，不做自动断句
+    g_ssRec = SherpaOnnxCreateOnlineRecognizer(&c);
+    fprintf(stderr, "[SttStream] CreateOnlineRecognizer(%s) => %p\n",
+            isTransducer ? "transducer" : "zipformer2_ctc", (void*)g_ssRec);
+    if (!g_ssRec) {
+        SsSetErr("创建流式识别器失败（模型加载失败）");
+        return 0;
+    }
+    g_ssResult.clear();
+    g_ssSamples.clear();
+    g_ssState = 0;
+    SsSetErr("");
+    return 1;
+}
+
+// 建流 + 起采集
+__declspec(dllexport) int SttStream_Begin() {
+    std::lock_guard<std::mutex> lk(g_ssMx);
+    if (!g_ssRec) { SsSetErr("流式模型未加载"); return 0; }
+    if (g_ssState == 1) return 1;
+    if (g_ssState == 2) { SsSetErr("正在精修上一段，请稍候"); return 0; }
+    if (g_ssThread.joinable()) g_ssThread.join();
+    if (g_ssStream) { SherpaOnnxDestroyOnlineStream(g_ssStream); g_ssStream = nullptr; }
+    g_ssStream = SherpaOnnxCreateOnlineStream(g_ssRec);
+    if (!g_ssStream) { SsSetErr("创建流式识别流失败"); return 0; }
+    std::vector<float> discard;
+    g_ssCapture.PullSamples(discard);
+    g_ssSamples.clear();
+    g_ssResult.clear();
+    if (!g_ssCapture.Start(16000)) {
+        SherpaOnnxDestroyOnlineStream(g_ssStream);
+        g_ssStream = nullptr;
+        SsSetErr("麦克风采集启动失败");
+        return 0;
+    }
+    g_ssState = 1;
+    SsSetErr("");
+    return 1;
+}
+
+// 录音中轮询：喂入新采集到的音频 → 增量解码 → 回写当前文本
+__declspec(dllexport) int SttStream_Poll(char* out, int outSize) {
+    if (!out || outSize <= 0) return 0;
+    std::lock_guard<std::mutex> lk(g_ssMx);
+    if (g_ssState != 1 || !g_ssRec || !g_ssStream) { out[0] = '\0'; return 0; }
+    std::vector<float> chunk;
+    g_ssCapture.PullSamples(chunk);
+    if (!chunk.empty()) {
+        SherpaOnnxOnlineStreamAcceptWaveform(g_ssStream, 16000, chunk.data(), (int32_t)chunk.size());
+        g_ssSamples.insert(g_ssSamples.end(), chunk.begin(), chunk.end());
+    }
+    SsDrain();
+    SsTakeText(g_ssResult);
+    int n = std::min((int)g_ssResult.size(), outSize - 1);
+    memcpy(out, g_ssResult.c_str(), n);
+    out[n] = '\0';
+    return 1;
+}
+
+// 停止录音并收尾；refine!=0 且离线模型已加载时，异步精修
+__declspec(dllexport) int SttStream_End(int refine) {
+    std::lock_guard<std::mutex> lk(g_ssMx);
+    if (g_ssState != 1 || !g_ssRec || !g_ssStream) return 0;
+    g_ssCapture.Stop();
+    std::vector<float> tail;
+    g_ssCapture.PullSamples(tail);
+    if (!tail.empty()) {
+        SherpaOnnxOnlineStreamAcceptWaveform(g_ssStream, 16000, tail.data(), (int32_t)tail.size());
+        g_ssSamples.insert(g_ssSamples.end(), tail.begin(), tail.end());
+    }
+    SherpaOnnxOnlineStreamInputFinished(g_ssStream);
+    SsDrain();
+    SsTakeText(g_ssResult);
+    if (g_ssSamples.empty()) {
+        SsSetErr("未采集到音频");
+        g_ssState = 0;
+        return 0;
+    }
+    if (refine && g_sttRec) {
+        if (g_ssThread.joinable()) g_ssThread.join();
+        g_ssState = 2;
+        g_ssThread = std::thread(SsRefineThread, g_ssSamples);
+    } else {
+        g_ssState = 3;
+    }
+    return 1;
+}
+
+// 停止并丢弃
+__declspec(dllexport) int SttStream_Cancel() {
+    std::lock_guard<std::mutex> lk(g_ssMx);
+    if (g_ssState != 1) return 0;
+    g_ssCapture.Stop();
+    std::vector<float> discard;
+    g_ssCapture.PullSamples(discard);
+    g_ssSamples.clear();
+    g_ssResult.clear();
+    g_ssState = 0;
+    return 1;
+}
+
+__declspec(dllexport) int SttStream_GetState() {
+    return g_ssState.load();
+}
+
+__declspec(dllexport) int SttStream_GetResult(char* buf, int bufSize) {
+    if (!buf || bufSize <= 0) return 0;
+    if (g_ssState != 3 && g_ssState != 1) { buf[0] = '\0'; return 0; }
+    int n = std::min((int)g_ssResult.size(), bufSize - 1);
+    memcpy(buf, g_ssResult.c_str(), n);
+    buf[n] = '\0';
+    return 1;
+}
+
+__declspec(dllexport) int SttStream_GetLastError(char* buf, int bufSize) {
+    if (!buf || bufSize <= 0) return 0;
+    int n = std::min((int)g_ssError.size(), bufSize - 1);
+    memcpy(buf, g_ssError.c_str(), n);
+    buf[n] = '\0';
+    return g_ssError.empty() ? 0 : (int)g_ssError.size();
+}
+
+__declspec(dllexport) void SttStream_Close() {
+    std::lock_guard<std::mutex> lk(g_ssMx);
+    if (g_ssState == 1) {
+        g_ssCapture.Stop();
+        std::vector<float> discard;
+        g_ssCapture.PullSamples(discard);
+        g_ssState = 0;
+    }
+    if (g_ssThread.joinable()) g_ssThread.join();
+    if (g_ssStream) { SherpaOnnxDestroyOnlineStream(g_ssStream); g_ssStream = nullptr; }
+    if (g_ssRec)    { SherpaOnnxDestroyOnlineRecognizer(g_ssRec); g_ssRec = nullptr; }
+    g_ssResult.clear();
+    g_ssSamples.clear();
+    SsSetErr("");
+}
+
+// 离线验证：按 100ms 分片喂 wav，模拟实时上屏，最终返回全文（不依赖麦克风）
+__declspec(dllexport) int SttStream_TestWav(const wchar_t* wavPath, char* out, int outSize) {
+    if (!wavPath || !out || outSize <= 0) return 0;
+    out[0] = '\0';
+    std::string wp = WToUtf8(wavPath);
+    std::lock_guard<std::mutex> lk(g_ssMx);
+    if (!g_ssRec) return 0;
+    const SherpaOnnxWave* wave = SherpaOnnxReadWave(wp.c_str());
+    if (!wave || !wave->samples || wave->num_samples <= 0) {
+        if (wave) SherpaOnnxFreeWave(wave);
+        return 0;
+    }
+    const SherpaOnnxOnlineStream* s = SherpaOnnxCreateOnlineStream(g_ssRec);
+    if (!s) { SherpaOnnxFreeWave(wave); return 0; }
+
+    const int32_t chunk = (wave->sample_rate > 0 ? wave->sample_rate : 16000) / 10; // 100ms
+    int32_t pos = 0;
+    while (pos < wave->num_samples) {
+        int32_t n = std::min(chunk, wave->num_samples - pos);
+        SherpaOnnxOnlineStreamAcceptWaveform(s, wave->sample_rate, wave->samples + pos, n);
+        pos += n;
+        while (SherpaOnnxIsOnlineStreamReady(g_ssRec, s))
+            SherpaOnnxDecodeOnlineStream(g_ssRec, s);
+        const SherpaOnnxOnlineRecognizerResult* r = SherpaOnnxGetOnlineStreamResult(g_ssRec, s);
+        if (r) {
+            fprintf(stderr, "[SttStream] %.2fs => %s\n",
+                    (double)pos / (double)wave->sample_rate, r->text ? r->text : "");
+            SherpaOnnxDestroyOnlineRecognizerResult(r);
+        }
+    }
+    SherpaOnnxOnlineStreamInputFinished(s);
+    while (SherpaOnnxIsOnlineStreamReady(g_ssRec, s))
+        SherpaOnnxDecodeOnlineStream(g_ssRec, s);
+
+    int ok = 0;
+    const SherpaOnnxOnlineRecognizerResult* r = SherpaOnnxGetOnlineStreamResult(g_ssRec, s);
+    if (r && r->text) {
+        int len = std::min((int)strlen(r->text), outSize - 1);
+        memcpy(out, r->text, len);
+        out[len] = '\0';
+        ok = 1;
+    }
+    if (r) SherpaOnnxDestroyOnlineRecognizerResult(r);
+    SherpaOnnxDestroyOnlineStream(s);
     SherpaOnnxFreeWave(wave);
     return ok;
 }
