@@ -5,6 +5,10 @@ global RMT_VERSION := "1.3"
 #Include Main\GlobalUtil.ahk
 #Include Main\MainGlobalUtil.ahk
 
+; §3 单实例：已有实例且携带命令行参数 → 转发命令队列后退出；否则（无参数/提权切换）接管
+if (!EnsureSingleInstance())
+    ExitApp()
+
 InitFilePath()              ;初始化文件路径
 LoadCurMacroSetting()       ;加载当前配置宏，宏指令
 HandleOpenArg()             ;处理打开软件的参数
@@ -18,3 +22,7 @@ PluginInit()
 MyTimingScheduler.Start()
 InitVoiceEngine().Start()    ;启动语音触发监听（引擎 DLL 缺失时安全降级，不影响其余功能）
 BindKey()           ;绑定快捷键
+
+; §3 命令行收尾：启动命令队列监听 + 执行首次启动携带的命令（如 rmt -run 1-2 在无实例时直接启动执行）
+StartCmdQueueListener()
+RmtRunStartupCommands()

@@ -140,21 +140,23 @@ class ExVariableGui {
         endY := ocr.Add("StackPanel").Grid_Row(1).Grid_Column(5).Orientation("Horizontal")
         endY.Add("ComboBox").Name("EndPosY").Width(85).Height(24).MinHeight(24).IsEditable("True")
 
-        ; 行5：结果保存选项 GroupBox
+        ; 行5：结果保存选项 GroupBox（§15.3 滚动区：变量行数不限，动态增删）
         resGroup := body.Add("GroupBox").Grid_Row(5).Name("ResultGroup").Header(GetLang("结果保存选项:"))
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Foreground("{DynamicResource TextMain}").Margin("0,2,0,2")
         res := resGroup.Add("Grid").Margin("8,6")
-        res.Rows("28", "26", "30", "30")
-        res.Cols("20", "140", "40", "140", "40", "140")
-        res.Add("CheckBox").Grid_Row(0).Grid_ColumnSpan(6).Name("IsIgnoreExist").Content(GetLang("如果变量存在则不改变数值")).VerticalAlignment("Center")
-        res.Add("TextBlock").Grid_Row(1).Grid_Column(1).Text(GetLang("开关      变量名")).VerticalAlignment("Center")
-        loop 6 {
-            row := (A_Index <= 3) ? 2 : 3
-            col := Mod((A_Index - 1), 3) * 2
-            res.Add("TextBlock").Grid_Row(row).Grid_Column(col).Text(A_Index ".").VerticalAlignment("Center")
-            res.Add("CheckBox").Grid_Row(row).Grid_Column(col + 1).Name("Tog" A_Index).VerticalAlignment("Center")
-            res.Add("ComboBox").Grid_Row(row).Grid_Column(col + 2).Name("Var" A_Index).Width(120).Height(24).MinHeight(24).IsEditable("True").HorizontalAlignment("Left")
-        }
+        res.Rows("26", "22", "150")
+        res.Cols("24", "24", "360", "40", "*")
+        res.Add("CheckBox").Grid_Row(0).Grid_ColumnSpan(5).Name("IsIgnoreExist").Content(GetLang("如果变量存在则不改变数值")).VerticalAlignment("Center")
+        res.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text("#").HorizontalAlignment("Center").VerticalAlignment("Center")
+        res.Add("TextBlock").Grid_Row(1).Grid_Column(1).Text(GetLang("开关")).HorizontalAlignment("Center").VerticalAlignment("Center")
+        res.Add("TextBlock").Grid_Row(1).Grid_Column(2).Text(GetLang("变量名")).VerticalAlignment("Center")
+        res.Add("TextBlock").Grid_Row(1).Grid_Column(3).Text(GetLang("删除")).HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; 行区：ScrollViewer + 命名 StackPanel，行由 _ExVarRowXml 动态注入
+        resSv := res.Add("ScrollViewer").Grid_Row(2).Grid_ColumnSpan(5)
+            .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
+        resSv.Add("StackPanel").Name("ExVarRowsPanel")
+        ; 「添加变量」按钮（放结果组右上）
+        res.Add("Button").Grid_Row(0).Grid_Column(4).Name("BtnAddExVar").Content(GetLang("添加变量")).Height(22).MinHeight(22).Padding("6,0").Cursor("Hand").HorizontalAlignment("Right").VerticalAlignment("Center")
 
         ; 行6：确定
         btnRow := body.Add("StackPanel").Grid_Row(6).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -163,7 +165,7 @@ class ExVariableGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" Height="520" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" Height="560" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -176,6 +178,7 @@ class ExVariableGui {
         this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEditBtn"))
         this.ui.OnEvent("BtnExtractEdit", "Click", ObjBindMethod(this, "OnClickExtractBtn"))
         this.ui.OnEvent("SelectToggle", "Click", ObjBindMethod(this, "OnClickSelectToggle"))
+        this.ui.OnEvent("BtnAddExVar", "Click", ObjBindMethod(this, "OnAddExRow"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
 
         this.ui.Show()
@@ -261,11 +264,8 @@ class ExVariableGui {
             this.Data.VariableArr.Push("Num6")
         }
 
-        loop this.Data.ToggleArr.Length {
-            i := A_Index
-            this.ui.Update("Tog" i, "IsChecked", this.Data.ToggleArr[i] ? "True" : "False")
-            this._SetCombo("Var" i, GetGuiVarArr(), this.Data.VariableArr[i])
-        }
+        this._EnsureExVarDataLen()
+        this._RebuildExRows()
         this.ui.Update("IsIgnoreExist", "IsChecked", this.Data.IsIgnoreExist ? "True" : "False")
         this.ui.Update("ExtractStrCon", "Text", this.Data.ExtractStr)
         this.ui.Update("ExtractTypeCombo", "SelectedIndex", String(this.Data.ExtractType - 1))
@@ -277,6 +277,93 @@ class ExVariableGui {
         this._SetCombo("EndPosY", GetGuiVarArr(), this.Data.EndPosY)
         this._SetCombo("SearchCountCombo", [GetLang("无限")], this.Data.SearchCount == -1 ? GetLang("无限") : this.Data.SearchCount)
         this.ui.Update("SearchIntervalCon", "Text", this.Data.SearchInterval)
+    }
+
+    ; ---------- §15.3 动态行区 ----------
+
+    ; 保证 ToggleArr/VariableArr 长度一致且至少 1 行
+    _EnsureExVarDataLen() {
+        if (!IsObject(this.Data)) {
+            this.Data := ExVariableData()
+            this.Data.SerialStr := this.SerialStr
+        }
+        if (this.Data.ToggleArr.Length == 0) {
+            this.Data.ToggleArr := [1]
+            this.Data.VariableArr := ["Var1"]
+        }
+        n := this.Data.ToggleArr.Length
+        while (this.Data.VariableArr.Length < n)
+            this.Data.VariableArr.Push("Var" (this.Data.VariableArr.Length + 1))
+        while (this.Data.VariableArr.Length > n)
+            this.Data.VariableArr.RemoveAt(this.Data.VariableArr.Length)
+    }
+
+    _ExVarRowXml(i) {
+        ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
+        return '<Grid ' ns ' Margin="0,2">'
+            . '<Grid.ColumnDefinitions>'
+            . '<ColumnDefinition Width="24"/><ColumnDefinition Width="24"/><ColumnDefinition Width="360"/><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/>'
+            . '</Grid.ColumnDefinitions>'
+            . '<TextBlock Grid.Column="0" Text="' i '." HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"/>'
+            . '<CheckBox Grid.Column="1" Name="Tog' i '" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
+            . '<ComboBox Grid.Column="2" Name="Var' i '" Width="360" Height="24" MinHeight="24" IsEditable="True" VerticalContentAlignment="Center" Margin="4,0,4,0"/>'
+            . '<Button Grid.Column="3" Name="DelExRow' i '" Content="×" Height="22" MinHeight="22" Padding="0" Cursor="Hand" FontSize="14" ToolTip="' GetLang("删除该变量") '"/>'
+            . '</Grid>'
+    }
+
+    ; 重建全部行：ClearItems + 注入 + 绑定事件 + 填值
+    _RebuildExRows() {
+        if (!IsObject(this.ui))
+            return
+        this._EnsureExVarDataLen()
+        batch := []
+        batch.Push({ControlName: "ExVarRowsPanel", PropertyName: "ClearItems", Value: ""})
+        loop this.Data.ToggleArr.Length
+            batch.Push({ControlName: "ExVarRowsPanel", PropertyName: "AddXamlItem", Value: this._ExVarRowXml(A_Index)})
+        this.ui.BatchUpdate(batch)
+        loop this.Data.ToggleArr.Length {
+            i := A_Index
+            this._BindEx("Tog" i, "Click", ObjBindMethod(this, "OnExRowTogClick", i))
+            this._BindEx("DelExRow" i, "Click", ObjBindMethod(this, "OnDelExRow", i))
+            this.ui.Update("Tog" i, "IsChecked", this.Data.ToggleArr[i] ? "True" : "False")
+            this._SetCombo("Var" i, GetGuiVarArr(), this.Data.VariableArr[i])
+        }
+    }
+
+    _BindEx(name, evt, cb) {
+        if (this.ui.events.Has(name) && this.ui.events[name].Has(evt))
+            this.ui.events[name][evt] := []
+        this.ui.OnEvent(name, evt, cb)
+        this.ui.Update(name, "BindEvent", evt)
+    }
+
+    ; 行开关点击后保持 ToggleArr 与 UI 同步（保存时用）
+    OnExRowTogClick(i, state := "", ctrl := "", event := "") {
+        if (IsObject(this.ui) && IsObject(this.Data))
+            this.Data.ToggleArr[i] := this.ui.Query("Tog" i) == "True"
+    }
+
+    OnAddExRow(state := "", ctrl := "", event := "") {
+        if (!IsObject(this.ui))
+            return
+        this.SaveExVariableData()
+        n := this.Data.ToggleArr.Length + 1
+        this.Data.ToggleArr.Push(1)
+        this.Data.VariableArr.Push("Var" n)
+        this._RebuildExRows()
+    }
+
+    OnDelExRow(n, state := "", ctrl := "", event := "") {
+        if (!IsObject(this.ui))
+            return
+        if (this.Data.ToggleArr.Length <= 1) {
+            MsgBox(GetLang("至少保留一个变量"))
+            return
+        }
+        this.SaveExVariableData()
+        this.Data.ToggleArr.RemoveAt(n)
+        this.Data.VariableArr.RemoveAt(n)
+        this._RebuildExRows()
     }
 
     ToggleFunc(state) {
@@ -327,9 +414,18 @@ class ExVariableGui {
     OnSureExtractAction(ExtractStr, VariNum) {
         if (IsObject(this.ui))
             this.ui.Update("ExtractStrCon", "Text", ExtractStr)
-        loop 6 {
+        ; §15.3：行数不足时补齐后再按提取数勾选
+        this.SaveExVariableData()
+        while (this.Data.ToggleArr.Length < VariNum) {
+            this.Data.ToggleArr.Push(false)
+            this.Data.VariableArr.Push("Var" (this.Data.ToggleArr.Length + 1))
+        }
+        this._RebuildExRows()
+        loop this.Data.ToggleArr.Length {
             isTog := VariNum >= A_Index
             this.ui.Update("Tog" A_Index, "IsChecked", isTog ? "True" : "False")
+            if (isTog)
+                this.Data.ToggleArr[A_Index] := true
         }
     }
 
@@ -388,7 +484,7 @@ class ExVariableGui {
         }
 
         ToggleArr := []
-        loop 6 {
+        loop this.Data.ToggleArr.Length {
             isOn := this.ui.Query("Tog" A_Index) == "True"
             ToggleArr.Push(isOn)
             if (isOn) {

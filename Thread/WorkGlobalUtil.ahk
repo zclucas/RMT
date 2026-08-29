@@ -25,6 +25,8 @@ global MyMainWin := ""
 
 ; 主进程输入弹窗（输入框/按钮条）回传结果缓存：OnEventMessage 收到 IPR/IBR 写入，WorkerInputRequest 读取
 global _workerInputResult := ""
+; §17 热重载：主进程广播 CF 后待重载配置的标志（忙时置位，任务结束 finally 重载）
+global workerConfigDirty := false
 global MyStopMacro := WorkStopMacro
 global MyTriggerSubMacro := WorkTriggerSubMacro
 global MySubmitGraphBranches := WorkSubmitGraphBranches

@@ -60,8 +60,8 @@ class MacroSettingGui {
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("15,14")
-        body.Rows("40", "40", "40", "*")
-        body.Cols("90", "160")
+        body.Rows("40", "40", "40", "40", "*")
+        body.Cols("90", "230")
 
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("按键类型：")).VerticalAlignment("Center")
         tkRow := body.Add("StackPanel").Grid_Row(0).Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Center")
@@ -80,13 +80,21 @@ class MacroSettingGui {
         for t in GetLangArr(["无", "结束提示", "循环结束提示"])
             et.Add("ComboBoxItem").Content(t)
 
-        btnRow := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; §22 窗口绑定：宏内所有窗口信息填「{绑定窗口}」时，运行时统一替换为此绑定窗口（一改全改）
+        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("窗口绑定：")).VerticalAlignment("Center")
+        bwRow := body.Add("StackPanel").Grid_Row(3).Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Center")
+        bwRow.Add("TextBox").Name("BindWindowCon").Width(190).Height(26).MinHeight(26)
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
+        bwRow.Add("Button").Name("BtnBindWinEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("6,0,0,0").Cursor("Hand")
+
+        btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(100).Height(36).MinHeight(36)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="300" Height="200" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="360" Height="240" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -95,6 +103,7 @@ class MacroSettingGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnHelp", "Click", ObjBindMethod(this, "OnClickModeHelpBtn"))
+        this.ui.OnEvent("BtnBindWinEdit", "Click", ObjBindMethod(this, "OnClickBindWinEdit"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
 
         this.ui.Show()
@@ -159,6 +168,19 @@ class MacroSettingGui {
         this.ui.Update("TKTypeCombo", "SelectedIndex", String(item.Mode - 1))
         this.ui.Update("StartTipCombo", "SelectedIndex", String(item.StartTipSound - 1))
         this.ui.Update("EndTipCombo", "SelectedIndex", String(item.EndTipSound - 1))
+        ; §22 窗口绑定（旧配置无此字段时回退空）
+        this.ui.Update("BindWindowCon", "Text", ObjHasOwnProp(item, "BindWindow") ? item.BindWindow : "")
+    }
+
+    ; §22 窗口绑定编辑：复用 FrontInfoGui 选窗
+    OnClickBindWinEdit(state := "", ctrl := "", event := "") {
+        if (MainSoftData.IsModalSubGui && this.ui != "") {
+            MyFrontInfoGui.OwnerHwnd := this.Hwnd()
+        }
+        else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
+        MyFrontInfoGui.ShowGui(XamlValueBridge(this.ui, "BindWindowCon"))
     }
 
     OnClickModeHelpBtn(state, ctrl, event) {
@@ -186,6 +208,10 @@ class MacroSettingGui {
         item.Mode := mode
         item.StartTipSound := this._SelIndex("StartTipCombo") + 1
         item.EndTipSound := this._SelIndex("EndTipCombo") + 1
+        ; §22 窗口绑定保存
+        item.BindWindow := this.ui.Query("BindWindowCon")
         this._CloseWindow()
+        ; §18 宏高级设置即时持久化 + Worker 热重载（Mode/提示音/BindWindow 影响执行语义）
+        HotReloadPublish(this.tableItem.Index, 0)
     }
 }

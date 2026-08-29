@@ -13,7 +13,75 @@ BindKey() {
     BindMenuHotKey()
     BindUIPanelHotKey()
     BindTabHotKey()
+    BindFoldSwitchHotkey()
+    ; §2：保存后热重载（§17 选「否」）订阅触发键重绑，使模块/条目禁用、触发键改动运行时立即生效
+    if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
+        MyHotReloadBus.Subscribe(OnHotReloadRebindKeys)
     OnExit(OnExitSoft)
+}
+
+; §2 模块独立开关快捷键重绑总入口：fold 级禁用切换 / RMT指令「禁用模块」/ 保存热重载共用
+RebindAllTriggerKeys() {
+    InitTriggerKeyMap()
+    BindMenuHotKey()
+    BindUIPanelHotKey()
+    BindTabHotKey()
+    BindFoldSwitchHotkey()
+}
+
+; 保存后热重载订阅者：任何表配置变更都重绑触发键（fold 禁用状态/条目禁用/触发键改动实时生效）
+OnHotReloadRebindKeys(tableIndex, itemIndex) {
+    RebindAllTriggerKeys()
+}
+
+; ============================================================
+; §2 模块独立快捷键开关：遍历全部表的折叠框，注册「启用/禁用模块」切换热键
+; 按下 → OnFoldSwitchHotkey 切换 fold.ForbidState → 重绑触发键 + HotReloadBus 广播
+; ============================================================
+BindFoldSwitchHotkey() {
+    for tableItem in MySoftData.TableInfo {
+        for index, fold in tableItem.Folds {
+            if (fold.ForbidHotkey == "")
+                continue
+            oriKey := fold.ForbidHotkey
+            isCombo := IsComboKey(oriKey)
+            key := isCombo ? oriKey : ("$*" oriKey)
+            isJoyKey := RegExMatch(oriKey, "Joy")
+            if (isJoyKey) {
+                ; 手柄键：走 JoyMacro 映射（action 为函数对象，切换模块启用状态）
+                try MyJoyMacro.AddMacro(oriKey, OnFoldSwitchHotkey.Bind(tableItem.Index, index), "", "")
+            } else {
+                try {
+                    Hotkey(key, OnFoldSwitchHotkey.Bind(tableItem.Index, index))
+                } catch as e {
+                }
+            }
+        }
+    }
+}
+
+; §2 模块开关动作：切换 fold 启用状态，实时重绑触发键 + 总线广播
+OnFoldSwitchHotkey(tableIndex, foldIndex, *) {
+    global MySoftData, MyMainWin, MyHotReloadBus
+    tableItem := MySoftData.TableInfo[tableIndex]
+    if (!tableItem)
+        return
+    fold := tableItem.Folds[foldIndex]
+    if (!fold)
+        return
+    fold.ForbidState := !fold.ForbidState
+    RebindAllTriggerKeys()
+    ; §18 模块开关：即时落盘 + 广播（与 _ApplyChange FoldForbid 同链路）
+    HotReloadPublish(tableIndex, 0)
+    tip := (fold.ForbidState ? GetLang("模块已禁用：") : GetLang("模块已启用：")) (fold.Remark == "" ? fold.ID : fold.Remark)
+    if (MySoftData.CMDTip)
+        MyCMDReportAciton(tip)
+    ; 同步主界面折叠行「禁用」勾选框（非虚拟列表路径；VL 视图下次渲染自然一致）
+    try {
+        if (IsSet(MyMainWin) && IsObject(MyMainWin) && !MyMainWin._useVirtual.Has(tableIndex) && MyMainWin.ui)
+            MyMainWin.ui.Update("FoldForbid_" tableIndex "_" foldIndex, "IsChecked", fold.ForbidState ? "True" : "False")
+    } catch as e {
+    }
 }
 
 BindShortcut(triggerInfo, action) {
@@ -389,21 +457,60 @@ OnClickTriggerJoyTypeHelpBtn(*) {
 }
 
 OnExitSoft(*) {
-    global MyPToken, MyChineseOcr, MyUIMacroGui, MyWorkPool
-    Gdip_Shutdown(MyPToken)
-    IbSendDestroy()
-    MyChineseOcr := ""
-    MyEnglishOcr := ""
-    CleanupAllMacroStates()
+    global MyPToken, MyChineseOcr, MyEnglishOcr, MyUIMacroGui, MyWorkPool, MyVoiceEngine
+    global MainSoftData, MySoftData, IniFile, IniSection
+
+    ; ① 先隐藏主窗口：WPF 窗口属于 daemon 进程，进程清理期间仍留在屏幕上正是「窗口关得慢」的主因。
+    ;    先隐藏后，用户感知窗口立即关闭，其余清理在后台进行。
+    try {
+        if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui))
+            MainSoftData.MyGui.Hide()
+    }
+
+    ; ② 语音引擎先停：VoiceDll 的采集/识别线程若在进程退出时仍在运行，
+    ;    DLL 卸载与线程执行竞态是 0xc0000409 崩溃的头号嫌疑，退出前必须 join 停线程。
+    try {
+        if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
+            MyVoiceEngine.Stop()
+    } catch as e {
+        RMTLogSys(RMT_LV_WARN, "Exit", "语音引擎停止失败: " (e.HasProp("Message") ? e.Message : ""))
+    }
+
+    ; ③ 各项清理各自 try：任一失败（如 gdiplus 已卸载抛错）都不中断后续清理
+    try Gdip_Shutdown(MyPToken)
+    catch as e {
+        RMTLogSys(RMT_LV_WARN, "Exit", "Gdip_Shutdown 失败: " (e.HasProp("Message") ? e.Message : ""))
+    }
+    try IbSendDestroy()
+    catch as e {
+        RMTLogSys(RMT_LV_WARN, "Exit", "IbSendDestroy 失败: " (e.HasProp("Message") ? e.Message : ""))
+    }
+    try {
+        MyChineseOcr := ""
+        MyEnglishOcr := ""
+    } catch {
+    }
+    try CleanupAllMacroStates()
+    catch as e {
+        RMTLogSys(RMT_LV_WARN, "Exit", "CleanupAllMacroStates 失败: " (e.HasProp("Message") ? e.Message : ""))
+    }
 
     if (MyWorkPool != "") {
-        MyWorkPool.Clear()
+        try MyWorkPool.Clear()
+        catch as e {
+            RMTLogSys(RMT_LV_WARN, "Exit", "WorkPool.Clear 失败: " (e.HasProp("Message") ? e.Message : ""))
+        }
         MyWorkPool := ""
     }
-    if (IsSet(MyUIMacroGui) && MyUIMacroGui != "")
-        MyUIMacroGui.StopMonitor()
-
-    IniWrite(MySoftData.MacroTotalCount, IniFile, IniSection, "MacroTotalCount")
+    if (IsSet(MyUIMacroGui) && MyUIMacroGui != "") {
+        try MyUIMacroGui.StopMonitor()
+        catch as e {
+            RMTLogSys(RMT_LV_WARN, "Exit", "UIMacro.StopMonitor 失败: " (e.HasProp("Message") ? e.Message : ""))
+        }
+    }
+    try IniWrite(MySoftData.MacroTotalCount, IniFile, IniSection, "MacroTotalCount")
+    catch {
+    }
 }
 
 BindMenuHotKey() {
@@ -714,7 +821,9 @@ GetMacroAction(tableIndex, index) {
         actionUp := OnTriggerKeyUp.Bind(tableIndex, index)
     }
     else if (tableSymbol == "String") {
-        actionDown := TriggerMacroHandler.Bind(tableIndex, index)
+        ; §17 表身份已 ID 化（670460e8 重构）：TriggerMacroHandler 首参须为表对象/ID，
+        ; 绑定对象而非数字索引，否则 GetTableByID("3") 解析失败 → 字符串宏触发键/热串永不触发
+        actionDown := TriggerMacroHandler.Bind(tableItem, index)
     }
     else if (tableSymbol == "Replace") {
         actionDown := OnReplaceDownKey.Bind(tableItem, macro, index)
@@ -839,6 +948,12 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
         return
     item := tableItem.Items[itemIndex]
     if (!item)
+        return
+    ; §17 统一禁用门控（条目禁用 Forbid / 所属模块禁用 fold.ForbidState → 任何触发来源均不执行）：
+    ; 热重载（保存选「否」）后旧热键/定时器排程里的残留条目仍会到达此入口，
+    ; 在这里统一拦截后禁用立即生效；覆盖 String 表直绑热键、定时宏、Worker 分支触发、子宏「触发」等路径
+    ; Forbid 用 ParseBoolInt 归一（防旧配置遗留字符串 "0" 被当 truthy）
+    if (ParseBoolInt(item.Forbid) || GetItemFoldForbidState(tableItem, itemIndex))
         return
     macro := item.Macro
     tableID := tableItem.ID

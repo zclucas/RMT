@@ -26,6 +26,7 @@ class VirtualListHost {
         this._ui.OnEvent(listName, "VL_CLICK", ObjBindMethod(this, "_OnVLClick", t))
         this._ui.OnEvent(listName, "VL_CHANGE", ObjBindMethod(this, "_OnVLChange", t))
         this._ui.OnEvent(listName, "VL_COMMIT_ALL", ObjBindMethod(this, "_OnVLCommitAll", t))
+        this._ui.OnEvent(listName, "VL_DROP", ObjBindMethod(this, "_OnVLDrop", t))
     }
 
     Init(t, tableItem) {
@@ -167,11 +168,9 @@ class VirtualListHost {
             switch action {
                 case "FoldBtn": OnFoldBtnClick(tableItem, idx, event)
                 case "FoldFrontBtn": OnFoldFrontInfoEdit(tableItem, idx, event)
-                case "FoldAdd": OnItemAddMacroBtnClick(tableItem, idx, event)
-                case "FoldPaste": OnItemPasteMacroBtnClick(tableItem, idx, event)
-                case "FoldAddMod": OnItemAddFoldBtnClick(tableItem, idx, event)
-                case "FoldDelMod": OnItemDelFoldBtnClick(tableItem, idx, event)
                 case "FoldTKEdit": OnFlodTKEditClick(tableItem, idx, event)
+                case "FoldForbidHK": OnFoldForbidHKEditClick(tableItem, idx, event)
+                case "FoldMenu": OnFoldMenuClick(tableItem, idx, event)
             }
         }
     }
@@ -214,6 +213,109 @@ class VirtualListHost {
         }
     }
 
+    ; §11 拖拽落点：srcId\x1FtgtId\x1F0前|1后
+    ; 决策：宏可跨模块迁移；模块只能模块间迁移。模型变更后整表 VL_INIT 重建（低频，O(1) IPC）
+    _OnVLDrop(t, state, ctrl, event) {
+        payload := state["VL_DROP"]
+        if (payload == "")
+            return
+        p := StrSplit(payload, US)
+        if (p.Length < 3)
+            return
+        srcId := p[1], tgtId := p[2], before := p[3] == "0"
+        tableItem := MySoftData.TableInfo[t]
+        srcIsFold := SubStr(srcId, 1, 1) == "F"
+        tgtIsFold := SubStr(tgtId, 1, 1) == "F"
+        srcIdx := Integer(SubStr(srcId, InStr(srcId, "_", , 2) + 1))
+        tgtIdx := Integer(SubStr(tgtId, InStr(tgtId, "_", , 2) + 1))
+        try {
+            if (srcIsFold && tgtIsFold) {
+                ; 模块间迁移
+                this.MoveFoldInTable(tableItem, srcIdx, tgtIdx, before)
+            } else if (srcIsFold && !tgtIsFold) {
+                ; 模块拖到宏行：移到目标宏所在模块前/后
+                tgtFoldIdx := GetFoldIndexInTable(tableItem, tableItem.Items[tgtIdx].FoldID)
+                if (tgtFoldIdx >= 1)
+                    this.MoveFoldInTable(tableItem, srcIdx, tgtFoldIdx, before)
+            } else if (!srcIsFold && tgtIsFold) {
+                ; 宏移入目标模块（模块首/尾）
+                this.MoveItemToFold(tableItem, srcIdx, tableItem.Folds[tgtIdx].ID, before ? "head" : "tail")
+            } else {
+                ; 宏行 → 宏行：同模块排序或跨模块迁移
+                this.MoveItemTo(tableItem, srcIdx, tgtIdx, before)
+            }
+            tableItem.RebuildIndex()
+            RebuildTableLocator()
+            this.Init(t, tableItem)
+            ; §17 热重载：拖拽移动宏/模块改变索引 → 重绑触发键（防热键闭包数字索引错位误触发）
+            HotReloadPublish(t, 0)
+        } catch as e {
+        }
+    }
+
+    ; 模块移动（Folds 数组移动，宏 FoldID 引用不变；toFoldIdx 为移动前下标）
+    MoveFoldInTable(tableItem, fromFoldIdx, toFoldIdx, before) {
+        fold := tableItem.Folds[fromFoldIdx]
+        tableItem.Folds.RemoveAt(fromFoldIdx)
+        if (toFoldIdx > fromFoldIdx)
+            toFoldIdx--
+        if (toFoldIdx < 1)
+            toFoldIdx := 1
+        pos := before ? toFoldIdx : (toFoldIdx + 1)
+        tableItem.Folds.InsertAt(pos, fold)
+    }
+
+    ; 宏移动：Items[fromIdx] 移到 Items[tgtIdx] 前/后（目标宏的模块；跨模块时改 FoldID）
+    MoveItemTo(tableItem, fromIdx, tgtIdx, before) {
+        item := tableItem.Items[fromIdx]
+        tgtItem := tableItem.Items[tgtIdx]
+        targetFoldID := tgtItem.FoldID
+        tableItem.Items.RemoveAt(fromIdx)
+        ; 移除后目标下标偏移
+        if (tgtIdx > fromIdx)
+            tgtIdx--
+        item.FoldID := targetFoldID
+        pos := before ? tgtIdx : (tgtIdx + 1)
+        if (pos < 1)
+            pos := 1
+        tableItem.Items.InsertAt(pos, item)
+    }
+
+    ; 宏移入指定模块（posMode: head=模块首 tail=模块尾）
+    MoveItemToFold(tableItem, fromIdx, toFoldID, posMode) {
+        item := tableItem.Items[fromIdx]
+        tableItem.Items.RemoveAt(fromIdx)
+        item.FoldID := toFoldID
+        if (posMode == "tail") {
+            ; 尾部：目标模块最后一个条目后；模块空则按 Folds 顺序定位
+            pos := tableItem.Items.Length + 1
+            foldIdx := GetFoldIndexInTable(tableItem, toFoldID)
+            for i, it in tableItem.Items {
+                itFoldIdx := GetFoldIndexInTable(tableItem, it.FoldID)
+                if (it.FoldID == toFoldID)
+                    pos := i + 1
+                else if (itFoldIdx >= 1 && itFoldIdx > foldIdx)
+                    break   ; 遇后续模块第一条目：停在其前（即目标模块尾）
+            }
+        } else {
+            ; head：目标模块第一个条目前；模块空则插到该模块位置（Folds 顺序）
+            pos := tableItem.Items.Length + 1
+            foldIdx := GetFoldIndexInTable(tableItem, toFoldID)
+            for i, it in tableItem.Items {
+                itFoldIdx := GetFoldIndexInTable(tableItem, it.FoldID)
+                if (it.FoldID == toFoldID) {
+                    pos := i
+                    break
+                }
+                if (itFoldIdx >= 1 && itFoldIdx > foldIdx) {
+                    pos := i
+                    break
+                }
+            }
+        }
+        tableItem.Items.InsertAt(pos, item)
+    }
+
     ; 字段 → 模型映射（对象化，与旧 ReadTabValues 一致）
     _ApplyChange(tableItem, id, field, value) {
         idx := Integer(SubStr(id, InStr(id, "_", , 2) + 1))
@@ -240,5 +342,9 @@ class VirtualListHost {
                 case "FoldTK": fold.TK := value
             }
         }
+        ; §18 宏表字段编辑即时持久化 + 热重载：任何字段变更（含 Remark/TKType/Loop 等）
+        ; → 立即落盘 + 广播（触发键重绑/语音重建/定时重建/UI宏刷新 + Worker CF），
+        ; 与折叠头 FoldTK 同生效链路，不必等保存选「否」；禁用/触发键/窗口条件即时生效
+        HotReloadPublish(GetTableIndexByID(tableItem.ID), 0)
     }
 }

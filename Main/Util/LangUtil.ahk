@@ -1,12 +1,15 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 global MainSoftData                ; 在 GlobalUtil.ahk 中由 MainConfig() 赋值
 LangKeyMap := Map()
 
 ;指令相关的key
 LangCmdKeyArr := ["截图", "截图提取文本", "自由贴", "开启指令显示", "关闭指令显示", "显示菜单", "关闭菜单",
+    "打开界面窗口", "关闭界面窗口", "禁用模块", "取消禁用模块",
     "启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠",
     "休眠", "暂停所有宏", "恢复所有宏", "终止所有宏", "重载", "关闭软件", "间隔", "按键", "搜索", "搜索Pro", "移动", "移动Pro",
+    "鼠标移动", "鼠标移动Pro", "增量移动",
     "输出", "运行", "循环", "宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "RMT指令", "后台鼠标", "后台按键",
+    "等待",
     "循环次数", "宏循环次数", "当前鼠标坐标X", "当前鼠标坐标Y", "按下", "松开", "点击", "创建", "克隆", "删除", "包含",
     "取值", "赋值", "插入", "追加", "移除", "移除最后", "长度", "变量或值", "数组", "文本分割", "文本提取", "文本替换", "去除空格",
     "大小写转换", "文本统计", "去除前空白字符", "去除后空白字符", "去除前后空白字符", "去除所有空白字符", "全部大写", "全部小写",
@@ -155,7 +158,7 @@ GetLangCmd(Cmd, Mode) {
     cmdSymbol := GetCmdSymbol(paramArr[1])
     paramArr[1] := GetCmdStr(paramArr[1])
 
-    IsMM := paramArr[1] == "移动" || paramArr[1] == GetLang("移动")
+    IsMM := IsMoveCmd(paramArr[1])
     IsPressKey := paramArr[1] == "按键" || paramArr[1] == GetLang("按键")
     IsInterval := paramArr[1] == "间隔" || paramArr[1] == GetLang("间隔")
     IsRMT := paramArr[1] == "RMT指令" || paramArr[1] == GetLang("RMT指令")

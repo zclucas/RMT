@@ -16,7 +16,26 @@ class UIMacroGui {
         this._lastActiveHwnd := 0       ; 上次检测的前台窗口 hwnd
         ; 用户主动关闭（右键关闭/Alt+F4/热键隐藏）后禁止「激活时默认显示」重建，直到热键再开
         this.UserClosedKeys := Map()
+        ; §17 热重载订阅：任意配置变更广播 → 清空面板缓存（下次触发按新配置重建）
+        global MyHotReloadBus
+        if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
+            MyHotReloadBus.Subscribe(ObjBindMethod(this, "OnHotReloadConfigChanged"), (t) => this._IsUiTable(t))
         this.StartMonitor()
+    }
+
+    ; 是否界面宏表（按表符号判断；t 为 TableInfo 索引）
+    _IsUiTable(t) {
+        global MySoftData
+        if (!IsObject(MySoftData) || !MySoftData.HasProp("TableInfo"))
+            return false
+        if (t < 1 || t > MySoftData.TableInfo.Length)
+            return false
+        return MySoftData.TableInfo[t].Symbol == "UI"
+    }
+
+    ; §17 热重载回调：清空面板缓存，下次触发（热键/RMT指令/激活跟随）按新配置重建
+    OnHotReloadConfigChanged(tableIndex, itemIndex) {
+        this.RefreshPanels()
     }
 
     MarkUserClosed(panelKey) {
@@ -1031,6 +1050,23 @@ class UIMacroGui {
             }
         }
         this.PanelMap.Clear()
+    }
+
+    ; §15.5 RMT指令「打开界面窗口」：为界面宏表全部可用折叠框创建并显示面板；
+    ; 没有可用的界面窗口时无操作（调用方据此判断「指令无效」）
+    ShowAllPanels() {
+        tableItem := GetTableBySymbol("UI")
+        if (!tableItem)
+            return
+        loop tableItem.Folds.Length {
+            foldIndex := A_Index
+            fold := tableItem.Folds[foldIndex]
+            if (!fold || fold.ForbidState)
+                continue
+            ctx := this._GetFoldContext(foldIndex)
+            if (ctx && ctx.items.Length > 0)
+                this.ShowPanel(foldIndex)
+        }
     }
 
     RefreshPanels() {

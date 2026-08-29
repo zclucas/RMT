@@ -53,6 +53,9 @@ public class VirtualListHost
     private string _anchorId;
     private bool _suppressCommit;
     private bool _suppressChange; // 结构操作布局期：压制容器回收产生的伪 SelectionChanged/LostFocus
+    // §11 VL 拖拽：按下起点 + 是否已武装（交互控件上不启动）
+    private Point _dragStartPoint;
+    private bool _dragArmed;
     // 表类型 enabled 标志（VL_INIT 首行 T<t>_0 注入，per host 恒定）；默认 true 兼容不带标志的调用
     private bool _tkBtnEn = true;
     private bool _tkTypeEn = true;
@@ -99,6 +102,57 @@ public class VirtualListHost
             _lb.AddHandler(Selector.SelectionChangedEvent, new SelectionChangedEventHandler(OnSelectionChanged));
             _lb.AddHandler(System.Windows.UIElement.LostKeyboardFocusEvent, new System.Windows.Input.KeyboardFocusChangedEventHandler(OnLostFocus));
             _lb.AddHandler(System.Windows.UIElement.MouseRightButtonUpEvent, new System.Windows.Input.MouseButtonEventHandler(OnRightUp), true);
+            // §11 VL 拖拽排序：行/折叠头按住拖动 → VL_DROP 回传（srcId\x1FtgtId\x1F0前|1后）
+            _lb.AllowDrop = true;
+            _dragArmed = false;
+            _lb.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                _dragArmed = false;
+                FrameworkElement fe = e.OriginalSource as FrameworkElement;
+                DependencyObject d = fe;
+                // 交互控件（按钮/输入框/下拉/勾选/滚动条）上不启动拖拽
+                while (d != null)
+                {
+                    if (d is ButtonBase || d is TextBox || d is ComboBox || d is CheckBox || d is ScrollBar)
+                        return;
+                    d = System.Windows.Media.VisualTreeHelper.GetParent(d);
+                }
+                _dragStartPoint = e.GetPosition(null);
+                _dragArmed = true;
+            };
+            _lb.PreviewMouseMove += (s, e) =>
+            {
+                if (!_dragArmed || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+                    return;
+                Point pos = e.GetPosition(null);
+                if (Math.Abs(pos.X - _dragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                    Math.Abs(pos.Y - _dragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+                    return;
+                _dragArmed = false;
+                ListBoxItem item = GetItemUnderMouse(_lb, e.GetPosition(_lb));
+                if (item == null) return;
+                VLItem vi = item.DataContext as VLItem;
+                if (vi == null) return;
+                try
+                {
+                    DataObject dobj = new DataObject("VLRowId", vi.Id);
+                    DragDrop.DoDragDrop(_lb, dobj, DragDropEffects.Move);
+                }
+                catch { }
+            };
+            _lb.Drop += (s, e) =>
+            {
+                if (!e.Data.GetDataPresent("VLRowId")) return;
+                string srcId = (string)e.Data.GetData("VLRowId");
+                ListBoxItem target = GetItemUnderMouse(_lb, e.GetPosition(_lb));
+                if (target == null) return;
+                VLItem tvi = target.DataContext as VLItem;
+                if (tvi == null || tvi.Id == srcId) return;
+                // 插入位置：拖点相对目标行上/下半
+                bool before = e.GetPosition(target).Y < target.ActualHeight / 2;
+                SendDrop(srcId, tvi.Id, before);
+                e.Handled = true;
+            };
             _lb.ItemTemplateSelector = new VLTemplateSelector(_win);
             // 容器模板剥成裸 ContentPresenter：SelectionMode=Single 仅为合法值，实际无选中高亮/键盘焦点
             var lbiStyle = new System.Windows.Style(typeof(System.Windows.Controls.ListBoxItem));
@@ -404,6 +458,12 @@ public class VirtualListHost
         _send("EVENT|" + _winId + "|" + _listName + "|VL_CHANGE|" + BridgeUtil.LengthPrefix(id + "\x1F" + field + "\x1F" + value));
     }
 
+    // §11 拖拽落点回传：VL_DROP|srcId\x1FtgtId\x1F0(前)/1(后)
+    private void SendDrop(string srcId, string tgtId, bool before)
+    {
+        _send("EVENT|" + _winId + "|" + _listName + "|VL_DROP|" + BridgeUtil.LengthPrefix(srcId + "\x1F" + tgtId + "\x1F" + (before ? "0" : "1")));
+    }
+
     private void CommitAll()
     {
         if (_lb == null) return;
@@ -533,6 +593,20 @@ public class VirtualListHost
         {
             System.Windows.FrameworkElement r = FindControlByName(System.Windows.Media.VisualTreeHelper.GetChild(parent, i), name);
             if (r != null) return r;
+        }
+        return null;
+    }
+
+    // §11 拖拽目标行命中：光标下最近的 ListBoxItem
+    private ListBoxItem GetItemUnderMouse(ListBox lb, Point p)
+    {
+        System.Windows.Media.HitTestResult hit = System.Windows.Media.VisualTreeHelper.HitTest(lb, p);
+        if (hit != null)
+        {
+            DependencyObject depObj = hit.VisualHit;
+            while (depObj != null && !(depObj is ListBoxItem))
+                depObj = System.Windows.Media.VisualTreeHelper.GetParent(depObj);
+            return depObj as ListBoxItem;
         }
         return null;
     }

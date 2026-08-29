@@ -19,9 +19,7 @@ class MMProGui {
         this.Data := ""
         this.SerialStr := ""
         this.PosAction := () => this.RefreshMousePos()
-        this.ConfigDLArr := []
         this._syncing := false   ; 程序初始化/刷新配置时抑制 SelectionChanged/Click 递归
-        this.RuleMenu := ""
     }
 
     ShowGui(cmd) {
@@ -79,7 +77,7 @@ class MMProGui {
     _BuildAndShow() {
         global MySoftData
         this._closed := false
-        title := this.ParentTile GetLang("移动Pro编辑器")
+        title := this.ParentTile GetLang("鼠标移动Pro编辑器")
         this._title := title
         titleHeight := "30"
 
@@ -96,7 +94,7 @@ class MMProGui {
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("10,6")
-        body.Rows("34", "30", "24", "32", "34", "34", "32", "32", "24", "*")
+        body.Rows("34", "30", "24", "32", "34", "32", "32", "24", "*")
         body.Cols("80", "130", "80", "130")
 
         ; 行0：快捷方式
@@ -116,48 +114,43 @@ class MMProGui {
         ; 行2：鼠标位置
         body.Add("TextBlock").Grid_Row(2).Grid_ColumnSpan(4).Name("MousePosCon").Text(GetLang("当前鼠标位置:0,0")).VerticalAlignment("Center")
 
-        ; 行3：屏幕规格
-        row3 := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(4).Orientation("Horizontal").VerticalAlignment("Center")
-        row3.Add("TextBlock").Text(GetLang("屏幕规格：")).VerticalAlignment("Center")
-        row3.Add("ComboBox").Name("ConfigDLCombo").Width(220).Height(26).MinHeight(26).Margin("4,0,0,0")
-        row3.Add("Button").Name("BtnConfigEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("8,0,0,0")
+        ; 行3：坐标位置X/Y
+        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("坐标位置X:")).VerticalAlignment("Center")
+        body.Add("ComboBox").Grid_Row(3).Grid_Column(1).Name("PosVarX").Height(26).MinHeight(26).IsEditable("True")
+        body.Add("TextBlock").Grid_Row(3).Grid_Column(2).Text(GetLang("坐标位置Y:")).VerticalAlignment("Center")
+        body.Add("ComboBox").Grid_Row(3).Grid_Column(3).Name("PosVarY").Height(26).MinHeight(26).IsEditable("True")
 
-        ; 行4：坐标位置X/Y
-        body.Add("TextBlock").Grid_Row(4).Grid_Column(0).Text(GetLang("坐标位置X:")).VerticalAlignment("Center")
-        body.Add("ComboBox").Grid_Row(4).Grid_Column(1).Name("PosVarX").Height(26).MinHeight(26).IsEditable("True")
-        body.Add("TextBlock").Grid_Row(4).Grid_Column(2).Text(GetLang("坐标位置Y:")).VerticalAlignment("Center")
-        body.Add("ComboBox").Grid_Row(4).Grid_Column(3).Name("PosVarY").Height(26).MinHeight(26).IsEditable("True")
-
-        ; 行5：移动速度 + 鼠标动作
-        body.Add("TextBlock").Grid_Row(5).Grid_Column(0).Text(GetLang("移动速度：")).VerticalAlignment("Center")
-        body.Add("TextBox").Grid_Row(5).Grid_Column(1).Name("SpeedCon").Height(24).MinHeight(24).VerticalContentAlignment("Center").Text("90")
-        body.Add("TextBlock").Grid_Row(5).Grid_Column(2).Text(GetLang("鼠标动作：")).VerticalAlignment("Center")
-        act := body.Add("ComboBox").Grid_Row(5).Grid_Column(3).Name("ActionTypeCombo").Height(26).MinHeight(26)
+        ; 行4：移动速度 + 鼠标动作
+        body.Add("TextBlock").Grid_Row(4).Grid_Column(0).Text(GetLang("移动速度：")).VerticalAlignment("Center")
+        body.Add("TextBox").Grid_Row(4).Grid_Column(1).Name("SpeedCon").Height(24).MinHeight(24).VerticalContentAlignment("Center").Text("90")
+        body.Add("TextBlock").Grid_Row(4).Grid_Column(2).Text(GetLang("鼠标动作：")).VerticalAlignment("Center")
+        act := body.Add("ComboBox").Grid_Row(4).Grid_Column(3).Name("ActionTypeCombo").Height(26).MinHeight(26)
         for a in GetLangArr(["移动", "移动点击1次", "移动点击2次"])
             act.Add("ComboBoxItem").Content(a)
 
-        ; 行6：移动方式 + 拟真轨迹
-        row6 := body.Add("StackPanel").Grid_Row(6).Grid_ColumnSpan(4).Orientation("Horizontal").VerticalAlignment("Center")
-        row6.Add("TextBlock").Text(GetLang("移动方式：")).VerticalAlignment("Center")
-        mm := row6.Add("ComboBox").Name("MouseMoveModeCombo").Width(110).Height(26).MinHeight(26).Margin("4,0,0,0")
-        for m in GetLangArr(["绝对移动", "相对移动", "游戏视角"])
+        ; 行5：坐标基准（§20 屏幕/窗口）+ 移动模式（绝对/相对）+ 拟真轨迹
+        row5 := body.Add("StackPanel").Grid_Row(5).Grid_ColumnSpan(4).Orientation("Horizontal").VerticalAlignment("Center")
+        row5.Add("TextBlock").Text(GetLang("坐标基准：")).VerticalAlignment("Center")
+        ref := row5.Add("ComboBox").Name("RefCombo").Width(90).Height(26).MinHeight(26).Margin("4,0,0,0")
+        for r in GetLangArr(["屏幕", "窗口"])
+            ref.Add("ComboBoxItem").Content(r)
+        row5.Add("TextBlock").Text(GetLang("移动方式：")).VerticalAlignment("Center").Margin("14,0,0,0")
+        mm := row5.Add("ComboBox").Name("MouseMoveModeCombo").Width(90).Height(26).MinHeight(26).Margin("4,0,0,0")
+        for m in GetLangArr(["绝对移动", "相对移动"])
             mm.Add("ComboBoxItem").Content(m)
-        row6.Add("CheckBox").Name("HumanMouseTog").Content(GetLang("启用拟真轨迹")).VerticalAlignment("Center").Margin("14,0,0,0")
+        row5.Add("CheckBox").Name("HumanMouseTog").Content(GetLang("启用拟真轨迹")).VerticalAlignment("Center").Margin("14,0,0,0")
 
-        ; 行7：移动次数 + 每次间隔
-        row7 := body.Add("StackPanel").Grid_Row(7).Grid_ColumnSpan(4).Orientation("Horizontal").VerticalAlignment("Center")
-        countRow := row7.Add("StackPanel").Name("CountRow").Orientation("Horizontal")
-        countRow.Add("TextBlock").Text(GetLang("移动次数:")).VerticalAlignment("Center")
-        countRow.Add("TextBox").Name("CountCon").Width(90).Height(24).MinHeight(24).Margin("4,0,0,0").VerticalContentAlignment("Center").Text("1")
-        intervalRow := row7.Add("StackPanel").Name("IntervalRow").Orientation("Horizontal").Margin("16,0,0,0")
-        intervalRow.Add("TextBlock").Text(GetLang("每次间隔：")).VerticalAlignment("Center")
-        intervalRow.Add("TextBox").Name("IntervalCon").Width(90).Height(24).MinHeight(24).Margin("4,0,0,0").VerticalContentAlignment("Center").Text("1000")
+        ; 行6：窗口信息（坐标基准=窗口时显示；标题/类名，可 FrontInfoGui 选窗）
+        winRow := body.Add("StackPanel").Name("WinInfoRow").Grid_Row(6).Grid_ColumnSpan(4).Orientation("Horizontal").VerticalAlignment("Center")
+        winRow.Add("TextBlock").Text(GetLang("窗口信息：")).VerticalAlignment("Center")
+        winRow.Add("TextBox").Name("WinInfoCon").Width(240).Height(24).MinHeight(24).Margin("4,0,0,0").VerticalContentAlignment("Center")
+        winRow.Add("Button").Name("BtnWinInfoEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("6,0,0,0")
 
-        ; 行8：提示
-        body.Add("TextBlock").Grid_Row(8).Grid_ColumnSpan(4).Text(GetLang("游戏视角：调整原神等第一人称，第三人称游戏视角")).VerticalAlignment("Center")
+        ; 行7：提示
+        body.Add("TextBlock").Grid_Row(7).Grid_ColumnSpan(4).Text(GetLang("坐标基准=窗口时，坐标按所选窗口左上角偏移计算（绝对移动）。")).VerticalAlignment("Center")
 
-        ; 行9：确定
-        btnRow := body.Add("StackPanel").Grid_Row(9).Grid_ColumnSpan(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; 行8：确定
+        btnRow := body.Add("StackPanel").Grid_Row(8).Grid_ColumnSpan(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(100).Height(36).MinHeight(36)
 
         ; === 创建 XAMLHost ===
@@ -172,8 +165,8 @@ class MMProGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnExecute", "Click", ObjBindMethod(this, "TriggerMacro"))
-        this.ui.OnEvent("ConfigDLCombo", "SelectionChanged", ObjBindMethod(this, "OnChangeConfig"))
-        this.ui.OnEvent("BtnConfigEdit", "Click", ObjBindMethod(this, "OnClickConfigEditBtn"))
+        this.ui.OnEvent("RefCombo", "SelectionChanged", ObjBindMethod(this, "OnRefChange"))
+        this.ui.OnEvent("BtnWinInfoEdit", "Click", ObjBindMethod(this, "OnWinInfoEdit"))
         this.ui.OnEvent("MouseMoveModeCombo", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
         this.ui.OnEvent("HumanMouseTog", "Click", ObjBindMethod(this, "OnHumanMouseTogClick"))
         this.ui.OnEvent("BtnTargeter", "Click", ObjBindMethod(this, "OnClickTargeterBtn"))
@@ -253,19 +246,18 @@ class MMProGui {
 
     _TypeValue() => this._SelIndex("ActionTypeCombo") + 1
     _MoveMode() => this._SelIndex("MouseMoveModeCombo")
+    _RefMode() => this._SelIndex("RefCombo")
 
     Init(cmd) {
         
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("移动Pro")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("鼠标移动Pro")
         
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()
 
-        
-        this.RefreshConfigDLArr()
         
         this._SetCombo("PosVarX", this.DLVariableArr, GetLang(this.Data.PosVarX))
         this._SetCombo("PosVarY", this.DLVariableArr, GetLang(this.Data.PosVarY))
@@ -274,11 +266,16 @@ class MMProGui {
         MoveMode := 0
         if (ObjHasOwnProp(this.Data, "MouseMoveMode"))
             MoveMode := this.Data.MouseMoveMode
+        ; §20 旧配置兼容：旧「游戏视角」(值2) 在下拉只剩 绝对/相对 时回退为绝对移动（执行端仍兼容旧值）
+        if (MoveMode > 1)
+            MoveMode := 0
         this.ui.Update("MouseMoveModeCombo", "SelectedIndex", String(MoveMode))
 
+        RefMode := ObjHasOwnProp(this.Data, "RefMode") ? Integer(this.Data.RefMode) : 0
+        this.ui.Update("RefCombo", "SelectedIndex", String(RefMode))
+        this.ui.Update("WinInfoCon", "Text", ObjHasOwnProp(this.Data, "WinInfo") ? this.Data.WinInfo : "")
+
         this.ui.Update("SpeedCon", "Text", this.Data.Speed)
-        this.ui.Update("CountCon", "Text", this.Data.Count)
-        this.ui.Update("IntervalCon", "Text", this.Data.Interval)
         this.ui.Update("HumanMouseTog", "IsChecked", (ObjHasOwnProp(this.Data, "IsHumanMouse") ? this.Data.IsHumanMouse : 0) ? "True" : "False")
 
         this.OnTypeChange()
@@ -308,173 +305,21 @@ class MMProGui {
         return CommandStr
     }
 
-    RefreshConfigDLArr() {
-        Arr := []
-        Arr.Push(this.Data.ConfigName)
-        loop this.Data.ConfigArr.Length {
-            CurConfigData := this.Data.ConfigArr[A_Index]
-            if (ObjHasOwnProp(CurConfigData, "ConfigName"))
-                Arr.Push(CurConfigData.ConfigName)
-        }
-        this.ConfigDLArr := Arr
-        this._syncing := true
-        try this._SetCombo("ConfigDLCombo", Arr, this.Data.ConfigName)
-        finally this._syncing := false
-    }
-
-    _SaveConfigData(saveStr) {
-        IniWrite(saveStr, MMProFile, IniSection, this.Data.SerialStr)
-    }
-
-    OnClickConfigEditBtn(state := "", ctrl := "", event := "") {
-        ; 打开 编辑 菜单（修改/增加/删除）
-        x := y := 0
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&x, &y)
-        this.OnRuleMenuAt(x, y)
-    }
-
-    OnRuleMenuAt(x, y) {
-        ; 用 AHK 原生 Menu 弹编辑菜单（简单三选项，无需 XAML ContextMenu 样式）
-        if (this.RuleMenu == "") {
-            this.RuleMenu := Menu()
-            this.RuleMenu.Add(GetLang("修改"), (*) => this.OnRuleMenuHandler(GetLang("修改")))
-            this.RuleMenu.Add(GetLang("增加"), (*) => this.OnRuleMenuHandler(GetLang("增加")))
-            this.RuleMenu.Add(GetLang("删除"), (*) => this.OnRuleMenuHandler(GetLang("删除")))
-        }
-        this.RuleMenu.Show(x, y)
-    }
-
-    OnRuleMenuHandler(Str) {
-        if (Str == GetLang("修改")) {
-            if (!ObjHasOwnProp(this, "WinRuleGui")) {
-                this.WinRuleGui := WinRuleGui()
-            }
-            SureAction(width, height, remark) {
-                ConfigName := Format("{}*{}", width, height)
-                if (remark != "")
-                    ConfigName := Format("{}*{}_{}", width, height, remark)
-                if (ConfigName == this.Data.ConfigName)
-                    return
-                loop this.ConfigDLArr.Length {
-                    if (this.ConfigDLArr[A_Index] == ConfigName) {
-                        MsgBox(Format("{} 配置已存在，修改失败", ConfigName))
-                        return
-                    }
-                }
-                this.Data.ConfigName := ConfigName
-                this.RefreshConfigDLArr()
-                saveStr := JSON.stringify(this.Data, 0)
-                this._SaveConfigData(saveStr)
-                MsgBox(GetLang("修改成功"))
-            }
-            this.WinRuleGui.SureAction := SureAction
-            this.WinRuleGui.ShowGui()
-        }
-        else if (Str == GetLang("增加")) {
-            this.OnAddConfig()
-        }
-        else if (Str == GetLang("删除")) {
-            this.OnRemoveConfig()
-        }
-    }
-
-    _SaveCurrentConfigToData() {
-        LastConfig := Object()
-        LastConfig.ConfigName := this.Data.ConfigName
-        LastConfig.PosVarX := GetLangKey(this.ui.Query("PosVarX"))
-        LastConfig.PosVarY := GetLangKey(this.ui.Query("PosVarY"))
-        LastConfig.ActionType := this._TypeValue()
-        LastConfig.MouseMoveMode := this._MoveMode()
-        LastConfig.Speed := this.ui.Query("SpeedCon")
-        LastConfig.Count := this.ui.Query("CountCon")
-        LastConfig.Interval := this.ui.Query("IntervalCon")
-        return LastConfig
-    }
-
-    OnAddConfig() {
-        if (!ObjHasOwnProp(this, "WinRuleGui")) {
-            this.WinRuleGui := WinRuleGui()
-        }
-        SureAction(width, height, remark) {
-            ConfigName := Format("{}*{}", width, height)
-            if (remark != "")
-                ConfigName := Format("{}*{}_{}", width, height, remark)
-            loop this.ConfigDLArr.Length {
-                if (this.ConfigDLArr[A_Index] == ConfigName) {
-                    MsgBox(Format("{} 配置已存在，无法重复添加", ConfigName))
-                    return
-                }
-            }
-            LastConfig := this._SaveCurrentConfigToData()
-            this.Data.ConfigArr.Push(LastConfig)
-            this.Data.ConfigName := ConfigName
-            this.RefreshConfigDLArr()
-            saveStr := JSON.stringify(this.Data, 0)
-            this._SaveConfigData(saveStr)
-            MsgBox(Format("{} 配置添加成功", ConfigName))
-        }
-        this.WinRuleGui.SureAction := SureAction
-        this.WinRuleGui.ShowGui()
-    }
-
-    OnRemoveConfig() {
-        if (this.ConfigDLArr.Length <= 1) {
-            MsgBox("最后选项不可删除！！！")
+    ; §20 坐标基准切换：选「窗口」时显示窗口信息编辑行
+    OnRefChange(state := "", ctrl := "", event := "") {
+        if (this._syncing || !IsObject(this.ui))
             return
-        }
-        result := MsgBox(Format(GetLang("是否删除 {} 配置"), this.ui.Query("ConfigDLCombo")), GetLang("提示"), 1)
-        if (result == "Cancel")
-            return
-
-        ConfigData := this.Data.ConfigArr[1]
-        this.Data.ConfigArr.RemoveAt(1)
-        this.Data.ConfigName := ConfigData.ConfigName
-        this.Data.PosVarX := ConfigData.PosVarX
-        this.Data.PosVarY := ConfigData.PosVarY
-        this.Data.ActionType := ConfigData.ActionType
-        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : 0
-        this.Data.Speed := ConfigData.Speed
-        this.Data.Count := ConfigData.Count
-        this.Data.Interval := ConfigData.Interval
-        saveStr := JSON.stringify(this.Data, 0)
-        this._SaveConfigData(saveStr)
-        CMDStr := this.GetCommandStr()
-        this.Init(CMDStr)
+        isWin := this._RefMode() == 1
+        this.ui.Update("WinInfoRow", "Visibility", isWin ? "Visible" : "Collapsed")
     }
 
-    OnChangeConfig(state := "", ctrl := "", event := "") {
-        if (this._syncing || !IsObject(this.ui) || !this.ConfigDLArr.Length)
+    ; §20 窗口信息编辑：复用 FrontInfoGui 选窗（标题/类名）
+    OnWinInfoEdit(state := "", ctrl := "", event := "") {
+        if (!IsObject(this.ui))
             return
-        ; 程序化设置（Init/Refresh）触发的 SelectionChanged 是异步到达的，_syncing 已被清。
-        ; 此时新值==当前配置名=无实际切换，直接返回，避免 OnChangeConfig → Init 无限递归。
-        if (this.ui.Query("ConfigDLCombo") == this.Data.ConfigName)
-            return
-        LastConfig := this._SaveCurrentConfigToData()
-        this.Data.ConfigArr.Push(LastConfig)
-
-        ConfigData := ""
-        loop this.ConfigDLArr.Length {
-            if (this.ui.Query("ConfigDLCombo") == this.Data.ConfigArr[A_Index].ConfigName) {
-                ConfigData := this.Data.ConfigArr.RemoveAt(A_Index)
-                break
-            }
-        }
-        if (ConfigData == "")
-            return
-
-        this.Data.ConfigName := ConfigData.ConfigName
-        this.Data.PosVarX := ConfigData.PosVarX
-        this.Data.PosVarY := ConfigData.PosVarY
-        this.Data.ActionType := ConfigData.ActionType
-        this.Data.MouseMoveMode := ObjHasOwnProp(ConfigData, "MouseMoveMode") ? ConfigData.MouseMoveMode : 0
-        this.Data.Speed := ConfigData.Speed
-        this.Data.Count := ConfigData.Count
-        this.Data.Interval := ConfigData.Interval
-        saveStr := JSON.stringify(this.Data, 0)
-        this._SaveConfigData(saveStr)
-        CMDStr := this.GetCommandStr()
-        this.Init(CMDStr)
+        frontCtrl := CtrlAdapter("WinInfoCon", this.ui, "Text")
+        MyFrontInfoGui.SureAction := () => this.OnRefChange()
+        MyFrontInfoGui.ShowGui(frontCtrl, true)
     }
 
     CheckIfValid() {
@@ -508,17 +353,7 @@ class MMProGui {
     OnTypeChange(state := "", ctrl := "", event := "") {
         if (this._syncing || !IsObject(this.ui))
             return
-        MoveMode := this._MoveMode()
-        isGameView := MoveMode == 2
-        this.ui.Update("ActionTypeCombo", "IsEnabled", isGameView ? "False" : "True")
-        this.ui.Update("SpeedCon", "IsEnabled", isGameView ? "False" : "True")
-        this.ui.Update("HumanMouseTog", "IsEnabled", isGameView ? "False" : "True")
-        this.ui.Update("CountRow", "Visibility", isGameView ? "Visible" : "Collapsed")
-        this.ui.Update("IntervalRow", "Visibility", isGameView ? "Visible" : "Collapsed")
-        if (isGameView) {
-            this.ui.Update("ActionTypeCombo", "SelectedIndex", "0")
-            this.ui.Update("SpeedCon", "Text", "100")
-        }
+        ; §20 移动模式仅剩 绝对/相对（旧「游戏视角」已拆为增量移动指令），无需联动禁用
     }
 
     OnSureTarget(PosX, PosY, Color) {
@@ -584,9 +419,10 @@ class MMProGui {
         this.Data.PosVarY := GetLangKey(this.ui.Query("PosVarY"))
         this.Data.ActionType := this._TypeValue()
         this.Data.MouseMoveMode := this._MoveMode()
+        ; §20 坐标基准 + 窗口信息
+        this.Data.RefMode := this._RefMode()
+        this.Data.WinInfo := GetLangKey(this.ui.Query("WinInfoCon"))
         this.Data.Speed := this.ui.Query("SpeedCon")
-        this.Data.Count := this.ui.Query("CountCon")
-        this.Data.Interval := this.ui.Query("IntervalCon")
         this.Data.IsHumanMouse := this.ui.Query("HumanMouseTog") == "True" ? 1 : 0
         SaveMacroCMDData(this.Data)
     }

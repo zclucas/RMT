@@ -324,7 +324,8 @@ class VoiceEngineMgr {
                 continue
             ; 启用/禁用由主界面「禁用」（Forbid）控制：禁用则跳过；关键词非空即可作为唤醒词
             for i, item in t.Items {
-                if (item.Forbid)
+                ; §2 模块级禁用联动：所属模块禁用则该模块语音宏不触发
+                if (item.Forbid || GetItemFoldForbidState(t, i))
                     continue
                 kwStr := item.VoiceKeywords
                 if (kwStr == "")
@@ -427,12 +428,12 @@ class VoiceEngineMgr {
         if (p.Length != 2)
             return
         tableID := p[1], itemID := p[2]
-        ; 触发时做合法性复查：宏存在、未禁用（主界面禁用开关）
+        ; 触发时做合法性复查：宏存在、未禁用（主界面禁用开关/§2 模块级禁用）
         tableItem := GetTableByID(tableID)
         item := GetItemGlobal(itemID)
         if (!tableItem || !item)
             return
-        if (item.Forbid)
+        if (item.Forbid || GetItemFoldForbidState(tableItem, GetItemIndexInTable(tableItem, itemID)))
             return
         if (item.VoiceKeywords == "")
             return

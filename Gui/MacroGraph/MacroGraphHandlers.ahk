@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; ============================================================================
 ; MacroGraphGui 职能拆分 —— 节点内联编辑回调
@@ -248,10 +248,10 @@ class MacroGraphHandlersMixin {
         this._Apply()
     }
 
-    ; 游戏视角模式下速度固定100且禁用编辑；其余模式恢复可编辑并同步速度值
+    ; 游戏视角模式下速度固定100且禁用编辑；其余模式恢复可编辑并同步速度值（旧配置兼容）
     _RefreshMoveVisibility(id) {
         d := this._Parse(this.cmdNodes[id].CurCMD)
-        if (d.type != GetLang("移动") || this.ui == "")
+        if (!IsMoveCmd(d.type) || this.ui == "")
             return
         isGameView := (d.mode == "2" || d.mode == 2)
         if (isGameView) {
@@ -265,12 +265,10 @@ class MacroGraphHandlersMixin {
         }
     }
 
-    ; 模式编号 -> 下拉项索引
+    ; 模式编号 -> 下拉项索引（§20 下拉仅 绝对/相对；旧值 2 游戏视角回退绝对）
     _MoveModeIndex(mode) {
         if (mode == "1" || mode == 1)
             return 1
-        if (mode == "2" || mode == 2)
-            return 2
         return 0
     }
 
@@ -278,18 +276,16 @@ class MacroGraphHandlersMixin {
     _MoveModeFromText(text) {
         if (text == GetLang("相对移动"))
             return "1"
-        if (text == GetLang("游戏视角"))
-            return "2"
         return "0"
     }
 
     ; ----------------------------------------------------------------- 移动Pro
 
-    ; 判断某 CurCMD 首段是否为「移动Pro」序列码（去掉结尾数字后等于「移动Pro」）
+    ; 判断某 CurCMD 首段是否为「移动Pro/鼠标移动Pro」序列码（去掉结尾数字后匹配新旧名）
     _IsMMProName(name) {
         if (name == "")
             return false
-        return RegExReplace(name, "\d+$", "") == GetLang("移动Pro")
+        return IsMoveProCmd(RegExReplace(name, "\d+$", ""))
     }
 
     ; 搜索序列码判定（如 "搜索1"）：去掉结尾数字后与「搜索」完全匹配
@@ -1530,9 +1526,11 @@ class MacroGraphHandlersMixin {
             this._FlushIntervalInline(id, d, state)
         else if (d.type == GetLang("按键"))
             this._FlushKeyInline(id, d, state)
-        else if (d.type == GetLang("移动"))
+        else if (IsMoveCmd(d.type))
             this._FlushMoveInline(id, d, state)
-        else if (d.type == GetLang("移动Pro"))
+        else if (IsDeltaMoveCmd(d.type))
+            this._FlushDeltaMoveInline(id, d, state)
+        else if (IsMoveProCmd(d.type))
             this._FlushMMProInline(id, state)
         else if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro"))
             this._FlushSearchInline(id, state)
@@ -1663,11 +1661,24 @@ class MacroGraphHandlersMixin {
             dirty := true
         }
         idx := this._ComboSelectedIndex("ModeCmb_" id)
-        if (idx >= 0 && idx <= 2) {
+        if (idx >= 0 && idx <= 1) {
             d.mode := String(idx)
             dirty := true
         } else if (this._InlineVal(state, "ModeCmb_" id, &modeTxt)) {
             d.mode := this._MoveModeFromText(modeTxt)
+            dirty := true
+        }
+        if (dirty)
+            this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+    }
+
+    ; §20 增量移动内联字段写回（X/Y 偏移）
+    _FlushDeltaMoveInline(id, d, state) {
+        dirty := false
+        for field, prefix in Map("posx", "DPosX_", "posy", "DPosY_") {
+            if (!this._InlineVal(state, prefix id, &val))
+                continue
+            d.%field% := val
             dirty := true
         }
         if (dirty)

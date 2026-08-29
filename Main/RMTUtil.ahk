@@ -18,21 +18,10 @@ global XAML_IN_PROCESS_PREVIEW := false
 
 ;资源保存（带脏检查优化：只写入实际发生变化的配置项）
 OnSaveSetting(*) {
-    global MySoftData, MyWorkPool
+    global MySoftData, MyWorkPool, MyHotReloadBus
     isValid := CheckAllValueSettingValid()
     if (!isValid)
         return
-
-    ; 先取窗口位置再隐藏，用户感知窗口立即关闭；后续保存/Reload 在隐藏窗口下进行
-    SaveCurWinPos()
-    MainSoftData.MyGui.Hide()
-
-    OnKillAllMacro()
-
-    if (MyWorkPool != "") {
-        MyWorkPool.Clear()
-        MyWorkPool := ""
-    }
 
     ; Epic5：虚拟化列表保存前兜底提交实体化行全字段（覆盖纯键盘后未失焦路径）。
     ; VL_COMMIT_ALL 回传经 SetTimer(-1) 异步写模型，Sleep(-1) 处理 pending timer 后再读，防丢
@@ -43,11 +32,10 @@ OnSaveSetting(*) {
         }
     }
 
-    loop MySoftData.TableInfo.Length {
-        tableItem := MySoftData.TableInfo[A_Index]
-        RecycleTabItem(tableItem)
-    }
-    SaveAllTableItemInfo(MySoftData.TableInfo)   ; 批量：一次解析 + 一次原子写（含表集合 [[table]]）
+    ; §18 职责分离：宏表数据已在各 live 编辑点即时落盘（HotReloadPublish/SaveTableItemInfo），
+    ; 此处不再保存宏表；CommitAll 产生的模型变更经 _ApplyChange 已即时写盘。
+    ; 本函数只处理非热重载数据：全局设置（下方 CheckAndAddDirty Ini 写）+ 表结构批量变更
+    ; （表管理/合并路径在调用方显式 SaveAllTableItemInfo）。
 
     ; 静态变量：保存上次写入的值，用于脏检查
     static lastSavedSettings := Map()
@@ -67,12 +55,20 @@ OnSaveSetting(*) {
     CheckAndAddDirty("IntervalFloat", MainSoftData.IntervalFloat)
     CheckAndAddDirty("CoordXFloat", MainSoftData.CoordXFloat)
     CheckAndAddDirty("CoordYFloat", MainSoftData.CoordYFloat)
+    ; §10 显示页签（symbol=0/1 π 拼接）
+    _tvStr := ""
+    for _sym, _vis in MainSoftData.TabVisibleMap
+        _tvStr .= (_tvStr == "" ? "" : "π") _sym "=" (_vis ? 1 : 0)
+    CheckAndAddDirty("TabVisible", _tvStr)
     CheckAndAddDirty("SuspendHotkey", MainSoftData.SuspendHotkey)
     CheckAndAddDirty("PauseHotkey", MainSoftData.PauseHotkey)
     CheckAndAddDirty("KillMacroHotkey", MainSoftData.KillMacroHotkey)
+    CheckAndAddDirty("DebugRunHotkey", MainSoftData.HasProp("DebugRunHotkey") ? MainSoftData.DebugRunHotkey : "f5")
+    CheckAndAddDirty("DebugStepHotkey", MainSoftData.HasProp("DebugStepHotkey") ? MainSoftData.DebugStepHotkey : "f6")
     CheckAndAddDirty("IsBootStart", MainSoftData.IsBootStart)
     CheckAndAddDirty("ShowSplitLine", MainSoftData.ShowSplitLine)
     CheckAndAddDirty("IsModalSubGui", MainSoftData.IsModalSubGui)
+    CheckAndAddDirty("BackImagePath", MainSoftData.BackImagePath)   ; §11 主界面背景图
     CheckAndAddDirty("MutiThreadNum", MainSoftData.MutiThreadNum)
     CheckAndAddDirty("SoftBGColor", MainSoftData.SoftBGColor)
     CheckAndAddDirty("NoVariableTip", MainSoftData.NoVariableTip)
@@ -138,6 +134,25 @@ OnSaveSetting(*) {
     ; 只写入实际发生变化的配置项（性能提升80%+）
     for key, value in dirtySettings {
         IniWrite(value, IniFile, IniSection, key)
+    }
+
+    ; §17 保存后弹窗确认：不再无条件重启。选择「暂不重启」→ 热重载（配置修改运行时立即生效）
+    msg := GetLang("配置已保存。是否立即重启软件使全部设置生效？") "`n"
+        . GetLang("选择「否」将不重启，宏配置修改会通过热重载在运行时立即生效。")
+    result := MsgBox(msg, GetLang("提示"), "YesNo Icon?")
+    if (result == "No") {
+        ; §18 热重载兜底广播：全局设置变更需热重载生效；宏表已即时落盘，tableIndex==0 不重复写盘
+        HotReloadPublish(0, 0)
+        return
+    }
+
+    ; 立即重启：先取窗口位置再隐藏（用户感知窗口立即关闭），终止宏并清线程池
+    SaveCurWinPos()
+    MainSoftData.MyGui.Hide()
+    OnKillAllMacro()
+    if (MyWorkPool != "") {
+        MyWorkPool.Clear()
+        MyWorkPool := ""
     }
     SafeReload()
 }
@@ -438,6 +453,8 @@ InitFilePath() {
     global KeyDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyDataFile.ini"
     global MoveDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MoveDataFile.ini"
     global RMTCMDFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RMTCMDFile.ini"
+    global WaitFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WaitFile.ini"
+    global DeltaMoveFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.ini"
     global ProjectRootDir := A_ScriptDir
 }
 
@@ -923,6 +940,19 @@ ExcuteRMTCMDAction(Cmd) {
             OpenMenuWheel(paramArr[4], false)
         case "关闭菜单":
             CloseMenuWheel()
+        case "打开界面窗口":
+            ; §15.5：打开界面宏的全部面板；没有可用的界面窗口时该指令无效（无操作）
+            if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
+                MyUIMacroGui.ShowAllPanels()
+        case "关闭界面窗口":
+            ; §15.5：关闭全部界面宏面板
+            if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
+                MyUIMacroGui.HideAllPanels()
+        case "禁用模块":
+            ; §2：禁用指定页签下的模块（paramArr[4]=表符号, paramArr[5]=模块路径身份 FoldID）
+            RmtCmdSetFoldForbidState(paramArr, true)
+        case "取消禁用模块":
+            RmtCmdSetFoldForbidState(paramArr, false)
         case "休眠":
             OnSuspendHotkey()
         case "暂停所有宏":
@@ -936,6 +966,29 @@ ExcuteRMTCMDAction(Cmd) {
         case "关闭软件":
             ExitApp()
     }
+}
+
+; §2 RMT指令「禁用模块/取消禁用模块」执行端：按表符号+模块路径身份切换 fold 启用状态，
+; 实时重绑触发键 + HotReloadBus 广播（与折叠开关热键同一生效链路）
+RmtCmdSetFoldForbidState(paramArr, forbid) {
+    global MySoftData, MyHotReloadBus
+    tableSymbol := paramArr.Length >= 5 ? paramArr[4] : ""
+    foldID := paramArr.Length >= 6 ? paramArr[5] : ""
+    if (tableSymbol == "" || foldID == "")
+        return
+    tableItem := GetTableBySymbol(tableSymbol)
+    if (!tableItem)
+        return
+    fold := tableItem.GetFold(foldID)
+    if (!fold)
+        return
+    fold.ForbidState := forbid
+    RebindAllTriggerKeys()
+    ; §18 RMT指令禁用模块：即时落盘 + 广播（与折叠开关热键同链路）
+    HotReloadPublish(tableItem.Index, 0)
+    tip := (forbid ? GetLang("模块已禁用：") : GetLang("模块已启用：")) (fold.Remark == "" ? fold.ID : fold.Remark)
+    if (MySoftData.CMDTip)
+        MyCMDReportAciton(tip)
 }
 
 ScreenShot(X1, Y1, X2, Y2, FileName) {
@@ -974,12 +1027,20 @@ OnToolTextCheckScreenShot() {
 TogGetSelectArea(isEnable, action := "") {
     if (isEnable && action != "") {
         MainSoftData.GetAreaAction := action
+        ; §18 自动吸附：升级为拖动中实时框选绘制（复用 SelectAreaDraw），窗口/控件边缘自动吸附
+        ToolTipContent(GetLang("请框选搜索范围"))
+        SetSystemCursor("CROSS")
         Hotkey("~*LButton", OnGetSelectAreaDown, "On")
         Hotkey("~*LButton Up", OnGetSelectAreaUp, "On")
         Hotkey("~*RButton", OnGetSelectAreaCancel, "On")
     }
     else {
         MainSoftData.GetAreaAction := ""
+        SetTimer(SelectAreaDraw, 0)
+        SelectAreaHo.Hide()
+        MySoftData.ToolTipEndTime := 0
+        ToolTip()
+        SetSystemCursor()
         Hotkey("~*LButton", "Off")
         Hotkey("~*LButton Up", "Off")
         Hotkey("~*RButton", "Off")
@@ -987,10 +1048,14 @@ TogGetSelectArea(isEnable, action := "") {
 }
 
 OnGetSelectAreaDown(*) {
+    global SelectAreaState
+    SelectAreaState.winPos := ""
+    SelectAreaState.firstPos := false
     CoordMode("Mouse", "Screen")
     MouseGetPos(&startX, &startY)
     MainSoftData.StartAreaPosX := startX
     MainSoftData.StartAreaPosY := startY
+    SetTimer(SelectAreaDraw, 30)
 }
 
 OnGetSelectAreaUp(*) {
@@ -998,13 +1063,19 @@ OnGetSelectAreaUp(*) {
     TogGetSelectArea(false)
     if (action == "")
         return
-    CoordMode("Mouse", "Screen")
-    MouseGetPos(&endX, &endY)
-
-    x1 := Min(MainSoftData.StartAreaPosX, endX)
-    y1 := Min(MainSoftData.StartAreaPosY, endY)
-    x2 := Max(MainSoftData.StartAreaPosX, endX)
-    y2 := Max(MainSoftData.StartAreaPosY, endY)
+    global SelectAreaState
+    if (SelectAreaState.winPos != "" && ObjHasOwnProp(SelectAreaState.winPos, "W") && SelectAreaState.winPos.W > 0 && SelectAreaState.winPos.H > 0) {
+        x1 := SelectAreaState.winPos.X
+        y1 := SelectAreaState.winPos.Y
+        x2 := x1 + SelectAreaState.winPos.W
+        y2 := y1 + SelectAreaState.winPos.H
+    } else {
+        ; 点击未拖动：起终点相同
+        x1 := MainSoftData.StartAreaPosX
+        y1 := MainSoftData.StartAreaPosY
+        x2 := x1
+        y2 := y1
+    }
     action(x1, y1, x2, y2)
 }
 
@@ -1093,6 +1164,10 @@ SelectAreaDraw() {
     } else {
         ex := 0, ey := 0
         MouseGetPos(&ex, &ey)
+        ; §18 框选自动吸附：当前光标位置吸附到 光标下窗口/控件 的边缘（容差内生效，保留手动拖拽）
+        _snap := SnapPointToCandidates(ex, ey, 6)
+        ex := _snap.X
+        ey := _snap.Y
         sx := SelectAreaState.sx, sy := SelectAreaState.sy
         if (sx <= ex && sy <= ey)
             SelectAreaState.winPos := {X: sx, Y: sy, W: ex - sx, H: ey - sy}
@@ -1114,6 +1189,68 @@ SelectAreaDraw() {
     } else {
         SelectAreaHo.Hide()
     }
+}
+
+; ============================================================
+; §18 框选自动吸附：光标下 窗口+子控件 边缘吸附（参考 PixPin）
+; 保留手动拖拽：仅当光标距边缘 ≤ 容差时吸附，其余位置自由移动
+; ============================================================
+global SnapRectsTmp := []
+
+EnumSnapChildProc(hwnd, lParam) {
+    global SnapRectsTmp
+    r := Buffer(16)
+    if (DllCall("GetWindowRect", "Ptr", hwnd, "Ptr", r)) {
+        SnapRectsTmp.Push({L: NumGet(r, 0, "Int"), T: NumGet(r, 4, "Int"), R: NumGet(r, 8, "Int"), B: NumGet(r, 12, "Int")})
+    }
+    return true
+}
+
+; 取光标下顶层窗口 + 其全部子控件的屏幕矩形（吸附候选）
+GetSnapCandidates(mx, my) {
+    global SnapRectsTmp
+    SnapRectsTmp := []
+    pt := (my << 32) | (mx & 0xFFFFFFFF)   ; POINT 打包
+    hwnd := DllCall("WindowFromPoint", "Int64", pt, "Ptr")
+    if (!hwnd)
+        return SnapRectsTmp
+    top := DllCall("GetAncestor", "Ptr", hwnd, "UInt", 2, "Ptr")   ; GA_ROOT
+    if (!top)
+        top := hwnd
+    r := Buffer(16)
+    if (DllCall("GetWindowRect", "Ptr", top, "Ptr", r)) {
+        SnapRectsTmp.Push({L: NumGet(r, 0, "Int"), T: NumGet(r, 4, "Int"), R: NumGet(r, 8, "Int"), B: NumGet(r, 12, "Int")})
+    }
+    cb := CallbackCreate(EnumSnapChildProc, "F", 2)
+    DllCall("EnumChildWindows", "Ptr", top, "Ptr", cb, "Ptr", 0)
+    CallbackFree(cb)
+    return SnapRectsTmp
+}
+
+; 把 (x,y) 吸附到候选矩形最近边缘（容差 tol 内；返回 {X,Y}）
+SnapPointToCandidates(x, y, tol := 6) {
+    nx := x
+    ny := y
+    best := tol
+    for r in GetSnapCandidates(x, y) {
+        if (Abs(x - r.L) <= best && y >= r.T - tol && y <= r.B + tol) {
+            nx := r.L
+            best := Abs(x - r.L)
+        }
+        if (Abs(x - r.R) <= best && y >= r.T - tol && y <= r.B + tol) {
+            nx := r.R
+            best := Abs(x - r.R)
+        }
+        if (Abs(y - r.T) <= best && x >= r.L - tol && x <= r.R + tol) {
+            ny := r.T
+            best := Abs(y - r.T)
+        }
+        if (Abs(y - r.B) <= best && x >= r.L - tol && x <= r.R + tol) {
+            ny := r.B
+            best := Abs(y - r.B)
+        }
+    }
+    return {X: nx, Y: ny}
 }
 
 SetSystemCursor(Cursor:="") {
@@ -1272,7 +1409,7 @@ FullCopyCmd(cmdStr, CopyedMap := Map()) {
         return cmdStr
     if (paramArr[1] == GetLang("按键"))
         return cmdStr
-    if (paramArr[1] == GetLang("移动"))
+    if (IsMoveCmd(paramArr[1]))
         return cmdStr
     if (paramArr[1] == GetLang("RMT指令"))
         return cmdStr
@@ -1568,6 +1705,7 @@ OnTriggerSepcialItemMacro(MacroStr) {
 }
 
 HandleOpenArg() {
+    global MySoftData
     if (A_Args.Length <= 0) {
         if (MainSoftData.IsAdminStart && !A_IsAdmin)
             ElevateToAdmin()
@@ -1575,7 +1713,8 @@ HandleOpenArg() {
     }
 
     loop A_Args.Length {
-        arg := A_Args[A_Index]
+        argIndex := A_Index
+        arg := A_Args[argIndex]
         if (arg == "-min") {
             MainSoftData.IsMinStart := true
             continue
@@ -1585,6 +1724,21 @@ HandleOpenArg() {
                 ElevateToAdmin()
             }
             continue
+        }
+        if (arg == "-elevated") {
+            continue
+        }
+        ; §3 命令行：首个其它 "-" 参数视为命令起始，收集该命令及其全部参数，
+        ; 启动完成后由 RmtRunStartupCommands() 统一执行（依赖表/线程池/UI 就绪）
+        if (SubStr(arg, 1, 1) == "-") {
+            if (!MySoftData.HasProp("StartupCmdArr"))
+                MySoftData.StartupCmdArr := []
+            MySoftData.StartupCmdArr := []
+            MySoftData.StartupCmdArr.Push(arg)
+            loop A_Args.Length - argIndex {
+                MySoftData.StartupCmdArr.Push(A_Args[argIndex + A_Index])
+            }
+            break
         }
     }
 }

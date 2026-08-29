@@ -80,6 +80,7 @@ class WorkerData {
         this.isGraphBranch := false   ; 是否为图形宏并行分支任务
         this.graphNodeSerial := ""    ; 图形分支起始节点（异常退出时重派）
         this.rxBusy := false          ; ProcessWorkerRx 重入保护
+        this.configDirty := false     ; §17 热重载：主进程保存后待补发配置刷新（CF）的标志
     }
 }
 
@@ -114,6 +115,12 @@ class WorkPool {
 
         OnMessage(WM_LOAD_WORK, ObjBindMethod(this, "OnWorkerReady"))
         OnMessage(WM_WORKER_TO_MASTER, ObjBindMethod(this, "OnWorkerToMaster"))
+
+        ; §17 热重载订阅：整表保存（OnSaveSetting 选「否」→ Publish(0,0)，落盘后）→ 广播 Worker 重载配置，
+        ; 使「新增宏 / 修改宏内容」保存选「否」后 Worker（Work.exe 启动快照）立即生效，不必重启
+        global MyHotReloadBus
+        if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
+            MyHotReloadBus.Subscribe(ObjBindMethod(this, "OnHotReloadConfigChanged"))
 
         if (this.isDynamic) {
             this.shrinkTimerFunc := ObjBindMethod(this, "FreeShrinkCheck")
@@ -638,6 +645,9 @@ class WorkPool {
         this.freePool[idx] := wd
         GraphPoolLog("Worker就绪", Format("Worker#{1} 就绪后闲置={2} 队列={3} 仍启动中=[{4}]"
             , idx, this.freePool.Count, this.taskQueue.Size(), this.GetPendingWorkerIds()))
+        ; §17 热重载：启动期间收到配置变更（configDirty）→ 就绪后立即补发重载
+        if (wd.configDirty)
+            this.SendConfigRefresh(wd)
         this.Dispatch()
     }
 
@@ -660,6 +670,38 @@ class WorkPool {
             payload := JSON.stringify(["SyncVarData", VarArr, ArrArr])
             this.PushTask(wd, MsgType.EVENT, 0, payload)
         }
+    }
+
+    ; ---- §17 热重载：配置变更 → Worker 重载（新增宏/宏内容保存选「否」即生效） ----
+
+    ; §17/§18 总线回调：宏表整表变更（itemIndex==0 = 新增/删除宏/模块/内容/字段等 live 编辑已即时落盘）
+    ; 与全量 Publish(0,0) → 广播 Worker 重载配置；行级变更（触发键/语音关键词等主进程消费）不重载 Worker
+    OnHotReloadConfigChanged(tableIndex, itemIndex) {
+        if (itemIndex != 0)
+            return
+        this.BroadcastConfigRefresh()
+    }
+
+    ; 广播配置刷新：空闲 Worker 立即发 CF；忙/启动中的置 configDirty，回空闲（FINISH/就绪）时补发
+    BroadcastConfigRefresh() {
+        if (this.workerMap.Count == 0)
+            return
+        GraphPoolLog("热重载", Format("Worker配置刷新 存活={1} 空闲={2} 忙={3} 启动中={4}"
+            , this.workerMap.Count, this.freePool.Count, this.usePool.Count, this.pending.Count))
+        for idx, wd in this.workerMap {
+            wd.configDirty := true
+        }
+        for idx, wd in this.freePool {
+            this.SendConfigRefresh(wd)
+        }
+    }
+
+    ; 向指定 Worker 发送 CF（配置重载）事件并清标志
+    SendConfigRefresh(wd) {
+        if (!wd || !wd.tx)
+            return
+        wd.configDirty := false
+        this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CF")))
     }
 
     RemoveWorkerFromPools(idx) {
@@ -1002,6 +1044,9 @@ class WorkPool {
                                 wd.isGraphBranch := false
                                 wd.graphNodeSerial := ""
                                 wd.idleTick := A_TickCount
+                                ; §17 热重载：忙时延后的配置刷新，任务结束回空闲时补发
+                                if (wd.configDirty)
+                                    this.SendConfigRefresh(wd)
                                 if (remainCount <= 0) {
                                     if (!this.HasItemWork(tID, iID))
                                         this.FinishGraphMacroItem(tID, iID)
@@ -1016,6 +1061,9 @@ class WorkPool {
                                 this.freePool[wd.idx] := wd
                                 wd.isGraphBranch := false
                                 wd.idleTick := A_TickCount
+                                ; §17 热重载：忙时延后的配置刷新，任务结束回空闲时补发
+                                if (wd.configDirty)
+                                    this.SendConfigRefresh(wd)
                                 this.Dispatch()
                             }
                         case MsgType.EVENT:

@@ -38,7 +38,7 @@ InitUI() {
 
     MainSoftData.MyGui := GuiAdapter(MyMainWin.ui)
     MainSoftData.MyGui.Title := "RMTv" RMT_VERSION_DISPLAY
-    MainSoftData.TabCtrl := TabAdapter(MyMainWin.ui)
+    MainSoftData.TabCtrl := TabAdapter(MyMainWin.ui, MyMainWin)
     MainSoftData.TabCtrl._value := MainSoftData.TableIndex
     MainSoftData.BtnSave := CtrlAdapter("BtnSave", MyMainWin.ui, "Text")
 

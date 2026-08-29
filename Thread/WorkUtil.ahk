@@ -60,6 +60,8 @@
         global KeyDataFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\KeyDataFile.ini"
         global MoveDataFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\MoveDataFile.ini"
         global RMTCMDFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\RMTCMDFile.ini"
+        global WaitFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\WaitFile.ini"
+        global DeltaMoveFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.ini"
         global IniSection := "UserSettings"
 
     ;项目根目录（Worker进程A_WorkingDir指向Thread子目录，需回退到项目根）
@@ -281,7 +283,7 @@
     }
 
     OnExecTask(id, cmd) {
-        global rx, workIndex, workerTaskBusy, workerPendingTasks
+        global rx, workIndex, workerTaskBusy, workerPendingTasks, workerConfigDirty
         ; 业务日志（C 项阶段3）：缓存当前任务标识供开始/结束埋点使用
         static _bizCurTab := 0, _bizCurItem := 0, _bizCurRemark := ""
         workerTaskBusy := true
@@ -334,6 +336,11 @@
             RMTLogBusiness("宏:(" _bizCurRemark ")", Format("tab{1} item{2} 结束", _bizCurTab, _bizCurItem))
             rx.Push(MsgType.FINISH, id)
             MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+            ; §17 热重载：任务期间收到 CF → 结束当前任务后重载配置，再执行下一任务（用新配置）
+            if (workerConfigDirty) {
+                workerConfigDirty := false
+                ReloadWorkerConfig()
+            }
             if (workerPendingTasks.Length > 0) {
                 t := workerPendingTasks.RemoveAt(1)
                 ScheduleWorkerTask(t.id, t.cmd)
@@ -344,7 +351,7 @@
     }
 
     OnEventMessage(cmd) {
-        global _workerInputResult
+        global _workerInputResult, workerTaskBusy, workerConfigDirty
         if (SubStr(cmd, 1, 2) != "R1")
             return
 
@@ -427,6 +434,16 @@
                             KillTableItemMacro(tableItem, itemIndex)
                         }
                         GraphPoolLog("Worker收到终止指令", Format("tab={1} item={2}", args[1], args[2]))
+                    case "CF":
+                        ; §17 热重载：主进程保存选「否」后广播 → 重载宏配置（新增宏/宏内容即时生效）
+                        ; 忙（正在执行宏）→ 置位，任务结束后再重载；空闲 → 立即重载
+                        if (workerTaskBusy) {
+                            workerConfigDirty := true
+                            GraphPoolLog("Worker配置热重载延后", "当前任务执行中")
+                        } else {
+                            workerConfigDirty := false
+                            ReloadWorkerConfig()
+                        }
                     case "GA":
                         global graphBranchesAckKey, graphBranchesAckReceived
                         key := args[1] "_" args[2]
@@ -436,6 +453,22 @@
             } catch {
             }
         }
+    }
+}
+
+; §17 热重载：重新加载宏配置（主进程保存选「否」后广播 CF 触发）
+; 注意：LoadCurMacroSetting 会整表重建 TableInfo（新对象），运行中宏引用旧对象会破坏执行上下文，
+; 因此只允许空闲时调用——CF 事件（空闲分支）与 OnExecTask finally（忙时延后）双保险。
+ReloadWorkerConfig() {
+    try {
+        ; Worker 侧 TomlUtil 缓存是启动快照，主进程保存不会失效它 → 必须先失效才能读到新内容
+        TomlUtil_Invalidate()
+        LoadCurMacroSetting()
+        InitData()
+        GraphPoolLog("Worker配置热重载", "完成")
+    } catch as e {
+        GraphPoolLog("Worker配置热重载失败", Format("err={1} line={2} what={3}`nstack={4}"
+            , e.Message, e.Line, e.What, e.Stack))
     }
 }
 

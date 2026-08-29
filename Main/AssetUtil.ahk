@@ -17,6 +17,7 @@
 #Include Util\FileIOUtil.ahk
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
+#Include Util\WaitUtil.ahk
 #Include Util\GraphMacroUtil.ahk
 #Include Util\PluginUtil.ahk
 #Include Util\ThemeUtil.ahk
@@ -73,6 +74,18 @@ GetFloatValue(oriValue, floatValue) {
 
 GetCurMSec() {
     return A_Hour * 3600 * 1000 + A_Min * 60 * 1000 + A_Sec * 1000 + A_mSec
+}
+
+; §22 宏窗口绑定：窗口信息为「{绑定窗口}」时，替换为该宏（MacroItem.BindWindow）的绑定窗口，实现「一改全改」
+ResolveBindWindow(tableItem, index, winInfoStr) {
+    if (winInfoStr != "{绑定窗口}" && winInfoStr != GetLang("{绑定窗口}"))
+        return winInfoStr
+    if (!IsObject(tableItem) || !tableItem.Items.Has(index))
+        return winInfoStr
+    item := tableItem.Items[index]
+    if (IsObject(item) && ObjHasOwnProp(item, "BindWindow") && item.BindWindow != "")
+        return item.BindWindow
+    return winInfoStr
 }
 
 GetHwndList(infoStr) {
@@ -371,14 +384,19 @@ InitData() {
         "后台鼠标", BGMouseFile, "后台按键", BGKeyFile, "文本处理", TextOpsFile, "Timing", TimingFile, "数组", ArrayFile,
         "输入", InputFile, "文件读写", FileIOFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile,
         "注释", CommentFile, "抓图", ScreenShotFile, "图形节点", GraphNodeFile, "图形开始节点", GraphStartNodeFile,
-        "间隔", IntervalFile, "按键", KeyDataFile, "移动", MoveDataFile, "RMT指令", RMTCMDFile)
+        "间隔", IntervalFile, "按键", KeyDataFile, "移动", MoveDataFile, "RMT指令", RMTCMDFile,
+        "等待", WaitFile,
+        ; §20 指令改名：新名「鼠标移动/鼠标移动Pro/增量移动」与旧名「移动/移动Pro」双键并存（旧配置序列码与宏内容零迁移兼容）
+        "鼠标移动", MoveDataFile, "鼠标移动Pro", MMProFile, "增量移动", DeltaMoveFile)
     MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "移动Pro", MMProData,
         "输出", OutputData, "运行", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
         "变量提取", ExVariableData, "如果", CompareData, "如果Pro", CompareProData, "运算", OperationData,
         "后台鼠标", BGMouseData, "后台按键", BGKeyData, "文本处理", TextOpsData, "Timing", TimingData, "数组", ArrayData,
         "输入", InputData, "文件读写", FileIOData, "窗口管理", WindowManageData, "按键检测", KeyCheckData,
         "注释", CommentData, "抓图", ScreenShotData, "图形节点", MacroGraphNode, "图形开始节点", MacroGraphStartNode,
-        "间隔", IntervalData, "按键", KeyDataConfig, "移动", MoveDataConfig, "RMT指令", RMTCMDData)
+        "间隔", IntervalData, "按键", KeyDataConfig, "移动", MoveDataConfig, "RMT指令", RMTCMDData,
+        "等待", WaitData,
+        "鼠标移动", MoveDataConfig, "鼠标移动Pro", MMProData, "增量移动", DeltaMoveData)
 }
 
 ; 是否正在运行罗技软件（G HUB / LGS）
@@ -472,6 +490,9 @@ LoadMainSetting() {
     MainSoftData.SuspendHotkey := IniRead(IniFile, IniSection, "SuspendHotkey", "!p")
     MainSoftData.PauseHotkey := IniRead(IniFile, IniSection, "PauseHotkey", "!i")
     MainSoftData.KillMacroHotkey := IniRead(IniFile, IniSection, "KillMacroHotkey", "!k")
+    ; §14.5 逻辑树调试热键（默认 F5/F6，可在设置→快捷键修改）
+    MainSoftData.DebugRunHotkey := IniRead(IniFile, IniSection, "DebugRunHotkey", "f5")
+    MainSoftData.DebugStepHotkey := IniRead(IniFile, IniSection, "DebugStepHotkey", "f6")
     MainSoftData.IsToolCheck := IniRead(IniFile, IniSection, "IsToolCheck", false)
     MainSoftData.ToolCheckHotKey := IniRead(IniFile, IniSection, "ToolCheckHotKey", "!o")
     MainSoftData.ToolRecordMacroHotKey := IniRead(IniFile, IniSection, "RecordMacroHotKey", "!r")
@@ -549,6 +570,8 @@ LoadMainSetting() {
     if (MainSoftData.MacroStopType != 1 && MainSoftData.MacroStopType != 2)
         MainSoftData.MacroStopType := 1
     MainSoftData.SoftBGColor := IniRead(IniFile, IniSection, "SoftBGColor", "f0f0f0")
+    ; §11 主界面背景图（全局配置，空=不启用）
+    MainSoftData.BackImagePath := IniRead(IniFile, IniSection, "BackImagePath", "")
     MainSoftData.NoVariableTip := IniRead(IniFile, IniSection, "NoVariableTip", true)
     ; 业务日志开关（统一日志 C 项阶段3）：默认关，开启后 Worker 写 Business.log 流水
     global RMTLogBusinessEnabled
@@ -571,6 +594,24 @@ LoadMainSetting() {
     MySoftData.WinPosY := IniRead(IniFile, IniSection, "WinPosY", 0)
     MainSoftData.TableIndex := IniRead(IniFile, IniSection, "TableIndex", 1)
     MainSoftData.CurTableID := IsNumber(MainSoftData.TableIndex) ? "" : MainSoftData.TableIndex
+    ; §10 显示页签：8 个宏表可见性（隐藏仅显示效果，不影响触发）；Tool/Setting/Help/Reward/Thank 恒显示
+    MainSoftData.TabVisibleMap := Map()
+    rawTabVis := IniRead(IniFile, IniSection, "TabVisible", "")
+    for def in CreateDefaultTableDefs() {
+        sym := def[1]
+        switch sym {
+            case "Tool", "Setting", "Help", "Reward", "Thank":
+                continue
+        }
+        MainSoftData.TabVisibleMap[sym] := true
+    }
+    if (rawTabVis != "") {
+        for seg in StrSplit(rawTabVis, "π") {
+            p := StrSplit(seg, "=")
+            if (p.Length == 2 && MainSoftData.TabVisibleMap.Has(p[1]))
+                MainSoftData.TabVisibleMap[p[1]] := (p[2] == "1")
+        }
+    }
     MainSoftData.Lang := IniRead(IniFile, IniSection, "Lang", "无语言")
     MainSoftData.FontType := IniRead(IniFile, IniSection, "FontType", "微软雅黑")
     MainSoftData.JoyType := IniRead(IniFile, IniSection, "JoyType", "Xbox")
@@ -908,7 +949,69 @@ SetFontList() {
 ; ============================================================
 IsMacroTomlMode() {
     global MacroFile
-    return (SubStr(MacroFile, -4) == ".toml")
+    ; 后缀判断：SubStr(x,-5) 才是 ".toml"；-4 只取到 "toml"（4 字符）与 ".toml"（5 字符）永远不相等，
+    ; 曾导致 TOML 链路从未启用、MacroFile.toml 一直被当 INI 操作（[Tables] 残留/重载断链的根源）
+    return (SubStr(MacroFile, -5) == ".toml")
+}
+
+; §22 兼容 INI 迁移残留：TOML 文件里混入 INI 风格 [Tables] List 段
+; （旧代码在迁移窗口期用 IniWrite 把表集合写进 .toml 的僵尸段，含异构数组 List）。
+; 无 [[table]] 表集合时按旧格式解析，返回 [[ID, Symbol, Name, Order], ...]；无残留段返回 []。
+TomlUtil_LegacyTableList(t) {
+    result := []
+    if (!TomlUtil_Valid(t))
+        return result
+    tablesSeg := TomlUtil_Table(t, "Tables")
+    if (!TomlUtil_Valid(tablesSeg))
+        return result
+    for entry in TomlUtil_List(tablesSeg, "List") {
+        if (!IsObject(entry) || entry.Length < 4)
+            continue
+        result.Push(entry)
+    }
+    return result
+}
+
+; §22 剔除 INI 迁移残留 [Tables] 段（写回前调用）：表集合已由 [[table]] 承载，
+; root 里的 [Tables]（异构数组 List）会让 TomlWriter 写回抛异常，直接剔除自愈。
+TomlUtil_DeleteTablesLegacy(root) {
+    if (root.Has("Tables"))
+        root.Delete("Tables")
+}
+
+; 从旧格式表集合条目数组构建 TableItem 列表（entry = [ID, Symbol, Name, Order]）
+; 独立函数：LoadCurMacroSetting 内含 `for tableItem` 循环，使 tableItem 成为该函数局部变量；
+; AHK v2 变量名大小写不敏感 → 在函数内直接 TableItem() 会被解析为"调用局部变量 tableItem"
+; 而报 "This local variable has not been assigned a value"，必须在此类无 tableItem 变量的函数内实例化。
+BuildTableItemList(entries) {
+    result := []
+    for e in entries {
+        if (!IsObject(e) || e.Length < 4)
+            continue
+        t := TableItem()
+        t.Symbol := e[2]
+        t.ID := e[2]
+        t.Name := e[3]
+        t.Order := Integer(e[4])
+        ; 仅旧式动态段名（t_ 前缀）视为迁移源（PersistSeg）；新固定 Symbol 或 Symbol_N 多实例不做迁移
+        t.PersistSeg := (SubStr(e[1], 1, 2) == "t_") ? e[1] : ""
+        result.Push(t)
+    }
+    return result
+}
+
+; 从 TOML [[table]] 数组构建 TableItem 列表（每项为 Toml 对象，字段 id/symbol/name/order）
+BuildTableItemListFromToml(tables) {
+    result := []
+    for tbl in tables {
+        t := TableItem()
+        t.Symbol := TomlUtil_Str(tbl, "symbol", "")
+        t.ID := TomlUtil_Str(tbl, "id", t.Symbol)
+        t.Name := TomlUtil_Str(tbl, "name", t.Symbol)
+        t.Order := TomlUtil_Int(tbl, "order", 1)
+        result.Push(t)
+    }
+    return result
 }
 
 ; ============================================================
@@ -929,20 +1032,8 @@ LoadCurMacroSetting() {
             MySoftData.TableInfo := []
             try {
                 tableArr := JSON.parse(tableListStr, , false)
-                if (IsObject(tableArr)) {
-                    for entry in tableArr {
-                        if (!IsObject(entry) || entry.Length < 4)
-                            continue
-                        t := TableItem()
-                        t.Symbol := entry[2]
-                        t.ID := t.Symbol
-                        t.Name := entry[3]
-                        t.Order := Integer(entry[4])
-                        ; 仅旧式动态段名（t_ 前缀）视为迁移源（PersistSeg）；新固定 Symbol 或 Symbol_N 多实例不做迁移
-                        t.PersistSeg := (SubStr(entry[1], 1, 2) == "t_") ? entry[1] : ""
-                        MySoftData.TableInfo.Push(t)
-                    }
-                }
+                if (IsObject(tableArr))
+                    MySoftData.TableInfo := BuildTableItemList(tableArr)
             } catch as e {
                 ; JSON 解析失败（异常损坏）→ 回退默认表集合
                 CreateTableItemArr()
@@ -991,16 +1082,16 @@ LoadCurMacroSetting() {
     t := TomlUtil_Read()
     if (TomlUtil_Valid(t)) {
         tables := TomlUtil_Tables(t, "table")
-        if (tables.Length > 0) {
-            MySoftData.TableInfo := []
-            for tbl in tables {
-                tblItem := TableItem()
-                tblItem.Symbol := TomlUtil_Str(tbl, "symbol", "")
-                tblItem.ID := TomlUtil_Str(tbl, "id", tblItem.Symbol)
-                tblItem.Name := TomlUtil_Str(tbl, "name", tblItem.Symbol)
-                tblItem.Order := TomlUtil_Int(tbl, "order", 1)
-                MySoftData.TableInfo.Push(tblItem)
-            }
+        ; §22 兼容：INI 迁移残留 [Tables] List 段（无 [[table]] 时）→ 按旧表集合解析，避免误走默认表重建
+        legacyTables := (tables.Length == 0) ? TomlUtil_LegacyTableList(t) : []
+        if (tables.Length > 0 || legacyTables.Length > 0) {
+            ; 独立函数建表：LoadCurMacroSetting 内 `for tableItem` 使 tableItem 为局部变量，
+            ; 直接调 TableItem() 会被解析为局部变量调用（AHK v2 大小写不敏感）→ 抽离避免遮蔽
+            MySoftData.TableInfo := (tables.Length > 0)
+                ? BuildTableItemListFromToml(tables)
+                : BuildTableItemList(legacyTables)
+            if (tables.Length == 0)
+                migrated := true   ; INI 残留 [Tables] 兼容 → 自愈写回 [[table]]
             RebuildTableLocator()
         } else {
             CreateTableItemArr()
@@ -1208,6 +1299,7 @@ ReadTableItemInfoNew(tableItem, segID := "") {
             fold.FrontInfo := IniRead(MacroFile, foldSeg, "FrontInfo", "")
             fold.ForbidState := !!Integer(IniRead(MacroFile, foldSeg, "ForbidState", "0"))
             fold.FoldState := !!Integer(IniRead(MacroFile, foldSeg, "FoldState", "0"))
+            fold.ForbidHotkey := IniRead(MacroFile, foldSeg, "ForbidHotkey", "")
             fold.TKType := Integer(IniRead(MacroFile, foldSeg, "TKType", "4"))
             fold.TK := IniRead(MacroFile, foldSeg, "TK", "")
             fold.HoldTime := IniRead(MacroFile, foldSeg, "HoldTime", "500")
@@ -1272,6 +1364,7 @@ ReadTableItemInfoNew(tableItem, segID := "") {
         fold.FrontInfo := TomlUtil_Str(fseg, "FrontInfo")
         fold.ForbidState := !!TomlUtil_Bool(fseg, "ForbidState")
         fold.FoldState := !!TomlUtil_Bool(fseg, "FoldState")
+        fold.ForbidHotkey := TomlUtil_Str(fseg, "ForbidHotkey")
         fold.TKType := Integer(TomlUtil_Str(fseg, "TKType", "4"))
         fold.TK := TomlUtil_Str(fseg, "TK")
         fold.HoldTime := TomlUtil_Str(fseg, "HoldTime", "500")
@@ -1817,6 +1910,7 @@ SaveTableItemInfoIni(tableItem) {
         IniWrite(fold.FrontInfo,    MacroFile, foldSeg, "FrontInfo")
         IniWrite(fold.ForbidState ? 1 : 0, MacroFile, foldSeg, "ForbidState")
         IniWrite(fold.FoldState ? 1 : 0,   MacroFile, foldSeg, "FoldState")
+        IniWrite(fold.ForbidHotkey,  MacroFile, foldSeg, "ForbidHotkey")
         IniWrite(fold.TKType,       MacroFile, foldSeg, "TKType")
         IniWrite(fold.TK,           MacroFile, foldSeg, "TK")
         IniWrite(fold.HoldTime,     MacroFile, foldSeg, "HoldTime")
@@ -1898,6 +1992,8 @@ SaveTableItemInfoIni(tableItem) {
 ; ============================================================
 SaveTableItemInfoToml(tableItem) {
     root := TomlUtil_RootMap()
+    ; §22 写回前剔除 INI 残留 [Tables] 段，防止 TomlWriter 遇异构数组抛异常导致保存失败
+    TomlUtil_DeleteTablesLegacy(root)
     SaveTableItemInfoTomlCore(root, tableItem)
     TomlUtil_Write(root)
 }
@@ -1947,6 +2043,7 @@ SaveTableItemInfoTomlCore(root, tableItem) {
         fseg["FrontInfo"] := fold.FrontInfo
         fseg["ForbidState"] := fold.ForbidState ? 1 : 0
         fseg["FoldState"] := fold.FoldState ? 1 : 0
+        fseg["ForbidHotkey"] := fold.ForbidHotkey
         fseg["TKType"] := String(fold.TKType)
         fseg["TK"] := fold.TK
         fseg["HoldTime"] := String(fold.HoldTime)
@@ -1998,6 +2095,8 @@ SaveAllTableItemInfo(tableItems) {
         return
     }
     root := TomlUtil_RootMap()
+    ; §22 写回前剔除 INI 残留 [Tables] 段（表集合以 [[table]] 为准）
+    TomlUtil_DeleteTablesLegacy(root)
     ; 表集合 [[table]]（id/symbol/name/order）
     tableArr := []
     for tableItem in tableItems {
@@ -2049,6 +2148,8 @@ SaveTableCollection() {
         return
     }
     root := TomlUtil_RootMap()
+    ; §22 写回前剔除 INI 残留 [Tables] 段（表集合以 [[table]] 为准）
+    TomlUtil_DeleteTablesLegacy(root)
     tableArr := []
     for tableItem in MySoftData.TableInfo {
         tableArr.Push(Map("id", tableItem.ID, "symbol", tableItem.Symbol, "name", tableItem.Name, "order", tableItem.Order))
@@ -2081,6 +2182,32 @@ CreateDefaultTableDefs() {
         ["Thank", "特别感谢", 13]
     ]
 }
+
+; §10 显示页签：8 个宏表按 MainSoftData.TabVisibleMap 显隐（隐藏仅显示效果，不影响触发）；
+; 非配置表（Tool/Setting/Help/Reward/Thank）恒显示
+IsTabVisible(tableItem) {
+    symbol := tableItem.Symbol
+    switch symbol {
+        case "Tool", "Setting", "Help", "Reward", "Thank":
+            return true
+    }
+    if (IsObject(MainSoftData.TabVisibleMap) && MainSoftData.TabVisibleMap.Has(symbol))
+        return MainSoftData.TabVisibleMap[symbol]
+    return true
+}
+
+; §20 指令改名兼容判断：旧名「移动/移动Pro」与新名「鼠标移动/鼠标移动Pro」都识别
+; （旧配置宏内容/流程图节点类型零迁移兼容；增量移动为全新指令无旧名）
+; 入参可为当前语言显示文本（如 "Mouse Move"）或中文键，内部统一 GetLangKey 后按键比较
+IsMoveCmd(t) {
+    k := GetLangKey(t)
+    return k == "移动" || k == "鼠标移动"
+}
+IsMoveProCmd(t) {
+    k := GetLangKey(t)
+    return k == "移动Pro" || k == "鼠标移动Pro"
+}
+IsDeltaMoveCmd(t) => GetLangKey(t) == "增量移动"
 
 CreateTableItemArr() {
     global MySoftData
@@ -3025,6 +3152,34 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map()) {
         case "当前星期几":
             Value := A_WDay == 1 ? 7 : A_WDay - 1
             return true
+        ; §21 数值型时间变量（旧「当前时间/当前秒」字符串型不再列出，此处保留兼容）
+        case "当前时间戳":
+            Value := DateDiff(A_Now, "19700101000000", "Seconds")
+            return true
+        case "当前年":
+            Value := A_YYYY
+            return true
+        case "当前月":
+            Value := A_MM
+            return true
+        case "当前日":
+            Value := A_DD
+            return true
+        case "当前时":
+            Value := A_Hour
+            return true
+        case "当前分":
+            Value := A_Min
+            return true
+        case "当前剪切板":
+            ; 仅当剪切板内容是文本时有效；否则值为「空」（中文便于理解）
+            Value := "空"
+            try {
+                clipText := A_Clipboard
+                if (clipText != "")
+                    Value := clipText
+            }
+            return true
         case "当前鼠标颜色":
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
@@ -3407,8 +3562,11 @@ GetBrightness() {
 }
 
 GetSystemVarArr() {
+    ; §21：时间类变量改为数值型（当前时/分/秒/星期几 返回数值，当前时间戳=Unix秒）；
+    ; 新增 当前剪切板；旧「当前时间/当前时间(秒)/当前秒」不再列出（执行端保留兼容）
     return [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("句柄ID"), GetLang("当前鼠标颜色"), GetLang("当前鼠标坐标X"),
-    GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间"), GetLang("当前时间(秒)"), GetLang("当前秒"), GetLang("当前星期几")]
+    GetLang("当前鼠标坐标Y"), GetLang("当前日期"), GetLang("当前时间戳"), GetLang("当前年"), GetLang("当前月"), GetLang("当前日"),
+    GetLang("当前时"), GetLang("当前分"), GetLang("当前秒"), GetLang("当前星期几"), GetLang("当前剪切板")]
 }
 
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {

@@ -631,6 +631,10 @@ class MenuWheelGui {
         item := foldItems[ArcNr]
         if (!item)
             return
+        ; §17 统一禁用门控：轮盘条目被禁用（条目 Forbid / 所属模块禁用）→ 选择不触发，
+        ; 覆盖轮盘已打开期间条目被禁用（保存选「否」热重载或模块开关热键）的场景
+        if (ParseBoolInt(item.Forbid) || fold.ForbidState)
+            return
         macroIndex := GetItemIndexInTable(tableItem, item.ID)
         triggerType := item.TriggerType
 

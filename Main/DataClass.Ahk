@@ -19,6 +19,7 @@ class MacroItem {
         this.EndTipSound := 1   ;结束提示音 1.无   2.结束提示  3.循环结束提示
         this.IcoPath := ""      ;菜单宏ICO路径
         this.VoiceKeywords := "" ;语音触发关键词（多个用英文逗号 , 分隔）
+        this.BindWindow := ""   ;§22 宏级窗口绑定：宏内所有窗口信息填「{绑定窗口}」时运行时替换为此值（一改全改）
         this.FoldID := ""       ;所属折叠框 ID（FoldInfo 的 ID 引用，替代 IndexSpanArr 范围）
 
         ; ===== 运行时状态（原平行数组） =====
@@ -46,6 +47,8 @@ class MacroFold {
         this.FrontInfo := ""        ;折叠框前台信息
         this.ForbidState := false   ;禁用状态
         this.FoldState := false     ;折叠状态
+        ;§2 模块独立开关：按下该快捷键切换本模块启用/禁用（实时经热键重绑 + HotReloadBus 生效）
+        this.ForbidHotkey := ""     ;模块启用/禁用开关快捷键（自定义，空=不启用）
         ;菜单栏功能
         this.TKType := 4            ;触发类型
         this.TK := ""               ;触发按键，菜单栏功能
@@ -212,6 +215,7 @@ class MainConfig {
         this.IsAdminStart := false      ; 是否以管理员权限启动
         this.IsMinStart := false        ; 是否最小化启动（常驻托盘）
         this.SoftBGColor := "f0f0f0"    ; 软件背景颜色 (6位HEX)
+        this.BackImagePath := ""        ; §11 主界面背景图（全局配置，空=不启用；保存重启生效）
         this.Theme := "RMT_Light"       ; XAML 界面主题名称
         this.ShowSplitLine := false     ; 表格是否显示分割线
         this.IsModalSubGui := true      ; 子窗口是否模态（阻止主窗口操作）
@@ -223,6 +227,8 @@ class MainConfig {
         this.CurTableID := ""           ; 当前显示的表 ID（身份，持久化用；空则回落 TableIndex）
         this.TabPosX := 0               ; Tab 组件左上角 X 坐标
         this.TabPosY := 0               ; Tab 组件左上角 Y 坐标
+        ; §10 显示页签选项：symbol → 是否显示（隐藏仅显示效果，不影响触发）；非配置表恒显示
+        this.TabVisibleMap := Map()
 
         ; ========== 热键绑定 ==========
         this.IsSuspend := false         ; 软件休眠状态
@@ -269,6 +275,9 @@ class MainConfig {
         this.PreferredMacroEditor := 1
         this.SharedCopy := false        ; 逻辑树编辑器右键菜单显示「共享复制」（原样复制，不重新分配序列号）
         this.RemarkAutoType := 2        ; 指令备注自动生成 (1=不生成, 2=自动生成, 3=覆盖生成)
+        ; §14.5 逻辑树调试热键（可在 设置→快捷键 中修改，不再固定 F5/F6）
+        this.DebugRunHotkey := "f5"     ; 调试运行
+        this.DebugStepHotkey := "f6"    ; 调试单步运行
 
         ; ========== 提示选项 ==========
         this.NoVariableTip := false     ; 未找到变量时是否弹窗提醒
@@ -997,6 +1006,10 @@ class SearchData {
         this.CoordToogle := 0
         this.CoordXName := GetLang("坐标X")
         this.CoordYName := GetLang("坐标Y")
+        ; §15.1 多目标：-1=所有目标都满足，>=1=自定义满足个数
+        this.SatisfyCount := -1
+        ; §15.1 多目标数组（每项 = 单目标配置对象，字段同上方单目标字段）
+        this.SearchTargetArr := []
     }
 
 }
@@ -1076,15 +1089,26 @@ class CompareProData {
 class MMProData {
     __New() {
         this.SerialStr := ""
-        this.ConfigName := Format("{}*{}_{}", A_ScreenWidth, A_ScreenHeight, GetLang("全屏"))
-        this.ConfigArr := []
         this.PosVarX := 100
         this.PosVarY := 100
         this.ActionType := 1          ;鼠标动作 1移动 2移动点击1次 3移动点击2次
-        this.MouseMoveMode := 0      ;鼠标移动模式 0=绝对移动 1=相对移动 2=游戏视角
+        this.MouseMoveMode := 0      ;§20 移动模式 0=绝对移动 1=相对移动（旧值 2=游戏视角 已拆为「增量移动」指令，仅旧配置兼容执行）
+        this.RefMode := 0            ;§20 坐标基准 0=屏幕 1=窗口（选窗口时配合 WinInfo）
+        this.WinInfo := ""           ;§20 窗口信息（基准=窗口时的标题/类名等）
         this.Speed := 90           ;移动速度
-        this.Count := 1
-        this.Interval := 1000
+    }
+}
+
+; §20 增量移动指令配置（原「移动Pro-游戏视角」拆分，mouse_event 相对位移）
+class DeltaMoveData {
+    __New() {
+        this.SerialStr := ""
+        this.DeltaX := 0            ;X 相对位移（支持 {变量}）
+        this.DeltaY := 0            ;Y 相对位移（支持 {变量}）
+        ; 错误处理（影刀模式，阶段5）
+        this.ErrMode := "stop"
+        this.ErrRetryCount := 3
+        this.ErrRetryInterval := 500
     }
 }
 
@@ -1263,6 +1287,25 @@ class TimingData {
     }
 }
 
+; §16 等待指令：19 种「检测间隔+轮询」场景
+class WaitData {
+    __New() {
+        this.SerialStr := ""
+        ; 1变量值 2按键按下 3按键松开 4屏幕变化 5鼠标移动 6鼠标停止 7剪切板变化
+        ; 8进程存在 9进程关闭 10窗口存在 11窗口激活 12窗口屏幕变化 13窗口大小变化
+        ; 14窗口关闭 15窗口最小化 16文件存在 17文件删除 18文件变化 19日期
+        this.WaitType := 1
+        this.Interval := 500        ; 检测间隔（毫秒）
+        this.Param1 := ""           ; 主参数：变量名/按键名/进程名/窗口信息/文件路径/日期值
+        this.Param2 := ""           ; 次参数：期望值 / 日期单位（分钟|小时|天|具体时间|时间变量）
+        this.Param3 := ""
+        this.StartPosX := 0         ; 范围（屏幕/窗口变化类）
+        this.StartPosY := 0
+        this.EndPosX := A_ScreenWidth
+        this.EndPosY := A_ScreenHeight
+    }
+}
+
 class ArrayData {
     __New() {
         this.SerialStr := ""
@@ -1285,6 +1328,9 @@ class RMTCMDData {
         this.Category := "全部"   ; 指令类别（全部/键鼠/菜单等）
         this.CmdStr := "截图"     ; 具体指令（截图/自由贴/显示菜单等）
         this.MenuIndex := 1       ; 显示菜单时的菜单序号
+        ; §2 禁用模块/取消禁用模块 参数：目标表符号 + 目标模块路径身份（FoldID，如 Normal.Module1）
+        this.TableSymbol := ""    ; 目标表符号（Normal/String/Menu/UI/Voice/Timing/SubMacro/Replace）
+        this.FoldID := ""         ; 目标模块路径身份
         this.OperateType := 1 ; 旧字段兼容：1截图 2截图中提取文本 3自由贴 4开启指令显示 5关闭指令显示 6启用键鼠 7禁用键鼠 8休眠 9终止所有宏 10重载
         ; 错误处理（影刀模式，阶段5）
         this.ErrMode := "stop"

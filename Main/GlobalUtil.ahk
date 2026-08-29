@@ -1,5 +1,8 @@
 #Requires AutoHotkey v2.0
-#SingleInstance Force
+; §3 命令行：单实例由 EnsureSingleInstance() 自管理（命名互斥+文件命令队列 IPC），
+; 二次启动携带参数时转发给运行实例执行，不再用 #SingleInstance Force 的替换语义（会终止运行中的宏）
+#SingleInstance Off
+#Include Util\RmtCmdUtil.ahk
 #Include JoyMacro.ahk
 #Include RecordJoyUtil.ahk
 #Include RecordUtil.ahk
@@ -38,6 +41,7 @@
 #Include ..\Gui\EditHotkeyGui.ahk
 #Include ..\Gui\FreePasteGui.ahk
 #Include ..\Gui\MacroEditGui.ahk
+#Include ..\Gui\CharVarEditGui.ahk
 #Include ..\Gui\MenuWheelGlobalSettingGui.ahk
 #Include ..\Gui\MacroGraph\MacroGraphGui.ahk
 #Include ..\Gui\MenuWheelGui.ahk
@@ -66,6 +70,8 @@
 #Include ..\Gui\InputBtnXamlGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
 #Include ..\Gui\VoiceGui.ahk
+#Include ..\Gui\WaitGui.ahk
+#Include ..\Gui\DeltaMoveGui.ahk
 #Include ..\Gui\TableMgrGui.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
 
@@ -121,6 +127,7 @@ global MyVarListenGui := VarListenGui()
 global MyMacroGui := MacroEditGui()
 global MyMacroGraphGui := MacroGraphGui()
 global MyMenuWheel := MenuWheelGui()
+global MyHotReloadBus := HotReloadBus()   ;配置热重载总线（编辑器广播变更，消费端空闲时重建；先于各消费端实例化以便 __new 订阅）
 global MyMenuMacroSettingGui := MenuMacroSettingGui()
 global MyUIMacroGui := UIMacroGui()
 global MyUIMacroSettingGui := UIMacroSettingGui()
@@ -138,7 +145,6 @@ global MyToolRecordSettingGui := ToolRecordSettingGui()
 global MyUseExplainGui := UseExplainGui()
 global MyConfigMergeGui := ConfigMergeGui()
 global MyVoiceGui := VoiceGui()
-global MyHotReloadBus := HotReloadBus()   ;配置热重载总线（编辑器广播变更，消费端空闲时重建）
 global MyStopMacro := StopMacro
 global SelectAreaHo := HighlightOutlineSelectArea("Red", 150)
 global SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0}

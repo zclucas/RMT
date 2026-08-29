@@ -238,10 +238,11 @@ class MacroGraphDataMixin {
     }
 
     ; 形式化 INI 指令的 cmdKey 列表（与 AssetUtil 中 CMD 映射一致；阶段5 含新配置化 间隔/按键/移动/RMT指令）
+    ; §20 改名：加「鼠标移动/增量移动」新键（旧「移动」键保留兼容旧图）
     _FormalIniCmdKeys() {
         return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组",
             "后台鼠标", "后台按键", "窗口管理", "按键检测", "注释", "抓图", "循环",
-            "间隔", "按键", "移动", "RMT指令"]
+            "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令"]
     }
 
     _FormalIniKeyFromName(name) {
@@ -279,6 +280,8 @@ class MacroGraphDataMixin {
                 "间隔", IntervalData,
                 "按键", KeyDataConfig,
                 "移动", MoveDataConfig,
+                "鼠标移动", MoveDataConfig,
+                "增量移动", DeltaMoveData,
                 "RMT指令", RMTCMDData
             )
         }
@@ -594,11 +597,15 @@ class MacroGraphDataMixin {
             d.hold := data.HoldTime
             d.count := data.Count
             d.inter := data.IntervalTime
-        } else if (cmdKey == "移动") {
+        } else if (cmdKey == "移动" || cmdKey == "鼠标移动") {
             d.posx := data.PosX
             d.posy := data.PosY
             d.speed := data.Speed
             d.mode := data.MoveMode
+        } else if (cmdKey == "增量移动") {
+            ; §20 增量移动（游戏视角拆分）：相对位移
+            d.posx := data.DeltaX
+            d.posy := data.DeltaY
         } else if (cmdKey == "RMT指令") {
             d.rmtCategory := data.Category
             d.rmtOp := data.CmdStr
@@ -869,7 +876,7 @@ class MacroGraphDataMixin {
     ; 节点标题栏是否不显示备注（旧纯文本格式：这些指令的 `_` 后段是参数而非备注）
     ; 阶段5 配置化后（首段带数字序列码，如 间隔123_500），备注应显示
     _NodeTitleOmitRemark(type) {
-        return type == GetLang("间隔") || type == GetLang("按键") || type == GetLang("移动")
+        return type == GetLang("间隔") || type == GetLang("按键") || IsMoveCmd(type)
             || type == GetLang("变量") || type == GetLang("RMT指令") || type == GetLang("注释")
     }
 
@@ -923,15 +930,16 @@ class MacroGraphDataMixin {
             d.count := paramArr.Length >= 5 ? paramArr[5] : "1"
             d.inter := paramArr.Length >= 6 ? paramArr[6] : "200"
         }
-        else if (name == GetLang("移动")) {
+        else if (IsMoveCmd(name)) {
             d.posx := paramArr.Length >= 2 ? paramArr[2] : "0"
             d.posy := paramArr.Length >= 3 ? paramArr[3] : "0"
             d.speed := paramArr.Length >= 4 ? paramArr[4] : "90"
             d.mode := paramArr.Length >= 5 ? paramArr[5] : "0"
         }
         else if (this._IsMMProName(name)) {
-            ; 移动Pro 参数存储在 MMProFile.ini 中，CurCMD 即其 SerialStr（如 "移动Pro3"）
-            d.type := GetLang("移动Pro")
+            ; 移动Pro 参数存储在 MMProFile.ini 中，CurCMD 即其 SerialStr（如 "移动Pro3" / "鼠标移动Pro3"）
+            prefix := RegExReplace(name, "\d+$", "")
+            d.type := GetLang(GetLangKey(prefix))
             d.serialStr := name
             try {
                 data := GetMacroCMDData(name)
@@ -944,6 +952,20 @@ class MacroGraphDataMixin {
                     d.isHuman := ObjHasOwnProp(data, "IsHumanMouse") ? data.IsHumanMouse : 0
                     d.count := ObjHasOwnProp(data, "Count") ? data.Count : 1
                     d.interval := ObjHasOwnProp(data, "Interval") ? data.Interval : 1000
+                    d.refMode := ObjHasOwnProp(data, "RefMode") ? data.RefMode : 0
+                    d.winInfo := ObjHasOwnProp(data, "WinInfo") ? data.WinInfo : ""
+                }
+            }
+        }
+        else if (IsDeltaMoveCmd(name)) {
+            ; §20 增量移动：参数存 DeltaMoveFile.ini，CurCMD 即其 SerialStr（如 "增量移动3"）
+            d.type := GetLang("增量移动")
+            d.serialStr := name
+            try {
+                data := GetMacroCMDData(name)
+                if (IsObject(data)) {
+                    d.posx := data.DeltaX
+                    d.posy := data.DeltaY
                 }
             }
         }
@@ -1055,7 +1077,7 @@ class MacroGraphDataMixin {
     _BuildCmd(d) {
         ; 阶段5：配置化节点（有 serialStr，来自 间隔<serial> 等）→ 更新 Data 并保存，返回序列码+备注
         if (d.HasOwnProp("serialStr") && d.serialStr != "") {
-            if (d.type == GetLang("间隔") || d.type == GetLang("按键") || d.type == GetLang("移动") || d.type == GetLang("RMT指令")) {
+            if (d.type == GetLang("间隔") || d.type == GetLang("按键") || IsMoveCmd(d.type) || IsDeltaMoveCmd(d.type) || d.type == GetLang("RMT指令")) {
                 try {
                     data := GetMacroCMDData(d.serialStr)
                     if (IsObject(data)) {
@@ -1078,12 +1100,16 @@ class MacroGraphDataMixin {
                             data.Count := d.count
                             data.IntervalTime := d.inter
                             remark := data.KeyName "_" d.ktype
-                        } else if (d.type == GetLang("移动")) {
+                        } else if (IsMoveCmd(d.type)) {
                             data.PosX := d.posx
                             data.PosY := d.posy
                             data.Speed := d.speed
                             data.MoveMode := d.mode
                             remark := data.PosX " " data.PosY
+                        } else if (IsDeltaMoveCmd(d.type)) {
+                            data.DeltaX := d.posx
+                            data.DeltaY := d.posy
+                            remark := data.DeltaX " " data.DeltaY
                         } else if (d.type == GetLang("RMT指令")) {
                             data.Category := d.HasOwnProp("rmtCategory") ? d.rmtCategory : GetLang("全部")
                             data.CmdStr := d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
@@ -1119,9 +1145,10 @@ class MacroGraphDataMixin {
             return cmd
         }
 
-        if (d.type == GetLang("移动")) {
-            cmd := GetLang("移动") "_" d.posx "_" d.posy "_" d.speed
-            ; 模式：0=绝对移动(省略) 1=相对移动 2=游戏视角，与 MouseMoveGui 保持一致
+        if (IsMoveCmd(d.type)) {
+            ; 旧格式纯文本指令（无序列码）：按当前语言显示名重建（旧名/新名都兼容）
+            cmd := GetLang(GetLangKey(d.type)) "_" d.posx "_" d.posy "_" d.speed
+            ; 模式：0=绝对移动(省略) 1=相对移动 2=游戏视角（旧数据），与 MouseMoveGui 保持一致
             if (d.mode != "0" && d.mode != 0 && d.mode != "")
                 cmd .= "_" d.mode
             return cmd

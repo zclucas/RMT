@@ -763,6 +763,10 @@ class TimingGui {
         IniWrite(saveStr, TimingFile, IniSection, Data.SerialStr)
         if (MySoftData.DataCacheMap.Has(Data.SerialStr))
             MySoftData.DataCacheMap.Delete(Data.SerialStr)
+        ; §18 定时参数即时生效：广播 Timing 表整表变更 → TimingScheduler 订阅者空闲重建调度堆（不必等保存选「否」）
+        t := GetTableBySymbol("Timing")
+        if (t)
+            HotReloadPublish(t.Index, 0)
     }
 
     GetTimingData(SerialStr) {

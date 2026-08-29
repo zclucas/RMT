@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 兼容外部对 .Gui.Hwnd / .Hide / .Show 的调用
 class CMDTipGuiFacade {
@@ -40,6 +40,82 @@ class CMDTipGui {
         ; 自动清理
         this.AutoClear := 0          ; 0=从不 1=每天 2=每周
         this._lastClearDate := ""
+        ; §7 当前按下按键展示区
+        this._keyTimer := ""         ; 按键轮询定时器（窗口可见时运行）
+        this._lastKeys := ""         ; 上次展示的按键串（变化才刷新 UI，零 IPC 去抖）
+        this._keyMap := CMDTipGui._BuildKeyNameMap()
+        this._keySlots := 8          ; 固定槽位按钮数（组合键几乎不可能同时超过 8 个）
+    }
+
+    ; §7 虚拟键码 → 展示名映射（构建一次；显示顺序即 Map 插入顺序，修饰键在前）
+    static _BuildKeyNameMap() {
+        m := Map()
+        ; 修饰键
+        m[0xA0] := "LShift"
+        m[0xA1] := "RShift"
+        m[0xA2] := "LCtrl"
+        m[0xA3] := "RCtrl"
+        m[0xA4] := "LAlt"
+        m[0xA5] := "RAlt"
+        m[0x5B] := "LWin"
+        m[0x5C] := "RWin"
+        ; 字母（大写）
+        loop 26 {
+            vk := 0x41 + A_Index - 1
+            m[vk] := Chr(0x41 + A_Index - 1)
+        }
+        ; 数字
+        loop 10 {
+            vk := 0x30 + A_Index - 1
+            m[vk] := Chr(0x30 + A_Index - 1)
+        }
+        ; 功能键
+        loop 24 {
+            vk := 0x70 + A_Index - 1
+            m[vk] := "F" A_Index
+        }
+        ; 导航/编辑
+        m[0x1B] := "Esc"
+        m[0x08] := "Backspace"
+        m[0x09] := "Tab"
+        m[0x0D] := "Enter"
+        m[0x20] := "Space"
+        m[0x14] := "CapsLock"
+        m[0x2C] := "PrintScreen"
+        m[0x2D] := "Insert"
+        m[0x2E] := "Delete"
+        m[0x24] := "Home"
+        m[0x23] := "End"
+        m[0x21] := "PgUp"
+        m[0x22] := "PgDn"
+        m[0x25] := "Left"
+        m[0x26] := "Up"
+        m[0x27] := "Right"
+        m[0x28] := "Down"
+        ; 标点
+        m[0xBA] := ";"
+        m[0xBB] := "="
+        m[0xBC] := ","
+        m[0xBD] := "-"
+        m[0xBE] := "."
+        m[0xBF] := "/"
+        m[0xC0] := "``"
+        m[0xDB] := "["
+        m[0xDC] := "\"
+        m[0xDD] := "]"
+        m[0xDE] := "'"
+        ; 小键盘
+        m[0x90] := "NumLock"
+        loop 10 {
+            vk := 0x60 + A_Index - 1
+            m[vk] := "Num" (A_Index - 1)
+        }
+        m[0x6A] := "Num*"
+        m[0x6B] := "Num+"
+        m[0x6D] := "Num-"
+        m[0x6E] := "Num."
+        m[0x6F] := "Num/"
+        return m
     }
 
     GetShowOptions() {
@@ -70,6 +146,12 @@ class CMDTipGui {
             this._wheelCb := ObjBindMethod(this, "_OnWheel")
             WinHotkey.SubscribeMouse("WheelUp", this._wheelCb)
             WinHotkey.SubscribeMouse("WheelDown", this._wheelCb)
+        }
+
+        ; §7 启动按键轮询（常驻定时器，窗口不可见时自动跳过）
+        if (!this._keyTimer) {
+            this._keyTimer := ObjBindMethod(this, "_PollKeys")
+            SetTimer(this._keyTimer, 50)
         }
     }
 
@@ -188,7 +270,9 @@ class CMDTipGui {
         main := XAML_Generator("Border").Name("RootBorder")
             .Background(bg).BorderThickness("0").CornerRadius("0")
             .IsHitTestVisible("False")
-        main.Add("TextBox").Name("ContentCon")
+        grid := main.Add("Grid")
+        grid.Rows("*", "42")
+        grid.Add("TextBox").Name("ContentCon").Grid_Row(0)
             .Text("")
             .IsReadOnly("True")
             .AcceptsReturn("True")
@@ -208,6 +292,20 @@ class CMDTipGui {
             .Focusable("False")
             .IsHitTestVisible("False")
             .CaretBrush("Transparent")
+
+        ; §7 当前按下按键展示区：固定 8 个槽位按钮（32×32，长键名宽度随内容自适应不截断），
+        ; 只显示当前按下的按键；窗口点击穿透，纯展示无交互
+        keysRow := grid.Add("WrapPanel").Name("KeysPanel").Grid_Row(1)
+            .Orientation("Horizontal").VerticalAlignment("Center").Margin("6,2")
+        loop this._keySlots {
+            keysRow.Add("Button").Name("KeyBtn_" (A_Index - 1))
+                .MinWidth(32).Height(32).Margin("2,0,0,0").Padding("6,0")
+                .Content("").Visibility("Collapsed")
+                .VerticalContentAlignment("Center").HorizontalContentAlignment("Center")
+                .FontSize("11").Foreground(fg)
+                .Background("Transparent").BorderThickness("1")
+                .BorderBrush("#44FFFFFF").Cursor("Arrow").IsHitTestVisible("False").Focusable("False")
+        }
 
         ; 配置为物理像素；XAML Left/Top/Width/Height 使用 DIP
         dipX := PhysToDip(this.PosX)
@@ -301,6 +399,54 @@ class CMDTipGui {
             try WinHotkey.UnsubscribeMouse("WheelDown", this._wheelCb)
             this._wheelCb := ""
         }
+        if (this._keyTimer) {
+            SetTimer(this._keyTimer, 0)
+            this._keyTimer := ""
+        }
+        this._lastKeys := ""
+    }
+
+    ; §7 按键轮询：GetAsyncKeyState 检测当前按下键，状态变化才刷新槽位按钮（零 IPC 去抖）
+    _PollKeys(*) {
+        if (this.closed || !IsObject(this.ui))
+            return
+        if (!this._IsVisible()) {
+            ; 窗口不可见：清空展示区
+            if (this._lastKeys != "") {
+                this._lastKeys := ""
+                this._SetKeyButtons([])
+            }
+            return
+        }
+        keys := []
+        for vk, name in this._keyMap {
+            if (DllCall("GetAsyncKeyState", "Int", vk) & 0x8000)
+                keys.Push(name)
+        }
+        keyStr := ""
+        for k in keys
+            keyStr .= k "|"
+        if (keyStr == this._lastKeys)
+            return
+        this._lastKeys := keyStr
+        this._SetKeyButtons(keys)
+    }
+
+    ; §7 刷新按键槽位按钮（固定槽位，一次批量 IPC）
+    _SetKeyButtons(keys) {
+        if (this.closed || !IsObject(this.ui))
+            return
+        batch := []
+        loop this._keySlots {
+            i := A_Index - 1
+            if (i < keys.Length) {
+                batch.Push({ControlName: "KeyBtn_" i, PropertyName: "Content", Value: keys[i + 1]})
+                batch.Push({ControlName: "KeyBtn_" i, PropertyName: "Visibility", Value: "Visible"})
+            } else {
+                batch.Push({ControlName: "KeyBtn_" i, PropertyName: "Visibility", Value: "Collapsed"})
+            }
+        }
+        try this.ui.BatchUpdate(batch)
     }
 
     AddCMD(CMDStr) {

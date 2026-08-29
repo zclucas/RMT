@@ -66,6 +66,8 @@ class TableMgrGui {
 
         AddTable(symbol, name)
         this._ReloadList()
+        ; §18 表结构变更不依赖「应用并保存」写宏表：此处显式落盘全部表+表集合
+        SaveAllTableItemInfo(MySoftData.TableInfo)
         ; 表集合变化需重建 UI：先保存再重载（SafeReload 保留配置并重启主窗口）
         OnSaveSetting()
         SafeReload()
@@ -99,6 +101,8 @@ class TableMgrGui {
             return
         RenameTable(t.ID, Trim(result.Value))
         this._ReloadList()
+        ; §18 表结构变更显式落盘
+        SaveAllTableItemInfo(MySoftData.TableInfo)
         OnSaveSetting()
         SafeReload()
     }
@@ -112,6 +116,8 @@ class TableMgrGui {
             return
         RemoveTable(t.ID)
         this._ReloadList()
+        ; §18 表结构变更显式落盘
+        SaveAllTableItemInfo(MySoftData.TableInfo)
         OnSaveSetting()
         SafeReload()
     }

@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #Include ..\Main\Util\MergeUtil.ahk
 
 class ConfigMergeGui {
@@ -601,6 +601,8 @@ class ConfigMergeGui {
 
             MsgBox(successMsg, GetLang("成功"), 0x0)
             this.OnClose()
+            ; §18 合并导入改内存宏表：不依赖「应用并保存」，此处显式落盘全部表+表集合
+            SaveAllTableItemInfo(MySoftData.TableInfo)
             OnSaveSetting()
         } catch as e {
             MsgBox(GetLang("合并导入失败: ") e.Message, GetLang("错误"), 0x10)

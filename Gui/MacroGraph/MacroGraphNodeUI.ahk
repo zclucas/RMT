@@ -63,17 +63,22 @@ class MacroGraphNodeUIMixin {
             this._AddFieldRow(body, "CountRow_" id, GetLang("点击次数："), "Count_" id, d.count, isClick, true, id, "count")
             this._AddFieldRow(body, "InterRow_" id, GetLang("每次间隔："), "Inter_" id, d.inter, showInter, true, id, "inter")
         }
-        else if (d.type == GetLang("移动")) {
-            isGameView := (d.mode == "2" || d.mode == 2)
+        else if (IsMoveCmd(d.type)) {
+            isGameView := (d.mode == "2" || d.mode == 2)   ; 旧配置游戏视角兼容（新配置无此值）
             ; 坐标X / 坐标Y / 移动速度 —— 标签与数值同行
             this._AddFieldRow(body, "PosXRow_" id, GetLang("坐标位置X:"), "PosX_" id, d.posx, true, true, id, "posx")
             this._AddFieldRow(body, "PosYRow_" id, GetLang("坐标位置Y:"), "PosY_" id, d.posy, true, true, id, "posy")
             this._AddFieldRow(body, "SpeedRow_" id, GetLang("移动速度："), "Speed_" id, isGameView ? "100" : d.speed, true, !isGameView, id, "speed")
-            ; 移动方式下拉 —— 标签与下拉同行
+            ; 移动方式下拉 —— §20 去「游戏视角」（已拆为增量移动指令）
             this._AddComboRow(body, "ModeRow_" id, GetLang("移动方式") "：", "ModeCmb_" id
-                , [GetLang("绝对移动"), GetLang("相对移动"), GetLang("游戏视角")], this._MoveModeIndex(d.mode), true)
+                , [GetLang("绝对移动"), GetLang("相对移动")], this._MoveModeIndex(d.mode), true)
         }
-        else if (d.type == GetLang("移动Pro")) {
+        else if (IsDeltaMoveCmd(d.type)) {
+            ; §20 增量移动：X/Y 相对位移
+            this._AddFieldRow(body, "DPosXRow_" id, GetLang("X偏移："), "DPosX_" id, d.posx, true, true, id, "posx")
+            this._AddFieldRow(body, "DPosYRow_" id, GetLang("Y偏移："), "DPosY_" id, d.posy, true, true, id, "posy")
+        }
+        else if (IsMoveProCmd(d.type)) {
             mmmode := d.HasOwnProp("mmmode") ? d.mmmode : 0
             isGameView := (mmmode == "2" || mmmode == 2)
             isHuman := (d.HasOwnProp("isHuman") && (d.isHuman == 1 || d.isHuman == "1"))
@@ -91,9 +96,9 @@ class MacroGraphNodeUIMixin {
             ; 鼠标动作下拉（移动 / 移动点击1次 / 移动点击2次）
             this._AddComboRow(body, "MPActionRow_" id, GetLang("鼠标动作："), "MPActionCmb_" id
                 , [GetLang("移动"), GetLang("移动点击1次"), GetLang("移动点击2次")], actionIdx, true, actionEnabled)
-            ; 移动方式下拉；拟真轨迹开启时禁用
+            ; 移动方式下拉；拟真轨迹开启时禁用（§20 去「游戏视角」）
             this._AddComboRow(body, "MPModeRow_" id, GetLang("移动方式") "：", "MPModeCmb_" id
-                , [GetLang("绝对移动"), GetLang("相对移动"), GetLang("游戏视角")], this._MoveModeIndex(mmmode), true, !isHuman)
+                , [GetLang("绝对移动"), GetLang("相对移动")], this._MoveModeIndex(mmmode), true, !isHuman)
             ; 启用拟真轨迹（复选框）；游戏视角下取消勾选并禁用
             this._AddCheckRow(body, "MPHumanRow_" id, "MPHuman_" id, GetLang("启用拟真轨迹"), (isHuman && !isGameView) ? 1 : 0, true, !isGameView)
             ; 移动次数 / 每次间隔（仅游戏视角显示）

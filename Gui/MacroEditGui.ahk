@@ -31,6 +31,25 @@
 class MacroEditGui {
     static Hotkeys := ["f5", "f6", "delete"]
 
+    ; §14.5 调试热键可配置（设置→快捷键），不再固定 F5/F6
+    _GetDebugRunHotkey() {
+        return (MainSoftData.HasProp("DebugRunHotkey") && MainSoftData.DebugRunHotkey != "")
+            ? MainSoftData.DebugRunHotkey : "f5"
+    }
+
+    _GetDebugStepHotkey() {
+        return (MainSoftData.HasProp("DebugStepHotkey") && MainSoftData.DebugStepHotkey != "")
+            ? MainSoftData.DebugStepHotkey : "f6"
+    }
+
+    _DebugRunLabel() {
+        return GetLang("运行") " (" FormatHotkeyDisplay(this._GetDebugRunHotkey()) ")"
+    }
+
+    _DebugStepLabel() {
+        return GetLang("单步运行") " (" FormatHotkeyDisplay(this._GetDebugStepHotkey()) ")"
+    }
+
     __new() {
         this.ParentTile := ""
         this.ui := ""                     ; XAMLHost 实例
@@ -79,6 +98,22 @@ class MacroEditGui {
         this.OpenedSubGuis := []        ; 多开时额外创建的子指令编辑器实例
         this.RecordMacroCon := ""
         this.DefaultFocusCon := ""
+        ; §1 撤销/重做：快照栈（根宏串 + 树上全部命令 Data 深快照）
+        this._undoStack := []
+        this._redoStack := []
+        this._undoBatch := 0             ; >0 时 _PushUndo 静默（内部批量组合操作只记一次）
+        ; §13 左侧指令面板：按类型分类 + 收藏星标 + 分类展开状态（持久化到 INI）
+        this.CmdCategory := [
+            {name: "键鼠/手柄", cmds: ["按键", "鼠标移动", "鼠标移动Pro", "增量移动", "后台按键", "后台鼠标", "按键检测"]},
+            {name: "搜索/识图", cmds: ["搜索", "搜索Pro"]},
+            {name: "输入/输出", cmds: ["输入", "输出", "文件读写"]},
+            {name: "变量/数据", cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
+            {name: "流程控制", cmds: ["间隔", "如果", "如果Pro", "循环", "等待"]},
+            {name: "调控", cmds: ["运行", "宏操作", "窗口管理", "RMT指令"]},
+            {name: "其他", cmds: ["抓图", "注释"]}
+        ]
+        this._favSet := Map()            ; 收藏指令名（中文）→ true
+        this._catExpand := Map()         ; 分类名（中文）→ true（展开）
         this.SubMacroLastIndex := 0
         this.DragSourceMap := Map()
         this._dragCancelled := false
@@ -94,12 +129,13 @@ class MacroEditGui {
     }
 
     InitCommandConfigs() {
-        this.CMDStrArr := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "移动", "移动Pro", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测", "注释", "抓图"])
+        ; §20 指令改名：移动→鼠标移动、移动Pro→鼠标移动Pro、新增 增量移动（原游戏视角）
+        this.CMDStrArr := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
+            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测", "等待", "注释", "抓图"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
-            "Images\Soft\Move.png", "Images\Soft\MovePro.png",
+            "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\Move.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png",
             "Images\Soft\Loop.png", "Images\Soft\Sub.png",
             "Images\Soft\Var.png", "Images\Soft\Extract.png",
@@ -109,17 +145,18 @@ class MacroEditGui {
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\Key.png",
             "Images\Soft\WindowManage.png", "Images\Soft\KeyCheck.png",
+            "Images\Soft\Control.png",
             "Images\Soft\ScreenShot.png", "Images\Soft\Comment.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("搜索"), "Icon3",
-        GetLang("搜索Pro"), "Icon4", GetLang("移动"), "Icon5", GetLang("移动Pro"), "Icon6", GetLang("输出"), "Icon7",
+        GetLang("搜索Pro"), "Icon4", GetLang("鼠标移动"), "Icon5", GetLang("鼠标移动Pro"), "Icon6", GetLang("增量移动"), "Icon34", GetLang("输出"), "Icon7",
         GetLang("运行"), "Icon8", GetLang("循环"), "Icon9", GetLang("宏操作"), "Icon10", GetLang("变量"), "Icon11",
         GetLang("变量提取"), "Icon12", GetLang("如果"), "Icon13", GetLang("如果Pro"), "Icon14", GetLang("运算"), "Icon15",
         GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
         GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27",
         GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("按键检测"), "Icon30", GetLang("注释"), "Icon31",
-        GetLang("抓图"), "Icon32")
+        GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33")
 
         ; IconN → 图标文件（顺序与原 IL_Add 一致）
         this.IconFileByNumber := Map(
@@ -138,7 +175,8 @@ class MacroEditGui {
             "Icon25", "Images\Soft\Arr.png", "Icon26", "Images\Soft\Input.png",
             "Icon27", "Images\Soft\FileIO.png", "Icon28", "Images\Soft\Control.png",
             "Icon29", "Images\Soft\WindowManage.png", "Icon30", "Images\Soft\KeyCheck.png",
-            "Icon31", "Images\Soft\Comment.png", "Icon32", "Images\Soft\ScreenShot.png")
+            "Icon31", "Images\Soft\Comment.png", "Icon32", "Images\Soft\ScreenShot.png",
+            "Icon33", "Images\Soft\Control.png", "Icon34", "Images\Soft\Move.png")
 
         ; 指令名 → 图标文件（XAML 树节点 Image.Source 用）
         this.CmdIconFileMap := Map()
@@ -152,8 +190,9 @@ class MacroEditGui {
             {class: KeyGui, name: "按键", icon: "Images\Soft\Key.png", propName: "KeyGui"},
             {class: SearchGui, name: "搜索", icon: "Images\Soft\Search.png", propName: "SearchGui"},
             {class: SearchProGui, name: "搜索Pro", icon: "Images\Soft\SearchPro.png", propName: "SearchProGui"},
-            {class: MouseMoveGui, name: "移动", icon: "Images\Soft\Move.png", propName: "MouseMoveGui"},
-            {class: MMProGui, name: "移动Pro", icon: "Images\Soft\MovePro.png", propName: "MMProGui"},
+            {class: MouseMoveGui, name: "鼠标移动", icon: "Images\Soft\Move.png", propName: "MouseMoveGui"},
+            {class: MMProGui, name: "鼠标移动Pro", icon: "Images\Soft\MovePro.png", propName: "MMProGui"},
+            {class: DeltaMoveGui, name: "增量移动", icon: "Images\Soft\Move.png", propName: "DeltaMoveGui"},
             {class: InputGui, name: "输入", icon: "Images\Soft\Input.png", propName: "InputGui"},
             {class: OutputGui, name: "输出", icon: "Images\Soft\Output.png", propName: "OutputGui"},
             {class: LoopGui, name: "循环", icon: "Images\Soft\Loop.png", propName: "LoopGui"},
@@ -172,6 +211,7 @@ class MacroEditGui {
             {class: BGKeyGui, name: "后台按键", icon: "Images\Soft\Key.png", propName: "BGKeyGui"},
             {class: WindowManageGui, name: "窗口管理", icon: "Images\Soft\WindowManage.png", propName: "WindowManageGui"},
             {class: KeyCheckGui, name: "按键检测", icon: "Images\Soft\KeyCheck.png", propName: "KeyCheckGui"},
+            {class: WaitGui, name: "等待", icon: "Images\Soft\Control.png", propName: "WaitGui"},
             {class: CommentGui, name: "注释", icon: "Images\Soft\Comment.png", propName: "CommentGui"},
             {class: ScreenShotGui, name: "抓图", icon: "Images\Soft\ScreenShot.png", propName: "ScreenShotGui"}
         ]
@@ -197,7 +237,7 @@ class MacroEditGui {
         this._BuildAndShow(CommandStr, ShowSaveBtn)
 
         ; 注册快捷键热键（仅编辑器前台时拦截，失焦时按键透传给其他程序；关闭时注销）
-        this._hkIds := WinHotkey.Register(["F5", "F6", "Delete", "$^c", "$^v"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
+        this._hkIds := WinHotkey.Register([this._GetDebugRunHotkey(), this._GetDebugStepHotkey(), "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
 
         ; 注册拖拽消息监听（先注销再注册，避免重复打开时叠多个处理器）
         OnMessage(0x0201, this._lbtnHandler, 0)
@@ -282,6 +322,141 @@ class MacroEditGui {
             . '</Style>'
     }
 
+    ; ==================== §13 左侧指令面板（分类+收藏） ====================
+
+    ; 从 INI 读收藏集与分类展开状态
+    _LoadCmdPanelState() {
+        this._favSet := Map()
+        ; §20 默认收藏用新名「鼠标移动」（旧配置 CmdFav 含「移动」时忽略不匹配项）
+        favStr := IniRead(IniFile, IniSection, "CmdFav", "间隔,按键,搜索,鼠标移动")
+        for name in StrSplit(favStr, ",") {
+            name := Trim(name)
+            if (name != "")
+                this._favSet[name] := true
+        }
+        this._catExpand := Map()
+        catStr := IniRead(IniFile, IniSection, "CmdCatState", "")
+        for seg in StrSplit(catStr, ",") {
+            pair := StrSplit(seg, "=")
+            if (pair.Length == 2 && Trim(pair[1]) != "")
+                this._catExpand[Trim(pair[1])] := Trim(pair[2]) == "1"
+        }
+    }
+
+    ; 收藏集落盘（即时）
+    _SaveFavState() {
+        arr := []
+        for config in this.SubGuiConfig
+            if (this._favSet.Has(config.name))
+                arr.Push(config.name)
+        s := ""
+        for i, name in arr
+            s .= (i > 1 ? "," : "") name
+        IniWrite(s, IniFile, IniSection, "CmdFav")
+    }
+
+    ; 分类展开状态落盘（即时）
+    _SaveCatState() {
+        pairs := []
+        for idx, cat in this.CmdCategory
+            pairs.Push(cat.name "=" (this._catExpand.Get(cat.name, true) ? "1" : "0"))
+        s := ""
+        for i, p in pairs
+            s .= (i > 1 ? "," : "") p
+        IniWrite(s, IniFile, IniSection, "CmdCatState")
+    }
+
+    ; 按中文指令名找 SubGuiConfig；找不到返回 ""
+    _CmdConfigOf(cmdName) {
+        for config in this.SubGuiConfig
+            if (config.name == cmdName)
+                return config
+        return ""
+    }
+
+    ; 构建一行指令：星标 + 指令按钮（图标+名称）
+    _AddCmdRowBtn(row, config, favBtnName, cmdBtnName, isFav) {
+        fav := row.Add("Button").Name(favBtnName).Width(22).Height(30).Margin("0,1,0,1")
+            .Background("Transparent").BorderThickness("0").Cursor("Hand").Padding("0")
+            .VerticalContentAlignment("Center").HorizontalContentAlignment("Center")
+        fav.Add("TextBlock").Name(favBtnName "_Txt").Text(isFav ? "⭐" : "☆").FontSize(13)
+            .HorizontalAlignment("Center").VerticalAlignment("Center")
+        b := row.Add("Button").Name(cmdBtnName).Height(30).Margin("2,1").Background("Transparent").BorderThickness("0")
+            .Cursor("Hand").HorizontalContentAlignment("Left").VerticalContentAlignment("Center")
+        sp := b.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
+        sp.Add("Image").Source(StrReplace(A_WorkingDir "\" config.icon, "\", "/")).Width(16).Height(16).Margin("0,0,4,0")
+        sp.Add("TextBlock").Text(GetLang(config.name)).FontSize(11).VerticalAlignment("Center")
+    }
+
+    ; 构建左侧面板：收藏区（预建全部行按收藏集显隐）+ 分类区（可折叠，状态记忆）
+    _BuildCmdPanel(left) {
+        this._LoadCmdPanelState()
+        sv := left.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
+        panel := sv.Add("StackPanel").Margin("2,4,2,4")
+
+        ; ---- 收藏区 ----
+        panel.Add("TextBlock").Text("⭐ " GetLang("收藏")).FontSize(12).FontWeight("SemiBold")
+            .Margin("4,2,0,2").Foreground("{DynamicResource TextMain}")
+        favPanel := panel.Add("StackPanel").Name("CmdFavPanel")
+        for config in this.SubGuiConfig {
+            isFav := this._favSet.Has(config.name)
+            row := favPanel.Add("StackPanel").Name("FavRow_" config.propName).Orientation("Horizontal")
+                .Visibility(isFav ? "Visible" : "Collapsed")
+            this._AddCmdRowBtn(row, config, "FavBtnFav_" config.propName, "CmdBtnFav_" config.propName, isFav)
+        }
+
+        ; ---- 分类区 ----
+        for idx, cat in this.CmdCategory {
+            expanded := this._catExpand.Get(cat.name, true)
+            arrow := expanded ? Chr(0x25BE) : Chr(0x25B8)   ; ▾ / ▸
+            panel.Add("Button").Name("CatToggle_" idx).Content(arrow " " GetLang(cat.name))
+                .HorizontalAlignment("Stretch").Height(28).Background("Transparent").BorderThickness("0")
+                .Cursor("Hand").HorizontalContentAlignment("Left").FontSize(12).FontWeight("SemiBold")
+                .Foreground("{DynamicResource TextMain}").Margin("0,6,0,0").Padding("6,0")
+            catPanel := panel.Add("StackPanel").Name("CatPanel_" idx).Visibility(expanded ? "Visible" : "Collapsed")
+            for cmdName in cat.cmds {
+                config := this._CmdConfigOf(cmdName)
+                if (config == "")
+                    continue
+                row := catPanel.Add("StackPanel").Orientation("Horizontal")
+                this._AddCmdRowBtn(row, config, "FavBtnCat_" config.propName, "CmdBtn_" config.propName, this._favSet.Has(config.name))
+            }
+        }
+    }
+
+    ; 星标点击：切换收藏并刷新两处星标与收藏区行显隐
+    _OnToggleFav(propName, state, ctrl, event) {
+        if (!IsObject(this.ui))
+            return
+        for config in this.SubGuiConfig {
+            if (config.propName != propName)
+                continue
+            isFav := !this._favSet.Has(config.name)
+            if (isFav)
+                this._favSet[config.name] := true
+            else
+                this._favSet.Delete(config.name)
+            star := isFav ? "⭐" : "☆"
+            try this.ui.Update("FavBtnCat_" propName "_Txt", "Text", star)
+            try this.ui.Update("FavBtnFav_" propName "_Txt", "Text", star)
+            try this.ui.Update("FavRow_" propName, "Visibility", isFav ? "Visible" : "Collapsed")
+            this._SaveFavState()
+            return
+        }
+    }
+
+    ; 分类标题点击：折叠/展开该分类并保存
+    _OnToggleCat(idx, state, ctrl, event) {
+        if (!IsObject(this.ui) || idx < 1 || idx > this.CmdCategory.Length)
+            return
+        cat := this.CmdCategory[idx]
+        expanded := !this._catExpand.Get(cat.name, true)
+        this._catExpand[cat.name] := expanded
+        try this.ui.Update("CatPanel_" idx, "Visibility", expanded ? "Visible" : "Collapsed")
+        try this.ui.Update("CatToggle_" idx, "Content", (expanded ? Chr(0x25BE) : Chr(0x25B8)) " " GetLang(cat.name))
+        this._SaveCatState()
+    }
+
     _BuildAndShow(CommandStr, ShowSaveBtn) {
         global MySoftData
         this._closed := false
@@ -298,6 +473,11 @@ class MacroEditGui {
         tbInner := tb.Add("Grid")
         tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(12).FontWeight("SemiBold").VerticalAlignment("Center").Margin("12,0,0,0")
         BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
+        ; §8 帮助/视频按钮（占位）：帮助打开指令手册，视频提示制作中（文档/视频完成后按指令跳转）
+        helpBtn := BtnGroup.Add("Button").Name("BtnCmdHelp").WindowChrome_IsHitTestVisibleInChrome("True").Width(34).Height(30).MinHeight(30).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0).ToolTip(GetLang("指令手册"))
+        helpBtn.Add("TextBlock").Text(Chr(0xE946)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        videoBtn := BtnGroup.Add("Button").Name("BtnCmdVideo").WindowChrome_IsHitTestVisibleInChrome("True").Width(34).Height(30).MinHeight(30).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0).ToolTip(GetLang("指令视频"))
+        videoBtn.Add("TextBlock").Text(Chr(0xE714)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
         closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
         closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
 
@@ -310,8 +490,8 @@ class MacroEditGui {
         dbgBtn := menuBar.Add("Button").Name("BtnMenuDebug").Content(GetLang("调试")).Cursor("Hand").Background("Transparent").BorderThickness("0").Padding("10,3")
         dbgHost := menuBar.Add("Border").Name("MenuDebugHost").Width("0").Height("0").Visibility("Collapsed")
         dbgCM := dbgHost.Add("Border.ContextMenu").Add("ContextMenu").Name("MenuDebugCM").MinWidth("160").Placement("MousePoint").Background("{DynamicResource DropdownBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Foreground("{DynamicResource TextMain}").InjectResources(this._ContextMenuScrollStyle()).InjectResources(this._MenuItemSubmenuStyle())
-        dbgCM.Add("MenuItem").Name("MenuRunF5").Header(GetLang("运行(F5)"))
-        dbgCM.Add("MenuItem").Name("MenuRunF6").Header(GetLang("单步运行(F6)"))
+        dbgCM.Add("MenuItem").Name("MenuRunF5").Header(this._DebugRunLabel())
+        dbgCM.Add("MenuItem").Name("MenuRunF6").Header(this._DebugStepLabel())
         dbgCM.Add("MenuItem").Name("MenuKill").Header(GetLang("终止"))
         toolBtn := menuBar.Add("Button").Name("BtnMenuTool").Content(GetLang("工具")).Cursor("Hand").Background("Transparent").BorderThickness("0").Padding("10,3").Margin("8,0,0,0")
         toolHost := menuBar.Add("Border").Name("MenuToolHost").Width("0").Height("0").Visibility("Collapsed")
@@ -335,6 +515,9 @@ class MacroEditGui {
         treeCtx.Add("MenuItem").Name("MenuPasteCmd").Header(GetLang("粘贴"))
         treeCtx.Add("Separator")
         treeCtx.Add("MenuItem").Name("MenuDeleteCmd").Header(GetLang("删除"))
+        treeCtx.Add("Separator")
+        treeCtx.Add("MenuItem").Name("MenuUndoCmd").Header(GetLang("撤销一步"))
+        treeCtx.Add("MenuItem").Name("MenuClearAllCmd").Header(GetLang("清空所有"))
 
         branchCtxHost := menuBar.Add("Border").Name("BranchCtxHost").Width("0").Height("0").Visibility("Collapsed")
         branchCtx := branchCtxHost.Add("Border.ContextMenu").Add("ContextMenu").Name("BranchCtxMenu").MinWidth("180").Placement("MousePoint").Background("{DynamicResource DropdownBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Foreground("{DynamicResource TextMain}").InjectResources(this._ContextMenuScrollStyle()).InjectResources(this._MenuItemSubmenuStyle())
@@ -343,23 +526,16 @@ class MacroEditGui {
             miAdd.Add("MenuItem").Name("MenuBranchAdd_" index).Header(value)
         branchCtx.Add("Separator")
         branchCtx.Add("MenuItem").Name("MenuBranchDelete").Header(GetLang("删除"))
+        branchCtx.Add("MenuItem").Name("MenuBranchUndoCmd").Header(GetLang("撤销一步"))
 
         content := body.Add("Grid").Grid_Row(1)
         content.Cols("210", "*")
         content.Rows("42", "30", "*", "48")
 
-        ; 左侧指令面板
+        ; 左侧指令面板（§13：按类型分类 + 收藏星标 + 滚动条 + 展开状态记忆）
         left := content.Add("GroupBox").Grid_Column(0).Grid_RowSpan(4).Header(GetLang("指令选项")).Margin("5,4,2,4")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Foreground("{DynamicResource TextMain}")
-        leftGrid := left.Add("UniformGrid").Columns(2)
-        for config in this.SubGuiConfig {
-            btnName := "CmdBtn_" config.propName
-            b := leftGrid.Add("Button").Name(btnName).Height(32).Margin("2").Background("Transparent").BorderThickness("0")
-                .Cursor("Hand").HorizontalContentAlignment("Center").VerticalContentAlignment("Center")
-            sp := b.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
-            sp.Add("Image").Source(StrReplace(A_WorkingDir "\" config.icon, "\", "/")).Width(16).Height(16).Margin("0,0,4,0")
-            sp.Add("TextBlock").Text(GetLang(config.name)).FontSize(11)
-        }
+        this._BuildCmdPanel(left)
 
         ; 顶部工具条
         toolRow := content.Add("Grid").Grid_Column(1).Grid_Row(0).Margin("10,8,10,0")
@@ -400,10 +576,12 @@ class MacroEditGui {
 
         ; 底部按钮
         bottom := content.Add("StackPanel").Grid_Column(1).Grid_Row(3).Orientation("Horizontal").Margin("10,6,10,0").HorizontalAlignment("Center")
-        bottom.Add("Button").Name("BtnBack").Content(GetLang("退格")).Width(100).Height(32).MinHeight(32).Margin("4,0")
-        bottom.Add("Button").Name("BtnClear").Content(GetLang("清空指令")).Width(100).Height(32).MinHeight(32).Margin("4,0")
-        bottom.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(100).Height(32).MinHeight(32).Margin("4,0")
-        bottom.Add("Button").Name("SaveBtn").Content(GetLang("应用并保存")).Width(100).Height(32).MinHeight(32).Margin("4,0")
+        bottom.Add("Button").Name("BtnUndo").Content(GetLang("撤销")).Width(80).Height(32).MinHeight(32).Margin("4,0").IsEnabled("False")
+        bottom.Add("Button").Name("BtnRedo").Content(GetLang("重做")).Width(80).Height(32).MinHeight(32).Margin("4,0").IsEnabled("False")
+        bottom.Add("Button").Name("BtnBack").Content(GetLang("退格")).Width(80).Height(32).MinHeight(32).Margin("4,0")
+        bottom.Add("Button").Name("BtnClear").Content(GetLang("清空指令")).Width(80).Height(32).MinHeight(32).Margin("4,0")
+        bottom.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(80).Height(32).MinHeight(32).Margin("4,0")
+        bottom.Add("Button").Name("SaveBtn").Content(GetLang("应用并保存")).Width(80).Height(32).MinHeight(32).Margin("4,0")
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
@@ -426,10 +604,15 @@ class MacroEditGui {
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        ; §8 帮助/视频占位
+        this.ui.OnEvent("BtnCmdHelp", "Click", ObjBindMethod(this, "OnCmdHelpClick"))
+        this.ui.OnEvent("BtnCmdVideo", "Click", ObjBindMethod(this, "OnCmdVideoClick"))
         this.ui.OnEvent("EditModeCombo", "SelectionChanged", ObjBindMethod(this, "OnChangeEditMode"))
         this.ui.OnEvent("RecordTog", "Click", ObjBindMethod(this, "OnClickRecordTog"))
         this.ui.OnEvent("BtnBack", "Click", (*) => this.Backspace())
         this.ui.OnEvent("BtnClear", "Click", (*) => this.ClearStr())
+        this.ui.OnEvent("BtnUndo", "Click", (*) => this.Undo())
+        this.ui.OnEvent("BtnRedo", "Click", (*) => this.Redo())
         this.ui.OnEvent("BtnOk", "Click", (*) => this.OnSureBtnClick())
         this.ui.OnEvent("SaveBtn", "Click", (*) => this.OnSaveBtnClick())
         this.ui.OnEvent("BtnExpand", "Click", (*) => this.ExpandAll())
@@ -437,8 +620,8 @@ class MacroEditGui {
         this.ui.OnEvent("BtnGraphNode", "Click", ObjBindMethod(this, "OnSwitchToGraphEditor"))
         this.ui.OnEvent("BtnMenuDebug", "Click", (*) => this.ui.Update("MenuDebugCM", "IsOpen", "True"))
         this.ui.OnEvent("BtnMenuTool", "Click", (*) => this.ui.Update("MenuToolCM", "IsOpen", "True"))
-        this.ui.OnEvent("MenuRunF5", "Click", (*) => this.MenuHandler(GetLang("运行(F5)")))
-        this.ui.OnEvent("MenuRunF6", "Click", (*) => this.MenuHandler(GetLang("单步运行(F6)")))
+        this.ui.OnEvent("MenuRunF5", "Click", (*) => this.MenuHandler(this._DebugRunLabel()))
+        this.ui.OnEvent("MenuRunF6", "Click", (*) => this.MenuHandler(this._DebugStepLabel()))
         this.ui.OnEvent("MenuKill", "Click", (*) => this.MenuHandler(GetLang("终止")))
         this.ui.OnEvent("MenuVarListen", "Click", (*) => this.MenuHandler(GetLang("变量监视")))
         this.ui.OnEvent("MenuCmdTip", "Click", (*) => this.MenuHandler(GetLang("指令显示")))
@@ -452,6 +635,9 @@ class MacroEditGui {
         this.ui.OnEvent("MenuPasteCmd", "Click", (*) => this.ContentMenuHandler(GetLang("粘贴")))
         this.ui.OnEvent("MenuDeleteCmd", "Click", (*) => this.ContentMenuHandler(GetLang("删除")))
         this.ui.OnEvent("MenuBranchDelete", "Click", (*) => this.ContentMenuHandler(GetLang("删除")))
+        this.ui.OnEvent("MenuUndoCmd", "Click", (*) => this.Undo())
+        this.ui.OnEvent("MenuBranchUndoCmd", "Click", (*) => this.Undo())
+        this.ui.OnEvent("MenuClearAllCmd", "Click", (*) => this.ClearStr())
         for index, value in this.CMDStrArr {
             this.ui.OnEvent("MenuInsert_" index, "Click", this.ContentMenuHandler.Bind(this, "Next_" value))
             this.ui.OnEvent("MenuBranchAdd_" index, "Click", this.ContentMenuHandler.Bind(this, "Add_" value))
@@ -469,6 +655,15 @@ class MacroEditGui {
             btnName := "CmdBtn_" config.propName
             this.ui.OnEvent(btnName, "Click", CreateSubGuiClickHandler(this, guiInstance))
             this.ui.OnEvent(btnName, "PreviewMouseLeftButtonDown", this._OnPanelDragStart.Bind(this, guiInstance, GetLang(config.name)))
+            ; §13 收藏区行（同名指令按钮，点击/拖拽同分类区）
+            this.ui.OnEvent("CmdBtnFav_" config.propName, "Click", CreateSubGuiClickHandler(this, guiInstance))
+            this.ui.OnEvent("CmdBtnFav_" config.propName, "PreviewMouseLeftButtonDown", this._OnPanelDragStart.Bind(this, guiInstance, GetLang(config.name)))
+            ; 星标切换
+            this.ui.OnEvent("FavBtnCat_" config.propName, "Click", this._OnToggleFav.Bind(this, config.propName))
+            this.ui.OnEvent("FavBtnFav_" config.propName, "Click", this._OnToggleFav.Bind(this, config.propName))
+        }
+        for idx, cat in this.CmdCategory {
+            this.ui.OnEvent("CatToggle_" idx, "Click", this._OnToggleCat.Bind(this, idx))
         }
 
         this.ui.Track("EditModeCombo")
@@ -519,6 +714,20 @@ class MacroEditGui {
         } catch {
         }
         this._TryReveal("theme")
+    }
+
+    ; §8 帮助按钮：打开指令手册（后续可精确跳转到对应指令章节）
+    OnCmdHelpClick(state, ctrl, event) {
+        helpPath := A_WorkingDir "\Web\指令手册.md"
+        if (FileExist(helpPath))
+            Run(helpPath)
+        else
+            MyMsgBoxContent(GetLang("指令手册尚未生成"))
+    }
+
+    ; §8 视频按钮：占位（指令详细介绍视频制作中）
+    OnCmdVideoClick(state, ctrl, event) {
+        MyMsgBoxContent(GetLang("指令介绍视频制作中，敬请期待。"))
     }
 
     ; 揭盖一次（防重复）：引擎还原位置并显示，窗口从离屏直接变完整内容，无 Hide/Show
@@ -629,6 +838,10 @@ class MacroEditGui {
         MacroStr := GetLangMacro(MacroStr, 1)
         this.ShowSaveBtn := ShowSaveBtn
         this.SubMacroLastIndex := 0
+        ; 打开新宏：清空上一份宏的撤销/重做栈
+        this._undoStack := []
+        this._redoStack := []
+        this._undoBatch := 0
         this.SaveBtnCtrl.Visible := this.ShowSaveBtn
         this.InitTreeView(MacroStr)
         this.InitMacroText(MacroStr)
@@ -641,6 +854,7 @@ class MacroEditGui {
     }
 
     Backspace() {
+        this._PushUndo()
         if (this.EditModeCon.Value == 1) {
             if (this.MacroTreeViewCon.GetCount() == 0)
                 return
@@ -666,6 +880,7 @@ class MacroEditGui {
     }
 
     ClearStr() {
+        this._PushUndo()
         this.MacroTreeViewCon.Delete()
         this.MacroEditTextCon.Value := ""
     }
@@ -764,6 +979,142 @@ class MacroEditGui {
             MacroStr := this.MacroEditTextCon.Value
         }
         return MacroStr
+    }
+
+    ; ==================== §1 撤销/重做 ====================
+
+    ; 捕获当前完整编辑状态：根宏串（树或文本）+ 树上所有命令的 Data 深快照。
+    ; 命令参数存在以序列号为键的 Data 对象里（含 搜索/如果/循环 等分支内容），
+    ; 仅存根宏串无法还原分支，因此必须连 Data 一起快照。
+    _CaptureSnapshot() {
+        snap := {root: "", data: Map()}
+        if (this.EditModeCon.Value == 1) {
+            snap.root := this.GetTreeMacroStr(0)
+        }
+        else {
+            snap.root := this.MacroEditTextCon.Value
+        }
+        this._CollectSnapshotData(0, snap.data)
+        return snap
+    }
+
+    ; 递归收集树上全部命令节点的 Data JSON（含嵌套分支内的命令）
+    ; 注意：dataMap 不能声明为 ByRef——调用处传的是 snap.data（对象属性，非变量引用），
+    ; Map 本身是引用类型，去 ByRef 后对 Map 的写入依旧原地生效。
+    _CollectSnapshotData(itemID, dataMap) {
+        childID := this.MacroTreeViewCon.GetChild(itemID)
+        while (childID) {
+            text := this.MacroTreeViewCon.GetText(childID)
+            if (text != "" && SubStr(text, 1, 1) != "⎖") {
+                cmdStr := MySoftData.ParseCmdJoyDisplay(text)
+                serial := this._SerialOfCmd(cmdStr)
+                if (serial != "" && !dataMap.Has(serial)) {
+                    try {
+                        Data := GetMacroCMDData(serial)
+                        dataMap[serial] := JSON.stringify(Data, 0)
+                    }
+                }
+                this._CollectSnapshotData(childID, dataMap)
+            }
+            childID := this.MacroTreeViewCon.GetNext(childID)
+        }
+    }
+
+    ; 从指令文本（可能带 ⭐/🚫/→ 前缀与显示名）提取「命令名_序号」形式的序列码；无序号返回 ""
+    _SerialOfCmd(cmdStr) {
+        cmdStr := StrReplace(StrReplace(cmdStr, "⭐", ""), "→", "")
+        paramArr := StrSplit(cmdStr, "_")
+        if (paramArr.Length == 0)
+            return ""
+        first := StrReplace(paramArr[1], "🚫", "")
+        dummy := ""
+        SplitSerialTextAndNumbers(first, &textOnly, &numbersOnly)
+        if (numbersOnly == "")
+            return ""
+        return textOnly . numbersOnly
+    }
+
+    ; 入栈前状态快照（上限 100 条，超出丢最旧）；批量组合操作期间静默
+    _PushUndo() {
+        if (this._undoBatch > 0)
+            return
+        snap := this._CaptureSnapshot()
+        this._undoStack.Push(snap)
+        if (this._undoStack.Length > 100)
+            this._undoStack.RemoveAt(1)
+        this._redoStack := []
+        this._SyncUndoBtns()
+    }
+
+    Undo() {
+        if (this._undoStack.Length == 0)
+            return
+        this._redoStack.Push(this._CaptureSnapshot())
+        snap := this._undoStack.Pop()
+        this._RestoreSnapshot(snap)
+        this._SyncUndoBtns()
+    }
+
+    Redo() {
+        if (this._redoStack.Length == 0)
+            return
+        this._undoStack.Push(this._CaptureSnapshot())
+        snap := this._redoStack.Pop()
+        this._RestoreSnapshot(snap)
+        this._SyncUndoBtns()
+    }
+
+    ; 撤销/重做可用性同步到按钮（简单起见仅刷新 IsEnabled）
+    _SyncUndoBtns() {
+        if (!IsObject(this.ui))
+            return
+        try this.ui.Update("BtnUndo", "IsEnabled", this._undoStack.Length > 0 ? "True" : "False")
+        try this.ui.Update("BtnRedo", "IsEnabled", this._redoStack.Length > 0 ? "True" : "False")
+    }
+
+    ; 恢复快照：先写回各命令 Data（缓存+文件），再重建树/文本
+    _RestoreSnapshot(snap) {
+        for serial, json in snap.data {
+            try this._RestoreCmdData(serial, json)
+        }
+        if (this.EditModeCon.Value == 1) {
+            this.InitTreeView(snap.root)
+            firstItem := this.MacroTreeViewCon.GetNext(0)
+            if (firstItem)
+                this.SetMultiSelected(firstItem, true)
+        }
+        else {
+            this.InitMacroText(snap.root)
+        }
+    }
+
+    ; 把某命令的 Data 快照写回数据文件并清缓存（与 SaveMacroCMDData 同链路）
+    ; 注意：快照 serial 来自显示文本（英文模式可能是 "Key004"），
+    ; 但数据文件键恒为中文序列码（"按键004"，GetCMDSerialStr 内部 GetLangKey 转回），
+    ; 落盘与清缓存都必须用规范化键 cmdKey+序号。
+    _RestoreCmdData(serial, json) {
+        dummy := ""
+        SplitSerialTextAndNumbers(serial, &textOnly, &dummy)
+        cmdKey := GetLangKey(textOnly)
+        if (!MySoftData.DataFileMap.Has(cmdKey))
+            return
+        file := MySoftData.DataFileMap[cmdKey]
+        normalized := cmdKey . dummy
+        IniWrite(json, file, IniSection, normalized)
+        if (MySoftData.DataCacheMap.Has(normalized))
+            MySoftData.DataCacheMap.Delete(normalized)
+        if (serial != normalized && MySoftData.DataCacheMap.Has(serial))
+            MySoftData.DataCacheMap.Delete(serial)
+    }
+
+    ; 一组用户操作只记一次撤销（如整段粘贴、图形转线性）
+    _BeginUndoBatch() {
+        this._undoBatch += 1
+    }
+
+    _EndUndoBatch() {
+        if (this._undoBatch > 0)
+            this._undoBatch -= 1
     }
 
     InitMacroText(MacroStr) {
@@ -893,10 +1244,10 @@ class MacroEditGui {
     _OnHotkey(key) {
         ; 去掉 ~ / $ 前缀后再比较（$ 用于防止 Send 再次触发自身热键）
         key := LTrim(key, "~$")
-        if (key == "F5")
-            this.MenuHandler(GetLang("运行(F5)"))
-        else if (key == "F6")
-            this.MenuHandler(GetLang("单步运行(F6)"))
+        if (StrLower(key) == StrLower(this._GetDebugRunHotkey()))
+            this.MenuHandler(this._DebugRunLabel())
+        else if (StrLower(key) == StrLower(this._GetDebugStepHotkey()))
+            this.MenuHandler(this._DebugStepLabel())
         else if (key == "Delete") {
             this.OnDeleteCmd()
         }
@@ -915,16 +1266,29 @@ class MacroEditGui {
                 ; 空树/无选中时也允许粘贴到根层
                 this.ContentMenuHandler(GetLang("粘贴"))
         }
+        else if (key == "^z") {
+            ; 文本模式：交还编辑框原生撤销；逻辑树模式：走快照撤销栈
+            if (!this.MacroTreeViewCon.Visible)
+                Send("^z")
+            else
+                this.Undo()
+        }
+        else if (key == "^y") {
+            if (!this.MacroTreeViewCon.Visible)
+                Send("^y")
+            else
+                this.Redo()
+        }
     }
 
     OnSoftKey(key, isDown) {
         if (!isDown)
             return
 
-        if (key == "f5")
-            this.MenuHandler(GetLang("运行(F5)"))
-        if (key == "f6")
-            this.MenuHandler(GetLang("单步运行(F6)"))
+        if (StrLower(key) == StrLower(this._GetDebugRunHotkey()))
+            this.MenuHandler(this._DebugRunLabel())
+        if (StrLower(key) == StrLower(this._GetDebugStepHotkey()))
+            this.MenuHandler(this._DebugStepLabel())
         if (key == "delete") {
             try {
                 focusedHwnd := DllCall("GetFocus", "Ptr")
@@ -1337,14 +1701,17 @@ class MacroEditGui {
             this.OnSubNodeEdit(parentId, displayLinear)
             return
         }
-        ; 根级图形开始节点：用线性宏替换该节点
+        ; 根级图形开始节点：用线性宏替换该节点（整段转线性记一次撤销）
         try this.MacroTreeViewCon.GetText(itemId)
         catch
             return
+        this._PushUndo()
+        this._BeginUndoBatch()
         this.CurItemID := itemId
         cmds := SplitMacro(displayLinear)
         if (cmds.Length == 0) {
             this.OnDeleteCmd()
+            this._EndUndoBatch()
             return
         }
         this.OnModifyCmd(cmds[1])
@@ -1355,6 +1722,7 @@ class MacroEditGui {
             if (nextId)
                 this.CurItemID := nextId
         }
+        this._EndUndoBatch()
     }
 
     _OnGraphNodeEditorSure(itemId, startSerial, symbol := "") {
@@ -1430,7 +1798,7 @@ class MacroEditGui {
                     this.ui.Update("Window", "Topmost", this._topOn ? "True" : "False")
                 this.ToolMenu.ToggleCheck(GetLang("窗口置顶"))
             }
-            case GetLang("运行(F5)"):
+            case this._DebugRunLabel():
             {
                 this.ResetDebugState()
                 MacroStr := this.GetMacroStr()
@@ -1441,7 +1809,7 @@ class MacroEditGui {
                 OnTriggerSepcialItemMacro(MacroStr)
                 MsgBox(GetLang("调试运行结束"), "", "Owner" this.Gui.Hwnd)
             }
-            case GetLang("单步运行(F6)"):
+            case this._DebugStepLabel():
             {
                 tableItem := MySoftData.SpecialTableItem
                 if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1) {
@@ -2053,6 +2421,7 @@ class MacroEditGui {
 
     ;添加指令
     OnAddCmd(CommandStr) {
+        this._PushUndo()
         this.ResetDebugState()
         if (this.EditModeCon.Value == 1) {
             iconStr := this.GetCmdIconStr(CommandStr)
@@ -2079,6 +2448,7 @@ class MacroEditGui {
 
     ;修改指令
     OnModifyCmd(CommandStr) {
+        this._PushUndo()
         this.ResetDebugState()
         this.MacroTreeViewCon.Modify(this.CurItemID, , MySoftData.FormatCmdJoyDisplay(CommandStr))
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
@@ -2127,6 +2497,7 @@ class MacroEditGui {
     }
 
     OnSwitchCmd(ItemAID, ItemBID) {
+        this._PushUndo()
         this.ResetDebugState()
         LastItemID := this.MacroTreeViewCon.GetPrev(ItemAID)
         ParentID := this.MacroTreeViewCon.GetParent(ItemAID)
@@ -2157,6 +2528,7 @@ class MacroEditGui {
     ; 真／假／循環體／條件可以參與多選；刪除時不能直接刪掉容器，
     ; 而是依照單選的語義清空對應分支資料，再統一 RefreshTree。
     OnDeleteCmd() {
+        this._PushUndo()
         this.ResetDebugState()
 
         selectedItems := this.GetMultiSelectedItems()
@@ -2311,6 +2683,7 @@ class MacroEditGui {
 
     ;插入指令
     OnPreInsertCmd(CommandStr) {
+        this._PushUndo()
         this.ResetDebugState()
         displayStr := MySoftData.FormatCmdJoyDisplay(CommandStr)
         ParentID := this.MacroTreeViewCon.GetParent(this.CurItemID)
@@ -2330,8 +2703,6 @@ class MacroEditGui {
 
     ; 插入一條指令；返回刷新後可繼續作為插入錨點的 TreeView ItemID。
     OnNextInsertCmd(CommandStr) {
-        this.ResetDebugState()
-
         ; 防止多條指令誤傳進來，避免把「运行,输出,如果」當成一個 command key。
         cmds := SplitMacro(CommandStr)
         if (cmds.Length > 1) {
@@ -2342,6 +2713,9 @@ class MacroEditGui {
         CommandStr := Trim(CommandStr, " `t`r`n")
         if (CommandStr == "")
             return 0
+
+        this._PushUndo()
+        this.ResetDebugState()
 
         anchorItemID := this.CurItemID
         ParentID := this.MacroTreeViewCon.GetParent(anchorItemID)
@@ -2392,7 +2766,7 @@ class MacroEditGui {
         this.CurItemID := 0
     }
 
-    ; 將剪貼簿中的單條或多條宏指令逐條貼上。
+    ; 將剪貼簿中的單條或多條宏指令逐條貼上（整段粘贴记一次撤销）。
     PasteClipboardCommands(ClipboardStr) {
         ClipboardStr := Trim(ClipboardStr, " `t`r`n")
         if (ClipboardStr == "")
@@ -2401,6 +2775,10 @@ class MacroEditGui {
         cmds := SplitMacro(ClipboardStr)
         if (cmds.Length == 0)
             return
+
+        this._PushUndo()
+        this._BeginUndoBatch()
+        try {
 
         anchorID := this.CurItemID
         anchorText := ""
@@ -2516,6 +2894,9 @@ class MacroEditGui {
             this.MultiSelectAnchor := targetID
             this.MacroTreeViewCon.Modify(targetID, "Select")
         }
+        } finally {
+            this._EndUndoBatch()
+        }
     }
 
     ; 取得 parent 的第 N 個直接子節點（1-based）。
@@ -2554,6 +2935,7 @@ class MacroEditGui {
     }
 
     OnSubNodeAddCmd(CommandStr) {
+        this._PushUndo()
         displayStr := MySoftData.FormatCmdJoyDisplay(CommandStr)
         iconStr := this.GetCmdIconStr(CommandStr)
         newItemID := this.MacroTreeViewCon.Add(displayStr, this.CurItemID, iconStr)
@@ -2566,6 +2948,7 @@ class MacroEditGui {
     }
 
     OnSubNodeEdit(nodeItemID, macroStr) {
+        this._PushUndo()
         RealItemID := this.MacroTreeViewCon.GetParent(nodeItemID)
         RealCommandStr := this.MacroTreeViewCon.GetText(RealItemID)
         macroStr := macroStr == "" ? " " : macroStr
@@ -3138,6 +3521,7 @@ class MacroEditGui {
     }
 
     MoveTreeViewItem(sourceItem, destParent, relativeToItem, mode) {
+        this._PushUndo()
         this.ResetDebugState()
         this.ClearMultiSelection()
 

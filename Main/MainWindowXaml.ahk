@@ -45,15 +45,44 @@ class CtrlAdapter {
 }
 
 class TabAdapter {
-    __New(ui) {
+    __New(ui, owner := "") {
         this.ui := ui
+        this._owner := owner
         this._value := 1
     }
+    ; §10 可见页签映射表（TableInfo 下标数组，主窗口构建时按 TabVisibleMap 过滤生成）
+    _TabOrder() {
+        o := (IsObject(this._owner) && this._owner.HasOwnProp("_tabOrder") && IsObject(this._owner._tabOrder)) ? this._owner._tabOrder : ""
+        return (o && o.Length > 0) ? o : ""
+    }
     Value {
-        get => this._value
+        get {
+            o := this._TabOrder()
+            if (!o)
+                return this._value
+            v := this.ui.Query("TabControl>SelectedIndex")
+            if (v == "")
+                return this._value
+            sel := Integer(v) + 1
+            if (sel >= 1 && sel <= o.Length)
+                return o[sel]
+            return this._value
+        }
         set {
             this._value := value
-            this.ui.Update("TabControl", "SelectedIndex", String(value - 1))
+            o := this._TabOrder()
+            if (!o) {
+                this.ui.Update("TabControl", "SelectedIndex", String(value - 1))
+                return
+            }
+            for i, t in o {
+                if (t == value) {
+                    this.ui.Update("TabControl", "SelectedIndex", String(i - 1))
+                    return
+                }
+            }
+            ; 目标表被隐藏：切到第一个可见页签
+            this.ui.Update("TabControl", "SelectedIndex", "0")
         }
     }
     UseTab(i := "") {
@@ -184,6 +213,16 @@ class MainWin {
         main.Rows(titleHeight, "*")
         main.Cols("130", "*")
 
+        ; §11 主界面背景图（全局配置；铺满窗口最底层，内容面板未覆盖处可见）
+        _bgImg := Trim(MainSoftData.BackImagePath)
+        if (_bgImg != "" && FileExist(_bgImg)) {
+            try {
+                main.Add("Image").Name("WinBgImage").Grid_Row(0).Grid_RowSpan(2).Grid_Column(0).Grid_ColumnSpan(2)
+                    .Source(_bgImg).Stretch("Fill").Opacity("0.9").IsHitTestVisible("False")
+            } catch as e {
+            }
+        }
+
         ; ---- 标题栏 ----
         tb := main.Add("Border").Grid_Row(0).Grid_ColumnSpan(2).Background("{DynamicResource TitleBarColor}").Name("DragArea")
         tbInner := tb.Add("Grid")
@@ -237,15 +276,34 @@ class MainWin {
 
         ; ---- 右侧 TabControl ----
         right := main.Add("Grid").Grid_Row(1).Grid_Column(1).Margin("0,2,8,4")
-        tab := right.Add("TabControl").Name("TabControl").Style("{StaticResource RmtMainTabCtrl}").Background("{DynamicResource BgColor}").SelectedIndex(String(MainSoftData.TableIndex - 1))
+        ; §10 显示页签：先按可见性过滤生成 _tabOrder（TableInfo 下标数组），页签位置 ↔ 表下标经 TabAdapter/OnTabChanged 映射
+        this._tabOrder := []
         loop MySoftData.TableInfo.Length {
-            idx := A_Index
+            if (IsTabVisible(MySoftData.TableInfo[A_Index]))
+                this._tabOrder.Push(A_Index)
+        }
+        initSel := 0
+        for i, t in this._tabOrder {
+            if (t == MainSoftData.TableIndex) {
+                initSel := i - 1
+                break
+            }
+        }
+        if (initSel == 0 && this._tabOrder.Length >= 1) {
+            ; 当前表被隐藏 → 落到第一个可见页签，并同步身份（避免保存时持久化隐藏表 ID）
+            MainSoftData.TableIndex := this._tabOrder[1]
+            MainSoftData.CurTableID := MySoftData.TableInfo[this._tabOrder[1]].ID
+        }
+        tab := right.Add("TabControl").Name("TabControl").Style("{StaticResource RmtMainTabCtrl}").Background("{DynamicResource BgColor}").SelectedIndex(String(initSel))
+        loop this._tabOrder.Length {
+            pos := A_Index
+            idx := this._tabOrder[pos]
             tableItem := MySoftData.TableInfo[idx]
             tabItem := tab.Add("TabItem").Header(GetLang(tableItem.Name))
             ; 首个/末个页签打 Tag，模板按 Tag 适配圆角（首个左圆角、末个右圆角），末个同时隐藏分割线
-            if (idx == 1)
+            if (pos == 1)
                 tabItem.Tag("first")
-            else if (idx == MySoftData.TableInfo.Length)
+            else if (pos == this._tabOrder.Length)
                 tabItem.Tag("last")
             if (this._useVirtual.Has(idx)) {
                 ; 宏/模块显示区：自适应剩余空间，外层边框包裹；上边距 -2 让内容框上边框与页签条下边框重叠
@@ -253,12 +311,16 @@ class MainWin {
                 ; Epic5 虚拟列表：ListBox + DataTemplate + VirtualizingStackPanel(Recycling)，
                 ; 行模板注入 Window.Resources，由 _vl.Init 一次 VL_INIT 填充
                 vg := bd.Add("Grid")
-                vg.Add("ListBox").Name("FoldList_" idx).SelectionMode("Single").BorderThickness("0").Background("Transparent")
+                vg.Rows("*", "30")
+                vg.Add("ListBox").Name("FoldList_" idx).Grid_Row(0).SelectionMode("Single").BorderThickness("0").Background("Transparent")
                     .Margin("4,2,4,2")
                     .VirtualizingPanel_IsVirtualizing("True").VirtualizingPanel_VirtualizationMode("Recycling")
                     .VirtualizingPanel_CacheLength("2,2").VirtualizingPanel_CacheLengthUnit("Page")
                 ; 吸顶折叠头 overlay（sticky header）：滚动时当前模块头钉在列表顶部
-                vg.Add("ContentControl").Name("VLSticky_" idx).VerticalAlignment("Top").HorizontalAlignment("Stretch").Visibility("Collapsed").Margin("4,2,4,2")
+                vg.Add("ContentControl").Name("VLSticky_" idx).Grid_Row(0).VerticalAlignment("Top").HorizontalAlignment("Stretch").Visibility("Collapsed").Margin("4,2,4,2")
+                ; §11 页签模块列表底部 + 按钮：新增该页签下的模块
+                vg.Add("Button").Name("AddFoldBtn_" idx).Grid_Row(1).Content("+").Width(64).Height(24).MinHeight(24)
+                    .FontSize("14").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,2,0,2").ToolTip(GetLang("新增模块"))
             } else {
                 sv := tabItem.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
                 sv.Add("StackPanel").Name("Panel_" idx).Margin("8,6,8,10")
@@ -387,6 +449,11 @@ class MainWin {
         this.ui.OnEvent("BtnReload", "Click", MenuReload)
         this.ui.OnEvent("BtnHelp", "Click", (*) => Run(A_WorkingDir "\index.html"))
         this.ui.OnEvent("BtnSave", "Click", OnSaveSetting)
+        ; §11 页签底部 + 按钮：新增该页签下的模块（到列表末尾）
+        for _afIdx in this._tabOrder {
+            _afItem := MySoftData.TableInfo[_afIdx]
+            this.ui.OnEvent("AddFoldBtn_" _afIdx, "Click", ObjBindMethod(this, "OnTabAddFoldBtnClick", _afItem))
+        }
 
         this._vl := VirtualListHost(this.ui)
         this.LoadLeftBarValues()
@@ -471,11 +538,19 @@ class MainWin {
         this.ui.Update("Window", "WindowState", maxState == 1 ? "Normal" : "Maximized")
     }
 
+    ; §11 页签底部 + 按钮：新增模块到列表末尾
+    OnTabAddFoldBtnClick(tableItem, state, ctrl, event) {
+        OnItemAddFoldBtnClick(tableItem, tableItem.Folds.Length, "")
+    }
+
     OnTabChanged(state, ctrl, event) {
         v := this.ui.Query("TabControl>SelectedIndex")
         if (v == "")
             return
-        idx := Integer(v) + 1
+        sel := Integer(v) + 1
+        ; §10 页签位置 → TableInfo 下标（隐藏页签后位置与下标不再 1:1）
+        idx := (this.HasOwnProp("_tabOrder") && IsObject(this._tabOrder) && sel >= 1 && sel <= this._tabOrder.Length)
+            ? this._tabOrder[sel] : sel
         MainSoftData.TableIndex := idx
         if (idx >= 1 && idx <= MySoftData.TableInfo.Length)
             MainSoftData.CurTableID := MySoftData.TableInfo[idx].ID
@@ -632,10 +707,6 @@ class MainWin {
             . '<TextBlock Text="' GetLang("前台:") '" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
             . '<TextBox Name="FoldFront_' t '_' f '" Text="' this._XmlEsc(fold.FrontInfo) '" Width="120" Height="26" MinHeight="26" Padding="4,0" Margin="2,0,8,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '<Button Name="FoldFrontBtn_' t '_' f '" Content="' GetLang("编辑") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Name="FoldAddBtn_' t '_' f '" Content="' GetLang("新增宏") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Name="FoldPasteBtn_' t '_' f '" Content="' GetLang("粘贴宏") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Name="FoldAddModBtn_' t '_' f '" Content="' GetLang("新增模块") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Name="FoldDelModBtn_' t '_' f '" Content="' GetLang("删除模块") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
             . '<CheckBox Name="FoldForbid_' t '_' f '" Content="' GetLang("禁用") '" IsChecked="' (fold.ForbidState ? "True" : "False") '" VerticalAlignment="Center">'
             . '<CheckBox.Template><ControlTemplate TargetType="CheckBox">'
             . '<BulletDecorator Background="Transparent" Cursor="Hand">'
@@ -647,6 +718,8 @@ class MainWin {
             . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Border" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger>'
             . '</ControlTemplate.Triggers>'
             . '</ControlTemplate></CheckBox.Template></CheckBox>'
+            . '<Button Name="FoldForbidHK_' t '_' f '" Content="' this._XmlEsc(fold.ForbidHotkey == "" ? GetLang("开关键") : fold.ForbidHotkey) '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0" ToolTip="' GetLang("模块启用/禁用开关快捷键") '"/>'
+            . '<Button Name="FoldMenu_' t '_' f '" Content="&#x2630;" Height="26" MinHeight="26" Width="26" Padding="0" Margin="0,0,4,0" FontSize="12" ToolTip="' GetLang("模块菜单") '"/>'
             . '</StackPanel>'
         if (isMenu || isUI) {
             xaml .= '<StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,0,0">'
@@ -761,12 +834,11 @@ class MainWin {
         tableItem := MySoftData.TableInfo[t]
         for f, fold in tableItem.Folds {
             this._Bind("FoldFrontBtn_" t "_" f, "Click", OnFoldFrontInfoEdit.Bind(tableItem, f))
-            this._Bind("FoldAddBtn_" t "_" f, "Click", OnItemAddMacroBtnClick.Bind(tableItem, f))
-            this._Bind("FoldPasteBtn_" t "_" f, "Click", OnItemPasteMacroBtnClick.Bind(tableItem, f))
-            this._Bind("FoldAddModBtn_" t "_" f, "Click", OnItemAddFoldBtnClick.Bind(tableItem, f))
-            this._Bind("FoldDelModBtn_" t "_" f, "Click", OnItemDelFoldBtnClick.Bind(tableItem, f))
+            ; §11 原「新增宏/粘贴宏/新增模块/删除模块」按钮已移入 ≡ 菜单（FoldMenu）
             this._Bind("FoldBtn_" t "_" f, "Click", OnFoldBtnClick.Bind(tableItem, f))
             this._Bind("FoldTKEdit_" t "_" f, "Click", OnFlodTKEditClick.Bind(tableItem, f))
+            this._Bind("FoldForbidHK_" t "_" f, "Click", OnFoldForbidHKEditClick.Bind(tableItem, f))
+            this._Bind("FoldMenu_" t "_" f, "Click", OnFoldMenuClick.Bind(tableItem, f))
         }
     }
 
@@ -891,11 +963,9 @@ class MainWin {
             . '<TextBlock Text="' GetLang("前台:") '" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
             . '<TextBox Tag="FoldFront" Text="{Binding FoldFront}" Width="120" Height="26" MinHeight="26" Padding="4,0" Margin="2,0,8,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '<Button Tag="FoldFrontBtn" Content="' GetLang("编辑") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Tag="FoldAdd" Content="' GetLang("新增宏") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Tag="FoldPaste" Content="' GetLang("粘贴宏") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Tag="FoldAddMod" Content="' GetLang("新增模块") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
-            . '<Button Tag="FoldDelMod" Content="' GetLang("删除模块") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0"/>'
             . this._VlCheckBox("FoldForbid", "")
+            . '<Button Tag="FoldForbidHK" Content="' GetLang("开关键") '" Height="26" MinHeight="26" Padding="6,0" Margin="0,0,4,0" ToolTip="' GetLang("模块启用/禁用开关快捷键") '"/>'
+            . '<Button Tag="FoldMenu" Content="&#x2630;" Height="26" MinHeight="26" Width="26" Padding="0" Margin="0,0,4,0" FontSize="12" ToolTip="' GetLang("模块菜单") '"/>'
             . '</StackPanel>'
             . '<StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,0,0" Visibility="{Binding ShowTKRowVisibility}">'
             . '<TextBlock Text="' GetLang("菜单触发键：") '" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
@@ -991,33 +1061,55 @@ class MainWin {
             . '</StackPanel>'
     }
 
-    ; ============ 设置页 ============
+    ; ============ 设置页（§12 按「作用范围」重组：通用设置 / 宏设置 / 功能选项） ============
     BuildSettingTab() {
         p := "Panel_10"
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
 
-        Add('<TextBlock ' ns ' Text="' GetLang("数值选项") '" FontWeight="Bold" Margin="0,6,0,4"/>')
-        Add('<WrapPanel ' ns ' Orientation="Horizontal">'
-            . this._IntRow("点击时间浮动(%)：", "EditHoldFloat", MainSoftData.HoldFloat)
-            . this._IntRow("每次间隔浮动(%)：", "EditPreIntervalFloat", MainSoftData.PreIntervalFloat)
-            . this._IntRow("间隔指令浮动(%)：", "EditIntervalFloat", MainSoftData.IntervalFloat)
-            . this._IntRow("坐标X浮动(px)：", "EditCoordXFloat", MainSoftData.CoordXFloat)
-            . this._IntRow("坐标Y浮动(px)：", "EditCoordYFloat", MainSoftData.CoordYFloat)
-            . this._IntRow("多线程数(-1~10)：", "EditMutiThreadNum", MainSoftData.MutiThreadNum
-                , GetLang("设置若梦兔最大线程数量") "`n" GetLang("-1：动态多线程，线程闲置时回收（30秒），不足时创建新的线程")
-                . "`n" GetLang("0：单线程") "`n" GetLang("n：固定线程为指定n（推荐3~5）")
-                . "`n" GetLang("提示：动态多线程采用固定线程3+动态多线程池最大16"))
-            . '<StackPanel ' ns ' Orientation="Horizontal" Margin="0,4,16,4"><TextBlock Text="' GetLang("软件背景颜色：") '" Width="120" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="12"/><TextBox Name="EditSoftBGColor" Text="' MainSoftData.SoftBGColor '" Width="100" Height="26" MinHeight="26" Padding="4,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/></StackPanel>'
-            . '</WrapPanel>')
-
-        Add('<TextBlock ' ns ' Text="' GetLang("开关选项") '" FontWeight="Bold" Margin="0,10,0,4"/>')
+        ; ---- 通用设置：开机自启/管理员启动/多线程数/语言/首选编辑器/软件字体/截图方式/手柄类型/模态子窗口 ----
+        Add('<TextBlock ' ns ' Text="' GetLang("通用设置") '" FontWeight="Bold" Margin="0,6,0,4"/>')
         Add('<WrapPanel ' ns ' Orientation="Horizontal">'
             . this._CheckRow("开机自启", "ChkBootStart", MainSoftData.IsBootStart)
             . this._CheckRow("管理员启动", "ChkAdminStart", MainSoftData.IsAdminStart
                 , GetLang("开启后：软件会以管理员身份启动。部分功能（如后台键鼠、部分游戏按键模拟等）需要管理员权限才能生效。")
                 . "`n" GetLang("若同时开启开机自启，自启时也会以管理员身份启动。")
                 . "`n" GetLang("重要：请不要自行通过「右键若梦兔 → 属性 → 兼容性 → 以管理员身份运行此程序」绑定管理员权限，这样会导致「开机自启」选项失效。如需管理员权限，请使用本选项。"))
+            . this._CheckRow("模态子窗口", "ChkModalSubGui", MainSoftData.IsModalSubGui
+                , GetLang("开启后：打开指令编辑等子窗口时，会禁用主窗口，必须先关闭子窗口才能继续操作主窗口。")
+                . "`n" GetLang("关闭后：子窗口与主窗口可同时操作，方便对照主界面内容进行编辑。")
+                . "`n" GetLang("提示：默认开启，一般建议保持开启，避免误操作主窗口导致编辑内容丢失。"))
+            . this._IntRow("多线程数(-1~10)：", "EditMutiThreadNum", MainSoftData.MutiThreadNum
+                , GetLang("设置若梦兔最大线程数量") "`n" GetLang("-1：动态多线程，线程闲置时回收（30秒），不足时创建新的线程")
+                . "`n" GetLang("0：单线程") "`n" GetLang("n：固定线程为指定n（推荐3~5）")
+                . "`n" GetLang("提示：动态多线程采用固定线程3+动态多线程池最大16"))
+            . this._ComboRow("语言/Lang：", "CmbLang", MainSoftData.LangArr, MainSoftData.Lang)
+            . this._ComboRow(GetLang("首选编辑器："), "CmbPreferredEditor", GetLangArr(["逻辑树", "图形节点"]), MainSoftData.PreferredMacroEditor)
+            . this._ComboRow(GetLang("截图方式："), "CmbScreenShot", GetLangArr(["微软截图", "RMT截图", "SC截图"]), MainSoftData.ScreenShotType)
+            . this._ComboRow(GetLang("手柄映射："), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType
+                , GetLang("手柄映射说明"))
+            . this._ComboRow(GetLang("宏手柄类型："), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType
+                , GetLang("宏手柄类型说明"))
+            . this._ComboRow(GetLang("软件字体："), "CmbFont", MainSoftData.FontList, MainSoftData.FontType
+                , GetLang("软件界面使用的字体，修改后保存设置生效。"))
+            . '<StackPanel ' ns ' Orientation="Horizontal" Margin="0,4,16,4"><TextBlock Text="' GetLang("软件背景颜色：") '" Width="120" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="12"/><TextBox Name="EditSoftBGColor" Text="' MainSoftData.SoftBGColor '" Width="100" Height="26" MinHeight="26" Padding="4,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/></StackPanel>'
+            . '<StackPanel ' ns ' Orientation="Horizontal" Margin="0,4,16,4"><TextBlock Text="' GetLang("背景图：") '" Width="120" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="12"/><TextBox Name="EditBackImage" Text="' this._XmlEsc(MainSoftData.BackImagePath) '" Width="220" Height="26" MinHeight="26" Padding="4,0" VerticalContentAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/><Button Name="BtnBackImageBrowse" Content="' GetLang("浏览") '" Height="26" MinHeight="26" Padding="8,0" Margin="4,0,0,0"/><Button Name="BtnBackImageClear" Content="' GetLang("清空") '" Height="26" MinHeight="26" Padding="8,0" Margin="4,0,0,0"/></StackPanel>'
+            . '</WrapPanel>')
+
+        ; ---- 宏设置：时间/间隔/坐标浮动 + 无变量提醒（多线程数已在通用设置，去重） ----
+        Add('<TextBlock ' ns ' Text="' GetLang("宏设置") '" FontWeight="Bold" Margin="0,10,0,4"/>')
+        Add('<WrapPanel ' ns ' Orientation="Horizontal">'
+            . this._IntRow("点击时间浮动(%)：", "EditHoldFloat", MainSoftData.HoldFloat)
+            . this._IntRow("每次间隔浮动(%)：", "EditPreIntervalFloat", MainSoftData.PreIntervalFloat)
+            . this._IntRow("间隔指令浮动(%)：", "EditIntervalFloat", MainSoftData.IntervalFloat)
+            . this._IntRow("坐标X浮动(px)：", "EditCoordXFloat", MainSoftData.CoordXFloat)
+            . this._IntRow("坐标Y浮动(px)：", "EditCoordYFloat", MainSoftData.CoordYFloat)
+            . this._CheckRow("无变量提醒", "ChkNoVariable", MainSoftData.NoVariableTip)
+            . '</WrapPanel>')
+
+        ; ---- 功能选项：其余开关 + 功能按钮 ----
+        Add('<TextBlock ' ns ' Text="' GetLang("功能选项") '" FontWeight="Bold" Margin="0,10,0,4"/>')
+        Add('<WrapPanel ' ns ' Orientation="Horizontal">'
             . this._CheckRow("仅前台运行宏", "ChkForeground", MainSoftData.CheckForeground
                 , GetLang("开启后：宏运行时会检查该项配置的前台窗口；若当前前台窗口不匹配，则终止该宏。")
                 . "`n" GetLang("关闭后：不校验前台窗口，宏按原逻辑继续执行。")
@@ -1031,27 +1123,11 @@ class MainWin {
                 , GetLang("开启后：按下、开关、长按类型在按住触发键期间可以连续触发。")
                 . "`n" GetLang("关闭后：按下、开关、长按类型必须先松开触发键，才能再次触发。")
                 . "`n" GetLang("提示：松开、松止、双击类型不受此选项影响。"))
-            . this._CheckRow("无变量提醒", "ChkNoVariable", MainSoftData.NoVariableTip)
             . this._CheckRow("业务日志", "ChkBusinessLog", MainSoftData.BusinessLog
                 , GetLang("开启后：记录宏运行流水到 Log\\Business.log（宏触发/每指令/宏结束）。")
                 . "`n" GetLang("关闭后：不记录业务流水（默认）。")
                 . "`n" GetLang("提示：业务日志可能产生大量内容，建议排查问题时开启。"))
-            . this._CheckRow("模态子窗口", "ChkModalSubGui", MainSoftData.IsModalSubGui
-                , GetLang("开启后：打开指令编辑等子窗口时，会禁用主窗口，必须先关闭子窗口才能继续操作主窗口。")
-                . "`n" GetLang("关闭后：子窗口与主窗口可同时操作，方便对照主界面内容进行编辑。")
-                . "`n" GetLang("提示：默认开启，一般建议保持开启，避免误操作主窗口导致编辑内容丢失。"))
             . this._CheckRow("分割线", "ChkSplitLine", MainSoftData.ShowSplitLine)
-            . '</WrapPanel>')
-
-        Add('<TextBlock ' ns ' Text="' GetLang("下拉框选项") '" FontWeight="Bold" Margin="0,10,0,4"/>')
-        Add('<WrapPanel ' ns ' Orientation="Horizontal">'
-            . this._ComboRow("语言/Lang：", "CmbLang", MainSoftData.LangArr, MainSoftData.Lang)
-            . this._ComboRow(GetLang("首选编辑器："), "CmbPreferredEditor", GetLangArr(["逻辑树", "图形节点"]), MainSoftData.PreferredMacroEditor)
-            . this._ComboRow(GetLang("截图方式："), "CmbScreenShot", GetLangArr(["微软截图", "RMT截图", "SC截图"]), MainSoftData.ScreenShotType)
-            . this._ComboRow(GetLang("手柄映射："), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType
-                , GetLang("手柄映射说明"))
-            . this._ComboRow(GetLang("宏手柄类型："), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType
-                , GetLang("宏手柄类型说明"))
             . this._ComboRow(GetLang("按下时按下："), "CmbKeyDownDown", GetLangArr(["自动松开", "忽略重复按下", "允许重复按下"]), MainSoftData.KeyDownDownType
                 , GetLang("当宏按键已经处于按下状态，再次触发按下指令时特别处理")
                 . "`n" GetLang("自动松开：再次按下前，先松开该按键（确保指令正常执行）")
@@ -1066,7 +1142,20 @@ class MainWin {
                 . "`n" GetLang("提示：强制终止响应更快，但频繁结束、创建线程会消耗较多资源，建议保持智能终止。"))
             . '</WrapPanel>')
 
-        Add('<TextBlock ' ns ' Text="' GetLang("功能选项") '" FontWeight="Bold" Margin="0,10,0,4"/>')
+        ; ---- §10 显示页签选项：勾选控制页签显隐（隐藏仅显示效果，不影响触发；保存后重启生效） ----
+        Add('<TextBlock ' ns ' Text="' GetLang("显示页签") '" FontWeight="Bold" Margin="0,10,0,4"/>')
+        Add('<WrapPanel ' ns ' Orientation="Horizontal">'
+            . this._CheckRow(GetLang("按键宏"), "TabVisible_Normal", this._TabVisibleVal("Normal"))
+            . this._CheckRow(GetLang("字串宏"), "TabVisible_String", this._TabVisibleVal("String"))
+            . this._CheckRow(GetLang("菜单宏"), "TabVisible_Menu", this._TabVisibleVal("Menu"))
+            . this._CheckRow(GetLang("界面宏"), "TabVisible_UI", this._TabVisibleVal("UI"))
+            . this._CheckRow(GetLang("语音宏"), "TabVisible_Voice", this._TabVisibleVal("Voice"))
+            . this._CheckRow(GetLang("定时宏"), "TabVisible_Timing", this._TabVisibleVal("Timing"))
+            . this._CheckRow(GetLang("宏"), "TabVisible_SubMacro", this._TabVisibleVal("SubMacro"))
+            . this._CheckRow(GetLang("按键替换"), "TabVisible_Replace", this._TabVisibleVal("Replace"))
+            . '</WrapPanel>')
+        Add('<TextBlock ' ns ' Text="' GetLang("隐藏的页签仅不显示，不影响该页签下宏的正常触发（保存后重启生效）。") '" Foreground="{DynamicResource TextSub}" FontSize="11" Margin="0,2,0,4"/>')
+
         Add('<WrapPanel ' ns ' Orientation="Horizontal">'
             . '<Button Name="BtnTheme" Content="' GetLang("主题") '" Height="28" MinHeight="28" Padding="14,0" Margin="0,4,12,4"/>'
             . '<Button Name="BtnHotkey" Content="' GetLang("快捷键") '" Height="28" MinHeight="28" Padding="14,0" Margin="0,4,12,4"/>'
@@ -1088,6 +1177,10 @@ class MainWin {
         this._Bind("EditCoordYFloat", "LostFocus", ObjBindMethod(this, "OnIntEdit", "CoordYFloat"))
         this._Bind("EditMutiThreadNum", "LostFocus", ObjBindMethod(this, "OnIntEdit", "MutiThreadNum"))
         this._Bind("EditSoftBGColor", "LostFocus", ObjBindMethod(this, "OnTextEdit", "SoftBGColor"))
+        ; §11 背景图：浏览/清空（写入 MainSoftData.BackImagePath，保存后重启生效）
+        this._Bind("BtnBackImageBrowse", "Click", ObjBindMethod(this, "OnBackImageBrowse"))
+        this._Bind("BtnBackImageClear", "Click", ObjBindMethod(this, "OnBackImageClear"))
+        this._Bind("CmbFont", "SelectionChanged", ObjBindMethod(this, "OnComboText", "FontType"))
         this._Bind("ChkBootStart", "Click", OnBootStartChanged)
         this._Bind("ChkAdminStart", "Click", OnAdminStartChanged)
         this._Bind("ChkForeground", "Click", ObjBindMethod(this, "OnCheckEdit", "CheckForeground"))
@@ -1105,6 +1198,9 @@ class MainWin {
         this._Bind("CmbKeyDownDown", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "KeyDownDownType"))
         this._Bind("CmbRemarkAuto", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "RemarkAutoType"))
         this._Bind("CmbMacroStop", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "MacroStopType"))
+        ; §10 显示页签勾选
+        for sym in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace"]
+            this._Bind("TabVisible_" sym, "Click", ObjBindMethod(this, "OnTabVisibleCheck", sym))
         this._Bind("BtnTheme", "Click", OnClickThemeSettingBtn)
         this._Bind("BtnHotkey", "Click", OnClickHotkeySettingBtn)
         this._Bind("BtnToolRecord", "Click", OnClickToolRecordSettingBtn)
@@ -1130,8 +1226,33 @@ class MainWin {
         MainSoftData.%fieldName% := this.ui.Query(ctrl)
     }
 
+    ; §11 背景图：浏览选择图片文件（写入配置，保存后重启生效）
+    OnBackImageBrowse(state, ctrl, event) {
+        path := FileSelect(1, , GetLang("选择背景图片"), "图片 (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp")
+        if (path == "")
+            return
+        MainSoftData.BackImagePath := path
+        this.ui.Update("EditBackImage", "Text", path)
+    }
+
+    OnBackImageClear(state, ctrl, event) {
+        MainSoftData.BackImagePath := ""
+        this.ui.Update("EditBackImage", "Text", "")
+    }
+
     OnCheckEdit(fieldName, state, ctrl, event) {
         MainSoftData.%fieldName% := this.ui.Query(ctrl) == "True"
+    }
+
+    ; §10 显示页签勾选：写入 TabVisibleMap（保存后重启生效）
+    OnTabVisibleCheck(symbol, state, ctrl, event) {
+        if (!MainSoftData.TabVisibleMap.Has(symbol))
+            return
+        MainSoftData.TabVisibleMap[symbol] := this.ui.Query(ctrl) == "True"
+    }
+
+    _TabVisibleVal(symbol) {
+        return (MainSoftData.TabVisibleMap.Has(symbol)) ? MainSoftData.TabVisibleMap[symbol] : true
     }
 
     ; 业务日志开关：写 MainSoftData + 同步 LogUtil global + 持久化

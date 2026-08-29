@@ -252,6 +252,8 @@ class MenuMacroSettingGui {
             finalPath := this.CopyIcoToImagesFolder(this.OriginalIcoPath)
         tableItem.Items[idx].IcoPath := finalPath
         this.Close()
+        ; §18 菜单宏图标即时持久化 + 广播（菜单渲染订阅者重建）
+        HotReloadPublish(tableItem.Index, idx)
     }
 
     CopyIcoToImagesFolder(sourcePath) {

@@ -252,6 +252,8 @@ class UIMacroSettingGui {
             finalPath := this.CopyIconToImagesFolder(this.OriginalIconPath)
         tableItem.Items[idx].IcoPath := finalPath
         this.Close()
+        ; §18 UI宏图标即时持久化 + 广播（面板渲染订阅者重建）
+        HotReloadPublish(tableItem.Index, idx)
     }
 
     CopyIconToImagesFolder(sourcePath) {

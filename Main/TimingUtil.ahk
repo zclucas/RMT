@@ -8,6 +8,26 @@ class TimingScheduler {
         this.timerFunc := ObjBindMethod(this, "OnTimer")
         this.endCheckTimerFunc := ObjBindMethod(this, "OnEndCheck")
         this.running := false
+        ; §17 热重载订阅：定时表配置变更（宏/模块禁用、定时参数、宏内容）→ 空闲时重建调度堆，
+        ; 使禁用/启用/改定时保存选「否」后立即生效（不再只靠重启时 Rebuild）
+        global MyHotReloadBus
+        if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
+            MyHotReloadBus.Subscribe(ObjBindMethod(this, "OnConfigChanged"), (t) => this._IsTimingTable(t))
+    }
+
+    ; 订阅过滤器：仅关心定时表（t 为 TableInfo 索引；Publish(0,0) 整表变更由总线直通 handler）
+    _IsTimingTable(t) {
+        global MySoftData
+        if (!IsObject(MySoftData) || !MySoftData.HasProp("TableInfo"))
+            return false
+        if (t < 1 || t > MySoftData.TableInfo.Length)
+            return false
+        return MySoftData.TableInfo[t].Symbol == "Timing"
+    }
+
+    ; §17 热重载回调：重建调度堆（禁用条目移除、启用条目加入、定时参数按新配置重排）
+    OnConfigChanged(tableIndex, itemIndex) {
+        this.Rebuild()
     }
 
     ; 表 ID 可能为 ""（include 阶段 TableInfo 未填充）；启动时解析一次
@@ -161,6 +181,11 @@ class TimingScheduler {
             index := item.index
             itemObj := tableItem.Items[index]
             if (!itemObj)
+                continue
+
+            ; §17 触发前实时复查：热重载/编辑后残留的排程条目（条目或所属模块被禁用、宏内容被清空）
+            ; 不再触发也不再续排，自然从堆中排空（配合总线订阅 Rebuild 双保险）
+            if (!TimingCheckItemIfValid(tableItem, index))
                 continue
 
             Data := GetMacroCMDData(itemObj.TimingSerial)

@@ -93,8 +93,10 @@ class MacroGraphConnectionsMixin {
                 s .= "  x" d.count
             return s
         }
-        if (d.type == GetLang("移动"))
+        if (IsMoveCmd(d.type))
             return "(" d.posx ", " d.posy ")  " GetLang("移动速度：") d.speed
+        if (IsDeltaMoveCmd(d.type))
+            return GetLang("增量移动") "  (" d.posx ", " d.posy ")"
         if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro")) {
             typeNames := [GetLang("屏幕图片"), GetLang("屏幕颜色"), GetLang("屏幕文本"), GetLang("窗口图片"), GetLang("窗口颜色"), GetLang("窗口文本")]
             st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 6) ? d.searchType : 1

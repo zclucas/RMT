@@ -50,15 +50,15 @@ class MacroGraphGui {
         this.startSerial := ""        ; 本图开始节点(MacroGraphStartNode)的 SerialStr；保存后回写 MacroArr 即此值
         this._sessionId := 0          ; 每次打开自增；用于忽略旧窗口迟到的异步关闭事件，避免覆盖写空
 
-        ; 若梦兔全部指令
-        this.CmdList := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "移动", "移动Pro", "输入", "输出", "循环", "宏操作",
+        ; 若梦兔全部指令（§20 改名：移动→鼠标移动、移动Pro→鼠标移动Pro、新增 增量移动）
+        this.CmdList := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
             "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标",
-            "后台按键", "窗口管理", "按键检测", "注释", "抓图"])
+            "后台按键", "窗口管理", "按键检测", "等待", "注释", "抓图"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
         this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
-            "Images\Soft\Move.png", "Images\Soft\MovePro.png",
+            "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\Move.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png",
             "Images\Soft\Loop.png", "Images\Soft\Sub.png",
             "Images\Soft\Var.png", "Images\Soft\Extract.png",
@@ -68,6 +68,7 @@ class MacroGraphGui {
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\Key.png",
             "Images\Soft\WindowManage.png", "Images\Soft\KeyCheck.png",
+            "Images\Soft\Control.png",
             "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png"]
 
         ; 复用现有子编辑器（双击节点时打开）
@@ -77,6 +78,7 @@ class MacroGraphGui {
         this.SearchGui := SearchGui()
         this.SearchProGui := SearchProGui()
         this.MMProGui := MMProGui()
+        this.DeltaMoveGui := DeltaMoveGui()
         this.InputGui := InputGui()
         this.OutputGui := OutputGui()
         this.SubMacroGui := SubMacroGui()
@@ -92,6 +94,7 @@ class MacroGraphGui {
         this.BGKeyGui := BGKeyGui()
         this.WindowManageGui := WindowManageGui()
         this.KeyCheckGui := KeyCheckGui()
+        this.WaitGui := WaitGui()
         this.ScreenShotGui := ScreenShotGui()
         this.CommentGui := CommentGui()
         this.LoopGui := LoopGui()
@@ -471,22 +474,30 @@ class MacroGraphGui {
             SaveMacroCMDData(data)
             return this._MakeNode(CorrectRemark(serial, "a_" GetLang("点击")))
         }
-        if (cmdName == GetLang("移动")) {
+        if (IsMoveCmd(cmdName)) {
             ; 阶段5：配置化
-            serial := GetCMDSerialStr("移动")
+            serial := GetCMDSerialStr(GetLangKey(cmdName))
             data := MoveDataConfig()
             data.SerialStr := serial
             data.Speed := 90
             SaveMacroCMDData(data)
             return this._MakeNode(CorrectRemark(serial, "0 0"))
         }
-        if (cmdName == GetLang("移动Pro")) {
+        if (IsMoveProCmd(cmdName)) {
             ; 移动Pro 走 INI 持久化（参数存 MMProFile.ini，CurCMD 仅为序列码引用，与执行引擎一致）
-            serial := GetCMDSerialStr("移动Pro")
+            serial := GetCMDSerialStr(GetLangKey(cmdName))
             data := MMProData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
             return this._MakeNode(serial)
+        }
+        if (IsDeltaMoveCmd(cmdName)) {
+            ; §20 增量移动：配置化（参数存 DeltaMoveFile.ini）
+            serial := GetCMDSerialStr(GetLangKey(cmdName))
+            data := DeltaMoveData()
+            data.SerialStr := serial
+            SaveMacroCMDData(data)
+            return this._MakeNode(CorrectRemark(serial, "0 0"))
         }
         if (cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro")) {
             ; 搜索/搜索Pro 走 INI 持久化（参数存 SearchFile.ini，CurCMD 仅为序列码引用，与执行引擎一致）
@@ -648,9 +659,11 @@ class MacroGraphGui {
             editor := this.IntervalGui
         else if (d.type == GetLang("按键"))
             editor := this.KeyGui
-        else if (d.type == GetLang("移动"))
+        else if (IsMoveCmd(d.type))
             editor := this.MouseGui
-        else if (d.type == GetLang("移动Pro"))
+        else if (IsDeltaMoveCmd(d.type))
+            editor := this.DeltaMoveGui
+        else if (IsMoveProCmd(d.type))
             editor := this.MMProGui
         else if (d.type == GetLang("搜索Pro"))
             editor := this.SearchProGui
@@ -733,14 +746,18 @@ class MacroGraphGui {
                 this.ui.Update("Inter_" id, "Text", d.inter)
                 this._RefreshKeyVisibility(id)
             }
-            else if (d.type == GetLang("移动")) {
+            else if (IsMoveCmd(d.type)) {
                 this.ui.Update("PosX_" id, "Text", d.posx)
                 this.ui.Update("PosY_" id, "Text", d.posy)
                 this.ui.Update("Speed_" id, "Text", d.speed)
                 this.ui.Update("ModeCmb_" id, "SelectedIndex", this._MoveModeIndex(d.mode))
                 this._RefreshMoveVisibility(id)
             }
-            else if (d.type == GetLang("移动Pro")) {
+            else if (IsDeltaMoveCmd(d.type)) {
+                this.ui.Update("DPosX_" id, "Text", d.posx)
+                this.ui.Update("DPosY_" id, "Text", d.posy)
+            }
+            else if (IsMoveProCmd(d.type)) {
                 data := this._MMProData(id)
                 if (data != "") {
                     this.ui.Update("MPPosX_" id, "Text", GetLang(data.PosVarX))

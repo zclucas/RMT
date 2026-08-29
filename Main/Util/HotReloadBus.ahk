@@ -61,7 +61,8 @@ class HotReloadBus {
                 ; 注意：sub.Filter/sub.Handler 是普通可调用对象存为属性，
                 ; 必须用 .Call() 显式调用——用 obj.prop(args) 方法语法会额外传入 this 实参，
                 ; 导致 "Too many parameters passed to function"。
-                if (IsObject(sub.Filter) && !sub.Filter.Call(tableIndex))
+                ; tableIndex==0 表示「全部表」：跳过 filter（订阅者全收，由 handler 自行决定）
+                if (tableIndex != 0 && IsObject(sub.Filter) && !sub.Filter.Call(tableIndex))
                     continue
                 for itemIndex in items {
                     try

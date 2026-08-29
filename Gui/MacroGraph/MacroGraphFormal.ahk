@@ -48,7 +48,8 @@ class MacroGraphFormalMixin {
             GetLang("注释"), this.CommentGui,
             GetLang("循环"), this.LoopGui,
             GetLang("如果"), this.CompareGui,
-            GetLang("如果Pro"), this.CompareProGui
+            GetLang("如果Pro"), this.CompareProGui,
+            GetLang("等待"), this.WaitGui
         )
     }
 

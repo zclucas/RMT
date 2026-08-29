@@ -221,7 +221,7 @@ class MacroTreeAdapter {
             if (this._IsVisible(node)) {
                 idx := this._FlatIndexOf(id)
                 if (idx >= 0)
-                    this.ui.Update(this.treeName, "InsertXamlItem", idx "|" this._BuildCardXml(node, this._Depth(node)))
+                    this.ui.Update(this.treeName, "InsertXamlItem", idx "|" this._BuildCardXml(node, this._Depth(node), idx))
                 else
                     this.Render()
             }
@@ -341,14 +341,14 @@ class MacroTreeAdapter {
 
     ; 递归收集可见节点卡片（塌陷分支不进入）
     _AppendVisibleCards(node, depth, &cards) {
-        cards.Push(this._BuildCardXml(node, depth))
+        cards.Push(this._BuildCardXml(node, depth, cards.Length))
         if (!node.expanded)
             return
         for child in node.children
             this._AppendVisibleCards(child, depth + 1, &cards)
     }
 
-    _BuildCardXml(node, depth) {
+    _BuildCardXml(node, depth, flatIdx := 0) {
         text := this._EscapeXml(node.text)
         hasChild := node.children.Length > 0
         left := depth * 16
@@ -357,9 +357,13 @@ class MacroTreeAdapter {
         arrow := '<Border Name="Arrow_' node.id '" Width="14" Height="14" Margin="0,0,2,0" Background="Transparent">'
             . '<TextBlock Name="Arrow_' node.id '_Txt" Text="' glyph '" FontSize="8" Foreground="{DynamicResource TextSub}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>'
         ; 卡片：圆角 + 描边 + 底，左缩进=深度；缩进放内层 Border 的 Margin（ListBoxItem 不设 Margin，保证整行命中无死区）
+        ; §14.1 交替背景：按可见扁平索引奇偶在两色间交替，便于区分相邻节点（ListAltBg 为主题随动斑马纹）
+        ; AHK v2 无 mod 运算符（v1 才有），必须用 Mod() 函数；
+        ; 裸写 `flatIdx mod 2` 会被解析成拼接，mod 求值为 Mod 函数对象 → 报 "Expected a String but got a Func"
+        cardBg := (Mod(flatIdx, 2) == 0) ? "{DynamicResource DropdownBg}" : "{DynamicResource ListAltBg}"
         xml := '<ListBoxItem xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
             . ' Tag="' node.id '" Background="Transparent" BorderThickness="0" Padding="0" HorizontalContentAlignment="Stretch">'
-            . '<Border CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource InputStroke}" Background="{DynamicResource DropdownBg}" Margin="' left ',3,8,3" Padding="6,5,8,5">'
+            . '<Border CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource InputStroke}" Background="' cardBg '" Margin="' left ',3,8,3" Padding="6,5,8,5">'
             . '<StackPanel Orientation="Horizontal" VerticalAlignment="Center">'
         xml .= arrow
         ; 勾选标记：选中=蓝底白✓，未选中=灰色空心框。两种图标同尺寸始终占位，避免行内容移位

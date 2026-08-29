@@ -738,6 +738,8 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
     RebuildTableLocator()
 
     MyMainWin.RenderTab(tableItem)
+    ; §17 热重载：粘贴宏插入新条目 → 重绑触发键（防索引错位）+ 语音/定时订阅者重建
+    HotReloadPublish(tableItem.Index, 0)
 
     MsgBox(GetLang("已粘贴宏"))
 }

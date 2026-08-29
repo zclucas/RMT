@@ -42,11 +42,14 @@ TomlUtil_Read(filePath := "") {
 }
 
 ; 失效缓存（写文件后必须调用）
+; 注意：AHK v2 的 Map.Delete 对不存在的键抛 "Item has no value"（不是返回 0）。
+; 必须 Has 守卫：Worker 启动后 TomlUtil_Write 的 finally 已失效缓存，CF 重载再次 Invalidate 时键已不存在。
 TomlUtil_Invalidate(filePath := "") {
     global TomlUtil_Cache
     if (filePath == "")
         filePath := TomlUtil_Path()
-    TomlUtil_Cache.Delete(filePath)
+    if (TomlUtil_Cache.Has(filePath))
+        TomlUtil_Cache.Delete(filePath)
 }
 
 ; 现有 root（键剥离引号，值保留解析后的 HashMap/ArrayList），供整文件写回；文件不存在返回空 Map

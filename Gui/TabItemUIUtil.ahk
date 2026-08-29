@@ -1,6 +1,27 @@
 #Requires AutoHotkey v2.0
 #Include ..\Main\Util\JsonUtil.ahk
 
+; §17/§18 热重载广播封装：调用方须已更新内存模型；总线空闲时统一派发各订阅者
+; （触发键重绑 / Worker CF / 语音重建 / 定时重建 / UI宏刷新），与折叠头 FoldTK 同生效链路
+; §18 宏表即时持久化：宏表（非静态表）编辑 → 立即落盘（SaveTableItemInfo 整文件读-改-原子写），
+; 不再依赖「应用并保存」；「应用并保存」只处理全局非热重载数据
+HotReloadPublish(tableIndex, itemIndex := 0) {
+    global MyHotReloadBus, MySoftData
+    if (tableIndex >= 1 && IsObject(MySoftData) && MySoftData.HasProp("TableInfo")
+        && tableIndex <= MySoftData.TableInfo.Length) {
+        tableItem := MySoftData.TableInfo[tableIndex]
+        if (IsObject(tableItem) && !IsStaticTable(tableItem)) {
+            try {
+                SaveTableItemInfo(tableItem)
+            } catch as e {
+                RMTLogSys(RMT_LV_ERROR, "HotReloadPublish", Format("宏表落盘失败: tab={1} err={2}", tableIndex, e.Message))
+            }
+        }
+    }
+    if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
+        MyHotReloadBus.Publish(tableIndex, itemIndex)
+}
+
 ; 宏列表数据操作层（XAML 版）
 ; 渲染由 MainWin.RenderTab 完成；本文件只做数据变更 + 触发重渲染。
 ; 编辑值回读统一走 MyMainWin.ReadTabValues（对应原生 RecycleTabItem）。
@@ -37,6 +58,8 @@ OnItemAddMacroBtnClick(tableItem, foldIndex, *) {
     tableItem.RebuildIndex()
     RebuildTableLocator()
     MyMainWin.RenderTab(tableItem)
+    ; §17 热重载：新增宏 live 广播（触发键重绑/语音/定时订阅者空闲重建）
+    HotReloadPublish(tableItem.Index, 0)
 }
 
 ;删除宏配置
@@ -48,6 +71,8 @@ OnItemDelMacroBtnClick(tableItem, DelIndex, *) {
     MyMainWin.ReadTabValues(tableItem)
     OnItemDelMacro(tableItem, DelIndex)
     MyMainWin.RenderTab(tableItem)
+    ; §17 热重载：删除宏 live 广播 → 立即解除旧热键（防索引错位误触发错误宏）
+    HotReloadPublish(tableItem.Index, 0)
 }
 
 OnItemDelMacro(tableItem, itemIndex) {
@@ -73,6 +98,8 @@ OnItemAddFoldBtnClick(tableItem, foldIndex, *) {
 
     tableItem.RebuildIndex()
     MyMainWin.RenderTab(tableItem)
+    ; §17 热重载：新增模块 live 广播（模块开关热键 BindFoldSwitchHotkey 即时重绑）
+    HotReloadPublish(tableItem.Index, 0)
 }
 
 ; 菜单宏/界面宏新增模块时批量预置配置项（菜单默认 4、界面默认 3）
@@ -117,6 +144,8 @@ OnItemDelFoldBtnClick(tableItem, foldIndex, *) {
         RebuildTableLocator()
     }
     MyMainWin.RenderTab(tableItem)
+    ; §17 热重载：删除模块 live 广播 → 立即解除旧模块开关热键（防 foldIndex 错位切换错误模块）
+    HotReloadPublish(tableItem.Index, 0)
 }
 
 ;编辑字串宏触发键
@@ -128,6 +157,8 @@ OnItemEditTriggerStr(tableItem, index, *) {
     SureAction(sureTriggerKey) {
         item.TK := sureTriggerKey
         MyMainWin.RenderTab(tableItem)
+        ; §17 热重载：字串宏触发键 live 广播 → 立即重绑热键/热串（与折叠头 FoldTK 同链路，不必等保存）
+        HotReloadPublish(tableItem.Index, index)
     }
 
     MyTriggerStrGui.SaveBtnAction := OnSaveSetting
@@ -157,6 +188,8 @@ OnItemCustomEditTriggerStrInput(tableItem, index, *) {
         return
     item.TK := CustomTK.Value
     MyMainWin.RenderTab(tableItem)
+    ; §17 热重载：自定义触发串 live 广播 → 立即重绑热键/热串
+    HotReloadPublish(tableItem.Index, index)
 }
 
 ; 语音触发设置（语音关键词配置窗口入口）
@@ -175,6 +208,8 @@ OnItemEditTriggerKey(tableItem, index, *) {
         item.HoldTime := timeValue
         item.UnorderedTrigger := unorderedTrigger
         MyMainWin.RenderTab(tableItem)
+        ; §17 热重载：按键宏触发键 live 广播 → 立即重绑热键（含顺序/反向组合键）
+        HotReloadPublish(tableItem.Index, index)
     }
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
@@ -239,6 +274,8 @@ OnItemEditMacro(tableItem, index, *) {
 
     SureAction(sureMacro) {
         item.Macro := sureMacro
+        ; §18 宏内容即时持久化 + Worker 热重载：确定即写盘 + 广播 → CF → Worker 重载，不必等保存选「否」
+        HotReloadPublish(tableItem.Index, 0)
     }
 
     useGraph := false
@@ -259,6 +296,8 @@ OnItemEditReplaceKey(tableItem, index, *) {
 
     SureAction(sureMacro) {
         item.Macro := sureMacro
+        ; §18 替换宏内容即时持久化 + Worker 热重载
+        HotReloadPublish(tableItem.Index, 0)
     }
 
     MyReplaceKeyGui.SureBtnAction := SureAction
@@ -278,6 +317,8 @@ OnItemMoveUp(tableItem, index, *) {
     ; 增量：只刷新被交换两行，不整列表重建（滚动位置不复位）
     MyMainWin.RefreshItemRow(tableItem.Index, index - 1)
     MyMainWin.RefreshItemRow(tableItem.Index, index)
+    ; §17 热重载：上移改变索引 → 重绑触发键（防热键闭包数字索引错位）
+    HotReloadPublish(tableItem.Index, 0)
 }
 
 OnItemMoveDown(tableItem, index, *) {
@@ -293,6 +334,8 @@ OnItemMoveDown(tableItem, index, *) {
     ; 增量：只刷新被交换两行，不整列表重建（滚动位置不复位）
     MyMainWin.RefreshItemRow(tableItem.Index, index + 1)
     MyMainWin.RefreshItemRow(tableItem.Index, index)
+    ; §17 热重载：下移改变索引 → 重绑触发键（防热键闭包数字索引错位）
+    HotReloadPublish(tableItem.Index, 0)
 }
 
 OnFoldFrontInfoEdit(tableItem, foldIndex, *) {
@@ -309,6 +352,8 @@ OnFoldFrontInfoEdit(tableItem, foldIndex, *) {
         fold.FrontInfo := newInfo
         if (oldInfo != newInfo && IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
             MyUIMacroGui.DestroyFoldPanels(fold.ID)
+        ; §17 热重载：窗口条件（FrontInfo）live 广播 → 重绑热键（HotIfWinActive 新条件即时生效）
+        HotReloadPublish(tableItem.Index, 0)
     }
     MyFrontInfoGui.SureAction := SureAction
     MyFrontInfoGui.ShowGui(frontCtrl, true)
@@ -318,6 +363,12 @@ OnFoldBtnClick(tableItem, foldIndex, *) {
     fold := tableItem.Folds[foldIndex]
     MyMainWin.ReadTabValues(tableItem)
     fold.FoldState := !fold.FoldState
+    ; §18 折叠状态即时持久化（UI 状态，不影响触发/执行，只写盘不广播）
+    if (!IsStaticTable(tableItem)) {
+        try SaveTableItemInfo(tableItem)
+        catch as e
+            RMTLogSys(RMT_LV_ERROR, "OnFoldBtnClick", Format("折叠状态落盘失败: {1}", e.Message))
+    }
     t := tableItem.Index
     if (MyMainWin._useVirtual.Has(t)) {
         ; Epic5：折叠 = 集合移除行组 + 视口锚定（1 IPC），不重建整表
@@ -345,12 +396,42 @@ OnFlodTKEditClick(tableItem, foldIndex, *) {
         fold.HoldTime := timeValue
         fold.UnorderedTrigger := unorderedTrigger
         MyMainWin.RenderTab(tableItem)
+        ; §18 折叠头触发键即时持久化 + 重绑（与 _ApplyChange FoldTK 同链路）
+        HotReloadPublish(tableItem.Index, 0)
     }
 
     MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
     MyTriggerKeyGui.SureBtnAction := SureAction
     MyTriggerKeyGui.UnorderedTrigger := fold.UnorderedTrigger
     MyTriggerKeyGui.ShowGui(fold.TK, fold.HoldTime, false)
+}
+
+; §2 模块启用/禁用开关快捷键：弹触发键编辑窗，仅取按键值（切换模块启用状态用，无需长按/顺序语义）
+OnFoldForbidHKEditClick(tableItem, foldIndex, *) {
+    fold := tableItem.Folds[foldIndex]
+    MyMainWin.ReadTabValues(tableItem)
+    SureAction(sureTriggerKey, timeValue, unorderedTrigger) {
+        fold.ForbidHotkey := sureTriggerKey
+        MyMainWin.RenderTab(tableItem)
+        ; §18 模块开关热键即时持久化 + 重绑（BindFoldSwitchHotkey 生效）
+        HotReloadPublish(tableItem.Index, 0)
+    }
+
+    MyTriggerKeyGui.SaveBtnAction := OnSaveSetting
+    MyTriggerKeyGui.SureBtnAction := SureAction
+    MyTriggerKeyGui.UnorderedTrigger := false
+    MyTriggerKeyGui.ShowGui(fold.ForbidHotkey, 500, false)
+}
+
+; §11 模块三横杠菜单（行内「新增宏/粘贴宏/新增模块/删除模块」按钮移入此菜单）
+OnFoldMenuClick(tableItem, foldIndex, *) {
+    MyMainWin.ReadTabValues(tableItem)
+    m := Menu()
+    m.Add(GetLang("新增宏"), (*) => OnItemAddMacroBtnClick(tableItem, foldIndex))
+    m.Add(GetLang("粘贴宏"), (*) => OnItemPasteMacroBtnClick(tableItem, foldIndex))
+    m.Add(GetLang("新增模块"), (*) => OnItemAddFoldBtnClick(tableItem, foldIndex))
+    m.Add(GetLang("删除模块"), (*) => OnItemDelFoldBtnClick(tableItem, foldIndex))
+    m.Show()
 }
 
 ; 折叠框内条目数（用于菜单宏 8 上限校验）

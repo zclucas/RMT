@@ -36,6 +36,10 @@ class RMTCMDGui {
             GetLang("宏控制"), [
                 GetLang("显示菜单"),
                 GetLang("关闭菜单"),
+                GetLang("打开界面窗口"),
+                GetLang("关闭界面窗口"),
+                GetLang("禁用模块"),
+                GetLang("取消禁用模块"),
                 GetLang("暂停所有宏"),
                 GetLang("恢复所有宏"),
                 GetLang("终止所有宏")
@@ -122,7 +126,7 @@ class RMTCMDGui {
         ; ---- Tab1 常规 ----
         ti1 := tc.Add("TabItem").Header(GetLang("常规"))
         body := ti1.Add("Grid").Margin("15,14,15,14")
-        body.Rows("40", "40", "40", "40", "*")
+        body.Rows("40", "40", "40", "40", "40", "*")
         body.Cols("80", "*")
 
         ; 备注（放选项卡第一个位置）
@@ -147,7 +151,16 @@ class RMTCMDGui {
         menuRow.Add("ComboBox").Name("MenuDLCombo").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; §2 禁用模块/取消禁用模块：目标页签 + 目标模块 两个下拉（指令选中时显示）
+        foldParamRow := body.Add("StackPanel").Name("FoldParamRow").Grid_Row(4).Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Center")
+        foldParamRow.Add("TextBlock").Text(GetLang("页签：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        foldParamRow.Add("ComboBox").Name("TabCombo").Width(110).Height(26).MinHeight(26).Margin("4,0,0,0")
+            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        foldParamRow.Add("TextBlock").Text(GetLang("模块：")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        foldParamRow.Add("ComboBox").Name("FoldCombo").Width(150).Height(26).MinHeight(26).Margin("4,0,0,0")
+            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+
+        btnRow := body.Add("StackPanel").Grid_Row(5).Grid_ColumnSpan(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Height(28).MinHeight(28).Padding("14,0")
 
         ; ---- Tab2 错误处理 ----
@@ -192,6 +205,7 @@ class RMTCMDGui {
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("CategoryCombo", "SelectionChanged", ObjBindMethod(this, "OnTypeChane"))
         this.ui.OnEvent("CmdTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnCmdChange"))
+        this.ui.OnEvent("TabCombo", "SelectionChanged", ObjBindMethod(this, "OnTabComboChange"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
         this.ui.OnEvent("EHModeCombo", "SelectionChanged", ObjBindMethod(this, "OnEHModeChange"))
         this.ui.OnEvent("BtnOk2", "Click", ObjBindMethod(this, "OnSureBtnClick"))
@@ -313,6 +327,33 @@ class RMTCMDGui {
         for it in DropDownArr
             this.ui.Update("MenuDLCombo", "AddItem", it)
         this.ui.Update("MenuDLCombo", "SelectedIndex", String(menuDLIndex - 1))
+
+        ; §2 禁用模块/取消禁用模块：页签+模块 回显
+        this._tabSymbols := this._FoldTabSymbols()
+        tabItems := []
+        for symbol in this._tabSymbols {
+            t := GetTableBySymbol(symbol)
+            tabItems.Push(t ? GetLang(t.Name) : symbol)
+        }
+        this._SetDDL("TabCombo", tabItems, tabItems.Length >= 1 ? tabItems[1] : "")
+        selSymbol := (this.Data.HasOwnProp("TableSymbol") && this.Data.TableSymbol != "") ? this.Data.TableSymbol : (this._tabSymbols.Length >= 1 ? this._tabSymbols[1] : "")
+        selTable := GetTableBySymbol(selSymbol)
+        this._SetDDL("TabCombo", tabItems, selTable ? GetLang(selTable.Name) : (tabItems.Length >= 1 ? tabItems[1] : ""))
+        foldItems := []
+        if (selTable) {
+            for f, fold in selTable.Folds
+                foldItems.Push(f ". " fold.Remark)
+        }
+        foldSelText := ""
+        if (this.Data.HasOwnProp("FoldID") && this.Data.FoldID != "" && selTable) {
+            for f, fd in selTable.Folds {
+                if (fd.ID == this.Data.FoldID) {
+                    foldSelText := f ". " fd.Remark
+                    break
+                }
+            }
+        }
+        this._SetDDL("FoldCombo", foldItems, foldSelText != "" ? foldSelText : (foldItems.Length >= 1 ? foldItems[1] : ""))
         this._InitEH()
     }
 
@@ -366,6 +407,40 @@ class RMTCMDGui {
         CmdStr := this.ui.Query("CmdTypeCombo")
         IsShowMenuDL := CmdStr == GetLang("显示菜单")
         this.ui.Update("MenuRow", "Visibility", IsShowMenuDL ? "Visible" : "Collapsed")
+        ; §2 禁用模块/取消禁用模块：显示目标页签+模块参数行
+        IsShowFoldParam := CmdStr == GetLang("禁用模块") || CmdStr == GetLang("取消禁用模块")
+        this.ui.Update("FoldParamRow", "Visibility", IsShowFoldParam ? "Visible" : "Collapsed")
+    }
+
+    ; §2 页签下拉切换：刷新模块下拉为该页签下的模块列表
+    OnTabComboChange(state := "", ctrl := "", event := "") {
+        if (!IsObject(this.ui) || !IsObject(this._tabSymbols))
+            return
+        tabIdx := Integer(this.ui.Query("TabCombo>SelectedIndex")) + 1
+        if (tabIdx < 1 || tabIdx > this._tabSymbols.Length)
+            return
+        tableItem := GetTableBySymbol(this._tabSymbols[tabIdx])
+        items := []
+        if (tableItem) {
+            for f, fold in tableItem.Folds {
+                items.Push(f ". " fold.Remark)
+            }
+        }
+        this._SetDDL("FoldCombo", items, items.Length >= 1 ? items[1] : "")
+    }
+
+    ; 列出可选「禁用模块」的页签（宏相关表，排除非配置表）
+    _FoldTabSymbols() {
+        global MySoftData
+        symbols := []
+        for tableItem in MySoftData.TableInfo {
+            switch tableItem.Symbol {
+                case "Tool", "Setting", "Help", "Reward", "Thank":
+                    continue
+            }
+            symbols.Push(tableItem.Symbol)
+        }
+        return symbols
     }
 
     OnSureBtnClick(state, ctrl, event) {
@@ -385,6 +460,16 @@ class RMTCMDGui {
         this.Data.OperateType := 0   ; 旧字段占位（保留兼容）
         this.Data.MenuIndex := this.ui.Query("CmdTypeCombo") == GetLang("显示菜单")
             ? (Integer(this.ui.Query("MenuDLCombo>SelectedIndex")) + 1) : 1
+        ; §2 禁用模块/取消禁用模块：保存目标页签符号 + 模块路径身份
+        if (this.Data.CmdStr == GetLang("禁用模块") || this.Data.CmdStr == GetLang("取消禁用模块")) {
+            tabIdx := Integer(this.ui.Query("TabCombo>SelectedIndex")) + 1
+            foldIdx := Integer(this.ui.Query("FoldCombo>SelectedIndex")) + 1
+            if (IsObject(this._tabSymbols) && tabIdx >= 1 && tabIdx <= this._tabSymbols.Length) {
+                selTable := GetTableBySymbol(this._tabSymbols[tabIdx])
+                this.Data.TableSymbol := this._tabSymbols[tabIdx]
+                this.Data.FoldID := (selTable && foldIdx >= 1 && foldIdx <= selTable.Folds.Length) ? selTable.Folds[foldIdx].ID : ""
+            }
+        }
         ; 错误处理（阶段5）
         this.Data.ErrMode := ["stop", "ignore", "retry"][this._EHMode() + 1]
         this.Data.ErrRetryCount := this.ui.Query("EHRetryCount")

@@ -113,6 +113,10 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "搜索Pro", OnSearchWrapper,
         "移动", OnMouseMove,
         "移动Pro", OnMMPro,
+        ; §20 改名双键：新名「鼠标移动/鼠标移动Pro/增量移动」；旧名键保留兼容旧配置宏
+        "鼠标移动", OnMouseMove,
+        "鼠标移动Pro", OnMMPro,
+        "增量移动", OnDeltaMove,
         "运行", OnRunFile,
         "如果", OnCompare,
         "如果Pro", OnComparePro,
@@ -131,6 +135,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "文件读写", OnFileIO,
         "窗口管理", OnWindowManage,
         "按键检测", OnKeyCheck,
+        "等待", OnWait,
         "注释", (*) => "",
         "抓图", OnScreenShot,
         "图形开始节点", OnGraphStartNode
@@ -667,7 +672,9 @@ OnMMPro(tableItem, cmd, index) {
 
     LastSumTime := 0
     MoveMode := ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : 0
-    Data.Count := MoveMode == 2 ? Data.Count : 1
+    ; §20 新版已去除「移动次数」，恒 1 次；旧配置数据保留 Count/Interval 字段则沿用
+    Count := ObjHasOwnProp(Data, "Count") ? Data.Count : 1
+    Data.Count := MoveMode == 2 ? Count : 1
     loop Data.Count {
         WaitIfPaused(tableItem, index)
 
@@ -675,7 +682,7 @@ OnMMPro(tableItem, cmd, index) {
         if (item && item.Killed)
             return
 
-        FloatInterval := GetFloatTime(Data.Interval, MainSoftData.PreIntervalFloat)
+        FloatInterval := GetFloatTime(ObjHasOwnProp(Data, "Interval") ? Data.Interval : 0, MainSoftData.PreIntervalFloat)
         OnMMProOnce(tableItem, index, Data)
         if (A_Index != Data.Count)
             Sleep(FloatInterval)
@@ -696,9 +703,48 @@ OnMMProOnce(tableItem, index, Data) {
 
     PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
+
+    ; §20 旧配置兼容：MouseMoveMode==2（游戏视角）已拆为「增量移动」指令，旧数据仍按 mouse_event 相对位移执行
+    if (MoveMode == 2)
+        return MouseMoveGameViewByKeyMode(keyMode, PosX, PosY, Speed)
+
+    ; §20 坐标基准：RefMode==1（窗口）且绝对移动时，坐标按窗口左上角偏移（窗口信息支持 {绑定窗口}）
+    RefMode := ObjHasOwnProp(Data, "RefMode") ? Integer(Data.RefMode) : 0
+    if (RefMode == 1 && MoveMode == 0) {
+        WinInfo := ObjHasOwnProp(Data, "WinInfo") ? Data.WinInfo : ""
+        hwndList := GetHwndList(ResolveBindWindow(tableItem, index, WinInfo))
+        if (!IsObject(hwndList) || hwndList.Length == 0)
+            return
+        WinGetPos(&winX, &winY, , , "ahk_id " hwndList[1])
+        PosX := winX + PosX
+        PosY := winY + PosY
+    }
+
     ; ActionType: 1 移动 | 2 单击 | 3 双击
     clickCount := (Data.ActionType == 1) ? 0 : (Data.ActionType == 2 ? 1 : 2)
     MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, clickCount, IsHumanMouse)
+}
+
+; §20 增量移动指令（原移动Pro-游戏视角拆出）：X/Y 相对位移，固定走 mouse_event，与按键类型无关
+OnDeltaMove(tableItem, cmd, index) {
+    paramArr := StrSplit(cmd, "_")
+    SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
+    if (numbersOnly != "" && MySoftData.DataFileMap.Has(GetLangKey(textOnly))) {
+        Data := GetMacroCMDData(paramArr[1])
+        deltaX := Data.DeltaX
+        deltaY := Data.DeltaY
+    } else {
+        deltaX := paramArr.Length >= 2 ? paramArr[2] : 0
+        deltaY := paramArr.Length >= 3 ? paramArr[3] : 0
+    }
+
+    hasX := TryGetTabVarValue(&dX, tableItem, index, deltaX)
+    hasY := TryGetTabVarValue(&dY, tableItem, index, deltaY)
+    if (!hasX || !hasY)
+        return
+    dX := GetFloatValue(dX, MainSoftData.CoordXFloat)
+    dY := GetFloatValue(dY, MainSoftData.CoordYFloat)
+    MouseMoveGameViewByKeyMode(GetMacroKeyMode(tableItem, index), dX, dY, 100)
 }
 
 OnOutput(tableItem, cmd, index) {
@@ -894,7 +940,7 @@ OnVariable(tableItem, cmd, index) {
     DeleteNameArr := []
     VariableNameArr := []
     ValueArr := []
-    loop 4 {
+    loop Data.ToggleArr.Length {
         if (!Data.ToggleArr[A_Index])
             continue
         VariableName := Data.VariableArr[A_Index]
@@ -1015,7 +1061,7 @@ OnExVariableOnce(tableItem, index, Data) {
         if (!HasX1 || !HasX2 || !HasY1 || !HasY2)
             return
         TextObjs := []
-        hwndList := GetHwndList(Data.WinInfo)
+        hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.WinInfo))   ; §22 绑定窗口替换
         loop hwndList.Length {
             CurWinTextObjs := GetWinTextObjArr(hwndList[A_Index], X1, Y1, X2, Y2, Data.OCRType)
             if (CurWinTextObjs != "")
@@ -1091,7 +1137,7 @@ OnBGMouse(tableItem, cmd, index) {
     }
     PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
-    hwndList := GetHwndList(Data.TargetTitle)
+    hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.TargetTitle))   ; §22 绑定窗口替换
     loop hwndList.Length {
         hwnd := hwndList[A_Index]
         ; 点击位置（窗口客户区坐标）
@@ -1147,7 +1193,7 @@ OnBGKey(tableItem, cmd, index) {
 }
 
 SendBGKey(Data, tableItem, index) {
-    hwndList := GetHwndList(Data.FrontStr)
+    hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.FrontStr))   ; §22 绑定窗口替换
 
     if (Data.Type == 1 || Data.Type == 3) {
         for hwnd in hwndList {
@@ -1213,6 +1259,7 @@ OnMouseMove(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     ; 阶段5：新格式 移动<serial> 走配置文件；旧格式 移动_X_Y_Speed_MoveMode 兼容
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
+    textOnly := GetLangKey(textOnly)   ; 英文模式序列码前缀反译（旧名「移动」/新名「鼠标移动」都命中 DataFileMap）
     if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
         Data := GetMacroCMDData(paramArr[1])
         PosX := Integer(Data.PosX)
@@ -1299,16 +1346,22 @@ OnRMTCMD(tableItem, cmd, index) {
     if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
         Data := GetMacroCMDData(paramArr[1])
         cmdStr := Data.CmdStr
+        category := Data.HasOwnProp("Category") ? Data.Category : GetLang("全部")
         if (cmdStr == GetLang("显示菜单"))
             cmdStr .= "_" (Data.HasOwnProp("MenuIndex") ? Data.MenuIndex : 1)
+        ; §2 禁用模块/取消禁用模块：附加目标表符号 + 模块路径身份（⫶ 分隔，执行端按段取参）
+        if ((cmdStr == GetLang("禁用模块") || cmdStr == GetLang("取消禁用模块"))
+            && Data.HasOwnProp("TableSymbol") && Data.TableSymbol != "")
+            cmdStr .= "⫶" Data.TableSymbol "⫶" Data.FoldID
+        cmd := "RMT指令⫶" category "⫶" cmdStr
     } else {
         cmdStr := paramArr[3]
         if (cmdStr == GetLang("显示菜单") && paramArr.Length >= 5)
             cmdStr .= "_" paramArr[4]
+        cmd := StrReplace(cmd, "_", "⫶")
     }
     if (ApplyRmtInputControl(cmdStr))
         return
-    cmd := StrReplace(cmd, "_", "⫶")
     MyExcuteRMTCMDAction(cmd)
 }
 
@@ -1826,6 +1879,7 @@ OnScreenShot(tableItem, cmd, index) {
 
     if (Data.ScreenShotType == 2) {
         winInfo := GetReplaceVarText(tableItem, index, Data.WinInfo)
+        winInfo := ResolveBindWindow(tableItem, index, winInfo)   ; §22 绑定窗口替换
         if (winInfo == "") {
             ShotDebugLog("窗口抓图：窗口信息为空，已终止")
             return

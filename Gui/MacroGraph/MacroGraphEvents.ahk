@@ -93,7 +93,7 @@ class MacroGraphEventsMixin {
             this._BindCtrl("Inter_" id, "LostFocus", this._OnField.Bind(this, id, "inter"), runtime)
             this._BindCtrl("Inter_" id, "KeyDown", this._OnField.Bind(this, id, "inter"), runtime)
         }
-        else if (d.type == GetLang("移动")) {
+        else if (IsMoveCmd(d.type)) {
             this._TrackCtrl("PosX_" id, runtime)
             this._TrackCtrl("PosY_" id, runtime)
             this._TrackCtrl("Speed_" id, runtime)
@@ -104,7 +104,16 @@ class MacroGraphEventsMixin {
             this._BindCtrl("ModeCmb_" id, "SelectionChanged", this._OnMoveMode.Bind(this, id), runtime)
             this._BindCtrl("ModeCmb_" id, "DropDownClosed", this._OnMoveMode.Bind(this, id), runtime)
         }
-        else if (d.type == GetLang("移动Pro")) {
+        else if (IsDeltaMoveCmd(d.type)) {
+            ; §20 增量移动：X/Y 偏移字段
+            this._TrackCtrl("DPosX_" id, runtime)
+            this._TrackCtrl("DPosY_" id, runtime)
+            this._BindCtrl("DPosX_" id, "LostFocus", this._OnField.Bind(this, id, "posx"), runtime)
+            this._BindCtrl("DPosX_" id, "KeyDown", this._OnField.Bind(this, id, "posx"), runtime)
+            this._BindCtrl("DPosY_" id, "LostFocus", this._OnField.Bind(this, id, "posy"), runtime)
+            this._BindCtrl("DPosY_" id, "KeyDown", this._OnField.Bind(this, id, "posy"), runtime)
+        }
+        else if (IsMoveProCmd(d.type)) {
             this._TrackCtrl("MPPosX_" id, runtime)
             this._TrackCtrl("MPPosY_" id, runtime)
             this._TrackCtrl("MPSpeed_" id, runtime)

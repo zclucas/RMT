@@ -98,9 +98,10 @@ class OutputGui {
         row1 := body.Add("StackPanel").Grid_Row(1).Grid_ColumnSpan(4).Orientation("Horizontal").VerticalAlignment("Center")
         row1.Add("TextBlock").Text(GetLang("输出类型:")).VerticalAlignment("Center")
         ot := row1.Add("ComboBox").Name("OutputTypeCombo").Width(140).Height(26).MinHeight(26).Margin("4,0,0,0")
-        for t in GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"])
+        ; §21.4：字符变量类型已移除（改由 变量指令-字符 的「编辑」按钮构建）
+        for t in GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"])
             ot.Add("ComboBoxItem").Content(t)
-        varNameRow := row1.Add("StackPanel").Name("VarNameRow").Orientation("Horizontal").Margin("12,0,0,0")
+        varNameRow := row1.Add("StackPanel").Name("VarNameRow").Orientation("Horizontal").Margin("12,0,0,0").Visibility("Collapsed")
         varNameRow.Add("TextBlock").Text(GetLang("保存变量") "：").VerticalAlignment("Center")
         varNameRow.Add("ComboBox").Name("VariableNameCombo").Width(110).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
 
@@ -238,7 +239,7 @@ class OutputGui {
             this.Data.VariableName := "Data"
 
         this.ui.Update("TextCon", "Text", GetLangStr(this.Data.Text, 1))
-        this._SetDDL("OutputTypeCombo", GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"]), GetLang(this.Data.OutputType))
+        this._SetDDL("OutputTypeCombo", GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"]), GetLang(this.Data.OutputType))
         this._SetCombo("VariableNameCombo", GetGuiVarArr(), GetLang(this.Data.VariableName))
         this._SetDDL("VariCombo", this.DLVariableArr, "")
         this.ui.Update("VariCombo", "SelectedIndex", "0")
@@ -264,10 +265,8 @@ class OutputGui {
     }
 
     OnChangeOutputType(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
-            return
-        isCharVariable := this.ui.Query("OutputTypeCombo") == GetLang("字符变量")
-        this.ui.Update("VarNameRow", "Visibility", isCharVariable ? "Visible" : "Collapsed")
+        ; §21.4：字符变量类型已移除，无需再控制保存变量行显隐
+        return
     }
 
     OnClickAddVarNameBtn(state, ctrl, event) {
@@ -291,10 +290,6 @@ class OutputGui {
     }
 
     CheckIfValid() {
-        if (this.ui.Query("OutputTypeCombo") == GetLang("字符变量")) {
-            if (!CheckVarNameIfValid(this.ui.Query("VariableNameCombo")))
-                return false
-        }
         return true
     }
 
@@ -316,9 +311,5 @@ class OutputGui {
         this.Data.OutputType := GetLangKey(this.ui.Query("OutputTypeCombo"))
         this.Data.VariableName := GetVarName(this.ui.Query("VariableNameCombo"))
         SaveMacroCMDData(this.Data)
-
-        if (this.Data.OutputType == "字符变量") {
-            MySoftData.GlobalVariMap[this.Data.VariableName] := true
-        }
     }
 }

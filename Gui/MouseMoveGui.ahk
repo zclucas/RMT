@@ -43,7 +43,7 @@ class MouseMoveGui {
     _BuildAndShow() {
         global MySoftData
         this._closed := false
-        title := this.ParentTile GetLang("移动编辑器")
+        title := this.ParentTile GetLang("鼠标移动编辑器")
         this._title := title
         titleHeight := "30"
 
@@ -102,7 +102,7 @@ class MouseMoveGui {
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        ; 行5：移动速度 + 移动方式
+        ; 行5：移动速度 + 移动方式（§20 去「游戏视角」，已拆为增量移动指令）
         body.Add("TextBlock").Grid_Row(5).Grid_Column(0).Text(GetLang("移动速度：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         body.Add("TextBox").Grid_Row(5).Grid_Column(1).Name("SpeedCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize("11").Padding("4,0").Text("90")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
@@ -110,14 +110,14 @@ class MouseMoveGui {
         body.Add("TextBlock").Grid_Row(5).Grid_Column(2).Text(GetLang("移动方式：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         mm := body.Add("ComboBox").Grid_Row(5).Grid_Column(3).Name("MouseMoveModeCombo").Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        for m in GetLangArr(["绝对移动", "相对移动", "游戏视角"])
+        for m in GetLangArr(["绝对移动", "相对移动"])
             mm.Add("ComboBoxItem").Content(m)
 
         ; 行6：提示
         body.Add("TextBlock").Grid_Row(6).Grid_ColumnSpan(4).Text(GetLang("移动速度0~100，100为瞬移")).VerticalAlignment("Center").Foreground("{DynamicResource TextSub}").FontSize("11")
 
         ; 行7：当前指令
-        body.Add("TextBlock").Grid_Row(7).Grid_ColumnSpan(4).Name("CommandStrCon").Text(GetLang("当前指令：移动")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(7).Grid_ColumnSpan(4).Name("CommandStrCon").Text(GetLang("当前指令：鼠标移动")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
 
         ; 行8：确定
         btnRow := body.Add("StackPanel").Grid_Row(8).Grid_ColumnSpan(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -317,7 +317,7 @@ class MouseMoveGui {
         if (!IsObject(this.ui))
             return
         MoveMode := this._MoveMode()
-        CommandStr := GetLang("移动")
+        CommandStr := GetLang("鼠标移动")
         CommandStr .= "_" this.ui.Query("PosXCon")
         CommandStr .= "_" this.ui.Query("PosYCon")
         CommandStr .= "_" this.ui.Query("SpeedCon")
@@ -405,7 +405,7 @@ class MouseMoveGui {
         this.Data.ErrRetryInterval := this.ui.Query("EHRetryInterval")
 
         if (this.Data.SerialStr == "")
-            this.Data.SerialStr := GetCMDSerialStr(GetLang("移动"))
+            this.Data.SerialStr := GetCMDSerialStr(GetLang("鼠标移动"))
         SaveMacroCMDData(this.Data)
         ; 备注：用户备注优先，为空则自动生成操作内容（CorrectRemark 会剔除逗号，故用空格分隔）
         remark := Trim(this.ui.Query("RemarkCon"))

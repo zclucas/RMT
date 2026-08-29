@@ -101,11 +101,8 @@ class VoiceGui {
         item.VoiceKeywords := keywords
         ; 启用/禁用由主界面「禁用」开关（Forbid）控制；此处仅保证该行语音字段有效
 
-        ; 热重载：广播「本行配置已变更」，VoiceEngine 订阅者空闲时重建关键词集（不阻塞 UI）
-        if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
-            MyHotReloadBus.Publish(GetTableIndexByID(tableItem.ID), index)
-        else if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
-            MyVoiceEngine.NotifyConfigChanged(GetTableIndexByID(tableItem.ID), index)
+        ; §18 热重载：广播「本行配置已变更」+ 即时落盘，VoiceEngine 订阅者空闲时重建关键词集（不阻塞 UI）
+        HotReloadPublish(GetTableIndexByID(tableItem.ID), index)
     }
 
     OnSureClick(*) {
