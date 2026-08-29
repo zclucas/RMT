@@ -31,6 +31,7 @@
 #Include Util\FixCompatUtil.ahk
 #Include Util\HotReloadBus.ahk
 #Include Util\VoiceUtil.ahk
+#Include Util\SttUtil.ahk
 #Include ..\Plugins\ViGEm\AHK-ViGEm-Bus-v2.ahk
 
 #Include ..\Gui\TriggerKeyGui.ahk
@@ -70,6 +71,7 @@
 #Include ..\Gui\InputBtnXamlGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
 #Include ..\Gui\VoiceGui.ahk
+#Include ..\Gui\SttGui.ahk
 #Include ..\Gui\WaitGui.ahk
 #Include ..\Gui\DeltaMoveGui.ahk
 #Include ..\Gui\TableMgrGui.ahk

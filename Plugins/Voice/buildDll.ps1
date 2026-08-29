@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     RMT VoiceDll 一键编译部署脚本 (MSVC) — 完全自包含版
 .DESCRIPTION
@@ -40,6 +40,9 @@ $ModelName   = "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20"
 $ModelChunk  = "chunk-16-left-64"
 $SherpaUrl   = "https://github.com/k2-fsa/sherpa-onnx/releases/download/$SherpaVer/$SherpaPkg.tar.bz2"
 $ModelUrl    = "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/$ModelName.tar.bz2"
+# STT 离线语音转文字模型（paraformer 中英小模型，~82MB；按需下载，不进发布包）
+$SttModelName = "sherpa-onnx-paraformer-zh-small-2024-03-09"
+$SttModelUrl  = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$SttModelName.tar.bz2"
 
 # ==================== 目录 ====================
 # 依赖下载解压区（git 忽略）
@@ -53,7 +56,9 @@ $BuildDir   = Join-Path $DepDir ("out_" + $Arch)
 $RunDir     = Join-Path $VoiceDir $Arch
 # 运行时模型目录（跨架构共享）
 $RunModelDir = Join-Path $VoiceDir "models\kws"
-New-Item -ItemType Directory -Force -Path $DlDir, $SherpaDir, $BuildDir, $RunDir, $RunModelDir | Out-Null
+# STT 模型运行时目录（跨架构共享）
+$RunSttModelDir = Join-Path $VoiceDir "models\stt"
+New-Item -ItemType Directory -Force -Path $DlDir, $SherpaDir, $BuildDir, $RunDir, $RunModelDir, $RunSttModelDir | Out-Null
 
 # 源码在 src\ 子目录
 $Src      = Join-Path $VoiceDir "src\VoiceDll.cpp"
@@ -136,6 +141,25 @@ Expand-TarBz2 $modelTar $DepDir
 $modelSrcDir = Join-Path $DepDir $ModelName
 if (-not (Test-Path $modelSrcDir)) { Write-Host "[错误] 解压后未找到模型目录: $modelSrcDir" -ForegroundColor Red; if (-not $NoPause) { Read-Host "按回车退出" }; exit 1 }
 Write-Host "[OK] 模型源: $modelSrcDir" -ForegroundColor Green
+
+# --- STT paraformer 模型包（语音转文字；缺才部署，已有则跳过下载） ---
+$sttModelOk = (Test-Path (Join-Path $RunSttModelDir "model.int8.onnx")) -and (Test-Path (Join-Path $RunSttModelDir "tokens.txt"))
+if (-not $sttModelOk) {
+    $sttTar = Join-Path $DlDir "$SttModelName.tar.bz2"
+    Invoke-Download $SttModelUrl $sttTar "STT paraformer 中文模型"
+    Expand-TarBz2 $sttTar $DepDir
+    $sttSrcDir = Join-Path $DepDir $SttModelName
+    if (-not (Test-Path $sttSrcDir)) { Write-Host "[错误] 解压后未找到 STT 模型目录: $sttSrcDir" -ForegroundColor Red; if (-not $NoPause) { Read-Host "按回车退出" }; exit 1 }
+    foreach ($mf in @("model.int8.onnx", "tokens.txt")) {
+        $srcMf = Join-Path $sttSrcDir $mf
+        $dstMf = Join-Path $RunSttModelDir $mf
+        if (Test-Path $srcMf) { Copy-Item $srcMf $dstMf -Force }
+        else { Write-Host "[警告] STT 模型文件缺失: $srcMf（跳过）" -ForegroundColor Yellow }
+    }
+    Write-Host "[OK] STT 模型已就位: models\stt" -ForegroundColor Green
+} else {
+    Write-Host "[OK] STT 模型已缓存: $RunSttModelDir（跳过下载）" -ForegroundColor Green
+}
 
 # ==================== 查找 MSVC 编译器（按架构选 vcvars32/64） ====================
 $vcvarsName = if ($Arch -eq "x86") { "vcvars32.bat" } else { "vcvars64.bat" }

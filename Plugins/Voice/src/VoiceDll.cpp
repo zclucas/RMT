@@ -15,6 +15,17 @@
 //   void  Voice_Close()
 //   int   Voice_TestWav(const wchar_t* wavPath, char* out, int outSize)
 //
+// STT（离线语音转文字，sherpa-onnx OfflineRecognizer + paraformer）：
+//   int   Stt_Init(const wchar_t* model, const wchar_t* tokens)
+//   int   Stt_Begin()                        ; 开始录音（独立 WASAPI 实例，与 KWS 互不干扰）
+//   int   Stt_End()                          ; 停止录音并异步解码
+//   int   Stt_Cancel()                       ; 停止录音并丢弃（不解码）
+//   int   Stt_GetState()                     ; 0空闲 1录音中 2解码中 3完成 4错误
+//   int   Stt_GetResult(char* buf, int bufSize) ; 解码完成后取全文（UTF-8）
+//   int   Stt_GetLastError(char* buf, int bufSize)
+//   void  Stt_Close()
+//   int   Stt_TestWav(const wchar_t* wavPath, char* out, int outSize)
+//
 // 编译：MSVC x64 + 链接 sherpa-onnx-c-api.lib + WASAPI(winmm/ole32? no)
 //       WASAPI 需要 avrt.lib 用于 MMCSS。COM CoInitializeEx + ole32.
 // 依赖运行时：sherpa-onnx-c-api.dll + onnxruntime.dll 与最新 DLL 同目录。
@@ -573,6 +584,192 @@ __declspec(dllexport) int Voice_TestWav(const wchar_t* wavPath, char* out, int o
     }
     SherpaOnnxFreeWave(wave);
     return hit;
+}
+
+// ---------------------------------------------------------------------
+// STT（离线语音转文字）—— sherpa-onnx OfflineRecognizer + paraformer
+// 独立于 KWS：单独的识别器 / 采集实例 / 错误串，状态机 0空闲→1录音→2解码→3完成/4错误。
+// 解码在独立线程执行（Stt_End 立即返回），AHK 轮询 Stt_GetState 取结果。
+// 注意：解码线程内绝不获取 g_sttMx（Stt_Init/Close 持锁 join 才不会死锁）。
+// ---------------------------------------------------------------------
+static std::mutex g_sttMx;
+static const SherpaOnnxOfflineRecognizer* g_sttRec = nullptr;
+static std::string g_sttModel, g_sttTokens;
+static std::string g_sttError;
+static std::string g_sttResult;
+static WasapiCapture g_sttCapture;              // 独立采集实例（WASAPI 共享模式，与 KWS 并存）
+static std::thread g_sttThread;
+static std::atomic<int> g_sttState{0};          // 0空闲 1录音中 2解码中 3完成 4错误
+
+static void SttSetErr(const std::string& s) { g_sttError = s; }
+
+// 解码线程主体：一次性喂入全部采样并解码（不持锁；结果写回后再置状态保证可见性）
+static void SttDecodeThread(const SherpaOnnxOfflineRecognizer* rec, std::vector<float> samples) {
+    const SherpaOnnxOfflineStream* s = SherpaOnnxCreateOfflineStream(rec);
+    if (!s) {
+        SttSetErr("创建离线识别流失败");
+        g_sttState = 4;
+        return;
+    }
+    int32_t n = (int32_t)samples.size();
+    if (n > 0)
+        SherpaOnnxAcceptWaveformOffline(s, 16000, samples.data(), n);
+    SherpaOnnxDecodeOfflineStream(rec, s);
+    const SherpaOnnxOfflineRecognizerResult* r = SherpaOnnxGetOfflineStreamResult(s);
+    if (!r) {
+        SherpaOnnxDestroyOfflineStream(s);
+        SttSetErr("离线解码失败");
+        g_sttState = 4;
+        return;
+    }
+    g_sttResult = (r->text ? r->text : "");
+    SttSetErr("");
+    SherpaOnnxDestroyOfflineRecognizerResult(r);
+    SherpaOnnxDestroyOfflineStream(s);
+    g_sttState = 3;
+}
+
+// 加载 paraformer 离线模型（model.int8.onnx + tokens.txt）
+__declspec(dllexport) int Stt_Init(const wchar_t* model, const wchar_t* tokens) {
+    std::lock_guard<std::mutex> lk(g_sttMx);
+    g_sttModel  = WToUtf8(model);
+    g_sttTokens = WToUtf8(tokens);
+    if (g_sttModel.empty() || g_sttTokens.empty()) {
+        SttSetErr("模型路径不完整");
+        return 0;
+    }
+    // 若上一段还在解码，先等它落地（避免使用中的识别器被销毁）
+    if (g_sttThread.joinable()) g_sttThread.join();
+    if (g_sttRec) { SherpaOnnxDestroyOfflineRecognizer(g_sttRec); g_sttRec = nullptr; }
+    SherpaOnnxOfflineRecognizerConfig c;
+    memset(&c, 0, sizeof(c));
+    c.feat_config.sample_rate = 16000;
+    c.feat_config.feature_dim = 80;
+    c.model_config.paraformer.model = g_sttModel.c_str();
+    c.model_config.tokens = g_sttTokens.c_str();
+    c.model_config.num_threads = 2;
+    c.model_config.provider = "cpu";
+    c.decoding_method = "greedy_search";   // paraformer 仅支持 greedy_search
+    g_sttRec = SherpaOnnxCreateOfflineRecognizer(&c);
+    fprintf(stderr, "[Stt] CreateOfflineRecognizer => %p\n", (void*)g_sttRec);
+    if (!g_sttRec) {
+        SttSetErr("创建离线识别器失败（模型加载失败）");
+        return 0;
+    }
+    g_sttResult.clear();
+    g_sttState = 0;
+    SttSetErr("");
+    return 1;
+}
+
+// 开始录音（丢弃采集缓冲中上一段的残留）
+__declspec(dllexport) int Stt_Begin() {
+    std::lock_guard<std::mutex> lk(g_sttMx);
+    if (!g_sttRec) { SttSetErr("模型未加载"); return 0; }
+    if (g_sttState == 1) return 1;
+    if (g_sttState == 2) { SttSetErr("正在识别上一段录音，请稍候"); return 0; }
+    std::vector<float> discard;
+    g_sttCapture.PullSamples(discard);
+    g_sttResult.clear();
+    if (!g_sttCapture.Start(16000)) {
+        SttSetErr("麦克风采集启动失败");
+        return 0;
+    }
+    g_sttState = 1;
+    return 1;
+}
+
+// 停止录音并异步开始解码（立即返回；轮询 Stt_GetState）
+__declspec(dllexport) int Stt_End() {
+    std::lock_guard<std::mutex> lk(g_sttMx);
+    if (g_sttState != 1) return 0;
+    g_sttCapture.Stop();
+    std::vector<float> samples;
+    g_sttCapture.PullSamples(samples);
+    if (samples.empty()) {
+        SttSetErr("未采集到音频");
+        g_sttState = 0;
+        return 0;
+    }
+    if (g_sttThread.joinable()) g_sttThread.join();
+    g_sttState = 2;
+    g_sttThread = std::thread(SttDecodeThread, g_sttRec, std::move(samples));
+    return 1;
+}
+
+// 停止录音并丢弃（不解码）。解码中则不处理（返回 0，等它自然结束）。
+__declspec(dllexport) int Stt_Cancel() {
+    std::lock_guard<std::mutex> lk(g_sttMx);
+    if (g_sttState != 1) return 0;
+    g_sttCapture.Stop();
+    std::vector<float> discard;
+    g_sttCapture.PullSamples(discard);
+    g_sttState = 0;
+    return 1;
+}
+
+__declspec(dllexport) int Stt_GetState() {
+    return g_sttState.load();
+}
+
+__declspec(dllexport) int Stt_GetResult(char* buf, int bufSize) {
+    if (!buf || bufSize <= 0) return 0;
+    if (g_sttState != 3) { buf[0] = '\0'; return 0; }
+    int n = std::min((int)g_sttResult.size(), bufSize - 1);
+    memcpy(buf, g_sttResult.c_str(), n);
+    buf[n] = '\0';
+    return 1;
+}
+
+__declspec(dllexport) int Stt_GetLastError(char* buf, int bufSize) {
+    if (!buf || bufSize <= 0) return 0;
+    int n = std::min((int)g_sttError.size(), bufSize - 1);
+    memcpy(buf, g_sttError.c_str(), n);
+    buf[n] = '\0';
+    return g_sttError.empty() ? 0 : (int)g_sttError.size();
+}
+
+__declspec(dllexport) void Stt_Close() {
+    std::lock_guard<std::mutex> lk(g_sttMx);
+    if (g_sttState == 1) {
+        g_sttCapture.Stop();
+        std::vector<float> discard;
+        g_sttCapture.PullSamples(discard);
+        g_sttState = 0;
+    }
+    if (g_sttThread.joinable()) g_sttThread.join();
+    if (g_sttRec) { SherpaOnnxDestroyOfflineRecognizer(g_sttRec); g_sttRec = nullptr; }
+    g_sttResult.clear();
+    SttSetErr("");
+}
+
+// 离线测试：读取一个 wav 文件做整段转写（自动化验证用，不依赖麦克风）
+__declspec(dllexport) int Stt_TestWav(const wchar_t* wavPath, char* out, int outSize) {
+    if (!wavPath || !out || outSize <= 0) return 0;
+    out[0] = '\0';
+    std::string wp = WToUtf8(wavPath);
+    std::lock_guard<std::mutex> lk(g_sttMx);
+    if (!g_sttRec) return 0;
+    if (g_sttThread.joinable()) g_sttThread.join();
+    const SherpaOnnxWave* wave = SherpaOnnxReadWave(wp.c_str());
+    if (!wave) return 0;
+    const SherpaOnnxOfflineStream* s = SherpaOnnxCreateOfflineStream(g_sttRec);
+    int ok = 0;
+    if (s) {
+        SherpaOnnxAcceptWaveformOffline(s, wave->sample_rate, wave->samples, wave->num_samples);
+        SherpaOnnxDecodeOfflineStream(g_sttRec, s);
+        const SherpaOnnxOfflineRecognizerResult* r = SherpaOnnxGetOfflineStreamResult(s);
+        if (r && r->text) {
+            int len = std::min((int)strlen(r->text), outSize - 1);
+            memcpy(out, r->text, len);
+            out[len] = '\0';
+            ok = 1;
+        }
+        if (r) SherpaOnnxDestroyOfflineRecognizerResult(r);
+        SherpaOnnxDestroyOfflineStream(s);
+    }
+    SherpaOnnxFreeWave(wave);
+    return ok;
 }
 
 } // extern "C"
