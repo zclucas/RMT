@@ -166,25 +166,29 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     if (MySoftData.CMDTip)
         MyCMDReportAciton(cmdStr)
 
-    ; 业务日志（C 项阶段3）：每指令执行流水（默认关，设置开启后生效；Worker 执行侧写入）
-    RMTLogBusiness("宏:(" item.Remark ")", Format("tab{1} item{2} 指令: {3}", tableItem.ID, item.ID, GetCmdStr(cmdStr)))
-
     cmdKey := RTrim(paramArr[1], "0123456789")
+    ok := true
     try {
         result := Actions[cmdKey](tableItem, cmdStr, index)
     } catch as err {
+        ok := false
         ; 错误处理配置：优先指令 Data 配置（间隔<serial> 等配置文件模式），|EH: 后缀兼容保留
         ehCfg := eh.cfg
         if (!IsObject(ehCfg))
             ehCfg := RMTGetDataErrHandle(cmdStr)
         handled := RMTHandleError(err, cmdKey, ehCfg, () => Actions[cmdKey](tableItem, cmdStr, index))
         if (handled[1]) {
+            ok := true
             result := handled[2]
         } else {
             KillTableItemMacro(tableItem, index)
             result := ""
         }
     }
+    ; 业务日志（C 项阶段3）：每指令执行流水（默认关，设置开启后生效；Worker 执行侧写入）
+    ; 执行后记录，成功/失败并入同一条，不额外增加日志条目
+    RMTLogBusiness("宏:(" item.Remark ")", Format("tab{1} item{2} {3}指令: {4}"
+        , tableItem.ID, item.ID, ok ? "" : "失败 ", GetCmdStr(cmdStr)))
     return result
 }
 

@@ -27,13 +27,15 @@ _HandleError(exception) {
     }
     fullInfo := what . (what && msg ? " | " : "") . msg
 
-    ; DLL加载失败 —— 静默
+    ; DLL加载失败 —— 静默（提示后抑制默认对话框）
     if (RegExMatch(fullInfo, "Failed to load DLL.") || (msg && RegExMatch(msg, "Failed to load DLL."))){
         _ShowError("DLL加载失败,检查DLL是否存在并解锁：" extra, stack)
         return true
     }
 
-    return false
+    ; 其余错误：统一归口日志 + 错误中心聚合，不再弹 AHK 默认错误框（避免打断操作）
+    _ShowError(fullInfo, stack)
+    return true
 }
 
 _ShowError(msg, stack := "") {

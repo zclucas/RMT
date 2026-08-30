@@ -67,7 +67,7 @@ class LogSettingGui {
 
         ; === 主体 ===
         body := main.Add("Grid").Grid_Row(1).Margin("20,16,20,16")
-        body.Rows("40", "40", "40", "*")
+        body.Rows("40", "40", "40", "40", "*")
 
         ; 行0：日志级别
         row0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
@@ -96,8 +96,16 @@ class LogSettingGui {
             .ToolTip(GetLang("开启后：error 级错误在错误中心聚合显示（可复制/清空）。")
                 . "`n" GetLang("关闭后：error 只写入 System.log，不打开错误中心。"))
 
-        ; 行3：确定
-        btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; 行3：业务日志
+        row3 := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").VerticalAlignment("Center")
+        row3.Add("TextBlock").Text(GetLang("业务日志：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        chkBiz := row3.Add("CheckBox").Name("ChkBusinessLog").VerticalAlignment("Center").Margin("4,0,0,0")
+            .ToolTip(GetLang("开启后：记录宏运行流水到 Log\\Business.log（宏触发/每指令/宏结束）。")
+                . "`n" GetLang("关闭后：不记录业务流水（默认）。")
+                . "`n" GetLang("提示：业务日志可能产生大量内容，建议排查问题时开启。"))
+
+        ; 行4：确定
+        btnRow := body.Add("StackPanel").Grid_Row(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Height(28).MinHeight(28).Padding("14,0")
 
         ; === 创建 XAMLHost ===
@@ -114,6 +122,7 @@ class LogSettingGui {
         this.ui.OnEvent("CmbLogLevel", "SelectionChanged", ObjBindMethod(this, "OnLevelChanged"))
         this.ui.OnEvent("ChkLogWarnBubble", "Click", ObjBindMethod(this, "OnBubbleToggle"))
         this.ui.OnEvent("ChkLogErrorBadge", "Click", ObjBindMethod(this, "OnBadgeToggle"))
+        this.ui.OnEvent("ChkBusinessLog", "Click", ObjBindMethod(this, "OnBusinessLogToggle"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnOkClick"))
 
         this.ui.Show()
@@ -149,8 +158,10 @@ class LogSettingGui {
         this.ui.Update("CmbLogLevel", "SelectedIndex", String(idx))
         bubble := MainSoftData.HasOwnProp("LogWarnBubble") ? MainSoftData.LogWarnBubble : true
         badge := MainSoftData.HasOwnProp("LogErrorBadge") ? MainSoftData.LogErrorBadge : true
+        biz := MainSoftData.HasOwnProp("BusinessLog") ? MainSoftData.BusinessLog : false
         this.ui.Update("ChkLogWarnBubble", "IsChecked", bubble ? "True" : "False")
         this.ui.Update("ChkLogErrorBadge", "IsChecked", badge ? "True" : "False")
+        this.ui.Update("ChkBusinessLog", "IsChecked", biz ? "True" : "False")
     }
 
     OnWindowLoad(state, ctrl, event) {
@@ -193,6 +204,14 @@ class LogSettingGui {
     OnBadgeToggle(state, ctrl, event) {
         MainSoftData.LogErrorBadge := this.ui.Query("ChkLogErrorBadge") == "True"
         IniWrite(MainSoftData.LogErrorBadge, IniFile, IniSection, "LogErrorBadge")
+    }
+
+    ; 业务日志开关（同步 LogUtil global + 持久化）
+    OnBusinessLogToggle(state, ctrl, event) {
+        global RMTLogBusinessEnabled
+        MainSoftData.BusinessLog := this.ui.Query("ChkBusinessLog") == "True"
+        RMTLogBusinessEnabled := MainSoftData.BusinessLog
+        IniWrite(MainSoftData.BusinessLog, IniFile, IniSection, "BusinessLog")
     }
 
     OnOkClick(state, ctrl, event) {

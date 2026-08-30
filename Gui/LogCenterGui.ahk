@@ -101,12 +101,19 @@ class LogCenterGui {
         btnExport := topBar.Add("Button").Name("BtnExport").Content(GetLang("导出")).Height(28).MinHeight(28).Padding("14,0").Margin("0,4,0,4")
 
         ; 日志内容区
-        this._content := body.Add("TextBox").Grid_Row(1).Grid_ColumnSpan(3).Name("LogCon")
+        ; 外层 Border 提供背景/边框；内层 ScrollViewer 管理滚动，滚动条固定在外层 ScrollViewer 底部/右侧
+        ; （即文本框控件区域的边缘，属于控件本身、不随内容滚动）；内层 TextBox 仅承载文本、禁用内部滚动
+        contentBdr := body.Add("Border").Grid_Row(1).Grid_ColumnSpan(3)
+            .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        contentSv := contentBdr.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Auto")
+        this._content := contentSv.Add("TextBox").Name("LogCon")
             .AcceptsReturn("True").TextWrapping("NoWrap").IsReadOnly("True")
-            .VerticalContentAlignment("Top").FontFamily("Consolas").FontSize("11")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .ScrollViewer_VerticalScrollBarVisibility("Auto")
+            .VerticalContentAlignment("Top").HorizontalAlignment("Left").VerticalAlignment("Top")
+            .FontFamily("Consolas").FontSize("11")
+            .Background("Transparent").Foreground("{DynamicResource InputText}")
+            .BorderThickness("0").Padding("4,4,4,4")
+            .ScrollViewer_VerticalScrollBarVisibility("Disabled")
+            .ScrollViewer_HorizontalScrollBarVisibility("Disabled")
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
