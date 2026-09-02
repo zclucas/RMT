@@ -7,16 +7,21 @@ namespace GameInputTest
     [StructLayout(LayoutKind.Sequential)]
     public struct GameInputGamepadState
     {
-        // Final stable layout. vt[22] on inbox GameInput.dll.
-        // 5/6 axes confirmed. RY=0, Btn=0 for now.
-        public float _f0;               // offset 0
-        public float LeftTrigger;       // offset 4
-        public float RightTrigger;      // offset 8
-        public float LeftThumbstickX;   // offset 12
-        public float LeftThumbstickY;   // offset 16
-        public float RightThumbstickX;  // offset 20
-        public float _f6;               // offset 24
-        public float _f7;               // offset 28
+        // NOTE: keep this struct at 32 bytes (8 x 4). GetGamepadState (vt[22])
+        // is marshalled as an `out struct`; shrinking the struct breaks the call
+        // (returns a bogus float-like code). Empirically 32 bytes works.
+        //   off0  buttons(int32 bitmask)   off4  LeftTrigger
+        //   off8  RightTrigger             off12 LeftThumbstickX
+        //   off16 LeftThumbstickY          off20 RightThumbstickX
+        //   off24 RightThumbstickY         off28 _pad
+        public int    buttons;            // offset 0 (bitmask, see GameInputGamepadButtons)
+        public float  LeftTrigger;        // offset 4
+        public float  RightTrigger;       // offset 8
+        public float  LeftThumbstickX;    // offset 12
+        public float  LeftThumbstickY;    // offset 16
+        public float  RightThumbstickX;   // offset 20
+        public float  RightThumbstickY;   // offset 24
+        public float  _pad;               // offset 28 (keep 32-byte size)
     }
 
     public class ReadingData
@@ -221,11 +226,12 @@ namespace GameInputTest
             _diag += "  GetDevice=0x" + device.ToString("X16") + "\r\n";
 
             GameInputGamepadState state;
-            if (_rGetGamepad(readingPtr, out state) < 0)
-            {
-                _diag += "  GetGamepadState FAILED\r\n";
-                return;
-            }
+            int hrGs = _rGetGamepad(readingPtr, out state);
+            // Note: on this dll GetGamepadState can return 0xBF800001 (= -1.0f as
+            // an int) even though it has already filled `state` correctly (dump
+            // showed RY=-1.000 while hr was 0xBF800001). So do NOT treat a
+            // negative return as failure — trust the populated state.
+            _diag += "  GetGamepadState hr=0x" + ((uint)hrGs).ToString("X8") + "\r\n";
 
             string devId = device.ToString("X16");
             ReadingData rd = new ReadingData
@@ -234,10 +240,10 @@ namespace GameInputTest
                 LeftThumbstickX   = state.LeftThumbstickX,
                 LeftThumbstickY   = state.LeftThumbstickY,
                 RightThumbstickX  = state.RightThumbstickX,
-                RightThumbstickY  = 0,
+                RightThumbstickY  = state.RightThumbstickY,   // off24, was hardcoded 0
                 LeftTrigger  = state.LeftTrigger,
                 RightTrigger = state.RightTrigger,
-                Buttons      = 0,
+                Buttons      = (ulong)(uint)state.buttons,    // off0 bitmask
             };
 
             _diag += "  LT=" + state.LeftTrigger.ToString("F3")
@@ -245,7 +251,8 @@ namespace GameInputTest
                   + " LX=" + state.LeftThumbstickX.ToString("F3")
                   + " LY=" + state.LeftThumbstickY.ToString("F3")
                   + " RX=" + state.RightThumbstickX.ToString("F3")
-                  + " RY=0" + "\r\n";
+                  + " RY=" + state.RightThumbstickY.ToString("F3")
+                  + " Btn=0x" + ((uint)state.buttons).ToString("X") + "\r\n";
 
             _deviceStates[devId] = rd;
         }
