@@ -100,7 +100,7 @@ class ErrorMsgBoxGui {
             if (this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd) {
                 gotHwnd := true
                 try WinActivate("ahk_id " this.ui.wpfHwnd)
-                try SetTimer((*) => this.ui.Update("Window", "Opacity", "1"), -10)
+                try SetTimer((*) => (IsObject(this.ui) ? this.ui.Update("Window", "Opacity", "1") : ""), -10)
                 break
             }
             Sleep(50)
@@ -136,9 +136,14 @@ class ErrorMsgBoxGui {
     }
 
     OnCopyBtnClick(state, ctrl, event) {
-        if (this.ui.Query("TextCon") != "") {
-            A_Clipboard := this.ui.Query("TextCon")
-            Toast.Success(GetLang("已复制"))
+        if (IsObject(this.ui)) {
+            try {
+                txt := this.ui.Query("TextCon")
+                if (txt != "") {
+                    A_Clipboard := txt
+                    Toast.Success(GetLang("已复制"))
+                }
+            }
         }
     }
 

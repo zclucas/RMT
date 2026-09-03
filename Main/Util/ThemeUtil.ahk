@@ -608,7 +608,8 @@ class AppThemeUtil {
             }
         }
         AppThemeUtil.RefreshOpenSettingWindows()
-        try MacroGraphGui.RefreshOpenThemes()
+        if (IsSet(MacroGraphGui) && IsObject(MacroGraphGui))
+            try MacroGraphGui.RefreshOpenThemes()
         if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
             MyUIMacroGui.RefreshPanels()
         if (IsSet(MyCMDTipGui) && IsObject(MyCMDTipGui))

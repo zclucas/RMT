@@ -623,6 +623,8 @@ BindTabHotKey() {
     tableIndex := 0
     MyJoyMacro.MacroMap := Map()
     MyJoyMacro.ComboMacroMap := Map()
+    ; 同步清空边缘触发状态，避免旧宏残留 prev=1 导致重绑后首个按键边沿丢失
+    MyJoyMacro.prevXboxState := Map()
     registerMsg := "=== Registered Hotkeys ===`n"
 
     ; 预计算缓存Map（避免重复的字符串处理和正则匹配）

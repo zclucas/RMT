@@ -176,7 +176,7 @@ GetLangCmd(Cmd, Mode) {
         paramArr[2] := action(paramArr[2])
     }
 
-    if (IsPressKey) {
+    if (IsPressKey && paramArr.Length >= 3) {
         paramArr[3] := action(paramArr[3])
     }
     return GetCmdByParams(paramArr)

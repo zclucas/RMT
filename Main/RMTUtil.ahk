@@ -16,6 +16,7 @@ global XAML_ENABLE_DEVTOOLS := false
 ; 正式运行使用独立 daemon 进程。
 global XAML_IN_PROCESS_PREVIEW := false
 
+
 ;资源保存（带脏检查优化：只写入实际发生变化的配置项）
 OnSaveSetting(*) {
     global MySoftData, MyWorkPool, MyHotReloadBus
@@ -277,41 +278,16 @@ InitViGEmPlugin() {
     }
 
     isDS4 := MainSoftData.JoyType = "DS4"
-    diBefore := SnapshotJoyDeviceMap()
     global ViGJoy := isDS4 ? ViGEmDS4() : ViGEmXb360()
     global CurViGJoyType := isDS4 ? "DS4" : "Xbox"
-    global VirtualJoyDiIdx := FindNewJoyDeviceIndex(diBefore)
 
     try instOk := (IsSet(ViGJoy) && ViGJoy.Instance != "")
     catch
         instOk := false
-    try xidx := ViGJoy.ViGJoyXInputIdx
-    catch
-        xidx := "?"
-    JoyDebugLog(Format("PluginInit {} created InstanceOK={} XInputIdx={} DiIdx={} DllPath={}"
-        , isDS4 ? "ViGEmDS4" : "ViGEmXb360", instOk, xidx, VirtualJoyDiIdx
+    JoyDebugLog(Format("PluginInit {} created InstanceOK={} DllPath={}"
+        , isDS4 ? "ViGEmDS4" : "ViGEmXb360", instOk
         , IsSet(ViGEmDllPath) ? ViGEmDllPath : "(unset)"), "init")
-}
-
-SnapshotJoyDeviceMap() {
-    diBefore := Map()
-    loop 10 {
-        n := GetKeyState(A_Index "JoyName")
-        if (n != "")
-            diBefore[A_Index] := n
-    }
-    return diBefore
-}
-
-FindNewJoyDeviceIndex(diBefore) {
-    try {
-        loop 10 {
-            n := GetKeyState(A_Index "JoyName")
-            if (n != "" && !diBefore.Has(A_Index))
-                return A_Index
-        }
-    }
-    return -1
+    ; 反回环无需在此武装：已在读取源头 GI_CollectStates 过滤 PID=0x028E(ViGEm) 处理。
 }
 
 InitNativePlugins() {
@@ -863,6 +839,7 @@ ViGJoySetState(JoyType, Key, Value) {
                 return
             }
             ViGJoy.Buttons[Key].SetState(Value)
+            ; 反回环已由读取源头 GI_CollectStates 过滤 PID=0x028E(ViGEm) 处理，无需在此记账。
         } else if (JoyType == "Axis") {
             if (!ViGJoy.Axes.Has(Key)) {
                 JoyDebugLog(Format("ViGJoySetState ABORT: Axes has no key '{}'", Key), "vigem")
@@ -1328,11 +1305,12 @@ SimpleRecordMacroStr(MacroStr) {
     SimpleCmdArr := []
     loop CmdArr.Length {
         paramArr := SplitCommand(CmdArr[A_Index])
-        isPressKey := paramArr[1] == GetLang("按键") && paramArr[3] == GetLang("按下")
-        if (isPressKey && A_Index + 1 < CmdArr.Length) {
+        ; 轴行无类型(如 按键_JoyAxisLX:75)仅2段，访问 paramArr[3] 会越界，须先判长度
+        isPressKey := paramArr.Length >= 3 && paramArr[1] == GetLang("按键") && paramArr[3] == GetLang("按下")
+        if (isPressKey && A_Index + 2 < CmdArr.Length) {
             next1ParamArr := SplitCommand(CmdArr[A_Index + 1])
             next2ParamArr := SplitCommand(CmdArr[A_Index + 2])
-            isMatchFormat := next1ParamArr[1] == GetLang("间隔") && next2ParamArr[1] == GetLang("按键")
+            isMatchFormat := next1ParamArr.Length >= 2 && next2ParamArr.Length >= 3 && next1ParamArr[1] == GetLang("间隔") && next2ParamArr[1] == GetLang("按键")
             if (isMatchFormat && paramArr[2] == next2ParamArr[2] && next2ParamArr[3] == "松开") {
                 ; 时长保底：PS5 蓝牙有时按下+松开在同 tick，间隔=0
                 clickDuration := next1ParamArr[2]

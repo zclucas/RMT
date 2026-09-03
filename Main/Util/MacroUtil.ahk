@@ -1412,7 +1412,8 @@ OnPressKey(tableItem, cmd, index) {
     paramArr := SplitCommand(cmd)
     ; 阶段5：新格式 按键<serial> 走配置文件；旧格式 按键_a_点击_100 兼容
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
+    isConfigCmd := (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly))
+    if (isConfigCmd) {
         Data := GetMacroCMDData(paramArr[1])
         keyName := Data.KeyName
         keyTypeVal := Data.KeyType          ; 1按下 2松开 3点击
@@ -1420,9 +1421,14 @@ OnPressKey(tableItem, cmd, index) {
         count := Data.Count
         intervalTime := Data.IntervalTime
     } else {
+        Data := ""
         keyName := paramArr[2]
+        ; 纯文本带值轴指令（录制产物 按键_JoyAxisLX:75，无"按下/松开/点击"类型段）：
+        ; 无需解析 keyType/保持等，后续统一轴分支会直接设值并 return。
+        isTextAxisCmd := (paramArr.Length == 2 && RegExMatch(paramArr[2]
+            , "^(JoyAxisL[XY]|JoyAxisR[XY]|JoyAxisL[TR]|JoyAxisR[TR]):(-?[0-9]+)$"))
         keyTypeMap := Map("按下", 1, "松开", 2, "点击", 3)
-        keyTypeVal := keyTypeMap[paramArr[3]]
+        keyTypeVal := isTextAxisCmd ? 1 : keyTypeMap[paramArr[3]]
         holdTime := paramArr.Length >= 4 ? Integer(paramArr[4]) : 100
         count := paramArr.Length >= 5 ? Integer(paramArr[5]) : 1
         intervalTime := paramArr.Length >= 6 ? Integer(paramArr[6]) : 0
@@ -1435,6 +1441,31 @@ OnPressKey(tableItem, cmd, index) {
     isJoyAxis := InStr(keyName, "JoyAxis")
     isJoyDpad := InStr(keyName, "JoyDpad")
     item := tableItem.Items[index]
+
+    ; 轴模拟量指令：把该虚拟手柄轴设为目标值并保持。
+    ; 轴是连续行为（非按键），无"按下/松开/点击"。直至下一条同轴指令覆盖
+    ; （含 AxisValue=0 回中）或宏链被中断/停止时兜底回中。
+    ; 两种来源：
+    ;   1) 编辑器/录制 config：按键<serial> → Data.IsAxis=1，值在 Data.AxisValue
+    ;   2) 录制纯文本（可读、剪贴板粘贴）：按键_JoyAxisLX:75 → 值内联在键名
+    axisKey := ""
+    axisValue := ""
+    if (isConfigCmd && IsObject(Data) && Data.IsAxis && InStr(Data.KeyName, "JoyAxis")) {
+        axisKey := Data.KeyName
+        axisValue := Data.HasOwnProp("AxisValue") ? Data.AxisValue : 0
+    } else if (!isConfigCmd && RegExMatch(keyName
+        , "^(JoyAxisL[XY]|JoyAxisR[XY]|JoyAxisL[TR]|JoyAxisR[TR]):(-?[0-9]+)$", &am)) {
+        axisKey := am[1]
+        axisValue := Integer(am[2])
+    }
+    if (axisKey != "") {
+        JoyDebugLog(Format("OnPressKey AXIS cmd={} key={} value={} mode={} pool={} killed={}"
+            , cmd, axisKey, axisValue, item.Mode, WorkPoolEnabled(), item.Killed), "press")
+        ; 连续语义：恒定 state=1（设到 axisValue 并 TrackDown 保持）。axisValue=0 即回中/归零。
+        SendJoyAxisValueKey(axisKey, 1, axisValue, tableItem, index)
+        return
+    }
+
     actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
     action := actionMap[Integer(item.Mode)]
     action := isJoyKey ? SendJoyBtnKey : action

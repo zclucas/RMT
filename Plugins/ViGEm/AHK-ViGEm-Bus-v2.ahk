@@ -273,44 +273,7 @@ class ViGEmXb360 extends ViGEmTarget {
 
         this.Dpad := ViGEmXb360._DpadHelper(this)
 
-        ; XInput索引相关
-        this.ViGJoyXInputIdx := -1  ; 虚拟手柄占用的XInput索引，-1表示未检测
-
         super.__New()
-
-        ; 异步检测虚拟手柄的XInput索引，不阻塞主线程
-        this._DetectXInputIdx()
-    }
-
-    ; 异步检测虚拟手柄占用的XInput索引（新出现的就是虚拟手柄）
-    _DetectXInputIdx() {
-        ; 创建时快照当前XInput连接状态
-        this._detectConnectedBefore := Map()
-        loop 4 {
-            xiState := Buffer(16)
-            if !DllCall("XInput1_4\XInputGetState", "uint", A_Index - 1, "ptr", xiState)
-                this._detectConnectedBefore[A_Index - 1] := true
-        }
-
-        this._detectTries := 0
-        SetTimer(ObjBindMethod(this, "_DetectXInputTick"), -50)
-    }
-
-    _DetectXInputTick() {
-        loop 4 {
-            xiState := Buffer(16)
-            if !DllCall("XInput1_4\XInputGetState", "uint", A_Index - 1, "ptr", xiState) {
-                if !this._detectConnectedBefore.Has(A_Index - 1) {
-                    this.ViGJoyXInputIdx := A_Index - 1
-                    this._detectConnectedBefore := ""
-                    return
-                }
-            }
-        }
-        if (++this._detectTries < 10)
-            SetTimer(ObjBindMethod(this, "_DetectXInputTick"), -50)
-        else
-            this._detectConnectedBefore := ""
     }
 
     class _ButtonHelper {

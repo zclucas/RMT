@@ -166,20 +166,8 @@ RI_Init() {
 
     DllCall("RegisterRawInputDevices", "Ptr", RID2.Ptr, "UInt", 1, "UInt", A_PtrSize == 8 ? 16 : 12)
 
-    ; 注册手柄 HID（Gamepad/Joystick）
-    RID_JOY := Buffer(A_PtrSize == 8 ? 16 : 12, 0)
-    NumPut("UShort", 0x01, RID_JOY, 0)    ; RIM_TYPEHID
-    NumPut("UShort", 0x01, RID_JOY, 2)    ; usUsagePage = Generic Desktop Controls
-    NumPut("UInt", 0x04, RID_JOY, 4)      ; usUsage = Joystick
-    NumPut("UPtr", RI_hwnd, RID_JOY, 8)
-    DllCall("RegisterRawInputDevices", "Ptr", RID_JOY.Ptr, "UInt", 1, "UInt", A_PtrSize == 8 ? 16 : 12)
-
-    RID_GAMEPAD := Buffer(A_PtrSize == 8 ? 16 : 12, 0)
-    NumPut("UShort", 0x01, RID_GAMEPAD, 0)  ; RIM_TYPEHID
-    NumPut("UShort", 0x01, RID_GAMEPAD, 2)  ; usUsagePage = Generic Desktop Controls
-    NumPut("UInt", 0x05, RID_GAMEPAD, 4)    ; usUsage = Gamepad
-    NumPut("UPtr", RI_hwnd, RID_GAMEPAD, 8)
-    DllCall("RegisterRawInputDevices", "Ptr", RID_GAMEPAD.Ptr, "UInt", 1, "UInt", A_PtrSize == 8 ? 16 : 12)
+    ; 注：此处曾注册 HID Joystick(0x04)/Gamepad(0x05)，但 OnWMInput_Raw 只处理
+    ;     dwType==0(鼠标) / dwType==1(键盘)，RIM_TYPEHID(2) 无分支，手柄数据从不消费，已移除。
 
     mouseSpeed := 0
     DllCall("SystemParametersInfo", "UInt", 0x0070, "UInt", 0, "IntP", &mouseSpeed, "UInt", 0)
@@ -586,6 +574,8 @@ OnFinishRecordMacro() {
             keyName := Key == "," ? GetLang("逗号") : Key
             MainSoftData.RecordMacroStr .= GetLang("按键") "_" keyName "_" GetLang("松开") ","
         }
+        ; 真轴兜底回中：仍有非零偏转的摇杆/扳机补一条 :0，保证回放结束归零
+        RecordJoyAxisRecentre()
     }
     macroStr := Trim(MainSoftData.RecordMacroStr, ",")
     macroStr := SimpleRecordMacroStr(macroStr)

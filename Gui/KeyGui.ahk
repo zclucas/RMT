@@ -108,12 +108,19 @@ class KeyGui {
         ; 行3：底部参数行
         bottom := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(11).Orientation("Horizontal").Margin("10,2").VerticalAlignment("Center")
         ; 类型组：标签+下拉框合成盒子，提示挂盒子上（主界面 _ComboRow 同款）
-        typeBox := bottom.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center").ToolTip(this._TypeHelpText())
+        typeBox := bottom.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center").ToolTip(this._TypeHelpText())
         typeBox.Add("TextBlock").Text(GetLang("类型:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         kt := typeBox.Add("ComboBox").Name("KeyTypeCon").Width(80).Height(26).MinHeight(26).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["按下", "松开", "点击"])
             kt.Add("ComboBoxItem").Content(t)
+        bottom.Add("TextBlock").Name("AxisValueTipCon").Text(GetLang("轴值:")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        bottom.Add("TextBox").Name("AxisValueCon").Width(64).Height(26).MinHeight(26)
+            .VerticalContentAlignment("Center").Padding("4,0")
+            .TextAlignment("Center").FontSize("11").Margin("6,0,0,0")
+            .Foreground("{DynamicResource InputText}")
+            .Background("{DynamicResource InputBg}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         bottom.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("点击时长:")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         bottom.Add("TextBox").Name("HoldTimeCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0")
@@ -195,6 +202,7 @@ class KeyGui {
         this.ui.OnEvent("HoldTimeCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("KeyCountCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("PerIntervalCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
+        this.ui.OnEvent("AxisValueCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("BtnClear", "Click", (*) => this.ClearCheckedArr())
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
         this.ui.OnEvent("EHModeCombo", "SelectionChanged", ObjBindMethod(this, "OnEHModeChange"))
@@ -319,9 +327,8 @@ class KeyGui {
         this._AddKeyRow([
             ["JoyDpadUp",GetLang("上"),20,60],["JoyDpadDown",GetLang("下"),95,60],
             ["JoyDpadLeft",GetLang("左"),170,60],["JoyDpadRight",GetLang("右"),245,60],
-            ["JoyDpadNone",GetLang("无方向"),320,60],["JoyAxisLXMin","LXMin",395,60],["JoyAxisLXMax","LXMax",470,60],
-            ["JoyAxisLYMin","LYMin",545,60],["JoyAxisLYMax","LYMax",620,60],["JoyAxisRXMin","RXMin",695,60],
-            ["JoyAxisRXMax","RXMax",770,60],["JoyAxisRYMin","RYMin",845,60],["JoyAxisRYMax","RYMax",920,60]], 380)
+            ["JoyDpadNone",GetLang("无方向"),320,60],["JoyAxisLX","LX",395,64],["JoyAxisLY","LY",470,64],
+            ["JoyAxisRX","RX",545,64],["JoyAxisRY","RY",620,64],["JoyAxisLT","LT",695,64],["JoyAxisRT","RT",770,64]], 380)
     }
 
     _RegisterKeyEvents() {
@@ -331,7 +338,62 @@ class KeyGui {
 
     ; ---------------- 选项相关 ----------------
 
+    ; 真轴键（带轴数值指令）：LX/LY/RX/RY 摇杆 -100..100；LT/RT 扳机 0..100
+    _AxisKeyRange(key) {
+        static ranges := Map(
+            "JoyAxisLX", "-100..100", "JoyAxisLY", "-100..100", "JoyAxisRX", "-100..100", "JoyAxisRY", "-100..100",
+            "JoyAxisLT", "0..100", "JoyAxisRT", "0..100")
+        return ranges.Get(key, "")
+    }
+    _IsAxisKey(key) {
+        return this._AxisKeyRange(key) != ""
+    }
+    _AxisMinMax(key) {
+        if (key == "JoyAxisLT" || key == "JoyAxisRT")
+            return [0, 100]
+        return [-100, 100]
+    }
+
     OnCheckedKey(key, *) {
+        ; 互斥约束：轴键只能单独选一个；选了普通键就不能选轴键；选了轴键就清空其他所有选择
+        if (this._IsAxisKey(key)) {
+            isSelected := false
+            arrayIndex := 0
+            for index, value in this.CheckedArr {
+                if (value == key) {
+                    isSelected := true
+                    arrayIndex := index
+                    break
+                }
+            }
+            ; 反选当前轴 -> 清空；正选 -> 仅保留该轴
+            for index, value in this.CheckedArr {
+                if (this.ConMap.Has(value))
+                    this.ui.Update(this.ConMap[value], "Background", this.UnSelectColor)
+            }
+            if (isSelected) {
+                this.CheckedArr := []
+            } else {
+                this.CheckedArr := [key]
+                this.ui.Update(this.ConMap[key], "Background", this.SelectColor)
+                ; 首次选轴给出默认轴值
+                cur := IsObject(this.ui) ? this.ui.Query("AxisValueCon") : ""
+                if (!IsNumber(cur) || cur == "")
+                    this.ui.Update("AxisValueCon", "Text", "100")
+            }
+            this.Refresh()
+            return
+        }
+
+        ; 普通键（含 Dpad/Joy按钮/键鼠）：不支持与轴键混选。若当前已选轴键，直接清掉轴再按普通键逻辑
+        if (this.CheckedArr.Length > 0 && this._IsAxisKey(this.CheckedArr[1])) {
+            for index, value in this.CheckedArr {
+                if (this.ConMap.Has(value))
+                    this.ui.Update(this.ConMap[value], "Background", this.UnSelectColor)
+            }
+            this.CheckedArr := []
+        }
+
         isSelected := false
         arrayIndex := 0
         con := this.ConMap.Get(key)
@@ -354,6 +416,12 @@ class KeyGui {
         }
 
         this.Refresh()
+    }
+
+    _SelectedAxisKey() {
+        if (this.CheckedArr.Length == 1 && this._IsAxisKey(this.CheckedArr[1]))
+            return this.CheckedArr[1]
+        return ""
     }
 
     ClearCheckedArr() {
@@ -438,6 +506,37 @@ class KeyGui {
 
         this.RefreshCheckCon(this.KeyStr)
         this._InitEH()
+
+        ; 轴指令回显：载入真轴 + 轴值
+        this._InitAxisValueBox()
+    }
+
+    ; 回显轴指令的轴值与选中态（兼容 config 与旧明文 LX:75 两种来源）
+    _InitAxisValueBox() {
+        axisVal := ""
+        axisName := ""
+        if (IsObject(this.Data) && this.Data.IsAxis) {
+            axisName := this.Data.KeyName
+            axisVal := this.Data.HasOwnProp("AxisValue") ? this.Data.AxisValue : ""
+        } else if (RegExMatch(this.KeyStr, "^(JoyAxisL[XY]|JoyAxisR[XY]|JoyAxisL[TR]|JoyAxisR[TR]):(-?[0-9]+)$", &m)) {
+            axisName := m[1]
+            axisVal := Integer(m[2])
+        }
+        if (axisName != "" && this._IsAxisKey(axisName) && this.ConMap.Has(axisName)) {
+            ; 只保留该轴为唯一选中（若 KeyStr 含该轴则已由 RefreshCheckCon 高亮，这里兜底补全）
+            if (this.CheckedArr.Length != 1 || this.CheckedArr[1] != axisName) {
+                for k in this.CheckedArr
+                    if (this.ConMap.Has(k))
+                        this.ui.Update(this.ConMap[k], "Background", this.UnSelectColor)
+                this.CheckedArr := [axisName]
+                this.ui.Update(this.ConMap[axisName], "Background", this.SelectColor)
+            }
+            ; 缺省轴值一律给满值：摇杆 100（满偏）、扳机 100（满按），与 OnCheckedKey 的默认值一致
+            if (axisVal == "")
+                axisVal := 100
+            this.ui.Update("AxisValueCon", "Text", axisVal)
+        }
+        this.Refresh()
     }
 
     ; ============ 错误处理（阶段5，影刀模式）============
@@ -514,7 +613,18 @@ class KeyGui {
         ; 复用旧 CommandStr 的 UI 值解析（KeyStr 已在 UpdateCommandStr 刷新）
         cmdArr := SplitCommand(this.CommandStr)
         this.Data.KeyName := this.KeyStr
-        this.Data.KeyType := this._KeyTypeIndex()          ; 1按下 2松开 3点击
+        axisKey := this._SelectedAxisKey()
+        if (axisKey != "") {
+            ; 轴指令：连续行为，无类型(按下/松开/点击)。KeyType 置固定 1(按下=设值保持)，
+            ; 仅 AxisValue 表达目标值；回中由用户再发一条 AxisValue=0 实现。
+            this.Data.KeyType := 1
+            this.Data.IsAxis := 1
+            this.Data.AxisValue := this._ReadAxisValue(axisKey)
+        } else {
+            this.Data.KeyType := this._KeyTypeIndex()          ; 1按下 2松开 3点击
+            this.Data.IsAxis := 0
+            this.Data.AxisValue := 0
+        }
         this.Data.HoldTime := cmdArr.Length >= 4 ? cmdArr[4] : 100
         this.Data.Count := cmdArr.Length >= 5 ? cmdArr[5] : 1
         this.Data.IntervalTime := cmdArr.Length >= 6 ? cmdArr[6] : 0
@@ -529,9 +639,27 @@ class KeyGui {
         SaveMacroCMDData(this.Data)
         ; 备注：用户备注优先，为空则自动生成操作内容
         remark := Trim(this.ui.Query("RemarkCon"))
-        if (remark == "")
-            remark := this.KeyStr "_" this._KeyTypeText()
+        if (remark == "") {
+            remark := this.KeyStr
+            if (axisKey != "")
+                remark .= ":" this.Data.AxisValue
+            else
+                remark .= "_" this._KeyTypeText()
+        }
         return CorrectRemark(this.Data.SerialStr, remark)
+    }
+
+    _ReadAxisValue(axisKey) {
+        range := this._AxisMinMax(axisKey)
+        v := this.ui.Query("AxisValueCon")
+        if (!IsNumber(v))
+            v := range[2]
+        v := Integer(v)
+        if (v < range[1])
+            return range[1]
+        if (v > range[2])
+            return range[2]
+        return v
     }
 
     ; 按键类型帮助提示（主界面样式：ToolTip 挂标签，不用问号按钮）
@@ -552,10 +680,20 @@ class KeyGui {
         this.KeyStr := this.GetTriggerKey()
         this.UpdateCommandStr()
 
-        isShowHoldTime := this._KeyTypeIndex() == 3
+        axisKey := this._SelectedAxisKey()
+        isAxis := axisKey != ""
+        ; 轴是连续行为（非按键），无按下/松开/点击类型：选轴时隐藏"类型"组与点击类参数，
+        ; 仅保留"轴值"输入框（设到该值即保持，回中用数值0再发一条）。
+        isShowType := !isAxis
+        isShowHoldTime := !isAxis && this._KeyTypeIndex() == 3
         isShowCount := isShowHoldTime
         isShowInterval := isShowCount && this.ui.Query("KeyCountCon") != 1
+        isShowAxisValue := isAxis
 
+        ; 类型组（标签+下拉）整体显隐
+        this.ui.Update("TypeBox", "Visibility", isShowType ? "Visible" : "Collapsed")
+        this.ui.Update("AxisValueTipCon", "Visibility", isShowAxisValue ? "Visible" : "Collapsed")
+        this.ui.Update("AxisValueCon", "Visibility", isShowAxisValue ? "Visible" : "Collapsed")
         this.ui.Update("HoldTimeTipCon", "Visibility", isShowHoldTime ? "Visible" : "Collapsed")
         this.ui.Update("HoldTimeCon", "Visibility", isShowHoldTime ? "Visible" : "Collapsed")
         this.ui.Update("KeyCountTipCon", "Visibility", isShowCount ? "Visible" : "Collapsed")
@@ -578,21 +716,27 @@ class KeyGui {
     }
 
     UpdateCommandStr() {
-        hasHoldTime := this._KeyTypeIndex() == 3
+        axisKey := this._SelectedAxisKey()
+        hasHoldTime := !axisKey && this._KeyTypeIndex() == 3
         hasCount := hasHoldTime && this.ui.Query("KeyCountCon") != 1
         hasInterval := hasCount && this.ui.Query("PerIntervalCon") != 0
 
         CommandStr := GetLang("按键")
-        CommandStr .= "_" this.KeyStr
-        CommandStr .= "_" this._KeyTypeText()
-        if (hasHoldTime) {
-            CommandStr .= "_" this.ui.Query("HoldTimeCon")
-        }
-        if (hasCount) {
-            CommandStr .= "_" this.ui.Query("KeyCountCon")
-        }
-        if (hasInterval) {
-            CommandStr .= "_" this.ui.Query("PerIntervalCon")
+        if (axisKey != "") {
+            ; 轴指令（连续行为，无类型）：按键_LX:75
+            CommandStr .= "_" axisKey ":" this._ReadAxisValue(axisKey)
+        } else {
+            CommandStr .= "_" this.KeyStr
+            CommandStr .= "_" this._KeyTypeText()
+            if (hasHoldTime) {
+                CommandStr .= "_" this.ui.Query("HoldTimeCon")
+            }
+            if (hasCount) {
+                CommandStr .= "_" this.ui.Query("KeyCountCon")
+            }
+            if (hasInterval) {
+                CommandStr .= "_" this.ui.Query("PerIntervalCon")
+            }
         }
 
         this.CommandStr := CommandStr
@@ -602,6 +746,25 @@ class KeyGui {
         if (this.KeyStr == "") {
             MsgBox(GetLang("请选择按键！"))
             return false
+        }
+
+        axisKey := this._SelectedAxisKey()
+        if (axisKey != "") {
+            ; 轴值校验（摇杆 -100..100，扳机 0..100）
+            range := this._AxisMinMax(axisKey)
+            v := this.ui.Query("AxisValueCon")
+            if (!IsNumber(v) || Integer(v) < range[1] || Integer(v) > range[2]) {
+                MsgBox(Format("轴值需为 {} 到 {} 的整数！", range[1], range[2]))
+                return false
+            }
+        } else if (this.CheckedArr.Length > 0) {
+            ; 非轴多键时不允许混入任何轴键（防异常态）
+            for k in this.CheckedArr {
+                if (this._IsAxisKey(k)) {
+                    MsgBox(GetLang("轴键只能单独使用一个，且不能与其他按键组合！"))
+                    return false
+                }
+            }
         }
 
         if (!IsInteger(this.ui.Query("KeyCountCon")) || Integer(this.ui.Query("KeyCountCon")) <= 0) {

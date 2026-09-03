@@ -64,8 +64,8 @@ CompatMacro(MacroStr, &isFix) {
             CMDArr[A_Index] := GetCmdByParams(paramArr)
         }
 
-        ;1.1F1 按键指令动作类型改成中文
-        if (paramArr[1] == "按键" && IsInteger(paramArr[3])) {
+        ;1.1F1 按键指令动作类型改成中文（轴行无类型仅2段，须先判长度避免越界）
+        if (paramArr[1] == "按键" && paramArr.Length >= 3 && IsInteger(paramArr[3])) {
             keyTypeMap := Map(1, "按下", 2, "松开", 3, "点击")
             if (keyTypeMap.Has(Integer(paramArr[3]))) {
                 isFix := true

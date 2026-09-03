@@ -2297,6 +2297,10 @@ ReleaseTableItemHoldKeys(tableItem, index) {
         else if (value == "JoyAxis") {
             SendJoyAxisKey(key, 0, tableItem, index)
         }
+        else if (value == "JoyAxisValue") {
+            ; 连续轴指令（JoyAxisLX/LY/RX/RY/LT/RT + 轴值）被中断/停止：回中/归零到 0
+            SendJoyAxisValueKey(key, 0, 0, tableItem, index)
+        }
         else if (value == "JoyDpad") {
             SendJoyDpadKey(key, 0, tableItem, index)
         }

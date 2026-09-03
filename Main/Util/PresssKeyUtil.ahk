@@ -342,6 +342,53 @@ SendJoyAxisKey(key, state, tableItem, index) {
         TrackUp(bucket, key, tableItem, index)
 }
 
+; 轴指令：解析规范轴键 JoyAxisLX/LY/RX/RY/LT/RT + 指令层轴值，换算并写入虚拟手柄。
+;   JoyAxisLX/LY/RX/RY: 轴值为 -100..100（0=中心），换算到 ViGEm 摇杆 0..100（50=中心）
+;   JoyAxisLT/RT:       轴值为 0..100，换算到 ViGEm 扳机 0..255
+; key 形如 "JoyAxisLX"（不含 Min/Max，axisValue 为指令层真实模拟量）
+SendJoyAxisValueKey(key, state, axisValue, tableItem, index) {
+    bucket := GetHoldBucket(tableItem, index)
+
+    axisName := SubStr(key, 8)             ; "JoyAxisLX" -> "LX"
+    ; 白名单判定：未知轴名直接忽略，避免被当成摇杆写入非法值
+    static StickAxes := Map("LX", 1, "LY", 1, "RX", 1, "RY", 1)
+    static TriggerAxes := Map("LT", 1, "RT", 1)
+    isStick := StickAxes.Has(axisName)
+    isTrigger := TriggerAxes.Has(axisName)
+    if (!isStick && !isTrigger) {
+        JoyDebugLog(Format("SendJoyAxisValueKey IGNORE unknown axis key={}", key), "send")
+        return
+    }
+
+    ; 松开（state=0）时回到中性：摇杆回中(指令0)、扳机归零(0)
+    target := state ? axisValue : 0
+
+    ; 换算：摇杆指令 -100..100 -> ViGEm 0..100(50=中心)；扳机指令 0..100 -> ViGEm 0..255
+    outVal := 0
+    if (isStick) {
+        outVal := Round(ClampAxisValue(target, -100, 100) / 2 + 50)   ; -100->0, 0->50, +100->100
+    } else {
+        outVal := Round(ClampAxisValue(target, 0, 100) * 2.55)        ; 0->0, 100->255
+    }
+    JoyDebugLog(Format("SendJoyAxisValueKey key={} state={} value={} axis={} out={}", key, state, axisValue, axisName, outVal), "send")
+    MyViGJoySetState("Axis", axisName, outVal)
+
+    if (state)
+        TrackDown(bucket, key, "JoyAxisValue", tableItem, index)
+    else
+        TrackUp(bucket, key, tableItem, index)
+}
+
+; 指令层轴值裁剪到 [min,max]，返回裁剪后整数
+ClampAxisValue(v, min, max) {
+    v := IsNumber(v) ? v : 0
+    if (v < min)
+        return min
+    if (v > max)
+        return max
+    return v
+}
+
 SendJoyDpadKey(key, state, tableItem, index) {
     bucket := GetHoldBucket(tableItem, index)
 

@@ -1377,6 +1377,11 @@ class KeyDataConfig {
         this.HoldTime := 100      ; 点击时长(ms)
         this.Count := 1           ; 点击次数
         this.IntervalTime := 0    ; 每次间隔(ms)
+        ; 轴指令（真实模拟量，替代方向二元按键）：
+        ;   IsAxis=1 时 KeyName 形如 "JoyAxisLX"，AxisValue 为目标模拟量
+        ;   摇杆 LX/LY/RX/RY 取 -100..100（0=中心）；扳机 LT/RT 取 0..100
+        this.IsAxis := 0          ; 0普通按键 1轴模拟量指令
+        this.AxisValue := 0       ; 轴目标值（指令层 ±100 / 0..100）
         ; 错误处理（影刀模式，阶段5）
         this.ErrMode := "stop"
         this.ErrRetryCount := 3
