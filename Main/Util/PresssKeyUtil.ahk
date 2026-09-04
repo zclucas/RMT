@@ -51,9 +51,32 @@ ClearDpadHoldState(bucket, tableItem := "", index := 0) {
     }
 }
 
+; 罗技（IbInputSimulator）驱动只实现标准 USB 键盘用法页：
+;   Logitech::send_keyboard_input → Usb::keyboard_vk_to_usage(vk)
+; 该转换对 VK 0xA6~0xB7（Browser_Back … Launch_App2，即多媒体/浏览器/启动键）一律返回 usage 0，
+; 写入 6 字节 HID 报告等于空槽位 → 驱动报"无键按下" → 静默无效。
+; 且 report_keyboard 是 DeviceIoControl，无论 usage 是否有效都返回成功，
+; 因此 IbSendKeybdDown 的 bool 返回值判断不了成败，无法像 AHI 那样"发送失败才回退"，
+; 只能在发送前按 VK 区间预判，这类键改走普通 AHK Send（按 VK 发送，功能可用，代价是非驱动级）。
+; 注意：这段是实测 + 驱动源码双重确认的，**不要删除**。
+; 判断某键在罗技驱动下是否发不出去（逻辑真值）。
+; 供 ResolveActionForKey（SendSingleKey 热路径）与 SendLogicKey（替换键直调路径）共用，
+; 保证两条发送路径都覆盖到驱动级缺失的键。
+IsLogicUnsendableKey(key) {
+    vk := 0
+    try vk := GetKeyVK(key)
+    catch
+        return false
+
+    ; 0xA6 = VK_BROWSER_BACK … 0xB7 = VK_LAUNCH_APP2
+    return (vk >= 0xA6 && vk <= 0xB7)
+}
+
 ResolveActionForKey(baseAction, key) {
-    static LogicNoKeyMap := Map("Volume_Up", 0, "Volume_Down", 0, "Volume_Mute", 0)
-    return (baseAction == SendLogicKey && LogicNoKeyMap.Has(key)) ? SendNormalKey : baseAction
+    if (baseAction != SendLogicKey)
+        return baseAction
+
+    return IsLogicUnsendableKey(key) ? SendNormalKey : baseAction
 }
 
 SendKeysUp(keys, tableItem, index, Action) {
@@ -166,6 +189,14 @@ SendNormalKey(Key, state, tableItem, index) {
 }
 
 SendLogicKey(Key, state, tableItem, index) {
+    ; 驱动级覆盖不到的多媒体/浏览器键（VK 0xA6~0xB7）在此兜底，避免替换键路径
+    ; （OnReplaceDownKey/Up 直接调 sender、不经 SendSingleKey）漏网直接发进驱动而静默无效。
+    ; down/up 对称：是否降级只由键决定，一次宏期间不变，不会出现按下走 Normal、抬起走 Logic 的错配。
+    if (IsLogicUnsendableKey(Key)) {
+        SendNormalKey(Key, state, tableItem, index)
+        return
+    }
+
     if !InitLogitechGHubNew()
         return
 
@@ -194,9 +225,16 @@ SendAHIKey(Key, state, tableItem, index) {
     if !InitAHI()
         return
 
-    bucket := GetHoldBucket(tableItem, index)
+    ; AHI 只认扫描码，多媒体/浏览器键（Volume_*/Media_*/Browser_*/Launch_*）一律发不出去。
+    ; 发送失败时回退到普通 AHK Send，而不是静默丢弃。
+    ; SendNormalKey 内部会自己 TrackDown/TrackUp（source 记为 Normal），所以这里直接 return。
+    ; down/up 对称：失败与否只由键名决定，一次宏期间不变，不会出现按下与抬起走不同通道。
+    if !AhiSendKey(Key, state) {
+        SendNormalKey(Key, state, tableItem, index)
+        return
+    }
 
-    AhiSendKey(Key, state)
+    bucket := GetHoldBucket(tableItem, index)
     if state
         TrackDown(bucket, Key, "AHI", tableItem, index)
     else

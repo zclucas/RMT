@@ -31,6 +31,18 @@ global AHI_MouseBtnMap := Map(
     "XButton2", 4    ; 侧键2 → BUTTON_5 (INTERCEPTION_MOUSE_BUTTON_5_DOWN = 0x100)
 )
 
+; 滚轮映射表（名称 → [AHI 按钮编号, state]）
+; AHI 的滚轮不是"移动"，而是通过按钮事件发送：
+;   button 5 = 垂直滚轮，6 = 横向滚轮
+;   state 1 = 上/右，-1 = 下/左
+; 参考: https://github.com/evilC/AutoHotInterception
+global AHI_WheelMap := Map(
+    "WheelUp",    [5, 1],
+    "WheelDown",  [5, -1],
+    "WheelRight", [6, 1],
+    "WheelLeft",  [6, -1]
+)
+
 ; AHI 安装目录（含 install.ps1 / 安装卸载.bat）
 GetAHIPluginDir() {
     if (IsSet(AHIPluginDir) && DirExist(AHIPluginDir))
@@ -195,7 +207,7 @@ AhiSendKey(key, state := 1) {
     if (!InitAHI())
         return false
 
-    global AHI_Driver, AHI_KeyboardId, AHI_MouseId, AHI_MouseBtnMap
+    global AHI_Driver, AHI_KeyboardId, AHI_MouseId, AHI_MouseBtnMap, AHI_WheelMap
 
     ; 检查是否为鼠标按键
     if (AHI_MouseBtnMap.Has(key)) {
@@ -209,22 +221,28 @@ AhiSendKey(key, state := 1) {
         return true
     }
 
-    ; 滚轮特殊处理
-    if (key == "WheelUp") {
-        if (state == 1)
-            AHI_Driver.SendMouseMoveRelative(AHI_MouseId, 0, 120)
-        return true
-    }
-    if (key == "WheelDown") {
-        if (state == 1)
-            AHI_Driver.SendMouseMoveRelative(AHI_MouseId, 0, -120)
+    ; 滚轮：一次性事件，只在 state==1 时发送（旧的 SendMouseMoveRelative 会把光标当 Y 轴移动，且方向相反）
+    if (AHI_WheelMap.Has(key)) {
+        if (state == 1) {
+            wheel := AHI_WheelMap[key]
+            AHI_Driver.SendMouseButtonEvent(AHI_MouseId, wheel[1], wheel[2])
+            _AHI_Log("AHI_Wheel", Format("key={} btn={} state={}", key, wheel[1], wheel[2]))
+        }
         return true
     }
 
     ; 键盘按键
+    ; 注意：AHI 只认 <=256 的扫描码，以及 256+ 白名单内的扩展键（方向键/Insert/Delete/Win/RCtrl/RAlt/RShift/
+    ; NumLock/NumpadEnter/NumpadDiv/PrtScr/AppsKey）。多媒体键（Volume_*/Media_*/Browser_*/Launch_*）的
+    ; AHK 扫描码都 >256 且不在白名单内，AHI 会直接抛异常，必须拦下来，否则整个宏会被打断
     scanCode := GetKeySC(key)
     if (scanCode != 0) {
-        AHI_Driver.SendKeyEvent(AHI_KeyboardId, scanCode, state)
+        try
+            AHI_Driver.SendKeyEvent(AHI_KeyboardId, scanCode, state)
+        catch as err {
+            _AHI_Log("AHI_KeyErr", Format("key={} sc=0x{:X} state={} err={}", key, scanCode, state, err.Message))
+            return false
+        }
         return true
     }
     
@@ -237,7 +255,7 @@ AhiSend(keys) {
     if (!InitAHI())
         return false
 
-    global AHI_Driver, AHI_KeyboardId, AHI_MouseId, AHI_MouseBtnMap
+    global AHI_Driver, AHI_KeyboardId, AHI_MouseId, AHI_MouseBtnMap, AHI_WheelMap
     keys := Trim(keys)
     if (keys == "")
         return false
@@ -261,10 +279,9 @@ AhiSend(keys) {
                 btnNum := AHI_MouseBtnMap[keyName]
                 AHI_Driver.SendMouseButtonEvent(AHI_MouseId, btnNum, 1)
                 AHI_Driver.SendMouseButtonEvent(AHI_MouseId, btnNum, 0)
-            } else if (keyName == "WheelUp") {
-                AHI_Driver.SendMouseMoveRelative(AHI_MouseId, 0, 120)
-            } else if (keyName == "WheelDown") {
-                AHI_Driver.SendMouseMoveRelative(AHI_MouseId, 0, -120)
+            } else if (AHI_WheelMap.Has(keyName)) {
+                wheel := AHI_WheelMap[keyName]
+                AHI_Driver.SendMouseButtonEvent(AHI_MouseId, wheel[1], wheel[2])
             } else {
                 ; 键盘按键
                 scanCode := GetKeySC(keyName)
@@ -337,7 +354,17 @@ AhiNormalizeMouseBtn(whichButton := "L") {
 ; 鼠标点击（Interception）；clickCount 为点击次数
 AhiClick(whichButton := "L", clickCount := 1) {
     if (!InitAHI()) {
-        Click(whichButton, , , clickCount)
+        ; AHK v2 的 Click 最多 3 个参数（X, Y, Options），次数要拼进 Options 字符串
+        static fallbackBtn := Map("LButton", "Left", "RButton", "Right", "MButton", "Middle"
+            , "XButton1", "X1", "XButton2", "X2")
+        btnName := AhiNormalizeMouseBtn(whichButton)
+        btnOpt := fallbackBtn.Has(btnName) ? fallbackBtn[btnName] : "Left"
+        cnt := Max(1, Integer(clickCount))
+        Loop cnt {
+            Click(btnOpt)
+            if (A_Index < cnt)
+                Sleep(50)
+        }
         return false
     }
 
