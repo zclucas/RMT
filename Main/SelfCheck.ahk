@@ -8,7 +8,7 @@ SelfCheckMissingFiles() {
         return
     }
 
-    version := RegExReplace(RMT_VERSION, "^(\d+\.\d+).*", "$1")
+    version := RMT_VERSION  ; 使用完整版本名，不做 *.* 截断（如 1.3.5 -> tag v1.3.5_x64）
     arch := A_PtrSize == 8 ? "x64" : "x86"
     bitArch := A_PtrSize == 8 ? "64bit" : "32bit"
     tag := "v" version "_" arch
