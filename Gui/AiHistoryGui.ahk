@@ -232,7 +232,7 @@ class AiHistoryGui {
     OnDelClick(id, state, ctrl, event) {
         this._skipRow := true
         SetTimer(() => (this._skipRow := false), -200)
-        if (MsgBox(GetLang("确定删除这条对话记录？"), GetLang("对话记录"), "YesNo Icon?") != "Yes")
+        if (!RmtDialog.Confirm(GetLang("确定删除这条对话记录？"), GetLang("对话记录")))
             return
         AiChatStore.Delete(id)
         try {

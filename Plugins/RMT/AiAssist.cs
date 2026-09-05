@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace RMT
@@ -22,6 +23,7 @@ namespace RMT
         private string _chatError = "";
         private string _chatPartial = "";
         private int _chatSeq;
+        private CancellationTokenSource _chatCts;
 
         static AiAssist()
         {
@@ -88,7 +90,7 @@ namespace RMT
             return ParseChatResult(body);
         }
 
-        private string ChatCompletionStream(string baseUrl, string apiKey, string model, string messagesJson, double temperature, string toolsJson, int seq)
+        private string ChatCompletionStream(string baseUrl, string apiKey, string model, string messagesJson, double temperature, string toolsJson, int seq, CancellationToken token)
         {
             baseUrl = NormalizeBaseUrl(baseUrl);
             if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(model))
@@ -112,7 +114,7 @@ namespace RMT
                     try { req.Headers.Accept.ParseAdd("text/event-stream"); } catch { }
                     req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-                    HttpResponseMessage resp = Client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead)
+                    HttpResponseMessage resp = Client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, token)
                         .ConfigureAwait(false).GetAwaiter().GetResult();
                     int code = (int)resp.StatusCode;
                     if (code < 200 || code >= 300)
@@ -136,6 +138,7 @@ namespace RMT
                         string line;
                         while ((line = reader.ReadLine()) != null)
                         {
+                            token.ThrowIfCancellationRequested();
                             if (CurrentSeq() != seq)
                                 break;
                             line = (line ?? "").Trim();
@@ -331,11 +334,22 @@ namespace RMT
             string j = messagesJson;
             string t = toolsJson ?? "";
             double temp = 0.4;
+            CancellationTokenSource cts;
+            lock (_chatLock)
+            {
+                if (_chatCts != null)
+                {
+                    try { _chatCts.Cancel(); } catch { }
+                }
+                _chatCts = new CancellationTokenSource();
+                cts = _chatCts;
+            }
+            CancellationToken token = cts.Token;
             Task.Run(() =>
             {
                 try
                 {
-                    string r = ChatCompletionStream(b, k, m, j, temp, t, seq);
+                    string r = ChatCompletionStream(b, k, m, j, temp, t, seq, token);
                     lock (_chatLock)
                     {
                         if (seq != _chatSeq)
@@ -346,6 +360,18 @@ namespace RMT
                 }
                 catch (Exception ex)
                 {
+                    if (token.IsCancellationRequested || ex is OperationCanceledException || ex is TaskCanceledException)
+                    {
+                        lock (_chatLock)
+                        {
+                            if (seq != _chatSeq)
+                                return;
+                            _chatState = 0;
+                            _chatResult = "";
+                            _chatError = "";
+                        }
+                        return;
+                    }
                     lock (_chatLock)
                     {
                         if (seq != _chatSeq)
@@ -355,6 +381,23 @@ namespace RMT
                     }
                 }
             });
+        }
+
+        /// <summary>取消进行中的对话请求。休眠/暂停/终止宏不要调用这个。</summary>
+        public void CancelChat()
+        {
+            lock (_chatLock)
+            {
+                _chatSeq++;
+                _chatState = 0;
+                _chatResult = "";
+                _chatError = "";
+                _chatPartial = "";
+                if (_chatCts != null)
+                {
+                    try { _chatCts.Cancel(); } catch { }
+                }
+            }
         }
 
         /// <summary>0=空闲 1=进行中 2=成功 3=失败</summary>

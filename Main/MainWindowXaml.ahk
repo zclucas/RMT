@@ -209,6 +209,8 @@ class MainWin {
         this._aiHist := Map()       ; 页签 → [{role, content}, ...]
         this._aiSessionId := Map()  ; 页签 → 当前会话 id
         this._aiBusy := Map()       ; 页签 → 正在请求
+        this._aiCancel := Map()     ; 页签 → 用户点了暂停取消
+        this._aiEmptyRetry := Map()
         this._aiToolRound := Map()
         this._aiThinkPhase := Map()
         this._aiThinkMode := Map()  ; 页签 → think | edit
@@ -235,12 +237,16 @@ class MainWin {
         this._aiPendingLinks := []
         this._aiPendingFileActs := []
         this._aiPendingCopyAll := []
+        this._aiPendingUserCards := []
+        this._aiUserExpanded := Map()
         this._aiCopyAllText := Map()
         this._aiMsgFilePaths := []
         this._aiStickBottom := Map()
         this.aiScrollTick := ObjBindMethod(this, "_AiScrollPending")
         this._aiScrollTab := 0
         this._aiNormGuard := Map()
+        this._aiInputWide := Map()
+        this._aiInputBoxW := Map()
         this._pendingMacroNav := ""
     }
 
@@ -303,9 +309,9 @@ class MainWin {
         return (IsSet(MainSoftData) && MainSoftData.HasProp("FontType") && MainSoftData.FontType != "")
             ? MainSoftData.FontType : "微软雅黑"
     }
-    ; 多行时每增一行的行距（含行距与字脚，过小会裁切 q/g/y）
+    ; 多行时每增一行的行距（在单行高度上叠加）
     _AiInputExtraLineH() {
-        return 22
+        return 16
     }
     ; 拖拽调宽时对话框宽度跟随的过渡时长
     _AiInnerAnimMs() {
@@ -314,6 +320,27 @@ class MainWin {
     ; 对话输入框最多显示行数，超出出滚动条
     _AiInputMaxLines() {
         return 10
+    }
+    _AiUserPreviewLines() {
+        return 3.5
+    }
+    _AiUserPreviewLineH() {
+        return Max(18, Integer(XAMLHost.ChatBodyFontSize()) + 6)
+    }
+    _AiUserPreviewH() {
+        pad := Integer(AiSettingGui.ContentPadL)
+        return Round(this._AiUserPreviewLineH() * this._AiUserPreviewLines() + pad * 2)
+    }
+    _AiUserNeedsClip(text) {
+        raw := this._AiNormalizeNewlines(text, false)
+        lines := StrSplit(raw, "`n")
+        if (lines.Length > 3)
+            return true
+        for line in lines {
+            if (StrLen(line) > 28)
+                return true
+        }
+        return false
     }
 
     ; 惰性构建虚拟表集合（须在 LoadCurMacroSetting 之后调用）
@@ -1740,8 +1767,8 @@ class MainWin {
         att := box.Add("StackPanel").Name("AiAttachBar_" idx).Grid_Row(0).Orientation("Horizontal")
             .Margin("0,6,4,4").Visibility("Collapsed").ClipToBounds("False")
         inner := box.Add("Grid").Grid_Row(1)
-        inner.Cols("*", "Auto", "Auto")
-        tb := inner.Add("TextBox").Name("AiInput_" idx).Grid_Column(0).Style("{StaticResource RmtAiChatBox}")
+        tb := inner.Add("TextBox").Name("AiInput_" idx).Style("{StaticResource RmtAiChatBox}")
+            .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
             .Height(textH).MinHeight(textH).MaxHeight(maxH)
             .AcceptsReturn("True").TextWrapping("Wrap").AllowDrop("False")
             .VerticalScrollBarVisibility("Hidden").HorizontalScrollBarVisibility("Disabled")
@@ -1750,18 +1777,19 @@ class MainWin {
             .Foreground("{DynamicResource InputText}")
             .Background("Transparent").BorderThickness("0")
         this._AttachTextEditContextMenu(tb, true)
-        ph := inner.Add("TextBlock").Name("AiInputPh_" idx).Grid_Column(0).Text(GetLang("询问关于宏的任何问题…")).IsHitTestVisible("False")
+        ph := inner.Add("TextBlock").Name("AiInputPh_" idx).Text(GetLang("询问关于宏的任何问题…")).IsHitTestVisible("False")
             .VerticalAlignment("Center").HorizontalAlignment("Left").Margin("0")
             .Foreground("{DynamicResource TextSub}").Opacity("0.55")
             .FontSize(this._AiChatBodyFontSize())
-        inner.Add("Button").Name("AiMic_" idx).Grid_Column(1).Width(sendW).Height(sendW).MinHeight(sendW)
-            .VerticalAlignment("Center")
-            .Style("{StaticResource RmtAiIconBtn}").Margin("2,0,0,0")
+        btns := inner.Add("StackPanel").Name("AiInputBtns_" idx).Orientation("Horizontal")
+            .HorizontalAlignment("Right").VerticalAlignment("Center")
+            .SetProp("Panel.ZIndex", "2")
+        btns.Add("Button").Name("AiMic_" idx).Width(sendW).Height(sendW).MinHeight(sendW)
+            .Style("{StaticResource RmtAiIconBtn}").Margin("0,0,2,0")
             .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(11)
             .ToolTip(GetLang("语音输入"))
-        inner.Add("Button").Name("AiSend_" idx).Grid_Column(2).Width(sendW).Height(sendW).MinHeight(sendW)
-            .VerticalAlignment("Center")
-            .Style("{StaticResource RmtAiIconBtn}").Margin("2,0,0,0")
+        btns.Add("Button").Name("AiSend_" idx).Width(sendW).Height(sendW).MinHeight(sendW)
+            .Style("{StaticResource RmtAiIconBtn}").Margin("0")
             .Content(Chr(0xE724)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(11)
             .ToolTip(GetLang("发送"))
     }
@@ -1838,11 +1866,13 @@ class MainWin {
     _AiInputSendW() {
         return 24
     }
+    _AiInputIconReserve() {
+        return this._AiInputSendW() * 2 + 4
+    }
 
     _AiInputPad(lines) {
-        ; 外层 Border 承担边距（与 AI 设置 ContentPadL 一致），内层 TextBox 不再叠一层
         pad := AiSettingGui.ContentPadL
-        return lines <= 1 ? pad ",0," pad ",0" : pad ",4," pad ",4"
+        return lines <= 1 ? pad ",0," pad ",0" : pad ",2," pad ",2"
     }
 
     _AiInputPhMargin(lines) {
@@ -1896,6 +1926,7 @@ class MainWin {
         this._aiPendingLinks := []
         this._aiPendingFileActs := []
         this._aiPendingCopyAll := []
+        this._aiPendingUserCards := []
         xaml := this._AiMsgXaml(isUser, text)
         try this.ui.Update("SideAiMsgs_" t, "AddXamlItem", xaml)
         for name in this._aiPendingLinks
@@ -1904,6 +1935,8 @@ class MainWin {
             this._Bind(act.name, "Click", ObjBindMethod(this, "OnAiFileMenu", act))
         for name in this._aiPendingCopyAll
             this._Bind(name, "Click", ObjBindMethod(this, "OnAiCopyAll", name))
+        for name in this._aiPendingUserCards
+            this._Bind(name, "MouseLeftButtonUp", ObjBindMethod(this, "OnAiUserMsgClick", name))
         if (stick)
             this._AiScrollToEndSoon(t)
     }
@@ -1913,13 +1946,25 @@ class MainWin {
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         fg := "{DynamicResource TextMain}"
         this._aiMsgFilePaths := this._AiExtractFilePaths(text)
-        body := this._AiMdBodyXaml(text, fg)
+        body := this._AiMdBodyXaml(text, fg, isUser)
         fs := this._AiChatBodyFontSize()
         ff := this._XmlEsc(this._AiChatFontFamily())
-        rtb := '<RichTextBox IsReadOnly="True" IsDocumentEnabled="True" BorderThickness="0"'
+        rtbHit := ""
+        rtbName := ""
+        if (isUser) {
+            this._aiLinkSeq += 1
+            card := "AiUserMsg_" this._aiLinkSeq
+            rtbName := ' Name="' card '_Body"'
+            if (this._AiUserNeedsClip(text)) {
+                rtbHit := ' IsHitTestVisible="False"'
+                this._aiPendingUserCards.Push(card)
+            }
+        }
+        rtb := '<RichTextBox' rtbName ' IsReadOnly="True" IsDocumentEnabled="True" BorderThickness="0"'
             . ' Background="Transparent" Padding="0" Margin="0"'
             . ' VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"'
             . ' IsUndoEnabled="False" CaretBrush="Transparent" Cursor="IBeam" Tag="PassScroll"'
+            . rtbHit
             . ' FontSize="' fs '" FontFamily="' ff '" Foreground="' fg '">'
             . this._AiMsgContextMenuXaml(isUser, text)
             . '<FlowDocument PagePadding="0" TextAlignment="Left" FontSize="' fs '" FontFamily="' ff '">'
@@ -1928,9 +1973,13 @@ class MainWin {
         if (isUser) {
             pad := AiSettingGui.ContentPadL
             r := this._AiInputRadius()
-            return '<Border ' ns ' Margin="0,2,0,9" Padding="' pad ',' pad '" HorizontalAlignment="Stretch"'
+            clip := this._AiUserNeedsClip(text)
+            extra := clip
+                ? ' MaxHeight="' this._AiUserPreviewH() '" ClipToBounds="True" Cursor="Hand" ToolTip="' this._XmlEsc(GetLang("点击展开")) '"'
+                : ""
+            return '<Border ' ns ' Name="' card '" Margin="0,2,0,9" Padding="' pad ',' pad '" HorizontalAlignment="Stretch"'
                 . ' Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}"'
-                . ' BorderThickness="1" CornerRadius="' r '">'
+                . ' BorderThickness="1" CornerRadius="' r '"' extra '>'
                 . rtb
                 . '</Border>'
         }
@@ -1939,12 +1988,41 @@ class MainWin {
             . '</Border>'
     }
 
-    _AiMdBodyXaml(text, fg) {
+    OnAiUserMsgClick(name, *) {
+        if (!IsObject(this._aiUserExpanded))
+            this._aiUserExpanded := Map()
+        if (this._aiUserExpanded.Has(name) && this._aiUserExpanded[name])
+            return
+        this._aiUserExpanded[name] := true
+        try this.ui.Update(name, "MaxHeight", "10000")
+        try this.ui.Update(name, "Cursor", "Arrow")
+        try this.ui.Update(name, "ToolTip", "")
+        try this.ui.Update(name "_Body", "IsHitTestVisible", "True")
+    }
+
+    _AiMdBodyXaml(text, fg, preserveLines := false) {
+        if (preserveLines)
+            return this._AiPreserveLinesXaml(text, fg)
         out := ""
         for blk in this._AiParseMd(text)
             out .= this._AiMdBlockXaml(blk, fg)
         if (out == "")
             out := this._AiMdParagraph(text, fg, this._AiChatBodyFontSize(), "0,0,0,0")
+        return out
+    }
+
+    ; 用户输入按原文换行展示，不按 Markdown 把相邻行拼成一段
+    _AiPreserveLinesXaml(text, fg) {
+        raw := this._AiNormalizeNewlines(text, false)
+        fs := this._AiChatBodyFontSize()
+        lh := this._AiUserPreviewLineH()
+        out := ""
+        for line in StrSplit(raw, "`n")
+            out .= '<Paragraph Margin="0,0,0,0" LineHeight="' lh '" LineStackingStrategy="BlockLineHeight"'
+                . ' FontSize="' fs '" Foreground="' fg '">' this._AiInlineXaml(line, fg) '</Paragraph>'
+        if (out == "")
+            out .= '<Paragraph Margin="0,0,0,0" LineHeight="' lh '" LineStackingStrategy="BlockLineHeight"'
+                . ' FontSize="' fs '" Foreground="' fg '">' this._AiMdRun("", ' Foreground="' fg '"') '</Paragraph>'
         return out
     }
 
@@ -2526,6 +2604,10 @@ class MainWin {
     }
 
     OnAiSendClick(t, state, ctrl, event) {
+        if (this._AiIsBusy(t)) {
+            this._AiCancelFromUser(t)
+            return
+        }
         this._AiSendFrom(t)
     }
 
@@ -2851,41 +2933,119 @@ class MainWin {
         this._FitAiInput(this._aiFitTab)
     }
 
+    _AiInputContentWidth(t) {
+        w := 0
+        try {
+            v := this.ui.Query("AiInputHost_" t ">ActualWidth")
+            if (v != "" && IsNumber(v))
+                w := Float(v) - AiSettingGui.ContentPadL * 2
+        }
+        if (w < 40) {
+            try {
+                v := this.ui.Query("AiInput_" t ">ActualWidth")
+                if (v != "" && IsNumber(v))
+                    w := Float(v)
+            }
+        }
+        if (w >= 40) {
+            if (!IsObject(this._aiInputBoxW))
+                this._aiInputBoxW := Map()
+            this._aiInputBoxW[t] := w
+            return w
+        }
+        if (IsObject(this._aiInputBoxW) && this._aiInputBoxW.Has(t) && this._aiInputBoxW[t] >= 40)
+            return this._aiInputBoxW[t]
+        pw := this.aiPanelW
+        if (!IsNumber(pw) || pw < 80)
+            pw := this._AiPanelDefaultW()
+        return Max(80, pw - 20 - AiSettingGui.ContentPadL * 2)
+    }
+
+    _AiInputTextPx(s) {
+        fs := Float(XAMLHost.ChatBodyFontSize())
+        if (fs < 10)
+            fs := 12
+        px := 0.0
+        i := 1
+        len := StrLen(s)
+        while (i <= len) {
+            o := Ord(SubStr(s, i, 1))
+            if (o >= 0x2E80)
+                px += fs
+            else if (o == 9)
+                px += fs * 2
+            else
+                px += fs * 0.55
+            i += 1
+        }
+        return px
+    }
+
+    _AiInputLayout(t, text, &vis, &lastRatio) {
+        vis := 1
+        lastRatio := 0.0
+        raw := this._AiNormalizeNewlines(text, false)
+        if (raw == "")
+            return
+        boxW := this._AiInputContentWidth(t)
+        if (boxW < 1)
+            boxW := 1
+        vis := 0
+        lastPx := 0.0
+        for line in StrSplit(raw, "`n") {
+            px := this._AiInputTextPx(line)
+            if (px <= 0) {
+                vis += 1
+                lastPx := 0.0
+                continue
+            }
+            n := Integer((px - 0.01) / boxW) + 1
+            if (n < 1)
+                n := 1
+            vis += n
+            lastPx := px - (n - 1) * boxW
+        }
+        if (vis < 1)
+            vis := 1
+        lastRatio := lastPx / boxW
+    }
+
+    _AiInputKeepWide(t, lastRatio) {
+        if (!IsObject(this._aiInputWide))
+            this._aiInputWide := Map()
+        this._aiInputWide[t] := (lastRatio >= 0.8)
+        return this._aiInputWide[t]
+    }
+
     _FitAiInput(t) {
         if (t < 1)
             return
         lineH := this._AiInputLineH()
         extraH := this._AiInputExtraLineH()
         maxLines := this._AiInputMaxLines()
-        lines := 1
-        try {
-            v := this.ui.Query("AiInput_" t ">LineCount")
-            if (v != "")
-                lines := Integer(v)
-        }
-        ; 以硬换行为主；LineCount 含软换行时取较大值，但高度按「首行 lineH + 额外行距」算，避免 2*lineH 显得过高
         text := ""
         try text := this.ui.Query("AiInput_" t)
-        if (text != "") {
-            hard := StrSplit(this._AiNormalizeNewlines(text, false), "`n").Length
-            if (hard > lines)
-                lines := hard
-        }
+        vis := 1
+        lastRatio := 0.0
+        this._AiInputLayout(t, text, &vis, &lastRatio)
+        lines := vis
+        if (this._AiInputKeepWide(t, lastRatio))
+            lines += 1
         if (lines < 1)
             lines := 1
         if (lines > maxLines)
             lines := maxLines
-        vPad := lines <= 1 ? 0 : 8
-        chromeH := lineH + (lines - 1) * extraH
-        if (lines > 1)
-            chromeH += 1
-        textH := chromeH - 2 - vPad
+        multi := lines > 1
+        chromeH := multi ? (lineH + (lines - 1) * extraH + 2) : lineH
+        textH := chromeH - 2
         if (textH < lineH - 2)
             textH := lineH - 2
         pad := this._AiInputPad(lines)
-        vca := lines <= 1 ? "Center" : "Top"
-        sb := lines >= maxLines ? "Auto" : (lines <= 1 ? "Hidden" : "Disabled")
+        vca := multi ? "Top" : "Center"
+        sb := lines >= maxLines ? "Auto" : (multi ? "Disabled" : "Hidden")
         try this.ui.Update("AiInput_" t, "Height", String(textH))
+        try this.ui.Update("AiInput_" t, "MinHeight", String(multi ? extraH : (lineH - 2)))
+        try this.ui.Update("AiInput_" t, "Margin", "0")
         try this.ui.Update("AiInput_" t, "Padding", "0")
         try this.ui.Update("AiInput_" t, "VerticalContentAlignment", vca)
         try this.ui.Update("AiInput_" t, "VerticalScrollBarVisibility", sb)
@@ -2893,12 +3053,8 @@ class MainWin {
         try this.ui.Update("AiInputHost_" t, "Padding", pad)
         try this.ui.Update("AiInputPh_" t, "VerticalAlignment", vca)
         try this.ui.Update("AiInputPh_" t, "Margin", "0")
-        vBtn := lines <= 1 ? "Center" : "Bottom"
-        mBtn := lines <= 1 ? "2,0,0,0" : "2,0,0,2"
-        try this.ui.Update("AiSend_" t, "VerticalAlignment", vBtn)
-        try this.ui.Update("AiMic_" t, "VerticalAlignment", vBtn)
-        try this.ui.Update("AiSend_" t, "Margin", mBtn)
-        try this.ui.Update("AiMic_" t, "Margin", mBtn)
+        try this.ui.Update("AiInputBtns_" t, "VerticalAlignment", multi ? "Bottom" : "Center")
+        try this.ui.Update("AiInputBtns_" t, "Margin", multi ? "0,0,0,1" : "0")
         if (IsObject(this._aiPendingCaret) && this._aiPendingCaret.Has(t)) {
             try this.ui.Update("AiInput_" t, "CaretIndex", String(this._aiPendingCaret[t]))
             this._aiPendingCaret.Delete(t)
@@ -2918,9 +3074,7 @@ class MainWin {
         text := Trim(this._AiNormalizeNewlines(text, false), "`n")
         if (text == "" && this._AiAttachList(t).Length < 1)
             return
-        if (!IsObject(this._aiBusy))
-            this._aiBusy := Map()
-        if (this._aiBusy.Has(t) && this._aiBusy[t]) {
+        if (this._AiIsBusy(t)) {
             Toast.Info(GetLang("正在等待上一条回复…"))
             return
         }
@@ -2931,15 +3085,23 @@ class MainWin {
             return
         }
         this._aiBusy[t] := true
+        if (!IsObject(this._aiCancel))
+            this._aiCancel := Map()
+        this._aiCancel[t] := false
+        if (!IsObject(this._aiEmptyRetry))
+            this._aiEmptyRetry := Map()
+        this._aiEmptyRetry[t] := false
         this._aiChatTab := t
         if (!IsObject(this._aiToolRound))
             this._aiToolRound := Map()
         this._aiToolRound[t] := 0
         this._AiClearToolNotes(t)
-        try this.ui.Update("AiSend_" t, "IsEnabled", "False")
+        this._AiSetSendMode(t, true)
         this._AiShowThinking(t, false, GetLang("正在分析你的问题"))
         try this.ui.Update("AiInput_" t, "Text", "")
         try {
+            if (IsObject(this._aiInputWide))
+                this._aiInputWide[t] := false
             attTxt := this._AiConsumeAttachText(t)
             if (attTxt != "")
                 text := Trim(text attTxt)
@@ -2986,6 +3148,10 @@ class MainWin {
             SetTimer(this.aiChatTick, 0)
             return
         }
+        if (this._AiCancelRequested(t)) {
+            this._AiFinishChat(t, "", "", true)
+            return
+        }
         st := 0
         try st := AiAssist.ChatState()
         catch {
@@ -3020,7 +3186,9 @@ class MainWin {
         if (!IsObject(this._aiToolRound))
             this._aiToolRound := Map()
         rnd := this._aiToolRound.Has(t) ? Integer(this._aiToolRound[t]) : 0
-        if (rnd >= 5) {
+        if (this._AiCancelRequested(t))
+            return false
+        if (rnd >= 8) {
             this._aiToolRound[t] := 0
             return false
         }
@@ -3066,16 +3234,31 @@ class MainWin {
         }
     }
 
-    _AiFinishChat(t, reply, errMsg) {
+    _AiFinishChat(t, reply, errMsg, cancelled := false) {
         SetTimer(this.aiChatTick, 0)
         if (!IsObject(this._aiBusy))
             this._aiBusy := Map()
-        this._aiBusy[t] := false
-        if (IsObject(this._aiToolRound) && this._aiToolRound.Has(t))
-            this._aiToolRound[t] := 0
-        try this.ui.Update("AiSend_" t, "IsEnabled", "True")
-        this._AiHideThinking(t)
+        if (cancelled || this._AiCancelRequested(t)) {
+            this._aiBusy[t] := false
+            if (!IsObject(this._aiCancel))
+                this._aiCancel := Map()
+            this._aiCancel[t] := false
+            if (IsObject(this._aiToolRound) && this._aiToolRound.Has(t))
+                this._aiToolRound[t] := 0
+            this._AiSetSendMode(t, false)
+            this._AiHideThinking(t)
+            msg := GetLang("（已取消）")
+            this._AiAppendMsg(t, false, msg)
+            try this._AiHistPush(t, "assistant", msg)
+            this._AiClearToolNotes(t)
+            return
+        }
         if (errMsg != "") {
+            this._aiBusy[t] := false
+            if (IsObject(this._aiToolRound) && this._aiToolRound.Has(t))
+                this._aiToolRound[t] := 0
+            this._AiSetSendMode(t, false)
+            this._AiHideThinking(t)
             fail := GetLang("请求失败") "：`n" errMsg
             this._AiAppendMsg(t, false, fail)
             try this._AiHistPush(t, "assistant", fail)
@@ -3089,10 +3272,20 @@ class MainWin {
         if (IsObject(payload))
             reason := AiAssist.ReasoningOf(payload)
         reply := Trim(reply)
-        if (reply == "") {
-            note := this._AiComposeToolFailReply(t)
-            reply := (note != "") ? note : GetLang("（模型返回空内容）")
-        } else if (this._AiHasPermissionFail(t) && !InStr(reply, "写入权限") && !InStr(reply, "完全访问")) {
+        if (reply == "")
+            reply := Trim(this._AiComposeToolReply(t))
+        if (reply == "" && !this._AiEmptyRetried(t)) {
+            this._AiRetryEmptyReply(t)
+            return
+        }
+        this._aiBusy[t] := false
+        if (IsObject(this._aiToolRound) && this._aiToolRound.Has(t))
+            this._aiToolRound[t] := 0
+        this._AiSetSendMode(t, false)
+        this._AiHideThinking(t)
+        if (reply == "")
+            reply := GetLang("这次没有生成说明。请再试一次，或把目标宏说得更具体（例如 1:2、触发键、要做的动作）。")
+        else if (this._AiHasPermissionFail(t) && !InStr(reply, "写入权限") && !InStr(reply, "完全访问")) {
             extra := this._AiComposeToolFailReply(t)
             if (extra != "")
                 reply .= "`n`n" extra
@@ -3103,6 +3296,55 @@ class MainWin {
         try this._AiHistPushMap(t, asst)
         this._AiAppendMsg(t, false, reply)
         this._AiClearToolNotes(t)
+        if (IsObject(this._aiEmptyRetry))
+            this._aiEmptyRetry[t] := false
+    }
+
+    _AiIsBusy(t) {
+        return IsObject(this._aiBusy) && this._aiBusy.Has(t) && this._aiBusy[t]
+    }
+
+    _AiCancelRequested(t) {
+        return IsObject(this._aiCancel) && this._aiCancel.Has(t) && this._aiCancel[t]
+    }
+
+    _AiCancelFromUser(t) {
+        if (!IsObject(this._aiCancel))
+            this._aiCancel := Map()
+        this._aiCancel[t] := true
+        this._aiChatTab := t
+        AiAssist.CancelChat()
+        this._AiFinishChat(t, "", "", true)
+    }
+
+    _AiSetSendMode(t, busy) {
+        glyph := busy ? Chr(0xE769) : Chr(0xE724)
+        tip := busy ? GetLang("取消") : GetLang("发送")
+        try this.ui.Update("AiSend_" t, "Content", glyph)
+        try this.ui.Update("AiSend_" t, "ToolTip", tip)
+        try this.ui.Update("AiSend_" t, "IsEnabled", "True")
+    }
+
+    _AiEmptyRetried(t) {
+        return IsObject(this._aiEmptyRetry) && this._aiEmptyRetry.Has(t) && this._aiEmptyRetry[t]
+    }
+
+    _AiRetryEmptyReply(t) {
+        if (!IsObject(this._aiEmptyRetry))
+            this._aiEmptyRetry := Map()
+        this._aiEmptyRetry[t] := true
+        this._aiBusy[t] := true
+        this._aiChatTab := t
+        this._AiSetSendMode(t, true)
+        this._AiShowThinking(t, false, GetLang("正在整理回复"))
+        this._AiHistPush(t, "user", "请用中文说明刚才的结果或无法完成的原因，不要空回复。")
+        try {
+            msgs := this._AiBuildApiMessages(t)
+            AiAssist.BeginChat(msgs)
+            SetTimer(this.aiChatTick, 200)
+        } catch as e {
+            this._AiFinishChat(t, "", this._AiErrText(e))
+        }
     }
 
     _AiThinkLabel(t) {
@@ -3234,6 +3476,37 @@ class MainWin {
                 return true
         }
         return false
+    }
+
+    _AiComposeToolReply(t) {
+        fail := this._AiComposeToolFailReply(t)
+        if (fail != "")
+            return fail
+        if (!IsObject(this._aiToolNotes) || !this._aiToolNotes.Has(t))
+            return ""
+        okN := 0
+        failN := 0
+        done := ""
+        for n in this._aiToolNotes[t] {
+            if (Type(n) != "Map")
+                continue
+            nm := n.Has("name") ? String(n["name"]) : ""
+            if (n.Has("ok") && n["ok"]) {
+                okN += 1
+                if (nm = "update_macro")
+                    done := GetLang("已按你的要求改好对应宏")
+                else if (nm = "add_macro" && done == "")
+                    done := GetLang("已新增宏")
+            } else
+                failN += 1
+        }
+        if (okN < 1 && failN < 1)
+            return ""
+        if (okN > 0 && failN < 1)
+            return (done != "" ? done : GetLang("操作已完成")) "。" GetLang("如需调整请继续说明。")
+        if (okN > 0)
+            return GetLang("部分操作已完成，另有步骤失败。请换种说法再试，或检查目标宏是否存在。")
+        return GetLang("操作未成功。请检查目标宏是否存在，或把页签和序号说得更具体。")
     }
 
     _AiComposeToolFailReply(t) {
@@ -3677,7 +3950,7 @@ class MainWin {
             . '<Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">'
             . '<Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="' this._AiInputRadius() '"' this._BorderSnap() '>'
-            . '<ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}" VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"/>'
+            . '<ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}" VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"/>'
             . '</Border></ControlTemplate></Setter.Value></Setter></Style>'
         aiIconBtn := '<Style x:Key="RmtAiIconBtn" TargetType="Button">'
             . '<Setter Property="Width" Value="22"/><Setter Property="Height" Value="22"/><Setter Property="MinHeight" Value="22"/>'

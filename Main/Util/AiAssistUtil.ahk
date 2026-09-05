@@ -242,6 +242,12 @@ class AiAssist {
         return String(GetRmtAi().PeekChatPartial())
     }
 
+    static CancelChat() {
+        try GetRmtAi().CancelChat()
+        catch {
+        }
+    }
+
     static BuildSystemPrompt() {
         global MainSoftData
         access := AiAssist.AccessLabel()
@@ -258,8 +264,13 @@ class AiAssist {
             prompt .= "`n你拥有内置工具，必须自己调用，不要说「没有读文件/执行工具」。"
                 . "`n配置：list_macros / read_macro / update_macro / add_macro。"
                 . "`n用户要求新增/修改宏时：先 list_macros 或 read_macro 确认目标，再 update_macro / add_macro。"
-                . "`n改完后用一两句话说明改了哪条。不要输出「请到软件里手动修改」。"
-                . "`n指令串格式：按键_a_点击_100、按键_LButton_点击_50、间隔_80，多条用英文逗号连接。"
+                . "`n改完后必须用中文一两句话说明改了哪条、指令是什么。禁止只回空内容，禁止说「请到软件里手动修改」。"
+                . "`n指令串（英文逗号连接）："
+                . "`n- 按键_a_点击_100、按键_LButton_点击_50、间隔_80"
+                . "`n- 移动_X_Y_速度_模式（模式0=屏幕绝对坐标，1=相对；速度默认90）"
+                . "`n- 变量_名字_当前鼠标坐标X 或 变量_名字_当前鼠标坐标Y（记下触发时的鼠标位置）"
+                . "`n回到原位示例：变量_sx_当前鼠标坐标X,变量_sy_当前鼠标坐标Y,移动_1919_0_90_0,按键_LButton_点击_50,移动_sx_sy_90_0"
+                . "`n屏幕右上角用接近屏幕宽、Y=0 的绝对坐标；用户写「1:2」表示第1页第2条宏。"
             if (Integer(MainSoftData.AiApprovalMode) == 1)
                 prompt .= "`n手动审批：写操作前用户会确认；被拒绝则改用说明。"
             prompt .= "`nwrite_file / run_command / run_script 已可用（.ahk / .ps1 / .bat / .py）。"
@@ -316,7 +327,7 @@ class AiAssist {
             tools.Push(AiAssist._ToolDef("read_macro", "读取一条宏的完整字段。", '[{"name":"tab","type":"integer","desc":"页签序号，1-based"},{"name":"index","type":"integer","desc":"宏序号，1-based"}]'))
         }
         if (AiAssist.CanWrite()) {
-            tools.Push(AiAssist._ToolDef("update_macro", "就地修改一条已有宏并立即保存、刷新界面。", '[{"name":"tab","type":"integer","desc":"页签序号"},{"name":"index","type":"integer","desc":"宏序号"},{"name":"trigger_key","type":"string","desc":"触发键，如 k / F6"},{"name":"remark","type":"string","desc":"备注"},{"name":"macro","type":"string","desc":"指令串，如 按键_a_点击_100,按键_u_点击_100"},{"name":"commands","type":"string","desc":"JSON 数组，元素含 type=key|interval"},{"name":"loop_count","type":"string","desc":"循环次数"},{"name":"forbid","type":"boolean","desc":"是否禁用"},{"name":"trigger_type","type":"integer","desc":"1按下 2松开 3松止 4开关 5长按 6双击"}]'))
+            tools.Push(AiAssist._ToolDef("update_macro", "就地修改一条已有宏并立即保存、刷新界面。", '[{"name":"tab","type":"integer","desc":"页签序号"},{"name":"index","type":"integer","desc":"宏序号"},{"name":"trigger_key","type":"string","desc":"触发键，如 r / F6"},{"name":"remark","type":"string","desc":"备注"},{"name":"macro","type":"string","desc":"指令串，如 变量_sx_当前鼠标坐标X,移动_1919_0_90_0,按键_LButton_点击_50,移动_sx_sy_90_0"},{"name":"commands","type":"string","desc":"JSON 数组，元素 type=key|interval|move"},{"name":"loop_count","type":"string","desc":"循环次数"},{"name":"forbid","type":"boolean","desc":"是否禁用"},{"name":"trigger_type","type":"integer","desc":"1按下 2松开 3松止 4开关 5长按 6双击"}]'))
             tools.Push(AiAssist._ToolDef("add_macro", "在指定页签新增一条宏并立即保存。", '[{"name":"tab","type":"integer","desc":"页签序号，默认当前页"},{"name":"trigger_key","type":"string","desc":"触发键"},{"name":"remark","type":"string","desc":"备注"},{"name":"macro","type":"string","desc":"指令串"},{"name":"commands","type":"string","desc":"JSON 指令数组"}]'))
         }
         if (AiAssist.CanWriteFile()) {
@@ -543,6 +554,12 @@ class AiAssist {
                 if (cmd.Has("interval"))
                     line .= "_" Integer(cmd["interval"])
                 parts.Push(line)
+            } else if (typ = "move") {
+                x := cmd.Has("x") ? String(cmd["x"]) : "0"
+                y := cmd.Has("y") ? String(cmd["y"]) : "0"
+                speed := cmd.Has("speed") ? Integer(cmd["speed"]) : 90
+                mode := cmd.Has("mode") ? Integer(cmd["mode"]) : 0
+                parts.Push("移动_" x "_" y "_" speed "_" mode)
             }
         }
         out := ""

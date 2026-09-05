@@ -204,6 +204,7 @@ SetPauseState(state) {
 
 OnKillAllMacro(*) {
     global MySoftData, MyWorkPool
+    ; 只停正在跑的宏，不要取消 AI 对话；取消走输入框暂停按钮
 
     CloseMenuWheel()
 

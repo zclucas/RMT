@@ -938,6 +938,17 @@ OnSubMacro(tableItem, cmd, index) {
 
 OnVariable(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
+    SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
+    if (numbersOnly == "" && paramArr.Length >= 3) {
+        varName := paramArr[2]
+        p1 := InStr(cmd, "_")
+        p2 := (p1 > 0) ? InStr(cmd, "_", false, p1 + 1) : 0
+        src := (p2 > 0) ? SubStr(cmd, p2 + 1) : ""
+        Value := ""
+        if (varName != "" && TryGetTabVarValue(&Value, tableItem, index, src, false))
+            MySetGlobalVariable([varName], [Value], false)
+        return
+    }
     Data := GetMacroCMDData(paramArr[1])
     LocalVariableMap := tableItem.Items[index].VariableMap
     DeleteNameArr := []
@@ -1270,8 +1281,11 @@ OnMouseMove(tableItem, cmd, index) {
         Speed := Integer(Data.Speed)
         MoveMode := Integer(Data.MoveMode)
     } else {
-        PosX := Integer(paramArr[2])
-        PosY := Integer(paramArr[3])
+        PosX := 0, PosY := 0
+        if (paramArr.Length < 3 || !TryGetTabVarValue(&PosX, tableItem, index, paramArr[2], false))
+            PosX := (paramArr.Length >= 2 && IsNumber(paramArr[2])) ? Integer(paramArr[2]) : 0
+        if (paramArr.Length < 3 || !TryGetTabVarValue(&PosY, tableItem, index, paramArr[3], false))
+            PosY := (paramArr.Length >= 3 && IsNumber(paramArr[3])) ? Integer(paramArr[3]) : 0
         Speed := paramArr.Length >= 4 ? Integer(paramArr[4]) : 90
         MoveMode := paramArr.Length >= 5 ? Integer(paramArr[5]) : 0
     }
