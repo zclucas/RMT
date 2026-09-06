@@ -181,17 +181,23 @@ RMTGetErrorHandle(cmdType) {
 ; 解析指令字符串中的 EH 段
 ; 返回 { cmd: 剥离后的纯指令, cfg: {mode,...} | "" }
 RMTParseErrHandle(cmdStr) {
-    if (RegExMatch(cmdStr, "\|EH:([^|]+)$", &m)) {
-        cfg := { mode: m[1] }
-        if (cfg.mode == "retry") {
-            parts := StrSplit(m[1], ";")
-            cfg.mode := parts[1]
-            cfg.retryCount := parts.Length >= 2 ? Integer(parts[2]) : 3
-            cfg.retryInterval := parts.Length >= 3 ? Integer(parts[3]) : 500
-        }
-        return { cmd: StrReplace(cmdStr, m[0], ""), cfg: cfg }
+    if (!(pos := InStr(cmdStr, "|EH:")))
+        return { cmd: cmdStr, cfg: "" }
+
+    cleanCmd := SubStr(cmdStr, 1, pos - 1)
+    ehStr := SubStr(cmdStr, pos + 4)
+    parts := StrSplit(ehStr, ";")
+    mode := parts[1]
+
+    if (mode == "retry") {
+        cfg := { mode: "retry"
+            , retryCount: parts.Length >= 2 ? Integer(parts[2]) : 3
+            , retryInterval: parts.Length >= 3 ? Integer(parts[3]) : 500 }
+    } else {
+        cfg := { mode: mode }
     }
-    return { cmd: cmdStr, cfg: "" }
+
+    return { cmd: cleanCmd, cfg: cfg }
 }
 
 ; 构建 EH 段后缀（cfg 为 "" 或 mode=stop 时不追加）

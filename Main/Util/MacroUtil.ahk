@@ -151,8 +151,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     if (SubStr(cmdStr, 1, 2) == "🚫")
         return
 
-    frontInfo := GetItemFrontInfo(tableItem, index)
-    if (MainSoftData.CheckForeground && frontInfo != "" && !CheckFrontWindowActive(frontInfo)) {
+    if (MainSoftData.CheckForeground && (frontInfo := GetItemFrontInfo(tableItem, index)) != "" && !CheckFrontWindowActive(frontInfo)) {
         KillTableItemMacro(tableItem, index)
         return
     }
@@ -161,11 +160,15 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     eh := RMTParseErrHandle(cmdStr)
     cmdStr := eh.cmd
 
-    paramArr := StrSplit(GetCmdStr(cmdStr), "_")
+    ; 避免重复调用 GetCmdStr，并用 InStr 提取首段 Key 替代全量 StrSplit
+    cleanCmdStr := GetCmdStr(cmdStr)
+    firstUnderscore := InStr(cleanCmdStr, "_")
+    firstPart := firstUnderscore ? SubStr(cleanCmdStr, 1, firstUnderscore - 1) : cleanCmdStr
+    cmdKey := RTrim(firstPart, "0123456789")
+
     if (MySoftData.CMDTip)
         MyCMDReportAciton(cmdStr)
 
-    cmdKey := RTrim(paramArr[1], "0123456789")
     ok := true
     try {
         result := Actions[cmdKey](tableItem, cmdStr, index)
@@ -185,9 +188,9 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         }
     }
     ; 业务日志（C 项阶段3）：每指令执行流水（默认关，设置开启后生效；Worker 执行侧写入）
-    ; 执行后记录，成功/失败并入同一条，不额外增加日志条目
+    ; 执行后记录，成功/失败并入同一条，不额外增加日志条目（复用 cleanCmdStr）
     RMTLogBusiness("宏:(" item.Remark ")", Format("tab{1} item{2} {3}指令: {4}"
-        , tableItem.ID, item.ID, ok ? "" : "失败 ", GetCmdStr(cmdStr)))
+        , tableItem.ID, item.ID, ok ? "" : "失败 ", cleanCmdStr))
     return result
 }
 
@@ -223,7 +226,7 @@ CheckFrontWindowActive(frontInfoStr) {
     if (InStr(frontInfoStr, "❖")) {
         hwndList := StrSplit(StrReplace(frontInfoStr, "❖"), "|")
         for hwnd in hwndList {
-            if (WinExist("ahk_id " hwnd) && WinActive("ahk_id " hwnd))
+            if (WinActive("ahk_id " hwnd))
                 return true
         }
         return false
@@ -250,7 +253,7 @@ CheckFrontWindowActive(frontInfoStr) {
     if (winTitle == "")
         return true
 
-    return !!(WinExist(winTitle) && WinActive(winTitle))
+    return !!WinActive(winTitle)
 }
 
 OnSearchWrapper(tableItem, cmdStr, index) {
