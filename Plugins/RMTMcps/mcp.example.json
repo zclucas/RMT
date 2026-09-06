@@ -1,14 +1,14 @@
 {
   "mcpServers": {
     "rmt-mcp": {
-      "command": "D:/Data/RMT/Dev/Plugins/RMTMcps/RMTMcps.exe",
+      "command": "./RMTMcps.exe",
       "args": [],
       "env": {
-        "RMT_MCP_WORK_ROOT": "D:/Data/RMT/Dev/Plugins/RMTMcps/workspaces",
-        "RMT_MCP_OUTPUT_ROOT": "D:/Data/RMT/Dev/Plugins/RMTMcps/output",
+        "RMT_MCP_WORK_ROOT": "./workspaces",
+        "RMT_MCP_OUTPUT_ROOT": "./output",
         "RMT_MCP_TTL_HOURS": "24"
       }
     }
   },
-  "_comment": "Cursor 全局 mcp.json 请用绝对路径。相对路径仅适合自管 cwd 的宿主。换机时改 command / env 中的盘符路径即可。无需本机 Python。"
+  "_comment": "路径相对本文件所在目录（与 RMTMcps.exe 同级）。RMT 启动时请把 WorkingDirectory 设为本目录；Cursor 全局 mcp.json 若不支持相对路径，再改成绝对路径。"
 }
