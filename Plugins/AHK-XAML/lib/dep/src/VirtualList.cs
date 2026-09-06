@@ -526,7 +526,15 @@ public class VirtualListHost
         if (f.Length > 4) r.LoopText = f[4];
         if (f.Length > 5) r.Forbid = f[5] == "1";
         if (f.Length > 6) r.ColorHex = f[6];
-        if (f.Length > 7) r.EditKind = f[7];
+        if (f.Length > 7) r.SeqNo = f[7];
+        if (f.Length > 8) r.EditKind = f[8];
+        // §23 网络宏扩展位（与 ParseRow 同布局：f[9]=网络表标志）
+        if (f.Length > 9)
+        {
+            bool isNetRow = f[9] == "1";
+            r.NetHelpVis = isNetRow ? "Visible" : "Collapsed";
+            r.NetTypeVis = isNetRow ? "Collapsed" : "Visible";
+        }
     }
 
     private void SetFold(string val)
@@ -1156,6 +1164,10 @@ public class VirtualListHost
         r.ColorHex = f.Length > 6 ? f[6] : "";
         r.SeqNo = f.Length > 7 ? f[7] : "";
         r.EditKind = f.Length > 8 ? f[8] : "0";
+        // §23 网络宏扩展位：f[9]="1" 表示网络表行（显示说明按钮、隐藏触发类型下拉）
+        bool isNetRow = f.Length > 9 && f[9] == "1";
+        r.NetHelpVis = isNetRow ? "Visible" : "Collapsed";
+        r.NetTypeVis = isNetRow ? "Collapsed" : "Visible";
         FillSelMark(r);
         return r;
     }
@@ -1239,6 +1251,9 @@ public class VListRow : VLItem
     public string SelMark { get { return _SelMark; } set { Set(ref _SelMark, value, "SelMark"); } } private string _SelMark;
     public string SelMarkNo { get { return _SelMarkNo; } set { Set(ref _SelMarkNo, value, "SelMarkNo"); } } private string _SelMarkNo;
     public string SelMarkTip { get { return _SelMarkTip; } set { Set(ref _SelMarkTip, value, "SelMarkTip"); } } private string _SelMarkTip;
+    // §23 网络宏行标志：NetHelpVis=说明按钮可见性、NetTypeVis=触发类型下拉可见性（互斥，由同一记录位驱动）
+    public string NetHelpVis { get; set; }
+    public string NetTypeVis { get; set; }
 }
 
 public class VListFold : VLItem

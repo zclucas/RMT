@@ -100,6 +100,8 @@ OnSaveSetting(*) {
     CheckAndAddDirty("RemarkAutoType", MainSoftData.RemarkAutoType)
     CheckAndAddDirty("MacroStopType", MainSoftData.MacroStopType)
     CheckAndAddDirty("Theme", MainSoftData.Theme)
+    ; §23 网络触发：端口（热生效走总线调和，NetworkServer.OnConfigChanged 自动重绑定）
+    CheckAndAddDirty("NetworkPort", MainSoftData.NetworkPort)
 
     ; 工具设置
     CheckAndAddDirty("ToolCheckHotKey", MainSoftData.ToolCheckHotkey)
@@ -178,6 +180,14 @@ CheckAllValueSettingValid() {
 
     if (!CheckValueSettingValid(GetLang("多线程数"), MainSoftData.MutiThreadNum))
         return false
+
+    ; §23 P2-1：端口 1-65535 范围校验（非法值如 99999 会被 htons 截断为 34463，静默监听错端口）。
+    ; 拒绝本次保存并还原为 INI 中上次有效值（INI 读取端仍有钳制兜底），同时回写 UI 输入框。
+    if (!NetworkIsValidPort(MainSoftData.NetworkPort)) {
+        MsgBox(GetLang("网络触发端口必须是 1-65535 之间的整数，本次保存已取消，端口已还原为上次有效值。"))
+        MainSoftData.NetworkPort := NetworkNormalizePort(IniRead(IniFile, IniSection, "NetworkPort", 16888))
+        return false
+    }
 
     return true
 }

@@ -20,6 +20,7 @@ SetEditData()               ;缓存编辑器数据，设置下拉框变量，检
 ;放后面初始化，因为这初始化时间比较长
 PluginInit()
 MyTimingScheduler.Start()
+MyNetworkServer.Start()     ;§23 网络触发：启动 HTTP 监听（默认 127.0.0.1:16888，bind 失败仅告警不阻塞）
 InitVoiceEngine().Start()    ;启动语音触发监听（引擎 DLL 缺失时安全降级，不影响其余功能）
 BindKey()           ;绑定快捷键
 

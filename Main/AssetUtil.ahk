@@ -634,6 +634,8 @@ LoadMainSetting() {
     MainSoftData.LogicTreeBranchSplit := !!IniRead(IniFile, IniSection, "LogicTreeBranchSplit", false)
     MainSoftData.LogWarnBubble := IniRead(IniFile, IniSection, "LogWarnBubble", true)
     MainSoftData.LogErrorBadge := IniRead(IniFile, IniSection, "LogErrorBadge", true)
+    ; §23 网络触发：监听端口（默认 16888，NetworkNormalizePort 钳制 1-65535）
+    MainSoftData.NetworkPort := NetworkNormalizePort(IniRead(IniFile, IniSection, "NetworkPort", 16888))
     MySoftData.CMDTip := IniRead(IniFile, IniSection, "CMDTip", false)
     MainSoftData.CheckForeground := IniRead(IniFile, IniSection, "CheckForeground", false)
     MainSoftData.ScreenShotType := IniRead(IniFile, IniSection, "ScreenShotType", 3)
@@ -1092,6 +1094,7 @@ LoadCurMacroSetting() {
             if (MySoftData.TableInfo.Length == 0)
                 CreateTableItemArr()
             RebuildTableLocator()
+            EnsureNetworkTable()    ;§23 旧配置兼容：自动补建「网络宏」表（无则插 Replace 之后）
         } else {
             ; 旧格式：默认 13 表骨架（条目数据按旧格式逐表迁移）
             CreateTableItemArr()
@@ -1152,6 +1155,7 @@ LoadCurMacroSetting() {
         CreateTableItemArr()
         migrated := true
     }
+    EnsureNetworkTable()    ;§23 旧配置兼容：自动补建「网络宏」表（无则插 Replace 之后）
     for tableItem in MySoftData.TableInfo {
         if (ReadTableItemInfo(tableItem))
             migrated := true
@@ -2226,11 +2230,12 @@ CreateDefaultTableDefs() {
         ["Timing", "定时宏", 6],
         ["SubMacro", "宏", 7],
         ["Replace", "按键替换", 8],
-        ["Tool", "工具", 9],
-        ["Setting", "设置", 10],
-        ["Help", "帮助", 11],
-        ["Reward", "赞助", 12],
-        ["Thank", "特别感谢", 13]
+        ["Network", "网络宏", 9],
+        ["Tool", "工具", 10],
+        ["Setting", "设置", 11],
+        ["Help", "帮助", 12],
+        ["Reward", "赞助", 13],
+        ["Thank", "特别感谢", 14]
     ]
 }
 
@@ -2275,6 +2280,43 @@ CreateTableItemArr() {
     MySoftData.TableInfo := Arr
     RebuildTableLocator()
     return Arr
+}
+
+; ============================================================
+; §23 网络触发：老配置无损迁移（PRD P0-3）
+; 表集合加载后调用：无 Symbol=="Network" 的表时，插入到按键替换(Replace)之后、
+; 工具(Tool)等页签之前，后续表 Order 顺延，并调用既有表集合落盘函数写回
+; （条目数据无损、用户无需重置配置；Tool..Thank 页签 Order +1 属可接受表象性变化）
+; 注意：本函数内不得使用名为 tableItem 的变量（AHK 大小写不敏感会遮蔽 TableItem 类，见 LoadCurMacroSetting 注释）
+; ============================================================
+EnsureNetworkTable() {
+    global MySoftData
+    for tbl in MySoftData.TableInfo {
+        if (tbl.Symbol == "Network")
+            return false
+    }
+    insertIdx := 0
+    loop MySoftData.TableInfo.Length {
+        if (MySoftData.TableInfo[A_Index].Symbol == "Replace") {
+            insertIdx := A_Index + 1
+            break
+        }
+    }
+    if (insertIdx == 0)
+        insertIdx := MySoftData.TableInfo.Length + 1
+    t := TableItem()
+    t.Symbol := "Network"
+    t.ID := "Network"       ;表身份恒 = Symbol（与 Normal/String/Timing 并列）
+    t.Name := "网络宏"      ;存语言键原文（页签渲染时统一 GetLang，与其他表一致）
+    t.Order := insertIdx
+    MySoftData.TableInfo.InsertAt(insertIdx, t)
+    ; 整体归一化 Order 为 1..N（Network 插入位次即顺序，后续表自然顺延）
+    loop MySoftData.TableInfo.Length
+        MySoftData.TableInfo[A_Index].Order := A_Index
+    RebuildTableLocator()
+    SaveTableCollection()   ;复用既有表集合落盘链路（INI/TOML 双格式自适应）
+    RMTLogSysInfo("网络触发", "旧配置迁移：已自动补建「网络宏」表（插在按键替换之后）")
+    return true
 }
 
 InitTableItemState() {
@@ -2459,6 +2501,8 @@ IsItemSymbol(symbol) {
         return true
     if (symbol == "Voice")
         return true
+    if (symbol == "Network")
+        return true
     return false
 }
 
@@ -2495,6 +2539,8 @@ CheckIsItemTable(index) {
         return true
     if (symbol == "Voice")
         return true
+    if (symbol == "Network")
+        return true
     return false
 }
 
@@ -2513,6 +2559,8 @@ CheckIsMacroTable(index) {
     if (symbol == "UI")
         return true
     if (symbol == "Voice")
+        return true
+    if (symbol == "Network")
         return true
     return false
 }
@@ -3888,4 +3936,21 @@ SafeReload() {
 WorkPoolEnabled() {
     global MyWorkPool
     return MyWorkPool != "" && IsObject(MyWorkPool) && (MyWorkPool.isDynamic || MyWorkPool.maxSize >= 1)
+}
+
+; ---------- §23 网络触发：端口工具（P2-1：保存校验与启动钳制共用）----------
+; 放在本文件（主进程与 Worker 共同 include）；不能放 NetworkHttpUtil.ahk（仅主进程 include），
+; 否则 Worker 加载 LoadMainSetting 时函数名无法解析（AHK #Warn）。
+
+; 端口合法性：必须是 1-65535 的整数（99999 这类值经 htons 截断会静默监听错端口）。
+; 用 IsInteger 值检查而非 `is Integer` 类型检查：IniRead 返回字符串，"16890" 也须视为合法。
+NetworkIsValidPort(v) {
+    if (!IsInteger(v))
+        return false
+    return (v >= 1 && v <= 65535)
+}
+
+; 归一化端口：非法/越界一律回退默认 16888（启动/调和路径防御，避免 Integer() 抛异常）
+NetworkNormalizePort(v) {
+    return NetworkIsValidPort(v) ? Integer(v) : 16888
 }
