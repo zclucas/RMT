@@ -73,12 +73,7 @@ class TriggerStrGui {
         main.Rows(titleHeight, "280", "34", "30", "30", "30", "32", "*")
 
         ; === 标题栏 ===
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("12,0,0,0")
-        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
-        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
         ; === 字符区（GroupBox + Canvas 绝对定位，复刻原生布局）===
         gb := main.Add("GroupBox").Grid_Row(1).Header(GetLang("请从下面字符中组合你想要触发宏的字串：")).Margin("10,2,10,0")

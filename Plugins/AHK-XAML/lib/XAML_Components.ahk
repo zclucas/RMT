@@ -108,8 +108,8 @@ class XColorPicker {
             tb.Add("TextBlock").Text(title).Foreground("{DynamicResource TextMain}").FontSize(14).FontWeight("Bold").VerticalAlignment("Center").Grid_Column(0).Grid_ColumnSpan(2)
         }
 
-        closeBtn := tb.Add("Button").Name("BtnClose").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).HorizontalAlignment("Right").Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0).Grid_Column(2)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        closeBtn := XAMLHost.AddTitleCloseBtn(tb, "BtnClose", "30")
+        closeBtn.HorizontalAlignment("Right").Grid_Column(2)
 
         ; 2D Color Canvas
         canvasGrid := main.Add("Grid").Name("CanvasGrid").Grid_Row(2).Margin("15,0,15,0").ClipToBounds("True")

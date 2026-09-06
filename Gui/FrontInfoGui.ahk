@@ -17,6 +17,7 @@ class FrontInfoGui {
         this.winInfoCon := ""
         this.isFront := false
         this._closed := true
+        this._topOn := true
 
         ; 控件名数组（索引 1..5 对应 运行时鼠标下窗口/句柄ID/标题/窗口类/进程名）
         this.InfoTogArrCon := ["Tog1", "Tog2", "Tog3", "Tog4", "Tog5"]
@@ -26,6 +27,35 @@ class FrontInfoGui {
 
     Hwnd() {
         return (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
+    }
+
+    ; 24 在 100/125/150/200% DPI 都是整数物理像素。26×125%=32.5，窗口取整会裁掉底边，边框粗细就会不均。
+    static _SnapBox() {
+        return 24
+    }
+
+    ; 方形问号：宽高锁定同一像素，避免默认 Button 内边距 / 字号适配把高度撑高
+    static _AddSquareHelpBtn(parent, name := "BtnHelp", tip := "") {
+        box := FrontInfoGui._SnapBox()
+        btn := parent.Add("Button").Name(name).Content("?")
+            .Width(box).Height(box).MinWidth(box).MinHeight(box).MaxWidth(box).MaxHeight(box)
+            .FontSize(11).Padding("0").Margin("6,0,0,0")
+            .VerticalAlignment("Center").HorizontalAlignment("Center")
+            .Cursor("Hand")
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            .Foreground("{DynamicResource TextMain}")
+            .SnapsToDevicePixels("True").UseLayoutRounding("False")
+        if (tip != "")
+            btn.ToolTip(tip)
+        return btn
+    }
+
+    static _ToolBtnHoverStyle() {
+        return '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+    }
+
+    static _OkBtnHoverStyle() {
+        return '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
     }
 
     _EscapeXml(s) {
@@ -59,60 +89,102 @@ class FrontInfoGui {
         titleHeight := "30"
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
-        main.Rows(titleHeight, "30", "*", "44")
+        main.Rows(titleHeight, "28", "Auto")
 
-        ; === 标题栏 ===
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("12,0,0,0")
-        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
-        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBarChrome(main, title)
+        BtnGroup := chrome.Btns
+        pinHost := BtnGroup.Add("Grid").Width(30).ClipToBounds("False").VerticalAlignment("Stretch")
+        pinBtn := pinHost.Add("Button").Name("BtnTop")
+            .Style("{StaticResource FrontPinBtn}")
+            .WindowChrome_IsHitTestVisibleInChrome("True")
+            .Width(30).Height(titleHeight).MinHeight(titleHeight).Padding("0").Cursor("Hand")
+            .VerticalAlignment("Stretch")
+            .ToolTip(GetLang("窗口置顶"))
+            .Background("Transparent").BorderBrush("Transparent").BorderThickness("0")
+            .Foreground("{DynamicResource TitleBarForeground}")
+        pinBtn.Add("TextBlock").Text(Chr(0xE840)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+            .FontSize(12).VerticalAlignment("Center").HorizontalAlignment("Center")
+        pinDot := pinHost.Add("Grid").Name("BtnTopDot").Visibility("Collapsed")
+        pinDot.Add("Ellipse").Width(6).Height(6).Fill("{DynamicResource Accent}")
+            .HorizontalAlignment("Right").VerticalAlignment("Top")
+            .Margin("0,2,2,0").IsHitTestVisible("False")
+        XAMLHost.AddTitleCloseBtn(BtnGroup, "BtnClosePanel", titleHeight)
 
-        ; === 顶部行 ===
-        top := main.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").Margin("10,4")
-        top.Add("CheckBox").Name("TopTogCon").Content(GetLang("窗口置顶")).VerticalAlignment("Center")
-        top.Add("TextBlock").Text("F1").VerticalAlignment("Center").Margin("60,0,0,0").Opacity("0.6")
-        top.Add("TextBlock").Text(GetLang("确定信息")).VerticalAlignment("Center").Margin("4,0,0,0")
-        top.Add("Button").Name("BtnHelp").Content("?").Width(30).Height(26).MinHeight(26).Margin("20,0,0,0").Cursor("Hand")
-            .Background("{DynamicResource EditBg}").Foreground("{DynamicResource EditText}")
-            .BorderBrush("{DynamicResource EditStroke}").BorderThickness("1").Padding("0")
+        ; === 顶部行：F1 键帽 + 确定信息 + 问号 ===
+        top := main.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").Margin("10,2,10,0").VerticalAlignment("Center")
+        box := FrontInfoGui._SnapBox()
+        f1Cap := top.Add("Border").CornerRadius("3").BorderThickness("1.25").Padding("8,0")
+            .Height(box).MinHeight(box)
+            .BorderBrush("{DynamicResource ControlBorder}").Background("{DynamicResource ControlBg}")
+            .VerticalAlignment("Center").SnapsToDevicePixels("True").UseLayoutRounding("False")
+            .ToolTip(GetLang("按 F1 抓取当前鼠标下窗口信息"))
+        f1Cap.Add("TextBlock").Text(FormatHotkeyDisplay("F1")).FontSize(11).FontWeight("SemiBold")
+            .VerticalAlignment("Center").HorizontalAlignment("Center").Foreground("{DynamicResource TextMain}")
+        top.Add("TextBlock").Text(GetLang("确定信息")).VerticalAlignment("Center").Margin("8,0,0,0")
+        toolHover := FrontInfoGui._ToolBtnHoverStyle()
+        okStyle := FrontInfoGui._OkBtnHoverStyle()
+        helpBtn := FrontInfoGui._AddSquareHelpBtn(top, "BtnHelp", GetLang("窗口信息说明"))
+        helpBtn.InjectResources(toolHover)
 
         ; === 主体 ===
-        body := main.Add("StackPanel").Grid_Row(2).Orientation("Vertical").Margin("10,2")
-        body.Add("TextBlock").Text(GetLang("当前鼠标下窗口信息：")).VerticalAlignment("Center")
-        body.Add("TextBox").Name("CurWinInfoCon").Height(70).Margin("0,2,0,0").IsReadOnly("True")
+        body := main.Add("Grid").Grid_Row(2).Margin("10,4,10,0")
+        body.Cols("Auto", "*")
+        body.Rows("Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto")
+        body.Add("TextBlock").Text(GetLang("当前鼠标下窗口信息：")).Grid_Row(0).Grid_ColumnSpan(2).VerticalAlignment("Center")
+        body.Add("TextBox").Name("CurWinInfoCon").Grid_Row(1).Grid_ColumnSpan(2).Height(97).Margin("0,2,0,4").IsReadOnly("True")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Top").Padding("4,2").FontSize(11)
+            .AcceptsReturn("True").TextWrapping("NoWrap")
+            .HorizontalScrollBarVisibility("Auto").VerticalScrollBarVisibility("Disabled")
 
-        ; 5 行 checkbox + edit
-        this._AddInfoRow(body, 1, GetLang("运行时鼠标下窗口"), true)
-        this._AddInfoRow(body, 2, GetLang("句柄ID"), false)
-        ; 变量行
-        varRow := body.Add("StackPanel").Orientation("Horizontal").Margin("95,2,0,0")
+        this._AddInfoRow(body, 2, 1, GetLang("运行时鼠标下窗口"), true)
+        this._AddInfoRow(body, 3, 2, GetLang("句柄ID"), false)
+        varRow := body.Add("StackPanel").Grid_Row(4).Grid_Column(1).Orientation("Horizontal")
+            .HorizontalAlignment("Right").Margin("0,4,0,0")
         varRow.Add("TextBlock").Name("VariTipCon").Text(GetLang("变量:")).VerticalAlignment("Center")
         varRow.Add("ComboBox").Name("VariCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
-        varRow.Add("Button").Name("BtnAddVar").Content(GetLang("追加变量值")).Height(26).MinHeight(26).Margin("6,0,0,0").Cursor("Hand")
-        this._AddInfoRow(body, 3, GetLang("标题"), false)
-        this._AddInfoRow(body, 4, GetLang("窗口类"), false)
-        this._AddInfoRow(body, 5, GetLang("进程名"), false)
-
-        ; === 底部按钮 ===
-        btnRow := main.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
-        btnRow.Add("Button").Name("BtnSure").Content(GetLang("确定")).Width(100).Height(32).MinHeight(32).Margin("4,0").Cursor("Hand")
+        addVarBtn := varRow.Add("Button").Name("BtnAddVar").Content(GetLang("追加变量值")).Width(110).Height(26).MinHeight(26).Padding("12,0").Margin("6,0,0,0").Cursor("Hand")
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1.25")
+            .Foreground("{DynamicResource TextMain}")
+        addVarBtn.InjectResources(toolHover)
+        this._AddInfoRow(body, 5, 3, GetLang("标题"), false)
+        this._AddInfoRow(body, 6, 4, GetLang("窗口类"), false)
+        this._AddInfoRow(body, 7, 5, GetLang("进程名"), false)
+        btnRow := body.Add("StackPanel").Grid_Row(8).Grid_ColumnSpan(2).Orientation("Horizontal")
+            .HorizontalAlignment("Center").Margin("0,10,0,4")
+        sureBtn := btnRow.Add("Button").Name("BtnSure").Content(GetLang("确定")).Width(80).Height(32).MinHeight(32).Cursor("Hand")
+            .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
+        sureBtn.InjectResources(okStyle)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" Height="500" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="460" Height="425" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
-        this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
+        pinStyle := '<Style x:Key="FrontPinBtn" TargetType="Button">'
+            . '<Setter Property="Width" Value="30"/><Setter Property="Height" Value="30"/><Setter Property="MinHeight" Value="30"/>'
+            . '<Setter Property="Padding" Value="0"/><Setter Property="Cursor" Value="Hand"/>'
+            . '<Setter Property="Background" Value="Transparent"/>'
+            . '<Setter Property="BorderBrush" Value="Transparent"/>'
+            . '<Setter Property="BorderThickness" Value="0"/>'
+            . '<Setter Property="Foreground" Value="{DynamicResource TitleBarForeground}"/>'
+            . '<Setter Property="FocusVisualStyle" Value="{x:Null}"/>'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">'
+            . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
+            . '</Border>'
+            . '<ControlTemplate.Triggers>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger>'
+            . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger>'
+            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', pinStyle)
 
         ; === 事件 ===
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
-        this.ui.OnEvent("TopTogCon", "Click", ObjBindMethod(this, "OnTopTogClick"))
+        this.ui.OnEvent("BtnTop", "Click", ObjBindMethod(this, "OnTopTogClick"))
         this.ui.OnEvent("BtnHelp", "Click", ObjBindMethod(this, "OnClickTypeHelpBtn"))
         this.ui.OnEvent("BtnAddVar", "Click", ObjBindMethod(this, "OnClickAddVarValueBtn"))
         this.ui.OnEvent("BtnSure", "Click", ObjBindMethod(this, "OnSureBtnClick"))
@@ -123,18 +195,28 @@ class FrontInfoGui {
 
     }
 
-    _AddInfoRow(parent, idx, label, hideText) {
-        row := parent.Add("StackPanel").Orientation("Horizontal").Margin("0,2,0,0")
-        row.Add("CheckBox").Name("Tog" idx).Content(label).Width(150).VerticalAlignment("Center")
-        vis := hideText ? "Collapsed" : "Visible"
-        row.Add("TextBox").Name("InfoText" idx).Width(360).Height(26).MinHeight(26).Margin("8,0,0,0").Visibility(vis)
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
+    _AddInfoRow(parent, row, idx, label, hideText) {
+        if (hideText) {
+            parent.Add("CheckBox").Name("Tog" idx).Content(label).Grid_Row(row).Grid_Column(0).Grid_ColumnSpan(2)
+                .VerticalAlignment("Center").Margin("0,4,0,0")
+            return
+        }
+        parent.Add("CheckBox").Name("Tog" idx).Content(label).Grid_Row(row).Grid_Column(0)
+            .VerticalAlignment("Center").Margin("0,4,8,0")
+        box := parent.Add("Border").Grid_Row(row).Grid_Column(1).Margin("0,4,0,0")
+            .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}")
+            .BorderThickness("1").CornerRadius("3").Height(28).MinHeight(28).Padding("0")
+            .SnapsToDevicePixels("True")
+        box.Add("TextBox").Name("InfoText" idx)
+            .Height(26).MinHeight(26).BorderThickness("0").Background("Transparent")
+            .Foreground("{DynamicResource InputText}").VerticalContentAlignment("Center").Padding("4,1")
+            .HorizontalScrollBarVisibility("Disabled").VerticalScrollBarVisibility("Disabled")
     }
 
     Init(winInfoCon) {
         this.winInfoCon := winInfoCon
-        this.ui.Update("TopTogCon", "IsChecked", "True")
+        this._topOn := true
+        this._SyncTopBtn()
         infoStr := winInfoCon.Value
         if (InStr(infoStr, "❖")) {
             idStr := StrReplace(infoStr, "❖", "")
@@ -283,8 +365,33 @@ class FrontInfoGui {
     }
 
     OnTopTogClick(state, ctrl, event) {
-        topmost := this.ui.Query("TopTogCon") == "True"
-        WinSetAlwaysOnTop(topmost ? "On" : "Off", "ahk_id " this.Hwnd())
+        this._topOn := !this._topOn
+        this._SyncTopBtn()
+    }
+
+    _SyncTopBtn() {
+        if (!IsObject(this.ui))
+            return
+        on := !!this._topOn
+        if (on) {
+            try this.ui.Update("BtnTop", "Background", "{DynamicResource ActionBg}")
+            try this.ui.Update("BtnTop", "BorderBrush", "{DynamicResource ActionStroke}")
+            try this.ui.Update("BtnTop", "BorderThickness", "1")
+            try this.ui.Update("BtnTop", "Foreground", "{DynamicResource ActionText}")
+            try this.ui.Update("BtnTopDot", "Visibility", "Visible")
+        } else {
+            try this.ui.Update("BtnTop", "Background", "Transparent")
+            try this.ui.Update("BtnTop", "BorderBrush", "Transparent")
+            try this.ui.Update("BtnTop", "BorderThickness", "0")
+            try this.ui.Update("BtnTop", "Foreground", "{DynamicResource TitleBarForeground}")
+            try this.ui.Update("BtnTopDot", "Visibility", "Collapsed")
+        }
+        try this.ui.Update("Window", "Topmost", on ? "True" : "False")
+        hwnd := this.Hwnd()
+        if (hwnd) {
+            topVal := on ? 1 : 0
+            try WinSetAlwaysOnTop(topVal, "ahk_id " hwnd)
+        }
     }
 
     OnTogClick(index, *) {
@@ -369,7 +476,7 @@ class FrontInfoGui {
         str1 := GetLang("优先级：句柄ID > 标题 + 窗口类 + 进程名")
         str2 := GetLang("句柄ID支持多ID任意适配")
         str := Format("{}`n{}", str1, str2)
-        MsgBox(str, GetLang("窗口信息说明"), "Owner" this.Hwnd())
+        RmtDialog.Info(str, GetLang("窗口信息说明"))
     }
 
     OnClickAddVarValueBtn(state, ctrl, event) {
@@ -402,6 +509,7 @@ class FrontInfoGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        this._SyncTopBtn()
     }
 
     OnWindowClosing(state, ctrl, event) {

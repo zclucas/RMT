@@ -263,7 +263,7 @@ class UIMacroGui {
 
     ; 构建XAML面板（对齐 CreateFloatingPanel L182-264）
     BuildXAMLPanel(btnItems, foldIndex, targetHwnd, isScreenMode, skipActivate := false) {
-        titleBarH := 26
+        titleBarH := 30
         btnItemH := MainSoftData.UIPanelBtnHeight
         btnItemW := MainSoftData.UIPanelBtnWidth
         btnGap := 2

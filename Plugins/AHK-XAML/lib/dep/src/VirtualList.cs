@@ -143,8 +143,10 @@ public class VirtualListHost
                 }
                 ListBoxItem under = GetItemUnderMouse(_lb, e.GetPosition(_lb));
                 VLItem underVi = under != null ? under.DataContext as VLItem : null;
-                if (underVi is VListRow && (!interactive || d is TextBox))
+                if (underVi is VListRow && !interactive)
                     SendClick(underVi.Id, "Select");
+                else if (underVi is VListRow && (d is TextBox || d is ComboBox))
+                    SendClick(underVi.Id, "Field");
                 if (interactive && !fromHandle)
                     return;
                 if (!fromHandle && !(underVi is VListFold))

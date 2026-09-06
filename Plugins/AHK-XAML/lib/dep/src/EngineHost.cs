@@ -850,7 +850,7 @@ public partial class AhkWpfEngine
                     // GlassFrame=0 禁用 DWM 系统玻璃（Win11 下 GlassFrame=-1 的系统玻璃色偏紫，首帧会闪紫）
                     chrome.GlassFrameThickness = new Thickness(0);
                     chrome.ResizeBorderThickness = new Thickness(6); // 四角缩放
-                    double captionHeight = 50;
+                    double captionHeight = 30;
                     try
                     {
                         if (win.Resources.Contains("TitleBarHeight"))
@@ -867,7 +867,7 @@ public partial class AhkWpfEngine
                     try { chrome.CornerRadius = (CornerRadius)Application.Current.Resources["WindowRadius"]; } catch { chrome.CornerRadius = new CornerRadius(12); }
                     System.Windows.Shell.WindowChrome.SetWindowChrome(win, chrome);
                     // Re-apply IsHitTestVisibleInChrome on known buttons
-                    foreach (string btnName in new[] { "BtnToggleSidebar", "BtnClose", "BtnMinimize", "BtnMaximize" })
+                    foreach (string btnName in new[] { "BtnToggleSidebar", "BtnClose", "BtnClosePanel", "BtnWinClose", "BtnMinimize", "BtnMaximize" })
                     {
                         var el = win.FindName(btnName) as System.Windows.IInputElement;
                         if (el != null) System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(el, true);

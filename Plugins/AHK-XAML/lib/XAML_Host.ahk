@@ -365,6 +365,50 @@ class XAMLHost {
         return XAMLHost.FontSize(2)
     }
 
+    ; 标题栏关闭钮：与主界面 BtnWinClose 同款（46×标题栏高、TitleBarCloseButton、右上圆角 hover）
+    static AddTitleCloseBtn(parent, name := "BtnClosePanel", titleHeight := "30") {
+        btn := parent.Add("Button").Name(name)
+            .Style("{StaticResource TitleBarCloseButton}")
+            .WindowChrome_IsHitTestVisibleInChrome("True")
+            .Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0")
+            .VerticalAlignment("Stretch").Background("Transparent")
+            .Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+        btn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+            .FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        return btn
+    }
+
+    ; 标题栏骨架（铬钮不进 DragArea）。titleIcon 画在标题文字左侧。返回 { Root, Drag, Btns }
+    static AddTitleBarChrome(main, title, titleName := "", titleIcon := "", titleIconColor := "") {
+        tb := main.Add("Grid").Grid_Row(0).Background("{DynamicResource TitleBarColor}")
+        tb.Cols("*", "Auto")
+        drag := tb.Add("Border").Grid_Column(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
+        row := drag.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center").Margin("15,0,0,0")
+        if (titleIcon != "") {
+            icColor := (titleIconColor != "") ? titleIconColor : "{DynamicResource TitleBarForeground}"
+            icHost := row.Add("Border").Margin("0,1,0,0").VerticalAlignment("Center")
+            icHost.Add("TextBlock").Text(titleIcon).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+                .FontSize(XAMLHost.TitleFontSize()).Foreground(icColor)
+                .VerticalAlignment("Center")
+        }
+        tbk := row.Add("TextBlock")
+        if (titleName != "")
+            tbk.Name(titleName)
+        titleLeft := (titleIcon != "") ? "6" : "0"
+        tbk.Text(title).Foreground("{DynamicResource TitleBarForeground}")
+            .FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center")
+            .Margin(titleLeft ",0,0,0").Padding("0")
+        btns := tb.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Stretch")
+        return { Root: tb, Drag: drag, Btns: btns }
+    }
+
+    ; 标准标题栏 + 关闭钮。返回 { Root, Drag, Btns, Close }
+    static AddTitleBar(main, title, titleHeight := "30", closeName := "BtnClosePanel", titleName := "", titleIcon := "", titleIconColor := "") {
+        chrome := XAMLHost.AddTitleBarChrome(main, title, titleName, titleIcon, titleIconColor)
+        chrome.Close := XAMLHost.AddTitleCloseBtn(chrome.Btns, closeName, titleHeight)
+        return chrome
+    }
+
     ; Popup/ContextMenu 脱离 Viewbox：字号 = 主题字号 × 主窗 Viewbox，视觉上才和界面正文一致
     static PopupFontSize() {
         theme := XAMLHost.GetThemeFontSize()
@@ -401,7 +445,7 @@ class XAMLHost {
 
     ; 标题栏高度固定，不随主题字号变化
     static GetTitleBarHeight() {
-        return 36
+        return 30
     }
 
     static ApplyTitleBarHeight(&xaml) {
@@ -609,11 +653,15 @@ class XAMLHost {
         return 0
     }
 
-    ; 标题栏铬钮（最小/最大/关闭）：统一走 TitleBarCloseButton
+    ; 标题栏铬钮：关闭走 TitleBarCloseButton（右上圆角），最小/最大走 TitleBarChromeButton（直角）
+    static IsTitleCloseButton(tag) {
+        return InStr(tag, 'Name="BtnClosePanel"') || InStr(tag, 'Name="BtnWinClose"')
+            || InStr(tag, 'Name="BtnClosePicker"') || InStr(tag, 'Name="BtnClose"')
+    }
+
     static IsTitleChromeButton(tag) {
-        return InStr(tag, 'Name="BtnClosePanel"') || InStr(tag, 'Name="BtnClose"')
-            || InStr(tag, 'Name="BtnWinClose"') || InStr(tag, 'Name="BtnMinimize"')
-            || InStr(tag, 'Name="BtnMaximize"')
+        return XAMLHost.IsTitleCloseButton(tag)
+            || InStr(tag, 'Name="BtnMinimize"') || InStr(tag, 'Name="BtnMaximize"')
     }
 
     ; 标题栏：窗口标题 = 主题字号+2 且粗体；铬钮统一 TitleBarCloseButton
@@ -621,13 +669,27 @@ class XAMLHost {
         titleFs := XAMLHost.FormatFontSize(XAMLHost.GetThemeFontSize() + 2)
         out := ""
         pos := 1
-        while (RegExMatch(mid, "i)<(TextBlock|Button)\b[^>]*>", &m, pos)) {
+        while (RegExMatch(mid, "i)<(TextBlock|Button|StackPanel)\b[^>]*>", &m, pos)) {
             tag := m[0]
             out .= SubStr(mid, pos, m.Pos[0] - pos)
             kind := m[1]
-            if (kind = "TextBlock") {
+            if (kind = "StackPanel") {
+                if (InStr(tag, 'Orientation="Horizontal"') && InStr(tag, 'HorizontalAlignment="Right"')) {
+                    if (InStr(tag, "VerticalAlignment="))
+                        tag := RegExReplace(tag, '\bVerticalAlignment="[^"]*"', 'VerticalAlignment="Stretch"')
+                    else
+                        tag := RegExReplace(tag, ">$", ' VerticalAlignment="Stretch">')
+                }
+            } else if (kind = "TextBlock") {
                 isIcon := InStr(tag, "Segoe Fluent") || InStr(tag, "MDL2") || InStr(tag, 'FontSize="10"')
-                if (!isIcon) {
+                if (isIcon) {
+                    if (InStr(tag, "VerticalAlignment="))
+                        tag := RegExReplace(tag, '\bVerticalAlignment="[^"]*"', 'VerticalAlignment="Center"')
+                    else
+                        tag := RegExReplace(tag, ">$", ' VerticalAlignment="Center">')
+                    if (InStr(tag, "Margin="))
+                        tag := RegExReplace(tag, '\bMargin="[^"]*"', 'Margin="0"')
+                } else {
                     if (RegExMatch(tag, 'FontSize="\d+(?:\.\d+)?"'))
                         tag := RegExReplace(tag, 'FontSize="\d+(?:\.\d+)?"', 'FontSize="' titleFs '"')
                     else
@@ -643,17 +705,21 @@ class XAMLHost {
                 else
                     tag := RegExReplace(tag, ">$", ' Width="46">')
                 if (InStr(tag, "Height="))
-                    tag := RegExReplace(tag, '\bHeight="\d+(?:\.\d+)?"', 'Height="36"')
+                    tag := RegExReplace(tag, '\bHeight="\d+(?:\.\d+)?"', 'Height="30"')
                 else
-                    tag := RegExReplace(tag, ">$", ' Height="36">')
+                    tag := RegExReplace(tag, ">$", ' Height="30">')
                 if (InStr(tag, "MinHeight="))
-                    tag := RegExReplace(tag, '\bMinHeight="\d+(?:\.\d+)?"', 'MinHeight="36"')
+                    tag := RegExReplace(tag, '\bMinHeight="\d+(?:\.\d+)?"', 'MinHeight="30"')
                 else
-                    tag := RegExReplace(tag, ">$", ' MinHeight="36">')
+                    tag := RegExReplace(tag, ">$", ' MinHeight="30">')
                 if (InStr(tag, "Padding="))
                     tag := RegExReplace(tag, '\bPadding="[^"]*"', 'Padding="0"')
                 else
                     tag := RegExReplace(tag, ">$", ' Padding="0">')
+                if (InStr(tag, "VerticalAlignment="))
+                    tag := RegExReplace(tag, '\bVerticalAlignment="[^"]*"', 'VerticalAlignment="Stretch"')
+                else
+                    tag := RegExReplace(tag, ">$", ' VerticalAlignment="Stretch">')
                 ; 静止透明（透出标题栏色），hover=ControlBorder，按下=BtnPressBg
                 if (InStr(tag, "Background="))
                     tag := RegExReplace(tag, '\bBackground="[^"]*"', 'Background="Transparent"')

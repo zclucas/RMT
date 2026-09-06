@@ -102,18 +102,13 @@ class AiSettingGui {
         AiAssist.EnsureDefaults()
         this.closed := false
         title := GetLang("AI 设置")
-        titleHeight := "36"
+        titleHeight := "30"
         h := AiSettingGui.CtrlH
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(titleHeight, "*")
 
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0")
-        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
-        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
         ; 右缘留白根因：StackPanel+固定 fieldW 不拉伸；内容宽≈386，窗宽460→右侧空约 30px。
         ; 改为每行 Grid(Auto|*)，字段列 HorizontalAlignment=Stretch 吃满 body。

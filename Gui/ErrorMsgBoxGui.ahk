@@ -59,14 +59,8 @@ class ErrorMsgBoxGui {
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(titleHeight, "*")
 
-        ; === 标题栏：关闭钮不放进 DragArea，避免拖动吃掉点击 ===
-        tb := main.Add("Grid").Grid_Row(0).Background("{DynamicResource TitleBarColor}")
-        tb.Cols("*", "Auto")
-        drag := tb.Add("Border").Grid_Column(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        drag.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("12,0,0,0")
-        closeBtn := tb.Add("Button").Name("BtnClose").Grid_Column(1).WindowChrome_IsHitTestVisibleInChrome("True")
-            .Width(40).Height(titleHeight).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight, "BtnClose")
+        closeBtn := chrome.Close
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("10,12")

@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 变量监视器双击修改值：XAML，颜色跟随通用主题
 class VarModifyGui {
@@ -40,7 +40,7 @@ class VarModifyGui {
     _BuildAndShow() {
         this.closed := false
         title := GetLang("修改")
-        titleHeight := "36"
+        titleHeight := "30"
         winW := 400
         winH := 280
 
@@ -48,14 +48,7 @@ class VarModifyGui {
         main.Rows(titleHeight, "*", "Auto")
 
         ; 标题栏
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0")
-        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
-        CloseBtnTemplate := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
-        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.InjectResources(CloseBtnTemplate)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
         body := main.Add("StackPanel").Grid_Row(1).Margin("20, 12, 20, 8")
         nameRow := body.Add("StackPanel").Orientation("Horizontal").Margin("0,0,0,12")

@@ -557,12 +557,12 @@
         </Setter>
     </Style>
 
-    <!-- 标题栏铬钮（最小/最大/关闭）唯一样式：静止透明透出标题栏色，hover=ControlBorder，按下=BtnPressBg -->
-    <Style x:Key="TitleBarCloseButton" TargetType="Button">
+    <!-- 标题栏中间铬钮（最小/最大）：hover 直角。关闭钮才用右上圆角。 -->
+    <Style x:Key="TitleBarChromeButton" TargetType="Button">
         <Setter Property="Width" Value="46"/>
-        <Setter Property="Height" Value="36"/>
+        <Setter Property="Height" Value="30"/>
         <Setter Property="MinWidth" Value="46"/>
-        <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="MinHeight" Value="30"/>
         <Setter Property="Padding" Value="0"/>
         <Setter Property="Margin" Value="0"/>
         <Setter Property="VerticalAlignment" Value="Stretch"/>
@@ -575,8 +575,29 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource ControlBorder}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 标题栏最右侧关闭钮：hover 右上圆角贴窗口角 -->
+    <Style x:Key="TitleBarCloseButton" TargetType="Button" BasedOn="{StaticResource TitleBarChromeButton}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
                     <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" SnapsToDevicePixels="True">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">

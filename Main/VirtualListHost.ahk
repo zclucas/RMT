@@ -206,8 +206,10 @@ class VirtualListHost {
         }
         idx := Integer(SubStr(id, InStr(id, "_", , 2) + 1))
         if (SubStr(id, 1, 1) == "R") {
-            if (IsObject(MyMainWin))
-                MyMainWin.SelectSideTreeItem(t, idx)
+            if (IsObject(MyMainWin) && (action == "Select" || action == "Field"))
+                MyMainWin.SelectSideTreeItem(t, idx, action == "Select")
+            else if (IsObject(MyMainWin) && action != "Setting")
+                MyMainWin.SelectSideTreeItem(t, idx, false)
             switch action {
                 case "TKBtn": this._EditTK(tableItem, idx, event)
                 case "TKBtnR":
@@ -219,7 +221,10 @@ class VirtualListHost {
                 case "NetHelp":
                     ; §23 网络宏：触发键左侧「?」按钮 → 网络触发说明弹窗（弹 XAML 窗须离开 VL_CLICK）
                     this._DeferDialog("NetHelp", OnItemNetworkHelp.Bind(tableItem, idx))
-                case "Setting": OnItemEditMacroSetting(tableItem, idx, event)
+                case "Setting":
+                    if (IsObject(MyMainWin))
+                        MyMainWin.SelectSideTreeItem(t, idx, false, true)
+                    OnItemEditMacroSetting(tableItem, idx, event)
                 case "Edit":
                     (CheckIsMacroTable(t) ? OnItemEditMacro : OnItemEditReplaceKey)(tableItem, idx, event)
                 case "Forbid": OnItemForbidToggle(tableItem, idx, event)

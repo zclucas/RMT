@@ -29,6 +29,51 @@ class RmtDialog {
         }
     }
 
+    ; 只读正文右键：只换菜单外观（与 AI 助手同色/同结构），不改弹窗正文字号
+    static _AttachReadonlyCtxMenu(el) {
+        if (!IsObject(el))
+            return
+        ff := (IsSet(MainSoftData) && MainSoftData.HasProp("FontType") && MainSoftData.FontType != "") ? MainSoftData.FontType : "微软雅黑"
+        cm := el.Add("FrameworkElement.ContextMenu").Add("ContextMenu")
+            .MinWidth("140").Placement("MousePoint").FontFamily(ff)
+            .Background("{DynamicResource DropdownBg}").BorderBrush("{DynamicResource InputStroke}")
+            .BorderThickness("1").Foreground("{DynamicResource TextMain}")
+        cm.Add("MenuItem").Header(GetLang("复制")).SetMarkup("Command", "Copy")
+        cm.Add("Separator")
+        cm.Add("MenuItem").Header(GetLang("全选")).SetMarkup("Command", "SelectAll")
+    }
+
+    static _LinePx(line, fs) {
+        px := 0.0
+        loop parse line {
+            if (Ord(A_LoopField) <= 127)
+                px += fs * 0.55
+            else
+                px += fs
+        }
+        return px
+    }
+
+    ; 短句按最长行收窗宽，避免左右大块留白；超过 2 行走宽窗 + 边框
+    static _MsgLayout(msg, fs := 15) {
+        nl := 1
+        longest := 0.0
+        if (InStr(msg, "`n")) {
+            nl := 0
+            loop parse msg, "`n" {
+                nl++
+                w := RmtDialog._LinePx(A_LoopField, fs)
+                if (w > longest)
+                    longest := w
+            }
+        } else {
+            longest := RmtDialog._LinePx(msg, fs)
+        }
+        tall := nl > 2
+        w := tall ? 460 : Min(340, Max(268, Round(longest + 36)))
+        return { Tall: tall, WinW: w, Lines: nl }
+    }
+
     static _Show(msg, title, buttons, iconChar, iconColor, offsetMsg := false) {
         owner := 0
         try {
@@ -37,10 +82,10 @@ class RmtDialog {
         }
         try XAMLHost.EnsureDaemonHealthy()
 
-        titleHeight := "36"
+        titleHeight := "30"
         fs := XAMLHost.FontSize()
-        winW := 300   ; 设计宽度（250+50）；Show 时 ApplyDialogVisualScale + Viewbox 与其它弹窗同一套管线
-        iconFs := fs * 3
+        lay := RmtDialog._MsgLayout(msg, fs)
+        winW := lay.WinW
         fontFamily := ""
         try {
             if (IsSet(MainSoftData) && MainSoftData.HasProp("FontType") && MainSoftData.FontType != "")
@@ -53,42 +98,32 @@ class RmtDialog {
         main.TextElement_FontSize(fs)
         main.Rows(titleHeight, "Auto")
 
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}")
-            .FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0").Padding("0")
-
-        btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch").Height(36)
-        ; 关闭钮与各界面统一：TitleBarCloseButton（hover=ControlBorder、按下=BtnPressBg）
-        closeBtn := btnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}")
-            .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).MinHeight(36).Padding("0")
-            .VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10)
-            .VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight, "BtnClosePanel", "", iconChar, iconColor)
+        closeBtn := chrome.Close
 
         body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
-        panel := body.Add("StackPanel").Margin("14,18,14,14")
+        panel := body.Add("StackPanel").Margin(lay.Tall ? "12,12,12,12" : "12,16,12,12")
 
-        if (offsetMsg) {
-            ; Info（空复制等）：图标靠左，文案整窗居中后再右偏 50，换行块内左对齐，避免压住图标
-            msgRow := panel.Add("Grid").Margin("0,4,0,4")
-            if (iconChar != "") {
-                msgRow.Add("TextBlock").Text(iconChar).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-                    .FontSize(iconFs).Foreground(iconColor).VerticalAlignment("Center").HorizontalAlignment("Left")
-                    .Margin("2,0,0,0")
-            }
-            msgTb := msgRow.Add("TextBlock").Text(msg).Foreground("{DynamicResource TextMain}").FontSize(fs)
-                .VerticalAlignment("Center").HorizontalAlignment("Center").TextAlignment("Left").TextWrapping("Wrap")
-                .Margin("50,0,0,0")
+        if (!lay.Tall) {
+            ; 短文案：整段居中，窗宽按最长行收紧
+            msgTb := panel.Add("TextBlock").Text(msg).Foreground("{DynamicResource TextMain}").FontSize(fs)
+                .HorizontalAlignment("Center").VerticalAlignment("Center")
+                .TextAlignment("Center").TextWrapping("Wrap")
+                .MaxWidth(winW - 24).Margin("0,4,0,0")
         } else {
-            ; Confirm（删除等）：图标+文案作为一组水平居中
-            msgRow := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,4,0,4")
-            if (iconChar != "") {
-                msgRow.Add("TextBlock").Text(iconChar).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-                    .FontSize(iconFs).Foreground(iconColor).VerticalAlignment("Center").Margin("0,0,10,0")
-            }
-            msgTb := msgRow.Add("TextBlock").Text(msg).Foreground("{DynamicResource TextMain}").FontSize(fs)
-                .VerticalAlignment("Center").TextAlignment("Center")
+            ; 长文案：边框包住只读文本，可框选复制、不可编辑
+            roStyle := '<Style TargetType="TextBox"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Padding="0"/></ControlTemplate></Setter.Value></Setter></Style>'
+            box := panel.Add("Border")
+                .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").CornerRadius("4")
+                .Background("{DynamicResource InputBg}").Padding("10,8,6,8")
+            msgTb := box.Add("TextBox").Name("DlgMsgText").Text(msg).Foreground("{DynamicResource TextMain}").FontSize(fs)
+                .Background("Transparent").BorderThickness("0").Padding("0")
+                .IsReadOnly("True").IsReadOnlyCaretVisible("True").AcceptsReturn("True")
+                .TextWrapping("Wrap").MaxHeight(340)
+                .HorizontalScrollBarVisibility("Disabled").VerticalScrollBarVisibility("Auto")
+                .CaretBrush("{DynamicResource TextMain}")
+            msgTb.InjectResources(roStyle)
+            RmtDialog._AttachReadonlyCtxMenu(msgTb)
         }
         if (fontFamily != "")
             msgTb.FontFamily(fontFamily)

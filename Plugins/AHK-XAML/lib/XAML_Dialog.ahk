@@ -65,7 +65,7 @@ class XDialog {
         if (XDialog.Has(options, "Resources")) {
             dialogResources .= "`n" options.Resources
         }
-        main.Rows("40", "*", "Auto")
+        main.Rows("30", "*", "Auto")
         if (XDialog.Has(options, "ContentFontSize"))
             main.TextElement_FontSize(options.ContentFontSize)
         else
@@ -94,7 +94,7 @@ class XDialog {
 
         if (showCloseBtn) {
             closeBtnName := XDialog.Opt(options, "CloseBtnName", "BtnClose")
-            closeBtn := tb.Add("Button").Name(closeBtnName).WindowChrome_IsHitTestVisibleInChrome("True").HorizontalAlignment("Right").Background("Transparent").BorderThickness(0).Width(46).Height(36).MinHeight(36).Padding("0").Cursor("Hand").Foreground("{DynamicResource TitleBarForeground}")
+            closeBtn := tb.Add("Button").Name(closeBtnName).WindowChrome_IsHitTestVisibleInChrome("True").HorizontalAlignment("Right").Background("Transparent").BorderThickness(0).Width(46).Height(30).MinHeight(30).Padding("0").Cursor("Hand").Foreground("{DynamicResource TitleBarForeground}")
             try closeBtn._Props["Width"] := options.CloseBtnWidth
             try closeBtn._Props["Height"] := options.CloseBtnHeight
             try closeBtn._Props["Margin"] := options.CloseBtnMargin
@@ -219,7 +219,7 @@ class XDialog {
             ui.skipFontScale := XDialog.Opt(options, "SkipFontScale", false)
         } else {
             ; Use a lightweight template without the 75KB component library for speed
-            captionH := movable ? "45" : "0"
+            captionH := movable ? "30" : "0"
             startupLoc := owner ? "CenterOwner" : "CenterScreen"
             dialogTemplate := '
             (
