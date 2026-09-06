@@ -777,7 +777,7 @@ class MainWin {
         cur := MainSoftData.TableIndex
         this._renderedTabs[cur] := true
         this.RenderTab(MySoftData.TableInfo[cur])
-        this._SelectFirstSideTreeItem(cur)
+        ; 启动不默认选中第一条宏，等用户点选
         ; AI 预置对话改为首次打开侧栏/切到 AI 时惰性注入，避免启动与首展卡顿
     }
 
@@ -887,7 +887,6 @@ class MainWin {
         if (IsObject(nav) && nav.tab == idx && nav.idx >= 1) {
             this.SelectSideTreeItem(idx, nav.idx)
         } else {
-            this._SelectFirstSideTreeItem(idx)
             this.RefreshSideTree(idx)
         }
         if (this.aiAssistOpen) {
@@ -1573,15 +1572,12 @@ class MainWin {
             return ""
         tableItem := MySoftData.TableInfo[t]
         id := this._sideTreeSel.Has(t) ? this._sideTreeSel[t] : ""
-        item := (id != "") ? tableItem.GetItem(id) : ""
-        if (!item)
-            item := this._FirstSideTreeItem(tableItem)
-        if (item)
-            this._sideTreeSel[t] := item.ID
-        return item
+        if (id == "")
+            return ""
+        return tableItem.GetItem(id)
     }
 
-    SelectSideTreeItem(t, index, *) {
+    SelectSideTreeItem(t, index, openPanel := true, deferTree := false, *) {
         if (t < 1 || t > MySoftData.TableInfo.Length)
             return
         tableItem := MySoftData.TableInfo[t]
@@ -1590,13 +1586,25 @@ class MainWin {
         item := tableItem.Items[index]
         if (!item)
             return
-        if (this._sideTreeSel.Has(t) && this._sideTreeSel[t] == item.ID) {
-            this._ApplyRowSel(t, index)
-            return
+        ; 事件回调会把 state 传到 openPanel；只有显式 false 才不展开
+        doOpen := (openPanel != false && openPanel != 0)
+        opened := false
+        if (doOpen && !this._IsAiPanelOpen()) {
+            this.aiAssistOpen := true
+            this.sidePanelMode := 1
+            this._ApplyAiPanelUi()
+            this._ApplySidePanelMode()
+            opened := true
         }
+        same := this._sideTreeSel.Has(t) && this._sideTreeSel[t] == item.ID
         this._sideTreeSel[t] := item.ID
         this._ApplyRowSel(t, index)
-        this.RefreshSideTree(t)
+        if (this._IsAiPanelOpen() && this.sidePanelMode == 1 && (!same || opened)) {
+            if (deferTree == true)
+                SetTimer(ObjBindMethod(this, "RefreshSideTree", t), -1)
+            else
+                this.RefreshSideTree(t)
+        }
     }
 
     _ApplyRowSel(t, index) {
@@ -1614,6 +1622,8 @@ class MainWin {
         if (index >= 1) {
             this._SetItemRowSelChrome(t, index, true)
             this._rowSelIdx[t] := index
+        } else {
+            this._rowSelIdx[t] := 0
         }
     }
 
