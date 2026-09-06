@@ -288,6 +288,9 @@ class MainConfig {
         this.LogWarnBubble := true      ; warn 级托盘气泡（2s 自动消失）
         this.LogErrorBadge := true      ; error 级错误中心聚合
 
+        ; ========== §23 网络触发（HTTP/Webhook）==========
+        this.NetworkPort := 16888       ; HTTP 监听端口（默认 16888；仅绑定 127.0.0.1，不自动换端口）
+
         ; ========== AI 助手（OpenAI 兼容）==========
         this.AiApiKey := ""
         this.AiApiBaseUrl := "https://api.openai.com/v1"

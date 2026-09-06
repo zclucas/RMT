@@ -78,7 +78,9 @@ class VirtualListHost {
             . US . this._Esc(this._Loop(tableItem, i))
             . US . (item.Forbid ? "1" : "0")
             . US . this._Color(tableItem, i)
+            . US . (i ".")
             . US . String(GetMacroEditKind(item.Macro))
+            . US . (GetTableSymbol(t) == "Network" ? "1" : "0")   ;§23 网络宏标志（说明按钮/触发类型隐藏）
         this._ui.Update("FoldList_" t, "VL_ROW", val)
     }
 
@@ -141,6 +143,7 @@ class VirtualListHost {
                     . US . this._Color(tableItem, i)
                     . US . (i ".")
                     . US . String(GetMacroEditKind(item.Macro))
+                    . US . (GetTableSymbol(t) == "Network" ? "1" : "0")   ;§23 网络宏标志
                     . RS
             }
         }
@@ -155,6 +158,10 @@ class VirtualListHost {
             ; 语音宏：触发键列显示唤醒词
             tkStr := item.VoiceKeywords
             return tkStr == "" ? GetLang("编辑") : tkStr
+        }
+        if (GetTableSymbol(t) == "Network") {
+            ; §23 网络宏：触发键列显示「复制链接」，点击/右键=直接复制开启 URL
+            return item.ID == "" ? GetLang("编辑") : GetLang("复制链接")
         }
         tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
         if (tkStr == "" && CheckIsNormalTable(t))
@@ -205,7 +212,15 @@ class VirtualListHost {
                 MyMainWin.SelectSideTreeItem(t, idx, false)
             switch action {
                 case "TKBtn": this._EditTK(tableItem, idx, event)
-                case "TKBtnR": OnItemCustomEditTriggerStr(tableItem, idx, event)
+                case "TKBtnR":
+                    ; §23 网络宏：右键触发键列 = 直接复制开启 URL；其余表保持自定义触发串
+                    if (GetTableSymbol(t) == "Network")
+                        OnItemNetworkCopyUrl(tableItem, idx, "on", event)
+                    else
+                        OnItemCustomEditTriggerStr(tableItem, idx, event)
+                case "NetHelp":
+                    ; §23 网络宏：触发键左侧「?」按钮 → 网络触发说明弹窗（弹 XAML 窗须离开 VL_CLICK）
+                    this._DeferDialog("NetHelp", OnItemNetworkHelp.Bind(tableItem, idx))
                 case "Setting":
                     if (IsObject(MyMainWin))
                         MyMainWin.SelectSideTreeItem(t, idx, false, true)
@@ -245,6 +260,8 @@ class VirtualListHost {
             OnUIMacroSettingClick(tableItem, i, event)
         else if (GetTableSymbol(t) == "Voice")
             OnItemVoiceTriggerSetting(tableItem, i, event)   ; 语音宏：触发编辑弹窗填唤醒词
+        else if (GetTableSymbol(t) == "Network")
+            OnItemNetworkCopyUrl(tableItem, i, "on", event)   ; §23 网络宏：触发键列点击 = 直接复制开启 URL
         else
             OnItemEditTriggerKey(tableItem, i, event)
     }

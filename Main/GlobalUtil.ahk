@@ -22,6 +22,7 @@
 #Include VirtualListHost.ahk
 #Include UIUtil.ahk
 #Include TimingUtil.ahk
+#Include NetworkUtil.ahk
 #Include WindowHotkeyManager.ahk
 #Include BindUtil.ahk
 #Include VariableUtil.ahk

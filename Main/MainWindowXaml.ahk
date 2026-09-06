@@ -4511,11 +4511,15 @@ class MainWin {
         isSubMacro := CheckIsSubMacroTable(t)
         isUI := GetTableSymbol(t) == "UI"
         isVoice := GetTableSymbol(t) == "Voice"
+        isNetwork := GetTableSymbol(t) == "Network"
 
         if (isVoice) {
             ; 语音宏：触发键列显示唤醒词
             tkStr := item.VoiceKeywords
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        } else if (isNetwork) {
+            ; §23 网络宏：触发键列显示「复制链接」，点击/右键=直接复制开启 URL
+            tkStr := item.ID == "" ? GetLang("编辑") : GetLang("复制链接")
         } else {
             tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
@@ -4536,8 +4540,11 @@ class MainWin {
             . '<Border Grid.Column="0" Name="Color_' t '_' i '" Width="12" Height="12" CornerRadius="6" Background="' colorHex '" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
             . this._BuildSeqNoXaml(false, t, i, rowSel)
             . this._BuildItemRemarkFieldXaml(t, i, item.Remark, false)
-            . '<Button Grid.Column="4" Name="TKBtn_' t '_' i '" Style="{StaticResource RmtItemFieldBtn}" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '" IsEnabled="' (isSubMacro ? "False" : "True") '">' this._BuildTKBtnInnerXaml(tkStr, false) '</Button>'
-            . '<ComboBox Grid.Column="5" Name="TKType_' t '_' i '" Style="{StaticResource RmtItemCombo}" Margin="0" SelectedIndex="' tkTypeIdx '" IsEnabled="' (isNormal ? "True" : "False") '" ToolTip="' GetLang("触发类型") '">'
+            . '<StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Left">'
+            . (isNetwork ? '<Button Name="NetHelp_' t '_' i '" Style="{StaticResource RmtItemFieldBtn}" Width="24" Margin="0,0,2,0" Content="&#xE946;" ToolTip="' GetLang("网络触发说明") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>' : '')
+            . '<Button Name="TKBtn_' t '_' i '" Style="{StaticResource RmtItemFieldBtn}" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '" IsEnabled="' (isSubMacro ? "False" : "True") '">' this._BuildTKBtnInnerXaml(tkStr, false) '</Button>'
+            . '</StackPanel>'
+            . '<ComboBox Grid.Column="5" Name="TKType_' t '_' i '" Style="{StaticResource RmtItemCombo}" Margin="0" SelectedIndex="' tkTypeIdx '" IsEnabled="' (isNormal ? "True" : "False") '" Visibility="' (isNetwork ? "Collapsed" : "Visible") '" ToolTip="' GetLang("触发类型") '">'
             . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
             . '</ComboBox>'
             . this._BuildItemEditBtnXaml(t, i, item, false)
@@ -4622,6 +4629,7 @@ class MainWin {
         isTiming := CheckIsTimingMacroTable(t)
         isMenu := CheckIsMenuMacroTable(t)
         isUI := GetTableSymbol(t) == "UI"
+        isNetwork := GetTableSymbol(t) == "Network"
 
         editTK := isTriggerStr ? OnItemEditTriggerStr : OnItemEditTriggerKey
         editTK := isTiming ? OnItemEditTiming : editTK
@@ -4629,6 +4637,8 @@ class MainWin {
         editMacro := isMacro ? OnItemEditMacro : OnItemEditReplaceKey
         if (isUI)
             editTK := OnUIMacroSettingClick
+        else if (isNetwork)
+            editTK := (*) => OnItemNetworkCopyUrl(tableItem, i, "on")   ; §23 网络宏：触发键列点击 → 直接复制开启 URL
         else if (GetTableSymbol(t) == "Voice")
             editTK := OnItemVoiceTriggerSetting   ; 语音宏：触发键列点击 → 语音触发编辑弹窗（填唤醒词）
 
@@ -4637,7 +4647,11 @@ class MainWin {
 
         this._Bind("SeqBtn_" t "_" i, "Click", ObjBindMethod(this, "SelectSideTreeItem", t, i))
         this._Bind("TKBtn_" t "_" i, "Click", editTK.Bind(tableItem, i))
-        this._Bind("TKBtn_" t "_" i, "MouseRightButtonUp", OnItemCustomEditTriggerStr.Bind(tableItem, i))
+        ; §23 网络宏：右键同为直接复制开启 URL；其余表保持自定义触发串
+        this._Bind("TKBtn_" t "_" i, "MouseRightButtonUp", isNetwork ? ((*) => OnItemNetworkCopyUrl(tableItem, i, "on")) : OnItemCustomEditTriggerStr.Bind(tableItem, i))
+        ; §23 网络宏：触发键左侧「?」按钮 → 网络触发说明弹窗（仅网络表行存在该按钮）
+        if (isNetwork)
+            this._Bind("NetHelp_" t "_" i, "Click", OnItemNetworkHelp.Bind(tableItem, i))
         this._Bind("Setting_" t "_" i, "Click", OnItemEditMacroSetting.Bind(tableItem, i))
         this._Bind("Edit_" t "_" i, "Click", editMacro.Bind(tableItem, i))
         this._Bind("Forbid_" t "_" i, "Click", OnItemForbidToggle.Bind(tableItem, i))
@@ -4793,8 +4807,11 @@ class MainWin {
             . '<Border Grid.Column="0" Width="12" Height="12" CornerRadius="6" Background="{Binding ColorHex}" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
             . this._BuildSeqNoXaml(true)
             . this._BuildItemRemarkFieldXaml(0, 0, "", true)
-            . '<Button Grid.Column="4" Tag="TKBtn" IsEnabled="{Binding TKBtnEnabled}" Style="{StaticResource RmtItemFieldBtn}" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml("", true) '</Button>'
-            . '<ComboBox Grid.Column="5" Tag="TKType" SelectedIndex="{Binding TKType}" IsEnabled="{Binding TKTypeEnabled}" Style="{StaticResource RmtItemCombo}" Margin="0" ToolTip="' GetLang("触发类型") '">'
+            . '<StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Left">'
+            . '<Button Tag="NetHelp" Visibility="{Binding NetHelpVis}" Style="{StaticResource RmtItemFieldBtn}" Width="24" Margin="0,0,2,0" Content="&#xE946;" ToolTip="' GetLang("网络触发说明") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>'
+            . '<Button Tag="TKBtn" IsEnabled="{Binding TKBtnEnabled}" Style="{StaticResource RmtItemFieldBtn}" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml("", true) '</Button>'
+            . '</StackPanel>'
+            . '<ComboBox Grid.Column="5" Tag="TKType" Visibility="{Binding NetTypeVis}" SelectedIndex="{Binding TKType}" IsEnabled="{Binding TKTypeEnabled}" Style="{StaticResource RmtItemCombo}" Margin="0" ToolTip="' GetLang("触发类型") '">'
             . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
             . '</ComboBox>'
             . this._BuildItemEditBtnXaml(0, 0, "", true)
@@ -4945,8 +4962,8 @@ class MainWin {
 
     ; ============ 工具页 ============
     BuildToolTab() {
-        ; Panel_ 编号 = TableInfo 位置（工具表第 9 位；1-8 为宏表走虚拟列表，无 Panel_）
-        p := "Panel_9"
+        ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Tool 起顺延 +1，改按 Symbol 动态取位
+        p := "Panel_" GetTableIndexByID("Tool")
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
 
         Add(this._LabelRow("变量监视器：", '<StackPanel Orientation="Horizontal"><Button Name="BtnOpenVarListen" Content="' GetLang("打开监视器") '" Height="24" MinHeight="24" Padding="10,0" Margin="0,0,8,0"/><Button Name="BtnFileCheck" Content="' GetLang("文件校验") '" Height="24" MinHeight="24" Padding="10,0" Margin="0,0,8,0"/><Button Name="BtnFileCheckHelp" Content="?" Height="24" MinHeight="24" Width="30" Padding="0" Cursor="Hand" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/></StackPanel>'))
@@ -5013,7 +5030,8 @@ class MainWin {
 
     ; ============ 设置页（§12 按「作用范围」重组：通用设置 / 宏设置 / 功能选项） ============
     BuildSettingTab() {
-        p := "Panel_10"
+        ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Setting 起顺延 +1，改按 Symbol 动态取位
+        p := "Panel_" GetTableIndexByID("Setting")
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
 
@@ -5056,6 +5074,8 @@ class MainWin {
             . this._IntRow("坐标Y浮动(px)：", "EditCoordYFloat", MainSoftData.CoordYFloat)
             . this._CheckRow("无变量提醒", "ChkNoVariable", MainSoftData.NoVariableTip)
             . '</WrapPanel>')
+
+        ; ---- §23 网络宏参数已移至独立窗口（底部按钮组「网络宏设置」）----
 
         ; ---- 功能选项：其余开关 + 功能按钮 ----
         Add('<TextBlock ' ns ' Text="' GetLang("功能选项") '" FontWeight="Bold" Margin="0,10,0,4"/>')
@@ -5103,6 +5123,7 @@ class MainWin {
             . this._CheckRow(GetLang("定时宏"), "TabVisible_Timing", this._TabVisibleVal("Timing"))
             . this._CheckRow(GetLang("宏"), "TabVisible_SubMacro", this._TabVisibleVal("SubMacro"))
             . this._CheckRow(GetLang("按键替换"), "TabVisible_Replace", this._TabVisibleVal("Replace"))
+            . this._CheckRow(GetLang("网络宏"), "TabVisible_Network", this._TabVisibleVal("Network"))
             . '</WrapPanel>')
         Add('<TextBlock ' ns ' Text="' GetLang("隐藏的页签仅不显示，不影响该页签下宏的正常触发（保存后重启生效）。") '" Foreground="{DynamicResource TextSub}" FontSize="11" Margin="0,2,0,4"/>')
 
@@ -5115,6 +5136,7 @@ class MainWin {
             . '<Button Name="BtnRightClickMenu" Content="' GetLang("右键菜单设置") '" Height="28" MinHeight="28" Padding="14,0" Margin="0,4,12,4"/>'
             . '<Button Name="BtnMenuWheel" Content="' GetLang("轮盘") '" Height="28" MinHeight="28" Padding="14,0" Margin="0,4,12,4"/>'
             . '<Button Name="BtnUIPanel" Content="' GetLang("界面浮窗") '" Height="28" MinHeight="28" Padding="14,0" Margin="0,4,12,4"/>'
+            . '<Button Name="BtnNetworkSetting" Content="' GetLang("网络宏设置") '" Height="28" MinHeight="28" Padding="14,0" Margin="0,4,12,4"/>'
             . '<CheckBox Name="ChkCMDTip" Content="' GetLang("指令显示") '" VerticalAlignment="Center" Margin="4,4,6,4"/>'
             . '<Button Name="BtnCMDTipSetting" Content="' GetLang("设置") '" Height="28" MinHeight="28" Padding="10,0" Margin="0,4,0,4"/>'
             . '</WrapPanel>')
@@ -5126,6 +5148,9 @@ class MainWin {
         this._Bind("EditCoordXFloat", "LostFocus", ObjBindMethod(this, "OnIntEdit", "CoordXFloat"))
         this._Bind("EditCoordYFloat", "LostFocus", ObjBindMethod(this, "OnIntEdit", "CoordYFloat"))
         this._Bind("EditMutiThreadNum", "LostFocus", ObjBindMethod(this, "OnIntEdit", "MutiThreadNum"))
+        ; §23 网络宏：参数窗口（端口变更保存后经 OnSaveSetting + 总线调和热生效）
+        ; 弹 XAML 窗须离开 Click 消息上下文，SetTimer(-1) 延迟打开
+        this._Bind("BtnNetworkSetting", "Click", (*) => SetTimer(() => NetworkShowSettingDialog(), -1))
         this._Bind("EditSoftBGColor", "LostFocus", ObjBindMethod(this, "OnTextEdit", "SoftBGColor"))
         ; §11 背景图：浏览/清空（写入 MainSoftData.BackImagePath，保存后重启生效）
         this._Bind("BtnBackImageBrowse", "Click", ObjBindMethod(this, "OnBackImageBrowse"))
@@ -5149,7 +5174,7 @@ class MainWin {
         this._Bind("CmbRemarkAuto", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "RemarkAutoType"))
         this._Bind("CmbMacroStop", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "MacroStopType"))
         ; §10 显示页签勾选
-        for sym in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace"]
+        for sym in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace", "Network"]
             this._Bind("TabVisible_" sym, "Click", ObjBindMethod(this, "OnTabVisibleCheck", sym))
         this._Bind("BtnTheme", "Click", OnClickThemeSettingBtn)
         this._Bind("BtnHotkey", "Click", OnClickHotkeySettingBtn)
@@ -5259,7 +5284,8 @@ class MainWin {
 
     ; ============ 帮助页 ============
     BuildHelpTab() {
-        p := "Panel_11"
+        ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Help 起顺延 +1，改按 Symbol 动态取位
+        p := "Panel_" GetTableIndexByID("Help")
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         Add('<TextBlock ' ns ' Text="' GetLang("免责声明") '" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,4"/>')
@@ -5279,6 +5305,7 @@ class MainWin {
         Add(this._LinkRow(GetLang("软件交流渠道："), "https://qm.qq.com/q/DgpDumEPzq", "QQ群（837661891）、QQ频道、GitHub 论坛、Discord"))
         Add(this._LabelRow(GetLang("软件反馈表格："), '<TextBlock Text="' GetLang("bug文档") '、' GetLang("需求文档") '、' GetLang("使用备注") '（仅交流群成员有编辑权限）" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"/>'))
         Add(this._LabelRow(GetLang("软件开源协议："), '<TextBlock Text="AGPL-3.0" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"/>'))
+
         this._FlushLinks()
     }
 
@@ -5304,7 +5331,8 @@ class MainWin {
 
     ; ============ 赞助页 ============
     BuildRewardTab() {
-        p := "Panel_12"
+        ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Reward 起顺延 +1，改按 Symbol 动态取位
+        p := "Panel_" GetTableIndexByID("Reward")
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         countStr := FormatIntegerWithCommas(MySoftData.MacroTotalCount)
         str := Format(GetLang("若梦兔（RMT）—— 这款完全免费的开源软件，始终陪在你身边。")) "`n"
@@ -5323,7 +5351,8 @@ class MainWin {
 
     ; ============ 特别感谢页 ============
     BuildThankTab() {
-        p := "Panel_13"
+        ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Thank 起顺延 +1，改按 Symbol 动态取位
+        p := "Panel_" GetTableIndexByID("Thank")
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         Add('<TextBlock ' ns ' Text="' GetLang("感谢以下开发者为项目付出的智慧与汗水（排名不分先后）：") '" FontWeight="Bold" TextWrapping="Wrap" Margin="0,8,0,4"/>')

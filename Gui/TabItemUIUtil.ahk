@@ -505,3 +505,337 @@ GetFoldAddItemIndex(tableItem, FoldIndex) {
 OnUIMacroSettingClick(tableItem, macroIndex, *) {
     MyUIMacroSettingGui.ShowGui(tableItem, macroIndex)
 }
+
+; ============================================================
+; §23 网络触发：条目触发 URL 辅助 + 说明弹窗
+; 触发码=条目 ID，动作由 path 决定：
+;   开启 http://127.0.0.1:{端口}/macro/{ID}/on   （循环执行，幂等）
+;   关闭 http://127.0.0.1:{端口}/macro/{ID}/off  （停止执行，幂等）
+; 「按下/单次」对网络宏无意义，UI 不展示（服务端仍兼容 /{ID}）。
+; ============================================================
+
+NetworkGetPort() {
+    global MainSoftData
+    return MainSoftData.HasProp("NetworkPort") ? Integer(MainSoftData.NetworkPort) : 16888
+}
+
+; 拼接条目触发 URL（action: "on"/"off"；按当前设置端口，127.0.0.1 固定回环）
+NetworkGetTriggerUrl(macroID, action := "on") {
+    return "http://127.0.0.1:" NetworkGetPort() "/macro/" macroID "/" action
+}
+
+; 复制条目触发 URL 到剪贴板（action: "on"/"off"，成功经 Toast 反馈）
+OnItemNetworkCopyUrl(tableItem, index, action := "on", *) {
+    item := tableItem.Items[index]
+    if (!item || item.ID == "")
+        return
+    url := NetworkGetTriggerUrl(item.ID, action)
+    if (SetClipboard(url))
+        Toast.Success(GetLang("已复制：") url)
+}
+
+; 网络宏条目触发键列点击/右键：不弹菜单，直接复制「开启」URL（「关闭」URL 在「?」说明弹窗里可复制）
+
+; 网络触发说明弹窗（触发键左侧「?」按钮）：本条目的开/关 URL（可复制）+ 参数/响应/各种情况解释
+OnItemNetworkHelp(tableItem, index, *) {
+    item := tableItem.Items[index]
+    if (!item || item.ID == "")
+        return
+    NetworkShowHelpDialog(item.ID)
+}
+
+; 网络触发说明弹窗。macroID 为空 = 通用模式（设置页入口，URL 用 {条目ID} 占位）；
+; 传入条目 ID = 条目模式（网络表「?」按钮，URL 行为该条目的真实链接，可复制）
+NetworkShowHelpDialog(macroID := "") {
+    port := NetworkGetPort()
+    isItem := (macroID != "")
+    idPart := isItem ? macroID : "{" GetLang("条目ID") "}"
+    urlBase := "http://127.0.0.1:" port "/macro/" idPart
+    urlOn := isItem ? NetworkGetTriggerUrl(macroID, "on") : ""
+    urlOff := isItem ? NetworkGetTriggerUrl(macroID, "off") : ""
+    owner := 0
+    try {
+        if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd)
+            owner := MyMainWin.ui.wpfHwnd
+    }
+    try XAMLHost.EnsureDaemonHealthy()
+
+    titleHeight := "36"
+    fs := XAMLHost.FontSize()
+    winW := 520
+    fontFamily := ""
+    try {
+        if (IsSet(MainSoftData) && MainSoftData.HasProp("FontType") && MainSoftData.FontType != "")
+            fontFamily := MainSoftData.FontType
+    }
+
+    main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
+    if (fontFamily != "")
+        main.TextElement_FontFamily(fontFamily)
+    main.TextElement_FontSize(fs)
+    main.Rows(titleHeight, "Auto")
+
+    ; 标题栏（与 RmtDialog 同壳：拖拽区 + 统一关闭钮）
+    tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
+    tbInner := tb.Add("Grid")
+    tbInner.Add("TextBlock").Text(GetLang("网络触发说明")).Foreground("{DynamicResource TitleBarForeground}")
+        .FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0").Padding("0")
+    btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch").Height(36)
+    closeBtn := btnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}")
+        .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).MinHeight(36).Padding("0")
+        .VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+    closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10)
+        .VerticalAlignment("Center").HorizontalAlignment("Center")
+
+    body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
+    panel := body.Add("StackPanel").Margin("16,12,16,12")
+
+    ; —— 一行解释 ——
+    panel.Add("TextBlock").Text(GetLang("用 HTTP 请求触发本宏，参数写入全局变量（文本，允许覆盖）；出错时 body 直接写明原因。"))
+        .Foreground("{DynamicResource TextMain}").TextWrapping("Wrap")
+
+    ; —— 本条目的触发 URL（条目模式各带复制按钮；通用模式跳过）——
+    if (isItem) {
+        for , rowDef in [{label: GetLang("开启（循环执行）"), url: urlOn, btn: "BtnCopyOn"}
+                       , {label: GetLang("关闭（停止执行）"), url: urlOff, btn: "BtnCopyOff"}] {
+            row := panel.Add("Grid").Margin("0,2,0,2")
+            row.Cols("Auto", "*", "Auto")
+            row.Add("TextBlock").Grid_Column(0).Text(rowDef.label "：").Foreground("{DynamicResource TextMain}")
+                .VerticalAlignment("Center").Margin("0,0,6,0")
+            row.Add("TextBlock").Grid_Column(1).Text(rowDef.url).Foreground("{DynamicResource Accent}")
+                .VerticalAlignment("Center").TextWrapping("Wrap")
+            row.Add("Button").Grid_Column(2).Name(rowDef.btn).Content(GetLang("复制"))
+                .Width(56).Height(24).MinHeight(24).Margin("8,0,0,0").Cursor("Hand")
+        }
+    }
+
+    ; —— 示例（多行，每行可复制；通用模式用 {条目ID} 占位）——
+    panel.Add("TextBlock").Text(GetLang("示例")).FontWeight("Bold").Foreground("{DynamicResource TextMain}").Margin("0,10,0,2")
+    exArr := [urlBase
+            , urlBase "/on"
+            , urlBase "/off"
+            , urlBase "/on?" GetLang("窗口标题") "=文档1&" GetLang("次数") "=3"
+            , 'curl -X POST -H "Content-Type: application/json" -d "{\"窗口标题\":\"文档1\"}" ' urlBase]
+    exIdx := 0
+    for , ex in exArr {
+        exIdx++
+        exRow := panel.Add("Grid").Margin("0,2,0,2")
+        exRow.Cols("*", "Auto")
+        exRow.Add("TextBlock").Grid_Column(0).Text(ex).Foreground("{DynamicResource TextMain}")
+            .VerticalAlignment("Center").TextWrapping("Wrap")
+        exRow.Add("Button").Grid_Column(1).Name("BtnEx" exIdx).Content(GetLang("复制"))
+            .Width(56).Height(24).MinHeight(24).Margin("8,0,0,0").Cursor("Hand")
+    }
+
+    ; —— 底部确定按钮 ——
+    btnRow := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,14,0,4")
+    okBtn := btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定"))
+        .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
+        .FontWeight("Bold").BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1")
+        .FontSize(fs).Cursor("Hand").Width(80).Height(32)
+    PrimaryBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionPressBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+    okBtn.InjectResources(PrimaryBtnStyle)
+
+    tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
+    ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
+    safeTitle := RmtDialog._XmlEsc(GetLang("网络触发说明"))
+    ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' winW '" SizeToContent="Height" Opacity="0"')
+    ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
+    if (fontFamily != "")
+        ui.xaml := StrReplace(ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' fontFamily '"')
+    ui.xaml := StrReplace(ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
+    ui.xaml := StrReplace(ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
+
+    resultObj := { Button: "" }
+    closeDlg := (btnText) => RmtDialog._OnPick(ui, resultObj, btnText, owner)
+    ui.OnEvent("Window", "Closing", (state, ctrl, event) => RmtDialog._OnClosing(resultObj, owner))
+    ui.OnEvent("Window", "LoadedHwnd", (state, ctrl, event) => RmtDialog._OnLoad(ui, owner))
+    ui.OnEvent("BtnClosePanel", "Click", (state, ctrl, event) => closeDlg("Closed"))
+    ui.OnEvent("BtnOk", "Click", (state, ctrl, event) => closeDlg(GetLang("确定")))
+    if (isItem) {
+        ui.OnEvent("BtnCopyOn", "Click", (*) => OnItemNetworkCopyClipboard(urlOn, GetLang("已复制开启 URL")))
+        ui.OnEvent("BtnCopyOff", "Click", (*) => OnItemNetworkCopyClipboard(urlOff, GetLang("已复制关闭 URL")))
+    }
+    for n, ex in exArr
+        ui.OnEvent("BtnEx" n, "Click", OnItemNetworkCopyClipboardEx.Bind(ex))
+
+    if (!XamlWin.Open(ui, "", owner))
+        throw Error("网络触发说明弹窗打开失败")
+    ownerDisabled := false
+    while (resultObj.Button == "" && WinExist("ahk_id " ui.wpfHwnd)) {
+        if (ui.wpfHwnd && owner && !ownerDisabled) {
+            try WinSetEnabled(0, "ahk_id " owner)
+            ownerDisabled := true
+        }
+        Sleep(50)
+    }
+    if (owner)
+        try WinSetEnabled(1, "ahk_id " owner)
+}
+
+OnItemNetworkCopyClipboard(text, tip) {
+    if (SetClipboard(text))
+        Toast.Success(tip)
+}
+
+; 弹窗示例行复制按钮用（OnEvent 会附带事件参数，须可变参接收）
+OnItemNetworkCopyClipboardEx(text, *) {
+    OnItemNetworkCopyClipboard(text, GetLang("已复制"))
+}
+
+; ============================================================
+; §23 网络宏设置窗口（设置页底部按钮组「网络宏设置」）
+; 仅承载网络宏相关参数：监听端口 / 监听地址 / 端口冲突红字
+; ============================================================
+NetworkShowSettingDialog() {
+    global MainSoftData
+    owner := 0
+    try {
+        if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd)
+            owner := MyMainWin.ui.wpfHwnd
+    }
+    try XAMLHost.EnsureDaemonHealthy()
+
+    titleHeight := "36"
+    fs := XAMLHost.FontSize()
+    winW := 400
+    fontFamily := ""
+    try {
+        if (IsSet(MainSoftData) && MainSoftData.HasProp("FontType") && MainSoftData.FontType != "")
+            fontFamily := MainSoftData.FontType
+    }
+
+    main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
+    if (fontFamily != "")
+        main.TextElement_FontFamily(fontFamily)
+    main.TextElement_FontSize(fs)
+    main.Rows(titleHeight, "Auto")
+
+    ; 标题栏（与说明弹窗同壳）
+    tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
+    tbInner := tb.Add("Grid")
+    tbInner.Add("TextBlock").Text(GetLang("网络宏设置")).Foreground("{DynamicResource TitleBarForeground}")
+        .FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0").Padding("0")
+    btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch").Height(36)
+    closeBtn := btnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}")
+        .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).MinHeight(36).Padding("0")
+        .VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+    closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10)
+        .VerticalAlignment("Center").HorizontalAlignment("Center")
+
+    body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
+    panel := body.Add("StackPanel").Margin("16,12,16,12")
+
+    ; —— 监听端口 ——
+    row1 := panel.Add("Grid").Margin("0,2,0,2")
+    row1.Cols("Auto", "Auto")
+    row1.Add("TextBlock").Grid_Column(0).Text(GetLang("监听端口：")).Foreground("{DynamicResource TextMain}")
+        .VerticalAlignment("Center").Margin("0,0,6,0")
+    row1.Add("TextBox").Grid_Column(1).Name("EditNetPort").Text(String(MainSoftData.NetworkPort))
+        .Width(100).Height(26).MinHeight(26).Padding("4,0").VerticalContentAlignment("Center")
+        .FontSize(12).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+        .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+
+    ; —— 监听地址（只读）——
+    row2 := panel.Add("Grid").Margin("0,6,0,2")
+    row2.Cols("Auto", "Auto")
+    row2.Add("TextBlock").Grid_Column(0).Text(GetLang("监听地址：")).Foreground("{DynamicResource TextMain}")
+        .VerticalAlignment("Center").Margin("0,0,6,0")
+    row2.Add("TextBox").Grid_Column(1).Text("127.0.0.1").IsReadOnly("True")
+        .Width(100).Height(26).MinHeight(26).Padding("4,0").VerticalContentAlignment("Center")
+        .FontSize(12).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+        .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        .ToolTip(GetLang("默认仅监听本机回环地址，保证安全；外部设备无法访问"))
+
+    ; —— 状态红字（端口冲突 / 校验错误，正常时隐藏）——
+    panel.Add("TextBlock").Name("TxtNetBindError").Text("").Foreground("Red").FontSize(11)
+        .Margin("0,8,0,0").Visibility("Collapsed").TextWrapping("Wrap")
+
+    ; —— 底部按钮：保存 / 关闭 ——
+    btnRow := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,14,0,4")
+    saveBtn := btnRow.Add("Button").Name("BtnNetSave").Content(GetLang("保存"))
+        .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
+        .FontWeight("Bold").BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1")
+        .FontSize(fs).Cursor("Hand").Width(80).Height(32).Margin("0,0,12,0")
+    closeBtn2 := btnRow.Add("Button").Name("BtnNetClose").Content(GetLang("关闭"))
+        .FontSize(fs).Cursor("Hand").Width(80).Height(32)
+    PrimaryBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionPressBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+    saveBtn.InjectResources(PrimaryBtnStyle)
+
+    tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
+    ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
+    safeTitle := RmtDialog._XmlEsc(GetLang("网络宏设置"))
+    ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' winW '" SizeToContent="Height" Opacity="0"')
+    ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
+    if (fontFamily != "")
+        ui.xaml := StrReplace(ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' fontFamily '"')
+    ui.xaml := StrReplace(ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
+    ui.xaml := StrReplace(ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
+
+    resultObj := { Button: "" }
+    closeDlg := (btnText) => RmtDialog._OnPick(ui, resultObj, btnText, owner)
+    ui.OnEvent("Window", "Closing", (state, ctrl, event) => RmtDialog._OnClosing(resultObj, owner))
+    ui.OnEvent("Window", "LoadedHwnd", (state, ctrl, event) => RmtDialog._OnLoad(ui, owner))
+    ui.OnEvent("BtnClosePanel", "Click", (state, ctrl, event) => closeDlg("Closed"))
+    ui.OnEvent("BtnNetClose", "Click", (state, ctrl, event) => closeDlg("Closed"))
+    ui.OnEvent("BtnNetSave", "Click", (state, ctrl, event) => NetworkApplyNetSetting(ui, closeDlg))
+    ; 打开即显示当前端口冲突状态（如有）
+    NetworkSetNetDialogError(ui, NetworkGetBindError())
+
+    if (!XamlWin.Open(ui, "", owner))
+        throw Error("网络宏设置窗口打开失败")
+    ownerDisabled := false
+    while (resultObj.Button == "" && WinExist("ahk_id " ui.wpfHwnd)) {
+        if (ui.wpfHwnd && owner && !ownerDisabled) {
+            try WinSetEnabled(0, "ahk_id " owner)
+            ownerDisabled := true
+        }
+        Sleep(50)
+    }
+    if (owner)
+        try WinSetEnabled(1, "ahk_id " owner)
+}
+
+; 读取监听 bind 错误（无监听对象/无错误返回空串）
+NetworkGetBindError() {
+    global MyNetworkServer
+    err := ""
+    try {
+        if (IsSet(MyNetworkServer) && IsObject(MyNetworkServer))
+            err := MyNetworkServer.GetBindError()
+    }
+    return err
+}
+
+; 设置窗口状态红字（msg 为空隐藏）
+NetworkSetNetDialogError(ui, msg) {
+    try {
+        ui.Update("TxtNetBindError", "Text", RmtDialog._XmlEsc(msg))
+        ui.Update("TxtNetBindError", "Visibility", msg == "" ? "Collapsed" : "Visible")
+    }
+}
+
+; 保存：校验端口 → 写 MainSoftData → OnSaveSetting 落盘 + 总线调和 → 反馈结果
+; 成功返回 true（调用方关闭窗口）；失败在窗口内红字提示并保持打开
+NetworkApplyNetSetting(ui, closeDlg) {
+    global MainSoftData, MyNetworkServer
+    v := ""
+    try v := Trim(ui.Query("EditNetPort"))
+    if (!NetworkIsValidPort(v)) {
+        NetworkSetNetDialogError(ui, GetLang("端口需为 1-65535 的整数"))
+        return
+    }
+    MainSoftData.NetworkPort := Integer(v)
+    OnSaveSetting()   ; 全量脏检查落盘 + HotReloadPublish 广播（注意：总线是 SetTimer(-1) 异步 flush）
+    ; 总线调和为空闲异步派发，此处需立即拿到 bind 结果决定红字/关窗：
+    ; 同步做一次幂等调和（后续总线 flush 再调一次无副作用，running/wantPort 已判定）
+    try MyNetworkServer.OnConfigChanged(0, 0)
+    err := NetworkGetBindError()
+    if (err != "") {
+        NetworkSetNetDialogError(ui, err)   ; 绑定失败（如端口占用）：红字提示，窗口保持打开
+        return
+    }
+    NetworkSetNetDialogError(ui, "")
+    Toast.Success(GetLang("已保存，监听端口: ") MainSoftData.NetworkPort)
+    closeDlg(GetLang("保存"))
+}
