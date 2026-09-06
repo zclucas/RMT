@@ -824,7 +824,7 @@ public partial class AhkWpfEngine
                 {
                     if (node == null || !seen.Add(node))
                         return;
-                    if (IsInTitleBar(node))
+                    if (IsInTitleBar(node) || IsTitleChromeNamed(node))
                     {
                         ApplyTitleBarNode(node, minSize);
                         return;
@@ -3821,18 +3821,26 @@ public partial class AhkWpfEngine
                 tb.FontSize = themeSize + 2;
                 tb.FontWeight = FontWeights.Bold;
             }
+            else
+            {
+                tb.Margin = new Thickness(0);
+                tb.Padding = new Thickness(0);
+                tb.VerticalAlignment = VerticalAlignment.Center;
+                tb.HorizontalAlignment = HorizontalAlignment.Center;
+            }
             return;
         }
         Button btn = node as Button;
         if (btn == null || string.IsNullOrEmpty(btn.Name))
             return;
         if (btn.Name != "BtnClosePanel" && btn.Name != "BtnClose" && btn.Name != "BtnWinClose"
+            && btn.Name != "BtnClosePicker"
             && btn.Name != "BtnMinimize" && btn.Name != "BtnMaximize")
             return;
         btn.Width = 46;
-        btn.Height = 36;
+        btn.Height = 30;
         btn.MinWidth = 46;
-        btn.MinHeight = 36;
+        btn.MinHeight = 30;
         btn.Padding = new Thickness(0);
         btn.Margin = new Thickness(0);
         btn.VerticalAlignment = VerticalAlignment.Stretch;
@@ -3844,7 +3852,12 @@ public partial class AhkWpfEngine
             Window owner = Window.GetWindow(btn);
             if (owner != null)
             {
-                Style chromeStyle = owner.TryFindResource("TitleBarCloseButton") as Style;
+                bool isClose = btn.Name == "BtnClosePanel" || btn.Name == "BtnClose" || btn.Name == "BtnWinClose"
+                    || btn.Name == "BtnClosePicker";
+                string styleKey = isClose ? "TitleBarCloseButton" : "TitleBarChromeButton";
+                Style chromeStyle = owner.TryFindResource(styleKey) as Style;
+                if (chromeStyle == null)
+                    chromeStyle = owner.TryFindResource("TitleBarCloseButton") as Style;
                 if (chromeStyle != null)
                     btn.Style = chromeStyle;
             }
@@ -3861,10 +3874,25 @@ public partial class AhkWpfEngine
                 bd.HorizontalAlignment = HorizontalAlignment.Stretch;
                 bd.VerticalAlignment = VerticalAlignment.Stretch;
                 bd.MinWidth = 46;
-                bd.MinHeight = 36;
+                bd.MinHeight = 30;
+                if (btn.Name == "BtnMinimize" || btn.Name == "BtnMaximize")
+                    bd.CornerRadius = new CornerRadius(0);
             }
+            ContentPresenter cp = BridgeUtil.FindVisualChild<ContentPresenter>(btn);
+            if (cp != null)
+                cp.Margin = new Thickness(0);
         }
         catch { }
+    }
+
+    static bool IsTitleChromeNamed(DependencyObject node)
+    {
+        Button btn = node as Button;
+        if (btn == null || string.IsNullOrEmpty(btn.Name))
+            return false;
+        return btn.Name == "BtnClosePanel" || btn.Name == "BtnClose" || btn.Name == "BtnWinClose"
+            || btn.Name == "BtnClosePicker"
+            || btn.Name == "BtnMinimize" || btn.Name == "BtnMaximize";
     }
 
     static bool IsInTitleBar(DependencyObject node)
@@ -3914,7 +3942,11 @@ public partial class AhkWpfEngine
             return;
         if ((node as Button) == null && (node as ComboBox) == null && (node as TextBox) == null)
             return;
-        if ((node as Button) != null && !double.IsNaN(fe.Width) && fe.Width <= 40 && double.IsNaN(fe.Height))
+        // 窄铬钮/方形图标钮（关闭、问号等）不要被字号适配拉高，否则会变成「宽比高低」且边框不均
+        if ((node as Button) != null && !double.IsNaN(fe.Width) && fe.Width <= 46)
+            return;
+        string nm = fe.Name ?? "";
+        if (nm == "BtnHelp" || nm == "BtnClosePanel" || nm == "BtnWinClose" || nm == "BtnClose" || nm == "BtnClosePicker")
             return;
         double need = Math.Ceiling(fontSize + 12);
         if (need < 26)

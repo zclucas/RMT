@@ -691,18 +691,14 @@ class MacroEditGui {
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(titleHeight, "*")
 
-        ; === 标题栏 ===
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("12,0,0,0")
-        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
+        chrome := XAMLHost.AddTitleBarChrome(main, title)
+        BtnGroup := chrome.Btns
         ; §8 帮助/视频按钮（占位）：帮助打开指令手册，视频提示制作中（文档/视频完成后按指令跳转）
         helpBtn := BtnGroup.Add("Button").Name("BtnCmdHelp").WindowChrome_IsHitTestVisibleInChrome("True").Width(34).Height(30).MinHeight(30).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0).ToolTip(GetLang("指令手册"))
         helpBtn.Add("TextBlock").Text(Chr(0xE946)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
         videoBtn := BtnGroup.Add("Button").Name("BtnCmdVideo").WindowChrome_IsHitTestVisibleInChrome("True").Width(34).Height(30).MinHeight(30).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0).ToolTip(GetLang("指令视频"))
         videoBtn.Add("TextBlock").Text(Chr(0xE714)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
-        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        XAMLHost.AddTitleCloseBtn(BtnGroup, "BtnClosePanel", titleHeight)
 
         ; === 主体 ===
         body := main.Add("Grid").Grid_Row(1)

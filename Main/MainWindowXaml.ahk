@@ -380,7 +380,7 @@ class MainWin {
             MainSoftData.TableIndex := 1
         this.closed := false
         title := "RMTv" RMT_VERSION
-        titleHeight := "36"
+        titleHeight := "30"
 
         ; 根内容固定按 1400×787 设计渲染：引擎 Viewbox 会保留显式尺寸，
         ; 再按窗口实际尺寸（随屏幕等比缩放，见下方 wh 计算）等比例缩放——
@@ -400,19 +400,23 @@ class MainWin {
             }
         }
 
-        ; ---- 标题栏 ----
-        tb := main.Add("Border").Grid_Row(0).Grid_ColumnSpan(2).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
+        ; ---- 标题栏（铬钮不放进 DragArea，与 RMT错误 弹窗一致，避免拖动区补丁把图标顶偏）----
+        tb := main.Add("Grid").Grid_Row(0).Grid_ColumnSpan(2).Background("{DynamicResource TitleBarColor}")
+        tb.Cols("*", "Auto")
+        drag := tb.Add("Border").Grid_Column(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
+        dragInner := drag.Add("Grid")
         ; 标题左侧软件图标（rabit.png 带透明通道，作标题栏小图标；Grid 内需左对齐，否则会居中）
-        tbInner.Add("Image").Name("TitleIcon").Width(20).Height(20).Margin("14,0,10,0").HorizontalAlignment("Left").VerticalAlignment("Center").Source(StrReplace(A_WorkingDir "\Images\Soft\rabit.png", "\", "/"))
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("44,0,0,0").Padding("0")
-        btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch").Height(36)
-        minBtn := btnGroup.Add("Button").Name("BtnMinimize").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).Padding("0").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+        dragInner.Add("Image").Name("TitleIcon").Width(20).Height(20).Margin("14,0,10,0").HorizontalAlignment("Left").VerticalAlignment("Center").Source(StrReplace(A_WorkingDir "\Images\Soft\rabit.png", "\", "/"))
+        dragInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("44,0,0,0").Padding("0")
+        btnGroup := tb.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Stretch")
+        chromeFlat := '<Style TargetType="Button"><Setter Property="VerticalAlignment" Value="Stretch"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        minBtn := btnGroup.Add("Button").Name("BtnMinimize").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+        minBtn.InjectResources(chromeFlat)
         minBtn.Add("TextBlock").Text(Chr(0xE921)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
-        maxBtn := btnGroup.Add("Button").Name("BtnMaximize").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).Padding("0").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+        maxBtn := btnGroup.Add("Button").Name("BtnMaximize").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+        maxBtn.InjectResources(chromeFlat)
         maxBtn.Add("TextBlock").Text(Chr(0xE922)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
-        ; 最小/最大/关闭：统一 TitleBarCloseButton（静止透明=标题栏色，hover=ControlBorder，按下=BtnPressBg）
-        closeBtn := btnGroup.Add("Button").Name("BtnWinClose").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).Padding("0").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+        closeBtn := btnGroup.Add("Button").Name("BtnWinClose").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
         closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
 
         ; ---- 左操作栏 ----
@@ -447,7 +451,7 @@ class MainWin {
         leftTop.Add("Button").Name("BtnReload").Content(GetLang("重启")).Height(33).MinHeight(33).Margin("0,8,0,0").Style("{StaticResource RmtSidebarBtn}")
         leftBottom := left.Add("StackPanel").Grid_Row(1).VerticalAlignment("Bottom")
         leftBottom.Add("Button").Name("BtnHelp").Content(GetLang("RMT文档")).Height(28).MinHeight(28).Margin("0,2,0,2")
-        leftBottom.Add("Button").Name("BtnSave").Content(GetLang("应用并保存")).Height(35).MinHeight(35).Margin("0,2,0,2").FontWeight("Bold")
+        leftBottom.Add("Button").Name("BtnSave").Content(GetLang("应用并保存")).Height(36).MinHeight(36).Margin("0,2,0,0").FontWeight("Bold")
 
         ; ---- 右侧 TabControl ----
         right := main.Add("Grid").Grid_Row(1).Grid_Column(1).Margin("0,2,2,4")
@@ -481,7 +485,7 @@ class MainWin {
             else if (pos == this._tabOrder.Length)
                 tabItem.Tag("last")
             ; 页签内容区统一外层边框；上边距 -1 与页签条下边框重叠，避免双线且与页签条等粗
-            bd := tabItem.Add("Border").BorderThickness("1.5").BorderBrush("{DynamicResource OutlineStroke}").CornerRadius("4").Margin("4,-1,2,4").Padding("2,2,0,2")
+            bd := tabItem.Add("Border").BorderThickness("1.5").BorderBrush("{DynamicResource OutlineStroke}").CornerRadius("4").Margin("4,-1,2,2").Padding("2,2,0,2")
             bd.Apply({SnapsToDevicePixels: "True", UseLayoutRounding: "False", ClipToBounds: "False"})
             if (this._useVirtual.Has(idx)) {
                 ; 宏/模块显示区：自适应剩余空间
@@ -493,7 +497,7 @@ class MainWin {
                 ; 取整会让行 Margin(2)/24px 控件在 125% DPI 下按累计偏移不同而 ±1px（展开/折叠/拖拽后
                 ; 行距忽大忽小、侧边框断点、备注底边被吞）。关闭后位置为稳定小数，边框仍清晰。
                 vg.Add("ListBox").Name("FoldList_" idx).Grid_Column(0).SelectionMode("Single").BorderThickness("0").Background("Transparent")
-                    .Margin("0,0,-2,0").UseLayoutRounding("False").SnapsToDevicePixels("True").Panel_ZIndex(1)
+                    .Margin("0").UseLayoutRounding("False").SnapsToDevicePixels("True").Panel_ZIndex(1)
                     .VirtualizingPanel_IsVirtualizing("True").VirtualizingPanel_VirtualizationMode("Standard")
                     .VirtualizingPanel_CacheLength("2,2").VirtualizingPanel_CacheLengthUnit("Page")
                 ; 吸顶折叠头 overlay（sticky header）：滚动时当前模块头钉在列表顶部
@@ -931,11 +935,12 @@ class MainWin {
     }
 
     _AiRailMargin() {
+        ; 往右叠 2px，让钮的右边框压在内容框 1.5px 右边框上（一条线，不留缝）
         return "0,0,-2,0"
     }
 
     _ListScrollMargin(open) {
-        return open ? "0" : "0,0,-2,0"
+        return "0"
     }
 
     _ApplyListScrollMargin(open) {
@@ -4130,7 +4135,7 @@ class MainWin {
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
             . '<Grid>'
             . '<Path x:Name="Bd" Data="M 18,0 L 18,200 L 0,176 L 0,24 Z" Stretch="Fill"'
-            . ' Fill="{DynamicResource ControlBg}" Stroke="{DynamicResource OutlineStroke}" StrokeThickness="1.25"'
+            . ' Fill="{DynamicResource ControlBg}" Stroke="{DynamicResource OutlineStroke}" StrokeThickness="1.5"'
             . ' StrokeLineJoin="Round" SnapsToDevicePixels="True"/>'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-3,0,0,0"/>'
             . '</Grid>'

@@ -43,7 +43,7 @@ class XAML_DevTools {
         this.target.OnEvent("Engine", "DevToolsTree", ObjBindMethod(this, "OnTreeReceived"))
         this.target.OnEvent("Engine", "DevToolsProps", ObjBindMethod(this, "OnPropsReceived"))
 
-        this.app := XAML_GUI("Developer Tools - " this.target.id, Map("Sidebar", true, "TitleBarHeight", 45, "CloseAction", "None", "ForceDynamic", true))
+        this.app := XAML_GUI("Developer Tools - " this.target.id, Map("Sidebar", true, "TitleBarHeight", 30, "CloseAction", "None", "ForceDynamic", true))
 
         ; Setup theme and list defaults
         this.app.X.InjectResources('

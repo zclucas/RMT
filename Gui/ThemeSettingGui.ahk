@@ -63,7 +63,7 @@ class ThemeSettingGui {
     _BuildAndShow() {
         this.closed := false
         title := GetLang("主题选项")
-        titleHeight := "36"
+        titleHeight := "30"
         uiScale := XAMLHost.GetMainViewboxScale()
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
@@ -72,13 +72,7 @@ class ThemeSettingGui {
         main.TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(titleHeight, "*")
 
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0").Padding("0")
-
-        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch").Height(36)
-        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).MinHeight(36).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
         body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
         scrollViewer := body.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")

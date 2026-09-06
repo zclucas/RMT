@@ -18,6 +18,7 @@ class TriggerKeyGui {
         this.CheckedArr := []
         this.ConMap := Map()          ; key → 按键按钮控件名
         this._btnKeyMap := Map()      ; 控件名 → key
+        this._btnTxtMap := Map()      ; key → 按钮内文字控件名
         this._keySeq := 0
         this.ShowSaveBtn := false
         this.IsToolEdit := ""
@@ -220,7 +221,6 @@ class TriggerKeyGui {
         vis := !this.IsToolEdit ? "Visible" : "Collapsed"
         this.ui.Update("HoldTimeCon", "Visibility", vis)
         this.ui.Update("HoldTimeLabelCon", "Visibility", vis)
-        this.ui.Update("HoldTimeTipCon", "Visibility", vis)
         this.ui.Update("UnorderedTriggerCon", "Visibility", vis)
         if (!this.IsToolEdit) {
             this.ui.Update("HoldTimeCon", "Text", this.HoldTime)
@@ -361,69 +361,98 @@ class TriggerKeyGui {
         ; 实例复用：重建前清空按键映射，避免 _btnKeyMap/_keySeq 累积导致事件重复绑定
         this.ConMap := Map()
         this._btnKeyMap := Map()
+        this._btnTxtMap := Map()
         this._keySeq := 0
         title := GetLang("触发键编辑器")
         this._title := title
         titleHeight := "30"
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
-        main.Rows(titleHeight, "*", "Auto", "44")
+        main.Rows(titleHeight, "*", "Auto")
 
         ; === 标题栏 ===
-        tb := main.Add("Border").Grid_Row(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")
-        tbInner := tb.Add("Grid")
-        tbInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("12,0,0,0")
-        BtnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
-        closeBtn := BtnGroup.Add("Button").Name("BtnClosePanel").WindowChrome_IsHitTestVisibleInChrome("True").Width(40).Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
-        ; === 按键网格 ===
-        keyGroup := main.Add("GroupBox").Grid_Row(1).Header(GetLang("请从下面选框中勾选触发宏的按键：")).Margin("8,2,8,4")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Foreground("{DynamicResource TextMain}")
-            .ClipToBounds("True")
-        sv := keyGroup.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled").ClipToBounds("True")
-        this._keyGrid := sv.Add("Canvas").Width("1240").Height("410")
+        ; === 按键网格（主界面同款 1.5px Outline 外框；顶部居中：键盘触发键检测）===
+        editorBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
+            . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>'
+            . '<ControlTemplate.Triggers>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger>'
+            . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionPressBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger>'
+            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        toolBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
+            . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>'
+            . '<ControlTemplate.Triggers>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ControlBorder}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
+            . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource BtnPressBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
+            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 
-        ; === 操作选项面板（左：选项；右：勾选规则提示）===
-        opt := main.Add("Grid").Grid_Row(2).Margin("10,4")
-        opt.Cols("*", "Auto")
-        opt.Rows("30", "30", "28", "26")
+        keyGroup := main.Add("Border").Grid_Row(1).Margin("8,4,8,19").Padding("4,2,4,4")
+            .BorderBrush("{DynamicResource OutlineStroke}").BorderThickness("1.5").CornerRadius("4")
+            .Background("Transparent").ClipToBounds("False")
+        keyGroup.Apply({SnapsToDevicePixels: "True", UseLayoutRounding: "False"})
+        keyInner := keyGroup.Add("Grid").ClipToBounds("False")
+        ; 单层叠放：检测行置顶居中；按键区铺满
+        keyInner.Rows("*")
 
-        r0 := opt.Add("StackPanel").Grid_Row(0).Orientation("Horizontal")
-        r0.Add("TextBlock").Text(GetLang("键盘触发键检测：")).VerticalAlignment("Center")
-        r0.Add("TextBox").Name("HotkeyCon").Width(140).Height(26).MinHeight(26).Margin("4,0,0,0")
+        detectRow := keyInner.Add("StackPanel").Grid_Row(0).Orientation("Horizontal")
+            .HorizontalAlignment("Center").VerticalAlignment("Top").Margin("-20,2,0,0").Panel_ZIndex(2)
+        detectRow.Add("TextBlock").Text(GetLang("键盘触发键检测：")).VerticalAlignment("Center")
+        detectRow.Add("TextBox").Name("HotkeyCon").Width(180).Height(26).MinHeight(26).Margin("4,0,0,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
-        r0.Add("Button").Name("BtnDetect").Content(GetLang("确定")).Height(26).MinHeight(26).Margin("6,0,0,0").Cursor("Hand")
+        detectBtn := detectRow.Add("Button").Name("BtnDetect").Content(GetLang("确定")).Width(56).Height(26).MinHeight(26).Padding("12,0").Margin("6,0,0,0").Cursor("Hand")
+            .Background("{DynamicResource ControlBg}").Foreground("{DynamicResource TextMain}")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+        detectBtn.InjectResources(toolBtnStyle)
 
-        r1 := opt.Add("StackPanel").Grid_Row(1).Orientation("Horizontal")
+        sv := keyInner.Add("ScrollViewer").Grid_Row(0).Panel_ZIndex(1)
+            .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled").ClipToBounds("False")
+        this._keyGrid := sv.Add("Canvas").Width("1240").Height("395").Margin("-10,0,0,0")
+
+        ; === 底部：选项+说明+清空/确定，整体上移 15px（不改包裹框内按键）===
+        bottom := main.Add("Grid").Grid_Row(2).Margin("0,-15,0,4").ClipToBounds("False")
+        bottom.Rows("Auto", "44")
+
+        opt := bottom.Add("Grid").Grid_Row(0).Margin("10,4").ClipToBounds("False")
+        opt.Rows("28", "30", "26")
+
+        r0 := opt.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").HorizontalAlignment("Left").Margin("100,0,0,0")
+        r0.Add("CheckBox").Name("EnableTriggerKeyCon").Content(GetLang("保留触发键原本功能")).VerticalAlignment("Center")
+        r0.Add("CheckBox").Name("UnorderedTriggerCon").Content(GetLang("顺序触发")).VerticalAlignment("Center").Margin("24,0,0,0")
+            .ToolTip(GetLang("普通触发键多选生效"))
+
+        r1 := opt.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").HorizontalAlignment("Left").Margin("100,0,0,0")
         r1.Add("TextBlock").Name("HoldTimeLabelCon").Text(GetLang("长按时间/双击时间：")).VerticalAlignment("Center")
         r1.Add("TextBox").Name("HoldTimeCon").Width(100).Height(24).MinHeight(24)
             .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center").FontSize(11).Margin("4,0,0,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        r1.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("（此设置只在触发模式是【长按】/【双击】时有效）")).VerticalAlignment("Center").Opacity("0.6").Margin("6,0,0,0")
+            .ToolTip(GetLang("此设置只在触发模式是【长按】/【双击】时有效"))
 
-        r2 := opt.Add("StackPanel").Grid_Row(2).Orientation("Horizontal")
-        r2.Add("CheckBox").Name("EnableTriggerKeyCon").Content(GetLang("保留触发键原本功能")).VerticalAlignment("Center")
-        r2.Add("CheckBox").Name("UnorderedTriggerCon").Content(GetLang("顺序触发")).VerticalAlignment("Center").Margin("24,0,0,0")
+        r2 := opt.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Left").Margin("100,0,0,0")
+        r2.Add("TextBlock").Name("CheckedInfoCon").Text(GetLang("当前配置的触发键：无")).VerticalAlignment("Center")
+        r2.Add("TextBlock").Name("CheckedInvalidTipCon").Text(GetLang("当前配置无效,请浏览勾选规则后，检查配置")).Foreground("#FF0000").VerticalAlignment("Center").Margin("20,0,0,0").Visibility("Collapsed")
 
-        r3 := opt.Add("StackPanel").Grid_Row(3).Orientation("Horizontal")
-        r3.Add("TextBlock").Name("CheckedInfoCon").Text(GetLang("当前配置的触发键：无")).VerticalAlignment("Center")
-        r3.Add("TextBlock").Name("CheckedInvalidTipCon").Text(GetLang("当前配置无效,请浏览勾选规则后，检查配置")).Foreground("#FF0000").VerticalAlignment("Center").Margin("20,0,0,0").Visibility("Collapsed")
+        helpStack := opt.Add("StackPanel").Grid_Row(0).Grid_RowSpan(3).Orientation("Vertical")
+            .HorizontalAlignment("Left").VerticalAlignment("Center").Margin("620,0,10,0").Width(630)
+            .IsHitTestVisible("False")
+        helpStack.Add("TextBlock").Name("HelpTip1").Text(GetLang("特殊按键：Shift, Alt, Ctrl, Win, LShift, RShift, LAlt, RAlt, LCtrl, RCtrl, LWin, RWin")).Opacity("0.6").TextWrapping("Wrap")
+        helpStack.Add("TextBlock").Name("HelpTip2").Text(GetLang("普通按键：除特殊按键的其他按键")).Opacity("0.6").Margin("0,4,0,0")
+        helpStack.Add("TextBlock").Name("HelpTip3").Text(GetLang("勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中只能 勾选一/二个按键 或 不选")).Opacity("0.6").Margin("0,4,0,0").TextWrapping("Wrap")
+        helpStack.Add("TextBlock").Name("HelpTip4").Text(GetLang("勾选规则2：手柄按钮、摇杆可选1-2个按键组合")).Opacity("0.6").Margin("0,4,0,0")
 
-        ; 右侧勾选规则提示（照原版底部右列）
-        helpStack := opt.Add("StackPanel").Grid_Column(1).Grid_RowSpan(4).Orientation("Vertical").VerticalAlignment("Center").Margin("30,0,0,0").Width(500)
-        helpStack.Add("TextBlock").Text(GetLang("特殊按键：Shift, Alt, Ctrl, Win, LShift, RShift, LAlt, RAlt, LCtrl, RCtrl, LWin, RWin")).FontSize(11).Opacity("0.6").TextWrapping("Wrap")
-        helpStack.Add("TextBlock").Text(GetLang("普通按键：除特殊按键的其他按键")).FontSize(11).Opacity("0.6").Margin("0,4,0,0")
-        helpStack.Add("TextBlock").Text(GetLang("勾选规则1：特殊按键中可以 同时勾选多个按键 或 不选，普通按键中只能 勾选一/二个按键 或 不选")).FontSize(11).Opacity("0.6").Margin("0,4,0,0").TextWrapping("Wrap")
-        helpStack.Add("TextBlock").Text(GetLang("勾选规则2：手柄按钮、摇杆可选1-2个按键组合")).FontSize(11).Opacity("0.6").Margin("0,4,0,0")
-
-        ; === 底部按钮行 ===
-        btnRow := main.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
-        btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(100).Height(32).MinHeight(32).Margin("4,0").Cursor("Hand")
-        btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(100).Height(32).MinHeight(32).Margin("4,0").Cursor("Hand")
-        btnRow.Add("Button").Name("SaveBtn").Content(GetLang("应用并保存")).Width(100).Height(32).MinHeight(32).Margin("4,0").Cursor("Hand")
+        btnRow := bottom.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        clearBtn := btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(100).Height(32).MinHeight(32).Margin("0").Cursor("Hand")
+            .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontWeight("Bold")
+        clearBtn.InjectResources(editorBtnStyle)
+        okBtn := btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(100).Height(32).MinHeight(32).Margin("400,0,0,0").Cursor("Hand")
+            .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontWeight("Bold")
+        okBtn.InjectResources(editorBtnStyle)
 
         ; === 生成按键网格 ===
         this._BuildKeyGrid()
@@ -431,7 +460,7 @@ class TriggerKeyGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="1280" Height="640" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="1280" Height="635" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -447,7 +476,6 @@ class TriggerKeyGui {
         this.ui.OnEvent("UnorderedTriggerCon", "Click", ObjBindMethod(this, "OnChangeUnorderedTrigger"))
         this.ui.OnEvent("BtnClear", "Click", (*) => this.ClearCheckedArr())
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
-        this.ui.OnEvent("SaveBtn", "Click", ObjBindMethod(this, "OnSaveBtnClick"))
 
     }
 
@@ -461,13 +489,22 @@ class TriggerKeyGui {
     _PlaceKey(value, display, x, y, width) {
         this._keySeq += 1
         name := "KeyBtn_" this._keySeq
+        txtName := name "_Txt"
         btn := this._keyGrid.Add("Button").Name(name).Width(width).Height(25)
             .SetProp("Canvas.Left", String(x)).SetProp("Canvas.Top", String(y))
-            .Content(display).FontSize(11).Cursor("Hand").Padding("2,0")
+            .Cursor("Hand").Padding("2,1")
+            .HorizontalContentAlignment("Stretch").VerticalContentAlignment("Stretch")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource TextMain}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        ; Viewbox DownOnly：字号上限为当前 11，超出按钮宽度时自适应缩小
+        vb := btn.Add("Viewbox").Stretch("Uniform").StretchDirection("DownOnly")
+            .HorizontalAlignment("Center").VerticalAlignment("Center")
+        vb.Add("TextBlock").Name(txtName).Text(display).FontSize(11)
+            .Foreground("{DynamicResource TextMain}")
+            .TextAlignment("Center").TextWrapping("NoWrap")
         this.ConMap.Set(value, name)
         this._btnKeyMap.Set(name, value)
+        this._btnTxtMap.Set(value, txtName)
     }
 
     _AddKeyRow(keys, y) {
@@ -478,6 +515,7 @@ class TriggerKeyGui {
 
     _BuildKeyGrid() {
         global MySoftData
+        ; 「键盘」在 Esc 上方（同「鼠标」相对左键）；整体上移由 ScrollViewer/Canvas Margin 完成，勿再 +30 抵消
         this._PlaceLabel(GetLang("键盘"), 20, 0)
         this._AddKeyRow([
             ["Esc","Esc",20,40],["F1","F1",120,35],["F2","F2",170,35],["F3","F3",220,35],["F4","F4",270,35],
@@ -515,9 +553,9 @@ class TriggerKeyGui {
             ["Browser_Back",GetLang("后退"),245,60],["Browser_Forward",GetLang("前进"),320,60],
             ["Browser_Refresh",GetLang("刷新"),395,60],["Browser_Stop",GetLang("停止"),470,60],
             ["Browser_Search",GetLang("搜索"),545,60],["Browser_Favorites",GetLang("收藏夹"),620,60],
-            ["Browser_Home",GetLang("主页"),695,60],["Volume_Mute",GetLang("静音"),770,60],
-            ["Volume_Down",GetLang("调低音量"),845,60],["Volume_Up",GetLang("增加音量"),920,60],
-            ["Bright_Down",GetLang("降低亮度"),1028,60],["Bright_Up",GetLang("提高亮度"),1103,60]], 200)
+            ["Browser_Home",GetLang("主页"),695,60],["Volume_Mute",GetLang("静音"),790,60],
+            ["Volume_Down",GetLang("音量-"),865,60],["Volume_Up",GetLang("音量+"),940,60],
+            ["Bright_Down",GetLang("亮度-"),1045,60],["Bright_Up",GetLang("亮度+"),1120,60]], 200)
         this._AddKeyRow([
             ["Launch_App1",GetLang("此电脑"),20,60],["Launch_App2",GetLang("计算器"),95,60],
             ["Media_Next",GetLang("下一首"),170,60],["Media_Prev",GetLang("上一首"),245,60],
@@ -588,7 +626,6 @@ class TriggerKeyGui {
         isValid := this.CheckConfigValid()
         this.ui.Update("CheckedInvalidTipCon", "Visibility", isValid ? "Collapsed" : "Visible")
         this.ui.Update("CheckedInfoCon", "Text", lable infoStr)
-        this.ui.Update("SaveBtn", "Visibility", this.ShowSaveBtn ? "Visible" : "Collapsed")
         this.UpdateJoyBtnDisplay()
 
         ; 顺序触发：仅当非特殊按键多选时可用，否则禁用并灰显
@@ -608,8 +645,8 @@ class TriggerKeyGui {
             "JoyLS", "JoyRS", "JoyBack", "JoyStart", "JoyPad", "JoyHome",
             "JoyDpadUp", "JoyDpadDown", "JoyDpadLeft", "JoyDpadRight"]
         for key in joyBtnKeys {
-            if (this.ConMap.Has(key))
-                this.ui.Update(this.ConMap[key], "Content", MySoftData.GetJoyDisplayName(key))
+            if (this._btnTxtMap.Has(key))
+                this.ui.Update(this._btnTxtMap[key], "Text", MySoftData.GetJoyDisplayName(key))
         }
     }
 
@@ -623,6 +660,14 @@ class TriggerKeyGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        ; ScaleFontSize 有主题下限，声明 FontSize(9) 会被抬回主题字号；用 Relative 写入才真正 -2
+        helpFs := XAMLHost.FormatFontSize(XAMLHost.ScaleFontSizeRelative(XAMLHost.GetDesignFontSize() - 2))
+        prevSkip := this.ui.HasProp("skipFontScale") ? this.ui.skipFontScale : false
+        this.ui.skipFontScale := true
+        loop 4 {
+            try this.ui.Update("HelpTip" A_Index, "FontSize", String(helpFs))
+        }
+        this.ui.skipFontScale := prevSkip
     }
 
     OnWindowClosing(state, ctrl, event) {

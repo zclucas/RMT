@@ -925,6 +925,7 @@ as=None
 窗口=Window
 窗口信息:=Win Info:
 窗口信息说明=Window Info Help
+按 F1 抓取当前鼠标下窗口信息=Press F1 to capture the window under the cursor
 坐标基准：=Reference:
 鼠标移动Pro编辑器=Mouse Move Pro Editor
 增量移动编辑器=Incremental Move Editor
