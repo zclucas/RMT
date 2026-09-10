@@ -238,15 +238,28 @@ OnItemMenuMacroSettingClick(tableItem, index, *) {
     MyMenuMacroSettingGui.ShowGui(tableItem, index)
 }
 
+; F3：主编辑器断点落盘（与 SureAction 同一落盘链路：写 item 字段 + 热重载广播到 Worker）
+PersistItemBreakpoints(item, tableItem, bpStr) {
+    if (!IsObject(item))
+        return
+    item.Breakpoints := bpStr
+    HotReloadPublish(tableItem.Index, 0)
+}
+
 ; 打开逻辑树（宏指令）编辑器
 OpenItemMacroTreeEditor(tableItem, index, macro, SureAction) {
     item := tableItem.Items[index]
+    bpStr := item.HasProp("Breakpoints") ? item.Breakpoints : ""
     MySoftData.SpecialTableItem.Items[1].Mode := item.Mode
     if (MyMacroGui.Gui != "") {
         style := WinGetStyle(MyMacroGui.Gui.Hwnd)
         isVisible := (style & 0x10000000)
         if (isVisible) {
             MacroGui := MacroEditGui()
+            ; F3：接线断点持久化（显示「断点」菜单 + 载入既有断点 + 变更即落盘）
+            MacroGui._bpAllowed := true
+            MacroGui._bpStr := bpStr
+            MacroGui.OnBpChanged := (b) => PersistItemBreakpoints(item, tableItem, b)
             MacroGui.SureFocusCon := MainSoftData.BtnSave
             MacroGui.SureBtnAction := SureAction
             MacroGui.SaveBtnAction := OnSaveSetting
@@ -254,6 +267,10 @@ OpenItemMacroTreeEditor(tableItem, index, macro, SureAction) {
             return
         }
     }
+    ; F3：接线断点持久化（同上）
+    MyMacroGui._bpAllowed := true
+    MyMacroGui._bpStr := bpStr
+    MyMacroGui.OnBpChanged := (b) => PersistItemBreakpoints(item, tableItem, b)
     MyMacroGui.SureFocusCon := MainSoftData.BtnSave
     MyMacroGui.SureBtnAction := SureAction
     MyMacroGui.SaveBtnAction := OnSaveSetting

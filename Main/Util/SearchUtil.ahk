@@ -111,6 +111,9 @@ SearchExecute(tableItem, Data, index) {
 
         if (Data.FalseMacro == "")
             return
+        ; 调试步入拦截：假分支（非空）仅判定不执行体；返回 "" 阻断 Search(-1) 重插
+        if (TryInterceptBranch("Search", "FalseMacro", "", -1))
+            return ""
         OnTriggerMacroOnce(tableItem, Data.FalseMacro, index)
     }
 }
@@ -341,6 +344,9 @@ ApplySearchActions(tableItem, Data, index, ResXList, ResYList, ResHwndList, Imag
     if (Data.TrueMacro == "")
         return true
 
+    ; 调试步入拦截：真分支（非空）仅判定不执行体；返回 true 伪装「已找到」阻断 Search(-1) 重插
+    if (TryInterceptBranch("Search", "TrueMacro", "", -1))
+        return true
     OnTriggerMacroOnce(tableItem, Data.TrueMacro, index)
     return true
 }

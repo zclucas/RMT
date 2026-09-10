@@ -21,6 +21,7 @@ class MacroItem {
         this.VoiceKeywords := "" ;语音触发关键词（多个用英文逗号 , 分隔）
         this.BindWindow := ""   ;§22 宏级窗口绑定：宏内所有窗口信息填「{绑定窗口}」时运行时替换为此值（一改全改）
         this.FoldID := ""       ;所属折叠框 ID（FoldInfo 的 ID 引用，替代 IndexSpanArr 范围）
+        this.Breakpoints := ""  ;断点集合：命令签名串，规范化 ",sig1,sig2,"（首尾逗号便于无歧义包含判定）
 
         ; ===== 运行时状态（原平行数组） =====
         this.ColorState := 0            ;颜色状态
@@ -275,9 +276,9 @@ class MainConfig {
         this.PreferredMacroEditor := 1
         this.SharedCopy := false        ; 逻辑树编辑器右键菜单显示「共享复制」（原样复制，不重新分配序列号）
         this.RemarkAutoType := 2        ; 指令备注自动生成 (1=不生成, 2=自动生成, 3=覆盖生成)
-        ; §14.5 逻辑树调试热键（可在 设置→快捷键 中修改，不再固定 F5/F6）
-        this.DebugRunHotkey := "f5"     ; 调试运行
-        this.DebugStepHotkey := "f6"    ; 调试单步运行
+        ; §14.5 / IDE 式调试：逻辑树调试热键（可在 设置→快捷键 中修改，不再固定 F5/F6）
+        this.DebugRunHotkey := "f5"     ; 继续
+        this.DebugStepHotkey := "f11"   ; 步入
 
         ; ========== 提示选项 ==========
         this.NoVariableTip := false     ; 未找到变量时是否弹窗提醒

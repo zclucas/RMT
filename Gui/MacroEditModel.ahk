@@ -22,6 +22,8 @@ class MacroEditNode {
         this.checked := false      ; 多选标记
         this.expanded := true      ; 展开状态
         this.splitView := "both"   ; 真假分栏：both / true / false
+        this.debugCur := false     ; 调试当前位置（→）标记：纯瞬态内存字段，绝不写入 node.text
+        this.debugBp := false      ; 断点标记：纯瞬态内存字段，绝不写入 node.text（独立 Brk_ 图标通道）
     }
 }
 
@@ -176,6 +178,36 @@ class MacroTreeAdapter {
             this._renderCause := "Modify:" options
             this.Render()
         }
+    }
+
+    ; 调试当前位置（→）标记：只改节点字段并增量刷新 Cur_ 图标，绝不修改 node.text。
+    ; 这样 → 不会经 GetTreeMacroStr / 快照 / 侧栏写回链路进入真实宏串（解 G1）。
+    SetCurrentPos(id, on) {
+        if (id == 0 || !this.nodes.Has(id))
+            return
+        node := this.nodes[id]
+        node.debugCur := on ? true : false
+        if (IsObject(this.ui))
+            try this.ui.Update("Cur_" id, "Visibility", node.debugCur ? "Visible" : "Collapsed")
+    }
+
+    ; 断点标记：只改节点字段并增量刷新 Brk_ 图标，绝不修改 node.text。
+    ; 与 SetCurrentPos / Dbg_ 一样走独立图标通道，零文本污染（解 G1 同类约束）。
+    SetBreakPoint(id, on) {
+        if (id == 0 || !this.nodes.Has(id))
+            return
+        node := this.nodes[id]
+        node.debugBp := on ? true : false
+        if (IsObject(this.ui))
+            try this.ui.Update("Brk_" id, "Visibility", node.debugBp ? "Visible" : "Collapsed")
+    }
+
+    ; 读取节点断点标记（字段，非文本）；不存在返回 false
+    IsBreakPoint(id) {
+        if (id == 0 || !this.nodes.Has(id))
+            return false
+        node := this.nodes[id]
+        return (node.HasProp("debugBp") && node.debugBp) ? true : false
     }
 
     ; 更新单个节点的多选高亮（无勾选框，改卡片底色）
@@ -447,6 +479,7 @@ class MacroTreeAdapter {
         return !this._SubtreeHasTrueFalsePair(pair.true) && !this._SubtreeHasTrueFalsePair(pair.false)
     }
 
+    ; ⚠️ 当前无调用方：旧「嵌套分栏左缘拉回一级」策略专用，2026-09-10 弃用后保留以备回退
     _FirstLevelNode(node) {
         p := node
         while (IsObject(p) && IsObject(p.parent))
@@ -454,6 +487,7 @@ class MacroTreeAdapter {
         return p
     }
 
+    ; ⚠️ 当前无调用方（同上）
     _FindAncestorPairOwner(node) {
         p := IsObject(node) ? node.parent : ""
         while (IsObject(p)) {
@@ -594,14 +628,23 @@ class MacroTreeAdapter {
         return xml
     }
 
-    ; 无上级搜索时对齐本指令图标左边；有上级搜索时对齐一级指令图标左边，保持分栏宽度
+    ; 分栏左缘一律对齐【所属父容器】的图标左边：
+    ;   - 顶层：父容器即一级搜索/如果 → 左缘对齐一级图标左边（原行为不变）
+    ;   - 嵌套：父容器即该嵌套容器自身 → 左缘随父级缩进，不再被拉回最左侧
+    ; （2026-09-10 用户反馈：多重嵌套下分栏框贴最左侧，与父级缩进脱节）
+    ; 上限保护（T5）：_WidthBeforeIcon 随嵌套深度每层 +20px 线性增长，深度 ≳15 时
+    ; inset 会吃掉整块面板宽度、把真/假两栏压成 0 宽。故取 Min(计算值, _SplitInsetCap())：
+    ; 浅嵌套（≤ 约 8 层，计算值 ≤ 约 180）远低于上限 → Min 不生效，顶层与浅嵌套行为零变化。
     _SplitPairLeftInset(pair) {
         owner := (IsObject(pair) && IsObject(pair.true)) ? pair.true.parent : ""
-        alignNode := owner
-        if (IsObject(this._FindAncestorPairOwner(owner)))
-            alignNode := this._FirstLevelNode(owner)
-        prefix := IsObject(alignNode) ? this._WidthBeforeIcon(alignNode) : 20
-        return 2 + prefix
+        prefix := IsObject(owner) ? this._WidthBeforeIcon(owner) : 20
+        return Min(2 + prefix, this._SplitInsetCap())
+    }
+
+    ; 分栏 inset 上限（像素）：inset + rail(_SplitRailW()=16) 之后须为真/假两栏各留最小可读
+    ; 宽度（行高 26、图标约 20px）。180 对常见面板宽度可保证两栏 > 0 宽，且高于所有浅嵌套值。
+    _SplitInsetCap() {
+        return 180
     }
 
     _SplitBranchBadgeXml(branchNode, isTrue, searchId := "", view := "both") {
@@ -632,7 +675,8 @@ class MacroTreeAdapter {
     ; 清理节点显示前缀（调试/跳过等标记），便于识别真/假容器
     _CleanNodeText(node) {
         t := node.text
-        t := StrReplace(t, "→", "")
+        ; 仅剥行首 →（调试位置标记）；→ 亦是手柄 D-pad「右」显示名，不可全局剥离
+        t := CmdStripCurPos(t)
         while (t != "") {
             ch := SubStr(t, 1, 1)
             if (ch == Chr(0x25B6) || ch == Chr(0x2B50) || ch == "🚫" || ch == "→" || ch == "⎖" || ch == " ")
@@ -793,6 +837,8 @@ class MacroTreeAdapter {
         cardBg := this._CardBgXml(node, flatIdx)
         skipOp := this._NodeIsSkip(node) ? "0.42" : "1"
         dbgVis := CmdIsDebug(node.text) ? "Visible" : "Collapsed"
+        curVis := (node.HasProp("debugCur") && node.debugCur) ? "Visible" : "Collapsed"
+        brkVis := (node.HasProp("debugBp") && node.debugBp) ? "Visible" : "Collapsed"
         dispText := this._EscapeXml(CmdStripDebug(node.text))
         xml := '<Border Name="CardBd_' node.id '" Tag="' node.id '" CornerRadius="0" BorderThickness="0" Background="' cardBg '" Margin="0" Padding="2,0,6,0" HorizontalAlignment="Stretch">'
             . '<StackPanel Name="CardInner_' node.id '" Orientation="Horizontal" VerticalAlignment="Stretch" MinHeight="24" Opacity="' skipOp '">'
@@ -803,6 +849,17 @@ class MacroTreeAdapter {
             xml .= '<Border Width="16" Height="16" Margin="0,0,4,0"/>'
         xml .= '<Grid Name="Dbg_' node.id '" Width="14" Height="12" Margin="0,0,4,0" Visibility="' dbgVis '" VerticalAlignment="Center">'
             . CmdKeyRightIconXaml("{DynamicResource Accent}", 13, 11, "1.8")
+            . '</Grid>'
+        ; 当前位置标记（→）：实心三角，视觉上区别于调试起点的空心键帽；
+        ; 可见性读节点字段 debugCur，保证 Render() 全量重建后仍与字段一致（解 G1）
+        xml .= '<Grid Name="Cur_' node.id '" Width="10" Height="12" Margin="0,0,4,0" Visibility="' curVis '" VerticalAlignment="Center">'
+            . '<Path Width="9" Height="11" Stretch="Uniform" Fill="{DynamicResource Accent}"'
+            . ' Data="M 0,0 L 9,5.5 L 0,11 Z" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False"/>'
+            . '</Grid>'
+        ; 断点标记（Brk_ 独立通道）：实心小红圆，与 Dbg_（空心键帽）/ Cur_（实心三角）三通道互不干扰；
+        ; 可见性读节点字段 debugBp，保证 Render() 全量重建后仍与字段一致（零文本污染）
+        xml .= '<Grid Name="Brk_' node.id '" Width="10" Height="12" Margin="0,0,4,0" Visibility="' brkVis '" VerticalAlignment="Center">'
+            . '<Ellipse Width="9" Height="9" Fill="#E53935" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False"/>'
             . '</Grid>'
         xml .= '<TextBlock Name="Txt_' node.id '" Text="' dispText '" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"/>'
         xml .= '</StackPanel></Border>'

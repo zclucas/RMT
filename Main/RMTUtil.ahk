@@ -65,7 +65,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("PauseHotkey", MainSoftData.PauseHotkey)
     CheckAndAddDirty("KillMacroHotkey", MainSoftData.KillMacroHotkey)
     CheckAndAddDirty("DebugRunHotkey", MainSoftData.HasProp("DebugRunHotkey") ? MainSoftData.DebugRunHotkey : "f5")
-    CheckAndAddDirty("DebugStepHotkey", MainSoftData.HasProp("DebugStepHotkey") ? MainSoftData.DebugStepHotkey : "f6")
+    CheckAndAddDirty("DebugStepHotkey", MainSoftData.HasProp("DebugStepHotkey") ? MainSoftData.DebugStepHotkey : "f11")
     CheckAndAddDirty("IsBootStart", MainSoftData.IsBootStart)
     CheckAndAddDirty("ShowSplitLine", MainSoftData.ShowSplitLine)
     CheckAndAddDirty("IsModalSubGui", MainSoftData.IsModalSubGui)

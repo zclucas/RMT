@@ -490,9 +490,9 @@ LoadMainSetting() {
     MainSoftData.SuspendHotkey := IniRead(IniFile, IniSection, "SuspendHotkey", "!p")
     MainSoftData.PauseHotkey := IniRead(IniFile, IniSection, "PauseHotkey", "!i")
     MainSoftData.KillMacroHotkey := IniRead(IniFile, IniSection, "KillMacroHotkey", "!k")
-    ; §14.5 逻辑树调试热键（默认 F5/F6，可在设置→快捷键修改）
+    ; §14.5 / IDE 式调试：逻辑树调试热键（默认 继续=F5 / 步入=F11，可在设置→快捷键修改）
     MainSoftData.DebugRunHotkey := IniRead(IniFile, IniSection, "DebugRunHotkey", "f5")
-    MainSoftData.DebugStepHotkey := IniRead(IniFile, IniSection, "DebugStepHotkey", "f6")
+    MainSoftData.DebugStepHotkey := IniRead(IniFile, IniSection, "DebugStepHotkey", "f11")
     MainSoftData.IsToolCheck := IniRead(IniFile, IniSection, "IsToolCheck", false)
     MainSoftData.ToolCheckHotKey := IniRead(IniFile, IniSection, "ToolCheckHotKey", "!o")
     MainSoftData.ToolRecordMacroHotKey := IniRead(IniFile, IniSection, "RecordMacroHotKey", "!r")
@@ -1388,6 +1388,7 @@ ReadTableItemInfoNew(tableItem, segID := "") {
                 item.IcoPath := IniRead(MacroFile, macroSeg, "IcoPath", "")
                 item.VoiceKeywords := IniRead(MacroFile, macroSeg, "VoiceKeywords", "")
                 item.Macro := IniRead(MacroFile, macroSeg, "Macro", "")
+                item.Breakpoints := IniRead(MacroFile, macroSeg, "Breakpoints", "")
                 item.FoldID := foldSeg             ; 父模块路径身份
                 tableItem.Items.Push(item)
                 tableItem.ItemMap[macroSeg] := item
@@ -1456,6 +1457,7 @@ ReadTableItemInfoNew(tableItem, segID := "") {
             item.IcoPath := TomlUtil_Str(mseg, "IcoPath")
             item.VoiceKeywords := TomlUtil_Str(mseg, "VoiceKeywords")
             item.Macro := TomlUtil_Str(mseg, "Macro")
+            item.Breakpoints := TomlUtil_Str(mseg, "Breakpoints")   ;断点集合（缺省 ""）
             item.FoldID := foldSeg
             tableItem.Items.Push(item)
             tableItem.ItemMap[macroSeg] := item
@@ -1995,6 +1997,7 @@ SaveTableItemInfoIni(tableItem) {
             IniWrite(item.IcoPath,       MacroFile, macroSeg, "IcoPath")
             IniWrite(item.UnorderedTrigger ? 1 : 0, MacroFile, macroSeg, "UnorderedTrigger")
             IniWrite(item.VoiceKeywords, MacroFile, macroSeg, "VoiceKeywords")
+            IniWrite(item.Breakpoints,   MacroFile, macroSeg, "Breakpoints")
             ; 宏内容：直接存（换行用 ⫶ 编码，避免 INI 值含换行）
             MacroStr := Trim(item.Macro)
             MacroStr := Trim(MacroStr, "`n")
@@ -2130,6 +2133,8 @@ SaveTableItemInfoTomlCore(root, tableItem) {
             mseg["VoiceKeywords"] := item.VoiceKeywords
             ; 宏内容：原样存储（多行换行由 TomlWriter 转义为 \n，读回自动还原，无需 ⫶ 编码）
             mseg["Macro"] := item.Macro
+            ; 断点集合：与 Macro 同段的条目级字段，值形如 ",sig1,sig2,"（缺省 ""）
+            mseg["Breakpoints"] := item.Breakpoints
             root[macroSeg] := mseg
         }
         fseg["MacroOrder"] := macroOrder
@@ -3608,6 +3613,16 @@ CmdIsDebug(cmd) {
 CmdStripDebug(cmd) {
     cmd := StrReplace(cmd, Chr(0x25B6), "")
     return StrReplace(cmd, Chr(0x2B50), "")
+}
+
+; 仅剥离「行首」的调试当前位置标记 →（U+2192）。
+; ⚠️ 关键：→ 同时是手柄 D-pad「右」的显示名（如 🎮→），绝不能全局 StrReplace，
+; 否则会破坏 ParseCmdJoyDisplay 的手柄键名还原（DpadRight 失效）。
+; 旧调试标记恒为单条指令文本的首字符前缀，故只剥行首即可，主/Worker 共享。
+CmdStripCurPos(text) {
+    if (text != "" && SubStr(text, 1, 1) == Chr(0x2192))
+        return SubStr(text, 2)
+    return text
 }
 
 ; 向右键帽（删除末尾 E750 镜像，中间无 X）

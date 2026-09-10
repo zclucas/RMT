@@ -32,6 +32,7 @@ class SideLogicTree {
             menuEditName: "SideMenuEditCmd",
             menuSkipName: "SideMenuSkipCmd",
             menuDebugName: "SideMenuDebugCmd",
+            menuBpName: "SideMenuBpCmd",
             menuCopyName: "SideMenuCopyCmd",
             menuPasteName: "SideMenuPasteCmd",
             menuDeleteName: "SideMenuDeleteCmd",
@@ -45,7 +46,8 @@ class SideLogicTree {
         bindCtx := !SideLogicTree.CtxMenuBound
         bindHk := !SideLogicTree.HotkeyBound
         onChanged := ObjBindMethod(this, "_OnMacroChanged", t)
-        ed.AttachSidePanel(this.mainWin.ui, names, onChanged, bindCtx, bindHk)
+        onBpChanged := ObjBindMethod(this, "_OnBpChanged", t)
+        ed.AttachSidePanel(this.mainWin.ui, names, onChanged, bindCtx, bindHk, onBpChanged)
         if (bindCtx)
             SideLogicTree.CtxMenuBound := true
         if (bindHk)
@@ -62,12 +64,12 @@ class SideLogicTree {
             this.editors[t].SetSideActive(true)
     }
 
-    Load(t, macroStr) {
+    Load(t, macroStr, bpStr := "") {
         ed := this.Ensure(t)
         if (!IsObject(ed))
             return
         this.Activate(t)
-        ed.LoadSideMacro(macroStr)
+        ed.LoadSideMacro(macroStr, bpStr)
     }
 
     Get(t) {
@@ -83,6 +85,12 @@ class SideLogicTree {
         if (!IsObject(this.mainWin))
             return
         this.mainWin._WriteSideTreeMacroStr(t, macroStr)
+    }
+
+    _OnBpChanged(t, bpStr) {
+        if (!IsObject(this.mainWin))
+            return
+        this.mainWin._WriteSideTreeBreakpoints(t, bpStr)
     }
 
     SyncToolToggles(t) {

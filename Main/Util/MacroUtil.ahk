@@ -102,6 +102,56 @@ OnTriggerMacroOnce(tableItem, macro, index) {
     }
 }
 
+; ============================================================
+; 调试步入 / 断点 共享纯函数（零 XAML 依赖；主进程与 Worker 通用）
+; 轮 1 仅启用 TryInterceptBranch（步入拦截）+ BpSig/BpStrHas（断点身份/包含判定）；
+; 不含任何阻塞式断点闸门（真实运行断点暂停属轮 2）。
+; ============================================================
+
+; 调试分支拦截：命中返回 true（仅记录命中分支、不执行分支体），由调试器接管步入。
+; 未激活（正常触发 / Worker / F5）→ 直接 false，对既有执行语义逐字节等价。
+; 注意：本函数只碰普通对象与全局变量，绝不引用任何 XAML 类名（Worker 编译安全）。
+TryInterceptBranch(kind, branchField, controlType, hitIndex := -1) {
+    global MySoftData
+    if (!IsSet(MySoftData) || !IsObject(MySoftData) || !MySoftData.HasProp("DebugHook"))
+        return false
+    hook := MySoftData.DebugHook
+    if (!IsObject(hook) || !hook.active)
+        return false
+    hook.recorded := true
+    hook.kind := kind
+    hook.branchField := branchField
+    hook.controlType := controlType
+    hook.hitIndex := hitIndex
+    return true
+}
+
+; 断点签名：命令的稳定标识（跨语言模式）。优先序列号（GetLangKey 归一为中文键），
+; 无序列号的旧格式指令退回去标记后的整串。共享纯函数，主/Worker 通用。
+; 已知局限：无序列号的旧格式指令（如「间隔_500」）重复时签名退化为整串 →
+; 同名重复指令共享断点、落在首条（编辑器创建的现代宏不受影响）。
+; 回退分支已剥离逗号：断点串以 ",sig1,sig2," 存放并用 ",sig," 包夹 InStr 匹配，
+; 若旧格式文本含逗号会产生假阳命中；写/读两侧同走本函数，归一即一致。
+BpSig(cmdText) {
+    txt := CmdStripCurPos(GetCmdStr(cmdText))
+    paramArr := StrSplit(txt, "_")
+    if (paramArr.Length == 0)
+        return ""
+    textOnly := ""
+    numbersOnly := ""
+    SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
+    if (numbersOnly == "")
+        return StrReplace(txt, ",", "")             ; 旧格式：纯文本整串（剥离逗号防 ,sig, 假阳）
+    return GetLangKey(textOnly) . numbersOnly        ; 现代格式：序列号（跨语言稳定）
+}
+
+; 断点集合包含判定：断点串规范化为 ",sig1,sig2,"，用 ",sig," 包夹 InStr 做无歧义匹配。
+BpStrHas(bpStr, sig) {
+    if (bpStr == "" || sig == "")
+        return false
+    return InStr(bpStr, "," sig ",") ? true : false
+}
+
 ; 执行单条宏指令（线性宏循环与图形节点 Walk 共用）
 ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     global MySoftData
@@ -161,24 +211,26 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     cmdStr := eh.cmd
 
     ; 避免重复调用 GetCmdStr，并用 InStr 提取首段 Key 替代全量 StrSplit
+    ; 解 G2：清洗串只剥离 🚫/▶/⭐（参数段完整保留），交给处理器一律用 cleanCmdStr，
+    ; 避免调试起点 ▶ 进入处理器导致序列号解析失败而误杀宏
     cleanCmdStr := GetCmdStr(cmdStr)
     firstUnderscore := InStr(cleanCmdStr, "_")
     firstPart := firstUnderscore ? SubStr(cleanCmdStr, 1, firstUnderscore - 1) : cleanCmdStr
     cmdKey := RTrim(firstPart, "0123456789")
 
     if (MySoftData.CMDTip)
-        MyCMDReportAciton(cmdStr)
+        MyCMDReportAciton(cleanCmdStr)
 
     ok := true
     try {
-        result := Actions[cmdKey](tableItem, cmdStr, index)
+        result := Actions[cmdKey](tableItem, cleanCmdStr, index)
     } catch as err {
         ok := false
         ; 错误处理配置：优先指令 Data 配置（间隔<serial> 等配置文件模式），|EH: 后缀兼容保留
         ehCfg := eh.cfg
         if (!IsObject(ehCfg))
-            ehCfg := RMTGetDataErrHandle(cmdStr)
-        handled := RMTHandleError(err, cmdKey, ehCfg, () => Actions[cmdKey](tableItem, cmdStr, index))
+            ehCfg := RMTGetDataErrHandle(cleanCmdStr)
+        handled := RMTHandleError(err, cmdKey, ehCfg, () => Actions[cmdKey](tableItem, cleanCmdStr, index))
         if (handled[1]) {
             ok := true
             result := handled[2]
@@ -623,6 +675,10 @@ OnCompare(tableItem, cmd, index) {
         MySetGlobalVariable([Data.SaveName], [SaveValue], false)
     }
 
+    ; 调试步入拦截：命中则仅判定、不执行分支体，控制类型延后到调试帧结算
+    if (TryInterceptBranch("If", result ? "TrueMacro" : "FalseMacro", result ? Data.TrueControlType : Data.FalseControlType))
+        return
+
     macro := result ? Data.TrueMacro : Data.FalseMacro
     if (macro != "")
         OnTriggerMacroOnce(tableItem, macro, index)
@@ -662,12 +718,18 @@ OnComparePro(tableItem, cmd, index) {
         }
 
         if (result) {
+            ; 调试步入拦截：命中分支，仅判定不执行体
+            if (TryInterceptBranch("IfPro", "MacroArr", ControlType, A_Index))
+                return
             if (Macro != "")
                 OnTriggerMacroOnce(tableItem, Macro, index)
             HandleControlType(tableItem, index, ControlType)
             return
         }
     }
+    ; 调试步入拦截：默认分支（以上都不是），仅判定不执行体
+    if (TryInterceptBranch("IfPro", "DefaultMacro", Data.DefaultControlType, -1))
+        return
     OnTriggerMacroOnce(tableItem, Data.DefaultMacro, index)
     HandleControlType(tableItem, index, Data.DefaultControlType)
 }
@@ -811,6 +873,9 @@ OnLoop(tableItem, cmd, index) {
                 break
 
             WaitIfPaused(tableItem, index)
+            ; 调试步入拦截：无限循环体，仅判定不执行体
+            if (TryInterceptBranch("Loop", "LoopBody", "", A_Index))
+                return
             OnTriggerMacroOnce(tableItem, Data.LoopBody, index)
 
             if (item.VariableMap["循环-跳过本轮"]) {
@@ -838,6 +903,9 @@ OnLoop(tableItem, cmd, index) {
                 break
 
             WaitIfPaused(tableItem, index)
+            ; 调试步入拦截：计数循环体，仅判定不执行体
+            if (TryInterceptBranch("Loop", "LoopBody", "", A_Index))
+                return
             OnTriggerMacroOnce(tableItem, Data.LoopBody, index)
 
             if (item.VariableMap["循环-跳过本轮"]) {

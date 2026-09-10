@@ -394,6 +394,12 @@ class MacroGraphGui {
 
         if (sureAction != "")
             sureAction(linear)
+        ; F3：图示切回逻辑树时清空可能「过期」的断点落盘接线（此处无 item 上下文，
+        ; 若继续沿用 MyMacroGui 上一次的 OnBpChanged 会把断点误写到别的条目）。
+        ; 置为 fail-safe：隐藏断点菜单、清空断点串与回调，直至经 OpenItemMacroTreeEditor 重新正确接线。
+        MyMacroGui._bpAllowed := false
+        MyMacroGui._bpStr := ""
+        MyMacroGui.OnBpChanged := ""
         MyMacroGui.SureFocusCon := MainSoftData.BtnSave
         MyMacroGui.SureBtnAction := sureAction
         MyMacroGui.SaveBtnAction := OnSaveSetting

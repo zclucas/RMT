@@ -18,7 +18,10 @@ class CompareGui {
         this.MacroGui := ""
         ; 原生 FocusCon 是「备注」标签控件，供嵌套 MacroEditGui.SureFocusCon 关窗后 Focus；
         ; XAML 版无法持有原生控件，改用带 Focus() 的轻量 facade（聚焦 XAML 的 RemarkCon）
-        this.FocusCon := { Focus: ObjBindMethod(this, "_FocusRemark") }
+        ; ⚠️ 闭包必须写成 (*) 变参：调用方是 facade.Focus() 方法式调用，AHK v2 会把 facade
+        ;    自身作为首参传进来；ObjBindMethod 已绑定 this、不再吃参数
+        ;    → 会报 "Too many parameters passed to function"（2026-09-10 实测修复）
+        this.FocusCon := { Focus: (*) => this._FocusRemark() }
         this._closed := true
         this._title := ""
 

@@ -1316,6 +1316,7 @@ class MainWin {
         treeCtx.Add("Separator")
         treeCtx.Add("MenuItem").Name("SideMenuSkipCmd").Header(GetLang("跳过指令"))
         treeCtx.Add("MenuItem").Name("SideMenuDebugCmd").Header(GetLang("调试起点"))
+        treeCtx.Add("MenuItem").Name("SideMenuBpCmd").Header(GetLang("断点"))
         treeCtx.Add("Separator")
         treeCtx.Add("MenuItem").Name("SideMenuDeleteCmd").Header(GetLang("删除"))
 
@@ -1412,9 +1413,12 @@ class MainWin {
         selIdx := item ? GetItemIndexInTable(MySoftData.TableInfo[t], item.ID) : 0
         this._ApplyRowSel(t, selIdx)
         macroStr := ""
-        if (item && CheckIsMacroTable(t) && Trim(item.Macro) != "")
+        bpStr := ""
+        if (item && CheckIsMacroTable(t) && Trim(item.Macro) != "") {
             macroStr := GetLangMacro(item.Macro, 1)
-        this._sideTree.Load(t, macroStr)
+            bpStr := item.HasProp("Breakpoints") ? item.Breakpoints : ""
+        }
+        this._sideTree.Load(t, macroStr, bpStr)
         this._sideTree.SyncToolToggles(t)
         hasCmd := Trim(macroStr) != ""
         try this.ui.Update(emptyName, "Visibility", hasCmd ? "Collapsed" : "Visible")
@@ -1441,6 +1445,16 @@ class MainWin {
         }
         emptyName := "SideTreeEmpty_" t
         try this.ui.Update(emptyName, "Visibility", Trim(macroStr) == "" ? "Visible" : "Collapsed")
+    }
+
+    ; 断点写回：更新条目字段 + 热重载广播（断点为独立字段，不动 Macro 文本，也不重建树）
+    ; 树标记已由 MacroEditGui.SetBreakPoint 就地更新；此处仅落字段并广播到 Worker
+    _WriteSideTreeBreakpoints(t, bpStr) {
+        item := this._ResolveSideTreeItem(t)
+        if (!item)
+            return
+        item.Breakpoints := bpStr
+        HotReloadPublish(t, 0)
     }
 
     OnSideToolExpand(t, *) {
@@ -1502,7 +1516,7 @@ class MainWin {
         if (!IsObject(ed))
             return
         this._sideTree.Activate(t)
-        ed.MenuHandler(ed._DebugRunLabel())
+        ed.MenuHandler(ed._ContinueLabel())
     }
 
     OnSideToolStep(t, *) {
@@ -1510,7 +1524,21 @@ class MainWin {
         if (!IsObject(ed))
             return
         this._sideTree.Activate(t)
-        ed.MenuHandler(ed._DebugStepLabel())
+        ed.MenuHandler(ed._StepIntoLabel())
+    }
+
+    ; ⚠️ 当前无调用方（侧栏「运行到下一断点」工具钮已随 F7 退休删除，
+    ;    语义并入「继续」F5）；保留以备回退——勿当活代码引用。
+    OnSideToolRunToBp(t, *) {
+        if (!IsObject(this._sideTree))
+            return
+        this._sideTree.Activate(t)
+        ed := this._sideTree.ActiveEditor()
+        if (!IsObject(ed))
+            ed := this._sideTree.Ensure(t)
+        if (!IsObject(ed))
+            return
+        ed.ContinueRun()
     }
 
     OnSideToolVar(t, *) {
@@ -1707,8 +1735,8 @@ class MainWin {
         this._AddSideToolBtn(toolBar, idx, "Redo", Chr(0xE7A6), GetLang("恢复"), false)
         this._AddSideToolBtn(toolBar, idx, "Back", Chr(0xE750), GetLang("删除末尾"), false)
         this._AddSideToolBtn(toolBar, idx, "Record", Chr(0xE7C8), GetLang("指令录制"), true)
-        this._AddSideToolBtn(toolBar, idx, "Run", Chr(0xE768), GetLang("运行"), false)
-        this._AddSideToolBtn(toolBar, idx, "Step", "", GetLang("单步运行"), false)
+        this._AddSideToolBtn(toolBar, idx, "Run", Chr(0xE768), GetLang("继续"), false)
+        this._AddSideToolBtn(toolBar, idx, "Step", "", GetLang("步入"), false)
         this._AddSideToolBtn(toolBar, idx, "Var", Chr(0xE7B3), GetLang("变量监视"), true)
         this._AddSideToolBtn(toolBar, idx, "CmdTip", Chr(0xE8E3), GetLang("指令显示"), true)
         this._AddSideToolBtn(toolBar, idx, "Top", Chr(0xE840), GetLang("窗口置顶"), true)

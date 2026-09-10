@@ -31,23 +31,46 @@
 class MacroEditGui {
     static Hotkeys := ["f5", "f6", "delete"]
 
-    ; §14.5 调试热键可配置（设置→快捷键），不再固定 F5/F6
-    _GetDebugRunHotkey() {
-        return (MainSoftData.HasProp("DebugRunHotkey") && MainSoftData.DebugRunHotkey != "")
-            ? MainSoftData.DebugRunHotkey : "f5"
+    ; IDE 式调试热键（设置→快捷键）。字段名沿用历史：
+    ;   DebugRunHotkey→「继续」、DebugStepHotkey→「步入」。不改写存量值，仅改 getter 语义：
+    ;   旧默认 f6 自动升 f11；用户自定义值原样保留。
+    _GetContinueHotkey() {                          ; 旧 DebugRunHotkey；旧默认 f5 恰=新 F5
+        v := MainSoftData.HasProp("DebugRunHotkey") ? MainSoftData.DebugRunHotkey : ""
+        return (v == "" || v == "f5") ? "f5" : v
     }
 
-    _GetDebugStepHotkey() {
-        return (MainSoftData.HasProp("DebugStepHotkey") && MainSoftData.DebugStepHotkey != "")
-            ? MainSoftData.DebugStepHotkey : "f6"
+    _GetStepIntoHotkey() {                          ; 旧 DebugStepHotkey；旧默认 f6 → 新默认 f11
+        v := MainSoftData.HasProp("DebugStepHotkey") ? MainSoftData.DebugStepHotkey : ""
+        return (v == "" || v == "f6") ? "f11" : v
     }
 
+    _ContinueLabel() {
+        return GetLang("继续") " (" FormatHotkeyDisplay(this._GetContinueHotkey()) ")"
+    }
+
+    _StepOverLabel() {
+        return GetLang("步进") " (" FormatHotkeyDisplay("F10") ")"
+    }
+
+    _StepIntoLabel() {
+        return GetLang("步入") " (" FormatHotkeyDisplay(this._GetStepIntoHotkey()) ")"
+    }
+
+    _StepOutLabel() {
+        return GetLang("步出") " (" FormatHotkeyDisplay("+F11") ")"
+    }
+
+    _RunToCursorLabel() {
+        return GetLang("运行到光标处") " (" FormatHotkeyDisplay("^F10") ")"
+    }
+
+    _ToggleSkipLabel() {
+        return GetLang("跳过指令") " (" FormatHotkeyDisplay("^/") ")"
+    }
+
+    ; team-lead 指定保留方法名；仅把热键显示源改为硬编码 Ctrl+F5（不调试快跑，不进设置项）
     _DebugRunLabel() {
-        return GetLang("运行") " (" FormatHotkeyDisplay(this._GetDebugRunHotkey()) ")"
-    }
-
-    _DebugStepLabel() {
-        return GetLang("单步运行") " (" FormatHotkeyDisplay(this._GetDebugStepHotkey()) ")"
+        return GetLang("运行") " (" FormatHotkeyDisplay("^F5") ")"
     }
 
     __new(reuseShared := false) {
@@ -72,6 +95,13 @@ class MacroEditGui {
         this.GuiMenu := ""
         this.DebugItemID := 0
         this.CurrentItemID := 0
+        this.DebugStack := []                  ; 调试步入调用栈（纯瞬态，不落盘、不入快照）
+        this._bpStr := ""                      ; 当前断点串缓存（InitTreeView 重建后按此重放标记）
+        this.OnBpChanged := ""                 ; 断点写回回调（宿主设置；无持久化宿主时为空）
+        ; F3：断点菜单门控。默认 false = 隐藏「断点」右键项（fail-safe，宁可无入口也不要静默丢失）。
+        ; 仅当宿主已接线持久化落盘时才置 true：主编辑器（OpenItemMacroTreeEditor）设置；
+        ; 侧栏逻辑树的断点菜单独立建在 MainWindowXaml，不受此开关影响。
+        this._bpAllowed := false
         this.ShowSaveBtn := false
         this.SureFocusCon := ""
         this.isContextEdit := false
@@ -92,6 +122,7 @@ class MacroEditGui {
         this.menuEditName := "MenuEditCmd"
         this.menuSkipName := "MenuSkipCmd"
         this.menuDebugName := "MenuDebugCmd"
+        this.menuBpName := "MenuBpCmd"
         this.menuCopyName := "MenuCopyCmd"
         this.menuPasteName := "MenuPasteCmd"
         this.menuDeleteName := "MenuDeleteCmd"
@@ -270,7 +301,7 @@ class MacroEditGui {
         this._BuildAndShow(CommandStr, ShowSaveBtn)
 
         ; 注册快捷键热键（仅编辑器前台时拦截，失焦时按键透传给其他程序；关闭时注销）
-        this._hkIds := WinHotkey.Register([this._GetDebugRunHotkey(), this._GetDebugStepHotkey(), "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
+        this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), "F10", this._GetStepIntoHotkey(), "+F11", "^F10", "$^/", "^F5", "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
 
         ; 注册拖拽消息监听（先注销再注册，避免重复打开时叠多个处理器）
         OnMessage(0x0201, this._lbtnHandler, 0)
@@ -295,13 +326,16 @@ class MacroEditGui {
     }
 
     ; 侧栏多实例只注册一次热键，由 ActiveEditor 转发
-    AttachSidePanel(ui, names, onChanged := "", bindCtxMenu := true, bindHotkeys := true) {
+    AttachSidePanel(ui, names, onChanged := "", bindCtxMenu := true, bindHotkeys := true, onBpChanged := "") {
         if (!IsObject(ui))
             return
         this._sideMode := true
         this._closed := false
         this.ui := ui
         this.OnMacroChanged := onChanged
+        this.OnBpChanged := onBpChanged
+        ; F3：侧栏逻辑树断点持久化路径已通（OnBpChanged → 宿主 _WriteSideTreeBreakpoints），启用断点菜单
+        this._bpAllowed := true
         if (IsObject(names)) {
             if (names.HasProp("treeName") && names.treeName != "")
                 this.treeName := names.treeName
@@ -323,6 +357,8 @@ class MacroEditGui {
                 this.menuSkipName := names.menuSkipName
             if (names.HasProp("menuDebugName") && names.menuDebugName != "")
                 this.menuDebugName := names.menuDebugName
+            if (names.HasProp("menuBpName") && names.menuBpName != "")
+                this.menuBpName := names.menuBpName
             if (names.HasProp("menuCopyName") && names.menuCopyName != "")
                 this.menuCopyName := names.menuCopyName
             if (names.HasProp("menuPasteName") && names.menuPasteName != "")
@@ -360,16 +396,17 @@ class MacroEditGui {
             this._sideBound := true
         }
         if (bindHotkeys && this._hkIds.Length == 0 && hwnd)
-            this._hkIds := WinHotkey.Register([this._GetDebugRunHotkey(), this._GetDebugStepHotkey(), "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), hwnd)
+            this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), "F10", this._GetStepIntoHotkey(), "+F11", "^F10", "$^/", "^F5", "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), hwnd)
     }
 
     SetSideActive(active) {
         this._sideActive := !!active
     }
 
-    LoadSideMacro(MacroStr) {
+    LoadSideMacro(MacroStr, bpStr := "") {
         if (!IsObject(this.MacroTreeViewCon))
             return
+        this._bpStr := bpStr ? bpStr : ""
         this.InitTreeView(MacroStr)
         this.ClearMultiSelection()
         this.CurItemID := 0
@@ -404,6 +441,7 @@ class MacroEditGui {
         this.ui.OnEvent(this.menuEditName, "Click", (*) => this.ContentMenuHandler(GetLang("编辑")))
         this.ui.OnEvent(this.menuSkipName, "Click", (*) => this.ContentMenuHandler("Skip"))
         this.ui.OnEvent(this.menuDebugName, "Click", (*) => this.ContentMenuHandler("Debug"))
+        this.ui.OnEvent(this.menuBpName, "Click", (*) => this.ContentMenuHandler("Bp"))
         this.ui.OnEvent(this.menuCopyName, "Click", (*) => this.ContentMenuHandler(GetLang("复制")))
         this.ui.OnEvent(this.menuPasteName, "Click", (*) => this.ContentMenuHandler(GetLang("粘贴")))
         this.ui.OnEvent(this.menuDeleteName, "Click", (*) => this.ContentMenuHandler(GetLang("删除")))
@@ -709,8 +747,15 @@ class MacroEditGui {
         dbgBtn := menuBar.Add("Button").Name("BtnMenuDebug").Content(GetLang("调试")).Cursor("Hand").Background("Transparent").BorderThickness("0").Padding("10,3")
         dbgHost := menuBar.Add("Border").Name("MenuDebugHost").Width("0").Height("0").Visibility("Collapsed")
         dbgCM := dbgHost.Add("Border.ContextMenu").Add("ContextMenu").Name("MenuDebugCM").MinWidth("160").Placement("MousePoint").Background("{DynamicResource DropdownBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Foreground("{DynamicResource TextMain}").InjectResources(this._ContextMenuScrollStyle()).InjectResources(this._MenuItemSubmenuStyle())
-        dbgCM.Add("MenuItem").Name("MenuRunF5").Header(this._DebugRunLabel())
-        dbgCM.Add("MenuItem").Name("MenuRunF6").Header(this._DebugStepLabel())
+        dbgCM.Add("MenuItem").Name("MenuContinue").Header(this._ContinueLabel())
+        dbgCM.Add("MenuItem").Name("MenuStepOver").Header(this._StepOverLabel())
+        dbgCM.Add("MenuItem").Name("MenuStepInto").Header(this._StepIntoLabel())
+        dbgCM.Add("MenuItem").Name("MenuStepOut").Header(this._StepOutLabel())
+        dbgCM.Add("MenuItem").Name("MenuRunToCursor").Header(this._RunToCursorLabel())
+        dbgCM.Add("Separator")
+        dbgCM.Add("MenuItem").Name("MenuToggleSkip").Header(this._ToggleSkipLabel())
+        dbgCM.Add("MenuItem").Name("MenuDebugRun").Header(this._DebugRunLabel())
+        dbgCM.Add("Separator")
         dbgCM.Add("MenuItem").Name("MenuKill").Header(GetLang("终止"))
         toolBtn := menuBar.Add("Button").Name("BtnMenuTool").Content(GetLang("工具")).Cursor("Hand").Background("Transparent").BorderThickness("0").Padding("10,3").Margin("8,0,0,0")
         toolHost := menuBar.Add("Border").Name("MenuToolHost").Width("0").Height("0").Visibility("Collapsed")
@@ -737,6 +782,8 @@ class MacroEditGui {
         treeCtx.Add("Separator")
         treeCtx.Add("MenuItem").Name("MenuSkipCmd").Header(GetLang("跳过指令"))
         treeCtx.Add("MenuItem").Name("MenuDebugCmd").Header(GetLang("调试起点"))
+        ; F3：仅在宿主已接线断点持久化时才显示（子集子编辑器默认隐藏，避免误设后静默丢失）
+        treeCtx.Add("MenuItem").Name("MenuBpCmd").Header(GetLang("断点")).Visibility(this._bpAllowed ? "Visible" : "Collapsed")
         treeCtx.Add("Separator")
         treeCtx.Add("MenuItem").Name("MenuDeleteCmd").Header(GetLang("删除"))
 
@@ -857,8 +904,13 @@ class MacroEditGui {
         this.ui.OnEvent("BtnGraphNode", "Click", ObjBindMethod(this, "OnSwitchToGraphEditor"))
         this.ui.OnEvent("BtnMenuDebug", "Click", (*) => this.ui.Update("MenuDebugCM", "IsOpen", "True"))
         this.ui.OnEvent("BtnMenuTool", "Click", (*) => this.ui.Update("MenuToolCM", "IsOpen", "True"))
-        this.ui.OnEvent("MenuRunF5", "Click", (*) => this.MenuHandler(this._DebugRunLabel()))
-        this.ui.OnEvent("MenuRunF6", "Click", (*) => this.MenuHandler(this._DebugStepLabel()))
+        this.ui.OnEvent("MenuContinue", "Click", (*) => this.MenuHandler(this._ContinueLabel()))
+        this.ui.OnEvent("MenuStepOver", "Click", (*) => this.MenuHandler(this._StepOverLabel()))
+        this.ui.OnEvent("MenuStepInto", "Click", (*) => this.MenuHandler(this._StepIntoLabel()))
+        this.ui.OnEvent("MenuStepOut", "Click", (*) => this.MenuHandler(this._StepOutLabel()))
+        this.ui.OnEvent("MenuRunToCursor", "Click", (*) => this.MenuHandler(this._RunToCursorLabel()))
+        this.ui.OnEvent("MenuToggleSkip", "Click", (*) => this.MenuHandler(this._ToggleSkipLabel()))
+        this.ui.OnEvent("MenuDebugRun", "Click", (*) => this.MenuHandler(this._DebugRunLabel()))
         this.ui.OnEvent("MenuKill", "Click", (*) => this.MenuHandler(GetLang("终止")))
         this.ui.OnEvent("MenuVarListen", "Click", (*) => this.MenuHandler(GetLang("变量监视")))
         this.ui.OnEvent("MenuCmdTip", "Click", (*) => this.MenuHandler(GetLang("指令显示")))
@@ -996,6 +1048,14 @@ class MacroEditGui {
         this._dragSource := ""
         if (IsObject(this.MacroTreeViewCon))
             this.MacroTreeViewCon._suppressRender := false
+        ; V4：调试进行中关窗 = 终止调试。只清 hook.active 不够——ContinueRun/StepOut 的
+        ; 同步循环仍在逐条真实执行指令（键鼠仍在动）。Kill 停真实执行 + 复位全部调试态。
+        KillSingleTableMacro(MySoftData.SpecialTableItem)
+        this.ResetDebugState()
+        ; 关窗时清全局调试钩子 active 标志：DebugHook 是全局对象、不随窗口销毁清零；
+        ; 若在 DoDebugStep 激活(active:=true) 与复位之间进程被杀/异常退出，会残留 active=true →
+        ; 之后真实触发宏时 TryInterceptBranch 误拦截、静默跳过分支体。_CloseDebugHook 仅清标志，安全。
+        this._CloseDebugHook()
         ToolTip()
         this.ui := ""
         this.Gui := ""
@@ -1100,6 +1160,9 @@ class MacroEditGui {
         this._PushUndo()
         this.MacroTreeViewCon.Delete()
         this.MacroEditTextCon.Value := ""
+        ; T4：清空全部命令后树上已无任何标记 → 重采集(得 "") 剪掉所有残留断点签名
+        if (this._bpAllowed)
+            this._NotifyBpChanged()
     }
 
     OnChangeEditMode(state, ctrl, event) {
@@ -1119,6 +1182,7 @@ class MacroEditGui {
             this.InitTreeView(MacroStr)
         }
         else if (this.EditModeCon.Value == 2) {
+            this.ResetDebugState()                  ; V6：树已隐藏，悬挂的调试态会继续驱动不可见树 → 切换即终止调试
             this.InitMacroText(MacroStr)
         }
     }
@@ -1162,7 +1226,10 @@ class MacroEditGui {
 
         action := this.SaveBtnAction
         action()
-        this.SureFocusCon.Focus()
+        ; SureFocusCon 可能是原生控件 / XAML facade / 轻量对象，也可能是 ""
+        ; （宿主未提供，如 CompareProGui 传空）→ 必须先判对象，否则 "".Focus() 直接抛错
+        if (IsObject(this.SureFocusCon))
+            this.SureFocusCon.Focus()
     }
 
     OnSureBtnClick() {
@@ -1180,7 +1247,10 @@ class MacroEditGui {
         }
 
         this._HideWindow()
-        this.SureFocusCon.Focus()
+        ; SureFocusCon 可能是原生控件 / XAML facade / 轻量对象，也可能是 ""
+        ; （宿主未提供，如 CompareProGui 传空）→ 必须先判对象，否则 "".Focus() 直接抛错
+        if (IsObject(this.SureFocusCon))
+            this.SureFocusCon.Focus()
     }
 
     OnGuiClose() {
@@ -1224,31 +1294,18 @@ class MacroEditGui {
             text := this.MacroTreeViewCon.GetText(childID)
             if (text != "" && SubStr(text, 1, 1) != "⎖") {
                 cmdStr := MySoftData.ParseCmdJoyDisplay(text)
-                serial := this._SerialOfCmd(cmdStr)
-                if (serial != "" && !dataMap.Has(serial)) {
+                ; N11：取「命令名」（首段），非身份签名；与 OnLoop 的 StrSplit(cmd,"_")[1] 取 Data 惯例一致
+                cmdName := StrSplit(GetCmdStr(CmdStripCurPos(cmdStr)), "_")[1]
+                if (cmdName != "" && !dataMap.Has(cmdName)) {
                     try {
-                        Data := GetMacroCMDData(serial)
-                        dataMap[serial] := JSON.stringify(Data, 0)
+                        Data := GetMacroCMDData(cmdName)
+                        dataMap[cmdName] := JSON.stringify(Data, 0)
                     }
                 }
                 this._CollectSnapshotData(childID, dataMap)
             }
             childID := this.MacroTreeViewCon.GetNext(childID)
         }
-    }
-
-    ; 从指令文本（可能带 ⭐/🚫/→ 前缀与显示名）提取「命令名_序号」形式的序列码；无序号返回 ""
-    _SerialOfCmd(cmdStr) {
-        cmdStr := StrReplace(CmdStripDebug(cmdStr), "→", "")
-        paramArr := StrSplit(cmdStr, "_")
-        if (paramArr.Length == 0)
-            return ""
-        first := StrReplace(paramArr[1], "🚫", "")
-        dummy := ""
-        SplitSerialTextAndNumbers(first, &textOnly, &numbersOnly)
-        if (numbersOnly == "")
-            return ""
-        return textOnly . numbersOnly
     }
 
     ; 入栈前状态快照（上限 100 条，超出丢最旧）；批量组合操作期间静默
@@ -1434,7 +1491,7 @@ class MacroEditGui {
         ; MultiSelectItems / TreeView Select 狀態都保持原樣。
         this.CurItemID := item
         itemText := this.MacroTreeViewCon.GetText(this.CurItemID)
-        cleanItemText := StrReplace(itemText, "→", "")
+        cleanItemText := CmdStripCurPos(itemText)
         isCondi := SubStr(cleanItemText, 1, StrLen(GetLang("条件"))) == GetLang("条件")
         ; 清理→前缀用于菜单状态判断（→是运行时临时标记，不影响逻辑状态）
         if (cleanItemText == "" || SubStr(cleanItemText, 1, 1) == "⎖")
@@ -1479,10 +1536,20 @@ class MacroEditGui {
         }
         if (this._sideMode && IsSet(MyMainWin) && IsObject(MyMainWin) && (!MyMainWin.aiAssistOpen || MyMainWin.sidePanelMode != 1))
             return
-        if (StrLower(key) == StrLower(this._GetDebugRunHotkey()))
+        if (StrLower(key) == StrLower(this._GetContinueHotkey()))
+            this.MenuHandler(this._ContinueLabel())
+        else if (StrLower(key) == StrLower("F10"))
+            this.MenuHandler(this._StepOverLabel())
+        else if (StrLower(key) == StrLower(this._GetStepIntoHotkey()))
+            this.MenuHandler(this._StepIntoLabel())
+        else if (StrLower(key) == StrLower("+F11"))
+            this.MenuHandler(this._StepOutLabel())
+        else if (StrLower(key) == StrLower("^F10"))
+            this.MenuHandler(this._RunToCursorLabel())
+        else if (key == "^/")
+            this.MenuHandler(this._ToggleSkipLabel())
+        else if (StrLower(key) == StrLower("^F5"))
             this.MenuHandler(this._DebugRunLabel())
-        else if (StrLower(key) == StrLower(this._GetDebugStepHotkey()))
-            this.MenuHandler(this._DebugStepLabel())
         else if (key == "Delete") {
             this.OnDeleteCmd()
         }
@@ -1520,10 +1587,10 @@ class MacroEditGui {
         if (!isDown)
             return
 
-        if (StrLower(key) == StrLower(this._GetDebugRunHotkey()))
-            this.MenuHandler(this._DebugRunLabel())
-        if (StrLower(key) == StrLower(this._GetDebugStepHotkey()))
-            this.MenuHandler(this._DebugStepLabel())
+        if (StrLower(key) == StrLower(this._GetContinueHotkey()))
+            this.MenuHandler(this._ContinueLabel())
+        if (StrLower(key) == StrLower(this._GetStepIntoHotkey()))
+            this.MenuHandler(this._StepIntoLabel())
         if (key == "delete") {
             try {
                 focusedHwnd := DllCall("GetFocus", "Ptr")
@@ -1816,7 +1883,7 @@ class MacroEditGui {
                 return
             }
             text := this.MacroTreeViewCon.GetText(target)
-            if (SubStr(StrReplace(text, "→", ""), 1, 1) == "⎖")
+            if (SubStr(CmdStripCurPos(text), 1, 1) == "⎖")
                 return
             if (this.IsContainerNode(text)) {
                 this.OnOpenSubGui(cand.gui, 5)
@@ -1975,7 +2042,7 @@ class MacroEditGui {
         this.MacroTreeViewCon.Modify(itemID, "Select")
         try this.MacroTreeViewCon.Focus()
         itemText := this.MacroTreeViewCon.GetText(itemID)
-        cleanItemText := StrReplace(itemText, "→", "")
+        cleanItemText := CmdStripCurPos(itemText)
         if (cleanItemText == "" || SubStr(cleanItemText, 1, 1) == "⎖") {
             this.CurItemID := 0
             this._OpenCtxMenu(this.blankCtxMenuName)
@@ -2013,7 +2080,12 @@ class MacroEditGui {
                 this.SubMacroEditGui := MacroEditGui()
 
             macroStr := this.GetTreeMacroStr(this.CurItemID)
-            this.SubMacroEditGui.SureBtnAction := this.OnSubNodeEdit.Bind(this, this.CurItemID)
+            ; F3：分支体子编辑器接入断点 —— 显示「断点」菜单；清空起始断点串避免重开串味；
+            ; 保存时经 _OnSubEditorSure 把本次新增断点并入父树（见 _IngestChildBreakpoints）
+            nodeID := this.CurItemID
+            this.SubMacroEditGui._bpAllowed := true
+            this.SubMacroEditGui._bpStr := ""
+            this.SubMacroEditGui.SureBtnAction := (m) => this._OnSubEditorSure(nodeID, m, this.SubMacroEditGui)
             this.SubMacroEditGui.SureFocusCon := this.MacroTreeViewCon
             ParentTile := StrReplace(this.Gui.Title, GetLang("编辑器"), "")
             this.SubMacroEditGui.ParentTile := ParentTile "-"
@@ -2049,7 +2121,7 @@ class MacroEditGui {
         }
 
         ; 清理→前缀（⭐/🚫 由 GetCmdOnlyText / GetCmdStr 处理）
-        cleanText := StrReplace(itemText, "→", "")
+        cleanText := CmdStripCurPos(itemText)
         paramsArr := StrSplit(cleanText, "_")
         cmd := GetCmdOnlyText(paramsArr[1])
         ; 图形开始节点：用节点编辑器打开，不走普通指令 SubGui
@@ -2207,55 +2279,29 @@ class MacroEditGui {
                 OnTriggerSepcialItemMacro(MacroStr)
                 MsgBox(GetLang("调试运行结束"), "", "Owner" this.Gui.Hwnd)
             }
-            case this._DebugStepLabel():
+            case this._ContinueLabel():
             {
-                tableItem := MySoftData.SpecialTableItem
-                if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1) {
-                    return
-                }
-
-                ; 阶段1: 定位（首次F6或终止后，查找⭐起点或第一项）
-                if (this.DebugItemID == 0) {
-                    MyCMDTipGui.Hide()
-                    this.DebugItemID := this.FindDebugStartItem()
-                    if (!this.DebugItemID) {
-                        this.DebugItemID := this.MacroTreeViewCon.GetNext(0)
-                    }
-                }
-                if (!this.DebugItemID)
-                    return
-
-                try {
-                    CurCMD := this.MacroTreeViewCon.GetText(this.DebugItemID)
-                } catch {
-                    this.ResetDebugState()
-                    return
-                }
-
-                ; 阶段2: 跳过不可执行项（🚫禁用和⎖容器配置），自动推进不消耗步数
-                while (SubStr(CurCMD, 1, 2) == "🚫" || SubStr(CurCMD, 1, 1) == "⎖") {
-                    this.AdvanceToNext()
-                    if (!this.DebugItemID)
-                        return
-                    try {
-                        CurCMD := this.MacroTreeViewCon.GetText(this.DebugItemID)
-                    } catch {
-                        this.ResetDebugState()
-                        return
-                    }
-                }
-
-                ; 阶段3: 标记当前位置 → 执行
-                this.MarkCurrentPosition(this.DebugItemID)
-
-                CleanCMD := StrReplace(CmdStripDebug(CurCMD), "→", "")
-                ; 还原格式化的手柄键名后执行
-                CleanCMD := MySoftData.ParseCmdJoyDisplay(CleanCMD)
-                CurLangCMD := GetLangMacro(CleanCMD, 2)
-                OnTriggerSepcialItemMacro(CurLangCMD)
-
-                ; 阶段4: 推进到下一项
-                this.AdvanceToNext()
+                this.ContinueRun()
+            }
+            case this._StepOverLabel():
+            {
+                this.StepOver()
+            }
+            case this._StepIntoLabel():
+            {
+                this.StepInto()
+            }
+            case this._StepOutLabel():
+            {
+                this.StepOut()
+            }
+            case this._RunToCursorLabel():
+            {
+                this.RunToCursor()
+            }
+            case this._ToggleSkipLabel():
+            {
+                this.ToggleSkipSelected()
             }
             case GetLang("终止"):
             {
@@ -2281,7 +2327,7 @@ class MacroEditGui {
         if (this.CurItemID)
             try itemText := this.MacroTreeViewCon.GetText(this.CurItemID)
         ; 清理→前缀用于状态判断
-        cleanItemText := StrReplace(itemText, "→", "")
+        cleanItemText := CmdStripCurPos(itemText)
         paramsArr := StrSplit(cmdStr, "_")
         if (paramsArr.Length == 2) {
             modeType := 5
@@ -2317,13 +2363,8 @@ class MacroEditGui {
             }
             case "Skip":
             {
-                if (CmdIsDebug(cleanItemText)) {
-                    MsgBox(GetLang("调试起点不能跳过"), "", "Owner" this.Gui.Hwnd)
-                    return
-                }
-                IsToSkip := SubStr(cleanItemText, 1, 2) != "🚫"
-                CommandStr := IsToSkip ? "🚫" cleanItemText : SubStr(cleanItemText, 3)
-                this.OnModifyCmd(CommandStr)
+                ; 薄封装：与 Ctrl+/ 同源（单条走 ids=[CurItemID]，语义完全一致）
+                this.ToggleSkipSelected()
             }
             case "Debug":
                 if (SubStr(cleanItemText, 1, 2) == "🚫") {
@@ -2331,9 +2372,33 @@ class MacroEditGui {
                     return
                 }
                 IsToDebug := !CmdIsDebug(cleanItemText)
+                ; 解 G10：调试起点全局互斥——设新起点前先清除其它节点的 ▶/⭐，避免多起点并存
+                if (IsToDebug)
+                    this.ClearOtherDebugStarts(this.CurItemID)
                 CommandStr := IsToDebug ? CmdDebugMark() cleanItemText : CmdStripDebug(cleanItemText)
                 ; 调试标记是持久标记，由F6单步时FindDebugStartItem查找，不直接设DebugItemID
                 this.OnModifyCmd(CommandStr)
+            case "Bp":
+            {
+                ; F3：未接线持久化的实例不响应（与菜单隐藏双保险，杜绝误设静默丢失）
+                if (!this._bpAllowed)
+                    return
+                ; 断点开关：🚫 禁用项 / ⎖ 配置行不可设断点（弹提示，不生效）
+                if (SubStr(cleanItemText, 1, 2) == "🚫") {
+                    MsgBox(GetLang("跳过指令不可设置断点"), "", "Owner" this.Gui.Hwnd)
+                    return
+                }
+                if (SubStr(cleanItemText, 1, 1) == "⎖") {
+                    MsgBox(GetLang("该行不可设置断点"), "", "Owner" this.Gui.Hwnd)
+                    return
+                }
+                if (!this.CurItemID)
+                    return
+                ; 纯字段切换（独立 Brk_ 图标通道），绝不写 node.text
+                curOn := this.MacroTreeViewCon.IsBreakPoint(this.CurItemID)
+                this.MacroTreeViewCon.SetBreakPoint(this.CurItemID, !curOn)
+                this._NotifyBpChanged()
+            }
             case GetLang("复制"):
             {
                 selectedItems := this.GetMultiSelectedItems()
@@ -2352,7 +2417,7 @@ class MacroEditGui {
                     } catch {
                         continue
                     }
-                    text := StrReplace(CmdStripDebug(text), "→", "")
+                    text := CmdStripCurPos(CmdStripDebug(text))
                     if (text == "" || SubStr(text, 1, 1) == "⎖")
                         continue
                     cmd := FullCopyCmd(text)
@@ -2387,7 +2452,7 @@ class MacroEditGui {
                     } catch {
                         continue
                     }
-                    text := StrReplace(CmdStripDebug(text), "→", "")
+                    text := CmdStripCurPos(CmdStripDebug(text))
                     if (text == "" || SubStr(text, 1, 1) == "⎖")
                         continue
                     if (text != "")
@@ -2413,7 +2478,7 @@ class MacroEditGui {
                         text := Trim(text, " `t`r`n")
                         if (text == "")
                             continue
-                        text := StrReplace(CmdStripDebug(text), "→", "")
+                        text := CmdStripCurPos(CmdStripDebug(text))
                         cmd := FullCopyCmd(text)
                         if (cmd != "")
                             copyStr .= (copyStr == "" ? "" : ",") cmd
@@ -2440,94 +2505,747 @@ class MacroEditGui {
         }
     }
 
-    ; 重置调试状态（清除位置和→标记）
+    ; 重置调试状态（清空位置/→标记 + 清空步入栈 + 关闭拦截钩子 + 清控制标志）
     ResetDebugState() {
         this.DebugItemID := 0
         this.ClearCurrentPosition()
+        if (IsObject(this.DebugStack))
+            this.DebugStack := []
+        this._CloseDebugHook()
+        this._ClearFlags()
     }
 
-    ; 在指定项上加→前缀，表示当前位置（同时清除旧位置）
+    ; 标记当前位置（纯指针：只改节点字段 + Cur_ 图标可见性，绝不写文本，解 G1）
     MarkCurrentPosition(itemID) {
-        ; 先清除旧的→标记
+        ; 先清除旧位置
         if (this.CurrentItemID && this.CurrentItemID != itemID) {
-            try {
-                oldText := this.MacroTreeViewCon.GetText(this.CurrentItemID)
-                if (SubStr(oldText, 1, 1) == "→") {
-                    this.MacroTreeViewCon.Modify(this.CurrentItemID, , SubStr(oldText, 2))
-                }
-            } catch {
-                ; 旧项可能已失效，忽略
+            try this.MacroTreeViewCon.SetCurrentPos(this.CurrentItemID, false)
+            catch {
+                ; 旧项可能已失效或适配器不支持，忽略
             }
         }
-        ; 在新项上加→（保留调试起点标记）
+        ; 在新项上标记（🚫 禁用 / ⎖ 容器配置项不作位置标记）
         try {
             text := this.MacroTreeViewCon.GetText(itemID)
-            hasDebug := CmdIsDebug(text)
-            cleanText := StrReplace(CmdStripDebug(text), "→", "")
-            if (SubStr(cleanText, 1, 2) != "🚫" && SubStr(cleanText, 1, 1) != "⎖") {
-                newText := hasDebug ? "→" CmdDebugMark() cleanText : "→" cleanText
-                this.MacroTreeViewCon.Modify(itemID, , newText)
-            }
+            cleanText := CmdStripCurPos(CmdStripDebug(text))
+            if (SubStr(cleanText, 1, 2) != "🚫" && SubStr(cleanText, 1, 1) != "⎖")
+                this.MacroTreeViewCon.SetCurrentPos(itemID, true)
         } catch {
             ; 忽略
         }
         this.CurrentItemID := itemID
     }
 
-    ; 清除当前项的→标记
+    ; 清除当前位置标记（纯指针）
     ClearCurrentPosition() {
         if (!this.CurrentItemID)
             return
-        try {
-            text := this.MacroTreeViewCon.GetText(this.CurrentItemID)
-            if (SubStr(text, 1, 1) == "→") {
-                this.MacroTreeViewCon.Modify(this.CurrentItemID, , SubStr(text, 2))
-            }
-        } catch {
+        try this.MacroTreeViewCon.SetCurrentPos(this.CurrentItemID, false)
+        catch {
             ; 忽略
         }
         this.CurrentItemID := 0
     }
 
-    ; 推进到下一个可执行项，到达末尾时直接结束
-    AdvanceToNext() {
-        safeCount := 0
-        loop {
-            if (safeCount++ > 1000) {
-                this.ResetDebugState()
-                return
-            }
-            try
-                nextID := this.MacroTreeViewCon.GetNext(this.DebugItemID)
-            catch {
-                this.ResetDebugState()
-                MsgBox(GetLang("单步运行结束"), "", "Owner" this.Gui.Hwnd)
-                return
-            }
-            if (!nextID) {
-                ; 到达当前层级末尾，直接结束
-                this.ResetDebugState()
-                MsgBox(GetLang("单步运行结束"), "", "Owner" this.Gui.Hwnd)
-                return
-            }
-            this.DebugItemID := nextID
+    ; ==================== 调试步入内核（全容器步入 + 断点，v2 §12） ====================
 
-            try {
-                cmdNextStr := this.MacroTreeViewCon.GetText(this.DebugItemID)
-            } catch {
-                this.ResetDebugState()
-                MsgBox(GetLang("单步运行结束"), "", "Owner" this.Gui.Hwnd)
-                return
-            }
+    ; 惰性建立调试拦截钩子（主进程调试期非空；Worker 不实例化本类 → 恒不存在）
+    _EnsureDebugHook() {
+        if (!MySoftData.HasProp("DebugHook"))
+            MySoftData.DebugHook := { active: false, recorded: false, containerId: 0, kind: "", branchField: "", hitIndex: -1, controlType: "" }
+        return MySoftData.DebugHook
+    }
 
-            ; 跳过禁用项和特殊容器配置项
-            if (SubStr(cmdNextStr, 1, 2) == "🚫" || SubStr(cmdNextStr, 1, 1) == "⎖")
-                continue
+    ; 关闭钩子（清激活标志；保留结构供下次复用）
+    _CloseDebugHook() {
+        if (MySoftData.HasProp("DebugHook") && IsObject(MySoftData.DebugHook))
+            MySoftData.DebugHook.active := false
+    }
 
-            break
+    ; 落位：设 DebugItemID 并标 →（纯指针，不写文本）
+    _Goto(itemID) {
+        this.DebugItemID := itemID
+        this.MarkCurrentPosition(itemID)
+    }
+
+    ; 节点文本：去 →/▶/⭐（保留 🚫/⎖，供 _IsSkippable 判定）
+    _RawText(id) {
+        t := ""
+        try t := this.MacroTreeViewCon.GetText(id)
+        return CmdStripCurPos(CmdStripDebug(t))
+    }
+
+    ; 节点文本：完全清洗（去 →/▶/⭐/🚫/⎖/空格），供分支容器名比较
+    _CleanText(id) {
+        t := this._RawText(id)
+        while (t != "") {
+            ch := SubStr(t, 1, 1)
+            if (ch == "🚫" || ch == "⎖" || ch == " ")
+                t := SubStr(t, 2)
+            else
+                break
         }
-        ; 到达下一个可执行项，标记为当前位置
+        return t
+    }
+
+    _IsSkipRow(t) => SubStr(t, 1, 2) == "🚫"
+
+    _IsCfgRow(t) => SubStr(t, 1, 1) == "⎖"
+
+    _IsSkippable(t) => (this._IsSkipRow(t) || this._IsCfgRow(t))
+
+    ; 单步执行用的 scratch 条目（SpecialTableItem；空表返回 ""）
+    _SpecialItem() {
+        ti := MySoftData.SpecialTableItem
+        if (!IsObject(ti) || ti.Items.Length < 1)
+            return ""
+        return ti.Items[1]
+    }
+
+    ; 读取三控制标志（缺失键按 false 兜底，不抛错）
+    _Flags() {
+        item := this._SpecialItem()
+        brk := false, skip := false, brch := false
+        if (item && IsObject(item.VariableMap)) {
+            if (item.VariableMap.Has("循环-跳出"))
+                brk := !!item.VariableMap["循环-跳出"]
+            if (item.VariableMap.Has("循环-跳过本轮"))
+                skip := !!item.VariableMap["循环-跳过本轮"]
+            if (item.VariableMap.Has("分支-跳出"))
+                brch := !!item.VariableMap["分支-跳出"]
+        }
+        return { brk: brk, skip: skip, brch: brch }
+    }
+
+    ; 清三控制标志（仅清已有键，绝不新增/写坏 VariableMap）
+    _ClearFlags() {
+        item := this._SpecialItem()
+        if (!item || !IsObject(item.VariableMap))
+            return
+        if (item.VariableMap.Has("分支-跳出"))
+            item.VariableMap["分支-跳出"] := false
+        if (item.VariableMap.Has("循环-跳过本轮"))
+            item.VariableMap["循环-跳过本轮"] := false
+        if (item.VariableMap.Has("循环-跳出"))
+            item.VariableMap["循环-跳出"] := false
+    }
+
+    ; 安全取同级下一条（异常 → 0）
+    _SafeGetNext(id) {
+        try
+            return this.MacroTreeViewCon.GetNext(id)
+        catch
+            return 0
+    }
+
+    ; 由容器命令节点 + 钩子回报的命中分支，定位「分支容器节点」。
+    ; 注：钩子 hitIndex 为 1 基（守卫直传 A_Index），故此处条件序号按 1 基计数。
+    _FindBranchChild(containerID, kind, hitIndex, branchField) {
+        childID := 0
+        try childID := this.MacroTreeViewCon.GetChild(containerID)
+        catch
+            return 0
+        condIdx := 0
+        lastCond := 0
+        condPrefix := GetLang("条件")
+        while (childID) {
+            t := this._CleanText(childID)
+            if (kind == "If" || kind == "Search" || kind == "SearchPro") {
+                if (branchField == "TrueMacro" && t == GetLang("真"))
+                    return childID
+                if (branchField == "FalseMacro" && t == GetLang("假"))
+                    return childID
+            }
+            else if (kind == "Loop") {
+                if (t == GetLang("循环体"))
+                    return childID
+            }
+            else if (kind == "IfPro") {
+                if (condPrefix != "" && SubStr(t, 1, StrLen(condPrefix)) == condPrefix) {
+                    condIdx += 1
+                    if (branchField == "DefaultMacro")
+                        lastCond := childID
+                    else if (condIdx == hitIndex)
+                        return childID
+                }
+            }
+            try childID := this.MacroTreeViewCon.GetNext(childID)
+            catch
+                break
+        }
+        if (kind == "IfPro" && branchField == "DefaultMacro")
+            return lastCond
+        return 0
+    }
+
+    ; 取某分支容器的「首个可执行子节点」（跳过 🚫/⎖；空 → 0）
+    _FirstExecChild(parentID) {
+        child := 0
+        try child := this.MacroTreeViewCon.GetChild(parentID)
+        catch
+            return 0
+        while (child) {
+            if (!this._IsSkippable(this._RawText(child)))
+                return child
+            try child := this.MacroTreeViewCon.GetNext(child)
+            catch
+                break
+        }
+        return 0
+    }
+
+    ; 钩子命中 → 压帧 + 下潜（F6 阶段4，hook.recorded==true 时调用）
+    _EnterBranchFromHook() {
+        try {
+            hook := MySoftData.DebugHook
+            containerId := hook.containerId
+            kind := hook.kind
+            branchNodeId := this._FindBranchChild(containerId, kind, hook.hitIndex, hook.branchField)
+            if (!branchNodeId) {
+                ; H3：找不到分支节点 = 动态内容（宏操作插入串/子宏调用/图形宏）的容器被守卫拦截，
+                ; 树上无对应分支可下潜。降级：视为已处理继续推进，不再 EndDebugRun（静默中止会话）。
+                ; ⚠️ 分支体未执行（守卫已吞），与真实运行存在差异——Toast 明示。
+                this._ClearFlags()
+                Toast.Show(GetLang("该分支不支持单步，已跳过"))
+                return this.AdvanceToNext()
+            }
+            loopCount := 0
+            infinite := false
+            ; N11：取「命令名」（首段）用于 GetMacroCMDData，与 OnLoop 的 StrSplit(cmd,"_")[1] 惯例一致；
+            ; 绝不用 BpSig（身份签名）当命令名 —— 旧格式「循环_5」经 BpSig 会得到含 `_` 的整串而抛错。
+            cmdName := StrSplit(GetCmdStr(this._CleanText(containerId)), "_")[1]
+            if (kind == "Loop") {
+                Data := GetMacroCMDData(cmdName)
+                if (Data.LoopCount == -1)
+                    infinite := true
+                else {
+                    v := ""
+                    hasValue := TryGetTabVarValue(&v, MySoftData.SpecialTableItem, 1, Data.LoopCount)
+                    loopCount := hasValue ? Integer(v) : 0
+                }
+            }
+            frame := { containerId: containerId, kind: kind, serial: cmdName, branchNodeId: branchNodeId, branchField: hook.branchField, controlType: hook.controlType, iterIndex: (kind == "Loop") ? 1 : 0, loopCount: loopCount, infinite: infinite, returnNextId: this._SafeGetNext(containerId) }
+            ; 自动展开父容器 + 分支容器，保证 → 可见（v1 §3.6）
+            try this.MacroTreeViewCon.Modify(containerId, "Expand")
+            try this.MacroTreeViewCon.Modify(branchNodeId, "Expand")
+            this.DebugStack.Push(frame)
+            ; 循环帧：镜像 OnLoop 在体执行前设置「循环次数」，供体内指令读取
+            if (kind == "Loop") {
+                item := this._SpecialItem()
+                if (item && IsObject(item.VariableMap) && item.VariableMap.Has("循环次数"))
+                    item.VariableMap["循环次数"] := frame.iterIndex
+            }
+            ; N1：镜像 OnLoop「写 循环次数:=A_Index → 判本轮条件 → 不通过整轮 break」
+            ; （MacroUtil:868-870/:898-900，无限循环分支 :869 同样每轮判）——条件首轮即假时
+            ; 真身体一次不进，调试也不得潜入（旧实现无条件直潜 → 恒多跑 1 轮体）。
+            ; 判定必须放在 Push+写 循环次数 之后（条件可引用 {循环次数}，与 H1 同理）。
+            if (kind == "Loop" && !this._EvalLoopCondition(frame)) {
+                this.DebugStack.Pop()
+                return this._ResumeAfterFrame(frame)
+            }
+            first := this._FirstExecChild(branchNodeId)
+            if (!first)                                 ; 空分支体 → 立即结算（解 G4）
+                return this.CompleteTopFrame()
+            this._Goto(first)
+        } catch {
+            this._ClearFlags()
+            this.EndDebugRun()
+        }
+    }
+
+    ; 帧结算：某帧分支体已执行到末尾（GetNext==0）时调用。
+    ; 语义 = 运行时「容器执行完毕 → HandleControlType 设标志 → 所在块 for 逐层消费」的复刻。
+    CompleteTopFrame() {
+        try {
+            if (this.DebugStack.Length == 0) {
+                this.EndDebugRun()
+                return
+            }
+            frame := this.DebugStack.Pop()
+            ; (1) 镜像 HandleControlType：分支体跑完后设本帧分支 ControlType
+            ;     （Loop 帧 controlType 恒为 "" → no-op，与 OnLoop 不调 HandleControlType 一致）
+            if (frame.controlType != "" && frame.controlType != "无")
+                HandleControlType(MySoftData.SpecialTableItem, 1, frame.controlType)
+            ; (2) 读取三标志
+            f := this._Flags()
+            ; (3) 判定优先级：循环-跳出 > 循环-跳过本轮 > 分支-跳出 > 无
+            if (f.brk) {
+                this._ClearFlags()
+                return this._PopToNearestLoop()
+            }
+            if (f.skip) {
+                this._ClearFlags()
+                return this._SkipToNearestLoopIteration()
+            }
+            if (f.brch) {
+                this._ClearFlags()
+                return this.CompleteTopFrame()
+            }
+            ; (4) 无控制标志 → 正常回落。
+            ;     Loop 帧 → 进入下一轮（计数/条件判定在 _NextLoopIteration 内）
+            this._ClearFlags()
+            if (frame.kind == "Loop")
+                return this._NextLoopIteration(frame)
+            return this._ResumeAfterFrame(frame)
+        } catch {
+            this._ClearFlags()
+            this.EndDebugRun()
+        }
+    }
+
+    ; 循环-跳出：弹出至最近 Loop 帧（含），去其 returnNextId；无则继续结算父帧
+    _PopToNearestLoop() {
+        loop {
+            if (this.DebugStack.Length == 0) {
+                this.EndDebugRun()
+                return
+            }
+            f := this.DebugStack.Pop()
+            if (f.kind == "Loop") {
+                if (f.returnNextId) {
+                    this._Goto(f.returnNextId)
+                    return
+                }
+                return this.CompleteTopFrame()
+            }
+            ; M1：真实传播途中，中间容器完成仍执行其 HandleControlType（OnCompare:686-687 等）；
+            ; 调试弹帧须镜像，否则隔层控制类型（如 分支-跳出）永久丢失
+            if (f.controlType != "" && f.controlType != "无")
+                HandleControlType(MySoftData.SpecialTableItem, 1, f.controlType)
+            ; N3（QA ISSUE-1）：合法消费点（CompleteTopFrame/H2）都在调用本助手前读+清标志，
+            ; 此处是唯一「无消费点」的裸置位——真身中该标志由紧邻块级 for 立即消费
+            ; （MacroUtil:94-96），弹帧 unwind 本身就是那次消费的镜像 → 置位后立即清除，
+            ; 严禁残留到下一帧结算（否则跨帧 unwind 会多弹一层/误终止循环）。
+            this._ClearFlags()
+        }
+    }
+
+    ; 循环-跳过本轮：弹出至最近 Loop 帧（含），进入其下一轮。
+    _SkipToNearestLoopIteration() {
+        loop {
+            if (this.DebugStack.Length == 0) {
+                this.EndDebugRun()
+                return
+            }
+            f := this.DebugStack.Pop()
+            if (f.kind == "Loop")
+                return this._NextLoopIteration(f)
+            ; M1：同 _PopToNearestLoop，镜像中间容器的 HandleControlType
+            if (f.controlType != "" && f.controlType != "无")
+                HandleControlType(MySoftData.SpecialTableItem, 1, f.controlType)
+            ; N3：同 _PopToNearestLoop——置位后立即清除，防止残留污染下一帧结算
+            this._ClearFlags()
+        }
+    }
+
+    ; 正常回落：回「容器所在块」的下一条；容器是该块末尾 → 结算父帧
+    _ResumeAfterFrame(frame) {
+        if (frame.returnNextId) {
+            this._Goto(frame.returnNextId)
+            return
+        }
+        return this.CompleteTopFrame()
+    }
+
+    ; 循环下一轮：严格镜像真身 OnLoop（MacroUtil:896-919）的轮内次序——
+    ;   ①计数边界：loop Value 至多 Value 轮，第 N+1 轮不存在 → 不写「循环次数」、不判条件，直接回落
+    ;   ②先写 循环次数:=candidate（H1 修复：真身每轮「先写 A_Index → 再判条件」，
+    ;     条件引用 {循环次数} 时必须看到本轮序号；旧实现先判后写 → 恒多跑一轮）
+    ;   ③判条件（复用真身 GetLoopState）；失败 → 停在 candidate（真身失败轮同样保留该值，L1 同步对齐）
+    ;   ④通过 → iterIndex:=candidate、重新压帧、下潜执行本轮体
+    ; 必须重新 Push(frame)：本帧在 CompleteTopFrame 中已被弹出，若不再入栈，
+    ; 体末再次 CompleteTopFrame 会误 Pop 父帧。
+    _NextLoopIteration(frame) {
+        candidate := frame.iterIndex + 1
+        if (!frame.infinite && candidate > frame.loopCount)
+            return this._ResumeAfterFrame(frame)
+        item := this._SpecialItem()
+        if (item && IsObject(item.VariableMap) && item.VariableMap.Has("循环次数"))
+            item.VariableMap["循环次数"] := candidate
+        if (!this._EvalLoopCondition(frame))
+            return this._ResumeAfterFrame(frame)
+        frame.iterIndex := candidate
+        this.DebugStack.Push(frame)          ; 重新入栈：本帧继续追踪下一轮
+        first := this._FirstExecChild(frame.branchNodeId)
+        if (!first) {                        ; 体结构异常/无内容 → 安全回落，勿递归 CompleteTopFrame
+            this.DebugStack.Pop()
+            return this._ResumeAfterFrame(frame)
+        }
+        this._Goto(first)
+    }
+
+    ; 重判循环条件：复用运行时 GetLoopState（MacroUtil.ahk，一行不改）
+    ; 被 _NextLoopIteration 调用；cmd 传 frame.serial（命令名首段）、index 恒为 1，
+    ; 与 OnLoop 内 GetLoopState(tableItem, cmd, index, Data) 等价。
+    _EvalLoopCondition(frame) {
+        try {
+            Data := GetMacroCMDData(frame.serial)
+            return GetLoopState(MySoftData.SpecialTableItem, frame.serial, 1, Data)
+        } catch {
+            return false
+        }
+    }
+
+    ; 结束调试运行：清状态 + 非模态提示（解 G12，不用模态 MsgBox）
+    EndDebugRun() {
+        this.ResetDebugState()
+        Toast.Show(GetLang("单步运行结束"))
+    }
+
+    ; 「继续」(F5)：到下一断点；无断点 → 跑到宏结束（IDE 语义，删去旧 F7 的零断点早退）。
+    ; F1：起始/上次停留节点即使本身是断点，也先执行一步 —— 否则连按会在同一断点原地复停。
+    ; 走步入引擎逐条执行；maxSteps 兜底防止异常宏卡死。
+    ContinueRun() {
+        tableItem := MySoftData.SpecialTableItem
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+            return
+        maxSteps := 100000
+        steps := 0
+        deadline := A_TickCount + 120000            ; V2：2 分钟硬上限（继续=跑到断点，批量执行请用 Ctrl+F5）
+        ; 无会话 → 定位起点（=IDE F5 启动）
+        if (this.DebugItemID == 0) {
+            MyCMDTipGui.Hide()
+            id := this.FindDebugStartItem()
+            if (!id)
+                id := this.MacroTreeViewCon.GetNext(0)
+            if (!id) {
+                Toast.Show(GetLang("无可运行指令"))
+                return
+            }
+            this._Goto(id)
+        }
+        this._ClearFlags()                          ; V3：清上次运行残留控制标志（Kill 强杀时 OnLoop 未消费 → 脏标志误读）
+        this.DoDebugStep()                          ; F1：先执行一步保进度
+        loop {
+            if (++steps > maxSteps) {
+                this.ResetDebugState()
+                Toast.Show(GetLang("调试步骤过多，已退出"))
+                return
+            }
+            if (A_TickCount > deadline) {           ; V2：时间兜底（无人值守冻结逃生）
+                this.ResetDebugState()
+                Toast.Show(GetLang("调试运行超时，已退出"))
+                return
+            }
+            cur := this.DebugItemID
+            if (!cur)                               ; 宏结束（EndDebugRun 已清态）
+                return
+            if (this._IsSkippable(this._RawText(cur))) {   ; 不可执行项 → 只推进
+                this.AdvanceToNext()
+                continue
+            }
+            if (this.MacroTreeViewCon.IsBreakPoint(cur))   ; 新抵达断点 → 停在此（下次执行）
+                return
+            this.DoDebugStep()                      ; 继续执行一步（容器则步入）
+        }
+    }
+
+    ; 步入（F11）：进入容器分支（=旧 F6 语义，零算法改动）
+    StepInto() {
+        this.DoDebugStep(true)
+    }
+
+    ; 步进（F10）：不进入容器，整体真实执行（into=false → 不给 hook 置 active，容器整段运行）
+    StepOver() {
+        this.DoDebugStep(false)
+    }
+
+    ; 步出（Shift+F11）：跑完/离开当前帧再停（字面帧退出，Q-B）。into=false：不调试嵌套容器内部。
+    StepOut() {
+        tableItem := MySoftData.SpecialTableItem
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+            return
+        if (this.DebugItemID == 0) {
+            Toast.Show(GetLang("请先开始调试"))
+            return
+        }
+        depth := this.DebugStack.Length
+        if (depth == 0) {                           ; 顶层无帧可出
+            Toast.Show(GetLang("已在顶层，运行到结束"))
+            return this.ContinueRun()
+        }
+        maxSteps := 100000
+        steps := 0
+        deadline := A_TickCount + 120000            ; V2：时间兜底（无限循环步出防冻结）
+        loop {
+            if (++steps > maxSteps) {
+                this.ResetDebugState()
+                Toast.Show(GetLang("调试步骤过多，已退出"))
+                return
+            }
+            if (A_TickCount > deadline) {
+                this.ResetDebugState()
+                Toast.Show(GetLang("调试运行超时，已退出"))
+                return
+            }
+            this.DoDebugStep(false)                 ; 只关心当前帧何时结束
+            if (this.DebugStack.Length < depth)     ; 已离开当前帧 → 停
+                return
+            if (this.DebugItemID == 0)              ; 宏结束（EndDebugRun 已清态）
+                return
+        }
+    }
+
+    ; 运行到光标处（Ctrl+F10）：跑到 CurItemID；到达即停（不执行目标，等价 IDE 停在该行前）
+    RunToCursor() {
+        tableItem := MySoftData.SpecialTableItem
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+            return
+        target := this.CurItemID
+        if (!target) {
+            Toast.Show(GetLang("请先选中要运行的指令"))
+            return
+        }
+        try t := this.MacroTreeViewCon.GetText(target)
+        catch {
+            Toast.Show(GetLang("目标指令已失效"))
+            return
+        }
+        if (t == "") {                              ; V1：死 id 适配器返回 "" 不抛错 → 显式判死
+            Toast.Show(GetLang("目标指令已失效"))
+            return
+        }
+        ; 🚫/⎖ 永被跳过 → 预拒绝（不启动）
+        if (SubStr(t, 1, 2) == "🚫" || SubStr(t, 1, 1) == "⎖") {
+            Toast.Show(GetLang("该指令不可作为运行目标"))
+            return
+        }
+        ; 无会话 → 定位起点
+        if (this.DebugItemID == 0) {
+            MyCMDTipGui.Hide()
+            id := this.FindDebugStartItem()
+            if (!id)
+                id := this.MacroTreeViewCon.GetNext(0)
+            if (!id) {
+                Toast.Show(GetLang("无可运行指令"))
+                return
+            }
+            this._Goto(id)
+        }
+        this._ClearFlags()                          ; V3：同 ContinueRun，清残留控制标志
+        if (this.DebugItemID == target) {           ; Q-D：原地不动
+            Toast.Show(GetLang("已停在光标处"))
+            return
+        }
+        maxSteps := 100000
+        steps := 0
+        deadline := A_TickCount + 120000            ; V2：时间兜底
+        loop {
+            if (++steps > maxSteps) {
+                this.ResetDebugState()
+                Toast.Show(GetLang("调试步骤过多，已退出"))
+                return
+            }
+            if (A_TickCount > deadline) {
+                this.ResetDebugState()
+                Toast.Show(GetLang("调试运行超时，已退出"))
+                return
+            }
+            cur := this.DebugItemID
+            if (!cur) {                             ; 宏结束/跨分支/被删
+                Toast.Show(GetLang("未到达光标处，已运行到结束"))
+                return
+            }
+            if (this._IsSkippable(this._RawText(cur))) {   ; 不可执行项 → 只推进
+                this.AdvanceToNext()
+                continue
+            }
+            if (cur == target)                      ; ★到达即停（不执行）
+                return
+            this.DoDebugStep()                      ; 步入语义：保证分支内目标可达
+        }
+    }
+
+    ; 深度遍历整棵逻辑树，收集带断点（debugBp）节点的命令签名，规范化为 ",sig1,sig2,"
+    GetTreeBreakpoints() {
+        sigs := []
+        this._CollectBpSigs(0, &sigs)
+        if (sigs.Length == 0)
+            return ""
+        out := ","
+        for s in sigs
+            out .= s ","
+        return out
+    }
+
+    _CollectBpSigs(itemID, &sigs) {
+        try
+            childID := this.MacroTreeViewCon.GetChild(itemID)
+        catch
+            return
+        while (childID) {
+            t := this._RawText(childID)
+            if (t != "" && SubStr(t, 1, 1) != "⎖" && this.MacroTreeViewCon.IsBreakPoint(childID)) {
+                sig := BpSig(t)
+                if (sig != "" && !this._BpSigIn(sigs, sig))
+                    sigs.Push(sig)
+            }
+            this._CollectBpSigs(childID, &sigs)
+            try
+                childID := this.MacroTreeViewCon.GetNext(childID)
+            catch
+                break
+        }
+    }
+
+    _BpSigIn(sigs, sig) {
+        for s in sigs
+            if (s == sig)
+                return true
+        return false
+    }
+
+    ; 树重建后按断点串重放标记（签名即身份；命中则置节点 debugBp）
+    _ApplyBreakpoints(bpStr) {
+        if (bpStr == "")
+            return
+        this._ApplyBpRecurse(0, bpStr)
+    }
+
+    _ApplyBpRecurse(itemID, bpStr) {
+        try
+            childID := this.MacroTreeViewCon.GetChild(itemID)
+        catch
+            return
+        while (childID) {
+            t := this._RawText(childID)
+            if (t != "" && SubStr(t, 1, 1) != "⎖") {
+                sig := BpSig(t)
+                if (sig != "" && BpStrHas(bpStr, sig))
+                    this.MacroTreeViewCon.SetBreakPoint(childID, true)
+            }
+            this._ApplyBpRecurse(childID, bpStr)
+            try
+                childID := this.MacroTreeViewCon.GetNext(childID)
+            catch
+                break
+        }
+    }
+
+    ; 断点变更：刷新本地缓存 + 通知宿主写回（侧栏宿主 → _WriteSideTreeBreakpoints）
+    _NotifyBpChanged() {
+        bpStr := this.GetTreeBreakpoints()
+        this._bpStr := bpStr
+        if (IsObject(this.OnBpChanged))
+            try this.OnBpChanged.Call(bpStr)
+    }
+
+    ; 单步一次：定位 → 跳过不可执行 → 执行一步（into 语义见阶段3）→ 推进
+    ; into=true（步入 F11）：容器被钩子拦截 → 下潜分支
+    ; into=false（步进 F10 / 步出 / 继续内部推进）：不给 hook 置 active → 容器整体真实执行（天然 Step Over）
+    DoDebugStep(into := true) {
+        tableItem := MySoftData.SpecialTableItem
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+            return
+        ; 阶段1: 定位（首次或终止后，查找⭐起点或第一项）
+        if (this.DebugItemID == 0) {
+            MyCMDTipGui.Hide()
+            this.DebugItemID := this.FindDebugStartItem()
+            if (!this.DebugItemID)
+                this.DebugItemID := this.MacroTreeViewCon.GetNext(0)
+            this._ClearFlags()                      ; V3：清上次运行残留控制标志
+        }
+        if (!this.DebugItemID)
+            return
+        try
+            CurCMD := this.MacroTreeViewCon.GetText(this.DebugItemID)
+        catch {
+            this.EndDebugRun()
+            return
+        }
+        if (CurCMD == "") {                         ; V1：死 id 适配器返回 "" 不抛错 → 显式判死
+            this.EndDebugRun()
+            return
+        }
+        ; 阶段2: 跳过不可执行项（🚫禁用和⎖容器配置），自动推进不消耗步数
+        while (SubStr(CurCMD, 1, 2) == "🚫" || SubStr(CurCMD, 1, 1) == "⎖") {
+            this.AdvanceToNext()
+            if (!this.DebugItemID)
+                return
+            try
+                CurCMD := this.MacroTreeViewCon.GetText(this.DebugItemID)
+            catch {
+                this.EndDebugRun()
+                return
+            }
+            if (CurCMD == "") {                     ; V1：死 id 判死（同上）
+                this.EndDebugRun()
+                return
+            }
+        }
+        ; 阶段3: 标记当前位置 → 激活钩子（active=into）→ 执行单条
         this.MarkCurrentPosition(this.DebugItemID)
+        hook := ""
+        try {
+            ; F8：钩子建立/激活一并纳入 try，避免 _EnsureDebugHook 异常外抛
+            hook := this._EnsureDebugHook()
+            if (IsObject(hook)) {
+                hook.recorded := false            ; ★每步复位，杜绝上一步残留
+                hook.containerId := this.DebugItemID
+                hook.active := into               ; true=步入；false=步进（不拦截→整体执行）
+            }
+            CleanCMD := CmdStripCurPos(CmdStripDebug(CurCMD))
+            ; 还原格式化的手柄键名后执行
+            CleanCMD := MySoftData.ParseCmdJoyDisplay(CleanCMD)
+            CurLangCMD := GetLangMacro(CleanCMD, 2)
+            OnTriggerSepcialItemMacro(CurLangCMD)
+        } catch {
+            ; 兜底契约：异常即关钩子 + 清标志 + 退出调试（宁可退出，绝不继续不一致状态）
+            if (IsObject(hook))
+                hook.active := false
+            this._ClearFlags()
+            this.ResetDebugState()
+            Toast.Show(GetLang("调试状态异常，已退出调试"))
+            return
+        }
+        if (IsObject(hook))
+            hook.active := false
+        ; H2：into=false（步进/步出）整段真实执行时，内部容器的 ControlType 可能置位
+        ; 循环-跳出/循环-跳过本轮——真身语义下该标志传播到最近的真实 Loop 边界消费
+        ; （OnLoop:881-888/911-918），而调试态该边界是 DebugStack 里的 Loop 帧，
+        ; 单条执行无人消费 → 残留污染后续帧结算（误弹栈/提前 EndDebugRun）。
+        ; 就地结算：按标志语义弹到最近 Loop 帧（跳出/进下一轮），等价真身 OnLoop 边界。
+        if (!into) {
+            flags := this._Flags()
+            if (flags.brk || flags.skip) {
+                this._ClearFlags()
+                if (this.DebugStack.Length > 0)
+                    return flags.brk ? this._PopToNearestLoop() : this._SkipToNearestLoopIteration()
+                ; 栈空（顶层步进）：真身会在宏级消费（MacroUtil:39-46），调试态无结算点，就地清掉防残留
+            }
+        }
+        ; 阶段4: 按 hook.recorded 分叉——容器被拦截则步入，否则推进到下一项
+        if (IsObject(hook) && hook.recorded) {
+            this._EnterBranchFromHook()
+            return
+        }
+        this.AdvanceToNext()
+    }
+
+    ; 推进到下一个可执行位置；同级耗尽时结算栈顶帧（栈空则结束）
+    AdvanceToNext() {
+        ; V1：当前节点已被删除（死 id）时 GetNext 会误判「体末」→ 显式判死退出
+        try {
+            if (this.MacroTreeViewCon.GetText(this.DebugItemID) == "") {
+                this.EndDebugRun()
+                return
+            }
+        } catch {
+            this.EndDebugRun()
+            return
+        }
+        try
+            nextID := this.MacroTreeViewCon.GetNext(this.DebugItemID)
+        catch {
+            this.EndDebugRun()
+            return
+        }
+        if (nextID) {
+            this.DebugItemID := nextID
+            this.MarkCurrentPosition(nextID)
+            return
+        }
+        this.CompleteTopFrame()
     }
 
     ; 递归遍历整个TreeView（含子分支），查找带⭐的调试起点项
@@ -2588,6 +3306,36 @@ class MacroEditGui {
         return 0
     }
 
+    ; 解 G10：清除整树中除 keepItemID 外的所有调试起点标记（▶/⭐），保证起点全局唯一
+    ClearOtherDebugStarts(keepItemID) {
+        ; 守卫：keepItemID 为空/0 时不清（避免「清空全部 ▶ 且不回设」的边界）
+        if (!keepItemID)
+            return
+        this._ClearDebugStartsInChildren(0, keepItemID)
+    }
+
+    ; 递归清除 parentID 子树内所有节点的调试起点标记（保留 keepItemID 自身）
+    _ClearDebugStartsInChildren(parentID, keepItemID) {
+        try
+            childID := this.MacroTreeViewCon.GetChild(parentID)
+        catch
+            return
+        while (childID) {
+            try {
+                text := this.MacroTreeViewCon.GetText(childID)
+                if (childID != keepItemID && text != "" && CmdIsDebug(text))
+                    this.MacroTreeViewCon.Modify(childID, , CmdStripDebug(text))
+            } catch {
+                ; 单节点异常不阻断整树遍历
+            }
+            this._ClearDebugStartsInChildren(childID, keepItemID)
+            try
+                childID := this.MacroTreeViewCon.GetNext(childID)
+            catch
+                break
+        }
+    }
+
     InitTreeView(MacroStr) {
         this.ResetDebugState()
         this.ClearMultiSelection()
@@ -2597,12 +3345,16 @@ class MacroEditGui {
         this.MacroTreeViewCon.Delete()
         this.LastItemID := 0
         for cmdStr in cmdArr {
+            ; 幂等迁移：历史版本曾把当前位置标记 → 写进宏串，这里统一清除让老配置自愈
+            cmdStr := CmdStripCurPos(cmdStr)
             iconStr := this.GetCmdIconStr(cmdStr)
             displayStr := MySoftData.FormatCmdJoyDisplay(cmdStr)
             root := this.MacroTreeViewCon.Add(displayStr, 0, iconStr)
             this.LastItemID := root
             this.TreeAddBranch(root, cmdStr)
         }
+        ; 树重建后按缓存断点串重放标记（Render 前设字段，Render 读字段渲染 Brk_）
+        this._ApplyBreakpoints(this._bpStr)
         this.MacroTreeViewCon.Opt("+Redraw")
     }
 
@@ -2617,6 +3369,8 @@ class MacroEditGui {
             subItem := this.MacroTreeViewCon.GetChild(itemID)
         }
         this.TreeAddBranch(itemID, CommandStr)
+        ; F5：增量重建子节点后按缓存断点串重放 Brk_ 标记（否则编辑容器后其子节点断点视觉丢失）
+        this._ApplyBreakpoints(this._bpStr)
         ; 不再 TreeExpand：新节点默认 expanded，增量增删已呈现完整分支，无需全量重建
     }
 
@@ -2711,6 +3465,8 @@ class MacroEditGui {
 
         cmdArr := SplitMacro(CommandStr)
         for cmdStr in cmdArr {
+            ; 幂等迁移：清除历史遗留在分支数据里的当前位置标记 →
+            cmdStr := CmdStripCurPos(cmdStr)
             iconStr := this.GetCmdIconStr(cmdStr)
             displayStr := MySoftData.FormatCmdJoyDisplay(cmdStr)
             subRoot := this.MacroTreeViewCon.Add(displayStr, root, iconStr)
@@ -2874,6 +3630,103 @@ class MacroEditGui {
         this._NotifyMacroChanged()
     }
 
+    ; ==================== 跳过指令切换（复用 🚫 标记，IDE 式注释） ====================
+
+    ; Ctrl+/：切换选中项的 🚫。语义=全有或全无（全部已 🚫 → 全部取消；否则全部加 🚫）。
+    ; 单条走同一函数（ids=[CurItemID]），与右键「跳过指令」同源。
+    ; 关键：整批就地 Modify(id,,"text")（id 全程稳定），末尾一次性回写分支父；
+    ;      禁止在此批量路径调用 OnModifyCmd(容器会 RefreshTree → 后代 id 失效，见 R5)。
+    ToggleSkipSelected() {
+        ids := this.GetMultiSelectedItems()
+        if (ids.Length == 0 && this.CurItemID)
+            ids.Push(this.CurItemID)
+        if (ids.Length == 0)
+            return
+        single := (ids.Length == 1)
+        targets := [], skipCfg := 0, skipDebug := 0, skipBranch := 0
+        condPrefix := GetLang("条件")
+        condPrefixLen := StrLen(condPrefix)
+        for id in ids {
+            raw := this.MacroTreeViewCon.GetText(id)
+            clean := CmdStripCurPos(raw)              ; 仅剥行首 →，保留 ▶/⭐/🚫（与 case"Skip" 一致）
+            if (SubStr(clean, 1, 1) == "⎖") {         ; 配置行不可跳过
+                skipCfg += 1
+                continue
+            }
+            if (CmdIsDebug(clean)) {                   ; ⭐/▶ 调试起点不可跳过
+                skipDebug += 1
+                continue
+            }
+            ; V5：分支容器节点（真/假/循环体/条件：…）不是指令，加 🚫 只会污染显示
+            ; （数据侧有 SaveCommandData 的 fileMap 守卫兜底不落盘，但 UI 混乱且该次编辑静默丢失）
+            if (clean == GetLang("真") || clean == GetLang("假") || clean == GetLang("循环体")
+                || (condPrefix != "" && SubStr(clean, 1, condPrefixLen) == condPrefix)) {
+                skipBranch += 1
+                continue
+            }
+            targets.Push({ id: id, clean: clean })
+        }
+        ; 不可跳过项策略：单条沿用「调试起点」MsgBox 拒绝；批量跳过该行、末尾 Toast 汇总
+        if (targets.Length == 0) {
+            if (skipDebug > 0) {
+                if (single)
+                    MsgBox(GetLang("调试起点不能跳过"), "", "Owner" this.Gui.Hwnd)
+                else
+                    Toast.Show(GetLang("调试起点不能跳过"))
+            }
+            else if (skipBranch > 0)
+                Toast.Show(GetLang("该节点不支持跳过"))
+            else
+                Toast.Show(GetLang("无可跳过的指令"))
+            return
+        }
+        allSkipped := true
+        for t in targets
+            if (SubStr(t.clean, 1, 2) != "🚫") {
+                allSkipped := false
+                break
+            }
+        this.ResetDebugState()                         ; 编辑即结束调试（与 OnModifyCmd 一致）
+        this._PushUndo()                               ; ★整批一次撤销（先于 BeginUndoBatch 捕获快照）
+        this._BeginUndoBatch()
+        for t in targets {
+            newText := allSkipped ? SubStr(t.clean, 3) : "🚫" t.clean
+            this.MacroTreeViewCon.Modify(t.id, , MySoftData.FormatCmdJoyDisplay(newText))   ; 就地改文本，id 不变
+        }
+        this._EndUndoBatch()
+        this._CommitSkipEdits(targets)
+        this._NotifyMacroChanged()
+        if (skipDebug > 0) {
+            if (single)
+                MsgBox(GetLang("调试起点不能跳过"), "", "Owner" this.Gui.Hwnd)
+            else
+                Toast.Show(GetLang("调试起点不能跳过"))
+        }
+        else if (skipBranch > 0)
+            Toast.Show(GetLang("该节点不支持跳过"))
+        else if (skipCfg > 0)
+            Toast.Show(GetLang("配置文件行已跳过"))
+    }
+
+    ; 批量跳过后的分支回写：把每个「被改节点的分支父」的新宏串写回其真实命令（镜像 OnModifyCmd 末尾）。
+    ; 根级被改节点由 _NotifyMacroChanged 的 GetMacroStr 覆盖，此处跳过。
+    _CommitSkipEdits(nodes) {
+        parents := Map()
+        for n in nodes {
+            p := this.MacroTreeViewCon.GetParent(n.id)
+            if (p == 0)
+                continue                               ; 根级：由 _NotifyMacroChanged 的 GetMacroStr 覆盖
+            parents[p] := true                         ; 分支父（真/假/循环体/条件）
+        }
+        for p in parents {
+            grand := this.MacroTreeViewCon.GetParent(p)
+            if (grand == 0)
+                continue                               ; 防御
+            realCmd := this.MacroTreeViewCon.GetText(grand)
+            this.SaveCommandData(realCmd, this.GetTreeMacroStr(p), p)     ; 镜像 OnModifyCmd 末尾
+        }
+    }
+
     ;修改指令
     OnModifyCmd(CommandStr) {
         this._PushUndo()
@@ -3012,6 +3865,9 @@ class MacroEditGui {
             this.CurItemID := 0
             this.ClearMultiSelection()
             this._NotifyMacroChanged()
+            ; T4：多选删除后剪掉被删命令的幽灵断点签名
+            if (this._bpAllowed)
+                this._NotifyBpChanged()
             return
         }
 
@@ -3078,7 +3934,7 @@ class MacroEditGui {
         ; 如果 selectedItems 是容器內普通指令，則需要把剩餘宏重新寫回該容器。
         if (parentIsContainer) {
             macroStr := this.GetTreeMacroStr(parentID)
-            isCondi := SubStr(StrReplace(parentText, "→", ""), 1, StrLen(GetLang("条件"))) == GetLang("条件")
+            isCondi := SubStr(CmdStripCurPos(parentText), 1, StrLen(GetLang("条件"))) == GetLang("条件")
             macroStr := macroStr == "" && isCondi ? "空条件" : macroStr
             this.SaveCommandData(realCommandStr, macroStr, parentID)
         }
@@ -3087,6 +3943,9 @@ class MacroEditGui {
         this.CurItemID := 0
         this.ClearMultiSelection()
         this._NotifyMacroChanged()
+        ; T4：删除容器分支后剪掉被删命令的幽灵断点签名
+        if (this._bpAllowed)
+            this._NotifyBpChanged()
     }
 
     ; 單一指令的刪除邏輯。容器節點不能直接 Delete，只能清空它所代表的分支。
@@ -3102,6 +3961,9 @@ class MacroEditGui {
         if (ParentID == 0) {
             if (!isContainer)
                 this.MacroTreeViewCon.Delete(itemID)
+            ; T4：根层早退分支同样剪枝，避免根层被删命令残留幽灵断点签名
+            if (this._bpAllowed)
+                this._NotifyBpChanged()
             return
         }
 
@@ -3117,7 +3979,7 @@ class MacroEditGui {
             macroStr := this.GetTreeMacroStr(NodeItemID)
 
             NodeItemText := this.MacroTreeViewCon.GetText(NodeItemID)
-            isCondi := SubStr(StrReplace(NodeItemText, "→", ""), 1, StrLen(GetLang("条件"))) == GetLang("条件")
+            isCondi := SubStr(CmdStripCurPos(NodeItemText), 1, StrLen(GetLang("条件"))) == GetLang("条件")
             macroStr := macroStr == "" && isCondi ? "空条件" : macroStr
         }
 
@@ -3127,6 +3989,9 @@ class MacroEditGui {
         if (isContainer)
             this.RefreshTree(RealItemID)
         this._NotifyMacroChanged()
+        ; T4：删除后重新采集「当前仍被标记」的签名写回宿主，剪掉已删命令的幽灵签名
+        if (this._bpAllowed)
+            this._NotifyBpChanged()
     }
 
     ;插入指令
@@ -3240,7 +4105,7 @@ class MacroEditGui {
             catch
                 anchorID := 0
         }
-        anchorText := StrReplace(anchorText, "→", "")
+        anchorText := CmdStripCurPos(anchorText)
 
         ; 無有效錨點（空樹或刪光後）：逐條追加到根層
         if (!anchorID) {
@@ -3412,6 +4277,25 @@ class MacroEditGui {
         this._NotifyMacroChanged()
     }
 
+    ; F3：分支体子编辑器「确定」入口 —— 先回写分支体宏文本（同 OnSubNodeEdit），
+    ; 再把该子编辑器本次新增的断点并入父树（父树已 RefreshTree，新节点就位，标记可命中）。
+    _OnSubEditorSure(nodeItemID, macroStr, srcEd) {
+        this.OnSubNodeEdit(nodeItemID, macroStr)
+        if (IsObject(srcEd))
+            this._IngestChildBreakpoints(srcEd.GetTreeBreakpoints())
+    }
+
+    ; F3：把「子编辑器（分支体）」新增的断点并入本编辑器树并落盘/上报。
+    ; 采用「并集」语义：只新增命中签名的标记，绝不覆盖其他分支已有签名（呼应扁平签名模型）。
+    _IngestChildBreakpoints(bpStr) {
+        if (bpStr == "")
+            return
+        this._ApplyBreakpoints(bpStr)
+        this._bpStr := this.GetTreeBreakpoints()
+        if (IsObject(this.OnBpChanged))
+            try this.OnBpChanged.Call(this._bpStr)
+    }
+
     ExpandAll() {
         this.MacroTreeViewCon.Opt("-Redraw")
         rootItemID := this.MacroTreeViewCon.GetNext(0)
@@ -3457,8 +4341,11 @@ class MacroEditGui {
         rootItemID := this.MacroTreeViewCon.GetChild(ItemID)
         while (rootItemID) {
             cmdStr := this.MacroTreeViewCon.GetText(rootItemID)
-            if (cmdStr != "" && SubStr(cmdStr, 1, 1) != "⎖")
+            if (cmdStr != "" && SubStr(cmdStr, 1, 1) != "⎖") {
+                ; 剥离当前位置标记 →（纯瞬态，不进入宏串）；保留 ▶ 供 F5 起点切片使用（解 G1）
+                cmdStr := CmdStripCurPos(cmdStr)
                 macroStr .= MySoftData.ParseCmdJoyDisplay(cmdStr) ","
+            }
 
             rootItemID := this.MacroTreeViewCon.GetNext(rootItemID)
         }
@@ -3688,7 +4575,7 @@ class MacroEditGui {
                 return
 
             itemText := this.MacroTreeViewCon.GetText(sourceItem)
-            cleanText := StrReplace(itemText, "→", "")
+            cleanText := CmdStripCurPos(itemText)
 
             ; ⎖ 開頭的是資訊/控制節點，不參與多選。
             ; 真／假／循環體／條件是可選取的容器節點。
@@ -3750,7 +4637,7 @@ class MacroEditGui {
                         mode := 1
                     } else {
                         itemText := this.MacroTreeViewCon.GetText(targetItem)
-                        cleanText := StrReplace(itemText, "→", "")
+                        cleanText := CmdStripCurPos(itemText)
 
                         if (SubStr(cleanText, 1, 1) == "⎖" || (dragInfo.isMove && targetItem == dragInfo.sourceItem)) {
                             mode := -1
@@ -3951,7 +4838,7 @@ class MacroEditGui {
     }
 
     IsContainerNode(itemText) {
-        cleanItemText := StrReplace(itemText, "→", "")
+        cleanItemText := CmdStripCurPos(itemText)
         isCondi := SubStr(cleanItemText, 1, StrLen(GetLang("条件"))) == GetLang("条件")
         return (
             cleanItemText == GetLang("真")
@@ -3965,7 +4852,7 @@ class MacroEditGui {
     _IsImmovableNode(itemText) {
         if (itemText == "")
             return true
-        clean := StrReplace(itemText, "→", "")
+        clean := CmdStripCurPos(itemText)
         if (SubStr(clean, 1, 1) == "⎖")
             return true
         return this.IsContainerNode(itemText)
