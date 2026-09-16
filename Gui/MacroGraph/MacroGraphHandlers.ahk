@@ -355,7 +355,7 @@ class MacroGraphHandlersMixin {
         return ""
     }
 
-    ; X/Y 坐标(可编辑下拉) 与 速度(文本框) 变更：写回 MMProFile.ini
+    ; X/Y 坐标(可编辑下拉) 与 速度(文本框) 变更：写回 MMProFile.toml
     _OnMMProField(id, field, state, ctrl, event) {
         data := this._MMProData(id)
         if (data == "")

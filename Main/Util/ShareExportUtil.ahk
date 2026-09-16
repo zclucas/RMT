@@ -1,8 +1,8 @@
 #Requires AutoHotkey v2.0
 
-; 选择性导出：把勾选的宏/模块重排成一份自洽的最小配置目录（旧版 MacroFile.ini 格式）
+; 选择性导出：把勾选的宏/模块重排成一份自洽的最小配置目录（MacroFile.toml 扁平数组布局）
 ; 依赖闭包复用 MergeUtil.CollectSourceConfigs（指令配置/变量都是 DataFileMap 序列码条目，含嵌套分支）
-; 导入端零改动：UnpackFile → OnRepairSetting(Compat* 补齐数组字段/升级格式) → CompatPath 自动改写图片路径
+; 导入端：UnpackFile → OnRepairSetting(Compat* 补齐数组字段) → CompatPath 自动改写图片路径
 class ShareExportUtil {
 
     ; 返回缺失依赖的序列号列表（顿号连接；空串=无缺失。不阻断导出）
@@ -28,7 +28,7 @@ class ShareExportUtil {
                 continue
             dataFile := MySoftData.DataFileMap[cmdType]
             SplitPath dataFile, &baseName
-            IniWrite(info["配置"], outDir "\" baseName, IniSection, serial)
+            CfgWrite(info["配置"], outDir "\" baseName, SettingSection, serial)
         }
         missingNames := []
         for serial, _ in serials {
@@ -40,8 +40,8 @@ class ShareExportUtil {
         if (DirExist(sourceDir "\Images"))
             DirCopy(sourceDir "\Images", outDir "\Images", true)
 
-        ; 3) 宏定义：写旧版 MacroFile.ini（π 分隔数组 + FoldInfo 模块分组）
-        this._WriteMacroFileIni(checkedItems, outDir)
+        ; 3) 宏定义：写 MacroFile.toml 扁平数组布局（π 分隔数组 + FoldInfo 模块分组）
+        this._WriteMacroFileFlatToml(checkedItems, outDir)
         return this._JoinName(missingNames)
     }
 
@@ -55,8 +55,8 @@ class ShareExportUtil {
         return out
     }
 
-    static _WriteMacroFileIni(checkedItems, outDir) {
-        macroFile := outDir "\MacroFile.ini"
+    static _WriteMacroFileFlatToml(checkedItems, outDir) {
+        macroFile := outDir "\MacroFile.toml"
 
         ; TabIndex → Symbol 映射
         symbolByIndex := Map()
@@ -83,18 +83,18 @@ class ShareExportUtil {
 
             tkArr := [], remarkArr := [], modeArr := [], macroArr := []
             for item in items {
-                tkArr.Push(this._IniSafe(item.TriggerKey))
-                remarkArr.Push(this._IniSafe(item.Remark))
+                tkArr.Push(this._FlatSafe(item.TriggerKey))
+                remarkArr.Push(this._FlatSafe(item.Remark))
                 modeArr.Push("1")
-                ; 旧格式用 ⫶ 承载换行
-                macroArr.Push(this._IniSafe(StrReplace(String(item.MacroStr), "`n", "⫶")))
+                ; 扁平格式用 ⫶ 承载换行
+                macroArr.Push(this._FlatSafe(StrReplace(String(item.MacroStr), "`n", "⫶")))
             }
 
-            IniWrite(this._JoinPi(modeArr), macroFile, IniSection, symbol "ModeArr")
-            IniWrite(this._JoinPi(tkArr), macroFile, IniSection, symbol "TKArr")
-            IniWrite(this._JoinPi(remarkArr), macroFile, IniSection, symbol "RemarkArr")
+            CfgWrite(this._JoinPi(modeArr), macroFile, SettingSection, symbol "ModeArr")
+            CfgWrite(this._JoinPi(tkArr), macroFile, SettingSection, symbol "TKArr")
+            CfgWrite(this._JoinPi(remarkArr), macroFile, SettingSection, symbol "RemarkArr")
             loop n
-                IniWrite(macroArr[A_Index], macroFile, IniSection, symbol "MacroArr" A_Index)
+                CfgWrite(macroArr[A_Index], macroFile, SettingSection, symbol "MacroArr" A_Index)
 
             ; 其余结构数组字段缺省即可：导入端 CompatCMD 按 ModeArr 长度补齐
 
@@ -121,13 +121,13 @@ class ShareExportUtil {
 
             if (spanArr.Length > 0) {
                 foldJson := this._BuildFoldJson(spanArr, remarkJsonArr)
-                IniWrite(foldJson, macroFile, IniSection, symbol "FoldInfo")
+                CfgWrite(foldJson, macroFile, SettingSection, symbol "FoldInfo")
             }
         }
     }
 
     ; π 是内部分隔符（U+03C0），正文里出现会破坏数组，替换为形近的「兀」
-    static _IniSafe(s) {
+    static _FlatSafe(s) {
         s := StrReplace(String(s), "π", "兀")
         s := StrReplace(s, "`r", "")
         return s

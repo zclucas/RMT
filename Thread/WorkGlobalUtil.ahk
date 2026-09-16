@@ -12,8 +12,8 @@ global MyMouseInfo := MouseWinData()
 ; Worker 无 UI，该函数为空操作
 SetToolTextDisplay(text) {
 }
-global IniFile := A_WorkingDir "\..\Setting\MainSettings.ini"
-global ThemesIniPath := A_WorkingDir "\..\Setting\themes.ini"
+global SettingFile := A_WorkingDir "\..\Setting\MainSettings.toml"
+global ThemesPath := A_WorkingDir "\..\Setting\themes.toml"
 global LangDir := A_WorkingDir "\..\Lang"
 
 global MyChineseOcr := 0  ; 懒加载：首次使用时才初始化

@@ -4,7 +4,7 @@
 ; 日志与错误设置（C 项阶段5）
 ; 独立窗口：日志级别 / warn 气泡开关 / error 错误中心开关
 ; 入口：主界面设置页「日志与错误」按钮
-; 保存：即时写 MainSoftData + LogUtil global + IniWrite 持久化
+; 保存：即时写 MainSoftData + LogUtil global + CfgWrite 持久化
 ; =====================================================================
 
 class LogSettingGui {
@@ -168,19 +168,19 @@ class LogSettingGui {
         MainSoftData.SysLogMinLevel := lv
         RMTLogSysMinLevel := lv
         this._curLevel := lv
-        IniWrite(lv, IniFile, IniSection, "SysLogMinLevel")
+        CfgWrite(lv, SettingFile, SettingSection, "SysLogMinLevel")
     }
 
     ; warn 气泡开关
     OnBubbleToggle(state, ctrl, event) {
         MainSoftData.LogWarnBubble := this.ui.Query("ChkLogWarnBubble") == "True"
-        IniWrite(MainSoftData.LogWarnBubble, IniFile, IniSection, "LogWarnBubble")
+        CfgWrite(MainSoftData.LogWarnBubble, SettingFile, SettingSection, "LogWarnBubble")
     }
 
     ; error 错误中心开关
     OnBadgeToggle(state, ctrl, event) {
         MainSoftData.LogErrorBadge := this.ui.Query("ChkLogErrorBadge") == "True"
-        IniWrite(MainSoftData.LogErrorBadge, IniFile, IniSection, "LogErrorBadge")
+        CfgWrite(MainSoftData.LogErrorBadge, SettingFile, SettingSection, "LogErrorBadge")
     }
 
     ; 业务日志开关（同步 LogUtil global + 持久化）
@@ -188,7 +188,7 @@ class LogSettingGui {
         global RMTLogBusinessEnabled
         MainSoftData.BusinessLog := this.ui.Query("ChkBusinessLog") == "True"
         RMTLogBusinessEnabled := MainSoftData.BusinessLog
-        IniWrite(MainSoftData.BusinessLog, IniFile, IniSection, "BusinessLog")
+        CfgWrite(MainSoftData.BusinessLog, SettingFile, SettingSection, "BusinessLog")
     }
 
     OnOkClick(state, ctrl, event) {

@@ -497,7 +497,7 @@ class RightClickMenuSettingGui {
     }
 
     OnConfirmClick(state := unset, ctrl := unset, event := unset) {
-        global IniFile, IniSection
+        global SettingFile, SettingSection
         ; 保存到 MainSoftData
         genStr := ""
         for i, k in this._generalActive {
@@ -530,9 +530,9 @@ class RightClickMenuSettingGui {
 
         ; 直接写入 ini，不需要等待全局保存
         try {
-            IniWrite(genStr,           IniFile, IniSection, "GeneralContextMenu")
-            IniWrite(branchStr,        IniFile, IniSection, "BranchContextMenu")
-            IniWrite(hasSharedCopy,    IniFile, IniSection, "SharedCopy")
+            CfgWrite(genStr,           SettingFile, SettingSection, "GeneralContextMenu")
+            CfgWrite(branchStr,        SettingFile, SettingSection, "BranchContextMenu")
+            CfgWrite(hasSharedCopy,    SettingFile, SettingSection, "SharedCopy")
         }
 
         this.Close()

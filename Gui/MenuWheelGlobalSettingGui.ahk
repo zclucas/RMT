@@ -215,9 +215,9 @@ class MenuWheelGlobalSettingGui {
         MainSoftData.MenuWheelSelectMode := this._selectMode
         MainSoftData.MenuWheelShowTooltip := this._showTooltip
         MainSoftData.MenuWheelScale := this._wheelScale
-        IniWrite(MainSoftData.FixedMenuWheel, IniFile, IniSection, "FixedMenuWheel")
-        IniWrite(MainSoftData.MenuWheelSelectMode, IniFile, IniSection, "MenuWheelSelectMode")
-        IniWrite(MainSoftData.MenuWheelShowTooltip, IniFile, IniSection, "MenuWheelShowTooltip")
-        IniWrite(MainSoftData.MenuWheelScale, IniFile, IniSection, "MenuWheelScale")
+        CfgWrite(MainSoftData.FixedMenuWheel, SettingFile, SettingSection, "FixedMenuWheel")
+        CfgWrite(MainSoftData.MenuWheelSelectMode, SettingFile, SettingSection, "MenuWheelSelectMode")
+        CfgWrite(MainSoftData.MenuWheelShowTooltip, SettingFile, SettingSection, "MenuWheelShowTooltip")
+        CfgWrite(MainSoftData.MenuWheelScale, SettingFile, SettingSection, "MenuWheelScale")
     }
 }

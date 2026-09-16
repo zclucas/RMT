@@ -463,7 +463,7 @@ class MacroGraphGui {
 
     _DefaultObj(cmdName) {
         if (cmdName == GetLang("间隔")) {
-            ; 阶段5：配置化（间隔<serial>_备注，参数存 IntervalFile.ini）
+            ; 阶段5：配置化（间隔<serial>_备注，参数存 IntervalFile.toml）
             serial := GetCMDSerialStr("间隔")
             data := IntervalData()
             data.SerialStr := serial
@@ -491,7 +491,7 @@ class MacroGraphGui {
             return this._MakeNode(CorrectRemark(serial, "0 0"))
         }
         if (IsMoveProCmd(cmdName)) {
-            ; 移动Pro 走 INI 持久化（参数存 MMProFile.ini，CurCMD 仅为序列码引用，与执行引擎一致）
+            ; 移动Pro 走 INI 持久化（参数存 MMProFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
             serial := GetCMDSerialStr(GetLangKey(cmdName))
             data := MMProData()
             data.SerialStr := serial
@@ -499,7 +499,7 @@ class MacroGraphGui {
             return this._MakeNode(serial)
         }
         if (IsDeltaMoveCmd(cmdName)) {
-            ; §20 增量移动：配置化（参数存 DeltaMoveFile.ini）
+            ; §20 增量移动：配置化（参数存 DeltaMoveFile.toml）
             serial := GetCMDSerialStr(GetLangKey(cmdName))
             data := DeltaMoveData()
             data.SerialStr := serial
@@ -507,7 +507,7 @@ class MacroGraphGui {
             return this._MakeNode(CorrectRemark(serial, "0 0"))
         }
         if (cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro")) {
-            ; 搜索/搜索Pro 走 INI 持久化（参数存 SearchFile.ini，CurCMD 仅为序列码引用，与执行引擎一致）
+            ; 搜索/搜索Pro 走 INI 持久化（参数存 SearchFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
             serial := GetCMDSerialStr(cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索")
             data := SearchData()
             data.SerialStr := serial
@@ -529,7 +529,7 @@ class MacroGraphGui {
             return this._MakeNode(serial)
         }
         if (cmdName == GetLang("RMT指令")) {
-            ; 阶段5：配置化（RMT指令<serial>_截图，参数存 RMTCMDFile.ini）
+            ; 阶段5：配置化（RMT指令<serial>_截图，参数存 RMTCMDFile.toml）
             serial := GetCMDSerialStr("RMT指令")
             data := RMTCMDData()
             data.SerialStr := serial

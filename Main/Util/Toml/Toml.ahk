@@ -1568,7 +1568,7 @@ class StringValueReaderWriter
 {
     static STRING_VALUE_READER_WRITER := StringValueReaderWriter()
     
-    static UNICODE_REGEX := Pattern.compile("\\[uU](.{4})")
+    static UNICODE_REGEX := Pattern.compile("\\[uU]([0-9a-fA-F]{4})")
     
     static specialCharacterEscapes := map('`b', "\b", '`t', "\t", '`n', "\n", '`f', "\f", '`r', "\r", '"', "\`"", '\', "\\")
     
@@ -1584,15 +1584,31 @@ class StringValueReaderWriter
     
     escapeUnicode(_in, _context)
     {
-        loop strlen(_in)
+        ; 批量转义。写入侧最大热点：原实现每个需转义字符调用一次 write，
+        ; 而 write 落到 StringBuilder/StringWriter 的「累加字符串」= 复制整个已累积内容，
+        ; 几十万字符、转义密度极高的值（紧凑 JSON）会退化成 O(n²)。
+        ; 改为原生 StrReplace 整体替换后只 write 一次：
+        ;   ① 反斜杠翻倍 —— 必须最先做，否则后面新引入的反斜杠会被二次翻倍；
+        ;   ② 双引号 → \"   —— 新引入的反斜杠在 ① 之后产生，不会再被处理；
+        ;   ③ 控制字符 → \x 形式 —— 同上。
+        ; 转义集合与 specialCharacterEscapes 完全一致（`b `t `n `f `r " \），
+        ; 输出与逐字符版逐字节相同。
+        if (_in == "")
+            return
+        static ESCAPE_SCAN := "[" Chr(8) Chr(9) Chr(10) Chr(12) Chr(13) '"' '\\' "]"
+        if !(regexmatch(_in, ESCAPE_SCAN))
         {
-            i := a_index - 1
-            codePoint := substr(_in, i + 1, 1)
-            if (ord(codePoint) < 93 && StringValueReaderWriter.specialCharacterEscapes.has(codePoint))
-                _context.write(StringValueReaderWriter.specialCharacterEscapes[codePoint])
-            else
-                _context.write(codePoint)
+            _context.write(_in)                 ; 整个值无需转义 → 一次写出
+            return
         }
+        s := strreplace(_in, '\', '\\', true)
+        s := strreplace(s, '"', '\"', true)
+        s := strreplace(s, "`r", '\r', true)
+        s := strreplace(s, "`n", '\n', true)
+        s := strreplace(s, "`t", '\t', true)
+        s := strreplace(s, "`b", '\b', true)
+        s := strreplace(s, "`f", '\f', true)
+        _context.write(s)
     }
     
     isPrimitiveType()
@@ -1604,16 +1620,34 @@ class StringValueReaderWriter
     {
         startIndex := index.incrementAndGet()
         endIndex := -1
-        i := index.get()
-        while (i < strlen(s))
+        ; 找结束引号：原实现逐字符循环（每字符一次 SubStr + 一次 AtomicInteger 方法调用），
+        ; 大配置（几十万字符）下是读入侧最大开销。改为 InStr 直接跳到下一个引号，
+        ; 仅在「引号前一个字符是反斜杠」时才继续往后找 —— 判定与原逐字符版等价。
+        ; 候选范围等于原循环 i 从 startIndex 到 len-1，即引号位置 startIndex+1 .. len。
+        len := strlen(s)
+        pos := 0
+        p := startIndex + 1
+        while (p <= len)
         {
-            ch := substr(s, i + 1, 1)
-            if (ch == '"' && substr(s, i, 1) != '\')
+            q := instr(s, '"', , p)
+            if (!q)
+                break
+            if (substr(s, q - 1, 1) != '\')
             {
-                endIndex := i
+                pos := q
                 break
             }
-            i := index.incrementAndGet()
+            p := q + 1
+        }
+        if (pos)
+        {
+            endIndex := pos - 1
+            index.set(endIndex)
+        }
+        else
+        {
+            ; 未终止：原循环结束时 index 停在 len（起点已在 len 之后则保持原值）
+            index.set(startIndex > len ? startIndex : len)
         }
         if (endIndex == -1)
         {
@@ -1635,6 +1669,11 @@ class StringValueReaderWriter
     
     replaceUnicodeCharacters(value)
     {
+        ; 快路径：绝大多数值不含 \uXXXX，直接返回，省掉每次构造 Matcher 的开销
+        ; （每个键/值的读、写各调用一次，几百个键就是上千次）
+        ; AHK 的 InStr 默认不区分大小写，\U 同样命中。
+        if (!instr(value, '\u'))
+            return value
         unicodeMatcher := StringValueReaderWriter.UNICODE_REGEX.matcher(value)
         while (unicodeMatcher.find())
             value := strreplace(value, unicodeMatcher.group(), chr(integer("0x" unicodeMatcher.group(1))))
@@ -1643,26 +1682,80 @@ class StringValueReaderWriter
     
     replaceSpecialCharacters(s)
     {
+        ; 批量反转义（读入侧最大热点：原逐字符扫描 + 字符串累加是 O(n²)）。
+        ; 用「占位符 + 原生 StrReplace」把迭代次数降到常数：
+        ;   ① 先把转义序列 \\ 换成占位字符（Chr(1)，正常 TOML 正文不会出现）；
+        ;   ② 再替换其余转义序列 —— 这些新产生的反斜杠不会再被 ① 处理；
+        ;   ③ 最后把占位符还原成单个反斜杠。
+        ; 顺序不可颠倒：若先把 \\ 换成 \ 再替换 \b/\n，D:\bak 这类路径会被二次吃掉
+        ;（\b → 退格符），run/搜索等配置里的路径会静默损坏。
+        ; 行为与逐字符版一致：无法识别的转义（含末尾孤立反斜杠）→ Java.Null()。
+        len := strlen(s)
+        if (len == 0)
+            return ""
+        if !instr(s, '\')
+            return s                      ; 无转义字符 → 原样返回（快路径）
+        ph := Chr(1)
+        if (instr(s, ph))                 ; 极罕见：正文含占位字符 → 退回逐字符扫描
+            return this.replaceSpecialCharactersSlow(s)
+        out := strreplace(s, '\\', ph, true)
+        out := strreplace(out, '\n', "`n", true)
+        out := strreplace(out, '\t', "`t", true)
+        out := strreplace(out, '\r', "`r", true)
+        out := strreplace(out, '\b', "`b", true)
+        out := strreplace(out, '\f', "`f", true)
+        out := strreplace(out, '\"', '"', true)
+        out := strreplace(out, '\/', '/', true)
+        ; 非法转义检测：把 \\ 成对换成占位符、并把合法转义全部展开之后，正文里若还剩反斜杠，
+        ; 只可能是「非法转义」或「末尾孤立反斜杠」（合法转义都不会产生反斜杠）→ 整体判无效。
+        ; 不能改用「正则直接找反斜杠 + 后续字符」的写法：正则无法感知配对，
+        ; D:\\zm 的第 2 个反斜杠、\\\\zm 的第 4 个反斜杠都会被误判为非法，
+        ; 所有含 Windows 路径的值（run/search 配置）会全部解析失败。
+        if (instr(out, '\'))
+            return Java.Null()
+        out := strreplace(out, ph, '\', true)
+        return out
+    }
+
+    replaceSpecialCharactersSlow(s)
+    {
+        ; 逐字符从左到右扫描（批量快路径的兜底，行为与批量版完全一致）
+        len := strlen(s)
+        out := ""
         i := 0
-        while (i < strlen(s) - 1)
+        while (i < len)
         {
             ch := substr(s, i + 1, 1)
-            next := substr(s, i + 2, 1)
-            if (ch == '\' && next == '\')
+            if (ch == '\')
+            {
                 i++
-            else if (ch == '\' && !(next == 'b' || next == 'f' || next == 'n' || next == 't' || next == 'r' || next == '"' || next == '\'))
-                return Java.Null()
+                if (i >= len)
+                    return Java.Null()
+                next := substr(s, i + 1, 1)
+                if (next == 'n')
+                    out .= "`n"
+                else if (next == 't')
+                    out .= "`t"
+                else if (next == 'r')
+                    out .= "`r"
+                else if (next == 'b')
+                    out .= "`b"
+                else if (next == 'f')
+                    out .= "`f"
+                else if (next == '"')
+                    out .= '"'
+                else if (next == '\')
+                    out .= '\'
+                else if (next == '/')
+                    out .= '/'
+                else
+                    return Java.Null()
+            }
+            else
+                out .= ch
             i++
         }
-        s := strreplace(s, "\n", "`n")
-        s := strreplace(s, '\"', '"')
-        s := strreplace(s, "\t", "`t")
-        s := strreplace(s, "\r", "`r")
-        s := strreplace(s, "\\", "\")
-        s := strreplace(s, "\/", "/")
-        s := strreplace(s, "\b", "`b")
-        s := strreplace(s, "\f", "`f")
-        return s
+        return out
     }
     
     write(value, _context)
@@ -1989,17 +2082,20 @@ class TomlParser
         line := AtomicInteger(1)
         _identifier := Java.Null()
         value := Java.Null()
+        errs := _results.errors
+        len := strlen(tomlString)      ; 提到循环外：原实现每轮都调一次 strlen
         i := index.get()
-        while (i < strlen(tomlString))
+        while (i < len)
         {
             c := substr(tomlString, i + 1, 1)
-            if _results.errors.hasErrors()
+            if errs.hasErrors()
                 break
+            ; isspace 即 Character.isWhitespace 本体，内联省掉每字符一次方法调用
             if (c == '#' && !inComment)
                 inComment := true
-            else if (!Character.isWhitespace(c) && !inComment && _identifier is Java.Null)
+            else if (!isspace(c) && !inComment && _identifier is Java.Null)
             {
-                id := IdentifierConverter.IDENTIFIER_CONVERTER.convert(tomlString, index, Context(, line, _results.errors))
+                id := IdentifierConverter.IDENTIFIER_CONVERTER.convert(tomlString, index, Context(, line, errs))
                 if (id != Identifier.INVALID)
                 {
                     if id.isKey()
@@ -2017,16 +2113,16 @@ class TomlParser
                 value := Java.Null()
                 line.incrementAndGet()
             }
-            else if (!inComment && !(_identifier is Java.Null) && _identifier.isKey() && value is Java.Null && !Character.isWhitespace(c))
+            else if (!inComment && !(_identifier is Java.Null) && _identifier.isKey() && value is Java.Null && !isspace(c))
             {
-                value := ValueReaders.VALUE_READERS.convert(tomlString, index, Context(_identifier, line, _results.errors))
+                value := ValueReaders.VALUE_READERS.convert(tomlString, index, Context(_identifier, line, errs))
                 if (value is Results.Errors)
-                    _results.errors.add(value)
+                    errs.add(value)
                 else
                     _results.addValue(_identifier.getName(), value, line)
             }
-            else if (!(value is Java.Null) && !inComment && !Character.isWhitespace(c))
-                _results.errors.invalidTextAfterIdentifier(_identifier, c, line.get())
+            else if (!(value is Java.Null) && !inComment && !isspace(c))
+                errs.invalidTextAfterIdentifier(_identifier, c, line.get())
             i := index.incrementAndGet()
         }
         return _results
@@ -2129,14 +2225,17 @@ class ValueReaders
     
     convert(value, index, _context)
     {
-        substring := substr(value, index.get() + 1)
+        ; canRead 最多只检查前 5 个字符（见各 Reader.canRead 的实现）。
+        ; 原实现对每个值都 substr 出「剩余全文」传给 canRead —— 几十万字符的文件里
+        ; 每个值复制一遍全文，是 O(n²)。判定只取短前缀，真正的解析仍传完整 value。
+        probe := substr(value, index.get() + 1, 8)
         for valueParser in ValueReaders.READERS
         {
-            if (valueParser.canRead(substring))
+            if (valueParser.canRead(probe))
                 return valueParser.read(value, index, _context)
         }
         errors := Results.Errors()
-        errors.invalidValue(_context.identifier.getName(), substring, _context.line.get())
+        errors.invalidValue(_context.identifier.getName(), substr(value, index.get() + 1), _context.line.get())
         return errors
     }
 }

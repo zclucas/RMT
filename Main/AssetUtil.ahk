@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #Include "DataClass.ahk"
 #Include Util\TableLocator.ahk
 #Include Util\ExcelUtil.ahk
@@ -29,6 +29,7 @@
 #Include "..\Plugins\MouseControl.ahk"
 #Include Util\MouseMoveUtil.ahk
 #Include Util\TomlUtil.ahk
+#Include Util\ConfigUtil.ahk
 
 global WM_COPYDATA := 0x4a ;传递字符串，系统信息
 
@@ -476,119 +477,119 @@ DipToPhys(v) {
 
 LoadMainSetting() {
     global MainSoftData, MySoftData
-    global IniSection := "UserSettings"
-    MySoftData.CurSettingName := IniRead(IniFile, IniSection, "CurSettingName", "RMT默认配置")
-    MainSoftData.SettingArrStr := IniRead(IniFile, IniSection, "SettingArrStr", "RMT默认配置")
-    MainSoftData.HasSaved := IniRead(IniFile, IniSection, "HasSaved", false)
-    MainSoftData.IsReload := IniRead(IniFile, IniSection, "IsReload", false)
-    MySoftData.NormalPeriod := IniRead(IniFile, IniSection, "NormalPeriod", 50)
-    MainSoftData.HoldFloat := IniRead(IniFile, IniSection, "HoldFloat", 0)
-    MainSoftData.PreIntervalFloat := IniRead(IniFile, IniSection, "PreIntervalFloat", 0)
-    MainSoftData.IntervalFloat := IniRead(IniFile, IniSection, "IntervalFloat", 0)
-    MainSoftData.CoordXFloat := IniRead(IniFile, IniSection, "CoordXFloat", 0)
-    MainSoftData.CoordYFloat := IniRead(IniFile, IniSection, "CoordYFloat", 0)
-    MainSoftData.SuspendHotkey := IniRead(IniFile, IniSection, "SuspendHotkey", "!p")
-    MainSoftData.PauseHotkey := IniRead(IniFile, IniSection, "PauseHotkey", "!i")
-    MainSoftData.KillMacroHotkey := IniRead(IniFile, IniSection, "KillMacroHotkey", "!k")
+    global SettingSection := "UserSettings"
+    MySoftData.CurSettingName := CfgRead(SettingFile, SettingSection, "CurSettingName", "RMT默认配置")
+    MainSoftData.SettingArrStr := CfgRead(SettingFile, SettingSection, "SettingArrStr", "RMT默认配置")
+    MainSoftData.HasSaved := CfgRead(SettingFile, SettingSection, "HasSaved", false)
+    MainSoftData.IsReload := CfgRead(SettingFile, SettingSection, "IsReload", false)
+    MySoftData.NormalPeriod := CfgRead(SettingFile, SettingSection, "NormalPeriod", 50)
+    MainSoftData.HoldFloat := CfgRead(SettingFile, SettingSection, "HoldFloat", 0)
+    MainSoftData.PreIntervalFloat := CfgRead(SettingFile, SettingSection, "PreIntervalFloat", 0)
+    MainSoftData.IntervalFloat := CfgRead(SettingFile, SettingSection, "IntervalFloat", 0)
+    MainSoftData.CoordXFloat := CfgRead(SettingFile, SettingSection, "CoordXFloat", 0)
+    MainSoftData.CoordYFloat := CfgRead(SettingFile, SettingSection, "CoordYFloat", 0)
+    MainSoftData.SuspendHotkey := CfgRead(SettingFile, SettingSection, "SuspendHotkey", "!p")
+    MainSoftData.PauseHotkey := CfgRead(SettingFile, SettingSection, "PauseHotkey", "!i")
+    MainSoftData.KillMacroHotkey := CfgRead(SettingFile, SettingSection, "KillMacroHotkey", "!k")
     ; §14.5 / IDE 式调试：逻辑树调试热键（默认 继续=F5 / 步入=F11，可在设置→快捷键修改）
-    MainSoftData.DebugRunHotkey := IniRead(IniFile, IniSection, "DebugRunHotkey", "f5")
-    MainSoftData.DebugStepHotkey := IniRead(IniFile, IniSection, "DebugStepHotkey", "f11")
-    MainSoftData.IsToolCheck := IniRead(IniFile, IniSection, "IsToolCheck", false)
-    MainSoftData.ToolCheckHotKey := IniRead(IniFile, IniSection, "ToolCheckHotKey", "!o")
-    MainSoftData.ToolRecordMacroHotKey := IniRead(IniFile, IniSection, "RecordMacroHotKey", "!r")
-    MainSoftData.ToolTextFilterHotKey := IniRead(IniFile, IniSection, "ToolTextFilterHotKey", "!u")
-    MainSoftData.ScreenShotHotKey := IniRead(IniFile, IniSection, "ScreenShotHotKey", "!y")
-    MainSoftData.FreePasteHotKey := IniRead(IniFile, IniSection, "FreePasteHotKey", "!t")
-    MainSoftData.RecordKeyboard := IniRead(IniFile, IniSection, "RecordKeyboard", true)
-    MainSoftData.RecordMouse := IniRead(IniFile, IniSection, "RecordMouse", true)
-    MainSoftData.RecordJoy := IniRead(IniFile, IniSection, "RecordJoy", false)
-    MainSoftData.RecordMouseTrail := IniRead(IniFile, IniSection, "RecordMouseTrail", 1)
-    MainSoftData.RecordMouseTrailSpeed := IniRead(IniFile, IniSection, "RecordMouseTrailSpeed", 95)
-    MainSoftData.RecordHoldMuti := IniRead(IniFile, IniSection, "RecordHoldMuti", false)
-    MainSoftData.RecordAutoLoosen := IniRead(IniFile, IniSection, "RecordAutoLoosen", true)
-    MainSoftData.RecordJoyInterval := IniRead(IniFile, IniSection, "RecordJoyInterval", 50)
-    MainSoftData.RecordShowBorder := IniRead(IniFile, IniSection, "RecordShowBorder", true)
-    MainSoftData.OCRTypeValue := IniRead(IniFile, IniSection, "OCRType", 1)
-    MainSoftData.IsBootStart := IniRead(IniFile, IniSection, "IsBootStart", false)
+    MainSoftData.DebugRunHotkey := CfgRead(SettingFile, SettingSection, "DebugRunHotkey", "f5")
+    MainSoftData.DebugStepHotkey := CfgRead(SettingFile, SettingSection, "DebugStepHotkey", "f11")
+    MainSoftData.IsToolCheck := CfgRead(SettingFile, SettingSection, "IsToolCheck", false)
+    MainSoftData.ToolCheckHotKey := CfgRead(SettingFile, SettingSection, "ToolCheckHotKey", "!o")
+    MainSoftData.ToolRecordMacroHotKey := CfgRead(SettingFile, SettingSection, "RecordMacroHotKey", "!r")
+    MainSoftData.ToolTextFilterHotKey := CfgRead(SettingFile, SettingSection, "ToolTextFilterHotKey", "!u")
+    MainSoftData.ScreenShotHotKey := CfgRead(SettingFile, SettingSection, "ScreenShotHotKey", "!y")
+    MainSoftData.FreePasteHotKey := CfgRead(SettingFile, SettingSection, "FreePasteHotKey", "!t")
+    MainSoftData.RecordKeyboard := CfgRead(SettingFile, SettingSection, "RecordKeyboard", true)
+    MainSoftData.RecordMouse := CfgRead(SettingFile, SettingSection, "RecordMouse", true)
+    MainSoftData.RecordJoy := CfgRead(SettingFile, SettingSection, "RecordJoy", false)
+    MainSoftData.RecordMouseTrail := CfgRead(SettingFile, SettingSection, "RecordMouseTrail", 1)
+    MainSoftData.RecordMouseTrailSpeed := CfgRead(SettingFile, SettingSection, "RecordMouseTrailSpeed", 95)
+    MainSoftData.RecordHoldMuti := CfgRead(SettingFile, SettingSection, "RecordHoldMuti", false)
+    MainSoftData.RecordAutoLoosen := CfgRead(SettingFile, SettingSection, "RecordAutoLoosen", true)
+    MainSoftData.RecordJoyInterval := CfgRead(SettingFile, SettingSection, "RecordJoyInterval", 50)
+    MainSoftData.RecordShowBorder := CfgRead(SettingFile, SettingSection, "RecordShowBorder", true)
+    MainSoftData.OCRTypeValue := CfgRead(SettingFile, SettingSection, "OCRType", 1)
+    MainSoftData.IsBootStart := CfgRead(SettingFile, SettingSection, "IsBootStart", false)
     if (MainSoftData.IsBootStart == 1 || MainSoftData.IsBootStart == 2)
         MainSoftData.IsBootStart := true
     else if (MainSoftData.IsBootStart == "false" || MainSoftData.IsBootStart == 0)
         MainSoftData.IsBootStart := false
     else
         MainSoftData.IsBootStart := !!MainSoftData.IsBootStart
-    MainSoftData.IsAdminStart := IniRead(IniFile, IniSection, "IsAdminStart", false)
+    MainSoftData.IsAdminStart := CfgRead(SettingFile, SettingSection, "IsAdminStart", false)
     if (MainSoftData.IsAdminStart == 1 || MainSoftData.IsAdminStart == "true")
         MainSoftData.IsAdminStart := true
     else if (MainSoftData.IsAdminStart == "false" || MainSoftData.IsAdminStart == 0)
         MainSoftData.IsAdminStart := false
     else
         MainSoftData.IsAdminStart := !!MainSoftData.IsAdminStart
-    MainSoftData.ShowSplitLine := IniRead(IniFile, IniSection, "ShowSplitLine", false)
-    MainSoftData.FixedMenuWheel := IniRead(IniFile, IniSection, "FixedMenuWheel", false)
-    MainSoftData.MenuWheelSelectMode := IniRead(IniFile, IniSection, "MenuWheelSelectMode", 2)
-    MainSoftData.MenuWheelShowTooltip := IniRead(IniFile, IniSection, "MenuWheelShowTooltip", false)
-    MainSoftData.MenuWheelScale := IniRead(IniFile, IniSection, "MenuWheelScale", 100)
-    MainSoftData.Theme := IniRead(IniFile, IniSection, "Theme", "RMT_Light")
-    ; 主题字体：大小与 FontType 一样落在用户设置；旧版 themes.ini 仅作迁移回退
+    MainSoftData.ShowSplitLine := CfgRead(SettingFile, SettingSection, "ShowSplitLine", false)
+    MainSoftData.FixedMenuWheel := CfgRead(SettingFile, SettingSection, "FixedMenuWheel", false)
+    MainSoftData.MenuWheelSelectMode := CfgRead(SettingFile, SettingSection, "MenuWheelSelectMode", 2)
+    MainSoftData.MenuWheelShowTooltip := CfgRead(SettingFile, SettingSection, "MenuWheelShowTooltip", false)
+    MainSoftData.MenuWheelScale := CfgRead(SettingFile, SettingSection, "MenuWheelScale", 100)
+    MainSoftData.Theme := CfgRead(SettingFile, SettingSection, "Theme", "RMT_Light")
+    ; 主题字体：大小与 FontType 一样落在用户设置；用户设置缺失时回退主题文件 themes.toml
     global XAML_FontSizeDelta, XAML_FontSizeBase, XAML_FontSizeDefault, XAML_FontWeight, XAML_TextClarity
     defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
-    fs := IniRead(IniFile, IniSection, "FontSize", "")
+    fs := CfgRead(SettingFile, SettingSection, "FontSize", "")
     if (fs == "" || !IsNumber(fs)) {
-        themeIni := GetThemesIniPath()
-        fs := IniRead(themeIni, MainSoftData.Theme, "FontSize", defFs)
+        themeFile := GetThemesPath()
+        fs := CfgRead(themeFile, MainSoftData.Theme, "FontSize", defFs)
     }
     ApplyUserFontSize(fs, false)
-    if (IniRead(IniFile, IniSection, "FontSize", "") == "")
-        try IniWrite(MainSoftData.FontSize, IniFile, IniSection, "FontSize")
+    if (CfgRead(SettingFile, SettingSection, "FontSize", "") == "")
+        try CfgWrite(MainSoftData.FontSize, SettingFile, SettingSection, "FontSize")
     try {
-        themeIni := GetThemesIniPath()
-        MainSoftData.FontWeight := FontWeightToNum(IniRead(themeIni, MainSoftData.Theme, "FontWeight", "400"))
+        themeFile := GetThemesPath()
+        MainSoftData.FontWeight := FontWeightToNum(CfgRead(themeFile, MainSoftData.Theme, "FontWeight", "400"))
         XAML_FontWeight := MainSoftData.FontWeight
         MainSoftData.FontClarity := "1"   ; 文字清晰度固定 1（标准平滑）
         XAML_TextClarity := 1
     }
     ; 界面浮窗配置（非颜色）
-    MainSoftData.UIPanelShowOnActive := IniRead(IniFile, IniSection, "UIPanelShowOnActive", true)
-    MainSoftData.UIPanelDefaultPos := Integer(IniRead(IniFile, IniSection, "UIPanelDefaultPos", 1))
+    MainSoftData.UIPanelShowOnActive := CfgRead(SettingFile, SettingSection, "UIPanelShowOnActive", true)
+    MainSoftData.UIPanelDefaultPos := Integer(CfgRead(SettingFile, SettingSection, "UIPanelDefaultPos", 1))
     ; 旧版本「鼠标位置」=8 已移除；无效值统一归一化为左上角(1)
     if (MainSoftData.UIPanelDefaultPos == 8 || MainSoftData.UIPanelDefaultPos < 1 || MainSoftData.UIPanelDefaultPos > 10)
         MainSoftData.UIPanelDefaultPos := 1
-    MainSoftData.UIPanelOffsetX := IniRead(IniFile, IniSection, "UIPanelOffsetX", 100)
-    MainSoftData.UIPanelOffsetY := IniRead(IniFile, IniSection, "UIPanelOffsetY", 100)
-    MainSoftData.UIPanelBtnHeight := IniRead(IniFile, IniSection, "UIPanelBtnHeight", 34)
-    MainSoftData.UIPanelFontSize := IniRead(IniFile, IniSection, "UIPanelFontSize", 12)
-    MainSoftData.UIPanelBtnWidth := IniRead(IniFile, IniSection, "UIPanelBtnWidth", 80)
-    MainSoftData.UIPanelCols := IniRead(IniFile, IniSection, "UIPanelCols", 3)
-    EnsureXAMLThemesIni()
+    MainSoftData.UIPanelOffsetX := CfgRead(SettingFile, SettingSection, "UIPanelOffsetX", 100)
+    MainSoftData.UIPanelOffsetY := CfgRead(SettingFile, SettingSection, "UIPanelOffsetY", 100)
+    MainSoftData.UIPanelBtnHeight := CfgRead(SettingFile, SettingSection, "UIPanelBtnHeight", 34)
+    MainSoftData.UIPanelFontSize := CfgRead(SettingFile, SettingSection, "UIPanelFontSize", 12)
+    MainSoftData.UIPanelBtnWidth := CfgRead(SettingFile, SettingSection, "UIPanelBtnWidth", 80)
+    MainSoftData.UIPanelCols := CfgRead(SettingFile, SettingSection, "UIPanelCols", 3)
+    EnsureXAMLThemesToml()
     ; 统一主题颜色（轮盘/浮窗/指令显示），不兼容旧分散颜色配置
-    AppThemeUtil.LoadFromIni()
-    MainSoftData.IsModalSubGui := IniRead(IniFile, IniSection, "IsModalSubGui", true)
-    MainSoftData.MutiThreadNum := IniRead(IniFile, IniSection, "MutiThreadNum", -1)
-    MainSoftData.DynamicCorePoolSize := IniRead(IniFile, IniSection, "DynamicCorePoolSize", 2)
-    MainSoftData.ElasticTimeout := IniRead(IniFile, IniSection, "ElasticTimeout", 30)
-    MainSoftData.MacroStopType := Integer(IniRead(IniFile, IniSection, "MacroStopType", 1))
+    AppThemeUtil.LoadFromToml()
+    MainSoftData.IsModalSubGui := CfgRead(SettingFile, SettingSection, "IsModalSubGui", true)
+    MainSoftData.MutiThreadNum := CfgRead(SettingFile, SettingSection, "MutiThreadNum", -1)
+    MainSoftData.DynamicCorePoolSize := CfgRead(SettingFile, SettingSection, "DynamicCorePoolSize", 2)
+    MainSoftData.ElasticTimeout := CfgRead(SettingFile, SettingSection, "ElasticTimeout", 30)
+    MainSoftData.MacroStopType := Integer(CfgRead(SettingFile, SettingSection, "MacroStopType", 1))
     if (MainSoftData.MacroStopType != 1 && MainSoftData.MacroStopType != 2)
         MainSoftData.MacroStopType := 1
-    MainSoftData.SoftBGColor := IniRead(IniFile, IniSection, "SoftBGColor", "f0f0f0")
+    MainSoftData.SoftBGColor := CfgRead(SettingFile, SettingSection, "SoftBGColor", "f0f0f0")
     ; §11 主界面背景图（全局配置，空=不启用）
-    MainSoftData.BackImagePath := IniRead(IniFile, IniSection, "BackImagePath", "")
-    MainSoftData.NoVariableTip := IniRead(IniFile, IniSection, "NoVariableTip", true)
+    MainSoftData.BackImagePath := CfgRead(SettingFile, SettingSection, "BackImagePath", "")
+    MainSoftData.NoVariableTip := CfgRead(SettingFile, SettingSection, "NoVariableTip", true)
     ; 业务日志开关（统一日志 C 项阶段3）：默认关，开启后 Worker 写 Business.log 流水
     global RMTLogBusinessEnabled
-    MainSoftData.BusinessLog := IniRead(IniFile, IniSection, "BusinessLog", false)
+    MainSoftData.BusinessLog := CfgRead(SettingFile, SettingSection, "BusinessLog", false)
     RMTLogBusinessEnabled := MainSoftData.BusinessLog
     ; 日志与错误（C 项阶段5）
     global RMTLogSysMinLevel
-    MainSoftData.SysLogMinLevel := IniRead(IniFile, IniSection, "SysLogMinLevel", "info")
+    MainSoftData.SysLogMinLevel := CfgRead(SettingFile, SettingSection, "SysLogMinLevel", "info")
     RMTLogSysMinLevel := MainSoftData.SysLogMinLevel
     ; AI 助手（OpenAI 兼容）
-    MainSoftData.AiApiKey := IniRead(IniFile, IniSection, "AiApiKey", "")
-    MainSoftData.AiApiBaseUrl := IniRead(IniFile, IniSection, "AiApiBaseUrl", "https://api.openai.com/v1")
-    MainSoftData.AiProvider := IniRead(IniFile, IniSection, "AiProvider", "")
-    MainSoftData.AiModel := IniRead(IniFile, IniSection, "AiModel", "")
-    MainSoftData.AiModelList := IniRead(IniFile, IniSection, "AiModelList", "")
-    MainSoftData.AiAccessMode := Integer(IniRead(IniFile, IniSection, "AiAccessMode", 2))
-    MainSoftData.AiApprovalMode := Integer(IniRead(IniFile, IniSection, "AiApprovalMode", 2))
+    MainSoftData.AiApiKey := CfgRead(SettingFile, SettingSection, "AiApiKey", "")
+    MainSoftData.AiApiBaseUrl := CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "https://api.openai.com/v1")
+    MainSoftData.AiProvider := CfgRead(SettingFile, SettingSection, "AiProvider", "")
+    MainSoftData.AiModel := CfgRead(SettingFile, SettingSection, "AiModel", "")
+    MainSoftData.AiModelList := CfgRead(SettingFile, SettingSection, "AiModelList", "")
+    MainSoftData.AiAccessMode := Integer(CfgRead(SettingFile, SettingSection, "AiAccessMode", 2))
+    MainSoftData.AiApprovalMode := Integer(CfgRead(SettingFile, SettingSection, "AiApprovalMode", 2))
     if (MainSoftData.AiAccessMode < 1 || MainSoftData.AiAccessMode > 3)
         MainSoftData.AiAccessMode := 2
     if (MainSoftData.AiApprovalMode < 1 || MainSoftData.AiApprovalMode > 3)
@@ -629,27 +630,27 @@ LoadMainSetting() {
         if (url != "" && MainSoftData.AiProvider = "openai" && url != "https://api.openai.com/v1")
             MainSoftData.AiProvider := "custom"
     }
-    rawPanelW := IniRead(IniFile, IniSection, "AiPanelWidth", 380)
+    rawPanelW := CfgRead(SettingFile, SettingSection, "AiPanelWidth", 380)
     MainSoftData.AiPanelWidth := IsNumber(rawPanelW) ? Integer(rawPanelW) : 380
-    MainSoftData.LogicTreeBranchSplit := !!IniRead(IniFile, IniSection, "LogicTreeBranchSplit", false)
-    MainSoftData.LogWarnBubble := IniRead(IniFile, IniSection, "LogWarnBubble", true)
-    MainSoftData.LogErrorBadge := IniRead(IniFile, IniSection, "LogErrorBadge", true)
+    MainSoftData.LogicTreeBranchSplit := !!CfgRead(SettingFile, SettingSection, "LogicTreeBranchSplit", false)
+    MainSoftData.LogWarnBubble := CfgRead(SettingFile, SettingSection, "LogWarnBubble", true)
+    MainSoftData.LogErrorBadge := CfgRead(SettingFile, SettingSection, "LogErrorBadge", true)
     ; §23 网络触发：监听端口（默认 16888，NetworkNormalizePort 钳制 1-65535）
-    MainSoftData.NetworkPort := NetworkNormalizePort(IniRead(IniFile, IniSection, "NetworkPort", 16888))
-    MySoftData.CMDTip := IniRead(IniFile, IniSection, "CMDTip", false)
-    MainSoftData.CheckForeground := IniRead(IniFile, IniSection, "CheckForeground", false)
-    MainSoftData.ScreenShotType := IniRead(IniFile, IniSection, "ScreenShotType", 3)
-    MainSoftData.KeyDownDownType := IniRead(IniFile, IniSection, "KeyDownDown", 1)
-    MainSoftData.AutoLoosenModifier := !!IniRead(IniFile, IniSection, "AutoLoosenModifier", true)
-    MainSoftData.ContinuousTrigger := !!IniRead(IniFile, IniSection, "ContinuousTrigger", true)
-    MainSoftData.AgreeAgreement := IniRead(IniFile, IniSection, "AgreeAgreement", false)
-    MySoftData.WinPosX := IniRead(IniFile, IniSection, "WinPosX", 0)
-    MySoftData.WinPosY := IniRead(IniFile, IniSection, "WinPosY", 0)
-    MainSoftData.TableIndex := IniRead(IniFile, IniSection, "TableIndex", 1)
+    MainSoftData.NetworkPort := NetworkNormalizePort(CfgRead(SettingFile, SettingSection, "NetworkPort", 16888))
+    MySoftData.CMDTip := CfgRead(SettingFile, SettingSection, "CMDTip", false)
+    MainSoftData.CheckForeground := CfgRead(SettingFile, SettingSection, "CheckForeground", false)
+    MainSoftData.ScreenShotType := CfgRead(SettingFile, SettingSection, "ScreenShotType", 3)
+    MainSoftData.KeyDownDownType := CfgRead(SettingFile, SettingSection, "KeyDownDown", 1)
+    MainSoftData.AutoLoosenModifier := !!CfgRead(SettingFile, SettingSection, "AutoLoosenModifier", true)
+    MainSoftData.ContinuousTrigger := !!CfgRead(SettingFile, SettingSection, "ContinuousTrigger", true)
+    MainSoftData.AgreeAgreement := CfgRead(SettingFile, SettingSection, "AgreeAgreement", false)
+    MySoftData.WinPosX := CfgRead(SettingFile, SettingSection, "WinPosX", 0)
+    MySoftData.WinPosY := CfgRead(SettingFile, SettingSection, "WinPosY", 0)
+    MainSoftData.TableIndex := CfgRead(SettingFile, SettingSection, "TableIndex", 1)
     MainSoftData.CurTableID := IsNumber(MainSoftData.TableIndex) ? "" : MainSoftData.TableIndex
     ; §10 显示页签：8 个宏表可见性（隐藏仅显示效果，不影响触发）；Tool/Setting/Help/Reward/Thank 恒显示
     MainSoftData.TabVisibleMap := Map()
-    rawTabVis := IniRead(IniFile, IniSection, "TabVisible", "")
+    rawTabVis := CfgRead(SettingFile, SettingSection, "TabVisible", "")
     for def in CreateDefaultTableDefs() {
         sym := def[1]
         switch sym {
@@ -665,37 +666,37 @@ LoadMainSetting() {
                 MainSoftData.TabVisibleMap[p[1]] := (p[2] == "1")
         }
     }
-    MainSoftData.Lang := IniRead(IniFile, IniSection, "Lang", "无语言")
-    MainSoftData.FontType := IniRead(IniFile, IniSection, "FontType", "微软雅黑")
-    MainSoftData.JoyType := IniRead(IniFile, IniSection, "JoyType", "Xbox")
+    MainSoftData.Lang := CfgRead(SettingFile, SettingSection, "Lang", "无语言")
+    MainSoftData.FontType := CfgRead(SettingFile, SettingSection, "FontType", "微软雅黑")
+    MainSoftData.JoyType := CfgRead(SettingFile, SettingSection, "JoyType", "Xbox")
     if (MainSoftData.JoyType == "PS5")
         MainSoftData.JoyType := "DS4"   ; 兼容旧配置：ViGEm 仅有 DS4（DualShock 4），无 PS5 类型
-    MainSoftData.TriggerJoyType := IniRead(IniFile, IniSection, "TriggerJoyType", "Xbox")
-    MainSoftData.PreferredMacroEditor := Integer(IniRead(IniFile, IniSection, "PreferredMacroEditor", 1))
-    MainSoftData.SharedCopy := !!IniRead(IniFile, IniSection, "SharedCopy", false)
-    MainSoftData.GeneralContextMenu := IniRead(IniFile, IniSection, "GeneralContextMenu", "")
-    MainSoftData.BranchContextMenu  := IniRead(IniFile, IniSection, "BranchContextMenu",  "")
+    MainSoftData.TriggerJoyType := CfgRead(SettingFile, SettingSection, "TriggerJoyType", "Xbox")
+    MainSoftData.PreferredMacroEditor := Integer(CfgRead(SettingFile, SettingSection, "PreferredMacroEditor", 1))
+    MainSoftData.SharedCopy := !!CfgRead(SettingFile, SettingSection, "SharedCopy", false)
+    MainSoftData.GeneralContextMenu := CfgRead(SettingFile, SettingSection, "GeneralContextMenu", "")
+    MainSoftData.BranchContextMenu  := CfgRead(SettingFile, SettingSection, "BranchContextMenu",  "")
     if (MainSoftData.PreferredMacroEditor != 1 && MainSoftData.PreferredMacroEditor != 2)
         MainSoftData.PreferredMacroEditor := 1
-    MainSoftData.RemarkAutoType := Integer(IniRead(IniFile, IniSection, "RemarkAutoType", 2))
+    MainSoftData.RemarkAutoType := Integer(CfgRead(SettingFile, SettingSection, "RemarkAutoType", 2))
     if (MainSoftData.RemarkAutoType != 1 && MainSoftData.RemarkAutoType != 2 && MainSoftData.RemarkAutoType != 3)
         MainSoftData.RemarkAutoType := 2
     ; CMD 默认：宽按 DPI 缩放，高 300，X = 屏幕宽 - 显示宽（物理像素 / -DPIScale）
     defCMDWidth := GetDefaultCMDTipWidth()
-    MainSoftData.CMDWidth := IniRead(IniFile, IniSection, "CMDWidth", defCMDWidth)
-    MainSoftData.CMDHeight := IniRead(IniFile, IniSection, "CMDHeight", 300)
-    MainSoftData.CMDPosX := IniRead(IniFile, IniSection, "CMDPosX", A_ScreenWidth - Integer(MainSoftData.CMDWidth))
-    MainSoftData.CMDPosY := IniRead(IniFile, IniSection, "CMDPosY", 0)
-    MainSoftData.CMDTransparency := IniRead(IniFile, IniSection, "CMDTransparency", 50)
-    MainSoftData.CMDFontSize := IniRead(IniFile, IniSection, "CMDFontSize", 12)
-    MainSoftData.CMDLogToFile := IniRead(IniFile, IniSection, "CMDLogToFile", false)
-    MainSoftData.CMDLogFilePath := IniRead(IniFile, IniSection, "CMDLogFilePath", "")
-    MainSoftData.CMDLogAutoClear := IniRead(IniFile, IniSection, "CMDLogAutoClear", 0)
-    MainSoftData.VarListenTop := IniRead(IniFile, IniSection, "VarListenTop", 1)
-    MainSoftData.VarListenWidth := IniRead(IniFile, IniSection, "VarListenWidth", 400)
-    MainSoftData.VarListenHeight := IniRead(IniFile, IniSection, "VarListenHeight", 420)
-    MySoftData.MacroTotalCount := IniRead(IniFile, IniSection, "MacroTotalCount", 0)
-    MainSoftData.LastShowMonth := IniRead(IniFile, IniSection, "LastShowMonth", A_Mon)
+    MainSoftData.CMDWidth := CfgRead(SettingFile, SettingSection, "CMDWidth", defCMDWidth)
+    MainSoftData.CMDHeight := CfgRead(SettingFile, SettingSection, "CMDHeight", 300)
+    MainSoftData.CMDPosX := CfgRead(SettingFile, SettingSection, "CMDPosX", A_ScreenWidth - Integer(MainSoftData.CMDWidth))
+    MainSoftData.CMDPosY := CfgRead(SettingFile, SettingSection, "CMDPosY", 0)
+    MainSoftData.CMDTransparency := CfgRead(SettingFile, SettingSection, "CMDTransparency", 50)
+    MainSoftData.CMDFontSize := CfgRead(SettingFile, SettingSection, "CMDFontSize", 12)
+    MainSoftData.CMDLogToFile := CfgRead(SettingFile, SettingSection, "CMDLogToFile", false)
+    MainSoftData.CMDLogFilePath := CfgRead(SettingFile, SettingSection, "CMDLogFilePath", "")
+    MainSoftData.CMDLogAutoClear := CfgRead(SettingFile, SettingSection, "CMDLogAutoClear", 0)
+    MainSoftData.VarListenTop := CfgRead(SettingFile, SettingSection, "VarListenTop", 1)
+    MainSoftData.VarListenWidth := CfgRead(SettingFile, SettingSection, "VarListenWidth", 400)
+    MainSoftData.VarListenHeight := CfgRead(SettingFile, SettingSection, "VarListenHeight", 420)
+    MySoftData.MacroTotalCount := CfgRead(SettingFile, SettingSection, "MacroTotalCount", 0)
+    MainSoftData.LastShowMonth := CfgRead(SettingFile, SettingSection, "LastShowMonth", A_Mon)
 
     MySoftData.TableInfo := CreateTableItemArr()
     SetFontList()
@@ -703,14 +704,15 @@ LoadMainSetting() {
     LangKeysInit()
 }
 
-GetThemesIniPath() {
-    if (IsSet(ThemesIniPath) && ThemesIniPath != "")
-        return ThemesIniPath
-    return A_WorkingDir "\Setting\themes.ini"
+; 主题资源文件（XAML Resource_* / Window_DWM / 字体）路径
+GetThemesPath() {
+    if (IsSet(ThemesPath) && ThemesPath != "")
+        return ThemesPath
+    return A_WorkingDir "\Setting\themes.toml"
 }
 
-; persistIni=true 时写入 MainSettings（权威）并同步 themes.ini
-ApplyUserFontSize(fs, persistIni := true) {
+; persist=true 时写入 MainSettings（权威）并同步 themes.toml
+ApplyUserFontSize(fs, persist := true) {
     global XAML_FontSizeDelta, XAML_FontSizeBase, XAML_FontSizeDefault
     baseFs := IsSet(XAML_FontSizeBase) ? XAML_FontSizeBase : 15
     defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
@@ -723,73 +725,76 @@ ApplyUserFontSize(fs, persistIni := true) {
         fs := 40
     MainSoftData.FontSize := fs
     XAML_FontSizeDelta := fs - baseFs
-    if (persistIni) {
-        try IniWrite(fs, IniFile, IniSection, "FontSize")
-        try IniWrite(fs, GetThemesIniPath(), MainSoftData.Theme, "FontSize")
+    if (persist) {
+        try CfgWrite(fs, SettingFile, SettingSection, "FontSize")
+        try CfgWrite(fs, GetThemesPath(), MainSoftData.Theme, "FontSize")
     }
     return fs
 }
 
-EnsureXAMLThemesIni() {
+EnsureXAMLThemesToml() {
     static done := false
     if (done)
         return
-    iniPath := GetThemesIniPath()
+    iniPath := GetThemesPath()
     if (FileExist(iniPath)) {
         done := true
         return
     }
-    if (!DirExist(A_ScriptDir "\Setting"))
-        DirCreate(A_ScriptDir "\Setting")
-    IniWrite("2,0", iniPath, "RMT_Light", "Window_DWM")
-    IniWrite("15", iniPath, "RMT_Light", "FontSize")   ; 主题字体大小（软件默认 15）
-    IniWrite("400", iniPath, "RMT_Light", "FontWeight")
-    IniWrite("1", iniPath, "RMT_Light", "FontClarity")
-    IniWrite("CornerRadius:8", iniPath, "RMT_Light", "Resource_WindowRadius")
-    IniWrite("#FFF0F0F0", iniPath, "RMT_Light", "Resource_BgColor")
-    IniWrite("#FFEBEBEB", iniPath, "RMT_Light", "Resource_TitleBarColor")
-    IniWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_TitleBarForeground")
-    IniWrite("#20E0E0E0", iniPath, "RMT_Light", "Resource_SidebarColor")
-    IniWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_TextMain")
-    IniWrite("#FF666666", iniPath, "RMT_Light", "Resource_TextSub")
-    IniWrite("#FFF0F0F0", iniPath, "RMT_Light", "Resource_ControlBg")
-    IniWrite("#FF999999", iniPath, "RMT_Light", "Resource_ControlBorder")
-    IniWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_InputBg")
-    IniWrite("#FFCCCCCC", iniPath, "RMT_Light", "Resource_InputStroke")
-    IniWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_InputText")
-    IniWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_EditBg")
-    IniWrite("#FFCCCCCC", iniPath, "RMT_Light", "Resource_EditStroke")
-    IniWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_EditText")
-    IniWrite("#FFE3F2FD", iniPath, "RMT_Light", "Resource_EditHoverBg")
-    IniWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_EditHoverStroke")
-    IniWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ActionBg")
-    IniWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ActionStroke")
-    IniWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_ActionText")
-    IniWrite("#FF106EBE", iniPath, "RMT_Light", "Resource_ActionHoverBg")
-    IniWrite("#FF106EBE", iniPath, "RMT_Light", "Resource_ActionHoverStroke")
-    IniWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ProgressBar")
-    IniWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_DropdownBg")
-    IniWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_Accent")
-    IniWrite("Double:8", iniPath, "RMT_Light", "Resource_ScrollBarWidth")
-    IniWrite("CornerRadius:3", iniPath, "RMT_Light", "Resource_ScrollBarRadius")
-    IniWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ScrollBarHover")
+    ; 目录取 iniPath 自身所在目录：编译版 Worker 里 A_ScriptDir 是 Thread\，
+    ; 用 A_ScriptDir "\Setting" 会在 Thread\ 下造出一个无用的 Setting 空目录
+    SplitPath iniPath, , &themeDir
+    if (themeDir != "" && !DirExist(themeDir))
+        DirCreate(themeDir)
+    CfgWrite("2,0", iniPath, "RMT_Light", "Window_DWM")
+    CfgWrite("15", iniPath, "RMT_Light", "FontSize")   ; 主题字体大小（软件默认 15）
+    CfgWrite("400", iniPath, "RMT_Light", "FontWeight")
+    CfgWrite("1", iniPath, "RMT_Light", "FontClarity")
+    CfgWrite("CornerRadius:8", iniPath, "RMT_Light", "Resource_WindowRadius")
+    CfgWrite("#FFF0F0F0", iniPath, "RMT_Light", "Resource_BgColor")
+    CfgWrite("#FFEBEBEB", iniPath, "RMT_Light", "Resource_TitleBarColor")
+    CfgWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_TitleBarForeground")
+    CfgWrite("#20E0E0E0", iniPath, "RMT_Light", "Resource_SidebarColor")
+    CfgWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_TextMain")
+    CfgWrite("#FF666666", iniPath, "RMT_Light", "Resource_TextSub")
+    CfgWrite("#FFF0F0F0", iniPath, "RMT_Light", "Resource_ControlBg")
+    CfgWrite("#FF999999", iniPath, "RMT_Light", "Resource_ControlBorder")
+    CfgWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_InputBg")
+    CfgWrite("#FFCCCCCC", iniPath, "RMT_Light", "Resource_InputStroke")
+    CfgWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_InputText")
+    CfgWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_EditBg")
+    CfgWrite("#FFCCCCCC", iniPath, "RMT_Light", "Resource_EditStroke")
+    CfgWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_EditText")
+    CfgWrite("#FFE3F2FD", iniPath, "RMT_Light", "Resource_EditHoverBg")
+    CfgWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_EditHoverStroke")
+    CfgWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ActionBg")
+    CfgWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ActionStroke")
+    CfgWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_ActionText")
+    CfgWrite("#FF106EBE", iniPath, "RMT_Light", "Resource_ActionHoverBg")
+    CfgWrite("#FF106EBE", iniPath, "RMT_Light", "Resource_ActionHoverStroke")
+    CfgWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ProgressBar")
+    CfgWrite("#FFFFFFFF", iniPath, "RMT_Light", "Resource_DropdownBg")
+    CfgWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_Accent")
+    CfgWrite("Double:8", iniPath, "RMT_Light", "Resource_ScrollBarWidth")
+    CfgWrite("CornerRadius:3", iniPath, "RMT_Light", "Resource_ScrollBarRadius")
+    CfgWrite("#FF0078D7", iniPath, "RMT_Light", "Resource_ScrollBarHover")
 
-    IniWrite("2,1", iniPath, "RMT_Dark", "Window_DWM")
-    IniWrite("15", iniPath, "RMT_Dark", "FontSize")   ; 主题字体大小（软件默认 15）
-    IniWrite("400", iniPath, "RMT_Dark", "FontWeight")
-    IniWrite("1", iniPath, "RMT_Dark", "FontClarity")
-    IniWrite("CornerRadius:8", iniPath, "RMT_Dark", "Resource_WindowRadius")
-    IniWrite("#FF1E1E1E", iniPath, "RMT_Dark", "Resource_BgColor")
-    IniWrite("#20000000", iniPath, "RMT_Dark", "Resource_SidebarColor")
-    IniWrite("#FFFFFFFF", iniPath, "RMT_Dark", "Resource_TextMain")
-    IniWrite("#FFAAAAAA", iniPath, "RMT_Dark", "Resource_TextSub")
-    IniWrite("#15252525", iniPath, "RMT_Dark", "Resource_ControlBg")
-    IniWrite("#20333333", iniPath, "RMT_Dark", "Resource_ControlBorder")
-    IniWrite("#FF252525", iniPath, "RMT_Dark", "Resource_DropdownBg")
-    IniWrite("#FF0A84FF", iniPath, "RMT_Dark", "Resource_Accent")
-    IniWrite("Double:8", iniPath, "RMT_Dark", "Resource_ScrollBarWidth")
-    IniWrite("CornerRadius:3", iniPath, "RMT_Dark", "Resource_ScrollBarRadius")
-    IniWrite("#FF0A84FF", iniPath, "RMT_Dark", "Resource_ScrollBarHover")
+    CfgWrite("2,1", iniPath, "RMT_Dark", "Window_DWM")
+    CfgWrite("15", iniPath, "RMT_Dark", "FontSize")   ; 主题字体大小（软件默认 15）
+    CfgWrite("400", iniPath, "RMT_Dark", "FontWeight")
+    CfgWrite("1", iniPath, "RMT_Dark", "FontClarity")
+    CfgWrite("CornerRadius:8", iniPath, "RMT_Dark", "Resource_WindowRadius")
+    CfgWrite("#FF1E1E1E", iniPath, "RMT_Dark", "Resource_BgColor")
+    CfgWrite("#20000000", iniPath, "RMT_Dark", "Resource_SidebarColor")
+    CfgWrite("#FFFFFFFF", iniPath, "RMT_Dark", "Resource_TextMain")
+    CfgWrite("#FFAAAAAA", iniPath, "RMT_Dark", "Resource_TextSub")
+    CfgWrite("#15252525", iniPath, "RMT_Dark", "Resource_ControlBg")
+    CfgWrite("#20333333", iniPath, "RMT_Dark", "Resource_ControlBorder")
+    CfgWrite("#FF252525", iniPath, "RMT_Dark", "Resource_DropdownBg")
+    CfgWrite("#FF0A84FF", iniPath, "RMT_Dark", "Resource_Accent")
+    CfgWrite("Double:8", iniPath, "RMT_Dark", "Resource_ScrollBarWidth")
+    CfgWrite("CornerRadius:3", iniPath, "RMT_Dark", "Resource_ScrollBarRadius")
+    CfgWrite("#FF0A84FF", iniPath, "RMT_Dark", "Resource_ScrollBarHover")
     done := true
 }
 
@@ -924,31 +929,28 @@ XamlUiDiagWindow(hwnd, tag := "win", fixIfHidden := false) {
 ; useAppWinTheme：是否用 AppTheme「通用窗口」色覆盖 XAML Resource（设置窗默认 true）
 ApplyXamlTheme(ui, themeName, iniPath := "", useAppWinTheme := true) {
     if (iniPath == "")
-        iniPath := A_WorkingDir "\Setting\themes.ini"
+        iniPath := A_WorkingDir "\Setting\themes.toml"
     if FileExist(iniPath) {
-        themeData := ""
-        try themeData := IniRead(iniPath, themeName)
-        if (themeData != "") {
+        themeMap := Map()
+        try themeMap := CfgSection(iniPath, themeName)
+        if (themeMap.Count > 0) {
             ; 合并为一次 BatchUpdate：theme 资源 ~30 条，逐条 Update 是 30 次同步 IPC 往返（拖慢开窗）
             batch := []
-            Loop Parse, themeData, "`n", "`r" {
-                parts := StrSplit(A_LoopField, "=", " `t", 2)
-                if (parts.Length == 2) {
-                    key := Trim(parts[1])
-                    val := Trim(parts[2])
-                    if (key == "Window_DWM") {
-                        ; 不透明窗口铺实色 BgColor，Mica 不可见且首帧闪紫：backdrop 置 0，保留 dark 模式
-                        if (ui.HasProp("xaml") && InStr(ui.xaml, 'AllowsTransparency="True"'))
-                            batch.Push({ControlName: "Window", PropertyName: "DWM", Value: val})
-                        else {
-                            dwmParts := StrSplit(val, ",", " `t")
-                            dwmDark := dwmParts.Length > 1 ? dwmParts[2] : "0"
-                            batch.Push({ControlName: "Window", PropertyName: "DWM", Value: "0," dwmDark})
-                        }
+            for key, val in themeMap {
+                key := Trim(key)
+                val := Trim(val)
+                if (key == "Window_DWM") {
+                    ; 不透明窗口铺实色 BgColor，Mica 不可见且首帧闪紫：backdrop 置 0，保留 dark 模式
+                    if (ui.HasProp("xaml") && InStr(ui.xaml, 'AllowsTransparency="True"'))
+                        batch.Push({ControlName: "Window", PropertyName: "DWM", Value: val})
+                    else {
+                        dwmParts := StrSplit(val, ",", " `t")
+                        dwmDark := dwmParts.Length > 1 ? dwmParts[2] : "0"
+                        batch.Push({ControlName: "Window", PropertyName: "DWM", Value: "0," dwmDark})
                     }
-                    else if (InStr(key, "Resource_") == 1)
-                        batch.Push({ControlName: "Resource", PropertyName: SubStr(key, 10), Value: val})
                 }
+                else if (InStr(key, "Resource_") == 1)
+                    batch.Push({ControlName: "Resource", PropertyName: SubStr(key, 10), Value: val})
             }
             if (batch.Length > 0 && ui.HasMethod("BatchUpdate"))
                 ui.BatchUpdate(batch)
@@ -997,61 +999,8 @@ SetFontList() {
 }
 
 ; ============================================================
-; TOML 宏配置读写（MacroFile 现指向 MacroFile.toml，操作封装在 Util\TomlUtil.ahk）
-; 双模式：MacroFile 以 .toml 结尾走 TOML 新链路；一次性迁移期临时指向 .ini 走旧 INI 链路。
+; TOML 宏配置读写（MacroFile 指向 MacroFile.toml，操作封装在 Util\TomlUtil.ahk）
 ; ============================================================
-IsMacroTomlMode() {
-    global MacroFile
-    ; 后缀判断：SubStr(x,-5) 才是 ".toml"；-4 只取到 "toml"（4 字符）与 ".toml"（5 字符）永远不相等，
-    ; 曾导致 TOML 链路从未启用、MacroFile.toml 一直被当 INI 操作（[Tables] 残留/重载断链的根源）
-    return (SubStr(MacroFile, -5) == ".toml")
-}
-
-; §22 兼容 INI 迁移残留：TOML 文件里混入 INI 风格 [Tables] List 段
-; （旧代码在迁移窗口期用 IniWrite 把表集合写进 .toml 的僵尸段，含异构数组 List）。
-; 无 [[table]] 表集合时按旧格式解析，返回 [[ID, Symbol, Name, Order], ...]；无残留段返回 []。
-TomlUtil_LegacyTableList(t) {
-    result := []
-    if (!TomlUtil_Valid(t))
-        return result
-    tablesSeg := TomlUtil_Table(t, "Tables")
-    if (!TomlUtil_Valid(tablesSeg))
-        return result
-    for entry in TomlUtil_List(tablesSeg, "List") {
-        if (!IsObject(entry) || entry.Length < 4)
-            continue
-        result.Push(entry)
-    }
-    return result
-}
-
-; §22 剔除 INI 迁移残留 [Tables] 段（写回前调用）：表集合已由 [[table]] 承载，
-; root 里的 [Tables]（异构数组 List）会让 TomlWriter 写回抛异常，直接剔除自愈。
-TomlUtil_DeleteTablesLegacy(root) {
-    if (root.Has("Tables"))
-        root.Delete("Tables")
-}
-
-; 从旧格式表集合条目数组构建 TableItem 列表（entry = [ID, Symbol, Name, Order]）
-; 独立函数：LoadCurMacroSetting 内含 `for tableItem` 循环，使 tableItem 成为该函数局部变量；
-; AHK v2 变量名大小写不敏感 → 在函数内直接 TableItem() 会被解析为"调用局部变量 tableItem"
-; 而报 "This local variable has not been assigned a value"，必须在此类无 tableItem 变量的函数内实例化。
-BuildTableItemList(entries) {
-    result := []
-    for e in entries {
-        if (!IsObject(e) || e.Length < 4)
-            continue
-        t := TableItem()
-        t.Symbol := e[2]
-        t.ID := e[2]
-        t.Name := e[3]
-        t.Order := Integer(e[4])
-        ; 仅旧式动态段名（t_ 前缀）视为迁移源（PersistSeg）；新固定 Symbol 或 Symbol_N 多实例不做迁移
-        t.PersistSeg := (SubStr(e[1], 1, 2) == "t_") ? e[1] : ""
-        result.Push(t)
-    }
-    return result
-}
 
 ; 从 TOML [[table]] 数组构建 TableItem 列表（每项为 Toml 对象，字段 id/symbol/name/order）
 BuildTableItemListFromToml(tables) {
@@ -1073,79 +1022,17 @@ BuildTableItemListFromToml(tables) {
 ; 旧格式：无 [Tables] 段 → 使用默认 13 表定义（每条目按旧格式迁移）
 ; ============================================================
 LoadCurMacroSetting() {
-    global MySoftData, MacroFile, MacroIniFile
+    global MySoftData
     migrated := false
 
-    ; ---- INI 迁移期（MacroFile 临时指向 .ini）：完全走旧链路 ----
-    if (!IsMacroTomlMode()) {
-        tableListStr := IniRead(MacroFile, "Tables", "List", "")
-        if (tableListStr != "") {
-            ; 新格式：解析动态表集合（JSON 数组 [[ID, Symbol, Name, Order], ...]）
-            ; 表身份固定 = Symbol（entry[2]）；entry[1] 若是旧动态 t_xxx 段名则记入 PersistSeg 供迁移读取
-            MySoftData.TableInfo := []
-            try {
-                tableArr := JSON.parse(tableListStr, , false)
-                if (IsObject(tableArr))
-                    MySoftData.TableInfo := BuildTableItemList(tableArr)
-            } catch as e {
-                ; JSON 解析失败（异常损坏）→ 回退默认表集合
-                CreateTableItemArr()
-            }
-            if (MySoftData.TableInfo.Length == 0)
-                CreateTableItemArr()
-            RebuildTableLocator()
-            EnsureNetworkTable()    ;§23 旧配置兼容：自动补建「网络宏」表（无则插 Replace 之后）
-        } else {
-            ; 旧格式：默认 13 表骨架（条目数据按旧格式逐表迁移）
-            CreateTableItemArr()
-            migrated := true
-        }
-        for tableItem in MySoftData.TableInfo {
-            if (ReadTableItemInfo(tableItem))
-                migrated := true
-            EnsureTableHasFold(tableItem)
-        }
-        ; 仅当发生过迁移（旧格式→新格式）才落盘表集合，避免 Worker 并发写
-        if (migrated)
-            SaveTableCollection()
-        RebuildTableLocator()
-        ResolveCurTableIndex()
-        return
-    }
-
-    ; ---- 一次性迁移：.toml 不存在且 .ini 存在 → 读 INI 进内存 → 落盘 .toml → 回读校验后改名 .bak ----
-    if (!FileExist(MacroFile) && FileExist(MacroIniFile)) {
-        savedMacroFile := MacroFile
-        MacroFile := MacroIniFile
-        LoadCurMacroSetting()                ; 递归走 INI 分支（读旧格式进内存）
-        MacroFile := savedMacroFile
-        SaveAllTableItemInfo(MySoftData.TableInfo)   ; 表集合 + 各表三级段一次落盘 .toml
-        ; 回读校验：成功才把 .ini 改名 .bak，失败保留 .ini（下次启动仍会尝试迁移）
-        try {
-            chk := TomlUtil_Read()
-            if (TomlUtil_Valid(chk))
-                FileMove(MacroIniFile, MacroIniFile ".bak", 1)
-        } catch as e {
-            RMTLogSys(RMT_LV_ERROR, "LoadCurMacroSetting", Format("TOML 迁移校验失败，保留 INI: {1}", e.Message))
-        }
-        ResolveCurTableIndex()
-        return
-    }
-
-    ; ---- TOML 正常路径：表集合 [[table]] 数组 ----
+    ; ---- 表集合 [[table]] 数组 ----
     t := TomlUtil_Read()
     if (TomlUtil_Valid(t)) {
         tables := TomlUtil_Tables(t, "table")
-        ; §22 兼容：INI 迁移残留 [Tables] List 段（无 [[table]] 时）→ 按旧表集合解析，避免误走默认表重建
-        legacyTables := (tables.Length == 0) ? TomlUtil_LegacyTableList(t) : []
-        if (tables.Length > 0 || legacyTables.Length > 0) {
+        if (tables.Length > 0) {
             ; 独立函数建表：LoadCurMacroSetting 内 `for tableItem` 使 tableItem 为局部变量，
             ; 直接调 TableItem() 会被解析为局部变量调用（AHK v2 大小写不敏感）→ 抽离避免遮蔽
-            MySoftData.TableInfo := (tables.Length > 0)
-                ? BuildTableItemListFromToml(tables)
-                : BuildTableItemList(legacyTables)
-            if (tables.Length == 0)
-                migrated := true   ; INI 残留 [Tables] 兼容 → 自愈写回 [[table]]
+            MySoftData.TableInfo := BuildTableItemListFromToml(tables)
             RebuildTableLocator()
         } else {
             CreateTableItemArr()
@@ -1198,21 +1085,10 @@ ReadTableItemInfo(tableItem) {
         return false
     }
 
-    segID := tableItem.PersistSeg   ; 迁移源段名（旧 t_xxx；新格式为空）
-
-    ; ---- 新格式检测：表段有 ModuleOrder 键，或存在 [tableID.*] 三级子段 ----
+    ; ---- 三级段检测：表段有 ModuleOrder 键，或存在 [tableID.*] 三级子段 ----
     if (HasThreeLevelData(tableItem.ID)) {
         ReadTableItemInfoNew(tableItem, tableItem.ID)
         return false
-    }
-
-    ; ---- 旧 t_xxx 迁移段检测：回退 PersistSeg ----
-    if (segID != "" && HasThreeLevelData(segID)) {
-        ; 旧 t_xxx 段数据仍在：按旧段名读取，并落盘迁移到固定 Symbol 段
-        ReadTableItemInfoNew(tableItem, segID)
-        SaveTableItemInfo(tableItem)   ; 迁移：写固定 Symbol 段
-        tableItem.PersistSeg := ""     ; 迁移完成，清除迁移标记
-        return true
     }
 
     ; ---- 全新表：初始化默认条目并落盘为三级格式 ----
@@ -1223,12 +1099,6 @@ ReadTableItemInfo(tableItem) {
 
 ; 判断某表是否存在三级段结构数据（ModuleOrder 键或 [表ID.*] 子段）
 HasThreeLevelData(tableID) {
-    global MacroFile
-    if (!IsMacroTomlMode()) {
-        if (IniRead(MacroFile, tableID, "ModuleOrder", "") != "")
-            return true
-        return EnumerateDottedSubSegments(tableID).Length > 0
-    }
     t := TomlUtil_Read()
     if (!TomlUtil_Valid(t))
         return false
@@ -1261,8 +1131,7 @@ InitTableItemDefault(tableItem) {
         tableItem.Items.Push(item)
     }
     ApplyLegacyArraysToItems(tableItem, defs, [])
-    ; 首次启动（从未保存过配置）：给首个条目填默认宏模板，
-    ; 与旧格式迁移路径 ReadTableItemInfoLegacy 保持一致，避免首次创建 Macro_* 落盘为空
+    ; 首次启动（从未保存过配置）：给首个条目填默认宏模板，避免首次创建 Macro_* 落盘为空
     if (!MainSoftData.HasSaved && itemCount >= 1)
         tableItem.Items[1].Macro := GetGetTableItemDefaultMacro(symbol)
     tableItem.RebuildIndex()
@@ -1329,73 +1198,11 @@ SegTailNum(seg, prefix) {
 ;   段名序号 = 稳定身份（纯自增不复用、移动改路径），顺序由父段 Order 列表单独控制。
 ; ============================================================
 ReadTableItemInfoNew(tableItem, segID := "") {
-    global MacroFile
     tableID := (segID == "") ? tableItem.ID : segID
     tableItem.Items := []
     tableItem.ItemMap := Map()
     tableItem.Folds := []
     tableItem.FoldMap := Map()
-
-    ; ---- INI 迁移期（MacroFile 临时指向 .ini）：旧链路 ----
-    if (!IsMacroTomlMode()) {
-        ; ---- 模块级：按表段 ModuleOrder 列表顺序加载 [tableID.ModuleN] 段 ----
-        foldSegmentOrder := StrSplit(IniRead(MacroFile, tableID, "ModuleOrder", ""), "π")
-        foldSegs := EnumerateDottedSubSegments(tableID)   ; 合法子段集合（去重确认存在）
-        for foldRef in foldSegmentOrder {
-            foldRef := Trim(foldRef, "`r`n ")
-            if (foldRef == "")
-                continue
-            foldSeg := tableID "." foldRef     ; 例 Normal.Module1
-            if (!HasSegment(foldSeg, foldSegs))
-                continue   ; 段不存在则跳过（避免读残留）
-            fold := MacroFold()
-            fold.ID := foldSeg                 ; 段名即模块身份（全局唯一路径）
-            fold.Remark := IniRead(MacroFile, foldSeg, "Remark", "")
-            fold.FrontInfo := IniRead(MacroFile, foldSeg, "FrontInfo", "")
-            fold.ForbidState := !!Integer(IniRead(MacroFile, foldSeg, "ForbidState", "0"))
-            fold.FoldState := !!Integer(IniRead(MacroFile, foldSeg, "FoldState", "0"))
-            fold.ForbidHotkey := IniRead(MacroFile, foldSeg, "ForbidHotkey", "")
-            fold.TKType := Integer(IniRead(MacroFile, foldSeg, "TKType", "4"))
-            fold.TK := IniRead(MacroFile, foldSeg, "TK", "")
-            fold.HoldTime := IniRead(MacroFile, foldSeg, "HoldTime", "500")
-            fold.UnorderedTrigger := !!Integer(IniRead(MacroFile, foldSeg, "UnorderedTrigger", "0"))
-            tableItem.Folds.Push(fold)
-            tableItem.FoldMap[foldSeg] := fold
-
-            ; ---- 宏级：按模块段 MacroOrder 列表顺序加载 [foldSeg.MacroM] 段 ----
-            macroSegs := EnumerateDottedSubSegments(foldSeg)
-            macroOrder := StrSplit(IniRead(MacroFile, foldSeg, "MacroOrder", ""), "π")
-            for macroRef in macroOrder {
-                macroRef := Trim(macroRef, "`r`n ")
-                if (macroRef == "")
-                    continue
-                macroSeg := foldSeg "." macroRef   ; 例 Normal.Module1.Macro1
-                if (!HasSegment(macroSeg, macroSegs))
-                    continue
-                item := MacroItem()
-                item.ID := macroSeg                ; 段名即宏身份（表内唯一路径）
-                item.TK := IniRead(MacroFile, macroSeg, "TK", "")
-                item.HoldTime := IniRead(MacroFile, macroSeg, "HoldTime", "500")
-                item.UnorderedTrigger := !!Integer(IniRead(MacroFile, macroSeg, "UnorderedTrigger", "0"))
-                item.Forbid := ParseBoolInt(IniRead(MacroFile, macroSeg, "Forbid", "0"))
-                item.LoopCount := IniRead(MacroFile, macroSeg, "LoopCount", "1")
-                item.Remark := IniRead(MacroFile, macroSeg, "Remark", "")
-                item.TriggerType := IniRead(MacroFile, macroSeg, "TriggerType", "1")
-                item.TimingSerial := IniRead(MacroFile, macroSeg, "TimingSerial", "")
-                item.Mode := IniRead(MacroFile, macroSeg, "Mode", "1")
-                item.StartTipSound := IniRead(MacroFile, macroSeg, "StartTipSound", "1")
-                item.EndTipSound := IniRead(MacroFile, macroSeg, "EndTipSound", "1")
-                item.IcoPath := IniRead(MacroFile, macroSeg, "IcoPath", "")
-                item.VoiceKeywords := IniRead(MacroFile, macroSeg, "VoiceKeywords", "")
-                item.Macro := IniRead(MacroFile, macroSeg, "Macro", "")
-                item.Breakpoints := IniRead(MacroFile, macroSeg, "Breakpoints", "")
-                item.FoldID := foldSeg             ; 父模块路径身份
-                tableItem.Items.Push(item)
-                tableItem.ItemMap[macroSeg] := item
-            }
-        }
-        return
-    }
 
     ; ---- TOML 新链路（操作封装在 Util\TomlUtil.ahk，含点键自动补引号）----
     t := TomlUtil_Read()
@@ -1486,38 +1293,8 @@ ParseBoolInt(x) {
 ; 仅返回比 prefix 多一节（不含更深层级）的段。
 ; ============================================================
 EnumerateDottedSubSegments(prefix) {
-    global MacroFile
     segs := []
     orderMap := Map()   ; 段名 -> 末节数字
-    ; ---- INI 迁移期：磁盘枚举全部段名 ----
-    if (!IsMacroTomlMode()) {
-        try {
-            allSegs := IniRead(MacroFile)   ; 全部段名，换行分隔
-            for rawLine in StrSplit(allSegs, "`n") {
-                seg := Trim(rawLine, "`r`n ")
-                if (seg == "" || seg == prefix)
-                    continue
-                ; 只接受 prefix + "." + 单节（tail 不含点 = 直接子段；含点 = 更深孙段跳过）
-                prefixDot := prefix "."
-                if (SubStr(seg, 1, StrLen(prefixDot)) != prefixDot)
-                    continue
-                tail := SubStr(seg, StrLen(prefixDot) + 1)
-                if (InStr(tail, "."))
-                    continue   ; 更深层级孙段
-                ; 提取末节序号（ModuleN / MacroN 的 N）
-                num := 0
-                if (RegExMatch(tail, "(\d+)$", &m))
-                    num := Integer(m[1])
-                segs.Push(seg)
-                orderMap[seg] := num
-            }
-        } catch as e {
-            RMTLogSys(RMT_LV_ERROR, "EnumerateDottedSubSegments", Format("枚举 {1} 子段失败: {2}", prefix, e.Message))
-        }
-        ; 按末节数字自然升序
-        BuildSortIndex(segs, orderMap)
-        return segs
-    }
     ; ---- TOML 新链路：root 键迭代（TomlUtil_RootMap 已剥离引号，不再枚举磁盘） ----
     src := TomlUtil_RootMap()
     prefixDot := prefix "."
@@ -1559,149 +1336,6 @@ BuildSortIndex(segs, orderMap) {
         if (!swapped)
             break
     }
-}
-
-; ============================================================
-; 旧格式读取：symbol 前缀 π 拼接 + MacroArr N + FoldInfo JSON
-; 解析后迁移为新格式对象结构
-; ============================================================
-ReadTableItemInfoLegacy(tableItem) {
-    global MySoftData, MacroFile, IniSection
-    symbol := tableItem.Symbol
-    defaultInfo := GetTableItemDefaultInfo(tableItem)
-    savedTKArrStr := IniRead(MacroFile, IniSection, symbol "TKArr", "")
-    savedModeArrStr := IniRead(MacroFile, IniSection, symbol "ModeArr", "")
-    savedForbidArrStr := IniRead(MacroFile, IniSection, symbol "ForbidArr", "")
-    savedRemarkArrStr := IniRead(MacroFile, IniSection, symbol "RemarkArr", "")
-    savedLoopCountStr := IniRead(MacroFile, IniSection, symbol "LoopCountArr", "")
-    savedHoldTimeArrStr := IniRead(MacroFile, IniSection, symbol "HoldTimeArr", "")
-    savedTriggerTypeArrStr := IniRead(MacroFile, IniSection, symbol "TriggerTypeArr", "")
-    savedSerialStr := IniRead(MacroFile, IniSection, symbol "SerialArr", "")
-    savedTimingSerialStr := IniRead(MacroFile, IniSection, symbol "TimingSerialArr", "")
-    savedStartTipSoundStr := IniRead(MacroFile, IniSection, symbol "StartTipSoundArr", "")
-    savedEndTipSoundStr := IniRead(MacroFile, IniSection, symbol "EndTipSoundArr", "")
-    savedIcoPathArrStr := IniRead(MacroFile, IniSection, symbol "IcoPathArr", "")
-    savedUnorderedTriggerArrStr := IniRead(MacroFile, IniSection, symbol "UnorderedTriggerArr", "")
-    savedVoiceKeywordsArrStr := IniRead(MacroFile, IniSection, symbol "VoiceKeywordsArr", "")
-    savedFoldInfoStr := IniRead(MacroFile, IniSection, symbol "FoldInfo", "")
-
-    ; 不存在折叠筐就初始化，并读取默认配置
-    if (savedFoldInfoStr == "") {
-        savedTKArrStr := defaultInfo[1]
-        savedHoldTimeArrStr := defaultInfo[2]
-        savedModeArrStr := defaultInfo[3]
-        savedForbidArrStr := defaultInfo[4]
-        savedRemarkArrStr := defaultInfo[5]
-        savedLoopCountStr := defaultInfo[6]
-        savedTriggerTypeArrStr := defaultInfo[7]
-        savedSerialStr := defaultInfo[8]
-        savedTimingSerialStr := defaultInfo[9]
-        savedStartTipSoundStr := defaultInfo[10]
-        savedEndTipSoundStr := defaultInfo[11]
-        savedIcoPathArrStr := defaultInfo[12]
-        savedUnorderedTriggerArrStr := defaultInfo[13]
-        savedVoiceKeywordsArrStr := defaultInfo[14]
-
-        defaultFoldInfo := ItemFoldInfo()
-        defaultFoldInfo.RemarkArr := [GetLang("RMT默认初始化配置")]
-        defaultFoldInfo.FrontInfoArr := [""]
-        if (savedModeArrStr == "")
-            IndexSpanValue := "无-无"
-        else
-            IndexSpanValue := "1-" StrSplit(savedModeArrStr, "π").Length
-        defaultFoldInfo.IndexSpanArr := [IndexSpanValue]
-        defaultFoldInfo.FoldStateArr := [false]
-        defaultFoldInfo.ForbidStateArr := [false]
-
-        defaultFoldInfo.TKTypeArr := [4]
-        defaultFoldInfo.TKArr := [""]
-        defaultFoldInfo.HoldTimeArr := [500]
-        defaultFoldInfo.UnorderedTriggerArr := [false]
-        savedFoldInfoStr := JSON.stringify(defaultFoldInfo, 0)
-    }
-
-    ; 解析旧数组 → 条目对象
-    ; 非宏表（Tool/Setting/Help/Reward/Thank）无条目配置：ModeArr 空 → 0 条
-    if (savedModeArrStr == "") {
-        tableItem.Folds := []
-        tableItem.FoldMap := Map()
-        tableItem.Items := []
-        tableItem.ItemMap := Map()
-        return
-    }
-    itemCount := StrSplit(savedModeArrStr, "π").Length
-    if (itemCount == 0)
-        itemCount := 1
-
-    oldTKArr := StrSplit(savedTKArrStr, "π")
-    oldHoldTimeArr := StrSplit(savedHoldTimeArrStr, "π")
-    oldModeArr := StrSplit(savedModeArrStr, "π")
-    oldForbidArr := StrSplit(savedForbidArrStr, "π")
-    oldRemarkArr := StrSplit(savedRemarkArrStr, "π")
-    oldLoopCountArr := StrSplit(savedLoopCountStr, "π")
-    oldTriggerTypeArr := StrSplit(savedTriggerTypeArrStr, "π")
-    oldSerialArr := StrSplit(savedSerialStr, "π")
-    oldTimingSerialArr := StrSplit(savedTimingSerialStr, "π")
-    oldStartTipSoundArr := StrSplit(savedStartTipSoundStr, "π")
-    oldEndTipSoundArr := StrSplit(savedEndTipSoundStr, "π")
-    oldIcoPathArr := StrSplit(savedIcoPathArrStr, "π")
-    oldUnorderedTriggerArr := StrSplit(savedUnorderedTriggerArrStr, "π")
-    oldVoiceKeywordsArr := StrSplit(savedVoiceKeywordsArrStr, "π")
-
-    ; 迁移折叠框：IndexSpanArr → FoldID
-    oldFoldInfo := JSON.parse(savedFoldInfoStr, , false)
-    Compat1_0_8F4FlodInfo(oldFoldInfo)
-    mig := MigrateIndexSpanToFoldID(oldFoldInfo, itemCount)
-    foldsArr := mig[1]
-    itemFoldIDArr := mig[2]
-
-    tableItem.Folds := foldsArr
-    tableItem.FoldMap := Map()
-    for fold in foldsArr
-        tableItem.FoldMap[fold.ID] := fold
-
-    tableItem.Items := []
-    tableItem.ItemMap := Map()
-    loop itemCount {
-        item := MacroItem()
-        item.ID := (oldSerialArr.Has(A_Index) && oldSerialArr[A_Index] != "") ? oldSerialArr[A_Index] : GetCMDSerialStr("Item")
-        item.TK := oldTKArr.Has(A_Index) ? oldTKArr[A_Index] : ""
-        item.HoldTime := oldHoldTimeArr.Has(A_Index) && oldHoldTimeArr[A_Index] != "" ? oldHoldTimeArr[A_Index] : 500
-        item.Mode := oldModeArr.Has(A_Index) && oldModeArr[A_Index] != "" ? oldModeArr[A_Index] : 1
-        item.Forbid := oldForbidArr.Has(A_Index) && oldForbidArr[A_Index] != "" ? oldForbidArr[A_Index] : 0
-        item.Remark := oldRemarkArr.Has(A_Index) ? oldRemarkArr[A_Index] : ""
-        item.LoopCount := oldLoopCountArr.Has(A_Index) && oldLoopCountArr[A_Index] != "" ? oldLoopCountArr[A_Index] : "1"
-        item.TriggerType := oldTriggerTypeArr.Has(A_Index) && oldTriggerTypeArr[A_Index] != "" ? oldTriggerTypeArr[A_Index] : 1
-        item.TimingSerial := oldTimingSerialArr.Has(A_Index) ? oldTimingSerialArr[A_Index] : ""
-        item.StartTipSound := oldStartTipSoundArr.Has(A_Index) && oldStartTipSoundArr[A_Index] != "" ? oldStartTipSoundArr[A_Index] : 1
-        item.EndTipSound := oldEndTipSoundArr.Has(A_Index) && oldEndTipSoundArr[A_Index] != "" ? oldEndTipSoundArr[A_Index] : 1
-        item.IcoPath := oldIcoPathArr.Has(A_Index) ? oldIcoPathArr[A_Index] : ""
-        item.UnorderedTrigger := oldUnorderedTriggerArr.Has(A_Index) ? (oldUnorderedTriggerArr[A_Index] == "1" || oldUnorderedTriggerArr[A_Index] == "true") : false
-        item.VoiceKeywords := oldVoiceKeywordsArr.Has(A_Index) ? oldVoiceKeywordsArr[A_Index] : ""
-        item.FoldID := itemFoldIDArr.Has(A_Index) ? itemFoldIDArr[A_Index] : ""
-        tableItem.Items.Push(item)
-        tableItem.ItemMap[item.ID] := item
-    }
-
-    ; 宏内容单独 key（旧格式：symbol"MacroArr" N）
-    loop itemCount {
-        str := IniRead(MacroFile, IniSection, symbol "MacroArr" A_Index, "")
-        if (str == "" && !MainSoftData.HasSaved && A_Index == 1)
-            str := GetGetTableItemDefaultMacro(symbol)
-        else {
-            str := StrReplace(str, "⫶", "`n")
-        }
-        tableItem.Items[A_Index].Macro := str
-    }
-
-    ; 登记条目 ID / TimingSerial 到全局序列号（防重复生成）
-    for item in tableItem.Items {
-        if (item.ID != "")
-            SetSerialByArr([item.ID])
-        if (item.TimingSerial != "")
-            SetSerialByArr([item.TimingSerial])
-    }
-    CompatEnsureArrLength(tableItem)
 }
 
 ; 把旧默认信息数组应用为条目（供全新表初始化）
@@ -1894,153 +1528,8 @@ GetTableItemDefaultInfo(tableItem) {
 ;   [TableID.ModuleN.MacroM] 宏段：ID=<真实全局 ItemN> + 宏字段 + Macro 实义
 ;   段名序号 ModuleN/MacroN 为层级内易读序号，真实对象 ID 存段内 ID= 键恢复全局唯一引用。
 ; ============================================================
-; 枚举删除 INI 某段内的全部键（保留段头）。用于非配置表（静态页）在保存时清空整段，保证零配置、零残留。
-WipeIniSectionKeys(filename, section) {
-    allKeys := IniRead(filename, section)
-    for key in StrSplit(allKeys, "`n") {
-        if (key != "")
-            IniDelete(filename, section, key)
-    }
-}
-
-; 删除某表名前缀下的全部带点子段（[tableID.*]），供非配置表清空与孤儿清理。
-WipeDottedSubSections(filename, tableID) {
-    allSegs := IniRead(filename)   ; 全部段名，换行分隔
-    prefixDot := tableID "."
-    for rawLine in StrSplit(allSegs, "`n") {
-        seg := Trim(rawLine, "`r`n ")
-        if (seg == "")
-            continue
-        if (SubStr(seg, 1, StrLen(prefixDot)) == prefixDot)
-            IniDelete(filename, seg)
-    }
-}
-
 SaveTableItemInfo(tableItem) {
-    ; 双模式分发：迁移期 MacroFile 临时指向 .ini 走旧链路；正常期 .toml 走 TOML 新链路
-    if (!IsMacroTomlMode()) {
-        SaveTableItemInfoIni(tableItem)
-        return
-    }
     SaveTableItemInfoToml(tableItem)
-}
-
-SaveTableItemInfoIni(tableItem) {
-    global MacroFile, IniSection
-    tableID := tableItem.ID
-    symbol := tableItem.Symbol
-
-    ; 非配置表（Tool/Setting/Help/Reward/Thank 等静态页）：不参与宏配置，
-    ; 清空本段全部键 + 全部 [tableID.*] 带点子段，保证磁盘零配置、零残留。
-    if (IsStaticTable(tableItem)) {
-        try {
-            WipeIniSectionKeys(MacroFile, tableID)
-            WipeDottedSubSections(MacroFile, tableID)
-        } catch as e {
-            RMTLogSys(RMT_LV_ERROR, "SaveTableItemInfo", Format("清空静态表段 {1} 失败: {2}", tableID, e.Message))
-        }
-        return
-    }
-
-    ; ---- 模块级 + 宏级三级落盘（路径身份） ----
-    ; 段名即对象身份（fold.ID = tableID.ModuleN，item.ID = foldSeg.MacroM），无独立 ID= 键。
-    ; 顺序由父段 Order 列表单独控制：表段 ModuleOrder、模块段 MacroOrder（存各直属尾节）。
-    ; 孤儿宏（FoldID 无匹配模块）先归入首模块，保证不丢失。
-    fallbackFold := tableItem.Folds.Length > 0 ? tableItem.Folds[1] : ""
-    for item in tableItem.Items {
-        if ((item.FoldID == "" || !FoldIDBelongs(item.FoldID, tableItem)) && fallbackFold != "")
-            item.FoldID := fallbackFold.ID
-    }
-
-    currentSegs := Map()   ; 本次写入的段名集合，用于孤儿清理
-    moduleOrder := []      ; 表段 ModuleOrder：模块段尾节（ModuleN）
-    for fold in tableItem.Folds {
-        foldSeg := fold.ID
-        if (foldSeg == "") {
-            RMTLogSys(RMT_LV_ERROR, "SaveTableItemInfo", "模块缺少路径身份(ID)，无法确定段名，跳过")
-            continue
-        }
-        currentSegs[foldSeg] := true
-        ; 收集模块尾节（如 Normal.Module1 → Module1）
-        moduleOrder.Push(GetSegTail(foldSeg))
-        IniWrite(fold.Remark,       MacroFile, foldSeg, "Remark")
-        IniWrite(fold.FrontInfo,    MacroFile, foldSeg, "FrontInfo")
-        IniWrite(fold.ForbidState ? 1 : 0, MacroFile, foldSeg, "ForbidState")
-        IniWrite(fold.FoldState ? 1 : 0,   MacroFile, foldSeg, "FoldState")
-        IniWrite(fold.ForbidHotkey,  MacroFile, foldSeg, "ForbidHotkey")
-        IniWrite(fold.TKType,       MacroFile, foldSeg, "TKType")
-        IniWrite(fold.TK,           MacroFile, foldSeg, "TK")
-        IniWrite(fold.HoldTime,     MacroFile, foldSeg, "HoldTime")
-        IniWrite(fold.UnorderedTrigger ? 1 : 0, MacroFile, foldSeg, "UnorderedTrigger")
-
-        macroOrder := []   ; 模块段 MacroOrder：宏段尾节（MacroN）
-        for item in tableItem.Items {
-            if (item.FoldID != foldSeg)
-                continue   ; 宏归属按 FoldID（父路径）归入对应模块段
-            macroSeg := item.ID
-            if (macroSeg == "") {
-                RMTLogSys(RMT_LV_ERROR, "SaveTableItemInfo", Format("模块{1}内宏缺少路径身份(ID)，跳过", foldSeg))
-                continue
-            }
-            currentSegs[macroSeg] := true
-            macroOrder.Push(GetSegTail(macroSeg))
-            IniWrite(item.TK,            MacroFile, macroSeg, "TK")
-            IniWrite(item.HoldTime,      MacroFile, macroSeg, "HoldTime")
-            IniWrite(item.Mode,          MacroFile, macroSeg, "Mode")
-            IniWrite(item.Forbid ? 1 : 0, MacroFile, macroSeg, "Forbid")
-            IniWrite(item.Remark,        MacroFile, macroSeg, "Remark")
-            IniWrite(item.LoopCount,     MacroFile, macroSeg, "LoopCount")
-            IniWrite(item.TriggerType,   MacroFile, macroSeg, "TriggerType")
-            IniWrite(item.TimingSerial,  MacroFile, macroSeg, "TimingSerial")
-            IniWrite(item.StartTipSound, MacroFile, macroSeg, "StartTipSound")
-            IniWrite(item.EndTipSound,   MacroFile, macroSeg, "EndTipSound")
-            IniWrite(item.IcoPath,       MacroFile, macroSeg, "IcoPath")
-            IniWrite(item.UnorderedTrigger ? 1 : 0, MacroFile, macroSeg, "UnorderedTrigger")
-            IniWrite(item.VoiceKeywords, MacroFile, macroSeg, "VoiceKeywords")
-            IniWrite(item.Breakpoints,   MacroFile, macroSeg, "Breakpoints")
-            ; 宏内容：直接存（换行用 ⫶ 编码，避免 INI 值含换行）
-            MacroStr := Trim(item.Macro)
-            MacroStr := Trim(MacroStr, "`n")
-            MacroStr := Trim(MacroStr, ",")
-            MacroStr := StrReplace(MacroStr, "`n", "⫶")
-            IniWrite(MacroStr, MacroFile, macroSeg, "Macro")
-        }
-        IniWrite(JoinPi(macroOrder), MacroFile, foldSeg, "MacroOrder")
-    }
-    IniWrite(JoinPi(moduleOrder), MacroFile, tableID, "ModuleOrder")
-
-    ; 清理孤儿 [tableID.*] 子段：删除不在当前写入集合中的段，防累积。
-    try {
-        allSegs := IniRead(MacroFile)
-        prefixDot := tableID "."
-        for rawLine in StrSplit(allSegs, "`n") {
-            seg := Trim(rawLine, "`r`n ")
-            if (seg == "" || SubStr(seg, 1, StrLen(prefixDot)) != prefixDot)
-                continue
-            if (!currentSegs.Has(seg))
-                IniDelete(MacroFile, seg)
-        }
-    } catch as e {
-        RMTLogSys(RMT_LV_ERROR, "SaveTableItemInfo", Format("清理孤儿子段失败: {1}", e.Message))
-    }
-
-    ; 清除旧格式残留 key（symbol 前缀，避免双格式并存误判）
-    IniDelete(MacroFile, IniSection, symbol "TKArr")
-    IniDelete(MacroFile, IniSection, symbol "ModeArr")
-    IniDelete(MacroFile, IniSection, symbol "ForbidArr")
-    IniDelete(MacroFile, IniSection, symbol "RemarkArr")
-    IniDelete(MacroFile, IniSection, symbol "LoopCountArr")
-    IniDelete(MacroFile, IniSection, symbol "HoldTimeArr")
-    IniDelete(MacroFile, IniSection, symbol "TriggerTypeArr")
-    IniDelete(MacroFile, IniSection, symbol "SerialArr")
-    IniDelete(MacroFile, IniSection, symbol "TimingSerialArr")
-    IniDelete(MacroFile, IniSection, symbol "StartTipSoundArr")
-    IniDelete(MacroFile, IniSection, symbol "EndTipSoundArr")
-    IniDelete(MacroFile, IniSection, symbol "IcoPathArr")
-    IniDelete(MacroFile, IniSection, symbol "UnorderedTriggerArr")
-    IniDelete(MacroFile, IniSection, symbol "VoiceTriggerArr")
-    IniDelete(MacroFile, IniSection, symbol "VoiceKeywordsArr")
-    IniDelete(MacroFile, IniSection, symbol "FoldInfo")
 }
 
 ; ============================================================
@@ -2050,8 +1539,6 @@ SaveTableItemInfoIni(tableItem) {
 ; ============================================================
 SaveTableItemInfoToml(tableItem) {
     root := TomlUtil_RootMap()
-    ; §22 写回前剔除 INI 残留 [Tables] 段，防止 TomlWriter 遇异构数组抛异常导致保存失败
-    TomlUtil_DeleteTablesLegacy(root)
     SaveTableItemInfoTomlCore(root, tableItem)
     TomlUtil_Write(root)
 }
@@ -2145,18 +1632,9 @@ SaveTableItemInfoTomlCore(root, tableItem) {
 ; ============================================================
 ; 批量保存全部表（TOML 模式）：一次解析 root + 一次原子写
 ; 含表集合 [[table]] 与各表三级段，替代 OnSaveSetting 的逐表读写（13 表 → 1 次解析 + 1 次写）
-; INI 模式（迁移期）退化为逐表旧链路
 ; ============================================================
 SaveAllTableItemInfo(tableItems) {
-    if (!IsMacroTomlMode()) {
-        for tableItem in tableItems
-            SaveTableItemInfo(tableItem)
-        SaveTableCollection()
-        return
-    }
     root := TomlUtil_RootMap()
-    ; §22 写回前剔除 INI 残留 [Tables] 段（表集合以 [[table]] 为准）
-    TomlUtil_DeleteTablesLegacy(root)
     ; 表集合 [[table]]（id/symbol/name/order）
     tableArr := []
     for tableItem in tableItems {
@@ -2195,21 +1673,9 @@ JoinPi(arr) {
     return out
 }
 
-; 保存整个表集合（动态表定义）
-; INI 版：[Tables] 段 JSON 数组序列化；TOML 版：[[table]] 数组（id/symbol/name/order）
+; 保存整个表集合（动态表定义）：[[table]] 数组（id/symbol/name/order）
 SaveTableCollection() {
-    global MacroFile
-    if (!IsMacroTomlMode()) {
-        tableArr := []
-        for tableItem in MySoftData.TableInfo {
-            tableArr.Push([tableItem.ID, tableItem.Symbol, tableItem.Name, tableItem.Order])
-        }
-        IniWrite(JSON.stringify(tableArr, 0), MacroFile, "Tables", "List")
-        return
-    }
     root := TomlUtil_RootMap()
-    ; §22 写回前剔除 INI 残留 [Tables] 段（表集合以 [[table]] 为准）
-    TomlUtil_DeleteTablesLegacy(root)
     tableArr := []
     for tableItem in MySoftData.TableInfo {
         tableArr.Push(Map("id", tableItem.ID, "symbol", tableItem.Symbol, "name", tableItem.Name, "order", tableItem.Order))
@@ -2319,7 +1785,7 @@ EnsureNetworkTable() {
     loop MySoftData.TableInfo.Length
         MySoftData.TableInfo[A_Index].Order := A_Index
     RebuildTableLocator()
-    SaveTableCollection()   ;复用既有表集合落盘链路（INI/TOML 双格式自适应）
+    SaveTableCollection()   ;复用既有表集合落盘链路（TOML [[table]] 数组）
     RMTLogSysInfo("网络触发", "旧配置迁移：已自动补建「网络宏」表（插在按键替换之后）")
     return true
 }
@@ -2765,7 +2231,7 @@ ClearUselessSetting(deleteMacro) {
     for id, value in match {
         if (value == "")
             continue
-        IniDelete(CompareFile, IniSection, value)
+        CfgDelete(CompareFile, SettingSection, value)
     }
 
     RegExMatch(deleteMacro, "(Coord\d+)", &match)
@@ -2773,7 +2239,7 @@ ClearUselessSetting(deleteMacro) {
     for id, value in match {
         if (value == "")
             continue
-        IniDelete(MMPROFile, IniSection, value)
+        CfgDelete(MMPROFile, SettingSection, value)
     }
 }
 
@@ -3111,7 +2577,7 @@ GetMacroCMDData(serialStr) {
 
     DataFile := MySoftData.DataFileMap[cmd]
     DataClass := MySoftData.DataClassMap[cmd]
-    saveStr := IniRead(DataFile, IniSection, normalizedSerialStr, "")
+    saveStr := CfgRead(DataFile, SettingSection, normalizedSerialStr, "")
     if (saveStr == "") {
         Data := DataClass()
         Data.SerialStr := SerialStr
@@ -3140,7 +2606,7 @@ SaveMacroCMDData(Data) {
     DataFile := MySoftData.DataFileMap[cmdKey]
 
     saveStr := JSON.stringify(Data, 0)
-    IniWrite(saveStr, DataFile, IniSection, Data.SerialStr)
+    CfgWrite(saveStr, DataFile, SettingSection, Data.SerialStr)
     ; 清掉原串与规范化键，避免中英文序列码双缓存导致读到旧对象（勾选未回显）
     if (MySoftData.DataCacheMap.Has(Data.SerialStr))
         MySoftData.DataCacheMap.Delete(Data.SerialStr)
@@ -3956,7 +3422,7 @@ WorkPoolEnabled() {
 ; 否则 Worker 加载 LoadMainSetting 时函数名无法解析（AHK #Warn）。
 
 ; 端口合法性：必须是 1-65535 的整数（99999 这类值经 htons 截断会静默监听错端口）。
-; 用 IsInteger 值检查而非 `is Integer` 类型检查：IniRead 返回字符串，"16890" 也须视为合法。
+; 用 IsInteger 值检查而非 `is Integer` 类型检查：CfgRead 返回字符串，"16890" 也须视为合法。
 NetworkIsValidPort(v) {
     if (!IsInteger(v))
         return false

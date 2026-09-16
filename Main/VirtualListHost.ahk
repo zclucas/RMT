@@ -142,6 +142,7 @@ class VirtualListHost {
 
     ; ============ VL_INIT 数据构建 ============
     _BuildRecords(t, tableItem) {
+        NormalizeFoldItemOrder(tableItem)   ; 修复历史「新增模块插错位」导致的行号乱序（按模块稳定归位）
         isMacro := CheckIsMacroTable(t)
         isNormal := CheckIsNormalTable(t)
         isSubMacro := CheckIsSubMacroTable(t)

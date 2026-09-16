@@ -4467,18 +4467,14 @@ class MainWin {
     _BuildTKBtnInnerXaml(tkStr, vlMode, bindingName := "TKStr") {
         kb := '&#xE92E;'
         if (vlMode) {
+            ; 可见性由数据侧直接给 TKTextVis / TKGlyphVis（VListRow / VListFold 均有），
+            ; 内联 DataTrigger 在注入模板中不生效，不能靠它切换
             binding := "{Binding " bindingName "}"
             return '<Grid>'
-                . '<Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Center">'
-                . '<Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Visibility" Value="Visible"/>'
-                . '<Style.Triggers><DataTrigger Binding="' binding '" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>'
-                . '</Style></Viewbox.Style>'
+                . '<Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Center" Visibility="{Binding TKTextVis}">'
                 . '<TextBlock Text="' binding '" TextWrapping="NoWrap" TextAlignment="Center" FontSize="14"/>'
                 . '</Viewbox>'
-                . '<TextBlock Text="' kb '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center">'
-                . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>'
-                . '<Style.Triggers><DataTrigger Binding="' binding '" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>'
-                . '</Style></TextBlock.Style></TextBlock>'
+                . '<TextBlock Text="' kb '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding TKGlyphVis}"/>'
                 . '</Grid>'
         }
         if (tkStr == "")
@@ -4495,14 +4491,8 @@ class MainWin {
         font := ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"'
         if (vlMode) {
             return '<Grid ClipToBounds="False" IsHitTestVisible="False">'
-                . '<TextBlock Text="' clock '"' font '>'
-                . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Visible"/>'
-                . '<Style.Triggers><DataTrigger Binding="{Binding HasTimingConfig}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>'
-                . '</Style></TextBlock.Style></TextBlock>'
-                . '<TextBlock Text="' timer '"' font '>'
-                . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>'
-                . '<Style.Triggers><DataTrigger Binding="{Binding HasTimingConfig}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>'
-                . '</Style></TextBlock.Style></TextBlock>'
+                . '<TextBlock Text="' clock '" Visibility="{Binding ClockVis}"' font '/>'
+                . '<TextBlock Text="' timer '" Visibility="{Binding TimerVis}"' font '/>'
                 . '</Grid>'
         }
         emptyVis := configured ? "Collapsed" : "Visible"
@@ -4520,14 +4510,8 @@ class MainWin {
         font := ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource TextMain}"'
         if (vlMode) {
             return '<Grid Width="24" Height="20" IsHitTestVisible="False">'
-                . '<TextBlock Text="' photo '" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"' font '>'
-                . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Visible"/>'
-                . '<Style.Triggers><DataTrigger Binding="{Binding HasConfigImage}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>'
-                . '</Style></TextBlock.Style></TextBlock>'
-                . '<Image Source="{Binding ConfigImagePath}" Width="20" Height="20" Stretch="UniformToFill">'
-                . '<Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Collapsed"/>'
-                . '<Style.Triggers><DataTrigger Binding="{Binding HasConfigImage}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>'
-                . '</Style></Image.Style></Image>'
+                . '<TextBlock Text="' photo '" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PhotoVis}"' font '/>'
+                . '<Image Source="{Binding ConfigImagePath}" Width="20" Height="20" Stretch="UniformToFill" Visibility="{Binding TKThumbVis}"/>'
                 . '</Grid>'
         }
         configured := imagePath != ""
@@ -5594,7 +5578,7 @@ class MainWin {
         global RMTLogBusinessEnabled
         MainSoftData.BusinessLog := this.ui.Query(ctrl) == "True"
         RMTLogBusinessEnabled := MainSoftData.BusinessLog
-        IniWrite(MainSoftData.BusinessLog, IniFile, IniSection, "BusinessLog")
+        CfgWrite(MainSoftData.BusinessLog, SettingFile, SettingSection, "BusinessLog")
     }
 
     OnComboText(fieldName, state, ctrl, event) {

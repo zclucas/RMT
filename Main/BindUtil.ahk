@@ -463,7 +463,7 @@ OnClickTriggerJoyTypeHelpBtn(*) {
 
 OnExitSoft(*) {
     global MyPToken, MyChineseOcr, MyEnglishOcr, MyUIMacroGui, MyWorkPool, MyVoiceEngine
-    global MainSoftData, MySoftData, IniFile, IniSection, MyMainWin
+    global MainSoftData, MySoftData, SettingFile, SettingSection, MyMainWin
 
     try {
         if (IsSet(MyMainWin) && IsObject(MyMainWin))
@@ -518,7 +518,7 @@ OnExitSoft(*) {
             RMTLogSys(RMT_LV_WARN, "Exit", "UIMacro.StopMonitor 失败: " (e.HasProp("Message") ? e.Message : ""))
         }
     }
-    try IniWrite(MySoftData.MacroTotalCount, IniFile, IniSection, "MacroTotalCount")
+    try CfgWrite(MySoftData.MacroTotalCount, SettingFile, SettingSection, "MacroTotalCount")
     catch {
     }
 }

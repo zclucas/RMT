@@ -3,7 +3,7 @@
 ; =============================================================================
 ; AppThemeUtil — 统一主题调色板（窗口、节点、轮盘与运行浮层共用）
 ;
-; 存储：MainSettings.ini [ThemeColors]
+; 存储：MainSettings.toml [ThemeColors]
 ; 运行时：同步到 MainSoftData.ThemeColors，以及各消费字段（UIPanel* / CMD*）
 ; 通用窗口色：经 ApplyXamlTheme(..., useAppWinTheme:=true) 覆盖到 XAML Resource
 ;
@@ -21,7 +21,7 @@
 ;    一律使用默认主题（DefaultThemeKey）对应色，禁止用纯黑凑数（纯黑仅作开发兜底）
 ; 5. 自定义主题（AppTheme=Custom）：
 ;    以默认主题为底图，再叠加 ini 中已保存的逐项颜色；新增 Key 自动得默认色
-; 6. 预设增删：只改 Presets；未知 Key 在 LoadFromIni 因 IsPresetKey 失败而回退到默认主题
+; 6. 预设增删：只改 Presets；未知 Key 在 LoadFromToml 因 IsPresetKey 失败而回退到默认主题
 ; 7. ColorDefs 的 Group/Label 只描述颜色用途，不再作为主题设置页分组标题；
 ;    主题设置页固定显示 14 个语义槽位，修改一个槽位会同步其全部用途键。
 ; =============================================================================
@@ -524,11 +524,11 @@ class AppThemeUtil {
         AppThemeUtil.ApplyToRuntime(MainSoftData.ThemeColors)
     }
 
-    ; ---------- ini 读写 ----------
+    ; ---------- toml 读写 ----------
 
-    static LoadFromIni() {
+    static LoadFromToml() {
         section := "ThemeColors"
-        themeKey := IniRead(IniFile, section, "AppTheme", AppThemeUtil.DefaultThemeKey)
+        themeKey := CfgRead(SettingFile, section, "AppTheme", AppThemeUtil.DefaultThemeKey)
         ; 空值、未知 Key → 默认主题
         if (themeKey == "" || !AppThemeUtil.IsPresetKey(themeKey))
             themeKey := AppThemeUtil.DefaultThemeKey
@@ -540,7 +540,7 @@ class AppThemeUtil {
 
         ; 逐项覆盖：ini 有值才覆盖；新增 ColorDefs Key 在 ini 中不存在时保留底图色
         for def in AppThemeUtil.ColorDefs {
-            saved := IniRead(IniFile, section, def.Key, "")
+            saved := CfgRead(SettingFile, section, def.Key, "")
             if (saved != "")
                 colors[def.Key] := AppThemeUtil.NormalizeArgb(saved)
         }
@@ -550,19 +550,19 @@ class AppThemeUtil {
         AppThemeUtil.ApplyToRuntime(colors)
     }
 
-    static SaveToIni() {
+    static SaveToToml() {
         section := "ThemeColors"
         ; 保存前补齐，避免漏写新增 Key
         MainSoftData.ThemeColors := AppThemeUtil.CloneColorMap(MainSoftData.ThemeColors)
-        IniWrite(MainSoftData.AppTheme, IniFile, section, "AppTheme")
+        CfgWrite(MainSoftData.AppTheme, SettingFile, section, "AppTheme")
         for def in AppThemeUtil.ColorDefs {
             val := AppThemeUtil.ResolveColor(MainSoftData.ThemeColors, def.Key)
-            IniWrite(val, IniFile, section, def.Key)
+            CfgWrite(val, SettingFile, section, def.Key)
         }
         ; 其他界面设置仍写入原有配置段；主题颜色只写入 14 个 Theme_Color 槽位。
-        IniWrite(MainSoftData.AppTheme, IniFile, IniSection, "AppTheme")
+        CfgWrite(MainSoftData.AppTheme, SettingFile, SettingSection, "AppTheme")
         if (MainSoftData.HasProp("FontSize"))
-            IniWrite(MainSoftData.FontSize, IniFile, IniSection, "FontSize")
+            CfgWrite(MainSoftData.FontSize, SettingFile, SettingSection, "FontSize")
     }
 
     ; 轮盘取色：ThemeColors → 默认主题；defaultVal 仅作额外兜底（调用方可省略）

@@ -1076,7 +1076,7 @@ class Writer
 
 class monoExtra
 {
-    static UNICODE_REGEX := Pattern.compile("\\[uU](.{4})")
+    static UNICODE_REGEX := Pattern.compile("\\[uU]([0-9a-fA-F]{4})")
     
     static arrayToMap(arr)
     {
@@ -1281,6 +1281,9 @@ class monoExtra
     
     static replaceUnicodeCharacters(value)
     {
+        ; 快路径：绝大多数值不含 \uXXXX，直接返回，省掉构造 Matcher 的开销
+        if (!instr(value, '\u'))
+            return value
         unicodeMatcher := monoExtra.UNICODE_REGEX.matcher(value)
         while (unicodeMatcher.find())
             value := strreplace(value, unicodeMatcher.group(), chr(integer("0x" unicodeMatcher.group(1))))
@@ -1289,26 +1292,74 @@ class monoExtra
     
     static replaceSpecialCharacters(s)
     {
+        ; 批量反转义（与 Toml.ahk 的 StringValueReaderWriter 实现保持一致）。
+        ; 用「占位符 + 原生 StrReplace」替代逐字符扫描 + 字符串累加（O(n²)）：
+        ;   ① 先把转义序列 \\ 换成占位字符；② 再替换其余转义序列；③ 占位符还原成单反斜杠。
+        ; 顺序不可颠倒：先 \\ → \ 再替换 \b/\n 会把 D:\bak 这类路径二次吃掉。
+        ; 无法识别的转义（含末尾孤立反斜杠）→ Java.Null()，与逐字符版一致。
+        len := strlen(s)
+        if (len == 0)
+            return ""
+        if !instr(s, '\')
+            return s
+        ph := Chr(1)
+        if (instr(s, ph))
+            return monoExtra.replaceSpecialCharactersSlow(s)
+        out := strreplace(s, '\\', ph, true)
+        out := strreplace(out, '\n', "`n", true)
+        out := strreplace(out, '\t', "`t", true)
+        out := strreplace(out, '\r', "`r", true)
+        out := strreplace(out, '\b', "`b", true)
+        out := strreplace(out, '\f', "`f", true)
+        out := strreplace(out, '\"', '"', true)
+        out := strreplace(out, '\/', '/', true)
+        ; 非法转义检测：\\ 成对换成占位符、合法转义全部展开后仍剩反斜杠 → 非法转义 / 末尾孤立反斜杠
+        ; （不能写成「正则找反斜杠 + 后续字符」：正则无法感知配对，D:\\zm、\\\\zm 会被误判）
+        if (instr(out, '\'))
+            return Java.Null()
+        out := strreplace(out, ph, '\', true)
+        return out
+    }
+    
+    static replaceSpecialCharactersSlow(s)
+    {
+        ; 逐字符从左到右扫描（批量快路径的兜底，行为与批量版完全一致）
+        out := ""
         i := 0
-        while (i < strlen(s) - 1)
+        len := strlen(s)
+        while (i < len)
         {
             ch := substr(s, i + 1, 1)
-            next := substr(s, i + 2, 1)
-            if (ch == '\' && next == '\')
+            if (ch == '\')
+            {
                 i++
-            else if (ch == '\' && !(next == 'b' || next == 'f' || next == 'n' || next == 't' || next == 'r' || next == '"' || next == '\'))
-                return Java.Null()
+                if (i >= len)
+                    return Java.Null()
+                next := substr(s, i + 1, 1)
+                if (next == 'n')
+                    out .= "`n"
+                else if (next == 't')
+                    out .= "`t"
+                else if (next == 'r')
+                    out .= "`r"
+                else if (next == 'b')
+                    out .= "`b"
+                else if (next == 'f')
+                    out .= "`f"
+                else if (next == '"')
+                    out .= '"'
+                else if (next == '\')
+                    out .= '\'
+                else if (next == '/')
+                    out .= '/'
+                else
+                    return Java.Null()
+            }
+            else
+                out .= ch
             i++
         }
-        s := strreplace(s, "\n", "`n")
-        s := strreplace(s, '\"', '"')
-        s := strreplace(s, "\t", "`t")
-        s := strreplace(s, "\r", "`r")
-        s := strreplace(s, "\\", "\")
-        s := strreplace(s, "\/", "/")
-        s := strreplace(s, "\b", "`b")
-        s := strreplace(s, "\f", "`f")
-        return s
+        return out
     }
     
     static toString(obj)

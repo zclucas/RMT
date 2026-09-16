@@ -2,7 +2,7 @@
 
 ; =====================================================================
 ; AI 助手设置：模型商 / API URL / API Key / 模型 / 写入权限 / 指令审批
-; 入口：侧栏 AI 工具栏「设置」；确定后即时 IniWrite
+; 入口：侧栏 AI 工具栏「设置」；确定后即时 CfgWrite
 ;
 ; 布局约定：
 ; - 内容内边距统一 ContentPadL=6（与全局 TextBox/对话输入一致）
@@ -373,7 +373,7 @@ class AiSettingGui {
         MainSoftData.AiModelList := this._CollectModelListText(model)
         MainSoftData.AiAccessMode := accessMode
         MainSoftData.AiApprovalMode := approvalMode
-        AiAssist.SaveToIni()
+        AiAssist.SaveToToml()
         Toast.Success(GetLang("AI 设置已保存"))
         try this.ui.Update("Window", "Close", "")
     }

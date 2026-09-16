@@ -1581,8 +1581,8 @@ OnReplaceUpKey(tableItem, info, index, *) {
 MenuReload(*) {
     ; 持久化当前 tab 用 TableID（身份）；未切换过则回落 TabCtrl.Value
     savedTab := MainSoftData.CurTableID != "" ? MainSoftData.CurTableID : MainSoftData.TabCtrl.Value
-    IniWrite(savedTab, IniFile, IniSection, "TableIndex")
-    IniWrite(true, IniFile, IniSection, "IsReload")
+    CfgWrite(savedTab, SettingFile, SettingSection, "TableIndex")
+    CfgWrite(true, SettingFile, SettingSection, "IsReload")
     SafeReload()
 }
 
@@ -1665,12 +1665,12 @@ OnBootStartChanged(ctrl, *) {
         return
     MainSoftData.IsBootStart := MyMainWin.ui.Query("ChkBootStart") == "True"
     ok := ApplyBootStartRegistry(MainSoftData.IsBootStart)
-    IniWrite(MainSoftData.IsBootStart ? 1 : 0, IniFile, IniSection, "IsBootStart")
+    CfgWrite(MainSoftData.IsBootStart ? 1 : 0, SettingFile, SettingSection, "IsBootStart")
     if (!ok) {
         ; 注册表未能与选项对齐时回滚勾选，避免界面已关、实际仍自启
         MainSoftData.IsBootStart := !MainSoftData.IsBootStart
         try MyMainWin.ui.Update("ChkBootStart", "IsChecked", MainSoftData.IsBootStart ? "True" : "False")
-        IniWrite(MainSoftData.IsBootStart ? 1 : 0, IniFile, IniSection, "IsBootStart")
+        CfgWrite(MainSoftData.IsBootStart ? 1 : 0, SettingFile, SettingSection, "IsBootStart")
         MsgBox(GetLang("开机自启设置失败，请检查是否被安全软件拦截，或勿通过兼容性强制管理员运行。"), GetLang("提示"), 48)
     }
 }
@@ -1681,7 +1681,7 @@ OnAdminStartChanged(ctrl, *) {
     if (!IsObject(MyMainWin))
         return
     MainSoftData.IsAdminStart := MyMainWin.ui.Query("ChkAdminStart") == "True"
-    IniWrite(MainSoftData.IsAdminStart ? 1 : 0, IniFile, IniSection, "IsAdminStart")
+    CfgWrite(MainSoftData.IsAdminStart ? 1 : 0, SettingFile, SettingSection, "IsAdminStart")
     if (MainSoftData.IsBootStart)
         ApplyBootStartRegistry(true)
 }

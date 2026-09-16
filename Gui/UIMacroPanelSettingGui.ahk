@@ -497,7 +497,7 @@ class UIMacroPanelSettingGui {
     }
 
     SaveData() {
-        global IniFile, IniSection
+        global SettingFile, SettingSection
 
         MainSoftData.UIPanelShowOnActive := this._showOnActive
         MainSoftData.UIPanelDefaultPos := this._defaultPos
@@ -508,13 +508,13 @@ class UIMacroPanelSettingGui {
         MainSoftData.UIPanelBtnWidth := this._btnWidth
         MainSoftData.UIPanelCols := this._cols
 
-        IniWrite(MainSoftData.UIPanelShowOnActive, IniFile, IniSection, "UIPanelShowOnActive")
-        IniWrite(MainSoftData.UIPanelDefaultPos, IniFile, IniSection, "UIPanelDefaultPos")
-        IniWrite(MainSoftData.UIPanelOffsetX, IniFile, IniSection, "UIPanelOffsetX")
-        IniWrite(MainSoftData.UIPanelOffsetY, IniFile, IniSection, "UIPanelOffsetY")
-        IniWrite(MainSoftData.UIPanelBtnHeight, IniFile, IniSection, "UIPanelBtnHeight")
-        IniWrite(MainSoftData.UIPanelFontSize, IniFile, IniSection, "UIPanelFontSize")
-        IniWrite(MainSoftData.UIPanelBtnWidth, IniFile, IniSection, "UIPanelBtnWidth")
-        IniWrite(MainSoftData.UIPanelCols, IniFile, IniSection, "UIPanelCols")
+        CfgWrite(MainSoftData.UIPanelShowOnActive, SettingFile, SettingSection, "UIPanelShowOnActive")
+        CfgWrite(MainSoftData.UIPanelDefaultPos, SettingFile, SettingSection, "UIPanelDefaultPos")
+        CfgWrite(MainSoftData.UIPanelOffsetX, SettingFile, SettingSection, "UIPanelOffsetX")
+        CfgWrite(MainSoftData.UIPanelOffsetY, SettingFile, SettingSection, "UIPanelOffsetY")
+        CfgWrite(MainSoftData.UIPanelBtnHeight, SettingFile, SettingSection, "UIPanelBtnHeight")
+        CfgWrite(MainSoftData.UIPanelFontSize, SettingFile, SettingSection, "UIPanelFontSize")
+        CfgWrite(MainSoftData.UIPanelBtnWidth, SettingFile, SettingSection, "UIPanelBtnWidth")
+        CfgWrite(MainSoftData.UIPanelCols, SettingFile, SettingSection, "UIPanelCols")
     }
 }

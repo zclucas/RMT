@@ -146,7 +146,7 @@ OnSaveSetting(*) {
 
     ; 只写入实际发生变化的配置项（性能提升80%+）
     for key, value in dirtySettings {
-        IniWrite(value, IniFile, IniSection, key)
+        CfgWrite(value, SettingFile, SettingSection, key)
     }
 
     ; §17 保存后不再弹窗/重启：宏表已即时落盘，全局设置走热重载；需要整进程重启用侧栏「重启」
@@ -185,7 +185,7 @@ CheckAllValueSettingValid() {
     ; 拒绝本次保存并还原为 INI 中上次有效值（INI 读取端仍有钳制兜底），同时回写 UI 输入框。
     if (!NetworkIsValidPort(MainSoftData.NetworkPort)) {
         MsgBox(GetLang("网络触发端口必须是 1-65535 之间的整数，本次保存已取消，端口已还原为上次有效值。"))
-        MainSoftData.NetworkPort := NetworkNormalizePort(IniRead(IniFile, IniSection, "NetworkPort", 16888))
+        MainSoftData.NetworkPort := NetworkNormalizePort(CfgRead(SettingFile, SettingSection, "NetworkPort", 16888))
         return false
     }
 
@@ -216,12 +216,12 @@ SaveCurWinPos() {
     scale := (w / dpi) / (1400 * fs)
     if (scale <= 0)
         scale := 1
-    IniWrite(Format("{}π{}πSπ{:.2f}", x, y, scale), IniFile, IniSection, "LastWinPos")
+    CfgWrite(Format("{}π{}πSπ{:.2f}", x, y, scale), SettingFile, SettingSection, "LastWinPos")
 
     ListenGui := MyVarListenGui.Gui
     if (MyVarListenGui.Gui != "") {
         ListenGui.GetPos(&x, &y, &w, &h)
-        IniWrite(Format("{}π{}", x, y), IniFile, IniSection, "ListenVarPos")
+        CfgWrite(Format("{}π{}", x, y), SettingFile, SettingSection, "ListenVarPos")
     }
 }
 
@@ -396,9 +396,9 @@ GetDiscourse() {
 
 ; 共享站点地址：ini 优先（可迁移时只改配置），默认现站点
 GetShareServerUrl() {
-    global IniFile, IniSection
+    global SettingFile, SettingSection
     url := ""
-    try url := Trim(IniRead(IniFile, IniSection, "ShareServerUrl", ""))
+    try url := Trim(CfgRead(SettingFile, SettingSection, "ShareServerUrl", ""))
     if (url == "")
         url := "https://forum.yka.moe"
     return RTrim(url, "/")
@@ -406,9 +406,9 @@ GetShareServerUrl() {
 
 ; 共享分类 id：默认「共享」分类（id 41），可被 ini 覆盖
 GetShareCategoryId() {
-    global IniFile, IniSection
+    global SettingFile, SettingSection
     id := ""
-    try id := Trim(IniRead(IniFile, IniSection, "ShareCategoryId", ""))
+    try id := Trim(CfgRead(SettingFile, SettingSection, "ShareCategoryId", ""))
     if (id == "" || !IsNumber(id))
         id := "41"
     return Integer(id)
@@ -418,23 +418,23 @@ GetShareCategoryId() {
 ; 正常路径由设置页「登录论坛」授权后自动写入（用户密钥模式，apiUser 留空）。
 ; ShareApiUser 仅在需要「管理员 Key 模式」时手工改 ini —— UI 上已不提供该输入框，避免误填导致 403。
 GetShareApiUser() {
-    global IniFile, IniSection
+    global SettingFile, SettingSection
     v := ""
-    try v := Trim(IniRead(IniFile, IniSection, "ShareApiUser", ""))
+    try v := Trim(CfgRead(SettingFile, SettingSection, "ShareApiUser", ""))
     return v
 }
 
 GetShareApiKey() {
-    global IniFile, IniSection
+    global SettingFile, SettingSection
     v := ""
-    try v := Trim(IniRead(IniFile, IniSection, "ShareApiKey", ""))
+    try v := Trim(CfgRead(SettingFile, SettingSection, "ShareApiKey", ""))
     return v
 }
 
 SetShareAuth(apiUser, apiKey) {
-    global IniFile, IniSection
-    IniWrite(apiUser, IniFile, IniSection, "ShareApiUser")
-    IniWrite(apiKey, IniFile, IniSection, "ShareApiKey")
+    global SettingFile, SettingSection
+    CfgWrite(apiUser, SettingFile, SettingSection, "ShareApiUser")
+    CfgWrite(apiKey, SettingFile, SettingSection, "ShareApiKey")
 }
 
 ApplyRMTServerStatus(statusStr) {
@@ -516,40 +516,39 @@ InitFilePath() {
     global ViGEmDllPath := A_WorkingDir "\Plugins\ViGEm\ViGEmWrapper.dll"
     global AHIDllDir := A_WorkingDir "\Plugins\AhiDriver"
     global AHIPluginDir := A_WorkingDir "\Plugins\AhiDriver\installer"
-    global ArrayFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ArrayFile.ini"
+    global ArrayFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ArrayFile.toml"
     global MacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.toml"
-    global MacroIniFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.ini"
-    global SearchFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchFile.ini"
-    global SearchProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchProFile.ini"
-    global CompareFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareFile.ini"
-    global CompareProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareProFile.ini"
-    global MMProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MMProFile.ini"
-    global BGKeyFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\BGKeyFile.ini"
-    global TimingFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TimingFile.ini"
-    global RunFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RunFile.ini"
-    global OutputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\OutputFile.ini"
-    global VariableFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\VariableFile.ini"
-    global ExVariableFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ExVariableFile.ini"
-    global TextOpsFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TextOpsFile.ini"
-    global SubMacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SubMacroFile.ini"
-    global LoopFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\LoopFile.ini"
-    global OperationFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\OperationFile.ini"
-    global BGMouseFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\BGMouseFile.ini"
-    global InputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\InputFile.ini"
-    global FileIOFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\FileIOFile.ini"
-    global WindowManageFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WindowManageFile.ini"
-    global KeyCheckFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyCheckFile.ini"
-    global CommentFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CommentFile.ini"
-    global ScreenShotFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ScreenShotFile.ini"
-    global GraphNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphNodeFile.ini"
-    global GraphStartNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.ini"
+    global SearchFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchFile.toml"
+    global SearchProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchProFile.toml"
+    global CompareFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareFile.toml"
+    global CompareProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareProFile.toml"
+    global MMProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MMProFile.toml"
+    global BGKeyFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\BGKeyFile.toml"
+    global TimingFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TimingFile.toml"
+    global RunFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RunFile.toml"
+    global OutputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\OutputFile.toml"
+    global VariableFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\VariableFile.toml"
+    global ExVariableFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ExVariableFile.toml"
+    global TextOpsFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TextOpsFile.toml"
+    global SubMacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SubMacroFile.toml"
+    global LoopFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\LoopFile.toml"
+    global OperationFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\OperationFile.toml"
+    global BGMouseFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\BGMouseFile.toml"
+    global InputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\InputFile.toml"
+    global FileIOFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\FileIOFile.toml"
+    global WindowManageFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WindowManageFile.toml"
+    global KeyCheckFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyCheckFile.toml"
+    global CommentFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CommentFile.toml"
+    global ScreenShotFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ScreenShotFile.toml"
+    global GraphNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphNodeFile.toml"
+    global GraphStartNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.toml"
     ; 阶段5：纯文本指令迁移到配置文件模式（间隔/按键/移动/RMT指令）
-    global IntervalFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\IntervalFile.ini"
-    global KeyDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyDataFile.ini"
-    global MoveDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MoveDataFile.ini"
-    global RMTCMDFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RMTCMDFile.ini"
-    global WaitFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WaitFile.ini"
-    global DeltaMoveFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.ini"
+    global IntervalFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\IntervalFile.toml"
+    global KeyDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyDataFile.toml"
+    global MoveDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MoveDataFile.toml"
+    global RMTCMDFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RMTCMDFile.toml"
+    global WaitFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WaitFile.toml"
+    global DeltaMoveFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.toml"
     global ProjectRootDir := A_ScriptDir
 }
 
@@ -1023,7 +1022,7 @@ ExcuteRMTCMDAction(Cmd) {
                 isVisible := (style & 0x10000000)  ; 0x10000000 = WS_VISIBLE
                 if (isVisible) {
                     MyVarListenGui.Gui.Hide()
-                    IniWrite(false, IniFile, IniSection, "IsOpenListenVar")
+                    CfgWrite(false, SettingFile, SettingSection, "IsOpenListenVar")
                 }
             }
         case "显示菜单":

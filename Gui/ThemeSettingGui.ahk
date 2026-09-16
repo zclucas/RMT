@@ -374,14 +374,14 @@ class ThemeSettingGui {
         ; 补齐缺失项后再落盘，保证后续新增 ColorDefs 写入默认主题色
         MainSoftData.ThemeColors := AppThemeUtil.CloneColorMap(this._colors)
         AppThemeUtil.ApplyToRuntime(MainSoftData.ThemeColors)
-        AppThemeUtil.SaveToIni()
+        AppThemeUtil.SaveToToml()
         global XAML_FontSizeDelta, XAML_FontSizeBase, XAML_FontWeight, XAML_TextClarity
         try {
             try {
                 sel := this.ui.Query("FontFamilyCon")
                 if (sel != "" && IsObject(MainSoftData.FontList) && MainSoftData.FontList.Has(sel)) {
                     MainSoftData.FontType := sel
-                    IniWrite(sel, IniFile, IniSection, "FontType")
+                    CfgWrite(sel, SettingFile, SettingSection, "FontType")
                 }
             }
             oldDelta := XAML_FontSizeDelta

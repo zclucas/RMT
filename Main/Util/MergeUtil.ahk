@@ -39,7 +39,7 @@ class MergeResult {
 class MergeUtil {
     static TempMergeDir := ""
 
-    ; 可合并页签：按 Symbol 读写源 MacroFile.ini，Index 映射到「当前程序」页签。
+    ; 可合并页签：按 Symbol 读写源 MacroFile.toml，Index 映射到「当前程序」页签。
     ; 旧版（1.2 前）源配置无 UITKArr 等键 → 界面宏解析为空并跳过；
     ; 1.2+ 源配置有 UI 数据 → 正常导入到界面宏页签。无需单独版本分支。
     static GetMergeTabConfig() {
@@ -93,20 +93,31 @@ class MergeUtil {
     }
 
     static ParseMacroItemsByModule(settingDir, symbol, tabIndex) {
-        ; 现行格式：MacroFile.toml（表集合 [[table]] + [tableID].ModuleOrder + 模块/宏段）
-        tomlFile := settingDir "\MacroFile.toml"
-        if (FileExist(tomlFile)) {
-            return this._ParseMacroItemsToml(tomlFile, symbol, tabIndex)
-        }
-
-        ; 兼容旧包（1.2 前的 .rmt）：INI 格式
-        macroFile := settingDir "\MacroFile.ini"
+        ; 宏定义唯一文件 MacroFile.toml，两种布局：
+        ;   1) 现行三级表格式：[[table]] 表集合 + [tableID].ModuleOrder + 模块段/宏段
+        ;   2) 分享包扁平数组格式：symbol TKArr/ModeArr/MacroArrN + symbol FoldInfo 索引区间
+        macroFile := settingDir "\MacroFile.toml"
         if (!FileExist(macroFile))
             return []
 
-        tkArrStr := IniRead(macroFile, "UserSettings", symbol "TKArr", "")
-        remarkArrStr := IniRead(macroFile, "UserSettings", symbol "RemarkArr", "")
-        modeArrStr := IniRead(macroFile, "UserSettings", symbol "ModeArr", "")
+        nodes := this._ParseMacroItemsToml(macroFile, symbol, tabIndex)
+        if (nodes.Length > 0)
+            return nodes
+
+        return this._ParseMacroItemsFlat(settingDir, symbol, tabIndex)
+    }
+
+    ; 扁平数组格式（分享包）：模块归属由 FoldInfo 的 IndexSpanArr/RemarkArr 索引区间承载
+    static _ParseMacroItemsFlat(settingDir, symbol, tabIndex) {
+        macroFile := settingDir "\MacroFile.toml"
+
+        tkArrStr := CfgRead(macroFile, "UserSettings", symbol "TKArr", "")
+        modeArrStr := CfgRead(macroFile, "UserSettings", symbol "ModeArr", "")
+        ; 无扁平数组键 → 不是扁平布局（三级表格式但该表无条目），避免 StrSplit("") 造出空条目
+        if (tkArrStr == "" && modeArrStr == "")
+            return []
+
+        remarkArrStr := CfgRead(macroFile, "UserSettings", symbol "RemarkArr", "")
 
         modeArr := StrSplit(modeArrStr, "π")
         tkArr := StrSplit(tkArrStr, "π")
@@ -122,7 +133,7 @@ class MergeUtil {
             node.Remark := (A_Index <= remarkArr.Length) ? remarkArr[A_Index] : ""
             node.DisplayName := A_Index ". " node.Remark
 
-            macroStr := IniRead(macroFile, "UserSettings", symbol "MacroArr" A_Index, "")
+            macroStr := CfgRead(macroFile, "UserSettings", symbol "MacroArr" A_Index, "")
             macroStr := StrReplace(macroStr, "⫶", "`n")
             node.MacroStr := macroStr
 
@@ -286,11 +297,11 @@ class MergeUtil {
     }
 
     static ParseFoldInfo(settingDir, symbol) {
-        macroFile := settingDir "\MacroFile.ini"
+        macroFile := settingDir "\MacroFile.toml"
         if (!FileExist(macroFile))
             return ""
 
-        foldInfoStr := IniRead(macroFile, IniSection, symbol "FoldInfo", "")
+        foldInfoStr := CfgRead(macroFile, SettingSection, symbol "FoldInfo", "")
         if (foldInfoStr == "")
             return ""
 
@@ -456,7 +467,7 @@ class MergeUtil {
             if (DataFile == "")
                 continue
 
-            existingData := IniRead(DataFile, IniSection, serial, "")
+            existingData := CfgRead(DataFile, SettingSection, serial, "")
             if (existingData != "") {
                 conflicts.Push({
                     Serial: serial,
@@ -644,12 +655,12 @@ class MergeUtil {
         if (DataFile == "")
             return ""
 
-        saveStr := IniRead(DataFile, IniSection, serial, "")
+        saveStr := CfgRead(DataFile, SettingSection, serial, "")
         if (saveStr == "") {
             textOnly := RegExReplace(serial, "\d+")
             numbersOnly := RegExReplace(serial, "\D+")
             normalizedKey := GetLangKey(textOnly) . numbersOnly
-            saveStr := IniRead(DataFile, IniSection, normalizedKey, "")
+            saveStr := CfgRead(DataFile, SettingSection, normalizedKey, "")
         }
 
         if (saveStr == "")
@@ -667,7 +678,7 @@ class MergeUtil {
         inferredType := MergeUtil.InferSerialType(serialStr)
         if (inferredType != "" && sourceDataFileMap.Has(inferredType)) {
             try {
-                if (IniRead(sourceDataFileMap[inferredType], IniSection, serialStr, "") != "")
+                if (CfgRead(sourceDataFileMap[inferredType], SettingSection, serialStr, "") != "")
                     return inferredType
             } catch as e {
             }
@@ -675,7 +686,7 @@ class MergeUtil {
 
         for cmdType, DataFile in sourceDataFileMap {
             try {
-                existingData := IniRead(DataFile, IniSection, serialStr, "")
+                existingData := CfgRead(DataFile, SettingSection, serialStr, "")
                 if (existingData != "")
                     return cmdType
             } catch as e {

@@ -600,7 +600,7 @@ class CMDTipSettingGui {
     }
 
     SaveData() {
-        global IniFile, IniSection
+        global SettingFile, SettingSection
 
         MainSoftData.CMDPosX := this._posX
         MainSoftData.CMDPosY := this._posY
@@ -612,15 +612,15 @@ class CMDTipSettingGui {
         MainSoftData.CMDLogFilePath := this._logFilePath
         MainSoftData.CMDLogAutoClear := this._logAutoClear
 
-        IniWrite(MainSoftData.CMDPosX, IniFile, IniSection, "CMDPosX")
-        IniWrite(MainSoftData.CMDPosY, IniFile, IniSection, "CMDPosY")
-        IniWrite(MainSoftData.CMDWidth, IniFile, IniSection, "CMDWidth")
-        IniWrite(MainSoftData.CMDHeight, IniFile, IniSection, "CMDHeight")
-        IniWrite(MainSoftData.CMDFontSize, IniFile, IniSection, "CMDFontSize")
-        IniWrite(MainSoftData.CMDTransparency, IniFile, IniSection, "CMDTransparency")
-        IniWrite(MainSoftData.CMDLogToFile, IniFile, IniSection, "CMDLogToFile")
-        IniWrite(MainSoftData.CMDLogFilePath, IniFile, IniSection, "CMDLogFilePath")
-        IniWrite(MainSoftData.CMDLogAutoClear, IniFile, IniSection, "CMDLogAutoClear")
+        CfgWrite(MainSoftData.CMDPosX, SettingFile, SettingSection, "CMDPosX")
+        CfgWrite(MainSoftData.CMDPosY, SettingFile, SettingSection, "CMDPosY")
+        CfgWrite(MainSoftData.CMDWidth, SettingFile, SettingSection, "CMDWidth")
+        CfgWrite(MainSoftData.CMDHeight, SettingFile, SettingSection, "CMDHeight")
+        CfgWrite(MainSoftData.CMDFontSize, SettingFile, SettingSection, "CMDFontSize")
+        CfgWrite(MainSoftData.CMDTransparency, SettingFile, SettingSection, "CMDTransparency")
+        CfgWrite(MainSoftData.CMDLogToFile, SettingFile, SettingSection, "CMDLogToFile")
+        CfgWrite(MainSoftData.CMDLogFilePath, SettingFile, SettingSection, "CMDLogFilePath")
+        CfgWrite(MainSoftData.CMDLogAutoClear, SettingFile, SettingSection, "CMDLogAutoClear")
 
         if (IsSet(MyCMDTipGui) && IsObject(MyCMDTipGui))
             MyCMDTipGui.ApplySettings()

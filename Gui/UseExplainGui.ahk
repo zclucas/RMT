@@ -211,10 +211,10 @@ class UseExplainGui {
         this.ImagePathArr := []
         this.HasChange := false
         OperFilePath := SettingPath "\使用说明&署名.txt"
-        IniSection := "Instructions for Use & Attribution"
-        AuthorText := IniRead(OperFilePath, IniSection, "Author", "")
-        EffectText := IniRead(OperFilePath, IniSection, "Effect", "")
-        OperText := IniRead(OperFilePath, IniSection, "Operation", "")
+        ExplainSection := "Instructions for Use & Attribution"
+        AuthorText := CfgRead(OperFilePath, ExplainSection, "Author", "")
+        EffectText := CfgRead(OperFilePath, ExplainSection, "Effect", "")
+        OperText := CfgRead(OperFilePath, ExplainSection, "Operation", "")
         AuthorText := StrReplace(AuthorText, "⫶", "`n")
         EffectText := StrReplace(EffectText, "⫶", "`n")
         OperText := StrReplace(OperText, "⫶", "`n")
@@ -332,13 +332,13 @@ class UseExplainGui {
             return
 
         OperFilePath := this.SettingPath "\使用说明&署名.txt"
-        IniSection := "Instructions for Use & Attribution"
+        ExplainSection := "Instructions for Use & Attribution"
         AuthorText := StrReplace(this.ui.Query("AuthorCon"), "`n", "⫶")
         EffectText := StrReplace(this.ui.Query("EffectCon"), "`n", "⫶")
         OperText := StrReplace(this.ui.Query("OperCon"), "`n", "⫶")
-        IniWrite(AuthorText, OperFilePath, IniSection, "Author")
-        IniWrite(EffectText, OperFilePath, IniSection, "Effect")
-        IniWrite(OperText, OperFilePath, IniSection, "Operation")
+        CfgWrite(AuthorText, OperFilePath, ExplainSection, "Author")
+        CfgWrite(EffectText, OperFilePath, ExplainSection, "Effect")
+        CfgWrite(OperText, OperFilePath, ExplainSection, "Operation")
 
         this.OnTriggerModeAction(true, this.HasChange)
         this._CloseWindow()

@@ -496,6 +496,12 @@ public class VirtualListHost
             dr.ConfigImagePath = sr.ConfigImagePath;
             dr.TimingConfigVis = sr.TimingConfigVis;
             dr.HasTimingConfig = sr.HasTimingConfig;
+            dr.TKTextVis = sr.TKTextVis;
+            dr.TKGlyphVis = sr.TKGlyphVis;
+            dr.PhotoVis = sr.PhotoVis;
+            dr.TKThumbVis = sr.TKThumbVis;
+            dr.ClockVis = sr.ClockVis;
+            dr.TimerVis = sr.TimerVis;
             FillSelMark(dr);
             return;
         }
@@ -1190,6 +1196,16 @@ public class VirtualListHost
         r.ConfigImagePath = f.Length > 12 ? f[12] : "";
         r.TimingConfigVis = isTimingRow ? "Visible" : "Collapsed";
         r.HasTimingConfig = f.Length > 14 && f[14] == "1";
+        // 按钮内部各图标的可见性：由数据侧直接给出 Visibility 字符串。
+        // 模板里原本靠内联 Style + DataTrigger 切换，实测在注入的 DataTemplate 中不生效，
+        // 导致键盘字形与键名同时可见并重叠；改成直接绑定后互斥关系由数据保证。
+        bool isKeyInputRow = !isImageConfigRow && !isTimingRow;
+        r.TKTextVis = isKeyInputRow ? "Visible" : "Collapsed";
+        r.TKGlyphVis = (isKeyInputRow && string.IsNullOrEmpty(r.TKStr)) ? "Visible" : "Collapsed";
+        r.PhotoVis = (isImageConfigRow && !r.HasConfigImage) ? "Visible" : "Collapsed";
+        r.TKThumbVis = (isImageConfigRow && r.HasConfigImage) ? "Visible" : "Collapsed";
+        r.ClockVis = (isTimingRow && !r.HasTimingConfig) ? "Visible" : "Collapsed";
+        r.TimerVis = (isTimingRow && r.HasTimingConfig) ? "Visible" : "Collapsed";
     }
 
     private static void FillSelMark(VListRow r)
@@ -1280,6 +1296,13 @@ public class VListRow : VLItem
     public string ConfigImagePath { get { return _ConfigImagePath; } set { Set(ref _ConfigImagePath, value, "ConfigImagePath"); } } private string _ConfigImagePath;
     public string TimingConfigVis { get; set; }
     public bool HasTimingConfig { get { return _HasTimingConfig; } set { Set(ref _HasTimingConfig, value, "HasTimingConfig"); } } private bool _HasTimingConfig;
+    // 触发键按钮内部：文本 / 键盘字形 / 图片缩略图 / 时钟 / 秒表 的可见性（直接绑 Visibility）。
+    public string TKTextVis { get; set; }
+    public string TKGlyphVis { get; set; }
+    public string PhotoVis { get; set; }
+    public string TKThumbVis { get; set; }
+    public string ClockVis { get; set; }
+    public string TimerVis { get; set; }
 }
 
 public class VListFold : VLItem
@@ -1289,7 +1312,19 @@ public class VListFold : VLItem
     public bool FoldForbid { get { return _FoldForbid; } set { Set(ref _FoldForbid, value, "FoldForbid"); } } private bool _FoldForbid;
     public int FoldTKType { get { return _FoldTKType; } set { Set(ref _FoldTKType, value, "FoldTKType"); } } private int _FoldTKType;
     public string FoldTK { get { return _FoldTK; } set { Set(ref _FoldTK, value, "FoldTK"); } } private string _FoldTK;
-    public string FoldTKStr { get { return _FoldTKStr; } set { Set(ref _FoldTKStr, value, "FoldTKStr"); } } private string _FoldTKStr;
+    public string FoldTKStr
+    {
+        get { return _FoldTKStr; }
+        set
+        {
+            Set(ref _FoldTKStr, value, "FoldTKStr");
+            // 折叠头触发键按钮复用 RmtMacroRow 的内部模板，同样绑 TKTextVis / TKGlyphVis
+            TKTextVis = string.IsNullOrEmpty(value) ? "Collapsed" : "Visible";
+            TKGlyphVis = string.IsNullOrEmpty(value) ? "Visible" : "Collapsed";
+        }
+    } private string _FoldTKStr;
+    public string TKTextVis { get { return _TKTextVis; } set { Set(ref _TKTextVis, value, "TKTextVis"); } } private string _TKTextVis;
+    public string TKGlyphVis { get { return _TKGlyphVis; } set { Set(ref _TKGlyphVis, value, "TKGlyphVis"); } } private string _TKGlyphVis;
     public bool Folded { get { return _Folded; } set { Set(ref _Folded, value, "Folded"); } } private bool _Folded;
     public bool HasBody { get { return _HasBody; } set { Set(ref _HasBody, value, "HasBody"); } } private bool _HasBody;
     public bool IsFirstFold { get { return _IsFirstFold; } set { Set(ref _IsFirstFold, value, "IsFirstFold"); } } private bool _IsFirstFold;

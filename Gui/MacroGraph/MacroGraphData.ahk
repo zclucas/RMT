@@ -616,8 +616,8 @@ class MacroGraphDataMixin {
     ; ----------------------------------------------------------------- 图结构持久化
 
     ; 保存图结构（全部走项目标准 SaveMacroCMDData，无额外索引）：
-    ;   - 每个 MacroGraphNode（CurCMD、后继 NextNodeArr 的 SerialStr、坐标）存入 GraphNodeFile.ini；
-    ;   - 开始节点 MacroGraphStartNode（NodeArr=开始连向的节点、EmptyNode=无前置的自由节点、坐标）存入 GraphStartNodeFile.ini。
+    ;   - 每个 MacroGraphNode（CurCMD、后继 NextNodeArr 的 SerialStr、坐标）存入 GraphNodeFile.toml；
+    ;   - 开始节点 MacroGraphStartNode（NodeArr=开始连向的节点、EmptyNode=无前置的自由节点、坐标）存入 GraphStartNodeFile.toml。
     ;   - MacroArr 仅记录开始节点的 SerialStr，复原时由它即可取得全部信息。
     _SaveGraph() {
         if (this.graph == "")
@@ -689,7 +689,7 @@ class MacroGraphDataMixin {
             this._StoreBranchLayout(id, node, p)
             ; 展开的循环节点：持久化外置循环体相对偏移，重载/收展时布局稳定
             this._StoreLoopBodyLayout(id, node, p)
-            SaveMacroCMDData(node)          ; 存入 GraphNodeFile.ini（key=node.SerialStr）
+            SaveMacroCMDData(node)          ; 存入 GraphNodeFile.toml（key=node.SerialStr）
         }
 
         ; EmptyNode = 既不被开始节点连接、也无任何前置指令节点的自由节点
@@ -708,7 +708,7 @@ class MacroGraphDataMixin {
         startNode.EmptyNode := emptyNode
         startNode.X := sp.x
         startNode.Y := sp.y
-        SaveMacroCMDData(startNode)         ; 存入 GraphStartNodeFile.ini（key=startSerial）
+        SaveMacroCMDData(startNode)         ; 存入 GraphStartNodeFile.toml（key=startSerial）
     }
 
     ; 把可折叠父节点布局写入 MacroGraphNode（搜索/如果/如果Pro/循环）：
@@ -937,7 +937,7 @@ class MacroGraphDataMixin {
             d.mode := paramArr.Length >= 5 ? paramArr[5] : "0"
         }
         else if (this._IsMMProName(name)) {
-            ; 移动Pro 参数存储在 MMProFile.ini 中，CurCMD 即其 SerialStr（如 "移动Pro3" / "鼠标移动Pro3"）
+            ; 移动Pro 参数存储在 MMProFile.toml 中，CurCMD 即其 SerialStr（如 "移动Pro3" / "鼠标移动Pro3"）
             prefix := RegExReplace(name, "\d+$", "")
             d.type := GetLang(GetLangKey(prefix))
             d.serialStr := name
@@ -958,7 +958,7 @@ class MacroGraphDataMixin {
             }
         }
         else if (IsDeltaMoveCmd(name)) {
-            ; §20 增量移动：参数存 DeltaMoveFile.ini，CurCMD 即其 SerialStr（如 "增量移动3"）
+            ; §20 增量移动：参数存 DeltaMoveFile.toml，CurCMD 即其 SerialStr（如 "增量移动3"）
             d.type := GetLang("增量移动")
             d.serialStr := name
             try {
@@ -970,7 +970,7 @@ class MacroGraphDataMixin {
             }
         }
         else if (this._IsSearchName(name) || this._IsSearchProName(name)) {
-            ; 搜索/搜索Pro 参数存储在 SearchFile.ini 中，CurCMD 即其 SerialStr（如 "搜索1"、"搜索Pro2"）
+            ; 搜索/搜索Pro 参数存储在 SearchFile.toml 中，CurCMD 即其 SerialStr（如 "搜索1"、"搜索Pro2"）
             d.type := this._IsSearchProName(name) ? GetLang("搜索Pro") : GetLang("搜索")
             d.serialStr := name
             try {
@@ -1005,7 +1005,7 @@ class MacroGraphDataMixin {
             }
         }
         else if (this._IsInputName(name)) {
-            ; 输入参数存储在 InputFile.ini 中，CurCMD 即其 SerialStr（如 "输入1"）
+            ; 输入参数存储在 InputFile.toml 中，CurCMD 即其 SerialStr（如 "输入1"）
             d.type := GetLang("输入")
             d.serialStr := name
             try {
@@ -1019,7 +1019,7 @@ class MacroGraphDataMixin {
             }
         }
         else if (this._IsOutputName(name)) {
-            ; 输出参数存储在 OutputFile.ini 中，CurCMD 即其 SerialStr（如 "输出1"）
+            ; 输出参数存储在 OutputFile.toml 中，CurCMD 即其 SerialStr（如 "输出1"）
             d.type := GetLang("输出")
             d.serialStr := name
             try {

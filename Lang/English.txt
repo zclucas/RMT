@@ -1592,6 +1592,7 @@ RMT 命令行帮助=RMT Command Line Help
 等待日期=Wait Date
 期望值：=Expected:
 按键：=Key:
+可在配置管理中切换后使用=Switch to it from Configs when needed.
 进程名：=Process:
 文件路径：=File Path:
 日期值：=Date Value:

@@ -31,7 +31,7 @@ InitUI() {
         if (!AgreementGui.ShowAndWait())
             ExitApp()
         MainSoftData.AgreeAgreement := true
-        IniWrite(true, IniFile, IniSection, "AgreeAgreement")
+        CfgWrite(true, SettingFile, SettingSection, "AgreeAgreement")
     }
 
     MyMainWin.BuildAndShow()
@@ -59,11 +59,11 @@ OnOpen() {
         return
     }
 
-    IniWrite(false, IniFile, IniSection, "IsReload")
+    CfgWrite(false, SettingFile, SettingSection, "IsReload")
     if (MainSoftData.LastShowMonth != A_Mon) {
         MainSoftData.TabCtrl.Value := 9
         MainSoftData.LastShowMonth := A_Mon
-        IniWrite(MainSoftData.LastShowMonth, IniFile, IniSection, "LastShowMonth")
+        CfgWrite(MainSoftData.LastShowMonth, SettingFile, SettingSection, "LastShowMonth")
     }
     ; 首次打开不 WinMove/WinShow：主窗口 Opacity=0，内容填完再揭盖；再 Move 会抖一下
     RefreshListenVarGui()
@@ -80,7 +80,7 @@ OnGuiClose(*) {
 ; 读取保存的主窗口位置尺寸；旧格式 xπy 两段回退默认 1070×590，损坏/越界返回空数组
 ; BuildAndShow 可见前置位 + RefreshGui 都复用，避免两处解析漂移
 GetLastWinPos() {
-    LastWinPosStr := IniRead(IniFile, IniSection, "LastWinPos", "")
+    LastWinPosStr := CfgRead(SettingFile, SettingSection, "LastWinPos", "")
     WinPosArr := StrSplit(LastWinPosStr, "π")
     if (WinPosArr.Length >= 2 && IsNumber(WinPosArr[1]) && IsNumber(WinPosArr[2])) {
         VirtualWidth := SysGet(78)
@@ -108,7 +108,7 @@ GetLastWinPos() {
 }
 
 RefreshGui() {
-    IniWrite(false, IniFile, IniSection, "IsReload")
+    CfgWrite(false, SettingFile, SettingSection, "IsReload")
 
     pos := GetLastWinPos()
     if (pos.Length) {
@@ -120,7 +120,7 @@ RefreshGui() {
     if (MainSoftData.LastShowMonth != A_Mon) {
         MainSoftData.TabCtrl.Value := 9
         MainSoftData.LastShowMonth := A_Mon
-        IniWrite(MainSoftData.LastShowMonth, IniFile, IniSection, "LastShowMonth")
+        CfgWrite(MainSoftData.LastShowMonth, SettingFile, SettingSection, "LastShowMonth")
     }
 
     MainSoftData.MyGui.Show(Format("w{} h{}", 1070, 590))
@@ -128,11 +128,11 @@ RefreshGui() {
 }
 
 RefreshListenVarGui(isForce := false) {
-    IsOenListVar := IniRead(IniFile, IniSection, "IsOpenListenVar", false)
+    IsOenListVar := CfgRead(SettingFile, SettingSection, "IsOpenListenVar", false)
     if (!isForce && !IsOenListVar)
         return
 
-    LastPosStr := IniRead(IniFile, IniSection, "ListenVarPos", "")
+    LastPosStr := CfgRead(SettingFile, SettingSection, "ListenVarPos", "")
     WinPosArr := StrSplit(LastPosStr, "π")
     if (WinPosArr.Length == 2 && IsNumber(WinPosArr[1]) && IsNumber(WinPosArr[2])) {
         VirtualWidth := SysGet(78)

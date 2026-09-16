@@ -276,7 +276,7 @@ class CompareProEditItemGui {
                 this.Data.ControlTypeArr[this.CondiNumber] := GetLangKey(this.ui.Query("ControlTypeCon"))
             }
             saveStr := JSON.stringify(this.Data, 0)
-            IniWrite(saveStr, CompareProFile, IniSection, this.Data.SerialStr)
+            CfgWrite(saveStr, CompareProFile, SettingSection, this.Data.SerialStr)
             if (MySoftData.DataCacheMap.Has(this.Data.SerialStr)) {
                 MySoftData.DataCacheMap.Delete(this.Data.SerialStr)
             }

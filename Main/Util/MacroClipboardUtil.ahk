@@ -11,7 +11,7 @@
 ;
 ; 依赖：
 ;   - JsonUtil.ahk (JSON.parse / JSON.stringify)
-;   - 全局变量: MySoftData, IniSection
+;   - 全局变量: MySoftData, SettingSection
 ; ============================================================================
 
 
@@ -111,14 +111,14 @@ FindSerialType(serialStr) {
     inferredType := InferSerialTypeByPrefix(serialStr)
     if (inferredType != "" && MySoftData.DataFileMap.Has(inferredType)) {
         try {
-            if (IniRead(MySoftData.DataFileMap[inferredType], IniSection, serialStr, "") != "")
+            if (CfgRead(MySoftData.DataFileMap[inferredType], SettingSection, serialStr, "") != "")
                 return inferredType
         } catch as e {
         }
     }
     for cmdType, DataFile in MySoftData.DataFileMap {
         try {
-            existingData := IniRead(DataFile, IniSection, serialStr, "")
+            existingData := CfgRead(DataFile, SettingSection, serialStr, "")
             if (existingData != "")
                 return cmdType
         } catch as e {
@@ -171,13 +171,13 @@ ExtractSerialFromCmd(cmdStr) {
             if (underscorePos > 0) {
                 pureSerial := SubStr(afterType, 1, underscorePos - 1)
                 fullSerial := cmdType . pureSerial
-                if (IniRead(DataFile, IniSection, fullSerial, "") != "")
+                if (CfgRead(DataFile, SettingSection, fullSerial, "") != "")
                     return fullSerial
             }
 
             ; 如果没有 _ ，整个 afterType 就是序列码
             fullSerial := cmdType . afterType
-            if (IniRead(DataFile, IniSection, fullSerial, "") != "")
+            if (CfgRead(DataFile, SettingSection, fullSerial, "") != "")
                 return fullSerial
         }
     }
@@ -204,14 +204,14 @@ FindOrValidateSerial(serialPart, cmdType) {
         return ""
 
     try {
-        if (IniRead(DataFile, IniSection, serialPart, "") != "")
+        if (CfgRead(DataFile, SettingSection, serialPart, "") != "")
             return serialPart
 
         loop StrLen(serialPart) {
             testPart := SubStr(serialPart, 1, StrLen(serialPart) - A_Index)
             if (testPart == "")
                 break
-            if (IniRead(DataFile, IniSection, cmdType . testPart, "") != "")
+            if (CfgRead(DataFile, SettingSection, cmdType . testPart, "") != "")
                 return cmdType . testPart
         }
     } catch {
@@ -372,7 +372,7 @@ SerialExistsInDataFile(cmdType, serialStr) {
         DataFile := MySoftData.DataFileMap[cmdType]
         if (DataFile == "" || !FileExist(DataFile))
             return false
-        return IniRead(DataFile, IniSection, serialStr, "") != ""
+        return CfgRead(DataFile, SettingSection, serialStr, "") != ""
     } catch {
         return false
     }

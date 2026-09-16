@@ -589,14 +589,14 @@ class MacroEditGui {
     _LoadCmdPanelState() {
         this._favSet := Map()
         ; §20 默认收藏用新名「鼠标移动」（旧配置 CmdFav 含「移动」时忽略不匹配项）
-        favStr := IniRead(IniFile, IniSection, "CmdFav", "间隔,按键,搜索,鼠标移动")
+        favStr := CfgRead(SettingFile, SettingSection, "CmdFav", "间隔,按键,搜索,鼠标移动")
         for name in StrSplit(favStr, ",") {
             name := Trim(name)
             if (name != "")
                 this._favSet[name] := true
         }
         this._catExpand := Map()
-        catStr := IniRead(IniFile, IniSection, "CmdCatState", "")
+        catStr := CfgRead(SettingFile, SettingSection, "CmdCatState", "")
         for seg in StrSplit(catStr, ",") {
             pair := StrSplit(seg, "=")
             if (pair.Length == 2 && Trim(pair[1]) != "")
@@ -613,7 +613,7 @@ class MacroEditGui {
         s := ""
         for i, name in arr
             s .= (i > 1 ? "," : "") name
-        IniWrite(s, IniFile, IniSection, "CmdFav")
+        CfgWrite(s, SettingFile, SettingSection, "CmdFav")
     }
 
     ; 分类展开状态落盘（即时）
@@ -624,7 +624,7 @@ class MacroEditGui {
         s := ""
         for i, p in pairs
             s .= (i > 1 ? "," : "") p
-        IniWrite(s, IniFile, IniSection, "CmdCatState")
+        CfgWrite(s, SettingFile, SettingSection, "CmdCatState")
     }
 
     ; 按中文指令名找 SubGuiConfig；找不到返回 ""
@@ -1375,7 +1375,7 @@ class MacroEditGui {
             return
         file := MySoftData.DataFileMap[cmdKey]
         normalized := cmdKey . dummy
-        IniWrite(json, file, IniSection, normalized)
+        CfgWrite(json, file, SettingSection, normalized)
         if (MySoftData.DataCacheMap.Has(normalized))
             MySoftData.DataCacheMap.Delete(normalized)
         if (serial != normalized && MySoftData.DataCacheMap.Has(serial))

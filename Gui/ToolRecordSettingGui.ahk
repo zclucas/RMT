@@ -373,14 +373,14 @@ class ToolRecordSettingGui {
         MainSoftData.RecordJoyInterval := this._joyInterval
         MainSoftData.RecordShowBorder := this._showBorder
 
-        IniWrite(MainSoftData.RecordAutoLoosen, IniFile, IniSection, "RecordAutoLoosen")
-        IniWrite(MainSoftData.RecordHoldMuti, IniFile, IniSection, "RecordHoldMuti")
-        IniWrite(MainSoftData.RecordKeyboard, IniFile, IniSection, "RecordKeyboard")
-        IniWrite(MainSoftData.RecordMouse, IniFile, IniSection, "RecordMouse")
-        IniWrite(MainSoftData.RecordMouseTrail, IniFile, IniSection, "RecordMouseTrail")
-        IniWrite(MainSoftData.RecordMouseTrailSpeed, IniFile, IniSection, "RecordMouseTrailSpeed")
-        IniWrite(MainSoftData.RecordJoy, IniFile, IniSection, "RecordJoy")
-        IniWrite(MainSoftData.RecordJoyInterval, IniFile, IniSection, "RecordJoyInterval")
-        IniWrite(MainSoftData.RecordShowBorder, IniFile, IniSection, "RecordShowBorder")
+        CfgWrite(MainSoftData.RecordAutoLoosen, SettingFile, SettingSection, "RecordAutoLoosen")
+        CfgWrite(MainSoftData.RecordHoldMuti, SettingFile, SettingSection, "RecordHoldMuti")
+        CfgWrite(MainSoftData.RecordKeyboard, SettingFile, SettingSection, "RecordKeyboard")
+        CfgWrite(MainSoftData.RecordMouse, SettingFile, SettingSection, "RecordMouse")
+        CfgWrite(MainSoftData.RecordMouseTrail, SettingFile, SettingSection, "RecordMouseTrail")
+        CfgWrite(MainSoftData.RecordMouseTrailSpeed, SettingFile, SettingSection, "RecordMouseTrailSpeed")
+        CfgWrite(MainSoftData.RecordJoy, SettingFile, SettingSection, "RecordJoy")
+        CfgWrite(MainSoftData.RecordJoyInterval, SettingFile, SettingSection, "RecordJoyInterval")
+        CfgWrite(MainSoftData.RecordShowBorder, SettingFile, SettingSection, "RecordShowBorder")
     }
 }

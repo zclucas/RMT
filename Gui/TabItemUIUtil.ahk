@@ -86,6 +86,7 @@ OnItemAddFoldBtnClick(tableItem, foldIndex, *) {
     isMenu := CheckIsMenuMacroTable(tableItem.Index)
     isUI := GetTableSymbol(tableItem.Index) == "UI"
     MyMainWin.ReadTabValues(tableItem)
+    NormalizeFoldItemOrder(tableItem)   ; 先把历史错位的条目按模块归位（老数据自愈）
 
     fold := MacroFold()
     fold.ID := NewModulePath(tableItem)   ; 路径身份 Normal.Module{max+1}
@@ -410,12 +411,8 @@ OnFoldBtnClick(tableItem, foldIndex, *) {
     fold := tableItem.Folds[foldIndex]
     MyMainWin.ReadTabValues(tableItem)
     fold.FoldState := !fold.FoldState
-    ; §18 折叠状态即时持久化（UI 状态，不影响触发/执行，只写盘不广播）
-    if (!IsStaticTable(tableItem)) {
-        try SaveTableItemInfo(tableItem)
-        catch as e
-            RMTLogSys(RMT_LV_ERROR, "OnFoldBtnClick", Format("折叠状态落盘失败: {1}", e.Message))
-    }
+    ; §18 折叠状态持久化改防抖：点击只改内存，停手 1s 后统一写盘（原同步写 111KB 整文件，单次 200~400ms 卡手）
+    FoldStateSaveDebounce(tableItem)
     t := tableItem.Index
     if (MyMainWin._useVirtual.Has(t)) {
         ; Epic5：折叠 = 集合移除行组 + 视口锚定（1 IPC），不重建整表
@@ -433,6 +430,27 @@ OnFoldBtnClick(tableItem, foldIndex, *) {
                 MyMainWin._BindItemRow(t, i)
         }
     }
+}
+
+; 折叠状态防抖落盘：连续点击只写最后一次（SetTimer 负周期单发，每次点击重置）
+global FoldSavePending := Map()
+
+FoldStateSaveDebounce(tableItem) {
+    global FoldSavePending
+    if (IsStaticTable(tableItem))
+        return
+    FoldSavePending[tableItem.Index] := tableItem
+    SetTimer(FoldSaveDebounceFlush, -1000)
+}
+
+FoldSaveDebounceFlush() {
+    global FoldSavePending
+    for _, tableItem in FoldSavePending {
+        try SaveTableItemInfo(tableItem)
+        catch as e
+            RMTLogSys(RMT_LV_ERROR, "FoldSaveDebounce", Format("折叠状态落盘失败: {1}", e.Message))
+    }
+    FoldSavePending := Map()
 }
 
 OnFlodTKEditClick(tableItem, foldIndex, *) {
@@ -514,18 +532,43 @@ GetFoldAddItemIndex(tableItem, FoldIndex) {
     if (lastIdx != 0)
         return lastIdx + 1
 
-    ; 折叠框无条目：找前一个有序折叠框（FoldIndex-1 ... 1）的最后一个条目，插其后
+    ; 折叠框无条目：插到前一个「有条目」折叠框区块的末尾（保持模块条目连续）。
+    ; 注意必须找 prevFold 的【最后】一个条目；取第一个会把新模块条目插进上一模块中间，
+    ; Items 数组顺序与模块顺序错开，行号就乱了。
     loop FoldIndex - 1 {
         f := FoldIndex - A_Index
         prevFold := tableItem.Folds[f]
         if (!prevFold)
             continue
+        lastIdx := 0
         for i, item in tableItem.Items {
             if (item.FoldID == prevFold.ID)
-                return i + 1
+                lastIdx := i
+            else if (lastIdx != 0)
+                break   ; 已越过本折叠的条目区
         }
+        if (lastIdx != 0)
+            return lastIdx + 1
     }
     return 1
+}
+
+; 按模块顺序稳定重排 Items（模块内保持原有相对顺序；FoldID 悬空的条目排在最后，不丢数据）。
+; 用于修复历史版本「新增模块插错位」造成的 Items 顺序与模块顺序错开（行号乱序）。
+NormalizeFoldItemOrder(tableItem) {
+    ids := Map()
+    for f, fold in tableItem.Folds
+        ids[fold.ID] := true
+    ordered := []
+    for f, fold in tableItem.Folds
+        for i, item in tableItem.Items
+            if (item.FoldID == fold.ID)
+                ordered.Push(item)
+    for i, item in tableItem.Items
+        if (!ids.Has(item.FoldID))
+            ordered.Push(item)
+    if (ordered.Length == tableItem.Items.Length)
+        tableItem.Items := ordered
 }
 
 OnUIMacroSettingClick(tableItem, macroIndex, *) {

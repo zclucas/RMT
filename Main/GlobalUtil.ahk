@@ -33,6 +33,7 @@
 #Include Util\LogUtil.ahk
 #Include Util\ErrorHandler.ahk
 #Include Util\FixCompatUtil.ahk
+#Include Util\IniImportUtil.ahk
 #Include Util\HotReloadBus.ahk
 #Include Util\VoiceUtil.ahk
 #Include Util\SttUtil.ahk
@@ -127,7 +128,7 @@ OnError(ErrHandler)             ;注册全局错误处理器
 UnblockZoneIdentifier()         ;异步移除文件的Zone.Identifier标记 防止文件被锁定
 global MySoftData := SoftData()
 global MainSoftData := MainConfig()
-global IniFile := A_WorkingDir "\Setting\MainSettings.ini"
+global SettingFile := A_WorkingDir "\Setting\MainSettings.toml"
 global LangDir := A_WorkingDir "\Lang"
 LoadMainSetting()               ;加载通用设置
 SyncBootStartRegistry()         ;主进程：开机自启选项与注册表对账（Worker 勿调用）

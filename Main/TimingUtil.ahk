@@ -394,6 +394,6 @@ HasTimingConfig(item) {
     serial := item.TimingSerial
     if (serial == "")
         return false
-    global TimingFile, IniSection
-    return IniRead(TimingFile, IniSection, serial, "") != ""
+    global TimingFile, SettingSection
+    return CfgRead(TimingFile, SettingSection, serial, "") != ""
 }

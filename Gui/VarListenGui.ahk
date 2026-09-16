@@ -76,7 +76,7 @@ class VarListenGui {
         }
 
         this._ApplyTopMost()
-        IniWrite(true, IniFile, IniSection, "IsOpenListenVar")
+        CfgWrite(true, SettingFile, SettingSection, "IsOpenListenVar")
         this.Refresh()
     }
 
@@ -218,7 +218,7 @@ class VarListenGui {
                     MainSoftData.MacroEditGui.ToolMenu.Uncheck(GetLang("变量监视"))
             }
         }
-        IniWrite(false, IniFile, IniSection, "IsOpenListenVar")
+        CfgWrite(false, SettingFile, SettingSection, "IsOpenListenVar")
         try {
             if (!XAMLHost.IsDaemonAlive())
                 XAMLHost.ResetDaemon()
@@ -233,8 +233,8 @@ class VarListenGui {
         if (w > 0 && h > 0) {
             MainSoftData.VarListenWidth := w
             MainSoftData.VarListenHeight := h
-            IniWrite(w, IniFile, IniSection, "VarListenWidth")
-            IniWrite(h, IniFile, IniSection, "VarListenHeight")
+            CfgWrite(w, SettingFile, SettingSection, "VarListenWidth")
+            CfgWrite(h, SettingFile, SettingSection, "VarListenHeight")
         }
     }
 
@@ -246,7 +246,7 @@ class VarListenGui {
         else if (IsSet(state) && IsObject(state) && state.Has("TopCon"))
             this._topOn := (state["TopCon"] = "True" || state["TopCon"] = 1)
         this._ApplyTopMost()
-        IniWrite(this._topOn, IniFile, IniSection, "VarListenTop")
+        CfgWrite(this._topOn, SettingFile, SettingSection, "VarListenTop")
         MainSoftData.VarListenTop := this._topOn
     }
 

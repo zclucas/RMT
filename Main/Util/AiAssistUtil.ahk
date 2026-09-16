@@ -57,16 +57,16 @@ class AiAssist {
             MainSoftData.AiApprovalMode := 2 ; 自动审批
     }
 
-    static LoadFromIni() {
-        global MainSoftData, IniFile, IniSection
+    static LoadFromToml() {
+        global MainSoftData, SettingFile, SettingSection
         AiAssist.EnsureDefaults()
-        MainSoftData.AiApiKey := IniRead(IniFile, IniSection, "AiApiKey", "")
-        MainSoftData.AiApiBaseUrl := IniRead(IniFile, IniSection, "AiApiBaseUrl", "https://api.openai.com/v1")
-        MainSoftData.AiProvider := IniRead(IniFile, IniSection, "AiProvider", "")
-        MainSoftData.AiModel := IniRead(IniFile, IniSection, "AiModel", "")
-        MainSoftData.AiModelList := IniRead(IniFile, IniSection, "AiModelList", "")
-        MainSoftData.AiAccessMode := Integer(IniRead(IniFile, IniSection, "AiAccessMode", 2))
-        MainSoftData.AiApprovalMode := Integer(IniRead(IniFile, IniSection, "AiApprovalMode", 2))
+        MainSoftData.AiApiKey := CfgRead(SettingFile, SettingSection, "AiApiKey", "")
+        MainSoftData.AiApiBaseUrl := CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "https://api.openai.com/v1")
+        MainSoftData.AiProvider := CfgRead(SettingFile, SettingSection, "AiProvider", "")
+        MainSoftData.AiModel := CfgRead(SettingFile, SettingSection, "AiModel", "")
+        MainSoftData.AiModelList := CfgRead(SettingFile, SettingSection, "AiModelList", "")
+        MainSoftData.AiAccessMode := Integer(CfgRead(SettingFile, SettingSection, "AiAccessMode", 2))
+        MainSoftData.AiApprovalMode := Integer(CfgRead(SettingFile, SettingSection, "AiApprovalMode", 2))
         if (MainSoftData.AiAccessMode < 1 || MainSoftData.AiAccessMode > 3)
             MainSoftData.AiAccessMode := 2
         if (MainSoftData.AiApprovalMode < 1 || MainSoftData.AiApprovalMode > 3)
@@ -75,16 +75,16 @@ class AiAssist {
             MainSoftData.AiProvider := AiAssist.MatchProviderId(MainSoftData.AiApiBaseUrl)
     }
 
-    static SaveToIni() {
-        global MainSoftData, IniFile, IniSection
+    static SaveToToml() {
+        global MainSoftData, SettingFile, SettingSection
         AiAssist.EnsureDefaults()
-        IniWrite(MainSoftData.AiApiKey, IniFile, IniSection, "AiApiKey")
-        IniWrite(MainSoftData.AiApiBaseUrl, IniFile, IniSection, "AiApiBaseUrl")
-        IniWrite(MainSoftData.AiProvider, IniFile, IniSection, "AiProvider")
-        IniWrite(MainSoftData.AiModel, IniFile, IniSection, "AiModel")
-        IniWrite(MainSoftData.AiModelList, IniFile, IniSection, "AiModelList")
-        IniWrite(MainSoftData.AiAccessMode, IniFile, IniSection, "AiAccessMode")
-        IniWrite(MainSoftData.AiApprovalMode, IniFile, IniSection, "AiApprovalMode")
+        CfgWrite(MainSoftData.AiApiKey, SettingFile, SettingSection, "AiApiKey")
+        CfgWrite(MainSoftData.AiApiBaseUrl, SettingFile, SettingSection, "AiApiBaseUrl")
+        CfgWrite(MainSoftData.AiProvider, SettingFile, SettingSection, "AiProvider")
+        CfgWrite(MainSoftData.AiModel, SettingFile, SettingSection, "AiModel")
+        CfgWrite(MainSoftData.AiModelList, SettingFile, SettingSection, "AiModelList")
+        CfgWrite(MainSoftData.AiAccessMode, SettingFile, SettingSection, "AiAccessMode")
+        CfgWrite(MainSoftData.AiApprovalMode, SettingFile, SettingSection, "AiApprovalMode")
     }
 
     static ProviderIndex(id := "") {
