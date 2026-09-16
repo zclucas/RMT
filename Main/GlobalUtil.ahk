@@ -14,6 +14,7 @@
 #Include ..\Plugins\AHK-XAML\lib\XAML_Dialog.ahk
 #Include ..\Plugins\AHK-XAML\lib\AXML.ahk
 #Include Util\XamlWin.ahk
+#Include Util\HelpDocWin.ahk
 #Include Util\ToastUtil.ahk
 #Include Util\RmtDialog.ahk
 #Include RMTUtil.ahk
@@ -78,6 +79,10 @@
 #Include ..\Gui\CustomInputGui.ahk
 #Include ..\Gui\InputBtnXamlGui.ahk
 #Include ..\Gui\ConfigMergeGui.ahk
+#Include ..\Gui\ShareCenterGui.ahk
+#Include ..\Gui\ShareUploadGui.ahk
+#Include ..\Gui\ShareDetailGui.ahk
+#Include Util\ShareExportUtil.ahk
 #Include ..\Gui\VoiceGui.ahk
 #Include ..\Gui\SttGui.ahk
 #Include ..\Gui\WaitGui.ahk

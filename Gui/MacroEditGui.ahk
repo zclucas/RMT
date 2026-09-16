@@ -1522,6 +1522,12 @@ class MacroEditGui {
         ; 去掉 ~ / $ 前缀后再比较（$ 用于防止 Send 再次触发自身热键）
         rawKey := key
         key := LTrim(key, "~$")
+        ; 焦点在主窗口文本输入框里时，编辑类按键必须交还 WPF 原生处理：
+        ; 本组热键（侧栏模式）注册在主窗口上且 $ 吞键，否则设置页等输入框无法复制/粘贴/撤销
+        if (this._PassEditKeyToTextInput(key)) {
+            Send(key)
+            return
+        }
         if (this._sideMode && !this._sideActive) {
             if (IsSet(MyMainWin) && IsObject(MyMainWin) && (!MyMainWin.aiAssistOpen || MyMainWin.sidePanelMode != 1))
                 return
@@ -1581,6 +1587,18 @@ class MacroEditGui {
             else
                 this.Redo()
         }
+    }
+
+    ; 主窗口文本框正在编辑时，编辑类按键应交给 WPF 原生处理
+    ; （侧栏模式把 $^c/$^v/$^z/$^y/Delete 注册在主窗口 hwnd 上，$ 会吞键且不转发）
+    _PassEditKeyToTextInput(key) {
+        if (!this._sideMode)
+            return false
+        if (key != "^c" && key != "^v" && key != "^z" && key != "^y" && key != "Delete")
+            return false
+        if (!IsSet(MyMainWin) || !IsObject(MyMainWin))
+            return false
+        return MyMainWin.HasProp("_textFocusName") && MyMainWin._textFocusName != ""
     }
 
     OnSoftKey(key, isDown) {

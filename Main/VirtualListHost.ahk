@@ -231,6 +231,7 @@ class VirtualListHost {
                 ; 复制/删除会弹 XAML 窗；必须离开 VL_CLICK/WM_COPYDATA 后再弹。
                 ; BoundFunc 挂在 this 上，避免匿名闭包被回收导致定时器不触发（点了没反应、也没日志）。
                 case "Copy": this._DeferDialog("Copy", OnItemCopyMacroBtnClick.Bind(tableItem, idx))
+                case "Share": this._DeferDialog("Share", OnItemShareMacroBtnClick.Bind(tableItem, idx))
                 case "Del": this._DeferDialog("Del", OnItemDelMacroBtnClick.Bind(tableItem, idx))
             }
         }
@@ -241,6 +242,7 @@ class VirtualListHost {
                 case "FoldTKEdit": OnFlodTKEditClick(tableItem, idx, event)
                 case "FoldAddMacro": OnItemAddMacroBtnClick(tableItem, idx, event)
                 case "FoldPasteMacro": OnItemPasteMacroBtnClick(tableItem, idx, event)
+                case "FoldShare": this._DeferDialog("FoldShare", OnFoldShareBtnClick.Bind(tableItem, idx))
                 case "FoldForbidBtn": OnFoldForbidToggleClick(tableItem, idx, event)
                 case "FoldDel": this._DeferDialog("FoldDel", OnItemDelFoldBtnClick.Bind(tableItem, idx))
             }

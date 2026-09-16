@@ -47,7 +47,7 @@ SelfCheckMissingFiles() {
         "Lang\中文.txt", "chinese.txt",
         "Lang\English.txt", "English.txt",
         "Thread\Work.exe", "Work.exe",
-        "index.html", "index.html")
+        "Web\index.html", "index.html")
 
     optionalMap := Map(
         "Plugins\MouseControl.dll", "MouseControl.dll",

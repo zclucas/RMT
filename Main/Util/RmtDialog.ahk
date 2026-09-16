@@ -29,6 +29,25 @@ class RmtDialog {
         }
     }
 
+    ; 多按钮选择（XAML 版 CustomMsgBox）。返回按钮序号（1 起）；点关闭/按 Esc → 0。
+    ; 返回值语义与旧 CustomMsgBox 一致，方便调用处 1:1 替换。
+    static Choose(msg, title := "", buttons := []) {
+        RmtDialog._Trace("Choose enter msg=" RmtDialog._Clip(msg) " n=" buttons.Length)
+        try {
+            btn := RmtDialog._Show(String(msg), title != "" ? title : GetLang("提示"), buttons, Chr(0xE814), "{DynamicResource Accent}", true)
+            if (btn == "" || btn == "Closed")
+                return 0
+            loop buttons.Length {
+                if (buttons[A_Index] == btn)
+                    return A_Index
+            }
+            return 0
+        } catch as e {
+            RmtDialog._Log("Choose", e)
+            return 0
+        }
+    }
+
     ; 只读正文右键：只换菜单外观（与 AI 助手同色/同结构），不改弹窗正文字号
     static _AttachReadonlyCtxMenu(el) {
         if (!IsObject(el))

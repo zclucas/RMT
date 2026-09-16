@@ -308,6 +308,7 @@ InitRMTHttpPlugin() {
     global RMT_Http := ""
     global RMT_Ai := ""
     global RMT_ASM := ""
+    global RMT_Discourse := ""
     global RMT_IsForbidUpdate := false
     global RMT_HasDotNet := HasDotNetFramework()
     global RMT_StatusPollFn := ""
@@ -375,6 +376,65 @@ GetRmtAi() {
         throw Error(GetLang("无法创建 RMT.AiAssist，请重新编译 Plugins\RMT\RMT.dll"))
     RMT_HasDotNet := true
     return RMT_Ai
+}
+
+; 惰性取得 Discourse 只读客户端实例（供共享中心使用）
+GetDiscourse() {
+    global RMT_Discourse, RMT_ASM, RMT_HasDotNet
+    if (IsObject(RMT_Discourse))
+        return RMT_Discourse
+    if (!HasDotNetFramework())
+        throw Error(GetLang("需要安装 .NET Framework 4 才能使用共享功能"))
+    RMTPath := EnsureRmtDll()
+    if (!IsObject(RMT_ASM))
+        RMT_ASM := CLR_LoadLibrary(RMTPath)
+    RMT_Discourse := RMT_ASM.CreateInstance("RMT.Discourse")
+    if (!IsObject(RMT_Discourse))
+        throw Error(GetLang("无法创建 RMT.Discourse，请重新编译 Plugins\RMT\RMT.dll"))
+    return RMT_Discourse
+}
+
+; 共享站点地址：ini 优先（可迁移时只改配置），默认现站点
+GetShareServerUrl() {
+    global IniFile, IniSection
+    url := ""
+    try url := Trim(IniRead(IniFile, IniSection, "ShareServerUrl", ""))
+    if (url == "")
+        url := "https://forum.yka.moe"
+    return RTrim(url, "/")
+}
+
+; 共享分类 id：默认「共享」分类（id 41），可被 ini 覆盖
+GetShareCategoryId() {
+    global IniFile, IniSection
+    id := ""
+    try id := Trim(IniRead(IniFile, IniSection, "ShareCategoryId", ""))
+    if (id == "" || !IsNumber(id))
+        id := "41"
+    return Integer(id)
+}
+
+; 上传鉴权：apiUser 非空 = Api-Key+Api-Username 模式；空 = User-Api-Key 模式
+; 正常路径由设置页「登录论坛」授权后自动写入（用户密钥模式，apiUser 留空）。
+; ShareApiUser 仅在需要「管理员 Key 模式」时手工改 ini —— UI 上已不提供该输入框，避免误填导致 403。
+GetShareApiUser() {
+    global IniFile, IniSection
+    v := ""
+    try v := Trim(IniRead(IniFile, IniSection, "ShareApiUser", ""))
+    return v
+}
+
+GetShareApiKey() {
+    global IniFile, IniSection
+    v := ""
+    try v := Trim(IniRead(IniFile, IniSection, "ShareApiKey", ""))
+    return v
+}
+
+SetShareAuth(apiUser, apiKey) {
+    global IniFile, IniSection
+    IniWrite(apiUser, IniFile, IniSection, "ShareApiUser")
+    IniWrite(apiKey, IniFile, IniSection, "ShareApiKey")
 }
 
 ApplyRMTServerStatus(statusStr) {

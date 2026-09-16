@@ -80,15 +80,37 @@ class JSON {
 				LF := P A_LoopField, K := InStr(LF, "\") ? UC(LF) : LF, P := ""
 		}
 		return J
-		UC(S, e := 1) {
-			static m := Map('"', '"', "a", "`a", "b", "`b", "t", "`t", "n", "`n", "v", "`v", "f", "`f", "r", "`r")
-			local v := ""
-			Loop Parse S, "\"
-				if !((e := !e) && A_LoopField = "" ? v .= "\" : !e ? (v .= A_LoopField, 1) : 0)
-					v .= (t := m.Get(SubStr(A_LoopField, 1, 1), 0)) ? t SubStr(A_LoopField, 2) :
-						(t := RegExMatch(A_LoopField, "i)^(u[\da-f]{4}|x[\da-f]{2})\K")) ?
-							Chr("0x" SubStr(A_LoopField, 2, t - 2)) SubStr(A_LoopField, t) : "\" A_LoopField,
-							e := A_LoopField = "" ? e : !e
+		UC(S) {
+			; 逐字符解码转义。旧实现按 "\" 分割后每段只解码第一个转义，
+			; 相邻转义（如 \" 紧跟 \u003e）会把 "u003e 原样留下，导致字符串损坏。
+			static m := Map('"', '"', "/", "/", "\\", "\\", "a", "`a", "b", "`b", "t", "`t"
+				, "n", "`n", "v", "`v", "f", "`f", "r", "`r")
+			local v := "", i := 1, n := StrLen(S), c, e, hi, lo
+			while (i <= n) {
+				c := SubStr(S, i, 1)
+				if (c != "\") {
+					v .= c, i++
+					continue
+				}
+				e := i < n ? SubStr(S, i + 1, 1) : ""
+				if (m.Has(e)) {
+					v .= m[e], i += 2
+				} else if (e = "u" && i + 5 <= n && RegExMatch(SubStr(S, i + 2, 4), "^[\da-fA-F]{4}$")) {
+					hi := Integer("0x" SubStr(S, i + 2, 4))
+					if (hi >= 0xD800 && hi <= 0xDBFF && i + 11 <= n
+							&& SubStr(S, i + 6, 2) = "\u"
+							&& RegExMatch(SubStr(S, i + 8, 4), "^[\da-fA-F]{4}$")
+							&& (lo := Integer("0x" SubStr(S, i + 8, 4))) >= 0xDC00 && lo <= 0xDFFF) {
+						v .= Chr(0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00)), i += 12
+					} else {
+						v .= Chr(hi), i += 6
+					}
+				} else if (e = "x" && i + 3 <= n && RegExMatch(SubStr(S, i + 2, 2), "^[\da-fA-F]{2}$")) {
+					v .= Chr("0x" SubStr(S, i + 2, 2)), i += 4
+				} else {
+					v .= "\", i++
+				}
+			}
 			return v
 		}
 	}

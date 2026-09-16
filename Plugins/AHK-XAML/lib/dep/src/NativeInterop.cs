@@ -263,6 +263,11 @@ public interface ITaskbarList3
 
 internal static class RmtTaskbarGroup
 {
+    // 总开关：禁用“对话框折叠成主窗口标签页”的行为。
+    // 折叠会导致子窗口没有自己的任务栏按钮、Alt+Tab 不列出（RMT 主程序要求独立窗口）。
+    // 恢复原行为改回 false 即可。
+    private static readonly bool disabled = true;
+
     private static ITaskbarList3 list;
     private static bool hooked;
     private static IntPtr hubHwnd;
@@ -270,6 +275,7 @@ internal static class RmtTaskbarGroup
 
     public static void EnsureHooked()
     {
+        if (disabled) return;
         if (hooked) return;
         hooked = true;
         EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnWindowLoaded), true);
@@ -277,6 +283,7 @@ internal static class RmtTaskbarGroup
 
     public static void Refresh()
     {
+        if (disabled) return;
         try { RefreshCore(); }
         catch { }
     }

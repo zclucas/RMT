@@ -1,6 +1,12 @@
 #Requires AutoHotkey v2.0
 
 class FolderPackager {
+    ; ── 解包安全限制（解包来源不可信的包时生效，P0）──
+    static MAX_FILE_COUNT := 10000                       ; 条目数上限
+    static MAX_FILE_SIZE := 200 * 1024 * 1024            ; 单文件上限 200MB
+    static MAX_TOTAL_SIZE := 1024 * 1024 * 1024          ; 解压总大小上限 1GB（条目数 × 单文件上限可达 TB 级，必须有总量帽子）
+    static ALLOWED_EXT := "ini,toml,json,txt,md,png,jpg,jpeg,gif,bmp,webp,ico,wav,mp3,onnx"
+
     ; 打包文件夹为二进制文件
     static PackFolder(folderPath, outputFile) {
         if !DirExist(folderPath)
@@ -80,10 +86,22 @@ class FolderPackager {
 
         ; 解析并提取文件
         fileCount := 0
+        extractedSize := 0
         while pos < data.Size {
             fileInfo := this._ParseFile(data, pos)
             if !fileInfo
                 break
+
+            ; ── 安全校验：包可能来自不可信来源 ──
+            if (++fileCount > this.MAX_FILE_COUNT)
+                throw Error(GetLang("打包文件条目数超过上限，已中止解包"))
+
+            this._ValidateEntry(fileInfo.path)
+
+            ; 累计写出量上限：单文件有帽子，但条目数没约束时总量能到 TB 级
+            extractedSize += fileInfo.data.Size
+            if (extractedSize > this.MAX_TOTAL_SIZE)
+                throw Error(GetLang("打包文件解压后总大小超过上限，已中止解包"))
 
             ; 创建子目录（如果需要）
             fileDir := outputFolder "\" fileInfo.dir
@@ -96,7 +114,6 @@ class FolderPackager {
 
             pos := fileInfo.nextPos
             processedSize := pos
-            fileCount++
 
             if callback {
                 progress := Round((processedSize / totalSize) * 100)
@@ -161,7 +178,39 @@ class FolderPackager {
         if data.Size < 4 || StrGet(data, 4, "cp0") != "RMPK"
             return false
 
+        ; 校验版本号
+        if data.Size < 16 || NumGet(data, 12, "uint") != 1
+            return false
+
         return { endPos: 16 } ; 头部总长度
+    }
+
+    ; 校验条目路径与扩展名（防路径穿越 / 危险文件，P0）
+    static _ValidateEntry(name) {
+        static RESERVED := "CON,PRN,AUX,NUL,COM1,COM2,COM3,COM4,COM5,COM6,COM7,COM8,COM9,LPT1,LPT2,LPT3,LPT4,LPT5,LPT6,LPT7,LPT8,LPT9"
+
+        if (name = "")
+            throw Error(GetLang("打包文件包含空路径，已中止解包"))
+        ; 拒绝 ..、盘符、正斜杠、反斜杠开头（只允许包内相对路径）
+        if InStr(name, "..") || InStr(name, ":") || InStr(name, "/") || SubStr(name, 1, 1) = "\"
+            throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
+        ; 拒绝控制字符
+        loop parse name
+            if (Ord(A_LoopField) < 32)
+                throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
+        ; 拒绝 Windows 保留设备名
+        for seg in StrSplit(name, "\") {
+            base := seg
+            dot := InStr(base, ".", , 1)
+            if dot
+                base := SubStr(base, 1, dot - 1)
+            if InStr("," RESERVED ",", "," base ",")
+                throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
+        }
+        ; 扩展名白名单
+        dot := InStr(name, ".", , -1)
+        if !dot || !InStr("," this.ALLOWED_EXT ",", "," SubStr(name, dot + 1) ",")
+            throw Error(GetLang("打包文件包含不允许的文件类型，已中止解包:") " " name)
     }
 
     static _GetAllFiles(folderPath) {
@@ -206,6 +255,10 @@ class FolderPackager {
 
         ; 读取文件大小
         fileSize := NumGet(data, startPos + 4 + nameLen, "uint64")
+
+        ; 单文件大小上限（防止异常大文件直接分配内存）
+        if fileSize > this.MAX_FILE_SIZE
+            throw Error(GetLang("打包文件包含超过大小上限的条目，已中止解包"))
 
         ; 计算数据位置
         dataStart := startPos + 4 + nameLen + 8

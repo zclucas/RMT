@@ -93,6 +93,13 @@ class MergeUtil {
     }
 
     static ParseMacroItemsByModule(settingDir, symbol, tabIndex) {
+        ; 现行格式：MacroFile.toml（表集合 [[table]] + [tableID].ModuleOrder + 模块/宏段）
+        tomlFile := settingDir "\MacroFile.toml"
+        if (FileExist(tomlFile)) {
+            return this._ParseMacroItemsToml(tomlFile, symbol, tabIndex)
+        }
+
+        ; 兼容旧包（1.2 前的 .rmt）：INI 格式
         macroFile := settingDir "\MacroFile.ini"
         if (!FileExist(macroFile))
             return []
@@ -217,6 +224,67 @@ class MergeUtil {
         return moduleNodes
     }
 
+    ; TOML 格式解析：宏归属由模块段 MacroOrder 显式承载，无需 FoldInfo 索引换算
+    static _ParseMacroItemsToml(tomlFile, symbol, tabIndex) {
+        t := TomlUtil_Read(tomlFile)
+        if (!TomlUtil_Valid(t))
+            return []
+
+        ; [[table]] 表集合中找 Symbol 对应的表（身份 = Symbol）
+        tableID := ""
+        for tbl in TomlUtil_Tables(t, "table") {
+            if (TomlUtil_Str(tbl, "symbol", "") == symbol) {
+                tableID := TomlUtil_Str(tbl, "id", symbol)
+                break
+            }
+        }
+        if (tableID == "")
+            return []
+
+        tableSeg := TomlUtil_Table(t, tableID)
+        if (!TomlUtil_Valid(tableSeg))
+            return []
+
+        moduleNodes := []
+        for tail in TomlUtil_List(tableSeg, "ModuleOrder") {
+            foldSeg := tableID "." tail
+            fseg := TomlUtil_Table(t, foldSeg)
+            if (!TomlUtil_Valid(fseg))
+                continue
+
+            moduleName := TomlUtil_Str(fseg, "Remark", "")
+            if (moduleName == "")
+                moduleName := tail
+
+            items := []
+            for mtail in TomlUtil_List(fseg, "MacroOrder") {
+                mseg := TomlUtil_Table(t, foldSeg "." mtail)
+                if (!TomlUtil_Valid(mseg))
+                    continue
+                item := MergeTreeNode()
+                item.Type := "Item"
+                item.TabIndex := tabIndex
+                item.ItemIndex := items.Length + 1
+                item.TriggerKey := TomlUtil_Str(mseg, "TK", "")
+                item.Remark := TomlUtil_Str(mseg, "Remark", "")
+                item.DisplayName := item.Remark
+                ; TOML 宏内容为真实换行，无需 ⫶ 还原
+                item.MacroStr := TomlUtil_Str(mseg, "Macro", "")
+                item.ResourceSerials := this.ExtractResourceSerials(item.MacroStr)
+                items.Push(item)
+            }
+
+            moduleNode := MergeTreeNode()
+            moduleNode.Type := "Module"
+            moduleNode.ModuleName := moduleName
+            moduleNode.DisplayName := "📦" moduleName " (" items.Length GetLang("项") ")"
+            moduleNode.Children := items
+            moduleNodes.Push(moduleNode)
+        }
+
+        return moduleNodes
+    }
+
     static ParseFoldInfo(settingDir, symbol) {
         macroFile := settingDir "\MacroFile.ini"
         if (!FileExist(macroFile))
@@ -280,6 +348,10 @@ class MergeUtil {
             if (SubStr(cmdStr, 1, StrLen(cmdType)) != cmdType)
                 continue
 
+            ; 间隔指令：间隔_3000 的纯数字是内联毫秒参数（RecordUtil 录制格式），不是序列号；
+            ; 序列化间隔（图形节点阶段5）格式为 间隔间隔1_备注，由后缀 CJK+数字正则路径提取
+            isInterval := (cmdType == "间隔")
+
             afterType := SubStr(cmdStr, StrLen(cmdType) + 1)
             if (afterType == "")
                 continue
@@ -300,12 +372,12 @@ class MergeUtil {
                                     return potentialSerial
                             }
                         }
-                        if (IsNumber(potentialSerial))
+                        if (IsNumber(potentialSerial) && !isInterval)
                             return cmdType . potentialSerial
                     }
                 }
                 else {
-                    if (IsNumber(remaining))
+                    if (IsNumber(remaining) && !isInterval)
                         return cmdType . remaining
                 }
             }
@@ -313,11 +385,11 @@ class MergeUtil {
                 underscorePos := InStr(afterType, "_")
                 if (underscorePos > 0) {
                     pureSerial := SubStr(afterType, 1, underscorePos - 1)
-                    if (pureSerial != "" && IsNumber(pureSerial))
+                    if (pureSerial != "" && IsNumber(pureSerial) && !isInterval)
                         return cmdType . pureSerial
                 }
                 else {
-                    if (IsNumber(afterType))
+                    if (IsNumber(afterType) && !isInterval)
                         return cmdType . afterType
                 }
             }
@@ -326,14 +398,13 @@ class MergeUtil {
         for cmdType, _ in MySoftData.DataFileMap {
             typeLen := StrLen(cmdType)
             if (SubStr(cmdStr, 1, typeLen) == cmdType) {
+                isInterval := (cmdType == "间隔")
                 rest := SubStr(cmdStr, typeLen + 1)
                 if (rest != "") {
-                    match := RegExMatch(rest, "i)^_?([A-Za-z\x{4e00}-\x{9fff}]+\d+)")
-                    if (match)
-                        return match[1]
-                    match := RegExMatch(rest, "^_?(\d+)")
-                    if (match && match[1] != "")
-                        return cmdType . match[1]
+                    if RegExMatch(rest, "i)^_?([A-Za-z\x{4e00}-\x{9fff}]+\d+)", &m)
+                        return m[1]
+                    if (!isInterval && RegExMatch(rest, "^_?(\d+)", &m) && m[1] != "")
+                        return cmdType . m[1]
                 }
             }
         }

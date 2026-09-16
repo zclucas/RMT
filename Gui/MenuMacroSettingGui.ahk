@@ -116,7 +116,7 @@ class MenuMacroSettingGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            Format('Title="{}" ShowInTaskbar="False" Width="{}" Height="{}" Left="{}" Top="{}" Opacity="0"',
+            Format('Title="{}" ShowInTaskbar="True" Width="{}" Height="{}" Left="{}" Top="{}" Opacity="0"',
                 title, winW, winH, dipX, dipY))
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', 'WindowStartupLocation="Manual"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')

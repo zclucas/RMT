@@ -13,7 +13,11 @@ global XAML_FORCE_DYNAMIC_COMPILE := true
 ;   "temp"    - Only compile/copy to %TEMP%\AhkWpf (keeps lib/dep clean, default)
 ;   "lib/dep" - Compile to lib/dep and run from there directly
 ;   "both"    - Compile to lib/dep and also copy to %TEMP%\AhkWpf (old behavior)
-global XAML_ENGINE_BUILD_LOCATION := "temp"
+;
+; 本项目取 "both"：WebView2 打开后引擎产物名带后缀（见 XAMLHost.GetEngineDllName
+; → ahk-xaml-wv2.dll）。留 "temp" 的话它只落在 %TEMP%，lib\dep 里始终是旧的无
+; WebView 版本，PackRMT.ps1 打出来的 Release 会缺引擎、进而要在用户机上重编。
+global XAML_ENGINE_BUILD_LOCATION := "both"
 
 ; --- Developer Diagnostics ---
 ; When true, crash dialogs show interactive "Skip Property" / "Skip Element" buttons
@@ -34,7 +38,12 @@ global XAML_ENABLE_LOGGING := true
 global XAML_ENABLE_TRACING := true
 
 ; --- WebView2 ---
-global XAML_ENABLE_WEBVIEW := false
+; 开启原因：帮助文档改用软件内嵌的小窗显示（Main/Util/HelpDocWin.ahk），
+; 窗口属于软件自身，标题栏/尺寸/位置可控，不像 msedge --app 那样由浏览器接管。
+; 只影响能装 WebView2 运行时的系统（Win10 1803+）；Win7 由 HasWebView2Runtime()
+; 拦下并退回 --app 方案，不会走到这里。
+; 依赖 DLL 首次运行自动从 NuGet 下载到 lib\dep\WebView2\。
+global XAML_ENABLE_WEBVIEW := true
 
 ; --- WebView2 User Data Directory ---
 ; The directory where WebView2 stores its browser cache, cookies, and user data.

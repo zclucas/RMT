@@ -169,6 +169,9 @@ class MainWin {
     __New() {
         this.ui := ""
         this.closed := false
+        this._textFocusName := ""   ; 当前聚焦的文本框名（侧栏编辑热键据此判断是否透传 Ctrl+C/V/Z/Y、Delete）
+        this._shareLoginTick := ""  ; 非空 = 正在等浏览器授权回调（SetTimer 的 bound method）
+        this._shareVerifyTick := "" ; 非空 = 正在用 key 校验 /session/current.json
         this._linkCounter := 0
         this._linkQueue := []
         ; 每页已渲染的宏条目索引（供 RefreshItemColorUI 判断是否需更新色点）
@@ -723,6 +726,11 @@ class MainWin {
             this.ui.OnEvent("AiInput_" t, "TextChanged", ObjBindMethod(this, "OnAiInputChanged", t))
             this.ui.OnEvent("AiInput_" t, "PreviewKeyDown:Return", ObjBindMethod(this, "OnAiInputEnter", t))
             this.ui.OnEvent("AiInput_" t, "PreviewKeyDown:V", ObjBindMethod(this, "OnAiInputPasteKey", t))
+            ; 焦点跟踪：侧栏逻辑树的窗口级 $^c/$^v/$^z/$^y/Delete 会吞键，AI 框同样收不到按键（含 Ctrl+V 贴图）
+            this.ui.OnEvent("AiInput_" t, "GotFocus", ObjBindMethod(this, "OnTextInputFocus", "AiInput_" t))
+            this.ui.OnEvent("AiInput_" t, "LostFocus", ObjBindMethod(this, "OnTextInputBlur", "AiInput_" t))
+            try this.ui.Update("AiInput_" t, "BindEvent", "GotFocus")
+            try this.ui.Update("AiInput_" t, "BindEvent", "LostFocus")
             this.ui.OnEvent("AiInput_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))
             this.ui.OnEvent("AiInput_" t, "Drop", ObjBindMethod(this, "OnAiInputFileDrop", t))
             this.ui.OnEvent("AiInputHost_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))
@@ -738,7 +746,7 @@ class MainWin {
         this.ui.OnEvent("BtnReload", "Click", MenuReload)
         if (!A_IsCompiled)
             this.ui.OnEvent("BtnGMUI", "Click", (*) => this.ui.Update("Window", "GMUIOpen", ""))
-        this.ui.OnEvent("BtnHelp", "Click", (*) => Run(A_WorkingDir "\index.html"))
+        this.ui.OnEvent("BtnHelp", "Click", (*) => OnOpenHelpDoc())
         this.ui.OnEvent("BtnSave", "Click", OnSaveSetting)
 
         this._vl := VirtualListHost(this.ui)
@@ -4586,6 +4594,7 @@ class MainWin {
             . '<Button Grid.Column="9" Name="Setting_' t '_' i '" Style="{StaticResource RmtItemPrimaryBtn}" Margin="0" Content="&#xE713;" ToolTip="' GetLang("设置") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"/>'
             . '<StackPanel Grid.Column="11" Orientation="Horizontal" VerticalAlignment="Center">'
             . '<Button Name="Copy_' t '_' i '" Style="{StaticResource RmtFoldToolBtn}" Content="&#xE8C8;" ToolTip="' GetLang("复制") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>'
+            . '<Button Name="Share_' t '_' i '" Style="{StaticResource RmtFoldToolBtn}" Content="&#xE898;" ToolTip="' GetLang("分享到论坛") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Margin="0,0,4,0"/>'
             . this._BuildItemForbidBtnXaml(t, i, item.Forbid, false)
             . '<Button Name="Del_' t '_' i '" Style="{StaticResource RmtFoldToolBtn}" Content="&#xE74D;" ToolTip="' GetLang("删除") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Margin="0"/>'
             . '</StackPanel>'
@@ -4699,6 +4708,7 @@ class MainWin {
             this._Bind("FoldTKEdit_" t "_" f, "Click", OnFlodTKEditClick.Bind(tableItem, f))
             this._Bind("FoldAddMacro_" t "_" f, "Click", OnItemAddMacroBtnClick.Bind(tableItem, f))
             this._Bind("FoldPasteMacro_" t "_" f, "Click", OnItemPasteMacroBtnClick.Bind(tableItem, f))
+            this._Bind("FoldShare_" t "_" f, "Click", OnFoldShareBtnClick.Bind(tableItem, f))
             this._Bind("FoldForbidBtn_" t "_" f, "Click", OnFoldForbidToggleClick.Bind(tableItem, f))
             this._Bind("FoldDel_" t "_" f, "Click", OnItemDelFoldBtnClick.Bind(tableItem, f))
         }
@@ -4853,6 +4863,7 @@ class MainWin {
             . '<Button Grid.Column="9" Tag="Setting" Style="{StaticResource RmtItemPrimaryBtn}" Margin="0" Content="&#xE713;" ToolTip="' GetLang("设置") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"/>'
             . '<StackPanel Grid.Column="11" Orientation="Horizontal" VerticalAlignment="Center">'
             . '<Button Tag="Copy" Style="{StaticResource RmtFoldToolBtn}" Content="&#xE8C8;" ToolTip="' GetLang("复制") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>'
+            . '<Button Tag="Share" Style="{StaticResource RmtFoldToolBtn}" Content="&#xE898;" ToolTip="' GetLang("分享到论坛") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Margin="0,0,4,0"/>'
             . this._BuildItemForbidBtnXaml(0, 0, false, true)
             . '<Button Tag="Del" Style="{StaticResource RmtFoldToolBtn}" Content="&#xE74D;" ToolTip="' GetLang("删除") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Margin="0"/>'
             . '</StackPanel>'
@@ -4901,10 +4912,11 @@ class MainWin {
         return '<Button Name="' name '_' t '_' f '" Tag="' tag '" ' attrs '/>'
     }
 
-    ; 模块行工具按钮：新增宏 / 粘贴宏 / 禁用 / 删除
+    ; 模块行工具按钮：新增宏 / 粘贴宏 / 分享到论坛 / 禁用 / 删除
     _BuildFoldToolbarXaml(t, f, forbidState, vlMode := false) {
         return this._BuildFoldIconBtn("FoldAddMacro", "FoldAddMacro", t, f, "+", GetLang("新增宏"), vlMode, false)
             . this._BuildFoldIconBtn("FoldPasteMacro", "FoldPasteMacro", t, f, "&#xE77F;", GetLang("粘贴宏"), vlMode)
+            . this._BuildFoldIconBtn("FoldShare", "FoldShare", t, f, "&#xE898;", GetLang("分享到论坛"), vlMode)
             . this._BuildFoldForbidBtnXaml(t, f, forbidState, vlMode)
             . this._BuildFoldIconBtn("FoldDel", "FoldDel", t, f, "&#xE74D;", GetLang("删除"), vlMode, true, true)
     }
@@ -5142,6 +5154,7 @@ class MainWin {
                 , GetLang("智能终止：优先以协作方式让宏自行退出，设 150ms 期限，逾期未退出则强制结束。")
                 . "`n" GetLang("强制终止：直接结束线程并创建新线程，不等待宏自行退出。")
                 . "`n" GetLang("提示：强制终止响应更快，但频繁结束、创建线程会消耗较多资源，建议保持智能终止。"))
+            . '<StackPanel ' ns ' Orientation="Horizontal" Margin="0,4,16,4"><Button Name="BtnShareLogin" Content="' GetLang("登录论坛") '" Height="24" MinHeight="24" Padding="10,0" VerticalAlignment="Center" ToolTip="' GetLang("在浏览器里登录论坛并授权本客户端；授权后自动把凭据写入配置，不必手动填 Key") '"/><Button Name="BtnShareLogout" Content="' GetLang("退出登录") '" Height="24" MinHeight="24" Padding="10,0" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="' GetLang("清除本机保存的论坛凭据；如需在论坛侧彻底注销该密钥，请到 个人设置 → 应用 里撤销") '"/><TextBlock Name="TxtShareLoginState" Text="' this._XmlEsc(this._ShareLoginStateText()) '" Margin="8,0,16,0" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}" FontSize="11"/></StackPanel>'
             . '</WrapPanel>')
 
         ; ---- §10 显示页签选项：勾选控制页签显隐（隐藏仅显示效果，不影响触发；保存后重启生效） ----
@@ -5184,6 +5197,17 @@ class MainWin {
         ; 弹 XAML 窗须离开 Click 消息上下文，SetTimer(-1) 延迟打开
         this._Bind("BtnNetworkSetting", "Click", (*) => SetTimer(() => NetworkShowSettingDialog(), -1))
         this._Bind("EditSoftBGColor", "LostFocus", ObjBindMethod(this, "OnTextEdit", "SoftBGColor"))
+        ; 共享上传：浏览器授权登录（Discourse /user-api-key/new，免手填 Key）
+        this._Bind("BtnShareLogin", "Click", ObjBindMethod(this, "OnShareLoginClick"))
+        this._Bind("BtnShareLogout", "Click", ObjBindMethod(this, "OnShareLogoutClick"))
+        ; 文本输入焦点跟踪：侧栏逻辑树把 $^c/$^v/$^z/$^y/Delete 注册成主窗口级热键（$ 吞键且不转发），
+        ; 不记录焦点的话这些键到不了输入框 → 由 MacroEditGui._OnHotkey 据此透传（主窗口文本框都粘不了的根因）
+        for nm in ["EditSoftBGColor", "EditBackImage"] {
+            this.ui.OnEvent(nm, "GotFocus", ObjBindMethod(this, "OnTextInputFocus", nm))
+            this.ui.OnEvent(nm, "LostFocus", ObjBindMethod(this, "OnTextInputBlur", nm))
+            try this.ui.Update(nm, "BindEvent", "GotFocus")
+            try this.ui.Update(nm, "BindEvent", "LostFocus")
+        }
         ; §11 背景图：浏览/清空（写入 MainSoftData.BackImagePath，保存后重启生效）
         this._Bind("BtnBackImageBrowse", "Click", ObjBindMethod(this, "OnBackImageBrowse"))
         this._Bind("BtnBackImageClear", "Click", ObjBindMethod(this, "OnBackImageClear"))
@@ -5231,6 +5255,130 @@ class MainWin {
 
     OnTextEdit(fieldName, state, ctrl, event) {
         MainSoftData.%fieldName% := this.ui.Query(ctrl)
+    }
+
+    ; 共享上传：退出登录 —— 清空本机凭据（论坛侧那条密钥不撤销，用户可自行去 个人设置 → 应用 撤销）
+    OnShareLogoutClick(state, ctrl, event) {
+        if (this._shareLoginTick != "") {              ; 正在等授权：一并取消
+            SetTimer(this._shareLoginTick, 0)
+            this._shareLoginTick := ""
+            try GetDiscourse().CancelUserAuth()
+        }
+        SetShareAuth("", "")
+        this._SetShareLoginState(this._ShareLoginStateText())
+    }
+
+    ; ---- 共享上传：浏览器授权登录（Discourse /user-api-key/new） ----
+    ; 点按钮 → C# 起本地固定端口监听 + 打开浏览器授权页 → 轮询 GetAuthState()，
+    ; 2 = 已用 RSA 私钥解出 key → 写 ini → 再用 key 打 /session/current.json 校验并显示用户名。
+    ; 前置条件：站点后台 allowed_user_api_auth_redirects 必须逐字包含
+    ;   http://127.0.0.1:38471/authcb（另 :38472 / :38473 是端口被占时的顺延位），
+    ;   该设置不支持通配符，端口必须与 C# 的 AuthCallbackPorts 一致。
+    OnShareLoginClick(state, ctrl, event) {
+        if (this._shareLoginTick != "") {              ; 等待中再点 = 取消
+            SetTimer(this._shareLoginTick, 0)
+            this._shareLoginTick := ""
+            try GetDiscourse().CancelUserAuth()
+            this._SetShareLoginState(this._ShareLoginStateText())
+            return
+        }
+        try GetDiscourse().BeginUserAuth(GetShareServerUrl())
+        catch as e {
+            this._SetShareLoginState(GetLang("无法开始授权：") . e.Message)
+            return
+        }
+        this._SetShareLoginState(GetLang("已打开浏览器，请登录论坛并点「授权」…（再点本按钮可取消）"))
+        this._shareLoginTick := ObjBindMethod(this, "PollShareLogin")
+        SetTimer(this._shareLoginTick, 300)
+    }
+
+    PollShareLogin() {
+        st := 0
+        try st := Integer(GetDiscourse().GetAuthState())
+        catch as e {
+            SetTimer(this._shareLoginTick, 0)
+            this._shareLoginTick := ""
+            this._SetShareLoginState(GetLang("授权失败：") . e.Message)
+            return
+        }
+        if (st = 1)                                   ; 1 = 仍在等回调（C# 侧 5 分钟超时）
+            return
+        SetTimer(this._shareLoginTick, 0)
+        this._shareLoginTick := ""
+        if (st != 2) {
+            this._SetShareLoginState(this._ShareLoginStateText())
+            return
+        }
+        raw := "", err := ""
+        try raw := GetDiscourse().TakeAuthResult()
+        try err := GetDiscourse().GetAuthError()
+        key := ""
+        if (raw != "" && RegExMatch(raw, '"key"\s*:\s*"([^"]+)"', &m))
+            key := m[1]
+        if (key == "") {
+            if (err == "")
+                err := GetLang("授权页未返回凭据")
+            this._SetShareLoginState(GetLang("授权失败：") . err)
+            return
+        }
+        ; 用户密钥模式：用户名必须留空（C# 的 ApplyAuth 据此发 User-Api-Key 而非 Api-Key）
+        SetShareAuth("", key)
+        this._SetShareLoginState(GetLang("已授权，正在校验…"))
+        this.StartShareVerify(key)
+    }
+
+    ; 用刚拿到的 key 打一次 /session/current.json：既确认凭据可用，也顺带取回用户名显示
+    StartShareVerify(key) {
+        if (this._shareVerifyTick != "")
+            return
+        try GetDiscourse().SetAuth("", key)
+        try GetDiscourse().BeginGetTextAuth(GetShareServerUrl() . "/session/current.json")
+        this._shareVerifyTick := ObjBindMethod(this, "PollShareVerify")
+        SetTimer(this._shareVerifyTick, 400)
+    }
+
+    PollShareVerify() {
+        st := 0
+        try st := Integer(GetDiscourse().GetTextAuthState())
+        catch {
+            SetTimer(this._shareVerifyTick, 0)
+            this._shareVerifyTick := ""
+            this._SetShareLoginState(GetLang("已保存凭据（未能校验）"))
+            return
+        }
+        if (st = 1)
+            return
+        SetTimer(this._shareVerifyTick, 0)
+        this._shareVerifyTick := ""
+        body := ""
+        if (st = 2)
+            try body := GetDiscourse().TakeTextAuthResult()
+        if (body != "" && RegExMatch(body, '"username"\s*:\s*"([^"]+)"', &m))
+            this._SetShareLoginState(GetLang("已登录：") . m[1])
+        else
+            this._SetShareLoginState(GetLang("凭据已保存，但校验未通过（可能已在论坛被撤销）"))
+    }
+
+    ; 状态行初始文案：只读 ini，不联网（启动时不发请求；校验只在点「登录论坛」后做）
+    _ShareLoginStateText() {
+        if (GetShareApiKey() == "")
+            return GetLang("未登录")
+        u := GetShareApiUser()
+        return (u != "") ? GetLang("已登录（管理员 Key）：") . u : GetLang("已登录")
+    }
+
+    _SetShareLoginState(text) {
+        try this.ui.Update("TxtShareLoginState", "Text", text)
+    }
+
+    ; 文本框焦点跟踪：主窗口聚焦文本框时，侧栏逻辑树的 $^c/$^v/$^z/$^y/Delete 需透传（见 MacroEditGui._PassEditKeyToTextInput）
+    OnTextInputFocus(nm, state, ctrl, event) {
+        this._textFocusName := nm
+    }
+
+    OnTextInputBlur(nm, state, ctrl, event) {
+        if (this._textFocusName == nm)
+            this._textFocusName := ""
     }
 
     ; §11 背景图：浏览选择图片文件（写入配置，保存后重启生效）
@@ -5329,7 +5477,7 @@ class MainWin {
         Add('<TextBlock ' ns ' Text="' GetLang("若不同意上述条款，请立即停止使用本软件。") '" Foreground="Red" HorizontalAlignment="Center" Margin="0,10,0,0"/>')
 
         Add(this._LinkRow(GetLang("更新视频合集："), "https://www.bilibili.com/video/BV1yR8x6xEBW", GetLang("版本更新视频，直播交流问答")))
-        Add(this._LinkRow(GetLang("操作说明文档："), A_WorkingDir "\index.html", GetLang("快速上手，指令手册、常见问题、常见报错、更新日志等")))
+        Add(this._LinkRow(GetLang("操作说明文档："), GetHelpDocPath(), GetLang("快速上手，指令手册、常见问题、常见报错、更新日志等")))
         Add(this._LinkRow(GetLang("配置共享仓库："), "https://zclucas.github.io/RMT-Setting/", GetLang("案例学习、获取他人分享的宏配置（支持下载导入）")))
         Add(this._LinkRow(GetLang("国内开源网址："), "https://gitee.com/fateman/RMT", "https://gitee.com/fateman/RMT"))
         Add(this._LinkRow(GetLang("国外开源网址："), "https://github.com/zclucas/RMT", "https://github.com/zclucas/RMT"))
@@ -5358,6 +5506,11 @@ class MainWin {
     }
 
     OnLinkClick(url, state, ctrl, event) {
+        if (url = "")
+            return
+        ; 本地 html 帮助文档 → 优先用 Chromium app 模式小窗打开
+        if (RegExMatch(url, "i)\.html?$") && FileExist(url) && OpenHelpInAppWindow())
+            return
         Run(url)
     }
 

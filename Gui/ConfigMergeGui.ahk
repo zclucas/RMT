@@ -134,15 +134,16 @@ class ConfigMergeGui {
             .Text(GetLang("合并说明:合并的宏将按原模块结构创建新模块"))
             .Foreground("{DynamicResource TextSub}").FontSize(12).TextWrapping("Wrap")
 
-        ; 底部按钮居中：开始合并导入、取消
+        ; 底部按钮居中：导出 .rmt、开始合并导入、取消
         btnRow := root.Add("StackPanel").Orientation("Horizontal").Grid_Row(4)
             .HorizontalAlignment("Center").Margin("0,12,0,2")
-        this._AddBtn(btnRow, "ExecuteBtn", GetLang("开始合并导入"), 110).Margin("0,0,162,0")
+        this._AddBtn(btnRow, "ExportBtn", GetLang("导出 .rmt"), 100).Margin("0,0,10,0")
+        this._AddBtn(btnRow, "ExecuteBtn", GetLang("开始合并导入"), 110).Margin("0,0,10,0")
         this._AddBtn(btnRow, "CancelBtn", GetLang("取消"), 90)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="False" Width="620" Height="680" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="True" Width="620" Height="680" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         groupBoxStyle := '<Style TargetType="GroupBox"><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/></Style>'
@@ -153,6 +154,7 @@ class ConfigMergeGui {
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("CancelBtn", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("ExecuteBtn", "Click", ObjBindMethod(this, "OnExecuteMerge"))
+        this.ui.OnEvent("ExportBtn", "Click", ObjBindMethod(this, "OnExportRmt"))
         this.ui.OnEvent("SelectFileBtn", "Click", ObjBindMethod(this, "OnSelectFile"))
         this.ui.Track("LocalConfigDDL")
         this.ui.OnEvent("LocalConfigDDL", "SelectionChanged", ObjBindMethod(this, "OnLocalConfigChange"))
@@ -224,8 +226,12 @@ class ConfigMergeGui {
         this._applyingUI := true
         try {
             this.ui.Update("LocalConfigDDL", "ClearItems", "")
+            ; 必须用 AddXamlItem 包 ComboBoxItem：AddItem 塞纯字符串项后，
+            ; 不可编辑 ComboBox 的 state 采集走 cb.Text → 恒为空 → 回调读不到值
+            ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
             for name in this._localSettings {
-                this.ui.Update("LocalConfigDDL", "AddItem", name)
+                this.ui.Update("LocalConfigDDL", "AddXamlItem",
+                    '<ComboBoxItem ' ns ' Content="' this._XmlEsc(name) '"/>')
             }
         } finally {
             this._applyingUI := false
@@ -261,7 +267,13 @@ class ConfigMergeGui {
             return
         configName := ""
         if (IsSet(state) && IsObject(state) && state.Has("LocalConfigDDL"))
-            configName := state["LocalConfigDDL"]
+            configName := Trim(String(state["LocalConfigDDL"]))
+        if (configName == "") {
+            ; 兜底：state 文本拿不到时按 SelectedIndex 映射回配置名
+            idx := this.ui.Query("LocalConfigDDL>SelectedIndex")
+            if (IsNumber(idx) && Integer(idx) >= 0 && Integer(idx) + 1 <= this._localSettings.Length)
+                configName := this._localSettings[Integer(idx) + 1]
+        }
         if (configName == "")
             return
 
@@ -591,6 +603,62 @@ class ConfigMergeGui {
         } catch as e {
             MsgBox(GetLang("合并导入失败: ") e.Message, GetLang("错误"), 0x10)
         }
+    }
+
+    ; 导出 .rmt：把勾选项打包成自洽最小配置目录 → 弹上传分享窗口
+    OnExportRmt(state := unset, ctrl := unset, event := unset) {
+        if (!this.TreeRoot) {
+            MsgBox(GetLang("请先选择源配置"), GetLang("提示"), 0x40)
+            return
+        }
+
+        checkedItems := []
+        this._CollectCheckedItems(this.TreeRoot, checkedItems)
+        if (checkedItems.Length == 0) {
+            MsgBox(GetLang("请至少选择一个宏进行导出"), GetLang("提示"), 0x40)
+            return
+        }
+
+        sourceDir := this.IsFromRmt ? MergeUtil.TempMergeDir : this.SourcePath
+        if (sourceDir == "" || !DirExist(sourceDir)) {
+            MsgBox(GetLang("源配置目录不存在"), GetLang("错误"), 0x10)
+            return
+        }
+
+        outDir := A_Temp "\RMT_Export_" A_Now
+        try missingStr := ShareExportUtil.ExportChecked(checkedItems, sourceDir, outDir)
+        catch as e {
+            MsgBox(GetLang("导出失败: ") e.Message, GetLang("错误"), 0x10)
+            return
+        }
+
+        if (missingStr != "")
+            MsgBox(GetLang("以下被引用的指令配置未找到，分享包可能不完整：") "`n" missingStr, GetLang("提示"), 0x40)
+
+        exportDir := A_Temp "\RMT_Export"
+        if (!DirExist(exportDir))
+            DirCreate(exportDir)
+        fileName := ShareExportUtil.SuggestName(checkedItems, this.SourceName)
+        rmtPath := exportDir "\" fileName ".rmt"
+        try {
+            if (FileExist(rmtPath))
+                FileDelete(rmtPath)
+            FolderPackager.PackFolder(outDir, rmtPath)
+        } catch as e {
+            MsgBox(GetLang("打包失败: ") e.Message, GetLang("错误"), 0x10)
+            return
+        }
+        try DirDelete(outDir, true)
+
+        confirmResult := MsgBox(Format("{}: {}`n{}: {}`n`n{}",
+            GetLang("导出宏数"), checkedItems.Length,
+            GetLang("文件"), rmtPath,
+            GetLang("是否继续发布到共享论坛？")), GetLang("导出完成"), 0x24 | 0x40)
+        if (confirmResult != "Yes")
+            return
+
+        this.OnClose()
+        ShareUploadGui.ShowGui(rmtPath, ShareExportUtil.SuggestName(checkedItems, this.SourceName), GetLang("配置"))
     }
 
     _XmlEsc(s) {

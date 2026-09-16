@@ -221,3 +221,148 @@ OnTrayEndRecord(*) {
     UIControls.ToolCheckRecord.Value := false
     OnForceEndRecord()
 }
+
+; 帮助文档首页：统一走程序目录下的 Web\index.html（源码态与发布版同名）
+GetHelpDocPath() {
+    return A_WorkingDir "\Web\index.html"
+}
+
+; 打开帮助文档；文件不存在时给出提示而不是抛 Run 错误
+; pageHash 形如 "#/docs/commands/key"，留空则打开首页
+; 三层降级：内嵌 WebView2 窗（Win10/11，自绘标题栏）→ Chromium --app 小窗 → 系统默认浏览器
+OnOpenHelpDoc(pageHash := "") {
+    p := GetHelpDocPath()
+    if (!FileExist(p)) {
+        MsgBox(GetLang("未找到帮助文档，请检查程序目录下的 Web 文件夹是否完整。"), GetLang("提示"))
+        return
+    }
+    if (HasWebView2Runtime() && HelpDocWin.Open(pageHash))
+        return
+    if (OpenHelpInAppWindow(pageHash))
+        return
+    Run(p)   ; 没有可用的 Chromium 浏览器 → 交系统默认浏览器
+}
+
+; 探测系统是否装有 WebView2 运行时（Win10 1803+ 一般自带；Win7 没有）
+; 检查 EdgeUpdate Clients 注册表里的 pv 值，三个视图都查
+HasWebView2Runtime() {
+    static keys := ["HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                  , "HKLM\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                  , "HKCU\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"]
+    for k in keys {
+        try {
+            v := Trim(RegRead(k, "pv"))
+            if (v != "")
+                return true
+        }
+    }
+    return false
+}
+
+; 用 Chromium 浏览器的 --app 模式打开帮助文档（无地址栏的独立小窗）
+; pageHash 形如 "#/docs/commands/key"，留空则打开首页
+; winW / winH：窗口宽高。winW 默认 560（窄栏，触发站点移动端布局）；winH 传 0 表示与主窗口等高
+; 返回 true = 已用 app 模式打开；false = 没找到浏览器或启动失败
+OpenHelpInAppWindow(pageHash := "", winW := 560, winH := 0) {
+    docPath := GetHelpDocPath()
+    if (!FileExist(docPath))
+        return false
+    exe := FindChromiumBrowser()
+    if (exe = "")
+        return false
+
+    ; 独立 user-data-dir：不与用户已开的浏览器共进程，
+    ; 既不会被「恢复上次会话」/插件干扰，用户关浏览器时也不会连带关掉帮助窗
+    profileDir := A_Temp "\RMT_HelpBrowser"
+    if (!DirExist(profileDir))
+        DirCreate(profileDir)
+
+    ; 位置与尺寸：贴当前前台窗口（点「帮助」时就是 RMT 主窗口）右侧并等高，
+    ; 右边放不下就贴左侧；完全取不到主窗口就贴主屏右侧
+    mx := 0
+    my := 0
+    mw := 0
+    mh := 0
+    try WinGetPos(&mx, &my, &mw, &mh, "A")
+    w := winW
+    if (winW > A_ScreenWidth)
+        w := A_ScreenWidth - 40
+    if (mw < 200 || mh < 200) {
+        x := A_ScreenWidth - w - 12
+        y := 60
+        h := (winH > 0) ? winH : Round(A_ScreenHeight * 0.85)
+    } else {
+        x := mx + mw
+        y := my
+        h := (winH > 0) ? winH : mh
+        if (x + w > A_ScreenWidth)
+            x := (mx - w >= 0) ? mx - w : A_ScreenWidth - w
+    }
+
+    cmd := '"' exe '"'
+        . ' --app="' FileToFileUri(docPath) pageHash '"'
+        . ' --user-data-dir="' profileDir '"'
+        . ' --no-first-run --no-default-browser-check'
+        . ' --window-size=' w ',' h
+        . ' --window-position=' x ',' y
+    try
+        Run(cmd)
+    catch
+        return false
+    return true
+}
+
+; 本地路径 → file:/// URL（--app 只接受 URL，不接受裸路径）
+FileToFileUri(path) {
+    p := StrReplace(path, "\", "/")
+    if (!RegExMatch(p, "^[A-Za-z]:"))
+        return ""
+    return "file:///" UriEncode(p)
+}
+
+; UTF-8 百分号编码，保留 URL 路径中安全的字符（含 / 和 :）
+; 用途：用户名/安装目录含中文或空格时，file:// URL 仍然可用
+UriEncode(s) {
+    buf := Buffer(StrPut(s, "UTF-8"))
+    StrPut(s, buf, "UTF-8")
+    out := "", i := 0
+    while (i < buf.Size - 1) {
+        b := NumGet(buf, i, "UChar")
+        if ((b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5A) || (b >= 0x61 && b <= 0x7A)
+            || b = 0x2F || b = 0x3A || b = 0x2D || b = 0x5F || b = 0x2E || b = 0x7E)
+            out .= Chr(b)
+        else
+            out .= Format("%{:02X}", b)
+        i++
+    }
+    return out
+}
+
+; 探测可用的 Chromium 浏览器 exe 路径，找不到返回 ""
+FindChromiumBrowser() {
+    ; 1) 注册表 App Paths（Chrome / Edge；32 位进程需另查 WOW6432Node）
+    for name in ["chrome.exe", "msedge.exe"] {
+        for key in ["HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\"
+                  , "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\"
+                  , "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\"] {
+            try {
+                p := Trim(RegRead(key name), '" ')
+                if (p != "" && FileExist(p))
+                    return p
+            }
+        }
+    }
+    ; 2) 常见安装路径兜底
+    pf  := EnvGet("ProgramFiles")
+    pfx := EnvGet("ProgramFiles(x86)")
+    lad := EnvGet("LocalAppData")
+    for p in [lad "\Google\Chrome\Application\chrome.exe"
+            , pf  "\Google\Chrome\Application\chrome.exe"
+            , pfx "\Google\Chrome\Application\chrome.exe"
+            , pfx "\Microsoft\Edge\Application\msedge.exe"
+            , pf  "\Microsoft\Edge\Application\msedge.exe"
+            , lad "\Microsoft\Edge\Application\msedge.exe"]
+        if (FileExist(p))
+            return p
+    return ""
+}
