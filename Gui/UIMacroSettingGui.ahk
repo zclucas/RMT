@@ -62,7 +62,7 @@ class UIMacroSettingGui {
 
     _BuildAndShow() {
         this.closed := false
-        title := GetLang("界面宏配置 - 图标") " " this.CurrentMacroIndex
+        title := "Icon-按钮" this.CurrentMacroIndex
         titleHeight := "30"
         winW := 420
         winH := 200
@@ -157,7 +157,7 @@ class UIMacroSettingGui {
     _ApplyValuesToUI() {
         if (!IsObject(this.ui) || this.closed)
             return
-        title := GetLang("界面宏配置 - 图标") " " this.CurrentMacroIndex
+        title := "Icon-按钮" this.CurrentMacroIndex
         try this.ui.Update("TitleText", "Text", title)
         try this.ui.Update("Window", "Title", title)
         try this.ui.Update("IcoPathCon", "Text", this._pathText)
@@ -232,6 +232,7 @@ class UIMacroSettingGui {
             finalPath := this.CopyIconToImagesFolder(this.OriginalIconPath)
         tableItem.Items[idx].IcoPath := finalPath
         this.Close()
+        MyMainWin.RefreshItemRow(tableItem.Index, idx)
         ; §18 UI宏图标即时持久化 + 广播（面板渲染订阅者重建）
         HotReloadPublish(tableItem.Index, idx)
     }

@@ -397,8 +397,8 @@ class UIMacroGui {
         ui.xaml := StrReplace(ui.xaml, 'AllowsTransparency="False"', 'AllowsTransparency="True"')
         ui.xaml := StrReplace(ui.xaml, 'Background="Transparent"', 'Background="' bgColor '"')
 
-        panelResources := '<CornerRadius x:Key="CloseBtnRadius">0,8,0,0</CornerRadius>'
-            . '<SolidColorBrush x:Key="UIPanelBtnColor" Color="' btnColor '"/>'
+        ; XAML_TEMPLATE 已内置 CloseBtnRadius；此处重复注入同名资源会让 WPF 解析器崩溃。
+        panelResources := '<SolidColorBrush x:Key="UIPanelBtnColor" Color="' btnColor '"/>'
             . '<SolidColorBrush x:Key="UIPanelBtnText" Color="' btnTextColor '"/>'
             . '<SolidColorBrush x:Key="UIPanelBgColor" Color="' bgColor '"/>'
             . '<SolidColorBrush x:Key="UIPanelTitleBg" Color="' titleBg '"/>'

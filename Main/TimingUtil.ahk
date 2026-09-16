@@ -386,3 +386,14 @@ HandleOnSoftStart(tableItem) {
             TriggerMacroHandler(tableItem, index)
     }
 }
+
+; 定时宏「宏配置」是否已保存过（TimingFile 有记录）。新建条目只有序列码、尚未确定。
+HasTimingConfig(item) {
+    if (!IsObject(item) || !item.HasProp("TimingSerial"))
+        return false
+    serial := item.TimingSerial
+    if (serial == "")
+        return false
+    global TimingFile, IniSection
+    return IniRead(TimingFile, IniSection, serial, "") != ""
+}

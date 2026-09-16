@@ -398,7 +398,8 @@ public partial class AhkWpfEngine
             try
             {
                 var rootContent = win.Content as FrameworkElement;
-                if (rootContent != null && !(rootContent is System.Windows.Controls.Viewbox)
+                bool fluidDialogLayout = win.Resources["RmtFluidDialogLayout"] is bool && (bool)win.Resources["RmtFluidDialogLayout"];
+                if (!fluidDialogLayout && rootContent != null && !(rootContent is System.Windows.Controls.Viewbox)
                     && !double.IsNaN(win.Width))
                 {
                     if (double.IsNaN(rootContent.Width))
@@ -534,36 +535,12 @@ public partial class AhkWpfEngine
             }
         }
 
-        // Set owner
-        if (ownerHwndStr != "0")
-        {
-            try
-            {
-                IntPtr oHwnd = new IntPtr(long.Parse(ownerHwndStr));
-                if (oHwnd != IntPtr.Zero)
-                {
-                    win.Resources["OriginalNativeOwner"] = oHwnd;
-                    new WindowInteropHelper(win).Owner = oHwnd;
-                }
-            }
-            catch { }
-        }
-
+        ApplyNativeOwner(win, ownerHwndStr);
         InheritWindowIconAndTitle(win, ownerHwndStr);
 #if ENABLE_WEBVIEW
         ConfigureWebView2CreationProperties(win);
 #endif
-        if (isDaemon)
-        {
-            // Opacity=0：首帧 present 前挂 LWA_ALPHA=0，全程不 WinHide，避免「白壳→隐藏→再显示」
-            PrepareDeferredReveal(win);
-            win.Show();
-            ReinforceNativeAlphaHide(win);
-        }
-        else
-        {
-            win.ShowDialog();
-        }
+        ShowEngineWindow(win, isDaemon);
     }
 
     public void RunEngine(string id, string hwndStr, string trackedCsv, string scriptName, string xamlFilePath, string eventsFilePath, string ownerHwndStr = "0", bool isDaemon = false)
@@ -1162,19 +1139,7 @@ public partial class AhkWpfEngine
             }
         }
 
-        if (ownerHwndStr != "0")
-        {
-            try
-            {
-                IntPtr oHwnd = new IntPtr(long.Parse(ownerHwndStr));
-                if (oHwnd != IntPtr.Zero)
-                {
-                    win.Resources["OriginalNativeOwner"] = oHwnd;
-                    new System.Windows.Interop.WindowInteropHelper(win).Owner = oHwnd;
-                }
-            }
-            catch { }
-        }
+        ApplyNativeOwner(win, ownerHwndStr);
 
         eventsContent = null;
 
@@ -1182,16 +1147,79 @@ public partial class AhkWpfEngine
 #if ENABLE_WEBVIEW
         ConfigureWebView2CreationProperties(win);
 #endif
-        if (isDaemon)
+        ShowEngineWindow(win, isDaemon);
+    }
+
+    // 失效/子窗口句柄不能当 Owner：CreateWindowEx 会抛「无效的窗口句柄」并打崩引擎。
+    private static IntPtr ResolveOwnerHwnd(string ownerHwndStr)
+    {
+        if (string.IsNullOrEmpty(ownerHwndStr) || ownerHwndStr == "0")
+            return IntPtr.Zero;
+        try
         {
-            // Opacity=0：首帧 present 前挂 LWA_ALPHA=0，全程不 WinHide，避免「白壳→隐藏→再显示」
-            PrepareDeferredReveal(win);
-            win.Show();
-            ReinforceNativeAlphaHide(win);
+            IntPtr hwnd = new IntPtr(long.Parse(ownerHwndStr));
+            if (hwnd == IntPtr.Zero || !IsWindow(hwnd))
+                return IntPtr.Zero;
+            const int GWL_STYLE = -16;
+            const int WS_CHILD = 0x40000000;
+            if ((GetWindowLong(hwnd, GWL_STYLE) & WS_CHILD) != 0)
+            {
+                IntPtr root = GetAncestor(hwnd, 2); // GA_ROOT
+                if (root != IntPtr.Zero && IsWindow(root) && (GetWindowLong(root, GWL_STYLE) & WS_CHILD) == 0)
+                    return root;
+                return IntPtr.Zero;
+            }
+            return hwnd;
         }
-        else
+        catch
         {
-            win.ShowDialog();
+            return IntPtr.Zero;
+        }
+    }
+
+    private static void ApplyNativeOwner(Window win, string ownerHwndStr)
+    {
+        IntPtr oHwnd = ResolveOwnerHwnd(ownerHwndStr);
+        if (oHwnd == IntPtr.Zero)
+            return;
+        try
+        {
+            win.Resources["OriginalNativeOwner"] = oHwnd;
+            new WindowInteropHelper(win).Owner = oHwnd;
+        }
+        catch { }
+    }
+
+    private static void ShowEngineWindow(Window win, bool isDaemon)
+    {
+        try
+        {
+            if (isDaemon)
+            {
+                PrepareDeferredReveal(win);
+                win.Show();
+                ReinforceNativeAlphaHide(win);
+            }
+            else
+            {
+                win.ShowDialog();
+            }
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            try { new WindowInteropHelper(win).Owner = IntPtr.Zero; } catch { }
+            if (win.Resources.Contains("OriginalNativeOwner"))
+                win.Resources.Remove("OriginalNativeOwner");
+            if (isDaemon)
+            {
+                PrepareDeferredReveal(win);
+                win.Show();
+                ReinforceNativeAlphaHide(win);
+            }
+            else
+            {
+                win.ShowDialog();
+            }
         }
     }
 

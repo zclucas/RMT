@@ -406,7 +406,7 @@ class XAMLHost {
             .FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center")
             .Margin(titleLeft ",0,0,0").Padding("0")
         btns := tb.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Stretch")
-        return { Root: tb, Drag: drag, Btns: btns }
+        return { Root: tb, Drag: drag, Title: tbk, Btns: btns }
     }
 
     ; 标准标题栏 + 关闭钮。返回 { Root, Drag, Btns, Close }
@@ -430,13 +430,18 @@ class XAMLHost {
 
     ; 写入 XAML 的声明字号：经 ApplyFontSizeDelta/ScaleFontSize 后等于 PopupFontSize()
     static PopupFontSizeDeclared() {
+        return XAMLHost.VisualFontSizeDeclared()
+    }
+
+    ; 流式子窗不使用 Viewbox；把主窗显示倍率折算进声明字号，主题增量仍只应用一次。
+    static VisualFontSizeDeclared(extra := 0) {
         theme := XAMLHost.GetThemeFontSize()
         scale := XAMLHost.GetMainViewboxScale()
         if (!IsNumber(scale) || scale <= 0)
             scale := 1.0
         base := XAMLHost.GetDesignFontSize()
         delta := theme - base
-        return XAMLHost.FormatFontSize(theme * scale - delta)
+        return XAMLHost.FormatFontSize((theme + extra) * scale - delta)
     }
 
     static GetThemeFontSize() {
@@ -514,7 +519,7 @@ class XAMLHost {
     ; 主界面 / 主题选项 / 取色与准星等已自带根尺寸则跳过；图形节点 skipFontScale 跳过。
     ; 透明浮层、自由粘贴不改尺寸，避免坐标/内容被拉伸。
     static ApplyDialogVisualScale(&xaml, skip := false) {
-        if (skip)
+        if (skip || InStr(xaml, 'x:Key="RmtFluidDialogLayout"'))
             return
         if (InStr(xaml, 'AllowsTransparency="True"'))
             return

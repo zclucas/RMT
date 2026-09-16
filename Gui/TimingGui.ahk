@@ -11,6 +11,8 @@ class TimingGui {
         this._instanceKey := ""
         this.Data := ""
         this.SerialStr := ""
+        this.tableItem := ""
+        this.itemIndex := 0
         this._typeIndex := 1
         this._unitIndex := 2
         this._startText := ""
@@ -22,11 +24,13 @@ class TimingGui {
         this._pickerGui := ""
     }
 
-    ShowGui(SerialStr) {
+    ShowGui(SerialStr, tableItem := "", index := 0) {
         if (SerialStr == "" || !RegExMatch(SerialStr, "^Timing\d+$"))
             SerialStr := GetCMDSerialStr("Timing")
         this.SerialStr := SerialStr
         this.Data := this.GetTimingData(this.SerialStr)
+        this.tableItem := tableItem
+        this.itemIndex := index
         this._LoadDataToFields()
 
         key := "timing"
@@ -36,6 +40,8 @@ class TimingGui {
             if (!oldInst.closed && XAMLHost.CanReuseWindow(hwnd)) {
                 oldInst.SerialStr := this.SerialStr
                 oldInst.Data := this.Data
+                oldInst.tableItem := tableItem
+                oldInst.itemIndex := index
                 oldInst._LoadDataToFields()
                 oldInst._ApplyValuesToUI()
                 try WinActivate("ahk_id " hwnd)
@@ -694,7 +700,15 @@ class TimingGui {
         if (!this.CheckIfValid())
             return
         this.SaveTimingData()
+        this._RefreshOwnerRow()
         this.Close()
+    }
+
+    _RefreshOwnerRow() {
+        if (!IsObject(this.tableItem) || this.itemIndex < 1)
+            return
+        if (IsSet(MyMainWin) && IsObject(MyMainWin))
+            MyMainWin.RefreshItemRow(this.tableItem.Index, this.itemIndex)
     }
 
     SaveTimingData() {

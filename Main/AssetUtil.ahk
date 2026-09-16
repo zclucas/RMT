@@ -3119,9 +3119,7 @@ GetMacroCMDData(serialStr) {
     else {
         Data := JSON.parse(saveStr, , false)
     }
-    ; 旧配置「运行」可能缺 Mode 等字段，读入时补齐
-    if (cmd == "运行")
-        CompatEnsureRunData(Data)
+
     MySoftData.DataCacheMap.Set(normalizedSerialStr, Data)
 
     ; Also cache the original key if they differ, so next time we hit the fast path at the top

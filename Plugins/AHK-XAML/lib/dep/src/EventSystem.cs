@@ -22,6 +22,14 @@ using Microsoft.Web.WebView2.Core;
 #endif
 public partial class AhkWpfEngine
 {
+    // WM_COPYDATA callbacks must stay asynchronous to avoid re-entrant WPF/AHK deadlocks,
+    // but a separate ThreadPool work item per event can reorder Down/Move/Up.  A single
+    // FIFO worker preserves UI event order while retaining the asynchronous boundary.
+    private readonly object _asyncSendLock = new object();
+    private readonly System.Collections.Generic.Queue<string> _asyncSendQueue =
+        new System.Collections.Generic.Queue<string>();
+    private bool _asyncSendWorkerRunning;
+
     private void BindEvent(string ctrlName, string eventName, int fpsLimit = 0, bool queueLimited = false)
     {
         string eventKey = ctrlName + ":" + eventName;
@@ -152,6 +160,10 @@ public partial class AhkWpfEngine
                 {
                     ((UIElement)ctrl).PreviewMouseLeftButtonDown += (s, e) =>
                     {
+                        if (ctrlName.StartsWith("AiSplit_", StringComparison.Ordinal))
+                        {
+                            try { ((UIElement)ctrl).CaptureMouse(); } catch { }
+                        }
                         if (e.ClickCount >= 2)
                         {
                             DependencyObject orig = e.OriginalSource as DependencyObject;
@@ -169,6 +181,22 @@ public partial class AhkWpfEngine
                         DumpStateWithArgs(ctrlName, eventName, e);
                     };
                 }
+                return;
+            }
+
+            // 扩展面板分割线在按下时捕获鼠标；按钮抬起后必须显式释放，
+            // 否则移出 6px 热区时会丢 MouseMove，后续点击也可能仍投递给旧分割线。
+            if (eventName == "PreviewMouseLeftButtonUp" && ctrl is UIElement)
+            {
+                ((UIElement)ctrl).PreviewMouseLeftButtonUp += (s, e) =>
+                {
+                    DumpStateWithArgs(ctrlName, eventName, e);
+                    var captured = System.Windows.Input.Mouse.Captured as FrameworkElement;
+                    if (captured != null && captured.Name.StartsWith("AiSplit_", StringComparison.Ordinal))
+                    {
+                        try { captured.ReleaseMouseCapture(); } catch { }
+                    }
+                };
                 return;
             }
 
@@ -462,9 +490,11 @@ public partial class AhkWpfEngine
             {
                 var pos = me.GetPosition(ctrl);
                 string coords = ((int)pos.X) + "," + ((int)pos.Y);
+                var dragPos = me.GetPosition(win);
+                string dragCoords = ((int)dragPos.X) + "," + ((int)dragPos.Y);
                 var sb = new StringBuilder("EVENT|" + winId + "|" + cName + "|" + eName + "|" + BridgeUtil.LengthPrefix(coords) + "\n");
                 sb.Append(cName + "=" + BridgeUtil.LengthPrefix(coords) + "\n");
-                sb.Append("DragCoords=" + BridgeUtil.LengthPrefix(coords) + "\n");
+                sb.Append("DragCoords=" + BridgeUtil.LengthPrefix(dragCoords) + "\n");
                 if (e is System.Windows.Input.MouseButtonEventArgs)
                     sb.Append("ClickCount=" + BridgeUtil.LengthPrefix(((System.Windows.Input.MouseButtonEventArgs)e).ClickCount.ToString()) + "\n");
                 SendToAhkAsync(sb.ToString());
@@ -605,15 +635,34 @@ public partial class AhkWpfEngine
 
     private void SendToAhkAsync(string text)
     {
-        System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+        lock (_asyncSendLock)
         {
-            byte[] bytes = Encoding.UTF8.GetBytes(text);
-            var cds = new COPYDATASTRUCT { cbData = bytes.Length + 1, lpData = Marshal.AllocHGlobal(bytes.Length + 1) };
-            Marshal.Copy(bytes, 0, cds.lpData, bytes.Length);
-            Marshal.WriteByte(cds.lpData, bytes.Length, 0);
-            SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref cds);
-            Marshal.FreeHGlobal(cds.lpData);
-        });
+            _asyncSendQueue.Enqueue(text);
+            if (_asyncSendWorkerRunning)
+                return;
+            _asyncSendWorkerRunning = true;
+        }
+
+        System.Threading.ThreadPool.QueueUserWorkItem(_ => DrainAsyncSendQueue());
+    }
+
+    private void DrainAsyncSendQueue()
+    {
+        while (true)
+        {
+            string text;
+            lock (_asyncSendLock)
+            {
+                if (_asyncSendQueue.Count == 0)
+                {
+                    _asyncSendWorkerRunning = false;
+                    return;
+                }
+                text = _asyncSendQueue.Dequeue();
+            }
+            try { SendToAhk(text); }
+            catch { }
+        }
     }
 
     private void SendToAhk(string text)

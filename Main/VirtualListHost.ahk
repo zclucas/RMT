@@ -17,6 +17,10 @@ class VirtualListHost {
         this._ui := ui
         this._registered := Map()
         this._vlFonts := Map()
+        ; 所有延迟弹窗统一经宿主包装回调执行，BoundFunc 生命周期由 this 持有。
+        this._dlgFn := ""
+        this._dlgTag := ""
+        this._dlgDispatch := ObjBindMethod(this, "_RunDeferredDialog")
     }
 
     EnsureEvents(t) {
@@ -32,9 +36,32 @@ class VirtualListHost {
 
     ; 离开 VL_CLICK 后再弹窗；fn 必须是 BoundFunc 且保存在 this，否则 AHK 可能丢掉定时器
     _DeferDialog(tag, fn) {
-        try RmtDialog._Trace("VL defer " tag)
+        if (IsSet(RmtDialog))
+            try RmtDialog._Trace("VL defer " tag)
+        this._dlgTag := tag
         this._dlgFn := fn
-        SetTimer(this._dlgFn, -50)
+        SetTimer(this._dlgDispatch, -50)
+    }
+
+    ; 定时器只调用宿主方法，再由宿主安全执行真正的弹窗回调。
+    ; 这样异常不会从 VL 事件线程继续向上传播，也不会因临时 BoundFunc 被回收而丢失。
+    _RunDeferredDialog(*) {
+        fn := this._dlgFn
+        tag := this._dlgTag
+        this._dlgFn := ""
+        this._dlgTag := ""
+        if (!IsObject(fn) || !HasMethod(fn, "Call"))
+            return
+        try {
+            if (IsSet(RmtDialog))
+                try RmtDialog._Trace("VL run " tag)
+            fn.Call()
+            if (IsSet(RmtDialog))
+                try RmtDialog._Trace("VL done " tag)
+        } catch as err {
+            if (IsSet(RmtDialog))
+                try RmtDialog._Trace("VL dialog failed " tag ": " err.Message)
+        }
     }
 
     Init(t, tableItem, refreshFonts := "") {
@@ -71,6 +98,8 @@ class VirtualListHost {
     RefreshRow(t, i) {
         tableItem := MySoftData.TableInfo[t]
         item := tableItem.Items[i]
+        isImageConfig := CheckIsMenuMacroTable(t) || GetTableSymbol(t) == "UI"
+        configImagePath := isImageConfig ? this._ConfigImagePath(t, item) : ""
         val := "R" t "_" i
             . US . this._Esc(item.Remark)
             . US . this._Esc(this._TKStr(tableItem, i, t))
@@ -81,6 +110,11 @@ class VirtualListHost {
             . US . (i ".")
             . US . String(GetMacroEditKind(item.Macro))
             . US . (GetTableSymbol(t) == "Network" ? "1" : "0")   ;§23 网络宏标志（说明按钮/触发类型隐藏）
+            . US . (isImageConfig ? "1" : "0")                    ; 菜单宏/UI宏：图片配置按钮 + 隐藏触发类型
+            . US . (configImagePath != "" ? "1" : "0")           ; 图片是否已配置且可读取
+            . US . this._Esc(StrReplace(configImagePath, "\", "/"))
+            . US . (CheckIsTimingMacroTable(t) ? "1" : "0")      ; 定时宏：时钟/秒表配置按钮
+            . US . (HasTimingConfig(item) ? "1" : "0")
         this._ui.Update("FoldList_" t, "VL_ROW", val)
     }
 
@@ -113,6 +147,7 @@ class VirtualListHost {
         isSubMacro := CheckIsSubMacroTable(t)
         isMenu := CheckIsMenuMacroTable(t)
         isUI := GetTableSymbol(t) == "UI"
+        isImageConfig := isMenu || isUI
         ; 表类型标志行（per tab 恒定，C# 按此设行控件 IsEnabled）
         records := "T" t "_0"
             . US . (isSubMacro ? "0" : "1")
@@ -130,10 +165,12 @@ class VirtualListHost {
                 . US . this._Esc(fold.TK)
                 . US . (fold.FoldState ? "1" : "0")
                 . US . showTKRow
+                . US . this._Esc(FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(fold.TK)))
                 . RS
             for i, item in tableItem.Items {
                 if (item.FoldID != fold.ID)
                     continue
+                configImagePath := isImageConfig ? this._ConfigImagePath(t, item) : ""
                 records .= "R" t "_" i
                     . US . this._Esc(item.Remark)
                     . US . this._Esc(this._TKStr(tableItem, i, t))
@@ -144,6 +181,11 @@ class VirtualListHost {
                     . US . (i ".")
                     . US . String(GetMacroEditKind(item.Macro))
                     . US . (GetTableSymbol(t) == "Network" ? "1" : "0")   ;§23 网络宏标志
+                    . US . (isImageConfig ? "1" : "0")                    ; 菜单宏/UI宏图片配置标志
+                    . US . (configImagePath != "" ? "1" : "0")           ; 图片是否已配置且可读取
+                    . US . this._Esc(StrReplace(configImagePath, "\", "/"))
+                    . US . (CheckIsTimingMacroTable(t) ? "1" : "0")      ; 定时宏：时钟/秒表配置按钮
+                    . US . (HasTimingConfig(item) ? "1" : "0")
                     . RS
             }
         }
@@ -160,13 +202,26 @@ class VirtualListHost {
             return tkStr == "" ? GetLang("编辑") : tkStr
         }
         if (GetTableSymbol(t) == "Network") {
-            ; §23 网络宏：触发键列显示「复制链接」，点击/右键=直接复制开启 URL
+            ; §23 网络宏：触发键列显示「复制链接」，点击/右键=直接复制单次 URL
             return item.ID == "" ? GetLang("编辑") : GetLang("复制链接")
         }
-        tkStr := isTiming ? GetLang("定时") : FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
+        if (isTiming)
+            return ""
+        tkStr := FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
         if (tkStr == "" && CheckIsNormalTable(t))
             return ""
         return tkStr == "" ? GetLang("编辑") : tkStr
+    }
+
+    _ConfigImagePath(t, item) {
+        path := item.IcoPath
+        if (path == "" || path == "0")
+            return ""
+        if (FileExist(path))
+            return path
+        dirName := GetTableSymbol(t) == "UI" ? "UIIcon" : "MenuIcon"
+        fullPath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\" dirName "\" path
+        return FileExist(fullPath) ? fullPath : ""
     }
 
     _TKType(tableItem, i, t) {
@@ -213,9 +268,9 @@ class VirtualListHost {
             switch action {
                 case "TKBtn": this._EditTK(tableItem, idx, event)
                 case "TKBtnR":
-                    ; §23 网络宏：右键触发键列 = 直接复制开启 URL；其余表保持自定义触发串
+                    ; §23 网络宏：右键触发键列 = 直接复制单次 URL；其余表保持自定义触发串
                     if (GetTableSymbol(t) == "Network")
-                        OnItemNetworkCopyUrl(tableItem, idx, "on", event)
+                        OnItemNetworkCopyUrl(tableItem, idx, "", event)
                     else
                         OnItemCustomEditTriggerStr(tableItem, idx, event)
                 case "NetHelp":
@@ -261,9 +316,11 @@ class VirtualListHost {
         else if (GetTableSymbol(t) == "UI")
             OnUIMacroSettingClick(tableItem, i, event)
         else if (GetTableSymbol(t) == "Voice")
-            OnItemVoiceTriggerSetting(tableItem, i, event)   ; 语音宏：触发编辑弹窗填唤醒词
+            ; 虚拟列表事件来自 XAML IPC；延后到当前 VL_CLICK 返回后再创建 XAML 子窗，
+            ; 避免在桥接事件回调中同步创建第二个引擎窗口导致宿主直接退出。
+            this._DeferDialog("VoiceTrigger", OnItemVoiceTriggerSetting.Bind(tableItem, i))
         else if (GetTableSymbol(t) == "Network")
-            OnItemNetworkCopyUrl(tableItem, i, "on", event)   ; §23 网络宏：触发键列点击 = 直接复制开启 URL
+            OnItemNetworkCopyUrl(tableItem, i, "", event)   ; §23 网络宏：触发键列点击 = 直接复制单次 URL
         else
             OnItemEditTriggerKey(tableItem, i, event)
     }

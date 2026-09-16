@@ -33,31 +33,93 @@ class VoiceGui {
         if (item)
             curKeywords := item.VoiceKeywords
 
-        ; 复用已存在窗口则刷新（单实例模式）
-        if (this.hasGui && this.Gui != "") {
-            this._LoadToFields(curKeywords)
-            return
+        ; 复用已存在窗口则刷新（单实例模式）。引擎窗口被关闭/重启后，旧的
+        ; AHK 对象可能仍然存在；先校验 HWND，避免把 Update/Query 发到失效窗口。
+        if (this.hasGui && IsObject(this.Gui)) {
+            if (!this._CanReuseWindow()) {
+                this._OnClosed()
+            } else {
+                this._LoadToFields(curKeywords)
+                return
+            }
         }
 
-        mainGui := IsObject(MainSoftData.MyGui) ? MainSoftData.MyGui.Hwnd : ""
-        panel := XAML_Generator("StackPanel").Margin("16")
-        panel.Add("TextBlock").Text(GetLang("说出以下关键词即可触发该宏。支持多个关键词，用英文逗号 , 分隔。")).TextWrapping("Wrap").Margin("0,0,0,10")
-        panel.Add("TextBlock").Text(GetLang("唤醒关键词：")).Margin("0,0,0,6")
-        panel.Add("TextBox").Name("EdKeywords").Height(120).AcceptsReturn("True").TextWrapping("Wrap").VerticalScrollBarVisibility("Auto")
-        panel.Add("TextBlock").Text(GetLang("示例：开始攻击, 暂停, 保存进度（每个关键词之间用英文逗号分隔）")).TextWrapping("Wrap").Margin("0,8,0,12")
-        buttons := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right")
-        buttons.Add("Button").Name("BtnSure").Content(GetLang("确定")).Width(90).MinHeight(32).IsDefault("True").Margin("0,0,10,0")
-        buttons.Add("Button").Name("BtnCancel").Content(GetLang("取消")).Width(90).MinHeight(32).IsCancel("True")
-        this.ui := XamlWin.Create(GetLang("语音关键词"), panel, 480, 360)
-        this.ui.OnEvent("BtnSure", "Click", (*) => this.OnSureClick())
-        this.ui.OnEvent("BtnCancel", "Click", (*) => this.Cancel())
-        this.ui.OnEvent("Window", "Closing", (*) => this._OnClosed())
-        this.ui.Update("EdKeywords", "Text", curKeywords)
-        this.hasGui := true
-        if (XamlWin.Open(this.ui, "", mainGui))
-            this.Gui := {Hwnd: this.ui.wpfHwnd}
-        else
-            this.Cancel()
+        try {
+            mainGui := IsObject(MainSoftData.MyGui) ? MainSoftData.MyGui.Hwnd : ""
+            strokeWidth := "1"
+            panel := XAML_Generator("Grid").Margin("16")
+            panel.Rows("Auto", "Auto", "*", "Auto", "Auto")
+            panel.Add("TextBlock").Grid_Row(0).Text(GetLang("说出以下关键词即可触发该宏。支持多个关键词，用英文逗号 , 分隔。")).TextWrapping("Wrap").Margin("0,0,0,10")
+            panel.Add("TextBlock").Grid_Row(1).Text(GetLang("唤醒关键词：")).Margin("0,0,0,6")
+            ; Match main fold-field stroke weight: 1.25 DIP, no Aliased edge mode
+            ; (default TextBox/Button templates look hairline-thin at 125% DPI).
+            ed := panel.Add("TextBox").Name("EdKeywords").Grid_Row(2).MinHeight(120).AcceptsReturn("True").TextWrapping("Wrap")
+                .VerticalScrollBarVisibility("Auto").VerticalAlignment("Stretch")
+                .BorderBrush("{DynamicResource InputStroke}").BorderThickness(strokeWidth)
+                .SnapsToDevicePixels("True").UseLayoutRounding("False")
+            ed.InjectResources(this._FieldStrokeStyle("TextBox"))
+            panel.Add("TextBlock").Grid_Row(3).Text(GetLang("示例：开始攻击, 暂停, 保存进度（每个关键词之间用英文逗号分隔）")).TextWrapping("Wrap").Margin("0,8,0,12")
+            ; A stable Uid is required for GM-UI instance properties to survive a restart.
+            ; Automatic source-line Uids are disabled in production and must not be relied on.
+            buttons := panel.Add("StackPanel").Name("VoiceKeywordActions").Uid("ahk:Voice.Keywords.Actions")
+                .Grid_Row(4).Orientation("Horizontal").HorizontalAlignment("Right")
+            btnSure := buttons.Add("Button").Name("BtnSure").Content(GetLang("确定")).Width(90).MinHeight(32)
+                .BorderBrush("{DynamicResource OutlineStroke}").BorderThickness(strokeWidth)
+                .SnapsToDevicePixels("True").UseLayoutRounding("False")
+                .IsDefault("True").Margin("0,0,10,0")
+            btnSure.InjectResources(this._FieldStrokeStyle("Button"))
+            btnCancel := buttons.Add("Button").Name("BtnCancel").Content(GetLang("取消")).Width(90).MinHeight(32)
+                .BorderBrush("{DynamicResource OutlineStroke}").BorderThickness(strokeWidth)
+                .SnapsToDevicePixels("True").UseLayoutRounding("False")
+                .IsCancel("True")
+            btnCancel.InjectResources(this._FieldStrokeStyle("Button"))
+            ; Use the same Viewbox/chrome scaling path as every other business dialog.
+            ; The former fluid-only path made this title bar a different visual size and
+            ; caused several visible relayouts while restoring the saved window geometry.
+            this.ui := XamlWin.Create(GetLang("语音关键词"), panel, 480, 340)
+            this.ui.OnEvent("BtnSure", "Click", (*) => this.OnSureClick())
+            this.ui.OnEvent("BtnCancel", "Click", (*) => this.Cancel())
+            this.ui.OnEvent("Window", "Closing", (*) => this._OnClosed())
+            this.ui.OnEvent("Window", "Closed", (*) => this._OnClosed())
+            this.ui.Update("EdKeywords", "Text", curKeywords)
+            this.hasGui := true
+            if (XamlWin.Open(this.ui, "", mainGui))
+                this.Gui := {Hwnd: this.ui.wpfHwnd}
+            else
+                this.Cancel()
+        } catch as err {
+            ; 解析/XAML 引擎异常时释放可复用状态，下一次点击可重新创建窗口。
+            try RmtDialog._Trace("VoiceGui ShowGui failed: " err.Message)
+            this._OnClosed()
+        }
+    }
+
+    _CanReuseWindow() {
+        if (!this.hasGui || !IsObject(this.ui) || !this.ui.HasProp("wpfHwnd"))
+            return false
+        hwnd := this.ui.wpfHwnd
+        return hwnd && DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+    }
+
+    ; Same stroke recipe as main fold fields: template Border without Aliased EdgeMode
+    ; so 1.5 DIP strokes stay visible at 125%/150% DPI.
+    _FieldStrokeStyle(typeName) {
+        return '<Style TargetType="' typeName '"><Setter Property="Template"><Setter.Value>'
+            . '<ControlTemplate TargetType="' typeName '">'
+            . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"'
+            . ' BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"'
+            . ' Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . (typeName = "TextBox"
+                ? '<ScrollViewer x:Name="PART_ContentHost" Margin="0"/>'
+                : '<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>')
+            . '</Border>'
+            . (typeName = "Button"
+                ? '<ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True">'
+                    . '<Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/>'
+                    . '<Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/>'
+                    . '</Trigger></ControlTemplate.Triggers>'
+                : '')
+            . '</ControlTemplate></Setter.Value></Setter></Style>'
     }
 
     _LoadToFields(keywords) {

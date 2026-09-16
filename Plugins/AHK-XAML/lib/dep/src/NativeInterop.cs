@@ -79,6 +79,10 @@ public partial class AhkWpfEngine
     [DllImport("user32.dll")]
     public static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+    [DllImport("user32.dll")]
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT lpPoint);

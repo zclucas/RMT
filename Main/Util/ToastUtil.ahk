@@ -20,6 +20,7 @@
 class Toast {
     static HoldMs := 1500    ; 默认停留时长（毫秒）
     static _inst := ""       ; 当前活动实例
+    static _pending := ""    ; 延后开窗任务（避免 XAML Click 回调里同步 CREATE_WINDOW）
 
     ; ── 分类快捷方法 ──────────────────────────────────────────
     static Show(msg, typeOrHold := "", holdMs := 0) {
@@ -49,12 +50,23 @@ class Toast {
         msg := Trim(String(msg))
         if (msg == "")
             return
+        ; 不能在 XAML Click/SendMessage 回调里同步 CREATE_WINDOW：会嵌套死锁，
+        ; _SendToEngine 超时后 KillDaemon，表现为点按钮闪退。
+        Toast._pending := { msg: msg, type: type, holdMs: holdMs }
+        SetTimer(ObjBindMethod(Toast, "_FlushPending"), -1)
+    }
+
+    static _FlushPending(*) {
+        job := Toast._pending
+        Toast._pending := ""
+        if (!IsObject(job))
+            return
         ; 关闭仍在显示的旧提示，避免叠加
         if (IsObject(Toast._inst)) {
             try Toast._inst.Close()
             Toast._inst := ""
         }
-        inst := Toast.Instance(msg, type, holdMs > 0 ? holdMs : Toast.HoldMs)
+        inst := Toast.Instance(job.msg, job.type, job.holdMs > 0 ? job.holdMs : Toast.HoldMs)
         Toast._inst := inst
         inst.Start()
     }
@@ -141,6 +153,8 @@ class Toast {
 
             ; 记录展示前的前台窗口（通常是逻辑树编辑器），展示后抢回焦点
             this.restoreHwnd := WinGetID("A")
+            if (this.restoreHwnd && !DllCall("user32\IsWindow", "Ptr", this.restoreHwnd, "Int"))
+                this.restoreHwnd := 0
             ; 定位跟随用：保存编辑器窗口句柄，供 _Position 依据窗口所在屏幕定位（而不是鼠标所在屏幕）
             this.ownerHwnd := this.restoreHwnd
             XamlUiDiag("Toast.Start capture active=" WinGetID("A") " title=" WinGetTitle("A") " restore=" this.restoreHwnd, "focus")

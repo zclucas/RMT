@@ -363,6 +363,7 @@ public class VirtualListHost
                 fo.FoldTK = f.Length > 5 ? f[5] : "";
                 fo.Folded = f.Length > 6 && f[6] == "1";
                 fo.ShowTKRow = f.Length > 7 && f[7] == "1";
+                fo.FoldTKStr = f.Length > 8 ? f[8] : fo.FoldTK;
                 fo.FoldTKTypeEnabled = _foldTKTypeEn;
                 _byId[fo.Id] = fo;
                 newItems.Add(fo);
@@ -487,6 +488,14 @@ public class VirtualListHost
             dr.IsLastModule = sr.IsLastModule;
             dr.EditKind = sr.EditKind;
             dr.FoldForbid = sr.FoldForbid;
+            dr.NetHelpVis = sr.NetHelpVis;
+            dr.NetTypeVis = sr.NetTypeVis;
+            dr.KeyInputVis = sr.KeyInputVis;
+            dr.ImageConfigVis = sr.ImageConfigVis;
+            dr.HasConfigImage = sr.HasConfigImage;
+            dr.ConfigImagePath = sr.ConfigImagePath;
+            dr.TimingConfigVis = sr.TimingConfigVis;
+            dr.HasTimingConfig = sr.HasTimingConfig;
             FillSelMark(dr);
             return;
         }
@@ -499,6 +508,7 @@ public class VirtualListHost
             df.FoldForbid = sf.FoldForbid;
             df.FoldTKType = sf.FoldTKType;
             df.FoldTK = sf.FoldTK;
+            df.FoldTKStr = sf.FoldTKStr;
             df.Folded = sf.Folded;
             df.HasBody = sf.HasBody;
             df.IsFirstFold = sf.IsFirstFold;
@@ -530,13 +540,8 @@ public class VirtualListHost
         if (f.Length > 6) r.ColorHex = f[6];
         if (f.Length > 7) r.SeqNo = f[7];
         if (f.Length > 8) r.EditKind = f[8];
-        // §23 网络宏扩展位（与 ParseRow 同布局：f[9]=网络表标志）
-        if (f.Length > 9)
-        {
-            bool isNetRow = f[9] == "1";
-            r.NetHelpVis = isNetRow ? "Visible" : "Collapsed";
-            r.NetTypeVis = isNetRow ? "Collapsed" : "Visible";
-        }
+        // 扩展位：f[9]=网络宏，f[10]=菜单宏/UI宏图片配置列，f[11]=已配置图片，f[12]=缩略图路径，f[13]=定时宏，f[14]=已保存定时。
+        ApplyRowConfigFlags(r, f);
     }
 
     private void SetFold(string val)
@@ -1166,12 +1171,25 @@ public class VirtualListHost
         r.ColorHex = f.Length > 6 ? f[6] : "";
         r.SeqNo = f.Length > 7 ? f[7] : "";
         r.EditKind = f.Length > 8 ? f[8] : "0";
-        // §23 网络宏扩展位：f[9]="1" 表示网络表行（显示说明按钮、隐藏触发类型下拉）
-        bool isNetRow = f.Length > 9 && f[9] == "1";
-        r.NetHelpVis = isNetRow ? "Visible" : "Collapsed";
-        r.NetTypeVis = isNetRow ? "Collapsed" : "Visible";
+        // 扩展位：网络宏显示说明并隐藏类型；菜单宏/UI宏显示图片状态并隐藏类型；定时宏显示时钟/秒表。
+        ApplyRowConfigFlags(r, f);
         FillSelMark(r);
         return r;
+    }
+
+    private static void ApplyRowConfigFlags(VListRow r, string[] f)
+    {
+        bool isNetRow = f.Length > 9 && f[9] == "1";
+        bool isImageConfigRow = f.Length > 10 && f[10] == "1";
+        bool isTimingRow = f.Length > 13 && f[13] == "1";
+        r.NetHelpVis = isNetRow ? "Visible" : "Collapsed";
+        r.NetTypeVis = (isNetRow || isImageConfigRow) ? "Collapsed" : "Visible";
+        r.KeyInputVis = (isImageConfigRow || isTimingRow) ? "Collapsed" : "Visible";
+        r.ImageConfigVis = isImageConfigRow ? "Visible" : "Collapsed";
+        r.HasConfigImage = f.Length > 11 && f[11] == "1";
+        r.ConfigImagePath = f.Length > 12 ? f[12] : "";
+        r.TimingConfigVis = isTimingRow ? "Visible" : "Collapsed";
+        r.HasTimingConfig = f.Length > 14 && f[14] == "1";
     }
 
     private static void FillSelMark(VListRow r)
@@ -1253,9 +1271,15 @@ public class VListRow : VLItem
     public string SelMark { get { return _SelMark; } set { Set(ref _SelMark, value, "SelMark"); } } private string _SelMark;
     public string SelMarkNo { get { return _SelMarkNo; } set { Set(ref _SelMarkNo, value, "SelMarkNo"); } } private string _SelMarkNo;
     public string SelMarkTip { get { return _SelMarkTip; } set { Set(ref _SelMarkTip, value, "SelMarkTip"); } } private string _SelMarkTip;
-    // §23 网络宏行标志：NetHelpVis=说明按钮可见性、NetTypeVis=触发类型下拉可见性（互斥，由同一记录位驱动）
+    // 网络宏/图片配置宏的专属可见性。
     public string NetHelpVis { get; set; }
     public string NetTypeVis { get; set; }
+    public string KeyInputVis { get; set; }
+    public string ImageConfigVis { get; set; }
+    public bool HasConfigImage { get { return _HasConfigImage; } set { Set(ref _HasConfigImage, value, "HasConfigImage"); } } private bool _HasConfigImage;
+    public string ConfigImagePath { get { return _ConfigImagePath; } set { Set(ref _ConfigImagePath, value, "ConfigImagePath"); } } private string _ConfigImagePath;
+    public string TimingConfigVis { get; set; }
+    public bool HasTimingConfig { get { return _HasTimingConfig; } set { Set(ref _HasTimingConfig, value, "HasTimingConfig"); } } private bool _HasTimingConfig;
 }
 
 public class VListFold : VLItem
@@ -1265,6 +1289,7 @@ public class VListFold : VLItem
     public bool FoldForbid { get { return _FoldForbid; } set { Set(ref _FoldForbid, value, "FoldForbid"); } } private bool _FoldForbid;
     public int FoldTKType { get { return _FoldTKType; } set { Set(ref _FoldTKType, value, "FoldTKType"); } } private int _FoldTKType;
     public string FoldTK { get { return _FoldTK; } set { Set(ref _FoldTK, value, "FoldTK"); } } private string _FoldTK;
+    public string FoldTKStr { get { return _FoldTKStr; } set { Set(ref _FoldTKStr, value, "FoldTKStr"); } } private string _FoldTKStr;
     public bool Folded { get { return _Folded; } set { Set(ref _Folded, value, "Folded"); } } private bool _Folded;
     public bool HasBody { get { return _HasBody; } set { Set(ref _HasBody, value, "HasBody"); } } private bool _HasBody;
     public bool IsFirstFold { get { return _IsFirstFold; } set { Set(ref _IsFirstFold, value, "IsFirstFold"); } } private bool _IsFirstFold;

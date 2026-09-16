@@ -194,7 +194,16 @@ OnItemCustomEditTriggerStrInput(tableItem, index, *) {
 
 ; 语音触发设置（语音关键词配置窗口入口）
 OnItemVoiceTriggerSetting(tableItem, index, *) {
-    MyVoiceGui.ShowGui(tableItem, index)
+    ; 入口可能来自 VL 的延迟回调，也可能来自右键菜单；统一兜底，
+    ; 避免窗口已被引擎回收时异常沿事件线程冒泡到主界面。
+    try {
+        if (!IsSet(MyVoiceGui) || !IsObject(MyVoiceGui))
+            return
+        MyVoiceGui.ShowGui(tableItem, index)
+    } catch as err {
+        if (IsSet(RmtDialog))
+            try RmtDialog._Trace("VoiceTrigger failed idx=" index ": " err.Message)
+    }
 }
 
 ;编辑按键宏触发键
@@ -226,7 +235,7 @@ OnItemEditTiming(tableItem, index, *) {
         SerialStr := GetCMDSerialStr("Timing")
         item.TimingSerial := SerialStr
     }
-    MyTimingGui.ShowGui(SerialStr)
+    MyTimingGui.ShowGui(SerialStr, tableItem, index)
 }
 
 OnItemEditMacroSetting(tableItem, index, *) {
@@ -526,9 +535,9 @@ OnUIMacroSettingClick(tableItem, macroIndex, *) {
 ; ============================================================
 ; §23 网络触发：条目触发 URL 辅助 + 说明弹窗
 ; 触发码=条目 ID，动作由 path 决定：
-;   开启 http://127.0.0.1:{端口}/macro/{ID}/on   （循环执行，幂等）
-;   关闭 http://127.0.0.1:{端口}/macro/{ID}/off  （停止执行，幂等）
-; 「按下/单次」对网络宏无意义，UI 不展示（服务端仍兼容 /{ID}）。
+;   单次 http://127.0.0.1:{端口}/macro/{ID}
+;   循环 http://127.0.0.1:{端口}/macro/{ID}/on
+;   终止 http://127.0.0.1:{端口}/macro/{ID}/off
 ; ============================================================
 
 NetworkGetPort() {
@@ -536,29 +545,47 @@ NetworkGetPort() {
     return MainSoftData.HasProp("NetworkPort") ? Integer(MainSoftData.NetworkPort) : 16888
 }
 
-; 拼接条目触发 URL（action: "on"/"off"；按当前设置端口，127.0.0.1 固定回环）
-NetworkGetTriggerUrl(macroID, action := "on") {
-    return "http://127.0.0.1:" NetworkGetPort() "/macro/" macroID "/" action
+; 拼接条目触发 URL（action 空=单次；"on"/"off"=循环/终止；127.0.0.1 固定回环）
+NetworkGetTriggerUrl(macroID, action := "") {
+    url := "http://127.0.0.1:" NetworkGetPort() "/macro/" macroID
+    if (action != "")
+        url .= "/" action
+    return url
 }
 
-; 复制条目触发 URL 到剪贴板（action: "on"/"off"，成功经 Toast 反馈）
-OnItemNetworkCopyUrl(tableItem, index, action := "on", *) {
+; 复制条目触发 URL 到剪贴板（默认单次，不带 /on）
+OnItemNetworkCopyUrl(tableItem, index, action := "", *) {
     item := tableItem.Items[index]
     if (!item || item.ID == "")
         return
     url := NetworkGetTriggerUrl(item.ID, action)
-    if (SetClipboard(url))
-        Toast.Success(GetLang("已复制：") url)
+    OnItemNetworkCopyClipboard(url, GetLang("已复制：") url)
 }
 
-; 网络宏条目触发键列点击/右键：不弹菜单，直接复制「开启」URL（「关闭」URL 在「?」说明弹窗里可复制）
+; 网络宏条目触发键列点击/右键：不弹菜单，直接复制单次 URL（循环/终止等在「?」说明弹窗里可复制）
 
-; 网络触发说明弹窗（触发键左侧「?」按钮）：本条目的开/关 URL（可复制）+ 参数/响应/各种情况解释
+; 网络触发说明弹窗（触发键左侧「?」按钮）：五条触发示例，各带复制
 OnItemNetworkHelp(tableItem, index, *) {
     item := tableItem.Items[index]
     if (!item || item.ID == "")
         return
-    NetworkShowHelpDialog(item.ID)
+    try NetworkShowHelpDialog(item.ID)
+    catch as err {
+        try RmtDialog._Trace("NetworkHelp failed: " err.Message)
+        try RmtDialog.Info(GetLang("无法打开网络触发说明") "`n" err.Message)
+    }
+}
+
+; 主窗口 HWND 可能在引擎重启后失效；失效句柄不能当 Owner，否则 CreateWindowEx 会崩引擎。
+NetworkResolveOwnerHwnd() {
+    hwnd := 0
+    try {
+        if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd)
+            hwnd := Integer(MyMainWin.ui.wpfHwnd)
+    }
+    if (hwnd && !DllCall("user32\IsWindow", "Ptr", hwnd, "Int"))
+        hwnd := 0
+    return hwnd
 }
 
 ; 网络触发说明弹窗。macroID 为空 = 通用模式（设置页入口，URL 用 {条目ID} 占位）；
@@ -568,18 +595,12 @@ NetworkShowHelpDialog(macroID := "") {
     isItem := (macroID != "")
     idPart := isItem ? macroID : "{" GetLang("条目ID") "}"
     urlBase := "http://127.0.0.1:" port "/macro/" idPart
-    urlOn := isItem ? NetworkGetTriggerUrl(macroID, "on") : ""
-    urlOff := isItem ? NetworkGetTriggerUrl(macroID, "off") : ""
-    owner := 0
-    try {
-        if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd)
-            owner := MyMainWin.ui.wpfHwnd
-    }
+    owner := NetworkResolveOwnerHwnd()
     try XAMLHost.EnsureDaemonHealthy()
 
     titleHeight := "36"
     fs := XAMLHost.FontSize()
-    winW := 520
+    winW := 580
     fontFamily := ""
     try {
         if (IsSet(MainSoftData) && MainSoftData.HasProp("FontType") && MainSoftData.FontType != "")
@@ -607,38 +628,23 @@ NetworkShowHelpDialog(macroID := "") {
     body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
     panel := body.Add("StackPanel").Margin("16,12,16,12")
 
-    ; —— 一行解释 ——
-    panel.Add("TextBlock").Text(GetLang("用 HTTP 请求触发本宏，参数写入全局变量（文本，允许覆盖）；出错时 body 直接写明原因。"))
-        .Foreground("{DynamicResource TextMain}").TextWrapping("Wrap")
-
-    ; —— 本条目的触发 URL（条目模式各带复制按钮；通用模式跳过）——
-    if (isItem) {
-        for , rowDef in [{label: GetLang("开启（循环执行）"), url: urlOn, btn: "BtnCopyOn"}
-                       , {label: GetLang("关闭（停止执行）"), url: urlOff, btn: "BtnCopyOff"}] {
-            row := panel.Add("Grid").Margin("0,2,0,2")
-            row.Cols("Auto", "*", "Auto")
-            row.Add("TextBlock").Grid_Column(0).Text(rowDef.label "：").Foreground("{DynamicResource TextMain}")
-                .VerticalAlignment("Center").Margin("0,0,6,0")
-            row.Add("TextBlock").Grid_Column(1).Text(rowDef.url).Foreground("{DynamicResource Accent}")
-                .VerticalAlignment("Center").TextWrapping("Wrap")
-            row.Add("Button").Grid_Column(2).Name(rowDef.btn).Content(GetLang("复制"))
-                .Width(56).Height(24).MinHeight(24).Margin("8,0,0,0").Cursor("Hand")
-        }
-    }
-
-    ; —— 示例（多行，每行可复制；通用模式用 {条目ID} 占位）——
-    panel.Add("TextBlock").Text(GetLang("示例")).FontWeight("Bold").Foreground("{DynamicResource TextMain}").Margin("0,10,0,2")
-    exArr := [urlBase
-            , urlBase "/on"
-            , urlBase "/off"
-            , urlBase "/on?" GetLang("窗口标题") "=文档1&" GetLang("次数") "=3"
-            , 'curl -X POST -H "Content-Type: application/json" -d "{\"窗口标题\":\"文档1\"}" ' urlBase]
+    titleVar := GetLang("窗口标题")
+    countVar := GetLang("次数")
+    exArr := [
+        { title: GetLang("触发：单次触发宏"), text: urlBase },
+        { title: GetLang("循环触发：循环执行宏"), text: urlBase "/on" },
+        { title: GetLang("终止宏：终止执行宏"), text: urlBase "/off" },
+        { title: GetLang("变量触发：设置窗口标题、次数全局变量然后触发宏"), text: urlBase "/on?" titleVar "=文档1&" countVar "=3" },
+        { title: GetLang("变量触发：通过POST+JSON设置全局变量值后触发宏"), text: 'curl -X POST -H "Content-Type: application/json" -d "{\"' titleVar '\":\"文档1\"}" ' urlBase }
+    ]
     exIdx := 0
     for , ex in exArr {
         exIdx++
-        exRow := panel.Add("Grid").Margin("0,2,0,2")
+        panel.Add("TextBlock").Text(ex.title).Foreground("{DynamicResource TextMain}")
+            .TextWrapping("Wrap").Margin(exIdx == 1 ? "0,0,0,2" : "0,10,0,2")
+        exRow := panel.Add("Grid").Margin("0,0,0,0")
         exRow.Cols("*", "Auto")
-        exRow.Add("TextBlock").Grid_Column(0).Text(ex).Foreground("{DynamicResource TextMain}")
+        exRow.Add("TextBlock").Grid_Column(0).Text(ex.text).Foreground("{DynamicResource Accent}")
             .VerticalAlignment("Center").TextWrapping("Wrap")
         exRow.Add("Button").Grid_Column(1).Name("BtnEx" exIdx).Content(GetLang("复制"))
             .Width(56).Height(24).MinHeight(24).Margin("8,0,0,0").Cursor("Hand")
@@ -669,15 +675,11 @@ NetworkShowHelpDialog(macroID := "") {
     ui.OnEvent("Window", "LoadedHwnd", (state, ctrl, event) => RmtDialog._OnLoad(ui, owner))
     ui.OnEvent("BtnClosePanel", "Click", (state, ctrl, event) => closeDlg("Closed"))
     ui.OnEvent("BtnOk", "Click", (state, ctrl, event) => closeDlg(GetLang("确定")))
-    if (isItem) {
-        ui.OnEvent("BtnCopyOn", "Click", (*) => OnItemNetworkCopyClipboard(urlOn, GetLang("已复制开启 URL")))
-        ui.OnEvent("BtnCopyOff", "Click", (*) => OnItemNetworkCopyClipboard(urlOff, GetLang("已复制关闭 URL")))
-    }
     for n, ex in exArr
-        ui.OnEvent("BtnEx" n, "Click", OnItemNetworkCopyClipboardEx.Bind(ex))
+        ui.OnEvent("BtnEx" n, "Click", OnItemNetworkCopyClipboardEx.Bind(ex.text))
 
     if (!XamlWin.Open(ui, "", owner))
-        throw Error("网络触发说明弹窗打开失败")
+        throw Error(GetLang("网络触发说明弹窗打开失败"))
     ownerDisabled := false
     while (resultObj.Button == "" && WinExist("ahk_id " ui.wpfHwnd)) {
         if (ui.wpfHwnd && owner && !ownerDisabled) {
@@ -690,9 +692,26 @@ NetworkShowHelpDialog(macroID := "") {
         try WinSetEnabled(1, "ahk_id " owner)
 }
 
+; 不能在 XAML Click 里同步开 Toast：会对引擎 SendMessage 嵌套死锁，
+; _SendToEngine 超时后 KillDaemon，表现为点复制闪退。必须先离开回调。
+_NetworkCopyPending := ""
+
 OnItemNetworkCopyClipboard(text, tip) {
-    if (SetClipboard(text))
-        Toast.Success(tip)
+    global _NetworkCopyPending
+    _NetworkCopyPending := { text: text, tip: tip }
+    SetTimer(_NetworkCopyClipboardDo, -1)
+}
+
+_NetworkCopyClipboardDo(*) {
+    global _NetworkCopyPending
+    job := _NetworkCopyPending
+    _NetworkCopyPending := ""
+    if (!IsObject(job))
+        return
+    try {
+        if (SetClipboard(job.text))
+            Toast.Success(job.tip)
+    }
 }
 
 ; 弹窗示例行复制按钮用（OnEvent 会附带事件参数，须可变参接收）
@@ -706,11 +725,7 @@ OnItemNetworkCopyClipboardEx(text, *) {
 ; ============================================================
 NetworkShowSettingDialog() {
     global MainSoftData
-    owner := 0
-    try {
-        if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd)
-            owner := MyMainWin.ui.wpfHwnd
-    }
+    owner := NetworkResolveOwnerHwnd()
     try XAMLHost.EnsureDaemonHealthy()
 
     titleHeight := "36"

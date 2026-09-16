@@ -1293,7 +1293,10 @@ class PanelManager {
         try themeData := IniRead(iniPath, resolvedTheme)
 
         resourceInject := '<CornerRadius x:Key="PanelRadius">' initialRadius '</CornerRadius>'
-        resourceInject .= '<CornerRadius x:Key="CloseBtnRadius">0,' initialRadius ',0,0</CornerRadius>'
+        ; CloseBtnRadius 已存在于 XAML_TEMPLATE，直接替换其值，不能再向资源字典追加同名键。
+        ui.xaml := RegExReplace(ui.xaml
+            , '<CornerRadius\s+x:Key="CloseBtnRadius">[^<]*</CornerRadius>'
+            , '<CornerRadius x:Key="CloseBtnRadius">0,' initialRadius ',0,0</CornerRadius>')
         if (themeData != "") {
             Loop Parse, themeData, "`n", "`r" {
                 parts := StrSplit(A_LoopField, "=", " `t", 2)

@@ -158,8 +158,8 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     static Actions := Map(
         "间隔", OnInterval,
         "按键", OnPressKey,
-        "搜索", OnSearchWrapper,
-        "搜索Pro", OnSearchWrapper,
+        "搜索", SearchOnTrigger,
+        "搜索Pro", SearchOnTrigger,
         "移动", OnMouseMove,
         "移动Pro", OnMMPro,
         ; §20 改名双键：新名「鼠标移动/鼠标移动Pro/增量移动」；旧名键保留兼容旧配置宏
@@ -171,7 +171,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "如果Pro", OnComparePro,
         "输出", OnOutput,
         "变量", OnVariable,
-        "变量提取", OnExVariableWrapper,
+        "变量提取", OnExVariable,
         "宏操作", OnSubMacro,
         "运算", OnOperation,
         "后台鼠标", OnBGMouse,
@@ -306,23 +306,6 @@ CheckFrontWindowActive(frontInfoStr) {
         return true
 
     return !!WinActive(winTitle)
-}
-
-OnSearchWrapper(tableItem, cmdStr, index) {
-    isLoopFound := SearchOnTrigger(tableItem, cmdStr, index)
-    item := tableItem.Items[index]
-    if (item && item.Killed)
-        return
-    if (isLoopFound != "" && isLoopFound == false) {
-        return [cmdStr]
-    }
-}
-
-OnExVariableWrapper(tableItem, cmdStr, index) {
-    isLoopFound := OnExVariable(tableItem, cmdStr, index)
-    if (isLoopFound != "" && isLoopFound == false) {
-        return [cmdStr]
-    }
 }
 
 OnRunFile(tableItem, cmd, index) {
@@ -1069,17 +1052,15 @@ OnVariable(tableItem, cmd, index) {
 }
 
 OnExVariable(tableItem, cmd, index) {
-    paramArr := StrSplit(cmd, "_")
-    Data := GetMacroCMDData(paramArr[1])
-    count := Data.SearchCount
-    interval := Data.SearchInterval
+    cmdName := StrSplit(cmd, "_")[1]
+    Data := GetMacroCMDData(cmdName)
 
-    ;变量初始化默认值0
+    ; 变量初始化默认值0
     NameArr := []
     ValueArr := []
-    loop Data.ToggleArr.Length {
-        if (Data.ToggleArr[A_Index]) {
-            NameArr.Push(Data.VariableArr[A_Index])
+    for i, toggle in Data.ToggleArr {
+        if (toggle) {
+            NameArr.Push(Data.VariableArr[i])
             ValueArr.Push(0)
         }
     }
@@ -1096,10 +1077,10 @@ OnExVariable(tableItem, cmd, index) {
         if (!isFound) {
             FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
             InterruptibleSleep(tableItem, index, FloatInterval)
+            return [cmd]
         }
-        return isFound
-    }
-    else {
+        return true
+    } else {
         loop Data.SearchCount {
             WaitIfPaused(tableItem, index)
 
@@ -1107,11 +1088,10 @@ OnExVariable(tableItem, cmd, index) {
             if (item.Killed)
                 return
 
-            isFound := OnExVariableOnce(tableItem, index, Data)
-            if (isFound)
+            if (OnExVariableOnce(tableItem, index, Data))
                 return
 
-            if (Data.SearchCount > A_Index) {
+            if (A_Index < Data.SearchCount) {
                 FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
                 InterruptibleSleep(tableItem, index, FloatInterval)
             }
@@ -1120,71 +1100,65 @@ OnExVariable(tableItem, cmd, index) {
 }
 
 OnExVariableOnce(tableItem, index, Data) {
-    if (Data.ExtractType == 1) {
-        HasX1 := TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
-        HasY1 := TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
-        HasX2 := TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
-        HasY2 := TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY)
-        if (!HasX1 || !HasX2 || !HasY1 || !HasY2)
-            return
-        TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
-        TextObjs := TextObjs == "" ? [] : TextObjs
-    }
-    else if (Data.ExtractType == 2) {
-        TextObjs := []
-        if (!IsClipboardText())
-            return
-        obj := Object()
-        obj.Text := A_Clipboard
-        TextObjs.Push(obj)
-    }
-    else if (Data.ExtractType == 3) {
-        HasX1 := TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
-        HasY1 := TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
-        HasX2 := TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
-        HasY2 := TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY)
-        if (!HasX1 || !HasX2 || !HasY1 || !HasY2)
-            return
-        TextObjs := []
-        hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.WinInfo))   ; §22 绑定窗口替换
-        loop hwndList.Length {
-            CurWinTextObjs := GetWinTextObjArr(hwndList[A_Index], X1, Y1, X2, Y2, Data.OCRType)
-            if (CurWinTextObjs != "")
-                TextObjs.Push(CurWinTextObjs*)
-        }
+    TextObjs := []
+    switch Data.ExtractType {
+        case 1:
+            if (!TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
+             || !TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
+             || !TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
+             || !TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY))
+                return false
+            TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
+            if (TextObjs == "")
+                TextObjs := []
+
+        case 2:
+            if (!IsClipboardText())
+                return false
+            TextObjs := [{ Text: A_Clipboard }]
+
+        case 3:
+            if (!TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
+             || !TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
+             || !TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
+             || !TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY))
+                return false
+            hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.WinInfo))   ; §22 绑定窗口替换
+            for hwnd in hwndList {
+                if ((CurWinTextObjs := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType)) != "")
+                    TextObjs.Push(CurWinTextObjs*)
+            }
     }
 
-    isOk := false
     allText := ""
-    for index, value in TextObjs {
-        allText .= value.text
-        allText .= "`n"
+    for _, value in TextObjs {
+        allText .= value.Text "`n"
     }
     allText := RTrim(allText, "`n")
+
     ExtractStr := GetReplaceVarText(tableItem, index, Data.ExtractStr)
+    activeLen := GetExVariableActiveLength(Data.ToggleArr)
+
     for _, value in TextObjs {
         VariableValueArr := ExtractVariable(value.Text, ExtractStr)
-        VariableValueArr := ExtractStr == "" && allText != "" ? [allText] : VariableValueArr
-        if (VariableValueArr == "")
-            continue
-
-        if (GetExVariableActiveLength(Data.ToggleArr) > VariableValueArr.Length)
+        if (ExtractStr == "" && allText != "")
+            VariableValueArr := [allText]
+        if (VariableValueArr == "" || activeLen > VariableValueArr.Length)
             continue
 
         RealNameArr := []
         RealValueArr := []
-        loop VariableValueArr.Length {
-            if (Data.ToggleArr[A_Index]) {
-                RealNameArr.Push(Data.VariableArr[A_Index])
-                RealValueArr.Push(VariableValueArr[A_Index])
+        for i, toggle in Data.ToggleArr {
+            if (toggle) {
+                RealNameArr.Push(Data.VariableArr[i])
+                RealValueArr.Push(VariableValueArr[i])
             }
         }
         MySetGlobalVariable(RealNameArr, RealValueArr, Data.IsIgnoreExist)
-        isOk := true
-        break
+        return true
     }
 
-    return isOk
+    return false
 }
 
 OnOperation(tableItem, cmd, index) {

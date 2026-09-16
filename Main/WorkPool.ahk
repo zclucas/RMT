@@ -210,6 +210,8 @@ class WorkPool {
         wd.hEvt := CreateEvent(evtName)
         wd.createTick := A_TickCount
         this.pending[idx] := wd
+        ; Run 可被 Worker 的就绪消息打断，消息处理前必须能查到这个实例。
+        this.workerMap[idx] := wd
 
         Run(Format('"{}" {} {} {}'
             ; parentHwnd 必须用主进程窗口（A_ScriptHwnd）：XAML 迁移后 MyGui.Hwnd 是 daemon 进程窗口，
@@ -222,7 +224,6 @@ class WorkPool {
         wd.pid := pid
         ; PROCESS_TERMINATE | PROCESS_DUP_HANDLE | SYNCHRONIZE，供强制停止时 TerminateProcess
         wd.hProc := DllCall("OpenProcess", "uint", 0x0001 | 0x0040 | 0x00100000, "int", false, "uint", pid, "ptr")
-        this.workerMap[idx] := wd
         GraphPoolLog("CreateWorker", Format("Worker#{1} 已启动 pid={2} pending={3} maxSize={4}"
             , idx, pid, this.pending.Count, this.maxSize))
     }
@@ -624,6 +625,12 @@ class WorkPool {
         if (!this.pending.Has(idx))
             return
         wd := this.pending[idx]
+        ; Worker 可能在 Run 返回并写入 pid 之前发来就绪消息。
+        ; 延后验证，避免把仍在启动的 Worker 当成失效实例清理。
+        if (!wd.pid) {
+            SetTimer(() => this.OnWorkerReady(wParam, lParam, msg, hwnd), -1)
+            return
+        }
         readyHwnd := lParam > 0 ? lParam : hwnd
         if (readyHwnd && wd.pid) {
             try {
@@ -718,10 +725,14 @@ class WorkPool {
     CleanUpWorker(wd, resetTask := true, terminateProcess := false) {
         if (!wd)
             return
+        ; 清理期间可能因消息/定时器重入，旧的 wd 也可能与补建的同编号 Worker 并存。
+        ; 只允许当前登记的实例清理一次，先移除登记再执行可能触发消息的状态更新。
+        if (!this.workerMap.Has(wd.idx) || this.workerMap[wd.idx] != wd)
+            return
+        this.workerMap.Delete(wd.idx)
+        this.RemoveWorkerFromPools(wd.idx)
         if (resetTask)
             this.ResetWorkerTaskState(wd, 3)
-        this.RemoveWorkerFromPools(wd.idx)
-        this.workerMap.Delete(wd.idx)
 
         ; 必须先切断 tx/rx，正在执行的 ProcessWorkerRx 会因此立刻退出，不再 Pop
         shmTx := wd.shmTx

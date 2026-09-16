@@ -18,20 +18,28 @@
 
 class XamlWin {
     ; Small business dialogs share the same chrome, theme and GM-UI registration.
-    static Create(title, content, width, height) {
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
-            .TextElement_FontFamily(MainSoftData.FontType).TextElement_FontSize(XAMLHost.FontSize())
-        main.Rows("30", "*")
-        XAMLHost.AddTitleBar(main, title, "30")
+    static Create(title, content, width, height, fluidContent := false) {
+        visualScale := fluidContent ? XAMLHost.GetMainViewboxScale() : 1
+        bodyFont := fluidContent ? XAMLHost.VisualFontSizeDeclared() : XAMLHost.FontSize()
+        titleHeight := fluidContent ? XAMLHost.FormatFontSize(30 * visualScale) : "30"
+        main := XAML_Generator("Grid").Name("RmtDialogRoot").Background("{DynamicResource BgColor}")
+            .TextElement_FontFamily(MainSoftData.FontType).TextElement_FontSize(bodyFont)
+        main.Rows(titleHeight, "*")
+        chrome := XAMLHost.AddTitleBar(main, title, titleHeight, "BtnClosePanel", "DialogTitle")
+        if (fluidContent) {
+            try chrome.Title.FontSize(XAMLHost.VisualFontSizeDeclared(2))
+        }
         body := main.Add("Border").Grid_Row(1)
         body._Children.Push(content)
         content._Parent := body
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()))
         safeTitle := StrReplace(StrReplace(StrReplace(title, "&", "&amp;"), '"', "&quot;"), "<", "&lt;")
-        scale := XAMLHost.GetMainViewboxScale()
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * scale) '" Height="' Round(height * scale) '" Opacity="0"')
-        ui.xaml := StrReplace(ui.xaml, "%resources%", "")
+        ; Emit design DIP sizes. ApplyDialogVisualScale enlarges the window and pins the root
+        ; so EngineHost's Viewbox matches the main UI. Pre-multiplying here would double-scale.
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * visualScale) '" Height="' Round(height * visualScale) '" Opacity="0"')
+        resources := fluidContent ? '<Boolean xmlns="clr-namespace:System;assembly=mscorlib" x:Key="RmtFluidDialogLayout">True</Boolean>' : ""
+        ui.xaml := StrReplace(ui.xaml, "%resources%", resources)
         ui.OnEvent("BtnClosePanel", "Click", (*) => ui.Update("Window", "Close", ""))
         ui.OnEvent("Window", "LoadedHwnd", (*) => XamlWin.OnLoadTheme(ui))
         return ui
@@ -87,6 +95,10 @@ class XamlWin {
             } catch {
             }
         }
+        ; Set the native owner in CREATE_WINDOW, before the hidden window is shown.
+        ; Applying it after reveal changes z-order/activation and produces visible flashes.
+        if (ownerHwnd != "")
+            ui.ownerHwnd := ownerHwnd
         ui.Show()
         return XamlWin.WaitHwnd(ui, ownerHwnd, activate)
     }
@@ -123,7 +135,12 @@ class XamlWin {
                     }
                     XamlWin._DbgState(ui, "after-owner-clear")
                 }
-                XamlWin.Reveal(ui)
+                ; 揭盖：不透明窗（Opacity="0"）已由 LoadedHwnd 在「更新队列+字号刷完」后揭过，
+                ; 这里只给非自动揭盖窗口兜底；_skipAutoReveal（最小化启动等刻意隐藏）不揭
+                autoReveal := InStr(ui.xaml, 'Opacity="0"') && !InStr(ui.xaml, 'AllowsTransparency="True"')
+                skipReveal := ui.HasOwnProp("_skipAutoReveal") && ui._skipAutoReveal
+                if (!autoReveal && !skipReveal)
+                    XamlWin.Reveal(ui)
                 if (activate)
                     try WinActivate("ahk_id " ui.wpfHwnd)
                 XamlWin._DbgState(ui, "after-reveal")

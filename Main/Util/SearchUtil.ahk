@@ -1,12 +1,11 @@
 #Requires AutoHotkey v2.0
 
 SearchOnTrigger(tableItem, cmdStr, index) {
-    paramArr := StrSplit(cmdStr, "_")
-    IsSearchPro := InStr(paramArr[1], "搜索Pro")
-    dataFile := IsSearchPro ? SearchProFile : SearchFile
-    Data := GetMacroCMDData(paramArr[1])
+    cmdName := StrSplit(cmdStr, "_")[1]
+    Data := GetMacroCMDData(cmdName)
     SearchDebugLog(Format("搜索命令触发 cmd={} type={} count={}", cmdStr, Data.SearchType, Data.SearchCount))
-    return SearchExecute(tableItem, Data, index)
+    res := SearchExecute(tableItem, Data, index)
+    return (res == false && res != "") ? [cmdStr] : res
 }
 
 ; 搜索图片路径解析：存在同名用户变量 → 用变量值；否则把配置文本当作路径

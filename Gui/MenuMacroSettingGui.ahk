@@ -62,7 +62,7 @@ class MenuMacroSettingGui {
 
     _BuildAndShow() {
         this.closed := false
-        title := GetLang("菜单宏配置 - 扇区") " " this.CurrentIndex
+        title := "Icon-扇区" this.CurrentIndex " "
         titleHeight := "30"
         winW := 420
         winH := 200
@@ -157,7 +157,7 @@ class MenuMacroSettingGui {
     _ApplyValuesToUI() {
         if (!IsObject(this.ui) || this.closed)
             return
-        title := GetLang("菜单宏配置 - 扇区") " " this.CurrentIndex
+        title := "Icon-扇区" this.CurrentIndex " "
         try this.ui.Update("TitleText", "Text", title)
         try this.ui.Update("Window", "Title", title)
         try this.ui.Update("IcoPathCon", "Text", this._pathText)
@@ -232,6 +232,7 @@ class MenuMacroSettingGui {
             finalPath := this.CopyIcoToImagesFolder(this.OriginalIcoPath)
         tableItem.Items[idx].IcoPath := finalPath
         this.Close()
+        MyMainWin.RefreshItemRow(tableItem.Index, idx)
         ; §18 菜单宏图标即时持久化 + 广播（菜单渲染订阅者重建）
         HotReloadPublish(tableItem.Index, idx)
     }
