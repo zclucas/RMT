@@ -185,6 +185,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "窗口管理", OnWindowManage,
         "按键检测", OnKeyCheck,
         "等待", OnWait,
+        "时间", OnTimeData,
         "注释", (*) => "",
         "抓图", OnScreenShot,
         "图形开始节点", OnGraphStartNode
@@ -1012,7 +1013,7 @@ OnVariable(tableItem, cmd, index) {
         if (!Data.ToggleArr[A_Index])
             continue
         VariableName := Data.VariableArr[A_Index]
-        if (Data.OperaTypeArr[A_Index] == 5) {  ;删除
+        if (Data.OperaTypeArr[A_Index] == 6) {  ;删除
             DeleteNameArr.Push(VariableName)
             continue
         }
@@ -1038,6 +1039,19 @@ OnVariable(tableItem, cmd, index) {
             hasValue := TryGetTabVarValue(&Value, tableItem, index, Data.CopyVariableArr[A_Index])
             if (!hasValue)
                 return
+        }
+
+        if (Data.OperaTypeArr[A_Index] == 5) {   ;时间：获取当前时间存入变量（或从源变量读取）
+            srcVal := Data.CopyVariableArr[A_Index]
+            if (srcVal != "") {
+                hasSrc := TryGetTabVarValue(&srcTime, tableItem, index, srcVal, false)
+                stamp := hasSrc ? TimeToAhkStamp(srcTime) : ""
+            } else {
+                stamp := ""
+            }
+            if (stamp == "")
+                stamp := A_Now
+            Value := FormatTime(stamp, "yyyy-MM-dd HH:mm:ss")
         }
 
         VariableNameArr.Push(VariableName)

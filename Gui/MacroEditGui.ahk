@@ -167,7 +167,7 @@ class MacroEditGui {
             {name: "变量/数据", cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
             {name: "流程控制", cmds: ["间隔", "如果", "如果Pro", "循环", "等待"]},
             {name: "调控", cmds: ["运行", "宏操作", "窗口管理", "RMT指令"]},
-            {name: "其他", cmds: ["抓图", "注释"]}
+            {name: "其他", cmds: ["抓图", "注释", "时间"]}
         ]
         this._favSet := Map()            ; 收藏指令名（中文）→ true
         this._catExpand := Map()         ; 分类名（中文）→ true（展开）
@@ -195,7 +195,7 @@ class MacroEditGui {
     InitCommandConfigs() {
         ; §20 指令改名：移动→鼠标移动、移动Pro→鼠标移动Pro、新增 增量移动（原游戏视角）
         this.CMDStrArr := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测", "等待", "注释", "抓图"])
+            "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测", "等待", "时间", "注释", "抓图"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
@@ -209,7 +209,7 @@ class MacroEditGui {
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\Key.png",
             "Images\Soft\WindowManage.png", "Images\Soft\KeyCheck.png",
-            "Images\Soft\Control.png",
+            "Images\Soft\Control.png", "Images\Soft\Interval.png",
             "Images\Soft\ScreenShot.png", "Images\Soft\Comment.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("搜索"), "Icon3",
@@ -220,7 +220,7 @@ class MacroEditGui {
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
         GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27",
         GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("按键检测"), "Icon30", GetLang("注释"), "Icon31",
-        GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33")
+        GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33", GetLang("时间"), "Icon35")
 
         ; IconN → 图标文件（顺序与原 IL_Add 一致）
         this.IconFileByNumber := Map(
@@ -240,7 +240,7 @@ class MacroEditGui {
             "Icon27", "Images\Soft\FileIO.png", "Icon28", "Images\Soft\Control.png",
             "Icon29", "Images\Soft\WindowManage.png", "Icon30", "Images\Soft\KeyCheck.png",
             "Icon31", "Images\Soft\Comment.png", "Icon32", "Images\Soft\ScreenShot.png",
-            "Icon33", "Images\Soft\Control.png", "Icon34", "Images\Soft\Move.png")
+            "Icon33", "Images\Soft\Control.png", "Icon34", "Images\Soft\Move.png", "Icon35", "Images\Soft\Interval.png")
 
         ; 指令名 → 图标文件（XAML 树节点 Image.Source 用）
         this.CmdIconFileMap := Map()
@@ -276,6 +276,7 @@ class MacroEditGui {
             {class: WindowManageGui, name: "窗口管理", icon: "Images\Soft\WindowManage.png", propName: "WindowManageGui"},
             {class: KeyCheckGui, name: "按键检测", icon: "Images\Soft\KeyCheck.png", propName: "KeyCheckGui"},
             {class: WaitGui, name: "等待", icon: "Images\Soft\Control.png", propName: "WaitGui"},
+            {class: TimeGui, name: "时间", icon: "Images\Soft\Interval.png", propName: "TimeGui"},
             {class: CommentGui, name: "注释", icon: "Images\Soft\Comment.png", propName: "CommentGui"},
             {class: ScreenShotGui, name: "抓图", icon: "Images\Soft\ScreenShot.png", propName: "ScreenShotGui"}
         ]

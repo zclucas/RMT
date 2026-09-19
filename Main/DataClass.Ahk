@@ -1303,6 +1303,25 @@ class TimingData {
 }
 
 ; §16 等待指令：19 种「检测间隔+轮询」场景
+class TimeData {
+    __New() {
+        this.SerialStr := ""
+        ; SubMode: 1指定时刻等待, 2时间区间判断, 3获取时间变量, 4获取时间字符串, 5时间计算
+        this.SubMode := 1
+        this.Param1 := ""  ; 模式1:目标时间/时长; 模式2:开始时间; 模式3:时间变量名; 模式4:目标变量名; 模式5:时间变量1
+        this.Param2 := ""  ; 模式1:单位/类型; 模式2:结束时间; 模式3:来源时间(可选); 模式4:时间源(可选); 模式5:时间变量2/偏移
+        this.Param3 := ""  ; 模式2:允许星期; 模式4:格式化模板; 模式5:操作类型(差值/增加/减少)
+        this.Param4 := ""  ; 模式2:不满足动作; 模式5:保存变量名
+        this.Param5 := ""  ; 模式5:输出单位(秒/毫秒/分钟/小时/天/HH:mm:ss)
+        this.CheckInterval := 500 ; 轮询间隔(ms) — 模式1使用
+        this.Timeout := 0         ; 超时(ms, 0为无限) — 模式1使用
+        ; 错误处理
+        this.ErrMode := "stop"
+        this.ErrRetryCount := 3
+        this.ErrRetryInterval := 500
+    }
+}
+
 class WaitData {
     __New() {
         this.SerialStr := ""

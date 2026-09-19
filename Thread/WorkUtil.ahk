@@ -61,6 +61,7 @@
         global RMTCMDFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\RMTCMDFile.toml"
         global WaitFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\WaitFile.toml"
         global DeltaMoveFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.toml"
+        global TimeDataFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\TimeDataFile.toml"
         global SettingSection := "UserSettings"
 
     ;项目根目录（Worker进程A_WorkingDir指向Thread子目录，需回退到项目根）

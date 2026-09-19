@@ -549,6 +549,7 @@ InitFilePath() {
     global RMTCMDFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RMTCMDFile.toml"
     global WaitFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WaitFile.toml"
     global DeltaMoveFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.toml"
+    global TimeDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TimeDataFile.toml"
     global ProjectRootDir := A_ScriptDir
 }
 

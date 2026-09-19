@@ -227,7 +227,7 @@ class VariableGui {
     _VarRowXml(i) {
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         opItems := ""
-        for t in GetLangArr(["数值", "随机数值", "字符", "系统", "删除"])
+        for t in GetLangArr(["数值", "随机数值", "字符", "系统", "时间", "删除"])
             opItems .= '<ComboBoxItem Content="' t '"/>'
         return '<Grid ' ns ' Margin="0,2">'
             . '<Grid.ColumnDefinitions>'
@@ -338,7 +338,9 @@ class VariableGui {
             case 4:
                 return GetSystemVarArr()
             case 5:
-                return []
+                return GetGuiVarArr()   ; 时间变量：从全局变量池选择
+            case 6:
+                return []               ; 删除：无需源值
         }
         return []
     }
@@ -350,7 +352,7 @@ class VariableGui {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             OperaTypeValue := this._OpTypeValue(i)
-            EnableCopy := OperaTypeValue == 1 || OperaTypeValue == 3 || OperaTypeValue == 4
+            EnableCopy := OperaTypeValue == 1 || OperaTypeValue == 3 || OperaTypeValue == 4 || OperaTypeValue == 5
             EnableMinMax := OperaTypeValue == 2
             batch.Push({ControlName: "Copy" i, PropertyName: "IsEnabled", Value: EnableCopy ? "True" : "False"})
             batch.Push({ControlName: "Min" i, PropertyName: "IsEnabled", Value: EnableMinMax ? "True" : "False"})
@@ -446,6 +448,9 @@ class VariableGui {
                             CurVarRemark .= this.ui.Query("Min" i) "~" this.ui.Query("Max" i)
                     }
                     else if (this._OpTypeValue(i) == 5) {
+                        CurVarRemark .= GetLang("时间")
+                    }
+                    else if (this._OpTypeValue(i) == 6) {
                         CurVarRemark .= GetLang("删除")
                     }
                     Remark .= CurVarRemark "&"

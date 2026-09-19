@@ -53,7 +53,7 @@ class MacroGraphGui {
         ; 若梦兔全部指令（§20 改名：移动→鼠标移动、移动Pro→鼠标移动Pro、新增 增量移动）
         this.CmdList := GetLangArr(["间隔", "按键", "搜索", "搜索Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
             "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标",
-            "后台按键", "窗口管理", "按键检测", "等待", "注释", "抓图"])
+            "后台按键", "窗口管理", "按键检测", "等待", "时间", "注释", "抓图"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
         this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png",
@@ -68,7 +68,7 @@ class MacroGraphGui {
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\Key.png",
             "Images\Soft\WindowManage.png", "Images\Soft\KeyCheck.png",
-            "Images\Soft\Control.png",
+            "Images\Soft\Control.png", "Images\Soft\Interval.png",
             "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png"]
 
         ; 复用现有子编辑器（双击节点时打开）
@@ -95,6 +95,7 @@ class MacroGraphGui {
         this.WindowManageGui := WindowManageGui()
         this.KeyCheckGui := KeyCheckGui()
         this.WaitGui := WaitGui()
+        this.TimeGui := TimeGui()
         this.ScreenShotGui := ScreenShotGui()
         this.CommentGui := CommentGui()
         this.LoopGui := LoopGui()

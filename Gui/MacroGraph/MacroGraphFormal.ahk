@@ -49,7 +49,8 @@ class MacroGraphFormalMixin {
             GetLang("循环"), this.LoopGui,
             GetLang("如果"), this.CompareGui,
             GetLang("如果Pro"), this.CompareProGui,
-            GetLang("等待"), this.WaitGui
+            GetLang("等待"), this.WaitGui,
+            GetLang("时间"), this.TimeGui
         )
     }
 

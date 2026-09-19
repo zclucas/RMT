@@ -1,5 +1,6 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #Include "DataClass.ahk"
+#Include "VariableUtil.ahk"
 #Include Util\TableLocator.ahk
 #Include Util\ExcelUtil.ahk
 #Include Util\SerialUtil.ahk
@@ -18,6 +19,7 @@
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\WaitUtil.ahk
+#Include Util\TimeUtil.ahk
 #Include Util\GraphMacroUtil.ahk
 #Include Util\PluginUtil.ahk
 #Include Util\ThemeUtil.ahk
@@ -386,7 +388,7 @@ InitData() {
         "输入", InputFile, "文件读写", FileIOFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile,
         "注释", CommentFile, "抓图", ScreenShotFile, "图形节点", GraphNodeFile, "图形开始节点", GraphStartNodeFile,
         "间隔", IntervalFile, "按键", KeyDataFile, "移动", MoveDataFile, "RMT指令", RMTCMDFile,
-        "等待", WaitFile,
+        "等待", WaitFile, "时间", TimeDataFile,
         ; §20 指令改名：新名「鼠标移动/鼠标移动Pro/增量移动」与旧名「移动/移动Pro」双键并存（旧配置序列码与宏内容零迁移兼容）
         "鼠标移动", MoveDataFile, "鼠标移动Pro", MMProFile, "增量移动", DeltaMoveFile)
     MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "移动Pro", MMProData,
@@ -396,7 +398,7 @@ InitData() {
         "输入", InputData, "文件读写", FileIOData, "窗口管理", WindowManageData, "按键检测", KeyCheckData,
         "注释", CommentData, "抓图", ScreenShotData, "图形节点", MacroGraphNode, "图形开始节点", MacroGraphStartNode,
         "间隔", IntervalData, "按键", KeyDataConfig, "移动", MoveDataConfig, "RMT指令", RMTCMDData,
-        "等待", WaitData,
+        "等待", WaitData, "时间", TimeData,
         "鼠标移动", MoveDataConfig, "鼠标移动Pro", MMProData, "增量移动", DeltaMoveData)
 }
 

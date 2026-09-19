@@ -99,6 +99,17 @@ SetGlobalData(macroStr, visitMap) {
                 }
                 SetGlobalData(Data.TrueMacro, visitMap)
                 SetGlobalData(Data.FalseMacro, visitMap)
+            case "时间":
+                ; 模式3(获取时间变量)/模式4(获取时间字符串)：Param1 为目标变量名
+                ; 模式5(时间计算)：Param4 为保存变量名
+                subMode := Data.HasOwnProp("SubMode") ? Integer(Data.SubMode) : 0
+                if (subMode == 3 || subMode == 4) {
+                    if (Data.Param1 != "")
+                        VariableMap[Data.Param1] := true
+                } else if (subMode == 5) {
+                    if (Data.Param4 != "")
+                        VariableMap[Data.Param4] := true
+                }
         }
     }
 }

@@ -87,6 +87,7 @@
 #Include ..\Gui\VoiceGui.ahk
 #Include ..\Gui\SttGui.ahk
 #Include ..\Gui\WaitGui.ahk
+#Include ..\Gui\TimeGui.ahk
 #Include ..\Gui\DeltaMoveGui.ahk
 #Include ..\Gui\TableMgrGui.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
