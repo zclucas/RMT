@@ -107,8 +107,11 @@ SetGlobalData(macroStr, visitMap) {
                 ; 模式5(时间计算)：Param4 为保存变量名
                 subMode := Data.HasOwnProp("SubMode") ? Integer(Data.SubMode) : 0
                 if (subMode == 3 || subMode == 4) {
-                    if (Data.Param1 != "")
+                    if (Data.Param1 != "") {
                         VariableMap[Data.Param1] := true
+                        if (subMode == 3)
+                            MySoftData.TimeVarMap[Data.Param1] := true
+                    }
                 } else if (subMode == 5) {
                     if (Data.Param4 != "")
                         VariableMap[Data.Param4] := true
@@ -117,8 +120,21 @@ SetGlobalData(macroStr, visitMap) {
     }
 }
 
-;mode 0自定义 1-所有 2-循环次数 3-坐标 4-句柄ID 5-颜色 6-可运算变量
+GetTimeVarArr() {
+    ResultArr := []
+    if (IsObject(MySoftData) && MySoftData.HasOwnProp("TimeVarMap")) {
+        for Key in MySoftData.TimeVarMap {
+            ResultArr.Push(Key)
+        }
+    }
+    return ResultArr
+}
+
+;mode 0自定义 1-所有 2-循环次数 3-坐标 4-句柄ID 5-颜色 6-可运算变量 7-时间变量
 GetGuiVarArr(Mode := 0) {
+    if (Mode == 7) {
+        return GetTimeVarArr()
+    }
     ResultArr := []
     ResultMap := Map()
     SpecialKeyArr0 := []

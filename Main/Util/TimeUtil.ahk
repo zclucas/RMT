@@ -248,6 +248,7 @@ TimeExecGetTimeVar(tableItem, index, Data) {
 
     ; 时间变量存储为标准格式字符串 "yyyy-MM-dd HH:mm:ss"
     outVal := FormatTime(stamp, "yyyy-MM-dd HH:mm:ss")
+    try MySoftData.TimeVarMap[varName] := true
     MySetGlobalVariable([varName], [outVal], false)
 }
 

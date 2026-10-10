@@ -3965,6 +3965,11 @@ IsTimeCategoryName(name) {
     return false
 }
 
+IsTimeVar(name) {
+    return (name != "" && IsObject(MySoftData) && MySoftData.HasOwnProp("TimeVarMap") && (MySoftData.TimeVarMap.Has(name) || MySoftData.TimeVarMap.Has(GetLangKey(name))))
+}
+
+
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {
     if (CompareType == 7) {
         hasValue := TryGetTabVarValue(&Value, tableItem, index, Name, false)

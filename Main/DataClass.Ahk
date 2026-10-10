@@ -451,6 +451,7 @@ class SoftData {
         this.ArrayMap := Map()          ;真正的全局数组
         this.GlobalVariMap := Map()     ;UI下拉显示变量
         this.VariableMap := Map()       ;真正的全局变量
+        this.TimeVarMap := Map()        ;记录时间变量（包含获取时间变量指令生成的变量）
         this.DataFileMap := Map()       ;配置命令对应的文件路径
         this.DataClassMap := Map()      ;配置对应的数据类型
 

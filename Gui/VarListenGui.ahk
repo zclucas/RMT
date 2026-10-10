@@ -309,7 +309,8 @@ class VarListenGui {
 
         for key, value in MySoftData.VariableMap {
             this._rowKeys.Push(key)
-            this._AddRow(this._rowKeys.Length, key, GetLang("值"), String(value), false)
+            typeText := IsTimeVar(key) ? GetLang("时间") : GetLang("值")
+            this._AddRow(this._rowKeys.Length, key, typeText, String(value), false)
         }
         for key, value in MySoftData.ArrayMap {
             this._rowKeys.Push("ε" key)
