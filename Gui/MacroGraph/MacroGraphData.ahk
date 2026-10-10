@@ -53,8 +53,9 @@ class MacroGraphDataMixin {
     _CloneSearch(srcCmd) {
         srcArr := SplitCommand(srcCmd)
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
+        isMulti := this._IsSearchMultiName(srcSerial)
         isPro := this._IsSearchProName(srcSerial)
-        newSerial := GetCMDSerialStr(isPro ? "搜索Pro" : "搜索")
+        newSerial := GetCMDSerialStr(isMulti ? "组合搜索" : (isPro ? "搜索Pro" : "搜索"))
         newData := SearchData()
         newData.SerialStr := newSerial
         try {
@@ -101,7 +102,7 @@ class MacroGraphDataMixin {
         name := head[1]
         if (this._IsMMProName(name))
             return this._CloneMMPro(srcCmd)
-        if (this._IsSearchName(name) || this._IsSearchProName(name))
+        if (this._IsSearchFamilyName(name))
             return this._CloneSearch(srcCmd)
         if (this._IsCompareName(name))
             return this._CloneIf(srcCmd)
@@ -981,9 +982,9 @@ class MacroGraphDataMixin {
                 }
             }
         }
-        else if (this._IsSearchName(name) || this._IsSearchProName(name)) {
-            ; 搜索/搜索Pro 参数存储在 SearchFile.toml 中，CurCMD 即其 SerialStr（如 "搜索1"、"搜索Pro2"）
-            d.type := this._IsSearchProName(name) ? GetLang("搜索Pro") : GetLang("搜索")
+        else if (this._IsSearchFamilyName(name)) {
+            ; 搜索/搜索Pro/组合搜索 参数存储在 Search*.toml 中，CurCMD 即其 SerialStr
+            d.type := this._IsSearchMultiName(name) ? GetLang("组合搜索") : (this._IsSearchProName(name) ? GetLang("搜索Pro") : GetLang("搜索"))
             d.serialStr := name
             try {
                 data := GetMacroCMDData(name)

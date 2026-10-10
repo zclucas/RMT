@@ -217,6 +217,16 @@ class MacroGraphEventsMixin {
                 this._BindCtrl("SCoordY_" id, "SelectionChanged", this._OnSearchProField.Bind(this, id, "CoordYName"), runtime)
             }
         }
+        else if (d.type == GetLang("组合搜索") || d.type == GetLang("搜索Multi")) {
+            this._TrackCtrl("SSat_" id, runtime)
+            this._TrackCtrl("SCount_" id, runtime)
+            this._TrackCtrl("SActCmb_" id, runtime)
+            this._BindCtrl("SSat_" id, "LostFocus", this._OnSearchProField.Bind(this, id, "SatisfyCount"), runtime)
+            this._BindCtrl("SCount_" id, "LostFocus", this._OnSearchCount.Bind(this, id), runtime)
+            this._BindCtrl("SCount_" id, "SelectionChanged", this._OnSearchCount.Bind(this, id), runtime)
+            this._BindCtrl("SActCmb_" id, "SelectionChanged", this._OnSearchAction.Bind(this, id), runtime)
+            this._BindCtrl("SActCmb_" id, "DropDownClosed", this._OnSearchAction.Bind(this, id), runtime)
+        }
         else if (d.type == GetLang("输入")) {
             this._TrackCtrl("InTypeCmb_" id, runtime)
             this._TrackCtrl("InPauseCmb_" id, runtime)

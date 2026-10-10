@@ -51,13 +51,13 @@ class MacroGraphGui {
         this._sessionId := 0          ; 每次打开自增；用于忽略旧窗口迟到的异步关闭事件，避免覆盖写空
 
         ; 若梦兔全部指令（§20 改名：移动→鼠标移动、移动Pro→鼠标移动Pro、新增 增量移动）
-        this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
+        this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "组合搜索", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
             "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标",
             "后台按键", "窗口管理", "按键检测", "手柄检测", "等待", "时间", "注释", "抓图"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
         this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Key.png",
-            "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
+            "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchPro.png",
             "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\Move.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png",
             "Images\Soft\Loop.png", "Images\Soft\Sub.png",
@@ -78,6 +78,7 @@ class MacroGraphGui {
         this.MouseGui := MouseMoveGui()
         this.SearchGui := SearchGui()
         this.SearchProGui := SearchProGui()
+        this.SearchMultiGui := SearchMultiGui()
         this.MMProGui := MMProGui()
         this.DeltaMoveGui := DeltaMoveGui()
         this.InputGui := InputGui()
@@ -500,9 +501,9 @@ class MacroGraphGui {
             SaveMacroCMDData(data)
             return this._MakeNode(CorrectRemark(serial, "0 0"))
         }
-        if (cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro")) {
-            ; 搜索/搜索Pro 走 INI 持久化（参数存 SearchFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
-            serial := GetCMDSerialStr(cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索")
+        if (cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro") || cmdName == GetLang("组合搜索")) {
+            ; 搜索/搜索Pro/组合搜索 走 INI 持久化（参数存 SearchFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
+            serial := GetCMDSerialStr(cmdName == GetLang("组合搜索") ? "组合搜索" : (cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索"))
             data := SearchData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
@@ -685,6 +686,8 @@ class MacroGraphGui {
             editor := this.DeltaMoveGui
         else if (IsMoveProCmd(d.type))
             editor := this.MMProGui
+        else if (d.type == GetLang("组合搜索") || d.type == GetLang("搜索Multi"))
+            editor := this.SearchMultiGui
         else if (d.type == GetLang("搜索Pro"))
             editor := this.SearchProGui
         else if (d.type == GetLang("搜索"))
@@ -723,7 +726,7 @@ class MacroGraphGui {
             return
         }
         ; 搜索/搜索Pro：就地刷新内联字段与分支节点内容，避免整窗重建（闪烁/窗口被销毁）
-        if (dEdit.type == GetLang("搜索") || dEdit.type == GetLang("搜索Pro")) {
+        if (dEdit.type == GetLang("搜索") || dEdit.type == GetLang("搜索Pro") || dEdit.type == GetLang("组合搜索") || dEdit.type == GetLang("搜索Multi")) {
             this._RefreshSearchNode(id, dEdit)
             this._Apply()
             return
@@ -810,6 +813,18 @@ class MacroGraphGui {
     _RefreshSearchNode(id, d) {
         if (this.ui == "")
             return
+        if (d.type == GetLang("组合搜索") || d.type == GetLang("搜索Multi")) {
+            this.ui.Update("Title_" id, "Text", this._NodeTitleText(d))
+            sat := d.HasOwnProp("satisfyCount") ? d.satisfyCount : -1
+            this.ui.Update("SSat_" id, "Text", (sat == -1 || sat == "-1") ? GetLang("全部") : "" sat)
+            cnt := d.HasOwnProp("searchCount") ? d.searchCount : 1
+            this.ui.Update("SCount_" id, "Text", (cnt == -1 || cnt == "-1") ? GetLang("无限") : "" cnt)
+            ma := (d.HasOwnProp("mouseAction") && d.mouseAction >= 1 && d.mouseAction <= 3) ? d.mouseAction : 2
+            this.ui.Update("SActCmb_" id, "SelectedIndex", ma - 1)
+            this._RefreshBranchBody(id, true)
+            this._RefreshBranchBody(id, false)
+            return
+        }
         isPro := (d.type == GetLang("搜索Pro"))
         maxType := isPro ? 6 : 3
         st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= maxType) ? d.searchType : 1

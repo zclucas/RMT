@@ -93,7 +93,7 @@ SetGlobalData(macroStr, visitMap) {
                     SetGlobalData(value, visitMap)
                 }
                 SetGlobalData(Data.DefaultMacro, visitMap)
-            case "搜索", "搜索Pro":
+            case "搜索", "搜索Pro", "组合搜索", "搜索Multi":
                 if (Data.ResultToggle)
                     VariableMap[Data.ResultSaveName] := true
                 if (Data.CoordToogle) {

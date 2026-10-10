@@ -103,7 +103,7 @@ class MacroGraphConnectionsMixin {
                 s .= "  x" d.count
             return s
         }
-        if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro")) {
+        if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro") || d.type == GetLang("组合搜索") || d.type == GetLang("搜索Multi")) {
             typeNames := [GetLang("屏幕图片"), GetLang("屏幕颜色"), GetLang("屏幕文本"), GetLang("窗口图片"), GetLang("窗口颜色"), GetLang("窗口文本")]
             st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 6) ? d.searchType : 1
             typeStr := typeNames[st]

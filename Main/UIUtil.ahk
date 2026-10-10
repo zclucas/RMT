@@ -244,7 +244,7 @@ CmdEditorPlayTip(hotkey := "!l") {
 
 ; 指令编辑器标题栏：手册跳转对应章节，视频暂为占位提示
 ; playAction 非空时显示执行钮；targeterAction 显示定位取色器；f1Action 显示 F1 定位
-BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", targeterAction := "", f1Action := "") {
+BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", targeterAction := "", f1Action := "", f2Action := "", f3Action := "") {
     if (!IsObject(ui))
         return
     hash := "#指令手册"
@@ -270,6 +270,16 @@ BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", t
         f1Tip := StrReplace(f1Tip, "F1:", "F1：")
         try ui.Update("BtnCmdF1", "ToolTip", f1Tip)
         ui.OnEvent("BtnCmdF1", "Click", f1Action)
+    }
+    if (f2Action != "") {
+        try ui.Update("BtnCmdF2", "Visibility", "Visible")
+        try ui.Update("BtnCmdF2", "ToolTip", GetLang("F2：截图"))
+        ui.OnEvent("BtnCmdF2", "Click", f2Action)
+    }
+    if (f3Action != "") {
+        try ui.Update("BtnCmdF3", "Visibility", "Visible")
+        try ui.Update("BtnCmdF3", "ToolTip", GetLang("F3：选取当前颜色"))
+        ui.OnEvent("BtnCmdF3", "Click", f3Action)
     }
 }
 
@@ -309,6 +319,8 @@ CmdEditorTitleIcon(title) {
         pairs := [
             ["鼠标移动Pro", "Images\Soft\MovePro.png"],
             ["搜索Pro", "Images\Soft\SearchPro.png"],
+            ["组合搜索", "Images\Soft\SearchPro.png"],
+            ["搜索Multi", "Images\Soft\SearchPro.png"],
             ["如果Pro", "Images\Soft\IfPro.png"],
             ["变量提取", "Images\Soft\Extract.png"],
             ["提取文本", "Images\Soft\Extract.png"],

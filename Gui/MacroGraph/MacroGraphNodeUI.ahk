@@ -115,6 +115,9 @@ class MacroGraphNodeUIMixin {
         else if (d.type == GetLang("搜索Pro")) {
             this._FillSearchProBody(id, d, body)
         }
+        else if (d.type == GetLang("组合搜索") || d.type == GetLang("搜索Multi")) {
+            this._FillSearchMultiBody(id, d, body)
+        }
         else if (d.type == GetLang("搜索")) {
             st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 3) ? d.searchType : 1
 
@@ -264,6 +267,18 @@ class MacroGraphNodeUIMixin {
         ; 结果保存 / 目标点保存（可折叠卡片）
         this._AddSearchSaveCard(body, id, true, d, varList)
         this._AddSearchSaveCard(body, id, false, d, varList)
+    }
+
+    _FillSearchMultiBody(id, d, body) {
+        cnt := d.HasOwnProp("searchCount") ? d.searchCount : 1
+        cntText := (cnt == -1 || cnt == "-1") ? GetLang("无限") : "" cnt
+        sat := d.HasOwnProp("satisfyCount") ? d.satisfyCount : -1
+        satText := (sat == -1 || sat == "-1") ? GetLang("全部") : "" sat
+        this._AddFieldRow(body, "SSatRow_" id, GetLang("满足个数："), "SSat_" id, satText, true)
+        this._AddFieldRow(body, "SCountRow_" id, GetLang("搜索次数："), "SCount_" id, cntText, true)
+        actionNames := [GetLang("无动作"), GetLang("移动至目标"), GetLang("移动至目标点击")]
+        ma := (d.HasOwnProp("mouseAction") && d.mouseAction >= 1 && d.mouseAction <= 3) ? d.mouseAction : 2
+        this._AddComboRow(body, "SActRow_" id, GetLang("鼠标动作："), "SActCmb_" id, actionNames, ma - 1, true)
     }
 
     ; 行内单元格：标签 + 文本框（自成命名 StackPanel，便于按显隐切换）；rightCell=true 时加左间距形成第二列
@@ -429,7 +444,7 @@ class MacroGraphNodeUIMixin {
             return false
         arr := SplitCommand(this.cmdNodes[id].CurCMD)
         serial := arr.Length >= 1 ? arr[1] : this.cmdNodes[id].CurCMD
-        return this._IsSearchName(serial) || this._IsSearchProName(serial)
+        return this._IsSearchFamilyName(serial)
     }
 
     ; 该 id 是否为如果节点
@@ -497,7 +512,7 @@ class MacroGraphNodeUIMixin {
 
     ; 搜索/如果：是否为「真假双分支」父类型（不含如果Pro）
     _IsBranchPairParentType(type) {
-        return type == GetLang("如果") || type == GetLang("搜索") || type == GetLang("搜索Pro")
+        return type == GetLang("如果") || type == GetLang("搜索") || type == GetLang("搜索Pro") || type == GetLang("组合搜索") || type == GetLang("搜索Multi")
     }
 
     ; 真/假分支默认相对 dy（grid=20）。
@@ -1428,7 +1443,7 @@ class MacroGraphNodeUIMixin {
     }
 
     _IsSearchTypeTitle(title) {
-        return title == GetLang("搜索") || title == GetLang("搜索Pro")
+        return title == GetLang("搜索") || title == GetLang("搜索Pro") || title == GetLang("组合搜索") || title == GetLang("搜索Multi")
     }
 
     ; 由指令类型名查找对应图标 URI（匹配 CmdList 顺序）；开始节点等无对应项返回空

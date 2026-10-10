@@ -1353,7 +1353,7 @@ class MergeUtil {
             }
         }
 
-        subDirs := ["ScreenShot", "SearchPro"]
+        subDirs := ["ScreenShot", "SearchPro", "SearchMulti"]
         for subDir in subDirs {
             srcSub := sourceImagesDir "\" subDir
             tgtSub := targetImagesDir "\" subDir

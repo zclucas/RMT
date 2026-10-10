@@ -535,6 +535,7 @@ InitFilePath() {
     global MacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.toml"
     global SearchFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchFile.toml"
     global SearchProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchProFile.toml"
+    global SearchMultiFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchMultiFile.toml"
     global CompareFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareFile.toml"
     global CompareProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareProFile.toml"
     global MMProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MMProFile.toml"
@@ -1561,7 +1562,7 @@ FullCopyCmd(cmdStr, CopyedMap := Map()) {
     CopyedMap.Set(paramArr[1], CommandStr)
     paramArr[1] := CommandStr
 
-    ;如果， 搜索， 搜索Pro
+    ;如果， 搜索， 搜索Pro， 组合搜索
     if (ObjHasOwnProp(Data, "TrueMacro")) {
         Data.TrueMacro := FullCopyMacro(Data.TrueMacro, CopyedMap)
     }

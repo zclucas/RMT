@@ -5,6 +5,7 @@
 #Include MouseMoveGui.ahk
 #Include SearchGui.ahk
 #Include SearchProGui.ahk
+#Include SearchMultiGui.ahk
 #Include ScreenShotGui.ahk
 #Include RunGui.ahk
 #Include RunProGui.ahk
@@ -165,7 +166,7 @@ class MacroEditGui {
         ; §13 左侧指令面板：按类型分类 + 收藏星标 + 分类展开状态（持久化到 INI）
         this.CmdCategory := [
             {name: "键鼠/手柄", icon: Chr(0xE765), cmds: ["按键", "后台按键", "后台鼠标", "鼠标移动", "鼠标移动Pro", "增量移动", "手柄", "按键检测", "手柄检测"]},
-            {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro"]},
+            {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro", "组合搜索"]},
             {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出", "文件读写"]},
             {name: "变量/数据", icon: Chr(0xE8EF), cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
             {name: "流程控制", icon: Chr(0xE8FD), cmds: ["间隔", "如果", "如果Pro", "循环", "等待"]},
@@ -200,11 +201,11 @@ class MacroEditGui {
 
     InitCommandConfigs() {
         ; §20 指令改名：移动→鼠标移动、移动Pro→鼠标移动Pro、新增 增量移动（原游戏视角）
-        this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
+        this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "组合搜索", "鼠标移动", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
             "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口管理", "按键检测", "手柄检测", "等待", "时间", "注释", "抓图"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Key.png",
-            "Images\Soft\Search.png", "Images\Soft\SearchPro.png",
+            "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchPro.png",
             "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\Move.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png",
             "Images\Soft\Loop.png", "Images\Soft\Sub.png",
@@ -219,7 +220,7 @@ class MacroEditGui {
             "Images\Soft\ScreenShot.png", "Images\Soft\Comment.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("手柄"), "Icon2", GetLang("搜索"), "Icon3",
-        GetLang("搜索Pro"), "Icon4", GetLang("鼠标移动"), "Icon5", GetLang("鼠标移动Pro"), "Icon6", GetLang("增量移动"), "Icon34", GetLang("输出"), "Icon7",
+        GetLang("搜索Pro"), "Icon4", GetLang("组合搜索"), "Icon4", GetLang("鼠标移动"), "Icon5", GetLang("鼠标移动Pro"), "Icon6", GetLang("增量移动"), "Icon34", GetLang("输出"), "Icon7",
         GetLang("运行"), "Icon8", GetLang("运行Pro"), "Icon8", GetLang("循环"), "Icon9", GetLang("宏操作"), "Icon10", GetLang("变量"), "Icon11",
         GetLang("变量提取"), "Icon12", GetLang("如果"), "Icon13", GetLang("如果Pro"), "Icon14", GetLang("运算"), "Icon15",
         GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
@@ -261,6 +262,7 @@ class MacroEditGui {
             {class: JoyGui, name: "手柄", icon: "Images\Soft\Key.png", propName: "JoyGui"},
             {class: SearchGui, name: "搜索", icon: "Images\Soft\Search.png", propName: "SearchGui"},
             {class: SearchProGui, name: "搜索Pro", icon: "Images\Soft\SearchPro.png", propName: "SearchProGui"},
+            {class: SearchMultiGui, name: "组合搜索", icon: "Images\Soft\SearchPro.png", propName: "SearchMultiGui"},
             {class: MouseMoveGui, name: "鼠标移动", icon: "Images\Soft\Move.png", propName: "MouseMoveGui"},
             {class: MMProGui, name: "鼠标移动Pro", icon: "Images\Soft\MovePro.png", propName: "MMProGui"},
             {class: DeltaMoveGui, name: "增量移动", icon: "Images\Soft\Move.png", propName: "DeltaMoveGui"},
@@ -2115,6 +2117,8 @@ class MacroEditGui {
                 clickCount := Integer(cc)
         }
         if (clickCount >= 2) {
+            ; 双击会打开编辑器，鼠标抬起常被子弹窗吃掉，必须立刻清掉拖拽幽灵/提示
+            this._DragEndReset()
             this._OnTreeDoubleClick(state, ctrl, event)
             return
         }
@@ -2530,6 +2534,7 @@ class MacroEditGui {
     OnDoubleClick(ctrl, item) {
         if (item == 0)
             return
+        this._DragEndReset()
 
         itemText := this.MacroTreeViewCon.GetText(item)
         if (itemText == "" || SubStr(itemText, 1, 1) == "⎖")
@@ -2596,10 +2601,25 @@ class MacroEditGui {
             cmd := GetLang("手柄")
         if (cmd == GetLang("运行") && this._RunNeedsProEditor(GetCmdStr(cleanText)))
             cmd := GetLang("运行Pro")
+        if (cmd == GetLang("搜索Pro") && this._SearchNeedsMultiEditor(GetCmdStr(cleanText)))
+            cmd := GetLang("组合搜索")
         if (!this.SubGuiMap.Has(cmd))
             return
         subGui := this.SubGuiMap[cmd]
         this.OnOpenSubGui(subGui, 2)
+    }
+
+    ; 旧多目标「搜索Pro」打开组合搜索，避免单目标编辑器丢掉其余目标
+    _SearchNeedsMultiEditor(cmdStr) {
+        paramArr := StrSplit(GetCmdStr(cmdStr), "_")
+        if (paramArr.Length < 1)
+            return false
+        try data := GetMacroCMDData(paramArr[1])
+        catch
+            return false
+        if (!IsObject(data) || !ObjHasOwnProp(data, "SearchTargetArr") || !IsObject(data.SearchTargetArr))
+            return false
+        return data.SearchTargetArr.Length > 1
     }
 
     ; 旧「运行」若带 Pro 字段（模式/窗口/管道），编辑时打开运行Pro，避免保存时丢掉参数
@@ -2843,6 +2863,8 @@ class MacroEditGui {
                 }
                 if (cmd == GetLang("运行") && this._RunNeedsProEditor(GetCmdStr(paramsArr[1])))
                     cmd := GetLang("运行Pro")
+                if (cmd == GetLang("搜索Pro") && this._SearchNeedsMultiEditor(GetCmdStr(paramsArr[1])))
+                    cmd := GetLang("组合搜索")
                 if (!this.SubGuiMap.Has(cmd))
                     return
                 subGui := this.SubGuiMap[cmd]
@@ -3137,7 +3159,7 @@ class MacroEditGui {
         condPrefix := GetLang("条件")
         while (childID) {
             t := this._CleanText(childID)
-            if (kind == "If" || kind == "Search" || kind == "SearchPro") {
+            if (kind == "If" || kind == "Search" || kind == "SearchPro" || kind == "SearchMulti") {
                 if (branchField == "TrueMacro" && t == GetLang("真"))
                     return childID
                 if (branchField == "FalseMacro" && t == GetLang("假"))
@@ -3864,8 +3886,9 @@ class MacroEditGui {
     TreeAddBranch(root, cmdStr) {
         paramArr := StrSplit(cmdStr, "_")
         IsSkip := SubStr(paramArr[1], 1, 2) == "🚫"
+        IsSearchMulti := InStr(paramArr[1], GetLang("组合搜索")) || InStr(paramArr[1], GetLang("搜索Multi"))
         IsSearchPro := InStr(paramArr[1], GetLang("搜索Pro"))
-        IsSearch := InStr(paramArr[1], GetLang("搜索")) && !IsSearchPro
+        IsSearch := InStr(paramArr[1], GetLang("搜索")) && !IsSearchPro && !IsSearchMulti
         IsIfPro := InStr(paramArr[1], GetLang("如果Pro"))
         IsIf := InStr(paramArr[1], GetLang("如果")) && !IsIfPro
         IsLoop := InStr(paramArr[1], GetLang("循环"))
@@ -3873,7 +3896,7 @@ class MacroEditGui {
         SerialStr := GetCmdStr(paramArr[1])
         if (IsSkip)
             return
-        if (!IsSearch && !IsSearchPro && !IsIf && !IsLoop && !IsIfPro)
+        if (!IsSearch && !IsSearchPro && !IsSearchMulti && !IsIf && !IsLoop && !IsIfPro)
             return
 
         ParentID := this.MacroTreeViewCon.GetParent(root)
@@ -3886,7 +3909,7 @@ class MacroEditGui {
         }
 
         Data := GetMacroCMDData(SerialStr)
-        if (IsIf || IsSearch || IsSearchPro) {
+        if (IsIf || IsSearch || IsSearchPro || IsSearchMulti) {
             TrueMacro := GetLangMacro(Data.TrueMacro, 1)
             FalseMacro := GetLangMacro(Data.FalseMacro, 1)
 
@@ -4975,6 +4998,8 @@ class MacroEditGui {
         fileMap := Map(
             GetLang("搜索"), SearchFile,
             GetLang("搜索Pro"), SearchProFile,
+            GetLang("组合搜索"), SearchMultiFile,
+            GetLang("搜索Multi"), SearchMultiFile,
             GetLang("抓图"), ScreenShotFile,
             GetLang("如果"), CompareFile,
             GetLang("如果Pro"), CompareProFile,

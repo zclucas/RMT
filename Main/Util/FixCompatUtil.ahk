@@ -25,7 +25,7 @@ CompatParseData(val) {
 CompatMacro(MacroStr, &isFix) {
     CMDArr := SplitMacro(MacroStr)
     isFix := false
-    modifyKeyMap := Map("移动Pro", 1, "搜索", 1, "搜索Pro", 1, "运行", 1, "运行Pro", 1, "如果", 1, "如果Pro", 1, "输出", 1, "变量", 1,
+    modifyKeyMap := Map("移动Pro", 1, "搜索", 1, "搜索Pro", 1, "组合搜索", 1, "搜索Multi", 1, "运行", 1, "运行Pro", 1, "如果", 1, "如果Pro", 1, "输出", 1, "变量", 1,
         "变量提取", 1, "宏操作", 1, "运算", 1, "后台鼠标", 1, "后台按键", 1, "循环", 1)
     loop CMDArr.Length {
         paramArr := SplitCommand(CMDArr[A_Index])

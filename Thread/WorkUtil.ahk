@@ -33,6 +33,7 @@
         global MacroFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\MacroFile.toml"
         global SearchFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SearchFile.toml"
         global SearchProFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SearchProFile.toml"
+        global SearchMultiFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SearchMultiFile.toml"
         global ScreenShotFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\ScreenShotFile.toml"
         global CompareFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\CompareFile.toml"
         global CompareProFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\CompareProFile.toml"

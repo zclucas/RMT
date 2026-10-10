@@ -217,7 +217,7 @@ class MacroGraphEditMixin {
             pasteHead := SplitCommand(pasteCmd)
             if (pasteHead.Length >= 1 && this._IsMMProName(pasteHead[1]))
                 pasteCmd := this._CloneMMPro(pasteCmd)
-            else if (pasteHead.Length >= 1 && (this._IsSearchName(pasteHead[1]) || this._IsSearchProName(pasteHead[1])))
+            else if (pasteHead.Length >= 1 && this._IsSearchFamilyName(pasteHead[1]))
                 pasteCmd := this._CloneSearch(pasteCmd)
             else if (pasteHead.Length >= 1 && this._IsCompareName(pasteHead[1]))
                 pasteCmd := this._CloneIf(pasteCmd)

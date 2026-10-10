@@ -428,6 +428,23 @@ class XAMLHost {
         return btn
     }
 
+    ; 框选范围：虚线圆角方框
+    static AddTitleChromeDashRectBtn(parent, name, titleHeight := "30", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", boxSize := 12) {
+        btn := parent.Add("Button").Name(name)
+            .Style(style)
+            .WindowChrome_IsHitTestVisibleInChrome("True")
+            .Width(btnWidth).MinWidth(btnWidth).Height(titleHeight).MinHeight(titleHeight).Padding("0")
+            .VerticalAlignment("Stretch").Background("Transparent")
+            .Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
+            .Visibility(visibility)
+        btn.Add("Rectangle").Name(name "Glyph").Width(boxSize).Height(boxSize)
+            .RadiusX("2").RadiusY("2").Fill("Transparent")
+            .Stroke("{DynamicResource TitleBarForeground}").StrokeThickness("1.4")
+            .StrokeDashArray("2 1.6").HorizontalAlignment("Center").VerticalAlignment("Center")
+            .SnapsToDevicePixels("True")
+        return btn
+    }
+
     ; 标题栏骨架（铬钮不进 DragArea）。titleIcon 画在标题文字左侧。返回 { Root, Drag, Btns }
     static AddTitleBarChrome(main, title, titleName := "", titleIcon := "", titleIconColor := "", iconSize := 16) {
         tb := main.Add("Grid").Grid_Row(0).Background("{DynamicResource TitleBarColor}")
@@ -514,11 +531,29 @@ class XAMLHost {
             if (t != "")
                 f1Tip := StrReplace(t, "F1:", "F1：")
         }
-        chrome.F1 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF1", titleHeight, Chr(0xE707), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
+        f1Box := 12
+        try f1Box := Max(11, Round(Float(glyphSize)) + 1)
+        chrome.F1 := XAMLHost.AddTitleChromeDashRectBtn(chrome.Btns, "BtnCmdF1", titleHeight, "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, f1Box)
         chrome.F1.ToolTip(f1Tip)
+        f2Tip := "F2：截图"
+        try {
+            t2 := GetLang("F2：截图")
+            if (t2 != "")
+                f2Tip := t2
+        }
+        chrome.F2 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF2", titleHeight, Chr(0xE7A8), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
+        chrome.F2.ToolTip(f2Tip)
+        f3Tip := "F3：选取当前颜色"
+        try {
+            t3 := GetLang("F3：选取当前颜色")
+            if (t3 != "")
+                f3Tip := t3
+        }
+        chrome.F3 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF3", titleHeight, Chr(0xEF3C), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
+        chrome.F3.ToolTip(f3Tip)
         tgtTip := "定位取色器"
         try tgtTip := GetLang("定位取色器")
-        chrome.Targeter := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdTargeter", titleHeight, Chr(0xEF3C), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
+        chrome.Targeter := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdTargeter", titleHeight, Chr(0xE707), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
         chrome.Targeter.ToolTip(tgtTip)
         playTip := "Alt + L：执行"
         try playTip := CmdEditorPlayTip("!l")
@@ -541,7 +576,7 @@ class XAMLHost {
         if (!macroStyle) {
             try chrome.Btns.VerticalAlignment("Stretch")
             sq := cmdBtnW
-            for btn in [chrome.F1, chrome.Targeter, chrome.Play, chrome.Help, chrome.Video] {
+            for btn in [chrome.F1, chrome.F2, chrome.F3, chrome.Targeter, chrome.Play, chrome.Help, chrome.Video] {
                 try btn.Width(sq).MinWidth(sq).Height(sq).MinHeight(sq).VerticalAlignment("Center").Margin("0")
             }
             ; 关闭钮贴齐标题栏右上角：全高 Stretch + TitleBarCloseButton 圆角，hover 才贴窗口弧
@@ -960,7 +995,7 @@ class XAMLHost {
 
     static _SyncEditorTitleGlyphs(host, glyphSize) {
         gs := String(glyphSize)
-        for name in ["BtnClosePanelGlyph", "BtnMinimizeGlyph", "BtnMaximizeGlyph", "BtnPinGlyph", "BtnCmdF1Glyph", "BtnCmdTargeterGlyph", "BtnCmdPlayGlyph", "BtnCmdHelpGlyph", "BtnCmdVideoGlyph"] {
+        for name in ["BtnClosePanelGlyph", "BtnMinimizeGlyph", "BtnMaximizeGlyph", "BtnPinGlyph", "BtnCmdF1Glyph", "BtnCmdF2Glyph", "BtnCmdF3Glyph", "BtnCmdTargeterGlyph", "BtnCmdPlayGlyph", "BtnCmdHelpGlyph", "BtnCmdVideoGlyph"] {
             try host.Update(name, "FontSize", gs)
         }
         iconFs := InStr(host.xaml, 'Name="MacroEditorTitle"') ? "20" : "14"
@@ -970,7 +1005,7 @@ class XAMLHost {
     static _SyncCmdChromeCentered(host) {
         w := String(XAMLHost.CmdChromeBtnWidth())
         h := String(XAMLHost.CmdTitleBarHeight())
-        for name in ["BtnCmdF1", "BtnCmdTargeter", "BtnCmdPlay", "BtnCmdHelp", "BtnCmdVideo"] {
+        for name in ["BtnCmdF1", "BtnCmdF2", "BtnCmdF3", "BtnCmdTargeter", "BtnCmdPlay", "BtnCmdHelp", "BtnCmdVideo"] {
             try host.Update(name, "Width", w)
             try host.Update(name, "MinWidth", w)
             try host.Update(name, "Height", w)
@@ -990,7 +1025,7 @@ class XAMLHost {
 
     static _SyncChromeBtnWidth(host, w) {
         ws := String(w)
-        for name in ["BtnClosePanel", "BtnCmdF1", "BtnCmdTargeter", "BtnCmdPlay", "BtnCmdHelp", "BtnCmdVideo"] {
+        for name in ["BtnClosePanel", "BtnCmdF1", "BtnCmdF2", "BtnCmdF3", "BtnCmdTargeter", "BtnCmdPlay", "BtnCmdHelp", "BtnCmdVideo"] {
             try host.Update(name, "Width", ws)
             try host.Update(name, "MinWidth", ws)
             try host.Update(name, "Margin", "0")
@@ -1000,7 +1035,7 @@ class XAMLHost {
 
     static _SyncEditorTitleBarSize(host, h, closeW) {
         h := String(h)
-        for name in ["BtnClosePanel", "BtnMinimize", "BtnMaximize", "BtnPin", "BtnCmdF1", "BtnCmdTargeter", "BtnCmdPlay", "BtnCmdHelp", "BtnCmdVideo"] {
+        for name in ["BtnClosePanel", "BtnMinimize", "BtnMaximize", "BtnPin", "BtnCmdF1", "BtnCmdF2", "BtnCmdF3", "BtnCmdTargeter", "BtnCmdPlay", "BtnCmdHelp", "BtnCmdVideo"] {
             try host.Update(name, "Height", h)
             try host.Update(name, "MinHeight", h)
         }

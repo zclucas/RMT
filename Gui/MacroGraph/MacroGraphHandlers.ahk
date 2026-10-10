@@ -305,6 +305,17 @@ class MacroGraphHandlersMixin {
         return RegExReplace(name, "\d+$", "") == GetLang("搜索Pro")
     }
 
+    _IsSearchMultiName(name) {
+        if (name == "")
+            return false
+        n := RegExReplace(name, "\d+$", "")
+        return n == GetLang("组合搜索") || n == GetLang("搜索Multi") || n == "组合搜索" || n == "搜索Multi"
+    }
+
+    _IsSearchFamilyName(name) {
+        return this._IsSearchName(name) || this._IsSearchProName(name) || this._IsSearchMultiName(name)
+    }
+
     ; 如果Pro序列码判定（如 "如果Pro1"）
     _IsCompareProName(name) {
         if (name == "")
@@ -892,7 +903,7 @@ class MacroGraphHandlersMixin {
             return
         nameMap := Map("WinInfo", "SWin_", "SearchInterval", "SInterval_", "ClickCount", "SClick_"
             , "Speed", "SSpeed_", "ResultSaveName", "SResName_", "TrueValue", "SResTrue_", "FalseValue", "SResFalse_"
-            , "CoordXName", "SCoordX_", "CoordYName", "SCoordY_")
+            , "CoordXName", "SCoordX_", "CoordYName", "SCoordY_", "SatisfyCount", "SSat_")
         if (!nameMap.Has(field))
             return
         key := nameMap[field] id
@@ -918,6 +929,9 @@ class MacroGraphHandlersMixin {
         }
         else if (field == "TrueValue" || field == "FalseValue") {
             data.%field% := val
+        }
+        else if (field == "SatisfyCount") {
+            data.SatisfyCount := (val == GetLang("全部") || val == "-1" || val == -1) ? -1 : val
         }
         else {
             ; 数值字段（间隔/点击次数/速度）：忽略空值，最小为 1
@@ -1537,7 +1551,7 @@ class MacroGraphHandlersMixin {
             this._FlushDeltaMoveInline(id, d, state)
         else if (IsMoveProCmd(d.type))
             this._FlushMMProInline(id, state)
-        else if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro"))
+        else if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro") || d.type == GetLang("组合搜索") || d.type == GetLang("搜索Multi"))
             this._FlushSearchInline(id, state)
         else if (d.type == GetLang("输入"))
             this._FlushInputInline(id, state)

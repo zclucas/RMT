@@ -161,6 +161,8 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "手柄", OnPressJoy,
         "搜索", SearchOnTrigger,
         "搜索Pro", SearchOnTrigger,
+        "组合搜索", SearchOnTrigger,
+        "搜索Multi", SearchOnTrigger,
         "移动", OnMouseMove,
         "移动Pro", OnMMPro,
         ; §20 改名双键：新名「鼠标移动/鼠标移动Pro/增量移动」；旧名键保留兼容旧配置宏

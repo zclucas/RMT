@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>坐标四件套 · 参考样式</title>
+  <style>
+    :root {
+      --bg: #f6ead2;
+      --paper: #fff8e8;
+      --ink: #5a3d22;
+      --muted: #8a6240;
+      --line: #d4b48a;
+      --input: #fffdf8;
+      --accent: #f59e0b;
+      --ok: #fb923c;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8eed8, #ead7b4);
+      padding: 28px 20px 48px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    .lead { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0 0 22px; }
+    .grid { display: grid; gap: 16px; }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px 16px;
+    }
+    .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .head h2 { margin: 0; font-size: 15px; }
+    .tag {
+      font-size: 12px; color: var(--muted);
+      background: #f3e2c2; border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+    }
+    .note { margin: 10px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+    label { font-size: 13px; white-space: nowrap; }
+    input {
+      height: 28px; border: 1px solid var(--line); border-radius: 4px;
+      background: var(--input); color: var(--ink); padding: 0 6px;
+      font: inherit; font-size: 13px; text-align: center;
+    }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .fake-win { border: 1px solid #e0bf8d; border-radius: 8px; overflow: hidden; background: #fff9ec; }
+    .chrome {
+      height: 32px; display: flex; align-items: center; padding: 0 10px;
+      background: linear-gradient(180deg, #f8e2b6, #f0cc8d);
+      border-bottom: 1px solid #e0bf8d; font-size: 13px; font-weight: 650;
+    }
+    .pane { padding: 12px 14px; }
+    .hint { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+
+    /* 1 现状 */
+    .s1 { display: grid; grid-template-columns: auto 70px auto 70px auto 1fr; gap: 8px 10px; align-items: center; }
+    .s1 input { width: 70px; }
+
+    /* 2 短标签四宫格 */
+    .s2 { display: grid; grid-template-columns: 36px 72px 36px 72px; gap: 8px 10px; align-items: center; }
+
+    /* 3 单行起止 */
+    .pair { display: flex; align-items: center; gap: 6px; }
+    .pair input { width: 68px; }
+    .sep { color: var(--muted); padding: 0 4px; }
+
+    /* 4 括号成对 */
+    .paren { display: flex; align-items: center; gap: 4px; }
+    .paren input { width: 68px; }
+    .paren .br { color: var(--muted); font-size: 16px; }
+
+    /* 5 范围卡片 */
+    .box {
+      display: inline-block; border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px 10px; background: #fffdf6;
+    }
+    .box .cap { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .box .g { display: grid; grid-template-columns: 28px 68px 28px 68px; gap: 6px 8px; align-items: center; }
+
+    /* 6 XY 分列 */
+    .xy { display: grid; grid-template-columns: auto auto auto auto; gap: 6px 10px; align-items: center; }
+    .xy .k { font-size: 12px; color: var(--muted); }
+    .xy input { width: 68px; }
+
+    /* 7 区间写法 */
+    .rng { display: flex; align-items: center; gap: 6px; }
+    .rng input { width: 64px; }
+    .tilde { color: var(--muted); font-weight: 700; }
+
+    /* 8 角标输入 */
+    .chip {
+      position: relative; display: inline-flex; align-items: center;
+    }
+    .chip input { width: 78px; padding-left: 18px; text-align: left; }
+    .chip b {
+      position: absolute; left: 5px; top: 2px; font-size: 10px;
+      color: var(--muted); font-weight: 650;
+    }
+
+    /* 9 摘要 */
+    .sum {
+      display: flex; align-items: center; gap: 8px;
+      border: 1px solid var(--line); border-radius: 6px;
+      padding: 6px 10px; background: var(--input); width: fit-content;
+    }
+    .sum code { font-size: 13px; }
+    .sum button {
+      height: 24px; border: 1px solid var(--line); background: #fff3d6;
+      border-radius: 4px; color: var(--ink); cursor: pointer; font-size: 12px;
+    }
+
+    /* 10 工具条 */
+    .bar {
+      display: flex; align-items: center; gap: 6px;
+      border: 1px solid var(--line); border-radius: 6px;
+      padding: 4px 8px; width: fit-content; background: #fffdf6;
+    }
+    .loc {
+      width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 4px;
+      background: #fff3d6; display: grid; place-items: center; font-size: 13px;
+    }
+    .bar input { width: 62px; }
+    .bar .d { color: var(--muted); font-size: 12px; }
+
+    .rec {
+      width: 44px; height: 32px; border: 1.5px dashed var(--line); border-radius: 3px;
+      position: relative; flex: 0 0 auto;
+    }
+    .rec i { position: absolute; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
+    .rec i.a { left: -2px; top: -2px; }
+    .rec i.b { right: -2px; bottom: -2px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>坐标四件套 · 10 种更省空间的参考</h1>
+    <p class="lead">
+      现在搜索 / 搜索Pro / 抓图 / 变量提取 / 等待 都是两行四个长标签：起始坐标X、起始坐标Y、终止坐标X、终止坐标Y。
+      占两行、标签比输入框还长。下面用同一组数（31381, 10334 → 36299, 14333）对比 10 种写法，方便你挑一种再落到真实界面。
+    </p>
+
+    <div class="grid">
+      <section class="card">
+        <div class="head"><h2>1. 现状对照</h2><span class="tag">2 行 · 最占地方</span></div>
+        <div class="fake-win">
+          <div class="chrome">宏指令-搜索</div>
+          <div class="pane">
+            <div class="s1">
+              <label>起始坐标X：</label><input value="31381" />
+              <label>起始坐标Y：</label><input value="10334" />
+              <label>搜索文本：</label><input style="width:120px;text-align:left" value="检索文本" />
+              <label>终止坐标X：</label><input value="36299" />
+              <label>终止坐标Y：</label><input value="14333" />
+            </div>
+          </div>
+        </div>
+        <p class="note">四个「坐标」重复说了四遍，标签列约 90px，整块大约两行 × 半个窗宽。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>2. 短标签四宫格</h2><span class="tag">仍 2 行 · 省横向</span></div>
+        <div class="row">
+          <div class="s2">
+            <label>起X</label><input value="31381" />
+            <label>起Y</label><input value="10334" />
+            <label>止X</label><input value="36299" />
+            <label>止Y</label><input value="14333" />
+          </div>
+        </div>
+        <p class="note">改动最小：只缩短文案。语义还在，右边能让出「搜索文本」一整列。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>3. 单行起止</h2><span class="tag">1 行</span></div>
+        <div class="row">
+          <label>起点</label>
+          <div class="pair"><input value="31381" /><input value="10334" /></div>
+          <span class="sep">→</span>
+          <label>终点</label>
+          <div class="pair"><input value="36299" /><input value="14333" /></div>
+        </div>
+        <p class="note">四个数挤进一行。适合搜索、等待这种后面还要跟文本/颜色的界面。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>4. 括号成对</h2><span class="tag">1 行 · 程序员习惯</span></div>
+        <div class="row">
+          <label>范围</label>
+          <div class="paren"><span class="br">(</span><input value="31381" /><input value="10334" /><span class="br">)</span></div>
+          <span class="sep">—</span>
+          <div class="paren"><span class="br">(</span><input value="36299" /><input value="14333" /><span class="br">)</span></div>
+        </div>
+        <p class="note">把 XY 当成一个点。标签只出现一次，比「起始坐标X」清爽。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>5. 范围卡片</h2><span class="tag">1 块 · 和其他控件分开</span></div>
+        <div class="box">
+          <div class="cap">搜索范围</div>
+          <div class="g">
+            <label>起X</label><input value="31381" />
+            <label>起Y</label><input value="10334" />
+            <label>止X</label><input value="36299" />
+            <label>止Y</label><input value="14333" />
+          </div>
+        </div>
+        <p class="note">四个数收进一个浅框，右边可以并排放搜索文本 / 截图。和「变量」那边的大框风格接近。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>6. 按 X / Y 分列</h2><span class="tag">1 行半</span></div>
+        <div class="xy">
+          <span class="k">X</span>
+          <label>起</label><input value="31381" />
+          <label>止</label><input value="36299" />
+          <span class="k">Y</span>
+          <label>起</label><input value="10334" />
+          <label>止</label><input value="14333" />
+        </div>
+        <p class="note">先想轴再想起止。改宽度、对齐时比较好扫一眼。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>7. 区间写法</h2><span class="tag">1 行</span></div>
+        <div class="rng">
+          <label>X</label><input value="31381" /><span class="tilde">~</span><input value="36299" />
+          <span class="sep">｜</span>
+          <label>Y</label><input value="10334" /><span class="tilde">~</span><input value="14333" />
+        </div>
+        <p class="note">强调「从哪到哪」。和随机数值的最小~最大读法一致。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>8. 角标输入</h2><span class="tag">1 行 · 无外置标签</span></div>
+        <div class="row">
+          <span class="chip"><b>X1</b><input value="31381" /></span>
+          <span class="chip"><b>Y1</b><input value="10334" /></span>
+          <span class="sep">→</span>
+          <span class="chip"><b>X2</b><input value="36299" /></span>
+          <span class="chip"><b>Y2</b><input value="14333" /></span>
+        </div>
+        <p class="note">标签藏进框里，一行更短。适合已经有 F1 框选、用户很熟的界面。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>9. 一行摘要</h2><span class="tag">默认 1 行 · 点开再改</span></div>
+        <div class="sum">
+          <span>范围</span>
+          <code>31381, 10334 → 36299, 14333</code>
+          <button type="button">编辑</button>
+        </div>
+        <p class="note">F1 框选后多数人不再手改。平时只看摘要，点编辑才展开四个框。最省垂直空间。</p>
+      </section>
+
+      <section class="card">
+        <div class="head"><h2>10. 框选工具条</h2><span class="tag">1 行 · 带框选入口</span></div>
+        <div class="bar">
+          <div class="loc" title="F1 框选">⌖</div>
+          <div class="rec" title="范围示意"><i class="a"></i><i class="b"></i></div>
+          <span class="d">起</span><input value="31381" /><input value="10334" />
+          <span class="d">止</span><input value="36299" /><input value="14333" />
+        </div>
+        <p class="note">把 F1 框选、示意矩形和四个数收成一条工具栏。搜索 / 抓图这种「先框再填」最合适。</p>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
