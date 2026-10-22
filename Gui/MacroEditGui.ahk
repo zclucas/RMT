@@ -1,6 +1,7 @@
 #Requires AutoHotkey v2.0
 #Include IntervalGui.ahk
 #Include KeyGui.ahk
+#Include JoyPickerHook.ahk
 #Include JoyGui.ahk
 #Include MouseMoveGui.ahk
 #Include SearchGui.ahk
