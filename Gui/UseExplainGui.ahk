@@ -265,6 +265,11 @@ class UseExplainGui {
     }
 
     CheckClipboard() {
+        ; 窗口已关掉（this.ui 被置空）时先停监听再返回，否则定时器会一直报错
+        if (!IsObject(this.ui)) {
+            SetTimer(this.CheckClipboardAction, 0)
+            return
+        }
         if DllCall("IsClipboardFormatAvailable", "uint", 8) {
             CurrentDateTime := FormatTime(, "HHmmss")
             filePath := this.SettingPath "\Images\UseExplain\" CurrentDateTime ".png"
@@ -273,7 +278,7 @@ class UseExplainGui {
             this.AllImagePathMap.Set(filePath, true)
             this.ImagePathArr.Push(filePath)
             this.RefreshLV()
-            SetTimer(, 0)
+            SetTimer(this.CheckClipboardAction, 0)
         }
     }
 

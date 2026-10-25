@@ -223,8 +223,23 @@ GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode) {
     return res
 }
 
+; 当前 RMT_OpenCV.dll 是否带自适应匹配（老 dll 没有该导出 → 返回 false，自动走旧接口）
+OpenCvAdaptiveReady() {
+    static cached := -1
+    if (cached != -1)
+        return cached
+    cached := 0
+    try {
+        if (DllCall("RMT_OpenCV.dll\GetApiVersion", "Cdecl Int") >= 2)
+            cached := 1
+    } catch {
+    }
+    return cached
+}
+
 ; OpenCV屏幕图片识别
-FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold) {
+; Adaptive=true 且 dll 支持时走跨分辨率匹配；否则与原行为完全一致
+FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold, Adaptive := false) {
     if (A_PtrSize != 8) ;非64位不可用，直接退出
         return false
     if (OpenCvEnsure() != "")
@@ -234,13 +249,21 @@ FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold) {
     searchY := Y1
     searchW := X2 - X1
     searchH := Y2 - Y1
+    if (Adaptive && OpenCvAdaptiveReady()) {
+        try {
+            return DllCall("RMT_OpenCV.dll\FindScreenImageAdaptive", "AStr", targetPath, "Int", searchX,
+                "Int", searchY, "Int", searchW, "Int", searchH, "Int", matchThreshold, "Int*", ResXPtr, "Int*", ResYPtr,
+                "Cdecl Int")
+        } catch {
+        }
+    }
     return DllCall("RMT_OpenCV.dll\FindScreenImage", "AStr", targetPath, "Int", searchX,
         "Int", searchY, "Int", searchW, "Int", searchH, "Int", matchThreshold, "Int*", ResXPtr, "Int*", ResYPtr,
         "Cdecl Int")
 }
 
 ; OpenCV窗口图片识别    返回窗口的坐标
-FindWinImage(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold) {
+FindWinImage(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold, Adaptive := false) {
     if (A_PtrSize != 8) ;非64位不可用，直接退出
         return false
     if (OpenCvEnsure() != "")
@@ -250,6 +273,14 @@ FindWinImage(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold)
     searchY := Y1
     searchW := X2 - X1
     searchH := Y2 - Y1
+    if (Adaptive && OpenCvAdaptiveReady()) {
+        try {
+            return DllCall("RMT_OpenCV.dll\FindWinImageAdaptive", "AStr", targetPath, "Int", hwnd, "Int", searchX,
+                "Int", searchY, "Int", searchW, "Int", searchH, "Int", matchThreshold, "Int*", ResXPtr, "Int*", ResYPtr,
+                "Cdecl Int")
+        } catch {
+        }
+    }
     return DllCall("RMT_OpenCV.dll\FindWinImage", "AStr", targetPath, "Int", hwnd, "Int", searchX,
         "Int", searchY, "Int", searchW, "Int", searchH, "Int", matchThreshold, "Int*", ResXPtr, "Int*", ResYPtr,
         "Cdecl Int")

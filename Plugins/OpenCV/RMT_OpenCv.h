@@ -57,3 +57,29 @@ extern "C" IMAGEFINDER_API int __cdecl FindWinImage(                // 窗口图
     int matchThreshold,         // 匹配阈值
     int* x,                     // 匹配到的X坐标
     int* y);                    // 匹配到的Y坐标
+
+// ---- 1.2.2 自适应匹配（跨分辨率 / 跨 DPI / 透明底模板）----
+// 只在不勾「自适应」时走旧函数，勾了才走下面两个；GetApiVersion 用来让 AHK 判断
+// 当前 dll 是否已经重编译（老 dll 没有这些导出，AHK 会捕获异常并回退旧接口）。
+extern "C" IMAGEFINDER_API int __cdecl GetApiVersion();            // 2 = 支持自适应匹配，3 = 边缘图比例判断 + 原分辨率细调
+
+extern "C" IMAGEFINDER_API int __cdecl FindScreenImageAdaptive(     // 屏幕自适应图片匹配
+    const char* targetPath,
+    int searchX,
+    int searchY,
+    int searchW,
+    int searchH,
+    int matchThreshold,
+    int* x,
+    int* y);
+
+extern "C" IMAGEFINDER_API int __cdecl FindWinImageAdaptive(        // 窗口自适应图片匹配
+    const char* targetPath,
+    int hwnd,
+    int searchX,
+    int searchY,
+    int searchW,
+    int searchH,
+    int matchThreshold,
+    int* x,
+    int* y);

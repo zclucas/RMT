@@ -27,6 +27,7 @@ class SearchProGui {
         this.PreviewFollowing := false
         this.PreviewShowing := false
         this._comboGuard := 0
+        this.AdaptiveOn := 0
         this.CountTogArr := ["SearchIntervalHost"]
         this.MouseSpeedArr := ["SpeedTipCon", "SpeedCon"]
         this.MouseClickArr := ["ClickCountCon"]
@@ -234,6 +235,14 @@ class SearchProGui {
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         imgPrev.Add("Image").Name("ImageCon").Stretch("Uniform")
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
+        ; 自适应匹配开关：只对图片类搜索 + OpenCV 识别显示；关掉时行为与老版本一致
+        imgPanel.Add("Button").Grid_Row(2).Name("AdaptiveBtn")
+            .Width(76).Height(28).MinHeight(28).Padding("0").Cursor("Hand")
+            .HorizontalAlignment("Left").VerticalAlignment("Top").Margin("72,6,0,0")
+            .Content(GetLang("自适应")).FontSize("11").Tag("0")
+            .ToolTip(GetLang("自适应匹配：分辨率或缩放比例变了也能找到"))
+            .Foreground("{DynamicResource TextMain}").Background("{DynamicResource ControlBg}")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
         clrPanel := typeHost.Add("Grid").Name("ColorPanel").VerticalAlignment("Top").Visibility("Collapsed")
         clrPanel.Rows("32", "32")
@@ -350,6 +359,8 @@ class SearchProGui {
         this.ui.OnEvent("HexColorCon", "TextChanged", ObjBindMethod(this, "OnHexColorChange"))
         this.ui.OnEvent("ImageShotBtn", "Click", ObjBindMethod(this, "OnImageShotBtnClick"))
         this.ui.OnEvent("ImageSelectBtn", "Click", ObjBindMethod(this, "OnClickSetPicBtn"))
+        this.ui.OnEvent("AdaptiveBtn", "Click", ObjBindMethod(this, "OnToggleAdaptive"))
+        this.ui.OnEvent("SearchImageTypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEditBtn"))
         this.ui.OnEvent("BtnEditFoundMacro", "Click", ObjBindMethod(this, "OnEditFoundMacroBtnClick"))
         this.ui.OnEvent("BtnEditUnFoundMacro", "Click", ObjBindMethod(this, "OnEditUnFoundMacroBtnClick"))
@@ -452,6 +463,30 @@ class SearchProGui {
             this.ui.Update("ImageCon", "Source", path != "" ? StrReplace(path, "\", "/") : "")
     }
 
+    ; 自适应匹配开关（跨分辨率找图）：开 = 换机器/换缩放比例也能找到
+    OnToggleAdaptive(*) {
+        if (!IsObject(this.ui))
+            return
+        this._SyncAdaptive(!this.AdaptiveOn)
+    }
+
+    _SyncAdaptive(on) {
+        if (!IsObject(this.ui))
+            return
+        on := (on == true || on == 1 || on == "1" || on == "true")
+        this.AdaptiveOn := on ? 1 : 0
+        try this.ui.Update("AdaptiveBtn", "Tag", on ? "1" : "0")
+        if (on) {
+            try this.ui.Update("AdaptiveBtn", "Background", "{DynamicResource ActionBg}")
+            try this.ui.Update("AdaptiveBtn", "BorderBrush", "{DynamicResource ActionStroke}")
+            try this.ui.Update("AdaptiveBtn", "Foreground", "{DynamicResource ActionText}")
+        } else {
+            try this.ui.Update("AdaptiveBtn", "Background", "{DynamicResource ControlBg}")
+            try this.ui.Update("AdaptiveBtn", "BorderBrush", "{DynamicResource ControlBorder}")
+            try this.ui.Update("AdaptiveBtn", "Foreground", "{DynamicResource TextMain}")
+        }
+    }
+
     SetConArrState(ConArr, isEnabled, state) {
         prop := isEnabled ? "IsEnabled" : "Visibility"
         val := isEnabled ? (state ? "True" : "False") : (state ? "Visible" : "Collapsed")
@@ -475,6 +510,7 @@ class SearchProGui {
         this.ui.Update("ColorSimilarCon", "Text", this.Data.Similar)
         this.ui.Update("WinInfoCon", "Text", this.Data.WinInfo)
         this.ui.Update("SearchImageTypeCon", "SelectedIndex", String(Max(0, Integer(this.Data.SearchImageType) - 1)))
+        this._SyncAdaptive(ObjHasOwnProp(this.Data, "Adaptive") ? this.Data.Adaptive : 0)
         this._SetCombo("ImagePathCon", this.DLVariableArr, this.Data.SearchImagePath)
         this._SetImage(this.Data.SearchImagePath)
         this._SetCombo("HexColorCon", this.DLVariableArr, this.Data.SearchColor)
@@ -510,7 +546,7 @@ class SearchProGui {
         if (!ObjHasOwnProp(data, "SearchTargetArr") || !IsObject(data.SearchTargetArr) || data.SearchTargetArr.Length < 1)
             return
         t := data.SearchTargetArr[1]
-        for key in ["SearchType", "WinInfo", "SearchColor", "SearchText", "SearchImagePath", "Similar", "OCRType", "SearchImageType", "StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
+        for key in ["SearchType", "WinInfo", "SearchColor", "SearchText", "SearchImagePath", "Similar", "OCRType", "SearchImageType", "Adaptive", "StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
             if (ObjHasOwnProp(t, key))
                 data.%key% := t.%key%
         }
@@ -608,6 +644,7 @@ class SearchProGui {
         data.OCRType := 1
         imgType := this.ui.Query("SearchImageTypeCon>SelectedIndex")
         data.SearchImageType := (IsNumber(imgType) && Integer(imgType) >= 0) ? Integer(imgType) + 1 : 1
+        data.Adaptive := this.AdaptiveOn
         data.SearchType := this._TypeIndex()
         data.WinInfo := this.ui.Query("WinInfoCon")
         data.SearchColor := this.ui.Query("HexColorCon")
@@ -678,6 +715,9 @@ class SearchProGui {
             this.ui.Update("MouseColorTipCon", "BorderBrush", this._SwatchContrastStroke(ColorText))
             this.ui.Update("MouseColorTipCon", "BorderThickness", "1")
         }
+        catch {
+            ; 鼠标越界 / 窗口已关 / 取色失败都属正常情况，定时刷新不该抛错刷日志
+        }
     }
 
     OnChangeType(*) {
@@ -688,6 +728,10 @@ class SearchProGui {
         isWin := curType == 4 || curType == 5 || curType == 6
         isInfinite := this.ui.Query("SearchCountCon") == GetLang("无限")
         this.SetConArrState(this.ImageVariArr, false, isImage)
+        ; 自适应只对 OpenCV 识别有效，RMT识图 那条路没有缩放能力
+        ocvIdx := this.ui.Query("SearchImageTypeCon>SelectedIndex")
+        isOcv := isImage && (!IsNumber(ocvIdx) || Integer(ocvIdx) <= 0)
+        this.ui.Update("AdaptiveBtn", "Visibility", isOcv ? "Visible" : "Collapsed")
         this.SetConArrState(this.ColorArr, false, isColor)
         this.SetConArrState(this.TextArr, false, isText)
         if (isColor)
@@ -820,6 +864,12 @@ class SearchProGui {
     }
 
     CheckClipboard(*) {
+        ; 窗口已关掉（this.ui 被置空）时先停监听再返回，
+        ; 否则每 500ms 抛一次「String has no method Update」，日志被刷满
+        if (!IsObject(this.ui)) {
+            SetTimer(this.CheckClipboardAction, 0)
+            return
+        }
         if DllCall("IsClipboardFormatAvailable", "uint", 8) {
             imageSerial := GetNextImageSerial()
             filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
@@ -827,7 +877,7 @@ class SearchProGui {
             this._SetImage(filePath)
             this.Data.SearchImagePath := filePath
             this.ui.Update("ImagePathCon", "Text", filePath)
-            SetTimer(, 0)
+            SetTimer(this.CheckClipboardAction, 0)
         }
     }
 

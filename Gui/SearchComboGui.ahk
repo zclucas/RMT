@@ -421,6 +421,7 @@ class SearchComboGui {
             Similar: ObjHasOwnProp(Data, "Similar") ? Data.Similar : 90,
             OCRType: ObjHasOwnProp(Data, "OCRType") ? Data.OCRType : 1,
             SearchImageType: ObjHasOwnProp(Data, "SearchImageType") ? Data.SearchImageType : SearchImageDefaultType(),
+            Adaptive: ObjHasOwnProp(Data, "Adaptive") ? Data.Adaptive : 0,
             Remark: ObjHasOwnProp(Data, "Remark") ? Data.Remark : "",
             StartPosX: ObjHasOwnProp(Data, "StartPosX") ? Data.StartPosX : 0,
             StartPosY: ObjHasOwnProp(Data, "StartPosY") ? Data.StartPosY : 0,
@@ -521,6 +522,14 @@ class SearchComboGui {
             . ' Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
             . '<Image Name="' this._TN(n, "Image") '" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>'
             . '</Border>'
+            . '<Button Name="' this._TN(n, "AdaptiveBtn") '" Grid.Row="3" Grid.Column="4" Width="64" Height="28" MinHeight="28"'
+            . ' Padding="0" VerticalAlignment="Center" HorizontalAlignment="Stretch" Cursor="Hand" FontSize="' fs '"'
+            . ' Content="' GetLang("自适应") '" Tag="0"'
+            . ' ToolTip="' GetLang("自适应匹配：分辨率或缩放比例变了也能找到") '"'
+            . ' Foreground="{DynamicResource TextMain}" Background="{DynamicResource ControlBg}"'
+            . ' BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
+            . this._ThemeHoverBtnStyle()
+            . '</Button>'
             . '<TextBlock Name="' this._TN(n, "ImagePathTip") '" Grid.Row="3" Grid.Column="0" Text="' GetLang("图片路径：") '" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource TextMain}" FontSize="' fs '"/>'
             . '<Grid Name="' this._TN(n, "ImagePathRow") '" Grid.Row="3" Grid.Column="2" Width="228" HorizontalAlignment="Left">'
             . '<Grid.ColumnDefinitions>'
@@ -613,6 +622,8 @@ class SearchComboGui {
 
     _BindTargetCard(n) {
         this._Bind(this._TN(n, "Type"), "SelectionChanged", ObjBindMethod(this, "OnTargetTypeChanged", n))
+        ; 识别模型切换时刷新「自适应」按钮的显隐
+        this._Bind(this._TN(n, "ImageType"), "SelectionChanged", ObjBindMethod(this, "OnTargetTypeChanged", n))
         this._Bind(this._TN(n, "DelBtn"), "Click", ObjBindMethod(this, "OnDelTarget", n))
         if (n > 1)
             this._Bind(this._TN(n, "UpBtn"), "Click", ObjBindMethod(this, "OnMoveTarget", n, -1))
@@ -626,6 +637,34 @@ class SearchComboGui {
         this._Bind(this._TN(n, "EndPosY"), "LostFocus", ObjBindMethod(this, "RefreshPreviewArea"))
         this._Bind(this._TN(n, "ScreenshotBtn"), "Click", ObjBindMethod(this, "OnScreenShotBtnClick", n))
         this._Bind(this._TN(n, "ImageSelectBtn"), "Click", ObjBindMethod(this, "OnClickSetPicBtn", n))
+        this._Bind(this._TN(n, "AdaptiveBtn"), "Click", ObjBindMethod(this, "OnToggleAdaptive", n))
+    }
+
+    ; 自适应匹配开关：只在图片类搜索上显示；关掉时行为与老版本完全一致
+    OnToggleAdaptive(n, state := "", ctrl := "", event := "") {
+        if (!IsObject(this.ui) || n > this.TargetList.Length)
+            return
+        cur := ObjHasOwnProp(this.TargetList[n], "Adaptive") ? this.TargetList[n].Adaptive : 0
+        on := (cur == 1 || cur == "1" || cur == true)
+        this.TargetList[n].Adaptive := on ? 0 : 1
+        this._SyncAdaptiveBtn(n, !on)
+    }
+
+    _SyncAdaptiveBtn(n, on) {
+        if (!IsObject(this.ui))
+            return
+        btn := this._TN(n, "AdaptiveBtn")
+        on := (on == true || on == 1 || on == "1" || on == "true")
+        try this.ui.Update(btn, "Tag", on ? "1" : "0")
+        if (on) {
+            try this.ui.Update(btn, "Background", "{DynamicResource ActionBg}")
+            try this.ui.Update(btn, "BorderBrush", "{DynamicResource ActionStroke}")
+            try this.ui.Update(btn, "Foreground", "{DynamicResource ActionText}")
+        } else {
+            try this.ui.Update(btn, "Background", "{DynamicResource ControlBg}")
+            try this.ui.Update(btn, "BorderBrush", "{DynamicResource ControlBorder}")
+            try this.ui.Update(btn, "Foreground", "{DynamicResource TextMain}")
+        }
     }
 
     _FillTargetCard(n) {
@@ -640,6 +679,7 @@ class SearchComboGui {
         this._SetCombo(this._TN(n, "EndPosX"), this.DLVariableArr, t.EndPosX)
         this._SetCombo(this._TN(n, "EndPosY"), this.DLVariableArr, t.EndPosY)
         this.ui.Update(this._TN(n, "ImageType"), "SelectedIndex", String((t.SearchImageType ? t.SearchImageType : 1) - 1))
+        this._SyncAdaptiveBtn(n, ObjHasOwnProp(t, "Adaptive") ? t.Adaptive : 0)
         this._SetImage(n, t.SearchImagePath)
         this._SetCombo(this._TN(n, "ImagePath"), this.DLVariableArr, t.SearchImagePath)
         this._SetCombo(this._TN(n, "Color"), this.DLVariableArr, t.SearchColor)
@@ -690,6 +730,7 @@ class SearchComboGui {
             Similar: last.Similar,
             OCRType: last.OCRType,
             SearchImageType: last.SearchImageType,
+            Adaptive: ObjHasOwnProp(last, "Adaptive") ? last.Adaptive : 0,
             Remark: ObjHasOwnProp(last, "Remark") ? last.Remark : "",
             StartPosX: last.StartPosX, StartPosY: last.StartPosY,
             EndPosX: last.EndPosX, EndPosY: last.EndPosY
@@ -745,6 +786,10 @@ class SearchComboGui {
         this.ui.Update(tn "ImageTypeTip", "Visibility", isImage ? "Visible" : "Hidden")
         this.ui.Update(tn "ImageType", "Visibility", isImage ? "Visible" : "Hidden")
         this.ui.Update(tn "ImagePreviewHost", "Visibility", isImage ? "Visible" : "Hidden")
+        ; 自适应只对 OpenCV 识别有效，RMT识图 那条路没有缩放能力
+        modelIdx := this.ui.Query(tn "ImageType>SelectedIndex")
+        isOcv := isImage && (!IsNumber(modelIdx) || Integer(modelIdx) <= 0)
+        this.ui.Update(tn "AdaptiveBtn", "Visibility", isOcv ? "Visible" : "Hidden")
         this.ui.Update(tn "ColorTipLabel", "Visibility", isColor ? "Visible" : "Hidden")
         this.ui.Update(tn "ColorRow", "Visibility", isColor ? "Visible" : "Hidden")
         this.ui.Update(tn "TextTipLabel", "Visibility", isText ? "Visible" : "Hidden")
@@ -954,6 +999,9 @@ class SearchComboGui {
             this.ui.Update("MouseColorCon", "Text", ColorText)
             this.ui.Update("MouseColorTipCon", "Background", "#" ColorText)
         }
+        catch {
+            ; 鼠标越界 / 窗口已关 / 取色失败都属正常情况，定时刷新不该抛错刷日志
+        }
     }
 
     OnSureTarget(PosX, PosY, Color) {
@@ -1031,6 +1079,11 @@ class SearchComboGui {
     }
 
     CheckClipboard() {
+        ; 窗口已关掉（this.ui 被置空）时先停监听再返回，否则定时器会一直报错
+        if (!IsObject(this.ui)) {
+            SetTimer(this.CheckClipboardAction, 0)
+            return
+        }
         if DllCall("IsClipboardFormatAvailable", "uint", 8) {
             n := this._CurTarget()
             imageSerial := GetNextImageSerial()
@@ -1039,7 +1092,7 @@ class SearchComboGui {
             this._SetImage(n, filePath)
             this.TargetList[n].SearchImagePath := filePath
             this.ui.Update(this._TN(n, "ImagePath"), "Text", filePath)
-            SetTimer(, 0)
+            SetTimer(this.CheckClipboardAction, 0)
         }
     }
 
@@ -1175,6 +1228,7 @@ class SearchComboGui {
                 Similar: this.ui.Query(tn "Similar"),
                 OCRType: 1,   ; v6 统一多语言模型，不再区分
                 SearchImageType: Integer(this.ui.Query(tn "ImageType>SelectedIndex")) + 1,
+                Adaptive: ObjHasOwnProp(this.TargetList[n], "Adaptive") ? this.TargetList[n].Adaptive : 0,
                 Remark: this.ui.Query(tn "Remark"),
                 StartPosX: this.ui.Query(tn "StartPosX"),
                 StartPosY: this.ui.Query(tn "StartPosY"),
@@ -1192,6 +1246,7 @@ class SearchComboGui {
                 data.Similar := t.Similar
                 data.OCRType := t.OCRType
                 data.SearchImageType := t.SearchImageType
+                data.Adaptive := t.Adaptive
                 data.StartPosX := t.StartPosX
                 data.StartPosY := t.StartPosY
                 data.EndPosX := t.EndPosX

@@ -446,6 +446,9 @@ class SearchGui {
             this.ui.Update("MouseColorTipCon", "BorderBrush", this._SwatchContrastStroke(ColorText))
             this.ui.Update("MouseColorTipCon", "BorderThickness", "1")
         }
+        catch {
+            ; 鼠标越界 / 窗口已关 / 取色失败都属正常情况，定时刷新不该抛错刷日志
+        }
     }
 
     ; ---------------- 按钮/事件 ----------------
@@ -486,6 +489,11 @@ class SearchGui {
     }
 
     CheckClipboard() {
+        ; 窗口已关掉（this.ui 被置空）时先停监听再返回，否则定时器会一直报错
+        if (!IsObject(this.ui)) {
+            SetTimer(this.CheckClipboardAction, 0)
+            return
+        }
         ; 如果剪贴板中有图像
         if DllCall("IsClipboardFormatAvailable", "uint", 8)  ; 8 是 CF_BITMAP 格式
         {
@@ -495,7 +503,7 @@ class SearchGui {
             this._SetImage(filePath)
             this.Data.SearchImagePath := filePath
             ; 停止监听
-            SetTimer(, 0)
+            SetTimer(this.CheckClipboardAction, 0)
         }
     }
 

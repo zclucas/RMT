@@ -1,9 +1,25 @@
+// windows.h 默认把 min/max 定义成宏，会破坏 std::min/std::max（报 C2589）
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "RMT_OpenCv.h"
 #include <opencv2/opencv.hpp>
 #include <windows.h>
 #include <dwmapi.h>
 #include <unordered_map>
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #pragma comment(lib, "Dwmapi.lib")
+
+// 兜底：某些 SDK/config 仍会在别处引入 min/max 宏
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 
 // 缩略图缓存结构
 struct ThumbnailCache {
@@ -384,15 +400,15 @@ extern "C" IMAGEFINDER_API int __cdecl FindWinColor(
 
 	// 2️ 构造颜色范围
 	cv::Scalar lower(
-		max(0, b - tol),
-		max(0, g - tol),
-		max(0, r - tol)
+		std::max(0, b - tol),
+		std::max(0, g - tol),
+		std::max(0, r - tol)
 	);
 
 	cv::Scalar upper(
-		min(255, b + tol),
-		min(255, g + tol),
-		min(255, r + tol)
+		std::min(255, b + tol),
+		std::min(255, g + tol),
+		std::min(255, r + tol)
 	);
 
 	// 3️ inRange 匹配
@@ -460,6 +476,16 @@ extern "C" IMAGEFINDER_API int __cdecl FindScreenImage(
 	{
 		std::cerr << "Failed to capture screen region." << std::endl;
 		return 0;
+	}
+
+	// 通道数不一致时统一（4 通道 PNG 模板 + 3 通道截屏会让 matchTemplate 直接断言失败，
+	// 相似度 ≥95 不走灰度的那条分支最容易踩到）
+	if (templateImage.channels() != capturedImage.channels())
+	{
+		if (templateImage.channels() == 4 && capturedImage.channels() == 3)
+			cv::cvtColor(templateImage, templateImage, cv::COLOR_BGRA2BGR);
+		else if (templateImage.channels() == 3 && capturedImage.channels() == 4)
+			cv::cvtColor(templateImage, templateImage, cv::COLOR_BGR2BGRA);
 	}
 
 	// 2. 转换为灰度图（提高处理速度）
@@ -567,6 +593,15 @@ extern "C" IMAGEFINDER_API int __cdecl FindWinImage(
 		return 0;
 	}
 
+	// 通道数统一，理由同 FindScreenImage
+	if (templateImage.channels() != capturedImage.channels())
+	{
+		if (templateImage.channels() == 4 && capturedImage.channels() == 3)
+			cv::cvtColor(templateImage, templateImage, cv::COLOR_BGRA2BGR);
+		else if (templateImage.channels() == 3 && capturedImage.channels() == 4)
+			cv::cvtColor(templateImage, templateImage, cv::COLOR_BGR2BGRA);
+	}
+
 	// 3. 转灰度（非高分相似度）
 	cv::Mat grayLarge, graySmall;
 	if (matchThreshold >= 95)
@@ -611,5 +646,360 @@ extern "C" IMAGEFINDER_API int __cdecl FindWinImage(
 	*x = topLeft.x;
 	*y = topLeft.y;
 	
+	return 1;
+}
+// =====================================================================
+// 自适应匹配（跨分辨率 / 跨 DPI）
+// 与旧 FindScreenImage/FindWinImage 的差别：
+//   1) 不再遍历整张结果图 + NMS —— API 只返回一个点，minMaxLoc 给出的
+//      就是「分数最高的那个位置」，与 NMS 后的 selected.front() 等价；
+//   2) 1:1 优先，且判定口径与旧实现完全一致；1:1 没命中才往下走；
+//   3) 往下走时同时看灰度图和 Sobel 梯度图：文字换了分辨率是系统重新
+//      光栅化的，灰度对不上，笔画/字框的边缘结构还在；
+//   4) 半分辨率粗扫用「灰度 + 边缘取大者」挑比例，再回原分辨率在候选点
+//      周围按 ±6% 微调（像素取整会让密排文字整块错位）；
+//   5) 缩放档位允许放宽 12% 灰度分，但要求边缘图在同一位置也对得上；
+//   6) 模板带 alpha 时按不透明区域生成 mask 参与比对。
+// =====================================================================
+
+// 上次成功的比例记忆：同一个模板在循环里反复搜时，第二遍起直接命中粗扫第一档
+static std::unordered_map<std::string, float> g_scaleHint;
+
+static void toGrayMat(const cv::Mat& src, cv::Mat& dst)
+{
+	if (src.channels() == 1) { dst = src; return; }
+	cv::cvtColor(src, dst, src.channels() == 4 ? cv::COLOR_BGRA2GRAY : cv::COLOR_BGR2GRAY);
+}
+
+// 有透明像素才建 mask；全不透明返回 false 走原路径
+static bool buildAlphaMask(const cv::Mat& tpl, cv::Mat& mask)
+{
+	if (tpl.channels() != 4)
+		return false;
+	std::vector<cv::Mat> ch;
+	cv::split(tpl, ch);
+	double mn = 0, mx = 0;
+	cv::minMaxLoc(ch[3], &mn, &mx);
+	if (mn >= 250)
+		return false;
+	cv::threshold(ch[3], mask, 8, 255, cv::THRESH_BINARY);
+	// 缩小/放大后边缘会混色，往里收一像素，避免把背景色带进比对
+	if (std::min(tpl.cols, tpl.rows) >= 16)
+		cv::erode(mask, mask, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)));
+	return cv::countNonZero(mask) >= 4;
+}
+
+static cv::Mat resizeMat(const cv::Mat& src, double s, bool maskMode)
+{
+	cv::Mat out;
+	int w = std::max(1, (int)std::lround(src.cols * s));
+	int h = std::max(1, (int)std::lround(src.rows * s));
+	if (w == src.cols && h == src.rows)
+		return src;
+	int interp = maskMode ? cv::INTER_NEAREST : (s < 1.0 ? cv::INTER_AREA : cv::INTER_LINEAR);
+	cv::resize(src, out, cv::Size(w, h), 0, 0, interp);
+	return out;
+}
+
+// 梯度幅值图：文字/细笔画模板在不同分辨率下是系统按矢量重新光栅化的，
+// 灰度对不上，但笔画走向、字框位置这些边缘结构还在，用它做比例判断更稳
+static cv::Mat toEdgeMat(const cv::Mat& gray)
+{
+	cv::Mat g, gx, gy, ax, ay, mag;
+	cv::GaussianBlur(gray, g, cv::Size(3, 3), 0);
+	cv::Sobel(g, gx, CV_16S, 1, 0, 3);
+	cv::Sobel(g, gy, CV_16S, 0, 1, 3);
+	cv::convertScaleAbs(gx, ax);
+	cv::convertScaleAbs(gy, ay);
+	cv::addWeighted(ax, 0.5, ay, 0.5, 0, mag);
+	return mag;
+}
+
+// 单次匹配：只取最高分点（等价于旧实现「全图扫描 + NMS 取分数第一」）
+static double matchBest(const cv::Mat& img, const cv::Mat& tpl, const cv::Mat& mask, cv::Point* loc)
+{
+	if (tpl.cols > img.cols || tpl.rows > img.rows)
+		return -1.0;
+	cv::Mat result;
+	if (!mask.empty())
+		cv::matchTemplate(img, tpl, result, cv::TM_CCORR_NORMED, mask);
+	else
+		cv::matchTemplate(img, tpl, result, cv::TM_CCOEFF_NORMED);
+	cv::patchNaNs(result, 0.0);   // 纯色区域会算出 NaN/Inf，不清掉会让 minMaxLoc 结果失控
+	double mn = 0, mx = -1;
+	cv::Point mxLoc(0, 0);
+	cv::minMaxLoc(result, &mn, &mx, nullptr, &mxLoc);
+	if (loc) *loc = mxLoc;
+	return mx;
+}
+
+// mask 命中后再核一次：只统计不透明像素的平均灰度差，挡住纯色模板分数虚高
+static bool maskVerify(const cv::Mat& img, const cv::Mat& tpl, const cv::Mat& mask, cv::Point pt, int tol)
+{
+	if (pt.x < 0 || pt.y < 0 || pt.x + tpl.cols > img.cols || pt.y + tpl.rows > img.rows)
+		return false;
+	cv::Mat patch = img(cv::Rect(pt.x, pt.y, tpl.cols, tpl.rows));
+	cv::Mat diff;
+	cv::absdiff(patch, tpl, diff);
+	double sum = 0;
+	int n = 0;
+	for (int yy = 0; yy < diff.rows; ++yy)
+	{
+		const uchar* d = diff.ptr<uchar>(yy);
+		const uchar* m = mask.ptr<uchar>(yy);
+		for (int xx = 0; xx < diff.cols; ++xx)
+		{
+			if (m[xx])
+			{
+				sum += d[xx];
+				++n;
+			}
+		}
+	}
+	if (n == 0)
+		return false;
+	return (sum / n) <= tol;
+}
+
+// 缩放档位的命中判定：
+// 灰度分够阈值 = 严格命中，口径和改之前完全一样；
+// 否则才放宽（缩放后字型重新光栅化，灰度分会掉一截），但要求边缘图在同一位置也对得上，
+// 避免糊到「同字体、差一个字」的模板上去。1:1 档位不放宽。
+static bool acceptScaled(double scGray, double scEdge, cv::Point ptG, cv::Point ptE,
+	double scale, double thr, bool okStrict, bool okLoose)
+{
+	if (scGray >= thr)
+		return okStrict;
+	if (std::fabs(scale - 1.0) < 0.005)
+		return false;
+	if (scGray >= thr - 0.12 && scEdge >= 0.55 && okLoose)
+		return std::abs(ptG.x - ptE.x) <= 4 && std::abs(ptG.y - ptE.y) <= 4;
+	return false;
+}
+
+// 核心：返回模板左上角在 captured 内的坐标（未加 searchX/searchY，由调用方加）
+static int findImageAdaptiveCore(const cv::Mat& captured, const cv::Mat& tpl, int matchThreshold,
+	const char* cacheKey, cv::Point* outPt)
+{
+	double thr = matchThreshold / 100.0;
+	cv::Mat grayImg, tplGray, mask;
+	toGrayMat(captured, grayImg);
+	toGrayMat(tpl, tplGray);
+	bool useMask = buildAlphaMask(tpl, mask);
+	int tol = (int)std::max(12.0, (100 - matchThreshold) * 3.0);
+
+	// 比例候选：1:1 → 上次成功过的比例 → 常见档位（100/125/150% DPI 及其反向）
+	std::vector<double> scales;
+	scales.push_back(1.0);
+	auto pushScale = [&](double s) {
+		if (s <= 0.05)
+			return;
+		for (size_t i = 0; i < scales.size(); ++i)
+			if (std::fabs(scales[i] - s) < 0.02)
+				return;
+		int w = (int)std::lround(tplGray.cols * s);
+		int h = (int)std::lround(tplGray.rows * s);
+		if (w < 4 || h < 4 || w > grayImg.cols || h > grayImg.rows)
+			return;
+		scales.push_back(s);
+	};
+	if (cacheKey && cacheKey[0])
+	{
+		auto it = g_scaleHint.find(cacheKey);
+		if (it != g_scaleHint.end())
+			pushScale(it->second);
+	}
+	const double ladder[] = { 1.25, 0.8, 1.5, 0.6667, 1.75, 0.5714, 2.0, 0.5 };
+	for (double s : ladder)
+		pushScale(s);
+
+	// ① 1:1 快速路径：和改之前一次匹配的成本相同
+	{
+		cv::Point pt;
+		double sc = matchBest(grayImg, tplGray, mask, &pt);
+		if (sc >= thr && (!useMask || maskVerify(grayImg, tplGray, mask, pt, tol)))
+		{
+			*outPt = pt;
+			return 1;
+		}
+	}
+
+	// 1:1 没命中才付边缘图这份开销
+	cv::Mat edgeImg = toEdgeMat(grayImg);
+	cv::Mat tplEdge = toEdgeMat(tplGray);
+	if (useMask)
+		cv::bitwise_and(tplEdge, tplEdge, tplEdge, mask);   // 透明区不算边缘，免得 alpha 边界造出假边缘
+
+	// ② 半分辨率粗扫：灰度与边缘各扫一遍取大者，只用来挑比例，不判阈值
+	//    （缩小后分数会掉，不能拿来判定；文字类模板靠边缘这条路才挑得准）
+	bool coarseDone = false;
+	double bestScale = 1.0;
+	cv::Point bestPt(0, 0);
+	if (std::min(tplGray.cols, tplGray.rows) >= 24 && grayImg.cols >= 160 && grayImg.rows >= 160)
+	{
+		cv::Mat half, halfEdge;
+		cv::resize(grayImg, half, cv::Size(grayImg.cols / 2, grayImg.rows / 2), 0, 0, cv::INTER_AREA);
+		cv::resize(edgeImg, halfEdge, cv::Size(grayImg.cols / 2, grayImg.rows / 2), 0, 0, cv::INTER_AREA);
+		double bestScore = -1;
+		for (size_t i = 1; i < scales.size(); ++i)
+		{
+			cv::Mat th = resizeMat(tplGray, scales[i] * 0.5, false);
+			cv::Mat eh = resizeMat(tplEdge, scales[i] * 0.5, false);
+			cv::Mat mh = useMask ? resizeMat(mask, scales[i] * 0.5, true) : cv::Mat();
+			if (th.cols > half.cols || th.rows > half.rows)
+				continue;
+			cv::Point ptG, ptE;
+			double scG = matchBest(half, th, mh, &ptG);
+			double scE = matchBest(halfEdge, eh, cv::Mat(), &ptE);
+			double sc = std::max(scG, scE);
+			if (sc > bestScore)
+			{
+				bestScore = sc;
+				bestScale = scales[i];
+				bestPt = (scE > scG) ? ptE : ptG;
+				coarseDone = true;
+			}
+		}
+	}
+
+	// ③ 回原分辨率细调：候选点周围一小块里对比例做小步微调
+	//    档位比例本身对（比如正好 125%），可像素取整会让整块模板一点点错位，
+	//    密排文字对这种错位最敏感，所以要在附近再扫一遍 ±6%
+	if (coarseDone)
+	{
+		cv::Mat tf0 = resizeMat(tplGray, bestScale, false);
+		int cx = bestPt.x * 2, cy = bestPt.y * 2;
+		int margin = 8 + std::max(tf0.cols, tf0.rows) / 16;
+		int rx = std::max(0, cx - margin), ry = std::max(0, cy - margin);
+		int rw = std::min(grayImg.cols - rx, tf0.cols + margin * 2);
+		int rh = std::min(grayImg.rows - ry, tf0.rows + margin * 2);
+		if (rw >= tf0.cols && rh >= tf0.rows)
+		{
+			// clone 一次：matchTemplate 对非连续 ROI 不稳，候选窗口很小，拷贝代价可以忽略
+			cv::Rect roiRect(rx, ry, rw, rh);
+			cv::Mat roi = grayImg(roiRect).clone();
+			cv::Mat roiE = edgeImg(roiRect).clone();
+			const double fine[] = { 1.0, 0.97, 1.03, 0.94, 1.06 };
+			double bestSG = -2, bestSE = -2, winScale = bestScale;
+			cv::Point winPG(0, 0), winPE(0, 0);
+			bool winStrict = true, winLoose = true;
+			for (double k : fine)
+			{
+				double s = bestScale * k;
+				cv::Mat tf = resizeMat(tplGray, s, false);
+				cv::Mat ef = resizeMat(tplEdge, s, false);
+				cv::Mat mf = useMask ? resizeMat(mask, s, true) : cv::Mat();
+				if (tf.cols > roi.cols || tf.rows > roi.rows)
+					continue;
+				cv::Point pG, pE;
+				double sg = matchBest(roi, tf, mf, &pG);
+				double se = matchBest(roiE, ef, cv::Mat(), &pE);
+				if (sg > bestSG)
+				{
+					bestSG = sg;
+					bestSE = se;
+					winScale = s;
+					winPG = pG;
+					winPE = pE;
+					winStrict = !useMask || maskVerify(roi, tf, mf, pG, tol);
+					winLoose = !useMask || maskVerify(roi, tf, mf, pG, tol * 2);
+				}
+			}
+			if (bestSG > -1 && acceptScaled(bestSG, bestSE, winPG, winPE, winScale, thr, winStrict, winLoose))
+			{
+				if (cacheKey && cacheKey[0])
+					g_scaleHint[cacheKey] = (float)winScale;
+				*outPt = cv::Point(rx + winPG.x, ry + winPG.y);
+				return 1;
+			}
+		}
+	}
+
+	// ④ 兜底：逐档在原图上直接试（粗扫因模板太小被跳过、或候选点被复核否掉时走这里）
+	//    小模板多半是文字截图，只试相近档位，1.75/2.0 这种离谱比例本来也不该出现
+	size_t tryCount = scales.size();
+	if (std::min(tplGray.cols, tplGray.rows) < 24 && tryCount > 5)
+		tryCount = 5;
+	for (size_t i = 1; i < tryCount; ++i)
+	{
+		cv::Mat tf = resizeMat(tplGray, scales[i], false);
+		cv::Mat mf = useMask ? resizeMat(mask, scales[i], true) : cv::Mat();
+		cv::Point pG, pE;
+		double sg = matchBest(grayImg, tf, mf, &pG);
+		if (sg < thr - 0.12)
+			continue;                       // 灰度差太远，边缘也不必再算了
+		double se = matchBest(edgeImg, resizeMat(tplEdge, scales[i], false), cv::Mat(), &pE);
+		bool okStrict = !useMask || maskVerify(grayImg, tf, mf, pG, tol);
+		bool okLoose = !useMask || maskVerify(grayImg, tf, mf, pG, tol * 2);
+		if (acceptScaled(sg, se, pG, pE, scales[i], thr, okStrict, okLoose))
+		{
+			if (cacheKey && cacheKey[0])
+				g_scaleHint[cacheKey] = (float)scales[i];
+			*outPt = pG;
+			return 1;
+		}
+	}
+	return 0;
+}
+
+extern "C" IMAGEFINDER_API int __cdecl GetApiVersion()
+{
+	return 3;   // 2 = 自适应匹配；3 = 加了边缘图比例判断 + 原分辨率细调
+}
+
+extern "C" IMAGEFINDER_API int __cdecl FindScreenImageAdaptive(
+	const char* targetPath,
+	int searchX,
+	int searchY,
+	int searchW,
+	int searchH,
+	int matchThreshold,
+	int* x,
+	int* y)
+{
+	if (matchThreshold > 100) matchThreshold = 100;
+	else if (matchThreshold < 0) matchThreshold = 0;
+
+	cv::Mat tpl = cv::imread(targetPath, cv::IMREAD_UNCHANGED);
+	if (tpl.empty())
+		return 0;
+	cv::Mat captured = captureScreen(searchX, searchY, searchW, searchH);
+	if (captured.empty())
+		return 0;
+
+	cv::Point pt;
+	if (!findImageAdaptiveCore(captured, tpl, matchThreshold, targetPath, &pt))
+		return 0;
+	*x = pt.x + searchX;
+	*y = pt.y + searchY;
+	return 1;
+}
+
+extern "C" IMAGEFINDER_API int __cdecl FindWinImageAdaptive(
+	const char* targetPath,
+	int hwndInt,
+	int searchX,
+	int searchY,
+	int searchW,
+	int searchH,
+	int matchThreshold,
+	int* x,
+	int* y)
+{
+	if (matchThreshold > 100) matchThreshold = 100;
+	else if (matchThreshold < 0) matchThreshold = 0;
+
+	cv::Mat tpl = cv::imread(targetPath, cv::IMREAD_UNCHANGED);
+	if (tpl.empty())
+		return 0;
+	cv::Mat captured = captureScreen(hwndInt, searchX, searchY, searchW, searchH);
+	if (captured.empty())
+		return 0;
+
+	cv::Point pt;
+	if (!findImageAdaptiveCore(captured, tpl, matchThreshold, targetPath, &pt))
+		return 0;
+	*x = pt.x + searchX;
+	*y = pt.y + searchY;
 	return 1;
 }

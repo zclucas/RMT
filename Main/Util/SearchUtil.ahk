@@ -52,6 +52,7 @@ GetSearchTargetArr(Data) {
         Similar:      ObjHasOwnProp(Data, "Similar") ? Data.Similar : 90,
         OCRType:      ObjHasOwnProp(Data, "OCRType") ? Data.OCRType : 1,
         SearchImageType: ObjHasOwnProp(Data, "SearchImageType") ? Data.SearchImageType : SearchImageDefaultType(),
+        Adaptive:     ObjHasOwnProp(Data, "Adaptive") ? Data.Adaptive : 0,
         StartPosX:    ObjHasOwnProp(Data, "StartPosX") ? Data.StartPosX : 0,
         StartPosY:    ObjHasOwnProp(Data, "StartPosY") ? Data.StartPosY : 0,
         EndPosX:      ObjHasOwnProp(Data, "EndPosX") ? Data.EndPosX : A_ScreenWidth,
@@ -223,6 +224,16 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYLi
     return found
 }
 
+; 目标是否勾了「自适应匹配」（跨分辨率找图）
+SearchAdaptiveOn(Data) {
+    if (!ObjHasOwnProp(Data, "Adaptive"))
+        return false
+    v := Data.Adaptive
+    if (IsNumber(v))
+        return Integer(v) != 0
+    return (v == true || v == "true" || v == 1)
+}
+
 SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY) {
     if (Data.SearchImageType == 1) {
         ocvReason := OpenCvEnsure()
@@ -230,7 +241,7 @@ SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY) {
             ShowOpenCvInstallPrompt(ocvReason)
             return false
         }
-        return FindScreenImage(&ResX, &ResY, ImagePath, X1, Y1, X2, Y2, Data.Similar)
+        return FindScreenImage(&ResX, &ResY, ImagePath, X1, Y1, X2, Y2, Data.Similar, SearchAdaptiveOn(Data))
     }
     else {
         Similar := Integer(-2.55 * Data.Similar + 255)
@@ -255,7 +266,7 @@ SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, 
     ResXList := [], ResYList := [], ResHwndList := []
     for i, hwnd in hwndList {
         ResX := 0, ResY := 0
-        isFound := FindWinImage(&ResX, &ResY, ImagePath, hwnd, X1, Y1, X2, Y2, Data.Similar)
+        isFound := FindWinImage(&ResX, &ResY, ImagePath, hwnd, X1, Y1, X2, Y2, Data.Similar, SearchAdaptiveOn(Data))
         if (isFound) {
             found := true
             ResHwndList.Push(hwnd)

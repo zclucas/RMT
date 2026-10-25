@@ -295,6 +295,9 @@ class FrontInfoGui {
             tipStr := labels.hwnd winId "`n" labels.title title "`n" labels.class className "`n" labels.process process
             this.ui.Update("CurWinInfoCon", "Text", tipStr)
         }
+        catch {
+            ; 窗口已关 / 目标窗口刚销毁都属正常情况，100ms 定时刷新不该抛错刷日志
+        }
     }
 
     ToggleFunc(state) {
