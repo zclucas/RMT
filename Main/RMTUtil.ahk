@@ -1603,29 +1603,68 @@ class HighlightOutlineSelectArea {
 SimpleRecordMacroStr(MacroStr) {
     CmdArr := SplitMacro(MacroStr)
     SimpleCmdArr := []
-    loop CmdArr.Length {
-        paramArr := SplitCommand(CmdArr[A_Index])
+    cmdKeyKw := GetLang("按键")
+    joyKw := GetLang("手柄")
+    spanKw := GetLang("间隔")
+    downKw := GetLang("按下")
+    upKw := GetLang("松开")
+    clickKw := GetLang("点击")
+
+    ; 用 skip 计数代替给 A_Index 赋值：循环计数器不受赋值影响，
+    ; 否则合并后的「间隔」「松开」会被重复输出，录出多余的孤立按下/松开。
+    skip := 0
+    for idx, curCmd in CmdArr {
+        if (skip > 0) {
+            skip--
+            continue
+        }
+
+        paramArr := SplitCommand(curCmd)
         ; 轴行无类型(如 按键_JoyAxisLX:75)仅2段，访问 paramArr[3] 会越界，须先判长度
-        isPressKey := paramArr.Length >= 3 && (paramArr[1] == GetLang("按键") || paramArr[1] == GetLang("手柄")) && paramArr[3] == GetLang("按下")
-        if (isPressKey && A_Index + 2 < CmdArr.Length) {
-            next1ParamArr := SplitCommand(CmdArr[A_Index + 1])
-            next2ParamArr := SplitCommand(CmdArr[A_Index + 2])
-            isMatchFormat := next1ParamArr.Length >= 2 && next2ParamArr.Length >= 3 && next1ParamArr[1] == GetLang("间隔") && next2ParamArr[1] == paramArr[1]
-            if (isMatchFormat && paramArr[2] == next2ParamArr[2] && next2ParamArr[3] == "松开") {
+        isPressKey := paramArr.Length >= 3 && (paramArr[1] == cmdKeyKw || paramArr[1] == joyKw) && paramArr[3] == downKw
+        if (isPressKey && idx + 2 <= CmdArr.Length) {
+            next1ParamArr := SplitCommand(CmdArr[idx + 1])
+            next2ParamArr := SplitCommand(CmdArr[idx + 2])
+            isMatchFormat := (next1ParamArr.Length >= 2 && next2ParamArr.Length >= 3
+                && next1ParamArr[1] == spanKw && next2ParamArr[1] == paramArr[1])
+            if (isMatchFormat && paramArr[2] == next2ParamArr[2] && next2ParamArr[3] == upKw) {
                 ; 时长保底：PS5 蓝牙有时按下+松开在同 tick，间隔=0
                 clickDuration := next1ParamArr[2]
                 if (clickDuration < 50)
                     clickDuration := 50
-                SimpleCmdStr := Format("{}_{}_{}_{}", paramArr[1], paramArr[2], GetLang("点击"), clickDuration)
-                SimpleCmdArr.Push(SimpleCmdStr)
-                A_Index := A_Index + 2
+                SimpleCmdArr.Push(Format("{}_{}_{}_{}", paramArr[1], paramArr[2], clickKw, clickDuration))
+                skip := 2
                 continue
             }
         }
-        SimpleCmdArr.Push(CmdArr[A_Index])
+        SimpleCmdArr.Push(curCmd)
     }
 
-    return GetMacroStrByCmdArr(SimpleCmdArr)
+    ; 第二遍：孤儿「松开」补成「点击」。
+    ; 录制组合键（如 Alt+Tab）时松开事件会被拆到没有配对按下的位置，
+    ; 留下「按键_Tab_松开」这条指令——回放时它不产生任何效果（1.1.2 记作「点击」）。
+    ; 只处理「此前从未出现过该键按下」的松开，避免破坏真正的长按录制。
+    fixedArr := []
+    seenDown := Map()
+    for cmd in SimpleCmdArr {
+        p := SplitCommand(cmd)
+        isKeyLine := p.Length >= 3 && (p[1] == cmdKeyKw || p[1] == joyKw)
+        if (isKeyLine) {
+            sign := p[1] "|" p[2]
+            if (p[3] == downKw) {
+                seenDown[sign] := true
+                fixedArr.Push(cmd)
+                continue
+            }
+            if (p[3] == upKw && !seenDown.Has(sign)) {
+                fixedArr.Push(Format("{}_{}_{}_{}", p[1], p[2], clickKw, 50))
+                continue
+            }
+        }
+        fixedArr.Push(cmd)
+    }
+
+    return GetMacroStrByCmdArr(fixedArr)
 }
 
 DiscardRecordTriggerKey(MacroStr, isFront) {

@@ -21,6 +21,8 @@ class TriggerKeyData {
         this.LastKeyDownTime := 0  ;上次按下时间（用于双击检测）
         this.DblClickInterval := 300  ;双击间隔时间（毫秒）
         this.NeedReleaseBeforeRetrigger := false  ; 连续触发关闭时：需先松开才能再次触发
+        this.LastDownWasStop := false  ; 本次按下是否为「关闭开关宏」动作（见 OnTriggerKeyDown）
+        this.ReleaseWatchFn := ""  ; 组合键「松开」轮询定时器（组合键没有 up 热键，见 StartReleaseWatch）
 
         ; 缓存相关字段（性能优化）
         this.cacheTime := 0          ;上次更新缓存的时间戳
@@ -116,6 +118,36 @@ class TriggerKeyData {
         return false
     }
 
+    ; 组合键（Ctrl & A）在 BindTabHotKey 里从不注册 "xxx up" 热键，收不到 OnTriggerKeyUp，
+    ; 靠事件无法解除「先松开才能再触发」锁定 → 连续触发关闭后组合键只能触发一次。
+    ; 改为短周期轮询物理键态：松手即解锁；按住不放（键盘自动重复）则继续保持锁定。
+    LockUntilRelease() {
+        this.NeedReleaseBeforeRetrigger := true
+        if (InStr(this.Key, " & "))
+            this.StartReleaseWatch()
+    }
+
+    StartReleaseWatch() {
+        if (this.ReleaseWatchFn == "")
+            this.ReleaseWatchFn := this.WatchRelease.Bind(this)
+        SetTimer(this.ReleaseWatchFn, 60)
+    }
+
+    StopReleaseWatch() {
+        if (this.ReleaseWatchFn != "")
+            SetTimer(this.ReleaseWatchFn, 0)
+    }
+
+    WatchRelease() {
+        ; 读键态出任何异常都按「已松开」处理：宁可退化成可重复触发，也不能把触发键永久锁死
+        released := true
+        try released := !AreKeysPressed(this.Key)
+        if (!this.NeedReleaseBeforeRetrigger || released) {
+            this.NeedReleaseBeforeRetrigger := false
+            this.StopReleaseWatch()
+        }
+    }
+
     OnTriggerKeyDown() {
         this.UpdataArr()
 
@@ -128,6 +160,8 @@ class TriggerKeyData {
         ; 滚轮等脉冲键没有松开事件，必须始终允许下一次独立脉冲。
         isOnlyDownKey := this.IsOnlyDownKey()
         blockRetrigger := !isOnlyDownKey && !MainSoftData.ContinuousTrigger && this.NeedReleaseBeforeRetrigger
+        ; 本帧是否有「关闭开关宏」动作（由 Action() 置位），用于结尾跳过「先松开」锁定
+        this.LastDownWasStop := false
 
         for index, value in this.DownArr {
             if (blockRetrigger)
@@ -159,14 +193,19 @@ class TriggerKeyData {
         if (!blockRetrigger)
             this.SetHoldTimeChecker()
 
-        if (!isOnlyDownKey && !MainSoftData.ContinuousTrigger
+        ; 本次按下是「关闭开关宏」时不再要求先松开：关闭流程里若丢掉这次 Up，
+        ; 锁定会一直卡在 true，表现为关闭后再按没反应、要再按一次才恢复。
+        wasStop := this.LastDownWasStop
+        this.LastDownWasStop := false
+        if (!wasStop && !isOnlyDownKey && !MainSoftData.ContinuousTrigger
             && (this.DownArr.Length > 0 || this.TogArr.Length > 0 || this.HoldArr.Length > 0))
-            this.NeedReleaseBeforeRetrigger := true
+            this.LockUntilRelease()
     }
 
     OnTriggerKeyUp() {
         this.UpdataArr()
         this.NeedReleaseBeforeRetrigger := false
+        this.StopReleaseWatch()
 
         for index, value in this.LoosenArr {
             value.Action()
@@ -222,7 +261,7 @@ class TriggerKeyData {
                 LoosenModifyKey(info.GetTK())
             info.Action()
             if (!this.IsOnlyDownKey() && !MainSoftData.ContinuousTrigger)
-                this.NeedReleaseBeforeRetrigger := true
+                this.LockUntilRelease()
         }
     }
 }
@@ -359,6 +398,7 @@ class TriggerKeyInfo {
                 if (!isRunning && WorkPoolEnabled() && MyWorkPool.HasItemWork(t.ID, item.ID))
                     isRunning := true
                 if (isRunning) {
+                    this.LastDownWasStop := true
                     MyStopMacro(t, itemIndex)
                     return
                 }

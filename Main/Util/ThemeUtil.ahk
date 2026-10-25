@@ -586,6 +586,20 @@ class AppThemeUtil {
             colors := IsObject(MainSoftData.ThemeColors) ? MainSoftData.ThemeColors : Map()
         colors := AppThemeUtil.BuildCompleteColorMap(colors)
 
+        ; 透明分层窗（AllowsTransparency="True" 且窗口自身底色为透明/Null，如菜单轮盘、Toast）
+        ; 绝不能铺窗口底色：这条 Background 更新会在 LoadedHwnd 时才刷进引擎，
+        ; 表现为轮盘先出现、几百毫秒后背后多出一个正方形白色底框。
+        ; 注意 UIMacroGui 这类「AllowsTransparency=True 但自带实色底」的窗口不在其列。
+        isLayeredWin := false
+        if (ui.HasOwnProp("_noWinBackground") && ui._noWinBackground)
+            isLayeredWin := true
+        else if (ui.HasProp("xaml") && InStr(ui.xaml, 'AllowsTransparency="True"')) {
+            winEnd := InStr(ui.xaml, ">")
+            winHead := winEnd ? SubStr(ui.xaml, 1, winEnd) : ""
+            if (InStr(winHead, 'Background="Transparent"') || InStr(winHead, 'Background="{x:Null}"'))
+                isLayeredWin := true
+        }
+
         titleBg := AppThemeUtil.ResolveColor(colors, "Win_TitleBg")
         titleText := AppThemeUtil.ResolveColor(colors, "Win_TitleText")
         windowBg := AppThemeUtil.ResolveColor(colors, "Win_WindowBg")
@@ -663,6 +677,15 @@ class AppThemeUtil {
                 {ControlName: "DragArea", PropertyName: "Background", Value: titleBg},
                 {ControlName: "Window", PropertyName: "Background", Value: windowBg}
             ]
+            if (isLayeredWin) {
+                kept := []
+                for entry in batch {
+                    if (entry.ControlName == "Window" && entry.PropertyName == "Background")
+                        continue
+                    kept.Push(entry)
+                }
+                batch := kept
+            }
             ui.BatchUpdate(batch)
         } else {
             try ui.Update("Resource", "TitleBarColor", titleBg)
@@ -707,7 +730,8 @@ class AppThemeUtil {
             try ui.Update("Resource", "FoldAltBg", AppThemeUtil.MakeFoldAltBg(windowBg, actionBg))
             try ui.Update("Resource", "FoldDivider", AppThemeUtil.WithAlpha(groupStroke, "55"))
             try ui.Update("DragArea", "Background", titleBg)
-            try ui.Update("Window", "Background", windowBg)
+            if (!isLayeredWin)
+                try ui.Update("Window", "Background", windowBg)
         }
     }
 

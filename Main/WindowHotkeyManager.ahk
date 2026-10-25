@@ -95,6 +95,12 @@ class WinHotkey {
 
         ; 首次订阅时注册全局热键（~前缀：不拦截原始事件，允许透传给其他程序）
         if (WinHotkey._mouseHandlers[key].Length == 1) {
+            ; 该键已被宏触发键占用时不能再注册：AHK 同 KeyName 只有一个变体，
+            ; ~WheelDown 会把宏的 $*WheelDown 顶掉，导致滚轮宏「完全没反应」。
+            if (IsBareMacroHotkeyBound(key)) {
+                RMTLogSys(RMT_LV_WARN, "Hotkey", "面板滚轮热键让位于宏触发键: " key)
+                return
+            }
             try Hotkey("~" key, ObjBindMethod(WinHotkey, "_OnMouseKey", key), "On")
         }
     }
@@ -112,7 +118,8 @@ class WinHotkey {
         }
         if (newArr.Length == 0) {
             WinHotkey._mouseHandlers.Delete(key)
-            try Hotkey("~" key, "Off")
+            if (!IsBareMacroHotkeyBound(key))
+                try Hotkey("~" key, "Off")
         } else {
             WinHotkey._mouseHandlers[key] := newArr
         }
@@ -121,7 +128,9 @@ class WinHotkey {
     ; 取消订阅所有鼠标热键（主窗口关闭时调用）
     static UnsubscribeAllMouse() {
         for key in WinHotkey._mouseHandlers {
-            try Hotkey("~" key, "Off")
+            ; 已被宏触发键占用的裸键：关掉会连宏一起关，必须跳过
+            if (!IsBareMacroHotkeyBound(key))
+                try Hotkey("~" key, "Off")
         }
         WinHotkey._mouseHandlers.Clear()
     }

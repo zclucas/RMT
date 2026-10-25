@@ -149,8 +149,14 @@ class JoyMacro {
             try State := this.XInputState(idx)
             catch
                 continue
-            if (State == 0)
+            if (State == 0) {
+                ; 设备暂不可读（未就绪/断连）时也要复位边沿状态，否则该槽位会永远停在「已按下」，
+                ; 表现为组合键只生效一次、之后怎么按都没反应。
+                prevKey0 := comboKey "|Xbox|" idx
+                if (this.prevXboxState.Has(prevKey0) && this.prevXboxState[prevKey0])
+                    this.prevXboxState[prevKey0] := 0
                 continue
+            }
 
             pressed1 := false
             pressed2 := false
@@ -175,18 +181,19 @@ class JoyMacro {
                 pressed2 := (value2 != 0 && value2 >= valueSection2[1] && value2 <= valueSection2[2])
             }
 
-            if (pressed1 && pressed2) {
-                prevKey := comboKey "|Xbox|" idx
-                prev := this.prevXboxState.Has(prevKey) ? this.prevXboxState[prevKey] : 0
-                bothNow := 1
+            prevKey := comboKey "|Xbox|" idx
+            prev := this.prevXboxState.Has(prevKey) ? this.prevXboxState[prevKey] : 0
 
-                if (bothNow && !prev) {
+            if (pressed1 && pressed2) {
+                if (!prev) {
                     this.prevXboxState[prevKey] := 1
                     this.ComboMacroMap.Get(comboKey).Action()
                     return
                 }
-                if (!bothNow && prev)
-                    this.prevXboxState[prevKey] := 0
+            }
+            else if (prev) {
+                ; 任一键松开（或本帧未同时按下）必须复位，否则 prev 永远为 1 → 组合键只能用一次
+                this.prevXboxState[prevKey] := 0
             }
         }
     }

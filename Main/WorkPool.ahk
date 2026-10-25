@@ -472,6 +472,20 @@ class WorkPool {
         idx := freeKeys[1]
         wd := this.freePool[idx]
 
+        ; 空闲池里可能残留已清理的实例（tx/rx 已置 0，或已被同编号新实例替换），
+        ; 直接拿去 Push 会抛「This value of type "Integer" has no method named "Push"」。
+        ; 先把它剔出空闲池，再让 Dispatch 的 while 继续取下一个，任务不动。
+        if (!this.IsWorkerInstanceAlive(wd)) {
+            this.freePool.Delete(idx)
+            ; 进程若还活着（实例被新实例顶替后的孤儿），通知它自行退出，别留在后台
+            if (wd.pid && ProcessExist(wd.pid))
+                try this.PostMessage(WM_CLEAR_WORK, wd)
+            this.CleanUpWorker(wd)
+            GraphPoolLog("Dispatch跳过", Format("Worker#{1} 空闲池实例已失效 pid={2} 进程存活={3} 队列={4}"
+                , idx, wd.pid, (wd.pid && ProcessExist(wd.pid)) ? 1 : 0, this.taskQueue.Size()))
+            return true
+        }
+
         task := this.taskQueue.Pop()
         if (!wd.tx.Push(MsgType.TASK, wd.idx, task.cmd, 0)) {
             this.taskQueue.queue.InsertAt(1, task)
@@ -572,6 +586,9 @@ class WorkPool {
     }
 
     GetWorkerDispatchBlockReason(wd) {
+        ; tx 已置 0 = 该实例已被清理，只剩坏引用
+        if (!wd || !wd.tx)
+            return "实例已清理"
         if (!wd.pid || !ProcessExist(wd.pid))
             return "进程已退出"
         if (!this.ResolveWorkerHwnd(wd))
@@ -625,6 +642,9 @@ class WorkPool {
         if (!this.pending.Has(idx))
             return
         wd := this.pending[idx]
+        ; 迟到的就绪消息：该编号已被新实例占用 → 丢弃，别把旧实例塞进空闲池
+        if (this.workerMap.Has(idx) && this.workerMap[idx] != wd)
+            return
         ; Worker 可能在 Run 返回并写入 pid 之前发来就绪消息。
         ; 延后验证，避免把仍在启动的 Worker 当成失效实例清理。
         if (!wd.pid) {
@@ -650,6 +670,10 @@ class WorkPool {
 
         ; 动态创建的 Worker 需要同步主线程当前的变量和数组状态
         this.SyncStateToWorker(wd)
+
+        ; 同步期间实例可能已被清理/替换，别再往空闲池里放僵尸
+        if (!this.IsWorkerInstanceAlive(wd))
+            return
 
         this.freePool[idx] := wd
         GraphPoolLog("Worker就绪", Format("Worker#{1} 就绪后闲置={2} 队列={3} 仍启动中=[{4}]"
@@ -713,11 +737,35 @@ class WorkPool {
         this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CF")))
     }
 
-    RemoveWorkerFromPools(idx) {
+    ; 只摘除「同一个对象」：同编号的新实例（重建）不能被旧实例的清理顺带删掉。
+    RemoveWorkerFromPools(wd) {
         for pool in [this.freePool, this.usePool, this.pending] {
-            if (pool.Has(idx))
-                pool.Delete(idx)
+            if (pool.Has(wd.idx) && pool[wd.idx] == wd)
+                pool.Delete(wd.idx)
         }
+    }
+
+    ; FINISH 处理后把 Worker 放回空闲池。
+    ; 处理过程中的状态更新（GetTableByID / SetTableItemState / 日志 / Dispatch）可能触发消息泵，
+    ; 被新一轮热键或强制停止重入并清掉这个 wd。此时若照旧往池里放，空闲池就留下一个
+    ; tx=0 的僵尸实例，下次分派时 wd.tx.Push 直接抛「Integer has no method named Push」。
+    ReleaseWorkerToFreePool(wd) {
+        if (!this.IsWorkerInstanceAlive(wd)) {
+            this.RemoveWorkerFromPools(wd)
+            return false
+        }
+        if (this.usePool.Has(wd.idx) && this.usePool[wd.idx] == wd)
+            this.usePool.Delete(wd.idx)
+        this.freePool[wd.idx] := wd
+        wd.isGraphBranch := false
+        wd.idleTick := A_TickCount
+        return true
+    }
+
+    ; wd 是否仍是线程池里登记在册的活实例（未被强杀/缩容/重载清理，也未被同编号新实例替换）。
+    ; 清理过的实例 tx/rx 已置 0，再拿去 wd.tx.Push 会抛「Integer has no method named Push」。
+    IsWorkerInstanceAlive(wd) {
+        return wd && wd.tx && this.workerMap.Has(wd.idx) && this.workerMap[wd.idx] == wd
     }
 
     ; resetTask: 是否重置宏项占用状态
@@ -727,10 +775,14 @@ class WorkPool {
             return
         ; 清理期间可能因消息/定时器重入，旧的 wd 也可能与补建的同编号 Worker 并存。
         ; 只允许当前登记的实例清理一次，先移除登记再执行可能触发消息的状态更新。
-        if (!this.workerMap.Has(wd.idx) || this.workerMap[wd.idx] != wd)
+        if (!this.workerMap.Has(wd.idx) || this.workerMap[wd.idx] != wd) {
+            ; 已被清理或被同编号新实例替换：仍要把这个陈旧对象从池里摘掉，
+            ; 否则它会带着 tx=0 留在 freePool，下次分派直接抛「Integer has no method named Push」。
+            this.RemoveWorkerFromPools(wd)
             return
+        }
         this.workerMap.Delete(wd.idx)
-        this.RemoveWorkerFromPools(wd.idx)
+        this.RemoveWorkerFromPools(wd)
         if (resetTask)
             this.ResetWorkerTaskState(wd, 3)
 
@@ -915,15 +967,17 @@ class WorkPool {
             return
 
         now := A_TickCount
-        shrunk := 0
+        toShrink := []
         for idx, wd in this.freePool {
-            if (shrunk >= maxShrink)
+            if (toShrink.Length >= maxShrink)
                 break
-            if (wd.idleTick > 0 && (now - wd.idleTick) >= this.elasticTimeout) {
-                this.PostMessage(WM_CLEAR_WORK, wd)
-                this.CleanUpWorker(wd)
-                shrunk++
-            }
+            if (wd.idleTick > 0 && (now - wd.idleTick) >= this.elasticTimeout)
+                toShrink.Push(wd)
+        }
+        ; 先收集再清理：CleanUpWorker 会从 freePool 删除元素，直接在遍历中删会跳过/漏项
+        for wd in toShrink {
+            this.PostMessage(WM_CLEAR_WORK, wd)
+            this.CleanUpWorker(wd)
         }
     }
 
@@ -1024,6 +1078,11 @@ class WorkPool {
                         return
                     switch type {
                         case MsgType.FINISH:
+                            ; FINISH 处理过程会走 Dispatch → CleanUpWorker → Sleep，期间可被新的
+                            ; 热键/强制停止重入：此刻 wd 可能已被清理（tx=0）或被同编号新实例替换。
+                            ; 这时若继续把它放回 freePool，就会留下一个 tx=0 的僵尸空闲 Worker。
+                            if (!this.IsWorkerInstanceAlive(wd))
+                                return
                             if (!this.usePool.Has(wd.idx))
                                 continue
                             tID := wd.tableID
@@ -1049,14 +1108,11 @@ class WorkPool {
                                 }
                                 GraphPoolLog("Worker完成", Format("Worker#{1} tab={2} item={3} 图形分支 graph={4} 剩余计数={5} 队列={6} 忙碌=[{7}]"
                                     , wd.idx, tID, iID, wd.isGraphBranch ? 1 : 0, remainCount, this.taskQueue.Size(), this.GetBusyWorkerIds()))
-                                if (this.usePool.Has(wd.idx))
-                                    this.usePool.Delete(wd.idx)
-                                this.freePool[wd.idx] := wd
+                                if (!this.ReleaseWorkerToFreePool(wd))
+                                    return
                                 wd.tableID := ""
                                 wd.itemID := ""
-                                wd.isGraphBranch := false
                                 wd.graphNodeSerial := ""
-                                wd.idleTick := A_TickCount
                                 ; §17 热重载：忙时延后的配置刷新，任务结束回空闲时补发
                                 if (wd.configDirty)
                                     this.SendConfigRefresh(wd)
@@ -1069,11 +1125,8 @@ class WorkPool {
                                 this.Dispatch()
                             } else {
                                 this.ResetWorkerTaskState(wd, 0)
-                                if (this.usePool.Has(wd.idx))
-                                    this.usePool.Delete(wd.idx)
-                                this.freePool[wd.idx] := wd
-                                wd.isGraphBranch := false
-                                wd.idleTick := A_TickCount
+                                if (!this.ReleaseWorkerToFreePool(wd))
+                                    return
                                 ; §17 热重载：忙时延后的配置刷新，任务结束回空闲时补发
                                 if (wd.configDirty)
                                     this.SendConfigRefresh(wd)
@@ -1339,6 +1392,9 @@ class WorkPool {
     }
 
     PushTask(wd, type, id, payload) {
+        ; 已清理的实例 tx 为 0，直接 Push 会抛「Integer has no method named Push」
+        if (!wd || !wd.tx)
+            return false
         if (wd.tx.Push(type, id, payload)) {
             if (wd.hEvt)
                 DllCall("SetEvent", "ptr", wd.hEvt)

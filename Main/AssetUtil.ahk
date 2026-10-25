@@ -2570,23 +2570,59 @@ LoosenModifyKey(keyCombo) {
     }
 }
 
+; 去掉热键前缀符号，取出真正的键名：^a → a、<^a → a、~*$b → b。
+; 组合键（^q & w）拆开后每段可能带修饰符前缀，直接喂 GetKeyState 会抛「Parameter #1 is invalid」。
+StripHotkeyPrefix(keyName) {
+    k := Trim(String(keyName))
+    static prefixes := ["<^", ">^", "^", "<!", ">!", "!", "<+", ">+", "+", "<#", ">#", "#", "~", "*", "$"]
+    loop {
+        matched := false
+        for p in prefixes {
+            if (SubStr(k, 1, StrLen(p)) == p) {
+                k := SubStr(k, StrLen(p) + 1)
+                matched := true
+                break
+            }
+        }
+        if (!matched)
+            break
+    }
+    return Trim(k)
+}
+
 ; 检查单个物理键是否按下（含手柄键）
 IsPhysicalKeyPressed(mainKey) {
-    mainKey := LTrim(Trim(mainKey), "~")
+    mainKey := StripHotkeyPrefix(mainKey)
     if (mainKey == "")
         return true
 
+    ; 手柄键：RMT 用友好名（JoyA/JoyBack…），必须先映射成 AHK 名（1Joy1…），
+    ; 否则 GetKeyState("1JoyA") 同样非法。
     isJoyKey := RegExMatch(mainKey, "Joy")
     if (isJoyKey) {
+        if (IsObject(MySoftData) && MySoftData.HasProp("GetJoyToAhkMap")) {
+            try {
+                joyMap := MySoftData.GetJoyToAhkMap()
+                if (joyMap.Has(mainKey))
+                    mainKey := joyMap[mainKey]
+            }
+        }
         isJoyAxis := RegExMatch(mainKey, "Min") || RegExMatch(mainKey, "Max")
         joyName := isJoyAxis ? SubStr(mainKey, 1, 4) : mainKey
         loop 4 {
-            if (GetKeyState(A_Index joyName))
-                return true
+            try {
+                if (GetKeyState(A_Index joyName))
+                    return true
+            }
         }
         return false
     }
-    return !!GetKeyState(mainKey, "P")
+
+    ; 非法键名（未收录的键/显示名）按「未按下」处理：宁可放开重复触发，也不能把触发键锁死
+    try
+        return !!GetKeyState(mainKey, "P")
+    catch
+        return false
 }
 
 AreKeysPressed(keyCombo) {
@@ -2594,9 +2630,12 @@ AreKeysPressed(keyCombo) {
     if (keyCombo == "")
         return false
 
-    ; 新格式：Ctrl & A
+    ; 新格式：Ctrl & A（每段可能带 ^ ! + # 前缀，如 ^q & w）
     if (InStr(keyCombo, " & ")) {
         for part in StrSplit(keyCombo, " & ") {
+            part := StripHotkeyPrefix(part)
+            if (part == "")
+                continue
             if (!IsPhysicalKeyPressed(part))
                 return false
         }

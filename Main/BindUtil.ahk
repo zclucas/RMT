@@ -1,6 +1,61 @@
 #Requires AutoHotkey v2.0
 
+; ============================================================
+; 宏触发键热键登记表：注册成功的热键统一记录，重绑前先全部注销。
+; 修复：改触发键后旧热键（如 Alt+滚轮）仍然生效、且新触发键注册失败的问题。
+; ============================================================
+RecordMacroHotkey(hotkeyStr) {
+    global BoundMacroHotkeyList
+    if (!IsSet(BoundMacroHotkeyList) || !IsObject(BoundMacroHotkeyList))
+        BoundMacroHotkeyList := []
+    BoundMacroHotkeyList.Push(hotkeyStr)
+}
+
+UnbindAllMacroHotkeys() {
+    global BoundMacroHotkeyList
+    if (!IsSet(BoundMacroHotkeyList) || !IsObject(BoundMacroHotkeyList))
+        return 0
+    removed := 0
+    for k in BoundMacroHotkeyList {
+        ; 先确保禁用（旧触发键不再生效），再尝试移除变体，避免旧回调残留
+        try Hotkey(k, "Off")
+        catch {
+        }
+        try {
+            Hotkey(k, "")
+            removed++
+        } catch as e {
+        }
+    }
+    BoundMacroHotkeyList := []
+    return removed
+}
+
+; 滚轮/亮度键是一次性脉冲键：只产生「按下」，没有「松开」事件。
+; 给它们注册 "xxx up" 会抛非法热键，进而打断后续注册，必须跳过。
+IsPulseTriggerKey(keyStr) {
+    k := StrLower(keyStr)
+    return InStr(k, "wheel") || InStr(k, "bright_")
+}
+
+; 该「裸键名」是否已被宏触发键占用（只算无修饰键的形式，如 $*WheelDown）。
+; AHK 同一 KeyName 只有一个热键变体：面板再注册 ~WheelDown 会把宏的 $*WheelDown 覆盖掉，
+; 表现为「设了单滚轮触发后完全没反应」。这里用于让面板滚轮功能给宏让位。
+IsBareMacroHotkeyBound(coreName) {
+    global BoundMacroHotkeyList
+    if (!IsSet(BoundMacroHotkeyList) || !IsObject(BoundMacroHotkeyList))
+        return false
+    pattern := "^[~*$]*" StrLower(coreName) "$"
+    for item in BoundMacroHotkeyList {
+        if (RegExMatch(StrLower(item), pattern))
+            return true
+    }
+    return false
+}
+
 BindKey() {
+    UnbindAllMacroHotkeys()
+    ResetJoyMacroMaps()
     BindSuspendHotkey()
     BindShortcut(MainSoftData.PauseHotkey, OnPauseHotKey)
     BindShortcut(MainSoftData.KillMacroHotkey, OnKillAllMacro)
@@ -22,6 +77,8 @@ BindKey() {
 
 ; §2 模块独立开关快捷键重绑总入口：fold 级禁用切换 / RMT指令「禁用模块」/ 保存热重载共用
 RebindAllTriggerKeys() {
+    UnbindAllMacroHotkeys()
+    ResetJoyMacroMaps()
     InitTriggerKeyMap()
     BindMenuHotKey()
     BindUIPanelHotKey()
@@ -53,7 +110,9 @@ BindFoldSwitchHotkey() {
             } else {
                 try {
                     Hotkey(key, OnFoldSwitchHotkey.Bind(tableItem.Index, index))
+                    RecordMacroHotkey(key)
                 } catch as e {
+                    RMTLogSys(RMT_LV_WARN, "Hotkey", "注册模块开关热键失败: " oriKey "｜" (e.HasProp("Message") ? e.Message : ""))
                 }
             }
         }
@@ -554,11 +613,15 @@ BindMenuHotKey() {
         }
         else {
             try {
-                if (actionArr[1] != "")
+                if (actionArr[1] != "") {
                     Hotkey(key, actionArr[1])
+                    RecordMacroHotkey(key)
+                }
 
-                if (actionArr[2] != "" && !isCombo)
+                if (actionArr[2] != "" && !isCombo && !IsPulseTriggerKey(oriKey)) {
                     Hotkey(key " up", actionArr[2])
+                    RecordMacroHotkey(key " up")
+                }
 
                 ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
                 if (isCombo && !fold.UnorderedTrigger) {
@@ -566,6 +629,7 @@ BindMenuHotKey() {
                     if (reversedKey != "") {
                         try {
                             Hotkey(reversedKey, actionArr[1])
+                            RecordMacroHotkey(reversedKey)
                             if (actionArr[2] != "" && !isCombo)
                                 Hotkey(reversedKey " up", actionArr[2])
                         }
@@ -575,6 +639,7 @@ BindMenuHotKey() {
                 }
             }
             catch as e {
+                RMTLogSys(RMT_LV_WARN, "Hotkey", "注册触发键失败: " oriKey " → " key "｜" (e.HasProp("Message") ? e.Message : ""))
             }
         }
 
@@ -612,12 +677,17 @@ BindUIPanelHotKey() {
         }
         else {
             try {
-                if (actionArr[1] != "")
+                if (actionArr[1] != "") {
                     Hotkey(key, actionArr[1])
-                if (actionArr[2] != "" && !isCombo)
+                    RecordMacroHotkey(key)
+                }
+                if (actionArr[2] != "" && !isCombo && !IsPulseTriggerKey(oriKey)) {
                     Hotkey(key " up", actionArr[2])
+                    RecordMacroHotkey(key " up")
+                }
             }
             catch as e {
+                RMTLogSys(RMT_LV_WARN, "Hotkey", "注册界面宏触发键失败: " oriKey " → " key "｜" (e.HasProp("Message") ? e.Message : ""))
             }
         }
 
@@ -626,12 +696,17 @@ BindUIPanelHotKey() {
     }
 }
 
-BindTabHotKey() {
-    tableIndex := 0
+; 手柄宏映射重置：必须在「所有」Bind* 之前统一清一次。
+; 原先写在 BindTabHotKey 内部，会把 BindMenuHotKey 刚注册的手柄菜单宏一起清掉。
+ResetJoyMacroMaps() {
     MyJoyMacro.MacroMap := Map()
     MyJoyMacro.ComboMacroMap := Map()
     ; 同步清空边缘触发状态，避免旧宏残留 prev=1 导致重绑后首个按键边沿丢失
     MyJoyMacro.prevXboxState := Map()
+}
+
+BindTabHotKey() {
+    tableIndex := 0
     registerMsg := "=== Registered Hotkeys ===`n"
 
     ; 预计算缓存Map（避免重复的字符串处理和正则匹配）
@@ -698,10 +773,14 @@ BindTabHotKey() {
                 try {
                     if (actionArr[1] != "") {
                         Hotkey(key, actionArr[1], "On")
+                        RecordMacroHotkey(key)
                     }
 
-                    if (actionArr[2] != "" && !cache.isCombo)
+                    ; 滚轮/亮度键没有「松开」事件，注册 up 会抛非法热键并中断后续注册
+                    if (actionArr[2] != "" && !cache.isCombo && !IsPulseTriggerKey(rawKey)) {
                         Hotkey(key " up", actionArr[2], "On")
+                        RecordMacroHotkey(key " up")
+                    }
 
                     ; 顺序触发（默认无序）：注册反向组合键；勾选顺序时不注册
                     if (cache.isCombo && !item.UnorderedTrigger) {
@@ -709,6 +788,7 @@ BindTabHotKey() {
                         if (reversedKey != "") {
                             try {
                                 Hotkey(reversedKey, actionArr[1], "On")
+                                RecordMacroHotkey(reversedKey)
                                 if (actionArr[2] != "" && !cache.isCombo)
                                     Hotkey(reversedKey " up", actionArr[2], "On")
                                 registerMsg .= "  ↩ Reversed: '" reversedKey "'`n"
@@ -721,6 +801,7 @@ BindTabHotKey() {
                 }
                 catch as e {
                     registerMsg .= "❌ Failed: " e.Message "`n"
+                    RMTLogSys(RMT_LV_WARN, "Hotkey", "注册宏触发键失败: " rawKey " → " key "｜" (e.HasProp("Message") ? e.Message : ""))
                 }
             }
 
@@ -732,6 +813,12 @@ BindTabHotKey() {
 }
 
 InitTriggerKeyMap() {
+    ; 重建前先停掉旧对象的组合键松开轮询，避免孤儿定时器留在后台
+    if (IsObject(MySoftData.TriggerKeyMap)) {
+        for key, data in MySoftData.TriggerKeyMap {
+            try data.StopReleaseWatch()
+        }
+    }
     MySoftData.TriggerKeyMap := Map()
     tableItem := GetTableBySymbol("Normal")
     if (tableItem) {
