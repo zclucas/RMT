@@ -496,17 +496,43 @@ public partial class AhkWpfEngine
     {
         if (win == null || Application.Current == null)
             return;
-        foreach (System.Collections.DictionaryEntry entry in win.Resources)
+        // 这里写的是全局资源字典：每改一个键都会让**所有已打开窗口**重新求值 DynamicResource。
+        // 一个窗口几十个键串着写＝几十轮全量重算（实测 140ms）。现在全局已有的键直接跳过，
+        // 只有第一次开窗（字典还是空的）才会真正写一批，后续开窗这里基本空转。
+        System.Windows.Threading.DispatcherProcessingDisabled scope = default(System.Windows.Threading.DispatcherProcessingDisabled);
+        bool scoped = false;
+        try
         {
-            if (entry.Key is Type)
-                continue;
-            if (entry.Value is Style || entry.Value is FrameworkTemplate)
-                continue;
-            try
+            scope = win.Dispatcher.DisableProcessing();
+            scoped = true;
+        }
+        catch { }
+        try
+        {
+            foreach (System.Collections.DictionaryEntry entry in win.Resources)
             {
-                Application.Current.Resources[entry.Key] = entry.Value;
+                if (entry.Key is Type)
+                    continue;
+                if (entry.Value is Style || entry.Value is FrameworkTemplate)
+                    continue;
+                try
+                {
+                    // 全局已有这个键就不再写：新窗口 XAML 里的只是静态默认值，
+                    // 覆盖全局不但把当前主题改回默认，还要让所有窗口重算一遍 DynamicResource。
+                    // 主题色随后由 AHK 侧按主题写入，全局字典以主题为准。
+                    if (Application.Current.Resources.Contains(entry.Key))
+                        continue;
+                    AhkWpfEngine.SetAppResource(entry.Key, entry.Value);
+                }
+                catch { }
             }
-            catch { }
+        }
+        finally
+        {
+            if (scoped)
+            {
+                try { scope.Dispose(); } catch { }
+            }
         }
     }
 

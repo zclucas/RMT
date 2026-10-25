@@ -245,7 +245,7 @@ class ConfigMergeGui {
 
         SplitPath selectedFile, &fileName, , &fileExt, &fileNameNoExt
         if (fileExt != "rmt") {
-            MsgBox(GetLang("请选择 .rmt 文件！"), GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("请选择 .rmt 文件！"), GetLang("错误"), this.ui.wpfHwnd)
             return
         }
 
@@ -258,7 +258,7 @@ class ConfigMergeGui {
             tempDir := MergeUtil.PrepareTempFromRmt(selectedFile)
             this.LoadSourceConfig(tempDir)
         } catch as e {
-            MsgBox(GetLang("解包失败: ") e.Message, GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("解包失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
         }
     }
 
@@ -526,7 +526,7 @@ class ConfigMergeGui {
 
     OnExecuteMerge(state := unset, ctrl := unset, event := unset) {
         if (!this.TreeRoot) {
-            MsgBox(GetLang("请先选择源配置"), GetLang("提示"), 0x40)
+            RmtDialog.Info(GetLang("请先选择源配置"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
 
@@ -534,7 +534,7 @@ class ConfigMergeGui {
         this._CollectCheckedItems(this.TreeRoot, checkedItems)
 
         if (checkedItems.Length == 0) {
-            MsgBox(GetLang("请至少选择一个宏进行导入"), GetLang("提示"), 0x40)
+            RmtDialog.Info(GetLang("请至少选择一个宏进行导入"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
 
@@ -552,7 +552,7 @@ class ConfigMergeGui {
                     break
                 }
             }
-            MsgBox(tipStr, GetLang("资源冲突提示"), 0x0)
+            RmtDialog.Info(tipStr, GetLang("资源冲突提示"), this.ui.wpfHwnd)
         }
 
         varReplaceMap := MergeUtil.PreviewVarReplaceMap(checkedItems, sourceDir)
@@ -567,7 +567,7 @@ class ConfigMergeGui {
                     break
                 }
             }
-            MsgBox(tipStr, GetLang("变量冲突提示"), 0x0)
+            RmtDialog.Info(tipStr, GetLang("变量冲突提示"), this.ui.wpfHwnd)
         }
 
         moduleCount := MergeUtil.GetModuleCountFromItems(checkedItems)
@@ -576,8 +576,7 @@ class ConfigMergeGui {
             GetLang("导入模块数"), moduleCount,
             GetLang("导入宏数"), checkedItems.Length)
 
-        confirmResult := MsgBox(resultMsg, GetLang("确认合并导入"), 0x24 | 0x40)
-        if (confirmResult != "Yes")
+        if (!RmtDialog.Confirm(resultMsg, GetLang("确认合并导入"), this.ui.wpfHwnd))
             return
 
         try {
@@ -595,45 +594,45 @@ class ConfigMergeGui {
             if (result.CopiedImages.Length > 0)
                 successMsg .= "`n" Format("{}: {}", GetLang("复制图片"), result.CopiedImages.Length)
 
-            MsgBox(successMsg, GetLang("成功"), 0x0)
+            RmtDialog.Info(successMsg, GetLang("成功"), this.ui.wpfHwnd)
             this.OnClose()
             ; §18 合并导入改内存宏表：不依赖「应用并保存」，此处显式落盘全部表+表集合
             SaveAllTableItemInfo(MySoftData.TableInfo)
             OnSaveSetting()
         } catch as e {
-            MsgBox(GetLang("合并导入失败: ") e.Message, GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("合并导入失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
         }
     }
 
     ; 导出 .rmt：把勾选项打包成自洽最小配置目录 → 弹上传分享窗口
     OnExportRmt(state := unset, ctrl := unset, event := unset) {
         if (!this.TreeRoot) {
-            MsgBox(GetLang("请先选择源配置"), GetLang("提示"), 0x40)
+            RmtDialog.Info(GetLang("请先选择源配置"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
 
         checkedItems := []
         this._CollectCheckedItems(this.TreeRoot, checkedItems)
         if (checkedItems.Length == 0) {
-            MsgBox(GetLang("请至少选择一个宏进行导出"), GetLang("提示"), 0x40)
+            RmtDialog.Info(GetLang("请至少选择一个宏进行导出"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
 
         sourceDir := this.IsFromRmt ? MergeUtil.TempMergeDir : this.SourcePath
         if (sourceDir == "" || !DirExist(sourceDir)) {
-            MsgBox(GetLang("源配置目录不存在"), GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("源配置目录不存在"), GetLang("错误"), this.ui.wpfHwnd)
             return
         }
 
         outDir := A_Temp "\RMT_Export_" A_Now
         try missingStr := ShareExportUtil.ExportChecked(checkedItems, sourceDir, outDir)
         catch as e {
-            MsgBox(GetLang("导出失败: ") e.Message, GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("导出失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
             return
         }
 
         if (missingStr != "")
-            MsgBox(GetLang("以下被引用的指令配置未找到，分享包可能不完整：") "`n" missingStr, GetLang("提示"), 0x40)
+            RmtDialog.Info(GetLang("以下被引用的指令配置未找到，分享包可能不完整：") "`n" missingStr, GetLang("提示"), this.ui.wpfHwnd)
 
         exportDir := A_Temp "\RMT_Export"
         if (!DirExist(exportDir))
@@ -643,18 +642,22 @@ class ConfigMergeGui {
         try {
             if (FileExist(rmtPath))
                 FileDelete(rmtPath)
-            FolderPackager.PackFolder(outDir, rmtPath)
+            ; 询问包密码（弹窗挂在配置合并窗口上，取消 = 不导出）
+            if (!FolderPackager.PackFolderWithPassword(outDir, rmtPath, this.ui.wpfHwnd)) {
+                try DirDelete(outDir, true)
+                return
+            }
         } catch as e {
-            MsgBox(GetLang("打包失败: ") e.Message, GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("打包失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
             return
         }
         try DirDelete(outDir, true)
 
-        confirmResult := MsgBox(Format("{}: {}`n{}: {}`n`n{}",
+        askMsg := Format("{}: {}`n{}: {}`n`n{}",
             GetLang("导出宏数"), checkedItems.Length,
             GetLang("文件"), rmtPath,
-            GetLang("是否继续发布到共享论坛？")), GetLang("导出完成"), 0x24 | 0x40)
-        if (confirmResult != "Yes")
+            GetLang("是否继续发布到共享论坛？"))
+        if (!RmtDialog.Confirm(askMsg, GetLang("导出完成"), this.ui.wpfHwnd))
             return
 
         this.OnClose()

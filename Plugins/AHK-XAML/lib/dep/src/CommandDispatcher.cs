@@ -398,18 +398,39 @@ public partial class AhkWpfEngine
 
     private void ProcessMessage(IntPtr hwnd, string text)
     {
-        foreach (string line in text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        string[] lines = text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        // 批量消息（AHK 侧的 BatchUpdate，典型是主题的 ~30 条 Resource）走一次布局合并：
+        // 每条 win.Resources[key] = value 都会让整棵树重新求值，30 条串着跑就是几百毫秒。
+        // DisableProcessing 让这些失效只结算一次，语义不变。
+        bool bulk = lines.Length > 1;
+        System.Windows.Threading.DispatcherProcessingDisabled scope = default(System.Windows.Threading.DispatcherProcessingDisabled);
+        if (bulk)
         {
-            try
+            try { scope = System.Windows.Threading.Dispatcher.CurrentDispatcher.DisableProcessing(); }
+            catch { bulk = false; }
+        }
+        try
+        {
+            foreach (string line in lines)
             {
-                ProcessSingleMessage(hwnd, line);
-            }
-            catch (Exception ex)
-            {
-                if (EnableLogging)
+                try
                 {
-                    try { System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"), "ProcessMessage line failed: " + line + " => " + ex.Message + "\n"); } catch { }
+                    ProcessSingleMessage(hwnd, line);
                 }
+                catch (Exception ex)
+                {
+                    if (EnableLogging)
+                    {
+                        try { System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"), "ProcessMessage line failed: " + line + " => " + ex.Message + "\n"); } catch { }
+                    }
+                }
+            }
+        }
+        finally
+        {
+            if (bulk)
+            {
+                try { scope.Dispose(); } catch { }
             }
         }
     }
@@ -870,6 +891,13 @@ public partial class AhkWpfEngine
         }
         else if (parts[0] == "Resource")
         {
+            // 值没变就整条跳过：开一次窗会把同一批主题色重发一遍，重写 window.Resources /
+            // 应用级字典都要让整棵树重新求值 DynamicResource（实测一次开窗几百毫秒）。
+            // 带副作用的键（半径、滚动条宽）不在此列，照旧走完整流程。
+            if (parts[1] != "WindowRadius" && parts[1] != "PanelRadius"
+                && parts[1] != "BaseWindowRadius" && parts[1] != "ScrollBarWidth"
+                && AhkWpfEngine.WindowResourceUnchanged(win, parts[1], parts[2]))
+                return;
             string[] rParts = parts[2].Split(new[] { ':' }, 2);
             if (rParts.Length == 2 && (rParts[0] == "Brush" || rParts[0] == "Thickness" || rParts[0] == "CornerRadius" || rParts[0] == "Double"))
             {
@@ -882,7 +910,7 @@ public partial class AhkWpfEngine
                     if (parts[1] == "WindowRadius")
                     {
                         win.Resources["BaseWindowRadius"] = new System.Windows.CornerRadiusConverter().ConvertFromString(val);
-                        if (Application.Current != null && !win.Title.StartsWith("Developer Tools - ")) Application.Current.Resources["BaseWindowRadius"] = win.Resources["BaseWindowRadius"];
+                        if (Application.Current != null && !win.Title.StartsWith("Developer Tools - ")) AhkWpfEngine.SetAppResource("BaseWindowRadius", win.Resources["BaseWindowRadius"]);
                         UpdateSnapState(win);
                     }
                     else
@@ -935,7 +963,7 @@ public partial class AhkWpfEngine
             {
                 object synced = win.Resources[parts[1]];
                 if (!(synced is System.Windows.Style) && !(synced is FrameworkTemplate))
-                    Application.Current.Resources[parts[1]] = synced;
+                    AhkWpfEngine.SetAppResource(parts[1], synced);
             }
             RmtCommonStyles.ThemeChanged(win, parts[1]);
             // Force-apply ScrollBarWidth to all ScrollBar elements in the visual tree
@@ -970,7 +998,7 @@ public partial class AhkWpfEngine
             object ctrl = parts[0] == "Window" ? win : FindControlByPath(parts[0]);
             if (ctrl == null && parts[0] != "Window")
             {
-                if (EnableLogging)
+                if (EnableLogging && AhkWpfEngine.VerboseBindLog)
                 {
                     try { System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"), "Control not found: " + parts[0] + "\n"); } catch { }
                 }
@@ -1047,12 +1075,9 @@ public partial class AhkWpfEngine
                                 {
                                     try {
                                         var ns = NameScope.GetNameScope(win);
-                                        try {
-                                            System.IO.File.AppendAllText(
-                                                GetLogPath("AhkWpfDebug.log"),
-                                                string.Format("AddXamlItem RegisterName: fe.Name={0}, ns is null={1}\n", fe.Name, ns == null)
-                                            );
-                                        } catch { }
+                                        // 注意：此处不要再写日志。registerNames 会遍历整棵已存在的树，
+                                        // 每插一个控件就 O(n) 次文件打开/写/关闭，整体 O(n^2)，
+                                        // 是开窗和动态加控件卡顿的主要来源（曾把 AhkWpfDebug.log 灌到 4.7MB）。
                                         if (ns != null) {
                                             try { ns.UnregisterName(fe.Name); } catch { }
                                             ns.RegisterName(fe.Name, fe);
@@ -1069,15 +1094,7 @@ public partial class AhkWpfEngine
                                         } catch { }
                                     }
                                 }
-                                else
-                                {
-                                    try {
-                                        System.IO.File.AppendAllText(
-                                            GetLogPath("AhkWpfDebug.log"),
-                                            "RegisterName Warning: Element " + fe.GetType().Name + " has empty Name\n"
-                                        );
-                                    } catch { }
-                                }
+                                // 无 Name 的元素不再逐个写日志（同上是 O(n^2) 写盘炸弹，且无意义）
                             }
                             var dobj = obj as DependencyObject;
                             if (dobj != null)

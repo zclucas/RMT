@@ -248,7 +248,11 @@ class ShareExportUtil {
         try {
             if (FileExist(rmtPath))
                 FileDelete(rmtPath)
-            FolderPackager.PackFolder(outDir, rmtPath)
+            ; 询问包密码（可留空 = 不加密）
+            if (!FolderPackager.PackFolderWithPassword(outDir, rmtPath)) {
+                try DirDelete(outDir, true)
+                return
+            }
         } catch as e {
             try DirDelete(outDir, true)
             throw e

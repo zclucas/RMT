@@ -365,6 +365,7 @@ public partial class AhkWpfEngine
 
     public void RunEngineInline(string id, string hwndStr, string trackedCsv, string scriptName, string ownerHwndStr, string inlineData, bool isDaemon)
     {
+        // ---- 开窗分段计时（诊断用，一行一条）----
         // Fast path: parse XAML + events directly from the inline data
         string[] parts = inlineData.Split(new[] { "\n---AHK-XAML-EVENTS---\n" }, 2, StringSplitOptions.None);
         string xamlContent = parts[0];
@@ -456,20 +457,23 @@ public partial class AhkWpfEngine
         if (btnPin != null) btnPin.Click += (s, e) => { win.Topmost = !win.Topmost; };
 
         win.Resources["BaseWindowRadius"] = new CornerRadius(12);
-        if (Application.Current != null) Application.Current.Resources["BaseWindowRadius"] = win.Resources["BaseWindowRadius"];
+        if (Application.Current != null) AhkWpfEngine.SetAppResource("BaseWindowRadius", win.Resources["BaseWindowRadius"]);
 
         win.StateChanged += (s, e) =>
         {
-            SendToAhk("EVENT|" + winId + "|Window|StateChanged|" + win.WindowState.ToString() + "\n");
+            SendToAhkAsync("EVENT|" + winId + "|Window|StateChanged|" + win.WindowState.ToString() + "\n");
             UpdateSnapState(win);
         };
+        // 激活/失活必须异步回 AHK：AHK 侧 WinActivate 走 SetForegroundWindow，前台切换会同步等
+        // 目标窗口处理 WM_ACTIVATE；此刻再用同步 SendMessage 把事件塞回 AHK，而 AHK 正卡在
+        // WinActivate 里没泵消息 —— 两边互等，只能靠系统超时解开（实测 125~170ms/次）。
         win.Activated += (s, e) =>
         {
-            SendToAhk("EVENT|" + winId + "|Window|Activated\n");
+            SendToAhkAsync("EVENT|" + winId + "|Window|Activated\n");
         };
         win.Deactivated += (s, e) =>
         {
-            SendToAhk("EVENT|" + winId + "|Window|Deactivated\n");
+            SendToAhkAsync("EVENT|" + winId + "|Window|Deactivated\n");
         };
         win.LocationChanged += (s, e) => UpdateSnapState(win);
         win.SizeChanged += (s, e) => UpdateSnapState(win);
@@ -1022,20 +1026,23 @@ public partial class AhkWpfEngine
         if (btnPin != null) btnPin.Click += (s, e) => { win.Topmost = !win.Topmost; };
 
         win.Resources["BaseWindowRadius"] = new CornerRadius(12);
-        if (Application.Current != null) Application.Current.Resources["BaseWindowRadius"] = win.Resources["BaseWindowRadius"];
+        if (Application.Current != null) AhkWpfEngine.SetAppResource("BaseWindowRadius", win.Resources["BaseWindowRadius"]);
 
         win.StateChanged += (s, e) =>
         {
-            SendToAhk("EVENT|" + winId + "|Window|StateChanged|" + win.WindowState.ToString() + "\n");
+            SendToAhkAsync("EVENT|" + winId + "|Window|StateChanged|" + win.WindowState.ToString() + "\n");
             UpdateSnapState(win);
         };
+        // 激活/失活必须异步回 AHK：AHK 侧 WinActivate 走 SetForegroundWindow，前台切换会同步等
+        // 目标窗口处理 WM_ACTIVATE；此刻再用同步 SendMessage 把事件塞回 AHK，而 AHK 正卡在
+        // WinActivate 里没泵消息 —— 两边互等，只能靠系统超时解开（实测 125~170ms/次）。
         win.Activated += (s, e) =>
         {
-            SendToAhk("EVENT|" + winId + "|Window|Activated\n");
+            SendToAhkAsync("EVENT|" + winId + "|Window|Activated\n");
         };
         win.Deactivated += (s, e) =>
         {
-            SendToAhk("EVENT|" + winId + "|Window|Deactivated\n");
+            SendToAhkAsync("EVENT|" + winId + "|Window|Deactivated\n");
         };
         win.LocationChanged += (s, e) => UpdateSnapState(win);
         win.SizeChanged += (s, e) => UpdateSnapState(win);
@@ -1215,6 +1222,7 @@ public partial class AhkWpfEngine
             if (isDaemon)
             {
                 PrepareDeferredReveal(win);
+                ApplyTaskbarExStyle(win);
                 win.Show();
                 ReinforceNativeAlphaHide(win);
             }
@@ -1231,6 +1239,7 @@ public partial class AhkWpfEngine
             if (isDaemon)
             {
                 PrepareDeferredReveal(win);
+                ApplyTaskbarExStyle(win);
                 win.Show();
                 ReinforceNativeAlphaHide(win);
             }
@@ -1239,6 +1248,26 @@ public partial class AhkWpfEngine
                 win.ShowDialog();
             }
         }
+    }
+
+    // 有属主的窗口默认不占任务栏位。RMT 要「压在主窗口上方 + 自己有一个任务栏按钮」，
+    // 所以补 WS_EX_APPWINDOW。关键是得在 Show 之前打上：以前是在窗口已经显示后由 AHK 补位，
+    // 还得靠 hide/show 逼任务栏重新登记 —— 那两步一次 125ms，且会让已显示的窗口闪一下。
+    private static void ApplyTaskbarExStyle(Window win)
+    {
+        try
+        {
+            if (win == null || !win.ShowInTaskbar)
+                return;   // ShowInTaskbar=False 的弹窗本来就不该有任务栏按钮
+            var helper = new System.Windows.Interop.WindowInteropHelper(win);
+            IntPtr h = helper.Handle;
+            if (h == IntPtr.Zero)
+                return;   // 没提前建句柄的窗口不在这里动样式，交回 AHK 侧兜底
+            int ex = GetWindowLong(h, -20);
+            if ((ex & 0x40000) == 0)                        // WS_EX_APPWINDOW
+                SetWindowLong(h, -20, new IntPtr(ex | 0x40000));
+        }
+        catch { }
     }
 
     // 非透明窗口：WPF Opacity 在首帧 present 前对 HWND 无效。
@@ -1522,8 +1551,8 @@ public partial class AhkWpfEngine
 
         if (Application.Current != null && !win.Title.StartsWith("Developer Tools - "))
         {
-            Application.Current.Resources["WindowRadius"] = win.Resources["WindowRadius"];
-            Application.Current.Resources["CloseBtnRadius"] = win.Resources["CloseBtnRadius"];
+            AhkWpfEngine.SetAppResource("WindowRadius", win.Resources["WindowRadius"]);
+            AhkWpfEngine.SetAppResource("CloseBtnRadius", win.Resources["CloseBtnRadius"]);
         }
 
         var btnMaximizeTxt = win.FindName("BtnMaximizeTxt") as TextBlock;

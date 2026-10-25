@@ -8,7 +8,8 @@ class FolderPackager {
     static ALLOWED_EXT := "ini,toml,json,txt,md,png,jpg,jpeg,gif,bmp,webp,ico,wav,mp3,onnx"
 
     ; 打包文件夹为二进制文件
-    static PackFolder(folderPath, outputFile) {
+    ; password 非空 → 整体加密，输出带 "RMTC" 头的密文包（导入时凭密码解开）
+    static PackFolder(folderPath, outputFile, password := "") {
         if !DirExist(folderPath)
             throw Error(GetLang("文件夹不存在:") folderPath)
 
@@ -48,8 +49,19 @@ class FolderPackager {
         }
 
         ; 保存到文件
+        ; 加密作用于整个包：连文件名、图片内容都看不到，比逐个文件加密更干净
+        buf := (password == "") ? mainBuffer : RMTC_SealBuffer(mainBuffer, password)
         FileEncoding("CP0")
-        FileOpen(outputFile, "w").RawWrite(mainBuffer)
+        FileOpen(outputFile, "w").RawWrite(buf)
+        return true
+    }
+
+    ; 打包并询问密码（勾选「不加密」= 明文）。返回 true 表示已写出文件，false 表示用户取消
+    static PackFolderWithPassword(folderPath, outputFile, owner := 0) {
+        r := RMTC_AskExportPassword(owner)
+        if (!r.Ok)
+            return false
+        this.PackFolder(folderPath, outputFile, r.Pwd)
         return true
     }
 
@@ -71,6 +83,10 @@ class FolderPackager {
 
         if bytesRead != fileSize
             throw Error(GetLang("文件读取不完整，期望") fileSize GetLang("字节，实际读取") bytesRead GetLang("字节"))
+
+        ; 加密分享包：问一次密码，解出原始 RMPK 字节，后续解析流程完全不变
+        if (data.Size >= 4 && StrGet(data, 4, "cp0") == "RMTC")
+            data := this._DecryptData(data, packedFile)
 
         ; 解析文件头
         headerInfo := this._ParseHeader(data)
@@ -127,6 +143,23 @@ class FolderPackager {
         return true
     }
 
+    ; 加密包 → 明文包字节。最多问 3 次密码，取消或连续输错就中止导入
+    static _DecryptData(data, packedFile) {
+        SplitPath packedFile, &name
+        wrong := false
+        loop 3 {
+            r := RMTC_AskImportPassword(name, wrong)
+            if (!r.Ok)
+                throw Error(GetLang("已取消，未导入加密分享包"))
+            try {
+                return RMTC_OpenBuffer(data, r.Pwd)
+            } catch as e {
+                wrong := true
+            }
+        }
+        throw Error(GetLang("密码错误次数过多，已取消导入"))
+    }
+
     static UploadFile(selectedFile) {
         tempPath := outputFolder := A_WorkingDir "\Temp"
         FolderPackager.UnpackFile(selectedFile, tempPath)
@@ -144,18 +177,17 @@ class FolderPackager {
                 FolderPackager.PackFolder(tempPath, selectedFile)
             }
 
-            result := MsgBox(GetLang("共享上传文件：") selectedFile, GetLang("提示"), "4")
-            if (result == "No")
+            if (!RmtDialog.Confirm(GetLang("共享上传文件：") selectedFile, GetLang("提示")))
                 return
 
             global RMT_Http, RMT_HasDotNet
             if (!RMT_HasDotNet || RMT_Http == "") {
-                MsgBox(GetLang("缺少.NET环境，无法使用共享上传功能"))
+                RmtDialog.Info(GetLang("缺少.NET环境，无法使用共享上传功能"), GetLang("提示"))
                 return
             }
 
             result := RMT_Http.UploadFile(selectedFile)
-            MsgBox(result)
+            RmtDialog.Info(result, GetLang("提示"))
         }
         if (DirExist(tempPath))
             DirDelete(tempPath, true)

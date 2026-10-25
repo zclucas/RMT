@@ -28,6 +28,7 @@
 #Include BindUtil.ahk
 #Include VariableUtil.ahk
 #Include TriggerKeyData.ahk
+#Include Util\CryptoUtil.ahk
 #Include FolderPackager.ahk
 #Include Util\MacroClipboardUtil.ahk
 #Include Util\LogUtil.ahk

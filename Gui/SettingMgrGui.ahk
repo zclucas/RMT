@@ -330,13 +330,13 @@ class SettingMgrGui {
     OnReplaceBtnClick(state, ctrl, event) {
         tipStr := Format("{}`n{}", GetLang("将清空当前软件的所有配置，并把所选文件中的配置迁移导入本软件。"), GetLang(
             "为了避免数据丢失，自动备份当前所有配置保存到软件下SettingOld中。"))
-        MsgBox(tipStr)
+        RmtDialog.Info(tipStr, GetLang("提示"), this.ui.wpfHwnd)
         SelectedFolder := DirSelect(, 0, GetLang("请选择若梦兔软件下Setting配置文件。"))
         if SelectedFolder == ""
             return
         SplitPath SelectedFolder, &name, &dir, &ext, &name_no_ext, &drive
         if (!InStr(name, "Setting") || name == "SettingOld") {
-            MsgBox(GetLang("需要选择若梦兔软件下的Setting文件"))
+            RmtDialog.Info(GetLang("需要选择若梦兔软件下的Setting文件"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
         CurSettingDir := A_WorkingDir "\Setting"
@@ -356,7 +356,7 @@ class SettingMgrGui {
                 this.OnRepairSetting(A_LoopFilePath)
             }
         } catch as e {
-            MsgBox(GetLang("迁移失败: ") e.Message, GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("迁移失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
             return
         }
         ; 以磁盘上实际存在的目录为准重建配置列表。
@@ -388,7 +388,7 @@ class SettingMgrGui {
         MySoftData.MacroTotalCount := CfgRead(SettingFile, SettingSection, "MacroTotalCount", 0)
         RMTLogSysInfo("配置导入", Format("配置列表已重建：{1}", SettingArrStr))
         CfgWrite(true, SettingFile, SettingSection, "IsReload")
-        MsgBox(GetLang("配置迁移成功"))
+        RmtDialog.Info(GetLang("配置迁移成功"), GetLang("提示"), this.ui.wpfHwnd)
         SafeReload()
     }
 
@@ -416,11 +416,11 @@ class SettingMgrGui {
     OnRMTUploadBtnClick(state, ctrl, event) {
         global RMT_Http, RMT_HasDotNet, RMT_IsForbidUpdate
         if (!RMT_HasDotNet || RMT_Http == "") {
-            MsgBox(GetLang("缺少.NET环境，无法使用共享上传功能"))
+            RmtDialog.Info(GetLang("缺少.NET环境，无法使用共享上传功能"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
         if (RMT_IsForbidUpdate) {
-            MsgBox(Format("{}`n{}`n{}", GetLang("因为以下原因配置无法上传："), GetLang("服务器没有启动"), GetLang("今日上传次数太多")))
+            RmtDialog.Info(Format("{}`n{}`n{}", GetLang("因为以下原因配置无法上传："), GetLang("服务器没有启动"), GetLang("今日上传次数太多")), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
         selectedFile := FileSelect(1, , GetLang("选择要共享上传的 RMT 文件"), "RMT Files (*.rmt)")
@@ -429,18 +429,18 @@ class SettingMgrGui {
 
         SplitPath selectedFile, &fileName, , &fileExt, &fileNameNoExt
         if fileExt != "rmt" {
-            MsgBox(GetLang("请选择 .rmt 文件！"), GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("请选择 .rmt 文件！"), GetLang("错误"), this.ui.wpfHwnd)
             return
         }
 
         if (fileNameNoExt == GetLang("RMT默认配置")) {
-            MsgBox(GetLang("请重命名配置文件后再上传（配置名需要与功能相关）"))
+            RmtDialog.Info(GetLang("请重命名配置文件后再上传（配置名需要与功能相关）"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
 
         isVaild := this.IsValidFolderName(fileNameNoExt)
         if (!isVaild) {
-            MsgBox(GetLang("配置名不符合文件目录命名规则，请修改"))
+            RmtDialog.Info(GetLang("配置名不符合文件目录命名规则，请修改"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
 
@@ -451,8 +451,10 @@ class SettingMgrGui {
         settingName := this._GetSelectedSetting(state)
         folderPath := A_WorkingDir "\Setting\" settingName
         outputFile := A_Desktop "\" settingName ".rmt"
-        FolderPackager.PackFolder(folderPath, outputFile)
-        MsgBox(GetLang("打包完成:") outputFile)
+        ; 询问包密码（弹窗挂在配置管理窗口上，取消 = 不导出）
+        if (!FolderPackager.PackFolderWithPassword(folderPath, outputFile, this.ui.wpfHwnd))
+            return
+        RmtDialog.Info(GetLang("打包完成:") outputFile, GetLang("提示"), this.ui.wpfHwnd)
     }
 
     OnUnpackBtnClick(state, ctrl, event) {
@@ -462,20 +464,21 @@ class SettingMgrGui {
 
         SplitPath selectedFile, &fileName, , &fileExt, &fileNameNoExt
         if fileExt != "rmt" {
-            MsgBox(GetLang("请选择 .rmt 文件！"), GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("请选择 .rmt 文件！"), GetLang("错误"), this.ui.wpfHwnd)
             return
         }
 
         isVaild := this.IsValidFolderName(fileNameNoExt)
         if (!isVaild) {
-            MsgBox(GetLang("配置名不符合文件目录命名规则，请修改"))
+            RmtDialog.Info(GetLang("配置名不符合文件目录命名规则，请修改"), GetLang("提示"), this.ui.wpfHwnd)
             return false
         }
 
         LoadType := 1
         for settingName in this.SettingList {
             if (fileNameNoExt == settingName) {
-                SelectType := CustomMsgBox(GetLang("配置已存在，请选择导入方式："), GetLang("配置导入选项"), GetLang("覆盖导入|自增导入|取消导入"))
+                importBtns := [GetLang("覆盖导入"), GetLang("自增导入"), GetLang("取消导入")]
+                SelectType := RmtDialog.Choose(GetLang("配置已存在，请选择导入方式："), GetLang("配置导入选项"), importBtns, this.ui.wpfHwnd)
                 if (SelectType == 0 || SelectType == 3)
                     return
 
@@ -500,7 +503,7 @@ class SettingMgrGui {
             ; 覆盖模式且覆盖的正是当前配置 → 当前配置目录的内容已被替换，必须重启重载
             if (LoadType == 2 && fileNameNoExt == MySoftData.CurSettingName) {
                 CfgWrite(true, SettingFile, SettingSection, "IsReload")
-                MsgBox(fileNameNoExt GetLang("配置导入成功"))
+                RmtDialog.Info(fileNameNoExt GetLang("配置导入成功"), GetLang("提示"), this.ui.wpfHwnd)
                 SafeReload()
                 return
             }
@@ -508,9 +511,9 @@ class SettingMgrGui {
             ; 其余情况只落盘：当前配置目录未被触碰，不切换 CurSettingName、不写 IsReload、不重启。
             ; 刷新配置列表即可让新导入的配置出现在下拉框中，用户需要时再去「加载」它。
             this.Refresh()
-            MsgBox(fileNameNoExt GetLang("配置导入成功") "`n" GetLang("可在配置管理中切换后使用"))
+            RmtDialog.Info(fileNameNoExt GetLang("配置导入成功") "`n" GetLang("可在配置管理中切换后使用"), GetLang("提示"), this.ui.wpfHwnd)
         } catch as e {
-            MsgBox(GetLang("解包失败: ") e.Message, GetLang("错误"), 0x10)
+            RmtDialog.Info(GetLang("解包失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
         }
     }
 

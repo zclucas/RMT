@@ -63,6 +63,29 @@ class XamlWin {
         return ""
     }
 
+    ; 弹窗该挂哪个窗口当属主：优先当前前台窗口（必须是本进程、可见、非透明浮层/工具窗），
+    ; 否则退回主窗口。固定挂主窗口会让「从配置管理点导出」的弹窗最后把主窗口顶上来，
+    ; 反而把配置管理压到最底下。
+    static ActiveOwner() {
+        fg := 0
+        try fg := DllCall("user32\GetForegroundWindow", "Ptr")
+        if (fg) {
+            pid := 0
+            try DllCall("user32\GetWindowThreadProcessId", "Ptr", fg, "UInt*", &pid)
+            ex := 0
+            try ex := DllCall("user32\GetWindowLongPtrW", "Ptr", fg, "Int", -20, "Ptr")
+            ; WS_EX_LAYERED：轮盘、提示、悬浮信息这类透明浮层，不做属主
+            isOverlay := (ex & 0x80000) ? true : false
+            if (pid && pid == ProcessExist() && !isOverlay && DllCall("user32\IsWindowVisible", "Ptr", fg, "Int"))
+                return fg
+        }
+        try {
+            if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd)
+                return MyMainWin.ui.wpfHwnd
+        }
+        return 0
+    }
+
     static QueueTheme(ui) {
         if (!IsObject(ui))
             return
@@ -91,6 +114,79 @@ class XamlWin {
         try ui.Update("Window", "Opacity", "1")
     }
 
+    ; 算窗口落点写进 XAML 的 Left/Top —— 引擎揭盖时会照 XAML 里的 Left/Top 定位
+    ; （没写时它按 SizeToContent 窗口的高 600 兜底算，小窗就会明显偏上）。
+    ; 尺寸仍由 SizeToContent 决定，这里的高度只用来算落点，估偏了只差几像素，不会裁内容。
+    ; 入参是设计尺寸（DIP，未乘主界面缩放），返回 DIP —— 引擎揭盖时会再乘一次 DPI 缩放。
+    static PresetPos(designW, designH, refHwnd := 0) {
+        uiScale := 1.0
+        try uiScale := XAMLHost.GetMainViewboxScale()
+        if (!(uiScale > 1.001))
+            uiScale := 1.0
+        dpi := 96
+        try dpi := A_ScreenDPI
+        scale := dpi / 96
+
+        l := 0, t := 0, r := 0, b := 0
+        ref := (refHwnd && DllCall("user32\IsWindow", "Ptr", refHwnd, "Int")) ? refHwnd : 0
+        mon := DllCall("user32\MonitorFromWindow", "Ptr", ref, "UInt", 2, "Ptr")
+        if (mon) {
+            mi := Buffer(40, 0)
+            NumPut("UInt", 40, mi, 0)
+            if (DllCall("user32\GetMonitorInfoW", "Ptr", mon, "Ptr", mi, "Int")) {
+                l := NumGet(mi, 20, "Int"), t := NumGet(mi, 24, "Int")
+                r := NumGet(mi, 28, "Int"), b := NumGet(mi, 32, "Int")
+            }
+        }
+        if (r <= l || b <= t)
+            return ""
+        wPhys := designW * uiScale * scale
+        hPhys := designH * uiScale * scale
+        x := l + (r - l - wPhys) / 2
+        y := t + (b - t - hPhys) / 2
+        return { Left: Round(x / scale, 1), Top: Round(y / scale, 1) }
+    }
+
+    ; 把 PresetPos 结果拼成 XAML 属性片段；算不出来就返回空串（退回引擎默认落点）
+    static PosAttr(designW, designH, refHwnd := 0) {
+        pos := XamlWin.PresetPos(designW, designH, refHwnd)
+        if (!IsObject(pos))
+            return ""
+        return ' Left="' pos.Left '" Top="' pos.Top '"'
+    }
+
+    ; 揭盖后校验：落点与目标偏差超过 tol 才纠正。
+    ; tol 给 40px 是有意的 —— 估算高度总会差几十 DIP，对应落点偏移只有一半，
+    ; 落在容差内就不动（不动 = 打开即到位，没有可见的重新定位）；只有 DPI/缩放算错这种大偏差才纠正。
+    static NudgeIfOff(ui, refHwnd := 0, tol := 40) {
+        if (!IsObject(ui) || !ui.HasProp("wpfHwnd") || !ui.wpfHwnd)
+            return
+        hwnd := ui.wpfHwnd
+        rc := Buffer(16, 0)
+        if (!DllCall("user32\GetWindowRect", "Ptr", hwnd, "Ptr", rc, "Int"))
+            return
+        w := NumGet(rc, 8, "Int") - NumGet(rc, 0, "Int")
+        h := NumGet(rc, 12, "Int") - NumGet(rc, 4, "Int")
+        l := NumGet(rc, 0, "Int"), t := NumGet(rc, 4, "Int")
+        ; 目标 = 参考窗口所在显示器工作区居中
+        ref := (refHwnd && DllCall("user32\IsWindow", "Ptr", refHwnd, "Int")) ? refHwnd : hwnd
+        mon := DllCall("user32\MonitorFromWindow", "Ptr", ref, "UInt", 2, "Ptr")
+        if (!mon)
+            return
+        mi := Buffer(40, 0)
+        NumPut("UInt", 40, mi, 0)
+        if (!DllCall("user32\GetMonitorInfoW", "Ptr", mon, "Ptr", mi, "Int"))
+            return
+        wl := NumGet(mi, 20, "Int"), wt := NumGet(mi, 24, "Int")
+        wr := NumGet(mi, 28, "Int"), wb := NumGet(mi, 32, "Int")
+        tx := wl + (wr - wl - w) // 2
+        ty := wt + (wb - wt - h) // 2
+        if (Abs(tx - l) <= tol && Abs(ty - t) <= tol)
+            return
+        DllCall("user32\SetWindowPos", "Ptr", hwnd, "Ptr", 0, "Int", tx, "Int", ty
+            , "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004)
+    }
+
     ; fill：Show 前入队内容的回调（Func / BoundFunc / 有 Call 的对象）
     static Open(ui, fill := "", ownerHwnd := "", activate := true) {
         if (!IsObject(ui))
@@ -114,12 +210,15 @@ class XamlWin {
     static WaitHwnd(ui, ownerHwnd := "", activate := true) {
         if (!IsObject(ui))
             return false
-        loop 40 {
+        ; 属主标记：_EnforceIndependent 靠它判断「这窗有属主，别清」。
+        ; 弹窗（ShowInTaskbar="False"）以前不设这个标记，2 秒后就被当成独立窗清掉属主并
+        ; hide/show 一遍，看起来就是「窗口闪一下、慢半拍」。所有窗口一律记上。
+        ui._modalOwner := ownerHwnd
+        ; 探 HWND：头部密一点（窗口多半这时已建好），之后放宽，总上限仍是 2 秒
+        loop 80 {
             if (ui.HasProp("wpfHwnd") && ui.wpfHwnd) {
-                XamlWin._DbgState(ui, "found")
                 popup := InStr(ui.xaml, 'ShowInTaskbar="False"')
                 if (!popup) {
-                    ui._modalOwner := ownerHwnd
                     owner := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -8, "Ptr")
                     if (ownerHwnd != "") {
                         ; 模态窗口：保留/补设属主（永远压在主窗口上方）
@@ -133,6 +232,8 @@ class XamlWin {
                     }
                     ; 有属主 + APPWINDOW = 既有自己的任务栏按钮/Alt+Tab，又保持压主窗口上方；
                     ; 无属主 + APPWINDOW = 独立窗口的任务栏按钮确定性存在
+                    ; daemon 现在在 Show 之前就打好了这个位（ApplyTaskbarExStyle），走到这里通常
+                    ; 是引擎没升级的兜底：补位后必须 hide/show 才生效，这一步实测要 125ms。
                     ex := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr")
                     if (!(ex & 0x40000)) {
                         DllCall("user32\SetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr", ex | 0x40000)
@@ -141,7 +242,6 @@ class XamlWin {
                         DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 0)
                         DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 8)
                     }
-                    XamlWin._DbgState(ui, "after-owner-clear")
                 }
                 ; 揭盖：不透明窗（Opacity="0"）已由 LoadedHwnd 在「更新队列+字号刷完」后揭过，
                 ; 这里只给非自动揭盖窗口兜底；_skipAutoReveal（最小化启动等刻意隐藏）不揭
@@ -149,9 +249,12 @@ class XamlWin {
                 skipReveal := ui.HasOwnProp("_skipAutoReveal") && ui._skipAutoReveal
                 if (!autoReveal && !skipReveal)
                     XamlWin.Reveal(ui)
-                if (activate)
-                    try WinActivate("ahk_id " ui.wpfHwnd)
-                XamlWin._DbgState(ui, "after-reveal")
+                if (activate) {
+                    ; daemon 的 Show 自己就会激活窗口，此刻窗口已经在屏上。AHK 再同步调一次
+                    ; SetForegroundWindow / WinActivate 是重复动作，而且跨进程这一步要等 125ms。
+                    ; 改成返回之后再看一眼：已经是前台就什么都不做，不是才补一次。
+                    XamlWin._DeferActivate(ui)
+                }
                 ; 前2秒每200ms重申 Opacity=1：防 daemon 异步应用 XAML 里的 Opacity="0"
                 ; 覆盖揭盖（win32 全绿但窗口看不见时的最后嫌疑人）
                 stompFn := ObjBindMethod(XamlWin, "_StompOpacity", ui)
@@ -162,24 +265,72 @@ class XamlWin {
                 SetTimer(() => XamlWin._EnforceIndependent(ui), -5000)
                 return true
             }
-            Sleep(50)
+            ; 前 40 轮 5ms、之后 20ms：Sleep 的实际粒度常被系统 timer 分辨率拉到 15ms 以上，
+            ; 而窗口句柄通常在 200~700ms 才由 daemon 回传，密集探测能省掉「多睡一轮」的延迟
+            Sleep(A_Index <= 40 ? 5 : 20)
         }
         return false
     }
 
-    ; 前2秒重申 Opacity=1（10次后自停）
+    ; 开窗不在这里同步激活，交给消息循环下一轮再看（见 WaitHwnd 里的说明）。
+    static _DeferActivate(ui) {
+        SetTimer(ObjBindMethod(XamlWin, "_DoDeferActivate", ui), -1)
+    }
+
+    static _DoDeferActivate(ui) {
+        try {
+            if (!IsObject(ui) || !ui.HasProp("wpfHwnd") || !ui.wpfHwnd)
+                return
+            hw := ui.wpfHwnd
+            if (DllCall("user32\GetForegroundWindow", "Ptr") == hw)
+                return
+            ; 不用 WinActivate：它内部「等窗口真的变前台」的循环粒度很粗，实测恒定 125ms。
+            ; 自己每 5ms 探一次，拿到前台立刻返回（实测 16ms）。
+            t := A_TickCount
+            DllCall("user32\SetForegroundWindow", "Ptr", hw)
+            while (A_TickCount - t < 400) {
+                if (DllCall("user32\GetForegroundWindow", "Ptr") == hw)
+                    break
+                Sleep(5)
+            }
+        }
+    }
+
+    ; 窗口是否已经在屏上且完全不透明（layered 窗口读 LWA_ALPHA）
+    static _IsOpaqueVisible(hwnd) {
+        if (!hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int"))
+            return false
+        if (!DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int"))
+            return false
+        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        if (!(ex & 0x80000))          ; WS_EX_LAYERED：没分层就是全不透明
+            return true
+        alpha := 255, flags := 0, crKey := 0
+        if (DllCall("user32\GetLayeredWindowAttributes", "Ptr", hwnd, "UInt*", &crKey, "UChar*", &alpha, "UInt*", &flags)) {
+            if (flags & 0x2)          ; LWA_ALPHA
+                return alpha >= 250
+        }
+        return true
+    }
+
+    ; 前2秒重申 Opacity=1（次数到或窗口已正常显示就自停）
+    ; 每次都发同步 IPC：若前一个窗口的定时器还在跑，碰上 daemon 正在建新窗口就会把
+    ; AHK 主线程卡住几百毫秒（表现就是「开窗慢半拍」）。所以先廉价查一次窗口状态，
+    ; 已经可见且不透明就立刻收手，一次 IPC 都不发。
     static _StompOpacity(ui) {
         if (!IsObject(ui) || !ui.HasProp("wpfHwnd") || !ui.wpfHwnd) {
             if (IsObject(ui) && ui.HasProp("_stompFn"))
                 SetTimer(ui._stompFn, 0)
             return
         }
-        try ui.Update("Window", "Opacity", "1")
         n := 0
         try n := Integer(ui._stompN) + 1
         ui._stompN := n
-        if (n >= 10)
+        if (XamlWin._IsOpaqueVisible(ui.wpfHwnd) || n >= 6) {
             SetTimer(ui._stompFn, 0)
+            return
+        }
+        try ui.Update("Window", "Opacity", "1")
     }
 
     ; 开窗后的状态兜底：非模态窗口保持独立身份（属主被异步设回则解除）；
@@ -190,9 +341,11 @@ class XamlWin {
             return
         try {
             hwnd := ui.wpfHwnd
-            ; 重申渲染层状态，防 daemon 异步覆盖
-            try ui.Update("Window", "Opacity", "1")
-            try ui.Update("Window", "Visibility", "Visible")
+            ; 重申渲染层状态，防 daemon 异步覆盖（已正常显示就不发，省两次同步 IPC）
+            if (!XamlWin._IsOpaqueVisible(hwnd)) {
+                try ui.Update("Window", "Opacity", "1")
+                try ui.Update("Window", "Visibility", "Visible")
+            }
             modal := ui.HasProp("_modalOwner") && ui._modalOwner != ""
             owner := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -8, "Ptr")
             if (!modal && owner != 0) {
@@ -208,7 +361,6 @@ class XamlWin {
                 XamlWin._TabOp(hwnd, 5)   ; ITaskbarList::DeleteTab
                 XamlWin._TabOp(hwnd, 4)   ; ITaskbarList::AddTab
             }
-            XamlWin._DbgState(ui, "enforce")
         }
     }
 
@@ -230,42 +382,6 @@ class XamlWin {
             }
             v := NumGet(NumGet(XamlWin._tl, "Ptr"), slot * A_PtrSize, "Ptr")
             DllCall(v, "Ptr", XamlWin._tl, "Ptr", hwnd, "HRESULT")
-        }
-    }
-
-    ; 诊断用：记录窗口可见性/属主/样式/位置/DWM裁剪/前台/主窗口状态快照
-    static _DbgState(ui, tag) {
-        try {
-            hwnd := ui.wpfHwnd
-            vis := DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
-            owner := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -8, "Ptr")
-            ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
-            iconic := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
-            cloak := 0
-            DllCall("dwmapi\DwmGetWindowAttribute", "Ptr", hwnd, "Int", 14, "Int*", &cloak := 0, "Int", 4)  ; DWMWA_CLOAKED
-            rect := Buffer(16)
-            DllCall("user32\GetWindowRect", "Ptr", hwnd, "Ptr", rect)
-            l := NumGet(rect, 0, "Int"), t := NumGet(rect, 4, "Int")
-            r := NumGet(rect, 8, "Int"), b := NumGet(rect, 12, "Int")
-            fg := DllCall("user32\GetForegroundWindow", "Ptr")
-            ; 主窗口快照：是否置顶/可见/位置，判断子窗是否被压在主窗后面
-            mainInfo := "n/a"
-            try {
-                if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd) {
-                    mh := MyMainWin.ui.wpfHwnd
-                    mex := DllCall("user32\GetWindowLongPtrW", "Ptr", mh, "Int", -20, "Ptr")
-                    mvis := DllCall("user32\IsWindowVisible", "Ptr", mh, "Int")
-                    mrect := Buffer(16)
-                    DllCall("user32\GetWindowRect", "Ptr", mh, "Ptr", mrect)
-                    mainInfo := Format("hwnd={1:#x} top={2} vis={3} rect=({4},{5})-({6},{7})",
-                        mh, (mex & 0x8) ? 1 : 0, mvis,
-                        NumGet(mrect, 0, "Int"), NumGet(mrect, 4, "Int"), NumGet(mrect, 8, "Int"), NumGet(mrect, 12, "Int"))
-                }
-            }
-            RMTLogSys(RMT_LV_INFO, "XamlWin", Format("[{1}] vis={2} owner={3:#x} ex={4:#x} iconic={5} cloak={6} fg={7:#x} rect=({8},{9})-({10},{11}) main[{12}]",
-                tag, vis, owner, ex, iconic, cloak, fg, l, t, r, b, mainInfo))
-        } catch as e {
-            try RMTLogSys(RMT_LV_INFO, "XamlWin", "[" tag "] 日志失败: " e.Message)
         }
     }
 }

@@ -113,10 +113,10 @@ class ShareUploadGui {
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
-        ; 提示区：本窗是唯一的反馈出口 —— 校验失败、判重、上传/发帖结果全写这里，不弹任何子窗口
+        ; 状态文本给个最小高度，窗口高度随内容自动（SizeToContent=Height）时不会抖
         root.Add("TextBlock").Name("StatusText").Grid_Row(1).Margin("2,8,2,0")
             .Text("").Foreground("{DynamicResource TextSub}").FontSize(12)
-            .TextWrapping("Wrap").MaxHeight(80)
+            .TextWrapping("Wrap").MinHeight("36").MaxHeight(80)
 
         btnRow := root.Add("StackPanel").Orientation("Horizontal").Grid_Row(2)
             .HorizontalAlignment("Center").Margin("0,10,0,2")
@@ -124,9 +124,14 @@ class ShareUploadGui {
         this._AddBtn(btnRow, "OpenTopicBtn", GetLang("打开帖子"), 90).Margin("0,0,10,0").Visibility("Collapsed")
         this._AddBtn(btnRow, "CancelBtn", GetLang("取消"), 90)
 
+        ; 落点写进 XAML：引擎揭盖时对 SizeToContent 窗口按「高 600」估位置，这个窗只有 390 高，会偏上。
+        ; 尺寸仍由 SizeToContent 决定，这里的 386 只用来算落点（估偏几像素不影响显示）。
+        refWin := XamlWin.ActiveOwner()
+        posAttr := XamlWin.PosAttr(480, 386, refWin)
+
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="True" Width="480" Height="505" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="True"' posAttr ' Width="480" SizeToContent="Height" Opacity="0"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
@@ -140,8 +145,12 @@ class ShareUploadGui {
         this.ui.OnEvent("CancelBtn", "Click", ObjBindMethod(this, "OnCancelClick"))
 
         this._pollFn := ObjBindMethod(this, "_Poll")
+        ; 不设属主，保留它自己的任务栏按钮；落点已在 XAML 里按 refWin 所在显示器算好
         if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
             this.closed := true
+        else
+            ; 兜底校验：偏差 >40px 才纠正（正常走 XAML 落点，不会有可见的重新定位）
+            XamlWin.NudgeIfOff(this.ui, refWin)
     }
 
     _AddFieldRow(parent, label, _) {

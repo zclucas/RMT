@@ -2362,13 +2362,22 @@ class XAMLHost {
             instance.wpfHwnd := Integer(parts[5])
             ; Opacity=0 的隐藏由引擎 SourceInitialized+LWA_ALPHA 完成；勿 WinHide（会白壳闪一下再藏）
             if instance.HasOwnProp("_updateQueue") {
-                for item in instance._updateQueue {
-                    if (item.type == "single")
-                        instance.Update(item.ctrl, item.prop, item.val)
-                    else if (item.type == "batch")
-                        instance.BatchUpdate(item.arr)
-                }
+                ; 排队期间攒下的更新合并成**一次** BatchUpdate 发出去。
+                ; 量最大的来源是 ApplyXamlTheme（主题 ~30 条 Resource），本身已是一次批量；
+                ; 剩下的零散项也并进去，避免多条同步 IPC 往返。
+                pending := instance._updateQueue
                 instance._updateQueue := []
+                batch := []
+                for item in pending {
+                    if (item.type == "single")
+                        batch.Push({ ControlName: item.ctrl, PropertyName: item.prop, Value: item.val })
+                    else if (item.type == "batch") {
+                        for sub in item.arr
+                            batch.Push(sub)
+                    }
+                }
+                if (batch.Length)
+                    try instance.BatchUpdate(batch)
             }
             ; 控件样式（xaml.components）里写死的 FontSize 不会被 XAML 字符串替换；
             ; 与主题滑条一致：开窗后再按主题下限夹一次，重启后才能看到实际字号。
@@ -2376,7 +2385,9 @@ class XAMLHost {
                 try {
                     themeFs := XAMLHost.GetThemeFontSize()
                     instance.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, themeFs))
-                    XAMLHost.SyncChatFontResources(instance)
+                    ; AiChatFontSize 只服务 AI 聊天界面；不带它的窗口每开一次白跑两次同步 IPC
+                    if (InStr(instance.xaml, "AiChatFontSize"))
+                        XAMLHost.SyncChatFontResources(instance)
                     XAMLHost.SyncCmdEditorTitleFont(instance)
                 }
             }

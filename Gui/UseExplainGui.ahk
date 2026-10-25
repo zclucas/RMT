@@ -239,7 +239,7 @@ class UseExplainGui {
         SplitPath path, &name, &dir, &ext, &name_no_ext, &drive
         newPath := this.SettingPath "\Images\UseExplain\" name
         if (FileExist(newPath)) {
-            MsgBox(GetLang("该图片已添加，请勿重复添加！！！"))
+            RmtDialog.Info(GetLang("该图片已添加，请勿重复添加！！！"), GetLang("提示"), this.Hwnd())
             return
         }
 
@@ -297,17 +297,17 @@ class UseExplainGui {
             return true
 
         if (Trim(this.ui.Query("AuthorCon")) == "") {
-            MsgBox(GetLang("请完善作者信息，若不想留名请输入匿名"))
+            RmtDialog.Info(GetLang("请完善作者信息，若不想留名请输入匿名"), GetLang("提示"), this.Hwnd())
             return false
         }
 
         if (Trim(this.ui.Query("EffectCon")) == "") {
-            MsgBox(GetLang("请完善配置作用信息，简要的介绍配置的作用"))
+            RmtDialog.Info(GetLang("请完善配置作用信息，简要的介绍配置的作用"), GetLang("提示"), this.Hwnd())
             return false
         }
 
         if (Trim(this.ui.Query("OperCon")) == "") {
-            MsgBox(GetLang("请完善操作说明信息，详细说明配置对应的操作"))
+            RmtDialog.Info(GetLang("请完善操作说明信息，详细说明配置对应的操作"), GetLang("提示"), this.Hwnd())
             return false
         }
 
