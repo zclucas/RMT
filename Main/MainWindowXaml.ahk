@@ -6692,7 +6692,9 @@ class MainWin {
         feedback := '<StackPanel><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
             . this._HelpFeedbackItem(0, "&#xE7BA;", GetLang("Bug 文档"), GetLang("提交可复现步骤、预期结果、实际表现，以及必要的截图或日志。"), "https://docs.qq.com/sheet/DVWJIdEVMV1pHUVJj", GetLang("打开 Bug 文档"), "0,0,5,0")
             . this._HelpFeedbackItem(1, "&#xE8F2;", GetLang("需求文档"), GetLang("描述使用场景、期望能力与优先级，帮助我们评估和规划。"), "https://docs.qq.com/sheet/DVWRQaXBFUVV5bERo", GetLang("打开需求文档"), "5,0,0,0")
-            . '</Grid><Border Margin="0,10,0,0" Padding="9,7" Background="{DynamicResource EditHoverBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="5"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' this._XmlEsc(GetLang("Bug 文档和需求文档需要加入交流群后才可编辑；未加入时仍可打开查看现有内容。")) '" TextWrapping="Wrap" Foreground="{DynamicResource TextSub}" FontSize="11"/></StackPanel></Border></StackPanel>'
+            . '</Grid>'
+            . '<Border Margin="0,10,0,0">' this._HelpFeedbackItem(0, "&#xE8BD;", GetLang("在软件内直接提交"), GetLang("不用跳浏览器：填标题和描述即可发到论坛，自动带上 RMT 版本、系统、屏幕缩放，还可以直接附截图。"), "rmt:feedback", GetLang("立即反馈"), "0") '</Border>'
+            . '<Border Margin="0,10,0,0" Padding="9,7" Background="{DynamicResource EditHoverBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="5"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' this._XmlEsc(GetLang("Bug 文档和需求文档需要加入交流群后才可编辑；未加入时仍可打开查看现有内容。")) '" TextWrapping="Wrap" Foreground="{DynamicResource TextSub}" FontSize="11"/></StackPanel></Border></StackPanel>'
 
         lower := '<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Grid.Column="0" Margin="0,0,7,0">'
             . this._HelpCard(GetLang("社区"), "&#xE8BD;", community, GetLang("交流、群组与开源"), "0")
@@ -6770,6 +6772,11 @@ class MainWin {
     OnLinkClick(url, state, ctrl, event) {
         if (url = "")
             return
+        ; 软件内反馈：不走浏览器，直接开反馈窗口
+        if (url = "rmt:feedback") {
+            FeedbackGui.ShowGui()
+            return
+        }
         ; 本地 html 帮助文档 → 优先用 Chromium app 模式小窗打开
         if (RegExMatch(url, "i)\.html?$") && FileExist(url) && OpenHelpInAppWindow())
             return

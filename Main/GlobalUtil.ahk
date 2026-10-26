@@ -83,6 +83,7 @@
 #Include ..\Gui\ConfigMergeGui.ahk
 #Include ..\Gui\ShareCenterGui.ahk
 #Include ..\Gui\ShareUploadGui.ahk
+#Include ..\Gui\FeedbackGui.ahk
 #Include ..\Gui\ShareDetailGui.ahk
 #Include Util\ShareExportUtil.ahk
 #Include ..\Gui\VoiceGui.ahk

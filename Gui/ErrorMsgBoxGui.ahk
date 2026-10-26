@@ -71,8 +71,10 @@ class ErrorMsgBoxGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
         btnRow := body.Add("Grid").Grid_Row(1).HorizontalAlignment("Center").VerticalAlignment("Center")
-        btnRow.Cols("Auto", "300", "Auto")
+        btnRow.Cols("Auto", "*", "Auto")
         btnRow.Add("Button").Name("BtnCopy").Grid_Column(0).Content(GetLang("复制")).Width(80).Height(30).MinHeight(30)
+        btnRow.Add("Button").Name("BtnFeedback").Grid_Column(1).Content(GetLang("反馈")).Width(80).Height(30).MinHeight(30)
+            .HorizontalAlignment("Center").ToolTip(GetLang("把这段报错带到论坛反馈窗口"))
         btnRow.Add("Button").Name("BtnOk").Grid_Column(2).Content(GetLang("确定")).Width(80).Height(30).MinHeight(30)
 
         ; === 创建 XAMLHost ===
@@ -87,6 +89,7 @@ class ErrorMsgBoxGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClose", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnCopy", "Click", ObjBindMethod(this, "OnCopyBtnClick"))
+        this.ui.OnEvent("BtnFeedback", "Click", ObjBindMethod(this, "OnFeedbackClick"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnCancelClick"))
     }
 
@@ -121,6 +124,14 @@ class ErrorMsgBoxGui {
                 }
             }
         }
+    }
+
+    ; 把这段报错原样带进反馈窗口，用户只需补复现步骤就能发帖
+    OnFeedbackClick(state, ctrl, event) {
+        txt := this.GetErrorText()
+        body := "**报错内容**`n`n``````n" txt "`n``````n`n**复现步骤**`n`n1. `n2. `n`n**期望结果**`n`n"
+        this._CloseWindow()
+        try FeedbackGui.ShowGui("bug", body)
     }
 
 }

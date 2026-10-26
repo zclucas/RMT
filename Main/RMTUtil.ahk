@@ -438,8 +438,20 @@ GetShareServerUrl() {
     url := ""
     try url := Trim(CfgRead(SettingFile, SettingSection, "ShareServerUrl", ""))
     if (url == "")
-        url := "https://forum.yka.moe"
+        url := "https://forum.ruomengtu.com"
     return RTrim(url, "/")
+}
+
+; 反馈分类 id：bug = bug反馈(42)，idea = 功能建议(44)，都可被 ini 覆盖
+GetFeedbackCategoryId(kind := "bug") {
+    global SettingFile, SettingSection
+    key := (kind = "idea") ? "FeedbackIdeaCategoryId" : "FeedbackBugCategoryId"
+    def := (kind = "idea") ? "44" : "42"
+    id := ""
+    try id := Trim(CfgRead(SettingFile, SettingSection, key, ""))
+    if (id == "" || !IsNumber(id))
+        id := def
+    return Integer(id)
 }
 
 ; 共享分类 id：默认「共享」分类（id 41），可被 ini 覆盖
