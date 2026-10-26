@@ -892,6 +892,9 @@ class SearchData {
         this.SearchText := GetLang("检索文本")
         this.SearchImagePath := ""
         this.Similar := 90 ; 图片搜索模糊匹配度100  - 50
+        this.FilterEnable := 0      ;滤色找图：0关 1开（仅屏幕图片搜索有效）
+        this.FilterColor := ""      ;保留色列表 "FF00FF,00FF00"，只有这些颜色的像素参与匹配
+        this.FilterSimilar := 8     ;滤色每通道容差 0~255
         this.OCRType := 1   ;1中文  2英文
         this.SearchImageType := 1 ; 1 opencv 2 rmt
         this.StartPosX := 0

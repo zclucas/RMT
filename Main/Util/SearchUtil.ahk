@@ -159,6 +159,29 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYLi
 }
 
 SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY) {
+    ;滤色找图：老配置没有这几个字段，必须先兜底再取
+    filterOn := ObjHasOwnProp(Data, "FilterEnable") ? Data.FilterEnable : 0
+    filterColor := ObjHasOwnProp(Data, "FilterColor") ? Data.FilterColor : ""
+    filterTol := ObjHasOwnProp(Data, "FilterSimilar") ? Data.FilterSimilar : 8
+
+    ;仅在"屏幕图片搜索 + 已勾选 + 填了颜色"时接管；否则走原有逻辑
+    if (Data.SearchType == 1 && filterOn && filterColor != "") {
+        ocvReason := OpenCvEnsure()
+        if (ocvReason != "") {
+            ShowOpenCvInstallPrompt(ocvReason)
+            return false
+        }
+
+        ret := FindScreenImageFilter(&ResX, &ResY, ImagePath, X1, Y1, X2, Y2
+            , Data.Similar, filterColor, filterTol)
+
+        if (ret != 1)
+            SearchDebugLog(Format("滤色找图未命中 区域=({},{})-({},{}) 颜色={} 容差={} 返回={} 详情={}"
+                , X1, Y1, X2, Y2, filterColor, filterTol, ret, GetFilterLastErrorText()))
+
+        return ret == 1
+    }
+
     if (Data.SearchImageType == 1) {
         ocvReason := OpenCvEnsure()
         if (ocvReason != "") {
@@ -186,11 +209,20 @@ SearchText(Data, X1, Y1, X2, Y2, &ResX, &ResY, Text) {
 }
 
 SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, &ResHwndList) {
+    ;保留色：老配置没有这几个字段，必须先兜底
+    winFilterOn := ObjHasOwnProp(Data, "FilterEnable") ? Data.FilterEnable : 0
+    winFilterColor := ObjHasOwnProp(Data, "FilterColor") ? Data.FilterColor : ""
+    winFilterTol := ObjHasOwnProp(Data, "FilterSimilar") ? Data.FilterSimilar : 8
+    useFilter := winFilterOn && winFilterColor != ""
+
     found := false
     ResXList := [], ResYList := [], ResHwndList := []
     for i, hwnd in hwndList {
         ResX := 0, ResY := 0
-        isFound := FindWinImage(&ResX, &ResY, ImagePath, hwnd, X1, Y1, X2, Y2, Data.Similar)
+        if (useFilter)
+            isFound := FindWinImageFilter(&ResX, &ResY, ImagePath, hwnd, X1, Y1, X2, Y2, Data.Similar, winFilterColor, winFilterTol)
+        else
+            isFound := FindWinImage(&ResX, &ResY, ImagePath, hwnd, X1, Y1, X2, Y2, Data.Similar)
         if (isFound) {
             found := true
             ResHwndList.Push(hwnd)
