@@ -238,6 +238,83 @@ FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold) {
         "Cdecl Int")
 }
 
+; OpenCV屏幕图片识别（支持颜色筛选）  返回目标左上角屏幕坐标
+; filterColors: "FF00FF,00FF00"（RRGGBB），空串表示不做颜色筛选
+; filterMode:   0=排除这些颜色   1=只保留这些颜色（默认，其余像素不参与匹配）
+; 返回码: 1找到 / 0未找到 / -1模板读取失败 / -2模板大于搜索区 / -3OpenCV异常 / -4有效像素不足 / -5截图失败 / -6参数非法
+FindScreenImageFilter(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold, filterColors, tolerance, filterMode := 1) {
+    if (A_PtrSize != 8) ;非64位不可用，直接退出
+        return -6
+    if (OpenCvEnsure() != "")
+        return -5
+
+    return DllCall("RMT_OpenCV.dll\FindScreenImageFilter", "Str", targetPath, "Int", X1,
+        "Int", Y1, "Int", X2 - X1, "Int", Y2 - Y1, "Int", matchThreshold,
+        "Str", filterColors, "Int", tolerance, "Int", filterMode,
+        "Int*", ResXPtr, "Int*", ResYPtr, "Cdecl Int")
+}
+
+; 渲染一次预览到指定文件；返回 {ret, ow, oh, pw, ph}
+RenderFilterPreviewTo(templatePath, filterColors, tolerance, filterMode, size, zoom, outPath) {
+    valid := 0, total := 0, pw := 0, ph := 0, ow := 0, oh := 0
+    bx := 0, by := 0, bw := 0, bh := 0
+    ret := DllCall("RMT_OpenCV.dll\RenderFilterPreview"
+        , "Str", templatePath, "Str", filterColors, "Int", tolerance, "Int", filterMode
+        , "Int", size, "Int", size
+        , "Int", 0, "Int", 0, "Int", 0, "Int", 0          ; view：0 = 整图
+        , "Int", 0, "Int", 0, "Int", 0, "Int", 0          ; 无选区框
+        , "Int", 0                                       ; 不画像素格
+        , "Int", zoom
+        , "Str", outPath, "Str", outPath
+        , "Int*", &valid, "Int*", &total, "Int*", &pw, "Int*", &ph
+        , "Int*", &ow, "Int*", &oh, "Int*", &bx, "Int*", &by, "Int*", &bw, "Int*", &bh
+        , "CDecl Int")
+    return { ret: ret, ow: ow, oh: oh, pw: pw, ph: ph }
+}
+
+; 生成"保留后"缩略图，用于搜索Pro 里的预览框。成功返回图片路径，失败返回 ""
+SaveFilteredPreview(templatePath, filterColors, tolerance, outPath, size := 100, filterMode := 1) {
+    if (OpenCvEnsure() != "")
+        return ""
+
+    ; 先按 100% 渲一次拿原图尺寸（这次输出会被裁，只是探尺寸）
+    probe := A_Temp "\RMT_thumb_probe.png"
+    info := RenderFilterPreviewTo(templatePath, filterColors, tolerance, filterMode, size, 100, probe)
+    if (info.ret != 1 || info.ow <= 0 || info.oh <= 0)
+        return ""
+
+    ; 再按"适应尺寸"渲一次
+    zoom := Max(1, Floor(Min(size / info.ow, size / info.oh) * 100))
+    info := RenderFilterPreviewTo(templatePath, filterColors, tolerance, filterMode, size, zoom, outPath)
+    return (info.ret = 1) ? outPath : ""
+}
+
+; 取滤色找图最近一次的错误描述（没找到时会带"本区域最高 xx%"）
+GetFilterLastErrorText() {
+    if (OpenCvEnsure() != "")
+        return ""
+    try {
+        pBuf := DllCall("RMT_OpenCV.dll\GetFilterLastError", "CDecl Ptr")
+        return pBuf ? StrGet(pBuf, "UTF-16") : ""
+    } catch {
+        return ""
+    }
+}
+
+; OpenCV窗口图片识别（保留色）  返回窗口客户区坐标
+; 与 FindScreenImageFilter 同一套掩码逻辑，只是截图换成按窗口句柄取
+FindWinImageFilter(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold, filterColors, tolerance, filterMode := 1) {
+    if (A_PtrSize != 8) ;非64位不可用，直接退出
+        return -6
+    if (OpenCvEnsure() != "")
+        return -5
+
+    return DllCall("RMT_OpenCV.dll\FindWinImageFilter", "Str", targetPath, "Int", hwnd, "Int", X1,
+        "Int", Y1, "Int", X2 - X1, "Int", Y2 - Y1, "Int", matchThreshold,
+        "Str", filterColors, "Int", tolerance, "Int", filterMode,
+        "Int*", ResXPtr, "Int*", ResYPtr, "Cdecl Int")
+}
+
 ; OpenCV窗口图片识别    返回窗口的坐标
 FindWinImage(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold) {
     if (A_PtrSize != 8) ;非64位不可用，直接退出

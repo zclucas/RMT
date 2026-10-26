@@ -1,6 +1,7 @@
 ﻿#Requires AutoHotkey v2.0
 #Include MacroEditGui.ahk
 #Include WinRuleGui.ahk
+#Include FilterEditGui.ahk
 
 class SearchProGui {
     __new() {
@@ -32,6 +33,9 @@ class SearchProGui {
         this.PreviewBorderArr := []
         this.PreviewFollowTimer := 0
         this.PreviewFollowing := false
+        this.FilterTolValue := 8        ;保留色容差（由图片处理窗口回写）
+        this.FilterColorValue := ""     ;保留色列表（空=不启用保留色）
+        this.FilterEditGui := ""        ;滤色编辑器实例，懒加载
     }
 
     ShowGui(cmd) {
@@ -255,12 +259,11 @@ class SearchProGui {
         this.WinInfoArr.Push(btnCon)
 
         PosY += 35
-        PosX := 360
-        Con := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("相似度(%)："))
+        Con := MyGui.Add("Text", Format("x360 y{} w80", PosY), GetLang("相似度(%)："))
         this.SimilarArr.Push(Con)
-        PosX += 80
-        this.SimilarCon := MyGui.Add("Edit", Format("x{} y{} w{} Center", PosX, PosY - 5, 80))
+        this.SimilarCon := MyGui.Add("Edit", Format("x440 y{} w80 Center", PosY - 5))
         this.SimilarArr.Push(this.SimilarCon)
+
 
         ; Row2: [识别模型] [下拉] + ImageCon 原版位置(570,145)
         PosY += 35
@@ -290,7 +293,16 @@ class SearchProGui {
         this.ImageSelectBtn := btnCon
         this.ImageVariArr.Push(this.ImageSelectBtn)
 
-        PosY := BasePosY + 70
+        ; ---- 图片处理（放在截图按钮正下方）----
+        PosY += 35
+        PosX := 360
+        btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY - 7, 110, 30), GetLang("图片处理"))
+        btnCon.OnEvent("Click", (*) => this.OnClickFilterEditBtn())
+        btnCon.ToolTip := GetLang("图片处理：选保留色、裁剪模板")
+        this.FilterEditBtn := btnCon
+        this.ImageVariArr.Push(btnCon)
+
+        PosY := BasePosY + 105
         PosX := 360
         this.SearchImagePathTipCon := MyGui.Add("Text", Format("x{} y{} w{}", PosX, PosY, 80), GetLang("图片路径："))
         this.ImageVariArr.Push(this.SearchImagePathTipCon)
@@ -329,7 +341,7 @@ class SearchProGui {
             "英文"]))
         this.TextArr.Push(this.OCRTypeCon)
 
-        PosY := Max(BasePosY + 98, LeftMacroPosY)
+        PosY := Max(BasePosY + 133, LeftMacroPosY)
 
         PosX := 360
         con := MyGui.Add("Text", Format("x{} y{} w{} h{}", PosX, PosY, 170, 20), GetLang("未找到后的指令：（可选）"))
@@ -371,8 +383,10 @@ class SearchProGui {
         btnCon := MyGui.Add("Button", Format("x{} y{} w{} h{}", PosX, PosY, 100, 40), GetLang("确定"))
         btnCon.OnEvent("Click", (*) => this.OnClickSureBtn())
         MyGui.OnEvent("Close", (*) => this.OnGuiClose())
-        pos := GetCenterPosOnActiveMonitor(700, 600)
-        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 700, 600))
+        ; 高度按实际内容算，新增一行也不会把「确定」挤出窗口
+        winH := Max(600, PosY + 60)
+        pos := GetCenterPosOnActiveMonitor(700, winH)
+        MyGui.Show(Format("x{} y{} w{} h{}", pos.x, pos.y, 700, winH))
     }
 
     Init(cmd) {
@@ -386,15 +400,17 @@ class SearchProGui {
         this.RefreshConfigDLArr()
         this.SearchTypeCon.Value := Integer(ObjHasOwnProp(this.Data, "SearchType") ? this.Data.SearchType : 1)
         this.SimilarCon.Value := this.Data.Similar
+        ;滤色字段是新增的，老配置里没有，必须兜底
+        this.FilterColorValue := ObjHasOwnProp(this.Data, "FilterColor") ? this.Data.FilterColor : ""
+        this.FilterTolValue := ObjHasOwnProp(this.Data, "FilterSimilar") ? this.Data.FilterSimilar : 8
+        this.RefreshFilterBtn()
         this.OCRTypeCon.Value := this.Data.OCRType
         this.WinInfoCon.Value := this.Data.WinInfo
         this.SearchImageTypeCon.Value := this.Data.SearchImageType
         this.ImagePathCon.Delete()
         this.ImagePathCon.Add(this.DLVariableArr)
         this.ImagePathCon.Text := this.Data.SearchImagePath
-        this.ImageCon.GetPos(&imagePosX, &imagePosY)
-        this.ImageCon.Value := this.Data.SearchImagePath
-        this.ImageCon.Move(imagePosX, imagePosY, 100, 100)
+        this.RefreshImageThumb(this.Data.SearchImagePath)
         this.HexColorCon.Delete()
         this.HexColorCon.Add(this.DLVariableArr)
         this.HexColorCon.Text := this.Data.SearchColor
@@ -869,9 +885,7 @@ class SearchProGui {
                 path := newPath
             }
 
-            this.ImageCon.GetPos(&imagePosX, &imagePosY)
-            this.ImageCon.Value := path
-            this.ImageCon.Move(imagePosX, imagePosY, 100, 100)
+            this.RefreshImageThumb(path)
             this.Data.SearchImagePath := path
             this.ImagePathCon.Text := path
         }
@@ -901,9 +915,7 @@ class SearchProGui {
             filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot\" imageSerial ".png"
             SaveClipToBitmap(filePath)
 
-            this.ImageCon.GetPos(&imagePosX, &imagePosY)
-            this.ImageCon.Value := filePath
-            this.ImageCon.Move(imagePosX, imagePosY, 100, 100)
+            this.RefreshImageThumb(filePath)
             this.Data.SearchImagePath := filePath
             this.ImagePathCon.Text := filePath
             ; 停止监听
@@ -1109,10 +1121,82 @@ class SearchProGui {
         this.OnSetSearchArea(mouseX, mouseY, mouseX, mouseY)
     }
 
+    ;---- 打开滤色编辑器 ----
+    OnClickFilterEditBtn() {
+        path := this.ImagePathCon.Text
+        if (path == "" || !FileExist(path)) {
+            MsgBox(GetLang("请先设置搜索图片"))
+            return
+        }
+
+        if (this.FilterEditGui == "") {
+            this.FilterEditGui := FilterEditGui()
+        }
+
+        this.FilterEditGui.SureAction := (colors, tol) => this.ApplyFilter(colors, tol)
+        this.FilterEditGui.CropAction := (newPath) => this.ApplyCroppedImage(newPath)
+
+        if (MainSoftData.IsModalSubGui && this.Gui != "") {
+            this.FilterEditGui.OwnerHwnd := this.Gui.Hwnd
+        }
+        else {
+            this.FilterEditGui.OwnerHwnd := ""
+        }
+
+        this.FilterEditGui.ShowGui(path, this.FilterColorValue, this.FilterTolValue)
+    }
+
+    ; 预览框：有保留色时显示处理后的图，没有则显示原图
+    RefreshImageThumb(path) {
+        if (this.ImageCon == "")
+            return
+        shown := path
+        if (path != "" && FileExist(path) && Trim(this.FilterColorValue) != "") {
+            out := A_Temp "\RMT_thumb_effect.png"
+            made := SaveFilteredPreview(path, this.FilterColorValue, this.FilterTolValue, out, 100)
+            if (made != "")
+                shown := made
+        }
+        this.ImageCon.GetPos(&ix, &iy)
+        this.ImageCon.Value := shown
+        this.ImageCon.Move(ix, iy, 100, 100)
+    }
+
+    ;图片处理窗口点确定后回写（有颜色即视为开启保留色）
+    ApplyFilter(colors, tol) {
+        this.FilterColorValue := colors
+        this.FilterTolValue := tol
+        this.RefreshFilterBtn()
+        this.RefreshImageThumb(this.ImagePathCon.Text)
+    }
+
+    ;裁剪后把命令的图片路径换成新文件
+    ApplyCroppedImage(newPath) {
+        this.ImagePathCon.Text := newPath
+        this.RefreshImageThumb(newPath)
+    }
+
+    ;按钮上显示保留色数量，提示里给出容差
+    RefreshFilterBtn() {
+        if (this.FilterEditBtn == "")
+            return
+        n := 0
+        for c in StrSplit(this.FilterColorValue, ",")
+            if (Trim(c) != "")
+                n += 1
+        this.FilterEditBtn.Text := (n > 0) ? Format(GetLang("图片处理({}色)"), n) : GetLang("图片处理")
+        this.FilterEditBtn.ToolTip := (n > 0)
+            ? Format(GetLang("已启用保留色：{}　容差 {}"), this.FilterColorValue, this.FilterTolValue)
+            : GetLang("图片处理：选保留色、裁剪模板")
+    }
+
     SaveSearchData() {
         data := this.Data
         data.SearchImagePath := this.ImagePathCon.Text
         data.Similar := this.SimilarCon.Value
+        data.FilterColor := this.FilterColorValue
+        data.FilterEnable := (Trim(this.FilterColorValue) != "") ? 1 : 0
+        data.FilterSimilar := this.FilterTolValue
         data.OCRType := this.OCRTypeCon.Value
         data.SearchImageType := this.SearchImageTypeCon.Value
         data.SearchType := this.SearchTypeCon.Value
