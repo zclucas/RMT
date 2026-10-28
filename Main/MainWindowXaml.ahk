@@ -556,7 +556,9 @@ class MainWin {
             . '<Setter Property="Padding" Value="0"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl"><Grid>'
             . '<Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>'
-            . '<Border Grid.Row="0" Margin="4,0,2,0" CornerRadius="4" BorderThickness="1.5" BorderBrush="{DynamicResource OutlineStroke}" Padding="0,0" SnapsToDevicePixels="True"><WrapPanel IsItemsHost="True"/></Border>'
+            ; 页签条整条声明为「可命中」，不当作窗口标题栏拖动区：窗口标题栏热区是窗口 DIP，
+            ; 内容整体被 Viewbox 缩放后可能压到页签条上，那一段会变成拖窗、页签点不动。
+            . '<Border Grid.Row="0" Margin="4,0,2,0" CornerRadius="4" BorderThickness="1.5" BorderBrush="{DynamicResource OutlineStroke}" Padding="0,0" SnapsToDevicePixels="True" WindowChrome.IsHitTestVisibleInChrome="True"><WrapPanel IsItemsHost="True"/></Border>'
             . '<Border Grid.Row="1" Background="Transparent"><ContentPresenter ContentSource="SelectedContent"/></Border>'
             . '</Grid></ControlTemplate></Setter.Value></Setter>'
             . '</Style>'
@@ -872,7 +874,12 @@ class MainWin {
     }
 
     OnWindowRevealed(state, ctrl, event) {
-        try WinActivate("ahk_id " this.ui.wpfHwnd)
+        ; 引擎揭盖那一瞬已经 SetForegroundWindow；这里只在没抢到前台时补一次。
+        ; WinActivate 内部要轮询「真的变前台」，恒定 125ms，能省就省。
+        try {
+            if (DllCall("user32\GetForegroundWindow", "Ptr") != this.ui.wpfHwnd)
+                WinActivate("ahk_id " this.ui.wpfHwnd)
+        }
         this._RelayoutCurrentVL()
     }
 

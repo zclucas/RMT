@@ -177,6 +177,27 @@ public partial class AhkWpfEngine
                 return IntPtr.Zero;
             }
         }
+        else if (msg == 0x00A3) // WM_NCLBUTTONDBLCLK
+        {
+            // 标题栏双击：默认交给 DefWindowProc 走 SC_MAXIMIZE / SC_RESTORE。
+            // 但窗口刚出现、还没被激活时，第一击会被系统拿去切前台，双击序列容易被打断，
+            // 表现为「刚启动双击标题栏不最大化」。这里自己接管，不依赖窗口是否已是前台。
+            try
+            {
+                if (wParam.ToInt32() == 2) // HTCAPTION
+                {
+                    if (win.ResizeMode == System.Windows.ResizeMode.CanResize || win.ResizeMode == System.Windows.ResizeMode.CanResizeWithGrip)
+                    {
+                        win.WindowState = win.WindowState == WindowState.Maximized
+                            ? WindowState.Normal
+                            : WindowState.Maximized;
+                        handled = true;
+                        return IntPtr.Zero;
+                    }
+                }
+            }
+            catch { }
+        }
         else if (msg == 0x0211) // WM_ENTERMENULOOP：系统菜单/弹出菜单打开
         {
             try
@@ -4066,6 +4087,28 @@ public partial class AhkWpfEngine
             catch { }
         }
         ShowWindow(hwnd, 5);
+        // 揭盖这一瞬内容已经就绪，把「窗口出现时就该是活动窗口」补上：
+        // PrepareDeferredReveal 为了不在空壳阶段抢焦点设了 ShowActivated=false，窗口出现时是未激活的；
+        // 未激活窗口双击标题栏，第一击会被系统当作「激活窗口」吃掉，只剩单击，所以刚启动时双击
+        // 最大不了，等到 AHK 侧 WinActivate 回来才正常。这里直接接管前台，省掉那一段延迟。
+        try
+        {
+            if (win.Resources.Contains("_RevealActivate"))
+            {
+                bool wantActive = true;
+                try { wantActive = (bool)win.Resources["_RevealActivate"]; } catch { }
+                win.Resources.Remove("_RevealActivate");
+                if (wantActive)
+                {
+                    SetForegroundWindow(hwnd);
+                    // 真的到了前台才打标记：1.5s 后那次兜底 Activate 看到标记就不再抢一次。
+                    // 用 GetForegroundWindow 而不是 WPF 的 IsActive —— WM_ACTIVATE 的处理有延迟，
+                    // IsActive 在这一瞬可能还是 false，误判成「没激活」就等于没修。
+                    try { if (GetForegroundWindow() == hwnd) win.Resources["_RevealActiveOk"] = true; } catch { }
+                }
+            }
+        }
+        catch { }
         RmtTaskbarGroup.Refresh();
     }
 

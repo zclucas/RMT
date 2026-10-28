@@ -23,6 +23,9 @@ using Microsoft.Web.WebView2.Core;
 public partial class AhkWpfEngine
 {
     string winId; IntPtr ahkHwnd; string[] tracked; Window win;
+    // XAML 里写的 WindowChrome.CaptionHeight（设计尺寸）。窗口标题栏热区是窗口 DIP，不跟着
+    // 根内容 Viewbox 缩放，必须按当前缩放比换算，否则内容缩小后热区会压到标题栏下方的控件上。
+    double _chromeCaptionDesign = -1;
     System.Collections.Generic.HashSet<string> _boundEvents = new System.Collections.Generic.HashSet<string>();
     System.Collections.Generic.Dictionary<string, object> _boundEventCtrls = new System.Collections.Generic.Dictionary<string, object>();
     System.Collections.Generic.Dictionary<string, object> _controlCache = new System.Collections.Generic.Dictionary<string, object>();
@@ -476,13 +479,14 @@ public partial class AhkWpfEngine
             SendToAhkAsync("EVENT|" + winId + "|Window|Deactivated\n");
         };
         win.LocationChanged += (s, e) => UpdateSnapState(win);
-        win.SizeChanged += (s, e) => UpdateSnapState(win);
+        win.SizeChanged += (s, e) => { UpdateSnapState(win); SyncChromeCaption(); };
 
         win.Loaded += (s, e) =>
         {
             IntPtr hwndVal = new WindowInteropHelper(win).Handle;
             HwndSource.FromHwnd(hwndVal).AddHook(WndProc);
             FillViewboxViewport();
+            SyncChromeCaption();
             // Async: 避免 CREATE_WINDOW 的 SendMessage 与 LoadedHwnd 回调互相嵌套死锁
             SendToAhkAsync("EVENT|" + winId + "|Window|LoadedHwnd|" + hwndVal.ToString() + "\n");
             UpdateSnapState(win);
@@ -1045,13 +1049,14 @@ public partial class AhkWpfEngine
             SendToAhkAsync("EVENT|" + winId + "|Window|Deactivated\n");
         };
         win.LocationChanged += (s, e) => UpdateSnapState(win);
-        win.SizeChanged += (s, e) => UpdateSnapState(win);
+        win.SizeChanged += (s, e) => { UpdateSnapState(win); SyncChromeCaption(); };
 
         win.Loaded += (s, e) =>
         {
             IntPtr hwnd = new WindowInteropHelper(win).Handle;
             HwndSource.FromHwnd(hwnd).AddHook(WndProc);
             FillViewboxViewport();
+            SyncChromeCaption();
             // Async: 避免 CREATE_WINDOW 的 SendMessage 与 LoadedHwnd 回调互相嵌套死锁
             SendToAhkAsync("EVENT|" + winId + "|Window|LoadedHwnd|" + hwnd.ToString() + "\n");
             UpdateSnapState(win);
@@ -1074,8 +1079,10 @@ public partial class AhkWpfEngine
                     win.Topmost = false;
                     if (keepTopmost) win.Topmost = true;
                 }
-                // 揭盖前窗口处于 SW_HIDE 隐藏阶段：不激活（Activate 会把隐藏窗口重新显示成白壳）
-                if (!win.Resources.Contains("_NativeAlphaPending"))
+                // 揭盖前窗口处于 SW_HIDE 隐藏阶段：不激活（Activate 会把隐藏窗口重新显示成白壳）。
+                // 揭盖时 RevealNativeWindow 已经接管过前台（_RevealActiveOk 标记）：成功就别再补，
+                // 否则用户在这 1.5 秒内切去别的程序，会被硬拉回 RMT。
+                if (!win.Resources.Contains("_NativeAlphaPending") && !win.Resources.Contains("_RevealActiveOk"))
                     win.Activate();
                 try { System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce; } catch { }
                 GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
@@ -1215,6 +1222,39 @@ public partial class AhkWpfEngine
         catch { }
     }
 
+    // 标题栏热区是窗口 DIP，不跟着根内容 Viewbox 缩放，且 WPF 判定的范围是
+    // 「ResizeBorderThickness.Top + CaptionHeight」两段合起来（WindowChromeWorker._HitTestNca）。
+    // 所以 CaptionHeight 要按「视觉标题栏高度 × 缩放比 − 顶部缩放边框」换算：
+    // 少了会把缩放边框算漏，热区越过标题栏压到页签条上，那一段点不动、也不出悬停高亮。
+    private void SyncChromeCaption()
+    {
+        if (win == null) return;
+        try
+        {
+            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(win);
+            if (chrome == null) return;
+            if (_chromeCaptionDesign < 0) _chromeCaptionDesign = chrome.CaptionHeight;
+            if (!(_chromeCaptionDesign > 0)) return;
+            var hostBox = win.Content as Viewbox;
+            var child = hostBox == null ? null : hostBox.Child as FrameworkElement;
+            if (child == null) return;
+            double designW = child.ActualWidth > 1 ? child.ActualWidth : child.Width;
+            double designH = child.ActualHeight > 1 ? child.ActualHeight : child.Height;
+            if (!(designW > 1) || !(designH > 1)) return;
+            double hostW = hostBox.ActualWidth > 1 ? hostBox.ActualWidth : win.ActualWidth;
+            double hostH = hostBox.ActualHeight > 1 ? hostBox.ActualHeight : win.ActualHeight;
+            if (!(hostW > 1) || !(hostH > 1)) return;
+            double scale = Math.Min(hostW / designW, hostH / designH);
+            if (scale < 0.3) scale = 0.3;
+            if (scale > 3) scale = 3;
+            double target = Math.Round(_chromeCaptionDesign * scale - chrome.ResizeBorderThickness.Top, 2);
+            if (target < 0) target = 0;
+            if (Math.Abs(chrome.CaptionHeight - target) > 0.5)
+                chrome.CaptionHeight = target;
+        }
+        catch { }
+    }
+
     private static void ShowEngineWindow(Window win, bool isDaemon)
     {
         try
@@ -1282,6 +1322,10 @@ public partial class AhkWpfEngine
             return;
         try
         {
+            // 记住原始 ShowActivated：揭盖时按这个决定要不要接管前台（RevealNativeWindow）。
+            // 窗口以「未激活」状态出现时，双击标题栏的第一击会被系统拿去激活窗口直接吞掉，
+            // 表现为刚启动双击标题栏不最大化，要等到 AHK 侧 WinActivate 回来才正常。
+            win.Resources["_RevealActivate"] = win.ShowActivated;
             win.ShowActivated = false; // 内容未就绪前不抢焦点
             win.Resources["_NativeAlphaPending"] = true;
             // 揭盖还原位：窗口 XAML 已显式定位（Manual+Left/Top，如主窗口的保存位置）则沿用，
