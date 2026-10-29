@@ -1,0 +1,160 @@
+name: Test Pack
+
+# 用于测试提交的代码是否能打包成功
+
+on:
+  push:
+    branches:
+      - Dev
+  workflow_dispatch:
+
+concurrency:
+  group: test-pack-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    name: 打包并检查报错
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Node（打包帮助文档 Web/JS/SingleHtml.js 需要）
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # choco 的 autohotkey 包只装运行时（编译器是官方安装器里的可选组件，choco 静默参数没带），
+      # 所以：运行时用 choco，编译器用官方 Ahk2Exe 的 zip。两者本来就可以分处不同目录。
+      - name: 安装 AutoHotkey v2 与 Ahk2Exe
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ahkVer = '2.0.31'
+          $a2xVer = 'Ahk2Exe1.1.37.02a2'
+
+          # 1) runtime (v2 base binaries) via choco
+          Write-Host "choco install autohotkey --version=$ahkVer"
+          choco install autohotkey --version=$ahkVer -y --no-progress
+          $code = $LASTEXITCODE
+          Write-Host "choco exit code: $code"
+          # 3010 means installed but a reboot is required; treat as success
+          if ($code -ne 0 -and $code -ne 3010) { throw "choco install autohotkey failed: exit $code" }
+
+          $root = Join-Path $env:ProgramFiles 'AutoHotkey'
+          if (-not (Test-Path -LiteralPath $root)) { throw "AutoHotkey not installed: $root" }
+          Write-Host "install dir: $root"
+          Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "  $($_.Name)" }
+
+          # v2 bases live under the v2 subfolder; find them instead of hardcoding the layout
+          $ahk64 = (Get-ChildItem -LiteralPath $root -Recurse -Filter 'AutoHotkey64.exe' -ErrorAction SilentlyContinue |
+                    Select-Object -First 1).FullName
+          $ahk32 = (Get-ChildItem -LiteralPath $root -Recurse -Filter 'AutoHotkey32.exe' -ErrorAction SilentlyContinue |
+                    Select-Object -First 1).FullName
+          if (-not $ahk64) { throw "AutoHotkey64.exe not found under $root" }
+          if (-not $ahk32) { throw "AutoHotkey32.exe not found under $root" }
+
+          # 2) compiler via the official Ahk2Exe zip
+          $a2xZip = Join-Path $env:RUNNER_TEMP 'ahk2exe.zip'
+          Write-Host "download: Ahk2Exe $a2xVer"
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/Ahk2Exe/releases/download/$a2xVer/$a2xVer.zip" `
+            -OutFile $a2xZip -UseBasicParsing -TimeoutSec 300
+          $a2xDir = Join-Path $env:RUNNER_TEMP 'ahk2exe'
+          Expand-Archive -LiteralPath $a2xZip -DestinationPath $a2xDir -Force
+          $ahk2exe = (Get-ChildItem -LiteralPath $a2xDir -Recurse -Filter 'Ahk2Exe.exe' |
+                      Select-Object -First 1).FullName
+          if (-not $ahk2exe) { throw 'Ahk2Exe.exe not found in the official zip' }
+
+          Add-Content -Path $env:GITHUB_ENV -Value "A2X=$ahk2exe"
+          Add-Content -Path $env:GITHUB_ENV -Value "AHK64=$ahk64"
+          Add-Content -Path $env:GITHUB_ENV -Value "AHK32=$ahk32"
+
+          Write-Host "Ahk2Exe      : $ahk2exe ($((Get-Item $ahk2exe).VersionInfo.FileVersion))"
+          Write-Host "AutoHotkey64 : $ahk64 ($((Get-Item $ahk64).VersionInfo.FileVersion))"
+          Write-Host "AutoHotkey32 : $ahk32 ($((Get-Item $ahk32).VersionInfo.FileVersion))"
+          Write-Host "node         : $(node -v)"
+
+      - name: 运行 PackRMT.ps1（严格模式，任一环节失败即失败）
+        run: |
+          # keep this block ASCII-only: on Windows, shell: powershell reads the temp script as ANSI
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $ErrorActionPreference = 'Continue'
+
+          # both => build and pack BOTH ReleaseX64 and ReleaseX86
+          $params = @{
+            NoPause          = $true
+            Strict           = $true
+            SkipProcessCheck = $true
+            Release          = 'both'
+            OutDir           = (Join-Path $env:RUNNER_TEMP 'RMTRelease')
+          }
+          if ($env:A2X)   { $params.Ahk2ExePath = $env:A2X }
+          if ($env:AHK64) { $params.Base64Path  = $env:AHK64 }
+          if ($env:AHK32) { $params.Base32Path  = $env:AHK32 }
+
+          & (Join-Path $env:GITHUB_WORKSPACE 'PackRMT.ps1') @params
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          exit 0
+
+      - name: 汇总日志到任务摘要
+        if: always()
+        shell: pwsh
+        run: |
+          $md = @()
+          $md += '## RMT 打包检查'
+          $md += ''
+          $md += '| 项目 | 值 |'
+          $md += '| --- | --- |'
+          $md += "| 分支 | $env:GITHUB_REF_NAME |"
+          $md += "| 提交 | $($env:GITHUB_SHA.Substring(0,7)) |"
+
+          $log = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'Log') -Filter 'PackRMT_*.log' -ErrorAction SilentlyContinue |
+                 Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+          if (-not $log) {
+            $md += '| 结果 | 未生成日志（脚本可能在写入前就退出） |'
+          }
+          else {
+            $text  = Get-Content -LiteralPath $log.FullName -Raw
+            $lines = $text -split "`r?`n"
+            $errs  = @($lines | Where-Object { $_ -match '\[ERROR\]' } | ForEach-Object { $_.Trim() })
+            $warns = @($lines | Where-Object { $_ -match '\[WARN\]' })
+            $ok    = $text -match '\[RESULT\] BUILD OK'
+
+            $md += "| 结果 | $(if ($ok) { '成功' } else { '失败' }) |"
+            $md += "| 错误行数 | $($errs.Count) |"
+            $md += "| 警告行数 | $($warns.Count) |"
+            $md += "| 日志文件 | $($log.Name) |"
+
+            if ($errs.Count -gt 0) {
+              $md += ''
+              $md += '### 错误摘录'
+              $md += '```'
+              $md += @($errs | Select-Object -First 20)
+              $md += '```'
+            }
+            if (-not $ok) {
+              foreach ($e in ($errs | Select-Object -First 5)) { Write-Host "::error::$e" }
+            }
+          }
+
+          $md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: 上传打包日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pack-logs
+          path: Log/*.log
+          if-no-files-found: warn
+          retention-days: 14
+

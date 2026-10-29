@@ -2,7 +2,24 @@
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-param([switch]$NoPause, [switch]$StopRunningOnly)
+param(
+    [switch]$NoPause,
+    [switch]$StopRunningOnly,
+    # 发行版类型：none=只编译 Work.exe（含帮助文档）/ x64=测试版 / both=正式版
+    # 留空 = 交互式询问（本地双击运行的默认行为不受影响）
+    [ValidateSet("none", "x64", "both")]
+    [string]$Release = "",
+    # 发行包输出目录，留空 = 桌面\RMTRelease
+    [string]$OutDir = "",
+    # 严格模式：帮助文档 / 发行版任一步失败都以退出码 1 结束，供 CI 判定
+    [switch]$Strict,
+    # 跳过“关闭正在运行的 RMT/Work.exe”（CI 环境无进程占用，也不需要可能的提权）
+    [switch]$SkipProcessCheck,
+    # 覆盖编译器路径（CI 用自完备的 AHK 安装目录）
+    [string]$Ahk2ExePath = "",
+    [string]$Base64Path = "",
+    [string]$Base32Path = ""
+)
 
 try { $Host.UI.RawUI.WindowTitle = "RMT 打包工具" } catch { }
 $ErrorActionPreference = "Stop"
@@ -25,6 +42,11 @@ $Base64Paths = @(
 $Base32Paths = @(
     "C:\Program Files\AutoHotkey\v2\AutoHotkey32.exe"
 )
+
+# 命令行显式指定的路径优先
+if ($Ahk2ExePath) { $Ahk2ExePaths = @($Ahk2ExePath) + $Ahk2ExePaths }
+if ($Base64Path)  { $Base64Paths  = @($Base64Path)  + $Base64Paths }
+if ($Base32Path)  { $Base32Paths  = @($Base32Path)  + $Base32Paths }
 
 # ============================================================
 # 通用函数
@@ -502,9 +524,13 @@ function New-Release {
         Copy-Voice -ReleaseDir $releaseDir -Arch "x86"
     }
 
-    Write-Section "创建发行包到桌面"
-    $desktop = [Environment]::GetFolderPath("Desktop")
-    $rmtReleaseDir = Join-Path $desktop "RMTRelease"
+    # 输出目录：命令行 -OutDir 优先，默认桌面\RMTRelease
+    $rmtReleaseDir = if ($OutDir) {
+        [IO.Path]::GetFullPath($OutDir)
+    } else {
+        Join-Path ([Environment]::GetFolderPath("Desktop")) "RMTRelease"
+    }
+    Write-Section "创建发行包到 $rmtReleaseDir"
 
     # 删除旧的 RMTRelease 目录
     if (Test-Path $rmtReleaseDir) {
@@ -1005,7 +1031,11 @@ function Main {
 
     # 步骤 3: 先关闭主进程与 Worker，释放 Work.exe 后才能清理和编译
     Write-Step 3 "关闭正在运行的 RMT 和 Work.exe"
-    Stop-RunningRMT
+    if ($SkipProcessCheck) {
+        Write-Log "  已跳过（-SkipProcessCheck）" "Gray"
+    } else {
+        Stop-RunningRMT
+    }
 
     # 步骤 4: 清理旧文件
     Write-Step 4 "清理旧文件"
@@ -1021,28 +1051,41 @@ function Main {
     # 步骤 6: 打包帮助文档
     Write-Step 6 "打包帮助文档"
     if (-not (Pack-HelpDoc)) {
+        if ($Strict) { throw "帮助文档打包失败（-Strict 模式下视为错误）" }
         Write-Log "警告: 帮助文档打包失败" "Yellow"
     }
     Write-Log "运行环境work编译完成" "Green"
 
-    # 步骤 7: 询问是否生成发行版
+    # 步骤 7: 生成发行版
     Write-Step 7 "生成发行版"
-    $choice = Ask-Choice "请选择发行版类型:" @("不生成", "测试版 (仅 X64)", "正式版 (X64 + X86)")
+
+    # 命令行给了 -Release 就不再询问；没给则保持原来的交互式选择
+    if ($Release) {
+        $choice = switch ($Release) { "x64" { 2 } "both" { 3 } default { 1 } }
+        Write-Log "发行版类型: $Release（命令行指定）" "Cyan"
+    } else {
+        $choice = Ask-Choice "请选择发行版类型:" @("不生成", "测试版 (仅 X64)", "正式版 (X64 + X86)")
+    }
 
     if ($choice -eq 2) {
         if (-not (New-Release -Type "x64")) {
+            if ($Strict) { throw "发行版创建失败（x64）" }
             Write-Log "发行版创建失败" "Red"
         }
     }
     elseif ($choice -eq 3) {
         if ($script:Base32Exe) {
             if (-not (New-Release -Type "both")) {
+                if ($Strict) { throw "发行版创建失败（x64 + x86）" }
                 Write-Log "发行版创建失败" "Red"
             }
         }
         else {
+            # 要求 32/64 都打包时，缺 32 位编译器算错误（CI 用），不能悄悄降级成只出 x64
+            if ($Strict) { throw "未找到 32 位编译器（AutoHotkey32.exe），无法生成 X86 发行版" }
             Write-Log "未找到 32 位编译器，生成 X64 测试版" "Yellow"
             if (-not (New-Release -Type "x64")) {
+                if ($Strict) { throw "发行版创建失败（x64）" }
                 Write-Log "发行版创建失败" "Red"
             }
         }
@@ -1079,6 +1122,12 @@ catch {
     $script:ExitCode = 1
 }
 finally {
+    # 写在 Stop-Transcript 之前，保证 CI 日志里能直接搜到结论行
+    if ($script:ExitCode -eq 0) {
+        Write-Host "`n[RESULT] BUILD OK" -ForegroundColor Green
+    } else {
+        Write-Host "`n[RESULT] BUILD FAILED (exit $script:ExitCode)" -ForegroundColor Red
+    }
     if ($script:Transcript) {
         try { Stop-Transcript | Out-Null } catch { }
         Write-Host "`n日志: $($script:Transcript)" -ForegroundColor DarkGray
