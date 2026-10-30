@@ -506,7 +506,11 @@ class VariableGui {
         str13 := GetLang("当前时：当前小时（形如19）")
         str14 := GetLang("当前分：当前分钟（形如46）")
         str15 := GetLang("当前秒：当前秒（形如58）")
-        str := Format("{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6, str7, str7b, str8, str9, str10, str11, str12, str13, str14, str15)
+        str16 := GetLang("窗口宽度：实时获取当前窗口宽度（鼠标所在窗口）")
+        str17 := GetLang("窗口高度：实时获取当前窗口高度（鼠标所在窗口）")
+        str18 := GetLang("窗口坐标X：实时获取当前窗口左上角X（鼠标所在窗口）")
+        str19 := GetLang("窗口坐标Y：实时获取当前窗口左上角Y（鼠标所在窗口）")
+        str := Format("{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6, str7, str7b, str8, str9, str10, str11, str12, str13, str14, str15, str16, str17, str18, str19)
         RmtDialog.Info(str, GetLang("系统变量说明"), "Owner" this.Hwnd())
     }
 

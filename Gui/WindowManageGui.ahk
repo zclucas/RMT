@@ -26,13 +26,14 @@ class WindowManageGui {
         this.ActionTypeArr := [
             GetLang("激活窗口"), GetLang("最大化窗口"), GetLang("最小化窗口"), GetLang("还原窗口"), GetLang("关闭窗口"),
             GetLang("移动窗口"), GetLang("调整大小"), GetLang("置顶窗口"), GetLang("取消置顶"), GetLang("修改标题"),
-            GetLang("修改透明度"), GetLang("开启鼠标穿透"), GetLang("关闭鼠标穿透")
+            GetLang("修改透明度"), GetLang("开启鼠标穿透"), GetLang("关闭鼠标穿透"), GetLang("获取窗口信息")
         ]
         ; 显隐联动行容器名（OnActionChange 用，对应原生 RelateArrCon 控件组）
         this.PosRelateArrCon := ["PosRelateRow"]
         this.SizeRelateArrCon := ["SizeRelateRow"]
         this.TitleRelateArrCon := ["TitleRelateRow"]
         this.TransparencyRelateArrCon := ["TransparencyRelateRow"]
+        this.GetInfoRelateArrCon := ["GetInfoRelateRow"]
     }
 
     Hwnd() {
@@ -153,6 +154,19 @@ class WindowManageGui {
         transRow.Add("TextBlock").Grid_Column(0).Text(GetLang("透明度：")).VerticalAlignment("Center")
         transRow.Add("ComboBox").Grid_Column(1).Name("TransparencyCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
 
+        ; 获取窗口信息：四个接收变量（左上角 X/Y、宽/高）压缩在**一行**。
+        ; 重要：窗口用 SizeToContent="Height"，只在开窗时测量一次，展开高度超出预留就会把下方「确定」按钮挤出可视区，
+        ; 所以这里必须和其它操作类型一样只占一行（36），不能拆成两行。
+        getInfoRow := extra.Add("Grid").Name("GetInfoRelateRow").Visibility("Collapsed")
+        getInfoRow.Rows("36")
+        getInfoRow.Cols("70", "14", "*", "6", "14", "*", "6", "14", "*", "6", "14", "*")
+        getInfoRow.Add("TextBlock").Grid_Column(0).Text(GetLang("存入变量：")).VerticalAlignment("Center")
+        ; ToolTip 必须用「完整句子」做键：中文下 GetLang 直接原样返回传入的键，传短键会把键名显示给用户
+        this._AddVarSlot(getInfoRow, 1, "X", "GetPosXVarCon", GetLang("获取窗口信息X存入提示：窗口左上角的 X 坐标写入该变量，留空则不获取"))
+        this._AddVarSlot(getInfoRow, 4, "Y", "GetPosYVarCon", GetLang("获取窗口信息Y存入提示：窗口左上角的 Y 坐标写入该变量，留空则不获取"))
+        this._AddVarSlot(getInfoRow, 7, "W", "GetWidthVarCon", GetLang("获取窗口信息宽度存入提示：窗口宽度写入该变量，留空则不获取"))
+        this._AddVarSlot(getInfoRow, 10, "H", "GetHeightVarCon", GetLang("获取窗口信息高度存入提示：窗口高度写入该变量，留空则不获取"))
+
         ; 行3：确定
         btnRow := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(5).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow)
@@ -194,6 +208,19 @@ class WindowManageGui {
             this._ComboPush(name, prop, val)
     }
 
+    ; 旧配置保存的 WindowManageData 没有「获取窗口信息」的变量名字段，按空处理避免报错
+    _DataField(name, defaultValue := "") {
+        return (IsObject(this.Data) && this.Data.HasOwnProp(name)) ? this.Data.%name% : defaultValue
+    }
+
+    ; 单行内的「标签 + 变量下拉」一格：labelCol 放标签，labelCol+1 放下拉
+    _AddVarSlot(rowGrid, labelCol, label, comboName, tip) {
+        rowGrid.Add("TextBlock").Grid_Column(labelCol).Text(label).VerticalAlignment("Center")
+            .HorizontalAlignment("Center")
+        rowGrid.Add("ComboBox").Grid_Column(labelCol + 1).Name(comboName).Height(26).MinHeight(26)
+            .IsEditable("True").VerticalAlignment("Center").ToolTip(tip)
+    }
+
     ; ---------------- 数据 ----------------
 
     Init(cmd) {
@@ -219,6 +246,10 @@ class WindowManageGui {
         this._SetCombo("HeightCon", DLVariableArr, this.Data.Height)
         this._SetCombo("NewTitleCon", DLVariableArr, this.Data.NewTitle)
         this._SetCombo("TransparencyCon", DLVariableArr, this.Data.Transparency)
+        this._SetCombo("GetPosXVarCon", DLVariableArr, this._DataField("GetPosXVar"))
+        this._SetCombo("GetPosYVarCon", DLVariableArr, this._DataField("GetPosYVar"))
+        this._SetCombo("GetWidthVarCon", DLVariableArr, this._DataField("GetWidthVar"))
+        this._SetCombo("GetHeightVarCon", DLVariableArr, this._DataField("GetHeightVar"))
         ; 透明度：原生在变量项之后追加 0%~100% 列表
         for p in ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"]
             this._ComboPush("TransparencyCon", "AddItem", p)
@@ -236,11 +267,13 @@ class WindowManageGui {
         isShowSize := (actionType == GetLang("调整大小"))
         isShowTitle := (actionType == GetLang("修改标题"))
         isShowTransparency := (actionType == GetLang("修改透明度"))
+        isShowGetInfo := (actionType == GetLang("获取窗口信息"))
 
         this.SetConArrState(this.PosRelateArrCon, false, isShowPos)
         this.SetConArrState(this.SizeRelateArrCon, false, isShowSize)
         this.SetConArrState(this.TitleRelateArrCon, false, isShowTitle)
         this.SetConArrState(this.TransparencyRelateArrCon, false, isShowTransparency)
+        this.SetConArrState(this.GetInfoRelateArrCon, false, isShowGetInfo)
     }
 
     CheckIfValid() {
@@ -269,6 +302,10 @@ class WindowManageGui {
         this.Data.Height := this.ui.Query("HeightCon")
         this.Data.NewTitle := this.ui.Query("NewTitleCon")
         this.Data.Transparency := StrReplace(this.ui.Query("TransparencyCon"), "%")
+        this.Data.GetPosXVar := this.ui.Query("GetPosXVarCon")
+        this.Data.GetPosYVar := this.ui.Query("GetPosYVarCon")
+        this.Data.GetWidthVar := this.ui.Query("GetWidthVarCon")
+        this.Data.GetHeightVar := this.ui.Query("GetHeightVarCon")
         SaveMacroCMDData(this.Data)
     }
 

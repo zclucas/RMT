@@ -3096,6 +3096,22 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map()) {
             }
             Value := winId
             return true
+        case "窗口宽度", "窗口高度", "窗口坐标X", "窗口坐标Y":
+            winId := 0
+            winX := 0, winY := 0, winW := 0, winH := 0
+            try {
+                CoordMode("Mouse", "Screen")
+                MouseGetPos &mouseX, &mouseY, &winId
+                if (winId)
+                    WinGetPos(&winX, &winY, &winW, &winH, "ahk_id " winId)
+            }
+            switch varName {
+                case "窗口宽度": Value := winW
+                case "窗口高度": Value := winH
+                case "窗口坐标X": Value := winX
+                case "窗口坐标Y": Value := winY
+            }
+            return true
     }
 
     if (tableVarMap.Has(varName)) {
@@ -3449,7 +3465,9 @@ GetBrightness() {
 }
 
 GetSystemVarArr() {
-    return [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("句柄ID"), GetLang("当前鼠标颜色"),
+    return [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("句柄ID"),
+    GetLang("窗口宽度"), GetLang("窗口高度"), GetLang("窗口坐标X"), GetLang("窗口坐标Y"),
+    GetLang("当前鼠标颜色"),
     GetLang("当前坐标X"), GetLang("当前坐标Y"), GetLang("当前剪切板"), GetLang("当前时间戳")]
 }
 

@@ -1514,6 +1514,8 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <li><strong>句柄ID</strong>：当前鼠标所在窗口句柄</li>
 <li><strong>当前鼠标颜色</strong>：如 <code>EEFF44</code></li>
 <li><strong>当前鼠标坐标X / Y</strong>：屏幕坐标</li>
+<li><strong>窗口宽度 / 高度</strong>：当前鼠标所在窗口的宽、高</li>
+<li><strong>窗口坐标X / Y</strong>：当前鼠标所在窗口左上角的 X、Y（屏幕坐标）</li>
 <li><strong>当前日期</strong>：如 <code>2026-04-12</code></li>
 <li><strong>当前时间</strong>：如 <code>19:46</code></li>
 <li><strong>当前时间(秒)</strong>：如 <code>19:46:58</code></li>
@@ -2161,6 +2163,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <ol>
 <li><strong>找窗口</strong>：按标题、类名、进程名找到目标窗口。</li>
 <li><strong>改窗口</strong>：对找到的窗口做激活、缩放、移动、置顶、改标题、改透明度、鼠标穿透等操作。</li>
+<li><strong>读窗口</strong>：用「获取窗口信息」把目标窗口的位置和大小读出来，存进变量。</li>
 </ol>
 <h3>类型说明</h3>
 <ol>
@@ -2173,6 +2176,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <li><strong>修改标题</strong>：改窗口标题栏上的文字。</li>
 <li><strong>修改透明度</strong>：0～100%，例如 <code>80%</code>。<code>0%</code> 完全透明，<code>100%</code> 完全不透明。</li>
 <li><strong>开启 / 关闭鼠标穿透</strong>：开启后，鼠标点击会穿过这个窗口，点到它后面的内容。</li>
+<li><strong>获取窗口信息</strong>：把窗口左上角坐标和窗口大小读出来，分别存进四个变量，供后面的指令使用。</li>
 </ol>
 <h3>参数解析</h3>
 <ol>
@@ -2181,6 +2185,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <li><strong>宽度 / 高度</strong>：仅「调整大小」使用，可填变量。</li>
 <li><strong>新标题</strong>：仅「修改标题」使用，可填变量。</li>
 <li><strong>透明度</strong>：仅「修改透明度」使用，范围 <code>0%</code>～<code>100%</code>，可填变量。</li>
+<li><strong>坐标X存入 / 坐标Y存入 / 宽度存入 / 高度存入</strong>：仅「获取窗口信息」使用，填接收结果的变量名。某一项留空就表示不取这一项。</li>
 <li><strong>备注</strong>：写在指令串序列号后面，只用于辨认。</li>
 </ol>
 <h3>特别说明</h3>
@@ -2188,6 +2193,9 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <li><strong>关窗口不是杀进程</strong>：关了窗口之后，程序可能仍在托盘或后台运行。</li>
 <li><strong>只操作可见窗口</strong>：按标题等模糊匹配时，会解析成当前可见窗口的句柄，避免误操作到隐藏窗口。</li>
 <li><strong>找不到窗口</strong>：查找值填错、窗口已经关掉，或没有可见的匹配项时，本条没有效果。</li>
+<li><strong>获取窗口信息只读第一个窗口</strong>：多个窗口同时匹配时，只读取最上面那个窗口的信息，和「激活窗口」的取法一致。</li>
+<li><strong>坐标与大小的口径</strong>：读的是整个窗口的外框（<code>WinGetPos</code>），包含标题栏和边框。界面绘图的客户区（去掉标题栏和边框）会略小一点。</li>
+<li><strong>存到变量后要自己再用</strong>：读取结果只是写进变量，不会改变窗口本身。拿到之后再用「移动窗口」「调整大小」等去用这些值。</li>
 </ol>
 <h3>指令格式</h3>
 <ul>
@@ -2720,6 +2728,20 @@ ExecuteMacroCmdOnce (单条指令执行)
 <p><strong>功能概述：</strong><br>文件夹打包工具（用于导出配置）。</p>
 <hr>
 <h2>🖥️ GUI 模块 (<code>Gui/</code>)</h2>
+<h3>⚠️ 窗口高度：SizeToContent 的已知坑</h3>
+<p>多数指令编辑窗口在创建时是：</p>
+<pre><code class="language-ahk">this.ui.xaml := StrReplace(this.ui.xaml, &#39;Width=&quot;940&quot; Height=&quot;700&quot;&#39;,
+    &#39;Title=&quot;&#39; title &#39;&quot; Width=&quot;540&quot; SizeToContent=&quot;Height&quot; Opacity=&quot;0&quot;&#39;)
+</code></pre>
+<p><code>SizeToContent=&quot;Height&quot;</code> <strong>只在开窗那一刻按内容测量一次</strong>，开窗后不会跟着内容重新变高。</p>
+<p>后果：显隐联动（如切换操作类型后 <code>Visibility</code> 从 <code>Collapsed</code> 变 <code>Visible</code>）展开出来的行，会挤占窗口底部原本的边距余量；<strong>展开超过余量就会把底部「确定」按钮挤出可视区，按钮点不到</strong>。</p>
+<p>规则：</p>
+<ul>
+<li>任一分支展开的内容，<strong>总高度不能超过其它分支的最高值</strong>（一般就是一行 36）；</li>
+<li>需要放多个输入项时优先压在<strong>一行</strong>内（缩短标签、用 <code>X / Y / W / H</code> 之类语言无关的短标签 + <code>ToolTip</code> 说明），不要拆成多行；</li>
+<li>数据确实很多时，参考 <code>FeedbackGui.ahk</code> 改成<strong>固定 <code>Height</code></strong>（那里不用 <code>SizeToContent</code> 就是为了不被裁按钮）。</li>
+</ul>
+<p>参照：<code>Gui/WindowManageGui.ahk</code> 的「获取窗口信息」把四个接收变量压成单行，就是为了守住这个预算。</p>
 <h3><code>MacroEditGui.ahk</code></h3>
 <p><strong>功能概述：</strong><br>主宏编辑器，支持用户自定义宏逻辑。</p>
 <p><strong>职责内容：</strong></p>
@@ -3155,6 +3177,8 @@ ExecuteMacroCmdOnce (单条指令执行)
 <li><strong>独立颜色匹配</strong>：搜索 Pro、搜索 Combo 的 OpenCV 图片目标新增「颜色匹配」开关，默认使用灰度匹配；开启后比较颜色，并支持自适应缩放，相似度不再自动切换颜色模式。</li>
 <li><strong>移动Pro 拖拽动作</strong>：鼠标动作新增「拖拽」，绝对移动从起始点拖到终止点，相对移动按 X / Y 偏移拖动；坐标支持变量，结束后自动松开左键。</li>
 <li><strong>移动路径预览</strong>：移动、移动Pro、增量移动的编辑器标题栏提供预览按钮，在屏幕上叠加显示主题配色的路径箭头；增量移动会标出每一步的落点，便于核对点位与范围。</li>
+<li><strong>获取窗口信息</strong>：窗口管理新增操作类型，读取目标窗口左上角的 X / Y 与窗口宽高，分别写入指定变量；变量名留空的项不获取。</li>
+<li><strong>窗口类系统变量</strong>：变量的「系统」类型新增窗口宽度、窗口高度、窗口坐标X、窗口坐标Y，实时取当前鼠标所在窗口的信息。</li>
 <li><strong>内嵌帮助文档</strong>：可在软件内阅读帮助文档，指令编辑器支持直接跳转到对应指令的手册说明。</li>
 <li><strong>软件内反馈</strong>：在帮助页直接提交 Bug 或功能建议；登录论坛后可填写描述、粘贴或拖入图片，并选择附带环境信息。</li>
 </ul>
@@ -3175,6 +3199,7 @@ ExecuteMacroCmdOnce (单条指令执行)
 <li><strong>日志与错误提示</strong>：完善全局异常和业务日志，统一轻量提示与错误反馈，便于定位宏执行问题。</li>
 <li><strong>帮助与社区入口</strong>：完善帮助、支持我们和特别感谢页，补充论坛登录、月度支持及企业赞助入口。</li>
 <li><strong>配置管理</strong>：优化管理界面，移除旧版「共享上传」入口，统一通过共享中心发布配置。</li>
+<li><strong>手柄宏触发方案调研</strong>：整理 Steam Input、reWASD、JoyToKey、AntiMicroX 与 ViGEm 的实现方式，明确 Xbox 手柄宏需要区分触发键是否保留原功能，并为后续持续状态透传与宏输出叠加方案保留回滚点。</li>
 </ul>
 <h3>修复</h3>
 <ul>

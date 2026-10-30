@@ -1989,6 +1989,13 @@ OnWindowManage(tableItem, cmd, index) {
         try WinActivate(winTitle)
         return
     }
+    ; 获取窗口信息同样只取最上面的一个目标，读到的值写入指定的变量
+    if (Data.ActionType == "获取窗口信息") {
+        infoHwnds := WinGetList(winTitle)
+        if (infoHwnds.Length > 0)
+            GetWindowInfoToVars(tableItem, index, "ahk_id " infoHwnds[1], Data)
+        return
+    }
     hwnds := WinGetList(winTitle)
     for hwnd in hwnds {
         try {
@@ -2038,6 +2045,27 @@ OnWindowManage(tableItem, cmd, index) {
             }
         }
     }
+}
+
+; 「获取窗口信息」：读取目标窗口左上角坐标与大小，写入用户配置的变量。
+; 变量名未配置的项跳过（不读取、不写入）；旧配置缺字段同样按未配置处理。
+GetWindowInfoToVars(tableItem, index, winTitle, Data) {
+    winX := 0, winY := 0, winW := 0, winH := 0
+    try WinGetPos(&winX, &winY, &winW, &winH, winTitle)
+    nameArr := []
+    valueArr := []
+    for pair in [["GetPosXVar", winX], ["GetPosYVar", winY], ["GetWidthVar", winW], ["GetHeightVar", winH]] {
+        field := pair[1]
+        if (!ObjHasOwnProp(Data, field))
+            continue
+        varName := Trim(Data.%field%)
+        if (varName == "")
+            continue
+        nameArr.Push(varName)
+        valueArr.Push(pair[2])
+    }
+    if (nameArr.Length > 0)
+        MySetGlobalVariable(nameArr, valueArr, false)
 }
 
 OnKeyCheck(tableItem, cmd, index) {
