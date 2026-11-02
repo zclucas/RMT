@@ -29,6 +29,13 @@ public partial class AhkWpfEngine
     private readonly System.Collections.Generic.Queue<string> _asyncSendQueue =
         new System.Collections.Generic.Queue<string>();
     private bool _asyncSendWorkerRunning;
+    private FrameworkElement _ballDragControl;
+    private IntPtr _ballDragWindowHwnd;
+    private int _ballDragStartMouseX;
+    private int _ballDragStartMouseY;
+    private int _ballDragStartWindowX;
+    private int _ballDragStartWindowY;
+    private bool _ballDragMoved;
 
     private void BindEvent(string ctrlName, string eventName, int fpsLimit = 0, bool queueLimited = false)
     {
@@ -152,6 +159,20 @@ public partial class AhkWpfEngine
                             SendToAhkAsync("EVENT|" + winId + "|" + ctrlName + "|KeyCapture|" + BridgeUtil.LengthPrefix(ahkKey) + "\n");
                         }
                     };
+                }
+                return;
+            }
+
+            // 悬浮球在 WPF UI 线程内捕获鼠标并移动窗口，避免逐帧跨进程回调造成拖动滞后。
+            if (eventName == "BallDrag")
+            {
+                var ball = ctrl as FrameworkElement;
+                if (ball != null)
+                {
+                    ball.PreviewMouseLeftButtonDown += (s, e) => BeginBallDrag(ctrlName, ball, e);
+                    ball.PreviewMouseMove += (s, e) => UpdateBallDrag(ball, e);
+                    ball.PreviewMouseLeftButtonUp += (s, e) => EndBallDrag(ctrlName, ball, e);
+                    ball.LostMouseCapture += (s, e) => CancelBallDrag(ball);
                 }
                 return;
             }
@@ -284,6 +305,115 @@ public partial class AhkWpfEngine
                 );
             } catch { }
         }
+    }
+
+    private void BeginBallDrag(string ctrlName, FrameworkElement ball,
+        System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != System.Windows.Input.MouseButton.Left || _ballDragControl != null)
+            return;
+
+        POINT mouse;
+        RECT window;
+        IntPtr hwnd = new WindowInteropHelper(win).Handle;
+        if (hwnd == IntPtr.Zero || !GetCursorPos(out mouse) || !GetWindowRect(hwnd, out window))
+            return;
+
+        _ballDragControl = ball;
+        _ballDragWindowHwnd = hwnd;
+        _ballDragStartMouseX = mouse.x;
+        _ballDragStartMouseY = mouse.y;
+        _ballDragStartWindowX = window.left;
+        _ballDragStartWindowY = window.top;
+        _ballDragMoved = false;
+        if (!ball.CaptureMouse())
+        {
+            CancelBallDrag(ball);
+            return;
+        }
+        e.Handled = true;
+    }
+
+    private void UpdateBallDrag(FrameworkElement ball, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!object.ReferenceEquals(_ballDragControl, ball) || !ball.IsMouseCaptured)
+            return;
+
+        POINT mouse;
+        if (!GetCursorPos(out mouse))
+            return;
+
+        int dx = mouse.x - _ballDragStartMouseX;
+        int dy = mouse.y - _ballDragStartMouseY;
+        if (!_ballDragMoved)
+        {
+            double scaleX = 1;
+            double scaleY = 1;
+            try
+            {
+                PresentationSource source = PresentationSource.FromVisual(ball);
+                if (source != null && source.CompositionTarget != null)
+                {
+                    scaleX = source.CompositionTarget.TransformToDevice.M11;
+                    scaleY = source.CompositionTarget.TransformToDevice.M22;
+                }
+            }
+            catch { }
+
+            int thresholdX = Math.Max(1, (int)Math.Ceiling(SystemParameters.MinimumHorizontalDragDistance * scaleX));
+            int thresholdY = Math.Max(1, (int)Math.Ceiling(SystemParameters.MinimumVerticalDragDistance * scaleY));
+            if (Math.Abs(dx) <= thresholdX && Math.Abs(dy) <= thresholdY)
+                return;
+            _ballDragMoved = true;
+        }
+
+        SetWindowPos(_ballDragWindowHwnd, IntPtr.Zero,
+            _ballDragStartWindowX + dx, _ballDragStartWindowY + dy, 0, 0,
+            0x0001 | 0x0004 | 0x0010);
+        e.Handled = true;
+    }
+
+    private void EndBallDrag(string ctrlName, FrameworkElement ball,
+        System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!object.ReferenceEquals(_ballDragControl, ball)
+            || e.ChangedButton != System.Windows.Input.MouseButton.Left)
+            return;
+
+        UpdateBallDrag(ball, e);
+        bool moved = _ballDragMoved;
+        IntPtr hwnd = _ballDragWindowHwnd;
+        int x = _ballDragStartWindowX;
+        int y = _ballDragStartWindowY;
+        if (moved)
+        {
+            RECT window;
+            if (GetWindowRect(hwnd, out window))
+            {
+                x = window.left;
+                y = window.top;
+            }
+        }
+
+        _ballDragControl = null;
+        _ballDragWindowHwnd = IntPtr.Zero;
+        _ballDragMoved = false;
+        if (ball.IsMouseCaptured)
+            ball.ReleaseMouseCapture();
+
+        string gesture = moved ? "move|" + x + "," + y : "click";
+        SendToAhkAsync("EVENT|" + winId + "|" + ctrlName + "|BallDrag|"
+            + BridgeUtil.LengthPrefix(gesture) + "\n");
+        e.Handled = true;
+    }
+
+    private void CancelBallDrag(FrameworkElement ball)
+    {
+        if (!object.ReferenceEquals(_ballDragControl, ball))
+            return;
+        _ballDragControl = null;
+        _ballDragWindowHwnd = IntPtr.Zero;
+        _ballDragMoved = false;
     }
 
     public class EventThrottler

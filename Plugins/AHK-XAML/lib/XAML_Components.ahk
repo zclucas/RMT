@@ -210,7 +210,27 @@ class XColorPicker {
         ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Width="360" SizeToContent="Height" Topmost="True"')
         ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
 
-        resultObj := { Color: "", Status: "Cancel", Instance: ui, IsDragging: false, Hue: 0.0, Sat: 1.0, Val: 1.0, Alpha: 255, R: 0, G: 0, B: 0, LastMoveTime: 0 }
+        resultObj := {
+            Color: "",
+            Status: "Cancel",
+            Instance: ui,
+            IsDragging: false,
+            Hue: 0.0,
+            Sat: 1.0,
+            Val: 1.0,
+            Alpha: 255,
+            R: 0,
+            G: 0,
+            B: 0,
+            LastMoveTime: 0,
+            LastCanvasEventTime: 0,
+            LastCanvasX: -1,
+            LastCanvasY: -1,
+            CanvasScale: 1.0,
+            CanvasOriginX: 0.0,
+            CanvasOriginY: 0.0
+        }
+        resultObj.CanvasDragTimer := ObjBindMethod(XColorPicker, "CanvasDragTick", ui, resultObj)
 
         if (modal && owner)
             WinSetEnabled(0, "ahk_id " owner)
@@ -294,6 +314,7 @@ class XColorPicker {
     }
 
     static OnClose(resultObj, owner, modal, state := "", ctrl := "", event := "") {
+        XColorPicker.StopCanvasDrag(resultObj)
         if owner && modal
             WinSetEnabled(1, "ahk_id " owner)
     }
@@ -306,42 +327,92 @@ class XColorPicker {
     }
 
     static OnCanvasDown(ui, resultObj, state, ctrl, event) {
+        point := XColorPicker.ReadCanvasPoint(state)
+        if (!IsObject(point))
+            return
+
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&mouseX, &mouseY)
+        resultObj.CanvasScale := XColorPicker.WindowDpiScale(ui)
+        resultObj.CanvasOriginX := mouseX - point.X * resultObj.CanvasScale
+        resultObj.CanvasOriginY := mouseY - point.Y * resultObj.CanvasScale
+        resultObj.LastCanvasEventTime := A_TickCount
         resultObj.IsDragging := true
-        XColorPicker.ProcessCanvasMouse(ui, resultObj)
+        XColorPicker.ProcessCanvasMouse(ui, resultObj, point.X, point.Y)
+        SetTimer(resultObj.CanvasDragTimer, 16)
     }
 
     static OnCanvasUp(ui, resultObj, state, ctrl, event) {
-        resultObj.IsDragging := false
+        XColorPicker.StopCanvasDrag(resultObj)
     }
 
     static OnCanvasMove(ui, resultObj, state, ctrl, event) {
-        if (resultObj.IsDragging && A_TickCount - resultObj.LastMoveTime >= 16) {
+        if (!resultObj.IsDragging || A_TickCount - resultObj.LastMoveTime < 16)
+            return
+
+        point := XColorPicker.ReadCanvasPoint(state)
+        if (IsObject(point)) {
+            CoordMode("Mouse", "Screen")
+            MouseGetPos(&mouseX, &mouseY)
+            resultObj.CanvasScale := XColorPicker.WindowDpiScale(ui)
+            resultObj.CanvasOriginX := mouseX - point.X * resultObj.CanvasScale
+            resultObj.CanvasOriginY := mouseY - point.Y * resultObj.CanvasScale
+            resultObj.LastCanvasEventTime := A_TickCount
             resultObj.LastMoveTime := A_TickCount
-            XColorPicker.ProcessCanvasMouse(ui, resultObj)
+            XColorPicker.ProcessCanvasMouse(ui, resultObj, point.X, point.Y)
         }
     }
 
-    static ProcessCanvasMouse(ui, resultObj) {
-        CoordMode("Mouse", "Client")
-        MouseGetPos(&mX, &mY, &mWin)
+    static CanvasDragTick(ui, resultObj) {
+        if (!resultObj.IsDragging)
+            return
+        if (!GetKeyState("LButton", "P")) {
+            XColorPicker.StopCanvasDrag(resultObj)
+            return
+        }
+        if (A_TickCount - resultObj.LastCanvasEventTime < 32)
+            return
 
-        ; If the user dragged far away, we still process relative to the start window
-        ; Canvas is at X=15, Y=50. Width=330, Height=180
-        x := mX - 15
-        y := mY - 50
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&mouseX, &mouseY)
+        x := (mouseX - resultObj.CanvasOriginX) / resultObj.CanvasScale
+        y := (mouseY - resultObj.CanvasOriginY) / resultObj.CanvasScale
+        if (Abs(x - resultObj.LastCanvasX) < 0.5 && Abs(y - resultObj.LastCanvasY) < 0.5)
+            return
+        XColorPicker.ProcessCanvasMouse(ui, resultObj, x, y)
+    }
 
-        if (x < 0)
-            x := 0
-        if (x > 330)
-            x := 330
-        if (y < 0)
-            y := 0
-        if (y > 180)
-            y := 180
+    static StopCanvasDrag(resultObj) {
+        resultObj.IsDragging := false
+        if (resultObj.HasProp("CanvasDragTimer"))
+            SetTimer(resultObj.CanvasDragTimer, 0)
+    }
 
+    static ReadCanvasPoint(state) {
+        if (!IsObject(state) || !state.Has("CanvasArea"))
+            return ""
+        parts := StrSplit(String(state["CanvasArea"]), ",")
+        if (parts.Length < 2 || !IsNumber(parts[1]) || !IsNumber(parts[2]))
+            return ""
+        return { X: Float(parts[1]), Y: Float(parts[2]) }
+    }
+
+    static WindowDpiScale(ui) {
+        dpi := 0
+        if (ui.HasProp("wpfHwnd") && ui.wpfHwnd)
+            try dpi := DllCall("user32\GetDpiForWindow", "Ptr", ui.wpfHwnd, "UInt")
+        if (!dpi)
+            dpi := A_ScreenDPI
+        return dpi / 96.0
+    }
+
+    static ProcessCanvasMouse(ui, resultObj, x, y) {
+        x := Max(0.0, Min(330.0, x))
+        y := Max(0.0, Min(180.0, y))
+        resultObj.LastCanvasX := x
+        resultObj.LastCanvasY := y
         resultObj.Sat := x / 330.0
         resultObj.Val := 1.0 - (y / 180.0)
-
         ui.Update("CanvasThumb", "Margin", String(x - 7) "," String(y - 7) ",0,0")
 
         XColorPicker.UpdateFromHSV(ui, resultObj)

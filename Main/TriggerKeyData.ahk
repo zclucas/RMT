@@ -426,8 +426,15 @@ class TriggerKeyInfo {
         }
         else if (this.macroType == 3) {
             ; 界面宏：切换悬浮面板，绝不能误开菜单轮盘
-            if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
-                MyUIMacroGui.TogglePanel(this.foldID)
+            ; foldID 是折叠框唯一 ID，TogglePanel 要的是表内下标，必须先换算
+            if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui)) {
+                t := GetTableBySymbol("UI")
+                if (t) {
+                    foldIndex := GetFoldIndexInTable(t, this.foldID)
+                    if (foldIndex)
+                        MyUIMacroGui.TogglePanel(foldIndex)
+                }
+            }
         }
     }
 

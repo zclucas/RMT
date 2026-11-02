@@ -233,6 +233,9 @@ class XAMLHost {
         ; 否则设置页等运行时内容不随「字体大小」缩放，导致与主题窗口等烘焙内容字号不一致
         if (propertyName = "AddXamlItem" || propertyName = "InsertXamlItem" || propertyName = "Document")
             valueStr := XAMLHost.ApplyFontSizeDelta(valueStr, this.IsFontScaleSkipped())
+        else if (propertyName = "FontSizeCustom" && IsNumber(valueStr)) {
+            valueStr := String(XAMLHost.FormatFontSize(valueStr))
+        }
         else if (propertyName = "FontSize" && IsNumber(valueStr))
             valueStr := String(XAMLHost.FormatFontSize(XAMLHost.ScaleFontSize(valueStr, this.IsFontScaleSkipped())))
         if !this.wpfHwnd {
@@ -241,6 +244,8 @@ class XAMLHost {
             this._updateQueue.Push({ type: "single", ctrl: controlName, prop: propertyName, val: valueStr })
             return
         }
+        if (propertyName = "FontSizeCustom")
+            propertyName := "FontSize"
         ; Window.Close 必须异步：若用 SendMessage 同步关窗，WPF Closing 回调里再 SendMessage 回 AHK 会死锁，
         ; 导致引擎卡死、之后所有 XAML 界面都打不开。
         if (controlName = "Window" && (propertyName = "Close" || propertyName = "close")) {
@@ -278,14 +283,19 @@ class XAMLHost {
             if (!updateObj.HasProp("ControlName") || !updateObj.HasProp("PropertyName") || !updateObj.HasProp("Value"))
                 continue
 
+            propertyName := updateObj.PropertyName
             val := String(updateObj.Value)
-            if (updateObj.PropertyName = "AddXamlItem" || updateObj.PropertyName = "InsertXamlItem" || updateObj.PropertyName = "Document")
+            if (propertyName = "AddXamlItem" || propertyName = "InsertXamlItem" || propertyName = "Document")
                 val := XAMLHost.ApplyFontSizeDelta(val, this.IsFontScaleSkipped())
-            else if (updateObj.PropertyName = "FontSize" && IsNumber(val))
+            else if (propertyName = "FontSizeCustom" && IsNumber(val)) {
+                val := String(XAMLHost.FormatFontSize(val))
+                propertyName := "FontSize"
+            }
+            else if (propertyName = "FontSize" && IsNumber(val))
                 val := String(XAMLHost.FormatFontSize(XAMLHost.ScaleFontSize(val, this.IsFontScaleSkipped())))
             val := StrReplace(val, "`r", "&#x0D;")
             val := StrReplace(val, "`n", "&#x0A;")
-            payload .= updateObj.ControlName "|" updateObj.PropertyName "|" val "`n"
+            payload .= updateObj.ControlName "|" propertyName "|" val "`n"
         }
 
         if (payload != "") {
@@ -746,8 +756,10 @@ class XAMLHost {
     }
 
     ; 相对主题平移、不抬到主题下限。ScaleFontSize 有 themeMin，声明 12/11 在默认主题下会被抬成 15，改字号看不出变化。
-    static ScaleFontSizeRelative(declared) {
+    static ScaleFontSizeRelative(declared, skip := false) {
         global XAML_FontSizeDelta, XAML_FontSizeBase
+        if (skip)
+            return Float(declared)
         XAMLHost.SyncThemeFontDelta()
         delta := IsSet(XAML_FontSizeDelta) ? XAML_FontSizeDelta : 0
         return Max(6, Float(declared) + delta)
@@ -786,10 +798,14 @@ class XAMLHost {
             return xaml
         try {
             frozen := []
+            customFrozen := []
             xaml := RegExReplace(xaml, 'Name="(\w+Glyph)"([^>]*?)FontSize="(\d+(?:\.\d+)?)"'
                 , (m) => (frozen.Push(m[3]), 'Name="' m[1] '"' m[2] 'FontSize="@@GLYPH' frozen.Length '@@"'))
             xaml := RegExReplace(xaml, 'FontSize="(\d+(?:\.\d+)?)"([^>]*?)Name="(\w+Glyph)"'
                 , (m) => (frozen.Push(m[1]), 'FontSize="@@GLYPH' frozen.Length '@@"' m[2] 'Name="' m[3] '"'))
+            ; 自定义界面字号由控件配置决定，不随主题缩放。
+            xaml := RegExReplace(xaml, '<[^>]*\bTag="UIMacroCustomFont"[^>]*>'
+                , (m) => XAMLHost._FreezeCustomFontTag(m[0], customFrozen))
             scale(s) => RegExReplace(s, 'FontSize="\K\d+(?:\.\d+)?'
                 , (m) => XAMLHost.FormatFontSize(XAMLHost.ScaleFontSize(m[0])))
             dragPos := InStr(xaml, 'Name="DragArea"')
@@ -809,10 +825,20 @@ class XAMLHost {
             }
             loop frozen.Length
                 result := StrReplace(result, "@@GLYPH" A_Index "@@", frozen[A_Index])
+            loop customFrozen.Length
+                result := StrReplace(result, "@@CUSTOMFONT" A_Index "@@", customFrozen[A_Index])
             return result
         } catch {
             return xaml
         }
+    }
+
+    static _FreezeCustomFontTag(tag, frozen) {
+        if (!RegExMatch(tag, 'FontSize="(\d+(?:\.\d+)?)"', &m))
+            return tag
+        frozen.Push(XAMLHost.FormatFontSize(m[1]))
+        return RegExReplace(tag, 'FontSize="\d+(?:\.\d+)?"'
+            , 'FontSize="@@CUSTOMFONT' frozen.Length '@@"', , 1)
     }
 
     ; 按标签嵌套找到与 tagStart 配对的结束标签，避免 Grid 标题栏误吃到后面的 </Border>

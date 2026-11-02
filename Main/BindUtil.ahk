@@ -347,11 +347,6 @@ OnClickMenuWheelSettingBtn(*) {
     MenuWheelGlobalSettingGui.ShowGui()
 }
 
-OnClickUIMacroPanelSettingBtn(*) {
-    XamlUiDiag("=== click 界面浮窗按钮 ===", "UIUtil")
-    UIMacroPanelSettingGui.ShowGui()
-}
-
 OnClickCMDTipToggle(*) {
     global MyMainWin
     v := MyMainWin.ui.Query("ChkCMDTip") == "True"

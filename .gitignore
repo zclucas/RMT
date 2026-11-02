@@ -24,5 +24,6 @@ _bmad
 _bmad-output
 .self/
 .dsh/
+优化.md
 Plugins/SupportQr/bin/
 Plugins/SupportQr/obj/
