@@ -159,7 +159,7 @@ class VarListenGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' title '" ShowInTaskbar="True" Width="' winW '" Height="' winH '" MinWidth="' minW '" MinHeight="' minH '" Opacity="0"')
+            'Title="' title '" ShowInTaskbar="True" Width="' winW '" Height="' winH '" MinWidth="' minW '" MinHeight="' minH '"')
         ; 有保存坐标时建窗即定位，避免先 CenterScreen 再跳转闪烁
         if (this._initX != "" && this._initY != "") {
             this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"',

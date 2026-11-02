@@ -139,7 +139,7 @@ class SettingMgrGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="True" Width="440" Height="340" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="True" Width="440" Height="340"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
@@ -167,8 +167,6 @@ class SettingMgrGui {
         this.Refresh()
         if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
             this.closed := true
-        ; LoadedHwnd 若丢失则兜底（正常路径等待循环已 reveal）
-        SetTimer(ObjBindMethod(this, "_RevealFallback"), -800)
     }
 
     _AddBtn(parent, name, content, width) {
@@ -226,21 +224,6 @@ class SettingMgrGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
-    }
-
-    ; 揭盖一次（防重复）：引擎还原位置并显示，窗口从离屏直接变完整内容，无 Hide/Show
-    _TryReveal(from := "") {
-        if (this._revealed || this.closed)
-            return
-        if (!IsObject(this.ui) || !this.ui.HasProp("wpfHwnd") || !this.ui.wpfHwnd)
-            return
-        this._revealed := true
-        try this.ui.Update("Window", "Opacity", "1")
-        try WinActivate("ahk_id " this.ui.wpfHwnd)
-    }
-
-    _RevealFallback(*) {
-        this._TryReveal("fallback")
     }
 
     OnCancelClick(state, ctrl, event) {

@@ -1155,6 +1155,9 @@ class XAMLHost {
 
     static Prewarm(exePath := "") {
         ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR
+        ; 先设 RMT_LOG_DIR：引擎日志写哪由这个环境变量决定，Prewarm 是最早拉 daemon 的地方，
+        ; 若此时还没实例化过 XAMLHost（GetAppDir 未跑），daemon 就会把日志写去 %TEMP%\AhkWpf
+        XAMLHost.GetAppDir()
         wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         XAMLHost.EnsureDaemonHealthy()
@@ -1227,6 +1230,14 @@ class XAMLHost {
         }
 
         logArg := (IsSet(XAML_ENABLE_LOGGING) && !XAML_ENABLE_LOGGING) ? ' --no-log' : ''
+        ; 同一个引擎不要连拉两次：daemon 从进程创建到发布 hwnd 要两三百毫秒，
+        ; 这段时间里 Prewarm 会被再调一次（脚本启动时一次、Show 里 _EnsureDaemon 又一次），
+        ; 结果同时起两个 WPF 进程——两个冷启动互相抢 CPU，首帧明显变慢，还多留一个常驻进程。
+        ; 只在「确实还有引擎进程活着」时才跳过：进程已死（崩溃/被超时逻辑杀掉）照常重拉。
+        static lastSpawnTick := 0
+        if (lastSpawnTick && A_TickCount - lastSpawnTick < 8000 && ProcessExist(baseDllName))
+            return
+        lastSpawnTick := A_TickCount
         XAMLHost.RunProcess(targetExe, '--daemon "' ProcessExist() '" "' String(XAMLHost.daemonReceiver.Hwnd) '"' logArg, "", true)
     }
 
@@ -1794,28 +1805,42 @@ class XAMLHost {
         return true
     }
 
+    ; 目标已是最新就不复制：这些 dll 每次启动都被覆盖重写一遍，
+    ; 白磁盘 IO 还会触发杀软实时扫描，实测能把引擎进程的启动推迟近 1 秒
+    static _CopyIfStale(src, dst) {
+        if (!FileExist(src))
+            return
+        if (FileExist(dst)) {
+            try {
+                if (FileGetSize(src) = FileGetSize(dst) && FileGetTime(src, "M") = FileGetTime(dst, "M"))
+                    return
+            }
+        }
+        try FileCopy(src, dst, 1)
+    }
+
     static CopyRequiredDlls(libDir, targetDir) {
         depDir := libDir "\dep"
         if (IsSet(XAML_ENABLE_WEBVIEW) && XAML_ENABLE_WEBVIEW) {
             if FileExist(depDir "\WebView2\WebView2Loader.dll") {
-                try FileCopy(depDir "\WebView2\WebView2Loader.dll", targetDir "\WebView2Loader.dll", 1)
-                try FileCopy(depDir "\WebView2\Microsoft.Web.WebView2.Core.dll", targetDir "\Microsoft.Web.WebView2.Core.dll", 1)
-                try FileCopy(depDir "\WebView2\Microsoft.Web.WebView2.Wpf.dll", targetDir "\Microsoft.Web.WebView2.Wpf.dll", 1)
+                XAMLHost._CopyIfStale(depDir "\WebView2\WebView2Loader.dll", targetDir "\WebView2Loader.dll")
+                XAMLHost._CopyIfStale(depDir "\WebView2\Microsoft.Web.WebView2.Core.dll", targetDir "\Microsoft.Web.WebView2.Core.dll")
+                XAMLHost._CopyIfStale(depDir "\WebView2\Microsoft.Web.WebView2.Wpf.dll", targetDir "\Microsoft.Web.WebView2.Wpf.dll")
             }
         }
         if (IsSet(XAML_ENABLE_AVALONEDIT) && XAML_ENABLE_AVALONEDIT) {
             if FileExist(depDir "\AvalonEdit\ICSharpCode.AvalonEdit.dll")
-                try FileCopy(depDir "\AvalonEdit\ICSharpCode.AvalonEdit.dll", targetDir "\ICSharpCode.AvalonEdit.dll", 1)
+                XAMLHost._CopyIfStale(depDir "\AvalonEdit\ICSharpCode.AvalonEdit.dll", targetDir "\ICSharpCode.AvalonEdit.dll")
         }
         if (IsSet(XAML_ENABLE_DOCUMENT) && XAML_ENABLE_DOCUMENT) {
             if FileExist(depDir "\OpenXml\DocumentFormat.OpenXml.dll")
-                try FileCopy(depDir "\OpenXml\DocumentFormat.OpenXml.dll", targetDir "\DocumentFormat.OpenXml.dll", 1)
+                XAMLHost._CopyIfStale(depDir "\OpenXml\DocumentFormat.OpenXml.dll", targetDir "\DocumentFormat.OpenXml.dll")
             if FileExist(depDir "\OpenXml\NPOI.dll")
-                try FileCopy(depDir "\OpenXml\NPOI.dll", targetDir "\NPOI.dll", 1)
+                XAMLHost._CopyIfStale(depDir "\OpenXml\NPOI.dll", targetDir "\NPOI.dll")
             if FileExist(depDir "\OpenXml\NPOI.OOXML.dll")
-                try FileCopy(depDir "\OpenXml\NPOI.OOXML.dll", targetDir "\NPOI.OOXML.dll", 1)
+                XAMLHost._CopyIfStale(depDir "\OpenXml\NPOI.OOXML.dll", targetDir "\NPOI.OOXML.dll")
             if FileExist(depDir "\OpenXml\NPOI.OpenXml4Net.dll")
-                try FileCopy(depDir "\OpenXml\NPOI.OpenXml4Net.dll", targetDir "\NPOI.OpenXml4Net.dll", 1)
+                XAMLHost._CopyIfStale(depDir "\OpenXml\NPOI.OpenXml4Net.dll", targetDir "\NPOI.OpenXml4Net.dll")
         }
     }
 
@@ -1962,6 +1987,8 @@ class XAMLHost {
 
     _EnsureDaemon() {
         ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR, XAML_FORCE_DYNAMIC_COMPILE
+        ; 保证引擎日志进项目 Log\：spawn 前必须已设 RMT_LOG_DIR
+        XAMLHost.GetAppDir()
         wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         baseDllName := XAMLHost.GetEngineDllName()
@@ -2174,6 +2201,8 @@ class XAMLHost {
             ; Inline mode: embed XAML + events directly in the CREATE_WINDOW message
             ; This eliminates the Engine|Ready -> XAML_PAYLOAD round-trip entirely
             eventBindings := this._BuildEventBindings()
+            ; 诊断：引擎建窗后有一大段耗时在逐条 BindEvent，先记下条数便于定位
+            try FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " +" A_TickCount " [Show] id=" this.id " events=" (StrLen(eventBindings) ? StrSplit(eventBindings, ",").Length : 0) " xamlKB=" Round(StrLen(this.xaml) / 1024) "`n", A_WorkingDir "\Log\XamlUiDiag.log", "UTF-8")
             cleanXaml := StrReplace(this.xaml, "%resources%", "")
             ; 只改窗口本身的 Transparent，避免把标题栏关闭/最小化钮也刷成 BgColor（和标题栏色不一致）
             if (!InStr(this.xaml, 'AllowsTransparency="True"')) {
@@ -2214,6 +2243,9 @@ class XAMLHost {
             }
             XAMLHost.ApplyDialogVisualScale(&cleanXaml, this.IsFontScaleSkipped())
             inlinePayload := cleanXaml "`n---AHK-XAML-EVENTS---`n" eventBindings
+            ; 后台启动（rmt -min）：让引擎建完窗立刻收起，避免「先显示再被隐藏」的那一下
+            if (this.HasOwnProp("_startHidden") && this._startHidden)
+                inlinePayload := "#HIDDEN#" inlinePayload
             payload := "CREATE_WINDOW_INLINE|" this.id "|" trackedCsv "|" A_ScriptName "|" String(this.ownerHwnd) "|" inlinePayload
 
             ; CRITICAL: Reset wpfHwnd BEFORE sending, not after.
@@ -2420,11 +2452,7 @@ class XAMLHost {
                     XAMLHost.SyncCmdEditorTitleFont(instance)
                 }
             }
-            ; 配置管理同款：队列和字号刷完立刻揭盖。再等 OnWindowLoad 只会让已在屏上的黑框更久。
-            if (InStr(instance.xaml, 'Opacity="0"') && !InStr(instance.xaml, 'AllowsTransparency="True"')) {
-                if (!instance.HasOwnProp("_skipAutoReveal") || !instance._skipAutoReveal)
-                    try instance.Update("Window", "Opacity", "1")
-            }
+            ; 窗口创建时就是最终样子，这里只把队列内容和字号刷进去，不做可见性处理。
         }
         if (ctrlName == "Window" && eventName == "Closed") {
             instance.wpfHwnd := 0
@@ -3094,7 +3122,7 @@ XAML_TEMPLATE := '
             SnapsToDevicePixels="True">
         
         <WindowChrome.WindowChrome>
-            <WindowChrome GlassFrameThickness="0" ResizeBorderThickness="6" CaptionHeight="%CaptionHeight%" CornerRadius="{DynamicResource WindowRadius}" />
+            <WindowChrome GlassFrameThickness="0" ResizeBorderThickness="4" CaptionHeight="%CaptionHeight%" CornerRadius="{DynamicResource WindowRadius}" />
         </WindowChrome.WindowChrome>
     
         <Window.Resources>

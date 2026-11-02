@@ -368,6 +368,24 @@ class XAMLElement {
 
     ; Generate XAML string recursively
     ToString(indent := "") {
+        parts := []
+        this._CollectXaml(parts, indent)
+        out := ""
+        for p in parts
+            out .= p
+        return out
+    }
+
+    ; 按顺序返回直接子元素。用于「先建到临时根节点、再逐个注入已有容器」的场景
+    ; （例如按需构建的 AI 侧栏：要注入到页签已有的 Grid 里，保持原有子元素顺序）。
+    Children() {
+        return this._Children
+    }
+
+    ; 按顺序把自身与子树写入片段数组。旧实现让每个子节点返回整棵子树的字符串、
+    ; 再由父节点拼接，同一段文本会随层数被反复复制（大窗口实测几百毫秒）；
+    ; 这里只在最后拼一次，复杂度从「层数 × 总长」降到「总长」。
+    _CollectXaml(parts, indent) {
         if (this._Tag == "Slider" && !this.HasOwnProp("_CustomStyleApplied") && (this._Props.Has("ThumbShape") || this._Props.Has("ThumbWidth") || this._Props.Has("ThumbHeight") || this._Props.Has("ThumbColor") || this._Props.Has("ThumbBg") || this._Props.Has("ThumbBackground") || this._Props.Has("TrackHeight") || this._Props.Has("TrackColor") || this._Props.Has("TrackBg") || this._Props.Has("TrackBackground"))) {
             this._CustomStyleApplied := true
             this._ApplyCustomSliderStyle()
@@ -375,21 +393,28 @@ class XAMLElement {
 
         attrStr := ""
         for k, v in this._Props {
-            val := StrReplace(String(v), "&", "&amp;")
-            val := StrReplace(val, "<", "&lt;")
-            val := StrReplace(val, ">", "&gt;")
-            val := StrReplace(val, '"', "&quot;")
-            val := StrReplace(val, "'", "&apos;")
-            val := StrReplace(val, "`r`n", "&#10;")
-            val := StrReplace(val, "`n", "&#10;")
-            val := StrReplace(val, "`r", "&#10;")
+            val := String(v)
+            ; 绝大多数属性值没有需要转义的字符：先短路判断一次，
+            ; 避免每个属性都跑 8 遍全串 StrReplace。
+            if (InStr(val, "&") || InStr(val, "<") || InStr(val, ">") || InStr(val, '"')
+                || InStr(val, "'") || InStr(val, "`r") || InStr(val, "`n"))
+            {
+                val := StrReplace(val, "&", "&amp;")
+                val := StrReplace(val, "<", "&lt;")
+                val := StrReplace(val, ">", "&gt;")
+                val := StrReplace(val, '"', "&quot;")
+                val := StrReplace(val, "'", "&apos;")
+                val := StrReplace(val, "`r`n", "&#10;")
+                val := StrReplace(val, "`n", "&#10;")
+                val := StrReplace(val, "`r", "&#10;")
+            }
             ; WPF 属性值以 { 开头会被当作标记扩展，字面文本需转义为 {} 前缀；
             ; 故意写的标记扩展（{Binding...} 等）经 SetMarkup 标记为 raw，跳过此转义
             if (!this._RawProps.Has(k) && (k == "Text" || k == "Content") && SubStr(val, 1, 1) == "{")
                 val := "{}" val
             attrStr .= ' ' k '="' val '"'
         }
-        
+
         tracker := ""
         if (this.HasProp("_AhkLine") && this._AhkLine != "") {
             filePrefix := (this.HasProp("_AhkFile") && this._AhkFile != "") ? this._AhkFile ":" : ""
@@ -400,22 +425,22 @@ class XAMLElement {
                 }
             }
         }
-        
-        if (this._Children.Length == 0 && this._TextContent == "")
-            return indent tracker "<" this._Tag attrStr " />`n"
-        
-        out := indent tracker "<" this._Tag attrStr ">"
-        
-        if (this._TextContent != "") {
-            out .= this._TextContent
-        } else {
-            out .= "`n"
-            for child in this._Children
-                out .= child.ToString(indent "    ")
-            out .= indent
+
+        if (this._Children.Length == 0 && this._TextContent == "") {
+            parts.Push(indent tracker "<" this._Tag attrStr " />`n")
+            return
         }
-        out .= "</" this._Tag ">`n"
-        return out
+
+        parts.Push(indent tracker "<" this._Tag attrStr ">")
+        if (this._TextContent != "") {
+            parts.Push(this._TextContent)
+        } else {
+            parts.Push("`n")
+            for child in this._Children
+                child._CollectXaml(parts, indent "    ")
+            parts.Push(indent)
+        }
+        parts.Push("</" this._Tag ">`n")
     }
 
     _ApplyCustomSliderStyle() {

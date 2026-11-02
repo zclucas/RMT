@@ -168,7 +168,7 @@ class ThemeSettingGui {
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
         winW := Round(designW * uiScale)
         winH := Round(designH * uiScale)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Uid="gm:Window.Theme" Title="' title '" ShowInTaskbar="False" Width="' winW '" Height="' winH '" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Uid="gm:Window.Theme" Title="' title '" ShowInTaskbar="False" Width="' winW '" Height="' winH '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         groupBoxStyle := '<Style TargetType="GroupBox"><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/></Style>'

@@ -74,7 +74,7 @@ class RmtDialog {
         row.Add("Button").Name("BtnCancel").Content(GetLang("取消")).Width(96).Height(34).Margin("14,0,0,0").IsCancel("True").Background("{DynamicResource ControlBg}").Foreground("{DynamicResource TextMain}").Cursor("Hand")
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' RmtDialog._XmlEsc(title) '" ShowInTaskbar="False" Width="420" SizeToContent="Height" Opacity="0"')
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' RmtDialog._XmlEsc(title) '" ShowInTaskbar="False" Width="420" SizeToContent="Height"')
         ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         ui.xaml := StrReplace(ui.xaml, "%resources%", "")
         if (ff != "")
@@ -254,7 +254,7 @@ class RmtDialog {
         safeTitle := RmtDialog._XmlEsc(title)
         ; 与其它小弹窗（XamlWin.Create）统一：不置顶，属主已保证压在主窗口上方；
         ; 高度随内容（SizeToContent=Height），宽度按正文/按钮行算好。
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False"' posAttr ' Width="' winW '" SizeToContent="Height" Opacity="0"')
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False"' posAttr ' Width="' winW '" SizeToContent="Height"')
         ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         ; 窗口自身底色从 Transparent 换成标题栏色：Viewbox 等比缩放留边时不会露出白条
         winEnd := InStr(ui.xaml, ">")

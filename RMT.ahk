@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#NoTrayIcon
 global RMT_VERSION := "1.3"
 #Include Main\SelfCheck.ahk
 #Include Main\AssetUtil.ahk
@@ -9,6 +10,7 @@ global RMT_VERSION := "1.3"
 if (!EnsureSingleInstance())
     ExitApp()
 
+XAMLHost.Prewarm()
 InitFilePath()              ;初始化文件路径
 LoadCurMacroSetting()       ;加载当前配置宏，宏指令
 HandleOpenArg()             ;处理打开软件的参数
