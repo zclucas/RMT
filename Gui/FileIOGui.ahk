@@ -318,7 +318,11 @@ class FileIOGui {
 
         this._SetDDL("OperTypeCombo", this._OperTypes(), GetLang(this.Data.OperType))
         this._SetDDL("EncodingCombo", GetLangArr(MySoftData.FileEncodingArr), GetShowEncoding(this.Data.Encoding))
-        this._SetCombo("FilePathCombo", GetGuiVarArr(2), this.Data.FilePath)
+        ; 路径下拉给的是 {变量} 形式：选中即得到可被 GetReplaceVarText 解析的完整占位符
+        PathVarArr := []
+        for v in GetGuiVarArr(2)
+            PathVarArr.Push("{" v "}")
+        this._SetCombo("FilePathCombo", PathVarArr, this.Data.FilePath)
         this._ComboPush("ContentCon", "Text", GetLangStr(this.Data.Content, 1))
         this._SetDDL("SaveTypeCombo", GetLangArr(["变量", "数组"]), GetLang(this.Data.SaveType))
         this._SetCombo("SaveNameCombo", this.DLVarArr, this.Data.SaveName)

@@ -1896,15 +1896,19 @@ OnInput(tableItem, cmd, index) {
 OnFileIO(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
+    OperType := FileIONormType(Data.OperType)
 
-    FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
-    isExcel := FileIOIsExcelType(Data.OperType)
-    filter := isExcel ? "Excel Files (*.xlsx; *.xls)" : ""
-    if (!ValidateCmdPath(&Data, "FilePath", GetLang("选择文件"), filter, tableItem, index))
-        return
-    FilePath := Data.FilePath
+    ; 文件路径支持 {变量}：解析放在执行层（ReadExcel/WriteExcel/ReadTextFile/WriteTextFile 内 GetReplaceVarText）。
+    ; 只有读取类才校验“解析后文件是否存在”，缺失时提示重新选择；
+    ; 写入类不校验存在性——目标文件（如带日期的新文件名）可能尚未创建。
+    if (FileIOIsReadType(OperType)) {
+        isExcel := FileIOIsExcelType(OperType)
+        filter := isExcel ? "Excel Files (*.xlsx; *.xls)" : ""
+        if (!ValidateCmdPath(&Data, "FilePath", GetLang("选择文件"), filter, tableItem, index))
+            return
+    }
 
-    switch FileIONormType(Data.OperType) {
+    switch OperType {
         case "读取Excel":
             ReadExcel(Data, tableItem, index)
         case "写入Excel":
