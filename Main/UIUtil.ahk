@@ -244,12 +244,12 @@ OnTrayEndRecord(*) {
     OnForceEndRecord()
 }
 
-; 帮助文档首页：统一走程序目录下的 Web\index.html（源码态与发布版同名）
+; 帮助文档：程序目录根下的 index.html（SingleHtml 打成的单文件）。旧版 Web\index.html 仅作兜底。
 GetHelpDocPath() {
-    p := A_WorkingDir "\Web\index.html"
+    p := A_WorkingDir "\index.html"
     if (FileExist(p))
         return p
-    return A_WorkingDir "\index.html"
+    return A_WorkingDir "\Web\index.html"
 }
 
 ; 标题栏执行钮提示：Alt + L：执行
@@ -462,7 +462,7 @@ OnOpenRmtDoc(pageHash := "") {
 OnOpenHelpDoc(pageHash := "") {
     p := GetHelpDocPath()
     if (!FileExist(p)) {
-        RmtDialog.Info(GetLang("未找到帮助文档，请检查程序目录下的 Web 文件夹是否完整。"), GetLang("提示"))
+        RmtDialog.Info(GetLang("未找到帮助文档，请检查程序目录下的 index.html 是否完整。"), GetLang("提示"))
         return
     }
     if (HasWebView2Runtime() && HelpDocWin.Open(pageHash))

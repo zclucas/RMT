@@ -361,8 +361,9 @@ function Pack-HelpDoc {
     Push-Location $WebDir
     try {
         $proc = Start-Process -FilePath "node" -ArgumentList "SingleHtml.js" -NoNewWindow -Wait -PassThru
-        if ($proc.ExitCode -ne 0) {
+        if ($null -eq $proc.ExitCode -or $proc.ExitCode -ne 0) {
             Write-Log "  [ERROR] SingleHtml.js 退出码: $($proc.ExitCode)" "Red"
+            return $false
         }
     }
     finally { Pop-Location }
@@ -393,6 +394,16 @@ function New-Release {
     if (-not $version) {
         Write-Log "无法获取版本号，取消发行版创建" "Red"
         return $false
+    }
+
+    # 先编 RMT.dll，后面拷进 Release 和资源清单的才是这一版
+    $rmtBuild = Join-Path $PSScriptRoot "Plugins\RMT\buildDll.ps1"
+    if (Test-Path -LiteralPath $rmtBuild) {
+        Write-Log "编译 Plugins\RMT\RMT.dll ..." "Gray"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $rmtBuild -NoPause
+        if ($LASTEXITCODE -ne 0) {
+            throw "RMT.dll 编译失败，请检查 $env:TEMP\RMT-dll-build.log"
+        }
     }
 
     $RmtAhk = Join-Path $PSScriptRoot "RMT.ahk"
@@ -446,7 +457,7 @@ function New-Release {
 
         # 复制 AHK-XAML DLL
         Write-Log "复制 AHK-XAML DLL..." "Gray"
-        Copy-XamlDlls -ReleaseDir $releaseDir
+        Copy-XamlDlls -ReleaseDir $releaseDir -Arch "x64"
 
         # 复制 AhiDriver（DLL + Interception 安装包）
         Write-Log "复制 AhiDriver (x64)..." "Gray"
@@ -459,6 +470,8 @@ function New-Release {
         # 复制语音触发插件 Voice (x64)
         Write-Log "复制 Voice 插件 (x64)..." "Gray"
         Copy-Voice -ReleaseDir $releaseDir -Arch "x64"
+
+        Copy-RuntimePlugins -ReleaseDir $releaseDir
     }
 
     if ($Type -eq "x86" -or $Type -eq "both") {
@@ -509,7 +522,7 @@ function New-Release {
 
         # 复制 AHK-XAML DLL
         Write-Log "复制 AHK-XAML DLL..." "Gray"
-        Copy-XamlDlls -ReleaseDir $releaseDir
+        Copy-XamlDlls -ReleaseDir $releaseDir -Arch "x86"
 
         # 复制 AhiDriver（DLL + Interception 安装包）
         Write-Log "复制 AhiDriver (x86)..." "Gray"
@@ -522,6 +535,8 @@ function New-Release {
         # 复制语音触发插件 Voice (x86)
         Write-Log "复制 Voice 插件 (x86)..." "Gray"
         Copy-Voice -ReleaseDir $releaseDir -Arch "x86"
+
+        Copy-RuntimePlugins -ReleaseDir $releaseDir
     }
 
     # 输出目录：命令行 -OutDir 优先，默认桌面\RMTRelease
@@ -609,18 +624,54 @@ function New-Release {
 function Copy-HelpDocs {
     param([string]$ReleaseDir)
 
-    # 离线文档站（Docusaurus hash 路由产物，file:// 可直接双击打开）
-    # 源：Web\（index.html + assets\ + img\），由 RMT-Docs 的 npm run build:offline 生成后放入
-    $webSrc = Join-Path $PSScriptRoot "Web"
-    $webDst = Join-Path $ReleaseDir "Web"
-    if (Test-Path (Join-Path $webSrc "index.html")) {
-        if (Test-Path $webDst) {
-            Remove-Item $webDst -Recurse -Force
-        }
-        Copy-Item -Path $webSrc -Destination $webDst -Force -Recurse -ErrorAction SilentlyContinue
-        Write-Log "  已复制: Web\ (离线文档站)" "Gray"
+    # 帮助文档由 Web\JS\SingleHtml.js 打成程序目录根下的单文件 index.html。
+    # 运行时打开的也是这个路径（见 GetHelpDocPath / OnOpenRmtDoc），不是 Web\index.html。
+    $indexSrc = Join-Path $PSScriptRoot "index.html"
+    $indexDst = Join-Path $ReleaseDir "index.html"
+    if (Test-Path -LiteralPath $indexSrc) {
+        Copy-IntoRelease -Source $indexSrc -Destination $indexDst
+        Write-Log "  已复制: index.html" "Gray"
     } else {
-        Write-Log "  [WARN] 未找到离线文档站: Web\index.html" "Yellow"
+        Write-Log "  [WARN] 未找到帮助文档: index.html（先确认 Web\JS\SingleHtml.js 已生成）" "Yellow"
+    }
+}
+
+# 覆盖复制。目标若是已加载的 dll/exe，直接 Copy-Item -Force 会报「用户映射区域」。
+# 先读到旁边的临时文件，再把旧文件改名换上。正在运行的映像允许改名，不允许原地截断。
+function Copy-IntoRelease {
+    param([string]$Source, [string]$Destination)
+
+    $parent = Split-Path -Parent $Destination
+    if (-not (Test-Path -LiteralPath $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    $tmp = "$Destination.copying"
+    $bak = "$Destination.old"
+    if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+
+    $in = [IO.File]::Open($Source, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+        $out = [IO.File]::Open($tmp, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try { $in.CopyTo($out) } finally { $out.Dispose() }
+    } finally { $in.Dispose() }
+
+    $renamed = $false
+    if (Test-Path -LiteralPath $Destination) {
+        if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue }
+        Move-Item -LiteralPath $Destination -Destination $bak -Force
+        $renamed = $true
+    }
+    try {
+        Move-Item -LiteralPath $tmp -Destination $Destination -Force
+    } catch {
+        if ($renamed -and -not (Test-Path -LiteralPath $Destination) -and (Test-Path -LiteralPath $bak)) {
+            Move-Item -LiteralPath $bak -Destination $Destination -Force
+        }
+        throw
+    }
+    if ($renamed) {
+        Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -645,7 +696,7 @@ function Copy-OpenCV {
 }
 
 function Copy-XamlDlls {
-    param([string]$ReleaseDir)
+    param([string]$ReleaseDir, [string]$Arch = "x64")
 
     $srcDepDir = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib\dep"
     $dstDepDir = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib\dep"
@@ -671,7 +722,7 @@ function Copy-XamlDlls {
     # 首次跑软件时会由 RestoreWebView2Dlls 自动从 NuGet 下载到 lib/dep/WebView2/
     $wvDepSrc = Join-Path $srcDepDir "WebView2"
     if (Test-Path $wvDepSrc) {
-        $wvFiles = @("Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.Wpf.dll", "WebView2Loader.dll")
+        $wvFiles = @("Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.Wpf.dll")
         $missing = @()
         foreach ($f in $wvFiles) {
             $s = Join-Path $wvDepSrc $f
@@ -681,8 +732,19 @@ function Copy-XamlDlls {
                 $missing += $f
             }
         }
+        # WebView2Loader 是原生 DLL。开发机默认只下到 x64；x86 放在 WebView2\x86\
+        $loaderSrc = if ($Arch -eq "x86") {
+            Join-Path $wvDepSrc "x86\WebView2Loader.dll"
+        } else {
+            Join-Path $wvDepSrc "WebView2Loader.dll"
+        }
+        if (Test-Path $loaderSrc) {
+            Copy-Item $loaderSrc -Destination (Join-Path $dstDepDir "WebView2Loader.dll") -Force
+        } else {
+            $missing += "WebView2Loader.dll ($Arch)"
+        }
         if ($missing.Count -eq 0) {
-            Write-Log "  已复制: AHK-XAML/lib/dep/WebView2 三件套" "Gray"
+            Write-Log "  已复制: AHK-XAML/lib/dep/WebView2 三件套 ($Arch)" "Gray"
         } else {
             Write-Log ("  [WARN] WebView2 依赖不全，缺: " + ($missing -join ", ")) "Yellow"
         }
@@ -787,7 +849,8 @@ function Copy-InputDlls {
     }
 }
 
-# 语音触发插件（Voice）：按架构复制运行时 DLL + 共享 KWS 模型
+# 语音触发插件（Voice）：按架构复制运行时 DLL + 关键词模型。
+# 流式识别模型 stt_stream 约 160MB，缺文件时由语音转文字窗口按需下载，不进发行包。
 function Copy-Voice {
     param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
 
@@ -807,20 +870,86 @@ function Copy-Voice {
         Write-Log "  已复制: Voice/$Arch/$($_.Name)" "Gray"
     }
 
-    # 共享 KWS 模型（跨架构，缺才复制）
+    # 关键词模型。每次覆盖，避免发行目录留着旧模型
     $modelSrc = Join-Path $PSScriptRoot "Plugins\Voice\models\kws"
     $modelDst = Join-Path $ReleaseDir "Plugins\Voice\models\kws"
     if (Test-Path $modelSrc) {
         New-Item -ItemType Directory -Path $modelDst -Force | Out-Null
         Get-ChildItem $modelSrc -File | ForEach-Object {
-            $dst = Join-Path $modelDst $_.Name
-            if (-not (Test-Path $dst)) {
-                Copy-Item $_.FullName -Destination $dst -Force
-                Write-Log "  已复制: Voice/models/kws/$($_.Name)" "Gray"
-            }
+            Copy-Item $_.FullName -Destination (Join-Path $modelDst $_.Name) -Force
+            Write-Log "  已复制: Voice/models/kws/$($_.Name)" "Gray"
         }
     } else {
         Write-Log "  [WARN] Voice 模型目录不存在: $modelSrc" "Yellow"
+    }
+
+    # 上次打包可能已经复制过。发行目录里留着会再次打进 zip。
+    $sttDst = Join-Path $ReleaseDir "Plugins\Voice\models\stt_stream"
+    if (Test-Path $sttDst) {
+        Remove-Item $sttDst -Recurse -Force
+        Write-Log "  已移除按需下载模型: Voice/models/stt_stream" "Yellow"
+    }
+}
+
+# 发行目录运行时要靠磁盘加载、以前打包漏掉的插件
+function Copy-RuntimePlugins {
+    param([string]$ReleaseDir)
+
+    $bundles = @(
+        @{
+            Name = "RMT/RMT.dll"
+            Src  = "Plugins\RMT\RMT.dll"
+            Dst  = "Plugins\RMT\RMT.dll"
+        },
+        @{
+            Name = "RMTMcps/RMTMcps.exe"
+            Src  = "Plugins\RMTMcps\RMTMcps.exe"
+            Dst  = "Plugins\RMTMcps\RMTMcps.exe"
+        },
+        @{
+            Name = "RMTMcps/README.md"
+            Src  = "Plugins\RMTMcps\README.md"
+            Dst  = "Plugins\RMTMcps\README.md"
+        },
+        @{
+            Name = "RMTMcps/mcp.example.json"
+            Src  = "Plugins\RMTMcps\mcp.example.json"
+            Dst  = "Plugins\RMTMcps\mcp.example.json"
+        },
+        @{
+            Name = "GameInput/GameInputWrapper.cs"
+            Src  = "Plugins\GameInput\GameInputWrapper.cs"
+            Dst  = "Plugins\GameInput\GameInputWrapper.cs"
+        },
+        @{
+            Name = "GameInput/GameInputRedist.msi"
+            Src  = "Plugins\GameInput\GameInputRedist.msi"
+            Dst  = "Plugins\GameInput\GameInputRedist.msi"
+        },
+        @{
+            Name = "SupportQr/QrDecode.exe"
+            Src  = "Plugins\SupportQr\QrDecode.exe"
+            Dst  = "Plugins\SupportQr\QrDecode.exe"
+        },
+        @{
+            Name = "SupportQr/zxing.dll"
+            Src  = "Plugins\SupportQr\zxing.dll"
+            Dst  = "Plugins\SupportQr\zxing.dll"
+        }
+    )
+    foreach ($item in $bundles) {
+        $src = Join-Path $PSScriptRoot $item.Src
+        $dst = Join-Path $ReleaseDir $item.Dst
+        if (Test-Path -LiteralPath $src) {
+            $parent = Split-Path $dst -Parent
+            if (-not (Test-Path $parent)) {
+                New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            }
+            Copy-IntoRelease -Source $src -Destination $dst
+            Write-Log "  已复制: $($item.Name)" "Gray"
+        } else {
+            Write-Log "  [WARN] 未找到: $($item.Name)" "Yellow"
+        }
     }
 }
 
@@ -840,20 +969,31 @@ function Copy-RapidOcr {
         Write-Log "  [WARN] 未找到: RapidOcr/$bitArch/RapidOcrOnnx.dll" "Yellow"
     }
 
-    # PP-OCRv6 ch_models（det/rec/dict，跨架构共用，缺才复制）
+    # PP-OCRv6 ch_models。覆盖同步，并删掉源目录里已经没有的旧模型，避免加载时先扫到 v4
     $modelSrc = Join-Path $PSScriptRoot "Plugins\RapidOcr\ch_models"
     $modelDst = Join-Path $ReleaseDir "Plugins\RapidOcr\ch_models"
     if (Test-Path $modelSrc) {
         New-Item -ItemType Directory -Path $modelDst -Force | Out-Null
+        $keep = @{}
         Get-ChildItem $modelSrc -File | ForEach-Object {
-            $dst = Join-Path $modelDst $_.Name
-            if (-not (Test-Path $dst)) {
-                Copy-Item $_.FullName -Destination $dst -Force
-                Write-Log "  已复制: RapidOcr/ch_models/$($_.Name)" "Gray"
+            Copy-Item $_.FullName -Destination (Join-Path $modelDst $_.Name) -Force
+            $keep[$_.Name] = $true
+            Write-Log "  已复制: RapidOcr/ch_models/$($_.Name)" "Gray"
+        }
+        Get-ChildItem $modelDst -File -ErrorAction SilentlyContinue | ForEach-Object {
+            if (-not $keep.ContainsKey($_.Name)) {
+                Remove-Item $_.FullName -Force
+                Write-Log "  已移除过期模型: RapidOcr/ch_models/$($_.Name)" "Yellow"
             }
         }
     } else {
         Write-Log "  [WARN] RapidOcr 模型目录不存在: $modelSrc" "Yellow"
+    }
+
+    $enDst = Join-Path $ReleaseDir "Plugins\RapidOcr\en_models"
+    if (Test-Path $enDst) {
+        Remove-Item $enDst -Recurse -Force
+        Write-Log "  已移除过期目录: RapidOcr/en_models" "Yellow"
     }
 }
 
@@ -875,16 +1015,6 @@ function Compress-ReleaseZip {
 # 一一对应，用于上传到 RMTAssets 仓库对应 tag（v{version}_{arch}）的 Release 资产
 function New-RMTAssets {
     param([string]$Arch, [string]$ReleaseDir)
-
-    # 打包前用 csc 重编 Plugins\RMT\RMT.dll（Http/Device/AiAssist）
-    $rmtBuild = Join-Path $PSScriptRoot "Plugins\RMT\buildDll.ps1"
-    if (Test-Path -LiteralPath $rmtBuild) {
-        Write-Log "编译 Plugins\RMT\RMT.dll ..." "Gray"
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $rmtBuild -NoPause
-        if ($LASTEXITCODE -ne 0) {
-            throw "RMT.dll 编译失败，请检查 $env:TEMP\RMT-dll-build.log"
-        }
-    }
 
     $bitArch = if ($Arch -eq "x64") { "64bit" } else { "32bit" }
     $assetsDir = Join-Path $ReleaseDir "RMTAssets_$Arch"
@@ -926,7 +1056,7 @@ function New-RMTAssets {
         @{ Dest = "chinese.txt";                     Src = "Lang\中文.txt" },
         @{ Dest = "English.txt";                     Src = "Lang\English.txt" },
         @{ Dest = "Work.exe";                        Src = "Release$Arch\Thread\Work.exe" },
-        @{ Dest = "index.html";                      Src = "Web\index.html" },
+        @{ Dest = "index.html";                      Src = "index.html" },
         @{ Dest = "MouseControl.dll";                Src = "Plugins\MouseControl.dll" },
         @{ Dest = "PlayAudio.vbs";                   Src = "MinTool\PlayAudio.vbs" },
         @{ Dest = "CountDown.exe";                   Src = "MinTool\CountDown.exe" }
@@ -951,14 +1081,14 @@ function New-RMTAssets {
         "IcoRunning.ico", "Joy.png", "DeltaMove.png",
         "KeyListen.png", "JoyListen.png", "SearchCombo.png", "Excel.png",
         "Time.png", "WaitConfirm.png", "RunPro.png",
-        "Arr.png", "Condition.png", "Control.png", "Extract.png", "False.png",
+        "Arr.png", "Condition.png", "Control.png", "FlowJump.png", "Extract.png", "False.png",
         "FileIO.png", "GreenColor.png", "IcoPause.ico", "If.png", "IfPro.png",
         "Input.png", "Interval.png", "Key.png", "Loop.png",
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "RedColor.png", "Run.png", "Search.png",
         "SearchPro.png", "MacroAction.png", "Target.png", "TextOps.png", "True.png",
         "Var.png", "WeiXin.png", "WindowManage.png", "YellowColor.png",
-        "ZhiFuBao.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
+        "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
     )
 
     $softDir = Join-Path $PSScriptRoot "Images\Soft"

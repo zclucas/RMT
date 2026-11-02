@@ -23,6 +23,7 @@ const iconMap = {
   '软件介绍': '📘',
   '快速上手': '🚀',
   '指令手册': '📖',
+  '界面宏字段绑定支持表': '🪟',
   '命令行': '💻',
   '常见问题': '❓',
   '常见报错': '⚠️',
@@ -498,7 +499,52 @@ ${searchScript}
 </body>
 </html>`;
 
-OUTPUTS.forEach(output => fs.writeFileSync(output, fullHtml, 'utf-8'));
+// 直接 writeFileSync 截断已有文件时，若该文件被映射到内存（编辑器、杀毒扫描），
+// Windows 返回的错误在 Node 里是 UNKNOWN(-4094)，open 直接失败。
+// 先写入临时文件，再把旧文件挪走换上新文件，并短暂重试。
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function writeOutput(output, data) {
+  const dir = path.dirname(output);
+  const base = path.basename(output);
+  const tmp = path.join(dir, `.${base}.${process.pid}.tmp`);
+  const bak = path.join(dir, `.${base}.${process.pid}.bak`);
+  fs.writeFileSync(tmp, data, 'utf-8');
+  let lastErr = null;
+  for (let i = 0; i < 8; i++) {
+    try {
+      try { fs.rmSync(bak, { force: true }); } catch (e) {}
+      if (fs.existsSync(output)) fs.renameSync(output, bak);
+      try {
+        fs.renameSync(tmp, output);
+      } catch (err) {
+        if (!fs.existsSync(output) && fs.existsSync(bak)) {
+          try { fs.renameSync(bak, output); } catch (e) {}
+        }
+        throw err;
+      }
+      try { fs.rmSync(bak, { force: true }); } catch (e) {}
+      return;
+    } catch (err) {
+      lastErr = err;
+      const code = err && err.code;
+      const retry = code === 'UNKNOWN' || code === 'EPERM' || code === 'EBUSY' || code === 'EACCES' || code === 'EEXIST';
+      if (!retry || i === 7) break;
+      sleepMs(150 * (i + 1));
+    }
+  }
+  try { fs.rmSync(tmp, { force: true }); } catch (e) {}
+  const detail = lastErr && lastErr.code === 'UNKNOWN'
+    ? '文件可能正被其他程序占用（例如已在编辑器中打开）'
+    : (lastErr && lastErr.message);
+  const wrapped = new Error(`写入失败: ${output}\n${detail}`);
+  wrapped.code = lastErr && lastErr.code;
+  throw wrapped;
+}
+
+OUTPUTS.forEach(output => writeOutput(output, fullHtml));
 
 const sizeKB = Math.round(fs.statSync(OUTPUTS[0]).size / 1024);
 const groupCount = navGroups.filter(g => g.type === 'group').length;

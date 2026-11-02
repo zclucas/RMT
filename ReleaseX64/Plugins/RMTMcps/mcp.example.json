@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "rmt-mcp": {
+      "command": "./RMTMcps.exe",
+      "args": [],
+      "env": {
+        "RMT_MCP_WORK_ROOT": "./workspaces",
+        "RMT_MCP_OUTPUT_ROOT": "./output",
+        "RMT_MCP_TTL_HOURS": "24"
+      }
+    }
+  },
+  "_comment": "路径相对本文件所在目录（与 RMTMcps.exe 同级）。RMT 启动时请把 WorkingDirectory 设为本目录；Cursor 全局 mcp.json 若不支持相对路径，再改成绝对路径。"
+}

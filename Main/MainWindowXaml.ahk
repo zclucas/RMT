@@ -7072,7 +7072,7 @@ class MainWin {
         countStr := FormatIntegerWithCommas(MySoftData.MacroTotalCount)
         weiXinImg := StrReplace(A_WorkingDir "\Images\Soft\WeiXin.png", "\", "/")
         zhiFuBaoImg := StrReplace(A_WorkingDir "\Images\Soft\ZhiFuBao.png", "\", "/")
-        ; 赞助二维码通过 FileInstall 编译进主程序，运行时不读取 Images\Soft 下的同名文件。
+        ; 赞助二维码随主程序发布。FileInstall 行必须单独成行，Ahk2Exe 才会打进 exe。
         aiFaDianImg := this._GetBuiltInSupportQr("aifadian")
         stripe2Img := this._GetBuiltInSupportQr("stripe2")
         stripe5Img := this._GetBuiltInSupportQr("stripe5")
@@ -7147,50 +7147,97 @@ class MainWin {
             return paths[kind]
         switch kind {
             case "stripe2":
+                rel := "Images\Soft\Stripe2.png"
                 tempPath := A_Temp "\RMT_Stripe2.png"
-                try FileInstall("Images\Soft\Stripe2.png", tempPath, 1)
-                src := A_WorkingDir "\Images\Soft\Stripe2.png"
+                try {
+                    FileInstall("Images\Soft\Stripe2.png", tempPath, 1)
+                }
             case "stripe5":
+                rel := "Images\Soft\Stripe5.png"
                 tempPath := A_Temp "\RMT_Stripe5.png"
-                try FileInstall("Images\Soft\Stripe5.png", tempPath, 1)
-                src := A_WorkingDir "\Images\Soft\Stripe5.png"
+                try {
+                    FileInstall("Images\Soft\Stripe5.png", tempPath, 1)
+                }
             default:
+                rel := "Images\Soft\AiFaDian.png"
                 tempPath := A_Temp "\RMT_AiFaDian.png"
-                try FileInstall("Images\Soft\AiFaDian.png", tempPath, 1)
-                src := A_WorkingDir "\Images\Soft\AiFaDian.png"
+                try {
+                    FileInstall("Images\Soft\AiFaDian.png", tempPath, 1)
+                }
         }
-        if (FileExist(tempPath)) {
-            paths[kind] := StrReplace(tempPath, "\", "/")
-            return paths[kind]
-        }
-        ; 脚本模式 / 临时文件占用时回退到工作目录源图，避免赞助页拖垮 PopulateAll
-        if (FileExist(src))
-            return StrReplace(src, "\", "/")
-        return ""
+        got := this._MaterializeBundled(tempPath, rel)
+        if (got == "")
+            return ""
+        paths[kind] := StrReplace(got, "\", "/")
+        return paths[kind]
     }
 
     _GetQrDecodeExe() {
         static exePath := ""
-        if (exePath != "" && FileExist(exePath))
+        if (exePath != "" && this._IsPeImage(exePath))
             return exePath
         dir := A_Temp "\RMT_SupportQr"
         DirCreate(dir)
         destExe := dir "\QrDecode.exe"
         destDll := dir "\zxing.dll"
-        try FileInstall("Plugins\SupportQr\QrDecode.exe", destExe, 1)
-        try FileInstall("Plugins\SupportQr\zxing.dll", destDll, 1)
-        if (!FileExist(destExe)) {
-            srcExe := A_WorkingDir "\Plugins\SupportQr\QrDecode.exe"
-            srcDll := A_WorkingDir "\Plugins\SupportQr\zxing.dll"
-            if (FileExist(srcExe)) {
-                FileCopy(srcExe, destExe, 1)
-                if (FileExist(srcDll))
-                    FileCopy(srcDll, destDll, 1)
-            }
+        ; 行首必须是 FileInstall。写成 try FileInstall 时 Ahk2Exe 不收录，
+        ; 编译版会先把目标截成 0 字节，cmd 再启动它就会弹出“此应用无法在你的电脑上运行”。
+        try {
+            FileInstall("Plugins\SupportQr\QrDecode.exe", destExe, 1)
         }
-        if (FileExist(destExe))
-            exePath := destExe
+        try {
+            FileInstall("Plugins\SupportQr\zxing.dll", destDll, 1)
+        }
+        exe := this._MaterializeBundled(destExe, "Plugins\SupportQr\QrDecode.exe")
+        if (exe == destExe)
+            this._MaterializeBundled(destDll, "Plugins\SupportQr\zxing.dll")
+        if (this._IsPeImage(exe))
+            exePath := exe
         return exePath
+    }
+
+    ; FileInstall 找不到资源时会留下 0 字节文件，FileExist 仍为真，不能据此认为提取成功。
+    _FileHasData(path) {
+        if (path == "" || !FileExist(path))
+            return false
+        try
+            return FileGetSize(path) > 0
+        return false
+    }
+
+    _IsPeImage(path) {
+        if (!this._FileHasData(path))
+            return false
+        try {
+            f := FileOpen(path, "r")
+            if (!IsObject(f))
+                return false
+            sig := f.Read(2)
+            f.Close()
+            return sig == "MZ"
+        }
+        return false
+    }
+
+    _MaterializeBundled(dest, rel) {
+        if (this._FileHasData(dest))
+            return dest
+        src := A_WorkingDir "\" rel
+        if (!this._FileHasData(src))
+            src := A_ScriptDir "\" rel
+        if (!this._FileHasData(src))
+            return ""
+        try {
+            SplitPath(dest, , &parent)
+            if (parent != "")
+                DirCreate(parent)
+            if (FileExist(dest))
+                FileDelete(dest)
+            FileCopy(src, dest, 1)
+        }
+        if (this._FileHasData(dest))
+            return dest
+        return src
     }
 
     _ReadQrUrl(imagePath) {
@@ -7200,10 +7247,10 @@ class MainWin {
         if (cache.Has(imagePath))
             return cache[imagePath]
         exe := this._GetQrDecodeExe()
-        if (exe == "")
+        if (!this._IsPeImage(exe))
             return ""
         winPath := StrReplace(imagePath, "/", "\")
-        if (!FileExist(winPath))
+        if (!this._FileHasData(winPath))
             return ""
         dir := A_Temp "\RMT_SupportQr"
         outFile := dir "\out.txt"

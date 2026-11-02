@@ -29,7 +29,7 @@
 | `write_rmt_file` | 写/改工作区文件（易踩 INI/编码坑，优先用 `edit_rmt_macro`） |
 | `explain_rmt` | 配置可读摘要（触发键、指令中文描述等） |
 | `validate_rmt` | 校验合法性，返回分级问题清单 |
-| `edit_rmt_macro` | 结构化增/删/改一条宏，并自动复校验 |
+| `edit_rmt_macro` | 结构化增/删/改宏，或宏内单条指令，并自动复校验 |
 | `generate_rmt_config` | 按 JSON 规格生成并打包 `.rmt` |
 | `pack_rmt` | 已编辑工作区重新打包为 `.rmt` |
 | `list_rmt_outputs` | 列出 `output` 下已有 `.rmt` |
@@ -41,13 +41,21 @@
 1. **解读已有配置**：`parse_rmt(source)` → `explain_rmt(workspace_id)` 或 `read_rmt_file` → 用完可 `cleanup_rmt_workspace`
 2. **从零生成**：`generate_rmt_config(spec_json)`；小包看 `delivery.base64`；过大再 `export_rmt_file`
 3. **改一条宏再打包**：`parse_rmt` → `edit_rmt_macro`（看 `validation`）→ `pack_rmt`
-4. **只校验**：`validate_rmt(workspace_id=...)` 或 `validate_rmt(source=...)`
+4. **只改一条指令**：`explain_rmt` 数出指令序号 → `edit_rmt_macro(operation="update_command", command_index=N)`；
+   改配置型指令的参数则用 `data_configs` 按序列码 upsert，不必重建指令
+5. **只校验**：`validate_rmt(workspace_id=...)` 或 `validate_rmt(source=...)`
 
 ### 关键约定
 
 - `setting_name` / `pack_rmt` 的 `output_name`：纯英文（字母数字下划线连字符）；中文标题放 `title`
 - `module`：Symbol 或中文均可，如 `Normal` / `按键宏`、`String` / `字串宏`、`Timing` / `定时宏`
-- 宏序号 `index` 为 **1-based**；`edit_rmt_macro` 的 `operation`：`update`（默认）/ `add` / `delete`
+- 宏序号 `index` 与指令序号 `command_index` 都是 **1-based**
+- `edit_rmt_macro` 的 `operation`：
+  - 宏级 `update`（默认）/ `add` / `delete`
+  - 指令级 `update_command` / `add_command` / `delete_command`，配 `command_index` 与 `changes.command`
+  - 图形级 `update_graph_node` / `add_graph_node` / `delete_graph_node`，配 `changes.node` / `after` / `command`
+  - **只改一条指令时别用 `update` + `commands`**：那要求复述该宏全部指令，漏写会静默丢掉原指令
+    （含配置型指令的序列码引用）
 - `changes_json` / `commands` 可含：`trigger_key`、`remark`、`forbid`/`enabled`、`trigger_type`（1–6 或 按下/松开/松止/开关/长按/双击）、`mode`、`hold_time`、`loop_count`、`macro` 指令串或 `commands` 数组（二者优先 commands）
 - **配置型指令**（宏里只有序列码，参数在对应 `*File.ini`）：
   - `search`/`搜索`、`search_pro`/`搜索Pro` → SearchFile / SearchProFile
@@ -56,11 +64,17 @@
   - `output`/`输出`、`run`/`运行`、`submacro`/`宏操作`、`operation`/`运算`
   - `mmpro`/`移动Pro`、`bg_mouse`/`后台鼠标`、`bg_key`/`后台按键`
   - `text_ops`/`文本处理`、`array`/`数组`、`input`/`输入`、`file_io`/`文件读写`
-  - `window`/`窗口管理`、`key_check`/`按键检测`、`joy_check`/`手柄检测`、`comment`/`注释`、`screenshot`/`抓图`
+  - `window`/`窗口管理`、`key_check`/`按键检测`、`comment`/`注释`、`screenshot`/`抓图`
   - `graph_node`/`图形节点`、`graph_start`/`图形开始节点`
-  - 通用写法：`{"type":"loop","count":3,"body":"按键_a_点击"}` 或 `{"type":"如果","config":{...}}`
+  - 图形宏：`{"type":"graph_start","nodes":[{"command":{"type":"key","key":"a"}},{"command":{"type":"interval","ms":40}}]}`。不写 `next` 时按顺序串成一条链；`next` 用节点 `id`；`free:true` 放进 EmptyNode
+  - 改已有图：`edit_rmt_macro` 的 `update_graph_node` / `add_graph_node` / `delete_graph_node`。`after` 为 `start`、`free` 或「图形节点N」；`node` 指定要改/删的节点；`command` 是新指令。删节点时自动把前后连线接上
+  - 通用写法：`{"type":"loop","count":"无限","body":[...]}` 或 `{"type":"如果","conditions":[{"left":"HP","op":"小于","right":"30"}]}`。`config` 里的键名须与 RMT DataClass 一致；简写会转成对应字段（如搜索 `text`/`color`/`count:"无限"`、输出 `mode:"粘贴"`→`粘贴内容`、运行 `mode:"等待+返回值"`）。运行会按 Mode 补齐 `SaveNameArr`/`StdIn`/`Encoding`；窗口透明度写成不带 `%` 的数值（如 `"80"`）
   - 也可 `data_configs` / `search_configs` / `loop_configs` 等按序列码 upsert
-- 内联指令：`key` / `interval` / `move` / `rmt` / `raw`
+- 内联指令（参数直接写在宏串里，无 DataFile）：`key` / `interval` / `move` / `rmt` / `raw`
+  - `interval`：`{"ms":3000}` 固定；`{"min":100,"max":300}` 随机区间（**必须成对给**，只给一个会报错）
+  - `move`：`移动_X_Y_速度_方式`。方式 `mode`：`绝对`/`0`、`相对`/`1`、`游戏视角`/`2`；不写方式则省略（绝对）。`relative:true` 仍等价于相对
+  - `rmt`：`RMT指令_类别_指令`；`action` 为「显示菜单」时再加 `menu` 序号
+  - 任意类型可加 `"disabled":true`（🚫 禁用）或 `"debug":true`（⭐ 调试起点）
 - 使用说明字段：`bot_name`、`config_purpose`、`operation_instructions`，须中文且结合实际配置
 - 沙盒与宿主机文件系统隔离时：不要对宿主机 `output/` 做 `cp`；用响应内 `delivery.base64` 或 `export_rmt_file`
 <!-- RMT_AI_PROMPT_END -->
@@ -117,20 +131,53 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 
 - **二选一**（优先 `workspace_id`）：`workspace_id` 或 `source`  
 - **返回**：`total_macros`、`tab_count`、`tabs[]`（每条宏含 trigger / enabled / remark / commands 可读描述）、`datafiles`  
-- 对全部配置型序列码（搜索/变量/循环/如果/输出…）会读取对应 `*File.ini`，在 `commands[].config` 给出 JSON；缺配置标 `config_missing`；嵌套 `TrueMacro`/`LoopBody`/`MacroArr`/`CurCMD` 会递归解读
+- 对全部配置型序列码（搜索/变量/循环/如果/输出…）会读取对应 `*File.ini`，在 `commands[].config` 给出 JSON；缺配置标 `config_missing`；嵌套 `TrueMacro`/`LoopBody`/`MacroArr`/`CurCMD` 会递归解读。图形开始节点额外给出 `graph_nodes`
 
 ### validate_rmt
 
 - **二选一**（优先 `workspace_id`）：`workspace_id` 或 `source`  
-- **校验项摘要**：调用链死循环、页签字段齐全、触发键/按键名合法、指令类型与字段数、单宏指令过多（>1000 提醒）、分隔符/序列码/FoldInfo、数组等长与折叠框覆盖、定时宏结束时间、英文语系污染、**配置型序列码与全部 DataFile 是否匹配**  
+- **校验项摘要**：调用链死循环、页签字段齐全、触发键/按键名合法、指令类型与字段数、单宏指令过多（>1000 提醒）、分隔符/序列码/FoldInfo、数组等长与折叠框覆盖、定时宏结束时间、英文语系污染、**配置型序列码与全部 DataFile 双向匹配**（宏引用了但 DataFile 缺 → `datafile_serial_missing`；DataFile 有但没人引用 → `datafile_entry_orphan`，只是 warning，不影响运行）  
 - **返回**：`valid`、`summary`、`issues[]`（severity/code/message/location）、`stats`
 
 ### edit_rmt_macro
 
 - **必填** `workspace_id`、`module`
-- **可选** `index`（update/delete 必填）、`changes_json`、`operation`（`update`/`add`/`delete`）
+- **可选** `index`（除 `add` 外都必填）、`changes_json`、`operation`、`command_index`
 - **`changes_json` 额外支持**：`commands` 里全部配置型 type（自动写 DataFile）；`data_configs` / `search_configs` / `loop_configs` 等按序列码 upsert
-- **返回**：`operation`、`module`、`macro_count`、`edited_macro`、`datafiles_updated`、`validation`
+- **返回**：`operation`、`module`、`macro_count`、`edited_macro`、`edited_command`（指令级操作的前后对照）、`datafiles_updated`、`validation`
+
+`operation` 六种取值：
+
+| operation | 作用 | 需要 | 说明 |
+|-----------|------|------|------|
+| `update` | 改整条宏 | `index` | `changes` 给 `trigger_key` / `remark` / `commands` 等 |
+| `add` | 新增宏 | — | 追加到该页签末尾，`index` 忽略 |
+| `delete` | 删整条宏 | `index` | 自动前移后续宏并修 FoldInfo |
+| `update_command` | 替换一条指令 | `index`、`command_index` | `changes.command` 给新指令；**只给 `disabled`/`debug` 时仅切换 🚫/⭐ 标记、保留原指令参数** |
+| `add_command` | 插入一条指令 | `index` | `command_index<=0` 或超末尾则追加；否则插到该位置之前 |
+| `delete_command` | 删一条指令 | `index`、`command_index` | 宏内其余指令与分隔符风格（`,` 或换行 `⫶`）保持不变 |
+| `update_graph_node` | 改一个图形节点 | `index` 或 `changes.start` | `node` 为「图形节点N」；可改 `command` / `next` / `x` / `y` |
+| `add_graph_node` | 新增图形节点 | 同上 | `after`：`start`（默认）、`free` 或某个节点序列码；`command` 为该节点指令 |
+| `delete_graph_node` | 删除图形节点 | 同上 | 把前驱直接连到被删节点的后继，并删掉该节点配置 |
+
+改一条指令的两个例子：
+
+```jsonc
+// 把第 2 条指令改成 100~300ms 随机等待
+operation="update_command", index=1, command_index=2
+changes_json={"command": {"type": "interval", "min": 100, "max": 300}}
+
+// 只禁用第 1 条指令，不动它的参数
+operation="update_command", index=1, command_index=1
+changes_json={"command": {"disabled": true}}
+```
+
+配置型指令的参数存在 `*File.ini`，改参数不用重建指令，按序列码 upsert 即可：
+
+```jsonc
+operation="update", index=1
+changes_json={"data_configs": {"变量1": {"CopyVariableArr": ["99", "0", "0", "0"]}}}
+```
 
 ### generate_rmt_config
 
@@ -208,6 +255,54 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 ### cleanup_rmt_workspace
 
 - **必填** `workspace_id`：具体 ID，或 `all`（清 workspaces + output 下 `.rmt`），或 `expired`（按 TTL）
+
+---
+
+## 指令参数速查
+
+`commands` 数组（`generate_rmt_config`）与 `changes.command`（`edit_rmt_macro` 指令级操作）用同一套 schema。
+
+### 内联指令：参数直接写进宏串，不落 DataFile
+
+| type | 参数 | 生成结果 |
+|------|------|----------|
+| `key` | `key`、`action`（按下/松开/点击，默认点击）、`duration`=100、`count`=1、`interval`=200 | `按键_a_点击_100_10_200` |
+| `interval` | `ms`（固定，也可直接写 `"100~300"`）**或** `min`+`max`（随机区间，必须成对） | `间隔_3000` / `间隔_100~300` |
+| `move` | `x`、`y`、`speed`=90、`mode`（`绝对`/`相对`/`游戏视角` 或 0/1/2；省略=绝对） | `移动_800_600_90` / `移动_10_0_100_1` / `移动_1_2_90_2` |
+| `rmt` | `category`、`action`；显示菜单再加 `menu` | `RMT指令_调试_开启指令显示` / `RMT指令_宏控制_显示菜单_2` |
+| `raw` | `value`：原样写入的指令串，用于本表未覆盖的写法 | 原样 |
+
+四种内联指令都可再加两个开关，**配置型指令同样支持**：
+
+| 字段 | 效果 | 生成结果 |
+|------|------|----------|
+| `disabled: true` | 该指令被禁用，RMT 执行时跳过 | `🚫按键_a_点击_100_1_200` |
+| `debug: true` | 标为调试起点 | `⭐间隔_500` |
+
+### 配置型指令：宏串里只留序列码，参数写进 `*File.ini`
+
+24 种类型与对应文件见上方标记段的清单，英文别名（`search`/`if`/`loop`/`var`…）与中文名都能识别。
+所有配置型指令共用三个字段：
+
+| 字段 | 作用 |
+|------|------|
+| `serial` | 指定序列码（如 `"搜索2"`）；不给则自动分配未占用的编号 |
+| `remark` | 宏串里跟在序列码后的备注，如 `搜索1_找图` |
+| `config` | 原样写入 DataFile 的字段字典，键名须与 `*File.ini` 一致 |
+
+其中 5 种有友好简写，不必知道 INI 字段名：
+
+| type | 简写参数 | 落到 DataFile 的字段 |
+|------|----------|---------------------|
+| `variable` / `变量` | `name`、`value`、`operation`（数值/随机/字符/系统/删除 或 1-5）、`min`、`max`；多槽位用 `slots`（最多 4 个） | `VariableArr` / `CopyVariableArr` / `OperaTypeArr` / `MinVariableArr` / `MaxVariableArr` |
+| `output` / `输出` | `text`、`mode` | `Text`、`OutputType` |
+| `run` / `运行` | `target`、`mode` | `Target`、`Mode` |
+| `comment` / `注释` | `text` 或 `content` | `Content` |
+| `loop` / `循环` | `count`、`body` | `LoopCount`、`LoopBody` |
+
+**其余 19 种目前只能走 `config` 字段直传**（搜索、如果、宏操作、抓图、数组、文本处理等）。
+不确定字段名时的可靠办法：先 `parse_rmt` 一个已有同类配置，`explain_rmt` 会在
+`commands[].config` 里给出该类型的完整 JSON，照着改即可。
 
 ---
 

@@ -56,11 +56,14 @@ public partial class AhkWpfEngine
         {
             try
             {
-                // 只允许四角缩放：点落在窗口四边（非四角）时返回 HTBORDER，禁止单边调整大小
+                short px = (short)(lParam.ToInt64() & 0xFFFF);
+                short py = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+                // 只允许四角缩放：点落在窗口四边（非四角）时返回 HTBORDER，禁止单边调整大小。
+                // 边带要留到标题栏判断之后：标题栏上沿也在这条带里，先返回 HTBORDER 的话那一截不能拖、也不能双击最大化。
+                bool corner = false;
+                bool edge = false;
                 try
                 {
-                    short px = (short)(lParam.ToInt64() & 0xFFFF);
-                    short py = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
                     RECT wr;
                     if (GetWindowRect(hwnd, out wr))
                     {
@@ -69,21 +72,15 @@ public partial class AhkWpfEngine
                         bool onRight = px >= wr.right - band && px <= wr.right;
                         bool onTop = py >= wr.top && py <= wr.top + band;
                         bool onBottom = py >= wr.bottom - band && py <= wr.bottom;
-                        bool corner = (onLeft || onRight) && (onTop || onBottom);
-                        if ((onLeft || onRight || onTop || onBottom) && !corner)
-                        {
-                            handled = true;
-                            return new IntPtr(18); // HTBORDER：无缩放边框，拖拽无效
-                        }
+                        corner = (onLeft || onRight) && (onTop || onBottom);
+                        edge = (onLeft || onRight || onTop || onBottom) && !corner;
                     }
                 }
                 catch { }
                 var btn = win.FindName("BtnMaximize") as System.Windows.Controls.Button;
                 if (btn != null && btn.IsVisible)
                 {
-                    short screenX = (short)(lParam.ToInt64() & 0xFFFF);
-                    short screenY = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
-                    if (MaxBtnContainsScreen(btn, screenX, screenY))
+                    if (MaxBtnContainsScreen(btn, px, py))
                     {
                         // Win11 分屏要 HTMAXBUTTON，WPF 收不到 IsMouseOver；底色跟最小化/关闭同一套主题
                         SetMaxBtnChrome(btn, true, _maxBtnPressed);
@@ -94,6 +91,18 @@ public partial class AhkWpfEngine
                     {
                         SetMaxBtnChrome(btn, false, false);
                     }
+                }
+                // 视觉标题栏（DragArea）整段都是拖拽 / 双击最大化区。WindowChrome 只认窗口顶部
+                // 一条 DIP 热区，不跟着根内容 Viewbox 走，标题栏上半截会落在热区外面。
+                if (!corner && TitleBarCaptionContains(px, py))
+                {
+                    handled = true;
+                    return new IntPtr(2); // HTCAPTION
+                }
+                if (edge)
+                {
+                    handled = true;
+                    return new IntPtr(18); // HTBORDER：无缩放边框，拖拽无效
                 }
             }
             catch { }
@@ -399,6 +408,49 @@ public partial class AhkWpfEngine
         Point bottomRight = btn.PointToScreen(new Point(btn.ActualWidth, btn.ActualHeight));
         return screenX >= topLeft.X && screenX <= bottomRight.X &&
                screenY >= topLeft.Y && screenY <= bottomRight.Y;
+    }
+
+    // 屏幕点是否落在视觉标题栏的可拖拽区域（DragArea 的屏幕矩形，含 Viewbox 缩放）。
+    // 铬钮（最小化/关闭等，标了 IsHitTestVisibleInChrome）即使画在 DragArea 里面也要能点。
+    bool TitleBarCaptionContains(short screenX, short screenY)
+    {
+        if (win == null) return false;
+        var drag = win.FindName("DragArea") as FrameworkElement;
+        if (drag == null || !drag.IsVisible || drag.ActualWidth < 1 || drag.ActualHeight < 1)
+            return false;
+        Point topLeft, bottomRight;
+        try
+        {
+            topLeft = drag.PointToScreen(new Point(0, 0));
+            bottomRight = drag.PointToScreen(new Point(drag.ActualWidth, drag.ActualHeight));
+        }
+        catch { return false; }
+        double x0 = Math.Min(topLeft.X, bottomRight.X);
+        double y0 = Math.Min(topLeft.Y, bottomRight.Y);
+        double x1 = Math.Max(topLeft.X, bottomRight.X);
+        double y1 = Math.Max(topLeft.Y, bottomRight.Y);
+        if (screenX < x0 || screenX > x1 || screenY < y0 || screenY > y1)
+            return false;
+        try
+        {
+            Point local = win.PointFromScreen(new Point(screenX, screenY));
+            var hit = win.InputHitTest(local) as DependencyObject;
+            int depth = 0;
+            while (hit != null && depth++ < 24)
+            {
+                var input = hit as IInputElement;
+                if (input != null && System.Windows.Shell.WindowChrome.GetIsHitTestVisibleInChrome(input))
+                    return false;
+                DependencyObject parent = null;
+                if (hit is Visual || hit is System.Windows.Media.Media3D.Visual3D)
+                    parent = VisualTreeHelper.GetParent(hit);
+                if (parent == null)
+                    parent = LogicalTreeHelper.GetParent(hit);
+                hit = parent;
+            }
+        }
+        catch { }
+        return true;
     }
 
     // 最大化钮被标成 HTMAXBUTTON 后 WPF 触发器不走；底色与最小化/关闭一致：hover=ControlBorder，按下=BtnPressBg

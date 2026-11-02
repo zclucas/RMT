@@ -546,7 +546,13 @@ OnExitSoft(*) {
         RMTLogSys(RMT_LV_WARN, "Exit", "语音引擎停止失败: " (e.HasProp("Message") ? e.Message : ""))
     }
 
-    ; ③ 各项清理各自 try：任一失败（如 gdiplus 已卸载抛错）都不中断后续清理
+    ; ③ 关掉本目录带的 MCP 服务。Cursor 若另挂了别的副本，路径对不上就不动。
+    try CloseRmtMcps()
+    catch as e {
+        RMTLogSys(RMT_LV_WARN, "Exit", "关闭 RMTMcps 失败: " (e.HasProp("Message") ? e.Message : ""))
+    }
+
+    ; ④ 各项清理各自 try：任一失败（如 gdiplus 已卸载抛错）都不中断后续清理
     try Gdip_Shutdown(MyPToken)
     catch as e {
         RMTLogSys(RMT_LV_WARN, "Exit", "Gdip_Shutdown 失败: " (e.HasProp("Message") ? e.Message : ""))
@@ -580,6 +586,21 @@ OnExitSoft(*) {
     }
     try CfgWrite(MySoftData.MacroTotalCount, SettingFile, SettingSection, "MacroTotalCount")
     catch {
+    }
+}
+
+; 结束与本程序同目录的 RMTMcps.exe。按可执行文件路径判断，不按进程名一刀切。
+CloseRmtMcps() {
+    target := A_ScriptDir "\Plugins\RMTMcps\RMTMcps.exe"
+    if (!FileExist(target))
+        return
+    wmi := ComObjGet("winmgmts:")
+    query := wmi.ExecQuery("Select ProcessId, ExecutablePath from Win32_Process where Name='RMTMcps.exe'")
+    for proc in query {
+        path := proc.ExecutablePath
+        if (path = "" || StrLower(path) != StrLower(target))
+            continue
+        try ProcessClose(Integer(proc.ProcessId))
     }
 }
 

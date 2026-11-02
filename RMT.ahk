@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.0
 #NoTrayIcon
-global RMT_VERSION := "1.3F1"
+global RMT_VERSION := "1.3F2"
 #Include Main\SelfCheck.ahk
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
