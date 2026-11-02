@@ -908,7 +908,12 @@ public partial class AhkWpfEngine
                         object v = node.GetValue(TextElement.FontSizeProperty);
                         if (v is double && !double.IsNaN((double)v))
                         {
-                            useSize = skipFont ? Math.Max(minSize, (double)v) : Math.Max(minSize, (double)v + delta);
+                            bool customFont = IsUIMacroCustomFont(node);
+                            useSize = skipFont
+                                ? Math.Max(minSize, (double)v)
+                                : (customFont
+                                    ? (double)v
+                                    : Math.Max(minSize, (double)v + delta));
                             if (!skipFont && Math.Abs(useSize - (double)v) > 0.01)
                                 node.SetValue(TextElement.FontSizeProperty, useSize);
                         }
@@ -1038,7 +1043,26 @@ public partial class AhkWpfEngine
             }
             if (ctrl != null)
             {
-                if (parts[1] == "AddItem")
+                // 运行期重绑事件：value = "ctrl:event,ctrl:event,..."
+                // 用于「画布原地重灌」之后——注入的新元素需要重新挂鼠标事件。
+                // BindEvent 内部按 (ctrl,event) 记录并比对实例，重复调用是安全的。
+                if (parts[1] == "RebindEvents")
+                {
+                    _controlCache.Clear();
+                    try
+                    {
+                        foreach (var tok in parts[2].Split(','))
+                        {
+                            string t = tok.Trim();
+                            if (t.Length == 0) continue;
+                            int ci = t.IndexOf(':');
+                            if (ci <= 0 || ci >= t.Length - 1) continue;
+                            BindEvent(t.Substring(0, ci), t.Substring(ci + 1));
+                        }
+                    }
+                    catch { }
+                }
+                else if (parts[1] == "AddItem")
                 {
                     _controlCache.Clear();
                     if (ctrl is ListBox)
@@ -3929,6 +3953,7 @@ public partial class AhkWpfEngine
                             tb.FontSize = (owner.FindName("MacroEditorTitle") != null) ? 20 : themeSize;
                     }
                 }
+
                 catch { }
             }
             return;
@@ -4006,6 +4031,12 @@ public partial class AhkWpfEngine
                 cp.Margin = new Thickness(0);
         }
         catch { }
+    }
+
+    static bool IsUIMacroCustomFont(DependencyObject node)
+    {
+        FrameworkElement fe = node as FrameworkElement;
+        return fe != null && fe.Tag != null && fe.Tag.ToString() == "UIMacroCustomFont";
     }
 
     static bool IsTitleChromeNamed(DependencyObject node)

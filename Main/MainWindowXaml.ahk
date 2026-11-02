@@ -5711,6 +5711,19 @@ class MainWin {
                 . btnRow(GetLang("日志中心"), '<Button Name="BtnLogCenter" Content="' GetLang("打开日志中心") ' ↗" HorizontalAlignment="Left" Padding="10,0"/>'), "0", "", "logErr")))
 
         ; ---------- 页：界面 ----------
+        ; 自定义界面：面板下拉的数据源（界面宏的折叠框）
+        uiFoldNames := []
+        try {
+            uiTable := GetTableBySymbol("UI")
+            if (uiTable) {
+                for i, f in uiTable.Folds {
+                    nm := Trim(String(f.Remark))
+                    uiFoldNames.Push(nm == "" ? (GetLang("面板") " " i) : (i ". " nm))
+                }
+            }
+        }
+        if (uiFoldNames.Length == 0)
+            uiFoldNames.Push(GetLang("面板") " 1")
         triggerPage := page("trigger"
             , twoCol(
                 card(GetLang("菜单宏-轮盘"), "&#xE700;", tog(GetLang("固定位置"), "WheelFixedPosCon", MainSoftData.FixedMenuWheel, GetLang("固定在屏幕中下方"))
@@ -5724,7 +5737,10 @@ class MainWin {
                 , card(GetLang("界面宏-浮窗"), "&#xE737;", sld(GetLang("按钮宽度"), "UIPanelBtnWidthCon", "UIPanelBtnWidthVal", MainSoftData.UIPanelBtnWidth, 40, 250, 5)
                     . sld(GetLang("按钮高度"), "UIPanelBtnHeightCon", "UIPanelBtnHeightVal", MainSoftData.UIPanelBtnHeight, 20, 60, 2)
                     . sld(GetLang("字体大小"), "UIPanelFontSizeCon", "UIPanelFontSizeVal", MainSoftData.UIPanelFontSize, 8, 24, 1)
-                    . sld(GetLang("每行个数"), "UIPanelColsCon", "UIPanelColsVal", MainSoftData.UIPanelCols, 1, 6, 1), "0", "", "uipanel")
+                    . sld(GetLang("每行个数"), "UIPanelColsCon", "UIPanelColsVal", MainSoftData.UIPanelCols, 1, 6, 1)
+                    . tog(GetLang("界面激活时显示"), "UIPanelShowOnActiveCon", MainSoftData.UIPanelShowOnActive)
+                    . cmb(GetLang("自定义面板"), "UIPanelCustomFoldCon", uiFoldNames, 1)
+                    . btnRow(GetLang("自定义界面"), '<StackPanel Orientation="Horizontal"><Button Name="BtnEditUIPanelCustom" Content="' GetLang("界面编辑") '" HorizontalAlignment="Left" Padding="10,0"/><Button Name="BtnResetUIPanelCustom" Content="' GetLang("恢复自动") '" HorizontalAlignment="Left" Padding="10,0" Margin="8,0,0,0"/></StackPanel>'), "0", "", "uipanel")
             )
         )
 
@@ -5843,6 +5859,8 @@ class MainWin {
 
         ; ---- 设置中心：仅「日志中心」仍为独立查看窗口（非设置项）----
         this._Bind("BtnLogCenter", "Click", (*) => LogCenterGui.ShowGui())
+        this._Bind("BtnEditUIPanelCustom", "Click", (*) => OpenUIPanelCustomDesigner(this))
+        this._Bind("BtnResetUIPanelCustom", "Click", (*) => ResetUIPanelCustomSchema(this))
 
         ; ---- 设置中心：指令录制 ----
         this._Bind("ShowBorderCon", "Click", ObjBindMethod(this, "OnCheckEdit", "RecordShowBorder"))
@@ -5895,6 +5913,7 @@ class MainWin {
         this._Bind("UIPanelBtnHeightCon", "ValueChanged", ObjBindMethod(this, "OnSettingSlider", "UIPanelBtnHeight", "UIPanelBtnHeightVal", 20, 60))
         this._Bind("UIPanelFontSizeCon", "ValueChanged", ObjBindMethod(this, "OnSettingSlider", "UIPanelFontSize", "UIPanelFontSizeVal", 8, 24))
         this._Bind("UIPanelColsCon", "ValueChanged", ObjBindMethod(this, "OnSettingSlider", "UIPanelCols", "UIPanelColsVal", 1, 6))
+        this._Bind("UIPanelShowOnActiveCon", "Click", ObjBindMethod(this, "OnCheckEdit", "UIPanelShowOnActive"))
         this._Bind("CountDownFontCon", "ValueChanged", ObjBindMethod(this, "OnSettingSlider", "CountDownFontSize", "CountDownFontVal", 8, 72))
         this._Bind("CountDownAlphaCon", "ValueChanged", ObjBindMethod(this, "OnSettingSlider", "CountDownAlpha", "CountDownAlphaVal", 0, 100))
         this._Bind("CountDownStyleCon", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "CountDownStyle"))
@@ -5998,7 +6017,7 @@ class MainWin {
             {id: "logErr", fields: [{key: "SysLogMinLevel", def: "info", ctrl: "CmbLogLevel", kind: "cmbText"}, {key: "LogWarnBubble", def: true, ctrl: "ChkLogWarnBubble", kind: "chk"}, {key: "LogErrorBadge", def: true, ctrl: "ChkLogErrorBadge", kind: "chk"}, {key: "BusinessLog", def: false, ctrl: "ChkBusinessLog", kind: "chk", hook: "blog"}]},
             {id: "wheel", fields: [{key: "FixedMenuWheel", def: false, ctrl: "WheelFixedPosCon", kind: "chk"}, {key: "MenuWheelShowTooltip", def: false, ctrl: "WheelShowTooltipCon", kind: "chk"}, {key: "MenuWheelSelectMode", def: 2, ctrl: "WheelSelectModeCon", kind: "cmb"}, {key: "MenuWheelScale", def: 100, ctrl: "WheelScaleCon", kind: "sld", val: "WheelScaleVal"}]},
             {id: "countdown", fields: [{key: "CountDownStyle", def: 2, ctrl: "CountDownStyleCon", kind: "cmb"}, {key: "CountDownPadZero", def: true, ctrl: "CountDownPadCon", kind: "chk"}, {key: "CountDownAlpha", def: 70, ctrl: "CountDownAlphaCon", kind: "sld", val: "CountDownAlphaVal"}, {key: "CountDownFontSize", def: 15, ctrl: "CountDownFontCon", kind: "sld", val: "CountDownFontVal"}]},
-            {id: "uipanel", fields: [{key: "UIPanelBtnWidth", def: 80, ctrl: "UIPanelBtnWidthCon", kind: "sld", val: "UIPanelBtnWidthVal"}, {key: "UIPanelBtnHeight", def: 34, ctrl: "UIPanelBtnHeightCon", kind: "sld", val: "UIPanelBtnHeightVal"}, {key: "UIPanelFontSize", def: 12, ctrl: "UIPanelFontSizeCon", kind: "sld", val: "UIPanelFontSizeVal"}, {key: "UIPanelCols", def: 3, ctrl: "UIPanelColsCon", kind: "sld", val: "UIPanelColsVal"}]},
+            {id: "uipanel", fields: [{key: "UIPanelBtnWidth", def: 80, ctrl: "UIPanelBtnWidthCon", kind: "sld", val: "UIPanelBtnWidthVal"}, {key: "UIPanelBtnHeight", def: 34, ctrl: "UIPanelBtnHeightCon", kind: "sld", val: "UIPanelBtnHeightVal"}, {key: "UIPanelFontSize", def: 12, ctrl: "UIPanelFontSizeCon", kind: "sld", val: "UIPanelFontSizeVal"}, {key: "UIPanelCols", def: 3, ctrl: "UIPanelColsCon", kind: "sld", val: "UIPanelColsVal"}, {key: "UIPanelShowOnActive", def: true, ctrl: "UIPanelShowOnActiveCon", kind: "chk"}]},
             {id: "theme", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
             {id: "font", fields: [{key: "FontType", def: "微软雅黑", ctrl: "CmbFont", kind: "cmbText"}, {key: "FontSize", def: 15, ctrl: "ThemeFontSizeCon", kind: "sld", val: "ThemeFontSizeVal"}]},
             {id: "palette", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
@@ -6209,26 +6228,16 @@ class MainWin {
         try this.ui.Update(name, "Value", String(v))
     }
 
-    ; 界面浮窗出现位置：下拉序号 ↔ 锚点 id（id 8 不存在，顺序见 UIMacroPanelSettingGui.PosOptions）
-    _UIPanelPosIds() {
-        return [1, 2, 3, 4, 5, 6, 7, 9, 10]
-    }
-    _UIPanelPosIndex(id) {
-        for i, pid in this._UIPanelPosIds() {
-            if (pid == id)
-                return i - 1
+    OnSettingBoundedIntText(fieldName, mn, mx, state, ctrl, event) {
+        t := Trim(this.ui.Query(ctrl))
+        if (t == "" || !IsInteger(t)) {
+            try this.ui.Update(ctrl, "Text", String(MainSoftData.%fieldName%))
+            return
         }
-        return 0
-    }
-    OnUIPanelPosChanged(state, ctrl, event) {
-        idx := this.ui.Query("UIPanelDefaultPosCon>SelectedIndex")
-        if (!IsNumber(idx))
-            return
-        ids := this._UIPanelPosIds()
-        idx := Integer(idx) + 1
-        if (idx < 1 || idx > ids.Length)
-            return
-        MainSoftData.UIPanelDefaultPos := ids[idx]
+        v := Max(mn, Min(mx, Integer(t)))
+        MainSoftData.%fieldName% := v
+        this.MarkSettingDirty(ctrl)
+        try this.ui.Update(ctrl, "Text", String(v))
     }
 
     ; 主题：字体大小（滑块/数值框），原位预览并与「应用并保存」一致地写回 FontSize
@@ -7315,3 +7324,97 @@ class MainWin {
 }
 
 global MyMainWin := MainWin()
+
+; ===========================================================================
+; 界面宏 · 自定义界面入口（设置中心「界面宏-浮窗」卡片）
+; ===========================================================================
+OpenUIPanelCustomDesigner(mainWin) {
+    idx := 0
+    try idx := Integer(mainWin.ui.Query("UIPanelCustomFoldCon>SelectedIndex"))
+    if (idx < 0)
+        idx := 0
+    UIMacroDesignerGui.ShowGui(idx + 1)
+}
+
+ResetUIPanelCustomSchema(mainWin) {
+    global SettingFile, SettingSection
+    global MyUIMacroGui
+
+    idx := 0
+    try idx := Integer(mainWin.ui.Query("UIPanelCustomFoldCon>SelectedIndex"))
+    if (idx < 0)
+        idx := 0
+    foldIndex := idx + 1
+
+    ; 存储键 = 折叠框 ID（与设计器/运行时一致）；取不到才退回数组下标
+    fold := ""
+    try {
+        tableItem := GetTableBySymbol("UI")
+        if (tableItem && tableItem.Folds.Length >= foldIndex)
+            fold := tableItem.Folds[foldIndex]
+    }
+    foldKey := UIMacroSchema.FoldKey(fold)
+    if (foldKey == "")
+        foldKey := String(foldIndex)
+
+    ; 旧下标文件也要能清掉（兼容迁移前保存的配置）
+    legacyKey := String(foldIndex)
+    hasCurrent := (FileExist(UIMacroSchema.StorePathByKey(foldKey)) != "")
+    hasLegacy := (foldKey != legacyKey && FileExist(UIMacroSchema.StorePathByKey(legacyKey)) != "")
+
+    ; v0.1 遗留：自定义界面还可能存在聚合字段 MainSoftData.UIPanelCustom 里
+    ; （形状 {折叠框下标: schema}，键是**下标**不是 fold.ID）。
+    ; 运行时 _GetCustomSchema 在文件缺失时会回退读它 —— 只删文件会让「已恢复为自动模式」
+    ; 变成假提示，所以它也算「有可删内容」，并且要在下面一起清掉。
+    legacyDict := ""
+    try legacyRaw := MainSoftData.UIPanelCustom
+    catch
+        legacyRaw := ""
+    if (Trim(String(legacyRaw)) != "") {
+        legacyJson := UIMacroSchema.DecodeStore(legacyRaw)
+        try legacyDict := JSON.parse(String(legacyJson), , false)
+        catch
+            legacyDict := ""
+    }
+    hasLegacyDict := (IsObject(legacyDict) && ObjHasOwnProp(legacyDict, legacyKey))
+
+    if (!hasCurrent && !hasLegacy && !hasLegacyDict) {
+        MsgBox("该面板当前就是自动模式", "自定义界面", "Iconi")
+        return
+    }
+    if (MsgBox("确定清除该面板的自定义界面？", "自定义界面", "YesNo Icon?") != "Yes")
+        return
+
+    if (hasCurrent)
+        UIMacroSchema.DeleteStoreByKey(foldKey)
+    if (hasLegacy)
+        UIMacroSchema.DeleteStoreByKey(legacyKey)
+    if (hasLegacyDict) {
+        ; 全程 try 包住：清理遗留字段失败不能影响「已恢复」主流程
+        try {
+            legacyDict.DeleteProp(legacyKey)
+            newRaw := ""
+            ; 注意：本项目对某些对象 JSON.stringify 会返回空串，
+            ; 空串一律不写回，宁可留旧数据也不能把其它面板的配置抹掉。
+            try newRaw := JSON.stringify(legacyDict, 0)
+            catch
+                newRaw := ""
+            if (newRaw != "") {
+                storedRaw := UIMacroSchema.EncodeStore(newRaw)
+                if (storedRaw != "") {
+                    MainSoftData.UIPanelCustom := storedRaw
+                    CfgWrite(storedRaw, SettingFile, SettingSection, "UIPanelCustom")
+                }
+            }
+        }
+    }
+
+    ; 立即生效：销毁面板缓存，下次触发按键按自动模式重建
+    ; 带前台信息的面板 key 是 "<idx>|<hwnd>"，DestroyPanel(idx) 会静默失效，
+    ; 所以走 DestroyFoldPanels（按 panelInfo.foldIndex 匹配）。
+    try {
+        if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
+            MyUIMacroGui.DestroyFoldPanels(foldIndex)
+    }
+    MsgBox("已恢复为自动模式", "自定义界面", "Iconi")
+}

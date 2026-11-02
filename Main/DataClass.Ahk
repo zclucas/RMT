@@ -322,9 +322,6 @@ class MainConfig {
 
         ; ========== 界面浮窗 ==========
         this.UIPanelShowOnActive := true    ; 界面激活时默认显示浮窗
-        this.UIPanelDefaultPos := 1         ; 浮窗出现位置锚点 (1=左上, 2=中上, 3=右上, 4=中左, 5=中心, 6=中右, 7=左下, 9=中下, 10=右下)
-        this.UIPanelOffsetX := 100          ; 出现位置偏移 X (0~500)
-        this.UIPanelOffsetY := 100          ; 出现位置偏移 Y (0~500)
         this.UIPanelTitleBg := "#FF8B4513"   ; 标题背景 (由主题同步)
         this.UIPanelTitleText := "#FFFFFFFF" ; 标题文本 (由主题同步)
         this.UIPanelBtnColor := "#FFDAA520"  ; 按钮背景 (由主题同步)
@@ -335,6 +332,10 @@ class MainConfig {
         this.UIPanelFontSize := 12           ; 按钮字体大小
         this.UIPanelBtnWidth := 80           ; 按钮宽度
         this.UIPanelCols := 3                ; 每行按钮个数
+        this.UIPanelCustom := ""             ; 旧版自定义界面聚合配置（Base64 JSON）
+        this.UIPanelBall := ""               ; 处于「悬浮球」收起态的面板（逗号分隔的 fold 键）
+        this.UIPanelBallPos := ""            ; 各悬浮球位置（key=x,y;key2=x,y）
+        this.UIPanelPos := ""                ; 各展开面板的位置（key=x,y;key2=x,y），手动拖过才记
 
         ; ========== 倒计时浮层 ==========
         this.CountDownFontSize := 15        ; 倒计时字体大小

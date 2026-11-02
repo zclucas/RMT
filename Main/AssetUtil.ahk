@@ -758,16 +758,14 @@ LoadMainSetting() {
     }
     ; 界面浮窗配置（非颜色）
     MainSoftData.UIPanelShowOnActive := CfgRead(SettingFile, SettingSection, "UIPanelShowOnActive", true)
-    MainSoftData.UIPanelDefaultPos := Integer(CfgRead(SettingFile, SettingSection, "UIPanelDefaultPos", 1))
-    ; 旧版本「鼠标位置」=8 已移除；无效值统一归一化为左上角(1)
-    if (MainSoftData.UIPanelDefaultPos == 8 || MainSoftData.UIPanelDefaultPos < 1 || MainSoftData.UIPanelDefaultPos > 10)
-        MainSoftData.UIPanelDefaultPos := 1
-    MainSoftData.UIPanelOffsetX := CfgRead(SettingFile, SettingSection, "UIPanelOffsetX", 100)
-    MainSoftData.UIPanelOffsetY := CfgRead(SettingFile, SettingSection, "UIPanelOffsetY", 100)
     MainSoftData.UIPanelBtnHeight := CfgRead(SettingFile, SettingSection, "UIPanelBtnHeight", 34)
     MainSoftData.UIPanelFontSize := CfgRead(SettingFile, SettingSection, "UIPanelFontSize", 12)
     MainSoftData.UIPanelBtnWidth := CfgRead(SettingFile, SettingSection, "UIPanelBtnWidth", 80)
     MainSoftData.UIPanelCols := CfgRead(SettingFile, SettingSection, "UIPanelCols", 3)
+    MainSoftData.UIPanelCustom := CfgRead(SettingFile, SettingSection, "UIPanelCustom", "")
+    MainSoftData.UIPanelBall := CfgRead(SettingFile, SettingSection, "UIPanelBall", "")
+    MainSoftData.UIPanelBallPos := CfgRead(SettingFile, SettingSection, "UIPanelBallPos", "")
+    MainSoftData.UIPanelPos := CfgRead(SettingFile, SettingSection, "UIPanelPos", "")
     MainSoftData.CountDownFontSize := CfgRead(SettingFile, SettingSection, "CountDownFontSize", 15)
     MainSoftData.CountDownAlpha := CfgRead(SettingFile, SettingSection, "CountDownAlpha", 70)
     MainSoftData.CountDownStyle := Integer(CfgRead(SettingFile, SettingSection, "CountDownStyle", 2))
