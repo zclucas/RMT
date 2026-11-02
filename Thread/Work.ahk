@@ -1,4 +1,23 @@
 #Requires AutoHotkey v2.0
+
+; Worker 不加载界面。AssetUtil 里会直接写 RmtDialog，类必须先存在，
+; 否则编译时会被当成未赋值的局部变量。提示转给主进程显示。
+class RmtDialog {
+    static Info(msg, title := "", owner := 0) {
+        try WorkMsgBoxContent(String(msg))
+    }
+
+    static Confirm(msg, title := "", owner := 0) {
+        try WorkMsgBoxContent(String(msg))
+        return false
+    }
+
+    static Choose(msg, title := "", buttons := [], owner := 0) {
+        try WorkMsgBoxContent(String(msg))
+        return 0
+    }
+}
+
 #Include "..\Main\AssetUtil.ahk"
 #Include "..\Main\Util\LogUtil.ahk"
 #Include "..\Main\Util\SharedMemory.ahk"

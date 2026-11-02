@@ -345,7 +345,7 @@ WaitBeginKeyCapture(callback) {
     try ih.Start()
     for hk in WaitCaptureMouseKeys()
         try Hotkey("~*" hk, WaitKeyCapOnMouse, "On")
-    try ToolTipContent(GetLang("请按下要等待的按键（Esc 取消）"))
+    try MyToolTipContent(GetLang("请按下要等待的按键（Esc 取消）"))
 }
 
 WaitKeyCapOnEnd(ih, *) {
