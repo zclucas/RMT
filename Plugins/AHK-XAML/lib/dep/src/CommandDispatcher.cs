@@ -3872,20 +3872,6 @@ public partial class AhkWpfEngine
                         else if (pt == "Geometry") val = System.Windows.Media.Geometry.Parse(parts[2]);
                         else val = Convert.ChangeType(parts[2], prop.PropertyType);
                         prop.SetValue(ctrl, val, null);
-                        // 配置管理同款：Opacity=1 立即揭盖。屏上再等 present 只会拉长黑框（GlassFrame=0 时 LWA 藏不住）。
-                        if (ctrl == win && parts[1] == "Opacity" && win.Resources.Contains("_NativeAlphaPending"))
-                        {
-                            try
-                            {
-                                IntPtr wHwnd = new System.Windows.Interop.WindowInteropHelper(win).Handle;
-                                if (wHwnd != IntPtr.Zero)
-                                {
-                                    RevealNativeWindow(win, wHwnd);
-                                    SendToAhkAsync("EVENT|" + winId + "|Window|Revealed\n");
-                                }
-                            }
-                            catch { }
-                        }
                         // AHK 收起临时拖线时同步复位拖线状态机
                         if (parts[1] == "Visibility" && ctrl == tempConnection && val is Visibility
                             && (Visibility)val == Visibility.Collapsed)
@@ -4089,64 +4075,5 @@ public partial class AhkWpfEngine
             fe.MinHeight = need;
     }
 
-    // 揭盖：立刻移到目标位置并去掉 layered。不要在屏上再等一帧（GlassFrame=0 时会露出黑框）。
-    private static void RevealNativeWindow(Window win, IntPtr hwnd)
-    {
-        if (hwnd == IntPtr.Zero)
-            return;
-        try { win.Resources.Remove("_NativeAlphaPending"); } catch { }
-        if (!win.AllowsTransparency)
-        {
-            try
-            {
-                int noBackdrop = 0;
-                int darkMode = 0;
-                DwmSetWindowAttribute(hwnd, 20, ref darkMode, 4);
-                DwmSetWindowAttribute(hwnd, 38, ref noBackdrop, 4);
-            }
-            catch { }
-        }
-        SetLayeredWindowAttributes(hwnd, 0, 255, 0x2);
-        int ex = GetWindowLong(hwnd, -20);
-        SetWindowLong(hwnd, -20, new IntPtr(ex & ~0x80000));
-        // 先在屏外去掉 layered，让 Win11 阴影一次成型，再移回目标位置（避免先出内容再补阴影）
-        try { SetWindowPos(hwnd, IntPtr.Zero, -32000, -32000, 0, 0, 0x0001 | 0x0004 | 0x0010 | 0x0020); } catch { }
-        if (win.Resources.Contains("_RevealPos"))
-        {
-            try
-            {
-                System.Windows.Point pos = (System.Windows.Point)win.Resources["_RevealPos"];
-                double scale = 1.0;
-                try { scale = GetDpiForSystem() / 96.0; } catch { }
-                SetWindowPos(hwnd, IntPtr.Zero, (int)(pos.X * scale), (int)(pos.Y * scale), 0, 0, 0x0001 | 0x0004 | 0x0010);
-                win.Resources.Remove("_RevealPos");
-            }
-            catch { }
-        }
-        ShowWindow(hwnd, 5);
-        // 揭盖这一瞬内容已经就绪，把「窗口出现时就该是活动窗口」补上：
-        // PrepareDeferredReveal 为了不在空壳阶段抢焦点设了 ShowActivated=false，窗口出现时是未激活的；
-        // 未激活窗口双击标题栏，第一击会被系统当作「激活窗口」吃掉，只剩单击，所以刚启动时双击
-        // 最大不了，等到 AHK 侧 WinActivate 回来才正常。这里直接接管前台，省掉那一段延迟。
-        try
-        {
-            if (win.Resources.Contains("_RevealActivate"))
-            {
-                bool wantActive = true;
-                try { wantActive = (bool)win.Resources["_RevealActivate"]; } catch { }
-                win.Resources.Remove("_RevealActivate");
-                if (wantActive)
-                {
-                    SetForegroundWindow(hwnd);
-                    // 真的到了前台才打标记：1.5s 后那次兜底 Activate 看到标记就不再抢一次。
-                    // 用 GetForegroundWindow 而不是 WPF 的 IsActive —— WM_ACTIVATE 的处理有延迟，
-                    // IsActive 在这一瞬可能还是 false，误判成「没激活」就等于没修。
-                    try { if (GetForegroundWindow() == hwnd) win.Resources["_RevealActiveOk"] = true; } catch { }
-                }
-            }
-        }
-        catch { }
-        RmtTaskbarGroup.Refresh();
-    }
 
 }

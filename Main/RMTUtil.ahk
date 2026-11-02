@@ -289,7 +289,6 @@ PluginInit() {
     InitNativePlugins()
     InitRMTHttpPlugin()
     SetTimer(CheckOcrIdle, 60000)   ;60秒后，释放Ocr资源
-    XAMLHost.Prewarm()
 }
 
 InitViGEmPlugin() {

@@ -559,15 +559,8 @@ internal static class RmtCommonStyles
             double height = double.IsNaN(window.ActualHeight) || window.ActualHeight <= 0 ? window.Height : window.ActualHeight;
             var position = new Point(area.Left + area.Width * ax + x - width * ax,
                 area.Top + area.Height * ay + y - height * ay);
-            // A deferred window must stay offscreen until its content is ready. Restoring
-            // a saved GM-UI position during Loaded must only update its reveal target.
-            if (window.Resources.Contains("_NativeAlphaPending"))
-                window.Resources["_RevealPos"] = position;
-            else
-            {
-                window.Left = position.X;
-                window.Top = position.Y;
-            }
+            window.Left = position.X;
+            window.Top = position.Y;
             window.UpdateLayout();
             return;
         }

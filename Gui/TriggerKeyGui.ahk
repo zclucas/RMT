@@ -557,7 +557,7 @@ class TriggerKeyGui {
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
         winW := isJoy ? "720" : "1280"
         winH := isJoy ? "620" : "555"
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Uid="gm:Window.TriggerKey" Title="' this._EscapeXml(title) '" Width="' winW '" Height="' winH '" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Uid="gm:Window.TriggerKey" Title="' this._EscapeXml(title) '" Width="' winW '" Height="' winH '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

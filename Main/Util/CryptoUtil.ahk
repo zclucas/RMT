@@ -429,7 +429,7 @@ RMTC_PwdGuiShow(title, tip, wrong, confirmMode, owner := 0) {
     tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
     ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
     safeTitle := RMTC_XmlEsc(title)
-    ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False"' posAttr ' Width="' winW '" SizeToContent="Height" Opacity="0"')
+    ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False"' posAttr ' Width="' winW '" SizeToContent="Height"')
     ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
     if (fontFamily != "")
         ui.xaml := StrReplace(ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' fontFamily '"')

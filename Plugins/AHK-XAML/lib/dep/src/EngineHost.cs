@@ -369,6 +369,13 @@ public partial class AhkWpfEngine
     public void RunEngineInline(string id, string hwndStr, string trackedCsv, string scriptName, string ownerHwndStr, string inlineData, bool isDaemon)
     {
         // ---- 开窗分段计时（诊断用，一行一条）----
+        // 后台启动标记：AHK 在 inline 数据前加 #HIDDEN#，窗口建好后立刻收起（rmt -min）
+        bool startHidden = false;
+        if (inlineData.StartsWith("#HIDDEN#", StringComparison.Ordinal))
+        {
+            startHidden = true;
+            inlineData = inlineData.Substring(8);
+        }
         // Fast path: parse XAML + events directly from the inline data
         string[] parts = inlineData.Split(new[] { "\n---AHK-XAML-EVENTS---\n" }, 2, StringSplitOptions.None);
         string xamlContent = parts[0];
@@ -385,6 +392,9 @@ public partial class AhkWpfEngine
         PreprocessXamlAndExtractWebViewSources(ref xamlContent);
 #endif
         byte[] xamlBytes = Encoding.UTF8.GetBytes(xamlContent);
+        // 只有 XAML 里真的带 WebView2 控件才需要遍历整棵树去配它。
+        // 主窗口这种上千控件的大窗口，这一趟遍历实测要 700ms+，找不到就白烧。
+        bool hasWebView2 = xamlContent.IndexOf("WebView2", StringComparison.OrdinalIgnoreCase) >= 0;
         if (Application.Current == null) new Application();
         try
         {
@@ -547,9 +557,10 @@ public partial class AhkWpfEngine
         ApplyNativeOwner(win, ownerHwndStr);
         InheritWindowIconAndTitle(win, ownerHwndStr);
 #if ENABLE_WEBVIEW
-        ConfigureWebView2CreationProperties(win);
+        if (hasWebView2)
+            ConfigureWebView2CreationProperties(win);
 #endif
-        ShowEngineWindow(win, isDaemon);
+        ShowEngineWindow(win, isDaemon, startHidden);
     }
 
     public void RunEngine(string id, string hwndStr, string trackedCsv, string scriptName, string xamlFilePath, string eventsFilePath, string ownerHwndStr = "0", bool isDaemon = false)
@@ -1079,11 +1090,7 @@ public partial class AhkWpfEngine
                     win.Topmost = false;
                     if (keepTopmost) win.Topmost = true;
                 }
-                // 揭盖前窗口处于 SW_HIDE 隐藏阶段：不激活（Activate 会把隐藏窗口重新显示成白壳）。
-                // 揭盖时 RevealNativeWindow 已经接管过前台（_RevealActiveOk 标记）：成功就别再补，
-                // 否则用户在这 1.5 秒内切去别的程序，会被硬拉回 RMT。
-                if (!win.Resources.Contains("_NativeAlphaPending") && !win.Resources.Contains("_RevealActiveOk"))
-                    win.Activate();
+                // 窗口在 Show 时已经正常激活，这里不再补 Activate：强行抢前台会把用户切走的窗口拉回来。
                 try { System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce; } catch { }
                 GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
                 GC.WaitForPendingFinalizers();
@@ -1255,16 +1262,26 @@ public partial class AhkWpfEngine
         catch { }
     }
 
-    private static void ShowEngineWindow(Window win, bool isDaemon)
+    private static void ShowEngineWindow(Window win, bool isDaemon, bool startHidden = false)
     {
         try
         {
             if (isDaemon)
             {
-                PrepareDeferredReveal(win);
                 ApplyTaskbarExStyle(win);
+                // 后台启动（rmt -min）：Show 时不要抢前台，否则焦点一夺一还，会闪两下。
+                // 窗口仍会露出一下白壳（内容还没画完），这个不接受额外机制，就这样。
+                if (startHidden)
+                    win.ShowActivated = false;
                 win.Show();
-                ReinforceNativeAlphaHide(win);
+                if (startHidden)
+                {
+                    // 用 Win32 隐藏而不是 win.Hide()：后者会把 WPF 的 Visibility 设成 Hidden，
+                    // 之后 AHK 用 WinShow 恢复时会被 WPF 再纠正回去。这里只藏 HWND，状态不受影响。
+                    IntPtr hHide = new WindowInteropHelper(win).Handle;
+                    if (hHide != IntPtr.Zero)
+                        ShowWindow(hHide, 0);   // SW_HIDE
+                }
             }
             else
             {
@@ -1278,10 +1295,18 @@ public partial class AhkWpfEngine
                 win.Resources.Remove("OriginalNativeOwner");
             if (isDaemon)
             {
-                PrepareDeferredReveal(win);
                 ApplyTaskbarExStyle(win);
+                if (startHidden)
+                    win.ShowActivated = false;
                 win.Show();
-                ReinforceNativeAlphaHide(win);
+                if (startHidden)
+                {
+                    // 用 Win32 隐藏而不是 win.Hide()：后者会把 WPF 的 Visibility 设成 Hidden，
+                    // 之后 AHK 用 WinShow 恢复时会被 WPF 再纠正回去。这里只藏 HWND，状态不受影响。
+                    IntPtr hHide = new WindowInteropHelper(win).Handle;
+                    if (hHide != IntPtr.Zero)
+                        ShowWindow(hHide, 0);   // SW_HIDE
+                }
             }
             else
             {
@@ -1308,90 +1333,6 @@ public partial class AhkWpfEngine
                 SetWindowLong(h, -20, new IntPtr(ex | 0x40000));
         }
         catch { }
-    }
-
-    // 非透明窗口：WPF Opacity 在首帧 present 前对 HWND 无效。
-    // 用 SourceInitialized（HWND 已建、尚未画第一帧）挂 WS_EX_LAYERED+alpha=0；
-    // 并在 Show 前就把窗口移到屏幕外（-32000）——LWA alpha 在部分 DWM/WindowChrome 组合下
-    // 不可靠，若 Show 后再移，Show 瞬间会在屏上露出白壳（用户可见的闪烁）。
-    // 居中位置在 Show 前按 CenterScreen 规则预计算存入 _RevealPos，揭盖时由 CommandDispatcher 还原。
-    // 禁止 AHK 侧 WinHide/WinShow：会变成白壳→隐藏→再显示。
-    private static void PrepareDeferredReveal(Window win)
-    {
-        if (win == null || win.AllowsTransparency || win.Opacity >= 1)
-            return;
-        try
-        {
-            // 记住原始 ShowActivated：揭盖时按这个决定要不要接管前台（RevealNativeWindow）。
-            // 窗口以「未激活」状态出现时，双击标题栏的第一击会被系统拿去激活窗口直接吞掉，
-            // 表现为刚启动双击标题栏不最大化，要等到 AHK 侧 WinActivate 回来才正常。
-            win.Resources["_RevealActivate"] = win.ShowActivated;
-            win.ShowActivated = false; // 内容未就绪前不抢焦点
-            win.Resources["_NativeAlphaPending"] = true;
-            // 揭盖还原位：窗口 XAML 已显式定位（Manual+Left/Top，如主窗口的保存位置）则沿用，
-            // 避免揭盖时先居中再被 WinMove 拉回导致可见跳变（闪烁）；
-            // 未显式定位的窗口（CenterScreen 默认）按 CenterScreen 规则居中（DIP 坐标）。
-            if (!double.IsNaN(win.Left) && !double.IsNaN(win.Top))
-                win.Resources["_RevealPos"] = new System.Windows.Point(win.Left, win.Top);
-            else
-            {
-                double winW = double.IsNaN(win.Width) ? 800 : win.Width;
-                double winH = double.IsNaN(win.Height) ? 600 : win.Height;
-                double cx = Math.Max(0, (System.Windows.SystemParameters.PrimaryScreenWidth - winW) / 2);
-                double cy = Math.Max(0, (System.Windows.SystemParameters.PrimaryScreenHeight - winH) / 2);
-                win.Resources["_RevealPos"] = new System.Windows.Point(cx, cy);
-            }
-            win.WindowStartupLocation = System.Windows.WindowStartupLocation.Manual;
-            win.Left = -32000;
-            win.Top = -32000;
-            // HWND 创建瞬间、首帧绘制前
-            win.SourceInitialized += (s, e) =>
-            {
-                try { ApplyNativeAlphaZero(win); }
-                catch { }
-            };
-            // 提前建 HWND，让 SourceInitialized 在 Show 前就触发
-            var helper = new System.Windows.Interop.WindowInteropHelper(win);
-            helper.EnsureHandle();
-            // Show 前关 DWM backdrop（Win11 默认 Acrylic 偏紫，首帧会闪紫）
-            try
-            {
-                int noBackdrop = 0; // DWMSBT_NONE
-                int darkMode = 0;
-                DwmSetWindowAttribute(helper.Handle, 20, ref darkMode, 4);
-                DwmSetWindowAttribute(helper.Handle, 38, ref noBackdrop, 4);
-            }
-            catch { }
-            ApplyNativeAlphaZero(win);
-            // Show 前移到屏幕外：SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
-            SetWindowPos(helper.Handle, IntPtr.Zero, -32000, -32000, 0, 0, 0x0001 | 0x0004 | 0x0010);
-        }
-        catch { }
-    }
-
-    private static void ReinforceNativeAlphaHide(Window win)
-    {
-        if (win == null || !win.Resources.Contains("_NativeAlphaPending"))
-            return;
-        try
-        {
-            IntPtr h = new System.Windows.Interop.WindowInteropHelper(win).Handle;
-            if (h != IntPtr.Zero)
-                SetWindowPos(h, IntPtr.Zero, -32000, -32000, 0, 0, 0x0001 | 0x0004 | 0x0010);
-            ApplyNativeAlphaZero(win);
-        }
-        catch { }
-    }
-
-    private static void ApplyNativeAlphaZero(Window win)
-    {
-        IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(win).Handle;
-        if (hwnd == IntPtr.Zero)
-            return;
-        int ex = GetWindowLong(hwnd, -20);
-        if ((ex & 0x80000) == 0)
-            SetWindowLong(hwnd, -20, new IntPtr(ex | 0x80000)); // WS_EX_LAYERED
-        SetLayeredWindowAttributes(hwnd, 0, 0, 0x2);            // LWA_ALPHA=0
     }
 
     private void InheritWindowIconAndTitle(Window win, string ownerHwndStr)

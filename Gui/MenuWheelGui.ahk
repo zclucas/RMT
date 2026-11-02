@@ -540,7 +540,6 @@ class MenuWheelGui {
                 ; 設置 WS_EX_NOACTIVATE (0x08000000) 防止 WPF 視窗搶走滑鼠和鍵盤焦點
                 WinSetExStyle("+0x08000000", "ahk_id " this.ui.wpfHwnd)
             }
-            XamlWin.Reveal(this.ui)
         }
 
         itemCount := this._buildItemCount

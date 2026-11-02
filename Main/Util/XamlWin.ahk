@@ -1,13 +1,12 @@
 #Requires AutoHotkey v2.0
 
 ; =============================================================================
-; XamlWin — 所有 XAML 子窗统一开窗：先入队主题/内容，再 Show，hwnd 后揭盖
+; XamlWin — 所有 XAML 子窗统一开窗：先入队主题/内容，再 Show
 ;
-; 不闪原因（AI 设置同款）：
-;   1. 窗口 XAML 带 Opacity="0"，引擎离屏创建
-;   2. Show 前 ApplyXamlTheme + 填表，Update 进 _updateQueue
-;   3. LoadedHwnd 一次刷入队列，再 Opacity=1
-;   4. OnWindowLoad 不再二次 ApplyXamlTheme（后补描边/滚动条会闪）
+; 窗口创建时就是最终样子（不做透明离屏、不需要事后揭盖）：
+;   1. Show 前 ApplyXamlTheme + 填表，Update 进 _updateQueue
+;   2. LoadedHwnd 一次刷入队列
+;   3. OnWindowLoad 不再二次 ApplyXamlTheme（后补描边/滚动条会闪）
 ;
 ; 用法：
 ;   建好 ui、绑事件后：
@@ -37,7 +36,7 @@ class XamlWin {
         safeTitle := StrReplace(StrReplace(StrReplace(title, "&", "&amp;"), '"', "&quot;"), "<", "&lt;")
         ; Emit design DIP sizes. ApplyDialogVisualScale enlarges the window and pins the root
         ; so EngineHost's Viewbox matches the main UI. Pre-multiplying here would double-scale.
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * visualScale) '" Height="' Round(height * visualScale) '" Opacity="0"')
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * visualScale) '" Height="' Round(height * visualScale) '"')
         ; Window chrome corners sit outside the title row. Paint them with TitleBarColor so a
         ; Viewbox letterbox cannot show the default white/BgColor strip above the title.
         winEnd := InStr(ui.xaml, ">")
@@ -106,12 +105,6 @@ class XamlWin {
         if (ui.HasProp("_xamlThemeQueued") && ui._xamlThemeQueued)
             return
         XamlWin.QueueTheme(ui)
-    }
-
-    static Reveal(ui) {
-        if (!IsObject(ui))
-            return
-        try ui.Update("Window", "Opacity", "1")
     }
 
     ; 算窗口落点写进 XAML 的 Left/Top —— 引擎揭盖时会照 XAML 里的 Left/Top 定位
@@ -243,23 +236,12 @@ class XamlWin {
                         DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 8)
                     }
                 }
-                ; 揭盖：不透明窗（Opacity="0"）已由 LoadedHwnd 在「更新队列+字号刷完」后揭过，
-                ; 这里只给非自动揭盖窗口兜底；_skipAutoReveal（最小化启动等刻意隐藏）不揭
-                autoReveal := InStr(ui.xaml, 'Opacity="0"') && !InStr(ui.xaml, 'AllowsTransparency="True"')
-                skipReveal := ui.HasOwnProp("_skipAutoReveal") && ui._skipAutoReveal
-                if (!autoReveal && !skipReveal)
-                    XamlWin.Reveal(ui)
                 if (activate) {
                     ; daemon 的 Show 自己就会激活窗口，此刻窗口已经在屏上。AHK 再同步调一次
                     ; SetForegroundWindow / WinActivate 是重复动作，而且跨进程这一步要等 125ms。
                     ; 改成返回之后再看一眼：已经是前台就什么都不做，不是才补一次。
                     XamlWin._DeferActivate(ui)
                 }
-                ; 前2秒每200ms重申 Opacity=1：防 daemon 异步应用 XAML 里的 Opacity="0"
-                ; 覆盖揭盖（win32 全绿但窗口看不见时的最后嫌疑人）
-                stompFn := ObjBindMethod(XamlWin, "_StompOpacity", ui)
-                ui._stompFn := stompFn
-                SetTimer(stompFn, 200)
                 ; 兜底：daemon 若事后异步改属主，2s/5s 后自动反制（一次性）
                 SetTimer(() => XamlWin._EnforceIndependent(ui), -2000)
                 SetTimer(() => XamlWin._EnforceIndependent(ui), -5000)
@@ -296,43 +278,6 @@ class XamlWin {
         }
     }
 
-    ; 窗口是否已经在屏上且完全不透明（layered 窗口读 LWA_ALPHA）
-    static _IsOpaqueVisible(hwnd) {
-        if (!hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int"))
-            return false
-        if (!DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int"))
-            return false
-        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
-        if (!(ex & 0x80000))          ; WS_EX_LAYERED：没分层就是全不透明
-            return true
-        alpha := 255, flags := 0, crKey := 0
-        if (DllCall("user32\GetLayeredWindowAttributes", "Ptr", hwnd, "UInt*", &crKey, "UChar*", &alpha, "UInt*", &flags)) {
-            if (flags & 0x2)          ; LWA_ALPHA
-                return alpha >= 250
-        }
-        return true
-    }
-
-    ; 前2秒重申 Opacity=1（次数到或窗口已正常显示就自停）
-    ; 每次都发同步 IPC：若前一个窗口的定时器还在跑，碰上 daemon 正在建新窗口就会把
-    ; AHK 主线程卡住几百毫秒（表现就是「开窗慢半拍」）。所以先廉价查一次窗口状态，
-    ; 已经可见且不透明就立刻收手，一次 IPC 都不发。
-    static _StompOpacity(ui) {
-        if (!IsObject(ui) || !ui.HasProp("wpfHwnd") || !ui.wpfHwnd) {
-            if (IsObject(ui) && ui.HasProp("_stompFn"))
-                SetTimer(ui._stompFn, 0)
-            return
-        }
-        n := 0
-        try n := Integer(ui._stompN) + 1
-        ui._stompN := n
-        if (XamlWin._IsOpaqueVisible(ui.wpfHwnd) || n >= 6) {
-            SetTimer(ui._stompFn, 0)
-            return
-        }
-        try ui.Update("Window", "Opacity", "1")
-    }
-
     ; 开窗后的状态兜底：非模态窗口保持独立身份（属主被异步设回则解除）；
     ; 模态窗口保留属主（压主窗口上方）。两种都恢复独立任务栏按钮，
     ; 反制引擎 RmtTaskbarGroup 的 DeleteTab/RegisterTab 折叠。
@@ -341,11 +286,6 @@ class XamlWin {
             return
         try {
             hwnd := ui.wpfHwnd
-            ; 重申渲染层状态，防 daemon 异步覆盖（已正常显示就不发，省两次同步 IPC）
-            if (!XamlWin._IsOpaqueVisible(hwnd)) {
-                try ui.Update("Window", "Opacity", "1")
-                try ui.Update("Window", "Visibility", "Visible")
-            }
             modal := ui.HasProp("_modalOwner") && ui._modalOwner != ""
             owner := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -8, "Ptr")
             if (!modal && owner != 0) {

@@ -316,7 +316,7 @@ class CMDTipGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "0")
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            Format('Title="CMDTip" ShowInTaskbar="False" Topmost="True" ShowActivated="False" Left="{}" Top="{}" Width="{}" Height="{}" Opacity="0"',
+            Format('Title="CMDTip" ShowInTaskbar="False" Topmost="True" ShowActivated="False" Left="{}" Top="{}" Width="{}" Height="{}"',
                 dipX, dipY, dipW, dipH))
         this.ui.xaml := StrReplace(this.ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', 'WindowStartupLocation="Manual"')

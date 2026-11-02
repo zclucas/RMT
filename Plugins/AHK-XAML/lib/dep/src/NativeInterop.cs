@@ -384,7 +384,6 @@ internal static class RmtTaskbarGroup
     internal static bool IsGroupWindow(Window window)
     {
         if (window == null || !window.IsVisible) return false;
-        if (window.Resources.Contains("_NativeAlphaPending")) return false;
         double width = window.ActualWidth > 1 ? window.ActualWidth : window.Width;
         double height = window.ActualHeight > 1 ? window.ActualHeight : window.Height;
         if (width > 0 && width < 180) return false;
