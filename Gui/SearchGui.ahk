@@ -229,7 +229,7 @@ class SearchGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        winSize := 'Title="' this._EscapeXml(title) '" Width="640" SizeToContent="Height" Opacity="0"'
+        winSize := 'Title="' this._EscapeXml(title) '" Width="640" SizeToContent="Height"'
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', winSize)
         if (InStr(this.ui.xaml, 'Width="940"') || InStr(this.ui.xaml, 'Height="700"')) {
             cnt := 0

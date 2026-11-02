@@ -276,13 +276,9 @@ class MainWin {
     _AiPanelSplitW() {
         return 6
     }
-    ; 扩展钮默认宽度（窄）；hover 展开到 _AiRailHoverW
-    _AiRailW() {
-        return 8
-    }
-    ; 扩展钮 hover 宽度
+    ; 扩展钮宽度（恒定命中区，hover 只换描边底色不变宽）
     _AiRailHoverW() {
-        return 18
+        return 20
     }
     ; 逻辑树 / AI助手 选项宽度（与顶部页签一致）
     _AiTabW() {
@@ -480,6 +476,7 @@ class MainWin {
         right := main.Add("Grid").Grid_Row(1).Grid_Column(1).Margin("0,2,2,4")
         ; §10 显示页签：先按可见性过滤生成 _tabOrder（TableInfo 下标数组），页签位置 ↔ 表下标经 TabAdapter/OnTabChanged 映射
         this._tabOrder := []
+        this._aiPanels := Map()    ; 已建出 AI 侧栏的页签（其余按需构建）
         loop MySoftData.TableInfo.Length {
             if (IsTabVisible(MySoftData.TableInfo[A_Index]))
                 this._tabOrder.Push(A_Index)
@@ -521,7 +518,7 @@ class MainWin {
                 ; 宏/模块显示区：自适应剩余空间
                 ; Epic5 虚拟列表：ListBox + DataTemplate + VirtualizingStackPanel(Recycling)，
                 ; 行模板注入 Window.Resources，由 _vl.Init 一次 VL_INIT 填充
-                vg := bd.Add("Grid")
+                vg := bd.Add("Grid").Name("TabGrid_" idx)
                 vg.Cols("*", "Auto")
                 ; UseLayoutRounding=False：整棵列表关闭布局取整，改由各卡片 SnapsToDevicePixels 画边。
                 ; 取整会让行 Margin(2)/24px 控件在 125% DPI 下按累计偏移不同而 ±1px（展开/折叠/拖拽后
@@ -532,7 +529,12 @@ class MainWin {
                     .VirtualizingPanel_CacheLength("2,2").VirtualizingPanel_CacheLengthUnit("Page")
                 ; 吸顶折叠头 overlay（sticky header）：滚动时当前模块头钉在列表顶部
                 vg.Add("ContentControl").Name("VLSticky_" idx).Grid_Column(0).VerticalAlignment("Top").HorizontalAlignment("Stretch").Visibility("Collapsed").Margin("0").UseLayoutRounding("False").SnapsToDevicePixels("True").Panel_ZIndex(1)
-                this._BuildAiAssistPanel(vg, idx)
+                ; AI 侧栏只在当前页签建：8 个宏页签各带一份是本窗口 XAML 的主要体积，
+                ; 而同一时刻只显示一份。其余页签先不建，首次切过去再注入（见 _EnsureAiPanel）。
+                if (idx == MainSoftData.TableIndex) {
+                    this._BuildAiAssistPanel(vg, idx)
+                    this._aiPanels[idx] := true
+                }
                 vg.Add("Border").Name("AiDragShield_" idx).Grid_Column(0).Grid_ColumnSpan(2)
                     .Background("Transparent").Cursor("SizeWE").Visibility("Collapsed").Panel_ZIndex(20)
                 ; 扩展钮叠在滚动条和扩展内容之上（表现 + 点击同一层）
@@ -710,9 +712,16 @@ class MainWin {
         this._itemToolbarShift := 200
         ; 宏页签无触发键/触发类型：相对原「宏编辑器」列左移，并与模块前台保持固定间距
         this._subMacroEditShift := 210
+        resStr := tabStyle . tabItemStyle . tabSelBgRes . stateBtnStyle . defaultBtnStyle . sidebarBtnStyle . iconBtnStyle . foldRowStyles . this._BuildVListTemplates()
+        ; 按需注入 AI 侧栏时作为解析上下文的资源副本（见 _EnsureAiPanel）。
+        ; 剔除画刷/字号标量：这些键在 Window.Resources 里已被主题与字体设置覆盖，
+        ; 包装 Grid 若带着这里的静态默认值，会遮蔽主题值（注入面板配色退回未主题化的旧色）
+        this._resInjectStr := RegExReplace(resStr, '<SolidColorBrush\b[^>]*/>', "")
+        this._resInjectStr := RegExReplace(this._resInjectStr, '<sys:Double x:Key="[^"]+">[^<]*</sys:Double>', "")
+        appStr := main.ToString()
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
-        tmp := StrReplace(tmp, "%resources%", tabStyle . tabItemStyle . tabSelBgRes . stateBtnStyle . defaultBtnStyle . sidebarBtnStyle . iconBtnStyle . foldRowStyles . this._BuildVListTemplates())
-        this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
+        tmp := StrReplace(tmp, "%resources%", resStr)
+        this.ui := XAMLHost(StrReplace(tmp, "%app%", appStr), "", "")
         ; 首帧即定死保存位置：模板 CenterScreen 会让 WPF 强制居中并覆盖后续 WinMove → 先默认位置闪一帧。
         ; 改 Manual + 注入 Left/Top/Width/Height（AHK 逻辑坐标 = WPF DIP，125% DPI 下物理 132,126 已实测吻合，无单位错位）。
         ; LastWinPos 无效或仅含旧坐标时使用新版居中默认尺寸。
@@ -733,7 +742,7 @@ class MainWin {
             wh := 'Width="' w '" Height="' h '"'
         }
         ; 先填内容再显示：Opacity=0 走引擎离屏揭盖，避免空壳→主题/列表刷入时抖动
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ' wh ' Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ' wh '')
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', startLoc)
         ; Viewbox 或窗口非客户区露出的边缘也使用主题底色，避免透明背景呈黑色。
         winEnd := InStr(this.ui.xaml, ">")
@@ -757,30 +766,12 @@ class MainWin {
         this.ui.OnEvent("BtnPauseActive", "Click", OnPauseHotKey)
         this.ui.OnEvent("BtnToggleHotkeyHint", "Click", ObjBindMethod(this, "OnToggleHotkeyHint"))
         for t in this._useVirtual {
+            ; 这两个控件不属于侧栏，页签骨架里一直在：扩展开关与拖拽遮罩
             this.ui.OnEvent("BtnAiPanel_" t, "Click", ObjBindMethod(this, "OnToggleAiPanel"))
-            this.ui.OnEvent("AiSplit_" t, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "OnAiSplitStart"))
             this.ui.OnEvent("AiDragShield_" t, "PreviewMouseLeftButtonUp", ObjBindMethod(this, "OnAiSplitEnd"))
-            this.ui.OnEvent("BtnSideModeTree_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", 1))
-            this.ui.OnEvent("BtnSideModeAi_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", 2))
-            this.ui.OnEvent("BtnSideToolsToggle_" t, "Click", ObjBindMethod(this, "OnSideToolsToggle"))
-            this.ui.OnEvent("AiInput_" t, "TextChanged", ObjBindMethod(this, "OnAiInputChanged", t))
-            this.ui.OnEvent("AiInput_" t, "PreviewKeyDown:Return", ObjBindMethod(this, "OnAiInputEnter", t))
-            this.ui.OnEvent("AiInput_" t, "PreviewKeyDown:V", ObjBindMethod(this, "OnAiInputPasteKey", t))
-            ; 焦点跟踪：侧栏逻辑树的窗口级 $^c/$^v/$^z/$^y/Delete 会吞键，AI 框同样收不到按键（含 Ctrl+V 贴图）
-            this.ui.OnEvent("AiInput_" t, "GotFocus", ObjBindMethod(this, "OnTextInputFocus", "AiInput_" t))
-            this.ui.OnEvent("AiInput_" t, "LostFocus", ObjBindMethod(this, "OnTextInputBlur", "AiInput_" t))
-            try this.ui.Update("AiInput_" t, "BindEvent", "GotFocus")
-            try this.ui.Update("AiInput_" t, "BindEvent", "LostFocus")
-            this.ui.OnEvent("AiInput_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))
-            this.ui.OnEvent("AiInput_" t, "Drop", ObjBindMethod(this, "OnAiInputFileDrop", t))
-            this.ui.OnEvent("AiInputHost_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))
-            this.ui.OnEvent("AiInputHost_" t, "Drop", ObjBindMethod(this, "OnAiInputFileDrop", t))
-            this.ui.OnEvent("AiSend_" t, "Click", ObjBindMethod(this, "OnAiSendClick", t))
-            this.ui.OnEvent("AiMic_" t, "Click", ObjBindMethod(this, "OnAiMicClick", t))
-            this.ui.OnEvent("SideAiToolHistory_" t, "Click", ObjBindMethod(this, "OnSideAiToolHistory", t))
-            this.ui.OnEvent("SideAiToolSettings_" t, "Click", ObjBindMethod(this, "OnSideAiToolSettings", t))
-            this.ui.OnEvent("SideAiToolTop_" t, "Click", ObjBindMethod(this, "OnSideToolTop", t))
-            this._BindSideTree(t)
+            ; 侧栏内的控件只有建出来的页签才有，绑定跟着建（见 _EnsureAiPanel）
+            if (this._aiPanels.Has(t))
+                this._BindAiPanel(t)
         }
         this.ui.OnEvent("BtnKill", "Click", OnKillAllMacro)
         this.ui.OnEvent("BtnReload", "Click", MenuReload)
@@ -792,13 +783,16 @@ class MainWin {
         this._vl := VirtualListHost(this.ui)
         this.LoadLeftBarValues()
         this._startHidden := MainSoftData.HasProp("IsMinStart") && MainSoftData.IsMinStart
-        this.ui._skipAutoReveal := this._startHidden
+        this.ui._startHidden := this._startHidden
         ; ===== 先填充内容（Show 前入队，LoadedHwnd 时一次刷入），填充完再显示，避免空壳闪烁 =====
         try {
             this.PopulateAll()
         } catch as e {
             XamlUiDiag("PopulateAll 异常: " e.Message " @ " e.File ":" e.Line "`n" e.Stack, "MainWin")
         }
+        ; 主题资源在 Show 之前入队（与弹窗同一套做法）：首帧就能拿到 BgColor/TextMain，
+        ; 不必等 Loaded 之后再刷，避免窗口先露一帧无背景色。
+        try ApplyXamlTheme(this.ui, MainSoftData.Theme)
         this.ui.Show()
 
         gotHwnd := false
@@ -824,20 +818,47 @@ class MainWin {
     }
 
     PopulateAll() {
+        ; 页签内容按需构建：启动只建轻量页签，重页签等用户首次切过去再建。
+        ; 赞助页要起 QrDecode.exe 解两张二维码图（实测 313ms），启动时根本不显示，这笔钱是白付的。
+        this._tabBuilders := Map(
+            GetTableIndexByID("Tool"), "BuildToolTab",
+            GetTableIndexByID("Setting"), "BuildSettingTab",
+            GetTableIndexByID("Help"), "BuildHelpTab",
+            GetTableIndexByID("Reward"), "BuildRewardTab",
+            GetTableIndexByID("Thank"), "BuildThankTab")
+        this._builtTabs := Map()
+        this._deferredTabs := Map(GetTableIndexByID("Reward"), true)
+
         ; 各页签独立构建：任一失败不得阻断后续 RenderTab（否则主界面宏列表空白）
-        for fn in ["BuildToolTab", "BuildSettingTab", "BuildHelpTab", "BuildRewardTab", "BuildThankTab"] {
-            try
-                this.%fn%()
-            catch as e
-                XamlUiDiag(fn " 异常: " e.Message " @ " e.File ":" e.Line, "MainWin")
+        for idx, fn in this._tabBuilders {
+            if (this._deferredTabs.Has(idx) && idx != MainSoftData.TableIndex)
+                continue
+            this._EnsureTabBuilt(idx)
         }
         ; 惰性渲染：只渲染当前 tab（旧路径全量渲染 7 tab 是启动 1.3s 的主因），切 tab 时由 OnTabChanged 补渲染
         this._renderedTabs := Map()
         cur := MainSoftData.TableIndex
+        this._EnsureTabBuilt(cur)
         this._renderedTabs[cur] := true
         this.RenderTab(MySoftData.TableInfo[cur])
         ; 启动不默认选中第一条宏，等用户点选
         ; AI 预置对话改为首次打开侧栏/切到 AI 时惰性注入，避免启动与首展卡顿
+    }
+
+    ; 按需构建页签内容（幂等）。未登记构建函数的页签（普通宏表）直接跳过。
+    _EnsureTabBuilt(idx) {
+        if (!this.HasOwnProp("_builtTabs") || !IsObject(this._builtTabs))
+            this._builtTabs := Map()
+        if (this._builtTabs.Has(idx))
+            return
+        this._builtTabs[idx] := true
+        if (!this.HasOwnProp("_tabBuilders") || !IsObject(this._tabBuilders) || !this._tabBuilders.Has(idx))
+            return
+        fn := this._tabBuilders[idx]
+        try
+            this.%fn%()
+        catch as e
+            XamlUiDiag(fn " 异常: " e.Message " @ " e.File ":" e.Line, "MainWin")
     }
 
     ; VL_INIT 重建虚拟行后补刷主题字号（否则新行仍用样式声明 11，比已缩放行偏小）
@@ -866,11 +887,10 @@ class MainWin {
         } catch as e {
             XamlUiDiag("MainWin OnWindowLoad err: " e.Message, "MainWin")
         }
-        ; 最小化启动：保持隐藏，不揭盖
+        ; 最小化启动：窗口已在 Show 之后被 OnOpen 收起，这里只跳过布局重算
         if (this.HasOwnProp("_startHidden") && this._startHidden)
             return
-        try this.ui.Update("Window", "Opacity", "1")
-        ; 主题/揭盖后再走折叠同款 Reset，避免首帧在视口未定时量出的底边/行距
+        ; 主题刷完再走折叠同款 Reset，避免首帧在视口未定时量出的底边/行距
         SetTimer(ObjBindMethod(this, "_RelayoutCurrentVL"), -1)
     }
 
@@ -885,12 +905,6 @@ class MainWin {
     }
 
     OnWindowRevealed(state, ctrl, event) {
-        ; 引擎揭盖那一瞬已经 SetForegroundWindow；这里只在没抢到前台时补一次。
-        ; WinActivate 内部要轮询「真的变前台」，恒定 125ms，能省就省。
-        try {
-            if (DllCall("user32\GetForegroundWindow", "Ptr") != this.ui.wpfHwnd)
-                WinActivate("ahk_id " this.ui.wpfHwnd)
-        }
         this._RelayoutCurrentVL()
     }
 
@@ -941,6 +955,9 @@ class MainWin {
         if (idx == MainSoftData.TableIndex && this.HasOwnProp("_renderedTabs") && this._renderedTabs.Has(idx))
             return
         MainSoftData.TableIndex := idx
+        ; 惰性构建：首次切到某个页签才生成它的内容（启动时只建当前页签）
+        this._EnsureTabBuilt(idx)
+        this._EnsureAiPanel(idx)
         if (idx >= 1 && idx <= MySoftData.TableInfo.Length)
             MainSoftData.CurTableID := MySoftData.TableInfo[idx].ID
         try MainSoftData.TabCtrl._value := idx
@@ -992,6 +1009,86 @@ class MainWin {
         this.ui.Update("BtnToggleHotkeyHint", "Content", this._showHotkeyHint ? Chr(0xE70D) : Chr(0xE76C))
     }
 
+    ; AI 侧栏的事件绑定。侧栏按需构建（只有当前页签先建），绑定必须跟着建的动作走，
+    ; 否则晚建出来的页签侧栏是死的（按钮不响应、输入框收不到键）。
+    ; 统一走 _BindLive：Show 之后注入的控件不在建窗事件表里，引擎侧钩子要靠 BindEvent 现挂。
+    _BindAiPanel(t) {
+        this._BindLive("AiSplit_" t, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "OnAiSplitStart"))
+        this._BindLive("BtnSideModeTree_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", 1))
+        this._BindLive("BtnSideModeAi_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", 2))
+        this._BindLive("BtnSideToolsToggle_" t, "Click", ObjBindMethod(this, "OnSideToolsToggle"))
+        this._BindLive("AiInput_" t, "TextChanged", ObjBindMethod(this, "OnAiInputChanged", t))
+        this._BindLive("AiInput_" t, "PreviewKeyDown:Return", ObjBindMethod(this, "OnAiInputEnter", t))
+        this._BindLive("AiInput_" t, "PreviewKeyDown:V", ObjBindMethod(this, "OnAiInputPasteKey", t))
+        ; 焦点跟踪：侧栏逻辑树的窗口级 $^c/$^v/$^z/$^y/Delete 会吞键，AI 框同样收不到按键（含 Ctrl+V 贴图）
+        this._BindLive("AiInput_" t, "GotFocus", ObjBindMethod(this, "OnTextInputFocus", "AiInput_" t))
+        this._BindLive("AiInput_" t, "LostFocus", ObjBindMethod(this, "OnTextInputBlur", "AiInput_" t))
+        this._BindLive("AiInput_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))
+        this._BindLive("AiInput_" t, "Drop", ObjBindMethod(this, "OnAiInputFileDrop", t))
+        this._BindLive("AiInputHost_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))
+        this._BindLive("AiInputHost_" t, "Drop", ObjBindMethod(this, "OnAiInputFileDrop", t))
+        this._BindLive("AiSend_" t, "Click", ObjBindMethod(this, "OnAiSendClick", t))
+        this._BindLive("AiMic_" t, "Click", ObjBindMethod(this, "OnAiMicClick", t))
+        this._BindLive("SideAiToolHistory_" t, "Click", ObjBindMethod(this, "OnSideAiToolHistory", t))
+        this._BindLive("SideAiToolSettings_" t, "Click", ObjBindMethod(this, "OnSideAiToolSettings", t))
+        this._BindLive("SideAiToolTop_" t, "Click", ObjBindMethod(this, "OnSideToolTop", t))
+        this._BindSideTree(t)
+    }
+
+    ; OnEvent 只登记 AHK 侧回调（仅随建窗载荷送达引擎）；Show 之后动态注入的控件
+    ; 必须补发 Update(ctrl, "BindEvent", evt) 让引擎按名字现找控件挂钩子。
+    ; 引擎按「事件键 + 控件引用」去重，建窗时已挂过的重复发无害。
+    _BindLive(name, evt, cb) {
+        this.ui.OnEvent(name, evt, cb)
+        try this.ui.Update(name, "BindEvent", evt)
+    }
+
+    ; 按需建出某个页签的 AI 侧栏（幂等）：生成一份侧栏 XAML 注入占位 Grid，
+    ; 再按当前全局状态（是否展开、宽度、逻辑树/AI 模式）把这个新实例对齐。
+    _EnsureAiPanel(idx) {
+        if (!this.HasOwnProp("_aiPanels") || !IsObject(this._aiPanels))
+            this._aiPanels := Map()
+        if (this._aiPanels.Has(idx))
+            return
+        this._aiPanels[idx] := true
+        g := XAML_Generator("Grid")
+        try {
+            this._BuildAiAssistPanel(g, idx)
+            ; AddXamlItem 走 XamlReader.Parse 独立解析：拿不到 Window 根上的 xmlns
+            ; （直接报「无法创建未知类型 Grid」），也解析不了 {StaticResource ...}
+            ; （样式只在 Window.Resources 里，SyncWindowResourcesToApp 有意跳过 Style）。
+            ; 所以套一层同构包装 Grid：自带全部命名空间 + 完整资源块，AiWrap 原样落在内层第 1 列。
+            for child in g.Children()
+                this.ui.Update("TabGrid_" idx, "AddXamlItem"
+                    , '<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
+                    . ' xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
+                    . ' xmlns:sys="clr-namespace:System;assembly=mscorlib"'
+                    . ' xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"'
+                    . ' Grid.Column="1">'
+                    . '<Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
+                    . '<Grid.Resources>' this._resInjectStr '</Grid.Resources>'
+                    . child.ToString()
+                    . '</Grid>')
+        } catch as e {
+            XamlUiDiag("_EnsureAiPanel 异常: " e.Message " @" e.Line, "MainWin")
+            return
+        }
+        this._BindAiPanel(idx)
+        ; 启动时是遍历所有页签发 EnableDropTarget 的，晚建的这一份要单独补
+        try this.ui.Update("AiInput_" idx, "EnableDropTarget", "RmtAiFile")
+        try this.ui.Update("AiInputHost_" idx, "EnableDropTarget", "RmtAiFile")
+        if (this.aiAssistOpen) {
+            try this.ui.Update("AiWrap_" idx, "MinWidth", "0")
+            try this.ui.Update("AiWrap_" idx, "Width", String(this._aiAnim ? this._aiAnimW : this.aiPanelW))
+            try this.ui.Update("AiInner_" idx, "MinWidth", "0")
+            try this.ui.Update("AiInner_" idx, "Width", String(this.aiPanelW))
+            try this.ui.Update("AiWrap_" idx, "Visibility", "Visible")
+            try this.ui.Update("BtnAiPanel_" idx, "Content", Chr(0xE76C))
+        }
+        this._ApplySidePanelMode()
+        this._ApplySideToolsVisibility()
+    }
+
     OnToggleAiPanel(state, ctrl, event) {
         this.aiAssistOpen := !this.aiAssistOpen
         this._ApplyAiPanelUi()
@@ -1006,7 +1103,9 @@ class MainWin {
     }
 
     _AiRailMargin() {
-        ; 往右叠 2px，让钮的右边框压在内容框 1.5px 右边框上（一条线，不留缝）
+        ; -2：钮的右边框压在内容框 1.5px 右边框内侧（贴边）。
+        ; 主窗口模板 ResizeBorderThickness=4：贴边后仅最外 0.5px 落在非客户区拖拽带里，
+        ; hover/点击全程有效（早先 6px 带会吞掉按钮右缘 2.5px，贴边侧鼠标未出钮就丢高亮）
         return "0,0,-2,0"
     }
 
@@ -1461,16 +1560,16 @@ class MainWin {
         this._sideTreeBound[t] := true
         if (!IsObject(this._sideTree))
             this._sideTree := SideLogicTree(this)
-        this.ui.OnEvent("SideToolExpand_" t, "Click", ObjBindMethod(this, "OnSideToolExpand", t))
-        this.ui.OnEvent("SideToolUndo_" t, "Click", ObjBindMethod(this, "OnSideToolUndo", t))
-        this.ui.OnEvent("SideToolRedo_" t, "Click", ObjBindMethod(this, "OnSideToolRedo", t))
-        this.ui.OnEvent("SideToolBack_" t, "Click", ObjBindMethod(this, "OnSideToolBack", t))
-        this.ui.OnEvent("SideToolRecord_" t, "Click", ObjBindMethod(this, "OnSideToolRecord", t))
-        this.ui.OnEvent("SideToolRun_" t, "Click", ObjBindMethod(this, "OnSideToolRun", t))
-        this.ui.OnEvent("SideToolStep_" t, "Click", ObjBindMethod(this, "OnSideToolStep", t))
-        this.ui.OnEvent("SideToolVar_" t, "Click", ObjBindMethod(this, "OnSideToolVar", t))
-        this.ui.OnEvent("SideToolCmdTip_" t, "Click", ObjBindMethod(this, "OnSideToolCmdTip", t))
-        this.ui.OnEvent("SideToolTop_" t, "Click", ObjBindMethod(this, "OnSideToolTop", t))
+        this._BindLive("SideToolExpand_" t, "Click", ObjBindMethod(this, "OnSideToolExpand", t))
+        this._BindLive("SideToolUndo_" t, "Click", ObjBindMethod(this, "OnSideToolUndo", t))
+        this._BindLive("SideToolRedo_" t, "Click", ObjBindMethod(this, "OnSideToolRedo", t))
+        this._BindLive("SideToolBack_" t, "Click", ObjBindMethod(this, "OnSideToolBack", t))
+        this._BindLive("SideToolRecord_" t, "Click", ObjBindMethod(this, "OnSideToolRecord", t))
+        this._BindLive("SideToolRun_" t, "Click", ObjBindMethod(this, "OnSideToolRun", t))
+        this._BindLive("SideToolStep_" t, "Click", ObjBindMethod(this, "OnSideToolStep", t))
+        this._BindLive("SideToolVar_" t, "Click", ObjBindMethod(this, "OnSideToolVar", t))
+        this._BindLive("SideToolCmdTip_" t, "Click", ObjBindMethod(this, "OnSideToolCmdTip", t))
+        this._BindLive("SideToolTop_" t, "Click", ObjBindMethod(this, "OnSideToolTop", t))
     }
 
     RefreshSideTree(t) {
@@ -4324,11 +4423,10 @@ class MainWin {
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsEditable" Value="True"><Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/><Setter TargetName="ContentSite" Property="Visibility" Value="Hidden"/></Trigger>'
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
-        railW := this._AiRailW()
         railHoverW := this._AiRailHoverW()
         tabW := this._AiTabW()
         aiRail := '<Style x:Key="RmtAiRailBtn" TargetType="Button">'
-            . '<Setter Property="Width" Value="' railW '"/><Setter Property="MinWidth" Value="' railW '"/>'
+            . '<Setter Property="Width" Value="' railHoverW '"/><Setter Property="MinWidth" Value="' railHoverW '"/>'
             . '<Setter Property="MaxWidth" Value="' railHoverW '"/>'
             . '<Setter Property="Height" Value="200"/>'
             . '<Setter Property="MinHeight" Value="200"/><Setter Property="MaxHeight" Value="200"/>'
@@ -4340,11 +4438,10 @@ class MainWin {
             . '<Path x:Name="Bd" Data="M 18,0 L 18,200 L 0,176 L 0,24 Z" Stretch="Fill"'
             . ' Fill="{DynamicResource ControlBg}" Stroke="{DynamicResource OutlineStroke}" StrokeThickness="1.5"'
             . ' StrokeLineJoin="Round" SnapsToDevicePixels="True"/>'
-            . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-3,0,0,0"/>'
+            . '<ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>'
             . '</Grid>'
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True">'
-            . '<Setter Property="Width" Value="' railHoverW '"/>'
             . '<Setter TargetName="Bd" Property="Fill" Value="{DynamicResource ControlBorder}"/>'
             . '<Setter TargetName="Bd" Property="Stroke" Value="{DynamicResource Accent}"/>'
             . '</Trigger>'
@@ -7325,28 +7422,28 @@ class MainWin {
 
     _GetBuiltInThankAvatar(id) {
         static paths := Map()
+        ; 静态表：id -> [源文件名, 临时文件名]
+        static files := Map(
+            "yun",        ["yun.jpg",        "RMT_Thank_yun.jpg"],
+            "boxstudy",   ["boxstudy.jpg",   "RMT_Thank_boxstudy.jpg"],
+            "sovaedv776", ["sovaedv776.png", "RMT_Thank_sovaedv776.png"],
+            "gushulily",  ["gushulily.jpg",  "RMT_Thank_gushulily.jpg"],
+            "t8numen",    ["t8numen.jpg",    "RMT_Thank_t8numen.jpg"])
         if (paths.Has(id))
             return paths[id]
-        switch id {
-            case "yun":
-                tempPath := A_Temp "\RMT_Thank_yun.jpg"
-                FileInstall("Web\assets\thank-avatars\yun.jpg", tempPath, 1)
-            case "boxstudy":
-                tempPath := A_Temp "\RMT_Thank_boxstudy.jpg"
-                FileInstall("Web\assets\thank-avatars\boxstudy.jpg", tempPath, 1)
-            case "sovaedv776":
-                tempPath := A_Temp "\RMT_Thank_sovaedv776.png"
-                FileInstall("Web\assets\thank-avatars\sovaedv776.png", tempPath, 1)
-            case "gushulily":
-                tempPath := A_Temp "\RMT_Thank_gushulily.jpg"
-                FileInstall("Web\assets\thank-avatars\gushulily.jpg", tempPath, 1)
-            case "t8numen":
-                tempPath := A_Temp "\RMT_Thank_t8numen.jpg"
-                FileInstall("Web\assets\thank-avatars\t8numen.jpg", tempPath, 1)
-            default:
-                return ""
-        }
-        paths[id] := StrReplace(tempPath, "\", "/")
+        if (!files.Has(id))
+            return ""
+        f := files[id]
+        rel := "Web\assets\thank-avatars\" f[1]
+        tempPath := A_Temp "\" f[2]
+        ; 只在临时文件不存在时才 FileInstall：同名临时图仍被上一轮实例的 WPF 持有时，
+        ; 覆盖写会抛 Failed，而这个异常会中断整个 BuildThankTab（感谢页整页空白）。
+        if (!FileExist(tempPath))
+            try FileInstall(rel, tempPath, 1)
+        out := FileExist(tempPath) ? tempPath : A_WorkingDir "\" rel
+        if (!FileExist(out))
+            return ""
+        paths[id] := StrReplace(out, "\", "/")
         return paths[id]
     }
 

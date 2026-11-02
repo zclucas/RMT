@@ -79,7 +79,7 @@ class FreePasteGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "0")
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="RMT-FreePaste" Width="300" Height="200" SizeToContent="WidthAndHeight" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="RMT-FreePaste" Width="300" Height="200" SizeToContent="WidthAndHeight"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', 'WindowStartupLocation="CenterScreen" Topmost="True" ShowInTaskbar="False"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')

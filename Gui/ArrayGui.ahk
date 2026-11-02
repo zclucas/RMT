@@ -201,7 +201,7 @@ class ArrayGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        winSize := 'Title="' this._EscapeXml(title) '" Width="520" SizeToContent="Height" Opacity="0"'
+        winSize := 'Title="' this._EscapeXml(title) '" Width="520" SizeToContent="Height"'
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', winSize)
         if (InStr(this.ui.xaml, 'Width="940"') || InStr(this.ui.xaml, 'Height="700"')) {
             cnt := 0
@@ -413,7 +413,7 @@ class ArrayGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         owner := (this.Hwnd() ? this.Hwnd() : this.OwnerHwnd)
         this.InitEditGui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
-        this.InitEditGui.xaml := StrReplace(this.InitEditGui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="520" Height="320" Opacity="0"')
+        this.InitEditGui.xaml := StrReplace(this.InitEditGui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="520" Height="320"')
         this.InitEditGui.xaml := StrReplace(this.InitEditGui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.InitEditGui.xaml := StrReplace(this.InitEditGui.xaml, '%resources%', '')
 

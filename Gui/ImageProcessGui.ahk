@@ -406,7 +406,7 @@ class ImageProcessGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"'
-            , 'Title="' this._Esc(title) '" Width="784" Height="686" Opacity="0"')
+            , 'Title="' this._Esc(title) '" Width="784" Height="686"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"'
             , 'FontFamily="' MainSoftData.FontType '"')

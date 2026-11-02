@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#NoTrayIcon
 global RMT_VERSION := "1.3F1"
 #Include Main\SelfCheck.ahk
 #Include Main\AssetUtil.ahk
@@ -11,7 +12,7 @@ if (!EnsureSingleInstance())
 
 ; 把程序路径写入环境变量 rmt，并安装 rmt 命令（仅常驻实例执行，命令行转发进程会先退出）
 RmtRegisterCliCommand()
-
+XAMLHost.Prewarm()
 InitFilePath()              ;初始化文件路径
 LoadCurMacroSetting()       ;加载当前配置宏，宏指令
 HandleOpenArg()             ;处理打开软件的参数

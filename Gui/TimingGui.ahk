@@ -243,7 +243,7 @@ class TimingGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            Format('Title="{}" ShowInTaskbar="False" Width="{}" Height="{}" Left="{}" Top="{}" Opacity="0"',
+            Format('Title="{}" ShowInTaskbar="False" Width="{}" Height="{}" Left="{}" Top="{}"',
                 title, winW, winH, dipX, dipY))
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', 'WindowStartupLocation="Manual"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
@@ -537,7 +537,7 @@ class TimingGui {
 
         picker := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
         picker.xaml := StrReplace(picker.xaml, 'Width="940" Height="700"',
-            Format('Title="{}" ShowInTaskbar="False" Width="{}" Height="{}" Left="{}" Top="{}" Opacity="0"',
+            Format('Title="{}" ShowInTaskbar="False" Width="{}" Height="{}" Left="{}" Top="{}"',
                 title, winW, winH, dipX, dipY))
         picker.xaml := StrReplace(picker.xaml, 'WindowStartupLocation="CenterScreen"', 'WindowStartupLocation="Manual"')
         picker.xaml := StrReplace(picker.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')

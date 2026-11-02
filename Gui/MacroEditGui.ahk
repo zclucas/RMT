@@ -360,8 +360,6 @@ class MacroEditGui {
         UIControls.RecordToggle := this.RecordMacroCon
         MainSoftData.MacroEditGui := this
         this.InitGuiMenu()
-        ; 兜底：万一揭盖失败（LoadedHwnd 丢失等）强制显示
-        SetTimer(ObjBindMethod(this, "_RevealFallback"), -800)
     }
 
     Hwnd() {
@@ -1337,7 +1335,7 @@ class MacroEditGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="1400" Height="867" Opacity="0"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="1400" Height="867"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._EditLayoutStyles())
 
@@ -1458,19 +1456,14 @@ class MacroEditGui {
         MyMsgBoxContent(GetLang("指令介绍视频制作中，敬请期待。"))
     }
 
-    ; 揭盖一次（防重复）：引擎还原位置并显示，窗口从离屏直接变完整内容，无 Hide/Show
+    ; 拿一次焦点（防重复）：窗口创建时就是最终样子，这里只负责切到前台
     _TryReveal(from := "") {
         if (this._revealed || this._closed)
             return
         if (!IsObject(this.ui) || !this.ui.HasProp("wpfHwnd") || !this.ui.wpfHwnd)
             return
         this._revealed := true
-        try this.ui.Update("Window", "Opacity", "1")
         try WinActivate("ahk_id " this.ui.wpfHwnd)
-    }
-
-    _RevealFallback(*) {
-        this._TryReveal("fallback")
     }
 
     _FadeIn() {
