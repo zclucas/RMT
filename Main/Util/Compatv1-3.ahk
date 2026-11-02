@@ -279,7 +279,7 @@ Compat13_Settings(sections) {
         supported[key] := true
     for key in ["RecordJoyInterval", "RecordShowBorder", "OCRType", "IsBootStart", "IsAdminStart", "ShowSplitLine", "FixedMenuWheel", "MenuWheelSelectMode"]
         supported[key] := true
-    for key in ["MenuWheelShowTooltip", "MenuWheelScale", "Theme", "UIPanelShowOnActive", "UIPanelDefaultPos", "UIPanelOffsetX", "UIPanelOffsetY", "UIPanelBtnHeight"]
+    for key in ["MenuWheelShowTooltip", "MenuWheelScale", "Theme", "UIPanelShowOnActive", "UIPanelBtnHeight"]
         supported[key] := true
     for key in ["UIPanelFontSize", "UIPanelBtnWidth", "UIPanelCols", "IsModalSubGui", "MutiThreadNum", "DynamicCorePoolSize", "ElasticTimeout", "MacroStopType"]
         supported[key] := true
@@ -301,7 +301,7 @@ Compat13_Settings(sections) {
         ; 已有对应含义的枚举照用；非法/已移除的选项删除，让读取端使用当前默认值。
         if (values.Has("JoyType") && values["JoyType"] == "PS5")
             values["JoyType"] := "DS4" ; 与 1.3 加载器已有的 ViGEm 别名对应。
-        enums := Map("UIPanelDefaultPos", "1,2,3,4,5,6,7,9,10", "MacroStopType", "1,2",
+        enums := Map("MacroStopType", "1,2",
             "KeyDownDown", "1,2", "MenuWheelSelectMode", "1,2", "JoyType", "Xbox,DS4")
         for key, options in enums {
             if (values.Has(key) && !InStr("," options ",", "," values[key] ","))

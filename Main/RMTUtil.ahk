@@ -150,8 +150,8 @@ OnSaveSetting(*) {
     ; 内联设置不再经过各独立设置窗口的 SaveData，统一保存这些字段。
     for key in ["CMDLogToFile", "CMDLogFilePath", "CMDLogAutoClear", "StartTipAudio", "EndTipAudio", "StopTipAudio",
         "FixedMenuWheel", "MenuWheelShowTooltip", "MenuWheelSelectMode", "MenuWheelScale",
-        "UIPanelShowOnActive", "UIPanelDefaultPos", "UIPanelOffsetX", "UIPanelOffsetY",
-        "UIPanelBtnWidth", "UIPanelBtnHeight", "UIPanelFontSize", "UIPanelCols",
+        "UIPanelShowOnActive",
+        "UIPanelBtnWidth", "UIPanelBtnHeight", "UIPanelFontSize", "UIPanelCols", "UIPanelCustom", "UIPanelBall", "UIPanelBallPos", "UIPanelPos",
         "CountDownFontSize", "CountDownAlpha", "CountDownStyle", "CountDownPadZero"]
         CheckAndAddDirty(key, MainSoftData.%key%)
 

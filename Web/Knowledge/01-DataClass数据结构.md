@@ -182,8 +182,6 @@
 | `MenuWheelShowTooltip` | false | 显示扇区名 |
 | `MenuWheelScale` | 100 | 轮盘大小 50~200 |
 | `UIPanelShowOnActive` | true | 窗口激活时显示浮窗 |
-| `UIPanelDefaultPos` | 1 | 1左上 2中上 3右上 4中左 5中心 6中右 7左下 9中下 10右下（无 8） |
-| `UIPanelOffsetX/Y` | 100 | 浮窗偏移 |
 | `UIPanelBtnHeight/Width/FontSize/Cols` | 34 / 80 / 12 / 3 | 浮窗按钮 |
 | `CMDTip` | false | 显示指令窗口 |
 | `CMDLogToFile` | false | 指令日志写文件 |

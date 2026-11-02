@@ -579,9 +579,11 @@ class AppThemeUtil {
 
     ; 将「通用窗口」色写入已打开的 XAML 窗口 Resource（及标题栏 DragArea）
     ; colors 可传编辑中的草稿 Map；省略则用 MainSoftData.ThemeColors
-    static ApplyWinThemeToXaml(ui, colors := "") {
+    static ApplyWinThemeToXaml(ui, colors := "", preserveUIPanelColors := false) {
         if (!IsObject(ui))
             return
+        if (ui.HasOwnProp("_preserveUIPanelColors") && ui._preserveUIPanelColors)
+            preserveUIPanelColors := true
         if (!IsObject(colors))
             colors := IsObject(MainSoftData.ThemeColors) ? MainSoftData.ThemeColors : Map()
         colors := AppThemeUtil.BuildCompleteColorMap(colors)
@@ -623,6 +625,11 @@ class AppThemeUtil {
         actionHoverBg := AppThemeUtil.ResolveColor(colors, "Win_ActionHoverBg")
         actionHoverStroke := AppThemeUtil.ResolveColor(colors, "Win_ActionHoverStroke")
         progress := AppThemeUtil.ResolveColor(colors, "Win_ProgressBar")
+        panelBtnColor := AppThemeUtil.ResolveColor(colors, "Panel_BtnColor")
+        panelBtnText := AppThemeUtil.ResolveColor(colors, "Panel_BtnText")
+        panelBg := AppThemeUtil.ResolveColor(colors, "Panel_BgColor")
+        panelTitleBg := AppThemeUtil.ResolveColor(colors, "Panel_TitleBg")
+        panelTitleText := AppThemeUtil.ResolveColor(colors, "Panel_TitleText")
         ; 页签选中背景：主题强调色低透明度（各主题自动适配，见主窗口 tabItemStyle 的 TabSelBg）
         tabSelBg := AppThemeUtil.WithAlpha(progress, "80")
         btnPressBg := AppThemeUtil.AdjustRgbBrightness(groupStroke, 0.90)
@@ -677,6 +684,13 @@ class AppThemeUtil {
                 {ControlName: "DragArea", PropertyName: "Background", Value: titleBg},
                 {ControlName: "Window", PropertyName: "Background", Value: windowBg}
             ]
+            if (!preserveUIPanelColors) {
+                batch.Push({ControlName: "Resource", PropertyName: "UIPanelBtnColor", Value: panelBtnColor})
+                batch.Push({ControlName: "Resource", PropertyName: "UIPanelBtnText", Value: panelBtnText})
+                batch.Push({ControlName: "Resource", PropertyName: "UIPanelBgColor", Value: panelBg})
+                batch.Push({ControlName: "Resource", PropertyName: "UIPanelTitleBg", Value: panelTitleBg})
+                batch.Push({ControlName: "Resource", PropertyName: "UIPanelTitleText", Value: panelTitleText})
+            }
             if (isLayeredWin) {
                 kept := []
                 for entry in batch {
@@ -694,6 +708,13 @@ class AppThemeUtil {
             try ui.Update("Resource", "TextMain", labelColor)
             try ui.Update("Resource", "TextSub", textSub)
             try ui.Update("Resource", "ControlBg", windowBg)
+            if (!preserveUIPanelColors) {
+                try ui.Update("Resource", "UIPanelBtnColor", panelBtnColor)
+                try ui.Update("Resource", "UIPanelBtnText", panelBtnText)
+                try ui.Update("Resource", "UIPanelBgColor", panelBg)
+                try ui.Update("Resource", "UIPanelTitleBg", panelTitleBg)
+                try ui.Update("Resource", "UIPanelTitleText", panelTitleText)
+            }
             try ui.Update("Resource", "ControlBorder", groupStroke)
             try ui.Update("Resource", "GroupStroke", groupStroke)
             try ui.Update("Resource", "GraphLine", graphLine)
@@ -831,7 +852,7 @@ class AppThemeUtil {
     ; 用类名字符串动态解析：Worker 未 Include 这些 Gui，直接写类名会触发 #Warn / 编译失败
     static RefreshOpenSettingWindows() {
         classNames := ["HotkeySettingGui", "ToolRecordSettingGui", "MenuWheelGlobalSettingGui",
-            "UIMacroPanelSettingGui", "CMDTipSettingGui", "ThemeSettingGui",
+            "CMDTipSettingGui", "ThemeSettingGui",
             "TimingGui", "MenuMacroSettingGui", "UIMacroSettingGui"]
         for name in classNames {
             try {
