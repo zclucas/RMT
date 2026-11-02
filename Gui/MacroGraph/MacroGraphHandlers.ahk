@@ -279,9 +279,7 @@ class MacroGraphHandlersMixin {
 
     ; 模式编号 -> 下拉项索引（§20 下拉仅 绝对/相对；旧值 2 游戏视角回退绝对）
     _MoveModeIndex(mode) {
-        if (mode == "1" || mode == 1)
-            return 1
-        return 0
+        return CmdEnumMoveMode(mode) == "相对移动" ? 1 : 0
     }
 
     ; 下拉项文本 -> 模式编号（与显示项使用同一 GetLang，确保中英文一致匹配）
@@ -340,33 +338,29 @@ class MacroGraphHandlersMixin {
     }
 
     ; 鼠标动作编号(1/2/3/4) -> 下拉项索引
-    _MMProActionIndex(at, mode := 1) {
-        if (mode == 0) {
-            if (at == "4" || at == 4)
-                return 4
-            if (at == "5" || at == 5)
-                return 3
-        } else if (at == "4" || at == 4) {
+    _MMProActionIndex(at, mode := "绝对移动") {
+        modeZh := CmdEnumMoveMode(mode)
+        atZh := CmdEnumMMAction(at)
+        items := modeZh == "相对移动" ? ["移动", "移动后单击", "移动后双击", "拖拽"] : ["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"]
+        if (modeZh == "相对移动" && atZh == "A到B拖拽")
             return 3
-        }
-        if (at == "2" || at == 2)
-            return 1
-        if (at == "3" || at == 3)
-            return 2
+        for i, it in items
+            if (it == atZh)
+                return i - 1
         return 0
     }
 
     ; 下拉项文本 -> 鼠标动作编号(1=移动 2=移动后单击 3=移动后双击 4=拖拽)
-    _MMProActionFromText(text, mode := 1) {
+    _MMProActionFromText(text, mode := "绝对移动") {
         if (text == GetLang("A到B拖拽"))
-            return 4
+            return "A到B拖拽"
         if (text == GetLang("拖拽"))
-            return mode == 0 ? 5 : 4
+            return "拖拽"
         if (text == GetLang("移动后单击") || text == GetLang("移动点击1次"))
-            return 2
+            return "移动后单击"
         if (text == GetLang("移动后双击") || text == GetLang("移动点击2次"))
-            return 3
-        return 1
+            return "移动后双击"
+        return "移动"
     }
 
     ; 取 X/Y 坐标变量的显示文本（存储为 Key 形式，显示用 GetLang；数字原样返回）
@@ -438,20 +432,16 @@ class MacroGraphHandlersMixin {
     }
 
     ; 从引擎当前选中项解析鼠标动作编号(1/2/3/4)：SelectedIndex 优先
-    _MMProActionFromState(key, state, fallback := 1, mode := 1) {
+    _MMProActionFromState(key, state, fallback := "移动", mode := "绝对移动") {
+        modeZh := CmdEnumMoveMode(mode)
+        items := modeZh == "相对移动" ? ["移动", "移动后单击", "移动后双击", "拖拽"] : ["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"]
         idx := this._ComboSelectedIndex(key)
-        if (idx >= 0 && idx <= (mode == 0 ? 4 : 3)) {
-            if (mode == 0 && idx == 3)
-                return 5
-            if (mode == 0 && idx == 4)
-                return 4
-            return idx + 1
-        }
+        if (idx >= 0 && idx < items.Length)
+            return items[idx + 1]
         txt := this._ComboText(key, state)
         if (txt != "")
-            return this._MMProActionFromText(txt, mode)
-        fb := Integer(fallback)
-        return (fb >= 1 && fb <= 5) ? fb : 1
+            return this._MMProActionFromText(txt, modeZh)
+        return CmdEnumMMAction(fallback)
     }
 
     ; 鼠标动作下拉变更
@@ -471,12 +461,11 @@ class MacroGraphHandlersMixin {
         if (data == "")
             return
         key := "MPModeCmb_" id
-        data.MouseMoveMode := Integer(this._MoveModeFromState(key, state, data.MouseMoveMode))
-        ; 普通拖拽只存在于绝对模式；切换到相对模式时沿用拖拽动作编号 4。
-        if (data.MouseMoveMode == 1 && data.ActionType == 5)
-            data.ActionType := 4
-        if (data.MouseMoveMode == 2) {
-            data.ActionType := 1
+        data.MouseMoveMode := CmdEnumMoveMode(this._MoveModeFromState(key, state, data.MouseMoveMode))
+        if (data.MouseMoveMode == "相对移动" && CmdEnumMMAction(data.ActionType) == "A到B拖拽")
+            data.ActionType := "拖拽"
+        if (data.MouseMoveMode == "游戏视角") {
+            data.ActionType := "移动"
             data.Speed := 100
             data.IsHumanMouse := 0
         }
@@ -489,8 +478,8 @@ class MacroGraphHandlersMixin {
     _RefreshMMProActionItems(id, data) {
         if (this.ui == "")
             return
-        mode := Integer(data.MouseMoveMode)
-        items := mode == 0 ? ["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"] : ["移动", "移动后单击", "移动后双击", "拖拽"]
+        mode := CmdEnumMoveMode(data.MouseMoveMode)
+        items := mode == "绝对移动" ? ["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"] : ["移动", "移动后单击", "移动后双击", "拖拽"]
         this.ui.Update("MPActionCmb_" id, "ClearItems", "")
         for it in GetLangArr(items)
             this.ui.Update("MPActionCmb_" id, "AddItem", it)
@@ -513,11 +502,11 @@ class MacroGraphHandlersMixin {
         data.IsHumanMouse := (v == "True" || v == 1 || v == "1") ? 1 : 0
         if (data.IsHumanMouse == 1) {
             ; 拟真轨迹与游戏视角互斥：游戏视角时切回相对移动
-            if (data.MouseMoveMode == 2) {
-                data.MouseMoveMode := 1
-                this.ui.Update("MPModeCmb_" id, "SelectedIndex", this._MoveModeIndex(1))
+            if (CmdEnumMoveMode(data.MouseMoveMode) == "游戏视角") {
+                data.MouseMoveMode := "相对移动"
+                this.ui.Update("MPModeCmb_" id, "SelectedIndex", this._MoveModeIndex("相对移动"))
             }
-            data.ActionType := 1
+            data.ActionType := "移动"
         }
         SaveMacroCMDData(data)
         this._RefreshMMProVisibility(id)
@@ -532,7 +521,7 @@ class MacroGraphHandlersMixin {
         data := this._MMProData(id)
         if (data == "")
             return
-        isGameView := (data.MouseMoveMode == 2 || data.MouseMoveMode == "2")
+        isGameView := CmdEnumMoveMode(data.MouseMoveMode) == "游戏视角"
         isHuman := (ObjHasOwnProp(data, "IsHumanMouse") && (data.IsHumanMouse == 1 || data.IsHumanMouse == "1"))
 
         ; 移动速度：游戏视角固定 100 且禁用；其余模式同步数据模型中的值
@@ -577,12 +566,14 @@ class MacroGraphHandlersMixin {
         }
 
         ; 坐标行：A 到 B 拖拽需要终止点，普通绝对拖拽只需要目标点。
-        isABDrag := !isGameView && data.MouseMoveMode == 0 && data.ActionType == 4
-        isSimpleDrag := !isGameView && data.MouseMoveMode == 0 && data.ActionType == 5
+        modeZh := CmdEnumMoveMode(data.MouseMoveMode)
+        actionZh := CmdEnumMMAction(data.ActionType)
+        isABDrag := !isGameView && modeZh == "绝对移动" && actionZh == "A到B拖拽"
+        isSimpleDrag := !isGameView && modeZh == "绝对移动" && actionZh == "拖拽"
         this.ui.Update("MPEndXRow_" id, "Visibility", isABDrag ? "Visible" : "Collapsed")
         this.ui.Update("MPEndYRow_" id, "Visibility", isABDrag ? "Visible" : "Collapsed")
-        this.ui.Update("MPPosXRow_" id "Label", "Text", GetLang(isABDrag ? "起始坐标X:" : (isSimpleDrag ? "目标点：" : (data.MouseMoveMode == 1 ? "偏移值" : "坐标位置X:"))))
-        this.ui.Update("MPPosYRow_" id "Label", "Text", GetLang(isABDrag || isSimpleDrag || data.MouseMoveMode == 1 ? "" : "坐标位置Y:"))
+        this.ui.Update("MPPosXRow_" id "Label", "Text", GetLang(isABDrag ? "起始坐标X:" : (isSimpleDrag ? "目标点：" : (modeZh == "相对移动" ? "偏移值" : "坐标位置X:"))))
+        this.ui.Update("MPPosYRow_" id "Label", "Text", GetLang(isABDrag || isSimpleDrag || modeZh == "相对移动" ? "" : "坐标位置Y:"))
 
         ; 移动次数 / 每次间隔：仅游戏视角显示；同步控件值
         this.ui.Update("MPCount_" id, "Text", ObjHasOwnProp(data, "Count") ? data.Count : "1")
@@ -624,25 +615,23 @@ class MacroGraphHandlersMixin {
 
     ; 下拉文本 -> 搜索类型编号（1屏幕图片 2屏幕颜色 3屏幕文本 4窗口图片 5窗口颜色 6窗口文本）
     _SearchTypeFromText(text) {
-        names := [GetLang("屏幕图片"), GetLang("屏幕颜色"), GetLang("屏幕文本"), GetLang("窗口图片"), GetLang("窗口颜色"), GetLang("窗口文本")]
-        loop names.Length {
-            if (text == names[A_Index] || GetLangKey(text) == GetLangKey(names[A_Index]))
-                return A_Index
-        }
-        return 1
+        names := CmdEnumSearchNames()
+        key := GetLangKey(text)
+        for name in names
+            if (text == GetLang(name) || key == name)
+                return name
+        return "屏幕图片"
     }
 
     ; 下拉文本 -> 鼠标动作编号（搜索：1无动作 2移动至目标 3移动点击1次 4移动点击2次；搜索Pro：1无动作 2移动至目标 3移动至目标点击）
     _SearchActionFromText(text) {
         if (text == GetLang("移动至目标"))
-            return 2
-        if (text == GetLang("移动至目标点击1次"))
-            return 3
+            return "移动至目标"
+        if (text == GetLang("移动至目标点击1次") || text == GetLang("移动至目标点击"))
+            return "移动至目标点击1次"
         if (text == GetLang("移动至目标点击2次"))
-            return 4
-        if (text == GetLang("移动至目标点击"))
-            return 3
-        return 1
+            return "移动至目标点击2次"
+        return "无动作"
     }
 
     ; 节点是否为 搜索Pro
@@ -656,7 +645,8 @@ class MacroGraphHandlersMixin {
 
     ; 搜索类型分类（同时适配 搜索 1-3 与 搜索Pro 1-6）
     _SearchTypeClass(st) {
-        return { isImage: (st == 1 || st == 4), isColor: (st == 2 || st == 5), isText: (st == 3 || st == 6), isWin: (st >= 4) }
+        st := CmdEnumSearch(st)
+        return { isImage: (st == "屏幕图片" || st == "窗口图片"), isColor: (st == "屏幕颜色" || st == "窗口颜色"), isText: (st == "屏幕文本" || st == "窗口文本"), isWin: (st == "窗口图片" || st == "窗口颜色" || st == "窗口文本") }
     }
 
     ; 搜索类型编号上限（搜索 1-3，搜索Pro 1-6）
@@ -665,30 +655,21 @@ class MacroGraphHandlersMixin {
     }
 
     ; 从事件 state / 下拉索引解析搜索类型：优先用 state（事件已带当前值），避免同步 Query 偶发空值
-    _SearchTypeFromState(id, key, state, fallback := 1) {
-        maxType := this._SearchTypeMax(id)
+    _SearchTypeFromState(id, key, state, fallback := "屏幕图片") {
+        names := this._IsNodePro(id) ? CmdEnumSearchNames() : ["屏幕图片", "屏幕颜色", "屏幕文本"]
         if (IsObject(state) && state.Has(key) && state[key] != "") {
             st := this._SearchTypeFromText(state[key])
-            if (st >= 1 && st <= maxType)
+            if (st != "屏幕图片" || GetLangKey(state[key]) == "屏幕图片")
                 return st
-            if (IsNumber(state[key])) {
-                n := Integer(state[key])
-                if (n >= 0 && n < maxType)
-                    return n + 1
-                if (n >= 1 && n <= maxType)
-                    return n
-            }
+            if (IsNumber(state[key]))
+                return CmdEnumFromIndex(state[key], names)
         }
         if (this.ui != "") {
             idx := this.ui.Query(key ">SelectedIndex")
-            if (idx != "" && IsNumber(idx) && Integer(idx) >= 0) {
-                st := Integer(idx) + 1
-                if (st >= 1 && st <= maxType)
-                    return st
-            }
+            if (idx != "" && IsNumber(idx))
+                return CmdEnumFromIndex(idx, names)
         }
-        fb := Integer(fallback)
-        return (fb >= 1 && fb <= maxType) ? fb : 1
+        return CmdEnumSearch(fallback)
     }
 
     ; 搜索类型变更：写回数据并切换类型相关行的显隐
@@ -906,31 +887,19 @@ class MacroGraphHandlersMixin {
     }
 
     ; 从事件 state / 下拉索引解析鼠标动作编号：优先 state，其次 Query
-    _SearchActionFromState(id, key, state, fallback := 1) {
-        isPro := this._IsNodePro(id)
-        maxAct := isPro ? 3 : 4
+    _SearchActionFromState(id, key, state, fallback := "移动至目标") {
+        names := this._IsNodePro(id) ? ["无动作", "移动至目标", "移动至目标点击1次"] : CmdEnumMouseActNames()
         if (IsObject(state) && state.Has(key) && state[key] != "") {
-            act := this._SearchActionFromText(state[key])
-            if (act >= 1 && act <= maxAct)
-                return act
-            if (IsNumber(state[key])) {
-                n := Integer(state[key])
-                if (n >= 0 && n < maxAct)
-                    return n + 1
-                if (n >= 1 && n <= maxAct)
-                    return n
-            }
+            if (!IsNumber(state[key]))
+                return this._SearchActionFromText(state[key])
+            return CmdEnumFromIndex(state[key], names)
         }
         if (this.ui != "") {
             idx := this.ui.Query(key ">SelectedIndex")
-            if (idx != "" && IsNumber(idx) && Integer(idx) >= 0) {
-                act := Integer(idx) + 1
-                if (act >= 1 && act <= maxAct)
-                    return act
-            }
+            if (idx != "" && IsNumber(idx))
+                return CmdEnumFromIndex(idx, names)
         }
-        fb := Integer(fallback)
-        return (fb >= 1 && fb <= maxAct) ? fb : 1
+        return CmdEnumMouseAct(fallback)
     }
 
     ; 鼠标动作变更：写回 SearchData
@@ -1803,21 +1772,22 @@ class MacroGraphHandlersMixin {
         }
         midx := this._ComboSelectedIndex("MPModeCmb_" id)
         if (midx < 0 || midx > 1)
-            midx := Integer(data.MouseMoveMode)
+            midx := this._MoveModeIndex(data.MouseMoveMode)
         aidx := this._ComboSelectedIndex("MPActionCmb_" id)
-        if (aidx >= 0 && aidx <= (midx == 0 ? 4 : 3)) {
-            data.ActionType := (midx == 0 && aidx == 3) ? 5 : ((midx == 0 && aidx == 4) ? 4 : aidx + 1)
+        actionItems := midx == 0 ? ["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"] : ["移动", "移动后单击", "移动后双击", "拖拽"]
+        if (aidx >= 0 && aidx < actionItems.Length) {
+            data.ActionType := actionItems[aidx + 1]
             dirty := true
         } else if (this._InlineVal(state, "MPActionCmb_" id, &actTxt)) {
             data.ActionType := this._MMProActionFromText(actTxt, midx)
             dirty := true
         }
         midx := this._ComboSelectedIndex("MPModeCmb_" id)
-        if (midx >= 0 && midx <= 2) {
-            data.MouseMoveMode := midx
+        if (midx >= 0 && midx <= 1) {
+            data.MouseMoveMode := midx == 1 ? "相对移动" : "绝对移动"
             dirty := true
         } else if (this._InlineVal(state, "MPModeCmb_" id, &modeTxt)) {
-            data.MouseMoveMode := Integer(this._MoveModeFromText(modeTxt))
+            data.MouseMoveMode := CmdEnumMoveMode(this._MoveModeFromText(modeTxt))
             dirty := true
         }
         hv := ""
@@ -1894,22 +1864,16 @@ class MacroGraphHandlersMixin {
         dirty := false
         isPro := this._IsNodePro(id)
         stIdx := this._ComboSelectedIndex("STypeCmb_" id)
-        if (stIdx >= 0) {
-            st := stIdx + 1
-            maxType := this._SearchTypeMax(id)
-            if (st >= 1 && st <= maxType) {
-                data.SearchType := st
-                dirty := true
-            }
+        typeNames := isPro ? CmdEnumSearchNames() : ["屏幕图片", "屏幕颜色", "屏幕文本"]
+        if (stIdx >= 0 && stIdx < typeNames.Length) {
+            data.SearchType := typeNames[stIdx + 1]
+            dirty := true
         }
         actIdx := this._ComboSelectedIndex("SActCmb_" id)
-        if (actIdx >= 0) {
-            act := actIdx + 1
-            maxAct := isPro ? 3 : 4
-            if (act >= 1 && act <= maxAct) {
-                data.MouseActionType := act
-                dirty := true
-            }
+        actNames := isPro ? ["无动作", "移动至目标", "移动至目标点击1次"] : CmdEnumMouseActNames()
+        if (actIdx >= 0 && actIdx < actNames.Length) {
+            data.MouseActionType := actNames[actIdx + 1]
+            dirty := true
         }
         for field, prefix in Map("SearchColor", "SColor_", "SearchText", "SText_", "Similar", "SSim_"
             , "StartPosX", "SStartX_", "StartPosY", "SStartY_", "EndPosX", "SEndX_", "EndPosY", "SEndY_") {

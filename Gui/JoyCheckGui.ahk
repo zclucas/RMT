@@ -162,9 +162,9 @@ class JoyCheckGui extends JoyGui {
         }
 
         analog := this.AxisMap.Count > 0
-        ct := this.Data.CheckType ? Integer(this.Data.CheckType) : 1
-        this._FillCheckTypeCombo(analog, ct - 1)
-        this.ui.Update("StateTypeCon", "SelectedIndex", String((this.Data.StateType ? this.Data.StateType : 1) - 1))
+        checkNames := analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()
+        this._FillCheckTypeCombo(analog, CmdEnumIndex(this.Data.CheckType, checkNames))
+        this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
         this._SetCombo("VarNameCon", GetGuiVarArr(), this.Data.VarName != "" ? this.Data.VarName : "Var1")
         this._RefreshPadHighlight()
         this.Refresh()
@@ -266,8 +266,10 @@ class JoyCheckGui extends JoyGui {
             if (this.AxisMap.Has(name))
                 data.KeyArr.Push("JoyAxis" name ":" this.AxisMap[name])
         }
-        data.CheckType := IsObject(this.ui) ? (Integer(this.ui.Query("CheckTypeCon>SelectedIndex")) + 1) : 1
-        data.StateType := IsObject(this.ui) ? (Integer(this.ui.Query("StateTypeCon>SelectedIndex")) + 1) : 1
+        analog := this.AxisMap.Count > 0
+        checkNames := analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()
+        data.CheckType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("CheckTypeCon>SelectedIndex") : "", checkNames)
+        data.StateType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("StateTypeCon>SelectedIndex") : "", CmdEnumStateNames())
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
         MySoftData.GlobalVariMap[data.VarName] := true
         SaveMacroCMDData(data)

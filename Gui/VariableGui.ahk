@@ -200,13 +200,12 @@ class VariableGui {
 
     _OpTypeValue(i) {
         v := IsObject(this.ui) ? this.ui.Query("OpType" i ">SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) + 1 : 1
+        return CmdEnumFromIndex(v, CmdEnumOperaNames())
     }
 
-    ; 旧 OperaType 7（时间类别）在界面上按「时间」(5) 显示
-    _UiOpType(i) {
-        ot := this.Data.OperaTypeArr[i]
-        return ot == 7 ? 5 : ot
+    _UiOpIndex(i) {
+        ot := (IsObject(this.Data) && this.Data.OperaTypeArr.Length >= i) ? this.Data.OperaTypeArr[i] : "数值"
+        return CmdEnumIndex(CmdEnumOpera(ot), CmdEnumOperaNames())
     }
 
     Init(cmd) {
@@ -241,7 +240,7 @@ class VariableGui {
         }
         n := this.Data.ToggleArr.Length
         while (this.Data.OperaTypeArr.Length < n)
-            this.Data.OperaTypeArr.Push(1)
+            this.Data.OperaTypeArr.Push("数值")
         while (this.Data.VariableArr.Length < n)
             this.Data.VariableArr.Push("Var" (this.Data.VariableArr.Length + 1))
         while (this.Data.CopyVariableArr.Length < n)
@@ -379,11 +378,11 @@ class VariableGui {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             this._BatchSetCombo(batch, "Var" i, GetGuiVarArr(), GetLang(this.Data.VariableArr[i]))
-            batch.Push({ControlName: "OpType" i, PropertyName: "SelectedIndex", Value: String(this._UiOpType(i) - 1)})
+            batch.Push({ControlName: "OpType" i, PropertyName: "SelectedIndex", Value: String(this._UiOpIndex(i))})
             copyVal := this.Data.CopyVariableArr[i]
-            if (copyVal == "" && this._UiOpType(i) == 1)
+            if (copyVal == "" && this._UiOpIndex(i) == 0)
                 copyVal := "0"
-            this._BatchSetCombo(batch, "Copy" i, this.GetGuiVarArrByType(this._UiOpType(i)), GetLang(copyVal))
+            this._BatchSetCombo(batch, "Copy" i, this.GetGuiVarArrByType(CmdEnumFromIndex(this._UiOpIndex(i), CmdEnumOperaNames())), GetLang(copyVal))
             this._BatchSetCombo(batch, "Min" i, GetGuiVarArr(), GetLang(this.Data.MinVariableArr[i]))
             this._BatchSetCombo(batch, "Max" i, GetGuiVarArr(), GetLang(this.Data.MaxVariableArr[i]))
         }
@@ -425,21 +424,15 @@ class VariableGui {
     }
 
     GetGuiVarArrByType(type) {
-        switch type {
-            case 1:
+        switch CmdEnumOpera(type) {
+            case "数值":
                 return GetGuiVarArr()
-            case 2:
-                return []
-            case 3:
-                return []
-            case 4:
+            case "系统":
                 return GetSystemVarArr()
-            case 5:
+            case "时间":
                 return GetTimeCategoryVarArr()
-            case 6:
-                return []               ; 删除：无需源值
-            case 7:
-                return GetTimeCategoryVarArr()   ; 旧时间类别
+            case "随机数值", "字符", "删除":
+                return []
         }
         return []
     }
@@ -451,8 +444,8 @@ class VariableGui {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             OperaTypeValue := this._OpTypeValue(i)
-            EnableCopy := OperaTypeValue == 1 || OperaTypeValue == 3 || OperaTypeValue == 4 || OperaTypeValue == 5
-            EnableMinMax := OperaTypeValue == 2
+            EnableCopy := OperaTypeValue == "数值" || OperaTypeValue == "字符" || OperaTypeValue == "系统" || OperaTypeValue == "时间"
+            EnableMinMax := OperaTypeValue == "随机数值"
             batch.Push({ControlName: "Copy" i, PropertyName: "IsEnabled", Value: EnableCopy ? "True" : "False"})
             batch.Push({ControlName: "Copy" i, PropertyName: "Opacity", Value: EnableCopy ? "1" : "0.45"})
             batch.Push({ControlName: "Min" i, PropertyName: "IsEnabled", Value: EnableMinMax ? "True" : "False"})
@@ -460,9 +453,9 @@ class VariableGui {
             batch.Push({ControlName: "Min" i, PropertyName: "Opacity", Value: EnableMinMax ? "1" : "0.45"})
             batch.Push({ControlName: "Max" i, PropertyName: "Opacity", Value: EnableMinMax ? "1" : "0.45"})
             ; 字符类型时显示「编辑」按钮（叠在「值」框右侧，不占列间距）
-            batch.Push({ControlName: "EditChar" i, PropertyName: "Visibility", Value: OperaTypeValue == 3 ? "Visible" : "Collapsed"})
+            batch.Push({ControlName: "EditChar" i, PropertyName: "Visibility", Value: OperaTypeValue == "字符" ? "Visible" : "Collapsed"})
             CurValue := GetLang(this.ui.Query("Copy" i))
-            if ((CurValue == "" || CurValue == "True" || CurValue == "False") && OperaTypeValue == 1)
+            if ((CurValue == "" || CurValue == "True" || CurValue == "False") && OperaTypeValue == "数值")
                 CurValue := "0"
             DLArr := this.GetGuiVarArrByType(OperaTypeValue)
             this._BatchSetCombo(batch, "Copy" i, DLArr, CurValue)
@@ -539,21 +532,21 @@ class VariableGui {
             loop this.Data.ToggleArr.Length {
                 i := A_Index
                 CurVarRemark := this.ui.Query("Var" i)
-                if (this._OpTypeValue(i) == 1) {
+                if (this._OpTypeValue(i) == "数值") {
                     if (IsNumber(this.ui.Query("Copy" i))) {
                         CurVarRemark .= "=" this.ui.Query("Copy" i)
                     }
                 }
-                else if (this._OpTypeValue(i) == 2) {
+                else if (this._OpTypeValue(i) == "随机数值") {
                     CurVarRemark .= GetLang("随机")
                     isNumSpan := IsNumber(this.ui.Query("Min" i)) && IsNumber(this.ui.Query("Max" i))
                     if (isNumSpan)
                         CurVarRemark .= this.ui.Query("Min" i) "~" this.ui.Query("Max" i)
                 }
-                else if (this._OpTypeValue(i) == 5) {
+                else if (this._OpTypeValue(i) == "时间") {
                     CurVarRemark .= GetLang("时间")
                 }
-                else if (this._OpTypeValue(i) == 6) {
+                else if (this._OpTypeValue(i) == "删除") {
                     CurVarRemark .= GetLang("删除")
                 }
                 Remark .= CurVarRemark "&"

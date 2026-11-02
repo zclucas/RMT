@@ -407,8 +407,8 @@ class CompareGui {
         this._SetCombo("SaveNameCon", GetGuiVarArr(), GetLang(ObjHasOwnProp(this.Data, "SaveName") ? this.Data.SaveName : ""))
         this.ui.Update("TrueValueCon", "Text", ObjHasOwnProp(this.Data, "TrueValue") ? this.Data.TrueValue : 1)
         this.ui.Update("FalseValueCon", "Text", ObjHasOwnProp(this.Data, "FalseValue") ? this.Data.FalseValue : 0)
-        logical := ObjHasOwnProp(this.Data, "LogicalType") ? this.Data.LogicalType : 1
-        this.ui.Update("LogicalTypeCon", "SelectedIndex", String(Integer(logical ? logical : 1) - 1))
+        logical := ObjHasOwnProp(this.Data, "LogicalType") ? this.Data.LogicalType : "且"
+        this.ui.Update("LogicalTypeCon", "SelectedIndex", String(CmdEnumIndex(logical, CmdEnumLogicNames())))
         this._RebuildRows()
     }
 
@@ -531,7 +531,7 @@ class CompareGui {
         this.Data.SaveName := GetVarName(this.ui.Query("SaveNameCon"))
         this.Data.TrueValue := this.ui.Query("TrueValueCon")
         this.Data.FalseValue := this.ui.Query("FalseValueCon")
-        this.Data.LogicalType := this._LogicalIndex() + 1
+        this.Data.LogicalType := CmdEnumFromIndex(this._LogicalIndex(), CmdEnumLogicNames())
         n := this.Data.ToggleArr.Length
         this.Data.ToggleArr := []
         this.Data.NameArr := []

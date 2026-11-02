@@ -320,9 +320,7 @@ class KeyGui {
 
     _KeyTypeIndex() {
         v := IsObject(this.ui) ? this.ui.Query("KeyTypeCon>SelectedIndex") : ""
-        if (!IsNumber(v) || Integer(v) < 0)
-            return 3   ; 默认 点击：参数行可见
-        return Integer(v) + 1
+        return CmdEnumFromIndex(v, CmdEnumKeyActNames(), "点击")
     }
 
     _KeyTypeText() {
@@ -347,7 +345,7 @@ class KeyGui {
             ; 旧序列号格式：读配置文件 Data，保存时改写为内联 按键_按键名_...
             this.Data := GetMacroCMDData(cmdArr[1])
             this.KeyStr := this.Data.KeyName
-            this._SetKeyType(GetLangArr(["按下", "松开", "点击"])[this.Data.KeyType])
+            this._SetKeyType(GetLang(CmdEnumKeyAct(this.Data.KeyType)))
             this.ui.Update("HoldTimeCon", "Text", this.Data.HoldTime)
             this.ui.Update("KeyCountCon", "Text", this.Data.Count)
             this.ui.Update("PerIntervalCon", "Text", this.Data.IntervalTime)
@@ -420,7 +418,7 @@ class KeyGui {
     }
 
     UpdateCommandStr() {
-        hasHoldTime := this._KeyTypeIndex() == 3
+        hasHoldTime := this._KeyTypeIndex() == "点击"
         hasCount := hasHoldTime && this.ui.Query("KeyCountCon") != 1
         hasInterval := hasCount && this.ui.Query("PerIntervalCon") != 0
 
@@ -451,7 +449,7 @@ class KeyGui {
             return false
         }
 
-        if (this._KeyTypeIndex() == 3) {
+        if (this._KeyTypeIndex() == "点击") {
             if (IsFloat(this.ui.Query("HoldTimeCon")) || this.ui.Query("HoldTimeCon") < 0) {
                 RmtDialog.Info(GetLang("按键时间请输入大于0的整数"))
                 return false

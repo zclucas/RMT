@@ -722,7 +722,9 @@ BindTabHotKey() {
         tableItem := MySoftData.TableInfo[A_Index]
         tableIndex := A_Index
         symbol := tableItem.Symbol
-        canBind := symbol == "Normal" || symbol == "String" || symbol == "SubMacro"
+        ; 按键替换以前靠固定下标 7 绑定。插入「语音宏」后 7 变成了子宏，
+        ; 改按 Symbol 时把替换表漏掉了，这里按类型补回。
+        canBind := symbol == "Normal" || symbol == "String" || symbol == "SubMacro" || symbol == "Replace"
         if (!canBind)
             continue
 
@@ -918,33 +920,35 @@ InitTriggerKeyMap() {
 
 GetMacroAction(tableIndex, index) {
     tableItem := MySoftData.TableInfo[tableIndex]
-    item := tableItem.Items[index]
-    macro := item.Macro
+    item := GetItemByIndex(tableItem, index)
+    if (!item || item.ID == "")
+        return ["", ""]
     tableSymbol := tableItem.Symbol
     actionDown := ""
     actionUp := ""
 
     if (tableSymbol == "Normal") {
-        actionDown := OnTriggerKeyDown.Bind(tableIndex, index)
-        actionUp := OnTriggerKeyUp.Bind(tableIndex, index)
+        ; 绑条目 ID，不绑行号。删除或上下移动后，旧热键在重绑完成前仍可能触发。
+        actionDown := OnTriggerKeyDown.Bind(tableItem.ID, item.ID)
+        actionUp := OnTriggerKeyUp.Bind(tableItem.ID, item.ID)
     }
     else if (tableSymbol == "String") {
         ; §17 表身份已 ID 化（670460e8 重构）：TriggerMacroHandler 首参须为表对象/ID，
         ; 绑定对象而非数字索引，否则 GetTableByID("3") 解析失败 → 字符串宏触发键/热串永不触发
-        actionDown := TriggerMacroHandler.Bind(tableItem, index)
+        actionDown := TriggerMacroHandler.Bind(tableItem.ID, item.ID)
     }
     else if (tableSymbol == "Replace") {
-        actionDown := OnReplaceDownKey.Bind(tableItem, macro, index)
-        actionUp := OnReplaceUpKey.Bind(tableItem, macro, index)
+        actionDown := OnReplaceDownKey.Bind(tableItem.ID, item.ID)
+        actionUp := OnReplaceUpKey.Bind(tableItem.ID, item.ID)
     }
     return [actionDown, actionUp]
 }
 
-OnTriggerKeyDown(tableIndex, itemIndex, *) {
-    tableItem := MySoftData.TableInfo[tableIndex]
-    item := tableItem.Items[itemIndex]
-    rawTK := item.TK
-    key := LTrim(rawTK, "~")
+OnTriggerKeyDown(tableID, itemID, *) {
+    resolved := ResolveMacroItem(tableID, itemID)
+    if (!resolved)
+        return
+    key := LTrim(resolved.Item.TK, "~")
     key := StrLower(key)
 
     if (!MySoftData.TriggerKeyMap.Has(key))
@@ -954,10 +958,11 @@ OnTriggerKeyDown(tableIndex, itemIndex, *) {
     Data.OnTriggerKeyDown()
 }
 
-OnTriggerKeyUp(tableIndex, itemIndex, *) {
-    tableItem := MySoftData.TableInfo[tableIndex]
-    item := tableItem.Items[itemIndex]
-    key := LTrim(item.TK, "~")
+OnTriggerKeyUp(tableID, itemID, *) {
+    resolved := ResolveMacroItem(tableID, itemID)
+    if (!resolved)
+        return
+    key := LTrim(resolved.Item.TK, "~")
     key := StrLower(key)
     if (!MySoftData.TriggerKeyMap.Has(key))
         return
@@ -1004,7 +1009,7 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
     if (IsObject(itemIndex)) {
         itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
     }
-    item := tableItem.Items[itemIndex]
+    item := GetItemByIndex(tableItem, itemIndex)
     if (!item)
         return
     macro := item.Macro
@@ -1052,9 +1057,7 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
         ; 字符串 ItemID（跨模块 ID 引用）
         itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
     }
-    if (itemIndex < 1)
-        return
-    item := tableItem.Items[itemIndex]
+    item := GetItemByIndex(tableItem, itemIndex)
     if (!item)
         return
     ; §17 统一禁用门控（条目禁用 Forbid / 所属模块禁用 fold.ForbidState → 任何触发来源均不执行）：

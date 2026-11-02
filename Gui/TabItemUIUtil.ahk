@@ -76,9 +76,12 @@ OnItemDelMacroBtnClick(tableItem, DelIndex, *) {
 }
 
 OnItemDelMacro(tableItem, itemIndex) {
+    ; 先松开仍按住的替换键，再删行。热键重绑是空闲定时器，删除和重绑之间的键抬起不能再去读已空的数组。
+    try ReleaseTableItemHoldKeys(tableItem, itemIndex)
     tableItem.Items.RemoveAt(itemIndex)
     tableItem.RebuildIndex()
     RebuildTableLocator()
+    try RebindAllTriggerKeys()
 }
 
 ;增加宏模块
@@ -133,7 +136,11 @@ OnItemDelFoldBtnClick(tableItem, foldIndex, *) {
     MyMainWin.ReadTabValues(tableItem)
     fold := tableItem.Folds[foldIndex]
     if (fold) {
-        ; 删除归属该折叠框的所有条目
+        ; 删除归属该折叠框的所有条目。先松开按住的键，避免删空后键抬起打到空数组。
+        for index, item in tableItem.Items {
+            if (item.FoldID == fold.ID)
+                try ReleaseTableItemHoldKeys(tableItem, index)
+        }
         keep := []
         for item in tableItem.Items {
             if (item.FoldID != fold.ID)
@@ -143,6 +150,7 @@ OnItemDelFoldBtnClick(tableItem, foldIndex, *) {
         tableItem.Folds.RemoveAt(foldIndex)
         tableItem.RebuildIndex()
         RebuildTableLocator()
+        try RebindAllTriggerKeys()
     }
     MyMainWin.RenderTab(tableItem)
     ; §17 热重载：删除模块 live 广播 → 立即解除旧模块开关热键（防 foldIndex 错位切换错误模块）
@@ -638,6 +646,8 @@ NetworkResolveOwnerHwnd() {
     }
     if (hwnd && !DllCall("user32\IsWindow", "Ptr", hwnd, "Int"))
         hwnd := 0
+    if (IsSet(XamlWin))
+        hwnd := XamlWin.ModalOwner(hwnd)
     return hwnd
 }
 
@@ -731,6 +741,7 @@ NetworkShowHelpDialog(macroID := "") {
     for n, ex in exArr
         ui.OnEvent("BtnEx" n, "Click", OnItemNetworkCopyClipboardEx.Bind(ex.text))
 
+    ui._holdZOrder := true
     if (!XamlWin.Open(ui, "", owner))
         throw Error(GetLang("网络触发说明弹窗打开失败"))
     ownerDisabled := false
@@ -881,6 +892,7 @@ NetworkShowSettingDialog() {
     ; 打开即显示当前端口冲突状态（如有）
     NetworkSetNetDialogError(ui, NetworkGetBindError())
 
+    ui._holdZOrder := true
     if (!XamlWin.Open(ui, "", owner))
         throw Error("网络宏设置窗口打开失败")
     ownerDisabled := false

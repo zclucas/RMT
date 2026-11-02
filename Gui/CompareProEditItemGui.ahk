@@ -65,7 +65,7 @@ class CompareProEditItemGui {
         DataArr.Push(Data.VariNameArr[CondiNumber])
         DataArr.Push(Data.CompareTypeArr[CondiNumber])
         DataArr.Push(Data.VariableArr[CondiNumber])
-        logicStr := Data.LogicTypeArr[CondiNumber] == 1 ? GetLang("且") : GetLang("或")
+        logicStr := CmdEnumLogic(Data.LogicTypeArr[CondiNumber]) == "且" ? GetLang("且") : GetLang("或")
         macro := Data.MacroArr[CondiNumber]
         controlType := Data.ControlTypeArr[CondiNumber]
         this.ShowGui(EditType, DataArr, logicStr, macro, controlType)
@@ -362,12 +362,9 @@ class CompareProEditItemGui {
         this.ui.Update(comboName, "Text", text)
     }
 
-    ; 逻辑关系下拉 1=且 2=或（原生 DropDownList.Value 为 1-based 索引）
     _LogicalTypeIndex() {
         v := IsObject(this.ui) ? this.ui.Query("LogicalTypeCon>SelectedIndex") : ""
-        if (!IsNumber(v) || Integer(v) < 0)
-            return 1
-        return Integer(v) + 1
+        return CmdEnumFromIndex(v, CmdEnumLogicNames())
     }
 
     _CompareTypeIndex(i) {

@@ -314,10 +314,10 @@ CalculateNextStamp(Data, baseStamp) {
     if (baseStamp < start) ; 還沒開始
         return CheckEnd(Data, start)
 
-    switch Data.Type {
-        case 1: ; 單次
+    switch CmdEnumTimingType(Data.Type) {
+        case "单次":
             return 0
-        case 3: ; 週期
+        case "自定义":
             return NextRepeatTime(Data, start, baseStamp)
     }
 
@@ -325,7 +325,7 @@ CalculateNextStamp(Data, baseStamp) {
 }
 
 NextRepeatTime(Data, start, baseStamp) {
-    if (Data.CustomUnit == 6) {
+    if (CmdEnumTimingUnit(Data.CustomUnit) == "月") {
         next := NextMonthTime(start, baseStamp, Data.CustomInterval)
     } else {
         interval := GetTimingInterval(Data)
@@ -361,8 +361,10 @@ StampToTimeStr(stamp) {
 }
 
 GetTimingInterval(Data) {
-    static IntervalMap := [1, 60, 3600, 86400, 604800] ; 秒 分 時 天 週
-    return Data.CustomInterval * IntervalMap[Data.CustomUnit]
+    secs := Map("秒", 1, "分钟", 60, "小时", 3600, "天", 86400, "周", 604800)
+    unit := CmdEnumTimingUnit(Data.CustomUnit)
+    span := secs.Has(unit) ? secs[unit] : 60
+    return Data.CustomInterval * span
 }
 
 TimingCheckItemIfValid(tableItem, index) {
@@ -382,7 +384,7 @@ HandleOnSoftStart(tableItem) {
             continue
 
         Data := GetMacroCMDData(item.TimingSerial)
-        if (Data.Type == 2)
+        if (CmdEnumTimingType(Data.Type) == "软件启动时")
             TriggerMacroHandler(tableItem, index)
     }
 }

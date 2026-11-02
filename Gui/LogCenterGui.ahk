@@ -4,23 +4,28 @@
 ; 日志中心（C 项阶段4：统一日志 GUI）
 ; 独立 XAML 窗口：系统日志 / 业务日志 两 tab + 级别筛选 + 复制/清空/刷新
 ; 数据源：Log\System.log / Log\Business.log（与 RMTLog 同路径规则）
-; 刷新：打开期间 5s 轮询文件增量
+; 刷新：只读文件尾部，避免把整份日志一次性灌进界面把软件卡死
 ; 入口：主界面设置区「日志中心」按钮（阶段4）；托盘菜单（后续）
 ; =====================================================================
 
 class LogCenterGui {
     static instances := Map()
     static _opening := false
-    static _refreshTimer := 0
 
     __New() {
         this.ui := ""
         this.closed := true
         this._curTab := "System"        ; System / Business
         this._levelFilter := ""         ; 空=全部；debug/info/warn/error
-        this._lastSysLen := 0
-        this._lastBizLen := 0
+        this._filePos := -1
+        this._shown := ""
+        this._maxChars := 60000         ; 界面只留最近一段，整文件（可达数 MB）会堵死 WPF 和主线程
+        this._busy := false
+        this._pendingFull := false
+        this._ready := false
         this._timerCb := ""
+        this._loadCb := ""
+        this._kickCb := ""
     }
 
     static ShowGui() {
@@ -100,7 +105,7 @@ class LogCenterGui {
         ; （即文本框控件区域的边缘，属于控件本身、不随内容滚动）；内层 TextBox 仅承载文本、禁用内部滚动
         contentBdr := body.Add("Border").Grid_Row(1).Grid_ColumnSpan(3)
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        contentSv := contentBdr.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Auto")
+        contentSv := contentBdr.Add("ScrollViewer").Name("LogScroll").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Auto")
         this._content := contentSv.Add("TextBox").Name("LogCon")
             .AcceptsReturn("True").TextWrapping("NoWrap").IsReadOnly("True")
             .VerticalContentAlignment("Top").HorizontalAlignment("Left").VerticalAlignment("Top")
@@ -134,19 +139,34 @@ class LogCenterGui {
             return
         }
 
-        ; 初次加载 + 启动轮询（绑定实例的闭包，确保 this 正确）
-        this._Reload(true)   ; 全量显示
-        this._timerCb := () => this._PollTick()
-        if (!LogCenterGui._refreshTimer)
-            LogCenterGui._refreshTimer := SetTimer(this._timerCb, 1000)
-        ; 写入即通知：主进程日志（System/Business）一写入就立即刷新
-        ; （Worker 进程的业务日志无法事件驱动，靠 1s 轮询兜底）
-        this._notifyCb := () => this._OnLogWritten()
+        ; 先让窗口能点，再异步读日志尾部。同步灌入整文件时 SendMessage 会把主线程和日志窗口一起卡住
+        this._ready := true
+        this._loadCb := ObjBindMethod(this, "_InitialLoad")
+        SetTimer(this._loadCb, -50)
+        this._notifyCb := ObjBindMethod(this, "_OnLogWritten")
         RMTLogSetNotify(this._notifyCb)
     }
 
-    ; 写入即通知回调：先强制落盘（日志还在内存缓冲），再增量追加
+    _InitialLoad() {
+        if (this.closed || !IsObject(this.ui))
+            return
+        this._Reload(true)
+        if (this.closed || this._timerCb)
+            return
+        this._timerCb := ObjBindMethod(this, "_PollTick")
+        SetTimer(this._timerCb, 800)
+    }
+
+    ; 写入通知只做合并：连续日志不逐条读文件、不逐条刷新界面
     _OnLogWritten() {
+        if (this.closed || !IsObject(this.ui) || this._kickCb)
+            return
+        this._kickCb := ObjBindMethod(this, "_KickRefresh")
+        SetTimer(this._kickCb, -200)
+    }
+
+    _KickRefresh() {
+        this._kickCb := ""
         if (this.closed || !IsObject(this.ui))
             return
         try FlushRMTLogAsync()
@@ -163,13 +183,17 @@ class LogCenterGui {
         this.ui := ""
         this.closed := true
         LogCenterGui.instances.Delete("main")
-        ; 注销写入通知 + 停轮询
         if (this.HasOwnProp("_notifyCb") && this._notifyCb)
             RMTLogClearNotify()
-        if (this.HasOwnProp("_timerCb") && this._timerCb) {
+        if (this._loadCb)
+            SetTimer(this._loadCb, 0)
+        if (this._timerCb)
             SetTimer(this._timerCb, 0)
-            LogCenterGui._refreshTimer := 0   ; 复位，下次打开重新起轮询
-        }
+        if (this._kickCb)
+            SetTimer(this._kickCb, 0)
+        this._loadCb := ""
+        this._timerCb := ""
+        this._kickCb := ""
     }
 
     OnCloseClick(state, ctrl, event) {
@@ -177,19 +201,29 @@ class LogCenterGui {
     }
 
     OnTabSys(state, ctrl, event) {
+        if (!this._ready || this._curTab == "System")
+            return
         this._curTab := "System"
-        this._Reload(true)   ; 全量替换
+        this._Reload(true)
     }
 
     OnTabBiz(state, ctrl, event) {
+        if (!this._ready || this._curTab == "Business")
+            return
         this._curTab := "Business"
-        this._Reload(true)   ; 全量替换
+        this._Reload(true)
     }
 
     OnLevelChanged(state, ctrl, event) {
-        idx := Integer(this.ui.Query("CmbLevel>SelectedIndex"))
-        this._levelFilter := idx <= 0 ? "" : ["debug", "info", "warn", "error"][idx]
-        this._Reload(true)   ; 筛选变化：全量替换
+        if (!this._ready || this.closed || !IsObject(this.ui))
+            return
+        idxRaw := this.ui.Query("CmbLevel>SelectedIndex")
+        idx := IsNumber(idxRaw) ? Integer(idxRaw) : 0
+        filter := idx <= 0 ? "" : ["debug", "info", "warn", "error"][idx]
+        if (filter == this._levelFilter)
+            return
+        this._levelFilter := filter
+        this._Reload(true)
     }
 
     OnRefresh(state, ctrl, event) {
@@ -197,9 +231,8 @@ class LogCenterGui {
     }
 
     OnCopy(state, ctrl, event) {
-        txt := this.ui.Query("LogCon")
-        if (txt != "") {
-            A_Clipboard := txt
+        if (this._shown != "") {
+            A_Clipboard := this._shown
             Toast.Success(GetLang("已复制"))
         }
     }
@@ -211,13 +244,13 @@ class LogCenterGui {
             return
         path := this._curTab == "System" ? this._SysPath() : this._BizPath()
         try FileDelete(path)
-        this._lastSysLen := 0
-        this._lastBizLen := 0
-        this._Reload()
+        this._filePos := -1
+        this._shown := ""
+        this._Reload(true)
     }
 
     OnExport(state, ctrl, event) {
-        txt := this.ui.Query("LogCon")
+        txt := this._shown
         if (txt == "")
             return
         defName := this._curTab == "System" ? "System.log" : "Business.log"
@@ -230,54 +263,121 @@ class LogCenterGui {
 
     ; ============ 加载 ============
 
-    ; 轮询回调（实例绑定闭包触发）：增量追加新日志
     _PollTick() {
         if (this.closed || !IsObject(this.ui))
             return
         this._Reload(false)
     }
 
-    ; full=true 切换 tab/筛选/初次：全量替换显示当前 tab 内容
-    ; full=false 轮询刷新：仅追加文件增量（不动已显示内容）
+    ; full=true：切换 / 筛选 / 初次打开，只取文件尾部
+    ; full=false：按字节偏移追加新内容，不再整文件读入、也不再把文本框内容 Query 回来
     _Reload(full := false) {
         if (this.closed || !IsObject(this.ui))
             return
-        path := this._curTab == "System" ? this._SysPath() : this._BizPath()
-        if (!FileExist(path)) {
-            this.ui.Update("LogCon", "Text", "")
+        if (this._busy) {
+            if (full)
+                this._pendingFull := true
             return
         }
+        this._busy := true
+        this._pendingFull := false
         try {
-            content := FileRead(path, "UTF-8")
-        } catch {
-            content := ""
-        }
-        rawLen := StrLen(content)
-
-        if (full) {
-            ; 全量替换（切换/筛选/初次）
-            shown := this._Filter(content)
-            this.ui.Update("LogCon", "Text", shown)
-        } else {
-            ; 增量追加（轮询/写入通知）：只显示自上次记录以来新增的部分
-            lastLen := this._curTab == "System" ? this._lastSysLen : this._lastBizLen
-            if (rawLen > lastLen) {
-                added := SubStr(content, lastLen + 1)
-                added := this._Filter(added)
-                if (added != "") {
-                    cur := this.ui.Query("LogCon")
-                    this.ui.Update("LogCon", "Text", cur . added)
+            path := this._curTab == "System" ? this._SysPath() : this._BizPath()
+            if (!FileExist(path)) {
+                this._filePos := 0
+                if (this._shown != "") {
+                    this._shown := ""
+                    this.ui.Update("LogCon", "Text", "")
                 }
-            } else if (rawLen < lastLen) {
-                ; 文件被轮转 .old / 清空重建：上次长度失效，全量替换（否则新内容永不显示）
-                shown := this._Filter(content)
-                this.ui.Update("LogCon", "Text", shown)
+                return
             }
+            size := 0
+            try size := FileGetSize(path)
+            if (!full && this._filePos >= 0 && size == this._filePos)
+                return
+            ; 一次涨太多就改读尾部，避免把整段新内容再塞进界面
+            if (!full && this._filePos >= 0 && size > this._filePos && (size - this._filePos) <= this._maxChars * 4) {
+                added := this._ReadFrom(path, this._filePos, &pos)
+                this._filePos := pos
+                added := this._Filter(added)
+                if (added == "")
+                    return
+                this._shown .= added
+                trimmed := this._TrimShown(this._shown)
+                if (trimmed != this._shown) {
+                    this._shown := trimmed
+                    this.ui.Update("LogCon", "Text", this._shown)
+                } else {
+                    this.ui.Update("LogCon", "AppendText", added)
+                }
+                try this.ui.Update("LogScroll", "ScrollToEnd", "")
+                return
+            }
+            text := this._ReadTail(path, &pos)
+            this._filePos := pos
+            text := this._TrimShown(this._Filter(text))
+            this._shown := text
+            this.ui.Update("LogCon", "Text", text)
+            try this.ui.Update("LogScroll", "ScrollToEnd", "")
+        } catch {
+        } finally {
+            this._busy := false
+            if (this._pendingFull && !this.closed && IsObject(this.ui))
+                this._Reload(true)
         }
-        if (this._curTab == "System")
-            this._lastSysLen := rawLen
-        else
-            this._lastBizLen := rawLen
+    }
+
+    _ReadTail(path, &pos) {
+        pos := 0
+        f := ""
+        try f := FileOpen(path, "r-wd", "UTF-8")
+        catch
+            return ""
+        if (!IsObject(f))
+            return ""
+        try {
+            size := f.Length
+            budget := this._maxChars * 4
+            if (size > budget) {
+                f.Pos := size - budget
+                try f.ReadLine()
+            }
+            text := f.Read()
+            pos := f.Pos
+            return text
+        } finally {
+            f.Close()
+        }
+    }
+
+    _ReadFrom(path, fromPos, &pos) {
+        pos := fromPos
+        f := ""
+        try f := FileOpen(path, "r-wd", "UTF-8")
+        catch
+            return ""
+        if (!IsObject(f))
+            return ""
+        try {
+            if (fromPos > f.Length)
+                fromPos := 0
+            f.Pos := fromPos
+            text := f.Read()
+            pos := f.Pos
+            return text
+        } finally {
+            f.Close()
+        }
+    }
+
+    _TrimShown(text) {
+        if (StrLen(text) <= this._maxChars)
+            return text
+        text := SubStr(text, -this._maxChars)
+        nl := InStr(text, "`n")
+        if (nl)
+            text := SubStr(text, nl + 1)
+        return GetLang("仅显示最近日志") "`n" text
     }
 
     _Filter(content) {

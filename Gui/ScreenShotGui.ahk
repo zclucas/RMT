@@ -207,8 +207,8 @@ class ScreenShotGui {
     }
 
     _ShotType() {
-        v := IsObject(this.ui) ? this.ui.Query("ScreenShotTypeCombo") : ""
-        return IsNumber(v) ? Integer(v) : 1
+        v := IsObject(this.ui) ? this.ui.Query("ScreenShotTypeCombo>SelectedIndex") : ""
+        return CmdEnumFromIndex(v, CmdEnumShotNames())
     }
 
     Init(cmd) {
@@ -220,13 +220,13 @@ class ScreenShotGui {
         if (!this.CheckIfDataValid())
             return
 
-        this.ui.Update("ScreenShotTypeCombo", "SelectedIndex", String(this.Data.ScreenShotType - 1))
+        this.ui.Update("ScreenShotTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.ScreenShotType, CmdEnumShotNames())))
         this.ui.Update("WinInfoCon", "Text", this.Data.WinInfo)
         this._SetCombo("StartPosX", this.DLVariableArr, this.Data.StartPosX)
         this._SetCombo("StartPosY", this.DLVariableArr, this.Data.StartPosY)
         this._SetCombo("EndPosX", this.DLVariableArr, this.Data.EndPosX)
         this._SetCombo("EndPosY", this.DLVariableArr, this.Data.EndPosY)
-        this.ui.Update("NameType", "IsChecked", this.Data.NameType ? "True" : "False")
+        this.ui.Update("NameType", "IsChecked", (this.Data.NameType == "固定名称" || this.Data.NameType == 1 || this.Data.NameType == "1") ? "True" : "False")
         this.ui.Update("FixedNameCon", "Text", this.Data.FixedName)
         this.ui.Update("ResultToggle", "IsChecked", this.Data.ResultToggle ? "True" : "False")
         this._SetCombo("ResultSaveNameCombo", this.DLVariableArr, this.Data.ResultSaveName)
@@ -260,7 +260,7 @@ class ScreenShotGui {
     }
 
     CheckIfValid() {
-        isWin := this._ShotType() == 2
+        isWin := this._ShotType() == "窗口抓图"
         if (IsNumber(this.ui.Query("StartPosX")) && IsNumber(this.ui.Query("StartPosY")) && IsNumber(this.ui.Query("EndPosX")) && IsNumber(this.ui.Query("EndPosY"))) {
             if (Number(this.ui.Query("StartPosX")) > Number(this.ui.Query("EndPosX")) || Number(this.ui.Query("StartPosY")) > Number(this.ui.Query("EndPosY"))) {
                 RmtDialog.Info(GetLang("起始坐标不能大于终止坐标"))
@@ -310,7 +310,7 @@ class ScreenShotGui {
     OnChangeType(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui) || (this._syncing && state != ""))
             return
-        isWin := this._ShotType() == 2
+        isWin := this._ShotType() == "窗口抓图"
         this._ComboPush("WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
         this._ComboPush("ScreenPosGroup", "Visibility", isWin ? "Collapsed" : "Visible")
         this._ComboPush("WinPosGroup", "Visibility", isWin ? "Visible" : "Collapsed")
@@ -344,7 +344,7 @@ class ScreenShotGui {
         if (!IsObject(this.ui))
             return
         curType := this._ShotType()
-        isWin := curType == 2
+        isWin := curType == "窗口抓图"
         Point1 := isWin ? GetWinPos(x1, y1) : [x1, y1]
         Point2 := isWin ? GetWinPos(x2, y2) : [x2, y2]
         this.ui.Update("StartPosX", "Text", Point1[1])
@@ -377,7 +377,7 @@ class ScreenShotGui {
         data.StartPosY := this.ui.Query("StartPosY")
         data.EndPosX := this.ui.Query("EndPosX")
         data.EndPosY := this.ui.Query("EndPosY")
-        data.NameType := this.ui.Query("NameType") == "True" ? 1 : 0
+        data.NameType := this.ui.Query("NameType") == "True" ? "固定名称" : "默认"
         data.FixedName := this.ui.Query("FixedNameCon")
         data.ResultToggle := this.ui.Query("ResultToggle") == "True" ? 1 : 0
         data.ResultSaveName := GetVarName(this.ui.Query("ResultSaveNameCombo"))

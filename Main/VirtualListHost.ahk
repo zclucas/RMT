@@ -306,6 +306,7 @@ class VirtualListHost {
                 case "FoldFrontBtn": OnFoldFrontInfoEdit(tableItem, idx, event)
                 case "FoldFrontHelp": this._DeferDialog("FoldFrontHelp", OnFoldFrontHelp.Bind(tableItem, idx))
                 case "FoldTKEdit": OnFlodTKEditClick(tableItem, idx, event)
+                case "FoldPos": this._DeferDialog("FoldPos", OnFoldPosSetting.Bind(tableItem, idx))
                 case "FoldAddMacro": OnItemAddMacroBtnClick(tableItem, idx, event)
                 case "FoldPasteMacro": OnItemPasteMacroBtnClick(tableItem, idx, event)
                 case "FoldShare": this._DeferDialog("FoldShare", OnFoldShareBtnClick.Bind(tableItem, idx))

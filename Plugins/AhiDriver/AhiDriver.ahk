@@ -106,7 +106,8 @@ IsInterceptionInstalled() {
     return hasKbd && hasMou
 }
 
-; 未安装 Interception 时提示；返回 true 表示用户点了「自动安装」
+; 未安装 Interception 时提示。
+; 返回 "reboot" 表示安装成功且用户确认立即重启；true 表示已尝试安装；false 表示取消或未找到脚本。
 ShowInterceptionInstallTip() {
     chosen := ""
     tipText := GetLang("使用AHI需要安装interception") "`n`n"
@@ -143,7 +144,8 @@ ShowInterceptionInstallTip() {
     cmd := Format('"{1}" -NoProfile -ExecutionPolicy Bypass -File "{2}" -Action install -NoPause', ps, installPs1)
     exitCode := RunWait(cmd, ahiDir)
     if (exitCode = 0) {
-        RmtDialog.Info(GetLang("Interception 安装完成，可直接使用 AHI 按键类型"), GetLang("提示"), 64)
+        if (RmtDialog.Confirm(GetLang("Interception 安装完成，需重启电脑后才能生效。是否立即重启？"), GetLang("提示")))
+            return "reboot"
     } else {
         RmtDialog.Info(GetLang("Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装卸载.bat"), GetLang("提示"), 48)
     }
@@ -161,7 +163,8 @@ InitAHI() {
     if (!IsInterceptionInstalled()) {
         if (!hasTipNoInterception) {
             hasTipNoInterception := true
-            ShowInterceptionInstallTip()
+            if (ShowInterceptionInstallTip() = "reboot")
+                Shutdown(2)
         }
         return false
     }

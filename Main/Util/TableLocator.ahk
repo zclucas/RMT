@@ -131,6 +131,28 @@ GetItemIndexInTable(tableItem, itemID) {
     return 0
 }
 
+; 按下标取条目。AHK v2 数组越界会抛 Invalid index，不能先取出再判空。
+GetItemByIndex(tableItem, index) {
+    if (!IsObject(tableItem) || !IsObject(tableItem.Items) || !IsNumber(index))
+        return ""
+    index := Integer(index)
+    if (index < 1 || index > tableItem.Items.Length)
+        return ""
+    return tableItem.Items[index]
+}
+
+; 按表 ID + 条目 ID 取当前行。删除、换序之后旧下标作废，调用方不得再拿它去索引。
+ResolveMacroItem(tableID, itemID) {
+    tableItem := GetTableByID(tableID)
+    if (!tableItem)
+        return ""
+    index := GetItemIndexInTable(tableItem, itemID)
+    item := GetItemByIndex(tableItem, index)
+    if (!item)
+        return ""
+    return { Table: tableItem, Index: index, Item: item }
+}
+
 ; 折叠框对象 → 在表内顺序下标（1 基；找不到返回 0）
 GetFoldIndexInTable(tableItem, foldID) {
     if (!tableItem || foldID == "")

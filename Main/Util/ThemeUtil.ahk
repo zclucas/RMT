@@ -852,7 +852,7 @@ class AppThemeUtil {
     ; 用类名字符串动态解析：Worker 未 Include 这些 Gui，直接写类名会触发 #Warn / 编译失败
     static RefreshOpenSettingWindows() {
         classNames := ["HotkeySettingGui", "ToolRecordSettingGui", "MenuWheelGlobalSettingGui",
-            "CMDTipSettingGui", "ThemeSettingGui",
+            "UIMacroPosSettingGui", "CMDTipSettingGui", "ThemeSettingGui",
             "TimingGui", "MenuMacroSettingGui", "UIMacroSettingGui"]
         for name in classNames {
             try {

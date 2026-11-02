@@ -426,12 +426,12 @@ class CompareProGui {
             condiStr := ""
             ItemIndex := A_Index
             loop this.Data.VariNameArr[ItemIndex].Length {
-                condiStr .= GetLang(this.Data.VariNameArr[ItemIndex][A_Index]) " " this.CompareTypeStrArr[this.Data.CompareTypeArr[
-                    ItemIndex][A_Index]] " " GetLang(this.Data.VariableArr[ItemIndex][A_Index])
+                condiStr .= GetLang(this.Data.VariNameArr[ItemIndex][A_Index]) " " GetCompareTypeName(this.Data.CompareTypeArr[
+                    ItemIndex][A_Index]) " " GetLang(this.Data.VariableArr[ItemIndex][A_Index])
                 condiStr .= "⎖"
             }
             condiStr := Trim(condiStr, "⎖")
-            logicStr := this.Data.LogicTypeArr[A_Index] == 1 ? GetLang("且") : GetLang("或")
+            logicStr := CmdEnumLogic(this.Data.LogicTypeArr[A_Index]) == "且" ? GetLang("且") : GetLang("或")
             macro := GetLangMacro(this.Data.MacroArr[A_Index], 1)
             controlType := (this.Data.ControlTypeArr.Length >= A_Index) ? this.Data.ControlTypeArr[A_Index] : "无"
             this.LVRowArr.Push([condiStr, logicStr, macro, controlType])

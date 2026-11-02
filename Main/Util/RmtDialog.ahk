@@ -51,11 +51,9 @@ class RmtDialog {
 
     ; 单行文本输入（兼容 AHK InputBox 返回对象），使用同一套 XAML 外壳。
     static Input(prompt, title := "", defaultValue := "", owner := 0) {
-        owner := RmtDialog._NormalizeOwner(owner)
+        owner := XamlWin.ModalOwner(RmtDialog._NormalizeOwner(owner))
         if (title == "")
             title := GetLang("输入")
-        if (!owner)
-            owner := XamlWin.ActiveOwner()
         try XAMLHost.EnsureDaemonHealthy()
         fs := XAMLHost.FontSize()
         ff := ""
@@ -86,6 +84,7 @@ class RmtDialog {
         ui.OnEvent("BtnClosePanel", "Click", (*) => finish(false))
         ui.OnEvent("BtnCancel", "Click", (*) => finish(false))
         ui.OnEvent("BtnOk", "Click", (*) => finish(true))
+        ui._holdZOrder := true
         if (!XamlWin.Open(ui, "", owner))
             return { Value: String(defaultValue), Result: "Cancel" }
         while (!rec.Done && WinExist("ahk_id " ui.wpfHwnd))
@@ -151,8 +150,7 @@ class RmtDialog {
     }
 
     static _Show(msg, title, buttons, iconChar, iconColor, owner := 0) {
-        if (!owner)
-            owner := XamlWin.ActiveOwner()
+        owner := XamlWin.ModalOwner(RmtDialog._NormalizeOwner(owner))
         try XAMLHost.EnsureDaemonHealthy()
 
         titleHeight := "30"
@@ -281,6 +279,7 @@ class RmtDialog {
         }
 
         RmtDialog._Trace("Show start owner=" owner " w=" winW " fs=" fs)
+        ui._holdZOrder := true
         if (!XamlWin.Open(ui, "", owner)) {
             try {
                 dir := A_ScriptDir "\Log"

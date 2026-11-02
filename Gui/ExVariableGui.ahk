@@ -248,7 +248,7 @@ class ExVariableGui {
 
     _TypeValue() {
         v := IsObject(this.ui) ? this.ui.Query("ExtractTypeCombo>SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) + 1 : 1
+        return CmdEnumFromIndex(v, CmdEnumExtractNames())
     }
 
     Init(cmd) {
@@ -262,7 +262,7 @@ class ExVariableGui {
         this._FillExVars()
         this.ui.Update("IsIgnoreExist", "IsChecked", this.Data.IsIgnoreExist ? "True" : "False")
         this.ui.Update("ExtractStrCon", "Text", this.Data.ExtractStr)
-        this.ui.Update("ExtractTypeCombo", "SelectedIndex", String(this.Data.ExtractType - 1))
+        this.ui.Update("ExtractTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.ExtractType, CmdEnumExtractNames())))
         this.ui.Update("WinInfoCon", "Text", this.Data.WinInfo)
 
         this._SetCombo("StartPosX", GetGuiVarArr(), this.Data.StartPosX)
@@ -320,7 +320,7 @@ class ExVariableGui {
     OnTypeChange(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
-        isWin := this._TypeValue() == 3
+        isWin := this._TypeValue() == "窗口"
         this.ui.Update("WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
     }
 
@@ -382,7 +382,7 @@ class ExVariableGui {
     OnSetSearchArea(x1, y1, x2, y2) {
         if (!IsObject(this.ui))
             return
-        isWin := this._TypeValue() == 3
+        isWin := this._TypeValue() == "窗口"
         Point1 := isWin ? GetWinPos(x1, y1) : [x1, y1]
         Point2 := isWin ? GetWinPos(x2, y2) : [x2, y2]
 
@@ -393,7 +393,7 @@ class ExVariableGui {
     }
 
     CheckIfValid() {
-        if (this._TypeValue() == 3 && this.ui.Query("WinInfoCon") == "") {
+        if (this._TypeValue() == "窗口" && this.ui.Query("WinInfoCon") == "") {
             RmtDialog.Info(GetLang("窗口绑定不能为空"))
             return false
         }
@@ -463,11 +463,11 @@ class ExVariableGui {
         if (!HasX1 || !HasX2 || !HasY1 || !HasY2)
             return
 
-        if (Data.ExtractType == 1) {
+        if (CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) == "屏幕") {
             TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
             TextObjs := TextObjs == "" ? [] : TextObjs
         }
-        else if (Data.ExtractType == 2) {
+        else if (CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) == "剪切板") {
             TextObjs := []
             if (!IsClipboardText())
                 return
@@ -475,7 +475,7 @@ class ExVariableGui {
             obj.Text := A_Clipboard
             TextObjs.Push(obj)
         }
-        else if (Data.ExtractType == 3) {
+        else if (CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) == "窗口") {
             HasX1 := TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
             HasY1 := TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
             HasX2 := TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)

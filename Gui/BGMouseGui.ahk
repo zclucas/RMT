@@ -234,11 +234,11 @@ class BGMouseGui {
 
     _MouseValue() {
         v := IsObject(this.ui) ? this.ui.Query("MouseTypeCombo>SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) + 1 : 1
+        return CmdEnumFromIndex(v, CmdEnumMouseBtnNames())
     }
     _OperValue() {
         v := IsObject(this.ui) ? this.ui.Query("OperateTypeCombo>SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) + 1 : 1
+        return CmdEnumFromIndex(v, CmdEnumBgOperNames())
     }
 
     Init(cmd) {
@@ -248,8 +248,8 @@ class BGMouseGui {
         this.Data := GetMacroCMDData(this.SerialStr)
 
         this.ui.Update("TargetTitleCon", "Text", this.Data.TargetTitle != "" ? this.Data.TargetTitle : "")
-        this.ui.Update("OperateTypeCombo", "SelectedIndex", String(this.Data.OperateType - 1))
-        this.ui.Update("MouseTypeCombo", "SelectedIndex", String(this.Data.MouseType - 1))
+        this.ui.Update("OperateTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.OperateType, CmdEnumBgOperNames())))
+        this.ui.Update("MouseTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.MouseType, CmdEnumMouseBtnNames())))
         this.ui.Update("ClickTimeCon", "Text", this.Data.ClickTime)
         this._SetCombo("PosVarX", GetGuiVarArr(0), GetLang(this.Data.PosVarX))
         this._SetCombo("PosVarY", GetGuiVarArr(0), GetLang(this.Data.PosVarY))
@@ -260,11 +260,11 @@ class BGMouseGui {
     OnRefresh(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
-        isScroll := this._MouseValue() == 4
+        isScroll := this._MouseValue() == "滚轮"
         this._Vis("OperateTipCon", !isScroll)
         this._Vis("OperateTypeCombo", !isScroll)
         this._Vis("ScrollRow", isScroll)
-        isClickOrDClick := this._OperValue() == 1 || this._OperValue() == 2
+        isClickOrDClick := this._OperValue() == "点击" || this._OperValue() == "双击"
         showClickTime := !isScroll && isClickOrDClick
         this._Vis("ClickTimeRow", showClickTime)
     }

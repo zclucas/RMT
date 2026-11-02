@@ -1207,9 +1207,7 @@ class JoyGui {
 
     _KeyTypeIndex() {
         v := IsObject(this.ui) ? this.ui.Query("KeyTypeCon>SelectedIndex") : ""
-        if (!IsNumber(v) || Integer(v) < 0)
-            return 3
-        return Integer(v) + 1
+        return CmdEnumFromIndex(v, CmdEnumKeyActNames(), "点击")
     }
 
     _KeyTypeText() {
@@ -1251,7 +1249,7 @@ class JoyGui {
                 keys .= (keys == "" ? "" : "+") v
             CommandStr .= "_" keys
             CommandStr .= "_" this._KeyTypeText()
-            if (this._KeyTypeIndex() == 3) {
+            if (this._KeyTypeIndex() == "点击") {
                 CommandStr .= "_" this.ui.Query("HoldTimeCon")
                 if (this.ui.Query("KeyCountCon") != 1) {
                     CommandStr .= "_" this.ui.Query("KeyCountCon")
@@ -1268,7 +1266,7 @@ class JoyGui {
             return
         this._JoyLog("Refresh begin")
         this.UpdateCommandStr()
-        isClick := this._KeyTypeIndex() == 3
+        isClick := this._KeyTypeIndex() == "点击"
         isCount := isClick
         isInter := isCount && this.ui.Query("KeyCountCon") != 1
 
@@ -1360,7 +1358,7 @@ class JoyGui {
                 RmtDialog.Info(GetLang("按键次数必须为大于零的整数！"))
                 return false
             }
-            if (this._KeyTypeIndex() == 3) {
+            if (this._KeyTypeIndex() == "点击") {
                 if (IsFloat(this.ui.Query("HoldTimeCon")) || this.ui.Query("HoldTimeCon") < 0) {
                     RmtDialog.Info(GetLang("按键时间请输入大于0的整数"))
                     return false

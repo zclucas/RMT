@@ -466,9 +466,7 @@ class SearchProGui {
 
     _TypeIndex() {
         v := IsObject(this.ui) ? this.ui.Query("SearchTypeCon>SelectedIndex") : ""
-        if (!IsNumber(v) || Integer(v) < 0)
-            return 1
-        return Integer(v) + 1
+        return CmdEnumFromIndex(v, CmdEnumSearchNames())
     }
 
     _SetImage(path) {
@@ -588,8 +586,7 @@ class SearchProGui {
         if (!this.CheckIfDataValid())
             return
 
-        st := (IsNumber(this.Data.SearchType) && this.Data.SearchType >= 1 && this.Data.SearchType <= 6) ? Integer(this.Data.SearchType) : 1
-        this.ui.Update("SearchTypeCon", "SelectedIndex", String(st - 1))
+        this.ui.Update("SearchTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.SearchType, CmdEnumSearchNames())))
         this.ui.Update("SimilarCon", "Text", this.Data.Similar)
         this.ui.Update("ColorMatchCon", "IsChecked", SearchColorMatchOn(this.Data) ? "True" : "False")
         this.ui.Update("ColorSimilarCon", "Text", this.Data.Similar)
@@ -627,7 +624,7 @@ class SearchProGui {
         this._SetCombo("CoordXNameCon", this.DLVariableArr, this.Data.CoordXName)
         this._SetCombo("CoordYNameCon", this.DLVariableArr, this.Data.CoordYName)
 
-        isWin := st == 4 || st == 5 || st == 6
+        isWin := this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本"
         this.LastIsWin := isWin
         this._ApplyMouseActionItems(isWin, this.Data.MouseActionType)
         this.PreviewShowing := false
@@ -656,7 +653,8 @@ class SearchProGui {
         this.ui.Update("MouseActionTypeCon", "ClearItems", "")
         for t in items
             this.ui.Update("MouseActionTypeCon", "AddItem", t)
-        idx := (IsNumber(sel) && Integer(sel) >= 1) ? Integer(sel) - 1 : 1
+        act := CmdEnumMouseAct(sel)
+        idx := act == "无动作" ? 0 : (act == "移动至目标" ? 1 : 2)
         this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(Max(0, Min(2, idx))))
     }
 
@@ -682,9 +680,9 @@ class SearchProGui {
         ex := this.ui.Query("EndPosXCon")
         ey := this.ui.Query("EndPosYCon")
         curType := this._TypeIndex()
-        isImage := curType == 1 || curType == 4
-        isText := curType == 3 || curType == 6
-        isWin := curType == 4 || curType == 5 || curType == 6
+        isImage := curType == "屏幕图片" || curType == "窗口图片"
+        isText := curType == "屏幕文本" || curType == "窗口文本"
+        isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
 
         if (IsNumber(sx) && IsNumber(sy) && IsNumber(ex) && IsNumber(ey)) {
             if (Number(sx) > Number(ex) || Number(sy) > Number(ey)) {
@@ -725,8 +723,8 @@ class SearchProGui {
             return false
 
         mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        ma := (IsNumber(mIdx) && Integer(mIdx) >= 0) ? Integer(mIdx) + 1 : 1
-        if (ma != 1 && !isWin) {
+        ma := CmdEnumFromIndex(mIdx, ["无动作", "移动至目标", "移动至目标点击1次"])
+        if (ma != "无动作" && !isWin) {
             spd := this.ui.Query("SpeedCon")
             if (!IsNumber(spd) || Number(spd) < 0 || Number(spd) > 100) {
                 RmtDialog.Info(GetLang("移动速度请输入0~100的数字"))
@@ -739,7 +737,7 @@ class SearchProGui {
     SaveSearchData() {
         data := this.Data
         data.SearchImagePath := this.ui.Query("ImagePathCon")
-        data.Similar := (this._TypeIndex() == 2 || this._TypeIndex() == 5) ? this.ui.Query("ColorSimilarCon") : this.ui.Query("SimilarCon")
+        data.Similar := (this._TypeIndex() == "屏幕颜色" || this._TypeIndex() == "窗口颜色") ? this.ui.Query("ColorSimilarCon") : this.ui.Query("SimilarCon")
         data.OCRType := 1
         data.SearchImageType := SearchImageDefaultType()
         data.ColorMatch := this._IsChecked("ColorMatchCon") ? 1 : 0
@@ -761,7 +759,7 @@ class SearchProGui {
         data.SearchCount := this.ui.Query("SearchCountCon") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCon")
         data.SearchInterval := this.ui.Query("SearchIntervalCon")
         mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        data.MouseActionType := (IsNumber(mIdx) && Integer(mIdx) >= 0) ? Integer(mIdx) + 1 : 1
+        data.MouseActionType := CmdEnumFromIndex(mIdx, ["无动作", "移动至目标", "移动至目标点击1次"])
         data.ClickCount := this.ui.Query("ClickCountCon")
         data.Speed := this.ui.Query("SpeedCon")
         data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
@@ -806,7 +804,7 @@ class SearchProGui {
         try {
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
-            if (this._TypeIndex() >= 4) {
+            if (this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本") {
                 PosArr := GetCurWinPos()
                 this.ui.Update("MousePosCon", "Text", Format("{},{}", PosArr[1], PosArr[2]))
             }
@@ -827,10 +825,10 @@ class SearchProGui {
 
     OnChangeType(*) {
         curType := this._TypeIndex()
-        isImage := curType == 1 || curType == 4
-        isColor := curType == 2 || curType == 5
-        isText := curType == 3 || curType == 6
-        isWin := curType == 4 || curType == 5 || curType == 6
+        isImage := curType == "屏幕图片" || curType == "窗口图片"
+        isColor := curType == "屏幕颜色" || curType == "窗口颜色"
+        isText := curType == "屏幕文本" || curType == "窗口文本"
+        isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
         isInfinite := this.ui.Query("SearchCountCon") == GetLang("无限")
         this.SetConArrState(this.ImageVariArr, false, isImage)
         this.ui.Update("SearchTypeHost", "Height", isImage ? "168" : "64")
@@ -852,14 +850,14 @@ class SearchProGui {
         if (isColor)
             this._ApplyColorSwatch()
         if (this.LastIsWin != "" && this.LastIsWin != isWin)
-            this._ApplyMouseActionItems(isWin, 1)
+            this._ApplyMouseActionItems(isWin, "无动作")
         countText := this.ui.Query("SearchCountCon")
         countValue := countText == GetLang("无限") ? -1 : countText
         this.SetConArrState(this.CountTogArr, false, IsNumber(countValue) && (countValue == -1 || countValue > 1))
         mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        ma := (IsNumber(mIdx) && Integer(mIdx) >= 0) ? Integer(mIdx) + 1 : 1
-        this.SetConArrState(this.MouseSpeedArr, false, ma != 1 && !isWin)
-        this.SetConArrState(this.MouseClickArr, false, ma == 3 && !isWin)
+        ma := CmdEnumFromIndex(mIdx, ["无动作", "移动至目标", "移动至目标点击1次"])
+        this.SetConArrState(this.MouseSpeedArr, false, ma != "无动作" && !isWin)
+        this.SetConArrState(this.MouseClickArr, false, ma == "移动至目标点击1次" && !isWin)
         this.SetConArrState(this.ResultTogArr, true, this._IsChecked("ResultToggleCon"))
         this.SetConArrState(this.CoordTogArr, true, this._IsChecked("CoordToogleCon"))
         this._RefreshSaveTips()
@@ -1003,7 +1001,7 @@ class SearchProGui {
     }
 
     OnGetArea(x1, y1, x2, y2) {
-        if (this._TypeIndex() >= 4) {
+        if (this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本") {
             this.OnF1SetAreaAction(x1, y1, x2, y2)
             return
         }
@@ -1088,7 +1086,7 @@ class SearchProGui {
     }
 
     OnF1SetAreaAction(x1, y1, x2, y2) {
-        isWin := this._TypeIndex() >= 4
+        isWin := this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本"
         hwndList := isWin ? GetHwndList(this.ui.Query("WinInfoCon")) : []
         if (isWin && hwndList.Length == 0)
             return
@@ -1156,7 +1154,7 @@ class SearchProGui {
             return
         }
         startX := Number(startX), startY := Number(startY), endX := Number(endX), endY := Number(endY)
-        isWin := this._TypeIndex() >= 4
+        isWin := this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本"
         if (isWin) {
             hwndList := GetHwndList(this.ui.Query("WinInfoCon"))
             if (hwndList.Length == 0) {

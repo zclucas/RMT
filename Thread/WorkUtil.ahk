@@ -328,8 +328,12 @@
                         continue
                     }
                     itemIndex := GetItemIndexInTable(tableItem, iIdx)
-                    item := tableItem.Items[itemIndex]
-                    _bizCurRemark := item ? item.Remark : ""
+                    item := GetItemByIndex(tableItem, itemIndex)
+                    if (!item) {
+                        GraphPoolLog("Worker任务-条目不存在", Format("tab={1} item={2}", tIdx, iIdx))
+                        continue
+                    }
+                    _bizCurRemark := item.Remark
                     RMTLogBusiness("宏:(" _bizCurRemark ")", Format("tab={1} item={2} 开始执行", tIdx, iIdx))
                     if (args.Length >= 3) {
                         nodeSerial := args[3]
@@ -596,11 +600,10 @@ ReloadWorkerConfig() {
         } else if (!IsNumber(itemIndex)) {
             itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
         }
-        if (itemIndex < 1)
+        item := GetItemByIndex(tableItem, itemIndex)
+        if (!item)
             return
-        item := tableItem.Items[itemIndex]
-        macro := item ? item.Macro : ""
-        OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
+        OnTriggerMacroKeyAndInit(tableItem, item.Macro, itemIndex)
     }
 
     WorkStopMacro(tableItem, itemIndex, playStopTip := false) {
@@ -608,7 +611,7 @@ ReloadWorkerConfig() {
             tableItem := GetTableByID(String(tableItem))
         if (IsObject(tableItem) && !IsNumber(itemIndex))
             itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
-        item := IsObject(tableItem) && IsNumber(itemIndex) && itemIndex >= 1 ? tableItem.Items[itemIndex] : ""
+        item := GetItemByIndex(tableItem, itemIndex)
         tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
         iID := WorkResolveItemID(tableItem, itemIndex)
         if (playStopTip && IsObject(item) && item.StopTipSound == 2)
@@ -690,7 +693,7 @@ ReloadWorkerConfig() {
         tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
         iID := WorkResolveItemID(tableItem, itemIndex)
         if (IsObject(tableItem) && IsNumber(itemIndex)) {
-            item := tableItem.Items[itemIndex]
+            item := GetItemByIndex(tableItem, itemIndex)
             if (item)
                 item.Pause := state
         } else {

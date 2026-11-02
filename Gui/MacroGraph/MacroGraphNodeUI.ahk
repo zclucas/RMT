@@ -103,8 +103,8 @@ class MacroGraphNodeUIMixin {
             this._AddEditableComboRow(body, "DIntervalRow_" id, GetLang("每次间隔："), "DInterval_" id, varList, d.HasOwnProp("interval") && d.interval != "" ? d.interval : "0", true)
         }
         else if (IsMoveProCmd(d.type)) {
-            mmmode := d.HasOwnProp("mmmode") ? d.mmmode : 0
-            isGameView := (mmmode == "2" || mmmode == 2)
+            mmmode := CmdEnumMoveMode(d.HasOwnProp("mmmode") ? d.mmmode : "绝对移动")
+            isGameView := mmmode == "游戏视角"
             isHuman := (d.HasOwnProp("isHuman") && (d.isHuman == 1 || d.isHuman == "1"))
             ; 鼠标动作/拟真轨迹/速度 的可用状态与 MMProGui 保持一致：
             ;   游戏视角：动作=移动且禁用、速度=100且禁用、拟真轨迹取消并禁用、显示移动次数/每次间隔
@@ -112,10 +112,10 @@ class MacroGraphNodeUIMixin {
             actionEnabled := !(isGameView || isHuman)
             actionIdx := (isGameView || isHuman) ? 0 : this._MMProActionIndex(d.HasOwnProp("actionType") ? d.actionType : 1, mmmode)
             varList := GetGuiVarArr()
-            actionType := d.HasOwnProp("actionType") ? d.actionType : 1
-            isABDrag := actionType == 4 && mmmode == 0
-            isSimpleDrag := actionType == 5 && mmmode == 0
-            isTargetPoint := mmmode == 0 && !isABDrag
+            actionType := CmdEnumMMAction(d.HasOwnProp("actionType") ? d.actionType : "移动")
+            isABDrag := actionType == "A到B拖拽" && mmmode == "绝对移动"
+            isSimpleDrag := actionType == "拖拽" && mmmode == "绝对移动"
+            isTargetPoint := mmmode == "绝对移动" && !isABDrag
             ; 坐标X / 坐标Y：可编辑下拉（既能下拉选变量，也能手动输入数值）
             this._AddEditableComboRow(body, "MPPosXRow_" id, GetLang(isABDrag ? "起始点" : (isTargetPoint ? "目标点：" : "偏移值")), "MPPosX_" id, varList, this._MMProVarText(d, "posVarX"), true)
             this._AddEditableComboRow(body, "MPPosYRow_" id, GetLang(isABDrag || isTargetPoint ? "" : "偏移值Y:"), "MPPosY_" id, varList, this._MMProVarText(d, "posVarY"), true)
@@ -125,7 +125,7 @@ class MacroGraphNodeUIMixin {
             this._AddFieldRow(body, "MPSpeedRow_" id, GetLang("移动速度："), "MPSpeed_" id, isGameView ? "100" : (d.HasOwnProp("speed") ? d.speed : "90"), true, !isGameView, id, "")
             ; 鼠标动作下拉：绝对模式增加普通拖拽与 A 到 B 拖拽两种动作。
             this._AddComboRow(body, "MPActionRow_" id, GetLang("鼠标动作："), "MPActionCmb_" id
-                , (mmmode == 0 ? [GetLang("移动"), GetLang("移动后单击"), GetLang("移动后双击"), GetLang("拖拽"), GetLang("A到B拖拽")] : [GetLang("移动"), GetLang("移动后单击"), GetLang("移动后双击"), GetLang("拖拽")]), this._MMProActionIndex(actionType, mmmode), true, actionEnabled)
+                , (mmmode == "绝对移动" ? [GetLang("移动"), GetLang("移动后单击"), GetLang("移动后双击"), GetLang("拖拽"), GetLang("A到B拖拽")] : [GetLang("移动"), GetLang("移动后单击"), GetLang("移动后双击"), GetLang("拖拽")]), this._MMProActionIndex(actionType, mmmode), true, actionEnabled)
             ; 移动方式下拉；拟真轨迹开启时禁用（§20 去「游戏视角」）
             this._AddComboRow(body, "MPModeRow_" id, GetLang("移动方式") "：", "MPModeCmb_" id
                 , [GetLang("绝对移动"), GetLang("相对移动")], this._MoveModeIndex(mmmode), true, !isHuman)
@@ -142,20 +142,20 @@ class MacroGraphNodeUIMixin {
             this._FillSearchComboBody(id, d, body)
         }
         else if (d.type == GetLang("搜索")) {
-            st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 3) ? d.searchType : 1
+            st := CmdEnumSearch(d.HasOwnProp("searchType") ? d.searchType : "屏幕图片")
 
             ; 搜索类型下拉
             typeNames := [GetLang("屏幕图片"), GetLang("屏幕颜色"), GetLang("屏幕文本")]
-            this._AddComboRow(body, "STypeRow_" id, GetLang("搜索类型："), "STypeCmb_" id, typeNames, st - 1, true)
+            this._AddComboRow(body, "STypeRow_" id, GetLang("搜索类型："), "STypeCmb_" id, typeNames, CmdEnumIndex(st, ["屏幕图片", "屏幕颜色", "屏幕文本"]), true)
 
             ; 颜色（仅颜色搜索可见）
-            this._AddFieldRow(body, "SColorRow_" id, GetLang("搜索颜色："), "SColor_" id, d.HasOwnProp("searchColor") ? d.searchColor : "FFFFFF", st == 2, true, id, "")
+            this._AddFieldRow(body, "SColorRow_" id, GetLang("搜索颜色："), "SColor_" id, d.HasOwnProp("searchColor") ? d.searchColor : "FFFFFF", st == "屏幕颜色", true, id, "")
             ; 文本（仅文本搜索可见）
-            this._AddFieldRow(body, "STextRow_" id, GetLang("搜索文本："), "SText_" id, d.HasOwnProp("searchText") ? d.searchText : "", st == 3, true, id, "")
+            this._AddFieldRow(body, "STextRow_" id, GetLang("搜索文本："), "SText_" id, d.HasOwnProp("searchText") ? d.searchText : "", st == "屏幕文本", true, id, "")
             ; 图片名（只读显示；仅图片搜索可见）
             imgPath := d.HasOwnProp("searchImagePath") ? d.searchImagePath : ""
             imgName := imgPath != "" ? RegExReplace(imgPath, ".*\\", "") : GetLang("未设置")
-            this._AddFieldRow(body, "SImgRow_" id, GetLang("搜索图片："), "SImg_" id, imgName, st == 1, false)
+            this._AddFieldRow(body, "SImgRow_" id, GetLang("搜索图片："), "SImg_" id, imgName, st == "屏幕图片", false)
             ; 图片预览改为浮动在节点左侧（见 _BuildHeader / _AddFloatingImgPreview），此处不再内嵌
 
             ; 搜索范围坐标（可手动输入数值）
@@ -166,8 +166,8 @@ class MacroGraphNodeUIMixin {
 
             ; 鼠标动作：仅下拉；宽度=标签80+输入96，右边与上方坐标输入框右对齐
             actionNames := [GetLang("无动作"), GetLang("移动至目标"), GetLang("移动至目标点击1次"), GetLang("移动至目标点击2次")]
-            ma := (d.HasOwnProp("mouseAction") && d.mouseAction >= 1 && d.mouseAction <= 4) ? d.mouseAction : 2
-            this._AddStackedComboRow(body, "SActRow_" id, "", "SActCmb_" id, actionNames, ma - 1, true, "176")
+            ma := CmdEnumMouseAct(d.HasOwnProp("mouseAction") ? d.mouseAction : "移动至目标")
+            this._AddStackedComboRow(body, "SActRow_" id, "", "SActCmb_" id, actionNames, CmdEnumIndex(ma, CmdEnumMouseActNames()), true, "176")
 
             ; 操作按钮（按类型显隐）：图片→截图/选择图片；颜色→定位取色器；所有类型→框选范围
             ops := body.Add("WrapPanel").Margin("0,6,0,0")
@@ -175,11 +175,11 @@ class MacroGraphNodeUIMixin {
             picBtn := ops.Add("Button").Name("SPic_" id).Content(GetLang("选择图片")).FontSize(this._MGFontSize(11)).Height("22").Margin("0,0,4,4").Padding("6,0")
             pickBtn := ops.Add("Button").Name("SPick_" id).Content(GetLang("定位取色器")).FontSize(this._MGFontSize(11)).Height("22").Margin("0,0,4,4").Padding("6,0")
             ops.Add("Button").Name("SArea_" id).Content(GetLang("框选范围")).FontSize(this._MGFontSize(11)).Height("22").Margin("0,0,4,4").Padding("6,0")
-            if (st != 1) {
+            if (st != "屏幕图片") {
                 shotBtn.Visibility("Collapsed")
                 picBtn.Visibility("Collapsed")
             }
-            if (st != 2)
+            if (st != "屏幕颜色")
                 pickBtn.Visibility("Collapsed")
             ; 真/假分支以「强制绑定的外部分支节点」呈现（见 _BuildBranchPair），此处不再内嵌泳道
         }
@@ -223,14 +223,14 @@ class MacroGraphNodeUIMixin {
     ; 搜索Pro 节点主体：在「搜索」基础上扩展 窗口类型/窗口信息/搜索次数+间隔/点击次数/结果保存/目标点保存；
     ; 坐标用可编辑下拉（变量或数值）；不显示 屏幕规格 与 识别模型（按需求隐藏）。
     _FillSearchProBody(id, d, body) {
-        st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 6) ? d.searchType : 1
+        st := CmdEnumSearch(d.HasOwnProp("searchType") ? d.searchType : "屏幕图片")
         c := this._SearchTypeClass(st)
         varList := GetGuiVarArr()
         LW := "70", CW := "96"   ; 统一标签宽，使整行控件与下方两列的左列控件对齐
 
         ; 搜索类型（整行；标签宽与下方一致，下拉左边缘与左列控件对齐）
         typeNames := [GetLang("屏幕图片"), GetLang("屏幕颜色"), GetLang("屏幕文本"), GetLang("窗口图片"), GetLang("窗口颜色"), GetLang("窗口文本")]
-        this._AddComboRow(body, "STypeRow_" id, GetLang("搜索类型："), "STypeCmb_" id, typeNames, st - 1, true, true, LW, "150")
+        this._AddComboRow(body, "STypeRow_" id, GetLang("搜索类型："), "STypeCmb_" id, typeNames, CmdEnumIndex(st, CmdEnumSearchNames()), true, true, LW, "150")
 
         ; 窗口信息（整行，含「编辑」按钮打开窗口信息编辑器；仅窗口搜索类型显示）
         winRow := body.Add("StackPanel").Name("SWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
@@ -264,12 +264,13 @@ class MacroGraphNodeUIMixin {
 
         ; 鼠标动作：仅下拉；宽度=两列坐标行(70+96+14+70+96)，右边与上方终点Y输入框右对齐
         actionNames := [GetLang("无动作"), GetLang("移动至目标"), GetLang("移动至目标点击")]
-        ma := (d.HasOwnProp("mouseAction") && d.mouseAction >= 1 && d.mouseAction <= 3) ? d.mouseAction : 2
-        this._AddStackedComboRow(body, "SActRow_" id, "", "SActCmb_" id, actionNames, ma - 1, true, "346")
+        ma := CmdEnumMouseAct(d.HasOwnProp("mouseAction") ? d.mouseAction : "移动至目标")
+        maIdx := ma == "无动作" ? 0 : (ma == "移动至目标" ? 1 : 2)
+        this._AddStackedComboRow(body, "SActRow_" id, "", "SActCmb_" id, actionNames, maIdx, true, "346")
 
         ; 移动速度（动作非「无」且非窗口搜索）| 点击次数（动作为点击且非窗口搜索）同一行
-        showSpeed := (ma != 1 && !c.isWin)
-        showClick := (ma == 3 && !c.isWin)
+        showSpeed := (ma != "无动作" && !c.isWin)
+        showClick := (ma == "移动至目标点击1次" && !c.isWin)
         rMouse := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
         this._ProCellField(rMouse, "SSpeedRow_" id, GetLang("移动速度："), "SSpeed_" id, d.HasOwnProp("speed") ? d.speed : 90, showSpeed, id, LW, CW, false)
         this._ProCellField(rMouse, "SClickRow_" id, GetLang("点击次数："), "SClick_" id, d.HasOwnProp("clickCount") ? d.clickCount : 1, showClick, id, LW, CW, true)
@@ -300,8 +301,9 @@ class MacroGraphNodeUIMixin {
         this._AddFieldRow(body, "SSatRow_" id, GetLang("满足个数："), "SSat_" id, satText, true)
         this._AddFieldRow(body, "SCountRow_" id, GetLang("搜索次数："), "SCount_" id, cntText, true)
         actionNames := [GetLang("无动作"), GetLang("移动至目标"), GetLang("移动至目标点击")]
-        ma := (d.HasOwnProp("mouseAction") && d.mouseAction >= 1 && d.mouseAction <= 3) ? d.mouseAction : 2
-        this._AddComboRow(body, "SActRow_" id, GetLang("鼠标动作："), "SActCmb_" id, actionNames, ma - 1, true)
+        ma := CmdEnumMouseAct(d.HasOwnProp("mouseAction") ? d.mouseAction : "移动至目标")
+        maIdx := ma == "无动作" ? 0 : (ma == "移动至目标" ? 1 : 2)
+        this._AddComboRow(body, "SActRow_" id, GetLang("鼠标动作："), "SActCmb_" id, actionNames, maIdx, true)
     }
 
     ; 行内单元格：标签 + 文本框（自成命名 StackPanel，便于按显隐切换）；rightCell=true 时加左间距形成第二列
@@ -1371,7 +1373,7 @@ class MacroGraphNodeUIMixin {
         if (this._IsSearchTypeTitle(title)) {
             ; 标题预览：颜色搜索显示色块（图片预览改为浮动在节点左侧，见 _AddFloatingImgPreview）
             d := this._Parse(this.cmdNodes[id].CurCMD)
-            st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 6) ? d.searchType : 1
+            st := CmdEnumSearch(d.HasOwnProp("searchType") ? d.searchType : "屏幕图片")
             color := d.HasOwnProp("searchColor") ? d.searchColor : "FFFFFF"
             swEl := hp.Add("Border").Name("STitleColor_" id).Width("18").Height("18").CornerRadius("3").Margin("6,0,0,0").BorderBrush("{DynamicResource TitleBarForeground}").BorderThickness("1").VerticalAlignment("Center")
             if (this._SearchTypeClass(st).isColor && RegExMatch(color, "^[0-9A-Fa-f]{6}$"))
@@ -1420,7 +1422,7 @@ class MacroGraphNodeUIMixin {
     ; 浮动图片预览：作为节点 Grid(Row1) 的顶部子元素，用 TranslateTransform 平移到节点左侧，
     ; 右上角贴近节点左边缘、位于入点下方；不参与内容布局，避免预览图夹在字段中间很突兀。
     _AddFloatingImgPreview(grid, id, d) {
-        st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 6) ? d.searchType : 1
+        st := CmdEnumSearch(d.HasOwnProp("searchType") ? d.searchType : "屏幕图片")
         cls := this._SearchTypeClass(st)
         imgPath := d.HasOwnProp("searchImagePath") ? d.searchImagePath : ""
         pw := 80, ph := 80

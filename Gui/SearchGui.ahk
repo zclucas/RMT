@@ -275,8 +275,7 @@ class SearchGui {
         if (!this.CheckIfDataValid())
             return
 
-        st := (IsNumber(this.Data.SearchType) && this.Data.SearchType >= 1 && this.Data.SearchType <= 3) ? this.Data.SearchType : 1
-        this.ui.Update("SearchTypeCon", "SelectedIndex", String(st - 1))
+        this.ui.Update("SearchTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.SearchType, ["屏幕图片", "屏幕颜色", "屏幕文本"])))
         this._SetImage(this.Data.SearchImagePath)
         this.ui.Update("HexColorCon", "Text", this.Data.SearchColor)
         this.ui.Update("TextCon", "Text", this.Data.SearchText)
@@ -284,8 +283,7 @@ class SearchGui {
         this.ui.Update("StartPosYCon", "Text", this.Data.StartPosY)
         this.ui.Update("EndPosXCon", "Text", this.Data.EndPosX)
         this.ui.Update("EndPosYCon", "Text", this.Data.EndPosY)
-        ma := (IsNumber(this.Data.MouseActionType) && this.Data.MouseActionType >= 1 && this.Data.MouseActionType <= 4) ? this.Data.MouseActionType : 2
-        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(ma - 1))
+        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.MouseActionType, CmdEnumMouseActNames())))
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(this.Data.TrueMacro, 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(this.Data.FalseMacro, 1))
         this.PreviewShowing := false
@@ -353,12 +351,12 @@ class SearchGui {
 
         curType := this._TypeIndex()
 
-        if (curType == 1 && this.Data.SearchImagePath == "") {
+        if (curType == "屏幕图片" && this.Data.SearchImagePath == "") {
             RmtDialog.Info(GetLang("请设置搜索图片"))
             return false
         }
 
-        if (curType == 1) {
+        if (curType == "屏幕图片") {
             searchWidth := Number(ex) - Number(sx)
             searchHeight := Number(ey) - Number(sy)
             size := GetImageSize(this.Data.SearchImagePath)
@@ -368,12 +366,12 @@ class SearchGui {
             }
         }
 
-        if (curType == 2 && !RegExMatch(this.ui.Query("HexColorCon"), "^([0-9A-Fa-f]{6})$")) {
+        if (curType == "屏幕颜色" && !RegExMatch(this.ui.Query("HexColorCon"), "^([0-9A-Fa-f]{6})$")) {
             RmtDialog.Info(GetLang("请输入正确的颜色值"))
             return false
         }
 
-        if (curType == 3) {
+        if (curType == "屏幕文本") {
             if (Number(sx) == Number(ex) || Number(sy) == Number(ey)) {
                 RmtDialog.Info(GetLang("搜索文本时：搜索范围中起始坐标不能和终止坐标相同"))
                 return false
@@ -393,7 +391,7 @@ class SearchGui {
         data.EndPosX := this.ui.Query("EndPosXCon")
         data.EndPosY := this.ui.Query("EndPosYCon")
         mIdx := IsObject(this.ui) ? this.ui.Query("MouseActionTypeCon>SelectedIndex") : ""
-        data.MouseActionType := (IsNumber(mIdx) && Integer(mIdx) >= 0) ? Integer(mIdx) + 1 : this.Data.MouseActionType
+        data.MouseActionType := CmdEnumFromIndex(mIdx, CmdEnumMouseActNames())
         data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
         data.FalseMacro := GetLangMacro(this.ui.Query("FalseMacroCon"), 2)
         SaveMacroCMDData(data)
@@ -401,9 +399,7 @@ class SearchGui {
 
     _TypeIndex() {
         v := IsObject(this.ui) ? this.ui.Query("SearchTypeCon>SelectedIndex") : ""
-        if (!IsNumber(v) || Integer(v) < 0)
-            return 1
-        return Integer(v) + 1
+        return CmdEnumFromIndex(v, ["屏幕图片", "屏幕颜色", "屏幕文本"])
     }
 
     _SetImage(path) {
@@ -609,9 +605,9 @@ class SearchGui {
 
     OnChangeSearchType(*) {
         curType := this._TypeIndex()
-        isImage := curType == 1
-        isColor := curType == 2
-        isText := curType == 3
+        isImage := curType == "屏幕图片"
+        isColor := curType == "屏幕颜色"
+        isText := curType == "屏幕文本"
         this.ui.Update("ImagePanel", "Visibility", isImage ? "Visible" : "Collapsed")
         this.ui.Update("ColorPanel", "Visibility", isColor ? "Visible" : "Collapsed")
         this.ui.Update("TextPanel", "Visibility", isText ? "Visible" : "Collapsed")

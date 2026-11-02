@@ -74,15 +74,11 @@ class TimingGui {
             ? this._FormatStamp(this.Data.EndStamp)
             : this._DefaultEndText()
 
-        this._typeIndex := Integer(this.Data.Type)
-        if (this._typeIndex < 1 || this._typeIndex > 3)
-            this._typeIndex := 1
+        this._typeIndex := CmdEnumIndex(this.Data.Type, CmdEnumTimingTypeNames()) + 1
 
         this._intervalText := String(this.Data.HasOwnProp("CustomInterval") ? this.Data.CustomInterval : "10")
 
-        this._unitIndex := Integer(this.Data.HasOwnProp("CustomUnit") ? this.Data.CustomUnit : 2)
-        if (this._unitIndex < 1 || this._unitIndex > 6)
-            this._unitIndex := 2
+        this._unitIndex := CmdEnumIndex(this.Data.HasOwnProp("CustomUnit") ? this.Data.CustomUnit : "分钟", CmdEnumTimingUnitNames()) + 1
     }
 
     _DefaultEndText() {
@@ -719,9 +715,9 @@ class TimingGui {
             endRaw := this._ParseTimeText(this._endText)
         Data.StartStamp := TimeStrToStamp(startRaw)
         Data.EndStamp := endRaw == "" ? 0 : TimeStrToStamp(endRaw)
-        Data.Type := this._typeIndex
+        Data.Type := CmdEnumFromIndex(this._typeIndex - 1, CmdEnumTimingTypeNames())
         Data.CustomInterval := this._intervalText
-        Data.CustomUnit := this._unitIndex
+        Data.CustomUnit := CmdEnumFromIndex(this._unitIndex - 1, CmdEnumTimingUnitNames())
 
         minimal := {}
         minimal.SerialStr := Data.SerialStr
@@ -729,7 +725,7 @@ class TimingGui {
         minimal.Type := Data.Type
         if (Data.EndStamp)
             minimal.EndStamp := Data.EndStamp
-        if (Data.Type == 3) {
+        if (Data.Type == "自定义") {
             minimal.CustomInterval := Data.CustomInterval
             minimal.CustomUnit := Data.CustomUnit
         }

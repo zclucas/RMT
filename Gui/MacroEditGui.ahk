@@ -3987,9 +3987,9 @@ class MacroEditGui {
             countStr := Data.LoopCount == -1 ? GetLang("无限") : Data.LoopCount
             CountRoot := this.MacroTreeViewCon.Add(Format("{}:{}", GetLang("⎖循环次数"), countStr), root, iconStr)
 
-            if (Data.CondiType != 1) {
+            if (CmdEnumZh(Data.CondiType, CmdEnumCondiNames()) != "无") {
                 iconStr := this.GetCmdIconStr(GetLang("条件"))
-                CondiStr := Data.CondiType == 2 ? GetLang("⎖继续条件：") : GetLang("⎖退出条件：")
+                CondiStr := CmdEnumZh(Data.CondiType, CmdEnumCondiNames()) == "继续条件" ? GetLang("⎖继续条件：") : GetLang("⎖退出条件：")
                 ItemStr := CondiStr . LoopData.GetCondiStr(Data)
                 CondiRoot := this.MacroTreeViewCon.Add(ItemStr, root, iconStr)
             }

@@ -195,15 +195,15 @@ MouseMoveGameViewByKeyMode(keyMode, x, y, speed := 90) {
 ; 统一策略：移动，可选随后点击
 ; speed: 界面速度 0~100（越大越快，100 瞬移）
 ; clickCount: 0=只移动；>0=移动后左键点击次数
-; moveMode: 0 绝对 | 1 相对 | 2 游戏视角（忽略 clickCount/isHuman，走游戏视角语义）
+; moveMode: 绝对移动 | 相对移动 | 游戏视角（忽略 clickCount/isHuman，走游戏视角语义）
 MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHuman := false) {
     keyMode := Integer(keyMode)
-    moveMode := Integer(moveMode)
+    moveMode := CmdEnumMoveMode(moveMode)
     clickCount := Integer(clickCount)
     uiSpeed := NormalizeUiMouseSpeed(speed)
 
     ; 游戏视角与按键类型无关，直接走 mouse_event，无需初始化罗技/AHI 后端
-    if (moveMode == 2)
+    if (moveMode == "游戏视角")
         return MouseMoveGameViewByKeyMode(keyMode, x, y, uiSpeed)
 
     if (!EnsureMouseBackend(keyMode))
@@ -214,21 +214,21 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
         SendMode("Event")
         CoordMode("Mouse", "Screen")
         SetDefaultMouseSpeed(UiSpeedToAhkSpeed(uiSpeed))
-        if (moveMode == 1)
+        if (moveMode == "相对移动")
             Click(Format("{} {} {} Relative", Integer(x), Integer(y), clickCount))
         else
             Click(Format("{} {} {}", Round(x), Round(y), clickCount))
         return true
     }
 
-    ok := (moveMode == 1)
+    ok := (moveMode == "相对移动")
         ? MouseMoveRelByKeyMode(keyMode, x, y, uiSpeed, isHuman && clickCount <= 0)
         : MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, isHuman && clickCount <= 0)
     if (!ok)
         return false
 
     if (clickCount > 0) {
-        if (moveMode == 1)
+        if (moveMode == "相对移动")
             Sleep(30)
         return MouseClickByKeyMode(keyMode, clickCount)
     }
@@ -236,19 +236,19 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
 }
 
 ; 搜索等场景：屏幕绝对坐标移动，可选点击/双击
-; actionType: 2=只移动 | 3=移动后点击 | 4=移动后双击
+; actionType: 移动至目标 | 移动至目标点击1次 | 移动至目标点击2次
 ; speed: 界面速度 0~100
 SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount := 1) {
     keyMode := Integer(keyMode)
-    actionType := Integer(actionType)
+    actionType := CmdEnumMouseAct(actionType)
     uiSpeed := NormalizeUiMouseSpeed(speed)
     if (!EnsureMouseBackend(keyMode))
         return false
 
-    if (actionType == 2)
+    if (actionType == "移动至目标")
         return MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, false)
 
-    n := (actionType == 4) ? 2 : Max(1, Integer(clickCount))
+    n := (actionType == "移动至目标点击2次") ? 2 : Max(1, Integer(clickCount))
     if (keyMode == 3 || keyMode == 4) {
         if (!MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, false))
             return false
@@ -265,15 +265,16 @@ SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount :
 ; 按下后始终在 finally 松开，避免移动异常导致左键保持按下。
 MouseDragByStrategy(keyMode, moveMode, x, y, endX, endY, speed := 90, isHuman := false) {
     keyMode := Integer(keyMode)
+    moveMode := CmdEnumMoveMode(moveMode)
     if (!EnsureMouseBackend(keyMode))
         return false
-    if (moveMode == 0 && !MouseMoveAbsByKeyMode(keyMode, x, y, speed, false))
+    if (moveMode == "绝对移动" && !MouseMoveAbsByKeyMode(keyMode, x, y, speed, false))
         return false
     if (keyMode == 3 && !InitLogitechGHubNew())
         return false
     try {
         MouseDragButtonByKeyMode(keyMode, true)
-        return (moveMode == 1)
+        return (moveMode == "相对移动")
             ? MouseMoveRelByKeyMode(keyMode, x, y, speed, isHuman)
             : MouseMoveAbsByKeyMode(keyMode, endX, endY, speed, isHuman)
     }

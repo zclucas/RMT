@@ -1,5 +1,5 @@
 #Requires AutoHotkey v2.0
-global RMT_VERSION := "1.3"
+global RMT_VERSION := "1.3F1"
 #Include Main\SelfCheck.ahk
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
@@ -8,6 +8,9 @@ global RMT_VERSION := "1.3"
 ; §3 单实例：已有实例且携带命令行参数 → 转发命令队列后退出；否则（无参数/提权切换）接管
 if (!EnsureSingleInstance())
     ExitApp()
+
+; 把程序路径写入环境变量 rmt，并安装 rmt 命令（仅常驻实例执行，命令行转发进程会先退出）
+RmtRegisterCliCommand()
 
 InitFilePath()              ;初始化文件路径
 LoadCurMacroSetting()       ;加载当前配置宏，宏指令

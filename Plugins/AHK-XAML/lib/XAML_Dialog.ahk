@@ -41,6 +41,8 @@ class XDialog {
         resizable := XDialog.Opt(options, "Resizable", false)
         modal := XDialog.Opt(options, "Modal", false)
         owner := XDialog.Opt(options, "Owner", 0)
+        if (IsSet(XamlWin))
+            owner := XamlWin.ModalOwner(owner)
         alwaysOnTop := XDialog.Opt(options, "AlwaysOnTop", false)
         waitForResponse := XDialog.Opt(options, "WaitForResponse", true)
         themeName := XDialog.Opt(options, "Theme", XAMLHost.LastTheme)
@@ -296,8 +298,11 @@ class XDialog {
             ui.Track("DialogInput")
         }
 
-        if (IsSet(XamlWin))
+        if (IsSet(XamlWin)) {
+            if (modal || waitForResponse)
+                ui._holdZOrder := true
             XamlWin.Open(ui, "", actualOwner)
+        }
         else
             ui.Show()
         try RmtDialog._Trace("XDialog.Show after ui.Show hwnd=" ui.wpfHwnd " id=" ui.id " daemon=" XAMLHost.daemonHwnd)

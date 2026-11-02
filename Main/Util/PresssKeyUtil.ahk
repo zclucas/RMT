@@ -3,8 +3,10 @@
 ; Helper
 ; ------------------------------------------------------------
 GetHoldBucket(tableItem, index) {
-    item := tableItem.Items[index]
-    return item ? item.HoldKey : Map()
+    item := GetItemByIndex(tableItem, index)
+    if (item && item.HoldKey)
+        return item.HoldKey
+    return Map()
 }
 
 ; Worker 启动时挂上同步回调；主进程保持为空，避免引用 Worker 专有函数
@@ -16,7 +18,7 @@ NotifyHoldKeyChange(tableItem, index, key, state, source := "") {
     if (MyHoldKeyNotify = "" || !IsObject(tableItem) || index < 1)
         return
     try {
-        item := tableItem.Items[index]
+        item := GetItemByIndex(tableItem, index)
         if (!item)
             return
         MyHoldKeyNotify.Call(tableItem.ID, item.ID, key, state, source)
@@ -111,12 +113,12 @@ SendKeyWrapper(KeyArrStr, holdTime, tableItem, index, keyType, Action) {
         return
     }
 
-    switch keyType {
-        case 1:
+    switch CmdEnumKeyAct(keyType) {
+        case "按下":
             SendKeysDown(KeyArr, tableItem, index, Action)
-        case 2:
+        case "松开":
             SendKeysUp(KeyArr, tableItem, index, Action)
-        case 3:
+        case "点击":
             SendKeysDown(KeyArr, tableItem, index, Action)
             Sleep(holdTime)
             SendKeysUp(KeyArr, tableItem, index, Action)

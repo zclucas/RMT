@@ -64,6 +64,187 @@ RMTLogDir() {
     return isWorker ? (A_ScriptDir "\..\Log") : (A_WorkingDir "\Log")
 }
 
+; ---------------- 指令显示日志路径 ----------------
+; 配置里存的是目录（空 = 软件所在目录\Log），不是某一次浏览得到的绝对路径。
+; 软件文件夹挪走之后，空值和下一次仍落在旧安装目录里的 Log 会自动改到当前软件目录。
+
+CMDLogInWorker() {
+    if (IsSet(MySoftData) && MySoftData.HasProp("isWorker") && MySoftData.isWorker)
+        return true
+    SplitPath(A_ScriptName, , , , &name)
+    return (name = "Work")
+}
+
+CMDLogAppDir() {
+    if (CMDLogInWorker()) {
+        SplitPath(A_ScriptDir, , &parent)
+        if (parent != "")
+            return RTrim(parent, "\")
+    }
+    dir := A_WorkingDir != "" ? A_WorkingDir : A_ScriptDir
+    return RTrim(dir, "\")
+}
+
+CMDLogNorm(p) {
+    p := Trim(StrReplace(String(p), "/", "\"))
+    while (InStr(p, "\\"))
+        p := StrReplace(p, "\\", "\")
+    return RTrim(p, "\")
+}
+
+CMDLogIsAbs(p) {
+    return RegExMatch(p, "^[A-Za-z]:\\") || SubStr(p, 1, 2) == "\\"
+}
+
+CMDLogIsUnder(path, root) {
+    p := StrLower(CMDLogNorm(path))
+    r := StrLower(CMDLogNorm(root))
+    if (p == "" || r == "")
+        return false
+    return p == r || InStr(p, r "\") == 1
+}
+
+CMDLogDirPrefix() {
+    return GetLang("软件所在目录")
+}
+
+; 用户在输入框里看到的文字 → 配置里保存的值（空 = 默认 Log 目录）
+CMDLogStoreFromUserText(text) {
+    t := CMDLogNorm(text)
+    prefix := CMDLogDirPrefix()
+    if (t == "" || t == prefix || t == prefix "\Log" || t == "软件所在目录" || t == "软件所在目录\Log" || t == ".\Log" || StrLower(t) == "log")
+        return ""
+    lowT := StrLower(t)
+    lowP := StrLower(prefix)
+    if (lowP != "" && InStr(lowT, lowP "\") == 1)
+        t := SubStr(t, StrLen(prefix) + 2)
+    else if (InStr(lowT, "软件所在目录\") == 1)
+        t := SubStr(t, StrLen("软件所在目录") + 2)
+    return CMDLogCalibrateStored(t)
+}
+
+CMDLogPathDisplay(stored) {
+    s := CMDLogCalibrateStored(stored)
+    if (s == "")
+        return CMDLogDirPrefix() "\Log"
+    if (CMDLogIsAbs(s))
+        return s
+    return CMDLogDirPrefix() "\" s
+}
+
+; 实际写入的日志文件。目录配置补上 CMDLog.txt；用户另选的 .log/.txt 文件保持原样。
+CMDLogResolveFile(stored) {
+    s := CMDLogCalibrateStored(stored)
+    if (s == "")
+        return CMDLogAppDir() "\Log\CMDLog.txt"
+    full := CMDLogIsAbs(s) ? s : (CMDLogAppDir() "\" s)
+    SplitPath(full, , , &ext)
+    ext := StrLower(ext)
+    if (ext == "log" || ext == "txt")
+        return full
+    return full "\CMDLog.txt"
+}
+
+CMDLogResolveDir(stored) {
+    file := CMDLogResolveFile(stored)
+    SplitPath(file, &name, &dir, &ext)
+    ext := StrLower(ext)
+    if (ext == "log" || ext == "txt")
+        return dir
+    return file
+}
+
+CMDLogCalibrateStored(stored) {
+    s := CMDLogNorm(stored)
+    if (s == "" || s == "." || s == ".\Log" || StrLower(s) == "log")
+        return ""
+    ; 旧版把目录存成「目录\CMDLog.txt」
+    if (StrLen(s) > 11 && SubStr(StrLower(s), -10) == "cmdlog.txt" && SubStr(s, -11, 1) == "\")
+        s := RTrim(SubStr(s, 1, StrLen(s) - 11), "\")
+    if (s == "" || StrLower(s) == "log")
+        return ""
+
+    app := CMDLogAppDir()
+    full := CMDLogIsAbs(s) ? s : (app "\" s)
+    full := CMDLogNorm(full)
+    if (CMDLogIsUnder(full, app)) {
+        rel := SubStr(full, StrLen(CMDLogNorm(app)) + 2)
+        if (rel == "" || StrLower(rel) == "log")
+            return ""
+        return rel
+    }
+
+    moved := CMDLogMovedInstallRel(full)
+    if (moved != "")
+        return (StrLower(moved) == "log") ? "" : moved
+    return CMDLogIsAbs(s) ? full : s
+}
+
+; 旧安装目录下的 Log（文件夹已挪走，或旁边还留着一份旧的 RMT）→ 相对当前软件目录的尾巴
+CMDLogMovedInstallRel(abs) {
+    low := StrLower(CMDLogNorm(abs))
+    app := StrLower(CMDLogAppDir())
+    pos := 1
+    while (pos := InStr(low, "\log", , pos)) {
+        root := SubStr(abs, 1, pos - 1)
+        rest := SubStr(abs, pos + 1)
+        restLow := StrLower(rest)
+        pos += 4
+        if (restLow != "log" && InStr(restLow, "log\") != 1)
+            continue
+        rootNorm := StrLower(CMDLogNorm(root))
+        if (rootNorm == "" || rootNorm == app || CMDLogIsUnder(root, CMDLogAppDir()) || CMDLogIsUnder(CMDLogAppDir(), root))
+            continue
+        if (DirExist(root) && !DirExist(root "\Setting") && !FileExist(root "\RMT.exe") && !FileExist(root "\RMT.ahk"))
+            continue
+        return rest
+    }
+    return ""
+}
+
+; 按日志文件的修改时间清理。每天 = 不是今天写的就删；每周 = 不是本周写的就删。
+; 旧实现只清空屏幕上的指令，而且把「上次清理」记成今天、只放在内存里，重启后永远不会再清。
+CMDLogTryAutoClear(filePath, mode) {
+    if (!IsNumber(mode))
+        return false
+    mode := Integer(mode)
+    if (mode != 1 && mode != 2)
+        return false
+    if (filePath == "" || !FileExist(filePath))
+        return false
+    try fileTime := FileGetTime(filePath)
+    catch
+        return false
+    due := false
+    if (mode == 1)
+        due := SubStr(fileTime, 1, 8) != SubStr(A_Now, 1, 8)
+    else
+        due := CMDLogWeekKey(fileTime) != CMDLogWeekKey(A_Now)
+    if (!due)
+        return false
+    try FileDelete(filePath)
+    catch {
+        try {
+            f := FileOpen(filePath, "w", "UTF-8")
+            if IsObject(f)
+                f.Close()
+        }
+    }
+    return !FileExist(filePath) || (FileExist(filePath) && FileGetSize(filePath) == 0)
+}
+
+; 以周一为界的周序号。用完整时间戳，避免只拿 yyyyMMdd 去 FormatTime 时对不上周。
+CMDLogWeekKey(ts) {
+    ts := String(ts)
+    if (StrLen(ts) < 8)
+        return ts
+    day := SubStr(ts, 1, 8) "000000"
+    try
+        return "W" Floor(DateDiff(day, "19700105000000", "Days") / 7)
+    catch
+        return SubStr(ts, 1, 8)
+}
+
 ; 进程 PID（缓存，AHK v2 无 A_PID 内置；用于日志线程标识——同一进程所有日志同 pid）
 global _rmtLogPid := 0
 RMTLogPid() {

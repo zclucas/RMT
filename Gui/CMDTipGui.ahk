@@ -37,9 +37,8 @@ class CMDTipGui {
         this._logFlushTimer := ""
         this.LogToFile := false
         this.LogFilePath := ""
-        ; 自动清理
-        this.AutoClear := 0          ; 0=从不 1=每天 2=每周
-        this._lastClearDate := ""
+        ; 自动清理：0=从不 1=每天 2=每周。按日志文件修改时间判断，不记在内存里
+        this.AutoClear := 2
         ; §7 当前按下按键展示区
         this._keyTimer := ""         ; 按键轮询定时器（窗口可见时运行）
         this._lastKeys := ""         ; 上次展示的按键串（变化才刷新 UI，零 IPC 去抖）
@@ -166,13 +165,11 @@ class CMDTipGui {
         this.BgAlpha := Integer((100 - MainSoftData.CMDTransparency) * 2.55)
         this.FontSize := MainSoftData.CMDFontSize
         this.FontColor := this._ToXamlColor(MainSoftData.CMDFontColor)
-        ; 日志输出
+        ; 日志输出。空配置 = 软件所在目录\Log\CMDLog.txt，文件夹挪走后仍然指向新目录
         this.LogToFile := MainSoftData.HasProp("CMDLogToFile") ? MainSoftData.CMDLogToFile : false
         rawPath := MainSoftData.HasProp("CMDLogFilePath") ? MainSoftData.CMDLogFilePath : ""
-        this.LogFilePath := (rawPath != "") ? rawPath : A_WorkingDir "\Log\CMDLog.txt"
-        this.AutoClear := MainSoftData.HasProp("CMDLogAutoClear") ? MainSoftData.CMDLogAutoClear : 0
-        if (this._lastClearDate == "")
-            this._lastClearDate := FormatTime(A_Now, "yyyyMMdd")
+        this.LogFilePath := CMDLogResolveFile(rawPath)
+        this.AutoClear := MainSoftData.HasProp("CMDLogAutoClear") && IsNumber(MainSoftData.CMDLogAutoClear) ? Integer(MainSoftData.CMDLogAutoClear) : 2
     }
 
     _ToRgb6(c) {
@@ -494,6 +491,8 @@ class CMDTipGui {
         ; 非阻塞写入：FileAppend 在 AHK v2 中是同步的，
         ; 但 3s 积累批量写入比每行写一次开销小很多
         try {
+            ; 跨天/跨周先删旧文件，再写入这一批。判断依据是文件修改时间，重启后仍然有效
+            CMDLogTryAutoClear(this.LogFilePath, this.AutoClear)
             SplitPath this.LogFilePath, , &logDir
             if (!DirExist(logDir))
                 DirCreate(logDir)
@@ -501,24 +500,11 @@ class CMDTipGui {
         }
     }
 
-    ; 自动清理旧日志
+    ; 到了清理周期：删掉过期日志文件，并清掉屏幕上还留着的旧指令
     _AutoClearCheck() {
-        if (this.AutoClear == 0 || this._contentText == "")
+        if (!CMDLogTryAutoClear(this.LogFilePath, this.AutoClear))
             return
-        shouldClear := false
-        if (this.AutoClear == 1) {
-            ; 每天：日期不同就清理
-            shouldClear := FormatTime(A_Now, "yyyyMMdd") != this._lastClearDate
-        } else if (this.AutoClear == 2) {
-            ; 每周：跨周才清理
-            ; ISO 年份+周数一体（YWeek 为 v2.0 原生令牌，含零填充）
-            curWeek := FormatTime(A_Now, "YWeek")
-            lastWeek := FormatTime(this._lastClearDate, "YWeek")
-            shouldClear := curWeek != lastWeek
-        }
-        if (!shouldClear)
-            return
-        this._lastClearDate := FormatTime(A_Now, "yyyyMMdd")
+        this._logFlushBuffer := ""
         this.ShowCount := 0
         this._contentText := ""
         this._textLen := 0

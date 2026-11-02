@@ -1,6 +1,7 @@
 ﻿#Requires AutoHotkey v2.0
 ; 1.2.2 -> 1.3：按指令语义迁移，不按字符串全文替换。
 ; 迁移只读写给定目录；不借用当前配置的资源序号或软件偏好。
+; 拆分「运行 / 游戏视角」仍看 1.2.2 的数字；拆完再把指令枚举写成中文。
 Compat13_Schemas() {
     return Map("SearchFile", SearchData, "SearchProFile", SearchData,
         "MMProFile", MMProData, "RunFile", RunData, "FileIOFile", FileIOData,
@@ -27,6 +28,35 @@ Compat13_Drop(data, names) {
         if (data.HasOwnProp(name))
             data.DeleteProp(name)
     }
+}
+
+; 1.2.2 普通「运行」：Mode 1 = 不等待，Option 1 = 默认（0 起）。缺字段按这两个默认值看，避免新类的中文默认值把全部运行改成运行Pro。
+Compat13_IsPlainRun(data) {
+    mode := data.HasOwnProp("Mode") ? data.Mode : 1
+    opt := data.HasOwnProp("Option") ? data.Option : 1
+    plainMode := mode == 1 || mode == "1" || mode == "不等待"
+    plainOpt := opt == 1 || opt == "1" || opt == "默认"
+    return plainMode && plainOpt
+}
+
+Compat13_IsGameView(data) {
+    mode := data.HasOwnProp("MouseMoveMode") ? data.MouseMoveMode : 0
+    return mode == 2 || mode == "2" || mode == "游戏视角"
+}
+
+; 序列码前缀即指令键。须在运行/游戏视角拆分之后调用，否则数字比较会失效。
+Compat13_ApplyEnums(data, key) {
+    if (!IsObject(data))
+        return
+    prefix := RegExReplace(String(key), "\d+$", "")
+    if (prefix == "" && data.HasProp("SerialStr"))
+        prefix := RegExReplace(String(data.SerialStr), "\d+$", "")
+    CmdEnumNorm(prefix, data)
+}
+
+Compat13_Store(values, key, data) {
+    Compat13_ApplyEnums(data, key)
+    values[key] := JSON.stringify(data, 0)
 }
 
 Compat13_Normalize(data, stem) {
@@ -109,13 +139,16 @@ Compat13_UpgradeDir(dir) {
             if (!IsObject(data))
                 continue
             Compat13_Normalize(data, stem)
-            values[key] := JSON.stringify(data, 0)
-            if (stem == "FileIOFile" && RegExMatch(key, "^文件读写\d+$") && FileIOIsExcelType(data.OperType))
+            if (stem == "FileIOFile" && RegExMatch(key, "^文件读写\d+$") && FileIOIsExcelType(data.OperType)) {
+                Compat13_Store(values, key, data)
                 Compat13_Rename(values, key, "Excel", renames)
-            else if (stem == "RunFile" && RegExMatch(key, "^运行\d+$") && (data.Mode != 1 || data.Option != 1))
+            }
+            else if (stem == "RunFile" && RegExMatch(key, "^运行\d+$") && !Compat13_IsPlainRun(data)) {
+                Compat13_Store(values, key, data)
                 Compat13_Rename(values, key, "运行Pro", renames)
+            }
             else if (stem == "MMProFile" && RegExMatch(key, "^(移动Pro|鼠标移动Pro)\d+$")) {
-                if (data.MouseMoveMode == 2) {
+                if (Compat13_IsGameView(data)) {
                     delta := DeltaMoveData()
                     delta.SerialStr := key
                     delta.DeltaX := data.PosVarX
@@ -136,17 +169,20 @@ Compat13_UpgradeDir(dir) {
                     renames[key] := delta.SerialStr
                 } else {
                     Compat13_Drop(data, ["Count", "Interval"])
-                    values[key] := JSON.stringify(data, 0)
+                    Compat13_Store(values, key, data)
                     if (RegExMatch(key, "^移动Pro\d+$"))
                         Compat13_Rename(values, key, "鼠标移动Pro", renames)
                 }
             }
+            else
+                Compat13_Store(values, key, data)
         }
         if (before != JSON.stringify(values, 0)) {
             Cfg_WriteRoot(root, path)
             changed := true
         }
     }
+    changed := Compat13_UpgradeLooseEnums(dir) || changed
     ; 所有资源中的分支宏、循环体、图形节点也要更新；文本输出/路径/备注不可替换。
     loop files, dir "\*.toml" {
         path := A_LoopFileFullPath
@@ -198,6 +234,34 @@ Compat13_UpgradeDir(dir) {
     return changed
 }
 
+; 不参与运行/游戏视角拆分的指令文件。枚举数字同样写成中文。
+Compat13_UpgradeLooseEnums(dir) {
+    changed := false
+    sec := IniImport_Section()
+    for stem in ["SearchComboFile", "JoyCheckFile", "IntervalFile", "KeyDataFile", "MoveDataFile", "WaitFile"
+        , "TimeDataFile", "CountDownFile", "WaitConfirmFile", "RMTCMDFile", "DeltaMoveFile"] {
+        path := dir "\" stem ".toml"
+        if (!FileExist(path))
+            continue
+        root := Cfg_Load(path)
+        if (!root.Has(sec))
+            continue
+        values := root[sec]
+        before := JSON.stringify(values, 0)
+        for key, val in values.Clone() {
+            data := CompatParseData(val)
+            if (!IsObject(data))
+                continue
+            Compat13_Store(values, key, data)
+        }
+        if (before != JSON.stringify(values, 0)) {
+            Cfg_WriteRoot(root, path)
+            changed := true
+        }
+    }
+    return changed
+}
+
 Compat13_RewriteBranches(data, renames) {
     for field in ["TrueMacro", "FalseMacro", "DefaultMacro", "LoopBody", "CurCMD"] {
         if (data.HasOwnProp(field))
@@ -232,6 +296,11 @@ Compat13_Command(renames, match) {
         parts[1] := renames[parts[1]]
     if (parts[1] == "移动")
         parts[1] := "鼠标移动"
+    ; 内联指令里的模式/动作编号写成中文。序列码指令（按键1、鼠标移动2）没有这些段。
+    if (parts[1] == "鼠标移动" && parts.Length >= 5 && IsNumber(parts[5]))
+        parts[5] := CmdEnumMoveMode(parts[5])
+    if (parts[1] == "按键" && parts.Length >= 3 && IsNumber(parts[3]))
+        parts[3] := CmdEnumKeyAct(parts[3])
     ; 纯手柄按钮/模拟轴迁到新手柄语法；混合键鼠+手柄组合仍由旧执行器整体发送，避免拆开改变同时按下语义。
     if (parts[1] == "按键" && parts.Length >= 2) {
         joy := []

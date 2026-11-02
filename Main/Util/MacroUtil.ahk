@@ -1,6 +1,6 @@
 ﻿;按键宏命令
 OnTriggerMacroKeyAndInit(tableItem, macro, index) {
-    item := tableItem.Items[index]
+    item := GetItemByIndex(tableItem, index)
     if (!item)
         return
     item.Killed := false
@@ -55,7 +55,7 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
 }
 
 OnFinishMacro(tableItem, macro, index) {
-    item := tableItem.Items[index]
+    item := GetItemByIndex(tableItem, index)
     if (!item)
         return
     ; 开关模式下被kill终止时，补充播放循环结束提示音（类型3）
@@ -323,22 +323,23 @@ OnRunFile(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
     target := Data.Target
     GetSmartReplaceVarText(tableItem, index, &target)
-    options := ["Hide", "", "Min", "Max"]
+    runOpt := Map("后台", "Hide", "默认", "", "最小化", "Min", "最大化", "Max")
+    optName := CmdEnumRunOption(Data.Option)
+    optFlag := runOpt.Has(optName) ? runOpt[optName] : ""
+    switch CmdEnumZh(Data.Mode, CmdEnumRunModeNames()) {
+        case "不等待":
+            Run(target, , optFlag)
 
-    switch Data.Mode {
-        case 1:
-            Run(target, , options[1 + Data.Option])
-
-        case 2:
-            exitCode := RunWait(target, , options[1 + Data.Option])
+        case "等待+返回值":
+            exitCode := RunWait(target, , optFlag)
             MySetGlobalVariable([Data.SaveNameArr[1]], [exitCode], false)
 
-        case 3:
+        case "不等待+输入":
             stdinText := Data.StdIn
             GetSmartReplaceVarText(tableItem, index, &stdinText)
             _RunCommandNoWait(target, &Data, stdinText)
 
-        case 4:
+        case "等待+输入输出":
             stdout := ""
             stderr := ""
             stdinText := Data.StdIn
@@ -662,7 +663,7 @@ OnFlowJump(tableItem, cmd, index) {
 OnCompare(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
-    result := Data.LogicalType == 1 ? true : false
+    result := CmdEnumLogic(Data.LogicalType) == "且" ? true : false
     loop Data.ToggleArr.Length {
         if (!Data.ToggleArr[A_Index])
             continue
@@ -673,7 +674,7 @@ OnCompare(tableItem, cmd, index) {
         if (!hasComparison)
             return
 
-        if (Data.LogicalType == 1) {
+        if (CmdEnumLogic(Data.LogicalType) == "且") {
             result := result && currentComparison
             if (!result)
                 break
@@ -712,7 +713,7 @@ OnComparePro(tableItem, cmd, index) {
         LogicType := Data.LogicTypeArr[A_Index]
         Macro := Data.MacroArr[A_Index]
         ControlType := Data.ControlTypeArr[A_Index]
-        result := LogicType == 1 ? true : false
+        result := CmdEnumLogic(LogicType) == "且" ? true : false
 
         for i, Name in NameArr {
             CompareType := CompareTypeArr[i]
@@ -720,7 +721,7 @@ OnComparePro(tableItem, cmd, index) {
             if (!hasComparison)
                 return
 
-            if (LogicType == 1) {
+            if (CmdEnumLogic(LogicType) == "且") {
                 result := result && currentComparison
                 if (!result)
                     break
@@ -753,10 +754,10 @@ OnMMPro(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
 
     LastSumTime := 0
-    MoveMode := ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : 0
+    MoveMode := CmdEnumMoveMode(ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : "绝对移动")
     ; §20 新版已去除「移动次数」，恒 1 次；旧配置数据保留 Count/Interval 字段则沿用
     Count := ObjHasOwnProp(Data, "Count") ? Data.Count : 1
-    Data.Count := MoveMode == 2 ? Count : 1
+    Data.Count := MoveMode == "游戏视角" ? Count : 1
     loop Data.Count {
         WaitIfPaused(tableItem, index)
 
@@ -774,7 +775,7 @@ OnMMPro(tableItem, cmd, index) {
 OnMMProOnce(tableItem, index, Data) {
     ; Speed 为界面速度 0~100（越大越快），由 MouseMoveUtil 按按键类型换算
     Speed := Data.Speed
-    MoveMode := ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : 0
+    MoveMode := CmdEnumMoveMode(ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : "绝对移动")
     keyMode := GetMacroKeyMode(tableItem, index)
     IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
 
@@ -786,15 +787,15 @@ OnMMProOnce(tableItem, index, Data) {
     PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
 
-    ; §20 旧配置兼容：MouseMoveMode==2（游戏视角）已拆为「增量移动」指令，旧数据仍按 mouse_event 相对位移执行
-    if (MoveMode == 2)
+    ; 旧配置「游戏视角」已拆为「增量移动」指令，读入后仍按 mouse_event 相对位移执行
+    if (MoveMode == "游戏视角")
         return MouseMoveGameViewByKeyMode(keyMode, PosX, PosY, Speed)
 
-    ; 动作 4 为 A 到 B 拖拽（旧配置兼容），动作 5 为绝对模式下从当前鼠标位置拖到目标点。
-    isDrag := Data.ActionType == 4 || Data.ActionType == 5
-    isABDrag := Data.ActionType == 4
+    action := CmdEnumMMAction(Data.ActionType)
+    isDrag := action == "A到B拖拽" || action == "拖拽"
+    isABDrag := action == "A到B拖拽"
     EndX := 0, EndY := 0
-    if (isABDrag && MoveMode == 0) {
+    if (isABDrag && MoveMode == "绝对移动") {
         if (!TryGetTabVarValue(&EndX, tableItem, index, Data.HasOwnProp("EndPosVarX") ? Data.EndPosVarX : 200)
             || !TryGetTabVarValue(&EndY, tableItem, index, Data.HasOwnProp("EndPosVarY") ? Data.EndPosVarY : 200))
             return
@@ -802,9 +803,9 @@ OnMMProOnce(tableItem, index, Data) {
         EndY := GetFloatValue(EndY, MainSoftData.CoordYFloat)
     }
 
-    ; §20 坐标基准：RefMode==1（窗口）且绝对移动时，坐标按窗口左上角偏移（窗口信息支持 {绑定窗口}）
-    RefMode := ObjHasOwnProp(Data, "RefMode") ? Integer(Data.RefMode) : 0
-    if (RefMode == 1 && MoveMode == 0) {
+    ; 坐标基准为窗口且绝对移动时，坐标按窗口左上角偏移（窗口信息支持 {绑定窗口}）
+    RefMode := CmdEnumRef(ObjHasOwnProp(Data, "RefMode") ? Data.RefMode : "屏幕")
+    if (RefMode == "窗口" && MoveMode == "绝对移动") {
         WinInfo := ObjHasOwnProp(Data, "WinInfo") ? Data.WinInfo : ""
         hwndList := GetHwndList(ResolveBindWindow(tableItem, index, WinInfo))
         if (!IsObject(hwndList) || hwndList.Length == 0)
@@ -819,7 +820,7 @@ OnMMProOnce(tableItem, index, Data) {
     }
 
     if (isDrag) {
-        if (Data.ActionType == 5 && MoveMode == 0) {
+        if (action == "拖拽" && MoveMode == "绝对移动") {
             CoordMode("Mouse", "Screen")
             MouseGetPos(&startX, &startY)
             return MouseDragByStrategy(keyMode, MoveMode, startX, startY, PosX, PosY, Speed, IsHumanMouse)
@@ -827,8 +828,7 @@ OnMMProOnce(tableItem, index, Data) {
         return MouseDragByStrategy(keyMode, MoveMode, PosX, PosY, EndX, EndY, Speed, IsHumanMouse)
     }
 
-    ; ActionType: 1 移动 | 2 单击 | 3 双击 | 4 A 到 B 拖拽 | 5 普通拖拽
-    clickCount := (Data.ActionType == 1) ? 0 : (Data.ActionType == 2 ? 1 : 2)
+    clickCount := (action == "移动") ? 0 : (action == "移动后单击" ? 1 : 2)
     MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, clickCount, IsHumanMouse)
 }
 
@@ -988,10 +988,10 @@ OnLoop(tableItem, cmd, index) {
 }
 
 GetLoopState(tableItem, cmd, index, Data) {
-    if (Data.CondiType == 1)
+    if (CmdEnumZh(Data.CondiType, CmdEnumCondiNames()) == "无")
         return true
 
-    result := Data.LogicType == 1 ? true : false
+    result := CmdEnumLogic(Data.LogicType) == "且" ? true : false
     loop Data.ToggleArr.Length {
         if (!Data.ToggleArr[A_Index])
             continue
@@ -1002,7 +1002,7 @@ GetLoopState(tableItem, cmd, index, Data) {
         if (!hasComparison)
             return false
 
-        if (Data.LogicType == 1) {
+        if (CmdEnumLogic(Data.LogicType) == "且") {
             result := result && currentComparison
             if (!result)
                 break
@@ -1013,10 +1013,10 @@ GetLoopState(tableItem, cmd, index, Data) {
         }
     }
 
-    if (Data.CondiType == 2)
+    if (CmdEnumZh(Data.CondiType, CmdEnumCondiNames()) == "继续条件")
         return result
 
-    if (Data.CondiType == 3)
+    if (CmdEnumZh(Data.CondiType, CmdEnumCondiNames()) == "退出条件")
         return !result
 }
 
@@ -1099,40 +1099,41 @@ OnVariable(tableItem, cmd, index) {
         if (!Data.ToggleArr[A_Index])
             continue
         VariableName := Data.VariableArr[A_Index]
-        if (Data.OperaTypeArr[A_Index] == 6) {  ;删除
+        opera := CmdEnumOpera(Data.OperaTypeArr[A_Index])
+        if (opera == "删除") {
             DeleteNameArr.Push(VariableName)
             continue
         }
 
         Value := 0
-        if (Data.OperaTypeArr[A_Index] == 1) {   ;数值
+        if (opera == "数值") {
             hasValue := TryGetTabVarValue(&Value, tableItem, index, Data.CopyVariableArr[A_Index])
             if (!hasValue)
                 return
         }
-        if (Data.OperaTypeArr[A_Index] == 2) {  ;随机
+        if (opera == "随机数值") {
             hasMin := TryGetTabVarValue(&minValue, tableItem, index, Data.MinVariableArr[A_Index])
             hasMax := TryGetTabVarValue(&maxValue, tableItem, index, Data.MaxVariableArr[A_Index])
             if (!hasMin || !hasMax)
                 return
             Value := Random(minValue, maxValue)
         }
-        if (Data.OperaTypeArr[A_Index] == 3) {  ;字符
+        if (opera == "字符") {
             Value := Data.CopyVariableArr[A_Index]
         }
 
-        if (Data.OperaTypeArr[A_Index] == 4) {   ;系统
+        if (opera == "系统") {
             hasValue := TryGetTabVarValue(&Value, tableItem, index, Data.CopyVariableArr[A_Index])
             if (!hasValue)
                 return
         }
 
-        if (Data.OperaTypeArr[A_Index] == 7 || (Data.OperaTypeArr[A_Index] == 5 && IsTimeCategoryName(Data.CopyVariableArr[A_Index]))) {   ;时间（原时间类别）
+        if (opera == "时间" && IsTimeCategoryName(Data.CopyVariableArr[A_Index])) {
             hasValue := TryGetTabVarValue(&Value, tableItem, index, Data.CopyVariableArr[A_Index])
             if (!hasValue)
                 return
         }
-        else if (Data.OperaTypeArr[A_Index] == 5) {   ;旧「时间」：取当前时间字符串（兼容已保存宏）
+        else if (opera == "时间") {   ;旧「时间」：取当前时间字符串（兼容已保存宏）
             srcVal := Data.CopyVariableArr[A_Index]
             if (srcVal != "") {
                 hasSrc := TryGetTabVarValue(&srcTime, tableItem, index, srcVal, false)
@@ -1206,8 +1207,8 @@ OnExVariable(tableItem, cmd, index) {
 
 OnExVariableOnce(tableItem, index, Data) {
     TextObjs := []
-    switch Data.ExtractType {
-        case 1:
+    switch CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) {
+        case "屏幕":
             if (!TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
              || !TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
              || !TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
@@ -1217,12 +1218,12 @@ OnExVariableOnce(tableItem, index, Data) {
             if (TextObjs == "")
                 TextObjs := []
 
-        case 2:
+        case "剪切板":
             if (!IsClipboardText())
                 return false
             TextObjs := [{ Text: A_Clipboard }]
 
-        case 3:
+        case "窗口":
             if (!TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
              || !TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
              || !TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
@@ -1307,7 +1308,8 @@ OnBGMouse(tableItem, cmd, index) {
         ; 点击位置（窗口客户区坐标）
         lParam := (PosY << 16) | (PosX & 0xFFFF)
 
-        if (Data.MouseType == 4) {  ;滚轮
+        mouseBtn := CmdEnumZh(Data.MouseType, CmdEnumMouseBtnNames())
+        if (mouseBtn == "滚轮") {
             if (Data.ScrollV != 0) {
                 value := 120 * Data.ScrollV
                 PostMessage(0x020A, (value << 16), lParam, , "ahk_id " hwnd)
@@ -1319,21 +1321,23 @@ OnBGMouse(tableItem, cmd, index) {
             return
         }
 
-        if (Data.OperateType == 1) {    ;点击
-            PostMessage WM_DOWN_ARR[Data.MouseType], 1, lParam, , "ahk_id " hwnd
+        btnIdx := Map("左键", 1, "中键", 2, "右键", 3).Get(mouseBtn, 1)
+        oper := CmdEnumZh(Data.OperateType, CmdEnumBgOperNames())
+        if (oper == "点击") {
+            PostMessage WM_DOWN_ARR[btnIdx], 1, lParam, , "ahk_id " hwnd
             Sleep Data.ClickTime
-            PostMessage WM_UP_ARR[Data.MouseType], 0, lParam, , "ahk_id " hwnd
+            PostMessage WM_UP_ARR[btnIdx], 0, lParam, , "ahk_id " hwnd
         }
-        else if (Data.OperateType == 2) {   ;双击
-            PostMessage WM_DCLICK_ARR[Data.MouseType], 1, lParam, , "ahk_id " hwnd
+        else if (oper == "双击") {
+            PostMessage WM_DCLICK_ARR[btnIdx], 1, lParam, , "ahk_id " hwnd
             Sleep Data.ClickTime
-            PostMessage WM_UP_ARR[Data.MouseType], 0, lParam, , "ahk_id " hwnd
+            PostMessage WM_UP_ARR[btnIdx], 0, lParam, , "ahk_id " hwnd
         }
-        else if (Data.OperateType == 3) {   ;按下
-            PostMessage WM_DOWN_ARR[Data.MouseType], 1, lParam, , "ahk_id " hwnd
+        else if (oper == "按下") {
+            PostMessage WM_DOWN_ARR[btnIdx], 1, lParam, , "ahk_id " hwnd
         }
-        else if (Data.OperateType == 4) {   ;松开
-            PostMessage WM_UP_ARR[Data.MouseType], 0, lParam, , "ahk_id " hwnd
+        else if (oper == "松开") {
+            PostMessage WM_UP_ARR[btnIdx], 0, lParam, , "ahk_id " hwnd
         }
     }
 }
@@ -1351,7 +1355,7 @@ OnBGKey(tableItem, cmd, index) {
         FloatHold := GetFloatTime(Data.ClickTime, MainSoftData.HoldFloat)
         FloatInterval := GetFloatTime(Data.ClickInterval, MainSoftData.PreIntervalFloat)
         SendBGKey(Data, tableItem, index)
-        if (Data.Type == 3 && A_Index != Data.ClickCount)
+        if (CmdEnumKeyAct(Data.Type) == "点击" && A_Index != Data.ClickCount)
             Sleep(FloatInterval)
     }
 }
@@ -1359,7 +1363,8 @@ OnBGKey(tableItem, cmd, index) {
 SendBGKey(Data, tableItem, index) {
     hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.FrontStr))   ; §22 绑定窗口替换
 
-    if (Data.Type == 1 || Data.Type == 3) {
+    keyAct := CmdEnumKeyAct(Data.Type)
+    if (keyAct == "按下" || keyAct == "点击") {
         for hwnd in hwndList {
             for key in Data.KeyArr {
                 SendBGKeyState(hwnd, key, 1, tableItem, index)
@@ -1368,11 +1373,11 @@ SendBGKey(Data, tableItem, index) {
 
     }
 
-    if (Data.Type == 3) {
+    if (keyAct == "点击") {
         Sleep(Data.ClickTime)
     }
 
-    if (Data.Type == 2 || Data.Type == 3) {
+    if (keyAct == "松开" || keyAct == "点击") {
         for hwnd in hwndList {
             loop Data.KeyArr.Length {
                 key := Data.KeyArr[Data.KeyArr.Length - A_Index + 1]
@@ -1429,7 +1434,7 @@ OnMouseMove(tableItem, cmd, index) {
         PosX := Integer(Data.PosX)
         PosY := Integer(Data.PosY)
         Speed := Integer(Data.Speed)
-        MoveMode := Integer(Data.MoveMode)
+        MoveMode := CmdEnumMoveMode(Data.MoveMode)
     } else {
         PosX := 0, PosY := 0
         if (paramArr.Length < 3 || !TryGetTabVarValue(&PosX, tableItem, index, paramArr[2], false))
@@ -1437,7 +1442,7 @@ OnMouseMove(tableItem, cmd, index) {
         if (paramArr.Length < 3 || !TryGetTabVarValue(&PosY, tableItem, index, paramArr[3], false))
             PosY := (paramArr.Length >= 3 && IsNumber(paramArr[3])) ? Integer(paramArr[3]) : 0
         Speed := paramArr.Length >= 4 ? Integer(paramArr[4]) : 90
-        MoveMode := paramArr.Length >= 5 ? Integer(paramArr[5]) : 0
+        MoveMode := CmdEnumMoveMode(paramArr.Length >= 5 ? paramArr[5] : 0)
     }
 
     PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
@@ -1540,7 +1545,7 @@ OnInterval(tableItem, cmd, index) {
         Data := GetMacroCMDData(paramArr[1])
         time1 := Data.Time1
         time2 := Data.Time2
-        isRandom := Data.Type == 2
+        isRandom := CmdEnumZh(Data.Type, CmdEnumIntervalNames()) == "随机"
     } else {
         time1 := paramArr[2]
         time2 := paramArr.Length >= 3 ? paramArr[3] : ""
@@ -1600,7 +1605,7 @@ OnPressKey(tableItem, cmd, index) {
     if (isConfigCmd) {
         Data := GetMacroCMDData(paramArr[1])
         keyName := Data.KeyName
-        keyTypeVal := Data.KeyType          ; 1按下 2松开 3点击
+        keyTypeVal := CmdEnumKeyAct(Data.KeyType)
         holdTime := Data.HoldTime
         count := Data.Count
         intervalTime := Data.IntervalTime
@@ -1611,8 +1616,7 @@ OnPressKey(tableItem, cmd, index) {
         ; 无需解析 keyType/保持等，后续统一轴分支会直接设值并 return。
         isTextAxisCmd := (paramArr.Length == 2 && RegExMatch(paramArr[2]
             , "^(JoyAxisL[XY]|JoyAxisR[XY]|JoyAxisL[TR]|JoyAxisR[TR]):(-?[0-9]+)$"))
-        keyTypeMap := Map("按下", 1, "松开", 2, "点击", 3)
-        keyTypeVal := isTextAxisCmd ? 1 : keyTypeMap[paramArr[3]]
+        keyTypeVal := isTextAxisCmd ? "按下" : CmdEnumKeyAct(paramArr[3])
         holdTime := paramArr.Length >= 4 ? Integer(paramArr[4]) : 100
         count := paramArr.Length >= 5 ? Integer(paramArr[5]) : 1
         intervalTime := paramArr.Length >= 6 ? Integer(paramArr[6]) : 0
@@ -1624,7 +1628,9 @@ OnPressKey(tableItem, cmd, index) {
     isJoyKey := InStr(keyName, "Joy")
     isJoyAxis := InStr(keyName, "JoyAxis")
     isJoyDpad := InStr(keyName, "JoyDpad")
-    item := tableItem.Items[index]
+    item := GetItemByIndex(tableItem, index)
+    if (!item)
+        return
 
     ; 轴模拟量指令：把该虚拟手柄轴设为目标值并保持。
     ; 轴是连续行为（非按键），无"按下/松开/点击"。直至下一条同轴指令覆盖
@@ -1673,33 +1679,43 @@ OnPressKey(tableItem, cmd, index) {
         FloatHold := GetFloatTime(holdTime, MainSoftData.HoldFloat)
         FloatInterval := GetFloatTime(intervalTime, MainSoftData.PreIntervalFloat)
         SendKeyWrapper(keyName, FloatHold, tableItem, index, keyType, action)
-        if (keyType == 3 && A_Index != count && FloatInterval > 0)
+        if (CmdEnumKeyAct(keyType) == "点击" && A_Index != count && FloatInterval > 0)
             Sleep(FloatInterval)
     }
 }
 
-;按键替换
-OnReplaceDownKey(tableItem, info, index, *) {
-    infos := StrSplit(info, ",")
-    mode := Integer(tableItem.Items[index].Mode)
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
-    action := actionMap[mode]
-    loop infos.Length {
-        assistKey := infos[A_Index]
-        assistKey := StrReplace(assistKey, "逗号", ",")
-        action(assistKey, 1, tableItem, index)
-    }
+;按键替换。热键绑定的是表 ID + 条目 ID，按下时再解析当前行。
+; 行被删除或换序后，旧下标会指向空数组（Invalid index: 1），不能再用行号取 Mode。
+OnReplaceDownKey(tableID, itemID, *) {
+    ReplaceKeySend(tableID, itemID, 1)
 }
 
-OnReplaceUpKey(tableItem, info, index, *) {
-    infos := StrSplit(info, ",")
-    mode := Integer(tableItem.Items[index].Mode)
+OnReplaceUpKey(tableID, itemID, *) {
+    ReplaceKeySend(tableID, itemID, 0)
+}
+
+ReplaceKeySend(tableID, itemID, state) {
+    resolved := ResolveMacroItem(tableID, itemID)
+    if (!resolved)
+        return
+    tableItem := resolved.Table
+    item := resolved.Item
+    index := resolved.Index
+    infos := StrSplit(item.Macro, ",")
+    mode := 1
+    try mode := Integer(item.Mode)
+    catch
+        mode := 1
     actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
+    if (!actionMap.Has(mode))
+        mode := 1
     action := actionMap[mode]
     loop infos.Length {
         assistKey := infos[A_Index]
         assistKey := StrReplace(assistKey, "逗号", ",")
-        action(assistKey, 0, tableItem, index)
+        if (assistKey = "")
+            continue
+        action(assistKey, state, tableItem, index)
     }
 }
 
@@ -2061,8 +2077,6 @@ ApplyKeyCheckResult(Data, isJoy := false) {
     if (keyArr.Length == 0)
         return
 
-    checkType := Data.CheckType
-    stateType := Data.StateType
     varName := Data.VarName
     analogKeys := []
     digitalKeys := []
@@ -2072,6 +2086,8 @@ ApplyKeyCheckResult(Data, isJoy := false) {
         else
             digitalKeys.Push(key)
     }
+    checkType := isJoy ? CmdEnumJoyCheck(Data.CheckType, analogKeys.Length > 0) : CmdEnumZh(Data.CheckType, CmdEnumKeyCheckNames())
+    stateType := CmdEnumZh(Data.StateType, CmdEnumStateNames())
 
     if (analogKeys.Length > 0) {
         ok := true
@@ -2085,22 +2101,22 @@ ApplyKeyCheckResult(Data, isJoy := false) {
         return
     }
 
-    stateMode := stateType == 1 ? "P" : ""
+    stateMode := stateType == "物理状态" ? "P" : ""
     isAllPressed := true
     isAnyPressed := false
     for key in digitalKeys {
-        isPressed := IsCheckKeyPressed(key, stateMode, 2, isJoy)
+        isPressed := IsCheckKeyPressed(key, stateMode, "大于等于", isJoy)
         if (isPressed) {
             isAnyPressed := true
-            if (checkType == 2)
+            if (checkType == "有一个按下")
                 break
         } else {
             isAllPressed := false
-            if (checkType == 1)
+            if (checkType == "同时按下")
                 break
         }
     }
-    result := (checkType == 1) ? (isAllPressed ? 1 : 0) : (isAnyPressed ? 1 : 0)
+    result := (checkType == "同时按下") ? (isAllPressed ? 1 : 0) : (isAnyPressed ? 1 : 0)
     MySetGlobalVariable([varName], [result], false)
 }
 
@@ -2177,20 +2193,20 @@ IsJoyAxisCompare(name, stored, cmpType) {
             if (!IsNumber(raw))
                 continue
             cur := isTrig ? Integer(raw) : Integer((Float(raw) - 50) * 2)
-            switch Integer(cmpType) {
-                case 1:
+            switch CmdEnumJoyCheck(cmpType, true) {
+                case "大于设定值":
                     if (cur > stored)
                         return true
-                case 2:
+                case "大于等于":
                     if (cur >= stored)
                         return true
-                case 3:
+                case "等于设定值":
                     if (cur == stored)
                         return true
-                case 4:
+                case "小于等于":
                     if (cur <= stored)
                         return true
-                case 5:
+                case "小于设定值":
                     if (cur < stored)
                         return true
                 default:
@@ -2243,7 +2259,7 @@ OnScreenShot(tableItem, cmd, index) {
         }
     }
 
-    if (Data.NameType == 1 && Data.FixedName != "") {
+    if (CmdEnumNameType(Data.NameType) == "固定名称" && Data.FixedName != "") {
         fileName := Data.FixedName ".png"
     } else {
         fileName := Data.SerialStr "-" A_Now ".png"
@@ -2259,7 +2275,7 @@ OnScreenShot(tableItem, cmd, index) {
         return
     }
 
-    if (Data.ScreenShotType == 2) {
+    if (CmdEnumZh(Data.ScreenShotType, CmdEnumShotNames()) == "窗口抓图") {
         winInfo := GetReplaceVarText(tableItem, index, ResolveBindWindow(tableItem, index, Data.WinInfo))
         if (winInfo == "") {
             ShotDebugLog("窗口抓图：窗口信息为空，已终止")

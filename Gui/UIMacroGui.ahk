@@ -321,57 +321,12 @@ class UIMacroGui {
         contentH := rows * btnItemH + (rows - 1) * btnGap + bodyMarginV
         ph := titleBarH + contentH + wpfBorderPad
 
-        ; 没有记忆位置时使用固定默认锚点；用户拖动后的坐标由位置记忆优先提供。
-        ; 锚定容器：屏幕模式 → 整个屏幕；窗口跟随模式 → 目标窗口（窗口化时的窗口矩形）。
-        ; 注：XAML 的 Window.Left/Top 使用 DIP（设备无关像素），A_ScreenWidth/GetWindowRect 返回物理像素，
-        ;     屏幕模式按 A_ScreenDPI 换算为 DIP；窗口跟随模式保持物理坐标与 SetWindowPos 跟随逻辑一致。
-        initX := 0, initY := 0
-        baseLeft := 0, baseTop := 0
-        if (isScreenMode) {
-            swDIP := A_ScreenWidth * 96 // A_ScreenDPI
-            shDIP := A_ScreenHeight * 96 // A_ScreenDPI
-            this.CalcDefaultPosition(UIMacroGui.DEFAULT_PANEL_ANCHOR, &initX, &initY, pw, ph, swDIP, shDIP)
-        } else {
-            contW := 0, contH := 0
-            if (targetHwnd) {
-                try {
-                    rect := this.GetWindowRectCoords(targetHwnd)
-                    contW := rect["right"] - rect["left"]
-                    contH := rect["bottom"] - rect["top"]
-                    baseLeft := rect["left"]
-                    baseTop := rect["top"]
-                }
-            }
-            if (contW <= 0)
-                contW := A_ScreenWidth
-            if (contH <= 0)
-                contH := A_ScreenHeight
-            this.CalcDefaultPosition(UIMacroGui.DEFAULT_PANEL_ANCHOR, &initX, &initY, pw, ph, contW, contH)
-            initX += baseLeft
-            initY += baseTop
-        }
-        ; 固定默认偏移只用于首次定位；记忆位置存在时会覆盖此坐标。
-        cfgOffX := UIMacroGui.DEFAULT_PANEL_OFFSET_X
-        cfgOffY := UIMacroGui.DEFAULT_PANEL_OFFSET_Y
-        initX += cfgOffX
-        initY += cfgOffY
-        offsetX := cfgOffX
-        offsetY := cfgOffY
-        ; 用户手动拖过这个面板 → 建窗时就用记忆位置，避免先出现在锚点再被拽过去
-        savedPos := this._PosGet("UIPanelPos", foldIndex, targetHwnd)
-        if (IsObject(savedPos)) {
-            ; 记忆位置来自 WinGetPos（物理像素），而 XAML 的 Left/Top 是 DIP：
-            ; 屏幕模式下必须换算，否则高分屏上会偏到别处（表现为"总在球的右边"）。
-            if (isScreenMode) {
-                scale := A_ScreenDPI / 96
-                initX := Round(savedPos.x / scale)
-                initY := Round(savedPos.y / scale)
-            } else {
-                initX := savedPos.x
-                initY := savedPos.y
-            }
-        }
-
+        ; 默认位置来自模块设置。用户拖动后的记忆位置优先。
+        ; 屏幕模式的 Left/Top 用 DIP，窗口跟随保持物理像素，与 SetWindowPos 一致。
+        mode := 0, anchor := 6, offX := -50, offY := 50
+        this._PlaceByFold(fold, foldIndex, targetHwnd, isScreenMode, pw, ph, &initX, &initY, &mode, &anchor, &offX, &offY)
+        offsetX := offX
+        offsetY := offY
 
         ; 构建XAML（与 floating_panel L213-233 完全一致的结构）
         main := XAML_Generator("Grid")
@@ -379,6 +334,7 @@ class UIMacroGui {
         main.Rows(titleBarH, "*")
 
         titleBar := main.Add("Border").Grid_Row(0).Name("TitleBar").Background("{DynamicResource UIPanelTitleBg}")
+            .WindowChrome_IsHitTestVisibleInChrome("True")
         titleBar.Add("TextBlock").Name("TitleText").Text(foldRemark)
             .Foreground("{DynamicResource UIPanelTitleText}").FontSize(11).FontWeight("SemiBold")
             .VerticalAlignment("Center").HorizontalAlignment("Center").Margin("6,0,6,0")
@@ -440,6 +396,7 @@ class UIMacroGui {
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
 
         ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="RMT Panel" ShowInTaskbar="False" Width="' pw '" Height="' ph '"')
+        ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         ui.xaml := StrReplace(ui.xaml, 'WindowStartupLocation="CenterScreen"', 'Left="' initX '" Top="' initY '" WindowStartupLocation="Manual"')
         ui.xaml := StrReplace(ui.xaml, 'AllowsTransparency="False"', 'AllowsTransparency="True"')
         ui.xaml := StrReplace(ui.xaml, 'Background="Transparent"', 'Background="' bgColor '"')
@@ -457,6 +414,8 @@ class UIMacroGui {
         for i, item in btnItems {
             ui.OnEvent(item.name, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "_OnBtnClick", item.macroId, panelKey))
         }
+        try ui.OnEvent("TitleBar", "PreviewMouseLeftButtonDown", ObjBindMethod(this, "_OnTitleGrab", panelKey))
+        try ui.OnEvent("Window", "StateChanged", ObjBindMethod(this, "_OnPanelStateChanged", panelKey))
 
         ; 显示窗口（对齐 floating_panel L254）
         ui.Show()
@@ -483,7 +442,8 @@ class UIMacroGui {
             frontInfo: fold ? fold.FrontInfo : "",
             visible: true,
             btnItems: btnItems,
-            anchorPos: UIMacroGui.DEFAULT_PANEL_ANCHOR,
+            posMode: mode,
+            anchor: anchor,
             offsetX: offsetX,
             offsetY: offsetY,
             lastSetX: "",
@@ -1208,6 +1168,39 @@ class UIMacroGui {
         }
     }
 
+    ; 用户改了模块位置后，丢掉该模块的拖动记忆，否则新锚点会被旧坐标盖住。
+    _PosForget(store, foldIndex) {
+        global SettingSection
+        base := this._PositionKey(foldIndex)
+        legacy := String(foldIndex)
+        raw := (store == "UIPanelPos") ? MainSoftData.UIPanelPos : MainSoftData.UIPanelBallPos
+        out := []
+        for part in StrSplit(String(raw), ";") {
+            p := Trim(part)
+            if (p == "")
+                continue
+            eq := InStr(p, "=")
+            if (!eq) {
+                out.Push(p)
+                continue
+            }
+            k := SubStr(p, 1, eq - 1)
+            if (k == base || k == legacy || InStr(k, base "|") == 1 || InStr(k, legacy "|") == 1)
+                continue
+            out.Push(p)
+        }
+        str := ""
+        for p in out
+            str .= (str == "" ? "" : ";") p
+        if (store == "UIPanelPos") {
+            MainSoftData.UIPanelPos := str
+            try CfgWrite(str, SettingFile, SettingSection, "UIPanelPos")
+        } else {
+            MainSoftData.UIPanelBallPos := str
+            try CfgWrite(str, SettingFile, SettingSection, "UIPanelBallPos")
+        }
+    }
+
     ; 球态窗口：短按展开，拖动后保存位置。
     _BuildCustomBall(foldIndex, targetHwnd, isScreenMode, skipActivate, panelKey := "") {
         if (panelKey == "")
@@ -1336,11 +1329,24 @@ class UIMacroGui {
         this._ToggleBall(panelKey, false)
     }
 
-    ; 按住标题栏：等松手记录位置（不拦截原生拖动，只观察）
-    _OnTitleGrab(panelKey, *) {
+    ; 标题栏可命中，双击走这里关闭，不再被系统当成标题栏双击而最大化。
+    ; 单击仍交给系统拖动。
+    _OnTitleGrab(panelKey, state, *) {
         info := this._FindPanelInfo(panelKey)
         if (!IsObject(info) || !info.wpfHwnd)
             return
+        onBtn := this._TitleClickOnButton(info, state)
+        if (!onBtn && IsObject(state) && state.Has("ClickCount") && Integer(state["ClickCount"]) >= 2) {
+            this._StopTitleDragArm()
+            if (IsObject(this._PosTickFn))
+                SetTimer(this._PosTickFn, 0)
+            this._PosWatchHwnd := 0
+            info._manualPos := false
+            this._OnPanelCloseClick(panelKey)
+            return
+        }
+        if (!onBtn)
+            this._ArmTitleDrag(info)
         this._PosWatchHwnd := info.wpfHwnd
         this._PosWatchPanelKey := panelKey
         this._PosWatchFold := info.foldIndex
@@ -1385,16 +1391,69 @@ class UIMacroGui {
             info._manualPos := true
     }
 
-    ; 面板被系统最大化 → 还原（固定尺寸面板不该有最大化态）
+    ; 事件字符串会被当成 Base64 解码，不能拿来判断 Maximized。看窗口真实状态。
     _OnPanelStateChanged(panelKey, *) {
         info := this._FindPanelInfo(panelKey)
-        if (!IsObject(info) || !IsObject(info.ui))
+        if (!IsObject(info) || !info.wpfHwnd)
             return
-        try {
-            if (info.ui.Query("Window>WindowState") == "Maximized")
-                info.ui.Update("Window", "WindowState", "Normal")
-        } catch {
+        if (WinGetMinMax("ahk_id " info.wpfHwnd) != 1)
+            return
+        this._StopTitleDragArm()
+        if (IsObject(this._PosTickFn))
+            SetTimer(this._PosTickFn, 0)
+        this._PosWatchHwnd := 0
+        info._manualPos := false
+        this._PosForget("UIPanelPos", info.foldIndex)
+        this._OnPanelCloseClick(panelKey)
+    }
+
+    ; 按住不动先不拖，避免把双击吃掉。鼠标移开再交给系统拖动。
+    _ArmTitleDrag(info) {
+        MouseGetPos(&mx, &my)
+        this._dragArmHwnd := info.wpfHwnd
+        this._dragArmX := mx
+        this._dragArmY := my
+        if (!IsObject(this._dragArmFn))
+            this._dragArmFn := ObjBindMethod(this, "_PollTitleDrag")
+        SetTimer(this._dragArmFn, 15)
+    }
+
+    _StopTitleDragArm() {
+        if (IsObject(this._dragArmFn))
+            SetTimer(this._dragArmFn, 0)
+        this._dragArmHwnd := 0
+    }
+
+    _PollTitleDrag() {
+        hwnd := this.HasProp("_dragArmHwnd") ? this._dragArmHwnd : 0
+        if (!hwnd || !GetKeyState("LButton", "P")) {
+            this._StopTitleDragArm()
+            return
         }
+        MouseGetPos(&mx, &my)
+        if (Abs(mx - this._dragArmX) <= 4 && Abs(my - this._dragArmY) <= 4)
+            return
+        this._StopTitleDragArm()
+        if (DllCall("user32\IsWindow", "Ptr", hwnd))
+            PostMessage(0xA1, 2, 0, , "ahk_id " hwnd)
+    }
+
+    ; 点在标题栏右侧按钮或左侧页码上时，不启动拖动。
+    _TitleClickOnButton(info, state) {
+        if (!IsObject(state) || !state.Has("TitleBar"))
+            return false
+        parts := StrSplit(state["TitleBar"], ",")
+        if (parts.Length < 1 || !IsNumber(Trim(parts[1])))
+            return false
+        x := Integer(Trim(parts[1]))
+        w := 0
+        try WinGetPos(, , &w, , "ahk_id " info.wpfHwnd)
+        if (w > 0)
+            w := w * 96 // A_ScreenDPI
+        if (w > 60 && x >= w - 60)
+            return true
+        pages := (info.HasProp("_pages") && Integer(info._pages) > 1) ? Integer(info._pages) : 0
+        return pages > 0 && x <= 6 + pages * 18
     }
 
     ; 标题栏「—」：收起成悬浮球
@@ -1438,8 +1497,8 @@ class UIMacroGui {
     _OnPanelCloseClick(panelKey, *) {
         info := this._FindPanelInfo(panelKey)
         if (IsObject(info)) {
-            ; 关之前记下当前位置（用户摆好的位置）
-            if (info.wpfHwnd && !info.HasProp("_isBall")) {
+            ; 只有用户拖动过才记住屏幕坐标。没拖过就继续按模块锚点跟随。
+            if (info.wpfHwnd && !info.HasProp("_isBall") && info.HasProp("_manualPos") && info._manualPos) {
                 cx := 0, cy := 0
                 try WinGetPos(&cx, &cy, , , "ahk_id " info.wpfHwnd)
                 if (cx != 0 || cy != 0)
@@ -1485,52 +1544,11 @@ class UIMacroGui {
         if (Trim(String(foldRemark)) == "")
             foldRemark := GetLang("面板") " " foldIndex
 
-        ; 位置计算：与原逻辑一致
-        initX := 0, initY := 0
-        baseLeft := 0, baseTop := 0
-        if (isScreenMode) {
-            swDIP := A_ScreenWidth * 96 // A_ScreenDPI
-            shDIP := A_ScreenHeight * 96 // A_ScreenDPI
-            this.CalcDefaultPosition(UIMacroGui.DEFAULT_PANEL_ANCHOR, &initX, &initY, pw, ph, swDIP, shDIP)
-        } else {
-            contW := 0, contH := 0
-            if (targetHwnd) {
-                try {
-                    rect := this.GetWindowRectCoords(targetHwnd)
-                    contW := rect["right"] - rect["left"]
-                    contH := rect["bottom"] - rect["top"]
-                    baseLeft := rect["left"]
-                    baseTop := rect["top"]
-                }
-            }
-            if (contW <= 0)
-                contW := A_ScreenWidth
-            if (contH <= 0)
-                contH := A_ScreenHeight
-            this.CalcDefaultPosition(UIMacroGui.DEFAULT_PANEL_ANCHOR, &initX, &initY, pw, ph, contW, contH)
-            initX += baseLeft
-            initY += baseTop
-        }
-        cfgOffX := UIMacroGui.DEFAULT_PANEL_OFFSET_X
-        cfgOffY := UIMacroGui.DEFAULT_PANEL_OFFSET_Y
-        initX += cfgOffX
-        initY += cfgOffY
-        offsetX := cfgOffX
-        offsetY := cfgOffY
-        ; 用户手动拖过这个面板 → 建窗时就用记忆位置，避免先出现在锚点再被拽过去
-        savedPos := this._PosGet("UIPanelPos", foldIndex, targetHwnd)
-        if (IsObject(savedPos)) {
-            ; 记忆位置来自 WinGetPos（物理像素），而 XAML 的 Left/Top 是 DIP：
-            ; 屏幕模式下必须换算，否则高分屏上会偏到别处（表现为"总在球的右边"）。
-            if (isScreenMode) {
-                scale := A_ScreenDPI / 96
-                initX := Round(savedPos.x / scale)
-                initY := Round(savedPos.y / scale)
-            } else {
-                initX := savedPos.x
-                initY := savedPos.y
-            }
-        }
+        ; 默认位置来自模块设置。用户拖动后的记忆位置优先。
+        mode := 0, anchor := 6, offX := -50, offY := 50
+        this._PlaceByFold(fold, foldIndex, targetHwnd, isScreenMode, pw, ph, &initX, &initY, &mode, &anchor, &offX, &offY)
+        offsetX := offX
+        offsetY := offY
 
 
         main := XAML_Generator("Grid")
@@ -1539,6 +1557,7 @@ class UIMacroGui {
 
         ; 标题栏：只有一行居中的标题文字，不加任何按钮
         titleBar := main.Add("Border").Grid_Row(0).Name("TitleBar").Background("{DynamicResource UIPanelTitleBg}")
+            .WindowChrome_IsHitTestVisibleInChrome("True")
         tbGrid := titleBar.Add("Grid")
         tbGrid.Add("TextBlock").Name("TitleText").Text(foldRemark)
             .Foreground("{DynamicResource UIPanelTitleText}").FontSize(11).FontWeight("SemiBold")
@@ -1634,6 +1653,7 @@ class UIMacroGui {
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
 
         ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="RMT Panel" ShowInTaskbar="False" Width="' pw '" Height="' ph '"')
+        ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         ui.xaml := StrReplace(ui.xaml, 'WindowStartupLocation="CenterScreen"', 'Left="' initX '" Top="' initY '" WindowStartupLocation="Manual"')
         ui.xaml := StrReplace(ui.xaml, 'AllowsTransparency="False"', 'AllowsTransparency="True"')
         ui.xaml := StrReplace(ui.xaml, 'Background="Transparent"', 'Background="' bgColor '"')
@@ -1680,7 +1700,7 @@ class UIMacroGui {
         ; 标题栏右上角两个按钮：收起成球 / 关闭浮窗
         try ui.OnEvent("BtnPanelBall", "Click", ObjBindMethod(this, "_OnPanelBallClick", panelKey))
         try ui.OnEvent("BtnPanelClose", "Click", ObjBindMethod(this, "_OnPanelCloseClick", panelKey))
-        ; 兜底：鼠标双击标题栏时系统会把它当 caption 双击而最大化，这里立刻还原
+        ; 双击标题：系统会先把它最大化，这里收到状态变化后关闭浮窗
         try ui.OnEvent("Window", "StateChanged", ObjBindMethod(this, "_OnPanelStateChanged", panelKey))
 
         ; 绑定控件的改动会即时更新内存，关闭面板时由快照决定是否还原。
@@ -1745,7 +1765,8 @@ class UIMacroGui {
             btnItems: [],
             _isCustom: true,
             _pages: pages,
-            anchorPos: UIMacroGui.DEFAULT_PANEL_ANCHOR,
+            posMode: mode,
+            anchor: anchor,
             offsetX: offsetX,
             offsetY: offsetY,
             lastSetX: "",
@@ -1913,29 +1934,34 @@ class UIMacroGui {
         if (ph <= 0)
             ph := 200
 
-        ; ====== 锚点基准（相对目标窗口左上角） ======
-        ; 依据窗口当前尺寸实时计算，窗口缩放时中心/右上/右下等锚点会随新尺寸重新定位
-        anchorX := 0, anchorY := 0
-        anchorPos := panelInfo.HasProp("anchorPos") ? panelInfo.anchorPos : 1
-        this.CalcDefaultPosition(anchorPos, &anchorX, &anchorY, pw, ph, winW, winH)
-
-        ; ====== 位置变化检测（替代三阶段拖拽检测） ======
-        ; 原理：记录我们上次 SetWindowPos 设到的位置(lastSetX/Y)。
-        ;   - 如果实际位置 == lastSetX/Y → 没有外部干扰 → 正常跟随
-        ;   - 如果实际位置 != lastSetX/Y → 有外部力量移动了面板(用户拖拽等)
-        ;     → 把「实际位置相对锚点基准」的差值写回 offset → 之后用新 offset 跟随
-        if (panelInfo.lastSetX != "" && panelInfo.lastSetY != "") {
-            devX := Abs(panelRect["left"] - panelInfo.lastSetX)
-            devY := Abs(panelRect["top"] - panelInfo.lastSetY)
-            if (devX > 3 || devY > 3) {
-                panelInfo.offsetX := panelRect["left"] - rect["left"] - anchorX
-                panelInfo.offsetY := panelRect["top"] - rect["top"] - anchorY
+        ; 绝对坐标固定在屏幕上。相对坐标跟随目标窗口，锚点随窗口尺寸变化。
+        mode := panelInfo.HasProp("posMode") ? panelInfo.posMode : 0
+        if (mode == 1) {
+            if (panelInfo.lastSetX != "" && panelInfo.lastSetY != "") {
+                devX := Abs(panelRect["left"] - panelInfo.lastSetX)
+                devY := Abs(panelRect["top"] - panelInfo.lastSetY)
+                if (devX > 3 || devY > 3) {
+                    panelInfo.offsetX := panelRect["left"]
+                    panelInfo.offsetY := panelRect["top"]
+                }
             }
+            newX := panelInfo.offsetX
+            newY := panelInfo.offsetY
+        } else {
+            anchorX := 0, anchorY := 0
+            anchor := panelInfo.HasProp("anchor") ? panelInfo.anchor : 6
+            this._AnchorBase(anchor, pw, ph, winW, winH, &anchorX, &anchorY)
+            if (panelInfo.lastSetX != "" && panelInfo.lastSetY != "") {
+                devX := Abs(panelRect["left"] - panelInfo.lastSetX)
+                devY := Abs(panelRect["top"] - panelInfo.lastSetY)
+                if (devX > 3 || devY > 3) {
+                    panelInfo.offsetX := panelRect["left"] - rect["left"] - anchorX
+                    panelInfo.offsetY := panelRect["top"] - rect["top"] - anchorY
+                }
+            }
+            newX := rect["left"] + anchorX + panelInfo.offsetX
+            newY := rect["top"] + anchorY + panelInfo.offsetY
         }
-
-        ; 阶段3 — 正常跟随移动（窗口移动/缩放都会使锚点基准变化而正确跟随）
-        newX := rect["left"] + anchorX + panelInfo.offsetX
-        newY := rect["top"] + anchorY + panelInfo.offsetY
         ownerHwnd := panelInfo.targetHwnd
         DllCall("user32\SetWindowPos"
             , "Ptr", hwnd
@@ -2044,16 +2070,14 @@ class UIMacroGui {
             panelInfo._topmostDone := false
             ; SW_SHOWNA：显示但不抢焦点，保持鼠标下仍是目标窗，下次触发判断更稳定
             DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 8)
+            ; 没拖动过：按模块位置重新摆放并继续跟随。拖动过：Apply 会优先用记忆坐标。
+            this._ResetPosFromFold(panelInfo)
+            panelInfo.lastSetX := ""
+            panelInfo.lastSetY := ""
             this.ApplyPanelPosition(panelInfo)
-            ; 重新显示后重置内部默认偏移；已记忆的用户位置会优先使用。
-            if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
-                panelInfo.offsetX := UIMacroGui.DEFAULT_PANEL_OFFSET_X
-                panelInfo.offsetY := UIMacroGui.DEFAULT_PANEL_OFFSET_Y
-            }
         } else {
-            ; 用户用快捷键隐藏 = 已经摆好了位置：先把当前位置记下来，
-            ; 否则下次打开 ApplyPanelPosition 会按旧记录把它挪回移动前的位置。
-            if (panelInfo.wpfHwnd && !panelInfo.HasProp("_isBall")) {
+            ; 拖动过才记下屏幕坐标，避免一次隐藏就把相对跟随钉死。
+            if (panelInfo.wpfHwnd && !panelInfo.HasProp("_isBall") && panelInfo.HasProp("_manualPos") && panelInfo._manualPos) {
                 px := 0, py := 0
                 try WinGetPos(&px, &py, , , "ahk_id " panelInfo.wpfHwnd)
                 if (px != 0 || py != 0)
@@ -2398,11 +2422,8 @@ class UIMacroGui {
                         pr := this.GetWindowRectCoords(panelInfo.wpfHwnd)
                         pw := pr["right"] - pr["left"]
                         ph := pr["bottom"] - pr["top"]
-                        anchorX := 0, anchorY := 0
-                        anchorPos := panelInfo.HasProp("anchorPos") ? panelInfo.anchorPos : 1
-                        this.CalcDefaultPosition(anchorPos, &anchorX, &anchorY, pw, ph, winW, winH)
-                        restoreX := targetRect["left"] + anchorX + panelInfo.offsetX
-                        restoreY := targetRect["top"] + anchorY + panelInfo.offsetY
+                        restoreX := 0, restoreY := 0
+                        this._PanelScreenPos(panelInfo, targetRect["left"], targetRect["top"], winW, winH, pw, ph, &restoreX, &restoreY)
                         DllCall("user32\SetWindowPos"
                             , "Ptr", panelInfo.wpfHwnd, "Ptr", panelInfo.targetHwnd
                             , "Int", restoreX, "Int", restoreY
@@ -2542,21 +2563,181 @@ class UIMacroGui {
         }
     }
 
-    ; 有记忆位置时优先恢复；否则使用内部默认位置。
+    ; 把已打开的该模块浮窗立刻挪到当前保存的位置。
+    ApplyFoldPosition(foldIndex) {
+        tableItem := GetTableBySymbol("UI")
+        if (!tableItem || foldIndex < 1 || foldIndex > tableItem.Folds.Length)
+            return
+        fold := tableItem.Folds[foldIndex]
+        this._PosForget("UIPanelPos", foldIndex)
+        for key, panelInfo in this.PanelMap {
+            if (!IsObject(panelInfo))
+                continue
+            if (panelInfo.foldIndex != foldIndex && panelInfo.foldIndex != fold.ID)
+                continue
+            this._ResetPosFromFold(panelInfo, fold)
+            panelInfo.lastSetX := ""
+            panelInfo.lastSetY := ""
+            panelInfo._manualPos := false
+            if (!panelInfo.visible || !panelInfo.wpfHwnd)
+                continue
+            if (!panelInfo.isScreenMode && panelInfo.panelReady)
+                this.FollowSinglePanel(key)
+            else
+                this.ApplyPanelPosition(panelInfo)
+        }
+    }
+
+    _FoldOf(panelInfo) {
+        tableItem := GetTableBySymbol("UI")
+        if (!tableItem || !IsObject(panelInfo) || !panelInfo.HasProp("foldIndex"))
+            return ""
+        idx := panelInfo.foldIndex
+        if (IsInteger(idx) && idx >= 1 && idx <= tableItem.Folds.Length)
+            return tableItem.Folds[idx]
+        if (tableItem.FoldMap.Has(idx))
+            return tableItem.FoldMap[idx]
+        return ""
+    }
+
+    _Num(v, def) {
+        if (IsInteger(v))
+            return v
+        if (IsNumber(v))
+            return Integer(v)
+        return def
+    }
+
+    ; offX/offY：相对模式是偏移，绝对模式是屏幕坐标。
+    _ReadFoldPos(fold, &mode, &anchor, &offX, &offY) {
+        mode := 0
+        anchor := 6
+        offX := -50
+        offY := 50
+        if (!IsObject(fold))
+            return
+        mode := fold.HasProp("PosMode") && this._Num(fold.PosMode, 0) == 1 ? 1 : 0
+        anchor := fold.HasProp("Anchor") ? this._Num(fold.Anchor, 6) : 6
+        if (anchor < 0 || anchor > 8)
+            anchor := 6
+        if (mode == 1) {
+            offX := fold.HasProp("PosX") ? this._Num(fold.PosX, 0) : 0
+            offY := fold.HasProp("PosY") ? this._Num(fold.PosY, 0) : 0
+        } else {
+            offX := fold.HasProp("OffsetX") ? this._Num(fold.OffsetX, -50) : -50
+            offY := fold.HasProp("OffsetY") ? this._Num(fold.OffsetY, 50) : 50
+        }
+    }
+
+    _ResetPosFromFold(panelInfo, fold := "") {
+        if (!IsObject(fold))
+            fold := this._FoldOf(panelInfo)
+        mode := 0, anchor := 6, offX := -50, offY := 50
+        this._ReadFoldPos(fold, &mode, &anchor, &offX, &offY)
+        panelInfo.posMode := mode
+        panelInfo.anchor := anchor
+        panelInfo.offsetX := offX
+        panelInfo.offsetY := offY
+    }
+
+    ; 0左上 1左中 2左下 3中上 4中心 5中下 6右上 7右中 8右下。点相对矩形左上角。
+    _AnchorPoint(anchor, w, h, &x, &y) {
+        col := 2, row := 0
+        switch this._Num(anchor, 6) {
+            case 0: col := 0, row := 0
+            case 1: col := 0, row := 1
+            case 2: col := 0, row := 2
+            case 3: col := 1, row := 0
+            case 4: col := 1, row := 1
+            case 5: col := 1, row := 2
+            case 6: col := 2, row := 0
+            case 7: col := 2, row := 1
+            case 8: col := 2, row := 2
+        }
+        x := col == 0 ? 0 : (col == 1 ? w // 2 : w)
+        y := row == 0 ? 0 : (row == 1 ? h // 2 : h)
+    }
+
+    ; 偏移为 0 时浮窗左上角相对容器左上角的位置。右下、偏移 0,0 时浮窗右下角与容器右下角重合。
+    _AnchorBase(anchor, pw, ph, contW, contH, &x, &y) {
+        tx := 0, ty := 0, fx := 0, fy := 0
+        this._AnchorPoint(anchor, contW, contH, &tx, &ty)
+        this._AnchorPoint(anchor, pw, ph, &fx, &fy)
+        x := tx - fx
+        y := ty - fy
+    }
+
+    _PanelScreenPos(info, baseLeft, baseTop, contW, contH, pw, ph, &x, &y) {
+        if (info.HasProp("posMode") && info.posMode == 1) {
+            x := info.offsetX
+            y := info.offsetY
+            return
+        }
+        ax := 0, ay := 0
+        anchor := info.HasProp("anchor") ? info.anchor : 6
+        this._AnchorBase(anchor, pw, ph, contW, contH, &ax, &ay)
+        x := baseLeft + ax + info.offsetX
+        y := baseTop + ay + info.offsetY
+    }
+
+    ; 建窗时的初始坐标。没有拖动记忆时用模块位置设置；有记忆则用记忆。
+    ; 屏幕模式的 Left/Top 用 DIP，窗口跟随保持物理像素。
+    _PlaceByFold(fold, foldIndex, targetHwnd, isScreenMode, pw, ph, &initX, &initY, &mode, &anchor, &offX, &offY) {
+        mode := 0, anchor := 6, offX := -50, offY := 50
+        this._ReadFoldPos(fold, &mode, &anchor, &offX, &offY)
+        dpi := A_ScreenDPI < 96 ? 96 : A_ScreenDPI
+        physPw := pw * dpi // 96
+        physPh := ph * dpi // 96
+        baseLeft := 0, baseTop := 0, contW := A_ScreenWidth, contH := A_ScreenHeight
+        if (!isScreenMode && targetHwnd && mode != 1) {
+            try {
+                rect := this.GetWindowRectCoords(targetHwnd)
+                w := rect["right"] - rect["left"]
+                h := rect["bottom"] - rect["top"]
+                if (w > 0 && h > 0) {
+                    contW := w
+                    contH := h
+                    baseLeft := rect["left"]
+                    baseTop := rect["top"]
+                }
+            }
+        }
+        physX := 0, physY := 0
+        posStub := { posMode: mode, anchor: anchor, offsetX: offX, offsetY: offY }
+        this._PanelScreenPos(posStub, baseLeft, baseTop, contW, contH, physPw, physPh, &physX, &physY)
+        if (isScreenMode) {
+            initX := physX * 96 // dpi
+            initY := physY * 96 // dpi
+        } else {
+            initX := physX
+            initY := physY
+        }
+        savedPos := this._PosGet("UIPanelPos", foldIndex, targetHwnd)
+        if (IsObject(savedPos)) {
+            if (isScreenMode) {
+                scale := A_ScreenDPI / 96
+                initX := Round(savedPos.x / scale)
+                initY := Round(savedPos.y / scale)
+            } else {
+                initX := savedPos.x
+                initY := savedPos.y
+            }
+        }
+    }
+
+    ; 有拖动记忆时优先恢复；否则按模块位置设置放置。
     ApplyPanelPosition(panelInfo) {
-        ; 用户手动拖过 → 以记忆位置为准，不再按锚点/跟随重算
         if (panelInfo.HasProp("foldIndex")) {
             saved := this._PosGet("UIPanelPos", panelInfo.foldIndex, panelInfo.targetHwnd)
             if (IsObject(saved) && panelInfo.wpfHwnd) {
                 try DllCall("user32\SetWindowPos", "Ptr", panelInfo.wpfHwnd, "Ptr", 0
                     , "Int", saved.x, "Int", saved.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004)
+                panelInfo.lastSetX := saved.x
+                panelInfo.lastSetY := saved.y
                 panelInfo._manualPos := true
-
                 return
             }
         }
-
-        ; 获取面板尺寸
         try {
             rect := this.GetWindowRectCoords(panelInfo.wpfHwnd)
             pw := rect["right"] - rect["left"]
@@ -2564,36 +2745,32 @@ class UIMacroGui {
         } catch {
             pw := 250, ph := 200
         }
+        if (pw <= 0)
+            pw := 250
+        if (ph <= 0)
+            ph := 200
 
-        initX := 0, initY := 0
-        baseLeft := 0, baseTop := 0
-        contW := 0, contH := 0
-
-        ; 窗口跟随模式：以目标窗口为锚定容器；否则以屏幕为容器
-        if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
+        baseLeft := 0, baseTop := 0, contW := A_ScreenWidth, contH := A_ScreenHeight
+        mode := panelInfo.HasProp("posMode") ? panelInfo.posMode : 0
+        if (mode != 1 && !panelInfo.isScreenMode && panelInfo.targetHwnd) {
             try {
                 wRect := this.GetWindowRectCoords(panelInfo.targetHwnd)
-                contW := wRect["right"] - wRect["left"]
-                contH := wRect["bottom"] - wRect["top"]
-                baseLeft := wRect["left"]
-                baseTop := wRect["top"]
+                w := wRect["right"] - wRect["left"]
+                h := wRect["bottom"] - wRect["top"]
+                if (w > 0 && h > 0) {
+                    contW := w
+                    contH := h
+                    baseLeft := wRect["left"]
+                    baseTop := wRect["top"]
+                }
             }
         }
-        if (contW <= 0)
-            contW := A_ScreenWidth
-        if (contH <= 0)
-            contH := A_ScreenHeight
-
-        this.CalcDefaultPosition(UIMacroGui.DEFAULT_PANEL_ANCHOR, &initX, &initY, pw, ph, contW, contH)
-        initX += baseLeft
-        initY += baseTop
-
-        initX += UIMacroGui.DEFAULT_PANEL_OFFSET_X
-        initY += UIMacroGui.DEFAULT_PANEL_OFFSET_Y
-
+        initX := 0, initY := 0
+        this._PanelScreenPos(panelInfo, baseLeft, baseTop, contW, contH, pw, ph, &initX, &initY)
         DllCall("user32\SetWindowPos", "Ptr", panelInfo.wpfHwnd, "Ptr", 0
             , "Int", initX, "Int", initY, "Int", 0, "Int", 0, "UInt", 0x0001)
-
+        panelInfo.lastSetX := initX
+        panelInfo.lastSetY := initY
     }
 
     GetWindowRectCoords(hwnd) {

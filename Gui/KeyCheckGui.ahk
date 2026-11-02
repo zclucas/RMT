@@ -328,8 +328,8 @@ class KeyCheckGui {
         if (cmdArr.Length >= 2)
             this.KeyStr := cmdArr[2]
 
-        this.ui.Update("CheckTypeCon", "SelectedIndex", String((this.Data.CheckType ? this.Data.CheckType : 1) - 1))
-        this.ui.Update("StateTypeCon", "SelectedIndex", String((this.Data.StateType ? this.Data.StateType : 1) - 1))
+        this.ui.Update("CheckTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.CheckType, CmdEnumKeyCheckNames())))
+        this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
         this._SetCombo("VarNameCon", this.DLVariableArr, this.Data.VarName != "" ? this.Data.VarName : "Var1")
 
         this.RefreshCheckCon(this.KeyStr)
@@ -361,8 +361,8 @@ class KeyCheckGui {
     SaveKeyCheckData() {
         data := this.Data
         data.KeyArr := this.CheckedArr.Clone()
-        data.CheckType := IsObject(this.ui) ? (Integer(this.ui.Query("CheckTypeCon>SelectedIndex")) + 1) : 1
-        data.StateType := IsObject(this.ui) ? (Integer(this.ui.Query("StateTypeCon>SelectedIndex")) + 1) : 1
+        data.CheckType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("CheckTypeCon>SelectedIndex") : "", CmdEnumKeyCheckNames())
+        data.StateType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("StateTypeCon>SelectedIndex") : "", CmdEnumStateNames())
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
         MySoftData.GlobalVariMap[data.VarName] := true
 

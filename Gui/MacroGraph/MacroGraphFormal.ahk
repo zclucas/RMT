@@ -93,21 +93,22 @@ class MacroGraphFormalMixin {
     }
 
     _WaitPanelName(waitType) {
-        t := IsNumber(waitType) ? Integer(waitType) : 1
-        switch t {
-            case 1:
+        switch CmdEnumWait(waitType) {
+            case "等待变量值":
                 return "Var"
-            case 2, 3:
+            case "等待按键按下", "等待按键松开":
                 return "Key"
-            case 4:
+            case "等待屏幕变化":
                 return "Range"
-            case 8, 9:
+            case "等待鼠标移动", "等待鼠标停止移动", "等待剪切板变化":
+                return "Hint"
+            case "等待进程存在", "等待进程关闭":
                 return "Proc"
-            case 10, 11, 12, 13, 14, 15:
+            case "等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化":
                 return "Win"
-            case 16, 17, 18:
+            case "等待文件存在", "等待文件删除", "等待文件变化":
                 return "File"
-            case 19:
+            case "等待日期":
                 return "Date"
             default:
                 return ""
@@ -140,7 +141,7 @@ class MacroGraphFormalMixin {
     }
 
     _FormalVarOpTypes() {
-        return GetLangArr(["数值", "随机数值", "字符", "系统", "删除"])
+        return GetLangArr(CmdEnumOperaNames())
     }
 
     _FormalMacroIndexItems(macroType) {
@@ -360,11 +361,9 @@ class MacroGraphFormalMixin {
 
     _FillWaitBody(id, d, body) {
         lw := this._FormalLW(), cw := this._FormalCW()
-        waitType := d.HasOwnProp("waitType") ? d.waitType : 1
+        waitType := d.HasOwnProp("waitType") ? d.waitType : "等待变量值"
         typeNames := GetLangArr(this._WaitTypeKeys())
-        idx := IsNumber(waitType) ? Integer(waitType) - 1 : 0
-        if (idx < 0 || idx >= typeNames.Length)
-            idx := 0
+        idx := CmdEnumIndex(waitType, this._WaitTypeKeys())
         panel := this._WaitPanelName(waitType)
         p1 := d.HasOwnProp("waitParam1") ? d.waitParam1 : ""
         p2 := d.HasOwnProp("waitParam2") ? d.waitParam2 : ""
@@ -376,10 +375,25 @@ class MacroGraphFormalMixin {
         this._AddEditableComboRow(body, "WaitVarNameRow_" id, GetLang("变量名："), "WaitVarName_" id, varList, p1, panel == "Var", lw, cw)
         this._AddEditableComboRow(body, "WaitVarValRow_" id, GetLang("期望值："), "WaitVarVal_" id, varList, p2, panel == "Var", lw, cw)
         this._AddFieldRow(body, "WaitKeyRow_" id, GetLang("按键："), "WaitKey_" id, p1, panel == "Key", true, "", "", "", lw, cw)
+        keyPick := body.Add("StackPanel").Name("WaitKeyPickRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
+        if (panel != "Key")
+            keyPick.Visibility("Collapsed")
+        keyPick.Add("TextBlock").Width(lw)
+        keyPick.Add("Button").Name("WaitKeyPick_" id).Content(GetLang("录入按键")).FontSize(this._MGFontSize(11)).Height("20").Padding("8,0")
         this._AddEditableComboRow(body, "WaitSXRow_" id, GetLang("起始坐标X："), "WaitSX_" id, varList, d.HasOwnProp("waitStartX") ? d.waitStartX : 0, panel == "Range", lw, cw)
         this._AddEditableComboRow(body, "WaitSYRow_" id, GetLang("起始坐标Y："), "WaitSY_" id, varList, d.HasOwnProp("waitStartY") ? d.waitStartY : 0, panel == "Range", lw, cw)
         this._AddEditableComboRow(body, "WaitEXRow_" id, GetLang("终止坐标X："), "WaitEX_" id, varList, d.HasOwnProp("waitEndX") ? d.waitEndX : A_ScreenWidth, panel == "Range", lw, cw)
         this._AddEditableComboRow(body, "WaitEYRow_" id, GetLang("终止坐标Y："), "WaitEY_" id, varList, d.HasOwnProp("waitEndY") ? d.waitEndY : A_ScreenHeight, panel == "Range", lw, cw)
+        areaRow := body.Add("StackPanel").Name("WaitAreaRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
+        if (panel != "Range")
+            areaRow.Visibility("Collapsed")
+        areaRow.Add("TextBlock").Width(lw)
+        areaRow.Add("Button").Name("WaitArea_" id).Content(GetLang("框选范围")).FontSize(this._MGFontSize(11)).Height("20").Padding("8,0")
+        hint := body.Add("TextBlock").Name("WaitHint_" id).Text(GetLang(WaitHintText(waitType)))
+            .Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Margin("0,5,0,0")
+        hint.SetProp("TextWrapping", "Wrap")
+        if (panel != "Hint")
+            hint.Visibility("Collapsed")
         this._AddFieldRow(body, "WaitProcRow_" id, GetLang("进程名："), "WaitProc_" id, p1, panel == "Proc", true, "", "", "", lw, cw)
 
         winRow := body.Add("StackPanel").Name("WaitWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
@@ -399,6 +413,11 @@ class MacroGraphFormalMixin {
         dateUnits := GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
         this._AddFieldRow(body, "WaitDateValRow_" id, GetLang("日期值："), "WaitDateVal_" id, p1, panel == "Date", true, "", "", "", lw, cw)
         this._AddComboRow(body, "WaitDateUnitRow_" id, GetLang("单位："), "WaitDateUnitCmb_" id, dateUnits, this._IndexInLangArr(dateUnits, GetLang(p2)), panel == "Date", true, lw, cw)
+        dateHint := body.Add("TextBlock").Name("WaitDateHint_" id).Text(GetLang("分钟、小时、天填数字；具体时间如 2026-01-01 12:00 或 18:00；时间变量填变量名"))
+            .Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(11)).Margin("0,2,0,0")
+        dateHint.SetProp("TextWrapping", "Wrap")
+        if (panel != "Date")
+            dateHint.Visibility("Collapsed")
     }
 
     _FillCountDownBody(id, d, body, visible := true) {
@@ -536,16 +555,16 @@ class MacroGraphFormalMixin {
         p := "VarS" slot
         toggled := d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0)
         on := this._FormalVarSlotOn(toggled)
-        ot := d.HasOwnProp("operaType" slot) ? d["operaType" slot] : 1
+        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "数值")
         vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Var" slot
         cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : "0"
         minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
         maxv := d.HasOwnProp("maxVar" slot) ? d["maxVar" slot] : "10"
         opTypes := this._FormalVarOpTypes()
-        showNum := on && ot == 1
-        showChar := on && ot == 3
-        showSys := on && ot == 4
-        showMinMax := on && ot == 2
+        showNum := on && ot == "数值"
+        showChar := on && ot == "字符"
+        showSys := on && ot == "系统"
+        showMinMax := on && ot == "随机数值"
         ; 逐级展开：仅勾选上一变量后才显示本槽；分割线分隔，不挤占左右区域
         block := body.Add("StackPanel").Name(p "Card_" id).Margin("0,2,0,0")
         if (!visible)
@@ -553,7 +572,7 @@ class MacroGraphFormalMixin {
         block.Add("Border").Height("1").Margin("0,6,0,4").BorderThickness("0").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
         this._AddCheckRow(block, p "TogRow_" id, p "Tog_" id, GetLang("变量") slot, on, true)
         this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量名："), p "Name_" id, GetGuiVarArr(), vn, on, lw, cw)
-        this._AddComboRow(block, p "OpRow_" id, GetLang("类型："), p "OpCmb_" id, opTypes, ot - 1, on, true, lw, cw)
+        this._AddComboRow(block, p "OpRow_" id, GetLang("类型："), p "OpCmb_" id, opTypes, CmdEnumIndex(ot, CmdEnumOperaNames()), on, true, lw, cw)
         ; 数值：可下拉选变量或手输数字；字符：纯文本输入框（无下拉）。两行各自固定标签、按类型显隐切换。
         this._AddEditableComboRow(block, p "CopyRow_" id, GetLang("数值："), p "Copy_" id, GetGuiVarArr(), cv, showNum, lw, cw)
         this._AddFieldRow(block, p "CharRow_" id, GetLang("字符："), p "CopyTxt_" id, cv, showChar, true, "", "", "", lw, cw)
@@ -613,7 +632,7 @@ class MacroGraphFormalMixin {
     _VarSummaryRowInfo(d, slot) {
         toggled := d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0)
         on := this._FormalVarSlotOn(toggled)
-        ot := d.HasOwnProp("operaType" slot) ? d["operaType" slot] : 1
+        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "数值")
         vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Var" slot
         cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : "0"
         minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
@@ -621,15 +640,17 @@ class MacroGraphFormalMixin {
         return { on: on, text: vn " = " this._VarSlotSummaryValue(ot, cv, minv, maxv) }
     }
 
-    ; 变量摘要值描述：1数值 2随机 3字符 4系统 5删除
     _VarSlotSummaryValue(ot, cv, minv, maxv) {
-        if (ot == 2)
+        ot := CmdEnumOpera(ot)
+        if (ot == "随机数值")
             return GetLang("随机") "[" minv "~" maxv "]"
-        if (ot == 3)
+        if (ot == "字符")
             return '"' cv '"'
-        if (ot == 4)
+        if (ot == "系统")
             return GetLang("系统") "：" GetLang(cv)
-        if (ot == 5)
+        if (ot == "时间")
+            return GetLang("时间")
+        if (ot == "删除")
             return GetLang("删除")
         return cv
     }
@@ -640,16 +661,16 @@ class MacroGraphFormalMixin {
         LW := "70", CW := "96"   ; 与搜索Pro一致：两列(标签70+控件96)并排恰好放进 380 宽节点
         varList := GetGuiVarArr()
         extTypes := GetLangArr(["屏幕", "剪切板", "窗口"])
-        et := d.HasOwnProp("extractType") ? d.extractType : 1
+        et := CmdEnumZh(d.HasOwnProp("extractType") ? d.extractType : "屏幕", CmdEnumExtractNames())
         es := d.HasOwnProp("extractStr") ? d.extractStr : ""
         wi := d.HasOwnProp("winInfo") ? d.winInfo : ""
-        isOcr := et == 1 || et == 3
-        isWin := et == 3
+        isOcr := et == "屏幕" || et == "窗口"
+        isWin := et == "窗口"
         ign := d.HasOwnProp("isIgnoreExist") ? d.isIgnoreExist : 0
 
         ; 提取类型 | 忽略已存在
         r := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
-        this._ProCellCombo(r, "ExTypeRow_" id, GetLang("提取类型："), "ExTypeCmb_" id, extTypes, et - 1, true, LW, CW, false)
+        this._ProCellCombo(r, "ExTypeRow_" id, GetLang("提取类型："), "ExTypeCmb_" id, extTypes, CmdEnumIndex(et, CmdEnumExtractNames()), true, LW, CW, false)
         this._ProCellCheck(r, "ExIgnRow_" id, "ExIgn_" id, GetLang("忽略已存在"), ign == 1 || ign == "1", true, true)
 
         ; 模板（屏幕/剪切板/窗口 都需要），含「编辑」按钮打开提取模板编辑器
@@ -858,29 +879,21 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         modes := this._FormalRunModeArr()
         saveLabels := [GetLang("返回值"), GetLang("输出"), GetLang("错误")]
-        rm := d.HasOwnProp("runMode") ? d.runMode : 1
-        if (rm == "" || !IsNumber(rm))
-            rm := 1
-        rm := Integer(rm)
-        if (rm < 1 || rm > 4)
-            rm := 1
+        rm := CmdEnumZh(d.HasOwnProp("runMode") ? d.runMode : "不等待", CmdEnumRunModeNames())
         rp := d.HasOwnProp("runTarget") ? d.runTarget : ""
-        optionVal := d.HasOwnProp("option") ? d.option : 1
-        if (optionVal == "" || !IsNumber(optionVal))
-            optionVal := 1
-        optionVal := Integer(optionVal)
+        optionVal := CmdEnumIndex(d.HasOwnProp("option") ? d.option : "默认", CmdEnumRunOptionNames(), 0)
         stdinVal := d.HasOwnProp("stdin") ? d.stdin : ""
         ; 显隐：与 RunGui.OnModeChange 对齐
-        showStdIn := (rm == 3 || rm == 4)
+        showStdIn := (rm == "不等待+输入" || rm == "等待+输入输出")
         showEncIn := showStdIn
-        showEncOut := (rm == 4)
-        showSave1 := (rm == 2 || rm == 4)
-        showSave23 := (rm == 4)
+        showEncOut := (rm == "等待+输入输出")
+        showSave1 := (rm == "等待+返回值" || rm == "等待+输入输出")
+        showSave23 := (rm == "等待+输入输出")
         ; 路径行：输入框 + 文件按钮（无标签，输入框宽度+30px）
         RunTargetRow := body.Add("StackPanel").Name("RunTargetRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         RunTargetRow.Add("TextBox").Name("RunTarget_" id).Text(rp).Width(cw + 25).Height("22").MinHeight("0").FontSize("12").Padding("4,0").VerticalContentAlignment("Center")
         this._ApplyActionBtnStyle(RunTargetRow.Add("Button").Name("RunTargetBrowse_" id).Content(GetLang("文件")).Width("50").Height("22").FontSize(this._MGFontSize(10)).Padding("0").Margin("4,0,0,0").VerticalAlignment("Center").Cursor("Hand").Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").BorderThickness("1").BorderBrush("{DynamicResource ActionStroke}"))
-        this._AddComboRow(body, "RunModeRow_" id, GetLang("模式："), "RunModeCmb_" id, modes, rm - 1, true, true, lw, cw)
+        this._AddComboRow(body, "RunModeRow_" id, GetLang("模式："), "RunModeCmb_" id, modes, CmdEnumIndex(rm, CmdEnumRunModeNames()), true, true, lw, cw)
 
         options := GetLangArr(["后台", "默认", "最小化", "最大化"])
         this._AddComboRow(body, "RunHideRow_" id, GetLang("窗口："), "RunOptionCmb_" id, options, optionVal, true, true, lw, cw)
@@ -1091,10 +1104,10 @@ class MacroGraphFormalMixin {
         varList := GetGuiVarArr()
         opTypes := GetLangArr(["点击", "双击", "按下", "松开"])
         mouseTypes := GetLangArr(["左键", "中键", "右键", "滚轮"])
-        ot := d.HasOwnProp("bgOperateType") ? d.bgOperateType : 1
-        mt := d.HasOwnProp("bgMouseType") ? d.bgMouseType : 1
-        isScroll := mt == 4
-        showClickTime := !isScroll && (ot == 1 || ot == 2)   ; 点击/双击
+        ot := CmdEnumZh(d.HasOwnProp("bgOperateType") ? d.bgOperateType : "点击", CmdEnumBgOperNames())
+        mt := CmdEnumZh(d.HasOwnProp("bgMouseType") ? d.bgMouseType : "左键", CmdEnumMouseBtnNames())
+        isScroll := mt == "滚轮"
+        showClickTime := !isScroll && (ot == "点击" || ot == "双击")
         tt := d.HasOwnProp("targetTitle") ? d.targetTitle : ""
         px := d.HasOwnProp("bgPosVarX") ? d.bgPosVarX : 100
         py := d.HasOwnProp("bgPosVarY") ? d.bgPosVarY : 100
@@ -1104,8 +1117,8 @@ class MacroGraphFormalMixin {
         titleRow := body.Add("StackPanel").Name("BgmTitleRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         this._MakeTextBox(titleRow, "BgmTitle_" id, tt, "130")
         titleRow.Add("Button").Name("BgmTitleEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
-        this._AddComboRow(body, "BgmMouseRow_" id, GetLang("按键："), "BgmMouseCmb_" id, mouseTypes, mt - 1, true, true, lw, cw)
-        this._AddComboRow(body, "BgmOpRow_" id, GetLang("动作："), "BgmOpCmb_" id, opTypes, ot - 1, !isScroll, !isScroll, lw, cw)
+        this._AddComboRow(body, "BgmMouseRow_" id, GetLang("按键："), "BgmMouseCmb_" id, mouseTypes, CmdEnumIndex(mt, CmdEnumMouseBtnNames()), true, true, lw, cw)
+        this._AddComboRow(body, "BgmOpRow_" id, GetLang("动作："), "BgmOpCmb_" id, opTypes, CmdEnumIndex(ot, CmdEnumBgOperNames()), !isScroll, !isScroll, lw, cw)
         this._AddFieldRow(body, "BgmTimeRow_" id, GetLang("点击时间:"), "BgmTime_" id, ctm, showClickTime, true, "", "", "", lw, cw)
         this._AddEditableComboRow(body, "BgmXRow_" id, GetLang("坐标X："), "BgmX_" id, varList, px, true, lw, cw)
         this._AddEditableComboRow(body, "BgmYRow_" id, GetLang("坐标Y："), "BgmY_" id, varList, py, true, lw, cw)
@@ -1116,18 +1129,18 @@ class MacroGraphFormalMixin {
     _FillBGKeyBody(id, d, body) {
         lw := this._FormalLW(), cw := this._FormalCW()
         typeNames := GetLangArr(["按下", "松开", "点击"])
-        tt := d.HasOwnProp("bgKeyType") ? d.bgKeyType : 1
+        tt := CmdEnumKeyAct(d.HasOwnProp("bgKeyType") ? d.bgKeyType : "按下")
         fs := d.HasOwnProp("frontStr") ? d.frontStr : ""
         keyStr := d.HasOwnProp("bgKeyStr") ? d.bgKeyStr : ""
         ctm := d.HasOwnProp("clickTime") ? d.clickTime : 100
         cc := d.HasOwnProp("clickCount") ? d.clickCount : 1
         ci := d.HasOwnProp("clickInterval") ? d.clickInterval : 100
-        isClick := tt == 3
+        isClick := tt == "点击"
         body.Add("TextBlock").Name("BgkKeys_" id).Text(keyStr).Foreground("{DynamicResource EditText}").FontWeight("Bold").FontSize(this._MGFontSize(13)).TextWrapping("Wrap")
         frontRow := body.Add("StackPanel").Name("BgkFrontRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         this._MakeTextBox(frontRow, "BgkFront_" id, fs, "130")
         frontRow.Add("Button").Name("BgkFrontEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
-        this._AddComboRow(body, "BgkTypeRow_" id, GetLang("类型："), "BgkTypeCmb_" id, typeNames, tt - 1, true, true, lw, cw)
+        this._AddComboRow(body, "BgkTypeRow_" id, GetLang("类型："), "BgkTypeCmb_" id, typeNames, CmdEnumIndex(tt, CmdEnumKeyActNames()), true, true, lw, cw)
         this._AddFieldRow(body, "BgkTimeRow_" id, GetLang("点击时长："), "BgkTime_" id, ctm, isClick, true, "", "", "", lw, cw)
         this._AddFieldRow(body, "BgkCountRow_" id, GetLang("点击次数："), "BgkCount_" id, cc, isClick, true, "", "", "", lw, cw)
         this._AddFieldRow(body, "BgkInterRow_" id, GetLang("每次间隔："), "BgkInter_" id, ci, isClick, true, "", "", "", lw, cw)
@@ -1166,13 +1179,13 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         checkTypes := this._KeyCheckTypeArr(d)
         stateTypes := GetLangArr(["物理状态", "逻辑状态"])
-        ct := d.HasOwnProp("kcCheckType") ? d.kcCheckType : 1
-        st := d.HasOwnProp("kcStateType") ? d.kcStateType : 1
+        ct := d.HasOwnProp("kcCheckType") ? d.kcCheckType : "同时按下"
+        st := d.HasOwnProp("kcStateType") ? d.kcStateType : "物理状态"
         vn := d.HasOwnProp("kcVarName") ? d.kcVarName : ""
         keyStr := d.HasOwnProp("kcKeyStr") ? d.kcKeyStr : ""
         body.Add("TextBlock").Name("KcKeys_" id).Text(keyStr).Foreground("{DynamicResource EditText}").FontWeight("Bold").FontSize(this._MGFontSize(13)).TextWrapping("Wrap")
-        this._AddComboRow(body, "KcCheckRow_" id, GetLang("检测："), "KcCheckCmb_" id, checkTypes, ct - 1, true, true, lw, cw)
-        this._AddComboRow(body, "KcStateRow_" id, GetLang("状态类型："), "KcStateCmb_" id, stateTypes, st - 1, true, true, lw, cw)
+        this._AddComboRow(body, "KcCheckRow_" id, GetLang("检测："), "KcCheckCmb_" id, checkTypes, CmdEnumIndex(ct, this._KeyCheckIsAnalog(d) ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()), true, true, lw, cw)
+        this._AddComboRow(body, "KcStateRow_" id, GetLang("状态类型："), "KcStateCmb_" id, stateTypes, CmdEnumIndex(st, CmdEnumStateNames()), true, true, lw, cw)
         this._AddEditableComboRow(body, "KcVarRow_" id, GetLang("变量："), "KcVar_" id, GetGuiVarArr(), vn, true, lw, cw)
     }
 
@@ -1193,16 +1206,16 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         varList := GetGuiVarArr()
         typeNames := GetLangArr(["屏幕抓图", "窗口抓图"])
-        st := d.HasOwnProp("ssType") ? d.ssType : 1
-        isWin := st == 2
-        nt := d.HasOwnProp("ssNameType") ? d.ssNameType : 1
-        showFixed := nt == 1 || nt == "1"
+        st := CmdEnumZh(d.HasOwnProp("ssType") ? d.ssType : "屏幕抓图", CmdEnumShotNames())
+        isWin := st == "窗口抓图"
+        nt := CmdEnumNameType(d.HasOwnProp("ssNameType") ? d.ssNameType : "固定名称")
+        showFixed := nt == "固定名称"
         fixed := d.HasOwnProp("ssFixedName") ? d.ssFixedName : "Shot"
         wi := d.HasOwnProp("ssWinInfo") ? d.ssWinInfo : ""
         toggle := d.HasOwnProp("ssResultToggle") ? d.ssResultToggle : 0
         on := toggle == 1 || toggle == "1"
         rn := d.HasOwnProp("ssResultSaveName") ? d.ssResultSaveName : GetLang("图片路径")
-        this._AddComboRow(body, "SsTypeRow_" id, GetLang("类型："), "SsTypeCmb_" id, typeNames, st - 1, true, true, lw, cw)
+        this._AddComboRow(body, "SsTypeRow_" id, GetLang("类型："), "SsTypeCmb_" id, typeNames, CmdEnumIndex(st, CmdEnumShotNames()), true, true, lw, cw)
         winRow := body.Add("StackPanel").Name("SsWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         if (!isWin)
             winRow.Visibility("Collapsed")
@@ -1521,16 +1534,14 @@ class MacroGraphFormalMixin {
         if (data == "")
             return info
         info.count := (data.LoopCount == -1 || data.LoopCount == "-1") ? GetLang("无限") : data.LoopCount
-        condiTypes := this._LoopCondiTypes()
-        ct := data.CondiType
-        info.condiName := (ct >= 1 && ct <= condiTypes.Length) ? condiTypes[ct] : condiTypes[1]
-        if (ct != 1) {
+        ct := CmdEnumZh(data.CondiType, CmdEnumCondiNames())
+        info.condiName := GetLang(ct)
+        if (ct != "无") {
             n := 0
             loop data.ToggleArr.Length
                 if (data.ToggleArr[A_Index])
                     n++
-            logicTypes := this._LoopLogicTypes()
-            info.logicName := (data.LogicType >= 1 && data.LogicType <= logicTypes.Length) ? logicTypes[data.LogicType] : logicTypes[1]
+            info.logicName := GetLang(CmdEnumLogic(data.LogicType))
             info.showLogic := n >= 2
         }
         return info
@@ -1539,7 +1550,7 @@ class MacroGraphFormalMixin {
     ; 单个条件的收起态简要：{on, text}。on=条件类型非「无」且该条件已启用。
     _LoopCondiSummaryRow(data, slot) {
         res := {on: false, text: ""}
-        if (data == "" || data.CondiType == 1 || slot > data.ToggleArr.Length || !data.ToggleArr[slot])
+        if (data == "" || CmdEnumZh(data.CondiType, CmdEnumCondiNames()) == "无" || slot > data.ToggleArr.Length || !data.ToggleArr[slot])
             return res
         res.on := true
         ct := data.CompareTypeArr[slot]
@@ -1836,6 +1847,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackEditCombo(id, "WaitVarName", h, runtime)
             this._FormalTrackEditCombo(id, "WaitVarVal", h, runtime)
             this._FormalTrackField(id, "WaitKey", h, runtime)
+            this._BindCtrl("WaitKeyPick_" id, "Click", this._OnWaitKeyPick.Bind(this, id), runtime)
             for nm in ["WaitSX", "WaitSY", "WaitEX", "WaitEY"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
             this._FormalTrackField(id, "WaitProc", h, runtime)
@@ -1843,6 +1855,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackField(id, "WaitFile", h, runtime)
             this._FormalTrackField(id, "WaitDateVal", h, runtime)
             this._FormalTrackCombo(id, "WaitDateUnitCmb", h, runtime)
+            this._BindCtrl("WaitArea_" id, "Click", this._OnWaitArea.Bind(this, id), runtime)
             this._BindCtrl("WaitWinEdit_" id, "Click", this._OnWaitWinEdit.Bind(this, id), runtime)
             this._BindCtrl("WaitFileBrowse_" id, "Click", this._OnWaitFileBrowse.Bind(this, id), runtime)
         } else if (t == GetLang("等待确定")) {

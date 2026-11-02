@@ -754,7 +754,7 @@ class SearchComboGui {
         if (!IsObject(this.ui) || n > this.TargetList.Length)
             return
         t := this.TargetList[n]
-        this.ui.Update(this._TN(n, "Type"), "SelectedIndex", String(Integer(t.SearchType ? t.SearchType : 1) - 1))
+        this.ui.Update(this._TN(n, "Type"), "SelectedIndex", String(CmdEnumIndex(t.SearchType ? t.SearchType : "屏幕图片", CmdEnumSearchNames())))
         this.ui.Update(this._TN(n, "Remark"), "Text", ObjHasOwnProp(t, "Remark") ? t.Remark : "")
         this.ui.Update(this._TN(n, "WinInfo"), "Text", t.WinInfo)
         this._SetCombo(this._TN(n, "StartPosX"), this.DLVariableArr, t.StartPosX)
@@ -866,10 +866,10 @@ class SearchComboGui {
         if (!IsObject(this.ui) || n > this.TargetList.Length)
             return
         curType := this._TargetType(n)
-        isImage := curType == 1 || curType == 4
-        isColor := curType == 2 || curType == 5
-        isText := curType == 3 || curType == 6
-        isWin := curType == 4 || curType == 5 || curType == 6
+        isImage := curType == "屏幕图片" || curType == "窗口图片"
+        isColor := curType == "屏幕颜色" || curType == "窗口颜色"
+        isText := curType == "屏幕文本" || curType == "窗口文本"
+        isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
         tn := this._TN(n, "")
         this.ui.Update(tn "WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
         this.ui.Update(tn "ImagePathTip", "Visibility", isImage ? "Visible" : "Hidden")
@@ -889,11 +889,9 @@ class SearchComboGui {
 
     _TargetType(n) {
         if (!IsObject(this.ui))
-            return 1
+            return "屏幕图片"
         v := this.ui.Query(this._TN(n, "Type") ">SelectedIndex")
-        if (!IsNumber(v) || Integer(v) < 0)
-            return 1
-        return Integer(v) + 1
+        return CmdEnumFromIndex(v, CmdEnumSearchNames())
     }
 
     ; 目标行控件名（当前目标）
@@ -915,10 +913,10 @@ class SearchComboGui {
         isCount := IsNumber(CountValue) && (CountValue == -1 || CountValue > 1)
         this.SetConArrState(this.CountTogArr, false, isCount)
 
-        mouseAction := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        isMouseSpeed := IsNumber(mouseAction) && mouseAction + 1 != 1
+        mouseAction := CmdEnumFromIndex(this.ui.Query("MouseActionTypeCon>SelectedIndex"), ["无动作", "移动至目标", "移动至目标点击1次"])
+        isMouseSpeed := mouseAction != "无动作"
         this.SetConArrState(this.MouseSpeedArr, false, isMouseSpeed)
-        isMouseClick := IsNumber(mouseAction) && mouseAction + 1 == 3
+        isMouseClick := mouseAction == "移动至目标点击1次"
         this.SetConArrState(this.MouseClickArr, false, isMouseClick)
 
         isSaveResult := this.ui.Query("ResultToggleCon") == "True"
@@ -971,9 +969,9 @@ class SearchComboGui {
         loop this.TargetList.Length {
             n := A_Index
             curType := this._TargetType(n)
-            isImage := curType == 1 || curType == 4
-            isText := curType == 3 || curType == 6
-            isWin := curType == 4 || curType == 5 || curType == 6
+            isImage := curType == "屏幕图片" || curType == "窗口图片"
+            isText := curType == "屏幕文本" || curType == "窗口文本"
+            isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
             tn := this._TN(n, "")
 
             if (IsNumber(this.ui.Query(tn "StartPosX")) && IsNumber(this.ui.Query(tn "StartPosY")) && IsNumber(this.ui.Query(tn "EndPosX"))
@@ -1043,7 +1041,7 @@ class SearchComboGui {
                 return false
         }
 
-        if (this.ui.Query("MouseActionTypeCon>SelectedIndex") + 1 != 1) {
+        if (CmdEnumFromIndex(this.ui.Query("MouseActionTypeCon>SelectedIndex"), ["无动作", "移动至目标", "移动至目标点击1次"]) != "无动作") {
             if (!IsNumber(this.ui.Query("SpeedCon")) || this.ui.Query("SpeedCon") < 0 || this.ui.Query("SpeedCon") > 100) {
                 RmtDialog.Info(GetLang("移动速度请输入0~100的数字"))
                 return false
@@ -1199,7 +1197,7 @@ class SearchComboGui {
     }
 
     OnGetArea(x1, y1, x2, y2) {
-        if (this._TargetType(this._CurTarget()) >= 4) {
+        if (this._TargetType(this._CurTarget()) == "窗口图片" || this._TargetType(this._CurTarget()) == "窗口颜色" || this._TargetType(this._CurTarget()) == "窗口文本") {
             this.OnF1SetAreaAction(x1, y1, x2, y2)
             return
         }
@@ -1300,7 +1298,7 @@ class SearchComboGui {
     OnF1SetAreaAction(x1, y1, x2, y2) {
         n := this._CurTarget()
         curType := this._TargetType(n)
-        isWin := curType == 4 || curType == 5 || curType == 6
+        isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
         hwndList := isWin ? GetHwndList(this.ui.Query(this._TN(n, "WinInfo"))) : []
         if (isWin && hwndList.Length == 0)
             return
@@ -1398,7 +1396,7 @@ class SearchComboGui {
         data.SatisfyCount := this.ui.Query("SatisfyCountCon") == GetLang("所有") ? -1 : this.ui.Query("SatisfyCountCon")
         data.SearchCount := this.ui.Query("SearchCountCon") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCon")
         data.SearchInterval := this.ui.Query("SearchIntervalCon")
-        data.MouseActionType := this.ui.Query("MouseActionTypeCon>SelectedIndex") + 1
+        data.MouseActionType := CmdEnumFromIndex(this.ui.Query("MouseActionTypeCon>SelectedIndex"), ["无动作", "移动至目标", "移动至目标点击1次"])
         data.ClickCount := this.ui.Query("ClickCountCon")
         data.Speed := this.ui.Query("SpeedCon")
         data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
@@ -1472,7 +1470,7 @@ class SearchComboGui {
         endY := Number(endY)
 
         curType := this._TargetType(n)
-        isWin := curType == 4 || curType == 5 || curType == 6
+        isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
         if (isWin) {
             hwndList := GetHwndList(this.ui.Query(tn "WinInfo"))
             if (hwndList.Length == 0) {
@@ -1658,7 +1656,9 @@ class SearchComboGui {
         this.ui.Update("MouseActionTypeCon", "ClearItems", "")
         for it in MouseDLArr
             this.ui.Update("MouseActionTypeCon", "AddItem", it)
-        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String((this.Data.MouseActionType ? this.Data.MouseActionType : 2) - 1))
+        act := CmdEnumMouseAct(this.Data.MouseActionType ? this.Data.MouseActionType : "移动至目标")
+        maIdx := act == "无动作" ? 0 : (act == "移动至目标" ? 1 : 2)
+        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(maIdx))
         this.OnOverallChange()
     }
 }

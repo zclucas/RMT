@@ -271,8 +271,8 @@ class RunProGui {
         DLVariableArr := GetGuiVarArr(1)
         this._SetCombo("VariCombo", DLVariableArr, "")
 
-        this.ui.Update("RunModeCombo", "SelectedIndex", String(this.Data.Mode - 1))
-        this.ui.Update("OptionCombo", "SelectedIndex", String((ObjHasOwnProp(this.Data, "Option") ? this.Data.Option + 1 : 2) - 1))
+        this.ui.Update("RunModeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.Mode, CmdEnumRunModeNames())))
+        this.ui.Update("OptionCombo", "SelectedIndex", String(CmdEnumIndex(ObjHasOwnProp(this.Data, "Option") ? this.Data.Option : "默认", CmdEnumRunOptionNames(), 0)))
         this.ui.Update("StdInCon", "Text", ObjHasOwnProp(this.Data, "StdIn") ? UnescapeVarText(this.Data.StdIn) : "")
 
         ; Load encoding - default to UTF-8
@@ -311,12 +311,12 @@ class RunProGui {
     OnModeChange(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
-        val := this._SelIndex("RunModeCombo") + 1
-        showSN1 := val == 2 || val == 4
-        showSN23 := val == 4
-        showStdIn := val == 3 || val == 4
-        showEncIn := val == 3 || val == 4
-        showEncOutErr := val == 4
+        val := CmdEnumFromIndex(this._SelIndex("RunModeCombo"), CmdEnumRunModeNames())
+        showSN1 := val == "等待+返回值" || val == "等待+输入输出"
+        showSN23 := val == "等待+输入输出"
+        showStdIn := val == "不等待+输入" || val == "等待+输入输出"
+        showEncIn := val == "不等待+输入" || val == "等待+输入输出"
+        showEncOutErr := val == "等待+输入输出"
         this._Vis("SaveName1Row", showSN1)
         this._Vis("SaveName2Row", showSN23)
         this._Vis("SaveName3Row", showSN23)
@@ -480,7 +480,7 @@ class RunProGui {
 
     OnClickSureBtn(state, ctrl, event) {
         ; ----- 编码提示（仅当模式为“等待+输入输出”时）-----
-        if (this._SelIndex("RunModeCombo") + 1 == 3) {
+        if (CmdEnumFromIndex(this._SelIndex("RunModeCombo"), CmdEnumRunModeNames()) == "不等待+输入") {
             for enc in [this.ui.Query("EncIn"), this.ui.Query("EncOut")] {
                 if (enc != "UTF-8" && enc != "UTF-16" && (SubStr(enc, 1, 2) != "CP")) {
                     RmtDialog.Info(Format("不支持{}编码", enc))
@@ -518,30 +518,30 @@ class RunProGui {
 
     SaveRunData() {
         this.Data.Target := SmartEscapeVarText(GetLangStr(this.ui.Query("PathTextCon"), 2))
-        this.Data.Mode := this._SelIndex("RunModeCombo") + 1
-        this.Data.Option := this._SelIndex("OptionCombo")
+        this.Data.Mode := CmdEnumFromIndex(this._SelIndex("RunModeCombo"), CmdEnumRunModeNames())
+        this.Data.Option := CmdEnumFromIndex(this._SelIndex("OptionCombo"), CmdEnumRunOptionNames())
 
-        if (this.Data.Mode == 1) {
+        if (this.Data.Mode == "不等待") {
             if (ObjHasOwnProp(this.Data, "StdIn"))
                 this.Data.DeleteProp("StdIn")
             if (ObjHasOwnProp(this.Data, "SaveNameArr"))
                 this.Data.DeleteProp("SaveNameArr")
             if (ObjHasOwnProp(this.Data, "Encoding"))
                 this.Data.DeleteProp("Encoding")
-        } else if (this.Data.Mode == 2) {
+        } else if (this.Data.Mode == "等待+返回值") {
             if (ObjHasOwnProp(this.Data, "StdIn"))
                 this.Data.DeleteProp("StdIn")
             this.Data.SaveNameArr := [this.ui.Query("SaveName1")]
             if (ObjHasOwnProp(this.Data, "Encoding"))
                 this.Data.DeleteProp("Encoding")
-        } else if (this.Data.Mode == 3) {
+        } else if (this.Data.Mode == "不等待+输入") {
             this.Data.StdIn := SmartEscapeVarText(this.ui.Query("StdInCon"))
             if (ObjHasOwnProp(this.Data, "SaveNameArr"))
                 this.Data.DeleteProp("SaveNameArr")
             enc := {}
             enc.In := this.ui.Query("EncIn")
             this.Data.Encoding := enc
-        } else if (this.Data.Mode == 4) {
+        } else if (this.Data.Mode == "等待+输入输出") {
             this.Data.StdIn := SmartEscapeVarText(this.ui.Query("StdInCon"))
             this.Data.SaveNameArr := [this.ui.Query("SaveName1"), this.ui.Query("SaveName2"), this.ui.Query("SaveName3")]
             enc := {}

@@ -63,27 +63,267 @@ class XamlWin {
         return ""
     }
 
-    ; 弹窗该挂哪个窗口当属主：优先当前前台窗口（必须是本进程、可见、非透明浮层/工具窗），
-    ; 否则退回主窗口。固定挂主窗口会让「从配置管理点导出」的弹窗最后把主窗口顶上来，
-    ; 反而把配置管理压到最底下。
+    ; 弹窗该挂哪个窗口当属主：当前用户正在用的那一层（搜索 Pro / 宏编辑 / 主窗口）。
+    ; XAML 窗口在引擎进程里，不能只认本进程，否则会退回主窗口。
+    ; 属主一旦是主窗口，系统显示弹窗时会把主窗口和它直接拥有的宏编辑一起抬上来，
+    ; 更深一层（搜索 Pro）就被压到主窗口下面。
     static ActiveOwner() {
         fg := 0
         try fg := DllCall("user32\GetForegroundWindow", "Ptr")
-        if (fg) {
-            pid := 0
-            try DllCall("user32\GetWindowThreadProcessId", "Ptr", fg, "UInt*", &pid)
+        if (XamlWin._IsStackWindow(fg))
+            return fg
+        for hwnd in XamlWin.AppZOrder() {
             ex := 0
-            try ex := DllCall("user32\GetWindowLongPtrW", "Ptr", fg, "Int", -20, "Ptr")
-            ; WS_EX_LAYERED：轮盘、提示、悬浮信息这类透明浮层，不做属主
-            isOverlay := (ex & 0x80000) ? true : false
-            if (pid && pid == ProcessExist() && !isOverlay && DllCall("user32\IsWindowVisible", "Ptr", fg, "Int"))
-                return fg
+            try ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+            if (ex & 0x8)   ; WS_EX_TOPMOST：悬浮面板，不当普通弹窗的属主
+                continue
+            return hwnd
         }
         try {
             if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd)
                 return MyMainWin.ui.wpfHwnd
         }
         return 0
+    }
+
+    ; 调用方传了更底层的属主（常见是主窗口）时，改挂当前最上面的业务窗口。
+    ; 这样禁用属主、关闭后激活属主，都回到用户正在编辑的那一层。
+    static ModalOwner(requested := 0) {
+        if (Type(requested) = "String") {
+            if (requested = "" || requested = "0" || !IsInteger(requested))
+                requested := 0
+            else
+                requested := Integer(requested)
+        }
+        top := XamlWin.ActiveOwner()
+        if (!requested || !DllCall("user32\IsWindow", "Ptr", requested, "Int"))
+            return top ? top : 0
+        ; 调用方给的属主已经在更底层（例如主窗口），弹窗仍挂到当前最上面的编辑窗
+        if (top && requested != top && XamlWin._IsAbove(top, requested))
+            return top
+        return requested
+    }
+
+    static _IsAbove(above, below) {
+        if (!above || !below || above = below)
+            return false
+        hwnd := DllCall("user32\GetTopWindow", "Ptr", 0, "Ptr")
+        seen := Map()
+        loop 400 {
+            if (!hwnd || seen.Has(hwnd))
+                return false
+            seen[hwnd] := true
+            if (hwnd = above)
+                return true
+            if (hwnd = below)
+                return false
+            hwnd := DllCall("user32\GetWindow", "Ptr", hwnd, "UInt", 2, "Ptr")
+        }
+        return false
+    }
+
+    ; 自上而下的业务窗口（不含置顶浮层）。弹窗出现前记一笔，用来把被系统打乱的层级压回去。
+    static AppZOrder() {
+        list := []
+        hwnd := DllCall("user32\GetTopWindow", "Ptr", 0, "Ptr")
+        seen := Map()
+        loop 400 {
+            if (!hwnd || seen.Has(hwnd))
+                break
+            seen[hwnd] := true
+            if (XamlWin._IsOrderWindow(hwnd))
+                list.Push(hwnd)
+            hwnd := DllCall("user32\GetWindow", "Ptr", hwnd, "UInt", 2, "Ptr")
+        }
+        return list
+    }
+
+    static _DaemonPid() {
+        hwnd := 0
+        try {
+            if (IsSet(XAMLHost) && XAMLHost.daemonHwnd)
+                hwnd := XAMLHost.daemonHwnd
+        }
+        if (!hwnd)
+            return 0
+        pid := 0
+        DllCall("user32\GetWindowThreadProcessId", "Ptr", hwnd, "UInt*", &pid)
+        return pid
+    }
+
+    static _IsAppPid(pid) {
+        if (!pid)
+            return false
+        if (pid == ProcessExist())
+            return true
+        daemon := XamlWin._DaemonPid()
+        return daemon && pid == daemon
+    }
+
+    static _IsCloaked(hwnd) {
+        try {
+            cloaked := 0
+            hr := DllCall("dwmapi\DwmGetWindowAttribute", "Ptr", hwnd, "UInt", 14, "Int*", &cloaked, "UInt", 4, "Int")
+            return hr = 0 && cloaked
+        } catch {
+            return false
+        }
+    }
+
+    ; 可参与层级记录的窗口：本程序或 XAML 引擎的可见顶级窗，排除透明浮层和工具窗。
+    static _IsStackWindow(hwnd) {
+        if (!hwnd || !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int") || XamlWin._IsCloaked(hwnd))
+            return false
+        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        if (ex & 0x80000)   ; WS_EX_LAYERED
+            return false
+        if (ex & 0x80)      ; WS_EX_TOOLWINDOW
+            return false
+        rc := Buffer(16, 0)
+        if (!DllCall("user32\GetWindowRect", "Ptr", hwnd, "Ptr", rc, "Int"))
+            return false
+        if (NumGet(rc, 8, "Int") - NumGet(rc, 0, "Int") < 8 || NumGet(rc, 12, "Int") - NumGet(rc, 4, "Int") < 8)
+            return false
+        pid := 0
+        DllCall("user32\GetWindowThreadProcessId", "Ptr", hwnd, "UInt*", &pid)
+        return XamlWin._IsAppPid(pid)
+    }
+
+    ; 参与「压回原顺序」的窗口。置顶浮层保持原样，避免被摘掉置顶。
+    static _IsOrderWindow(hwnd) {
+        if (!XamlWin._IsStackWindow(hwnd))
+            return false
+        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        return !(ex & 0x8)
+    }
+
+    static _IsPopupUi(ui) {
+        if (!IsObject(ui) || !ui.HasProp("xaml"))
+            return false
+        return InStr(ui.xaml, 'ShowInTaskbar="False"') && !InStr(ui.xaml, 'Topmost="True"')
+    }
+
+    ; 弹窗上方若还有「不属于这次打开前那叠窗口」的普通窗（别的程序，或后开的弹窗），就不要抢层级。
+    static _BlockedByOutsider(dialog, stack) {
+        mine := Map()
+        if (dialog)
+            mine[dialog] := true
+        if (IsObject(stack)) {
+            for hwnd in stack
+                mine[hwnd] := true
+        }
+        hwnd := DllCall("user32\GetTopWindow", "Ptr", 0, "Ptr")
+        seen := Map()
+        loop 400 {
+            if (!hwnd || seen.Has(hwnd))
+                return false
+            seen[hwnd] := true
+            if (dialog && hwnd = dialog)
+                return false
+            if (XamlWin._IsPlainTop(hwnd) && !mine.Has(hwnd))
+                return true
+            hwnd := DllCall("user32\GetWindow", "Ptr", hwnd, "UInt", 2, "Ptr")
+        }
+        return false
+    }
+
+    static _IsPlainTop(hwnd) {
+        if (!hwnd || !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int") || XamlWin._IsCloaked(hwnd))
+            return false
+        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        return !(ex & 0x80088)   ; TOPMOST | TOOLWINDOW | LAYERED
+    }
+
+    static _OrderOk(dialog, stack) {
+        expected := []
+        if (dialog && DllCall("user32\IsWindow", "Ptr", dialog, "Int") && DllCall("user32\IsWindowVisible", "Ptr", dialog, "Int"))
+            expected.Push(dialog)
+        if (IsObject(stack)) {
+            for hwnd in stack {
+                if (!hwnd || hwnd = dialog)
+                    continue
+                if (!DllCall("user32\IsWindow", "Ptr", hwnd, "Int") || !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int"))
+                    continue
+                if (!XamlWin._IsOrderWindow(hwnd))
+                    continue
+                expected.Push(hwnd)
+            }
+        }
+        if (expected.Length < 2)
+            return true
+        need := Map()
+        for h in expected
+            need[h] := true
+        got := []
+        hwnd := DllCall("user32\GetTopWindow", "Ptr", 0, "Ptr")
+        seen := Map()
+        loop 400 {
+            if (!hwnd || seen.Has(hwnd) || got.Length >= expected.Length)
+                break
+            seen[hwnd] := true
+            if (need.Has(hwnd))
+                got.Push(hwnd)
+            hwnd := DllCall("user32\GetWindow", "Ptr", hwnd, "UInt", 2, "Ptr")
+        }
+        if (got.Length != expected.Length)
+            return false
+        loop got.Length
+            if (got[A_Index] != expected[A_Index])
+                return false
+        return true
+    }
+
+    ; 弹窗打开后系统会激活属主链，把宏编辑/主窗口插到当前编辑窗前面。这里按打开前的顺序压回去：
+    ; 弹窗、当时最前面的编辑窗、再往下的各层。
+    static HoldModalOrder(dialog, stack) {
+        if (!dialog || !DllCall("user32\IsWindow", "Ptr", dialog, "Int"))
+            return
+        if (XamlWin._BlockedByOutsider(dialog, stack))
+            return
+        if (XamlWin._OrderOk(dialog, stack))
+            return
+        ; NOSIZE | NOMOVE | NOACTIVATE | NOOWNERZORDER | NOCOPYBITS
+        flags := 0x0313
+        DllCall("user32\SetWindowPos", "Ptr", dialog, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", flags)
+        prev := dialog
+        if (!IsObject(stack))
+            return
+        for hwnd in stack {
+            if (!hwnd || hwnd = dialog)
+                continue
+            if (!DllCall("user32\IsWindow", "Ptr", hwnd, "Int") || !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int"))
+                continue
+            if (!XamlWin._IsOrderWindow(hwnd))
+                continue
+            DllCall("user32\SetWindowPos", "Ptr", hwnd, "Ptr", prev, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", flags)
+            prev := hwnd
+        }
+    }
+
+    static _ArmModalGuard(ui) {
+        if (!IsObject(ui))
+            return
+        fn := ObjBindMethod(XamlWin, "_ModalGuardTick", ui)
+        ui._modalGuardFn := fn
+        SetTimer(fn, 50)
+        XamlWin._ModalGuardTick(ui)
+    }
+
+    static _ModalGuardTick(ui) {
+        if (!IsObject(ui) || !ui.HasProp("_modalGuardFn"))
+            return
+        hwnd := (ui.HasProp("wpfHwnd") && ui.wpfHwnd) ? ui.wpfHwnd : 0
+        ; 句柄销毁才停。揭盖前窗口会短暂不可见，这时停掉定时器，后面的层级就没人管了。
+        if (!hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")) {
+            fn := ui._modalGuardFn
+            ui._modalGuardFn := ""
+            SetTimer(fn, 0)
+            return
+        }
+        if (!DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int"))
+            return
+        stack := ui.HasProp("_modalStack") ? ui._modalStack : []
+        XamlWin.HoldModalOrder(hwnd, stack)
     }
 
     static QueueTheme(ui) {
@@ -199,12 +439,22 @@ class XamlWin {
             } catch {
             }
         }
+        ; 只有提示/确认这种短弹窗打 _holdZOrder。界面浮窗同样不进任务栏，不能拿来锁整叠窗口。
+        ; 本身已经置顶的弹窗不再改层级，避免把置顶标志清掉。
+        xaml := ui.HasProp("xaml") ? ui.xaml : ""
+        if (ui.HasProp("_holdZOrder") && ui._holdZOrder && !InStr(xaml, 'Topmost="True"')) {
+            ownerHwnd := XamlWin.ModalOwner(ownerHwnd)
+            ui._modalStack := XamlWin.AppZOrder()
+        }
         ; Set the native owner in CREATE_WINDOW, before the hidden window is shown.
         ; Applying it after reveal changes z-order/activation and produces visible flashes.
         if (ownerHwnd != "")
             ui.ownerHwnd := ownerHwnd
         ui.Show()
-        return XamlWin.WaitHwnd(ui, ownerHwnd, activate)
+        ok := XamlWin.WaitHwnd(ui, ownerHwnd, activate)
+        if (ok && ui.HasProp("_modalStack"))
+            XamlWin._ArmModalGuard(ui)
+        return ok
     }
 
     static WaitHwnd(ui, ownerHwnd := "", activate := true) {

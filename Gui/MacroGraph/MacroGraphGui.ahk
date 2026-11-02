@@ -859,17 +859,18 @@ class MacroGraphGui {
             this.ui.Update("SSat_" id, "Text", (sat == -1 || sat == "-1") ? GetLang("全部") : "" sat)
             cnt := d.HasOwnProp("searchCount") ? d.searchCount : 1
             this.ui.Update("SCount_" id, "Text", (cnt == -1 || cnt == "-1") ? GetLang("无限") : "" cnt)
-            ma := (d.HasOwnProp("mouseAction") && d.mouseAction >= 1 && d.mouseAction <= 3) ? d.mouseAction : 2
-            this.ui.Update("SActCmb_" id, "SelectedIndex", ma - 1)
+            ma := CmdEnumMouseAct(d.HasOwnProp("mouseAction") ? d.mouseAction : "移动至目标")
+            maIdx := ma == "无动作" ? 0 : (ma == "移动至目标" ? 1 : 2)
+            this.ui.Update("SActCmb_" id, "SelectedIndex", maIdx)
             this._RefreshBranchBody(id, true)
             this._RefreshBranchBody(id, false)
             return
         }
         isPro := (d.type == GetLang("搜索Pro"))
         maxType := isPro ? 6 : 3
-        st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= maxType) ? d.searchType : 1
+        st := CmdEnumSearch(d.HasOwnProp("searchType") ? d.searchType : "屏幕图片")
         this.ui.Update("Title_" id, "Text", this._NodeTitleText(d))
-        this.ui.Update("STypeCmb_" id, "SelectedIndex", st - 1)
+        this.ui.Update("STypeCmb_" id, "SelectedIndex", CmdEnumIndex(st, isPro ? CmdEnumSearchNames() : ["屏幕图片", "屏幕颜色", "屏幕文本"]))
         this.ui.Update("SColor_" id, "Text", d.HasOwnProp("searchColor") ? d.searchColor : "FFFFFF")
         this.ui.Update("SText_" id, "Text", d.HasOwnProp("searchText") ? d.searchText : "")
         imgPath := d.HasOwnProp("searchImagePath") ? d.searchImagePath : ""
@@ -882,9 +883,9 @@ class MacroGraphGui {
         this.ui.Update("SStartY_" id, "Text", d.HasOwnProp("startPosY") ? d.startPosY : 0)
         this.ui.Update("SEndX_" id, "Text", d.HasOwnProp("endPosX") ? d.endPosX : A_ScreenWidth)
         this.ui.Update("SEndY_" id, "Text", d.HasOwnProp("endPosY") ? d.endPosY : A_ScreenHeight)
-        maxAct := isPro ? 3 : 4
-        ma := (d.HasOwnProp("mouseAction") && d.mouseAction >= 1 && d.mouseAction <= maxAct) ? d.mouseAction : 2
-        this.ui.Update("SActCmb_" id, "SelectedIndex", ma - 1)
+        ma := CmdEnumMouseAct(d.HasOwnProp("mouseAction") ? d.mouseAction : "移动至目标")
+        maIdx := isPro ? (ma == "无动作" ? 0 : (ma == "移动至目标" ? 1 : 2)) : CmdEnumIndex(ma, CmdEnumMouseActNames())
+        this.ui.Update("SActCmb_" id, "SelectedIndex", maIdx)
         ; 搜索Pro 专属字段同步
         if (isPro) {
             this.ui.Update("SWin_" id, "Text", d.HasOwnProp("winInfo") ? d.winInfo : "")

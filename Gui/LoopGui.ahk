@@ -373,8 +373,8 @@ class LoopGui {
         this._SetCombo("CountCon", CountVariableArr, this.Data.LoopCount == -1 ? GetLang("无限") : this.Data.LoopCount)
 
         ; 原生 DropDownList.Value 为 1-based，XAML SelectedIndex 为 0-based
-        this.ui.Update("CondiCon", "SelectedIndex", String(this.Data.CondiType - 1))
-        this.ui.Update("LogicCon", "SelectedIndex", String(this.Data.LogicType - 1))
+        this.ui.Update("CondiCon", "SelectedIndex", String(CmdEnumIndex(this.Data.CondiType, CmdEnumCondiNames())))
+        this.ui.Update("LogicCon", "SelectedIndex", String(CmdEnumIndex(this.Data.LogicType, CmdEnumLogicNames())))
         this.ui.Update("LoopBodyCon", "Text", GetLangMacro(this.Data.LoopBody, 1))
         this._RebuildRows()
     }
@@ -464,8 +464,8 @@ class LoopGui {
 
     SaveLoopData() {
         this.Data.LoopCount := this.ui.Query("CountCon") == GetLang("无限") ? -1 : this.ui.Query("CountCon")
-        this.Data.CondiType := this._CondiIndex() + 1
-        this.Data.LogicType := this._LogicIndex() + 1
+        this.Data.CondiType := CmdEnumFromIndex(this._CondiIndex(), CmdEnumCondiNames())
+        this.Data.LogicType := CmdEnumFromIndex(this._LogicIndex(), CmdEnumLogicNames())
         this.Data.LoopBody := GetLangMacro(this.ui.Query("LoopBodyCon"), 2)
         n := this.Data.ToggleArr.Length
         this.Data.ToggleArr := []

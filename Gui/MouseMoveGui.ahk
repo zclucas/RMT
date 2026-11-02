@@ -149,7 +149,7 @@ class MouseMoveGui {
 
     _MoveMode() {
         v := IsObject(this.ui) ? this.ui.Query("MouseMoveModeCombo>SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) : 0
+        return CmdEnumFromIndex(v, ["绝对移动", "相对移动"], "绝对移动")
     }
 
     Init(cmd) {
@@ -169,13 +169,13 @@ class MouseMoveGui {
             PosX := cmdArr.Length >= 2 ? cmdArr[2] : 0
             PosY := cmdArr.Length >= 3 ? cmdArr[3] : 0
             Speed := cmdArr.Length >= 4 ? cmdArr[4] : 90
-            MoveMode := cmdArr.Length >= 5 ? Integer(cmdArr[5]) : 0
+            MoveMode := cmdArr.Length >= 5 ? cmdArr[5] : "绝对移动"
         }
 
         this.ui.Update("PosXCon", "Text", PosX)
         this.ui.Update("PosYCon", "Text", PosY)
         this.ui.Update("SpeedCon", "Text", Speed)
-        this.ui.Update("MouseMoveModeCombo", "SelectedIndex", String(MoveMode))
+        this.ui.Update("MouseMoveModeCombo", "SelectedIndex", String(CmdEnumIndex(MoveMode, ["绝对移动", "相对移动"], 0)))
         this.OnMoveModeChange()
         this.UpdateCommandStr()
     }
@@ -200,13 +200,13 @@ class MouseMoveGui {
         if (!IsObject(this.ui))
             return
         MoveMode := this._MoveMode()
-        this.ui.Update("PosXLabel", "Text", GetLang(MoveMode == 1 ? "偏移值X:" : "坐标位置X:"))
-        this.ui.Update("PosYLabel", "Text", GetLang(MoveMode == 1 ? "偏移值Y:" : "坐标位置Y:"))
+        this.ui.Update("PosXLabel", "Text", GetLang(MoveMode == "相对移动" ? "偏移值X:" : "坐标位置X:"))
+        this.ui.Update("PosYLabel", "Text", GetLang(MoveMode == "相对移动" ? "偏移值Y:" : "坐标位置Y:"))
         CommandStr := GetLang("移动")
         CommandStr .= "_" this.ui.Query("PosXCon")
         CommandStr .= "_" this.ui.Query("PosYCon")
         CommandStr .= "_" this.ui.Query("SpeedCon")
-        if (MoveMode != 0)
+        if (MoveMode != "绝对移动")
             CommandStr .= "_" MoveMode
         this.ui.Update("CommandStrCon", "Text", CommandStr)
     }
@@ -246,7 +246,7 @@ class MouseMoveGui {
         if (!IsObject(this.ui))
             return
         MoveMode := this._MoveMode()
-        if (MoveMode == 2) {
+        if (MoveMode == "游戏视角") {
             this.ui.Update("SpeedCon", "Text", "100")
             this.ui.Update("SpeedCon", "IsEnabled", "False")
         }
@@ -304,7 +304,7 @@ class MouseMoveGui {
         MouseGetPos &mouseX, &mouseY
         if (!IsObject(this.ui))
             return
-        if (this._MoveMode() == 1) {
+        if (this._MoveMode() == "相对移动") {
             curX := this.ui.Query("PosXCon")
             curY := this.ui.Query("PosYCon")
             curX := IsNumber(curX) ? Number(curX) : 0

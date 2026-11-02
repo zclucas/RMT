@@ -256,7 +256,7 @@ class FrontInfoGui {
         this._SyncTopBtn()
         value := winInfoCon.Value
         mode := this.scope == "module" ? 4 : (this.scope == "macro" ? 5 : 5)
-        if (value == "")
+        if (value == "" || value == "{所有窗口}")
             mode := 3
         fields := ["", "", ""]
         handle := ""
@@ -398,7 +398,7 @@ class FrontInfoGui {
         switch this.SourceMode() {
             case 0: return "❖{句柄ID}"
             case 1: return "❖" Trim(this.ui.Query("InfoText2"))
-            case 3: return ""
+            case 3: return this.scope == "macro" ? "{所有窗口}" : ""
             case 4: return "{模块窗口绑定}"
             case 5: return "{宏设置窗口绑定}"
         }

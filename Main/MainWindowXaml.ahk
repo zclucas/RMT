@@ -4037,6 +4037,23 @@ class MainWin {
         this._BindFoldRows(t)
     }
 
+    ; 界面宏触发类型右侧的浮窗位置。虚拟列表里菜单宏触发类型可编辑，用该状态把按钮收起。
+    _BuildFoldPosBtnXaml(t, f, vlMode) {
+        tip := GetLang("浮窗位置")
+        icon := ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Margin="4,0,0,0" Content="&#xE713;" ToolTip="' tip '"'
+        if (vlMode) {
+            return '<Button Tag="FoldPos"' icon '>'
+                . '<Button.Style><Style TargetType="Button" BasedOn="{StaticResource RmtFoldToolBtn}">'
+                . '<Setter Property="Visibility" Value="Collapsed"/>'
+                . '<Style.Triggers><DataTrigger Binding="{Binding FoldTKTypeEnabled}" Value="False">'
+                . '<Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>'
+                . '</Style></Button.Style></Button>'
+        }
+        if (t < 1 || GetTableSymbol(t) != "UI")
+            return ""
+        return '<Button Name="FoldPosBtn_' t '_' f '" Style="{StaticResource RmtFoldToolBtn}"' icon '/>'
+    }
+
     _BuildFoldTitleRow(t, f, isFirst := false) {
         fold := MySoftData.TableInfo[t].Folds[f]
         isMenu := CheckIsMenuMacroTable(t)
@@ -4055,7 +4072,7 @@ class MainWin {
                 . this._TriggerEntries('<Button Name="FoldTKEdit_' t '_' f '" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml(tkStr, false) '</Button>', false, "FoldTKEdit_" t "_" f, tkStr)
                 . '<ComboBox Name="FoldTKType_' t '_' f '" Style="{StaticResource RmtItemCombo}" Width="82" Margin="0" SelectedIndex="' (fold.TKType - 1) '" IsEnabled="' (isUI ? "False" : "True") '" ToolTip="' GetLang("触发类型") '">'
                 . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
-                . '</ComboBox></StackPanel></Grid>'
+                . '</ComboBox>' this._BuildFoldPosBtnXaml(t, f, false) '</StackPanel></Grid>'
         }
         xaml .= '</StackPanel></Border>'
         return xaml
@@ -5021,6 +5038,8 @@ class MainWin {
             this._Bind("FoldFrontBtn_" t "_" f, "Click", OnFoldFrontInfoEdit.Bind(tableItem, f))
             this._Bind("FoldFrontHelp_" t "_" f, "Click", OnFoldFrontHelp.Bind(tableItem, f))
             this._Bind("FoldBtn_" t "_" f, "Click", OnFoldBtnClick.Bind(tableItem, f))
+            if (GetTableSymbol(t) == "UI")
+                this._Bind("FoldPosBtn_" t "_" f, "Click", OnFoldPosSetting.Bind(tableItem, f))
             this._Bind("FoldTKEdit_" t "_" f, "Click", OnFlodTKEditClick.Bind(tableItem, f))
             this._Bind("FoldTKEdit_" t "_" f "_Keyboard", "Click", OnTriggerEntry.Bind(tableItem, f, true, "keyboard"))
             this._Bind("FoldTKEdit_" t "_" f "_Joy", "Click", OnTriggerEntry.Bind(tableItem, f, true, "joy"))
@@ -5227,7 +5246,7 @@ class MainWin {
             . this._TriggerEntries('<Button Tag="FoldTKEdit" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml("", true, "FoldTKStr") '</Button>', true, "FoldTKEdit")
             . '<ComboBox Tag="FoldTKType" SelectedIndex="{Binding FoldTKType}" IsEnabled="{Binding FoldTKTypeEnabled}" Style="{StaticResource RmtItemCombo}" Width="82" Margin="0" ToolTip="' GetLang("触发类型") '">'
             . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
-            . '</ComboBox></StackPanel></Grid>'
+            . '</ComboBox>' this._BuildFoldPosBtnXaml(0, 0, true) '</StackPanel></Grid>'
             . '</StackPanel></Border></DataTemplate>'
         addFold := '<DataTemplate x:Key="RmtAddFold">'
             . '<Grid Height="72" HorizontalAlignment="Stretch">'
@@ -5702,7 +5721,7 @@ class MainWin {
                 . sld(GetLang("字体大小"), "CmdTipFontCon", "CmdTipFontVal", MainSoftData.CMDFontSize, 8, 36, 1)
                 . sld(GetLang("背景透明度"), "CmdTipAlphaCon", "CmdTipAlphaVal", MainSoftData.CMDTransparency, 0, 100, 1)
                 . tog(GetLang("输出到文件"), "CmdTipLogFileCon", MainSoftData.CMDLogToFile, GetLang("把指令显示内容写入日志文件"))
-                . row(GetLang("日志文件路径"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="85"/></Grid.ColumnDefinitions><TextBox Name="CmdTipLogPathCon" Text="' this._XmlEsc(MainSoftData.CMDLogFilePath) '"/><Button Name="BtnCmdTipBrowse" Grid.Column="1" Content="' GetLang("浏览") ' ↗" Width="76" HorizontalAlignment="Right" Padding="6,0"/></Grid>')
+                . row(GetLang("日志文件路径"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="85"/></Grid.ColumnDefinitions><TextBox Name="CmdTipLogPathCon" Text="' this._XmlEsc(CMDLogPathDisplay(MainSoftData.CMDLogFilePath)) '"/><Button Name="BtnCmdTipBrowse" Grid.Column="1" Content="' GetLang("浏览") ' ↗" Width="76" HorizontalAlignment="Right" Padding="6,0"/></Grid>', GetLang("默认是软件所在目录下的 Log。把整个 RMT 文件夹换个位置后，会自动改到新目录，不用重新选择。") . "`n")
                 . cmb(GetLang("自动清理时间"), "CmdTipAutoClearCon", GetLangArr(["从不", "每天", "每周"]), MainSoftData.CMDLogAutoClear, true), "0", "", "cmdTip")
             , card(GetLang("日志与错误"), "&#xE81C;", cmb(GetLang("日志级别"), "CmbLogLevel", ["debug", "info", "warn", "error"], MainSoftData.SysLogMinLevel)
                 . tog(GetLang("warn 气泡"), "ChkLogWarnBubble", MainSoftData.LogWarnBubble, GetLang("警告时显示托盘气泡"))
@@ -6013,7 +6032,7 @@ class MainWin {
             {id: "recJoy", fields: [{key: "RecordJoy", def: false, ctrl: "JoyTogCon", kind: "chk"}, {key: "RecordJoyInterval", def: 100, ctrl: "JoyIntervalCon", kind: "num"}]},
             {id: "hk1", fields: [{key: "SuspendHotkey", def: "!p", ctrl: "Val_SuspendHotkey", kind: "hk"}, {key: "PauseHotkey", def: "!i", ctrl: "Val_PauseHotkey", kind: "hk"}, {key: "KillMacroHotkey", def: "!k", ctrl: "Val_KillMacroHotkey", kind: "hk"}, {key: "ToolRecordMacroHotKey", def: "!r", ctrl: "Val_ToolRecordMacroHotKey", kind: "hk"}, {key: "ToolTextFilterHotKey", def: "", ctrl: "Val_ToolTextFilterHotKey", kind: "hk"}]},
             {id: "hk2", fields: [{key: "ScreenShotHotKey", def: "", ctrl: "Val_ScreenShotHotKey", kind: "hk"}, {key: "FreePasteHotKey", def: "", ctrl: "Val_FreePasteHotKey", kind: "hk"}, {key: "ToolCheckHotkey", def: "!o", ctrl: "Val_ToolCheckHotkey", kind: "hk"}, {key: "DebugRunHotkey", def: "f5", ctrl: "Val_DebugRunHotkey", kind: "hk"}, {key: "DebugStepHotkey", def: "f11", ctrl: "Val_DebugStepHotkey", kind: "hk"}]},
-            {id: "cmdTip", fields: [{key: "CMDTip", def: false, ctrl: "ChkCMDTip", kind: "chkMy", hook: "cmdtip"}, {key: "CMDWidth", defFn: "cmdW", ctrl: "CmdTipWidthCon", kind: "sld", val: "CmdTipWidthVal"}, {key: "CMDHeight", def: 300, ctrl: "CmdTipHeightCon", kind: "sld", val: "CmdTipHeightVal"}, {key: "CMDPosX", defFn: "cmdX", ctrl: "CmdTipPosXCon", kind: "num"}, {key: "CMDPosY", def: 0, ctrl: "CmdTipPosYCon", kind: "num"}, {key: "CMDFontSize", def: 12, ctrl: "CmdTipFontCon", kind: "sld", val: "CmdTipFontVal"}, {key: "CMDTransparency", def: 50, ctrl: "CmdTipAlphaCon", kind: "sld", val: "CmdTipAlphaVal"}, {key: "CMDLogToFile", def: false, ctrl: "CmdTipLogFileCon", kind: "chk"}, {key: "CMDLogFilePath", def: "", ctrl: "CmdTipLogPathCon", kind: "txt"}, {key: "CMDLogAutoClear", def: 0, ctrl: "CmdTipAutoClearCon", kind: "cmb0"}]},
+            {id: "cmdTip", fields: [{key: "CMDTip", def: false, ctrl: "ChkCMDTip", kind: "chkMy", hook: "cmdtip"}, {key: "CMDWidth", defFn: "cmdW", ctrl: "CmdTipWidthCon", kind: "sld", val: "CmdTipWidthVal"}, {key: "CMDHeight", def: 300, ctrl: "CmdTipHeightCon", kind: "sld", val: "CmdTipHeightVal"}, {key: "CMDPosX", defFn: "cmdX", ctrl: "CmdTipPosXCon", kind: "num"}, {key: "CMDPosY", def: 0, ctrl: "CmdTipPosYCon", kind: "num"}, {key: "CMDFontSize", def: 12, ctrl: "CmdTipFontCon", kind: "sld", val: "CmdTipFontVal"}, {key: "CMDTransparency", def: 50, ctrl: "CmdTipAlphaCon", kind: "sld", val: "CmdTipAlphaVal"}, {key: "CMDLogToFile", def: false, ctrl: "CmdTipLogFileCon", kind: "chk"}, {key: "CMDLogFilePath", def: "", ctrl: "CmdTipLogPathCon", kind: "txt"}, {key: "CMDLogAutoClear", def: 2, ctrl: "CmdTipAutoClearCon", kind: "cmb0"}]},
             {id: "logErr", fields: [{key: "SysLogMinLevel", def: "info", ctrl: "CmbLogLevel", kind: "cmbText"}, {key: "LogWarnBubble", def: true, ctrl: "ChkLogWarnBubble", kind: "chk"}, {key: "LogErrorBadge", def: true, ctrl: "ChkLogErrorBadge", kind: "chk"}, {key: "BusinessLog", def: false, ctrl: "ChkBusinessLog", kind: "chk", hook: "blog"}]},
             {id: "wheel", fields: [{key: "FixedMenuWheel", def: false, ctrl: "WheelFixedPosCon", kind: "chk"}, {key: "MenuWheelShowTooltip", def: false, ctrl: "WheelShowTooltipCon", kind: "chk"}, {key: "MenuWheelSelectMode", def: 2, ctrl: "WheelSelectModeCon", kind: "cmb"}, {key: "MenuWheelScale", def: 100, ctrl: "WheelScaleCon", kind: "sld", val: "WheelScaleVal"}]},
             {id: "countdown", fields: [{key: "CountDownStyle", def: 2, ctrl: "CountDownStyleCon", kind: "cmb"}, {key: "CountDownPadZero", def: true, ctrl: "CountDownPadCon", kind: "chk"}, {key: "CountDownAlpha", def: 70, ctrl: "CountDownAlphaCon", kind: "sld", val: "CountDownAlphaVal"}, {key: "CountDownFontSize", def: 15, ctrl: "CountDownFontCon", kind: "sld", val: "CountDownFontVal"}]},
@@ -6148,7 +6167,8 @@ class MainWin {
                 try this.ui.Update(f.ctrl, "Text", String(def))
             case "txt":
                 MainSoftData.%f.key% := def
-                try this.ui.Update(f.ctrl, "Text", String(def))
+                shown := (f.key == "CMDLogFilePath") ? CMDLogPathDisplay(def) : String(def)
+                try this.ui.Update(f.ctrl, "Text", shown)
             case "pwd":
                 MainSoftData.%f.key% := def
                 try this.ui.Update(f.ctrl, "Password", String(def))
@@ -6175,12 +6195,17 @@ class MainWin {
     }
 
     OnSettingLogBrowse(*) {
-        selected := FileSelect("S", MainSoftData.CMDLogFilePath, GetLang("日志文件路径"), "Log (*.log; *.txt)")
+        start := CMDLogResolveDir(MainSoftData.CMDLogFilePath)
+        if (!DirExist(start))
+            start := CMDLogAppDir()
+        selected := FileSelect("D", start, GetLang("日志文件路径"))
         if (selected == "")
             return
-        MainSoftData.CMDLogFilePath := selected
-        this.ui.Update("CmdTipLogPathCon", "Text", selected)
+        MainSoftData.CMDLogFilePath := CMDLogCalibrateStored(selected)
+        this.ui.Update("CmdTipLogPathCon", "Text", CMDLogPathDisplay(MainSoftData.CMDLogFilePath))
         this.MarkSettingDirty("CmdTipLogPathCon")
+        if (IsSet(MyCMDTipGui) && IsObject(MyCMDTipGui))
+            MyCMDTipGui.ApplySettings()
     }
 
     OnSettingAudioBrowse(field, *) {
@@ -6556,6 +6581,15 @@ class MainWin {
 
     OnTextEdit(fieldName, state, ctrl, event) {
         global StartTipAudio, EndTipAudio, StopTipAudio
+        if (fieldName == "CMDLogFilePath") {
+            old := MainSoftData.CMDLogFilePath
+            MainSoftData.CMDLogFilePath := CMDLogStoreFromUserText(this.ui.Query(ctrl))
+            try this.ui.Update(ctrl, "Text", CMDLogPathDisplay(MainSoftData.CMDLogFilePath))
+            if (MainSoftData.CMDLogFilePath != old && IsSet(MyCMDTipGui) && IsObject(MyCMDTipGui))
+                MyCMDTipGui.ApplySettings()
+            this.MarkSettingDirty(ctrl)
+            return
+        }
         MainSoftData.%fieldName% := this.ui.Query(ctrl)
         if (fieldName == "StartTipAudio")
             StartTipAudio := MainSoftData.StartTipAudio
@@ -6827,7 +6861,7 @@ class MainWin {
         Add(this._HelpCard(GetLang("免责声明与合法使用提醒"), "&#xE7BA;", disclaimer, "", "0,2,0,14", true))
 
         docs := '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-            . '<Border Grid.Column="0" Padding="0,0,12,0">' this._HelpResource("&#xE8A5;", GetLang("软件说明文档"), GetLang("快速上手、指令手册、常见问题、常见报错与更新日志。"), "https://docs.ruomengtu.com/", GetLang("打开文档")) '</Border>'
+            . '<Border Grid.Column="0" Padding="0,0,12,0">' this._HelpResource("&#xE8A5;", GetLang("软件说明文档"), GetLang("快速上手、指令手册、命令行、常见问题、常见报错与更新日志。"), "https://docs.ruomengtu.com/", GetLang("打开文档")) '</Border>'
             . '<Border Grid.Column="1" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0">' this._HelpResource("&#xE714;", GetLang("更新视频合集"), GetLang("查看版本更新视频与直播交流问答。"), "https://www.bilibili.com/video/BV1yR8x6xEBW", GetLang("观看视频")) '</Border>'
             . '<Border Grid.Column="2" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0,0,0">' this._HelpResource("&#xE8B7;", GetLang("配置共享仓库"), GetLang("案例学习、获取他人分享的宏配置，并支持下载导入。"), "https://zclucas.github.io/RMT-Setting/", GetLang("查看仓库")) '</Border></Grid>'
         Add(this._HelpCard(GetLang("文档与学习"), "&#xE8A5;", docs, GetLang("从入门到进阶"), "0,0,0,14"))

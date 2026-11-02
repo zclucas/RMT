@@ -338,8 +338,7 @@ RMTC_PwdGui(title, tip, wrong, confirmMode, owner := 0) {
 RMTC_PwdGuiShow(title, tip, wrong, confirmMode, owner := 0) {
     result := { Pwd: "", Ok: false, Done: false }
 
-    if (!owner)
-        owner := XamlWin.ActiveOwner()
+    owner := XamlWin.ModalOwner(owner)
     try XAMLHost.EnsureDaemonHealthy()
 
     fs := XAMLHost.FontSize()
@@ -480,6 +479,7 @@ RMTC_PwdGuiShow(title, tip, wrong, confirmMode, owner := 0) {
     ui.OnEvent("Window", "Closing", (*) => finish("", false))
     ui.OnEvent("Window", "LoadedHwnd", (*) => XamlWin.OnLoadTheme(ui))
 
+    ui._holdZOrder := true
     if (!XamlWin.Open(ui, "", owner))
         return { Pwd: "", Ok: false }
     ; 打开后把焦点放到第一个密码框

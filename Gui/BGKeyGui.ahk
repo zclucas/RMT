@@ -316,7 +316,7 @@ class BGKeyGui {
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.ui.Update("FrontCon", "Text", this.Data.FrontStr)
         this.CheckedArr := this.Data.KeyArr
-        this.ui.Update("KeyTypeCon", "SelectedIndex", String(this.Data.Type - 1))
+        this.ui.Update("KeyTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.Type, CmdEnumKeyActNames())))
         this.ui.Update("HoldTimeCon", "Text", this.Data.ClickTime)
         this.ui.Update("KeyCountCon", "Text", this.Data.ClickCount)
         this.ui.Update("PerIntervalCon", "Text", this.Data.ClickInterval)
@@ -327,13 +327,11 @@ class BGKeyGui {
 
     _KeyTypeIndex() {
         v := IsObject(this.ui) ? this.ui.Query("KeyTypeCon>SelectedIndex") : ""
-        if (!IsNumber(v) || Integer(v) < 0)
-            return 3   ; 默认 点击
-        return Integer(v) + 1
+        return CmdEnumFromIndex(v, CmdEnumKeyActNames(), "点击")
     }
 
     Refresh() {
-        isShowHoldTime := this._KeyTypeIndex() == 3
+        isShowHoldTime := this._KeyTypeIndex() == "点击"
         isShowCount := isShowHoldTime
         isShowInterval := isShowCount && this.ui.Query("KeyCountCon") != 1
         ; Hidden 保留占位，避免类型切换时整行控件左右跳动
@@ -373,7 +371,7 @@ class BGKeyGui {
         this.Data.KeyArr := this.CheckedArr
         this.Data.Type := this._KeyTypeIndex()
         this.Data.ClickTime := this.ui.Query("HoldTimeCon")
-        this.Data.ClickCount := this._KeyTypeIndex() == 3 ? this.ui.Query("KeyCountCon") : 1
+        this.Data.ClickCount := this._KeyTypeIndex() == "点击" ? this.ui.Query("KeyCountCon") : 1
         this.Data.ClickInterval := this.ui.Query("PerIntervalCon")
 
         SaveMacroCMDData(this.Data)

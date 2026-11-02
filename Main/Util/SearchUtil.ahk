@@ -44,7 +44,7 @@ GetSearchTargetArr(Data) {
     if (ObjHasOwnProp(Data, "SearchTargetArr") && IsObject(Data.SearchTargetArr) && Data.SearchTargetArr.Length > 0)
         return Data.SearchTargetArr
     t := {
-        SearchType:   ObjHasOwnProp(Data, "SearchType") ? Data.SearchType : 1,
+        SearchType:   ObjHasOwnProp(Data, "SearchType") ? CmdEnumSearch(Data.SearchType) : "屏幕图片",
         WinInfo:      ObjHasOwnProp(Data, "WinInfo") ? Data.WinInfo : "",
         SearchColor:  ObjHasOwnProp(Data, "SearchColor") ? Data.SearchColor : "FFFFFF",
         SearchText:   ObjHasOwnProp(Data, "SearchText") ? Data.SearchText : "",
@@ -135,8 +135,8 @@ SearchRoundOnce(tableItem, Data, index, targets, satisfyCount) {
         found := SearchOnceTarget(tableItem, Data, target, index, &ResXList, &ResYList, &ResHwndList)
         if (found) {
             foundCount++
-            isWin := target.SearchType == 4 || target.SearchType == 5 || target.SearchType == 6
-            imgPath := target.SearchType == 1 ? target.SearchImagePath : ""
+            isWin := CmdEnumSearch(target.SearchType) == "窗口图片" || CmdEnumSearch(target.SearchType) == "窗口颜色" || CmdEnumSearch(target.SearchType) == "窗口文本"
+            imgPath := CmdEnumSearch(target.SearchType) == "屏幕图片" ? target.SearchImagePath : ""
             for j, rx in ResXList {
                 allResX.Push(rx)
                 allResY.Push(ResYList[j])
@@ -199,28 +199,29 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYLi
     CoordMode("Pixel", "Screen")
     ResX := 0, ResY := 0, found := false
     ResXList := [], ResYList := [], ResHwndList := []
-    isWin := Data.SearchType == 4 || Data.SearchType == 5 || Data.SearchType == 6
+    searchType := CmdEnumSearch(Data.SearchType)
+    isWin := searchType == "窗口图片" || searchType == "窗口颜色" || searchType == "窗口文本"
 
     if (isWin) {
         hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.WinInfo))   ; §22 绑定窗口替换
     }
 
-    if (Data.SearchType == 1) {     ;屏幕图片
+    if (searchType == "屏幕图片") {
         found := SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY)
     }
-    else if (Data.SearchType == 2) {    ;屏幕颜色
+    else if (searchType == "屏幕颜色") {
         found := SearchColor(Data, X1, Y1, X2, Y2, &ResX, &ResY)
     }
-    else if (Data.SearchType == 3) {    ;屏幕文本
+    else if (searchType == "屏幕文本") {
         found := SearchText(Data, X1, Y1, X2, Y2, &ResX, &ResY, Text)
     }
-    else if (Data.SearchType == 4) {    ;窗口图片
+    else if (searchType == "窗口图片") {
         found := SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, &ResHwndList)
     }
-    else if (Data.SearchType == 5) {    ;窗口颜色
+    else if (searchType == "窗口颜色") {
         found := SearchWinColor(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList)
     }
-    else if (Data.SearchType == 6) {    ;窗口文本
+    else if (searchType == "窗口文本") {
         found := SearchWinText(Data, hwndList, X1, Y1, X2, Y2, Text, &ResXList, &ResYList, &ResHwndList)
     }
 
@@ -497,18 +498,19 @@ ApplySearchActions(tableItem, Data, index, ResXList, ResYList, ResHwndList, Imag
 DoMouseAction(tableItem, Data, index, Pos, hwnd, Speed, isWin) {
     keyMode := GetMacroKeyMode(tableItem, index)
 
-    if (!isWin && (Data.MouseActionType == 2 || Data.MouseActionType == 3 || Data.MouseActionType == 4)) {
-        SearchMouseActionByStrategy(keyMode, Data.MouseActionType, Pos[1], Pos[2], Speed, Data.ClickCount)
+    mouseAct := CmdEnumMouseAct(Data.MouseActionType)
+    if (!isWin && (mouseAct == "移动至目标" || mouseAct == "移动至目标点击1次" || mouseAct == "移动至目标点击2次")) {
+        SearchMouseActionByStrategy(keyMode, mouseAct, Pos[1], Pos[2], Speed, Data.ClickCount)
         return
     }
 
-    if (isWin && Data.MouseActionType == 3) {
+    if (isWin && mouseAct == "移动至目标点击1次") {
         lParam := (Pos[2] << 16) | (Pos[1] & 0xFFFF)
         PostMessage 0x203, 1, lParam, , "ahk_id " hwnd
         Sleep 50
         PostMessage 0x202, 0, lParam, , "ahk_id " hwnd
     }
-    else if (isWin && Data.MouseActionType == 2) {
+    else if (isWin && mouseAct == "移动至目标") {
         lParam := (Pos[2] << 16) | (Pos[1] & 0xFFFF)
         PostMessage 0x201, 1, lParam, , "ahk_id " hwnd
         Sleep 50

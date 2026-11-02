@@ -79,62 +79,30 @@ ProcessNumberValue(Value) {
     return Integer(RegExReplace(Cleaned, "^0+(\d)", "$1"))
 }
 
-; 条件比较：下拉显示顺序（等于后为不等于）
-; 存储序号保持兼容：1> 2>= 3== 4<= 5< 6包含 7变量存在 8正则 9!=
+; 条件比较：下拉显示顺序（等于后面是不等于）。存储为中文，旧数字由 CmdEnumCompare 收成中文。
 GetCompareTypeLangArr() {
-    return GetLangArr(["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配"])
+    return GetLangArr(CmdEnumCompareShowNames())
 }
 
 GetCompareTypeName(ct) {
-    if (!IsNumber(ct))
-        ct := 1
-    ct := Integer(ct)
-    arr := GetLangArr(["大于", "大于等于", "等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配", "不等于"])
-    if (ct >= 1 && ct <= arr.Length)
-        return arr[ct]
-    return arr[1]
+    return GetLang(CmdEnumCompare(ct))
 }
 
 GetCompareTypeStrMap() {
-    return Map(
-        GetLang("大于"), 1,
-        GetLang("大于等于"), 2,
-        GetLang("等于"), 3,
-        GetLang("不等于"), 9,
-        GetLang("小于等于"), 4,
-        GetLang("小于"), 5,
-        GetLang("字符包含"), 6,
-        GetLang("变量存在"), 7,
-        GetLang("正则匹配"), 8
-    )
+    m := Map()
+    for name in CmdEnumCompareShowNames()
+        m[GetLang(name)] := name
+    return m
 }
 
 IsCompareExistVar(ct) {
-    return IsNumber(ct) && Integer(ct) == 7
+    return CmdEnumCompare(ct) == "变量存在"
 }
 
 ComboIndexToCompareType(idx) {
-    if (!IsNumber(idx) || Integer(idx) < 0)
-        return 1
-    idx := Integer(idx)
-    if (idx <= 2)
-        return idx + 1
-    if (idx == 3)
-        return 9
-    if (idx <= 8)
-        return idx
-    return 1
+    return CmdEnumFromIndex(idx, CmdEnumCompareShowNames())
 }
 
 CompareTypeToComboIndex(ct) {
-    if (!IsNumber(ct) || Integer(ct) < 1)
-        return 0
-    ct := Integer(ct)
-    if (ct <= 3)
-        return ct - 1
-    if (ct == 9)
-        return 3
-    if (ct >= 4 && ct <= 8)
-        return ct
-    return 0
+    return CmdEnumIndex(CmdEnumCompare(ct), CmdEnumCompareShowNames())
 }

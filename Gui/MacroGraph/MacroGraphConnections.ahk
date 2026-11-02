@@ -106,8 +106,8 @@ class MacroGraphConnectionsMixin {
         }
         if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro") || d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi")) {
             typeNames := [GetLang("屏幕图片"), GetLang("屏幕颜色"), GetLang("屏幕文本"), GetLang("窗口图片"), GetLang("窗口颜色"), GetLang("窗口文本")]
-            st := (d.HasOwnProp("searchType") && d.searchType >= 1 && d.searchType <= 6) ? d.searchType : 1
-            typeStr := typeNames[st]
+            st := CmdEnumSearch(d.HasOwnProp("searchType") ? d.searchType : "屏幕图片")
+            typeStr := GetLang(st)
             cls := this._SearchTypeClass(st)
             if (cls.isColor)
                 return typeStr "  #" d.searchColor

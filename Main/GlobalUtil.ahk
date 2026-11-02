@@ -64,6 +64,7 @@
 #Include ..\Gui\UIMacroDesignerGui.ahk
 #Include ..\Gui\UIMacroFieldPicker.ahk
 #Include ..\Gui\UIMacroLayerGui.ahk
+#Include ..\Gui\UIMacroPosSettingGui.ahk
 #Include ..\Gui\ThemeSettingGui.ahk
 #Include ..\Gui\HotkeySettingGui.ahk
 #Include ..\Gui\RightClickMenuSettingGui.ahk

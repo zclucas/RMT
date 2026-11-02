@@ -271,17 +271,13 @@ class MMProGui {
 
     _TypeValue() {
         idx := this._SelIndex("ActionTypeCombo")
-        ; 绝对移动的第 4 项是普通拖拽（动作 5），第 5 项才是旧的 A 到 B 拖拽（动作 4）。
-        if (this._MoveMode() == 0) {
-            if (idx == 3)
-                return 5
-            if (idx == 4)
-                return 4
-        }
-        return idx + 1
+        items := this._MoveMode() == "相对移动"
+            ? ["移动", "移动后单击", "移动后双击", "拖拽"]
+            : ["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"]
+        return CmdEnumFromIndex(idx, items, "移动")
     }
-    _MoveMode() => this._SelIndex("MouseMoveModeCombo")
-    _RefMode() => this._SelIndex("RefCombo")
+    _MoveMode() => CmdEnumFromIndex(this._SelIndex("MouseMoveModeCombo"), ["绝对移动", "相对移动"], "绝对移动")
+    _RefMode() => CmdEnumFromIndex(this._SelIndex("RefCombo"), CmdEnumRefNames(), "屏幕")
 
     Init(cmd) {
         
@@ -300,16 +296,13 @@ class MMProGui {
         this._SetCombo("EndPosVarY", this.DLVariableArr, GetLang(this.Data.HasOwnProp("EndPosVarY") ? this.Data.EndPosVarY : 200))
         this._RefreshActionItems(this.Data.ActionType)
 
-        MoveMode := 0
-        if (ObjHasOwnProp(this.Data, "MouseMoveMode"))
-            MoveMode := this.Data.MouseMoveMode
-        ; §20 旧配置兼容：旧「游戏视角」(值2) 在下拉只剩 绝对/相对 时回退为绝对移动（执行端仍兼容旧值）
-        if (MoveMode > 1)
-            MoveMode := 0
-        this.ui.Update("MouseMoveModeCombo", "SelectedIndex", String(MoveMode))
+        MoveMode := ObjHasOwnProp(this.Data, "MouseMoveMode") ? CmdEnumMoveMode(this.Data.MouseMoveMode) : "绝对移动"
+        if (MoveMode == "游戏视角")
+            MoveMode := "绝对移动"
+        this.ui.Update("MouseMoveModeCombo", "SelectedIndex", String(MoveMode == "相对移动" ? 1 : 0))
 
-        RefMode := ObjHasOwnProp(this.Data, "RefMode") ? Integer(this.Data.RefMode) : 0
-        this.ui.Update("RefCombo", "SelectedIndex", String(RefMode))
+        RefMode := ObjHasOwnProp(this.Data, "RefMode") ? this.Data.RefMode : "屏幕"
+        this.ui.Update("RefCombo", "SelectedIndex", String(CmdEnumIndex(RefMode, CmdEnumRefNames(), 0)))
         this.ui.Update("WinInfoCon", "Text", ObjHasOwnProp(this.Data, "WinInfo") ? this.Data.WinInfo : "")
         this.OnRefChange()
 
@@ -331,7 +324,7 @@ class MMProGui {
             RmtDialog.Info(GetLang("坐标Y是变量时，编辑模式下无法执行"))
             return
         }
-        if (this._TypeValue() == 4 && this._MoveMode() == 0
+        if (this._TypeValue() == "A到B拖拽" && this._MoveMode() == "绝对移动"
             && (!IsNumber(this.ui.Query("EndPosVarX")) || !IsNumber(this.ui.Query("EndPosVarY")))) {
             RmtDialog.Info(GetLang("终止坐标是变量时，编辑模式下无法执行"))
             return
@@ -352,7 +345,7 @@ class MMProGui {
     OnRefChange(state := "", ctrl := "", event := "") {
         if (this._syncing || !IsObject(this.ui))
             return
-        isWin := this._RefMode() == 1
+        isWin := this._RefMode() == "窗口"
         this.ui.Update("WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
     }
 
@@ -396,9 +389,9 @@ class MMProGui {
     OnTypeChange(state := "", ctrl := "", event := "") {
         if (this._syncing || !IsObject(this.ui))
             return
-        isRel := this._MoveMode() == 1
+        isRel := this._MoveMode() == "相对移动"
         action := this._TypeValue()
-        isABDrag := action == 4 && !isRel
+        isABDrag := action == "A到B拖拽" && !isRel
         isTargetPoint := !isRel && !isABDrag
         this._RefreshActionItems(action)
         this.ui.Update("EndPosRow", "Visibility", isABDrag ? "Visible" : "Collapsed")
@@ -410,21 +403,19 @@ class MMProGui {
         this.ui.Update("PosYLabel", "Text", "")
     }
 
-    _RefreshActionItems(action := 1) {
+    _RefreshActionItems(action := "移动") {
         if (!IsObject(this.ui))
             return
-        isRel := this._MoveMode() == 1
+        isRel := this._MoveMode() == "相对移动"
         modeKey := isRel ? 1 : 0
         items := isRel ? ["移动", "移动后单击", "移动后双击", "拖拽"] : ["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"]
+        action := CmdEnumMMAction(action)
+        if (isRel && action == "A到B拖拽")
+            action := "拖拽"
         idx := 0
-        if (isRel)
-            idx := (action >= 1 && action <= 4) ? action - 1 : 3
-        else if (action == 4)
-            idx := 4
-        else if (action == 5)
-            idx := 3
-        else
-            idx := (action >= 1 && action <= 3) ? action - 1 : 0
+        for i, it in items
+            if (it == action)
+                idx := i - 1
         if (this._actionMode == modeKey) {
             if (this.ui.Query("ActionTypeCombo>SelectedIndex") != String(idx))
                 this.ui.Update("ActionTypeCombo", "SelectedIndex", String(idx))
@@ -478,7 +469,7 @@ class MMProGui {
         MouseGetPos &mouseX, &mouseY
         if (!IsObject(this.ui))
             return
-        if (this._MoveMode() == 1) {
+        if (this._MoveMode() == "相对移动") {
             curX := this.ui.Query("PosVarX")
             curY := this.ui.Query("PosVarY")
             curX := IsNumber(curX) ? Number(curX) : 0
@@ -495,11 +486,11 @@ class MMProGui {
             return
         isEnabled := this.ui.Query("HumanMouseTog") == "True"
         if (isEnabled) {
-            if (this._MoveMode() == 2) {
+            if (this._MoveMode() == "游戏视角") {
                 this.ui.Update("MouseMoveModeCombo", "SelectedIndex", "0")
                 this.OnTypeChange()
             }
-            if (this._TypeValue() != 1)
+            if (this._TypeValue() != "移动")
                 this.ui.Update("ActionTypeCombo", "SelectedIndex", "0")
             this.OnTypeChange()
             this.ui.Update("ActionTypeCombo", "IsEnabled", "False")

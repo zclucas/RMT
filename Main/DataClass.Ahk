@@ -56,6 +56,13 @@ class MacroFold {
         this.TK := ""               ;触发按键，菜单栏功能
         this.HoldTime := 500        ;时间参数（长按=长按时间，双击=双击间隔）
         this.UnorderedTrigger := false  ;顺序触发
+        ; 界面宏浮窗位置（仅 UI 表使用并落盘）
+        this.PosMode := 0           ; 0 相对坐标  1 绝对坐标（屏幕坐标）
+        this.Anchor := 6            ; 0左上 1左中 2左下 3中上 4中心 5中下 6右上 7右中 8右下
+        this.OffsetX := -50         ; 相对坐标偏移 X
+        this.OffsetY := 50          ; 相对坐标偏移 Y
+        this.PosX := 0              ; 绝对坐标 X
+        this.PosY := 0              ; 绝对坐标 Y
     }
 }
 
@@ -355,8 +362,8 @@ class MainConfig {
         this.CMDFontSize := "12"        ; CMD 字体大小
         this.CMDFontColor := "5C3317"   ; CMD 字体颜色 (由主题同步)
         this.CMDLogToFile := false      ; 是否输出到日志文件
-        this.CMDLogFilePath := ""       ; 日志文件路径（空=默认，自动使用 Log/CMDLog.txt）
-        this.CMDLogAutoClear := 0       ; 自动清理 0=从不, 1=每天, 2=每周
+        this.CMDLogFilePath := ""       ; 日志目录（空=软件所在目录\Log，相对路径，换文件夹后自动跟着走）
+        this.CMDLogAutoClear := 2       ; 自动清理 0=从不, 1=每天, 2=每周
         ; ========== 宏提示音文件 ==========
         this.StartTipAudio := ""        ; 开始提示音文件路径（空=内置 Audio\\Start.wav）
         this.EndTipAudio := ""          ; 结束/终止提示音文件路径（空=内置 Audio\\End.wav）
@@ -1123,7 +1130,7 @@ class SearchData {
     __New() {
         this.SerialStr := ""
         this.ConfigName := Format("{}*{}_{}", A_ScreenWidth, A_ScreenHeight, GetLang("全屏"))
-        this.SearchType := 1        ;1屏幕图片  2屏幕颜色  3屏幕文本 4窗口图片 5窗口颜色 6窗口文本
+        this.SearchType := "屏幕图片"        ;屏幕图片 屏幕颜色 屏幕文本 窗口图片 窗口颜色 窗口文本
         this.WinInfo := "{宏设置窗口绑定}"          ;窗口信息
         this.SearchColor := "FFFFFF"
         this.SearchText := GetLang("检索文本")
@@ -1145,7 +1152,7 @@ class SearchData {
         this.EndPosY := A_ScreenHeight
         this.SearchCount := 1
         this.SearchInterval := 1000
-        this.MouseActionType := 2   ;   1无动作 2移动到目标 3移动到目标点击
+        this.MouseActionType := "移动至目标"   ;无动作 移动至目标 移动至目标点击1次 移动至目标点击2次
         this.Speed := 90
         this.ClickCount := 1
         this.ConfigArr := []    ;配置数组，不同的分辨率
@@ -1169,13 +1176,13 @@ class SearchData {
 class ScreenShotData {
     __New() {
         this.SerialStr := ""
-        this.ScreenShotType := 1        ;1屏幕抓图  2窗口抓图
+        this.ScreenShotType := "屏幕抓图"        ;屏幕抓图 窗口抓图
         this.WinInfo := "{宏设置窗口绑定}"              ;窗口信息（窗口抓图时使用）
         this.StartPosX := 0
         this.StartPosY := 0
         this.EndPosX := A_ScreenWidth
         this.EndPosY := A_ScreenHeight
-        this.NameType := 1              ;0默认（指令名+序号）  1固定名称
+        this.NameType := "固定名称"              ;默认（指令名+序号） 固定名称
         this.FixedName := "Shot"            ;固定名称（NameType=1时使用）
         this.SavePath := ""             ;保存路径（默认为Temp_ScreenShot）
         this.ResultToggle := 0          ;是否保存结果到变量
@@ -1188,9 +1195,9 @@ class CompareData {
     __New() {
         this.ToggleArr := [1, 0]
         this.NameArr := ["Var1", "Var2"]
-        this.CompareTypeArr := [1, 1]  ;1大于 2大于等于 3等于 4小于等于 5小于 6字符包含 7存在变量 8正则匹配 9不等于
+        this.CompareTypeArr := ["大于", "大于"]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
         this.VariableArr := ["Var1", "Var2"]
-        this.TrueControlType := "无"   ;流程控制：1无 2循环-跳过本轮 3循环-跳出 4分支-跳出
+        this.TrueControlType := "无"   ;流程控制：无 循环-跳过本轮 循环-跳出 分支-跳出
         this.FalseControlType := "无"   ;流程控制：1无 2循环-跳过本轮 3循环-跳出 4分支-跳出
         this.TrueMacro := ""
         this.FalseMacro := ""
@@ -1198,16 +1205,16 @@ class CompareData {
         this.SaveName := GetLang("结果")
         this.TrueValue := 1
         this.FalseValue := 0
-        this.LogicalType := 1
+        this.LogicalType := "且"
     }
 }
 
 class CompareProData {
     __New() {
         this.VariNameArr := [["Var1"], ["Var2"]]
-        this.CompareTypeArr := [[3], [3]]  ;与 CompareData 一致：1> 2>= 3== 4<= 5< 6包含 7变量存在 8正则 9!=
+        this.CompareTypeArr := [["等于"], ["等于"]]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
         this.VariableArr := [["1"], ["2"]]
-        this.LogicTypeArr := [1, 2]
+        this.LogicTypeArr := ["且", "或"]
         this.ControlTypeArr := ["无", "无"]
         this.MacroArr := ["按键_a_点击_100", "按键_b_点击_100"]
         this.DefaultControlType := "无"
@@ -1217,7 +1224,7 @@ class CompareProData {
     ;用于逻辑树展示
     static GetCondiStr(Data, itemIndex) {
         CommandStr := ""
-        symbolStr := Data.LogicTypeArr[itemIndex] == 1 ? GetLang("且") : GetLang("或")
+        symbolStr := CmdEnumLogic(Data.LogicTypeArr[itemIndex]) == "且" ? GetLang("且") : GetLang("或")
 
         loop Data.VariNameArr[itemIndex].Length {
             VariName := GetLang(Data.VariNameArr[itemIndex][A_Index])
@@ -1243,9 +1250,9 @@ class MMProData {
         this.PosVarY := 100
         this.EndPosVarX := 200       ;绝对拖拽终止坐标（PosVarX/Y 为起始坐标）
         this.EndPosVarY := 200
-        this.ActionType := 1          ;鼠标动作 1移动 2移动后单击 3移动后双击 4拖拽
-        this.MouseMoveMode := 0      ;§20 移动模式 0=绝对移动 1=相对移动（旧值 2=游戏视角 已拆为「增量移动」指令，仅旧配置兼容执行）
-        this.RefMode := 0            ;§20 坐标基准 0=屏幕 1=窗口（选窗口时配合 WinInfo）
+        this.ActionType := "移动"          ;移动 移动后单击 移动后双击 A到B拖拽 拖拽
+        this.MouseMoveMode := "绝对移动"      ;绝对移动 相对移动（旧值 游戏视角 已拆为「增量移动」指令，仅旧配置兼容执行）
+        this.RefMode := "屏幕"            ;屏幕 窗口（选窗口时配合 WinInfo）
         this.WinInfo := "{宏设置窗口绑定}"           ;§20 窗口信息（基准=窗口时的标题/类名等）
         this.Speed := 90           ;移动速度
     }
@@ -1270,8 +1277,8 @@ class RunData {
     __New() {
         this.SerialStr := ""
         this.Target := ""
-        this.Mode := 1
-        this.Option := 1
+        this.Mode := "不等待"
+        this.Option := "默认"
     }
 }
 
@@ -1327,11 +1334,11 @@ class LoopData {
     __New() {
         this.SerialStr := ""
         this.LoopCount := 10    ;循环次数
-        this.CondiType := 1     ;条件类型 1：无 2：继续条件 3：退出条件
-        this.LogicType := 1     ;逻辑关系  1：且    2：或
+        this.CondiType := "无"     ;无 继续条件 退出条件
+        this.LogicType := "且"     ;且 或
         this.ToggleArr := [1, 0]
         this.NameArr := ["Var1", "Var2"]
-        this.CompareTypeArr := [1, 1]  ;1大于 2大于等于 3等于 4小于等于 5小于 6字符包含 7存在变量 8正则匹配 9不等于
+        this.CompareTypeArr := ["大于", "大于"]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
         this.VariableArr := ["Var1", "Var2"]
         this.LoopBody := ""     ;循环体
     }
@@ -1339,7 +1346,7 @@ class LoopData {
     ;用于逻辑树展示
     static GetCondiStr(Data) {
         CommandStr := ""
-        symbolStr := Data.LogicType == 1 ? GetLang("且") : GetLang("或")
+        symbolStr := CmdEnumLogic(Data.LogicType) == "且" ? GetLang("且") : GetLang("或")
 
         loop Data.ToggleArr.Length {
             if (!Data.ToggleArr[A_Index])
@@ -1366,7 +1373,7 @@ class VariableData {
         this.SerialStr := ""
         this.IsIgnoreExist := 0
         this.ToggleArr := [1]
-        this.OperaTypeArr := [1]   ;1赋值 2随机 3字符 4删除
+        this.OperaTypeArr := ["数值"]   ;数值 随机数值 字符 系统 时间 删除
         this.VariableArr := ["Var1"]
         this.CopyVariableArr := ["0"]
         this.MinVariableArr := ["0"]
@@ -1381,7 +1388,7 @@ class ExVariableData {
         this.ToggleArr := [1, 0, 0, 0, 0, 0]
         this.VariableArr := ["Var1", "Var2", "Var3", "Var4", "Var5", "Var6"]
         this.ExtractStr := ""
-        this.ExtractType := 1
+        this.ExtractType := "屏幕"
         this.WinInfo := "{宏设置窗口绑定}"
         this.OCRType := 1
         this.StartPosX := 0
@@ -1406,8 +1413,8 @@ class BGMouseData {
     __New() {
         this.SerialStr := ""
         this.TargetTitle := "{宏设置窗口绑定}"
-        this.OperateType := 1 ;点击 双击 按下 松开
-        this.MouseType := 1 ;左键 中键 右键
+        this.OperateType := "点击" ;点击 双击 按下 松开
+        this.MouseType := "左键" ;左键 中键 右键 滚轮
         this.PosVarX := 100
         this.PosVarY := 100
         this.ScrollV := 1 ;水平滚动
@@ -1421,7 +1428,7 @@ class BGKeyData {
         this.SerialStr := ""
         this.FrontStr := "{宏设置窗口绑定}"
         this.KeyArr := []
-        this.Type := 1  ;1按下 2松开 3点击
+        this.Type := "按下"  ;按下 松开 点击
         this.ClickTime := 100
         this.ClickCount := 1
         this.ClickInterval := 100
@@ -1433,9 +1440,9 @@ class TimingData {
         this.SerialStr := ""
         this.StartStamp := DateDiff(A_Now, "19700101000000", "Seconds")  ; Unix timestamp
         this.EndStamp := 0                                                 ; 0 = no end, omitted in JSON
-        this.Type := 1  ;1单次 2软件启动时 3自定义
-        this.CustomInterval := "10"  ; only relevant when Type == 3
-        this.CustomUnit := 2         ; 1:秒 2:分钟 3:小時 4:天 5:週 6:月
+        this.Type := "单次"  ;单次 软件启动时 自定义
+        this.CustomInterval := "10"  ; only relevant when Type == 自定义
+        this.CustomUnit := "分钟"         ;秒 分钟 小时 天 周 月
     }
 }
 
@@ -1467,10 +1474,10 @@ class TimeData {
 class WaitData {
     __New() {
         this.SerialStr := ""
-        ; 1变量值 2按键按下 3按键松开 4屏幕变化 5鼠标移动 6鼠标停止 7剪切板变化
-        ; 8进程存在 9进程关闭 10窗口存在 11窗口激活 12窗口屏幕变化 13窗口大小变化
-        ; 14窗口关闭 15窗口最小化 16文件存在 17文件删除 18文件变化 19日期
-        this.WaitType := 1
+        ; 等待变量值 等待按键按下 等待按键松开 等待屏幕变化 等待鼠标移动 等待鼠标停止移动 等待剪切板变化
+        ; 等待进程存在 等待进程关闭 等待窗口存在 等待窗口激活 等待窗口屏幕变化 等待窗口大小变化
+        ; 等待窗口关闭 等待窗口最小化 等待文件存在 等待文件删除 等待文件变化 等待日期
+        this.WaitType := "等待变量值"
         this.Interval := 500        ; 检测间隔（毫秒）
         this.Param1 := ""           ; 主参数：变量名/按键名/进程名/窗口信息/文件路径/日期值
         this.Param2 := ""           ; 次参数：期望值 / 日期单位（分钟|小时|天|具体时间|时间变量）
@@ -1519,7 +1526,7 @@ class RMTCMDData {
 class IntervalData {
     __New() {
         this.SerialStr := ""
-        this.Type := 1            ; 1固定  2随机
+        this.Type := "固定"            ;固定 随机
         this.Time1 := "500"       ; 时间1（固定时为唯一时间）
         this.Time2 := "1000"      ; 时间2（随机范围上界）
         ; 错误处理（影刀模式，阶段5）
@@ -1536,7 +1543,7 @@ class MoveDataConfig {
         this.PosX := 0
         this.PosY := 0
         this.Speed := 90          ; 界面速度 0~100
-        this.MoveMode := 0
+        this.MoveMode := "绝对移动"
         ; 错误处理（影刀模式，阶段5）
         this.ErrMode := "stop"
         this.ErrRetryCount := 3
@@ -1549,7 +1556,7 @@ class KeyDataConfig {
     __New() {
         this.SerialStr := ""
         this.KeyName := ""        ; 按键名（含 Joy*/Axis 等）
-        this.KeyType := 3         ; 1按下 2松开 3点击
+        this.KeyType := "点击"         ;按下 松开 点击
         this.HoldTime := 100      ; 点击时长(ms)
         this.Count := 1           ; 点击次数
         this.IntervalTime := 0    ; 每次间隔(ms)
@@ -1714,8 +1721,8 @@ class KeyCheckData {
     __New() {
         this.SerialStr := ""
         this.KeyArr := []                   ;检测的按键数组（按键检测=键鼠；手柄检测=JoyA / JoyAxisLX:80 等）
-        this.CheckType := 1                 ;按键：1同时按下 2有一个按下；摇杆：1大于设定值 2大于等于 3等于设定值 4小于等于 5小于设定值
-        this.StateType := 1                 ;1物理状态 2逻辑状态
+        this.CheckType := "同时按下"                 ;按键：同时按下 有一个按下；摇杆：大于设定值 大于等于 等于设定值 小于等于 小于设定值
+        this.StateType := "物理状态"                 ;物理状态 逻辑状态
         this.VarName := ""                  ;变量名
     }
 }

@@ -373,8 +373,8 @@ class CMDTipSettingGui {
         this._transparency := Max(0, Min(100, Integer(MainSoftData.CMDTransparency)))
         this._logToFile := MainSoftData.HasProp("CMDLogToFile") ? MainSoftData.CMDLogToFile : false
         rawPath := MainSoftData.HasProp("CMDLogFilePath") ? MainSoftData.CMDLogFilePath : ""
-        this._logFilePath := (rawPath != "") ? rawPath : A_WorkingDir "\Log\CMDLog.txt"
-        this._logAutoClear := MainSoftData.HasProp("CMDLogAutoClear") ? MainSoftData.CMDLogAutoClear : 0
+        this._logFilePath := CMDLogCalibrateStored(rawPath)
+        this._logAutoClear := MainSoftData.HasProp("CMDLogAutoClear") && IsNumber(MainSoftData.CMDLogAutoClear) ? Integer(MainSoftData.CMDLogAutoClear) : 2
     }
 
     ApplyValuesToUI() {
@@ -395,7 +395,7 @@ class CMDTipSettingGui {
             this.ui.Update("TransparencyValText", "Text", String(this._transparency))
             ; 日志输出
             this.ui.Update("LogToFileCon", "IsChecked", this._logToFile ? "True" : "False")
-            this.ui.Update("LogFilePathCon", "Text", this._logFilePath)
+            this.ui.Update("LogFilePathCon", "Text", CMDLogPathDisplay(this._logFilePath))
             this.ui.Update("AutoClearCon", "SelectedIndex", String(this._logAutoClear))
         } finally {
             this._syncing := false
@@ -552,21 +552,19 @@ class CMDTipSettingGui {
         if (this._syncing)
             return
         val := state.Has("LogFilePathCon") ? state["LogFilePathCon"] : ""
-        if (val != "")
-            this._logFilePath := val
+        this._logFilePath := CMDLogStoreFromUserText(val)
     }
 
     OnBrowseLogPath(state, ctrl, event) {
-        static logDir := ""
-        if (logDir == "")
-            logDir := A_WorkingDir "\Log"
-        selected := FileSelect("D", logDir, GetLang("CMD日志文件"))
+        start := CMDLogResolveDir(this._logFilePath)
+        if (!DirExist(start))
+            start := CMDLogAppDir()
+        selected := FileSelect("D", start, GetLang("日志文件路径"))
         if (selected == "")
             return
-        logDir := selected
-        this._logFilePath := selected "\CMDLog.txt"
+        this._logFilePath := CMDLogCalibrateStored(selected)
         this._syncing := true
-        try this.ui.Update("LogFilePathCon", "Text", this._logFilePath)
+        try this.ui.Update("LogFilePathCon", "Text", CMDLogPathDisplay(this._logFilePath))
         finally this._syncing := false
     }
 
@@ -578,6 +576,9 @@ class CMDTipSettingGui {
         this._posY := 0
         this._fontSize := 12
         this._transparency := 50
+        this._logToFile := false
+        this._logFilePath := ""
+        this._logAutoClear := 2
         this.ApplyValuesToUI()
     }
 

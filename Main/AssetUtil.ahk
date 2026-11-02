@@ -6,6 +6,7 @@
 #Include Util\SerialUtil.ahk
 #Include Util\JsonUtil.ahk
 #Include Util\LangUtil.ahk
+#Include Util\CmdEnumUtil.ahk
 #Include Util\Gdip_All.ahk
 #Include Util\CompatDataUtil.ahk
 #Include Util\CompareUtil.ahk
@@ -94,6 +95,8 @@ ResolveBindWindow(tableItem, index, winInfoStr) {
     item := tableItem.Items[index]
     if (isMacro) {
         winInfoStr := item.HasOwnProp("BindWindow") ? item.BindWindow : ""
+        if (winInfoStr == "" || winInfoStr == "{所有窗口}")
+            return ""
         if (winInfoStr != "{模块窗口绑定}") {
             ; 禁止自身引用；旧占位符仍兼容，但不作为窗口标题匹配。
             if (winInfoStr == "{宏设置窗口绑定}" || winInfoStr == "{绑定窗口}" || winInfoStr == GetLang("{绑定窗口}"))
@@ -908,8 +911,17 @@ LoadMainSetting() {
     MainSoftData.CMDTransparency := CfgRead(SettingFile, SettingSection, "CMDTransparency", 50)
     MainSoftData.CMDFontSize := CfgRead(SettingFile, SettingSection, "CMDFontSize", 12)
     MainSoftData.CMDLogToFile := CfgRead(SettingFile, SettingSection, "CMDLogToFile", false)
-    MainSoftData.CMDLogFilePath := CfgRead(SettingFile, SettingSection, "CMDLogFilePath", "")
-    MainSoftData.CMDLogAutoClear := CfgRead(SettingFile, SettingSection, "CMDLogAutoClear", 0)
+    rawLogPath := CfgRead(SettingFile, SettingSection, "CMDLogFilePath", "")
+    MainSoftData.CMDLogFilePath := CMDLogCalibrateStored(rawLogPath)
+    ; 旧的绝对路径（上次安装目录\Log）收成相对路径，换文件夹后不用再手选
+    if (!CMDLogInWorker() && MainSoftData.CMDLogFilePath != CMDLogNorm(rawLogPath) && !(MainSoftData.CMDLogFilePath == "" && Trim(rawLogPath) == ""))
+        try CfgWrite(MainSoftData.CMDLogFilePath, SettingFile, SettingSection, "CMDLogFilePath")
+    rawClear := CfgRead(SettingFile, SettingSection, "CMDLogAutoClear", 2)
+    MainSoftData.CMDLogAutoClear := IsNumber(rawClear) ? Integer(rawClear) : 2
+    if (MainSoftData.CMDLogAutoClear < 0 || MainSoftData.CMDLogAutoClear > 2)
+        MainSoftData.CMDLogAutoClear := 2
+    if (!CMDLogInWorker())
+        try CMDLogTryAutoClear(CMDLogResolveFile(MainSoftData.CMDLogFilePath), MainSoftData.CMDLogAutoClear)
     MainSoftData.StartTipAudio := CfgRead(SettingFile, SettingSection, "StartTipAudio", A_WorkingDir "\Audio\Start.wav")
     MainSoftData.EndTipAudio := CfgRead(SettingFile, SettingSection, "EndTipAudio", A_WorkingDir "\Audio\End.wav")
     MainSoftData.StopTipAudio := CfgRead(SettingFile, SettingSection, "StopTipAudio", MainSoftData.EndTipAudio)
@@ -1477,6 +1489,14 @@ ReadTableItemInfoNew(tableItem, segID := "") {
         fold.ForbidHotkey := TomlUtil_Str(fseg, "ForbidHotkey")
         fold.TKType := Integer(TomlUtil_Str(fseg, "TKType", "4"))
         fold.TK := TomlUtil_Str(fseg, "TK")
+        fold.PosMode := TomlUtil_Int(fseg, "PosMode", 0) == 1 ? 1 : 0
+        fold.Anchor := TomlUtil_Int(fseg, "Anchor", 6)
+        if (fold.Anchor < 0 || fold.Anchor > 8)
+            fold.Anchor := 6
+        fold.OffsetX := TomlUtil_Int(fseg, "OffsetX", -50)
+        fold.OffsetY := TomlUtil_Int(fseg, "OffsetY", 50)
+        fold.PosX := TomlUtil_Int(fseg, "PosX", 0)
+        fold.PosY := TomlUtil_Int(fseg, "PosY", 0)
         fold.HoldTime := TomlUtil_Str(fseg, "HoldTime", "500")
         fold.UnorderedTrigger := !!TomlUtil_Bool(fseg, "UnorderedTrigger")
         tableItem.Folds.Push(fold)
@@ -1509,7 +1529,9 @@ ReadTableItemInfoNew(tableItem, segID := "") {
             item.StartTipSound := TomlUtil_Str(mseg, "StartTipSound", "1")
             item.EndTipSound := TomlUtil_Str(mseg, "EndTipSound", "1")
             item.StopTipSound := TomlUtil_Str(mseg, "StopTipSound", "1")
-            item.BindWindow := TomlUtil_Str(mseg, "BindWindow", "")
+            item.BindWindow := TomlUtil_Str(mseg, "BindWindow", "{模块窗口绑定}")
+            if (item.BindWindow == "")
+                item.BindWindow := "{模块窗口绑定}"
             item.IcoPath := TomlUtil_Str(mseg, "IcoPath")
             item.VoiceKeywords := TomlUtil_Str(mseg, "VoiceKeywords")
             item.Macro := TomlUtil_Str(mseg, "Macro")
@@ -1842,6 +1864,14 @@ SaveTableItemInfoTomlCore(root, tableItem) {
         fseg["TK"] := fold.TK
         fseg["HoldTime"] := String(fold.HoldTime)
         fseg["UnorderedTrigger"] := fold.UnorderedTrigger ? 1 : 0
+        if (tableItem.Symbol == "UI") {
+            fseg["PosMode"] := fold.PosMode == 1 ? 1 : 0
+            fseg["Anchor"] := fold.HasProp("Anchor") ? Integer(fold.Anchor) : 6
+            fseg["OffsetX"] := fold.HasProp("OffsetX") ? Integer(fold.OffsetX) : -50
+            fseg["OffsetY"] := fold.HasProp("OffsetY") ? Integer(fold.OffsetY) : 50
+            fseg["PosX"] := fold.HasProp("PosX") ? Integer(fold.PosX) : 0
+            fseg["PosY"] := fold.HasProp("PosY") ? Integer(fold.PosY) : 0
+        }
 
         macroOrder := []
         for item in tableItem.Items {
@@ -2087,7 +2117,7 @@ KillSingleTableMacro(tableItem) {
 
 ; 松开宏项仍按住的按键（不修改 Killed）
 ReleaseTableItemHoldKeys(tableItem, index) {
-    item := tableItem.Items[index]
+    item := GetItemByIndex(tableItem, index)
     if (!item || !item.HoldKey || item.HoldKey.Count == 0)
         return
     HoldKeyMap := item.HoldKey.Clone()
@@ -2133,7 +2163,7 @@ SyncWorkerHoldKey(tableID, itemID, key, state, source := "") {
     if (!tableItem)
         return
     itemIndex := GetItemIndexInTable(tableItem, String(itemID))
-    item := tableItem.Items[itemIndex]
+    item := GetItemByIndex(tableItem, itemIndex)
     if (!item || !item.HoldKey)
         return
     bucket := item.HoldKey
@@ -2146,7 +2176,7 @@ SyncWorkerHoldKey(tableID, itemID, key, state, source := "") {
 }
 
 KillTableItemMacro(tableItem, index) {
-    item := tableItem.Items[index]
+    item := GetItemByIndex(tableItem, index)
     if (!item)
         return
     GraphPoolLog("KillTableItemMacro", Format("tab={1} item={2} trig={3}", tableItem.ID, item.ID
@@ -2887,6 +2917,7 @@ GetMacroCMDData(serialStr) {
         else if (cmd == "文件读写" || cmd == "Excel")
             CompatEnsureFileIOData(Data)
     }
+    CmdEnumNorm(cmd, Data)
 
     MySoftData.DataCacheMap.Set(normalizedSerialStr, Data)
 
@@ -3489,7 +3520,8 @@ IsTimeVar(name) {
 
 
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {
-    if (CompareType == 7) {
+    CompareType := CmdEnumCompare(CompareType)
+    if (CompareType == "变量存在") {
         hasValue := TryGetTabVarValue(&Value, tableItem, index, Name, false)
         currentComparison := hasValue
         return true
@@ -3499,7 +3531,7 @@ DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {
     if (!hasValue)
         return false
 
-    if (CompareType == 3 || CompareType == 6 || CompareType == 8 || CompareType == 9) {
+    if (CompareType == "等于" || CompareType == "字符包含" || CompareType == "正则匹配" || CompareType == "不等于") {
         hasOtherValue := TryGetTabVarValue(&OtherVal, tableItem, index, OtherValue, false)
         OtherVal := hasOtherValue ? OtherVal : OtherValue
         hasOtherValue := true
@@ -3512,14 +3544,14 @@ DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {
         return false
 
     switch CompareType {
-        case 1: currentComparison := Value > OtherVal
-        case 2: currentComparison := Value >= OtherVal
-        case 3: currentComparison := Value == OtherVal
-        case 4: currentComparison := Value <= OtherVal
-        case 5: currentComparison := Value < OtherVal
-        case 6: currentComparison := CheckContainText(Value, OtherVal)
-        case 8: currentComparison := RegExMatch(Value, OtherVal)
-        case 9: currentComparison := Value != OtherVal
+        case "大于": currentComparison := Value > OtherVal
+        case "大于等于": currentComparison := Value >= OtherVal
+        case "等于": currentComparison := Value == OtherVal
+        case "小于等于": currentComparison := Value <= OtherVal
+        case "小于": currentComparison := Value < OtherVal
+        case "字符包含": currentComparison := CheckContainText(Value, OtherVal)
+        case "正则匹配": currentComparison := RegExMatch(Value, OtherVal)
+        case "不等于": currentComparison := Value != OtherVal
         default: currentComparison := false
     }
     return true

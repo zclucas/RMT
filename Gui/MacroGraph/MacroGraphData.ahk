@@ -596,7 +596,7 @@ class MacroGraphDataMixin {
         } else if (cmdKey == "注释") {
             d.commentContent := data.Content
         } else if (cmdKey == "间隔") {
-            d.itype := data.Type == 2 ? GetLang("随机") : GetLang("固定")
+            d.itype := GetLang(CmdEnumZh(data.Type, CmdEnumIntervalNames()))
             d.time := data.Time1
             d.time2 := data.Time2
         } else if (cmdKey == "按键") {

@@ -52,6 +52,19 @@ function Ensure-Admin {
     }
 }
 
+function Confirm-Reboot {
+    if ($NoPause) { return $false }
+    Write-Host ""
+    Write-Host "安装已完成。驱动需要重启电脑后才会生效。"
+    $ans = Read-Host "是否立即重启？(Y/N)"
+    if ($ans -match '^[Yy]') {
+        Write-Host "正在重启电脑..."
+        shutdown.exe /r /t 0
+        return $true
+    }
+    return $false
+}
+
 function Pause-Exit([int]$Code) {
     if (-not $NoPause) {
         Write-Host ""
@@ -353,7 +366,9 @@ switch ($Action) {
 
 Write-Host ""
 if ($code -eq 0) {
-    if ($Action -ne "status") {
+    if ($Action -eq "install" -or $Action -eq "repair") {
+        if (Confirm-Reboot) { exit 0 }
+    } elseif ($Action -ne "status") {
         Write-Host "操作结束。若进行了安装/修复/卸载，请立即重启电脑。"
     }
 } else {

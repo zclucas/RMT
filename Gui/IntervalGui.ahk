@@ -167,7 +167,7 @@ class IntervalGui {
 
     _TypeValue() {
         v := IsObject(this.ui) ? this.ui.Query("TypeCombo>SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) + 1 : 1
+        return CmdEnumFromIndex(v, CmdEnumIntervalNames())
     }
 
     Init(cmd) {
@@ -180,7 +180,7 @@ class IntervalGui {
         if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
             this.Data := GetMacroCMDData(cmdArr[1])
             this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
-            this.ui.Update("TypeCombo", "SelectedIndex", this.Data.Type == 2 ? "1" : "0")
+            this.ui.Update("TypeCombo", "SelectedIndex", CmdEnumZh(this.Data.Type, CmdEnumIntervalNames()) == "随机" ? "1" : "0")
             this._SetCombo("TimeVarCon1", DLVarArr, this.Data.Time1)
             this._SetCombo("TimeVarCon2", DLVarArr, this.Data.Time2)
         } else if (cmdArr.Length <= 1) {
@@ -215,12 +215,12 @@ class IntervalGui {
     ; 间隔_时间A_备注  /  间隔_时间A~时间B_备注
     GetCmdStr() {
         time1 := this.ui.Query("TimeVarCon1")
-        timePart := this._TypeValue() == 2 ? time1 "~" this.ui.Query("TimeVarCon2") : time1
+        timePart := this._TypeValue() == "随机" ? time1 "~" this.ui.Query("TimeVarCon2") : time1
         return CorrectRemark(GetLang("间隔") "_" timePart, Trim(this.ui.Query("RemarkCon")))
     }
 
     OnTypeChange(state := "", ctrl := "", event := "") {
-        showTime2 := this._TypeValue() == 2
+        showTime2 := this._TypeValue() == "随机"
         if (IsObject(this.ui))
             this.ui.Update("TimeRow2", "Visibility", showTime2 ? "Visible" : "Collapsed")
     }
@@ -237,7 +237,7 @@ class IntervalGui {
             }
         }
 
-        if (this._TypeValue() == 2) {
+        if (this._TypeValue() == "随机") {
             timeText := this.ui.Query("TimeVarCon2")
             if (IsNumber(timeText)) {
                 if (IsFloat(timeText) || timeText < 0) {

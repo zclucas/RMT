@@ -165,8 +165,11 @@ class MacroSettingGui {
         this.ui.Update("StartTipCombo", "SelectedIndex", String(item.StartTipSound - 1))
         this.ui.Update("EndTipCombo", "SelectedIndex", String(item.EndTipSound - 1))
         this.ui.Update("StopTipCombo", "SelectedIndex", String(item.StopTipSound - 1))
-        ; §22 窗口绑定（旧配置无此字段时回退空）
-        this.ui.Update("BindWindowCon", "Text", ObjHasOwnProp(item, "BindWindow") ? item.BindWindow : "")
+        ; 未设置时默认继承所属模块。空串是旧数据里的未设置值，不是「所有窗口」。
+        bw := ObjHasOwnProp(item, "BindWindow") ? item.BindWindow : "{模块窗口绑定}"
+        if (bw == "")
+            bw := "{模块窗口绑定}"
+        this.ui.Update("BindWindowCon", "Text", bw)
     }
 
     ; §22 窗口绑定编辑：复用 FrontInfoGui 选窗
@@ -184,7 +187,7 @@ class MacroSettingGui {
         str1 := GetLang("AHK Send：通用方式，适合办公软件与大多数游戏（管理员权限可以让更多游戏有效）。")
         str2 := GetLang("keybd_event：调用 Win 系统接口模拟按键，适用比较旧的软件或游戏（需管理员权限）。")
         str3 := GetLang("罗技：调用罗技驱动模拟按键（需管理员权限，并使用 G HUB 2022.2.1154 及以前版本）。")
-        str4 := GetLang("AHI：调用 Interception 驱动模拟按键（需安装 Interception 驱动）。")
+        str4 := GetLang("AHI：调用 Interception 驱动模拟按键（需安装 Interception 驱动，安装后需要重启）。")
         str5 := GetLang("Tip:罗技按键类型（含键盘与鼠标）仅支持 G HUB 2022.2.1154 及以前版本") "`n" GetLang(
             "Tip:AHI驱动需要安装Interception驱动并以管理员权限运行")
         str6 := GetLang("**keybd_event、罗技、AHI 的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**")
@@ -195,21 +198,25 @@ class MacroSettingGui {
     OnSureBtnClick(state, ctrl, event) {
         mode := this._SelIndex("TKTypeCombo") + 1
         ; 改成罗技(3)/AHI(4)时检查对应驱动是否已安装，未安装则弹出安装提示（运行时检测逻辑保持不变）
+        needReboot := false
         if (mode == 3) {
             InitLogitechGHubNew()
         } else if (mode == 4) {
             if (!IsInterceptionInstalled())
-                ShowInterceptionInstallTip()
+                needReboot := (ShowInterceptionInstallTip() = "reboot")
         }
         item := this.tableItem.Items[this.itemIndex]
         item.Mode := mode
         item.StartTipSound := this._SelIndex("StartTipCombo") + 1
         item.EndTipSound := this._SelIndex("EndTipCombo") + 1
         item.StopTipSound := this._SelIndex("StopTipCombo") + 1
-        ; §22 窗口绑定保存
-        item.BindWindow := this.ui.Query("BindWindowCon")
+        ; §22 窗口绑定保存。手清空文本框时回到模块窗口绑定；「所有窗口」由编辑器写成 {所有窗口}。
+        bw := Trim(this.ui.Query("BindWindowCon"))
+        item.BindWindow := bw == "" ? "{模块窗口绑定}" : bw
         this._CloseWindow()
         ; §18 宏高级设置即时持久化 + Worker 热重载（Mode/提示音/BindWindow 影响执行语义）
         HotReloadPublish(this.tableItem.Index, 0)
+        if (needReboot)
+            Shutdown(2)
     }
 }
