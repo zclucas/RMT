@@ -94,8 +94,9 @@ CmdEnumMouseBtnNames() => ["左键", "中键", "右键", "滚轮"]
 CmdEnumExtractNames() => ["屏幕", "剪切板", "窗口"]
 CmdEnumRunModeNames() => ["不等待", "等待+返回值", "不等待+输入", "等待+输入输出"]
 CmdEnumRunOptionNames() => ["后台", "默认", "最小化", "最大化"]
-CmdEnumTimingTypeNames() => ["单次", "软件启动时", "自定义"]
+CmdEnumTimingTypeNames() => ["单次", "软件启动时", "周期触发"]
 CmdEnumTimingUnitNames() => ["秒", "分钟", "小时", "天", "周", "月"]
+CmdEnumTimingDurationNames() => ["无限制", "固定时长"]
 CmdEnumShotNames() => ["屏幕抓图", "窗口抓图"]
 CmdEnumNameTypeNames() => ["默认", "固定名称"]
 CmdEnumKeyCheckNames() => ["同时按下", "有一个按下"]
@@ -123,8 +124,14 @@ CmdEnumWait(value) => CmdEnumZh(value, CmdEnumWaitNames())
 CmdEnumSearch(value) => CmdEnumZh(value, CmdEnumSearchNames())
 CmdEnumMouseAct(value) => CmdEnumZh(value, CmdEnumMouseActNames())
 CmdEnumMMAction(value) => CmdEnumZh(value, CmdEnumMMActionNames())
-CmdEnumTimingType(value) => CmdEnumZh(value, CmdEnumTimingTypeNames())
+CmdEnumTimingType(value) {
+    key := GetLangKey(Trim(String(value)))
+    if (key == "自定义")
+        return "周期触发"
+    return CmdEnumZh(value, CmdEnumTimingTypeNames())
+}
 CmdEnumTimingUnit(value) => CmdEnumZh(value, CmdEnumTimingUnitNames())
+CmdEnumTimingDuration(value) => CmdEnumZh(value, CmdEnumTimingDurationNames())
 
 CmdEnumJoyCheck(value, analog) {
     key := GetLangKey(Trim(String(value)))
@@ -227,8 +234,13 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "Mode", CmdEnumRunModeNames())
             CmdEnumSet(Data, "Option", CmdEnumRunOptionNames(), 0)
         case "Timing":
-            CmdEnumSet(Data, "Type", CmdEnumTimingTypeNames())
+            if (Data.HasProp("Type"))
+                Data.Type := CmdEnumTimingType(Data.Type)
             CmdEnumSet(Data, "CustomUnit", CmdEnumTimingUnitNames())
+            if (Data.HasProp("DurationMode"))
+                Data.DurationMode := CmdEnumTimingDuration(Data.DurationMode)
+            if (Data.HasProp("DurationUnit"))
+                Data.DurationUnit := CmdEnumTimingUnit(Data.DurationUnit)
         case "抓图":
             CmdEnumSet(Data, "ScreenShotType", CmdEnumShotNames())
             CmdEnumSet(Data, "NameType", CmdEnumNameTypeNames(), 0)

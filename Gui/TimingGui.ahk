@@ -19,6 +19,9 @@ class TimingGui {
         this._endText := ""
         this._endEnabled := false
         this._intervalText := "10"
+        this._durationModeIndex := 1
+        this._durationText := "10"
+        this._durationUnitIndex := 2
         this._btnStyle := ""
         this._editBtnStyle := ""
         this._pickerGui := ""
@@ -74,11 +77,16 @@ class TimingGui {
             ? this._FormatStamp(this.Data.EndStamp)
             : this._DefaultEndText()
 
-        this._typeIndex := CmdEnumIndex(this.Data.Type, CmdEnumTimingTypeNames()) + 1
+        this._typeIndex := CmdEnumIndex(CmdEnumTimingType(this.Data.Type), CmdEnumTimingTypeNames()) + 1
 
         this._intervalText := String(this.Data.HasOwnProp("CustomInterval") ? this.Data.CustomInterval : "10")
 
         this._unitIndex := CmdEnumIndex(this.Data.HasOwnProp("CustomUnit") ? this.Data.CustomUnit : "分钟", CmdEnumTimingUnitNames()) + 1
+
+        durationMode := this.Data.HasOwnProp("DurationMode") ? this.Data.DurationMode : "无限制"
+        this._durationModeIndex := CmdEnumIndex(durationMode, CmdEnumTimingDurationNames()) + 1
+        this._durationText := String(this.Data.HasOwnProp("Duration") ? this.Data.Duration : "10")
+        this._durationUnitIndex := CmdEnumIndex(this.Data.HasOwnProp("DurationUnit") ? this.Data.DurationUnit : "分钟", CmdEnumTimingUnitNames()) + 1
     }
 
     _DefaultEndText() {
@@ -131,8 +139,8 @@ class TimingGui {
         this.closed := false
         title := GetLang("定时编辑器")
         titleHeight := "30"
-        winW := 420
-        winH := 240
+        winW := 740
+        winH := 246
         this._btnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
         this._editBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 
@@ -141,96 +149,71 @@ class TimingGui {
 
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
-        body := main.Add("StackPanel").Grid_Row(1).Margin("18,8,18,8")
+        body := main.Add("StackPanel").Grid_Row(1).Margin("16,10,16,8")
 
-        timeBoxW := "170"
-        labelW := "72"
-        chkW := "22"
+        timeBoxW := "176"
+        labelW := "78"
+        sideLabelW := "78"
+        modeW := "132"
+        unitNames := GetLangArr(["秒", "分钟", "小时", "天", "周", "月"])
+        rowGap := "0,0,0,10"
 
-        ; 表单同网格居中：开始/结束/定时类型/每次间隔 label 左缘对齐
-        formBlock := body.Add("Grid").HorizontalAlignment("Center").Margin("0,0,0,0")
-        formBlock.Rows("Auto", "Auto", "Auto", "Auto")
-        formBlock.Cols(chkW, labelW, "Auto", "Auto", "Auto")
+        ; 列2与开始时间的日期按钮同列，每次间隔、时长从这一列起排
+        form := body.Add("Grid")
+        form.Rows("Auto", "Auto", "Auto", "Auto")
+        form.Cols(labelW, timeBoxW, "Auto", "Auto", "Auto", timeBoxW, "Auto", "Auto")
 
-        ; 开始时间（勾选列隐藏占位）
-        formBlock.Add("CheckBox").Visibility("Hidden").VerticalAlignment("Center")
-            .Grid_Row(0).Grid_Column(0).Margin("0,0,0,8")
-        formBlock.Add("TextBlock").Text(GetLang("开始时间：")).Foreground("{DynamicResource TextMain}").FontSize(13)
-            .VerticalAlignment("Center").Margin("0,0,4,8").Grid_Row(0).Grid_Column(1)
-        this._AddTextBox(formBlock, "StartTimeCon", "", timeBoxW, true, true)
-            .Grid_Row(0).Grid_Column(2).Margin("0,0,0,8")
-        startCalBtn := formBlock.Add("Button").Name("BtnStartCal")
-            .Width(28).Height(26).MinHeight(26).Margin("6,0,0,8").Cursor("Hand")
-            .VerticalAlignment("Center").Grid_Row(0).Grid_Column(3)
-            .Background("{DynamicResource EditBg}").Foreground("{DynamicResource EditText}")
-            .BorderBrush("{DynamicResource EditStroke}").BorderThickness("1")
-        startCalBtn.InjectResources(this._editBtnStyle)
-        startCalBtn.Add("TextBlock").Text(Chr(0xE787)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-            .FontSize(12).HorizontalAlignment("Center").VerticalAlignment("Center")
-        formBlock.Add("Border").Width(28).Height(1).Margin("6,0,0,8")
-            .Grid_Row(0).Grid_Column(4)
-
-        ; 结束时间
-        endChk := formBlock.Add("CheckBox").Name("EndEnableCon").Content("")
-            .VerticalAlignment("Center").HorizontalAlignment("Left")
-            .Grid_Row(1).Grid_Column(0).Margin("0,0,0,8")
+        this._AddFormLabel(form, "", GetLang("开始时间："), labelW, "0,0,4,10")
+            .Grid_Row(0).Grid_Column(0)
+        this._AddTextBox(form, "StartTimeCon", "", timeBoxW, true, true, "2,0")
+            .Grid_Row(0).Grid_Column(1).Margin(rowGap)
+        this._AddCalButton(form, "BtnStartCal", "")
+            .Grid_Row(0).Grid_Column(2).Margin("6,0,0,10")
+        form.Add("CheckBox").Name("EndEnableCon").Content("")
+            .VerticalAlignment("Center").Margin("36,0,2,10")
             .Foreground("{DynamicResource TextMain}")
-        formBlock.Add("TextBlock").Name("EndLabelCon").Text(GetLang("结束时间："))
-            .Foreground("{DynamicResource TextMain}").FontSize(13)
-            .VerticalAlignment("Center").Margin("0,0,4,8").Grid_Row(1).Grid_Column(1)
-        this._AddTextBox(formBlock, "EndTimeCon", "", timeBoxW, true, true)
-            .Grid_Row(1).Grid_Column(2).Margin("0,0,0,8")
-        endCalBtn := formBlock.Add("Button").Name("BtnEndCal")
-            .Width(28).Height(26).MinHeight(26).Margin("6,0,0,8").Cursor("Hand")
-            .VerticalAlignment("Center").Grid_Row(1).Grid_Column(3)
+            .Grid_Row(0).Grid_Column(3)
+        this._AddFormLabel(form, "EndLabelCon", GetLang("结束时间："), "", "0,0,4,10")
+            .Grid_Row(0).Grid_Column(4)
+        this._AddTextBox(form, "EndTimeCon", "", timeBoxW, true, true, "2,0")
+            .Grid_Row(0).Grid_Column(5).Margin(rowGap)
+        this._AddCalButton(form, "BtnEndCal", "BtnEndCalIcon")
+            .Grid_Row(0).Grid_Column(6).Margin("6,0,0,10")
+        helpBtn := form.Add("Button").Name("BtnEndHelp").Content("?")
+            .Width(28).Height(26).MinHeight(26).Margin("6,0,0,10").Cursor("Hand").FontSize(13)
+            .VerticalAlignment("Center")
             .Background("{DynamicResource EditBg}").Foreground("{DynamicResource EditText}")
             .BorderBrush("{DynamicResource EditStroke}").BorderThickness("1")
-        endCalBtn.InjectResources(this._editBtnStyle)
-        endCalBtn.Add("TextBlock").Name("BtnEndCalIcon").Text(Chr(0xE787))
-            .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-            .FontSize(12).HorizontalAlignment("Center").VerticalAlignment("Center")
-        helpBtn := formBlock.Add("Button").Name("BtnEndHelp").Content("?")
-            .Width(28).Height(26).MinHeight(26).Margin("6,0,0,8").Cursor("Hand").FontSize(13)
-            .VerticalAlignment("Center").Grid_Row(1).Grid_Column(4)
-            .Background("{DynamicResource EditBg}").Foreground("{DynamicResource EditText}")
-            .BorderBrush("{DynamicResource EditStroke}").BorderThickness("1")
+            .Grid_Row(0).Grid_Column(7)
         helpBtn.InjectResources(this._editBtnStyle)
 
-        ; 定时类型（独立一行，label 与开始时间对齐）
-        formBlock.Add("CheckBox").Visibility("Hidden").VerticalAlignment("Center")
-            .Grid_Row(2).Grid_Column(0).Margin("0,0,0,8")
-        formBlock.Add("TextBlock").Text(GetLang("定时类型：")).Foreground("{DynamicResource TextMain}").FontSize(13)
-            .VerticalAlignment("Center").Margin("0,0,4,8").Grid_Row(2).Grid_Column(1)
+        this._AddFormLabel(form, "", GetLang("触发类型："), labelW, "0,0,4,10")
+            .Grid_Row(1).Grid_Column(0)
+        this._AddCombo(form, "TypeCon", modeW, rowGap, GetLangArr(["单次", "软件启动时", "周期触发"]))
+            .Grid_Row(1).Grid_Column(1).HorizontalAlignment("Left")
+        intervalPanel := form.Add("StackPanel").Name("IntervalPanel").Orientation("Horizontal")
+            .Visibility("Collapsed").VerticalAlignment("Center")
+            .Grid_Row(1).Grid_Column(2).Grid_ColumnSpan(6).Margin(rowGap)
+        this._AddFormLabel(intervalPanel, "IntervalLabel", GetLang("每次间隔："), sideLabelW, "6,0,4,0")
+        this._AddTextBox(intervalPanel, "IntervalCon", "10", "70", false, false, "2,0")
+        this._AddCombo(intervalPanel, "UnitCon", "82", "6,0,0,0", unitNames)
 
-        typeNames := GetLangArr(["单次", "软件启动时", "自定义"])
-        typeCmb := formBlock.Add("ComboBox").Name("TypeCon").Width(timeBoxW).Height(26).MinHeight(26)
-            .Grid_Row(2).Grid_Column(2).Margin("0,0,0,8").VerticalAlignment("Center")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .IsEditable("False")
-        for n in typeNames
-            typeCmb.Add("ComboBoxItem").Content(n)
+        this._AddFormLabel(form, "", GetLang("任务时长："), labelW, "0,0,4,10")
+            .Grid_Row(2).Grid_Column(0)
+        this._AddCombo(form, "DurationModeCon", modeW, rowGap, GetLangArr(["无限制", "固定时长"]))
+            .Grid_Row(2).Grid_Column(1).HorizontalAlignment("Left")
+        durationPanel := form.Add("StackPanel").Name("DurationPanel").Orientation("Horizontal")
+            .Visibility("Collapsed").VerticalAlignment("Center")
+            .Grid_Row(2).Grid_Column(2).Grid_ColumnSpan(6).Margin(rowGap)
+        this._AddFormLabel(durationPanel, "", GetLang("时长："), sideLabelW, "6,0,4,0")
+        this._AddTextBox(durationPanel, "DurationCon", "10", "70", false, false, "2,0")
+        this._AddCombo(durationPanel, "DurationUnitCon", "82", "6,0,0,0", unitNames)
 
-        ; 每次间隔（独立一行；非自定义时灰显仍显示）
-        intervalRow := formBlock.Add("Grid").Name("IntervalRow")
-            .Grid_Row(3).Grid_Column(0).Grid_ColumnSpan(5)
-        intervalRow.Cols(chkW, labelW, "Auto", "Auto")
-        intervalRow.Add("CheckBox").Visibility("Hidden").VerticalAlignment("Center").Grid_Column(0)
-        intervalRow.Add("TextBlock").Name("IntervalLabel").Text(GetLang("每次间隔："))
-            .Foreground("{DynamicResource TextMain}").FontSize(13)
-            .VerticalAlignment("Center").Margin("0,0,4,0").Grid_Column(1)
-        this._AddTextBox(intervalRow, "IntervalCon", "10", "70").Grid_Column(2)
+        form.Add("TextBlock").Name("NextTriggerTip").Text("")
+            .Foreground("{DynamicResource TextSub}").FontSize(12).TextWrapping("Wrap")
+            .Margin("0,2,0,0").Grid_Row(3).Grid_Column(0).Grid_ColumnSpan(8)
 
-        unitNames := GetLangArr(["秒", "分钟", "小时", "天", "周", "月"])
-        unitCmb := intervalRow.Add("ComboBox").Name("UnitCon").Width(82).Height(26).MinHeight(26)
-            .Grid_Column(3).Margin("6,0,0,0").VerticalAlignment("Center")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .IsEditable("False")
-        for n in unitNames
-            unitCmb.Add("ComboBoxItem").Content(n)
-
-        btnRow := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,18,0,0")
+        btnRow := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,16,0,0")
         okBtn := btnRow.Add("Button").Name("BtnConfirm").Content(GetLang("确定"))
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").FontWeight("Bold")
             .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1")
@@ -248,7 +231,11 @@ class TimingGui {
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', 'WindowStartupLocation="Manual"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
-        this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
+        ; 输入框和下拉框用同一套边框：1 像素、对齐到像素，避免下边被裁成细线或加粗成 2 像素
+        inputChrome := '<CornerRadius x:Key="PanelRadius">8</CornerRadius>'
+        inputChrome .= '<Style TargetType="TextBox"><Setter Property="UseLayoutRounding" Value="True"/><Setter Property="SnapsToDevicePixels" Value="True"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="True"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border></ControlTemplate></Setter.Value></Setter></Style>'
+        inputChrome .= '<Style TargetType="ComboBox"><Setter Property="Padding" Value="6,0,18,0"/><Setter Property="UseLayoutRounding" Value="True"/><Setter Property="SnapsToDevicePixels" Value="True"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox"><Grid><ToggleButton x:Name="ToggleButton" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Focusable="false" IsChecked="{Binding Path=IsDropDownOpen,Mode=TwoWay,RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="True"><Path Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" Data="M 0 0 L 4 4 L 8 0 Z"/></Border></ControlTemplate></ToggleButton.Template></ToggleButton><ContentPresenter x:Name="ContentSite" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" HorizontalAlignment="Left"/><TextBox x:Name="PART_EditableTextBox" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="{TemplateBinding Padding}" Focusable="True" Background="Transparent" Foreground="{TemplateBinding Foreground}" BorderThickness="0" Visibility="Hidden" IsReadOnly="{TemplateBinding IsReadOnly}"/><Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide"><Border x:Name="DropDownBorder" Background="{DynamicResource DropdownBg}" BorderThickness="1" BorderBrush="{DynamicResource ControlBorder}" CornerRadius="3" Margin="0,4,0,0" Width="{Binding ActualWidth, ElementName=ToggleButton}" MaxHeight="350"><ScrollViewer Margin="0" SnapsToDevicePixels="True" Tag="ContainScroll"><StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer></Border></Popup></Grid></ControlTemplate></Setter.Value></Setter></Style>'
+        this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', inputChrome)
 
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
@@ -263,8 +250,16 @@ class TimingGui {
         this.ui.Track("TypeCon")
         this.ui.Track("IntervalCon")
         this.ui.Track("UnitCon")
+        this.ui.Track("DurationModeCon")
+        this.ui.Track("DurationCon")
+        this.ui.Track("DurationUnitCon")
         this.ui.OnEvent("TypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("TypeCon", "DropDownClosed", ObjBindMethod(this, "OnChangeType"))
+        this.ui.OnEvent("DurationModeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeDurationMode"))
+        this.ui.OnEvent("DurationModeCon", "DropDownClosed", ObjBindMethod(this, "OnChangeDurationMode"))
+        this.ui.OnEvent("IntervalCon", "TextChanged", ObjBindMethod(this, "OnTimingFieldChanged"))
+        this.ui.OnEvent("UnitCon", "SelectionChanged", ObjBindMethod(this, "OnTimingFieldChanged"))
+        this.ui.OnEvent("UnitCon", "DropDownClosed", ObjBindMethod(this, "OnTimingFieldChanged"))
         this.ui.OnEvent("EndEnableCon", "Checked", ObjBindMethod(this, "OnEndEnableChanged"))
         this.ui.OnEvent("EndEnableCon", "Unchecked", ObjBindMethod(this, "OnEndEnableChanged"))
 
@@ -273,12 +268,12 @@ class TimingGui {
             this.closed := true
     }
 
-    _AddTextBox(parent, name, text, width, readOnly := false, centerText := false) {
+    _AddTextBox(parent, name, text, width, readOnly := false, centerText := false, padding := "6,0") {
         tb := parent.Add("TextBox").Name(name).Text(text).Height(26).MinHeight(26)
             .FontSize(12).FontFamily(MainSoftData.FontType)
             .VerticalAlignment("Center").VerticalContentAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Padding("6,0")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Padding(padding)
         if (width != "*")
             tb.Width(width)
         if (readOnly)
@@ -286,6 +281,42 @@ class TimingGui {
         if (centerText)
             tb.TextAlignment("Center")
         return tb
+    }
+
+    _AddFormLabel(parent, name, text, width, margin) {
+        tb := parent.Add("TextBlock").Text(text)
+            .Foreground("{DynamicResource TextMain}").FontSize(13)
+            .VerticalAlignment("Center").Margin(margin)
+        if (name != "")
+            tb.Name(name)
+        if (width != "")
+            tb.Width(width)
+        return tb
+    }
+
+    _AddCalButton(parent, name, iconName) {
+        btn := parent.Add("Button").Name(name)
+            .Width(28).Height(26).MinHeight(26).Margin("6,0,0,0").Cursor("Hand")
+            .VerticalAlignment("Center")
+            .Background("{DynamicResource EditBg}").Foreground("{DynamicResource EditText}")
+            .BorderBrush("{DynamicResource EditStroke}").BorderThickness("1")
+        btn.InjectResources(this._editBtnStyle)
+        icon := btn.Add("TextBlock").Text(Chr(0xE787)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+            .FontSize(12).HorizontalAlignment("Center").VerticalAlignment("Center")
+        if (iconName != "")
+            icon.Name(iconName)
+        return btn
+    }
+
+    _AddCombo(parent, name, width, margin, names) {
+        cmb := parent.Add("ComboBox").Name(name).Width(width).Height(26).MinHeight(26)
+            .Margin(margin).VerticalAlignment("Center")
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .IsEditable("False")
+        for n in names
+            cmb.Add("ComboBoxItem").Content(n)
+        return cmb
     }
 
     OnWindowLoad(state, ctrl, event) {
@@ -329,28 +360,45 @@ class TimingGui {
         if (!IsObject(this.ui) || this.closed)
             return
 
-        typeNames := GetLangArr(["单次", "软件启动时", "自定义"])
+        typeNames := GetLangArr(["单次", "软件启动时", "周期触发"])
         unitNames := GetLangArr(["秒", "分钟", "小时", "天", "周", "月"])
+        durationNames := GetLangArr(["无限制", "固定时长"])
 
         try this.ui.Update("StartTimeCon", "Text", this._startText)
         try this.ui.Update("EndTimeCon", "Text", this._endText)
         try this.ui.Update("EndEnableCon", "IsChecked", this._endEnabled ? "True" : "False")
+        try this.ui.Update("IntervalCon", "Text", this._intervalText)
+        try this.ui.Update("DurationCon", "Text", this._durationText)
 
         try this.ui.Update("TypeCon", "Text", typeNames[this._typeIndex])
         try this.ui.Update("TypeCon", "SelectedIndex", this._typeIndex - 1)
-
-        try this.ui.Update("IntervalCon", "Text", this._intervalText)
-
         try this.ui.Update("UnitCon", "Text", unitNames[this._unitIndex])
         try this.ui.Update("UnitCon", "SelectedIndex", this._unitIndex - 1)
+        try this.ui.Update("DurationModeCon", "Text", durationNames[this._durationModeIndex])
+        try this.ui.Update("DurationModeCon", "SelectedIndex", this._durationModeIndex - 1)
+        try this.ui.Update("DurationUnitCon", "Text", unitNames[this._durationUnitIndex])
+        try this.ui.Update("DurationUnitCon", "SelectedIndex", this._durationUnitIndex - 1)
 
         this._RefreshIntervalVisibility()
+        this._RefreshDurationVisibility()
         this._RefreshEndEnabled()
+        this._RefreshNextTriggerTip()
     }
 
     OnChangeType(state := unset, ctrl := unset, event := unset) {
         this._ReadUIState(IsSet(state) ? state : unset)
         this._RefreshIntervalVisibility()
+        this._RefreshNextTriggerTip()
+    }
+
+    OnTimingFieldChanged(state := unset, ctrl := unset, event := unset) {
+        this._ReadUIState(IsSet(state) ? state : unset)
+        this._RefreshNextTriggerTip()
+    }
+
+    OnChangeDurationMode(state := unset, ctrl := unset, event := unset) {
+        this._ReadUIState(IsSet(state) ? state : unset)
+        this._RefreshDurationVisibility()
     }
 
     OnEndEnableChanged(state := unset, ctrl := unset, event := unset) {
@@ -367,32 +415,89 @@ class TimingGui {
             try this.ui.Update("EndTimeCon", "Text", this._endText)
         }
         this._RefreshEndEnabled()
+        this._RefreshNextTriggerTip()
     }
 
     _RefreshIntervalVisibility() {
         if (!IsObject(this.ui))
             return
-        ; 始终显示；仅自定义时可编辑，其余类型灰显
-        try this.ui.Update("IntervalRow", "Visibility", "Visible")
-        if (this._typeIndex == 3) {
-            try this.ui.Update("IntervalLabel", "Foreground", "{DynamicResource TextMain}")
-            try this.ui.Update("IntervalLabel", "Opacity", "1")
-            try this.ui.Update("IntervalCon", "IsEnabled", "True")
-            try this.ui.Update("IntervalCon", "Opacity", "1")
-            try this.ui.Update("IntervalCon", "Foreground", "{DynamicResource InputText}")
-            try this.ui.Update("UnitCon", "IsEnabled", "True")
-            try this.ui.Update("UnitCon", "Opacity", "1")
-            try this.ui.Update("UnitCon", "Foreground", "{DynamicResource InputText}")
-        } else {
-            try this.ui.Update("IntervalLabel", "Foreground", "{DynamicResource TextSub}")
-            try this.ui.Update("IntervalLabel", "Opacity", "0.55")
-            try this.ui.Update("IntervalCon", "IsEnabled", "False")
-            try this.ui.Update("IntervalCon", "Opacity", "0.45")
-            try this.ui.Update("IntervalCon", "Foreground", "{DynamicResource TextSub}")
-            try this.ui.Update("UnitCon", "IsEnabled", "False")
-            try this.ui.Update("UnitCon", "Opacity", "0.45")
-            try this.ui.Update("UnitCon", "Foreground", "{DynamicResource TextSub}")
+        try this.ui.Update("IntervalPanel", "Visibility", this._typeIndex == 3 ? "Visible" : "Collapsed")
+    }
+
+    _RefreshDurationVisibility() {
+        if (!IsObject(this.ui))
+            return
+        try this.ui.Update("DurationPanel", "Visibility", this._durationModeIndex == 2 ? "Visible" : "Collapsed")
+    }
+
+    _RefreshNextTriggerTip() {
+        if (!IsObject(this.ui))
+            return
+        try this.ui.Update("NextTriggerTip", "Text", this._DescribeNextTrigger())
+    }
+
+    _DescribeNextTrigger() {
+        block := this._TriggerBlockReason()
+        if (block != "")
+            return GetLang("不会触发：") block
+
+        typeName := CmdEnumFromIndex(this._typeIndex - 1, CmdEnumTimingTypeNames())
+        if (typeName == "软件启动时")
+            return this._WithFrontNote(GetLang("下次触发时间：") GetLang("软件启动时"))
+
+        startRaw := this._ParseTimeText(this._startText)
+        if (startRaw == "")
+            return GetLang("不会触发：") GetLang("开始时间无效")
+
+        Data := { StartStamp: TimeStrToStamp(startRaw), Type: typeName, CustomInterval: this._intervalText
+            , CustomUnit: CmdEnumFromIndex(this._unitIndex - 1, CmdEnumTimingUnitNames()) }
+        if (this._endEnabled) {
+            endRaw := this._ParseTimeText(this._endText)
+            if (endRaw == "")
+                return GetLang("不会触发：") GetLang("结束时间无效")
+            if (endRaw <= startRaw)
+                return GetLang("不会触发：") GetLang("结束时间必须晚于开始时间")
+            Data.EndStamp := TimeStrToStamp(endRaw)
         }
+
+        if (typeName == "周期触发" && (!IsNumber(this._intervalText) || this._intervalText + 0 <= 0 || InStr(String(this._intervalText), ".")))
+            return GetLang("不会触发：") GetLang("每次间隔需要是大于零的整数")
+
+        now := UnixNow()
+        next := 0
+        try next := CalculateNextStamp(Data, now)
+        if (next)
+            return this._WithFrontNote(GetLang("下次触发时间：") this._FormatStamp(next))
+
+        if (typeName == "单次")
+            return GetLang("不会触发：") GetLang("开始时间已过，单次只会触发一次")
+        return GetLang("不会触发：") GetLang("下一次触发不早于结束时间")
+    }
+
+    _TriggerBlockReason() {
+        if (!IsObject(this.tableItem) || this.itemIndex < 1)
+            return ""
+        item := ""
+        try item := this.tableItem.Items[this.itemIndex]
+        if (!item)
+            return ""
+        if (item.Macro == "")
+            return GetLang("宏内容为空")
+        if (item.Forbid)
+            return GetLang("该宏已禁用")
+        if (GetItemFoldForbidState(this.tableItem, this.itemIndex))
+            return GetLang("所属模块已禁用")
+        return ""
+    }
+
+    _WithFrontNote(text) {
+        if (!IsObject(this.tableItem) || this.itemIndex < 1)
+            return text
+        front := ""
+        try front := GetItemFrontInfo(this.tableItem, this.itemIndex)
+        if (front == "")
+            return text
+        return text GetLang("（仅指定前台窗口匹配时触发）")
     }
 
     _RefreshEndEnabled() {
@@ -467,8 +572,8 @@ class TimingGui {
 
         title := GetLang("选择时间")
         titleHeight := "30"
-        winW := 360
-        winH := 320
+        winW := 320
+        winH := 400
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(titleHeight, "*")
@@ -604,6 +709,7 @@ class TimingGui {
             try this.ui.Update("EndEnableCon", "IsChecked", "True")
             this._RefreshEndEnabled()
         }
+        this._RefreshNextTriggerTip()
         this._ClosePicker()
     }
 
@@ -619,26 +725,18 @@ class TimingGui {
                 this._endText := state["EndTimeCon"]
             if (state.Has("IntervalCon"))
                 this._intervalText := state["IntervalCon"]
+            if (state.Has("DurationCon"))
+                this._durationText := state["DurationCon"]
             if (state.Has("EndEnableCon"))
                 this._endEnabled := (state["EndEnableCon"] = "True" || state["EndEnableCon"] = "true" || state["EndEnableCon"] = "1")
-            if (state.Has("TypeCon") && state["TypeCon"] != "") {
-                names := GetLangArr(["单次", "软件启动时", "自定义"])
-                loop names.Length {
-                    if (state["TypeCon"] == names[A_Index]) {
-                        this._typeIndex := A_Index
-                        break
-                    }
-                }
-            }
-            if (state.Has("UnitCon") && state["UnitCon"] != "") {
-                units := GetLangArr(["秒", "分钟", "小时", "天", "周", "月"])
-                loop units.Length {
-                    if (state["UnitCon"] == units[A_Index]) {
-                        this._unitIndex := A_Index
-                        break
-                    }
-                }
-            }
+            if (state.Has("TypeCon") && state["TypeCon"] != "")
+                this._typeIndex := this._MatchNameIndex(state["TypeCon"], GetLangArr(["单次", "软件启动时", "周期触发"]), this._typeIndex)
+            if (state.Has("UnitCon") && state["UnitCon"] != "")
+                this._unitIndex := this._MatchNameIndex(state["UnitCon"], GetLangArr(["秒", "分钟", "小时", "天", "周", "月"]), this._unitIndex)
+            if (state.Has("DurationModeCon") && state["DurationModeCon"] != "")
+                this._durationModeIndex := this._MatchNameIndex(state["DurationModeCon"], GetLangArr(["无限制", "固定时长"]), this._durationModeIndex)
+            if (state.Has("DurationUnitCon") && state["DurationUnitCon"] != "")
+                this._durationUnitIndex := this._MatchNameIndex(state["DurationUnitCon"], GetLangArr(["秒", "分钟", "小时", "天", "周", "月"]), this._durationUnitIndex)
         }
         if (IsObject(this.ui)) {
             v := this.ui.Query("StartTimeCon")
@@ -649,16 +747,44 @@ class TimingGui {
             v := this.ui.Query("IntervalCon")
             if (v != "")
                 this._intervalText := v
+            v := this.ui.Query("DurationCon")
+            if (v != "")
+                this._durationText := v
             v := this.ui.Query("EndEnableCon")
             if (v != "")
                 this._endEnabled := (v = "True" || v = "true" || v = "1")
-            idx := this.ui.Query("TypeCon>SelectedIndex")
-            if (idx != "" && IsNumber(idx))
-                this._typeIndex := Integer(idx) + 1
-            idx := this.ui.Query("UnitCon>SelectedIndex")
-            if (idx != "" && IsNumber(idx))
-                this._unitIndex := Integer(idx) + 1
+            this._typeIndex := this._QueryComboIndex("TypeCon", this._typeIndex)
+            this._unitIndex := this._QueryComboIndex("UnitCon", this._unitIndex)
+            this._durationModeIndex := this._QueryComboIndex("DurationModeCon", this._durationModeIndex)
+            this._durationUnitIndex := this._QueryComboIndex("DurationUnitCon", this._durationUnitIndex)
         }
+    }
+
+    _MatchNameIndex(text, names, fallback) {
+        loop names.Length {
+            if (text == names[A_Index])
+                return A_Index
+        }
+        return fallback
+    }
+
+    _QueryComboIndex(name, fallback) {
+        idx := this.ui.Query(name ">SelectedIndex")
+        if (idx != "" && IsNumber(idx))
+            return Integer(idx) + 1
+        return fallback
+    }
+
+    _CheckPositiveInt(text, emptyMsg, decimalMsg) {
+        if (!IsNumber(text) || text + 0 <= 0) {
+            RmtDialog.Info(GetLang(emptyMsg))
+            return false
+        }
+        if (InStr(String(text), ".")) {
+            RmtDialog.Info(GetLang(decimalMsg))
+            return false
+        }
+        return true
     }
 
     CheckIfValid() {
@@ -679,14 +805,12 @@ class TimingGui {
             }
         }
         if (this._typeIndex == 3) {
-            if (!IsNumber(this._intervalText) || this._intervalText + 0 <= 0) {
-                RmtDialog.Info(GetLang("每次间隔需要输入大于零的数字！！！"))
+            if (!this._CheckPositiveInt(this._intervalText, "每次间隔需要输入大于零的数字！！！", "每次间隔时间只能是整数！！"))
                 return false
-            }
-            if (InStr(String(this._intervalText), ".")) {
-                RmtDialog.Info(GetLang("每次间隔时间只能是整数！！"))
+        }
+        if (this._durationModeIndex == 2) {
+            if (!this._CheckPositiveInt(this._durationText, "时长需要输入大于零的数字！！！", "时长只能是整数！！"))
                 return false
-            }
         }
         return true
     }
@@ -718,6 +842,9 @@ class TimingGui {
         Data.Type := CmdEnumFromIndex(this._typeIndex - 1, CmdEnumTimingTypeNames())
         Data.CustomInterval := this._intervalText
         Data.CustomUnit := CmdEnumFromIndex(this._unitIndex - 1, CmdEnumTimingUnitNames())
+        Data.DurationMode := CmdEnumFromIndex(this._durationModeIndex - 1, CmdEnumTimingDurationNames())
+        Data.Duration := this._durationText
+        Data.DurationUnit := CmdEnumFromIndex(this._durationUnitIndex - 1, CmdEnumTimingUnitNames())
 
         minimal := {}
         minimal.SerialStr := Data.SerialStr
@@ -725,10 +852,13 @@ class TimingGui {
         minimal.Type := Data.Type
         if (Data.EndStamp)
             minimal.EndStamp := Data.EndStamp
-        if (Data.Type == "自定义") {
+        if (Data.Type == "周期触发") {
             minimal.CustomInterval := Data.CustomInterval
             minimal.CustomUnit := Data.CustomUnit
         }
+        minimal.DurationMode := Data.DurationMode
+        minimal.Duration := Data.Duration
+        minimal.DurationUnit := Data.DurationUnit
 
         saveStr := JSON.stringify(minimal, 0)
         CfgWrite(saveStr, TimingFile, SettingSection, Data.SerialStr)

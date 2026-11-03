@@ -7,6 +7,8 @@ class TimingScheduler {
         this.heap := MinHeap()
         this.timerFunc := ObjBindMethod(this, "OnTimer")
         this.endCheckTimerFunc := ObjBindMethod(this, "OnEndCheck")
+        this._durationDeadlines := Map()
+        this._durationTimerFunc := ObjBindMethod(this, "_OnDurationFire")
         this.running := false
         ; §17 热重载订阅：定时表配置变更（宏/模块禁用、定时参数、宏内容）→ 空闲时重建调度堆，
         ; 使禁用/启用/改定时保存选「否」后立即生效（不再只靠重启时 Rebuild）
@@ -52,7 +54,7 @@ class TimingScheduler {
         tableItem := this._GetTable()
         if (!tableItem)
             return
-        HandleOnSoftStart(tableItem)
+        HandleOnSoftStart(tableItem, this)
 
         this.running := true
 
@@ -200,8 +202,11 @@ class TimingScheduler {
                     shouldTrigger := false
             }
 
-            if (shouldTrigger)
+            if (shouldTrigger) {
                 TriggerMacroHandler(tableItem, index)
+                ; 时长只约束这一次运行。周期的下一次触发点照常计算，触发时再重新计时。
+                this._ArmTaskDuration(tableItem, index, Data)
+            }
 
             nextTime := CalculateNextStamp(Data, item.time)
             if (nextTime)
@@ -238,6 +243,70 @@ class TimingScheduler {
 
         ; 只在真正需要時重新搜尋下一個 EndStamp，避免每秒掃描
         this.ScheduleEndCheck()
+    }
+
+    ; 从本次触发重新计算截止时间。已有截止时间会被覆盖，不改周期堆里的下一次触发点。
+    _ArmTaskDuration(tableItem, index, Data) {
+        item := tableItem.Items[index]
+        if (!item)
+            return
+        id := String(item.ID)
+        mode := Data.HasOwnProp("DurationMode") ? CmdEnumTimingDuration(Data.DurationMode) : "无限制"
+        if (mode != "固定时长") {
+            if (this._durationDeadlines.Has(id))
+                this._durationDeadlines.Delete(id)
+            this._ScheduleDurationFire()
+            return
+        }
+        secs := GetTimingDurationSeconds(Data)
+        if (secs < 1)
+            return
+        this._durationDeadlines[id] := UnixNow() + secs
+        this._ScheduleDurationFire()
+    }
+
+    _ScheduleDurationFire() {
+        next := 0
+        now := UnixNow()
+        for id, t in this._durationDeadlines {
+            if (!next || t < next)
+                next := t
+        }
+        if (!next) {
+            SetTimer(this._durationTimerFunc, 0)
+            return
+        }
+        this.SetOneShotTimer(this._durationTimerFunc, (next - now) * 1000)
+    }
+
+    _OnDurationFire() {
+        now := UnixNow()
+        due := []
+        for id, t in this._durationDeadlines {
+            if (t <= now)
+                due.Push(id)
+        }
+        tableItem := this._GetTable()
+        for id in due {
+            this._durationDeadlines.Delete(id)
+            if (tableItem)
+                this._StopTimedTask(tableItem, id)
+        }
+        this._ScheduleDurationFire()
+    }
+
+    _StopTimedTask(tableItem, itemID) {
+        index := GetItemIndexInTable(tableItem, itemID)
+        if (index < 1)
+            return
+        item := tableItem.Items[index]
+        if (!item)
+            return
+        running := (item.ColorState == 1 || item.ColorState == 2)
+        if (IsObject(MyWorkPool) && MyWorkPool.HasItemWork(tableItem.ID, item.ID))
+            running := true
+        if (running)
+            MyStopMacro(tableItem, index)
     }
 }
 
@@ -317,7 +386,7 @@ CalculateNextStamp(Data, baseStamp) {
     switch CmdEnumTimingType(Data.Type) {
         case "单次":
             return 0
-        case "自定义":
+        case "周期触发":
             return NextRepeatTime(Data, start, baseStamp)
     }
 
@@ -367,6 +436,27 @@ GetTimingInterval(Data) {
     return Data.CustomInterval * span
 }
 
+GetTimingDurationSeconds(Data) {
+    n := Data.HasOwnProp("Duration") ? Data.Duration : 0
+    if (!IsNumber(n) || n <= 0)
+        return 0
+    n := Integer(n)
+    unit := CmdEnumTimingUnit(Data.HasOwnProp("DurationUnit") ? Data.DurationUnit : "分钟")
+    if (unit == "月") {
+        try {
+            now := UnixNow()
+            endStr := DateAdd(StampToTimeStr(now), n, "Months")
+            secs := TimeStrToStamp(endStr) - now
+            return secs > 0 ? secs : 0
+        } catch {
+            return 0
+        }
+    }
+    secs := Map("秒", 1, "分钟", 60, "小时", 3600, "天", 86400, "周", 604800)
+    span := secs.Has(unit) ? secs[unit] : 60
+    return n * span
+}
+
 TimingCheckItemIfValid(tableItem, index) {
     item := tableItem.Items[index]
     return item
@@ -375,7 +465,7 @@ TimingCheckItemIfValid(tableItem, index) {
         && !GetItemFoldForbidState(tableItem, index)
 }
 
-HandleOnSoftStart(tableItem) {
+HandleOnSoftStart(tableItem, scheduler := "") {
     if (MainSoftData.IsReload)
         return
 
@@ -384,8 +474,11 @@ HandleOnSoftStart(tableItem) {
             continue
 
         Data := GetMacroCMDData(item.TimingSerial)
-        if (CmdEnumTimingType(Data.Type) == "软件启动时")
+        if (CmdEnumTimingType(Data.Type) == "软件启动时") {
             TriggerMacroHandler(tableItem, index)
+            if (scheduler != "")
+                scheduler._ArmTaskDuration(tableItem, index, Data)
+        }
     }
 }
 

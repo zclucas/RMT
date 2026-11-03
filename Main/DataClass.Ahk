@@ -1440,9 +1440,12 @@ class TimingData {
         this.SerialStr := ""
         this.StartStamp := DateDiff(A_Now, "19700101000000", "Seconds")  ; Unix timestamp
         this.EndStamp := 0                                                 ; 0 = no end, omitted in JSON
-        this.Type := "单次"  ;单次 软件启动时 自定义
-        this.CustomInterval := "10"  ; only relevant when Type == 自定义
+        this.Type := "单次"  ;单次 软件启动时 周期触发（旧值「自定义」仍兼容）
+        this.CustomInterval := "10"  ; 仅周期触发使用
         this.CustomUnit := "分钟"         ;秒 分钟 小时 天 周 月
+        this.DurationMode := "无限制"     ;无限制 固定时长
+        this.Duration := "10"
+        this.DurationUnit := "分钟"
     }
 }
 
