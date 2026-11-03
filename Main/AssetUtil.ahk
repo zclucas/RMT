@@ -1281,8 +1281,19 @@ BuildTableItemListFromToml(tables) {
 ; 旧格式：无 [Tables] 段 → 使用默认 13 表定义（每条目按旧格式迁移）
 ; ============================================================
 LoadCurMacroSetting() {
-    global MySoftData
+    global MySoftData, MacroFileSeedDefaults
     migrated := false
+
+    ; 目录里已经有宏文件（含尚未转换的旧 ini）时，禁止再种入「快捷启动」那套默认列表。
+    ; 1.3 写宏列表会按 14 个 [[table]] 重建整文件；读不懂的表以前会在这里回落成默认值，
+    ; 复杂旧配置看起来就像整份宏列表被默认配置换掉。
+    MacroFileSeedDefaults := !MacroFileHasExistingSource()
+    if (MacroFileImportIni())
+        migrated := true
+    ; 旧版扁平宏还在时，先展开成三级段。漏掉这一步的话，下面会把「没有三级段」
+    ; 当成全新表，用默认宏覆盖用户的 MacroFile。
+    if (ExpandFlatMacroFileIfNeeded())
+        migrated := true
 
     ; ---- 表集合 [[table]] 数组 ----
     t := TomlUtil_Read()
@@ -1350,10 +1361,133 @@ ReadTableItemInfo(tableItem) {
         return false
     }
 
+    ; 扁平键还在，或文件在但解析失败：保留原文件。写成默认宏就会把用户列表盖掉。
+    if (MacroFileMustKeep(symbol)) {
+        tableItem.Items := []
+        tableItem.ItemMap := Map()
+        tableItem.Folds := []
+        tableItem.FoldMap := Map()
+        return false
+    }
+
+    ; 已有配置却读不出这张表：保持空白，不要写成默认宏。
+    ; 全新安装（宏文件还不存在）才种入默认列表。
+    global MacroFileSeedDefaults
+    if (!IsSet(MacroFileSeedDefaults) || !MacroFileSeedDefaults) {
+        tableItem.Items := []
+        tableItem.ItemMap := Map()
+        tableItem.Folds := []
+        tableItem.FoldMap := Map()
+        return false
+    }
+
     ; ---- 全新表：初始化默认条目并落盘为三级格式 ----
     InitTableItemDefault(tableItem)
     SaveTableItemInfo(tableItem)
     return true
+}
+
+; toml 已有内容，或同目录还留着旧 ini，都算用户配置，不能当空白方案种默认宏。
+MacroFileHasExistingSource() {
+    global MacroFile
+    if (MacroFileNonEmpty(MacroFile))
+        return true
+    ini := MacroFileIniSibling()
+    return ini != "" && FileExist(ini)
+}
+
+MacroFileNonEmpty(path) {
+    if (path == "" || !FileExist(path))
+        return false
+    try
+        return FileGetSize(path) > 0
+    catch
+        return true
+}
+
+MacroFileIniSibling() {
+    global MacroFile
+    if (!IsSet(MacroFile) || SubStr(MacroFile, -5) != ".toml")
+        return ""
+    return SubStr(MacroFile, 1, -5) ".ini"
+}
+
+; 主进程才有整目录迁移。Worker 调用会失败，捕获后留给上面的保护，不能写默认宏。
+MacroFileImportIni() {
+    ini := MacroFileIniSibling()
+    if (ini == "" || !FileExist(ini))
+        return false
+    SplitPath ini, , &settingDir
+    try {
+        Compat_UpgradeDir(settingDir)
+    } catch as e {
+        try RMTLogSys(RMT_LV_ERROR, "配置导入", "旧 MacroFile.ini 迁移失败，已停止写入默认宏: " e.Message)
+        return false
+    }
+    global MacroFile
+    TomlUtil_Invalidate(MacroFile)
+    try CfgInvalidate(MacroFile)
+    return true
+}
+
+; 导入漏展开、或 Worker 没有导入器时：只要还能看到扁平键 / 文件解析失败，就不要落盘默认宏。
+; 主进程会在 LoadCurMacroSetting 开头先尝试展开；这里是最后一道，避免 Save 把原文件盖成 8KB 默认列表。
+MacroFileMustKeep(symbol) {
+    global MacroFile
+    if (!IsSet(MacroFile) || MacroFile == "" || !FileExist(MacroFile))
+        return false
+    try {
+        if (FileGetSize(MacroFile) == 0)
+            return false
+    } catch {
+        return true
+    }
+    t := TomlUtil_Read(MacroFile)
+    if (!TomlUtil_Valid(t)) {
+        try RMTLogSys(RMT_LV_ERROR, "配置导入", "MacroFile 无法解析，已停止写入默认宏：" MacroFile)
+        return true
+    }
+    if (symbol == "")
+        return false
+    sec := "UserSettings"
+    try {
+        kv := CfgSection(MacroFile, sec)
+    } catch {
+        return true
+    }
+    if (kv.Has(symbol "ModeArr") || kv.Has(symbol "FoldInfo") || kv.Has(symbol "MacroArr1")) {
+        try RMTLogSys(RMT_LV_ERROR, "配置导入", "MacroFile 仍是扁平布局，已停止用默认宏覆盖：" symbol)
+        return true
+    }
+    return false
+}
+
+; 主进程才有 IniImport_ExpandFlatMacroFile。Worker 调用会失败，捕获后留给上面的保护，不能写默认宏。
+ExpandFlatMacroFileIfNeeded() {
+    global MacroFile
+    if (!IsSet(MacroFile) || MacroFile == "" || !FileExist(MacroFile))
+        return false
+    try {
+        kv := CfgSection(MacroFile, "UserSettings")
+    } catch {
+        return false
+    }
+    flat := false
+    for def in CreateDefaultTableDefs() {
+        if (kv.Has(def[1] "ModeArr") || kv.Has(def[1] "FoldInfo") || kv.Has(def[1] "MacroArr1")) {
+            flat := true
+            break
+        }
+    }
+    if (!flat)
+        return false
+    SplitPath MacroFile, , &settingDir
+    try {
+        return IniImport_ExpandFlatMacroFile(settingDir)
+    } catch as e {
+        try RMTLogSys(RMT_LV_ERROR, "配置导入", "展开扁平 MacroFile 失败，已保留原文件: " e.Message)
+        return false
+    }
 }
 
 ; 判断某表是否存在三级段结构数据（ModuleOrder 键或 [表ID.*] 子段）
@@ -1809,6 +1943,8 @@ SaveTableItemInfo(tableItem) {
 ; 只重建本表全部段（先剔除旧段再写入），其他表段与 [[table]] 数组原样保留
 ; ============================================================
 SaveTableItemInfoToml(tableItem) {
+    if (MacroFileMustKeep(""))
+        return
     root := TomlUtil_RootMap()
     SaveTableItemInfoTomlCore(root, tableItem)
     TomlUtil_Write(root)
@@ -1915,6 +2051,8 @@ SaveTableItemInfoTomlCore(root, tableItem) {
 ; 含表集合 [[table]] 与各表三级段，替代 OnSaveSetting 的逐表读写（13 表 → 1 次解析 + 1 次写）
 ; ============================================================
 SaveAllTableItemInfo(tableItems) {
+    if (MacroFileMustKeep(""))
+        return
     root := TomlUtil_RootMap()
     ; 表集合 [[table]]（id/symbol/name/order）
     tableArr := []
@@ -1956,6 +2094,8 @@ JoinPi(arr) {
 
 ; 保存整个表集合（动态表定义）：[[table]] 数组（id/symbol/name/order）
 SaveTableCollection() {
+    if (MacroFileMustKeep(""))
+        return
     root := TomlUtil_RootMap()
     tableArr := []
     for tableItem in MySoftData.TableInfo {

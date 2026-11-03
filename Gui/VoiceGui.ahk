@@ -48,7 +48,7 @@ class VoiceGui {
             mainGui := IsObject(MainSoftData.MyGui) ? MainSoftData.MyGui.Hwnd : ""
             this.keywords := this._ParseKeywords(curKeywords)
             panel := this._BuildPanel()
-            this.ui := XamlWin.Create(GetLang("语音关键词"), panel, 460, 268)
+            this.ui := XamlWin.Create(GetLang("语音关键词"), panel, 460, 304)
             this.ui.OnEvent("BtnSure", "Click", (*) => this.OnSureClick())
             this.ui.OnEvent("BtnKwAdd", "Click", (*) => this._OnAddClick())
             this.ui.OnEvent("BtnKwMic", "Click", (*) => this._OnMicClick())
@@ -342,6 +342,8 @@ class VoiceGui {
         if (!IsSet(InitSttEngine))
             return
         engine := InitSttEngine()
+        if (IsObject(engine) && !engine.IsDllReady())
+            engine._TryLoadDll()
         if (!IsObject(engine) || !engine.IsDllReady()) {
             try Toast.Warning(GetLang("语音引擎未就绪"))
             return

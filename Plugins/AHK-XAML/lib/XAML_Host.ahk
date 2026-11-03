@@ -433,9 +433,87 @@ class XAMLHost {
             .VerticalAlignment("Stretch").Background("Transparent")
             .Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
             .Visibility(visibility)
-        btn.Add("TextBlock").Name(name "Glyph").Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-            .FontSize(glyphSize).VerticalAlignment("Center").HorizontalAlignment("Center")
+        ; Win11 有 Segoe Fluent，沿用系统字形。Win10 只有 MDL2，里面没有 U+ECAF（POI 定位针），
+        ; 会画出空方框，缺字宽度不稳时还会把右侧标题按钮挤出窗口。Win7 两套图标字体都没有。
+        ; 这些情况改画固定尺寸的矢量，Win7~Win11 看到的是同一套按钮。
+        spec := ""
+        if (!XAMLHost._HasSegoeFluent() && (!XAMLHost._HasMdl2() || glyph = Chr(0xECAF)))
+            spec := XAMLHost._TitleChromeIconSpec(glyph)
+        drawSize := XAMLHost._ChromeGlyphDrawSize(glyph, glyphSize)
+        if (IsObject(spec)) {
+            icon := btn.Add("Path").Name(name "Glyph").Data(spec.data)
+                .Width(drawSize).Height(drawSize).Stretch("Uniform")
+                .HorizontalAlignment("Center").VerticalAlignment("Center")
+            ; Path.FillRule 的默认值就是 EvenOdd（定位针、取色针中间的孔靠它挖出来）。
+            ; 再写成 FillRule="EvenOdd" 时，当前 WPF 宿主会报「未知成员 Path.FillRule」，
+            ; 宏编辑窗口整页解析失败。默认值已经是 EvenOdd，不要把这个属性写进 XAML。
+            if (spec.mode = "even" || spec.mode = "fill")
+                icon.Fill("{DynamicResource TitleBarForeground}")
+            else
+                icon.Fill("Transparent").Stroke("{DynamicResource TitleBarForeground}")
+                    .StrokeThickness(spec.thick).StrokeStartLineCap("Round").StrokeEndLineCap("Round")
+                    .StrokeLineJoin("Round")
+        } else {
+            btn.Add("TextBlock").Name(name "Glyph").Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
+                .FontSize(drawSize).VerticalAlignment("Center").HorizontalAlignment("Center")
+        }
         return btn
+    }
+
+    static _HasSegoeFluent() {
+        static flag := ""
+        if (flag = "")
+            flag := (FileExist(A_WinDir "\Fonts\SegoeFluentIcons.ttf") || FileExist(A_WinDir "\Fonts\Segoe Fluent Icons.ttf")) ? 1 : 0
+        return flag
+    }
+
+    static _HasMdl2() {
+        static flag := ""
+        if (flag = "")
+            flag := FileExist(A_WinDir "\Fonts\segmdl2.ttf") ? 1 : 0
+        return flag
+    }
+
+    ; 定位针（浮窗位置 / F1）在 Segoe Fluent 里留白多，同字号会比旁边的铬钮小一圈。
+    static _ChromeGlyphDrawSize(glyph, glyphSize) {
+        if (glyph = Chr(0xECAF))
+            return XAMLHost.FormatFontSize(glyphSize * 1.45)
+        return glyphSize
+    }
+
+    ; 标题栏铬钮矢量图标。坐标系 16×16，由 Path.Stretch 缩进按钮。
+    static _TitleChromeIconSpec(glyph) {
+        static specs := ""
+        if (!IsObject(specs)) {
+            specs := Map()
+            ; POI：定位针（框选/取点）。Win11 Fluent U+ECAF，Win10 MDL2 没有这个字。
+            specs[Chr(0xECAF)] := { mode: "even", data: "M8,0.9 C4.7,0.9 2.2,3.4 2.2,6.6 C2.2,10.4 8,15.2 8,15.2 C8,15.2 13.8,10.4 13.8,6.6 C13.8,3.4 11.3,0.9 8,0.9 Z M8,4.4 A2.15,2.15 0 0 1 8,8.7 A2.15,2.15 0 0 1 8,4.4 Z" }
+            ; MapPin：定位取色器
+            specs[Chr(0xE707)] := { mode: "even", data: "M8,1.2 C5.2,1.2 3,3.4 3,6.2 C3,9.6 8,14.6 8,14.6 C8,14.6 13,9.6 13,6.2 C13,3.4 10.8,1.2 8,1.2 Z M8,4.6 A1.7,1.7 0 0 1 8,8 A1.7,1.7 0 0 1 8,4.6 Z" }
+            ; Crop：截图四角
+            specs[Chr(0xE7A8)] := { mode: "stroke", thick: "1.5", data: "M2,6.2 V2 H6.2 M9.8,2 H14 V6.2 M14,9.8 V14 H9.8 M6.2,14 H2 V9.8" }
+            ; Eyedropper
+            specs[Chr(0xEF3C)] := { mode: "fill", data: "M10.2,1.2 L13.6,4.6 L12.2,6 L14.4,8.2 L12.6,10 L10.4,7.8 L6.2,12 L3.2,14.2 L1.8,12.8 L4,9.8 L8.2,5.6 L10.2,3.6 Z" }
+            ; Play
+            specs[Chr(0xE768)] := { mode: "fill", data: "M5,2.6 L13.4,8 L5,13.4 Z" }
+            ; Library：手册
+            specs[Chr(0xE8F1)] := { mode: "stroke", thick: "1.4", data: "M3.4,2.2 H12.2 V13.8 H3.4 Z M6.2,2.2 V13.8" }
+            ; Slideshow：视频
+            specs[Chr(0xE786)] := { mode: "fill", data: "M1.6,4.4 H9.6 V11.6 H1.6 Z M9.6,6.2 L14.4,4.2 V11.8 L9.6,9.8 Z" }
+            ; View
+            specs[Chr(0xE890)] := { mode: "even", data: "M1.4,8 C3.2,4.6 5.4,3 8,3 C10.6,3 12.8,4.6 14.6,8 C12.8,11.4 10.6,13 8,13 C5.4,13 3.2,11.4 1.4,8 Z M8,5.6 A2.4,2.4 0 0 1 8,10.4 A2.4,2.4 0 0 1 8,5.6 Z" }
+            ; OpenInNewWindow
+            specs[Chr(0xE8A7)] := { mode: "stroke", thick: "1.4", data: "M6.2,4.2 H3.2 V13 H12 V9.6 M7.6,3 H13 V8.4 M13,3 L7.2,8.8" }
+            ; ChromeClose
+            specs[Chr(0xE8BB)] := { mode: "stroke", thick: "1.6", data: "M3.4,3.4 L12.6,12.6 M12.6,3.4 L3.4,12.6" }
+            ; ChromeMinimize / Maximize
+            specs[Chr(0xE921)] := { mode: "stroke", thick: "1.6", data: "M3.2,8.2 H12.8" }
+            specs[Chr(0xE922)] := { mode: "stroke", thick: "1.4", data: "M3.2,3.2 H12.8 V12.8 H3.2 Z" }
+            specs[Chr(0xE923)] := { mode: "stroke", thick: "1.4", data: "M5,6.2 H13 V13.2 H5 Z M3,3 H11 V4.6 M3,3 V10 H4.6" }
+            ; Pin
+            specs[Chr(0xE840)] := { mode: "fill", data: "M6.2,1.6 H9.8 V5.4 L12.4,8 V9.6 H9 V14.4 H7 V9.6 H3.6 V8 L6.2,5.4 Z" }
+        }
+        return specs.Has(glyph) ? specs[glyph] : ""
     }
 
     ; 框选范围：虚线圆角方框
@@ -1022,9 +1100,12 @@ class XAMLHost {
 
     static _SyncEditorTitleGlyphs(host, glyphSize) {
         gs := String(glyphSize)
+        pin := String(XAMLHost._ChromeGlyphDrawSize(Chr(0xECAF), glyphSize))
         for name in ["BtnClosePanelGlyph", "BtnMinimizeGlyph", "BtnMaximizeGlyph", "BtnPinGlyph", "BtnCmdPointEditGlyph", "BtnCmdPreviewGlyph", "BtnCmdF1Glyph", "BtnCmdF2Glyph", "BtnCmdF3Glyph", "BtnCmdTargeterGlyph", "BtnCmdPlayGlyph", "BtnCmdHelpGlyph", "BtnCmdVideoGlyph"] {
-            try host.Update(name, "FontSize", gs)
+            try host.Update(name, "FontSize", name = "BtnCmdF1Glyph" ? pin : gs)
         }
+        try host.Update("BtnCmdF1Glyph", "Width", pin)
+        try host.Update("BtnCmdF1Glyph", "Height", pin)
         iconFs := InStr(host.xaml, 'Name="MacroEditorTitle"') ? "20" : "14"
         try host.Update("TitleIconGlyph", "FontSize", iconFs)
     }
@@ -2102,8 +2183,9 @@ class XAMLHost {
                 XAMLHost.daemonHwnd := engineType.InvokeMember_3("StartInProcess", 0x158, nullObj, nullObj, args)
             } else {
                 XAMLHost.Prewarm(targetExe)
+                ; Ready 要等样式加载完才发。冷启动这一段能超过 5 秒，等不够就会放弃建窗，进程在但主界面不出现。
                 startWait := A_TickCount
-                while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 5000) {
+                while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 60000) {
                     Sleep(10)
                 }
             }
@@ -2155,7 +2237,7 @@ class XAMLHost {
         if (!XAMLHost.daemonHwnd) {
             this._EnsureDaemon()
             startWait := A_TickCount
-            while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 5000)
+            while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 60000)
                 Sleep(10)
         }
         if (!XAMLHost.daemonHwnd || !XAMLHost.IsDaemonAlive())
@@ -2164,19 +2246,25 @@ class XAMLHost {
         StrPut(payload, buf, "UTF-8")
         head := SubStr(payload, 1, 48)
         t0 := A_TickCount
-        if (this._SendCopyData(XAMLHost.daemonHwnd, buf, 8000)) {
+        if (this._SendCopyData(XAMLHost.daemonHwnd, buf, 20000)) {
             XAMLHost.Diag(Format("SendToEngine OK cost={}ms head=[{}]", A_TickCount - t0, head))
             return
         }
-        ; 超时：杀掉卡死引擎后重试一次
+        ; 超时不代表消息被丢掉。冷启动时窗口可能马上就建出来，先等句柄，不要把引擎杀掉。
+        XAMLHost.Diag(Format("SendToEngine TIMEOUT cost={}ms head=[{}] -> wait hwnd", A_TickCount - t0, head))
+        startWait := A_TickCount
+        while (!this.wpfHwnd && XAMLHost.IsDaemonAlive() && A_TickCount - startWait < 20000)
+            Sleep(50)
+        if (this.wpfHwnd)
+            return
         XAMLHost.Diag(Format("SendToEngine TIMEOUT cost={}ms head=[{}] -> Kill+retry", A_TickCount - t0, head))
         XAMLHost.KillDaemon()
         this._EnsureDaemon()
         startWait := A_TickCount
-        while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 5000)
+        while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 60000)
             Sleep(10)
         if (XAMLHost.daemonHwnd && XAMLHost.IsDaemonAlive()) {
-            ok2 := this._SendCopyData(XAMLHost.daemonHwnd, buf, 8000)
+            ok2 := this._SendCopyData(XAMLHost.daemonHwnd, buf, 20000)
             XAMLHost.Diag("SendToEngine retry " (ok2 ? "OK" : "FAIL"))
         } else {
             XAMLHost.Diag("SendToEngine retry aborted: no daemon")
@@ -3122,7 +3210,7 @@ XAML_TEMPLATE := '
             SnapsToDevicePixels="True">
         
         <WindowChrome.WindowChrome>
-            <WindowChrome GlassFrameThickness="0" ResizeBorderThickness="4" CaptionHeight="%CaptionHeight%" CornerRadius="{DynamicResource WindowRadius}" />
+            <WindowChrome GlassFrameThickness="0" ResizeBorderThickness="4" CaptionHeight="%CaptionHeight%" CornerRadius="{DynamicResource WindowRadius}" UseAeroCaptionButtons="False" />
         </WindowChrome.WindowChrome>
     
         <Window.Resources>
@@ -3156,7 +3244,7 @@ XAML_TEMPLATE := '
             <CornerRadius x:Key="CloseBtnRadius">0,8,0,0</CornerRadius>
             <CornerRadius x:Key="WindowRadius">12</CornerRadius>
             <Thickness x:Key="WindowBorderThickness">0</Thickness>
-            <SolidColorBrush x:Key="WindowBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="WindowBorderBrush" Color="#FF999999" />
             <sys:Double x:Key="TitleBarGradientOpacity">0</sys:Double>
             %resources%
         </Window.Resources>

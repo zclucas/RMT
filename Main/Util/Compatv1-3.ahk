@@ -288,10 +288,10 @@ Compat13_Command(renames, match) {
     original := match[0]
     cmd := Trim(original)
     parts := SplitCommand(cmd)
-    marker := GetCmdSymbol(parts[1])
-    parts[1] := GetCmdStr(parts[1])
     if (parts.Length == 0)
         return original
+    marker := GetCmdSymbol(parts[1])
+    parts[1] := GetCmdStr(parts[1])
     if (renames.Has(parts[1]))
         parts[1] := renames[parts[1]]
     if (parts[1] == "移动")

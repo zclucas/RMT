@@ -40,6 +40,12 @@ public partial class AhkWpfEngine
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // 拖动时把自绘阴影跟紧窗口。系统阴影在直角窗口上会裁掉底边，这里不再靠它。
+        if (msg == 0x0047)
+        {
+            try { RmtWindowFrame.Follow(win); } catch { }
+            ScheduleSystemShadow();
+        }
         if (msg == 0x004A)
         {
             try
@@ -695,17 +701,9 @@ public partial class AhkWpfEngine
             int borderColor = -2; // DWMWA_COLOR_NONE (0xFFFFFFFE)
             DwmSetWindowAttribute(hwnd, 34, ref borderColor, 4);
 
-            // Re-apply shadow policy if glass frame thickness was set to prevent theme change override
-            if (win.Resources.Contains("GlassFrameThicknessVal"))
-            {
-                double val = (double)win.Resources["GlassFrameThicknessVal"];
-                int policy = (val == 0) ? 1 : 2;
-                DwmSetWindowAttribute(hwnd, 2, ref policy, 4);
-
-                MARGINS margins = (val == 0) ? new MARGINS(0, 0, 0, 0) : new MARGINS(-1, -1, -1, -1);
-                DwmExtendFrameIntoClientArea(hwnd, ref margins);
-                SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0037);
-            }
+            // COLOR_NONE 会在直角窗口上把底部阴影一起裁掉。Schedule 里按窗口形状再决定要不要改回。
+            _systemShadowSig = null;
+            ScheduleSystemShadow();
         }
         else if (parts[0] == "Window" && parts[1] == "ResizeMode")
         {
@@ -741,6 +739,8 @@ public partial class AhkWpfEngine
                         }
                     }
                 }
+                _systemShadowSig = null;
+                ScheduleSystemShadow();
             }
             catch { }
         }
@@ -769,40 +769,25 @@ public partial class AhkWpfEngine
             {
                 double val = double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
                 win.Resources["GlassFrameThicknessVal"] = val;
-                chrome.GlassFrameThickness = new Thickness(val);
                 if (val == 0)
                 {
+                    chrome.GlassFrameThickness = new Thickness(0);
                     chrome.ResizeBorderThickness = win.AllowsTransparency ? new Thickness(0) : new Thickness(6);
+                }
+                else if (val < 0)
+                {
+                    // -1 表示要阴影。阴影由 RmtWindowFrame 画，GlassFrame 保持 0，
+                    // 避免整窗玻璃闪紫，也避免直角窗口把底部系统阴影裁掉。
+                    chrome.ResizeBorderThickness = new Thickness(0);
                 }
                 else
                 {
+                    chrome.GlassFrameThickness = new Thickness(val);
                     chrome.ResizeBorderThickness = new Thickness(0);
                 }
-                IntPtr hwndVal = new WindowInteropHelper(win).Handle;
-                if (hwndVal != IntPtr.Zero)
-                {
-                    if (!win.AllowsTransparency)
-                    {
-                        int policy = (val == 0) ? 1 : 2; // 1 = DWMNCRP_DISABLED (No Shadow), 2 = DWMNCRP_ENABLED (Shadow)
-                        DwmSetWindowAttribute(hwndVal, 2, ref policy, 4); // DWMWA_NCRENDERING_POLICY = 2
-
-                        MARGINS margins = (val == 0) ? new MARGINS(0, 0, 0, 0) : new MARGINS(-1, -1, -1, -1);
-                        DwmExtendFrameIntoClientArea(hwndVal, ref margins);
-
-                        SetWindowPos(hwndVal, IntPtr.Zero, 0, 0, 0, 0, 0x0037); // SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
-
-                        if (win.Resources.Contains("DWM_Backdrop") && win.Resources.Contains("DWM_Dark"))
-                        {
-                            int backdrop = (int)win.Resources["DWM_Backdrop"];
-                            int dark = (int)win.Resources["DWM_Dark"];
-                            DwmSetWindowAttribute(hwndVal, 20, ref dark, 4);
-                            DwmSetWindowAttribute(hwndVal, 38, ref backdrop, 4);
-                            int borderColor = -2; // DWMWA_COLOR_NONE
-                            DwmSetWindowAttribute(hwndVal, 34, ref borderColor, 4);
-                        }
-                    }
-                    UpdateSnapState(win);
-                }
+                _systemShadowSig = null;
+                ApplySystemShadow(win);
+                UpdateSnapState(win);
             }
         }
         else if (parts[0] == "Window" && parts[1] == "ApplyVisibilityStyles")
@@ -882,15 +867,7 @@ public partial class AhkWpfEngine
                         DwmSetWindowAttribute(hwndVal, 34, ref borderColor, 4);
                     }
 
-                    if (!win.AllowsTransparency && win.Resources.Contains("GlassFrameThicknessVal"))
-                    {
-                        double val = (double)win.Resources["GlassFrameThicknessVal"];
-                        int policy = (val == 0) ? 1 : 2;
-                        DwmSetWindowAttribute(hwndVal, 2, ref policy, 4);
-                        MARGINS margins = (val == 0) ? new MARGINS(0, 0, 0, 0) : new MARGINS(-1, -1, -1, -1);
-                        DwmExtendFrameIntoClientArea(hwndVal, ref margins);
-                    }
-
+                    _systemShadowSig = null;
                     UpdateSnapState(win);
                 }
             }
@@ -1003,19 +980,12 @@ public partial class AhkWpfEngine
                         if (Application.Current != null && !win.Title.StartsWith("Developer Tools - ")) AhkWpfEngine.SetAppResource("BaseWindowRadius", win.Resources["BaseWindowRadius"]);
                         UpdateSnapState(win);
                     }
-                    else
-                    {
-                        win.Resources[parts[1]] = new System.Windows.CornerRadiusConverter().ConvertFromString(val);
-                        if (parts[1] == "PanelRadius")
+                        else
                         {
-                            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(win);
-                            if (chrome != null)
-                            {
-                                chrome.CornerRadius = (CornerRadius)win.Resources["PanelRadius"];
-                            }
-                            UpdateSnapState(win);
+                            win.Resources[parts[1]] = new System.Windows.CornerRadiusConverter().ConvertFromString(val);
+                            if (parts[1] == "PanelRadius")
+                                UpdateSnapState(win);
                         }
-                    }
                 }
                 else if (type == "Double") win.Resources[parts[1]] = double.Parse(val, System.Globalization.CultureInfo.InvariantCulture);
             }
@@ -1056,6 +1026,11 @@ public partial class AhkWpfEngine
                     AhkWpfEngine.SetAppResource(parts[1], synced);
             }
             RmtCommonStyles.ThemeChanged(win, parts[1]);
+            if (parts[1] == "WindowBorderBrush" || parts[1] == "ControlBorder" || parts[1] == "GroupStroke"
+                || parts[1] == "BgColor" || parts[1] == "WindowRadius" || parts[1] == "PanelRadius")
+            {
+                try { RmtWindowFrame.Sync(win); } catch { }
+            }
             // Force-apply ScrollBarWidth to all ScrollBar elements in the visual tree
             if (parts[1] == "ScrollBarWidth" && win.Resources[parts[1]] is double)
             {
@@ -4088,7 +4063,9 @@ public partial class AhkWpfEngine
         return btn.Name == "BtnClosePanel" || btn.Name == "BtnClose" || btn.Name == "BtnWinClose"
             || btn.Name == "BtnClosePicker"
             || btn.Name == "BtnMinimize" || btn.Name == "BtnMaximize" || btn.Name == "BtnPin"
-            || btn.Name == "BtnCmdF1" || btn.Name == "BtnCmdTargeter" || btn.Name == "BtnCmdPlay"
+            || btn.Name == "BtnCmdPointEdit" || btn.Name == "BtnCmdPreview"
+            || btn.Name == "BtnCmdF1" || btn.Name == "BtnCmdF2" || btn.Name == "BtnCmdF3"
+            || btn.Name == "BtnCmdTargeter" || btn.Name == "BtnCmdPlay"
             || btn.Name == "BtnCmdHelp" || btn.Name == "BtnCmdVideo";
     }
 

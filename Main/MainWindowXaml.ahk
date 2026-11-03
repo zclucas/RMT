@@ -795,15 +795,15 @@ class MainWin {
         try ApplyXamlTheme(this.ui, MainSoftData.Theme)
         this.ui.Show()
 
-        gotHwnd := false
-        loop 40 {
-            if (this.ui.wpfHwnd) {
-                gotHwnd := true
-                XamlUiDiag("MainWin hwnd=" this.ui.wpfHwnd, "MainWin")
-                this._EnableAiInputFileDrop()
-                break
-            }
+        ; 冷启动解析主窗口 XAML 可能要几秒。等太短就当没建成，后面的初始化会漏掉。
+        hwndWait := A_TickCount
+        while (!this.ui.wpfHwnd && A_TickCount - hwndWait < 30000)
             Sleep(50)
+        if (this.ui.wpfHwnd) {
+            XamlUiDiag("MainWin hwnd=" this.ui.wpfHwnd, "MainWin")
+            this._EnableAiInputFileDrop()
+        } else {
+            XamlUiDiag("MainWin hwnd timeout", "MainWin")
         }
     }
 
@@ -2849,6 +2849,8 @@ class MainWin {
             return
         }
         engine := InitSttEngine()
+        if (IsObject(engine) && !engine.IsDllReady())
+            engine._TryLoadDll()
         if (!IsObject(engine) || !engine.IsDllReady()) {
             Toast.Warning(GetLang("语音引擎未就绪"))
             return
@@ -4240,11 +4242,10 @@ class MainWin {
             . '<Setter Property="Background" Value="{DynamicResource ControlBg}"/>'
             . '<Setter Property="BorderBrush" Value="{DynamicResource InputStroke}"/>'
             . '<Setter Property="BorderThickness" Value="1"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Grid>'
-            . '<Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap() '>'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Grid UseLayoutRounding="False" ClipToBounds="False">'
+            . '<Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '>'
             . '<ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}" VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"/>'
-            . '</Border><Rectangle Height="1" VerticalAlignment="Bottom" Margin="3,0,3,1" Fill="{TemplateBinding BorderBrush}" IsHitTestVisible="False"/>'
-            . '</Grid></ControlTemplate></Setter.Value></Setter>'
+            . '</Border></Grid></ControlTemplate></Setter.Value></Setter>'
             . '<Style.Triggers>'
             . '<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="1"/><Setter Property="FontSize" Value="' foldFs '"/></Trigger>'
             . '<Trigger Property="IsReadOnly" Value="True"><Setter Property="FontSize" Value="' foldFs '"/></Trigger>'
@@ -4309,12 +4310,11 @@ class MainWin {
             . '<Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>'
             . '<Setter Property="BorderThickness" Value="1"/>'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid>'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"' this._BorderSnap() '>'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid UseLayoutRounding="False" ClipToBounds="False">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '>'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
-            . '</Border><Rectangle x:Name="BottomLine" Height="1" VerticalAlignment="Bottom" Margin="3,0,3,0" Fill="{TemplateBinding BorderBrush}" IsHitTestVisible="False"/>'
-            . '</Grid>'
-            . '<ControlTemplate.Triggers>' this._RmtBtnInteractionTriggers("Bd", "BottomLine") '</ControlTemplate.Triggers>'
+            . '</Border></Grid>'
+            . '<ControlTemplate.Triggers>' this._RmtBtnInteractionTriggers("Bd") '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Setter.Value></Setter></Style>'
         primaryBtn := StrReplace(toolBtn, 'x:Key="RmtFoldToolBtn"', 'x:Key="RmtItemPrimaryBtn"')
         primaryBtn := StrReplace(primaryBtn, 'Width" Value="24"', 'Width" Value="48"')
@@ -4330,10 +4330,10 @@ class MainWin {
             . '<Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>'
             . '<Setter Property="BorderThickness" Value="1"/>'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"' this._BorderSnap() '>'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid UseLayoutRounding="False" ClipToBounds="False">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '>'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
-            . '</Border>'
+            . '</Border></Grid>'
             . '<ControlTemplate.Triggers>'
             . '<MultiDataTrigger><MultiDataTrigger.Conditions>'
             . '<Condition Binding="{Binding FoldForbid}" Value="False"/>'
@@ -4382,13 +4382,13 @@ class MainWin {
             . '<Setter Property="Background" Value="{DynamicResource ControlBg}"/>'
             . '<Setter Property="BorderBrush" Value="{DynamicResource InputStroke}"/>'
             . '<Setter Property="BorderThickness" Value="1"/>'
-            . '<Setter Property="SnapsToDevicePixels" Value="True"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid>'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1" Padding="{TemplateBinding Padding}"' this._BorderSnap() '>'
+            . '<Setter Property="SnapsToDevicePixels" Value="False"/>'
+            . '<Setter Property="UseLayoutRounding" Value="False"/>'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid UseLayoutRounding="False" ClipToBounds="False">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1" Padding="{TemplateBinding Padding}"' this._BorderSnap(false) '>'
             . '<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>'
-            . '</Border><Rectangle x:Name="BottomLine" Height="1" VerticalAlignment="Bottom" Margin="3,0,3,1" Fill="{TemplateBinding BorderBrush}" IsHitTestVisible="False"/>'
-            . '</Grid>'
-            . '<ControlTemplate.Triggers>' this._RmtBtnInteractionTriggers("Bd", "BottomLine") '</ControlTemplate.Triggers>'
+            . '</Border></Grid>'
+            . '<ControlTemplate.Triggers>' this._RmtBtnInteractionTriggers("Bd") '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Setter.Value></Setter></Style>'
         itemCombo := '<Style x:Key="RmtItemCombo" TargetType="ComboBox">'
             . '<Style.Resources><Style TargetType="TextBox">'
@@ -4406,10 +4406,11 @@ class MainWin {
             . '<Setter Property="MinHeight" Value="24"/><Setter Property="Height" Value="24"/>'
             . '<Setter Property="VerticalContentAlignment" Value="Center"/>'
             . '<Setter Property="Padding" Value="4,0,20,0"/>'
-            . '<Setter Property="SnapsToDevicePixels" Value="True"/>'
+            . '<Setter Property="SnapsToDevicePixels" Value="False"/>'
+            . '<Setter Property="UseLayoutRounding" Value="False"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">'
-            . '<Grid' this._BorderSnap() '>'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap() '/>'
+            . '<Grid UseLayoutRounding="False" ClipToBounds="False">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '/>'
             . '<ToggleButton Background="Transparent" BorderThickness="0" Focusable="False" ClickMode="Press" IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">'
             . '<ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent">'
             . '<Path Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" Data="M 0 0 L 4 4 L 8 0 Z"/>'
@@ -4419,7 +4420,7 @@ class MainWin {
             . '<Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">'
             . '<Border x:Name="DropDownBorder" Background="{DynamicResource DropdownBg}" BorderThickness="1" BorderBrush="{DynamicResource ControlBorder}" CornerRadius="3" Margin="0,4,0,0" Width="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="350">'
             . '<ScrollViewer Margin="0" SnapsToDevicePixels="True" Tag="ContainScroll"><StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer>'
-            . '</Border></Popup><Rectangle Height="1" VerticalAlignment="Bottom" Margin="3,0,3,1" Fill="{TemplateBinding BorderBrush}" IsHitTestVisible="False"/></Grid>'
+            . '</Border></Popup></Grid>'
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsEditable" Value="True"><Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/><Setter TargetName="ContentSite" Property="Visibility" Value="Hidden"/></Trigger>'
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
@@ -4533,9 +4534,10 @@ class MainWin {
     }
 
     ; 描边禁止 UseLayoutRounding（与窗口取整叠加会吞底边）。不用 Aliased：125% DPI 下会把 1DIP 收成 1 物理像素，边框发丝细。
-    ; 行内控件的 Border 向上收 1 DIP，并在模板顶层补绘底边，避免语音宏行的描边被裁掉。
-    _BorderSnap() {
-        return ' SnapsToDevicePixels="True" UseLayoutRounding="False"'
+    ; 宏行控件再关掉 SnapsToDevicePixels：列表上的吸附是继承的，贴边的 1DIP 底边会被收成 0。
+    ; 底边只由 Border 自己画一圈，不再另铺一条线，否则下边框会叠成两条。
+    _BorderSnap(snap := true) {
+        return ' SnapsToDevicePixels="' (snap ? "True" : "False") '" UseLayoutRounding="False"'
     }
 
     _IsAiPanelOpen() {

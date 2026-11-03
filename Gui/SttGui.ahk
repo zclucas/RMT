@@ -18,18 +18,43 @@ class SttGui {
     static instances := Map()
     static backgroundInstance := ""
 
+    static _promptQueued := false
+
     ; Ask once at the point where a voice button is used, then download in the
     ; background so the caller can keep its own window open.
     static RequestModelDownload() {
         engine := InitSttEngine()
+        if (IsObject(engine) && !engine.IsDllReady())
+            engine._TryLoadDll()
         if (!IsObject(engine) || !engine.IsDllReady()) {
-            try Toast.Warning(GetLang("语音引擎未安装"))
+            try Toast.Warning(GetLang("语音引擎未就绪"))
             return false
         }
         if (engine.IsStreamModelReady())
             return true
-        if (!RmtDialog.Confirm(GetLang("缺少语音识别模型，是否下载？"), GetLang("提示")))
+        ; 离开语音按钮的点击回调再开确认框。在点击回调里同步开窗时，确认框可能出不来，用户只看得到右下角提示。
+        if (SttGui._promptQueued)
             return false
+        SttGui._promptQueued := true
+        SetTimer(ObjBindMethod(SttGui, "_PromptModelDownload"), -1)
+        return false
+    }
+
+    static _PromptModelDownload(*) {
+        try {
+            engine := InitSttEngine()
+            if (!IsObject(engine) || engine.IsStreamModelReady())
+                return
+            choice := RmtDialog.Choose(GetLang("缺少语音识别模型，是否下载？"), GetLang("提示"), [GetLang("下载识别模型"), GetLang("取消")])
+            if (choice != 1)
+                return
+            SttGui._BeginModelDownload()
+        } finally {
+            SttGui._promptQueued := false
+        }
+    }
+
+    static _BeginModelDownload() {
         inst := ""
         if (SttGui.instances.Has("global"))
             inst := SttGui.instances["global"]

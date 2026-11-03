@@ -180,7 +180,7 @@ class UIMacroFieldPicker {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"'
-            , 'Title="挑选器" Width="560" Height="620" Opacity="0"')
+            , 'Title="挑选器" Width="560" Height="620"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"'
             , 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"'

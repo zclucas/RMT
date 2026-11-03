@@ -2061,7 +2061,7 @@ internal sealed class RmtStyleEditor : Window
         // Do not set Owner: activating an owned window also brings the owner forward and can cover other dialogs.
         Owner = null;
         WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent; ShowInTaskbar = false; WindowStartupLocation = WindowStartupLocation.Manual;
-        var chrome = new System.Windows.Shell.WindowChrome { CaptionHeight = 30, ResizeBorderThickness = new Thickness(6), GlassFrameThickness = new Thickness(0), CornerRadius = new CornerRadius(0) };
+        var chrome = new System.Windows.Shell.WindowChrome { CaptionHeight = 30, ResizeBorderThickness = new Thickness(6), GlassFrameThickness = new Thickness(0), CornerRadius = new CornerRadius(0), UseAeroCaptionButtons = false };
         System.Windows.Shell.WindowChrome.SetWindowChrome(this, chrome);
         CopyResourceSnapshot(Resources, source.Resources);
         Loaded += delegate

@@ -648,6 +648,7 @@ class AppThemeUtil {
                 {ControlName: "Resource", PropertyName: "ControlBg", Value: windowBg},
                 {ControlName: "Resource", PropertyName: "ControlBorder", Value: groupStroke},
                 {ControlName: "Resource", PropertyName: "GroupStroke", Value: groupStroke},
+                {ControlName: "Resource", PropertyName: "WindowBorderBrush", Value: groupStroke},
                 {ControlName: "Resource", PropertyName: "GraphLine", Value: graphLine},
                 {ControlName: "Resource", PropertyName: "GraphConn", Value: graphConn},
                 {ControlName: "Resource", PropertyName: "GraphConnSel", Value: graphConnSel},
@@ -717,6 +718,7 @@ class AppThemeUtil {
             }
             try ui.Update("Resource", "ControlBorder", groupStroke)
             try ui.Update("Resource", "GroupStroke", groupStroke)
+            try ui.Update("Resource", "WindowBorderBrush", groupStroke)
             try ui.Update("Resource", "GraphLine", graphLine)
             try ui.Update("Resource", "GraphConn", graphConn)
             try ui.Update("Resource", "GraphConnSel", graphConnSel)

@@ -98,7 +98,7 @@ class UIMacroLayerGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"'
-            , 'Title="当前页控件列表" Width="330" Height="500" Opacity="0"')
+            , 'Title="当前页控件列表" Width="330" Height="500"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"'
             , 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, "%resources%", "")

@@ -164,6 +164,8 @@ class CustomInputGui {
         if (!IsSet(InitSttEngine))
             return
         engine := InitSttEngine()
+        if (IsObject(engine) && !engine.IsDllReady())
+            engine._TryLoadDll()
         if (!IsObject(engine) || !engine.IsDllReady()) {
             try Toast.Warning(GetLang("语音引擎未就绪"))
             return

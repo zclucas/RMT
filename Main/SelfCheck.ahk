@@ -30,6 +30,11 @@ SelfCheckMissingFiles() {
         "Plugins\Voice\" arch "\sherpa-onnx-c-api.dll", "sherpa-onnx-c-api.dll",
         "Plugins\Voice\" arch "\onnxruntime.dll", "onnxruntime.dll",
         "Plugins\Voice\" arch "\onnxruntime_providers_shared.dll", "onnxruntime_providers_shared.dll",
+        "Plugins\Voice\" arch "\vcruntime140.dll", "vcruntime140.dll",
+        "Plugins\Voice\" arch "\msvcp140.dll", "msvcp140.dll",
+        "Plugins\Voice\" arch "\msvcp140_1.dll", "msvcp140_1.dll",
+        "Plugins\Voice\" arch "\msvcp140_2.dll", "msvcp140_2.dll",
+        "Plugins\Voice\" arch "\api-ms-win-core-path-l1-1-0.dll", "api-ms-win-core-path-l1-1-0.dll",
         "Plugins\Voice\models\kws\decoder-epoch-13-avg-2-chunk-16-left-64.onnx", "kws_decoder.onnx",
         "Plugins\Voice\models\kws\encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx", "kws_encoder.int8.onnx",
         "Plugins\Voice\models\kws\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx", "kws_joiner.int8.onnx",
@@ -48,6 +53,8 @@ SelfCheckMissingFiles() {
         "Lang\English.txt", "English.txt",
         "Thread\Work.exe", "Work.exe",
         "index.html", "index.html")
+    if (arch == "x64")
+        criticalMap["Plugins\Voice\x64\vcruntime140_1.dll"] := "vcruntime140_1.dll"
 
     optionalMap := Map(
         "Plugins\MouseControl.dll", "MouseControl.dll",

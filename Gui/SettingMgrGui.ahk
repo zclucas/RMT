@@ -339,15 +339,20 @@ class SettingMgrGui {
         if (DirExist(CurSettingDir))
             DirDelete(CurSettingDir, true)
         DirCopy(SelectedFolder, CurSettingDir, 1)
-        ; Setting 根下的旧版共用配置（MainSettings.ini / themes.ini）→ TOML
+        ; Setting 根下的旧版共用配置（MainSettings.ini / themes.ini）→ TOML。
+        ; 单个方案失败不能中断其余方案：中断后没转完的目录只剩 ini，下次加载会当成空白方案写成默认宏列表。
+        migrateErr := ""
         try {
             Compat_UpgradeDir(CurSettingDir)
-            loop files, CurSettingDir "\*", "D" {
-                this.OnRepairSetting(A_LoopFilePath, true)
-            }
         } catch as e {
-            RmtDialog.Info(GetLang("迁移失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
-            return
+            migrateErr .= e.Message "`n"
+        }
+        loop files, CurSettingDir "\*", "D" {
+            try {
+                this.OnRepairSetting(A_LoopFilePath, true)
+            } catch as e {
+                migrateErr .= A_LoopFileName ": " e.Message "`n"
+            }
         }
         ; 以磁盘上实际存在的目录为准重建配置列表。
         ; 迁入的 MainSettings 里那份 SettingArrStr 可能过期、缺失，甚至只有旧软件的部分条目，
@@ -378,7 +383,10 @@ class SettingMgrGui {
         MySoftData.MacroTotalCount := CfgRead(SettingFile, SettingSection, "MacroTotalCount", 0)
         RMTLogSysInfo("配置导入", Format("配置列表已重建：{1}", SettingArrStr))
         CfgWrite(true, SettingFile, SettingSection, "IsReload")
-        RmtDialog.Info(GetLang("配置迁移成功"), GetLang("提示"), this.ui.wpfHwnd)
+        if (migrateErr != "")
+            RmtDialog.Info(GetLang("迁移失败: ") migrateErr, GetLang("错误"), this.ui.wpfHwnd)
+        else
+            RmtDialog.Info(GetLang("配置迁移成功"), GetLang("提示"), this.ui.wpfHwnd)
         SafeReload()
     }
 

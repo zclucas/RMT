@@ -34,9 +34,13 @@ class SttEngine {
 
     ; 尝试加载 VoiceDll（先预加载依赖，避免依赖搜索错位；与 SherpaVoiceEngine 同法）
     _TryLoadDll() {
+        if (this.hDll != 0)
+            return true
         if (!FileExist(this.DllPath))
             return false
-        for dep in ["onnxruntime.dll", "onnxruntime_providers_shared.dll", "sherpa-onnx-c-api.dll"] {
+        ; Win10 常未安装带 VCRUNTIME140_1 的 VC++ 运行库。运行库不在旁边时，
+        ; onnxruntime 加载失败，语音按钮只会弹出「语音引擎未就绪」，到不了模型下载。
+        for dep in ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll", "sherpa-onnx-c-api.dll"] {
             dp := this.RunDir "\" dep
             if (FileExist(dp)) {
                 try

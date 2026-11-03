@@ -47,8 +47,6 @@ class AgreementGui {
         Agreement3 := GetLang("3. 使用者需自行承担所有风险，开发者对因违反法律或第三方条款导致的后果概不负责。")
         Agreement4 := GetLang("4. 通过使用本软件，您确认：不会将其用于任何非法目的、已充分了解并接受所有潜在法律风险、同意免除开发者因滥用行为导致的一切追责权利。")
         Agreement5 := GetLang("若不同意上述条款，请立即停止使用本软件。")
-        AgreeAgreementStr := Format("{}`n`n{}`n`n{}`n`n{}`n`n{}", Agreement1, Agreement2, Agreement3, Agreement4, Agreement5)
-
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(titleHeight, "*")
 
@@ -56,13 +54,16 @@ class AgreementGui {
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
         ; === 内容：条款文本 + 按钮 ===
+        ; 全局 TextBox 模板把内容宿主按垂直对齐收成一行，横向又不给换行宽度，
+        ; 条款会在第一行右侧被裁掉，后面几条也排不出来。这里用可滚动的换行文本。
         body := main.Add("Grid").Grid_Row(1).Margin("10,12")
         body.Rows("*", "44")
-        body.Add("TextBox").Grid_Row(0).Name("TextCon").AcceptsReturn("True").TextWrapping("Wrap").IsReadOnly("True")
-            .VerticalContentAlignment("Top").Padding("8,6")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .ScrollViewer_VerticalScrollBarVisibility("Auto")
+        frame := body.Add("Border").Grid_Row(0).Background("{DynamicResource InputBg}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").CornerRadius("3")
+        scroller := frame.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled").Padding("10,8")
+        clauses := scroller.Add("StackPanel")
+        for clause in [Agreement1, Agreement2, Agreement3, Agreement4, Agreement5]
+            clauses.Add("TextBlock").Text(clause).TextWrapping("Wrap").Foreground("{DynamicResource InputText}").Margin("0,0,0,12")
         btnRow := body.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnDisagree").Content(GetLang("不同意")).Width(100).Height(30).MinHeight(30).Margin("0,0,24,0")
         btnRow.Add("Button").Name("BtnAgree").Content(GetLang("同意")).Width(100).Height(30).MinHeight(30)
@@ -81,8 +82,6 @@ class AgreementGui {
         this.ui.OnEvent("BtnDisagree", "Click", ObjBindMethod(this, "OnDisagreeClick"))
         this.ui.OnEvent("BtnAgree", "Click", ObjBindMethod(this, "OnAgreeClick"))
 
-        if (IsObject(this.ui))
-            this.ui.Update("TextCon", "Text", AgreeAgreementStr)
         if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
             this._closed := true
     }

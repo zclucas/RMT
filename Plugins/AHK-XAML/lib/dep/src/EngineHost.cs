@@ -26,6 +26,9 @@ public partial class AhkWpfEngine
     // XAML 里写的 WindowChrome.CaptionHeight（设计尺寸）。窗口标题栏热区是窗口 DIP，不跟着
     // 根内容 Viewbox 缩放，必须按当前缩放比换算，否则内容缩小后热区会压到标题栏下方的控件上。
     double _chromeCaptionDesign = -1;
+    // 系统阴影补丁的尺寸签名。拖动时位置在变、尺寸不变，签名相同就不再打 DWM。
+    string _systemShadowSig;
+    bool _systemShadowPosted;
     System.Collections.Generic.HashSet<string> _boundEvents = new System.Collections.Generic.HashSet<string>();
     System.Collections.Generic.Dictionary<string, object> _boundEventCtrls = new System.Collections.Generic.Dictionary<string, object>();
     System.Collections.Generic.Dictionary<string, object> _controlCache = new System.Collections.Generic.Dictionary<string, object>();
@@ -214,12 +217,6 @@ public partial class AhkWpfEngine
                         return IntPtr.Zero;
                     });
 
-                    byte[] rBytes = Encoding.UTF8.GetBytes("DAEMON|Ready|" + msgWindow.Handle.ToString() + "\n");
-                    var rCds = new COPYDATASTRUCT { cbData = rBytes.Length + 1, lpData = Marshal.AllocHGlobal(rBytes.Length + 1) };
-                    Marshal.Copy(rBytes, 0, rCds.lpData, rBytes.Length); Marshal.WriteByte(rCds.lpData, rBytes.Length, 0);
-                    SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref rCds);
-                    Marshal.FreeHGlobal(rCds.lpData);
-
                     System.Threading.Thread t = new System.Threading.Thread(() =>
                     {
                         try
@@ -270,6 +267,21 @@ public partial class AhkWpfEngine
                         };
                     } catch { }
 #endif
+                    // 样式和预热都结束后再报 Ready。提前报的话，AHK 会在 UI 线程还堵在
+                    // LoadComponentStyles 时送来 CREATE_WINDOW，超时后引擎被杀掉，主窗口永远不出现。
+                    app.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        try
+                        {
+                            byte[] rBytes = Encoding.UTF8.GetBytes("DAEMON|Ready|" + msgWindow.Handle.ToString() + "\n");
+                            var rCds = new COPYDATASTRUCT { cbData = rBytes.Length + 1, lpData = Marshal.AllocHGlobal(rBytes.Length + 1) };
+                            Marshal.Copy(rBytes, 0, rCds.lpData, rBytes.Length);
+                            Marshal.WriteByte(rCds.lpData, rBytes.Length, 0);
+                            SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref rCds);
+                            Marshal.FreeHGlobal(rCds.lpData);
+                        }
+                        catch { }
+                    }));
 
                     app.Run();
                 }
@@ -847,6 +859,9 @@ public partial class AhkWpfEngine
                 {
                     var chrome = new System.Windows.Shell.WindowChrome();
                     // GlassFrame=0 禁用 DWM 系统玻璃（Win11 下 GlassFrame=-1 的系统玻璃色偏紫，首帧会闪紫）
+                    // UseAeroCaptionButtons 默认 true。Win10 会在标题栏右侧留出系统按钮空位，
+                    // 自定义按钮被盖住或裁掉；Win11 没有这块空位，所以同一窗口两边看起来不一样。
+                    chrome.UseAeroCaptionButtons = false;
                     chrome.GlassFrameThickness = new Thickness(0);
                     chrome.ResizeBorderThickness = new Thickness(6); // 四角缩放
                     double captionHeight = 30;
@@ -1477,6 +1492,8 @@ public partial class AhkWpfEngine
             {
                 btnMaximizeTxt2.Text = win.WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
             }
+            try { RmtWindowFrame.Sync(win); } catch { }
+            ScheduleSystemShadow();
             return;
         }
 
@@ -1524,6 +1541,8 @@ public partial class AhkWpfEngine
         var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(win);
         if (chrome != null)
         {
+            // Win10 默认给系统标题按钮留空位，自定义按钮会时有时无地被盖住
+            chrome.UseAeroCaptionButtons = false;
             if (win.Resources.Contains("PanelRadius"))
             {
                 chrome.CornerRadius = (CornerRadius)win.Resources["PanelRadius"];
@@ -1544,6 +1563,82 @@ public partial class AhkWpfEngine
         if (btnMaximizeTxt != null)
         {
             btnMaximizeTxt.Text = win.WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        }
+        try { RmtWindowFrame.Sync(win); } catch { }
+        ScheduleSystemShadow();
+    }
+
+    // 边框和阴影由 RmtWindowFrame 画。系统阴影在直角窗口上会裁掉底边，
+    // Win10 上很多机器整圈都没有，所以不靠 DWM。
+    void ScheduleSystemShadow(bool afterLayout = false)
+    {
+        if (_systemShadowPosted || win == null)
+            return;
+        IntPtr hwnd = IntPtr.Zero;
+        try { hwnd = new WindowInteropHelper(win).Handle; } catch { }
+        if (SystemShadowKey(win, hwnd) == _systemShadowSig)
+            return;
+        _systemShadowPosted = true;
+        var priority = afterLayout
+            ? System.Windows.Threading.DispatcherPriority.ContextIdle
+            : System.Windows.Threading.DispatcherPriority.Render;
+        win.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _systemShadowPosted = false;
+            if (win == null)
+                return;
+            ApplySystemShadow(win);
+        }), priority);
+    }
+
+    string SystemShadowKey(Window window, IntPtr hwnd)
+    {
+        int w = 0, h = 0;
+        RECT wr;
+        if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out wr))
+        {
+            w = wr.right - wr.left;
+            h = wr.bottom - wr.top;
+        }
+        int radius = 0;
+        try
+        {
+            if (window.Resources.Contains("WindowRadius"))
+                radius = (int)Math.Round(((CornerRadius)window.Resources["WindowRadius"]).TopLeft);
+        }
+        catch { }
+        bool enabled = true;
+        try
+        {
+            if (window.Resources.Contains("GlassFrameThicknessVal"))
+                enabled = Math.Abs((double)window.Resources["GlassFrameThicknessVal"]) > 0.001;
+        }
+        catch { }
+        return (enabled ? "1" : "0") + ":" + (window.WindowState == WindowState.Maximized ? "M" : "N")
+            + ":" + w + "x" + h + ":" + radius;
+    }
+
+    void ApplySystemShadow(Window window)
+    {
+        if (window == null)
+            return;
+        try { RmtWindowFrame.Sync(window); } catch { }
+        IntPtr hwnd = IntPtr.Zero;
+        try { hwnd = new WindowInteropHelper(window).Handle; } catch { }
+        if (hwnd != IntPtr.Zero)
+            _systemShadowSig = SystemShadowKey(window, hwnd);
+        if (window.AllowsTransparency || hwnd == IntPtr.Zero)
+            return;
+        if (RmtWindowFrame.Wants(window))
+        {
+            try { RmtWindowFrame.DisableSystemShadow(hwnd); } catch { }
+            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(window);
+            if (chrome != null)
+            {
+                var g = chrome.GlassFrameThickness;
+                if (g.Left != 0 || g.Top != 0 || g.Right != 0 || g.Bottom != 0)
+                    chrome.GlassFrameThickness = new Thickness(0);
+            }
         }
     }
 

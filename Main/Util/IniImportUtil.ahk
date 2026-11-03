@@ -56,6 +56,10 @@ IniImport_ConvertDir(dir) {
                 ; 连段头都没解析出来 → 编码/行格式异常，保留原文件待查
                 if (sectionMap.Count == 0)
                     throw Error("未解析到任何配置项（编码或行格式异常），已跳过并保留原文件")
+                ; 文件其实不小，却一个键都没读到：多半是编码判错，不能当成空配置删掉。
+                ; 删了之后同名的默认 toml 会留在目录里，加载时看起来就像宏列表被默认配置覆盖。
+                if (A_LoopFileSize > 512)
+                    throw Error("未解析到任何配置项（文件并非空配置，已保留原文件）")
                 ; 只有段头、没有任何键 → 本来就是空配置（如 SearchFile.ini）。
                 ; 没有信息量，既不值得生成空 toml，也不该用它覆盖已有 toml，归档原 ini 即可。
                 result["Skipped"] += 1
@@ -254,7 +258,8 @@ IniImport_Kv(kv, key, def := "") {
 ;   （symbol TKArr/ModeArr/MacroArrN/FoldInfo，含 Compat 回填写入的同形键）
 ;   只删形如 <字母>Arr[数字] / <字母>FoldInfo 的键，其余键原样保留
 ; ============================================================
-IniImport_StripFlatKeys(root) {
+; symbols：这次真正展开成功的表。没读懂的表留着扁平键，避免加载时被当成空表写成默认宏。
+IniImport_StripFlatKeys(root, symbols) {
     sec := IniImport_Section()
     if (!root.Has(sec))
         return
@@ -262,8 +267,13 @@ IniImport_StripFlatKeys(root) {
     if (!IsObject(seg))
         return
     for key in seg.Clone() {
-        if (RegExMatch(key, "^[A-Za-z][A-Za-z0-9_]*Arr\d*$") || RegExMatch(key, "^[A-Za-z][A-Za-z0-9_]*FoldInfo$"))
-            seg.Delete(key)
+        for symbol in symbols {
+            if (SubStr(key, 1, StrLen(symbol)) != symbol)
+                continue
+            rest := SubStr(key, StrLen(symbol) + 1)
+            if (RegExMatch(rest, "^[A-Za-z0-9_]*Arr\d*$") || rest == "FoldInfo")
+                seg.Delete(key)
+        }
     }
     if (seg.Count == 0)
         root.Delete(sec)
@@ -315,11 +325,24 @@ IniImport_ReadTableItemFlat(tableItem, filePath := "") {
 
     modeArrStr := IniImport_Kv(kv, symbol "ModeArr")
     foldInfoStr := IniImport_Kv(kv, symbol "FoldInfo")
-    if (modeArrStr == "" && foldInfoStr == "")
+    ; 只有 MacroArrN、没有 ModeArr/FoldInfo 时也要展开，否则加载会把这张表当成空表写成默认宏
+    if (modeArrStr == "" && foldInfoStr == "" && !kv.Has(symbol "MacroArr1"))
         return false
 
     modeArr := IniImport_SplitPi(modeArrStr)
     itemCount := modeArr.Length
+    ; ModeArr 为空时仍可能有 MacroArrN（子宏常见：ModeArr 空、FoldInfo 的区间是「无-无」、正文在 MacroArr1）。
+    ; 只按 ModeArr 计条目会把这些宏展开成 0 条，随后清掉扁平键，正文就没了。
+    macroCount := 0
+    loop {
+        if (!kv.Has(symbol "MacroArr" A_Index))
+            break
+        macroCount := A_Index
+        if (A_Index >= 5000)
+            break
+    }
+    if (macroCount > itemCount)
+        itemCount := macroCount
 
     ; ---- 模块：FoldInfo → MacroFold（身份 = 路径 表ID.ModuleN）----
     ; JSON.parse(text, , false) → 普通 Object + Array；取值语法见 IniImport_ArrGet 顶部注释。
@@ -455,7 +478,8 @@ IniImport_ExpandFlatMacroFile(settingDir) {
     ; 扁平标记：模块信息或 ModeArr；子宏可以没有快捷键。
     flatMark := false
     for def in CreateDefaultTableDefs() {
-        if (IniImport_Kv(kv, def[1] "FoldInfo") != "" || IniImport_Kv(kv, def[1] "ModeArr") != "") {
+        if (IniImport_Kv(kv, def[1] "FoldInfo") != "" || IniImport_Kv(kv, def[1] "ModeArr") != ""
+            || kv.Has(def[1] "MacroArr1")) {
             flatMark := true
             break
         }
@@ -493,16 +517,45 @@ IniImport_ExpandFlatMacroFile(settingDir) {
     ; TomlUtil_Read 按路径缓存且无指纹 —— 必须先失效，否则可能拿到导入前的旧解析结果（会把刚写的扁平数据盖掉）
     TomlUtil_Invalidate(macroPath)
     root := TomlUtil_RootMap(macroPath)
+    ; 解析失败时 RootMap 是空表。这时若按 14 个默认 [[table]] 重建，会把用户文件换成默认宏列表。
+    if (root.Count == 0 && FileExist(macroPath)) {
+        size := 1
+        try size := FileGetSize(macroPath)
+        if (size > 0)
+            throw Error("MacroFile 无法解析，已停止重建宏列表")
+    }
+    bak := macroPath ".bak"
+    try FileCopy(macroPath, bak, 1)
     tableArr := []
     for tb in tblArr
         tableArr.Push(Map("id", tb.ID, "symbol", tb.Symbol, "name", tb.Name, "order", tb.Order))
     root["table"] := tableArr
-    ; 只写读到扁平数据的表：其余表（如旧版没有的语音宏/网络宏）不落段，load 时按全新表初始化
+    ; 只写读到扁平数据的表：其余表（如旧版没有的语音宏/网络宏）不落段，也不种默认宏
     for tb in flatArr
         SaveTableItemInfoTomlCore(root, tb)
     IniImport_MigrateMacroRefs(settingDir, flatArr, kv)
-    IniImport_StripFlatKeys(root)
-    TomlUtil_Write(root, macroPath)
+    symbols := []
+    for tb in flatArr
+        symbols.Push(tb.Symbol)
+    IniImport_StripFlatKeys(root, symbols)
+    try {
+        TomlUtil_Write(root, macroPath)
+        TomlUtil_Invalidate(macroPath)
+        written := TomlUtil_Read(macroPath)
+        if (!TomlUtil_Valid(written)) {
+            detail := ""
+            try Toml().read(FileRead(macroPath, "UTF-8"))
+            catch as readErr
+                detail := readErr.Message
+            throw Error("展开后的 MacroFile 无法回读: " detail)
+        }
+        try FileDelete(bak)
+    } catch as e {
+        if (FileExist(bak))
+            try FileMove(bak, macroPath, 1)
+        TomlUtil_Invalidate(macroPath)
+        throw e
+    }
     RMTLogSysInfo("配置导入", Format("MacroFile 扁平数组布局已展开为三级段：{1}（落盘 {2}ms，总计 {3}ms）",
         macroPath, A_TickCount - tWrite, A_TickCount - tAll))
     return true

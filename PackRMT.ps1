@@ -1038,6 +1038,11 @@ function New-RMTAssets {
         @{ Dest = "sherpa-onnx-c-api.dll";           Src = "Plugins\Voice\$Arch\sherpa-onnx-c-api.dll" },
         @{ Dest = "onnxruntime.dll";                 Src = "Plugins\Voice\$Arch\onnxruntime.dll" },
         @{ Dest = "onnxruntime_providers_shared.dll"; Src = "Plugins\Voice\$Arch\onnxruntime_providers_shared.dll" },
+        @{ Dest = "vcruntime140.dll";                Src = "Plugins\Voice\$Arch\vcruntime140.dll" },
+        @{ Dest = "msvcp140.dll";                    Src = "Plugins\Voice\$Arch\msvcp140.dll" },
+        @{ Dest = "msvcp140_1.dll";                  Src = "Plugins\Voice\$Arch\msvcp140_1.dll" },
+        @{ Dest = "msvcp140_2.dll";                  Src = "Plugins\Voice\$Arch\msvcp140_2.dll" },
+        @{ Dest = "api-ms-win-core-path-l1-1-0.dll"; Src = "Plugins\Voice\$Arch\api-ms-win-core-path-l1-1-0.dll" },
         @{ Dest = "kws_decoder.onnx";                Src = "Plugins\Voice\models\kws\decoder-epoch-13-avg-2-chunk-16-left-64.onnx" },
         @{ Dest = "kws_encoder.int8.onnx";           Src = "Plugins\Voice\models\kws\encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
         @{ Dest = "kws_joiner.int8.onnx";            Src = "Plugins\Voice\models\kws\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
@@ -1061,6 +1066,9 @@ function New-RMTAssets {
         @{ Dest = "PlayAudio.vbs";                   Src = "MinTool\PlayAudio.vbs" },
         @{ Dest = "CountDown.exe";                   Src = "MinTool\CountDown.exe" }
     )
+    if ($Arch -eq "x64") {
+        $assetList += @{ Dest = "vcruntime140_1.dll"; Src = "Plugins\Voice\x64\vcruntime140_1.dll" }
+    }
 
     $missing = 0
     foreach ($asset in $assetList) {

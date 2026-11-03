@@ -82,11 +82,14 @@ class SherpaVoiceEngine {
     ; 先按完整路径预加载其依赖 DLL（sherpa-onnx-c-api / onnxruntime 与 VoiceDll 同目录），
     ; 把 x64\x86 目录提前纳入依赖搜索路径，避免 VoiceDll 加载时找不到依赖。
     _TryLoadDll() {
+        if (this.hDll != 0)
+            return true
         if (!FileExist(this.DllPath))
             return false
         pluginDir := this.RunDir
-        ; 依次加载依赖（顺序无关，重在把插件目录挂进搜索路径）
-        for dep in ["onnxruntime.dll", "onnxruntime_providers_shared.dll", "sherpa-onnx-c-api.dll"] {
+        ; 依次加载依赖（顺序无关，重在把插件目录挂进搜索路径）。
+        ; 先加载随包携带的 VC 运行库，否则 Win10 上 onnxruntime 起不来。
+        for dep in ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll", "sherpa-onnx-c-api.dll"] {
             dp := pluginDir "\" dep
             if (FileExist(dp)) {
                 try

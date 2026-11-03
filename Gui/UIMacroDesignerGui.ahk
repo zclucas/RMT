@@ -401,7 +401,7 @@ class UIMacroDesignerGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"'
-            , 'Title="' title '" Width="1040" Height="700" Opacity="0"')
+            , 'Title="' title '" Width="1040" Height="700"')
 
         ; 恢复上次窗口位置（没有记录就沿用模板的居中）
         pos := this._LoadPos()
@@ -2145,7 +2145,6 @@ class UIMacroDesignerGui {
         pv := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         pv.xaml := StrReplace(pv.xaml, 'Width="940" Height="700"'
             , 'Title="预览" Width="' (pw + 12) '" Height="' ph '"')
-        pv.xaml := StrReplace(pv.xaml, 'AllowsTransparency="False"', 'AllowsTransparency="True"')
         pv.xaml := StrReplace(pv.xaml, 'Background="Transparent"', 'Background="' MainSoftData.UIPanelBgColor '"')
 
         pv.xaml := StrReplace(pv.xaml, '%resources%', this._UIPanelResources())

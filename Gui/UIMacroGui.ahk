@@ -21,6 +21,9 @@ class UIMacroGui {
         ; 用户主动关闭（右键关闭/Alt+F4/热键隐藏）后禁止「激活时默认显示」重建，直到热键再开
         this.UserClosedKeys := Map()
         this.UserClosedFolds := Map()   ; fold 级「用户已关闭」：监控不再自动建回来
+        ; 定时器回调懒创建。v2 读取尚未赋值的属性会直接抛错，不能写 IsObject(this._dragArmFn)
+        this._dragArmFn := ""
+        this._PosTickFn := ""
         ; §17 热重载订阅：任意配置变更广播 → 清空面板缓存（下次触发按新配置重建）
         global MyHotReloadBus
         if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
@@ -398,7 +401,8 @@ class UIMacroGui {
         ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="RMT Panel" ShowInTaskbar="False" Width="' pw '" Height="' ph '"')
         ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         ui.xaml := StrReplace(ui.xaml, 'WindowStartupLocation="CenterScreen"', 'Left="' initX '" Top="' initY '" WindowStartupLocation="Manual"')
-        ui.xaml := StrReplace(ui.xaml, 'AllowsTransparency="False"', 'AllowsTransparency="True"')
+        ; 矩形浮窗保持不透明。AllowsTransparency 与 WindowChrome 不能共存，
+        ; 同时打开时内容不会绘制，窗口只剩一块黑底。
         ui.xaml := StrReplace(ui.xaml, 'Background="Transparent"', 'Background="' bgColor '"')
 
         ; XAML_TEMPLATE 已内置 CloseBtnRadius；此处重复注入同名资源会让 WPF 解析器崩溃。
@@ -1655,7 +1659,7 @@ class UIMacroGui {
         ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="RMT Panel" ShowInTaskbar="False" Width="' pw '" Height="' ph '"')
         ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         ui.xaml := StrReplace(ui.xaml, 'WindowStartupLocation="CenterScreen"', 'Left="' initX '" Top="' initY '" WindowStartupLocation="Manual"')
-        ui.xaml := StrReplace(ui.xaml, 'AllowsTransparency="False"', 'AllowsTransparency="True"')
+        ; 同自动浮窗：不透明，避免和 WindowChrome 叠在一起后整窗变黑。
         ui.xaml := StrReplace(ui.xaml, 'Background="Transparent"', 'Background="' bgColor '"')
 
         panelResources := '<SolidColorBrush x:Key="UIPanelBtnColor" Color="' btnColor '"/>'

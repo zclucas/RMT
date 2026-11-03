@@ -1595,7 +1595,22 @@ class StringValueReaderWriter
         ; 输出与逐字符版逐字节相同。
         if (_in == "")
             return
-        static ESCAPE_SCAN := "[" Chr(8) Chr(9) Chr(10) Chr(12) Chr(13) '"' '\\' "]"
+        ; 除 \b \t \n \f \r 外的 C0 控制符不能裸写进 TOML 基本字符串，否则回读失败。
+        ; 回读失败后加载会把这份宏列表当成空文件，再写成默认的「快捷启动」。
+        static ready := false
+        static ESCAPE_SCAN := ""
+        static ESCAPE_EXTRA := ""
+        if (!ready) {
+            extra := ""
+            loop 31 {
+                if (A_Index = 8 || A_Index = 9 || A_Index = 10 || A_Index = 12 || A_Index = 13)
+                    continue
+                extra .= Chr(A_Index)
+            }
+            ESCAPE_EXTRA := extra
+            ESCAPE_SCAN := "[" extra Chr(8) Chr(9) Chr(10) Chr(12) Chr(13) '"' '\\' "]"
+            ready := true
+        }
         if !(regexmatch(_in, ESCAPE_SCAN))
         {
             _context.write(_in)                 ; 整个值无需转义 → 一次写出
@@ -1608,6 +1623,11 @@ class StringValueReaderWriter
         s := strreplace(s, "`t", '\t', true)
         s := strreplace(s, "`b", '\b', true)
         s := strreplace(s, "`f", '\f', true)
+        loop parse, ESCAPE_EXTRA {
+            if (!InStr(s, A_LoopField))
+                continue
+            s := StrReplace(s, A_LoopField, Format("\u{:04X}", Ord(A_LoopField)))
+        }
         _context.write(s)
     }
     
@@ -1620,10 +1640,8 @@ class StringValueReaderWriter
     {
         startIndex := index.incrementAndGet()
         endIndex := -1
-        ; 找结束引号：原实现逐字符循环（每字符一次 SubStr + 一次 AtomicInteger 方法调用），
-        ; 大配置（几十万字符）下是读入侧最大开销。改为 InStr 直接跳到下一个引号，
-        ; 仅在「引号前一个字符是反斜杠」时才继续往后找 —— 判定与原逐字符版等价。
-        ; 候选范围等于原循环 i 从 startIndex 到 len-1，即引号位置 startIndex+1 .. len。
+        ; 找结束引号。引号前连续反斜杠为偶数（含 0）才是真正的结尾。
+        ; 只看前一个字符会把 "\\" 的结尾引号当成被转义，以 \ 结尾的快捷键/路径整份解析失败。
         len := strlen(s)
         pos := 0
         p := startIndex + 1
@@ -1632,7 +1650,13 @@ class StringValueReaderWriter
             q := instr(s, '"', , p)
             if (!q)
                 break
-            if (substr(s, q - 1, 1) != '\')
+            bs := 0
+            i := q - 1
+            while (i > startIndex && SubStr(s, i, 1) == '\') {
+                bs += 1
+                i -= 1
+            }
+            if (Mod(bs, 2) == 0)
             {
                 pos := q
                 break
