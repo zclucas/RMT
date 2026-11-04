@@ -4,7 +4,7 @@ global MyWorkPool := ""
 global workIndex := 0    ; 主进程占位；Worker 中由 HandleWorkOpenArg 赋实际 idx
 
 GraphPoolLogPath() {
-    return MySoftData.isWorker ? A_ScriptDir "\..\Log\GraphPool.log" : A_ScriptDir "\Log\GraphPool.log"
+    return CMDLogAppDir() "\Log\GraphPool.log"
 }
 
 ; 图形宏线程池调试日志（Master 行附带 Worker 池统计：闲置/忙碌/启动中/队列）
@@ -15,9 +15,8 @@ global _graphPoolLogInitialized := false
 
 GraphPoolLog(tag, detail := "") {
     ; 归口统一日志（C 项）：GraphPool 语义归入系统日志 info 级
-    who := MySoftData.isWorker ? ("Worker#" workIndex) : "Master"
     msg := detail != "" ? (tag " " detail) : tag
-    RMTLogSys(RMT_LV_INFO, who, msg)
+    RMTLogSys(RMT_LV_INFO, ProcessTag(), msg)
 }
 
 FlushLogBufferAsync() {
@@ -31,12 +30,8 @@ IsGraphNodeSerial(serialStr) {
     return t == GetLangKey("图形节点") && n != ""
 }
 
-ShouldUseGraphWorkers() {
-    global MyWorkPool
-    if (MySoftData.isWorker)
-        return true
-    return WorkPoolEnabled()
-}
+; 是否把图形分支交给线程池。主进程看设置（RMTUtil.ahk），Worker 恒为真（WorkUtil.ahk）——
+; 两套同名实现，由包含链决定，函数里不判断角色。
 
 ShouldSkipGraphNextDispatch(cmdStr) {
     if (cmdStr == "")
@@ -77,34 +72,13 @@ DispatchGraphBranches(tableItem, index, serialArr, fromStart := false) {
             WalkGraphNode(tableItem, b, index)
         return
     }
-    if (MySoftData.isWorker) {
-        GraphPoolLog("Worker图形分支", Format("tab={1} item={2} 分支数={3} 本Worker=[{4}] fromStart={5}"
-            , tableItem.ID, index, branches.Length, branches[1], fromStart ? 1 : 0))
-        subsidiary := []
-        loop branches.Length - 1
-            subsidiary.Push(branches[A_Index + 1])
-        global MySubmitGraphBranches
-        ; 传条目对象（WorkSubmitGraphBranches 取 .ID 作为 ItemID，身份=ID）
-        MySubmitGraphBranches(tableItem, tableItem.Items[index], fromStart ? branches.Length : 0, subsidiary)
-        WalkGraphNode(tableItem, branches[1], index)
-        return
-    }
-    ; Master：直接通过 WorkPool 分配其余分支（任务队列存 TableID/ItemID，cmd 用 R1 IPC 编码）
-    global MyWorkPool
-    tableID := tableItem.ID
-    itemID := tableItem.Items[index].ID
-    loop branches.Length - 1 {
-        cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID, branches[A_Index + 1]))
-        tableItem.Items[index].GraphBranchCount++
-        GraphPoolLog("分支分配", Format("tab={1} item={2} node={3} 来源=Master/DispatchGraphBranches", tableID, itemID, branches[A_Index + 1]))
-        MyWorkPool.taskQueue.Push({ cmd: cmd, tableID: tableID, itemID: itemID, isGraphBranch: true })
-        MyWorkPool.Dispatch()
-    }
+    ; 余下分支怎么派：主进程丢线程池、Worker 上报 Master，两份实现见 RunBranchDispatch
+    RunBranchDispatch(tableItem, index, branches, fromStart)
     WalkGraphNode(tableItem, branches[1], index)
 }
 
 WalkGraphNode(tableItem, nodeSerial, index) {
-    who := MySoftData.isWorker ? Format("W{1}", workIndex) : "Master"
+    who := ProcessTag()
     item := tableItem.Items[index]
     GraphPoolLog("进入节点", Format("执行者={1} tab={2} item={3} node={4}", who, tableItem.ID, index, nodeSerial))
     if (item && item.Killed) {
@@ -159,12 +133,7 @@ OnTriggerGraphMacro(tableItem, startSerial, index) {
         return
     nodeArr := (startData.HasOwnProp("NodeArr") && IsObject(startData.NodeArr)) ? startData.NodeArr : []
     branches := CollectGraphBranchSerials(nodeArr)
-    ; Worker 多分支启动时设置本地计数，用于跳过 OnFinishMacro（由 Master 统一释放）
-    if (branches.Length > 1 && MySoftData.isWorker) {
-        item := tableItem.Items[index]
-        if (item)
-            item.GraphBranchCount := branches.Length
-    }
+    ; 多分支启动时，Worker 要在本地记一份总数（RunBranchDispatch 里做，由包含链区分）
     DispatchGraphBranches(tableItem, index, nodeArr, true)
 }
 

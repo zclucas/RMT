@@ -291,6 +291,28 @@ PluginInit() {
     SetTimer(CheckOcrIdle, 60000)   ;60秒后，释放Ocr资源
 }
 
+; ---------- 图形宏分支调度：主进程版 ----------
+; Worker 版在 Thread\WorkUtil.ahk（同名两个函数），由包含链决定用哪一份，
+; 共享代码（Main\Util\GraphMacroUtil.ahk）里不再出现角色判断。
+
+ShouldUseGraphWorkers() {
+    return WorkPoolEnabled()
+}
+
+; 把「第一个之外」的分支丢进本进程的线程池（任务队列存 TableID/ItemID，cmd 用 R1 IPC 编码）
+RunBranchDispatch(tableItem, index, branches, fromStart) {
+    global MyWorkPool
+    tableID := tableItem.ID
+    itemID := tableItem.Items[index].ID
+    loop branches.Length - 1 {
+        cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID, branches[A_Index + 1]))
+        tableItem.Items[index].GraphBranchCount++
+        GraphPoolLog("分支分配", Format("tab={1} item={2} node={3} 来源=Master/DispatchGraphBranches", tableID, itemID, branches[A_Index + 1]))
+        MyWorkPool.taskQueue.Push({ cmd: cmd, tableID: tableID, itemID: itemID, isGraphBranch: true })
+        MyWorkPool.Dispatch()
+    }
+}
+
 InitViGEmPlugin() {
     JoyDebugLog(Format("PluginInit HasJoyMacro={} MutiThreadNum={} WorkPoolEnabled={} IsAdmin={} Script={}"
         , MySoftData.HasJoyMacro, MainSoftData.MutiThreadNum, WorkPoolEnabled(), A_IsAdmin, A_ScriptFullPath), "init")
@@ -315,10 +337,14 @@ InitViGEmPlugin() {
 InitNativePlugins() {
     ; 加载 OpenCV 插件，失败时诊断具体原因（如缺少 VC++ 运行库）
     ocvReason := OpenCvEnsure()
-    if (ocvReason != "")
+    if (ocvReason != "") {
         JoyDebugLog(Format("OpenCV 插件初始化失败：{}", ocvReason), "init")
+        ; 提示只在这里做：这是主进程专属的启动流程，Worker 那边（WorkPluginInit）只写日志。
+        ; 共享代码里不再出现「是不是 Worker」的分支。
+        try RmtDialog.Info(Format("OpenCV 插件不可用，抓图/搜图等功能将无法使用：`n`n{}", ocvReason), "RMT 提示", 48)
+    }
 
-    IBPath := A_ScriptDir "\Plugins\IbInputSimulator.dll"
+    IBPath := ProjectRootDir "\Plugins\IbInputSimulator.dll"
     DllCall("LoadLibrary", "Str", IBPath)
 }
 
@@ -702,57 +728,16 @@ InitFilePath() {
         DirCreate(A_WorkingDir "\Images\FreePaste")
     }
 
-    global VBSPath := A_WorkingDir "\MinTool\PlayAudio.vbs"
-    global StartTipAudio := (MainSoftData.StartTipAudio != "" && FileExist(MainSoftData.StartTipAudio)) ? MainSoftData.StartTipAudio : A_WorkingDir "\Audio\Start.wav"
-    global EndTipAudio := (MainSoftData.EndTipAudio != "" && FileExist(MainSoftData.EndTipAudio)) ? MainSoftData.EndTipAudio : A_WorkingDir "\Audio\End.wav"
-    global StopTipAudio := (MainSoftData.StopTipAudio != "" && FileExist(MainSoftData.StopTipAudio)) ? MainSoftData.StopTipAudio : EndTipAudio
-    global ViGEmDllPath := A_WorkingDir "\Plugins\ViGEm\ViGEmWrapper.dll"
-    global AHIDllDir := A_WorkingDir "\Plugins\AhiDriver"
-    global AHIPluginDir := A_WorkingDir "\Plugins\AhiDriver\installer"
-    global ArrayFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ArrayFile.toml"
-    global MacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MacroFile.toml"
-    global SearchFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchFile.toml"
-    global SearchProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchProFile.toml"
-    global SearchComboFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchComboFile.toml"
+    InitDataFilePaths(A_WorkingDir)
+    ; 旧格式迁移只在主进程做：Worker 只读配置（见 Thread\WorkUtil.ahk 的 InitWorkFilePath）。
+    global SearchComboFile, TimeDataFile
     oldSearchMultiFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchMultiFile.toml"
-    if (!FileExist(SearchComboFile) && FileExist(oldSearchMultiFile)) {
+    if (!FileExist(SearchComboFile) && FileExist(oldSearchMultiFile))
         try FileMove(oldSearchMultiFile, SearchComboFile)
-    }
-    global CompareFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareFile.toml"
-    global CompareProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CompareProFile.toml"
-    global MMProFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MMProFile.toml"
-    global BGKeyFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\BGKeyFile.toml"
-    global TimingFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TimingFile.toml"
-    global RunFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RunFile.toml"
-    global OutputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\OutputFile.toml"
-    global VariableFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\VariableFile.toml"
-    global ExVariableFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ExVariableFile.toml"
-    global TextOpsFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TextOpsFile.toml"
-    global SubMacroFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SubMacroFile.toml"
-    global LoopFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\LoopFile.toml"
-    global OperationFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\OperationFile.toml"
-    global BGMouseFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\BGMouseFile.toml"
-    global InputFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\InputFile.toml"
-    global FileIOFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\FileIOFile.toml"
-    global WindowManageFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WindowManageFile.toml"
-    global KeyCheckFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyCheckFile.toml"
-    global JoyCheckFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\JoyCheckFile.toml"
-    global CommentFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CommentFile.toml"
-    global ScreenShotFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\ScreenShotFile.toml"
-    global GraphNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphNodeFile.toml"
-    global GraphStartNodeFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.toml"
-    ; 阶段5：纯文本指令迁移到配置文件模式（间隔/按键/移动/RMT指令）
-    global IntervalFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\IntervalFile.toml"
-    global KeyDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\KeyDataFile.toml"
-    global MoveDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\MoveDataFile.toml"
-    global RMTCMDFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\RMTCMDFile.toml"
-    global WaitFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WaitFile.toml"
-    global WaitConfirmFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\WaitConfirmFile.toml"
-    global DeltaMoveFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.toml"
-    global TimeDataFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TimeDataFile.toml"
-    global CountDownFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\CountDownFile.toml"
     CompatPromoteLegacyFile(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TimeFile.toml", TimeDataFile)
-    global ProjectRootDir := A_ScriptDir
+    ; 旧扁平布局的宏文件就地展开成三级段。放这里而不是 LoadCurMacroSetting：
+    ; 后者是主程序与 Worker 共用的，而展开依赖 IniImportUtil（Worker 不加载）。
+    ExpandFlatMacroFileIfNeeded()
 }
 
 StopMacro(tableItem, itemIndex, playStopTip := false) {

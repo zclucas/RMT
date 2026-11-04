@@ -205,7 +205,6 @@
 | `VariableMap` / `GlobalVariMap` | 全局变量 |
 | `ArrayMap` / `GlobalArrMap` | 全局数组 |
 | `TriggerKeyMap` | 已注册触发键 |
-| `isWorker` | 是否 Worker 进程 |
 | `CMDTip` | 是否显示指令提示 |
 | `CurSettingName` | 当前方案（Worker 用来拼路径） |
 | `ContinueKeyMap` | 鼠标键按住连续触发的特殊处理 |

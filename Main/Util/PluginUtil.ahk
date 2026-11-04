@@ -6,11 +6,10 @@
 ; 若目标机器未安装该运行库，LoadLibrary 会失败，抓图、搜图等 OpenCV 功能将全部不可用。
 
 OpenCvDllDir() {
-    isWorker := IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker
+    ; 目录由路径表统一给出（ProjectRootDir），主进程和 Worker 是同一个值，
+    ; 不需要再按「我是谁」分支。
     archDir := (A_PtrSize = 4) ? "x86" : "x64"
-    if (isWorker)
-        return A_ScriptDir "\..\Plugins\OpenCV\" archDir
-    return A_ScriptDir "\Plugins\OpenCV\" archDir
+    return ProjectRootDir "\Plugins\OpenCV\" archDir
 }
 
 IsOpenCvLoaded() {
@@ -81,22 +80,6 @@ OpenCvEnsure() {
     if (reason != "")
         SearchDebugLog(Format("OpenCV 不可用：{}", reason), "opencv")
     return reason
-}
-
-; 在主进程弹出一次“OpenCV 不可用”提示（Worker 无界面，不能弹窗，仅写日志）
-ShowOpenCvInstallPrompt(reason) {
-    static warned := false
-    if (warned)
-        return
-    warned := true
-
-    isWorker := IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker
-    if (isWorker)
-        return
-
-    try {
-        RmtDialog.Info(Format("OpenCV 插件不可用，抓图/搜图等功能将无法使用：`n`n{}", reason), "RMT 提示", 48)
-    }
 }
 
 ; 窗口颜色识别 x，y 窗口坐标

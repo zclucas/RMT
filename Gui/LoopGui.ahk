@@ -240,7 +240,7 @@ class LoopGui {
         if (this.ui.events.Has(name) && this.ui.events[name].Has(evt))
             this.ui.events[name][evt] := []
         this.ui.OnEvent(name, evt, cb)
-        try this.ui.Update(name, "BindEvent", evt)
+        try this.ui.BindEventBatched(name, evt)
     }
 
     _BindRowEvents() {

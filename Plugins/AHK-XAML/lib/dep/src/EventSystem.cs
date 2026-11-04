@@ -36,6 +36,10 @@ public partial class AhkWpfEngine
     private int _ballDragStartWindowX;
     private int _ballDragStartWindowY;
     private bool _ballDragMoved;
+    // 窗口级 MouseMove/PreviewMouseMove 是否回传。默认 true 保持既有行为；
+    // 主窗绑它只为拖 AI 分割条时取 DragCoords，开窗后由 AHK 关掉，按下分割条时再临时打开。
+    // 控件级 MouseMove（画布、摇杆、树节点拖拽）不受此开关影响。
+    internal bool ReportWindowMouseMove = true;
 
     private void BindEvent(string ctrlName, string eventName, int fpsLimit = 0, bool queueLimited = false)
     {
@@ -618,6 +622,11 @@ public partial class AhkWpfEngine
         {
             if (eName == "MouseMove" || eName == "PreviewMouseMove")
             {
+                // 窗口级鼠标移动默认不回传：主窗绑它是为了拖侧栏时取 DragCoords，
+                // 平时鼠标划过整个窗口就是每秒六十来条全量状态报文＋跨进程往返。
+                // AHK 在按下分割条时开、松开时关（CONFIG/MouseMoveReport）；控件级 MouseMove
+                // （画布、摇杆、轮盘）不受影响。
+                if (cName == "Window" && !ReportWindowMouseMove) return;
                 if ((DateTime.Now - lastSendMouseMove).TotalMilliseconds < 16) return;
                 lastSendMouseMove = DateTime.Now;
             }
@@ -633,12 +642,50 @@ public partial class AhkWpfEngine
                 sb.Append(cName + "=" + BridgeUtil.LengthPrefix(coords) + "\n");
                 sb.Append("DragCoords=" + BridgeUtil.LengthPrefix(dragCoords) + "\n");
                 if (e is System.Windows.Input.MouseButtonEventArgs)
+                {
                     sb.Append("ClickCount=" + BridgeUtil.LengthPrefix(((System.Windows.Input.MouseButtonEventArgs)e).ClickCount.ToString()) + "\n");
+                    // 列表/树按下时顺带回报命中行的 Tag：主程序拿它直接定位点了哪一行，
+                    // 不用再补一条同步 HitTest 查询（那是点一下等一次跨进程往返）。
+                    if (eName == "PreviewMouseLeftButtonDown" || eName == "MouseLeftButtonDown"
+                        || eName == "PreviewMouseRightButtonDown" || eName == "MouseRightButtonDown")
+                    {
+                        string hitTag = HitItemTagAt(ctrl, pos);
+                        if (hitTag != "")
+                            sb.Append("HitTag=" + BridgeUtil.LengthPrefix(hitTag) + "\n");
+                    }
+                }
                 SendToAhkAsync(sb.ToString());
                 return;
             }
         }
         DumpState(cName, eName);
+    }
+
+    // 在指定控件内按该控件的本地坐标做一次命中测试，向上找列表项/树项的 Tag。
+    // 只用于把「点了哪一行」随鼠标事件一起回传，省掉主程序那条同步 HitTest 查询。
+    private static string HitItemTagAt(object root, System.Windows.Point p)
+    {
+        var vis = root as System.Windows.Media.Visual;
+        if (vis == null)
+            return "";
+        try
+        {
+            var res = System.Windows.Media.VisualTreeHelper.HitTest(vis, p);
+            System.Windows.DependencyObject d = (res != null) ? res.VisualHit as System.Windows.DependencyObject : null;
+            while (d != null)
+            {
+                if (d is System.Windows.Controls.ListBoxItem || d is System.Windows.Controls.TreeViewItem)
+                {
+                    var fe = d as System.Windows.FrameworkElement;
+                    if (fe != null && fe.Tag != null)
+                        return fe.Tag.ToString();
+                    return "";
+                }
+                d = System.Windows.Media.VisualTreeHelper.GetParent(d);
+            }
+        }
+        catch { }
+        return "";
     }
 
     // 把 WPF Key 映射成 AHK 键名（与 KeyGui 按键网格 value 一致）
@@ -789,6 +836,7 @@ public partial class AhkWpfEngine
 
     private void DrainAsyncSendQueue()
     {
+        int consecutiveFail = 0;
         while (true)
         {
             string text;
@@ -801,19 +849,49 @@ public partial class AhkWpfEngine
                 }
                 text = _asyncSendQueue.Dequeue();
             }
-            try { SendToAhk(text); }
+            bool ok = false;
+            try { ok = SendToAhk(text); }
             catch { }
+            if (ok)
+            {
+                consecutiveFail = 0;
+                continue;
+            }
+            // AHK 连续不取消息：队列里再堆着的也是过期事件，丢掉比让它越积越晚更好。
+            // 下次 Enqueue 会重新拉起 worker。
+            if (++consecutiveFail >= 3)
+            {
+                lock (_asyncSendLock)
+                {
+                    _asyncSendQueue.Clear();
+                    _asyncSendWorkerRunning = false;
+                }
+                return;
+            }
         }
     }
 
-    private void SendToAhk(string text)
+    private bool SendToAhk(string text)
     {
         byte[] bytes = Encoding.UTF8.GetBytes(text);
-        var cds = new COPYDATASTRUCT { cbData = bytes.Length + 1, lpData = Marshal.AllocHGlobal(bytes.Length + 1) };
-        Marshal.Copy(bytes, 0, cds.lpData, bytes.Length);
-        Marshal.WriteByte(cds.lpData, bytes.Length, 0);
-        SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref cds);
-        Marshal.FreeHGlobal(cds.lpData);
+        int size = bytes.Length + 1;
+        IntPtr buf = Marshal.AllocHGlobal(size);
+        Marshal.Copy(bytes, 0, buf, bytes.Length);
+        Marshal.WriteByte(buf, bytes.Length, 0);
+        var cds = new COPYDATASTRUCT { cbData = size, lpData = buf };
+        IntPtr result;
+        // 500ms 超时：原来是无超时 SendMessage，AHK 主线程在处理长任务时会把手
+        // 唯一的发送 worker 永久挂住，之后所有 UI 事件都堵在队列里、界面看着像卡死。
+        // 这里超时就放弃这一条，worker 继续处理后面的。
+        IntPtr ok = SendMessageTimeout(ahkHwnd, 0x004A, IntPtr.Zero, ref cds, 0x0000, 500, out result);
+        if (ok != IntPtr.Zero)
+        {
+            Marshal.FreeHGlobal(buf);
+            return true;
+        }
+        // 超时不能释放：消息可能仍排在 AHK 队列里等处理，回收会变成读已释放内存。
+        // 只在对方长时间不响应时发生，单条几十字节，随进程退出回收。
+        return false;
     }
 
 }

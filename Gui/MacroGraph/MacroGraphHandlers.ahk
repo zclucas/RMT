@@ -719,9 +719,10 @@ class MacroGraphHandlersMixin {
             cnt := data.SearchCount
             isCount := (cnt == -1 || (IsNumber(cnt) && cnt + 0 > 1))
             this.ui.Update("SIntervalRow_" id, "Visibility", isCount ? "Visible" : "Collapsed")
-            act := data.MouseActionType
-            this.ui.Update("SSpeedRow_" id, "Visibility", (act != 1 && !c.isWin) ? "Visible" : "Collapsed")
-            this.ui.Update("SClickRow_" id, "Visibility", (act == 3 && !c.isWin) ? "Visible" : "Collapsed")
+            ; 鼠标动作现在是中文值，不能直接和旧序号比（旧写法 act==1/act==3 对中文永远不成立）
+            actIdx := CmdEnumIndex(CmdEnumMouseAct(data.MouseActionType), CmdEnumMouseActNames())
+            this.ui.Update("SSpeedRow_" id, "Visibility", (actIdx > 0 && !c.isWin) ? "Visible" : "Collapsed")
+            this.ui.Update("SClickRow_" id, "Visibility", (actIdx == 2 && !c.isWin) ? "Visible" : "Collapsed")
             ; 结果保存 / 目标点保存：开关控制内部字段显隐
             resOn := (data.ResultToggle == 1 || data.ResultToggle == "1" || data.ResultToggle == true)
             coordOn := (data.CoordToogle == 1 || data.CoordToogle == "1" || data.CoordToogle == true)

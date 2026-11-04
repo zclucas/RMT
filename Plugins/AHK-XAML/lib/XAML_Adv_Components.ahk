@@ -3483,7 +3483,7 @@ class XCommandPalette {
             this.ui.Update(this.id "_Results", "AddXamlItem", xamlStr)
 
             ; Bind click event for this button
-            this.ui.Update(btnId, "BindEvent", "Click")
+            this.ui.BindEventBatched(btnId, "Click")
             boundId := item.id
             this.ui.OnEvent(btnId, "Click", ((cmdId, *) => this.ExecuteCommand(cmdId)).Bind(boundId))
         }
@@ -3627,7 +3627,7 @@ class XCarousel {
     Bind(ui) {
         this.ui := ui
         for card in this.cards {
-            ui.Update(card.Id, "BindEvent", "MouseLeftButtonUp")
+            ui.BindEventBatched(card.Id, "MouseLeftButtonUp")
             ui.OnEvent(card.Id, "MouseLeftButtonUp", ObjBindMethod(this, "OnCardClicked", card.Id))
         }
     }

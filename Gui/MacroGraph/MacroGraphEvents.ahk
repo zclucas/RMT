@@ -280,7 +280,7 @@ class MacroGraphEventsMixin {
     _BindCtrl(name, evt, cb, runtime) {
         this.ui.OnEvent(name, evt, cb)
         if (runtime)
-            this.ui.Update(name, "BindEvent", evt)
+            this.ui.BindEventBatched(name, evt)
     }
 
     ; 拖动节点时记录其逻辑坐标（DragCoords 为画布坐标，需减去画布偏移）

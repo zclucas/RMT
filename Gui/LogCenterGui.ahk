@@ -53,8 +53,7 @@ class LogCenterGui {
     }
 
     LogDir() {
-        return (IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker)
-            ? (A_ScriptDir "\..\Log") : (A_WorkingDir "\Log")
+        return CMDLogAppDir() "\Log"
     }
 
     _SysPath() {

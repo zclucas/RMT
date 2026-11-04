@@ -466,7 +466,53 @@ class SearchProGui {
 
     _TypeIndex() {
         v := IsObject(this.ui) ? this.ui.Query("SearchTypeCon>SelectedIndex") : ""
+        ; 建窗之前 Query 一律拿空串（XAMLHost 还没有句柄），此时按数据里的搜索类型兜底，
+        ; 否则所有「窗口xxx」都会被误判成屏幕模式。
+        if (v == "" || !IsNumber(v))
+            return (IsObject(this.Data) && ObjHasOwnProp(this.Data, "SearchType"))
+                ? CmdEnumSearch(this.Data.SearchType) : CmdEnumSearchNames()[1]
         return CmdEnumFromIndex(v, CmdEnumSearchNames())
+    }
+
+    ; 窗口类搜索（在窗口内后台取点）。判断只认搜索类型，不去问控件。
+    _IsWinType(t) {
+        return t == "窗口图片" || t == "窗口颜色" || t == "窗口文本"
+    }
+
+    ; 鼠标动作下拉项（显示文案）。两种模式语义相同、措辞不同。
+    _MouseActItems(isWin) {
+        return isWin
+            ? GetLangArr(["无动作", "后台鼠标至目标点击", "后台鼠标至目标双击"])
+            : GetLangArr(["无动作", "移动至目标", "移动至目标点击"])
+    }
+
+    ; 鼠标动作的存储值，与下拉项一一对应。
+    ;   屏幕：移动至目标 / 移动至目标点击1次（实际次数另由「点击次数」决定）
+    ;   窗口：移动至目标（= 后台点击一次，沿用旧值，执行侧按 0x201/0x202 处理） / 点击2次
+    _MouseActNames(isWin) {
+        return isWin
+            ? ["无动作", "移动至目标", "移动至目标点击2次"]
+            : ["无动作", "移动至目标", "移动至目标点击1次"]
+    }
+
+    ; 存储值 → 下拉序号。旧数据里可能是窗口专用的展示名或旧序号，一并认掉：
+    ; 交给枚举兜底的话认不出就折成「无动作」，用户再点确定就把动作写没了。
+    _MouseActIndex(isWin, sel) {
+        raw := Trim(String(sel))
+        if (raw == "")
+            return 0
+        key := GetLangKey(raw)
+        if (key == "后台鼠标至目标点击")
+            return isWin ? 1 : 2
+        if (key == "后台鼠标至目标双击")
+            return 2
+        act := CmdEnumMouseAct(raw)   ; 旧序号（1 起）/ 中文名 → 标准存储名
+        if (act == "无动作" || act == "移动至目标")
+            return act == "无动作" ? 0 : 1
+        ; 点击类：窗口模式区分单击/双击，屏幕模式统一落在第三项
+        if (!isWin)
+            return 2
+        return act == "移动至目标点击2次" ? 2 : 1
     }
 
     _SetImage(path) {
@@ -624,7 +670,9 @@ class SearchProGui {
         this._SetCombo("CoordXNameCon", this.DLVariableArr, this.Data.CoordXName)
         this._SetCombo("CoordYNameCon", this.DLVariableArr, this.Data.CoordYName)
 
-        isWin := this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本"
+        ; 建窗之前 Query 取不到 SearchTypeCon 的值，搜索模式按数据里的类型判断，
+        ; 否则窗口类搜索会被当成屏幕模式，随后模式切换事件再把已保存的鼠标动作清成无动作。
+        isWin := this._IsWinType(CmdEnumSearch(this.Data.SearchType))
         this.LastIsWin := isWin
         this._ApplyMouseActionItems(isWin, this.Data.MouseActionType)
         this.PreviewShowing := false
@@ -649,13 +697,12 @@ class SearchProGui {
     }
 
     _ApplyMouseActionItems(isWin, sel) {
-        items := isWin ? GetLangArr(["无动作", "后台鼠标至目标点击", "后台鼠标至目标双击"]) : GetLangArr(["无动作", "移动至目标", "移动至目标点击"])
+        items := this._MouseActItems(isWin)
         this.ui.Update("MouseActionTypeCon", "ClearItems", "")
         for t in items
             this.ui.Update("MouseActionTypeCon", "AddItem", t)
-        act := CmdEnumMouseAct(sel)
-        idx := act == "无动作" ? 0 : (act == "移动至目标" ? 1 : 2)
-        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(Max(0, Min(2, idx))))
+        idx := Max(0, Min(2, this._MouseActIndex(isWin, sel)))
+        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(idx))
     }
 
     GetCommandStr() {
@@ -682,7 +729,7 @@ class SearchProGui {
         curType := this._TypeIndex()
         isImage := curType == "屏幕图片" || curType == "窗口图片"
         isText := curType == "屏幕文本" || curType == "窗口文本"
-        isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
+        isWin := this._IsWinType(curType)
 
         if (IsNumber(sx) && IsNumber(sy) && IsNumber(ex) && IsNumber(ey)) {
             if (Number(sx) > Number(ex) || Number(sy) > Number(ey)) {
@@ -723,7 +770,7 @@ class SearchProGui {
             return false
 
         mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        ma := CmdEnumFromIndex(mIdx, ["无动作", "移动至目标", "移动至目标点击1次"])
+        ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
         if (ma != "无动作" && !isWin) {
             spd := this.ui.Query("SpeedCon")
             if (!IsNumber(spd) || Number(spd) < 0 || Number(spd) > 100) {
@@ -758,8 +805,10 @@ class SearchProGui {
         data.EndPosY := this.ui.Query("EndPosYCon")
         data.SearchCount := this.ui.Query("SearchCountCon") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCon")
         data.SearchInterval := this.ui.Query("SearchIntervalCon")
+        ; 窗口模式的下拉项是「后台点击/后台双击」，存值与屏幕模式不同，按模式取表
+        isWin := this._IsWinType(this._TypeIndex())
         mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        data.MouseActionType := CmdEnumFromIndex(mIdx, ["无动作", "移动至目标", "移动至目标点击1次"])
+        data.MouseActionType := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
         data.ClickCount := this.ui.Query("ClickCountCon")
         data.Speed := this.ui.Query("SpeedCon")
         data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
@@ -828,7 +877,7 @@ class SearchProGui {
         isImage := curType == "屏幕图片" || curType == "窗口图片"
         isColor := curType == "屏幕颜色" || curType == "窗口颜色"
         isText := curType == "屏幕文本" || curType == "窗口文本"
-        isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
+        isWin := this._IsWinType(curType)
         isInfinite := this.ui.Query("SearchCountCon") == GetLang("无限")
         this.SetConArrState(this.ImageVariArr, false, isImage)
         this.ui.Update("SearchTypeHost", "Height", isImage ? "168" : "64")
@@ -849,13 +898,18 @@ class SearchProGui {
         this.SetConArrState(this.FalseConArr, true, !isInfinite)
         if (isColor)
             this._ApplyColorSwatch()
-        if (this.LastIsWin != "" && this.LastIsWin != isWin)
-            this._ApplyMouseActionItems(isWin, "无动作")
+        if (this.LastIsWin != "" && this.LastIsWin != isWin) {
+            ; 屏幕/窗口两套文案，切换时按「当前选中项」的语义值重建，不能清成无动作：
+            ; 打开窗口时这条晚于 Init 执行，清掉就等于把刚读出来的动作弄丢。
+            prevIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
+            if (IsNumber(prevIdx))
+                this._ApplyMouseActionItems(isWin, CmdEnumFromIndex(prevIdx, this._MouseActNames(this.LastIsWin)))
+        }
         countText := this.ui.Query("SearchCountCon")
         countValue := countText == GetLang("无限") ? -1 : countText
         this.SetConArrState(this.CountTogArr, false, IsNumber(countValue) && (countValue == -1 || countValue > 1))
         mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        ma := CmdEnumFromIndex(mIdx, ["无动作", "移动至目标", "移动至目标点击1次"])
+        ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
         this.SetConArrState(this.MouseSpeedArr, false, ma != "无动作" && !isWin)
         this.SetConArrState(this.MouseClickArr, false, ma == "移动至目标点击1次" && !isWin)
         this.SetConArrState(this.ResultTogArr, true, this._IsChecked("ResultToggleCon"))

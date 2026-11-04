@@ -575,3 +575,100 @@ class XamlWin {
         }
     }
 }
+
+; ---------------- XAML 窗口诊断与主题应用（仅主进程） ----------------
+; 只服务设置窗与主窗，放在主进程文件里，XAMLHost 可以直接引用，不必再用动态名兜编译。
+
+; XAML 设置窗诊断日志（排查：打不开 / 打开了但看不见）
+; 输出：A_WorkingDir\Log\XamlUiDiag.log
+XamlUiDiag(msg, tag := "diag") {
+    try {
+        logDir := A_WorkingDir "\Log"
+        if !DirExist(logDir)
+            DirCreate(logDir)
+        FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " +" A_TickCount " [" tag "] " msg "`n"
+            , logDir "\XamlUiDiag.log", "UTF-8")
+    }
+}
+
+XamlUiDiagDaemon(tag := "daemon") {
+    try {
+        host := XAMLHost
+        hwnd := host.daemonHwnd
+        alive := host.IsDaemonAlive()
+        resp := alive ? host.IsDaemonResponsive(300) : false
+        XamlUiDiag(Format("daemonHwnd={} alive={} responsive={}", hwnd, alive, resp), tag)
+    } catch as e {
+        XamlUiDiag("daemon status err: " e.Message, tag)
+    }
+}
+
+; 记录窗口位置/可见性；若疑似透明或跑出屏幕则强制可见并居中
+XamlUiDiagWindow(hwnd, tag := "win", fixIfHidden := false) {
+    if (!hwnd) {
+        XamlUiDiag("hwnd=0 (no window)", tag)
+        return false
+    }
+    exists := DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+    visible := DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+    try {
+        WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
+        title := ""
+        try title := WinGetTitle("ahk_id " hwnd)
+        XamlUiDiag(Format("hwnd={} exists={} visible={} pos=({},{}) size={}x{} title=[{}] screen={}x{}"
+            , hwnd, exists, visible, x, y, w, h, title, A_ScreenWidth, A_ScreenHeight), tag)
+        odd := (w < 40 || h < 40 || x < -3000 || y < -3000
+            || x > A_ScreenWidth + 200 || y > A_ScreenHeight + 200 || !visible)
+        if (fixIfHidden && odd) {
+            nw := (w > 40) ? w : 540
+            nh := (h > 40) ? h : 640
+            cx := Max(0, (A_ScreenWidth - nw) // 2)
+            cy := Max(0, (A_ScreenHeight - nh) // 2)
+            XamlUiDiag(Format("FIX offscreen/hidden -> Move({},{}) size={}x{}", cx, cy, nw, nh), tag)
+            try WinMove(cx, cy, nw, nh, "ahk_id " hwnd)
+            try WinShow("ahk_id " hwnd)
+            try WinActivate("ahk_id " hwnd)
+            WinGetPos(&x2, &y2, &w2, &h2, "ahk_id " hwnd)
+            XamlUiDiag(Format("after FIX pos=({},{}) size={}x{} visible={}"
+                , x2, y2, w2, h2, DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")), tag)
+        }
+        return true
+    } catch as e {
+        XamlUiDiag(Format("hwnd={} exists={} visible={} WinGetPos err={}", hwnd, exists, visible, e.Message), tag)
+        return false
+    }
+}
+
+; useAppWinTheme：是否用 AppTheme「通用窗口」色覆盖 XAML Resource（设置窗默认 true）
+ApplyXamlTheme(ui, themeName, iniPath := "", useAppWinTheme := true) {
+    if (iniPath == "")
+        iniPath := A_WorkingDir "\Setting\themes.toml"
+    if FileExist(iniPath) {
+        themeMap := Map()
+        try themeMap := CfgSection(iniPath, themeName)
+        if (themeMap.Count > 0) {
+            ; 合并为一次 BatchUpdate：theme 资源 ~30 条，逐条 Update 是 30 次同步 IPC 往返（拖慢开窗）
+            batch := []
+            for key, val in themeMap {
+                key := Trim(key)
+                val := Trim(val)
+                if (key == "Window_DWM") {
+                    ; 不透明窗口铺实色 BgColor，Mica 不可见且首帧闪紫：backdrop 置 0，保留 dark 模式
+                    if (ui.HasProp("xaml") && InStr(ui.xaml, 'AllowsTransparency="True"'))
+                        batch.Push({ControlName: "Window", PropertyName: "DWM", Value: val})
+                    else {
+                        dwmParts := StrSplit(val, ",", " `t")
+                        dwmDark := dwmParts.Length > 1 ? dwmParts[2] : "0"
+                        batch.Push({ControlName: "Window", PropertyName: "DWM", Value: "0," dwmDark})
+                    }
+                }
+                else if (InStr(key, "Resource_") == 1)
+                    batch.Push({ControlName: "Resource", PropertyName: SubStr(key, 10), Value: val})
+            }
+            if (batch.Length > 0 && ui.HasMethod("BatchUpdate"))
+                ui.BatchUpdate(batch)
+        }
+    }
+    if (useAppWinTheme)
+        AppThemeUtil.ApplyWinThemeToXaml(ui)
+}

@@ -405,7 +405,7 @@ class SearchComboGui {
         if (this.ui.events.Has(name) && this.ui.events[name].Has(evt))
             this.ui.events[name][evt] := []
         this.ui.OnEvent(name, evt, cb)
-        this.ui.Update(name, "BindEvent", evt)
+        this.ui.BindEventBatched(name, evt)
     }
 
     ; ---------------- 目标列表（§15.1 多目标） ----------------

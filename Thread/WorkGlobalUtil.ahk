@@ -9,19 +9,16 @@ global MySoftData := SoftData()
 global MainSoftData := MainConfig()     ; Worker 也需要实例化（AssetUtil/LangUtil 会引用）
 global MyMouseInfo := MouseWinData()
 
-; Worker 无 UI，该函数为空操作
-SetToolTextDisplay(text) {
-}
 global SettingFile := A_WorkingDir "\..\Setting\MainSettings.toml"
 global ThemesPath := A_WorkingDir "\..\Setting\themes.toml"
 global LangDir := A_WorkingDir "\..\Lang"
+; 软件根目录：Worker 的 A_WorkingDir 是 Thread\ 子目录，这里减一层并规整掉 \..。
+; 之后所有路径都以它为准，公共函数里不再需要判断「是不是 Worker」。
+global AppRootDir := ResolvePathNoDotDot(A_WorkingDir "\..")
 
 global MyChineseOcr := 0  ; 懒加载：首次使用时才初始化
 global MyEnglishOcr := 0   ; 懒加载：首次使用时才初始化
 global MyPToken := Gdip_Startup()
-; Worker 无 UI：MyMainWin 仅主程序实例化（Main/MainWindowXaml.ahk:1084），
-; 此处伪赋值占位，避免 Worker 编译期 #Warn UseUnsetGlobal 警告（MacroUtil 引用处有 IsObject 保护）
-global MyMainWin := ""
 
 ; 主进程输入弹窗（输入框/按钮条）回传结果缓存：OnEventMessage 收到 IPR/IBR 写入，WorkerInputRequest 读取
 global _workerInputResult := ""

@@ -26,6 +26,11 @@ public partial class AhkWpfEngine
     }
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, ref COPYDATASTRUCT lParam);
+
+    // 带回传值/超时的版本。引擎→AHK 的每条事件都用它发：AHK 主线程一旦长时间不取消息，
+    // 无超时的 SendMessage 会把线程池里唯一的发送 worker 永久挂死，后面的界面事件全部堵住。
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, ref COPYDATASTRUCT lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")]

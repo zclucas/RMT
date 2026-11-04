@@ -43,14 +43,8 @@ _ShowError(msg, stack := "") {
     if (stack != "")
         fullMsg .= "`n堆栈信息：`n" stack
 
-    if (IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker) {
-        if (IsSet(MsgSendHandler)) {
-            ; Worker：仅 ER 上报主进程（主进程统一记录日志 + 聚合，避免双写）
-            try MsgSendHandler("Error", "error|" workIndex "|" fullMsg)
-            return
-        }
-    }
-
+    ; Worker 不注册本处理器：它自己的 OnError(WorkOnError) 会把错误走 IPC 上报（见 WorkUtil）。
+    ; 所以这里只处理主进程的错误，不需要再按角色分支。
     if (_ErrShowing)
         return
     _ErrShowing := true

@@ -169,14 +169,17 @@ RefreshToolUI() {
     ; 可能先触发本函数（BindUtil 鼠标钩子），控件未赋值时直接跳过，避免对不存在属性赋值抛错
     if (!MainSoftData.HasProp("ToolMousePosCtrl") || !IsObject(MainSoftData.ToolMousePosCtrl))
         return
-    MainSoftData.ToolMousePosCtrl.Value := MainSoftData.PosStr
-    MainSoftData.ToolProcessNameCtrl.Value := MainSoftData.ProcessName
-    MainSoftData.ToolProcessTileCtrl.Value := MainSoftData.ProcessTile
-    MainSoftData.ToolProcessPidCtrl.Value := MainSoftData.ProcessPid
-    MainSoftData.ToolProcessClassCtrl.Value := MainSoftData.ProcessClass
-    MainSoftData.ToolProcessIdCtrl.Value := MainSoftData.ProcessId
-    MainSoftData.ToolColorCtrl.Value := MainSoftData.Color
-    MainSoftData.ToolMouseWinPosCtrl.Value := MainSoftData.WinPosStr
+    ; 100ms 一次整块刷新。逐条赋值等于每秒 80 次同步跨进程往返，这里合并成一条。
+    CtrlAdapter.RefreshAll([
+        [MainSoftData.ToolMousePosCtrl, MainSoftData.PosStr],
+        [MainSoftData.ToolProcessNameCtrl, MainSoftData.ProcessName],
+        [MainSoftData.ToolProcessTileCtrl, MainSoftData.ProcessTile],
+        [MainSoftData.ToolProcessPidCtrl, MainSoftData.ProcessPid],
+        [MainSoftData.ToolProcessClassCtrl, MainSoftData.ProcessClass],
+        [MainSoftData.ToolProcessIdCtrl, MainSoftData.ProcessId],
+        [MainSoftData.ToolColorCtrl, MainSoftData.Color],
+        [MainSoftData.ToolMouseWinPosCtrl, MainSoftData.WinPosStr]
+    ])
 }
 
 ; 编辑快捷键：确认选择后再同步到 MainSoftData（以及显示控件）
@@ -209,13 +212,20 @@ CustomTrayMenu() {
     if (IsProcessElevated())
         tipStr .= "`n" GetLang("管理员权限")
 
-    A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("日志中心"), (*) => LogCenterGui.ShowGui())
-    A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("显示窗口"), (*) => RefreshGui())
-    A_TrayMenu.Insert("&Suspend Hotkeys", GetLang("休眠"), (*) => OnSuspendHotkey())
-    A_TrayMenu.Insert(GetLang("休眠"), GetLang("开始录制"), (*) => OnTrayStartRecord())
-    A_TrayMenu.Insert(GetLang("休眠"), GetLang("结束录制"), (*) => OnTrayEndRecord())
-    A_TrayMenu.Delete("&Pause Script")
-    A_TrayMenu.Delete("&Suspend Hotkeys")
+    ; 先整表清空：AHK 默认会加「打开 / 帮助 / Window Spy / 重新加载脚本 / 编辑脚本 / 退出」，
+    ; 这些对用户没意义（编译版里名字还是英文），下面只放软件自己的项。
+    try A_TrayMenu.Delete()
+    A_TrayMenu.Add(GetLang("显示窗口"), (*) => RefreshGui())
+    A_TrayMenu.Add(GetLang("日志中心"), (*) => LogCenterGui.ShowGui())
+    A_TrayMenu.Add()
+    A_TrayMenu.Add(GetLang("休眠"), (*) => OnSuspendHotkey())
+    A_TrayMenu.Add(GetLang("开始录制"), (*) => OnTrayStartRecord())
+    A_TrayMenu.Add(GetLang("结束录制"), (*) => OnTrayEndRecord())
+    A_TrayMenu.Add()
+    ; 退出走 ExitApp，OnExitSoft 里的保存与清理照常执行
+    A_TrayMenu.Add(GetLang("退出"), (*) => ExitApp())
+    if (MainSoftData.IsSuspend)
+        try A_TrayMenu.Check(GetLang("休眠"))
     A_TrayMenu.ClickCount := 1
     A_TrayMenu.Default := GetLang("显示窗口")
     A_IconTip := tipStr  ; 鼠标悬停时显示此内容
@@ -594,4 +604,73 @@ FindChromiumBrowser() {
         if (FileExist(p))
             return p
     return ""
+}
+
+; ---------------- 错误统一展示（宏内业务错误） ----------------
+; 这是同名两套实现里的「主进程版」：写系统日志 + 按级别通知（warn 托盘气泡 / error 错误中心）。
+; Worker 版在 Thread\WorkUtil.ahk，只做一条 IPC 上报。两边由包含链决定，函数里没有角色分支。
+; 返回 true 表示已处理（调用方无需再弹窗）。
+RMTErrorShow(msg, level := RMT_LV_ERROR, source := "") {
+    if (source == "")
+        source := "Master"
+
+    RMTLogSys(level, source, msg)
+    if (level == RMT_LV_WARN) {
+        ; warn：托盘气泡（2s 自动消失）
+        if (!(IsSet(MainSoftData) && ObjHasOwnProp(MainSoftData, "LogWarnBubble") && !MainSoftData.LogWarnBubble)) {
+            try TrayTip(Format("[{1}] {2}", source, msg), GetLang("RMT 警告"), 1)
+            try SetTimer(() => TrayTip(), -2000)
+        }
+    } else if (level == RMT_LV_ERROR) {
+        ; error：错误中心聚合
+        if (IsSet(MyErrorMsgBoxGui) && IsObject(MyErrorMsgBoxGui)
+            && !(IsSet(MainSoftData) && ObjHasOwnProp(MainSoftData, "LogErrorBadge") && !MainSoftData.LogErrorBadge))
+            MyErrorMsgBoxGui.ShowGui(Format("[{1}] {2}", source, msg))
+    }
+    return true
+}
+
+; 日志里的进程标记（同名两套实现之一）。身份由入口文件决定，这里不需要判断。
+ProcessTag() {
+    return "Master"
+}
+
+; ---------------- 主界面按钮回调（仅主进程） ----------------
+; 这些回调都要碰界面（读 MyMainWin、写工具文本），只在这个进程里存在。
+
+OnToolTextFilterSelectImage(*) {
+    global MainSoftData
+    path := FileSelect(, , GetLang("选择图片"))
+    if (path == "")
+        return
+    ocr := GetChineseOcr() ; v6 统一多语言模型，不再区分语言
+    result := ocr.ocr_from_file(path)
+    SetToolTextDisplay(result)
+    SetClipboard(result)
+}
+
+OnClearToolText(*) {
+    SetToolTextDisplay("")
+}
+
+OnBootStartChanged(ctrl, *) {
+    global MyMainWin
+    MainSoftData.IsBootStart := MyMainWin.ui.Query("ChkBootStart") == "True"
+    ok := ApplyBootStartRegistry(MainSoftData.IsBootStart)
+    CfgWrite(MainSoftData.IsBootStart ? 1 : 0, SettingFile, SettingSection, "IsBootStart")
+    if (!ok) {
+        ; 注册表未能与选项对齐时回滚勾选，避免界面已关、实际仍自启
+        MainSoftData.IsBootStart := !MainSoftData.IsBootStart
+        try MyMainWin.ui.Update("ChkBootStart", "IsChecked", MainSoftData.IsBootStart ? "True" : "False")
+        CfgWrite(MainSoftData.IsBootStart ? 1 : 0, SettingFile, SettingSection, "IsBootStart")
+        RmtDialog.Info(GetLang("开机自启设置失败，请检查是否被安全软件拦截，或勿通过兼容性强制管理员运行。"), GetLang("提示"), 48)
+    }
+}
+
+OnAdminStartChanged(ctrl, *) {
+    global MyMainWin
+    MainSoftData.IsAdminStart := MyMainWin.ui.Query("ChkAdminStart") == "True"
+    CfgWrite(MainSoftData.IsAdminStart ? 1 : 0, SettingFile, SettingSection, "IsAdminStart")
+    if (MainSoftData.IsBootStart)
+        ApplyBootStartRegistry(true)
 }

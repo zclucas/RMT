@@ -212,6 +212,10 @@ public partial class AhkWpfEngine
                         handled = true;
                         return IntPtr.Zero;
                     }
+                    // 不可缩放的窗口（定位取色准星这类，整块内容就是 DragArea）在 WPF 侧
+                    // 收不到 MouseDoubleClick：这段客户端区域在 WM_NCHITTEST 里被判成标题栏。
+                    // 这里把双击转成事件回传，由主程序决定要不要响应（没登记就自然忽略）。
+                    SendToAhkAsync("EVENT|" + winId + "|Window|NcDoubleClick|\n");
                 }
             }
             catch { }
@@ -539,6 +543,14 @@ public partial class AhkWpfEngine
             return;
         }
 
+        // 释放 UI 线程级鼠标捕获。捕获泄漏会让同一引擎里的其它窗口全部收不到点击
+        // （表现为窗口关不掉、按钮点不动），拖拽结束/取消时由 AHK 主动补一刀。
+        if (parts[0] == "Window" && parts[1] == "ReleaseCapture")
+        {
+            try { System.Windows.Input.Mouse.Capture(null); } catch { }
+            return;
+        }
+
         // MQUERY: batched targeted query — returns values for specific controls in one IPC call
         // Format: MQUERY|ctrl1,ctrl2,ctrl3  or  MQUERY|*  (all tracked)
         if (parts[0] == "MQUERY" && parts.Length >= 2)
@@ -566,6 +578,11 @@ public partial class AhkWpfEngine
             if (parts[1] == "LightweightEvents")
             {
                 LightweightEvents = parts[2] == "1" || parts[2].ToLower() == "true";
+            }
+            else if (parts[1] == "MouseMoveReport")
+            {
+                // 窗口级鼠标移动回传开关（控件级不受影响）。见 EventSystem.ReportWindowMouseMove。
+                ReportWindowMouseMove = parts[2] == "1" || parts[2].ToLower() == "true";
             }
             return;
         }
@@ -1070,10 +1087,26 @@ public partial class AhkWpfEngine
             }
             if (ctrl != null)
             {
+                // 逻辑树拖拽全部交给引擎内跑（见 TreeDrag.cs）：AHK 侧只在松手时收一条结果，
+                // 不再在鼠标事件回调里逐帧同步查询引擎。
+                // value = "插入线控件名|幽灵Popup名|幽灵文本名"
+                if (parts[1] == "TreeDrag")
+                {
+                    AttachTreeDrag(ctrl, parts.Length > 2 ? parts[2] : "");
+                }
+                // 外部拖入：左侧指令面板按下后调用。value = "目标树名|幽灵文本|控件名三件套"
+                else if (parts[1] == "TreeDragExternal")
+                {
+                    string eraw = parts.Length > 2 ? parts[2] : "";
+                    string[] eseg = eraw.Split(new[] { '|' }, 3);
+                    if (eseg.Length >= 1)
+                        BeginExternalTreeDrag(eseg[0].Trim(), eseg.Length >= 2 ? eseg[1] : "",
+                            eseg.Length >= 3 ? eseg[2] : "");
+                }
                 // 运行期重绑事件：value = "ctrl:event,ctrl:event,..."
                 // 用于「画布原地重灌」之后——注入的新元素需要重新挂鼠标事件。
                 // BindEvent 内部按 (ctrl,event) 记录并比对实例，重复调用是安全的。
-                if (parts[1] == "RebindEvents")
+                else if (parts[1] == "RebindEvents")
                 {
                     _controlCache.Clear();
                     try
@@ -1139,6 +1172,15 @@ public partial class AhkWpfEngine
                     {
                         ((ItemsControl)ctrl).Items.Add(parts[2]);
                     }
+                }
+                else if (parts[1] == "FlowLayout")
+                {
+                    // 容器按自身宽度分行（槽位像素由 AHK 指定），宽度变化由引擎内部重排
+                    double slot = 124;
+                    if (parts.Length > 2)
+                        double.TryParse(parts[2], System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out slot);
+                    ApplyFlowLayout(ctrl as Panel, slot);
                 }
                 else if (parts[1] == "AddXamlItem")
                 {
@@ -1540,6 +1582,61 @@ public partial class AhkWpfEngine
                     catch (Exception ex)
                     {
                         Console.WriteLine("NavigateToString error: " + ex.Message);
+                    }
+                }
+                // 宽度动画：在引擎侧用 DoubleAnimation 跑，AHK 只发一条命令。
+                // 展开/收起侧栏原先靠 AHK 16ms 定时器每帧给每个页签发 Width，一帧几十条
+                // 同步 SendMessage；改到这里后整段动画只有一条 IPC，且由 WPF 按合成帧驱动。
+                // value = "目标[,时长ms[,起始]]"，时长 0（或负数）表示立即落定（也会清掉残留动画）。
+                else if (parts[1] == "AnimWidth")
+                {
+                    var fe = ctrl as FrameworkElement;
+                    if (fe != null)
+                    {
+                        string raw = parts.Length > 2 ? parts[2] : "";
+                        string[] av = raw.Split(',');
+                        double toW;
+                        if (av.Length >= 1 && double.TryParse(av[0].Trim(), System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out toW))
+                        {
+                            int durMs = 220;
+                            if (av.Length >= 2 && av[1].Trim().Length > 0)
+                                int.TryParse(av[1].Trim(), out durMs);
+                            double fromW = 0;
+                            bool hasFrom = av.Length >= 3 && double.TryParse(av[2].Trim(),
+                                System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out fromW);
+
+                            if (durMs <= 0)
+                            {
+                                // 落定：先摘掉动画，否则本地值会被动画优先级遮蔽
+                                fe.BeginAnimation(FrameworkElement.WidthProperty, null);
+                                fe.Width = toW;
+                            }
+                            else
+                            {
+                                var dur = new Duration(TimeSpan.FromMilliseconds(durMs));
+                                var anim = hasFrom
+                                    ? new System.Windows.Media.Animation.DoubleAnimation(fromW, toW, dur)
+                                    : new System.Windows.Media.Animation.DoubleAnimation(toW, dur);
+                                anim.EasingFunction = new System.Windows.Media.Animation.CubicEase
+                                {
+                                    EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
+                                };
+                                anim.FillBehavior = System.Windows.Media.Animation.FillBehavior.HoldEnd;
+                                anim.Completed += (s2, e2) =>
+                                {
+                                    // 动画结束后把值写成基准值，后续普通 Width 命令才生效
+                                    try
+                                    {
+                                        fe.BeginAnimation(FrameworkElement.WidthProperty, null);
+                                        fe.Width = toW;
+                                    }
+                                    catch { }
+                                };
+                                fe.BeginAnimation(FrameworkElement.WidthProperty, anim);
+                            }
+                        }
                     }
                 }
                 else if (parts[1] == "BindEvent")

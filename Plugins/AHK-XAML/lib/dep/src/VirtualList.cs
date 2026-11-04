@@ -111,7 +111,9 @@ public class VirtualListHost
         if (_lb != null && !_hooked)
         {
             _hooked = true;
-            _lb.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnClick));
+            // handledEventsToo: 按钮 Click 一旦在中途被标记 Handled，容器就收不到，
+            // 表现为"某些按钮点了没反应"。右键那行一直带 true，左键这行漏了。
+            _lb.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnClick), true);
             _lb.AddHandler(Selector.SelectionChangedEvent, new SelectionChangedEventHandler(OnSelectionChanged));
             _lb.AddHandler(System.Windows.UIElement.LostKeyboardFocusEvent, new System.Windows.Input.KeyboardFocusChangedEventHandler(OnLostFocus));
             _lb.AddHandler(System.Windows.UIElement.MouseRightButtonUpEvent, new System.Windows.Input.MouseButtonEventHandler(OnRightUp), true);

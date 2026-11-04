@@ -22,77 +22,56 @@
     }
 
     InitWorkFilePath() {
-        global VBSPath := A_WorkingDir "\..\MinTool\PlayAudio.vbs"
-        startCfg := CfgRead(SettingFile, "UserSettings", "StartTipAudio", "")
-        endCfg := CfgRead(SettingFile, "UserSettings", "EndTipAudio", "")
-        stopCfg := CfgRead(SettingFile, "UserSettings", "StopTipAudio", endCfg)
-        global StartTipAudio := (startCfg != "" && FileExist(startCfg)) ? startCfg : A_WorkingDir "\..\Audio\Start.wav"
-        global EndTipAudio := (endCfg != "" && FileExist(endCfg)) ? endCfg : A_WorkingDir "\..\Audio\End.wav"
-        global StopTipAudio := (stopCfg != "" && FileExist(stopCfg)) ? stopCfg : EndTipAudio
-        global ViGEmDllPath := A_WorkingDir "\..\Plugins\ViGEm\ViGEmWrapper.dll"
-        global AHIDllDir := A_WorkingDir "\..\Plugins\AhiDriver"
-        global AHIPluginDir := A_WorkingDir "\..\Plugins\AhiDriver\installer"
-        global ArrayFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\ArrayFile.toml"
-        global TimingFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\TimingFile.toml"
-        global MacroFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\MacroFile.toml"
-        global SearchFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SearchFile.toml"
-        global SearchProFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SearchProFile.toml"
-        global SearchComboFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SearchComboFile.toml"
-        oldSearchMultiFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SearchMultiFile.toml"
-        if (!FileExist(SearchComboFile) && FileExist(oldSearchMultiFile)) {
-            try FileMove(oldSearchMultiFile, SearchComboFile)
-        }
-        global ScreenShotFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\ScreenShotFile.toml"
-        global CompareFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\CompareFile.toml"
-        global CompareProFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\CompareProFile.toml"
-        global MMProFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\MMProFile.toml"
-        global BGKeyFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\BGKeyFile.toml"
-        global RunFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\RunFile.toml"
-        global OutputFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\OutputFile.toml"
-        global VariableFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\VariableFile.toml"
-        global ExVariableFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\ExVariableFile.toml"
-        global TextOpsFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\TextOpsFile.toml"
-        global SubMacroFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\SubMacroFile.toml"
-        global LoopFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\LoopFile.toml"
-        global OperationFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\OperationFile.toml"
-        global BGMouseFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\BGMouseFile.toml"
-        global InputFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\InputFile.toml"
-        global FileIOFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\FileIOFile.toml"
-        global WindowManageFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\WindowManageFile.toml"
-        global KeyCheckFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\KeyCheckFile.toml"
-        global JoyCheckFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\JoyCheckFile.toml"
-        global CommentFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\CommentFile.toml"
-        global GraphNodeFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\GraphNodeFile.toml"
-        global GraphStartNodeFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\GraphStartNodeFile.toml"
-        ; 阶段5：纯文本指令迁移到配置文件模式（间隔/按键/移动/RMT指令）
-        global IntervalFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\IntervalFile.toml"
-        global KeyDataFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\KeyDataFile.toml"
-        global MoveDataFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\MoveDataFile.toml"
-        global RMTCMDFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\RMTCMDFile.toml"
-        global WaitFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\WaitFile.toml"
-        global WaitConfirmFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\WaitConfirmFile.toml"
-        global DeltaMoveFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\DeltaMoveFile.toml"
-        global TimeDataFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\TimeDataFile.toml"
-        global CountDownFile := A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\CountDownFile.toml"
-        CompatPromoteLegacyFile(A_WorkingDir "\..\Setting\" MySoftData.CurSettingName "\TimeFile.toml", TimeDataFile)
-        global SettingSection := "UserSettings"
-
-    ;项目根目录（Worker进程A_WorkingDir指向Thread子目录，需回退到项目根）
-    global ProjectRootDir := A_WorkingDir '\..\'
-    loop files, ProjectRootDir {
-        ProjectRootDir := A_LoopFileFullPath
-        break
+        ; 路径表只有一份（AssetUtil.InitDataFilePaths）：Worker 只需要告诉它根目录在哪。
+        ; 建目录 / 旧格式迁移 / 展开扁平宏都在主进程启动时做完，Worker 只读配置。
+        InitDataFilePaths(A_WorkingDir "\..")
     }
 
-    ;利用机制把路径中的\..转换掉
-        loop files, StartTipAudio {
-            StartTipAudio := A_LoopFileFullPath
-            break
-        }
-        loop files, EndTipAudio {
-            EndTipAudio := A_LoopFileFullPath
-            break
-        }
+    ; Worker 读配置的唯一序列：冷启动与热重载共用，避免两处顺序走散。
+    ; isReload 只影响两件事：不重复解析命令行 / 共享内存，以及热重载必须先失效 TomlUtil 缓存
+    ; （Worker 侧缓存是启动快照，主进程保存不会通知它）。
+    BootWorkerConfig(isReload := false) {
+        LoadMainSetting()
+        InitWorkFilePath()
+        if (isReload)
+            TomlUtil_Invalidate()
+        else
+            HandleWorkOpenArg()
+        LoadCurMacroSetting()
+        InitData()
+    }
+
+    ; 日志里的进程标记（同名两套实现里的 Worker 版）。主进程版在 Main\UIUtil.ahk。
+    ProcessTag() {
+        return workIndex ? "Worker#" workIndex : "Worker"
+    }
+
+    ; ---------- 图形宏分支调度：Worker 版 ----------
+    ; 主进程版在 Main\RMTUtil.ahk。Worker 没有本地的 WorkPool，分支一律交回主进程分配。
+    ShouldUseGraphWorkers() {
+        return true
+    }
+
+    RunBranchDispatch(tableItem, index, branches, fromStart) {
+        item := tableItem.Items[index]
+        ; 从开始节点发起的多分支：本 Worker 记一份总数，用于跳过 OnFinishMacro（由 Master 统一释放）
+        if (fromStart && item)
+            item.GraphBranchCount := branches.Length
+        GraphPoolLog("Worker图形分支", Format("tab={1} item={2} 分支数={3} 本Worker=[{4}] fromStart={5}"
+            , tableItem.ID, index, branches.Length, branches[1], fromStart ? 1 : 0))
+        subsidiary := []
+        loop branches.Length - 1
+            subsidiary.Push(branches[A_Index + 1])
+        ; 传条目对象（WorkSubmitGraphBranches 取 .ID 作为 ItemID，身份=ID）
+        MySubmitGraphBranches(tableItem, item, fromStart ? branches.Length : 0, subsidiary)
+    }
+
+    ; 错误统一展示（同名两套实现里的 Worker 版）：只经 ER 通道上报主进程，
+    ; 不写本地日志、不弹窗。主进程版在 Main\UIUtil.ahk。
+    RMTErrorShow(msg, level := RMT_LV_ERROR, source := "") {
+        if (IsSet(MsgSendHandler))
+            MsgSendHandler("Error", level "|" workIndex "|" msg)
+        return true
     }
 
     InitWork() {
@@ -102,7 +81,7 @@
         global graphBranchesAckKey := ""
         global workerTaskBusy := false
         global workerPendingTasks := []
-        MySoftData.isWorker := true
+        ; 角色在 WorkGlobalUtil 建 MySoftData 时就置好了，此处不再改 （IsWorker 依赖它）
         ; 按键按住状态同步到主进程（供强杀后松开）
         MyHoldKeyNotify := (tIdx, iIdx, key, state, source) => MsgSendHandler("HoldKey", tIdx, iIdx, key, state, source)
 
@@ -155,7 +134,7 @@
         if (ocvReason != "")
             GraphPoolLog("Work插件初始化", Format("OpenCV 插件初始化失败：{}", ocvReason))
 
-        IBPath := A_ScriptDir "\..\Plugins\IbInputSimulator.dll"
+        IBPath := ProjectRootDir "\Plugins\IbInputSimulator.dll"
         DllCall('LoadLibrary', 'str', IBPath)
 
         SetTimer(CheckOcrIdle, 60000)
@@ -477,15 +456,10 @@
 ; 因此只允许空闲时调用——CF 事件（空闲分支）与 OnExecTask finally（忙时延后）双保险。
 ReloadWorkerConfig() {
     try {
-        ; CF 既用于宏表热重载，也用于“应用并保存”后的全局设置刷新。
-        ; 必须先重读 MainSettings，否则 KeyDownDownType/浮动/指令显示等 Worker 消费的
-        ; 设置会一直停留在启动快照，直到用户重启；配置方案名变化时也要同步重算文件路径。
-        LoadMainSetting()
-        InitWorkFilePath()
-        ; Worker 侧 TomlUtil 缓存是启动快照，主进程保存不会失效它 → 必须先失效才能读到新内容
-        TomlUtil_Invalidate()
-        LoadCurMacroSetting()
-        InitData()
+        ; 与冷启动走同一条序列（BootWorkerConfig），差别只有两处：
+        ; 不重复解析命令行/共享内存，以及必须先失效 TomlUtil 缓存——Worker 侧缓存是
+        ; 启动快照，主进程保存不会失效它，不失效就会读到旧内容。
+        BootWorkerConfig(true)
         GraphPoolLog("Worker配置热重载", "完成")
     } catch as e {
         GraphPoolLog("Worker配置热重载失败", Format("err={1} line={2} what={3}`nstack={4}"

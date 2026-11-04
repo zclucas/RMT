@@ -515,15 +515,13 @@ class ImageProcessGui {
         this.Zoom := Floor(z * 100) / 100
 
         ; 调整视口，使滚轮前光标下的原图像素仍位于同一画布位置。
+        ; 鼠标坐标和画布尺寸都是 DIP，不需要再做缩放补偿。
         if (IsObject(anchor)) {
             layout := this._ViewLayout(this.Zoom)
-            scale := this._CanvasScale()
-            cx := mouse.x / scale
-            cy := mouse.y / scale
             maxX := Max(0, this.OrigW - layout.viewW)
             maxY := Max(0, this.OrigH - layout.viewH)
-            this.ViewX := Min(maxX, Max(0, anchor.x - (cx - layout.offsetX) / layout.zoom))
-            this.ViewY := Min(maxY, Max(0, anchor.y - (cy - layout.offsetY) / layout.zoom))
+            this.ViewX := Min(maxX, Max(0, anchor.x - (mouse.x - layout.offsetX) / layout.zoom))
+            this.ViewY := Min(maxY, Max(0, anchor.y - (mouse.y - layout.offsetY) / layout.zoom))
         }
         this._wheelPending := true
         this._ApplyPreviewTransform()
@@ -888,13 +886,11 @@ class ImageProcessGui {
         if (zoom <= 0)
             zoom := (this.Zoom > 0) ? this.Zoom : 1.0
         layout := this._ViewLayout(zoom)
-        scale := this._CanvasScale()
+        ; 画布坐标和画布尺寸都是 DIP，直接换算，不需要缩放补偿
         vx := (viewX == "") ? this.ViewX : viewX
         vy := (viewY == "") ? this.ViewY : viewY
-        cx := px / scale
-        cy := py / scale
-        return { x: vx + (cx - layout.offsetX) / layout.zoom
-            , y: vy + (cy - layout.offsetY) / layout.zoom }
+        return { x: vx + (px - layout.offsetX) / layout.zoom
+            , y: vy + (py - layout.offsetY) / layout.zoom }
     }
 
     _ToImage(px, py) {
@@ -905,19 +901,6 @@ class ImageProcessGui {
         return { x: Floor(point.x), y: Floor(point.y) }
     }
 
-    ; 元素实际宽度 ÷ 渲染宽度。正常是 1；若事件坐标是物理像素而控件是 DIP，则为 1.25
-    _CanvasScale() {
-        static cached := 0
-        if (cached > 0)
-            return cached
-        w := 0
-        try w := this.ui.Query("LeftCanvas>ActualWidth")
-        if (IsNumber(w) && w > 0 && Abs(w - this.CanvasSide) > 0.5)
-            cached := w / this.CanvasSide
-        else
-            cached := 1
-        return cached
-    }
 
     OnDown(side, state, ctrl, event) {
         if (side != "L" && side != "R")
@@ -1263,26 +1246,23 @@ class ImageProcessGui {
         this._SyncIgnoreControls()
     }
 
-    ; 点是否落在四角手柄上（画布像素，容差 8）
+    ; 点是否落在四角手柄上（画布坐标，容差 8）
     _HitHandle(px, py) {
         if (this.SelW <= 0 || this.SelH <= 0 || this.Zoom <= 0)
             return ""
-        scale := this._CanvasScale()
-        cx := px / scale
-        cy := py / scale
         layout := this._ViewLayout(this.Zoom)
         x1 := layout.offsetX + (this.SelX - this.ViewX) * layout.zoom
         y1 := layout.offsetY + (this.SelY - this.ViewY) * layout.zoom
         x2 := layout.offsetX + (this.SelX + this.SelW - this.ViewX) * layout.zoom
         y2 := layout.offsetY + (this.SelY + this.SelH - this.ViewY) * layout.zoom
         tol := 8
-        if (Abs(cx - x1) <= tol && Abs(cy - y1) <= tol)
+        if (Abs(px - x1) <= tol && Abs(py - y1) <= tol)
             return "TL"
-        if (Abs(cx - x2) <= tol && Abs(cy - y1) <= tol)
+        if (Abs(px - x2) <= tol && Abs(py - y1) <= tol)
             return "TR"
-        if (Abs(cx - x1) <= tol && Abs(cy - y2) <= tol)
+        if (Abs(px - x1) <= tol && Abs(py - y2) <= tol)
             return "BL"
-        if (Abs(cx - x2) <= tol && Abs(cy - y2) <= tol)
+        if (Abs(px - x2) <= tol && Abs(py - y2) <= tol)
             return "BR"
         return ""
     }
@@ -1294,9 +1274,6 @@ class ImageProcessGui {
         if (this.EditorMode == "multi" && this.PointTool == "")
             return
 
-        scale := this._CanvasScale()
-        clickX /= scale
-        clickY /= scale
         layout := this._ViewLayout(this.Zoom)
         hitRadius := 6
 

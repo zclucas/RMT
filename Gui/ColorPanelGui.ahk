@@ -40,7 +40,10 @@ class ColorPanelGui {
         head := body.Add("Grid").Height(28).Margin("0,0,0,8")
         head.Cols("*", "28")
         head.Add("TextBlock").Text(GetLang("定位取色器")).FontSize(16).FontWeight("SemiBold").VerticalAlignment("Center")
-        closeBtn := head.Add("Button").Name("Cancel").Grid_Column(1).Width(28).Height(28).Cursor("Hand").Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0).ToolTip("Esc · " GetLang("取消"))
+        ; 整块卡片就是 DragArea（窗口无系统标题栏，靠它拖动），引擎的 WM_NCHITTEST 会把落在这块
+        ; 区域里的点击判成标题栏，按钮就再也收不到 Click。标上 IsHitTestVisibleInChrome 让引擎
+        ; 放行——和标题栏上的最小化/关闭钮同一个约定。
+        closeBtn := head.Add("Button").Name("Cancel").Grid_Column(1).Width(28).Height(28).Cursor("Hand").Background("Transparent").Foreground("{DynamicResource TextMain}").BorderThickness(0).WindowChrome_IsHitTestVisibleInChrome("True").ToolTip("Esc · " GetLang("取消"))
         closeBtn.Add("Path").Data("M 0,0 L 12,12 M 12,0 L 0,12").Width(12).Height(12)
             .Stroke("{DynamicResource TextMain}").StrokeThickness(1.5).Stretch("Uniform").IsHitTestVisible("False")
         closeBtn.InjectResources(this._ButtonStyle(false, "ControlBorder"))
@@ -76,11 +79,11 @@ class ColorPanelGui {
         actions.Cols("72", "8", "*")
         reset := actions.Add("Button").Name("Reset").Content("复位").Height(34).Cursor("Hand")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness(1).ToolTip("将准星移回本屏幕中央")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness(1).WindowChrome_IsHitTestVisibleInChrome("True").ToolTip("将准星移回本屏幕中央")
         reset.InjectResources(this._ButtonStyle(false))
         confirm := actions.Add("Button").Name("Confirm").Grid_Column(2).Content("确定选取  ↵").Height(34).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
-            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness(1)
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness(1).WindowChrome_IsHitTestVisibleInChrome("True")
         confirm.InjectResources(this._ButtonStyle(true))
         this.ui := XAMLHost(win.ToString(), "", MyTargetGui.Hwnd())
         this.ui.skipFontScale := true

@@ -344,7 +344,7 @@ class VarListenGui {
         this.ui.Update("VarList", "AddXamlItem", xaml)
         ; 双击用间隔识别（原逻辑），ListBoxItem 原生支持选中高亮
         this.ui.OnEvent(rowName, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "OnRowClick", rowId))
-        this.ui.Update(rowName, "BindEvent", "PreviewMouseLeftButtonDown")
+        this.ui.BindEventBatched(rowName, "PreviewMouseLeftButtonDown")
     }
 
     OnRowClick(rowId, state := unset, ctrl := unset, event := unset) {

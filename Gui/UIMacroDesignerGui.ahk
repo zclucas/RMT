@@ -769,15 +769,17 @@ class UIMacroDesignerGui {
             return
         item.x := this._SnapX(this._dragCtrlX + dx, item)
         item.y := this._SnapY(this._dragCtrlY + dy, item)
-        this._MoveCtrlVisual(item)
-        this._SyncSelBox()
+        ; 拖动每帧要改控件本体、命中层、选择框、属性面板坐标：合并成一次下发。
+        ; 逐条发是 7 次同步跨进程往返/帧（15ms 定时器），拖动时主线程基本被 IPC 占满。
+        batch := []
+        this._AppendCtrlVisualUpdates(batch, item)
+        this._AppendSelBoxUpdates(batch)
+        batch.Push({ControlName: "XCon", PropertyName: "Text", Value: String(item.x)})
+        batch.Push({ControlName: "YCon", PropertyName: "Text", Value: String(item.y)})
+        ; 属性面板的文本变更会回调进来改模型，拖动期间必须屏蔽（与原逐条写法一致）
         this._loading := true
-        try {
-            this.ui.Update("XCon", "Text", String(item.x))
-            this.ui.Update("YCon", "Text", String(item.y))
-        } finally {
-            this._loading := false
-        }
+        try this.ui.BatchUpdate(batch)
+        finally this._loading := false
     }
 
     _OnCtrlUp(id, state, ctrl, event) {
@@ -811,13 +813,21 @@ class UIMacroDesignerGui {
     _MoveCtrlVisual(item) {
         if (!IsObject(this.ui))
             return
+        batch := []
+        this._AppendCtrlVisualUpdates(batch, item)
+        try this.ui.BatchUpdate(batch)
+    }
+
+    ; 控件本体 + 命中层的位移/宽度。拆成可追加片段：拖动时要和选择框、属性面板合并成一次下发。
+    _AppendCtrlVisualUpdates(batch, item) {
         name := UIMacroRenderer.NameOf(item.id)
         width := UIMacroRenderer.ActualWidth(item, this._schema.window.width)
         margin := Format("{},{},0,0", Integer(item.x), Integer(item.y))
-        try this.ui.Update(name, "Margin", margin)
-        try this.ui.Update(name, "Width", String(width))
-        try this.ui.Update(UIMacroRenderer.HitNameOf(item.id), "Margin", margin)
-        try this.ui.Update(UIMacroRenderer.HitNameOf(item.id), "Width", String(width))
+        hitName := UIMacroRenderer.HitNameOf(item.id)
+        batch.Push({ControlName: name, PropertyName: "Margin", Value: margin})
+        batch.Push({ControlName: name, PropertyName: "Width", Value: String(width)})
+        batch.Push({ControlName: hitName, PropertyName: "Margin", Value: margin})
+        batch.Push({ControlName: hitName, PropertyName: "Width", Value: String(width)})
     }
 
     ; ------------------------------------------------------------------

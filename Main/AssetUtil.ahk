@@ -30,6 +30,9 @@
 
 #Include ..\Plugins\CLR.ahk
 #Include "..\Plugins\RapidOcr\RapidOcr.ahk"
+
+; 旧配置目录的整目录迁移（Compat_UpgradeDir）不在这里：它只在主进程需要，
+; 由 InitFilePath 在加载配置之前统一处理；Worker 只读配置，不参与迁移。
 #Include "..\Plugins\AhiDriver\AhiDriver.ahk"
 #Include "..\Plugins\IbInputSimulator.ahk"
 #Include "..\Plugins\MouseControl.ahk"
@@ -750,8 +753,6 @@ LoadMainSetting() {
         fs := CfgRead(themeFile, MainSoftData.Theme, "FontSize", defFs)
     }
     ApplyUserFontSize(fs, false)
-    if (CfgRead(SettingFile, SettingSection, "FontSize", "") == "")
-        try CfgWrite(MainSoftData.FontSize, SettingFile, SettingSection, "FontSize")
     try {
         themeFile := GetThemesPath()
         MainSoftData.FontWeight := FontWeightToNum(CfgRead(themeFile, MainSoftData.Theme, "FontWeight", "400"))
@@ -775,7 +776,7 @@ LoadMainSetting() {
     if (MainSoftData.CountDownStyle < 1 || MainSoftData.CountDownStyle > 3)
         MainSoftData.CountDownStyle := 2
     MainSoftData.CountDownPadZero := CfgRead(SettingFile, SettingSection, "CountDownPadZero", true)
-    EnsureXAMLThemesToml()
+    ; 主题文件由主进程在 LoadMainSetting 之前补齐（见 GlobalUtil）；这里只读不建。
     ; 统一主题颜色（轮盘/浮窗/指令显示），不兼容旧分散颜色配置
     AppThemeUtil.LoadFromToml()
     MainSoftData.IsModalSubGui := CfgRead(SettingFile, SettingSection, "IsModalSubGui", true)
@@ -913,15 +914,12 @@ LoadMainSetting() {
     MainSoftData.CMDLogToFile := CfgRead(SettingFile, SettingSection, "CMDLogToFile", false)
     rawLogPath := CfgRead(SettingFile, SettingSection, "CMDLogFilePath", "")
     MainSoftData.CMDLogFilePath := CMDLogCalibrateStored(rawLogPath)
-    ; 旧的绝对路径（上次安装目录\Log）收成相对路径，换文件夹后不用再手选
-    if (!CMDLogInWorker() && MainSoftData.CMDLogFilePath != CMDLogNorm(rawLogPath) && !(MainSoftData.CMDLogFilePath == "" && Trim(rawLogPath) == ""))
-        try CfgWrite(MainSoftData.CMDLogFilePath, SettingFile, SettingSection, "CMDLogFilePath")
+    ; 旧的绝对路径（上次安装目录\Log）在内存里已收成相对路径，回写由主进程统一做
+    ; （EnsureMainSettingPersisted）；本函数只读，Worker 也走这一份。
     rawClear := CfgRead(SettingFile, SettingSection, "CMDLogAutoClear", 2)
     MainSoftData.CMDLogAutoClear := IsNumber(rawClear) ? Integer(rawClear) : 2
     if (MainSoftData.CMDLogAutoClear < 0 || MainSoftData.CMDLogAutoClear > 2)
         MainSoftData.CMDLogAutoClear := 2
-    if (!CMDLogInWorker())
-        try CMDLogTryAutoClear(CMDLogResolveFile(MainSoftData.CMDLogFilePath), MainSoftData.CMDLogAutoClear)
     MainSoftData.StartTipAudio := CfgRead(SettingFile, SettingSection, "StartTipAudio", A_WorkingDir "\Audio\Start.wav")
     MainSoftData.EndTipAudio := CfgRead(SettingFile, SettingSection, "EndTipAudio", A_WorkingDir "\Audio\End.wav")
     MainSoftData.StopTipAudio := CfgRead(SettingFile, SettingSection, "StopTipAudio", MainSoftData.EndTipAudio)
@@ -935,6 +933,94 @@ LoadMainSetting() {
     SetFontList()
     LangInitSetting()
     LangKeysInit()
+}
+
+; ============================================================
+; 主进程专用：把 LoadMainSetting 里算出的「校正结果 / 兜底默认值」落定。
+; 单独成一步，是为了让 LoadMainSetting 保持纯读——Worker 也调用它，
+; 而 Worker 只该拿着配置去执行宏，不该回写任何文件。
+; ============================================================
+EnsureMainSettingPersisted() {
+    global MainSoftData
+    ; 旧安装目录留下的绝对日志路径 → 相对路径，换文件夹后不用再手选
+    rawLog := CfgRead(SettingFile, SettingSection, "CMDLogFilePath", "")
+    if (MainSoftData.CMDLogFilePath != CMDLogNorm(rawLog) && !(MainSoftData.CMDLogFilePath == "" && Trim(rawLog) == ""))
+        try CfgWrite(MainSoftData.CMDLogFilePath, SettingFile, SettingSection, "CMDLogFilePath")
+    ; 首次安装：把算出来的兜底字号落定，之后启动直接读到，不必每次走兜底分支
+    if (CfgRead(SettingFile, SettingSection, "FontSize", "") == "")
+        try CfgWrite(MainSoftData.FontSize, SettingFile, SettingSection, "FontSize")
+    ; 启动维护：日志按配置自动清理。属于主进程的启动动作，不再塞在 LoadMainSetting 里
+    ; 靠「是不是 Worker」去关。
+    try CMDLogTryAutoClear(CMDLogResolveFile(MainSoftData.CMDLogFilePath), MainSoftData.CMDLogAutoClear)
+}
+
+
+; 把路径里的 \..\ 消掉（GetFullPathName 只做字符串规整，不要求路径存在）。
+ResolvePathNoDotDot(p) {
+    p := RTrim(String(p), "\")
+    if (!InStr(p, ".."))
+        return p
+    buf := Buffer(65536 * 2, 0)
+    n := DllCall("GetFullPathNameW", "Str", p, "UInt", 65536, "Ptr", buf, "Ptr", 0)
+    return (n > 0) ? StrGet(buf, n) : p
+}
+
+; ============================================================
+; 数据文件路径表：主进程与 Worker 共用这一份定义。
+; rootDir = 软件根目录（主进程传 A_WorkingDir，Worker 传 A_WorkingDir "\.."）。
+; 以前主进程和 Worker 各抄一份 37 项的表，新增配置文件漏改一边不会报错，
+; 只会让 Worker 静默读到空路径。
+; 这里只算路径：建目录、旧格式迁移、展开扁平宏都是主进程启动时的事（见 InitFilePath）。
+; ============================================================
+InitDataFilePaths(rootDir) {
+    global ProjectRootDir := ResolvePathNoDotDot(rootDir)
+    global VBSPath := ProjectRootDir "\MinTool\PlayAudio.vbs"
+    global StartTipAudio := (MainSoftData.StartTipAudio != "" && FileExist(MainSoftData.StartTipAudio)) ? MainSoftData.StartTipAudio : ProjectRootDir "\Audio\Start.wav"
+    global EndTipAudio := (MainSoftData.EndTipAudio != "" && FileExist(MainSoftData.EndTipAudio)) ? MainSoftData.EndTipAudio : ProjectRootDir "\Audio\End.wav"
+    global StopTipAudio := (MainSoftData.StopTipAudio != "" && FileExist(MainSoftData.StopTipAudio)) ? MainSoftData.StopTipAudio : EndTipAudio
+    global ViGEmDllPath := ProjectRootDir "\Plugins\ViGEm\ViGEmWrapper.dll"
+    global AHIDllDir := ProjectRootDir "\Plugins\AhiDriver"
+    global AHIPluginDir := ProjectRootDir "\Plugins\AhiDriver\installer"
+
+    cfgDir := ProjectRootDir "\Setting\" MySoftData.CurSettingName
+    global ArrayFile := cfgDir "\ArrayFile.toml"
+    global MacroFile := cfgDir "\MacroFile.toml"
+    global SearchFile := cfgDir "\SearchFile.toml"
+    global SearchProFile := cfgDir "\SearchProFile.toml"
+    global SearchComboFile := cfgDir "\SearchComboFile.toml"
+    global CompareFile := cfgDir "\CompareFile.toml"
+    global CompareProFile := cfgDir "\CompareProFile.toml"
+    global MMProFile := cfgDir "\MMProFile.toml"
+    global BGKeyFile := cfgDir "\BGKeyFile.toml"
+    global TimingFile := cfgDir "\TimingFile.toml"
+    global RunFile := cfgDir "\RunFile.toml"
+    global OutputFile := cfgDir "\OutputFile.toml"
+    global VariableFile := cfgDir "\VariableFile.toml"
+    global ExVariableFile := cfgDir "\ExVariableFile.toml"
+    global TextOpsFile := cfgDir "\TextOpsFile.toml"
+    global SubMacroFile := cfgDir "\SubMacroFile.toml"
+    global LoopFile := cfgDir "\LoopFile.toml"
+    global OperationFile := cfgDir "\OperationFile.toml"
+    global BGMouseFile := cfgDir "\BGMouseFile.toml"
+    global InputFile := cfgDir "\InputFile.toml"
+    global FileIOFile := cfgDir "\FileIOFile.toml"
+    global WindowManageFile := cfgDir "\WindowManageFile.toml"
+    global KeyCheckFile := cfgDir "\KeyCheckFile.toml"
+    global JoyCheckFile := cfgDir "\JoyCheckFile.toml"
+    global CommentFile := cfgDir "\CommentFile.toml"
+    global ScreenShotFile := cfgDir "\ScreenShotFile.toml"
+    global GraphNodeFile := cfgDir "\GraphNodeFile.toml"
+    global GraphStartNodeFile := cfgDir "\GraphStartNodeFile.toml"
+    ; 阶段5：纯文本指令迁移到配置文件模式（间隔/按键/移动/RMT指令）
+    global IntervalFile := cfgDir "\IntervalFile.toml"
+    global KeyDataFile := cfgDir "\KeyDataFile.toml"
+    global MoveDataFile := cfgDir "\MoveDataFile.toml"
+    global RMTCMDFile := cfgDir "\RMTCMDFile.toml"
+    global WaitFile := cfgDir "\WaitFile.toml"
+    global WaitConfirmFile := cfgDir "\WaitConfirmFile.toml"
+    global DeltaMoveFile := cfgDir "\DeltaMoveFile.toml"
+    global TimeDataFile := cfgDir "\TimeDataFile.toml"
+    global CountDownFile := cfgDir "\CountDownFile.toml"
 }
 
 ; 主题资源文件（XAML Resource_* / Window_DWM / 字体）路径
@@ -1058,22 +1144,10 @@ FontWeightToNum(w) {
     return "400"
 }
 
-; XAML 设置窗诊断日志（排查：打不开 / 打开了但看不见）
-; 输出：A_WorkingDir\Log\XamlUiDiag.log
-XamlUiDiag(msg, tag := "diag") {
-    try {
-        logDir := A_WorkingDir "\Log"
-        if !DirExist(logDir)
-            DirCreate(logDir)
-        FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " +" A_TickCount " [" tag "] " msg "`n"
-            , logDir "\XamlUiDiag.log", "UTF-8")
-    }
-}
-
 ; 手柄按键输出诊断日志（排查：宏内 Joy 按键不生效）
 ; 归口统一日志（C 项）：debug 级（默认不写，设置页开启 Debug 后生效）
 JoyDebugLog(msg, tag := "joy") {
-    who := (IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker) ? "Worker" : "Master"
+    who := ProcessTag()
     RMTLogSys(RMT_LV_DEBUG, who, "[" tag "] " msg)
 }
 
@@ -1107,11 +1181,10 @@ JoyPickerLogReset() {
 ; 输出：主进程 A_WorkingDir\Log\ShotDebug.log；Worker 写到 A_ScriptDir\..\Log\ShotDebug.log
 ShotDebugLog(msg, tag := "shot") {
     try {
-        isWorker := IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker
-        logDir := isWorker ? (A_ScriptDir "\..\Log") : (A_WorkingDir "\Log")
+        logDir := CMDLogAppDir() "\Log"
         if !DirExist(logDir)
             DirCreate(logDir)
-        who := isWorker ? "Worker" : "Master"
+        who := ProcessTag()
         FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " +" A_TickCount " [" who "/" tag "] " msg "`n"
             , logDir "\ShotDebug.log", "UTF-8")
     }
@@ -1121,102 +1194,13 @@ ShotDebugLog(msg, tag := "shot") {
 ; 输出：主进程 A_WorkingDir\Log\SearchDebug.log；Worker 写到 A_ScriptDir\..\Log\SearchDebug.log
 SearchDebugLog(msg, tag := "search") {
     try {
-        isWorker := IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker
-        logDir := isWorker ? (A_ScriptDir "\..\Log") : (A_WorkingDir "\Log")
+        logDir := CMDLogAppDir() "\Log"
         if !DirExist(logDir)
             DirCreate(logDir)
-        who := isWorker ? "Worker" : "Master"
+        who := ProcessTag()
         FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " +" A_TickCount " [" who "/" tag "] " msg "`n"
             , logDir "\SearchDebug.log", "UTF-8")
     }
-}
-
-XamlUiDiagDaemon(tag := "daemon") {
-    ; Worker 未加载 AHK-XAML：用动态名解析，避免裸写 XAMLHost 触发 #Warn / 编译失败
-    try {
-        hostName := "XAMLHost"
-        if (!IsSet(%hostName%)) {
-            XamlUiDiag("XAMLHost not loaded", tag)
-            return
-        }
-        host := %hostName%
-        hwnd := host.daemonHwnd
-        alive := host.IsDaemonAlive()
-        resp := alive ? host.IsDaemonResponsive(300) : false
-        XamlUiDiag(Format("daemonHwnd={} alive={} responsive={}", hwnd, alive, resp), tag)
-    } catch as e {
-        XamlUiDiag("daemon status err: " e.Message, tag)
-    }
-}
-
-; 记录窗口位置/可见性；若疑似透明或跑出屏幕则强制可见并居中
-XamlUiDiagWindow(hwnd, tag := "win", fixIfHidden := false) {
-    if (!hwnd) {
-        XamlUiDiag("hwnd=0 (no window)", tag)
-        return false
-    }
-    exists := DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
-    visible := DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
-    try {
-        WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
-        title := ""
-        try title := WinGetTitle("ahk_id " hwnd)
-        XamlUiDiag(Format("hwnd={} exists={} visible={} pos=({},{}) size={}x{} title=[{}] screen={}x{}"
-            , hwnd, exists, visible, x, y, w, h, title, A_ScreenWidth, A_ScreenHeight), tag)
-        odd := (w < 40 || h < 40 || x < -3000 || y < -3000
-            || x > A_ScreenWidth + 200 || y > A_ScreenHeight + 200 || !visible)
-        if (fixIfHidden && odd) {
-            nw := (w > 40) ? w : 540
-            nh := (h > 40) ? h : 640
-            cx := Max(0, (A_ScreenWidth - nw) // 2)
-            cy := Max(0, (A_ScreenHeight - nh) // 2)
-            XamlUiDiag(Format("FIX offscreen/hidden -> Move({},{}) size={}x{}", cx, cy, nw, nh), tag)
-            try WinMove(cx, cy, nw, nh, "ahk_id " hwnd)
-            try WinShow("ahk_id " hwnd)
-            try WinActivate("ahk_id " hwnd)
-            WinGetPos(&x2, &y2, &w2, &h2, "ahk_id " hwnd)
-            XamlUiDiag(Format("after FIX pos=({},{}) size={}x{} visible={}"
-                , x2, y2, w2, h2, DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")), tag)
-        }
-        return true
-    } catch as e {
-        XamlUiDiag(Format("hwnd={} exists={} visible={} WinGetPos err={}", hwnd, exists, visible, e.Message), tag)
-        return false
-    }
-}
-
-; useAppWinTheme：是否用 AppTheme「通用窗口」色覆盖 XAML Resource（设置窗默认 true）
-ApplyXamlTheme(ui, themeName, iniPath := "", useAppWinTheme := true) {
-    if (iniPath == "")
-        iniPath := A_WorkingDir "\Setting\themes.toml"
-    if FileExist(iniPath) {
-        themeMap := Map()
-        try themeMap := CfgSection(iniPath, themeName)
-        if (themeMap.Count > 0) {
-            ; 合并为一次 BatchUpdate：theme 资源 ~30 条，逐条 Update 是 30 次同步 IPC 往返（拖慢开窗）
-            batch := []
-            for key, val in themeMap {
-                key := Trim(key)
-                val := Trim(val)
-                if (key == "Window_DWM") {
-                    ; 不透明窗口铺实色 BgColor，Mica 不可见且首帧闪紫：backdrop 置 0，保留 dark 模式
-                    if (ui.HasProp("xaml") && InStr(ui.xaml, 'AllowsTransparency="True"'))
-                        batch.Push({ControlName: "Window", PropertyName: "DWM", Value: val})
-                    else {
-                        dwmParts := StrSplit(val, ",", " `t")
-                        dwmDark := dwmParts.Length > 1 ? dwmParts[2] : "0"
-                        batch.Push({ControlName: "Window", PropertyName: "DWM", Value: "0," dwmDark})
-                    }
-                }
-                else if (InStr(key, "Resource_") == 1)
-                    batch.Push({ControlName: "Resource", PropertyName: SubStr(key, 10), Value: val})
-            }
-            if (batch.Length > 0 && ui.HasMethod("BatchUpdate"))
-                ui.BatchUpdate(batch)
-        }
-    }
-    if (useAppWinTheme)
-        AppThemeUtil.ApplyWinThemeToXaml(ui)
 }
 
 SetFontList() {
@@ -1287,13 +1271,9 @@ LoadCurMacroSetting() {
     ; 目录里已经有宏文件（含尚未转换的旧 ini）时，禁止再种入「快捷启动」那套默认列表。
     ; 1.3 写宏列表会按 14 个 [[table]] 重建整文件；读不懂的表以前会在这里回落成默认值，
     ; 复杂旧配置看起来就像整份宏列表被默认配置换掉。
+    ; 旧扁平布局的展开由主进程在 InitFilePath 里做（依赖 IniImportUtil，Worker 不加载）。
+    ; 这里只管「目录里已有配置」的判定，避免把复杂旧配置当全新表写默认宏。
     MacroFileSeedDefaults := !MacroFileHasExistingSource()
-    if (MacroFileImportIni())
-        migrated := true
-    ; 旧版扁平宏还在时，先展开成三级段。漏掉这一步的话，下面会把「没有三级段」
-    ; 当成全新表，用默认宏覆盖用户的 MacroFile。
-    if (ExpandFlatMacroFileIfNeeded())
-        migrated := true
 
     ; ---- 表集合 [[table]] 数组 ----
     t := TomlUtil_Read()
@@ -1312,17 +1292,19 @@ LoadCurMacroSetting() {
         CreateTableItemArr()
         migrated := true
     }
-    EnsureNetworkTable()    ;§23 旧配置兼容：自动补建「网络宏」表（无则插 Replace 之后）
+    ; §23 旧配置兼容：自动补建「网络宏」表（无则插 Replace 之后）。只补内存，不落盘。
+    if (EnsureNetworkTable())
+        migrated := true
     for tableItem in MySoftData.TableInfo {
         if (ReadTableItemInfo(tableItem))
             migrated := true
         EnsureTableHasFold(tableItem)
     }
-    ; 仅当发生过迁移（旧格式→新格式）才落盘表集合，避免 Worker 并发写
-    if (migrated)
-        SaveTableCollection()
     RebuildTableLocator()
     ResolveCurTableIndex()
+    ; 本函数只读：上面所有「补全」都只发生在内存里。要不要把表集合写回磁盘，
+    ; 由调用方决定——主进程落盘，Worker 只读（它只管拿这份配置去执行宏）。
+    return migrated
 }
 
 ; 持久化的当前 tab 是 TableID（身份）：解析为显示顺序下标；无效则回落 1
@@ -1412,24 +1394,6 @@ MacroFileIniSibling() {
     return SubStr(MacroFile, 1, -5) ".ini"
 }
 
-; 主进程才有整目录迁移。Worker 调用会失败，捕获后留给上面的保护，不能写默认宏。
-MacroFileImportIni() {
-    ini := MacroFileIniSibling()
-    if (ini == "" || !FileExist(ini))
-        return false
-    SplitPath ini, , &settingDir
-    try {
-        Compat_UpgradeDir(settingDir)
-    } catch as e {
-        try RMTLogSys(RMT_LV_ERROR, "配置导入", "旧 MacroFile.ini 迁移失败，已停止写入默认宏: " e.Message)
-        return false
-    }
-    global MacroFile
-    TomlUtil_Invalidate(MacroFile)
-    try CfgInvalidate(MacroFile)
-    return true
-}
-
 ; 导入漏展开、或 Worker 没有导入器时：只要还能看到扁平键 / 文件解析失败，就不要落盘默认宏。
 ; 主进程会在 LoadCurMacroSetting 开头先尝试展开；这里是最后一道，避免 Save 把原文件盖成 8KB 默认列表。
 MacroFileMustKeep(symbol) {
@@ -1460,34 +1424,6 @@ MacroFileMustKeep(symbol) {
         return true
     }
     return false
-}
-
-; 主进程才有 IniImport_ExpandFlatMacroFile。Worker 调用会失败，捕获后留给上面的保护，不能写默认宏。
-ExpandFlatMacroFileIfNeeded() {
-    global MacroFile
-    if (!IsSet(MacroFile) || MacroFile == "" || !FileExist(MacroFile))
-        return false
-    try {
-        kv := CfgSection(MacroFile, "UserSettings")
-    } catch {
-        return false
-    }
-    flat := false
-    for def in CreateDefaultTableDefs() {
-        if (kv.Has(def[1] "ModeArr") || kv.Has(def[1] "FoldInfo") || kv.Has(def[1] "MacroArr1")) {
-            flat := true
-            break
-        }
-    }
-    if (!flat)
-        return false
-    SplitPath MacroFile, , &settingDir
-    try {
-        return IniImport_ExpandFlatMacroFile(settingDir)
-    } catch as e {
-        try RMTLogSys(RMT_LV_ERROR, "配置导入", "展开扁平 MacroFile 失败，已保留原文件: " e.Message)
-        return false
-    }
 }
 
 ; 判断某表是否存在三级段结构数据（ModuleOrder 键或 [表ID.*] 子段）
@@ -2206,7 +2142,6 @@ EnsureNetworkTable() {
     loop MySoftData.TableInfo.Length
         MySoftData.TableInfo[A_Index].Order := A_Index
     RebuildTableLocator()
-    SaveTableCollection()   ;复用既有表集合落盘链路（TOML [[table]] 数组）
     RMTLogSysInfo("网络触发", "旧配置迁移：已自动补建「网络宏」表（插在按键替换之后）")
     return true
 }

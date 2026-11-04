@@ -348,7 +348,8 @@ SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY) {
     if (SearchImageDefaultType() == 1) {
         ocvReason := OpenCvEnsure()
         if (ocvReason != "") {
-            ShowOpenCvInstallPrompt(ocvReason)
+            ; 失败原因已由 OpenCvEnsure 写进日志；启动时的界面提示在主进程 InitNativePlugins 里做
+            SearchDebugLog(Format("找图失败：OpenCV 不可用（{}）", ocvReason), "opencv")
             return false
         }
         return FindScreenImage(&ResX, &ResY, ImagePath, X1, Y1, X2, Y2, Data.Similar, SearchAdaptiveOn(Data), SearchColorMatchOn(Data))
@@ -504,7 +505,18 @@ DoMouseAction(tableItem, Data, index, Pos, hwnd, Speed, isWin) {
         return
     }
 
-    if (isWin && mouseAct == "移动至目标点击1次") {
+    if (isWin && mouseAct == "移动至目标点击2次") {
+        ; 窗口后台双击：down / up / dblclk / up，缺 WM_LBUTTONDBLCLK 只会被当成两次单击
+        lParam := (Pos[2] << 16) | (Pos[1] & 0xFFFF)
+        PostMessage 0x201, 1, lParam, , "ahk_id " hwnd
+        Sleep 20
+        PostMessage 0x202, 0, lParam, , "ahk_id " hwnd
+        Sleep 40
+        PostMessage 0x203, 1, lParam, , "ahk_id " hwnd
+        Sleep 20
+        PostMessage 0x202, 0, lParam, , "ahk_id " hwnd
+    }
+    else if (isWin && mouseAct == "移动至目标点击1次") {
         lParam := (Pos[2] << 16) | (Pos[1] & 0xFFFF)
         PostMessage 0x203, 1, lParam, , "ahk_id " hwnd
         Sleep 50
