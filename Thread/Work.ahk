@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Warn All, Off
 
 ; Worker 不加载任何界面：所有对话框请求都转给主进程渲染，本进程只发请求、等回执。
 ; 走项目已有的「输入 / 等待确认」通道（InputRequest → 主进程独立弹窗 → IBR 回传）。
@@ -37,6 +38,74 @@ class RmtDialog {
         }
         return 0
     }
+}
+
+#Include "..\Main\Util\Gdip_All.ahk"
+#Include "..\Main\Util\JsonUtil.ahk"
+#Include "..\Gui\ImageProcessGui.ahk"
+
+if (A_Args.Length >= 3 && A_Args[1] == "--sample-align-worker") {
+    prefix := A_Args[2]
+    requestPath := prefix ".request.json"
+    resultPath := prefix ".result.json"
+    resultTempPath := resultPath ".tmp"
+    readyPath := prefix ".ready"
+    stopPath := prefix ".stop"
+    token := 0
+    try {
+        token := Gdip_Startup()
+        if (!token)
+            throw Error("GDI+ startup failed")
+        editor := ImageProcessGui()
+        editor.SampleMode := true
+        editor._sampleWorkerRoot := A_ScriptDir "\.."
+        editor._sampleEdgeCacheLimit := Max(0, Integer(A_Args[3]))
+        FileAppend("ready", readyPath, "UTF-8")
+        loop {
+            if (FileExist(stopPath))
+                break
+            if (!FileExist(requestPath)) {
+                Sleep(5)
+                continue
+            }
+
+            request := JSON.parse(FileRead(requestPath), false, true)
+            FileDelete(requestPath)
+            response := {match: 0, diagnostic: {}, error: ""
+                , edgeCacheHits: 0, edgeCacheBuilds: 0}
+            try {
+                ref := {Path: request["refPath"], W: request["refW"], H: request["refH"]}
+                sample := {Path: request["samplePath"], W: request["sampleW"], H: request["sampleH"]}
+                hitsBefore := editor._sampleEdgeCacheHits
+                buildsBefore := editor._sampleEdgeCacheBuilds
+                mode := request.Has("mode") ? request["mode"] : "align"
+                if (mode == "verify")
+                    response.match := editor._SampleVerifyPairAtOffset(ref, sample
+                        , request["expectedX"], request["expectedY"], response.diagnostic)
+                else if (mode == "effect")
+                    response.match := editor._SampleAlignEffectCandidate(
+                        ref, sample, response.diagnostic)
+                else
+                    response.match := editor._AlignPairTo(ref, sample, response.diagnostic)
+                response.edgeCacheHits := editor._sampleEdgeCacheHits - hitsBefore
+                response.edgeCacheBuilds := editor._sampleEdgeCacheBuilds - buildsBefore
+            } catch as e {
+                response.error := e.Message
+            }
+            try FileDelete(resultTempPath)
+            FileAppend(JSON.stringify(response), resultTempPath, "UTF-8")
+            FileMove(resultTempPath, resultPath, true)
+        }
+    } catch as e {
+        response := {match: 0, diagnostic: {}, error: e.Message
+            , edgeCacheHits: 0, edgeCacheBuilds: 0}
+        try FileAppend(JSON.stringify(response), resultTempPath, "UTF-8")
+        try FileMove(resultTempPath, resultPath, true)
+    } finally {
+        if (token)
+            Gdip_Shutdown(token)
+    }
+    ExitApp()
 }
 
 #Include "..\Main\AssetUtil.ahk"

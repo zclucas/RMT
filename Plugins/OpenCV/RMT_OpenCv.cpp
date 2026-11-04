@@ -20,6 +20,10 @@
 #include <cstdio>
 #include <cwchar>
 #include <cstdlib>
+#include <cstdint>
+#include <cstddef>
+#include <cstring>
+#include <limits>
 #include "WindowCapture.h"
 #include "SearchAll.h"
 #pragma comment(lib, "Dwmapi.lib")
@@ -353,6 +357,734 @@ extern "C" IMAGEFINDER_API void __cdecl ReleaseMat(void* matPtr)
 	if (matPtr) {
 		cv::Mat* mat = (cv::Mat*)matPtr;
 		delete mat;
+	}
+}
+
+extern "C" IMAGEFINDER_API int __cdecl SampleBuildEdgeMap(
+	const unsigned char* scan, int stride, int width, int height, int alphaAware,
+	unsigned char* pixels, unsigned char* directions, int* edgeCount,
+	uint64_t* mass)
+{
+	if (!scan || !pixels || !directions || !edgeCount || !mass
+		|| width <= 0 || height <= 0)
+		return 0;
+
+	const size_t w = static_cast<size_t>(width);
+	const size_t h = static_cast<size_t>(height);
+	if (w > std::numeric_limits<size_t>::max() / h)
+		return 0;
+	const size_t count = w * h;
+	const long long strideMagnitude = stride < 0
+		? -static_cast<long long>(stride) : static_cast<long long>(stride);
+	if (strideMagnitude < static_cast<long long>(width) * 4)
+		return 0;
+
+	std::memset(pixels, 0, count);
+	std::memset(directions, 0, count);
+	*edgeCount = 0;
+	*mass = 0;
+
+	try
+	{
+		std::vector<unsigned char> gray(count, 0);
+		std::vector<unsigned char> valid(alphaAware ? count : 0, 0);
+		std::vector<unsigned short> raw(count, 0);
+		int maxEdge = 0;
+
+		for (int y = 0; y < height; ++y)
+		{
+			const unsigned char* row = scan
+				+ static_cast<ptrdiff_t>(y) * stride;
+			const size_t rowOffset = static_cast<size_t>(y) * w;
+			for (int x = 0; x < width; ++x)
+			{
+				uint32_t value = 0;
+				std::memcpy(&value, row + static_cast<size_t>(x) * 4, 4);
+				const size_t index = rowOffset + static_cast<size_t>(x);
+				gray[index] = static_cast<unsigned char>(
+					((((value >> 16) & 255) * 77
+						+ ((value >> 8) & 255) * 150
+						+ (value & 255) * 29) >> 8));
+				if (alphaAware)
+					valid[index] = static_cast<unsigned char>((value >> 24) >= 128);
+			}
+		}
+
+		for (int y = 1; y < height - 1; ++y)
+		{
+			for (int x = 1; x < width - 1; ++x)
+			{
+				const size_t index = static_cast<size_t>(y) * w
+					+ static_cast<size_t>(x);
+				if (alphaAware
+					&& (!valid[index] || !valid[index - 1] || !valid[index + 1]
+						|| !valid[index - w] || !valid[index + w]))
+					continue;
+
+				const int dx = static_cast<int>(gray[index + 1])
+					- static_cast<int>(gray[index - 1]);
+				const int dy = static_cast<int>(gray[index + w])
+					- static_cast<int>(gray[index - w]);
+				const int gx = std::abs(dx);
+				const int gy = std::abs(dy);
+				const int edge = gx + gy;
+				int orientation = 0;
+				if (gx * 2 < gy)
+					orientation = 2;
+				else if (gy * 2 < gx)
+					orientation = 0;
+				else
+					orientation = dx * dy >= 0 ? 1 : 3;
+				const int polarity = (orientation == 0 ? dx < 0
+					: orientation == 2 ? dy < 0 : dx < 0) ? 1 : 0;
+				raw[index] = static_cast<unsigned short>(edge);
+				directions[index] = static_cast<unsigned char>(
+					orientation * 2 + polarity);
+				maxEdge = std::max(maxEdge, edge);
+			}
+		}
+
+		const double cutoff = std::max(6.0, maxEdge * 0.08);
+		if (maxEdge > cutoff)
+		{
+			for (int y = 1; y < height - 1; ++y)
+			{
+				const size_t rowOffset = static_cast<size_t>(y) * w;
+				for (int x = 1; x < width - 1; ++x)
+				{
+					const size_t index = rowOffset + static_cast<size_t>(x);
+					const unsigned short edge = raw[index];
+					if (edge > cutoff)
+					{
+						const int value = std::min(255, static_cast<int>(
+							std::lround((edge - cutoff) * 255.0
+								/ (maxEdge - cutoff))));
+						pixels[index] = static_cast<unsigned char>(value);
+						++(*edgeCount);
+						*mass += static_cast<uint64_t>(value);
+					}
+				}
+			}
+		}
+		return 1;
+	}
+	catch (...)
+	{
+		std::memset(pixels, 0, count);
+		std::memset(directions, 0, count);
+		*edgeCount = 0;
+		*mass = 0;
+		return 0;
+	}
+}
+
+namespace
+{
+	struct SampleEdgeCandidate
+	{
+		int ox;
+		int oy;
+		double score;
+		double coverage;
+		double texture;
+		int anchorVotes = 0;
+		double anchorMargin = 0.0;
+	};
+
+	static void InsertSampleCandidate(
+		std::vector<SampleEdgeCandidate>& candidates,
+		const SampleEdgeCandidate& candidate,
+		int radius,
+		int limit)
+	{
+		for (auto it = candidates.begin(); it != candidates.end(); ++it)
+		{
+			if (std::max(std::abs(candidate.ox - it->ox),
+				std::abs(candidate.oy - it->oy)) > radius)
+				continue;
+			if (candidate.score > it->score
+				|| (candidate.score == it->score
+					&& std::abs(candidate.ox) + std::abs(candidate.oy)
+						>= std::abs(it->ox) + std::abs(it->oy)))
+			{
+				if (candidate.anchorVotes > it->anchorVotes)
+				{
+					it->anchorVotes = candidate.anchorVotes;
+					it->anchorMargin = candidate.anchorMargin;
+				}
+				return;
+			}
+			SampleEdgeCandidate replacement = candidate;
+			if (it->anchorVotes > replacement.anchorVotes)
+			{
+				replacement.anchorVotes = it->anchorVotes;
+				replacement.anchorMargin = it->anchorMargin;
+			}
+			candidates.erase(it);
+			const int distance = std::abs(replacement.ox) + std::abs(replacement.oy);
+			auto position = candidates.begin();
+			while (position != candidates.end()
+				&& (position->score < replacement.score
+					|| (position->score == replacement.score
+						&& std::abs(position->ox) + std::abs(position->oy) <= distance)))
+				++position;
+			const auto index = static_cast<int>(position - candidates.begin());
+			if (index < limit)
+			{
+				candidates.insert(position, replacement);
+				if (static_cast<int>(candidates.size()) > limit)
+					candidates.pop_back();
+			}
+			return;
+			break;
+		}
+
+		const int distance = std::abs(candidate.ox) + std::abs(candidate.oy);
+		auto position = candidates.begin();
+		while (position != candidates.end()
+			&& (position->score < candidate.score
+				|| (position->score == candidate.score
+					&& std::abs(position->ox) + std::abs(position->oy) <= distance)))
+			++position;
+		const auto index = static_cast<int>(position - candidates.begin());
+		if (index < limit)
+		{
+			candidates.insert(position, candidate);
+			if (static_cast<int>(candidates.size()) > limit)
+				candidates.pop_back();
+		}
+	}
+
+	static void WriteSampleCandidate(double* output, int index,
+		const SampleEdgeCandidate& candidate)
+	{
+		double* row = output + static_cast<size_t>(index) * 5;
+		row[0] = static_cast<double>(candidate.ox);
+		row[1] = static_cast<double>(candidate.oy);
+		row[2] = candidate.score;
+		row[3] = candidate.coverage;
+		row[4] = candidate.texture;
+	}
+
+	static void WriteAnchorCandidate(double* output, int index,
+		const SampleEdgeCandidate& candidate)
+	{
+		double* row = output + static_cast<size_t>(index) * 8;
+		row[0] = static_cast<double>(candidate.ox);
+		row[1] = static_cast<double>(candidate.oy);
+		row[2] = candidate.score;
+		row[3] = candidate.coverage;
+		row[4] = candidate.anchorMargin;
+		row[5] = candidate.texture;
+		row[6] = static_cast<double>(candidate.anchorVotes);
+		row[7] = candidate.anchorMargin;
+	}
+}
+
+static int SampleAlignEdgeOffsetsImpl(
+	const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+	const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+	const unsigned char* weights, double* output, int capacity, int* outputCount)
+{
+	if (!pixelsB || !directionsB || !pixelsS || !directionsS || !weights
+		|| !output || !outputCount || bw < 4 || bh < 4 || sw < 4 || sh < 4
+		|| capacity <= 0)
+		return 0;
+
+	*outputCount = 0;
+	const int maxDimension = std::max(std::max(bw, bh), std::max(sw, sh));
+	const int step = std::max(1, (maxDimension + 23) / 24);
+	const int offsetStep = std::max(1, (maxDimension + 31) / 32);
+	const int minArea = (std::min(bw * bh, sw * sh) + 1) / 2;
+	std::vector<SampleEdgeCandidate> candidates;
+	candidates.reserve(static_cast<size_t>(capacity));
+
+	for (int oy = -(sh - 4); oy <= bh - 4; oy += offsetStep)
+	{
+		for (int ox = -(sw - 4); ox <= bw - 4; ox += offsetStep)
+		{
+			const int x0 = std::max(1, ox);
+			const int x1 = std::min(bw - 1, ox + sw - 1);
+			const int y0 = std::max(1, oy);
+			const int y1 = std::min(bh - 1, oy + sh - 1);
+			if ((x1 - x0) * (y1 - y0) < minArea)
+				continue;
+
+			int massB = 0;
+			int massS = 0;
+			double shared = 0.0;
+			for (int y = y0; y < y1; y += step)
+			{
+				for (int x = x0; x < x1; x += step)
+				{
+					const int idxB = y * bw + x;
+					const int idxS = (y - oy) * sw + x - ox;
+					const unsigned char va = pixelsB[idxB];
+					const unsigned char vb = pixelsS[idxS];
+					massB += va;
+					massS += vb;
+					if (va && vb)
+					{
+						const int weightIndex = directionsB[idxB] * 8 + directionsS[idxS];
+						shared += std::min(va, vb) * weights[weightIndex] * 0.5;
+					}
+				}
+			}
+
+			const int minMass = std::min(massB, massS);
+			if (minMass < 24)
+				continue;
+			const double coverage = shared / minMass;
+			const double purity = (2.0 * shared) / std::max(1, massB + massS);
+			const double score = 1.0 - (coverage * 0.7 + purity * 0.3);
+			const double texture = static_cast<double>(minMass)
+				/ ((x1 - x0) * (y1 - y0));
+			if (coverage >= 0.2)
+				InsertSampleCandidate(candidates,
+					{ ox, oy, score, coverage, texture },
+					std::max(2, step), capacity);
+		}
+	}
+
+	for (int i = 0; i < static_cast<int>(candidates.size()); ++i)
+		WriteSampleCandidate(output, i, candidates[static_cast<size_t>(i)]);
+	*outputCount = static_cast<int>(candidates.size());
+	return 1;
+}
+
+extern "C" IMAGEFINDER_API int __cdecl SampleAlignEdgeOffsets(
+	const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+	const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+	const unsigned char* weights, double* output, int capacity, int* outputCount)
+{
+	if (!outputCount)
+		return 0;
+	*outputCount = 0;
+	try
+	{
+		return SampleAlignEdgeOffsetsImpl(pixelsB, directionsB, bw, bh,
+			pixelsS, directionsS, sw, sh, weights, output, capacity, outputCount);
+	}
+	catch (...)
+	{
+		*outputCount = 0;
+		return 0;
+	}
+}
+
+static int SampleMatchEdgeAnchorsImpl(
+	const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+	const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+	const unsigned char* weights, double* output, int capacity, int* outputCount)
+{
+	if (!pixelsB || !directionsB || !pixelsS || !directionsS || !weights
+		|| !output || !outputCount || bw <= 0 || bh <= 0 || sw <= 0 || sh <= 0
+		|| capacity <= 0)
+		return 0;
+
+	*outputCount = 0;
+	const int minDimension = std::min(std::min(bw, bh), std::min(sw, sh));
+	const bool sampleLargerThanBase =
+		static_cast<long long>(sw) * sh > static_cast<long long>(bw) * bh;
+	const int patchSide = minDimension <= 40 || sampleLargerThanBase
+		? std::min(10, std::max(4, minDimension / 3))
+		: std::min(8, std::max(4, minDimension / 5));
+	if (std::min(std::min(bw, bh), std::min(sw, sh)) <= patchSide + 2)
+		return 1;
+	const int patchArea = patchSide * patchSide;
+	const int minPatchMass = std::max(24, patchArea * 2);
+	const int anchorStep = std::max(1, patchSide / 3);
+
+	auto buildIntegral = [](const unsigned char* pixels, int width, int height) {
+		const int stride = width + 1;
+		std::vector<uint32_t> sums(static_cast<size_t>(stride) * (height + 1), 0);
+		for (int y = 0; y < height; ++y)
+		{
+			uint32_t mass = 0;
+			for (int x = 0; x < width; ++x)
+			{
+				mass += pixels[y * width + x];
+				sums[static_cast<size_t>(y + 1) * stride + x + 1] =
+					mass + sums[static_cast<size_t>(y) * stride + x + 1];
+			}
+		}
+		return sums;
+	};
+	const std::vector<uint32_t> massB = buildIntegral(pixelsB, bw, bh);
+	const std::vector<uint32_t> massSums = buildIntegral(pixelsS, sw, sh);
+	auto patchMass = [patchSide](const std::vector<uint32_t>& sums, int width, int x, int y) {
+		const int stride = width + 1;
+		const size_t top = static_cast<size_t>(y) * stride + x;
+		const size_t bottom = static_cast<size_t>(y + patchSide) * stride + x + patchSide;
+		return sums[bottom] - sums[static_cast<size_t>(y) * stride + x + patchSide]
+			- sums[static_cast<size_t>(y + patchSide) * stride + x] + sums[top];
+	};
+
+	struct RankedAnchor
+	{
+		int x;
+		int y;
+		int mass;
+	};
+	std::vector<RankedAnchor> ranked;
+	ranked.reserve(48);
+	for (int y = 1; y + patchSide < bh; y += anchorStep)
+	{
+		for (int x = 1; x + patchSide < bw; x += anchorStep)
+		{
+			const int mass = static_cast<int>(patchMass(massB, bw, x, y));
+			if (mass < minPatchMass)
+				continue;
+			auto position = ranked.begin();
+			while (position != ranked.end() && position->mass >= mass)
+				++position;
+			const int index = static_cast<int>(position - ranked.begin());
+			if (index <= 48)
+			{
+				ranked.insert(position, { x, y, mass });
+				if (ranked.size() > 48)
+					ranked.pop_back();
+			}
+		}
+	}
+
+	std::vector<RankedAnchor> anchors;
+	const int spacing = std::max(3, patchSide / 2);
+	for (const RankedAnchor& anchor : ranked)
+	{
+		bool separated = true;
+		for (const RankedAnchor& selected : anchors)
+			if (std::max(std::abs(anchor.x - selected.x),
+				std::abs(anchor.y - selected.y)) < spacing)
+			{
+				separated = false;
+				break;
+			}
+		if (separated)
+		{
+			anchors.push_back(anchor);
+			if (anchors.size() >= 8)
+				break;
+		}
+	}
+
+	struct AnchorVote
+	{
+		int ox;
+		int oy;
+		double score;
+		double coverage;
+		double margin;
+		double texture;
+	};
+	std::vector<AnchorVote> votes;
+	for (const RankedAnchor& anchor : anchors)
+	{
+		struct EdgePoint
+		{
+			int sampleIndex;
+			unsigned char value;
+			unsigned char directionIndex;
+		};
+		std::vector<EdgePoint> points;
+		points.reserve(static_cast<size_t>(patchArea));
+		for (int py = 0; py < patchSide; ++py)
+			for (int px = 0; px < patchSide; ++px)
+			{
+				const int idxB = (anchor.y + py) * bw + anchor.x + px;
+				const unsigned char value = pixelsB[idxB];
+				if (value)
+					points.push_back({ py * sw + px, value,
+						static_cast<unsigned char>(directionsB[idxB] * 8) });
+			}
+
+		std::vector<SampleEdgeCandidate> matches;
+		matches.reserve(3);
+		for (int y = 1; y + patchSide < sh; ++y)
+			for (int x = 1; x + patchSide < sw; ++x)
+			{
+				const int massS = static_cast<int>(patchMass(massSums, sw, x, y));
+				const int minMass = std::min(anchor.mass, massS);
+				if (minMass < minPatchMass)
+					continue;
+				double shared = 0.0;
+				const int origin = y * sw + x;
+				for (const EdgePoint& point : points)
+				{
+					const int idxS = origin + point.sampleIndex;
+					const unsigned char valueS = pixelsS[idxS];
+					if (valueS)
+						shared += std::min(point.value, valueS)
+							* weights[point.directionIndex + directionsS[idxS]] * 0.5;
+				}
+				const double coverage = shared / minMass;
+				const double purity = (2.0 * shared) / std::max(1, anchor.mass + massS);
+				const double score = 1.0 - (coverage * 0.7 + purity * 0.3);
+				if (coverage >= 0.35)
+					InsertSampleCandidate(matches,
+						{ x, y, score, coverage, 0.0 },
+						std::max(2, patchSide / 3), 3);
+			}
+
+		if (matches.empty())
+			continue;
+		const SampleEdgeCandidate& best = matches[0];
+		const double margin = matches.size() > 1
+			? matches[1].score - best.score : 1.0e15;
+		if (best.score <= 0.65 && best.coverage >= 0.4
+			&& margin >= std::max(0.015, best.score * 0.08))
+			votes.push_back({ anchor.x - best.ox, anchor.y - best.oy, best.score,
+				best.coverage, margin, static_cast<double>(anchor.mass) / patchArea });
+	}
+
+	struct VoteCluster
+	{
+		AnchorVote anchor;
+		std::vector<AnchorVote> items;
+	};
+	std::vector<VoteCluster> clusters;
+	for (const AnchorVote& vote : votes)
+	{
+		auto target = clusters.end();
+		for (auto it = clusters.begin(); it != clusters.end(); ++it)
+			if (std::abs(vote.ox - it->anchor.ox) <= 2
+				&& std::abs(vote.oy - it->anchor.oy) <= 2)
+			{
+				target = it;
+				break;
+			}
+		if (target != clusters.end())
+			target->items.push_back(vote);
+		else
+			clusters.push_back({ vote, { vote } });
+	}
+
+	std::vector<SampleEdgeCandidate> candidates;
+	candidates.reserve(static_cast<size_t>(capacity));
+	for (const VoteCluster& cluster : clusters)
+	{
+		const int itemCount = static_cast<int>(cluster.items.size());
+		double score = 0.0, coverage = 0.0, margin = 0.0, texture = 0.0;
+		double sumX = 0.0, sumY = 0.0;
+		for (const AnchorVote& vote : cluster.items)
+		{
+			score += vote.score;
+			coverage += vote.coverage;
+			margin += vote.margin;
+			texture += vote.texture;
+			sumX += vote.ox;
+			sumY += vote.oy;
+		}
+		score /= itemCount;
+		coverage /= itemCount;
+		margin /= itemCount;
+		texture /= itemCount;
+		if ((itemCount >= 2 || (score <= 0.25 && coverage >= 0.75 && margin >= 0.12))
+			&& coverage >= 0.4)
+		{
+			SampleEdgeCandidate candidate = {
+				static_cast<int>(std::round(sumX / itemCount)),
+				static_cast<int>(std::round(sumY / itemCount)),
+				score, coverage, texture, itemCount, margin
+			};
+			InsertSampleCandidate(candidates, candidate, 2, capacity);
+		}
+	}
+
+	for (int i = 0; i < static_cast<int>(candidates.size()); ++i)
+		WriteAnchorCandidate(output, i, candidates[static_cast<size_t>(i)]);
+	*outputCount = static_cast<int>(candidates.size());
+	return 1;
+}
+
+extern "C" IMAGEFINDER_API int __cdecl SampleMatchEdgeAnchors(
+	const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+	const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+	const unsigned char* weights, double* output, int capacity, int* outputCount)
+{
+	if (!outputCount)
+		return 0;
+	*outputCount = 0;
+	try
+	{
+		return SampleMatchEdgeAnchorsImpl(pixelsB, directionsB, bw, bh,
+			pixelsS, directionsS, sw, sh, weights, output, capacity, outputCount);
+	}
+	catch (...)
+	{
+		*outputCount = 0;
+		return 0;
+	}
+}
+
+static int SampleRefineEdgeOffsetImpl(
+	const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+	const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+	int ox0, int oy0, int radius, const unsigned char* weights, double* output)
+{
+	if (!pixelsB || !directionsB || !pixelsS || !directionsS || !weights || !output
+		|| bw <= 0 || bh <= 0 || sw <= 0 || sh <= 0 || radius < 0)
+		return -1;
+
+	const int left = std::max(0, ox0);
+	const int right = std::min(bw, ox0 + sw);
+	const int top = std::max(0, oy0);
+	const int bottom = std::min(bh, oy0 + sh);
+	if (right - left < 8 || bottom - top < 8)
+		return 0;
+
+	const int blockW = std::min(120, right - left - radius * 2);
+	const int blockH = std::min(120, bottom - top - radius * 2);
+	if (blockW < 8 || blockH < 8)
+		return 0;
+	int bx = left + (right - left - blockW) / 2;
+	int by = top + (bottom - top - blockH) / 2;
+	const int pixelStep = std::max(1, (std::max(blockW, blockH) + 31) / 32);
+	const int sampleTotal = ((blockW + pixelStep - 1) / pixelStep)
+		* ((blockH + pixelStep - 1) / pixelStep);
+	const int xCandidates[3] = { bx, left + radius, right - blockW - radius };
+	const int yCandidates[3] = { by, top + radius, bottom - blockH - radius };
+	const double minMassRequired = std::max(24.0, sampleTotal * 0.2);
+	double bestBlockScore = 1.0e15;
+	for (int yi = 0; yi < 3; ++yi)
+		for (int xi = 0; xi < 3; ++xi)
+		{
+			const int testX = xCandidates[xi];
+			const int testY = yCandidates[yi];
+			int massTestB = 0;
+			int massTestS = 0;
+			double sharedTest = 0.0;
+			for (int yy = 0; yy < blockH; yy += pixelStep)
+				for (int xx = 0; xx < blockW; xx += pixelStep)
+				{
+					const int idxB = (testY + yy) * bw + testX + xx;
+					const int idxS = (testY - oy0) * sw + testX - ox0 + yy * sw + xx;
+					const unsigned char va = pixelsB[idxB];
+					const unsigned char vb = pixelsS[idxS];
+					massTestB += va;
+					massTestS += vb;
+					if (va && vb)
+					{
+						const int weightIndex = directionsB[idxB] * 8 + directionsS[idxS];
+						sharedTest += std::min(va, vb) * weights[weightIndex] * 0.5;
+					}
+				}
+			const int minMassTest = std::min(massTestB, massTestS);
+			if (minMassTest < minMassRequired)
+				continue;
+			const double coverageTest = sharedTest / minMassTest;
+			if (coverageTest < 0.25)
+				continue;
+			const double purityTest = (2.0 * sharedTest) / std::max(1, massTestB + massTestS);
+			const double scoreTest = 1.0 - (coverageTest * 0.7 + purityTest * 0.3);
+			if (scoreTest < bestBlockScore)
+			{
+				bestBlockScore = scoreTest;
+				bx = testX;
+				by = testY;
+			}
+		}
+
+	struct EdgePoint
+	{
+		int sampleIndex;
+		unsigned char value;
+		unsigned char directionIndex;
+	};
+	std::vector<EdgePoint> points;
+	points.reserve(static_cast<size_t>(sampleTotal));
+	int massB = 0;
+	for (int yy = 0; yy < blockH; yy += pixelStep)
+	{
+		for (int xx = 0; xx < blockW; xx += pixelStep)
+		{
+			const int idxB = (by + yy) * bw + bx + xx;
+			const unsigned char value = pixelsB[idxB];
+			points.push_back({ yy * sw + xx, value,
+				static_cast<unsigned char>(directionsB[idxB] * 8) });
+			massB += value;
+		}
+	}
+
+	double bestScore = 1.0e15;
+	int bestOx = ox0;
+	int bestOy = oy0;
+	double bestCoverage = 0.0;
+	double bestTexture = 0.0;
+	bool found = false;
+	for (int dy = -radius; dy <= radius; ++dy)
+	{
+		for (int dx = -radius; dx <= radius; ++dx)
+		{
+			const int ox = ox0 + dx;
+			const int oy = oy0 + dy;
+			int massS = 0;
+			double shared = 0.0;
+			const int origin = (by - oy) * sw + bx - ox;
+			bool valid = true;
+			for (const EdgePoint& point : points)
+			{
+				const int idxS = origin + point.sampleIndex;
+				if (idxS < 0 || idxS >= sw * sh)
+				{
+					valid = false;
+					break;
+				}
+				const unsigned char vb = pixelsS[idxS];
+				massS += vb;
+				if (point.value && vb)
+				{
+					const int weightIndex = point.directionIndex + directionsS[idxS];
+					shared += std::min(point.value, vb) * weights[weightIndex] * 0.5;
+				}
+			}
+			if (!valid)
+				return -1;
+			const int minMass = std::min(massB, massS);
+			if (minMass < minMassRequired)
+				continue;
+			const double coverage = shared / minMass;
+			const double purity = (2.0 * shared) / std::max(1, massB + massS);
+			const double score = 1.0 - (coverage * 0.7 + purity * 0.3);
+			const double texture = static_cast<double>(minMass) / sampleTotal;
+			if (coverage >= 0.25 && (score < bestScore
+				|| (score == bestScore
+					&& std::abs(dx) + std::abs(dy)
+						< std::abs(bestOx - ox0) + std::abs(bestOy - oy0))))
+			{
+				bestScore = score;
+				bestOx = ox;
+				bestOy = oy;
+				bestCoverage = coverage;
+				bestTexture = texture;
+				found = true;
+			}
+		}
+	}
+
+	if (!found)
+		return 0;
+	output[0] = static_cast<double>(bestOx);
+	output[1] = static_cast<double>(bestOy);
+	output[2] = bestScore;
+	output[3] = bestCoverage;
+	output[4] = bestTexture;
+	return 1;
+}
+
+extern "C" IMAGEFINDER_API int __cdecl SampleRefineEdgeOffset(
+	const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+	const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+	int ox0, int oy0, int radius, const unsigned char* weights, double* output)
+{
+	try
+	{
+		return SampleRefineEdgeOffsetImpl(pixelsB, directionsB, bw, bh,
+			pixelsS, directionsS, sw, sh, ox0, oy0, radius, weights, output);
+	}
+	catch (...)
+	{
+		return -1;
 	}
 }
 

@@ -160,3 +160,28 @@ extern "C" IMAGEFINDER_API int __cdecl GetImagePixelAtEx(
     const wchar_t* path, int x, int y, int* r, int* g, int* b, int* a);
 
 extern "C" IMAGEFINDER_API const wchar_t* __cdecl GetImageLastError();
+
+#include <cstdint>
+
+// Sample masking alignment helpers. Output is capacity rows of
+// [offsetX, offsetY, score, coverage, texture] doubles.
+extern "C" IMAGEFINDER_API int __cdecl SampleBuildEdgeMap(
+    const unsigned char* scan, int stride, int width, int height, int alphaAware,
+    unsigned char* pixels, unsigned char* directions, int* edgeCount,
+    uint64_t* mass);
+
+extern "C" IMAGEFINDER_API int __cdecl SampleAlignEdgeOffsets(
+    const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+    const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+    const unsigned char* weights, double* output, int capacity, int* outputCount);
+
+extern "C" IMAGEFINDER_API int __cdecl SampleMatchEdgeAnchors(
+    const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+    const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+    const unsigned char* weights, double* output, int capacity, int* outputCount);
+
+// Returns 1 when a refined candidate is written, 0 when none passes, and -1 on invalid input or native failure.
+extern "C" IMAGEFINDER_API int __cdecl SampleRefineEdgeOffset(
+    const unsigned char* pixelsB, const unsigned char* directionsB, int bw, int bh,
+    const unsigned char* pixelsS, const unsigned char* directionsS, int sw, int sh,
+    int ox0, int oy0, int radius, const unsigned char* weights, double* output);

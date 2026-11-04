@@ -1368,11 +1368,12 @@ OnGetSelectAreaCancel(*) {
     TogGetSelectArea(false)
 }
 
-TogSelectArea(isEnable, action := "") {
+TogSelectArea(isEnable, action := "", showPrompt := true) {
     global SelectAreaState
     if (isEnable && action != "") {
         MainSoftData.SelectAreaAction := action
-        ToolTipContent(GetLang("请框选截图范围"))
+        if (showPrompt)
+            ToolTipContent(GetLang("请框选截图范围"))
         SetSystemCursor("CROSS")
         Hotkey("*LButton", SelectAreaDown, "On")
         Hotkey("*LButton Up", SelectAreaUp, "On")
