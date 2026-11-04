@@ -81,6 +81,20 @@ CmdEnumWaitNames() => ["等待变量值", "等待按键按下", "等待按键松
     "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
     "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
     "等待文件存在", "等待文件删除", "等待文件变化", "等待日期"]
+
+; 编辑器只提供条件等待；日期统一使用时间指令。旧枚举保留，兼容已保存的宏。
+CmdEnumWaitEditorNames() {
+    names := CmdEnumWaitNames()
+    names.Pop()
+    return names
+}
+
+CmdEnumWaitEditorLabels() {
+    labels := []
+    for key in CmdEnumWaitEditorNames()
+        labels.Push(GetLang(SubStr(key, 3)))
+    return labels
+}
 CmdEnumSearchNames() => ["屏幕图片", "屏幕颜色", "屏幕文本", "窗口图片", "窗口颜色", "窗口文本"]
 CmdEnumMouseActNames() => ["无动作", "移动至目标", "移动至目标点击1次", "移动至目标点击2次"]
 CmdEnumMMActionNames() => ["移动", "移动后单击", "移动后双击", "A到B拖拽", "拖拽"]

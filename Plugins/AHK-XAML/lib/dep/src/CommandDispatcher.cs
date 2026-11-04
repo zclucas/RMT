@@ -530,6 +530,12 @@ public partial class AhkWpfEngine
             parts[2] = parts[2].Replace("&#x0A;", "\n").Replace("&#x0D;", "\r");
         }
 
+        if (parts[0] == "Window" && parts[1] == "InitialUpdateComplete")
+        {
+            if (firstFrame != null) firstFrame.CompleteInitialization();
+            return;
+        }
+
         if (parts[0] == "Window" && parts[1] == "GMUIConfigure" && parts.Length == 3)
         {
             RmtCommonStyles.Configure(win, parts[2]);

@@ -86,10 +86,7 @@ class MacroGraphFormalMixin {
     }
 
     _WaitTypeKeys() {
-        return ["等待变量值", "等待按键按下", "等待按键松开", "等待屏幕变化", "等待鼠标移动",
-            "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
-            "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
-            "等待文件存在", "等待文件删除", "等待文件变化", "等待日期"]
+        return CmdEnumWaitEditorNames()
     }
 
     _WaitPanelName(waitType) {
@@ -362,14 +359,14 @@ class MacroGraphFormalMixin {
     _FillWaitBody(id, d, body) {
         lw := this._FormalLW(), cw := this._FormalCW()
         waitType := d.HasOwnProp("waitType") ? d.waitType : "等待变量值"
-        typeNames := GetLangArr(this._WaitTypeKeys())
-        idx := CmdEnumIndex(waitType, this._WaitTypeKeys())
+        typeNames := CmdEnumWaitEditorLabels()
+        idx := CmdEnumWait(waitType) == "等待日期" ? -1 : CmdEnumIndex(waitType, this._WaitTypeKeys())
         panel := this._WaitPanelName(waitType)
         p1 := d.HasOwnProp("waitParam1") ? d.waitParam1 : ""
         p2 := d.HasOwnProp("waitParam2") ? d.waitParam2 : ""
         interval := d.HasOwnProp("waitInterval") ? d.waitInterval : 500
         varList := GetGuiVarArr()
-        this._AddComboRow(body, "WaitTypeRow_" id, GetLang("等待类型："), "WaitTypeCmb_" id, typeNames, idx, true, true, lw, "156")
+        this._AddComboRow(body, "WaitTypeRow_" id, GetLang("类型："), "WaitTypeCmb_" id, typeNames, idx, true, true, lw, "156")
         this._AddFieldRow(body, "WaitIntervalRow_" id, GetLang("检测间隔(ms)："), "WaitInterval_" id, interval, true, true, "", "", "", lw, cw)
 
         this._AddEditableComboRow(body, "WaitVarNameRow_" id, GetLang("变量名："), "WaitVarName_" id, varList, p1, panel == "Var", lw, cw)
@@ -411,7 +408,7 @@ class MacroGraphFormalMixin {
         fileRow.Add("Button").Name("WaitFileBrowse_" id).Content(GetLang("浏览")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0")
 
         dateUnits := GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
-        this._AddFieldRow(body, "WaitDateValRow_" id, GetLang("日期值："), "WaitDateVal_" id, p1, panel == "Date", true, "", "", "", lw, cw)
+        this._AddEditableComboRow(body, "WaitDateValRow_" id, GetLang("日期值："), "WaitDateVal_" id, GetTimeVarArr(), p1, panel == "Date", lw, cw)
         this._AddComboRow(body, "WaitDateUnitRow_" id, GetLang("单位："), "WaitDateUnitCmb_" id, dateUnits, this._IndexInLangArr(dateUnits, GetLang(p2)), panel == "Date", true, lw, cw)
         dateHint := body.Add("TextBlock").Name("WaitDateHint_" id).Text(GetLang("分钟、小时、天填数字；具体时间如 2026-01-01 12:00 或 18:00；时间变量填变量名"))
             .Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(11)).Margin("0,2,0,0")
@@ -1263,7 +1260,7 @@ class MacroGraphFormalMixin {
         vr := d.HasOwnProp("ifVar" slot) ? d["ifVar" slot] : "Var" slot
         cmpTypes := this._IfCmpTypes()
         showRow := showCard && on
-        showVal := showRow && cmp != 7
+        showVal := showRow && !IsCompareExistVar(cmp)
         block := body.Add("StackPanel").Name(p "TogRow_" id).Margin("0,2,0,0")
         if (!showCard)
             block.Visibility("Collapsed")
@@ -1383,7 +1380,7 @@ class MacroGraphFormalMixin {
         trueVal := d.HasOwnProp("trueValue") ? d.trueValue : 1
         falseVal := d.HasOwnProp("falseValue") ? d.falseValue : 0
         ; 逻辑关系始终可编辑（与循环次数类似）
-        this._AddComboRow(body, "IfLogicRow_" id, GetLang("逻辑关系："), "IfLogicCmb_" id, logicTypes, Max(0, logicType - 1), true, true, lw, cw)
+        this._AddComboRow(body, "IfLogicRow_" id, GetLang("逻辑关系："), "IfLogicCmb_" id, logicTypes, CmdEnumIndex(logicType, CmdEnumLogicNames()), true, true, lw, cw)
 
         ; ---- 展开：完整条件 + 结果保存 ----
         fullBox := body.Add("StackPanel").Name("IfFullBox_" id)
@@ -1515,7 +1512,7 @@ class MacroGraphFormalMixin {
         vr := d.HasOwnProp("loopVar" slot) ? d["loopVar" slot] : "Var" slot
         cmpTypes := this._LoopCmpTypes()
         showRow := showCard && on
-        showVal := showRow && cmp != 7
+        showVal := showRow && !IsCompareExistVar(cmp)
         block := body.Add("StackPanel").Name(p "TogRow_" id).Margin("0,2,0,0")
         if (!showCard)
             block.Visibility("Collapsed")
@@ -1590,15 +1587,15 @@ class MacroGraphFormalMixin {
         logicTypes := this._LoopLogicTypes()
         condiType := d.HasOwnProp("condiType") ? d.condiType : 1
         logicType := d.HasOwnProp("logicType") ? d.logicType : 1
-        showCondi := condiType != 1
+        showCondi := CmdEnumZh(condiType, CmdEnumCondiNames()) != "无"
         cmds := this._LoopBodyCmds(d)
 
         countItems := GetGuiVarArr()
         countItems.Push(GetLang("无限"))
         this._AddEditableComboRow(body, "LoopCountRow_" id, GetLang("循环次数："), "LoopCount_" id, countItems, this._LoopCountText(d), true, lw, cw)
-        this._AddComboRow(body, "LoopCondiRow_" id, GetLang("循环条件："), "LoopCondiCmb_" id, condiTypes, Max(0, condiType - 1), true, true, lw, cw)
+        this._AddComboRow(body, "LoopCondiRow_" id, GetLang("循环条件："), "LoopCondiCmb_" id, condiTypes, CmdEnumIndex(condiType, CmdEnumCondiNames()), true, true, lw, cw)
         ; 展开态完整条件；收起时隐藏，改用下方摘要
-        this._AddComboRow(body, "LoopLogicRow_" id, GetLang("逻辑关系："), "LoopLogicCmb_" id, logicTypes, Max(0, logicType - 1), showCondi && !folded, true, lw, cw)
+        this._AddComboRow(body, "LoopLogicRow_" id, GetLang("逻辑关系："), "LoopLogicCmb_" id, logicTypes, CmdEnumIndex(logicType, CmdEnumLogicNames()), showCondi && !folded, true, lw, cw)
         prevOn := true
         loop 4 {
             slot := A_Index
@@ -1853,7 +1850,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackField(id, "WaitProc", h, runtime)
             this._FormalTrackField(id, "WaitWin", h, runtime)
             this._FormalTrackField(id, "WaitFile", h, runtime)
-            this._FormalTrackField(id, "WaitDateVal", h, runtime)
+            this._FormalTrackEditCombo(id, "WaitDateVal", h, runtime)
             this._FormalTrackCombo(id, "WaitDateUnitCmb", h, runtime)
             this._BindCtrl("WaitArea_" id, "Click", this._OnWaitArea.Bind(this, id), runtime)
             this._BindCtrl("WaitWinEdit_" id, "Click", this._OnWaitWinEdit.Bind(this, id), runtime)

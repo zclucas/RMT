@@ -174,7 +174,7 @@ class MacroEditGui {
             {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出"]},
             {name: "变量/数据", icon: Chr(0xE8EF), cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
             {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel"]},
-            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "循环", "跳转", "如果", "如果Pro", "等待", "等待确定", "时间", "倒计时"]},
+            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "时间", "循环", "跳转", "如果", "如果Pro", "等待", "等待确定", "倒计时"]},
             {name: "调控", icon: Chr(0xE713), cmds: ["运行", "运行Pro", "宏操作", "窗口管理", "RMT指令"]},
             {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
         ]

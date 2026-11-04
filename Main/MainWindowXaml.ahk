@@ -746,7 +746,7 @@ class MainWin {
             startLoc := 'WindowStartupLocation="Manual" Left="' x '" Top="' y '"'
             wh := 'Width="' w '" Height="' h '"'
         }
-        ; 先填内容再显示：Opacity=0 走引擎离屏揭盖，避免空壳→主题/列表刷入时抖动
+        ; 先填内容再显示：引擎等待初始化和首帧绘制完成，避免主题/列表刷入时抖动
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ' wh '')
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', startLoc)
         ; Viewbox 或窗口非客户区露出的边缘也使用主题底色，避免透明背景呈黑色。
@@ -757,7 +757,6 @@ class MainWin {
         ; ---- 壳级事件（初始 XAML 内，经 eventBindings 绑定） ----
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("Window", "Revealed", ObjBindMethod(this, "OnWindowRevealed"))
         this.ui.OnEvent("Window", "PreviewMouseMove", ObjBindMethod(this, "OnAiSplitMove"))
         this.ui.OnEvent("Window", "PreviewMouseLeftButtonUp", ObjBindMethod(this, "OnAiSplitEnd"))
         this.ui.OnEvent("BtnWinClose", "Click", ObjBindMethod(this, "OnCloseClick"))
@@ -891,7 +890,7 @@ class MainWin {
                 if (hIcon)
                     this.ui.Update("Window", "Icon", "HICON:" hIcon)
             }
-            ApplyXamlTheme(this.ui, MainSoftData.Theme)
+            ; 首帧已使用配置配色，避免 Loaded 再次应用基础主题造成闪烁。
             this.LoadLeftBarValues()
             ; 主窗绑着 Window/PreviewMouseMove，只为拖 AI 分割条时取 DragCoords。
             ; 默认关掉，按下分割条时再开（见 SetWindowMouseMove）：否则鼠标在窗口里划过
@@ -900,25 +899,7 @@ class MainWin {
         } catch as e {
             XamlUiDiag("MainWin OnWindowLoad err: " e.Message, "MainWin")
         }
-        ; 最小化启动：窗口已在 Show 之后被 OnOpen 收起，这里只跳过布局重算
-        if (this.HasOwnProp("_startHidden") && this._startHidden)
-            return
-        ; 主题刷完再走折叠同款 Reset，避免首帧在视口未定时量出的底边/行距
-        SetTimer(ObjBindMethod(this, "_RelayoutCurrentVL"), -1)
-    }
-
-    _RelayoutCurrentVL() {
-        try {
-            if (!IsObject(this._vl) || !IsObject(this._useVirtual))
-                return
-            cur := MainSoftData.TableIndex
-            if (this._useVirtual.Has(cur))
-                this._vl.Relayout(cur)
-        }
-    }
-
-    OnWindowRevealed(state, ctrl, event) {
-        this._RelayoutCurrentVL()
+        ; VirtualList 在 Loaded 时已按最终视口测量；此处再次 Reset 会重建行并跳动。
     }
 
     OnWindowClosing(state, ctrl, event) {
@@ -4045,7 +4026,7 @@ class MainWin {
             . this._BuildFoldHeaderRowXaml(t, f, fold, false)
         if (isMenu || isUI) {
             tkStr := FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(fold.TK))
-            xaml .= '<Grid Margin="0,4,0,0">'
+            xaml .= '<Grid Margin="0,4,0,0" Visibility="' (fold.FoldState ? "Collapsed" : "Visible") '">'
                 . '<Grid.ColumnDefinitions>' this._BuildFoldLayoutColDefs() '</Grid.ColumnDefinitions>'
                 . '<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">'
                 . this._TriggerEntries('<Button Name="FoldTKEdit_' t '_' f '" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml(tkStr, false) '</Button>', false, "FoldTKEdit_" t "_" f, tkStr)
@@ -4094,14 +4075,14 @@ class MainWin {
     _BuildFoldCollapseBtnXaml(t, f, folded, vlMode) {
         iconStyle := ' Style="{StaticResource RmtIconBtn}"'
         if (vlMode) {
-            return '<Button Tag="FoldBtn" Width="24" Height="24" MinHeight="24" Margin="0,0,6,0" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12">'
+            return '<Button Tag="FoldBtn" Width="24" MinHeight="24" Margin="0,0,6,0" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12">'
                 . '<Button.Style><Style TargetType="Button" BasedOn="{StaticResource RmtIconBtn}">'
                 . '<Setter Property="Content" Value="&#xE70D;"/>'
                 . '<Style.Triggers><DataTrigger Binding="{Binding Folded}" Value="True"><Setter Property="Content" Value="&#xE76C;"/></DataTrigger></Style.Triggers>'
                 . '</Style></Button.Style></Button>'
         }
         foldGlyph := folded ? "&#xE76C;" : "&#xE70D;"
-        return '<Button Name="FoldBtn_' t '_' f '" Width="24" Height="24" MinHeight="24" Margin="0,0,6,0"' iconStyle '>'
+        return '<Button Name="FoldBtn_' t '_' f '" Width="24" MinHeight="24" Margin="0,0,6,0"' iconStyle '>'
             . '<TextBlock Name="FoldGlyph_' t '_' f '" Text="' foldGlyph '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Button>'
     }
@@ -4123,7 +4104,7 @@ class MainWin {
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Grid UseLayoutRounding="False" ClipToBounds="False">'
             . '<Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '>'
             . '<ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}" VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"/>'
-            . '</Border></Grid></ControlTemplate></Setter.Value></Setter>'
+            . '</Border><Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1" IsHitTestVisible="False" SnapsToDevicePixels="True" RenderOptions.EdgeMode="Aliased"/></Grid></ControlTemplate></Setter.Value></Setter>'
             . '<Style.Triggers>'
             . '<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="1"/><Setter Property="FontSize" Value="' foldFs '"/></Trigger>'
             . '<Trigger Property="IsReadOnly" Value="True"><Setter Property="FontSize" Value="' foldFs '"/></Trigger>'
@@ -4395,7 +4376,7 @@ class MainWin {
 
     _BuildDragHandleXaml() {
         dot := '<Ellipse Width="3" Height="3" Fill="{DynamicResource TextSub}" Opacity="0.7" Margin="1"/>'
-        return '<Button Tag="DragHandle" Style="{StaticResource RmtIconBtn}" Width="22" Height="24" MinHeight="24" ToolTip="' GetLang("拖拽调整顺序") '" VerticalAlignment="Center" HorizontalAlignment="Center" Cursor="Arrow">'
+        return '<Button Tag="DragHandle" Style="{StaticResource RmtIconBtn}" Width="22" MinHeight="24" ToolTip="' GetLang("拖拽调整顺序") '" VerticalAlignment="Center" HorizontalAlignment="Center" Cursor="Arrow">'
             . '<UniformGrid Rows="3" Columns="2" Width="10" Height="14" IsHitTestVisible="False">'
             . dot dot dot dot dot dot
             . '</UniformGrid></Button>'
@@ -4482,7 +4463,7 @@ class MainWin {
         nsAttr := ns != "" ? " " ns : ""
         nameAttr := t > 0 ? ' Name="ItemCard_' t '_' i '"' : ""
         defBg := rowSel ? "{DynamicResource TabSelBg}" : ((t > 0 && forbid) ? "{DynamicResource ListRowForbidBg}" : "{DynamicResource ControlBg}")
-        ; 宏行贴在页签内容框里，不再自绘左右/底边；高度 30（内边距 3+3，内容 24）。
+        ; 宏行最小高度 30；内容随主题字号加高，外层必须同步扩展以免裁掉控件底边。
         return '<Border' nsAttr nameAttr ' BorderBrush="{DynamicResource OutlineStroke}" ClipToBounds="False"' this._BorderSnap() '>'
             . '<Border.Style><Style TargetType="Border">'
             . '<Setter Property="CornerRadius" Value="0"/>'
@@ -4490,16 +4471,14 @@ class MainWin {
             . '<Setter Property="Margin" Value="0"/>'
             . '<Setter Property="Padding" Value="4,3,6,3"/>'
             . '<Setter Property="Background" Value="' defBg '"/>'
-            . '<Setter Property="Height" Value="30"/>'
             . '<Setter Property="MinHeight" Value="30"/>'
-            . '<Setter Property="MaxHeight" Value="30"/>'
             . '<Style.Triggers>'
             . '<DataTrigger Binding="{Binding IsAltRow}" Value="True"><Setter Property="Background" Value="{DynamicResource ListRowAltBg}"/></DataTrigger>'
             . '<DataTrigger Binding="{Binding Forbid}" Value="True"><Setter Property="Background" Value="{DynamicResource ListRowForbidBg}"/></DataTrigger>'
             . '<DataTrigger Binding="{Binding FoldForbid}" Value="True"><Setter Property="Background" Value="{DynamicResource ListRowForbidBg}"/></DataTrigger>'
             . '<DataTrigger Binding="{Binding RowSel}" Value="True"><Setter Property="Background" Value="{DynamicResource TabSelBg}"/></DataTrigger>'
             . '</Style.Triggers></Style></Border.Style>'
-            . '<Grid Height="24" VerticalAlignment="Center"' this._ItemForbidOpacityAttrs(t == 0, t, i, forbid) '>'
+            . '<Grid MinHeight="24" VerticalAlignment="Center"' this._ItemForbidOpacityAttrs(t == 0, t, i, forbid) '>'
             . this._ItemForbidOpacityStyle(t == 0)
             . '<Grid.ColumnDefinitions><ColumnDefinition Width="' this._ItemDragColW() '"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
             . '<Grid Grid.Column="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="False">'
@@ -4507,7 +4486,7 @@ class MainWin {
             . this._BuildRowSelIconXaml(t == 0, t, i, rowSel)
             . '<Grid VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,2,0">' this._BuildDragHandleXaml() '</Grid>'
             . '</Grid>'
-            . '<Grid Grid.Column="1" Height="24">'
+            . '<Grid Grid.Column="1" MinHeight="24">'
     }
 
     _ItemCardClose() {
@@ -4700,14 +4679,14 @@ class MainWin {
         box := this._FoldFieldBoxAttrs()
         if (vlMode) {
             ; 占位符绑 TextBox.Text（模板内局部名），按键即隐；不绑 FoldRemark（LostFocus 才回写）
-            return '<Grid Width="' fw '" Height="24" MinHeight="24">'
+            return '<Grid Width="' fw '" MinHeight="24">'
                 . '<TextBox Name="FoldRemarkBox" Tag="FoldRemark" Text="{Binding FoldRemark}"' box '/>'
                 . '<TextBlock Text="' ph '" IsHitTestVisible="False" VerticalAlignment="Center" Margin="1,0,1,0" HorizontalAlignment="Left" Foreground="{DynamicResource TextSub}" Opacity="0.55" FontSize="' foldFs '">'
                 . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>'
                 . '<Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=FoldRemarkBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>'
                 . '</Style></TextBlock.Style></TextBlock></Grid>'
         }
-        return '<Grid Width="' fw '" Height="24" MinHeight="24">'
+        return '<Grid Width="' fw '" MinHeight="24">'
             . '<TextBox Name="FoldRemark_' t '_' f '" Text="' this._XmlEsc(remark) '"' box '/>'
             . '<TextBlock Text="' ph '" IsHitTestVisible="False" VerticalAlignment="Center" Margin="1,0,1,0" HorizontalAlignment="Left" Foreground="{DynamicResource TextSub}" Opacity="0.55" FontSize="' foldFs '">'
             . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>'
@@ -4721,14 +4700,14 @@ class MainWin {
         box := this._FoldFieldBoxAttrs(' ToolTip="' GetLang("备注") '"')
         if (vlMode) {
             ; 占位符绑 TextBox.Text（模板内局部名），按键即隐；不绑 Remark（LostFocus 才回写）
-            return '<Grid Grid.Column="2" Height="24" MinHeight="24" Margin="-5,0,0,0">'
+            return '<Grid Grid.Column="2" MinHeight="24" Margin="-5,0,0,0">'
                 . '<TextBox Name="RemarkBox" Tag="Remark" Text="{Binding Remark}"' box '/>'
                 . '<TextBlock Text="' ph '" IsHitTestVisible="False" VerticalAlignment="Center" Margin="1,0,1,0" HorizontalAlignment="Left" Foreground="{DynamicResource TextSub}" Opacity="0.55" FontSize="' foldFs '">'
                 . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>'
                 . '<Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=RemarkBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>'
                 . '</Style></TextBlock.Style></TextBlock></Grid>'
         }
-        return '<Grid Grid.Column="2" Height="24" MinHeight="24" Margin="-5,0,0,0">'
+        return '<Grid Grid.Column="2" MinHeight="24" Margin="-5,0,0,0">'
             . '<TextBox Name="Remark_' t '_' i '" Text="' this._XmlEsc(remark) '"' box '/>'
             . '<TextBlock Text="' ph '" IsHitTestVisible="False" VerticalAlignment="Center" Margin="1,0,1,0" HorizontalAlignment="Left" Foreground="{DynamicResource TextSub}" Opacity="0.55" FontSize="' foldFs '">'
             . '<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>'
@@ -5225,7 +5204,7 @@ class MainWin {
             . '<Style.Triggers><DataTrigger Binding="{Binding FoldForbid}" Value="True"><Setter Property="Opacity" Value="' this._ForbidContentOpacity() '"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>'
             . this._BuildFoldDividerXaml(true)
             . this._BuildFoldHeaderRowXaml(0, 0, "", true)
-            . '<Grid Margin="0,4,0,0" Visibility="{Binding ShowTKRowVisibility}">'
+            . '<Grid Margin="0,4,0,0"><Grid.Style><Style TargetType="Grid"><Setter Property="Visibility" Value="{Binding ShowTKRowVisibility}"/><Style.Triggers><DataTrigger Binding="{Binding Folded}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>'
             . '<Grid.ColumnDefinitions>' this._BuildFoldLayoutColDefs() '</Grid.ColumnDefinitions>'
             . '<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">'
             . this._TriggerEntries('<Button Tag="FoldTKEdit" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml("", true, "FoldTKStr") '</Button>', true, "FoldTKEdit")
@@ -5463,9 +5442,9 @@ class MainWin {
     _TwoColRow(ns, label1, name1, val1, label2, name2, val2) {
         return '<StackPanel ' ns ' Orientation="Horizontal" Margin="0,4,0,4">'
             . '<TextBlock Text="' this._XmlEsc(label1) '" Width="120" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="12"/>'
-            . '<TextBox Name="' name1 '" Text="' this._XmlEsc(val1) '" Width="220" Height="24" MinHeight="24" Padding="4,0" VerticalContentAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
+            . '<TextBox Name="' name1 '" Text="' this._XmlEsc(val1) '" Width="220" MinHeight="24" Padding="4,0" VerticalContentAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '<TextBlock Text="' this._XmlEsc(label2) '" Width="120" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="12"/>'
-            . '<TextBox Name="' name2 '" Text="' this._XmlEsc(val2) '" Width="220" Height="24" MinHeight="24" Padding="4,0" VerticalContentAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
+            . '<TextBox Name="' name2 '" Text="' this._XmlEsc(val2) '" Width="220" MinHeight="24" Padding="4,0" VerticalContentAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '</StackPanel>'
     }
 
@@ -5518,7 +5497,7 @@ class MainWin {
             this._setHelpSeq += 1
             name := "BtnSetHelp_" this._setHelpSeq
             this._setHelpMap[name] := {title: title != "" ? title : GetLang("说明"), text: tip, fn: helpFnByLabel.Has(title) ? helpFnByLabel[title] : ""}
-            return '<Button Name="' name '" Content="?" Width="24" Height="24" MinHeight="24" Padding="4,2" Margin="6,0,0,0" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Cursor="Hand"/>'
+            return '<Button Name="' name '" Content="?" Width="24" MinHeight="24" Padding="4,2" Margin="6,0,0,0" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Cursor="Hand"/>'
         }
         afterHint(ctrl, hint) {
             if (InStr(ctrl, "<Slider"))
@@ -6797,7 +6776,7 @@ class MainWin {
         tipAttr := tip == "" ? "" : ' ToolTip="' this._XmlEsc(tip) '"'
         return '<StackPanel ' ns ' Orientation="Horizontal" Margin="0,4,16,4"' tipAttr '>'
             . '<TextBlock Text="' this._XmlEsc(label) '" Width="120" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="12"/>'
-            . '<TextBox Name="' name '" Text="' val '" Width="100" Height="24" MinHeight="24" Padding="4,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
+            . '<TextBox Name="' name '" Text="' val '" Width="100" MinHeight="24" Padding="4,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="11" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
             . '</StackPanel>'
     }
 
@@ -6824,7 +6803,7 @@ class MainWin {
         tipAttr := tip == "" ? "" : ' ToolTip="' this._XmlEsc(tip) '"'
         return '<StackPanel ' ns ' Orientation="Horizontal" Margin="0,4,16,4"' tipAttr '>'
             . '<TextBlock Text="' this._XmlEsc(label) '" Width="80" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="12"/>'
-            . '<ComboBox Name="' name '" Width="130" Height="24" MinHeight="24" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"' selAttr '>' itemsXaml '</ComboBox>'
+            . '<ComboBox Name="' name '" Width="130" MinHeight="24" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"' selAttr '>' itemsXaml '</ComboBox>'
             . '</StackPanel>'
     }
 

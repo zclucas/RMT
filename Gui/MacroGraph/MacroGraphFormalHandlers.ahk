@@ -1454,7 +1454,7 @@ class MacroGraphFormalHandlersMixin {
                 this._FormalSetVis(id, ps "Row_" id, chainVis)
                 this._FormalSetVis(id, ps "NameRow_" id, chainVis && on)
                 this._FormalSetVis(id, ps "CmpRow_" id, chainVis && on)
-                this._FormalSetVis(id, ps "VarRow_" id, chainVis && on && cmp != 7)
+                this._FormalSetVis(id, ps "VarRow_" id, chainVis && on && !IsCompareExistVar(cmp))
                 prevOn := chainVis && on
             }
         }
@@ -1474,7 +1474,7 @@ class MacroGraphFormalHandlersMixin {
             ci := A_Index
             p := "IfProC" ci
             lt := data.LogicTypeArr[ci]
-            this.ui.Update(p "LogicCmb_" id, "SelectedIndex", Max(0, lt - 1))
+            this.ui.Update(p "LogicCmb_" id, "SelectedIndex", CmdEnumIndex(lt, CmdEnumLogicNames()))
             condiN := data.VariNameArr[ci].Length
             loop 4 {
                 slot := A_Index
@@ -1563,7 +1563,7 @@ class MacroGraphFormalHandlersMixin {
             this._FormalSetVis(id, p "TogRow_" id, cardVis)
             this._FormalSetVis(id, p "NameRow_" id, cardVis && tog)
             this._FormalSetVis(id, p "CmpRow_" id, cardVis && tog)
-            this._FormalSetVis(id, p "VarRow_" id, cardVis && tog && cmp != 7)
+            this._FormalSetVis(id, p "VarRow_" id, cardVis && tog && !IsCompareExistVar(cmp))
             prevOn := chainVis && tog
         }
     }
@@ -1625,7 +1625,7 @@ class MacroGraphFormalHandlersMixin {
             return
         d := this._FormalDFromId(id)
         condiType := d.HasOwnProp("condiType") ? d.condiType : 1
-        showCondi := condiType != 1
+        showCondi := CmdEnumZh(condiType, CmdEnumCondiNames()) != "无"
         folded := this._NodeFolded(id)
         this._FormalSetVis(id, "LoopLogicRow_" id, showCondi && !folded)
         this._FormalSetVis(id, "LoopCondiSumBox_" id, showCondi && folded)
@@ -1642,7 +1642,7 @@ class MacroGraphFormalHandlersMixin {
             this._FormalSetVis(id, p "TogRow_" id, cardVis)   ; 整块条件（含分隔线）随条件类型 + 逐级展开显隐
             this._FormalSetVis(id, p "NameRow_" id, cardVis && tog)
             this._FormalSetVis(id, p "CmpRow_" id, cardVis && tog)
-            this._FormalSetVis(id, p "VarRow_" id, cardVis && tog && cmp != 7)
+            this._FormalSetVis(id, p "VarRow_" id, cardVis && tog && !IsCompareExistVar(cmp))
             prevOn := chainVis && tog
         }
     }
@@ -1968,14 +1968,25 @@ class MacroGraphFormalHandlersMixin {
             return
         if (!IsObject(state))
             state := Map()
-        typeNames := GetLangArr(this._WaitTypeKeys())
+        typeNames := CmdEnumWaitEditorLabels()
         dateUnits := GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
         this._EnsureComboInState(state, "WaitTypeCmb_" id, typeNames)
         this._EnsureComboInState(state, "WaitDateUnitCmb_" id, dateUnits)
-        if (state.Has("WaitTypeCmb_" id) && state["WaitTypeCmb_" id] != "")
-            data.WaitType := GetLangKey(state["WaitTypeCmb_" id])
-        if (state.Has("WaitInterval_" id) && state["WaitInterval_" id] != "")
-            data.Interval := state["WaitInterval_" id]
+        if (state.Has("WaitTypeCmb_" id) && state["WaitTypeCmb_" id] != "") {
+            for n, label in typeNames {
+                if (state["WaitTypeCmb_" id] == label) {
+                    data.WaitType := this._WaitTypeKeys()[n]
+                    break
+                }
+            }
+        }
+        if (state.Has("WaitInterval_" id)) {
+            iv := state["WaitInterval_" id]
+            if (IsNumber(iv) && Number(iv) > 0)
+                data.Interval := iv
+            else
+                this.ui.Update("WaitInterval_" id, "Text", data.Interval)
+        }
         t := CmdEnumWait(data.WaitType)
         panel := this._WaitPanelName(t)
         if (panel == "Var") {
@@ -1985,7 +1996,7 @@ class MacroGraphFormalHandlersMixin {
                 data.Param2 := state["WaitVarVal_" id]
         } else if (panel == "Key") {
             if (state.Has("WaitKey_" id))
-                data.Param1 := state["WaitKey_" id]
+                data.Param1 := WaitNormKeyName(state["WaitKey_" id])
         } else if (panel == "Range") {
             if (state.Has("WaitSX_" id))
                 data.StartPosX := state["WaitSX_" id]
@@ -2351,8 +2362,8 @@ class MacroGraphFormalHandlersMixin {
         condiType := d.HasOwnProp("condiType") ? d.condiType : 1
         logicType := d.HasOwnProp("logicType") ? d.logicType : 1
         this.ui.Update("LoopCount_" id, "Text", this._LoopCountText(d))
-        this.ui.Update("LoopCondiCmb_" id, "SelectedIndex", Max(0, condiType - 1))
-        this.ui.Update("LoopLogicCmb_" id, "SelectedIndex", Max(0, logicType - 1))
+        this.ui.Update("LoopCondiCmb_" id, "SelectedIndex", CmdEnumIndex(condiType, CmdEnumCondiNames()))
+        this.ui.Update("LoopLogicCmb_" id, "SelectedIndex", CmdEnumIndex(logicType, CmdEnumLogicNames()))
         loop 4 {
             slot := A_Index
             p := "LoopC" slot
@@ -2380,7 +2391,7 @@ class MacroGraphFormalHandlersMixin {
         saveName := d.HasOwnProp("saveName") ? d.saveName : GetLang("结果")
         trueVal := d.HasOwnProp("trueValue") ? d.trueValue : 1
         falseVal := d.HasOwnProp("falseValue") ? d.falseValue : 0
-        this.ui.Update("IfLogicCmb_" id, "SelectedIndex", Max(0, logicType - 1))
+        this.ui.Update("IfLogicCmb_" id, "SelectedIndex", CmdEnumIndex(logicType, CmdEnumLogicNames()))
         loop 4 {
             slot := A_Index
             p := "IfC" slot
@@ -2497,7 +2508,7 @@ class MacroGraphFormalHandlersMixin {
             minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
             maxv := d.HasOwnProp("maxVar" slot) ? d["maxVar" slot] : "10"
             this.ui.Update(p "Tog_" id, "IsChecked", on ? "True" : "False")
-            this.ui.Update(p "OpCmb_" id, "SelectedIndex", ot - 1)
+            this.ui.Update(p "OpCmb_" id, "SelectedIndex", CmdEnumIndex(CmdEnumOpera(ot), CmdEnumOperaNames()))
             this.ui.Update(p "Name_" id, "Text", GetLang(vn))
             this.ui.Update(p "Copy_" id, "Text", GetLang(cv))
             this.ui.Update(p "CopyTxt_" id, "Text", cv)   ; 字符纯文本框（与数值下拉共享 copyVar 数据）
@@ -2591,8 +2602,7 @@ class MacroGraphFormalHandlersMixin {
             return GetLang(CmdEnumZh(d.HasOwnProp("ssType") ? d.ssType : "屏幕抓图", CmdEnumShotNames()))
         }
         if (d.type == GetLang("等待")) {
-            keys := this._WaitTypeKeys()
-            return GetLang(CmdEnumWait(d.HasOwnProp("waitType") ? d.waitType : "等待变量值"))
+            return GetLang(SubStr(CmdEnumWait(d.HasOwnProp("waitType") ? d.waitType : "等待变量值"), 3))
         }
         if (d.type == GetLang("等待确定"))
             return GetLang(d.HasOwnProp("wcType") ? d.wcType : "继续")

@@ -258,7 +258,7 @@ class ViGEmXb360 extends ViGEmTarget {
 
     __New() {
         static buttons := Map("A", 4096, "B", 8192, "X", 16384, "Y", 32768, "LB", 256, "RB", 512, "LS", 64, "RS", 128,
-            "Back", 32, "Start", 16, "Xbox", 1024)
+            "Back", 32, "Start", 16, "Xbox", 1024, "Guide", 1024)
         static axes := Map("LX", 2, "LY", 3, "RX", 4, "RY", 5, "LT", 0, "RT", 1)
 
         this.Buttons := Map()

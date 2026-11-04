@@ -44,7 +44,7 @@ TrackUp(bucket, key, tableItem := "", index := 0) {
 }
 
 ClearDpadHoldState(bucket, tableItem := "", index := 0) {
-    for dpadKey in ["Up", "Down", "Left", "Right"] {
+    for dpadKey in ["JoyDpadUp", "JoyDpadDown", "JoyDpadLeft", "JoyDpadRight"] {
         if (!bucket.Has(dpadKey))
             continue
         bucket.Delete(dpadKey)

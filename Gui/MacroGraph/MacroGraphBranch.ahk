@@ -93,7 +93,7 @@ class MacroGraphBranchMixin {
         }
         this.ui.Update("LoopInlineBody_" id, "Visibility", willFold ? "Visible" : "Collapsed")
         d := this._FormalDFromId(id)
-        showCondi := (d.HasOwnProp("condiType") ? d.condiType : 1) != 1
+        showCondi := CmdEnumZh(d.HasOwnProp("condiType") ? d.condiType : 1, CmdEnumCondiNames()) != "无"
         this.ui.Update("LoopCondiSumBox_" id, "Visibility", (willFold && showCondi) ? "Visible" : "Collapsed")
         this._RefreshFormalLoopVisibility(id)  ; 同步逻辑/条件卡显隐（收起时隐藏）
         this.ui.Update("SFold_" id, "Content", willFold ? "▶" : "▼")

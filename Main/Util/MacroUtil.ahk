@@ -1684,14 +1684,62 @@ OnPressKey(tableItem, cmd, index) {
     }
 }
 
+; 滚轮/亮度键只有按下事件；共享给热键绑定与替换释放逻辑（本文件也由 Worker 加载）。
+IsPulseTriggerKey(keyStr) {
+    k := StrLower(keyStr)
+    return InStr(k, "wheel") || InStr(k, "bright_")
+}
+
 ;按键替换。热键绑定的是表 ID + 条目 ID，按下时再解析当前行。
 ; 行被删除或换序后，旧下标会指向空数组（Invalid index: 1），不能再用行号取 Mode。
+ReplaceKeysUseJoy(replaceKey) {
+    for key in StrSplit(replaceKey, ",") {
+        if (InStr(MySoftData.GetJoyFriendlyKey(Trim(key)), "Joy") == 1)
+            return true
+    }
+    return false
+}
+
 OnReplaceDownKey(tableID, itemID, *) {
     ReplaceKeySend(tableID, itemID, 1)
+    resolved := ResolveMacroItem(tableID, itemID)
+    if (!resolved || resolved.Item.HoldKey.Count == 0)
+        return
+    item := resolved.Item
+    ; 手柄由 JoyMacro 提供松开边沿；键鼠补充物理键态检测，覆盖组合键和切换窗口后丢失的 up。
+    if (InStr(item.TK, "Joy"))
+        return
+    if (!item.HasOwnProp("ReplaceReleaseTimer") || item.ReplaceReleaseTimer == "")
+        item.ReplaceReleaseTimer := WatchReplaceKeyRelease.Bind(tableID, itemID, item.TK)
+    ; 滚轮只有按下事件，替换为一次短按，不能让虚拟手柄一直按住。
+    SetTimer(item.ReplaceReleaseTimer, IsPulseTriggerKey(item.TK) ? -50 : 30)
 }
 
 OnReplaceUpKey(tableID, itemID, *) {
     ReplaceKeySend(tableID, itemID, 0)
+}
+
+WatchReplaceKeyRelease(tableID, itemID, triggerKey) {
+    resolved := ResolveMacroItem(tableID, itemID)
+    if (!resolved) {
+        SetTimer(, 0)
+        return
+    }
+    released := true
+    if (!IsPulseTriggerKey(triggerKey))
+        try released := !AreKeysPressed(triggerKey)
+    if (released || MainSoftData.IsSuspend || resolved.Item.HoldKey.Count == 0)
+        OnReplaceUpKey(tableID, itemID)
+}
+
+; 重绑/停用/退出时释放替换项；替换不经过宏运行状态机，ColorState 不会标记为运行中。
+ReleaseReplaceKeys() {
+    for tableItem in MySoftData.TableInfo {
+        if (tableItem.Symbol != "Replace")
+            continue
+        for item in tableItem.Items
+            OnReplaceUpKey(tableItem.ID, item.ID)
+    }
 }
 
 ReplaceKeySend(tableID, itemID, state) {
@@ -1701,6 +1749,17 @@ ReplaceKeySend(tableID, itemID, state) {
     tableItem := resolved.Table
     item := resolved.Item
     index := resolved.Index
+    if (!state) {
+        if (item.HasOwnProp("ReplaceReleaseTimer") && item.ReplaceReleaseTimer != "") {
+            SetTimer(item.ReplaceReleaseTimer, 0)
+            item.ReplaceReleaseTimer := ""
+        }
+        ; 按实际发送过的键及通道松开，编辑替换内容或切换模式后也能释放原来的输出。
+        ReleaseTableItemHoldKeys(tableItem, index)
+        return
+    }
+    if (MainSoftData.IsSuspend)
+        return
     infos := StrSplit(item.Macro, ",")
     mode := 1
     try mode := Integer(item.Mode)
@@ -1709,12 +1768,21 @@ ReplaceKeySend(tableID, itemID, state) {
     actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
     if (!actionMap.Has(mode))
         mode := 1
-    action := actionMap[mode]
+    baseAction := actionMap[mode]
     loop infos.Length {
-        assistKey := infos[A_Index]
+        assistKey := Trim(infos[A_Index])
         assistKey := StrReplace(assistKey, "逗号", ",")
         if (assistKey = "")
             continue
+        assistKey := MySoftData.GetJoyFriendlyKey(assistKey)
+        ; 每个替换键独立分发，允许键鼠与手柄混选；手柄输出不受键鼠模拟模式影响。
+        action := baseAction
+        if (InStr(assistKey, "JoyAxis") == 1)
+            action := SendJoyAxisKey
+        else if (InStr(assistKey, "JoyDpad") == 1)
+            action := SendJoyDpadKey
+        else if (InStr(assistKey, "Joy") == 1)
+            action := SendJoyBtnKey
         action(assistKey, state, tableItem, index)
     }
 }

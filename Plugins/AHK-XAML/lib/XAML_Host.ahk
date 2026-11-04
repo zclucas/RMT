@@ -516,10 +516,10 @@ class XAMLHost {
         return flag
     }
 
-    ; 定位针（浮窗位置 / F1）在 Segoe Fluent 里留白多，同字号会比旁边的铬钮小一圈。
+    ; 框选/取点定位针统一尺寸：兼顾字体与矢量回退，避免实心图标压过相邻按钮。
     static _ChromeGlyphDrawSize(glyph, glyphSize) {
         if (glyph = Chr(0xECAF))
-            return XAMLHost.FormatFontSize(glyphSize * 1.45)
+            return XAMLHost.FormatFontSize(glyphSize * 1.05)
         return glyphSize
     }
 
@@ -819,9 +819,12 @@ class XAMLHost {
     static ApplyDialogVisualScale(&xaml, skip := false) {
         if (skip || InStr(xaml, 'x:Key="RmtFluidDialogLayout"'))
             return
-        if (InStr(xaml, 'AllowsTransparency="True"'))
+        winEnd := InStr(xaml, ">")
+        windowHead := winEnd ? SubStr(xaml, 1, winEnd) : ""
+        ; Popup 也会声明透明，不能把下拉弹层误判为透明窗口。
+        if (InStr(windowHead, 'AllowsTransparency="True"'))
             return
-        if (InStr(xaml, "SizeToContent=") && InStr(xaml, "WidthAndHeight"))
+        if (InStr(windowHead, "SizeToContent=") && InStr(windowHead, "WidthAndHeight"))
             return
         ; 用户已保存尺寸的窗口（如变量监视器）不再二次放大，避免越开越大
         winEnd := InStr(xaml, ">")
@@ -2313,6 +2316,31 @@ class XAMLHost {
         }
     }
 
+    ; 首帧就使用已排队的颜色；保留队列，Loaded 时仍同步引擎/应用级资源。
+    BakeQueuedColorResources() {
+        if (!this.HasOwnProp("_updateQueue"))
+            return
+        colors := Map()
+        for item in this._updateQueue {
+            entries := item.type == "batch" ? item.arr : [{ControlName: item.ctrl, PropertyName: item.prop, Value: item.val}]
+            for entry in entries {
+                if (entry.ControlName == "Resource" && RegExMatch(String(entry.Value), "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$"))
+                    colors[entry.PropertyName] := entry.Value
+            }
+        }
+        for key, color in colors {
+            ; 资源名仅接受标识符，避免将任意更新内容解释为正则或 XAML。
+            if (!RegExMatch(key, "^\w+$"))
+                continue
+            pattern := '<SolidColorBrush\b[^>]*\bx:Key="' key '"[^>]*/>'
+            brush := '<SolidColorBrush x:Key="' key '" Color="' color '" />'
+            if (RegExMatch(this.xaml, pattern))
+                this.xaml := RegExReplace(this.xaml, pattern, brush)
+            else if (!InStr(this.xaml, 'x:Key="' key '"'))
+                this.xaml := StrReplace(this.xaml, "</Window.Resources>", brush "</Window.Resources>")
+        }
+    }
+
     Show(assetPath := "") {
         targetExe := this._EnsureDaemon()
         if (targetExe == "")
@@ -2331,14 +2359,17 @@ class XAMLHost {
             ; Inline mode: embed XAML + events directly in the CREATE_WINDOW message
             ; This eliminates the Engine|Ready -> XAML_PAYLOAD round-trip entirely
             eventBindings := this._BuildEventBindings()
+            ; 所有窗口都在创建前写入最终主题色，不能等异步 LoadedHwnd 再刷默认配色。
+            this.BakeQueuedColorResources()
             ; 诊断：引擎建窗后有一大段耗时在逐条 BindEvent，先记下条数便于定位
             try FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " +" A_TickCount " [Show] id=" this.id " events=" (StrLen(eventBindings) ? StrSplit(eventBindings, ",").Length : 0) " xamlKB=" Round(StrLen(this.xaml) / 1024) "`n", A_WorkingDir "\Log\XamlUiDiag.log", "UTF-8")
             cleanXaml := StrReplace(this.xaml, "%resources%", "")
             ; 只改窗口本身的 Transparent，避免把标题栏关闭/最小化钮也刷成 BgColor（和标题栏色不一致）
-            if (!InStr(this.xaml, 'AllowsTransparency="True"')) {
-                winEnd := InStr(cleanXaml, ">")
-                if (winEnd) {
-                    head := SubStr(cleanXaml, 1, winEnd)
+            winEnd := InStr(cleanXaml, ">")
+            if (winEnd) {
+                head := SubStr(cleanXaml, 1, winEnd)
+                ; Popup 的透明属性不代表顶级窗口透明。
+                if (!InStr(head, 'AllowsTransparency="True"')) {
                     head := StrReplace(head, 'Background="Transparent"', 'Background="{DynamicResource BgColor}"')
                     cleanXaml := head SubStr(cleanXaml, winEnd + 1)
                 }
@@ -2372,7 +2403,7 @@ class XAMLHost {
                 }
             }
             XAMLHost.ApplyDialogVisualScale(&cleanXaml, this.IsFontScaleSkipped())
-            inlinePayload := cleanXaml "`n---AHK-XAML-EVENTS---`n" eventBindings
+            inlinePayload := "#INIT#" cleanXaml "`n---AHK-XAML-EVENTS---`n" eventBindings
             ; 后台启动（rmt -min）：让引擎建完窗立刻收起，避免「先显示再被隐藏」的那一下
             if (this.HasOwnProp("_startHidden") && this._startHidden)
                 inlinePayload := "#HIDDEN#" inlinePayload
@@ -2556,7 +2587,7 @@ class XAMLHost {
                 instance._pendingClose := false
                 try DllCall("user32\PostMessageW", "Ptr", instance.wpfHwnd, "UInt", 0x0010, "Ptr", 0, "Ptr", 0)
             }
-            ; Opacity=0 的隐藏由引擎 SourceInitialized+LWA_ALPHA 完成；勿 WinHide（会白壳闪一下再藏）
+            ; 引擎在 HWND 显示前遮住首帧，等初始化完成和 WPF 绘制完成后才显示。
             if instance.HasOwnProp("_updateQueue") {
                 ; 排队期间攒下的更新合并成**一次** BatchUpdate 发出去。
                 ; 量最大的来源是 ApplyXamlTheme（主题 ~30 条 Resource），本身已是一次批量；
@@ -2587,7 +2618,6 @@ class XAMLHost {
                     XAMLHost.SyncCmdEditorTitleFont(instance)
                 }
             }
-            ; 窗口创建时就是最终样子，这里只把队列内容和字号刷进去，不做可见性处理。
         }
         if (ctrlName == "Window" && eventName == "Closed") {
             instance.wpfHwnd := 0
@@ -2643,6 +2673,14 @@ class XAMLHost {
                 matchNames.Push(baseEventName)
         }
         hasEvent := matchNames.Length > 0
+        ; Loaded 回调仍在定时器中执行；最后一个回调结束后才通知引擎揭示窗口。
+        if (ctrlName == "Window" && eventName == "LoadedHwnd") {
+            instance._pendingLoadedCallbacks := 0
+            for matchName in matchNames
+                instance._pendingLoadedCallbacks += instance.events[ctrlName][matchName].Length
+            if (!instance._pendingLoadedCallbacks)
+                instance.Update("Window", "InitialUpdateComplete", "")
+        }
         if (!IsSet(XAML_ENABLE_LOGGING) || XAML_ENABLE_LOGGING) {
             try FileAppend("OnCopyData dispatch check: " ctrlName "." eventName " hasEvent=" (hasEvent ? "true" : "false") " eventsCount=" (instance.events.Has(ctrlName) ? instance.events[ctrlName].Count : 0) "`n", XAMLHost.GetLogDir() "\AhkTrace.log", "UTF-8")
         }
@@ -2661,7 +2699,9 @@ class XAMLHost {
                     cb := evtObj.Callback
 
                     ; Handle optional event key args without breaking older 3-param callbacks
-                    if (extraArg != "")
+                    if (ctrlName == "Window" && eventName == "LoadedHwnd")
+                        SetTimer(ObjBindMethod(instance, "_RunLoadedCallback", cb, stateMap), -1, evtObj.Priority)
+                    else if (extraArg != "")
                         SetTimer(cb.Bind(stateMap, ctrlName, { Key: extraArg }), -1, evtObj.Priority)
                     else
                         SetTimer(cb.Bind(stateMap, ctrlName, baseEventName), -1, evtObj.Priority)
@@ -2669,6 +2709,15 @@ class XAMLHost {
             }
         }
         return 1
+    }
+
+    _RunLoadedCallback(callback, state) {
+        try callback.Call(state, "Window", "LoadedHwnd")
+        finally {
+            this._pendingLoadedCallbacks -= 1
+            if (!this._pendingLoadedCallbacks && this.wpfHwnd)
+                this.Update("Window", "InitialUpdateComplete", "")
+        }
     }
 
     ; =========================================================================
@@ -2733,8 +2782,10 @@ class XAMLHost {
     ;   state := ui.Query("TxtName", "SldPower") ; multi → Map
     ;   all := ui.Query("*")                     ; wildcard → Map of all tracked
     Query(names*) {
-        if (!this.wpfHwnd || names.Length == 0)
-            return (names.Length == 1) ? "" : Map()
+        if (names.Length == 0)
+            return Map()
+        if (!this.wpfHwnd)
+            return this._QueryQueued(names*)
 
         ; Build CSV of control names
         csv := ""
@@ -2768,6 +2819,59 @@ class XAMLHost {
         if (names.Length == 1 && names[1] != "*")
             return (Type(result) == "Map" && result.Has(names[1])) ? result[names[1]] : ""
         return Type(result) == "Map" ? result : Map()
+    }
+
+    ; Show 前 Update/BatchUpdate 尚在队列里，初始化联动也必须能读到刚写入的值。
+    ; 只投影显式写入的属性和下拉候选项，不模拟布局；建窗后始终以引擎查询为准。
+    _QueryQueued(names*) {
+        controls := Map()
+        if (this.HasOwnProp("_updateQueue")) {
+            for pending in this._updateQueue {
+                entries := pending.type == "batch" ? pending.arr
+                    : [{ControlName: pending.ctrl, PropertyName: pending.prop, Value: pending.val}]
+                for entry in entries {
+                    if (!entry.HasProp("ControlName") || !entry.HasProp("PropertyName") || !entry.HasProp("Value"))
+                        continue
+                    name := entry.ControlName, prop := entry.PropertyName, value := String(entry.Value)
+                    if (!controls.Has(name))
+                        controls[name] := {props: Map(), items: [], hasItems: false, value: ""}
+                    c := controls[name]
+                    c.props[prop] := value
+                    switch prop {
+                        case "ClearItems":
+                            c.items := [], c.hasItems := true, c.value := ""
+                            c.props["Text"] := "", c.props["SelectedIndex"] := "-1"
+                        case "AddItem":
+                            c.items.Push(value)
+                        case "SelectedIndex":
+                            c.value := ""
+                            if (c.hasItems && IsInteger(value) && value >= 0 && value < c.items.Length)
+                                c.value := c.items[Integer(value) + 1]
+                            c.props["Text"] := c.value
+                        case "Text", "Password", "Value", "SelectedItem", "SelectedValue", "SelectedDate":
+                            c.value := value
+                        case "IsChecked":
+                            c.value := (value = "True" || value = "1") ? "True" : "False"
+                            c.props[prop] := c.value
+                    }
+                }
+            }
+        }
+        wanted := names
+        if (names.Length == 1 && names[1] == "*") {
+            wanted := []
+            for name in this.tracked
+                wanted.Push(name)
+        }
+        result := Map()
+        for query in wanted {
+            parts := StrSplit(query, ">", , 2)
+            if (!controls.Has(parts[1]))
+                continue
+            c := controls[parts[1]]
+            result[query] := parts.Length == 1 ? c.value : c.props.Get(parts[2], "")
+        }
+        return (names.Length == 1 && names[1] != "*") ? result.Get(names[1], "") : result
     }
 
     ; =========================================================================

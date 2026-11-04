@@ -183,6 +183,7 @@ internal static class RmtWindowFrame
 
     static bool ShouldShow(Window w)
     {
+        if (RmtFirstFrame.IsPending(w)) return false;
         if (w == null || !w.IsVisible || w.Opacity < 0.05) return false;
         if (w.WindowState == WindowState.Minimized) return false;
         IntPtr hwnd = IntPtr.Zero;

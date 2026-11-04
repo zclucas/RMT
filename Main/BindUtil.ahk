@@ -13,6 +13,7 @@ RecordMacroHotkey(hotkeyStr) {
 
 UnbindAllMacroHotkeys() {
     global BoundMacroHotkeyList
+    ReleaseReplaceKeys()
     if (!IsSet(BoundMacroHotkeyList) || !IsObject(BoundMacroHotkeyList))
         return 0
     removed := 0
@@ -29,13 +30,6 @@ UnbindAllMacroHotkeys() {
     }
     BoundMacroHotkeyList := []
     return removed
-}
-
-; 滚轮/亮度键是一次性脉冲键：只产生「按下」，没有「松开」事件。
-; 给它们注册 "xxx up" 会抛非法热键，进而打断后续注册，必须跳过。
-IsPulseTriggerKey(keyStr) {
-    k := StrLower(keyStr)
-    return InStr(k, "wheel") || InStr(k, "bright_")
 }
 
 ; 该「裸键名」是否已被宏触发键占用（只算无修饰键的形式，如 $*WheelDown）。
@@ -265,6 +259,7 @@ OnKillAllMacro(*) {
     global MySoftData, MyWorkPool
     ; 只停正在跑的宏，不要取消 AI 对话；取消走输入框暂停按钮
 
+    ReleaseReplaceKeys()
     CloseMenuWheel()
 
     MySoftData.MacroRunningCount := 0
@@ -525,6 +520,7 @@ OnExitSoft(*) {
     global MyPToken, MyChineseOcr, MyEnglishOcr, MyUIMacroGui, MyWorkPool, MyVoiceEngine
     global MainSoftData, MySoftData, SettingFile, SettingSection, MyMainWin
 
+    try ReleaseReplaceKeys()
     try {
         if (IsSet(MyMainWin) && IsObject(MyMainWin))
             MyMainWin._AiPersistAllTabs()
@@ -733,6 +729,7 @@ ResetJoyMacroMaps() {
 }
 
 BindTabHotKey() {
+    global ViGJoy, CurViGJoyType
     tableIndex := 0
     registerMsg := "=== Registered Hotkeys ===`n"
 
@@ -760,6 +757,14 @@ BindTabHotKey() {
 
             if (item.Macro == "")
                 continue
+
+            ; 热重载新增手柄替换时提前创建设备，避免等首次按下才连接而丢失首个报告。
+            if (symbol == "Replace" && ReplaceKeysUseJoy(item.Macro)) {
+                MySoftData.HasJoyMacro := true
+                wantJoyType := MainSoftData.JoyType == "DS4" ? "DS4" : "Xbox"
+                if (!IsSet(ViGJoy) || !IsSet(CurViGJoyType) || CurViGJoyType != wantJoyType)
+                    InitViGEmPlugin()
+            }
 
             rawKey := item.TK
 

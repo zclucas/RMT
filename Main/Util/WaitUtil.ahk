@@ -576,10 +576,11 @@ WaitCalcTargetTime(tableItem, index, Data) {
     switch unit {
         case "分钟", "小时", "天":
             raw := Trim(String(raw))
-            if (!IsNumber(raw))
+            if (!IsNumber(raw) || Number(raw) < 0)
                 return ""
-            span := unit == "分钟" ? "Minutes" : (unit == "小时" ? "Hours" : "Days")
-            return DateAdd(A_Now, Integer(raw), span)
+            seconds := Number(raw) * (unit == "分钟" ? 60 : (unit == "小时" ? 3600 : 86400))
+            try return DateAdd(A_Now, Round(seconds), "Seconds")
+            return ""
         case "具体时间":
             return WaitParseDateTime(raw)
         case "时间变量":
@@ -594,11 +595,15 @@ WaitCalcTargetTime(tableItem, index, Data) {
                 found := true
             if (!found)
                 return ""
+            ; 时间指令产生的 YYYYMMDDHHMMSS 不能误当作毫秒 Unix 时间戳。
+            if (RegExMatch(String(v), "^\d{14}$") && WaitValidTimestamp(String(v)))
+                return String(v)
             if (IsNumber(v)) {
                 n := Integer(v)
                 if (n > 9999999999)
                     n := n // 1000
-                return DateAdd("19700101000000", n, "Seconds")
+                try return DateAdd("19700101000000", n, "Seconds")
+                return ""
             }
             return WaitParseDateTime(String(v))
     }
@@ -612,15 +617,17 @@ WaitParseDateTime(s) {
         return ""
     if (RegExMatch(s, "^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$", &tm)) {
         target := Format("{}{:02}{:02}{:02}", A_YYYY A_MM A_DD, tm[1], tm[2], (tm.Count >= 3 && tm[3] != "") ? tm[3] : 0)
+        if (!WaitValidTimestamp(target))
+            return ""
         if (target <= A_Now)
             target := DateAdd(target, 1, "Days")
         return target
     }
     digits := RegExReplace(s, "\D")
-    if (StrLen(digits) >= 14)
-        return SubStr(digits, 1, 14)
-    if (StrLen(digits) == 8)
-        return digits "000000"
+    if (RegExMatch(s, "^\d{14}$"))
+        return WaitValidTimestamp(s) ? s : ""
+    if (RegExMatch(s, "^\d{8}$"))
+        return WaitValidTimestamp(s "000000") ? s "000000" : ""
     if (RegExMatch(s, "(\d{4})[-/年. ](\d{1,2})[-/月. ](\d{1,2})", &m)) {
         y := m[1]
         mo := Format("{:02}", m[2])
@@ -631,9 +638,19 @@ WaitParseDateTime(s) {
             mi := Format("{:02}", mt[2])
             se := (mt.Count >= 3 && mt[3] != "") ? Format("{:02}", mt[3]) : "00"
         }
-        return y mo d h mi se
+        target := y mo d h mi se
+        return WaitValidTimestamp(target) ? target : ""
     }
     return ""
+}
+
+WaitValidTimestamp(value) {
+    try {
+        DateAdd(value, 0, "Seconds")
+        return true
+    } catch {
+        return false
+    }
 }
 
 WaitHintText(waitType) {

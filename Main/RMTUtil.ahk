@@ -2122,6 +2122,14 @@ SetEditData() {
     loop MySoftData.TableInfo.Length {
         tableIndex := A_Index
         tableItem := MySoftData.TableInfo[tableIndex]
+        ; 替换表存的是键名列表，不经过宏指令解析，但也需要在启动时创建虚拟手柄。
+        if (tableItem.Symbol == "Replace") {
+            for item in tableItem.Items {
+                if (ReplaceKeysUseJoy(item.Macro))
+                    MySoftData.HasJoyMacro := true
+            }
+            continue
+        }
         isMacro := CheckIsMacroTable(tableIndex)
         if (!isMacro)
             continue
