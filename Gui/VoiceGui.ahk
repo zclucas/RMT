@@ -282,7 +282,7 @@ class VoiceGui {
         for item in this.keywords {
             name := "KwChipDel_" item.Id
             this.ui.OnEvent(name, "Click", this._OnChipDel.Bind(this, item.Id))
-            try this.ui.Update(name, "BindEvent", "Click")
+            try this.ui.BindEventBatched(name, "Click")
         }
     }
 

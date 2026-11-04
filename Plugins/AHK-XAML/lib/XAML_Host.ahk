@@ -238,6 +238,17 @@ class XAMLHost {
         }
         else if (propertyName = "FontSize" && IsNumber(valueStr))
             valueStr := String(XAMLHost.FormatFontSize(XAMLHost.ScaleFontSize(valueStr, this.IsFontScaleSkipped())))
+        ; Window.Close 必须异步：若用 SendMessage 同步关窗，WPF Closing 回调里再 SendMessage 回 AHK 会死锁，
+        ; 导致引擎卡死、之后所有 XAML 界面都打不开。
+        ; 而且必须排在下面的 wpfHwnd 判空之前：句柄还没回填（窗口刚建、LoadedHwnd 未到）时，
+        ; 关窗请求会被塞进 _updateQueue 等一个永远不会再来的 flush，窗口就关不掉了。
+        if (controlName = "Window" && (propertyName = "Close" || propertyName = "close")) {
+            if this.wpfHwnd
+                DllCall("user32\PostMessageW", "Ptr", this.wpfHwnd, "UInt", 0x0010, "Ptr", 0, "Ptr", 0) ; WM_CLOSE
+            else
+                this._pendingClose := true   ; 等 LoadedHwnd 拿到句柄后补发
+            return
+        }
         if !this.wpfHwnd {
             if !this.HasOwnProp("_updateQueue")
                 this._updateQueue := []
@@ -246,12 +257,6 @@ class XAMLHost {
         }
         if (propertyName = "FontSizeCustom")
             propertyName := "FontSize"
-        ; Window.Close 必须异步：若用 SendMessage 同步关窗，WPF Closing 回调里再 SendMessage 回 AHK 会死锁，
-        ; 导致引擎卡死、之后所有 XAML 界面都打不开。
-        if (controlName = "Window" && (propertyName = "Close" || propertyName = "close")) {
-            DllCall("user32\PostMessageW", "Ptr", this.wpfHwnd, "UInt", 0x0010, "Ptr", 0, "Ptr", 0) ; WM_CLOSE
-            return
-        }
         val := StrReplace(valueStr, "`r", "&#x0D;")
         val := StrReplace(val, "`n", "&#x0A;")
         payload := controlName "|" propertyName "|" val
@@ -268,6 +273,43 @@ class XAMLHost {
 
         DllCall("user32\SendMessageW", "Ptr", this.wpfHwnd, "UInt", 0x004A, "Ptr", 0, "Ptr", cds.Ptr)
         ; 注意：Opacity 由引擎 LWA_ALPHA 处理。禁止此处 WinHide/WinShow，否则会出现「白壳→隐藏→再显示」。
+    }
+
+    ; 窗口级鼠标移动按需开：主窗 AI 分栏、宏编辑器侧栏逻辑树都要 Window 级坐标，
+    ; 但它们常复用同一个 ui（侧栏 attach 到主窗），所以用计数而不是布尔——谁需要谁加，
+    ; 归零才关。日常没人拖时完全不回传，省掉每秒几十条全量状态报文。
+    SetWindowMouseMove(on) {
+        n := this.HasOwnProp("_winMouseMoveUsers") ? this._winMouseMoveUsers : 0
+        n += on ? 1 : -1
+        if (n < 0)
+            n := 0
+        this._winMouseMoveUsers := n
+        try this.Update("CONFIG", "MouseMoveReport", n > 0 ? "1" : "0")
+    }
+
+    ; 给动态注入的控件补挂 WPF 事件。逐条 Update(ctrl,"BindEvent",evt) 每条都是一次同步
+    ; 跨进程往返，一个折叠行 12 个按钮、一个侧栏 20 个控件就够呛。这里攒到本轮末尾，
+    ; 用引擎的 RebindEvents 批量格式（ctrl:event,ctrl:event,...）一次发完。
+    BindEventBatched(ctrl, evt) {
+        if !this.HasOwnProp("_bindBatch") {
+            this._bindBatch := []
+            this._bindBatchTick := ObjBindMethod(this, "_FlushBindBatch")
+        }
+        this._bindBatch.Push(ctrl ":" evt)
+        SetTimer(this._bindBatchTick, -1)
+    }
+
+    _FlushBindBatch() {
+        if !this.HasOwnProp("_bindBatch") || !this._bindBatch.Length
+            return
+        pending := this._bindBatch
+        this._bindBatch := []
+        batch := ""
+        for item in pending
+            batch .= item ","
+        batch := RTrim(batch, ",")
+        if (batch != "")
+            try this.Update("Window", "RebindEvents", batch)
     }
 
     BatchUpdate(updatesArray) {
@@ -2540,6 +2582,11 @@ class XAMLHost {
 
         if (ctrlName == "Window" && eventName == "LoadedHwnd") {
             instance.wpfHwnd := Integer(parts[5])
+            ; 句柄回来之前就请求过关窗（窗口刚建就被点掉）：这里补发一次
+            if (instance.HasOwnProp("_pendingClose") && instance._pendingClose) {
+                instance._pendingClose := false
+                try DllCall("user32\PostMessageW", "Ptr", instance.wpfHwnd, "UInt", 0x0010, "Ptr", 0, "Ptr", 0)
+            }
             ; 引擎在 HWND 显示前遮住首帧，等初始化完成和 WPF 绘制完成后才显示。
             if instance.HasOwnProp("_updateQueue") {
                 ; 排队期间攒下的更新合并成**一次** BatchUpdate 发出去。

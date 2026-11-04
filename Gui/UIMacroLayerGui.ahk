@@ -269,10 +269,11 @@ class UIMacroLayerGui {
             this._ClearHover()
             return
         }
-        ; 先清掉上一行的指示
+        ; 清旧行 + 画新行合并成一次下发（原先是 4 条同步往返，每次跨行都要走一遍）
+        batch := []
         if (this._hoverRow != 0) {
-            try this.ui.Update("LR" this._hoverRow, "BorderThickness", "0")
-            try this.ui.Update("LR" this._hoverRow, "BorderBrush", "Transparent")
+            batch.Push({ControlName: "LR" this._hoverRow, PropertyName: "BorderThickness", Value: "0"})
+            batch.Push({ControlName: "LR" this._hoverRow, PropertyName: "BorderBrush", Value: "Transparent"})
         }
         this._hoverRow := row
         ; 方向决定指示线画在上边还是下边——落位语义是「控件占据该行」，
@@ -280,16 +281,20 @@ class UIMacroLayerGui {
         ;   向上拖（来源行号 > 目标行号）→ 原占用者被挤向下 → 线在目标行顶部
         ;   向下拖（来源行号 < 目标行号）→ 原占用者被挤向上 → 线在目标行底部
         edge := (this._dragFrom > row) ? "0,2,0,0" : "0,0,0,2"
-        try this.ui.Update("LR" row, "BorderBrush", "{DynamicResource ActionBg}")
-        try this.ui.Update("LR" row, "BorderThickness", edge)
+        batch.Push({ControlName: "LR" row, PropertyName: "BorderBrush", Value: "{DynamicResource ActionBg}"})
+        batch.Push({ControlName: "LR" row, PropertyName: "BorderThickness", Value: edge})
+        try this.ui.BatchUpdate(batch)
     }
 
     _ClearHover() {
-        if (this._hoverRow != 0) {
-            try this.ui.Update("LR" this._hoverRow, "BorderThickness", "0")
-            try this.ui.Update("LR" this._hoverRow, "BorderBrush", "Transparent")
-        }
+        row := this._hoverRow
         this._hoverRow := 0
+        if (row == 0)
+            return
+        try this.ui.BatchUpdate([
+            {ControlName: "LR" row, PropertyName: "BorderThickness", Value: "0"},
+            {ControlName: "LR" row, PropertyName: "BorderBrush", Value: "Transparent"}
+        ])
     }
 
     ; 行按下：选中该控件，并记下拖动来源

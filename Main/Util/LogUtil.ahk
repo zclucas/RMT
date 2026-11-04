@@ -60,29 +60,19 @@ _rmtLogNotify() {
 }
 
 RMTLogDir() {
-    isWorker := IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker
-    return isWorker ? (A_ScriptDir "\..\Log") : (A_WorkingDir "\Log")
+    return CMDLogAppDir() "\Log"
 }
 
 ; ---------------- 指令显示日志路径 ----------------
 ; 配置里存的是目录（空 = 软件所在目录\Log），不是某一次浏览得到的绝对路径。
 ; 软件文件夹挪走之后，空值和下一次仍落在旧安装目录里的 Log 会自动改到当前软件目录。
 
-CMDLogInWorker() {
-    if (IsSet(MySoftData) && MySoftData.HasProp("isWorker") && MySoftData.isWorker)
-        return true
-    SplitPath(A_ScriptName, , , , &name)
-    return (name = "Work")
-}
-
+; 软件根目录由入口文件给出（主进程 GlobalUtil / Worker Thread\WorkGlobalUtil），
+; 这里只读，不再按角色拼 A_ScriptDir\..。
 CMDLogAppDir() {
-    if (CMDLogInWorker()) {
-        SplitPath(A_ScriptDir, , &parent)
-        if (parent != "")
-            return RTrim(parent, "\")
-    }
-    dir := A_WorkingDir != "" ? A_WorkingDir : A_ScriptDir
-    return RTrim(dir, "\")
+    if (IsSet(AppRootDir) && AppRootDir != "")
+        return AppRootDir
+    return RTrim(A_WorkingDir != "" ? A_WorkingDir : A_ScriptDir, "\")
 }
 
 CMDLogNorm(p) {
@@ -417,36 +407,4 @@ RMTHandleError(err, cmdType, ehCfg := "", execFunc := 0) {
             RMTErrorShow(Format("[{1}] {2}", cmdType, errMsg), RMT_LV_ERROR, "宏")
             return [false, ""]
     }
-}
-
-; ---------------- 错误统一展示（宏内业务错误） ----------------
-; 替代裸 MsgBox：Worker 环境经 ER 通道上报主进程（不阻塞宏、不本地写日志）；
-; 主进程环境走错误中心 + 写系统日志（一次错误一条日志）。
-; 返回 true 表示已处理（调用方无需再弹窗）。
-RMTErrorShow(msg, level := RMT_LV_ERROR, source := "") {
-    if (source == "")
-        source := (IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker) ? ("Worker#" workIndex) : "Master"
-
-    if (IsSet(MySoftData) && ObjHasOwnProp(MySoftData, "isWorker") && MySoftData.isWorker) {
-        ; Worker：仅 ER 上报主进程（主进程统一记录日志 + 聚合，避免双写）
-        if (IsSet(MsgSendHandler))
-            MsgSendHandler("Error", level "|" workIndex "|" msg)
-        return true
-    }
-
-    ; 主进程：写系统日志（不模态弹窗）+ 按级别通知（warn 气泡 / error 错误中心，均可开关）
-    RMTLogSys(level, source, msg)
-    if (level == RMT_LV_WARN) {
-        ; warn：托盘气泡（2s 自动消失）
-        if (!(IsSet(MainSoftData) && ObjHasOwnProp(MainSoftData, "LogWarnBubble") && !MainSoftData.LogWarnBubble)) {
-            try TrayTip(Format("[{1}] {2}", source, msg), GetLang("RMT 警告"), 1)
-            try SetTimer(() => TrayTip(), -2000)
-        }
-    } else if (level == RMT_LV_ERROR) {
-        ; error：错误中心聚合
-        if (IsSet(MyErrorMsgBoxGui) && IsObject(MyErrorMsgBoxGui)
-            && !(IsSet(MainSoftData) && ObjHasOwnProp(MainSoftData, "LogErrorBadge") && !MainSoftData.LogErrorBadge))
-            MyErrorMsgBoxGui.ShowGui(Format("[{1}] {2}", source, msg))
-    }
-    return true
 }

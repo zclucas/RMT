@@ -272,11 +272,13 @@ class VirtualListHost {
             else if (IsObject(MyMainWin) && action != "Setting")
                 MyMainWin.SelectSideTreeItem(t, idx, false)
             switch action {
-                case "TKBtnKeyboard": OnTriggerEntry(tableItem, idx, false, "keyboard")
-                case "TKBtnJoy": OnTriggerEntry(tableItem, idx, false, "joy")
-                case "FoldTKEditKeyboard": OnTriggerEntry(tableItem, idx, true, "keyboard")
-                case "FoldTKEditJoy": OnTriggerEntry(tableItem, idx, true, "joy")
-                case "TKBtn": this._EditTK(tableItem, idx, event)
+                ; 触发键/触发编辑器要弹 XAML 窗；弹窗必须离开 VL_CLICK（WM_COPYDATA 回调）后再做，
+                ; 否则窗口建不出来，表现就是"点了没反应"。同 Copy/Del/Share 的处理。
+                case "TKBtnKeyboard": this._DeferDialog("TKBtnKeyboard", OnTriggerEntry.Bind(tableItem, idx, false, "keyboard"))
+                case "TKBtnJoy": this._DeferDialog("TKBtnJoy", OnTriggerEntry.Bind(tableItem, idx, false, "joy"))
+                case "FoldTKEditKeyboard": this._DeferDialog("FoldTKEditKeyboard", OnTriggerEntry.Bind(tableItem, idx, true, "keyboard"))
+                case "FoldTKEditJoy": this._DeferDialog("FoldTKEditJoy", OnTriggerEntry.Bind(tableItem, idx, true, "joy"))
+                case "TKBtn": this._DeferDialog("TKBtn", this._EditTK.Bind(this, tableItem, idx, event))
                 case "TKBtnR":
                     ; §23 网络宏：右键触发键列 = 直接复制单次 URL；其余表保持自定义触发串
                     if (GetTableSymbol(t) == "Network")
@@ -303,9 +305,14 @@ class VirtualListHost {
         else {
             switch action {
                 case "FoldBtn": OnFoldBtnClick(tableItem, idx, event)
-                case "FoldFrontBtn": OnFoldFrontInfoEdit(tableItem, idx, event)
+                ; 触发编辑器要弹窗，同上必须离开 VL_CLICK
+                case "FoldFrontBtn": this._DeferDialog("FoldFrontBtn", OnFoldFrontInfoEdit.Bind(tableItem, idx))
                 case "FoldFrontHelp": this._DeferDialog("FoldFrontHelp", OnFoldFrontHelp.Bind(tableItem, idx))
-                case "FoldTKEdit": OnFlodTKEditClick(tableItem, idx, event)
+                case "FoldTKEdit": this._DeferDialog("FoldTKEdit", OnFlodTKEditClick.Bind(tableItem, idx))
+                ; 模块头（F 前缀）上的按键/手柄子按钮：tag 是 FoldTKEditKeyboard / FoldTKEditJoy，
+                ; 原先只在 R 分支有 case，F 分支没有 → 点了静默无响应。
+                case "FoldTKEditKeyboard": this._DeferDialog("FoldTKEditKeyboard", OnTriggerEntry.Bind(tableItem, idx, true, "keyboard"))
+                case "FoldTKEditJoy": this._DeferDialog("FoldTKEditJoy", OnTriggerEntry.Bind(tableItem, idx, true, "joy"))
                 case "FoldPos": this._DeferDialog("FoldPos", OnFoldPosSetting.Bind(tableItem, idx))
                 case "FoldAddMacro": OnItemAddMacroBtnClick(tableItem, idx, event)
                 case "FoldPasteMacro": OnItemPasteMacroBtnClick(tableItem, idx, event)

@@ -2447,15 +2447,15 @@ class DataGridEx {
                 this.ui.Track(chkName)
                 this.ui.OnEvent(chkName, "Checked", ((uid) => (state, ctrl, ev) => this.OnRowCheckChange(uid, true))(rowObj._uid))
                 this.ui.OnEvent(chkName, "Unchecked", ((uid) => (state, ctrl, ev) => this.OnRowCheckChange(uid, false))(rowObj._uid))
-                this.ui.Update(chkName, "BindEvent", "Checked")
-                this.ui.Update(chkName, "BindEvent", "Unchecked")
+                this.ui.BindEventBatched(chkName, "Checked")
+                this.ui.BindEventBatched(chkName, "Unchecked")
             }
 
             if (this.showRowActions) {
                 for aIdx, action in this.rowActions {
                     btnName := this.id "_Row_Act_" rowObj._uid "_" action.Name
                     this.ui.OnEvent(btnName, "Click", ((uid, actName) => (state, ctrl, ev) => this.OnRowActionClick(uid, actName))(rowObj._uid, action.Name))
-                    this.ui.Update(btnName, "BindEvent", "Click")
+                    this.ui.BindEventBatched(btnName, "Click")
                 }
             }
         }

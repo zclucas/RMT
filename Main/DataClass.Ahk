@@ -430,8 +430,7 @@ class MainConfig {
 
 class SoftData {
     __New() {
-        ; ========== Worker 标识与运行状态 ==========
-        this.isWorker := false          ;子线程标识
+        ; ========== 运行状态 ==========
         this.MacroRunningCount := 0     ;运行中的宏数量
         this.IsMacroWorking := false    ;宏正在运行
 

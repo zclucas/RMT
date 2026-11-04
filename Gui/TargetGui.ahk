@@ -55,9 +55,14 @@ class TargetGui {
         this.ui.skipFontScale := true
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_Loaded"))
         this.ui.OnEvent("Window", "Closing", (*) => MyColorPanel.OnClose())
+        ; 准星整块就是 DragArea（窗口靠它拖动），这块客户端区域在 WM_NCHITTEST 里被当成标题栏，
+        ; WPF 的 MouseDoubleClick 收不到。引擎把标题栏双击转成 NcDoubleClick 回传。
+        this.ui.OnEvent("Window", "NcDoubleClick", ObjBindMethod(this, "GuiDoubleClick"))
         this.ui.OnEvent("DragArea", "MouseDoubleClick", ObjBindMethod(this, "GuiDoubleClick"))
         XamlWin.QueueTheme(this.ui)
-        this.ui.Update("Window", "ExcludeFromCapture", "True")
+        ; 不要给准星加「截屏排除」：那是 SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)，
+        ; 效果是「只在本机显示器上显示，远程桌面里完全不出现」——远程使用者会看不到准星。
+        ; 取色靠 BitBlt(SRCCOPY) 采样，本身不含分层窗口，准星不会污染采样结果。
         this.ui.Show()
         this.Gui := GuiAdapter(this.ui)
     }

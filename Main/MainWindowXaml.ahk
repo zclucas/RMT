@@ -42,6 +42,29 @@ class CtrlAdapter {
     Enabled {
         set => this._ui.Update(this._name, "IsEnabled", value ? "True" : "False")
     }
+
+    ; 批量写：pairs = [[adapter, 新值], ...]，合并成一条 IPC。
+    ; 定时刷新整块显示的控件（如工具页 8 个信息框）逐条复制会变成每秒几十次跨进程往返，
+    ; 这里一次发完，WPF 侧也只结算一次布局。
+    static RefreshAll(pairs) {
+        ui := ""
+        batch := []
+        for pair in pairs {
+            a := pair[1]
+            if (!IsObject(a))
+                continue
+            ui := a._ui
+            v := pair[2]
+            if (a._prop == "IsChecked")
+                batch.Push({ ControlName: a._name, PropertyName: "IsChecked", Value: v ? "True" : "False" })
+            else if (a._prop == "SelectedIndex")
+                batch.Push({ ControlName: a._name, PropertyName: "SelectedIndex", Value: String(v - 1) })
+            else
+                batch.Push({ ControlName: a._name, PropertyName: a._prop, Value: String(v) })
+        }
+        if (ui && batch.Length)
+            try ui.BatchUpdate(batch)
+    }
 }
 
 class TabAdapter {
@@ -176,10 +199,6 @@ class MainWin {
         this._linkQueue := []
         this._thankReady := false
         this._thankSponsorShown := false
-        this._sponsorLogos := []
-        this._sponsorLayoutKey := ""
-        this._sponsorLaying := false
-        this._sponsorLayoutWait := ""
         ; 每页已渲染的宏条目索引（供 RefreshItemColorUI 判断是否需更新色点）
         this.RenderedItems := Map()
         ; Epic5 虚拟列表：宏/模块显示区全走 _vl 渲染（模板已支持全部表类型：
@@ -197,21 +216,14 @@ class MainWin {
         this._aiDrag := false
         this._aiDragStartW := 0
         this._aiDragStartX := ""
+        this._aiDragMaxW := 0
         this._aiAnim := false
-        this._aiAnimFrom := 0
         this._aiAnimTo := 0
-        this._aiAnimT0 := 0
-        this._aiAnimW := 0
-        this.aiAnimTick := ObjBindMethod(this, "_TickAiPanelAnim")
+        ; 一次性定时器：动画时长跑完后收尾。缓存成成员是为了让重复 SetTimer 命中同一对象（覆盖而非叠加）。
+        this.aiFinishTick := ObjBindMethod(this, "_FinishAiPanelAnim")
         this._aiFitTab := 0
         this._aiPendingCaret := Map()
         this.aiFitTick := ObjBindMethod(this, "_FitAiInputCur")
-        this.aiInnerCur := this.aiPanelW
-        this.aiInnerFrom := 0
-        this.aiInnerTo := 0
-        this.aiInnerT0 := 0
-        this.aiInnerOn := false
-        this.aiInnerTick := ObjBindMethod(this, "_TickAiInnerW")
         this.aiSeeded := false
         this._aiSeededTabs := Map()
         this._aiHist := Map()       ; 页签 → [{role, content}, ...]
@@ -253,8 +265,6 @@ class MainWin {
         this.aiScrollTick := ObjBindMethod(this, "_AiScrollPending")
         this._aiScrollTab := 0
         this._aiNormGuard := Map()
-        this._aiInputWide := Map()
-        this._aiInputBoxW := Map()
         this._pendingMacroNav := ""
         this._settingDirty := Map()
     }
@@ -318,10 +328,6 @@ class MainWin {
     _AiInputExtraLineH() {
         return 16
     }
-    ; 拖拽调宽时对话框宽度跟随的过渡时长
-    _AiInnerAnimMs() {
-        return 160
-    }
     ; 对话输入框最多显示行数，超出出滚动条
     _AiInputMaxLines() {
         return 10
@@ -381,7 +387,6 @@ class MainWin {
             savedW := Integer(MainSoftData.AiPanelWidth)
             if (savedW > 0)
                 this.aiPanelW := this._ClampAiPanelW(savedW)
-            this.aiInnerCur := this.aiPanelW
         }
         ; 动态表集合：配置持久化的 TableIndex 可能越界（表已删/表数变化），钳制到有效范围
         if (MainSoftData.TableIndex < 1 || MainSoftData.TableIndex > MySoftData.TableInfo.Length)
@@ -868,6 +873,10 @@ class MainWin {
             fs := XAMLHost.GetThemeFontSize()
             this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, fs))
             XAMLHost.SyncChatFontResources(this.ui)
+            ; 字号变了行高也跟着变，输入框的最大高度要按新行高重算
+            this._aiRowH := Map()
+            for t in this._useVirtual
+                this._FitAiInput(t)
         } catch {
         }
     }
@@ -883,6 +892,10 @@ class MainWin {
             }
             ; 首帧已使用配置配色，避免 Loaded 再次应用基础主题造成闪烁。
             this.LoadLeftBarValues()
+            ; 主窗绑着 Window/PreviewMouseMove，只为拖 AI 分割条时取 DragCoords。
+            ; 默认关掉，按下分割条时再开（见 SetWindowMouseMove）：否则鼠标在窗口里划过
+            ; 就是每秒六十来条全量状态回传。侧栏逻辑树的拖拽也复用这同一个开关。
+            this.ui.SetWindowMouseMove(false)
         } catch as e {
             XamlUiDiag("MainWin OnWindowLoad err: " e.Message, "MainWin")
         }
@@ -1017,11 +1030,11 @@ class MainWin {
     }
 
     ; OnEvent 只登记 AHK 侧回调（仅随建窗载荷送达引擎）；Show 之后动态注入的控件
-    ; 必须补发 Update(ctrl, "BindEvent", evt) 让引擎按名字现找控件挂钩子。
+    ; 必须让引擎按名字现找控件挂钩子（走 _QueueBind 的批量下发）。
     ; 引擎按「事件键 + 控件引用」去重，建窗时已挂过的重复发无害。
     _BindLive(name, evt, cb) {
         this.ui.OnEvent(name, evt, cb)
-        try this.ui.Update(name, "BindEvent", evt)
+        this.ui.BindEventBatched(name, evt)
     }
 
     ; 按需建出某个页签的 AI 侧栏（幂等）：生成一份侧栏 XAML 注入占位 Grid，
@@ -1060,7 +1073,7 @@ class MainWin {
         try this.ui.Update("AiInputHost_" idx, "EnableDropTarget", "RmtAiFile")
         if (this.aiAssistOpen) {
             try this.ui.Update("AiWrap_" idx, "MinWidth", "0")
-            try this.ui.Update("AiWrap_" idx, "Width", String(this._aiAnim ? this._aiAnimW : this.aiPanelW))
+            try this.ui.Update("AiWrap_" idx, "Width", String(this.aiPanelW))
             try this.ui.Update("AiInner_" idx, "MinWidth", "0")
             try this.ui.Update("AiInner_" idx, "Width", String(this.aiPanelW))
             try this.ui.Update("AiWrap_" idx, "Visibility", "Visible")
@@ -1077,10 +1090,14 @@ class MainWin {
 
     _ApplyAiPanelGlyph() {
         glyph := this.aiAssistOpen ? Chr(0xE76C) : Chr(0xE76B)
+        m := this._AiRailMargin()
+        u := []
         for t in this._useVirtual {
-            try this.ui.Update("BtnAiPanel_" t, "Content", glyph)
-            try this.ui.Update("BtnAiPanel_" t, "Margin", this._AiRailMargin())
+            u.Push({ControlName: "BtnAiPanel_" t, PropertyName: "Content", Value: glyph})
+            u.Push({ControlName: "BtnAiPanel_" t, PropertyName: "Margin", Value: m})
         }
+        if (u.Length)
+            try this.ui.BatchUpdate(u)
     }
 
     _AiRailMargin() {
@@ -1096,15 +1113,19 @@ class MainWin {
 
     _ApplyListScrollMargin(open) {
         m := this._ListScrollMargin(open)
+        u := []
         for t in this._useVirtual
-            try this.ui.Update("FoldList_" t, "Margin", m)
+            u.Push({ControlName: "FoldList_" t, PropertyName: "Margin", Value: m})
+        if (u.Length)
+            try this.ui.BatchUpdate(u)
     }
 
     _ApplyAiPanelUi() {
         this._ApplyAiPanelGlyph()
         opening := this.aiAssistOpen
         ; 先开启动画，重活延后，避免首次展开卡顿
-        from := this._aiAnim ? this._aiAnimW : (opening ? 0 : this.aiPanelW)
+        ; 动画没跑完就再次切换时不传起点（空串），让引擎从当前渲染宽度续接，避免跳回去重跑
+        from := this._aiAnim ? "" : (opening ? 0 : this.aiPanelW)
         to := opening ? this.aiPanelW : 0
         this._StartAiPanelAnim(from, to)
         if (opening) {
@@ -1123,59 +1144,62 @@ class MainWin {
         }
     }
 
+    ; 展开/收起侧栏：整段动画交给引擎的 DoubleAnimation，AHK 只发一批命令。
+    ; 旧实现用 16ms 定时器每帧给每个页签发 Width，10 个页签就是每秒 ~600 条同步 SendMessage，
+    ; 每条都阻塞 AHK 主线程等 WPF 处理完——这是展开/拖拽 AI 面板卡顿的主因。
     _StartAiPanelAnim(from, to) {
-        this._StopAiInnerW()
-        innerW := to > 0 ? to : this.aiPanelW
-        this.aiInnerCur := innerW
+        ms := this._AiPanelAnimMs()
+        hasFrom := (from != "")
         this._aiAnim := true
-        this._aiAnimFrom := from
         this._aiAnimTo := to
-        this._aiAnimT0 := A_TickCount
-        this._aiAnimW := from
+        innerW := to > 0 ? to : this.aiPanelW
+
+        u := []
         for t in this._useVirtual {
-            try this.ui.Update("AiWrap_" t, "MinWidth", "0")
-            try this.ui.Update("AiWrap_" t, "Width", String(from))
-            try this.ui.Update("AiWrap_" t, "Visibility", "Visible")
-            try this.ui.Update("AiInner_" t, "MinWidth", "0")
-            try this.ui.Update("AiInner_" t, "Width", String(innerW))
-            try this.ui.Update("AiInner_" t, "HorizontalAlignment", "Right")
+            u.Push({ControlName: "AiWrap_" t, PropertyName: "MinWidth", Value: "0"})
+            ; 从静止态起步时先落定起点；动画中途续接则不动，让引擎从当前渲染宽度接上
+            if (hasFrom)
+                u.Push({ControlName: "AiWrap_" t, PropertyName: "AnimWidth", Value: from ",0"})
+            u.Push({ControlName: "AiWrap_" t, PropertyName: "Visibility", Value: "Visible"})
+            u.Push({ControlName: "AiInner_" t, PropertyName: "MinWidth", Value: "0"})
+            u.Push({ControlName: "AiInner_" t, PropertyName: "Width", Value: String(innerW)})
+            u.Push({ControlName: "AiInner_" t, PropertyName: "HorizontalAlignment", Value: "Right"})
         }
-        SetTimer(this.aiAnimTick, 16)
+        ; 动画行紧跟在准备行之后、同一批下发：所有页签在同一帧开始跑，视觉才同步
+        for t in this._useVirtual
+            u.Push({ControlName: "AiWrap_" t, PropertyName: "AnimWidth", Value: to "," ms})
+        if (u.Length)
+            try this.ui.BatchUpdate(u)
+
+        SetTimer(this.aiFinishTick, -(ms + 40))
     }
 
-    _TickAiPanelAnim() {
+    ; 动画结束后的定稿（复位 MinWidth、收起后隐藏）。整段落一次，不再逐帧。
+    _FinishAiPanelAnim() {
         if (!this._aiAnim)
             return
-        ms := this._AiPanelAnimMs()
-        if (ms < 1)
-            ms := 1
-        p := (A_TickCount - this._aiAnimT0) / ms
-        if (p >= 1)
-            p := 1
-        ease := 1 - (1 - p) ** 3
-        w := this._aiAnimFrom + (this._aiAnimTo - this._aiAnimFrom) * ease
-        this._aiAnimW := w
-        for t in this._useVirtual {
-            try this.ui.Update("AiWrap_" t, "Width", String(Round(w)))
-        }
-        if (p < 1)
+        ; 期间被反向切换过（定时器已被新的覆盖，这里再挡一次）：本次定稿已过期
+        if ((this._aiAnimTo > 0) != this.aiAssistOpen)
             return
-        SetTimer(this.aiAnimTick, 0)
         this._aiAnim := false
-        if (this._aiAnimTo <= 0) {
+        to := this._aiAnimTo
+        u := []
+        if (to <= 0) {
             for t in this._useVirtual {
-                try this.ui.Update("AiWrap_" t, "Visibility", "Collapsed")
-                try this.ui.Update("AiWrap_" t, "Width", String(this.aiPanelW))
-                try this.ui.Update("AiWrap_" t, "MinWidth", String(this._AiPanelMinW()))
+                u.Push({ControlName: "AiWrap_" t, PropertyName: "Visibility", Value: "Collapsed"})
+                u.Push({ControlName: "AiWrap_" t, PropertyName: "Width", Value: String(this.aiPanelW)})
+                u.Push({ControlName: "AiWrap_" t, PropertyName: "MinWidth", Value: String(this._AiPanelMinW())})
             }
-            return
+        } else {
+            for t in this._useVirtual {
+                u.Push({ControlName: "AiWrap_" t, PropertyName: "Width", Value: String(this.aiPanelW)})
+                u.Push({ControlName: "AiWrap_" t, PropertyName: "MinWidth", Value: String(this._AiPanelMinW())})
+                u.Push({ControlName: "AiInner_" t, PropertyName: "Width", Value: String(this.aiPanelW)})
+                u.Push({ControlName: "AiInner_" t, PropertyName: "MinWidth", Value: String(this._AiPanelMinW())})
+            }
         }
-        for t in this._useVirtual {
-            try this.ui.Update("AiWrap_" t, "Width", String(this.aiPanelW))
-            try this.ui.Update("AiWrap_" t, "MinWidth", String(this._AiPanelMinW()))
-            try this.ui.Update("AiInner_" t, "Width", String(this.aiPanelW))
-            try this.ui.Update("AiInner_" t, "MinWidth", String(this._AiPanelMinW()))
-        }
+        if (u.Length)
+            try this.ui.BatchUpdate(u)
     }
 
     OnAiSplitStart(state, ctrl, event) {
@@ -1183,6 +1207,11 @@ class MainWin {
             return
         this._aiDrag := true
         this._aiDragStartW := this.aiPanelW
+        ; 拖拽期间才要窗口级鼠标坐标，先打开回传（松开时在 OnAiSplitEnd 关掉）
+        this.ui.SetWindowMouseMove(true)
+        ; 容器总宽在拖拽过程中不变，宽度上限按下时问引擎一次，之后整段拖拽都用这个值
+        this._aiDragMaxW := 0
+        try this._aiDragMaxW := Integer(this.ui.Query("Window>MaxPanelWidth:" this._AiListMinW()))
         ; 桥接层统一按 Window 坐标上报，按下时就记录起点，短距离拖拽也能生效。
         this._aiDragStartX := this._AiDragX(state)
         this._ShowAiDragShield(true)
@@ -1207,6 +1236,11 @@ class MainWin {
             return
         this._aiDrag := false
         this._aiDragStartX := ""
+        this._aiDragMaxW := 0
+        this.ui.SetWindowMouseMove(false)
+        ; 分栏按下时引擎会 CaptureMouse（拖出 6px 热区仍要跟手）；万一 Up 没派发到，
+        ; 捕获会一直挂在 UI 线程上，同一引擎里的其它窗口就全点不动了。这里主动释放。
+        try this.ui.Update("Window", "ReleaseCapture", "")
         this._ShowAiDragShield(false)
         try this.ui.Update("Window", "Cursor", "Arrow")
         if (IsSet(MainSoftData))
@@ -1215,8 +1249,11 @@ class MainWin {
 
     _ShowAiDragShield(on) {
         vis := on ? "Visible" : "Collapsed"
+        u := []
         for t in this._useVirtual
-            try this.ui.Update("AiDragShield_" t, "Visibility", vis)
+            u.Push({ControlName: "AiDragShield_" t, PropertyName: "Visibility", Value: vis})
+        if (u.Length)
+            try this.ui.BatchUpdate(u)
     }
 
     _AiDragX(state) {
@@ -1233,30 +1270,21 @@ class MainWin {
         return ""
     }
 
+    ; 面板宽度上限由引擎给出：它知道列表和面板的实际宽度，也知道哪个页签当前可见。
+    ; 主程序只做数值夹取，不再回读 FoldList 的 ActualWidth。
     _ClampAiPanelW(w) {
         w := Integer(w)
         minW := this._AiPanelMinW()
         maxW := this._AiPanelMaxW()
-        try {
-            ; 只用当前可见列表计算可用宽度。查询第一个虚拟页签会命中隐藏控件，
-            ; 其 ActualWidth 为 0，任何点击/拖拽都会把面板错误夹到最小宽度。
-            t := (IsSet(MainSoftData) ? MainSoftData.TableIndex : 0)
-            if (!t || !this._useVirtual.Has(t)) {
-                for idx in this._useVirtual {
-                    candidateW := Integer(this.ui.Query("FoldList_" idx ">ActualWidth"))
-                    if (candidateW > 0) {
-                        t := idx
-                        break
-                    }
-                }
-            }
-            if (t) {
-                listW := Integer(this.ui.Query("FoldList_" t ">ActualWidth"))
-                if (listW > 0) {
-                    avail := listW + this.aiPanelW - this._AiListMinW()
-                    if (avail < maxW)
-                        maxW := avail
-                }
+        if (this._aiDrag && this._aiDragMaxW > 0) {
+            ; 拖拽全程容器总宽不变，按下时问引擎一次就够，别每帧往返
+            if (this._aiDragMaxW < maxW)
+                maxW := this._aiDragMaxW
+        } else {
+            try {
+                avail := Integer(this.ui.Query("Window>MaxPanelWidth:" this._AiListMinW()))
+                if (avail > 0 && avail < maxW)
+                    maxW := avail
             }
         }
         if (maxW < minW)
@@ -1267,67 +1295,21 @@ class MainWin {
             w := maxW
         return w
     }
-
     _SetAiPanelWidth(w) {
         w := this._ClampAiPanelW(w)
         if (w == this.aiPanelW)
             return
         this.aiPanelW := w
+        ; 拖拽时外框与内框一起改：合并成一条批量命令，整帧只有一次跨进程往返。
+        ; 内框原来用 160ms 定时器缓动跟随，每帧又是 N 条同步消息；拖拽本身是连续的，
+        ; 直接跟上反而更跟手，也省掉了那组定时器。
+        u := []
         for t in this._useVirtual {
-            try this.ui.Update("AiWrap_" t, "Width", String(w))
+            u.Push({ControlName: "AiWrap_" t, PropertyName: "AnimWidth", Value: w ",0"})
+            u.Push({ControlName: "AiInner_" t, PropertyName: "Width", Value: String(w)})
         }
-        this._StartAiInnerW(this.aiInnerCur, w)
-    }
-
-    _StopAiInnerW() {
-        if (this.aiInnerOn)
-            SetTimer(this.aiInnerTick, 0)
-        this.aiInnerOn := false
-    }
-
-    _StartAiInnerW(from, to) {
-        from := Integer(from)
-        to := Integer(to)
-        if (from == to) {
-            this._StopAiInnerW()
-            this.aiInnerCur := to
-            this._ApplyAiInnerW(to)
-            return
-        }
-        this.aiInnerOn := true
-        this.aiInnerFrom := from
-        this.aiInnerTo := to
-        this.aiInnerT0 := A_TickCount
-        this.aiInnerCur := from
-        this._ApplyAiInnerW(from)
-        SetTimer(this.aiInnerTick, 16)
-    }
-
-    _TickAiInnerW() {
-        if (!this.aiInnerOn)
-            return
-        ms := this._AiInnerAnimMs()
-        if (ms < 1)
-            ms := 1
-        p := (A_TickCount - this.aiInnerT0) / ms
-        if (p >= 1)
-            p := 1
-        ease := 1 - (1 - p) ** 3
-        w := this.aiInnerFrom + (this.aiInnerTo - this.aiInnerFrom) * ease
-        this.aiInnerCur := w
-        this._ApplyAiInnerW(Round(w))
-        if (p < 1)
-            return
-        this._StopAiInnerW()
-        this.aiInnerCur := this.aiInnerTo
-        this._ApplyAiInnerW(this.aiInnerTo)
-    }
-
-    _ApplyAiInnerW(w) {
-        for t in this._useVirtual {
-            try this.ui.Update("AiInner_" t, "Width", String(w))
-            try this.ui.Update("AiInner_" t, "HorizontalAlignment", "Right")
-        }
+        if (u.Length)
+            try this.ui.BatchUpdate(u)
     }
 
     OnSidePanelMode(mode, state, ctrl, event) {
@@ -1956,7 +1938,8 @@ class MainWin {
             .FontSize(this._AiChatBodyFontSize()).FontStyle("Italic").Foreground("{DynamicResource TextSub}")
             .Margin("2,0,0,6").Visibility("Collapsed").IsHitTestVisible("False")
             .TextWrapping("Wrap")
-        chrome := footCol.Add("Border").Name("AiInputHost_" idx).Height(lineH).MinHeight(lineH).MaxHeight(maxH + this._AiAttachBarH())
+        ; 不设 Height：高度由 TextBox 按内容自己撑开，外框跟着内容走
+        chrome := footCol.Add("Border").Name("AiInputHost_" idx).MinHeight(lineH).MaxHeight(maxH + this._AiAttachBarH())
             .Padding(padL ",0," padL ",0")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}")
             .BorderThickness("1").CornerRadius(String(r)).AllowDrop("True")
@@ -1968,9 +1951,9 @@ class MainWin {
         inner := box.Add("Grid").Grid_Row(1)
         tb := inner.Add("TextBox").Name("AiInput_" idx).Style("{StaticResource RmtAiChatBox}")
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
-            .Height(textH).MinHeight(textH).MaxHeight(maxH)
+            .MinHeight(textH).MaxHeight(maxH)
             .AcceptsReturn("True").TextWrapping("Wrap").AllowDrop("False")
-            .VerticalScrollBarVisibility("Hidden").HorizontalScrollBarVisibility("Disabled")
+            .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
             .VerticalContentAlignment("Center").Padding("0").Margin("0")
             .FontSize(this._AiChatBodyFontSize())
             .Foreground("{DynamicResource InputText}")
@@ -2067,15 +2050,6 @@ class MainWin {
     }
     _AiInputIconReserve() {
         return this._AiInputSendW() * 2 + 4
-    }
-
-    _AiInputPad(lines) {
-        pad := AiSettingGui.ContentPadL
-        return lines <= 1 ? pad ",0," pad ",0" : pad ",2," pad ",2"
-    }
-
-    _AiInputPhMargin(lines) {
-        return "0"
     }
 
     _AiAttachBarH() {
@@ -2755,10 +2729,14 @@ class MainWin {
     }
 
     OnAiInputChanged(t, state, ctrl, event) {
+        ; 高度由 TextBox 自己按内容重排，这里不用再量一次、也不用发渲染指令
         this._AiNormalizeInputBox(t)
         this._AiSyncPlaceholder(t)
-        this._aiFitTab := t
-        SetTimer(this.aiFitTick, -30)
+        ; 首次输入时校准一次行高（决定「最多几行」的上限），量到之后不再重复
+        if (!IsObject(this._aiRowH) || !this._aiRowH.Has(t)) {
+            this._aiFitTab := t
+            SetTimer(this.aiFitTick, -30)
+        }
     }
 
     _AiNormalizeInputBox(t) {
@@ -3161,128 +3139,30 @@ class MainWin {
         this._FitAiInput(this._aiFitTab)
     }
 
-    _AiInputContentWidth(t) {
-        w := 0
-        try {
-            v := this.ui.Query("AiInputHost_" t ">ActualWidth")
-            if (v != "" && IsNumber(v))
-                w := Float(v) - AiSettingGui.ContentPadL * 2
-        }
-        if (w < 40) {
-            try {
-                v := this.ui.Query("AiInput_" t ">ActualWidth")
-                if (v != "" && IsNumber(v))
-                    w := Float(v)
-            }
-        }
-        if (w >= 40) {
-            if (!IsObject(this._aiInputBoxW))
-                this._aiInputBoxW := Map()
-            this._aiInputBoxW[t] := w
-            return w
-        }
-        if (IsObject(this._aiInputBoxW) && this._aiInputBoxW.Has(t) && this._aiInputBoxW[t] >= 40)
-            return this._aiInputBoxW[t]
-        pw := this.aiPanelW
-        if (!IsNumber(pw) || pw < 80)
-            pw := this._AiPanelDefaultW()
-        return Max(80, pw - 20 - AiSettingGui.ContentPadL * 2)
-    }
-
-    _AiInputTextPx(s) {
-        fs := Float(XAMLHost.ChatBodyFontSize())
-        if (fs < 10)
-            fs := 12
-        px := 0.0
-        i := 1
-        len := StrLen(s)
-        while (i <= len) {
-            o := Ord(SubStr(s, i, 1))
-            if (o >= 0x2E80)
-                px += fs
-            else if (o == 9)
-                px += fs * 2
-            else
-                px += fs * 0.55
-            i += 1
-        }
-        return px
-    }
-
-    _AiInputLayout(t, text, &vis, &lastRatio) {
-        vis := 1
-        lastRatio := 0.0
-        raw := this._AiNormalizeNewlines(text, false)
-        if (raw == "")
-            return
-        boxW := this._AiInputContentWidth(t)
-        if (boxW < 1)
-            boxW := 1
-        vis := 0
-        lastPx := 0.0
-        for line in StrSplit(raw, "`n") {
-            px := this._AiInputTextPx(line)
-            if (px <= 0) {
-                vis += 1
-                lastPx := 0.0
-                continue
-            }
-            n := Integer((px - 0.01) / boxW) + 1
-            if (n < 1)
-                n := 1
-            vis += n
-            lastPx := px - (n - 1) * boxW
-        }
-        if (vis < 1)
-            vis := 1
-        lastRatio := lastPx / boxW
-    }
-
-    _AiInputKeepWide(t, lastRatio) {
-        if (!IsObject(this._aiInputWide))
-            this._aiInputWide := Map()
-        this._aiInputWide[t] := (lastRatio >= 0.8)
-        return this._aiInputWide[t]
-    }
-
+    ; 高度由 TextBox 按内容自己撑开（XAML 里不设 Height，只留 MinHeight/MaxHeight）：
+    ; 换行位置、字宽、字体回退全交给 WPF 的排版，主程序不再自己算行数。
+    ; 这里只维护上限——「最多显示 N 行」有多高取决于行高，而行高只随字号变，量一次就够。
     _FitAiInput(t) {
         if (t < 1)
             return
-        lineH := this._AiInputLineH()
-        extraH := this._AiInputExtraLineH()
-        maxLines := this._AiInputMaxLines()
-        text := ""
-        try text := this.ui.Query("AiInput_" t)
-        vis := 1
-        lastRatio := 0.0
-        this._AiInputLayout(t, text, &vis, &lastRatio)
-        lines := vis
-        if (this._AiInputKeepWide(t, lastRatio))
-            lines += 1
-        if (lines < 1)
-            lines := 1
-        if (lines > maxLines)
-            lines := maxLines
-        multi := lines > 1
-        chromeH := multi ? (lineH + (lines - 1) * extraH + 2) : lineH
-        textH := chromeH - 2
-        if (textH < lineH - 2)
-            textH := lineH - 2
-        pad := this._AiInputPad(lines)
-        vca := multi ? "Top" : "Center"
-        sb := lines >= maxLines ? "Auto" : (multi ? "Disabled" : "Hidden")
-        try this.ui.Update("AiInput_" t, "Height", String(textH))
-        try this.ui.Update("AiInput_" t, "MinHeight", String(multi ? extraH : (lineH - 2)))
-        try this.ui.Update("AiInput_" t, "Margin", "0")
-        try this.ui.Update("AiInput_" t, "Padding", "0")
-        try this.ui.Update("AiInput_" t, "VerticalContentAlignment", vca)
-        try this.ui.Update("AiInput_" t, "VerticalScrollBarVisibility", sb)
-        try this.ui.Update("AiInputHost_" t, "Height", String(chromeH + this._AiAttachHostExtra(t)))
-        try this.ui.Update("AiInputHost_" t, "Padding", pad)
-        try this.ui.Update("AiInputPh_" t, "VerticalAlignment", vca)
-        try this.ui.Update("AiInputPh_" t, "Margin", "0")
-        try this.ui.Update("AiInputBtns_" t, "VerticalAlignment", multi ? "Bottom" : "Center")
-        try this.ui.Update("AiInputBtns_" t, "Margin", multi ? "0,0,0,1" : "0")
+        if (!IsObject(this._aiRowH))
+            this._aiRowH := Map()
+        rowH := this._aiRowH.Has(t) ? this._aiRowH[t] : 0
+        if (rowH <= 0) {
+            try {
+                parts := StrSplit(String(this.ui.Query("AiInput_" t ">TextLines")), ",")
+                if (parts.Length >= 2 && IsNumber(parts[2]))
+                    rowH := Float(parts[2])
+            }
+            ; 量不到就先用设计值顶上，但不写缓存——下次布局好了会重新量
+            if (rowH > 0)
+                this._aiRowH[t] := rowH
+            else
+                rowH := this._AiInputExtraLineH()
+        }
+        maxH := this._AiInputLineH() + (this._AiInputMaxLines() - 1) * rowH
+        try this.ui.Update("AiInput_" t, "MaxHeight", String(maxH))
+        try this.ui.Update("AiInputHost_" t, "MaxHeight", String(maxH + this._AiAttachHostExtra(t)))
         if (IsObject(this._aiPendingCaret) && this._aiPendingCaret.Has(t)) {
             try this.ui.Update("AiInput_" t, "CaretIndex", String(this._aiPendingCaret[t]))
             this._aiPendingCaret.Delete(t)
@@ -3328,8 +3208,6 @@ class MainWin {
         this._AiShowThinking(t, false, GetLang("正在分析你的问题"))
         try this.ui.Update("AiInput_" t, "Text", "")
         try {
-            if (IsObject(this._aiInputWide))
-                this._aiInputWide[t] := false
             attTxt := this._AiConsumeAttachText(t)
             if (attTxt != "")
                 text := Trim(text attTxt)
@@ -5110,17 +4988,25 @@ class MainWin {
         SetTimer(this._voiceDlgFn, -50)
     }
 
+    ; 从引擎事件回调里弹 XAML 窗会起不来（回调还压在 WM_COPYDATA 里），统一延到独立伪线程。
+    ; 只包需要弹窗的回调；纯改属性/展开折叠这类直接调即可。
+    _DeferClick(fn) {
+        return (*) => SetTimer(fn, -50)
+    }
+
     _BindFoldRows(t) {
         tableItem := MySoftData.TableInfo[t]
         for f, fold in tableItem.Folds {
-            this._Bind("FoldFrontBtn_" t "_" f, "Click", OnFoldFrontInfoEdit.Bind(tableItem, f))
-            this._Bind("FoldFrontHelp_" t "_" f, "Click", OnFoldFrontHelp.Bind(tableItem, f))
+            ; 会弹 XAML 窗的按钮必须延迟：这些回调正运行在引擎发来的消息里，
+            ; 在里面建窗会起不来（表现就是点了没反应）。
+            this._Bind("FoldFrontBtn_" t "_" f, "Click", this._DeferClick(OnFoldFrontInfoEdit.Bind(tableItem, f)))
+            this._Bind("FoldFrontHelp_" t "_" f, "Click", this._DeferClick(OnFoldFrontHelp.Bind(tableItem, f)))
             this._Bind("FoldBtn_" t "_" f, "Click", OnFoldBtnClick.Bind(tableItem, f))
             if (GetTableSymbol(t) == "UI")
-                this._Bind("FoldPosBtn_" t "_" f, "Click", OnFoldPosSetting.Bind(tableItem, f))
-            this._Bind("FoldTKEdit_" t "_" f, "Click", OnFlodTKEditClick.Bind(tableItem, f))
-            this._Bind("FoldTKEdit_" t "_" f "_Keyboard", "Click", OnTriggerEntry.Bind(tableItem, f, true, "keyboard"))
-            this._Bind("FoldTKEdit_" t "_" f "_Joy", "Click", OnTriggerEntry.Bind(tableItem, f, true, "joy"))
+                this._Bind("FoldPosBtn_" t "_" f, "Click", this._DeferClick(OnFoldPosSetting.Bind(tableItem, f)))
+            this._Bind("FoldTKEdit_" t "_" f, "Click", this._DeferClick(OnFlodTKEditClick.Bind(tableItem, f)))
+            this._Bind("FoldTKEdit_" t "_" f "_Keyboard", "Click", this._DeferClick(OnTriggerEntry.Bind(tableItem, f, true, "keyboard")))
+            this._Bind("FoldTKEdit_" t "_" f "_Joy", "Click", this._DeferClick(OnTriggerEntry.Bind(tableItem, f, true, "joy")))
             this._Bind("FoldAddMacro_" t "_" f, "Click", OnItemAddMacroBtnClick.Bind(tableItem, f))
             this._Bind("FoldPasteMacro_" t "_" f, "Click", OnItemPasteMacroBtnClick.Bind(tableItem, f))
             this._Bind("FoldShare_" t "_" f, "Click", OnFoldShareBtnClick.Bind(tableItem, f))
@@ -5135,7 +5021,7 @@ class MainWin {
         if (this.ui.events.Has(name) && this.ui.events[name].Has(evt))
             this.ui.events[name][evt] := []
         this.ui.OnEvent(name, evt, cb)
-        this.ui.Update(name, "BindEvent", evt)
+        this.ui.BindEventBatched(name, evt)
     }
 
     ; 表身份 = tableItem 对象；t 仅作控件命名显示顺序槽位（内部解析）
@@ -7324,8 +7210,6 @@ class MainWin {
         }
         if (shown.Length < 1)
             return
-        this._sponsorLogos := shown
-        this._sponsorLayoutKey := ""
         ; 「感谢支持」与「QQ 昵称」同走提示文字：字号 11、常规字重
         body := '<StackPanel Name="ThankSponsorLogos" HorizontalAlignment="Stretch"/>'
         card := this._HelpCard(GetLang("企业赞助"), "&#xE731;", body, GetLang("感谢支持"), "0,0,0,14", false, 30)
@@ -7338,59 +7222,13 @@ class MainWin {
             return
         }
         this._thankSponsorShown := true
-        this._Bind("ThankSponsorLogos", "SizeChanged", ObjBindMethod(this, "LayoutThankSponsors"))
-        this.LayoutThankSponsors()
-    }
-
-    ; 按当前宽度均分行列：多出来的名额放在上面几行（n+1），其余为 n
-    LayoutThankSponsors(*) {
-        if (this._sponsorLaying || this._sponsorLogos.Length < 1)
-            return
-        w := ""
-        try w := this.ui.Query("ThankSponsorLogos>ActualWidth")
-        if (w == "" || !IsNumber(w))
-            return
-        w := Integer(Floor(Number(w)))
-        if (w < 80) {
-            if (!this._sponsorLayoutWait) {
-                this._sponsorLayoutWait := ObjBindMethod(this, "LayoutThankSponsors")
-                SetTimer(this._sponsorLayoutWait, -120)
-            }
-            return
+        ; logo 一次性交给引擎，分行与居中由引擎的 FlowLayout 完成：宽度变化时引擎自己重排，
+        ; 这里不监听 SizeChanged，也不回读 ActualWidth。
+        for sp in shown {
+            try this.ui.Update("ThankSponsorLogos", "AddXamlItem", this._ThankSponsorLogo(sp))
         }
-        slot := 124
-        cap := Integer(Floor(w / slot))
-        if (cap < 1)
-            cap := 1
-        n := this._sponsorLogos.Length
-        if (cap > n)
-            cap := n
-        rows := Integer(Ceil(n / cap))
-        key := cap "|" rows "|" n
-        if (key == this._sponsorLayoutKey)
-            return
-        this._sponsorLaying := true
-        this._sponsorLayoutKey := key
-        try {
-            base := n // rows
-            extra := Mod(n, rows)
-            ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-            this.ui.Update("ThankSponsorLogos", "ClearItems", "")
-            idx := 1
-            loop rows {
-                take := base + (A_Index <= extra ? 1 : 0)
-                rowXaml := '<StackPanel ' ns ' Orientation="Horizontal" HorizontalAlignment="Center">'
-                loop take {
-                    rowXaml .= this._ThankSponsorLogo(this._sponsorLogos[idx])
-                    idx++
-                }
-                rowXaml .= '</StackPanel>'
-                this.ui.Update("ThankSponsorLogos", "AddXamlItem", rowXaml)
-            }
-            this._FlushLinks()
-        } finally {
-            this._sponsorLaying := false
-        }
+        try this.ui.Update("ThankSponsorLogos", "FlowLayout", "124")
+        this._FlushLinks()
     }
 
     ; 无边框 100×100 logo，悬停时在指针上方弹出企业名称，点击打开链接

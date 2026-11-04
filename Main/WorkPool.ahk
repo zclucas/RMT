@@ -451,7 +451,7 @@ class WorkPool {
     RemoveDeadFreeWorkers() {
         toClean := []
         for idx, wd in this.freePool {
-            if (!this.IsWorkerDispatchable(wd))
+            if (!this.IsDispatchable(wd))
                 toClean.Push(wd)
         }
         for wd in toClean {
@@ -475,7 +475,7 @@ class WorkPool {
         ; 空闲池里可能残留已清理的实例（tx/rx 已置 0，或已被同编号新实例替换），
         ; 直接拿去 Push 会抛「This value of type "Integer" has no method named "Push"」。
         ; 先把它剔出空闲池，再让 Dispatch 的 while 继续取下一个，任务不动。
-        if (!this.IsWorkerInstanceAlive(wd)) {
+        if (!this.IsInstanceAlive(wd)) {
             this.freePool.Delete(idx)
             ; 进程若还活着（实例被新实例顶替后的孤儿），通知它自行退出，别留在后台
             if (wd.pid && ProcessExist(wd.pid))
@@ -596,7 +596,7 @@ class WorkPool {
         return ""
     }
 
-    IsWorkerDispatchable(wd) {
+    IsDispatchable(wd) {
         return this.GetWorkerDispatchBlockReason(wd) == ""
     }
 
@@ -672,7 +672,7 @@ class WorkPool {
         this.SyncStateToWorker(wd)
 
         ; 同步期间实例可能已被清理/替换，别再往空闲池里放僵尸
-        if (!this.IsWorkerInstanceAlive(wd))
+        if (!this.IsInstanceAlive(wd))
             return
 
         this.freePool[idx] := wd
@@ -750,7 +750,7 @@ class WorkPool {
     ; 被新一轮热键或强制停止重入并清掉这个 wd。此时若照旧往池里放，空闲池就留下一个
     ; tx=0 的僵尸实例，下次分派时 wd.tx.Push 直接抛「Integer has no method named Push」。
     ReleaseWorkerToFreePool(wd) {
-        if (!this.IsWorkerInstanceAlive(wd)) {
+        if (!this.IsInstanceAlive(wd)) {
             this.RemoveWorkerFromPools(wd)
             return false
         }
@@ -764,7 +764,7 @@ class WorkPool {
 
     ; wd 是否仍是线程池里登记在册的活实例（未被强杀/缩容/重载清理，也未被同编号新实例替换）。
     ; 清理过的实例 tx/rx 已置 0，再拿去 wd.tx.Push 会抛「Integer has no method named Push」。
-    IsWorkerInstanceAlive(wd) {
+    IsInstanceAlive(wd) {
         return wd && wd.tx && this.workerMap.Has(wd.idx) && this.workerMap[wd.idx] == wd
     }
 
@@ -857,7 +857,7 @@ class WorkPool {
     }
 
     ; 仅进程已退出视为丢失（pending 慢启动不杀）；短暂抖动时二次确认
-    IsWorkerProcessDead(wd) {
+    IsProcessDead(wd) {
         if (!wd.pid)
             return true
         if (ProcessExist(wd.pid))
@@ -866,14 +866,10 @@ class WorkPool {
         return !ProcessExist(wd.pid)
     }
 
-    IsLostWorker(wd) {
-        return this.IsWorkerProcessDead(wd)
-    }
-
     ReclaimDeadUsePoolWorkers() {
         toAbort := []
         for idx, wd in this.usePool {
-            if (this.IsWorkerProcessDead(wd))
+            if (this.IsProcessDead(wd))
                 toAbort.Push(wd)
         }
         for wd in toAbort
@@ -936,7 +932,7 @@ class WorkPool {
         removed := 0
         toDrop := []
         for idx, wd in this.pending {
-            if (this.IsLostWorker(wd))
+            if (this.IsProcessDead(wd))
                 toDrop.Push(wd)
         }
         for wd in toDrop {
@@ -1054,7 +1050,7 @@ class WorkPool {
     }
 
     ; 环缓冲是否仍归属该 Worker 且可安全访问（强制停止会先切断 rx）
-    IsWorkerRxAlive(wd, rb := 0) {
+    IsRxAlive(wd, rb := 0) {
         if (!wd || !wd.rx || !this.workerMap.Has(wd.idx))
             return false
         if (rb != 0 && wd.rx != rb)
@@ -1063,25 +1059,25 @@ class WorkPool {
     }
 
     ProcessWorkerRx(wd) {
-        if (!this.IsWorkerRxAlive(wd) || wd.rxBusy)
+        if (!this.IsRxAlive(wd) || wd.rxBusy)
             return
         wd.rxBusy := true
         try {
             loop {
                 rb := wd.rx
-                if (!this.IsWorkerRxAlive(wd, rb))
+                if (!this.IsRxAlive(wd, rb))
                     return
-                while (this.IsWorkerRxAlive(wd, rb)) {
+                while (this.IsRxAlive(wd, rb)) {
                     if (!rb.Pop(&type, &id, &result))
                         break
-                    if (!this.IsWorkerRxAlive(wd, rb))
+                    if (!this.IsRxAlive(wd, rb))
                         return
                     switch type {
                         case MsgType.FINISH:
                             ; FINISH 处理过程会走 Dispatch → CleanUpWorker → Sleep，期间可被新的
                             ; 热键/强制停止重入：此刻 wd 可能已被清理（tx=0）或被同编号新实例替换。
                             ; 这时若继续把它放回 freePool，就会留下一个 tx=0 的僵尸空闲 Worker。
-                            if (!this.IsWorkerInstanceAlive(wd))
+                            if (!this.IsInstanceAlive(wd))
                                 return
                             if (!this.usePool.Has(wd.idx))
                                 continue
@@ -1135,11 +1131,11 @@ class WorkPool {
                         case MsgType.EVENT:
                             this.OnWorkerEvent(wd, result)
                             ; OnWorkerEvent 内可能 Sleep（如指令提示），期间强制停止会切断 rx
-                            if (!this.IsWorkerRxAlive(wd, rb))
+                            if (!this.IsRxAlive(wd, rb))
                                 return
                     }
                 }
-                if (!this.IsWorkerRxAlive(wd, rb) || rb.IsEmpty())
+                if (!this.IsRxAlive(wd, rb) || rb.IsEmpty())
                     break
             }
         } finally {

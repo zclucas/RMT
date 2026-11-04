@@ -407,11 +407,11 @@ class ConfigMergeGui {
         this.ui.Update("MergeListPanel", "AddXamlItem", xaml)
         this.ui.OnEvent(chkName, "Checked", ObjBindMethod(this, "OnRowCheck", rowId))
         this.ui.OnEvent(chkName, "Unchecked", ObjBindMethod(this, "OnRowCheck", rowId))
-        this.ui.Update(chkName, "BindEvent", "Checked")
-        this.ui.Update(chkName, "BindEvent", "Unchecked")
+        this.ui.BindEventBatched(chkName, "Checked")
+        this.ui.BindEventBatched(chkName, "Unchecked")
         if (showFold) {
             this.ui.OnEvent(foldName, "Click", ObjBindMethod(this, "OnFoldClick", rowId))
-            this.ui.Update(foldName, "BindEvent", "Click")
+            this.ui.BindEventBatched(foldName, "Click")
         }
     }
 

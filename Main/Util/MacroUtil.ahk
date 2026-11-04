@@ -1796,21 +1796,6 @@ MenuReload(*) {
     SafeReload()
 }
 
-OnToolTextFilterSelectImage(*) {
-    global MainSoftData
-    path := FileSelect(, , GetLang("选择图片"))
-    if (path == "")
-        return
-    ocr := GetChineseOcr() ; v6 统一多语言模型，不再区分语言
-    result := ocr.ocr_from_file(path)
-    SetToolTextDisplay(result)
-    SetClipboard(result)
-}
-
-OnClearToolText(*) {
-    SetToolTextDisplay("")
-}
-
 GetBootStartRegPaths() {
     ; 同时清理 64/32 位注册表视图，避免取消自启后残留
     return [
@@ -1866,34 +1851,6 @@ ApplyBootStartRegistry(enable) {
 ; 启动时让注册表与 ini 中的 IsBootStart 对齐（清理取消后仍残留的自启项）
 SyncBootStartRegistry() {
     ApplyBootStartRegistry(!!MainSoftData.IsBootStart)
-}
-
-OnBootStartChanged(ctrl, *) {
-    global MyMainWin
-    ; Worker 无 UI：MyMainWin 为 "" 占位（见 WorkGlobalUtil），仅主程序实例化后走真实逻辑
-    if (!IsObject(MyMainWin))
-        return
-    MainSoftData.IsBootStart := MyMainWin.ui.Query("ChkBootStart") == "True"
-    ok := ApplyBootStartRegistry(MainSoftData.IsBootStart)
-    CfgWrite(MainSoftData.IsBootStart ? 1 : 0, SettingFile, SettingSection, "IsBootStart")
-    if (!ok) {
-        ; 注册表未能与选项对齐时回滚勾选，避免界面已关、实际仍自启
-        MainSoftData.IsBootStart := !MainSoftData.IsBootStart
-        try MyMainWin.ui.Update("ChkBootStart", "IsChecked", MainSoftData.IsBootStart ? "True" : "False")
-        CfgWrite(MainSoftData.IsBootStart ? 1 : 0, SettingFile, SettingSection, "IsBootStart")
-        RmtDialog.Info(GetLang("开机自启设置失败，请检查是否被安全软件拦截，或勿通过兼容性强制管理员运行。"), GetLang("提示"), 48)
-    }
-}
-
-OnAdminStartChanged(ctrl, *) {
-    global MyMainWin
-    ; Worker 无 UI：MyMainWin 为 "" 占位（见 WorkGlobalUtil），仅主程序实例化后走真实逻辑
-    if (!IsObject(MyMainWin))
-        return
-    MainSoftData.IsAdminStart := MyMainWin.ui.Query("ChkAdminStart") == "True"
-    CfgWrite(MainSoftData.IsAdminStart ? 1 : 0, SettingFile, SettingSection, "IsAdminStart")
-    if (MainSoftData.IsBootStart)
-        ApplyBootStartRegistry(true)
 }
 
 OnTextOps(tableItem, cmd, index) {
@@ -2338,8 +2295,8 @@ OnScreenShot(tableItem, cmd, index) {
 
     ocvReason := OpenCvEnsure()
     if (ocvReason != "") {
+        ; 失败原因已由 OpenCvEnsure 写进日志；启动时的界面提示在主进程 InitNativePlugins 里做
         ShotDebugLog(Format("抓图失败：OpenCV 不可用（{}）", ocvReason))
-        ShowOpenCvInstallPrompt(ocvReason)
         return
     }
 

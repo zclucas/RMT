@@ -1,19 +1,40 @@
 #Requires AutoHotkey v2.0
 
-; Worker 不加载界面。AssetUtil 里会直接写 RmtDialog，类必须先存在，
-; 否则编译时会被当成未赋值的局部变量。提示转给主进程显示。
+; Worker 不加载任何界面：所有对话框请求都转给主进程渲染，本进程只发请求、等回执。
+; 走项目已有的「输入 / 等待确认」通道（InputRequest → 主进程独立弹窗 → IBR 回传）。
+; 宏卡在等人确认是预期行为，这里的超时只用于防止主进程消失时永久挂住。
 class RmtDialog {
+    ; 10 分钟：用户离开一会儿再回来处理也来得及
+    static TimeoutMs := 600000
+
     static Info(msg, title := "", owner := 0) {
+        ; 通知型：单向投递，不等回执
         try WorkMsgBoxContent(String(msg))
     }
 
     static Confirm(msg, title := "", owner := 0) {
-        try WorkMsgBoxContent(String(msg))
-        return false
+        r := InputRequest("IB", "1", String(msg), "", "", "to=" RmtDialog.TimeoutMs)
+        return IsObject(r) && r.Length >= 1 && r[1] == "true"
     }
 
+    ; buttons：数组或 "|" 分隔字符串；返回按钮序号（关闭 / 超时返回 0）
     static Choose(msg, title := "", buttons := [], owner := 0) {
-        try WorkMsgBoxContent(String(msg))
+        opts := IsObject(buttons) ? buttons : StrSplit(String(buttons), "|")
+        if (!opts.Length)
+            return 0
+        joined := ""
+        for i, o in opts
+            joined .= (i > 1 ? "," : "") String(o)
+        r := InputRequest("IB", "5", String(msg), joined, String(opts[1]), "to=" RmtDialog.TimeoutMs)
+        if (!IsObject(r) || !r.Length)
+            return 0
+        v := String(r[1])
+        if (SubStr(v, 1, 4) == "sel:")
+            v := SubStr(v, 5)
+        for i, o in opts {
+            if (String(o) == v)
+                return i
+        }
         return 0
     }
 }
@@ -25,11 +46,7 @@ class RmtDialog {
 #Include WorkUtil.ahk
 #Include WorkGlobalUtil.ahk
 
-LoadMainSetting()           ;加载配置
-InitWorkFilePath()          ;初始化文件路径
-HandleWorkOpenArg()         ;处理打开参数
-LoadCurMacroSetting()       ;加载当前配置宏
-InitData()                  ;初始化软件数据，加载所有的宏指令
+BootWorkerConfig()          ;读配置 + 建路径 + 解析命令行（唯一序列，见 WorkUtil）
 InitWork()                  ;工作器特别初始化
 WorkPluginInit()            ;插件初始化
 

@@ -2108,7 +2108,7 @@ A到B拖拽=A to B Drag
 该宏已禁用=This macro is disabled
 所属模块已禁用=Its module is disabled
 （仅指定前台窗口匹配时触发）=(only when the foreground window matches)
-
+退出=Exit
 按键按下=Key Down
 按键松开=Key Up
 屏幕变化=Screen Change

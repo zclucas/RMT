@@ -102,6 +102,9 @@
 
 
 SetWorkingDir A_ScriptDir
+; 软件根目录：日志、插件等路径统一以它为准。主进程的工作目录就是安装目录本身，
+; Worker 在 Thread\ 子目录里，由 Thread\WorkGlobalUtil.ahk 给出它自己的值。
+global AppRootDir := RTrim(A_WorkingDir, "\")
 DetectHiddenWindows true
 Persistent
 A_MaxHotkeysPerInterval := 400
@@ -143,7 +146,11 @@ global LangDir := A_WorkingDir "\Lang"
 if (FileExist(A_WorkingDir "\Setting\MainSettings.ini")) {
     Compat_UpgradeDir(A_WorkingDir "\Setting")
 }
-LoadMainSetting()               ;加载通用设置
+; 首次安装补齐默认主题文件：写盘动作只放主进程。Worker 无界面、不读主题文件，
+; 也不该在这里落下任何文件。
+EnsureXAMLThemesToml()
+LoadMainSetting()               ;加载通用设置（纯读，Worker 共用同一份）
+EnsureMainSettingPersisted()    ;主进程：把校正结果与兜底默认值写回设置文件
 SyncBootStartRegistry()         ;主进程：开机自启选项与注册表对账（Worker 勿调用）
 
 global MyJoyMacro := JoyMacro()

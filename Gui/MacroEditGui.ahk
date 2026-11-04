@@ -84,17 +84,16 @@ class MacroEditGui {
         this.ParentTile := ""
         this.ui := ""                     ; XAMLHost 实例
         this._closed := true
-        this._dragEnabled := false        ; 原生 OnMessage 拖拽保持禁用（WPF 手动拖拽独立实现）
-        this._dragCandidate := ""         ; P6 手动拖拽候选 {fromLeft, gui, name, source, sx, sy}
-        this._dragActive := false
-        this._dragSource := ""
-        this._dragTarget := ""
-        this._dragSlot := ""
-        this._lastDragTip := ""            ; 拖拽提示缓存，防 ToolTip 每帧重建闪烁
-        this._dragReleaseAt := 0
-        this._dragWatchdog := ObjBindMethod(this, "_CheckDragRelease")
+        this._dragEnabled := false        ; 原生 OnMessage 拖拽保持禁用（拖拽由引擎内实现）
+        ; 命中测试/坐标换算都要查引擎，而鼠标事件回调本身运行在「引擎发给 AHK 的 send 消息」里，
+        ; 在里面同步发 MQUERY 拿不到应答。所以凡是需要查引擎的动作都转伪线程（-1 / -20）。
+        this._dblState := ""              ; 双击落下的 state
+        this._dblTick := ObjBindMethod(this, "_ApplyTreeDoubleClick")
         this._treeClickCoord := ""
+        this._treeDownHit := ""           ; 按下时引擎随事件带回的命中行 Tag
+        this._extDragGui := ""            ; 左侧指令拖进树：被拖的 gui 实例
         this._rightClickCoord := ""
+        this._rightDownHit := ""          ; 右键按下时引擎带回的命中行 Tag
         this._hkIds := []
         this._topOn := false
         this._title := ""
@@ -186,7 +185,7 @@ class MacroEditGui {
         this._ctxFavProp := ""           ; 指令行右键收藏的当前 propName
         this.SubMacroLastIndex := 0
         this.DragSourceMap := Map()
-        this._dragCancelled := false
+        this._dragCancelledAt := 0     ; 拖拽结束时刻：用它吞掉随后补发的那次 Click
         ; 多選複製：使用 TreeView Check 狀態作為多選標記
         this.MultiSelectItems := Map()
         this.MultiSelectAnchor := 0
@@ -473,7 +472,7 @@ class MacroEditGui {
             return
         this.ui.OnEvent(ctrlName, eventName, callback)
         ; 主窗口侧栏在 CREATE_WINDOW 之后才 Attach：必须补 BindEvent，否则引擎不挂 WPF 事件
-        try this.ui.Update(ctrlName, "BindEvent", eventName)
+        try this.ui.BindEventBatched(ctrlName, eventName)
     }
 
     _BindTreeInteractionEvents() {
@@ -482,11 +481,14 @@ class MacroEditGui {
         this._BindTreeUiEvent(this.treeName, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "_OnTreePreviewLeftDown"))
         this._BindTreeUiEvent(this.treeName, "PreviewMouseRightButtonDown", ObjBindMethod(this, "_OnTreePreviewRightDown"))
         this._BindTreeUiEvent(this.treeName, "PreviewKeyDown", ObjBindMethod(this, "_OnTreePreviewKeyDown"))
-        this._BindTreeUiEvent(this.treeName, "PreviewMouseMove", ObjBindMethod(this, "_OnTreeDragMove"))
-        this._BindTreeUiEvent(this.treeName, "PreviewMouseLeftButtonUp", ObjBindMethod(this, "_OnTreeDragDrop"))
-        this._BindTreeUiEvent("Window", "PreviewMouseMove", ObjBindMethod(this, "_OnTreeDragMove"))
-        this._BindTreeUiEvent("Window", "PreviewMouseLeftButtonUp", ObjBindMethod(this, "_OnTreeDragDrop"))
-        this._BindTreeUiEvent("Window", "Deactivated", ObjBindMethod(this, "_OnDragFocusLost"))
+        ; 拖拽（树内排序、左侧指令拖入）整段在引擎里跑：命中测试、插入线、跟手幽灵都不跨进程。
+        ; 这里只把三件套控件名交给引擎，并登记它在松手/取消时回报的结果事件。
+        this.ui.OnEvent(this.treeName, "TreeDrop", ObjBindMethod(this, "_OnTreeDropCommitted"))
+        this.ui.OnEvent(this.treeName, "TreeDropExternal", ObjBindMethod(this, "_OnTreeDropExternal"))
+        this.ui.OnEvent(this.treeName, "TreeDragStart", ObjBindMethod(this, "_OnTreeDragStartNative"))
+        this.ui.OnEvent(this.treeName, "TreeDragCancel", ObjBindMethod(this, "_OnTreeDragCancelNative"))
+        try this.ui.Update(this.treeName, "TreeDrag"
+            , this.insertLineName "|" this.dragGhostName "|" this.dragGhostTxtName)
     }
 
     _BindTreeContextMenuEvents() {
@@ -1482,7 +1484,6 @@ class MacroEditGui {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
         }
         this._DragEndReset()
-        this._dragSource := ""
         if (IsObject(this.MacroTreeViewCon))
             this.MacroTreeViewCon._suppressRender := false
         ToolTip()
@@ -1511,9 +1512,6 @@ class MacroEditGui {
         if (IsObject(this.ui)) {
             try this.ui.Update("Window", "Close", "")
         }
-        this._dragActive := false
-        this._dragCandidate := ""
-        this._dragSource := ""
         if (IsObject(this.MacroTreeViewCon))
             this.MacroTreeViewCon._suppressRender := false
         ; V4：调试进行中关窗 = 终止调试。只清 hook.active 不够——ContinueRun/StepOut 的
@@ -2110,6 +2108,14 @@ class MacroEditGui {
         return this.ui.Query(ctrlName ">HitTest:" coord)
     }
 
+    _ApplyTreeDoubleClick() {
+        state := this._dblState
+        this._dblState := ""
+        if (!IsObject(state))
+            return
+        this._OnTreeDoubleClick(state, "", "")
+    }
+
     ; WPF 树双击：命中测试定位节点打开编辑器；WPF 默认双击展开/折叠，定向还原到双击前状态（不整树重渲染）
     _OnTreeDoubleClick(state, ctrl, event) {
         if (this.EditModeCon.Value != 1 || !IsObject(this.ui))
@@ -2117,7 +2123,10 @@ class MacroEditGui {
         coord := this._EventCoord(state, this.treeName)
         if (coord == "")
             return
-        tagSlot := this._HitTest(this.treeName, coord)
+        ; 引擎在按下事件里带了命中行，优先用它，不用再发同步查询
+        tagSlot := (IsObject(state) && state.Has("HitTag")) ? String(state["HitTag"]) : ""
+        if (tagSlot == "")
+            tagSlot := this._HitTest(this.treeName, coord)
         if (tagSlot == "")
             return
         hit := this._ResolveHit(tagSlot, coord)
@@ -2130,7 +2139,7 @@ class MacroEditGui {
         this.OnDoubleClick(this.MacroTreeViewCon, itemID)
     }
 
-    ; WPF 树左键按下：记录拖拽候选，延迟到选中完成后再处理多选（Ctrl/Shift/普通）
+    ; WPF 树左键按下：只负责双击与点选，拖拽已交给引擎（见 _BindTreeInteractionEvents 的 TreeDrag）
     _OnTreePreviewLeftDown(state, ctrl, event) {
         if (this.EditModeCon.Value != 1 || !IsObject(this.ui))
             return
@@ -2142,273 +2151,92 @@ class MacroEditGui {
                 clickCount := Integer(cc)
         }
         if (clickCount >= 2) {
-            ; 双击会打开编辑器，鼠标抬起常被子弹窗吃掉，必须立刻清掉拖拽幽灵/提示
-            this._DragEndReset()
-            this._OnTreeDoubleClick(state, ctrl, event)
+            ; 命中测试要查引擎，不能在事件回调里同步做，转伪线程
+            this._dblState := state
+            SetTimer(this._dblTick, -1)
             return
         }
-        ; 新按下：连同旧幽灵与清理定时器一起复位。
-        this._DragEndReset()
-        coord := this._EventCoord(state, this.treeName)
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&sx, &sy)
-        source := ""
-        if (coord != "") {
-            tagSlot := this._HitTest(this.treeName, coord)
-            if (tagSlot != "") {
-                hit := this._ResolveHit(tagSlot, coord)
-                if (hit.splitBtn != "") {
-                    this._OnSplitViewClick(hit.splitBtn)
-                    this._dragCandidate := ""
-                    return
-                }
-                source := hit.id
-            }
-        }
-        if (source != "") {
-            srcText := this.MacroTreeViewCon.GetText(source)
-            if (this._IsImmovableNode(srcText))
-                source := ""
-        }
-        this._dragCandidate := {fromLeft: false, gui: "", name: "", source: source, sx: sx, sy: sy}
-        SetTimer(this._dragWatchdog, 50)
-        this._treeClickCoord := coord
+        ; 点选：延后一拍，等 ListBox 完成原生选中后再做多选/分栏按钮处理
+        this._treeClickCoord := this._EventCoord(state, this.treeName)
+        ; 引擎在按下事件里已经把命中行的 Tag 带回来了，不用再发一条同步查询
+        this._treeDownHit := (IsObject(state) && state.Has("HitTag")) ? String(state["HitTag"]) : ""
         SetTimer(ObjBindMethod(this, "_ProcessTreeLeftClick"), -20)
     }
 
-    ; 左面板按钮按下：拖拽候选（fromLeft）
+    ; 左面板按钮按下：把"拖的是哪条指令"交给引擎，由引擎在窗口内跟手并在松手时回报落点
     _OnPanelDragStart(guiInstance, displayName, state, ctrl, event) {
         if (this.EditModeCon.Value != 1 || !IsObject(this.ui))
             return
-        this._DragEndReset()
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&sx, &sy)
-        this._dragCandidate := {fromLeft: true, gui: guiInstance, name: displayName, source: "", sx: sx, sy: sy}
-        SetTimer(this._dragWatchdog, 50)
+        this._extDragGui := guiInstance
+        ; value = 目标树名|幽灵文本|插入线名|幽灵名|幽灵文本名
+        try this.ui.Update("Window", "TreeDragExternal"
+            , this.treeName "|" displayName "|" this.insertLineName "|" this.dragGhostName "|" this.dragGhostTxtName)
     }
 
-    ; 窗口级鼠标移动：检测拖拽启动；命中树得插入线位置（不重建树）
-    _OnTreeDragMove(state, ctrl, event) {
-        if (this._sideMode && !this._sideActive)
-            return
-        if (!IsObject(this._dragCandidate))
-            return
-        lbtnDown := GetKeyState("LButton", "P")
-        if (!lbtnDown) {
-            ; 松开可能发生在弹窗或窗口外：不再显示幽灵，保留候选给已排队的松开事件。
-            this._HideDragGhost()
-            return
-        }
-        if (!this._dragActive) {
-            cand := this._dragCandidate
-            CoordMode("Mouse", "Screen")
-            MouseGetPos(&cx, &cy)
-            if (Abs(cx - cand.sx) > 8 || Abs(cy - cand.sy) > 8) {
-                if (!cand.fromLeft && cand.source == "")
-                    return
-                this._dragActive := true
-                this.MacroTreeViewCon._suppressRender := true   ; 拖拽期间禁全量重建
-            }
-        }
-        if (this._dragActive) {
-            ; 相对树控件本地坐标（穿透 Viewbox），勿用 Window 坐标相减
-            treeCoord := this._TreeMouseLocal()
-            this._dragTarget := ""
-            this._dragSlot := ""
-            lineY := -1
-            if (treeCoord != "") {
-                tagSlot := this._HitTest(this.treeName, treeCoord)
-                if (tagSlot != "") {
-                    hit := this._ResolveHit(tagSlot, treeCoord)
-                    this._dragTarget := hit.id
-                    this._dragSlot := hit.slot
-                    this._ApplyInsertLine(hit)
-                    lineY := hit.lineY
-                }
-            }
-            if (lineY < 0)
-                try this.ui.Update(this.insertLineName, "Visibility", "Collapsed")
-            name := this._dragCandidate.fromLeft ? this._dragCandidate.name : this.MacroTreeViewCon.GetText(this._dragCandidate.source)
-            this._ShowDragGhost(name)
-        }
+    ; ==== 拖拽结果（命中/插入线/幽灵都在引擎内跑完，这里只落模型）====
+
+    _OnTreeDragStartNative(state, ctrl, event) {
+        ; 拖拽期间禁整棵重建：树一重建，源行和落点就都对不上了
+        if (IsObject(this.MacroTreeViewCon))
+            this.MacroTreeViewCon._suppressRender := true
     }
 
-    ; 跟鼠标幽灵：仅指令文本（对齐宏配置 VL：Popup Absolute + 屏幕 DIP）
-    _ShowDragGhost(text) {
-        if (!IsObject(this.ui) || !this._dragActive || !GetKeyState("LButton", "P"))
-            return
-        dip := this._CursorDip()
-        if (dip.Length < 2)
-            return
-        if (text != this._lastDragTip) {
-            this._lastDragTip := text
-            try this.ui.Update(this.dragGhostTxtName, "Text", text)
-        }
-        ; 与 VL GiveFeedback 相同：光标右下轻微偏移
-        try this.ui.Update(this.dragGhostName, "HorizontalOffset", String(dip[1] + 18))
-        try this.ui.Update(this.dragGhostName, "VerticalOffset", String(dip[2] + 14))
-        try this.ui.Update(this.dragGhostName, "IsOpen", "True")
-    }
-
-    _HideDragGhost() {
-        if (!IsObject(this.ui))
-            return
-        try this.ui.Update(this.dragGhostName, "IsOpen", "False")
-        ToolTip()
-    }
-
-    ; 当前光标相对树控件的本地坐标 "x;y"（穿透 Viewbox）
-    _TreeMouseLocal() {
-        if (!IsObject(this.ui))
-            return ""
-        raw := ""
-        try raw := this.ui.Query(this.treeName ">MouseLocal")
-        if (raw == "")
-            return ""
-        ; 兼容 "x;y" / "x,y"
-        raw := StrReplace(raw, ",", ";")
-        parts := StrSplit(raw, ";")
-        if (parts.Length != 2)
-            return ""
-        return Trim(parts[1]) ";" Trim(parts[2])
-    }
-
-    ; 屏幕光标 WPF DIP [x, y]，供 Absolute Popup
-    _CursorDip() {
-        out := []
-        if (!IsObject(this.ui))
-            return out
-        raw := ""
-        try raw := this.ui.Query("Window>CursorDip")
-        if (raw == "") {
-            ; 引擎未重编译时的兜底：物理像素 / 窗口 DPI
-            CoordMode("Mouse", "Screen")
-            MouseGetPos(&mx, &my)
-            dpi := 96
-            try {
-                hwnd := this.Hwnd()
-                if (hwnd)
-                    dpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
-            }
-            if (!dpi)
-                dpi := DllCall("user32\GetDpiForSystem", "UInt")
-            scale := (dpi > 0) ? (dpi / 96.0) : 1.0
-            return [mx / scale, my / scale]
-        }
-        parts := StrSplit(raw, ",")
-        if (parts.Length != 2)
-            return out
-        return [Number(parts[1]), Number(parts[2])]
-    }
-
-    ; 窗口坐标 → 树坐标（兼容旧路径；优先用 _TreeMouseLocal）
-    _TreeCoord(winCoord) {
-        treeLocal := this._TreeMouseLocal()
-        if (treeLocal != "")
-            return treeLocal
-        if (!IsObject(this.ui))
-            return ""
-        pos := this.ui.Query(this.treeName ">Position")
-        if (pos == "")
-            return ""
-        pp := StrSplit(pos, ",")
-        wc := StrSplit(winCoord, ";")
-        if (pp.Length != 2 || wc.Length != 2)
-            return ""
-        return (wc[1] - pp[1]) ";" (wc[2] - pp[2])
-    }
-
-    _OnDragFocusLost(*) {
-        this._DragEndReset()
-    }
-
-    ; MouseUp 被子窗口/系统吞掉时兜底取消；短暂宽限让正常异步 Drop 先处理。
-    _CheckDragRelease() {
-        if (!IsObject(this._dragCandidate) || !IsObject(this.ui) || (this._sideMode && !this._sideActive)) {
-            this._DragEndReset()
-            return
-        }
-        if (GetKeyState("LButton", "P")) {
-            this._dragReleaseAt := 0
-            return
-        }
-        this._HideDragGhost()
-        if (!this._dragReleaseAt)
-            this._dragReleaseAt := A_TickCount
-        if (A_TickCount - this._dragReleaseAt >= 150)
-            this._DragEndReset()
-    }
-
-    ; 拖拽结束/取消统一复位：恢复渲染、隐藏插入线、清幽灵
-    _DragEndReset() {
-        SetTimer(this._dragWatchdog, 0)
-        this._dragReleaseAt := 0
-        this._dragActive := false
-        this._dragCandidate := ""
-        this._dragTarget := ""
-        this._dragSlot := ""
-        this._lastDragTip := ""
+    _OnTreeDragCancelNative(state, ctrl, event) {
         if (IsObject(this.MacroTreeViewCon))
             this.MacroTreeViewCon._suppressRender := false
-        if (IsObject(this.ui)) {
-            try this.ui.Update(this.insertLineName, "Visibility", "Collapsed")
-        }
-        this._HideDragGhost()
     }
 
-    ; 窗口级松开左键：执行拖放（释放点不在树上则取消）
-    _OnTreeDragDrop(state, ctrl, event) {
-        if (this._sideMode && !this._sideActive)
-            return
-        if (!this._dragActive || !IsObject(this._dragCandidate)) {
-            this._DragEndReset()
-            return
+    ; 复位拖拽态：窗口关闭/重建等路径会调。引擎侧由它自己的 Up/Cancel 收尾，
+    ; 这里只把可能遗留的插入线和幽灵收掉，免得下次开窗看到残影。
+    _DragEndReset() {
+        if (IsObject(this.ui)) {
+            try this.ui.Update(this.insertLineName, "Visibility", "Collapsed")
+            try this.ui.Update(this.dragGhostName, "IsOpen", "False")
         }
-        cand := this._dragCandidate
-        treeCoord := this._TreeMouseLocal()
-        overTree := false
-        if (treeCoord != "" && IsObject(this.ui)) {
-            overTree := this.ui.Query(this.treeName ">IsOverTree:" treeCoord) == "1"
-            if (!overTree && !this._sideMode) {
-                winCoord := this._EventCoord(state, "Window")
-                if (winCoord != "")
-                    overTree := this.ui.Query("Window>IsOverTree:" winCoord) == "1"
-            }
-        }
-        this._DragEndReset()
-        this._dragCancelled := true
-        SetTimer((*) => this._dragCancelled := false, -300)
-        if (!overTree)
+    }
+
+    ; 树内拖拽：payload = "source|target|slot"
+    _OnTreeDropCommitted(state, ctrl, event) {
+        raw := IsObject(state) && state.Has("TreeDrop") ? state["TreeDrop"] : ""
+        this._OnTreeDragCancelNative(state, ctrl, event)
+        if (raw == "")
             return
-        ; 用释放点重新命中测试，取最终目标
-        target := ""
-        slot := ""
-        if (treeCoord != "") {
-            tagSlot := this._HitTest(this.treeName, treeCoord)
-            if (tagSlot != "") {
-                hit := this._ResolveHit(tagSlot, treeCoord)
-                target := hit.id
-                slot := hit.slot
-            }
-        }
-        if (cand.fromLeft) {
-            this.CurItemID := target
-            if (target == "") {
-                this.OnOpenSubGui(cand.gui, 1)
-                return
-            }
-            text := this.MacroTreeViewCon.GetText(target)
-            if (SubStr(CmdStripCurPos(text), 1, 1) == "⎖")
-                return
-            if (this.IsContainerNode(text)) {
-                this.OnOpenSubGui(cand.gui, 5)
-            } else {
-                this.OnOpenSubGui(cand.gui, slot == "top" ? 3 : 4)
-            }
+        parts := StrSplit(raw, "|")
+        if (parts.Length < 2)
+            return
+        this._MoveTreeNodeTo(parts[1], parts[2], parts.Length >= 3 ? parts[3] : "")
+    }
+
+    ; 左侧指令拖进树：payload = "|target|slot"（source 为空），落点决定插入方式
+    _OnTreeDropExternal(state, ctrl, event) {
+        raw := IsObject(state) && state.Has("TreeDropExternal") ? state["TreeDropExternal"] : ""
+        ; 拖拽已落定，吞掉紧随其后的那次 Click，否则会再开一次「新增指令」
+        this._dragCancelledAt := A_TickCount
+        this._OnTreeDragCancelNative(state, ctrl, event)
+        gui := this._extDragGui
+        this._extDragGui := ""
+        if (!IsObject(gui))
+            return
+        parts := raw == "" ? [] : StrSplit(raw, "|")
+        target := parts.Length >= 2 ? parts[2] : ""
+        slot := parts.Length >= 3 ? parts[3] : ""
+        this.CurItemID := target
+        if (target == "") {
+            this.OnOpenSubGui(gui, 1)
             return
         }
-        ; 树内移动：源 = 按下时命中的节点，目标 = 拖放时命中的节点
-        source := cand.source
+        text := this.MacroTreeViewCon.GetText(target)
+        if (SubStr(CmdStripCurPos(text), 1, 1) == "⎖")
+            return
+        if (this.IsContainerNode(text)) {
+            this.OnOpenSubGui(gui, 5)
+        } else {
+            this.OnOpenSubGui(gui, slot == "top" ? 3 : 4)
+        }
+    }
+
+    ; 树内移动：target 为空 = 移到根部末尾；容器 = 放进去；普通行 = 插到上/下
+    _MoveTreeNodeTo(source, target, slot) {
         if (source == "")
             return
         if (this._IsImmovableNode(this.MacroTreeViewCon.GetText(source)))
@@ -2438,7 +2266,10 @@ class MacroEditGui {
         coord := this._treeClickCoord
         if (coord == "")
             return
-        tagSlot := this._HitTest(this.treeName, coord)
+        tagSlot := this._treeDownHit
+        this._treeDownHit := ""
+        if (tagSlot == "")
+            tagSlot := this._HitTest(this.treeName, coord)
         if (tagSlot == "") {
             this._ClearTreeSelection()
             return
@@ -2519,6 +2350,7 @@ class MacroEditGui {
         if (this.EditModeCon.Value != 1 || !IsObject(this.ui))
             return
         this._rightClickCoord := this._EventCoord(state, this.treeName)
+        this._rightDownHit := (IsObject(state) && state.Has("HitTag")) ? String(state["HitTag"]) : ""
         SetTimer(ObjBindMethod(this, "_ProcessTreeRightClick"), -20)
     }
 
@@ -2530,7 +2362,9 @@ class MacroEditGui {
                 ed := MyMainWin._sideTree.ActiveEditor()
                 if (IsObject(ed) && ed != this) {
                     ed._rightClickCoord := this._rightClickCoord
+                    ed._rightDownHit := this._rightDownHit
                     this._rightClickCoord := ""
+                    this._rightDownHit := ""
                     ed._ProcessTreeRightClick()
                     return
                 }
@@ -2540,7 +2374,10 @@ class MacroEditGui {
         this._rightClickCoord := ""
         if (coord == "")
             return
-        tagSlot := this._HitTest(this.treeName, coord)
+        tagSlot := this._rightDownHit
+        this._rightDownHit := ""
+        if (tagSlot == "")
+            tagSlot := this._HitTest(this.treeName, coord)
         if (tagSlot == "") {
             this._ClearTreeSelection()
             this._OpenCtxMenu(this.blankCtxMenuName)
@@ -5426,9 +5263,9 @@ class MacroEditGui {
         return this.IsContainerNode(itemText)
     }
 
-    ; 分栏行 Tag 为 leftId+rightId+inset+view；HitTest 另附 originY|height|originX|width|splitBtn
+    ; 分栏行 Tag 为 leftId+rightId+inset+view；HitTest 另附 originY|height|originX|width|splitBtn|rowWidth
     _ResolveHit(tagSlot, coord := "") {
-        hit := {id: "", slot: "", expander: false, splitBtn: "", lineX: 0, lineW: 0, lineY: -1, hasLineBox: false}
+        hit := {id: "", slot: "", expander: false, splitBtn: "", lineX: 0, lineW: 0, lineY: -1, hasLineBox: false, rowW: 0}
         if (tagSlot == "")
             return hit
         parts := StrSplit(tagSlot, "|")
@@ -5447,6 +5284,8 @@ class MacroEditGui {
         }
         if (parts.Length >= 8 && parts[8] != "")
             hit.splitBtn := parts[8]
+        if (parts.Length >= 9 && IsNumber(parts[9]))
+            hit.rowW := Number(parts[9])
         hit.id := raw
         if (InStr(raw, "+")) {
             ids := StrSplit(raw, "+")
@@ -5467,12 +5306,8 @@ class MacroEditGui {
 
     _ApplySplitPairHit(&hit, leftId, rightId, inset, view, x) {
         btnW := 16
-        aw := 0
-        try {
-            rawW := this.ui.Query(this.treeName ">ActualWidth")
-            if (IsNumber(rawW))
-                aw := Number(rawW)
-        }
+        ; 行宽由引擎在命中结果里一并给出，不用再回读整棵树的 ActualWidth
+        aw := hit.rowW
         pairLeft := inset
         pairW := (aw > inset + 20) ? (aw - inset) : 320
         if (hit.hasLineBox && hit.lineW > 40 && hit.lineX <= inset + 2)
@@ -5510,32 +5345,6 @@ class MacroEditGui {
         if (id == "")
             id := (leftId != "") ? leftId : rightId
         hit.id := id
-    }
-
-    _ApplyInsertLine(hit) {
-        if (!IsObject(this.ui) || !IsObject(hit) || hit.lineY < 0 || hit.splitBtn != "") {
-            try this.ui.Update(this.insertLineName, "Visibility", "Collapsed")
-            return
-        }
-        left := 1
-        right := 1
-        if (hit.hasLineBox && hit.lineW > 8) {
-            left := Integer(Round(hit.lineX))
-            aw := 0
-            try {
-                rawW := this.ui.Query(this.treeName ">ActualWidth")
-                if (IsNumber(rawW))
-                    aw := Number(rawW)
-            }
-            if (aw > 0)
-                right := Integer(Round(aw - hit.lineX - hit.lineW))
-            if (left < 0)
-                left := 0
-            if (right < 0)
-                right := 0
-        }
-        try this.ui.Update(this.insertLineName, "Margin", left "," Integer(Round(hit.lineY)) "," right ",0")
-        try this.ui.Update(this.insertLineName, "Visibility", "Visible")
     }
 
     _OnSplitViewClick(token) {
@@ -5669,8 +5478,10 @@ class SideGuiFacade {
 
 CreateSubGuiClickHandler(self, guiInstance) {
     clickHandler(*) {
-        if (self._dragCancelled) {
-            self._dragCancelled := false
+        ; 拖拽到树里松开后，按钮还会补一个 Click——不拦的话会在插入指令之后
+        ; 又弹一次「新增指令」，两个窗叠在一起，前一个就关不掉了
+        if (self._dragCancelledAt && A_TickCount - self._dragCancelledAt < 400) {
+            self._dragCancelledAt := 0
             return
         }
         self.OnOpenSubGui(guiInstance)

@@ -610,9 +610,9 @@ class ShareCenterGui {
             btnName := "ShareDl_" i
             infoName := "ShareInfo_" i
             this.ui.OnEvent(btnName, "Click", ObjBindMethod(this, "OnRowDownload", i))
-            this.ui.Update(btnName, "BindEvent", "Click")
+            this.ui.BindEventBatched(btnName, "Click")
             this.ui.OnEvent(infoName, "Click", ObjBindMethod(this, "OnRowDetail", i))
-            this.ui.Update(infoName, "BindEvent", "Click")
+            this.ui.BindEventBatched(infoName, "Click")
         }
     }
 

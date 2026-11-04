@@ -58,7 +58,7 @@ public partial class AhkWpfEngine
     }
 
     // tag|slot|expander|originY|height|originX|width|splitBtn
-    private string FormatListHit(FrameworkElement tagFe, FrameworkElement yFe, FrameworkElement xFe, double hy, bool expander, string splitBtn, Visual rootVisual)
+    private string FormatListHit(FrameworkElement tagFe, FrameworkElement yFe, FrameworkElement xFe, double hy, bool expander, string splitBtn, Visual rootVisual, FrameworkElement rowFe)
     {
         if (tagFe == null || yFe == null)
             return "";
@@ -68,10 +68,16 @@ public partial class AhkWpfEngine
         var xOrigin = xFe.TransformToAncestor(rootVisual).Transform(new System.Windows.Point(0, 0));
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         string slot = (hy < yOrigin.Y + yFe.ActualHeight / 2.0) ? "top" : "bottom";
+        // 最后一段是整行宽度：分栏行里 xFe 只是其中一栏，算左右分栏占用要的是行宽
+        string rowW = "";
+        if (rowFe != null)
+        {
+            try { rowW = rowFe.ActualWidth.ToString(inv); } catch { }
+        }
         return tagFe.Tag.ToString() + "|" + slot + "|" + (expander ? "1" : "0")
             + "|" + yOrigin.Y.ToString(inv) + "|" + yFe.ActualHeight.ToString(inv)
             + "|" + xOrigin.X.ToString(inv) + "|" + xFe.ActualWidth.ToString(inv)
-            + "|" + (splitBtn ?? "");
+            + "|" + (splitBtn ?? "") + "|" + rowW;
     }
 
     private string GetControlValue(string trackName)
@@ -102,6 +108,29 @@ public partial class AhkWpfEngine
         // --- Suffix queries (rich component data) ---
         if (suffix != null)
         {
+            // TextLines —— 文本框在当前宽度下实际占几行，以及实际行高（"行数,行高"）。
+            // 替代主程序里按字符宽度估算换行的做法：估算用固定系数近似 ASCII 宽度，
+            // 中英混排、字体回退时都会偏，输入框高度会跳行。
+            if (suffix.StartsWith("TextLines"))
+            {
+                var tbx = c as System.Windows.Controls.TextBox;
+                if (tbx == null)
+                    return "1";
+                return MeasureTextBoxMetrics(tbx);
+            }
+
+            // MaxPanelWidth:listMinW —— AI 侧栏在「左侧列表不窄于 listMinW」前提下能取到的最大宽度。
+            // 面板和列表是同一容器里的两半，它们的实际宽度只有引擎知道；以前由主程序
+            // 回读 FoldList 的 ActualWidth 自己算，还得猜哪个页签当前可见。
+            if (suffix.StartsWith("MaxPanelWidth"))
+            {
+                double mpMinW = 0;
+                if (suffix.Length > 14)
+                    double.TryParse(suffix.Substring(14), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out mpMinW);
+                return QueryMaxPanelWidth(mpMinW);
+            }
+
             // HitTest:x;y —— 在指定控件上命中测试（坐标相对该控件），向上找 TreeViewItem，
             // 返回 "Tag|top/bottom"（top=光标在上半，bottom=下半；供插入上/下判定）
             if (suffix.StartsWith("HitTest:"))
@@ -160,7 +189,7 @@ public partial class AhkWpfEngine
                             {
                                 try
                                 {
-                                    val = FormatListHit(tagFe, yFe, xFe, hy, isCardExpander, splitBtn, rootVisual);
+                                    val = FormatListHit(tagFe, yFe, xFe, hy, isCardExpander, splitBtn, rootVisual, lbi);
                                 }
                                 catch
                                 {
@@ -179,7 +208,7 @@ public partial class AhkWpfEngine
                                         var itOrigin = it.TransformToAncestor(rootVisual).Transform(new System.Windows.Point(0, 0));
                                         if (hy >= itOrigin.Y && hy < itOrigin.Y + it.ActualHeight)
                                         {
-                                            val = FormatListHit(it, it, it, hy, false, "", rootVisual);
+                                            val = FormatListHit(it, it, it, hy, false, "", rootVisual, it);
                                             break;
                                         }
                                     }
@@ -639,6 +668,94 @@ public partial class AhkWpfEngine
             }
         }
         return sb.ToString();
+    }
+
+    // 找当前可见的 AI 侧栏，用「列表宽 + 面板宽 - 列表最小宽」算出面板还能到多宽。
+    // 只认 Visibility 为 Visible 且已经有实际宽度的那个，隐藏页签的 ActualWidth 为 0，不能用。
+    private string QueryMaxPanelWidth(double listMinW)
+    {
+        if (win == null)
+            return "";
+        double best = 0;
+        WalkVisualTree(win, (System.Windows.DependencyObject d) =>
+        {
+            var fe = d as System.Windows.FrameworkElement;
+            if (fe == null || string.IsNullOrEmpty(fe.Name))
+                return;
+            if (!fe.Name.StartsWith("AiWrap_"))
+                return;
+            if (fe.Visibility != System.Windows.Visibility.Visible || fe.ActualWidth <= 0)
+                return;
+            string tab = fe.Name.Substring("AiWrap_".Length);
+            var list = FindControlByPath("FoldList_" + tab) as System.Windows.FrameworkElement;
+            if (list == null || list.ActualWidth <= 0)
+                return;
+            double avail = list.ActualWidth + fe.ActualWidth - listMinW;
+            if (avail > best)
+                best = avail;
+        });
+        if (best <= 0)
+            return "";
+        return ((int)System.Math.Round(best)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // 文本框在当前宽度下占几行，以及实际行高（"行数,行高"）。
+    // 直接按文本排版测量，不看控件的 DesiredSize：模板自带的固定内边距和「单行外框高」
+    // 对不齐，用 DesiredSize 反推会整体偏一行。
+    // 行高也一并返回：主程序那边用的是固定值，字号被主题放大后每行会矮一截，多行时会裁字。
+    private static string MeasureTextBoxMetrics(System.Windows.Controls.TextBox tb)
+    {
+        if (tb == null)
+            return "1";
+
+        string text = tb.Text;
+        if (string.IsNullOrEmpty(text))
+            text = " ";   // 空文本也要量出行高，主程序拿它算「最多显示几行」的上限
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        text = text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+        double avail = tb.ActualWidth - tb.Padding.Left - tb.Padding.Right;
+        if (double.IsNaN(avail) || avail <= 0)
+            avail = tb.Width;
+        if (double.IsNaN(avail) || avail <= 0)
+            return "1";
+        if (avail < 8)
+            avail = 8;
+
+        try
+        {
+            var tf = new System.Windows.Media.Typeface(
+                tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch);
+            var ci = System.Globalization.CultureInfo.CurrentUICulture;
+
+            // 单行基准：中英各取一个字符，同时触发字体回退，行高更接近实际排版
+            var probe = new System.Windows.Media.FormattedText(
+                "国Ag", ci, tb.FlowDirection, tf, tb.FontSize,
+                System.Windows.Media.Brushes.Black);
+            probe.MaxTextWidth = 100000;
+            double lineUnit = probe.Height;
+            if (lineUnit <= 0)
+                return "1";
+
+            var ft = new System.Windows.Media.FormattedText(
+                text, ci, tb.FlowDirection, tf, tb.FontSize,
+                System.Windows.Media.Brushes.Black);
+            ft.MaxTextWidth = avail;
+            ft.MaxTextHeight = 1000000;
+
+            // 加 0.5 后取下整，避开 Math.Round 的银行家舍入（0.5 会舍成 0，导致少一行）
+            int lines = (int)Math.Floor(ft.Height / lineUnit + 0.5);
+            if (lines < 1)
+                lines = 1;
+            if (lines > 64)
+                lines = 64;
+            return lines.ToString(inv) + "," + lineUnit.ToString("0.##", inv);
+        }
+        catch
+        {
+            return "1";
+        }
     }
 
     // Collect state for specific control names only (used by MQUERY)
