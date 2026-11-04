@@ -57,7 +57,7 @@ class TimeGui {
     }
 
     _Edit(parent, name, width := "") {
-        el := parent.Add("TextBox").Name(name).Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
+        el := parent.Add("TextBox").Name(name).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left")
             .VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -67,7 +67,7 @@ class TimeGui {
     }
 
     _Combo(parent, name, editable := true, width := "") {
-        el := parent.Add("ComboBox").Name(name).Height(26).MinHeight(26).VerticalAlignment("Center")
+        el := parent.Add("ComboBox").Name(name).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left")
             .VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -89,8 +89,8 @@ class TimeGui {
     }
 
     _PairCols(g) {
-        ; 类型/超时 152 = 时68 + ：16 + 分68，右缘对齐分下拉；模式/轮询同宽
-        g.Cols("96", String(this._fldW), "108", String(this._fldW))
+        ; 与备注、目标时间共用标签宽度，避免剩余空间将类型行居中。
+        g.HorizontalAlignment("Left").Cols(String(this._labW), String(this._fldW), "108", String(this._fldW))
         return g
     }
 
@@ -102,20 +102,20 @@ class TimeGui {
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
-        main.Rows(titleHeight, "*")
+        main.Rows(titleHeight, "Auto")
 
         ; === 标题栏 ===
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,8")
-        body.Rows("32", "32", "Auto", "44")
+        body.Rows("Auto", "Auto", "Auto", "Auto")
         body.Cols("*")
 
-        r0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
+        r0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center").Margin("0,0,0,8")
         this._Lab(r0, "备注：")
         this._Edit(r0, "RemarkCon").Width(420).TextAlignment("Left")
 
-        r1 := this._PairCols(body.Add("Grid").Grid_Row(1).VerticalAlignment("Center"))
+        r1 := this._PairCols(body.Add("Grid").Grid_Row(1).VerticalAlignment("Center").Margin("0,0,0,4"))
         this._Lab(r1, "类型：").Grid_Column(0)
         tm := this._Combo(r1, "TimeModeCon", false, this._fldW).Grid_Column(1)
         for t in GetLangArr(this.ModeKeys)
@@ -145,12 +145,6 @@ class TimeGui {
         p1Var := p1.Add("StackPanel").Name("WaitVarRow").Orientation("Horizontal").Height("32").VerticalAlignment("Center").Visibility("Collapsed")
         this._Lab(p1Var, "时间戳：")
         this._Combo(p1Var, "WaitVarCon", true, 220)
-
-        p1r2 := this._PairCols(p1.Add("Grid").Height("32").VerticalAlignment("Center"))
-        this._Lab(p1r2, "超时(ms)：").Grid_Column(0)
-        this._Edit(p1r2, "TimeoutCon", this._fldW).Grid_Column(1)
-        this._Lab(p1r2, "轮询间隔(ms)：").Grid_Column(2)
-        this._Edit(p1r2, "CheckIntervalCon", this._fldW).Grid_Column(3)
 
         p2 := pStack.Add("StackPanel").Name("WindowPanel").Visibility("Collapsed")
         p2r1 := p2.Add("StackPanel").Name("WinTimeRow").Orientation("Horizontal").Height("32").VerticalAlignment("Center")
@@ -193,7 +187,7 @@ class TimeGui {
         this._Combo(p3r2, "CdPosXCon", true, 68)
         this._Combo(p3r2, "CdPosYCon", true, 68).Margin("8,0,0,0")
 
-        btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,12,0,4")
         AddCmdOkBtn(btnRow)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
@@ -318,10 +312,6 @@ class TimeGui {
         this._SetCombo("HourCon", vars, h)
         this._SetCombo("MinCon", vars, m)
         this._SetCombo("SecCon", vars, s)
-        timeout := ObjHasOwnProp(this.Data, "Timeout") ? this.Data.Timeout : 0
-        interval := ObjHasOwnProp(this.Data, "CheckInterval") ? this.Data.CheckInterval : 500
-        this.ui.Update("TimeoutCon", "Text", String(timeout))
-        this.ui.Update("CheckIntervalCon", "Text", String(interval))
 
         param5 := ObjHasOwnProp(this.Data, "Param5") ? this.Data.Param5 : ""
         winKind := (subMode == "区间判断") ? TimeNormWindowType(param5) : "时刻"
@@ -616,8 +606,7 @@ class TimeGui {
                     this.Data.Param1 := this.ui.Query("WaitVarCon")
                 else
                     this.Data.Param1 := this._ReadHms("WaitHourCon", "WaitMinCon", "WaitSecCon")
-                this.Data.Timeout := Integer(this.ui.Query("TimeoutCon") != "" ? this.ui.Query("TimeoutCon") : 0)
-                this.Data.CheckInterval := Integer(this.ui.Query("CheckIntervalCon") != "" ? this.ui.Query("CheckIntervalCon") : 500)
+                ; 不再展示高级轮询选项；保留已加载的兼容参数，新指令沿用 TimeData 默认值。
             case 2:
                 wt := TimeNormWindowType(this._GetSelectedKey("WinKindCon", TimeGui.WindowKindKeys))
                 this.Data.Param5 := wt

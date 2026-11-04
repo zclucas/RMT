@@ -23,6 +23,8 @@ using Microsoft.Web.WebView2.Core;
 public partial class AhkWpfEngine
 {
     string winId; IntPtr ahkHwnd; string[] tracked; Window win;
+    RmtFirstFrame firstFrame;
+    bool waitForInitialUpdates;
     // XAML 里写的 WindowChrome.CaptionHeight（设计尺寸）。窗口标题栏热区是窗口 DIP，不跟着
     // 根内容 Viewbox 缩放，必须按当前缩放比换算，否则内容缩小后热区会压到标题栏下方的控件上。
     double _chromeCaptionDesign = -1;
@@ -388,6 +390,8 @@ public partial class AhkWpfEngine
             startHidden = true;
             inlineData = inlineData.Substring(8);
         }
+        waitForInitialUpdates = inlineData.StartsWith("#INIT#", StringComparison.Ordinal);
+        if (waitForInitialUpdates) inlineData = inlineData.Substring(6);
         // Fast path: parse XAML + events directly from the inline data
         string[] parts = inlineData.Split(new[] { "\n---AHK-XAML-EVENTS---\n" }, 2, StringSplitOptions.None);
         string xamlContent = parts[0];
@@ -1277,26 +1281,16 @@ public partial class AhkWpfEngine
         catch { }
     }
 
-    private static void ShowEngineWindow(Window win, bool isDaemon, bool startHidden = false)
+    private void ShowEngineWindow(Window win, bool isDaemon, bool startHidden = false)
     {
         try
         {
+            firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden);
+            ApplyTaskbarExStyle(win);
+            if (startHidden) win.ShowActivated = false;
             if (isDaemon)
             {
-                ApplyTaskbarExStyle(win);
-                // 后台启动（rmt -min）：Show 时不要抢前台，否则焦点一夺一还，会闪两下。
-                // 窗口仍会露出一下白壳（内容还没画完），这个不接受额外机制，就这样。
-                if (startHidden)
-                    win.ShowActivated = false;
                 win.Show();
-                if (startHidden)
-                {
-                    // 用 Win32 隐藏而不是 win.Hide()：后者会把 WPF 的 Visibility 设成 Hidden，
-                    // 之后 AHK 用 WinShow 恢复时会被 WPF 再纠正回去。这里只藏 HWND，状态不受影响。
-                    IntPtr hHide = new WindowInteropHelper(win).Handle;
-                    if (hHide != IntPtr.Zero)
-                        ShowWindow(hHide, 0);   // SW_HIDE
-                }
             }
             else
             {
@@ -1308,20 +1302,14 @@ public partial class AhkWpfEngine
             try { new WindowInteropHelper(win).Owner = IntPtr.Zero; } catch { }
             if (win.Resources.Contains("OriginalNativeOwner"))
                 win.Resources.Remove("OriginalNativeOwner");
+            if (firstFrame == null)
+                firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden);
             if (isDaemon)
             {
                 ApplyTaskbarExStyle(win);
                 if (startHidden)
                     win.ShowActivated = false;
                 win.Show();
-                if (startHidden)
-                {
-                    // 用 Win32 隐藏而不是 win.Hide()：后者会把 WPF 的 Visibility 设成 Hidden，
-                    // 之后 AHK 用 WinShow 恢复时会被 WPF 再纠正回去。这里只藏 HWND，状态不受影响。
-                    IntPtr hHide = new WindowInteropHelper(win).Handle;
-                    if (hHide != IntPtr.Zero)
-                        ShowWindow(hHide, 0);   // SW_HIDE
-                }
             }
             else
             {

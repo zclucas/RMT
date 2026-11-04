@@ -3,10 +3,11 @@
 ; =============================================================================
 ; XamlWin — 所有 XAML 子窗统一开窗：先入队主题/内容，再 Show
 ;
-; 窗口创建时就是最终样子（不做透明离屏、不需要事后揭盖）：
+; 主题、内容和首帧绘制完成后才显示窗口：
 ;   1. Show 前 ApplyXamlTheme + 填表，Update 进 _updateQueue
-;   2. LoadedHwnd 一次刷入队列
-;   3. OnWindowLoad 不再二次 ApplyXamlTheme（后补描边/滚动条会闪）
+;   2. Show 将排队的最终主题色写进 XAML，首帧即使用当前配色
+;   3. LoadedHwnd 一次刷入其余更新、字号和回调内容，然后通知引擎初始化完成
+;   4. 引擎等 WPF 绘制完成后揭示窗口；OnWindowLoad 不再重复 ApplyXamlTheme
 ;
 ; 用法：
 ;   建好 ui、绑事件后：

@@ -112,7 +112,7 @@ class MacroGraphIfProMixin {
             return h
         cmp := (slot <= data.CompareTypeArr[caseIdx].Length) ? data.CompareTypeArr[caseIdx][slot] : 3
         h += this._IfProRowEstH() * 2
-        if (cmp != 7)
+        if (!IsCompareExistVar(cmp))
             h += this._IfProRowEstH()
         return h
     }
@@ -991,7 +991,7 @@ class MacroGraphIfProMixin {
             return { show: false, text: "" }
         logicTypes := this._IfProLogicTypes()
         lt := data.LogicTypeArr[caseIdx]
-        logicName := (lt >= 1 && lt <= logicTypes.Length) ? logicTypes[lt] : logicTypes[1]
+        logicName := logicTypes[CmdEnumIndex(lt, CmdEnumLogicNames()) + 1]
         return { show: true, text: GetLang("逻辑关系：") logicName }
     }
 
@@ -1079,14 +1079,14 @@ class MacroGraphIfProMixin {
         lt := data.LogicTypeArr[caseIdx]
         showLogic := cc > 1
         lw := this._FormalLW(), cw := this._FormalCW()
-        this._AddComboRow(innerFull, p "LogicRow_" id, GetLang("逻辑关系："), p "LogicCmb_" id, logicTypes, Max(0, lt - 1), showLogic, true, lw, cw)
+        this._AddComboRow(innerFull, p "LogicRow_" id, GetLang("逻辑关系："), p "LogicCmb_" id, logicTypes, CmdEnumIndex(lt, CmdEnumLogicNames()), showLogic, true, lw, cw)
         prevOn := true
         loop 4 {
             slot := A_Index
             chainVis := (slot == 1) ? true : prevOn
             on := slot <= cc
             cmp := (slot <= data.CompareTypeArr[caseIdx].Length) ? data.CompareTypeArr[caseIdx][slot] : 3
-            this._FillIfProCondiSlot(innerFull, id, caseIdx, slot, data, chainVis, cmp != 7)
+            this._FillIfProCondiSlot(innerFull, id, caseIdx, slot, data, chainVis, !IsCompareExistVar(cmp))
             prevOn := chainVis && on
         }
         ; 收起：条件摘要 + 本情况分支指令

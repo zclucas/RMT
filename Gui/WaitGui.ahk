@@ -17,10 +17,7 @@ class WaitGui {
         this.Data := ""
         this.SerialStr := ""
         this.DLVariableArr := []
-        this.WaitTypeKeys := ["等待变量值", "等待按键按下", "等待按键松开", "等待屏幕变化", "等待鼠标移动",
-            "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
-            "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
-            "等待文件存在", "等待文件删除", "等待文件变化", "等待日期"]
+        this.WaitTypeKeys := CmdEnumWaitEditorNames()
     }
 
     ShowGui(cmd) {
@@ -56,31 +53,28 @@ class WaitGui {
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
-        main.Rows(titleHeight, "34", "Auto", "40")
+        main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         ; === 内容 ===
-        body := main.Add("Grid").Grid_Row(1).Margin("10,8")
-        body.Rows("34", "Auto", "40")
+        body := main.Add("Grid").Grid_Row(1).Margin("16,12,16,16")
+        body.Rows("Auto", "Auto", "Auto")
         body.Cols("*")
 
-        ; 行0：备注 + 等待类型
-        row0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
-        row0.Add("TextBlock").Text(GetLang("备注：")).VerticalAlignment("Center")
+        ; 行0：类型 + 备注
+        row0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center").Margin("0,0,0,8")
+        row0.Add("TextBlock").Text(GetLang("类型：")).VerticalAlignment("Center")
+        wt := row0.Add("ComboBox").Name("WaitTypeCon").Width(160).Height(26).MinHeight(26).Margin("4,0,0,0")
+        for t in CmdEnumWaitEditorLabels()
+            wt.Add("ComboBoxItem").Content(t)
+        row0.Add("TextBlock").Text(GetLang("备注：")).VerticalAlignment("Center").Margin("16,0,0,0")
         row0.Add("TextBox").Name("RemarkCon").Width(140).Height(24).MinHeight(24).Margin("4,0,0,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
-        row0.Add("TextBlock").Text(GetLang("等待类型：")).VerticalAlignment("Center").Margin("16,0,0,0")
-        wt := row0.Add("ComboBox").Name("WaitTypeCon").Width(160).Height(26).MinHeight(26).Margin("4,0,0,0")
-        for t in GetLangArr(this.WaitTypeKeys)
-            wt.Add("ComboBoxItem").Content(t)
-
-        ; 行1：参数 GroupBox（各类型面板显隐切换）
-        pg := body.Add("GroupBox").Grid_Row(1).Header(GetLang("等待参数："))
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Foreground("{DynamicResource TextMain}").Margin("0,6,0,2")
-        pStack := pg.Add("StackPanel").Margin("10,8")
+        ; 行1：参数直接排版，不显示分组标题或外框。
+        pStack := body.Add("StackPanel").Grid_Row(1).Margin("0,6,0,2")
 
         ; 变量值面板：变量名 + 期望值
         vp := pStack.Add("StackPanel").Name("VarPanel").Orientation("Horizontal")
@@ -147,7 +141,7 @@ class WaitGui {
             dunit.Add("ComboBoxItem").Content(t)
 
         ; 行2：检测间隔 + 确定
-        btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,14,0,0")
         btnRow.Add("TextBlock").Text(GetLang("检测间隔(ms)：")).VerticalAlignment("Center")
         btnRow.Add("TextBox").Name("IntervalCon").Width(80).Height(24).MinHeight(24).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center")
@@ -183,6 +177,8 @@ class WaitGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        this.OnTypeChange()
+        this._SyncDateUnit()
     }
 
     OnWindowClosing(state, ctrl, event) {
@@ -223,6 +219,8 @@ class WaitGui {
 
     _TypeValue() {
         v := IsObject(this.ui) ? this.ui.Query("WaitTypeCon>SelectedIndex") : ""
+        if (!IsNumber(v) || Integer(v) < 0 || Integer(v) >= this.WaitTypeKeys.Length)
+            return ""
         return CmdEnumFromIndex(v, this.WaitTypeKeys)
     }
 
@@ -256,7 +254,7 @@ class WaitGui {
 
         batch := []
         batch.Push({ControlName: "RemarkCon", PropertyName: "Text", Value: cmdArr.Length >= 2 ? cmdArr[2] : ""})
-        batch.Push({ControlName: "WaitTypeCon", PropertyName: "SelectedIndex", Value: String(CmdEnumIndex(this.Data.WaitType, this.WaitTypeKeys))})
+        batch.Push({ControlName: "WaitTypeCon", PropertyName: "SelectedIndex", Value: String(CmdEnumWait(this.Data.WaitType) == "等待日期" ? -1 : CmdEnumIndex(this.Data.WaitType, this.WaitTypeKeys))})
         batch.Push({ControlName: "IntervalCon", PropertyName: "Text", Value: this.Data.Interval})
         batch.Push({ControlName: "VarNameCon", PropertyName: "Text", Value: this.Data.Param1})
         batch.Push({ControlName: "VarValCon", PropertyName: "Text", Value: this.Data.Param2})
@@ -404,6 +402,10 @@ class WaitGui {
 
     CheckIfValid() {
         t := this._TypeValue()
+        if (t == "") {
+            RmtDialog.Info(GetLang("请选择类型；日期等待请使用时间指令"))
+            return false
+        }
         switch t {
             case "等待变量值":
                 if (!CheckVarNameIfValid(this.ui.Query("VarNameCon")))
@@ -507,6 +509,10 @@ class WaitGui {
         unit := WaitNormDateUnit(GetLangKey(this.ui.Query("DateUnitCon")))
         val := Trim(this.ui.Query("DateValCon"))
         if (unit == "分钟" || unit == "小时" || unit == "天") {
+            if (IsNumber(val) && Number(val) < 0) {
+                RmtDialog.Info(GetLang("日期值无法识别"))
+                return false
+            }
             if (!IsNumber(val) && !InStr(val, "{") && (val == "" || InStr(val, " "))) {
                 RmtDialog.Info(GetLang("日期值无法识别"))
                 return false
