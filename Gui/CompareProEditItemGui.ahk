@@ -293,8 +293,6 @@ class CompareProEditItemGui {
             batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
             this._BatchSetCombo(batch, "NameCon_" i, this.DLVariableArr, GetLang(this.NameArr[i]))
             ct := this.CompareTypeArr[i]
-            if (!IsNumber(ct) || Integer(ct) < 1 || Integer(ct) > 9)
-                ct := 1
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
             this._BatchSetCombo(batch, "VariableCon_" i, this.DLVariableArr, GetLang(this.VariableArr[i]))
             onlyOne := this.ToggleArr.Length <= 1

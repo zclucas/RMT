@@ -307,8 +307,6 @@ class CompareGui {
             batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
             this._BatchSetCombo(batch, "NameCon_" i, this.DLVariableArr, GetLang(this.Data.NameArr[i]))
             ct := this.Data.CompareTypeArr[i]
-            if (!IsNumber(ct) || Integer(ct) < 1 || Integer(ct) > 9)
-                ct := 1
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
             this._BatchSetCombo(batch, "VariableCon_" i, this.DLVariableArr, GetLang(this.Data.VariableArr[i]))
             onlyOne := this.Data.ToggleArr.Length <= 1
