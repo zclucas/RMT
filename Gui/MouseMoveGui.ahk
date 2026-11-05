@@ -272,10 +272,12 @@ class MouseMoveGui {
         if (!this.CheckIfValid())
             return
         this.UpdateCommandStr()
+        ; 命令串要在关窗前取：_CloseWindow 会把 this.ui 置空，GetCmdStr 里还要读控件
+        cmdStr := this.GetCmdStr()
         action := this.SureBtnAction
         this._CloseWindow()
         if (action != "")
-            action(this.GetCmdStr())
+            action(cmdStr)
     }
 
     ; 阶段5：指令配置化——组装 Data 保存到配置文件，返回 移动<serial>_备注
