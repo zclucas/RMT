@@ -95,8 +95,8 @@ class MacroGraphHandlersMixin {
             keys := ["BgmX_" id, "BgmY_" id, "BgmTime_" id]
         else if (type == GetLang("后台按键"))
             keys := ["BgkTime_" id, "BgkCount_" id, "BgkInter_" id]
-        else if (type == GetLang("窗口管理"))
-            keys := ["WmX_" id, "WmY_" id, "WmW_" id, "WmH_" id, "WmTrans_" id]
+        else if ((type == GetLang("窗口管理") || type == GetLang("窗口信息") || type == GetLang("调整窗口")))
+            keys := ["WmX_" id, "WmY_" id, "WmW_" id, "WmH_" id, "WmTrans_" id, "WmWidthVar_" id, "WmHeightVar_" id, "WmTitle_" id, "WmResult1_" id, "WmResult2_" id, "WmResult3_" id, "WmResult4_" id, "WmResult5_" id, "WmResult6_" id, "WmResult7_" id]
         else if (type == GetLang("按键检测") || type == GetLang("手柄检测"))
             keys := ["KcVar_" id]
         else if (type == GetLang("抓图"))
@@ -1648,7 +1648,7 @@ class MacroGraphHandlersMixin {
                 this._OnFormalBGMouse(id, state, "", "Flush")
             else if (t == GetLang("后台按键"))
                 this._OnFormalBGKey(id, state, "", "Flush")
-            else if (t == GetLang("窗口管理"))
+            else if ((t == GetLang("窗口管理") || t == GetLang("窗口信息") || t == GetLang("调整窗口")))
                 this._OnFormalWindowManage(id, state, "", "Flush")
             else if (t == GetLang("按键检测") || t == GetLang("手柄检测"))
                 this._OnFormalKeyCheck(id, state, "", "Flush")

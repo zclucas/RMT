@@ -1000,7 +1000,9 @@ class MacroGraphFormalHandlersMixin {
     }
 
     _OnFormalWindowManage(id, state, ctrl, event) {
-        actions := this._FormalWindowManageActions()
+        if (this.HasOwnProp("_wmModeUpdating") && this._wmModeUpdating)
+            return
+        actions := this._FormalWindowManageActions(id)
         if (!IsObject(state))
             state := Map()
         if (ctrl == "WmActCmb_" id) {
@@ -1011,15 +1013,39 @@ class MacroGraphFormalHandlersMixin {
             data := this._FormalIniData(id)
             if (data == "")
                 return
-            data.ActionType := at
+            if (WindowActionGroup(data.ActionType) != at) {
+                nextAction := WindowGroupActions(at)[1]
+                WindowEnsureResults(data)
+                Loop 7 {
+                    prop := "ResultVar" A_Index
+                    value := WindowNextResultName(data.%prop%, data.ActionType, nextAction, A_Index)
+                    if (value != data.%prop%) {
+                        data.%prop% := value
+                        this.ui.Update("WmResult" A_Index "_" id, "Text", value)
+                    }
+                }
+                data.ActionType := nextAction
+            }
             SaveMacroCMDData(data)
-            this._RefreshFormalWindowManageVisibility(id, at)
+            this._RefreshWmModes(id, data.ActionType)
+            this._RefreshFormalWindowManageVisibility(id, data.ActionType)
             this._Apply()
             return
         }
         data := this._FormalIniData(id)
         if (data == "")
             return
+        if (ctrl == "WmModeCmb_" id) {
+            group := WindowActionGroup(data.ActionType)
+            mode := this._ComboText(ctrl, state, WindowGroupModes(group))
+            if (mode == "")
+                return
+            data.ActionType := WindowActionFromMode(group, mode)
+            SaveMacroCMDData(data)
+            this._RefreshFormalWindowManageVisibility(id, data.ActionType)
+            this._Apply()
+            return
+        }
         if (state.Has("WmWin_" id))
             data.SearchValue := state["WmWin_" id]
         if (state.Has("WmX_" id) && state["WmX_" id] != "")
@@ -1044,6 +1070,15 @@ class MacroGraphFormalHandlersMixin {
             data.NewTitle := state["WmTitle_" id]
         if (state.Has("WmTrans_" id) && state["WmTrans_" id] != "")
             data.Transparency := state["WmTrans_" id]
+        WindowEnsureResults(data)
+        data.CloseProcess := this._FormalReadToggle(state, "WmCloseProcess_" id, data.CloseProcess)
+        Loop 7 {
+            prop := "ResultVar" A_Index
+            key := "WmResult" A_Index "_" id
+            if (state.Has(key))
+                data.%prop% := GetVarName(state[key])
+        }
+        WindowRegisterResults(data)
         SaveMacroCMDData(data)
         this._Apply()
     }
@@ -1071,16 +1106,22 @@ class MacroGraphFormalHandlersMixin {
     }
 
     _WmReadLiveAction(id) {
-        actions := this._FormalWindowManageActions()
-        if (this.ui != "") {
-            try {
-                idx := this.ui.Get("WmActCmb_" id, "SelectedIndex")
-                if (idx >= 0 && idx < actions.Length)
-                    return GetLangKey(actions[idx + 1])
-            }
+        data := this._FormalIniData(id)
+        return IsObject(data) ? data.ActionType : "激活窗口"
+    }
+
+    _RefreshWmModes(id, action) {
+        this._wmModeUpdating := true
+        try {
+            modes := WindowGroupModes(WindowActionGroup(action))
+            this.ui.Update("WmModeCmb_" id, "ClearItems", "")
+            for mode in modes
+                this.ui.Update("WmModeCmb_" id, "AddItem", mode)
+            this.ui.Update("WmModeCmb_" id, "SelectedIndex", WindowModeIndex(action))
+            this._FormalSetVis(id, "WmModeRow_" id, modes.Length > 0)
+        } finally {
+            this._wmModeUpdating := false
         }
-        d := this._FormalDFromId(id)
-        return d.HasOwnProp("wmActionType") ? GetLangKey(d.wmActionType) : "激活窗口"
     }
 
     _OnFormalKeyCheck(id, state, ctrl, event) {
@@ -1753,10 +1794,35 @@ class MacroGraphFormalHandlersMixin {
         if (at == "")
             at := this._WmReadLiveAction(id)
         at := GetLangKey(at)
-        this._FormalSetVis(id, "WmXRow_" id, at == "移动窗口")
-        this._FormalSetVis(id, "WmYRow_" id, at == "移动窗口")
-        this._FormalSetVis(id, "WmWRow_" id, at == "调整宽高")
-        this._FormalSetVis(id, "WmHRow_" id, at == "调整宽高")
+        this._FormalSetVis(id, "WmCloseProcessRow_" id, at == "关闭窗口")
+        this.ui.Update("WmXLabel_" id, "Text", GetLang(at == "相对移动" ? "偏移X：" : "坐标X："))
+        this.ui.Update("WmYLabel_" id, "Text", GetLang(at == "相对移动" ? "偏移Y：" : "坐标Y："))
+        this.ui.Update("WmHint_" id, "Text", GetLang(WindowEditorHint(at)))
+        if (!this.HasOwnProp("_wmResultArrayMode"))
+            this._wmResultArrayMode := Map()
+        isArray := at == "匹配窗口列表"
+        if (!this._wmResultArrayMode.Has(id) || this._wmResultArrayMode[id] != isArray) {
+            this._wmResultArrayMode[id] := isArray
+            name := "WmResult1_" id
+            data := this._FormalIniData(id)
+            value := IsObject(data) ? data.ResultVar1 : ""
+            this.ui.Update(name, "ClearItems", "")
+            for item in (isArray ? GetGuiArrNameArr() : GetGuiVarArr())
+                this.ui.Update(name, "AddItem", item)
+            this.ui.Update(name, "Text", value)
+        }
+        fields := WindowInfoFields(at)
+        Loop 7 {
+            this._FormalSetVis(id, "WmResultRow" A_Index "_" id, A_Index <= fields.Length)
+            if (A_Index <= fields.Length) {
+                this.ui.Update("WmResultLabel" A_Index "_" id, "Text", GetLang(fields[A_Index]))
+                this.ui.Update("WmResultLabel" A_Index "_" id, "ToolTip", GetLang(WindowInfoFieldTip(at, A_Index)))
+            }
+        }
+        this._FormalSetVis(id, "WmXRow_" id, (at == "移动窗口" || at == "相对移动" || at == "位置和宽高"))
+        this._FormalSetVis(id, "WmYRow_" id, (at == "移动窗口" || at == "相对移动" || at == "位置和宽高"))
+        this._FormalSetVis(id, "WmWRow_" id, (at == "调整宽高" || at == "位置和宽高"))
+        this._FormalSetVis(id, "WmHRow_" id, (at == "调整宽高" || at == "位置和宽高"))
         this._FormalSetVis(id, "WmWidthVarRow_" id, at == "获取窗口宽高")
         this._FormalSetVis(id, "WmHeightVarRow_" id, at == "获取窗口宽高")
         this._FormalSetVis(id, "WmTitleRow_" id, at == "修改标题")
@@ -1765,15 +1831,16 @@ class MacroGraphFormalHandlersMixin {
 
     ; 窗口管理节点：编辑器确定后就地刷新内联控件值（避免整窗 _Render 闪烁）。
     _RefreshWindowManageInline(id, d) {
-        actions := this._FormalWindowManageActions()
+        actions := this._FormalWindowManageActions(id)
         at := d.HasOwnProp("wmActionType") ? d.wmActionType : "激活窗口"
         sv := d.HasOwnProp("wmSearchValue") ? d.wmSearchValue : ""
         varList := GetGuiVarArr()
-        actIdx := this._IndexInLangArr(actions, GetLang(at))
+        actIdx := this._IndexInLangArr(actions, GetLang(WindowActionGroup(GetLangKey(at))))
         if (actIdx < 0)
-            actIdx := this._IndexInLangArr(actions, at)
+            actIdx := this._IndexInLangArr(actions, WindowActionGroup(GetLangKey(at)))
         this.ui.Update("WmActCmb_" id, "SelectedIndex", Max(0, actIdx))
         this.ui.Update("WmWin_" id, "Text", sv)
+        this.ui.Update("WmCloseProcess_" id, "IsChecked", d.HasOwnProp("wmCloseProcess") && d.wmCloseProcess ? "True" : "False")
         for nm, val in Map("WmX", d.HasOwnProp("wmPosX") ? d.wmPosX : 0, "WmY", d.HasOwnProp("wmPosY") ? d.wmPosY : 0,
             "WmW", d.HasOwnProp("wmWidth") ? d.wmWidth : 0, "WmH", d.HasOwnProp("wmHeight") ? d.wmHeight : 0,
             "WmWidthVar", d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "Var1", "WmHeightVar", d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "Var2",
@@ -1783,6 +1850,11 @@ class MacroGraphFormalHandlersMixin {
                 this.ui.Update(nm "_" id, "AddItem", item)
             this.ui.Update(nm "_" id, "Text", GetLang(val))
         }
+        Loop 7 {
+            prop := "wmResultVar" A_Index
+            this.ui.Update("WmResult" A_Index "_" id, "Text", d.HasOwnProp(prop) ? d.%prop% : "Var" A_Index)
+        }
+        this._RefreshWmModes(id, GetLangKey(at))
         this._RefreshFormalWindowManageVisibility(id, at)
     }
 
@@ -1891,7 +1963,7 @@ class MacroGraphFormalHandlersMixin {
             this._RefreshFormalBGMouseVisibility(id)
         else if (d.type == GetLang("后台按键"))
             this._RefreshFormalBGKeyVisibility(id)
-        else if (d.type == GetLang("窗口管理"))
+        else if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口")))
             this._RefreshFormalWindowManageVisibility(id)
         else if (d.type == GetLang("抓图"))
             this._RefreshFormalScreenShotVisibility(id)
@@ -1956,7 +2028,7 @@ class MacroGraphFormalHandlersMixin {
             this._RefreshBGKeyInline(id, d)
             return true
         }
-        if (d.type == GetLang("窗口管理")) {
+        if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口"))) {
             this._RefreshWindowManageInline(id, d)
             return true
         }
@@ -2603,7 +2675,7 @@ class MacroGraphFormalHandlersMixin {
                 return d.bgKeyStr
             return GetLang(CmdEnumKeyAct(d.HasOwnProp("bgKeyType") ? d.bgKeyType : "按下"))
         }
-        if (d.type == GetLang("窗口管理"))
+        if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口")))
             return GetLang(d.HasOwnProp("wmActionType") ? d.wmActionType : "激活窗口")
         if (d.type == GetLang("按键检测") || d.type == GetLang("手柄检测")) {
             if (d.HasOwnProp("kcKeyStr") && d.kcKeyStr != "")

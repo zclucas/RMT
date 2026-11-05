@@ -267,7 +267,7 @@ CmdEnumNorm(cmd, Data) {
         case "宏操作":
             CmdEnumSetNum(Data, "MacroType", ["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
             CmdEnumSetNum(Data, "CallType", ["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
-        case "窗口管理":
+        case "窗口管理", "窗口信息", "调整窗口":
             ; 保留旧数字顺序，新类型只在界面插入，避免旧配置操作错位。
             CmdEnumSetNum(Data, "ActionType", ["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口", "调整宽高", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
             if (Data.ActionType == "调整大小")
@@ -276,6 +276,7 @@ CmdEnumNorm(cmd, Data) {
                 Data.WidthVarName := "Var1"
             if (!Data.HasProp("HeightVarName"))
                 Data.HeightVarName := "Var2"
+            WindowNormalizeInfo(Data)
         case "文件读写", "Excel":
             if (Data.HasProp("OperType")) {
                 types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")
@@ -283,4 +284,188 @@ CmdEnumNorm(cmd, Data) {
                 Data.OperType := types.Has(key) ? types[key] : FileIONormType(Data.OperType)
             }
     }
+}
+
+; 查询字段顺序同时用于编辑器和执行结果，旧宽高变量保持独立兼容。
+WindowInfoFields(action) {
+    switch action {
+        case "窗口位置": return ["坐标X", "坐标Y"]
+        case "位置与宽高": return ["坐标X", "坐标Y", "宽度", "高度"]
+        case "标题类名句柄": return ["标题", "类名", "句柄"]
+        case "进程信息": return ["进程名", "进程ID", "程序路径"]
+        case "窗口状态": return ["存在", "激活", "最小化", "最大化", "置顶", "透明度", "鼠标穿透"]
+        case "透明度与鼠标穿透状态": return ["透明度", "鼠标穿透"]
+        case "匹配窗口列表": return ["句柄数组"]
+    }
+    return []
+}
+
+WindowEnsureResults(data) {
+    if (!data.HasProp("CloseProcess"))
+        data.CloseProcess := false
+    Loop 7 {
+        prop := "ResultVar" A_Index
+        if (!data.HasProp(prop))
+            data.%prop% := "Var" A_Index
+    }
+}
+
+WindowRegisterResults(data) {
+    for i, label in WindowInfoFields(data.ActionType) {
+        prop := "ResultVar" i
+        name := GetVarName(data.%prop%)
+        if (name == "")
+            continue
+        if (data.ActionType == "匹配窗口列表")
+            MySoftData.GlobalArrMap[name] := true
+        else
+            MySoftData.GlobalVariMap[name] := true
+    }
+}
+
+; UI 分类与具体动作分离：仍保存原动作键，已有宏无需迁移。
+WindowActionGroup(action) {
+    switch action {
+        case "激活窗口", "关闭窗口": return "窗口操作"
+        case "调整宽高", "位置和宽高": return "调整尺寸"
+        case "移动窗口", "相对移动", "窗口居中": return "移动窗口"
+        case "最大化窗口", "最小化窗口", "还原窗口": return "显示状态"
+        case "置顶窗口", "取消置顶", "切换置顶": return "置顶"
+        case "开启鼠标穿透", "关闭鼠标穿透", "切换鼠标穿透": return "鼠标穿透"
+    }
+    return action
+}
+
+WindowGroupActions(group) {
+    switch group {
+        case "窗口操作": return ["激活窗口", "关闭窗口"]
+        case "调整尺寸": return ["调整宽高", "位置和宽高"]
+        case "移动窗口": return ["移动窗口", "相对移动", "窗口居中"]
+        case "显示状态": return ["最大化窗口", "最小化窗口", "还原窗口"]
+        case "置顶": return ["置顶窗口", "取消置顶", "切换置顶"]
+        case "鼠标穿透": return ["开启鼠标穿透", "关闭鼠标穿透", "切换鼠标穿透"]
+    }
+    return [group]
+}
+
+WindowGroupModes(group) {
+    switch group {
+        case "窗口操作": return GetLangArr(["激活", "关闭"])
+        case "调整尺寸": return GetLangArr(["仅宽高", "位置和宽高"])
+        case "移动窗口": return GetLangArr(["绝对位置", "相对移动", "窗口居中"])
+        case "显示状态": return GetLangArr(["最大化", "最小化", "还原"])
+        case "置顶", "鼠标穿透": return GetLangArr(["开启", "关闭", "切换"])
+    }
+    return []
+}
+
+WindowModeIndex(action) {
+    for i, item in WindowGroupActions(WindowActionGroup(action)) {
+        if (item == action)
+            return i - 1
+    }
+    return 0
+}
+
+WindowActionFromMode(group, mode) {
+    actions := WindowGroupActions(group)
+    for i, label in WindowGroupModes(group) {
+        if (label == mode)
+            return actions[i]
+    }
+    return actions[1]
+}
+
+; 旧查询映射到合并后的类型，只保留原先配置的输出变量，避免新增查询覆盖其它变量。
+WindowNormalizeInfo(data) {
+    if (data.ActionType == "窗口状态") {
+        if (!data.HasProp("ResultVar6"))
+            data.ResultVar6 := ""
+        if (!data.HasProp("ResultVar7"))
+            data.ResultVar7 := ""
+    }
+    WindowEnsureResults(data)
+    switch data.ActionType {
+        case "窗口位置":
+            data.ActionType := "位置与宽高"
+            data.ResultVar3 := "", data.ResultVar4 := ""
+        case "获取窗口宽高":
+            data.ActionType := "位置与宽高"
+            data.ResultVar1 := "", data.ResultVar2 := ""
+            data.ResultVar3 := data.WidthVarName
+            data.ResultVar4 := data.HeightVarName
+        case "透明度与鼠标穿透状态":
+            data.ActionType := "窗口状态"
+            data.ResultVar6 := data.ResultVar1
+            data.ResultVar7 := data.ResultVar2
+            Loop 5 {
+                prop := "ResultVar" A_Index
+                data.%prop% := ""
+            }
+    }
+}
+
+WindowEditorHint(action) {
+    switch action {
+        case "位置与宽高": return "结果保存到变量，留空则跳过。坐标为屏幕坐标，宽高包含标题栏和边框。"
+        case "窗口状态": return "结果保存到变量，留空则跳过。状态为 0/1；透明度为 0–100，100 表示完全不透明。"
+        case "匹配窗口列表": return "填写数组名，保存所有匹配窗口的句柄；没有匹配窗口时返回空数组。"
+        case "标题类名句柄", "进程信息": return "结果保存到变量，留空则跳过。读取第一个匹配窗口；未匹配时返回空值。"
+        case "移动窗口": return "输入屏幕坐标（像素），也可选择变量。"
+        case "相对移动": return "输入偏移量（像素），也可选择变量。正数向右/下，负数向左/上。"
+        case "窗口居中": return "居中到窗口所在显示器的工作区，避开任务栏。"
+        case "调整宽高", "位置和宽高": return "宽高为包含标题栏和边框的像素尺寸，须大于 0；支持变量。"
+        case "修改透明度": return "输入 0–100 或变量；0 表示完全透明，100 表示完全不透明。"
+        case "关闭窗口": return "默认只关闭窗口；需要结束后台驻留程序时，可勾选关闭进程。"
+        case "开启鼠标穿透", "关闭鼠标穿透", "切换鼠标穿透": return "开启后，鼠标点击将穿过该窗口，作用于下方窗口。"
+        case "修改标题": return "输入新标题，支持引用变量。"
+    }
+    return "操作作用于绑定的目标窗口。"
+}
+
+WindowNumericInputError(label, value) {
+    value := Trim(value)
+    if (value == "")
+        return label "不能为空，可填写数值或变量"
+    if (label == "透明度")
+        value := StrReplace(value, "%")
+    if (!IsNumber(value))
+        return "" ; 变量在执行时解析，编辑时不要求已有值。
+    if (label == "宽度" || label == "高度") {
+        if (value <= 0 || value != Integer(value))
+            return label "须为大于 0 的整数，或填写变量"
+    } else if (label == "透明度") {
+        if (value < 0 || value > 100)
+            return "透明度须在 0–100 之间，或填写变量"
+    } else if (value != Integer(value))
+        return label "须为整数，或填写变量"
+    return ""
+}
+
+WindowResultDefaultName(action, index) {
+    names := ["Win_Exist", "Win_Active", "Win_Minimized", "Win_Maximized", "Win_AlwaysOnTop", "Win_Transparency", "Win_ClickThrough"]
+    return action == "窗口状态" && index >= 1 && index <= names.Length ? names[index] : "Var" index
+}
+
+; 仅在用户切换类别时替换未修改的默认名；加载已有宏时不重命名输出。
+WindowNextResultName(value, oldAction, newAction, index) {
+    if (oldAction != newAction && (oldAction == "窗口状态" || newAction == "窗口状态")
+        && value == WindowResultDefaultName(oldAction, index))
+        return WindowResultDefaultName(newAction, index)
+    return value
+}
+
+WindowInfoFieldTip(action, index) {
+    if (action != "窗口状态")
+        return "填写保存结果的变量名；留空则跳过。"
+    tips := [
+        "1：找到匹配窗口；0：未找到匹配窗口。",
+        "1：目标窗口是当前活动窗口；0：未激活或未找到窗口。",
+        "1：目标窗口已最小化；0：未最小化或未找到窗口。",
+        "1：目标窗口已最大化；0：未最大化或未找到窗口。",
+        "1：目标窗口已置顶；0：未置顶或未找到窗口。",
+        "0–100：0 为完全透明，100 为完全不透明。未设置透明度时返回 100；未找到窗口时返回空值。",
+        "1：已开启鼠标穿透；0：未开启或未找到窗口。开启时点击穿过窗口作用于下方窗口。"
+    ]
+    return index >= 1 && index <= tips.Length ? tips[index] : ""
 }
