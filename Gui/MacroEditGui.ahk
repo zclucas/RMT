@@ -51,12 +51,38 @@ class MacroEditGui {
         return (v == "" || v == "f6") ? "f11" : v
     }
 
+    ; 其余调试热键：全部走设置（设置→快捷键「调试」块），空值回落到默认
+    _GetStepOverHotkey() {
+        v := MainSoftData.HasProp("DebugStepOverHotkey") ? MainSoftData.DebugStepOverHotkey : ""
+        return v == "" ? "f10" : v
+    }
+
+    _GetStepOutHotkey() {
+        v := MainSoftData.HasProp("DebugStepOutHotkey") ? MainSoftData.DebugStepOutHotkey : ""
+        return v == "" ? "+f11" : v
+    }
+
+    _GetRunToCursorHotkey() {
+        v := MainSoftData.HasProp("DebugRunToCursorHotkey") ? MainSoftData.DebugRunToCursorHotkey : ""
+        return v == "" ? "^f10" : v
+    }
+
+    _GetToggleSkipHotkey() {
+        v := MainSoftData.HasProp("DebugToggleSkipHotkey") ? MainSoftData.DebugToggleSkipHotkey : ""
+        return v == "" ? "^/" : v
+    }
+
+    _GetRunAllHotkey() {
+        v := MainSoftData.HasProp("DebugRunAllHotkey") ? MainSoftData.DebugRunAllHotkey : ""
+        return v == "" ? "^f5" : v
+    }
+
     _ContinueLabel() {
         return GetLang("继续") " (" FormatHotkeyDisplay(this._GetContinueHotkey()) ")"
     }
 
     _StepOverLabel() {
-        return GetLang("步进") " (" FormatHotkeyDisplay("F10") ")"
+        return GetLang("步进") " (" FormatHotkeyDisplay(this._GetStepOverHotkey()) ")"
     }
 
     _StepIntoLabel() {
@@ -64,20 +90,19 @@ class MacroEditGui {
     }
 
     _StepOutLabel() {
-        return GetLang("步出") " (" FormatHotkeyDisplay("+F11") ")"
+        return GetLang("步出") " (" FormatHotkeyDisplay(this._GetStepOutHotkey()) ")"
     }
 
     _RunToCursorLabel() {
-        return GetLang("运行到光标处") " (" FormatHotkeyDisplay("^F10") ")"
+        return GetLang("运行到光标处") " (" FormatHotkeyDisplay(this._GetRunToCursorHotkey()) ")"
     }
 
     _ToggleSkipLabel() {
-        return GetLang("跳过指令") " (" FormatHotkeyDisplay("^/") ")"
+        return GetLang("跳过指令") " (" FormatHotkeyDisplay(this._GetToggleSkipHotkey()) ")"
     }
 
-    ; team-lead 指定保留方法名；仅把热键显示源改为硬编码 Ctrl+F5（不调试快跑，不进设置项）
     _DebugRunLabel() {
-        return GetLang("运行") " (" FormatHotkeyDisplay("^F5") ")"
+        return GetLang("运行") " (" FormatHotkeyDisplay(this._GetRunAllHotkey()) ")"
     }
 
     __new(reuseShared := false) {
@@ -343,7 +368,7 @@ class MacroEditGui {
         this._BuildAndShow(CommandStr, ShowSaveBtn)
 
         ; 注册快捷键热键（仅编辑器前台时拦截，失焦时按键透传给其他程序；关闭时注销）
-        this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), "F10", this._GetStepIntoHotkey(), "+F11", "^F10", "$^/", "^F5", "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
+        this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), this._GetStepOverHotkey(), this._GetStepIntoHotkey(), this._GetStepOutHotkey(), this._GetRunToCursorHotkey(), "$" this._GetToggleSkipHotkey(), this._GetRunAllHotkey(), "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
 
         ; 注册拖拽消息监听（先注销再注册，避免重复打开时叠多个处理器）
         OnMessage(0x0201, this._lbtnHandler, 0)
@@ -436,7 +461,7 @@ class MacroEditGui {
             this._sideBound := true
         }
         if (bindHotkeys && this._hkIds.Length == 0 && hwnd)
-            this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), "F10", this._GetStepIntoHotkey(), "+F11", "^F10", "$^/", "^F5", "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), hwnd)
+            this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), this._GetStepOverHotkey(), this._GetStepIntoHotkey(), this._GetStepOutHotkey(), this._GetRunToCursorHotkey(), "$" this._GetToggleSkipHotkey(), this._GetRunAllHotkey(), "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), hwnd)
     }
 
     SetSideActive(active) {
@@ -1280,13 +1305,12 @@ class MacroEditGui {
         this._AddEditFoldBtn(leftTools, "BtnClear", Chr(0xE74D), GetLang("清空"))
         this._AddEditVSplit(leftTools)
 
-        this._AddEditFoldBtn(leftTools, "BtnContinue", Chr(0xE768), GetLang("播放/继续") "  F5")
-        stepBtn := this._AddEditFoldBtn(leftTools, "BtnStepInto", "", this._StepIntoLabel())
-        stepSp := stepBtn.Add("StackPanel").Orientation("Vertical").HorizontalAlignment("Center").VerticalAlignment("Center")
-        stepSp.Add("TextBlock").Text(Chr(0xE74B)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-            .FontSize(11).HorizontalAlignment("Center").Foreground("{DynamicResource TextMain}")
-        stepSp.Add("Ellipse").Width(4).Height(4).Fill("{DynamicResource TextMain}")
-            .HorizontalAlignment("Center").Margin("0,1,0,0")
+        this._AddEditFoldBtn(leftTools, "BtnContinue", Chr(0xE768), GetLang("播放/继续") "  " FormatHotkeyDisplay(this._GetContinueHotkey()))
+        this._AddEditFoldBtn(leftTools, "BtnStepOver", Chr(0xE76C), this._StepOverLabel())
+        this._AddEditFoldBtn(leftTools, "BtnStepInto", Chr(0xE70D), this._StepIntoLabel())
+        this._AddEditFoldBtn(leftTools, "BtnStepOut", Chr(0xE70E), this._StepOutLabel())
+        this._AddEditFoldBtn(leftTools, "BtnRunToCursor", Chr(0xE81D), this._RunToCursorLabel())
+        this._AddEditFoldBtn(leftTools, "BtnKill", Chr(0xE71A), GetLang("终止"))
         this._AddEditVSplit(leftTools)
 
         this._AddEditFoldBtn(leftTools, "BtnVarListen", Chr(0xE7B3), GetLang("变量监视"), true)
@@ -1373,7 +1397,11 @@ class MacroEditGui {
         this.ui.OnEvent("SaveBtn", "Click", (*) => this.OnSaveBtnClick())
         this.ui.OnEvent("BtnExpand", "Click", ObjBindMethod(this, "_OnToggleZoom"))
         this.ui.OnEvent("BtnContinue", "Click", (*) => this.MenuHandler(this._ContinueLabel()))
+        this.ui.OnEvent("BtnStepOver", "Click", (*) => this.MenuHandler(this._StepOverLabel()))
         this.ui.OnEvent("BtnStepInto", "Click", (*) => this.MenuHandler(this._StepIntoLabel()))
+        this.ui.OnEvent("BtnStepOut", "Click", (*) => this.MenuHandler(this._StepOutLabel()))
+        this.ui.OnEvent("BtnRunToCursor", "Click", (*) => this.MenuHandler(this._RunToCursorLabel()))
+        this.ui.OnEvent("BtnKill", "Click", (*) => this.MenuHandler(GetLang("终止")))
         this.ui.OnEvent("BtnVarListen", "Click", (*) => this.MenuHandler(GetLang("变量监视")))
         this.ui.OnEvent("BtnCmdTip", "Click", (*) => this.MenuHandler(GetLang("指令显示")))
         this.ui.OnEvent("BtnTopMost", "Click", (*) => this.MenuHandler(GetLang("窗口置顶")))
@@ -2012,17 +2040,17 @@ class MacroEditGui {
             return
         if (StrLower(key) == StrLower(this._GetContinueHotkey()))
             this.MenuHandler(this._ContinueLabel())
-        else if (StrLower(key) == StrLower("F10"))
+        else if (StrLower(key) == StrLower(this._GetStepOverHotkey()))
             this.MenuHandler(this._StepOverLabel())
         else if (StrLower(key) == StrLower(this._GetStepIntoHotkey()))
             this.MenuHandler(this._StepIntoLabel())
-        else if (StrLower(key) == StrLower("+F11"))
+        else if (StrLower(key) == StrLower(this._GetStepOutHotkey()))
             this.MenuHandler(this._StepOutLabel())
-        else if (StrLower(key) == StrLower("^F10"))
+        else if (StrLower(key) == StrLower(this._GetRunToCursorHotkey()))
             this.MenuHandler(this._RunToCursorLabel())
-        else if (key == "^/")
+        else if (StrLower(key) == StrLower(this._GetToggleSkipHotkey()))
             this.MenuHandler(this._ToggleSkipLabel())
-        else if (StrLower(key) == StrLower("^F5"))
+        else if (StrLower(key) == StrLower(this._GetRunAllHotkey()))
             this.MenuHandler(this._DebugRunLabel())
         else if (key == "Delete") {
             this.OnDeleteCmd()

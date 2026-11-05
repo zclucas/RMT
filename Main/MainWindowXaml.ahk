@@ -1530,7 +1530,7 @@ class MainWin {
         this._BindLive("SideToolBack_" t, "Click", ObjBindMethod(this, "OnSideToolBack", t))
         this._BindLive("SideToolRecord_" t, "Click", ObjBindMethod(this, "OnSideToolRecord", t))
         this._BindLive("SideToolRun_" t, "Click", ObjBindMethod(this, "OnSideToolRun", t))
-        this._BindLive("SideToolStep_" t, "Click", ObjBindMethod(this, "OnSideToolStep", t))
+        this._BindLive("SideToolKill_" t, "Click", ObjBindMethod(this, "OnSideToolKill", t))
         this._BindLive("SideToolVar_" t, "Click", ObjBindMethod(this, "OnSideToolVar", t))
         this._BindLive("SideToolCmdTip_" t, "Click", ObjBindMethod(this, "OnSideToolCmdTip", t))
         this._BindLive("SideToolTop_" t, "Click", ObjBindMethod(this, "OnSideToolTop", t))
@@ -1652,12 +1652,12 @@ class MainWin {
         ed.MenuHandler(ed._ContinueLabel())
     }
 
-    OnSideToolStep(t, *) {
+    OnSideToolKill(t, *) {
         ed := IsObject(this._sideTree) ? this._sideTree.Ensure(t) : ""
         if (!IsObject(ed))
             return
         this._sideTree.Activate(t)
-        ed.MenuHandler(ed._StepIntoLabel())
+        ed.MenuHandler(GetLang("终止"))
     }
 
     ; ⚠️ 当前无调用方（侧栏「运行到下一断点」工具钮已随 F7 退休删除，
@@ -1901,7 +1901,7 @@ class MainWin {
         this._AddSideToolBtn(toolBar, idx, "Back", Chr(0xE750), GetLang("删除末尾"), false)
         this._AddSideToolSep(toolBar)
         this._AddSideToolBtn(toolBar, idx, "Run", Chr(0xE768), GetLang("播放/继续"), false)
-        this._AddSideToolBtn(toolBar, idx, "Step", "", GetLang("步入"), false)
+        this._AddSideToolBtn(toolBar, idx, "Kill", Chr(0xE71A), GetLang("终止"), false)
         this._AddSideToolSep(toolBar)
         this._AddSideToolBtn(toolBar, idx, "Var", Chr(0xE7B3), GetLang("变量监视"), true)
         this._AddSideToolBtn(toolBar, idx, "CmdTip", Chr(0xE8E3), GetLang("指令显示"), true)
@@ -5690,12 +5690,18 @@ class MainWin {
                 {f: "KillMacroHotkey", l: "终止宏", t: false},
                 {f: "ToolRecordMacroHotKey", l: "指令录制", t: false},
                 {f: "ToolTextFilterHotKey", l: "文本提取", t: false}]},
-            {title: "截图与调试", glyph: "&#xE8D4;", defs: [
+            {title: "截图与工具", glyph: "&#xE8D4;", defs: [
                 {f: "ScreenShotHotKey", l: "屏幕截图", t: false},
                 {f: "FreePasteHotKey", l: "自由贴", t: false},
-                {f: "ToolCheckHotkey", l: "鼠标信息", t: false},
-                {f: "DebugRunHotkey", l: "继续", t: true},
-                {f: "DebugStepHotkey", l: "步入", t: true}]}
+                {f: "ToolCheckHotkey", l: "鼠标信息", t: false}]},
+            {title: "调试", glyph: "&#xE76C;", defs: [
+                {f: "DebugRunHotkey", l: "播放/继续", t: true},
+                {f: "DebugStepOverHotkey", l: "步进", t: true},
+                {f: "DebugStepHotkey", l: "步入", t: true},
+                {f: "DebugStepOutHotkey", l: "步出", t: true},
+                {f: "DebugRunToCursorHotkey", l: "运行到光标", t: true},
+                {f: "DebugToggleSkipHotkey", l: "跳过指令", t: true},
+                {f: "DebugRunAllHotkey", l: "运行", t: true}]}
         ]
         hotkeyCards := []
         for hi, hg in hotkeyGroups {
@@ -5705,9 +5711,12 @@ class MainWin {
                 hdisp := hv == "" ? GetLang("无") : FormatHotkeyDisplay(hv)
                 hb .= row(GetLang(hd.l), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBox Name="Val_' hd.f '" Text="' this._XmlEsc(hdisp) '" IsReadOnly="True"/><Button Grid.Column="1" Name="BtnEdit_' hd.f '" Content="&#xE70F;" FontFamily="' iconFont '" ToolTip="' GetLang("录入快捷键") '" Margin="8,0,0,0" Padding="0"/></Grid>')
             }
-            hotkeyCards.Push(card(GetLang(hg.title), hg.glyph, hb, "0", "", "hk" hi))
+            ; 左列放两张卡（全局 + 截图），第二张要和上面留出间距；右列只有一张，不用
+            mg := (hi == 2) ? "0,18,0,0" : "0"
+            hotkeyCards.Push(card(GetLang(hg.title), hg.glyph, hb, mg, "", "hk" hi))
         }
-        hotkeyPage := page("hotkey", twoCol(hotkeyCards[1], hotkeyCards[2]))
+        ; 三张卡：左列「全局与工具 + 截图与工具」，右列「调试」（项多，单独占一列）
+        hotkeyPage := page("hotkey", twoCol(hotkeyCards[1] . hotkeyCards[2], hotkeyCards[3]))
 
         ; ---------- 页：日志 ----------
         logPage := page("diagnostic", twoCol(
@@ -6029,7 +6038,8 @@ class MainWin {
             {id: "recMouse", fields: [{key: "RecordMouse", def: true, ctrl: "MouseTogCon", kind: "chk"}, {key: "RecordMouseTrail", def: 1, ctrl: "MouseTrailModeCon", kind: "cmb0"}, {key: "RecordMouseTrailSpeed", def: 95, ctrl: "MouseTrailSpeedCon", kind: "num"}]},
             {id: "recJoy", fields: [{key: "RecordJoy", def: false, ctrl: "JoyTogCon", kind: "chk"}, {key: "RecordJoyInterval", def: 100, ctrl: "JoyIntervalCon", kind: "num"}]},
             {id: "hk1", fields: [{key: "SuspendHotkey", def: "!p", ctrl: "Val_SuspendHotkey", kind: "hk"}, {key: "PauseHotkey", def: "!i", ctrl: "Val_PauseHotkey", kind: "hk"}, {key: "KillMacroHotkey", def: "!k", ctrl: "Val_KillMacroHotkey", kind: "hk"}, {key: "ToolRecordMacroHotKey", def: "!r", ctrl: "Val_ToolRecordMacroHotKey", kind: "hk"}, {key: "ToolTextFilterHotKey", def: "", ctrl: "Val_ToolTextFilterHotKey", kind: "hk"}]},
-            {id: "hk2", fields: [{key: "ScreenShotHotKey", def: "", ctrl: "Val_ScreenShotHotKey", kind: "hk"}, {key: "FreePasteHotKey", def: "", ctrl: "Val_FreePasteHotKey", kind: "hk"}, {key: "ToolCheckHotkey", def: "!o", ctrl: "Val_ToolCheckHotkey", kind: "hk"}, {key: "DebugRunHotkey", def: "f5", ctrl: "Val_DebugRunHotkey", kind: "hk"}, {key: "DebugStepHotkey", def: "f11", ctrl: "Val_DebugStepHotkey", kind: "hk"}]},
+            {id: "hk2", fields: [{key: "ScreenShotHotKey", def: "", ctrl: "Val_ScreenShotHotKey", kind: "hk"}, {key: "FreePasteHotKey", def: "", ctrl: "Val_FreePasteHotKey", kind: "hk"}, {key: "ToolCheckHotkey", def: "!o", ctrl: "Val_ToolCheckHotkey", kind: "hk"}]},
+            {id: "hk3", fields: [{key: "DebugRunHotkey", def: "f5", ctrl: "Val_DebugRunHotkey", kind: "hk"}, {key: "DebugStepOverHotkey", def: "f10", ctrl: "Val_DebugStepOverHotkey", kind: "hk"}, {key: "DebugStepHotkey", def: "f11", ctrl: "Val_DebugStepHotkey", kind: "hk"}, {key: "DebugStepOutHotkey", def: "+f11", ctrl: "Val_DebugStepOutHotkey", kind: "hk"}, {key: "DebugRunToCursorHotkey", def: "^f10", ctrl: "Val_DebugRunToCursorHotkey", kind: "hk"}, {key: "DebugToggleSkipHotkey", def: "^/", ctrl: "Val_DebugToggleSkipHotkey", kind: "hk"}, {key: "DebugRunAllHotkey", def: "^f5", ctrl: "Val_DebugRunAllHotkey", kind: "hk"}]},
             {id: "cmdTip", fields: [{key: "CMDTip", def: false, ctrl: "ChkCMDTip", kind: "chkMy", hook: "cmdtip"}, {key: "CMDWidth", defFn: "cmdW", ctrl: "CmdTipWidthCon", kind: "sld", val: "CmdTipWidthVal"}, {key: "CMDHeight", def: 300, ctrl: "CmdTipHeightCon", kind: "sld", val: "CmdTipHeightVal"}, {key: "CMDPosX", defFn: "cmdX", ctrl: "CmdTipPosXCon", kind: "num"}, {key: "CMDPosY", def: 0, ctrl: "CmdTipPosYCon", kind: "num"}, {key: "CMDFontSize", def: 12, ctrl: "CmdTipFontCon", kind: "sld", val: "CmdTipFontVal"}, {key: "CMDTransparency", def: 50, ctrl: "CmdTipAlphaCon", kind: "sld", val: "CmdTipAlphaVal"}, {key: "CMDLogToFile", def: false, ctrl: "CmdTipLogFileCon", kind: "chk"}, {key: "CMDLogFilePath", def: "", ctrl: "CmdTipLogPathCon", kind: "txt"}, {key: "CMDLogAutoClear", def: 2, ctrl: "CmdTipAutoClearCon", kind: "cmb0"}]},
             {id: "logErr", fields: [{key: "SysLogMinLevel", def: "info", ctrl: "CmbLogLevel", kind: "cmbText"}, {key: "LogWarnBubble", def: true, ctrl: "ChkLogWarnBubble", kind: "chk"}, {key: "LogErrorBadge", def: true, ctrl: "ChkLogErrorBadge", kind: "chk"}, {key: "BusinessLog", def: false, ctrl: "ChkBusinessLog", kind: "chk", hook: "blog"}]},
             {id: "wheel", fields: [{key: "FixedMenuWheel", def: false, ctrl: "WheelFixedPosCon", kind: "chk"}, {key: "MenuWheelShowTooltip", def: false, ctrl: "WheelShowTooltipCon", kind: "chk"}, {key: "MenuWheelSelectMode", def: 2, ctrl: "WheelSelectModeCon", kind: "cmb"}, {key: "MenuWheelScale", def: 100, ctrl: "WheelScaleCon", kind: "sld", val: "WheelScaleVal"}]},

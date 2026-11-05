@@ -24,8 +24,13 @@ class HotkeySettingGui {
         {Field: "ScreenShotHotKey", Label: "屏幕截图", OnlyTrigger: false, Default: ""},
         {Field: "FreePasteHotKey", Label: "自由贴", OnlyTrigger: false, Default: ""},
         {Field: "ToolCheckHotkey", Label: "鼠标信息", OnlyTrigger: false, Default: "!o"},
-        {Field: "DebugRunHotkey", Label: "继续", OnlyTrigger: true, Default: "f5"},
-        {Field: "DebugStepHotkey", Label: "步入", OnlyTrigger: true, Default: "f11"}
+        {Field: "DebugRunHotkey", Label: "播放/继续", OnlyTrigger: true, Default: "f5"},
+        {Field: "DebugStepOverHotkey", Label: "步进", OnlyTrigger: true, Default: "f10"},
+        {Field: "DebugStepHotkey", Label: "步入", OnlyTrigger: true, Default: "f11"},
+        {Field: "DebugStepOutHotkey", Label: "步出", OnlyTrigger: true, Default: "+f11"},
+        {Field: "DebugRunToCursorHotkey", Label: "运行到光标", OnlyTrigger: true, Default: "^f10"},
+        {Field: "DebugToggleSkipHotkey", Label: "跳过指令", OnlyTrigger: true, Default: "^/"},
+        {Field: "DebugRunAllHotkey", Label: "运行", OnlyTrigger: true, Default: "^f5"}
     ]
 
     __new() {
