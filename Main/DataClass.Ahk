@@ -398,6 +398,7 @@ class MainConfig {
         this.IsToolCheck := false       ; 鼠标信息检测开关
         this.PosStr := ""               ; 当前鼠标坐标字符串
         this.WinPosStr := ""            ; 当前窗口坐标字符串
+        this.WinSizeStr := ""           ; 鼠标所在窗口完整尺寸（含标题栏和边框）
         this.ProcessName := ""          ; 鼠标所在窗口进程名
         this.ProcessTile := ""          ; 鼠标所在窗口标题
         this.ProcessPid := ""           ; 鼠标所在窗口 PID
@@ -1708,12 +1709,14 @@ class WaitConfirmData {
 class WindowManageData {
     __New() {
         this.SerialStr := ""                 ;类型尽量使用中文 当做枚举使用  程序中有语义、也可以随时调整顺序
-        this.ActionType := "激活窗口"        ;1激活窗口 2最大化窗口 3最小化窗口 4还原窗口 5关闭窗口 6移动窗口 7调整大小 8置顶窗口 9取消置顶 10修改标题 11修改透明度 12开启鼠标穿透 13关闭鼠标穿透
+        this.ActionType := "激活窗口"        ; 操作类型，使用中文键
         this.SearchValue := "{宏设置窗口绑定}"              ;查找值（格式：标题⎖类名⎖进程名，空表示未选择）
         this.PosX := 0                      ;移动窗口X坐标（移动窗口时使用）
         this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
-        this.Width := 0                     ;窗口宽度（调整大小时使用）
-        this.Height := 0                    ;窗口高度（调整大小时使用）
+        this.Width := 0                     ;窗口宽度（调整宽高时使用）
+        this.Height := 0                    ;窗口高度（调整宽高时使用）
+        this.WidthVarName := "Var1"         ;获取窗口宽高的宽度变量
+        this.HeightVarName := "Var2"        ;获取窗口宽高的高度变量
         this.NewTitle := ""                 ;新标题（修改标题时使用）
         this.Transparency := "80%"           ;透明度值 0-100（修改透明度时使用，80表示80%不透明度）
     }

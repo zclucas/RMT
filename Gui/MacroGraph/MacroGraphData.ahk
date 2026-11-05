@@ -558,6 +558,8 @@ class MacroGraphDataMixin {
             d.wmPosY := data.PosY
             d.wmWidth := data.Width
             d.wmHeight := data.Height
+            d.wmWidthVarName := data.WidthVarName
+            d.wmHeightVarName := data.HeightVarName
             d.wmNewTitle := data.NewTitle
             d.wmTransparency := data.Transparency
         } else if (cmdKey == "按键检测" || cmdKey == "手柄检测") {

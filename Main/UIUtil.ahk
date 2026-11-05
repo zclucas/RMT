@@ -169,7 +169,7 @@ RefreshToolUI() {
     ; 可能先触发本函数（BindUtil 鼠标钩子），控件未赋值时直接跳过，避免对不存在属性赋值抛错
     if (!MainSoftData.HasProp("ToolMousePosCtrl") || !IsObject(MainSoftData.ToolMousePosCtrl))
         return
-    ; 100ms 一次整块刷新。逐条赋值等于每秒 80 次同步跨进程往返，这里合并成一条。
+    ; 100ms 一次整块刷新，合并下发，避免逐条同步跨进程往返。
     CtrlAdapter.RefreshAll([
         [MainSoftData.ToolMousePosCtrl, MainSoftData.PosStr],
         [MainSoftData.ToolProcessNameCtrl, MainSoftData.ProcessName],
@@ -177,6 +177,7 @@ RefreshToolUI() {
         [MainSoftData.ToolProcessPidCtrl, MainSoftData.ProcessPid],
         [MainSoftData.ToolProcessClassCtrl, MainSoftData.ProcessClass],
         [MainSoftData.ToolProcessIdCtrl, MainSoftData.ProcessId],
+        [MainSoftData.ToolWinSizeCtrl, MainSoftData.WinSizeStr],
         [MainSoftData.ToolColorCtrl, MainSoftData.Color],
         [MainSoftData.ToolMouseWinPosCtrl, MainSoftData.WinPosStr]
     ])

@@ -268,7 +268,14 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSetNum(Data, "MacroType", ["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
             CmdEnumSetNum(Data, "CallType", ["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
         case "窗口管理":
-            CmdEnumSetNum(Data, "ActionType", ["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口", "调整大小", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
+            ; 保留旧数字顺序，新类型只在界面插入，避免旧配置操作错位。
+            CmdEnumSetNum(Data, "ActionType", ["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口", "调整宽高", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
+            if (Data.ActionType == "调整大小")
+                Data.ActionType := "调整宽高"
+            if (!Data.HasProp("WidthVarName"))
+                Data.WidthVarName := "Var1"
+            if (!Data.HasProp("HeightVarName"))
+                Data.HeightVarName := "Var2"
         case "文件读写", "Excel":
             if (Data.HasProp("OperType")) {
                 types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")

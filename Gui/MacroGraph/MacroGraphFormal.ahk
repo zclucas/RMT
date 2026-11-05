@@ -1146,7 +1146,7 @@ class MacroGraphFormalMixin {
     ; 与 WindowManageGui.ActionTypeArr 一致
     _FormalWindowManageActions() {
         return GetLangArr(["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口",
-            "调整大小", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
+            "获取窗口宽高", "调整宽高", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
     }
 
     _FillWindowManageBody(id, d, body) {
@@ -1157,7 +1157,8 @@ class MacroGraphFormalMixin {
         sv := d.HasOwnProp("wmSearchValue") ? d.wmSearchValue : ""
         atKey := GetLangKey(at)
         isMove := atKey == "移动窗口"
-        isSize := atKey == "调整大小"
+        isSize := atKey == "调整宽高"
+        isGetSize := atKey == "获取窗口宽高"
         isTitle := atKey == "修改标题"
         isTrans := atKey == "修改透明度"
         this._AddComboRow(body, "WmActRow_" id, GetLang("操作："), "WmActCmb_" id, actions, this._IndexInLangArr(actions, GetLang(at)), true, true, lw, cw)
@@ -1168,6 +1169,8 @@ class MacroGraphFormalMixin {
         this._AddEditableComboRow(body, "WmYRow_" id, GetLang("坐标Y："), "WmY_" id, varList, d.HasOwnProp("wmPosY") ? d.wmPosY : 0, isMove, lw, cw)
         this._AddEditableComboRow(body, "WmWRow_" id, GetLang("宽度："), "WmW_" id, varList, d.HasOwnProp("wmWidth") ? d.wmWidth : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmHRow_" id, GetLang("高度："), "WmH_" id, varList, d.HasOwnProp("wmHeight") ? d.wmHeight : 0, isSize, lw, cw)
+        this._AddEditableComboRow(body, "WmWidthVarRow_" id, GetLang("宽度变量："), "WmWidthVar_" id, varList, d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "Var1", isGetSize, lw, cw)
+        this._AddEditableComboRow(body, "WmHeightVarRow_" id, GetLang("高度变量："), "WmHeightVar_" id, varList, d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "Var2", isGetSize, lw, cw)
         this._AddEditableComboRow(body, "WmTitleRow_" id, GetLang("新标题："), "WmTitle_" id, varList, d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", isTitle, lw, cw)
         this._AddEditableComboRow(body, "WmTransRow_" id, GetLang("透明度："), "WmTrans_" id, varList, d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80", isTrans, lw, cw)
     }
@@ -1759,7 +1762,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackCombo(id, "WmActCmb", h, runtime)
             this._FormalTrackField(id, "WmWin", h, runtime)
             this._BindCtrl("WmWinEdit_" id, "Click", this._OnFormalWmWinEdit.Bind(this, id), runtime)
-            for nm in ["WmX", "WmY", "WmW", "WmH", "WmTitle", "WmTrans"]
+            for nm in ["WmX", "WmY", "WmW", "WmH", "WmWidthVar", "WmHeightVar", "WmTitle", "WmTrans"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
         } else if (t == GetLang("按键检测") || t == GetLang("手柄检测")) {
             h := this._OnFormalKeyCheck.Bind(this, id)

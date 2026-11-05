@@ -2029,6 +2029,18 @@ OnWindowManage(tableItem, cmd, index) {
     if (winTitle == "")
         return
 
+    ; 查询返回第一个匹配窗口的完整宽高，与工具监视的尺寸一致。
+    if (Data.ActionType == "获取窗口宽高") {
+        try {
+            WinGetPos(, , &width, &height, winTitle)
+            widthVar := GetVarName(Data.WidthVarName)
+            heightVar := GetVarName(Data.HeightVarName)
+            if (widthVar != "" && heightVar != "")
+                MySetGlobalVariable([widthVar, heightVar], [width, height], false)
+        }
+        return
+    }
+
     ; 激活只选最上面的一个目标；其它操作对显式窗口组逐个处理。
     if (Data.ActionType == "激活窗口") {
         try WinActivate(winTitle)
@@ -2053,7 +2065,7 @@ OnWindowManage(tableItem, cmd, index) {
                     if (hasPosX && hasPosY) {
                         WinMove(Integer(PosX), Integer(PosY), , , winTitle)
                     }
-                case "调整大小":
+                case "调整宽高", "调整大小":
                     hasWidth := TryGetTabVarValue(&Width, tableItem, index, Data.Width)
                     hasHeight := TryGetTabVarValue(&Height, tableItem, index, Data.Height)
                     if (hasWidth && hasHeight) {

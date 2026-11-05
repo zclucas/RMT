@@ -314,6 +314,12 @@ SetToolCheckInfo() {
         MainSoftData.ProcessPid := WinGetPID(winId)
         MainSoftData.ProcessClass := WinGetClass(winId)
         MainSoftData.ProcessId := winId
+        ; WinGetPos 返回窗口外框尺寸，包含标题栏和边框。
+        MainSoftData.WinSizeStr := ""
+        try {
+            WinGetPos(, , &winWidth, &winHeight, "ahk_id " winId)
+            MainSoftData.WinSizeStr := winWidth " × " winHeight
+        }
         MainSoftData.Color := StrReplace(PixelGetColor(mouseX, mouseY, "Slow"), "0x", "")
 
         WinPosArr := GetCurWinPos()

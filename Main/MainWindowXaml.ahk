@@ -5377,7 +5377,8 @@ class MainWin {
             . field("屏幕坐标", "&#xE81D;", "TxtMousePos", MainSoftData.PosStr)
             . field("窗口标题", "&#xE8A5;", "TxtProcessTile", MainSoftData.ProcessTile)
             . field("窗口类", "&#xE8D7;", "TxtProcessClass", MainSoftData.ProcessClass)
-            . field("句柄 Id", "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId) '</StackPanel><StackPanel Grid.Column="1">'
+            . field("句柄 Id", "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId)
+            . field("窗口宽高", "&#xE740;", "TxtWinSize", MainSoftData.WinSizeStr) '</StackPanel><StackPanel Grid.Column="1">'
             . field("窗口坐标", "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
             . field("进程名", "&#xE9D9;", "TxtProcessName", MainSoftData.ProcessName)
             . field("进程 PID", "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)
@@ -5421,6 +5422,7 @@ class MainWin {
         MainSoftData.ToolProcessClassCtrl := CtrlAdapter("TxtProcessClass", this.ui, "Text")
         MainSoftData.ToolProcessPidCtrl := CtrlAdapter("TxtProcessPid", this.ui, "Text")
         MainSoftData.ToolProcessIdCtrl := CtrlAdapter("TxtProcessId", this.ui, "Text")
+        MainSoftData.ToolWinSizeCtrl := CtrlAdapter("TxtWinSize", this.ui, "Text")
         MainSoftData.ToolColorCtrl := CtrlAdapter("TxtColor", this.ui, "Text")
 
         this.ui.Update("ChkToolCheck", "IsChecked", MainSoftData.IsToolCheck ? "True" : "False")

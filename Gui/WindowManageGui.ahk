@@ -25,12 +25,13 @@ class WindowManageGui {
 
         this.ActionTypeArr := [
             GetLang("激活窗口"), GetLang("最大化窗口"), GetLang("最小化窗口"), GetLang("还原窗口"), GetLang("关闭窗口"),
-            GetLang("移动窗口"), GetLang("调整大小"), GetLang("置顶窗口"), GetLang("取消置顶"), GetLang("修改标题"),
+            GetLang("移动窗口"), GetLang("获取窗口宽高"), GetLang("调整宽高"), GetLang("置顶窗口"), GetLang("取消置顶"), GetLang("修改标题"),
             GetLang("修改透明度"), GetLang("开启鼠标穿透"), GetLang("关闭鼠标穿透")
         ]
         ; 显隐联动行容器名（OnActionChange 用，对应原生 RelateArrCon 控件组）
         this.PosRelateArrCon := ["PosRelateRow"]
         this.SizeRelateArrCon := ["SizeRelateRow"]
+        this.ResultRelateArrCon := ["ResultRelateRow"]
         this.TitleRelateArrCon := ["TitleRelateRow"]
         this.TransparencyRelateArrCon := ["TransparencyRelateRow"]
     }
@@ -133,6 +134,15 @@ class WindowManageGui {
         posRow.Add("TextBlock").Grid_Column(3).Text(GetLang("坐标Y：")).VerticalAlignment("Center")
         posRow.Add("ComboBox").Grid_Column(4).Name("PosYCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
 
+        resultRow := extra.Add("Grid").Name("ResultRelateRow").Visibility("Collapsed")
+        resultRow.Rows("36")
+        resultRow.Cols("108", "*", "16", "108", "*")
+        resultRow.Add("TextBlock").Grid_Column(0).Text(GetLang("宽度变量：")).VerticalAlignment("Center")
+        resultRow.Add("ComboBox").Grid_Column(1).Name("WidthVarNameCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
+
+        resultRow.Add("TextBlock").Grid_Column(3).Text(GetLang("高度变量：")).VerticalAlignment("Center")
+        resultRow.Add("ComboBox").Grid_Column(4).Name("HeightVarNameCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
+
         sizeRow := extra.Add("Grid").Name("SizeRelateRow").Visibility("Collapsed")
         sizeRow.Rows("36")
         sizeRow.Cols("108", "*", "16", "108", "*")
@@ -217,6 +227,8 @@ class WindowManageGui {
         this._SetCombo("PosYCon", DLVariableArr, this.Data.PosY)
         this._SetCombo("WidthCon", DLVariableArr, this.Data.Width)
         this._SetCombo("HeightCon", DLVariableArr, this.Data.Height)
+        this._SetCombo("WidthVarNameCon", DLVariableArr, this.Data.WidthVarName)
+        this._SetCombo("HeightVarNameCon", DLVariableArr, this.Data.HeightVarName)
         this._SetCombo("NewTitleCon", DLVariableArr, this.Data.NewTitle)
         this._SetCombo("TransparencyCon", DLVariableArr, this.Data.Transparency)
         ; 透明度：原生在变量项之后追加 0%~100% 列表
@@ -233,12 +245,14 @@ class WindowManageGui {
         else
             actionType := this.ui.Query("ActionTypeCon")
         isShowPos := (actionType == GetLang("移动窗口"))
-        isShowSize := (actionType == GetLang("调整大小"))
+        isShowSize := (actionType == GetLang("调整宽高"))
+        isShowResult := (actionType == GetLang("获取窗口宽高"))
         isShowTitle := (actionType == GetLang("修改标题"))
         isShowTransparency := (actionType == GetLang("修改透明度"))
 
         this.SetConArrState(this.PosRelateArrCon, false, isShowPos)
         this.SetConArrState(this.SizeRelateArrCon, false, isShowSize)
+        this.SetConArrState(this.ResultRelateArrCon, false, isShowResult)
         this.SetConArrState(this.TitleRelateArrCon, false, isShowTitle)
         this.SetConArrState(this.TransparencyRelateArrCon, false, isShowTransparency)
     }
@@ -250,6 +264,11 @@ class WindowManageGui {
             return false
         }
 
+        if (actionType == GetLang("获取窗口宽高")
+            && (Trim(this.ui.Query("WidthVarNameCon")) == "" || Trim(this.ui.Query("HeightVarNameCon")) == "")) {
+            RmtDialog.Info(GetLang("请输入变量名！"), "", "Owner" this.Hwnd())
+            return false
+        }
         if (actionType == GetLang("修改标题")) {
             if (this.ui.Query("NewTitleCon") == "") {
                 RmtDialog.Info(GetLang("新标题不能为空！"), "", "Owner" this.Hwnd())
@@ -267,6 +286,14 @@ class WindowManageGui {
         this.Data.PosY := this.ui.Query("PosYCon")
         this.Data.Width := this.ui.Query("WidthCon")
         this.Data.Height := this.ui.Query("HeightCon")
+        this.Data.WidthVarName := GetVarName(this.ui.Query("WidthVarNameCon"))
+        this.Data.HeightVarName := GetVarName(this.ui.Query("HeightVarNameCon"))
+        if (this.Data.ActionType == "获取窗口宽高") {
+            if (this.Data.WidthVarName != "")
+                MySoftData.GlobalVariMap[this.Data.WidthVarName] := true
+            if (this.Data.HeightVarName != "")
+                MySoftData.GlobalVariMap[this.Data.HeightVarName] := true
+        }
         this.Data.NewTitle := this.ui.Query("NewTitleCon")
         this.Data.Transparency := StrReplace(this.ui.Query("TransparencyCon"), "%")
         SaveMacroCMDData(this.Data)
