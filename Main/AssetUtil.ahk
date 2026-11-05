@@ -706,6 +706,11 @@ LoadMainSetting() {
     ; §14.5 / IDE 式调试：逻辑树调试热键（默认 继续=F5 / 步入=F11，可在设置→快捷键修改）
     MainSoftData.DebugRunHotkey := CfgRead(SettingFile, SettingSection, "DebugRunHotkey", "f5")
     MainSoftData.DebugStepHotkey := CfgRead(SettingFile, SettingSection, "DebugStepHotkey", "f11")
+    MainSoftData.DebugStepOverHotkey := CfgRead(SettingFile, SettingSection, "DebugStepOverHotkey", "f10")
+    MainSoftData.DebugStepOutHotkey := CfgRead(SettingFile, SettingSection, "DebugStepOutHotkey", "+f11")
+    MainSoftData.DebugRunToCursorHotkey := CfgRead(SettingFile, SettingSection, "DebugRunToCursorHotkey", "^f10")
+    MainSoftData.DebugToggleSkipHotkey := CfgRead(SettingFile, SettingSection, "DebugToggleSkipHotkey", "^/")
+    MainSoftData.DebugRunAllHotkey := CfgRead(SettingFile, SettingSection, "DebugRunAllHotkey", "^f5")
     MainSoftData.IsToolCheck := CfgRead(SettingFile, SettingSection, "IsToolCheck", false)
     MainSoftData.ToolCheckHotKey := CfgRead(SettingFile, SettingSection, "ToolCheckHotKey", "!o")
     MainSoftData.ToolRecordMacroHotKey := CfgRead(SettingFile, SettingSection, "RecordMacroHotKey", "!r")
