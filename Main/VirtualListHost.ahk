@@ -267,10 +267,13 @@ class VirtualListHost {
         }
         idx := Integer(SubStr(id, InStr(id, "_", , 2) + 1))
         if (SubStr(id, 1, 1) == "R") {
-            if (IsObject(MyMainWin) && (action == "Select" || action == "Field"))
-                MyMainWin.SelectSideTreeItem(t, idx, action == "Select")
-            else if (IsObject(MyMainWin) && action != "Setting")
-                MyMainWin.SelectSideTreeItem(t, idx, false)
+            ; 双击宏：展开/折叠右侧逻辑树；单击只切换当前宏（其余规则不变）
+            if (IsObject(MyMainWin)) {
+                if (action == "SelectDbl")
+                    MyMainWin.ToggleMacroTree(t, idx)
+                else if (action != "Setting")
+                    MyMainWin.SelectSideTreeItem(t, idx, false)
+            }
             switch action {
                 ; 触发键/触发编辑器要弹 XAML 窗；弹窗必须离开 VL_CLICK（WM_COPYDATA 回调）后再做，
                 ; 否则窗口建不出来，表现就是"点了没反应"。同 Copy/Del/Share 的处理。
