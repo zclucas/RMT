@@ -59,6 +59,7 @@ public class VirtualListHost
     // §11 VL 拖拽：按下起点 + 是否已武装（交互控件上不启动）
     private Point _dragStartPoint;
     private bool _dragArmed;
+    private VLItem _pressItem;   // 按下时所在的那一行（行自己的 Preview 处理器写入），拖拽起点不再靠坐标反查
     private Popup _ghostPopup;
     private TextBlock _ghostText;
     private Popup _insertPopup;
@@ -122,40 +123,14 @@ public class VirtualListHost
             // §11 VL 拖拽排序：行/折叠头按住拖动 → VL_DROP 回传（srcId\x1FtgtId\x1F0前|1后）
             _lb.AllowDrop = true;
             _dragArmed = false;
+            // 列表层只做状态复位，不判断点到了谁：行内点击由 ListBoxItem 自己的
+            // Preview 处理器（样式里的 EventSetter）负责，sender 就是那一行，
+            // 不需要按坐标反查、也不需要沿树找归属。下拉浮层的选项不属于任何
+            // ListBoxItem，自然就不会触发行的处理器。
             _lb.PreviewMouseLeftButtonDown += (s, e) =>
             {
                 _dragArmed = false;
-                FrameworkElement fe = e.OriginalSource as FrameworkElement;
-                DependencyObject d = fe;
-                bool fromHandle = false;
-                bool interactive = false;
-                while (d != null)
-                {
-                    FrameworkElement el = d as FrameworkElement;
-                    if (el != null && (el.Tag as string) == "DragHandle")
-                    {
-                        fromHandle = true;
-                        break;
-                    }
-                    if (d is ButtonBase || d is TextBox || d is ComboBox || d is CheckBox || d is ScrollBar)
-                    {
-                        interactive = true;
-                        break;
-                    }
-                    d = System.Windows.Media.VisualTreeHelper.GetParent(d);
-                }
-                ListBoxItem under = GetItemUnderMouse(_lb, e.GetPosition(_lb));
-                VLItem underVi = under != null ? under.DataContext as VLItem : null;
-                if (underVi is VListRow && !interactive)
-                    SendClick(underVi.Id, "Select");
-                else if (underVi is VListRow && (d is TextBox || d is ComboBox))
-                    SendClick(underVi.Id, "Field");
-                if (interactive && !fromHandle)
-                    return;
-                if (!fromHandle && !(underVi is VListFold))
-                    return;
-                _dragStartPoint = e.GetPosition(null);
-                _dragArmed = true;
+                _pressItem = null;
             };
             _lb.PreviewMouseMove += (s, e) =>
             {
@@ -166,9 +141,8 @@ public class VirtualListHost
                     Math.Abs(pos.Y - _dragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
                     return;
                 _dragArmed = false;
-                ListBoxItem item = GetItemUnderMouse(_lb, e.GetPosition(_lb));
-                if (item == null) return;
-                VLItem vi = item.DataContext as VLItem;
+                VLItem vi = _pressItem;
+                _pressItem = null;
                 if (vi == null || vi is VListAddFold) return;
                 EnsureDragUi();
                 _ghostText.Text = GhostLabel(vi);
@@ -272,6 +246,12 @@ public class VirtualListHost
             var lbiTemplate = new System.Windows.Controls.ControlTemplate(typeof(System.Windows.Controls.ListBoxItem))
             { VisualTree = lbiFactory };
             lbiStyle.Setters.Add(new System.Windows.Setter(System.Windows.Controls.ListBoxItem.TemplateProperty, lbiTemplate));
+            // 行自己的按下事件：sender 就是这一行，不用按坐标反查、也不用沿树找归属。
+            // 下拉浮层的选项不属于任何 ListBoxItem，因此不会被当成"点了某一行"。
+            var rowDown = new System.Windows.EventSetter();
+            rowDown.Event = System.Windows.UIElement.PreviewMouseLeftButtonDownEvent;
+            rowDown.Handler = new System.Windows.Input.MouseButtonEventHandler(OnRowPreviewDown);
+            lbiStyle.Setters.Add(rowDown);
             _lb.ItemContainerStyle = lbiStyle;
             // 首次 VL_INIT 通常发生在窗口 Show 前，ListBox 的实际视口尚未确定。
             // 等 Loaded 后再做一轮重排，避免语音宏首帧沿用折叠前的行宽/行高；
@@ -737,6 +717,73 @@ public class VirtualListHost
 
     // ---- 容器级事件路由 ----
 
+    // 事件源是否在本行的可视子树内。下拉弹层挂在独立的 PopupRoot 上，
+    // 事件虽会被路由回宿主行，但沿可视树向上走不到这一行 —— 借此把它和"点行"区分开。
+    private static bool IsSourceInRow(DependencyObject row, DependencyObject src)
+    {
+        DependencyObject d = src;
+        while (d != null)
+        {
+            if (ReferenceEquals(d, row))
+                return true;
+            try { d = System.Windows.Media.VisualTreeHelper.GetParent(d); }
+            catch { return false; }
+        }
+        return false;
+    }
+
+    // 行的按下处理：sender 就是被按下的 ListBoxItem，数据从它自己的 DataContext 取，
+    // 不做坐标命中、也不沿树反查归属。下拉浮层的选项不属于任何 ListBoxItem，
+    // 所以永远不会被当成"点了某一行"。
+    // 这里剩下的判断只有"按在行内的哪个控件上"（按钮/输入框/下拉框），与行归属无关。
+    private void OnRowPreviewDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _dragArmed = false;
+        _pressItem = null;
+        ListBoxItem li = sender as ListBoxItem;
+        if (li == null) return;
+        VLItem vi = li.DataContext as VLItem;
+        if (vi == null) return;
+        // 下拉弹层里的点击也会被路由到宿主行（事件源在 PopupRoot 那棵树里）。
+        // 那不是"点了这一行"——用户点的是弹层选项，直接忽略。
+        if (!IsSourceInRow(li, e.OriginalSource as DependencyObject))
+            return;
+
+        bool fromHandle = false;
+        bool interactive = false;
+        DependencyObject d = e.OriginalSource as DependencyObject;
+        while (d != null && !ReferenceEquals(d, li))
+        {
+            FrameworkElement el = d as FrameworkElement;
+            if (el != null && (el.Tag as string) == "DragHandle")
+            {
+                fromHandle = true;   // 按在拖拽手柄上：不选中，直接准备拖动
+                break;
+            }
+            if (d is ButtonBase || d is TextBox || d is ComboBox || d is CheckBox || d is ScrollBar)
+            {
+                interactive = true;
+                break;
+            }
+            d = System.Windows.Media.VisualTreeHelper.GetParent(d);
+        }
+
+        if (vi is VListRow)
+        {
+            if (!interactive)
+                SendClick(vi.Id, "Select");
+            else if (d is TextBox || d is ComboBox)
+                SendClick(vi.Id, "Field");
+        }
+        if (interactive && !fromHandle)
+            return;
+        if (!fromHandle && !(vi is VListFold))
+            return;
+        _dragStartPoint = e.GetPosition(null);
+        _pressItem = vi;
+        _dragArmed = true;
+    }
+
     private void OnClick(object sender, RoutedEventArgs e)
     {
         if (_suppressCommit) return;
@@ -777,6 +824,11 @@ public class VirtualListHost
         if (tag != "TKType" && tag != "FoldTKType") return;
         VLItem item = cb.DataContext as VLItem;
         if (item == null) return;
+        // 容器首次绑定、滚动新建容器时，WPF 会补发一次"选中变化"：值没变，它照样报。
+        // 这类事件没有用户参与——下拉没展开、焦点不在它身上、鼠标也不在它上面。
+        // 真实选择（鼠标点选项或键盘改值）一定满足三者之一。
+        if (!cb.IsDropDownOpen && !cb.IsKeyboardFocusWithin && !cb.IsMouseOver)
+            return;
         SendChange(item.Id, tag, cb.SelectedIndex.ToString());
     }
 
