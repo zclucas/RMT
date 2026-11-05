@@ -11,8 +11,13 @@
 #   .\Build.ps1 work         只编译 Worker
 #   .\Build.ps1 clean        只清理 Log + Setting，不编译
 #   .\Build.ps1 clean log    只清理 Log
+#   .\Build.ps1 clean xaml   只清理 XAML 引擎 dll（下次启动自动重编）
+#   .\Build.ps1 clean xaml log   清理范围可叠加（这里是 XAML dll + Log）
 #   .\Build.ps1 clean work   先清理再编译 Worker
 #   .\Build.ps1 x64 clean    先清理再编译（与上一个等价）
+#
+# 注意：clean xaml 删的是 lib\dep 下 ahk-xaml*.dll 与 %TEMP%\AhkWpf 的同名副本，
+# 会先结束本项目目录内正在运行的引擎进程（XAML 界面会随之关闭）。
 #
 # 版本号自动读 RMT.ahk 的 RMT_VERSION；图标固定用 Images\Soft\rabit.ico；
 # 输出固定到项目根目录（Worker 在其下的 Thread）。
@@ -39,8 +44,8 @@ function Write-Err([string]$Text) {
 }
 
 function Show-Usage {
-    Write-Host "  可用参数：x64  x86  rmt  work  clean [log|setting|all]" -ForegroundColor Gray
-    Write-Host "  例：.\Build.ps1    .\Build.ps1 work    .\Build.ps1 clean log    .\Build.ps1 x86 clean" -ForegroundColor Gray
+    Write-Host "  可用参数：x64  x86  rmt  work  clean [log|setting|xaml|all]" -ForegroundColor Gray
+    Write-Host "  例：.\Build.ps1    .\Build.ps1 work    .\Build.ps1 clean log    .\Build.ps1 clean xaml    .\Build.ps1 x86 clean" -ForegroundColor Gray
 }
 
 # ---------- 解析参数 ----------
@@ -51,7 +56,7 @@ foreach ($t in $args) {
     }
 }
 
-$unknown = @($tokens | Where-Object { $_ -notin @("x64", "x86", "rmt", "work", "clean", "log", "setting", "all") })
+$unknown = @($tokens | Where-Object { $_ -notin @("x64", "x86", "rmt", "work", "clean", "log", "setting", "xaml", "all") })
 if ($unknown.Count -gt 0) {
     Write-Err "不认识的参数：$($unknown -join ' ')"
     Show-Usage
@@ -60,11 +65,22 @@ if ($unknown.Count -gt 0) {
 
 $Arch = if ($tokens -contains "x86") { "x86" } else { "x64" }
 
-$hasClean = ($tokens -contains "clean") -or ($tokens -contains "log") -or
-            ($tokens -contains "setting") -or ($tokens -contains "all")
-$CleanScope = "all"
-if ($tokens -contains "setting") { $CleanScope = "setting" }
-elseif ($tokens -contains "log") { $CleanScope = "log" }
+# 清理范围：可叠加。单写 clean（不带范围）= Log + Setting；xaml 独立，不并入 all。
+$CleanLog = $false
+$CleanSetting = $false
+$CleanXaml = $false
+$scopeTokens = @("log", "setting", "xaml", "all")
+$hasScope = @($tokens | Where-Object { $_ -in $scopeTokens }).Count -gt 0
+$hasClean = ($tokens -contains "clean") -or $hasScope
+if ($hasClean) {
+    if (-not $hasScope -or ($tokens -contains "all")) {
+        $CleanLog = $true
+        $CleanSetting = $true
+    }
+    if ($tokens -contains "log") { $CleanLog = $true }
+    if ($tokens -contains "setting") { $CleanSetting = $true }
+    if ($tokens -contains "xaml") { $CleanXaml = $true }
+}
 
 $selectedBuild = ($tokens -contains "rmt") -or ($tokens -contains "work") -or
                  ($tokens -contains "x64") -or ($tokens -contains "x86")
@@ -133,11 +149,38 @@ function Stop-ProjectProcess {
 }
 
 # ---------- 清理 ----------
+# 引擎是独立 daemon 进程（映像名 ahk-xaml*.dll），可能从项目 dep 或 %TEMP%\AhkWpf 启动，
+# 只结束这两处路径下的，避免误杀其它项目的同名引擎。
+function Stop-XamlEngine {
+    $prefixes = @($Root)
+    if ($env:TEMP) { $prefixes += (Join-Path $env:TEMP "AhkWpf") }
+    $killed = 0
+    Get-Process -Name "ahk-xaml*" -ErrorAction SilentlyContinue | ForEach-Object {
+        $proc = $_
+        $procPath = $null
+        try { $procPath = $proc.Path } catch { }
+        if (-not $procPath) { return }
+        foreach ($prefix in $prefixes) {
+            if ($procPath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+                try { $proc.Kill(); $killed++; Write-Host "  已结束: $procPath" -ForegroundColor Gray } catch { }
+                break
+            }
+        }
+    }
+    if ($killed -gt 0) { Start-Sleep -Milliseconds 400 }
+    return $killed
+}
+
 if ($hasClean) {
-    Write-Step "清理目录（$CleanScope）"
+    $scopeName = @()
+    if ($CleanLog) { $scopeName += "Log" }
+    if ($CleanSetting) { $scopeName += "Setting" }
+    if ($CleanXaml) { $scopeName += "XAML dll" }
+    Write-Step ("清理（" + ($scopeName -join " + ") + "）")
+
     $cleanDirs = @()
-    if ($CleanScope -eq "log" -or $CleanScope -eq "all") { $cleanDirs += (Join-Path $Root "Log") }
-    if ($CleanScope -eq "setting" -or $CleanScope -eq "all") { $cleanDirs += (Join-Path $Root "Setting") }
+    if ($CleanLog) { $cleanDirs += (Join-Path $Root "Log") }
+    if ($CleanSetting) { $cleanDirs += (Join-Path $Root "Setting") }
 
     foreach ($dir in $cleanDirs) {
         if (-not (Test-Path -LiteralPath $dir)) {
@@ -166,7 +209,49 @@ if ($hasClean) {
         }
         Write-Ok "已删除 $dir"
     }
-    if ($CleanScope -eq "all") {
+
+    if ($CleanXaml) {
+        $xamlDlls = @(
+            (Join-Path $Root "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll"),
+            (Join-Path $Root "Plugins\AHK-XAML\lib\dep\ahk-xaml-wv2.dll")
+        )
+        # 开发模式（XAML_ENGINE_BUILD_LOCATION = "both"）还会往 %TEMP%\AhkWpf 放一份，
+        # 那份不清掉的话引擎仍会跑旧代码。
+        if ($env:TEMP) {
+            $xamlDlls += (Join-Path $env:TEMP "AhkWpf\ahk-xaml.dll")
+            $xamlDlls += (Join-Path $env:TEMP "AhkWpf\ahk-xaml-wv2.dll")
+        }
+
+        foreach ($file in $xamlDlls) {
+            if (-not (Test-Path -LiteralPath $file)) {
+                Write-Host "  跳过（不存在）：$file" -ForegroundColor Gray
+                continue
+            }
+            $errMsg = ""
+            try {
+                Remove-Item -LiteralPath $file -Force
+            } catch {
+                $errMsg = $_.Exception.Message
+            }
+            if ($errMsg -ne "") {
+                Write-Warn "删除被占用，结束引擎进程后重试"
+                $null = Stop-XamlEngine
+                Start-Sleep -Milliseconds 200
+                try {
+                    Remove-Item -LiteralPath $file -Force
+                    $errMsg = ""
+                } catch {
+                    Write-Err "删除失败：$file（$($_.Exception.Message)）"
+                    Write-Host "  引擎可能仍在使用（先退出 RMT 再试），或需要管理员权限。" -ForegroundColor Yellow
+                    exit 1
+                }
+            }
+            Write-Ok "已删除 $file"
+        }
+        Write-Host "  提示：下次以开发模式运行 RMT.ahk 会自动重编引擎；打包前需重编一次（PackRMT 取 lib\dep 下的 dll）" -ForegroundColor DarkGray
+    }
+
+    if ($CleanSetting) {
         Write-Host "  提示：clean 会连 Setting（配置方案/宏/变量）一起删；只删日志用 clean log" -ForegroundColor DarkGray
     }
 }
