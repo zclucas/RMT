@@ -245,6 +245,7 @@ class MainWin {
         this._aiSttTab := 0
         this.aiSttTick := ObjBindMethod(this, "_AiPollStt")
         this._sideTreeSel := Map()
+        this._dblOpenMacro := Map()  ; 页签 → 双击展开逻辑树的目标宏（再双击同一宏即折叠）
         this._sideTreeCmds := Map()
         this._sideTreeBound := Map()
         this._sideTree := ""
@@ -1765,6 +1766,9 @@ class MainWin {
             this._ApplySidePanelMode()
             opened := true
         }
+        ; 单击切到了别的宏：忘掉上次双击展开的目标，避免下次双击被误判成"折叠"
+        if (!doOpen && this._dblOpenMacro.Has(t) && this._dblOpenMacro[t] != item.ID)
+            this._dblOpenMacro.Delete(t)
         same := this._sideTreeSel.Has(t) && this._sideTreeSel[t] == item.ID
         this._sideTreeSel[t] := item.ID
         this._ApplyRowSel(t, index)
@@ -1774,6 +1778,34 @@ class MainWin {
             else
                 this.RefreshSideTree(t)
         }
+    }
+
+    ; 双击宏：展开/折叠右侧逻辑树。首次双击展开并显示该宏，再双击同一个即收起。
+    ToggleMacroTree(t, index) {
+        if (t < 1 || t > MySoftData.TableInfo.Length)
+            return
+        tableItem := MySoftData.TableInfo[t]
+        if (index < 1 || index > tableItem.Items.Length)
+            return
+        item := tableItem.Items[index]
+        if (!item)
+            return
+        same := this._dblOpenMacro.Has(t) && this._dblOpenMacro[t] == item.ID
+        if (same && this._IsAiPanelOpen() && this.sidePanelMode == 1) {
+            this._dblOpenMacro.Delete(t)
+            this.aiAssistOpen := false
+            this._ApplyAiPanelUi()
+            return
+        }
+        this._dblOpenMacro[t] := item.ID
+        ; 双击要看到的是逻辑树：侧栏没开、或停在 AI 分支时先切过去
+        if (!this._IsAiPanelOpen() || this.sidePanelMode != 1) {
+            this.aiAssistOpen := true
+            this.sidePanelMode := 1
+            this._ApplyAiPanelUi()
+            this._ApplySidePanelMode()
+        }
+        this.SelectSideTreeItem(t, index, false)
     }
 
     _ApplyRowSel(t, index) {

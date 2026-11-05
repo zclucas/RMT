@@ -771,7 +771,7 @@ public class VirtualListHost
         if (vi is VListRow)
         {
             if (!interactive)
-                SendClick(vi.Id, "Select");
+                SendClick(vi.Id, e.ClickCount >= 2 ? "SelectDbl" : "Select");
             else if (d is TextBox || d is ComboBox)
                 SendClick(vi.Id, "Field");
         }
