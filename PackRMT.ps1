@@ -454,6 +454,7 @@ function New-Release {
         # 复制文字识别插件 RapidOcr (x64)
         Write-Log "复制 RapidOcr 插件 (x64)..." "Gray"
         Copy-RapidOcr -ReleaseDir $releaseDir -Arch "x64"
+        Copy-TesseractOcr -ReleaseDir $releaseDir -Arch "x64"
 
         # 复制 AHK-XAML DLL
         Write-Log "复制 AHK-XAML DLL..." "Gray"
@@ -519,6 +520,7 @@ function New-Release {
         # 复制文字识别插件 RapidOcr (x86)
         Write-Log "复制 RapidOcr 插件 (x86)..." "Gray"
         Copy-RapidOcr -ReleaseDir $releaseDir -Arch "x86"
+        Copy-TesseractOcr -ReleaseDir $releaseDir -Arch "x86"
 
         # 复制 AHK-XAML DLL
         Write-Log "复制 AHK-XAML DLL..." "Gray"
@@ -847,6 +849,11 @@ function Copy-InputDlls {
             Write-Log "  [WARN] 未找到: Plugins/$name" "Yellow"
         }
     }
+    # VIIPER 客户端已编译进程序；发行包带上驱动与服务准备说明。
+    $viiperDocDir = Join-Path $dstDir "VIIPER"
+    New-Item -ItemType Directory -Path $viiperDocDir -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Plugins\VIIPER\README.md") -Destination $viiperDocDir -Force
+
 }
 
 # 语音触发插件（Voice）：按架构复制运行时 DLL + 关键词模型。
@@ -954,6 +961,20 @@ function Copy-RuntimePlugins {
 }
 
 # 文字识别插件（RapidOcr）：按架构复制 DLL + PP-OCRv6 ch_models（v6 统一多语言模型，无 en_models）
+function Copy-TesseractOcr {
+    param([string]$ReleaseDir, [string]$Arch)
+    $source = Join-Path $PSScriptRoot "Plugins\TesseractOcr"
+    $dest = Join-Path $ReleaseDir "Plugins\TesseractOcr"
+    foreach ($relative in @("$Arch\tesseract50.dll", "$Arch\leptonica-1.82.0.dll", "tessdata\chi_sim.traineddata", "tessdata\eng.traineddata", "LICENSE", "Leptonica-LICENSE.txt", "NOTICE.txt")) {
+        $file = Join-Path $source $relative
+        if (-not (Test-Path -LiteralPath $file)) { throw "Tesseract OCR 文件缺失: $file" }
+        $target = Join-Path $dest $relative
+        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $file -Destination $target -Force
+    }
+    Write-Log "  已复制: TesseractOcr/$Arch + tessdata" "Gray"
+}
+
 function Copy-RapidOcr {
     param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
 
@@ -1048,6 +1069,10 @@ function New-RMTAssets {
         @{ Dest = "kws_joiner.int8.onnx";            Src = "Plugins\Voice\models\kws\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
         @{ Dest = "kws_tokens.txt";                  Src = "Plugins\Voice\models\kws\tokens.txt" },
         @{ Dest = "RapidOcrOnnx.dll";                Src = "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll" },
+        @{ Dest = "tesseract50.dll";                Src = "Plugins\TesseractOcr\$Arch\tesseract50.dll" },
+        @{ Dest = "leptonica-1.82.0.dll";            Src = "Plugins\TesseractOcr\$Arch\leptonica-1.82.0.dll" },
+        @{ Dest = "chi_sim.traineddata";            Src = "Plugins\TesseractOcr\tessdata\chi_sim.traineddata" },
+        @{ Dest = "eng.traineddata";                Src = "Plugins\TesseractOcr\tessdata\eng.traineddata" },
         @{ Dest = "ScreenCapture.exe";               Src = "Plugins\ScreenCapture\ScreenCapture.exe" },
         @{ Dest = "AutoHotInterception.dll";         Src = "Plugins\AhiDriver\AutoHotInterception.dll" },
         @{ Dest = "interception_$Arch.dll";          Src = "Plugins\AhiDriver\$Arch\interception.dll" },

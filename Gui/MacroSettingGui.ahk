@@ -77,7 +77,7 @@ class MacroSettingGui {
         tkRow := body.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").VerticalAlignment("Center")
         tkRow.Add("TextBlock").Text(GetLang("按键类型：")).Width(90).VerticalAlignment("Center")
         tk := tkRow.Add("ComboBox").Name("TKTypeCombo").Width(125).Height(26).MinHeight(26)
-        for t in GetLangArr(["AHK Send", "keybd_event", "罗技", "AHI"])
+        for t in GetLangArr(["AHK Send", "keybd_event", "罗技", "AHI", "VIIPER"])
             tk.Add("ComboBoxItem").Content(t)
         helpBtn := FrontInfoGui._AddSquareHelpBtn(tkRow, "BtnHelp")
         helpBtn.InjectResources(toolHover)
@@ -188,10 +188,11 @@ class MacroSettingGui {
         str2 := GetLang("keybd_event：调用 Win 系统接口模拟按键，适用比较旧的软件或游戏（需管理员权限）。")
         str3 := GetLang("罗技：调用罗技驱动模拟按键（需管理员权限，并使用 G HUB 2022.2.1154 及以前版本）。")
         str4 := GetLang("AHI：调用 Interception 驱动模拟按键（需安装 Interception 驱动，安装后需要重启）。")
+        strViiper := GetLang("VIIPER：虚拟 USB 键鼠。先安装 usbip-win2，运行 viiper server（本机默认端口 3242）。详见 Plugins\VIIPER\README.md。")
         str5 := GetLang("Tip:罗技按键类型（含键盘与鼠标）仅支持 G HUB 2022.2.1154 及以前版本") "`n" GetLang(
             "Tip:AHI驱动需要安装Interception驱动并以管理员权限运行")
-        str6 := GetLang("**keybd_event、罗技、AHI 的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**")
-        str := Format("{}`n`n{}`n`n{}`n`n{}`n`n{}`n`n{}", str1, str2, str3, str4, str5, str6)
+        str6 := GetLang("**keybd_event、罗技、AHI、VIIPER 的按键可以作为宏的触发按键，切勿自己触发自己导致死循环**")
+        str := Format("{}`n`n{}`n`n{}`n`n{}`n`n{}`n`n{}", str1, str2, str3, str4 "`n`n" strViiper, str5, str6)
         RmtDialog.Info(str, GetLang("按键类型"))
     }
 
@@ -204,6 +205,13 @@ class MacroSettingGui {
         } else if (mode == 4) {
             if (!IsInterceptionInstalled())
                 needReboot := (ShowInterceptionInstallTip() = "reboot")
+        }
+        if (mode == 5) {
+            try ViiperInput.Request("ping")
+            catch as err {
+                RmtDialog.Info(err.Message, "VIIPER")
+                return
+            }
         }
         item := this.tableItem.Items[this.itemIndex]
         item.Mode := mode

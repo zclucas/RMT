@@ -1658,7 +1658,7 @@ OnPressKey(tableItem, cmd, index) {
         return
     }
 
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
+    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey, 5, SendViiperKey)
     action := actionMap[Integer(item.Mode)]
     action := isJoyKey ? SendJoyBtnKey : action
     action := isJoyAxis ? SendJoyAxisKey : action
@@ -1767,7 +1767,7 @@ ReplaceKeySend(tableID, itemID, state) {
     try mode := Integer(item.Mode)
     catch
         mode := 1
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey)
+    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey, 5, SendViiperKey)
     if (!actionMap.Has(mode))
         mode := 1
     baseAction := actionMap[mode]

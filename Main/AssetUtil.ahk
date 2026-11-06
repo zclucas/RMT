@@ -31,11 +31,13 @@
 
 #Include ..\Plugins\CLR.ahk
 #Include "..\Plugins\RapidOcr\RapidOcr.ahk"
+#Include "..\Plugins\TesseractOcr\TesseractOcr.ahk"
 
 ; 旧配置目录的整目录迁移（Compat_UpgradeDir）不在这里：它只在主进程需要，
 ; 由 InitFilePath 在加载配置之前统一处理；Worker 只读配置，不参与迁移。
 #Include "..\Plugins\AhiDriver\AhiDriver.ahk"
 #Include "..\Plugins\IbInputSimulator.ahk"
+#Include "..\Plugins\VIIPER\VIIPER.ahk"
 #Include "..\Plugins\MouseControl.ahk"
 #Include Util\MouseMoveUtil.ahk
 #Include Util\MouseMovePreview.ahk
@@ -731,7 +733,7 @@ LoadMainSetting() {
     MainSoftData.RecordAutoLoosen := CfgRead(SettingFile, SettingSection, "RecordAutoLoosen", true)
     MainSoftData.RecordJoyInterval := CfgRead(SettingFile, SettingSection, "RecordJoyInterval", 50)
     MainSoftData.RecordShowBorder := CfgRead(SettingFile, SettingSection, "RecordShowBorder", true)
-    MainSoftData.OCRTypeValue := CfgRead(SettingFile, SettingSection, "OCRType", 1)
+    MainSoftData.OCRTypeValue := CfgRead(SettingFile, SettingSection, "OCRType", 1) == 2 ? 2 : 1
     MainSoftData.IsBootStart := CfgRead(SettingFile, SettingSection, "IsBootStart", false)
     if (MainSoftData.IsBootStart == 1 || MainSoftData.IsBootStart == 2)
         MainSoftData.IsBootStart := true
@@ -2226,6 +2228,9 @@ ReleaseTableItemHoldKeys(tableItem, index) {
         }
         else if (value == "Logic") {
             SendLogicKey(key, 0, tableItem, index)
+        }
+        else if (SubStr(value, 1, 7) == "VIIPER:") {
+            ReleaseViiperKey(key, value, tableItem, index)
         }
         else if (value == "AHI") {
             SendAHIKey(key, 0, tableItem, index)
@@ -3738,8 +3743,11 @@ ValidateCmdPath(&Data, pathFieldName, selectTitle, filter, tableItem := "", inde
 ; ===== 项目根目录 / OCR 懒加载/定时回收函数 =====
 
 GetProjectRoot() {
+    global ProjectRootDir
+    if IsSet(ProjectRootDir) && ProjectRootDir != ""
+        return ProjectRootDir
     root := A_ScriptDir
-    if !FileExist(root '\Plugins\RapidOcr') {
+    if !DirExist(root '\Plugins') {
         root .= '\..'
         loop files, root {
             root := A_LoopFileFullPath
@@ -3754,22 +3762,21 @@ global LastEnglishOcrUseTime := 0
 global OCR_IDLE_TIMEOUT := 300000
 
 GetChineseOcr() {
-    global MyChineseOcr, LastChineseOcrUseTime
-    if (!MyChineseOcr) {
-        MyChineseOcr := RapidOcr(GetProjectRoot())
+    global MyChineseOcr, LastChineseOcrUseTime, MainSoftData
+    engineType := MainSoftData.OCRTypeValue == 2 ? 2 : 1
+    if (MyChineseOcr && ((MyChineseOcr is TesseractOcr) != (engineType == 2))) {
+        UnloadChineseOcr()
+        UnloadEnglishOcr()
     }
+    if (!MyChineseOcr)
+        MyChineseOcr := engineType == 2 ? TesseractOcr(GetProjectRoot()) : RapidOcr(GetProjectRoot())
     LastChineseOcrUseTime := A_TickCount
     return MyChineseOcr
 }
 
 ; 已弃用：PP-OCRv6 为统一多语言模型，GetChineseOcr/GetEnglishOcr 返回同一模型实例，保留仅为兼容旧调用
 GetEnglishOcr() {
-    global MyEnglishOcr, LastEnglishOcrUseTime
-    if (!MyEnglishOcr) {
-        MyEnglishOcr := RapidOcr(GetProjectRoot(), 2)
-    }
-    LastEnglishOcrUseTime := A_TickCount
-    return MyEnglishOcr
+    return GetChineseOcr()
 }
 
 UnloadChineseOcr() {

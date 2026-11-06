@@ -2165,3 +2165,6 @@ Header 每行 名称: 值；表单每行 名称=值（自动编码）。=Headers
 双击节点编辑搜索条件与排序=Double-click to edit search and order
 
 搜索顺序：=Search order:
+
+OCR类型=OCR engine
+文字识别引擎，支持中文和英文。保存设置后应用于后台宏。=Recognizes Chinese and English. Save settings to apply to background macros.

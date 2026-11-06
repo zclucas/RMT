@@ -32,11 +32,9 @@ class RapidOcr {
         config := { models: path "\Plugins\RapidOcr\" modelDire }
         dllpath := path "\Plugins\RapidOcr\" (A_PtrSize * 8) "bit\RapidOcrOnnx.dll"
         if (!RapidOcr.dllModule) {
-            RapidOcr.dllModule := DllCall('LoadLibrary', 'str', dllpath ?? A_LineFile '\..\' (A_PtrSize * 8) 'bit\RapidOcrOnnx.dll',
-            'ptr')
-            if (!RapidOcr.dllModule) {
-                return
-            }
+            RapidOcr.dllModule := DllCall('LoadLibraryEx', 'str', dllpath, 'ptr', 0, 'uint', 8, 'ptr')
+            if (!RapidOcr.dllModule)
+                throw Error(Format("RapidOCR 插件加载失败（{} 位，错误码 {}）：{}", A_PtrSize * 8, A_LastError, dllpath))
         }
         if !IsSet(config)
             config := { models: A_LineFile '\..\models' }
@@ -74,30 +72,46 @@ class RapidOcr {
                 throw TargetError('file "' k '" does not exist')
 
         this.ptr := DllCall('RapidOcrOnnx\OcrInit', 'str', det_model, 'str', cls_model, 'str', rec_model, 'str',
-            keys_dict, 'int', numThread, 'Cdecl')
-        if (this.ptr)
-            RapidOcr.instanceCount++
+            keys_dict, 'int', numThread, 'Cdecl Ptr')
+        if (!this.ptr)
+            throw Error("RapidOCR 模型初始化失败，请检查模型文件和可用内存。")
+        RapidOcr.instanceCount++
+        ; 初始化失败也可能返回非空句柄，必须读取原生错误后再允许识别。
+        try this.CheckError()
+        catch as e {
+            ; 旧版 x86 DLL 销毁初始化失败的实例时也可能抛异常，保留原始模型错误。
+            try this.Destroy()
+            throw e
+        }
     }
-    __Delete() => this.ptr && RapidOcr._releaseInstance(this)
+    __Delete() {
+        try this.Destroy()
+    }
 
     Destroy() {
         if (this.ptr) {
-            RapidOcr._releaseInstance(this)
-            this.ptr := 0
+            ptr := this.ptr
+            this.ptr := 0 ; 先清空，避免异常路径由 __Delete 再次释放同一指针。
+            try DllCall('RapidOcrOnnx\OcrDestroy', 'ptr', ptr, 'Cdecl')
+            finally {
+                RapidOcr.instanceCount--
+                if (RapidOcr.instanceCount <= 0 && RapidOcr.dllModule) {
+                    DllCall('FreeLibrary', 'ptr', RapidOcr.dllModule)
+                    RapidOcr.dllModule := 0
+                    RapidOcr.instanceCount := 0
+                }
+            }
         }
     }
 
-    static _releaseInstance(instance) {
-        DllCall('RapidOcrOnnx\OcrDestroy', 'ptr', instance, 'Cdecl')
-        RapidOcr.instanceCount--
-        if (RapidOcr.instanceCount <= 0 && RapidOcr.dllModule) {
-            DllCall('FreeLibrary', 'ptr', RapidOcr.dllModule)
-            RapidOcr.dllModule := 0
-            RapidOcr.instanceCount := 0
-        }
+    CheckError() {
+        if err := DllCall('RapidOcrOnnx\OcrGetLastError', 'ptr', this, 'Cdecl AStr')
+            throw Error("RapidOCR：" err)
+        return ''
     }
 
     static __cb(i) {
+        ; 原生回调使用 stdcall；x86 不可改成 Cdecl。
         static cbs := [{ ptr: CallbackCreate(get_text), __Delete: this => CallbackFree(this.ptr) }, { ptr: CallbackCreate(
             get_result), __Delete: this => CallbackFree(this.ptr) },]
         return cbs[i]
@@ -111,19 +125,19 @@ class RapidOcr {
 
     ; opencv4.8.0 Mat
     ocr_from_mat(mat, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectMat', 'ptr', this, 'ptr', mat,
-        'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl Int') ? res : ''
+        'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl Int') ? res : this.CheckError()
 
     ; path of pic
     ocr_from_file(picpath, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectFile', 'ptr', this, 'astr',
-        picpath, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res : ''
+        picpath, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res : this.CheckError()
 
     ; Image binary data
     ocr_from_binary(data, size, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectBinary', 'ptr', this,
-        'ptr', data, 'uptr', size, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res)) ? res : ''
+        'ptr', data, 'uptr', size, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl Int') ? res : this.CheckError()
 
     ; `struct BITMAP_DATA { void *bits; uint pitch; int width, height, bytespixel;};`
     ocr_from_bitmapdata(data, param := 0, allresult := false) => DllCall('RapidOcrOnnx\OcrDetectBitmapData', 'ptr',
-        this, 'ptr', data, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res : ''
+        this, 'ptr', data, 'ptr', param, 'ptr', RapidOcr.__cb(2 - !allresult), 'ptr', ObjPtr(&res), 'Cdecl') ? res : this.CheckError()
 
     class OcrParam extends Buffer {
         __New(param?) {

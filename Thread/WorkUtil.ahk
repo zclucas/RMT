@@ -239,7 +239,8 @@
 
 ;接受主程序指令后回调
 {
-    OnExit(wParam, lParam, msg, hwnd) {
+    ; 不遮蔽 AHK 内置 OnExit，输入后端需要注册设备清理回调。
+    OnWorkerExitMessage(wParam, lParam, msg, hwnd) {
         ExitApp()
     }
 

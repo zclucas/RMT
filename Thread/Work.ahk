@@ -51,7 +51,7 @@ InitWork()                  ;工作器特别初始化
 WorkPluginInit()            ;插件初始化
 
 ; 注册消息
-OnMessage(WM_CLEAR_WORK, OnExit)                        ;清除
+OnMessage(WM_CLEAR_WORK, OnWorkerExitMessage)           ;清除
 OnMessage(WM_MASTER_TO_WORKER, OnMasterToWorker)        ;主进程分发任务/广播通知
 WorkNotifyReady()   ;加载完成，同步通知主线程
 WaitAndProcessTasks()

@@ -1,0 +1,25 @@
+Tesseract OCR runtime for RMT
+
+Native DLLs: Tesseract 5.2.0 and Leptonica 1.82.0, x86 and x64,
+from Charles Weld's Tesseract 5.2.0 NuGet package:
+https://www.nuget.org/packages/Tesseract/5.2.0
+https://github.com/charlesw/tesseract
+https://github.com/tesseract-ocr/tesseract/tree/5.2.0
+https://github.com/DanBloomberg/leptonica/tree/1.82.0
+Only the native runtime DLLs are used; no .NET wrapper is required.
+Requires Microsoft Visual C++ 2015-2022 runtime for the matching architecture.
+
+Language models: chi_sim.traineddata and eng.traineddata from tessdata_fast.
+https://github.com/tesseract-ocr/tessdata_fast
+These integer LSTM models require OEM 1. RapidOCR ONNX models and character
+lists are not compatible with Tesseract traineddata.
+
+Tesseract and tessdata_fast: Apache License 2.0 (see LICENSE).
+Leptonica: BSD-style license (see Leptonica-LICENSE.txt).
+Upstream copyrights and licenses apply to their respective components.
+A5FCB6F0DB1E1D6D8522F39DB4E848F05984669172E584E8D76B6B3141E1F730  tessdata\chi_sim.traineddata
+7D4322BD2A7749724879683FC3912CB542F19906C83BCC1A52132556427170B2  tessdata\eng.traineddata
+DFCB3E6ED0B16BC55BFDBCF53543CFE42A354B87C3E35BD3A95EEBF005D73E76  x64\leptonica-1.82.0.dll
+DE4D04EC75095374D98F5DD7A60D14D7E2E0F76589DB693ECCF7AE658BE8CB2B  x64\tesseract50.dll
+1700330110ADA8E4F07FB063915E60E2B585AD87D9B1948093945E4645B66D08  x86\leptonica-1.82.0.dll
+7F4873CDB78B9CD18C069EAE434D38DD14E987531866463357CF51C016241820  x86\tesseract50.dll

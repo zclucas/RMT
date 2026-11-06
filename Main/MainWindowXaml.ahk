@@ -5637,6 +5637,7 @@ class MainWin {
                     . tog(GetLang("模态子窗口"), "ChkModalSubGui", MainSoftData.IsModalSubGui, GetLang("打开指令编辑等子窗口时禁用主窗口")), "0", "", "soft")
                 . card(GetLang("显示页签"), "&#xE8A5;", tabsBody, "0,18,0,0", "", "tabs")
                 , card(GetLang("通用"), "&#xE713;", cmb(GetLang("截图工具"), "CmbScreenShot", GetLangArr(["微软截图", "RMT截图", "SC截图"]), MainSoftData.ScreenShotType)
+                    . cmb(GetLang("OCR类型"), "CmbOCRType", ["RapidOCR", "Tesseract OCR"], MainSoftData.OCRTypeValue, false, GetLang("文字识别引擎，支持中文和英文。保存设置后应用于后台宏。"))
                     . cmb(GetLang("图片识别模型"), "CmbSearchImage", GetLangArr(["OpenCV", "RMT搜图"]), MainSoftData.SearchImageType)
                     . tog(GetLang("图片识别自适应"), "ChkSearchImageAdaptive", MainSoftData.SearchImageAdaptive, GetLang("仅 OpenCV 生效，匹配分辨率或 DPI 缩放变化后的图片"))
                     . num(GetLang("多线程数"), "EditMutiThreadNum", MainSoftData.MutiThreadNum, GetLang("-1：动态多线程；0：单线程；n：固定线程数（推荐 3~5）"))
@@ -5862,6 +5863,7 @@ class MainWin {
         this._Bind("CmbLang", "SelectionChanged", ObjBindMethod(this, "OnComboText", "Lang"))
         this._Bind("CmbPreferredEditor", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "PreferredMacroEditor"))
         this._Bind("CmbScreenShot", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "ScreenShotType"))
+        this._Bind("CmbOCRType", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "OCRTypeValue"))
         this._Bind("CmbSearchImage", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "SearchImageType"))
         this._Bind("ChkSearchImageAdaptive", "Click", ObjBindMethod(this, "OnCheckEdit", "SearchImageAdaptive"))
         this._Bind("CmbTriggerJoyType", "SelectionChanged", ObjBindMethod(this, "OnTriggerJoyTypeChanged"))
@@ -6027,7 +6029,7 @@ class MainWin {
             tabFields.Push({key: sym, def: true, ctrl: "TabVisible_" sym, kind: "tab"})
         this._setMods := [
             {id: "soft", fields: [{key: "IsBootStart", def: false, ctrl: "ChkBootStart", kind: "chk", hook: "boot"}, {key: "IsAdminStart", def: false, ctrl: "ChkAdminStart", kind: "chk", hook: "admin"}, {key: "IsDataReport", def: true, ctrl: "ChkDataReport", kind: "chk"}, {key: "Lang", def: "中文", ctrl: "CmbLang", kind: "cmbText"}, {key: "PreferredMacroEditor", def: 1, ctrl: "CmbPreferredEditor", kind: "cmb"}, {key: "IsModalSubGui", def: true, ctrl: "ChkModalSubGui", kind: "chk"}]},
-            {id: "general", fields: [{key: "ScreenShotType", def: 3, ctrl: "CmbScreenShot", kind: "cmb"}, {key: "SearchImageType", def: 1, ctrl: "CmbSearchImage", kind: "cmb"}, {key: "SearchImageAdaptive", def: false, ctrl: "ChkSearchImageAdaptive", kind: "chk"}, {key: "MutiThreadNum", def: -1, ctrl: "EditMutiThreadNum", kind: "num"}, {key: "NetworkPort", def: 16888, ctrl: "EditNetPort", kind: "num"}, {key: "RemarkAutoType", def: 2, ctrl: "CmbRemarkAuto", kind: "cmb"}]},
+            {id: "general", fields: [{key: "OCRTypeValue", def: 1, ctrl: "CmbOCRType", kind: "cmb"}, {key: "ScreenShotType", def: 3, ctrl: "CmbScreenShot", kind: "cmb"}, {key: "SearchImageType", def: 1, ctrl: "CmbSearchImage", kind: "cmb"}, {key: "SearchImageAdaptive", def: false, ctrl: "ChkSearchImageAdaptive", kind: "chk"}, {key: "MutiThreadNum", def: -1, ctrl: "EditMutiThreadNum", kind: "num"}, {key: "NetworkPort", def: 16888, ctrl: "EditNetPort", kind: "num"}, {key: "RemarkAutoType", def: 2, ctrl: "CmbRemarkAuto", kind: "cmb"}]},
             {id: "trig", fields: [{key: "CheckForeground", def: false, ctrl: "ChkForeground", kind: "chk"}, {key: "AutoLoosenModifier", def: true, ctrl: "ChkAutoLoosen", kind: "chk"}, {key: "ContinuousTrigger", def: true, ctrl: "ChkContinuous", kind: "chk"}, {key: "MacroStopType", def: 1, ctrl: "CmbMacroStop", kind: "cmb"}, {key: "KeyDownDownType", def: 1, ctrl: "CmbKeyDownDown", kind: "cmb"}, {key: "NoVariableTip", def: false, ctrl: "ChkNoVariable", kind: "chk"}]},
             {id: "audio", fields: [{key: "StartTipAudio", def: A_WorkingDir "\Audio\Start.wav", ctrl: "StartTipAudioCon", kind: "txt"}, {key: "EndTipAudio", def: A_WorkingDir "\Audio\End.wav", ctrl: "EndTipAudioCon", kind: "txt"}, {key: "StopTipAudio", def: A_WorkingDir "\Audio\End.wav", ctrl: "StopTipAudioCon", kind: "txt"}]},
             {id: "tabs", fields: tabFields},

@@ -18,7 +18,9 @@ IsOpenCvLoaded() {
 
 ; 检测 VC++ 2015-2022 运行库 DLL 是否缺失，返回缺失的 DLL 名（逗号分隔），无缺失返回 ""
 GetMissingVcRuntime() {
-    names := ["VCRUNTIME140.dll", "VCRUNTIME140_1.dll", "MSVCP140.dll", "CONCRT140.dll"]
+    names := ["VCRUNTIME140.dll", "MSVCP140.dll", "CONCRT140.dll"]
+    if (A_PtrSize == 8)
+        names.Push("VCRUNTIME140_1.dll")
     missing := []
     for n in names {
         if (DllCall("GetModuleHandle", "Str", n, "Ptr"))
@@ -56,11 +58,9 @@ OpenCvEnsure() {
     if (!FileExist(rmtDll) || !FileExist(worldDll)) {
         reason := Format("OpenCV 插件文件缺失：`n{}`n{}", rmtDll, worldDll)
     } else {
-        ; 将 OpenCV 目录加入 DLL 搜索路径，保证 opencv_world481.dll 能被找到
-        DllCall("SetDllDirectory", "Str", dllDir)
-
+        ; 按插件目录解析依赖，避免更改进程全局 DLL 搜索路径。
         ; 先加载依赖库，失败时能精确区分“缺运行库”与“缺依赖”
-        hWorld := DllCall("LoadLibrary", "Str", worldDll, "Ptr")
+        hWorld := DllCall("LoadLibraryEx", "Str", worldDll, "Ptr", 0, "UInt", 8, "Ptr")
         if (!hWorld) {
             worldErr := A_LastError
             vc := GetMissingVcRuntime()
@@ -69,9 +69,11 @@ OpenCvEnsure() {
             else
                 reason := Format("opencv_world481.dll 加载失败（错误码 {}）", worldErr)
         } else {
-            hRmt := DllCall("LoadLibrary", "Str", rmtDll, "Ptr")
-            if (!hRmt)
+            hRmt := DllCall("LoadLibraryEx", "Str", rmtDll, "Ptr", 0, "UInt", 8, "Ptr")
+            if (!hRmt) {
                 reason := Format("RMT_OpenCV.dll 加载失败（错误码 {}）", A_LastError)
+                DllCall("FreeLibrary", "Ptr", hWorld)
+            }
         }
     }
 
@@ -84,8 +86,6 @@ OpenCvEnsure() {
 
 ; 窗口颜色识别 x，y 窗口坐标
 FindWinColor(ResXPtr, ResYPtr, colorStr, hwnd, X1, Y1, X2, Y2, matchThreshold) {
-    if (A_PtrSize != 8) ;非64位不可用
-        return false
     if (OpenCvEnsure() != "")
         return false
 
@@ -123,45 +123,49 @@ GetScreenTextObjArr(X1, Y1, X2, Y2, mode) {
     height := Y2 - Y1
     pBitmap := Gdip_BitmapFromScreen(X1 "|" Y1 "|" width "|" height)
 
-    ; 获取位图的宽度和高度
-    Width := Gdip_GetImageWidth(pBitmap)
-    Height := Gdip_GetImageHeight(pBitmap)
+    if !pBitmap
+        throw Error("OCR 屏幕截图失败。")
+    locked := false
+    try {
+        ; 获取位图的宽度和高度
+        Width := Gdip_GetImageWidth(pBitmap)
+        Height := Gdip_GetImageHeight(pBitmap)
 
-    ; 锁定位图以获取位图数据
-    Gdip_LockBits(pBitmap, 0, 0, Width, Height, &Stride, &Scan0, &BitmapData)
+        ; 锁定位图以获取位图数据
+        if Gdip_LockBits(pBitmap, 0, 0, Width, Height, &Stride, &Scan0, &BitmapData)
+            throw Error("OCR 无法锁定截图位图。")
+        locked := true
 
-    if (A_PtrSize == 8) {
-        ; 64位系统结构
-        BITMAP_DATA := Buffer(24)  ; 64位下结构总大小为24字节
-        NumPut("ptr", Scan0, BITMAP_DATA, 0)   ; bits (8字节)
-        NumPut("uint", Stride, BITMAP_DATA, 8)  ; pitch (4字节)
-        NumPut("int", Width, BITMAP_DATA, 12)   ; width (4字节)
-        NumPut("int", Height, BITMAP_DATA, 16)  ; height (4字节)
-        NumPut("int", 4, BITMAP_DATA, 20)      ; bytespixel (4字节)
-    } else {
-        ; 32位系统结构
-        BITMAP_DATA := Buffer(20)  ; 32位下结构总大小为20字节
-        NumPut("ptr", Scan0, BITMAP_DATA, 0)   ; bits (4字节)
-        NumPut("uint", Stride, BITMAP_DATA, 4)  ; pitch (4字节)
-        NumPut("int", Width, BITMAP_DATA, 8)    ; width (4字节)
-        NumPut("int", Height, BITMAP_DATA, 12)  ; height (4字节)
-        NumPut("int", 4, BITMAP_DATA, 16)       ; bytespixel (4字节)
+        if (A_PtrSize == 8) {
+            ; 64位系统结构
+            BITMAP_DATA := Buffer(24)  ; 64位下结构总大小为24字节
+            NumPut("ptr", Scan0, BITMAP_DATA, 0)   ; bits (8字节)
+            NumPut("uint", Stride, BITMAP_DATA, 8)  ; pitch (4字节)
+            NumPut("int", Width, BITMAP_DATA, 12)   ; width (4字节)
+            NumPut("int", Height, BITMAP_DATA, 16)  ; height (4字节)
+            NumPut("int", 4, BITMAP_DATA, 20)      ; bytespixel (4字节)
+        } else {
+            ; 32位系统结构
+            BITMAP_DATA := Buffer(20)  ; 32位下结构总大小为20字节
+            NumPut("ptr", Scan0, BITMAP_DATA, 0)   ; bits (4字节)
+            NumPut("uint", Stride, BITMAP_DATA, 4)  ; pitch (4字节)
+            NumPut("int", Width, BITMAP_DATA, 8)    ; width (4字节)
+            NumPut("int", Height, BITMAP_DATA, 12)  ; height (4字节)
+            NumPut("int", 4, BITMAP_DATA, 16)       ; bytespixel (4字节)
+        }
+
+        ; 调用 ocr_from_bitmapdata 方法（mode 参数保留兼容，v6 统一多语言模型不再区分）
+        ocr := GetChineseOcr()
+        result := ocr.ocr_from_bitmapdata(BITMAP_DATA, , true)
+    } finally {
+        if locked
+            Gdip_UnlockBits(pBitmap, &BitmapData)
+        Gdip_DisposeImage(pBitmap)
     }
-
-    ; 调用 ocr_from_bitmapdata 方法（mode 参数保留兼容，v6 统一多语言模型不再区分）
-    ocr := GetChineseOcr()
-    result := ocr.ocr_from_bitmapdata(BITMAP_DATA, , true)
-
-    ; 解锁位图
-    Gdip_UnlockBits(pBitmap, &BitmapData)
-    ; 释放位图
-    Gdip_DisposeImage(pBitmap)
     return result
 }
 
 FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, text, mode) {
-    if (A_PtrSize != 8)
-        return false
     result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode)
     points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "左右优先")
     if (!points.Length)
@@ -183,13 +187,14 @@ GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode) {
     searchH := Y2 - Y1
     matPtr := DllCall("RMT_OpenCV.dll\CaptureWinMat", "Int", hwnd, "Int", searchX, "Int", searchY,
         "Int", searchW, "Int", searchH, "Cdecl Ptr")
-    ; v6 统一多语言模型，不再区分语言
-    ocr := GetChineseOcr()
-
-    res := ocr.ocr_from_mat(matPtr, , true)
-    DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")    ;释放mat，防止内存泄露
-
-    return res
+    if !matPtr
+        throw Error("OCR 窗口截图失败。")
+    try {
+        ocr := GetChineseOcr()
+        return ocr.ocr_from_mat(matPtr, , true)
+    } finally {
+        DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")
+    }
 }
 
 ; 当前 RMT_OpenCV.dll 是否带自适应匹配（老 dll 没有该导出 → 返回 false，自动走旧接口）
@@ -214,8 +219,6 @@ OpenCvExplicitImageReady() {
 }
 
 FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold, Adaptive := false, ColorMatch := false) {
-    if (A_PtrSize != 8) ;非64位不可用，直接退出
-        return false
     if (OpenCvEnsure() != "")
         return false
 
@@ -231,8 +234,6 @@ FindScreenImage(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold, Ad
 
 ; OpenCV窗口图片识别    返回窗口的坐标
 FindWinImage(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold, Adaptive := false, ColorMatch := false) {
-    if (A_PtrSize != 8) ;非64位不可用，直接退出
-        return false
     if (OpenCvEnsure() != "")
         return false
 
@@ -248,8 +249,6 @@ FindWinImage(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold,
 
 ; 多点找图 API
 MultiPointApiReady() {
-    if (A_PtrSize != 8)
-        return false
     if (OpenCvEnsure() != "")
         return false
     try {
@@ -260,8 +259,6 @@ MultiPointApiReady() {
 }
 
 AutoSelectPointsApiReady() {
-    if (A_PtrSize != 8)
-        return false
     if (OpenCvEnsure() != "")
         return false
     try {
@@ -272,8 +269,6 @@ AutoSelectPointsApiReady() {
 }
 
 MultiPointSuperApiReady() {
-    if (A_PtrSize != 8)
-        return false
     if (OpenCvEnsure() != "")
         return false
     try {
@@ -284,8 +279,6 @@ MultiPointSuperApiReady() {
 }
 
 FindScreenImageMultiPoint(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThreshold, points, tolerance := 8) {
-    if (A_PtrSize != 8)
-        return -6
     if (OpenCvEnsure() != "")
         return -5
     return DllCall("RMT_OpenCV.dll\FindScreenImageMultiPoint", "Str", targetPath
@@ -295,8 +288,6 @@ FindScreenImageMultiPoint(ResXPtr, ResYPtr, targetPath, X1, Y1, X2, Y2, matchThr
 }
 
 FindWinImageMultiPoint(ResXPtr, ResYPtr, targetPath, hwnd, X1, Y1, X2, Y2, matchThreshold, points, tolerance := 8) {
-    if (A_PtrSize != 8)
-        return -6
     if (OpenCvEnsure() != "")
         return -5
     return DllCall("RMT_OpenCV.dll\FindWinImageMultiPoint", "Str", targetPath, "Int", hwnd
