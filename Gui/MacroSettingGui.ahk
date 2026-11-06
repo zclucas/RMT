@@ -15,6 +15,7 @@ class MacroSettingGui {
         this._batching := false
         this.tableItem := ""
         this.itemIndex := ""
+        this.MacroGui := ""     ; 执行前/后钩子的宏编辑器（首次点击时创建）
     }
 
     ; 表身份 = TableItem 对象（位置不代表身份）
@@ -57,7 +58,7 @@ class MacroSettingGui {
         ; === 内容 ===
         ; 边距：左/右 15，上 4（相对原 14 上移 10），下 10（相对原 14 略收）
         body := main.Add("Grid").Grid_Row(1).Margin("15,4,15,10")
-        body.Rows("36", "36", "36", "36", "*")
+        body.Rows("36", "36", "36", "36", "36", "*")
         toolHover := FrontInfoGui._ToolBtnHoverStyle()
         okStyle := FrontInfoGui._OkBtnHoverStyle()
 
@@ -101,7 +102,19 @@ class MacroSettingGui {
         for t in GetLangArr(["无", "终止提示"])
             stop.Add("ComboBoxItem").Content(t)
 
-        btnRow := body.Add("StackPanel").Grid_Row(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; 执行前 / 执行后钩子：在 Worker 里于主宏循环前后各执行一次的宏串，留空即不启用
+        hookRow := body.Add("StackPanel").Grid_Row(4).Orientation("Horizontal").VerticalAlignment("Center")
+        hookRow.Add("TextBlock").Text(GetLang("执行钩子：")).Width(90).VerticalAlignment("Center")
+        preBtn := hookRow.Add("Button").Name("BtnPreHookEdit").Content(GetLang("执行前")).Width(80).Height(26).MinHeight(26).Padding("8,0").Cursor("Hand")
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1.25")
+            .Foreground("{DynamicResource TextMain}").Margin("0,0,8,0")
+        preBtn.InjectResources(toolHover)
+        postBtn := hookRow.Add("Button").Name("BtnPostHookEdit").Content(GetLang("执行后")).Width(80).Height(26).MinHeight(26).Padding("8,0").Cursor("Hand")
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1.25")
+            .Foreground("{DynamicResource TextMain}")
+        postBtn.InjectResources(toolHover)
+
+        btnRow := body.Add("StackPanel").Grid_Row(5).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         okBtn := btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(80).Height(32).MinHeight(32).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
             .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
@@ -111,7 +124,7 @@ class MacroSettingGui {
         ; 适配提示音标签完整显示，同时控制窗口宽度。
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="500" Height="250"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="500" Height="290"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -121,6 +134,8 @@ class MacroSettingGui {
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnHelp", "Click", ObjBindMethod(this, "OnClickModeHelpBtn"))
         this.ui.OnEvent("BtnBindWinEdit", "Click", ObjBindMethod(this, "OnClickBindWinEdit"))
+        this.ui.OnEvent("BtnPreHookEdit", "Click", ObjBindMethod(this, "OnClickHookEdit", "PreMacro"))
+        this.ui.OnEvent("BtnPostHookEdit", "Click", ObjBindMethod(this, "OnClickHookEdit", "PostMacro"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
 
     }
@@ -181,6 +196,32 @@ class MacroSettingGui {
             MyFrontInfoGui.OwnerHwnd := ""
         }
         MyFrontInfoGui.ShowGui(XamlValueBridge(this.ui, "BindWindowCon"), false, "macro")
+    }
+
+    ; §钩子：执行前/执行后宏串，复用宏编辑器。保存即写回条目并热重载，
+    ; 否则运行中的 Worker 还拿着旧配置（Worker 只在 CF 广播或下次启动时重载）。
+    OnClickHookEdit(field, *) {
+        item := this.tableItem.Items[this.itemIndex]
+        if (!IsObject(item))
+            return
+        if (!IsObject(this.MacroGui))
+            this.MacroGui := MacroEditGui()
+        if (MainSoftData.IsModalSubGui && this.Hwnd() != 0)
+            this.MacroGui.OwnerHwnd := this.Hwnd()
+        else
+            this.MacroGui.OwnerHwnd := ""
+        this.MacroGui.ParentTile := GetLang(field == "PreMacro" ? "执行前钩子" : "执行后钩子")
+        this.MacroGui.SureBtnAction := (command) => this._OnHookEdited(field, command)
+        cur := item.HasProp(field) ? item.%field% : ""
+        this.MacroGui.ShowGui(cur, true)
+    }
+
+    _OnHookEdited(field, command) {
+        item := this.tableItem.Items[this.itemIndex]
+        if (!IsObject(item))
+            return
+        item.%field% := command
+        HotReloadPublish(this.tableItem.Index, 0)
     }
 
     OnClickModeHelpBtn(state, ctrl, event) {

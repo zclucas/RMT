@@ -7,6 +7,8 @@ class MacroItem {
         this.ID := ""           ;条目唯一 ID（复用 GetCMDSerialStr("Item") 机制，全局唯一）
         this.TK := ""           ;触发键
         this.Macro := ""        ;宏内容
+        this.PreMacro := ""     ;执行前钩子（宏串，空=不启用）
+        this.PostMacro := ""    ;执行后钩子（宏串，空=不启用）
         this.HoldTime := 500    ;时间参数（长按=长按时间，双击=双击间隔）
         this.UnorderedTrigger := false  ;顺序触发（勾选时只按顺序注册，不勾选则正反向都注册）
         this.Forbid := 0        ;禁止
@@ -30,6 +32,7 @@ class MacroItem {
         this.GraphBranchCount := 0      ;图形宏并行分支 Worker 引用计数
         this.Killed := false            ;标记结束状态
         this.Pause := false             ;暂停
+        this.PostHookFired := false     ;后置钩子已派发（纯运行时，不落盘）
         this.ActionCount := 0           ;记录执行次数，用于循环次数判断
         this.HoldKey := Map()           ;记录当前按下的按键，以便结束时松开
         this.ToggleState := false       ;触发键开关状态

@@ -1624,6 +1624,8 @@ ReadTableItemInfoNew(tableItem, segID := "") {
             item.IcoPath := TomlUtil_Str(mseg, "IcoPath")
             item.VoiceKeywords := TomlUtil_Str(mseg, "VoiceKeywords")
             item.Macro := TomlUtil_Str(mseg, "Macro")
+            item.PreMacro := TomlUtil_Str(mseg, "PreMacro")     ;执行前钩子（缺省 ""）
+            item.PostMacro := TomlUtil_Str(mseg, "PostMacro")   ;执行后钩子（缺省 ""）
             item.Breakpoints := TomlUtil_Str(mseg, "Breakpoints")   ;断点集合（缺省 ""）
             item.FoldID := foldSeg
             tableItem.Items.Push(item)
@@ -1994,6 +1996,9 @@ SaveTableItemInfoTomlCore(root, tableItem) {
             mseg["VoiceKeywords"] := item.VoiceKeywords
             ; 宏内容：原样存储（多行换行由 TomlWriter 转义为 \n，读回自动还原，无需 ⫶ 编码）
             mseg["Macro"] := item.Macro
+            ; 执行前/后钩子：与 Macro 同段的条目级宏串（缺省 ""，不启用）
+            mseg["PreMacro"] := item.HasProp("PreMacro") ? item.PreMacro : ""
+            mseg["PostMacro"] := item.HasProp("PostMacro") ? item.PostMacro : ""
             ; 断点集合：与 Macro 同段的条目级字段，值形如 ",sig1,sig2,"（缺省 ""）
             mseg["Breakpoints"] := item.Breakpoints
             root[macroSeg] := mseg

@@ -252,7 +252,7 @@ class WorkPool {
     }
 
     Submit(cmd, tableID := "", itemID := "") {
-        this.taskQueue.Push({ cmd: cmd, tableID: tableID, itemID: itemID, isGraphBranch: false })
+        this.taskQueue.Push({ cmd: cmd, tableID: tableID, itemID: itemID, isGraphBranch: false, isHook: false })
         this.Dispatch()
         return 0
     }
@@ -303,6 +303,9 @@ class WorkPool {
         item.GraphBranchCount := 0
         SetTableItemState(tableItem, itemIndex, itemState)
         GraphPoolLog("图形宏结束", Format("tab={1} item={2} state={3}", tableID, itemID, itemState))
+        ; 多分支场景：分支 Worker 只跑自己那条链，谁都不负责后置钩子，
+        ; 由这里统一补派一次（钩子宏串仍交给 Worker 执行，主进程只投递）。
+        this.DispatchPostHook(tableItem, item)
     }
 
     DrainItemTaskQueue(tableID, itemID) {
@@ -394,6 +397,31 @@ class WorkPool {
 
         item.IsWorkIndex := 0
         SetTableItemState(tableItem, itemIndex, 3)
+        ; 强停时 Worker 侧走不到后置钩子（进程被杀，或分支没机会收尾），由主进程补派。
+        ; 此时 Killed 已经是 true，钩子以 force 模式执行，否则清理会被自身的终止判断拦住。
+        this.DispatchPostHook(tableItem, item)
+    }
+
+    ; 补派后置钩子：主进程只负责投递，钩子宏串仍然在 Worker 里执行。
+    ; 任务身份用「主条目 ID + _hook」而不是主条目 ID —— 否则会被 HasItemWork 判成
+    ; 「宏还在跑」，导致 FinishGraphMacroItem 永远收尾不了；也会被按主 ID 过滤的
+    ; DrainItemTaskQueue 当成残留任务清掉。
+    DispatchPostHook(tableItem, item) {
+        if (!IsObject(item) || !item.HasProp("PostMacro"))
+            return false
+        if (Trim(item.PostMacro) == "")
+            return false
+        if (item.HasProp("PostHookFired") && item.PostHookFired)
+            return false
+        item.PostHookFired := true
+        if (!WorkPoolEnabled())
+            return false
+        cmd := EncodeBatch(EncodeCommand("HM", tableItem.ID, item.ID, "post", "1"))
+        this.taskQueue.Push({ cmd: cmd, tableID: tableItem.ID, itemID: item.ID "_hook", isGraphBranch: false, isHook: true })
+        GraphPoolLog("后置钩子派发", Format("tab={1} item={2} 队列={3}"
+            , tableItem.ID, item.ID, this.taskQueue.Size()))
+        this.Dispatch()
+        return true
     }
 
     ; 新一次宏触发前：清队列、强停残留 Worker、重置状态
@@ -411,6 +439,7 @@ class WorkPool {
         item.Killed := false
         item.IsWorkIndex := 0
         item.HoldKey := Map()
+        item.PostHookFired := false   ; 新一轮触发：后置钩子重新可派
     }
 
     ; 协作式通知 Worker 停止并松开按键（强杀前尽量先走这一步）
@@ -528,7 +557,9 @@ class WorkPool {
         GraphPoolLog("Dispatch分配", Format("Worker#{1} tab={2} item={3} graph={4} 闲置={5} 队列={6}"
             , wd.idx, task.tableID, task.itemID, task.isGraphBranch ? 1 : 0
             , this.freePool.Count, this.taskQueue.Size()))
-        if (!task.isGraphBranch)
+        ; 钩子任务是收尾流程的附带执行，不计入宏执行次数。
+        ; isHook 用 HasProp 判：任务对象是临时 Map，漏字段时直接访问会抛异常。
+        if (!task.isGraphBranch && !(task.HasProp("isHook") && task.isHook))
             MySoftData.MacroTotalCount += 1
         return true
     }
@@ -617,7 +648,9 @@ class WorkPool {
             return
         }
         itemIndex := GetItemIndexInTable(tableItem, wd.itemID)
-        item := tableItem.Items[itemIndex]
+        ; 用 GetItemByIndex 而非 Items[n]：钩子任务的身份是「主 ID + _hook」，
+        ; 查不到会返回 0，直接下标会抛 Invalid index
+        item := GetItemByIndex(tableItem, itemIndex)
         ; 图形宏并行分支：单项 Worker 结束时不改宏项全局占用/颜色，由 FinishGraphMacroItem 统一释放
         skipMacroRelease := wd.isGraphBranch && item && item.GraphBranchCount > 0
 
@@ -888,7 +921,7 @@ class WorkPool {
             tableItem := GetTableByID(tID)
             if (tableItem) {
                 itemIndex := GetItemIndexInTable(tableItem, iID)
-                item := tableItem.Items[itemIndex]
+                item := GetItemByIndex(tableItem, itemIndex)
                 branchCount := item ? item.GraphBranchCount : 0
                 isGraphTask := (wd.isGraphBranch || branchCount > 0)
                 if (isGraphTask && item) {
@@ -1089,7 +1122,7 @@ class WorkPool {
                                 tableItem := GetTableByID(tID)
                                 if (tableItem) {
                                     itemIndex := GetItemIndexInTable(tableItem, iID)
-                                    item := tableItem.Items[itemIndex]
+                                    item := GetItemByIndex(tableItem, itemIndex)
                                     if (item)
                                         branchCount := item.GraphBranchCount
                                 }
@@ -1097,7 +1130,7 @@ class WorkPool {
                             isGraphTask := (wd.isGraphBranch || branchCount > 0) && tID && iID
                             if (isGraphTask) {
                                 tableItem := GetTableByID(tID)
-                                item := tableItem ? tableItem.Items[GetItemIndexInTable(tableItem, iID)] : ""
+                                item := tableItem ? GetItemByIndex(tableItem, GetItemIndexInTable(tableItem, iID)) : ""
                                 remainCount := branchCount
                                 if (item && branchCount > 0) {
                                     item.GraphBranchCount--

@@ -9,6 +9,9 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
     item.HoldKey := Map()
     item.VariableMap["宏循环次数"] := 1
     item.VariableMap["循环次数"] := 0
+    ; 执行前钩子：一次触发只跑一次（不是每轮循环）。只在发起者执行——
+    ; 图形宏的分支 Worker 走 WalkGraphNode，不经本函数，天然不会重复。
+    RunMacroHook(tableItem, item, "pre")
     isContinue := MySoftData.ContinueKeyMap.Has(item.TK) && item.LoopCount == 1
     isLoop := item.LoopCount == -1
     loop {
@@ -50,6 +53,10 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
     }
     ; 图形宏多分支时跳过 OnFinishMacro，由 Master 的 FinishGraphMacroItem 统一释放
     skipFinish := item.GraphBranchCount > 0
+    ; 执行后钩子：只在本进程独占该条目时执行。多分支场景下本 Worker 只是分支之一，
+    ; 收尾由主进程 FinishGraphMacroItem 统一补派后置钩子任务，此处跳过以免跑多份。
+    if (!skipFinish)
+        RunMacroHook(tableItem, item, "post")
     if (!skipFinish)
         OnFinishMacro(tableItem, macro, index)
 }
@@ -100,6 +107,94 @@ OnTriggerMacroOnce(tableItem, macro, index) {
         if (item.VariableMap["循环-跳出"])
             break
     }
+}
+
+; ============================================================
+; 执行前 / 执行后钩子
+;
+; 钩子宏串跑在独立的 scratch 表上，不复用主条目的 VariableMap ——
+; 否则 分支-跳出 / 循环-跳出 / 宏循环次数 会被钩子改写后串进主宏执行流。
+; scratch 表的 ID 不在真实表集合里，Worker 上报 ItemState 时主进程 GetTableByID
+; 落空即安全返回，不会污染 UI 状态。
+; ============================================================
+
+; 取一个空闲的钩子 scratch 表。用池化的原因：钩子里的「宏操作」可能触发另一个
+; 带钩子的宏，重入时必须有独立实例，否则两者会共写同一份 VariableMap。
+GetHookTableItem() {
+    static pool := []
+    for t in pool {
+        if (!t.HookBusy) {
+            t.HookBusy := true
+            return t
+        }
+    }
+    t := TableItem()
+    t.ID := "__RmtHook" (pool.Length + 1)
+    t.HookBusy := true
+    hookItem := MacroItem()
+    hookItem.ID := "__HookItem"
+    t.Items.Push(hookItem)
+    t.RebuildIndex()
+    InitSingleTableState(t)
+    pool.Push(t)
+    return t
+}
+
+; phase: "pre" = 执行前钩子，其余按 "post" = 执行后钩子
+; force: true = 即使主条目已被终止也继续跑完（主进程补派的清理钩子用这个模式，
+;        强停时 item.Killed 已经是 true，不强制的话清理会一行都不执行）
+RunMacroHook(tableItem, item, phase, force := false) {
+    if (!IsObject(item))
+        return false
+    field := (phase == "pre") ? "PreMacro" : "PostMacro"
+    if (!item.HasProp(field))
+        return false
+    macroStr := item.%field%
+    if (Trim(macroStr) == "")
+        return false
+
+    hookTable := GetHookTableItem()
+    hookItem := hookTable.Items[1]
+    who := ProcessTag()
+    try {
+        hookItem.Killed := false
+        hookItem.Pause := false
+        hookItem.ActionCount := 0
+        hookItem.HoldKey := Map()
+        hookItem.VariableMap["宏循环次数"] := 1
+        hookItem.VariableMap["循环次数"] := 0
+        hookItem.VariableMap["循环-跳过本轮"] := false
+        hookItem.VariableMap["循环-跳出"] := false
+        hookItem.VariableMap["分支-跳出"] := false
+
+        GraphPoolLog("钩子开始", Format("执行者={1} tab={2} item={3} phase={4}"
+            , who, tableItem.ID, item.ID, phase))
+
+        cmdArr := SplitMacro(macroStr)
+        for value in cmdArr {
+            ; 钩子没有独立停止信号，跟随主条目：主条目被终止时立刻收手
+            if (!force && item.Killed) {
+                hookItem.Killed := true
+                break
+            }
+            result := ExecuteMacroCmdOnce(hookTable, cmdArr[A_Index], 1)
+            if (result != "")
+                cmdArr.InsertAt(A_Index + 1, result*)
+            if (hookItem.VariableMap["分支-跳出"] || hookItem.VariableMap["循环-跳出"])
+                break
+        }
+
+        GraphPoolLog("钩子结束", Format("执行者={1} tab={2} item={3} phase={4} killed={5}"
+            , who, tableItem.ID, item.ID, phase, item.Killed ? 1 : 0))
+    } catch as e {
+        ; 钩子异常不能带崩主宏：只记录并上报
+        GraphPoolLog("钩子异常", Format("tab={1} item={2} phase={3} err={4} line={5}"
+            , tableItem.ID, item.ID, phase, e.Message, e.Line))
+        try RMTErrorShow("钩子执行异常(" phase "): " e.Message, RMT_LV_ERROR, who)
+    } finally {
+        hookTable.HookBusy := false
+    }
+    return true
 }
 
 ; ============================================================

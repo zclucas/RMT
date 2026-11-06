@@ -324,6 +324,29 @@
                         TriggerMacro(tableItem, itemIndex)
                     }
                 }
+
+                if (opcode == "HM") {
+                    ; 主进程补派的后置钩子任务。这里直接跑钩子宏串，绝不能转 TriggerMacro ——
+                    ; 那会进 OnTriggerMacroKeyAndInit 把前置钩子连带再跑一遍，形成递归。
+                    hookTab := args[1]
+                    hookItemID := args[2]
+                    hookPhase := args.Length >= 3 ? args[3] : "post"
+                    hookForce := (args.Length >= 4 && args[4] == "1")
+                    hookTableItem := GetTableByID(hookTab)
+                    if (!hookTableItem) {
+                        GraphPoolLog("Worker钩子-表不存在", Format("tab={1} item={2}", hookTab, hookItemID))
+                        continue
+                    }
+                    hookIdx := GetItemIndexInTable(hookTableItem, hookItemID)
+                    hookObj := GetItemByIndex(hookTableItem, hookIdx)
+                    if (!hookObj) {
+                        GraphPoolLog("Worker钩子-条目不存在", Format("tab={1} item={2}", hookTab, hookItemID))
+                        continue
+                    }
+                    GraphPoolLog("Worker执行钩子", Format("tab={1} item={2} phase={3} force={4}"
+                        , hookTab, hookItemID, hookPhase, hookForce ? 1 : 0))
+                    RunMacroHook(hookTableItem, hookObj, hookPhase, hookForce)
+                }
             }
         } catch as e {
             GraphPoolLog("Worker任务异常", Format("id={1} err={2} line={3} cmd={4}"
