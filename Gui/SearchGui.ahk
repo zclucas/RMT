@@ -296,7 +296,7 @@ class SearchGui {
             .HorizontalAlignment("Left").VerticalAlignment("Center").VerticalContentAlignment("Center")
             .Padding("2,0").TextAlignment("Center").FontSize("11").SetProp("Panel.ZIndex", "2")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("Int|NoIME|MaxLen:6")
     }
 
     _AreaPreviewBtnStyle() {

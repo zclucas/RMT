@@ -517,6 +517,8 @@ public partial class AhkWpfEngine
             SendToAhkAsync("EVENT|" + winId + "|Window|LoadedHwnd|" + hwndVal.ToString() + "\n");
             UpdateSnapState(win);
             InheritWindowIconAndTitle(win, ownerHwndStr);
+            // 输入限制（Tag="NumOnly" 等）在视觉树建好后一次挂完，主程序只写声明
+            AttachInputMasks(win);
             DumpState("Window", "Loaded");
 #if ENABLE_WEBVIEW
             InitializeWebView2IfPresent(win);
@@ -1091,6 +1093,8 @@ public partial class AhkWpfEngine
             SendToAhkAsync("EVENT|" + winId + "|Window|LoadedHwnd|" + hwnd.ToString() + "\n");
             UpdateSnapState(win);
             InheritWindowIconAndTitle(win, ownerHwndStr);
+            // 输入限制（Tag="NumOnly" 等）在视觉树建好后一次挂完，主程序只写声明
+            AttachInputMasks(win);
             DumpState("Window", "Loaded");
 #if ENABLE_WEBVIEW
             InitializeWebView2IfPresent(win);

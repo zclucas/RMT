@@ -190,7 +190,7 @@ class JoyGui {
         tb := parent.Add("TextBox").Name(name).Width(width).Height(26).MinHeight(26).Margin("6,0,0,0")
             .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("4,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:5")
         if (text != "")
             tb.Text(text)
         if (vis != "")
