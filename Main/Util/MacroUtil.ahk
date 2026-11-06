@@ -1883,7 +1883,7 @@ OnArray(tableItem, cmd, index) {
         case "创建":
             if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.Name))
                 return
-            MySetGlobalArray(Data.Name, Data.InitArr)
+            MySetGlobalArray(Data.Name, CloneArray(Data.InitArr))
         case "克隆":
             SourceArr := GetCmdArray(Data, tableItem, index, true)
             if (SourceArr == "")

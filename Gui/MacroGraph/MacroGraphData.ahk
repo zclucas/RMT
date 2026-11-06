@@ -524,7 +524,7 @@ class MacroGraphDataMixin {
             d.isIgnoreExist := data.IsIgnoreExist
             d.arrayType := data.Type
             d.arrayName := data.Name
-            d.initArr := data.InitArr.Clone()
+            d.initArr := CloneArray(data.InitArr)
             d.mainIndex := data.MainIndex
             d.argsIndex := data.ArgsIndex
             d.argsType := data.ArgsType
