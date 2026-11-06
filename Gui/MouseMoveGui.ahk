@@ -69,11 +69,11 @@ class MouseMoveGui {
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Name("PosXLabel").Text(GetLang("坐标位置X:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         body.Add("TextBox").Grid_Row(1).Grid_Column(1).Name("PosXCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("Int|NoIME|MaxLen:6")
         body.Add("TextBlock").Grid_Row(1).Grid_Column(2).Name("PosYLabel").Text(GetLang("坐标位置Y:")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         body.Add("TextBox").Grid_Row(1).Grid_Column(3).Name("PosYCon").Height(26).MinHeight(26).Margin("10,0,0,0").VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("Int|NoIME|MaxLen:6")
 
         ; 行2：移动速度 + 移动方式
         spdHost := body.Add("Border").Grid_Row(2).Grid_Column(0).Background("Transparent").VerticalAlignment("Center").ToolTip(speedTip)
@@ -81,7 +81,7 @@ class MouseMoveGui {
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         body.Add("TextBox").Grid_Row(2).Grid_Column(1).Name("SpeedCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize("11").Padding("4,0").Text("90")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").ToolTip(speedTip)
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").ToolTip(speedTip).Tag("NumOnly|NoIME|MaxLen:3")
         body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("移动方式：")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         mm := body.Add("ComboBox").Grid_Row(2).Grid_Column(3).Name("MouseMoveModeCombo").Height(26).MinHeight(26).Margin("10,0,0,0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")

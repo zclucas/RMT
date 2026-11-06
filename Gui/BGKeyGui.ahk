@@ -113,17 +113,17 @@ class BGKeyGui {
         bottom.Add("TextBox").Name("HoldTimeCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center").FontSize("11").Margin("6,0,0,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:5")
         bottom.Add("TextBlock").Name("KeyCountTipCon").Text(GetLang("点击次数：")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         bottom.Add("TextBox").Name("KeyCountCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center").FontSize("11").Margin("6,0,0,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:5")
         bottom.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         bottom.Add("TextBox").Name("PerIntervalCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center").FontSize("11").Margin("6,0,0,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:5")
 
         ; 行3：清空 / 确定（同款样式，间距 200px）
         btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -424,7 +424,7 @@ class BGKeyGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
-        KeyPickerHook.Attach(this, false, ["HoldTimeCon", "KeyCountCon", "PerIntervalCon"])
+        KeyPickerHook.Attach(this, false)
     }
 
     OnWindowClosing(state, ctrl, event) {

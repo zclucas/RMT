@@ -146,7 +146,7 @@ class WaitGui {
         btnRow.Add("TextBox").Name("IntervalCon").Width(80).Height(24).MinHeight(24).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:6")
         AddCmdOkBtn(btnRow, "BtnOk", "16,0,0,0")
 
         ; === 创建 XAMLHost ===

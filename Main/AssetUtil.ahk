@@ -389,10 +389,10 @@ NormalizeKeyPickerName(name) {
 class KeyPickerHook {
     static MouseKeys := ["WheelUp", "WheelDown", "WheelLeft", "WheelRight", "XButton1", "XButton2"]
 
-    static Attach(host, skipF1 := false, numCtrls := "") {
+    static Attach(host, skipF1 := false) {
         KeyPickerHook.Detach(host)
         host._kpSkipF1 := skipF1
-        host._kpNumFocus := false
+        host._kpEditableFocus := false
         host._kpHookDown := Map()
         ih := InputHook("V")
         ih.KeyOpt("{All}", "N")
@@ -404,7 +404,7 @@ class KeyPickerHook {
         for hk in KeyPickerHook.MouseKeys {
             try Hotkey("~" hk, host._kpMouseAction, "On")
         }
-        ; 空格只在选键窗激活且未输入数字时拦截，避免全局/输入框空格失效
+        ; 空格只在选键窗激活且未在输入时拦截，避免全局/输入框空格失效
         host._kpSpaceHotIf := (*) => KeyPickerHook._IsHostReady(host)
         host._kpSpaceAction := (*) => KeyPickerHook._OnSpace(host)
         try {
@@ -412,12 +412,16 @@ class KeyPickerHook {
             Hotkey("Space", host._kpSpaceAction, "On")
             HotIf()
         }
-        if (IsObject(numCtrls)) {
-            for name in numCtrls {
-                host.ui.OnEvent(name, "GotFocus", (*) => host._kpNumFocus := true)
-                host.ui.OnEvent(name, "LostFocus", (*) => host._kpNumFocus := false)
-            }
-        }
+        ; 焦点状态由引擎统一判断后上报（哪个控件能输入归渲染引擎管），
+        ; 这里只接收结果，不再逐个控件挂 GotFocus。
+        host.ui.OnEvent("Window", "FocusEditable", (state, *) => KeyPickerHook._OnFocusEditable(host, state))
+    }
+
+    static _OnFocusEditable(host, state) {
+        ; 拿不到值就保持原状态：宁可少选一个键，也不要把「正在输入」判成「没在输入」
+        if (!IsObject(state) || !state.Has("FocusEditable"))
+            return
+        host._kpEditableFocus := (state["FocusEditable"] == "1")
     }
 
     static Detach(host) {
@@ -443,13 +447,13 @@ class KeyPickerHook {
             host._kpSpaceAction := ""
         }
         host._kpHookDown := Map()
-        host._kpNumFocus := false
+        host._kpEditableFocus := false
     }
 
     static _IsHostReady(host) {
         if (!IsObject(host) || !IsObject(host.ui) || (host.HasProp("_closed") && host._closed))
             return false
-        if (host.HasProp("_kpNumFocus") && host._kpNumFocus)
+        if (host.HasProp("_kpEditableFocus") && host._kpEditableFocus)
             return false
         hwnd := 0
         try hwnd := host.Hwnd()

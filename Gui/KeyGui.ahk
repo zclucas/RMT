@@ -108,6 +108,7 @@ class KeyGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .Tag("NumOnly|NoIME|MaxLen:5")
         bottom.Add("TextBlock").Name("KeyCountTipCon").Text(GetLang("点击次数：")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         bottom.Add("TextBox").Name("KeyCountCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0")
@@ -115,6 +116,7 @@ class KeyGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .Tag("NumOnly|NoIME|MaxLen:5")
         bottom.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         bottom.Add("TextBox").Name("PerIntervalCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0")
@@ -122,6 +124,7 @@ class KeyGui {
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .Tag("NumOnly|NoIME|MaxLen:5")
         optWrap.Add("TextBlock").Name("CommandStrCon").Grid_Row(1).Text(GetLang("当前指令：无"))
             .HorizontalAlignment("Left").VerticalAlignment("Center").Margin("0,8,0,0")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
@@ -479,7 +482,7 @@ class KeyGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
-        KeyPickerHook.Attach(this, true, ["HoldTimeCon", "KeyCountCon", "PerIntervalCon"])
+        KeyPickerHook.Attach(this, true)
     }
 
     OnWindowClosing(state, ctrl, event) {

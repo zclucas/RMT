@@ -142,7 +142,7 @@ class InputGui {
         body.Add("TextBox").Grid_Row(5).Grid_Column(1).Name("TimeoutCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
             .VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:7")
         body.Add("TextBlock").Grid_Row(5).Grid_Column(3).Text(GetLang("超时后:")).VerticalAlignment("Center")
         ta := body.Add("ComboBox").Grid_Row(5).Grid_Column(4).Name("TimeoutActionCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         for t in GetLangArr(["无", "用默认值", "保持原值", "终止当前宏", "终止所有宏"])

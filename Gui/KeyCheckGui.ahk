@@ -386,7 +386,7 @@ class KeyCheckGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
-        KeyPickerHook.Attach(this, false, ["VarNameCon"])
+        KeyPickerHook.Attach(this, false)
     }
 
     OnWindowClosing(state, ctrl, event) {

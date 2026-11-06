@@ -9,6 +9,8 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
 using System.Xml;
 using System.Reflection;
 using System.Windows.Documents;
@@ -36,6 +38,8 @@ public partial class AhkWpfEngine
     private int _ballDragStartWindowX;
     private int _ballDragStartWindowY;
     private bool _ballDragMoved;
+    // Window 级焦点上报只挂一次（RebindEvents 重复下发也只算一次）
+    private bool _focusEditableBound;
     // 窗口级 MouseMove/PreviewMouseMove 是否回传。默认 true 保持既有行为；
     // 主窗绑它只为拖 AI 分割条时取 DragCoords，开窗后由 AHK 关掉，按下分割条时再临时打开。
     // 控件级 MouseMove（画布、摇杆、树节点拖拽）不受此开关影响。
@@ -110,6 +114,28 @@ public partial class AhkWpfEngine
                         string val = BridgeUtil.LengthPrefix(e.NewValue.ToString());
                         SendToAhk("EVENT|" + winId + "|" + ctrlName + "|IsVisibleChanged|" + val + "\n");
                     };
+                }
+                return;
+            }
+
+            // 焦点是否落在可输入控件上（Window 级，一次挂载全窗生效）。
+            // 控件状态归引擎：焦点换到 TextBox/可编辑下拉时推 1，换走或落空推 0。
+            // 主程序只读这个结果，不用再逐控件挂 GotFocus 去自己维护焦点状态。
+            if (eventName == "FocusEditable")
+            {
+                if (ctrl is UIElement && !_focusEditableBound)
+                {
+                    _focusEditableBound = true;
+                    System.Windows.Input.KeyboardFocusChangedEventHandler onFocus =
+                        (s, e) => ReportFocusEditable(e.NewFocus);
+                    ((UIElement)ctrl).AddHandler(UIElement.GotKeyboardFocusEvent, onFocus, true);
+                    ((UIElement)ctrl).AddHandler(UIElement.LostKeyboardFocusEvent, onFocus, true);
+                    try
+                    {
+                        System.IO.File.AppendAllText(GetLogPath("AhkWpfDebug.log"),
+                            "BindEvent: Window:FocusEditable installed (" + ctrlName + ")\n");
+                    }
+                    catch { }
                 }
                 return;
             }
@@ -659,6 +685,217 @@ public partial class AhkWpfEngine
             }
         }
         DumpState(cName, eName);
+    }
+
+    // 焦点控件是否接受文本输入：文本框（非只读）、密码框、可编辑/已展开的下拉都算。
+    // 结果以 EVENT 上报（1 可输入 / 0 不可），主程序的按键选择器据此决定这次物理按键是选键还是输入。
+    private void ReportFocusEditable(IInputElement focus)
+    {
+        bool editable = false;
+        try
+        {
+            TextBoxBase tb = focus as TextBoxBase;
+            if (tb != null)
+                editable = !tb.IsReadOnly;
+            else if (focus is PasswordBox)
+                editable = true;
+            else
+            {
+                ComboBox cb = focus as ComboBox;
+                if (cb != null)
+                    editable = cb.IsEditable || cb.IsDropDownOpen;
+            }
+        }
+        catch { }
+        try
+        {
+            // 必须走 LengthPrefix：AHK 侧 DecodeValue 只认「长度:值」，裸 "1" 会被当 base64 解成空串，
+            // 主程序那边就只能读到空值，焦点状态永远停在 0。
+            SendToAhkAsync("EVENT|" + winId + "|Window|FocusEditable|"
+                + BridgeUtil.LengthPrefix(editable ? "1" : "0") + "\n");
+        }
+        catch { }
+    }
+
+    // ===================== 输入限制 =====================
+    // XAML 上用 Tag 声明，拦截在引擎里做。多个规则用 | 叠加，全部满足才放行：
+    //   Tag="NumOnly"                      只收半角数字
+    //   Tag="NumOnly|MaxLen:5"             数字，最长 5 位
+    //   Tag="AsciiAlnum|NoSpace|NoIME"     只收英文数字、不许空格、关掉输入法
+    // 规则表写在代码里，加一种规则就是在表里加一行。
+    private static readonly Dictionary<string, string> MaskRules = new Dictionary<string, string>
+    {
+        { "NumOnly",    @"^\d*$" },                 // 半角数字
+        { "AsciiAlnum", @"^[A-Za-z0-9]*$" },        // 英文 + 数字
+        { "NoSpace",    @"^\S*$" },                 // 不许空白（全角空格也算）
+        { "Int",        @"^-?\d*$" },               // 可负整数
+        { "Decimal",    @"^-?\d*(\.\d{0,%})?$" },   // 小数，% 换成小数位数
+        { "MaxLen",     @"^[\s\S]{0,%}$" },         // 最长 % 个字符
+    };
+
+    private static readonly DependencyProperty MaskAppliedProperty =
+        DependencyProperty.RegisterAttached("MaskApplied", typeof(bool), typeof(AhkWpfEngine),
+            new PropertyMetadata(false));
+
+    // 窗口 Loaded 后整棵视觉树扫一遍。虚拟列表那种延迟生成的控件不在此时存在，
+    // 需要时在生成后再调用一次。
+    private void AttachInputMasks(DependencyObject root)
+    {
+        if (root == null)
+            return;
+        TextBox tb = root as TextBox;
+        if (tb != null)
+            AttachMask(tb, tb.Tag as string);
+        // 可编辑下拉：Tag 写在 ComboBox 上，实际输入的是模板里的 PART_EditableTextBox
+        ComboBox cb = root as ComboBox;
+        if (cb != null && cb.IsEditable)
+        {
+            string cbTag = cb.Tag as string;
+            if (!string.IsNullOrEmpty(cbTag))
+            {
+                try { cb.ApplyTemplate(); }
+                catch { }
+                TextBox inner = cb.Template == null ? null
+                    : cb.Template.FindName("PART_EditableTextBox", cb) as TextBox;
+                if (inner != null)
+                    AttachMask(inner, cbTag);
+            }
+        }
+        int count = 0;
+        try { count = VisualTreeHelper.GetChildrenCount(root); }
+        catch { return; }
+        for (int i = 0; i < count; i++)
+            AttachInputMasks(VisualTreeHelper.GetChild(root, i));
+    }
+
+    private void AttachMask(TextBox tb, string tag)
+    {
+        if (string.IsNullOrEmpty(tag))
+            return;
+        if ((bool)tb.GetValue(MaskAppliedProperty))
+            return;
+
+        bool noIme = false;
+        List<Regex> rules = new List<Regex>();
+        string[] tokens = tag.Split('|');
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            string tok = tokens[i].Trim();
+            if (tok.Length == 0)
+                continue;
+            string name = tok;
+            string argv = "";
+            int colon = tok.IndexOf(':');
+            if (colon > 0)
+            {
+                name = tok.Substring(0, colon).Trim();
+                argv = tok.Substring(colon + 1).Trim();
+            }
+            if (name == "NoIME")
+            {
+                noIme = true;          // 不是正则规则：关掉这个框的输入法
+                continue;
+            }
+            string pattern;
+            if (!MaskRules.TryGetValue(name, out pattern))
+                continue;
+            if (pattern.IndexOf('%') >= 0)
+            {
+                if (argv.Length == 0)
+                    continue;               // 带 % 的规则必须给参数，缺了就当没写
+                pattern = pattern.Replace("%", argv);
+            }
+            try { rules.Add(new Regex(pattern, RegexOptions.CultureInvariant)); }
+            catch { }
+        }
+        if (rules.Count == 0 && !noIme)
+            return;
+        tb.SetValue(MaskAppliedProperty, true);
+
+        if (noIme)
+            System.Windows.Input.InputMethod.SetIsInputMethodEnabled(tb, false);
+
+        Regex[] set = rules.ToArray();
+
+        // 逐字符拦截：拿「插入后的候选串」判定，不能只看新字符，否则长度类规则形同虚设。
+        // 只挂 Preview（隧道），冒泡的 TextInput 到达时 TextBox 已经插完字，会把候选串算重。
+        System.Windows.Input.TextCompositionEventHandler filter = (s, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Text))
+                return;
+            if (!MaskAcceptsInput(tb, set, e.Text))
+                e.Handled = true;
+        };
+        tb.PreviewTextInput += filter;
+
+        // 粘贴：整段参与判定，不合法就整段丢掉。正则只判不修，没法做到「只留数字」。
+        DataObject.AddPastingHandler(tb, (s, e) => MaskOnPaste(tb, set, e));
+
+        // 兜底：输入法上屏、拖放、外部注入这些绕开 PreviewTextInput 的路径，
+        // 退回上一个合法值。同一个 Dispatcher 周期内完成，中间态不会被绘制，不会闪。
+        string lastValid = tb.Text == null ? "" : tb.Text;
+        bool fixing = false;
+        tb.TextChanged += (s, e) =>
+        {
+            if (fixing)
+                return;
+            string cur = tb.Text == null ? "" : tb.Text;
+            if (MaskAcceptsText(set, cur))
+            {
+                lastValid = cur;
+                return;
+            }
+            int caret = tb.CaretIndex;
+            fixing = true;
+            try
+            {
+                tb.Text = lastValid;
+                tb.CaretIndex = Math.Min(caret, lastValid.Length);
+            }
+            finally
+            {
+                fixing = false;
+            }
+        };
+    }
+
+    private static bool MaskAcceptsText(Regex[] rules, string text)
+    {
+        for (int i = 0; i < rules.Length; i++)
+        {
+            if (!rules[i].IsMatch(text))
+                return false;
+        }
+        return true;
+    }
+
+    // 模拟一次插入后的整串，判断是否仍满足全部规则
+    private static bool MaskAcceptsInput(TextBox tb, Regex[] rules, string input)
+    {
+        string cur = tb.Text == null ? "" : tb.Text;
+        int start = tb.SelectionStart;
+        int len = tb.SelectionLength;
+        if (start < 0) start = 0;
+        if (start > cur.Length) start = cur.Length;
+        if (len < 0) len = 0;
+        if (start + len > cur.Length) len = cur.Length - start;
+        string candidate = cur.Substring(0, start) + input + cur.Substring(start + len);
+        return MaskAcceptsText(rules, candidate);
+    }
+
+    private static void MaskOnPaste(TextBox tb, Regex[] rules, DataObjectPastingEventArgs e)
+    {
+        string raw = null;
+        try
+        {
+            if (e.DataObject.GetDataPresent(DataFormats.UnicodeText))
+                raw = e.DataObject.GetData(DataFormats.UnicodeText) as string;
+            else if (e.DataObject.GetDataPresent(DataFormats.Text))
+                raw = e.DataObject.GetData(DataFormats.Text) as string;
+        }
+        catch { }
+        if (raw == null || !MaskAcceptsInput(tb, rules, raw))
+            e.CancelCommand();
     }
 
     // 在指定控件内按该控件的本地坐标做一次命中测试，向上找列表项/树项的 Tag。
