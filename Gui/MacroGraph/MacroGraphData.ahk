@@ -242,7 +242,7 @@ class MacroGraphDataMixin {
     ; §20 改名：加「鼠标移动/增量移动」新键（旧「移动」键保留兼容旧图）
     _FormalIniCmdKeys() {
         return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "文本处理", "数组",
-            "后台鼠标", "后台按键", "窗口管理", "按键检测", "手柄检测", "注释", "抓图", "循环",
+            "后台鼠标", "后台按键", "窗口管理", "窗口信息", "调整窗口", "按键检测", "手柄检测", "注释", "抓图", "循环",
             "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间"]
     }
 
@@ -275,7 +275,7 @@ class MacroGraphDataMixin {
                 "数组", ArrayData,
                 "后台鼠标", BGMouseData,
                 "后台按键", BGKeyData,
-                "窗口管理", WindowManageData,
+                "窗口信息", WindowInfoData, "调整窗口", WindowManageData, "窗口管理", WindowManageData,
                 "按键检测", KeyCheckData,
                 "手柄检测", KeyCheckData,
                 "抓图", ScreenShotData,
@@ -524,7 +524,7 @@ class MacroGraphDataMixin {
             d.isIgnoreExist := data.IsIgnoreExist
             d.arrayType := data.Type
             d.arrayName := data.Name
-            d.initArr := data.InitArr.Clone()
+            d.initArr := CloneArray(data.InitArr)
             d.mainIndex := data.MainIndex
             d.argsIndex := data.ArgsIndex
             d.argsType := data.ArgsType
@@ -551,7 +551,14 @@ class MacroGraphDataMixin {
             for k in data.KeyArr
                 keyStr .= k "⎖"
             d.bgKeyStr := RTrim(keyStr, "⎖")
-        } else if (cmdKey == "窗口管理") {
+        } else if ((cmdKey == "窗口管理" || cmdKey == "窗口信息" || cmdKey == "调整窗口")) {
+            WindowEnsureResults(data)
+            Loop 7 {
+                prop := "ResultVar" A_Index
+                dest := "wmResultVar" A_Index
+                d.%dest% := data.%prop%
+            }
+            d.wmCloseProcess := data.CloseProcess
             d.wmActionType := data.ActionType
             d.wmSearchValue := data.SearchValue
             d.wmPosX := data.PosX

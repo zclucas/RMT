@@ -1,5 +1,15 @@
 ﻿#Requires AutoHotkey v2.0
 
+; 数组配置与运行数据、克隆结果之间不能共享内层数组。
+CloneArray(DataArray) {
+    Result := DataArray.Clone()
+    loop DataArray.Length {
+        if (DataArray.Has(A_Index) && DataArray[A_Index] is Array)
+            Result[A_Index] := CloneArray(DataArray[A_Index])
+    }
+    return Result
+}
+
 GetArrayStr(DataArray) {
     ResText := ""
     for Index, Value in DataArray {

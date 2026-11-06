@@ -1708,6 +1708,7 @@ class WaitConfirmData {
 
 class WindowManageData {
     __New() {
+        WindowEnsureResults(this)
         this.SerialStr := ""                 ;类型尽量使用中文 当做枚举使用  程序中有语义、也可以随时调整顺序
         this.ActionType := "激活窗口"        ; 操作类型，使用中文键
         this.SearchValue := "{宏设置窗口绑定}"              ;查找值（格式：标题⎖类名⎖进程名，空表示未选择）
@@ -1800,3 +1801,10 @@ global MainSoftData
 ; 消除 MacroUtil/RMTUtil/BindUtil 等先于 MainWindowXaml 解析的函数内
 ; global MyMainWin 声明触发的编译期 #Warn UseUnsetGlobal 警告
 global MyMainWin
+
+class WindowInfoData extends WindowManageData {
+    __New() {
+        super.__New()
+        this.ActionType := "位置与宽高"
+    }
+}

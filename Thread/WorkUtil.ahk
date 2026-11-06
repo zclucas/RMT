@@ -406,7 +406,7 @@
                     case "CA":
                         sourceName := args[1]
                         newArrName := args[2]
-                        MySoftData.ArrayMap[newArrName] := MySoftData.ArrayMap[sourceName].Clone()
+                        MySoftData.ArrayMap[newArrName] := CloneArray(MySoftData.ArrayMap[sourceName])
                     case "DA":
                         if (MySoftData.ArrayMap.Has(args[1]))
                             MySoftData.ArrayMap.Delete(args[1])
@@ -475,7 +475,7 @@ ReloadWorkerConfig() {
     }
 
     WorkCloneGlobalArray(SourceArr, NewArrName) {
-        MySoftData.ArrayMap[NewArrName] := SourceArr.Clone()
+        MySoftData.ArrayMap[NewArrName] := CloneArray(SourceArr)
         sourceName := ""
         for name, arr in MySoftData.ArrayMap {
             if (arr == SourceArr && name != NewArrName) {

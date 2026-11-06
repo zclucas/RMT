@@ -44,6 +44,8 @@ class MacroGraphFormalMixin {
             GetLang("后台鼠标"), this.BGMouseGui,
             GetLang("后台按键"), this.BGKeyGui,
             GetLang("窗口管理"), this.WindowManageGui,
+            GetLang("窗口信息"), this.WindowInfoGui,
+            GetLang("调整窗口"), this.WindowAdjustGui,
             GetLang("按键检测"), this.KeyCheckGui,
             GetLang("手柄检测"), this.JoyCheckGui,
             GetLang("抓图"), this.ScreenShotGui,
@@ -309,7 +311,7 @@ class MacroGraphFormalMixin {
             this._FillBGMouseBody(id, d, body)
         else if (d.type == GetLang("后台按键"))
             this._FillBGKeyBody(id, d, body)
-        else if (d.type == GetLang("窗口管理"))
+        else if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口")))
             this._FillWindowManageBody(id, d, body)
         else if (d.type == GetLang("按键检测") || d.type == GetLang("手柄检测"))
             this._FillKeyCheckBody(id, d, body)
@@ -1144,33 +1146,43 @@ class MacroGraphFormalMixin {
     }
 
     ; 与 WindowManageGui.ActionTypeArr 一致
-    _FormalWindowManageActions() {
-        return GetLangArr(["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口",
-            "获取窗口宽高", "调整宽高", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
+    _FormalWindowManageActions(id) {
+        return WindowCommandActions(GetLangKey(this._FormalDFromId(id).type))
     }
 
     _FillWindowManageBody(id, d, body) {
         lw := this._FormalLW(), cw := this._FormalCW()
         varList := GetGuiVarArr()
-        actions := this._FormalWindowManageActions()
+        actions := this._FormalWindowManageActions(id)
         at := d.HasOwnProp("wmActionType") ? d.wmActionType : "激活窗口"
         sv := d.HasOwnProp("wmSearchValue") ? d.wmSearchValue : ""
         atKey := GetLangKey(at)
-        isMove := atKey == "移动窗口"
-        isSize := atKey == "调整宽高"
+        isMove := atKey == "移动窗口" || atKey == "相对移动" || atKey == "位置和宽高"
+        isSize := atKey == "调整宽高" || atKey == "位置和宽高"
         isGetSize := atKey == "获取窗口宽高"
         isTitle := atKey == "修改标题"
         isTrans := atKey == "修改透明度"
-        this._AddComboRow(body, "WmActRow_" id, GetLang("操作："), "WmActCmb_" id, actions, this._IndexInLangArr(actions, GetLang(at)), true, true, lw, cw)
+        this._AddComboRow(body, "WmActRow_" id, GetLang("操作："), "WmActCmb_" id, actions, this._IndexInLangArr(actions, GetLang(WindowActionGroup(atKey))), true, true, lw, cw)
+        modes := WindowGroupModes(WindowActionGroup(atKey))
+        this._AddComboRow(body, "WmModeRow_" id, GetLang("模式："), "WmModeCmb_" id, modes, WindowModeIndex(atKey), modes.Length > 0, true, lw, cw)
+        this._AddCheckRow(body, "WmCloseProcessRow_" id, "WmCloseProcess_" id, GetLang("关闭进程"), d.HasOwnProp("wmCloseProcess") ? d.wmCloseProcess : 0, atKey == "关闭窗口")
         winRow := body.Add("StackPanel").Name("WmWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         this._MakeTextBox(winRow, "WmWin_" id, sv, "130")
         this._ApplyActionBtnStyle(winRow.Add("Button").Name("WmWinEdit_" id).Content(GetLang("编辑")).Width("40").Height("20").FontSize(this._MGFontSize(11)).Padding("0").Margin("4,0,0,0").VerticalAlignment("Center").Cursor("Hand").Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").BorderThickness("1").BorderBrush("{DynamicResource ActionStroke}"))
-        this._AddEditableComboRow(body, "WmXRow_" id, GetLang("坐标X："), "WmX_" id, varList, d.HasOwnProp("wmPosX") ? d.wmPosX : 0, isMove, lw, cw)
-        this._AddEditableComboRow(body, "WmYRow_" id, GetLang("坐标Y："), "WmY_" id, varList, d.HasOwnProp("wmPosY") ? d.wmPosY : 0, isMove, lw, cw)
+        this._AddEditableComboRow(body, "WmXRow_" id, GetLang(atKey == "相对移动" ? "偏移X：" : "坐标X："), "WmX_" id, varList, d.HasOwnProp("wmPosX") ? d.wmPosX : 0, isMove, lw, cw, "WmXLabel_" id)
+        this._AddEditableComboRow(body, "WmYRow_" id, GetLang(atKey == "相对移动" ? "偏移Y：" : "坐标Y："), "WmY_" id, varList, d.HasOwnProp("wmPosY") ? d.wmPosY : 0, isMove, lw, cw, "WmYLabel_" id)
         this._AddEditableComboRow(body, "WmWRow_" id, GetLang("宽度："), "WmW_" id, varList, d.HasOwnProp("wmWidth") ? d.wmWidth : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmHRow_" id, GetLang("高度："), "WmH_" id, varList, d.HasOwnProp("wmHeight") ? d.wmHeight : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmWidthVarRow_" id, GetLang("宽度变量："), "WmWidthVar_" id, varList, d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "Var1", isGetSize, lw, cw)
         this._AddEditableComboRow(body, "WmHeightVarRow_" id, GetLang("高度变量："), "WmHeightVar_" id, varList, d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "Var2", isGetSize, lw, cw)
+        body.Add("TextBlock").Name("WmHint_" id).Text(GetLang(WindowEditorHint(atKey))).TextWrapping("Wrap").Margin("0,6,0,4").Opacity(0.75).FontSize(this._MGFontSize(11))
+        fields := WindowInfoFields(atKey)
+        Loop 7 {
+            prop := "wmResultVar" A_Index
+            label := A_Index <= fields.Length ? GetLang(fields[A_Index]) : ""
+            this._AddEditableComboRow(body, "WmResultRow" A_Index "_" id, label, "WmResult" A_Index "_" id, atKey == "匹配窗口列表" ? GetGuiArrNameArr() : varList,
+                d.HasOwnProp(prop) ? d.%prop% : "Var" A_Index, A_Index <= fields.Length, lw, cw, "WmResultLabel" A_Index "_" id, GetLang(WindowInfoFieldTip(atKey, A_Index)))
+        }
         this._AddEditableComboRow(body, "WmTitleRow_" id, GetLang("新标题："), "WmTitle_" id, varList, d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", isTitle, lw, cw)
         this._AddEditableComboRow(body, "WmTransRow_" id, GetLang("透明度："), "WmTrans_" id, varList, d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80", isTrans, lw, cw)
     }
@@ -1757,11 +1769,15 @@ class MacroGraphFormalMixin {
             this._FormalTrackField(id, "BgkTime", h, runtime)
             this._FormalTrackField(id, "BgkCount", h, runtime)
             this._FormalTrackField(id, "BgkInter", h, runtime)
-        } else if (t == GetLang("窗口管理")) {
+        } else if ((t == GetLang("窗口管理") || t == GetLang("窗口信息") || t == GetLang("调整窗口"))) {
             h := this._OnFormalWindowManage.Bind(this, id)
             this._FormalTrackCombo(id, "WmActCmb", h, runtime)
+            this._FormalTrackCombo(id, "WmModeCmb", h, runtime)
+            this._FormalTrackCheck(id, "WmCloseProcess", h, runtime)
             this._FormalTrackField(id, "WmWin", h, runtime)
             this._BindCtrl("WmWinEdit_" id, "Click", this._OnFormalWmWinEdit.Bind(this, id), runtime)
+            Loop 7
+                this._FormalTrackEditCombo(id, "WmResult" A_Index, h, runtime)
             for nm in ["WmX", "WmY", "WmW", "WmH", "WmWidthVar", "WmHeightVar", "WmTitle", "WmTrans"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
         } else if (t == GetLang("按键检测") || t == GetLang("手柄检测")) {

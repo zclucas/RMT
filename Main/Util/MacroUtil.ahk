@@ -190,7 +190,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "等待确定", OnWaitConfirm,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
-        "窗口管理", OnWindowManage,
+        "窗口信息", OnWindowManage, "调整窗口", OnWindowManage, "窗口管理", OnWindowManage,
         "按键检测", OnKeyCheck,
         "手柄检测", OnJoyCheck,
         "等待", OnWait,
@@ -1883,7 +1883,7 @@ OnArray(tableItem, cmd, index) {
         case "创建":
             if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.Name))
                 return
-            MySetGlobalArray(Data.Name, Data.InitArr)
+            MySetGlobalArray(Data.Name, CloneArray(Data.InitArr))
         case "克隆":
             SourceArr := GetCmdArray(Data, tableItem, index, true)
             if (SourceArr == "")
@@ -2015,12 +2015,100 @@ SetManagedWindowState(winTitle, state) {
     }
 }
 
+
+; 列表查询保留所有可见匹配项；显式句柄或窗口组尊重用户指定。
+WindowMatchedHandles(query) {
+    result := []
+    if (query == "")
+        return result
+    explicit := InStr(query, "ahk_id ") || InStr(query, "ahk_group ")
+    for hwnd in WinGetList(query) {
+        if (!explicit && (!DllCall("IsWindowVisible", "ptr", hwnd)
+            || WinGetClass("ahk_id " hwnd) == "Progman" || WinGetClass("ahk_id " hwnd) == "WorkerW"))
+            continue
+        result.Push(hwnd)
+    }
+    return result
+}
+
+WindowReadInfo(data, query) {
+    WindowEnsureResults(data)
+    fields := WindowInfoFields(data.ActionType)
+    if (!fields.Length)
+        return false
+    values := []
+    for label in fields
+        values.Push("")
+    hwnds := WindowMatchedHandles(query)
+    if (data.ActionType == "匹配窗口列表") {
+        name := GetVarName(data.ResultVar1)
+        if (name != "")
+            MySetGlobalArray(name, hwnds)
+        return true
+    }
+    hwnd := hwnds.Length ? hwnds[1] : 0
+    if (data.ActionType == "窗口状态")
+        values := [0, 0, 0, 0, 0, "", 0]
+    if (hwnd) {
+        target := "ahk_id " hwnd
+        try {
+            switch data.ActionType {
+                case "窗口位置", "位置与宽高":
+                    WinGetPos(&x, &y, &w, &h, target)
+                    values := data.ActionType == "窗口位置" ? [x, y] : [x, y, w, h]
+                case "标题类名句柄":
+                    values := [WinGetTitle(target), WinGetClass(target), hwnd]
+                case "进程信息":
+                    values[1] := WinGetProcessName(target)
+                    values[2] := WinGetPID(target)
+                    values[3] := WinGetProcessPath(target)
+                case "窗口状态":
+                    mm := WinGetMinMax(target)
+                    alpha := WinGetTransparent(target)
+                    exStyle := WinGetExStyle(target)
+                    values := [1, WinActive(target) ? 1 : 0, mm == -1 ? 1 : 0, mm == 1 ? 1 : 0, (exStyle & 0x8) ? 1 : 0,
+                        alpha == "" ? 100 : Round(alpha * 100 / 255), (exStyle & 0x20) ? 1 : 0]
+                case "透明度与鼠标穿透状态":
+                    alpha := WinGetTransparent(target)
+                    values := [alpha == "" ? 100 : Round(alpha * 100 / 255), (WinGetExStyle(target) & 0x20) ? 1 : 0]
+            }
+        }
+    }
+    names := [], results := []
+    for i, value in values {
+        prop := "ResultVar" i
+        name := GetVarName(data.%prop%)
+        if (name != "") {
+            names.Push(name)
+            results.Push(value)
+        }
+    }
+    if (names.Length)
+        MySetGlobalVariable(names, results, false)
+    return true
+}
+
+CenterManagedWindow(hwnd) {
+    target := "ahk_id " hwnd
+    WinGetPos(, , &w, &h, target)
+    monitor := DllCall("MonitorFromWindow", "ptr", hwnd, "uint", 2, "ptr")
+    info := Buffer(40, 0)
+    NumPut("uint", 40, info)
+    if (!DllCall("GetMonitorInfoW", "ptr", monitor, "ptr", info))
+        return
+    left := NumGet(info, 20, "int"), top := NumGet(info, 24, "int")
+    right := NumGet(info, 28, "int"), bottom := NumGet(info, 32, "int")
+    WinMove(left + Floor((right - left - w) / 2), top + Floor((bottom - top - h) / 2), , , target)
+}
+
 OnWindowManage(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
     searchValue := GetReplaceVarText(tableItem, index, ResolveBindWindow(tableItem, index, Data.SearchValue))
     winTitle := GetParamsWinInfoStr(searchValue)
+    if (WindowReadInfo(Data, winTitle))
+        return
     if (winTitle == "")
         return
 
@@ -2047,6 +2135,17 @@ OnWindowManage(tableItem, cmd, index) {
         return
     }
     hwnds := WinGetList(winTitle)
+    if (Data.ActionType == "关闭窗口" && Data.HasProp("CloseProcess") && Data.CloseProcess) {
+        ; 先固定并去重进程，避免结束一个进程后同进程其它窗口句柄失效。
+        pids := Map()
+        for hwnd in hwnds {
+            try pids[WinGetPID("ahk_id " hwnd)] := true
+        }
+        for pid in pids {
+            try ProcessClose(pid)
+        }
+        return
+    }
     for hwnd in hwnds {
         try {
             winTitle := "ahk_id " hwnd
@@ -2059,10 +2158,23 @@ OnWindowManage(tableItem, cmd, index) {
                     SetManagedWindowState(winTitle, 0)
                 case "关闭窗口":
                     WinClose(winTitle)
-                case "移动窗口":
+                case "窗口居中":
+                    CenterManagedWindow(hwnd)
+                case "位置和宽高":
+                    if (TryGetTabVarValue(&x, tableItem, index, Data.PosX)
+                        && TryGetTabVarValue(&y, tableItem, index, Data.PosY)
+                        && TryGetTabVarValue(&w, tableItem, index, Data.Width)
+                        && TryGetTabVarValue(&h, tableItem, index, Data.Height))
+                        WinMove(Integer(x), Integer(y), Integer(w), Integer(h), winTitle)
+                case "移动窗口", "相对移动":
                     hasPosX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosX)
                     hasPosY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosY)
                     if (hasPosX && hasPosY) {
+                        if (Data.ActionType == "相对移动") {
+                            WinGetPos(&oldX, &oldY, , , winTitle)
+                            PosX += oldX
+                            PosY += oldY
+                        }
                         WinMove(Integer(PosX), Integer(PosY), , , winTitle)
                     }
                 case "调整宽高", "调整大小":
@@ -2071,6 +2183,8 @@ OnWindowManage(tableItem, cmd, index) {
                     if (hasWidth && hasHeight) {
                         WinMove(, , Integer(Width), Integer(Height), winTitle)
                     }
+                case "切换置顶":
+                    WinSetAlwaysOnTop(-1, winTitle)
                 case "置顶窗口":
                     WinSetAlwaysOnTop(1, winTitle)
                 case "取消置顶":
@@ -2083,6 +2197,14 @@ OnWindowManage(tableItem, cmd, index) {
                     if (hasTransparency) {
                         alphaValue := Round(255 * Integer(Transparency) / 100)
                         WinSetTransparent(alphaValue, winTitle)
+                    }
+                case "切换鼠标穿透":
+                    if (WinGetExStyle(winTitle) & 0x20)
+                        WinSetExStyle("-0x20", winTitle)
+                    else {
+                        if (!(WinGetExStyle(winTitle) & 0x80000))
+                            WinSetTransparent(255, winTitle)
+                        WinSetExStyle("+0x20", winTitle)
                     }
                 case "开启鼠标穿透":
                     ; 普通窗口需启用分层样式，才能向其它进程的窗口透传鼠标。
