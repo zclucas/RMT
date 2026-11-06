@@ -1600,7 +1600,8 @@ ReadTableItemInfoNew(tableItem, segID := "") {
             item.Remark := TomlUtil_Str(mseg, "Remark")
             item.TriggerType := TomlUtil_Str(mseg, "TriggerType", "1")
             item.TimingSerial := TomlUtil_Str(mseg, "TimingSerial")
-            item.Mode := TomlUtil_Str(mseg, "Mode", "1")
+            ; 兼容旧版保存的整数 Mode；字符串读取器不会自动转换整数。
+            item.Mode := TomlUtil_Str(mseg, "Mode", TomlUtil_Int(mseg, "Mode", 1))
             item.StartTipSound := TomlUtil_Str(mseg, "StartTipSound", "1")
             item.EndTipSound := TomlUtil_Str(mseg, "EndTipSound", "1")
             item.StopTipSound := TomlUtil_Str(mseg, "StopTipSound", "1")
@@ -1963,7 +1964,7 @@ SaveTableItemInfoTomlCore(root, tableItem) {
             mseg := Map()
             mseg["TK"] := item.TK
             mseg["HoldTime"] := String(item.HoldTime)
-            mseg["Mode"] := item.Mode
+            mseg["Mode"] := String(item.Mode)
             mseg["Forbid"] := item.Forbid ? 1 : 0
             mseg["Remark"] := item.Remark
             mseg["LoopCount"] := String(item.LoopCount)
