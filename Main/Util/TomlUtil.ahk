@@ -13,6 +13,17 @@
 
 global TomlUtil_Cache := Map()
 
+; 模块内的宏顺序兼容旧尾节和完整 ID。跨组只改归属，保留 ID 及外部引用。
+ResolveMacroOrderPath(tableID, foldSeg, macroRef) {
+    macroRef := Trim(macroRef, "`r`n ")
+    if (macroRef == "")
+        return ""
+    if (!InStr(macroRef, "."))
+        return foldSeg "." macroRef
+    parts := StrSplit(macroRef, ".")
+    return (parts.Length == 3 && parts[1] == tableID) ? macroRef : ""
+}
+
 ; ---------- 文件级 ----------
 
 ; 默认目标文件（全局 MacroFile；调用方可传 filePath 覆盖）

@@ -259,6 +259,7 @@ class MergeUtil {
             return []
 
         moduleNodes := []
+        loadedMacros := Map()
         for tail in TomlUtil_List(tableSeg, "ModuleOrder") {
             foldSeg := tableID "." tail
             fseg := TomlUtil_Table(t, foldSeg)
@@ -271,14 +272,18 @@ class MergeUtil {
 
             items := []
             for mtail in TomlUtil_List(fseg, "MacroOrder") {
-                mseg := TomlUtil_Table(t, foldSeg "." mtail)
+                macroSeg := ResolveMacroOrderPath(tableID, foldSeg, mtail)
+                if (macroSeg == "" || loadedMacros.Has(macroSeg))
+                    continue
+                mseg := TomlUtil_Table(t, macroSeg)
                 if (!TomlUtil_Valid(mseg))
                     continue
+                loadedMacros[macroSeg] := true
                 item := MergeTreeNode()
                 item.Type := "Item"
                 item.TabIndex := tabIndex
                 item.ItemIndex := items.Length + 1
-                item.Serial := foldSeg "." mtail
+                item.Serial := macroSeg
                 item.TriggerKey := TomlUtil_Str(mseg, "TK", "")
                 item.Remark := TomlUtil_Str(mseg, "Remark", "")
                 item.DisplayName := item.Remark

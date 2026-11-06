@@ -1498,13 +1498,20 @@ NewModulePath(tableItem) {
         if (n > max)
             max := n
     }
+    ; 原模块删除后，移出的宏仍保留原 ID，不能复用其模块路径。
+    for item in tableItem.Items {
+        parent := SubStr(item.ID, 1, InStr(item.ID, ".", , , -1) - 1)
+        n := SegTailNum(parent, "Module")
+        if (n > max)
+            max := n
+    }
     return tableItem.ID "." "Module" (max + 1)
 }
 
 NewMacroPath(tableItem, foldSeg) {
     max := 0
     for item in tableItem.Items {
-        if (item.FoldID != foldSeg)
+        if (SubStr(item.ID, 1, InStr(item.ID, ".", , , -1) - 1) != foldSeg)
             continue
         n := SegTailNum(item.ID, "Macro")
         if (n > max)
@@ -1527,9 +1534,10 @@ SegTailNum(seg, prefix) {
 ; ============================================================
 ; 新格式读取（三级段结构）：[TableID] / [TableID.ModuleN] / [TableID.ModuleN.MacroM]
 ;   [TableID]                表段：ModuleOrder=ModuleNπ...（模块显示顺序，重排不改段名）
-;   [TableID.ModuleN]        模块段：MacroOrder=MacroNπ...（宏显示顺序）+ 模块字段；段名即模块身份
+;   [TableID.ModuleN]        模块段：MacroOrder=宏尾节或完整ID的数组 + 模块字段；段名即模块身份
 ;   [TableID.ModuleN.MacroM] 宏段：宏字段 + Macro 实义；段名即宏身份（表内唯一路径）
-;   段名序号 = 稳定身份（纯自增不复用、移动改路径），顺序由父段 Order 列表单独控制。
+;   段名序号 = 稳定身份（移动不改 ID），归属和顺序由模块 MacroOrder 控制。
+;   同模块可用 MacroN 尾节；跨模块存完整 ID，保留子宏及界面绑定引用。
 ; ============================================================
 ReadTableItemInfoNew(tableItem, segID := "") {
     tableID := (segID == "") ? tableItem.ID : segID
@@ -1577,15 +1585,11 @@ ReadTableItemInfoNew(tableItem, segID := "") {
         tableItem.Folds.Push(fold)
         tableItem.FoldMap[foldSeg] := fold
 
-        ; ---- 宏级：按模块段 MacroOrder 列表顺序加载 [foldSeg.MacroM] 段 ----
-        macroSegs := EnumerateDottedSubSegments(foldSeg)
+        ; ---- 宏级：按 MacroOrder 加载，跨组条目保留完整路径身份 ----
         macroOrder := TomlUtil_List(fseg, "MacroOrder")
         for macroRef in macroOrder {
-            macroRef := Trim(macroRef, "`r`n ")
-            if (macroRef == "")
-                continue
-            macroSeg := foldSeg "." macroRef
-            if (!HasSegment(macroSeg, macroSegs))
+            macroSeg := ResolveMacroOrderPath(tableID, foldSeg, macroRef)
+            if (macroSeg == "" || tableItem.ItemMap.Has(macroSeg))
                 continue
             mseg := TomlUtil_Table(t, macroSeg)
             if (!TomlUtil_Valid(mseg))
@@ -1954,13 +1958,15 @@ SaveTableItemInfoTomlCore(root, tableItem) {
         macroOrder := []
         for item in tableItem.Items {
             if (item.FoldID != foldSeg)
-                continue   ; 宏归属按 FoldID（父路径）归入对应模块段
+                continue   ; 宏归属按 FoldID，ID 保留最初分配的路径
             macroSeg := item.ID
             if (macroSeg == "") {
                 RMTLogSys(RMT_LV_ERROR, "SaveTableItemInfo", Format("模块{1}内宏缺少路径身份(ID)，跳过", foldSeg))
                 continue
             }
-            macroOrder.Push(GetSegTail(macroSeg))
+            ; 跨组不能只存尾节，否则重载会拼成目标组下不存在或同名的宏。
+            macroOrder.Push(ResolveMacroOrderPath(tableID, foldSeg, GetSegTail(macroSeg)) == macroSeg
+                ? GetSegTail(macroSeg) : macroSeg)
             mseg := Map()
             mseg["TK"] := item.TK
             mseg["HoldTime"] := String(item.HoldTime)
