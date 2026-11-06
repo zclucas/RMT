@@ -1173,6 +1173,15 @@ class SearchData {
 
 }
 
+class SearchAllData extends SearchData {
+    __New() {
+        super.__New()
+        this.AllSaveName := GetLang("搜索坐标集")
+        this.AllSort := "左右优先"
+        this.MouseActionType := "无动作"
+    }
+}
+
 class ScreenShotData {
     __New() {
         this.SerialStr := ""
@@ -1481,6 +1490,11 @@ class WaitData {
         ; 等待进程存在 等待进程关闭 等待窗口存在 等待窗口激活 等待窗口屏幕变化 等待窗口大小变化
         ; 等待窗口关闭 等待窗口最小化 等待文件存在 等待文件删除 等待文件变化 等待日期
         this.WaitType := "等待变量值"
+        this.Conditions := []       ; {Variable, Operator, Value}，空数组兼容旧等值判断
+        this.ConditionLogic := "且"
+        this.KeyDevice := "键盘"
+        this.KeyOptions := {KeyArr: [], CheckType: "同时按下", StateType: "物理状态"}
+        this.TimeConfig := {SubMode: "等待", Param1: "", Param2: "时长", Param4: "等待", Param5: "时刻", CheckInterval: 500, Timeout: 0}
         this.Interval := 500        ; 检测间隔（毫秒）
         this.Param1 := ""           ; 主参数：变量名/按键名/进程名/窗口信息/文件路径/日期值
         this.Param2 := ""           ; 次参数：期望值 / 日期单位（分钟|小时|天|具体时间|时间变量）
@@ -1572,6 +1586,22 @@ class KeyDataConfig {
         this.ErrMode := "stop"
         this.ErrRetryCount := 3
         this.ErrRetryInterval := 500
+    }
+}
+
+class HttpRequestData {
+    __New() {
+        this.SerialStr := ""
+        this.Method := "GET"
+        this.Url := "http://127.0.0.1:8080/"
+        this.Headers := ""
+        this.BodyType := "JSON"
+        this.Body := ""
+        this.TimeoutMs := 10000
+        this.Retries := 0
+        this.StatusVar := "HTTP状态码"
+        this.ResponseVar := "HTTP响应体"
+        this.ErrorVar := "HTTP错误信息"
     }
 }
 

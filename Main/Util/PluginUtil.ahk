@@ -108,18 +108,12 @@ ReleaseAllCaches() {
 
 FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, text, mode) {
     result := GetScreenTextObjArr(X1, Y1, X2, Y2, mode)
-    if (result == "" || !result)
+    points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "左右优先")
+    if (!points.Length)
         return false
-    for index, value in result {
-        isContain := CheckContainText(value.text, text)
-        if (isContain) {
-            pos := GetMatchCoord(value, X1, Y1, text)
-            ResX := pos[1]
-            ResY := pos[2]
-            break
-        }
-    }
-    return isContain
+    ResX := points[1][1]
+    ResY := points[1][2]
+    return true
 }
 
 ;RapidOcr文本识别 result里面都是窗口坐标
@@ -166,23 +160,15 @@ GetScreenTextObjArr(X1, Y1, X2, Y2, mode) {
 }
 
 FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, text, mode) {
-    if (A_PtrSize != 8) ;非64位不可用，直接退出
+    if (A_PtrSize != 8)
         return false
-
     result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode)
-    if (result == "" || !result)
+    points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "左右优先")
+    if (!points.Length)
         return false
-    for index, value in result {
-        isContain := CheckContainText(value.text, text)
-        if (isContain) {
-            ; GetMatchCoord 已加上截图区域起点 X1/Y1，返回窗口客户区坐标（与 FindWinColor/FindWinImage 一致），无需再加
-            pos := GetMatchCoord(value, X1, Y1, text)
-            ResX := pos[1]
-            ResY := pos[2]
-            break
-        }
-    }
-    return isContain
+    ResX := points[1][1]
+    ResY := points[1][2]
+    return true
 }
 
 ; 窗口文本识别

@@ -38,7 +38,7 @@ ShouldSkipGraphNextDispatch(cmdStr) {
         return false
     paramArr := StrSplit(GetCmdStr(cmdStr), "_")
     cmdKey := RTrim(paramArr[1], "0123456789")
-    skipTypes := [GetLang("如果"), GetLang("如果Pro"), GetLang("搜索"), GetLang("搜索Pro"), GetLang("搜索Combo"), GetLang("组合搜索"), GetLang("搜索Multi"), GetLang("循环")]
+    skipTypes := [GetLang("如果"), GetLang("如果Pro"), GetLang("搜索"), GetLang("搜索Pro"), GetLang("搜索All"), GetLang("搜索Combo"), GetLang("组合搜索"), GetLang("搜索Multi"), GetLang("循环")]
     for t in skipTypes {
         if (cmdKey == t)
             return true
@@ -331,7 +331,7 @@ ExpandNestedGraphStartsInCmd(cmdStr, visited) {
         return
 
     cmdKey := GetLangKey(GetCmdOnlyText(serial))
-    static branchCmdMap := Map("循环", true, "搜索", true, "搜索Pro", true, "搜索Combo", true, "组合搜索", true, "搜索Multi", true, "如果", true, "如果Pro", true)
+    static branchCmdMap := Map("循环", true, "搜索", true, "搜索Pro", true, "搜索All", true, "搜索Combo", true, "组合搜索", true, "搜索Multi", true, "如果", true, "如果Pro", true)
     if (!branchCmdMap.Has(cmdKey))
         return
 

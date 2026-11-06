@@ -46,20 +46,20 @@ class MacroGraphGui {
         this._sessionId := 0          ; 每次打开自增；用于忽略旧窗口迟到的异步关闭事件，避免覆盖写空
 
         ; 若梦兔全部指令（移动、移动Pro、增量移动）
-        this.CmdList := GetLangArr(["间隔", "时间", "按键", "手柄", "搜索", "搜索Pro", "搜索Combo", "组合搜索", "搜索Multi", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
-            "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "文本处理", "数组", "RMT指令", "后台鼠标",
+        this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
+            "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标",
             "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "等待确定", "倒计时", "注释", "抓图", "跳转"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
-        this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Time.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
-            "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png",
+        this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
+            "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png",
             "Images\Soft\Move.png", "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\MovePro.png", "Images\Soft\DeltaMove.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png",
             "Images\Soft\Loop.png", "Images\Soft\MacroAction.png",
             "Images\Soft\Var.png", "Images\Soft\Extract.png",
             "Images\Soft\If.png", "Images\Soft\IfPro.png",
             "Images\Soft\Operation.png", "Images\Soft\Run.png", "Images\Soft\RunPro.png",
-            "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\TextOps.png",
+            "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\HttpRequest.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
             "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjust.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
@@ -73,6 +73,7 @@ class MacroGraphGui {
         this.MouseGui := MouseMoveGui()
         this.SearchGui := SearchGui()
         this.SearchProGui := SearchProGui()
+        this.SearchAllGui := SearchAllGui()
         this.SearchComboGui := SearchComboGui()
         this.MMProGui := MMProGui()
         this.DeltaMoveGui := DeltaMoveGui()
@@ -84,6 +85,7 @@ class MacroGraphGui {
         this.OperationGui := OperationGui()
         this.RunGui := RunGui()
         this.RunProGui := RunProGui()
+        this.HttpRequestGui := HttpRequestGui()
         this.FileIOGui := FileIOGui()
         this.TextOpsGui := TextOpsGui()
         this.ArrayGui := ArrayGui()
@@ -100,7 +102,7 @@ class MacroGraphGui {
         this.WaitGui := WaitGui()
         this.WaitConfirmGui := WaitConfirmGui()
         this.TimeGui := TimeGui()
-        this.CountDownGui := this.TimeGui
+        this.CountDownGui := CountDownGui()
         this.ScreenShotGui := ScreenShotGui()
         this.CommentGui := CommentGui()
         this.LoopGui := LoopGui()
@@ -505,10 +507,10 @@ class MacroGraphGui {
             SaveMacroCMDData(data)
             return this._MakeNode(CorrectRemark(serial, "0 0"))
         }
-        if (cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro") || cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) {
+        if (cmdName == GetLang("搜索All") || cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro") || cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) {
             ; 搜索/搜索Pro/搜索Combo 走 INI 持久化（参数存 SearchFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
-            serial := GetCMDSerialStr((cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) ? "搜索Combo" : (cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索"))
-            data := SearchData()
+            serial := cmdName == GetLang("搜索All") ? GetCMDSerialStr("搜索All") : GetCMDSerialStr((cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) ? "搜索Combo" : (cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索"))
+            data := cmdName == GetLang("搜索All") ? SearchAllData() : SearchData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
             return this._MakeNode(serial)
@@ -716,6 +718,8 @@ class MacroGraphGui {
             editor := this.MMProGui
         else if (d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi"))
             editor := this.SearchComboGui
+        else if (d.type == GetLang("搜索All"))
+            editor := this.SearchAllGui
         else if (d.type == GetLang("搜索Pro"))
             editor := this.SearchProGui
         else if (d.type == GetLang("搜索"))
@@ -765,7 +769,7 @@ class MacroGraphGui {
             return
         }
         ; 搜索/搜索Pro：就地刷新内联字段与分支节点内容，避免整窗重建（闪烁/窗口被销毁）
-        if (dEdit.type == GetLang("搜索") || dEdit.type == GetLang("搜索Pro") || dEdit.type == GetLang("搜索Combo") || dEdit.type == GetLang("搜索Multi")) {
+        if (dEdit.type == GetLang("搜索All") || dEdit.type == GetLang("搜索") || dEdit.type == GetLang("搜索Pro") || dEdit.type == GetLang("搜索Combo") || dEdit.type == GetLang("搜索Multi")) {
             this._RefreshSearchNode(id, dEdit)
             this._Apply()
             return
@@ -857,6 +861,12 @@ class MacroGraphGui {
     _RefreshSearchNode(id, d) {
         if (this.ui == "")
             return
+        if (d.type == GetLang("搜索All")) {
+            this.ui.Update("Title_" id, "Text", this._NodeTitleText(d))
+            this._RefreshBranchBody(id, true)
+            this._RefreshBranchBody(id, false)
+            return
+        }
         if (d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi")) {
             this.ui.Update("Title_" id, "Text", this._NodeTitleText(d))
             sat := d.HasOwnProp("satisfyCount") ? d.satisfyCount : -1

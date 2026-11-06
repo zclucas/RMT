@@ -5,6 +5,14 @@
 #define IMAGEFINDER_API __declspec(dllimport)
 #endif
 
+// API 13: hwnd=0 captures the screen; otherwise coordinates are client-relative.
+extern "C" IMAGEFINDER_API void* __cdecl SearchAllCapture(const wchar_t* path,
+    int x, int y, int width, int height, int threshold, int colorMatch,
+    int adaptive, int colorMode, unsigned int color, int hwnd);
+extern "C" IMAGEFINDER_API int __cdecl SearchAllCount(void* handle);
+extern "C" IMAGEFINDER_API const void* __cdecl SearchAllPoints(void* handle);
+extern "C" IMAGEFINDER_API void __cdecl SearchAllRelease(void* handle);
+
 extern "C" IMAGEFINDER_API void* __cdecl CaptureWinMat(     // 窗口截图返回Mat对象 RapidOcr需要使用
     int hwnd,                   // 窗口句柄
     int x,                      // 捕获区域左上角X坐标

@@ -312,6 +312,10 @@ class MacroGraphHandlersMixin {
         return RegExReplace(name, "\d+$", "") == GetLang("搜索Pro")
     }
 
+    _IsSearchAllName(name) {
+        return RegExReplace(name, "\d+$", "") == GetLang("搜索All") || RegExReplace(name, "\d+$", "") == "搜索All"
+    }
+
     _IsSearchComboName(name) {
         if (name == "")
             return false
@@ -320,7 +324,7 @@ class MacroGraphHandlersMixin {
     }
 
     _IsSearchFamilyName(name) {
-        return this._IsSearchName(name) || this._IsSearchProName(name) || this._IsSearchComboName(name)
+        return this._IsSearchAllName(name) || this._IsSearchName(name) || this._IsSearchProName(name) || this._IsSearchComboName(name)
     }
 
     ; 如果Pro序列码判定（如 "如果Pro1"）
@@ -1589,7 +1593,7 @@ class MacroGraphHandlersMixin {
             this._FlushDeltaMoveInline(id, d, state)
         else if (IsMoveProCmd(d.type))
             this._FlushMMProInline(id, state)
-        else if (d.type == GetLang("搜索") || d.type == GetLang("搜索Pro") || d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi"))
+        else if (d.type == GetLang("搜索All") || d.type == GetLang("搜索") || d.type == GetLang("搜索Pro") || d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi"))
             this._FlushSearchInline(id, state)
         else if (d.type == GetLang("输入"))
             this._FlushInputInline(id, state)

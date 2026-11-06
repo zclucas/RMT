@@ -240,8 +240,18 @@ TimeParseDurationSecs(val, unit) {
     }
 }
 
+; 编辑器既可填写变量名，也可使用 {变量}；字面数值保持原值。
+TimeResolveValue(tableItem, index, raw) {
+    raw := Trim(String(raw))
+    value := GetReplaceVarText(tableItem, index, raw)
+    if (value == raw && raw != "" && !IsNumber(raw)
+        && TryGetTabVarValue(&resolved, tableItem, index, GetVarName(raw), false))
+        return String(resolved)
+    return value
+}
+
 TimeCalcTargetDateTime(tableItem, index, Data) {
-    param1Val := GetReplaceVarText(tableItem, index, Data.Param1)
+    param1Val := TimeResolveValue(tableItem, index, Data.Param1)
     waitType := TimeNormWaitType(Data.Param2)
 
     switch waitType {
@@ -249,9 +259,9 @@ TimeCalcTargetDateTime(tableItem, index, Data) {
             raw := Trim(String(Data.Param1))
             arr := StrSplit(raw, ":")
             if (arr.Length == 3) {
-                h := GetReplaceVarText(tableItem, index, arr[1])
-                m := GetReplaceVarText(tableItem, index, arr[2])
-                s := GetReplaceVarText(tableItem, index, arr[3])
+                h := TimeResolveValue(tableItem, index, arr[1])
+                m := TimeResolveValue(tableItem, index, arr[2])
+                s := TimeResolveValue(tableItem, index, arr[3])
                 param1Val := h ":" m ":" s
             }
             secs := TimeParseDurationSecs(param1Val, Data.Param2)
@@ -367,12 +377,12 @@ TimeToAhkStamp(s) {
 ; ---------- 模式2：时间区间判断 ----------
 
 TimeResolveClock(tableItem, index, raw) {
-    raw := Trim(String(raw))
+    raw := Trim(String(TimeResolveValue(tableItem, index, raw)))
     arr := StrSplit(raw, ":")
     if (arr.Length == 3) {
-        h := GetReplaceVarText(tableItem, index, arr[1])
-        m := GetReplaceVarText(tableItem, index, arr[2])
-        s := GetReplaceVarText(tableItem, index, arr[3])
+        h := TimeResolveValue(tableItem, index, arr[1])
+        m := TimeResolveValue(tableItem, index, arr[2])
+        s := TimeResolveValue(tableItem, index, arr[3])
         return Trim(h) ":" Trim(m) ":" Trim(s)
     }
     return GetReplaceVarText(tableItem, index, raw)
@@ -402,7 +412,7 @@ TimeNowInClockWindow(startStamp, endStamp) {
 }
 
 TimeResolveStamp(tableItem, index, raw) {
-    raw := Trim(String(raw))
+    raw := Trim(String(TimeResolveValue(tableItem, index, raw)))
     arr := StrSplit(raw, ":")
     if (arr.Length >= 6) {
         y := GetReplaceVarText(tableItem, index, arr[1])

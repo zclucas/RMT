@@ -27,7 +27,7 @@ class JoyCheckGui extends JoyGui {
         this._trigClick := ""
         this._pendingPadClick := ""
         try SetTimer(this._stickTick, 0)
-        title := this.ParentTile GetLang("手柄检测")
+        title := this.ParentTile GetLang(this.HasProp("SelectionData") ? "手柄按键选择" : "手柄检测")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
@@ -62,7 +62,7 @@ class JoyCheckGui extends JoyGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["物理状态", "逻辑状态"])
             st.Add("ComboBoxItem").Content(t)
-        check.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        check.Add("TextBlock").Name("ResultVarLabel").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         check.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -128,7 +128,11 @@ class JoyCheckGui extends JoyGui {
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("手柄检测")
-        this.Data := GetMacroCMDData(this.SerialStr)
+        this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
+        if (this.HasProp("SelectionData")) {
+            this.ui.Update("ResultVarLabel", "Visibility", "Collapsed")
+            this.ui.Update("VarNameCon", "Visibility", "Collapsed")
+        }
         this.Mode := "digital"
         this.CheckedArr := []
         this.AxisMap := Map()
@@ -240,6 +244,8 @@ class JoyCheckGui extends JoyGui {
             RmtDialog.Info(GetLang("请选择要检测的手柄按键！"))
             return false
         }
+        if (this.HasProp("SelectionData"))
+            return true
         varName := Trim(this.ui.Query("VarNameCon"))
         if (varName == "") {
             RmtDialog.Info(GetLang("请输入变量名！"))
@@ -271,6 +277,8 @@ class JoyCheckGui extends JoyGui {
         data.CheckType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("CheckTypeCon>SelectedIndex") : "", checkNames)
         data.StateType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("StateTypeCon>SelectedIndex") : "", CmdEnumStateNames())
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
+        if (this.HasProp("SelectionData"))
+            return
         MySoftData.GlobalVariMap[data.VarName] := true
         SaveMacroCMDData(data)
     }

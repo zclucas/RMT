@@ -23,6 +23,11 @@ OnWait(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
     if (!IsObject(Data))
         return
+    WaitEnsureData(Data)
+    if (WaitTypeNum(Data) == "等待时间")
+        return TimeExecWaitUntil(tableItem, index, Data.TimeConfig)
+    if (WaitTypeNum(Data) == "等待时间区间")
+        return TimeExecWindowCheck(tableItem, index, Data.TimeConfig)
     key := WaitStateKey(tableItem, index)
     watchKey := false
     try {
@@ -86,7 +91,11 @@ WaitInitBaseline(tableItem, index, Data) {
         case "等待按键松开":
             ; 已按下则等松开；未按下则先等一次按下再松开
             name := WaitNormKeyName(WaitResolveText(tableItem, index, Data.Param1))
-            WaitStateMap[key] := {armed: name != "" && IsPhysicalKeyPressed(name)}
+            if (Data.HasProp("KeyOptions") && Data.KeyOptions.KeyArr.Length) {
+                WaitStateMap[key] := {armedKeys: Map()}
+                WaitSelectedKeys(tableItem, index, Data, true)
+            } else
+                WaitStateMap[key] := {armed: name != "" && IsPhysicalKeyPressed(name)}
         case "等待文件变化":
             WaitStateMap[key] := WaitFileStamp(WaitResolveText(tableItem, index, Data.Param1))
         case "等待日期":
@@ -100,13 +109,19 @@ WaitCheckOnce(tableItem, index, Data) {
     key := WaitStateKey(tableItem, index)
     switch WaitTypeNum(Data) {
         case "等待变量值":
+            if (Data.HasProp("Conditions") && Data.Conditions.Length)
+                return WaitVariableConditions(tableItem, index, Data)
             if (!TryGetTabVarValue(&v, tableItem, index, GetVarName(Data.Param1), false)
                 && !TryGetTabVarValue(&v, tableItem, index, Data.Param1, false))
                 return false
             return Trim(String(v)) == WaitExpectedText(tableItem, index, Data.Param2)
         case "等待按键按下":
+            if (Data.HasProp("KeyOptions") && Data.KeyOptions.KeyArr.Length)
+                return WaitSelectedKeys(tableItem, index, Data, false)
             return WaitIsKeyDown(WaitResolveText(tableItem, index, Data.Param1))
         case "等待按键松开":
+            if (Data.HasProp("KeyOptions") && Data.KeyOptions.KeyArr.Length)
+                return WaitSelectedKeys(tableItem, index, Data, true)
             return WaitKeyReleased(key, WaitResolveText(tableItem, index, Data.Param1))
         case "等待屏幕变化":
             return WaitChanged(key, WaitScreenFingerprint(tableItem, index, Data))
@@ -273,6 +288,7 @@ WaitKeyReleased(stateKey, key) {
 }
 
 WaitIsKeyDown(key) {
+    global WaitKeyPulse
     key := WaitNormKeyName(key)
     if (key == "")
         return false
@@ -663,4 +679,115 @@ WaitHintText(waitType) {
             return "剪切板内容发生变化后继续"
     }
     return ""
+}
+
+
+; 新字段仅补默认值，旧宏的等值、按键与日期语义保持不变。
+WaitEnsureData(Data) {
+    defaults := WaitData()
+    for name, value in defaults.OwnProps()
+        if (!Data.HasOwnProp(name))
+            Data.%name% := value
+    if (!IsObject(Data.TimeConfig))
+        Data.TimeConfig := defaults.TimeConfig
+    if (!IsObject(Data.KeyOptions))
+        Data.KeyOptions := defaults.KeyOptions
+}
+
+WaitVariableConditions(tableItem, index, Data) {
+    logic := GetLangKey(Data.ConditionLogic)
+    result := logic != "或"
+    for condition in Data.Conditions {
+        found := TryGetTabVarValue(&value, tableItem, index, GetVarName(condition.Variable), false)
+        matched := found && WaitCompareValues(value, WaitExpectedText(tableItem, index, condition.Value), condition.Operator)
+        if (logic == "或" && matched)
+            return true
+        if (logic != "或" && !matched)
+            return false
+        result := matched
+    }
+    return result
+}
+
+WaitCompareValues(value, expected, operator) {
+    value := Trim(String(value)), expected := Trim(String(expected))
+    switch GetLangKey(operator) {
+        case "等于":
+            return value == expected
+        case "不等于":
+            return value != expected
+        case "包含":
+            return InStr(value, expected) > 0
+    }
+    if (!IsNumber(value) || !IsNumber(expected))
+        return false
+    a := Number(value), b := Number(expected)
+    switch GetLangKey(operator) {
+        case "大于":
+            return a > b
+        case "大于等于":
+            return a >= b
+        case "小于":
+            return a < b
+        case "小于等于":
+            return a <= b
+    }
+    return false
+}
+
+WaitSelectedKeys(tableItem, index, Data, released := false) {
+    options := Data.KeyOptions
+    any := CmdEnumZh(options.CheckType, CmdEnumKeyCheckNames()) == "有一个按下"
+    joy := Data.KeyDevice == "手柄"
+    analog := false
+    for key in options.KeyArr
+        if (InStr(key, "JoyAxis") == 1)
+            analog := true
+    cmp := analog ? CmdEnumJoyCheck(options.CheckType, true) : "大于等于"
+    stateMode := CmdEnumZh(options.StateType, CmdEnumStateNames()) == "物理状态" ? "P" : ""
+    stateKey := WaitStateKey(tableItem, index)
+    if (released) {
+        if (!WaitStateMap.Has(stateKey) || !WaitStateMap[stateKey].HasProp("armedKeys"))
+            WaitStateMap[stateKey] := {armedKeys: Map()}
+        armed := WaitStateMap[stateKey].armedKeys
+    }
+    result := !any
+    for key in options.KeyArr {
+        down := IsCheckKeyPressed(key, stateMode, cmp, joy)
+        ; 滚轮等短促输入沿用按键监听，不能只靠 GetKeyState 轮询。
+        if (!joy && !released && options.KeyArr.Length == 1 && stateMode == "P")
+            down := WaitIsKeyDown(key)
+        matched := down
+        if (released) {
+            if (down)
+                armed[key] := true
+            matched := armed.Has(key) && !down
+        }
+        if (any && matched)
+            result := true
+        else if (!any && !matched)
+            result := false
+    }
+    return result
+}
+
+WaitGroupNames() => ["窗口", "屏幕与鼠标", "按键", "变量", "进程", "文件与剪切板", "时间"]
+WaitGroupTypes(group) {
+    switch group {
+        case "窗口":
+            return ["等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化"]
+        case "屏幕与鼠标":
+            return ["等待屏幕变化", "等待鼠标移动", "等待鼠标停止移动"]
+        case "按键":
+            return ["等待按键按下", "等待按键松开"]
+        case "变量":
+            return ["等待变量值"]
+        case "进程":
+            return ["等待进程存在", "等待进程关闭"]
+        case "文件与剪切板":
+            return ["等待文件存在", "等待文件删除", "等待文件变化", "等待剪切板变化"]
+        case "时间":
+            return ["等待时间", "等待时间区间"]
+    }
+    return []
 }

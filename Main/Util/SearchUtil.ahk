@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include SearchAllUtil.ahk
 
 SearchOnTrigger(tableItem, cmdStr, index) {
     cmdName := StrSplit(cmdStr, "_")[1]
@@ -78,6 +79,8 @@ GetSatisfyCount(Data, targets) {
 }
 
 SearchExecute(tableItem, Data, index) {
+    if (Data is SearchAllData || GetLangKey(RegExReplace(Data.SerialStr, "\d+$", "")) == "搜索All")
+        return SearchAllExecute(tableItem, Data, index)
     targets := GetSearchTargetArr(Data)
     satisfyCount := GetSatisfyCount(Data, targets)
 
@@ -454,6 +457,9 @@ ApplySearchActions(tableItem, Data, index, ResXList, ResYList, ResHwndList, Imag
     Speed := Data.Speed
 
     loop ResXList.Length {
+        WaitIfPaused(tableItem, index)
+        if (tableItem.Items[index].Killed)
+            return ""
         ResX := ResXList[A_Index]
         ResY := ResYList[A_Index]
         Pos := [ResX, ResY]

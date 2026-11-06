@@ -3,7 +3,7 @@
 ; =====================================================================
 ; 等待编辑器（§16）—— XAML 迁移版（独立实现）
 ; 公开接口保持：ShowGui(cmd) / SureBtnAction / OwnerHwnd / ParentTile
-; 19 种等待类型共用「检测间隔 + 轮询」骨架，参数区按类型显隐
+; 七类等待共用条件编辑入口，时间等待与区间判断复用时间执行逻辑。
 ; =====================================================================
 
 class WaitGui {
@@ -17,7 +17,9 @@ class WaitGui {
         this.Data := ""
         this.SerialStr := ""
         this.DLVariableArr := []
-        this.WaitTypeKeys := CmdEnumWaitEditorNames()
+        this.WaitTypeKeys := []
+        this._currentGroup := ""
+        this._loading := false
     }
 
     ShowGui(cmd) {
@@ -28,7 +30,9 @@ class WaitGui {
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
         }
-        this.Init(cmd)
+        this._loading := true
+        try this.Init(cmd)
+        finally this._loading := false
         this.OnTypeChange()
         this._ShowWindow()
     }
@@ -48,6 +52,8 @@ class WaitGui {
     _BuildAndShow() {
         global MySoftData
         this._closed := false
+        if (this.HasProp("_timeRange"))
+            this.DeleteProp("_timeRange")
         title := this.ParentTile GetLang("等待编辑器")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
@@ -67,10 +73,13 @@ class WaitGui {
         row0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center").Margin("0,0,0,8")
         row0.Add("TextBlock").Text(GetLang("类型：")).VerticalAlignment("Center")
         wt := row0.Add("ComboBox").Name("WaitTypeCon").Width(160).Height(26).MinHeight(26).Margin("4,0,0,0")
-        for t in CmdEnumWaitEditorLabels()
+            .BorderThickness("0").BorderBrush("Transparent")
+        for t in GetLangArr(WaitGroupNames())
             wt.Add("ComboBoxItem").Content(t)
+        row0.Add("TextBlock").Text(GetLang("条件：")).VerticalAlignment("Center").Margin("12,0,0,0")
+        row0.Add("ComboBox").Name("WaitConditionCon").Width(160).Height(26).MinHeight(26).Margin("4,0,0,0").BorderThickness("0").BorderBrush("Transparent")
         row0.Add("TextBlock").Text(GetLang("备注：")).VerticalAlignment("Center").Margin("16,0,0,0")
-        row0.Add("TextBox").Name("RemarkCon").Width(140).Height(24).MinHeight(24).Margin("4,0,0,0")
+        row0.Add("TextBox").Name("RemarkCon").Width(110).Height(24).MinHeight(24).Margin("4,0,0,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
         ; 行1：参数直接排版，不显示分组标题或外框。
@@ -80,8 +89,14 @@ class WaitGui {
         vp := pStack.Add("StackPanel").Name("VarPanel").Orientation("Horizontal")
         vp.Add("TextBlock").Text(GetLang("变量名：")).VerticalAlignment("Center")
         vp.Add("ComboBox").Name("VarNameCon").Width(140).Height(24).MinHeight(24).Margin("4,0,0,0").IsEditable("True")
-        vp.Add("TextBlock").Text(GetLang("期望值：")).VerticalAlignment("Center").Margin("14,0,0,0")
+        this._Choice(vp, "VarCompareCon", WaitGui.CompareKeys, 100).Margin("10,0,0,0")
         vp.Add("ComboBox").Name("VarValCon").Width(140).Height(24).MinHeight(24).Margin("4,0,0,0").IsEditable("True")
+
+        vp2 := pStack.Add("StackPanel").Name("VarPanel2").Orientation("Horizontal").Margin("0,8,0,0")
+        this._Choice(vp2, "VarLogicCon", ["单个条件", "且", "或"], 100)
+        vp2.Add("ComboBox").Name("VarName2Con").Width(140).Height(24).MinHeight(24).Margin("8,0,0,0").IsEditable("True").ToolTip(GetLang("留空时使用第一条条件的变量"))
+        this._Choice(vp2, "VarCompare2Con", WaitGui.CompareKeys, 100).Margin("8,0,0,0")
+        vp2.Add("ComboBox").Name("VarVal2Con").Width(140).Height(24).MinHeight(24).Margin("8,0,0,0").IsEditable("True")
 
         ; 按键面板
         kp := pStack.Add("StackPanel").Name("KeyPanel").Orientation("Horizontal").Visibility("Collapsed")
@@ -89,7 +104,9 @@ class WaitGui {
         kp.Add("TextBox").Name("KeyCon").Width(160).Height(24).MinHeight(24).Margin("4,0,0,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
-        kp.Add("Button").Name("BtnPickKey").Content(GetLang("录入按键")).Height(24).MinHeight(24).Margin("6,0,0,0").Cursor("Hand")
+        kp.Add("Button").Name("BtnPickKey").Content(GetLang("键盘按键")).Height(24).MinHeight(24).Margin("6,0,0,0").Cursor("Hand")
+        kp.Add("Button").Name("BtnPickJoy").Content(GetLang("手柄按键")).Height(24).MinHeight(24).Margin("6,0,0,0").Cursor("Hand")
+        kp.Add("TextBlock").Name("KeySummaryCon").VerticalAlignment("Center").Margin("8,0,0,0").TextWrapping("Wrap")
 
         ; 范围面板：起始X/Y、终止X/Y
         rp := pStack.Add("StackPanel").Name("RangePanel").Visibility("Collapsed")
@@ -131,7 +148,20 @@ class WaitGui {
         hint := pStack.Add("TextBlock").Name("HintPanel").TextWrapping("Wrap").Visibility("Collapsed")
             .Foreground("{DynamicResource TextMain}").Margin("0,2,0,0")
 
-        ; 日期面板：值 + 单位
+        tp := pStack.Add("StackPanel").Name("TimePanel").Visibility("Collapsed")
+        tr := tp.Add("StackPanel").Orientation("Horizontal")
+        tr.Add("TextBlock").Text(GetLang("模式：")).VerticalAlignment("Center")
+        this._Choice(tr, "TimeKindCon", ["时长", "时刻", "时间戳"], 100)
+        tr.Add("TextBlock").Name("TimeValueLabel").Text(GetLang("目标：")).VerticalAlignment("Center").Margin("12,0,0,0")
+        tr.Add("ComboBox").Name("TimeValueCon").Width(250).Height(26).MinHeight(26).IsEditable("True")
+        ter := tp.Add("StackPanel").Name("TimeEndRow").Orientation("Horizontal").Margin("0,8,0,0")
+        ter.Add("TextBlock").Text(GetLang("结束：")).VerticalAlignment("Center")
+        ter.Add("ComboBox").Name("TimeEndCon").Width(250).Height(26).MinHeight(26).IsEditable("True")
+        ter.Add("TextBlock").Text(GetLang("不满足时：")).VerticalAlignment("Center").Margin("12,0,0,0")
+        this._Choice(ter, "TimeActionCon", ["等待", "跳过", "终止"], 100)
+        tp.Add("TextBlock").Name("TimeHintCon").TextWrapping("Wrap").Margin("0,8,0,0")
+
+        ; 日期面板：仅用于读取旧字段，新编辑统一使用时间面板
         dp := pStack.Add("StackPanel").Name("DatePanel").Orientation("Horizontal").Visibility("Collapsed")
         dp.Add("TextBlock").Name("DateValLabel").Text(GetLang("数值：")).VerticalAlignment("Center")
         dp.Add("ComboBox").Name("DateValCon").Width(180).Height(24).MinHeight(24).Margin("4,0,0,0").IsEditable("True")
@@ -161,11 +191,15 @@ class WaitGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/等待")
-        this.ui.OnEvent("WaitTypeCon", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
+        this.ui.OnEvent("WaitTypeCon", "SelectionChanged", ObjBindMethod(this, "OnGroupChange"))
+        this.ui.OnEvent("WaitConditionCon", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
+        this.ui.OnEvent("TimeKindCon", "SelectionChanged", ObjBindMethod(this, "OnTimeKindChange"))
+        this.ui.OnEvent("VarLogicCon", "SelectionChanged", ObjBindMethod(this, "OnVarLogicChange"))
         this.ui.OnEvent("DateUnitCon", "SelectionChanged", ObjBindMethod(this, "OnDateUnitChange"))
         this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEdit"))
         this.ui.OnEvent("BtnFileBrowse", "Click", ObjBindMethod(this, "OnClickFileBrowse"))
-        this.ui.OnEvent("BtnPickKey", "Click", ObjBindMethod(this, "OnClickPickKey"))
+        this.ui.OnEvent("BtnPickKey", "Click", ObjBindMethod(this, "OnClickPickKey", false))
+        this.ui.OnEvent("BtnPickJoy", "Click", ObjBindMethod(this, "OnClickPickKey", true))
         this.ui.OnEvent("BtnPickArea", "Click", ObjBindMethod(this, "OnClickPickArea"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
     }
@@ -218,7 +252,7 @@ class WaitGui {
     }
 
     _TypeValue() {
-        v := IsObject(this.ui) ? this.ui.Query("WaitTypeCon>SelectedIndex") : ""
+        v := IsObject(this.ui) ? this.ui.Query("WaitConditionCon>SelectedIndex") : ""
         if (!IsNumber(v) || Integer(v) < 0 || Integer(v) >= this.WaitTypeKeys.Length)
             return ""
         return CmdEnumFromIndex(v, this.WaitTypeKeys)
@@ -240,8 +274,8 @@ class WaitGui {
                 return "WinPanel"
             case "等待文件存在", "等待文件删除", "等待文件变化":
                 return "FilePanel"
-            case "等待日期":
-                return "DatePanel"
+            case "等待时间", "等待时间区间", "等待日期":
+                return "TimePanel"
         }
         return ""
     }
@@ -250,11 +284,29 @@ class WaitGui {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("等待")
         this.Data := GetMacroCMDData(this.SerialStr)
+        sourceKey := GetLangKey(RegExReplace(this.SerialStr, "\d+"))
+        if (sourceKey == "时间") {
+            old := this.Data
+            this.Data := WaitData()
+            this.Data.WaitType := TimeNormSubMode(old) == "区间判断" ? "等待时间区间" : "等待时间"
+            this.Data.TimeConfig := JSON.parse(JSON.stringify(old), , false)
+            if (this.Data.WaitType == "等待时间区间")
+                this.Data.TimeConfig.Param4 := TimeNormMismatch(old.HasProp("Param4") ? old.Param4 : "跳过")
+            this.SerialStr := GetCMDSerialStr("等待")
+            this.Data.SerialStr := this.SerialStr
+        }
+        WaitEnsureData(this.Data)
+        if (CmdEnumWait(this.Data.WaitType) == "等待日期") {
+            this.Data.WaitType := "等待时间"
+            unit := WaitNormDateUnit(this.Data.Param2)
+            this.Data.TimeConfig.Param1 := this.Data.Param1
+            this.Data.TimeConfig.Param2 := unit == "具体时间" ? "时刻" : (unit == "时间变量" ? "时间戳" : unit)
+        }
         this.DLVariableArr := GetGuiVarArr(1)
 
         batch := []
         batch.Push({ControlName: "RemarkCon", PropertyName: "Text", Value: cmdArr.Length >= 2 ? cmdArr[2] : ""})
-        batch.Push({ControlName: "WaitTypeCon", PropertyName: "SelectedIndex", Value: String(CmdEnumWait(this.Data.WaitType) == "等待日期" ? -1 : CmdEnumIndex(this.Data.WaitType, this.WaitTypeKeys))})
+        this._SelectType(CmdEnumWait(this.Data.WaitType))
         batch.Push({ControlName: "IntervalCon", PropertyName: "Text", Value: this.Data.Interval})
         batch.Push({ControlName: "VarNameCon", PropertyName: "Text", Value: this.Data.Param1})
         batch.Push({ControlName: "VarValCon", PropertyName: "Text", Value: this.Data.Param2})
@@ -283,25 +335,54 @@ class WaitGui {
         }
         if (IsObject(this.ui))
             this.ui.Update("DateUnitCon", "SelectedIndex", String(unitIdx))
-        this._SyncDateUnit()
+        conditions := this.Data.Conditions
+        a := conditions.Length ? conditions[1] : {Variable: this.Data.Param1, Operator: "等于", Value: this.Data.Param2}
+        b := conditions.Length > 1 ? conditions[2] : {Variable: "", Operator: "小于", Value: ""}
+        this._SetCombo("VarNameCon", this.DLVariableArr, a.Variable)
+        this._SetCombo("VarValCon", this.DLVariableArr, a.Value)
+        this._SetCombo("VarName2Con", this.DLVariableArr, b.Variable == "" ? a.Variable : b.Variable)
+        this._SetCombo("VarVal2Con", this.DLVariableArr, b.Value)
+        this._Choose("VarCompareCon", a.Operator, WaitGui.CompareKeys)
+        this._Choose("VarCompare2Con", b.Operator, WaitGui.CompareKeys)
+        this._Choose("VarLogicCon", conditions.Length > 1 ? this.Data.ConditionLogic : "单个条件", ["单个条件", "且", "或"])
+        cfg := this.Data.TimeConfig
+        range := CmdEnumWait(this.Data.WaitType) == "等待时间区间"
+        legacyUnit := GetLangKey(cfg.Param2)
+        kind := range ? TimeNormWindowType(cfg.Param5) : ((legacyUnit == "分钟" || legacyUnit == "小时" || legacyUnit == "天") ? legacyUnit : TimeNormWaitType(cfg.Param2 == "" ? "时长" : cfg.Param2))
+        this._FillTimeKinds(range, kind)
+        value := cfg.Param1
+        if (value == "")
+            value := range ? "09:00:00" : (kind == "时长" ? "00:00:10" : "14:30:00")
+        this._SetCombo("TimeValueCon", GetGuiVarArr(), value)
+        this._SetCombo("TimeEndCon", GetGuiVarArr(), range && cfg.Param2 != "" ? cfg.Param2 : "18:00:00")
+        this._Choose("TimeActionCon", cfg.Param4 == "" ? "等待" : TimeNormMismatch(cfg.Param4), ["等待", "跳过", "终止"])
+        this._RefreshKeySummary()
     }
 
     ; 按类型显隐参数面板
     OnTypeChange(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
+        if (!IsObject(this.ui) || this._loading)
             return
         t := this._TypeValue()
         show := this._PanelOf(t)
         batch := []
-        for name in ["VarPanel", "KeyPanel", "RangePanel", "ProcPanel", "WinPanel", "FilePanel", "DatePanel", "HintPanel"] {
+        for name in ["VarPanel", "KeyPanel", "RangePanel", "ProcPanel", "WinPanel", "FilePanel", "DatePanel", "HintPanel", "TimePanel"] {
             batch.Push({ControlName: name, PropertyName: "Visibility", Value: (name == show) ? "Visible" : "Collapsed"})
         }
+        batch.Push({ControlName: "VarPanel2", PropertyName: "Visibility", Value: show == "VarPanel" ? "Visible" : "Collapsed"})
         hint := WaitHintText(t)
         if (hint != "")
             batch.Push({ControlName: "HintPanel", PropertyName: "Text", Value: GetLang(hint)})
         this.ui.BatchUpdate(batch)
-        if (t == "等待日期")
-            this._SyncDateUnit()
+        if (show == "TimePanel") {
+            range := t == "等待时间区间"
+            kind := GetLangKey(this.ui.Query("TimeKindCon"))
+            this._FillTimeKinds(range, kind)
+            this.ui.Update("TimeEndRow", "Visibility", range ? "Visible" : "Collapsed")
+            this.ui.Update("TimeValueLabel", "Text", GetLang(range ? "开始：" : "目标："))
+            this.OnTimeKindChange()
+        }
+        this.OnVarLogicChange()
     }
 
     OnDateUnitChange(state := "", ctrl := "", event := "") {
@@ -355,8 +436,41 @@ class WaitGui {
             this.ui.Update("FilePathCon", "Text", path)
     }
 
-    OnClickPickKey(state := "", ctrl := "", event := "") {
-        WaitBeginKeyCapture(this._OnKeyPicked.Bind(this))
+    OnClickPickKey(joy := false, *) {
+        SetTimer(this._OpenKeyPicker.Bind(this, joy), -1)
+    }
+
+    _OpenKeyPicker(joy) {
+        picker := joy ? JoyCheckGui() : KeyCheckGui()
+        options := this.Data.KeyDevice == (joy ? "手柄" : "键盘") ? this.Data.KeyOptions : {KeyArr: [], CheckType: "同时按下", StateType: "物理状态"}
+        picker.SelectionData := JSON.parse(JSON.stringify(options), , false)
+        picker.SelectionData.VarName := ""
+        if (!joy && !picker.SelectionData.KeyArr.Length && this.ui.Query("KeyCon") != "")
+            picker.SelectionData.KeyArr := GetPressKeyArr(this.ui.Query("KeyCon"))
+        picker.OwnerHwnd := this.Hwnd()
+        picker.SureBtnAction := (*) => this._AcceptKeys(picker, joy)
+        this._keyPicker := picker
+        picker.ShowGui("")
+    }
+
+    _AcceptKeys(picker, joy) {
+        this.Data.KeyDevice := joy ? "手柄" : "键盘"
+        this.Data.KeyOptions := picker.Data
+        keys := ""
+        for key in picker.Data.KeyArr
+            keys .= (keys == "" ? "" : "⎖") key
+        this.ui.Update("KeyCon", "Text", keys)
+        this._RefreshKeySummary()
+    }
+
+    _RefreshKeySummary() {
+        options := this.Data.KeyOptions
+        mode := CmdEnumZh(options.CheckType, CmdEnumKeyCheckNames()) == "有一个按下" ? "任一按键" : "全部按键"
+        for key in options.KeyArr
+            if (InStr(key, "JoyAxis") == 1)
+                mode := options.CheckType
+        text := options.KeyArr.Length ? this.Data.KeyDevice " · " GetLang(mode) : ""
+        this.ui.Update("KeySummaryCon", "Text", text)
     }
 
     _OnKeyPicked(key) {
@@ -403,12 +517,14 @@ class WaitGui {
     CheckIfValid() {
         t := this._TypeValue()
         if (t == "") {
-            RmtDialog.Info(GetLang("请选择类型；日期等待请使用时间指令"))
+            RmtDialog.Info(GetLang("请选择等待条件"))
             return false
         }
         switch t {
             case "等待变量值":
                 if (!CheckVarNameIfValid(this.ui.Query("VarNameCon")))
+                    return false
+                if (GetLangKey(this.ui.Query("VarLogicCon")) != "单个条件" && this.ui.Query("VarName2Con") != "" && !CheckVarNameIfValid(this.ui.Query("VarName2Con")))
                     return false
             case "等待按键按下", "等待按键松开":
                 if (this.ui.Query("KeyCon") == "") {
@@ -432,6 +548,9 @@ class WaitGui {
                 }
             case "等待屏幕变化":
                 if (!this._AreaOk())
+                    return false
+            case "等待时间", "等待时间区间":
+                if (!this._ValidateTime())
                     return false
             case "等待日期":
                 if (this.ui.Query("DateValCon") == "") {
@@ -457,8 +576,23 @@ class WaitGui {
             case "等待变量值":
                 this.Data.Param1 := GetVarName(this.ui.Query("VarNameCon"))
                 this.Data.Param2 := this.ui.Query("VarValCon")
+                this.Data.Conditions := [{Variable: this.Data.Param1, Operator: GetLangKey(this.ui.Query("VarCompareCon")), Value: this.Data.Param2}]
+                logic := GetLangKey(this.ui.Query("VarLogicCon"))
+                this.Data.ConditionLogic := logic == "或" ? "或" : "且"
+                if (logic != "单个条件") {
+                    variable2 := this.ui.Query("VarName2Con")
+                    this.Data.Conditions.Push({Variable: variable2 == "" ? this.Data.Param1 : GetVarName(variable2), Operator: GetLangKey(this.ui.Query("VarCompare2Con")), Value: this.ui.Query("VarVal2Con")})
+                }
             case "等待按键按下", "等待按键松开":
-                this.Data.Param1 := WaitNormKeyName(this.ui.Query("KeyCon"))
+                this.Data.Param1 := this.ui.Query("KeyCon")
+                ; 仍允许直接填写键名；一旦修改文本就按当前文本重建键数组。
+                keyText := ""
+                for key in this.Data.KeyOptions.KeyArr
+                    keyText .= (keyText == "" ? "" : "⎖") key
+                if (keyText != this.Data.Param1) {
+                    this.Data.KeyDevice := "键盘"
+                    this.Data.KeyOptions := {KeyArr: GetPressKeyArr(this.Data.Param1), CheckType: "同时按下", StateType: "物理状态"}
+                }
                 this.Data.Param2 := ""
             case "等待屏幕变化":
                 this.Data.StartPosX := this.ui.Query("StartPosX")
@@ -479,6 +613,18 @@ class WaitGui {
             case "等待文件存在", "等待文件删除", "等待文件变化":
                 this.Data.Param1 := this.ui.Query("FilePathCon")
                 this.Data.Param2 := ""
+            case "等待时间", "等待时间区间":
+                cfg := this.Data.TimeConfig
+                cfg.SubMode := t == "等待时间区间" ? "区间判断" : "等待"
+                cfg.Param1 := this.ui.Query("TimeValueCon")
+                kind := GetLangKey(this.ui.Query("TimeKindCon"))
+                if (t == "等待时间区间") {
+                    cfg.Param2 := this.ui.Query("TimeEndCon")
+                    cfg.Param5 := kind
+                    cfg.Param4 := GetLangKey(this.ui.Query("TimeActionCon"))
+                } else
+                    cfg.Param2 := kind
+                cfg.CheckInterval := this.Data.Interval
             case "等待日期":
                 this.Data.Param1 := this.ui.Query("DateValCon")
                 this.Data.Param2 := GetLangKey(this.ui.Query("DateUnitCon"))
@@ -525,4 +671,99 @@ class WaitGui {
         }
         return true
     }
+    static CompareKeys := ["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "包含"]
+
+    _Choice(parent, name, keys, width) {
+        combo := parent.Add("ComboBox").Name(name).Width(width).Height(26).MinHeight(26)
+        for key in keys
+            combo.Add("ComboBoxItem").Content(GetLang(key))
+        return combo
+    }
+
+    _Choose(name, value, keys) {
+        this.ui.Update(name, "SelectedIndex", String(CmdEnumIndex(value, keys)))
+    }
+
+    _SelectType(type) {
+        for index, group in WaitGroupNames() {
+            for key in WaitGroupTypes(group) {
+                if (key == type) {
+                    this.ui.Update("WaitTypeCon", "SelectedIndex", index - 1)
+                    this._FillTypes(group, type)
+                    return
+                }
+            }
+        }
+        this.ui.Update("WaitTypeCon", "SelectedIndex", 3)
+        this._FillTypes("变量", "等待变量值")
+    }
+
+    _FillTypes(group, selected := "") {
+        this._currentGroup := group
+        this.WaitTypeKeys := WaitGroupTypes(group)
+        this.ui.Update("WaitConditionCon", "ClearItems", "")
+        for key in this.WaitTypeKeys {
+            label := key == "等待时间" ? "等待" : (key == "等待时间区间" ? "区间判断" : SubStr(key, 3))
+            this.ui.Update("WaitConditionCon", "AddItem", GetLang(label))
+        }
+        this.ui.Update("WaitConditionCon", "SelectedIndex", selected == "" ? 0 : CmdEnumIndex(selected, this.WaitTypeKeys))
+    }
+
+    OnGroupChange(*) {
+        if (this._loading || !IsObject(this.ui))
+            return
+        index := this.ui.Query("WaitTypeCon>SelectedIndex")
+        groups := WaitGroupNames()
+        if (!IsNumber(index) || index < 0 || index >= groups.Length)
+            return
+        group := groups[index + 1]
+        if (this._currentGroup != group)
+            this._FillTypes(group)
+        this.OnTypeChange()
+    }
+
+    _FillTimeKinds(range, selected) {
+        keys := range ? ["时刻", "时间戳"] : ["时长", "时刻", "时间戳"]
+        if (!range && (selected == "分钟" || selected == "小时" || selected == "天"))
+            keys.Push(selected)
+        if (this.HasProp("_timeRange") && this._timeRange == range)
+            return
+        this._timeRange := range
+        this.ui.Update("TimeKindCon", "ClearItems", "")
+        for key in keys
+            this.ui.Update("TimeKindCon", "AddItem", GetLang(key))
+        this._Choose("TimeKindCon", selected, keys)
+    }
+
+    OnTimeKindChange(*) {
+        kind := GetLangKey(this.ui.Query("TimeKindCon"))
+        hint := kind == "时长" ? "格式：时:分:秒，例如 00:01:30；支持变量。" : (kind == "时刻" ? "格式：时:分:秒，例如 14:30:00；区间支持跨午夜。" : "填写时间戳或时间变量，支持具体日期时间。")
+        if (kind == "分钟" || kind == "小时" || kind == "天")
+            hint := "旧配置时长单位：" kind "，支持数值或变量。"
+        this.ui.Update("TimeHintCon", "Text", GetLang(hint))
+    }
+
+    OnVarLogicChange(*) {
+        if (!IsObject(this.ui))
+            return
+        visibility := GetLangKey(this.ui.Query("VarLogicCon")) == "单个条件" ? "Collapsed" : "Visible"
+        for name in ["VarName2Con", "VarCompare2Con", "VarVal2Con"]
+            this.ui.Update(name, "Visibility", visibility)
+    }
+
+    _ValidateTime() {
+        value := Trim(this.ui.Query("TimeValueCon"))
+        range := this._TypeValue() == "等待时间区间"
+        if (value == "" || (range && Trim(this.ui.Query("TimeEndCon")) == "")) {
+            RmtDialog.Info(GetLang("请输入目标时间或区间起止时间"))
+            return false
+        }
+        kind := GetLangKey(this.ui.Query("TimeKindCon"))
+        if (kind == "时长" && RegExMatch(value, "^[0-9:. ]+$") && TimeParseDurationSecs(value, "时长") <= 0) {
+            RmtDialog.Info(GetLang("时长必须大于0"))
+            return false
+        }
+        return true
+    }
+
 }

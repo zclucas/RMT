@@ -135,6 +135,10 @@ class MacroGraphNodeUIMixin {
             this._AddFieldRow(body, "MPCountRow_" id, GetLang("移动次数:"), "MPCount_" id, d.HasOwnProp("count") ? d.count : "1", isGameView, true, id, "")
             this._AddFieldRow(body, "MPIntervalRow_" id, GetLang("每次间隔："), "MPInterval_" id, d.HasOwnProp("interval") ? d.interval : "1000", isGameView, true, id, "")
         }
+        else if (d.type == GetLang("搜索All")) {
+            body.Add("TextBlock").Text(GetLang("批量返回坐标数组")).TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
+            body.Add("TextBlock").Text(GetLang("双击节点编辑搜索条件与排序")).TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
+        }
         else if (d.type == GetLang("搜索Pro")) {
             this._FillSearchProBody(id, d, body)
         }
@@ -537,7 +541,7 @@ class MacroGraphNodeUIMixin {
 
     ; 搜索/如果：是否为「真假双分支」父类型（不含如果Pro）
     _IsBranchPairParentType(type) {
-        return type == GetLang("如果") || type == GetLang("搜索") || type == GetLang("搜索Pro") || type == GetLang("搜索Combo") || type == GetLang("搜索Multi")
+        return type == GetLang("如果") || type == GetLang("搜索All") || type == GetLang("搜索") || type == GetLang("搜索Pro") || type == GetLang("搜索Combo") || type == GetLang("搜索Multi")
     }
 
     ; 真/假分支默认相对 dy（grid=20）。
@@ -1438,7 +1442,7 @@ class MacroGraphNodeUIMixin {
     }
 
     _IsSearchTypeTitle(title) {
-        return title == GetLang("搜索") || title == GetLang("搜索Pro") || title == GetLang("搜索Combo") || title == GetLang("搜索Multi")
+        return title == GetLang("搜索All") || title == GetLang("搜索") || title == GetLang("搜索Pro") || title == GetLang("搜索Combo") || title == GetLang("搜索Multi")
     }
 
     ; 由指令类型名查找对应图标 URI（匹配 CmdList 顺序）；开始节点等无对应项返回空

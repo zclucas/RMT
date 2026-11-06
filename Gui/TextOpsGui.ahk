@@ -293,6 +293,9 @@ class TextOpsGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("文本处理")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        ; 旧替换指令以 MatchType 为准，ArgsType 可能仍为旧默认值。
+        if (this.Data.Type == "文本替换")
+            this.Data.ArgsType := this.Data.MatchType
         this.DLArrayArr := GetGuiArrNameArr()
         ArgsNameArr := GetGuiVarArr(2)
         ArgsNameArr.InsertAt(1, GetLang("制表符"))
@@ -301,7 +304,7 @@ class TextOpsGui {
         this._SetDDL("TypeCombo", GetLangArr(["文本拼接", "文本分割", "文本提取", "文本替换", "去除空格", "大小写转换", "文本统计"]), GetLang(this.Data.Type))
         this._SetCombo("NameCon", GetGuiVarArr(), this.Data.Name)
         concatArgs := this.Data.ArgsName
-        if (GetLang(this.Data.Type) == GetLang("文本拼接") && this._IsConcatPlaceholder(concatArgs))
+        if (cmd == "" && GetLang(this.Data.Type) == GetLang("文本拼接") && this._IsConcatPlaceholder(concatArgs))
             concatArgs := this._ConcatDefaultText()
         this._SetCombo("ArgsNameCon", ArgsNameArr, concatArgs)
         this.ui.Update("ConcatCon", "Text", concatArgs)
@@ -343,11 +346,6 @@ class TextOpsGui {
         this._Vis("NameCon", !IsConcat, true)
         this._Vis("ArgsGrid", !IsConcat, true)
         this._Vis("ConcatRow", IsConcat, true)
-        if (IsConcat) {
-            curConcat := this.ui.Query("ConcatCon")
-            if (this._IsConcatPlaceholder(curConcat))
-                this.ui.Update("ConcatCon", "Text", this._ConcatDefaultText())
-        }
         this._Vis("SearchRow", IsReplace, false)
         this.ui.Update("SearchCon", "IsEnabled", IsReplace ? "True" : "False")
         this.ui.Update("ReplaceCon", "IsEnabled", IsReplace ? "True" : "False")
@@ -432,11 +430,6 @@ class TextOpsGui {
             this.ConcatEditGui.Update("ConcatEditVarTypeCombo", "SelectedIndex", "0")
         this._FillConcatEditNameCombo()
         curText := IsObject(this.ui) ? this.ui.Query("ConcatCon") : ""
-        if (this._IsConcatPlaceholder(curText)) {
-            curText := this._ConcatDefaultText()
-            if (IsObject(this.ui))
-                this.ui.Update("ConcatCon", "Text", curText)
-        }
         this.ConcatEditGui.Update("ConcatEditCon", "Text", curText)
         owner := (this.Hwnd() ? this.Hwnd() : this.OwnerHwnd)
         if (!XamlWin.Open(this.ConcatEditGui, "", owner))
@@ -597,6 +590,8 @@ class TextOpsGui {
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
+        if (!this.CheckIfValid())
+            return
         this.SaveTextOpsData()
         CommandStr := this.GetCommandStr()
         OnTriggerSepcialItemMacro(CommandStr)
@@ -625,15 +620,15 @@ class TextOpsGui {
         if (isConcat) {
             ArgsName := this.ui.Query("ConcatCon")
         } else {
-            ArgsName := GetLangKey(this.ui.Query("ArgsNameCon"))
-            ArgsName := ArgsName == "制表符" ? "`t" : ArgsName
+            ArgsName := this.ui.Query("ArgsNameCon")
+            ArgsName := ArgsName == GetLang("制表符") ? "`t" : ArgsName
         }
         this.Data.Type := GetLangKey(this._TypeText())
         this.Data.Name := isConcat ? "" : this.ui.Query("NameCon")
         this.Data.ArgsType := isConcat ? "拼接文本" : GetLangKey(this._ArgsTypeText())
         this.Data.ArgsName := ArgsName
-        this.Data.Search := GetLangKey(this.ui.Query("SearchCon"))
-        this.Data.Replace := GetLangKey(this.ui.Query("ReplaceCon"))
+        this.Data.Search := this.ui.Query("SearchCon")
+        this.Data.Replace := this.ui.Query("ReplaceCon")
         this.Data.MatchType := GetLangKey(this._ArgsTypeText())
         this.Data.SaveType := GetLangKey(this.ui.Query("SaveTypeCombo"))
         this.Data.SaveName := GetVarName(this.ui.Query("SaveNameCon"))

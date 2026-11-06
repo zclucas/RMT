@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.0
 
-; 倒计时浮层：与 MinTool\CountDown 相同（置顶、无标题、点击穿透）
+; 倒计时执行与生命周期代理；XAML 浮层由主进程显示（置顶、无标题、点击穿透）。
 global CountDownAlive := Map()
 
 OnCountDown(tableItem, cmd, index) {
@@ -18,12 +18,10 @@ TimeExecCountDown(tableItem, index, Data) {
 
     posX := CountDownNum(tableItem, index, Data.PosX, 200)
     posY := CountDownNum(tableItem, index, Data.PosY, 200)
-    fontSize := CountDownStyleFontSize()
-    alpha := CountDownWinAlpha(CountDownStyleAlpha())
 
     CountDownReplaceAt(posX, posY)
     ov := CountDownOverlay()
-    ov.Start(total, posX, posY, fontSize, CountDownThemeRgb("text"), CountDownThemeRgb("bg"), alpha)
+    ov.Start(total, posX, posY)
 
     if (GetLangKey(Data.WaitEnd) == "不等待")
         return
@@ -59,24 +57,10 @@ CountDownReplaceAt(posX, posY) {
         CountDownAlive.Delete(key)
         try old.Close()
     }
-    title := CountDownWinTitle(key)
-    prev := A_DetectHiddenWindows
-    DetectHiddenWindows(true)
-    try {
-        loop 8 {
-            hwnd := WinExist(title)
-            if (!hwnd)
-                break
-            try WinClose("ahk_id " hwnd)
-            Sleep(10)
-        }
-    } finally {
-        DetectHiddenWindows(prev)
-    }
 }
 
 CountDownNum(tableItem, index, raw, def) {
-    v := GetReplaceVarText(tableItem, index, raw)
+    v := TimeResolveValue(tableItem, index, raw)
     return IsNumber(v) ? Integer(v) : def
 }
 
@@ -97,7 +81,7 @@ CountDownTotal(tableItem, index, Data) {
         return d > 0 ? d : 0
     }
     if (kind == "时间戳") {
-        val := GetReplaceVarText(tableItem, index, ObjHasOwnProp(Data, "Param1") ? Data.Param1 : "")
+        val := TimeResolveValue(tableItem, index, ObjHasOwnProp(Data, "Param1") ? Data.Param1 : "")
         target := TimeParseDateTime(val)
         if (target == "")
             return 0
@@ -277,73 +261,55 @@ CountDownOverlaySize(mode) {
     }
 }
 
+global CountDownRequests := Map()
+
+; 执行端只持有生命周期代理，XAML 窗口统一由主进程渲染。
 class CountDownOverlay {
     __New() {
         this.Running := false
-        this.gui := ""
-        this.txt := ""
-        this.tickFn := ""
-        this.aliveId := 0
+        this.token := ""
         this.posKey := ""
-        this.remaining := 0
-        this.displayType := "ss"
+        this.timer := ObjBindMethod(this, "Tick")
     }
 
-    Start(total, posX, posY, fontSize, textColor, bg, alpha) {
-        global CountDownAlive
-        this.remaining := total
+    Start(total, posX, posY, *) {
+        global CountDownAlive, CountDownRequests, MyCountDownStart
+        this.token := DllCall("GetCurrentProcessId", "uint") ":" A_TickCount ":" Random(100000, 999999)
         this.posKey := CountDownPosKey(posX, posY)
-        this.displayType := CountDownFormatMode(total)
-        sz := CountDownOverlaySize(this.displayType)
-        width := sz[1], height := sz[2]
-
-        g := Gui()
-        g.Title := CountDownWinTitle(this.posKey)
-        g.Opt("+AlwaysOnTop -Caption +ToolWindow +E0x20")
-        g.BackColor := bg
-        g.SetFont("s" fontSize " c" textColor, "Consolas")
-        this.txt := g.AddText("x0 y0 w" width " h" height " Center", CountDownFormatText(total))
-        WinSetTransparent(alpha, g.Hwnd)
-        g.Show("x" posX " y" posY " w" width " h" height " NoActivate")
-        this.gui := g
+        this.deadline := A_TickCount + (total + 1) * 1000
         this.Running := true
-        this.tickFn := ObjBindMethod(this, "Tick")
-        this.aliveId := this.posKey
         CountDownAlive[this.posKey] := this
-        SetTimer(this.tickFn, 1000)
+        CountDownRequests[this.token] := this
+        try MyCountDownStart.Call(this.token, total, posX, posY)
+        catch {
+            this.Close()
+            throw
+        }
+        SetTimer(this.timer, 250)
     }
 
     Tick(*) {
-        if (!this.Running)
-            return
-        try {
-            if (!IsObject(this.gui) || !WinExist("ahk_id " this.gui.Hwnd)) {
-                this.Close()
-                return
-            }
-        }
-        this.remaining -= 1
-        if (this.remaining < 0) {
+        if (this.Running && A_TickCount >= this.deadline)
             this.Close()
-            return
-        }
-        this.displayType := CountDownFormatMode(this.remaining)
-        try this.txt.Text := CountDownFormatText(this.remaining)
     }
 
     Close(*) {
-        global CountDownAlive
+        global MyCountDownStop
         if (!this.Running)
             return
-        this.Running := false
-        if (this.tickFn != "")
-            SetTimer(this.tickFn, 0)
-        try this.gui.Destroy()
-        catch {
-        }
-        this.gui := ""
-        this.txt := ""
-        if (this.posKey != "" && CountDownAlive.Has(this.posKey) && CountDownAlive[this.posKey] == this)
-            CountDownAlive.Delete(this.posKey)
+        CountDownComplete(this.token)
+        MyCountDownStop.Call(this.token)
     }
+}
+
+CountDownComplete(token) {
+    global CountDownRequests, CountDownAlive
+    if (!CountDownRequests.Has(token))
+        return
+    overlay := CountDownRequests[token]
+    overlay.Running := false
+    SetTimer(overlay.timer, 0)
+    CountDownRequests.Delete(token)
+    if (CountDownAlive.Has(overlay.posKey) && CountDownAlive[overlay.posKey] == overlay)
+        CountDownAlive.Delete(overlay.posKey)
 }

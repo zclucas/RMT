@@ -61,7 +61,7 @@ class KeyCheckGui {
         this.ConMap := Map()
         this._btnKeyMap := Map()
         this._keySeq := 0
-        title := this.ParentTile GetLang("按键检测")
+        title := this.ParentTile GetLang(this.HasProp("SelectionData") ? "键盘按键选择" : "按键检测")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
@@ -107,7 +107,7 @@ class KeyCheckGui {
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["物理状态", "逻辑状态"])
             st.Add("ComboBoxItem").Content(t)
-        bottom.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        bottom.Add("TextBlock").Name("ResultVarLabel").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         bottom.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -317,7 +317,11 @@ class KeyCheckGui {
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("按键检测")
-        this.Data := GetMacroCMDData(this.SerialStr)
+        this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
+        if (this.HasProp("SelectionData")) {
+            this.ui.Update("ResultVarLabel", "Visibility", "Collapsed")
+            this.ui.Update("VarNameCon", "Visibility", "Collapsed")
+        }
         this.DLVariableArr := GetGuiVarArr()
         this.KeyStr := ""
         if (this.Data.KeyArr.Length > 0) {
@@ -342,6 +346,8 @@ class KeyCheckGui {
             return false
         }
 
+        if (this.HasProp("SelectionData"))
+            return true
         varName := Trim(this.ui.Query("VarNameCon"))
         if (varName == "") {
             RmtDialog.Info(GetLang("请输入变量名！"))
@@ -364,6 +370,8 @@ class KeyCheckGui {
         data.CheckType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("CheckTypeCon>SelectedIndex") : "", CmdEnumKeyCheckNames())
         data.StateType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("StateTypeCon>SelectedIndex") : "", CmdEnumStateNames())
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
+        if (this.HasProp("SelectionData"))
+            return
         MySoftData.GlobalVariMap[data.VarName] := true
 
         SaveMacroCMDData(data)

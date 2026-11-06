@@ -16,6 +16,7 @@ class TimeGui {
         this.Data := ""
         this.SerialStr := ""
         this.ModeKeys := ["等待", "区间判断", "倒计时"]
+        this.CountDownOnly := false
         this._syncing := false
         this._labW := 96
         this._fldW := 152  ; 与「时+：+分」同宽，右缘对齐分下拉
@@ -23,10 +24,23 @@ class TimeGui {
 
     ShowGui(cmd) {
         global MySoftData
+        if (!this.CountDownOnly && cmd != "") {
+            serial := SplitCommand(cmd)[1]
+            mode := TimeNormSubMode(GetMacroCMDData(serial))
+            if (GetLangKey(RegExReplace(serial, "\d+")) == "时间" && (mode == "等待" || mode == "区间判断" || mode == "倒计时")) {
+                editor := mode == "倒计时" ? CountDownGui() : WaitGui()
+                editor.OwnerHwnd := this.OwnerHwnd
+                editor.ParentTile := this.ParentTile
+                editor.SureBtnAction := this.SureBtnAction
+                this._compatEditor := editor
+                editor.ShowGui(cmd)
+                return
+            }
+        }
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("时间")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CountDownOnly ? "倒计时" : "时间")
         this._BuildAndShow()
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
@@ -97,7 +111,7 @@ class TimeGui {
     _BuildAndShow() {
         global MySoftData
         this._closed := false
-        title := this.ParentTile GetLang("时间编辑器")
+        title := this.ParentTile GetLang(this.CountDownOnly ? "倒计时编辑器" : "时间编辑器")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
@@ -116,18 +130,20 @@ class TimeGui {
         this._Edit(r0, "RemarkCon").Width(420).TextAlignment("Left")
 
         r1 := this._PairCols(body.Add("Grid").Grid_Row(1).VerticalAlignment("Center").Margin("0,0,0,4"))
-        this._Lab(r1, "类型：").Grid_Column(0)
+        this._Lab(r1, "类型：").Grid_Column(0).Visibility(this.CountDownOnly ? "Collapsed" : "Visible")
         tm := this._Combo(r1, "TimeModeCon", false, this._fldW).Grid_Column(1)
+        if (this.CountDownOnly)
+            tm.Visibility("Collapsed")
         for t in GetLangArr(this.ModeKeys)
             tm.Add("ComboBoxItem").Content(t)
-        this._Lab(r1, "模式：").Grid_Column(2)
+        this._Lab(r1, "模式：").Grid_Column(this.CountDownOnly ? 0 : 2)
         wunit := this._Combo(r1, "WaitUnitCon", false, this._fldW).Grid_Column(3)
         for u in GetLangArr(TimeGui.WaitUnitKeys)
             wunit.Add("ComboBoxItem").Content(u)
         wkind := this._Combo(r1, "WinKindCon", false, this._fldW).Grid_Column(3).Visibility("Collapsed")
         for u in GetLangArr(TimeGui.WindowKindKeys)
             wkind.Add("ComboBoxItem").Content(u)
-        ckind := this._Combo(r1, "CdKindCon", false, this._fldW).Grid_Column(3).Visibility("Collapsed")
+        ckind := this._Combo(r1, "CdKindCon", false, this._fldW).Grid_Column(this.CountDownOnly ? 1 : 3).Visibility("Collapsed")
         for u in GetLangArr(TimeGui.WaitUnitKeys)
             ckind.Add("ComboBoxItem").Content(u)
 
@@ -287,7 +303,7 @@ class TimeGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("时间")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CountDownOnly ? "倒计时" : "时间")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
 
@@ -423,6 +439,8 @@ class TimeGui {
     }
 
     _ModeValue() {
+        if (this.CountDownOnly)
+            return 3
         v := IsObject(this.ui) ? this.ui.Query("TimeModeCon>SelectedIndex") : ""
         return (IsNumber(v) && v >= 0) ? (Integer(v) + 1) : 1
     }
@@ -588,8 +606,12 @@ class TimeGui {
         if (this.Data.SerialStr == "")
             this.Data.SerialStr := this.SerialStr
         if (this._CmdIsCountDown() && m != 3) {
-            this.SerialStr := GetCMDSerialStr("时间")
+            this.SerialStr := GetCMDSerialStr(this.CountDownOnly ? "倒计时" : "时间")
             this.Data := TimeData()
+            this.Data.SerialStr := this.SerialStr
+        }
+        if (m == 3 && !this._CmdIsCountDown()) {
+            this.SerialStr := GetCMDSerialStr("倒计时")
             this.Data.SerialStr := this.SerialStr
         }
         if (!this._CmdIsCountDown())
@@ -652,5 +674,14 @@ class TimeGui {
             if (ObjHasOwnProp(this.Data, k))
                 this.Data.DeleteProp(k)
         }
+    }
+}
+
+
+; 独立倒计时入口，复用时间参数控件但不显示其他指令类型。
+class CountDownGui extends TimeGui {
+    __new() {
+        super.__new()
+        this.CountDownOnly := true
     }
 }

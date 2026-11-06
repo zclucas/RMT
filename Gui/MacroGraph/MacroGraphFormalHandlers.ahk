@@ -1984,6 +1984,10 @@ class MacroGraphFormalHandlersMixin {
     _RefreshFormalInline(id, d) {
         if (this.ui == "")
             return false
+        if (d.type == GetLang("等待")) {
+            this._RefreshWaitVisibility(id)
+            return true
+        }
         if (d.type == GetLang("宏操作")) {
             this._RefreshSubMacroInline(id, d)
             return true
@@ -2048,92 +2052,15 @@ class MacroGraphFormalHandlersMixin {
     }
 
     _OnFormalWait(id, state, ctrl, event) {
-        data := this._FormalIniData(id)
-        if (data == "")
-            return
-        if (!IsObject(state))
-            state := Map()
-        typeNames := CmdEnumWaitEditorLabels()
-        dateUnits := GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
-        this._EnsureComboInState(state, "WaitTypeCmb_" id, typeNames)
-        this._EnsureComboInState(state, "WaitDateUnitCmb_" id, dateUnits)
-        if (state.Has("WaitTypeCmb_" id) && state["WaitTypeCmb_" id] != "") {
-            for n, label in typeNames {
-                if (state["WaitTypeCmb_" id] == label) {
-                    data.WaitType := this._WaitTypeKeys()[n]
-                    break
-                }
-            }
-        }
-        if (state.Has("WaitInterval_" id)) {
-            iv := state["WaitInterval_" id]
-            if (IsNumber(iv) && Number(iv) > 0)
-                data.Interval := iv
-            else
-                this.ui.Update("WaitInterval_" id, "Text", data.Interval)
-        }
-        t := CmdEnumWait(data.WaitType)
-        panel := this._WaitPanelName(t)
-        if (panel == "Var") {
-            if (state.Has("WaitVarName_" id))
-                data.Param1 := GetVarName(state["WaitVarName_" id])
-            if (state.Has("WaitVarVal_" id))
-                data.Param2 := state["WaitVarVal_" id]
-        } else if (panel == "Key") {
-            if (state.Has("WaitKey_" id))
-                data.Param1 := WaitNormKeyName(state["WaitKey_" id])
-        } else if (panel == "Range") {
-            if (state.Has("WaitSX_" id))
-                data.StartPosX := state["WaitSX_" id]
-            if (state.Has("WaitSY_" id))
-                data.StartPosY := state["WaitSY_" id]
-            if (state.Has("WaitEX_" id))
-                data.EndPosX := state["WaitEX_" id]
-            if (state.Has("WaitEY_" id))
-                data.EndPosY := state["WaitEY_" id]
-        } else if (panel == "Proc") {
-            if (state.Has("WaitProc_" id))
-                data.Param1 := state["WaitProc_" id]
-        } else if (panel == "Win") {
-            if (state.Has("WaitWin_" id))
-                data.Param1 := state["WaitWin_" id]
-        } else if (panel == "File") {
-            if (state.Has("WaitFile_" id))
-                data.Param1 := state["WaitFile_" id]
-        } else if (panel == "Date") {
-            if (state.Has("WaitDateVal_" id))
-                data.Param1 := state["WaitDateVal_" id]
-            if (state.Has("WaitDateUnitCmb_" id) && state["WaitDateUnitCmb_" id] != "")
-                data.Param2 := GetLangKey(state["WaitDateUnitCmb_" id])
-        }
-        SaveMacroCMDData(data)
-        this._RefreshWaitVisibility(id)
-        this._Apply()
+        ; 等待条件统一由完整编辑器保存，图形节点不覆写条件数据。
     }
 
     _RefreshWaitVisibility(id) {
         if (this.ui == "")
             return
         d := this._FormalDFromId(id)
-        panel := this._WaitPanelName(d.HasOwnProp("waitType") ? d.waitType : 1)
-        this._FormalSetVis(id, "WaitVarNameRow_" id, panel == "Var")
-        this._FormalSetVis(id, "WaitVarValRow_" id, panel == "Var")
-        this._FormalSetVis(id, "WaitKeyRow_" id, panel == "Key")
-        this._FormalSetVis(id, "WaitKeyPickRow_" id, panel == "Key")
-        this._FormalSetVis(id, "WaitSXRow_" id, panel == "Range")
-        this._FormalSetVis(id, "WaitSYRow_" id, panel == "Range")
-        this._FormalSetVis(id, "WaitEXRow_" id, panel == "Range")
-        this._FormalSetVis(id, "WaitEYRow_" id, panel == "Range")
-        this._FormalSetVis(id, "WaitAreaRow_" id, panel == "Range")
-        this._FormalSetVis(id, "WaitHint_" id, panel == "Hint")
-        if (panel == "Hint" && this.ui != "")
-            this.ui.Update("WaitHint_" id, "Text", GetLang(WaitHintText(d.HasOwnProp("waitType") ? d.waitType : 1)))
-        this._FormalSetVis(id, "WaitProcRow_" id, panel == "Proc")
-        this._FormalSetVis(id, "WaitWinRow_" id, panel == "Win")
-        this._FormalSetVis(id, "WaitFileRow_" id, panel == "File")
-        this._FormalSetVis(id, "WaitDateValRow_" id, panel == "Date")
-        this._FormalSetVis(id, "WaitDateUnitRow_" id, panel == "Date")
-        this._FormalSetVis(id, "WaitDateHint_" id, panel == "Date")
+        this.ui.Update("WaitTypeSummary_" id, "Text", GetLang(CmdEnumWait(d.HasOwnProp("waitType") ? d.waitType : "等待变量值")))
+        this.ui.Update("WaitIntervalSummary_" id, "Text", GetLang("检测间隔：") (d.HasOwnProp("waitInterval") ? d.waitInterval : 500) " ms")
     }
 
     _OnWaitKeyPick(id, *) {

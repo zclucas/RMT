@@ -3,7 +3,7 @@
 ; 迁移只读写给定目录；不借用当前配置的资源序号或软件偏好。
 ; 拆分「运行 / 游戏视角」仍看 1.2.2 的数字；拆完再把指令枚举写成中文。
 Compat13_Schemas() {
-    return Map("SearchFile", SearchData, "SearchProFile", SearchData,
+    return Map("SearchFile", SearchData, "SearchProFile", SearchData, "SearchAllFile", SearchAllData,
         "MMProFile", MMProData, "RunFile", RunData, "FileIOFile", FileIOData,
         "CompareFile", CompareData, "CompareProFile", CompareProData,
         "LoopFile", LoopData, "VariableFile", VariableData, "OperationFile", OperationData,
@@ -68,6 +68,10 @@ Compat13_Normalize(data, stem) {
         CompatEnsureRunData(data)
     if ((stem == "SearchFile" || stem == "SearchProFile") && !data.HasOwnProp("SearchImageType"))
         data.SearchImageType := 1 ; 新增软件级模型选项使用默认值，不借用当前正在运行的方案。
+    ; 旧文本替换只保存 MatchType，补默认值前同步编辑器使用的 ArgsType。
+    if (stem == "TextOpsFile" && data.HasOwnProp("Type") && data.Type == "文本替换"
+        && data.HasOwnProp("MatchType"))
+        data.ArgsType := data.MatchType
     Compat13_FillDefaults(data, schemas[stem]())
     if (stem == "FileIOFile") {
         types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")
@@ -357,6 +361,8 @@ Compat13_Settings(sections) {
     for key in ["AgreeAgreement", "WinPosX", "WinPosY", "Lang", "FontType", "JoyType", "TriggerJoyType", "PreferredMacroEditor"]
         supported[key] := true
     for key in ["SharedCopy", "GeneralContextMenu", "BranchContextMenu", "RemarkAutoType", "CMDWidth", "CMDHeight", "CMDPosX", "CMDPosY"]
+        supported[key] := true
+    for key in ["CountDownStyle", "CountDownPadZero", "CountDownAlpha", "CountDownFontSize"]
         supported[key] := true
     for key in ["CMDTransparency", "CMDFontSize", "CMDLogToFile", "CMDLogFilePath", "CMDLogAutoClear", "VarListenTop", "VarListenWidth", "VarListenHeight"]
         supported[key] := true

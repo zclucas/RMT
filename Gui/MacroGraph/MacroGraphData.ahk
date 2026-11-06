@@ -55,8 +55,8 @@ class MacroGraphDataMixin {
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
         isCombo := this._IsSearchComboName(srcSerial)
         isPro := this._IsSearchProName(srcSerial)
-        newSerial := GetCMDSerialStr(isCombo ? "搜索Combo" : (isPro ? "搜索Pro" : "搜索"))
-        newData := SearchData()
+        newSerial := this._IsSearchAllName(srcSerial) ? GetCMDSerialStr("搜索All") : GetCMDSerialStr(isCombo ? "搜索Combo" : (isPro ? "搜索Pro" : "搜索"))
+        newData := this._IsSearchAllName(srcSerial) ? SearchAllData() : SearchData()
         newData.SerialStr := newSerial
         try {
             src := GetMacroCMDData(srcSerial)
@@ -241,7 +241,7 @@ class MacroGraphDataMixin {
     ; 形式化 INI 指令的 cmdKey 列表（与 AssetUtil 中 CMD 映射一致；阶段5 含新配置化 间隔/按键/移动/RMT指令）
     ; §20 改名：加「鼠标移动/增量移动」新键（旧「移动」键保留兼容旧图）
     _FormalIniCmdKeys() {
-        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "文本处理", "数组",
+        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组",
             "后台鼠标", "后台按键", "窗口管理", "窗口信息", "调整窗口", "按键检测", "手柄检测", "注释", "抓图", "循环",
             "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间"]
     }
@@ -269,6 +269,7 @@ class MacroGraphDataMixin {
                 "运算", OperationData,
                 "运行", RunData,
                 "运行Pro", RunData,
+                "网络请求", HttpRequestData,
                 "文件读写", FileIOData,
                 "Excel", FileIOData,
                 "文本处理", TextOpsData,
@@ -495,6 +496,10 @@ class MacroGraphDataMixin {
                 else
                     d["runSave" A_Index] := (A_Index == 1 ? "ExitCode" : (A_Index == 2 ? "StdOut" : "StdErr"))
             }
+        } else if (cmdKey == "网络请求") {
+            d.httpMethod := data.Method
+            d.httpStatusVar := data.StatusVar
+            d.httpResponseVar := data.ResponseVar
         } else if (cmdKey == "文件读写" || cmdKey == "Excel") {
             d.operType := data.OperType
             d.operMode := data.OperMode
@@ -1049,7 +1054,7 @@ class MacroGraphDataMixin {
         }
         else if (this._IsSearchFamilyName(name)) {
             ; 搜索/搜索Pro/搜索Combo 参数存储在 Search*.toml 中，CurCMD 即其 SerialStr
-            d.type := this._IsSearchComboName(name) ? GetLang("搜索Combo") : (this._IsSearchProName(name) ? GetLang("搜索Pro") : GetLang("搜索"))
+            d.type := this._IsSearchAllName(name) ? GetLang("搜索All") : this._IsSearchComboName(name) ? GetLang("搜索Combo") : (this._IsSearchProName(name) ? GetLang("搜索Pro") : GetLang("搜索"))
             d.serialStr := name
             try {
                 data := GetMacroCMDData(name)

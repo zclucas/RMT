@@ -739,7 +739,7 @@ class UIMacroStepBinding {
             case "等待": return ["Interval", "Param1"]
             ; 搜索家族共用 SearchData、共用 SearchOnTrigger（MacroUtil:164）：
             ; 只留常用 4 项；搜索颜色/OCR类型/搜索类型 按需求不开放。
-            case "搜索", "搜索Pro", "搜索Combo", "组合搜索", "搜索Multi":
+            case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
                 return ["Similar", "SearchText", "SearchCount", "SearchInterval"]
             ; 以下均为执行路径已核实消费的标量字段（MacroUtil / CountDownUtil）
             case "输出": return ["Text"]
@@ -797,7 +797,7 @@ class UIMacroStepBinding {
                     case "CmdStr":    return { label: "指令", type: "enum", store: "str", options: UIMacroStepBinding._RmtCmdOptions() }
                     case "MenuIndex": return { label: "菜单序号", type: "int", min: 1, max: 99, store: "int" }
                 }
-            case "搜索", "搜索Pro", "搜索Combo", "组合搜索", "搜索Multi":
+            case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
                 switch String(field) {
                     ; onlyTypes：仅当搜索类型匹配时该字段才有意义（挑选器据此过滤）
                     case "Similar":        return { label: "相似度", type: "int", min: 50, max: 100, store: "int", onlyTypes: [1, 4], typeNote: "图片搜索" }
@@ -1064,7 +1064,7 @@ class UIMacroStepBinding {
             case "循环":
                 return [{ field: "LoopBody", index: 0, label: "循环体" }]
             ; 搜索家族自带真假分支宏，SearchUtil:125 经 OnTriggerMacroOnce 执行
-            case "搜索", "搜索Pro", "搜索Combo", "组合搜索", "搜索Multi":
+            case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
                 return [{ field: "TrueMacro", index: 0, label: "真分支" },
                     { field: "FalseMacro", index: 0, label: "假分支" }]
         }

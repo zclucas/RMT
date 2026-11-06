@@ -14,7 +14,7 @@ TextOpsSplit(Data, tableItem, index) {
     if (Data.ArgsType == "内容分割")
         ResArr := StrSplit(SourceText, SplitArgs)
     else if (Data.ArgsType == "定长分割") {
-        if (!IsInteger(SplitArgs) || SplitArgs == 0) {
+        if (!IsInteger(SplitArgs) || SplitArgs <= 0) {
             tip1 := GetLang("定长分割时参数必须是整数且大于0")
             tip2 := Format(GetLang("变量：{}   值：{}"), Data.ArgsName, SplitArgs)
             RMTErrorShow(tip1 "`n" tip2, RMT_LV_WARN, "宏")
@@ -89,13 +89,13 @@ TextOpsTrimSpace(Data, tableItem, index) {
     SourceText := TextGetSource(Data, tableItem, index)
 
     if (Data.ArgsType == "去除前空白字符") {
-        Res := LTrim(SourceText)
+        Res := RegExReplace(SourceText, "^\s+", "")
     }
     else if (Data.ArgsType == "去除后空白字符") {
-        Res := RTrim(SourceText)
+        Res := RegExReplace(SourceText, "\s+$", "")
     }
     else if (Data.ArgsType == "去除前后空白字符") {
-        Res := Trim(SourceText)
+        Res := RegExReplace(SourceText, "^\s+|\s+$", "")
     }
     else if (Data.ArgsType == "去除所有空白字符") {
         Res := RegExReplace(SourceText, "\s+", "")
@@ -151,6 +151,8 @@ TextOpsConcat(Data, tableItem, index) {
 
 ;辅助函数
 TextSplitByLength(Text, Length) {
+    if (!IsInteger(Length) || Length <= 0)
+        throw ValueError("定长分割时参数必须是整数且大于0")
     ResArr := []
     CurPos := 1
     TextLen := StrLen(Text)
@@ -216,7 +218,7 @@ TextSplitByRegex(text, pattern) {
 TextGetByRegex(text, pattern) {
     result := []
     pos := 1
-    while pos := RegExMatch(text, pattern, &m, pos) {
+    while pos <= StrLen(text) + 1 && pos := RegExMatch(text, pattern, &m, pos) {
         result.Push(m[0])
         matchLen := StrLen(m[0])
         pos += matchLen > 0 ? matchLen : 1

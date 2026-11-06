@@ -8,6 +8,8 @@
 ; =====================================================================
 
 class SearchProGui {
+    CommandName => "搜索Pro"
+    IsAll => false
     __new() {
         this.ParentTile := ""
         this.Gui := ""
@@ -82,7 +84,7 @@ class SearchProGui {
         this._windowToken += 1
         windowToken := this._windowToken
         this._closed := false
-        title := this.ParentTile GetLang("搜索Pro编辑器")
+        title := this.ParentTile GetLang(this.CommandName "编辑器")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
@@ -92,7 +94,7 @@ class SearchProGui {
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,10").ClipToBounds("False")
-        body.Rows("28", "32", "Auto", "Auto", "Auto", "40")
+        body.Rows("28", "32", "Auto", "Auto", "Auto", this.IsAll ? "Auto" : "0", "40")
         body.Cols("*", "12", "*")
 
         ; 行0：屏幕或窗口坐标（按类型切换） | 鼠标颜色
@@ -337,7 +339,11 @@ class SearchProGui {
         this._AddTipField(coordCol, "CoordXNameCon", "CoordXTipHost", "ComboBox", 110, GetLang("坐标X变量名"), "0,0,8,0")
         this._AddTipField(coordCol, "CoordYNameCon", "CoordYTipHost", "ComboBox", 110, GetLang("坐标Y变量名"), "")
 
-        btnRow := body.Add("StackPanel").Grid_Row(5).Grid_ColumnSpan(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        if (this.IsAll) {
+            coordCol.Visibility("Collapsed")
+            this.BuildAllFields(body)
+        }
+        btnRow := body.Add("StackPanel").Grid_Row(6).Grid_ColumnSpan(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow, "BtnSure", "4,0")
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
@@ -354,7 +360,7 @@ class SearchProGui {
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing").Bind(windowToken))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/4-搜索Pro", (*) => this.TriggerMacro(), "!l"
+        BindCmdEditorChrome(this.ui, this.IsAll ? "#指令手册/11.1-搜索All" : "#指令手册/4-搜索Pro", (*) => this.TriggerMacro(), "!l"
             , (*) => this.OnClickTargeterBtn(), (*) => this.OnF1()
             , (*) => this.OnImageShotBtnClick(), (*) => this.SureColor())
         try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
@@ -624,7 +630,7 @@ class SearchProGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("搜索Pro")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CommandName)
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()
@@ -883,7 +889,7 @@ class SearchProGui {
         this.ui.Update("SearchTypeHost", "Height", isImage ? "168" : "64")
         this.ui.Update("SearchTypeHost", "MinHeight", isImage ? "168" : "64")
         this.ui.Update("SearchTypeHost", "MaxHeight", isImage ? "168" : "64")
-        this.ui.Update("ColorMatchHost", "Visibility", isImage && SearchImageDefaultType() == 1 ? "Visible" : "Collapsed")
+        this.ui.Update("ColorMatchHost", "Visibility", isImage && (this.IsAll || SearchImageDefaultType() == 1) ? "Visible" : "Collapsed")
         this.SetConArrState(this.ColorArr, false, isColor)
         this.SetConArrState(this.TextArr, false, isText)
         if (isColor)

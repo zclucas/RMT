@@ -173,6 +173,7 @@
             "Report", "RP",
             "CmdTipForce", "FR",          ; 输出→指令窗口：强制显示，不经 CMDTip 门控
             "RMT指令", "RC",
+            "CountDown", "CD",
             "MsgBox", "MB",
             "ToolTip", "TT",
             "Error", "ER",          ; Worker 错误上报主进程（统一日志 C 项）
@@ -367,6 +368,8 @@
 
             try {
                 switch opcode {
+                    case "CDR":
+                        CountDownComplete(args[1])
                     case "IPR":
                         ; 主进程回传输入框结果：[ok, value]
                         ; 只写首次（主进程可能因 SureAction+HideAction 回传多条，CheckTxBuffer 一次消费，防止覆盖首次结果）

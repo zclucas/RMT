@@ -34,6 +34,8 @@ global MyCMDTipForceAction := WorkCmdTipForceShow
 global MyExcuteRMTCMDAction := WorkExcuteRMTCMDAction
 global MySetTableItemState := WorkSetTableItemState
 global MySetItemPauseState := WorkSetItemPauseState
+global MyCountDownStart := (token, total, x, y) => MsgSendHandler("CountDown", "start", token, total, x, y)
+global MyCountDownStop := (token) => MsgSendHandler("CountDown", "stop", token)
 global MyMsgBoxContent := WorkMsgBoxContent
 global MyToolTipContent := WorkToolTipContent
 global MyViGJoySetState := WorkViGJoySetState

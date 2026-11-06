@@ -21,6 +21,7 @@
 #include <cwchar>
 #include <cstdlib>
 #include "WindowCapture.h"
+#include "SearchAll.h"
 #pragma comment(lib, "Dwmapi.lib")
 
 // 兜底：某些 SDK/config 仍会在别处引入 min/max 宏
@@ -47,7 +48,7 @@ cv::Mat captureScreen(int x, int y, int width, int height)
 	HDC hDesktopDC = GetDC(NULL);
 	HDC hCaptureDC = CreateCompatibleDC(hDesktopDC);
 	HBITMAP hBitmap = CreateCompatibleBitmap(hDesktopDC, width, height);
-	SelectObject(hCaptureDC, hBitmap);
+	HGDIOBJ oldBitmap = SelectObject(hCaptureDC, hBitmap);
 
 	BitBlt(hCaptureDC, 0, 0, width, height, hDesktopDC, x, y, SRCCOPY | CAPTUREBLT);
 
@@ -65,7 +66,9 @@ cv::Mat captureScreen(int x, int y, int width, int height)
 	bi.biClrImportant = 0;
 
 	cv::Mat mat(height, width, CV_8UC4);
-	GetDIBits(hCaptureDC, hBitmap, 0, height, mat.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+	SelectObject(hCaptureDC, oldBitmap);
+	if (GetDIBits(hCaptureDC, hBitmap, 0, height, mat.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS) != height)
+		mat.release();
 
 	DeleteObject(hBitmap);
 	DeleteDC(hCaptureDC);
@@ -946,7 +949,7 @@ static int findImageAdaptiveCore(const cv::Mat& captured, const cv::Mat& tpl, in
 
 extern "C" IMAGEFINDER_API int __cdecl GetApiVersion()
 {
-	return 12;  // 12 = 颜色匹配独立参数（屏幕、窗口及自适应）
+	return 13;  // 13 = 批量屏幕/窗口搜索，单结果默认先左右后上下
 }
 
 // Ex 接口保留旧导出 ABI；颜色模式沿用原彩色模板的相似度算法，
@@ -954,40 +957,14 @@ extern "C" IMAGEFINDER_API int __cdecl GetApiVersion()
 static int findImageExplicitCore(const cv::Mat& captured, const cv::Mat& tpl,
 	int threshold, bool colorMatch, bool adaptive, const char* key, cv::Point* pt)
 {
-	if (captured.empty() || tpl.empty()) return 0;
-	threshold = std::max(0, std::min(100, threshold));
-	if (!colorMatch && adaptive)
-		return findImageAdaptiveCore(captured, tpl, threshold, key, pt);
-	cv::Mat image, templ, mask;
-	if (colorMatch) {
-		if (captured.channels() == 4) cv::cvtColor(captured, image, cv::COLOR_BGRA2BGR);
-		else if (captured.channels() == 1) cv::cvtColor(captured, image, cv::COLOR_GRAY2BGR);
-		else image = captured;
-		if (tpl.channels() == 4) cv::cvtColor(tpl, templ, cv::COLOR_BGRA2BGR);
-		else if (tpl.channels() == 1) cv::cvtColor(tpl, templ, cv::COLOR_GRAY2BGR);
-		else templ = tpl;
-	} else {
-		toGrayMat(captured, image);
-		toGrayMat(tpl, templ);
-	}
-	bool useMask = buildAlphaMask(tpl, mask);
-	std::vector<double> scales = {1.0};
-	if (adaptive && colorMatch) {
-		const double ladder[] = {1.25, 0.8, 1.5, 0.6667, 1.75, 0.5714, 2.0, 0.5};
-		for (double scale : ladder) scales.push_back(scale);
-		for (double scale : ladder)
-			for (int delta = -3; delta <= 3; ++delta)
-				if (delta) scales.push_back(scale * (1.0 + delta * 0.02));
-	}
-	for (double scale : scales) {
-		cv::Mat candidate = resizeMat(templ, scale, false);
-		if (candidate.cols > image.cols || candidate.rows > image.rows) continue;
-		cv::Mat candidateMask = useMask ? resizeMat(mask, scale, true) : cv::Mat();
-		cv::Point location;
-		double score = matchBest(image, candidate, candidateMask, &location);
-		if (score >= threshold / 100.0) { *pt = location; return 1; }
-	}
-	return 0;
+    if (captured.empty() || tpl.empty()) return 0;
+    auto positions = rmt_search_all::images(captured, tpl,
+        std::max(0, std::min(100, threshold)), colorMatch, adaptive, true);
+    if (positions.empty()) return 0;
+    *pt = *std::min_element(positions.begin(), positions.end(), [](const cv::Point& a, const cv::Point& b) {
+        return a.y != b.y ? a.y < b.y : a.x < b.x;
+    });
+    return 1;
 }
 
 extern "C" IMAGEFINDER_API int __cdecl FindScreenImageEx(const char* path,
@@ -1588,11 +1565,11 @@ static int FindImageMultiPointCore(const wchar_t* targetPath, const cv::Mat& sho
 				bestHits = hits;
 				bestX = col;
 				bestY = row;
-				if (bestHits == static_cast<int>(points.size()))
+				if (bestHits >= required)
 					break;
 			}
 		}
-		if (bestHits == static_cast<int>(points.size()))
+		if (bestHits >= required)
 			break;
 	}
 

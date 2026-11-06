@@ -68,6 +68,8 @@ SetGlobalData(macroStr, visitMap) {
             case "输入":
                 if (Data.Type == "弹窗" || Data.Type == "状态" || Data.Type == "选择" || Data.Type == "多选")
                     VariableMap[Data.SaveName] := true
+            case "网络请求":
+                HttpRequestRegisterResults(Data)
             case "文件读写", "Excel":
                 SetFileIOGlobalData(Data)
             case "运行", "运行Pro":
@@ -93,7 +95,9 @@ SetGlobalData(macroStr, visitMap) {
                     SetGlobalData(value, visitMap)
                 }
                 SetGlobalData(Data.DefaultMacro, visitMap)
-            case "搜索", "搜索Pro", "搜索Combo", "组合搜索", "搜索Multi":
+            case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
+                if (baseCmd == "搜索All")
+                    MySoftData.GlobalArrMap[Data.AllSaveName] := true
                 if (Data.ResultToggle)
                     VariableMap[Data.ResultSaveName] := true
                 if (Data.CoordToogle) {

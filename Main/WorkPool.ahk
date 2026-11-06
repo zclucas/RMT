@@ -773,6 +773,7 @@ class WorkPool {
     CleanUpWorker(wd, resetTask := true, terminateProcess := false) {
         if (!wd)
             return
+        CloseXamlCountDownForWorker(wd.pid)
         ; 清理期间可能因消息/定时器重入，旧的 wd 也可能与补建的同编号 Worker 并存。
         ; 只允许当前登记的实例清理一次，先移除登记再执行可能触发消息的状态更新。
         if (!this.workerMap.Has(wd.idx) || this.workerMap[wd.idx] != wd) {
@@ -1183,6 +1184,9 @@ class WorkPool {
                         tableItem := GetTableByID(args[1])
                         if (tableItem)
                             SetItemPauseState(tableItem, GetItemIndexInTable(tableItem, args[2]), args[3], wd.idx)
+                    case "CD":
+                        ; 交给空闲任务建窗，避免在 Worker 消息回调中同步创建 XAML。
+                        SetTimer(this._CountDownUiRequest.Bind(this, args.Clone(), wd, wd.pid), -10)
                     case "MB":
                         MsgBoxContent(args[1])
                     case "TT":
@@ -1385,6 +1389,27 @@ class WorkPool {
         } catch as e {
             GraphPoolLog("输入回传失败", Format("err={1} wd=#{2}", e.Message, req.wd.idx))
         }
+    }
+
+    _CountDownUiRequest(args, wd, pid) {
+        if (args[1] == "stop") {
+            CloseXamlCountDown(args[2])
+            return
+        }
+        if (wd.pid != pid || !this.IsInstanceAlive(wd))
+            return
+        token := args[2]
+        done := (*) => this._CountDownUiClosed(wd, pid, token)
+        try StartXamlCountDown(token, Number(args[3]), Number(args[4]), Number(args[5]), done, pid)
+        catch as e {
+            RMTLogSys(RMT_LV_ERROR, "CountDown", e.Message)
+            done.Call()
+        }
+    }
+
+    _CountDownUiClosed(wd, pid, token) {
+        if (wd.pid == pid)
+            this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CDR", token)))
     }
 
     PushTask(wd, type, id, payload) {

@@ -2131,3 +2131,37 @@ A到B拖拽=A to B Drag
 文件删除=File Delete
 文件变化=File Change
 请选择类型；日期等待请使用时间指令=Select a type; use the Time command for date waits.
+
+搜索All=SearchAll
+搜索All编辑器=SearchAll Editor
+搜索坐标集=SearchPositions
+坐标数组：=Coordinate array:
+排序：=Sort:
+不排序=Unsorted
+从上到下=Top to bottom
+从左到右=Left to right
+
+网络请求=HTTP Request
+网络请求编辑器=HTTP Request Editor
+编辑网络请求=Edit HTTP Request
+表单=Form
+原始文本=Raw Text
+方法：=Method:
+Body 类型：=Body type:
+超时（毫秒）：=Timeout (ms):
+失败重试次数：=Retry count:
+状态码变量：=Status variable:
+响应体变量：=Response variable:
+错误信息变量：=Error variable:
+状态码 + 响应体 → 变量=Status + response body → variables
+URL、Header 值和 Body 支持 {变量名}；GET 不发送 Body。=URL, header values and body support {variable}; GET sends no body.
+Header 每行 名称: 值；表单每行 名称=值（自动编码）。=Headers: Name: Value per line. Form: name=value per line (auto-encoded).
+网络失败状态码为 0；重试可能重复提交，默认不重试。=Network failures return status 0. Retries may duplicate submissions; default: no retry.
+三个结果变量名不能相同。=Use three different result variable names.
+
+左右优先=Left to right, then top to bottom
+上下优先=Top to bottom, then left to right
+批量返回坐标数组=Find all matching coordinates
+双击节点编辑搜索条件与排序=Double-click to edit search and order
+
+搜索顺序：=Search order:

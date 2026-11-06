@@ -80,12 +80,14 @@ CmdEnumOperaNames() => ["数值", "随机数值", "字符", "系统", "时间", 
 CmdEnumWaitNames() => ["等待变量值", "等待按键按下", "等待按键松开", "等待屏幕变化", "等待鼠标移动",
     "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
     "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
-    "等待文件存在", "等待文件删除", "等待文件变化", "等待日期"]
+    "等待文件存在", "等待文件删除", "等待文件变化", "等待日期", "等待时间", "等待时间区间"]
 
-; 编辑器只提供条件等待；日期统一使用时间指令。旧枚举保留，兼容已保存的宏。
+; 时间等待与区间判断纳入等待指令；旧日期枚举保留，兼容已保存的宏。
 CmdEnumWaitEditorNames() {
-    names := CmdEnumWaitNames()
-    names.Pop()
+    names := []
+    for name in CmdEnumWaitNames()
+        if (name != "等待日期")
+            names.Push(name)
     return names
 }
 
@@ -191,7 +193,7 @@ CmdEnumNorm(cmd, Data) {
     if (!IsObject(Data))
         return
     switch cmd {
-        case "搜索", "搜索Pro", "搜索Combo", "组合搜索", "搜索Multi":
+        case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
             CmdEnumNormSearchObj(Data)
             if (Data.HasProp("SearchTargetArr") && IsObject(Data.SearchTargetArr)) {
                 for t in Data.SearchTargetArr

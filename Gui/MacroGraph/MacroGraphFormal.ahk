@@ -36,6 +36,7 @@ class MacroGraphFormalMixin {
             GetLang("运算"), this.OperationGui,
             GetLang("运行"), this.RunGui,
             GetLang("运行Pro"), this.RunProGui,
+            GetLang("网络请求"), this.HttpRequestGui,
             GetLang("文件读写"), this.FileIOGui,
             GetLang("Excel"), this.FileIOGui,
             GetLang("文本处理"), this.TextOpsGui,
@@ -56,7 +57,7 @@ class MacroGraphFormalMixin {
             GetLang("等待"), this.WaitGui,
             GetLang("等待确定"), this.WaitConfirmGui,
             GetLang("时间"), this.TimeGui,
-            GetLang("倒计时"), this.TimeGui
+            GetLang("倒计时"), this.CountDownGui
         )
     }
 
@@ -299,6 +300,8 @@ class MacroGraphFormalMixin {
             this._FillRunBody(id, d, body)
         else if (d.type == GetLang("运行"))
             this._FillRunSimpleBody(id, d, body)
+        else if (d.type == GetLang("网络请求"))
+            this._FillHttpRequestBody(id, d, body)
         else if (this._IsFileIOType(d.type))
             this._FillFileIOBody(id, d, body)
         else if (d.type == GetLang("文本处理"))
@@ -335,6 +338,13 @@ class MacroGraphFormalMixin {
             this._FillTimeBody(id, d, body)
     }
 
+    _FillHttpRequestBody(id, d, body) {
+        method := d.HasOwnProp("httpMethod") ? d.httpMethod : "GET"
+        body.Add("TextBlock").Text(method " · HTTP").Foreground("{DynamicResource TextMain}").Margin("0,5,0,0")
+        body.Add("TextBlock").Text(GetLang("状态码 + 响应体 → 变量")).Foreground("{DynamicResource TextMain}").Margin("0,5,0,0")
+        body.Add("Button").Name("HttpEdit_" id).Content(GetLang("编辑网络请求")).Height(26).Margin("0,8,0,0")
+    }
+
     _FillWaitConfirmBody(id, d, body) {
         lw := this._FormalLW(), cw := this._FormalCW()
         typeItems := GetLangArr(["继续", "继续&终止&暂停"])
@@ -359,64 +369,10 @@ class MacroGraphFormalMixin {
     }
 
     _FillWaitBody(id, d, body) {
-        lw := this._FormalLW(), cw := this._FormalCW()
-        waitType := d.HasOwnProp("waitType") ? d.waitType : "等待变量值"
-        typeNames := CmdEnumWaitEditorLabels()
-        idx := CmdEnumWait(waitType) == "等待日期" ? -1 : CmdEnumIndex(waitType, this._WaitTypeKeys())
-        panel := this._WaitPanelName(waitType)
-        p1 := d.HasOwnProp("waitParam1") ? d.waitParam1 : ""
-        p2 := d.HasOwnProp("waitParam2") ? d.waitParam2 : ""
-        interval := d.HasOwnProp("waitInterval") ? d.waitInterval : 500
-        varList := GetGuiVarArr()
-        this._AddComboRow(body, "WaitTypeRow_" id, GetLang("类型："), "WaitTypeCmb_" id, typeNames, idx, true, true, lw, "156")
-        this._AddFieldRow(body, "WaitIntervalRow_" id, GetLang("检测间隔(ms)："), "WaitInterval_" id, interval, true, true, "", "", "", lw, cw)
-
-        this._AddEditableComboRow(body, "WaitVarNameRow_" id, GetLang("变量名："), "WaitVarName_" id, varList, p1, panel == "Var", lw, cw)
-        this._AddEditableComboRow(body, "WaitVarValRow_" id, GetLang("期望值："), "WaitVarVal_" id, varList, p2, panel == "Var", lw, cw)
-        this._AddFieldRow(body, "WaitKeyRow_" id, GetLang("按键："), "WaitKey_" id, p1, panel == "Key", true, "", "", "", lw, cw)
-        keyPick := body.Add("StackPanel").Name("WaitKeyPickRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
-        if (panel != "Key")
-            keyPick.Visibility("Collapsed")
-        keyPick.Add("TextBlock").Width(lw)
-        keyPick.Add("Button").Name("WaitKeyPick_" id).Content(GetLang("录入按键")).FontSize(this._MGFontSize(11)).Height("20").Padding("8,0")
-        this._AddEditableComboRow(body, "WaitSXRow_" id, GetLang("起始坐标X："), "WaitSX_" id, varList, d.HasOwnProp("waitStartX") ? d.waitStartX : 0, panel == "Range", lw, cw)
-        this._AddEditableComboRow(body, "WaitSYRow_" id, GetLang("起始坐标Y："), "WaitSY_" id, varList, d.HasOwnProp("waitStartY") ? d.waitStartY : 0, panel == "Range", lw, cw)
-        this._AddEditableComboRow(body, "WaitEXRow_" id, GetLang("终止坐标X："), "WaitEX_" id, varList, d.HasOwnProp("waitEndX") ? d.waitEndX : A_ScreenWidth, panel == "Range", lw, cw)
-        this._AddEditableComboRow(body, "WaitEYRow_" id, GetLang("终止坐标Y："), "WaitEY_" id, varList, d.HasOwnProp("waitEndY") ? d.waitEndY : A_ScreenHeight, panel == "Range", lw, cw)
-        areaRow := body.Add("StackPanel").Name("WaitAreaRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
-        if (panel != "Range")
-            areaRow.Visibility("Collapsed")
-        areaRow.Add("TextBlock").Width(lw)
-        areaRow.Add("Button").Name("WaitArea_" id).Content(GetLang("框选范围")).FontSize(this._MGFontSize(11)).Height("20").Padding("8,0")
-        hint := body.Add("TextBlock").Name("WaitHint_" id).Text(GetLang(WaitHintText(waitType)))
-            .Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Margin("0,5,0,0")
-        hint.SetProp("TextWrapping", "Wrap")
-        if (panel != "Hint")
-            hint.Visibility("Collapsed")
-        this._AddFieldRow(body, "WaitProcRow_" id, GetLang("进程名："), "WaitProc_" id, p1, panel == "Proc", true, "", "", "", lw, cw)
-
-        winRow := body.Add("StackPanel").Name("WaitWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
-        if (panel != "Win")
-            winRow.Visibility("Collapsed")
-        winRow.Add("TextBlock").Text(GetLang("窗口绑定：")).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(lw).VerticalAlignment("Center")
-        this._MakeTextBox(winRow, "WaitWin_" id, p1 != "" ? p1 : "{宏设置窗口绑定}", "96")
-        winRow.Add("Button").Name("WaitWinEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0")
-
-        fileRow := body.Add("StackPanel").Name("WaitFileRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
-        if (panel != "File")
-            fileRow.Visibility("Collapsed")
-        fileRow.Add("TextBlock").Text(GetLang("文件路径：")).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(lw).VerticalAlignment("Center")
-        this._MakeTextBox(fileRow, "WaitFile_" id, p1, "96")
-        fileRow.Add("Button").Name("WaitFileBrowse_" id).Content(GetLang("浏览")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0")
-
-        dateUnits := GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
-        this._AddEditableComboRow(body, "WaitDateValRow_" id, GetLang("日期值："), "WaitDateVal_" id, GetTimeVarArr(), p1, panel == "Date", lw, cw)
-        this._AddComboRow(body, "WaitDateUnitRow_" id, GetLang("单位："), "WaitDateUnitCmb_" id, dateUnits, this._IndexInLangArr(dateUnits, GetLang(p2)), panel == "Date", true, lw, cw)
-        dateHint := body.Add("TextBlock").Name("WaitDateHint_" id).Text(GetLang("分钟、小时、天填数字；具体时间如 2026-01-01 12:00 或 18:00；时间变量填变量名"))
-            .Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(11)).Margin("0,2,0,0")
-        dateHint.SetProp("TextWrapping", "Wrap")
-        if (panel != "Date")
-            dateHint.Visibility("Collapsed")
+        type := d.HasOwnProp("waitType") ? CmdEnumWait(d.waitType) : "等待变量值"
+        body.Add("TextBlock").Name("WaitTypeSummary_" id).Text(GetLang(type)).TextWrapping("Wrap").Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12))
+        body.Add("TextBlock").Name("WaitIntervalSummary_" id).Text(GetLang("检测间隔：") (d.HasOwnProp("waitInterval") ? d.waitInterval : 500) " ms").Margin("0,5,0,0").Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12))
+        body.Add("Button").Name("WaitEdit_" id).Content(GetLang("编辑等待条件")).Height(26).Margin("0,8,0,0")
     }
 
     _FillCountDownBody(id, d, body, visible := true) {
@@ -1856,24 +1812,10 @@ class MacroGraphFormalMixin {
                 }
             }
             this._BindCtrl("SFold_" id, "Click", this._OnToggleIfProFold.Bind(this, id), runtime)
+        } else if (t == GetLang("网络请求")) {
+            this._BindCtrl("HttpEdit_" id, "Click", (*) => SetTimer((*) => this.OpenNodeEditor(id), -1), runtime)
         } else if (t == GetLang("等待")) {
-            h := this._OnFormalWait.Bind(this, id)
-            this._FormalTrackCombo(id, "WaitTypeCmb", h, runtime)
-            this._FormalTrackField(id, "WaitInterval", h, runtime)
-            this._FormalTrackEditCombo(id, "WaitVarName", h, runtime)
-            this._FormalTrackEditCombo(id, "WaitVarVal", h, runtime)
-            this._FormalTrackField(id, "WaitKey", h, runtime)
-            this._BindCtrl("WaitKeyPick_" id, "Click", this._OnWaitKeyPick.Bind(this, id), runtime)
-            for nm in ["WaitSX", "WaitSY", "WaitEX", "WaitEY"]
-                this._FormalTrackEditCombo(id, nm, h, runtime)
-            this._FormalTrackField(id, "WaitProc", h, runtime)
-            this._FormalTrackField(id, "WaitWin", h, runtime)
-            this._FormalTrackField(id, "WaitFile", h, runtime)
-            this._FormalTrackEditCombo(id, "WaitDateVal", h, runtime)
-            this._FormalTrackCombo(id, "WaitDateUnitCmb", h, runtime)
-            this._BindCtrl("WaitArea_" id, "Click", this._OnWaitArea.Bind(this, id), runtime)
-            this._BindCtrl("WaitWinEdit_" id, "Click", this._OnWaitWinEdit.Bind(this, id), runtime)
-            this._BindCtrl("WaitFileBrowse_" id, "Click", this._OnWaitFileBrowse.Bind(this, id), runtime)
+            this._BindCtrl("WaitEdit_" id, "Click", (*) => SetTimer((*) => this.OpenNodeEditor(id), -1), runtime)
         } else if (t == GetLang("等待确定")) {
             h := this._OnFormalWaitConfirm.Bind(this, id)
             this._FormalTrackCombo(id, "WcTypeCmb", h, runtime)

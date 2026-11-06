@@ -96,6 +96,7 @@
 #Include ..\Gui\SttGui.ahk
 #Include ..\Gui\WaitGui.ahk
 #Include ..\Gui\TimeGui.ahk
+#Include ..\Gui\CountDownOverlay.ahk
 #Include ..\Gui\DeltaMoveGui.ahk
 #Include ..\Gui\TableMgrGui.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
@@ -193,6 +194,8 @@ global MyCMDTipForceAction := CmdTipForceShow
 global MyExcuteRMTCMDAction := ExcuteRMTCMDAction
 global MySetTableItemState := SetTableItemState
 global MySetItemPauseState := SetItemPauseState
+global MyCountDownStart := (token, total, x, y) => StartXamlCountDown(token, total, x, y, CountDownComplete.Bind(token))
+global MyCountDownStop := CloseXamlCountDown
 global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent
 global MyViGJoySetState := ViGJoySetState

@@ -6,6 +6,7 @@
 #Include MouseMoveGui.ahk
 #Include SearchGui.ahk
 #Include SearchProGui.ahk
+#Include SearchAllGui.ahk
 #Include SearchComboGui.ahk
 #Include ScreenShotGui.ahk
 #Include RunGui.ahk
@@ -32,6 +33,7 @@
 #include KeyCheckGui.ahk
 #Include JoyCheckGui.ahk
 #Include CommentGui.ahk
+#Include HttpRequestGui.ahk
 #Include FlowJumpGui.ahk
 #Include MacroEditModel.ahk
 
@@ -195,11 +197,11 @@ class MacroEditGui {
         ; §13 左侧指令面板：按类型分类 + 收藏星标 + 分类展开状态（持久化到 INI）
         this.CmdCategory := [
             {name: "键鼠/手柄", icon: Chr(0xE765), cmds: ["按键", "手柄", "移动", "移动Pro", "增量移动", "后台按键", "后台鼠标", "按键检测", "手柄检测"]},
-            {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro", "搜索Combo"]},
+            {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro", "搜索All", "搜索Combo"]},
             {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出"]},
             {name: "变量/数据", icon: Chr(0xE8EF), cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
-            {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel"]},
-            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "时间", "循环", "跳转", "如果", "如果Pro", "等待", "等待确定", "倒计时"]},
+            {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel", "网络请求"]},
+            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "循环", "跳转", "如果", "如果Pro", "等待", "等待确定", "倒计时"]},
             {name: "调控", icon: Chr(0xE713), cmds: ["运行", "运行Pro", "宏操作", "窗口信息", "调整窗口", "RMT指令"]},
             {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
         ]
@@ -233,18 +235,18 @@ class MacroEditGui {
 
     InitCommandConfigs() {
         ; 指令名称：移动、移动Pro、增量移动（原游戏视角）
-        this.CMDStrArr := GetLangArr(["间隔", "时间", "按键", "手柄", "搜索", "搜索Pro", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "等待确定", "倒计时", "注释", "抓图", "跳转"])
+        this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
+            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "等待确定", "倒计时", "注释", "抓图", "跳转"])
 
-        this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Time.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
-            "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchCombo.png",
+        this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
+            "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png",
             "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\DeltaMove.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png",
             "Images\Soft\Loop.png", "Images\Soft\MacroAction.png",
             "Images\Soft\Var.png", "Images\Soft\Extract.png",
             "Images\Soft\If.png", "Images\Soft\IfPro.png",
             "Images\Soft\Operation.png", "Images\Soft\Run.png", "Images\Soft\RunPro.png",
-            "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\TextOps.png",
+            "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\HttpRequest.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
             "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjust.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
@@ -252,12 +254,12 @@ class MacroEditGui {
             "Images\Soft\Interval.png", "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\FlowJump.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("手柄"), "Icon38", GetLang("搜索"), "Icon3",
-        GetLang("搜索Pro"), "Icon4", GetLang("搜索Combo"), "Icon39", GetLang("移动"), "Icon5", GetLang("移动Pro"), "Icon6", GetLang("增量移动"), "Icon34", GetLang("输出"), "Icon7",
+        GetLang("搜索Pro"), "Icon4", GetLang("搜索All"), "IconSearchAll", GetLang("搜索Combo"), "Icon39", GetLang("移动"), "Icon5", GetLang("移动Pro"), "Icon6", GetLang("增量移动"), "Icon34", GetLang("输出"), "Icon7",
         GetLang("运行"), "Icon8", GetLang("运行Pro"), "Icon40", GetLang("循环"), "Icon9", GetLang("宏操作"), "Icon10", GetLang("变量"), "Icon11",
         GetLang("变量提取"), "Icon12", GetLang("如果"), "Icon13", GetLang("如果Pro"), "Icon14", GetLang("运算"), "Icon15",
         GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
-        GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27", GetLang("Excel"), "Icon41",
+        GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27", GetLang("Excel"), "Icon41", GetLang("网络请求"), "IconHttpRequest",
         GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("窗口信息"), "Icon29", GetLang("调整窗口"), "IconWindowAdjust", GetLang("按键检测"), "Icon30", GetLang("手柄检测"), "Icon42", GetLang("跳转"), "Icon43", GetLang("流程跳转"), "Icon43", GetLang("注释"), "Icon31",
         GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33", GetLang("等待确定"), "Icon36", GetLang("时间"), "Icon35", GetLang("倒计时"), "Icon37")
 
@@ -282,8 +284,10 @@ class MacroEditGui {
             "Icon33", "Images\Soft\Wait.png", "Icon34", "Images\Soft\DeltaMove.png", "Icon35", "Images\Soft\Time.png",
             "Icon36", "Images\Soft\WaitConfirm.png", "Icon37", "Images\Soft\Interval.png",
             "Icon38", "Images\Soft\Joy.png",
+            "IconSearchAll", "Images\Soft\SearchAll.png",
             "Icon39", "Images\Soft\SearchCombo.png",
             "Icon40", "Images\Soft\RunPro.png",
+            "IconHttpRequest", "Images\Soft\HttpRequest.png",
             "Icon41", "Images\Soft\Excel.png",
             "Icon42", "Images\Soft\JoyListen.png",
             "Icon43", "Images\Soft\FlowJump.png")
@@ -303,6 +307,7 @@ class MacroEditGui {
             {class: JoyGui, name: "手柄", icon: "Images\Soft\Joy.png", propName: "JoyGui"},
             {class: SearchGui, name: "搜索", icon: "Images\Soft\Search.png", propName: "SearchGui"},
             {class: SearchProGui, name: "搜索Pro", icon: "Images\Soft\SearchPro.png", propName: "SearchProGui"},
+            {class: SearchAllGui, name: "搜索All", icon: "Images\Soft\SearchAll.png", propName: "SearchAllGui"},
             {class: SearchComboGui, name: "搜索Combo", icon: "Images\Soft\SearchCombo.png", propName: "SearchComboGui"},
             {class: MouseMoveGui, name: "移动", icon: "Images\Soft\Move.png", propName: "MouseMoveGui"},
             {class: MMProGui, name: "移动Pro", icon: "Images\Soft\MovePro.png", propName: "MMProGui"},
@@ -318,6 +323,7 @@ class MacroEditGui {
             {class: OperationGui, name: "运算", icon: "Images\Soft\Operation.png", propName: "OperationGui"},
             {class: RunGui, name: "运行", icon: "Images\Soft\Run.png", propName: "RunGui"},
             {class: RunProGui, name: "运行Pro", icon: "Images\Soft\RunPro.png", propName: "RunProGui"},
+            {class: HttpRequestGui, name: "网络请求", icon: "Images\Soft\HttpRequest.png", propName: "HttpRequestGui"},
             {class: FileIOGui, name: "文件读写", icon: "Images\Soft\FileIO.png", propName: "FileIOGui"},
             {class: FileIOGui, name: "Excel", icon: "Images\Soft\Excel.png", propName: "ExcelGui"},
             {class: TextOpsGui, name: "文本处理", icon: "Images\Soft\TextOps.png", propName: "TextOpsGui"},
@@ -356,8 +362,9 @@ class MacroEditGui {
     _BindCountDownToTimeGui() {
         if (!ObjHasOwnProp(this, "TimeGui") || !IsObject(this.TimeGui))
             return
-        this.CountDownGui := this.TimeGui
-        try this.SubGuiMap.Set(GetLang("倒计时"), this.TimeGui)
+        this.CountDownGui := CountDownGui()
+        this.CountDownGui.SureBtnAction := (cmd) => this.OnSubGuiSureBtnClick(cmd)
+        try this.SubGuiMap.Set(GetLang("倒计时"), this.CountDownGui)
     }
 
     ShowGui(CommandStr, ShowSaveBtn) {
@@ -3076,7 +3083,7 @@ class MacroEditGui {
         condPrefix := GetLang("条件")
         while (childID) {
             t := this._CleanText(childID)
-            if (kind == "If" || kind == "Search" || kind == "SearchPro" || kind == "SearchCombo" || kind == "SearchMulti") {
+            if (kind == "If" || kind == "Search" || kind == "SearchAll" || kind == "SearchPro" || kind == "SearchCombo" || kind == "SearchMulti") {
                 if (branchField == "TrueMacro" && t == GetLang("真"))
                     return childID
                 if (branchField == "FalseMacro" && t == GetLang("假"))
@@ -3804,7 +3811,7 @@ class MacroEditGui {
         paramArr := StrSplit(cmdStr, "_")
         IsSkip := SubStr(paramArr[1], 1, 2) == "🚫"
         IsSearchCombo := InStr(paramArr[1], GetLang("搜索Combo")) || InStr(paramArr[1], GetLang("组合搜索")) || InStr(paramArr[1], GetLang("搜索Multi"))
-        IsSearchPro := InStr(paramArr[1], GetLang("搜索Pro"))
+        IsSearchPro := InStr(paramArr[1], GetLang("搜索Pro")) || InStr(paramArr[1], GetLang("搜索All"))
         IsSearch := InStr(paramArr[1], GetLang("搜索")) && !IsSearchPro && !IsSearchCombo
         IsIfPro := InStr(paramArr[1], GetLang("如果Pro"))
         IsIf := InStr(paramArr[1], GetLang("如果")) && !IsIfPro
@@ -4920,6 +4927,7 @@ class MacroEditGui {
         fileMap := Map(
             GetLang("搜索"), SearchFile,
             GetLang("搜索Pro"), SearchProFile,
+            GetLang("搜索All"), SearchAllFile,
             GetLang("搜索Combo"), SearchComboFile,
             GetLang("组合搜索"), SearchComboFile,
             GetLang("搜索Multi"), SearchComboFile,

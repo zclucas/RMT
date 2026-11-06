@@ -1063,8 +1063,7 @@ function New-RMTAssets {
         @{ Dest = "Work.exe";                        Src = "Release$Arch\Thread\Work.exe" },
         @{ Dest = "index.html";                      Src = "index.html" },
         @{ Dest = "MouseControl.dll";                Src = "Plugins\MouseControl.dll" },
-        @{ Dest = "PlayAudio.vbs";                   Src = "MinTool\PlayAudio.vbs" },
-        @{ Dest = "CountDown.exe";                   Src = "MinTool\CountDown.exe" }
+        @{ Dest = "PlayAudio.vbs";                   Src = "MinTool\PlayAudio.vbs" }
     )
     if ($Arch -eq "x64") {
         $assetList += @{ Dest = "vcruntime140_1.dll"; Src = "Plugins\Voice\x64\vcruntime140_1.dll" }
@@ -1090,11 +1089,11 @@ function New-RMTAssets {
         "KeyListen.png", "JoyListen.png", "SearchCombo.png", "Excel.png",
         "Time.png", "WaitConfirm.png", "RunPro.png",
         "Arr.png", "Condition.png", "Control.png", "FlowJump.png", "Extract.png", "False.png",
-        "FileIO.png", "GreenColor.png", "IcoPause.ico", "If.png", "IfPro.png",
+        "HttpRequest.png", "FileIO.png", "GreenColor.png", "IcoPause.ico", "If.png", "IfPro.png",
         "Input.png", "Interval.png", "Key.png", "Loop.png",
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "RedColor.png", "Run.png", "Search.png",
-        "SearchPro.png", "MacroAction.png", "Target.png", "TextOps.png", "True.png",
+        "SearchPro.png", "SearchAll.png", "MacroAction.png", "Target.png", "TextOps.png", "True.png",
         "Var.png", "WeiXin.png", "WindowManage.png", "YellowColor.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
     )

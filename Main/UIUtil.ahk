@@ -352,6 +352,7 @@ CmdEditorTitleIcon(title) {
         pairs := [
             ["移动Pro", "Images\Soft\MovePro.png"],
             ["搜索Pro", "Images\Soft\SearchPro.png"],
+            ["搜索All", "Images\Soft\SearchAll.png"],
             ["搜索Combo", "Images\Soft\SearchCombo.png"],
             ["组合搜索", "Images\Soft\SearchCombo.png"],
             ["搜索Multi", "Images\Soft\SearchCombo.png"],
@@ -359,6 +360,7 @@ CmdEditorTitleIcon(title) {
             ["变量提取", "Images\Soft\Extract.png"],
             ["提取文本", "Images\Soft\Extract.png"],
             ["文本处理", "Images\Soft\TextOps.png"],
+            ["网络请求", "Images\Soft\HttpRequest.png"],
             ["文件读写", "Images\Soft\FileIO.png"],
             ["Excel", "Images\Soft\Excel.png"],
             ["窗口管理", "Images\Soft\WindowManage.png"],
