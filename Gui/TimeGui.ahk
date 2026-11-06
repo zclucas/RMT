@@ -79,13 +79,13 @@ class TimeGui {
     }
 
     _AddHms(parent, prefix) {
-        this._Combo(parent, prefix "HourCon", true, 68).ToolTip(GetLang("时"))
+        this._Combo(parent, prefix "HourCon", true, 68).ToolTip(GetLang("时")).Tag("NumOnly|NoIME|MaxLen:2")
         parent.Add("TextBlock").Text("：").Width("16").HorizontalAlignment("Center").TextAlignment("Center")
             .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
-        this._Combo(parent, prefix "MinCon", true, 68).ToolTip(GetLang("分"))
+        this._Combo(parent, prefix "MinCon", true, 68).ToolTip(GetLang("分")).Tag("NumOnly|NoIME|MaxLen:2")
         parent.Add("TextBlock").Text("：").Width("16").HorizontalAlignment("Center").TextAlignment("Center")
             .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
-        this._Combo(parent, prefix "SecCon", true, 68).ToolTip(GetLang("秒"))
+        this._Combo(parent, prefix "SecCon", true, 68).ToolTip(GetLang("秒")).Tag("NumOnly|NoIME|MaxLen:2")
     }
 
     _PairCols(g) {

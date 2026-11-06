@@ -105,6 +105,13 @@ public partial class AhkWpfEngine
                     handled = true;
                     return new IntPtr(2); // HTCAPTION
                 }
+                // 标题栏其余部分（右侧铬钮区）交回客户区：同一段 DIP 热区会把按钮上半截
+                // 当成标题栏，按钮点不动、也出不来悬停高亮。
+                if (!corner && TitleBarRowContains(px, py))
+                {
+                    handled = true;
+                    return new IntPtr(1); // HTCLIENT
+                }
                 if (edge)
                 {
                     handled = true;
@@ -461,6 +468,29 @@ public partial class AhkWpfEngine
         }
         catch { }
         return true;
+    }
+
+    // 视觉标题栏整行（含右侧铬钮区）的屏幕矩形。
+    // DragArea 之外的部分要交回客户区：WindowChrome 的 DIP 热区按窗口顶边算、不跟 Viewbox 走，
+    // 不接管的话按钮上半截会被当成标题栏，点不动也不出悬停高亮。
+    bool TitleBarRowContains(short screenX, short screenY)
+    {
+        if (win == null) return false;
+        var root = win.FindName("TitleBarRoot") as FrameworkElement;
+        if (root == null || !root.IsVisible || root.ActualWidth < 1 || root.ActualHeight < 1)
+            return false;
+        Point topLeft, bottomRight;
+        try
+        {
+            topLeft = root.PointToScreen(new Point(0, 0));
+            bottomRight = root.PointToScreen(new Point(root.ActualWidth, root.ActualHeight));
+        }
+        catch { return false; }
+        double x0 = Math.Min(topLeft.X, bottomRight.X);
+        double y0 = Math.Min(topLeft.Y, bottomRight.Y);
+        double x1 = Math.Max(topLeft.X, bottomRight.X);
+        double y1 = Math.Max(topLeft.Y, bottomRight.Y);
+        return screenX >= x0 && screenX <= x1 && screenY >= y0 && screenY <= y1;
     }
 
     // 最大化钮被标成 HTMAXBUTTON 后 WPF 触发器不走；底色与最小化/关闭一致：hover=ControlBorder，按下=BtnPressBg

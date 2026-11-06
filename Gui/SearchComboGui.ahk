@@ -182,7 +182,7 @@ class SearchComboGui {
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
             .Padding("2,0").TextAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:3")
         ms.Add("TextBox").Grid_Column(4).Name("ClickCountCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
             .Padding("2,0").TextAlignment("Center").FontSize("11")

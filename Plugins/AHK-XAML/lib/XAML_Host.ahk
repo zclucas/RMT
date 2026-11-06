@@ -210,6 +210,12 @@ class XAMLHost {
         evtObj := { Callback: callback, Priority: priority, LimitFPS: 0, QueueLimited: false }
         this.events[controlName][eventName].Push(evtObj)
 
+        ; 窗口已开再登记的事件不会随建窗载荷送达引擎，必须现挂一次；
+        ; 否则调用方忘了配 BindEventBatched 时回调永远不触发（静态绑定的静默失效）。
+        ; 建窗期（wpfHwnd 还没回填）跳过——那份事件表 Show 时统一打包发出。
+        if (this.wpfHwnd)
+            try this.BindEventBatched(controlName, eventName)
+
         ; Return a chainable config object for this event registration
         return { Limit: (thisObj, fps, queue := false) => (evtObj.LimitFPS := fps, evtObj.QueueLimited := queue, this) }
     }
@@ -304,9 +310,15 @@ class XAMLHost {
             return
         pending := this._bindBatch
         this._bindBatch := []
+        ; 同批里去重：OnEvent 已自动补挂一次，调用方再显式 BindEventBatched 会重复
+        seen := Map()
         batch := ""
-        for item in pending
+        for item in pending {
+            if (seen.Has(item))
+                continue
+            seen[item] := true
             batch .= item ","
+        }
         batch := RTrim(batch, ",")
         if (batch != "")
             try this.Update("Window", "RebindEvents", batch)
@@ -577,7 +589,7 @@ class XAMLHost {
 
     ; 标题栏骨架（铬钮不进 DragArea）。titleIcon 画在标题文字左侧。返回 { Root, Drag, Btns }
     static AddTitleBarChrome(main, title, titleName := "", titleIcon := "", titleIconColor := "", iconSize := 16) {
-        tb := main.Add("Grid").Grid_Row(0).Background("{DynamicResource TitleBarColor}")
+        tb := main.Add("Grid").Name("TitleBarRoot").Grid_Row(0).Background("{DynamicResource TitleBarColor}")
             .VerticalAlignment("Stretch").HorizontalAlignment("Stretch")
         tb.Cols("*", "Auto")
         drag := tb.Add("Border").Grid_Column(0).Background("{DynamicResource TitleBarColor}").Name("DragArea")

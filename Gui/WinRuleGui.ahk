@@ -66,12 +66,12 @@ class WinRuleGui {
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("屏幕宽度：")).VerticalAlignment("Center")
         body.Add("TextBox").Grid_Row(0).Grid_Column(1).Name("WidthCon").Height(26).MinHeight(26).VerticalContentAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:4")
 
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("屏幕高度：")).VerticalAlignment("Center")
         body.Add("TextBox").Grid_Row(1).Grid_Column(1).Name("HeightCon").Height(26).MinHeight(26).VerticalContentAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:4")
 
         body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center")
         body.Add("TextBox").Grid_Row(2).Grid_Column(1).Name("RemarkCon").Height(26).MinHeight(26).VerticalContentAlignment("Center")
