@@ -17,6 +17,7 @@ class SearchProGui {
         this.SureBtnAction := ""
         this.OwnerHwnd := ""
         this._closed := true
+        this._imageTestRunning := false
         this.PosAction := (*) => this.RefreshMouseInfo()
         this.F1Action := (x1, y1, x2, y2) => this.OnF1SetAreaAction(x1, y1, x2, y2)
         this.SetAreaAction := (x1, y1, x2, y2) => this.OnSetSearchArea(x1, y1, x2, y2)
@@ -92,6 +93,12 @@ class SearchProGui {
         main.Rows(titleHeight, "Auto")
 
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
+        if (!this.IsAll) {
+            chrome.Title.Parent().Add("TextBlock").Margin("18,0,0,0").VerticalAlignment("Center")
+                .Foreground("{DynamicResource TitleBarForeground}")
+                .Add("Run").Name("ImageSearchTime").FontWeight("Normal")
+                .FontSize("{Binding FontSize, ElementName=CmdEditorTitle}")
+        }
 
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,10").ClipToBounds("False")
         body.Rows("28", "32", "Auto", "Auto", "Auto", this.IsAll ? "Auto" : "0", "40")
@@ -255,7 +262,7 @@ class SearchProGui {
             .Width(28).Height(28).MinHeight(28).Padding("0").Cursor("Hand")
             .HorizontalAlignment("Left").VerticalAlignment("Top").Margin("104,4,0,0")
             .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").Content(Chr(0xE70F)).FontSize("12").Tag("0")
-            .ToolTip(GetLang("图片处理：多点选点、裁剪或重命名模板"))
+            .ToolTip(GetLang("裁剪、抠除；多点找图"))
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource ControlBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         clrPanel := typeHost.Add("Grid").Name("ColorPanel").VerticalAlignment("Top").Visibility("Collapsed")
@@ -360,7 +367,9 @@ class SearchProGui {
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing").Bind(windowToken))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, this.IsAll ? "#指令手册/11.1-搜索All" : "#指令手册/4-搜索Pro", (*) => this.TriggerMacro(), "!l"
+        BindCmdEditorChrome(this.ui
+            , this.IsAll ? "#指令手册/11.1-搜索All" : "#指令手册/4-搜索Pro"
+            , (*) => this.TriggerMacro(!this.IsAll), "!l"
             , (*) => this.OnClickTargeterBtn(), (*) => this.OnF1()
             , (*) => this.OnImageShotBtnClick(), (*) => this.SureColor())
         try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
@@ -531,10 +540,15 @@ class SearchProGui {
     OnClickImageProcessBtn(*) {
         path := ""
         try path := String(XamlValueBridge(this.ui, "ImagePathCon").Value)
-        if (path == "" || !FileExist(path)) {
-            RmtDialog.Info(GetLang("请先设置搜索图片"), GetLang("多点找图"))
-            return
-        }
+        if (!FileExist(path))
+            path := ""
+        points := path == "" ? [] : this.MultiPointData
+        seeds := path == "" ? [] : this.MultiPointSeedData
+        superSeeds := path == "" ? [] : this.SuperMultiPointSeedData
+        matchMode := path == "" ? "" : this.MultiPointMode
+        ignoreData := path == "" ? "" : this.SuperMultiPointIgnoreData
+        tol := path == "" ? 8 : this.MultiPointTolerance
+        superTol := path == "" ? 8 : this.SuperMultiPointTolerance
         if (!IsObject(this.ImageProcessGui))
             this.ImageProcessGui := ImageProcessGui()
         this.ImageProcessGui.SureAction := (points, seeds, tol, matchMode, superSeeds, superTol, ignoreData) =>
@@ -542,10 +556,10 @@ class SearchProGui {
         this.ImageProcessGui.CropAction := (newPath, points := "", seeds := "", superSeeds := "", ignoreData := "") =>
             this.ApplyCroppedImage(newPath, points, seeds, superSeeds, ignoreData)
         this.ImageProcessGui.ReleaseAction := () => this._ReleaseImageSource()
+        this.ImageProcessGui.ImageSelectAction := (newPath) => this.OnProcessImageSelected(newPath)
         this.ImageProcessGui.OwnerHwnd := this.Hwnd()
-        this.ImageProcessGui.ShowGui(path, this.MultiPointData, this.MultiPointSeedData
-            , this.MultiPointTolerance, this.MultiPointMode
-            , this.SuperMultiPointSeedData, this.SuperMultiPointTolerance, this.SuperMultiPointIgnoreData)
+        this.ImageProcessGui.ShowGui(path, points, seeds
+            , tol, matchMode, superSeeds, superTol, ignoreData)
     }
 
     ApplyMultiPoint(points, seeds, tol, matchMode := "", superSeeds := "", superTol := 8, ignoreData := "") {
@@ -605,11 +619,11 @@ class SearchProGui {
         try this.ui.Update("ImageProcessBtn", "Tag", on ? "1" : "0")
         try this.ui.Update("ImageProcessBtn", "ToolTip", on
             ? (matchMode == "super"
-                ? Format(GetLang("图片处理：超多点，基准色 {} 个（容差 {}）")
+                ? Format(GetLang("超多点找图：{} 个基准色，容差 {}")
                     , this.SuperMultiPointSeedData.Length, this.SuperMultiPointTolerance)
-                : Format(GetLang("图片处理：多点 {} 个（容差 {}）")
+                : Format(GetLang("多点找图：{} 个点，容差 {}")
                     , this.MultiPointData.Length, this.MultiPointTolerance))
-            : GetLang("图片处理：多点选点、裁剪或重命名模板"))
+            : GetLang("裁剪、抠除；多点找图"))
         if (on) {
             try this.ui.Update("ImageProcessBtn", "Background", "{DynamicResource ActionBg}")
             try this.ui.Update("ImageProcessBtn", "BorderBrush", "{DynamicResource ActionStroke}")
@@ -837,7 +851,7 @@ class SearchProGui {
     }
 
     ToggleFunc(state) {
-        MacroAction := (*) => this.TriggerMacro()
+        MacroAction := (*) => this.TriggerMacro(!this.IsAll)
         if (state) {
             SetTimer this.PosAction, 100
             Hotkey("!l", MacroAction, "On")
@@ -996,10 +1010,16 @@ class SearchProGui {
         if (path == "")
             return
         path := StoreSearchImage(path)
+        this.OnProcessImageSelected(path)
+    }
+
+    OnProcessImageSelected(path) {
+        if (!IsObject(this.ui) || !IsObject(this.Data))
+            return
         this._ResetImageProcessForNewImage()
         this._SetImage(path)
         this.Data.SearchImagePath := path
-        this.ui.Update("ImagePathCon", "Text", path)
+        try this.ui.Update("ImagePathCon", "Text", path)
     }
 
     OnImageShotBtnClick(*) {
@@ -1134,11 +1154,41 @@ class SearchProGui {
         this.MacroGui.ShowGui(this.ui.Query(isFound ? "TrueMacroCon" : "FalseMacroCon"), false)
     }
 
-    TriggerMacro() {
+    TriggerMacro(showImageTime := false) {
+        if (this._imageTestRunning)
+            return
+        windowToken := this._windowToken
+        if (showImageTime && IsObject(this.ui))
+            try this.ui.Update("ImageSearchTime", "Text", "")
         if (!this.CheckIfValid())
             return
         this.SaveSearchData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        command := this.GetCommandStr()
+        if (!showImageTime) {
+            OnTriggerSepcialItemMacro(command)
+            return
+        }
+
+        frequency := 0
+        DllCall("QueryPerformanceFrequency", "Int64*", &frequency)
+        timing := {SerialStr: this.Data.SerialStr, Ticks: 0, Count: 0, Succeeded: false}
+        tableItem := MySoftData.SpecialTableItem
+        hadTiming := ObjHasOwnProp(tableItem, "ImageSearchTestTiming")
+        previousTiming := hadTiming ? tableItem.ImageSearchTestTiming : ""
+        tableItem.ImageSearchTestTiming := timing
+        this._imageTestRunning := true
+        try {
+            OnTriggerSepcialItemMacro(command)
+        } finally {
+            this._imageTestRunning := false
+            if (hadTiming)
+                tableItem.ImageSearchTestTiming := previousTiming
+            else
+                tableItem.DeleteProp("ImageSearchTestTiming")
+        }
+        if (timing.Succeeded && IsObject(this.ui) && windowToken == this._windowToken)
+            try this.ui.Update("ImageSearchTime", "Text"
+                , Format(GetLang("耗时{1}ms"), Round(timing.Ticks * 1000 / frequency)))
     }
 
     OnF1(*) {

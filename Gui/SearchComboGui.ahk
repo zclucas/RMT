@@ -534,7 +534,7 @@ class SearchComboGui {
             . '<Button Name="' this._TN(n, "ProcessBtn") '" Width="22" Height="22" MinHeight="22"'
             . ' Padding="0" Margin="0,1,1,0" VerticalAlignment="Top" HorizontalAlignment="Right" Cursor="Hand" FontSize="12"'
             . ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Content="' Chr(0xE70F) '"'
-            . ' ToolTip="' GetLang("图片处理：多点选点、裁剪或重命名模板") '"'
+            . ' ToolTip="' GetLang("裁剪、抠除；多点找图") '"'
             . ' Foreground="{DynamicResource TextMain}" Background="{DynamicResource ControlBg}"'
             . ' BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
             . this._ThemeHoverBtnStyle()
@@ -666,11 +666,12 @@ class SearchComboGui {
         try this.ui.Update(btn, "Tag", on ? "1" : "0")
         try this.ui.Update(btn, "ToolTip", on
             ? (matchMode == "super"
-                ? Format(GetLang("图片处理：超多点，基准色 {} 个（容差 {}）")
+                ? Format(GetLang("超多点找图：{} 个基准色，容差 {}")
                     , SearchSuperMultiPointSeedData(t).Length
                     , ObjHasOwnProp(t, "SuperMultiPointTolerance") ? t.SuperMultiPointTolerance : 8)
-                : Format(GetLang("图片处理：多点 {} 个"), points.Length))
-            : GetLang("图片处理：多点选点、裁剪或重命名模板"))
+                : Format(GetLang("多点找图：{} 个点，容差 {}"), points.Length
+                    , ObjHasOwnProp(t, "MultiPointTolerance") ? t.MultiPointTolerance : 8))
+            : GetLang("裁剪、抠除；多点找图"))
         if (on) {
             try this.ui.Update(btn, "Background", "{DynamicResource ActionBg}")
             try this.ui.Update(btn, "BorderBrush", "{DynamicResource ActionStroke}")
@@ -686,26 +687,25 @@ class SearchComboGui {
         if (!IsObject(this.ui) || n < 1 || n > this.TargetList.Length)
             return
         path := String(this.ui.Query(this._TN(n, "ImagePath")))
-        if (path == "" || !FileExist(path)) {
-            RmtDialog.Info(GetLang("请先设置搜索图片"), GetLang("图片处理"))
-            return
-        }
+        if (!FileExist(path))
+            path := ""
         this.CurTarget := n
         if (!IsObject(this.ImageProcessGui))
             this.ImageProcessGui := ImageProcessGui()
         t := this.TargetList[n]
-        points := ObjHasOwnProp(t, "MultiPointData") && IsObject(t.MultiPointData) ? t.MultiPointData : []
-        seeds := ObjHasOwnProp(t, "MultiPointSeedData") && IsObject(t.MultiPointSeedData) ? t.MultiPointSeedData : []
-        superSeeds := SearchSuperMultiPointSeedData(t)
-        superIgnoreData := SearchSuperMultiPointIgnoreData(t)
-        tol := ObjHasOwnProp(t, "MultiPointTolerance") ? t.MultiPointTolerance : 8
-        superTol := ObjHasOwnProp(t, "SuperMultiPointTolerance") ? t.SuperMultiPointTolerance : 8
-        matchMode := SearchMatchMode(t)
+        points := path != "" && ObjHasOwnProp(t, "MultiPointData") && IsObject(t.MultiPointData) ? t.MultiPointData : []
+        seeds := path != "" && ObjHasOwnProp(t, "MultiPointSeedData") && IsObject(t.MultiPointSeedData) ? t.MultiPointSeedData : []
+        superSeeds := path != "" ? SearchSuperMultiPointSeedData(t) : []
+        superIgnoreData := path != "" ? SearchSuperMultiPointIgnoreData(t) : ""
+        tol := path != "" && ObjHasOwnProp(t, "MultiPointTolerance") ? t.MultiPointTolerance : 8
+        superTol := path != "" && ObjHasOwnProp(t, "SuperMultiPointTolerance") ? t.SuperMultiPointTolerance : 8
+        matchMode := path != "" ? SearchMatchMode(t) : ""
         this.ImageProcessGui.SureAction := (p, s, v, mode, superSeedPoints, superTolerance, ignoreData) =>
             this.ApplyProcess(n, p, s, v, mode, superSeedPoints, superTolerance, ignoreData)
         this.ImageProcessGui.CropAction := (newPath, p := "", s := "", superSeedPoints := "", ignoreData := "") =>
             this.ApplyProcessPath(n, newPath, p, s, superSeedPoints, ignoreData)
         this.ImageProcessGui.ReleaseAction := () => this._ReleaseImage(n)
+        this.ImageProcessGui.ImageSelectAction := (newPath) => this.OnProcessImageSelected(n, newPath)
         this.ImageProcessGui.OwnerHwnd := this.Hwnd()
         this.ImageProcessGui.ShowGui(path, points, seeds, tol, matchMode, superSeeds, superTol, superIgnoreData)
     }
@@ -1130,11 +1130,18 @@ class SearchComboGui {
         path := FileSelect(1, curPath, GetLang("选择图片"), "Image Files (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp)")
         if (path != "") {
             path := StoreSearchImage(path)
-            this._ResetTargetProcess(n)
-            this._SetImage(n, path)
-            this.TargetList[n].SearchImagePath := path
-            this.ui.Update(tn "ImagePath", "Text", path)
+            this.OnProcessImageSelected(n, path)
         }
+    }
+
+    OnProcessImageSelected(n, path) {
+        if (!IsObject(this.ui) || n < 1 || n > this.TargetList.Length)
+            return
+        this.CurTarget := n
+        this._ResetTargetProcess(n)
+        this._SetImage(n, path)
+        this.TargetList[n].SearchImagePath := path
+        try this.ui.Update(this._TN(n, "ImagePath"), "Text", path)
     }
 
     OnClickClearPicBtn(n, *) {

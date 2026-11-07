@@ -79,7 +79,7 @@ GetSatisfyCount(Data, targets) {
 }
 
 SearchExecute(tableItem, Data, index) {
-    if (Data is SearchAllData || GetLangKey(RegExReplace(Data.SerialStr, "\d+$", "")) == "搜索All")
+    if (Type(Data) == "SearchAllData" || GetLangKey(RegExReplace(Data.SerialStr, "\d+$", "")) == "搜索All")
         return SearchAllExecute(tableItem, Data, index)
     targets := GetSearchTargetArr(Data)
     satisfyCount := GetSatisfyCount(Data, targets)
@@ -92,6 +92,8 @@ SearchExecute(tableItem, Data, index) {
         isLoopFound := SearchRoundOnce(tableItem, Data, index, targets, satisfyCount)
         if (item && item.Killed)
             return
+        if (isLoopFound)
+            SearchTimingMarkSucceeded(tableItem, Data)
         if (!isLoopFound) {
             FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
             InterruptibleSleep(tableItem, index, FloatInterval)
@@ -107,8 +109,10 @@ SearchExecute(tableItem, Data, index) {
                 return
 
             isFound := SearchRoundOnce(tableItem, Data, index, targets, satisfyCount)
-            if (isFound)
+            if (isFound) {
+                SearchTimingMarkSucceeded(tableItem, Data)
                 return
+            }
 
             if (Data.SearchCount > A_Index) {
                 FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
@@ -127,6 +131,14 @@ SearchExecute(tableItem, Data, index) {
             return ""
         OnTriggerMacroOnce(tableItem, Data.FalseMacro, index)
     }
+}
+
+SearchTimingMarkSucceeded(tableItem, Data) {
+    if (!IsObject(tableItem) || !ObjHasOwnProp(tableItem, "ImageSearchTestTiming"))
+        return
+    timing := tableItem.ImageSearchTestTiming
+    if (IsObject(timing) && timing.SerialStr == Data.SerialStr)
+        timing.Succeeded := true
 }
 
 ; §15.1 一轮搜索：遍历所有目标，统计满足个数；满足时执行动作（含 TrueMacro 一次）并返回 true
@@ -186,8 +198,25 @@ SearchOnceTarget(tableItem, Data, target, index, &ResXList, &ResYList, &ResHwndL
 
     ResX := 0, ResY := 0
     ResXList := [], ResYList := [], ResHwndList := []
+    ; 只累计搜索Pro当前测试指令的搜索耗时，不包含间隔、鼠标动作及后续指令。
+    timing := ObjHasOwnProp(tableItem, "ImageSearchTestTiming") ? tableItem.ImageSearchTestTiming : ""
+    if (!IsObject(timing) || timing.SerialStr != Data.SerialStr)
+        timing := ""
+    if (IsObject(timing)) {
+        started := 0
+        DllCall("QueryPerformanceCounter", "Int64*", &started)
+    }
     try {
-        found := DoSearch(target, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYList, &ResHwndList, tableItem, index)
+        try {
+            found := DoSearch(target, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYList, &ResHwndList, tableItem, index)
+        } finally {
+            if (IsObject(timing)) {
+                ended := 0
+                DllCall("QueryPerformanceCounter", "Int64*", &ended)
+                timing.Ticks += ended - started
+                timing.Count += 1
+            }
+        }
     } catch as e {
         SearchDebugLog(Format("搜索异常 Message={} Extra={} What={} File={} Line={}"
             , e.Message, e.Extra, e.What, e.File, e.Line))
