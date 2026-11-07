@@ -2059,8 +2059,10 @@ class MacroGraphFormalHandlersMixin {
         if (this.ui == "")
             return
         d := this._FormalDFromId(id)
-        this.ui.Update("WaitTypeSummary_" id, "Text", GetLang(CmdEnumWait(d.HasOwnProp("waitType") ? d.waitType : "等待变量值")))
+        type := CmdEnumWait(d.HasOwnProp("waitType") ? d.waitType : "等待变量值")
+        this.ui.Update("WaitTypeSummary_" id, "Text", GetLang(type))
         this.ui.Update("WaitIntervalSummary_" id, "Text", GetLang("检测间隔：") (d.HasOwnProp("waitInterval") ? d.waitInterval : 500) " ms")
+        this.ui.Update("WaitIntervalSummary_" id, "Visibility", type == "等待确定" ? "Collapsed" : "Visible")
     }
 
     _OnWaitKeyPick(id, *) {

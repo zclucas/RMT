@@ -41,7 +41,7 @@ class SearchComboGui {
         this.ResultTogArr := ["ResultSaveNameCon", "TrueValueCon", "FalseValueCon"]
         this.CoordTogArr := ["CoordXNameCon", "CoordYNameCon"]
 
-        this.PreviewBorderArr := []
+        this.AreaPreview := ScreenAreaPreview()
         this.PreviewFollowTimer := 0
         this.PreviewFollowing := false
         this.PreviewShowing := false
@@ -364,18 +364,6 @@ class SearchComboGui {
             . '</Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></Button.Style>'
     }
 
-    _AreaPreviewBtnStyle() {
-        return '<Button.Style><Style TargetType="Button"><Setter Property="Tag" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False">'
-            . '<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border>'
-            . '<ControlTemplate.Triggers>'
-            . '<MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="Tag" Value="0"/></MultiTrigger.Conditions>'
-            . '<Setter TargetName="bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/></MultiTrigger>'
-            . '<MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="Tag" Value="1"/></MultiTrigger.Conditions>'
-            . '<Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></MultiTrigger>'
-            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></Button.Style>'
-    }
-
     _AreaComboXml(name, row, col) {
         return '<ComboBox Name="' name '" Grid.Row="' row '" Grid.Column="' col '" Width="110" Height="28" MinHeight="28"'
             . ' HorizontalAlignment="Left" VerticalAlignment="Center" VerticalContentAlignment="Center" FontSize="' XAMLHost.FontSize() '"'
@@ -499,7 +487,7 @@ class SearchComboGui {
             . ' Margin="-6,0,0,0" Padding="6,0,0,0" Tag="0" ToolTip="' GetLang("搜索范围") '"'
             . ' HorizontalContentAlignment="Left" VerticalContentAlignment="Stretch"'
             . ' Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
-            . this._AreaPreviewBtnStyle()
+            . '<Button.Style>' ScreenAreaPreview.ButtonStyle() '</Button.Style>'
             . '<Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">'
             . '<Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="32"/></Grid.RowDefinitions>'
             . '<TextBlock Grid.Row="0" Text="' GetLang("起始坐标：") '" VerticalAlignment="Center" HorizontalAlignment="Left"'
@@ -1446,9 +1434,6 @@ class SearchComboGui {
             on := this.PreviewShowing && A_Index == this.CurTarget
             name := this._TN(A_Index, "PreviewBtn")
             try this.ui.Update(name, "Tag", on ? "1" : "0")
-            try this.ui.Update(name, "Background", on ? "{DynamicResource Accent}" : "{DynamicResource ControlBg}")
-            try this.ui.Update(name, "BorderBrush", on ? "{DynamicResource Accent}" : "{DynamicResource ControlBorder}")
-            try this.ui.Update(name, "BorderThickness", on ? "2" : "1")
         }
     }
 
@@ -1478,14 +1463,14 @@ class SearchComboGui {
 
         curType := this._TargetType(n)
         isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
+        targetHwnd := 0
         if (isWin) {
-            hwndList := GetHwndList(this.ui.Query(tn "WinInfo"))
-            if (hwndList.Length == 0) {
+            targetHwnd := this.AreaPreview.FindTargetWindow(this.ui.Query(tn "WinInfo"))
+            if (!targetHwnd) {
                 this.StopPreviewFollow()
                 this.HidePreviewRect()
                 return
             }
-            targetHwnd := hwndList[1]
             startPt := this.WinToScreen(targetHwnd, startX, startY)
             endPt := this.WinToScreen(targetHwnd, endX, endY)
             startX := startPt[1]
@@ -1505,11 +1490,12 @@ class SearchComboGui {
             return
         }
 
-        this.ShowPreviewRect(x, y, w, h)
+        this.AreaPreview.Show(x, y, w, h, this._SetPreviewArea.Bind(this, n), targetHwnd, n ":" curType)
 
         if (isWin && !this.PreviewFollowing) {
             this.PreviewFollowing := true
-            this.PreviewFollowTimer := SetTimer(this.PreviewFollowTick.Bind(this), 100)
+            this.PreviewFollowTimer := this.PreviewFollowTick.Bind(this)
+            SetTimer(this.PreviewFollowTimer, 100)
         }
         else if (!isWin && this.PreviewFollowing) {
             this.StopPreviewFollow()
@@ -1531,7 +1517,8 @@ class SearchComboGui {
             this.StopPreviewFollow()
             return
         }
-        this.RefreshPreviewArea()
+        if (!this.AreaPreview.IsDragging())
+            this.RefreshPreviewArea()
     }
 
     WinToScreen(hwnd, winX, winY) {
@@ -1547,46 +1534,13 @@ class SearchComboGui {
         return [screenX, screenY]
     }
 
-    ShowPreviewRect(x, y, w, h) {
-        borderW := 2
-        borderColor := "Red"
-
-        if (this.PreviewBorderArr.Length == 0) {
-            topGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
-            topGui.BackColor := borderColor
-            topGui.Show("NA x" x " y" y " w" w " h" borderW)
-            this.PreviewBorderArr.Push(topGui)
-
-            bottomGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
-            bottomGui.BackColor := borderColor
-            bottomGui.Show("NA x" x " y" (y + h - borderW) " w" w " h" borderW)
-            this.PreviewBorderArr.Push(bottomGui)
-
-            leftGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
-            leftGui.BackColor := borderColor
-            leftGui.Show("NA x" x " y" y " w" borderW " h" h)
-            this.PreviewBorderArr.Push(leftGui)
-
-            rightGui := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
-            rightGui.BackColor := borderColor
-            rightGui.Show("NA x" (x + w - borderW) " y" y " w" borderW " h" h)
-            this.PreviewBorderArr.Push(rightGui)
-        }
-        else {
-            this.PreviewBorderArr[1].Move(x, y, w, borderW)
-            this.PreviewBorderArr[2].Move(x, y + h - borderW, w, borderW)
-            this.PreviewBorderArr[3].Move(x, y, borderW, h)
-            this.PreviewBorderArr[4].Move(x + w - borderW, y, borderW, h)
-        }
+    _SetPreviewArea(n, x1, y1, x2, y2) {
+        if (IsObject(this.ui) && this.PreviewShowing && n == this._CurTarget())
+            this.OnSetSearchArea(x1, y1, x2, y2)
     }
 
     HidePreviewRect() {
-        for gui in this.PreviewBorderArr {
-            try {
-                gui.Destroy()
-            }
-        }
-        this.PreviewBorderArr := []
+        this.AreaPreview.Hide()
     }
 
     OnWindowLoad(state, ctrl, event) {

@@ -87,7 +87,7 @@ class VoiceGui {
             .Height(124).MinHeight(124).MaxHeight(124).Padding("4,2,4,2")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}")
             .BorderThickness("1").CornerRadius(String(radius))
-            .SnapsToDevicePixels("True").UseLayoutRounding("False")
+            .SnapsToDevicePixels("True").UseLayoutRounding("True")
         chipScroll := chipBox.Add("ScrollViewer").VerticalScrollBarVisibility("Auto")
             .HorizontalScrollBarVisibility("Disabled").Background("Transparent").BorderThickness("0")
         chipScroll.Add("WrapPanel").Name("KwChipPanel").Uid("ahk:Voice.Keywords.Chips")
@@ -96,7 +96,7 @@ class VoiceGui {
             .Height(lineH).MinHeight(lineH).Padding(padL ",0,8,0")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}")
             .BorderThickness("1").CornerRadius(String(radius))
-            .SnapsToDevicePixels("True").UseLayoutRounding("False")
+            .SnapsToDevicePixels("True").UseLayoutRounding("True")
         inner := chrome.Add("Grid")
         inner.Add("TextBox").Name("EdKeywords").Style("{StaticResource KwChatBox}")
             .HorizontalAlignment("Stretch").VerticalAlignment("Center")
@@ -126,7 +126,7 @@ class VoiceGui {
             .HorizontalAlignment("Center").Margin("0,10,0,0")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
             .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1")
-            .SnapsToDevicePixels("True").UseLayoutRounding("False").IsDefault("True")
+            .SnapsToDevicePixels("True").UseLayoutRounding("True").IsDefault("True")
         btnSure.InjectResources(this._FieldStrokeStyle("Button"))
         return panel
     }
@@ -204,7 +204,7 @@ class VoiceGui {
             . '<ControlTemplate TargetType="' typeName '">'
             . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"'
             . ' BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"'
-            . ' Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . ' Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>'
             . '</Border>'
             . '<ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True">'
@@ -254,7 +254,7 @@ class VoiceGui {
             . '<Border Padding="10,6,10,6"'
             . ' Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource InputStroke}"'
             . ' BorderThickness="1" CornerRadius="3" MaxWidth="408" HorizontalAlignment="Left"'
-            . ' SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . ' SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<TextBlock Name="KwChipText_' item.Id '" Text="' this._XmlEsc(item.Text) '"'
             . ' TextWrapping="Wrap" Foreground="{DynamicResource TextMain}"'
             . ' VerticalAlignment="Center"/>'

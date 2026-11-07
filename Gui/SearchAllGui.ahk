@@ -5,18 +5,25 @@ class SearchAllGui extends SearchProGui {
     CommandName => "搜索All"
     IsAll => true
 
-    BuildAllFields(body) {
-        row := body.Add("Grid").Grid_Row(5).Grid_ColumnSpan(3).Margin("0,8,0,4")
-        row.Cols("86", "*", "12", "86", "*")
-        row.Rows("32", "Auto")
-        row.Add("TextBlock").Text(GetLang("坐标数组：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
-        this._AddEditCombo(row, "AllSaveNameCon", 0, 1)
-        row.Add("TextBlock").Grid_Column(3).Text(GetLang("搜索顺序：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
-        sort := row.Add("ComboBox").Grid_Column(4).Name("AllSortCon").Height(28).VerticalContentAlignment("Center")
-        for label in GetLangArr(["左右优先", "上下优先"])
+    SortOrders => ["上下左右", "上下右左", "下上左右", "下上右左"]
+
+    BuildAllSortField(coord) {
+        coord.Add("TextBlock").Grid_Row(2).Text(GetLang("搜索顺序：")).VerticalAlignment("Center")
+            .Foreground("{DynamicResource TextMain}").FontSize("12")
+        sort := coord.Add("ComboBox").Grid_Row(2).Grid_Column(2).Grid_ColumnSpan(3).Name("AllSortCon").Height(28).MinHeight(28)
+            .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+        for label in GetLangArr(this.SortOrders)
             sort.Add("ComboBoxItem").Content(label)
-        row.Add("TextBlock").Grid_Row(1).Grid_ColumnSpan(5).Margin("0,4,0,0").Text(GetLang("左右优先：先左右后上下；上下优先：先上下后左右。输出 [[x,y],…]，窗口模式为客户区坐标；颜色返回每个匹配像素。"))
-            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}").FontSize(11)
+    }
+
+    BuildAllArrayField(saveRow) {
+        coord := saveRow.Add("Grid").Grid_Column(2)
+        coord.Cols("Auto", "8", "*")
+        coord.Add("TextBlock").Text(GetLang("坐标数据：")).VerticalAlignment("Center")
+            .Foreground("{DynamicResource TextMain}").FontSize("12")
+        this._AddEditCombo(coord, "AllSaveNameCon", 0, 2)
     }
 
     Init(cmd) {
@@ -25,9 +32,17 @@ class SearchAllGui extends SearchProGui {
         for name in MySoftData.GlobalArrMap
             names.Push(name)
         this._SetCombo("AllSaveNameCon", names, this.Data.AllSaveName)
-        this.ui.Update("AllSortCon", "SelectedIndex", this.Data.AllSort == "上下优先" ? "1" : "0")
-        ; All uses whole-template matching; the Pro multi-point editor is not applicable.
-        this.ui.Update("ImageProcessBtn", "Visibility", "Collapsed")
+        savedOrder := this.Data.AllSort == "左右优先" ? "上下左右" : this.Data.AllSort
+        sortIndex := -1
+        for index, order in this.SortOrders {
+            if (order == savedOrder) {
+                sortIndex := index - 1
+                break
+            }
+        }
+        this.ui.Update("AllSortCon", "SelectedIndex", String(sortIndex))
+        if (sortIndex == -1)
+            this.ui.Update("AllSortCon", "ToolTip", GetLang(savedOrder))
     }
 
     CheckIfValid() {
@@ -36,7 +51,10 @@ class SearchAllGui extends SearchProGui {
 
     SaveSearchData() {
         this.Data.AllSaveName := GetVarName(this.ui.Query("AllSaveNameCon"))
-        this.Data.AllSort := ["左右优先", "上下优先"][Integer(this.ui.Query("AllSortCon>SelectedIndex")) + 1]
+        sortIndex := this.ui.Query("AllSortCon>SelectedIndex")
+        if (IsNumber(sortIndex) && sortIndex >= 0)
+            this.Data.AllSort := this.SortOrders[Integer(sortIndex) + 1]
+        this.Data.MouseActionType := "无动作"
         MySoftData.GlobalArrMap[this.Data.AllSaveName] := true
         super.SaveSearchData()
     }

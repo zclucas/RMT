@@ -151,6 +151,8 @@ class GuiAdapter {
         try WinActivate(hwnd)
     }
     Hide() {
+        if (IsSet(MyMainWin) && IsObject(MyMainWin) && MyMainWin.ui == this.ui)
+            MyMainWin.HideSideDebugTools()
         WinHide(this.ui.wpfHwnd)
     }
     Opt(opt) {
@@ -248,6 +250,7 @@ class MainWin {
         this._dblOpenMacro := Map()  ; 页签 → 双击展开逻辑树的目标宏（再双击同一宏即折叠）
         this._sideTreeCmds := Map()
         this._sideTreeBound := Map()
+        this._sideDebugTools := Map()
         this._sideTree := ""
         this._sideCtxBuilt := false
         this._rowSelIdx := Map()
@@ -394,7 +397,7 @@ class MainWin {
             MainSoftData.TableIndex := 1
         this.closed := false
         title := "RMTv" RMT_VERSION
-        titleHeight := "30"
+        titleHeight := XAMLHost.GetTitleBarHeight()
 
         ; 根内容固定按 1400×787 设计渲染：引擎 Viewbox 会保留显式尺寸，
         ; 再按窗口实际尺寸（随屏幕等比缩放，见下方 wh 计算）等比例缩放——
@@ -519,7 +522,7 @@ class MainWin {
                 tabItem.Tag("last")
             ; 页签内容区统一外层边框；上边距 -1 与页签条下边框重叠，避免双线且与页签条等粗
             bd := tabItem.Add("Border").BorderThickness("1.5").BorderBrush("{DynamicResource OutlineStroke}").CornerRadius("4").Margin("4,-1,2,2").Padding("2,2,0,2")
-            bd.Apply({SnapsToDevicePixels: "True", UseLayoutRounding: "False", ClipToBounds: "False"})
+            bd.Apply({SnapsToDevicePixels: "True", UseLayoutRounding: "True", ClipToBounds: "False"})
             if (this._useVirtual.Has(idx)) {
                 ; 宏/模块显示区：自适应剩余空间
                 ; Epic5 虚拟列表：ListBox + DataTemplate + VirtualizingStackPanel(Recycling)，
@@ -558,9 +561,10 @@ class MainWin {
                 isToolTab := tableItem.ID == "Tool"
                 isSettingTab := tableItem.ID == "Setting"
                 sv := bd.Add("ScrollViewer").VerticalScrollBarVisibility(isSettingTab ? "Disabled" : (isToolTab ? "Hidden" : "Auto")).HorizontalScrollBarVisibility("Disabled")
-                if (isSettingTab)
-                    sv.Add("Grid").Name("Panel_" idx).Margin("8,6,8,10")
-                else
+                if (isSettingTab) {
+                    bd.Padding("0,2,0,2")
+                    sv.Add("Grid").Name("Panel_" idx).Margin("0,6,4,10")
+                } else
                     sv.Add("StackPanel").Name("Panel_" idx).Margin("8,6,8,10")
             }
         }
@@ -904,6 +908,7 @@ class MainWin {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        this.HideSideDebugTools()
         this._AiPersistAllTabs()
         this.closed := true
         OnGuiClose()
@@ -913,6 +918,7 @@ class MainWin {
     OnCloseClick(state, ctrl, event) {
         ; 主窗口关闭 = 隐藏（应用继续托盘运行），不真正销毁窗口，托盘可恢复
         this._AiPersistAllTabs()
+        this.HideSideDebugTools()
         OnGuiClose()
         try WinHide(this.ui.wpfHwnd)
     }
@@ -949,6 +955,7 @@ class MainWin {
         ; ComboBox.SelectionChanged 会冒泡到 TabControl；同页再入不重渲，避免切页/生成行时抖动
         if (idx == MainSoftData.TableIndex && this.HasOwnProp("_renderedTabs") && this._renderedTabs.Has(idx))
             return
+        this.HideSideDebugTools()
         MainSoftData.TableIndex := idx
         ; 惰性构建：首次切到某个页签才生成它的内容（启动时只建当前页签）
         this._EnsureTabBuilt(idx)
@@ -1138,6 +1145,7 @@ class MainWin {
             if (this.sidePanelMode == 1)
                 SetTimer(ObjBindMethod(this, "RefreshSideTree", t0), -1)
         } else {
+            this.HideSideDebugTools()
             this._ApplyListScrollMargin(false)
             t0 := MainSoftData.TableIndex
             if (IsObject(this._vl) && this._useVirtual.Has(t0))
@@ -1402,6 +1410,8 @@ class MainWin {
             try this.ui.Update("SideAiToolSplit_" t, "Visibility", aiVis)
             try this.ui.Update("BtnSideToolsToggle_" t, "Content", glyph)
             try this.ui.Update("BtnSideToolsToggle_" t, "ToolTip", tip)
+            if ((!expanded || !isTree) && this._sideDebugTools.Has(t))
+                this._sideDebugTools[t].Hide()
             if (expanded) {
                 if (isTree)
                     this.SyncSideToolToggle(t, "Top", this._sideTopOn)
@@ -1529,8 +1539,8 @@ class MainWin {
         this._BindLive("SideToolRedo_" t, "Click", ObjBindMethod(this, "OnSideToolRedo", t))
         this._BindLive("SideToolBack_" t, "Click", ObjBindMethod(this, "OnSideToolBack", t))
         this._BindLive("SideToolRecord_" t, "Click", ObjBindMethod(this, "OnSideToolRecord", t))
-        this._BindLive("SideToolRun_" t, "Click", ObjBindMethod(this, "OnSideToolRun", t))
-        this._BindLive("SideToolKill_" t, "Click", ObjBindMethod(this, "OnSideToolKill", t))
+        this._sideDebugTools[t] := MacroDebugToolbar(this.ui, "SideToolDebug_" t, "SideToolDebugDot_" t
+            , "SideTreeList_" t, MyMacroGui, ObjBindMethod(this, "OnSideDebugAction", t), true)
         this._BindLive("SideToolVar_" t, "Click", ObjBindMethod(this, "OnSideToolVar", t))
         this._BindLive("SideToolCmdTip_" t, "Click", ObjBindMethod(this, "OnSideToolCmdTip", t))
         this._BindLive("SideToolTop_" t, "Click", ObjBindMethod(this, "OnSideToolTop", t))
@@ -1644,20 +1654,17 @@ class MainWin {
             this._sideTree.SyncToolToggles(t)
     }
 
-    OnSideToolRun(t, *) {
-        ed := IsObject(this._sideTree) ? this._sideTree.Ensure(t) : ""
-        if (!IsObject(ed))
-            return
-        this._sideTree.Activate(t)
-        ed.MenuHandler(ed._ContinueLabel())
+    HideSideDebugTools() {
+        for , toolbar in this._sideDebugTools
+            toolbar.Hide()
     }
 
-    OnSideToolKill(t, *) {
+    OnSideDebugAction(t, method, *) {
         ed := IsObject(this._sideTree) ? this._sideTree.Ensure(t) : ""
         if (!IsObject(ed))
             return
         this._sideTree.Activate(t)
-        ed.MenuHandler(GetLang("终止"))
+        MacroDebugToolbar.Run(ed, method)
     }
 
     ; ⚠️ 当前无调用方（侧栏「运行到下一断点」工具钮已随 F7 退休删除，
@@ -1900,8 +1907,7 @@ class MainWin {
         this._AddSideToolBtn(toolBar, idx, "Redo", Chr(0xE7A6), GetLang("恢复"), false)
         this._AddSideToolBtn(toolBar, idx, "Back", Chr(0xE750), GetLang("删除末尾"), false)
         this._AddSideToolSep(toolBar)
-        this._AddSideToolBtn(toolBar, idx, "Run", Chr(0xE768), GetLang("播放/继续"), false)
-        this._AddSideToolBtn(toolBar, idx, "Kill", Chr(0xE71A), GetLang("终止"), false)
+        this._AddSideToolBtn(toolBar, idx, "Debug", Chr(0xEBE8), GetLang("调试"), true)
         this._AddSideToolSep(toolBar)
         this._AddSideToolBtn(toolBar, idx, "Var", Chr(0xE7B3), GetLang("变量监视"), true)
         this._AddSideToolBtn(toolBar, idx, "CmdTip", Chr(0xE8E3), GetLang("指令显示"), true)
@@ -1975,7 +1981,7 @@ class MainWin {
             .Padding(padL ",0," padL ",0")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}")
             .BorderThickness("1").CornerRadius(String(r)).AllowDrop("True")
-        chrome.Apply({SnapsToDevicePixels: "True", UseLayoutRounding: "False"})
+        chrome.Apply({SnapsToDevicePixels: "True", UseLayoutRounding: "True"})
         box := chrome.Add("Grid")
         box.Rows("Auto", "*")
         att := box.Add("StackPanel").Name("AiAttachBar_" idx).Grid_Row(0).Orientation("Horizontal")
@@ -4052,7 +4058,7 @@ class MainWin {
         isUI := GetTableSymbol(t) == "UI"
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         foldBg := fold.ForbidState ? "{DynamicResource ListRowForbidBg}" : "{DynamicResource FoldHeaderBg}"
-        xaml := '<Border ' ns ' Name="FoldCard_' t '_' f '" CornerRadius="0" BorderThickness="0" BorderBrush="{DynamicResource OutlineStroke}" Background="' foldBg '" Margin="0" Padding="8,6,8,6"' this._BorderSnap() '>'
+        xaml := '<Border ' ns ' Name="FoldCard_' t '_' f '" CornerRadius="0" BorderThickness="0" BorderBrush="{DynamicResource OutlineStroke}" Background="' foldBg '" Margin="0" Padding="8,6,8,6" SnapsToDevicePixels="True" UseLayoutRounding="False">'
             . '<StackPanel Name="FoldCardInner_' t '_' f '" Opacity="' (fold.ForbidState ? this._ForbidContentOpacity() : "1") '" VerticalAlignment="Center" TextElement.FontSize="' XAMLHost.FormatFontSize(XAMLHost.ScaleFontSize(11)) '">'
             . this._BuildFoldDividerXaml(false, isFirst)
             . this._BuildFoldHeaderRowXaml(t, f, fold, false)
@@ -4134,9 +4140,9 @@ class MainWin {
             . '<Setter Property="BorderBrush" Value="{DynamicResource InputStroke}"/>'
             . '<Setter Property="BorderThickness" Value="1"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Grid UseLayoutRounding="False" ClipToBounds="False">'
-            . '<Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '>'
+            . '<Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap() '>'
             . '<ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Stretch" HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}" VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"/>'
-            . '</Border><Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1" IsHitTestVisible="False" SnapsToDevicePixels="True" RenderOptions.EdgeMode="Aliased"/></Grid></ControlTemplate></Setter.Value></Setter>'
+            . '</Border></Grid></ControlTemplate></Setter.Value></Setter>'
             . '<Style.Triggers>'
             . '<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="1"/><Setter Property="FontSize" Value="' foldFs '"/></Trigger>'
             . '<Trigger Property="IsReadOnly" Value="True"><Setter Property="FontSize" Value="' foldFs '"/></Trigger>'
@@ -4202,10 +4208,10 @@ class MainWin {
             . '<Setter Property="BorderThickness" Value="1"/>'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid UseLayoutRounding="False" ClipToBounds="False">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '>'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap() '>'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border></Grid>'
-            . '<ControlTemplate.Triggers>' this._RmtBtnInteractionTriggers("Bd") '</ControlTemplate.Triggers>'
+            . '<ControlTemplate.Triggers>' this._RmtBtnInteractionTriggers("Bd") MacroDebugToolbar.ActiveTrigger() '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Setter.Value></Setter></Style>'
         primaryBtn := StrReplace(toolBtn, 'x:Key="RmtFoldToolBtn"', 'x:Key="RmtItemPrimaryBtn"')
         primaryBtn := StrReplace(primaryBtn, 'Width" Value="24"', 'Width" Value="48"')
@@ -4222,7 +4228,7 @@ class MainWin {
             . '<Setter Property="BorderThickness" Value="1"/>'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid UseLayoutRounding="False" ClipToBounds="False">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '>'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap() '>'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border></Grid>'
             . '<ControlTemplate.Triggers>'
@@ -4276,7 +4282,7 @@ class MainWin {
             . '<Setter Property="SnapsToDevicePixels" Value="False"/>'
             . '<Setter Property="UseLayoutRounding" Value="False"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid UseLayoutRounding="False" ClipToBounds="False">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1" Padding="{TemplateBinding Padding}"' this._BorderSnap(false) '>'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1" Padding="{TemplateBinding Padding}"' this._BorderSnap() '>'
             . '<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>'
             . '</Border></Grid>'
             . '<ControlTemplate.Triggers>' this._RmtBtnInteractionTriggers("Bd") '</ControlTemplate.Triggers>'
@@ -4301,7 +4307,7 @@ class MainWin {
             . '<Setter Property="UseLayoutRounding" Value="False"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">'
             . '<Grid UseLayoutRounding="False" ClipToBounds="False">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap(false) '/>'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Margin="0,0,0,1"' this._BorderSnap() '/>'
             . '<ToggleButton Background="Transparent" BorderThickness="0" Focusable="False" ClickMode="Press" IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">'
             . '<ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent">'
             . '<Path Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" Data="M 0 0 L 4 4 L 8 0 Z"/>'
@@ -4418,17 +4424,13 @@ class MainWin {
         return 38
     }
 
-    ; 控件高度用 24：100%/125%/150%/200% DPI 下都是整数物理像素。
-    ; 26×125%=32.5，窗口 UseLayoutRounding 取整后底边 1px 会被裁掉。
+    ; 24 DIP 在 100%、125%、150%、200% DPI 下均为整数物理像素。
     _CtrlH() {
         return 24
     }
 
-    ; 描边禁止 UseLayoutRounding（与窗口取整叠加会吞底边）。不用 Aliased：125% DPI 下会把 1DIP 收成 1 物理像素，边框发丝细。
-    ; 宏行控件再关掉 SnapsToDevicePixels：列表上的吸附是继承的，贴边的 1DIP 底边会被收成 0。
-    ; 底边只由 Border 自己画一圈，不再另铺一条线，否则下边框会叠成两条。
-    _BorderSnap(snap := true) {
-        return ' SnapsToDevicePixels="' (snap ? "True" : "False") '" UseLayoutRounding="False"'
+    _BorderSnap() {
+        return ' SnapsToDevicePixels="True" UseLayoutRounding="True"'
     }
 
     _IsAiPanelOpen() {
@@ -5407,11 +5409,12 @@ class MainWin {
             . '<StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,12" VerticalAlignment="Center"><TextBlock Text="&#xE962;" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' GetLang("鼠标信息") '" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Name="TxtToolCheckKey" Text="' FormatHotkeyDisplay(MainSoftData.ToolCheckHotkey) '" Opacity="0.65" Margin="9,0,8,0" VerticalAlignment="Center"/><CheckBox Name="ChkToolCheck" Content="' GetLang("开关") '" Style="{StaticResource ToolSwitch}"/> </StackPanel>'
             . '<Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel>'
             . field("屏幕坐标", "&#xE81D;", "TxtMousePos", MainSoftData.PosStr)
+            . field("窗口位置", "&#xE7B7;", "TxtWinOrigin", MainSoftData.WinOriginStr)
             . field("窗口标题", "&#xE8A5;", "TxtProcessTile", MainSoftData.ProcessTile)
             . field("窗口类", "&#xE8D7;", "TxtProcessClass", MainSoftData.ProcessClass)
-            . field("句柄 Id", "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId)
-            . field("窗口宽高", "&#xE740;", "TxtWinSize", MainSoftData.WinSizeStr) '</StackPanel><StackPanel Grid.Column="1">'
+            . field("句柄 Id", "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId) '</StackPanel><StackPanel Grid.Column="1">'
             . field("窗口坐标", "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
+            . field("窗口宽高", "&#xE740;", "TxtWinSize", MainSoftData.WinSizeStr)
             . field("进程名", "&#xE9D9;", "TxtProcessName", MainSoftData.ProcessName)
             . field("进程 PID", "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)
             . field("位置颜色", "&#xE790;", "TxtColor", MainSoftData.Color) '</StackPanel></Grid></Grid>'
@@ -5449,6 +5452,7 @@ class MainWin {
         UIControls.ToolText := CtrlAdapter("TxtToolText", this.ui, "Text")
         MainSoftData.ToolMousePosCtrl := CtrlAdapter("TxtMousePos", this.ui, "Text")
         MainSoftData.ToolMouseWinPosCtrl := CtrlAdapter("TxtWinPos", this.ui, "Text")
+        MainSoftData.ToolWinOriginCtrl := CtrlAdapter("TxtWinOrigin", this.ui, "Text")
         MainSoftData.ToolProcessTileCtrl := CtrlAdapter("TxtProcessTile", this.ui, "Text")
         MainSoftData.ToolProcessNameCtrl := CtrlAdapter("TxtProcessName", this.ui, "Text")
         MainSoftData.ToolProcessClassCtrl := CtrlAdapter("TxtProcessClass", this.ui, "Text")
@@ -5486,8 +5490,6 @@ class MainWin {
     BuildSettingTab() {
         ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Setting 起顺延 +1，改按 Symbol 动态取位
         p := "Panel_" GetTableIndexByID("Setting")
-        ; 设置页导航需要与 Tab 内容外框相接：仅取消本页宿主默认的 8px 左边距。
-        this.ui.Update(p, "Margin", "0,6,4,10")
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
 
@@ -5498,7 +5500,7 @@ class MainWin {
         navStyle := '<Style x:Key="SetNavItem" TargetType="RadioButton">'
             . '<Setter Property="Height" Value="36"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">'
-            . '<Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" CornerRadius="0" Padding="0" Margin="0,0,-8,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="3"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+            . '<Border x:Name="Bd" Background="Transparent"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="3"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
             . '<Rectangle x:Name="Bar" Grid.Column="0" Width="3" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource Accent}" Visibility="Collapsed" Margin="0,5,0,5"/>'
             . '<ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"/></Grid></Border>'
             . '<ControlTemplate.Triggers>'
@@ -5509,9 +5511,11 @@ class MainWin {
 
         fieldStyles := '<Style TargetType="TextBox"><Setter Property="Height" Value="33"/><Setter Property="MinHeight" Value="33"/><Setter Property="Padding" Value="10,0"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Foreground" Value="{DynamicResource InputText}"/><Setter Property="Background" Value="{DynamicResource InputBg}"/><Setter Property="BorderBrush" Value="{DynamicResource InputStroke}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border CornerRadius="6" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/></Border></ControlTemplate></Setter.Value></Setter></Style>'
             . '<Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="30"/></Style>'
-            . '<Style x:Key="SetTabButton" TargetType="CheckBox"><Setter Property="Width" Value="85"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0,4,8,4"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox"><Border x:Name="Bd" CornerRadius="6" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"><Grid><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/><Ellipse x:Name="Dot" Visibility="Collapsed" Width="7" Height="7" Fill="{DynamicResource Accent}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,6,0"/></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="Dot" Property="Visibility" Value="Visible"/><Setter Property="FontWeight" Value="Bold"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+            . '<Style x:Key="SetTabButton" TargetType="ToggleButton"><Setter Property="Width" Value="85"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0,4,8,4"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border x:Name="Bd" CornerRadius="6" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"><Grid><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/><Ellipse x:Name="Dot" Visibility="Collapsed" Width="7" Height="7" Fill="{DynamicResource Accent}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,6,0"/></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="Dot" Property="Visibility" Value="Visible"/><Setter Property="FontWeight" Value="Bold"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 
         ; ---------- 行/卡片构建 ----------
+        ; 中文标签列预留 6 个 13 DIP 全角字及右侧留白。
+        labelWidth := MainSoftData.Lang == "English" ? 112 : 84
         this._setHelpMap := Map()
         this._setHelpSeq := 0
         helpFnByLabel := Map()
@@ -5531,64 +5535,61 @@ class MainWin {
             this._setHelpSeq += 1
             name := "BtnSetHelp_" this._setHelpSeq
             this._setHelpMap[name] := {title: title != "" ? title : GetLang("说明"), text: tip, fn: helpFnByLabel.Has(title) ? helpFnByLabel[title] : ""}
-            return '<Button Name="' name '" Content="?" Width="24" MinHeight="24" Padding="4,2" Margin="6,0,0,0" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Cursor="Hand"/>'
+            return '<Button Grid.Column="1" Name="' name '" Content="?" Width="24" MinHeight="24" Padding="4,2" FontSize="11" FontWeight="Bold" HorizontalAlignment="Left" VerticalAlignment="Center" Cursor="Hand"/>'
         }
-        afterHint(ctrl, hint) {
+        afterHint(ctrl, hint, hintName := "") {
+            hintAttr := (hintName == "" ? "" : ' Name="' hintName '"') ' Text="' this._XmlEsc(hint) '"'
             if (InStr(ctrl, "<Slider"))
                 return '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
                     . ctrl
-                    . '<TextBlock Grid.Column="1" Text="' this._XmlEsc(hint) '" MaxWidth="200" Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>'
+                    . '<TextBlock Grid.Column="1"' hintAttr ' MaxWidth="200" Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>'
             return '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
                 . ctrl
-                . '<TextBlock Grid.Column="1" Text="' this._XmlEsc(hint) '" Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>'
+                . '<TextBlock Grid.Column="1"' hintAttr ' Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>'
         }
-        row(label, ctrl, tip := "", w := "104", lblName := "") {
-            helpBtn := ""
-            if (tip != "") {
-                if (helpFnByLabel.Has(label) || InStr(tip, "`n"))
-                    helpBtn := StrReplace(dot(tip, label), "<Button ", '<Button DockPanel.Dock="Right" ')
-                else
-                    ctrl := afterHint(ctrl, tip)
+        row(label, ctrl, tip := "", lblName := "", help := "") {
+            if (help == "" && tip != "" && (helpFnByLabel.Has(label) || InStr(tip, "`n"))) {
+                help := tip
+                tip := ""
             }
-            return '<Border MinHeight="48" Padding="0,5" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,0,0,0.5"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="' w '"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                . '<DockPanel VerticalAlignment="Center" LastChildFill="True">' helpBtn '<TextBlock' (lblName == "" ? "" : ' Name="' lblName '"') ' Text="' this._XmlEsc(label) '" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" FontSize="13"/></DockPanel>'
+            if (tip != "")
+                ctrl := afterHint(ctrl, tip)
+            helpBtn := dot(help, label)
+            return '<Border MinHeight="48" Padding="0,5" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,0,0,0.5"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="' labelWidth '"/><ColumnDefinition Width="36"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+                . '<TextBlock' (lblName == "" ? "" : ' Name="' lblName '"') ' Text="' this._XmlEsc(label) '" Margin="0,0,4,0" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" FontSize="13"/>' helpBtn
                 . '<Grid Grid.Column="2" VerticalAlignment="Center">' ctrl '</Grid></Grid></Border>'
         }
-        tog(label, name, val, desc := "", tip := "", w := "104", lblName := "") {
-            help := tip != "" ? tip : desc
-            return row(label, '<CheckBox Name="' name '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>', help, w, lblName)
+        tog(label, name, val, tip := "") {
+            return row(label, '<CheckBox Name="' name '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>', tip)
         }
         togI(label, name, val) {
             return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' GetLang("隐藏的页签不影响宏触发，保存后重启生效。") '"/>'
         }
-        cmb(label, name, items, sel, zero := false, tip := "", w := "104") {
+        cmb(label, name, items, sel, zero := false, tip := "", descriptions := [], width := 0, editable := false) {
             selIdx := ""
             itemsXaml := ""
             for k, it in items {
                 isSel := IsInteger(sel) ? (k == Integer(sel) + (zero ? 1 : 0)) : (it == sel)
                 if (isSel)
                     selIdx := k - 1
-                itemsXaml .= '<ComboBoxItem Content="' this._XmlEsc(it) '"/>'
+                descAttr := descriptions.Length ? ' Tag="' this._XmlEsc(GetLang(descriptions[k])) '"' : ""
+                itemsXaml .= '<ComboBoxItem Content="' this._XmlEsc(it) '"' descAttr '/>'
             }
             selAttr := (selIdx == "") ? "" : ' SelectedIndex="' selIdx '"'
-            return row(label, '<ComboBox Name="' name '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"' selAttr '>' itemsXaml '</ComboBox>', tip, w)
+            if (editable)
+                selAttr := ' IsEditable="True" IsTextSearchEnabled="False" Text="' this._XmlEsc(String(sel)) '"'
+            widthAttr := width ? ' Width="' width '"' : ""
+            ctrl := '<ComboBox Name="' name '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"' selAttr widthAttr '>' itemsXaml '</ComboBox>'
+            if (descriptions.Length)
+                ctrl := afterHint(ctrl, "{Binding SelectedItem.Tag, ElementName=" name "}")
+            return row(label, ctrl, tip)
         }
-        num(label, name, val, tip := "", w := "104", boxW := "96") {
-            return row(label, '<TextBox Name="' name '" Text="' this._XmlEsc(String(val)) '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', tip, w)
+        num(label, name, val, tip := "", help := "") {
+            return row(label, '<TextBox Name="' name '" Text="' this._XmlEsc(String(val)) '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', tip, , help)
         }
-        ; 随机浮动：标签与问号右移，输入框延展至右边缘。
-        numCompact(label, name, val, tip) {
-            return row(label, '<TextBox Name="' name '" Text="' this._XmlEsc(String(val)) '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', tip, "188")
-        }
-        txt(label, name, val, tip := "", w := "104", boxW := "240") {
-            return row(label, '<TextBox Name="' name '" Text="' this._XmlEsc(String(val)) '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', tip, w)
-        }
-        sld(label, name, valName, val, mn, mx, tk, tip := "", w := "104") {
+        sld(label, name, valName, val, mn, mx, tk, tip := "") {
             return row(label, '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="9"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Slider Name="' name '" Height="28" Minimum="' mn '" Maximum="' mx '" Value="' val '" TickFrequency="' tk '" IsSnapToTickEnabled="True" VerticalAlignment="Center" Cursor="Hand"/>'
-                . '<TextBox Grid.Column="2" Name="' valName '" Text="' val '" TextAlignment="Center"/></Grid>', tip, w)
-        }
-        btnRow(label, ctrl, tip := "", w := "104") {
-            return row(label, ctrl, tip, w)
+                . '<TextBox Grid.Column="2" Name="' valName '" Text="' val '" TextAlignment="Center"/></Grid>', tip)
         }
         card(title, glyph, body, margin := "0", headerRight := "", modId := "") {
             ; 每张卡的最后一行不画下分隔线；前面的行保留，用于所有类别的统一布局。
@@ -5619,41 +5620,38 @@ class MainWin {
         ; ---------- 公共片段 ----------
         tabsBody := '<WrapPanel>'
             . togI(GetLang("按键宏"), "TabVisible_Normal", this._TabVisibleVal("Normal")) . togI(GetLang("字串宏"), "TabVisible_String", this._TabVisibleVal("String")) . togI(GetLang("菜单宏"), "TabVisible_Menu", this._TabVisibleVal("Menu")) . togI(GetLang("界面宏"), "TabVisible_UI", this._TabVisibleVal("UI")) . togI(GetLang("语音宏"), "TabVisible_Voice", this._TabVisibleVal("Voice")) . togI(GetLang("定时宏"), "TabVisible_Timing", this._TabVisibleVal("Timing")) . togI(GetLang("宏"), "TabVisible_SubMacro", this._TabVisibleVal("SubMacro")) . togI(GetLang("按键替换"), "TabVisible_Replace", this._TabVisibleVal("Replace")) . togI(GetLang("网络宏"), "TabVisible_Network", this._TabVisibleVal("Network")) . '</WrapPanel>'
-        appearanceBody := cmb(GetLang("软件字体"), "CmbFont", MainSoftData.FontList, MainSoftData.FontType, false, GetLang("软件界面使用的字体，修改后保存设置生效。"))
+        appearanceBody := cmb(GetLang("软件字体"), "CmbFont", MainSoftData.FontList, MainSoftData.FontType, false, GetLang("软件界面使用的字体，修改后保存设置生效。"), , 160)
             . sld(GetLang("字体大小"), "ThemeFontSizeCon", "ThemeFontSizeVal", MainSoftData.FontSize, 0, 40, 1, GetLang("字号 0~40；保存后统一刷新界面。"))
 
         ; ---------- 页：系统（按参考稿逐行排列） ----------
-        ltRtIsPs5 := (MainSoftData.TriggerJoyType == "PS5")
-        ltRtLabel := GetLang(ltRtIsPs5 ? "L2、R2按键化" : "LT、RT按键化")
-        ltRtDesc := Format(GetLang("开启后 {} 当普通按键；关闭则当扳机轴，可设 0~100。"), ltRtIsPs5 ? "L2/R2" : "LT/RT")
+        ltRtSwitch := '<CheckBox Name="ChkJoyLtRtAsButton" IsChecked="' (MainSoftData.JoyLtRtAsButton ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>'
         behaviorPage := page("behavior"
             , twoCol(
                 card(GetLang("软件"), "&#xE74C;", tog(GetLang("开机自启"), "ChkBootStart", MainSoftData.IsBootStart)
                     . tog(GetLang("管理员启动"), "ChkAdminStart", MainSoftData.IsAdminStart, GetLang("后台功能与部分按键类型需要管理员权限"))
-                    . row(GetLang("权限说明"), '<TextBlock Text="' GetLang("不要通过程序兼容性强制管理员运行；请使用本选项，才能与开机自启一起生效。") '" TextWrapping="Wrap" Foreground="{DynamicResource TextSub}" FontSize="13"/>')
                     . tog(GetLang("在线功能"), "ChkDataReport", MainSoftData.IsDataReport, GetLang("获取版本更新、AI 智能助手"))
                     . cmb(GetLang("语言"), "CmbLang", MainSoftData.LangArr, MainSoftData.Lang)
                     . cmb(GetLang("首选编辑器"), "CmbPreferredEditor", GetLangArr(["逻辑树", "图形节点"]), MainSoftData.PreferredMacroEditor)
                     . tog(GetLang("模态子窗口"), "ChkModalSubGui", MainSoftData.IsModalSubGui, GetLang("打开指令编辑等子窗口时禁用主窗口")), "0", "", "soft")
                 . card(GetLang("显示页签"), "&#xE8A5;", tabsBody, "0,18,0,0", "", "tabs")
-                , card(GetLang("通用"), "&#xE713;", cmb(GetLang("截图工具"), "CmbScreenShot", GetLangArr(["微软截图", "RMT截图", "SC截图"]), MainSoftData.ScreenShotType)
-                    . cmb(GetLang("OCR类型"), "CmbOCRType", ["RapidOCR", "Tesseract OCR"], MainSoftData.OCRTypeValue, false, GetLang("文字识别引擎，支持中文和英文。保存设置后应用于后台宏。"))
-                    . cmb(GetLang("图片识别模型"), "CmbSearchImage", GetLangArr(["OpenCV", "RMT搜图"]), MainSoftData.SearchImageType)
+                , card(GetLang("通用"), "&#xE713;", cmb(GetLang("截图工具"), "CmbScreenShot", GetLangArr(["微软截图", "RMT截图", "SC截图"]), MainSoftData.ScreenShotType, false, ""
+                        , ["调用 Windows 自带截图工具。", "内置框选截图，支持边缘吸附。", "支持标注、马赛克和贴图。"], 132)
+                    . cmb(GetLang("OCR类型"), "CmbOCRType", ["RapidOCR", "Tesseract OCR"], MainSoftData.OCRTypeValue, false, ""
+                        , ["默认引擎，使用 PP-OCRv6 识别中英文。", "使用 Tesseract 语言包识别中英文。"], 132)
+                    . cmb(GetLang("图片识别模型"), "CmbSearchImage", GetLangArr(["OpenCV", "RMT搜图"]), MainSoftData.SearchImageType, false, ""
+                        , ["默认灰度匹配，支持颜色匹配和缩放自适应。", "使用 AHK 内置的图片搜索。"], 132)
                     . tog(GetLang("图片识别自适应"), "ChkSearchImageAdaptive", MainSoftData.SearchImageAdaptive, GetLang("仅 OpenCV 生效，匹配分辨率或 DPI 缩放变化后的图片"))
-                    . num(GetLang("多线程数"), "EditMutiThreadNum", MainSoftData.MutiThreadNum, GetLang("-1：动态多线程；0：单线程；n：固定线程数（推荐 3~5）"))
+                    . cmb(GetLang("多线程数"), "EditMutiThreadNum", ["-1", "0"], MainSoftData.MutiThreadNum, false
+                        , GetLang("-1：动态多线程；0：单线程；n：固定线程数（推荐 3~5）"), , , true)
                     . num(GetLang("网络宏端口"), "EditNetPort", MainSoftData.NetworkPort, GetLang("网络宏端口 1-65535，默认 16888；仅监听本机回环地址。"))
                     . cmb(GetLang("指令备注生成"), "CmbRemarkAuto", GetLangArr(["不生成", "自动生成", "覆盖生成"]), MainSoftData.RemarkAutoType), "0", "", "general")
                 . card(GetLang("手柄"), "&#xE7FC;", cmb(GetLang("手柄映射"), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType)
                     . cmb(GetLang("宏手柄类型"), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType)
-                    . '<Border MinHeight="48" Padding="0,5" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,0,0,0.5"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="128"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                    . '<TextBlock Name="LblJoyLtRtAsButton" Text="' this._XmlEsc(ltRtLabel) '" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" FontSize="13" VerticalAlignment="Center"/>'
-                    . '<Grid Grid.Column="2" VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                    . '<CheckBox Name="ChkJoyLtRtAsButton" IsChecked="' (MainSoftData.JoyLtRtAsButton ? "True" : "False") '" Style="{StaticResource SetSwitch}" VerticalAlignment="Center"/>'
-                    . '<TextBlock Grid.Column="1" Name="LblJoyLtRtAsButton_Desc" Text="' this._XmlEsc(ltRtDesc) '" Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/>'
-                    . '</Grid></Grid></Border>', "0,18,0,0", "", "joy"))
+                    . row(this._JoyLtRtAsButtonLabel(), afterHint(ltRtSwitch, this._JoyLtRtAsButtonDesc(), "LblJoyLtRtAsButton_Desc"), "", "LblJoyLtRtAsButton"), "0,18,0,0", "", "joy"))
             , true)
 
         ; ---------- 页：宏 ----------
+        floatOff := "`n`n" GetLang("填 0 时不浮动。")
         audioRows := row(GetLang("开始音效"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/></Grid.ColumnDefinitions><TextBox Name="StartTipAudioCon" Text="' this._XmlEsc(MainSoftData.StartTipAudio) '" Padding="5,0"/><Button Grid.Column="1" Name="BtnStartTipBrowse" Content="' GetLang("浏览") '" Margin="6,0,0,0" Padding="4,0"/></Grid>')
             . row(GetLang("结束音效"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/></Grid.ColumnDefinitions><TextBox Name="EndTipAudioCon" Text="' this._XmlEsc(MainSoftData.EndTipAudio) '" Padding="5,0"/><Button Grid.Column="1" Name="BtnEndTipBrowse" Content="' GetLang("浏览") '" Margin="6,0,0,0" Padding="4,0"/></Grid>')
             . row(GetLang("终止音效"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/></Grid.ColumnDefinitions><TextBox Name="StopTipAudioCon" Text="' this._XmlEsc(MainSoftData.StopTipAudio) '" Padding="5,0"/><Button Grid.Column="1" Name="BtnStopTipBrowse" Content="' GetLang("浏览") '" Margin="6,0,0,0" Padding="4,0"/></Grid>')
@@ -5664,11 +5662,21 @@ class MainWin {
                     . cmb(GetLang("宏终止方式"), "CmbMacroStop", GetLangArr(["智能终止", "强制终止"]), MainSoftData.MacroStopType)
                     . cmb(GetLang("重复按下行为"), "CmbKeyDownDown", GetLangArr(["自动松开", "忽略重复按下", "允许重复按下"]), MainSoftData.KeyDownDownType)
                     . tog(GetLang("无变量提醒"), "ChkNoVariable", MainSoftData.NoVariableTip, GetLang("变量为空时提示")), "0", "", "trig")
-                , card(GetLang("随机浮动"), "&#xE823;", numCompact(GetLang("点击时间浮动（%）"), "EditHoldFloat", MainSoftData.HoldFloat, GetLang("点击指令时，按下或等待时长可随机上下浮动的百分比。"))
-                    . numCompact(GetLang("每次间隔浮动（%）"), "EditPreIntervalFloat", MainSoftData.PreIntervalFloat, GetLang("两次宏执行之间的间隔可随机上下浮动的百分比。"))
-                    . numCompact(GetLang("间隔指令浮动（%）"), "EditIntervalFloat", MainSoftData.IntervalFloat, GetLang("间隔指令本身的时长可随机上下浮动的百分比。"))
-                    . numCompact(GetLang("坐标 X 浮动 (px)"), "EditCoordXFloat", MainSoftData.CoordXFloat, GetLang("鼠标坐标 X 轴可随机上下偏移的像素值。"))
-                    . numCompact(GetLang("坐标 Y 浮动 (px)"), "EditCoordYFloat", MainSoftData.CoordYFloat, GetLang("鼠标坐标 Y 轴可随机上下偏移的像素值。")), "0", "", "float")
+                , card(GetLang("随机浮动"), "&#xE823;", num(GetLang("点击时间浮动"), "EditHoldFloat", MainSoftData.HoldFloat
+                        , GetLang("按键指令点击时的按住时长（%）")
+                        , GetLang("按键指令点击时长为 100 ms。填 10，按住约 90～110 ms；填 -10，按住约 90～100 ms。") floatOff)
+                    . num(GetLang("每次间隔浮动"), "EditPreIntervalFloat", MainSoftData.PreIntervalFloat
+                        , GetLang("多次点击、搜索等操作的重复间隔（%）")
+                        , GetLang("搜索重试间隔为 500 ms。填 10，下次重试前约等 450～550 ms；填 -10，约等 450～500 ms。") floatOff)
+                    . num(GetLang("间隔指令浮动"), "EditIntervalFloat", MainSoftData.IntervalFloat
+                        , GetLang("间隔指令的等待时长（%）")
+                        , GetLang("间隔指令设为 1000 ms。填 10，约等 900～1100 ms；填 -10，约等 900～1000 ms。") floatOff)
+                    . num(GetLang("坐标X浮动"), "EditCoordXFloat", MainSoftData.CoordXFloat
+                        , GetLang("鼠标目标坐标的水平偏移（像素）")
+                        , GetLang("鼠标绝对移动的目标 X 为 400。填 10，X 在 390～410 间随机；填 -10，只向左浮动，X 为 390～400。") floatOff)
+                    . num(GetLang("坐标Y浮动"), "EditCoordYFloat", MainSoftData.CoordYFloat
+                        , GetLang("鼠标目标坐标的垂直偏移（像素）")
+                        , GetLang("鼠标绝对移动的目标 Y 为 300。填 10，Y 在 290～310 间随机；填 -10，只向上浮动，Y 为 290～300。") floatOff), "0", "", "float")
                     . card(GetLang("音频"), "&#xE767;", audioRows, "0,18,0,0", "", "audio")))
 
         ; ---------- 页：指令录制 ----------
@@ -5720,6 +5728,21 @@ class MainWin {
         hotkeyPage := page("hotkey", twoCol(hotkeyCards[1] . hotkeyCards[2], hotkeyCards[3]))
 
         ; ---------- 页：日志 ----------
+        logLevels := [
+            ["debug", "调试", "记录手柄按键输出、插件初始化等调试细节。"],
+            ["info", "信息", "记录网络监听启动、配置导入等常规事件。"],
+            ["warn", "警告", "只记录警告。"],
+            ["error", "错误", "只记录错误。"]
+        ]
+        logLevelButtons := '<UniformGrid Columns="4">'
+        logLevelHelp := GetLang("可同时勾选多个级别。系统日志只写入勾选的级别，全部取消则暂停写入。")
+        for level in logLevels {
+            description := GetLang(level[3])
+            logLevelHelp .= "`n" GetLang(level[2]) " · " description
+            logLevelButtons .= '<CheckBox Name="LogLevel_' level[1] '" Style="{StaticResource SetTabButton}" Width="Auto"'
+                . ' IsChecked="' (RMTLogLevelEnabled(level[1], MainSoftData.SysLogMinLevel) ? "True" : "False") '" Content="' this._XmlEsc(GetLang(level[2])) '" ToolTip="' this._XmlEsc(description) '"/>'
+        }
+        logLevelButtons .= '</UniformGrid>'
         logPage := page("diagnostic", twoCol(
             card(GetLang("指令显示"), "&#xE8A5;", tog(GetLang("启用指令显示"), "ChkCMDTip", MySoftData.CMDTip, GetLang("在屏幕上显示宏运行状态"))
                 . num(GetLang("显示位置 X"), "CmdTipPosXCon", MainSoftData.CMDPosX)
@@ -5728,14 +5751,15 @@ class MainWin {
                 . sld(GetLang("显示高度"), "CmdTipHeightCon", "CmdTipHeightVal", MainSoftData.CMDHeight, 40, 600, 5)
                 . sld(GetLang("字体大小"), "CmdTipFontCon", "CmdTipFontVal", MainSoftData.CMDFontSize, 8, 36, 1)
                 . sld(GetLang("背景透明度"), "CmdTipAlphaCon", "CmdTipAlphaVal", MainSoftData.CMDTransparency, 0, 100, 1)
-                . tog(GetLang("输出到文件"), "CmdTipLogFileCon", MainSoftData.CMDLogToFile, GetLang("把指令显示内容写入日志文件"))
-                . row(GetLang("日志文件路径"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="85"/></Grid.ColumnDefinitions><TextBox Name="CmdTipLogPathCon" Text="' this._XmlEsc(CMDLogPathDisplay(MainSoftData.CMDLogFilePath)) '"/><Button Name="BtnCmdTipBrowse" Grid.Column="1" Content="' GetLang("浏览") ' ↗" Width="76" HorizontalAlignment="Right" Padding="6,0"/></Grid>', GetLang("默认是软件所在目录下的 Log。把整个 RMT 文件夹换个位置后，会自动改到新目录，不用重新选择。") . "`n")
-                . cmb(GetLang("自动清理时间"), "CmdTipAutoClearCon", GetLangArr(["从不", "每天", "每周"]), MainSoftData.CMDLogAutoClear, true), "0", "", "cmdTip")
-            , card(GetLang("日志与错误"), "&#xE81C;", cmb(GetLang("日志级别"), "CmbLogLevel", ["debug", "info", "warn", "error"], MainSoftData.SysLogMinLevel)
-                . tog(GetLang("warn 气泡"), "ChkLogWarnBubble", MainSoftData.LogWarnBubble, GetLang("警告时显示托盘气泡"))
-                . tog(GetLang("错误中心"), "ChkLogErrorBadge", MainSoftData.LogErrorBadge, GetLang("error 在错误中心聚合"))
-                . tog(GetLang("业务日志"), "ChkBusinessLog", MainSoftData.BusinessLog, GetLang("记录宏运行流水"))
-                . btnRow(GetLang("日志中心"), '<Button Name="BtnLogCenter" Content="' GetLang("打开日志中心") ' ↗" HorizontalAlignment="Left" Padding="10,0"/>'), "0", "", "logErr")))
+                . tog(GetLang("输出到文件"), "CmdTipLogFileCon", MainSoftData.CMDLogToFile, GetLang("把指令显示内容写入日志文件")), "0", "", "cmdTip")
+            , card(GetLang("日志与错误"), "&#xE81C;", row(GetLang("日志级别"), logLevelButtons, , , logLevelHelp)
+                . tog(GetLang("警告气泡"), "ChkLogWarnBubble", MainSoftData.LogWarnBubble, GetLang("宏运行警告通过托盘气泡提醒"))
+                . tog(GetLang("错误中心"), "ChkLogErrorBadge", MainSoftData.LogErrorBadge, GetLang("汇总宏运行错误，便于集中查看"))
+                . row(GetLang("日志文件路径"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Name="CmdTipLogPathCon" Padding="2,0" Text="' this._XmlEsc(CMDLogPathDisplay(MainSoftData.CMDLogFilePath)) '"/><Button Name="BtnCmdTipBrowse" Grid.Column="1" Content="' GetLang("浏览") ' ↗" Width="76" Height="33" Margin="8,0,0,0" Padding="6,0"/></Grid>'
+                    , GetLang("这是指令显示输出到文件时使用的路径。") "`n" GetLang("默认是软件所在目录下的 Log。把整个 RMT 文件夹换个位置后，会自动改到新目录，不用重新选择。"))
+                . cmb(GetLang("自动清理时间"), "CmdTipAutoClearCon", GetLangArr(["从不", "每天", "每周"]), MainSoftData.CMDLogAutoClear, true
+                    , GetLang("仅清理指令显示日志文件。") "`n" GetLang("每天清理当天之前的文件；每周清理本周之前的文件。"))
+                . row(GetLang("日志中心"), '<Button Name="BtnLogCenter" Content="' GetLang("打开日志中心") ' ↗" HorizontalAlignment="Left" Padding="10,0"/>'), "0", "", "logErr")))
 
         ; ---------- 页：界面 ----------
         ; 自定义界面：面板下拉的数据源（界面宏的折叠框）
@@ -5767,7 +5791,7 @@ class MainWin {
                     . sld(GetLang("每行个数"), "UIPanelColsCon", "UIPanelColsVal", MainSoftData.UIPanelCols, 1, 6, 1)
                     . tog(GetLang("界面激活时显示"), "UIPanelShowOnActiveCon", MainSoftData.UIPanelShowOnActive)
                     . cmb(GetLang("自定义面板"), "UIPanelCustomFoldCon", uiFoldNames, 1)
-                    . btnRow(GetLang("自定义界面"), '<StackPanel Orientation="Horizontal"><Button Name="BtnEditUIPanelCustom" Content="' GetLang("界面编辑") '" HorizontalAlignment="Left" Padding="10,0"/><Button Name="BtnResetUIPanelCustom" Content="' GetLang("恢复自动") '" HorizontalAlignment="Left" Padding="10,0" Margin="8,0,0,0"/></StackPanel>'), "0", "", "uipanel")
+                    . row(GetLang("自定义界面"), '<StackPanel Orientation="Horizontal"><Button Name="BtnEditUIPanelCustom" Content="' GetLang("界面编辑") '" HorizontalAlignment="Left" Padding="10,0"/><Button Name="BtnResetUIPanelCustom" Content="' GetLang("恢复自动") '" HorizontalAlignment="Left" Padding="10,0" Margin="8,0,0,0"/></StackPanel>'), "0", "", "uipanel")
             )
         )
 
@@ -5787,7 +5811,7 @@ class MainWin {
         paletteBody := '<UniformGrid Columns="3">'
         for slot, cd in AppThemeUtil.ColorDefs {
             col := tcMap.Has(cd.Key) ? tcMap[cd.Key] : "#FF000000"
-            paletteBody .= '<Grid Margin="0,4,16,4"><Grid.ColumnDefinitions><ColumnDefinition Width="56"/><ColumnDefinition Width="*"/><ColumnDefinition Width="35"/></Grid.ColumnDefinitions><TextBlock Text="' this._XmlEsc(GetLang("颜色") " " slot) '" VerticalAlignment="Center" FontSize="13"/><TextBox Grid.Column="1" Name="PaletteText_' slot '" Text="' this._XmlEsc(col) '" IsReadOnly="True" Padding="7,0"/><Border Grid.Column="2" Name="PalettePreview_' slot '" Width="28" Height="28" CornerRadius="6" HorizontalAlignment="Right" Background="' this._XmlEsc(col) '" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" Cursor="Arrow"/></Grid>'
+            paletteBody .= '<Grid Margin="0,4,16,4"><Grid.ColumnDefinitions><ColumnDefinition Width="' labelWidth '"/><ColumnDefinition Width="*"/><ColumnDefinition Width="35"/></Grid.ColumnDefinitions><TextBlock Text="' this._XmlEsc(GetLang("颜色") " " slot) '" VerticalAlignment="Center" FontSize="13"/><TextBox Grid.Column="1" Name="PaletteText_' slot '" Text="' this._XmlEsc(col) '" IsReadOnly="True" Padding="7,0"/><Border Grid.Column="2" Name="PalettePreview_' slot '" Width="28" Height="28" CornerRadius="6" HorizontalAlignment="Right" Background="' this._XmlEsc(col) '" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" Cursor="Arrow"/></Grid>'
         }
         paletteBody .= '</UniformGrid>'
         themePage := page("appearance"
@@ -5815,18 +5839,18 @@ class MainWin {
         aiPage := page("ai"
             , twoCol(
                 card(GetLang("大模型"), "&#xE99A;", cmb(GetLang("模型商"), "AiProviderCon", aiProviderNames, AiAssist.ProviderIndex(MainSoftData.AiProvider) - 1, true)
-                    . row(GetLang("API URL"), '<TextBox Name="AiBaseUrlCon" Text="' this._XmlEsc(MainSoftData.AiApiBaseUrl) '" Height="33" MinHeight="33" Padding="6,0,18,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', GetLang("OpenAI 兼容接口，例如 https://api.openai.com/v1"))
+                    . row(GetLang("API URL"), '<TextBox Name="AiBaseUrlCon" Text="' this._XmlEsc(MainSoftData.AiApiBaseUrl) '" Height="33" MinHeight="33" Padding="6,0,18,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>')
                     . row(GetLang("API Key"), '<PasswordBox Name="AiApiKeyCon" Password="' this._XmlEsc(MainSoftData.AiApiKey) '" Height="33" MinHeight="33" Padding="6,0,18,0" VerticalContentAlignment="Center" FontSize="12" Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputText}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>')
                     . row(GetLang("模型列表"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox Name="AiModelCon" IsEditable="True" Text="' this._XmlEsc(MainSoftData.AiModel) '" Height="33" MinHeight="33" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1">' aiModelXaml '</ComboBox><Button Grid.Column="1" Name="BtnAiRefreshModels" Content="&#xE72C;" FontFamily="' iconFont '" FontSize="14" Width="33" Height="33" MinWidth="33" MinHeight="33" Padding="0" Margin="8,0,0,0" ToolTip="' this._XmlEsc(GetLang("刷新")) '"/></Grid>'), "0", "", "aiModel")
-                , card(GetLang("权限"), "&#xE72E;", cmb(GetLang("写入权限"), "AiAccessCon", aiAccessNames, MainSoftData.AiAccessMode - 1, true, GetLang("只读：只能读取；工作区：写入仅限软件目录；完全访问：无读写限制。"))
-                    . cmb(GetLang("指令审批"), "AiApprovalCon", aiApprovalNames, MainSoftData.AiApprovalMode - 1, true)
-                    . row(GetLang("权限说明"), '<TextBlock Text="' GetLang("只读：只能读取；工作区：写入仅限软件目录；完全访问：无读写限制。") '" TextWrapping="Wrap" Foreground="{DynamicResource TextSub}"/>'), "0", "", "aiPerm")
+                , card(GetLang("权限"), "&#xE72E;", cmb(GetLang("写入权限"), "AiAccessCon", aiAccessNames, MainSoftData.AiAccessMode - 1, true, ""
+                        , ["只能读取文件和配置。", "写入仅限软件目录。", "读写无路径限制。"], 132)
+                    . cmb(GetLang("指令审批"), "AiApprovalCon", aiApprovalNames, MainSoftData.AiApprovalMode - 1, true), "0", "", "aiPerm")
             )
         )
 
         ; ---------- 组装：左侧导航 + 右侧页面 ----------
         navDefs := [["behavior", "&#xE713;", "系统"], ["macro", "&#xE768;", "宏"], ["record", "&#xE7C8;", "指令录制"], ["trigger", "&#xE8D4;", "界面"], ["hotkey", "&#xE765;", "快捷键"], ["appearance", "&#xE790;", "主题"], ["ai", "&#xE99A;", "AI 助手"], ["diagnostic", "&#xE81C;", "日志"]]
-        navSep := '<Border Height="1" Background="{DynamicResource OutlineStroke}" Margin="0,0,-9,0" HorizontalAlignment="Stretch"/>'
+        navSep := '<Border Height="1" Background="{DynamicResource OutlineStroke}"/>'
         navAll := navSep
         for ni, nd in navDefs {
             if (ni > 1)
@@ -5836,11 +5860,9 @@ class MainWin {
         navAll .= navSep
         pagesAll := behaviorPage . macroPage . recordPage . triggerPage . hotkeyPage . themePage . aiPage . logPage
         Add('<Grid ' ns '><Grid.Resources>' navStyle . switchStyle . fieldStyles '</Grid.Resources>'
-            . '<Grid.ColumnDefinitions><ColumnDefinition Width="146"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-            ; 先画纵向边框，再画导航与横向分隔线，使交点由横线覆盖，不留抗锯齿缝隙。
-            . '<Border Grid.Column="1" Width="1" HorizontalAlignment="Center" Background="{DynamicResource OutlineStroke}"/>'
-            . '<StackPanel Grid.Column="0" Margin="0,2,0,2">' navAll . '</StackPanel>'
-            . '<ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><Grid>' pagesAll . '</Grid></ScrollViewer>'
+            . '<Grid.ColumnDefinitions><ColumnDefinition Width="153"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+            . '<Border BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="0,0,1,0" SnapsToDevicePixels="True"><StackPanel>' navAll . '</StackPanel></Border>'
+            . '<ScrollViewer Grid.Column="1" Margin="5,0,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><Grid>' pagesAll . '</Grid></ScrollViewer>'
             . '</Grid>')
 
         ; ---- 事件 ----
@@ -5850,6 +5872,7 @@ class MainWin {
         this._Bind("EditCoordXFloat", "LostFocus", ObjBindMethod(this, "OnIntEdit", "CoordXFloat"))
         this._Bind("EditCoordYFloat", "LostFocus", ObjBindMethod(this, "OnIntEdit", "CoordYFloat"))
         this._Bind("EditMutiThreadNum", "LostFocus", ObjBindMethod(this, "OnIntEdit", "MutiThreadNum"))
+        this._Bind("EditMutiThreadNum", "SelectionChanged", ObjBindMethod(this, "OnIntEdit", "MutiThreadNum"))
         this._Bind("CmbFont", "SelectionChanged", ObjBindMethod(this, "OnComboText", "FontType"))
         this._Bind("ChkBootStart", "Click", OnBootStartChanged)
         this._Bind("ChkAdminStart", "Click", OnAdminStartChanged)
@@ -5857,7 +5880,6 @@ class MainWin {
         this._Bind("ChkAutoLoosen", "Click", ObjBindMethod(this, "OnCheckEdit", "AutoLoosenModifier"))
         this._Bind("ChkContinuous", "Click", ObjBindMethod(this, "OnCheckEdit", "ContinuousTrigger"))
         this._Bind("ChkNoVariable", "Click", ObjBindMethod(this, "OnCheckEdit", "NoVariableTip"))
-        this._Bind("ChkBusinessLog", "Click", ObjBindMethod(this, "OnBusinessLogToggle"))
         this._Bind("ChkModalSubGui", "Click", ObjBindMethod(this, "OnCheckEdit", "IsModalSubGui"))
         this._Bind("ChkDataReport", "Click", ObjBindMethod(this, "OnCheckEdit", "IsDataReport"))
         this._Bind("CmbLang", "SelectionChanged", ObjBindMethod(this, "OnComboText", "Lang"))
@@ -5911,7 +5933,8 @@ class MainWin {
         }
 
         ; ---- 设置中心：日志 ----
-        this._Bind("CmbLogLevel", "SelectionChanged", ObjBindMethod(this, "OnComboText", "SysLogMinLevel"))
+        for level in logLevels
+            this._Bind("LogLevel_" level[1], "Click", ObjBindMethod(this, "OnLogLevelChanged", level[1]))
         this._Bind("ChkLogWarnBubble", "Click", ObjBindMethod(this, "OnCheckEdit", "LogWarnBubble"))
         this._Bind("ChkLogErrorBadge", "Click", ObjBindMethod(this, "OnCheckEdit", "LogErrorBadge"))
 
@@ -5998,13 +6021,13 @@ class MainWin {
             pageId := "trigger"
         else if (RegExMatch(ctrl, "i)^(ShowBorder|HoldMuti|AutoLoosenCon|KeyboardTog|MouseTog|MouseTrail|JoyTog|JoyInterval)") )
             pageId := "record"
-        else if (RegExMatch(ctrl, "i)^(CmbLog|ChkLog|ChkBusiness|ChkCMD|CmdTip|Val_)") )
+        else if (RegExMatch(ctrl, "i)^(LogLevel_|ChkLog|ChkCMD|CmdTip|Val_)") )
             pageId := (InStr(ctrl, "Val_") = 1) ? "hotkey" : "diagnostic"
         else if (RegExMatch(ctrl, "i)^Ai") || ctrl == "ThemePresetCon")
             pageId := ctrl == "ThemePresetCon" ? "appearance" : "ai"
         else if (RegExMatch(ctrl, "i)^(CmbFont|ThemeFont|Palette)") )
             pageId := "appearance"
-        else if (RegExMatch(ctrl, "i)^(ChkBoot|ChkAdmin|ChkData|ChkModal|CmbLang|CmbPreferred|CmbScreen|CmbSearchImage|ChkSearchImageAdaptive|CmbRemark|CmbTriggerJoy|CmbJoy|ChkJoy|EditMuti|TabVisible)") )
+        else if (RegExMatch(ctrl, "i)^(ChkBoot|ChkAdmin|ChkData|ChkModal|CmbLang|CmbPreferred|CmbScreen|CmbOCR|CmbSearchImage|ChkSearchImageAdaptive|CmbRemark|CmbTriggerJoy|CmbJoy|ChkJoy|EditMuti|TabVisible)") )
             pageId := "behavior"
         else if (ctrl == "EditNetPort")
             pageId := "behavior"
@@ -6042,8 +6065,8 @@ class MainWin {
             {id: "hk1", fields: [{key: "SuspendHotkey", def: "!p", ctrl: "Val_SuspendHotkey", kind: "hk"}, {key: "PauseHotkey", def: "!i", ctrl: "Val_PauseHotkey", kind: "hk"}, {key: "KillMacroHotkey", def: "!k", ctrl: "Val_KillMacroHotkey", kind: "hk"}, {key: "ToolRecordMacroHotKey", def: "!r", ctrl: "Val_ToolRecordMacroHotKey", kind: "hk"}, {key: "ToolTextFilterHotKey", def: "", ctrl: "Val_ToolTextFilterHotKey", kind: "hk"}]},
             {id: "hk2", fields: [{key: "ScreenShotHotKey", def: "", ctrl: "Val_ScreenShotHotKey", kind: "hk"}, {key: "FreePasteHotKey", def: "", ctrl: "Val_FreePasteHotKey", kind: "hk"}, {key: "ToolCheckHotkey", def: "!o", ctrl: "Val_ToolCheckHotkey", kind: "hk"}]},
             {id: "hk3", fields: [{key: "DebugRunHotkey", def: "f5", ctrl: "Val_DebugRunHotkey", kind: "hk"}, {key: "DebugStepOverHotkey", def: "f10", ctrl: "Val_DebugStepOverHotkey", kind: "hk"}, {key: "DebugStepHotkey", def: "f11", ctrl: "Val_DebugStepHotkey", kind: "hk"}, {key: "DebugStepOutHotkey", def: "+f11", ctrl: "Val_DebugStepOutHotkey", kind: "hk"}, {key: "DebugRunToCursorHotkey", def: "^f10", ctrl: "Val_DebugRunToCursorHotkey", kind: "hk"}, {key: "DebugToggleSkipHotkey", def: "^/", ctrl: "Val_DebugToggleSkipHotkey", kind: "hk"}, {key: "DebugRunAllHotkey", def: "^f5", ctrl: "Val_DebugRunAllHotkey", kind: "hk"}]},
-            {id: "cmdTip", fields: [{key: "CMDTip", def: false, ctrl: "ChkCMDTip", kind: "chkMy", hook: "cmdtip"}, {key: "CMDWidth", defFn: "cmdW", ctrl: "CmdTipWidthCon", kind: "sld", val: "CmdTipWidthVal"}, {key: "CMDHeight", def: 300, ctrl: "CmdTipHeightCon", kind: "sld", val: "CmdTipHeightVal"}, {key: "CMDPosX", defFn: "cmdX", ctrl: "CmdTipPosXCon", kind: "num"}, {key: "CMDPosY", def: 0, ctrl: "CmdTipPosYCon", kind: "num"}, {key: "CMDFontSize", def: 12, ctrl: "CmdTipFontCon", kind: "sld", val: "CmdTipFontVal"}, {key: "CMDTransparency", def: 50, ctrl: "CmdTipAlphaCon", kind: "sld", val: "CmdTipAlphaVal"}, {key: "CMDLogToFile", def: false, ctrl: "CmdTipLogFileCon", kind: "chk"}, {key: "CMDLogFilePath", def: "", ctrl: "CmdTipLogPathCon", kind: "txt"}, {key: "CMDLogAutoClear", def: 2, ctrl: "CmdTipAutoClearCon", kind: "cmb0"}]},
-            {id: "logErr", fields: [{key: "SysLogMinLevel", def: "info", ctrl: "CmbLogLevel", kind: "cmbText"}, {key: "LogWarnBubble", def: true, ctrl: "ChkLogWarnBubble", kind: "chk"}, {key: "LogErrorBadge", def: true, ctrl: "ChkLogErrorBadge", kind: "chk"}, {key: "BusinessLog", def: false, ctrl: "ChkBusinessLog", kind: "chk", hook: "blog"}]},
+            {id: "cmdTip", fields: [{key: "CMDTip", def: false, ctrl: "ChkCMDTip", kind: "chkMy", hook: "cmdtip"}, {key: "CMDWidth", defFn: "cmdW", ctrl: "CmdTipWidthCon", kind: "sld", val: "CmdTipWidthVal"}, {key: "CMDHeight", def: 300, ctrl: "CmdTipHeightCon", kind: "sld", val: "CmdTipHeightVal"}, {key: "CMDPosX", defFn: "cmdX", ctrl: "CmdTipPosXCon", kind: "num"}, {key: "CMDPosY", def: 0, ctrl: "CmdTipPosYCon", kind: "num"}, {key: "CMDFontSize", def: 12, ctrl: "CmdTipFontCon", kind: "sld", val: "CmdTipFontVal"}, {key: "CMDTransparency", def: 50, ctrl: "CmdTipAlphaCon", kind: "sld", val: "CmdTipAlphaVal"}, {key: "CMDLogToFile", def: false, ctrl: "CmdTipLogFileCon", kind: "chk"}]},
+            {id: "logErr", fields: [{key: "SysLogMinLevel", def: "warn,error", ctrl: "LogLevel_warn", kind: "logLevel"}, {key: "LogWarnBubble", def: true, ctrl: "ChkLogWarnBubble", kind: "chk"}, {key: "LogErrorBadge", def: true, ctrl: "ChkLogErrorBadge", kind: "chk"}, {key: "CMDLogFilePath", def: "", ctrl: "CmdTipLogPathCon", kind: "txt"}, {key: "CMDLogAutoClear", def: 2, ctrl: "CmdTipAutoClearCon", kind: "cmb0"}]},
             {id: "wheel", fields: [{key: "FixedMenuWheel", def: false, ctrl: "WheelFixedPosCon", kind: "chk"}, {key: "MenuWheelShowTooltip", def: false, ctrl: "WheelShowTooltipCon", kind: "chk"}, {key: "MenuWheelSelectMode", def: 2, ctrl: "WheelSelectModeCon", kind: "cmb"}, {key: "MenuWheelScale", def: 100, ctrl: "WheelScaleCon", kind: "sld", val: "WheelScaleVal"}]},
             {id: "countdown", fields: [{key: "CountDownStyle", def: 2, ctrl: "CountDownStyleCon", kind: "cmb"}, {key: "CountDownPadZero", def: true, ctrl: "CountDownPadCon", kind: "chk"}, {key: "CountDownAlpha", def: 70, ctrl: "CountDownAlphaCon", kind: "sld", val: "CountDownAlphaVal"}, {key: "CountDownFontSize", def: 15, ctrl: "CountDownFontCon", kind: "sld", val: "CountDownFontVal"}]},
             {id: "uipanel", fields: [{key: "UIPanelBtnWidth", def: 80, ctrl: "UIPanelBtnWidthCon", kind: "sld", val: "UIPanelBtnWidthVal"}, {key: "UIPanelBtnHeight", def: 34, ctrl: "UIPanelBtnHeightCon", kind: "sld", val: "UIPanelBtnHeightVal"}, {key: "UIPanelFontSize", def: 12, ctrl: "UIPanelFontSizeCon", kind: "sld", val: "UIPanelFontSizeVal"}, {key: "UIPanelCols", def: 3, ctrl: "UIPanelColsCon", kind: "sld", val: "UIPanelColsVal"}, {key: "UIPanelShowOnActive", def: true, ctrl: "UIPanelShowOnActiveCon", kind: "chk"}]},
@@ -6149,8 +6172,6 @@ class MainWin {
                     OnBootStartChanged("")
                 else if (f.HasOwnProp("hook") && f.hook == "admin")
                     OnAdminStartChanged("")
-                else if (f.HasOwnProp("hook") && f.hook == "blog")
-                    this.OnBusinessLogToggle("", f.ctrl, "")
             case "chkMy":
                 try this.ui.Update(f.ctrl, "IsChecked", def ? "True" : "False")
                 MySoftData.CMDTip := !!def
@@ -6167,6 +6188,10 @@ class MainWin {
             case "cmbText":
                 MainSoftData.%f.key% := def
                 try this.ui.Update(f.ctrl, "Text", String(def))
+            case "logLevel":
+                MainSoftData.%f.key% := def
+                for level in RMTLogLevelKeys()
+                    try this.ui.Update("LogLevel_" level, "IsChecked", RMTLogLevelEnabled(level, def) ? "True" : "False")
             case "sld":
                 MainSoftData.%f.key% := def
                 try this.ui.Update(f.ctrl, "Value", String(def))
@@ -6776,13 +6801,11 @@ class MainWin {
         return (MainSoftData.TabVisibleMap.Has(symbol)) ? MainSoftData.TabVisibleMap[symbol] : true
     }
 
-    ; 业务日志开关：写 MainSoftData + 同步 LogUtil global + 持久化
-    OnBusinessLogToggle(state, ctrl, event) {
-        global RMTLogBusinessEnabled
-        MainSoftData.BusinessLog := this.ui.Query(ctrl) == "True"
+    ; 日志级别随设置保存生效。
+    OnLogLevelChanged(level, state, ctrl, event) {
+        checked := this.ui.Query(ctrl) == "True"
+        MainSoftData.SysLogMinLevel := RMTLogToggleLevel(MainSoftData.SysLogMinLevel, level, checked)
         this.MarkSettingDirty(ctrl)
-        RMTLogBusinessEnabled := MainSoftData.BusinessLog
-        CfgWrite(MainSoftData.BusinessLog, SettingFile, SettingSection, "BusinessLog")
     }
 
     OnComboText(fieldName, state, ctrl, event) {

@@ -812,7 +812,8 @@ LoadMainSetting() {
     RMTLogBusinessEnabled := MainSoftData.BusinessLog
     ; 日志与错误（C 项阶段5）
     global RMTLogSysMinLevel
-    MainSoftData.SysLogMinLevel := CfgRead(SettingFile, SettingSection, "SysLogMinLevel", "info")
+    legacyLogLevel := CfgRead(SettingFile, SettingSection, "SysLogMinLevel")
+    MainSoftData.SysLogMinLevel := CfgRead(SettingFile, SettingSection, "SysLogLevels", RMTLogLegacyLevels(legacyLogLevel))
     RMTLogSysMinLevel := MainSoftData.SysLogMinLevel
     ; AI 助手（OpenAI 兼容）
     MainSoftData.AiApiKey := CfgRead(SettingFile, SettingSection, "AiApiKey", "")
@@ -3186,7 +3187,7 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map()) {
             return true
         ; §21 数值型时间变量（旧「当前时间/当前秒」字符串型不再列出，此处保留兼容）
         case "当前时间戳":
-            Value := DateDiff(A_Now, "19700101000000", "Seconds")
+            Value := UnixNow()
             return true
         case "当前年":
             Value := A_YYYY

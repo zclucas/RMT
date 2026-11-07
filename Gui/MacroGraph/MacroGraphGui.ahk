@@ -48,7 +48,7 @@ class MacroGraphGui {
         ; 若梦兔全部指令（移动、移动Pro、增量移动）
         this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
             "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标",
-            "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "等待确定", "倒计时", "注释", "抓图", "跳转"])
+            "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "倒计时", "注释", "抓图", "跳转"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
         this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
@@ -62,8 +62,8 @@ class MacroGraphGui {
             "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\HttpRequest.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
-            "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjust.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
-            "Images\Soft\Wait.png", "Images\Soft\WaitConfirm.png", "Images\Soft\LoopCount.png",
+            "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjustGear32.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
+            "Images\Soft\Wait.png", "Images\Soft\LoopCount.png",
             "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\FlowJump.png"]
 
         ; 复用现有子编辑器（双击节点时打开）
@@ -100,7 +100,6 @@ class MacroGraphGui {
         this.KeyCheckGui := KeyCheckGui()
         this.JoyCheckGui := JoyCheckGui()
         this.WaitGui := WaitGui()
-        this.WaitConfirmGui := WaitConfirmGui()
         this.TimeGui := TimeGui()
         this.CountDownGui := CountDownGui()
         this.ScreenShotGui := ScreenShotGui()

@@ -60,7 +60,7 @@ class CustomMsgBoxGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
         btnRow := body.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
-        btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(80).Height(30).MinHeight(30)
+        AddCmdOkBtn(btnRow)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)

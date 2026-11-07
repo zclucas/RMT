@@ -216,7 +216,7 @@ class ThemeSettingGui {
             .Width(ui.previewW).Height(ui.previewH).CornerRadius("3").Margin(ui.previewMargin ",0,0,0")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1.5")
             .Background("#FF000000").Cursor("Arrow").VerticalAlignment("Center")
-            .SnapsToDevicePixels("True").UseLayoutRounding("False")
+            .SnapsToDevicePixels("True").UseLayoutRounding("True")
     }
 
     _AddThemeOption(combo, name, color) {

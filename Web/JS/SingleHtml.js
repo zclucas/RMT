@@ -71,6 +71,7 @@ const COMMAND_ICON_FILES = {
   "手柄": "Images/Soft/Joy.png",
   "搜索": "Images/Soft/Search.png",
   "搜索Pro": "Images/Soft/SearchPro.png",
+  "搜索All": "Images/Soft/SearchAll.png",
   "搜索Combo": "Images/Soft/SearchCombo.png",
   "鼠标移动": "Images/Soft/Move.png",
   "鼠标移动Pro": "Images/Soft/MovePro.png",
@@ -100,6 +101,8 @@ const COMMAND_ICON_FILES = {
   "Excel": "Images/Soft/Excel.png",
   "流程控制": "Images/Soft/Control.png",
   "窗口管理": "Images/Soft/WindowManage.png",
+  "窗口信息": "Images/Soft/WindowManage.png",
+  "调整窗口": "Images/Soft/WindowAdjustGear32.png",
   "按键检测": "Images/Soft/KeyListen.png",
   "手柄检测": "Images/Soft/JoyListen.png",
   "注释": "Images/Soft/Comment.png",
@@ -116,7 +119,7 @@ const COMMAND_ICON_FILES = {
 };
 
 function getCommandNavParts(title) {
-  const m = String(title || '').match(/^(\d+)\s+(.+)$/);
+  const m = String(title || '').match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
   const num = m ? m[1] : '';
   const cmdName = m ? m[2].trim() : String(title || '').trim();
   const rel = COMMAND_ICON_FILES[cmdName];
@@ -439,10 +442,10 @@ function findPageIndexByRoute(route){
   // 指令重排后，编辑器及旧书签里的编号可能过期，优先按完整指令名定位。
   if(group === '指令手册'){
     // 别名统一为「旧名 -> 现名」：新名直接与页面标题相等，旧名经别名映射后命中，保证新编辑器与历史书签都能跳转
-    const aliases = {'鼠标移动': '移动', '鼠标移动Pro': '移动Pro', '组合搜索': '搜索Combo', '搜索Multi': '搜索Combo', '倒计时': '时间', '流程跳转': '跳转'};
-    const name = key.replace(/^\\d+[-\\s]+/, '');
+    const aliases = {'鼠标移动': '移动', '鼠标移动Pro': '移动Pro', '组合搜索': '搜索Combo', '搜索Multi': '搜索Combo', '时间': '倒计时', '窗口管理': '窗口信息', '流程跳转': '跳转'};
+    const name = key.replace(/^\\d+(?:\\.\\d+)?[-\\s]+/, '');
     const command = aliases[name] || name;
-    idx = PAGE_META.findIndex(p => p.group === group && p.title.replace(/^\\d+\\s+/, '') === command);
+    idx = PAGE_META.findIndex(p => p.group === group && p.title.replace(/^\\d+(?:\\.\\d+)?\\s+/, '') === command);
     if(idx >= 0) return idx;
   }
   idx = PAGE_META.findIndex(p => p.group === group && (p.slug.endsWith('-'+key) || p.title.endsWith(key) || p.title.includes(key)));

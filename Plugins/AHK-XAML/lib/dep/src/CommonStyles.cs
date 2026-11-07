@@ -678,7 +678,7 @@ internal static class RmtCommonStyles
             chromeH = Math.Max(0, window.ActualHeight - hostBox.ActualHeight);
     }
 
-    internal static void NormalizeWindowContentForResize(Window window, double visualScale = double.NaN, double chromeW = 0, double chromeH = 0)
+    internal static void NormalizeWindowContentForResize(Window window, double visualScale = double.NaN, double chromeW = 0, double chromeH = 0, bool preserveAutoHeight = false)
     {
         if (window == null) return;
         window.UpdateLayout();
@@ -693,7 +693,7 @@ internal static class RmtCommonStyles
             && hostBox.StretchDirection == StretchDirection.Both
             && hostBox.Child is FrameworkElement)
         {
-            RetargetViewboxDesignSize(window, hostBox, (FrameworkElement)hostBox.Child, visualScale, chromeW, chromeH);
+            RetargetViewboxDesignSize(window, hostBox, (FrameworkElement)hostBox.Child, visualScale, chromeW, chromeH, preserveAutoHeight);
             return;
         }
         root.SetCurrentValue(FrameworkElement.WidthProperty, double.NaN);
@@ -722,7 +722,7 @@ internal static class RmtCommonStyles
         return host > 1 ? host : 0;
     }
 
-    private static void RetargetViewboxDesignSize(Window window, Viewbox hostBox, FrameworkElement child, double visualScale, double chromeW, double chromeH)
+    private static void RetargetViewboxDesignSize(Window window, Viewbox hostBox, FrameworkElement child, double visualScale, double chromeW, double chromeH, bool preserveAutoHeight)
     {
         if (window == null || hostBox == null || child == null) return;
         window.UpdateLayout();
@@ -752,7 +752,9 @@ internal static class RmtCommonStyles
         // Local XAML Width/Height on the dialog root would ignore SetCurrentValue and keep the
         // original aspect, which is what pushed the title off the top and added side margins.
         child.SetValue(FrameworkElement.WidthProperty, innerW);
-        child.SetValue(FrameworkElement.HeightProperty, innerH);
+        // Auto-height dialogs must remeasure when fields are shown or hidden.
+        if (!preserveAutoHeight || !double.IsNaN(child.Height))
+            child.SetValue(FrameworkElement.HeightProperty, innerH);
         child.HorizontalAlignment = HorizontalAlignment.Stretch;
         child.VerticalAlignment = VerticalAlignment.Stretch;
         hostBox.HorizontalAlignment = HorizontalAlignment.Stretch;

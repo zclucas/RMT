@@ -177,6 +177,7 @@ RefreshToolUI() {
         [MainSoftData.ToolProcessPidCtrl, MainSoftData.ProcessPid],
         [MainSoftData.ToolProcessClassCtrl, MainSoftData.ProcessClass],
         [MainSoftData.ToolProcessIdCtrl, MainSoftData.ProcessId],
+        [MainSoftData.ToolWinOriginCtrl, MainSoftData.WinOriginStr],
         [MainSoftData.ToolWinSizeCtrl, MainSoftData.WinSizeStr],
         [MainSoftData.ToolColorCtrl, MainSoftData.Color],
         [MainSoftData.ToolMouseWinPosCtrl, MainSoftData.WinPosStr]
@@ -365,7 +366,7 @@ CmdEditorTitleIcon(title) {
             ["Excel", "Images\Soft\Excel.png"],
             ["窗口管理", "Images\Soft\WindowManage.png"],
             ["窗口信息", "Images\Soft\WindowManage.png"],
-            ["调整窗口", "Images\Soft\WindowAdjust.png"],
+            ["调整窗口", "Images\Soft\WindowAdjustGear32.png"],
             ["按键检测", "Images\Soft\KeyListen.png"],
             ["手柄检测", "Images\Soft\JoyListen.png"],
             ["后台鼠标", "Images\Soft\Mouse.png"],
@@ -415,12 +416,189 @@ AddCmdOkBtn(parent, name := "BtnOk", extraMargin := "", content := "") {
     return btn
 }
 
+class ScreenAreaPreview {
+    static ButtonStyle() {
+        return '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
+            . '<Border x:Name="surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True">'
+            . '<Grid><Border x:Name="hoverTint" Background="{DynamicResource Accent}" Opacity="0.16" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>'
+            . '<ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Grid></Border>'
+            . '<ControlTemplate.Triggers>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="surface" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger>'
+            . '<Trigger Property="Tag" Value="1"><Setter TargetName="surface" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/></Trigger>'
+            . '<MultiTrigger><MultiTrigger.Conditions><Condition Property="Tag" Value="1"/><Condition Property="IsMouseOver" Value="True"/></MultiTrigger.Conditions>'
+            . '<Setter TargetName="hoverTint" Property="Visibility" Value="Visible"/></MultiTrigger>'
+            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+    }
+
+    ; 顺序与 _Draw 中的上、下、左、右、左上、右上、左下、右下相同。
+    static Grips := [[0, -1, 32645], [0, 1, 32645], [-1, 0, 32644], [1, 0, 32644],
+        [-1, -1, 32642], [1, -1, 32643], [-1, 1, 32643], [1, 1, 32642]]
+
+    __New(minSize := 1) {
+        this.MinSize := minSize
+        this.Windows := []
+        this.GripByHwnd := Map()
+        this.Rect := []
+        this.Drag := ""
+        this.Apply := ""
+        this.TargetHwnd := 0
+        this.MouseDown := ""
+        this.SetCursor := ""
+    }
+
+    Show(x, y, w, h, apply, targetHwnd := 0, context := "") {
+        rect := [Round(x), Round(y), Max(Round(x) + 1, Round(x + w)), Max(Round(y) + 1, Round(y + h))]
+        if (this.IsDragging()) {
+            if (targetHwnd == this.TargetHwnd && context == this.Context && this._SameRect(rect, this.Drag.StartRect))
+                return
+            this._StopDrag()
+        }
+        this.Apply := apply
+        this.TargetHwnd := targetHwnd
+        this.Context := context
+        this._Draw(rect)
+    }
+
+    Hide() {
+        this._StopDrag()
+        if (this.Windows.Length) {
+            OnMessage(0x0201, this.MouseDown, 0) ; WM_LBUTTONDOWN
+            OnMessage(0x0020, this.SetCursor, 0) ; WM_SETCURSOR
+            this.MouseDown := "", this.SetCursor := ""
+            for g in this.Windows
+                g.Destroy()
+            this.Windows := []
+            this.GripByHwnd.Clear()
+            this.Rect := []
+        }
+        this.Apply := ""
+        this.TargetHwnd := 0
+    }
+
+    IsDragging() {
+        return IsObject(this.Drag)
+    }
+
+    FindTargetWindow(info) {
+        matches := GetHwndList(info)
+        if (!matches.Length)
+            return 0
+        hwnd := matches[1]
+        ; 跟随鼠标所在窗口时，悬停在预览边框上仍使用原窗口。
+        return this.GripByHwnd.Has(hwnd) ? this.TargetHwnd : hwnd
+    }
+
+    _SameRect(a, b) {
+        return b.Length && a[1] == b[1] && a[2] == b[2] && a[3] == b[3] && a[4] == b[4]
+    }
+
+    _Draw(rect) {
+        if (this._SameRect(rect, this.Rect))
+            return
+        this.Rect := rect
+        left := rect[1], top := rect[2], right := rect[3], bottom := rect[4]
+        width := right - left, height := bottom - top
+        gripW := Max(2, Min(10, (width - 1) // 2)), gripH := Max(2, Min(10, (height - 1) // 2))
+        ; 极小范围的角向外延伸，仍给每条边留下可拖动的区域。
+        cornerLeft := Min(left, right - 2 * gripW - 1), cornerTop := Min(top, bottom - 2 * gripH - 1)
+        cornerRight := right - gripW, cornerBottom := bottom - gripH
+        midLeft := cornerLeft + gripW, midTop := cornerTop + gripH
+        midW := cornerRight - midLeft, midH := cornerBottom - midTop
+        edgeW := Min(gripW, 5), edgeH := Min(gripH, 5)
+        parts := [[midLeft, cornerTop, midW, edgeH], [midLeft, bottom - edgeH, midW, edgeH],
+            [cornerLeft, midTop, edgeW, midH], [right - edgeW, midTop, edgeW, midH],
+            [cornerLeft, cornerTop, gripW, gripH], [cornerRight, cornerTop, gripW, gripH],
+            [cornerLeft, cornerBottom, gripW, gripH], [cornerRight, cornerBottom, gripW, gripH]]
+        for i, part in parts {
+            if (i <= this.Windows.Length) {
+                this.Windows[i].Move(part*)
+                continue
+            }
+            g := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x08000000 -DPIScale")
+            g.BackColor := "Red"
+            this.Windows.Push(g)
+            this.GripByHwnd[g.Hwnd] := ScreenAreaPreview.Grips[i]
+            g.Show("NA x" part[1] " y" part[2] " w" part[3] " h" part[4])
+        }
+        if (this.MouseDown == "") {
+            this.MouseDown := this._OnMouseDown.Bind(this)
+            this.SetCursor := this._OnSetCursor.Bind(this)
+            OnMessage(0x0201, this.MouseDown)
+            OnMessage(0x0020, this.SetCursor)
+        }
+    }
+
+    _OnSetCursor(wParam, lParam, msg, hwnd) {
+        if (!this.GripByHwnd.Has(hwnd))
+            return
+        cursor := DllCall("LoadCursor", "ptr", 0, "ptr", this.GripByHwnd[hwnd][3], "ptr")
+        DllCall("SetCursor", "ptr", cursor)
+        return 1
+    }
+
+    _OnMouseDown(wParam, lParam, msg, hwnd) {
+        if (!this.GripByHwnd.Has(hwnd) || this.IsDragging())
+            return
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&x, &y)
+        this.Drag := {StartRect: this.Rect, X: x, Y: y, Grip: this.GripByHwnd[hwnd], Timer: this._DragTick.Bind(this)}
+        SetTimer(this.Drag.Timer, 15)
+        return 0
+    }
+
+    _DragTick() {
+        Critical()
+        if (!this.IsDragging())
+            return
+        drag := this.Drag
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&x, &y)
+        dx := x - drag.X, dy := y - drag.Y
+        rect := drag.StartRect.Clone()
+        minWidth := Min(this.MinSize, rect[3] - rect[1]), minHeight := Min(this.MinSize, rect[4] - rect[2])
+        if (drag.Grip[1] < 0)
+            rect[1] := Min(rect[1] + dx, rect[3] - minWidth)
+        else if (drag.Grip[1] > 0)
+            rect[3] := Max(rect[3] + dx, rect[1] + minWidth)
+        if (drag.Grip[2] < 0)
+            rect[2] := Min(rect[2] + dy, rect[4] - minHeight)
+        else if (drag.Grip[2] > 0)
+            rect[4] := Max(rect[4] + dy, rect[2] + minHeight)
+        this._Draw(rect)
+        if (GetKeyState("LButton", "P"))
+            return
+        this._StopDrag()
+        if (this._SameRect(rect, drag.StartRect))
+            return
+
+        apply := this.Apply
+        hwnd := this.TargetHwnd
+        if (hwnd) {
+            if (!WinExist("ahk_id " hwnd)) {
+                this.Hide()
+                return
+            }
+            start := GetWinPos(rect[1], rect[2], hwnd), end := GetWinPos(rect[3], rect[4], hwnd)
+            rect := [start[1], start[2], end[1], end[2]]
+        }
+        Critical("Off")
+        apply.Call(rect*)
+    }
+
+    _StopDrag() {
+        if (this.IsDragging()) {
+            SetTimer(this.Drag.Timer, 0)
+            this.Drag := ""
+        }
+    }
+}
+
 ; 快捷键键帽（F1 等）
 AddHotkeyBadge(parent, hotkey, tip := "") {
     cap := parent.Add("Border").CornerRadius("3").BorderThickness("1.25").Padding("8,0")
         .Height(28).MinHeight(28)
         .BorderBrush("{DynamicResource ControlBorder}").Background("{DynamicResource ControlBg}")
-        .VerticalAlignment("Center").SnapsToDevicePixels("True").UseLayoutRounding("False")
+        .VerticalAlignment("Center").SnapsToDevicePixels("True").UseLayoutRounding("True")
     if (tip != "")
         cap.ToolTip(tip)
     disp := FormatHotkeyDisplay(hotkey)

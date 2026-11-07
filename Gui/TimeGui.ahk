@@ -661,7 +661,6 @@ class TimeGui {
                     if (IsNumber(h) && IsNumber(m2) && IsNumber(s))
                         this.Data.Seconds := Integer(h) * 3600 + Integer(m2) * 60 + Integer(s)
                 }
-                this.Data.WaitEnd := "不等待"
                 this.Data.PosX := this.ui.Query("CdPosXCon")
                 this.Data.PosY := this.ui.Query("CdPosYCon")
         }

@@ -176,6 +176,7 @@
             "CountDown", "CD",
             "MsgBox", "MB",
             "ToolTip", "TT",
+            "OutputTip", "OT",
             "Error", "ER",          ; Worker 错误上报主进程（统一日志 C 项）
             "Joy", "JY"
         )
@@ -730,6 +731,10 @@ ReloadWorkerConfig() {
 
     WorkToolTipContent(content) {
         MsgSendHandler("ToolTip", content)
+    }
+
+    WorkOutputTipContent(content) {
+        MsgSendHandler("OutputTip", content)
     }
 
     WorkViGJoySetState(JoyType, Key, Value) {

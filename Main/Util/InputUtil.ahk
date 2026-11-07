@@ -2,41 +2,58 @@
 
 ; =====================================================================
 ; 输入 / 等待确定 统一通信（输入框/按钮条）：
-; Worker 跨进程请求主进程弹窗（IP/IB → WorkPool 弹窗 → IPR/IBR 回传）；
+; Worker 跨进程请求主进程弹窗（IP/IB/IF → WorkPool 弹窗 → IPR/IBR 回传）；
 ; 主进程宏经 WorkPool.RequestLocalInput 由主线程异步弹窗（结果写本地槽位）。
 ; 返回 args 数组（IPR: [ok, value]；IBR: [button]）；失败/超时返回 ""
 ; IB 结果：true/false/continue/cancel/pause/terminate/timeout，或 sel:选项
 ; =====================================================================
 InputRequest(opcode, args*) {
+    return DispatchInputRequest(opcode, "", args*)
+}
+
+RequestMacroInput(Data, tableItem, index, opcode, args*) {
+    args.Push(InputTimeoutArg(Data))
+    return DispatchInputRequest(opcode, GetItemByIndex(tableItem, index), args*)
+}
+
+DispatchInputRequest(opcode, item, args*) {
     global MyWorkPool
     pack := SplitInputReqArgs(args)
     sendArgs := pack.args.Clone()
     if (pack.timeoutMs > 0)
         sendArgs.Push("to=" pack.timeoutMs)
     if (IsSet(workIndex) && workIndex > 0)
-        return WorkerInputRequest(opcode, pack.timeoutMs, sendArgs*)
+        return WorkerInputRequest(opcode, pack.timeoutMs, item, sendArgs*)
     ; 主进程宏：交由主线程 WorkPool 弹窗
     if (MyWorkPool != "" && IsObject(MyWorkPool))
-        return MyWorkPool.RequestLocalInput(opcode == "IB", pack.timeoutMs, sendArgs*)
+        return MyWorkPool.RequestLocalInput(opcode, pack.timeoutMs, item, sendArgs*)
     return ""
 }
 
-WorkerInputRequest(opcode, timeoutMs, args*) {
+InputResponseDeadline(timeoutMs, graceMs, item) {
+    if (timeoutMs > 0)
+        return A_TickCount + timeoutMs + graceMs
+    return IsObject(item) ? 0 : A_TickCount + 300000
+}
+
+WorkerInputRequest(opcode, timeoutMs, item, args*) {
     global rx, workIndex, parentHwnd, _workerInputResult
     if (!IsSet(rx) || !IsSet(parentHwnd))
         return ""
     cmd := EncodeCommand(opcode, args*)
     payload := EncodeBatch(cmd)
+    _workerInputResult := ""
     rx.Push(MsgType.EVENT, 0, payload)
     PostMessage(WM_WORKER_TO_MASTER, workIndex, 0, , "ahk_id " parentHwnd)
-    _workerInputResult := ""
-    deadline := timeoutMs > 0 ? A_TickCount + timeoutMs + 2000 : A_TickCount + 300000
+    deadline := InputResponseDeadline(timeoutMs, 2000, item)
     loop {
         Sleep(100)
+        if (IsObject(item) && item.Killed)
+            return ""
         if (IsObject(_workerInputResult))
             break
-        if (A_TickCount > deadline)
-            return opcode == "IB" ? ["timeout"] : ["0", ""]
+        if (deadline && A_TickCount > deadline)
+            return ["timeout"]
     }
     r := _workerInputResult
     _workerInputResult := ""
@@ -71,6 +88,17 @@ EnsureInputData(Data) {
         Data.TimeoutMs := 0
     if (!ObjHasOwnProp(Data, "TimeoutAction"))
         Data.TimeoutAction := "无"
+}
+
+InputTypeKeys(current := "") {
+    keys := ["弹窗", "状态", "选择", "选择文件", "多选"]
+    if (current == "继续" || current == "继续&取消")
+        keys.Push(current)
+    return keys
+}
+
+InputHasResult(type) {
+    return type == "弹窗" || type == "状态" || type == "选择" || type == "选择文件" || type == "多选"
 }
 
 InputField(Data, prop, def := "") {
@@ -158,7 +186,7 @@ InputPopUp(Data, tableItem, index) {
     if (Content == "" && MySoftData.VariableMap.Has(Data.SaveName))
         Content := MySoftData.VariableMap[Data.SaveName]
 
-    result := InputRequest("IP", Label, Content, InputTimeoutArg(Data))
+    result := RequestMacroInput(Data, tableItem, index, "IP", Label, Content)
     if (IsObject(result) && result.Length >= 2 && result[1] == "1") {
         MySetGlobalVariable([Data.SaveName], [result[2]], false)
     }
@@ -172,12 +200,30 @@ InputPopUp(Data, tableItem, index) {
     InputEndPause(Data)
 }
 
+InputPickFile(Data, tableItem, index) {
+    EnsureInputData(Data)
+    InputBeginPause(Data)
+    try {
+        title := InputResolveText(tableItem, index, Data.Prompt)
+        if (title == "" || title == "提示文本" || title == InputDefaultPrompt())
+            title := GetLang("选择文件")
+        result := RequestMacroInput(Data, tableItem, index, "IF", "title=" title)
+        switch InputBtnResult(result) {
+            case "1":
+                if (result.Length >= 2 && result[2] != "")
+                    MySetGlobalVariable([Data.SaveName], [result[2]], false)
+            case "timeout":
+                HandleInputTimeout(Data, tableItem, index, Data.DefaultValue)
+        }
+    } finally InputEndPause(Data)
+}
+
 InputStateValue(Data, tableItem, index) {
     EnsureInputData(Data)
     InputBeginPause(Data)
 
     prompt := InputResolveText(tableItem, index, Data.Prompt)
-    result := InputRequest("IB", "1", prompt, "", "", InputTimeoutArg(Data))
+    result := RequestMacroInput(Data, tableItem, index, "IB", "1", prompt, "", "")
     btn := InputBtnResult(result)
     if (btn == "true")
         MySetGlobalVariable([Data.SaveName], [1], false)
@@ -203,7 +249,7 @@ InputChoice(Data, tableItem, index, multi := false) {
     if (InputOptionArr(options).Length == 0)
         options := InputDefaultOptions()
     def := InputResolveText(tableItem, index, Data.DefaultValue)
-    result := InputRequest("IB", multi ? "6" : "5", prompt, options, def, InputTimeoutArg(Data))
+    result := RequestMacroInput(Data, tableItem, index, "IB", multi ? "6" : "5", prompt, options, def)
     btn := InputBtnResult(result)
     if (btn == "timeout") {
         if (HandleInputTimeout(Data, tableItem, index, def)) {
@@ -241,13 +287,13 @@ HandleInputTimeout(Data, tableItem, index, fallback := "") {
 
 InputContinue(Data, tableItem, index) {
     InputBeginPause(Data)
-    InputRequest("IB", "2", InputResolveText(tableItem, index, InputField(Data, "Prompt", "")), "", "", InputTimeoutArg(Data))
+    RequestMacroInput(Data, tableItem, index, "IB", "2", InputResolveText(tableItem, index, InputField(Data, "Prompt", "")), "", "")
     InputEndPause(Data)
 }
 
 InputContinueAndCencel(Data, tableItem, index) {
     InputBeginPause(Data)
-    result := InputRequest("IB", "3", InputResolveText(tableItem, index, InputField(Data, "Prompt", "")), "", "", InputTimeoutArg(Data))
+    result := RequestMacroInput(Data, tableItem, index, "IB", "3", InputResolveText(tableItem, index, InputField(Data, "Prompt", "")), "", "")
     if (InputBtnResult(result) == "cancel")
         InputApplyStop(tableItem, index, Data.CancelType)
     InputEndPause(Data, InputBtnResult(result) == "cancel" && Data.CancelType == "终止所有宏")
@@ -258,36 +304,36 @@ OnWaitConfirm(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
     if (!IsObject(Data))
         return
-    if (!ObjHasOwnProp(Data, "Prompt"))
-        Data.Prompt := ""
-    if (!ObjHasOwnProp(Data, "TimeoutMs"))
-        Data.TimeoutMs := 0
-    if (!ObjHasOwnProp(Data, "TimeoutAction"))
-        Data.TimeoutAction := "无"
-    if (!ObjHasOwnProp(Data, "TerminateType"))
-        Data.TerminateType := "终止当前宏"
-    if (!ObjHasOwnProp(Data, "PauseBtnType"))
-        Data.PauseBtnType := "暂停当前宏"
+    RunWaitConfirmation(tableItem, index, Data)
+}
 
+RunWaitConfirmation(tableItem, index, Data, waitData := "") {
+    item := GetItemByIndex(tableItem, index)
     pausedAll := GetLangKey(InputField(Data, "PauseType", "暂停当前宏")) == "暂停所有宏"
     if (pausedAll)
         MyExcuteRMTCMDAction("RMT指令_宏控制_暂停所有宏")
 
-    prompt := InputResolveText(tableItem, index, Data.Prompt)
+    prompt := InputResolveText(tableItem, index, InputField(Data, "Prompt", ""))
     ibType := GetLangKey(InputField(Data, "Type", "继续")) == "继续&终止&暂停" ? "4" : "2"
-    result := InputRequest("IB", ibType, prompt, "", "", InputTimeoutArg(Data))
+    result := RequestMacroInput(IsObject(waitData) ? waitData : Data, tableItem, index, "IB", ibType, prompt, "", "")
     action := InputBtnResult(result)
+    if (IsObject(item) && (item.Killed || GetItemByIndex(tableItem, index) != item))
+        action := ""
+    if (IsObject(waitData) && IsObject(item)
+        && (action == "timeout" || action == "continue" || action == "terminate" || action == "pause"))
+        WaitWriteStatus(waitData, action == "timeout")
     if (action == "timeout")
-        action := WaitConfirmTimeoutAction(Data.TimeoutAction)
+        action := WaitConfirmTimeoutAction(InputField(Data, "TimeoutAction", "无"))
 
     if (action == "terminate") {
-        InputApplyStop(tableItem, index, Data.TerminateType)
-        if (Data.TerminateType != "终止所有宏" && pausedAll)
+        terminateType := InputField(Data, "TerminateType", "终止当前宏")
+        InputApplyStop(tableItem, index, terminateType)
+        if (terminateType != "终止所有宏" && pausedAll)
             MyExcuteRMTCMDAction("RMT指令_宏控制_恢复所有宏")
         return
     }
     if (action == "pause") {
-        if (Data.PauseBtnType == "暂停所有宏") {
+        if (InputField(Data, "PauseBtnType", "暂停当前宏") == "暂停所有宏") {
             if (!pausedAll)
                 MyExcuteRMTCMDAction("RMT指令_宏控制_暂停所有宏")
         }

@@ -998,7 +998,7 @@ OnOutput(tableItem, cmd, index) {
         Send "{Blind}^v"
     }
     else if (Data.OutputType == "临时提示") {    ;提示
-        MyToolTipContent(Content)
+        MyOutputTipContent(Content)
     }
     else if (Data.OutputType == "指令窗口") {    ;指令窗口
         MyCMDTipForceAction(Content)
@@ -2022,6 +2022,8 @@ OnInput(tableItem, cmd, index) {
             InputStateValue(Data, tableItem, index)
         case "选择":
             InputChoice(Data, tableItem, index, false)
+        case "选择文件":
+            InputPickFile(Data, tableItem, index)
         case "多选":
             InputChoice(Data, tableItem, index, true)
         case "继续":
@@ -2060,26 +2062,6 @@ OnFileIO(tableItem, cmd, index) {
 
 ; 将标题、类名、进程名条件解析为可见窗口的精确句柄。
 ; 显式句柄/窗口组保留原意；多个可见匹配项仍按窗口层叠顺序选第一个。
-ResolveVisibleWinHandle(winTitle) {
-    ; 已是精确句柄或句柄组，用户明确指定了目标，不做干预
-    if (InStr(winTitle, "ahk_id ") || InStr(winTitle, "ahk_group "))
-        return winTitle
-
-    ; 全局启用了 DetectHiddenWindows，纯标题匹配也必须排除隐藏窗口。
-    try {
-        detectedHwnds := WinGetList(winTitle)
-        for hwnd in detectedHwnds {
-            if (!DllCall("IsWindowVisible", "ptr", hwnd))
-                continue
-            cls := WinGetClass("ahk_id " hwnd)
-            if (cls == "Progman" || cls == "WorkerW")
-                continue
-            return "ahk_id " hwnd
-        }
-    }
-    return ""
-}
-
 MaximizeManagedWindow(winTitle) {
     SetManagedWindowState(winTitle, 1)
 }
@@ -2113,18 +2095,26 @@ SetManagedWindowState(winTitle, state) {
 }
 
 
-; 列表查询保留所有可见匹配项；显式句柄或窗口组尊重用户指定。
-WindowMatchedHandles(query) {
+; 按层叠顺序收集可见匹配项，显式句柄或窗口组尊重用户指定。
+WindowMatchedHandles(query, matchMode := "所有") {
     result := []
     if (query == "")
         return result
     explicit := InStr(query, "ahk_id ") || InStr(query, "ahk_group ")
     for hwnd in WinGetList(query) {
-        if (!explicit && (!DllCall("IsWindowVisible", "ptr", hwnd)
-            || WinGetClass("ahk_id " hwnd) == "Progman" || WinGetClass("ahk_id " hwnd) == "WorkerW"))
-            continue
+        if (!explicit) {
+            if (!DllCall("IsWindowVisible", "ptr", hwnd))
+                continue
+            try cls := WinGetClass("ahk_id " hwnd)
+            catch
+                continue
+            if (cls == "Progman" || cls == "WorkerW")
+                continue
+        }
         result.Push(hwnd)
     }
+    if (result.Length && matchMode != "所有")
+        return [result[matchMode == "最后" ? -1 : 1]]
     return result
 }
 
@@ -2136,8 +2126,10 @@ WindowReadInfo(data, query) {
     values := []
     for label in fields
         values.Push("")
-    hwnds := WindowMatchedHandles(query)
-    if (data.ActionType == "匹配窗口列表") {
+    isList := data.ActionType == "匹配窗口列表"
+    matchMode := data.HasProp("MatchMode") ? data.MatchMode : (isList ? "所有" : "首个")
+    hwnds := WindowMatchedHandles(query, matchMode)
+    if (isList) {
         name := GetVarName(data.ResultVar1)
         if (name != "")
             MySetGlobalArray(name, hwnds)
@@ -2206,18 +2198,17 @@ OnWindowManage(tableItem, cmd, index) {
     winTitle := GetParamsWinInfoStr(searchValue)
     if (WindowReadInfo(Data, winTitle))
         return
-    if (winTitle == "")
-        return
-
-    ; 将模糊匹配解析为可见窗口的精确句柄，避免命中隐藏窗口导致黑屏等异常
-    winTitle := ResolveVisibleWinHandle(winTitle)
-    if (winTitle == "")
+    matchMode := Data.HasProp("MatchMode") ? Data.MatchMode
+        : WindowDefaultMatchMode(Data.ActionType, InStr(winTitle, "ahk_id ") || InStr(winTitle, "ahk_group "))
+    ; 先固定匹配窗口，层叠顺序在后续操作中可能变化。
+    hwnds := WindowMatchedHandles(winTitle, matchMode)
+    if (!hwnds.Length)
         return
 
     ; 查询返回第一个匹配窗口的完整宽高，与工具监视的尺寸一致。
     if (Data.ActionType == "获取窗口宽高") {
         try {
-            WinGetPos(, , &width, &height, winTitle)
+            WinGetPos(, , &width, &height, "ahk_id " hwnds[1])
             widthVar := GetVarName(Data.WidthVarName)
             heightVar := GetVarName(Data.HeightVarName)
             if (widthVar != "" && heightVar != "")
@@ -2226,12 +2217,13 @@ OnWindowManage(tableItem, cmd, index) {
         return
     }
 
-    ; 激活只选最上面的一个目标；其它操作对显式窗口组逐个处理。
     if (Data.ActionType == "激活窗口") {
-        try WinActivate(winTitle)
+        ; 逐个激活时从后向前，最后让原本最靠前的匹配窗口获得焦点。
+        Loop hwnds.Length {
+            try WinActivate("ahk_id " hwnds[-A_Index])
+        }
         return
     }
-    hwnds := WinGetList(winTitle)
     if (Data.ActionType == "关闭窗口" && Data.HasProp("CloseProcess") && Data.CloseProcess) {
         ; 先固定并去重进程，避免结束一个进程后同进程其它窗口句柄失效。
         pids := Map()
@@ -2402,13 +2394,13 @@ IsCheckKeyPressed(key, stateMode, axisCmp := 2, isJoy := false) {
         if (stateMode == "P")
             return IsPhysicalKeyPressed(ahkKey)
         try
-            return !!GetKeyState(ahkKey, stateMode)
+            return !!GetKeyState(ahkKey)
         catch
             return IsPhysicalKeyPressed(ahkKey)
     }
 
     try
-        return !!GetKeyState(key, stateMode)
+        return stateMode == "" ? !!GetKeyState(key) : !!GetKeyState(key, stateMode)
     catch
         return false
 }

@@ -27,7 +27,6 @@
 #Include TextOpsGui.ahk
 #Include ArrayGui.ahk
 #Include InputGui.ahk
-#Include WaitConfirmGui.ahk
 #Include FileIOGui.ahk
 #Include WindowManageGui.ahk
 #include KeyCheckGui.ahk
@@ -110,6 +109,7 @@ class MacroEditGui {
     __new(reuseShared := false) {
         this.ParentTile := ""
         this.ui := ""                     ; XAMLHost 实例
+        this._debugToolbar := ""
         this._closed := true
         this._dragEnabled := false        ; 原生 OnMessage 拖拽保持禁用（拖拽由引擎内实现）
         ; 命中测试/坐标换算都要查引擎，而鼠标事件回调本身运行在「引擎发给 AHK 的 send 消息」里，
@@ -201,7 +201,7 @@ class MacroEditGui {
             {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出"]},
             {name: "变量/数据", icon: Chr(0xE8EF), cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
             {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel", "网络请求"]},
-            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "循环", "跳转", "如果", "如果Pro", "等待", "等待确定", "倒计时"]},
+            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "等待", "循环", "跳转", "如果", "如果Pro", "倒计时"]},
             {name: "调控", icon: Chr(0xE713), cmds: ["运行", "运行Pro", "宏操作", "窗口信息", "调整窗口", "RMT指令"]},
             {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
         ]
@@ -236,7 +236,7 @@ class MacroEditGui {
     InitCommandConfigs() {
         ; 指令名称：移动、移动Pro、增量移动（原游戏视角）
         this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "等待确定", "倒计时", "注释", "抓图", "跳转"])
+            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "倒计时", "注释", "抓图", "跳转"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png",
@@ -249,8 +249,8 @@ class MacroEditGui {
             "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\HttpRequest.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
-            "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjust.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
-            "Images\Soft\Wait.png", "Images\Soft\WaitConfirm.png",
+            "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjustGear32.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
+            "Images\Soft\Wait.png",
             "Images\Soft\Interval.png", "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\FlowJump.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("手柄"), "Icon38", GetLang("搜索"), "Icon3",
@@ -279,7 +279,7 @@ class MacroEditGui {
             "Icon23", "Images\Soft\LoopBody.png", "Icon24", "Images\Soft\TextOps.png",
             "Icon25", "Images\Soft\Arr.png", "Icon26", "Images\Soft\Input.png",
             "Icon27", "Images\Soft\FileIO.png", "Icon28", "Images\Soft\Control.png",
-            "IconWindowAdjust", "Images\Soft\WindowAdjust.png", "Icon29", "Images\Soft\WindowManage.png", "Icon30", "Images\Soft\KeyListen.png",
+            "IconWindowAdjust", "Images\Soft\WindowAdjustGear32.png", "Icon29", "Images\Soft\WindowManage.png", "Icon30", "Images\Soft\KeyListen.png",
             "Icon31", "Images\Soft\Comment.png", "Icon32", "Images\Soft\ScreenShot.png",
             "Icon33", "Images\Soft\Wait.png", "Icon34", "Images\Soft\DeltaMove.png", "Icon35", "Images\Soft\Time.png",
             "Icon36", "Images\Soft\WaitConfirm.png", "Icon37", "Images\Soft\Interval.png",
@@ -332,12 +332,11 @@ class MacroEditGui {
             {class: BGMouseGui, name: "后台鼠标", icon: "Images\Soft\Mouse.png", propName: "BGMouseGui"},
             {class: BGKeyGui, name: "后台按键", icon: "Images\Soft\BGKey.png", propName: "BGKeyGui"},
             {class: WindowManageGui, name: "窗口信息", icon: "Images\Soft\WindowManage.png", propName: "WindowInfoGui"},
-            {class: WindowManageGui, name: "调整窗口", icon: "Images\Soft\WindowAdjust.png", propName: "WindowAdjustGui"},
+            {class: WindowManageGui, name: "调整窗口", icon: "Images\Soft\WindowAdjustGear32.png", propName: "WindowAdjustGui"},
             {class: WindowManageGui, name: "窗口管理", icon: "Images\Soft\WindowManage.png", propName: "WindowManageGui"},
             {class: KeyCheckGui, name: "按键检测", icon: "Images\Soft\KeyListen.png", propName: "KeyCheckGui"},
             {class: JoyCheckGui, name: "手柄检测", icon: "Images\Soft\JoyListen.png", propName: "JoyCheckGui"},
             {class: WaitGui, name: "等待", icon: "Images\Soft\Wait.png", propName: "WaitGui"},
-            {class: WaitConfirmGui, name: "等待确定", icon: "Images\Soft\WaitConfirm.png", propName: "WaitConfirmGui"},
             {class: TimeGui, name: "时间", icon: "Images\Soft\Time.png", propName: "TimeGui"},
             {class: FlowJumpGui, name: "跳转", icon: "Images\Soft\FlowJump.png", propName: "FlowJumpGui"},
             {class: CommentGui, name: "注释", icon: "Images\Soft\Comment.png", propName: "CommentGui"},
@@ -357,6 +356,7 @@ class MacroEditGui {
                 this.SubGuiMap.Set(GetLang("鼠标" config.name), guiInstance)
             this.%config.propName% := guiInstance
         }
+        this.SubGuiMap[GetLang("等待确定")] := this.WaitGui
     }
 
     _BindCountDownToTimeGui() {
@@ -828,7 +828,8 @@ class MacroEditGui {
 
         for idx, cat in this.CmdCategory {
             expanded := this._catExpand.Get(cat.name, true)
-            this._AddCmdSectionHead(panel, "CatToggle_" idx, "CatArrow_" idx, "CatCount_" idx, cat.icon, GetLang(cat.name), expanded, cat.cmds.Length, "0,2,0,0")
+            this._AddCmdSectionHead(panel, "CatToggle_" idx, "CatArrow_" idx, "CatCount_" idx, cat.icon, GetLang(cat.name), expanded, cat.cmds.Length, "0,4,0,2")
+                .Background("{DynamicResource Accent}")
             catPanel := panel.Add("StackPanel").Name("CatPanel_" idx).Visibility(expanded ? "Visible" : "Collapsed")
             for cmdName in cat.cmds {
                 config := this._CmdConfigOf(cmdName)
@@ -963,12 +964,13 @@ class MacroEditGui {
             . '<Setter Property="BorderThickness" Value="1.5"/>'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid>'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border><Rectangle x:Name="BottomLine" Height="1.5" VerticalAlignment="Bottom" Margin="3,0,3,0" Fill="{TemplateBinding BorderBrush}" IsHitTestVisible="False"/>'
             . '</Grid><ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="BottomLine" Property="Fill" Value="{DynamicResource Accent}"/></Trigger>'
             . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="BottomLine" Property="Fill" Value="{DynamicResource Accent}"/></Trigger>'
+            . MacroDebugToolbar.ActiveTrigger()
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
         okBtn := '<Style x:Key="RmtEditOkBtn" TargetType="Button">'
             . '<Setter Property="Height" Value="31"/><Setter Property="MinHeight" Value="31"/><Setter Property="MinWidth" Value="72"/>'
@@ -979,7 +981,7 @@ class MacroEditGui {
             . '<Setter Property="Foreground" Value="{DynamicResource ActionText}"/>'
             . '<Setter Property="FontSize" Value="' bodyFs '"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border><ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Opacity" Value="0.92"/></Trigger>'
@@ -1020,7 +1022,7 @@ class MacroEditGui {
             . '<Setter Property="BorderThickness" Value="1.5"/>'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{DynamicResource TextMain}" TextElement.FontSize="' bodyFs '"/>'
             . '</Border><ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter Property="Opacity" Value="1"/></Trigger>'
@@ -1072,10 +1074,12 @@ class MacroEditGui {
             . '<Setter Property="Padding" Value="6,0,4,0"/>'
             . '<Setter Property="ClipToBounds" Value="False"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="3" ClipToBounds="False">'
-            . '<ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" ClipToBounds="False"/>'
-            . '</Border><ControlTemplate.Triggers>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger>'
+            . '<Grid Background="Transparent" ClipToBounds="False">'
+            . '<Border Background="{TemplateBinding Background}" CornerRadius="3" Opacity="0.13" IsHitTestVisible="False"/>'
+            . '<Border x:Name="Hover" BorderThickness="1" CornerRadius="3" IsHitTestVisible="False"/>'
+            . '<ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Stretch" VerticalAlignment="Center" ClipToBounds="False"/>'
+            . '</Grid><ControlTemplate.Triggers>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Hover" Property="BorderBrush" Value="{DynamicResource OutlineStroke}"/></Trigger>'
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
         return fold okBtn modeTab graphFloat sbThumb sbV sbH svStyle svImplicit cmdRow catHead
     }
@@ -1314,12 +1318,7 @@ class MacroEditGui {
         this._AddEditFoldBtn(leftTools, "BtnClear", Chr(0xE74D), GetLang("清空"))
         this._AddEditVSplit(leftTools)
 
-        this._AddEditFoldBtn(leftTools, "BtnContinue", Chr(0xE768), GetLang("播放/继续") "  " FormatHotkeyDisplay(this._GetContinueHotkey()))
-        this._AddEditFoldBtn(leftTools, "BtnStepOver", Chr(0xE76C), this._StepOverLabel())
-        this._AddEditFoldBtn(leftTools, "BtnStepInto", Chr(0xE70D), this._StepIntoLabel())
-        this._AddEditFoldBtn(leftTools, "BtnStepOut", Chr(0xE70E), this._StepOutLabel())
-        this._AddEditFoldBtn(leftTools, "BtnRunToCursor", Chr(0xE81D), this._RunToCursorLabel())
-        this._AddEditFoldBtn(leftTools, "BtnKill", Chr(0xE71A), GetLang("终止"))
+        this._AddEditFoldBtn(leftTools, "BtnDebugToolbar", Chr(0xEBE8), GetLang("调试"), true)
         this._AddEditVSplit(leftTools)
 
         this._AddEditFoldBtn(leftTools, "BtnVarListen", Chr(0xE7B3), GetLang("变量监视"), true)
@@ -1405,12 +1404,8 @@ class MacroEditGui {
         this.ui.OnEvent("BtnOk", "Click", (*) => this.OnSureBtnClick())
         this.ui.OnEvent("SaveBtn", "Click", (*) => this.OnSaveBtnClick())
         this.ui.OnEvent("BtnExpand", "Click", ObjBindMethod(this, "_OnToggleZoom"))
-        this.ui.OnEvent("BtnContinue", "Click", (*) => this.MenuHandler(this._ContinueLabel()))
-        this.ui.OnEvent("BtnStepOver", "Click", (*) => this.MenuHandler(this._StepOverLabel()))
-        this.ui.OnEvent("BtnStepInto", "Click", (*) => this.MenuHandler(this._StepIntoLabel()))
-        this.ui.OnEvent("BtnStepOut", "Click", (*) => this.MenuHandler(this._StepOutLabel()))
-        this.ui.OnEvent("BtnRunToCursor", "Click", (*) => this.MenuHandler(this._RunToCursorLabel()))
-        this.ui.OnEvent("BtnKill", "Click", (*) => this.MenuHandler(GetLang("终止")))
+        this._debugToolbar := MacroDebugToolbar(this.ui, "BtnDebugToolbar", "BtnDebugToolbarDot"
+            , this.treeName, this, ObjBindMethod(MacroDebugToolbar, "Run", this))
         this.ui.OnEvent("BtnVarListen", "Click", (*) => this.MenuHandler(GetLang("变量监视")))
         this.ui.OnEvent("BtnCmdTip", "Click", (*) => this.MenuHandler(GetLang("指令显示")))
         this.ui.OnEvent("BtnTopMost", "Click", (*) => this.MenuHandler(GetLang("窗口置顶")))
@@ -1524,6 +1519,9 @@ class MacroEditGui {
         if (IsObject(this.MacroTreeViewCon))
             this.MacroTreeViewCon._suppressRender := false
         ToolTip()
+        if (IsObject(this._debugToolbar))
+            this._debugToolbar.Hide()
+        this._debugToolbar := ""
         this.ui := ""
         this.Gui := ""
         this._closed := true
@@ -1536,6 +1534,8 @@ class MacroEditGui {
     _CloseWindow() {
         this._revealed := true
         this._closed := true
+        if (IsObject(this._debugToolbar))
+            this._debugToolbar.Hide()
         this._DragEndReset()
         if (this._hkIds.Length > 0) {
             WinHotkey.UnregisterAll(this._hkIds)
@@ -1560,11 +1560,14 @@ class MacroEditGui {
         ; 之后真实触发宏时 TryInterceptBranch 误拦截、静默跳过分支体。_CloseDebugHook 仅清标志，安全。
         this._CloseDebugHook()
         ToolTip()
+        this._debugToolbar := ""
         this.ui := ""
         this.Gui := ""
     }
 
     _HideWindow() {
+        if (IsObject(this._debugToolbar))
+            this._debugToolbar.Hide()
         if (IsObject(this.ui))
             this.ui.Update("Window", "Close", "")
     }
@@ -1686,9 +1689,12 @@ class MacroEditGui {
             this.InitTreeView(MacroStr)
         }
         else if (this.EditModeCon.Value == 2) {
+            if (IsObject(this._debugToolbar))
+                this._debugToolbar.Hide()
             this.ResetDebugState()                  ; V6：树已隐藏，悬挂的调试态会继续驱动不可见树 → 切换即终止调试
             this.InitMacroText(MacroStr)
         }
+        this.ui.Update("BtnDebugToolbar", "IsEnabled", this.EditModeCon.Value == 1 ? "True" : "False")
         this._SyncModeSeg(this.EditModeCon.Value)
     }
 
@@ -2735,7 +2741,8 @@ class MacroEditGui {
             {
                 KillSingleTableMacro(MySoftData.SpecialTableItem)
                 this.ResetDebugState()
-                MyCMDTipGui.ShowGui(GetLang("终止"))
+                if (MyCMDTipGui._IsVisible())
+                    MyCMDTipGui.AddCMD(GetLang("终止"))
             }
         }
         this._SyncToolToggleDots()
@@ -5480,6 +5487,191 @@ class MacroEditGui {
             parent := TVCon.GetParent(parent)
         }
         return false
+    }
+}
+
+class MacroDebugToolbar {
+    static Actions := [
+        {name: "Continue", glyph: 0xE768, label: "_ContinueLabel"},
+        {name: "StepOver", glyph: 0xE76C, label: "_StepOverLabel"},
+        {name: "StepInto", glyph: 0xE70D, label: "_StepIntoLabel"},
+        {name: "StepOut", glyph: 0xE70E, label: "_StepOutLabel"},
+        {name: "RunToCursor", path: "M 1,4 L 7,8 L 1,12 Z M 9,2 L 15,9 L 12,9 L 10.5,12 Z", label: "_RunToCursorLabel"},
+        {name: "Kill", glyph: 0xE71A, label: ""}
+    ]
+
+    static ActiveTrigger() {
+        return '<Trigger Property="Tag" Value="DebugToolbarOpen">'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ActionBg}"/>'
+            . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ActionStroke}"/>'
+            . '</Trigger>'
+    }
+
+    static Build(editor) {
+        win := XAML_Generator("Window")
+            .SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
+            .SetProp("xmlns:x", "http://schemas.microsoft.com/winfx/2006/xaml")
+            .Title(GetLang("调试")).WindowStyle("None").ResizeMode("NoResize").SizeToContent("WidthAndHeight")
+            .ShowInTaskbar("False").ShowActivated("False").AllowsTransparency("True")
+            .WindowStartupLocation("Manual").Background("Transparent").Opacity(0)
+        frame := win.Add("Border").CornerRadius(5).Padding("4")
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource OutlineStroke}").BorderThickness(1.5)
+        row := frame.Add("StackPanel").Orientation("Horizontal")
+        row.Add("Border").Name("DragArea").Width(22).Cursor("SizeAll").Background("Transparent").ToolTip(GetLang("拖拽"))
+            .Add("TextBlock").Text("⠿").FontFamily("Segoe UI Symbol").FontSize(16).IsHitTestVisible("False")
+            .Foreground("{DynamicResource TextSub}").HorizontalAlignment("Center").VerticalAlignment("Center")
+        row.InjectResources('<Style TargetType="Button"><Setter Property="Template"><Setter.Value>'
+            . '<ControlTemplate TargetType="Button"><Border x:Name="Surface" Background="Transparent" CornerRadius="3"'
+            . ' BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1.25">'
+            . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger>'
+            . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger>'
+            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
+        for action in this.Actions {
+            button := row.Add("Button").Name("MacroDebug" action.name).ToolTip(this.Label(editor, action.label))
+                .Width(28).Height(28).Margin("3,0,0,0").Cursor("Hand").Focusable("False")
+                .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14).FontWeight("Bold")
+                .Foreground("{DynamicResource TextMain}")
+            if (action.HasOwnProp("path")) {
+                button.Add("Path").Data(action.path).Width(16).Height(14).Stretch("Uniform")
+                    .Stroke("{DynamicResource TextMain}").StrokeThickness(1.5).StrokeLineJoin("Round")
+            } else
+                button.Content(Chr(action.glyph))
+        }
+        return win.ToString()
+    }
+
+    static Label(editor, method) => method == "" ? GetLang("终止") : editor.%method%()
+
+    static Run(editor, method, *) {
+        editor.MenuHandler(this.Label(editor, method))
+    }
+
+    __New(ui, launcher, dot, anchor, editor, dispatch, bindLive := false) {
+        this.ui := ui
+        this.launcher := launcher
+        this.dot := dot
+        this.anchor := anchor
+        this.editor := editor
+        this.dispatch := dispatch
+        this.popup := ""
+        this.position := ""
+        this.open := false
+        ui.OnEvent(launcher, "Click", ObjBindMethod(this, "Toggle"))
+        if (bindLive)
+            ui.BindEventBatched(launcher, "Click")
+    }
+
+    Toggle(*) {
+        if (this.open) {
+            this.Hide()
+            return
+        }
+        this._SetOpen(true)
+        SetTimer(ObjBindMethod(this, "_Show"), -1)
+    }
+
+    Hide(*) {
+        if (!this.open)
+            return
+        popup := this.popup
+        this.popup := ""
+        this._SetOpen(false)
+        if (IsObject(popup)) {
+            this._RememberPosition(popup)
+            popup.Update("Window", "Close", "")
+        }
+    }
+
+    _Show() {
+        if (!this.open || IsObject(this.popup))
+            return
+        owner := this.ui.wpfHwnd
+        if (!owner || !DllCall("user32\IsWindowVisible", "Ptr", owner, "Int")) {
+            this.Hide()
+            return
+        }
+        ; 在 Show 前查询，避免在引擎的 LoadedHwnd 回调内同步查询。
+        anchor := []
+        try anchor := StrSplit(this.ui.Query(this.anchor ">ScreenOrigin"), ",")
+        if (!this.open || IsObject(this.popup))
+            return
+        try {
+            popup := XAMLHost(MacroDebugToolbar.Build(this.editor), "", owner)
+            this.popup := popup
+            popup.skipFontScale := true
+            popup.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_OnLoaded", popup, anchor))
+            popup.OnEvent("Window", "Closing", ObjBindMethod(this, "_OnClosing", popup))
+            for action in MacroDebugToolbar.Actions
+                popup.OnEvent("MacroDebug" action.name, "Click", ObjBindMethod(this, "_OnAction", popup, action.label))
+            XamlWin.QueueTheme(popup)
+            popup.Show()
+        } catch {
+            this.Hide()
+        }
+    }
+
+    _OnLoaded(popup, anchor, *) {
+        if (this.popup != popup)
+            return
+        hwnd := popup.wpfHwnd
+        try WinSetExStyle("+0x08000000", hwnd) ; 点击调试浮窗时保留编辑器焦点与快捷键
+        try {
+            if (IsObject(this.position)) {
+                x := this.position.x, y := this.position.y
+                grip := Buffer(16)
+                NumPut("Int", x + 8, "Int", y + 8, "Int", x + 24, "Int", y + 24, grip)
+                if (!DllCall("user32\MonitorFromRect", "Ptr", grip, "UInt", 0, "Ptr"))
+                    this.position := ""
+            }
+            if (!IsObject(this.position)) {
+                if (anchor.Length == 2 && IsInteger(anchor[1]) && IsInteger(anchor[2])) {
+                    x := Integer(anchor[1]) + 8, y := Integer(anchor[2]) + 8
+                } else {
+                    WinGetPos(&ownerX, &ownerY,,, this.ui.wpfHwnd)
+                    x := ownerX + 8, y := ownerY + 64
+                }
+            }
+            WinMove(x, y,,, hwnd)
+        }
+        popup.Update("Window", "Opacity", "1")
+    }
+
+    _OnAction(popup, method, *) {
+        if (this.popup != popup)
+            return
+        try this.dispatch.Call(method)
+        finally {
+            if (method == "" && this.popup == popup)
+                this.Hide()
+        }
+    }
+
+    _RememberPosition(popup) {
+        if (popup.wpfHwnd) {
+            try {
+                WinGetPos(&x, &y,,, popup.wpfHwnd)
+                this.position := {x: x, y: y}
+            }
+        }
+    }
+
+    _OnClosing(popup, *) {
+        if (this.popup != popup)
+            return
+        this._RememberPosition(popup)
+        this.popup := ""
+        this._SetOpen(false)
+    }
+
+    _SetOpen(open) {
+        this.open := open
+        vis := open ? "Visible" : "Collapsed"
+        try this.ui.BatchUpdate([
+            {ControlName: this.launcher, PropertyName: "Tag", Value: open ? "DebugToolbarOpen" : ""},
+            {ControlName: this.launcher, PropertyName: "Foreground", Value: open ? "{DynamicResource ActionText}" : "{DynamicResource TextMain}"},
+            {ControlName: this.dot, PropertyName: "Visibility", Value: vis}
+        ])
     }
 }
 

@@ -1,5 +1,44 @@
 #Requires AutoHotkey v2.0
 
+UnixNow() {
+    localTime := Buffer(16)
+    DllCall("GetLocalTime", "Ptr", localTime)
+    stamp := Format("{:04}{:02}{:02}{:02}{:02}{:02}", NumGet(localTime, 0, "UShort"),
+        NumGet(localTime, 2, "UShort"), NumGet(localTime, 6, "UShort"), NumGet(localTime, 8, "UShort"),
+        NumGet(localTime, 10, "UShort"), NumGet(localTime, 12, "UShort"))
+    return TimeStrToStamp(stamp) + NumGet(localTime, 14, "UShort")
+}
+
+TimeStrToStamp(timeStr) {
+    return DateDiff(timeStr, "19700101000000", "Seconds") * 1000
+}
+
+StampToTimeStr(stamp) {
+    return DateAdd("19700101000000", stamp // 1000, "Seconds")
+}
+
+TimeEpochMilliseconds(value) {
+    value := Trim(value)
+    if (!RegExMatch(value, "^[0-9]{1,13}\z") || StrLen(value) == 8)
+        return ""
+    return StrLen(value) <= 10 ? Integer(value) * 1000 : Integer(value)
+}
+
+NormalizeTimingStamps(data) {
+    if (data.HasOwnProp("StampUnit") && data.StampUnit == "ms")
+        return false
+    for part in ["Start", "End"] {
+        stamp := part "Stamp"
+        time := part "Time"
+        if (data.HasOwnProp(stamp) && IsNumber(data.%stamp%))
+            data.%stamp% *= 1000
+        else if (data.HasOwnProp(time) && data.%time% != "")
+            data.%stamp% := TimeStrToStamp(data.%time%)
+    }
+    data.StampUnit := "ms"
+    return true
+}
+
 ; =====================================================================
 ; 时间指令执行端
 ;   SubMode 中文：等待 / 区间判断 / 倒计时
@@ -125,8 +164,10 @@ TimeSubModeIndex(Data) {
 ; ---------- 模式1：指定时刻等待 / 相对等待 ----------
 
 TimeExecWaitUntil(tableItem, index, Data) {
-    targetTime := TimeCalcTargetDateTime(tableItem, index, Data)
-    if (targetTime == "")
+    targetMs := TimeNormWaitType(Data.Param2) == "时间戳"
+        ? TimeEpochMilliseconds(TimeResolveValue(tableItem, index, Data.Param1)) : ""
+    targetTime := targetMs == "" ? TimeCalcTargetDateTime(tableItem, index, Data) : ""
+    if (targetMs == "" && targetTime == "")
         return
 
     checkInterval := Integer(Data.CheckInterval > 0 ? Data.CheckInterval : 500)
@@ -140,7 +181,8 @@ TimeExecWaitUntil(tableItem, index, Data) {
             return
 
         ; 到达目标时间
-        if (A_Now >= targetTime)
+        remaining := targetMs == "" ? "" : targetMs - UnixNow()
+        if (targetMs == "" ? A_Now >= targetTime : remaining <= 0)
             return
 
         ; 超时检查
@@ -148,6 +190,8 @@ TimeExecWaitUntil(tableItem, index, Data) {
             return
 
         floatInterval := GetFloatTime(checkInterval, MainSoftData.PreIntervalFloat)
+        if (targetMs != "")
+            floatInterval := Min(floatInterval, remaining)
         InterruptibleSleep(tableItem, index, floatInterval)
     }
 }
@@ -162,6 +206,10 @@ TimeNormWaitType(unit) {
             return "时刻"
         case "TimeVariable", "时间变量", "时间戳", "Timestamp":
             return "时间戳"
+        case "毫秒", "Milliseconds":
+            return "毫秒"
+        case "毫秒-随机", "Random Milliseconds":
+            return "毫秒-随机"
         default:
             return "时长"
     }
@@ -227,16 +275,16 @@ TimeParseDurationSecs(val, unit) {
     u := GetLangKey(Trim(String(unit)))
     if (RegExMatch(raw, "^(-?\d+):(-?\d+):(-?\d+)$", &mt))
         return Integer(mt[1]) * 3600 + Integer(mt[2]) * 60 + Integer(mt[3])
-    n := IsNumber(raw) ? Integer(raw) : 0
+    n := IsNumber(raw) ? Number(raw) : 0
     switch u {
         case "Minutes", "分钟":
-            return n * 60
+            return Round(n * 60)
         case "Hours", "小时":
-            return n * 3600
+            return Round(n * 3600)
         case "Days", "天":
-            return n * 86400
+            return Round(n * 86400)
         default:
-            return n
+            return Integer(n)
     }
 }
 
@@ -303,10 +351,9 @@ TimeParseDateTime(s) {
             return s
         if (len == 8)
             return s "000000"
-        if (len <= 10)
-            return DateAdd("19700101000000", Integer(s), "Seconds")
-        if (len == 13)
-            return DateAdd("19700101000000", Integer(SubStr(s, 1, 10)), "Seconds")
+        ms := TimeEpochMilliseconds(s)
+        if (ms != "")
+            return StampToTimeStr(ms)
     }
 
     ; 2. 纯时刻格式：14:30:00, 14:30
@@ -348,7 +395,7 @@ TimeFormatResult(stamp, formatType) {
         return ""
     switch formatType {
         case "UnixTimestamp":
-            return DateDiff(stamp, "19700101000000", "Seconds")
+            return TimeStrToStamp(stamp)
         case "E":
             w := FormatTime(stamp, "WDay")
             return w == 1 ? 7 : w - 1
@@ -435,15 +482,37 @@ TimeResolveStamp(tableItem, index, raw) {
     return TimeParseDateTime(clock)
 }
 
-TimeWindowInRange(tableItem, index, Data) {
+TimeWindowInRange(tableItem, index, Data, outside := false) {
     kind := TimeNormWindowType(ObjHasOwnProp(Data, "Param5") ? Data.Param5 : "")
+    if (kind == "时间戳") {
+        start := TimeRangeEndpointMilliseconds(tableItem, index, Data.Param1)
+        end := TimeRangeEndpointMilliseconds(tableItem, index, Data.Param2)
+        if (start == "" || end == "" || start > end)
+            return false
+        now := UnixNow()
+        inRange := now >= start && now <= end
+        return outside ? !inRange : inRange
+    }
     startStamp := TimeResolveStamp(tableItem, index, Data.Param1)
     endStamp := TimeResolveStamp(tableItem, index, Data.Param2)
     if (startStamp == "" || endStamp == "")
         return false
-    if (kind == "时间戳" || StrSplit(Trim(String(Data.Param1)), ":").Length >= 6)
-        return A_Now >= startStamp && A_Now <= endStamp
-    return TimeNowInClockWindow(startStamp, endStamp)
+    if (StrSplit(Trim(String(Data.Param1)), ":").Length >= 6) {
+        if (startStamp > endStamp)
+            return false
+        now := A_Now
+        inRange := now >= startStamp && now <= endStamp
+    } else
+        inRange := TimeNowInClockWindow(startStamp, endStamp)
+    return outside ? !inRange : inRange
+}
+
+TimeRangeEndpointMilliseconds(tableItem, index, value) {
+    ms := TimeEpochMilliseconds(TimeResolveValue(tableItem, index, value))
+    if (ms != "")
+        return ms
+    stamp := TimeResolveStamp(tableItem, index, value)
+    return stamp == "" ? "" : TimeStrToStamp(stamp)
 }
 
 TimeExecWindowCheck(tableItem, index, Data) {
@@ -504,18 +573,21 @@ TimeExecGetTimeStr(tableItem, index, Data) {
     if (varName == "")
         return
 
+    formatTemplate := Data.Param3 != "" ? Data.Param3 : "yyyy-MM-dd HH:mm:ss"
     srcParam := Trim(Data.Param2)
+    epochMs := ""
     if (srcParam != "") {
         srcVal := GetReplaceVarText(tableItem, index, srcParam)
+        if (formatTemplate == "UnixTimestamp")
+            epochMs := TimeEpochMilliseconds(srcVal)
         stamp := TimeToAhkStamp(srcVal)
     } else {
         stamp := ""
     }
-    if (stamp == "")
-        stamp := A_Now
-
-    formatTemplate := Data.Param3 != "" ? Data.Param3 : "yyyy-MM-dd HH:mm:ss"
-    outStr := TimeFormatResult(stamp, formatTemplate)
+    if (formatTemplate == "UnixTimestamp" && (epochMs != "" || stamp == ""))
+        outStr := epochMs != "" ? epochMs : UnixNow()
+    else
+        outStr := TimeFormatResult(stamp == "" ? A_Now : stamp, formatTemplate)
     MySetGlobalVariable([varName], [outStr], false)
 }
 

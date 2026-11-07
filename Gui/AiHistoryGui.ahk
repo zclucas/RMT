@@ -179,7 +179,7 @@ class AiHistoryGui {
             . '<Button.Template><ControlTemplate TargetType="Button">'
             . '<Border x:Name="Bd" Background="{TemplateBinding Background}"'
             . ' BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"'
-            . ' CornerRadius="3" Width="24" Height="24" SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . ' CornerRadius="3" Width="24" Height="24" SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border>'
             . '<ControlTemplate.Triggers>'

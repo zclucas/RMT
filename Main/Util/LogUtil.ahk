@@ -13,7 +13,7 @@
 ;   - 每文件超 2MB 自动轮转改名 .old 重建
 ;   - Worker 写 A_ScriptDir\..\Log\；主进程写 A_WorkingDir\Log\
 ;   - 业务日志受总开关控制（默认关，防量爆炸）
-;   - 系统 debug 级默认不写（设置页可调最低级别）
+;   - 系统日志仅写入设置页选中的级别
 ; 使用：
 ;   RMTLogSys("info", "Master", "配置加载完成")
 ;   RMTLogSysError("Worker#2", "宏执行异常: ...")
@@ -36,8 +36,8 @@ global _rmtLogInitialized := false
 ; 业务日志总开关（默认关；由设置页"日志与错误"分组控制，见设计文档阶段5）
 global RMTLogBusinessEnabled := false
 
-; 系统日志最低级别（默认 info：debug 级不写；设置页可调）
-global RMTLogSysMinLevel := RMT_LV_INFO
+; 系统日志写入级别，以逗号分隔。
+global RMTLogSysMinLevel := "warn,error"
 
 ; 日志刷新周期（毫秒）：内存缓冲攒够此间隔落盘一次。
 ; 原 5000 → 1000：日志中心打开时轮询 1s 兜底，缩短日志可见延迟（最坏 ~2s）
@@ -49,9 +49,10 @@ RMTLogSetNotify(cb) {
     global _rmtLogNotifyCb
     _rmtLogNotifyCb := cb
 }
-RMTLogClearNotify() {
+RMTLogClearNotify(cb) {
     global _rmtLogNotifyCb
-    _rmtLogNotifyCb := 0
+    if (_rmtLogNotifyCb == cb)
+        _rmtLogNotifyCb := 0
 }
 _rmtLogNotify() {
     global _rmtLogNotifyCb
@@ -245,12 +246,40 @@ RMTLogPid() {
 }
 
 ; ---------------- 主入口：系统日志 ----------------
+RMTLogLevelKeys() {
+    return ["debug", "info", "warn", "error"]
+}
+
+RMTLogLegacyLevels(level) {
+    ; 旧版除 debug 外的级别始终写入。单独使用新键，以区分只勾选一个级别。
+    if (InStr(level, ","))
+        return level ; 兼容开发版已写入的多选值。
+    switch level {
+        case "": return "warn,error"
+        case "debug": return "debug,info,warn,error"
+        default: return "info,warn,error"
+    }
+}
+
+RMTLogLevelEnabled(level, selected) {
+    return level != "" && InStr("," selected ",", "," level ",")
+}
+
+RMTLogToggleLevel(selected, level, checked) {
+    result := ""
+    for key in RMTLogLevelKeys() {
+        enabled := key == level ? checked : RMTLogLevelEnabled(key, selected)
+        if (enabled)
+            result .= (result == "" ? "" : ",") key
+    }
+    return result
+}
+
 RMTLogSys(level, source, msg) {
     global _rmtLogSysBuffer, _rmtLogSysPath, _rmtLogInitialized
     global RMTLogSysMinLevel
 
-    ; debug 级且当前最低级别非 debug 时跳过
-    if (level == RMT_LV_DEBUG && RMTLogSysMinLevel != RMT_LV_DEBUG)
+    if (!RMTLogLevelEnabled(level, RMTLogSysMinLevel))
         return
 
     if (!_rmtLogInitialized) {

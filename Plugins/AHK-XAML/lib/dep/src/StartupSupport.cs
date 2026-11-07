@@ -20,6 +20,8 @@ public partial class AhkWpfEngine
 {
     static AhkWpfEngine()
     {
+        // Use the same pixel rounding for border rendering and layout at fractional DPI.
+        AppContext.SetSwitch("Switch.MS.Internal.DoNotApplyLayoutRoundingToMarginsAndBorderThickness", false);
         _highlightBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(254, 239, 195));
         _highlightBrush.Freeze();
         _activeMatchBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 165, 0));

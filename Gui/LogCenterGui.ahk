@@ -29,24 +29,20 @@ class LogCenterGui {
     }
 
     static ShowGui() {
-        key := "main"
-        if (LogCenterGui.instances.Has(key)) {
-            oldInst := LogCenterGui.instances[key]
-            try {
-                if (!oldInst.closed && IsObject(oldInst.ui))
-                    return  ; 已打开，不重复
-            }
-            LogCenterGui.instances.Delete(key)
-        }
-
-        try XAMLHost.EnsureDaemonHealthy()
         if (LogCenterGui._opening)
             return
+        key := "main"
+        oldInst := LogCenterGui.instances.Get(key, 0)
+        if (IsObject(oldInst) && !oldInst.closed && IsObject(oldInst.ui))
+            return
+
         LogCenterGui._opening := true
         try {
+            try XAMLHost.EnsureDaemonHealthy()
             inst := LogCenterGui()
             inst._BuildAndShow()
-            LogCenterGui.instances[key] := inst
+            if (!inst.closed)
+                LogCenterGui.instances[key] := inst
         } finally {
             LogCenterGui._opening := false
         }
@@ -133,7 +129,7 @@ class LogCenterGui {
         this.ui.OnEvent("BtnClear", "Click", ObjBindMethod(this, "OnClear"))
         this.ui.OnEvent("BtnExport", "Click", ObjBindMethod(this, "OnExport"))
 
-        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this))) {
+        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)) || this.closed) {
             this.closed := true
             return
         }
@@ -179,11 +175,15 @@ class LogCenterGui {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        Critical "On"
         this.ui := ""
         this.closed := true
-        LogCenterGui.instances.Delete("main")
-        if (this.HasOwnProp("_notifyCb") && this._notifyCb)
-            RMTLogClearNotify()
+        if (LogCenterGui.instances.Get("main", 0) == this)
+            LogCenterGui.instances.Delete("main")
+        if (this.HasOwnProp("_notifyCb") && this._notifyCb) {
+            RMTLogClearNotify(this._notifyCb)
+            this._notifyCb := ""
+        }
         if (this._loadCb)
             SetTimer(this._loadCb, 0)
         if (this._timerCb)

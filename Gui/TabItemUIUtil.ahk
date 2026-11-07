@@ -661,7 +661,7 @@ NetworkShowHelpDialog(macroID := "") {
     owner := NetworkResolveOwnerHwnd()
     try XAMLHost.EnsureDaemonHealthy()
 
-    titleHeight := "36"
+    titleHeight := XAMLHost.GetTitleBarHeight()
     fs := XAMLHost.FontSize()
     winW := 580
     fontFamily := ""
@@ -681,9 +681,9 @@ NetworkShowHelpDialog(macroID := "") {
     tbInner := tb.Add("Grid")
     tbInner.Add("TextBlock").Text(GetLang("网络触发说明")).Foreground("{DynamicResource TitleBarForeground}")
         .FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0").Padding("0")
-    btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch").Height(36)
+    btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch")
     closeBtn := btnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}")
-        .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).MinHeight(36).Padding("0")
+        .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0")
         .VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
     closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10)
         .VerticalAlignment("Center").HorizontalAlignment("Center")
@@ -806,7 +806,7 @@ NetworkShowSettingDialog() {
     owner := NetworkResolveOwnerHwnd()
     try XAMLHost.EnsureDaemonHealthy()
 
-    titleHeight := "36"
+    titleHeight := XAMLHost.GetTitleBarHeight()
     fs := XAMLHost.FontSize()
     winW := 400
     fontFamily := ""
@@ -826,9 +826,9 @@ NetworkShowSettingDialog() {
     tbInner := tb.Add("Grid")
     tbInner.Add("TextBlock").Text(GetLang("网络宏设置")).Foreground("{DynamicResource TitleBarForeground}")
         .FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("15,0,0,0").Padding("0")
-    btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch").Height(36)
+    btnGroup := tbInner.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Right").VerticalAlignment("Stretch")
     closeBtn := btnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}")
-        .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(36).MinHeight(36).Padding("0")
+        .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0")
         .VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
     closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10)
         .VerticalAlignment("Center").HorizontalAlignment("Center")

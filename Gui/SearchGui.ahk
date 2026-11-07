@@ -23,7 +23,7 @@ class SearchGui {
         this.CheckClipboardAction := () => this.CheckClipboard()
         this.Data := ""
         this.MacroGui := ""
-        this.PreviewBorderArr := []
+        this.AreaPreview := ScreenAreaPreview()
         this.PreviewShowing := false
         this._comboGuard := 0
         ; 文本搜索显隐控件名数组（OnChangeSearchType 用）
@@ -124,7 +124,7 @@ class SearchGui {
             .Padding("6,0,0,0").Tag("0").ToolTip(GetLang("搜索范围"))
             .HorizontalContentAlignment("Left").VerticalContentAlignment("Stretch")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        areaBtn.InjectResources(this._AreaPreviewBtnStyle())
+        areaBtn.InjectResources(ScreenAreaPreview.ButtonStyle())
         areaLabels := areaBtn.Add("Grid").HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
         areaLabels.Rows("32", "32")
         areaLabels.Add("TextBlock").Grid_Row(0).Text(GetLang("起始坐标：")).VerticalAlignment("Center").HorizontalAlignment("Left")
@@ -297,18 +297,6 @@ class SearchGui {
             .Padding("2,0").TextAlignment("Center").FontSize("11").SetProp("Panel.ZIndex", "2")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("Int|NoIME|MaxLen:6")
-    }
-
-    _AreaPreviewBtnStyle() {
-        return '<Style TargetType="Button"><Setter Property="Tag" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False">'
-            . '<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border>'
-            . '<ControlTemplate.Triggers>'
-            . '<MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="Tag" Value="0"/></MultiTrigger.Conditions>'
-            . '<Setter TargetName="bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/></MultiTrigger>'
-            . '<MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="Tag" Value="1"/></MultiTrigger.Conditions>'
-            . '<Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></MultiTrigger>'
-            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
     }
 
     GetCommandStr() {
@@ -682,9 +670,6 @@ class SearchGui {
             return
         on := this.PreviewShowing
         this.ui.Update("BtnPreviewArea", "Tag", on ? "1" : "0")
-        this.ui.Update("BtnPreviewArea", "Background", on ? "{DynamicResource Accent}" : "{DynamicResource ControlBg}")
-        this.ui.Update("BtnPreviewArea", "BorderBrush", on ? "{DynamicResource Accent}" : "{DynamicResource ControlBorder}")
-        this.ui.Update("BtnPreviewArea", "BorderThickness", on ? "2" : "1")
     }
 
     OnClickPreviewArea(*) {
@@ -710,32 +695,11 @@ class SearchGui {
             this.HidePreviewRect()
             return
         }
-        this.ShowPreviewRect(x, y, w, h)
-    }
-
-    ShowPreviewRect(x, y, w, h) {
-        borderW := 2
-        if (this.PreviewBorderArr.Length == 0) {
-            for item in [[x, y, w, borderW], [x, y + h - borderW, w, borderW], [x, y, borderW, h], [x + w - borderW, y, borderW, h]] {
-                g := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
-                g.BackColor := "Red"
-                g.Show("NA x" item[1] " y" item[2] " w" item[3] " h" item[4])
-                this.PreviewBorderArr.Push(g)
-            }
-        }
-        else {
-            this.PreviewBorderArr[1].Move(x, y, w, borderW)
-            this.PreviewBorderArr[2].Move(x, y + h - borderW, w, borderW)
-            this.PreviewBorderArr[3].Move(x, y, borderW, h)
-            this.PreviewBorderArr[4].Move(x + w - borderW, y, borderW, h)
-        }
+        this.AreaPreview.Show(x, y, w, h, this.SetAreaAction)
     }
 
     HidePreviewRect() {
-        for g in this.PreviewBorderArr {
-            try g.Destroy()
-        }
-        this.PreviewBorderArr := []
+        this.AreaPreview.Hide()
     }
 
     SureColor(*) {

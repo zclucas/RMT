@@ -1248,15 +1248,8 @@ class MacroGraphHandlersMixin {
         return ""
     }
 
-    _InputTypeKeys(cur := "") {
-        keys := ["弹窗", "状态", "选择", "多选"]
-        if (cur == "继续" || cur == "继续&取消")
-            keys.Push(cur)
-        return keys
-    }
-
     _InputTypeIndex(typeKey) {
-        typeNames := GetLangArr(this._InputTypeKeys(typeKey))
+        typeNames := GetLangArr(InputTypeKeys(typeKey))
         target := GetLang(typeKey)
         Loop typeNames.Length {
             if (typeNames[A_Index] == target)
@@ -1266,7 +1259,9 @@ class MacroGraphHandlersMixin {
     }
 
     _InputTypeFromText(text) {
-        for key in ["弹窗", "状态", "选择", "多选", "继续", "继续&取消"] {
+        keys := InputTypeKeys()
+        keys.Push("继续", "继续&取消")
+        for key in keys {
             if (text == GetLang(key))
                 return key
         }
@@ -1274,7 +1269,7 @@ class MacroGraphHandlersMixin {
     }
 
     _InputTypeFromState(key, state, fallback := "弹窗") {
-        keys := this._InputTypeKeys(fallback)
+        keys := InputTypeKeys(fallback)
         idx := this._ComboSelectedIndex(key)
         if (idx >= 0 && idx < keys.Length)
             return keys[idx + 1]
@@ -1416,7 +1411,7 @@ class MacroGraphHandlersMixin {
             if (val == "")
                 return
             data.SaveName := GetVarName(val)
-            if (data.Type == "弹窗" || data.Type == "状态" || data.Type == "选择" || data.Type == "多选")
+            if (InputHasResult(data.Type))
                 MySoftData.GlobalVariMap[data.SaveName] := true
             SaveMacroCMDData(data)
         }
@@ -1429,7 +1424,7 @@ class MacroGraphHandlersMixin {
             return
         typeKey := data.Type
         showCancel := (typeKey == "继续&取消")
-        showRes := (typeKey == "弹窗" || typeKey == "状态" || typeKey == "选择" || typeKey == "多选")
+        showRes := InputHasResult(typeKey)
         ; 同步控件值，确保切换类型后内容与数据模型一致
         if (ObjHasOwnProp(data, "CancelType"))
             this.ui.Update("InCancelCmb_" id, "SelectedIndex", this._InputCancelTypeIndex(data.CancelType))
@@ -1813,7 +1808,7 @@ class MacroGraphHandlersMixin {
         if (data == "")
             return
         dirty := false
-        keys := ["弹窗", "状态", "继续", "继续&取消"]
+        keys := InputTypeKeys(data.Type)
         idx := this._ComboSelectedIndex("InTypeCmb_" id)
         if (idx >= 0 && idx < keys.Length) {
             data.Type := keys[idx + 1]

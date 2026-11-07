@@ -80,7 +80,7 @@ CmdEnumOperaNames() => ["数值", "随机数值", "字符", "系统", "时间", 
 CmdEnumWaitNames() => ["等待变量值", "等待按键按下", "等待按键松开", "等待屏幕变化", "等待鼠标移动",
     "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
     "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
-    "等待文件存在", "等待文件删除", "等待文件变化", "等待日期", "等待时间", "等待时间区间"]
+    "等待文件存在", "等待文件删除", "等待文件变化", "等待日期", "等待时间", "等待时间区间", "等待确定", "等待窗口移动"]
 
 ; 时间等待与区间判断纳入等待指令；旧日期枚举保留，兼容已保存的宏。
 CmdEnumWaitEditorNames() {
@@ -250,6 +250,7 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "Mode", CmdEnumRunModeNames())
             CmdEnumSet(Data, "Option", CmdEnumRunOptionNames(), 0)
         case "Timing":
+            NormalizeTimingStamps(Data)
             if (Data.HasProp("Type"))
                 Data.Type := CmdEnumTimingType(Data.Type)
             CmdEnumSet(Data, "CustomUnit", CmdEnumTimingUnitNames())
@@ -323,6 +324,12 @@ WindowRegisterResults(data) {
         else
             MySoftData.GlobalVariMap[name] := true
     }
+}
+
+WindowMatchModes(allowAll := true) => allowAll ? ["所有", "首个", "最后"] : ["首个", "最后"]
+
+WindowDefaultMatchMode(action, explicit) {
+    return explicit && action != "激活窗口" ? "所有" : "首个"
 }
 
 ; UI 分类与具体动作分离：仍保存原动作键，已有宏无需迁移。
@@ -411,8 +418,8 @@ WindowEditorHint(action) {
     switch action {
         case "位置与宽高": return "结果保存到变量，留空则跳过。坐标为屏幕坐标，宽高包含标题栏和边框。"
         case "窗口状态": return "结果保存到变量，留空则跳过。状态为 0/1；透明度为 0–100，100 表示完全不透明。"
-        case "匹配窗口列表": return "填写数组名，保存所有匹配窗口的句柄；没有匹配窗口时返回空数组。"
-        case "标题类名句柄", "进程信息": return "结果保存到变量，留空则跳过。读取第一个匹配窗口；未匹配时返回空值。"
+        case "匹配窗口列表": return "填写数组名，按匹配方式保存窗口句柄；没有匹配时返回空数组。"
+        case "标题类名句柄", "进程信息": return "结果保存到变量，留空则跳过。没有匹配时返回空值。"
         case "移动窗口": return "输入屏幕坐标（像素），也可选择变量。"
         case "相对移动": return "输入偏移量（像素），也可选择变量。正数向右/下，负数向左/上。"
         case "窗口居中": return "居中到窗口所在显示器的工作区，避开任务栏。"

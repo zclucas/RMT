@@ -300,7 +300,7 @@ class MainConfig {
         this.BusinessLog := false       ; 业务日志开关（统一日志 C 项：宏运行流水）
 
         ; ========== 日志与错误（C 项阶段5）==========
-        this.SysLogMinLevel := "info"   ; 系统日志最低级别：debug/info/warn/error（debug 需显式开启）
+        this.SysLogMinLevel := "warn,error" ; 系统日志写入级别，逗号分隔
         this.LogWarnBubble := true      ; warn 级托盘气泡（2s 自动消失）
         this.LogErrorBadge := true      ; error 级错误中心聚合
 
@@ -401,6 +401,7 @@ class MainConfig {
         this.IsToolCheck := false       ; 鼠标信息检测开关
         this.PosStr := ""               ; 当前鼠标坐标字符串
         this.WinPosStr := ""            ; 当前窗口坐标字符串
+        this.WinOriginStr := ""         ; 鼠标所在窗口外框左上角的屏幕坐标
         this.WinSizeStr := ""           ; 鼠标所在窗口完整尺寸（含标题栏和边框）
         this.ProcessName := ""          ; 鼠标所在窗口进程名
         this.ProcessTile := ""          ; 鼠标所在窗口标题
@@ -1179,8 +1180,8 @@ class SearchData {
 class SearchAllData extends SearchData {
     __New() {
         super.__New()
-        this.AllSaveName := GetLang("搜索坐标集")
-        this.AllSort := "左右优先"
+        this.AllSaveName := GetLang("坐标集")
+        this.AllSort := "上下左右"
         this.MouseActionType := "无动作"
     }
 }
@@ -1450,7 +1451,8 @@ class BGKeyData {
 class TimingData {
     __New() {
         this.SerialStr := ""
-        this.StartStamp := DateDiff(A_Now, "19700101000000", "Seconds")  ; Unix timestamp
+        this.StartStamp := UnixNow()
+        this.StampUnit := "ms"
         this.EndStamp := 0                                                 ; 0 = no end, omitted in JSON
         this.Type := "单次"  ;单次 软件启动时 周期触发（旧值「自定义」仍兼容）
         this.CustomInterval := "10"  ; 仅周期触发使用
@@ -1492,13 +1494,19 @@ class WaitData {
         ; 等待变量值 等待按键按下 等待按键松开 等待屏幕变化 等待鼠标移动 等待鼠标停止移动 等待剪切板变化
         ; 等待进程存在 等待进程关闭 等待窗口存在 等待窗口激活 等待窗口屏幕变化 等待窗口大小变化
         ; 等待窗口关闭 等待窗口最小化 等待文件存在 等待文件删除 等待文件变化 等待日期
-        this.WaitType := "等待变量值"
+        this.WaitType := "等待时间"
         this.Conditions := []       ; {Variable, Operator, Value}，空数组兼容旧等值判断
         this.ConditionLogic := "且"
         this.KeyDevice := "键盘"
         this.KeyOptions := {KeyArr: [], CheckType: "同时按下", StateType: "物理状态"}
-        this.TimeConfig := {SubMode: "等待", Param1: "", Param2: "时长", Param4: "等待", Param5: "时刻", CheckInterval: 500, Timeout: 0}
+        this.TimeConfig := {SubMode: "等待", Param1: "", Param2: "毫秒", Param4: "等待", Param5: "时刻", CheckInterval: 500, Timeout: 0}
+        this.ConfirmConfig := WaitConfirmData.DefaultOptions()
         this.Interval := 500        ; 检测间隔（毫秒）
+        this.TimeoutMs := 0
+        this.ResultSaveName := ""
+        this.WaitCompletedValue := 0
+        this.WaitTimedOutValue := 1
+        this.ProcessTargetType := "进程名"
         this.Param1 := ""           ; 主参数：变量名/按键名/进程名/窗口信息/文件路径/日期值
         this.Param2 := ""           ; 次参数：期望值 / 日期单位（分钟|小时|天|具体时间|时间变量）
         this.Param3 := ""
@@ -1714,13 +1722,13 @@ class SerialData {
 class InputData {
     __New() {
         this.SerialStr := ""
-        this.Type := "弹窗"                 ;弹窗 状态 选择 多选（旧：继续 继续&取消 仍可执行）
+        this.Type := "弹窗"                 ;弹窗 状态 选择 选择文件 多选（旧：继续 继续&取消 仍可执行）
         this.PauseType := "暂停当前宏"      ;交互时：暂停当前宏  暂停所有宏
         this.CancelType := "终止当前宏"     ;取消时  终止当前宏  终止所有宏（旧 继续&取消）
         this.SaveName := "Data"             ;保存的变量名
         this.Prompt := "提示文本"
         this.Options := "选项一，选项二，选项三"   ;选择/多选：中英文逗号或换行分隔
-        this.DefaultValue := ""             ;弹窗/选择/多选默认值；状态默认 1
+        this.DefaultValue := ""             ;选择文件时用于超时动作；状态默认 1
         this.TimeoutMs := 0                 ;0=不超时
         this.TimeoutAction := "无"          ;无 用默认值 保持原值 终止当前宏 终止所有宏
     }
@@ -1729,13 +1737,14 @@ class InputData {
 class WaitConfirmData {
     __New() {
         this.SerialStr := ""
-        this.Type := "继续"                 ;继续  继续&终止&暂停
-        this.PauseType := "暂停当前宏"      ;等待期间：暂停当前宏  暂停所有宏
-        this.Prompt := ""                   ;提示文本
-        this.TimeoutMs := 0                 ;0=不超时
-        this.TimeoutAction := "无"          ;无 自动继续 自动终止 自动暂停
-        this.TerminateType := "终止当前宏"  ;点终止：终止当前宏  终止所有宏
-        this.PauseBtnType := "暂停当前宏"   ;点暂停：暂停当前宏  暂停所有宏
+        this.TimeoutMs := 0
+        for name, value in WaitConfirmData.DefaultOptions().OwnProps()
+            this.%name% := value
+    }
+
+    static DefaultOptions() {
+        return {Type: "继续", PauseType: "暂停当前宏", Prompt: "", TimeoutAction: "无",
+            TerminateType: "终止当前宏", PauseBtnType: "暂停当前宏"}
     }
 }
 

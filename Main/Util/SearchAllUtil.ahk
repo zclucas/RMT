@@ -8,24 +8,24 @@ SearchAllExecute(tableItem, Data, index) {
         WaitIfPaused(tableItem, index)
         if (tableItem.Items[index].Killed)
             return ""
-        points := SearchAllOnce(tableItem, Data, index)
+        coordinates := SearchAllOnce(tableItem, Data, index)
         if (tableItem.Items[index].Killed)
             return ""
-        coordinates := []
-        for point in points
-            coordinates.Push([point[1], point[2]])
         MySetGlobalArray(Data.AllSaveName, coordinates)
-        if (points.Length) {
-            xs := [], ys := [], hwnds := [], isWindows := []
-            for point in points {
-                xs.Push(point[1])
-                ys.Push(point[2])
-                hwnd := point.Length >= 3 ? point[3] : 0
-                hwnds.Push(hwnd)
-                isWindows.Push(hwnd != 0)
+        if (coordinates.Length) {
+            WaitIfPaused(tableItem, index)
+            if (tableItem.Items[index].Killed)
+                return ""
+            if (Data.ResultToggle)
+                MySetGlobalVariable([Data.ResultSaveName], [Data.TrueValue], false)
+            ; 兼容旧配置中的单点坐标变量。
+            if (Data.CoordToogle) {
+                last := coordinates[coordinates.Length]
+                MySetGlobalVariable([Data.CoordXName], [last[1]], false)
+                MySetGlobalVariable([Data.CoordYName], [last[2]], false)
             }
-            ; Image positions are already centers; do not add template dimensions again.
-            ApplySearchActions(tableItem, Data, index, xs, ys, hwnds, [], isWindows)
+            if (Data.TrueMacro != "" && !TryInterceptBranch("Search", "TrueMacro", "", -1))
+                OnTriggerMacroOnce(tableItem, Data.TrueMacro, index)
             return true
         }
         if (A_Index < attempts || Data.SearchCount == -1)
@@ -57,10 +57,8 @@ SearchAllOnce(tableItem, Data, index) {
         if (tableItem.Items[index].Killed)
             return []
         points := SearchAllInRegion(tableItem, Data, index, x1, y1, x2, y2, kind, hwnd)
-        for point in points {
-            point.Push(hwnd)
+        for point in points
             allPoints.Push(point)
-        }
     }
     return SearchAllSort(allPoints, Data.AllSort)
 }
@@ -142,6 +140,8 @@ SearchAllSort(points, order) {
         return points
     axis := order == "上下优先" || order == "从左到右" ? 1 : 2
     other := 3 - axis
+    primaryDirection := order == "下上左右" || order == "下上右左" ? -1 : 1
+    secondaryDirection := order == "上下右左" || order == "下上右左" ? -1 : 1
     width := 1
     while (width < points.Length) {
         merged := [], start := 1
@@ -150,9 +150,11 @@ SearchAllSort(points, order) {
             right := mid, finish := Min(start + width * 2, points.Length + 1)
             while (left < mid || right < finish) {
                 takeLeft := right >= finish
-                if (!takeLeft && left < mid)
-                    takeLeft := points[left][axis] < points[right][axis]
-                        || (points[left][axis] == points[right][axis] && points[left][other] <= points[right][other])
+                if (!takeLeft && left < mid) {
+                    primary := points[left][axis] - points[right][axis]
+                    secondary := points[left][other] - points[right][other]
+                    takeLeft := primary * primaryDirection < 0 || (primary == 0 && secondary * secondaryDirection <= 0)
+                }
                 merged.Push(points[takeLeft ? left++ : right++])
             }
             start := finish

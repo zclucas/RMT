@@ -38,6 +38,7 @@ global MyCountDownStart := (token, total, x, y) => MsgSendHandler("CountDown", "
 global MyCountDownStop := (token) => MsgSendHandler("CountDown", "stop", token)
 global MyMsgBoxContent := WorkMsgBoxContent
 global MyToolTipContent := WorkToolTipContent
+global MyOutputTipContent := WorkOutputTipContent
 global MyViGJoySetState := WorkViGJoySetState
 ;数组相关
 global MySetGlobalArray := WorkSetGlobalArray

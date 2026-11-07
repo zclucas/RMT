@@ -55,7 +55,7 @@ class MacroGraphFormalMixin {
             GetLang("如果"), this.CompareGui,
             GetLang("如果Pro"), this.CompareProGui,
             GetLang("等待"), this.WaitGui,
-            GetLang("等待确定"), this.WaitConfirmGui,
+            GetLang("等待确定"), this.WaitGui,
             GetLang("时间"), this.TimeGui,
             GetLang("倒计时"), this.CountDownGui
         )
@@ -104,7 +104,7 @@ class MacroGraphFormalMixin {
                 return "Hint"
             case "等待进程存在", "等待进程关闭":
                 return "Proc"
-            case "等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化":
+            case "等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口移动", "等待窗口关闭", "等待窗口最小化":
                 return "Win"
             case "等待文件存在", "等待文件删除", "等待文件变化":
                 return "File"
@@ -372,6 +372,7 @@ class MacroGraphFormalMixin {
         type := d.HasOwnProp("waitType") ? CmdEnumWait(d.waitType) : "等待变量值"
         body.Add("TextBlock").Name("WaitTypeSummary_" id).Text(GetLang(type)).TextWrapping("Wrap").Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12))
         body.Add("TextBlock").Name("WaitIntervalSummary_" id).Text(GetLang("检测间隔：") (d.HasOwnProp("waitInterval") ? d.waitInterval : 500) " ms").Margin("0,5,0,0").Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12))
+            .Visibility(type == "等待确定" ? "Collapsed" : "Visible")
         body.Add("Button").Name("WaitEdit_" id).Content(GetLang("编辑等待条件")).Height(26).Margin("0,8,0,0")
     }
 

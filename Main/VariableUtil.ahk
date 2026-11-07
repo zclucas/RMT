@@ -70,6 +70,9 @@ SetGlobalData(macroStr, visitMap) {
                     VariableMap[Data.SaveName] := true
             case "网络请求":
                 HttpRequestRegisterResults(Data)
+            case "等待":
+                if (Data.HasOwnProp("ResultSaveName") && Data.ResultSaveName != "")
+                    VariableMap[Data.ResultSaveName] := true
             case "文件读写", "Excel":
                 SetFileIOGlobalData(Data)
             case "运行", "运行Pro":

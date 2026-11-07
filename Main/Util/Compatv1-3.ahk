@@ -66,6 +66,8 @@ Compat13_Normalize(data, stem) {
     ; 旧字段先归一化，避免默认字段挡住 RunPath/RunMode 等更早版本的映射。
     if (stem == "RunFile")
         CompatEnsureRunData(data)
+    if (stem == "TimingFile")
+        NormalizeTimingStamps(data)
     if ((stem == "SearchFile" || stem == "SearchProFile") && !data.HasOwnProp("SearchImageType"))
         data.SearchImageType := 1 ; 新增软件级模型选项使用默认值，不借用当前正在运行的方案。
     ; 旧文本替换只保存 MatchType，补默认值前同步编辑器使用的 ArgsType。

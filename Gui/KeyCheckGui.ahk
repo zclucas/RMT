@@ -97,19 +97,21 @@ class KeyCheckGui {
 
         ; 行2：检测模式 / 检测类型 / 结果变量（居中）
         bottom := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").Margin("10,12,10,2").VerticalAlignment("Center")
-        bottom.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        cc := bottom.Add("ComboBox").Name("CheckTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        for t in GetLangArr(["同时按下", "有一个按下"])
-            cc.Add("ComboBoxItem").Content(t)
-        bottom.Add("TextBlock").Text(GetLang("检测类型:")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        st := bottom.Add("ComboBox").Name("StateTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        for t in GetLangArr(["物理状态", "逻辑状态"])
-            st.Add("ComboBoxItem").Content(t)
-        bottom.Add("TextBlock").Name("ResultVarLabel").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        bottom.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        if (!this.HasProp("SelectionData")) {
+            bottom.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+            cc := bottom.Add("ComboBox").Name("CheckTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
+                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            for t in GetLangArr(["同时按下", "有一个按下"])
+                cc.Add("ComboBoxItem").Content(t)
+            bottom.Add("TextBlock").Text(GetLang("检测类型:")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            st := bottom.Add("ComboBox").Name("StateTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
+                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            for t in GetLangArr(["物理状态", "逻辑状态"])
+                st.Add("ComboBoxItem").Content(t)
+            bottom.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            bottom.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
+                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        }
 
         ; 行3：清空 / 确定（清空与确定同款，间距 300px）
         btnRow := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -318,10 +320,6 @@ class KeyCheckGui {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("按键检测")
         this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
-        if (this.HasProp("SelectionData")) {
-            this.ui.Update("ResultVarLabel", "Visibility", "Collapsed")
-            this.ui.Update("VarNameCon", "Visibility", "Collapsed")
-        }
         this.DLVariableArr := GetGuiVarArr()
         this.KeyStr := ""
         if (this.Data.KeyArr.Length > 0) {
@@ -332,9 +330,11 @@ class KeyCheckGui {
         if (cmdArr.Length >= 2)
             this.KeyStr := cmdArr[2]
 
-        this.ui.Update("CheckTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.CheckType, CmdEnumKeyCheckNames())))
-        this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
-        this._SetCombo("VarNameCon", this.DLVariableArr, this.Data.VarName != "" ? this.Data.VarName : "Var1")
+        if (!this.HasProp("SelectionData")) {
+            this.ui.Update("CheckTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.CheckType, CmdEnumKeyCheckNames())))
+            this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
+            this._SetCombo("VarNameCon", this.DLVariableArr, this.Data.VarName != "" ? this.Data.VarName : "Var1")
+        }
 
         this.RefreshCheckCon(this.KeyStr)
     }
@@ -367,11 +367,11 @@ class KeyCheckGui {
     SaveKeyCheckData() {
         data := this.Data
         data.KeyArr := this.CheckedArr.Clone()
+        if (this.HasProp("SelectionData"))
+            return
         data.CheckType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("CheckTypeCon>SelectedIndex") : "", CmdEnumKeyCheckNames())
         data.StateType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("StateTypeCon>SelectedIndex") : "", CmdEnumStateNames())
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
-        if (this.HasProp("SelectionData"))
-            return
         MySoftData.GlobalVariMap[data.VarName] := true
 
         SaveMacroCMDData(data)

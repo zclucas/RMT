@@ -509,6 +509,18 @@ public partial class AhkWpfEngine
                         val = ((FrameworkElement)c).ActualWidth.ToString(invW);
                     }
                     break;
+                case "ScreenOrigin":
+                    if (c is FrameworkElement)
+                    {
+                        var element = (FrameworkElement)c;
+                        if (element.IsVisible && PresentationSource.FromVisual(element) != null)
+                        {
+                            var point = element.PointToScreen(new Point(0, 0));
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            val = point.X.ToString("F0", inv) + "," + point.Y.ToString("F0", inv);
+                        }
+                    }
+                    break;
                 case "Position":
                     if (c is System.Windows.Media.Visual)
                     {

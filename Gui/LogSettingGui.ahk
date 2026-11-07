@@ -14,7 +14,6 @@ class LogSettingGui {
     __New() {
         this.ui := ""
         this.closed := true
-        this._curLevel := "info"
     }
 
     static ShowGui() {
@@ -62,20 +61,15 @@ class LogSettingGui {
 
         ; === 主体 ===
         body := main.Add("Grid").Grid_Row(1).Margin("20,16,20,16")
-        body.Rows("40", "40", "40", "40", "*")
+        body.Rows("40", "40", "40", "*")
 
         ; 行0：日志级别
         row0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
         row0.Add("TextBlock").Text(GetLang("日志级别：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        lvCombo := row0.Add("ComboBox").Name("CmbLogLevel").Width(110).Height(26).MinHeight(26).VerticalContentAlignment("Center").Margin("4,0,0,0")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .ToolTip(GetLang("系统日志的最低级别：低于此级别的日志不写入 System.log。")
-                . "`n" GetLang("debug：记录所有调试信息（建议排查问题时开启）")
-                . "`n" GetLang("info：记录正常事件（默认）")
-                . "`n" GetLang("warn/error：仅记录警告与错误，日志量最小"))
-        for lv in ["debug", "info", "warn", "error"]
-            lvCombo.Add("ComboBoxItem").Content(lv)
+        labels := ["调试", "信息", "警告", "错误"]
+        for i, level in RMTLogLevelKeys()
+            row0.Add("CheckBox").Name("LogLevel_" level).Content(GetLang(labels[i])).Margin("4,0,6,0").VerticalAlignment("Center")
+                .ToolTip(GetLang("可同时勾选多个级别。系统日志只写入勾选的级别，全部取消则暂停写入。"))
 
         ; 行1：warn 气泡
         row1 := body.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").VerticalAlignment("Center")
@@ -91,16 +85,8 @@ class LogSettingGui {
             .ToolTip(GetLang("开启后：error 级错误在错误中心聚合显示（可复制/清空）。")
                 . "`n" GetLang("关闭后：error 只写入 System.log，不打开错误中心。"))
 
-        ; 行3：业务日志
-        row3 := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").VerticalAlignment("Center")
-        row3.Add("TextBlock").Text(GetLang("业务日志：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        chkBiz := row3.Add("CheckBox").Name("ChkBusinessLog").VerticalAlignment("Center").Margin("4,0,0,0")
-            .ToolTip(GetLang("开启后：记录宏运行流水到 Log\\Business.log（宏触发/每指令/宏结束）。")
-                . "`n" GetLang("关闭后：不记录业务流水（默认）。")
-                . "`n" GetLang("提示：业务日志可能产生大量内容，建议排查问题时开启。"))
-
-        ; 行4：确定
-        btnRow := body.Add("StackPanel").Grid_Row(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; 行3：确定
+        btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Height(28).MinHeight(28).Padding("14,0")
 
         ; === 创建 XAMLHost ===
@@ -114,10 +100,10 @@ class LogSettingGui {
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCloseClick"))
-        this.ui.OnEvent("CmbLogLevel", "SelectionChanged", ObjBindMethod(this, "OnLevelChanged"))
+        for level in RMTLogLevelKeys()
+            this.ui.OnEvent("LogLevel_" level, "Click", ObjBindMethod(this, "OnLevelChanged", level))
         this.ui.OnEvent("ChkLogWarnBubble", "Click", ObjBindMethod(this, "OnBubbleToggle"))
         this.ui.OnEvent("ChkLogErrorBadge", "Click", ObjBindMethod(this, "OnBadgeToggle"))
-        this.ui.OnEvent("ChkBusinessLog", "Click", ObjBindMethod(this, "OnBusinessLogToggle"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnOkClick"))
 
         this._ApplyCurrent()
@@ -127,22 +113,13 @@ class LogSettingGui {
 
     _ApplyCurrent() {
         global RMTLogSysMinLevel
-        level := IsSet(MainSoftData) && MainSoftData.HasOwnProp("SysLogMinLevel") ? MainSoftData.SysLogMinLevel : RMTLogSysMinLevel
-        this._curLevel := level
-        idx := 0
-        for i, lv in ["debug", "info", "warn", "error"] {
-            if (lv == level) {
-                idx := i - 1
-                break
-            }
-        }
-        this.ui.Update("CmbLogLevel", "SelectedIndex", String(idx))
+        selected := MainSoftData.HasOwnProp("SysLogMinLevel") ? MainSoftData.SysLogMinLevel : RMTLogSysMinLevel
+        for level in RMTLogLevelKeys()
+            this.ui.Update("LogLevel_" level, "IsChecked", RMTLogLevelEnabled(level, selected) ? "True" : "False")
         bubble := MainSoftData.HasOwnProp("LogWarnBubble") ? MainSoftData.LogWarnBubble : true
         badge := MainSoftData.HasOwnProp("LogErrorBadge") ? MainSoftData.LogErrorBadge : true
-        biz := MainSoftData.HasOwnProp("BusinessLog") ? MainSoftData.BusinessLog : false
         this.ui.Update("ChkLogWarnBubble", "IsChecked", bubble ? "True" : "False")
         this.ui.Update("ChkLogErrorBadge", "IsChecked", badge ? "True" : "False")
-        this.ui.Update("ChkBusinessLog", "IsChecked", biz ? "True" : "False")
     }
 
     OnWindowLoad(state, ctrl, event) {
@@ -160,15 +137,13 @@ class LogSettingGui {
     }
 
     ; 日志级别：即时同步 LogUtil global + 持久化
-    OnLevelChanged(state, ctrl, event) {
+    OnLevelChanged(level, state, ctrl, event) {
         global RMTLogSysMinLevel
-        lv := this.ui.Query("CmbLogLevel")
-        if (lv == "")
-            return
-        MainSoftData.SysLogMinLevel := lv
-        RMTLogSysMinLevel := lv
-        this._curLevel := lv
-        CfgWrite(lv, SettingFile, SettingSection, "SysLogMinLevel")
+        checked := this.ui.Query(ctrl) == "True"
+        selected := RMTLogToggleLevel(MainSoftData.SysLogMinLevel, level, checked)
+        MainSoftData.SysLogMinLevel := selected
+        RMTLogSysMinLevel := selected
+        CfgWrite(selected, SettingFile, SettingSection, "SysLogLevels")
     }
 
     ; warn 气泡开关
@@ -184,13 +159,6 @@ class LogSettingGui {
     }
 
     ; 业务日志开关（同步 LogUtil global + 持久化）
-    OnBusinessLogToggle(state, ctrl, event) {
-        global RMTLogBusinessEnabled
-        MainSoftData.BusinessLog := this.ui.Query("ChkBusinessLog") == "True"
-        RMTLogBusinessEnabled := MainSoftData.BusinessLog
-        CfgWrite(MainSoftData.BusinessLog, SettingFile, SettingSection, "BusinessLog")
-    }
-
     OnOkClick(state, ctrl, event) {
         try this.ui.Update("Window", "Close", "")
     }

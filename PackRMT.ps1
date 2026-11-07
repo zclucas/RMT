@@ -1119,7 +1119,7 @@ function New-RMTAssets {
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "RedColor.png", "Run.png", "Search.png",
         "SearchPro.png", "SearchAll.png", "MacroAction.png", "Target.png", "TextOps.png", "True.png",
-        "Var.png", "WeiXin.png", "WindowManage.png", "YellowColor.png",
+        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "YellowColor.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
     )
 

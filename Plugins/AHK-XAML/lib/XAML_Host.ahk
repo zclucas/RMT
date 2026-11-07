@@ -431,16 +431,13 @@ class XAMLHost {
         return XAMLHost.FontSize(2)
     }
 
-    ; 指令编辑器标题栏：主题字号、略矮。宏指令标题栏：更大字/图标/高度（对齐间隔窗当前视觉）
+    ; 编辑器沿用主界面的标题栏设计高度，Viewbox 会统一缩放。
     static CmdTitleBarHeight() {
-        return 26
+        return XAMLHost.GetTitleBarHeight()
     }
 
     static MacroTitleBarHeight() {
-        scale := XAMLHost.GetMainViewboxScale()
-        if (!IsNumber(scale) || scale < 1)
-            scale := 1
-        return Integer(Max(38, Round(30 * scale)))
+        return XAMLHost.GetTitleBarHeight()
     }
 
     static MacroTitleGlyphSize() {
@@ -630,25 +627,25 @@ class XAMLHost {
         return chrome
     }
 
-    ; 指令编辑器标题栏：主题字号 15、加粗、略矮（26）。宏指令用 AddMacroTitleBar。
+    ; 指令编辑器标题栏使用较小的文字和图标。宏指令用 AddMacroTitleBar。
     static AddCmdTitleBar(main, title, titleHeight := "", closeName := "BtnClosePanel", titleName := "", titleIcon := "", titleIconColor := "") {
         return XAMLHost._AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, false)
     }
 
-    ; 宏指令编辑器标题栏：更大字号/图标/高度（对齐当前间隔窗的视觉）
+    ; 宏指令编辑器标题栏使用较大的文字和图标。
     static AddMacroTitleBar(main, title, titleHeight := "", closeName := "BtnClosePanel", titleName := "", titleIcon := "", titleIconColor := "") {
         return XAMLHost._AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, true)
     }
 
     static _AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, macroStyle) {
+        if (titleHeight == "")
+            titleHeight := XAMLHost.GetTitleBarHeight()
         if (titleIcon == "") {
             try titleIcon := CmdEditorTitleIcon(title)
         }
         if (macroStyle) {
             if (titleName == "")
                 titleName := "MacroEditorTitle"
-            if (titleHeight == "" || titleHeight == "30")
-                titleHeight := XAMLHost.MacroTitleBarHeight()
             titleFs := XAMLHost.TitleFontSize()
             glyphSize := XAMLHost.MacroTitleGlyphSize()
             cmdBtnW := "46"
@@ -656,8 +653,6 @@ class XAMLHost {
         } else {
             if (titleName == "")
                 titleName := "CmdEditorTitle"
-            if (titleHeight == "" || titleHeight == "30")
-                titleHeight := XAMLHost.CmdTitleBarHeight()
             titleFs := XAMLHost.FontSize(-2)
             glyphSize := XAMLHost.CmdTitleGlyphSize()
             cmdBtnW := XAMLHost.CmdChromeBtnWidth()
@@ -718,13 +713,12 @@ class XAMLHost {
         chrome.Close := XAMLHost.AddTitleCloseBtn(chrome.Btns, closeName, titleHeight, cmdBtnW, glyphSize)
         if (!macroStyle) {
             try chrome.Btns.VerticalAlignment("Stretch")
-            sq := cmdBtnW
+            btnHeight := Min(cmdBtnW, titleHeight)
             for btn in [chrome.PointEdit, chrome.Preview, chrome.F1, chrome.F2, chrome.F3, chrome.Targeter, chrome.Play, chrome.Help, chrome.Video] {
-                try btn.Width(sq).MinWidth(sq).Height(sq).MinHeight(sq).VerticalAlignment("Center").Margin("0")
+                try btn.Height(btnHeight).MinHeight(btnHeight).VerticalAlignment("Center").Margin("0")
             }
             ; 关闭钮贴齐标题栏右上角：全高 Stretch + TitleBarCloseButton 圆角，hover 才贴窗口弧
-            try chrome.Close.Width(sq).MinWidth(sq).Height(titleHeight).MinHeight(titleHeight)
-                .VerticalAlignment("Stretch").Margin("0")
+            try chrome.Close.VerticalAlignment("Stretch").Margin("0")
         }
         return chrome
     }
@@ -1023,6 +1017,7 @@ class XAMLHost {
 
     ; 标题栏：主窗标题 = 主题字号+2 且粗体；指令/宏指令编辑器标题 = 主题字号
     static _PatchTitleBarXaml(mid) {
+        titleHeight := XAMLHost.GetTitleBarHeight()
         titleFs := XAMLHost.FormatFontSize(XAMLHost.GetThemeFontSize() + 2)
         cmdTitleFs := XAMLHost.FormatFontSize(XAMLHost.GetThemeFontSize())
         out := ""
@@ -1068,13 +1063,13 @@ class XAMLHost {
                 else
                     tag := RegExReplace(tag, ">$", ' Width="46">')
                 if (InStr(tag, "Height="))
-                    tag := RegExReplace(tag, '\bHeight="\d+(?:\.\d+)?"', 'Height="30"')
+                    tag := RegExReplace(tag, '\bHeight="\d+(?:\.\d+)?"', 'Height="' titleHeight '"')
                 else
-                    tag := RegExReplace(tag, ">$", ' Height="30">')
+                    tag := RegExReplace(tag, ">$", ' Height="' titleHeight '">')
                 if (InStr(tag, "MinHeight="))
-                    tag := RegExReplace(tag, '\bMinHeight="\d+(?:\.\d+)?"', 'MinHeight="30"')
+                    tag := RegExReplace(tag, '\bMinHeight="\d+(?:\.\d+)?"', 'MinHeight="' titleHeight '"')
                 else
-                    tag := RegExReplace(tag, ">$", ' MinHeight="30">')
+                    tag := RegExReplace(tag, ">$", ' MinHeight="' titleHeight '">')
                 if (InStr(tag, "Padding="))
                     tag := RegExReplace(tag, '\bPadding="[^"]*"', 'Padding="0"')
                 else
@@ -1131,7 +1126,7 @@ class XAMLHost {
         }
     }
 
-    ; ApplyFonts 会把 DragArea 标题写成主题+2、铬钮高度写成 30。开窗后再按两类编辑器钉回去。
+    ; ApplyFonts 刷新通用标题栏样式后，再恢复编辑器的字号和按钮样式。
     static SyncCmdEditorTitleFont(host) {
         if (!IsObject(host) || !host.HasProp("xaml"))
             return
@@ -1168,13 +1163,15 @@ class XAMLHost {
     }
 
     static _SyncCmdChromeCentered(host) {
-        w := String(XAMLHost.CmdChromeBtnWidth())
-        h := String(XAMLHost.CmdTitleBarHeight())
+        width := XAMLHost.CmdChromeBtnWidth()
+        height := XAMLHost.CmdTitleBarHeight()
+        w := String(width), h := String(height)
+        btnHeight := String(Min(width, height))
         for name in ["BtnCmdPointEdit", "BtnCmdPreview", "BtnCmdF1", "BtnCmdF2", "BtnCmdF3", "BtnCmdTargeter", "BtnCmdPlay", "BtnCmdHelp", "BtnCmdVideo"] {
             try host.Update(name, "Width", w)
             try host.Update(name, "MinWidth", w)
-            try host.Update(name, "Height", w)
-            try host.Update(name, "MinHeight", w)
+            try host.Update(name, "Height", btnHeight)
+            try host.Update(name, "MinHeight", btnHeight)
             try host.Update(name, "VerticalAlignment", "Center")
             try host.Update(name, "Margin", "0")
         }
@@ -2153,6 +2150,9 @@ class XAMLHost {
             }
             configAhk := libDir "\XAML_Config.ahk"
             configTime := FileExist(configAhk) ? FileGetTime(configAhk) : 0
+            components := libDir "\dep\xaml.components"
+            componentsPath := FileExist(components ".baml") ? components ".baml" : components ".xaml"
+            componentsTime := FileExist(componentsPath) ? FileGetTime(componentsPath) : 0
             forceCompile := IsSet(XAML_FORCE_DYNAMIC_COMPILE) && XAML_FORCE_DYNAMIC_COMPILE
             buildLoc := IsSet(XAML_ENGINE_BUILD_LOCATION) ? XAML_ENGINE_BUILD_LOCATION : "temp"
 
@@ -2165,7 +2165,7 @@ class XAMLHost {
             ; 先重编译（必要时杀掉任意 ahk-xaml），再校验 daemon 路径，避免误连桌面 Release 旧引擎
             if (forceCompile && DirExist(srcDir)) {
                 compileTarget := (buildLoc == "temp") ? targetExe : sharedExe
-                needCompile := !FileExist(compileTarget) || newestSrcTime > FileGetTime(compileTarget) || configTime > FileGetTime(compileTarget)
+                needCompile := !FileExist(compileTarget) || Max(newestSrcTime, configTime, componentsTime) > FileGetTime(compileTarget)
                 if (needCompile) {
                     XAMLHost.KillDaemon()
                     try {

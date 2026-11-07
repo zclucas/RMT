@@ -193,8 +193,8 @@ class MacroGraphNodeUIMixin {
             cancelKey := d.HasOwnProp("cancelType") ? d.cancelType : "终止当前宏"
             saveName := d.HasOwnProp("saveName") ? d.saveName : "Data"
             showCancel := (typeKey == "继续&取消")
-            showRes := (typeKey == "弹窗" || typeKey == "状态" || typeKey == "选择" || typeKey == "多选")
-            typeNames := GetLangArr(this._InputTypeKeys(typeKey))
+            showRes := InputHasResult(typeKey)
+            typeNames := GetLangArr(InputTypeKeys(typeKey))
             pauseNames := GetLangArr(["暂停当前宏", "暂停所有宏"])
             cancelNames := GetLangArr(["终止当前宏", "终止所有宏"])
             varList := GetGuiVarArr()

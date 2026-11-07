@@ -10,7 +10,8 @@
 ;      滚轮由窗口内 AHK 热键接管，并保持鼠标下的图像位置。
 ; ===========================================================================
 class ImageProcessGui {
-    __new() {
+    __new(allowMultiPoint := true) {
+        this.AllowMultiPoint := allowMultiPoint
         this.ui := ""
         this.OwnerHwnd := ""
         this._ownerDisabled := false
@@ -181,8 +182,10 @@ class ImageProcessGui {
         this.IgnoreTool := ""
         this.IgnoreDragging := false
         this.IgnoreCurrentOp := ""
-        this.MatchMode := matchMode == "super" && this.SuperSeedPoints.Length > 0
-            ? "super" : (matchMode == "multi" && this.Points.Length > 0 ? "multi" : "")
+        this.MatchMode := ""
+        if (this.AllowMultiPoint)
+            this.MatchMode := matchMode == "super" && this.SuperSeedPoints.Length > 0
+                ? "super" : (matchMode == "multi" && this.Points.Length > 0 ? "multi" : "")
         this.EditorMode := this.MatchMode == "" ? "original" : this.MatchMode
         this.PointTool := ""
         this.OriginalTool := ""
@@ -249,6 +252,7 @@ class ImageProcessGui {
 
         this._AddBtn(bar, "BtnModeOriginal", GetLang("原图"), 64)
         this._AddBtn(bar, "BtnModeMultiPoint", GetLang("多点"), 64)
+            .Visibility(this.AllowMultiPoint ? "Visible" : "Collapsed")
         bar.Add("Button").Name("BtnHelp").Content("?")
             .Width(24).Height(24).MinWidth(24).MinHeight(24).MaxWidth(24).MaxHeight(24)
             .Padding("0").Margin("10,0,0,0").FontSize("11").Cursor("Hand")
@@ -673,14 +677,14 @@ class ImageProcessGui {
     }
 
     OnHelp(*) {
-        text := Format("{}`n{}`n`n{}`n{}`n{}`n`n{}`n{}"
-            , GetLang("一、图片处理")
-            , GetLang("改名：改完按右侧对勾应用。裁剪：框选保留区域后应用。抠除：画笔涂掉背景、笔擦擦回，再应用生成透明底。")
-            , GetLang("二、多点搜图")
-            , GetLang("用多个色块匹配；相似度=命中比例；可点击右上角效果图，查看搜索时参与的色块。操作流程：选基准点后可自动补点或手动增删，最多 256 点。")
-            , GetLang("超多点：选基准色 + 容差匹配整幅图，蒙版涂抹区域不参与匹配。")
-            , GetLang("三、自动抠图")
-            , GetLang("采集 2 张以上同一区域的样本（截屏或导入），自动对齐后提取所有样本共同不变的像素，生成透明底 PNG。"))
+        text := GetLang("一、图片处理") "`n"
+            . GetLang("改名：改完按右侧对勾应用。裁剪：框选保留区域后应用。抠除：画笔涂掉背景、笔擦擦回，再应用生成透明底。")
+        if (this.AllowMultiPoint)
+            text .= "`n`n" GetLang("二、多点搜图") "`n"
+                . GetLang("用多个色块匹配；相似度=命中比例；可点击右上角效果图，查看搜索时参与的色块。操作流程：选基准点后可自动补点或手动增删，最多 256 点。") "`n"
+                . GetLang("超多点：选基准色 + 容差匹配整幅图，蒙版涂抹区域不参与匹配。")
+        text .= "`n`n" GetLang(this.AllowMultiPoint ? "三、自动抠图" : "二、自动抠图") "`n"
+            . GetLang("采集 2 张以上同一区域的样本（截屏或导入），自动对齐后提取所有样本共同不变的像素，生成透明底 PNG。")
         RmtDialog.Info(text, GetLang("图片处理说明"))
     }
 

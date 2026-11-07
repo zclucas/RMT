@@ -19,10 +19,13 @@ global XAML_IN_PROCESS_PREVIEW := false
 
 ;资源保存（带脏检查优化：只写入实际发生变化的配置项）
 OnSaveSetting(*) {
-    global MySoftData, MyWorkPool, MyHotReloadBus, MyMainWin
-    isValid := CheckAllValueSettingValid()
-    if (!isValid)
+    global MySoftData, MyWorkPool, MyHotReloadBus, MyMainWin, RMTLogSysMinLevel
+    threadCount := MainSoftData.MutiThreadNum
+    if (IsSet(MyMainWin) && IsObject(MyMainWin) && MyMainWin.HasOwnProp("_setMods"))
+        threadCount := Trim(MyMainWin.ui.Query("EditMutiThreadNum>Text"))
+    if (!CheckAllValueSettingValid(threadCount))
         return
+    MainSoftData.MutiThreadNum := Integer(threadCount)
 
     ; Epic5：虚拟化列表保存前兜底提交实体化行全字段（覆盖纯键盘后未失焦路径）。
     ; VL_COMMIT_ALL 回传经 SetTimer(-1) 异步写模型，Sleep(-1) 处理 pending timer 后再读，防丢
@@ -80,7 +83,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("SoftBGColor", MainSoftData.SoftBGColor)
     CheckAndAddDirty("NoVariableTip", MainSoftData.NoVariableTip)
     CheckAndAddDirty("BusinessLog", MainSoftData.BusinessLog)
-    CheckAndAddDirty("SysLogMinLevel", MainSoftData.SysLogMinLevel)
+    CheckAndAddDirty("SysLogLevels", MainSoftData.SysLogMinLevel)
     CheckAndAddDirty("LogWarnBubble", MainSoftData.LogWarnBubble)
     CheckAndAddDirty("LogErrorBadge", MainSoftData.LogErrorBadge)
     CheckAndAddDirty("AiApiKey", MainSoftData.HasProp("AiApiKey") ? MainSoftData.AiApiKey : "")
@@ -164,6 +167,7 @@ OnSaveSetting(*) {
     for key, value in dirtySettings {
         CfgWrite(value, SettingFile, SettingSection, key)
     }
+    RMTLogSysMinLevel := MainSoftData.SysLogMinLevel
 
     ; 设置中心：主题方案与颜色 1~14 走 AppThemeUtil 自有落盘格式（[ThemeColors] + [UserSettings] AppTheme），
     ; 与「主题选项」窗口一致；此处统一在「应用并保存」时落盘。
@@ -186,7 +190,7 @@ CheckValueSettingValid(Name, Value) {
     return true
 }
 
-CheckAllValueSettingValid() {
+CheckAllValueSettingValid(threadCount) {
     if (!CheckValueSettingValid(GetLang("点击时间浮动"), MainSoftData.HoldFloat))
         return false
 
@@ -202,8 +206,10 @@ CheckAllValueSettingValid() {
     if (!CheckValueSettingValid(GetLang("坐标Y浮动"), MainSoftData.CoordYFloat))
         return false
 
-    if (!CheckValueSettingValid(GetLang("多线程数"), MainSoftData.MutiThreadNum))
+    if (!IsInteger(threadCount) || Integer(threadCount) < -1) {
+        RmtDialog.Info(GetLang("多线程数请输入 -1、0 或正整数。"))
         return false
+    }
 
     ; §23 P2-1：端口 1-65535 范围校验（非法值如 99999 会被 htons 截断为 34463，静默监听错端口）。
     ; 拒绝本次保存并还原为 INI 中上次有效值（INI 读取端仍有钳制兜底），同时回写 UI 输入框。
@@ -1162,6 +1168,10 @@ ViGJoySetState(JoyType, Key, Value) {
     } catch as e {
         JoyDebugLog(Format("ViGJoySetState EXCEPTION: {} | {}", e.Message, e.What), "vigem")
     }
+}
+
+OutputTipContent(content) {
+    CursorOutputTip.Show(content)
 }
 
 ToolTipContent(content) {

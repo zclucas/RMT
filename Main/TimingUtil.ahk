@@ -116,7 +116,7 @@ class TimingScheduler {
             return
 
         next := this.heap.Peek()
-        delay := (next.time - UnixNow()) * 1000
+        delay := next.time - UnixNow()
         this.SetOneShotTimer(this.timerFunc, delay)
     }
 
@@ -152,7 +152,7 @@ class TimingScheduler {
             return
         }
 
-        delay := (nextEnd - now) * 1000
+        delay := nextEnd - now
         this.SetOneShotTimer(this.endCheckTimerFunc, delay)
     }
 
@@ -192,7 +192,7 @@ class TimingScheduler {
 
             Data := GetMacroCMDData(itemObj.TimingSerial)
 
-            if (Data.HasOwnProp("EndStamp") && now >= Data.EndStamp)
+            if (Data.HasOwnProp("EndStamp") && Data.EndStamp && now >= Data.EndStamp)
                 continue
 
             shouldTrigger := true
@@ -234,7 +234,7 @@ class TimingScheduler {
 
             Data := GetMacroCMDData(item.TimingSerial)
 
-            if (!Data.HasOwnProp("EndStamp") || now < Data.EndStamp)
+            if (!Data.HasOwnProp("EndStamp") || !Data.EndStamp || now < Data.EndStamp)
                 continue
 
             if (item.IsWorkIndex != 0)
@@ -261,7 +261,7 @@ class TimingScheduler {
         secs := GetTimingDurationSeconds(Data)
         if (secs < 1)
             return
-        this._durationDeadlines[id] := UnixNow() + secs
+        this._durationDeadlines[id] := UnixNow() + secs * 1000
         this._ScheduleDurationFire()
     }
 
@@ -276,7 +276,7 @@ class TimingScheduler {
             SetTimer(this._durationTimerFunc, 0)
             return
         }
-        this.SetOneShotTimer(this._durationTimerFunc, (next - now) * 1000)
+        this.SetOneShotTimer(this._durationTimerFunc, next - now)
     }
 
     _OnDurationFire() {
@@ -397,7 +397,7 @@ NextRepeatTime(Data, start, baseStamp) {
     if (CmdEnumTimingUnit(Data.CustomUnit) == "月") {
         next := NextMonthTime(start, baseStamp, Data.CustomInterval)
     } else {
-        interval := GetTimingInterval(Data)
+        interval := GetTimingInterval(Data) * 1000
         next := start + ((baseStamp - start) // interval + 1) * interval
     }
 
@@ -407,26 +407,25 @@ NextRepeatTime(Data, start, baseStamp) {
 NextMonthTime(start, baseStamp, interval) {
     startStr := StampToTimeStr(start)
     baseStr := StampToTimeStr(baseStamp)
+    monthsDiff := (Integer(SubStr(baseStr, 1, 4)) - Integer(SubStr(startStr, 1, 4))) * 12
+        + Integer(SubStr(baseStr, 5, 2)) - Integer(SubStr(startStr, 5, 2))
+    offset := (monthsDiff // interval) * interval
+    next := TimeStrToStamp(TimingAddMonths(startStr, offset)) + Mod(start, 1000)
+    return next > baseStamp ? next : TimeStrToStamp(TimingAddMonths(startStr, offset + interval)) + Mod(start, 1000)
+}
 
-    monthsDiff := DateDiff(baseStr, startStr, "Months")
-    nextStr := DateAdd(startStr, ((monthsDiff // interval) + 1) * interval, "Months")
-    return TimeStrToStamp(nextStr)
+TimingAddMonths(stamp, offset) {
+    monthIndex := Integer(SubStr(stamp, 1, 4)) * 12 + Integer(SubStr(stamp, 5, 2)) - 1 + offset
+    monthStart := Format("{:04}{:02}01000000", monthIndex // 12, Mod(monthIndex, 12) + 1)
+    ; 从月首向后 31 天必到次月，取次月首的前一天作为本月月末。
+    nextMonth := SubStr(DateAdd(monthStart, 31, "Days"), 1, 6) "01000000"
+    lastDay := Integer(SubStr(DateAdd(nextMonth, -1, "Days"), 7, 2))
+    day := Min(Integer(SubStr(stamp, 7, 2)), lastDay)
+    return SubStr(monthStart, 1, 6) Format("{:02}", day) SubStr(stamp, 9)
 }
 
 CheckEnd(Data, nextTime) {
-    return (Data.HasOwnProp("EndStamp") && nextTime >= Data.EndStamp) ? 0 : nextTime
-}
-
-UnixNow() {
-    return DateDiff(A_Now, "19700101000000", "Seconds")
-}
-
-TimeStrToStamp(timeStr) {
-    return DateDiff(timeStr, "19700101000000", "Seconds")
-}
-
-StampToTimeStr(stamp) {
-    return DateAdd("19700101000000", stamp, "Seconds")
+    return (Data.HasOwnProp("EndStamp") && Data.EndStamp && nextTime >= Data.EndStamp) ? 0 : nextTime
 }
 
 GetTimingInterval(Data) {
@@ -444,9 +443,9 @@ GetTimingDurationSeconds(Data) {
     unit := CmdEnumTimingUnit(Data.HasOwnProp("DurationUnit") ? Data.DurationUnit : "分钟")
     if (unit == "月") {
         try {
-            now := UnixNow()
-            endStr := DateAdd(StampToTimeStr(now), n, "Months")
-            secs := TimeStrToStamp(endStr) - now
+            now := UnixNow() // 1000 * 1000
+            endStr := TimingAddMonths(StampToTimeStr(now), n)
+            secs := (TimeStrToStamp(endStr) - now) // 1000
             return secs > 0 ? secs : 0
         } catch {
             return 0

@@ -490,7 +490,7 @@ class VariableGui {
         str5 := GetLang("当前坐标X：实时获取当前鼠标X")
         str6 := GetLang("当前坐标Y：实时获取当前鼠标Y")
         str7 := GetLang("当前剪切板：仅剪切板是文本时有效，否则变量值为「空」")
-        str7b := GetLang("当前时间戳：当前Unix时间戳（秒）")
+        str7b := GetLang("当前时间戳：当前Unix时间戳（毫秒）")
         str8 := GetLang("当前年：当前年份（形如2026）")
         str9 := GetLang("当前月：当前月份（形如4）")
         str10 := GetLang("当前周：当前是一年中的第几周（形如41）")

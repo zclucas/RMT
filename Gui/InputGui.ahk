@@ -2,7 +2,7 @@
 
 ; =====================================================================
 ; 输入编辑器 —— XAML 迁移版（独立实现）
-; 类型：弹窗 / 状态 / 选择 / 多选（旧 继续 / 继续&取消 仍可打开已存指令）
+; 类型：弹窗 / 状态 / 选择 / 选择文件 / 多选（旧 继续 / 继续&取消 仍可打开已存指令）
 ; =====================================================================
 
 class InputGui {
@@ -64,16 +64,6 @@ class InputGui {
         }
     }
 
-    _TypeKeys() {
-        keys := ["弹窗", "状态", "选择", "多选"]
-        if (IsObject(this.Data)) {
-            cur := this.Data.Type
-            if (cur == "继续" || cur == "继续&取消")
-                keys.Push(cur)
-        }
-        return keys
-    }
-
     _BuildAndShow() {
         global MySoftData
         this._closed := false
@@ -104,7 +94,7 @@ class InputGui {
 
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("输入类型:")).VerticalAlignment("Center")
         tc := body.Add("ComboBox").Grid_Row(1).Grid_Column(1).Name("TypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
-        for t in GetLangArr(["弹窗", "状态", "选择", "多选"])
+        for t in GetLangArr(InputTypeKeys())
             tc.Add("ComboBoxItem").Content(t)
         body.Add("TextBlock").Grid_Row(1).Grid_Column(3).Text(GetLang("交互时:")).VerticalAlignment("Center")
         pt := body.Add("ComboBox").Grid_Row(1).Grid_Column(4).Name("PauseTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
@@ -139,12 +129,14 @@ class InputGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         body.Add("TextBlock").Grid_Row(5).Grid_Column(0).Text(GetLang("超时(ms)：")).VerticalAlignment("Center")
-        body.Add("TextBox").Grid_Row(5).Grid_Column(1).Name("TimeoutCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:7")
-        body.Add("TextBlock").Grid_Row(5).Grid_Column(3).Text(GetLang("超时后:")).VerticalAlignment("Center")
-        ta := body.Add("ComboBox").Grid_Row(5).Grid_Column(4).Name("TimeoutActionCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
+        timeoutCombo := body.Add("ComboBox").Grid_Row(5).Grid_Column(1).Name("TimeoutCon").Height(26).MinHeight(26).VerticalAlignment("Center")
+            .IsEditable("True").IsTextSearchEnabled("False").Tag("AllowPassive")
+        timeoutCombo.Add("ComboBoxItem").Content(GetLang("不限时"))
+        timeoutCombo.Add("ComboBoxItem").Content("10000")
+        timeoutActionRow := body.Add("Grid").Grid_Row(5).Grid_Column(3).Grid_ColumnSpan(2).Name("TimeoutActionRow").Visibility("Collapsed")
+        timeoutActionRow.Cols("80", "150")
+        timeoutActionRow.Add("TextBlock").Grid_Column(0).Text(GetLang("超时后:")).VerticalAlignment("Center")
+        ta := timeoutActionRow.Add("ComboBox").Grid_Column(1).Name("TimeoutActionCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         for t in GetLangArr(["无", "用默认值", "保持原值", "终止当前宏", "终止所有宏"])
             ta.Add("ComboBoxItem").Content(t)
 
@@ -162,6 +154,8 @@ class InputGui {
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/7-输入", ObjBindMethod(this, "TriggerMacro"))
         this.ui.OnEvent("TypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefreshType"))
+        this.ui.Track("TimeoutCon")
+        this.ui.OnEvent("TimeoutCon", "TextChanged", ObjBindMethod(this, "OnRefreshTimeout"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
     }
 
@@ -231,7 +225,7 @@ class InputGui {
         this.DLVariableArr := GetGuiVarArr(1)
         this.DLArrayArr := GetGuiArrNameArr()
 
-        this._SetDDL("TypeCombo", GetLangArr(this._TypeKeys()), GetLang(this.Data.Type))
+        this._SetDDL("TypeCombo", GetLangArr(InputTypeKeys(this.Data.Type)), GetLang(this.Data.Type))
         this._SetDDL("PauseTypeCombo", GetLangArr(["暂停当前宏", "暂停所有宏"]), GetLang(this.Data.PauseType))
         this._SetDDL("CancelTypeCombo", GetLangArr(["终止当前宏", "终止所有宏"]), GetLang(this.Data.CancelType))
         this._SetDDL("TimeoutActionCombo", GetLangArr(["无", "用默认值", "保持原值", "终止当前宏", "终止所有宏"]), GetLang(this.Data.TimeoutAction))
@@ -245,7 +239,27 @@ class InputGui {
         this._ComboPush("PromptCon", "Text", prompt)
         this._ComboPush("OptionsCon", "Text", opts)
         this._ComboPush("DefaultCon", "Text", this.Data.DefaultValue)
-        this._ComboPush("TimeoutCon", "Text", this.Data.TimeoutMs)
+        timeout := this.Data.TimeoutMs > 0 ? String(this.Data.TimeoutMs) : GetLang("不限时")
+        this._ComboPush("TimeoutCon", "Text", timeout)
+        this._RefreshTimeoutAction(timeout)
+    }
+
+    OnRefreshTimeout(state, ctrl, event) {
+        if (IsObject(this.ui) && IsObject(state) && state.Has("TimeoutCon"))
+            this._RefreshTimeoutAction(state["TimeoutCon"])
+    }
+
+    _RefreshTimeoutAction(timeout) {
+        this._ComboPush("TimeoutActionRow", "Visibility", this._ParseTimeoutMs(timeout) > 0 ? "Visible" : "Collapsed")
+    }
+
+    _ParseTimeoutMs(text) {
+        text := Trim(text)
+        if (text == "" || text = GetLang("不限时"))
+            return 0
+        if (!RegExMatch(text, "^[0-9]{1,10}\z") || Integer(text) > 4294967295)
+            return -1
+        return Integer(text)
     }
 
     OnRefreshType(state := "", ctrl := "", event := "") {
@@ -256,15 +270,14 @@ class InputGui {
         if (!IsObject(this.ui))
             return
         typeText := this.ui.Query("TypeCombo")
-        IsPopUp := typeText == GetLang("弹窗")
         IsState := typeText == GetLang("状态")
         IsChoice := typeText == GetLang("选择")
         IsMulti := typeText == GetLang("多选")
         IsGoOnAndCancel := typeText == GetLang("继续&取消")
 
         HasOptions := IsChoice || IsMulti
-        HasDefault := IsPopUp || IsState || IsChoice || IsMulti
-        HasRes := IsPopUp || IsState || IsChoice || IsMulti
+        HasRes := InputHasResult(GetLangKey(typeText))
+        HasDefault := HasRes
         if (this.ui.Query("PromptCon") == "")
             this.ui.Update("PromptCon", "Text", InputDefaultPrompt())
         if (HasOptions && this.ui.Query("OptionsCon") == "")
@@ -295,21 +308,25 @@ class InputGui {
             if (!CheckVarNameIfValid(this.ui.Query("SaveNameCombo")))
                 return false
         }
-        timeout := this.ui.Query("TimeoutCon")
-        if (timeout != "" && (!IsNumber(timeout) || Number(timeout) < 0)) {
-            RmtDialog.Info(GetLang("超时请输入大于等于0的数字（毫秒）"))
-            return false
-        }
-        return true
+        return this._CheckTimeout()
+    }
+
+    _CheckTimeout() {
+        if (this._ParseTimeoutMs(this.ui.Query("TimeoutCon")) >= 0)
+            return true
+        RmtDialog.Info(GetLang("超时请输入 0 到 4294967295 的整数（毫秒）"))
+        return false
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
+        if (!this._CheckTimeout())
+            return
         this.SaveData()
         CommandStr := this.GetCommandStr()
         OnTriggerSepcialItemMacro(CommandStr)
 
         typeText := this.ui.Query("TypeCombo")
-        HasRes := typeText == GetLang("弹窗") || typeText == GetLang("状态") || typeText == GetLang("选择") || typeText == GetLang("多选")
+        HasRes := InputHasResult(GetLangKey(typeText))
         if (HasRes) {
             Res := ""
             if (MySoftData.VariableMap.Has(this.Data.SaveName))
@@ -349,8 +366,7 @@ class InputGui {
         this.Data.DefaultValue := this.ui.Query("DefaultCon")
         if (this.Data.Type == "状态" && this.Data.DefaultValue == "")
             this.Data.DefaultValue := "1"
-        timeout := this.ui.Query("TimeoutCon")
-        this.Data.TimeoutMs := IsNumber(timeout) ? Integer(timeout) : 0
+        this.Data.TimeoutMs := this._ParseTimeoutMs(this.ui.Query("TimeoutCon"))
         this.Data.TimeoutAction := GetLangKey(this.ui.Query("TimeoutActionCombo"))
 
         if (this.ui.Query("ResultRow>Visibility") != "Collapsed") {

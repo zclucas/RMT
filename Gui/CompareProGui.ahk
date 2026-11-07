@@ -83,7 +83,7 @@ class CompareProGui {
         box := body.Add("Border").Grid_Row(0).Margin("0,4,0,4").Padding("10,10")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").CornerRadius("4")
             .Background("{DynamicResource ControlBg}")
-            .SnapsToDevicePixels("True").UseLayoutRounding("False")
+            .SnapsToDevicePixels("True").UseLayoutRounding("True")
         inner := box.Add("Grid")
         inner.Rows("Auto", "*")
 
@@ -95,7 +95,7 @@ class CompareProGui {
         remarkBd := meta.Add("Border").Grid_Column(1).Height("28").MinHeight("28").VerticalAlignment("Center")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource ControlBorder}")
             .BorderThickness("1").CornerRadius("3")
-            .SnapsToDevicePixels("True").UseLayoutRounding("False")
+            .SnapsToDevicePixels("True").UseLayoutRounding("True")
         remarkBd.Add("TextBox").Name("RemarkCon").BorderThickness("0").Background("Transparent")
             .Foreground("{DynamicResource InputText}").VerticalContentAlignment("Center").Padding("4,0")
             .VerticalAlignment("Stretch")
@@ -160,7 +160,7 @@ class CompareProGui {
         return '<Button.Template><ControlTemplate TargetType="Button">'
             . '<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"'
             . ' BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"'
-            . ' SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . ' SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border>'
             . '<ControlTemplate.Triggers>'
@@ -179,7 +179,7 @@ class CompareProGui {
     _ChipXml(name, op := "", val := "", hideVal := false) {
         xml := '<Border Margin="0,0,4,2" Padding="3,1" CornerRadius="3" BorderThickness="1"'
             . ' BorderBrush="{DynamicResource ControlBorder}" Background="{DynamicResource InputBg}"'
-            . ' SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . ' SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<StackPanel Orientation="Horizontal">'
             . '<TextBlock Text="' this._EscapeXml(name) '"'
             . ' Foreground="{DynamicResource TextMain}" VerticalAlignment="Center"/>'
@@ -260,7 +260,7 @@ class CompareProGui {
         cardPad := isFinally ? "0" : "0,0,0,8"
         return '<Border ' ns ' Margin="' cardPad '" Padding="8,6" CornerRadius="4" BorderThickness="1"'
             . ' BorderBrush="{DynamicResource ControlBorder}" Background="{DynamicResource ControlBg}"'
-            . ' SnapsToDevicePixels="True" UseLayoutRounding="False">'
+            . ' SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<Grid>'
             . '<Grid.RowDefinitions>'
             . '<RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>'
@@ -284,7 +284,7 @@ class CompareProGui {
             . ' Foreground="{DynamicResource TextMain}" VerticalAlignment="Center"/>'
             . '<Border Grid.Column="1" MinHeight="26" MaxHeight="40" Padding="6,4" CornerRadius="3"'
             . ' Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"'
-            . ' SnapsToDevicePixels="True" UseLayoutRounding="False" ToolTip="' this._EscapeXml(actionText) '">'
+            . ' SnapsToDevicePixels="True" UseLayoutRounding="True" ToolTip="' this._EscapeXml(actionText) '">'
             . '<TextBlock Text="' this._EscapeXml(actionText) '" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"'
             . ' Foreground="{DynamicResource InputText}" TextAlignment="Left" VerticalAlignment="Center"/>'
             . '</Border>'

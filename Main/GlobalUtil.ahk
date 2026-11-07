@@ -16,9 +16,11 @@
 #Include Util\XamlWin.ahk
 #Include Util\HelpDocWin.ahk
 #Include Util\ToastUtil.ahk
+#Include Util\CursorOutputTip.ahk
 #Include Util\RmtDialog.ahk
 #Include RMTUtil.ahk
 #Include WorkPool.ahk
+#Include ..\Gui\InputFileDialog.ahk
 #Include MainWindowXaml.ahk
 #Include VirtualListHost.ahk
 #Include UIUtil.ahk
@@ -198,6 +200,7 @@ global MyCountDownStart := (token, total, x, y) => StartXamlCountDown(token, tot
 global MyCountDownStop := CloseXamlCountDown
 global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent
+global MyOutputTipContent := OutputTipContent
 global MyViGJoySetState := ViGJoySetState
 ;宏运行状态颜色（0默认 1运行中 2暂停 3停止）
 global MacroStateColors := Map(1, "#FF4CAF50", 2, "#FFFFC107", 3, "#FFF44336")

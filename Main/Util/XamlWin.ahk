@@ -21,7 +21,8 @@ class XamlWin {
     static Create(title, content, width, height, fluidContent := false) {
         visualScale := fluidContent ? XAMLHost.GetMainViewboxScale() : 1
         bodyFont := fluidContent ? XAMLHost.VisualFontSizeDeclared() : XAMLHost.FontSize()
-        titleHeight := fluidContent ? XAMLHost.FormatFontSize(30 * visualScale) : "30"
+        baseTitleHeight := XAMLHost.GetTitleBarHeight()
+        titleHeight := fluidContent ? XAMLHost.FormatFontSize(baseTitleHeight * visualScale) : baseTitleHeight
         main := XAML_Generator("Grid").Name("RmtDialogRoot").Background("{DynamicResource BgColor}")
             .TextElement_FontFamily(MainSoftData.FontType).TextElement_FontSize(bodyFont)
         main.Rows(titleHeight, "*")
@@ -32,7 +33,7 @@ class XamlWin {
         body := main.Add("Border").Grid_Row(1)
         body._Children.Push(content)
         content._Parent := body
-        tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
+        tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", baseTitleHeight)
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()))
         safeTitle := StrReplace(StrReplace(StrReplace(title, "&", "&amp;"), '"', "&quot;"), "<", "&lt;")
         ; Emit design DIP sizes. ApplyDialogVisualScale enlarges the window and pins the root

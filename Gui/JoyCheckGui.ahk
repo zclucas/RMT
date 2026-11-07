@@ -50,22 +50,24 @@ class JoyCheckGui extends JoyGui {
         param := paramCard.Add("StackPanel")
 
         check := param.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").MinHeight("26")
-        check.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        cc := check.Add("ComboBox").Name("CheckTypeCon").Width(140).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        for t in GetLangArr(["同时按下", "有一个按下"])
-            cc.Add("ComboBoxItem").Content(t)
-        check.Add("TextBlock").Text(GetLang("检测类型:")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        st := check.Add("ComboBox").Name("StateTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        for t in GetLangArr(["物理状态", "逻辑状态"])
-            st.Add("ComboBoxItem").Content(t)
-        check.Add("TextBlock").Name("ResultVarLabel").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        check.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        if (!this.HasProp("SelectionData")) {
+            check.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+            cc := check.Add("ComboBox").Name("CheckTypeCon").Width(140).Height(26).MinHeight(26).Margin("4,0,0,0")
+                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            for t in GetLangArr(["同时按下", "有一个按下"])
+                cc.Add("ComboBoxItem").Content(t)
+            check.Add("TextBlock").Text(GetLang("检测类型:")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            st := check.Add("ComboBox").Name("StateTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
+                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            for t in GetLangArr(["物理状态", "逻辑状态"])
+                st.Add("ComboBoxItem").Content(t)
+            check.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            check.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
+                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        }
 
         analogRow := param.Add("StackPanel").Name("AnalogRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,8,0,0").MinHeight("26").Height("26").Visibility("Hidden")
         analogRow.Add("TextBlock").Name("AxisTip1").Text("LX").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12").Width("28")
@@ -111,8 +113,6 @@ class JoyCheckGui extends JoyGui {
         this.ui.OnEvent("AxisVal2", "LostFocus", ObjBindMethod(this, "OnAxisTextCommit", 2))
         this.ui.OnEvent("BtnClear", "Click", (*) => this.ClearAll())
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
-        this.ui.Update("CheckTypeCon", "SelectedIndex", "0")
-        this.ui.Update("StateTypeCon", "SelectedIndex", "0")
     }
 
     _SetCombo(comboName, items, text) {
@@ -129,10 +129,6 @@ class JoyCheckGui extends JoyGui {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("手柄检测")
         this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
-        if (this.HasProp("SelectionData")) {
-            this.ui.Update("ResultVarLabel", "Visibility", "Collapsed")
-            this.ui.Update("VarNameCon", "Visibility", "Collapsed")
-        }
         this.Mode := "digital"
         this.CheckedArr := []
         this.AxisMap := Map()
@@ -165,11 +161,13 @@ class JoyCheckGui extends JoyGui {
             this._SyncAxisControls()
         }
 
-        analog := this.AxisMap.Count > 0
-        checkNames := analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()
-        this._FillCheckTypeCombo(analog, CmdEnumIndex(this.Data.CheckType, checkNames))
-        this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
-        this._SetCombo("VarNameCon", GetGuiVarArr(), this.Data.VarName != "" ? this.Data.VarName : "Var1")
+        if (!this.HasProp("SelectionData")) {
+            analog := this.AxisMap.Count > 0
+            checkNames := analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()
+            this._FillCheckTypeCombo(analog, CmdEnumIndex(this.Data.CheckType, checkNames))
+            this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
+            this._SetCombo("VarNameCon", GetGuiVarArr(), this.Data.VarName != "" ? this.Data.VarName : "Var1")
+        }
         this._RefreshPadHighlight()
         this.Refresh()
     }
@@ -195,6 +193,8 @@ class JoyCheckGui extends JoyGui {
     }
 
     _EnsureCheckModeCombo() {
+        if (this.HasProp("SelectionData"))
+            return
         analog := this.AxisMap.Count > 0
         if (this._comboAnalog != "" && this._comboAnalog == analog)
             return
@@ -272,13 +272,13 @@ class JoyCheckGui extends JoyGui {
             if (this.AxisMap.Has(name))
                 data.KeyArr.Push("JoyAxis" name ":" this.AxisMap[name])
         }
+        if (this.HasProp("SelectionData"))
+            return
         analog := this.AxisMap.Count > 0
         checkNames := analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()
         data.CheckType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("CheckTypeCon>SelectedIndex") : "", checkNames)
         data.StateType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("StateTypeCon>SelectedIndex") : "", CmdEnumStateNames())
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
-        if (this.HasProp("SelectionData"))
-            return
         MySoftData.GlobalVariMap[data.VarName] := true
         SaveMacroCMDData(data)
     }

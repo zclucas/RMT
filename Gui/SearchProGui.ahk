@@ -26,7 +26,7 @@ class SearchProGui {
         this.LastIsWin := ""
         this.MacroGui := ""
         this.DLVariableArr := []
-        this.PreviewBorderArr := []
+        this.AreaPreview := ScreenAreaPreview()
         this.PreviewFollowTimer := 0
         this.PreviewFollowing := false
         this.PreviewShowing := false
@@ -101,7 +101,7 @@ class SearchProGui {
         }
 
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,10").ClipToBounds("False")
-        body.Rows("28", "32", "Auto", "Auto", "Auto", this.IsAll ? "Auto" : "0", "40")
+        body.Rows("28", "32", "Auto", "Auto", "Auto", "40")
         body.Cols("*", "12", "*")
 
         ; 行0：屏幕或窗口坐标（按类型切换） | 鼠标颜色
@@ -144,7 +144,7 @@ class SearchProGui {
         mid := body.Add("Grid").Grid_Row(2).Grid_ColumnSpan(3)
         mid.Cols("*", "12", "*")
         coord := mid.Add("Grid").Grid_Column(0)
-        coord.Rows("Auto", "32", "32", "32")
+        coord.Rows("Auto", "32", "32", this.IsAll ? "0" : "32")
         coord.Cols("78", "8", "*", "8", "*")
 
         areaWrap := coord.Add("Grid").Grid_Row(0).Grid_ColumnSpan(5).Margin("0,0,0,2")
@@ -155,7 +155,7 @@ class SearchProGui {
             .Padding("6,0,0,0").Tag("0").ToolTip(GetLang("搜索范围"))
             .HorizontalContentAlignment("Left").VerticalContentAlignment("Stretch")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        areaBtn.InjectResources(this._AreaPreviewBtnStyle())
+        areaBtn.InjectResources(ScreenAreaPreview.ButtonStyle())
         areaLabels := areaBtn.Add("Grid").HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
         areaLabels.Rows("32", "32")
         areaLabels.Add("TextBlock").Grid_Row(0).Text(GetLang("起始坐标：")).VerticalAlignment("Center").HorizontalAlignment("Left")
@@ -181,26 +181,30 @@ class SearchProGui {
         intervalHost.Add("TextBlock").Text("ms").FontSize("8").IsHitTestVisible("False")
             .HorizontalAlignment("Right").VerticalAlignment("Top").Margin("0,1,4,0")
             .Foreground("{DynamicResource TextSub}")
-        coord.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("鼠标动作：")).VerticalAlignment("Center").HorizontalAlignment("Left")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
-        mac := coord.Add("ComboBox").Grid_Row(2).Grid_Column(2).Grid_ColumnSpan(3).Name("MouseActionTypeCon").Height(28).MinHeight(28)
-            .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        for t in GetLangArr(["无动作", "移动至目标", "移动至目标点击"])
-            mac.Add("ComboBoxItem").Content(t)
-        coord.Add("TextBlock").Grid_Row(3).Grid_Column(0).Name("SpeedTipCon").Text(GetLang("移动速度：")).VerticalAlignment("Center").HorizontalAlignment("Left")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
-        coord.Add("TextBox").Grid_Row(3).Grid_Column(2).Name("SpeedCon").Height(28).MinHeight(28)
-            .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center").FontSize("11")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:3")
-        coord.Add("TextBox").Grid_Row(3).Grid_Column(4).Name("ClickCountCon").Height(28).MinHeight(28)
-            .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
-            .Padding("2,0").TextAlignment("Center").FontSize("11")
-            .ToolTip(GetLang("鼠标点击次数"))
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:4")
+        if (this.IsAll) {
+            this.BuildAllSortField(coord)
+        } else {
+            coord.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("鼠标动作：")).VerticalAlignment("Center").HorizontalAlignment("Left")
+                .Foreground("{DynamicResource TextMain}").FontSize("12")
+            mac := coord.Add("ComboBox").Grid_Row(2).Grid_Column(2).Grid_ColumnSpan(3).Name("MouseActionTypeCon").Height(28).MinHeight(28)
+                .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+                .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            for t in GetLangArr(["无动作", "移动至目标", "移动至目标点击"])
+                mac.Add("ComboBoxItem").Content(t)
+            coord.Add("TextBlock").Grid_Row(3).Grid_Column(0).Name("SpeedTipCon").Text(GetLang("移动速度：")).VerticalAlignment("Center").HorizontalAlignment("Left")
+                .Foreground("{DynamicResource TextMain}").FontSize("12")
+            coord.Add("TextBox").Grid_Row(3).Grid_Column(2).Name("SpeedCon").Height(28).MinHeight(28)
+                .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center").FontSize("11")
+                .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:3")
+            coord.Add("TextBox").Grid_Row(3).Grid_Column(4).Name("ClickCountCon").Height(28).MinHeight(28)
+                .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
+                .Padding("2,0").TextAlignment("Center").FontSize("11")
+                .ToolTip(GetLang("鼠标点击次数"))
+                .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:4")
+        }
 
         extra := mid.Add("StackPanel").Grid_Column(2).Orientation("Vertical").VerticalAlignment("Top")
 
@@ -333,24 +337,23 @@ class SearchProGui {
         ; 行4：结果保存 | 目标点保存
         saveRow := body.Add("Grid").Grid_Row(4).Grid_ColumnSpan(3).Margin("0,6,0,0")
         saveRow.Cols("*", "12", "*")
-        resCol := saveRow.Add("StackPanel").Grid_Column(0).Orientation("Horizontal").VerticalAlignment("Center")
+        resCol := saveRow.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
         resCol.Add("CheckBox").Name("ResultToggleCon").VerticalAlignment("Center").Margin("0,0,2,0")
             .ToolTip(GetLang("结果保存"))
         this._AddTipField(resCol, "ResultSaveNameCon", "ResultSaveNameTipHost", "ComboBox", 120, GetLang("变量名"), "0,0,8,0")
         this._AddTipField(resCol, "TrueValueCon", "TrueValueTipHost", "TextBox", 56, GetLang("真值"), "0,0,8,0")
         this._AddTipField(resCol, "FalseValueCon", "FalseValueTipHost", "TextBox", 56, GetLang("假值"), "")
 
-        coordCol := saveRow.Add("StackPanel").Grid_Column(2).Orientation("Horizontal").VerticalAlignment("Center")
-        coordCol.Add("CheckBox").Name("CoordToogleCon").VerticalAlignment("Center").Margin("0,0,2,0")
-            .ToolTip(GetLang("目标点保存"))
-        this._AddTipField(coordCol, "CoordXNameCon", "CoordXTipHost", "ComboBox", 110, GetLang("坐标X变量名"), "0,0,8,0")
-        this._AddTipField(coordCol, "CoordYNameCon", "CoordYTipHost", "ComboBox", 110, GetLang("坐标Y变量名"), "")
-
         if (this.IsAll) {
-            coordCol.Visibility("Collapsed")
-            this.BuildAllFields(body)
+            this.BuildAllArrayField(saveRow)
+        } else {
+            coordCol := saveRow.Add("StackPanel").Grid_Column(2).Orientation("Horizontal").VerticalAlignment("Center")
+            coordCol.Add("CheckBox").Name("CoordToogleCon").VerticalAlignment("Center").Margin("0,0,2,0")
+                .ToolTip(GetLang("目标点保存"))
+            this._AddTipField(coordCol, "CoordXNameCon", "CoordXTipHost", "ComboBox", 110, GetLang("坐标X变量名"), "0,0,8,0")
+            this._AddTipField(coordCol, "CoordYNameCon", "CoordYTipHost", "ComboBox", 110, GetLang("坐标Y变量名"), "")
         }
-        btnRow := body.Add("StackPanel").Grid_Row(6).Grid_ColumnSpan(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        btnRow := body.Add("StackPanel").Grid_Row(5).Grid_ColumnSpan(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow, "BtnSure", "4,0")
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
@@ -380,9 +383,11 @@ class SearchProGui {
         this.ui.OnEvent("SearchCountCon", "TextChanged", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("SearchCountCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         this._RefreshSaveTips()
-        this.ui.OnEvent("MouseActionTypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
+        if (!this.IsAll)
+            this.ui.OnEvent("MouseActionTypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("ResultToggleCon", "Click", ObjBindMethod(this, "OnChangeType"))
-        this.ui.OnEvent("CoordToogleCon", "Click", ObjBindMethod(this, "OnChangeType"))
+        if (!this.IsAll)
+            this.ui.OnEvent("CoordToogleCon", "Click", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("HexColorCon", "TextChanged", ObjBindMethod(this, "OnHexColorChange"))
         this.ui.OnEvent("ImageShotBtn", "Click", ObjBindMethod(this, "OnImageShotBtnClick"))
         this.ui.OnEvent("ImageSelectBtn", "Click", ObjBindMethod(this, "OnClickSetPicBtn"))
@@ -397,7 +402,8 @@ class SearchProGui {
         this.ui.OnEvent("StartPosYCon", "LostFocus", ObjBindMethod(this, "RefreshPreviewArea"))
         this.ui.OnEvent("EndPosXCon", "LostFocus", ObjBindMethod(this, "RefreshPreviewArea"))
         this.ui.OnEvent("EndPosYCon", "LostFocus", ObjBindMethod(this, "RefreshPreviewArea"))
-        this.ui.Update("MouseActionTypeCon", "SelectedIndex", "1")
+        if (!this.IsAll)
+            this.ui.Update("MouseActionTypeCon", "SelectedIndex", "1")
     }
 
     _SaveTipText(name) {
@@ -428,22 +434,12 @@ class SearchProGui {
             return
         for cn in ["ResultSaveNameTipHost", "TrueValueTipHost", "FalseValueTipHost", "CoordXTipHost", "CoordYTipHost"
             , "ResultSaveNameCon", "TrueValueCon", "FalseValueCon", "CoordXNameCon", "CoordYNameCon"] {
+            if (this.IsAll && InStr(cn, "Coord") == 1)
+                continue
             tip := this._SaveTipText(cn)
             if (tip != "")
                 try this.ui.Update(cn, "ToolTip", tip)
         }
-    }
-
-    _AreaPreviewBtnStyle() {
-        return '<Style TargetType="Button"><Setter Property="Tag" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="False">'
-            . '<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border>'
-            . '<ControlTemplate.Triggers>'
-            . '<MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="Tag" Value="0"/></MultiTrigger.Conditions>'
-            . '<Setter TargetName="bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/></MultiTrigger>'
-            . '<MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="Tag" Value="1"/></MultiTrigger.Conditions>'
-            . '<Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></MultiTrigger>'
-            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
     }
 
     _AddEditCombo(parent, name, row, col, width := "") {
@@ -550,7 +546,7 @@ class SearchProGui {
         tol := path == "" ? 8 : this.MultiPointTolerance
         superTol := path == "" ? 8 : this.SuperMultiPointTolerance
         if (!IsObject(this.ImageProcessGui))
-            this.ImageProcessGui := ImageProcessGui()
+            this.ImageProcessGui := ImageProcessGui(!this.IsAll)
         this.ImageProcessGui.SureAction := (points, seeds, tol, matchMode, superSeeds, superTol, ignoreData) =>
             this.ApplyMultiPoint(points, seeds, tol, matchMode, superSeeds, superTol, ignoreData)
         this.ImageProcessGui.CropAction := (newPath, points := "", seeds := "", superSeeds := "", ignoreData := "") =>
@@ -678,23 +674,27 @@ class SearchProGui {
         this._SetCombo("EndPosYCon", this.DLVariableArr, this.Data.EndPosY)
         this._SetCombo("SearchCountCon", [GetLang("无限")], this.Data.SearchCount == -1 ? GetLang("无限") : this.Data.SearchCount)
         this.ui.Update("SearchIntervalCon", "Text", this.Data.SearchInterval)
-        this.ui.Update("SpeedCon", "Text", this.Data.Speed)
-        this.ui.Update("ClickCountCon", "Text", this.Data.ClickCount)
+        if (!this.IsAll) {
+            this.ui.Update("SpeedCon", "Text", this.Data.Speed)
+            this.ui.Update("ClickCountCon", "Text", this.Data.ClickCount)
+        }
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(this.Data.TrueMacro, 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(this.Data.FalseMacro, 1))
         this.ui.Update("ResultToggleCon", "IsChecked", this._ToggleInt(this.Data.ResultToggle) ? "True" : "False")
         this._SetCombo("ResultSaveNameCon", this.DLVariableArr, this.Data.ResultSaveName)
         this.ui.Update("TrueValueCon", "Text", this.Data.TrueValue)
         this.ui.Update("FalseValueCon", "Text", this.Data.FalseValue)
-        this.ui.Update("CoordToogleCon", "IsChecked", this._ToggleInt(this.Data.CoordToogle) ? "True" : "False")
-        this._SetCombo("CoordXNameCon", this.DLVariableArr, this.Data.CoordXName)
-        this._SetCombo("CoordYNameCon", this.DLVariableArr, this.Data.CoordYName)
+        if (!this.IsAll) {
+            this.ui.Update("CoordToogleCon", "IsChecked", this._ToggleInt(this.Data.CoordToogle) ? "True" : "False")
+            this._SetCombo("CoordXNameCon", this.DLVariableArr, this.Data.CoordXName)
+            this._SetCombo("CoordYNameCon", this.DLVariableArr, this.Data.CoordYName)
 
-        ; 建窗之前 Query 取不到 SearchTypeCon 的值，搜索模式按数据里的类型判断，
-        ; 否则窗口类搜索会被当成屏幕模式，随后模式切换事件再把已保存的鼠标动作清成无动作。
-        isWin := this._IsWinType(CmdEnumSearch(this.Data.SearchType))
-        this.LastIsWin := isWin
-        this._ApplyMouseActionItems(isWin, this.Data.MouseActionType)
+            ; 建窗之前 Query 取不到 SearchTypeCon 的值，搜索模式按数据里的类型判断，
+            ; 否则窗口类搜索会被当成屏幕模式，随后模式切换事件再把已保存的鼠标动作清成无动作。
+            isWin := this._IsWinType(CmdEnumSearch(this.Data.SearchType))
+            this.LastIsWin := isWin
+            this._ApplyMouseActionItems(isWin, this.Data.MouseActionType)
+        }
         this.PreviewShowing := false
         this._ApplyAreaPreviewChrome()
         this.OnChangeType()
@@ -789,13 +789,15 @@ class SearchProGui {
         if (this._IsChecked("ResultToggleCon") && !CheckVarNameIfValid(this.ui.Query("ResultSaveNameCon")))
             return false
 
-        mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
-        if (ma != "无动作" && !isWin) {
-            spd := this.ui.Query("SpeedCon")
-            if (!IsNumber(spd) || Number(spd) < 0 || Number(spd) > 100) {
-                RmtDialog.Info(GetLang("移动速度请输入0~100的数字"))
-                return false
+        if (!this.IsAll) {
+            mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
+            ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
+            if (ma != "无动作" && !isWin) {
+                spd := this.ui.Query("SpeedCon")
+                if (!IsNumber(spd) || Number(spd) < 0 || Number(spd) > 100) {
+                    RmtDialog.Info(GetLang("移动速度请输入0~100的数字"))
+                    return false
+                }
             }
         }
         return true
@@ -825,21 +827,25 @@ class SearchProGui {
         data.EndPosY := this.ui.Query("EndPosYCon")
         data.SearchCount := this.ui.Query("SearchCountCon") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCon")
         data.SearchInterval := this.ui.Query("SearchIntervalCon")
-        ; 窗口模式的下拉项是「后台点击/后台双击」，存值与屏幕模式不同，按模式取表
-        isWin := this._IsWinType(this._TypeIndex())
-        mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        data.MouseActionType := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
-        data.ClickCount := this.ui.Query("ClickCountCon")
-        data.Speed := this.ui.Query("SpeedCon")
+        if (!this.IsAll) {
+            ; 窗口模式的下拉项是「后台点击/后台双击」，存值与屏幕模式不同，按模式取表
+            isWin := this._IsWinType(this._TypeIndex())
+            mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
+            data.MouseActionType := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
+            data.ClickCount := this.ui.Query("ClickCountCon")
+            data.Speed := this.ui.Query("SpeedCon")
+        }
         data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
         data.FalseMacro := GetLangMacro(this.ui.Query("FalseMacroCon"), 2)
         data.ResultToggle := this._IsChecked("ResultToggleCon") ? 1 : 0
         data.ResultSaveName := GetVarName(this.ui.Query("ResultSaveNameCon"))
         data.TrueValue := this.ui.Query("TrueValueCon")
         data.FalseValue := this.ui.Query("FalseValueCon")
-        data.CoordToogle := this._IsChecked("CoordToogleCon") ? 1 : 0
-        data.CoordXName := this.ui.Query("CoordXNameCon")
-        data.CoordYName := this.ui.Query("CoordYNameCon")
+        if (!this.IsAll) {
+            data.CoordToogle := this._IsChecked("CoordToogleCon") ? 1 : 0
+            data.CoordXName := this.ui.Query("CoordXNameCon")
+            data.CoordYName := this.ui.Query("CoordYNameCon")
+        }
         data.SearchTargetArr := []
         if (data.ResultToggle)
             MySoftData.GlobalVariMap[data.ResultSaveName] := true
@@ -918,7 +924,7 @@ class SearchProGui {
         this.SetConArrState(this.FalseConArr, true, !isInfinite)
         if (isColor)
             this._ApplyColorSwatch()
-        if (this.LastIsWin != "" && this.LastIsWin != isWin) {
+        if (!this.IsAll && this.LastIsWin != "" && this.LastIsWin != isWin) {
             ; 屏幕/窗口两套文案，切换时按「当前选中项」的语义值重建，不能清成无动作：
             ; 打开窗口时这条晚于 Init 执行，清掉就等于把刚读出来的动作弄丢。
             prevIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
@@ -928,12 +934,15 @@ class SearchProGui {
         countText := this.ui.Query("SearchCountCon")
         countValue := countText == GetLang("无限") ? -1 : countText
         this.SetConArrState(this.CountTogArr, false, IsNumber(countValue) && (countValue == -1 || countValue > 1))
-        mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
-        ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
-        this.SetConArrState(this.MouseSpeedArr, false, ma != "无动作" && !isWin)
-        this.SetConArrState(this.MouseClickArr, false, ma == "移动至目标点击1次" && !isWin)
+        if (!this.IsAll) {
+            mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
+            ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
+            this.SetConArrState(this.MouseSpeedArr, false, ma != "无动作" && !isWin)
+            this.SetConArrState(this.MouseClickArr, false, ma == "移动至目标点击1次" && !isWin)
+        }
         this.SetConArrState(this.ResultTogArr, true, this._IsChecked("ResultToggleCon"))
-        this.SetConArrState(this.CoordTogArr, true, this._IsChecked("CoordToogleCon"))
+        if (!this.IsAll)
+            this.SetConArrState(this.CoordTogArr, true, this._IsChecked("CoordToogleCon"))
         this._RefreshSaveTips()
         this.LastIsWin := isWin
         this.RefreshPreviewArea()
@@ -1239,9 +1248,6 @@ class SearchProGui {
             return
         on := this.PreviewShowing
         this.ui.Update("BtnPreviewArea", "Tag", on ? "1" : "0")
-        this.ui.Update("BtnPreviewArea", "Background", on ? "{DynamicResource Accent}" : "{DynamicResource ControlBg}")
-        this.ui.Update("BtnPreviewArea", "BorderBrush", on ? "{DynamicResource Accent}" : "{DynamicResource ControlBorder}")
-        this.ui.Update("BtnPreviewArea", "BorderThickness", on ? "2" : "1")
     }
 
     OnClickPreviewArea(*) {
@@ -1264,16 +1270,18 @@ class SearchProGui {
             return
         }
         startX := Number(startX), startY := Number(startY), endX := Number(endX), endY := Number(endY)
-        isWin := this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本"
+        type := this._TypeIndex()
+        isWin := type == "窗口图片" || type == "窗口颜色" || type == "窗口文本"
+        targetHwnd := 0
         if (isWin) {
-            hwndList := GetHwndList(this.ui.Query("WinInfoCon"))
-            if (hwndList.Length == 0) {
+            targetHwnd := this.AreaPreview.FindTargetWindow(this.ui.Query("WinInfoCon"))
+            if (!targetHwnd) {
                 this.StopPreviewFollow()
                 this.HidePreviewRect()
                 return
             }
-            startPt := this.WinToScreen(hwndList[1], startX, startY)
-            endPt := this.WinToScreen(hwndList[1], endX, endY)
+            startPt := this.WinToScreen(targetHwnd, startX, startY)
+            endPt := this.WinToScreen(targetHwnd, endX, endY)
             startX := startPt[1], startY := startPt[2], endX := endPt[1], endY := endPt[2]
         }
         x := Min(startX, endX), y := Min(startY, endY), w := Abs(endX - startX), h := Abs(endY - startY)
@@ -1282,10 +1290,11 @@ class SearchProGui {
             this.HidePreviewRect()
             return
         }
-        this.ShowPreviewRect(x, y, w, h)
+        this.AreaPreview.Show(x, y, w, h, this.SetAreaAction, targetHwnd, type)
         if (isWin && !this.PreviewFollowing) {
             this.PreviewFollowing := true
-            this.PreviewFollowTimer := SetTimer(this.PreviewFollowTick.Bind(this), 100)
+            this.PreviewFollowTimer := this.PreviewFollowTick.Bind(this)
+            SetTimer(this.PreviewFollowTimer, 100)
         }
         else if (!isWin && this.PreviewFollowing)
             this.StopPreviewFollow()
@@ -1304,7 +1313,8 @@ class SearchProGui {
             this.StopPreviewFollow()
             return
         }
-        this.RefreshPreviewArea()
+        if (!this.AreaPreview.IsDragging())
+            this.RefreshPreviewArea()
     }
 
     WinToScreen(hwnd, winX, winY) {
@@ -1317,29 +1327,8 @@ class SearchProGui {
         return [NumGet(pt, 0, "int"), NumGet(pt, 4, "int")]
     }
 
-    ShowPreviewRect(x, y, w, h) {
-        borderW := 2
-        if (this.PreviewBorderArr.Length == 0) {
-            for item in [[x, y, w, borderW], [x, y + h - borderW, w, borderW], [x, y, borderW, h], [x + w - borderW, y, borderW, h]] {
-                g := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x20 -DPIScale")
-                g.BackColor := "Red"
-                g.Show("NA x" item[1] " y" item[2] " w" item[3] " h" item[4])
-                this.PreviewBorderArr.Push(g)
-            }
-        }
-        else {
-            this.PreviewBorderArr[1].Move(x, y, w, borderW)
-            this.PreviewBorderArr[2].Move(x, y + h - borderW, w, borderW)
-            this.PreviewBorderArr[3].Move(x, y, borderW, h)
-            this.PreviewBorderArr[4].Move(x + w - borderW, y, borderW, h)
-        }
-    }
-
     HidePreviewRect() {
-        for g in this.PreviewBorderArr {
-            try g.Destroy()
-        }
-        this.PreviewBorderArr := []
+        this.AreaPreview.Hide()
     }
 
     OnWindowLoad(state, ctrl, event) {

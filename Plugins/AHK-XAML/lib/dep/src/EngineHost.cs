@@ -1247,7 +1247,8 @@ public partial class AhkWpfEngine
         {
             double chromeW, chromeH;
             RmtCommonStyles.GetWindowChromeInset(win, out chromeW, out chromeH);
-            RmtCommonStyles.NormalizeWindowContentForResize(win, RmtCommonStyles.WindowContentVisualScale(win), chromeW, chromeH);
+            RmtCommonStyles.NormalizeWindowContentForResize(win, RmtCommonStyles.WindowContentVisualScale(win),
+                chromeW, chromeH, preserveAutoHeight: win.SizeToContent == SizeToContent.Height);
         }
         catch { }
     }

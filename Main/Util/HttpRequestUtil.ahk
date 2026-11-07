@@ -23,10 +23,16 @@ HttpRequestValidate(data) {
         throw Error("URL 不能为空。")
     if (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 1 || data.TimeoutMs > 3600000)
         throw Error("超时时间应为 1～3600000 毫秒。")
-    if (!IsInteger(data.Retries) || data.Retries < 0 || data.Retries > 10)
-        throw Error("失败重试次数应为 0～10。")
-    if (!RegExMatch(data.BodyType, "^(JSON|表单|原始文本)$"))
+    if (!RegExMatch(data.Retries, "^\{[^{}\r\n]+\}$"))
+        HttpRequestRetryCount(data.Retries)
+    if (data.Method != "GET" && !RegExMatch(data.BodyType, "^(JSON|表单|原始文本)$"))
         throw Error("请选择有效的 Body 类型。")
+}
+
+HttpRequestRetryCount(value) {
+    if (!IsInteger(value) || value < 0 || value > 10)
+        throw Error("失败重试次数应为 0～10。")
+    return Integer(value)
 }
 
 ; 表单按行填写 name=value，分别进行 UTF-8 百分号编码。
@@ -44,6 +50,7 @@ HttpRequestUrlEncode(text) {
 
 HttpRequestPrepare(data, resolve) {
     HttpRequestValidate(data)
+    retries := HttpRequestRetryCount(IsInteger(data.Retries) ? data.Retries : Trim(resolve(data.Retries)))
     url := Trim(resolve(data.Url))
     if (!RegExMatch(url, "i)^https?://[^/\s]+") || RegExMatch(url, "[\r\n]"))
         throw Error("URL 必须以 http:// 或 https:// 开头。")
@@ -79,7 +86,7 @@ HttpRequestPrepare(data, resolve) {
             headers["Content-Type"] := data.BodyType == "JSON" ? "application/json; charset=utf-8"
                 : data.BodyType == "表单" ? "application/x-www-form-urlencoded; charset=utf-8" : "text/plain; charset=utf-8"
     }
-    return {Url: url, Headers: headers, Body: body}
+    return {Url: url, Headers: headers, Body: body, Retries: retries}
 }
 
 ; 每次尝试均有总时限；异步请求轮询使宏中止能及时 Abort。
@@ -91,7 +98,7 @@ HttpRequestExecute(data, resolve, cancelled := () => false) {
         result.Error := e.Message
         return result
     }
-    loop Integer(data.Retries) + 1 {
+    loop prepared.Retries + 1 {
         if (cancelled())
             return {Status: 0, Body: "", Error: "请求已取消"}
         result := {Status: 0, Body: "", Error: ""}
@@ -137,7 +144,7 @@ HttpRequestExecute(data, resolve, cancelled := () => false) {
             }
         }
         retryable := result.Status == 0 || result.Status == 408 || result.Status == 429 || result.Status >= 500
-        if (!retryable || A_Index > data.Retries)
+        if (!retryable || A_Index > prepared.Retries)
             return result
         ; 短暂退避，也允许终止宏。
         loop 20 {

@@ -72,7 +72,11 @@ class CharVarEditGui {
         vt := row1.Add("ComboBox").Grid_Column(1).Name("VarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))
         vt.Add("ComboBoxItem").Content(GetLang("数组"))
-        row1.Add("ComboBox").Grid_Column(3).Name("VariCombo").Width("200").Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left").IsEditable("True")
+        variables := row1.Add("ComboBox").Grid_Column(3).Name("VariCombo").Width("200").Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left").IsEditable("True")
+        for name in GetGuiVarArr(1) {
+            if (name != "")
+                variables.Add("ComboBoxItem").Content(name)
+        }
         row1.Add("Button").Grid_Column(5).Name("BtnAddName").Content(GetLang("追加名")).Height(26).MinHeight(26).VerticalAlignment("Center")
         row1.Add("Button").Grid_Column(7).Name("BtnAddValue").Content(GetLang("追加值")).Height(26).MinHeight(26).VerticalAlignment("Center")
 

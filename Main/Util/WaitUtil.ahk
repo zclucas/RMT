@@ -1,7 +1,7 @@
 #Requires AutoHotkey v2.0
 
 ; =================================================================
-; §16 等待指令执行端 —— 「检测间隔 + 轮询」骨架 + 19 种检测
+; §16 等待指令执行端 —— 检测间隔与轮询
 ;
 ; 每种等待 = WaitCheckOnce 的一个分支。变化类在开始时记基准，
 ; 基准放 WaitStateMap（表ID|条目ID），不写回共享的 Data。
@@ -14,7 +14,8 @@ global WaitKeyCapCB := ""
 global WaitKeyCapIH := ""
 global WaitKeyWatchCount := 0
 global WaitKeyWatchIH := ""
-global WaitKeyPulse := ""
+global WaitKeyPulses := Map()
+global WaitKeyPulseSeq := 0
 
 ; ---------- 轮询骨架 ----------
 
@@ -24,15 +25,34 @@ OnWait(tableItem, cmd, index) {
     if (!IsObject(Data))
         return
     WaitEnsureData(Data)
-    if (WaitTypeNum(Data) == "等待时间")
-        return TimeExecWaitUntil(tableItem, index, Data.TimeConfig)
-    if (WaitTypeNum(Data) == "等待时间区间")
-        return TimeExecWindowCheck(tableItem, index, Data.TimeConfig)
+    t := WaitTypeNum(Data)
+    if (t == "等待确定")
+        return RunWaitConfirmation(tableItem, index, Data.ConfirmConfig, Data)
+    cfg := Data.TimeConfig
+    targetMs := ""
+    if (t == "等待时间") {
+        kind := TimeNormWaitType(cfg.Param2)
+        if (kind == "毫秒" || kind == "毫秒-随机")
+            return WaitMilliseconds(tableItem, index, Data, kind == "毫秒-随机")
+        if (kind == "时间戳")
+            targetMs := TimeEpochMilliseconds(TimeResolveValue(tableItem, index, cfg.Param1))
+        if (targetMs == "") {
+            targetTime := TimeCalcTargetDateTime(tableItem, index, cfg)
+            if (targetTime == "")
+                return
+        }
+    }
+    waitOutside := t == "等待时间区间" && InputField(cfg, "WaitOutside", false)
+    mismatchAction := t == "等待时间区间" && !waitOutside ? TimeNormMismatch(InputField(cfg, "Param4", "跳过")) : ""
+    timeoutMs := Data.TimeoutMs
+    deadline := timeoutMs > 0 ? DllCall("GetTickCount64", "UInt64") + timeoutMs : 0
+    iv := Data.Interval
+    if (!IsNumber(iv) || Number(iv) <= 0)
+        iv := 500
     key := WaitStateKey(tableItem, index)
-    watchKey := false
+    watchKey := (t == "等待按键按下" || t == "等待按键松开")
+    timedOut := false
     try {
-        t := WaitTypeNum(Data)
-        watchKey := (t == "等待按键按下" || t == "等待按键松开")
         if (watchKey)
             WaitInstallKeyWatch()
         WaitInitBaseline(tableItem, index, Data)
@@ -41,15 +61,36 @@ OnWait(tableItem, cmd, index) {
             item := tableItem.Items[index]
             if (!item || item.Killed)
                 return
-            if (WaitCheckOnce(tableItem, index, Data))
-                return
-            iv := Data.HasProp("Interval") ? Data.Interval : 500
-            if (!IsNumber(iv) || Number(iv) <= 0)
-                iv := 500
+            if (deadline && DllCall("GetTickCount64", "UInt64") >= deadline) {
+                timedOut := true
+                break
+            }
+            switch t {
+                case "等待时间":
+                    matched := targetMs != "" ? UnixNow() >= targetMs : A_Now >= targetTime
+                case "等待时间区间":
+                    matched := TimeWindowInRange(tableItem, index, cfg, waitOutside)
+                    if (!matched && mismatchAction == "终止") {
+                        KillTableItemMacro(tableItem, index)
+                        return
+                    }
+                    if (mismatchAction == "跳过")
+                        matched := true
+                default:
+                    matched := WaitCheckOnce(tableItem, index, Data)
+            }
+            if (matched) {
+                timedOut := deadline && DllCall("GetTickCount64", "UInt64") >= deadline
+                break
+            }
             FloatInterval := 500
             try FloatInterval := GetFloatTime(iv, MainSoftData.PreIntervalFloat)
             if (!IsNumber(FloatInterval) || FloatInterval < 15)
                 FloatInterval := 15
+            if (targetMs != "")
+                FloatInterval := Min(FloatInterval, targetMs - UnixNow())
+            if (deadline)
+                FloatInterval := Min(FloatInterval, deadline - DllCall("GetTickCount64", "UInt64"))
             InterruptibleSleep(tableItem, index, FloatInterval)
         }
     } finally {
@@ -57,6 +98,45 @@ OnWait(tableItem, cmd, index) {
             WaitRemoveKeyWatch()
         if (WaitStateMap.Has(key))
             WaitStateMap.Delete(key)
+    }
+    if (!item.Killed)
+        WaitWriteStatus(Data, timedOut)
+}
+
+WaitMilliseconds(tableItem, index, Data, useRandom := false) {
+    cfg := Data.TimeConfig
+    duration := WaitParseMilliseconds(TimeResolveValue(tableItem, index, cfg.Param1))
+    if (duration < 0)
+        return
+    if (useRandom) {
+        maximum := WaitParseMilliseconds(TimeResolveValue(tableItem, index, InputField(cfg, "RandomMaxMs", "")))
+        if (maximum <= duration)
+            return
+        duration := Random(duration, maximum)
+    }
+    item := GetItemByIndex(tableItem, index)
+    if (!IsObject(item))
+        return
+    WaitIfPaused(tableItem, index)
+    if (item.Killed)
+        return
+    timedOut := Data.TimeoutMs > 0 && Data.TimeoutMs <= duration
+    InterruptibleSleep(tableItem, index, timedOut ? Data.TimeoutMs : duration)
+    if (!item.Killed)
+        WaitWriteStatus(Data, timedOut)
+}
+
+WaitParseMilliseconds(value) {
+    text := Trim(value)
+    if (!RegExMatch(text, "^[0-9]{1,10}\z") || Integer(text) > 4294967295)
+        return -1
+    return Integer(text)
+}
+
+WaitWriteStatus(Data, timedOut) {
+    if (Data.ResultSaveName != "") {
+        value := timedOut ? Data.WaitTimedOutValue : (Data.TimeoutMs > 0 ? Data.WaitCompletedValue : 0)
+        MySetGlobalVariable([Data.ResultSaveName], [value], false)
     }
 }
 
@@ -88,14 +168,12 @@ WaitInitBaseline(tableItem, index, Data) {
             WaitStateMap[key] := WaitWinClientFingerprint(WaitResolveWindow(tableItem, index, Data.Param1))
         case "等待窗口大小变化":
             WaitStateMap[key] := WaitWinSize(WaitResolveWindow(tableItem, index, Data.Param1))
-        case "等待按键松开":
-            ; 已按下则等松开；未按下则先等一次按下再松开
-            name := WaitNormKeyName(WaitResolveText(tableItem, index, Data.Param1))
-            if (Data.HasProp("KeyOptions") && Data.KeyOptions.KeyArr.Length) {
-                WaitStateMap[key] := {armedKeys: Map()}
+        case "等待窗口移动":
+            WaitWindowMoved(key, WaitResolveWindow(tableItem, index, Data.Param1))
+        case "等待按键按下", "等待按键松开":
+            WaitStateMap[key] := {keyPulseStart: WaitKeyPulseSeq, armedKeys: Map()}
+            if (WaitTypeNum(Data) == "等待按键松开")
                 WaitSelectedKeys(tableItem, index, Data, true)
-            } else
-                WaitStateMap[key] := {armed: name != "" && IsPhysicalKeyPressed(name)}
         case "等待文件变化":
             WaitStateMap[key] := WaitFileStamp(WaitResolveText(tableItem, index, Data.Param1))
         case "等待日期":
@@ -103,7 +181,7 @@ WaitInitBaseline(tableItem, index, Data) {
     }
 }
 
-; ---------- 单次检测（19 种） ----------
+; ---------- 单次检测 ----------
 
 WaitCheckOnce(tableItem, index, Data) {
     key := WaitStateKey(tableItem, index)
@@ -116,13 +194,9 @@ WaitCheckOnce(tableItem, index, Data) {
                 return false
             return Trim(String(v)) == WaitExpectedText(tableItem, index, Data.Param2)
         case "等待按键按下":
-            if (Data.HasProp("KeyOptions") && Data.KeyOptions.KeyArr.Length)
-                return WaitSelectedKeys(tableItem, index, Data, false)
-            return WaitIsKeyDown(WaitResolveText(tableItem, index, Data.Param1))
+            return WaitSelectedKeys(tableItem, index, Data)
         case "等待按键松开":
-            if (Data.HasProp("KeyOptions") && Data.KeyOptions.KeyArr.Length)
-                return WaitSelectedKeys(tableItem, index, Data, true)
-            return WaitKeyReleased(key, WaitResolveText(tableItem, index, Data.Param1))
+            return WaitSelectedKeys(tableItem, index, Data, true)
         case "等待屏幕变化":
             return WaitChanged(key, WaitScreenFingerprint(tableItem, index, Data))
         case "等待鼠标移动":
@@ -131,11 +205,8 @@ WaitCheckOnce(tableItem, index, Data) {
             return WaitMouseStopped(key, Data)
         case "等待剪切板变化":
             return WaitPlainChanged(key, WaitClipboardSeq())
-        case "等待进程存在":
-            return WaitProcessAlive(WaitResolveText(tableItem, index, Data.Param1))
-        case "等待进程关闭":
-            name := WaitResolveText(tableItem, index, Data.Param1)
-            return name != "" && !WaitProcessAlive(name)
+        case "等待进程存在", "等待进程关闭":
+            return WaitProcessMatches(tableItem, index, Data, WaitTypeNum(Data) == "等待进程存在")
         case "等待窗口存在":
             return WaitHwndList(tableItem, index, Data.Param1).Length > 0
         case "等待窗口激活":
@@ -149,6 +220,8 @@ WaitCheckOnce(tableItem, index, Data) {
             return WaitChanged(key, WaitWinClientFingerprint(WaitResolveWindow(tableItem, index, Data.Param1)))
         case "等待窗口大小变化":
             return WaitChanged(key, WaitWinSize(WaitResolveWindow(tableItem, index, Data.Param1)))
+        case "等待窗口移动":
+            return WaitWindowMoved(key, WaitResolveWindow(tableItem, index, Data.Param1))
         case "等待窗口关闭":
             spec := WaitResolveWindow(tableItem, index, Data.Param1)
             if (spec == "")
@@ -271,42 +344,12 @@ WaitNormKeyName(key) {
 }
 
 ; 松开：开始时已按下则等它松开；否则先看到按下，再等到松开
-WaitKeyReleased(stateKey, key) {
-    key := WaitNormKeyName(key)
-    if (key == "")
-        return false
-    st := (WaitStateMap.Has(stateKey) && IsObject(WaitStateMap[stateKey])) ? WaitStateMap[stateKey] : {armed: false}
-    down := WaitIsKeyDown(key)
-    if (!st.armed) {
-        if (down)
-            st.armed := true
-        WaitStateMap[stateKey] := st
-        return false
-    }
-    WaitStateMap[stateKey] := st
-    return !down
-}
-
-WaitIsKeyDown(key) {
-    global WaitKeyPulse
-    key := WaitNormKeyName(key)
-    if (key == "")
-        return false
-    if (WaitKeyPulse != "") {
-        hit := WaitKeyPulse == key
-        WaitKeyPulse := ""
-        if (hit)
-            return true
-    }
-    return IsPhysicalKeyPressed(key)
-}
-
 WaitInstallKeyWatch() {
-    global WaitKeyWatchCount, WaitKeyWatchIH, WaitKeyPulse
+    global WaitKeyWatchCount, WaitKeyWatchIH
     WaitKeyWatchCount++
     if (WaitKeyWatchCount > 1)
         return
-    WaitKeyPulse := ""
+    WaitKeyPulses.Clear()
     ih := InputHook("V")
     ih.KeyOpt("{All}", "N")
     ih.OnKeyDown := WaitKeyWatchDown
@@ -317,7 +360,7 @@ WaitInstallKeyWatch() {
 }
 
 WaitRemoveKeyWatch() {
-    global WaitKeyWatchCount, WaitKeyWatchIH, WaitKeyPulse
+    global WaitKeyWatchCount, WaitKeyWatchIH
     if (WaitKeyWatchCount <= 0)
         return
     WaitKeyWatchCount--
@@ -329,17 +372,26 @@ WaitRemoveKeyWatch() {
     }
     for hk in WaitWheelKeys()
         try Hotkey("~*" hk, WaitKeyWatchWheel, "Off")
-    WaitKeyPulse := ""
+    WaitKeyPulses.Clear()
 }
 
 WaitKeyWatchDown(ih, vk, sc) {
-    global WaitKeyPulse
-    try WaitKeyPulse := WaitNormKeyName(GetKeyName(Format("vk{:x}sc{:x}", vk, sc)))
+    try WaitRecordKeyPulse(GetKeyName(Format("vk{:x}sc{:x}", vk, sc)))
 }
 
 WaitKeyWatchWheel(thisHotkey) {
-    global WaitKeyPulse
-    WaitKeyPulse := WaitNormKeyName(RegExReplace(thisHotkey, "^[~\*]+"))
+    WaitRecordKeyPulse(RegExReplace(thisHotkey, "^[~\*]+"))
+}
+
+WaitRecordKeyPulse(name) {
+    global WaitKeyPulseSeq
+    key := StrLower(WaitNormKeyName(name))
+    if (key == "")
+        return
+    WaitKeyPulseSeq++
+    WaitKeyPulses[key] := WaitKeyPulseSeq
+    if (RegExMatch(key, "^[lr](ctrl|alt|shift|win)$", &modifier))
+        WaitKeyPulses[modifier[1]] := WaitKeyPulseSeq
 }
 
 WaitWheelKeys() {
@@ -531,7 +583,52 @@ WaitWinSize(winInfo) {
     return ""
 }
 
+WaitWindowMoved(key, winInfo) {
+    base := WaitStateMap.Get(key, "")
+    hwnds := GetHwndList(winInfo)
+    if (!hwnds.Length) {
+        WaitStateMap[key] := ""
+        return false
+    }
+    hwnd := hwnds[1]
+    if (IsObject(base)) {
+        for candidate in hwnds {
+            if (candidate == base.Hwnd) {
+                hwnd := candidate
+                break
+            }
+        }
+    }
+    try {
+        target := "ahk_id " hwnd
+        if (WinGetMinMax(target) == -1)
+            return false
+        WinGetPos(&x, &y, , , target)
+        WaitStateMap[key] := {Hwnd: hwnd, X: x, Y: y}
+        return IsObject(base) && base.Hwnd == hwnd && (base.X != x || base.Y != y)
+    }
+    return false
+}
+
 ; ---------- 进程 / 文件 ----------
+
+WaitProcessMatches(tableItem, index, Data, expectedAlive) {
+    target := Trim(WaitResolveText(tableItem, index, Data.Param1))
+    if (target == "")
+        return false
+    if (Data.HasOwnProp("ProcessTargetType") && Data.ProcessTargetType == "PID") {
+        pid := WaitParsePid(target)
+        return pid != 0 && (!!ProcessExist(pid) == expectedAlive)
+    }
+    return WaitProcessAlive(target) == expectedAlive
+}
+
+WaitParsePid(text) {
+    if (!RegExMatch(text, "^[0-9]{1,10}\z"))
+        return 0
+    pid := Integer(text)
+    return pid <= 4294967295 ? pid : 0
+}
 
 WaitProcessAlive(name) {
     name := Trim(name, " `t`"")
@@ -685,28 +782,39 @@ WaitHintText(waitType) {
 ; 新字段仅补默认值，旧宏的等值、按键与日期语义保持不变。
 WaitEnsureData(Data) {
     defaults := WaitData()
+    if (!Data.HasOwnProp("WaitType"))
+        Data.WaitType := "等待变量值"
+    if (!Data.HasOwnProp("TimeoutMs") && WaitTypeNum(Data) == "等待时间"
+        && Data.HasProp("TimeConfig") && IsObject(Data.TimeConfig) && Data.TimeConfig.HasProp("Timeout"))
+        Data.TimeoutMs := Data.TimeConfig.Timeout
     for name, value in defaults.OwnProps()
         if (!Data.HasOwnProp(name))
             Data.%name% := value
     if (!IsObject(Data.TimeConfig))
         Data.TimeConfig := defaults.TimeConfig
+    if (!IsObject(Data.ConfirmConfig))
+        Data.ConfirmConfig := defaults.ConfirmConfig
     if (!IsObject(Data.KeyOptions))
         Data.KeyOptions := defaults.KeyOptions
 }
 
 WaitVariableConditions(tableItem, index, Data) {
-    logic := GetLangKey(Data.ConditionLogic)
-    result := logic != "或"
+    any := CmdEnumLogic(Data.ConditionLogic) == "或"
     for condition in Data.Conditions {
         found := TryGetTabVarValue(&value, tableItem, index, GetVarName(condition.Variable), false)
-        matched := found && WaitCompareValues(value, WaitExpectedText(tableItem, index, condition.Value), condition.Operator)
-        if (logic == "或" && matched)
-            return true
-        if (logic != "或" && !matched)
-            return false
-        result := matched
+        operator := GetLangKey(condition.Operator)
+        switch operator {
+            case "变量存在":
+                matched := found
+            case "变量不存在":
+                matched := !found
+            default:
+                matched := found && WaitCompareValues(value, WaitExpectedText(tableItem, index, condition.Value), operator)
+        }
+        if (matched == any)
+            return any
     }
-    return result
+    return !any
 }
 
 WaitCompareValues(value, expected, operator) {
@@ -735,34 +843,48 @@ WaitCompareValues(value, expected, operator) {
     return false
 }
 
+WaitKeysHaveAxis(keys) {
+    for key in keys
+        if (RegExMatch(key, "i)^(?:JoyAxis)?(?:L[XY]|R[XY]|LT|RT):-?[0-9]+$"))
+            return true
+    return false
+}
+
 WaitSelectedKeys(tableItem, index, Data, released := false) {
-    options := Data.KeyOptions
-    any := CmdEnumZh(options.CheckType, CmdEnumKeyCheckNames()) == "有一个按下"
-    joy := Data.KeyDevice == "手柄"
-    analog := false
-    for key in options.KeyArr
-        if (InStr(key, "JoyAxis") == 1)
-            analog := true
+    options := Data.HasProp("KeyOptions") ? Data.KeyOptions : {KeyArr: [], CheckType: "", StateType: ""}
+    keys := options.KeyArr
+    if (!keys.Length)
+        keys := GetPressKeyArr(WaitResolveText(tableItem, index, Data.Param1))
+    if (!keys.Length)
+        return false
+    joy := Data.HasProp("KeyDevice") && Data.KeyDevice == "手柄"
+    analog := WaitKeysHaveAxis(keys)
+    any := !analog && CmdEnumZh(options.CheckType, CmdEnumKeyCheckNames()) == "有一个按下"
     cmp := analog ? CmdEnumJoyCheck(options.CheckType, true) : "大于等于"
     stateMode := CmdEnumZh(options.StateType, CmdEnumStateNames()) == "物理状态" ? "P" : ""
     stateKey := WaitStateKey(tableItem, index)
-    if (released) {
-        if (!WaitStateMap.Has(stateKey) || !WaitStateMap[stateKey].HasProp("armedKeys"))
-            WaitStateMap[stateKey] := {armedKeys: Map()}
-        armed := WaitStateMap[stateKey].armedKeys
-    }
+    if (!WaitStateMap.Has(stateKey))
+        WaitStateMap[stateKey] := {keyPulseStart: WaitKeyPulseSeq, armedKeys: Map()}
+    state := WaitStateMap[stateKey]
     result := !any
-    for key in options.KeyArr {
-        down := IsCheckKeyPressed(key, stateMode, cmp, joy)
-        ; 滚轮等短促输入沿用按键监听，不能只靠 GetKeyState 轮询。
-        if (!joy && !released && options.KeyArr.Length == 1 && stateMode == "P")
-            down := WaitIsKeyDown(key)
+    for key in keys {
+        if (!joy) {
+            key := WaitNormKeyName(Trim(key))
+            if (InStr(key, "{") || (!GetKeyVK(key) && key != "逗号" && InStr(key, "Wheel") != 1))
+                key := WaitNormKeyName(Trim(WaitResolveText(tableItem, index, key)))
+        }
+        down := IsCheckKeyPressed(key == "逗号" ? "," : key, stateMode, cmp, joy)
+        ; 滚轮没有持续按下状态。多键同时按下仍要求普通键处于按下状态。
+        wheel := !joy && InStr(key, "Wheel") == 1
+        usePulse := !joy && (wheel || (stateMode == "P" && (released || any || keys.Length == 1)))
+        pulse := usePulse && WaitKeyPulses.Get(StrLower(key), 0) > state.keyPulseStart
         matched := down
         if (released) {
-            if (down)
-                armed[key] := true
-            matched := armed.Has(key) && !down
-        }
+            if (down || pulse)
+                state.armedKeys[key] := true
+            matched := state.armedKeys.Has(key) && !down
+        } else if (pulse)
+            matched := true
         if (any && matched)
             result := true
         else if (!any && !matched)
@@ -771,11 +893,11 @@ WaitSelectedKeys(tableItem, index, Data, released := false) {
     return result
 }
 
-WaitGroupNames() => ["窗口", "屏幕与鼠标", "按键", "变量", "进程", "文件与剪切板", "时间"]
+WaitGroupNames() => ["时间", "屏幕与鼠标", "文件与剪切板", "窗口", "按键", "变量", "确定", "进程"]
 WaitGroupTypes(group) {
     switch group {
         case "窗口":
-            return ["等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化"]
+            return ["等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口移动", "等待窗口关闭", "等待窗口最小化"]
         case "屏幕与鼠标":
             return ["等待屏幕变化", "等待鼠标移动", "等待鼠标停止移动"]
         case "按键":
@@ -788,6 +910,8 @@ WaitGroupTypes(group) {
             return ["等待文件存在", "等待文件删除", "等待文件变化", "等待剪切板变化"]
         case "时间":
             return ["等待时间", "等待时间区间"]
+        case "确定":
+            return ["等待确定"]
     }
     return []
 }

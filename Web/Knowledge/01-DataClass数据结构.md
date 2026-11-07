@@ -444,8 +444,9 @@ Excel 未打开时写入会很慢。
 
 | 字段 | 含义 |
 |------|------|
-| `StartStamp` | Unix 秒，开始时间 |
-| `EndStamp` | `0` 或不存在=无结束 |
+| `StartStamp` | 毫秒时间戳，开始时间 |
+| `EndStamp` | 毫秒时间戳，`0` 或不存在表示无结束 |
+| `StampUnit` | `ms`。旧配置无此字段，读取时转换秒值 |
 | `Type` | `单次` / `软件启动时` / `周期触发`。旧数字 `1` `2` `3` 仍按这个顺序对应；旧文案 `自定义` 视为周期触发 |
 | `CustomInterval` | 周期数值，仅周期触发使用 |
 | `CustomUnit` | `秒` `分钟` `小时` `天` `周` `月` |
@@ -497,18 +498,28 @@ Excel 未打开时写入会很慢。
 
 | 字段 | 含义 |
 |------|------|
-| `Type` | `弹窗` `状态` `继续` `继续&取消` |
+| `Type` | `弹窗` `状态` `选择` `选择文件` `多选`，兼容旧 `继续` `继续&取消` |
 | `PauseType` | `不暂停` `暂停当前宏` `暂停所有宏` |
 | `CancelType` | `终止当前宏` `终止所有宏` |
-| `SaveName` | 弹窗/状态写入的变量 |
+| `SaveName` | 接收文本、状态、所选选项或文件路径的变量 |
+| `Prompt` / `Options` | 提示文字和选项列表。选择文件时使用提示文字作为标题 |
+| `TimeoutMs` / `TimeoutAction` | 超时毫秒数及超时后的动作，`0` 表示不限时 |
+| `DefaultValue` | 选择「用默认值」时写入的内容 |
 
 回车=真/继续，Esc=假/取消。输入弹窗打开时，Enter 触发键会被暂时禁用。
 
 ### 6.20 WindowManageData
 
-`ActionType`：激活/最大化/最小化/还原/关闭/移动/调整大小/置顶/取消置顶/修改标题/修改透明度/开/关鼠标穿透。  
-`SearchValue`：`标题⎖类名⎖进程名`，可 `{变量}`；空或找不到可见窗口则本条无效（会解析成可见句柄，避免点到隐藏窗）。  
-移动用 `PosX/Y`，改大小用 `Width/Height`，改标题用 `NewTitle`，透明度如 `80%`，均可填变量。关闭窗口 ≠ 杀进程。
+- `窗口信息` 与 `调整窗口` 共用此数据类，兼容旧 `窗口管理` 序列。
+- `SearchValue` 按 `标题⎖类名⎖进程名` 匹配，可引用变量。`MatchMode` 指定 `首个`、`最后` 或 `所有`。
+- `ActionType` 指定查询或调整动作。查询结果写入 `ResultVar1` 至 `ResultVar7`，匹配窗口列表将句柄数组写入 `ResultVar1`。
+- 调整时按动作使用 `PosX`、`PosY`、`Width`、`Height`、`NewTitle` 等字段。`CloseProcess` 为真时结束所属进程。
+
+### 6.20.1 WaitData（等待）
+
+- `WaitType` 指定条件，`Interval` 为检测间隔。`TimeoutMs` 为毫秒数，`0` 表示不限时。
+- `ResultSaveName` 接收 `WaitCompletedValue` 或 `WaitTimedOutValue`，默认分别为 `0` 和 `1`。
+- `Conditions` 和 `ConditionLogic` 存储变量条件及且、或关系。`KeyOptions` 存储选键及检测选项。`TimeConfig` 和 `ConfirmConfig` 分别保存时间和人工确认参数。
 
 ### 6.21 KeyCheckData（按键检测 / 手柄检测）
 

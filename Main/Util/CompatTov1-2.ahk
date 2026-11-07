@@ -332,13 +332,12 @@ CompatTiming(filePath) {
             curFix := true
         }
 
+        curFix := NormalizeTimingStamps(Data) || curFix
         if (Data.HasOwnProp("StartTime")) {
-            Data.StartStamp := TimeStrToStamp(Data.StartTime)
             Data.DeleteProp("StartTime")
             curFix := true
         }
         if (Data.HasOwnProp("EndTime")) {
-            Data.EndStamp := (Data.EndTime != "" ? TimeStrToStamp(Data.EndTime) : 0)
             Data.DeleteProp("EndTime")
             curFix := true
         }
