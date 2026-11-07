@@ -156,7 +156,7 @@ class AiSettingGui {
         permHost.Cols("*", "Auto", "*")
         cmbAccess := this._StyleCombo(permHost.Add("ComboBox").Name("CmbAiAccess").Grid_Column(0)
             .Margin("0,0,10,0").HorizontalAlignment("Stretch")
-            .ToolTip(GetLang("只读：只能读取任意文件内容") "`n" GetLang("工作区：可以读取任意文件，写入仅限软件目录") "`n" GetLang("完全访问：没有任何读写限制")))
+            .ToolTip(GetLang("只读：只能读取任意文件内容") "`n" GetLang("工作区：可以读取任意文件，写入仅限软件目录") "`n" GetLang("完全访问") "：" GetLang("读写不限路径，可执行命令和脚本。")))
         for lab in AiAssist.AccessLabels
             cmbAccess.Add("ComboBoxItem").Content(GetLang(lab))
         permHost.Add("TextBlock").Grid_Column(1).Text(GetLang("指令审批："))

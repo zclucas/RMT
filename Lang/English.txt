@@ -2368,6 +2368,7 @@ OCR类型=OCR engine
 只能读取文件和配置。=Read files and configuration only.
 写入仅限软件目录。=Writes are limited to the application folder.
 读写无路径限制。=Read and write without path restrictions.
+读写不限路径，可执行命令和脚本。=Read and write any path, and run commands and scripts.
 多线程数请输入 -1、0 或正整数。=Enter -1, 0, or a positive integer for the thread count.
 调试日志=Debug
 信息日志=Info

@@ -1892,7 +1892,7 @@ GetTableItemDefaultInfo(tableItem) {
 ;   段名序号 ModuleN/MacroN 为层级内易读序号，真实对象 ID 存段内 ID= 键恢复全局唯一引用。
 ; ============================================================
 SaveTableItemInfo(tableItem) {
-    SaveTableItemInfoToml(tableItem)
+    return SaveTableItemInfoToml(tableItem)
 }
 
 ; ============================================================
@@ -1902,10 +1902,11 @@ SaveTableItemInfo(tableItem) {
 ; ============================================================
 SaveTableItemInfoToml(tableItem) {
     if (MacroFileMustKeep(""))
-        return
+        return false
     root := TomlUtil_RootMap()
     SaveTableItemInfoTomlCore(root, tableItem)
     TomlUtil_Write(root)
+    return true
 }
 
 ; 把单表三级段组装进 root（不写文件）：供单表保存与批量保存共用

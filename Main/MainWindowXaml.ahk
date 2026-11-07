@@ -3238,6 +3238,8 @@ class MainWin {
             this._aiEmptyRetry := Map()
         this._aiEmptyRetry[t] := false
         this._aiChatTab := t
+        this._aiRequestMacro := this._ResolveSideTreeItem(t)
+        this._aiRequestConfig := MySoftData.CurSettingName
         if (!IsObject(this._aiToolRound))
             this._aiToolRound := Map()
         this._aiToolRound[t] := 0
@@ -3374,7 +3376,12 @@ class MainWin {
             name := call.Has("name") ? String(call["name"]) : ""
             args := call.Has("arguments") ? String(call["arguments"]) : "{}"
             this._AiShowThinking(t, true, this._AiToolDoingText(name, args))
-            result := this._AiCancelRequested(t) ? "Cancelled by user" : AiAssist.ExecTool(name, args)
+            if (this._AiCancelRequested(t))
+                result := "Cancelled by user"
+            else if (InStr(name, "_macro") && this._aiRequestConfig != MySoftData.CurSettingName)
+                result := '{"ok":false,"error":"当前配置已切换，请在目标配置中重新发送消息"}'
+            else
+                result := AiAssist.ExecTool(name, args)
             this._AiNoteToolResult(t, name, args, result)
             this._AiHistPushMap(t, Map("role", "tool", "content", result, "tool_call_id", cid))
         }
@@ -3595,13 +3602,13 @@ class MainWin {
                 return GetLang("正在执行命令")
             case "run_script":
                 return GetLang("正在运行脚本") (fn != "" ? "：" fn : "")
-            case "update_macro":
+            case "update_macro", "set_macro_step_enabled":
                 return GetLang("正在修改宏")
             case "add_macro":
                 return GetLang("正在新增宏")
             case "list_macros":
                 return GetLang("正在查看宏列表")
-            case "read_macro":
+            case "read_macro", "read_macro_step":
                 return GetLang("正在读取宏")
             default:
                 return GetLang("正在调用") " " name
@@ -3666,7 +3673,7 @@ class MainWin {
             nm := n.Has("name") ? String(n["name"]) : ""
             if (n.Has("ok") && n["ok"]) {
                 okN += 1
-                if (nm = "update_macro")
+                if (nm = "update_macro" || nm = "set_macro_step_enabled")
                     done := GetLang("已按你的要求改好对应宏")
                 else if (nm = "add_macro" && done == "")
                     done := GetLang("已新增宏")
@@ -3851,7 +3858,16 @@ class MainWin {
 
     _AiBuildApiMessages(t) {
         msgs := []
-        msgs.Push(Map("role", "system", "content", AiAssist.BuildSystemPrompt()))
+        selectedIndex := 0
+        if (this.HasOwnProp("_aiRequestMacro") && IsObject(this._aiRequestMacro)
+            && this._aiRequestConfig = MySoftData.CurSettingName
+            && t >= 1 && t <= MySoftData.TableInfo.Length && CheckIsMacroTable(t)) {
+            tableItem := MySoftData.TableInfo[t]
+            idx := GetItemIndexInTable(tableItem, this._aiRequestMacro.ID)
+            if (idx > 0 && tableItem.Items[idx] == this._aiRequestMacro)
+                selectedIndex := idx
+        }
+        msgs.Push(Map("role", "system", "content", AiAssist.BuildSystemPrompt(t, selectedIndex)))
         if (IsObject(this._aiHist) && this._aiHist.Has(t)) {
             arr := this._aiHist[t]
             start := 1
@@ -5843,7 +5859,7 @@ class MainWin {
                     . row(GetLang("API Key"), '<PasswordBox Name="AiApiKeyCon" Password="' this._XmlEsc(MainSoftData.AiApiKey) '" Height="33" MinHeight="33" Padding="6,0,18,0" VerticalContentAlignment="Center" FontSize="12" Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputText}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>')
                     . row(GetLang("模型列表"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox Name="AiModelCon" IsEditable="True" Text="' this._XmlEsc(MainSoftData.AiModel) '" Height="33" MinHeight="33" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1">' aiModelXaml '</ComboBox><Button Grid.Column="1" Name="BtnAiRefreshModels" Content="&#xE72C;" FontFamily="' iconFont '" FontSize="14" Width="33" Height="33" MinWidth="33" MinHeight="33" Padding="0" Margin="8,0,0,0" ToolTip="' this._XmlEsc(GetLang("刷新")) '"/></Grid>'), "0", "", "aiModel")
                 , card(GetLang("权限"), "&#xE72E;", cmb(GetLang("写入权限"), "AiAccessCon", aiAccessNames, MainSoftData.AiAccessMode - 1, true, ""
-                        , ["只能读取文件和配置。", "写入仅限软件目录。", "读写无路径限制。"], 132)
+                        , ["只能读取文件和配置。", "写入仅限软件目录。", "读写不限路径，可执行命令和脚本。"], 132)
                     . cmb(GetLang("指令审批"), "AiApprovalCon", aiApprovalNames, MainSoftData.AiApprovalMode - 1, true), "0", "", "aiPerm")
             )
         )

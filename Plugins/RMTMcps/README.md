@@ -8,7 +8,7 @@
 |------|------|
 | `RMTMcps.exe` | MCP 服务（打包产物，无需本机 Python） |
 | `mcp.example.json` | Cursor / AstrBot 配置示例 |
-| `README.md` | 本文件：工具清单 + 接入说明（内置 AI 读取下方标记段） |
+| `README.md` | 本文件：工具清单与接入说明 |
 | `workspaces/` | 解包临时区 |
 | `output/` | 生成的 `.rmt` |
 
@@ -17,9 +17,9 @@
 ---
 
 <!-- RMT_AI_PROMPT_BEGIN -->
-## 内置 AI 能力参考（RMTMcps）
+## MCP 工具速查
 
-你当前**不能直接调用** `RMTMcps.exe`。下列工具名与流程用于：解释配置能力、给出可落地的操作步骤与参数建议。若用户环境已接 Cursor/AstrBot MCP，可按其工具名引导对方调用。
+下列流程适用于已接入 RMTMcps 的宿主，例如 Cursor 或 AstrBot。RMT 内置助手使用软件自己的宏工具。
 
 ### 工具一览
 
@@ -29,7 +29,7 @@
 | `list_rmt_files` | 列出工作区内文件 |
 | `read_rmt_file` | 读工作区某文件（可限 `max_chars`，默认约 12000） |
 | `write_rmt_file` | 写/改工作区文件（易踩 INI/编码坑，优先用 `edit_rmt_macro`） |
-| `explain_rmt` | 配置可读摘要（触发键、指令中文描述等） |
+| `explain_rmt` | 解读配置或指定单条宏（触发键、指令参数、前后钩子） |
 | `validate_rmt` | 校验合法性，返回分级问题清单 |
 | `edit_rmt_macro` | 结构化增/删/改宏，或宏内单条指令，并自动复校验 |
 | `generate_rmt_config` | 按 JSON 规格生成并打包 `.rmt` |
@@ -43,7 +43,7 @@
 1. **解读已有配置**：`parse_rmt(source)` → `explain_rmt(workspace_id)` 或 `read_rmt_file` → 用完可 `cleanup_rmt_workspace`
 2. **从零生成**：`generate_rmt_config(spec_json)`；小包看 `delivery.base64`；过大再 `export_rmt_file`
 3. **改一条宏再打包**：`parse_rmt` → `edit_rmt_macro`（看 `validation`）→ `pack_rmt`
-4. **只改一条指令**：`explain_rmt` 数出指令序号 → `edit_rmt_macro(operation="update_command", command_index=N)`；
+4. **只改一条指令**：`explain_rmt(workspace_id=..., module="Normal", index=2)` 定位指令序号 → `edit_rmt_macro(operation="update_command", command_index=N)`；
    改配置型指令的参数则用 `data_configs` 按序列码 upsert，不必重建指令
 5. **只校验**：`validate_rmt(workspace_id=...)` 或 `validate_rmt(source=...)`
 
@@ -104,7 +104,7 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 ### 能力发现（外部宿主）
 
 - 宿主启动 exe 后走 MCP `tools/list`，得到工具名、描述与参数 schema。
-- 本文档供人读、Code Review、以及 **RMT 内置 AI**（读取上方标记段）离线了解能力；不必为「列工具」去启动 RMT 主程序。
+- 本文档供用户和 MCP 宿主参考；列出 MCP 工具时可独立启动服务。
 
 ---
 
@@ -132,7 +132,8 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 ### explain_rmt
 
 - **二选一**（优先 `workspace_id`）：`workspace_id` 或 `source`  
-- **返回**：`total_macros`、`tab_count`、`tabs[]`（每条宏含 trigger / enabled / remark / commands 可读描述）、`datafiles`  
+- **只读一条宏**：同时传入 `module`（如 `Normal` 或 `按键宏`）和从 1 开始的 `index`。
+- **返回**：`total_macros`（返回条数）、`tab_count`、`tabs[]`（每条宏含 trigger / enabled / remark / commands 可读描述）。`tabs[].macro_count` 是页签内宏总数，全量解读另返回 `datafiles`。
 - 对全部配置型序列码（搜索/变量/循环/如果/输出…）会读取对应 `*File.toml`，在 `commands[].config` 给出 JSON；缺配置标 `config_missing`；嵌套 `TrueMacro`/`LoopBody`/`MacroArr`/`CurCMD` 会递归解读。图形开始节点额外给出 `graph_nodes`
 
 ### validate_rmt
@@ -479,7 +480,7 @@ AstrBot 等沙盒与宿主机文件系统隔离，**不要**对宿主机 `output
 - **源码仓库中的发行文档模板是 `Release.README.md`**：增删工具、改参数说明、改 `RMT_AI_PROMPT` 标记段时，先改该文件，再同步到 `Release\README.md`（以及已拷贝的 `Dev\Plugins\RMTMcps\README.md`）。
 - `.\build.ps1` 打包时会自动把 `Release.README.md`、`mcp.example.json` 复制进 `Release\`。
 - 重新打包 exe 后：替换本目录 `RMTMcps.exe`，并核对本文（尤其 `RMT_AI_PROMPT` 标记段）是否仍一致。**无需改 AHK。**
-- 内置 AI 只注入标记段；改标记段时注意控制长度（避免撑爆每次对话的 system prompt）。
+- 标记段用于快速查阅外部 MCP 的工具和工作流程。
 - Python 源码可独立维护于其它目录；本目录只放 **exe + 配置示例 + 本文档**。
 
 

@@ -5,9 +5,9 @@
 ; （触发键重绑 / Worker CF / 语音重建 / 定时重建 / UI宏刷新），与折叠头 FoldTK 同生效链路
 ; §18 宏表即时持久化：宏表（非静态表）编辑 → 立即落盘（SaveTableItemInfo 整文件读-改-原子写），
 ; 不再依赖「应用并保存」；「应用并保存」只处理全局非热重载数据
-HotReloadPublish(tableIndex, itemIndex := 0) {
+HotReloadPublish(tableIndex, itemIndex := 0, persist := true) {
     global MyHotReloadBus, MySoftData
-    if (tableIndex >= 1 && IsObject(MySoftData) && MySoftData.HasProp("TableInfo")
+    if (persist && tableIndex >= 1 && IsObject(MySoftData) && MySoftData.HasProp("TableInfo")
         && tableIndex <= MySoftData.TableInfo.Length) {
         tableItem := MySoftData.TableInfo[tableIndex]
         if (IsObject(tableItem) && !IsStaticTable(tableItem)) {
