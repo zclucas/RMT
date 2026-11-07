@@ -232,7 +232,7 @@ class OperationGui {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("运算")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
-        this.Data := GetMacroCMDData(this.SerialStr)
+        this.Data := JSON.parse(JSON.stringify(GetMacroCMDData(this.SerialStr)), , false)
         this.DLVariableArr := GetGuiVarArr()
 
         this._EnsureOpDataLen()
@@ -246,7 +246,7 @@ class OperationGui {
             this.Data := OperationData()
             this.Data.SerialStr := this.SerialStr
         }
-        ; 去掉开关后：保留曾启用或已填表达式的行；空闲关闭槽丢弃；至少 1 行
+        ; 旧配置只保留已启用行，至少提供一条草稿行。
         this._CompactOpData()
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1]
@@ -274,7 +274,7 @@ class OperationGui {
             i := A_Index
             expr := (this.Data.ExpressionArr.Length >= i) ? this.Data.ExpressionArr[i] : ""
             name := (this.Data.UpdateNameArr.Length >= i) ? this.Data.UpdateNameArr[i] : ("Var" i)
-            if (this.Data.ToggleArr[i] || expr != "") {
+            if (this.Data.ToggleArr[i]) {
                 newTog.Push(1)
                 newName.Push(name)
                 newExpr.Push(expr)
@@ -344,7 +344,7 @@ class OperationGui {
     OnAddOpRow(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
-        this.SaveOperationData()
+        this._ReadOperationRows()
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
         this.Data.UpdateNameArr.Push("Var" n)
@@ -359,7 +359,7 @@ class OperationGui {
             RmtDialog.Info(GetLang("至少保留一个运算"))
             return
         }
-        this.SaveOperationData()
+        this._ReadOperationRows()
         this.Data.ToggleArr.RemoveAt(n)
         this.Data.UpdateNameArr.RemoveAt(n)
         this.Data.ExpressionArr.RemoveAt(n)
@@ -427,14 +427,17 @@ class OperationGui {
         return true
     }
 
-    SaveOperationData() {
+    _ReadOperationRows() {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             this.Data.ToggleArr[i] := 1
             this.Data.ExpressionArr[i] := GetLangStr(this.ui.Query("Expr" i), 2)
             this.Data.UpdateNameArr[i] := GetVarName(this.ui.Query("UpdateName" i))
         }
+    }
 
+    SaveOperationData() {
+        this._ReadOperationRows()
         loop this.Data.ToggleArr.Length
             MySoftData.GlobalVariMap[this.Data.UpdateNameArr[A_Index]] := true
         SaveMacroCMDData(this.Data)

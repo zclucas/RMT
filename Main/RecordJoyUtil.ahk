@@ -98,50 +98,6 @@ GI_CollectStates() {
     return states
 }
 
-; 非官方 XInputGetStateEx（ordinal 100）带 Guide/Home 位 0x0400；读不到则退回 XInputGetState
-JoyXInputEx(index := 0) {
-    static proc := 0
-    if (proc == 0) {
-        ; XInput 版本取决于系统/手柄驱动；xinput9_1_0 是很多 Xbox 手柄
-        ; 实际可用的兼容层，不能只尝试 1_4/1_3。
-        for dll in ["xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll", "xinput1_2.dll", "xinput1_1.dll"] {
-            hMod := DllCall("GetModuleHandle", "Str", dll, "Ptr")
-            if (!hMod)
-                hMod := DllCall("LoadLibrary", "Str", dll, "Ptr")
-            if (!hMod)
-                continue
-            proc := DllCall("GetProcAddress", "Ptr", hMod, "AStr", "XInputGetState", "Ptr")
-            if (proc)
-                break
-            ; 某些旧实现只导出 ordinal 100（含 Guide 位的扩展接口）。
-            proc := DllCall("GetProcAddress", "Ptr", hMod, "Ptr", 100, "Ptr")
-            if (proc)
-                break
-        }
-        if (!proc)
-            proc := -1
-    }
-    if (proc == -1)
-        return 0
-    buf := Buffer(16, 0)
-    if (DllCall(proc, "UInt", index, "Ptr", buf.Ptr) != 0)
-        return 0
-    lx := Integer(Round(NumGet(buf, 8, "Short") * 100 / 32768))
-    ly := Integer(Round(NumGet(buf, 10, "Short") * 100 / 32768))
-    rx := Integer(Round(NumGet(buf, 12, "Short") * 100 / 32768))
-    ry := Integer(Round(NumGet(buf, 14, "Short") * 100 / 32768))
-    clamp(v) => (v < -100 ? -100 : (v > 100 ? 100 : v))
-    return {
-        wButtons: NumGet(buf, 4, "UShort"),
-        lt: NumGet(buf, 6, "UChar"),
-        rt: NumGet(buf, 7, "UChar"),
-        lx: clamp(lx),
-        ly: clamp(ly),
-        rx: clamp(rx),
-        ry: clamp(ry)
-    }
-}
-
 RecordJoyAxises := Map("JoyXMin", 0, "JoyXMax", 100, "JoyYMin", 0, "JoyYMax", 100, "JoyZMin", 0, "JoyZMax", 100,
     "JoyRMin", 0, "JoyRMax", 100, "JoyUMin", 0, "JoyUMax", 100, "JoyVMin", 0, "JoyVMax", 100)
 RecordJoyPOVMap := Map("JoyPOV_0", 0, "JoyPOV_9000", 9000, "JoyPOV_18000", 18000, "JoyPOV_27000", 27000)

@@ -33,19 +33,6 @@ IsGraphNodeSerial(serialStr) {
 ; 是否把图形分支交给线程池。主进程看设置（RMTUtil.ahk），Worker 恒为真（WorkUtil.ahk）——
 ; 两套同名实现，由包含链决定，函数里不判断角色。
 
-ShouldSkipGraphNextDispatch(cmdStr) {
-    if (cmdStr == "")
-        return false
-    paramArr := StrSplit(GetCmdStr(cmdStr), "_")
-    cmdKey := RTrim(paramArr[1], "0123456789")
-    skipTypes := [GetLang("如果"), GetLang("如果Pro"), GetLang("搜索"), GetLang("搜索Pro"), GetLang("搜索All"), GetLang("搜索Combo"), GetLang("组合搜索"), GetLang("搜索Multi"), GetLang("循环")]
-    for t in skipTypes {
-        if (cmdKey == t)
-            return true
-    }
-    return false
-}
-
 CollectGraphBranchSerials(serialArr) {
     out := []
     if (!IsObject(serialArr))
@@ -121,8 +108,6 @@ WalkGraphNode(tableItem, nodeSerial, index) {
         }
     }
 
-    if (ShouldSkipGraphNextDispatch(curCmd))
-        return
     nexts := (nodeData.HasOwnProp("NextNodeArr") && IsObject(nodeData.NextNodeArr)) ? nodeData.NextNodeArr : []
     DispatchGraphBranches(tableItem, index, nexts, false)
 }

@@ -99,6 +99,7 @@ const COMMAND_ICON_FILES = {
   "输入": "Images/Soft/Input.png",
   "文件读写": "Images/Soft/FileIO.png",
   "Excel": "Images/Soft/Excel.png",
+  "网络请求": "Images/Soft/HttpRequest.png",
   "流程控制": "Images/Soft/Control.png",
   "窗口管理": "Images/Soft/WindowManage.png",
   "窗口信息": "Images/Soft/WindowManage.png",
@@ -216,7 +217,7 @@ for (const doc of DOC_FILES) {
       const child = { index, title: part.title, route, num: '', cmdName: '', iconHtml: '' };
       if (doc.title === '指令手册') {
         Object.assign(child, getCommandNavParts(part.title));
-        const category = part.md.match(/^所属分类：([^\r\n]+)/m);
+        const category = part.md.match(/^<span class="cmd-doc-tag [^"]+">[^\r\n]*<strong>([^<]+)<\/strong><\/span>$/m);
         child.category = category ? category[1].trim() : '';
       }
       children.push(child);
@@ -353,8 +354,20 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 .content blockquote{border-left:4px solid #4a6cf7;margin:14px 0;padding:10px 18px;background:#f5f7ff;color:#556;border-radius:0 6px 6px 0}
 .content hr{border:none;border-top:2px solid #eee;margin:32px 0}
 .content strong{color:#1a1a2e}
+.page[data-group="指令手册"] .cmd-doc-tag{display:inline-flex;align-items:center;gap:6px;padding:2px 11px;border-radius:999px;background:var(--cmd-tag-bg);color:var(--cmd-tag-text);font-size:12px}
+.page[data-group="指令手册"] .cmd-doc-tag strong{color:inherit}
+.cmd-doc-input,.cmd-doc-vision{--cmd-tag-bg:#e0f2fe;--cmd-tag-text:#075985}
+.cmd-doc-io,.cmd-doc-data{--cmd-tag-bg:#ede9fe;--cmd-tag-text:#5b21b6}
+.cmd-doc-files,.cmd-doc-flow{--cmd-tag-bg:#dcfce7;--cmd-tag-text:#166534}
+.cmd-doc-control,.cmd-doc-other{--cmd-tag-bg:#fef3c7;--cmd-tag-text:#854d0e}
+.page[data-group="指令手册"] .content blockquote{border-color:#c58817;background:#fff9e9;color:#61440c}
+.page[data-group="指令手册"] .content blockquote p{margin:0}
+.page[data-group="指令手册"] .content blockquote strong{color:#754b0c}
+.page[data-group="指令手册"] .content th{background:#e8effa;color:#26416e}
+.page[data-group="指令手册"] .content td{vertical-align:top;overflow-wrap:anywhere}
+.page[data-group="指令手册"] .content code{background:#edf2f9;color:#23436f}
+.page[data-group="指令手册"] .content pre code{background:none;color:inherit}
 .hidden{display:none!important}
-@media(max-width:800px){.sidebar{width:56px}.sidebar h1{font-size:11px;padding:14px 6px;text-align:center}.nav button{padding:10px 6px;font-size:11px;text-align:center}.tab-text,.nav-caret{display:none}.tab-sub{padding-left:6px!important}.nav-children{padding-left:0}}
 </style>
 <style>${searchCss}</style>
 <style>${vsCss}</style>
@@ -442,7 +455,7 @@ function findPageIndexByRoute(route){
   // 指令重排后，编辑器及旧书签里的编号可能过期，优先按完整指令名定位。
   if(group === '指令手册'){
     // 别名统一为「旧名 -> 现名」：新名直接与页面标题相等，旧名经别名映射后命中，保证新编辑器与历史书签都能跳转
-    const aliases = {'鼠标移动': '移动', '鼠标移动Pro': '移动Pro', '组合搜索': '搜索Combo', '搜索Multi': '搜索Combo', '时间': '倒计时', '窗口管理': '窗口信息', '流程跳转': '跳转'};
+    const aliases = {'鼠标移动': '移动', '鼠标移动Pro': '移动Pro', '组合搜索': '搜索Combo', '搜索Multi': '搜索Combo', '时间': '倒计时', '等待确定': '等待', '窗口管理': '窗口信息', '流程跳转': '跳转'};
     const name = key.replace(/^\\d+(?:\\.\\d+)?[-\\s]+/, '');
     const command = aliases[name] || name;
     idx = PAGE_META.findIndex(p => p.group === group && p.title.replace(/^\\d+(?:\\.\\d+)?\\s+/, '') === command);

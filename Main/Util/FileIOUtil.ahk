@@ -79,6 +79,7 @@ SetFileIOGlobalData(Data) {
 
 ReadExcel(Data, tableItem, index) {
     FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    item := IsObject(tableItem) ? tableItem.Items[index] : ""
     HasRow := TryGetTabVarValue(&Row, tableItem, index, Data.RowVar, true)
     HasCol := TryGetTabVarValue(&Col, tableItem, index, Data.ColVar, true)
     if (!HasRow || !HasCol)
@@ -87,15 +88,15 @@ ReadExcel(Data, tableItem, index) {
 
     switch Data.OperMode {
         case "单元格":
-            IsOk := ExcelCellToRead(FilePath, Data.NameOrSerial, Row, Col, &ResArr)
+            IsOk := ExcelCellToRead(FilePath, Data.NameOrSerial, Row, Col, &ResArr, item)
             if (IsOk)
                 MySetGlobalVariable([Data.SaveName], [ResArr], false)
         case "指定行":
-            IsOk := ExcelRowToRead(FilePath, Data.NameOrSerial, Row, Col, &ResArr)
+            IsOk := ExcelRowToRead(FilePath, Data.NameOrSerial, Row, Col, &ResArr, item)
             if (IsOk)
                 MySetGlobalArray(Data.SaveName, ResArr)
         case "指定列":
-            IsOk := ExcelColToRead(FilePath, Data.NameOrSerial, Row, Col, &ResArr)
+            IsOk := ExcelColToRead(FilePath, Data.NameOrSerial, Row, Col, &ResArr, item)
             if (IsOk)
                 MySetGlobalArray(Data.SaveName, ResArr)
         case "指定区域-行":
@@ -109,7 +110,7 @@ ReadExcel(Data, tableItem, index) {
                 RMTErrorShow(err, RMT_LV_WARN, "宏")
                 return
             }
-            IsOk := ExcelRangeRowToRead(FilePath, Data.NameOrSerial, Row, Col, RowEnd, ColEnd, &ResArr)
+            IsOk := ExcelRangeRowToRead(FilePath, Data.NameOrSerial, Row, Col, RowEnd, ColEnd, &ResArr, item)
             if (IsOk)
                 MySetGlobalArray(Data.SaveName, ResArr)
         case "指定区域-列":
@@ -123,7 +124,7 @@ ReadExcel(Data, tableItem, index) {
                 RMTErrorShow(err, RMT_LV_WARN, "宏")
                 return
             }
-            IsOk := ExcelRangeColToRead(FilePath, Data.NameOrSerial, Row, Col, RowEnd, ColEnd, &ResArr)
+            IsOk := ExcelRangeColToRead(FilePath, Data.NameOrSerial, Row, Col, RowEnd, ColEnd, &ResArr, item)
             if (IsOk)
                 MySetGlobalArray(Data.SaveName, ResArr)
     }
@@ -155,6 +156,7 @@ CheckExcelRegionBounds(rowStart, colStart, rowEnd, colEnd) {
 
 WriteExcel(Data, tableItem, index) {
     FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
+    item := IsObject(tableItem) ? tableItem.Items[index] : ""
     Content := GetReplaceVarText(tableItem, index, Data.Content)
     hasRowValue := TryGetTabVarValue(&RowValue, tableItem, index, Data.RowVar)
     hasColValue := TryGetTabVarValue(&ColValue, tableItem, index, Data.ColVar)
@@ -164,20 +166,20 @@ WriteExcel(Data, tableItem, index) {
 
     switch Data.OperMode {
         case "单元格":
-            ExcelCellToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Content)
+            ExcelCellToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Content, item)
         case "行号自增":
-            ExcelRowToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Content)
+            ExcelRowToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Content, item)
         case "列号自增":
-            ExcelColToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Content)
+            ExcelColToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Content, item)
         case "指定区域-行":
             hasArray := TryGetArrValue(&Arr, Data.ArrName)
             if (hasArray) {
-                ExcelRangeRowToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Arr)
+                ExcelRangeRowToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Arr, item)
             }
         case "指定区域-列":
             hasArray := TryGetArrValue(&Arr, Data.ArrName)
             if (hasArray) {
-                ExcelRangeColToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Arr)
+                ExcelRangeColToWrite(FilePath, Data.NameOrSerial, RowValue, ColValue, Arr, item)
             }
     }
 }
@@ -237,64 +239,27 @@ WriteTextFile(Data, tableItem, index) {
             FileObj.WriteLine("")
             FileObj.Write(Content)
             FileObj.Close()
-        case "指定行":
-            hasRowValue := TryGetTabVarValue(&RowValue, tableItem, index, Data.TextRowVar)
-            if (hasRowValue) {
-                RowValue := Integer(RowValue)
-                text := FileRead(FilePath, Data.Encoding)
-                lines := StrSplit(text, "`n", "`r")
-
-                ; 不够行就自动补
-                while (lines.Length < RowValue)
-                    lines.Push("")
-
-                lines[RowValue] := Content
-
-                FileObj := FileOpen(FilePath, "w", Data.Encoding)
-                for i, line in lines {
-                    if (i < lines.Length)
-                        FileObj.WriteLine(line)
-                    else
-                        FileObj.Write(line) ; 最后一行不强制换行
-                }
-
-                FileObj.Close()
+        case "指定行", "行号自增":
+            if (!TryGetTabVarValue(&row, tableItem, index, Data.TextRowVar) || !IsInteger(row) || row < 1)
+                return
+            lines := FileExist(FilePath) ? StrSplit(FileRead(FilePath, Data.Encoding), "`n", "`r") : []
+            if (Data.OperMode == "行号自增") {
+                while (row <= lines.Length && lines[row] != "")
+                    row++
             }
-        case "行号自增":
-            hasRowValue := TryGetTabVarValue(&RowValue, tableItem, index, Data.TextRowVar)
-            if (hasRowValue) {
-                RowValue := Integer(RowValue)
-                text := FileRead(FilePath, Data.Encoding)
-                ; 分割成行（兼容 CRLF）
-                lines := StrSplit(text, "`n", "`r")
-                HasWrite := false
-
-                loop lines.Length {
-                    CurRow := RowValue + A_Index - 1
-                    if (CurRow > lines.Length)
-                        break
-                    if (lines[CurRow] == "") {
-                        HasWrite := true
-                        lines[CurRow] := Content
-                        break
-                    }
-                }
-
-                if (!HasWrite)
-                    lines.Push(Content)
-
-                ; 重新写回文件（覆盖写）
-                FileObj := FileOpen(FilePath, "w", Data.Encoding)
-                ; 写回所有行
+            while (lines.Length < row)
+                lines.Push("")
+            lines[row] := Content
+            file := FileOpen(FilePath, "w", Data.Encoding)
+            try {
                 for i, line in lines {
                     if (i < lines.Length)
-                        FileObj.WriteLine(line)
+                        file.WriteLine(line)
                     else
-                        FileObj.Write(line) ; 最后一行不强制换行
+                        file.Write(line)
                 }
-
-                FileObj.Close()
-
+            } finally {
+                file.Close()
             }
     }
 }

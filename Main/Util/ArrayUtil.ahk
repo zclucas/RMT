@@ -153,7 +153,9 @@ GetCmdArray(Data, tableItem, index, variTip := true) {
         if (!isHas)
             return ""
 
-        if (ResArr.Length < Value) {
+        if (IsInteger(Value) && Value == 0)
+            return ResArr
+        if (!ArrayIndexInRange(Value, ResArr.Length)) {
             if (variTip && MainSoftData.NoVariableTip) {
                 str1 := Format(GetLang("数组：{}  长度：{}"), Data.Name, ResArr.Length)
                 str2 := Format("无法获取第{}的值", Value)
@@ -172,6 +174,10 @@ GetCmdArray(Data, tableItem, index, variTip := true) {
         return ""
     }
     return ResArr
+}
+
+ArrayIndexInRange(index, length, allowEnd := false) {
+    return IsInteger(index) && index != 0 && index >= -length && index <= length + (allowEnd ? 1 : 0)
 }
 
 SetArrayDataNewArr(Data) {
@@ -252,7 +258,7 @@ ArrayGetIndexValue(Data, tableItem, index) {
     if (!isHas)
         return
 
-    if (SourceArr.Length < GetIndex) {
+    if (!ArrayIndexInRange(GetIndex, SourceArr.Length)) {
         if (MainSoftData.NoVariableTip) {
             tip1 := Format(GetLang("数组：{} 长度：{}"), Data.Name, SourceArr.Length)
             tip2 := Format(GetLang("数组：{}  子数组{}  长度：{}"), Data.Name, MainIndex, SourceArr.Length)
@@ -280,7 +286,7 @@ ArrayModifyIndexValue(Data, tableItem, index) {
     if (!isHas)
         return
 
-    if (SourceArr.Length < SetIndex) {
+    if (!ArrayIndexInRange(SetIndex, SourceArr.Length)) {
         if (MainSoftData.NoVariableTip) {
             tip1 := Format(GetLang("数组：{} 长度：{}"), Data.Name, SourceArr.Length)
             tip2 := Format(GetLang("数组：{}  子数组{}  长度：{}"), Data.Name, MainIndex, SourceArr.Length)
@@ -318,7 +324,7 @@ ArrayInsertIndexValue(Data, tableItem, index) {
     if (!isHas)
         return
 
-    if (SourceArr.Length < InsertIndex) {
+    if (!ArrayIndexInRange(InsertIndex, SourceArr.Length, true)) {
         if (MainSoftData.NoVariableTip) {
             TryGetTabVarValue(&SubIndex, tableItem, index, Data.MainIndex, false)
             tip1 := Format(GetLang("数组：{} 长度：{}"), Data.Name, SourceArr.Length)
@@ -381,7 +387,7 @@ ArrayRemoveAtIndex(Data, tableItem, index) {
         return
 
     TryGetTabVarValue(&MainIndex, tableItem, index, Data.MainIndex, false)
-    if (SourceArr.Length < RemoveIndex) {
+    if (!ArrayIndexInRange(RemoveIndex, SourceArr.Length)) {
         if (MainSoftData.NoVariableTip) {
             tip1 := Format(GetLang("数组：{} 长度：{}"), Data.Name, SourceArr.Length)
             tip2 := Format(GetLang("数组：{}  子数组{}  长度：{}"), Data.Name, MainIndex, SourceArr.Length)

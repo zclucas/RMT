@@ -2232,6 +2232,14 @@ ReleaseTableItemHoldKeys(tableItem, index) {
         else if (value == "Normal") {
             SendNormalKey(key, 0, tableItem, index)
         }
+        else if (value == "BGKey") {
+            target := StrSplit(key, ":", , 3)
+            SendBGKeyState(target[2], target[3], 0, tableItem, index)
+        }
+        else if (SubStr(value, 1, 8) == "BGMouse:") {
+            target := StrSplit(key, ":", , 3)
+            try SendBGMouseButton(target[2], Integer(target[3]), false, Integer(SubStr(value, 9)), tableItem, index)
+        }
         else if (value == "Logic") {
             SendLogicKey(key, 0, tableItem, index)
         }
@@ -3288,19 +3296,20 @@ WaitIfPaused(tableItem, itemIndex) {
 }
 
 ; 可中断休眠：间隔内定期检查暂停/终止
-InterruptibleSleep(tableItem, index, duration) {
+InterruptibleSleep(tableItem, index, duration, waitWhilePaused := true) {
     if (duration <= 0)
         return
     item := tableItem.Items[index]
     curTime := 0
     clip := Min(100, duration)
     while (curTime < duration) {
-        WaitIfPaused(tableItem, index)
+        if (waitWhilePaused)
+            WaitIfPaused(tableItem, index)
         if (item && item.Killed)
             break
         Sleep(clip)
         curTime += clip
-        clip := Min(500, duration - curTime)
+        clip := Min(waitWhilePaused ? 500 : 100, duration - curTime)
     }
 }
 

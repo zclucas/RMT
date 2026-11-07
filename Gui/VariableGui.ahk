@@ -211,9 +211,16 @@ class VariableGui {
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("变量")
-        this.Data := GetMacroCMDData(this.SerialStr)
+        this.Data := JSON.parse(JSON.stringify(GetMacroCMDData(this.SerialStr)), , false)
         this.DLVariableArr := GetGuiVarArr(1)
 
+        this._EnsureVarDataLen()
+        rows := this.Data.ToggleArr.Length
+        Loop rows {
+            row := rows - A_Index + 1
+            if (!this.Data.ToggleArr[row])
+                this._RemoveVarRow(row)
+        }
         this._EnsureVarDataLen()
         this._RebuildRows()
         batch := []
@@ -393,7 +400,7 @@ class VariableGui {
     OnAddVarRow(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
-        this.SaveVariableData()
+        this._ReadVariableRows()
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
         this.Data.OperaTypeArr.Push(1)
@@ -412,15 +419,19 @@ class VariableGui {
             RmtDialog.Info(GetLang("至少保留一个变量"))
             return
         }
-        this.SaveVariableData()
+        this._ReadVariableRows()
+        this._RemoveVarRow(n)
+        this._RebuildRows()
+        this.OnRefresh()
+    }
+
+    _RemoveVarRow(n) {
         this.Data.ToggleArr.RemoveAt(n)
         this.Data.OperaTypeArr.RemoveAt(n)
         this.Data.VariableArr.RemoveAt(n)
         this.Data.CopyVariableArr.RemoveAt(n)
         this.Data.MinVariableArr.RemoveAt(n)
         this.Data.MaxVariableArr.RemoveAt(n)
-        this._RebuildRows()
-        this.OnRefresh()
     }
 
     GetGuiVarArrByType(type) {
@@ -557,7 +568,7 @@ class VariableGui {
         return CommandStr
     }
 
-    SaveVariableData() {
+    _ReadVariableRows() {
         this.Data.IsIgnoreExist := this.ui.Query("IsIgnoreExist") == "True" ? 1 : 0
         loop this.Data.ToggleArr.Length {
             i := A_Index
@@ -568,6 +579,10 @@ class VariableGui {
             this.Data.MinVariableArr[i] := GetLangKey(this.ui.Query("Min" i))
             this.Data.MaxVariableArr[i] := GetLangKey(this.ui.Query("Max" i))
         }
+    }
+
+    SaveVariableData() {
+        this._ReadVariableRows()
         loop this.Data.ToggleArr.Length {
             if (this.Data.ToggleArr[A_Index])
                 MySoftData.GlobalVariMap[this.Data.VariableArr[A_Index]] := true

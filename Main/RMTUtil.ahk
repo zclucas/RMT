@@ -1194,8 +1194,8 @@ ToolTipTimer() {
 
 ExcuteRMTCMDAction(Cmd) {
     ; 新格式: RMT指令⫶类别⫶指令 → paramArr[1]=RMT指令, paramArr[2]=类别, paramArr[3]=指令
-    paramArr := StrSplit(Cmd, "⫶")
-    if (paramArr.Length >= 3 && ApplyRmtInputControl(paramArr[3]))
+    paramArr := StrSplit(Cmd, InStr(Cmd, "⫶") ? "⫶" : "_")
+    if (paramArr.Length < 3 || ApplyRmtInputControl(paramArr[3]))
         return
     switch GetLangKey(paramArr[3]) {
         case "截图":
@@ -1232,7 +1232,7 @@ ExcuteRMTCMDAction(Cmd) {
                 }
             }
         case "显示菜单":
-            OpenMenuWheel(paramArr[4], false)
+            OpenMenuWheel(paramArr.Length >= 4 ? paramArr[4] : 1, false)
         case "关闭菜单":
             CloseMenuWheel()
         case "打开界面窗口":
@@ -1267,8 +1267,10 @@ ExcuteRMTCMDAction(Cmd) {
 ; 实时重绑触发键 + HotReloadBus 广播（与折叠开关热键同一生效链路）
 RmtCmdSetFoldForbidState(paramArr, forbid) {
     global MySoftData, MyHotReloadBus
-    tableSymbol := paramArr.Length >= 5 ? paramArr[4] : ""
-    foldID := paramArr.Length >= 6 ? paramArr[5] : ""
+    if (paramArr.Length < 5)
+        return
+    tableSymbol := paramArr[4]
+    foldID := paramArr[5]
     if (tableSymbol == "" || foldID == "")
         return
     tableItem := GetTableBySymbol(tableSymbol)
@@ -2039,7 +2041,7 @@ ShouldAutoGenerateRemark(Remark) {
     return (Remark == "")
 }
 
-OnTriggerSepcialItemMacro(MacroStr) {
+OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false) {
     tableItem := MySoftData.SpecialTableItem
     if (tableItem.Items.Length == 0) {
         item := MacroItem()
@@ -2059,7 +2061,7 @@ OnTriggerSepcialItemMacro(MacroStr) {
 
     UpdateMacroRunningCount(0, 1)
     RefreshItemColorUI(tableItem, 1)
-    OnTriggerMacroOnce(tableItem, MacroStr, 1)
+    OnTriggerMacroOnce(tableItem, MacroStr, 1, preserveBranchExit)
     item.ColorState := 0
     UpdateMacroRunningCount(1, 0)
     RefreshItemColorUI(tableItem, 1)

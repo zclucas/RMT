@@ -6,7 +6,7 @@ SearchOnTrigger(tableItem, cmdStr, index) {
     Data := GetMacroCMDData(cmdName)
     SearchDebugLog(Format("搜索命令触发 cmd={} type={} count={}", cmdStr, Data.SearchType, Data.SearchCount))
     res := SearchExecute(tableItem, Data, index)
-    return (res == false && res != "") ? [cmdStr] : res
+    return (res == false && res != "") ? [cmdStr] : ""
 }
 
 ; 搜索图片路径解析：存在同名用户变量 → 用变量值；否则把配置文本当作路径

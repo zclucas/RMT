@@ -1353,19 +1353,7 @@ class JoyGui {
             RmtDialog.Info(GetLang("请选择手柄按键或摇杆！"))
             return false
         }
-        if (this.CheckedArr.Length > 0) {
-            if (!IsInteger(this.ui.Query("KeyCountCon")) || Integer(this.ui.Query("KeyCountCon")) <= 0) {
-                RmtDialog.Info(GetLang("按键次数必须为大于零的整数！"))
-                return false
-            }
-            if (this._KeyTypeIndex() == "点击") {
-                if (IsFloat(this.ui.Query("HoldTimeCon")) || this.ui.Query("HoldTimeCon") < 0) {
-                    RmtDialog.Info(GetLang("按键时间请输入大于0的整数"))
-                    return false
-                }
-            }
-        }
-        return true
+        return !this.CheckedArr.Length || this._KeyTypeIndex() != "点击" || KeyGui.CheckClickParameters(this.ui)
     }
 
     OnSureBtnClick(*) {

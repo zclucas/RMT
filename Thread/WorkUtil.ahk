@@ -483,6 +483,9 @@
 ; 注意：LoadCurMacroSetting 会整表重建 TableInfo（新对象），运行中宏引用旧对象会破坏执行上下文，
 ; 因此只允许空闲时调用——CF 事件（空闲分支）与 OnExecTask finally（忙时延后）双保险。
 ReloadWorkerConfig() {
+    ; 重建宏表索引期间，不让任务定时器读取未加载完的条目。
+    previousCritical := A_IsCritical
+    Critical("On")
     try {
         ; 与冷启动走同一条序列（BootWorkerConfig），差别只有两处：
         ; 不重复解析命令行/共享内存，以及必须先失效 TomlUtil 缓存——Worker 侧缓存是
@@ -492,7 +495,7 @@ ReloadWorkerConfig() {
     } catch as e {
         GraphPoolLog("Worker配置热重载失败", Format("err={1} line={2} what={3}`nstack={4}"
             , e.Message, e.Line, e.What, e.Stack))
-    }
+    } finally Critical(previousCritical)
 }
 
 ;变量数据相关函数

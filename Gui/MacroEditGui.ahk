@@ -3628,7 +3628,7 @@ class MacroEditGui {
             ; 还原格式化的手柄键名后执行
             CleanCMD := MySoftData.ParseCmdJoyDisplay(CleanCMD)
             CurLangCMD := GetLangMacro(CleanCMD, 2)
-            OnTriggerSepcialItemMacro(CurLangCMD)
+            OnTriggerSepcialItemMacro(CurLangCMD, true)
         } catch {
             ; 兜底契约：异常即关钩子 + 清标志 + 退出调试（宁可退出，绝不继续不一致状态）
             if (IsObject(hook))
@@ -3640,19 +3640,15 @@ class MacroEditGui {
         }
         if (IsObject(hook))
             hook.active := false
-        ; H2：into=false（步进/步出）整段真实执行时，内部容器的 ControlType 可能置位
-        ; 循环-跳出/循环-跳过本轮——真身语义下该标志传播到最近的真实 Loop 边界消费
-        ; （OnLoop:881-888/911-918），而调试态该边界是 DebugStack 里的 Loop 帧，
-        ; 单条执行无人消费 → 残留污染后续帧结算（误弹栈/提前 EndDebugRun）。
-        ; 就地结算：按标志语义弹到最近 Loop 帧（跳出/进下一轮），等价真身 OnLoop 边界。
-        if (!into) {
-            flags := this._Flags()
-            if (flags.brk || flags.skip) {
-                this._ClearFlags()
-                if (this.DebugStack.Length > 0)
-                    return flags.brk ? this._PopToNearestLoop() : this._SkipToNearestLoopIteration()
-                ; 栈空（顶层步进）：真身会在宏级消费（MacroUtil:39-46），调试态无结算点，就地清掉防残留
-            }
+        ; 单步执行跳转后立即按调试栈结算，避免先执行本应跳过的同级指令。
+        flags := this._Flags()
+        if (flags.brk || flags.skip || flags.brch) {
+            this._ClearFlags()
+            if (flags.brk)
+                return this._PopToNearestLoop()
+            if (flags.skip)
+                return this._SkipToNearestLoopIteration()
+            return this.CompleteTopFrame()
         }
         ; 阶段4: 按 hook.recorded 分叉——容器被拦截则步入，否则推进到下一项
         if (IsObject(hook) && hook.recorded) {

@@ -32,4 +32,4 @@
 .outline-h2{padding-left:14px}
 .outline-h3{padding-left:24px;color:#64748b}
 @media(max-width:1000px){.doc-outline{display:none}}
-@media(max-width:800px){body{flex-direction:column}.sidebar{width:100%;max-height:48vh}.sidebar h1{font-size:13px;padding:10px 12px;text-align:left}.sidebar-search{position:relative;padding:9px 10px}.search-results{left:10px;right:10px;top:calc(100% - 1px);max-height:22vh}.nav{flex-direction:row;flex:0 0 auto;overflow-x:auto}.nav button{padding:8px 10px;font-size:12px;text-align:left}.main{min-height:0}.content-area{padding:20px 16px}}
+@media(max-width:800px){body{flex-direction:column}.sidebar{width:100%;max-height:48vh}.sidebar h1{font-size:13px;padding:10px 12px;text-align:left}.sidebar-search{position:relative;padding:9px 10px}.search-results{left:10px;right:10px;top:calc(100% - 1px);max-height:22vh}.nav{min-height:0}.nav button{padding:8px 10px;font-size:12px;text-align:left}.main{min-height:0}.content-area{padding:20px 16px}}

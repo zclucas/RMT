@@ -120,7 +120,14 @@ SendKeyWrapper(KeyArrStr, holdTime, tableItem, index, keyType, Action) {
             SendKeysUp(KeyArr, tableItem, index, Action)
         case "点击":
             SendKeysDown(KeyArr, tableItem, index, Action)
-            Sleep(holdTime)
+            if (IsObject(tableItem)) {
+                InterruptibleSleep(tableItem, index, holdTime, false)
+                item := GetItemByIndex(tableItem, index)
+                if (item && item.Killed)
+                    return
+            } else {
+                Sleep(holdTime)
+            }
             SendKeysUp(KeyArr, tableItem, index, Action)
     }
 }

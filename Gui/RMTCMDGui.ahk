@@ -164,8 +164,8 @@ class RMTCMDGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
+        this.ui.OnEvent("Window", "Closing", this.OnWindowClosing.Bind(this, this.ui.id))
+        this.ui.OnEvent("Window", "LoadedHwnd", this.OnWindowLoad.Bind(this, this.ui.id))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/20-RMT指令", ObjBindMethod(this, "TriggerMacro"), "!l")
         this.ui.OnEvent("CategoryCombo", "SelectionChanged", ObjBindMethod(this, "OnTypeChane"))
@@ -175,11 +175,14 @@ class RMTCMDGui {
 
     }
 
-    OnWindowLoad(state, ctrl, event) {
-        XamlWin.OnLoadTheme(this.ui)
+    OnWindowLoad(id, *) {
+        if (IsObject(this.ui) && this.ui.id == id)
+            XamlWin.OnLoadTheme(this.ui)
     }
 
-    OnWindowClosing(state, ctrl, event) {
+    OnWindowClosing(id, *) {
+        if (!IsObject(this.ui) || this.ui.id != id)
+            return
         this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
@@ -235,14 +238,10 @@ class RMTCMDGui {
             cmdCategory := this.Data.Category
             cmdStr := this.Data.CmdStr
             menuDLIndex := this.Data.HasOwnProp("MenuIndex") ? this.Data.MenuIndex : 1
-        } else if (cmdArr.Length >= 4) {
-            cmdCategory := cmdArr[2]
-            cmdStr := cmdArr[3]
-            menuDLIndex := cmdStr == GetLang("显示菜单") && cmdArr.Length >= 5 ? Integer(cmdArr[4]) : 1
         } else if (cmdArr.Length >= 3) {
             cmdCategory := cmdArr[2]
             cmdStr := cmdArr[3]
-            menuDLIndex := 1
+            menuDLIndex := cmdStr == GetLang("显示菜单") && cmdArr.Length >= 4 ? Integer(cmdArr[4]) : 1
         } else {
             cmdCategory := GetLang("全部")
             cmdStr := GetLang("截图")
@@ -253,6 +252,7 @@ class RMTCMDGui {
         Category := cmdCategory
         CmdStrArr := this.CategoriesMap[Category]
 
+        this._category := Category
         this._SetDDL("CategoryCombo", this.CategoriesArr, Category)
         this._SetDDL("CmdTypeCombo", CmdStrArr, cmdStr)
 
@@ -275,9 +275,9 @@ class RMTCMDGui {
             t := GetTableBySymbol(symbol)
             tabItems.Push(t ? GetLang(t.Name) : symbol)
         }
-        this._SetDDL("TabCombo", tabItems, tabItems.Length >= 1 ? tabItems[1] : "")
         selSymbol := (this.Data.HasOwnProp("TableSymbol") && this.Data.TableSymbol != "") ? this.Data.TableSymbol : (this._tabSymbols.Length >= 1 ? this._tabSymbols[1] : "")
         selTable := GetTableBySymbol(selSymbol)
+        this._foldTab := selTable ? selSymbol : (this._tabSymbols.Length >= 1 ? this._tabSymbols[1] : "")
         this._SetDDL("TabCombo", tabItems, selTable ? GetLang(selTable.Name) : (tabItems.Length >= 1 ? tabItems[1] : ""))
         foldItems := []
         if (selTable) {
@@ -305,6 +305,9 @@ class RMTCMDGui {
         if (!IsObject(this.ui))
             return
         Category := this.ui.Query("CategoryCombo")
+        if (!this.CategoriesMap.Has(Category) || Category == this._category)
+            return
+        this._category := Category
         CmdStrArr := this.CategoriesMap[Category]
         this._SetDDL("CmdTypeCombo", CmdStrArr, CmdStrArr.Length >= 1 ? CmdStrArr[1] : "")
         this.OnCmdChange()
@@ -338,7 +341,11 @@ class RMTCMDGui {
         tabIdx := Integer(this.ui.Query("TabCombo>SelectedIndex")) + 1
         if (tabIdx < 1 || tabIdx > this._tabSymbols.Length)
             return
-        tableItem := GetTableBySymbol(this._tabSymbols[tabIdx])
+        symbol := this._tabSymbols[tabIdx]
+        if (symbol == this._foldTab)
+            return
+        this._foldTab := symbol
+        tableItem := GetTableBySymbol(symbol)
         items := []
         if (tableItem) {
             for f, fold in tableItem.Folds {

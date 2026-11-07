@@ -87,7 +87,7 @@ OnFinishMacro(tableItem, macro, index) {
     MySetTableItemState(tableItem, index, itemState)
 }
 
-OnTriggerMacroOnce(tableItem, macro, index) {
+OnTriggerMacroOnce(tableItem, macro, index, preserveBranchExit := false) {
     cmdArr := SplitMacro(macro)
     item := tableItem.Items[index]
 
@@ -99,7 +99,8 @@ OnTriggerMacroOnce(tableItem, macro, index) {
             cmdArr.InsertAt(A_Index + 1, result*)
         }
         if (item.VariableMap["分支-跳出"]) {
-            item.VariableMap["分支-跳出"] := false
+            if (!preserveBranchExit)
+                item.VariableMap["分支-跳出"] := false
             break
         }
         if (item.VariableMap["循环-跳过本轮"])
@@ -423,42 +424,121 @@ OnRunFile(tableItem, cmd, index) {
     runOpt := Map("后台", "Hide", "默认", "", "最小化", "Min", "最大化", "Max")
     optName := CmdEnumRunOption(Data.Option)
     optFlag := runOpt.Has(optName) ? runOpt[optName] : ""
+    showWindow := CmdEnumIndex(optName, CmdEnumRunOptionNames())
     switch CmdEnumZh(Data.Mode, CmdEnumRunModeNames()) {
         case "不等待":
             Run(target, , optFlag)
 
         case "等待+返回值":
-            exitCode := RunWait(target, , optFlag)
-            MySetGlobalVariable([Data.SaveNameArr[1]], [exitCode], false)
+            item := tableItem.Items[index]
+            exitCode := _RunWaitInterruptible(target, optFlag, item)
+            if (!item.Killed)
+                MySetGlobalVariable([Data.SaveNameArr[1]], [exitCode], false)
 
         case "不等待+输入":
-            stdinText := Data.StdIn
+            stdinText := Data.HasOwnProp("StdIn") ? Data.StdIn : ""
             GetSmartReplaceVarText(tableItem, index, &stdinText)
-            _RunCommandNoWait(target, &Data, stdinText)
+            _RunCommandNoWait(target, showWindow, Data.Encoding.In, stdinText, tableItem.Items[index])
 
         case "等待+输入输出":
             stdout := ""
             stderr := ""
-            stdinText := Data.StdIn
+            stdinText := Data.HasOwnProp("StdIn") ? Data.StdIn : ""
             GetSmartReplaceVarText(tableItem, index, &stdinText)
-            exitCode := _RunCommand(target, &Data, stdinText, &stdout, &stderr)
-            MySetGlobalVariable(Data.SaveNameArr, [exitCode, stdout, stderr], false)
+            item := tableItem.Items[index]
+            exitCode := _RunCommand(target, showWindow, Data.Encoding, stdinText, &stdout, &stderr, item)
+            if (!item.Killed)
+                MySetGlobalVariable(Data.SaveNameArr, [exitCode, stdout, stderr], false)
     }
 }
 
-_RunCommandNoWait(commandLine, &Data, stdinText) {
+_RunWaitInterruptible(target, optFlag, item) {
+    ; 直接启动的进程保留原始句柄，避免短命进程在按 PID 取句柄前退出。
+    if (target == "")
+        return 0
+    showWindow := Map("Hide", 0, "", 1, "Min", 6, "Max", 3)[optFlag]
+    verb := ""
+    action := target
+    if RegExMatch(target, "i)^(\*\S+|find|explore|open|edit|print|properties)[ \t](.*)$", &match) {
+        verb := LTrim(match[1], "*")
+        action := match[2]
+    }
+    hProcess := 0
+    if (verb == "") {
+        si := Buffer(A_PtrSize == 8 ? 104 : 68, 0)
+        NumPut("UInt", si.Size, si)
+        NumPut("UInt", 1, si, A_PtrSize == 8 ? 60 : 44) ; STARTF_USESHOWWINDOW
+        NumPut("UShort", showWindow, si, A_PtrSize == 8 ? 64 : 48)
+        pi := Buffer(A_PtrSize == 8 ? 24 : 16, 0)
+        commandLine := Buffer(StrPut(target, "UTF-16"))
+        StrPut(target, commandLine, "UTF-16")
+        if DllCall("Kernel32\CreateProcessW", "Ptr", 0, "Ptr", commandLine, "Ptr", 0, "Ptr", 0,
+            "Int", 0, "UInt", 0, "Ptr", 0, "Ptr", 0, "Ptr", si, "Ptr", pi, "Int") {
+            hProcess := NumGet(pi, 0, "Ptr")
+            DllCall("Kernel32\CloseHandle", "Ptr", NumGet(pi, A_PtrSize, "Ptr"))
+        }
+    }
+    if (!hProcess && !_RunWaitOpenShell(action, verb, showWindow, &hProcess))
+        return RunWait(target, , optFlag)
+    if (!hProcess)
+        return 0
+    try {
+        while (!item.Killed) {
+            wait := DllCall("Kernel32\WaitForSingleObject", "Ptr", hProcess, "UInt", 0, "UInt")
+            if (wait == 0) {
+                if !DllCall("Kernel32\GetExitCodeProcess", "Ptr", hProcess, "Int*", &exitCode := 0, "Int")
+                    throw OSError()
+                return exitCode
+            }
+            if (wait != 0x102) ; WAIT_TIMEOUT
+                throw OSError()
+            Sleep(25)
+        }
+    } finally DllCall("Kernel32\CloseHandle", "Ptr", hProcess)
+}
+
+_RunWaitOpenShell(action, verb, showWindow, &hProcess) {
+    file := action
+    params := ""
+    if RegExMatch(action, '^"([^"]+)" ?(.*)$', &match) {
+        file := match[1]
+        params := match[2]
+    } else {
+        split := 1
+        while (split := InStr(action, " ", false, split + 1)) {
+            candidate := SubStr(action, 1, split - 1)
+            if RegExMatch(candidate, "i)\.(exe|bat|com|cmd|hta)$")
+                || (RegExMatch(candidate, "\.[^\\/]+$") && (attributes := FileExist(candidate)) && !InStr(attributes, "D")) {
+                file := candidate
+                params := SubStr(action, split + 1)
+                break
+            }
+        }
+    }
+    info := Buffer(A_PtrSize == 8 ? 112 : 60, 0)
+    mask := 0x440 ; SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI
+    if (verb = "properties")
+        mask |= 0x0C ; SEE_MASK_INVOKEIDLIST
+    NumPut("UInt", info.Size, "UInt", mask, info)
+    NumPut("Ptr", verb == "" ? 0 : StrPtr(verb), "Ptr", StrPtr(file),
+        "Ptr", params == "" ? 0 : StrPtr(params), info, 8 + A_PtrSize)
+    NumPut("Int", showWindow, info, 8 + 5 * A_PtrSize)
+    if !DllCall("Shell32\ShellExecuteExW", "Ptr", info, "Int")
+        return false
+    hProcess := NumGet(info, info.Size - A_PtrSize, "Ptr")
+    return true
+}
+
+_RunCommandNoWait(commandLine, showWindow, encoding, stdinText, item) {
     static STARTF_USESHOWWINDOW := 0x00000001
     static STARTF_USESTDHANDLES := 0x00000100
     static CREATE_NO_WINDOW := 0x08000000
-    static HANDLE_FLAG_INHERIT := 0x00000001
 
     commandLine := Trim(commandLine)
     if (commandLine = "")
         throw Error("_RunCommandNoWait: commandLine is empty")
     commandLine := _ResolveAssociatedCommand(commandLine)
 
-    stdinRd := 0
-    stdinWr := 0
     hProcess := 0
     hThread := 0
 
@@ -474,26 +554,21 @@ _RunCommandNoWait(commandLine, &Data, stdinText) {
     piSize := (A_PtrSize = 8) ? 24 : 16
     pi := Buffer(piSize, 0)
 
+    input := RunProcessInput(sa)
     try {
-        if !DllCall("Kernel32\CreatePipe", "Ptr*", &stdinRd, "Ptr*", &stdinWr, "Ptr", sa.Ptr, "UInt", 0, "Int")
-            throw Error("CreatePipe(stdin) failed. LastError=" A_LastError)
-
-        ; 父程序保留寫入端
-        DllCall("Kernel32\SetHandleInformation", "Ptr", stdinWr, "UInt", HANDLE_FLAG_INHERIT, "UInt", 0)
-
         ; 和 RunCommand 一樣
         siFlags := STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW
         NumPut("UInt", siFlags, si, (A_PtrSize = 8) ? 60 : 44)
 
-        NumPut("UShort", Data.Option, si, (A_PtrSize = 8) ? 64 : 48)
+        NumPut("UShort", showWindow, si, (A_PtrSize = 8) ? 64 : 48)
 
         ; stdin 給子程序
-        NumPut("Ptr", stdinRd, si, (A_PtrSize = 8) ? 80 : 56)
+        NumPut("Ptr", input.readHandle, si, (A_PtrSize = 8) ? 80 : 56)
 
         ; 不指定 stdout/stderr
         ; 讓 Windows 繼承父程序設定
 
-        creationFlags := Data.Option ? 0 : CREATE_NO_WINDOW
+        creationFlags := showWindow ? 0 : CREATE_NO_WINDOW
 
         if !DllCall("Kernel32\CreateProcessW"
             , "Ptr", 0
@@ -515,23 +590,12 @@ _RunCommandNoWait(commandLine, &Data, stdinText) {
         DllCall("Kernel32\CloseHandle", "Ptr", hThread)
         hThread := 0
 
-        ; 子程序已複製 stdin handle
-        DllCall("Kernel32\CloseHandle", "Ptr", stdinRd)
-        stdinRd := 0
-
-
-        if (stdinText != "")
-            _WriteTextToPipe(stdinWr, stdinText, Data.Encoding.In)
-
-        ; EOF
-        DllCall("Kernel32\CloseHandle", "Ptr", stdinWr)
-        stdinWr := 0
+        input.StartWrite(stdinText, encoding)
+        while (!item.Killed && !input.IsComplete())
+            Sleep(25)
 
     } finally {
-        if (stdinRd)
-            DllCall("Kernel32\CloseHandle", "Ptr", stdinRd)
-        if (stdinWr)
-            DllCall("Kernel32\CloseHandle", "Ptr", stdinWr)
+        input.Close()
         if (hThread)
             DllCall("Kernel32\CloseHandle", "Ptr", hThread)
         if (hProcess)
@@ -539,7 +603,7 @@ _RunCommandNoWait(commandLine, &Data, stdinText) {
     }
 }
 
-_RunCommand(commandLine, &Data, stdinText, &stdout, &stderr) {
+_RunCommand(commandLine, showWindow, encoding, stdinText, &stdout, &stderr, item) {
     static STARTF_USESHOWWINDOW := 0x00000001
     static STARTF_USESTDHANDLES := 0x00000100
     static CREATE_NO_WINDOW := 0x08000000
@@ -551,11 +615,10 @@ _RunCommand(commandLine, &Data, stdinText, &stdout, &stderr) {
     commandLine := _ResolveAssociatedCommand(commandLine)
     stdoutRd := 0, stdoutWr := 0
     stderrRd := 0, stderrWr := 0
-    stdinRd := 0, stdinWr := 0
     hProcess := 0, hThread := 0
     exitCode := 0
-    outText := ""
-    errText := ""
+    output := {buf: Buffer(4096), size: 0}
+    errors := {buf: Buffer(4096), size: 0}
     saSize := (A_PtrSize = 8) ? 24 : 12
     sa := Buffer(saSize, 0)
     NumPut("UInt", saSize, sa, 0)
@@ -565,62 +628,58 @@ _RunCommand(commandLine, &Data, stdinText, &stdout, &stderr) {
     NumPut("UInt", siSize, si, 0)
     piSize := (A_PtrSize = 8) ? 24 : 16
     pi := Buffer(piSize, 0)
+    input := RunProcessInput(sa)
     try {
-        if !DllCall("Kernel32\CreatePipe", "Ptr*", &stdinRd, "Ptr*", &stdinWr, "Ptr", sa.Ptr, "UInt", 0, "Int")
-            throw Error("CreatePipe(stdin) failed. LastError=" A_LastError)
         if !DllCall("Kernel32\CreatePipe", "Ptr*", &stdoutRd, "Ptr*", &stdoutWr, "Ptr", sa.Ptr, "UInt", 0, "Int")
             throw Error("CreatePipe(stdout) failed. LastError=" A_LastError)
         if !DllCall("Kernel32\CreatePipe", "Ptr*", &stderrRd, "Ptr*", &stderrWr, "Ptr", sa.Ptr, "UInt", 0, "Int")
             throw Error("CreatePipe(stderr) failed. LastError=" A_LastError)
         DllCall("Kernel32\SetHandleInformation", "Ptr", stdoutRd, "UInt", HANDLE_FLAG_INHERIT, "UInt", 0)
         DllCall("Kernel32\SetHandleInformation", "Ptr", stderrRd, "UInt", HANDLE_FLAG_INHERIT, "UInt", 0)
-        DllCall("Kernel32\SetHandleInformation", "Ptr", stdinWr, "UInt", HANDLE_FLAG_INHERIT, "UInt", 0)
         siFlags := STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW
         NumPut("UInt", siFlags, si, (A_PtrSize = 8) ? 60 : 44)
-        NumPut("UShort", Data.Option, si, (A_PtrSize = 8) ? 64 : 48)
-        NumPut("Ptr", stdinRd, si, (A_PtrSize = 8) ? 80 : 56)
+        NumPut("UShort", showWindow, si, (A_PtrSize = 8) ? 64 : 48)
+        NumPut("Ptr", input.readHandle, si, (A_PtrSize = 8) ? 80 : 56)
         NumPut("Ptr", stdoutWr, si, (A_PtrSize = 8) ? 88 : 60)
         NumPut("Ptr", stderrWr, si, (A_PtrSize = 8) ? 96 : 64)
-        creationFlags := Data.Option ? 0 : CREATE_NO_WINDOW
+        creationFlags := showWindow ? 0 : CREATE_NO_WINDOW
         if !DllCall("Kernel32\CreateProcessW", "Ptr", 0, "Str", commandLine, "Ptr", 0, "Ptr", 0, "Int", 1, "UInt", creationFlags, "Ptr", 0, "Str", A_WorkingDir, "Ptr", si.Ptr, "Ptr", pi.Ptr, "Int")
             throw Error("CreateProcessW failed. LastError=" A_LastError)
         hProcess := NumGet(pi, 0, "Ptr")
         hThread := NumGet(pi, A_PtrSize, "Ptr")
         DllCall("Kernel32\CloseHandle", "Ptr", hThread)
         hThread := 0
-        DllCall("Kernel32\CloseHandle", "Ptr", stdinRd)
-        stdinRd := 0
         DllCall("Kernel32\CloseHandle", "Ptr", stdoutWr)
         stdoutWr := 0
         DllCall("Kernel32\CloseHandle", "Ptr", stderrWr)
         stderrWr := 0
-        if (stdinText != "")
-            _WriteTextToPipe(stdinWr, stdinText, Data.Encoding.In)
-        DllCall("Kernel32\CloseHandle", "Ptr", stdinWr)
-        stdinWr := 0
+        input.StartWrite(stdinText, encoding.In)
         loop {
-            outText .= _DrainPipe(stdoutRd, Data.Encoding.Out)
-            errText .= _DrainPipe(stderrRd, Data.Encoding.Err)
+            if (item.Killed)
+                return
+            input.IsComplete()
+            _DrainPipe(stdoutRd, output)
+            _DrainPipe(stderrRd, errors)
             wait := DllCall("Kernel32\WaitForSingleObject", "Ptr", hProcess, "UInt", 50, "UInt")
-            if (wait != WAIT_TIMEOUT) {
-                outText .= _DrainPipe(stdoutRd, Data.Encoding.Out)
-                errText .= _DrainPipe(stderrRd, Data.Encoding.Err)
+            if (wait == 0) {
+                _DrainPipe(stdoutRd, output)
+                _DrainPipe(stderrRd, errors)
                 break
             }
+            if (wait != WAIT_TIMEOUT)
+                throw OSError()
+            Sleep(-1)
         }
         if !DllCall("Kernel32\GetExitCodeProcess", "Ptr", hProcess, "UInt*", &exitCode := 0, "Int")
             throw Error("GetExitCodeProcess failed. LastError=" A_LastError)
-        stdout := outText
-        stderr := errText
+        stdout := _DecodePipe(output, encoding.Out)
+        stderr := _DecodePipe(errors, encoding.Err)
 
     } catch as e {
         throw e
 
     } finally {
-        if (stdinRd)
-            DllCall("Kernel32\CloseHandle", "Ptr", stdinRd)
-        if (stdinWr)
-            DllCall("Kernel32\CloseHandle", "Ptr", stdinWr)
+        input.Close()
         if (stdoutRd)
             DllCall("Kernel32\CloseHandle", "Ptr", stdoutRd)
         if (stdoutWr)
@@ -637,44 +696,108 @@ _RunCommand(commandLine, &Data, stdinText, &stdout, &stderr) {
     return exitCode
 }
 
-_WriteTextToPipe(hPipe, text, encoding) {
-    if (!hPipe || text = "")
-        return
-    byteCount := StrPut(text, encoding) - 1
-    if (byteCount <= 0)
-        return
-    buf := Buffer(byteCount + 8, 0)
-    StrPut(text, buf, encoding)
-    totalWritten := 0
-    while (totalWritten < byteCount) {
-        written := 0
-        ok := DllCall("Kernel32\WriteFile", "Ptr", hPipe, "Ptr", buf.Ptr + totalWritten, "UInt", byteCount - totalWritten, "UInt*", &written, "Ptr", 0, "Int")
-        if (!ok || written <= 0)
-            break
-        totalWritten += written
+class RunProcessInput {
+    readHandle := 0
+    writeHandle := 0
+    pending := false
+
+    __New(inheritSecurity) {
+        static pipeOpenMode := 0x40080002 ; OVERLAPPED | FIRST_PIPE_INSTANCE | OUTBOUND
+        static pipeMode := 8 ; PIPE_REJECT_REMOTE_CLIENTS
+        name := "\\.\pipe\RMT.RunInput." ProcessExist() "." Random(1, 0x7fffffff)
+        this.overlapped := Buffer(A_PtrSize == 8 ? 32 : 20, 0)
+        ; 管道仅对所有者开放，子进程通过继承的句柄读取。
+        if !DllCall("Advapi32\ConvertStringSecurityDescriptorToSecurityDescriptorW", "Str", "D:P(A;;GA;;;OW)",
+            "UInt", 1, "Ptr*", &descriptor := 0, "Ptr", 0, "Int")
+            throw OSError()
+        try {
+            security := Buffer(A_PtrSize == 8 ? 24 : 12, 0)
+            NumPut("UInt", security.Size, security)
+            NumPut("Ptr", descriptor, security, A_PtrSize == 8 ? 8 : 4)
+            handle := DllCall("Kernel32\CreateNamedPipeW", "Str", name, "UInt", pipeOpenMode,
+                "UInt", pipeMode, "UInt", 1, "UInt", 4096, "UInt", 0, "UInt", 0, "Ptr", security, "Ptr")
+            if (handle == -1)
+                throw OSError()
+        } finally DllCall("Kernel32\LocalFree", "Ptr", descriptor, "Ptr")
+        this.writeHandle := handle
+        handle := DllCall("Kernel32\CreateFileW", "Str", name, "UInt", 0x80000000, "UInt", 0,
+            "Ptr", inheritSecurity, "UInt", 3, "UInt", 0, "Ptr", 0, "Ptr")
+        if (handle == -1) {
+            error := OSError()
+            this.Close()
+            throw error
+        }
+        this.readHandle := handle
+    }
+
+    StartWrite(text, encoding) {
+        DllCall("Kernel32\CloseHandle", "Ptr", this.readHandle)
+        this.readHandle := 0
+        if (text != "") {
+            this.buffer := Buffer(StrPut(text, encoding))
+            StrPut(text, this.buffer, encoding)
+            length := this.buffer.Size - _PipeCharacterSize(encoding)
+            ; 重叠写入允许在子进程不读取时处理终止，也能同时读取输出。
+            if !DllCall("Kernel32\WriteFile", "Ptr", this.writeHandle, "Ptr", this.buffer,
+                "UInt", length, "Ptr", 0, "Ptr", this.overlapped, "Int")
+                this.pending := A_LastError == 997 ; ERROR_IO_PENDING
+        }
+        if (!this.pending)
+            this.Close()
+    }
+
+    IsComplete() {
+        if (!this.pending)
+            return true
+        if (!this.GetResult(false) && A_LastError == 996) ; ERROR_IO_INCOMPLETE
+            return false
+        this.pending := false
+        this.Close()
+        return true
+    }
+
+    GetResult(wait) {
+        return DllCall("Kernel32\GetOverlappedResult", "Ptr", this.writeHandle,
+            "Ptr", this.overlapped, "UInt*", &written := 0, "Int", wait, "Int")
+    }
+
+    Close() {
+        if (this.pending) {
+            DllCall("Kernel32\CancelIoEx", "Ptr", this.writeHandle, "Ptr", this.overlapped)
+            this.GetResult(true)
+            this.pending := false
+        }
+        if (this.readHandle) {
+            DllCall("Kernel32\CloseHandle", "Ptr", this.readHandle)
+            this.readHandle := 0
+        }
+        if (this.writeHandle) {
+            DllCall("Kernel32\CloseHandle", "Ptr", this.writeHandle)
+            this.writeHandle := 0
+        }
     }
 }
 
-_DrainPipe(hPipe, encoding) {
-    if (!hPipe)
-        return ""
-    out := ""
-    buf := Buffer(4096, 0)
-    loop {
-        avail := 0
-        if !DllCall("Kernel32\PeekNamedPipe", "Ptr", hPipe, "Ptr", 0, "UInt", 0, "Ptr", 0, "UInt*", &avail, "Ptr", 0, "Int")
-            break
-        if (avail <= 0)
-            break
-        toRead := (avail > buf.Size) ? buf.Size : avail
-        bytesRead := 0
-        if !DllCall("Kernel32\ReadFile", "Ptr", hPipe, "Ptr", buf.Ptr, "UInt", toRead, "UInt*", &bytesRead, "Ptr", 0, "Int")
-            break
-        if (bytesRead <= 0)
-            break
-        out .= StrGet(buf.Ptr, bytesRead, encoding)
-    }
-    return out
+_DrainPipe(hPipe, result) {
+    if !DllCall("Kernel32\PeekNamedPipe", "Ptr", hPipe, "Ptr", 0, "UInt", 0, "Ptr", 0, "UInt*", &available := 0, "Ptr", 0, "Int")
+        return
+    if (!available)
+        return
+    required := result.size + available
+    if (required > result.buf.Size)
+        result.buf.Size := Max(required, result.buf.Size * 2)
+    if DllCall("Kernel32\ReadFile", "Ptr", hPipe, "Ptr", result.buf.Ptr + result.size,
+        "UInt", available, "UInt*", &bytesRead := 0, "Ptr", 0, "Int")
+        result.size += bytesRead
+}
+
+_PipeCharacterSize(encoding) {
+    return (encoding = "UTF-16" || encoding = "UTF-16-RAW" || encoding = "CP1200") ? 2 : 1
+}
+
+_DecodePipe(result, encoding) {
+    length := result.size // _PipeCharacterSize(encoding)
+    return length ? StrGet(result.buf, length, encoding) : ""
 }
 
 _ResolveAssociatedCommand(commandLine) {
@@ -920,13 +1043,13 @@ OnMMProOnce(tableItem, index, Data) {
         if (action == "拖拽" && MoveMode == "绝对移动") {
             CoordMode("Mouse", "Screen")
             MouseGetPos(&startX, &startY)
-            return MouseDragByStrategy(keyMode, MoveMode, startX, startY, PosX, PosY, Speed, IsHumanMouse)
+            return MouseDragByStrategy(tableItem, index, keyMode, MoveMode, startX, startY, PosX, PosY, Speed, IsHumanMouse)
         }
-        return MouseDragByStrategy(keyMode, MoveMode, PosX, PosY, EndX, EndY, Speed, IsHumanMouse)
+        return MouseDragByStrategy(tableItem, index, keyMode, MoveMode, PosX, PosY, EndX, EndY, Speed, IsHumanMouse)
     }
 
     clickCount := (action == "移动") ? 0 : (action == "移动后单击" ? 1 : 2)
-    MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, clickCount, IsHumanMouse)
+    MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, clickCount, IsHumanMouse, GetItemByIndex(tableItem, index))
 }
 
 ; §20 增量移动指令（原移动Pro-游戏视角拆出）：X/Y 相对位移，固定走 mouse_event，与按键类型无关
@@ -967,14 +1090,14 @@ OnDeltaMove(tableItem, cmd, index) {
             return
         dX := GetFloatValue(dX, MainSoftData.CoordXFloat)
         dY := GetFloatValue(dY, MainSoftData.CoordYFloat)
-        ; DeltaX/DeltaY 是本次总偏移，按次数拆成等量步骤执行。
-        MouseMoveGameViewByKeyMode(keyMode, dX / cnt, dY / cnt, 100)
+        ; DeltaX/DeltaY 是本次总偏移，分步取整后仍需保留总量。
+        MouseMoveGameViewByKeyMode(keyMode, DeltaMoveStep(dX, cnt, A_Index), DeltaMoveStep(dY, cnt, A_Index), 100)
 
         if (A_Index != cnt) {
             hasInterval := TryGetTabVarValue(&iv, tableItem, index, interval)
             if (!hasInterval)
                 return
-            Sleep(GetFloatTime(iv, MainSoftData.PreIntervalFloat))
+            InterruptibleSleep(tableItem, index, GetFloatTime(iv, MainSoftData.PreIntervalFloat), false)
         }
     }
 }
@@ -993,9 +1116,8 @@ OnOutput(tableItem, cmd, index) {
         SendMode(savedMode)
     }
     else if (Data.OutputType == "粘贴内容") {    ;粘贴文本
-        SetClipboard(Content)
-        ClipWait
-        Send "{Blind}^v"
+        if (Content != "" && SetClipboard(Content))
+            Send "{Blind}^v"
     }
     else if (Data.OutputType == "临时提示") {    ;提示
         MyOutputTipContent(Content)
@@ -1282,7 +1404,7 @@ OnExVariable(tableItem, cmd, index) {
             InterruptibleSleep(tableItem, index, FloatInterval)
             return [cmd]
         }
-        return true
+        return
     } else {
         loop Data.SearchCount {
             WaitIfPaused(tableItem, index)
@@ -1306,10 +1428,10 @@ OnExVariableOnce(tableItem, index, Data) {
     TextObjs := []
     switch CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) {
         case "屏幕":
-            if (!TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
-             || !TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
-             || !TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
-             || !TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY))
+            if (!TryGetTabVarValue(&X1, tableItem, index, Data.StartPosX)
+             || !TryGetTabVarValue(&Y1, tableItem, index, Data.StartPosY)
+             || !TryGetTabVarValue(&X2, tableItem, index, Data.EndPosX)
+             || !TryGetTabVarValue(&Y2, tableItem, index, Data.EndPosY))
                 return false
             TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
             if (TextObjs == "")
@@ -1321,10 +1443,10 @@ OnExVariableOnce(tableItem, index, Data) {
             TextObjs := [{ Text: A_Clipboard }]
 
         case "窗口":
-            if (!TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
-             || !TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
-             || !TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
-             || !TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY))
+            if (!TryGetTabVarValue(&X1, tableItem, index, Data.StartPosX)
+             || !TryGetTabVarValue(&Y1, tableItem, index, Data.StartPosY)
+             || !TryGetTabVarValue(&X2, tableItem, index, Data.EndPosX)
+             || !TryGetTabVarValue(&Y2, tableItem, index, Data.EndPosY))
                 return false
             hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.WinInfo))   ; §22 绑定窗口替换
             for hwnd in hwndList {
@@ -1389,9 +1511,6 @@ OnBGMouse(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
-    WM_DOWN_ARR := [0x201, 0x207, 0x204]    ;左键，中键，右键
-    WM_UP_ARR := [0x202, 0x208, 0x205]    ;左键，中键，右键
-    WM_DCLICK_ARR := [0x203, 0x209, 0x206]    ;左键，中键，右键
     hasPosVarX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosVarX)
     hasPosVarY := TryGetTabVarValue(&PosY, tableItem, index, Data.PosVarY)
     if (!hasPosVarX || !hasPosVarY) {
@@ -1400,64 +1519,79 @@ OnBGMouse(tableItem, cmd, index) {
     PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
     hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.TargetTitle))   ; §22 绑定窗口替换
+    item := GetItemByIndex(tableItem, index)
     loop hwndList.Length {
+        if (item && item.Killed)
+            return
         hwnd := hwndList[A_Index]
         ; 点击位置（窗口客户区坐标）
         lParam := (PosY << 16) | (PosX & 0xFFFF)
 
         mouseBtn := CmdEnumZh(Data.MouseType, CmdEnumMouseBtnNames())
         if (mouseBtn == "滚轮") {
-            if (Data.ScrollV != 0) {
-                value := 120 * Data.ScrollV
-                PostMessage(0x020A, (value << 16), lParam, , "ahk_id " hwnd)
-            }
-            else if (Data.ScrollH != 0) {
-                value := 120 * Data.ScrollH
-                PostMessage(0x020E, (value << 16), lParam, , "ahk_id " hwnd)
-            }
-            return
+            scroll := Data.ScrollV != 0 ? Data.ScrollV : Data.ScrollH
+            if (scroll == 0)
+                continue
+            WinGetClientPos(&clientX, &clientY, , , "ahk_id " hwnd)
+            wheelPoint := ((clientY + PosY) << 16) | ((clientX + PosX) & 0xFFFF)
+            PostMessage(Data.ScrollV != 0 ? 0x020A : 0x020E, (120 * scroll) << 16, wheelPoint, , "ahk_id " hwnd)
+            continue
         }
 
         btnIdx := Map("左键", 1, "中键", 2, "右键", 3).Get(mouseBtn, 1)
         oper := CmdEnumZh(Data.OperateType, CmdEnumBgOperNames())
-        if (oper == "点击") {
-            PostMessage WM_DOWN_ARR[btnIdx], 1, lParam, , "ahk_id " hwnd
-            Sleep Data.ClickTime
-            PostMessage WM_UP_ARR[btnIdx], 0, lParam, , "ahk_id " hwnd
-        }
-        else if (oper == "双击") {
-            PostMessage WM_DCLICK_ARR[btnIdx], 1, lParam, , "ahk_id " hwnd
-            Sleep Data.ClickTime
-            PostMessage WM_UP_ARR[btnIdx], 0, lParam, , "ahk_id " hwnd
+        if (oper == "点击" || oper == "双击") {
+            loop (oper == "双击" ? 2 : 1) {
+                SendBGMouseButton(hwnd, btnIdx, true, lParam, tableItem, index, A_Index == 2)
+                InterruptibleSleep(tableItem, index, Data.ClickTime, false)
+                if (item && item.Killed)
+                    return
+                SendBGMouseButton(hwnd, btnIdx, false, lParam, tableItem, index)
+            }
         }
         else if (oper == "按下") {
-            PostMessage WM_DOWN_ARR[btnIdx], 1, lParam, , "ahk_id " hwnd
+            SendBGMouseButton(hwnd, btnIdx, true, lParam, tableItem, index)
         }
         else if (oper == "松开") {
-            PostMessage WM_UP_ARR[btnIdx], 0, lParam, , "ahk_id " hwnd
+            SendBGMouseButton(hwnd, btnIdx, false, lParam, tableItem, index)
         }
+    }
+}
+
+SendBGMouseButton(hwnd, button, down, point, tableItem, index, doubleClick := false) {
+    static downMessages := [0x201, 0x207, 0x204], upMessages := [0x202, 0x208, 0x205]
+    static doubleMessages := [0x203, 0x209, 0x206], flags := [0x01, 0x10, 0x02]
+    bucket := GetHoldBucket(tableItem, index)
+    trackedKey := "BGMouse:" hwnd ":" button
+    if (down) {
+        PostMessage(doubleClick ? doubleMessages[button] : downMessages[button], flags[button], point, , "ahk_id " hwnd)
+        TrackDown(bucket, trackedKey, "BGMouse:" point, tableItem, index)
+    } else {
+        try PostMessage(upMessages[button], 0, point, , "ahk_id " hwnd)
+        finally TrackUp(bucket, trackedKey, tableItem, index)
     }
 }
 
 OnBGKey(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
-    loop Data.ClickCount {
+    click := CmdEnumKeyAct(Data.Type) == "点击"
+    count := click ? Data.ClickCount : 1
+    loop count {
         WaitIfPaused(tableItem, index)
 
         item := tableItem.Items[index]
         if (item && item.Killed)
             break
 
-        FloatHold := GetFloatTime(Data.ClickTime, MainSoftData.HoldFloat)
-        FloatInterval := GetFloatTime(Data.ClickInterval, MainSoftData.PreIntervalFloat)
-        SendBGKey(Data, tableItem, index)
-        if (CmdEnumKeyAct(Data.Type) == "点击" && A_Index != Data.ClickCount)
-            Sleep(FloatInterval)
+        hold := click ? GetFloatTime(Data.ClickTime, MainSoftData.HoldFloat) : 0
+        SendBGKey(Data, tableItem, index, hold)
+        if (click && A_Index != count)
+            InterruptibleSleep(tableItem, index, GetFloatTime(Data.ClickInterval, MainSoftData.PreIntervalFloat))
     }
 }
 
-SendBGKey(Data, tableItem, index) {
+SendBGKey(Data, tableItem, index, holdTime) {
     hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.FrontStr))   ; §22 绑定窗口替换
 
     keyAct := CmdEnumKeyAct(Data.Type)
@@ -1471,7 +1605,10 @@ SendBGKey(Data, tableItem, index) {
     }
 
     if (keyAct == "点击") {
-        Sleep(Data.ClickTime)
+        InterruptibleSleep(tableItem, index, holdTime)
+        item := GetItemByIndex(tableItem, index)
+        if (item && item.Killed)
+            return
     }
 
     if (keyAct == "松开" || keyAct == "点击") {
@@ -1502,22 +1639,17 @@ SendBGKeyState(hwnd, Key, state, tableItem, index) {
         return
     }
 
+    bucket := GetHoldBucket(tableItem, index)
+    trackedKey := "BGKey:" hwnd ":" Key
     if (state == 1) {
-        try {
-            PostMessage 0x100, VKCode, lParamDown, , "ahk_id " hwnd
-        }
+        try PostMessage 0x100, VKCode, lParamDown, , "ahk_id " hwnd
+        catch
+            return
+        TrackDown(bucket, trackedKey, "BGKey", tableItem, index)
     }
     else {
-        try {
-            PostMessage 0x101, VKCode, lParamUp, , "ahk_id " hwnd
-        }
-    }
-
-    if (state == 1) {
-        tableItem.Items[index].HoldKey[Key] := "Normal"
-    }
-    else {
-        tableItem.Items[index].HoldKey.Delete(Key)
+        try PostMessage 0x101, VKCode, lParamUp, , "ahk_id " hwnd
+        TrackUp(bucket, trackedKey, tableItem, index)
     }
 }
 
@@ -1545,7 +1677,7 @@ OnMouseMove(tableItem, cmd, index) {
     PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
     PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
     keyMode := GetMacroKeyMode(tableItem, index)
-    MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, 0, false)
+    MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, 0, false, GetItemByIndex(tableItem, index))
 }
 
 ; RMT 输入控制：键鼠/鼠标/键盘 启用与禁用（cmd 可为中文键或当前语言文本）
@@ -1616,17 +1748,19 @@ OnRMTCMD(tableItem, cmd, index) {
         Data := GetMacroCMDData(paramArr[1])
         cmdStr := Data.CmdStr
         category := Data.HasOwnProp("Category") ? Data.Category : GetLang("全部")
-        if (cmdStr == GetLang("显示菜单"))
-            cmdStr .= "_" (Data.HasOwnProp("MenuIndex") ? Data.MenuIndex : 1)
+        if (GetLangKey(cmdStr) == "显示菜单")
+            cmdStr .= "⫶" (Data.HasOwnProp("MenuIndex") ? Data.MenuIndex : 1)
         ; §2 禁用模块/取消禁用模块：附加目标表符号 + 模块路径身份（⫶ 分隔，执行端按段取参）
         if ((cmdStr == GetLang("禁用模块") || cmdStr == GetLang("取消禁用模块"))
             && Data.HasOwnProp("TableSymbol") && Data.TableSymbol != "")
             cmdStr .= "⫶" Data.TableSymbol "⫶" Data.FoldID
         cmd := "RMT指令⫶" category "⫶" cmdStr
     } else {
+        if (paramArr.Length < 3)
+            return
         cmdStr := paramArr[3]
-        if (cmdStr == GetLang("显示菜单") && paramArr.Length >= 5)
-            cmdStr .= "_" paramArr[4]
+        if (GetLangKey(cmdStr) == "显示菜单" && paramArr.Length < 4)
+            cmd .= "_1"
         cmd := StrReplace(cmd, "_", "⫶")
     }
     if (ApplyRmtInputControl(cmdStr))
@@ -1777,7 +1911,7 @@ OnPressKey(tableItem, cmd, index) {
         FloatInterval := GetFloatTime(intervalTime, MainSoftData.PreIntervalFloat)
         SendKeyWrapper(keyName, FloatHold, tableItem, index, keyType, action)
         if (CmdEnumKeyAct(keyType) == "点击" && A_Index != count && FloatInterval > 0)
-            Sleep(FloatInterval)
+            InterruptibleSleep(tableItem, index, FloatInterval, false)
     }
 }
 
@@ -2370,6 +2504,8 @@ ApplyKeyCheckResult(Data, isJoy := false) {
 
 IsCheckKeyPressed(key, stateMode, axisCmp := 2, isJoy := false) {
     global MySoftData
+    if (key == "逗号")
+        key := ","
     if (RegExMatch(key, "^(?:JoyAxis)?(L[XY]|R[XY]|LT|RT):(-?[0-9]+)$", &am))
         return IsJoyAxisCompare(am[1], Integer(am[2]), axisCmp)
 
@@ -2381,6 +2517,10 @@ IsCheckKeyPressed(key, stateMode, axisCmp := 2, isJoy := false) {
         "上", "JoyDpadUp", "下", "JoyDpadDown", "左", "JoyDpadLeft", "右", "JoyDpadRight",
         "无方向", "JoyDpadNone", "无", "JoyDpadNone")
     inn := isJoy && shortMap.Has(key) ? shortMap[key] : key
+
+    if (isJoy && (stateMode != "P" || InStr(inn, "JoyDpad") == 1)
+        && TryCheckXInputJoyButton(inn, &xinputPressed))
+        return xinputPressed
 
     if (inn == "JoyDpadNone")
         return IsJoyPovCentered()
@@ -2399,10 +2539,19 @@ IsCheckKeyPressed(key, stateMode, axisCmp := 2, isJoy := false) {
             return IsPhysicalKeyPressed(ahkKey)
     }
 
-    try
-        return stateMode == "" ? !!GetKeyState(key) : !!GetKeyState(key, stateMode)
-    catch
+    try {
+        if (stateMode != "")
+            return !!GetKeyState(key, stateMode)
+        vk := GetKeyVK(key)
+        if (!vk || MySoftData.OnlyDownKeyMap.Has(key))
+            return false
+        ; GetKeyState 的逻辑状态跟随线程消息队列，后台 Worker 需直接查询当前桌面。
+        if ((vk == 1 || vk == 2) && DllCall("GetSystemMetrics", "Int", 23, "Int"))
+            vk := 3 - vk
+        return DllCall("GetAsyncKeyState", "Int", vk, "Short") < 0
+    } catch {
         return false
+    }
 }
 
 IsJoyPovAt(target) {
@@ -2417,16 +2566,13 @@ IsJoyPovAt(target) {
 }
 
 IsJoyPovCentered() {
-    found := false
     loop 4 {
         try {
-            pov := GetKeyState(A_Index "JoyPOV")
-            found := true
-            if (pov == "" || pov == -1)
+            if (InStr(GetKeyState(A_Index "JoyInfo"), "P") && GetKeyState(A_Index "JoyPOV") == -1)
                 return true
         }
     }
-    return !found
+    return false
 }
 
 IsJoyAxisCompare(name, stored, cmpType) {
@@ -2435,38 +2581,71 @@ IsJoyAxisCompare(name, stored, cmpType) {
     if (ahkAxis == "")
         return false
     isTrig := (name == "LT" || name == "RT")
+    compare := CmdEnumJoyCheck(cmpType, true)
+    axis := StrLower(name)
+    matches := MatchXInputJoyState((state) => JoyAxisMatches(
+        isTrig ? Round(state.%axis% * 100 / 255) : state.%axis%, stored, compare), &hasXInput)
+    if (hasXInput)
+        return matches
     loop 4 {
         try {
             raw := GetKeyState(A_Index ahkAxis)
             if (!IsNumber(raw))
                 continue
             cur := isTrig ? Integer(raw) : Integer((Float(raw) - 50) * 2)
-            switch CmdEnumJoyCheck(cmpType, true) {
-                case "大于设定值":
-                    if (cur > stored)
-                        return true
-                case "大于等于":
-                    if (cur >= stored)
-                        return true
-                case "等于设定值":
-                    if (cur == stored)
-                        return true
-                case "小于等于":
-                    if (cur <= stored)
-                        return true
-                case "小于设定值":
-                    if (cur < stored)
-                        return true
-                default:
-                    if (cur >= stored)
-                        return true
-            }
+            if (JoyAxisMatches(cur, stored, compare))
+                return true
         }
     }
     return false
 }
 
+MatchXInputJoyState(predicate, &connected) {
+    connected := false
+    if (MainSoftData.JoyType == "DS4")
+        return false
+    loop 4 {
+        state := JoyXInputEx(A_Index - 1)
+        if (!state)
+            continue
+        connected := true
+        if (predicate.Call(state))
+            return true
+    }
+    return false
+}
+
+TryCheckXInputJoyButton(key, &pressed) {
+    static buttons := Map("JoyA", 0x1000, "JoyB", 0x2000, "JoyX", 0x4000, "JoyY", 0x8000,
+        "JoyLB", 0x100, "JoyRB", 0x200, "JoyBack", 0x20, "JoyStart", 0x10, "JoyLS", 0x40, "JoyRS", 0x80)
+    static directions := Map("JoyDpadUp", 1, "JoyDpadDown", 2, "JoyDpadLeft", 4, "JoyDpadRight", 8, "JoyDpadNone", 0)
+    if (buttons.Has(key)) {
+        bit := buttons[key]
+        pressed := MatchXInputJoyState((state) => !!(state.wButtons & bit), &connected)
+    } else if (directions.Has(key)) {
+        direction := directions[key]
+        pressed := MatchXInputJoyState((state) => (state.wButtons & 0xF) == direction, &connected)
+    } else if (key == "JoyLT" || key == "JoyRT") {
+        axis := key == "JoyLT" ? "lt" : "rt"
+        pressed := MatchXInputJoyState((state) => state.%axis% >= 30, &connected)
+    } else {
+        return false
+    }
+    return connected
+}
+
+JoyAxisMatches(value, target, compare) {
+    switch compare {
+        case "大于设定值": return value > target
+        case "等于设定值": return value == target
+        case "小于等于": return value <= target
+        case "小于设定值": return value < target
+        default: return value >= target
+    }
+}
+
 OnScreenShot(tableItem, cmd, index) {
+    static processId := DllCall("GetCurrentProcessId", "UInt"), shotSequence := 0
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
@@ -2497,11 +2676,15 @@ OnScreenShot(tableItem, cmd, index) {
     }
 
     baseDir := ProjectRootDir "\Setting\" MySoftData.CurSettingName "\Images\TempShot"
-    if (!DirExist(baseDir) && !DirCreate(baseDir)) {
+    if (!DirExist(baseDir))
+        try DirCreate(baseDir)
+    if (!DirExist(baseDir)) {
         ; 安装目录（如 Program Files）无写权限时，回退到用户临时目录
         baseDir := A_Temp "\RMT_TempShot\" MySoftData.CurSettingName
         ShotDebugLog(Format("主 TempShot 目录不可用，回退到：{}", baseDir))
-        if (!DirExist(baseDir) && !DirCreate(baseDir)) {
+        if (!DirExist(baseDir))
+            try DirCreate(baseDir)
+        if (!DirExist(baseDir)) {
             ShotDebugLog(Format("回退 TempShot 目录创建失败：{}", baseDir))
             return
         }
@@ -2510,7 +2693,7 @@ OnScreenShot(tableItem, cmd, index) {
     if (CmdEnumNameType(Data.NameType) == "固定名称" && Data.FixedName != "") {
         fileName := Data.FixedName ".png"
     } else {
-        fileName := Data.SerialStr "-" A_Now ".png"
+        fileName := Format("{}-{}-{:03}-{}-{}.png", Data.SerialStr, A_Now, A_MSec, processId, ++shotSequence)
     }
 
     filePath := baseDir "\" fileName

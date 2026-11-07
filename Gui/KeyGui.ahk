@@ -447,14 +447,24 @@ class KeyGui {
             return false
         }
 
-        if (!IsInteger(this.ui.Query("KeyCountCon")) || Integer(this.ui.Query("KeyCountCon")) <= 0) {
+        return this._KeyTypeIndex() != "点击" || KeyGui.CheckClickParameters(this.ui)
+    }
+
+    static CheckClickParameters(ui) {
+        count := ui.Query("KeyCountCon")
+        hold := ui.Query("HoldTimeCon")
+        if (!IsInteger(count) || count < 1) {
             RmtDialog.Info(GetLang("按键次数必须为大于零的整数！"))
             return false
         }
-
-        if (this._KeyTypeIndex() == "点击") {
-            if (IsFloat(this.ui.Query("HoldTimeCon")) || this.ui.Query("HoldTimeCon") < 0) {
-                RmtDialog.Info(GetLang("按键时间请输入大于0的整数"))
+        if (!IsInteger(hold) || hold < 0) {
+            RmtDialog.Info(GetLang("按键时间请输入大于0的整数"))
+            return false
+        }
+        if (count > 1) {
+            interval := ui.Query("PerIntervalCon")
+            if (!IsInteger(interval) || interval < 0) {
+                RmtDialog.Info(GetLang("每次间隔时间只能是整数！！"))
                 return false
             }
         }

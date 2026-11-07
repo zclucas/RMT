@@ -359,8 +359,9 @@ class WorkPool {
             return
         item.GraphBranchCount := 0
 
-        ; 1) 标记终止：主进程 Killed（供 FINISH 时判定终态 3）+ ST 通知 Worker 侧置 Killed 并松开按键
-        KillTableItemMacro(tableItem, itemIndex)
+        ; 协作终止由 Worker 松键，主进程在 Worker 停止后释放剩余按键。
+        item.Killed := true
+        item.ToggleState := false
 
         if (MainSoftData.MacroStopType == 2) {
             ; 强制终止：直接杀进程重建，不等待 Worker 协作退出
@@ -395,6 +396,7 @@ class WorkPool {
             }
         }
 
+        ReleaseTableItemHoldKeys(tableItem, itemIndex)
         item.IsWorkIndex := 0
         SetTableItemState(tableItem, itemIndex, 3)
         ; 强停时 Worker 侧走不到后置钩子（进程被杀，或分支没机会收尾），由主进程补派。

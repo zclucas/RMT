@@ -23,10 +23,10 @@ class HumanMouse {
         return HumanMouse.Instance
     }
 
-    Move(targetX, targetY, speed := "") {
+    Move(targetX, targetY, speed := "", item := "") {
         if (!this.IsEnabled) {
             MouseMove(targetX, targetY, speed)
-            return
+            return true
         }
 
         if (speed != "")
@@ -39,7 +39,7 @@ class HumanMouse {
         this.AutoCalculateParams(distance)
 
         path := this.GeneratePath(startX, startY, targetX, targetY)
-        this.ExecutePath(path)
+        return this.ExecutePath(path, item)
     }
 
     AutoCalculateParams(distance) {
@@ -206,9 +206,9 @@ class HumanMouse {
         return { X: x, Y: y }
     }
 
-    ExecutePath(path) {
+    ExecutePath(path, item := "") {
         if (path.Length < 2)
-            return
+            return true
 
         totalDist := 0
         loop path.Length - 1 {
@@ -228,13 +228,18 @@ class HumanMouse {
         baseDelay := Max(1, Round(duration / path.Length))
 
         loop path.Length - 1 {
+            if (item && item.Killed)
+                return false
             current := path[A_Index]
             MouseMove(Round(current.X), Round(current.Y), 0)
             Sleep(baseDelay)
         }
 
+        if (item && item.Killed)
+            return false
         lastPoint := path[path.Length]
         MouseMove(Round(lastPoint.X), Round(lastPoint.Y), 0)
+        return true
     }
 
     SetParams(params) {

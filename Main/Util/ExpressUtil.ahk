@@ -34,6 +34,8 @@ EvaluateExpression(expr) {
 
     pos := 1
     result := ParseAddSub(tokens, &pos)
+    if (pos <= tokens.Length)
+        throw ValueError("表达式包含多余内容")
     return TrimZeros(result)
 }
 
@@ -45,7 +47,7 @@ Tokenize(expr) {
     while (pos <= len) {
         char := SubStr(expr, pos, 1)
         ; 数字
-        if (RegExMatch(char, "\d")) {
+        if (RegExMatch(char, "[\d.]")) {
             numStr := ""
             while (pos <= len && RegExMatch(SubStr(expr, pos, 1), "[\d\.]")) {
                 numStr .= SubStr(expr, pos, 1)
@@ -73,7 +75,7 @@ Tokenize(expr) {
             continue
         }
 
-        pos++
+        throw ValueError("表达式包含无效字符", , char)
     }
 
     return tokens
@@ -129,12 +131,12 @@ ParsePower(tokens, &pos) {
 
 ParseAtom(tokens, &pos) {
     if (pos > tokens.Length)
-        return 0
+        throw ValueError("表达式缺少操作数")
 
     token := tokens[pos]
 
     ; 数字
-    if (RegExMatch(token, "^[\d\.]+$")) {
+    if (IsNumber(token)) {
         pos++
         return token
     }
@@ -148,8 +150,9 @@ ParseAtom(tokens, &pos) {
     if (token == "(") {
         pos++
         value := ParseAddSub(tokens, &pos)
-        if (pos <= tokens.Length && tokens[pos] == ")")
-            pos++
+        if (pos > tokens.Length || tokens[pos] != ")")
+            throw ValueError("表达式缺少右括号")
+        pos++
         return value
     }
 
@@ -157,8 +160,9 @@ ParseAtom(tokens, &pos) {
     if (token == "⌊") {
         pos++
         value := ParseAddSub(tokens, &pos)
-        if (pos <= tokens.Length && tokens[pos] == "⌋")
-            pos++
+        if (pos > tokens.Length || tokens[pos] != "⌋")
+            throw ValueError("表达式缺少取整右括号")
+        pos++
         return Round(value)
     }
 
@@ -170,14 +174,13 @@ ParseAtom(tokens, &pos) {
         return sign * value
     }
 
-    pos++
-    return 0
+    throw ValueError("表达式包含无效操作数", , token)
 }
 
 ParseFuncCall(tokens, &pos, fname) {
     pos++  ; 跳过函数名
     if (pos > tokens.Length || tokens[pos] != "(")
-        return 0
+        throw ValueError("函数缺少左括号", , fname)
     pos++  ; 跳过 '('
 
     ; 空参：abs() 等 → 0
@@ -194,8 +197,9 @@ ParseFuncCall(tokens, &pos, fname) {
         arg2 := ParseAddSub(tokens, &pos)
         hasArg2 := true
     }
-    if (pos <= tokens.Length && tokens[pos] == ")")
-        pos++
+    if (pos > tokens.Length || tokens[pos] != ")")
+        throw ValueError("函数缺少右括号", , fname)
+    pos++
 
     switch fname {
         case "abs":

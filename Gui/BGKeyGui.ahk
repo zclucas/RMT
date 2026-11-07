@@ -358,12 +358,7 @@ class BGKeyGui {
             return false
         }
 
-        if (!IsInteger(this.ui.Query("KeyCountCon")) || Integer(this.ui.Query("KeyCountCon")) <= 0) {
-            RmtDialog.Info(GetLang("按键次数必须为大于零的整数！"))
-            return false
-        }
-
-        return true
+        return this._KeyTypeIndex() != "点击" || KeyGui.CheckClickParameters(this.ui)
     }
 
     SaveBGKeyData() {

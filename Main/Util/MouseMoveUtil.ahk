@@ -126,7 +126,7 @@ MouseClickByKeyMode(keyMode, clickCount := 1) {
 }
 
 ; 绝对移动（屏幕坐标）；speed 为界面速度 0~100
-MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false) {
+MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") {
     keyMode := Integer(keyMode)
     x := Round(x), y := Round(y)
     if (keyMode == 5)
@@ -138,8 +138,7 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false) {
     if (isHuman && keyMode != 3 && keyMode != 4 && keyMode != 5) {
         hm := HumanMouse.GetInstance()
         hm.SetParams({ IsEnabled: true, Speed: uiSpeed })
-        hm.Move(x, y)
-        return true
+        return hm.Move(x, y, , item)
     }
 
     MouseGetPos(&startX, &startY)
@@ -159,12 +158,11 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false) {
             , x - startX, y - startY, x - endX, y - endY, uiSpeed))
         return true
     }
-    MouseMove(x, y, UiSpeedToAhkSpeed(uiSpeed))
-    return true
+    return MoveAhkCursor(x, y, uiSpeed, false, item)
 }
 
 ; 相对移动；speed 为界面速度 0~100
-MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false) {
+MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") {
     keyMode := Integer(keyMode)
     x := Integer(x), y := Integer(y)
     if (keyMode == 5)
@@ -177,8 +175,7 @@ MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false) {
         MouseGetPos(&curX, &curY)
         hm := HumanMouse.GetInstance()
         hm.SetParams({ IsEnabled: true, Speed: uiSpeed })
-        hm.Move(curX + x, curY + y)
-        return true
+        return hm.Move(curX + x, curY + y, , item)
     }
 
     MouseGetPos(&startX, &startY)
@@ -198,8 +195,29 @@ MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false) {
             , startX + x, startY + y, (startX + x) - endX, (startY + y) - endY, uiSpeed))
         return true
     }
-    MouseMove(x, y, UiSpeedToAhkSpeed(uiSpeed), "R")
-    return true
+    return MoveAhkCursor(x, y, uiSpeed, true, item)
+}
+
+MoveAhkCursor(x, y, uiSpeed, relative, item) {
+    speed := UiSpeedToAhkSpeed(uiSpeed)
+    if (!item || speed == 0) {
+        MouseMove(x, y, speed, relative ? "R" : "")
+        return true
+    }
+
+    ; AHK 的慢速 MouseMove 返回前不会处理终止消息。分段后在两段之间处理消息。
+    MouseGetPos(&startX, &startY)
+    dx := relative ? x : x - startX
+    dy := relative ? y : y - startY
+    stepSize := 12 + uiSpeed
+    steps := Max(1, Ceil(Max(Abs(dx), Abs(dy)) / stepSize))
+    loop steps {
+        if (item.Killed)
+            return false
+        MouseMove(startX + Round(dx * A_Index / steps), startY + Round(dy * A_Index / steps), speed)
+        Sleep(-1)
+    }
+    return !item.Killed
 }
 
 ; 游戏视角：相对位移，仅移动不点击；固定走 mouse_event，与按键类型无关
@@ -210,11 +228,16 @@ MouseMoveGameViewByKeyMode(keyMode, x, y, speed := 90) {
     return true
 }
 
+; 相邻的累计位移相减，把舍入余量分配到各步。
+DeltaMoveStep(delta, count, step) {
+    return Round(delta * step / count) - Round(delta * (step - 1) / count)
+}
+
 ; 统一策略：移动，可选随后点击
 ; speed: 界面速度 0~100（越大越快，100 瞬移）
 ; clickCount: 0=只移动；>0=移动后左键点击次数
 ; moveMode: 绝对移动 | 相对移动 | 游戏视角（忽略 clickCount/isHuman，走游戏视角语义）
-MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHuman := false) {
+MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHuman := false, item := "") {
     keyMode := Integer(keyMode)
     moveMode := CmdEnumMoveMode(moveMode)
     clickCount := Integer(clickCount)
@@ -228,7 +251,7 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
         return false
 
     ; AHK：带点击时用 Click 一步完成（含位移），避免相对位移执行两次
-    if (clickCount > 0 && keyMode != 3 && keyMode != 4 && keyMode != 5) {
+    if (clickCount > 0 && keyMode != 3 && keyMode != 4 && keyMode != 5 && (!item || uiSpeed == 100)) {
         SendMode("Event")
         CoordMode("Mouse", "Screen")
         SetDefaultMouseSpeed(UiSpeedToAhkSpeed(uiSpeed))
@@ -240,13 +263,13 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
     }
 
     ok := (moveMode == "相对移动")
-        ? MouseMoveRelByKeyMode(keyMode, x, y, uiSpeed, isHuman && clickCount <= 0)
-        : MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, isHuman && clickCount <= 0)
+        ? MouseMoveRelByKeyMode(keyMode, x, y, uiSpeed, isHuman && clickCount <= 0, item)
+        : MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, isHuman && clickCount <= 0, item)
     if (!ok)
         return false
 
     if (clickCount > 0) {
-        if (moveMode == "相对移动")
+        if (moveMode == "相对移动" && keyMode >= 3)
             Sleep(30)
         return MouseClickByKeyMode(keyMode, clickCount)
     }
@@ -281,29 +304,31 @@ SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount :
 
 ; 拖拽统一入口：绝对模式先定位起点，相对模式从当前位置按偏移拖动。
 ; 按下后始终在 finally 松开，避免移动异常导致左键保持按下。
-MouseDragByStrategy(keyMode, moveMode, x, y, endX, endY, speed := 90, isHuman := false) {
+MouseDragByStrategy(tableItem, index, keyMode, moveMode, x, y, endX, endY, speed := 90, isHuman := false) {
     keyMode := Integer(keyMode)
     moveMode := CmdEnumMoveMode(moveMode)
     if (!EnsureMouseBackend(keyMode))
         return false
-    if (moveMode == "绝对移动" && !MouseMoveAbsByKeyMode(keyMode, x, y, speed, false))
+    item := GetItemByIndex(tableItem, index)
+    if (moveMode == "绝对移动" && !MouseMoveAbsByKeyMode(keyMode, x, y, speed, false, item))
         return false
     if (keyMode == 3 && !InitLogitechGHubNew())
         return false
     try {
-        MouseDragButtonByKeyMode(keyMode, true)
+        MouseDragButtonByKeyMode(keyMode, true, tableItem, index)
         return (moveMode == "相对移动")
-            ? MouseMoveRelByKeyMode(keyMode, x, y, speed, isHuman)
-            : MouseMoveAbsByKeyMode(keyMode, endX, endY, speed, isHuman)
+            ? MouseMoveRelByKeyMode(keyMode, x, y, speed, isHuman, item)
+            : MouseMoveAbsByKeyMode(keyMode, endX, endY, speed, isHuman, item)
     }
     finally {
-        MouseDragButtonByKeyMode(keyMode, false)
+        if (!item || !item.Killed || item.HoldKey.Has("LButton"))
+            MouseDragButtonByKeyMode(keyMode, false, tableItem, index)
     }
 }
 
-MouseDragButtonByKeyMode(keyMode, isDown) {
+MouseDragButtonByKeyMode(keyMode, isDown, tableItem, index) {
     if (keyMode == 5)
-        return ViiperInput.Key("LButton", isDown)
+        return SendViiperKey("LButton", isDown, tableItem, index)
     if (keyMode == 3)
         IbClick(isDown ? "Down" : "Up")
     else if (keyMode == 4) {
@@ -316,4 +341,9 @@ MouseDragButtonByKeyMode(keyMode, isDown) {
         SendMode("Event")
         Click(isDown ? "Down" : "Up")
     }
+    bucket := GetHoldBucket(tableItem, index)
+    if (isDown)
+        TrackDown(bucket, "LButton", keyMode == 3 ? "Logic" : keyMode == 4 ? "AHI" : "Normal", tableItem, index)
+    else
+        TrackUp(bucket, "LButton", tableItem, index)
 }

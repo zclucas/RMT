@@ -201,8 +201,8 @@ class MMProGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
+        this.ui.OnEvent("Window", "Closing", this.OnWindowClosing.Bind(this, this.ui.id))
+        this.ui.OnEvent("Window", "LoadedHwnd", this.OnWindowLoad.Bind(this, this.ui.id))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/6-移动Pro", ObjBindMethod(this, "TriggerMacro"), "!l", ObjBindMethod(this, "OnClickTargeterBtn"), ObjBindMethod(this, "SureMMPro"))
         this.ui.OnEvent("RefCombo", "SelectionChanged", ObjBindMethod(this, "OnRefChange"))
@@ -219,11 +219,14 @@ class MMProGui {
 
     }
 
-    OnWindowLoad(state, ctrl, event) {
-        XamlWin.OnLoadTheme(this.ui)
+    OnWindowLoad(id, *) {
+        if (IsObject(this.ui) && this.ui.id == id)
+            XamlWin.OnLoadTheme(this.ui)
     }
 
-    OnWindowClosing(state, ctrl, event) {
+    OnWindowClosing(id, *) {
+        if (!IsObject(this.ui) || this.ui.id != id)
+            return
         MouseMovePreview.Clear(this.ui)
         
         try this.ToggleFunc(false)
