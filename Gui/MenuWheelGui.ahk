@@ -701,7 +701,7 @@ class MenuWheelGui {
 
         ; 非开关模式：直接启动
         SetTableItemState(tableItem, macroIndex, 1)
-        OnTriggerMacroKeyAndInit(tableItem, item.Macro, macroIndex)
+        RunMacroTrigger(tableItem, item.Macro, macroIndex)
     }
 
     ; ====== 内部轮盘实现 ======

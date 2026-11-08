@@ -79,7 +79,7 @@
   - `interval`：`{"ms":3000}` 固定；`{"min":100,"max":300}` 随机区间（**必须成对给**，只给一个会报错）
   - `move`：`移动_X_Y_速度_方式`。方式 `mode`：`绝对`/`0`、`相对`/`1`、`游戏视角`/`2`；不写方式则省略（绝对）。`relative:true` 仍等价于相对
   - `rmt`：`RMT指令_类别_指令`；`action` 为「显示菜单」时再加 `menu` 序号
-  - 任意类型可加 `"disabled":true`（🚫 禁用）或 `"debug":true`（⭐ 调试起点）
+  - 任意类型可加 `"disabled":true`（🚫 禁用）或 `"debug":true`（▶ 调试起点，兼容旧配置的 ⭐）
 - 使用说明字段：`bot_name`、`config_purpose`、`operation_instructions`，须中文且结合实际配置
 - 沙盒与宿主机文件系统隔离时：不要对宿主机 `output/` 做 `cp`；用响应内 `delivery.base64` 或 `export_rmt_file`
 <!-- RMT_AI_PROMPT_END -->
@@ -152,7 +152,8 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 - **必填** `workspace_id`、`module`
 - **可选** `index`（除 `add` 外都必填）、`changes_json`、`operation`、`command_index`、`preview_only`
 - **预览**：`preview_only=true` 在临时副本试改并校验，返回修改前后结果，原工作区保留原样。
-- **撤销**：`patch_command` 应用后返回 `edited_command.undo_receipt`，在同一宏和步骤使用 `undo_patch_command`，传 `{"undo_receipt": …}`。支持预览和过期检测。
+- **编辑范围** `phase` 默认为 `body`（正文）。TOML 宏的前置和后置钩子分别用 `pre` 和 `post`。`command_index` 从所选段的第一条开始计数。
+- **撤销** `patch_command` 应用后返回 `edited_command.undo_receipt`。在同一工作区、宏、`phase` 和步骤使用 `undo_patch_command`，传 `{"undo_receipt": …}`。支持预览和过期检测。
 - **`changes_json` 额外支持**：`commands` 里全部配置型 type（自动写 DataFile）；`data_configs` / `search_configs` / `loop_configs` 等按序列码 upsert
 - **返回**：`operation`、`module`、`macro_count`、`edited_macro`、`edited_command`（指令级操作的前后对照）、`datafiles_updated`、`validation`
 
@@ -163,7 +164,7 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 | `update` | 改整条宏 | `index` | `changes` 给 `trigger_key` / `remark` / `commands` 等 |
 | `add` | 新增宏 | — | 追加到该页签末尾，`index` 忽略 |
 | `delete` | 删整条宏 | `index` | 自动前移后续宏并修 FoldInfo |
-| `update_command` | 替换一条指令 | `index`、`command_index` | `changes.command` 给新指令；**只给 `disabled`/`debug` 时仅切换 🚫/⭐ 标记、保留原指令参数** |
+| `update_command` | 替换一条指令 | `index`、`command_index` | `changes.command` 给新指令。只给 `disabled`/`debug` 时仅切换 🚫/▶ 标记，保留原指令参数 |
 | `patch_command` | 改一条指令的参数 | `index`、`command_index` | 搜索、变量、等待。原分支与共享引用保留 |
 | `undo_patch_command` | 恢复局部参数修改 | `index`、`command_index` | 传原操作返回的 `undo_receipt` |
 | `add_command` | 插入一条指令 | `index` | `command_index<=0` 或超末尾则追加；否则插到该位置之前 |
@@ -289,7 +290,7 @@ changes_json={"data_configs": {"变量1": {"CopyVariableArr": ["99", "0", "0", "
 | 字段 | 效果 | 生成结果 |
 |------|------|----------|
 | `disabled: true` | 该指令被禁用，RMT 执行时跳过 | `🚫按键_a_点击_100_1_200` |
-| `debug: true` | 标为调试起点 | `⭐间隔_500` |
+| `debug: true` | 标为调试起点 | `▶间隔_500` |
 
 #### 按键
 

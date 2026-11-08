@@ -45,13 +45,7 @@ class InputBtnXamlGui {
         return (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
     }
 
-    _EscapeXml(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _EscapeXml(s) => EscapeXamlXml(s)
 
     _WinSize() {
         switch this.Type {

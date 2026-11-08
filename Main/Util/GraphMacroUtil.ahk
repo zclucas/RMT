@@ -3,24 +3,10 @@
 global MyWorkPool := ""
 global workIndex := 0    ; 主进程占位；Worker 中由 HandleWorkOpenArg 赋实际 idx
 
-GraphPoolLogPath() {
-    return CMDLogAppDir() "\Log\GraphPool.log"
-}
-
-; 图形宏线程池调试日志（Master 行附带 Worker 池统计：闲置/忙碌/启动中/队列）
-; 使用内存缓冲 + SetTimer 异步刷新，避免磁盘IO阻塞按键处理
-global _graphPoolLogBuffer := ""
-global _graphPoolLogPath := ""
-global _graphPoolLogInitialized := false
-
 GraphPoolLog(tag, detail := "") {
     ; 归口统一日志（C 项）：GraphPool 语义归入系统日志 info 级
     msg := detail != "" ? (tag " " detail) : tag
     RMTLogSys(RMT_LV_INFO, ProcessTag(), msg)
-}
-
-FlushLogBufferAsync() {
-    ; 已归口 RMTLog（LogUtil 自带缓冲+异步刷新），此函数保留为空壳兼容旧调用
 }
 
 IsGraphNodeSerial(serialStr) {
@@ -30,10 +16,7 @@ IsGraphNodeSerial(serialStr) {
     return t == GetLangKey("图形节点") && n != ""
 }
 
-; 是否把图形分支交给线程池。主进程看设置（RMTUtil.ahk），Worker 恒为真（WorkUtil.ahk）——
-; 两套同名实现，由包含链决定，函数里不判断角色。
-
-CollectGraphBranchSerials(serialArr) {
+FilterGraphNodeSerials(serialArr) {
     out := []
     if (!IsObject(serialArr))
         return out
@@ -44,27 +27,27 @@ CollectGraphBranchSerials(serialArr) {
     return out
 }
 
-; 多后继分支调度：单分支本进程执行，多分支通知 Master 分配其余分支后本进程执行第一个
-; fromStart=true：从图形开始节点发起，设置 GraphBranchCount 并标记发起 Worker
-DispatchGraphBranches(tableItem, index, serialArr, fromStart := false) {
-    branches := CollectGraphBranchSerials(serialArr)
+; 首条后继在当前进程执行。仅在线程池可用且有多个后继时，才把其余分支交给主进程调度。
+; fromStart=true 表示整张图的入口，调度器据此初始化分支计数。后续分叉沿用已有计数。
+RunGraphSuccessors(tableItem, index, serialArr, fromStart := false) {
+    branches := FilterGraphNodeSerials(serialArr)
     if (branches.Length == 0)
         return
     if (branches.Length == 1) {
-        WalkGraphNode(tableItem, branches[1], index)
+        RunGraphNodeChain(tableItem, branches[1], index)
         return
     }
     if (!ShouldUseGraphWorkers()) {
         for b in branches
-            WalkGraphNode(tableItem, b, index)
+            RunGraphNodeChain(tableItem, b, index)
         return
     }
     ; 余下分支怎么派：主进程丢线程池、Worker 上报 Master，两份实现见 RunBranchDispatch
     RunBranchDispatch(tableItem, index, branches, fromStart)
-    WalkGraphNode(tableItem, branches[1], index)
+    RunGraphNodeChain(tableItem, branches[1], index)
 }
 
-WalkGraphNode(tableItem, nodeSerial, index) {
+RunGraphNodeChain(tableItem, nodeSerial, index) {
     who := ProcessTag()
     item := tableItem.Items[index]
     GraphPoolLog("进入节点", Format("执行者={1} tab={2} item={3} node={4}", who, tableItem.ID, index, nodeSerial))
@@ -108,22 +91,17 @@ WalkGraphNode(tableItem, nodeSerial, index) {
         }
     }
 
+    ; 节点指令及其返回的子指令跑完后，才继续逻辑后继。上面的跳转标志可提前结束这条链。
     nexts := (nodeData.HasOwnProp("NextNodeArr") && IsObject(nodeData.NextNodeArr)) ? nodeData.NextNodeArr : []
-    DispatchGraphBranches(tableItem, index, nexts, false)
+    RunGraphSuccessors(tableItem, index, nexts, false)
 }
 
-OnTriggerGraphMacro(tableItem, startSerial, index) {
+RunGraphFromStartNode(tableItem, startSerial, index) {
     startData := GetMacroCMDData(startSerial)
     if (!IsObject(startData))
         return
     nodeArr := (startData.HasOwnProp("NodeArr") && IsObject(startData.NodeArr)) ? startData.NodeArr : []
-    branches := CollectGraphBranchSerials(nodeArr)
-    ; 多分支启动时，Worker 要在本地记一份总数（RunBranchDispatch 里做，由包含链区分）
-    DispatchGraphBranches(tableItem, index, nodeArr, true)
-}
-
-; 主进程占位；Worker 中由 WrokGlobalUtil 覆盖为 WorkSubmitGraphBranches
-SubmitGraphBranchesHandler(tableIndex, itemIndex, branchCount, nodeSerialArr, *) {
+    RunGraphSuccessors(tableItem, index, nodeArr, true)
 }
 
 ; ---------- 编辑器切换辅助（逻辑树 ↔ 节点图）----------
@@ -165,7 +143,7 @@ GetMacroEditKind(macroStr) {
 
 ; 顶层图是否存在「多后继」分叉（NodeArr / NextNodeArr 长度>1，或存在 EmptyNode）。
 ; 搜索/如果的真假分支存在 TrueMacro/FalseMacro 中，不计入此处。
-HasGraphMultiBranch(startSerial) {
+GraphHasParallelOrDisconnectedNodes(startSerial) {
     if (!IsGraphStartSerial(startSerial))
         return false
     startData := GetMacroCMDData(startSerial)
@@ -208,16 +186,16 @@ HasGraphMultiBranch(startSerial) {
 
 ; 将图形开始节点压成线性宏串：只沿第一链路（NodeArr[1] → 各 NextNodeArr[1]）
 ; 并递归把循环/搜索/搜索Pro/如果/如果Pro 分支内嵌套的图形开始节点转为线性宏写回 Data
-; 多链路时非第一链路内容会丢失
-GraphStartToLinearMacro(startSerial) {
+; 该操作会写回嵌套配置。调用前应完成多链路丢失检查和用户确认。
+ConvertGraphToLinearMacroInPlace(startSerial) {
     visited := Map()
-    linear := GraphStartFlattenFirstChain(startSerial)
+    linear := FlattenFirstGraphChain(startSerial)
     ExpandNestedGraphStartsInMacro(linear, visited)
     return linear
 }
 
 ; 仅压平第一链路，不处理嵌套分支
-GraphStartFlattenFirstChain(startSerial) {
+FlattenFirstGraphChain(startSerial) {
     result := []
     if (!IsGraphStartSerial(startSerial)) {
         for cmd in SplitMacro(startSerial) {
@@ -258,7 +236,7 @@ ConvertBranchMacroToLinear(macroStr, visited) {
         if (visited.Has(macroStr))
             return visited[macroStr]
         visited[macroStr] := ""   ; 占位，防环
-        linear := GraphStartFlattenFirstChain(macroStr)
+        linear := FlattenFirstGraphChain(macroStr)
         ExpandNestedGraphStartsInMacro(linear, visited)
         visited[macroStr] := linear
         return linear
@@ -281,7 +259,7 @@ ConvertBranchMacroToLinear(macroStr, visited) {
                 }
             } else {
                 visited[clean] := ""
-                nested := GraphStartFlattenFirstChain(clean)
+                nested := FlattenFirstGraphChain(clean)
                 ExpandNestedGraphStartsInMacro(nested, visited)
                 visited[clean] := nested
                 for subCmd in SplitMacro(nested) {

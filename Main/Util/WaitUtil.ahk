@@ -84,7 +84,7 @@ OnWait(tableItem, cmd, index) {
                 break
             }
             FloatInterval := 500
-            try FloatInterval := GetFloatTime(iv, MainSoftData.PreIntervalFloat)
+            try FloatInterval := RandomizeDurationByPercent(iv, MainSoftData.PreIntervalFloat)
             if (!IsNumber(FloatInterval) || FloatInterval < 15)
                 FloatInterval := 15
             if (targetMs != "")

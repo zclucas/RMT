@@ -197,7 +197,7 @@ class TimingScheduler {
 
             shouldTrigger := true
 
-            if ((frontInfo := GetItemFrontInfo(tableItem, index)) != "") {
+            if ((frontInfo := GetItemModuleWindowBinding(tableItem, index)) != "") {
                 if (!MyMouseInfo.CheckIfMatch(frontInfo, true))
                     shouldTrigger := false
             }

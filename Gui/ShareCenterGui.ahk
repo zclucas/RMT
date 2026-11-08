@@ -1347,11 +1347,5 @@ class ShareCenterGui {
         return out
     }
 
-    _XmlEsc(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _XmlEsc(s) => EscapeXamlXml(s)
 }

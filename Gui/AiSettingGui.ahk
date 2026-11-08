@@ -53,13 +53,7 @@ class AiSettingGui {
         }
     }
 
-    _EscapeXml(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _EscapeXml(s) => EscapeXamlXml(s)
 
     _StyleCombo(ctrl) {
         h := AiSettingGui.CtrlH

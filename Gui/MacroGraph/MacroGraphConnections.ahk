@@ -21,7 +21,7 @@ class MacroGraphConnectionsMixin {
         p := this.pos[id]
         x := p.x + g.offsetX
         y := p.y + g.offsetY
-        dInj := this._Parse(node.CurCMD)
+        dInj := this._ParseNodeCommand(node.CurCMD)
         nodeType := dInj.type
         nodeTitle := this._NodeTitleText(dInj)
         nodeW := (nodeType == GetLang("搜索Pro")) ? 380 : (this._IsFormalNodeType(nodeType) ? this._FormalNodeWidth(nodeType) : 200)
@@ -32,7 +32,7 @@ class MacroGraphConnectionsMixin {
         g.ui.OnEvent("Node_" id, "SelectNode", ObjBindMethod(g, "OnSelectNode", id))
         g.ui.OnEvent("Node_" id, "CtrlSelectNode", ObjBindMethod(g, "OnCtrlSelectNode", id))
         ; 本类事件（双击编辑 + 内联字段），runtime=true 同步向引擎补绑事件与采集
-        this._RegisterMyNodeEvents(id, node, true)
+        this._BindCommandNodeEvents(id, node, true)
         ; 启用该节点拖动（稍后，待元素就绪）
         SetTimer(() => g.ui.Update("Node_" id, "EnableDrag", "grid=20"), -150)
     }
@@ -54,7 +54,7 @@ class MacroGraphConnectionsMixin {
         p := this.pos[id]
         x := p.x + g.offsetX
         y := p.y + g.offsetY
-        d := this._Parse(node.CurCMD)
+        d := this._ParseNodeCommand(node.CurCMD)
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         title := this._XmlEsc(this._NodeTitleText(d))
         detail := this._XmlEsc(this._Summary(d))
@@ -148,16 +148,11 @@ class MacroGraphConnectionsMixin {
         return raw
     }
 
-    _XmlEsc(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _XmlEsc(s) => EscapeXamlXml(s)
 
-    ; 把当前画布连线快照到 this.links（供重建时还原）
-    _CaptureLinks() {
+    ; 从画布投影提取顶层逻辑后继。展开后的分支端口、循环回环和内联子图都有各自的数据归属。
+    ; this.links 用于重建和落盘，因此只收录可执行的顶层后继。
+    _CaptureTopLevelSuccessorLinks() {
         if (this.graph == "")
             return
         newLinks := []
@@ -204,14 +199,14 @@ class MacroGraphConnectionsMixin {
 
     ; 用户新建连线后：清理旧「分支→后续」模型残留，再加粗并补绑点击
     _OnConnectionsChanged() {
-        this._NormalizeBranchConnections()
+        this._RedirectBranchSuccessorLinks()
         this._ThickenConnections()
         this._RebindPathClicks()
     }
 
     ; 连线纠正（新模型：展开时主节点仍连后续；分支仅入点、无出线）：
     ; 旧图/残留的「分支→X / 情况分支→X」译回「父→X」并停用分支出线。
-    _NormalizeBranchConnections() {
+    _RedirectBranchSuccessorLinks() {
         g := this.graph
         if (g == "")
             return

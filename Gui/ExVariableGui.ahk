@@ -45,13 +45,7 @@ class ExVariableGui {
         return (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
     }
 
-    _EscapeXml(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _EscapeXml(s) => EscapeXamlXml(s)
 
     _AddLabel(parent, text, margin := "0,0,0,0") {
         return parent.Add("TextBlock").Text(text).VerticalAlignment("Center")
@@ -422,7 +416,7 @@ class ExVariableGui {
             }
         }
 
-        ActiveLength := GetExVariableActiveLength(ToggleArr)
+        ActiveLength := GetLastEnabledExtractRow(ToggleArr)
         if (ActiveLength > 1) {
             ExtractStr := this.ui.Query("ExtractStrCon")
             ExtractStr := StrReplace(ExtractStr, "&x", "", true, &XCount)
@@ -505,7 +499,7 @@ class ExVariableGui {
             VariableValueArr := ExtractStr == "" && allText != "" ? [allText] : VariableValueArr
             if (VariableValueArr == "")
                 continue
-            if (GetExVariableActiveLength(Data.ToggleArr) > VariableValueArr.Length)
+            if (GetLastEnabledExtractRow(Data.ToggleArr) > VariableValueArr.Length)
                 continue
 
             loop VariableValueArr.Length {

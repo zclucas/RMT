@@ -7,7 +7,7 @@ class MacroGraphIfProMixin {
     _IsIfProNodeId(id) {
         if (!this.cmdNodes.Has(id))
             return false
-        return this._Parse(this.cmdNodes[id].CurCMD).type == GetLang("如果Pro")
+        return this._ParseNodeCommand(this.cmdNodes[id].CurCMD).type == GetLang("如果Pro")
     }
 
     _IsExpandedIfPro(id) {
@@ -857,7 +857,7 @@ class MacroGraphIfProMixin {
         count := this._IfProBranchCountFromId(parentId)
         loop count
             this._CollapseInlineByBrId(this._ProBranchId(parentId, A_Index - 1))
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         if (this.cmdNodes.Has(parentId)) {
             node := this.cmdNodes[parentId]
             pp := this.pos.Has(parentId) ? this.pos[parentId] : { x: 0, y: 0 }
@@ -875,7 +875,7 @@ class MacroGraphIfProMixin {
             this.ui.Update("ProBrPort_" parentId "_" (A_Index - 1), "Visibility", "Collapsed")
         for x in succ
             this._ActivateConnection(parentId, x)
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         this._SpreadForCollapse(parentId)
         this._RebindPathClicks()
     }
@@ -884,7 +884,7 @@ class MacroGraphIfProMixin {
         g := this.graph
         if (g == "")
             return
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         succ := this._SuccessorsOf(parentId)
         ; 展开：主节点仍连后续；仅显示情况分支并由主节点侧边出点连入分支
         if (!this._branchInjected.Has(parentId)) {
@@ -904,7 +904,7 @@ class MacroGraphIfProMixin {
         this._ApplyIfProPortOutVisibility(parentId)
         this._RestoreProBranchPositions(parentId)
         this._SpreadForExpand(parentId)
-        this._NormalizeBranchConnections()
+        this._RedirectBranchSuccessorLinks()
         this._RebindPathClicks()
         this._ScheduleIfProPathUpdate(parentId)
         this._ScheduleProBranchLayoutRestore(parentId)
@@ -939,7 +939,7 @@ class MacroGraphIfProMixin {
         this._ApplyIfProPortOutVisibility(id)
         this.ui.Update("SFold_" id, "Content", willFold ? "▶" : "▼")
         this.ui.Update("SFold_" id, "ToolTip", willFold ? GetLang("展开") : GetLang("收起"))
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
     }
 
     ; 分支数量变化后重建外置分支节点（ComparePro 编辑器确定后调用）
@@ -955,7 +955,7 @@ class MacroGraphIfProMixin {
             for x in succ
                 this._ActivateConnection(brId, x)
         }
-        this._NormalizeBranchConnections()
+        this._RedirectBranchSuccessorLinks()
         this._RebindPathClicks()
         this._RestoreProBranchPositions(parentId)
         this._ScheduleIfProPathUpdate(parentId)

@@ -570,7 +570,7 @@ Excel 未打开时写入会很慢。
 | `X` `Y` `Folded` | 坐标与分支折叠 |
 | `TrueBranchDX/DY` `FalseBranchDX/DY` 等 | 编辑器布局，不影响执行语义 |
 
-图形宏可多分支并行，由 Master 用 `GraphBranchCountArr` 计数，全部结束后才 `OnFinishMacro`。
+图形宏可以并行执行分支。主进程按条目的 `GraphBranchCount` 汇总完成状态，最后由 `WorkPool.FinishGraphMacroItem` 统一收尾。
 
 ---
 

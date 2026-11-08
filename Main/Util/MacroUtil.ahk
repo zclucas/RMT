@@ -1,5 +1,5 @@
-﻿;按键宏命令
-OnTriggerMacroKeyAndInit(tableItem, macro, index) {
+﻿; 一次宏触发的完整生命周期。主进程本地执行和 Worker 都从这里进入。
+RunMacroTrigger(tableItem, macro, index) {
     item := GetItemByIndex(tableItem, index)
     if (!item)
         return
@@ -10,7 +10,7 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
     item.VariableMap["宏循环次数"] := 1
     item.VariableMap["循环次数"] := 0
     ; 执行前钩子：一次触发只跑一次（不是每轮循环）。只在发起者执行——
-    ; 图形宏的分支 Worker 走 WalkGraphNode，不经本函数，天然不会重复。
+    ; 图形宏的分支 Worker 走 RunGraphNodeChain，不经本函数，天然不会重复。
     RunMacroHook(tableItem, item, "pre")
     isContinue := MySoftData.ContinueKeyMap.Has(item.TK) && item.LoopCount == 1
     isLoop := item.LoopCount == -1
@@ -35,9 +35,9 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
             }
         }
 
-        HandTipSound(tableItem, index, 1, isFirst, isLast)
-        OnTriggerMacroOnce(tableItem, macro, index)
-        HandTipSound(tableItem, index, 2, isFirst, isLast)
+        PlayMacroIterationCue(tableItem, index, 1, isFirst, isLast)
+        RunMacroBodyOnce(tableItem, macro, index)
+        PlayMacroIterationCue(tableItem, index, 2, isFirst, isLast)
 
         if (item.VariableMap["循环-跳过本轮"]) {
             item.VariableMap["循环-跳过本轮"] := false
@@ -51,21 +51,21 @@ OnTriggerMacroKeyAndInit(tableItem, macro, index) {
         item.ActionCount++
         item.VariableMap["宏循环次数"] += 1
     }
-    ; 图形宏多分支时跳过 OnFinishMacro，由 Master 的 FinishGraphMacroItem 统一释放
+    ; 图形宏多分支时跳过 FinalizeMacroRun，由 Master 的 FinishGraphMacroItem 统一释放
     skipFinish := item.GraphBranchCount > 0
     ; 执行后钩子：只在本进程独占该条目时执行。多分支场景下本 Worker 只是分支之一，
     ; 收尾由主进程 FinishGraphMacroItem 统一补派后置钩子任务，此处跳过以免跑多份。
     if (!skipFinish)
         RunMacroHook(tableItem, item, "post")
     if (!skipFinish)
-        OnFinishMacro(tableItem, macro, index)
+        FinalizeMacroRun(tableItem, macro, index)
 }
 
-OnFinishMacro(tableItem, macro, index) {
+FinalizeMacroRun(tableItem, macro, index) {
     item := GetItemByIndex(tableItem, index)
     if (!item)
         return
-    ; 开关模式下被kill终止时，补充播放循环结束提示音（类型3）
+    ; 提前终止时，补播按「末轮结束」策略配置的提示音。
     if (item.Killed && item.EndTipSound == 3)
         PlayTipSound(2)
 
@@ -76,7 +76,7 @@ OnFinishMacro(tableItem, macro, index) {
     ; 结束时兜底松开仍按住的键：仅终止或开关触发类型需要松开；
     ; 按下/松开/双击/长按正常结束时保持按键按住，不在此松开
     needRelease := item.Killed || item.TriggerType == 4
-    GraphPoolLog("OnFinishMacro", Format("tab={1} item={2} killed={3} trig={4} hold={5} needRelease={6}"
+    GraphPoolLog("FinalizeMacroRun", Format("tab={1} item={2} killed={3} trig={4} hold={5} needRelease={6}"
         , tableItem.ID, item.ID, item.Killed, item.TriggerType
         , item.HoldKey.Count, needRelease))
     if (needRelease)
@@ -87,7 +87,9 @@ OnFinishMacro(tableItem, macro, index) {
     MySetTableItemState(tableItem, index, itemState)
 }
 
-OnTriggerMacroOnce(tableItem, macro, index, preserveBranchExit := false) {
+; 执行当前条目上的一段宏。分支和循环体共享条目状态，不重新初始化触发状态或钩子。
+; 调试子段可保留「分支-跳出」，交给外层调试器消费。
+RunMacroBodyOnce(tableItem, macro, index, preserveBranchExit := false) {
     cmdArr := SplitMacro(macro)
     item := tableItem.Items[index]
 
@@ -96,6 +98,7 @@ OnTriggerMacroOnce(tableItem, macro, index, preserveBranchExit := false) {
             break
         result := ExecuteMacroCmdOnce(tableItem, cmdArr[A_Index], index)
         if (result != "") {
+            ; 处理器返回的子指令紧接当前指令执行，再继续原序列。
             cmdArr.InsertAt(A_Index + 1, result*)
         }
         if (item.VariableMap["分支-跳出"]) {
@@ -121,7 +124,7 @@ OnTriggerMacroOnce(tableItem, macro, index, preserveBranchExit := false) {
 
 ; 取一个空闲的钩子 scratch 表。用池化的原因：钩子里的「宏操作」可能触发另一个
 ; 带钩子的宏，重入时必须有独立实例，否则两者会共写同一份 VariableMap。
-GetHookTableItem() {
+AcquireMacroHookTable() {
     static pool := []
     for t in pool {
         if (!t.HookBusy) {
@@ -154,7 +157,7 @@ RunMacroHook(tableItem, item, phase, force := false) {
     if (Trim(macroStr) == "")
         return false
 
-    hookTable := GetHookTableItem()
+    hookTable := AcquireMacroHookTable()
     hookItem := hookTable.Items[1]
     who := ProcessTag()
     try {
@@ -198,16 +201,9 @@ RunMacroHook(tableItem, item, phase, force := false) {
     return true
 }
 
-; ============================================================
-; 调试步入 / 断点 共享纯函数（零 XAML 依赖；主进程与 Worker 通用）
-; 轮 1 仅启用 TryInterceptBranch（步入拦截）+ BpSig/BpStrHas（断点身份/包含判定）；
-; 不含任何阻塞式断点闸门（真实运行断点暂停属轮 2）。
-; ============================================================
-
-; 调试分支拦截：命中返回 true（仅记录命中分支、不执行分支体），由调试器接管步入。
-; 未激活（正常触发 / Worker / F5）→ 直接 false，对既有执行语义逐字节等价。
-; 注意：本函数只碰普通对象与全局变量，绝不引用任何 XAML 类名（Worker 编译安全）。
-TryInterceptBranch(kind, branchField, controlType, hitIndex := -1) {
+; 步入时记录已经选中的分支，返回 true 让调用方暂缓执行分支体。
+; 未启用调试钩子时返回 false，主进程和 Worker 都可继续直接执行分支。
+TryInterceptDebugBranch(kind, branchField, controlType, hitIndex := -1) {
     global MySoftData
     if (!IsSet(MySoftData) || !IsObject(MySoftData) || !MySoftData.HasProp("DebugHook"))
         return false
@@ -316,7 +312,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     if (SubStr(cmdStr, 1, 2) == "🚫")
         return
 
-    if (MainSoftData.CheckForeground && (frontInfo := GetItemFrontInfo(tableItem, index)) != "" && !CheckFrontWindowActive(frontInfo)) {
+    if (MainSoftData.CheckForeground && (frontInfo := GetItemModuleWindowBinding(tableItem, index)) != "" && !CheckFrontWindowActive(frontInfo)) {
         KillTableItemMacro(tableItem, index)
         return
     }
@@ -375,7 +371,7 @@ RMTGetDataErrHandle(cmdStr) {
 }
 
 OnGraphStartNode(tableItem, cmdStr, index) {
-    OnTriggerGraphMacro(tableItem, cmdStr, index)
+    RunGraphFromStartNode(tableItem, cmdStr, index)
 }
 
 ; 检查前台窗口是否还存在并处于激活状态
@@ -917,12 +913,12 @@ OnCompare(tableItem, cmd, index) {
     }
 
     ; 调试步入拦截：命中则仅判定、不执行分支体，控制类型延后到调试帧结算
-    if (TryInterceptBranch("If", result ? "TrueMacro" : "FalseMacro", result ? Data.TrueControlType : Data.FalseControlType))
+    if (TryInterceptDebugBranch("If", result ? "TrueMacro" : "FalseMacro", result ? Data.TrueControlType : Data.FalseControlType))
         return
 
     macro := result ? Data.TrueMacro : Data.FalseMacro
     if (macro != "")
-        OnTriggerMacroOnce(tableItem, macro, index)
+        RunMacroBodyOnce(tableItem, macro, index)
 
     ControlType := result ? Data.TrueControlType : Data.FalseControlType
     HandleControlType(tableItem, index, ControlType)
@@ -960,18 +956,18 @@ OnComparePro(tableItem, cmd, index) {
 
         if (result) {
             ; 调试步入拦截：命中分支，仅判定不执行体
-            if (TryInterceptBranch("IfPro", "MacroArr", ControlType, A_Index))
+            if (TryInterceptDebugBranch("IfPro", "MacroArr", ControlType, A_Index))
                 return
             if (Macro != "")
-                OnTriggerMacroOnce(tableItem, Macro, index)
+                RunMacroBodyOnce(tableItem, Macro, index)
             HandleControlType(tableItem, index, ControlType)
             return
         }
     }
     ; 调试步入拦截：默认分支（以上都不是），仅判定不执行体
-    if (TryInterceptBranch("IfPro", "DefaultMacro", Data.DefaultControlType, -1))
+    if (TryInterceptDebugBranch("IfPro", "DefaultMacro", Data.DefaultControlType, -1))
         return
-    OnTriggerMacroOnce(tableItem, Data.DefaultMacro, index)
+    RunMacroBodyOnce(tableItem, Data.DefaultMacro, index)
     HandleControlType(tableItem, index, Data.DefaultControlType)
 }
 
@@ -991,7 +987,7 @@ OnMMPro(tableItem, cmd, index) {
         if (item && item.Killed)
             return
 
-        FloatInterval := GetFloatTime(ObjHasOwnProp(Data, "Interval") ? Data.Interval : 0, MainSoftData.PreIntervalFloat)
+        FloatInterval := RandomizeDurationByPercent(ObjHasOwnProp(Data, "Interval") ? Data.Interval : 0, MainSoftData.PreIntervalFloat)
         OnMMProOnce(tableItem, index, Data)
         if (A_Index != Data.Count)
             Sleep(FloatInterval)
@@ -1010,8 +1006,8 @@ OnMMProOnce(tableItem, index, Data) {
     if (!hasPosVarX || !hasPosVarY)
         return
 
-    PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
-    PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
+    PosX := RandomizeValueByOffset(PosX, MainSoftData.CoordXFloat)
+    PosY := RandomizeValueByOffset(PosY, MainSoftData.CoordYFloat)
 
     ; 旧配置「游戏视角」已拆为「增量移动」指令，读入后仍按 mouse_event 相对位移执行
     if (MoveMode == "游戏视角")
@@ -1025,8 +1021,8 @@ OnMMProOnce(tableItem, index, Data) {
         if (!TryGetTabVarValue(&EndX, tableItem, index, Data.HasOwnProp("EndPosVarX") ? Data.EndPosVarX : 200)
             || !TryGetTabVarValue(&EndY, tableItem, index, Data.HasOwnProp("EndPosVarY") ? Data.EndPosVarY : 200))
             return
-        EndX := GetFloatValue(EndX, MainSoftData.CoordXFloat)
-        EndY := GetFloatValue(EndY, MainSoftData.CoordYFloat)
+        EndX := RandomizeValueByOffset(EndX, MainSoftData.CoordXFloat)
+        EndY := RandomizeValueByOffset(EndY, MainSoftData.CoordYFloat)
     }
 
     ; 坐标基准为窗口且绝对移动时，坐标按窗口左上角偏移（窗口信息支持 {绑定窗口}）
@@ -1094,8 +1090,8 @@ OnDeltaMove(tableItem, cmd, index) {
         hasY := TryGetTabVarValue(&dY, tableItem, index, deltaY)
         if (!hasX || !hasY)
             return
-        dX := GetFloatValue(dX, MainSoftData.CoordXFloat)
-        dY := GetFloatValue(dY, MainSoftData.CoordYFloat)
+        dX := RandomizeValueByOffset(dX, MainSoftData.CoordXFloat)
+        dY := RandomizeValueByOffset(dY, MainSoftData.CoordYFloat)
         ; DeltaX/DeltaY 是本次总偏移，分步取整后仍需保留总量。
         MouseMoveGameViewByKeyMode(keyMode, DeltaMoveStep(dX, cnt, A_Index), DeltaMoveStep(dY, cnt, A_Index), 100)
 
@@ -1103,7 +1099,7 @@ OnDeltaMove(tableItem, cmd, index) {
             hasInterval := TryGetTabVarValue(&iv, tableItem, index, interval)
             if (!hasInterval)
                 return
-            InterruptibleSleep(tableItem, index, GetFloatTime(iv, MainSoftData.PreIntervalFloat), false)
+            InterruptibleSleep(tableItem, index, RandomizeDurationByPercent(iv, MainSoftData.PreIntervalFloat), false)
         }
     }
 }
@@ -1166,9 +1162,9 @@ OnLoop(tableItem, cmd, index) {
 
             WaitIfPaused(tableItem, index)
             ; 调试步入拦截：无限循环体，仅判定不执行体
-            if (TryInterceptBranch("Loop", "LoopBody", "", A_Index))
+            if (TryInterceptDebugBranch("Loop", "LoopBody", "", A_Index))
                 return
-            OnTriggerMacroOnce(tableItem, Data.LoopBody, index)
+            RunMacroBodyOnce(tableItem, Data.LoopBody, index)
 
             if (item.VariableMap["循环-跳过本轮"]) {
                 item.VariableMap["循环-跳过本轮"] := false
@@ -1196,9 +1192,9 @@ OnLoop(tableItem, cmd, index) {
 
             WaitIfPaused(tableItem, index)
             ; 调试步入拦截：计数循环体，仅判定不执行体
-            if (TryInterceptBranch("Loop", "LoopBody", "", A_Index))
+            if (TryInterceptDebugBranch("Loop", "LoopBody", "", A_Index))
                 return
-            OnTriggerMacroOnce(tableItem, Data.LoopBody, index)
+            RunMacroBodyOnce(tableItem, Data.LoopBody, index)
 
             if (item.VariableMap["循环-跳过本轮"]) {
                 item.VariableMap["循环-跳过本轮"] := false
@@ -1406,7 +1402,7 @@ OnExVariable(tableItem, cmd, index) {
         if (item.Killed)
             return
         if (!isFound) {
-            FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
+            FloatInterval := RandomizeDurationByPercent(Data.SearchInterval, MainSoftData.PreIntervalFloat)
             InterruptibleSleep(tableItem, index, FloatInterval)
             return [cmd]
         }
@@ -1423,7 +1419,7 @@ OnExVariable(tableItem, cmd, index) {
                 return
 
             if (A_Index < Data.SearchCount) {
-                FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
+                FloatInterval := RandomizeDurationByPercent(Data.SearchInterval, MainSoftData.PreIntervalFloat)
                 InterruptibleSleep(tableItem, index, FloatInterval)
             }
         }
@@ -1468,7 +1464,7 @@ OnExVariableOnce(tableItem, index, Data) {
     allText := RTrim(allText, "`n")
 
     ExtractStr := GetReplaceVarText(tableItem, index, Data.ExtractStr)
-    activeLen := GetExVariableActiveLength(Data.ToggleArr)
+    activeLen := GetLastEnabledExtractRow(Data.ToggleArr)
 
     for _, value in TextObjs {
         VariableValueArr := ExtractVariable(value.Text, ExtractStr)
@@ -1522,8 +1518,8 @@ OnBGMouse(tableItem, cmd, index) {
     if (!hasPosVarX || !hasPosVarY) {
         return
     }
-    PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
-    PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
+    PosX := RandomizeValueByOffset(PosX, MainSoftData.CoordXFloat)
+    PosY := RandomizeValueByOffset(PosY, MainSoftData.CoordYFloat)
     hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.TargetTitle))   ; §22 绑定窗口替换
     item := GetItemByIndex(tableItem, index)
     loop hwndList.Length {
@@ -1590,10 +1586,10 @@ OnBGKey(tableItem, cmd, index) {
         if (item && item.Killed)
             break
 
-        hold := click ? GetFloatTime(Data.ClickTime, MainSoftData.HoldFloat) : 0
+        hold := click ? RandomizeDurationByPercent(Data.ClickTime, MainSoftData.HoldFloat) : 0
         SendBGKey(Data, tableItem, index, hold)
         if (click && A_Index != count)
-            InterruptibleSleep(tableItem, index, GetFloatTime(Data.ClickInterval, MainSoftData.PreIntervalFloat))
+            InterruptibleSleep(tableItem, index, RandomizeDurationByPercent(Data.ClickInterval, MainSoftData.PreIntervalFloat))
     }
 }
 
@@ -1680,8 +1676,8 @@ OnMouseMove(tableItem, cmd, index) {
         MoveMode := CmdEnumMoveMode(paramArr.Length >= 5 ? paramArr[5] : 0)
     }
 
-    PosX := GetFloatValue(PosX, MainSoftData.CoordXFloat)
-    PosY := GetFloatValue(PosY, MainSoftData.CoordYFloat)
+    PosX := RandomizeValueByOffset(PosX, MainSoftData.CoordXFloat)
+    PosY := RandomizeValueByOffset(PosY, MainSoftData.CoordYFloat)
     keyMode := GetMacroKeyMode(tableItem, index)
     MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, 0, false, GetItemByIndex(tableItem, index))
 }
@@ -1808,7 +1804,7 @@ OnInterval(tableItem, cmd, index) {
         interval := Random(interval1, interval2)
     }
 
-    FloatInterval := GetFloatTime(interval, MainSoftData.IntervalFloat)
+    FloatInterval := RandomizeDurationByPercent(interval, MainSoftData.IntervalFloat)
     InterruptibleSleep(tableItem, index, FloatInterval)
 }
 
@@ -1913,8 +1909,8 @@ OnPressKey(tableItem, cmd, index) {
         if (item.Killed)
             break
 
-        FloatHold := GetFloatTime(holdTime, MainSoftData.HoldFloat)
-        FloatInterval := GetFloatTime(intervalTime, MainSoftData.PreIntervalFloat)
+        FloatHold := RandomizeDurationByPercent(holdTime, MainSoftData.HoldFloat)
+        FloatInterval := RandomizeDurationByPercent(intervalTime, MainSoftData.PreIntervalFloat)
         SendKeyWrapper(keyName, FloatHold, tableItem, index, keyType, action)
         if (CmdEnumKeyAct(keyType) == "点击" && A_Index != count && FloatInterval > 0)
             InterruptibleSleep(tableItem, index, FloatInterval, false)

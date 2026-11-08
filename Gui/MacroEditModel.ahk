@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Main\Util\XamlText.ahk
 
 ; =====================================================================
 ; MacroEditGui 的 XAML 迁移基础：节点模型 + 原生 TreeView 兼容适配器
@@ -892,13 +893,7 @@ class MacroTreeAdapter {
         return displayText
     }
 
-    _EscapeXml(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _EscapeXml(s) => EscapeXamlXml(s)
 
     _JoyListFont() {
         global MainSoftData

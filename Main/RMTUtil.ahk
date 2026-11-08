@@ -318,7 +318,7 @@ RunBranchDispatch(tableItem, index, branches, fromStart) {
     loop branches.Length - 1 {
         cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID, branches[A_Index + 1]))
         tableItem.Items[index].GraphBranchCount++
-        GraphPoolLog("分支分配", Format("tab={1} item={2} node={3} 来源=Master/DispatchGraphBranches", tableID, itemID, branches[A_Index + 1]))
+        GraphPoolLog("分支分配", Format("tab={1} item={2} node={3} 来源=Master/RunGraphSuccessors", tableID, itemID, branches[A_Index + 1]))
         MyWorkPool.taskQueue.Push({ cmd: cmd, tableID: tableID, itemID: itemID, isGraphBranch: true })
         MyWorkPool.Dispatch()
     }
@@ -779,7 +779,7 @@ StopMacro(tableItem, itemIndex, playStopTip := false) {
         }
     }
 
-    ; 主进程内执行的宏：置 Killed 标记后，宏循环会自行退出并由 OnFinishMacro 设置终止状态
+    ; 主进程内执行的宏：置 Killed 标记后，宏循环会自行退出并由 FinalizeMacroRun 设置终止状态
     KillTableItemMacro(tableItem, itemIndex)
     if (item.TriggerType == 4)
         SetTableItemState(tableItem, itemIndex, 3)
@@ -2060,7 +2060,7 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false) {
 
     UpdateMacroRunningCount(0, 1)
     RefreshItemColorUI(tableItem, 1)
-    OnTriggerMacroOnce(tableItem, MacroStr, 1, preserveBranchExit)
+    RunMacroBodyOnce(tableItem, MacroStr, 1, preserveBranchExit)
     item.ColorState := 0
     UpdateMacroRunningCount(1, 0)
     RefreshItemColorUI(tableItem, 1)

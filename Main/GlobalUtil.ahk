@@ -188,7 +188,6 @@ global MyStopMacro := StopMacro
 global SelectAreaHo := HighlightOutlineSelectArea("Red", 150)
 global SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0}
 global MyTriggerSubMacro := TriggerMacroHandler
-global MySubmitGraphBranches := SubmitGraphBranchesHandler
 global MySetGlobalVariable := SetGlobalVariable
 global MyDelGlobalVariable := DelGlobalVariable
 global MyCMDReportAciton := CMDReport

@@ -40,13 +40,7 @@ class UIMacroPosSettingGui {
         inst._BuildAndShow()
     }
 
-    _EscapeXml(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _EscapeXml(s) => EscapeXamlXml(s)
 
     _BuildAndShow() {
         this.closed := false

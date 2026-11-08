@@ -24,7 +24,7 @@ class MacroGraphNodeUIMixin {
 
     ; 指令节点（含内联编辑控件）
     _BuildCmdNode(id, node) {
-        d := this._Parse(node.CurCMD)
+        d := this._ParseNodeCommand(node.CurCMD)
         nodeW := this._IsFormalNodeType(d.type) ? this._FormalNodeWidth(d.type) : ""
         body := ""
         this._NewNodeShell(id, d.type, "Process", &body, nodeW)
@@ -63,7 +63,7 @@ class MacroGraphNodeUIMixin {
 
             ; 按键类型下拉 —— 标签与下拉同行
             this._AddComboRow(body, "TypeRow_" id, GetLang("类型:"), "TypeCmb_" id
-                , [GetLang("按下"), GetLang("松开"), GetLang("点击")], this._TypeIndex(d.ktype), true)
+                , [GetLang("按下"), GetLang("松开"), GetLang("点击")], this._KeyActionIndex(d.ktype), true)
 
             isClick := d.ktype == GetLang("点击")
             showInter := isClick && IsNumber(d.count) && (d.count + 0) > 1
@@ -76,7 +76,7 @@ class MacroGraphNodeUIMixin {
             isAnalog := InStr(d.key, ":") || InStr(d.HasOwnProp("raw") ? d.raw : "", ":")
             body.Add("TextBlock").Name("JoySum_" id).Text(this._JoyCmdSummary(d)).Foreground("{DynamicResource EditText}").FontWeight("Bold").FontSize(this._MGFontSize(13)).TextWrapping("Wrap")
             this._AddComboRow(body, "TypeRow_" id, GetLang("类型:"), "TypeCmb_" id
-                , [GetLang("按下"), GetLang("松开"), GetLang("点击")], this._TypeIndex(d.ktype), !isAnalog)
+                , [GetLang("按下"), GetLang("松开"), GetLang("点击")], this._KeyActionIndex(d.ktype), !isAnalog)
             isClick := d.ktype == GetLang("点击")
             showInter := isClick && IsNumber(d.count) && (d.count + 0) > 1
             this._AddFieldRow(body, "HoldRow_" id, GetLang("点击时长:"), "Hold_" id, d.hold, !isAnalog && isClick, true, id, "hold")
@@ -403,7 +403,7 @@ class MacroGraphNodeUIMixin {
         data.WinInfo := adapter.Value
         SaveMacroCMDData(data)
         this.ui.Update("SWin_" id, "Text", adapter.Value)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 搜索Pro「结果保存 / 目标点保存」卡片：开关复选框作为标题，勾选后展开内部变量字段
@@ -480,7 +480,7 @@ class MacroGraphNodeUIMixin {
     _IsIfNodeId(id) {
         if (!this.cmdNodes.Has(id))
             return false
-        return this._Parse(this.cmdNodes[id].CurCMD).type == GetLang("如果")
+        return this._ParseNodeCommand(this.cmdNodes[id].CurCMD).type == GetLang("如果")
     }
 
     ; 该节点是否处于折叠态（折叠则隐藏分支节点、搜索直连后续）
@@ -927,7 +927,7 @@ class MacroGraphNodeUIMixin {
     _IsLoopNodeId(id) {
         if (!this.cmdNodes.Has(id))
             return false
-        return this._Parse(this.cmdNodes[id].CurCMD).type == GetLang("循环")
+        return this._ParseNodeCommand(this.cmdNodes[id].CurCMD).type == GetLang("循环")
     }
 
     ; 循环节点且未折叠（展开态需显示外置循环体节点）
@@ -1196,7 +1196,7 @@ class MacroGraphNodeUIMixin {
     ; 端口作为 Border 子元素，用负 Margin 伸出节点边缘，拖动时自动跟随。
     _NodeFragments(id, node, &nodeXaml, &portInXaml, &portOutXaml) {
         g := this.graph
-        d := this._Parse(node.CurCMD)
+        d := this._ParseNodeCommand(node.CurCMD)
         p := this.pos.Has(id) ? this.pos[id] : { x: 200, y: 200 }
         x := p.x + g.offsetX
         y := p.y + g.offsetY
@@ -1353,7 +1353,7 @@ class MacroGraphNodeUIMixin {
 
         displayTitle := title
         if (this.cmdNodes.Has(id))
-            displayTitle := this._NodeTitleText(this._Parse(this.cmdNodes[id].CurCMD))
+            displayTitle := this._NodeTitleText(this._ParseNodeCommand(this.cmdNodes[id].CurCMD))
         nodeObj := { Id: id, Title: displayTitle, X: x, Y: y, UI: node, W: nodeW, H: 60, Type: nodeType }
         g.nodes.Push(nodeObj)
         return node
@@ -1372,11 +1372,11 @@ class MacroGraphNodeUIMixin {
             hp.Add("Image").SetProp("Source", iconUri).Width("14").Height("14").Margin("0,0,5,0").VerticalAlignment("Center")
         displayTitle := title
         if (this.cmdNodes.Has(id))
-            displayTitle := this._NodeTitleText(this._Parse(this.cmdNodes[id].CurCMD))
+            displayTitle := this._NodeTitleText(this._ParseNodeCommand(this.cmdNodes[id].CurCMD))
         hp.Add("TextBlock").Name("Title_" id).Text(displayTitle).Foreground("{DynamicResource TitleBarForeground}").FontWeight("Bold").FontSize(this._MGFontSize(12)).VerticalAlignment("Center")
         if (this._IsSearchTypeTitle(title)) {
             ; 标题预览：颜色搜索显示色块（图片预览改为浮动在节点左侧，见 _AddFloatingImgPreview）
-            d := this._Parse(this.cmdNodes[id].CurCMD)
+            d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
             st := CmdEnumSearch(d.HasOwnProp("searchType") ? d.searchType : "屏幕图片")
             color := d.HasOwnProp("searchColor") ? d.searchColor : "FFFFFF"
             swEl := hp.Add("Border").Name("STitleColor_" id).Width("18").Height("18").CornerRadius("3").Margin("6,0,0,0").BorderBrush("{DynamicResource TitleBarForeground}").BorderThickness("1").VerticalAlignment("Center")

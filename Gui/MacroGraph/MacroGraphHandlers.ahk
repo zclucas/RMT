@@ -137,7 +137,7 @@ class MacroGraphHandlersMixin {
             this._PullEditTextIntoState(state, key)
     }
 
-    ; 按键类型下拉项：0=按下 1=松开 2=点击（与 _TypeIndex / 节点构建顺序一致）
+    ; 按键类型下拉项：0=按下 1=松开 2=点击（与 _KeyActionIndex / 节点构建顺序一致）
     _KeyTypeFromIndex(idx) {
         if (idx == 0)
             return GetLang("按下")
@@ -169,11 +169,11 @@ class MacroGraphHandlersMixin {
         if (!this.cmdNodes.Has(id))
             return
         key := "TypeCmb_" id
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         d.ktype := this._KeyTypeFromState(key, state, d.ktype)
-        this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+        this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
         this._RefreshKeyVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 间隔类型下拉变更：固定/随机；切换时保留当前已填的时间值，并切换第二时间行显隐
@@ -181,7 +181,7 @@ class MacroGraphHandlersMixin {
         if (!this.cmdNodes.Has(id))
             return
         key := "ITypeCmb_" id
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         if (state.Has("Time_" id) && state["Time_" id] != "")
             d.time := state["Time_" id]
         if (state.Has("Time2_" id) && state["Time2_" id] != "")
@@ -190,14 +190,14 @@ class MacroGraphHandlersMixin {
         d.itype := this._IntervalTypeFromState(key, state, d.itype)
         if (d.itype == GetLang("随机") && d.time2 == "")
             d.time2 := "1000"
-        this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+        this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
         this._RefreshIntervalVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 随机模式显示第二时间行，固定模式隐藏；同时同步时间控件值，避免切换后显示旧值
     _RefreshIntervalVisibility(id) {
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         if (d.type != GetLang("间隔") || this.ui == "")
             return
         isRandom := d.itype == GetLang("随机")
@@ -251,18 +251,18 @@ class MacroGraphHandlersMixin {
         if (!this.cmdNodes.Has(id))
             return
         key := "ModeCmb_" id
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         d.mode := this._MoveModeFromState(key, state, d.mode)
         if (d.mode == "2")
             d.speed := "100"
-        this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+        this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
         this._RefreshMoveVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 游戏视角模式下速度固定100且禁用编辑；其余模式恢复可编辑并同步速度值（旧配置兼容）
     _RefreshMoveVisibility(id) {
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         if (!IsMoveCmd(d.type) || this.ui == "")
             return
         isGameView := (d.mode == "2" || d.mode == 2)
@@ -587,8 +587,8 @@ class MacroGraphHandlersMixin {
     }
 
     _MMProApply() {
-        this._CaptureLinks()
-        this._Apply()
+        this._CaptureTopLevelSuccessorLinks()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; ----------------------------------------------------------------- 搜索节点内联编辑
@@ -685,7 +685,7 @@ class MacroGraphHandlersMixin {
         data.SearchType := this._SearchTypeFromState(id, key, state, data.SearchType)
         SaveMacroCMDData(data)
         this._RefreshSearchVisibility(id, data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 按搜索类型切换 颜色/文本/图片 行的显隐（兼容 搜索 与 搜索Pro）
@@ -840,7 +840,7 @@ class MacroGraphHandlersMixin {
         SaveMacroCMDData(data)
         this._SetSearchImgDisplay(id, val)
         this._RefreshSearchTitlePreview(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 搜索字段（颜色/文本/相似度/起止坐标）变更：写回 SearchData
@@ -888,7 +888,7 @@ class MacroGraphHandlersMixin {
             }
             SaveMacroCMDData(data)
         }
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 从事件 state / 下拉索引解析鼠标动作编号：优先 state，其次 Query
@@ -917,7 +917,7 @@ class MacroGraphHandlersMixin {
         SaveMacroCMDData(data)
         ; 搜索Pro：动作变更联动 移动速度/点击次数 的显隐
         this._RefreshSearchVisibility(id, data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 搜索Pro 数值/文本字段（窗口信息/间隔/点击次数/速度/结果变量/真假值/坐标变量名）写回
@@ -966,7 +966,7 @@ class MacroGraphHandlersMixin {
             data.%field% := val
         }
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 搜索次数变更：支持「无限」或数值；联动 每次间隔 显隐
@@ -1031,7 +1031,7 @@ class MacroGraphHandlersMixin {
         }
         SaveMacroCMDData(data)
         this._RefreshSearchVisibility(id, data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; CheckBox 勾选状态：Checked/Unchecked 事件名最可靠，其次 state，最后 Query
@@ -1064,7 +1064,7 @@ class MacroGraphHandlersMixin {
             MySoftData.GlobalVariMap[data.ResultSaveName] := true
         SaveMacroCMDData(data)
         this._RefreshSearchVisibility(id, data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 目标点保存开关：写回并显隐内部字段
@@ -1081,7 +1081,7 @@ class MacroGraphHandlersMixin {
         }
         SaveMacroCMDData(data)
         this._RefreshSearchVisibility(id, data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 高级编辑：打开完整搜索编辑器（双击节点也可打开）
@@ -1093,8 +1093,8 @@ class MacroGraphHandlersMixin {
     _RefreshSearchInline(id) {
         if (!this.cmdNodes.Has(id))
             return
-        this._RefreshSearchNode(id, this._Parse(this.cmdNodes[id].CurCMD))
-        this._Apply()
+        this._RefreshSearchNode(id, this._ParseNodeCommand(this.cmdNodes[id].CurCMD))
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 截图（图片搜索）：按软件截图方式设置图片与搜索范围，与搜索编辑器行为一致
@@ -1374,7 +1374,7 @@ class MacroGraphHandlersMixin {
         data.Type := this._InputTypeFromState(key, state, data.Type)
         SaveMacroCMDData(data)
         this._RefreshInputVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnInputPauseType(id, state, ctrl, event) {
@@ -1384,7 +1384,7 @@ class MacroGraphHandlersMixin {
         key := "InPauseCmb_" id
         data.PauseType := this._InputPauseTypeFromState(key, state, data.PauseType)
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnInputCancelType(id, state, ctrl, event) {
@@ -1394,7 +1394,7 @@ class MacroGraphHandlersMixin {
         key := "InCancelCmb_" id
         data.CancelType := this._InputCancelTypeFromState(key, state, data.CancelType)
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnInputField(id, field, state, ctrl, event) {
@@ -1415,7 +1415,7 @@ class MacroGraphHandlersMixin {
                 MySoftData.GlobalVariMap[data.SaveName] := true
             SaveMacroCMDData(data)
         }
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _RefreshInputVisibility(id) {
@@ -1456,7 +1456,7 @@ class MacroGraphHandlersMixin {
         data.OutputType := this._OutputTypeFromState(key, state, data.OutputType)
         SaveMacroCMDData(data)
         this._RefreshOutputVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnOutputField(id, field, state, ctrl, event) {
@@ -1486,7 +1486,7 @@ class MacroGraphHandlersMixin {
                 MySoftData.GlobalVariMap[data.VariableName] := true
         }
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _RefreshOutputVisibility(id) {
@@ -1518,7 +1518,7 @@ class MacroGraphHandlersMixin {
 
     ; ----------------------------------------------------------------- 内联界面 → 数据 Flush
     ; 标签拖拽/输入框改值后不即时写回；在打开节点编辑器前、点击「保存」时统一刷入。
-    ; targetId 非空只刷该节点；空则刷全部指令节点（含内联子节点）。不触发 _Apply。
+    ; targetId 非空只刷该节点；空则刷全部指令节点（含内联子节点）。不触发 _SaveGraphAndNotifyParent。
 
     _FlushInlineFieldsFromUI(targetId := "") {
         if (this.ui == "")
@@ -1565,7 +1565,7 @@ class MacroGraphHandlersMixin {
     _FlushOneNodeInline(id, state) {
         if (!this.cmdNodes.Has(id))
             return
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         if (d.type == GetLang("跳转")) {
             if (this._InlineVal(state, "JumpCmb_" id, &value)) {
                 for action in FlowJumpActions() {
@@ -1598,7 +1598,7 @@ class MacroGraphHandlersMixin {
             this._FlushFormalInline(id, d, state)
     }
 
-    ; Formal：复用现有写回 handler，_flushSilent 抑制 _Apply；可编辑下拉一律以 >Text 为准（标签拖拽）
+    ; Formal：复用现有写回 handler，_flushSilent 抑制 _SaveGraphAndNotifyParent；可编辑下拉一律以 >Text 为准（标签拖拽）
     _FlushFormalInline(id, d, state) {
         if (!IsObject(state))
             state := Map()
@@ -1691,7 +1691,7 @@ class MacroGraphHandlersMixin {
             dirty := true
         }
         if (dirty)
-            this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+            this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
     }
 
     _FlushKeyInline(id, d, state) {
@@ -1713,7 +1713,7 @@ class MacroGraphHandlersMixin {
             dirty := true
         }
         if (dirty)
-            this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+            this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
     }
 
     _FlushMoveInline(id, d, state) {
@@ -1735,7 +1735,7 @@ class MacroGraphHandlersMixin {
             dirty := true
         }
         if (dirty)
-            this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+            this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
     }
 
     ; §20 增量移动内联字段写回（X/Y 偏移 + 偏移次数）
@@ -1748,7 +1748,7 @@ class MacroGraphHandlersMixin {
             dirty := true
         }
         if (dirty)
-            this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+            this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
     }
 
     _FlushMMProInline(id, state) {

@@ -13,7 +13,7 @@ class MacroGraphEventsMixin {
 
     _RegisterNodeEvents() {
         for id, node in this.cmdNodes
-            this._RegisterMyNodeEvents(id, node, false)
+            this._BindCommandNodeEvents(id, node, false)
         ; 展开搜索/如果/如果Pro 节点的真/假/多分支节点事件
         for id in this.order {
             if (this._IsExpandedIfPro(id)) {
@@ -54,14 +54,14 @@ class MacroGraphEventsMixin {
 
     ; 注册单个节点的"本类"事件（双击编辑 + 内联字段）。runtime=true 时同时向引擎补绑/补采集
     ; （运行时注入的控件不在启动期的事件/采集清单里，需用 BindEvent/Track 命令动态补上）。
-    _RegisterMyNodeEvents(id, node, runtime := false) {
+    _BindCommandNodeEvents(id, node, runtime := false) {
         ; 双击节点打开完整编辑器（节点是 Border，无原生双击，用 SelectNode 计时判定）
         ; SelectNode/CtrlSelectNode/DragMove 由引擎 EnableDrag 主动下发，仅需本地 OnEvent 接收
         this.ui.OnEvent("Node_" id, "SelectNode", this._OnNodeClick.Bind(this, id))
         this.ui.OnEvent("Node_" id, "CtrlSelectNode", this._OnNodeClick.Bind(this, id))
         this.ui.OnEvent("Node_" id, "DragMove", this._OnNodeDrag.Bind(this, id))
 
-        d := this._Parse(node.CurCMD)
+        d := this._ParseNodeCommand(node.CurCMD)
         if (d.type == GetLang("跳转")) {
             this._TrackCtrl("JumpCmb_" id, runtime)
             this._BindCtrl("JumpCmb_" id, "SelectionChanged", this._OnFlowJump.Bind(this, id), runtime)

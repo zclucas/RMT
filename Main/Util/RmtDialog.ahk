@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include XamlText.ahk
 
 ; =============================================================================
 ; RMT 通用提示/确认弹窗
@@ -345,13 +346,7 @@ class RmtDialog {
         return owner
     }
 
-    static _XmlEsc(s) {
-        s := StrReplace(String(s), "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    static _XmlEsc(s) => EscapeXamlXml(String(s))
 
     static _LogPath() {
         dir := A_ScriptDir "\Log"

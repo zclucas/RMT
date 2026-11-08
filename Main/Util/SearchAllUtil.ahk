@@ -24,19 +24,19 @@ SearchAllExecute(tableItem, Data, index) {
                 MySetGlobalVariable([Data.CoordXName], [last[1]], false)
                 MySetGlobalVariable([Data.CoordYName], [last[2]], false)
             }
-            if (Data.TrueMacro != "" && !TryInterceptBranch("Search", "TrueMacro", "", -1))
-                OnTriggerMacroOnce(tableItem, Data.TrueMacro, index)
+            if (Data.TrueMacro != "" && !TryInterceptDebugBranch("Search", "TrueMacro", "", -1))
+                RunMacroBodyOnce(tableItem, Data.TrueMacro, index)
             return true
         }
         if (A_Index < attempts || Data.SearchCount == -1)
-            InterruptibleSleep(tableItem, index, GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat))
+            InterruptibleSleep(tableItem, index, RandomizeDurationByPercent(Data.SearchInterval, MainSoftData.PreIntervalFloat))
     }
     if (Data.SearchCount == -1)
         return false
     if (Data.ResultToggle)
         MySetGlobalVariable([Data.ResultSaveName], [Data.FalseValue], false)
-    if (Data.FalseMacro != "" && !TryInterceptBranch("Search", "FalseMacro", "", -1))
-        OnTriggerMacroOnce(tableItem, Data.FalseMacro, index)
+    if (Data.FalseMacro != "" && !TryInterceptDebugBranch("Search", "FalseMacro", "", -1))
+        RunMacroBodyOnce(tableItem, Data.FalseMacro, index)
     return ""
 }
 

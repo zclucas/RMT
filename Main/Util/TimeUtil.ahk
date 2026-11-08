@@ -189,7 +189,7 @@ TimeExecWaitUntil(tableItem, index, Data) {
         if (timeoutMs > 0 && (A_TickCount - startTick >= timeoutMs))
             return
 
-        floatInterval := GetFloatTime(checkInterval, MainSoftData.PreIntervalFloat)
+        floatInterval := RandomizeDurationByPercent(checkInterval, MainSoftData.PreIntervalFloat)
         if (targetMs != "")
             floatInterval := Min(floatInterval, remaining)
         InterruptibleSleep(tableItem, index, floatInterval)

@@ -57,13 +57,7 @@ class VariableGui {
             . '</Grid></ControlTemplate></Setter.Value></Setter></Style>'
     }
 
-    _EscapeXml(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _EscapeXml(s) => EscapeXamlXml(s)
 
     _BuildAndShow() {
         global MySoftData

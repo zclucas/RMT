@@ -747,7 +747,7 @@ class MacroGraphFormalMixin {
         ; 折叠态刷新摘要
         if (this._NodeFolded(id))
             this._RefreshOperationSummary(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _FillOperationBody(id, d, body) {

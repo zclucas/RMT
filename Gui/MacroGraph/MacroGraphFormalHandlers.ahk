@@ -71,7 +71,7 @@ class MacroGraphFormalHandlersMixin {
     _FormalDFromId(id) {
         if (!this.cmdNodes.Has(id))
             return { type: "" }
-        return this._Parse(this.cmdNodes[id].CurCMD)
+        return this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
     }
 
     ; ----------------------------------------------------------------- 内联变更处理
@@ -112,7 +112,7 @@ class MacroGraphFormalHandlersMixin {
         }
         SaveMacroCMDData(data)
         this._RefreshFormalSubMacroVisibility(id, state)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _FormalVarSlotState(id, slot, d, state := unset) {
@@ -178,7 +178,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         this._RefreshFormalVariableVisibility(id, state)
         this._RefreshVariableSummary(id)   ; 同步收起态摘要，保证启用/取值变化即时反映
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalExVariable(id, state, ctrl, event) {
@@ -217,7 +217,7 @@ class MacroGraphFormalHandlersMixin {
         }
         SaveMacroCMDData(data)
         this._RefreshFormalExVariableVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 变量提取「模板」编辑按钮：复用提取模板编辑器(ExVariableEditGui)，确定后回写模板与变量勾选。
@@ -246,7 +246,7 @@ class MacroGraphFormalHandlersMixin {
                 this.ui.Update("ExV" A_Index "Tog_" id, "IsChecked", (A_Index <= variNum) ? "True" : "False")
         }
         this._RefreshFormalExVariableVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalOperation(id, state, ctrl, event) {
@@ -282,7 +282,7 @@ class MacroGraphFormalHandlersMixin {
         ; 折叠态：刷新摘要显示
         if (this._NodeFolded(id))
             this._RefreshOperationSummary(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalRun(id, state, ctrl, event) {
@@ -306,7 +306,7 @@ class MacroGraphFormalHandlersMixin {
             if (ObjHasOwnProp(data, "Encoding"))
                 data.DeleteProp("Encoding")
             SaveMacroCMDData(data)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         modes := this._FormalRunModeArr()
@@ -365,7 +365,7 @@ class MacroGraphFormalHandlersMixin {
         }
         SaveMacroCMDData(data)
         this._RefreshFormalRunVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 文件读写：结果是否仅能为「变量」（其余皆为「数组」），与编辑器 RefreshConVisable 一致。
@@ -428,7 +428,7 @@ class MacroGraphFormalHandlersMixin {
             data.SaveType := this._FIOResOnlyVar(ot, om) ? "变量" : "数组"
             SaveMacroCMDData(data)
         }
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 模式切换：类型与模式都【实时】取自界面控件，按 (类型, 模式) 一级一级刷新下方内容，不用快照、不读缓存。
@@ -450,7 +450,7 @@ class MacroGraphFormalHandlersMixin {
             data.SaveType := this._FIOResOnlyVar(ot, om) ? "变量" : "数组"
             SaveMacroCMDData(data)
         }
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 实时读取 RMT 指令节点当前界面上「类别/指令」的真实值（直接向 WPF 进程查询，不用事件快照、不读数据缓存）。
@@ -501,7 +501,7 @@ class MacroGraphFormalHandlersMixin {
     _RmtSyncCurCMD(id, d) {
         if (!this.cmdNodes.Has(id) || d.type != GetLang("RMT指令"))
             return
-        this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+        this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
     }
 
     ; 类别切换：重置下方所有选项——指令列表重建并定位到「第一个」指令，再按 (类别, 第一个指令) 实时刷新下方内容。
@@ -525,7 +525,7 @@ class MacroGraphFormalHandlersMixin {
         if (op != GetLang("显示菜单"))
             d.rmtMenuIdx := "1"
         this._RmtSyncCurCMD(id, d)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 指令切换：类别与指令都【实时】取自界面控件，按 (类别, 指令) 一级一级刷新下方内容
@@ -544,7 +544,7 @@ class MacroGraphFormalHandlersMixin {
         if (op != GetLang("显示菜单"))
             d.rmtMenuIdx := "1"
         this._RmtSyncCurCMD(id, d)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 刷新 RMT 指令节点下方选项（菜单序号的显示/隐藏）
@@ -587,7 +587,7 @@ class MacroGraphFormalHandlersMixin {
         if (live.op != "")
             d.rmtOp := live.op
         this._RmtSyncCurCMD(id, d)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 文件读写普通字段变更（RMT 菜单序号）
@@ -623,7 +623,7 @@ class MacroGraphFormalHandlersMixin {
         if (state.Has("FIOSave_" id) && state["FIOSave_" id] != "")
             data.SaveName := GetVarName(state["FIOSave_" id])
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 下方所有选项的刷新：完全由 (类型, 模式) 决定，不读数据表。
@@ -702,7 +702,7 @@ class MacroGraphFormalHandlersMixin {
             data.SaveType := (tt == "文本分割" || tt == "文本提取") ? "数组" : "变量"
             this._RefreshTextOpsOptions(id, tt, data.ArgsType, data.HasOwnProp("SaveName") ? data.SaveName : "")
             SaveMacroCMDData(data)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
 
@@ -715,7 +715,7 @@ class MacroGraphFormalHandlersMixin {
             data.ArgsType := GetLangKey(atTxt)
             this._RefreshFormalTextOpsVisibility(id, data.Type, data.ArgsType)
             SaveMacroCMDData(data)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
 
@@ -755,7 +755,7 @@ class MacroGraphFormalHandlersMixin {
 
         if (hasChange) {
             SaveMacroCMDData(data)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
         }
     }
 
@@ -831,7 +831,7 @@ class MacroGraphFormalHandlersMixin {
         this._RefreshArrayOptions(id, at, agt, st
             , data.HasOwnProp("ArgsName") ? data.ArgsName : ""
             , data.HasOwnProp("SaveName") ? data.SaveName : "")
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 普通字段变更：只写入对应字段，不触碰类型/派生显隐（这些字段不影响布局）。
@@ -857,7 +857,7 @@ class MacroGraphFormalHandlersMixin {
             state := Map()
         data.IsIgnoreExist := (ShowIgn && this._FormalReadToggle(state, "ArrIgn_" id, data.IsIgnoreExist)) ? 1 : 0
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 下方所有选项的刷新：完全由 (操作类型, 参数类型, 保存类型) 决定。
@@ -927,7 +927,7 @@ class MacroGraphFormalHandlersMixin {
             data.ScrollH := state["BgmSH_" id]
         SaveMacroCMDData(data)
         this._RefreshFormalBGMouseVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 后台鼠标「编辑」按钮：打开窗口信息编辑器，确定后回写目标窗口标题。
@@ -950,7 +950,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         if (this.ui != "")
             this.ui.Update("BgmTitle_" id, "Text", adapter.Value)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalBGKey(id, state, ctrl, event) {
@@ -973,7 +973,7 @@ class MacroGraphFormalHandlersMixin {
             data.ClickInterval := state["BgkInter_" id]
         SaveMacroCMDData(data)
         this._RefreshFormalBGKeyVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 后台按键「编辑」按钮：打开窗口信息编辑器，确定后回写前台信息。
@@ -996,7 +996,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         if (this.ui != "")
             this.ui.Update("BgkFront_" id, "Text", adapter.Value)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalWindowManage(id, state, ctrl, event) {
@@ -1029,7 +1029,7 @@ class MacroGraphFormalHandlersMixin {
             SaveMacroCMDData(data)
             this._RefreshWmModes(id, data.ActionType)
             this._RefreshFormalWindowManageVisibility(id, data.ActionType)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         data := this._FormalIniData(id)
@@ -1043,7 +1043,7 @@ class MacroGraphFormalHandlersMixin {
             data.ActionType := WindowActionFromMode(group, mode)
             SaveMacroCMDData(data)
             this._RefreshFormalWindowManageVisibility(id, data.ActionType)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         if (state.Has("WmWin_" id))
@@ -1080,7 +1080,7 @@ class MacroGraphFormalHandlersMixin {
         }
         WindowRegisterResults(data)
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalWmWinEdit(id, *) {
@@ -1102,7 +1102,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         if (this.ui != "")
             this.ui.Update("WmWin_" id, "Text", adapter.Value)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _WmReadLiveAction(id) {
@@ -1141,7 +1141,7 @@ class MacroGraphFormalHandlersMixin {
         if (state.Has("KcVar_" id) && state["KcVar_" id] != "")
             data.VarName := GetVarName(state["KcVar_" id])
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalScreenShot(id, state, ctrl, event) {
@@ -1158,7 +1158,7 @@ class MacroGraphFormalHandlersMixin {
             data.ScreenShotType := GetLangKey(ttTxt)
             SaveMacroCMDData(data)
             this._RefreshFormalScreenShotVisibility(id, data.ScreenShotType)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         if (ctrl == "SsNameTog_" id || ctrl == "SsResTog_" id) {
@@ -1177,7 +1177,7 @@ class MacroGraphFormalHandlersMixin {
             nt := data.NameType
             resOn := data.ResultToggle == 1 || data.ResultToggle == "1"
             this._RefreshFormalScreenShotVisibility(id, unset, nt, resOn)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         data := this._FormalIniData(id)
@@ -1198,7 +1198,7 @@ class MacroGraphFormalHandlersMixin {
         if (state.Has("SsResName_" id) && state["SsResName_" id] != "")
             data.ResultSaveName := GetVarName(state["SsResName_" id])
         SaveMacroCMDData(data)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalSsWinEdit(id, *) {
@@ -1220,7 +1220,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         if (this.ui != "")
             this.ui.Update("SsWin_" id, "Text", adapter.Value)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; ----------------------------------------------------------------- 显隐刷新
@@ -1480,7 +1480,7 @@ class MacroGraphFormalHandlersMixin {
         this._RefreshFormalIfProVisibility(id)
         this._RefreshIfProSummary(id)
         this._RefreshIfProPortPositions(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _RefreshFormalIfProVisibility(id) {
@@ -1589,7 +1589,7 @@ class MacroGraphFormalHandlersMixin {
         this._RefreshFormalIfVisibility(id)
         if (this._NodeFolded(id))
             this._RefreshIfSummary(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _RefreshFormalIfVisibility(id) {
@@ -1668,7 +1668,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         this._RefreshFormalLoopVisibility(id)
         this._RefreshLoopSummary(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _RefreshFormalLoopVisibility(id) {
@@ -2078,7 +2078,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         if (this.ui != "")
             this.ui.Update("WaitKey_" id, "Text", key)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnWaitArea(id, *) {
@@ -2104,7 +2104,7 @@ class MacroGraphFormalHandlersMixin {
             this.ui.Update("WaitEX_" id, "Text", x2)
             this.ui.Update("WaitEY_" id, "Text", y2)
         }
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnWaitWinEdit(id, *) {
@@ -2126,7 +2126,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         if (this.ui != "")
             this.ui.Update("WaitWin_" id, "Text", adapter.Value)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnWaitFileBrowse(id, *) {
@@ -2141,7 +2141,7 @@ class MacroGraphFormalHandlersMixin {
         SaveMacroCMDData(data)
         if (this.ui != "")
             this.ui.Update("WaitFile_" id, "Text", path)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _OnFormalWaitConfirm(id, state, ctrl, event) {
@@ -2175,7 +2175,7 @@ class MacroGraphFormalHandlersMixin {
             data.PauseBtnType := GetLangKey(state["WcPauseBtnCmb_" id])
         SaveMacroCMDData(data)
         this._RefreshWaitConfirmVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _RefreshWaitConfirmVisibility(id) {
@@ -2253,7 +2253,7 @@ class MacroGraphFormalHandlersMixin {
         }
         SaveMacroCMDData(data)
         this._RefreshTimeVisibility(id)
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     _RefreshTimeVisibility(id) {
@@ -2309,7 +2309,7 @@ class MacroGraphFormalHandlersMixin {
             this.ui.Update(key, "Height", String(h))
             this.ui.Update("Title_" id, "Text", GetLang("注释"))
         }
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 由 CommentData 生成带备注后缀的 CurCMD（备注取内容前 20 字）

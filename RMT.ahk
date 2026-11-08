@@ -18,7 +18,7 @@ InitFilePath()              ;初始化文件路径
 if (LoadCurMacroSetting())  ;加载当前配置宏（只读；返回是否在内存里补全过旧格式）
     SaveTableCollection()   ;主进程才落盘，Worker 不走这条
 HandleOpenArg()             ;处理打开软件的参数
-EditListen()                ;滚轮按键监听，防止滚轮修改下拉框数值
+RegisterNativeComboWheelGuard()
 InitData()                  ;初始化软件数据，加载所有的宏指令
 InitUI()                    ;初始化主界面UI
 SetEditData()               ;缓存编辑器数据，设置下拉框变量，检测是否有手柄按键

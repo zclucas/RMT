@@ -261,10 +261,10 @@ class MacroGraphMenuMixin {
         if (this.ui == "" || !this.ui.wpfHwnd || this.graph == "")
             return
         ; 在右键位置运行时注入完整内联节点（不重建窗口，避免闪烁）；不自动连线
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         this._SyncPositionsFromGraph()
         id := this._NewId()
-        node := this._DefaultObj(cmdName)
+        node := this._CreateDefaultCommandNode(cmdName)
         this.cmdNodes[id] := node
         ox := this.graph.HasProp("lastRightClickX") ? this.graph.lastRightClickX - this.graph.offsetX : 200
         oy := this.graph.HasProp("lastRightClickY") ? this.graph.lastRightClickY - this.graph.offsetY : 200
@@ -316,7 +316,7 @@ class MacroGraphMenuMixin {
             srcOk := fromIsBranch ? this._branchInjected.Has(logicalFrom) : this._NodeExists(pendingFrom)
             if (srcOk) {
                 this._ActivateConnection(pendingFrom, id)
-                this._NormalizeBranchConnections()
+                this._RedirectBranchSuccessorLinks()
                 ; 内联子图里从展开的如果/搜索引出新节点时，按展开间距推开后继
                 if (ownerBr != "" && logicalFrom != "" && logicalFrom != id)
                     this._EnsureExpandGap(logicalFrom)
@@ -326,7 +326,7 @@ class MacroGraphMenuMixin {
         }
         this._ThickenConnections()
         this._RebindPathClicks()
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 }
 

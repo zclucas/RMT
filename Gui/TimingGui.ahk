@@ -495,7 +495,7 @@ class TimingGui {
         if (!IsObject(this.tableItem) || this.itemIndex < 1)
             return text
         front := ""
-        try front := GetItemFrontInfo(this.tableItem, this.itemIndex)
+        try front := GetItemModuleWindowBinding(this.tableItem, this.itemIndex)
         if (front == "")
             return text
         return text GetLang("（仅指定前台窗口匹配时触发）")

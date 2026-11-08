@@ -6,7 +6,7 @@
 ; 说明：节点数据对象 MacroGraphNode 已在 Main\DataClass.Ahk 中定义
 ;       （字段 SerialStr / CurCMD / NextNodeArr）。本编辑器中每个节点仅持有
 ;       完整指令字符串 CurCMD，其余信息（类型/时间/按键/点击时长…）全部通过
-;       解析 CurCMD 实时获得（见 _Parse）。
+;       解析 CurCMD 实时获得（见 _ParseNodeCommand）。
 ;
 ; 交互：
 ;   - 表格行"编辑"：空宏按首选编辑器；首条为图形开始节点时进入本编辑器。
@@ -128,7 +128,7 @@ class MacroGraphGui {
         this.OnSwitchToTreeAction := "" ; 自定义「切换逻辑树」；空则走顶层 MyMacroGui 流程
         this._shotNodeId := ""        ; 正在执行截图取色的搜索节点ID（截图剪贴板回调用）
         this._searchClipAction := ObjBindMethod(this, "_SearchCheckClipboard") ; 截图剪贴板轮询回调（稳定引用，便于 SetTimer 开关）
-        this._suppressCloseApply := false ; 切换到逻辑树时跳过关闭时的 _Apply，避免覆盖已写回的线性宏
+        this._suppressCloseApply := false ; 切换到逻辑树时跳过关闭时的 _SaveGraphAndNotifyParent，避免覆盖已写回的线性宏
         this._closeHandled := false       ; 防止 Window.Closed 重复触发导致分支列表被刷新叠加
     }
 
@@ -374,10 +374,10 @@ class MacroGraphGui {
     }
 
     ; 切换到逻辑树：单链路直接切换；多链路（不含搜索/如果真假分支）需确认强行切换
-    ; GraphStartToLinearMacro 会递归把循环/搜索/如果等分支内的嵌套图形开始节点一并转为线性宏
+    ; ConvertGraphToLinearMacroInPlace 会递归把循环/搜索/如果等分支内的嵌套图形开始节点一并转为线性宏
     _OnSwitchToTree() {
         this._SaveGraph()
-        if (HasGraphMultiBranch(this.startSerial)) {
+        if (GraphHasParallelOrDisconnectedNodes(this.startSerial)) {
             tip := GetLang("多链路指令无法切换到逻辑树编辑器") "`n"
                 . GetLang("强行切换非第一链路的配置将丢失")
             choice := CustomMsgBox(tip, GetLang("提示"), GetLang("取消") "|" GetLang("强行切换"))
@@ -385,8 +385,8 @@ class MacroGraphGui {
                 return
         }
 
-        linear := GraphStartToLinearMacro(this.startSerial)
-        ; 关闭时跳过 _Apply，避免把已写回的线性宏再次覆盖成图形开始节点
+        linear := ConvertGraphToLinearMacroInPlace(this.startSerial)
+        ; 关闭时跳过 _SaveGraphAndNotifyParent，避免把已写回的线性宏再次覆盖成图形开始节点
         this._suppressCloseApply := true
         treeAction := this.OnSwitchToTreeAction
         this.OnSwitchToTreeAction := ""
@@ -436,7 +436,7 @@ class MacroGraphGui {
             this._SerializeAllInlineBranches()
             if (this.graph != "")
                 this._SaveGraph()
-            ; 关闭时务必把 startSerial 写回父级（TrueMacro/LoopBody 等），不能依赖后续再触发 _Apply
+            ; 关闭时务必把 startSerial 写回父级（TrueMacro/LoopBody 等），不能依赖后续再触发 _SaveGraphAndNotifyParent
             if (sureAction != "" && this.startSerial != "")
                 sureAction(this.startSerial)
         }
@@ -469,7 +469,7 @@ class MacroGraphGui {
 
 
 
-    _DefaultObj(cmdName) {
+    _CreateDefaultCommandNode(cmdName) {
         if (cmdName == GetLang("跳转"))
             return this._MakeNode("流程跳转_" FlowJumpActions()[1])
         if (cmdName == GetLang("间隔")) {
@@ -585,7 +585,7 @@ class MacroGraphGui {
         nameMap := Map("time", "Time_", "time2", "Time2_", "hold", "Hold_", "count", "Count_", "inter", "Inter_", "posx", "PosX_", "posy", "PosY_", "speed", "Speed_")
         ; §20 增量移动：控件前缀为 DPosX_/DPosY_/DCount_/DInterval_
         try {
-            dType := this._Parse(this.cmdNodes[id].CurCMD).type
+            dType := this._ParseNodeCommand(this.cmdNodes[id].CurCMD).type
             if (IsDeltaMoveCmd(dType))
                 nameMap := Map("posx", "DPosX_", "posy", "DPosY_", "count", "DCount_", "interval", "DInterval_")
         }
@@ -624,12 +624,12 @@ class MacroGraphGui {
             if (IsNumber(val) && val + 0 < 0)
                 val := "0"
         }
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         d.%field% := val
-        this.cmdNodes[id].CurCMD := this._BuildCmd(d)
+        this.cmdNodes[id].CurCMD := this._SerializeNodeCommand(d)
         if (field == "count")
             this._RefreshKeyVisibility(id)
-        ; 防抖：200ms 内只执行一次 _CaptureLinks + _Apply
+        ; 防抖：200ms 内只执行一次 _CaptureTopLevelSuccessorLinks + _SaveGraphAndNotifyParent
         if (this.HasOwnProp("_fieldDebounceTimer"))
             SetTimer(this._fieldDebounceTimer, 0)
         this._fieldDebounceTimer := this._DoFieldApply.Bind(this)
@@ -637,11 +637,11 @@ class MacroGraphGui {
     }
 
     _DoFieldApply() {
-        this._CaptureLinks()
-        this._Apply()
+        this._CaptureTopLevelSuccessorLinks()
+        this._SaveGraphAndNotifyParent()
     }
 
-    ; 为所有内联编辑 TextBox 绑定回车写回（失焦由 _RegisterMyNodeEvents 的 LostFocus 处理）
+    ; 为所有内联编辑 TextBox 绑定回车写回（失焦由 _BindCommandNodeEvents 的 LostFocus 处理）
     ; 不绑 TextChanged：输入过程不必每次写回；标签拖拽改值在打开编辑器/点保存时 Flush
     ; 注：须绑 "KeyDown"（引擎按 KeyEventArgs 追加 :Return）；绑 "KeyDown:Return" 无法挂上 WPF 事件
     _BindTextBoxEnterEvents() {
@@ -657,7 +657,7 @@ class MacroGraphGui {
 
     ; 重算按键节点 点击时长/次数/间隔 行的显隐；同时同步控件值，避免切换后显示旧值
     _RefreshKeyVisibility(id) {
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         if ((d.type != GetLang("按键") && d.type != GetLang("手柄")) || this.ui == "")
             return
         isAnalog := d.type == GetLang("手柄") && (InStr(d.key, ":") || InStr(d.HasOwnProp("raw") ? d.raw : "", ":"))
@@ -695,7 +695,7 @@ class MacroGraphGui {
             return
         ; 打开完整编辑器前：把节点内联控件（含标签拖拽改过的值）写回数据模型
         this._FlushInlineFieldsFromUI(id)
-        d := this._Parse(this.cmdNodes[id].CurCMD)
+        d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         editor := ""
         if (d.type == GetLang("跳转"))
             editor := this.FlowJumpGui
@@ -739,7 +739,7 @@ class MacroGraphGui {
         editor.SureBtnAction := (cmd) => this.OnEditorSure(id, cmd)
         ; RMT 指令参数存于 CurCMD 本身，打开编辑器时用规范化后的 CMD，与节点内联显示一致
         if (d.type == GetLang("RMT指令"))
-            editor.ShowGui(this._BuildCmd(d))
+            editor.ShowGui(this._SerializeNodeCommand(d))
         else
             editor.ShowGui(this.cmdNodes[id].CurCMD)
     }
@@ -748,9 +748,9 @@ class MacroGraphGui {
     OnEditorSure(id, cmd) {
         if (!this.cmdNodes.Has(id))
             return
-        oldType := this._Parse(this.cmdNodes[id].CurCMD).type
+        oldType := this._ParseNodeCommand(this.cmdNodes[id].CurCMD).type
         this.cmdNodes[id].CurCMD := cmd
-        dEdit := this._Parse(cmd)
+        dEdit := this._ParseNodeCommand(cmd)
         if (dEdit.type == GetLang("跳转")) {
             for i, action in FlowJumpActions() {
                 if (action == dEdit.jumpAction) {
@@ -759,49 +759,49 @@ class MacroGraphGui {
                 }
             }
             this.ui.Update("Title_" id, "Text", this._NodeTitleText(dEdit))
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         if (oldType != dEdit.type) {
-            this._CaptureLinks()
+            this._CaptureTopLevelSuccessorLinks()
             this._Render()
             return
         }
         ; 搜索/搜索Pro：就地刷新内联字段与分支节点内容，避免整窗重建（闪烁/窗口被销毁）
         if (dEdit.type == GetLang("搜索All") || dEdit.type == GetLang("搜索") || dEdit.type == GetLang("搜索Pro") || dEdit.type == GetLang("搜索Combo") || dEdit.type == GetLang("搜索Multi")) {
             this._RefreshSearchNode(id, dEdit)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         if (dEdit.type == GetLang("输入")) {
             this._RefreshInputNode(id, dEdit)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         if (dEdit.type == GetLang("输出")) {
             this._RefreshOutputNode(id, dEdit)
-            this._Apply()
+            this._SaveGraphAndNotifyParent()
             return
         }
         if (this._IsFormalNodeType(dEdit.type)) {
             ; 形式化节点：优先就地刷新内联控件值（避免整窗 _Render 闪烁）；
             ; 未覆盖的类型回退到整体重建（从 INI 读取，保证字段/显隐完全同步）。
             if (this._RefreshFormalInline(id, dEdit)) {
-                this._Apply()
+                this._SaveGraphAndNotifyParent()
                 return
             }
-            this._CaptureLinks()
+            this._CaptureTopLevelSuccessorLinks()
             this._Render()
             return
         }
         ; 注入的简要节点无法就地刷新 → 重建为完整内联节点
         if (this.injected.Has(id)) {
-            this._CaptureLinks()
+            this._CaptureTopLevelSuccessorLinks()
             this._Render()
             return
         }
         if (this.ui != "") {
-            d := this._Parse(cmd)
+            d := this._ParseNodeCommand(cmd)
             this.ui.Update("Title_" id, "Text", this._NodeTitleText(d))
             if (d.type == GetLang("间隔")) {
                 this.ui.Update("ITypeCmb_" id, "SelectedIndex", this._IntervalTypeIndex(d.itype))
@@ -853,7 +853,7 @@ class MacroGraphGui {
                 }
             }
         }
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 搜索/搜索Pro 完整编辑器确定后：就地刷新内联字段、显隐与真/假分支节点内容（不重建窗口）
@@ -925,7 +925,7 @@ class MacroGraphGui {
 
     ; 回写：图形宏以「开始节点(MacroGraphStartNode) 的 SerialStr」作为入口引用写回 MacroArr
     ; _flushSilent：打开编辑器前 Flush Formal 时跳过，避免批量回写主宏
-    _Apply() {
+    _SaveGraphAndNotifyParent() {
         if (this.HasOwnProp("_flushSilent") && this._flushSilent)
             return
         this._SerializeAllInlineBranches()   ; 内联展开的分支：把当前编辑就地回写 TrueMacro/FalseMacro
@@ -933,7 +933,7 @@ class MacroGraphGui {
         if (this.graph != "")
             this._SaveGraph()
         else
-            this._CaptureLinks()
+            this._CaptureTopLevelSuccessorLinks()
         if (this.SureBtnAction == "")
             return
         action := this.SureBtnAction
@@ -943,7 +943,7 @@ class MacroGraphGui {
 
     ; ----------------------------------------------------------------- 辅助
 
-    _TypeIndex(ktype) {
+    _KeyActionIndex(ktype) {
         if (ktype == GetLang("按下"))
             return 0
         if (ktype == GetLang("松开"))

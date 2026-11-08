@@ -38,8 +38,8 @@ class MacroGraphEditMixin {
         for lid in loopIds
             this._RemoveLoopBodyNodeRuntime(lid)
         this._DeleteSelectedNodes()
-        this._CaptureLinks()
-        this._Apply()
+        this._CaptureTopLevelSuccessorLinks()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 运行时清理一个循环节点的外置循环体节点（隐藏 UI、移除节点表、隐藏回环路径），不重建窗口
@@ -202,7 +202,7 @@ class MacroGraphEditMixin {
             return
         if (!this.HasOwnProp("_clipboard") || !this._clipboard || !this._clipboard.nodes)
             return
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         this._SyncPositionsFromGraph()
         g := this.graph
         origin := this._GetPasteOrigin(fromMenu)
@@ -261,10 +261,10 @@ class MacroGraphEditMixin {
             if (newFrom != "" && newTo != "" && newFrom != newTo)
                 this._ActivateConnection(newFrom, newTo)
         }
-        this._NormalizeBranchConnections()
+        this._RedirectBranchSuccessorLinks()
         this._ThickenConnections()
         this._RebindPathClicks()
-        this._Apply()
+        this._SaveGraphAndNotifyParent()
     }
 
     ; 粘贴锚点：

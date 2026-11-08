@@ -37,7 +37,7 @@ class MacroGraphBranchMixin {
         ; 标题按钮图标：折叠→▶（点击展开），展开→▼（点击收起）
         this.ui.Update("SFold_" id, "Content", willFold ? "▶" : "▼")
         this.ui.Update("SFold_" id, "ToolTip", willFold ? GetLang("展开") : GetLang("收起"))
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
     }
 
     ; 切换变量节点折叠态：折叠=只显示各启用变量「变量名 = 值」摘要；展开=完整卡片。
@@ -98,7 +98,7 @@ class MacroGraphBranchMixin {
         this._RefreshFormalLoopVisibility(id)  ; 同步逻辑/条件卡显隐（收起时隐藏）
         this.ui.Update("SFold_" id, "Content", willFold ? "▶" : "▼")
         this.ui.Update("SFold_" id, "ToolTip", willFold ? GetLang("展开") : GetLang("收起"))
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
     }
 
     ; 折叠循环：隐藏外置循环体节点 + 两条回环路径 + 循环节点右侧两个交互点；后继子树左移靠近循环节点
@@ -116,7 +116,7 @@ class MacroGraphBranchMixin {
         ; 回环路径两端的三角箭头也随收起隐藏（否则收起后仍残留在循环节点右侧）
         this.ui.Update("LoopEnterTri_" loopId, "Visibility", "Collapsed")
         this.ui.Update("LoopReturnTri_" loopId, "Visibility", "Collapsed")
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         this._SpreadForCollapse(loopId)        ; 收起：后继子树左移，与循环节点保持目标间距
     }
 
@@ -138,7 +138,7 @@ class MacroGraphBranchMixin {
         ; 回环路径两端的三角箭头随展开恢复显示
         this.ui.Update("LoopEnterTri_" loopId, "Visibility", "Visible")
         this.ui.Update("LoopReturnTri_" loopId, "Visibility", "Visible")
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         this._SpreadForExpand(loopId)          ; 展开：后继子树右移腾出外置循环体空间
     }
 
@@ -222,7 +222,7 @@ class MacroGraphBranchMixin {
         ; 先折叠真/假分支上的内联展开内容并回写，再隐藏分支卡片，避免内联子节点残留画布
         this._CollapseInlineBranch(searchId, true)
         this._CollapseInlineBranch(searchId, false)
-        this._CaptureLinks()                 ; 先取得当前逻辑后继
+        this._CaptureTopLevelSuccessorLinks()                 ; 先取得当前逻辑后继
         succ := this._SuccessorsOf(searchId)
         for conn in g.connections {
             if (this._ConnInvolvesSearchBranch(conn, searchId))
@@ -233,7 +233,7 @@ class MacroGraphBranchMixin {
         this._ApplyPairBranchPortVisibility(searchId)
         for x in succ
             this._ActivateConnection(searchId, x)
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         ; 收起：后继子树左移，与搜索节点保持至少 120px 间距
         this._SpreadForCollapse(searchId)
         this._RebindPathClicks()
@@ -244,7 +244,7 @@ class MacroGraphBranchMixin {
         g := this.graph
         if (g == "")
             return
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         succ := this._SuccessorsOf(searchId)
         ; 分支节点：首次展开则注入，否则显隐 + 主→分支连线
         if (!this._branchInjected.Has(searchId)) {

@@ -2359,7 +2359,7 @@ class UIMacroGui {
 
         actionObj := this
         action := (*) => (
-            OnTriggerMacroKeyAndInit(tableItem, macroStr, macroIndex),
+            RunMacroTrigger(tableItem, macroStr, macroIndex),
             SetTimer(() => actionObj.OnMacroComplete(macroIndex), -10)
         )
 

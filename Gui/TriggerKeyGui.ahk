@@ -51,13 +51,7 @@ class TriggerKeyGui {
         return IsObject(this.ui) && !(this.HasProp("_closed") && this._closed)
     }
 
-    _EscapeXml(s) {
-        s := StrReplace(s, "&", "&amp;")
-        s := StrReplace(s, "<", "&lt;")
-        s := StrReplace(s, ">", "&gt;")
-        s := StrReplace(s, '"', "&quot;")
-        return s
-    }
+    _EscapeXml(s) => EscapeXamlXml(s)
 
     OnSureHotkey(state, ctrl, event) {
         triggerKey := this.ui.Query("HotkeyCon")

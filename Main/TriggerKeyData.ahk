@@ -316,7 +316,7 @@ class TriggerKeyInfo {
             item := this.GetItem()
             if (!t || !item)
                 return ""
-            return GetItemFrontInfo(t, GetItemIndexInTable(t, item.ID))
+            return GetItemModuleWindowBinding(t, GetItemIndexInTable(t, item.ID))
         }
         fold := this.GetFold()
         return fold ? fold.FrontInfo : ""

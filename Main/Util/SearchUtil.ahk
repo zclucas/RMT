@@ -95,7 +95,7 @@ SearchExecute(tableItem, Data, index) {
         if (isLoopFound)
             SearchTimingMarkSucceeded(tableItem, Data)
         if (!isLoopFound) {
-            FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
+            FloatInterval := RandomizeDurationByPercent(Data.SearchInterval, MainSoftData.PreIntervalFloat)
             InterruptibleSleep(tableItem, index, FloatInterval)
         }
         return isLoopFound
@@ -115,7 +115,7 @@ SearchExecute(tableItem, Data, index) {
             }
 
             if (Data.SearchCount > A_Index) {
-                FloatInterval := GetFloatTime(Data.SearchInterval, MainSoftData.PreIntervalFloat)
+                FloatInterval := RandomizeDurationByPercent(Data.SearchInterval, MainSoftData.PreIntervalFloat)
                 InterruptibleSleep(tableItem, index, FloatInterval)
             }
         }
@@ -127,9 +127,9 @@ SearchExecute(tableItem, Data, index) {
         if (Data.FalseMacro == "")
             return
         ; 调试步入拦截：假分支（非空）仅判定不执行体；返回 "" 阻断 Search(-1) 重插
-        if (TryInterceptBranch("Search", "FalseMacro", "", -1))
+        if (TryInterceptDebugBranch("Search", "FalseMacro", "", -1))
             return ""
-        OnTriggerMacroOnce(tableItem, Data.FalseMacro, index)
+        RunMacroBodyOnce(tableItem, Data.FalseMacro, index)
     }
 }
 
@@ -513,8 +513,8 @@ ApplySearchActions(tableItem, Data, index, ResXList, ResYList, ResHwndList, Imag
         }
 
         ; 坐标浮点处理
-        Pos[1] := GetFloatValue(Pos[1], MainSoftData.CoordXFloat)
-        Pos[2] := GetFloatValue(Pos[2], MainSoftData.CoordYFloat)
+        Pos[1] := RandomizeValueByOffset(Pos[1], MainSoftData.CoordXFloat)
+        Pos[2] := RandomizeValueByOffset(Pos[2], MainSoftData.CoordYFloat)
 
         ; 执行鼠标动作
         DoMouseAction(tableItem, Data, index, Pos, hwnd, Speed, isWin)
@@ -525,9 +525,9 @@ ApplySearchActions(tableItem, Data, index, ResXList, ResYList, ResHwndList, Imag
         return true
 
     ; 调试步入拦截：真分支（非空）仅判定不执行体；返回 true 伪装「已找到」阻断 Search(-1) 重插
-    if (TryInterceptBranch("Search", "TrueMacro", "", -1))
+    if (TryInterceptDebugBranch("Search", "TrueMacro", "", -1))
         return true
-    OnTriggerMacroOnce(tableItem, Data.TrueMacro, index)
+    RunMacroBodyOnce(tableItem, Data.TrueMacro, index)
     return true
 }
 

@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include XamlText.ahk
 
 ; =============================================================================
 ; XamlWin — 所有 XAML 子窗统一开窗：先入队主题/内容，再 Show

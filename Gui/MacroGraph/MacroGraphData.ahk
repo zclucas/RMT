@@ -10,7 +10,7 @@
 
 ; 解析结果对象基类：让普通对象同时支持 d.fixedProp（点）与 d["dynKey" i]（中括号）访问。
 ; AHK v2 的对象字面量默认不支持中括号取值（无 __Item），会抛 "no property named __Item"，
-; 导致 _MapIniDataToParse 里 d["toggle" i]:=... 静默失败（被 _Parse 的 try 吞掉），
+; 导致 _CopyCommandDataToNodeFields 里 d["toggle" i]:=... 静默失败（被 _ParseNodeCommand 的 try 吞掉），
 ; 进而变量/运算等节点解析恒为默认值。设此基类后中括号读写统一映射到自身属性。
 class MGParseObjBase {
     __Item[key] {
@@ -404,7 +404,8 @@ class MacroGraphDataMixin {
     }
 
     ; 将 INI 数据对象的属性复制到解析结果 d（camelCase 字段名）
-    _MapIniDataToParse(d, data, cmdKey) {
+    ; 将持久化指令配置映射为图形节点字段，保留配置对象原有的数据结构。
+    _CopyCommandDataToNodeFields(d, data, cmdKey) {
         if (!IsObject(data))
             return
         if (cmdKey == "宏操作") {
@@ -695,10 +696,10 @@ class MacroGraphDataMixin {
             this.startSerial := GetCMDSerialStr("图形开始节点")
         ; 保存前：把画布内联控件当前值写回各节点数据（标签拖拽等平时不即时落盘）
         this._FlushInlineFieldsFromUI()
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
         this._SyncPositionsFromGraph()
 
-        ; 后继表(engineId->[engineId])、入度统计、开始节点的后继
+        ; 先用画布 ID 建后继表和入度，再写成持久化序列号。保存的连线不依赖本次打开时分配的画布 ID。
         nextMap := Map()
         inDeg := Map()
         for id in this.order
@@ -972,7 +973,7 @@ class MacroGraphDataMixin {
     }
 
     ; 解析 CurCMD，返回包含各字段的明细对象（节点信息全部由此而来，不单独存储）
-    _Parse(cmd) {
+    _ParseNodeCommand(cmd) {
         paramArr := SplitCommand(cmd)
         name := paramArr.Length >= 1 ? paramArr[1] : cmd
         d := { type: name, raw: cmd, temp: false, time: "", time2: "", itype: "", key: "", ktype: "", hold: "", count: "", inter: "", posx: "", posy: "", speed: "", mode: "" }
@@ -1148,7 +1149,7 @@ class MacroGraphDataMixin {
             d.serialStr := name
             try {
                 data := GetMacroCMDData(name)
-                this._MapIniDataToParse(d, data, iniKey)
+                this._CopyCommandDataToNodeFields(d, data, iniKey)
             }
             if (iniKey == "间隔" && paramArr.Length >= 2)
                 d.remark := paramArr[2]
@@ -1159,7 +1160,7 @@ class MacroGraphDataMixin {
         return d
     }
 
-    _BuildCmd(d) {
+    _SerializeNodeCommand(d) {
         if (d.type == GetLang("跳转"))
             return "流程跳转_" GetLangKey(d.jumpAction)
         if (d.type == GetLang("间隔")) {

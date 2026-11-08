@@ -1063,7 +1063,7 @@ class UIMacroStepBinding {
                 return out
             case "循环":
                 return [{ field: "LoopBody", index: 0, label: "循环体" }]
-            ; 搜索家族自带真假分支宏，SearchUtil:125 经 OnTriggerMacroOnce 执行
+            ; 搜索家族自带真假分支宏，SearchUtil:125 经 RunMacroBodyOnce 执行
             case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
                 return [{ field: "TrueMacro", index: 0, label: "真分支" },
                     { field: "FalseMacro", index: 0, label: "假分支" }]

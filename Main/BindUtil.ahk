@@ -1064,7 +1064,7 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
     if (!isTrigger) {
         item.ToggleState := true
         SetTableItemState(tableItem, itemIndex, 1)
-        action := OnTriggerMacroKeyAndInit.Bind(tableItem, macro, itemIndex)
+        action := RunMacroTrigger.Bind(tableItem, macro, itemIndex)
         item.ToggleAction := action
         SetTimer(action, -1)
     }
@@ -1119,7 +1119,7 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
         return
     }
     MySoftData.MacroTotalCount += 1
-    OnTriggerMacroKeyAndInit(tableItem, macro, itemIndex)
+    RunMacroTrigger(tableItem, macro, itemIndex)
 }
 
 GetReversedComboKey(comboKey) {

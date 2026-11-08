@@ -11,7 +11,7 @@
 ; 关键约束：内联子节点仅是「容器子图」的可视化编辑视图，不属于顶层图：
 ;   · 子节点放入 this.cmdNodes / this.pos（复用全部内联编辑机制），但不进 this.order；
 ;   · 顶层的连线捕获 / 归一 / 保存均通过 _IsInlineSub 跳过这些子节点与相关连线；
-;   · 任意改动在 _Apply 时就地回写到 TrueMacro / FalseMacro / MacroArr /
+;   · 任意改动在 _SaveGraphAndNotifyParent 时就地回写到 TrueMacro / FalseMacro / MacroArr /
 ;     DefaultMacro / LoopBody（复用既有序列码，不产生泄漏）。
 ;
 ; 本视图为会话级：整窗重建（_Render）或重新打开编辑器时先回写再折叠，重建后默认折叠。
@@ -326,7 +326,7 @@ class MacroGraphInlineMixin {
         this.ui.Update("ILExpand_" brId, "Content", "▸")
         this.ui.Update("ILExpand_" brId, "ToolTip", GetLang("展开"))
         this._RefreshInlineContainerBody(brId)
-        this._CaptureLinks()
+        this._CaptureTopLevelSuccessorLinks()
     }
 
     ; 整窗重建前：把所有展开的内联分支回写并从 cmdNodes/pos 摘除，避免污染重建后的顶层图。
@@ -353,7 +353,7 @@ class MacroGraphInlineMixin {
         this._ilStartSerial := Map()
     }
 
-    ; 回写所有展开中的内联分支（_Apply 调用）
+    ; 回写所有展开中的内联分支（_SaveGraphAndNotifyParent 调用）
     _SerializeAllInlineBranches() {
         if (!this.HasOwnProp("_ilExpanded"))
             return

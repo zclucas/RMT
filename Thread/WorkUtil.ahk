@@ -56,7 +56,7 @@
 
     RunBranchDispatch(tableItem, index, branches, fromStart) {
         item := tableItem.Items[index]
-        ; 从开始节点发起的多分支：本 Worker 记一份总数，用于跳过 OnFinishMacro（由 Master 统一释放）
+        ; 从开始节点发起的多分支：本 Worker 记一份总数，用于跳过 FinalizeMacroRun（由 Master 统一释放）
         if (fromStart && item)
             item.GraphBranchCount := branches.Length
         GraphPoolLog("Worker图形分支", Format("tab={1} item={2} 分支数={3} 本Worker=[{4}] fromStart={5}"
@@ -328,7 +328,7 @@
                     if (args.Length >= 3) {
                         nodeSerial := args[3]
                         GraphPoolLog("Worker开始执行", Format("tab={1} item={2} node={3}", tIdx, iIdx, nodeSerial))
-                        WalkGraphNode(tableItem, nodeSerial, itemIndex)
+                        RunGraphNodeChain(tableItem, nodeSerial, itemIndex)
                     } else {
                         TriggerMacro(tableItem, itemIndex)
                     }
@@ -336,7 +336,7 @@
 
                 if (opcode == "HM") {
                     ; 主进程补派的后置钩子任务。这里直接跑钩子宏串，绝不能转 TriggerMacro ——
-                    ; 那会进 OnTriggerMacroKeyAndInit 把前置钩子连带再跑一遍，形成递归。
+                    ; 那会进 RunMacroTrigger 把前置钩子连带再跑一遍，形成递归。
                     hookTab := args[1]
                     hookItemID := args[2]
                     hookPhase := args.Length >= 3 ? args[3] : "post"
@@ -620,7 +620,7 @@ ReloadWorkerConfig() {
         item := GetItemByIndex(tableItem, itemIndex)
         if (!item)
             return
-        OnTriggerMacroKeyAndInit(tableItem, item.Macro, itemIndex)
+        RunMacroTrigger(tableItem, item.Macro, itemIndex)
     }
 
     WorkStopMacro(tableItem, itemIndex, playStopTip := false) {
