@@ -164,7 +164,6 @@ class MacroEditGui {
             }
         } else
             this.InitSubGui()
-        this._BindCountDownToTimeGui()
         this.SubGuiMap.Set(GetLang("流程跳转"), this.FlowJumpGui)
     }
 #Include MacroEditor\CommandCatalog.ahk

@@ -104,6 +104,7 @@
             {class: JoyCheckGui, name: "手柄检测", icon: "Images\Soft\JoyListen.png", propName: "JoyCheckGui"},
             {class: WaitGui, name: "等待", icon: "Images\Soft\Wait.png", propName: "WaitGui"},
             {class: TimeGui, name: "时间", icon: "Images\Soft\Time.png", propName: "TimeGui"},
+            {class: CountDownGui, name: "倒计时", icon: "Images\Soft\Interval.png", propName: "CountDownGui"},
             {class: FlowJumpGui, name: "跳转", icon: "Images\Soft\FlowJump.png", propName: "FlowJumpGui"},
             {class: CommentGui, name: "注释", icon: "Images\Soft\Comment.png", propName: "CommentGui"},
             {class: ScreenShotGui, name: "抓图", icon: "Images\Soft\ScreenShot.png", propName: "ScreenShotGui"}
@@ -123,12 +124,4 @@
             this.%config.propName% := guiInstance
         }
         this.SubGuiMap[GetLang("等待确定")] := this.WaitGui
-    }
-
-    _BindCountDownToTimeGui() {
-        if (!ObjHasOwnProp(this, "TimeGui") || !IsObject(this.TimeGui))
-            return
-        this.CountDownGui := CountDownGui()
-        this.CountDownGui.SureBtnAction := (cmd) => this.OnSubGuiSureBtnClick(cmd)
-        try this.SubGuiMap.Set(GetLang("倒计时"), this.CountDownGui)
     }

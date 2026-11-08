@@ -1,6 +1,6 @@
 # RMT MCP（RMTMcps.exe）
 
-已适配 RMT 1.3F2。生成的配置默认使用 UTF-8 TOML，可继续解析、校验和编辑旧 INI 配置包。
+已适配 RMT 1.3F3。生成的配置默认使用 UTF-8 TOML，可继续解析、校验和编辑旧 INI 配置包。
 
 若梦兔 `.rmt` 配置的 MCP 工具说明。本目录的 `RMTMcps.exe` 是独立 stdio 服务：**不启动 RMT 主程序也能用**；启动 RMT 也不会自动拉起本服务。
 
@@ -8,7 +8,7 @@
 |------|------|
 | `RMTMcps.exe` | MCP 服务（打包产物，无需本机 Python） |
 | `mcp.example.json` | Cursor / AstrBot 配置示例 |
-| `README.md` | 本文件：工具清单 + 接入说明（内置 AI 读取下方标记段） |
+| `README.md` | 本文件：工具清单与接入说明 |
 | `workspaces/` | 解包临时区 |
 | `output/` | 生成的 `.rmt` |
 
@@ -17,9 +17,9 @@
 ---
 
 <!-- RMT_AI_PROMPT_BEGIN -->
-## 内置 AI 能力参考（RMTMcps）
+## MCP 工具速查
 
-你当前**不能直接调用** `RMTMcps.exe`。下列工具名与流程用于：解释配置能力、给出可落地的操作步骤与参数建议。若用户环境已接 Cursor/AstrBot MCP，可按其工具名引导对方调用。
+下列流程适用于已接入 RMTMcps 的宿主，例如 Cursor 或 AstrBot。RMT 内置助手使用软件自己的宏工具。
 
 ### 工具一览
 
@@ -29,7 +29,7 @@
 | `list_rmt_files` | 列出工作区内文件 |
 | `read_rmt_file` | 读工作区某文件（可限 `max_chars`，默认约 12000） |
 | `write_rmt_file` | 写/改工作区文件（易踩 INI/编码坑，优先用 `edit_rmt_macro`） |
-| `explain_rmt` | 配置可读摘要（触发键、指令中文描述等） |
+| `explain_rmt` | 解读配置或指定单条宏（触发键、指令参数、前后钩子） |
 | `validate_rmt` | 校验合法性，返回分级问题清单 |
 | `edit_rmt_macro` | 结构化增/删/改宏，或宏内单条指令，并自动复校验 |
 | `generate_rmt_config` | 按 JSON 规格生成并打包 `.rmt` |
@@ -43,8 +43,8 @@
 1. **解读已有配置**：`parse_rmt(source)` → `explain_rmt(workspace_id)` 或 `read_rmt_file` → 用完可 `cleanup_rmt_workspace`
 2. **从零生成**：`generate_rmt_config(spec_json)`；小包看 `delivery.base64`；过大再 `export_rmt_file`
 3. **改一条宏再打包**：`parse_rmt` → `edit_rmt_macro`（看 `validation`）→ `pack_rmt`
-4. **只改一条指令**：`explain_rmt` 数出指令序号 → `edit_rmt_macro(operation="update_command", command_index=N)`；
-   改配置型指令的参数则用 `data_configs` 按序列码 upsert，不必重建指令
+4. **只改一条指令**：`explain_rmt(workspace_id=..., module="Normal", index=2)` 定位指令序号 → `edit_rmt_macro(operation="update_command", command_index=N)`；
+   局部修改搜索、变量、等待参数时，用 `patch_command`，保留其他步骤和分支。
 5. **只校验**：`validate_rmt(workspace_id=...)` 或 `validate_rmt(source=...)`
 
 ### 关键约定
@@ -55,6 +55,9 @@
 - `edit_rmt_macro` 的 `operation`：
   - 宏级 `update`（默认）/ `add` / `delete`
   - 指令级 `update_command` / `add_command` / `delete_command`，配 `command_index` 与 `changes.command`
+  - 局部参数 `patch_command`：例如 `{"expected_command":"搜索Pro1","parameters":{"SearchCount":3}}`。
+    多目标或多行用 `target_index` / `row_index`；先 `preview_only=true`，再带 `expected_revision` 提交。
+    `data_configs` 会更新共享配置，影响所有引用同一序列码的步骤。
   - 图形级 `update_graph_node` / `add_graph_node` / `delete_graph_node`，配 `changes.node` / `after` / `command`
   - **只改一条指令时别用 `update` + `commands`**：那要求复述该宏全部指令，漏写会静默丢掉原指令
     （含配置型指令的序列码引用）
@@ -76,7 +79,7 @@
   - `interval`：`{"ms":3000}` 固定；`{"min":100,"max":300}` 随机区间（**必须成对给**，只给一个会报错）
   - `move`：`移动_X_Y_速度_方式`。方式 `mode`：`绝对`/`0`、`相对`/`1`、`游戏视角`/`2`；不写方式则省略（绝对）。`relative:true` 仍等价于相对
   - `rmt`：`RMT指令_类别_指令`；`action` 为「显示菜单」时再加 `menu` 序号
-  - 任意类型可加 `"disabled":true`（🚫 禁用）或 `"debug":true`（⭐ 调试起点）
+  - 任意类型可加 `"disabled":true`（🚫 禁用）或 `"debug":true`（▶ 调试起点，兼容旧配置的 ⭐）
 - 使用说明字段：`bot_name`、`config_purpose`、`operation_instructions`，须中文且结合实际配置
 - 沙盒与宿主机文件系统隔离时：不要对宿主机 `output/` 做 `cp`；用响应内 `delivery.base64` 或 `export_rmt_file`
 <!-- RMT_AI_PROMPT_END -->
@@ -104,7 +107,9 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 ### 能力发现（外部宿主）
 
 - 宿主启动 exe 后走 MCP `tools/list`，得到工具名、描述与参数 schema。
-- 本文档供人读、Code Review、以及 **RMT 内置 AI**（读取上方标记段）离线了解能力；不必为「列工具」去启动 RMT 主程序。
+- 本文档供用户和 MCP 宿主参考；列出 MCP 工具时可独立启动服务。
+- 解包校验容器版本、条目路径及大小。上限为 1 GiB、10,000 个文件，每个文件最多 200 MiB。
+- 文件读写只接受工作区内相对路径，清理仅处理服务生成的工作区和输出文件。
 
 ---
 
@@ -132,7 +137,8 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 ### explain_rmt
 
 - **二选一**（优先 `workspace_id`）：`workspace_id` 或 `source`  
-- **返回**：`total_macros`、`tab_count`、`tabs[]`（每条宏含 trigger / enabled / remark / commands 可读描述）、`datafiles`  
+- **只读一条宏**：同时传入 `module`（如 `Normal` 或 `按键宏`）和从 1 开始的 `index`。
+- **返回**：`total_macros`（返回条数）、`tab_count`、`tabs[]`（每条宏含 trigger / enabled / remark / commands 可读描述）。`tabs[].macro_count` 是页签内宏总数，全量解读另返回 `datafiles`。
 - 对全部配置型序列码（搜索/变量/循环/如果/输出…）会读取对应 `*File.toml`，在 `commands[].config` 给出 JSON；缺配置标 `config_missing`；嵌套 `TrueMacro`/`LoopBody`/`MacroArr`/`CurCMD` 会递归解读。图形开始节点额外给出 `graph_nodes`
 
 ### validate_rmt
@@ -144,18 +150,23 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 ### edit_rmt_macro
 
 - **必填** `workspace_id`、`module`
-- **可选** `index`（除 `add` 外都必填）、`changes_json`、`operation`、`command_index`
+- **可选** `index`（除 `add` 外都必填）、`changes_json`、`operation`、`command_index`、`preview_only`
+- **预览**：`preview_only=true` 在临时副本试改并校验，返回修改前后结果，原工作区保留原样。
+- **编辑范围** `phase` 默认为 `body`（正文）。TOML 宏的前置和后置钩子分别用 `pre` 和 `post`。`command_index` 从所选段的第一条开始计数。
+- **撤销** `patch_command` 应用后返回 `edited_command.undo_receipt`。在同一工作区、宏、`phase` 和步骤使用 `undo_patch_command`，传 `{"undo_receipt": …}`。支持预览和过期检测。
 - **`changes_json` 额外支持**：`commands` 里全部配置型 type（自动写 DataFile）；`data_configs` / `search_configs` / `loop_configs` 等按序列码 upsert
 - **返回**：`operation`、`module`、`macro_count`、`edited_macro`、`edited_command`（指令级操作的前后对照）、`datafiles_updated`、`validation`
 
-`operation` 六种取值：
+`operation` 支持：
 
 | operation | 作用 | 需要 | 说明 |
 |-----------|------|------|------|
 | `update` | 改整条宏 | `index` | `changes` 给 `trigger_key` / `remark` / `commands` 等 |
 | `add` | 新增宏 | — | 追加到该页签末尾，`index` 忽略 |
 | `delete` | 删整条宏 | `index` | 自动前移后续宏并修 FoldInfo |
-| `update_command` | 替换一条指令 | `index`、`command_index` | `changes.command` 给新指令；**只给 `disabled`/`debug` 时仅切换 🚫/⭐ 标记、保留原指令参数** |
+| `update_command` | 替换一条指令 | `index`、`command_index` | `changes.command` 给新指令。只给 `disabled`/`debug` 时仅切换 🚫/▶ 标记，保留原指令参数 |
+| `patch_command` | 改一条指令的参数 | `index`、`command_index` | 搜索、变量、等待。原分支与共享引用保留 |
+| `undo_patch_command` | 恢复局部参数修改 | `index`、`command_index` | 传原操作返回的 `undo_receipt` |
 | `add_command` | 插入一条指令 | `index` | `command_index<=0` 或超末尾则追加；否则插到该位置之前 |
 | `delete_command` | 删一条指令 | `index`、`command_index` | 宏内其余指令与分隔符风格（`,` 或换行 `⫶`）保持不变 |
 | `update_graph_node` | 改一个图形节点 | `index` 或 `changes.start` | `node` 为「图形节点N」；可改 `command` / `next` / `x` / `y` |
@@ -279,7 +290,7 @@ changes_json={"data_configs": {"变量1": {"CopyVariableArr": ["99", "0", "0", "
 | 字段 | 效果 | 生成结果 |
 |------|------|----------|
 | `disabled: true` | 该指令被禁用，RMT 执行时跳过 | `🚫按键_a_点击_100_1_200` |
-| `debug: true` | 标为调试起点 | `⭐间隔_500` |
+| `debug: true` | 标为调试起点 | `▶间隔_500` |
 
 #### 按键
 
@@ -479,7 +490,7 @@ AstrBot 等沙盒与宿主机文件系统隔离，**不要**对宿主机 `output
 - **源码仓库中的发行文档模板是 `Release.README.md`**：增删工具、改参数说明、改 `RMT_AI_PROMPT` 标记段时，先改该文件，再同步到 `Release\README.md`（以及已拷贝的 `Dev\Plugins\RMTMcps\README.md`）。
 - `.\build.ps1` 打包时会自动把 `Release.README.md`、`mcp.example.json` 复制进 `Release\`。
 - 重新打包 exe 后：替换本目录 `RMTMcps.exe`，并核对本文（尤其 `RMT_AI_PROMPT` 标记段）是否仍一致。**无需改 AHK。**
-- 内置 AI 只注入标记段；改标记段时注意控制长度（避免撑爆每次对话的 system prompt）。
+- 标记段用于快速查阅外部 MCP 的工具和工作流程。
 - Python 源码可独立维护于其它目录；本目录只放 **exe + 配置示例 + 本文档**。
 
 

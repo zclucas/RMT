@@ -111,7 +111,7 @@ const COMMAND_ICON_FILES = {
   "等待": "Images/Soft/Wait.png",
   "等待确定": "Images/Soft/WaitConfirm.png",
   "时间": "Images/Soft/Time.png",
-  "跳转": "Images/Soft/Control.png",
+  "跳转": "Images/Soft/FlowJump.png",
   "倒计时": "Images/Soft/Interval.png",
   "移动": "Images/Soft/Move.png",
   "移动Pro": "Images/Soft/MovePro.png",
@@ -176,10 +176,12 @@ function splitMarkdownByH2(md) {
   }));
 }
 
-function mdToHtml(md) {
-  let text = fixImagePaths(md);
-  let htmlBody = marked.parse(text);
-  return convertImagesInHtml(htmlBody);
+function mdToHtml(md, isCommandDoc = false) {
+  let html = marked.parse(fixImagePaths(md));
+  if (isCommandDoc) {
+    html = html.replace(/<p>(?=<img src="Images\/MacroCMD\/)/g, '<p class="cmd-config-screenshots">');
+  }
+  return convertImagesInHtml(html);
 }
 
 const markedSrc = readWebText('JS', 'marked.min.js');
@@ -212,12 +214,12 @@ for (const doc of DOC_FILES) {
         title: part.title,
         slug: part.slug,
         route,
-        body: mdToHtml(part.md)
+        body: mdToHtml(part.md, doc.title === '指令手册')
       });
       const child = { index, title: part.title, route, num: '', cmdName: '', iconHtml: '' };
       if (doc.title === '指令手册') {
         Object.assign(child, getCommandNavParts(part.title));
-        const category = part.md.match(/^<span class="cmd-doc-tag [^"]+">[^\r\n]*<strong>([^<]+)<\/strong><\/span>$/m);
+        const category = part.md.match(/^<!-- 指令分类：([^\r\n]+) -->$/m);
         child.category = category ? category[1].trim() : '';
       }
       children.push(child);
@@ -354,19 +356,14 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 .content blockquote{border-left:4px solid #4a6cf7;margin:14px 0;padding:10px 18px;background:#f5f7ff;color:#556;border-radius:0 6px 6px 0}
 .content hr{border:none;border-top:2px solid #eee;margin:32px 0}
 .content strong{color:#1a1a2e}
-.page[data-group="指令手册"] .cmd-doc-tag{display:inline-flex;align-items:center;gap:6px;padding:2px 11px;border-radius:999px;background:var(--cmd-tag-bg);color:var(--cmd-tag-text);font-size:12px}
-.page[data-group="指令手册"] .cmd-doc-tag strong{color:inherit}
-.cmd-doc-input,.cmd-doc-vision{--cmd-tag-bg:#e0f2fe;--cmd-tag-text:#075985}
-.cmd-doc-io,.cmd-doc-data{--cmd-tag-bg:#ede9fe;--cmd-tag-text:#5b21b6}
-.cmd-doc-files,.cmd-doc-flow{--cmd-tag-bg:#dcfce7;--cmd-tag-text:#166534}
-.cmd-doc-control,.cmd-doc-other{--cmd-tag-bg:#fef3c7;--cmd-tag-text:#854d0e}
 .page[data-group="指令手册"] .content blockquote{border-color:#c58817;background:#fff9e9;color:#61440c}
 .page[data-group="指令手册"] .content blockquote p{margin:0}
 .page[data-group="指令手册"] .content blockquote strong{color:#754b0c}
 .page[data-group="指令手册"] .content th{background:#e8effa;color:#26416e}
 .page[data-group="指令手册"] .content td{vertical-align:top;overflow-wrap:anywhere}
-.page[data-group="指令手册"] .content code{background:#edf2f9;color:#23436f}
-.page[data-group="指令手册"] .content pre code{background:none;color:inherit}
+.content .cmd-config-screenshots img{width:auto;max-width:min(100%,640px);max-height:min(400px,48vh);margin-inline:auto;padding:0;box-shadow:none}
+:is([data-route$="-按键"],[data-route$="-后台按键"],[data-route$="-按键检测"]) .content .cmd-config-screenshots img{max-width:100%}
+.page[data-group="指令手册"] .content :not(pre)>code{background:#e5edff;color:#142c56;font-family:Consolas,"Microsoft YaHei",monospace;font-size:1em;font-weight:600;overflow-wrap:anywhere}
 .hidden{display:none!important}
 </style>
 <style>${searchCss}</style>
