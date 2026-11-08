@@ -159,13 +159,23 @@ SendSingleKey(key, state, tableItem, index, Action) {
 ; ------------------------------------------------------------
 ; Repeated key-down policy
 ; ------------------------------------------------------------
+IsDesktopKeyPressed(key) {
+    vk := GetKeyVK(key)
+    if (!vk || MySoftData.OnlyDownKeyMap.Has(key))
+        return false
+    ; GetKeyState 的逻辑状态跟随调用线程的消息队列，可能仍是上一次输入。
+    ; 获取当前桌面状态，并将逻辑左右键映射回系统的物理键位。
+    if ((vk == 1 || vk == 2) && DllCall("GetSystemMetrics", "Int", 23, "Int"))
+        vk := 3 - vk
+    return DllCall("GetAsyncKeyState", "Int", vk, "Short") < 0
+}
+
 HandleRepeatedKeyDown(key, tableItem, index, Action) {
-    ; Joy* 不是合法 GetKeyState 键名，调用会抛错并中断宏
-    if (InStr(key, "Joy"))
+    if (MainSoftData.KeyDownDownType = 3 || InStr(key, "Joy"))
         return false
 
     try {
-        if !GetKeyState(key)
+        if !IsDesktopKeyPressed(key)
             return false
     } catch {
         return false
@@ -177,7 +187,6 @@ HandleRepeatedKeyDown(key, tableItem, index, Action) {
             Action(key, 0, tableItem, index)
         case 2:  ; ignore later press
             return true
-        case 3:  ; allow duplicate press
     }
     return false
 }

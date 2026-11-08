@@ -17,6 +17,8 @@ class LogCenterGui {
         this.closed := true
         this._curTab := "System"        ; System / Business
         this._levelFilter := ""         ; 空=全部；debug/info/warn/error
+        this._filterCurrent := ""
+        this._filterTail := ""
         this._filePos := -1
         this._shown := ""
         this._maxChars := 60000         ; 界面只留最近一段，整文件（可达数 MB）会堵死 WPF 和主线程
@@ -253,10 +255,21 @@ class LogCenterGui {
         if (txt == "")
             return
         defName := this._curTab == "System" ? "System.log" : "Business.log"
-        savePath := FileSelect("S", defName, GetLang("导出日志"), "日志文件 (*.log)")
-        if (savePath != "") {
-            try FileAppend(txt, savePath, "UTF-8")
+        savePath := FileSelect("S16", defName, GetLang("导出日志"), "日志文件 (*.log)")
+        if (savePath == "")
+            return
+        currentPath := this._curTab == "System" ? this._SysPath() : this._BizPath()
+        if (ResolvePathNoDotDot(savePath) = ResolvePathNoDotDot(currentPath)) {
+            Toast.Warning(GetLang("请选择不同于当前日志的导出文件"))
+            return
+        }
+        try {
+            output := FileOpen(savePath, "w", "UTF-8")
+            try output.Write(txt)
+            finally output.Close()
             Toast.Success(GetLang("已导出"))
+        } catch as e {
+            Toast.Error(e.Message)
         }
     }
 
@@ -284,6 +297,8 @@ class LogCenterGui {
             path := this._curTab == "System" ? this._SysPath() : this._BizPath()
             if (!FileExist(path)) {
                 this._filePos := 0
+                this._filterCurrent := ""
+                this._filterTail := ""
                 if (this._shown != "") {
                     this._shown := ""
                     this.ui.Update("LogCon", "Text", "")
@@ -298,7 +313,7 @@ class LogCenterGui {
             if (!full && this._filePos >= 0 && size > this._filePos && (size - this._filePos) <= this._maxChars * 4) {
                 added := this._ReadFrom(path, this._filePos, &pos)
                 this._filePos := pos
-                added := this._Filter(added)
+                added := this._Filter(added, false)
                 if (added == "")
                     return
                 this._shown .= added
@@ -379,12 +394,23 @@ class LogCenterGui {
         return GetLang("仅显示最近日志") "`n" text
     }
 
-    _Filter(content) {
+    _Filter(content, reset := true) {
+        if (reset) {
+            this._filterCurrent := ""
+            this._filterTail := ""
+        }
         if (this._levelFilter == "")
             return content
+        ; 只识别真正的日志头；匹配该条的级别后，保留所有续行和堆栈。
+        ; 轮询可能读到尚未写完的一行，等下次补齐再解析。
+        lines := StrSplit(this._filterTail content, "`n", "`r")
+        this._filterTail := lines.Length ? lines.Pop() : ""
         filtered := ""
-        for line in StrSplit(content, "`n", "`r") {
-            if (InStr(line, "[" this._levelFilter "]"))
+        VarSetStrCapacity(&filtered, StrLen(content))
+        for line in lines {
+            if (RegExMatch(line, "^\[.*\] \[\d+\] \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[(debug|info|warn|error)\](?: |$)", &header))
+                this._filterCurrent := header[1]
+            if (this._filterCurrent == this._levelFilter)
                 filtered .= line "`n"
         }
         return filtered

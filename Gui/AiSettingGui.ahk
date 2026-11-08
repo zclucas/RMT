@@ -72,7 +72,7 @@ class AiSettingGui {
 
     ; TextBox 主题模板对 Padding 表现与 Combo 不一致：外层 Border 承担边框+内边距，内层 TextBox 无边框
     ; 父级须为 Grid 且字段在 Column 1（*），本控件 Stretch 填满，不再写死 Width。
-    _AddFieldTextBox(parent, name, gap) {
+    _AddFieldTextBox(parent, name, gap, password := false) {
         h := AiSettingGui.CtrlH
         padL := AiSettingGui.ContentPadL
         host := parent.Add("Border").Name(name "_Host").Grid_Column(1)
@@ -81,11 +81,12 @@ class AiSettingGui {
             .HorizontalAlignment("Stretch")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .SnapsToDevicePixels("True")
-        tb := host.Add("TextBox").Name(name)
+        tb := host.Add(password ? "PasswordBox" : "TextBox").Name(name)
             .Height(h - 2).MinHeight(h - 2).VerticalContentAlignment("Center")
             .Padding("0").Margin("0").BorderThickness("0")
             .Foreground("{DynamicResource InputText}").Background("Transparent")
-            .VerticalScrollBarVisibility("Disabled").HorizontalScrollBarVisibility("Disabled")
+        if (!password)
+            tb.VerticalScrollBarVisibility("Disabled").HorizontalScrollBarVisibility("Disabled")
         return tb
     }
 
@@ -137,7 +138,7 @@ class AiSettingGui {
         row2 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row2.Cols(String(labelW), "*")
         row2.Add("TextBlock").Text(GetLang("API Key：")).Grid_Column(0).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        this._AddFieldTextBox(row2, "TxtAiApiKey", gap)
+        this._AddFieldTextBox(row2, "TxtAiApiKey", gap, true)
 
         ; 行3：模型列表 + 刷新
         row3 := body.Add("Grid").Grid_Row(3).VerticalAlignment("Center")
@@ -217,7 +218,7 @@ class AiSettingGui {
             this.ui.Update("CmbAiProvider", "SelectedIndex", String(pIdx))
             this.ui.Update("TxtAiBaseUrl", "Text", MainSoftData.AiApiBaseUrl)
             this._ApplyUrlEditable(this._IsUrlEditable(MainSoftData.AiProvider))
-            this.ui.Update("TxtAiApiKey", "Text", MainSoftData.AiApiKey)
+            this.ui.Update("TxtAiApiKey", "Password", MainSoftData.AiApiKey)
             this._FillModelCombo(AiAssist.ModelListArr(), MainSoftData.AiModel)
             this.ui.Update("CmbAiAccess", "SelectedIndex", String(MainSoftData.AiAccessMode - 1))
             this.ui.Update("CmbAiApproval", "SelectedIndex", String(MainSoftData.AiApprovalMode - 1))

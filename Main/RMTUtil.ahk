@@ -1695,6 +1695,8 @@ SimpleRecordMacroStr(MacroStr) {
 }
 
 DiscardRecordTriggerKey(MacroStr, isFront) {
+    if (isFront ? MainSoftData.IsTogStartRecord : MainSoftData.IsTogEndRecord)
+        return MacroStr
     triggerMap := GetRecordTriggerKeyMap()
     CmdArr := SplitMacro(MacroStr)
     SimpleCmdArr := []
@@ -1703,33 +1705,30 @@ DiscardRecordTriggerKey(MacroStr, isFront) {
         cmd := isFront ? CmdArr[A_Index] : CmdArr[CmdArr.Length - A_Index + 1]
 
         if (!hasDiscard) {
-            if (isFront && MainSoftData.IsTogStartRecord) {
-                hasDiscard := true
-            }
-            else if (!isFront && MainSoftData.IsTogEndRecord) {
-                hasDiscard := true
-            }
-            else {
-                if (InStr(cmd, GetLang("间隔")))
+            if (InStr(cmd, GetLang("间隔")))
+                continue
+
+            if (!isFront) {
+                moveArr := SplitCommand(cmd)
+                if (moveArr.Length >= 4 && moveArr[moveArr.Length] == "2")
                     continue
-
-                if (!isFront) {
-                    moveArr := SplitCommand(cmd)
-                    if (moveArr.Length >= 4 && moveArr[moveArr.Length] == "2")
-                        continue
-                }
-
-                if (CheckIfDiscardCMD(triggerMap, cmd))
-                    continue
-
-                hasDiscard := true
             }
+
+            if (CheckIfDiscardCMD(triggerMap, cmd))
+                continue
+
+            hasDiscard := true
         }
 
-        if (isFront)
+        if (isFront) {
             SimpleCmdArr.Push(cmd)
-        else
-            SimpleCmdArr.InsertAt(1, cmd)
+        } else {
+            ; 逆向仅寻找尾部截断点。找到后一次线性复制，避免长录制逐条头插。
+            endIndex := CmdArr.Length - A_Index + 1
+            Loop endIndex
+                SimpleCmdArr.Push(CmdArr[A_Index])
+            break
+        }
     }
 
     return GetMacroStrByCmdArr(SimpleCmdArr)

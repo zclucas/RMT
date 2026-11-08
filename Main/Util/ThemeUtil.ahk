@@ -87,7 +87,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF1A1A1A",
             Theme_Color11: "#FF1A1A1A",
             Theme_Color12: "#FF333333",
-            Theme_Color13: "#FFFFFFFF",
+            Theme_Color13: "#FF3E6687",
             Theme_Color14: "#FFFFFFFF"},
         {Key: "FrostGray", Name: "霜灰",
             Theme_Color01: "#FF475569",
@@ -102,7 +102,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF1E293B",
             Theme_Color11: "#FF1E293B",
             Theme_Color12: "#FF2E3540",
-            Theme_Color13: "#FFF8FAFC",
+            Theme_Color13: "#FF475569",
             Theme_Color14: "#FFFFFFFF"},
         {Key: "DarkNight", Name: "暗夜",
             Theme_Color01: "#FF4A4A4A",
@@ -132,7 +132,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF5C3317",
             Theme_Color11: "#FF5C3317",
             Theme_Color12: "#FF3A3228",
-            Theme_Color13: "#FFFFF8DC",
+            Theme_Color13: "#FF8A551F",
             Theme_Color14: "#FFFFFFFF"},
         {Key: "Ocean", Name: "海洋",
             Theme_Color01: "#FF1E90FF",
@@ -147,7 +147,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF1A365D",
             Theme_Color11: "#FF1A365D",
             Theme_Color12: "#FF283848",
-            Theme_Color13: "#FFF0F8FF",
+            Theme_Color13: "#FF28618E",
             Theme_Color14: "#FFFFFFFF"},
         {Key: "PinkSakura", Name: "绯樱",
             Theme_Color01: "#FFDB2777",
@@ -162,7 +162,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF9F1239",
             Theme_Color11: "#FF9F1239",
             Theme_Color12: "#FF3A2830",
-            Theme_Color13: "#FFFFF0F5",
+            Theme_Color13: "#FF9F3159",
             Theme_Color14: "#FFFFFFFF"},
         {Key: "Matcha", Name: "抹茶",
             Theme_Color01: "#FF65A30D",
@@ -177,7 +177,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF365314",
             Theme_Color11: "#FF365314",
             Theme_Color12: "#FF2E3828",
-            Theme_Color13: "#FFF7FBEA",
+            Theme_Color13: "#FF466927",
             Theme_Color14: "#FFFFFFFF"},
         {Key: "Celadon", Name: "青瓷",
             Theme_Color01: "#FF0D9488",
@@ -192,7 +192,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF134E4A",
             Theme_Color11: "#FF134E4A",
             Theme_Color12: "#FF283836",
-            Theme_Color13: "#FFF0FDFA",
+            Theme_Color13: "#FF286D63",
             Theme_Color14: "#FFFFFFFF"},
         {Key: "DuskPurple", Name: "暮紫",
             Theme_Color01: "#FF7C3AED",
@@ -207,7 +207,7 @@ class AppThemeUtil {
             Theme_Color10: "#FF4C1D95",
             Theme_Color11: "#FF4C1D95",
             Theme_Color12: "#FF322840",
-            Theme_Color13: "#FFFAF5FF",
+            Theme_Color13: "#FF624A87",
             Theme_Color14: "#FFFFFFFF"}
     ]
 
@@ -527,6 +527,10 @@ class AppThemeUtil {
     ; ---------- toml 读写 ----------
 
     static LoadFromToml() {
+        static legacyGraphColors := Map(
+            "Default", "#FFFFFFFF", "FrostGray", "#FFF8FAFC", "WarmSun", "#FFFFF8DC",
+            "Ocean", "#FFF0F8FF", "PinkSakura", "#FFFFF0F5", "Matcha", "#FFF7FBEA",
+            "Celadon", "#FFF0FDFA", "DuskPurple", "#FFFAF5FF")
         section := "ThemeColors"
         themeKey := CfgRead(SettingFile, section, "AppTheme", AppThemeUtil.DefaultThemeKey)
         ; 空值、未知 Key → 默认主题；Custom 是正式的可编辑主题键。
@@ -541,8 +545,13 @@ class AppThemeUtil {
         ; 逐项覆盖：ini 有值才覆盖；新增 ColorDefs Key 在 ini 中不存在时保留底图色
         for def in AppThemeUtil.ColorDefs {
             saved := CfgRead(SettingFile, section, def.Key, "")
-            if (saved != "")
-                colors[def.Key] := AppThemeUtil.NormalizeArgb(saved)
+            if (saved == "")
+                continue
+            color := AppThemeUtil.NormalizeArgb(saved)
+            ; 仅升级浅色预设的旧连线色，自定义主题按已保存值读取。
+            if (def.Key == "Theme_Color13" && color == legacyGraphColors.Get(themeKey, ""))
+                continue
+            colors[def.Key] := color
         }
 
         colors := AppThemeUtil.CloneColorMap(colors)

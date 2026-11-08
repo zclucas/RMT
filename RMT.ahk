@@ -5,6 +5,7 @@ global RMT_VERSION := "1.3F3"
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
 #Include Main\MainGlobalUtil.ahk
+#SingleInstance Off ; 命令行客户端先走应用互斥，不能由界面库的 Force 规则替换常驻进程。
 
 ; §3 单实例：已有实例且携带命令行参数 → 转发命令队列后退出；否则（无参数/提权切换）接管
 if (!EnsureSingleInstance())

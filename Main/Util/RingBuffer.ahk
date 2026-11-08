@@ -40,6 +40,14 @@ class RingBuffer {
 
     ; Push: [Type][ID][hEvent][Len][Payload]
     Push(type, id, str := "", hEvent := 0) {
+        ; 单生产者/单消费者是按进程划分的；AHK 定时器和消息回调仍可能中断同进程线程。
+        previousCritical := A_IsCritical
+        Critical("On")
+        try return this._Push(type, id, str, hEvent)
+        finally Critical(previousCritical)
+    }
+
+    _Push(type, id, str, hEvent) {
         if (!this.valid)
             return false
 
@@ -78,6 +86,13 @@ class RingBuffer {
     }
 
     Pop(&type, &id, &str, &hEvent := 0) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try return this._Pop(&type, &id, &str, &hEvent)
+        finally Critical(previousCritical)
+    }
+
+    _Pop(&type, &id, &str, &hEvent) {
         if (!this.valid)
             return false
 
@@ -93,7 +108,7 @@ class RingBuffer {
         if (type_signed == -1) {
             tail += (this.cap - pos)
             this.SetTail(tail)
-            return this.Pop(&type, &id, &str, &hEvent)
+            return this._Pop(&type, &id, &str, &hEvent)
         }
 
         type := NumGet(this.bufPtr, pos, "UInt")

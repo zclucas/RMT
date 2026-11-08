@@ -1032,6 +1032,7 @@ class MainWin {
         this._BindLive("AiSend_" t, "Click", ObjBindMethod(this, "OnAiSendClick", t))
         this._BindLive("AiMic_" t, "Click", ObjBindMethod(this, "OnAiMicClick", t))
         this._BindLive("SideAiToolHistory_" t, "Click", ObjBindMethod(this, "OnSideAiToolHistory", t))
+        this._BindLive("SideAiToolValidate_" t, "Click", ObjBindMethod(this, "OnSideAiToolValidate", t))
         this._BindLive("SideAiToolSettings_" t, "Click", ObjBindMethod(this, "OnSideAiToolSettings", t))
         this._BindLive("SideAiToolTop_" t, "Click", ObjBindMethod(this, "OnSideToolTop", t))
         this._BindSideTree(t)
@@ -1425,6 +1426,23 @@ class MainWin {
         AiHistoryGui.ShowGui(t)
     }
 
+    OnSideAiToolValidate(t, *) {
+        item := this._ResolveSideTreeItem(t)
+        if (!IsObject(item)) {
+            Toast.Info(GetLang("请先选择要校验的宏"))
+            return
+        }
+        title := GetLang("运行前校验")
+        try {
+            table := AiAssist._ResolveTable(t)
+            idx := GetItemIndexInTable(table, item.ID)
+            result := AiMacroValidation.Check(Map("tab", t, "index", idx, "item_id", item.ID))
+            RmtDialog.Info(AiMacroValidation.FormatReport(result), title, this.ui.wpfHwnd)
+        } catch as e {
+            RmtDialog.Info(e.Message, title, this.ui.wpfHwnd)
+        }
+    }
+
     OnSideAiToolSettings(t, *) {
         AiSettingGui.ShowGui()
     }
@@ -1649,7 +1667,7 @@ class MainWin {
     }
 
     OnSideToolRecord(t, *) {
-        OnHotToolRecordMacro(true)
+        OnClickToolRecordMacro(true)
         if (IsObject(this._sideTree))
             this._sideTree.SyncToolToggles(t)
     }
@@ -1917,6 +1935,7 @@ class MainWin {
             .Orientation("Horizontal").Height(30).Margin("4,4,4,4").VerticalAlignment("Center")
             .Visibility("Collapsed")
         this._AddSideToolBtn(aiToolBar, idx, "History", Chr(0xE81C), GetLang("对话记录"), false, "SideAiTool")
+        this._AddSideToolBtn(aiToolBar, idx, "Validate", Chr(0xE9D9), GetLang("运行前校验"), false, "SideAiTool")
         this._AddSideToolBtn(aiToolBar, idx, "Settings", Chr(0xE713), GetLang("设置"), false, "SideAiTool")
         this._AddSideToolBtn(aiToolBar, idx, "Top", Chr(0xE840), GetLang("窗口置顶"), true, "SideAiTool")
 
@@ -2832,10 +2851,39 @@ class MainWin {
             mods := state["KeyModifiers"]
         if (!InStr(mods, "Ctrl"))
             return
+        if (this._AiPasteClipboardFiles(t))
+            return
         if (DllCall("IsClipboardFormatAvailable", "UInt", 8) || DllCall("IsClipboardFormatAvailable", "UInt", 2)) {
             if (this._AiPasteClipboardImage(t))
                 return
         }
+    }
+
+    _AiPasteClipboardFiles(t) {
+        if (!DllCall("IsClipboardFormatAvailable", "UInt", 15) || !DllCall("OpenClipboard", "Ptr", 0))
+            return false
+        files := []
+        try {
+            drop := DllCall("GetClipboardData", "UInt", 15, "Ptr")
+            if (!drop)
+                return false
+            count := DllCall("shell32\DragQueryFileW", "Ptr", drop, "UInt", 0xFFFFFFFF, "Ptr", 0, "UInt", 0, "UInt")
+            loop Min(count, 12) {
+                index := A_Index - 1
+                len := DllCall("shell32\DragQueryFileW", "Ptr", drop, "UInt", index, "Ptr", 0, "UInt", 0, "UInt")
+                if (!len || len > 32767)
+                    continue
+                buf := Buffer((len + 1) * 2)
+                if DllCall("shell32\DragQueryFileW", "Ptr", drop, "UInt", index, "Ptr", buf, "UInt", len + 1, "UInt")
+                    files.Push(StrGet(buf, len, "UTF-16"))
+            }
+        } finally DllCall("CloseClipboard")
+        for path in files {
+            attr := FileExist(path)
+            if (attr && !InStr(attr, "D"))
+                this._AiAddAttach(t, this._AiIsImageFile(path) ? "image" : "file", path)
+        }
+        return files.Length > 0
     }
 
     OnAiMicClick(t, *) {
@@ -2988,6 +3036,10 @@ class MainWin {
         for a in list {
             if (a["path"] = path)
                 return
+        }
+        if (list.Length >= 12) {
+            Toast.Warning(GetLang("最多可添加 12 个附件"))
+            return
         }
         this._aiAttachSeq := Integer(this._aiAttachSeq) + 1
         SplitPath(path, &name)
@@ -3283,9 +3335,12 @@ class MainWin {
 
     _AiErrText(e) {
         errMsg := IsObject(e) && e.HasProp("Message") ? e.Message : String(e)
+        detail := errMsg
         if (IsObject(e) && e.HasProp("File") && e.File != "")
-            errMsg .= "`n" e.File (e.HasProp("Line") ? ":" e.Line : "")
-        return errMsg
+            detail .= "`n" e.File (e.HasProp("Line") ? ":" e.Line : "")
+        try RMTLogSys(RMT_LV_WARN, "AI", detail)
+        errMsg := RegExReplace(errMsg, "i)^\s*\(0x[0-9a-f]+\)\s*")
+        return Trim(RegExReplace(errMsg, "i)\s*Source:\s*RMT\s*$"))
     }
 
     _AiPollChat() {
@@ -3602,7 +3657,7 @@ class MainWin {
                 return GetLang("正在执行命令")
             case "run_script":
                 return GetLang("正在运行脚本") (fn != "" ? "：" fn : "")
-            case "update_macro", "set_macro_step_enabled":
+            case "update_macro", "set_macro_step_enabled", "apply_macro_step_edit", "undo_macro_step_edit":
                 return GetLang("正在修改宏")
             case "add_macro":
                 return GetLang("正在新增宏")
@@ -3610,6 +3665,10 @@ class MainWin {
                 return GetLang("正在查看宏列表")
             case "read_macro", "read_macro_step":
                 return GetLang("正在读取宏")
+            case "preview_macro_step_edit":
+                return GetLang("正在生成修改预览")
+            case "validate_macro":
+                return GetLang("正在校验宏")
             default:
                 return GetLang("正在调用") " " name
         }
@@ -3622,6 +3681,7 @@ class MainWin {
             this._aiToolNotes[t] := []
         ok := true
         err := ""
+        summary := ""
         try {
             obj := JSON.parse(result)
             if (Type(obj) = "Map") {
@@ -3629,11 +3689,19 @@ class MainWin {
                     ok := false
                 if (obj.Has("error"))
                     err := String(obj["error"])
+                if (ok && name = "validate_macro")
+                    summary := AiMacroValidation.FormatReport(obj)
+                else if (ok && name = "preview_macro_step_edit") {
+                    summary := obj.Get("changed", false) ? GetLang("预览已生成，尚未保存。") : GetLang("参数没有变化。")
+                    for change in obj.Get("changes", [])
+                        summary .= "`n`n" change["field"] "："
+                            . JSON.stringify(change["before"], 0) " → " JSON.stringify(change["after"], 0)
+                }
             }
         } catch {
         }
         path := this._AiToolArgPath(argsJson)
-        this._aiToolNotes[t].Push(Map("name", name, "ok", ok, "error", err, "path", path))
+        this._aiToolNotes[t].Push(Map("name", name, "ok", ok, "error", err, "path", path, "summary", summary))
         if (!ok && err != "")
             this._AiShowThinking(t, true, GetLang("工具失败") "：" this._AiShortErr(err))
     }
@@ -3667,23 +3735,34 @@ class MainWin {
         okN := 0
         failN := 0
         done := ""
+        summaries := ""
+        firstError := ""
         for n in this._aiToolNotes[t] {
             if (Type(n) != "Map")
                 continue
             nm := n.Has("name") ? String(n["name"]) : ""
             if (n.Has("ok") && n["ok"]) {
                 okN += 1
-                if (nm = "update_macro" || nm = "set_macro_step_enabled")
+                if (nm = "undo_macro_step_edit")
+                    done := GetLang("已撤销参数修改")
+                else if (nm = "update_macro" || nm = "set_macro_step_enabled" || nm = "apply_macro_step_edit")
                     done := GetLang("已按你的要求改好对应宏")
                 else if (nm = "add_macro" && done == "")
                     done := GetLang("已新增宏")
-            } else
+                if (n.Get("summary", "") != "")
+                    summaries .= (summaries == "" ? "" : "`n`n") n["summary"]
+            } else {
                 failN += 1
+                if (firstError == "" && n.Get("error", "") != "")
+                    firstError := n["error"]
+            }
         }
         if (okN < 1 && failN < 1)
             return ""
         if (okN > 0 && failN < 1)
-            return (done != "" ? done : GetLang("操作已完成")) "。" GetLang("如需调整请继续说明。")
+            return done != "" ? done "。" : (summaries != "" ? summaries : GetLang("操作已完成") "。")
+        if (firstError != "")
+            return (summaries != "" ? summaries "`n`n" : "") GetLang("工具失败") "：" firstError
         if (okN > 0)
             return GetLang("部分操作已完成，另有步骤失败。请换种说法再试，或检查目标宏是否存在。")
         return GetLang("操作未成功。请检查目标宏是否存在，或把页签和序号说得更具体。")
@@ -5395,10 +5474,10 @@ class MainWin {
                 . '<TextBox Grid.Column="1" Name="' name '" Text="' this._XmlEsc(value) '" Height="26" MinHeight="26" Padding="6,0" VerticalContentAlignment="Center" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/></Grid>'
         }
         card(title, glyph, body, margin := "0", headerRight := "") {
-            glyphXaml := glyph == "" ? "" : '<TextBlock Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" FontSize="13" Margin="0,0,7,0"/>'
-            return '<Border Margin="' margin '" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1.25" CornerRadius="7" Padding="0">'
+            glyphXaml := glyph == "" ? "" : '<TextBlock Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource TitleBarForeground}" FontSize="13" Margin="0,0,7,0"/>'
+            return '<Border Margin="' margin '" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource OutlineStroke}" TextElement.Foreground="{DynamicResource TextMain}" BorderThickness="1.25" CornerRadius="7" Padding="0">'
                 . '<Grid><Grid.RowDefinitions><RowDefinition Height="38"/><RowDefinition Height="*"/></Grid.RowDefinitions>'
-                . '<Border Background="{DynamicResource TitleBarColor}" CornerRadius="7,7,0,0" Padding="12,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center">' glyphXaml '<TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" VerticalAlignment="Center"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">' headerRight '</StackPanel></Grid></Border>'
+                . '<Border Background="{DynamicResource TitleBarColor}" CornerRadius="7,7,0,0" Padding="12,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center">' glyphXaml '<TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" Foreground="{DynamicResource TitleBarForeground}" VerticalAlignment="Center"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">' headerRight '</StackPanel></Grid></Border>'
                 . '<Grid Grid.Row="1" Margin="14,12,14,14">' body '</Grid></Grid></Border>'
         }
         openBtn(name, glyph, text, primary := false) {
@@ -5456,7 +5535,7 @@ class MainWin {
         this._Bind("BtnFileCheckHelp", "Click", OnClickFileCheckHelpBtn)
         this._Bind("ChkToolCheck", "Click", OnToolCheckHotkey)
         this._Bind("ChkAlwaysOnTop", "Click", OnToolAlwaysOnTop)
-        this._Bind("ChkToolCheckRecord", "Click", OnHotToolRecordMacro.Bind(false))
+        this._Bind("ChkToolCheckRecord", "Click", OnClickToolRecordMacro.Bind(false))
         this._Bind("BtnTextShot", "Click", OnToolTextFilterScreenShot)
         this._Bind("BtnTextImage", "Click", OnToolTextFilterSelectImage)
         this._Bind("BtnStt", "Click", (*) => SttGui.ShowGui())
@@ -5517,7 +5596,7 @@ class MainWin {
             . '<Setter Property="Height" Value="36"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">'
             . '<Border x:Name="Bd" Background="Transparent"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="3"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-            . '<Rectangle x:Name="Bar" Grid.Column="0" Width="3" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource Accent}" Visibility="Collapsed" Margin="0,5,0,5"/>'
+            . '<Rectangle x:Name="Bar" Grid.Column="0" Width="3" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource TextMain}" Visibility="Collapsed" Margin="0,5,0,5"/>'
             . '<ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"/></Grid></Border>'
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ListAltBg}"/></Trigger>'
@@ -5527,7 +5606,7 @@ class MainWin {
 
         fieldStyles := '<Style TargetType="TextBox"><Setter Property="Height" Value="33"/><Setter Property="MinHeight" Value="33"/><Setter Property="Padding" Value="10,0"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Foreground" Value="{DynamicResource InputText}"/><Setter Property="Background" Value="{DynamicResource InputBg}"/><Setter Property="BorderBrush" Value="{DynamicResource InputStroke}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border CornerRadius="6" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/></Border></ControlTemplate></Setter.Value></Setter></Style>'
             . '<Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="30"/></Style>'
-            . '<Style x:Key="SetTabButton" TargetType="ToggleButton"><Setter Property="Width" Value="85"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0,4,8,4"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border x:Name="Bd" CornerRadius="6" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"><Grid><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/><Ellipse x:Name="Dot" Visibility="Collapsed" Width="7" Height="7" Fill="{DynamicResource Accent}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,6,0"/></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="Dot" Property="Visibility" Value="Visible"/><Setter Property="FontWeight" Value="Bold"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+            . '<Style x:Key="SetTabButton" TargetType="ToggleButton"><Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="Width" Value="85"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0,4,8,4"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border x:Name="Bd" CornerRadius="6" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"><Grid><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/><Ellipse x:Name="Dot" Visibility="Collapsed" Width="7" Height="7" Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,6,0"/></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="Dot" Property="Visibility" Value="Visible"/><Setter Property="FontWeight" Value="Bold"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 
         ; ---------- 行/卡片构建 ----------
         ; 中文标签列预留 6 个 13 DIP 全角字及右侧留白。
@@ -5610,12 +5689,12 @@ class MainWin {
         card(title, glyph, body, margin := "0", headerRight := "", modId := "") {
             ; 每张卡的最后一行不画下分隔线；前面的行保留，用于所有类别的统一布局。
             body := RegExReplace(body, 's)(.*)<Border([^>]*?)BorderThickness="0,0,0,0\.5"', '$1<Border$2BorderThickness="0"')
-            g := glyph == "" ? "" : '<TextBlock Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>'
+            g := glyph == "" ? "" : '<TextBlock Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource TitleBarForeground}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>'
             if (modId != "")
                 headerRight := '<Button Name="BtnSetReset_' modId '" Content="&#xE72C;" FontFamily="' iconFont '" FontSize="12" Width="22" Height="22" MinHeight="22" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center" Cursor="Hand" ToolTip="' this._XmlEsc(GetLang("重置")) '" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextSub}"/>' headerRight
             return '<Border Margin="' margin '" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="10" Padding="0">'
                 . '<Grid><Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>'
-                . '<Border Background="{DynamicResource TitleBarColor}" CornerRadius="10,10,0,0" Padding="10,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center">' g '<TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">' headerRight '</StackPanel></Grid></Border>'
+                . '<Border Background="{DynamicResource TitleBarColor}" CornerRadius="10,10,0,0" Padding="10,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center">' g '<TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TitleBarForeground}" VerticalAlignment="Center"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">' headerRight '</StackPanel></Grid></Border>'
                 . '<StackPanel Grid.Row="1" Margin="15,6,15,11">' body '</StackPanel></Grid></Border>'
         }
         twoCol(l, r) {
@@ -5623,7 +5702,7 @@ class MainWin {
             return '<Grid VerticalAlignment="Top"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" VerticalAlignment="Top">' l '</StackPanel><StackPanel Grid.Column="2" VerticalAlignment="Top">' r '</StackPanel></Grid>'
         }
         navItem(id, glyph, text, checked := false) {
-            return '<RadioButton Name="SetNav_' id '" GroupName="SetNav" Style="{StaticResource SetNavItem}"' (checked ? ' IsChecked="True"' : '') '><StackPanel Orientation="Horizontal" Margin="12,0,0,0"><TextBlock Text="' glyph '" FontFamily="' iconFont '" FontSize="14" Foreground="{DynamicResource Accent}" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock Name="SetNavText_' id '" Text="' this._XmlEsc(text) '" VerticalAlignment="Center" FontSize="13"/></StackPanel></RadioButton>'
+            return '<RadioButton Name="SetNav_' id '" GroupName="SetNav" Style="{StaticResource SetNavItem}"' (checked ? ' IsChecked="True"' : '') '><StackPanel Orientation="Horizontal" Margin="12,0,0,0"><TextBlock Text="' glyph '" FontFamily="' iconFont '" FontSize="14" Foreground="{DynamicResource TextMain}" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock Name="SetNavText_' id '" Text="' this._XmlEsc(text) '" VerticalAlignment="Center" FontSize="13"/></StackPanel></RadioButton>'
         }
         pending(body) {
             return '<Expander Header="' GetLang("待确认的原有功能") '" IsExpanded="False" Margin="0,20,0,0" Foreground="{DynamicResource TextSub}"><StackPanel Margin="12">' body '</StackPanel></Expander>'

@@ -1701,7 +1701,7 @@ class MacroEditGui {
     OnClickRecordTog(*) {
         UIControls.RecordToggle := this.RecordMacroCon
         MainSoftData.MacroEditGui := this
-        OnHotToolRecordMacro(true)
+        OnClickToolRecordMacro(true)
     }
 
     ; 切换到图形节点编辑器（先回写当前宏内容）

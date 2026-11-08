@@ -1,6 +1,6 @@
 # RMT MCP（RMTMcps.exe）
 
-已适配 RMT 1.3F2。生成的配置默认使用 UTF-8 TOML，可继续解析、校验和编辑旧 INI 配置包。
+已适配 RMT 1.3F3。生成的配置默认使用 UTF-8 TOML，可继续解析、校验和编辑旧 INI 配置包。
 
 若梦兔 `.rmt` 配置的 MCP 工具说明。本目录的 `RMTMcps.exe` 是独立 stdio 服务：**不启动 RMT 主程序也能用**；启动 RMT 也不会自动拉起本服务。
 
@@ -44,7 +44,7 @@
 2. **从零生成**：`generate_rmt_config(spec_json)`；小包看 `delivery.base64`；过大再 `export_rmt_file`
 3. **改一条宏再打包**：`parse_rmt` → `edit_rmt_macro`（看 `validation`）→ `pack_rmt`
 4. **只改一条指令**：`explain_rmt(workspace_id=..., module="Normal", index=2)` 定位指令序号 → `edit_rmt_macro(operation="update_command", command_index=N)`；
-   改配置型指令的参数则用 `data_configs` 按序列码 upsert，不必重建指令
+   局部修改搜索、变量、等待参数时，用 `patch_command`，保留其他步骤和分支。
 5. **只校验**：`validate_rmt(workspace_id=...)` 或 `validate_rmt(source=...)`
 
 ### 关键约定
@@ -55,6 +55,9 @@
 - `edit_rmt_macro` 的 `operation`：
   - 宏级 `update`（默认）/ `add` / `delete`
   - 指令级 `update_command` / `add_command` / `delete_command`，配 `command_index` 与 `changes.command`
+  - 局部参数 `patch_command`：例如 `{"expected_command":"搜索Pro1","parameters":{"SearchCount":3}}`。
+    多目标或多行用 `target_index` / `row_index`；先 `preview_only=true`，再带 `expected_revision` 提交。
+    `data_configs` 会更新共享配置，影响所有引用同一序列码的步骤。
   - 图形级 `update_graph_node` / `add_graph_node` / `delete_graph_node`，配 `changes.node` / `after` / `command`
   - **只改一条指令时别用 `update` + `commands`**：那要求复述该宏全部指令，漏写会静默丢掉原指令
     （含配置型指令的序列码引用）
@@ -105,6 +108,8 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 
 - 宿主启动 exe 后走 MCP `tools/list`，得到工具名、描述与参数 schema。
 - 本文档供用户和 MCP 宿主参考；列出 MCP 工具时可独立启动服务。
+- 解包校验容器版本、条目路径及大小。上限为 1 GiB、10,000 个文件，每个文件最多 200 MiB。
+- 文件读写只接受工作区内相对路径，清理仅处理服务生成的工作区和输出文件。
 
 ---
 
@@ -145,11 +150,13 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 ### edit_rmt_macro
 
 - **必填** `workspace_id`、`module`
-- **可选** `index`（除 `add` 外都必填）、`changes_json`、`operation`、`command_index`
+- **可选** `index`（除 `add` 外都必填）、`changes_json`、`operation`、`command_index`、`preview_only`
+- **预览**：`preview_only=true` 在临时副本试改并校验，返回修改前后结果，原工作区保留原样。
+- **撤销**：`patch_command` 应用后返回 `edited_command.undo_receipt`，在同一宏和步骤使用 `undo_patch_command`，传 `{"undo_receipt": …}`。支持预览和过期检测。
 - **`changes_json` 额外支持**：`commands` 里全部配置型 type（自动写 DataFile）；`data_configs` / `search_configs` / `loop_configs` 等按序列码 upsert
 - **返回**：`operation`、`module`、`macro_count`、`edited_macro`、`edited_command`（指令级操作的前后对照）、`datafiles_updated`、`validation`
 
-`operation` 六种取值：
+`operation` 支持：
 
 | operation | 作用 | 需要 | 说明 |
 |-----------|------|------|------|
@@ -157,6 +164,8 @@ AstrBot 同理：`args` 为空数组，按需设 `env`。换机优先带整目�
 | `add` | 新增宏 | — | 追加到该页签末尾，`index` 忽略 |
 | `delete` | 删整条宏 | `index` | 自动前移后续宏并修 FoldInfo |
 | `update_command` | 替换一条指令 | `index`、`command_index` | `changes.command` 给新指令；**只给 `disabled`/`debug` 时仅切换 🚫/⭐ 标记、保留原指令参数** |
+| `patch_command` | 改一条指令的参数 | `index`、`command_index` | 搜索、变量、等待。原分支与共享引用保留 |
+| `undo_patch_command` | 恢复局部参数修改 | `index`、`command_index` | 传原操作返回的 `undo_receipt` |
 | `add_command` | 插入一条指令 | `index` | `command_index<=0` 或超末尾则追加；否则插到该位置之前 |
 | `delete_command` | 删一条指令 | `index`、`command_index` | 宏内其余指令与分隔符风格（`,` 或换行 `⫶`）保持不变 |
 | `update_graph_node` | 改一个图形节点 | `index` 或 `changes.start` | `node` 为「图形节点N」；可改 `command` / `next` / `x` / `y` |

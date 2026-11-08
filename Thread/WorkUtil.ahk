@@ -28,14 +28,16 @@
     }
 
     ; Worker 读配置的唯一序列：冷启动与热重载共用，避免两处顺序走散。
-    ; isReload 只影响两件事：不重复解析命令行 / 共享内存，以及热重载必须先失效 TomlUtil 缓存
-    ; （Worker 侧缓存是启动快照，主进程保存不会通知它）。
+    ; 热重载时先清理文件缓存和已解析的指令对象，再走同一条配置加载路径。
     BootWorkerConfig(isReload := false) {
+        if (isReload) {
+            TomlUtil_Invalidate()
+            CfgInvalidate()
+            MySoftData.DataCacheMap.Clear()
+        }
         LoadMainSetting()
         InitWorkFilePath()
-        if (isReload)
-            TomlUtil_Invalidate()
-        else
+        if (!isReload)
             HandleWorkOpenArg()
         LoadCurMacroSetting()
         InitData()
@@ -255,25 +257,31 @@
 
     CheckTxBuffer() {
         global tx, workIndex, graphBranchesWaiting, workerTaskBusy, workerPendingTasks
-        if (graphBranchesWaiting)
-            return
-        loop {
-            while (tx.Pop(&type, &id, &cmd)) {
-                switch type {
-                    case MsgType.TASK:
-                        if (workerTaskBusy) {
-                            workerPendingTasks.Push({ id: id, cmd: cmd })
-                            GraphPoolLog("Worker任务延后", Format("id={1} 原因=上一任务未完成 pending={2}", id, workerPendingTasks.Length))
-                        } else {
-                            ScheduleWorkerTask(id, cmd)
-                        }
-                    case MsgType.EVENT:
-                        OnEventMessage(cmd)
+        ; 消息唤醒与共享事件唤醒共用一个消费者，分派顺序不可被另一回调穿插。
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (graphBranchesWaiting)
+                return
+            loop {
+                while (tx.Pop(&type, &id, &cmd)) {
+                    switch type {
+                        case MsgType.TASK:
+                            if (workerTaskBusy) {
+                                workerPendingTasks.Push({ id: id, cmd: cmd })
+                                GraphPoolLog("Worker任务延后", Format("id={1} 原因=上一任务未完成 pending={2}", id, workerPendingTasks.Length))
+                            } else {
+                                workerTaskBusy := true
+                                ScheduleWorkerTask(id, cmd)
+                            }
+                        case MsgType.EVENT:
+                            OnEventMessage(cmd)
+                    }
                 }
+                if (tx.IsEmpty())
+                    break
             }
-            if (tx.IsEmpty())
-                break
-        }
+        } finally Critical(previousCritical)
     }
 
     OnExecTask(id, cmd) {
@@ -355,19 +363,23 @@
         } finally {
             ; 业务日志（C 项阶段3）：宏结束（正常/异常统一记录）
             RMTLogBusiness("宏:(" _bizCurRemark ")", Format("tab{1} item{2} 结束", _bizCurTab, _bizCurItem))
-            rx.Push(MsgType.FINISH, id)
-            MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
-            ; §17 热重载：任务期间收到 CF → 结束当前任务后重载配置，再执行下一任务（用新配置）
-            if (workerConfigDirty) {
-                workerConfigDirty := false
-                ReloadWorkerConfig()
-            }
-            if (workerPendingTasks.Length > 0) {
-                t := workerPendingTasks.RemoveAt(1)
-                ScheduleWorkerTask(t.id, t.cmd)
-            } else {
-                workerTaskBusy := false
-            }
+            previousCritical := A_IsCritical
+            Critical("On")
+            try {
+                ; 空闲前先处理运行中收到的热重载，再回报完成或取下一任务。
+                if (workerConfigDirty) {
+                    workerConfigDirty := false
+                    ReloadWorkerConfig()
+                }
+                rx.Push(MsgType.FINISH, id)
+                MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+                if (workerPendingTasks.Length > 0) {
+                    t := workerPendingTasks.RemoveAt(1)
+                    ScheduleWorkerTask(t.id, t.cmd)
+                } else {
+                    workerTaskBusy := false
+                }
+            } finally Critical(previousCritical)
         }
     }
 

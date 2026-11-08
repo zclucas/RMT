@@ -18,6 +18,7 @@ class MacroEditNode {
         this.text := text          ; 显示文本（含 ⭐/🚫/→/⎖ 前缀）
         this.icon := icon          ; 图标文件绝对路径（/ 分隔）
         this.parent := parent
+        this.siblingIndex := 0
         this.children := []
         this.checked := false      ; 多选标记
         this.expanded := true      ; 展开状态
@@ -108,7 +109,7 @@ class MacroTreeAdapter {
         if (!node)
             return 0
         siblings := node.parent ? node.parent.children : this.roots
-        i := this._IndexOf(siblings, node.id)
+        i := node.siblingIndex
         return (i > 0 && i < siblings.Length) ? siblings[i + 1].id : 0
     }
 
@@ -119,7 +120,7 @@ class MacroTreeAdapter {
         if (!node)
             return 0
         siblings := node.parent ? node.parent.children : this.roots
-        i := this._IndexOf(siblings, node.id)
+        i := node.siblingIndex
         return i > 1 ? siblings[i - 1].id : 0
     }
 
@@ -131,10 +132,7 @@ class MacroTreeAdapter {
     }
 
     GetCount() {
-        count := 0
-        for node in this.roots
-            count += this._CountChildren(node)
-        return count
+        return this.nodes.Count
     }
 
     IsExpanded(id) {
@@ -289,18 +287,21 @@ class MacroTreeAdapter {
     }
 
     _InsertInto(arr, node, insertBefore, insertAfterId) {
-        if (insertBefore) {
-            arr.InsertAt(1, node)
-            return
+        index := arr.Length + 1
+        if (insertBefore)
+            index := 1
+        else if (insertAfterId != "") {
+            after := this.nodes[insertAfterId]
+            if (node.parent == after.parent)
+                index := after.siblingIndex + 1
         }
-        if (insertAfterId != "") {
-            for i, n in arr
-                if (n.id == insertAfterId) {
-                    arr.InsertAt(i + 1, node)
-                    return
-                }
-        }
-        arr.Push(node)
+        arr.InsertAt(index, node)
+        this._ReindexFrom(arr, index)
+    }
+
+    _ReindexFrom(arr, index) {
+        Loop arr.Length - index + 1
+            arr[index + A_Index - 1].siblingIndex := index + A_Index - 1
     }
 
     _ResolveIcon(token) {
@@ -329,20 +330,9 @@ class MacroTreeAdapter {
             this._CollectVisibleIds(node, &visibleIds)
         ; 父节点由父变叶（1→0 子）需去箭头，整树重建一次
         parentBecomesLeaf := (node.parent && node.parent.children.Length == 1)
-        if (node.parent) {
-            arr := node.parent.children
-            for i, n in arr
-                if (n.id == id) {
-                    arr.RemoveAt(i)
-                    break
-                }
-        } else {
-            for i, n in this.roots
-                if (n.id == id) {
-                    this.roots.RemoveAt(i)
-                    break
-                }
-        }
+        siblings := node.parent ? node.parent.children : this.roots
+        siblings.RemoveAt(node.siblingIndex)
+        this._ReindexFrom(siblings, node.siblingIndex)
         this._RemoveRecursive(node)
         if (!this._redrawSuspended) {
             if (this._AffectsSplit(node)) {
@@ -914,20 +904,6 @@ class MacroTreeAdapter {
         global MainSoftData
         base := (IsSet(MainSoftData) && MainSoftData.HasProp("FontType") && MainSoftData.FontType != "") ? MainSoftData.FontType : "Microsoft YaHei UI"
         return this._EscapeXml(base ", Segoe Fluent Icons, Segoe MDL2 Assets")
-    }
-
-    _IndexOf(arr, id) {
-        for i, n in arr
-            if (n.id == id)
-                return i
-        return 0
-    }
-
-    _CountChildren(node) {
-        c := 1
-        for child in node.children
-            c += this._CountChildren(child)
-        return c
     }
 
     ; ---------------- 增量渲染辅助 ----------------

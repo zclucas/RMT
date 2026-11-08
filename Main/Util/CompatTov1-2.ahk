@@ -364,12 +364,12 @@ CompatSearch(filePath) {
             continue
         curFix := CompatPath(filePath, Data)
 
-        if (Data.TrueMacro != "") {
+        if (Data.HasOwnProp("TrueMacro") && Data.TrueMacro != "") {
             Data.TrueMacro := CompatMacro(Data.TrueMacro, &isFix)
             curFix := curFix || isFix
         }
 
-        if (Data.FalseMacro != "") {
+        if (Data.HasOwnProp("FalseMacro") && Data.FalseMacro != "") {
             Data.FalseMacro := CompatMacro(Data.FalseMacro, &isFix)
             curFix := curFix || isFix
         }
@@ -411,12 +411,12 @@ CompatSearchPro(filePath) {
             curFix := true
         }
 
-        if (Data.TrueMacro != "") {
+        if (Data.HasOwnProp("TrueMacro") && Data.TrueMacro != "") {
             Data.TrueMacro := CompatMacro(Data.TrueMacro, &isFix)
             curFix := curFix || isFix
         }
 
-        if (Data.FalseMacro != "") {
+        if (Data.HasOwnProp("FalseMacro") && Data.FalseMacro != "") {
             Data.FalseMacro := CompatMacro(Data.FalseMacro, &isFix)
             curFix := curFix || isFix
         }
@@ -673,12 +673,12 @@ CompatCompare(filePath) {
         if (Data == "")
             continue
         curFix := false
-        if (Data.TrueMacro != "") {
+        if (Data.HasOwnProp("TrueMacro") && Data.TrueMacro != "") {
             Data.TrueMacro := CompatMacro(Data.TrueMacro, &isFix)
             curFix := curFix || isFix
         }
 
-        if (Data.FalseMacro != "") {
+        if (Data.HasOwnProp("FalseMacro") && Data.FalseMacro != "") {
             Data.FalseMacro := CompatMacro(Data.FalseMacro, &isFix)
             curFix := curFix || isFix
         }

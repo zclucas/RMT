@@ -77,6 +77,7 @@ class WorkerData {
         this.createTick := 0          ; Worker 进程创建时间戳，用于检测启动超时
         this.tableID := ""            ; Worker 当前正在处理的宏所属的表 ID（空=空闲）
         this.itemID := ""             ; Worker 当前正在处理的宏的条目 ID（空=空闲）
+        this.taskID := 0              ; 本次分派的完成令牌，不使用可重复的 Worker 编号
         this.isGraphBranch := false   ; 是否为图形宏并行分支任务
         this.graphNodeSerial := ""    ; 图形分支起始节点（异常退出时重派）
         this.rxBusy := false          ; ProcessWorkerRx 重入保护
@@ -104,6 +105,7 @@ class WorkPool {
         this.taskQueue := TaskQueue()     ; 等待分发的任务队列，每项 {cmd, tableIndex, itemIndex}
         this.mainPID := DllCall("GetCurrentProcessId")
         this.idxCounter := 0          ; Worker 索引计数器（递增，用于分配唯一 idx）
+        this.taskSequence := 0
         this.isDispatching := false    ; Dispatch 防重入标志
         this.dispatchPending := false
         this.targetWorkerCount := 0
@@ -112,6 +114,10 @@ class WorkPool {
         this.rxPollFunc := ""
         this.residualCheckFunc := ""
         this._inputGuis := Map()      ; 活动输入弹窗实例（key=req）
+        this._nativeFileQueue := []
+        this._nativeFileActive := false
+        this._nativeFileCurrent := ""
+        this._nativeFileNext := ""
 
         OnMessage(WM_LOAD_WORK, ObjBindMethod(this, "OnWorkerReady"))
         OnMessage(WM_WORKER_TO_MASTER, ObjBindMethod(this, "OnWorkerToMaster"))
@@ -150,6 +156,19 @@ class WorkPool {
     }
 
     Clear() {
+        if (this._nativeFileNext != "") {
+            SetTimer(this._nativeFileNext, 0)
+            this._nativeFileNext := ""
+        }
+        this._nativeFileQueue := []
+        nativeRequests := []
+        for req in this._inputGuis {
+            if (req.HasOwnProp("nativeFile"))
+                nativeRequests.Push(req)
+        }
+        for req in nativeRequests
+            this._CancelInput(req)
+
         if (this.rxPollFunc != "") {
             SetTimer(this.rxPollFunc, 0)
             this.rxPollFunc := ""
@@ -494,6 +513,13 @@ class WorkPool {
 
     ; 从 freePool 取一个 Worker，从 taskQueue 取一个任务，绑定后通知 Worker
     AssignTask() {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try return this._AssignTask()
+        finally Critical(previousCritical)
+    }
+
+    _AssignTask() {
         ; 取第一个空闲 Worker（freePool 非空由 Dispatch 调用前保证）
         freeKeys := []
         for k in this.freePool {
@@ -518,7 +544,10 @@ class WorkPool {
         }
 
         task := this.taskQueue.Pop()
-        if (!wd.tx.Push(MsgType.TASK, wd.idx, task.cmd, 0)) {
+        this.taskSequence := (this.taskSequence & 0xFFFFFFFF) + 1
+        if (this.taskSequence > 0xFFFFFFFF)
+            this.taskSequence := 1
+        if (!wd.tx.Push(MsgType.TASK, this.taskSequence, task.cmd, 0)) {
             this.taskQueue.queue.InsertAt(1, task)
             GraphPoolLog("Dispatch失败", Format("Worker#{1} tx已满", wd.idx))
             return false
@@ -526,6 +555,7 @@ class WorkPool {
 
         this.freePool.Delete(idx)
         this.usePool[idx] := wd
+        wd.taskID := this.taskSequence
         wd.tableID := task.tableID
         wd.itemID := task.itemID
         wd.isGraphBranch := task.HasOwnProp("isGraphBranch") ? task.isGraphBranch : false
@@ -546,15 +576,9 @@ class WorkPool {
         if (wd.hEvt)
             DllCall("SetEvent", "ptr", wd.hEvt)
         if (!this.PostMessage(WM_MASTER_TO_WORKER, wd)) {
-            this.usePool.Delete(idx)
-            this.freePool[idx] := wd
-            wd.tableID := ""
-            wd.itemID := ""
-            wd.isGraphBranch := false
-            wd.graphNodeSerial := ""
-            this.taskQueue.queue.InsertAt(1, task)
-            GraphPoolLog("Dispatch失败", Format("Worker#{1} PostMessage失败 node={2}", wd.idx, wd.graphNodeSerial))
-            return false
+            ; 任务已写入共享缓冲区，事件唤醒仍可执行。重复入队会运行两次；
+            ; 若进程确实已退出，由死亡回收路径结束本次任务。
+            GraphPoolLog("Dispatch消息唤醒失败", Format("Worker#{1} node={2}", wd.idx, wd.graphNodeSerial))
         }
         GraphPoolLog("Dispatch分配", Format("Worker#{1} tab={2} item={3} graph={4} 闲置={5} 队列={6}"
             , wd.idx, task.tableID, task.itemID, task.isGraphBranch ? 1 : 0
@@ -793,6 +817,7 @@ class WorkPool {
         if (this.usePool.Has(wd.idx) && this.usePool[wd.idx] == wd)
             this.usePool.Delete(wd.idx)
         this.freePool[wd.idx] := wd
+        wd.taskID := 0
         wd.isGraphBranch := false
         wd.idleTick := A_TickCount
         return true
@@ -1024,6 +1049,8 @@ class WorkPool {
             if (wd.pid)
                 tracked[wd.pid] := true
         }
+        if (IsObject(this._nativeFileCurrent) && this._nativeFileCurrent.childPID)
+            tracked[this._nativeFileCurrent.childPID] := true
 
         residual := []
         for p in EnumProcesses() {
@@ -1117,7 +1144,7 @@ class WorkPool {
                             ; 这时若继续把它放回 freePool，就会留下一个 tx=0 的僵尸空闲 Worker。
                             if (!this.IsInstanceAlive(wd))
                                 return
-                            if (!this.usePool.Has(wd.idx))
+                            if (!this.usePool.Has(wd.idx) || wd.taskID != id)
                                 continue
                             tID := wd.tableID
                             iID := wd.itemID
@@ -1379,16 +1406,10 @@ class WorkPool {
         real := pack.args
         try {
             if (opcode == "IF") {
-                dialog := InputFileDialog()
-                req.gui := dialog
-                if (pack.timeoutMs > 0)
-                    SetTimer((*) => this._TimeoutInputDialog(req, opcode), -pack.timeoutMs)
-                cancelCheck := () => req.item.Killed && this._CancelInput(req)
-                if (req.local && IsObject(req.item))
-                    SetTimer(cancelCheck, 100)
-                try path := dialog.Show(real.Length ? SubStr(real[1], 7) : GetLang("选择文件"))
-                finally SetTimer(cancelCheck, 0)
-                this._SendInputResult(req, "IPR", path != "" ? "1" : "0", path)
+                req.nativeFile := true
+                this._nativeFileQueue.Push({req: req, timeoutMs: pack.timeoutMs,
+                    title: real.Length ? SubStr(real[1], 7) : GetLang("选择文件")})
+                this._ScheduleNativeFile()
                 return
             }
             if (opcode == "IB") {
@@ -1424,10 +1445,63 @@ class WorkPool {
         }
     }
 
+    _ScheduleNativeFile() {
+        if (!this._nativeFileActive && this._nativeFileQueue.Length && this._nativeFileNext = "") {
+            this._nativeFileNext := ObjBindMethod(this, "_ShowNextNativeFile")
+            SetTimer(this._nativeFileNext, -1)
+        }
+    }
+
+    _ShowNextNativeFile() {
+        this._nativeFileNext := ""
+        if (this._nativeFileActive)
+            return
+        while (this._nativeFileQueue.Length) {
+            request := this._nativeFileQueue.RemoveAt(1)
+            req := request.req
+            if (req.done)
+                continue
+            ; Windows 原生文件选择器在主线程使用模态循环，不在其中嵌套另一个。
+            this._nativeFileActive := true
+            timeoutCheck := (*) => this._TimeoutInputDialog(req, "IF")
+            cancelCheck := () => req.item.Killed && this._CancelInput(req)
+            try {
+                dialog := InputFileDialog(this.workerExe)
+                this._nativeFileCurrent := dialog
+                req.gui := dialog
+                if (request.timeoutMs > 0)
+                    SetTimer(timeoutCheck, -request.timeoutMs)
+                if (req.local && IsObject(req.item))
+                    SetTimer(cancelCheck, 100)
+                path := dialog.Show(request.title)
+                if (req.HasOwnProp("fileTimedOut"))
+                    this._SendInputResult(req, "IPR", "timeout")
+                else
+                    this._SendInputResult(req, "IPR", path != "" ? "1" : "0", path)
+            } catch as e {
+                GraphPoolLog("输入弹窗异常", Format("err={1} wd=#{2}", e.Message, req.wd.idx))
+                this._SendInputResult(req, "IPR", req.HasOwnProp("fileTimedOut") ? "timeout" : "0", "")
+            } finally {
+                SetTimer(timeoutCheck, 0)
+                SetTimer(cancelCheck, 0)
+                this._nativeFileCurrent := ""
+                this._nativeFileActive := false
+                this._ScheduleNativeFile()
+            }
+            return
+        }
+    }
+
     _TimeoutInputDialog(req, opcode) {
         if (req.done)
             return
         gui := req.HasOwnProp("gui") ? req.gui : ""
+        if (opcode == "IF" && gui is InputFileDialog) {
+            ; 先退出原生模态循环，再回传结果，避免 Worker 紧接着重入文件选择。
+            req.fileTimedOut := true
+            gui._CloseWindow()
+            return
+        }
         this._SendInputResult(req, opcode == "IB" ? "IBR" : "IPR", "timeout")
         try gui._CloseWindow()
     }

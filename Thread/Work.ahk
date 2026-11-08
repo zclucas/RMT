@@ -112,8 +112,15 @@ if (A_Args.Length >= 3 && A_Args[1] == "--sample-align-worker") {
 #Include "..\Main\Util\LogUtil.ahk"
 #Include "..\Main\Util\SharedMemory.ahk"
 #Include "..\Main\Util\RingBuffer.ahk"
+#Include InputFilePicker.ahk
 #Include WorkUtil.ahk
 #Include WorkGlobalUtil.ahk
+
+if (A_Args.Length = 4 && A_Args[1] = "--input-file") {
+    if RegExMatch(A_Args[2], "^Local\\RMT_Picker_\d+_\d+_\d+$")
+        RunInputFilePicker(A_Args[2], Integer(A_Args[3]), Integer(A_Args[4]))
+    ExitApp()
+}
 
 BootWorkerConfig()          ;读配置 + 建路径 + 解析命令行（唯一序列，见 WorkUtil）
 InitWork()                  ;工作器特别初始化

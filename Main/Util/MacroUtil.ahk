@@ -248,9 +248,8 @@ BpStrHas(bpStr, sig) {
     return InStr(bpStr, "," sig ",") ? true : false
 }
 
-; 执行单条宏指令（线性宏循环与图形节点 Walk 共用）
-ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
-    global MySoftData
+; 运行时与静态检查共用同一份指令表。
+MacroCommandActions() {
     static Actions := Map(
         "间隔", OnInterval,
         "按键", OnPressKey,
@@ -299,6 +298,13 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         "图形开始节点", OnGraphStartNode
     )
 
+    return Actions
+}
+
+; 执行单条宏指令（线性宏循环与图形节点 Walk 共用）
+ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
+    global MySoftData
+    static Actions := MacroCommandActions()
     item := tableItem.Items[index]
     if (!item)
         return
@@ -2542,13 +2548,7 @@ IsCheckKeyPressed(key, stateMode, axisCmp := 2, isJoy := false) {
     try {
         if (stateMode != "")
             return !!GetKeyState(key, stateMode)
-        vk := GetKeyVK(key)
-        if (!vk || MySoftData.OnlyDownKeyMap.Has(key))
-            return false
-        ; GetKeyState 的逻辑状态跟随线程消息队列，后台 Worker 需直接查询当前桌面。
-        if ((vk == 1 || vk == 2) && DllCall("GetSystemMetrics", "Int", 23, "Int"))
-            vk := 3 - vk
-        return DllCall("GetAsyncKeyState", "Int", vk, "Short") < 0
+        return IsDesktopKeyPressed(key)
     } catch {
         return false
     }

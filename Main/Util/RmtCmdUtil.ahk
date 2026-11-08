@@ -42,9 +42,9 @@ RmtCmdInitPaths() {
 ; 创建并持有命名互斥。已被占用时返回 0。
 RmtCreateMutex() {
     h := DllCall("kernel32\CreateMutexW", "Ptr", 0, "Int", 1, "WStr", "Local\RMT_SingleInstance", "Ptr")
+    err := A_LastError
     if (!h)
         return 0
-    err := DllCall("kernel32\GetLastError", "UInt")
     if (err == 183) {    ; ERROR_ALREADY_EXISTS
         DllCall("kernel32\CloseHandle", "Ptr", h)
         return 0

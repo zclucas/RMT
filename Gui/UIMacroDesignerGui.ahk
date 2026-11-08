@@ -394,7 +394,7 @@ class UIMacroDesignerGui {
             .TextWrapping("Wrap").Foreground("{DynamicResource TextMain}")
 
         pp.Add("Border").Height("1").Margin("0,8,0,8").Background("{DynamicResource ControlBorder}")
-        pp.Add("TextBlock").Name("PanelSizeCon").Text("面板：" UIMacroSchema.Summary(this._schema))
+        pp.Add("TextBlock").Name("PanelSizeCon").Text(this._PanelSummary())
             .FontSize("10").TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
 
         ; ---- 宿主 ----
@@ -557,7 +557,27 @@ class UIMacroDesignerGui {
     }
 
     _SyncPanelSize() {
-        try this.ui.Update("PanelSizeCon", "Text", "面板：" UIMacroSchema.Summary(this._schema))
+        try this.ui.Update("PanelSizeCon", "Text", this._PanelSummary())
+    }
+
+    _PageControls() {
+        controls := []
+        for ctrl in this._schema.controls {
+            if ((ctrl.HasProp("page") ? Integer(ctrl.page) : 1) = this._page)
+                controls.Push(ctrl)
+        }
+        return controls
+    }
+
+    _PanelSummary() {
+        return Format(GetLang("面板：{1}×{2} / 本页 {3} 个控件（共 {4} 个）"), this._schema.window.width
+            , this._schema.window.height, this._PageControls().Length, this._schema.controls.Length)
+    }
+
+    _Notice(message, title := "") {
+        owner := 0
+        try owner := this.ui.wpfHwnd
+        RmtDialog.Info(message, title != "" ? title : GetLang("自定义界面"), owner)
     }
 
     _SyncProps() {
@@ -1160,7 +1180,7 @@ class UIMacroDesignerGui {
         updates.Push({ ControlName: "DesignCanvas", PropertyName: "Height", Value: String(newPanelH) })
         this._AppendHandleUpdates(updates, true)
         updates.Push({ ControlName: "PanelSizeCon", PropertyName: "Text"
-            , Value: "面板：" UIMacroSchema.Summary(this._schema) })
+            , Value: this._PanelSummary() })
         if (this._selId == "")
             this._AppendSelBoxUpdates(updates)
         if (this._selId != "")
@@ -1587,18 +1607,46 @@ class UIMacroDesignerGui {
     }
 
 
-    _AddByType(type) {
+    _AddPageControl(type) {
         if (this._schema.controls.Length >= UIMacroSchema.MaxControls) {
-            MsgBox("最多 " UIMacroSchema.MaxControls " 个控件", "自定义界面", "Icon!")
+            this._Notice("最多 " UIMacroSchema.MaxControls " 个控件")
             return ""
         }
-        newId := UIMacroSchema.Add(this._schema, type, 12, 12 + this._schema.controls.Length * 6)
+        pageControls := this._PageControls()
+        newId := UIMacroSchema.Add(this._schema, type)
         if (newId == "")
             return ""
-        ; 新控件归属当前编辑页
-        newCtrl := UIMacroSchema.FindById(this._schema, newId)
-        if (IsObject(newCtrl))
-            newCtrl.page := this._page
+        ctrl := UIMacroSchema.FindById(this._schema, newId)
+        ctrl.page := this._page
+        panelW := Integer(this._schema.window.width)
+        panelH := Integer(this._schema.window.height)
+        width := UIMacroRenderer.ActualWidth(ctrl, panelW)
+        height := Integer(ctrl.h)
+        ctrl.x := Min(12, Max(0, panelW - width))
+        ctrl.y := Min(12 + pageControls.Length * 6, Max(0, panelH - height))
+        if (!UIMacroSchema.IsShapeType(type)) {
+            below := 12, right := 12
+            for existing in pageControls {
+                if (UIMacroSchema.IsShapeType(existing.type))
+                    continue
+                below := Max(below, Integer(existing.y) + Integer(existing.h) + 6)
+                right := Max(right, Integer(existing.x) + UIMacroRenderer.ActualWidth(existing, panelW) + 6)
+            }
+            if (below + height <= panelH)
+                ctrl.y := below
+            else if (right + width <= panelW) {
+                ctrl.x := right
+                ctrl.y := Min(12, Max(0, panelH - height))
+            }
+        }
+        return ctrl
+    }
+
+    _AddByType(type) {
+        ctrl := this._AddPageControl(type)
+        if (!IsObject(ctrl))
+            return ""
+        newId := ctrl.id
         ; 图形自动压到底层：否则新加的线框/线会盖在已有控件上，挡住点击
         if (UIMacroSchema.IsShapeType(type))
             UIMacroSchema.SendToBack(this._schema, newId)
@@ -1613,8 +1661,9 @@ class UIMacroDesignerGui {
             return
         if (!UIMacroSchema.Remove(this._schema, this._selId))
             return
-        ; 删完自动选中剩下的第一个；留空会导致下一次 Delete 直接返回（看起来像只能删一个）
-        this._selId := this._schema.controls.Length ? String(this._schema.controls[1].id) : ""
+        ; 删完只在当前页选取剩余控件，避免属性栏显示别页的控件。
+        remaining := this._PageControls()
+        this._selId := remaining.Length ? String(remaining[1].id) : ""
         this._windowSelected := false
         this._Rebuild()
     }
@@ -1685,19 +1734,11 @@ class UIMacroDesignerGui {
             ctrlType := "Edit"
         if (!this._ValidateBindingTarget(target))
             return ""
-        if (this._schema.controls.Length >= UIMacroSchema.MaxControls) {
-            MsgBox("最多 " UIMacroSchema.MaxControls " 个控件", "自定义界面", "Icon!")
-            return ""
-        }
-
         label := this._NewControlLabel(target)
-        newId := UIMacroSchema.Add(this._schema, ctrlType, 12, 12 + this._schema.controls.Length * 6)
-        if (newId == "")
-            return ""
-        ctrl := UIMacroSchema.FindById(this._schema, newId)
+        ctrl := this._AddPageControl(ctrlType)
         if (!IsObject(ctrl))
             return ""
-        ctrl.page := this._page
+        newId := ctrl.id
         ctrl.text := label
         this._SetControlBinding(ctrl, target, ctrlType)
         this._selId := newId
@@ -1726,7 +1767,7 @@ class UIMacroDesignerGui {
         key := UIMacroStepBinding.TargetKey(target)
         if (key != "" && (this._IsTargetBoundByAnotherControl(key, exceptId)
             || UIMacroStepBinding.IsOccupiedByKey(key, this._foldKey, this._foldIndex))) {
-            MsgBox("该字段已被其它控件或面板绑定", "绑定冲突", "Icon!")
+            this._Notice("该字段已被其它控件或面板绑定", "绑定冲突")
             return false
         }
         return true
@@ -1873,7 +1914,7 @@ class UIMacroDesignerGui {
     _OnAddPage(*) {
         pages := (this._schema.window.HasProp("pages") ? Integer(this._schema.window.pages) : 1)
         if (pages >= 20) {
-            MsgBox("最多 20 页", "自定义界面", "Icon!")
+            this._Notice("最多 20 页")
             return
         }
         this._schema.window.pages := pages + 1
@@ -1889,16 +1930,13 @@ class UIMacroDesignerGui {
             return
 
         page := this._page
-        controlsOnPage := 0
-        for ctrl in this._schema.controls {
-            ctrlPage := ctrl.HasProp("page") ? Integer(ctrl.page) : 1
-            if (ctrlPage == page)
-                controlsOnPage += 1
+        controlsOnPage := this._PageControls().Length
+        if (controlsOnPage > 0) {
+            choice := RmtDialog.Choose(Format(GetLang("删除第 {1} 页及其 {2} 个控件？"), page, controlsOnPage)
+                , GetLang("删除页面"), [GetLang("删除页面"), GetLang("取消")], this.ui.wpfHwnd)
+            if (choice != 1)
+                return
         }
-        if (controlsOnPage > 0
-            && MsgBox("删除第 " page " 页及其 " controlsOnPage " 个控件？", "删除页面", "YesNo Icon? Default2")
-                != "Yes")
-            return
 
         i := this._schema.controls.Length
         while (i >= 1) {
@@ -2059,6 +2097,7 @@ class UIMacroDesignerGui {
                 this.ui.Update("DesignCanvas", "RebindEvents", bindList)
             this._SyncSelBox()
             this._SyncProps()
+            this._SyncPanelSize()
             try UIMacroLayerGui.NotifyIfOpen()
             ; 页码按钮的显隐也要刷：_Rebuild 走原地重灌时不会执行到函数尾部
             this._ReloadPageCombo()
@@ -2129,7 +2168,7 @@ class UIMacroDesignerGui {
     _OnPreview(*) {
         v := UIMacroSchema.Validate(this._schema)
         if (!v.ok) {
-            MsgBox(v.msg, "自定义界面", "Icon!")
+            this._Notice(v.msg)
             return
         }
         pw := Integer(this._schema.window.width)
@@ -2147,6 +2186,7 @@ class UIMacroDesignerGui {
             inputBg: "{DynamicResource InputBg}",
             inputStroke: "{DynamicResource InputStroke}",
             inputTextColor: "{DynamicResource InputText}",
+            onlyPage: this._page,
             panelWidth: pw,
             tableItem: this._tableItem
         })
@@ -2154,17 +2194,16 @@ class UIMacroDesignerGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         pv := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         pv.xaml := StrReplace(pv.xaml, 'Width="940" Height="700"'
-            , 'Title="预览" Width="' (pw + 12) '" Height="' ph '"')
+            , 'Title="预览" ShowInTaskbar="False" Width="' (pw + 12) '" Height="' ph '"')
         pv.xaml := StrReplace(pv.xaml, 'Background="Transparent"', 'Background="' MainSoftData.UIPanelBgColor '"')
 
         pv.xaml := StrReplace(pv.xaml, '%resources%', this._UIPanelResources())
         pv.xaml := StrReplace(pv.xaml, '%components%', '')
 
-        if (IsObject(this._previewUi))
-            try this._previewUi.Update("Window", "Close", "")
+        this._ClosePreview()
         pv.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "_ClosePreview"))
-        pv.Show()
-        this._previewUi := pv
+        if (XamlWin.Open(pv, "", this.ui.wpfHwnd))
+            this._previewUi := pv
     }
 
     _ClosePreview(*) {
@@ -2177,7 +2216,7 @@ class UIMacroDesignerGui {
     _OnSave(*) {
         v := UIMacroSchema.Validate(this._schema)
         if (!v.ok) {
-            MsgBox(v.msg, "自定义界面", "Icon!")
+            this._Notice(v.msg)
             return
         }
 
@@ -2185,7 +2224,7 @@ class UIMacroDesignerGui {
 
         json := UIMacroSchema.Serialize(this._schema)
         if (json == "") {
-            MsgBox("生成配置失败（序列化返回空），请把这条信息发给我", "自定义界面", "Icon!")
+            this._Notice("生成配置失败：没有可保存的内容")
             return
         }
         if (UIMacroSchema.WriteStoreByKey(this._foldKey, json)) {
@@ -2198,7 +2237,7 @@ class UIMacroDesignerGui {
                     MyUIMacroGui.DestroyFoldPanels(this._foldIndex)
             }
         } else {
-            MsgBox("写入失败：" UIMacroSchema.StorePathByKey(this._foldKey), "自定义界面", "Icon!")
+            this._Notice("写入失败：" UIMacroSchema.StorePathByKey(this._foldKey))
         }
     }
 

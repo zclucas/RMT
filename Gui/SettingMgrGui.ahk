@@ -278,11 +278,23 @@ class SettingMgrGui {
     }
 
     _GetSelectedSetting(state := unset) {
-        if (IsSet(state) && IsObject(state) && state.Has("OperSettingCon") && state["OperSettingCon"] != "")
-            return state["OperSettingCon"]
-        if (this._selectedSetting != "")
-            return this._selectedSetting
-        return MySoftData.CurSettingName
+        name := this._selectedSetting != "" ? this._selectedSetting : MySoftData.CurSettingName
+        if (IsSet(state) && IsObject(state) && state.Has("OperSettingCon"))
+            name := state["OperSettingCon"]
+        if (Compat_IsSettingName(name)) {
+            for item in this.SettingList {
+                if (item = name)
+                    return item
+            }
+        }
+        return ""
+    }
+
+    _RequireSelectedSetting(state) {
+        name := this._GetSelectedSetting(state)
+        if (name == "")
+            RmtDialog.Info(GetLang("请从列表中选择已有配置"), GetLang("提示"), this.ui.wpfHwnd)
+        return name
     }
 
     OnMergeBtnClick(state, ctrl, event) {
@@ -331,62 +343,18 @@ class SettingMgrGui {
             RmtDialog.Info(GetLang("需要选择若梦兔软件下的Setting文件"), GetLang("提示"), this.ui.wpfHwnd)
             return
         }
-        CurSettingDir := A_WorkingDir "\Setting"
-        OldSettingDir := A_WorkingDir "\SettingOld\Setting" FormatTime(, "MM月dd日HH-mm-ss")
-        if (DirExist(OldSettingDir))
-            DirDelete(OldSettingDir, true)
-        DirCopy(CurSettingDir, OldSettingDir, 1)
-        if (DirExist(CurSettingDir))
-            DirDelete(CurSettingDir, true)
-        DirCopy(SelectedFolder, CurSettingDir, 1)
-        ; Setting 根下的旧版共用配置（MainSettings.ini / themes.ini）→ TOML。
-        ; 单个方案失败不能中断其余方案：中断后没转完的目录只剩 ini，下次加载会当成空白方案写成默认宏列表。
-        migrateErr := ""
         try {
-            Compat_UpgradeDir(CurSettingDir)
+            imported := Compat_ImportSettingsTree(SelectedFolder, A_WorkingDir "\Setting"
+                , A_WorkingDir "\SettingOld", MySoftData.CurSettingName)
         } catch as e {
-            migrateErr .= e.Message "`n"
+            RmtDialog.Info(GetLang("迁移失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
+            return
         }
-        loop files, CurSettingDir "\*", "D" {
-            try {
-                this.OnRepairSetting(A_LoopFilePath, true)
-            } catch as e {
-                migrateErr .= A_LoopFileName ": " e.Message "`n"
-            }
-        }
-        ; 以磁盘上实际存在的目录为准重建配置列表。
-        ; 迁入的 MainSettings 里那份 SettingArrStr 可能过期、缺失，甚至只有旧软件的部分条目，
-        ; 不重建就会出现「迁入成功但配置选项下拉框里看不到新配置」。
-        SettingArrStr := ""
-        firstSetting := ""
-        foundCur := false
-        loop files, CurSettingDir "\*", "D" {
-            dirName := A_LoopFileName
-            if (firstSetting == "")
-                firstSetting := dirName
-            if (dirName == MySoftData.CurSettingName)
-                foundCur := true
-            SettingArrStr .= dirName "π"
-        }
-        SettingArrStr := RTrim(SettingArrStr, "π")
-        if (SettingArrStr == "")
-            SettingArrStr := "RMT默认配置"
-        MainSoftData.SettingArrStr := SettingArrStr
-        CfgWrite(SettingArrStr, SettingFile, SettingSection, "SettingArrStr")
-
-        ; 当前配置名在新列表里不存在（迁入的是另一套配置）→ 落到第一项，避免启动后指向空目录
-        if (!foundCur) {
-            MySoftData.CurSettingName := firstSetting
-            CfgWrite(MySoftData.CurSettingName, SettingFile, SettingSection, "CurSettingName")
-        }
-
+        MainSoftData.SettingArrStr := imported.Names
+        MySoftData.CurSettingName := imported.Selected
         MySoftData.MacroTotalCount := CfgRead(SettingFile, SettingSection, "MacroTotalCount", 0)
-        RMTLogSysInfo("配置导入", Format("配置列表已重建：{1}", SettingArrStr))
-        CfgWrite(true, SettingFile, SettingSection, "IsReload")
-        if (migrateErr != "")
-            RmtDialog.Info(GetLang("迁移失败: ") migrateErr, GetLang("错误"), this.ui.wpfHwnd)
-        else
-            RmtDialog.Info(GetLang("配置迁移成功"), GetLang("提示"), this.ui.wpfHwnd)
+        RMTLogSysInfo("配置导入", Format("配置列表已重建：{1}", imported.Names))
+        RmtDialog.Info(GetLang("配置迁移成功"), GetLang("提示"), this.ui.wpfHwnd)
         SafeReload()
     }
 
@@ -412,7 +380,9 @@ class SettingMgrGui {
     }
 
     OnPackBtnClick(state, ctrl, event) {
-        settingName := this._GetSelectedSetting(state)
+        settingName := this._RequireSelectedSetting(state)
+        if (settingName == "")
+            return
         folderPath := A_WorkingDir "\Setting\" settingName
         outputFile := A_Desktop "\" settingName ".rmt"
         ; 询问包密码（弹窗挂在配置管理窗口上，取消 = 不导出）
@@ -440,7 +410,8 @@ class SettingMgrGui {
 
         LoadType := 1
         for settingName in this.SettingList {
-            if (fileNameNoExt == settingName) {
+            if (fileNameNoExt = settingName) {
+                fileNameNoExt := settingName
                 importBtns := [GetLang("覆盖导入"), GetLang("自增导入"), GetLang("取消导入")]
                 SelectType := RmtDialog.Choose(GetLang("配置已存在，请选择导入方式："), GetLang("配置导入选项"), importBtns, this.ui.wpfHwnd)
                 if (SelectType == 0 || SelectType == 3)
@@ -454,11 +425,8 @@ class SettingMgrGui {
         if (LoadType == 3)
             fileNameNoExt := IncrementText(this.SettingList, fileNameNoExt)
 
-        outputFolder := A_WorkingDir "\Setting\" fileNameNoExt
-
         try {
-            FolderPackager.UnpackFile(selectedFile, outputFolder)
-            this.OnRepairSetting(outputFolder, true)
+            Compat_ImportProfilePackage(selectedFile, A_WorkingDir "\Setting", A_WorkingDir "\SettingOld", fileNameNoExt)
             if (LoadType != 2) {
                 MainSoftData.SettingArrStr .= "π" fileNameNoExt
                 CfgWrite(MainSoftData.SettingArrStr, SettingFile, SettingSection, "SettingArrStr")
@@ -482,19 +450,27 @@ class SettingMgrGui {
     }
 
     OnLoadBtnClick(state, ctrl, event) {
-        MySoftData.CurSettingName := this._GetSelectedSetting(state)
+        settingName := this._RequireSelectedSetting(state)
+        if (settingName == "")
+            return
+        MySoftData.CurSettingName := settingName
         CfgWrite(MySoftData.CurSettingName, SettingFile, SettingSection, "CurSettingName")
         CfgWrite(true, SettingFile, SettingSection, "IsReload")
         SafeReload()
     }
 
     OnCourseBtnClick(state, ctrl, event) {
-        folderPath := A_WorkingDir "\Setting\" this._GetSelectedSetting(state)
+        settingName := this._RequireSelectedSetting(state)
+        if (settingName == "")
+            return
+        folderPath := A_WorkingDir "\Setting\" settingName
         MyUseExplainGui.ShowGui(folderPath)
     }
 
     OnDelBtnClick(state, ctrl, event) {
-        settingName := this._GetSelectedSetting(state)
+        settingName := this._RequireSelectedSetting(state)
+        if (settingName == "")
+            return
         if (settingName == MySoftData.CurSettingName) {
             RmtDialog.Info(GetLang("不可删除当前配置"))
             return
@@ -504,8 +480,18 @@ class SettingMgrGui {
         if (!result)
             return
 
-        if (DirExist(A_WorkingDir "\Setting\" settingName))
-            DirDelete(A_WorkingDir "\Setting\" settingName, true)
+        settingPath := A_WorkingDir "\Setting\" settingName
+        try {
+            FolderPackager._RejectReparsePoint(A_WorkingDir "\Setting")
+            FolderPackager._RejectReparsePoint(settingPath)
+            if (DirExist(settingPath)) {
+                Compat_CheckPlainTree(settingPath)
+                DirDelete(settingPath, true)
+            }
+        } catch as e {
+            RmtDialog.Info(e.Message, GetLang("错误"), this.ui.wpfHwnd)
+            return
+        }
 
         SettingArrStr := ""
         for name in this.SettingList {
@@ -578,7 +564,7 @@ class SettingMgrGui {
         }
 
         for settingName in this.SettingList {
-            if (FileName == settingName) {
+            if (FileName = settingName) {
                 RmtDialog.Info(GetLang("配置名已存在"))
                 return false
             }
@@ -587,30 +573,6 @@ class SettingMgrGui {
     }
 
     IsValidFolderName(folderName) {
-        if (folderName == "")
-            return false
-
-        reservedNames := Map(
-            "CON", 1, "PRN", 1, "AUX", 1, "NUL", 1,
-            "COM1", 1, "COM2", 1, "COM3", 1, "COM4", 1, "COM5", 1, "COM6", 1, "COM7", 1, "COM8", 1, "COM9", 1,
-            "LPT1", 1, "LPT2", 1, "LPT3", 1, "LPT4", 1, "LPT5", 1, "LPT6", 1, "LPT7", 1, "LPT8", 1, "LPT9", 1
-        )
-
-        if (reservedNames.Has(folderName))
-            return false
-
-        illegalChars := ["\", "/", ":", "*", "?", " ", "<", ">", "|"]
-        for char in illegalChars {
-            if (InStr(folderName, char))
-                return false
-        }
-
-        if (RegExMatch(folderName, "[ .]$"))
-            return false
-
-        if (StrLen(folderName) > 255)
-            return false
-
-        return true
+        return Compat_IsSettingName(folderName)
     }
 }

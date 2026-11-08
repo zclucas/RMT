@@ -153,13 +153,12 @@ RecordRealAxisValue(symbol, State) {
 }
 
 ; 落一条轴设值采样（无类型）。值变化死区、回中兜底交给调用方判断。
-RecordJoyAxisSet(axisKey, value) {
+RecordJoyAxisSet(axisKey, value, curTime, &macroStr) {
     global MainSoftData
-    curTime := A_TickCount
     span := curTime - MainSoftData.RecordLastTime
     MainSoftData.RecordLastTime := curTime
-    MainSoftData.RecordMacroStr .= Format("{}_{},", GetLang("间隔"), span)
-    MainSoftData.RecordMacroStr .= Format("{}_{}:{},", GetLang("手柄"), JoyInternalToShort(axisKey), value)
+    macroStr .= Format("{}_{},", GetLang("间隔"), span)
+    macroStr .= Format("{}_{}:{},", GetLang("手柄"), JoyInternalToShort(axisKey), value)
 }
 
 ; 上次已落宏的各轴值（初值从每轮采样建立；录制结束时非零需兜底回中）
@@ -167,20 +166,25 @@ RecordAxisLastVal := Map()
 
 ; 录制首轮各轴基线（避免把开始时的既有偏转落成指令）
 RecordAxisBase := Map()
+RecordJoyButtons := Map()
+RecordJoyReleasedAt := Map()
+RecordJoyLastTick := 0
 
 RecordJoyTimer() {
     global RecordXInputStates, MainSoftData, MySoftData, RecordJoyIndexArr, RecordJoyAxises, XboxJoyAndPOVMap
+    global RecordJoyButtons, RecordJoyReleasedAt, RecordJoyLastTick, RI_eventQueue
 
-    if (!UIControls.ToolCheckRecord.Value)
+    if (!RI_isActive || !UIControls.ToolCheckRecord.Value)
         return
 
-    static lastTick := 0
-    debounceMs := MainSoftData.RecordJoyInterval
-    if (debounceMs < 20)
-        debounceMs := 20
-    if (A_TickCount - lastTick < debounceMs)
+    debounceMs := Max(20, MainSoftData.RecordJoyInterval)
+    now := RecordNow()
+    remaining := debounceMs - (now - RecordJoyLastTick)
+    if (remaining > 0) {
+        SetTimer(RecordJoyTimer, -remaining)
         return
-    lastTick := A_TickCount
+    }
+    RecordJoyLastTick := now
 
     RecordRefreshJoyIndexArr()
     RecordXInputStates := RecordCollectXInputStates()
@@ -223,24 +227,31 @@ RecordJoyTimer() {
                 break
         }
 
-        if (isPressed) {
-            OnRecordAddMacroStr(friendlyKey, true)
+        if (isPressed != RecordJoyButtons.Get(friendlyKey, false)) {
+            if (isPressed && now - RecordJoyReleasedAt.Get(friendlyKey, -100) < 100)
+                continue
+            if (!RI_isActive)
+                return
+            RecordJoyButtons[friendlyKey] := isPressed
+            if (!isPressed)
+                RecordJoyReleasedAt[friendlyKey] := now
+            RI_eventQueue.Push(Map("type", "key", "name", friendlyKey,
+                "state", GetLang(isPressed ? "按下" : "松开"), "t", now))
         }
-        else if (MainSoftData.RecordHoldKeyMap.Has(friendlyKey))
-            OnRecordAddMacroStr(friendlyKey, false)
     }
 
     ; 真轴采样：把摇杆/扳机当前偏转（%）按值变化死区落成「设值」轴指令。
     ; 首个有效状态只建基线（不落初始偏移）；此后 |Δ|≥StepVal 才采样，抑制中心抖动。
     RecordAxisSampleTimer()
 
-    SetTimer(RecordJoyTimer, -MainSoftData.RecordJoyInterval)
+    if (RI_isActive)
+        SetTimer(RecordJoyTimer, -debounceMs)
 }
 
 ; 真轴模拟量采样（被 RecordJoyTimer 调用）。多台手柄只取第 1 台状态。
 RecordAxisSampleTimer() {
-    global RecordAxisLastVal, RecordAxisBase, MainSoftData
-    if (RecordXInputStates.Length == 0)
+    global RecordAxisLastVal, RecordAxisBase, RI_eventQueue
+    if (!RI_isActive || RecordXInputStates.Length == 0)
         return
     s := RecordXInputStates[1]
     stepVal := 3                 ; 值变化死区（±，抑制噪声；也决定采样粒度）
@@ -259,27 +270,31 @@ RecordAxisSampleTimer() {
         changed := Abs(v - last) >= stepVal
         if (!changed && !(last != 0 && v == 0))
             continue
+        if (!RI_isActive)
+            return
         RecordAxisLastVal[axisKey] := v
-        RecordJoyAxisSet(axisKey, v)
+        RI_eventQueue.Push(Map("type", "axis", "name", axisKey, "value", v, "t", RecordNow()))
     }
 }
 
 ; 录制结束兜底：仍有非零偏转的轴落一条 :0 回中，保证录制宏在末尾把手柄轴归零。
 ; 与按钮 AutoLoosen 一致，仅在 RecordAutoLoosen 开启时调用（由 OnFinishRecordMacro 触发）。
 RecordJoyAxisRecentre() {
-    global RecordAxisLastVal
+    global MainSoftData, RecordAxisLastVal
     if (!IsObject(RecordAxisLastVal) || RecordAxisLastVal.Count == 0)
         return
+    macroStr := MainSoftData.RecordMacroStr
     for axisKey, v in RecordAxisLastVal {
         if (v == 0)
             continue
         RecordAxisLastVal[axisKey] := 0
-        RecordJoyAxisSet(axisKey, 0)
+        RecordJoyAxisSet(axisKey, 0, RecordNow(), &macroStr)
     }
+    MainSoftData.RecordMacroStr := macroStr
 }
 
 RecordJoy() {
-    global RecordJoyIndexArr, MainSoftData
+    global RecordJoyIndexArr, RecordJoyButtons, RecordJoyReleasedAt, RecordJoyLastTick
     ; 首次启动前确保 GameInput wrapper 就绪（无手柄/加载失败会在此暴露，不静默空录）
     try {
         GI_EnsureWrapper()
@@ -288,12 +303,13 @@ RecordJoy() {
         return
     }
     RecordRefreshJoyIndexArr()
-    MainSoftData.RecordHoldKeyMap := Map()
-    MainSoftData.RecordInitialHoldMap := Map()
     ; 真轴采样基线复位：录制开始时摇杆/扳机的既有偏转只作基线，不落成指令
     global RecordAxisLastVal, RecordAxisBase
     RecordAxisLastVal := Map()
     RecordAxisBase := Map()
+    RecordJoyButtons := Map()
+    RecordJoyReleasedAt := Map()
+    RecordJoyLastTick := 0
     SetTimer(RecordJoyTimer, -50)
 }
 

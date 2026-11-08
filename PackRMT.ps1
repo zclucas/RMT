@@ -697,28 +697,45 @@ function Copy-OpenCV {
     }
 }
 
+function Build-XamlReleaseEngine {
+    param([string]$SourceDir, [string]$Destination, [ValidateSet("x86", "x64")][string]$Arch)
+
+    $framework = Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319"
+    if (!(Test-Path -LiteralPath (Join-Path $framework "csc.exe"))) {
+        $framework = Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319"
+    }
+    $compiler = Join-Path $framework "csc.exe"
+    if (!(Test-Path -LiteralPath $compiler)) { throw "缺少 .NET Framework C# 编译器：$compiler" }
+    $sources = @(Get-ChildItem -LiteralPath (Join-Path $SourceDir "src") -Filter "*.cs" -File)
+    if (!$sources.Count) { throw "缺少 AHK-XAML 引擎源码" }
+    $options = @("/nologo", "/target:winexe", "/platform:$Arch", "/out:$Destination", "/lib:$framework\WPF")
+    $options += @("System", "System.Core", "System.Xml", "PresentationFramework", "PresentationCore",
+                  "WindowsBase", "System.Xaml", "UIAutomationProvider", "UIAutomationTypes") | ForEach-Object { "/reference:$_.dll" }
+    $webview = Join-Path $SourceDir "WebView2"
+    $core = Join-Path $webview "Microsoft.Web.WebView2.Core.dll"
+    $wpf = Join-Path $webview "Microsoft.Web.WebView2.Wpf.dll"
+    if ((Test-Path -LiteralPath $core) -and (Test-Path -LiteralPath $wpf)) {
+        $options += @("/define:ENABLE_WEBVIEW", "/reference:$core", "/reference:$wpf")
+    }
+    $gif = Join-Path $SourceDir "WpfAnimatedGif\WpfAnimatedGif.dll"
+    if (Test-Path -LiteralPath $gif) { $options += "/reference:$gif" }
+    $resources = Join-Path $SourceDir "xaml.components.baml"
+    if (!(Test-Path -LiteralPath $resources)) { $resources = Join-Path $SourceDir "xaml.components.xaml" }
+    if (!(Test-Path -LiteralPath $resources)) { throw "缺少 AHK-XAML 控件资源" }
+    $options += "/resource:$resources"
+    & $compiler @options @($sources.FullName)
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $Destination)) { throw "AHK-XAML 引擎编译失败 ($Arch)" }
+}
+
 function Copy-XamlDlls {
     param([string]$ReleaseDir, [string]$Arch = "x64")
 
     $srcDepDir = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib\dep"
     $dstDepDir = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib\dep"
-
     New-Item -ItemType Directory -Path $dstDepDir -Force | Out-Null
-
-    # 引擎 DLL：开发期开着 WebView2 时产物名是 ahk-xaml-wv2.dll（见 XAMLHost.GetEngineDllName），
-    # 而编译版运行时固定找 ahk-xaml.dll。所以优先把 wv2 版改名为 ahk-xaml.dll 放进 Release；
-    # 只有旧的 ahk-xaml.dll 时照常复制（帮助窗会走 --app 降级，不影响软件其它部分）。
-    $wv2Src = Join-Path $srcDepDir "ahk-xaml-wv2.dll"
-    $plainSrc = Join-Path $srcDepDir "ahk-xaml.dll"
-    if (Test-Path $wv2Src) {
-        Copy-Item $wv2Src -Destination (Join-Path $dstDepDir "ahk-xaml.dll") -Force
-        Write-Log "  已复制: AHK-XAML/lib/dep/ahk-xaml-wv2.dll -> ahk-xaml.dll (WebView2 版引擎)" "Gray"
-    } elseif (Test-Path $plainSrc) {
-        Copy-Item $plainSrc -Destination $dstDepDir -Force
-        Write-Log "  [WARN] 未找到 ahk-xaml-wv2.dll（先跑一次软件让引擎带 WebView2 重编），已用旧版 ahk-xaml.dll" "Yellow"
-    } else {
-        Write-Log "  [WARN] 未找到: AHK-XAML/lib/dep/ahk-xaml.dll" "Yellow"
-    }
+    # 不借用开发机上可能已经过时的 AnyCPU 引擎；确保与当前消息协议和原生 Loader 位数一致。
+    Build-XamlReleaseEngine -SourceDir $srcDepDir -Destination (Join-Path $dstDepDir "ahk-xaml.dll") -Arch $Arch
+    Write-Log "  已编译: AHK-XAML/lib/dep/ahk-xaml.dll ($Arch)" "Gray"
 
     # WebView2 依赖三件套（Microsoft.Web.WebView2.Core/Wpf + WebView2Loader），
     # 首次跑软件时会由 RestoreWebView2Dlls 自动从 NuGet 下载到 lib/dep/WebView2/

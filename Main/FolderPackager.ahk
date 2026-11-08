@@ -80,7 +80,11 @@ class FolderPackager {
         ; 读取二进制数据 - 修正这里
         FileEncoding("CP0")
         file := FileOpen(packedFile, "r")
-        fileSize := FileGetSize(packedFile)  ; 使用 FileGetSize 获取文件大小
+        fileSize := file.Length
+        if (fileSize > this.MAX_TOTAL_SIZE + 16 * 1024 * 1024) {
+            file.Close()
+            throw Error(GetLang("打包文件解压后总大小超过上限，已中止解包"))
+        }
         data := Buffer(fileSize)
         bytesRead := file.RawRead(data, fileSize)  ; 读取指定字节数
         file.Close()
@@ -99,36 +103,56 @@ class FolderPackager {
 
         pos := headerInfo.endPos
         totalSize := data.Size
-        processedSize := pos
+        ; 整包校验通过前不创建目录、不删除版本标记、不覆盖原文件。
+        entries := []
+        fileNames := Map()
+        fileNames.CaseSense := false
+        extractedSize := 0
+        this._RejectReparsePoint(outputFolder)
+        while pos < totalSize {
+            if (entries.Length >= this.MAX_FILE_COUNT)
+                throw Error(GetLang("打包文件条目数超过上限，已中止解包"))
+            entry := this._ParseFile(data, pos)
+            if !entry
+                throw Error(GetLang("无效的打包文件格式"))
+            this._ValidateEntry(entry.path)
+            if fileNames.Has(entry.path)
+                throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " entry.path)
+            fileNames[entry.path] := true
+            extractedSize += entry.size
+            if (extractedSize > this.MAX_TOTAL_SIZE)
+                throw Error(GetLang("打包文件解压后总大小超过上限，已中止解包"))
+            entries.Push(entry)
+            pos := entry.nextPos
+        }
+        if !entries.Length
+            throw Error(GetLang("无效的打包文件格式"))
+        for entry in entries {
+            path := outputFolder
+            relative := ""
+            parts := StrSplit(entry.path, "\")
+            for i, segment in parts {
+                path .= "\" segment
+                relative .= (relative = "" ? "" : "\") segment
+                this._RejectReparsePoint(path)
+                attr := FileExist(path)
+                isFolder := i < parts.Length
+                if ((isFolder && fileNames.Has(relative)) || (attr && !!InStr(attr, "D") != isFolder))
+                    throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " entry.path)
+            }
+        }
 
         ; 创建输出文件夹
         DirCreate(outputFolder)
         ; 覆盖解包无版本旧包时，不继承目标目录残留的新版本标记。
         versionPath := Compat_VersionFile(outputFolder)
+        this._RejectReparsePoint(versionPath)
         if (FileExist(versionPath))
             FileDelete(versionPath)
         CfgInvalidate(versionPath)
 
 
-        ; 解析并提取文件
-        fileCount := 0
-        extractedSize := 0
-        while pos < data.Size {
-            fileInfo := this._ParseFile(data, pos)
-            if !fileInfo
-                break
-
-            ; ── 安全校验：包可能来自不可信来源 ──
-            if (++fileCount > this.MAX_FILE_COUNT)
-                throw Error(GetLang("打包文件条目数超过上限，已中止解包"))
-
-            this._ValidateEntry(fileInfo.path)
-
-            ; 累计写出量上限：单文件有帽子，但条目数没约束时总量能到 TB 级
-            extractedSize += fileInfo.data.Size
-            if (extractedSize > this.MAX_TOTAL_SIZE)
-                throw Error(GetLang("打包文件解压后总大小超过上限，已中止解包"))
-
+        for fileInfo in entries {
             ; 创建子目录（如果需要）
             fileDir := outputFolder "\" fileInfo.dir
             if fileDir != outputFolder "\"
@@ -136,21 +160,28 @@ class FolderPackager {
 
             ; 写入文件
             outputPath := outputFolder "\" fileInfo.path
-            FileOpen(outputPath, "w").RawWrite(fileInfo.data)
-
-            pos := fileInfo.nextPos
-            processedSize := pos
+            out := FileOpen(outputPath, "w")
+            try {
+                if (fileInfo.size && out.RawWrite(data.Ptr + fileInfo.offset, fileInfo.size) != fileInfo.size)
+                    throw Error(GetLang("文件写入失败:") " " fileInfo.path)
+            } finally out.Close()
 
             if callback {
-                progress := Round((processedSize / totalSize) * 100)
+                progress := Round((fileInfo.nextPos / totalSize) * 100)
                 callback("解包进度: " progress "% - " fileInfo.path, progress)
             }
         }
 
         if callback
-            callback("解包完成: " outputFolder " (共 " fileCount " 个文件)", 100)
+            callback("解包完成: " outputFolder " (共 " entries.Length " 个文件)", 100)
 
         return true
+    }
+
+    static _RejectReparsePoint(path) {
+        attrs := DllCall("GetFileAttributesW", "str", path, "uint")
+        if (attrs != 0xFFFFFFFF && attrs & 0x400)
+            throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " path)
     }
 
     ; 加密包 → 明文包字节。最多问 3 次密码，取消或连续输错就中止导入
@@ -200,8 +231,7 @@ class FolderPackager {
 
         if (name = "")
             throw Error(GetLang("打包文件包含空路径，已中止解包"))
-        ; 拒绝 ..、盘符、正斜杠、反斜杠开头（只允许包内相对路径）
-        if InStr(name, "..") || InStr(name, ":") || InStr(name, "/") || SubStr(name, 1, 1) = "\"
+        if RegExMatch(name, '[<>:"/|?*]')
             throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
         ; 拒绝控制字符
         loop parse name
@@ -209,11 +239,13 @@ class FolderPackager {
                 throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
         ; 拒绝 Windows 保留设备名
         for seg in StrSplit(name, "\") {
+            if (!StrLen(seg) || RegExMatch(seg, "[ .]$"))
+                throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
             base := seg
             dot := InStr(base, ".", , 1)
             if dot
                 base := SubStr(base, 1, dot - 1)
-            if InStr("," RESERVED ",", "," base ",")
+            if (InStr("," RESERVED ",", "," RTrim(base) ",") || RegExMatch(base, "i)^(COM|LPT)[¹²³]$"))
                 throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
         }
         ; 扩展名白名单
@@ -254,19 +286,21 @@ class FolderPackager {
 
         ; 读取文件名长度
         nameLen := NumGet(data, startPos, "uint")
-        if startPos + 4 + nameLen + 8 > data.Size
+        if (nameLen < 2 || nameLen > 131072 || startPos + 4 + nameLen + 8 > data.Size)
             return false
 
-        ; 读取文件名
-        fileNameBuf := Buffer(nameLen)
-        DllCall("RtlMoveMemory", "ptr", fileNameBuf.ptr, "ptr", data.ptr + startPos + 4, "uint", nameLen)
-        fileName := StrGet(fileNameBuf, "utf-8")
+        nameOffset := startPos + 4
+        if NumGet(data, nameOffset + nameLen - 1, "uchar") != 0
+            return false
+        fileName := StrGet(data.Ptr + nameOffset, nameLen - 1, "UTF-8")
+        if StrPut(fileName, "UTF-8") != nameLen
+            return false
 
         ; 读取文件大小
-        fileSize := NumGet(data, startPos + 4 + nameLen, "uint64")
+        fileSize := NumGet(data, startPos + 4 + nameLen, "int64")
 
         ; 单文件大小上限（防止异常大文件直接分配内存）
-        if fileSize > this.MAX_FILE_SIZE
+        if (fileSize < 0 || fileSize > this.MAX_FILE_SIZE)
             throw Error(GetLang("打包文件包含超过大小上限的条目，已中止解包"))
 
         ; 计算数据位置
@@ -275,10 +309,6 @@ class FolderPackager {
 
         if dataEnd > data.Size
             return false
-
-        ; 提取文件数据
-        fileData := Buffer(fileSize)
-        DllCall("RtlMoveMemory", "ptr", fileData.ptr, "ptr", data.ptr + dataStart, "uint", fileSize)
 
         ; 分离目录和文件名
         splitPos := InStr(fileName, "\", , -1)
@@ -294,7 +324,8 @@ class FolderPackager {
             path: fileName,
             dir: fileDir,
             name: fileNameOnly,
-            data: fileData,
+            offset: dataStart,
+            size: fileSize,
             nextPos: dataEnd
         }
     }

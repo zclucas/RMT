@@ -124,9 +124,7 @@ namespace RMT
                         try { errText = resp.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult() ?? ""; } catch { }
                         if (code == 400 || code == 404 || code == 422)
                             return ChatCompletion(baseUrl, apiKey, model, messagesJson, temperature, toolsJson);
-                        string snippet = errText.Replace("\r", " ").Replace("\n", " ").Trim();
-                        if (snippet.Length > 180)
-                            snippet = snippet.Substring(0, 180);
+                        string snippet = ErrorSnippet(errText);
                         throw new Exception("API 请求失败 HTTP " + code + (snippet.Length > 0 ? "\n" + snippet : ""));
                     }
 
@@ -137,6 +135,7 @@ namespace RMT
                         var content = new StringBuilder();
                         var reasoning = new StringBuilder();
                         var tools = new Dictionary<int, ToolAcc>();
+                        bool sawReply = false;
                         string line;
                         while ((line = ReadStreamLine(reader, token)) != null)
                         {
@@ -155,13 +154,12 @@ namespace RMT
                             if (line.IndexOf("\"chat.completion.chunk\"") < 0
                                 && line.IndexOf("\"message\"") >= 0
                                 && line.IndexOf("\"choices\"") >= 0)
-                            {
-                                string full = ParseChatResult(line);
-                                PublishPartial(seq, ParseChatContent(line));
-                                return full;
-                            }
-                            ApplyStreamChunk(line, content, reasoning, tools, seq);
+                                return ParseChatResult(line);
+                            if (ApplyStreamChunk(line, content, reasoning, tools, seq))
+                                sawReply = true;
                         }
+                        if (!sawReply)
+                            throw new Exception("无法解析模型回复，请检查接口是否兼容 OpenAI Chat Completions");
                         return BuildStreamResult(content, reasoning, tools);
                     }
                     }
@@ -196,39 +194,63 @@ namespace RMT
             }
         }
 
-        private void ApplyStreamChunk(string json, StringBuilder content, StringBuilder reasoning, Dictionary<int, ToolAcc> tools, int seq)
+        private bool ApplyStreamChunk(string json, StringBuilder content, StringBuilder reasoning, Dictionary<int, ToolAcc> tools, int seq)
         {
-            int deltaAt = json.IndexOf("\"delta\"");
-            if (deltaAt < 0)
-                return;
-            string after = json.Substring(deltaAt);
-            Match cm = Regex.Match(after, "\"content\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-            if (cm.Success)
+            var doc = ParseJsonDocument(json);
+            ThrowProviderError(doc);
+            var delta = doc.SelectSingleNode("/root/choices/item[1]/delta[@type='object']");
+            if (delta == null)
+                return false;
+            string piece = ReadJsonString(delta, "content");
+            if (!string.IsNullOrEmpty(piece))
             {
-                string piece = UnescapeJsonString(cm.Groups[1].Value);
-                if (piece.Length > 0)
-                {
-                    content.Append(piece);
-                    PublishPartial(seq, content.ToString());
-                }
+                content.Append(piece);
+                PublishPartial(seq, content.ToString());
             }
-            if (!AppendDeltaString(after, "reasoning_content", reasoning)
-                && !AppendDeltaString(after, "reasoning", reasoning))
-                AppendDeltaString(after, "thinking", reasoning);
-            AccToolDelta(tools, json);
+            reasoning.Append(ReadJsonString(delta, "reasoning_content")
+                ?? ReadJsonString(delta, "reasoning") ?? ReadJsonString(delta, "thinking"));
+            AccToolNodes(tools, delta.SelectNodes("tool_calls/item"));
+            return true;
         }
 
-        private static bool AppendDeltaString(string json, string key, StringBuilder dest)
+        private static string ReadJsonString(System.Xml.XmlNode node, string key)
         {
-            if (dest == null || string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key))
-                return false;
-            Match m = Regex.Match(json, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-            if (!m.Success)
-                return false;
-            string piece = UnescapeJsonString(m.Groups[1].Value);
-            if (piece.Length > 0)
-                dest.Append(piece);
-            return true;
+            var value = node.SelectSingleNode(key + "[@type='string']");
+            return value == null ? null : value.InnerText;
+        }
+
+        private static void ThrowProviderError(System.Xml.XmlDocument doc)
+        {
+            var error = doc.SelectSingleNode("/root/error[not(@type='null')]");
+            if (error == null)
+                return;
+            string message = ReadJsonString(error, "message") ?? error.InnerText;
+            if (message.Length > 180)
+                message = message.Substring(0, 180);
+            throw new Exception("模型服务返回错误：" + message);
+        }
+
+        private static string ErrorSnippet(string body)
+        {
+            string message = (body ?? "").Trim();
+            // Gateway error pages may contain an entire HTML document; retain the HTTP status.
+            if (message.StartsWith("<", StringComparison.Ordinal))
+                return "";
+            if (message.StartsWith("{", StringComparison.Ordinal))
+            {
+                try
+                {
+                    var doc = ParseJsonDocument(message);
+                    var root = doc.DocumentElement;
+                    var error = root == null ? null : root.SelectSingleNode("error[@type='object']");
+                    message = (error == null ? null : ReadJsonString(error, "message"))
+                        ?? (root == null ? null : ReadJsonString(root, "message") ?? ReadJsonString(root, "error"))
+                        ?? "";
+                }
+                catch { return ""; }
+            }
+            message = message.Replace("\r", " ").Replace("\n", " ").Trim();
+            return message.Length > 180 ? message.Substring(0, 180) : message;
         }
 
         private static string ReadStreamLine(StreamReader reader, CancellationToken token)
@@ -239,14 +261,19 @@ namespace RMT
             return read.GetAwaiter().GetResult();
         }
 
-        private static void AccToolDelta(Dictionary<int, ToolAcc> map, string json)
+        private static System.Xml.XmlDocument ParseJsonDocument(string json)
         {
-            // Decode every array entry; regex over the whole array loses parallel calls.
             var doc = new System.Xml.XmlDocument();
             using (var reader = System.Runtime.Serialization.Json.JsonReaderWriterFactory.CreateJsonReader(
                 Encoding.UTF8.GetBytes(json), System.Xml.XmlDictionaryReaderQuotas.Max))
                 doc.Load(reader);
-            foreach (System.Xml.XmlNode node in doc.SelectNodes("/root/choices/item/delta/tool_calls/item"))
+            return doc;
+        }
+
+        private static void AccToolNodes(Dictionary<int, ToolAcc> map, System.Xml.XmlNodeList nodes)
+        {
+            // Decode every array entry; regex over the whole array loses parallel calls.
+            foreach (System.Xml.XmlNode node in nodes)
             {
                 int idx;
                 var indexNode = node.SelectSingleNode("index");
@@ -297,24 +324,10 @@ namespace RMT
             bool hasCalls = !string.IsNullOrEmpty(callsJson);
             bool hasReason = !string.IsNullOrEmpty(reasoning);
             if (!hasCalls && !hasReason)
-            {
-                if (string.IsNullOrEmpty(content))
-                    throw new Exception("无法解析模型回复，请检查接口是否兼容 OpenAI Chat Completions");
-                return content;
-            }
+                return content ?? "";
             return "§TOOLS§{\"content\":\"" + JsonEsc(content ?? "")
                 + "\",\"reasoning_content\":\"" + JsonEsc(reasoning ?? "")
                 + "\",\"calls\":[" + (callsJson ?? "") + "]}";
-        }
-
-        private static string ExtractJsonString(string json, string key)
-        {
-            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key))
-                return null;
-            Match m = Regex.Match(json, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-            if (!m.Success)
-                return null;
-            return UnescapeJsonString(m.Groups[1].Value);
         }
 
         private class ToolAcc
@@ -465,9 +478,7 @@ namespace RMT
                     int code = (int)resp.StatusCode;
                     if (code < 200 || code >= 300)
                     {
-                        string snippet = text.Replace("\r", " ").Replace("\n", " ").Trim();
-                        if (snippet.Length > 180)
-                            snippet = snippet.Substring(0, 180);
+                        string snippet = ErrorSnippet(text);
                         throw new Exception("API 请求失败 HTTP " + code + (snippet.Length > 0 ? "\n" + snippet : ""));
                     }
                     return text;
@@ -528,112 +539,31 @@ namespace RMT
             if (string.IsNullOrEmpty(body))
                 throw new Exception("无法解析模型回复，请检查接口是否兼容 OpenAI Chat Completions");
 
-            string content = ParseChatContent(body);
-            string reasoning = ParseReasoningContent(body);
+            var doc = ParseJsonDocument(body);
+            ThrowProviderError(doc);
+            var message = doc.SelectSingleNode("/root/choices/item[1]/message[@type='object']");
+            if (message == null)
+                throw new Exception("无法解析模型回复，请检查接口是否兼容 OpenAI Chat Completions");
+            string content = ReadJsonString(message, "content");
+            string reasoning = ReadJsonString(message, "reasoning_content")
+                ?? ReadJsonString(message, "reasoning") ?? ReadJsonString(message, "thinking");
             var calls = new StringBuilder();
-            foreach (Match m in Regex.Matches(body,
-                "\"id\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"[\\s\\S]{0,240}?\"name\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"[\\s\\S]{0,80}?\"arguments\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"",
-                RegexOptions.Singleline))
+            foreach (System.Xml.XmlNode node in message.SelectNodes("tool_calls/item"))
             {
+                var function = node.SelectSingleNode("function");
+                string name = function == null ? null : ReadJsonString(function, "name");
+                if (string.IsNullOrEmpty(name))
+                    continue;
                 if (calls.Length > 0)
                     calls.Append(',');
-                calls.Append("{\"id\":\"").Append(JsonEsc(UnescapeJsonString(m.Groups[1].Value)))
-                    .Append("\",\"name\":\"").Append(JsonEsc(UnescapeJsonString(m.Groups[2].Value)))
-                    .Append("\",\"arguments\":\"").Append(JsonEsc(UnescapeJsonString(m.Groups[3].Value)))
+                string id = ReadJsonString(node, "id") ?? ("call_" + calls.Length);
+                calls.Append("{\"id\":\"").Append(JsonEsc(id))
+                    .Append("\",\"name\":\"").Append(JsonEsc(name))
+                    .Append("\",\"arguments\":\"").Append(JsonEsc(ReadJsonString(function, "arguments") ?? ""))
                     .Append("\"}");
-            }
-            if (calls.Length < 1)
-            {
-                foreach (Match m in Regex.Matches(body,
-                    "\"name\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"\\s*,\\s*\"arguments\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"",
-                    RegexOptions.Singleline))
-                {
-                    if (calls.Length > 0)
-                        calls.Append(',');
-                    calls.Append("{\"id\":\"call_").Append(calls.Length).Append("\",\"name\":\"")
-                        .Append(JsonEsc(UnescapeJsonString(m.Groups[1].Value)))
-                        .Append("\",\"arguments\":\"").Append(JsonEsc(UnescapeJsonString(m.Groups[2].Value)))
-                        .Append("\"}");
-                }
             }
             return WrapChatPayload(content, reasoning, calls.ToString());
         }
 
-        private static string ParseReasoningContent(string body)
-        {
-            if (string.IsNullOrEmpty(body))
-                return "";
-            Match m = Regex.Match(body, "\"reasoning_content\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-            if (!m.Success)
-                m = Regex.Match(body, "\"reasoning\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-            if (!m.Success)
-                m = Regex.Match(body, "\"thinking\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-            if (!m.Success)
-                return "";
-            return UnescapeJsonString(m.Groups[1].Value);
-        }
-
-        private static string ParseChatContent(string body)
-        {
-            if (string.IsNullOrEmpty(body))
-                return "";
-
-            // content 可能为 null（纯 tool_calls）
-            if (Regex.IsMatch(body, "\"content\"\\s*:\\s*null"))
-                return "";
-
-            // 优先取 choices[0].message.content
-            Match m = Regex.Match(body,
-                "\"choices\"\\s*:\\s*\\[\\s*\\{[\\s\\S]*?\"message\"\\s*:\\s*\\{[\\s\\S]*?\"content\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"",
-                RegexOptions.Singleline);
-            if (!m.Success)
-            {
-                m = Regex.Match(body, "\"content\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-            }
-            if (!m.Success)
-                return "";
-
-            return UnescapeJsonString(m.Groups[1].Value);
-        }
-
-        private static string UnescapeJsonString(string s)
-        {
-            if (string.IsNullOrEmpty(s))
-                return "";
-            var sb = new StringBuilder(s.Length);
-            for (int i = 0; i < s.Length; i++)
-            {
-                if (s[i] == '\\' && i + 1 < s.Length)
-                {
-                    char n = s[++i];
-                    switch (n)
-                    {
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        case '"': sb.Append('"'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case '/': sb.Append('/'); break;
-                        case 'u':
-                            if (i + 4 < s.Length)
-                            {
-                                int code;
-                                if (int.TryParse(s.Substring(i + 1, 4), System.Globalization.NumberStyles.HexNumber, null, out code))
-                                {
-                                    sb.Append((char)code);
-                                    i += 4;
-                                    break;
-                                }
-                            }
-                            sb.Append(n);
-                            break;
-                        default: sb.Append(n); break;
-                    }
-                }
-                else
-                    sb.Append(s[i]);
-            }
-            return sb.ToString();
-        }
     }
 }
