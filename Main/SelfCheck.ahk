@@ -16,6 +16,7 @@ SelfCheckMissingFiles() {
 
     criticalMap := Map(
         "Plugins\RMT\RMT.dll", "RMT.dll",
+        "Plugins\RMT\RMT.ExcelHelper.exe", "RMT.ExcelHelper.exe",
         "Plugins\IbInputSimulator.dll", "IbInputSimulator.dll",
         "Audio\Start.wav", "Start.wav",
         "Audio\End.wav", "End.wav",

@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RmtDir = $PSScriptRoot
 $OutDll = Join-Path $RmtDir "RMT.dll"
+$OutHelper = Join-Path $RmtDir "RMT.ExcelHelper.exe"
 $ErrLog = Join-Path $env:TEMP "RMT-dll-build.log"
 
 function Find-Csc {
@@ -107,5 +108,16 @@ if ((-not (Test-Path -LiteralPath $OutDll)) -or ($code -ne 0)) {
 }
 
 Write-Host "OK: $OutDll" -ForegroundColor Green
+
+$excelSources = @($sources | Where-Object { (Split-Path -Leaf $_) -like 'Excel*.cs' } | ForEach-Object { "`"$_`"" })
+$helperArgs = @("/nologo", "/target:winexe", "/main:RMT.ExcelElevation", "/optimize+", "/out:`"$OutHelper`"", "/lib:`"$fwLib`"") + $refArgs + $excelSources
+cmd.exe /c "`"$csc`" $($helperArgs -join ' ') > `"$ErrLog`" 2>&1"
+if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $OutHelper)) {
+    Write-Host "ERROR: Excel helper compilation failed. Log: $ErrLog" -ForegroundColor Red
+    Get-Content -LiteralPath $ErrLog | Write-Host
+    if (-not $NoPause) { Read-Host "Press Enter" }
+    exit 1
+}
+Write-Host "OK: $OutHelper" -ForegroundColor Green
 if (-not $NoPause) { Read-Host "Press Enter" }
 exit 0

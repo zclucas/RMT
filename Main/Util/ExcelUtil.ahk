@@ -117,34 +117,52 @@ ExcelDllWriteCells(mode, values) {
     return cells
 }
 
-ExcelDllRun(path, sheet, mode, write, row, col, endRow, endCol, values, &result, item) {
+GetRmtExcelEditor() {
     global RMT_ASM
+    if (!IsObject(RMT_ASM))
+        RMT_ASM := CLR_LoadLibrary(EnsureRmtDll())
+    editor := RMT_ASM.CreateInstance("RMT.ExcelEditor")
+    if (!IsObject(editor))
+        throw Error(GetLang("无法加载 Excel DLL"))
+    return editor
+}
+
+ExcelDllRun(path, sheet, mode, write, row, col, endRow, endCol, values, &result, item) {
     try {
         if (item && item.Killed)
             return false
         path := ExcelWorkbookPath(path, &mutexName)
-        if (!IsObject(RMT_ASM))
-            RMT_ASM := CLR_LoadLibrary(EnsureRmtDll())
-        job := RMT_ASM.CreateInstance("RMT.ExcelEditor")
-        if (!IsObject(job))
-            throw Error(GetLang("无法加载 Excel DLL"))
+        job := GetRmtExcelEditor()
         cells := write ? ExcelDllWriteCells(mode, values) : ComObjArray(12, 0)
         if (IsInteger(sheet))
             sheet := Integer(sheet)
         if (!job.Begin(path, mutexName, sheet, mode, write, row, col, endRow, endCol, cells))
             throw Error(GetLang("当前进程已有 Excel 操作在运行"))
         deadline := DllCall("GetTickCount64", "UInt64") + 60000
+        waitingForElevation := false
         while (state := job.GetState()) == 1 {
             if (item && item.Killed)
                 return false
-            if (DllCall("GetTickCount64", "UInt64") >= deadline)
-                throw Error(GetLang("Excel 操作超时。若已开始保存，请检查工作簿。"))
+            now := DllCall("GetTickCount64", "UInt64")
+            waiting := job.IsWaitingForElevation()
+            if (waiting != waitingForElevation) {
+                waitingForElevation := waiting
+                deadline := now + (waiting ? 120000 : 60000)
+            }
+            if (now >= deadline) {
+                message := waiting ? "等待 Excel 管理员授权超时" : "Excel 操作超时。若已开始写入，请检查工作簿。"
+                throw Error(GetLang(message))
+            }
             Sleep(25)
         }
         if (item && item.Killed)
             return false
-        if (state != 2)
-            throw Error(GetLang(job.GetError()))
+        if (state != 2) {
+            message := ""
+            for i, line in StrSplit(job.GetError(), "`n", "`r")
+                message .= (i > 1 ? "`n" : "") GetLang(line)
+            throw Error(message)
+        }
         if (!write)
             result := job.GetResult()
         return true
@@ -158,12 +176,47 @@ ExcelDllRun(path, sheet, mode, write, row, col, endRow, endCol, values, &result,
     return false
 }
 
-; 复用 Excel 返回的可写工作簿，避免后台重复打开引发受保护视图错误。
+class ExcelElevationRequired extends Error {
+}
+
+; 优先从现有窗口获取工作簿，找不到时走原有 COM 文件绑定。
 ExcelOpenWorkbook(path, writable, &app, &closeBackground, &workbook) {
-    workbook := ComObjGet(path)
+    workbook := ""
+    try {
+        editor := GetRmtExcelEditor()
+        workbook := editor.FindOpenWorkbook(path)
+    }
+    attached := IsObject(workbook) && ComObjValue(workbook)
+    if (!attached) {
+        needsElevation := false
+        if (IsSet(editor))
+            try needsElevation := editor.NeedsElevationForLockedWorkbook(path)
+        if (needsElevation)
+            throw ExcelElevationRequired()
+        try workbook := ComObjGet(path)
+        catch as e {
+            accessError := ""
+            if (writable && IsSet(editor))
+                try accessError := editor.GetOpenWorkbookError()
+            if (accessError != "")
+                throw Error(e.Message "`n" GetLang(accessError))
+            throw e
+        }
+    }
     app := workbook.Application
-    closeBackground := !app.Visible
+    closeBackground := !attached && !app.Visible
     if (writable && workbook.ReadOnly) {
+        needsElevation := false
+        if (IsSet(editor))
+            try needsElevation := editor.NeedsElevationForLockedWorkbook(path)
+        if (needsElevation)
+            throw ExcelElevationRequired()
+        if (!attached && IsSet(editor)) {
+            accessError := ""
+            try accessError := editor.GetOpenWorkbookError()
+            if (accessError != "")
+                throw Error(GetLang(accessError))
+        }
         if (closeBackground)
             workbook.ChangeFileAccess(2, , false) ; xlReadWrite
         if (workbook.ReadOnly)
@@ -198,7 +251,7 @@ ExcelCellToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -206,7 +259,9 @@ ExcelCellToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("写入失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllWrite(wbPath, sheetIdentifier, "Cell", row, col, value, item)
+    MsgBox GetLang("写入失败：") failure.Message
     return false
 }
 
@@ -233,7 +288,7 @@ ExcelRowToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -241,7 +296,9 @@ ExcelRowToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("写入失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllWrite(wbPath, sheetIdentifier, "Row", row, col, value, item)
+    MsgBox GetLang("写入失败：") failure.Message
     return false
 }
 
@@ -268,7 +325,7 @@ ExcelColToWrite(wbPath, sheetIdentifier, row, col,  value, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -276,7 +333,9 @@ ExcelColToWrite(wbPath, sheetIdentifier, row, col,  value, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("写入失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllWrite(wbPath, sheetIdentifier, "Column", row, col, value, item)
+    MsgBox GetLang("写入失败：") failure.Message
     return false
 }
 
@@ -315,7 +374,7 @@ ExcelRangeRowToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -323,7 +382,9 @@ ExcelRangeRowToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("写入失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllWrite(xlPath, SheetIdentifier, "RowRange", Row, Col, Arr, item)
+    MsgBox GetLang("写入失败：") failure.Message
     return false
 }
 
@@ -362,7 +423,7 @@ ExcelRangeColToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -370,7 +431,9 @@ ExcelRangeColToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("写入失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllWrite(xlPath, SheetIdentifier, "ColumnRange", Row, Col, Arr, item)
+    MsgBox GetLang("写入失败：") failure.Message
     return false
 }
 
@@ -397,7 +460,7 @@ ExcelCellToRead(wbPath, sheetIdentifier, row, col, &ResValue, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -405,7 +468,9 @@ ExcelCellToRead(wbPath, sheetIdentifier, row, col, &ResValue, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("读取失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllRead(wbPath, sheetIdentifier, "Cell", row, col, row, col, &ResValue, item)
+    MsgBox GetLang("读取失败：") failure.Message
     return false
 }
 
@@ -442,7 +507,7 @@ ExcelRowToRead(xlPath, SheetIdentifier, Row, Col, &ResArr, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -450,7 +515,9 @@ ExcelRowToRead(xlPath, SheetIdentifier, Row, Col, &ResArr, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("读取失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllRead(xlPath, SheetIdentifier, "Row", Row, Col, Row, Col, &ResArr, item)
+    MsgBox GetLang("读取失败：") failure.Message
     return false
 }
 
@@ -487,7 +554,7 @@ ExcelColToRead(xlPath, SheetIdentifier, Row, Col, &ResArr, item := "") {
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -495,7 +562,9 @@ ExcelColToRead(xlPath, SheetIdentifier, Row, Col, &ResArr, item := "") {
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("读取失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllRead(xlPath, SheetIdentifier, "Column", Row, Col, Row, Col, &ResArr, item)
+    MsgBox GetLang("读取失败：") failure.Message
     return false
 }
 
@@ -551,7 +620,7 @@ ExcelRangeRowToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr, 
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -559,7 +628,9 @@ ExcelRangeRowToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr, 
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("读取失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllRead(xlPath, SheetIdentifier, "RowRange", Row, Col, EndRow, EndCol, &ResArr, item)
+    MsgBox GetLang("读取失败：") failure.Message
     return false
 }
 
@@ -598,7 +669,7 @@ ExcelRangeColToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr, 
         return true
     }
     catch as e {
-        failure := e.Message
+        failure := e
     }
     finally {
         if (IsSet(closeBackground) && closeBackground)
@@ -606,6 +677,8 @@ ExcelRangeColToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr, 
         if (IsSet(lock))
             lock.Close()
     }
-    MsgBox GetLang("读取失败：") failure
+    if (failure is ExcelElevationRequired)
+        return ExcelDllRead(xlPath, SheetIdentifier, "ColumnRange", Row, Col, EndRow, EndCol, &ResArr, item)
+    MsgBox GetLang("读取失败：") failure.Message
     return false
 }

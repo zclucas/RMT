@@ -172,7 +172,7 @@
                     . cmb(GetLang("OCR类型"), "CmbOCRType", ["RapidOCR", "Tesseract OCR"], MainSoftData.OCRTypeValue, false, ""
                         , ["默认引擎，使用 PP-OCRv6 识别中英文。", "使用 Tesseract 语言包识别中英文。"], 132)
                     . cmb(GetLang("Excel"), "CmbExcelBackend", GetLangArr(["C# DLL", "AHK（兼容）"]), MainSoftData.ExcelBackend, false, ""
-                        , ["默认方式，独立运行 Excel。写入前请关闭目标工作簿。", "使用原有方式，可操作已在 Excel 中打开的工作簿。"], 132)
+                        , ["默认方式，优先连接已打开的工作簿。", "使用原有 AHK 读写方式。"], 132)
                     . cmb(GetLang("图片识别模型"), "CmbSearchImage", GetLangArr(["OpenCV", "RMT搜图"]), MainSoftData.SearchImageType, false, ""
                         , ["默认灰度匹配，支持颜色匹配和缩放自适应。", "使用 AHK 内置的图片搜索。"], 132)
                     . tog(GetLang("图片识别自适应"), "ChkSearchImageAdaptive", MainSoftData.SearchImageAdaptive, GetLang("仅 OpenCV 生效，匹配分辨率或 DPI 缩放变化后的图片"))

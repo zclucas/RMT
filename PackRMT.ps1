@@ -926,6 +926,11 @@ function Copy-RuntimePlugins {
             Dst  = "Plugins\RMT\RMT.dll"
         },
         @{
+            Name = "RMT/RMT.ExcelHelper.exe"
+            Src  = "Plugins\RMT\RMT.ExcelHelper.exe"
+            Dst  = "Plugins\RMT\RMT.ExcelHelper.exe"
+        },
+        @{
             Name = "RMTMcps/RMTMcps.exe"
             Src  = "Plugins\RMTMcps\RMTMcps.exe"
             Dst  = "Plugins\RMTMcps\RMTMcps.exe"
@@ -1062,6 +1067,7 @@ function New-RMTAssets {
     # 关键文件 + 可选文件（本地路径 -> 资源名，与 SelfCheck.ahk 保持一致）
     $assetList = @(
         @{ Dest = "RMT.dll";                         Src = "Plugins\RMT\RMT.dll" },
+        @{ Dest = "RMT.ExcelHelper.exe";             Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
         @{ Dest = "IbInputSimulator.dll";            Src = "Plugins\IbInputSimulator.dll" },
         @{ Dest = "Start.wav";                       Src = "Audio\Start.wav" },
         @{ Dest = "End.wav";                         Src = "Audio\End.wav" },

@@ -16,7 +16,7 @@ EnsureRmtDll(force := false) {
             throw Error("缺少 Plugins\RMT\RMT.dll")
         return dllPath
     }
-    need := force || !FileExist(dllPath)
+    need := force || !FileExist(dllPath) || !FileExist(rmtDir "\RMT.ExcelHelper.exe")
     if (!need) {
         dllTime := FileGetTime(dllPath, "M")
         loop files rmtDir "\*.cs" {
@@ -46,9 +46,12 @@ BuildRmtDll(rmtDir := "", dllPath := "") {
         fwLib := A_WinDir "\Microsoft.NET\Framework\v4.0.30319"
 
     srcArgs := ""
+    excelSrcArgs := ""
     srcCount := 0
     loop files rmtDir "\*.cs" {
         srcArgs .= ' "' A_LoopFilePath '"'
+        if (SubStr(A_LoopFileName, 1, 5) == "Excel")
+            excelSrcArgs .= ' "' A_LoopFilePath '"'
         srcCount++
     }
     if (srcCount < 1)
@@ -72,8 +75,12 @@ BuildRmtDll(rmtDir := "", dllPath := "") {
     try FileDelete(errLog)
     cmd := Format('"{}" /nologo /target:library /optimize+ /out:"{}" /lib:"{}"{}{}'
         , csc, dllPath, fwLib, refs, srcArgs)
-    RunWait(A_ComSpec ' /c "' cmd ' > "' errLog '" 2>&1"', , "Hide")
-    return FileExist(dllPath)
+    if (RunWait(A_ComSpec ' /c "' cmd ' > "' errLog '" 2>&1"', , "Hide") != 0 || !FileExist(dllPath))
+        return false
+    helperPath := rmtDir "\RMT.ExcelHelper.exe"
+    cmd := Format('"{}" /nologo /target:winexe /main:RMT.ExcelElevation /optimize+ /out:"{}" /lib:"{}"{}{}'
+        , csc, helperPath, fwLib, refs, excelSrcArgs)
+    return RunWait(A_ComSpec ' /c "' cmd ' >> "' errLog '" 2>&1"', , "Hide") == 0 && FileExist(helperPath)
 }
 
 FindRmtCsc() {
