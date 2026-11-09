@@ -1,5 +1,7 @@
 class AutoHotInterception {
 	_contextManagers := Map()
+	_absoluteContext := 0
+	_absoluteModule := 0
 
 	__New() {
 		bitness := A_PtrSize == 8 ? "x64" : "x86"
@@ -7,6 +9,7 @@ class AutoHotInterception {
 
 		interceptionDllName := "interception.dll"
 		interceptionDllFile := baseDir "\" bitness "\" interceptionDllName
+		this._interceptionDllFile := interceptionDllFile
 
 		if (!FileExist(interceptionDllFile)) {
 			RmtDialog.Info("Unable to find " interceptionDllFile "`n`nExpected path:`n" interceptionDllFile "`n`nPlease ensure the file exists.")
@@ -46,6 +49,13 @@ class AutoHotInterception {
 		}
 	}
 
+	__Delete() {
+		if (this._absoluteContext)
+			DllCall(this._interceptionDllFile "\interception_destroy_context", "Ptr", this._absoluteContext, "CDecl")
+		if (this._absoluteModule)
+			DllCall("FreeLibrary", "Ptr", this._absoluteModule)
+	}
+
 	GetInstance() {
 		return this.Instance
 	}
@@ -73,6 +83,25 @@ class AutoHotInterception {
 
 	SendMouseMoveAbsolute(id, x, y) {
 		this.Instance.SendMouseMoveAbsolute(id, x, y)
+	}
+
+	SendMouseMoveVirtualDesktop(id, x, y) {
+		lib := this._interceptionDllFile
+		if (!this._absoluteContext) {
+			if (!this._absoluteModule)
+				this._absoluteModule := DllCall("LoadLibraryW", "Str", lib, "Ptr")
+			if (!this._absoluteModule)
+				return false
+			this._absoluteContext := DllCall(lib "\interception_create_context", "CDecl Ptr")
+			if (!this._absoluteContext)
+				return false
+		}
+		; InterceptionMouseStroke: absolute movement (0x1) across the virtual desktop (0x2).
+		stroke := Buffer(20, 0)
+		NumPut("UShort", 0x3, stroke, 2)
+		NumPut("Int", x, "Int", y, stroke, 8)
+		return DllCall(lib "\interception_send", "Ptr", this._absoluteContext, "Int", id,
+			"Ptr", stroke, "UInt", 1, "CDecl Int") == 1
 	}
 
 	SetState(state) {

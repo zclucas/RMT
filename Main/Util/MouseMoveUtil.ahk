@@ -81,15 +81,13 @@ UiSpeedToDriverSpeed(uiSpeed) {
 }
 
 ; 初始化对应后端；失败返回 false（AHI/罗技不可用时上层应中止）
-EnsureMouseBackend(keyMode) {
+EnsureMouseBackend(keyMode, relative, usesButtons := false) {
     keyMode := Integer(keyMode)
-    if (keyMode == 3) {
-        if (!InitMouseControl())
-            return false
-        return true
-    }
+    if (keyMode == 3)
+        return !relative || InitMouseControl()
     if (keyMode == 5) {
-        ViiperInput.Stream("mouse")
+        if (relative || usesButtons)
+            ViiperInput.Stream("mouse")
         return true
     }
     if (keyMode == 4)
@@ -129,9 +127,14 @@ MouseClickByKeyMode(keyMode, clickCount := 1) {
 MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") {
     keyMode := Integer(keyMode)
     x := Round(x), y := Round(y)
-    if (keyMode == 5)
-        return ViiperInput.Move(x, y, NormalizeUiMouseSpeed(speed), true)
     uiSpeed := NormalizeUiMouseSpeed(speed)
+    if (keyMode == 5) {
+        if !MoveWindowsCursorAbs(x, y, UiSpeedToDriverSpeed(uiSpeed), item)
+            return false
+        ; 单次核对落点，避免受限的光标位置触发错误点击。
+        MouseGetPos(&endX, &endY)
+        return endX == x && endY == y
+    }
     SendMode("Event")
     CoordMode("Mouse", "Screen")
 
@@ -143,22 +146,54 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
 
     MouseGetPos(&startX, &startY)
     if (keyMode == 3) {
-        MC_MoveAbsSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed))
+        ok := MC_MoveAbsSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed), item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("ABS", Format("{} target=({},{}) start=({},{}) end=({},{}) dXY=({},{}) eXY=({},{}) speed={}"
             , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
             , x - startX, y - startY, x - endX, y - endY, uiSpeed))
-        return true
+        return ok
     }
     if (keyMode == 4) {
-        AhiMoveAbsSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed))
+        ok := AhiMoveAbsSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed), item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("ABS", Format("{} target=({},{}) start=({},{}) end=({},{}) dXY=({},{}) eXY=({},{}) speed={}"
             , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
             , x - startX, y - startY, x - endX, y - endY, uiSpeed))
-        return true
+        return ok
     }
     return MoveAhkCursor(x, y, uiSpeed, false, item)
+}
+
+MoveWindowsCursorAbs(x, y, speed, item) {
+    MC_SmoothStepParams(speed, &maxStep, &stepDelay)
+    return MoveDriverCursorAbs(x, y, speed, maxStep, stepDelay, SendWindowsCursorPoint, item)
+}
+
+SendWindowsCursorPoint(x, y, *) => DllCall("SetCursorPos", "Int", x, "Int", y, "Int")
+
+; 读取起点后，以固定步长和间隔发送规划好的绝对坐标。
+MoveDriverCursorAbs(x, y, speed, maxStep, stepDelay, sendPoint, item) {
+    CoordMode("Mouse", "Screen")
+    left := SysGet(76), top := SysGet(77), width := SysGet(78), height := SysGet(79)
+    x := Max(left, Min(left + width - 1, x))
+    y := Max(top, Min(top + height - 1, y))
+    MouseGetPos(&startX, &startY)
+    dx := x - startX, dy := y - startY
+    distance := Sqrt(dx * dx + dy * dy)
+    if (!distance)
+        return !item || !item.Killed
+
+    steps := speed >= 100 ? 1 : Ceil(distance / maxStep)
+    loop steps {
+        if (item && item.Killed)
+            return false
+        stepX := startX + Round(dx * A_Index / steps)
+        stepY := startY + Round(dy * A_Index / steps)
+        if !sendPoint(stepX, stepY, left, top, width, height)
+            return false
+        Sleep(stepDelay)
+    }
+    return !item || !item.Killed
 }
 
 ; 相对移动；speed 为界面速度 0~100
@@ -247,7 +282,7 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
     if (moveMode == "游戏视角")
         return MouseMoveGameViewByKeyMode(keyMode, x, y, uiSpeed)
 
-    if (!EnsureMouseBackend(keyMode))
+    if (!EnsureMouseBackend(keyMode, moveMode == "相对移动", clickCount > 0))
         return false
 
     ; AHK：带点击时用 Click 一步完成（含位移），避免相对位移执行两次
@@ -283,7 +318,7 @@ SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount :
     keyMode := Integer(keyMode)
     actionType := CmdEnumMouseAct(actionType)
     uiSpeed := NormalizeUiMouseSpeed(speed)
-    if (!EnsureMouseBackend(keyMode))
+    if (!EnsureMouseBackend(keyMode, false, actionType != "移动至目标"))
         return false
 
     if (actionType == "移动至目标")
@@ -307,7 +342,7 @@ SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount :
 MouseDragByStrategy(tableItem, index, keyMode, moveMode, x, y, endX, endY, speed := 90, isHuman := false) {
     keyMode := Integer(keyMode)
     moveMode := CmdEnumMoveMode(moveMode)
-    if (!EnsureMouseBackend(keyMode))
+    if (!EnsureMouseBackend(keyMode, moveMode == "相对移动", true))
         return false
     item := GetItemByIndex(tableItem, index)
     if (moveMode == "绝对移动" && !MouseMoveAbsByKeyMode(keyMode, x, y, speed, false, item))

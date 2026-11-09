@@ -38,6 +38,7 @@ LoadMainSetting() {
     MainSoftData.RecordJoyInterval := CfgRead(SettingFile, SettingSection, "RecordJoyInterval", 50)
     MainSoftData.RecordShowBorder := CfgRead(SettingFile, SettingSection, "RecordShowBorder", true)
     MainSoftData.OCRTypeValue := CfgRead(SettingFile, SettingSection, "OCRType", 1) == 2 ? 2 : 1
+    MainSoftData.ExcelBackend := CfgRead(SettingFile, SettingSection, "ExcelBackend", 1) == 2 ? 2 : 1
     MainSoftData.IsBootStart := CfgRead(SettingFile, SettingSection, "IsBootStart", false)
     if (MainSoftData.IsBootStart == 1 || MainSoftData.IsBootStart == 2)
         MainSoftData.IsBootStart := true

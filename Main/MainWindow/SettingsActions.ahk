@@ -23,7 +23,7 @@
             pageId := ctrl == "ThemePresetCon" ? "appearance" : "ai"
         else if (RegExMatch(ctrl, "i)^(CmbFont|ThemeFont|Palette)") )
             pageId := "appearance"
-        else if (RegExMatch(ctrl, "i)^(ChkBoot|ChkAdmin|ChkData|ChkModal|CmbLang|CmbPreferred|CmbScreen|CmbOCR|CmbSearchImage|ChkSearchImageAdaptive|CmbRemark|CmbTriggerJoy|CmbJoy|ChkJoy|EditMuti|TabVisible)") )
+        else if (RegExMatch(ctrl, "i)^(ChkBoot|ChkAdmin|ChkData|ChkModal|CmbLang|CmbPreferred|CmbScreen|CmbOCR|CmbExcelBackend|CmbSearchImage|ChkSearchImageAdaptive|CmbRemark|CmbTriggerJoy|CmbJoy|ChkJoy|EditMuti|TabVisible)") )
             pageId := "behavior"
         else if (ctrl == "EditNetPort")
             pageId := "behavior"
@@ -48,7 +48,7 @@
             tabFields.Push({key: sym, def: true, ctrl: "TabVisible_" sym, kind: "tab"})
         this._setMods := [
             {id: "soft", fields: [{key: "IsBootStart", def: false, ctrl: "ChkBootStart", kind: "chk", hook: "boot"}, {key: "IsAdminStart", def: false, ctrl: "ChkAdminStart", kind: "chk", hook: "admin"}, {key: "IsDataReport", def: true, ctrl: "ChkDataReport", kind: "chk"}, {key: "Lang", def: "中文", ctrl: "CmbLang", kind: "cmbText"}, {key: "PreferredMacroEditor", def: 1, ctrl: "CmbPreferredEditor", kind: "cmb"}, {key: "IsModalSubGui", def: true, ctrl: "ChkModalSubGui", kind: "chk"}]},
-            {id: "general", fields: [{key: "OCRTypeValue", def: 1, ctrl: "CmbOCRType", kind: "cmb"}, {key: "ScreenShotType", def: 3, ctrl: "CmbScreenShot", kind: "cmb"}, {key: "SearchImageType", def: 1, ctrl: "CmbSearchImage", kind: "cmb"}, {key: "SearchImageAdaptive", def: false, ctrl: "ChkSearchImageAdaptive", kind: "chk"}, {key: "MutiThreadNum", def: -1, ctrl: "EditMutiThreadNum", kind: "num"}, {key: "NetworkPort", def: 16888, ctrl: "EditNetPort", kind: "num"}, {key: "RemarkAutoType", def: 2, ctrl: "CmbRemarkAuto", kind: "cmb"}]},
+            {id: "general", fields: [{key: "OCRTypeValue", def: 1, ctrl: "CmbOCRType", kind: "cmb"}, {key: "ExcelBackend", def: 1, ctrl: "CmbExcelBackend", kind: "cmb"}, {key: "ScreenShotType", def: 3, ctrl: "CmbScreenShot", kind: "cmb"}, {key: "SearchImageType", def: 1, ctrl: "CmbSearchImage", kind: "cmb"}, {key: "SearchImageAdaptive", def: false, ctrl: "ChkSearchImageAdaptive", kind: "chk"}, {key: "MutiThreadNum", def: -1, ctrl: "EditMutiThreadNum", kind: "num"}, {key: "NetworkPort", def: 16888, ctrl: "EditNetPort", kind: "num"}, {key: "RemarkAutoType", def: 2, ctrl: "CmbRemarkAuto", kind: "cmb"}]},
             {id: "trig", fields: [{key: "CheckForeground", def: false, ctrl: "ChkForeground", kind: "chk"}, {key: "AutoLoosenModifier", def: true, ctrl: "ChkAutoLoosen", kind: "chk"}, {key: "ContinuousTrigger", def: true, ctrl: "ChkContinuous", kind: "chk"}, {key: "MacroStopType", def: 1, ctrl: "CmbMacroStop", kind: "cmb"}, {key: "KeyDownDownType", def: 1, ctrl: "CmbKeyDownDown", kind: "cmb"}, {key: "NoVariableTip", def: false, ctrl: "ChkNoVariable", kind: "chk"}]},
             {id: "audio", fields: [{key: "StartTipAudio", def: A_WorkingDir "\Audio\Start.wav", ctrl: "StartTipAudioCon", kind: "txt"}, {key: "EndTipAudio", def: A_WorkingDir "\Audio\End.wav", ctrl: "EndTipAudioCon", kind: "txt"}, {key: "StopTipAudio", def: A_WorkingDir "\Audio\End.wav", ctrl: "StopTipAudioCon", kind: "txt"}]},
             {id: "tabs", fields: tabFields},

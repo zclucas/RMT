@@ -9,7 +9,7 @@ global RMT_ASM := ""         ; 已加载程序集（可选复用）
 
 ; 若源码比 DLL 新（或 DLL 缺失），用 csc 重编。打包 exe 不现场编译。
 EnsureRmtDll(force := false) {
-    rmtDir := A_ScriptDir "\Plugins\RMT"
+    rmtDir := AppRootDir "\Plugins\RMT"
     dllPath := rmtDir "\RMT.dll"
     if (A_IsCompiled) {
         if (!FileExist(dllPath))
@@ -35,7 +35,7 @@ EnsureRmtDll(force := false) {
 
 BuildRmtDll(rmtDir := "", dllPath := "") {
     if (rmtDir == "")
-        rmtDir := A_ScriptDir "\Plugins\RMT"
+        rmtDir := AppRootDir "\Plugins\RMT"
     if (dllPath == "")
         dllPath := rmtDir "\RMT.dll"
     csc := FindRmtCsc()

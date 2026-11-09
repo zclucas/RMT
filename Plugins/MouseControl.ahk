@@ -55,50 +55,8 @@ MC_MoveR(x, y) {
     DllCall(MCDllPath "\move_R", "Int", Integer(x), "Int", Integer(y))
 }
 
-; 绝对移动到目标屏幕坐标（虚拟桌面像素，原点为虚拟屏左上角）
-; 优先调用 DLL 的 move_Abs；若多屏/加速导致未到位，再分片相对逼近
-MC_MoveAbs(targetX, targetY) {
-    global MCDllPath
-    CoordMode("Mouse", "Screen")
-    targetX := Integer(targetX)
-    targetY := Integer(targetY)
-
-    ; 钳制到虚拟桌面范围内，避免 DLL 收到越界坐标后行为异常
-    vx := SysGet(76), vy := SysGet(77)
-    vw := SysGet(78), vh := SysGet(79)
-    targetX := Max(vx, Min(vx + vw - 1, targetX))
-    targetY := Max(vy, Min(vy + vh - 1, targetY))
-
-    DllCall(MCDllPath "\move_Abs", "Int", targetX, "Int", targetY)
-
-    MouseGetPos(&curX, &curY)
-    if (Abs(targetX - curX) <= 2 && Abs(targetY - curY) <= 2)
-        return
-
-    ; 相对报告通常为 int8（±127），必须分片，否则跨屏会被截到当前屏边缘
-    maxStep := 127
-    stuckCount := 0
-    Loop 400 {
-        MouseGetPos(&curX, &curY)
-        dx := targetX - curX
-        dy := targetY - curY
-        if (Abs(dx) <= 1 && Abs(dy) <= 1)
-            return
-        ; 检测是否卡在屏幕边缘（坐标不再变化但目标未达成）
-        if (A_Index > 1 && curX = lastX && curY = lastY)
-            stuckCount++
-        else
-            stuckCount := 0
-        if (stuckCount >= 3)
-            return
-        lastX := curX, lastY := curY
-        if (Mod(A_Index, 20) = 0)
-            DllCall(MCDllPath "\move_Abs", "Int", targetX, "Int", targetY)
-        stepX := Max(-maxStep, Min(maxStep, dx))
-        stepY := Max(-maxStep, Min(maxStep, dy))
-        MC_MoveR(stepX, stepY)
-    }
-}
+; 绝对移动到目标屏幕坐标。
+MC_MoveAbs(targetX, targetY) => MC_MoveAbsSmooth(targetX, targetY, 100)
 
 ; 平滑移动步进参数
 ; speed: 1~100 越大越快
@@ -117,28 +75,10 @@ MC_SmoothStepParams(speed, &maxStep, &stepDelay) {
     stepDelay := Max(1, Round(21 * ((1 - factor) ** 1.2) + 1))
 }
 
-; 带速度的绝对移动
-; 内部始终拆分为小步长相对移动，不调用 move_Abs 以避免 DLL 在屏幕边缘坐标映射异常
-; speed: 1~100 越大越快（拆分为小步相对移动，避免单次大值）
-MC_MoveAbsSmooth(targetX, targetY, speed := 0) {
-    CoordMode("Mouse", "Screen")
-
-    ; 钳制目标到虚拟桌面范围
-    vx := SysGet(76), vy := SysGet(77)
-    vw := SysGet(78), vh := SysGet(79)
-    targetX := Max(vx, Min(vx + vw - 1, Integer(targetX)))
-    targetY := Max(vy, Min(vy + vh - 1, Integer(targetY)))
-
-    MouseGetPos(&curX, &curY)
-    dx := targetX - curX
-    dy := targetY - curY
-
-    if (Abs(dx) <= 1 && Abs(dy) <= 1)
-        return
-
-    ; 全部走相对步进，避免 DLL move_Abs 在边缘坐标时的异常行为
-    return MC_MoveRSmooth(dx, dy, speed)
-}
+; MouseControl.dll 的 move_Abs 使用 SendInput，按主屏尺寸做整数换算。
+; 直接使用 Windows 屏幕像素坐标，避免换算误差和副屏映射偏差。
+MC_MoveAbsSmooth(targetX, targetY, speed := 0, item := "")
+    => MoveWindowsCursorAbs(targetX, targetY, speed, item)
 
 ; 相对移动（平滑，闭环校正 + 自适应步长）
 ;   - 步长随剩余距离等比衰减：≤5px→1，否则≤1/3，上限 maxStep

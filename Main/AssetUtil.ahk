@@ -3,6 +3,7 @@
 #Include "VariableUtil.ahk"
 #Include Util\TableLocator.ahk
 #Include Util\ExcelUtil.ahk
+#Include Util\RmtDllUtil.ahk
 #Include Util\SerialUtil.ahk
 #Include Util\JsonUtil.ahk
 #Include Util\LangUtil.ahk

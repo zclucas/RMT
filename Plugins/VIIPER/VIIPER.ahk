@@ -230,24 +230,9 @@ class ViiperInput {
         return true
     }
 
-    static Move(x, y, speed := 90, absolute := false) {
+    static Move(x, y, speed := 90) {
         this.Stream("mouse")
         CoordMode("Mouse", "Screen")
-        if (absolute) {
-            ; VIIPER 鼠标只支持相对报告：根据实际光标位置闭环校正加速偏差。
-            step := Max(1, speed)
-            MouseGetPos(&cx, &cy)
-            attempts := 40 + Ceil(Max(Abs(x - cx), Abs(y - cy)) / step) * 4
-            loop attempts {
-                MouseGetPos(&cx, &cy)
-                dx := Round(x - cx), dy := Round(y - cy)
-                if (!dx && !dy)
-                    return true
-                this.Mouse(Max(-step, Min(step, dx)), Max(-step, Min(step, dy)))
-                Sleep(10)
-            }
-            throw Error("VIIPER: 鼠标未能到达目标坐标，请检查设备挂载或目标是否可达")
-        }
         steps := Max(1, Ceil(Max(Abs(x), Abs(y)) / (speed >= 100 ? 32767 : Max(1, speed))))
         px := 0, py := 0
         loop steps {

@@ -130,6 +130,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("RecordJoyInterval", MainSoftData.RecordJoyInterval)
     CheckAndAddDirty("RecordShowBorder", MainSoftData.RecordShowBorder)
     CheckAndAddDirty("OCRType", MainSoftData.OCRTypeValue)
+    CheckAndAddDirty("ExcelBackend", MainSoftData.ExcelBackend)
 
     ; 状态设置（这些每次都变化，始终写入）
     CheckAndAddDirty("TableIndex", MainSoftData.CurTableID != "" ? MainSoftData.CurTableID : MainSoftData.TabCtrl.Value)

@@ -41,7 +41,6 @@
 #Include Util\VoiceUtil.ahk
 #Include Util\SttUtil.ahk
 #Include Util\AiAssistUtil.ahk
-#Include Util\RmtDllUtil.ahk
 #Include ..\Plugins\ViGEm\AHK-ViGEm-Bus-v2.ahk
 
 #Include ..\Gui\TriggerKeyGui.ahk

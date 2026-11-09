@@ -76,8 +76,9 @@ GetFileProductName(path) {
 
 ; 是否已安装完整 Interception 驱动（文件 + UpperFilters 钩子）
 IsInterceptionInstalled() {
-    kbdSys := A_WinDir "\System32\drivers\keyboard.sys"
-    mouSys := A_WinDir "\System32\drivers\mouse.sys"
+    systemDir := A_WinDir (A_Is64bitOS && A_PtrSize == 4 ? "\Sysnative" : "\System32")
+    kbdSys := systemDir "\drivers\keyboard.sys"
+    mouSys := systemDir "\drivers\mouse.sys"
     if (GetFileProductName(kbdSys) != "Interception" || GetFileProductName(mouSys) != "Interception")
         return false
 
@@ -410,22 +411,6 @@ AhiMouseUp(whichButton := "L") {
 
 ; ========== 鼠标移动（Interception，正式接口） ==========
 
-; 屏幕坐标 → Interception 绝对坐标（0~65535，映射整个虚拟桌面）
-; 公式：屏幕像素 0~(vw-1) 线性映射到 0~65535
-; 缓存 SysGet 避免循环中重复查询，同时消除并发下的屏幕尺寸漂移
-AhiScreenToAbs(x, y, &absX, &absY) {
-    static vx := "", vy := "", vw := "", vh := ""
-    if (vx == "") {
-        vx := SysGet(76)   ; SM_XVIRTUALSCREEN
-        vy := SysGet(77)   ; SM_YVIRTUALSCREEN
-        vw := Max(1, SysGet(78))  ; SM_CXVIRTUALSCREEN
-        vh := Max(1, SysGet(79))  ; SM_CYVIRTUALSCREEN
-    }
-    ; 使用 (vw - 1) / (vh - 1) 作为分母，保证最右/最下像素映射到 65535
-    absX := Max(0, Min(65535, Round((Integer(x) - vx) * 65535.0 / Max(1, vw - 1))))
-    absY := Max(0, Min(65535, Round((Integer(y) - vy) * 65535.0 / Max(1, vh - 1))))
-}
-
 ; 平滑步进参数
 ; 步长上限 50：避免单次 driver 调用值过大被 Windows 鼠标加速曲线放大
 ; speed: 1~100 越大越快
@@ -451,52 +436,21 @@ AhiMoveR(x, y) {
     return true
 }
 
-; 绝对移动到屏幕坐标（真绝对报告，避免相对+加速导致乱飘）
-AhiMoveAbs(targetX, targetY) {
+; 绝对移动到屏幕坐标。
+AhiMoveAbs(targetX, targetY) => AhiMoveAbsSmooth(targetX, targetY, 100)
+
+AhiMoveAbsSmooth(targetX, targetY, speed := 0, item := "") {
     if (!InitAHI())
         return false
-
-    global AHI_Driver, AHI_MouseId
-    ; 钳制到虚拟桌面范围内，避免驱动收到越界坐标后行为异常
-    static vx := "", vy := "", vw := "", vh := ""
-    if (vx == "") {
-        vx := SysGet(76), vy := SysGet(77)
-        vw := SysGet(78), vh := SysGet(79)
-    }
-    targetX := Max(vx, Min(vx + vw - 1, Integer(targetX)))
-    targetY := Max(vy, Min(vy + vh - 1, Integer(targetY)))
-    AhiScreenToAbs(targetX, targetY, &absX, &absY)
-    AHI_Driver.SendMouseMoveAbsolute(AHI_MouseId, absX, absY)
-    return true
+    AhiSmoothStepParams(speed, &maxStep, &stepDelay)
+    return MoveDriverCursorAbs(targetX, targetY, speed, maxStep, stepDelay, AhiSendAbsolutePoint, item)
 }
 
-; 带速度的绝对移动
-; 内部拆分为小步长相对移动，不调用 SendMouseMoveAbsolute 以避免 AHI 驱动坐标映射异常导致闪烁
-; speed: 1~100 越大越快（拆分为小步相对移动）
-AhiMoveAbsSmooth(targetX, targetY, speed := 0) {
-    if (!InitAHI())
-        return false
-
-    CoordMode("Mouse", "Screen")
-
-    ; 钳制目标到虚拟桌面范围
-    static vx := "", vy := "", vw := "", vh := ""
-    if (vx == "") {
-        vx := SysGet(76), vy := SysGet(77)
-        vw := SysGet(78), vh := SysGet(79)
-    }
-    targetX := Max(vx, Min(vx + vw - 1, Integer(targetX)))
-    targetY := Max(vy, Min(vy + vh - 1, Integer(targetY)))
-
-    MouseGetPos(&curX, &curY)
-    dx := targetX - curX
-    dy := targetY - curY
-
-    if (Abs(dx) <= 1 && Abs(dy) <= 1)
-        return true
-
-    ; 全部走相对步进，避免 AHI 绝对移动在坐标映射不一致时闪烁
-    return AhiMoveRSmooth(dx, dy, speed)
+AhiSendAbsolutePoint(x, y, left, top, width, height) {
+    ; 映射到像素中心，避免归一化时落到相邻像素。
+    absX := Floor((x - left + 0.5) * 65536 / width)
+    absY := Floor((y - top + 0.5) * 65536 / height)
+    return AHI_Driver.SendMouseMoveVirtualDesktop(AHI_MouseId, absX, absY)
 }
 
 ; 相对移动（平滑，闭环校正 + 自适应步长）
