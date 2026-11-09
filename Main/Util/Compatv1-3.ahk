@@ -67,14 +67,20 @@ Compat13_Normalize(data, stem) {
     if (stem == "RunFile")
         CompatEnsureRunData(data)
     if (stem == "TimingFile")
-        NormalizeTimingStamps(data)
+        NormalizeTimingData(data)
     if ((stem == "SearchFile" || stem == "SearchProFile") && !data.HasOwnProp("SearchImageType"))
         data.SearchImageType := 1 ; 新增软件级模型选项使用默认值，不借用当前正在运行的方案。
     ; 旧文本替换只保存 MatchType，补默认值前同步编辑器使用的 ArgsType。
     if (stem == "TextOpsFile" && data.HasOwnProp("Type") && data.Type == "文本替换"
         && data.HasOwnProp("MatchType"))
         data.ArgsType := data.MatchType
-    Compat13_FillDefaults(data, schemas[stem]())
+    defaults := schemas[stem]()
+    if (stem == "TimingFile") {
+        ; 缺少周期参数时保留缺失状态，避免替旧宏猜测执行频率。
+        defaults.DeleteProp("CustomInterval")
+        defaults.DeleteProp("CustomUnit")
+    }
+    Compat13_FillDefaults(data, defaults)
     if (stem == "FileIOFile") {
         types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")
         data.OperType := types.Has(String(data.OperType)) ? types[String(data.OperType)] : FileIONormType(data.OperType)

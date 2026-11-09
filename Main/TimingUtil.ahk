@@ -378,14 +378,13 @@ class MinHeap {
 }
 
 CalculateNextStamp(Data, baseStamp) {
+    if (!Data.HasOwnProp("StartStamp") || !IsNumber(Data.StartStamp))
+        return 0
     start := Data.StartStamp
-
-    if (baseStamp < start) ; 還沒開始
-        return CheckEnd(Data, start)
 
     switch CmdEnumTimingType(Data.Type) {
         case "单次":
-            return 0
+            return baseStamp < start ? CheckEnd(Data, start) : 0
         case "周期触发":
             return NextRepeatTime(Data, start, baseStamp)
     }
@@ -394,10 +393,20 @@ CalculateNextStamp(Data, baseStamp) {
 }
 
 NextRepeatTime(Data, start, baseStamp) {
-    if (CmdEnumTimingUnit(Data.CustomUnit) == "月") {
+    static seconds := Map("秒", 1, "分钟", 60, "小时", 3600, "天", 86400, "周", 604800)
+    if (!Data.HasOwnProp("CustomInterval") || !IsNumber(Data.CustomInterval)
+        || Data.CustomInterval <= 0 || Mod(Data.CustomInterval, 1) != 0 || !Data.HasOwnProp("CustomUnit"))
+        return 0
+    unit := CmdEnumNum(Data.CustomUnit, CmdEnumTimingUnitNames())
+    if (unit != "月" && !seconds.Has(unit))
+        return 0
+    if (baseStamp < start)
+        return CheckEnd(Data, start)
+
+    if (unit == "月") {
         next := NextMonthTime(start, baseStamp, Data.CustomInterval)
     } else {
-        interval := GetTimingInterval(Data) * 1000
+        interval := Data.CustomInterval * seconds[unit] * 1000
         next := start + ((baseStamp - start) // interval + 1) * interval
     }
 
@@ -428,13 +437,6 @@ CheckEnd(Data, nextTime) {
     return (Data.HasOwnProp("EndStamp") && Data.EndStamp && nextTime >= Data.EndStamp) ? 0 : nextTime
 }
 
-GetTimingInterval(Data) {
-    secs := Map("秒", 1, "分钟", 60, "小时", 3600, "天", 86400, "周", 604800)
-    unit := CmdEnumTimingUnit(Data.CustomUnit)
-    span := secs.Has(unit) ? secs[unit] : 60
-    return Data.CustomInterval * span
-}
-
 GetTimingDurationSeconds(Data) {
     n := Data.HasOwnProp("Duration") ? Data.Duration : 0
     if (!IsNumber(n) || n <= 0)
@@ -462,6 +464,7 @@ TimingCheckItemIfValid(tableItem, index) {
         && (item.Macro != "")
         && !item.Forbid
         && !GetItemFoldForbidState(tableItem, index)
+        && HasTimingConfig(item)
 }
 
 HandleOnSoftStart(tableItem, scheduler := "") {
@@ -486,7 +489,7 @@ HasTimingConfig(item) {
     if (!IsObject(item) || !item.HasProp("TimingSerial"))
         return false
     serial := item.TimingSerial
-    if (serial == "")
+    if (!RegExMatch(serial, "^Timing\d+$"))
         return false
     global TimingFile, SettingSection
     return CfgRead(TimingFile, SettingSection, serial, "") != ""

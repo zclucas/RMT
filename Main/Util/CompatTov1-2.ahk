@@ -164,10 +164,14 @@ CompatPath(FilePath, Data) {
 CompatPathTarget(settingDir, Data) {
     if (!IsObject(Data) || !ObjHasOwnProp(Data, "SearchImagePath") || Data.SearchImagePath == "")
         return false
-    ; 包内图片相对于实际导入目录定位，合并导入的临时目录也适用。
-    if (RegExMatch(Data.SearchImagePath, "i)(?:^|[\\/])Images[\\/](.+)$", &m)) {
-        newPath := settingDir "\Images\" m[1]
-        if (FileExist(newPath) && newPath != Data.SearchImagePath) {
+    ; 优先识别配置的资源根，避免把同名配置或安装路径中的 Images 当成资源目录。
+    ; 包内相对路径和导入临时目录仍可直接按 Images 定位。
+    if (RegExMatch(Data.SearchImagePath, "i)(?:^|[\\/])Setting[\\/][^\\/]+[\\/]Images[\\/](.+)$", &m)
+        || RegExMatch(Data.SearchImagePath, "i)(?:^|[\\/])Images[\\/](.+)$", &m)) {
+        newPath := settingDir "\Images\" StrReplace(m[1], "/", "\")
+        if (FileExist(newPath) && !DirExist(newPath)) {
+            if (newPath = Data.SearchImagePath)
+                return false
             Data.SearchImagePath := newPath
             return true
         }
@@ -332,7 +336,7 @@ CompatTiming(filePath) {
             curFix := true
         }
 
-        curFix := NormalizeTimingStamps(Data) || curFix
+        curFix := NormalizeTimingData(Data) || curFix
         if (Data.HasOwnProp("StartTime")) {
             Data.DeleteProp("StartTime")
             curFix := true

@@ -250,10 +250,10 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "Mode", CmdEnumRunModeNames())
             CmdEnumSet(Data, "Option", CmdEnumRunOptionNames(), 0)
         case "Timing":
-            NormalizeTimingStamps(Data)
+            NormalizeTimingData(Data)
             if (Data.HasProp("Type"))
                 Data.Type := CmdEnumTimingType(Data.Type)
-            CmdEnumSet(Data, "CustomUnit", CmdEnumTimingUnitNames())
+            CmdEnumSetNum(Data, "CustomUnit", CmdEnumTimingUnitNames())
             if (Data.HasProp("DurationMode"))
                 Data.DurationMode := CmdEnumTimingDuration(Data.DurationMode)
             if (Data.HasProp("DurationUnit"))

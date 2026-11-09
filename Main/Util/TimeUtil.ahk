@@ -24,9 +24,23 @@ TimeEpochMilliseconds(value) {
     return StrLen(value) <= 10 ? Integer(value) * 1000 : Integer(value)
 }
 
-NormalizeTimingStamps(data) {
+NormalizeTimingData(data) {
     if (data.HasOwnProp("StampUnit") && data.StampUnit == "ms")
         return false
+    ; 1.1 用 StartTime 保存日期，定时类型编号与 1.2 的 StartStamp 格式不同。
+    if (data.HasOwnProp("StartTime") && data.HasOwnProp("Type") && IsInteger(data.Type)) {
+        switch Integer(data.Type) {
+            case 2, 3, 4, 5:
+                units := ["小时", "天", "周", "月"]
+                data.CustomUnit := units[Integer(data.Type) - 1]
+                data.CustomInterval := 1
+                data.Type := "周期触发"
+            case 6:
+                data.Type := "软件启动时"
+            case 7:
+                data.Type := "周期触发"
+        }
+    }
     for part in ["Start", "End"] {
         stamp := part "Stamp"
         time := part "Time"

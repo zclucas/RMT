@@ -249,6 +249,9 @@ class FolderPackager {
                 throw Error(GetLang("打包文件包含非法路径，已中止解包:") " " name)
         }
         ; 扩展名白名单
+        ; 旧版导出会打包手动停用的定时文件，按原文件名保留备份。
+        if (name = "TimingFile.bak")
+            return
         dot := InStr(name, ".", , -1)
         if !dot || !InStr("," this.ALLOWED_EXT ",", "," SubStr(name, dot + 1) ",")
             throw Error(GetLang("打包文件包含不允许的文件类型，已中止解包:") " " name)
