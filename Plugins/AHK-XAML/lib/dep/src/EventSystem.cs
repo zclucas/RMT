@@ -614,6 +614,8 @@ public partial class AhkWpfEngine
             if ((mods & System.Windows.Input.ModifierKeys.Alt) != 0) modStr += "Alt,";
             if (modStr.Length > 0)
                 sbKey.Append("KeyModifiers=" + BridgeUtil.LengthPrefix(modStr.TrimEnd(',')) + "\n");
+            if (IsEditableFocus(System.Windows.Input.Keyboard.FocusedElement))
+                sbKey.Append("KeyFromEditable=" + BridgeUtil.LengthPrefix("1") + "\n");
 
             if (key == System.Windows.Input.Key.V && ctrlOnly)
             {
@@ -687,32 +689,26 @@ public partial class AhkWpfEngine
         DumpState(cName, eName);
     }
 
-    // 焦点控件是否接受文本输入：文本框（非只读）、密码框、可编辑/已展开的下拉都算。
-    // 结果以 EVENT 上报（1 可输入 / 0 不可），主程序的按键选择器据此决定这次物理按键是选键还是输入。
+    // 文本框（非只读）、密码框、可编辑或已展开的下拉框接收编辑按键。
+    private static bool IsEditableFocus(IInputElement focus)
+    {
+        TextBoxBase tb = focus as TextBoxBase;
+        if (tb != null)
+            return !tb.IsReadOnly;
+        if (focus is PasswordBox)
+            return true;
+        ComboBox cb = focus as ComboBox;
+        return cb != null && (cb.IsEditable || cb.IsDropDownOpen);
+    }
+
     private void ReportFocusEditable(IInputElement focus)
     {
-        bool editable = false;
-        try
-        {
-            TextBoxBase tb = focus as TextBoxBase;
-            if (tb != null)
-                editable = !tb.IsReadOnly;
-            else if (focus is PasswordBox)
-                editable = true;
-            else
-            {
-                ComboBox cb = focus as ComboBox;
-                if (cb != null)
-                    editable = cb.IsEditable || cb.IsDropDownOpen;
-            }
-        }
-        catch { }
         try
         {
             // 必须走 LengthPrefix：AHK 侧 DecodeValue 只认「长度:值」，裸 "1" 会被当 base64 解成空串，
             // 主程序那边就只能读到空值，焦点状态永远停在 0。
             SendToAhkAsync("EVENT|" + winId + "|Window|FocusEditable|"
-                + BridgeUtil.LengthPrefix(editable ? "1" : "0") + "\n");
+                + BridgeUtil.LengthPrefix(IsEditableFocus(focus) ? "1" : "0") + "\n");
         }
         catch { }
     }

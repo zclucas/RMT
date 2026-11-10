@@ -26,6 +26,7 @@
 #Include Util\WaitUtil.ahk
 #Include Util\TimeUtil.ahk
 #Include Util\CountDownUtil.ahk
+#Include Util\PromptUtil.ahk
 #Include Util\GraphMacroUtil.ahk
 #Include Util\PluginUtil.ahk
 #Include Util\ThemeUtil.ahk

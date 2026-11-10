@@ -243,7 +243,7 @@ class MacroGraphDataMixin {
     _FormalIniCmdKeys() {
         return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组",
             "后台鼠标", "后台按键", "窗口管理", "窗口信息", "调整窗口", "按键检测", "手柄检测", "注释", "抓图", "循环",
-            "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间"]
+            "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间", "提示"]
     }
 
     _FormalIniKeyFromName(name) {
@@ -291,6 +291,7 @@ class MacroGraphDataMixin {
                 "等待", WaitData,
                 "等待确定", WaitConfirmData,
                 "倒计时", CountDownData,
+                "提示", PromptData,
                 "时间", TimeData
             )
         }
@@ -412,7 +413,6 @@ class MacroGraphDataMixin {
             d.macroType := data.MacroType
             d.callType := data.CallType
             d.insertCount := data.InsertCount
-            d.index := data.Index
             d.macroSerial := data.MacroSerial
         } else if (cmdKey == "变量") {
             d.isIgnoreExist := data.IsIgnoreExist
@@ -978,10 +978,22 @@ class MacroGraphDataMixin {
         name := paramArr.Length >= 1 ? paramArr[1] : cmd
         d := { type: name, raw: cmd, temp: false, time: "", time2: "", itype: "", key: "", ktype: "", hold: "", count: "", inter: "", posx: "", posy: "", speed: "", mode: "" }
         ObjSetBase(d, MGParseObjBase.Prototype)   ; 启用 d["dynKey"] 中括号读写（见 MGParseObjBase）
+        if (PromptUsesEditor(cmd)) {
+            legacy := PromptLegacyData(cmd)
+            d.type := GetLang(GetCmdOnlyText(name))
+            if (IsObject(legacy))
+                d.promptType := legacy.Type
+            else {
+                d.serialStr := name
+                d.promptType := GetMacroCMDData(name).Type
+            }
+            return d
+        }
 
         if (GetLangKey(name) == "流程跳转") {
-            d.type := GetLang("跳转")
-            d.jumpAction := FlowJumpAction(GetLangCmd(cmd, 2))
+            d.type := GetLang("宏操作")
+            d.macroType := "当前宏"
+            try d.callType := FlowJumpAction(GetLangCmd(cmd, 2))
         }
         else if (name == GetLang("间隔")) {
             raw := paramArr.Length >= 2 ? paramArr[2] : "500"
@@ -1161,8 +1173,8 @@ class MacroGraphDataMixin {
     }
 
     _SerializeNodeCommand(d) {
-        if (d.type == GetLang("跳转"))
-            return "流程跳转_" GetLangKey(d.jumpAction)
+        if (d.HasOwnProp("promptType"))
+            return d.raw
         if (d.type == GetLang("间隔")) {
             timePart := (d.itype == GetLang("随机")) ? d.time "~" d.time2 : d.time
             remark := d.HasOwnProp("remark") ? d.remark : ""

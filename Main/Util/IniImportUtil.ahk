@@ -449,8 +449,12 @@ IniImport_ReadTableItemFlat(tableItem, filePath := "") {
         tableItem.ItemMap[item.ID] := item
     }
     ; 宏内容单独键：symbol MacroArr N（⫶ 还原为换行）
-    loop itemCount
-        tableItem.Items[A_Index].Macro := StrReplace(IniImport_Kv(kv, symbol "MacroArr" A_Index), "⫶", "`n")
+    loop itemCount {
+        index := A_Index
+        item := tableItem.Items[index]
+        for field in ["Macro", "PreMacro", "PostMacro"]
+            item.%field% := StrReplace(IniImport_Kv(kv, symbol field "Arr" index), "⫶", "`n")
+    }
 
     CompatEnsureArrLength(tableItem)
     tableItem.RebuildIndex()
@@ -556,12 +560,16 @@ IniImport_ExpandFlatMacroFile(settingDir) {
         TomlUtil_Invalidate(macroPath)
         throw e
     }
+    ; 三级宏表已写完。清理重试时用于恢复原目标的暂存段。
+    refsPath := settingDir "\SubMacroFile.toml"
+    if (CfgHasSection(refsPath, "FlatMacroRefSource"))
+        CfgDeleteSegs(refsPath, "FlatMacroRefSource")
     RMTLogSysInfo("配置导入", Format("MacroFile 扁平数组布局已展开为三级段：{1}（落盘 {2}ms，总计 {3}ms）",
         macroPath, A_TickCount - tWrite, A_TickCount - tAll))
     return true
 }
 
-; 在删除旧 SerialArr 前将宏操作引用转为路径身份。优先序列号，保留旧版索引兜底。
+; 重排宏后按源身份重绑。只有确实没有身份字段的旧完整列表使用原索引。
 ; 映射仅来自导入包，不能使用当前正在运行的配置。
 IniImport_MigrateMacroRefs(settingDir, tables, legacyKv) {
     path := settingDir "\SubMacroFile.toml"
@@ -570,36 +578,51 @@ IniImport_MigrateMacroRefs(settingDir, tables, legacyKv) {
     bySymbol := Map()
     for tb in tables
         bySymbol[tb.Symbol] := tb
-    root := Cfg_Load(path)
+    root := Cfg_Load(path).Clone()
     sec := IniImport_Section()
     if (!root.Has(sec))
         return
+    root[sec] := root[sec].Clone()
+    original := root["FlatMacroRefSource"] := Cfg_Seg(root, "FlatMacroRefSource").Clone()
     changed := false
+    serialIndices := Map()
+    for symbol, _ in bySymbol {
+        indices := Map()
+        for i, oldSerial in IniImport_SplitPi(IniImport_Kv(legacyKv, symbol "SerialArr")) {
+            if (oldSerial != "")
+                indices[oldSerial] := indices.Has(oldSerial) ? 0 : i
+        }
+        serialIndices[symbol] := indices
+    }
     for key, val in root[sec] {
-        data := CompatParseData(val)
+        source := original.Get(key, val)
+        data := CompatParseData(source)
         if (!IsObject(data) || !data.HasOwnProp("MacroType") || data.MacroType == "当前宏")
             continue
         symbol := CompatMacroTypeSymbol(data.MacroType)
-        if (!bySymbol.Has(symbol))
-            continue
-        tb := bySymbol[symbol]
-        idx := data.HasOwnProp("Index") && IsInteger(data.Index) ? Integer(data.Index) : 0
-        serial := data.HasOwnProp("MacroSerial") ? String(data.MacroSerial) : ""
-        oldSerials := IniImport_SplitPi(IniImport_Kv(legacyKv, symbol "SerialArr"))
-        if (serial != "" && serial != "0" && serial != "-1") {
-            for i, oldSerial in oldSerials {
-                if (oldSerial == serial) {
-                    idx := i
-                    break
-                }
-            }
+        idx := 0
+        tb := bySymbol.Get(symbol, "")
+        if (tb) {
+            indices := serialIndices[symbol]
+            if (data.HasOwnProp("MacroSerial"))
+                idx := indices.Get(String(data.MacroSerial), 0)
+            else if (indices.Count == 0 && data.HasOwnProp("Index") && IsInteger(data.Index))
+                idx := Integer(data.Index)
         }
-        if (idx < 1 || idx > tb.Items.Length)
-            continue
-        data.Index := idx
-        data.MacroSerial := tb.Items[idx].ID
-        root[sec][key] := JSON.stringify(data, 0)
-        changed := true
+        if (!tb || idx < 1 || idx > tb.Items.Length) {
+            ; 缺失或未选中的目标不能绑定到同一位置的其他宏。
+            data.Index := 0
+            data.MacroSerial := ""
+        } else {
+            data.Index := idx
+            data.MacroSerial := tb.Items[idx].ID
+        }
+        updated := JSON.stringify(data, 0)
+        if (updated != val) {
+            original[key] := source
+            root[sec][key] := updated
+            changed := true
+        }
     }
     if (changed)
         Cfg_WriteRoot(root, path)

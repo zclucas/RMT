@@ -80,11 +80,11 @@ TomlUtil_Write(root, filePath := "") {
         filePath := TomlUtil_Path()
     try {
         content := TomlWriter().write(root)
-        try {
-            f := FileOpen(filePath ".tmp", "w", "UTF-8-RAW")
+        f := FileOpen(filePath ".tmp", "w", "UTF-8-RAW")
+        try
             f.Write(content)
+        finally
             f.Close()
-        }
         FileMove(filePath ".tmp", filePath, 1)
     } catch as e {
         RMTLogSys(RMT_LV_ERROR, "TomlUtil", Format("写 {1} 失败: {2}", filePath, e.Message))

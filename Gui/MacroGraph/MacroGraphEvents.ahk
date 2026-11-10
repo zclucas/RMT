@@ -62,12 +62,7 @@ class MacroGraphEventsMixin {
         this.ui.OnEvent("Node_" id, "DragMove", this._OnNodeDrag.Bind(this, id))
 
         d := this._ParseNodeCommand(node.CurCMD)
-        if (d.type == GetLang("跳转")) {
-            this._TrackCtrl("JumpCmb_" id, runtime)
-            this._BindCtrl("JumpCmb_" id, "SelectionChanged", this._OnFlowJump.Bind(this, id), runtime)
-            this._BindCtrl("JumpCmb_" id, "DropDownClosed", this._OnFlowJump.Bind(this, id), runtime)
-        }
-        else if (d.type == GetLang("间隔")) {
+        if (d.type == GetLang("间隔")) {
             this._TrackCtrl("ITypeCmb_" id, runtime)
             this._TrackCtrl("Time_" id, runtime)
             this._TrackCtrl("Time2_" id, runtime)
@@ -342,6 +337,8 @@ class MacroGraphEventsMixin {
     ; 窗口按键：Delete 删除选中项；Ctrl+C/V 复制粘贴节点
     ; 修饰键优先读事件里的 KeyModifiers（按键瞬间），避免 SetTimer 延迟后 GetKeyState 已松开
     _OnKeyDown(state, ctrl, info) {
+        if (IsObject(state) && state.Has("KeyFromEditable"))
+            return
         key := ""
         if (IsObject(info) && info.HasProp("Key"))
             key := info.Key

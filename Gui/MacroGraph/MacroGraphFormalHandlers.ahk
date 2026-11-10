@@ -34,18 +34,6 @@ class MacroGraphFormalHandlersMixin {
             this.ui.Update(rowName, "Visibility", visible ? "Visible" : "Collapsed")
     }
 
-    _FormalSubCallIsInsert(id, ct, state := unset) {
-        callTypes := GetLangArr(["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
-        val := this._ComboText("SubCallCmb_" id, IsSet(state) ? state : unset, callTypes)
-        if (val != "") {
-            idx := this._IndexInLangArr(callTypes, val)
-            if (idx < 0)
-                idx := this._IndexInLangArr(callTypes, GetLang(GetLangKey(val)))
-            return idx == 0
-        }
-        return GetLangKey(ct) == "插入到当前宏"
-    }
-
     _FormalLangKeyFromCombo(items, stateVal) {
         idx := this._IndexInLangArr(items, stateVal)
         return idx >= 0 ? GetLangKey(items[idx + 1]) : GetLangKey(stateVal)
@@ -76,42 +64,55 @@ class MacroGraphFormalHandlersMixin {
 
     ; ----------------------------------------------------------------- 内联变更处理
 
-    _OnFormalSubMacro(id, state, ctrl, event) {
+    _OnFormalSubMacro(id, field, state, *) {
         data := this._FormalIniData(id)
         if (data == "")
             return
-        if (!IsObject(state))
-            state := Map()
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
-        callTypes := GetLangArr(["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
-        this._EnsureComboInState(state, "SubTypeCmb_" id, macroTypes)
-        this._EnsureComboInState(state, "SubCallCmb_" id, callTypes)
-        sidx := this._ComboSelectedIndex("SubIdxCmb_" id)
-        if (sidx >= 0)
-            state["SubIdxCmb_" id] := String(sidx + 1)
-        if (state.Has("SubTypeCmb_" id) && state["SubTypeCmb_" id] != "")
-            data.MacroType := this._FormalLangKeyFromCombo(macroTypes, state["SubTypeCmb_" id])
-        if (state.Has("SubCallCmb_" id) && state["SubCallCmb_" id] != "")
-            data.CallType := this._FormalLangKeyFromCombo(callTypes, state["SubCallCmb_" id])
-        if (state.Has("SubIdxCmb_" id) && state["SubIdxCmb_" id] != "") {
-            data.Index := this._FormalParseListIndex(state["SubIdxCmb_" id])
-            try {
-                tableItem := GetTableBySymbol(data.MacroType)
-                if (tableItem && tableItem.Items.Length >= data.Index)
-                    data.MacroSerial := tableItem.Items[data.Index].ID
+        macroTypes := SubMacroGui.MacroTypes()
+        typeIndex := this._ComboSelectedIndex("SubTypeCmb_" id) + 1
+        if (!macroTypes.Has(typeIndex))
+            return
+        macroType := macroTypes[typeIndex]
+        callKeys := SubMacroGui.CallKeys(macroType == "当前宏")
+        switch field {
+            case "Type":
+                if (macroType == data.MacroType)
+                    return
+                data.MacroType := macroType
+                data.MacroSerial := ""
+                data.Index := 0
+                if (SubMacroGui.CallIndex(macroType, data.CallType) < 0)
+                    data.CallType := callKeys[1]
+            case "Call":
+                idx := this._ComboSelectedIndex("SubCallCmb_" id) + 1
+                if (macroType != data.MacroType || !callKeys.Has(idx) || data.CallType == callKeys[idx])
+                    return
+                data.CallType := callKeys[idx]
+            case "Target":
+                targets := this._subMacroTargets.Get(id, "")
+                idx := this._ComboSelectedIndex("SubIdxCmb_" id) + 1
+                if (!targets || macroType != data.MacroType || targets.Type != macroType || !targets.IDs.Has(idx))
+                    return
+                targetID := targets.IDs[idx]
+                tableItem := GetTableBySymbol(CompatMacroTypeSymbol(macroType))
+                actualIndex := GetItemIndexInTable(tableItem, targetID)
+                if (!actualIndex || (data.MacroSerial == targetID && data.Index == actualIndex))
+                    return
+                data.MacroSerial := targetID
+                data.Index := actualIndex
+            case "Count":
+                if (data.CallType != "插入到当前宏")
+                    return
+                count := GetLangKey(this._ComboText("SubIns_" id, state))
+                if (count == "" || count == data.InsertCount)
+                    return
+                data.InsertCount := count
             }
-        }
-        if (state.Has("SubIns_" id) && state["SubIns_" id] != "")
-            data.InsertCount := GetLangKey(state["SubIns_" id])
-        else if (this.ui != "") {
-            ins := this.ui.Query("SubIns_" id ">Text")
-            if (ins == "")
-                ins := this.ui.Query("SubIns_" id)
-            if (ins != "")
-                data.InsertCount := GetLangKey(ins)
-        }
         SaveMacroCMDData(data)
-        this._RefreshFormalSubMacroVisibility(id, state)
+        if (field == "Type")
+            this._RefreshSubMacroInline(id, this._FormalDFromId(id))
+        else
+            this._RefreshFormalSubMacroVisibility(id)
         this._SaveGraphAndNotifyParent()
     }
 
@@ -471,14 +472,14 @@ class MacroGraphFormalHandlersMixin {
 
     ; RMT 类别对应的指令列表（与 RMTCMDGui.CategoriesMap 保持一致）
     _RmtCategoryOps(category) {
-        allOps := GetLangArr(["截图", "截图提取文本", "自由贴", "启用鼠标", "启用键盘", "启用键鼠",
+        allOps := GetLangArr(["截图", "截图提取文本", "启用鼠标", "启用键盘", "启用键鼠",
             "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速", "显示菜单", "关闭菜单",
             "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
             "关闭指令显示", "关闭软件", "休眠", "重载"])
         if (category == GetLang("全部") || category == "")
             return allOps
         categoryOps := Map(
-            GetLang("图文"), GetLangArr(["截图", "截图提取文本", "自由贴"]),
+            GetLang("图文"), GetLangArr(["截图", "截图提取文本"]),
             GetLang("输入控制"), GetLangArr(["启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速"]),
             GetLang("宏控制"), GetLangArr(["显示菜单", "关闭菜单", "暂停所有宏", "恢复所有宏", "终止所有宏"]),
             GetLang("调试"), GetLangArr(["开启变量监视", "关闭变量监视", "开启指令显示", "关闭指令显示"]),
@@ -1225,21 +1226,14 @@ class MacroGraphFormalHandlersMixin {
 
     ; ----------------------------------------------------------------- 显隐刷新
 
-    _RefreshFormalSubMacroVisibility(id, state := unset) {
+    _RefreshFormalSubMacroVisibility(id) {
         if (this.ui == "")
             return
         d := this._FormalDFromId(id)
         mt := d.HasOwnProp("macroType") ? d.macroType : "按键宏"
         ct := d.HasOwnProp("callType") ? d.callType : "触发"
-        if (IsSet(state) && state.Has("SubTypeCmb_" id) && state["SubTypeCmb_" id] != "")
-            mt := this._FormalLangKeyFromCombo(GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"]), state["SubTypeCmb_" id])
-        if (IsSet(state) && state.Has("SubCallCmb_" id) && state["SubCallCmb_" id] != "")
-            ct := this._FormalLangKeyFromCombo(GetLangArr(["插入到当前宏", "触发", "暂停", "取消暂停", "终止"]), state["SubCallCmb_" id])
-        idxItems := this._FormalMacroIndexItems(mt)
-        showIdx := (GetLangKey(mt) != "当前宏") && idxItems.Length > 0
-        showIns := IsSet(state) ? this._FormalSubCallIsInsert(id, ct, state) : this._FormalSubCallIsInsert(id, ct)
-        this._FormalSetVis(id, "SubIdxRow_" id, showIdx)
-        this._FormalSetVis(id, "SubInsRow_" id, showIns)
+        this._FormalSetVis(id, "SubIdxRow_" id, mt != "当前宏")
+        this._FormalSetVis(id, "SubInsRow_" id, ct == "插入到当前宏")
     }
 
     _RefreshFormalVariableVisibility(id, state := unset) {
@@ -2195,7 +2189,7 @@ class MacroGraphFormalHandlersMixin {
             state := Map()
         d := this._FormalDFromId(id)
         isCdCmd := (d.type == GetLang("倒计时"))
-        modeItems := GetLangArr(["等待", "区间判断", "倒计时"])
+        modeItems := GetLangArr(["等待", "区间判断"])
         unitItems := GetLangArr(TimeGui.WaitUnitKeys)
         winKinds := GetLangArr(TimeGui.WindowKindKeys)
         acts := GetLangArr(TimeGui.MismatchActionKeys)
@@ -2488,22 +2482,23 @@ class MacroGraphFormalHandlersMixin {
     }
 
     _RefreshSubMacroInline(id, d) {
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
-        callTypes := GetLangArr(["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
+        macroTypes := GetLangArr(SubMacroGui.MacroTypes())
         mt := d.HasOwnProp("macroType") ? d.macroType : "按键宏"
         ct := d.HasOwnProp("callType") ? d.callType : "触发"
-        idx := d.HasOwnProp("index") ? d.index : 1
         ins := d.HasOwnProp("insertCount") ? d.insertCount : "1"
+        callTypes := this._FormalSubMacroCallLabels(mt)
         this.ui.Update("SubTypeCmb_" id, "SelectedIndex", this._IndexInLangArr(macroTypes, GetLang(mt)))
-        this.ui.Update("SubCallCmb_" id, "SelectedIndex", this._IndexInLangArr(callTypes, GetLang(ct)))
+        this.ui.Update("SubCallCmb_" id, "ClearItems", "")
+        for label in callTypes
+            this.ui.Update("SubCallCmb_" id, "AddItem", label)
+        this.ui.Update("SubCallCmb_" id, "SelectedIndex", SubMacroGui.CallIndex(mt, ct))
         this.ui.Update("SubIns_" id, "Text", GetLang(ins))
         ; 宏序号下拉项随宏类型变化：在同一控件上清空重填（无新命名元素，安全）
-        idxItems := this._FormalMacroIndexItems(mt)
+        target := this._FormalSubMacroTargets(id, mt, d.HasOwnProp("macroSerial") ? d.macroSerial : "")
         this.ui.Update("SubIdxCmb_" id, "ClearItems", "")
-        for it in idxItems
+        for it in target.Items
             this.ui.Update("SubIdxCmb_" id, "AddItem", it)
-        if (idxItems.Length > 0)
-            this.ui.Update("SubIdxCmb_" id, "SelectedIndex", Max(0, idx - 1))
+        this.ui.Update("SubIdxCmb_" id, "SelectedIndex", target.Selected)
         this._RefreshFormalSubMacroVisibility(id)
     }
 

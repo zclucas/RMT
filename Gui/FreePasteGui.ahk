@@ -14,10 +14,42 @@ class FreePasteGui {
         this._wheelCb := ""
         this.ui := ""
         this.curGui := ""
+        this.sequence := 0
     }
 
     ShowGui() {
         this.AddGui()
+    }
+
+    ShowPrompt(isImage, value, name := "", temporary := false) {
+        if (name != "")
+            this.ClosePrompt(false, name)
+        try {
+            if (!this._BuildAndShow(isImage, value, name, temporary) && temporary)
+                PromptReleaseImage(value)
+        } catch {
+            if (temporary)
+                PromptReleaseImage(value)
+            throw
+        }
+    }
+
+    ClosePrompt(all, name := "") {
+        matches := []
+        latest := ""
+        for _, data in this.GuiMap {
+            if (all || (name != "" && data.Name == name))
+                matches.Push(data.ui)
+            else if (name == "" && (!IsObject(latest) || data.Sequence > latest.Sequence))
+                latest := data
+        }
+        if (IsObject(latest))
+            matches.Push(latest.ui)
+        for ui in matches
+            this.DestroyGui(ui)
+    }
+
+    _WatchWheel() {
         ; 订阅滚轮热键（粘贴窗口活动期间有效）
         if (!this._wheelCb) {
             this._wheelCb := ObjBindMethod(this, "_OnWheel")
@@ -36,8 +68,10 @@ class FreePasteGui {
     ; 从 GuiMap 移除面板；全部面板销毁后取消订阅滚轮热键（幂等，双路径共用）
     _RemoveUi(ui) {
         hwnd := (IsObject(ui) && ui.HasProp("wpfHwnd")) ? ui.wpfHwnd : 0
-        if (hwnd != 0 && this.GuiMap.Has(hwnd))
-            this.GuiMap.Delete(hwnd)
+        if (hwnd != 0 && this.GuiMap.Has(hwnd)) {
+            data := this.GuiMap.Delete(hwnd)
+            PromptReleaseImage(data.TemporaryPath)
+        }
         if (this.GuiMap.Count == 0 && this._wheelCb) {
             WinHotkey.UnsubscribeMouse("WheelUp", this._wheelCb)
             WinHotkey.UnsubscribeMouse("WheelDown", this._wheelCb)
@@ -50,11 +84,16 @@ class FreePasteGui {
         isImage := DllCall("IsClipboardFormatAvailable", "UInt", 8)  ; CF_DIB = 8
         isText := IsClipboardText()
 
-        if (isImage || isText)
-            this._BuildAndShow(isImage, isText)
+        if (isImage) {
+            CurrentDateTime := FormatTime(, "MM月dd日HH-mm-ss")
+            filePath := A_WorkingDir "\Images\FreePaste\" CurrentDateTime ".png"
+            SaveClipToBitmap(filePath)
+            this.ShowPrompt(true, filePath)
+        } else if (isText)
+            this.ShowPrompt(false, A_Clipboard)
     }
 
-    _BuildAndShow(isImage, isText) {
+    _BuildAndShow(isImage, value, name, temporary) {
         global MySoftData
         title := "RMT-FreePaste"
         this._title := title
@@ -62,17 +101,14 @@ class FreePasteGui {
         main := XAML_Generator("Grid").Name("OverlayCon").Background("White")
 
         if (isImage) {
-            CurrentDateTime := FormatTime(, "MM月dd日HH-mm-ss")
-            filePath := A_WorkingDir "\Images\FreePaste\" CurrentDateTime ".png"
-            SaveClipToBitmap(filePath)
-            size := GetImageSize(filePath)
-            this._imgPath := filePath
+            size := GetImageSize(value)
+            if (size[1] <= 0 || size[2] <= 0)
+                throw ValueError(GetLang("无法读取图片") ": " value)
             main.Add("Image").Name("ImageCon").Width(size[1]).Height(size[2]).Stretch("Uniform")
-                .Source(StrReplace(filePath, "\", "/"))
+                .Source(StrReplace(value, "\", "/"))
         }
-        else if (isText) {
-            clipText := A_Clipboard
-            main.Add("TextBlock").Name("TextCon").Text(clipText).FontSize(13).FontWeight("SemiBold")
+        else {
+            main.Add("TextBlock").Name("TextCon").Text(value).FontSize(13).FontWeight("SemiBold")
                 .Margin("10").Foreground("#FF000000")
         }
 
@@ -91,20 +127,25 @@ class FreePasteGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("OverlayCon", "PreviewMouseLeftButtonDown", ObjBindMethod(this, "OnOverlayMouseDown").Bind(localUi))
 
-        if (!XamlWin.Open(this.ui)) {
-            this.ui := ""
-            return
+        if (!XamlWin.Open(localUi)) {
+            this.DestroyGui(localUi)
+            return false
         }
 
         ; 登记 GuiMap（以窗口句柄为键，滚轮回调/双击/关闭共用）
-        guiData := FreePasteData(this.ui)
+        guiData := FreePasteData(localUi)
+        guiData.Name := name
+        guiData.Sequence := ++this.sequence
+        guiData.TemporaryPath := temporary ? value : ""
         if (isImage)
             guiData.InitImage("ImageCon", size[1], size[2])
-        else if (isText)
+        else
             guiData.InitText("TextCon")
         guiData.InitOverlay("OverlayCon")
-        this.GuiMap.Set(this.ui.wpfHwnd, guiData)
-        this.curGui := this.ui
+        this.GuiMap.Set(localUi.wpfHwnd, guiData)
+        this.curGui := localUi
+        this._WatchWheel()
+        return true
     }
 
     ; 左键单击拖拽窗口，双击销毁面板（与原生 Click/DoubleClick 语义一致）

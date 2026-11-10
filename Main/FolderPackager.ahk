@@ -9,7 +9,7 @@ class FolderPackager {
 
     ; 打包文件夹为二进制文件
     ; password 非空 → 整体加密，输出带 "RMTC" 头的密文包（导入时凭密码解开）
-    static PackFolder(folderPath, outputFile, password := "") {
+    static PackFolder(folderPath, outputFile, password := "", report := "") {
         if !DirExist(folderPath)
             throw Error(GetLang("文件夹不存在:") folderPath)
 
@@ -19,7 +19,6 @@ class FolderPackager {
 
         ; 获取所有文件列表
         files := this._GetAllFiles(folderPath)
-        totalFiles := files.Length
 
         ; 预计算总大小
         totalSize := 16 ; 头部大小
@@ -40,7 +39,6 @@ class FolderPackager {
         pos += header.Size
 
         ; 遍历文件夹并添加文件
-        processedFiles := 0
         for filePath in files {
             relativePath := StrReplace(filePath, folderPath "\")
             fileChunk := this._AddFile(relativePath, filePath)
@@ -49,11 +47,14 @@ class FolderPackager {
             DllCall("RtlMoveMemory", "ptr", mainBuffer.ptr + pos, "ptr", fileChunk.ptr, "uint", fileChunk.Size)
             pos += fileChunk.Size
 
-            processedFiles++
+            if (report)
+                report(GetLang("正在打包文件"), Floor(100 * pos / totalSize))
         }
 
         ; 保存到文件
         ; 加密作用于整个包：连文件名、图片内容都看不到，比逐个文件加密更干净
+        if (report)
+            report(GetLang("正在保存配置包"))
         buf := (password == "") ? mainBuffer : RMTC_SealBuffer(mainBuffer, password)
         FileEncoding("CP0")
         FileOpen(outputFile, "w").RawWrite(buf)
@@ -65,7 +66,8 @@ class FolderPackager {
         r := RMTC_AskExportPassword(owner)
         if (!r.Ok)
             return false
-        this.PackFolder(folderPath, outputFile, r.Pwd)
+        RmtProgress.Run(GetLang("导出配置"), GetLang("正在检查配置文件")
+            , (progress) => this.PackFolder(folderPath, outputFile, r.Pwd, ObjBindMethod(progress, "Report")), owner)
         return true
     }
 
@@ -75,7 +77,7 @@ class FolderPackager {
             throw Error(GetLang("打包文件不存在:") packedFile)
 
         if callback
-            callback(GetLang("开始解包文件:") packedFile)
+            callback(GetLang("正在检查配置文件"))
 
         ; 读取二进制数据 - 修正这里
         FileEncoding("CP0")
@@ -151,6 +153,18 @@ class FolderPackager {
             FileDelete(versionPath)
         CfgInvalidate(versionPath)
 
+        ; 包含宏表的配置包以包内宏操作为准，避免复用目标方案的同号指令。
+        if (fileNames.Has("MacroFile.toml") || fileNames.Has("MacroFile.ini")) {
+            for name in ["MacroFile.toml", "MacroFile.ini", "SubMacroFile.toml", "SubMacroFile.ini"] {
+                path := outputFolder "\" name
+                if (!fileNames.Has(name) && FileExist(path)) {
+                    this._RejectReparsePoint(path)
+                    FileDelete(path)
+                    CfgInvalidate(path)
+                    TomlUtil_Invalidate(path)
+                }
+            }
+        }
 
         for fileInfo in entries {
             ; 创建子目录（如果需要）
@@ -168,12 +182,9 @@ class FolderPackager {
 
             if callback {
                 progress := Round((fileInfo.nextPos / totalSize) * 100)
-                callback("解包进度: " progress "% - " fileInfo.path, progress)
+                callback(GetLang("正在解包文件"), progress)
             }
         }
-
-        if callback
-            callback("解包完成: " outputFolder " (共 " entries.Length " 个文件)", 100)
 
         return true
     }
@@ -260,7 +271,8 @@ class FolderPackager {
     static _GetAllFiles(folderPath) {
         files := []
         loop files folderPath "\*", "R" {
-            if !InStr(FileExist(A_LoopFileFullPath), "D")
+            ; 迁移备份等非配置文件留在本地，避免生成解包器会拒收的配置包。
+            if (InStr("," this.ALLOWED_EXT ",", "," StrLower(A_LoopFileExt) ","))
                 files.Push(A_LoopFileFullPath)
         }
         return files

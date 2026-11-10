@@ -40,6 +40,16 @@ CloseXamlCountDownForWorker(pid) {
         overlay.Close()
 }
 
+CloseXamlCountDownAt(posKey) {
+    overlays := []
+    for _, overlay in XamlCountDownWindows {
+        if (posKey == "" || overlay.posKey == posKey)
+            overlays.Push(overlay)
+    }
+    for overlay in overlays
+        overlay.Close()
+}
+
 CloseXamlCountDown(token) {
     global XamlCountDownWindows, XamlCountDownCancelled
     if (XamlCountDownWindows.Has(token))

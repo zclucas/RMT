@@ -745,16 +745,6 @@
         try this.ui.Update("TxtShareLoginState", "Text", text)
     }
 
-    ; 文本框焦点跟踪：主窗口聚焦文本框时，侧栏逻辑树的 $^c/$^v/$^z/$^y/Delete 需透传（见 MacroEditGui._PassEditKeyToTextInput）
-    OnTextInputFocus(nm, state, ctrl, event) {
-        this._textFocusName := nm
-    }
-
-    OnTextInputBlur(nm, state, ctrl, event) {
-        if (this._textFocusName == nm)
-            this._textFocusName := ""
-    }
-
     ; §11 背景图：浏览选择图片文件（写入配置，保存后重启生效）
     OnBackImageBrowse(state, ctrl, event) {
         path := FileSelect(1, , GetLang("选择背景图片"), "图片 (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp")

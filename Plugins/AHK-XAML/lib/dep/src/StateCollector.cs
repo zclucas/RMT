@@ -82,6 +82,9 @@ public partial class AhkWpfEngine
 
     private string GetControlValue(string trackName)
     {
+        if (trackName == "Window>FocusEditable")
+            return IsEditableFocus(System.Windows.Input.Keyboard.FocusedElement) ? "1" : "0";
+
         string cName = trackName;
         string suffix = null;
 

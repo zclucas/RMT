@@ -176,6 +176,7 @@
             "CmdTipForce", "FR",          ; 输出→指令窗口：强制显示，不经 CMDTip 门控
             "RMT指令", "RC",
             "CountDown", "CD",
+            "Prompt", "NT",
             "MsgBox", "MB",
             "ToolTip", "TT",
             "OutputTip", "OT",
@@ -234,8 +235,9 @@
 
         cmd := EncodeCommand(opcode, realArgs*)
         payload := EncodeBatch(cmd)
-        rx.Push(MsgType.EVENT, 0, payload)
+        sent := rx.Push(MsgType.EVENT, 0, payload)
         MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+        return sent
     }
 
 }

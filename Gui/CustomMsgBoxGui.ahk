@@ -15,10 +15,10 @@ class CustomMsgBoxGui {
         this.Desc := ""
     }
 
-    ShowGui(Desc) {
+    ShowGui(Desc, title := "") {
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
-        this._BuildAndShow()
+        this._BuildAndShow(title)
         this.Desc := Desc
         if (IsObject(this.ui))
             this.ui.Update("TextCon", "Text", Desc)
@@ -32,10 +32,11 @@ class CustomMsgBoxGui {
 
     _EscapeXml(s) => EscapeXamlXml(s)
 
-    _BuildAndShow() {
+    _BuildAndShow(title) {
         global MySoftData
         this._closed := false
-        title := GetLang("RMT输出弹窗")
+        if (title == "")
+            title := GetLang("RMT输出弹窗")
         this._title := title
         titleHeight := "30"
 
@@ -64,18 +65,21 @@ class CustomMsgBoxGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
+        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing", this.ui))
+        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad", this.ui))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
 
     }
 
-    OnWindowLoad(state, ctrl, event) {
-        XamlWin.OnLoadTheme(this.ui)
+    OnWindowLoad(ui, *) {
+        if (this.ui == ui)
+            XamlWin.OnLoadTheme(ui)
     }
 
-    OnWindowClosing(state, ctrl, event) {
+    OnWindowClosing(ui, *) {
+        if (this.ui != ui)
+            return
         this.ui := ""
         this._closed := true
     }

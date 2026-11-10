@@ -17,6 +17,7 @@ class FeedbackGui {
         this._btnStyle := ""
         this._kind := "bug"          ; bug | idea
         this._uploads := []          ; 正文图片与独立附件共用上传队列
+        this._attachmentProgress := ""
         this._attachments := []
         this._errorSent := ""
         this._disc := ""
@@ -236,6 +237,7 @@ class FeedbackGui {
     OnWindowClosing(state, ctrl, event) {
         this.closed := true
         this._StopPoll()
+        this._CloseAttachmentProgress()
         this._StopLoginTimer()
         FeedbackGui._opening := false
         if (FeedbackGui.instances.Has("global") && FeedbackGui.instances["global"] == this)
@@ -280,6 +282,7 @@ class FeedbackGui {
     Close() {
         this.closed := true
         this._StopPoll()
+        this._CloseAttachmentProgress()
         this._StopLoginTimer()
         if IsObject(this.ui) {
             try this.ui.Update("Window", "Close", "")
@@ -630,13 +633,20 @@ class FeedbackGui {
         this._upIdx := idx
         this._pending := "upload"
         this._pendingSince := 0
-        this._SetStatus(Format(GetLang("正在上传第 {1}/{2} 个文件…"), idx, this._uploads.Length))
+        message := Format(GetLang("正在上传第 {1}/{2} 个文件…"), idx, this._uploads.Length)
+        this._SetStatus(message)
         try this._disc.BeginUploadFile(this._baseUrl "/uploads.json", this._uploads[idx].path)
         catch as e {
             this._pending := ""
             this._OnUploadFailed(idx, e.Message)
             return
         }
+        firstProgress := !IsObject(this._attachmentProgress)
+        if (firstProgress)
+            this._attachmentProgress := RmtProgress(GetLang("提交反馈"), message, this.ui.wpfHwnd)
+        this._attachmentProgress.Report(message, 100 * (idx - 1) / this._uploads.Length)
+        if (firstProgress)
+            this._attachmentProgress.Show()
         this._StartPoll()
     }
 
@@ -679,6 +689,8 @@ class FeedbackGui {
         this._pending := "post"
         this._pendingSince := 0
         this._SetStatus(GetLang("正在提交..."))
+        if (IsObject(this._attachmentProgress))
+            this._attachmentProgress.Report(GetLang("正在提交..."))
         try this._disc.BeginCreatePost(this._baseUrl "/posts.json", this._titleSent, raw, catId, this._versionTagSent)
         catch as e {
             this._pending := ""
@@ -948,6 +960,8 @@ class FeedbackGui {
 
     ; 提交中锁住按钮，避免重复点
     _SetBusy(on) {
+        if (!on)
+            this._CloseAttachmentProgress()
         if (!IsObject(this.ui))
             return
         try this.ui.Update("SubmitBtn", "Content", on ? GetLang("提交中…") : GetLang("提交反馈"))
@@ -962,6 +976,13 @@ class FeedbackGui {
             try this.ui.Update("LoginBtn", "IsEnabled", "False")
         } else {
             this._SyncLoginBtn()
+        }
+    }
+
+    _CloseAttachmentProgress() {
+        if (IsObject(this._attachmentProgress)) {
+            this._attachmentProgress.Close()
+            this._attachmentProgress := ""
         }
     }
 

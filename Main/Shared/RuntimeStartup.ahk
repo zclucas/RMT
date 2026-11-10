@@ -57,7 +57,7 @@ SendNativeControlMessage(Msg, wParam, lParam, hWnd) {
 InitData() {
     InitTableItemState()
     MySoftData.DataFileMap := Map("搜索", SearchFile, "搜索Pro", SearchProFile, "搜索All", SearchAllFile, "搜索Combo", SearchComboFile, "组合搜索", SearchComboFile, "搜索Multi", SearchComboFile, "移动Pro", MMProFile,
-        "输出", OutputFile, "运行", RunFile, "运行Pro", RunFile, "循环", LoopFile, "宏操作", SubMacroFile, "变量", VariableFile,
+        "输出", OutputFile, "提示", PromptFile, "运行", RunFile, "运行Pro", RunFile, "循环", LoopFile, "宏操作", SubMacroFile, "变量", VariableFile,
         "变量提取", ExVariableFile, "如果", CompareFile, "如果Pro", CompareProFile, "运算", OperationFile,
         "后台鼠标", BGMouseFile, "后台按键", BGKeyFile, "文本处理", TextOpsFile, "Timing", TimingFile, "数组", ArrayFile,
         "输入", InputFile, "网络请求", HttpRequestFile, "文件读写", FileIOFile, "Excel", FileIOFile, "窗口信息", WindowManageFile, "调整窗口", WindowManageFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile, "手柄检测", JoyCheckFile,
@@ -67,7 +67,7 @@ InitData() {
         ; §20 指令改名：新名「鼠标移动/鼠标移动Pro/增量移动」与旧名「移动/移动Pro」双键并存（旧配置序列码与宏内容零迁移兼容）
         "鼠标移动", MoveDataFile, "鼠标移动Pro", MMProFile, "增量移动", DeltaMoveFile)
     MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "搜索All", SearchAllData, "搜索Combo", SearchData, "组合搜索", SearchData, "搜索Multi", SearchData, "移动Pro", MMProData,
-        "输出", OutputData, "运行", RunData, "运行Pro", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
+        "输出", OutputData, "提示", PromptData, "运行", RunData, "运行Pro", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
         "变量提取", ExVariableData, "如果", CompareData, "如果Pro", CompareProData, "运算", OperationData,
         "后台鼠标", BGMouseData, "后台按键", BGKeyData, "文本处理", TextOpsData, "Timing", TimingData, "数组", ArrayData,
         "输入", InputData, "网络请求", HttpRequestData, "文件读写", FileIOData, "Excel", FileIOData, "窗口信息", WindowInfoData, "调整窗口", WindowManageData, "窗口管理", WindowManageData, "按键检测", KeyCheckData, "手柄检测", KeyCheckData,

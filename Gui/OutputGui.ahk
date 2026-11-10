@@ -81,7 +81,7 @@ class OutputGui {
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("输出类型:")).VerticalAlignment("Center").Margin("8,0,0,0")
         ot := body.Add("ComboBox").Grid_Row(0).Grid_Column(1).Name("OutputTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         ; §21.4：字符变量类型已移除（改由 变量指令-字符 的「编辑」按钮构建）
-        for t in GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"])
+        for t in GetLangArr(["发送内容", "粘贴内容", "指令窗口", "复制到剪切板"])
             ot.Add("ComboBoxItem").Content(t)
         body.Add("TextBlock").Grid_Row(0).Grid_Column(3).Text(GetLang("备注：")).VerticalAlignment("Center")
         body.Add("TextBox").Grid_Row(0).Grid_Column(4).Name("RemarkCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
@@ -207,7 +207,7 @@ class OutputGui {
             this.Data.VariableName := "Data"
 
         this.ui.Update("TextCon", "Text", GetLangStr(this.Data.Text, 1))
-        this._SetDDL("OutputTypeCombo", GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"]), GetLang(this.Data.OutputType))
+        this._SetDDL("OutputTypeCombo", GetLangArr(["发送内容", "粘贴内容", "指令窗口", "复制到剪切板"]), GetLang(this.Data.OutputType))
         this._SetCombo("VariableNameCombo", GetGuiVarArr(), GetLang(this.Data.VariableName))
         this._SetDDL("VarTypeCombo", GetLangArr(["变量", "数组"]), GetLang("变量"))
         this._SetDDL("VariCombo", this.DLVariableArr, "")

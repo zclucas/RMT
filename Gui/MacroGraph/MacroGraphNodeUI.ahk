@@ -37,16 +37,12 @@ class MacroGraphNodeUIMixin {
 
     ; 填充节点 body（内联编辑控件）。静态构建与运行时注入复用同一套生成逻辑。
     _FillNodeBody(id, d, body) {
-        if (d.type == GetLang("跳转")) {
-            actions := FlowJumpActions()
-            selected := 0
-            for i, action in actions {
-                if (action == d.jumpAction)
-                    selected := i - 1
-            }
-            this._AddComboRow(body, "JumpRow_" id, "", "JumpCmb_" id, GetLangArr(actions), selected, true)
+        if (d.HasOwnProp("promptType")) {
+            body.Add("TextBlock").Name("PromptKind_" id).Text(GetLang(d.promptType)).Foreground("{DynamicResource TextMain}").TextWrapping("Wrap")
+            body.Add("TextBlock").Text(GetLang("双击编辑提示")).Foreground("{DynamicResource TextSub}").TextWrapping("Wrap")
+            return
         }
-        else if (d.type == GetLang("间隔")) {
+        if (d.type == GetLang("间隔")) {
             isRandom := d.itype == GetLang("随机")
             ; 间隔类型下拉（固定/随机）—— 标签与下拉同行
             this._AddComboRow(body, "ITypeRow_" id, GetLang("类型："), "ITypeCmb_" id
@@ -206,7 +202,7 @@ class MacroGraphNodeUIMixin {
         else if (d.type == GetLang("输出")) {
             outputTypeKey := d.HasOwnProp("outputType") ? d.outputType : "发送内容"
             isCharVar := (outputTypeKey == "字符变量")
-            outputTypeNames := GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"])
+            outputTypeNames := GetLangArr(["发送内容", "粘贴内容", "指令窗口", "复制到剪切板", "字符变量"])
             textVal := d.HasOwnProp("text") ? GetLangStr(d.text, 1) : GetLang("将要输出的文本")
             varName := (d.HasOwnProp("variableName") && d.variableName != "") ? d.variableName : "Data"
             varList := GetGuiVarArr()

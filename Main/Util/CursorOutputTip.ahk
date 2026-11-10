@@ -6,21 +6,33 @@ class CursorOutputTip {
     static deadline := 0
     static visible := false
     static tick := ""
+    static isImage := false
+    static temporaryPath := ""
 
-    static Show(text) {
+    static Show(value, duration := 5000, isImage := false, temporary := false) {
         static flush := ObjBindMethod(CursorOutputTip, "_Flush")
         if (!this.tick)
             this.tick := ObjBindMethod(this, "_Tick")
-        this.pending := String(text)
+        if (IsObject(this.pending) && this.pending.temporary)
+            PromptReleaseImage(this.pending.value)
+        this.pending := {value: String(value), duration: duration, isImage: isImage, temporary: temporary}
         ; Worker 消息和 XAML 事件回调都要先返回，再建窗。
         SetTimer(flush, -1)
     }
 
     static _Flush() {
-        if (this.pending == "") {
+        request := this.pending
+        this.pending := ""
+        if (!IsObject(request))
+            return
+        if (request.value == "") {
             this._Close()
             return
         }
+        if (request.isImage || this.isImage)
+            this._Close()
+        this.isImage := request.isImage
+        this.temporaryPath := request.temporary ? request.value : ""
         if (!IsObject(this.ui)) {
             colors := MainSoftData.ThemeColors
             win := XAML_Generator("Window")
@@ -34,21 +46,26 @@ class CursorOutputTip {
                 .Background(AppThemeUtil.ResolveColor(colors, "Win_InputBg"))
                 .BorderBrush(AppThemeUtil.ResolveColor(colors, "Win_InputStroke"))
                 .IsHitTestVisible("False")
-            border.Add("TextBlock").Name("TipText").TextWrapping("Wrap")
-                .Foreground(AppThemeUtil.ResolveColor(colors, "Win_InputText"))
-                .FontFamily(MainSoftData.FontType).FontSize(XAMLHost.FontSize())
+            if (request.isImage)
+                border.Add("Image").MaxWidth(400).MaxHeight(320).Stretch("Uniform").StretchDirection("DownOnly")
+                    .Source(StrReplace(request.value, "\", "/"))
+            else
+                border.Add("TextBlock").Name("TipText").TextWrapping("Wrap")
+                    .Foreground(AppThemeUtil.ResolveColor(colors, "Win_InputText"))
+                    .FontFamily(MainSoftData.FontType).FontSize(XAMLHost.FontSize())
             this.ui := XAMLHost(win.ToString(), "", 0)
             this.ui.skipFontScale := true
-            this.ui.Update("TipText", "Text", this.pending)
+            if (!request.isImage)
+                this.ui.Update("TipText", "Text", request.value)
             try this.ui.Show()
             catch {
                 this._Close()
                 return
             }
         } else {
-            this.ui.Update("TipText", "Text", this.pending)
+            this.ui.Update("TipText", "Text", request.value)
         }
-        this.deadline := A_TickCount + 5000
+        this.deadline := A_TickCount + request.duration
         SetTimer(this.tick, 16)
     }
 
@@ -100,5 +117,8 @@ class CursorOutputTip {
             try this.ui.Update("Window", "Close", "")
         this.ui := ""
         this.visible := false
+        this.isImage := false
+        PromptReleaseImage(this.temporaryPath)
+        this.temporaryPath := ""
     }
 }

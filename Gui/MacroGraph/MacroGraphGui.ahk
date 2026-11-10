@@ -46,15 +46,15 @@ class MacroGraphGui {
         this._sessionId := 0          ; 每次打开自增；用于忽略旧窗口迟到的异步关闭事件，避免覆盖写空
 
         ; 若梦兔全部指令（移动、移动Pro、增量移动）
-        this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "循环", "宏操作",
+        this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作",
             "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标",
-            "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "倒计时", "注释", "抓图", "跳转"])
+            "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
         this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png",
             "Images\Soft\Move.png", "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\MovePro.png", "Images\Soft\DeltaMove.png",
-            "Images\Soft\Input.png", "Images\Soft\Output.png",
+            "Images\Soft\Input.png", "Images\Soft\Output.png", "Images\Soft\Prompt.png",
             "Images\Soft\Loop.png", "Images\Soft\MacroAction.png",
             "Images\Soft\Var.png", "Images\Soft\Extract.png",
             "Images\Soft\If.png", "Images\Soft\IfPro.png",
@@ -63,8 +63,8 @@ class MacroGraphGui {
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
             "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjustGear32.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
-            "Images\Soft\Wait.png", "Images\Soft\LoopCount.png",
-            "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\FlowJump.png"]
+            "Images\Soft\Wait.png",
+            "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png"]
 
         ; 复用现有子编辑器（双击节点时打开）
         this.IntervalGui := IntervalGui()
@@ -80,6 +80,7 @@ class MacroGraphGui {
         this.InputGui := InputGui()
         this.OutputGui := OutputGui()
         this.SubMacroGui := SubMacroGui()
+        this._subMacroTargets := Map()
         this.VariableGui := VariableGui()
         this.ExVariableGui := ExVariableGui()
         this.OperationGui := OperationGui()
@@ -101,13 +102,12 @@ class MacroGraphGui {
         this.JoyCheckGui := JoyCheckGui()
         this.WaitGui := WaitGui()
         this.TimeGui := TimeGui()
-        this.CountDownGui := CountDownGui()
+        this.PromptGui := PromptGui()
         this.ScreenShotGui := ScreenShotGui()
         this.CommentGui := CommentGui()
         this.LoopGui := LoopGui()
         this.CompareGui := CompareGui()
         this.CompareProGui := CompareProGui()
-        this.FlowJumpGui := FlowJumpGui()
         this.BranchGraphGui := ""     ; 搜索/如果/如果Pro 分支的「嵌套节点编辑器」（懒加载）
         this._branchExpanded := Map() ; 分支节点是否展开显示全部指令（key=分支合成ID）
         this._loopChipsExpanded := Map() ; 循环体指令卡片是否展开（key=内联用循环ID/外置用循环体合成ID）
@@ -151,6 +151,7 @@ class MacroGraphGui {
         this.WindowBindingContext := windowBindingContext
         this.startSerial := ""
         this.cmdNodes := Map()
+        this._subMacroTargets.Clear()
         this.order := []
         this.pos := Map()
         this.links := []
@@ -471,8 +472,6 @@ class MacroGraphGui {
 
 
     _CreateDefaultCommandNode(cmdName) {
-        if (cmdName == GetLang("跳转"))
-            return this._MakeNode("流程跳转_" FlowJumpActions()[1])
         if (cmdName == GetLang("间隔")) {
             return this._MakeNode(GetLang("间隔") "_500")
         }
@@ -556,22 +555,6 @@ class MacroGraphGui {
         }
         ; 其它指令：临时节点占位（仍只存 CurCMD，类型由解析判定）
         return this._MakeNode(cmdName)
-    }
-
-    _OnFlowJump(id, state, ctrl, event) {
-        if (!this.cmdNodes.Has(id))
-            return
-        key := "JumpCmb_" id
-        value := IsObject(state) && state.Has(key) ? state[key] : this.ui.Query(key)
-        action := GetLangKey(value)
-        for valid in FlowJumpActions() {
-            if (action != valid)
-                continue
-            cmd := "流程跳转_" action
-            if (this.cmdNodes[id].CurCMD != cmd)
-                this.OnEditorSure(id, cmd)
-            return
-        }
     }
 
     _OnField(id, field, state, ctrl, event) {
@@ -694,13 +677,17 @@ class MacroGraphGui {
     OpenNodeEditor(id) {
         if (!this.cmdNodes.Has(id))
             return
+        if (PromptUsesEditor(this.cmdNodes[id].CurCMD)) {
+            this.PromptGui.OwnerHwnd := this.ui.wpfHwnd
+            this.PromptGui.SureBtnAction := (cmd) => this.OnEditorSure(id, cmd)
+            this.PromptGui.ShowGui(this.cmdNodes[id].CurCMD)
+            return
+        }
         ; 打开完整编辑器前：把节点内联控件（含标签拖拽改过的值）写回数据模型
         this._FlushInlineFieldsFromUI(id)
         d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         editor := ""
-        if (d.type == GetLang("跳转"))
-            editor := this.FlowJumpGui
-        else if (d.type == GetLang("间隔"))
+        if (d.type == GetLang("间隔"))
             editor := this.IntervalGui
         else if (d.type == GetLang("按键")) {
             if (IsJoyLegacyKeyCmd(this.cmdNodes[id].CurCMD))
@@ -754,20 +741,15 @@ class MacroGraphGui {
         oldType := this._ParseNodeCommand(this.cmdNodes[id].CurCMD).type
         this.cmdNodes[id].CurCMD := cmd
         dEdit := this._ParseNodeCommand(cmd)
-        if (dEdit.type == GetLang("跳转")) {
-            for i, action in FlowJumpActions() {
-                if (action == dEdit.jumpAction) {
-                    this.ui.Update("JumpCmb_" id, "SelectedIndex", i - 1)
-                    break
-                }
-            }
-            this.ui.Update("Title_" id, "Text", this._NodeTitleText(dEdit))
-            this._SaveGraphAndNotifyParent()
-            return
-        }
         if (oldType != dEdit.type) {
             this._CaptureTopLevelSuccessorLinks()
             this._Render()
+            return
+        }
+        if (dEdit.HasOwnProp("promptType")) {
+            this.ui.Update("Title_" id, "Text", this._NodeTitleText(dEdit))
+            this.ui.Update("PromptKind_" id, "Text", GetLang(dEdit.promptType))
+            this._SaveGraphAndNotifyParent()
             return
         }
         ; 搜索/搜索Pro：就地刷新内联字段与分支节点内容，避免整窗重建（闪烁/窗口被销毁）

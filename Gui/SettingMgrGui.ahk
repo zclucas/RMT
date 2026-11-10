@@ -313,8 +313,10 @@ class SettingMgrGui {
         }
 
         try {
-            Compat_RenameProfile(A_WorkingDir, MySoftData.CurSettingName, newFileName.Value
-                , ObjBindMethod(this, "_SelectProfileForReload", newFileName.Value, RTrim(NewSettingArrStr, "π")))
+            RmtProgress.Run(GetLang("重命名"), GetLang("正在复制配置文件")
+                , (*) => Compat_RenameProfile(A_WorkingDir, MySoftData.CurSettingName, newFileName.Value
+                    , ObjBindMethod(this, "_SelectProfileForReload", newFileName.Value, RTrim(NewSettingArrStr, "π")))
+                , this.ui.wpfHwnd)
         } catch as e {
             RmtDialog.Info(e.Message, GetLang("错误"), this.ui.wpfHwnd)
             return
@@ -336,8 +338,10 @@ class SettingMgrGui {
             return
         }
         try {
-            imported := Compat_ImportSettingsTree(SelectedFolder, A_WorkingDir "\Setting"
-                , A_WorkingDir "\SettingOld", MySoftData.CurSettingName)
+            imported := RmtProgress.Run(GetLang("配置迁移"), GetLang("正在检查配置文件")
+                , (progress) => Compat_ImportSettingsTree(SelectedFolder, A_WorkingDir "\Setting"
+                    , A_WorkingDir "\SettingOld", MySoftData.CurSettingName, ObjBindMethod(progress, "Report"))
+                , this.ui.wpfHwnd)
         } catch as e {
             RmtDialog.Info(GetLang("迁移失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
             return
@@ -352,7 +356,8 @@ class SettingMgrGui {
 
     OnRepairBtnClick(state, ctrl, event) {
         SettingDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName
-        hasWork := this.OnRepairSetting(SettingDir)
+        hasWork := RmtProgress.Run(GetLang("正在检查配置文件"), MySoftData.CurSettingName
+            , (*) => this.OnRepairSetting(SettingDir), this.ui.wpfHwnd)
         if (hasWork) {
             RmtDialog.Info("已校对")
             CfgWrite(true, SettingFile, SettingSection, "IsReload")
@@ -421,8 +426,10 @@ class SettingMgrGui {
             list := MainSoftData.SettingArrStr
             if (LoadType != 2)
                 list .= "π" fileNameNoExt
-            Compat_ImportProfilePackage(selectedFile, A_WorkingDir "\Setting", A_WorkingDir "\SettingOld", fileNameNoExt
-                , ObjBindMethod(this, "_SelectProfileForReload", fileNameNoExt, list))
+            RmtProgress.Run(GetLang("导入配置"), GetLang("正在检查配置文件")
+                , (progress) => Compat_ImportProfilePackage(selectedFile, A_WorkingDir "\Setting", A_WorkingDir "\SettingOld", fileNameNoExt
+                    , ObjBindMethod(this, "_SelectProfileForReload", fileNameNoExt, list), ObjBindMethod(progress, "Report"))
+                , this.ui.wpfHwnd)
         } catch as e {
             RmtDialog.Info(GetLang("解包失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
             return
@@ -434,7 +441,13 @@ class SettingMgrGui {
         settingName := this._RequireSelectedSetting(state)
         if (settingName == "")
             return
-        this._SelectProfileForReload(settingName)
+        try {
+            RmtProgress.Run(GetLang("切换配置"), settingName
+                , (*) => this._SelectProfileForReload(settingName), this.ui.wpfHwnd)
+        } catch as e {
+            RmtDialog.Info(e.Message, GetLang("错误"), this.ui.wpfHwnd)
+            return
+        }
         SafeReload()
     }
 

@@ -21,8 +21,7 @@ class RMTCMDGui {
         this.CategoriesMap := Map(
             GetLang("图文"), [
                 GetLang("截图"),
-                GetLang("截图提取文本"),
-                GetLang("自由贴")
+                GetLang("截图提取文本")
             ],
             GetLang("输入控制"), [
                 GetLang("启用鼠标"),

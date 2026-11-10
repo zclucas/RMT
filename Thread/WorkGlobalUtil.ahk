@@ -34,8 +34,10 @@ global MyCMDTipForceAction := WorkCmdTipForceShow
 global MyExcuteRMTCMDAction := WorkExcuteRMTCMDAction
 global MySetTableItemState := WorkSetTableItemState
 global MySetItemPauseState := WorkSetItemPauseState
-global MyCountDownStart := (token, total, x, y) => MsgSendHandler("CountDown", "start", token, total, x, y)
+global MyCountDownStart := (token, total, x, y, detached) => MsgSendHandler("CountDown", "start", token, total, x, y, detached)
 global MyCountDownStop := (token) => MsgSendHandler("CountDown", "stop", token)
+global MyCountDownCloseByPosition := (key) => MsgSendHandler("CountDown", "closeAt", key)
+global MyShowPrompt := (payload) => MsgSendHandler("Prompt", payload)
 global MyMsgBoxContent := WorkMsgBoxContent
 global MyToolTipContent := WorkToolTipContent
 global MyOutputTipContent := WorkOutputTipContent

@@ -14,6 +14,7 @@
 #Include CompareGui.ahk
 #Include MMProGui.ahk
 #Include OutputGui.ahk
+#Include PromptGui.ahk
 #Include VariableGui.ahk
 #Include SubMacroGui.ahk
 #Include OperationGui.ahk
@@ -33,7 +34,6 @@
 #Include JoyCheckGui.ahk
 #Include CommentGui.ahk
 #Include HttpRequestGui.ahk
-#Include FlowJumpGui.ahk
 #Include MacroEditModel.ahk
 
 class MacroEditGui {
@@ -134,10 +134,10 @@ class MacroEditGui {
         this.CmdCategory := [
             {name: "键鼠/手柄", icon: Chr(0xE765), cmds: ["按键", "手柄", "移动", "移动Pro", "增量移动", "后台按键", "后台鼠标", "按键检测", "手柄检测"]},
             {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro", "搜索All", "搜索Combo"]},
-            {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出"]},
+            {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出", "提示"]},
             {name: "变量/数据", icon: Chr(0xE8EF), cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
             {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel", "网络请求"]},
-            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "等待", "循环", "跳转", "如果", "如果Pro", "倒计时"]},
+            {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "等待", "循环", "如果", "如果Pro"]},
             {name: "调控", icon: Chr(0xE713), cmds: ["运行", "运行Pro", "宏操作", "窗口信息", "调整窗口", "RMT指令"]},
             {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
         ]
@@ -165,7 +165,7 @@ class MacroEditGui {
             }
         } else
             this.InitSubGui()
-        this.SubGuiMap.Set(GetLang("流程跳转"), this.FlowJumpGui)
+        this.SubGuiMap.Set(GetLang("流程跳转"), this.SubMacroGui)
     }
 #Include MacroEditor\CommandCatalog.ahk
 
@@ -180,7 +180,7 @@ class MacroEditGui {
         this._BuildAndShow(CommandStr, ShowSaveBtn)
 
         ; 注册快捷键热键（仅编辑器前台时拦截，失焦时按键透传给其他程序；关闭时注销）
-        this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), this._GetStepOverHotkey(), this._GetStepIntoHotkey(), this._GetStepOutHotkey(), this._GetRunToCursorHotkey(), "$" this._GetToggleSkipHotkey(), this._GetRunAllHotkey(), "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
+        this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), this._GetStepOverHotkey(), this._GetStepIntoHotkey(), this._GetStepOutHotkey(), this._GetRunToCursorHotkey(), "$" this._GetToggleSkipHotkey(), this._GetRunAllHotkey(), "$Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), this.Hwnd())
 
         ; 注册拖拽消息监听（先注销再注册，避免重复打开时叠多个处理器）
         OnMessage(0x0201, this._lbtnHandler, 0)

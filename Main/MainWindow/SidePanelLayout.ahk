@@ -10,9 +10,6 @@
         this._BindLive("AiInput_" t, "TextChanged", ObjBindMethod(this, "OnAiInputChanged", t))
         this._BindLive("AiInput_" t, "PreviewKeyDown:Return", ObjBindMethod(this, "OnAiInputEnter", t))
         this._BindLive("AiInput_" t, "PreviewKeyDown:V", ObjBindMethod(this, "OnAiInputPasteKey", t))
-        ; 焦点跟踪：侧栏逻辑树的窗口级 $^c/$^v/$^z/$^y/Delete 会吞键，AI 框同样收不到按键（含 Ctrl+V 贴图）
-        this._BindLive("AiInput_" t, "GotFocus", ObjBindMethod(this, "OnTextInputFocus", "AiInput_" t))
-        this._BindLive("AiInput_" t, "LostFocus", ObjBindMethod(this, "OnTextInputBlur", "AiInput_" t))
         this._BindLive("AiInput_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))
         this._BindLive("AiInput_" t, "Drop", ObjBindMethod(this, "OnAiInputFileDrop", t))
         this._BindLive("AiInputHost_" t, "FileDrop", ObjBindMethod(this, "OnAiInputFileDrop", t))

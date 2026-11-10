@@ -1248,6 +1248,8 @@ class WorkPool {
                         tableItem := GetTableByID(args[1])
                         if (tableItem)
                             SetItemPauseState(tableItem, GetItemIndexInTable(tableItem, args[2]), args[3], wd.idx)
+                    case "NT":
+                        QueuePromptDisplay(args[1])
                     case "CD":
                         ; 交给空闲任务建窗，避免在 Worker 消息回调中同步创建 XAML。
                         SetTimer(this._CountDownUiRequest.Bind(this, args.Clone(), wd, wd.pid), -10)
@@ -1538,6 +1540,10 @@ class WorkPool {
     }
 
     _CountDownUiRequest(args, wd, pid) {
+        if (args[1] == "closeAt") {
+            CloseXamlCountDownAt(args[2])
+            return
+        }
         if (args[1] == "stop") {
             CloseXamlCountDown(args[2])
             return
@@ -1546,7 +1552,8 @@ class WorkPool {
             return
         token := args[2]
         done := (*) => this._CountDownUiClosed(wd, pid, token)
-        try StartXamlCountDown(token, Number(args[3]), Number(args[4]), Number(args[5]), done, pid)
+        ownerPid := args.Length >= 6 && args[6] == "1" ? 0 : pid
+        try StartXamlCountDown(token, Number(args[3]), Number(args[4]), Number(args[5]), done, ownerPid)
         catch as e {
             RMTLogSys(RMT_LV_ERROR, "CountDown", e.Message)
             done.Call()

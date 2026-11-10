@@ -1,13 +1,13 @@
 
     InitCommandConfigs() {
         ; 指令名称：移动、移动Pro、增量移动（原游戏视角）
-        this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "倒计时", "注释", "抓图", "跳转"])
+        this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作", "变量", "变量提取",
+            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图"])
 
         this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png",
             "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\DeltaMove.png",
-            "Images\Soft\Input.png", "Images\Soft\Output.png",
+            "Images\Soft\Input.png", "Images\Soft\Output.png", "Images\Soft\Prompt.png",
             "Images\Soft\Loop.png", "Images\Soft\MacroAction.png",
             "Images\Soft\Var.png", "Images\Soft\Extract.png",
             "Images\Soft\If.png", "Images\Soft\IfPro.png",
@@ -17,7 +17,7 @@
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
             "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjustGear32.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
             "Images\Soft\Wait.png",
-            "Images\Soft\Interval.png", "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\FlowJump.png"]
+            "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\FlowJump.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("手柄"), "Icon38", GetLang("搜索"), "Icon3",
         GetLang("搜索Pro"), "Icon4", GetLang("搜索All"), "IconSearchAll", GetLang("搜索Combo"), "Icon39", GetLang("移动"), "Icon5", GetLang("移动Pro"), "Icon6", GetLang("增量移动"), "Icon34", GetLang("输出"), "Icon7",
@@ -27,7 +27,7 @@
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
         GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27", GetLang("Excel"), "Icon41", GetLang("网络请求"), "IconHttpRequest",
         GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("窗口信息"), "Icon29", GetLang("调整窗口"), "IconWindowAdjust", GetLang("按键检测"), "Icon30", GetLang("手柄检测"), "Icon42", GetLang("跳转"), "Icon43", GetLang("流程跳转"), "Icon43", GetLang("注释"), "Icon31",
-        GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33", GetLang("等待确定"), "Icon36", GetLang("时间"), "Icon35", GetLang("倒计时"), "Icon37")
+        GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33", GetLang("等待确定"), "Icon36", GetLang("时间"), "Icon35", GetLang("倒计时"), "Icon37", GetLang("提示"), "IconPrompt")
 
         ; IconN → 图标文件（顺序与原 IL_Add 一致）
         this.IconFileByNumber := Map(
@@ -56,7 +56,7 @@
             "IconHttpRequest", "Images\Soft\HttpRequest.png",
             "Icon41", "Images\Soft\Excel.png",
             "Icon42", "Images\Soft\JoyListen.png",
-            "Icon43", "Images\Soft\FlowJump.png")
+            "Icon43", "Images\Soft\FlowJump.png", "IconPrompt", "Images\Soft\Prompt.png")
 
         ; 指令名 → 图标文件（XAML 树节点 Image.Source 用）
         this.CmdIconFileMap := Map()
@@ -80,6 +80,7 @@
             {class: DeltaMoveGui, name: "增量移动", icon: "Images\Soft\DeltaMove.png", propName: "DeltaMoveGui"},
             {class: InputGui, name: "输入", icon: "Images\Soft\Input.png", propName: "InputGui"},
             {class: OutputGui, name: "输出", icon: "Images\Soft\Output.png", propName: "OutputGui"},
+            {class: PromptGui, name: "提示", icon: "Images\Soft\Prompt.png", propName: "PromptGui"},
             {class: LoopGui, name: "循环", icon: "Images\Soft\Loop.png", propName: "LoopGui"},
             {class: SubMacroGui, name: "宏操作", icon: "Images\Soft\MacroAction.png", propName: "SubMacroGui"},
             {class: VariableGui, name: "变量", icon: "Images\Soft\Var.png", propName: "VariableGui"},
@@ -104,8 +105,6 @@
             {class: JoyCheckGui, name: "手柄检测", icon: "Images\Soft\JoyListen.png", propName: "JoyCheckGui"},
             {class: WaitGui, name: "等待", icon: "Images\Soft\Wait.png", propName: "WaitGui"},
             {class: TimeGui, name: "时间", icon: "Images\Soft\Time.png", propName: "TimeGui"},
-            {class: CountDownGui, name: "倒计时", icon: "Images\Soft\Interval.png", propName: "CountDownGui"},
-            {class: FlowJumpGui, name: "跳转", icon: "Images\Soft\FlowJump.png", propName: "FlowJumpGui"},
             {class: CommentGui, name: "注释", icon: "Images\Soft\Comment.png", propName: "CommentGui"},
             {class: ScreenShotGui, name: "抓图", icon: "Images\Soft\ScreenShot.png", propName: "ScreenShotGui"}
         ]

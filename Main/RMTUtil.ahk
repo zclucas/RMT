@@ -1114,10 +1114,10 @@ CleanupAllMacroStates() {
     RecoverAllDirtyStates()
 }
 
-MsgBoxContent(content) {
+MsgBoxContent(content, title := "") {
     MainSoftData.MyGui.Flash()
     SoundPlay "*-1"
-    MyMsgboxGui.ShowGui(content)
+    MyMsgboxGui.ShowGui(content, title)
 }
 
 ViGJoySetState(JoyType, Key, Value) {

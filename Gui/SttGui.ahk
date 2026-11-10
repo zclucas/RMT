@@ -9,14 +9,14 @@
 ;   目录 models\stt_stream\ —— encoder/decoder/joiner + tokens.txt + bpe.model
 ;   chunk 档位 160/480/960/1920ms，见 SttGui.StreamPkg（默认 480ms）
 ; 见 Main\Util\SttUtil.ahk 的 SttEngine.Stream* 系列封装。
-; 模型缺失时提供「下载识别模型」按钮（按需下载，不进发布包）。
+; 模型缺失时，在工具页入口询问是否下载（按需下载，不进发布包）。
 ; 默认不置顶；窗口内提供「窗口置顶」可选框。
 ; =================================================================
 
 class SttGui {
     ; ---------- 单例入口 ----------
     static instances := Map()
-    static backgroundInstance := ""
+    static activeDownload := ""
 
     static _promptQueued := false
 
@@ -30,9 +30,14 @@ class SttGui {
             try Toast.Warning(GetLang("语音引擎未就绪"))
             return false
         }
+        if (IsObject(SttGui.activeDownload)) {
+            if (IsObject(SttGui.activeDownload.progress))
+                SetTimer(ObjBindMethod(SttGui.activeDownload.progress, "Show"), -1)
+            return false
+        }
         if (engine.IsStreamModelReady())
             return true
-        ; 离开语音按钮的点击回调再开确认框。在点击回调里同步开窗时，确认框可能出不来，用户只看得到右下角提示。
+        ; 离开语音按钮的点击回调再开确认框，避免在回调里同步开窗。
         if (SttGui._promptQueued)
             return false
         SttGui._promptQueued := true
@@ -43,7 +48,7 @@ class SttGui {
     static _PromptModelDownload(*) {
         try {
             engine := InitSttEngine()
-            if (!IsObject(engine) || engine.IsStreamModelReady())
+            if (!IsObject(engine) || engine.IsStreamModelReady() || IsObject(SttGui.activeDownload))
                 return
             choice := RmtDialog.Choose(GetLang("缺少语音识别模型，是否下载？"), GetLang("提示"), [GetLang("下载识别模型"), GetLang("取消")])
             if (choice != 1)
@@ -55,31 +60,20 @@ class SttGui {
     }
 
     static _BeginModelDownload() {
-        inst := ""
-        if (SttGui.instances.Has("global"))
-            inst := SttGui.instances["global"]
-        if (!IsObject(inst) || (inst.downloadState != "" && inst.downloadState != "err")) {
-            if (!IsObject(SttGui.backgroundInstance) || SttGui.backgroundInstance.downloadState == "")
-                SttGui.backgroundInstance := SttGui()
-            inst := SttGui.backgroundInstance
-        }
-        if (inst.downloadState == "dl" || inst.downloadState == "ex")
+        if (IsObject(SttGui.activeDownload))
             return true
-        inst._downloadStandalone := !inst.hasGui
-        inst.OnDownloadClick()
-        if (inst.downloadState == "dl" || inst.downloadState == "ex") {
-            SetTimer(inst.timerFunc, 100)
-            Toast.Progress(GetLang("模型下载中…"))
-            return true
-        }
-        Toast.Error(GetLang("模型下载启动失败，请稍后重试"))
-        return false
+        inst := SttGui.instances.Has("global") ? SttGui.instances["global"] : SttGui()
+        inst._StartModelDownload()
+        return inst.downloadState == "dl" || inst.downloadState == "ex"
     }
 
     ; 流式模型包（chunksize 越大越准、延迟越高：160ms / 480ms / 960ms / 1920ms）
     static StreamPkg := "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
 
     static ShowGui() {
+        if (!SttGui.RequestModelDownload())
+            return
+
         key := "global"
         if (SttGui.instances.Has(key)) {
             inst := SttGui.instances[key]
@@ -109,14 +103,14 @@ class SttGui {
         ; 下载流程状态："" 无 / "dl" 下载中 / "ex" 解压中 / "err" 失败
         this.downloadState := ""
         this.dlQueue := []             ; 待下载模型队列
-        this.dlTotal := 0
         this.dlPid := 0
         this.dlTar := ""
+        this.dlBytes := 0
+        this.dlExpectedBytes := 0
         this.dlDir := ""
         this.dlSpec := ""              ; 当前模型规格（Map）
-        this.dlCur := ""               ; 当前正在下载的模型说明
-        this._lastDownloadToast := 0
-        this._downloadStandalone := false
+        this.progress := ""
+        this._lastProgressTick := 0
         this._topOn := false
         this.timerFunc := ObjBindMethod(this, "OnTimer")
         this.preloadFunc := ObjBindMethod(this, "OnPreload")
@@ -151,7 +145,6 @@ class SttGui {
         list := []
         if (!engine.IsStreamModelReady()) {
             list.Push(Map(
-                "label", GetLang("识别模型"),
                 "pkg", SttGui.StreamPkg,
                 "url", "https://gh-proxy.org/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" SttGui.StreamPkg ".tar.bz2",
                 "dir", engine.StreamModelDir,
@@ -176,11 +169,10 @@ class SttGui {
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("12,10")
-        ; 行2（下载模型按钮）用 Auto：默认 Collapsed 时不占位
-        body.Rows("26", "40", "Auto", "Auto", "*", "Auto")
+        body.Rows("26", "40", "Auto", "*", "Auto")
 
         ; 状态行
-        body.Add("TextBlock").Grid_Row(0).Name("TxtStatus").Text("").Foreground("{DynamicResource TextSub}")
+        body.Add("TextBlock").Grid_Row(0).Name("TxtStatus").Text("").Foreground("{DynamicResource TextMain}")
             .VerticalAlignment("Center").TextTrimming("CharacterEllipsis")
 
         ; 按钮行（置顶开关靠右）
@@ -193,22 +185,18 @@ class SttGui {
         btnRow.Add("CheckBox").Grid_Column(5).Name("TopCon").Content(GetLang("窗口置顶"))
             .VerticalAlignment("Center").Margin("0,0,0,0").Foreground("{DynamicResource TextMain}")
 
-        ; 模型缺失时的下载按钮（默认隐藏）
-        body.Add("Button").Grid_Row(2).Name("BtnDownload").Content(GetLang("下载识别模型"))
-            .Width(180).Height(32).MinHeight(32).HorizontalAlignment("Left").Margin("0,4,0,4").Visibility("Collapsed")
-
         ; 结果标题
-        body.Add("TextBlock").Grid_Row(3).Text(GetLang("识别结果：")).Margin("0,8,0,4").VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(2).Text(GetLang("识别结果：")).Margin("0,8,0,4").VerticalAlignment("Center")
 
         ; 结果编辑框（只读，可全选复制）
-        body.Add("TextBox").Grid_Row(4).Name("EdResult").TextWrapping("Wrap").IsReadOnly("True")
+        body.Add("TextBox").Grid_Row(3).Name("EdResult").TextWrapping("Wrap").IsReadOnly("True")
             .VerticalContentAlignment("Top").Margin("0,0,0,4")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
 
         ; 提示文案
-        body.Add("TextBlock").Grid_Row(5).Text(GetLang("边说边出字，全部本地运行，不联网。支持中英文混合。"))
+        body.Add("TextBlock").Grid_Row(4).Text(GetLang("边说边出字，全部本地运行，不联网。支持中英文混合。"))
             .Foreground("{DynamicResource TextSub}").TextWrapping("Wrap").Margin("0,2,0,0")
 
         ; === 创建 XAMLHost ===
@@ -227,7 +215,6 @@ class SttGui {
         this.ui.OnEvent("BtnStop", "Click", ObjBindMethod(this, "OnStopClick"))
         this.ui.OnEvent("BtnCopy", "Click", ObjBindMethod(this, "OnCopyClick"))
         this.ui.OnEvent("BtnClear", "Click", ObjBindMethod(this, "OnClearClick"))
-        this.ui.OnEvent("BtnDownload", "Click", ObjBindMethod(this, "OnDownloadClick"))
         this.ui.OnEvent("TopCon", "Checked", ObjBindMethod(this, "OnTogTop"))
         this.ui.OnEvent("TopCon", "Unchecked", ObjBindMethod(this, "OnTogTop"))
 
@@ -279,50 +266,63 @@ class SttGui {
         engine := InitSttEngine()
         dllOk := engine.IsDllReady()
         streamOk := engine.IsStreamModelReady()
-        canStart := streamOk && !this.recording && !this.finalizing
-            && !this.loading && this.downloadState == ""
-
-        ; 下载按钮：模型缺失就显示（DLL 缺失时不给下载，需重装插件）
-        this.ui.Update("BtnDownload", "Visibility", (dllOk && !streamOk) ? "Visible" : "Collapsed")
+        canStart := dllOk && streamOk && !this.recording && !this.finalizing && !this.loading
 
         if (this.loading) {
             status := GetLang("模型正在加载…")
-            this.ui.Update("BtnDownload", "IsEnabled", "False")
         } else if (this.downloadState == "dl") {
-            status := GetLang("模型下载中，请稍候") "（" this.dlCur "）……"
-            this.ui.Update("BtnDownload", "IsEnabled", "False")
+            status := GetLang("模型下载中，请稍候")
         } else if (this.downloadState == "ex") {
             status := GetLang("模型解压中……")
-            this.ui.Update("BtnDownload", "IsEnabled", "False")
         } else if (this.recording) {
             status := GetLang("正在聆听…")
-            this.ui.Update("BtnDownload", "IsEnabled", "True")
         } else if (this.finalizing) {
             status := GetLang("识别中……")
-            this.ui.Update("BtnDownload", "IsEnabled", "True")
         } else if (this.downloadState == "err") {
             status := GetLang("模型下载失败，请检查网络后重试")
-            this.ui.Update("BtnDownload", "IsEnabled", "True")
         } else if (!dllOk) {
             status := GetLang("语音插件未安装（缺少 VoiceDll.dll）")
         } else if (!streamOk) {
             status := GetLang("识别模型未就绪，请先下载模型")
-            this.ui.Update("BtnDownload", "IsEnabled", "True")
         } else if (!engine.streamLoaded) {
             status := GetLang("就绪（模型预热中）")
-            this.ui.Update("BtnDownload", "IsEnabled", "True")
         } else {
             status := GetLang("就绪（流式模型已加载）")
-            this.ui.Update("BtnDownload", "IsEnabled", "True")
         }
         this.ui.Update("TxtStatus", "Text", status)
-        this.ui.Update("BtnStart", "IsEnabled", (canStart && dllOk) ? "True" : "False")
+        this.ui.Update("BtnStart", "IsEnabled", canStart ? "True" : "False")
         this.ui.Update("BtnStop", "IsEnabled", this.recording ? "True" : "False")
     }
 
     _FormatElapsed() {
         sec := Floor((A_TickCount - this.recordStartTick) / 1000)
         return Format("{:02d}:{:02d}", Floor(sec / 60), Mod(sec, 60))
+    }
+
+    _DownloadPercent() => Min(100, Floor(100 * this.dlBytes / this.dlExpectedBytes))
+
+    _DownloadProgressText() {
+        status := GetLang("模型下载中，请稍候") "  " Format("{:.1f}", this.dlBytes / 1000000)
+        if (this.dlExpectedBytes > 0)
+            status .= Format(" / {:.1f} MB", this.dlExpectedBytes / 1000000)
+        else
+            status .= " MB"
+        return status
+    }
+
+    _UpdateDownloadProgress() {
+        this._lastProgressTick := A_TickCount
+        ; 只读取最终下载响应的长度，跳过重定向头。无长度时仍显示已下载量。
+        if (!this.dlExpectedBytes) {
+            try {
+                headers := FileRead(this.dlTar ".headers", "UTF-8")
+                if (RegExMatch(headers, "m)^HTTP/\S+ 200[^\r\n]*\R((?:[^\r\n]+\R)*)\R", &response)
+                    && RegExMatch(response[1], "im)^Content-Length:[ \t]*(\d+)", &length))
+                    this.dlExpectedBytes := Integer(length[1])
+            }
+        }
+        try this.dlBytes := FileGetSize(this.dlTar)
+        this.progress.Report(this._DownloadProgressText(), this.dlExpectedBytes > 0 ? this._DownloadPercent() : "")
     }
 
     ; ---------- 定时器：实时上屏 + 收尾轮询 + 下载进度 ----------
@@ -332,6 +332,7 @@ class SttGui {
             oldState := this.downloadState
             if (!ProcessExist(this.dlPid)) {
                 if (this.downloadState == "dl") {
+                    try FileDelete(this.dlTar ".headers")
                     if (this._StartExtract())
                         this.downloadState := "ex"
                     else
@@ -344,29 +345,27 @@ class SttGui {
                             this.downloadState := "err"
                     } else {
                         this.downloadState := ""
-                        this.dlCur := ""
                     }
                 }
             }
-            this._RefreshUi()
-            if (this.downloadState == "dl" && (A_TickCount - this._lastDownloadToast) >= 500) {
-                this._lastDownloadToast := A_TickCount
-                mb := FileExist(this.dlTar) ? Round(FileGetSize(this.dlTar) / 1024 / 1024, 1) : 0
-                Toast.Progress(GetLang("模型下载中…") " " mb " MB")
-            } else if (this.downloadState == "ex" && oldState != "ex")
-                Toast.Progress(GetLang("模型解压中…"))
-            if (oldState != this.downloadState && this.downloadState == "") {
-                Toast.Success(GetLang("语音识别模型下载成功"))
-                if (this._downloadStandalone) {
-                    SetTimer(this.timerFunc, 0)
-                    SttGui.backgroundInstance := ""
+            if (this.downloadState == "dl") {
+                if (oldState != "dl" || A_TickCount - this._lastProgressTick >= 500)
+                    this._UpdateDownloadProgress()
+            } else if (oldState != this.downloadState) {
+                this._RefreshUi()
+                if (this.downloadState == "ex") {
+                    this.progress.Report(GetLang("模型解压中……"))
+                    return
                 }
-            } else if (oldState != this.downloadState && this.downloadState == "err") {
-                Toast.Error(GetLang("语音识别模型下载失败，请检查网络后重试"))
-                if (this._downloadStandalone) {
+                SttGui.activeDownload := ""
+                this.progress.Close()
+                this.progress := ""
+                if (!this.hasGui)
                     SetTimer(this.timerFunc, 0)
-                    SttGui.backgroundInstance := ""
-                }
+                if (this.downloadState == "")
+                    Toast.Success(GetLang("语音识别模型下载成功"))
+                else
+                    Toast.Error(GetLang("模型下载失败，请检查网络后重试"))
             }
             return
         }
@@ -469,7 +468,6 @@ class SttGui {
             return
 
         if (!engine.IsStreamReady()) {
-            SttGui.RequestModelDownload()
             this._RefreshUi()
             return
         }
@@ -535,26 +533,36 @@ class SttGui {
     }
 
     ; ---------- 模型按需下载（curl + tar，异步 Run + 进程轮询，支持多模型排队） ----------
-    OnDownloadClick(state := "", ctrl := "", event := "") {
-        if (this.downloadState == "dl" || this.downloadState == "ex")
+    _StartModelDownload() {
+        if (IsObject(SttGui.activeDownload))
             return
         this.dlQueue := this._MissingModels()
-        this.dlTotal := this.dlQueue.Length
-        if (!this.dlTotal)
+        if (!this.dlQueue.Length)
             return
-        if (!this._StartNextDownload())
+        if (!this._StartNextDownload()) {
             this.downloadState := "err"
+            this._RefreshUi()
+            Toast.Error(GetLang("模型下载启动失败，请稍后重试"))
+            return
+        }
+        SttGui.activeDownload := this
+        this.progress := RmtProgress(GetLang("下载识别模型"), GetLang("模型下载中，请稍候"))
+        SetTimer(this.timerFunc, 0)
+        this.progress.Show()
         this._RefreshUi()
+        this._UpdateDownloadProgress()
+        SetTimer(this.timerFunc, 100)
     }
 
     _StartNextDownload() {
         if (!this.dlQueue.Length)
             return false
         spec := this.dlQueue.RemoveAt(1)
-        idx := this.dlTotal - this.dlQueue.Length
-        this.dlCur := spec["label"] " (" idx "/" this.dlTotal ")"
+        this.dlBytes := 0
+        this.dlExpectedBytes := 0
         this.dlTar := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".tar.bz2"
-        cmd := Format('curl.exe -k --ssl-no-revoke -L --fail -s -S -o "{}" "{}"', this.dlTar, spec["url"])
+        cmd := Format('curl.exe -k --ssl-no-revoke -L --fail -s -S --suppress-connect-headers -D "{}" -o "{}" "{}"',
+            this.dlTar ".headers", this.dlTar, spec["url"])
         try {
             Run(cmd, A_Temp, "Hide", &pid)
             this.dlPid := pid
@@ -610,7 +618,8 @@ class SttGui {
 
     ; ---------- 关闭 ----------
     _Cleanup() {
-        SetTimer(this.timerFunc, 0)
+        if (this != SttGui.activeDownload)
+            SetTimer(this.timerFunc, 0)
         SetTimer(this.preloadFunc, 0)
         engine := InitSttEngine()
         if (this.recording)
@@ -625,10 +634,7 @@ class SttGui {
     }
 
     OnClose(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
-            return
-        ui := this.ui
-        this._Cleanup()
-        try ui.Update("Window", "Close", "")
+        if (IsObject(this.ui))
+            try this.ui.Update("Window", "Close", "")
     }
 }

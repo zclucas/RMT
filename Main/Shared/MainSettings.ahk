@@ -314,6 +314,7 @@ InitDataFilePaths(rootDir) {
     global TimingFile := cfgDir "\TimingFile.toml"
     global RunFile := cfgDir "\RunFile.toml"
     global OutputFile := cfgDir "\OutputFile.toml"
+    global PromptFile := cfgDir "\PromptFile.toml"
     global VariableFile := cfgDir "\VariableFile.toml"
     global ExVariableFile := cfgDir "\ExVariableFile.toml"
     global TextOpsFile := cfgDir "\TextOpsFile.toml"

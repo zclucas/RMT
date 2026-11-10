@@ -195,8 +195,16 @@ Compat13_UpgradeDir(dir) {
         }
     }
     changed := Compat13_UpgradeLooseEnums(dir) || changed
-    ; 所有资源中的分支宏、循环体、图形节点也要更新；文本输出/路径/备注不可替换。
+    rewrite := (macro) => Compat13_Macro(macro, renames)
+    return Compat_RewriteMacroFiles(dir, rewrite, Compat13_RewriteBranches) || changed
+}
+
+; 只遍历宏表和指令资源里的宏字段，避免改写备注、提示正文和路径。
+Compat_RewriteMacroFiles(dir, rewriteMacro, rewriteBranches, beforeWrite := "", skipFile := "") {
+    changed := false
     loop files, dir "\*.toml" {
+        if (A_LoopFileName == skipFile)
+            continue
         path := A_LoopFileFullPath
         if (A_LoopFileName == "MacroFile.toml") {
             ; 通过 TomlUtil 保留 [[table]] 数组，不能使用 Cfg 的标量存储层写宏表。
@@ -207,8 +215,9 @@ Compat13_UpgradeDir(dir) {
                 if (!(fields is Map))
                     continue
                 for key, value in fields {
-                    if (TomlUtil_StripKey(key) == "Macro" || RegExMatch(TomlUtil_StripKey(key), "^[A-Za-z]+MacroArr\d+$")) {
-                        next := Compat13_Macro(value, renames)
+                    field := TomlUtil_StripKey(key)
+                    if (Type(value) == "String" && RegExMatch(field, "^(?:Macro|PreMacro|PostMacro|[A-Za-z]+MacroArr\d+)$")) {
+                        next := rewriteMacro.Call(value)
                         if (next != value) {
                             fields[key] := next
                             dirty := true
@@ -217,6 +226,8 @@ Compat13_UpgradeDir(dir) {
                 }
             }
             if (dirty) {
+                if (beforeWrite != "")
+                    beforeWrite.Call()
                 TomlUtil_Write(root, path)
                 CfgInvalidate(path)
                 changed := true
@@ -227,18 +238,20 @@ Compat13_UpgradeDir(dir) {
         dirty := false
         for section, fields in root {
             for key, value in fields {
+                if (Type(value) != "String")
+                    continue
                 data := CompatParseData(value)
                 if (!IsObject(data))
                     continue
-                Compat13_RewriteBranches(data, renames)
-                next := JSON.stringify(data, 0)
-                if (next != value) {
-                    fields[key] := next
+                if (rewriteBranches.Call(data, rewriteMacro)) {
+                    fields[key] := JSON.stringify(data, 0)
                     dirty := true
                 }
             }
         }
         if (dirty) {
+            if (beforeWrite != "")
+                beforeWrite.Call()
             Cfg_WriteRoot(root, path)
             changed := true
         }
@@ -274,15 +287,36 @@ Compat13_UpgradeLooseEnums(dir) {
     return changed
 }
 
-Compat13_RewriteBranches(data, renames) {
-    for field in ["TrueMacro", "FalseMacro", "DefaultMacro", "LoopBody", "CurCMD"] {
-        if (data.HasOwnProp(field))
-            data.%field% := Compat13_Macro(data.%field%, renames)
+Compat13_RewriteBranches(data, rewrite) {
+    return Compat_RewriteMacroFields(data, rewrite,
+        ["TrueMacro", "FalseMacro", "DefaultMacro", "LoopBody", "CurCMD"], ["MacroArr"])
+}
+
+Compat_RewriteMacroFields(data, rewrite, fields, arrays) {
+    changed := false
+    for field in fields {
+        if (!data.HasOwnProp(field) || Type(data.%field%) != "String")
+            continue
+        next := rewrite.Call(data.%field%)
+        if (next != data.%field%) {
+            data.%field% := next
+            changed := true
+        }
     }
-    if (data.HasOwnProp("MacroArr") && data.MacroArr is Array) {
-        for i, macro in data.MacroArr
-            data.MacroArr[i] := Compat13_Macro(macro, renames)
+    for field in arrays {
+        if (!data.HasOwnProp(field) || !(data.%field% is Array))
+            continue
+        for index, value in data.%field% {
+            if (Type(value) != "String")
+                continue
+            next := rewrite.Call(value)
+            if (next != value) {
+                data.%field%[index] := next
+                changed := true
+            }
+        }
     }
+    return changed
 }
 
 Compat13_Macro(macro, renames) {

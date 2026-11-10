@@ -240,11 +240,11 @@ EnsureTableHasFold(tableItem) {
 }
 
 ; ============================================================
-; 路径身份分配（纯自增不复用）：模块 = tableID.Module{max+1}；宏 = foldSeg.Macro{max+1}
-; 序号自增不复用：取现有同层最大序号 + 1，基于内存现有对象扫描（首次生成时磁盘无数据，不能枚举磁盘）。
+; 路径身份分配：模块 = tableID.Module{max+1}；宏 = foldSeg.Macro{max+1}。
+; 已删除但仍被宏操作引用的路径也参与分配，防止新宏接管旧引用。
 ; ============================================================
 NewModulePath(tableItem) {
-    max := 0
+    max := tableItem.PathCounters.Get(tableItem.ID, 0)
     for fold in tableItem.Folds {
         n := SegTailNum(fold.ID, "Module")
         if (n > max)
@@ -257,11 +257,19 @@ NewModulePath(tableItem) {
         if (n > max)
             max := n
     }
-    return tableItem.ID "." "Module" (max + 1)
+    for id in ReferencedMacroPaths(tableItem) {
+        parent := SubStr(id, 1, InStr(id, ".", , , -1) - 1)
+        n := SegTailNum(parent, "Module")
+        if (n > max)
+            max := n
+    }
+    id := tableItem.ID ".Module" (max + 1)
+    tableItem.RememberPath(id)
+    return id
 }
 
 NewMacroPath(tableItem, foldSeg) {
-    max := 0
+    max := tableItem.PathCounters.Get(foldSeg, 0)
     for item in tableItem.Items {
         if (SubStr(item.ID, 1, InStr(item.ID, ".", , , -1) - 1) != foldSeg)
             continue
@@ -269,7 +277,31 @@ NewMacroPath(tableItem, foldSeg) {
         if (n > max)
             max := n
     }
-    return foldSeg "." "Macro" (max + 1)
+    for id in ReferencedMacroPaths(tableItem) {
+        if (SubStr(id, 1, InStr(id, ".", , , -1) - 1) != foldSeg)
+            continue
+        n := SegTailNum(id, "Macro")
+        if (n > max)
+            max := n
+    }
+    id := foldSeg ".Macro" (max + 1)
+    tableItem.RememberPath(id)
+    return id
+}
+
+ReferencedMacroPaths(tableItem) {
+    global SubMacroFile, SettingSection
+    paths := []
+    if (!IsSet(SubMacroFile))
+        return paths
+    prefix := tableItem.ID "."
+    for _, raw in CfgSection(SubMacroFile, SettingSection) {
+        data := CompatParseData(raw)
+        if (IsObject(data) && data.HasOwnProp("MacroSerial") && Type(data.MacroSerial) == "String"
+            && SubStr(data.MacroSerial, 1, StrLen(prefix)) == prefix)
+            paths.Push(data.MacroSerial)
+    }
+    return paths
 }
 
 ; 解析段名尾节的序号（Normal.Module3 → 3），前缀不匹配或非纯数字返回 0
@@ -303,6 +335,18 @@ ReadTableItemInfoNew(tableItem, segID := "") {
     if (!TomlUtil_Valid(t))
         return
     tableSeg := TomlUtil_Table(t, tableID)
+    rawCounters := TomlUtil_Str(tableSeg, "PathCounters", "")
+    if (rawCounters != "") {
+        try {
+            counters := JSON.parse(rawCounters, true)
+            if (counters is Map) {
+                for parent, count in counters {
+                    if (IsInteger(count) && count > tableItem.PathCounters.Get(parent, 0))
+                        tableItem.PathCounters[parent] := Integer(count)
+                }
+            }
+        }
+    }
     foldSegmentOrder := TomlUtil_List(tableSeg, "ModuleOrder")
     foldSegs := EnumerateDottedSubSegments(tableID)   ; root 键前缀枚举（存在性确认）
     for foldRef in foldSegmentOrder {
@@ -685,6 +729,7 @@ SaveTableItemInfoTomlCore(root, tableItem) {
     }
     tableSeg := Map()
     tableSeg["ModuleOrder"] := moduleOrder
+    tableSeg["PathCounters"] := JSON.stringify(tableItem.PathCounters, 0)
     root[tableID] := tableSeg
 
     ; ---- 模块段 + 宏段（含点路径身份键，TomlWriter 自动加引号） ----
