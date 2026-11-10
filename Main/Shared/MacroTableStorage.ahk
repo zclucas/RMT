@@ -18,8 +18,7 @@ BuildTableItemListFromToml(tables) {
 
 ; ============================================================
 ; 加载当前配置方案的所有表（动态表集合）
-; 新格式：[Tables] 段 List=TableID|Symbol|Name|Order 用 π 分隔
-; 旧格式：无 [Tables] 段 → 使用默认 13 表定义（每条目按旧格式迁移）
+; 使用 TOML 的 [[table]] 顺序。没有集合时按默认表结构恢复。
 ; ============================================================
 LoadCurMacroSetting() {
     global MySoftData, MacroFileSeedDefaults
@@ -42,15 +41,22 @@ LoadCurMacroSetting() {
             MySoftData.TableInfo := BuildTableItemListFromToml(tables)
             RebuildTableLocator()
         } else {
-            CreateTableItemArr()
+            CreateTableItemArr(!MacroFileSeedDefaults && !HasThreeLevelData("Gesture"))
             migrated := true
         }
     } else {
-        CreateTableItemArr()
+        CreateTableItemArr(!MacroFileSeedDefaults)
         migrated := true
     }
-    ; §23 旧配置兼容：自动补建「网络宏」表（无则插 Replace 之后）。只补内存，不落盘。
-    if (EnsureNetworkTable())
+    ; 旧配置按页签 ID 保留当前选中项，再补建缺失的内置宏表。
+    if (MainSoftData.CurTableID == "" && IsInteger(MainSoftData.TableIndex)
+        && MainSoftData.TableIndex >= 1 && MySoftData.TableInfo.Has(MainSoftData.TableIndex))
+        MainSoftData.CurTableID := MySoftData.TableInfo[MainSoftData.TableIndex].ID
+    if (EnsureBuiltInMacroTable("Network", "网络宏", "Replace")) {
+        RMTLogSysInfo("网络触发", "旧配置迁移：已自动补建「网络宏」表（插在按键替换之后）")
+        migrated := true
+    }
+    if (EnsureBuiltInMacroTable("Gesture", "手势宏", "String"))
         migrated := true
     for tableItem in MySoftData.TableInfo {
         if (ReadTableItemInfo(tableItem))
@@ -864,26 +870,30 @@ SaveTableCollection() {
 ;Table信息相关
 ; 默认表定义（新体系：动态表集合的初始骨架）
 ; 每项 [Symbol, 显示名(语言键), 顺序]
-CreateDefaultTableDefs() {
-    return [
+MacroCategoryDefs() {
+    static defs := [
         ["Normal", "按键宏", 1],
         ["String", "字串宏", 2],
-        ["Menu", "菜单宏", 3],
-        ["UI", "界面宏", 4],
-        ["Voice", "语音宏", 5],
-        ["Timing", "定时宏", 6],
-        ["SubMacro", "宏", 7],
-        ["Replace", "按键替换", 8],
-        ["Network", "网络宏", 9],
-        ["Tool", "工具", 10],
-        ["Setting", "设置", 11],
-        ["Help", "帮助", 12],
-        ["Reward", "支持我们", 13],
-        ["Thank", "特别感谢", 14]
+        ["Gesture", "手势宏", 3],
+        ["Menu", "菜单宏", 4],
+        ["UI", "界面宏", 5],
+        ["Voice", "语音宏", 6],
+        ["Timing", "定时宏", 7],
+        ["SubMacro", "宏", 8],
+        ["Replace", "按键替换", 9],
+        ["Network", "网络宏", 10]
     ]
+    return defs
 }
 
-; §10 显示页签：8 个宏表按 MainSoftData.TabVisibleMap 显隐（隐藏仅显示效果，不影响触发）；
+CreateDefaultTableDefs() {
+    defs := MacroCategoryDefs().Clone()
+    for entry in [["Tool", "工具"], ["Setting", "设置"], ["Help", "帮助"], ["Reward", "支持我们"], ["Thank", "特别感谢"]]
+        defs.Push([entry[1], entry[2], defs.Length + 1])
+    return defs
+}
+
+; 宏相关页签按 MainSoftData.TabVisibleMap 显隐（隐藏不影响触发）；
 ; 非配置表（Tool/Setting/Help/Reward/Thank）恒显示
 IsTabVisible(tableItem) {
     symbol := tableItem.Symbol
@@ -909,16 +919,18 @@ IsMoveProCmd(t) {
 }
 IsDeltaMoveCmd(t) => GetLangKey(t) == "增量移动"
 
-CreateTableItemArr() {
+CreateTableItemArr(legacyOrder := false) {
     global MySoftData
     Arr := []
     defs := CreateDefaultTableDefs()
     for def in defs {
+        if (legacyOrder && def[1] == "Gesture")
+            continue
         t := TableItem()
         t.ID := def[1]      ; 表身份固定 = 表类型 Symbol（Normal/String/...），不用动态 t_xxx → 重启不漂移，段名固定
         t.Symbol := def[1]
         t.Name := def[2]
-        t.Order := def[3]
+        t.Order := Arr.Length + 1
         Arr.Push(t)
     }
     MySoftData.TableInfo := Arr
@@ -926,38 +938,40 @@ CreateTableItemArr() {
     return Arr
 }
 
-; ============================================================
-; §23 网络触发：老配置无损迁移（PRD P0-3）
-; 表集合加载后调用：无 Symbol=="Network" 的表时，插入到按键替换(Replace)之后、
-; 工具(Tool)等页签之前，后续表 Order 顺延，并调用既有表集合落盘函数写回
-; （条目数据无损、用户无需重置配置；Tool..Thank 页签 Order +1 属可接受表象性变化）
-; 注意：本函数内不得使用名为 tableItem 的变量（AHK 大小写不敏感会遮蔽 TableItem 类，见 LoadCurMacroSetting 注释）
-; ============================================================
-EnsureNetworkTable() {
+; 为旧配置补建新增的内置宏表，保留已有页签的相对顺序和身份。
+EnsureBuiltInMacroTable(symbol, name, afterSymbol) {
     global MySoftData
     for tbl in MySoftData.TableInfo {
-        if (tbl.Symbol == "Network")
+        if (tbl.Symbol == symbol)
             return false
     }
     insertIdx := 0
     loop MySoftData.TableInfo.Length {
-        if (MySoftData.TableInfo[A_Index].Symbol == "Replace") {
+        if (MySoftData.TableInfo[A_Index].Symbol == afterSymbol) {
             insertIdx := A_Index + 1
             break
         }
     }
-    if (insertIdx == 0)
+    if (insertIdx == 0) {
         insertIdx := MySoftData.TableInfo.Length + 1
+        for i, tbl in MySoftData.TableInfo {
+            if (IsStaticTable(tbl)) {
+                insertIdx := i
+                break
+            }
+        }
+    }
     t := TableItem()
-    t.Symbol := "Network"
-    t.ID := "Network"       ;表身份恒 = Symbol（与 Normal/String/Timing 并列）
-    t.Name := "网络宏"      ;存语言键原文（页签渲染时统一 GetLang，与其他表一致）
+    t.Symbol := symbol
+    t.ID := symbol
+    while (GetTableByID(t.ID))
+        t.ID := symbol "_" (A_Index + 1)
+    t.Name := name
     t.Order := insertIdx
     MySoftData.TableInfo.InsertAt(insertIdx, t)
-    ; 整体归一化 Order 为 1..N（Network 插入位次即顺序，后续表自然顺延）
+    ; 整体归一化 Order 为 1..N。
     loop MySoftData.TableInfo.Length
         MySoftData.TableInfo[A_Index].Order := A_Index
     RebuildTableLocator()
-    RMTLogSysInfo("网络触发", "旧配置迁移：已自动补建「网络宏」表（插在按键替换之后）")
     return true
 }

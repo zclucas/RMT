@@ -1815,6 +1815,7 @@ class MsgType {
     static TASK := 1    ;主线程 派发任务给 Worker
     static FINISH := 2  ;Worker 告知 主线程 任务结束
     static EVENT := 3   ;双向广播事件 例如Worker修改变量值后 告知主线程 主线程收到后 广播所有人
+    static READY := 4   ;Worker 通过私有通道报告就绪及窗口句柄
 }
 
 class MacroGraphNode{

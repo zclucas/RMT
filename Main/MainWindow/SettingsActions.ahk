@@ -44,8 +44,8 @@
 
     _InitSettingModuleSpecs() {
         tabFields := []
-        for sym in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace", "Network"]
-            tabFields.Push({key: sym, def: true, ctrl: "TabVisible_" sym, kind: "tab"})
+        for def in MacroCategoryDefs()
+            tabFields.Push({key: def[1], def: true, ctrl: "TabVisible_" def[1], kind: "tab"})
         this._setMods := [
             {id: "soft", fields: [{key: "IsBootStart", def: false, ctrl: "ChkBootStart", kind: "chk", hook: "boot"}, {key: "IsAdminStart", def: false, ctrl: "ChkAdminStart", kind: "chk", hook: "admin"}, {key: "IsDataReport", def: true, ctrl: "ChkDataReport", kind: "chk"}, {key: "Lang", def: "中文", ctrl: "CmbLang", kind: "cmbText"}, {key: "PreferredMacroEditor", def: 1, ctrl: "CmbPreferredEditor", kind: "cmb"}, {key: "IsModalSubGui", def: true, ctrl: "ChkModalSubGui", kind: "chk"}]},
             {id: "general", fields: [{key: "OCRTypeValue", def: 1, ctrl: "CmbOCRType", kind: "cmb"}, {key: "ExcelBackend", def: 1, ctrl: "CmbExcelBackend", kind: "cmb"}, {key: "ScreenShotType", def: 3, ctrl: "CmbScreenShot", kind: "cmb"}, {key: "SearchImageType", def: 1, ctrl: "CmbSearchImage", kind: "cmb"}, {key: "SearchImageAdaptive", def: false, ctrl: "ChkSearchImageAdaptive", kind: "chk"}, {key: "MutiThreadNum", def: -1, ctrl: "EditMutiThreadNum", kind: "num"}, {key: "NetworkPort", def: 16888, ctrl: "EditNetPort", kind: "num"}, {key: "RemarkAutoType", def: 2, ctrl: "CmbRemarkAuto", kind: "cmb"}]},

@@ -20,10 +20,9 @@ global MyChineseOcr := 0  ; 懒加载：首次使用时才初始化
 global MyEnglishOcr := 0   ; 懒加载：首次使用时才初始化
 global MyPToken := Gdip_Startup()
 
-; 主进程输入弹窗（输入框/按钮条）回传结果缓存：OnEventMessage 收到 IPR/IBR 写入，WorkerInputRequest 读取
-global _workerInputResult := ""
 ; §17 热重载：主进程广播 CF 后待重载配置的标志（忙时置位，任务结束 finally 重载）
 global workerConfigDirty := false
+MySendWorkerEvent := SendWorkerEvent
 global MyStopMacro := WorkStopMacro
 global MyTriggerSubMacro := WorkTriggerSubMacro
 global MySubmitGraphBranches := WorkSubmitGraphBranches
@@ -32,7 +31,6 @@ global MyDelGlobalVariable := WorkDelGlobalVariable
 global MyCMDReportAciton := WorkCMDReport
 global MyCMDTipForceAction := WorkCmdTipForceShow
 global MyExcuteRMTCMDAction := WorkExcuteRMTCMDAction
-global MySetTableItemState := WorkSetTableItemState
 global MySetItemPauseState := WorkSetItemPauseState
 global MyCountDownStart := (token, total, x, y, detached) => MsgSendHandler("CountDown", "start", token, total, x, y, detached)
 global MyCountDownStop := (token) => MsgSendHandler("CountDown", "stop", token)

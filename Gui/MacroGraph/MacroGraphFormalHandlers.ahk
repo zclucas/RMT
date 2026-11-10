@@ -94,7 +94,7 @@ class MacroGraphFormalHandlersMixin {
                 if (!targets || macroType != data.MacroType || targets.Type != macroType || !targets.IDs.Has(idx))
                     return
                 targetID := targets.IDs[idx]
-                tableItem := GetTableBySymbol(CompatMacroTypeSymbol(macroType))
+                tableItem := GetMacroTypeTargetTable(macroType, targetID)
                 actualIndex := GetItemIndexInTable(tableItem, targetID)
                 if (!actualIndex || (data.MacroSerial == targetID && data.Index == actualIndex))
                     return

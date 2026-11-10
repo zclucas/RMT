@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+global MySendWorkerEvent := 0
 
 ; =====================================================================
 ; 输入 / 等待确定 统一通信（输入框/按钮条）：
@@ -37,27 +38,35 @@ InputResponseDeadline(timeoutMs, graceMs, item) {
 }
 
 WorkerInputRequest(opcode, timeoutMs, item, args*) {
-    global rx, workIndex, parentHwnd, _workerInputResult
-    if (!IsSet(rx) || !IsSet(parentHwnd))
-        return ""
-    cmd := EncodeCommand(opcode, args*)
-    payload := EncodeBatch(cmd)
-    _workerInputResult := ""
-    rx.Push(MsgType.EVENT, 0, payload)
-    PostMessage(WM_WORKER_TO_MASTER, workIndex, 0, , "ahk_id " parentHwnd)
+    global workerInputRequestState
+    static sequence := 0
+    request := {id: ++sequence, response: opcode == "IB" ? "IBR" : "IPR", result: ""}
+    workerInputRequestState := request
     deadline := InputResponseDeadline(timeoutMs, 2000, item)
-    loop {
-        Sleep(100)
-        if (IsObject(item) && item.Killed)
+    try {
+        if (!MySendWorkerEvent.Call(EncodeBatch(EncodeCommand(opcode, request.id, args*))))
             return ""
-        if (IsObject(_workerInputResult))
-            break
-        if (deadline && A_TickCount > deadline)
-            return ["timeout"]
+        loop {
+            Sleep(25)
+            if (IsObject(item) && item.Killed)
+                return ""
+            if (IsObject(request.result))
+                return request.result
+            if (deadline && A_TickCount > deadline)
+                return ["timeout"]
+        }
+    } finally {
+        workerInputRequestState := 0
+        if (!IsObject(request.result))
+            MySendWorkerEvent.Call(EncodeBatch(EncodeCommand("IC", request.id)))
     }
-    r := _workerInputResult
-    _workerInputResult := ""
-    return r
+}
+
+WorkerInputReply(opcode, id, args*) {
+    if (IsSet(workerInputRequestState) && workerInputRequestState
+        && workerInputRequestState.id == Integer(id) && workerInputRequestState.response == opcode
+        && !IsObject(workerInputRequestState.result))
+        workerInputRequestState.result := args
 }
 
 SplitInputReqArgs(args) {

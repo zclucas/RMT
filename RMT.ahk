@@ -20,7 +20,11 @@ if (!startupArgs.Length || !RmtCmdSame(startupArgs[1], "-min"))
     startupProgress.Show()
 try {
     InitFilePath()              ;初始化文件路径
-    if (LoadCurMacroSetting())  ;加载当前配置宏（只读；返回是否在内存里补全过旧格式）
+    migratedTables := LoadCurMacroSetting()
+    ; 先固化旧数字索引指向的页签 ID，再保存插入新页签后的顺序。
+    if (MainSoftData.CurTableID != "" && IsInteger(CfgRead(SettingFile, SettingSection, "TableIndex", "")))
+        CfgWrite(MainSoftData.CurTableID, SettingFile, SettingSection, "TableIndex")
+    if (migratedTables)
         SaveTableCollection()   ;主进程才落盘，Worker 不走这条
     HandleOpenArg()             ;处理打开软件的参数
     RegisterNativeComboWheelGuard()

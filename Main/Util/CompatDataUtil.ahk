@@ -275,8 +275,9 @@ CompatEnsureArrLength(tableItem) {
 
 ; 1.2.2 宏操作保存中文类型名；界面继续使用中文，执行/迁移统一解析为表 Symbol。
 CompatMacroTypeSymbol(macroType) {
-    static types := Map("按键宏", "Normal", "字串宏", "String", "菜单宏", "Menu",
-        "界面宏", "UI", "语音宏", "Voice", "定时宏", "Timing", "宏", "SubMacro",
-        "按键替换", "Replace", "网络宏", "Network")
-    return types.Has(macroType) ? types[macroType] : macroType
+    for def in MacroCategoryDefs() {
+        if (def[2] == macroType)
+            return def[1]
+    }
+    return macroType
 }

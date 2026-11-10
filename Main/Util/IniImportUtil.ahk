@@ -502,6 +502,7 @@ IniImport_ExpandFlatMacroFile(settingDir) {
         tblArr.Push(tb)
     }
     flatArr := []
+    hasGesture := false
     for tb in tblArr {
         if (IsStaticTable(tb))
             continue                        ; 工具/设置/帮助/赞助/感谢：无宏配置，不读不写
@@ -513,6 +514,8 @@ IniImport_ExpandFlatMacroFile(settingDir) {
             RMTLogSysInfo("配置导入", Format("  展开 {1} 耗时 {2}ms（{3} 条宏）", tb.ID, msTb, tb.Items.Length))
         EnsureTableHasFold(tb)
         flatArr.Push(tb)
+        if (tb.Symbol == "Gesture")
+            hasGesture := true
     }
     if (flatArr.Length == 0)
         return false
@@ -528,11 +531,22 @@ IniImport_ExpandFlatMacroFile(settingDir) {
         if (size > 0)
             throw Error("MacroFile 无法解析，已停止重建宏列表")
     }
+    if (TomlUtil_Tables(TomlUtil_Read(macroPath), "table").Length)
+        throw Error("MacroFile 同时包含旧列表与独立页签，已保留原文件")
+    for tb in flatArr {
+        for key in root {
+            if (key == tb.ID || InStr(key, tb.ID ".") == 1)
+                throw Error("MacroFile 的旧列表与三级宏段重复，已保留原文件：" tb.ID)
+        }
+    }
     bak := macroPath ".bak"
     try FileCopy(macroPath, bak, 1)
     tableArr := []
-    for tb in tblArr
-        tableArr.Push(Map("id", tb.ID, "symbol", tb.Symbol, "name", tb.Name, "order", tb.Order))
+    ; 数字页签索引要先在旧顺序中解析，主进程加载时再插入手势宏。
+    for tb in tblArr {
+        if (tb.Symbol != "Gesture" || hasGesture)
+            tableArr.Push(Map("id", tb.ID, "symbol", tb.Symbol, "name", tb.Name, "order", tableArr.Length + 1))
+    }
     root["table"] := tableArr
     ; 只写读到扁平数据的表：其余表（如旧版没有的语音宏/网络宏）不落段，也不种默认宏
     for tb in flatArr

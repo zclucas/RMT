@@ -110,6 +110,12 @@ GetItemTableGlobal(itemID) {
     return GetTableByID(MySoftData.GlobalItemMap[itemID].TableID)
 }
 
+; 宏操作目标使用稳定条目 ID，再核对类别，支持同类别的多个页签。
+GetMacroTypeTargetTable(macroType, itemID) {
+    tableItem := GetItemTableGlobal(itemID)
+    return tableItem && tableItem.Symbol == CompatMacroTypeSymbol(macroType) ? tableItem : ""
+}
+
 ; ===== 折叠框查询 API =====
 ; 按 TableID + FoldID 取折叠框对象（无则 ""）
 GetFoldByID(tableID, foldID) {

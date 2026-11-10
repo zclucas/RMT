@@ -186,17 +186,11 @@ LoadMainSetting() {
     MySoftData.WinPosY := CfgRead(SettingFile, SettingSection, "WinPosY", 0)
     MainSoftData.TableIndex := CfgRead(SettingFile, SettingSection, "TableIndex", 1)
     MainSoftData.CurTableID := IsNumber(MainSoftData.TableIndex) ? "" : MainSoftData.TableIndex
-    ; §10 显示页签：8 个宏表可见性（隐藏仅显示效果，不影响触发）；Tool/Setting/Help/Reward/Thank 恒显示
+    ; 宏相关页签可见性（隐藏不影响触发）；静态页签恒显示
     MainSoftData.TabVisibleMap := Map()
     rawTabVis := CfgRead(SettingFile, SettingSection, "TabVisible", "")
-    for def in CreateDefaultTableDefs() {
-        sym := def[1]
-        switch sym {
-            case "Tool", "Setting", "Help", "Reward", "Thank":
-                continue
-        }
-        MainSoftData.TabVisibleMap[sym] := true
-    }
+    for def in MacroCategoryDefs()
+        MainSoftData.TabVisibleMap[def[1]] := true
     if (rawTabVis != "") {
         for seg in StrSplit(rawTabVis, "π") {
             p := StrSplit(seg, "=")

@@ -45,11 +45,11 @@ class MergeUtil {
     ; 1.2+ 源配置有 UI 数据 → 正常导入到界面宏页签。无需单独版本分支。
     static GetMergeTabConfig() {
         tabs := []
-        for symbol in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Network", "Replace"] {
-            idx := GetTableIndex(symbol)
-            if (idx <= 0)
-                continue
-            tabs.Push({ Index: idx, Symbol: symbol, Name: MySoftData.TableInfo[idx].Name })
+        for def in MacroCategoryDefs() {
+            symbol := def[1]
+            tableItem := GetTableBySymbol(symbol)
+            if (tableItem)
+                tabs.Push({ Index: tableItem.Index, Symbol: symbol, Name: tableItem.Name })
         }
         return tabs
     }
@@ -246,17 +246,18 @@ class MergeUtil {
         if (!TomlUtil_Valid(t))
             return []
 
-        ; [[table]] 表集合中找 Symbol 对应的表（身份 = Symbol）
-        tableID := ""
+        modules := []
         for tbl in TomlUtil_Tables(t, "table") {
             if (TomlUtil_Str(tbl, "symbol", "") == symbol) {
                 tableID := TomlUtil_Str(tbl, "id", symbol)
-                break
+                for node in this._ParseMacroTableToml(t, tableID, tabIndex)
+                    modules.Push(node)
             }
         }
-        if (tableID == "")
-            return []
+        return modules
+    }
 
+    static _ParseMacroTableToml(t, tableID, tabIndex) {
         tableSeg := TomlUtil_Table(t, tableID)
         if (!TomlUtil_Valid(tableSeg))
             return []

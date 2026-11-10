@@ -146,14 +146,11 @@ class MacroGraphFormalMixin {
 
     _FormalSubMacroTargets(id, macroType, targetID) {
         items := [], ids := [], selected := -1
-        tableItem := GetTableBySymbol(CompatMacroTypeSymbol(macroType))
-        if (tableItem) {
-            for i, item in tableItem.Items {
-                items.Push(i ". " item.Remark)
-                ids.Push(item.ID)
-                if (item.ID == targetID)
-                    selected := i - 1
-            }
+        for i, item in SubMacroGui.Targets(macroType) {
+            items.Push(item.Label)
+            ids.Push(item.ID)
+            if (item.ID == targetID)
+                selected := i - 1
         }
         this._subMacroTargets[id] := {Type: macroType, IDs: ids}
         return {Items: items, Selected: selected}

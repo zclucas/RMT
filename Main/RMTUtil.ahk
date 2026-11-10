@@ -787,168 +787,95 @@ StopMacro(tableItem, itemIndex, playStopTip := false) {
 }
 
 ; Worker 多分支图形宏：接收 Worker 提交的分支节点列表，入队并分派，回复确认
-HandleWorkerGraphBranches(wd, tIdx, iIdx, branchCount, nodeArr) {
-    ; Worker 协议已 ID 化：tIdx=TableID, iIdx=ItemID（兼容旧数字下发：反查对象再取 ID）
-    tableItem := IsObject(tIdx) ? tIdx : GetTableByID(String(tIdx))
-    if (!tableItem) {
-        GraphPoolLog("图形分支-表不存在", Format("tab={1} item={2}", tIdx, iIdx))
-        return
-    }
-    tableID := tableItem.ID
-    itemID := IsObject(iIdx) ? iIdx.ID : (tableItem.GetItem(String(iIdx)) ? String(iIdx) : "")
-    item := tableItem.GetItem(itemID)
-    if (!item) {
-        GraphPoolLog("图形分支-条目不存在", Format("tab={1} item={2}", tableID, iIdx))
-        return
-    }
-    itemIndex := GetItemIndexInTable(tableItem, itemID)
-    if (branchCount > 0) {
-        ; fromStart：设置总分支数，清空旧队列，重置终止标记
-        MyWorkPool.DrainItemTaskQueue(tableID, itemID)
-        item.GraphBranchCount := branchCount
-        item.Killed := false
-        if (MyWorkPool.usePool.Has(wd.idx)) {
-            w := MyWorkPool.usePool[wd.idx]
-            w.isGraphBranch := true
-            w.tableID := tableID
-            w.itemID := itemID
+HandleWorkerGraphBranches(wd, tableID, itemID, nodeArr) {
+    previousCritical := A_IsCritical
+    Critical("On")
+    try {
+        if (wd.stopRequested || !wd.taskID || wd.tableID != tableID || wd.itemID != itemID)
+            return
+        tableItem := GetTableByID(tableID)
+        item := GetItemByIndex(tableItem, GetItemIndexInTable(tableItem, itemID))
+        if (!item || item.Killed || item.HasOwnProp("Stopping"))
+            return
+        wd.isGraphBranch := true
+        item.GraphBranchCount := Max(1, item.GraphBranchCount) + nodeArr.Length
+        for nodeSerial in nodeArr
+            MyWorkPool.taskQueue.Push({cmd: EncodeBatch(EncodeCommand("TR", tableID, itemID, nodeSerial))
+                , tableID: tableID, itemID: itemID, isGraphBranch: true})
+        ; 确认已入队即可，后续分支可在源 Worker 完成后复用该槽位。
+        MyWorkPool.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("GA", tableID, itemID)))
+    } finally Critical(previousCritical)
+    MyWorkPool.Dispatch()
+}
+
+SetGlobalArray(name, value) => CommitGlobalData("SA", [name, value])
+CloneGlobalArray(source, name) => SetGlobalArray(name, CloneArray(IsObject(source) ? source : MySoftData.ArrayMap[source]))
+DeleteGlobalArray(name) => CommitGlobalData("DA", [name])
+ModifyGlobalArray(name, row, index, isArrayValue, value) => CommitGlobalData("MA", [name, row, index, value])
+InsertGlobalArray(name, row, index, isArrayValue, value) => CommitGlobalData("IA", [name, row, index, value])
+RemoveAtGlobalArray(name, row, index) => CommitGlobalData("RA", [name, row, index])
+SetGlobalVariable(names, values, ignoreExist) => CommitGlobalData("SV", [names, values, ignoreExist])
+DelGlobalVariable(names) => CommitGlobalData("DV", [names])
+
+; 主进程为全局数据排序。提交后的权威值按相同顺序发给所有 Worker。
+CommitGlobalData(opcode, args) {
+    previousCritical := A_IsCritical
+    Critical("On")
+    try {
+        variables := MySoftData.VariableMap
+        arrays := MySoftData.ArrayMap
+        commands := []
+        switch opcode {
+            case "SV":
+                names := args[1]
+                values := args[2]
+                ignoreExist := args[3]
+                updates := []
+                for i, name in names {
+                    value := ignoreExist && variables.Has(name) ? variables[name] : values[i]
+                    commands.Push(EncodeCommand("SV", name, JSON.stringify([value])))
+                    updates.Push([name, value])
+                }
+                for pair in updates
+                    variables[pair[1]] := pair[2]
+            case "DV":
+                for name in args[1] {
+                    if (variables.Has(name))
+                        variables.Delete(name)
+                    commands.Push(EncodeCommand("DV", name))
+                }
+            case "DA":
+                if (arrays.Has(args[1]))
+                    arrays.Delete(args[1])
+                commands.Push(EncodeCommand("DA", args[1]))
+            case "SA", "MA", "IA", "RA":
+                name := args[1]
+                if (opcode == "SA") {
+                    root := args[2]
+                } else {
+                    root := CloneArray(arrays[name])
+                    target := args[2] == 0 ? root : root[Integer(args[2])]
+                    index := Integer(args[3])
+                    switch opcode {
+                        case "MA": target[index] := args[4]
+                        case "IA": target.InsertAt(index, args[4])
+                        case "RA": target.RemoveAt(index)
+                    }
+                }
+                commands.Push(EncodeCommand("SA", name, JSON.stringify([root])))
+                arrays[name] := root
+            default:
+                throw Error("Unknown global data operation")
         }
-    } else {
-        loop nodeArr.Length
-            item.GraphBranchCount++
-    }
-    ; 入队各分支任务
-    for nodeSerial in nodeArr
-        MyWorkPool.taskQueue.Push({ cmd: EncodeBatch(EncodeCommand("TR", tableID, itemID, nodeSerial)), tableID: tableID, itemID: itemID, isGraphBranch: true })
-    if (MyWorkPool.isDispatching)
-        MyWorkPool.dispatchPending := true
-    else
-        MyWorkPool.Dispatch()
-    ; 回复 Worker 确认，唤醒继续执行分支1
-    MyWorkPool.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("GA", tableID, itemID)))
+        if (commands.Length && WorkPoolEnabled())
+            MyWorkPool.BroadcastPayloadEx(0, EncodeBatch(commands*))
+    } finally Critical(previousCritical)
+    if (commands.Length)
+        SetTimer(RefreshGlobalDataView, -1)
 }
 
-GetArrayRefByPath(rootArr, path, &lastIdx) {
-    parts := StrSplit(path, ".")
-    curr := rootArr
-    if (parts.Length == 2 && parts[1] == "0") {
-        lastIdx := Integer(parts[2])
-        return rootArr
-    }
-    loop parts.Length - 1 {
-        idx := Integer(parts[A_Index])
-        curr := curr[idx]
-    }
-    lastIdx := Integer(parts[parts.Length])
-    return curr
-}
-
-SetGlobalArray(Name, Value, excludeIdx := 0) {
-    MySoftData.ArrayMap[Name] := Value
-    MyVarListenGui.Refresh()
-    ; 整串序列化，保留二维嵌套；旧协议按元素展开会把 [[a],[b]] 压成一维
-    MyWorkPool.BroadcastEx(excludeIdx, "SA", Name, GetArrayStr(Value))
-}
-
-CloneGlobalArray(Source, NewArrName, excludeIdx := 0) {
-    if (IsObject(Source)) {
-        ; 单线程：克隆指令直接把源数组对象传进来，克隆后按对象同一性反查源数组名
-        MySoftData.ArrayMap[NewArrName] := CloneArray(Source)
-        SourceName := ""
-        for name, arr in MySoftData.ArrayMap {
-            if (arr == Source && name != NewArrName) {
-                SourceName := name
-                break
-            }
-        }
-        if (SourceName == "")
-            SourceName := NewArrName
-    }
-    else {
-        ; 多线程：master 收到 worker 的 CloneArray 广播，Source 是数组名字符串
-        MySoftData.ArrayMap[NewArrName] := CloneArray(MySoftData.ArrayMap[Source])
-        SourceName := Source
-    }
-    MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "CA", SourceName, NewArrName)
-}
-
-DeleteGlobalArray(ArrName, excludeIdx := 0) {
-    MySoftData.ArrayMap.Delete(ArrName)
-    MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "DA", ArrName)
-}
-
-ModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value, excludeIdx := 0) {
-    path := MainIndex "." Index
-    rootArr := MySoftData.ArrayMap[ArrName]
-    currArr := GetArrayRefByPath(rootArr, path, &lastIdx)
-    currArr[lastIdx] := Value
-    MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "MA", ArrName, path, IsArrayValue ? GetArrayStr(Value) : Value)
-}
-
-InsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value, excludeIdx := 0) {
-    path := MainIndex "." Index
-    rootArr := MySoftData.ArrayMap[ArrName]
-    currArr := GetArrayRefByPath(rootArr, path, &lastIdx)
-    currArr.InsertAt(lastIdx, Value)
-    MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "IA", ArrName, path, IsArrayValue ? GetArrayStr(Value) : Value)
-}
-
-RemoveAtGlobalArray(ArrName, MainIndex, Index, excludeIdx := 0) {
-    path := MainIndex "." Index
-    rootArr := MySoftData.ArrayMap[ArrName]
-    currArr := GetArrayRefByPath(rootArr, path, &lastIdx)
-    currArr.RemoveAt(lastIdx)
-    MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastEx(excludeIdx, "RA", ArrName, path)
-}
-
-SetGlobalVariable(NameArr, ValueArr, ignoreExist, excludeIdx := 0) {
-    RealNameArr := NameArr.Clone()
-    RealValueArr := ValueArr.Clone()
-    if (ignoreExist) {
-        RealNameArr := []
-        RealValueArr := []
-        loop NameArr.Length {
-            if (!MySoftData.VariableMap.Has(NameArr[A_Index])) {
-                RealNameArr.Push(NameArr[A_Index])
-                RealValueArr.Push(ValueArr[A_Index])
-            }
-        }
-    }
-    if (RealNameArr.Length == 0)
-        return
-
-    commands := []
-    loop RealNameArr.Length {
-        MySoftData.VariableMap[RealNameArr[A_Index]] := RealValueArr[A_Index]
-        commands.Push(EncodeCommand("SV", RealNameArr[A_Index], RealValueArr[A_Index]))
-    }
-    MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastPayloadEx(excludeIdx, EncodeBatch(commands*))
-}
-
-DelGlobalVariable(NameArr, excludeIdx := 0) {
-    RealNameArr := []
-    loop NameArr.Length {
-        if (MySoftData.VariableMap.Has(NameArr[A_Index])) {
-            MySoftData.VariableMap.Delete(NameArr[A_Index])
-            RealNameArr.Push(NameArr[A_Index])
-        }
-    }
-
-    if (RealNameArr.Length == 0)
-        return
-
-    commands := []
-    loop RealNameArr.Length {
-        commands.Push(EncodeCommand("DV", RealNameArr[A_Index]))
-    }
-    MyVarListenGui.Refresh()
-    MyWorkPool.BroadcastPayloadEx(excludeIdx, EncodeBatch(commands*))
+RefreshGlobalDataView() {
+    try MyVarListenGui.Refresh()
 }
 
 SetCMDTipValue(value) {
@@ -1057,7 +984,7 @@ StopCancelTableItemTimer(tableItem, itemIndex) {
     }
 }
 
-SetItemPauseState(tableItem, itemIndex, state, excludeIdx := 0) {
+SetItemPauseState(tableItem, itemIndex, state) {
     if (!IsObject(tableItem))
         tableItem := GetTableByID(String(tableItem))
     if (!tableItem)
@@ -1072,7 +999,13 @@ SetItemPauseState(tableItem, itemIndex, state, excludeIdx := 0) {
     item := tableItem.Items[itemIndex]
     if (!item)
         return
-    item.Pause := state
+    previousCritical := A_IsCritical
+    Critical("On")
+    try {
+        item.Pause := state
+        if (WorkPoolEnabled())
+            MyWorkPool.SendItemPause(tableItem.ID, item.ID, state)
+    } finally Critical(previousCritical)
 
     LastColorState := item.ColorState
     if (LastColorState == 1 && state == 1)
@@ -1080,7 +1013,6 @@ SetItemPauseState(tableItem, itemIndex, state, excludeIdx := 0) {
     else if (LastColorState == 2 && state == 0)
         SetTableItemState(tableItem, itemIndex, 1)
 
-    MyWorkPool.BroadcastEx(excludeIdx, "PS", tableItem.ID, item.ID, state)
 }
 
 ;恢复意外退出残留的脏状态，后面要换成热重载就会要
@@ -1245,7 +1177,7 @@ ExcuteRMTCMDAction(Cmd) {
             if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
                 MyUIMacroGui.HideAllPanels()
         case "禁用模块":
-            ; §2：禁用指定页签下的模块（paramArr[4]=表符号, paramArr[5]=模块路径身份 FoldID）
+            ; §2：禁用指定页签下的模块（paramArr[4]=表 ID, paramArr[5]=模块路径身份 FoldID）
             RmtCmdSetFoldForbidState(paramArr, true)
         case "取消禁用模块":
             RmtCmdSetFoldForbidState(paramArr, false)
@@ -1264,7 +1196,7 @@ ExcuteRMTCMDAction(Cmd) {
     }
 }
 
-; §2 RMT指令「禁用模块/取消禁用模块」执行端：按表符号+模块路径身份切换 fold 启用状态，
+; §2 RMT指令「禁用模块/取消禁用模块」执行端：按表 ID 和模块路径身份切换 fold 启用状态，
 ; 实时重绑触发键 + HotReloadBus 广播（与折叠开关热键同一生效链路）
 RmtCmdSetFoldForbidState(paramArr, forbid) {
     global MySoftData, MyHotReloadBus
@@ -1274,7 +1206,9 @@ RmtCmdSetFoldForbidState(paramArr, forbid) {
     foldID := paramArr[5]
     if (tableSymbol == "" || foldID == "")
         return
-    tableItem := GetTableBySymbol(tableSymbol)
+    tableItem := GetTableByID(tableSymbol)
+    if (!tableItem)
+        tableItem := GetTableBySymbol(tableSymbol)
     if (!tableItem)
         return
     fold := tableItem.GetFold(foldID)

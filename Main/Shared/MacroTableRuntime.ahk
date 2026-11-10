@@ -175,24 +175,10 @@ GetTableIndex(SymbolOrName) {
 ; 判断某个 Symbol 是否为参与宏的条目类型（与 CheckIsItemTable(index) 同集合，但直接按 Symbol 判定，
 ; 不依赖 tableItem.Index 走 GetTableIndexByID 的定位，避免在表集合尚未完全构建／表索引错位时误判）。
 IsItemSymbol(symbol) {
-    if (symbol == "Normal")
-        return true
-    if (symbol == "String")
-        return true
-    if (symbol == "SubMacro")
-        return true
-    if (symbol == "Timing")
-        return true
-    if (symbol == "Menu")
-        return true
-    if (symbol == "Replace")
-        return true
-    if (symbol == "UI")
-        return true
-    if (symbol == "Voice")
-        return true
-    if (symbol == "Network")
-        return true
+    for def in MacroCategoryDefs() {
+        if (def[1] == symbol)
+            return true
+    }
     return false
 }
 
@@ -211,48 +197,11 @@ CheckIsNormalTable(index) {
     return false
 }
 
-CheckIsItemTable(index) {
-    symbol := GetTableSymbol(index)
-    if (symbol == "Normal")
-        return true
-    if (symbol == "String")
-        return true
-    if (symbol == "SubMacro")
-        return true
-    if (symbol == "Timing")
-        return true
-    if (symbol == "Menu")
-        return true
-    if (symbol == "Replace")
-        return true
-    if (symbol == "UI")
-        return true
-    if (symbol == "Voice")
-        return true
-    if (symbol == "Network")
-        return true
-    return false
-}
+CheckIsItemTable(index) => IsItemSymbol(GetTableSymbol(index))
 
 CheckIsMacroTable(index) {
     symbol := GetTableSymbol(index)
-    if (symbol == "Normal")
-        return true
-    if (symbol == "String")
-        return true
-    if (symbol == "SubMacro")
-        return true
-    if (symbol == "Timing")
-        return true
-    if (symbol == "Menu")
-        return true
-    if (symbol == "UI")
-        return true
-    if (symbol == "Voice")
-        return true
-    if (symbol == "Network")
-        return true
-    return false
+    return symbol != "Replace" && IsItemSymbol(symbol)
 }
 
 CheckIsStringMacroTable(index) {

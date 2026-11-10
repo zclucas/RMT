@@ -61,18 +61,15 @@ class ShareExportUtil {
     static _WriteMacroFileFlatToml(checkedItems, outDir) {
         macroFile := outDir "\MacroFile.toml"
 
-        ; TabIndex → Symbol 映射
-        symbolByIndex := Map()
-        for _, tabInfo in MergeUtil.GetMergeTabConfig()
-            symbolByIndex.Set(tabInfo.Index, tabInfo.Symbol)
-
         ; 按页签分组（保持勾选顺序）
         tabItems := Map()
         tabOrder := []
         for item in checkedItems {
-            if (!symbolByIndex.Has(item.TabIndex))
+            if (item.TabIndex < 1 || !MySoftData.TableInfo.Has(item.TabIndex))
                 continue
-            symbol := symbolByIndex[item.TabIndex]
+            symbol := GetTableSymbol(item.TabIndex)
+            if (!IsItemSymbol(symbol))
+                continue
             if (!tabItems.Has(symbol)) {
                 tabItems.Set(symbol, [])
                 tabOrder.Push(symbol)

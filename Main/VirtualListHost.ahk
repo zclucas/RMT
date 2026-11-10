@@ -115,6 +115,7 @@ class VirtualListHost {
             . US . this._Esc(StrReplace(configImagePath, "\", "/"))
             . US . (CheckIsTimingMacroTable(t) ? "1" : "0")      ; 定时宏：时钟/秒表配置按钮
             . US . (HasTimingConfig(item) ? "1" : "0")
+            . US . ((tableItem.Symbol == "Voice" || tableItem.Symbol == "Gesture") ? "1" : "0")
         this._ui.Update("FoldList_" t, "VL_ROW", val)
     }
 
@@ -191,7 +192,7 @@ class VirtualListHost {
                     . US . this._Esc(StrReplace(configImagePath, "\", "/"))
                     . US . (isTiming ? "1" : "0")                         ; 定时宏：时钟/秒表配置按钮
                     . US . (HasTimingConfig(item) ? "1" : "0")
-                    . US . (isVoice ? "1" : "0")                          ; 语音宏：隐藏触发类型
+                    . US . ((isVoice || tableItem.Symbol == "Gesture") ? "1" : "0")  ; 单次事件触发
                     . RS
             }
         }
@@ -211,6 +212,8 @@ class VirtualListHost {
             ; §23 网络宏：触发键列显示「复制链接」，点击/右键=直接复制单次 URL
             return item.ID == "" ? GetLang("编辑") : GetLang("复制链接")
         }
+        if (tableItem.Symbol == "Gesture")
+            return GestureDisplay(item.TK)
         if (isTiming)
             return ""
         tkStr := FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
@@ -286,6 +289,8 @@ class VirtualListHost {
                     ; §23 网络宏：右键触发键列 = 直接复制单次 URL；其余表保持自定义触发串
                     if (GetTableSymbol(t) == "Network")
                         OnItemNetworkCopyUrl(tableItem, idx, "", event)
+                    else if (tableItem.Symbol == "Gesture")
+                        OnItemEditGesture(tableItem, idx)
                     else
                         OnItemCustomEditTriggerStr(tableItem, idx, event)
                 case "NetHelp":
@@ -329,7 +334,9 @@ class VirtualListHost {
     ; 触发键按钮分发表类型（复刻旧 _BindItemRow）
     _EditTK(tableItem, i, event) {
         t := tableItem.Index
-        if (CheckIsStringMacroTable(t))
+        if (tableItem.Symbol == "Gesture")
+            OnItemEditGesture(tableItem, i)
+        else if (CheckIsStringMacroTable(t))
             OnItemEditTriggerStr(tableItem, i, event)
         else if (CheckIsTimingMacroTable(t))
             OnItemEditTiming(tableItem, i, event)

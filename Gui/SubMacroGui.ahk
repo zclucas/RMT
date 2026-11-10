@@ -188,7 +188,25 @@ class SubMacroGui {
         return this._callKeys.Has(index) ? this._callKeys[index] : ""
     }
 
-    static MacroTypes() => ["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "网络宏"]
+    static MacroTypes() {
+        types := ["当前宏"]
+        for def in MacroCategoryDefs() {
+            if (def[1] != "Replace")
+                types.Push(def[2])
+        }
+        return types
+    }
+
+    static Targets(macroType) {
+        targets := []
+        tables := GetTablesBySymbol(CompatMacroTypeSymbol(macroType))
+        for tableItem in tables {
+            prefix := tables.Length > 1 ? GetLang(tableItem.Name) " · " : ""
+            for i, item in tableItem.Items
+                targets.Push({ID: item.ID, Label: prefix i ". " item.Remark})
+        }
+        return targets
+    }
 
     static CallKeys(currentMacro) {
         return currentMacro
@@ -275,16 +293,13 @@ class SubMacroGui {
             this._targetIDs := []
             this._ComboPush("DropDownIndexCombo", "IsEnabled", currentMacro ? "False" : "True")
             this._ComboPush("DropDownIndexCombo", "ClearItems", "")
-            tableItem := GetTableBySymbol(CompatMacroTypeSymbol(macroType))
             selectedIndex := -1
             targetID := this._syncing && this.Data.HasOwnProp("MacroSerial") ? this.Data.MacroSerial : ""
-            if (tableItem) {
-                for i, item in tableItem.Items {
-                    this._targetIDs.Push(item.ID)
-                    this._ComboPush("DropDownIndexCombo", "AddItem", i ". " item.Remark)
-                    if (item.ID == targetID)
-                        selectedIndex := i - 1
-                }
+            for i, item in SubMacroGui.Targets(macroType) {
+                this._targetIDs.Push(item.ID)
+                this._ComboPush("DropDownIndexCombo", "AddItem", item.Label)
+                if (item.ID == targetID)
+                    selectedIndex := i - 1
             }
             this._ComboPush("DropDownIndexCombo", "SelectedIndex", String(selectedIndex))
         }
@@ -322,9 +337,10 @@ class SubMacroGui {
         if (this._TypeValue() != 1) {
             idx := this._SelIndex("DropDownIndexCombo") + 1
             if (this._targetType == macroType && this._targetIDs.Has(idx)) {
-                tableItem := GetTableBySymbol(CompatMacroTypeSymbol(macroType))
+                targetID := this._targetIDs[idx]
+                tableItem := GetMacroTypeTargetTable(macroType, targetID)
                 if (tableItem)
-                    target := ResolveMacroItem(tableItem.ID, this._targetIDs[idx])
+                    target := ResolveMacroItem(tableItem.ID, targetID)
             }
             if (!target) {
                 RmtDialog.Info(GetLang("宏不存在"))

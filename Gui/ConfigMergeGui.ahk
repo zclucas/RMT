@@ -376,6 +376,8 @@ class ConfigMergeGui {
                     for itemNode in moduleNode.Children {
                         itemRow := ++row
                         triggerDisplay := itemNode.TriggerKey != "" ? itemNode.TriggerKey : GetLang("无触发键")
+                        if (itemNode.TriggerKey != "" && GetTableSymbol(itemNode.TabIndex) == "Gesture")
+                            triggerDisplay := GestureDisplay(itemNode.TriggerKey)
                         this.ItemNodeMap[itemRow] := itemNode
                         itemNode.ListViewRow := itemRow
                         this._AddListRow(itemRow, itemNode.DisplayName, triggerDisplay, itemNode.IsChecked, 2, false, false, true)

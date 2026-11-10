@@ -116,9 +116,8 @@ if (A_Args.Length >= 3 && A_Args[1] == "--sample-align-worker") {
 #Include WorkUtil.ahk
 #Include WorkGlobalUtil.ahk
 
-if (A_Args.Length = 4 && A_Args[1] = "--input-file") {
-    if RegExMatch(A_Args[2], "^Local\\RMT_Picker_\d+_\d+_\d+$")
-        RunInputFilePicker(A_Args[2], Integer(A_Args[3]), Integer(A_Args[4]))
+if (A_Args.Length == 4 && A_Args[1] == "--input-file") {
+    RunInputFilePicker(Integer(A_Args[2]), Integer(A_Args[3]), Integer(A_Args[4]))
     ExitApp()
 }
 
@@ -127,7 +126,6 @@ InitWork()                  ;工作器特别初始化
 WorkPluginInit()            ;插件初始化
 
 ; 注册消息
-OnMessage(WM_CLEAR_WORK, OnWorkerExitMessage)           ;清除
 OnMessage(WM_MASTER_TO_WORKER, OnMasterToWorker)        ;主进程分发任务/广播通知
 WorkNotifyReady()   ;加载完成，同步通知主线程
 WaitAndProcessTasks()

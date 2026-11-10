@@ -29,6 +29,8 @@
 #Include NetworkUtil.ahk
 #Include WindowHotkeyManager.ahk
 #Include BindUtil.ahk
+#Include GestureUtil.ahk
+#Include ..\Gui\GestureGui.ahk
 #Include VariableUtil.ahk
 #Include TriggerKeyData.ahk
 #Include Util\CryptoUtil.ahk

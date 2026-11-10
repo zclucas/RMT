@@ -262,16 +262,25 @@ class RMTCMDGui {
         this.ui.Update("MenuDLCombo", "SelectedIndex", String(menuDLIndex - 1))
 
         ; §2 禁用模块/取消禁用模块：页签+模块 回显
-        this._tabSymbols := this._FoldTabSymbols()
+        this._tabIDs := this._FoldTabIDs()
         tabItems := []
-        for symbol in this._tabSymbols {
-            t := GetTableBySymbol(symbol)
-            tabItems.Push(t ? GetLang(t.Name) : symbol)
+        targetID := this.Data.HasOwnProp("TableSymbol") ? this.Data.TableSymbol : ""
+        targetTable := GetTableByID(targetID)
+        if (!targetTable)
+            targetTable := GetTableBySymbol(targetID)
+        selectedIndex := 0
+        for i, tableID in this._tabIDs {
+            t := GetTableByID(tableID)
+            tabItems.Push(GetLang(t.Name))
+            if (targetTable && targetTable.ID == tableID)
+                selectedIndex := i
         }
-        selSymbol := (this.Data.HasOwnProp("TableSymbol") && this.Data.TableSymbol != "") ? this.Data.TableSymbol : (this._tabSymbols.Length >= 1 ? this._tabSymbols[1] : "")
-        selTable := GetTableBySymbol(selSymbol)
-        this._foldTab := selTable ? selSymbol : (this._tabSymbols.Length >= 1 ? this._tabSymbols[1] : "")
-        this._SetDDL("TabCombo", tabItems, selTable ? GetLang(selTable.Name) : (tabItems.Length >= 1 ? tabItems[1] : ""))
+        if (!selectedIndex && this._tabIDs.Length)
+            selectedIndex := 1
+        this._foldTab := selectedIndex ? this._tabIDs[selectedIndex] : ""
+        selTable := GetTableByID(this._foldTab)
+        this._SetDDL("TabCombo", tabItems, "")
+        this.ui.Update("TabCombo", "SelectedIndex", String(selectedIndex - 1))
         foldItems := []
         if (selTable) {
             for f, fold in selTable.Folds
@@ -329,16 +338,16 @@ class RMTCMDGui {
 
     ; §2 页签下拉切换：刷新模块下拉为该页签下的模块列表
     OnTabComboChange(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui) || !IsObject(this._tabSymbols))
+        if (!IsObject(this.ui) || !IsObject(this._tabIDs))
             return
         tabIdx := Integer(this.ui.Query("TabCombo>SelectedIndex")) + 1
-        if (tabIdx < 1 || tabIdx > this._tabSymbols.Length)
+        if (tabIdx < 1 || tabIdx > this._tabIDs.Length)
             return
-        symbol := this._tabSymbols[tabIdx]
-        if (symbol == this._foldTab)
+        tableID := this._tabIDs[tabIdx]
+        if (tableID == this._foldTab)
             return
-        this._foldTab := symbol
-        tableItem := GetTableBySymbol(symbol)
+        this._foldTab := tableID
+        tableItem := GetTableByID(tableID)
         items := []
         if (tableItem) {
             for f, fold in tableItem.Folds {
@@ -349,17 +358,14 @@ class RMTCMDGui {
     }
 
     ; 列出可选「禁用模块」的页签（宏相关表，排除非配置表）
-    _FoldTabSymbols() {
+    _FoldTabIDs() {
         global MySoftData
-        symbols := []
+        ids := []
         for tableItem in MySoftData.TableInfo {
-            switch tableItem.Symbol {
-                case "Tool", "Setting", "Help", "Reward", "Thank":
-                    continue
-            }
-            symbols.Push(tableItem.Symbol)
+            if (IsItemSymbol(tableItem.Symbol))
+                ids.Push(tableItem.ID)
         }
-        return symbols
+        return ids
     }
 
     ToggleFunc(state) {
@@ -399,9 +405,9 @@ class RMTCMDGui {
         if (this.Data.CmdStr == GetLang("禁用模块") || this.Data.CmdStr == GetLang("取消禁用模块")) {
             tabIdx := Integer(this.ui.Query("TabCombo>SelectedIndex")) + 1
             foldIdx := Integer(this.ui.Query("FoldCombo>SelectedIndex")) + 1
-            if (IsObject(this._tabSymbols) && tabIdx >= 1 && tabIdx <= this._tabSymbols.Length) {
-                selTable := GetTableBySymbol(this._tabSymbols[tabIdx])
-                this.Data.TableSymbol := this._tabSymbols[tabIdx]
+            if (IsObject(this._tabIDs) && tabIdx >= 1 && tabIdx <= this._tabIDs.Length) {
+                selTable := GetTableByID(this._tabIDs[tabIdx])
+                this.Data.TableSymbol := this._tabIDs[tabIdx]
                 this.Data.FoldID := (selTable && foldIdx >= 1 && foldIdx <= selTable.Folds.Length) ? selTable.Folds[foldIdx].ID : ""
             }
         }
