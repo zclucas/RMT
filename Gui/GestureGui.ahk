@@ -46,11 +46,14 @@ class GestureGui {
         this.TouchLabel := win.AddText("xm y52 w105", GetLang("触控板手势"))
         this.Touch := win.AddDropDownList("x+8 yp-3 w333 Choose1", GetLangArr(GestureTouchNames()))
         this.ShapeLabel := win.AddText("xm y88 w105", GetLang("手势轨迹"))
-        this.Shape := win.AddDropDownList("x+8 yp-3 w333", [])
+        this.Shape := win.AddDropDownList("x+8 yp-3 w333 r14", [])
         this.ShortcutLabel := win.AddText("xm y88 w105", GetLang("映射快捷键"))
         this.Shortcut := win.AddHotkey("x+8 yp-3 w229")
         this.ResetShortcut := win.AddButton("x+8 yp-1 w96 h26", GetLang("恢复默认"))
         this.ResetShortcut.OnEvent("Click", ObjBindMethod(this, "DefaultShortcut"))
+        this.TouchModifier := win.AddCheckbox("xm y88 w446 Checked", GetLang("仅在按住 Ctrl + Alt 时触发"))
+        this.TouchMouseHelp := win.AddText("xm y122 w446 h74",
+            GetLang("双指轻点使用 Windows 右键事件，双指滑动使用滚动事件。普通鼠标的同类操作也可触发。"))
         this.Pad := win.AddPicture("xm y122 w446 h112 +Border +0x200")
         this.TouchHelp := win.AddText("xm y122 w446 h50", GetLang("在 Windows 触控板的高级手势中，为所选动作录入这里的快捷键。"))
         this.OpenSettings := win.AddButton("xm y182 w215 h30", GetLang("打开 Windows 触控板设置"))
@@ -65,11 +68,15 @@ class GestureGui {
         current := GestureRead(value)
         this.LastSlot := 1
         this.DefaultShortcut()
-        if (current && current.Source == "Touch") {
+        if (current && current.Source != "Mouse") {
             this.Source.Choose(2)
             this.Touch.Choose(current.Slot)
-            this.LastSlot := current.Slot
-            this.Shortcut.Value := GestureHotkeyText(current.Chord)
+            if (current.Source == "TouchMouse") {
+                this.TouchModifier.Value := current.Modified
+            } else {
+                this.LastSlot := current.Slot
+                this.SetShortcutChord(current.Chord)
+            }
         } else if (current) {
             for i, key in this.MouseKeys {
                 if (key == current.Key)
@@ -83,6 +90,7 @@ class GestureGui {
         this.MouseKey.OnEvent("Change", ObjBindMethod(this, "OnMouseKey"))
         this.Shape.OnEvent("Change", ObjBindMethod(this, "Update"))
         this.Touch.OnEvent("Change", ObjBindMethod(this, "OnTouch"))
+        this.TouchModifier.OnEvent("Click", ObjBindMethod(this, "Update"))
         this.Shortcut.OnEvent("Change", ObjBindMethod(this, "Update"))
         win.OnEvent("Close", ObjBindMethod(this, "Close"))
         win.OnEvent("Escape", ObjBindMethod(this, "Close"))
@@ -104,12 +112,12 @@ class GestureGui {
         this.ShapeIDs := []
         labels := []
         wheel := GestureIsWheel(this.MouseKeys[this.MouseKey.Value])
-        ids := ["Right", "DownRight", "Down", "DownLeft", "Left", "UpLeft", "Up", "UpRight",
-            "L", "V", "Caret", "Z", "S", "N", "W", "M", "Circle", "Triangle", "Square", "Diamond", "Custom"]
-        if (wheel)
-            ids.InsertAt(1, "Tilt")
+        ids := wheel ? ["Tilt"] : []
+        for preset in GesturePath.Presets()
+            ids.Push(preset[1])
+        ids.Push("Custom")
         if (selected == "" || (selected == "Tilt" && !wheel))
-            selected := ids[1]
+            selected := wheel ? "Tilt" : "Right"
         choice := 1
         for i, id in ids {
             this.ShapeIDs.Push(id)
@@ -123,26 +131,48 @@ class GestureGui {
     }
 
     OnMouseKey(*) {
-        this.RebuildShapes(this.ShapeIDs[this.Shape.Value])
+        if (GestureTriggers.Editing != this || !this.MouseKeys.Has(this.MouseKey.Value))
+            return
+        this.RebuildShapes(this.ShapeIDs.Get(this.Shape.Value, ""))
         this.Update()
     }
 
     OnTouch(*) {
-        previous := GestureDefaultChord(this.LastSlot)
-        this.LastSlot := this.Touch.Value
-        if (GestureParseHotkey(this.Shortcut.Value) == previous)
-            this.DefaultShortcut()
+        if (GestureTriggers.Editing != this)
+            return
+        slot := this.Touch.Value
+        if (!GestureTwoFingerKey(slot)) {
+            previous := GestureDefaultChord(this.LastSlot)
+            this.LastSlot := slot
+            if (this.GetShortcutChord() == previous)
+                this.DefaultShortcut()
+        }
         this.Update()
     }
 
     DefaultShortcut(*) {
-        this.Shortcut.Value := GestureHotkeyText(GestureDefaultChord(this.Touch.Value))
+        this.SetShortcutChord(GestureDefaultChord(this.Touch.Value))
         if (GestureTriggers.Editing == this)
             this.Update()
     }
 
+    GetShortcutChord() {
+        value := DllCall("SendMessageW", "Ptr", this.Shortcut.Hwnd, "UInt", 0x402, "Ptr", 0, "Ptr", 0, "Ptr")
+        flags := value >> 8
+        modifiers := ((flags & 4) ? 1 : 0) | (flags & 2) | ((flags & 1) ? 4 : 0)
+        vk := value & 0xFF
+        return vk && modifiers ? (vk << 16) | modifiers : 0
+    }
+
+    SetShortcutChord(chord) {
+        ; 热键控件的 Shift、Alt 标志位与 RegisterHotKey 的定义相反。
+        flags := ((chord & 1) ? 4 : 0) | (chord & 2) | ((chord & 4) ? 1 : 0)
+        value := (flags << 8) | (chord >> 16)
+        DllCall("SendMessageW", "Ptr", this.Shortcut.Hwnd, "UInt", 0x401, "Ptr", value, "Ptr", 0, "Ptr")
+    }
+
     OpenTouchSettings(*) {
-        chord := GestureParseHotkey(this.Shortcut.Value)
+        chord := this.GetShortcutChord()
         status := this.TouchStatus(chord)
         if (status != "") {
             this.Hint.Text := status
@@ -157,12 +187,18 @@ class GestureGui {
     }
 
     Update(*) {
+        if (GestureTriggers.Editing != this || !this.ShapeIDs.Has(this.Shape.Value))
+            return
         touch := this.Source.Value == 2
+        twoFinger := touch && GestureTwoFingerKey(this.Touch.Value) != ""
+        mapped := touch && !twoFinger
         shape := this.ShapeIDs[this.Shape.Value]
         custom := !touch && shape == "Custom"
         this.MouseLabel.Visible := this.MouseKey.Visible := this.ShapeLabel.Visible := this.Shape.Visible := !touch
-        this.TouchLabel.Visible := this.Touch.Visible := this.ShortcutLabel.Visible := this.Shortcut.Visible := touch
-        this.ResetShortcut.Visible := this.TouchHelp.Visible := this.OpenSettings.Visible := touch
+        this.TouchLabel.Visible := this.Touch.Visible := touch
+        this.ShortcutLabel.Visible := this.Shortcut.Visible := mapped
+        this.ResetShortcut.Visible := this.TouchHelp.Visible := this.OpenSettings.Visible := mapped
+        this.TouchModifier.Visible := this.TouchMouseHelp.Visible := twoFinger
         this.Pad.Visible := !touch && shape != "Tilt"
         if (!custom)
             this.Recording := false
@@ -172,8 +208,13 @@ class GestureGui {
         }
         SetTimer(this.SampleCallback, custom ? 15 : 0)
 
-        if (touch) {
-            chord := GestureParseHotkey(this.Shortcut.Value)
+        if (twoFinger) {
+            key := GestureTwoFingerKey(this.Touch.Value)
+            this.Hint.Text := !this.TouchModifier.Value && GestureIsWheel(key) && this.HasMouseBinding(key)
+                ? GetLang("同方向也有鼠标滚轮手势。建议按住 Ctrl + Alt 区分。")
+                : GetLang("滑动方向以 Windows 实际滚动方向为准。")
+        } else if (mapped) {
+            chord := this.GetShortcutChord()
             this.Hint.Text := this.TouchStatus(chord)
         } else if (custom) {
             path := this.Custom == "" ? [] : GestureRead("Mouse|LButton|" this.Custom).Path[1]
@@ -187,6 +228,19 @@ class GestureGui {
                 ? GetLang("向左或右倾斜滚轮一次。选择轨迹时，随后移动鼠标并停住。")
                 : GetLang("按住所选鼠标键绘制轨迹，松开时识别。按键也会传给当前应用。")
         }
+    }
+
+    HasMouseBinding(key) {
+        prefix := "Mouse|" key "|"
+        for tableItem in MySoftData.TableInfo {
+            if (tableItem.Symbol != "Gesture")
+                continue
+            for item in tableItem.Items {
+                if ((tableItem.ID != this.TableID || item.ID != this.ItemID) && InStr(item.TK, prefix) == 1)
+                    return true
+            }
+        }
+        return false
     }
 
     TouchStatus(chord) {
@@ -250,6 +304,9 @@ class GestureGui {
     }
 
     Sample() {
+        Critical()
+        if (GestureTriggers.Editing != this)
+            return
         down := GetKeyState("LButton", "P")
         started := down && !this.WasDown
         this.WasDown := down
@@ -294,10 +351,14 @@ class GestureGui {
     }
 
     Save(clear, *) {
+        if (GestureTriggers.Editing != this)
+            return
         value := ""
         if (!clear) {
-            if (this.Source.Value == 2) {
-                chord := GestureParseHotkey(this.Shortcut.Value)
+            if (this.Source.Value == 2 && GestureTwoFingerKey(this.Touch.Value) != "") {
+                value := "Touch|" this.Touch.Value "|" this.TouchModifier.Value
+            } else if (this.Source.Value == 2) {
+                chord := this.GetShortcutChord()
                 status := this.TouchStatus(chord)
                 if (status != "") {
                     this.Hint.Text := status
@@ -308,6 +369,8 @@ class GestureGui {
                 if (chord != GestureDefaultChord(slot))
                     value .= "|" (chord & 0xFFFF) "|" (chord >> 16)
             } else {
+                if (!this.MouseKeys.Has(this.MouseKey.Value) || !this.ShapeIDs.Has(this.Shape.Value))
+                    return
                 key := this.MouseKeys[this.MouseKey.Value]
                 shape := this.ShapeIDs[this.Shape.Value]
                 if (shape == "Custom") {
@@ -321,14 +384,28 @@ class GestureGui {
             }
         }
         resolved := ResolveMacroItem(this.TableID, this.ItemID)
-        changed := resolved && resolved.Item.TK != value
-        if (changed)
-            resolved.Item.TK := value
-        this.Close()
-        if (!changed)
+        if (!resolved || resolved.Item.TK == value) {
+            this.Close()
             return
+        }
+        previousCritical := A_IsCritical
+        Critical()
+        previous := resolved.Item.TK
+        resolved.Item.TK := value
+        try {
+            if (!SaveTableItemInfo(resolved.Table))
+                throw Error(GetLang("无法写入当前配置"))
+        } catch as err {
+            resolved.Item.TK := previous
+            this.Hint.Text := GetLang("手势保存失败，请检查配置文件后重试。")
+            try RMTLogSys(RMT_LV_ERROR, "Gesture", err.Message)
+            return
+        } finally {
+            Critical(previousCritical)
+        }
+        HotReloadPublish(resolved.Table.Index, 0, false)
+        this.Close()
         MyMainWin.RefreshItemRow(resolved.Table.Index, resolved.Index)
-        HotReloadPublish(resolved.Table.Index, resolved.Index)
     }
 
     Close(*) {
@@ -336,11 +413,13 @@ class GestureGui {
             return
         SetTimer(this.SampleCallback, 0)
         GestureTriggers.Editing := false
-        GestureTriggers.SetSetupChord()
-        if (this.RestoreOwner)
-            DllCall("EnableWindow", "Ptr", this.Owner, "Int", true)
-        this.Window.Destroy()
-        this.SampleCallback := ""
+        try GestureTriggers.SetSetupChord()
+        finally {
+            if (this.RestoreOwner)
+                DllCall("EnableWindow", "Ptr", this.Owner, "Int", true)
+            this.Window.Destroy()
+            this.SampleCallback := ""
+        }
     }
 }
 

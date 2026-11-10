@@ -7,13 +7,19 @@ GestureMouseKeys() {
 
 GestureTouchNames() {
     static names := ["三指轻点", "三指上滑", "三指下滑", "三指左滑", "三指右滑",
-        "四指轻点", "四指上滑", "四指下滑", "四指左滑", "四指右滑"]
+        "四指轻点", "四指上滑", "四指下滑", "四指左滑", "四指右滑",
+        "双指轻点", "双指上滑", "双指下滑", "双指左滑", "双指右滑"]
     return names
 }
 
 GestureIsWheel(key) => key == "WheelLeft" || key == "WheelRight"
 
 GestureDefaultChord(slot) => ((0x6F + slot) << 16) | 7
+
+GestureTwoFingerKey(slot) {
+    static keys := ["RButton", "WheelUp", "WheelDown", "WheelLeft", "WheelRight"]
+    return slot >= 11 && slot <= 15 ? keys[slot - 10] : ""
+}
 
 GestureHotkeyText(chord) {
     return ((chord & 2) ? "^" : "") ((chord & 1) ? "!" : "") ((chord & 4) ? "+" : "")
@@ -30,6 +36,11 @@ GestureParseHotkey(value) {
 
 GestureRead(value) {
     parts := StrSplit(value, "|")
+    if (parts.Length == 3 && parts[1] == "Touch" && RegExMatch(parts[2], "^1[1-5]$")
+        && (parts[3] == "0" || parts[3] == "1")) {
+        slot := Integer(parts[2])
+        return {Source: "TouchMouse", Slot: slot, Key: GestureTwoFingerKey(slot), Modified: parts[3] == "1"}
+    }
     if ((parts.Length == 2 || parts.Length == 4) && parts[1] == "Touch"
         && RegExMatch(parts[2], "^(?:[1-9]|10)$")) {
         slot := Integer(parts[2])
@@ -63,18 +74,85 @@ GestureDisplay(value) {
     gesture := GestureRead(value)
     if (!gesture)
         return GetLang("编辑手势")
-    if (gesture.Source == "Touch")
-        return GetLang(GestureTouchNames()[gesture.Slot])
+    if (gesture.Source != "Mouse") {
+        label := GetLang(GestureTouchNames()[gesture.Slot])
+        return gesture.Source == "TouchMouse" && gesture.Modified ? "Ctrl+Alt · " label : label
+    }
     return GetLang(GestureMouseKeys()[gesture.Key]) " · " GetLang(GesturePath.Labels()[gesture.Shape])
 }
 
 class GesturePath {
+    static Presets() {
+        static presets := 0
+        if (presets)
+            return presets
+        presets := [
+            ["Up", "上滑", [[0,1],[0,0]]], ["Down", "下滑", [[0,0],[0,1]]],
+            ["Left", "左滑", [[1,0],[0,0]]], ["Right", "右滑", [[0,0],[1,0]]],
+            ["UpRight", "↗", [[0,1],[1,0]]], ["DownRight", "↘", [[0,0],[1,1]]],
+            ["DownLeft", "↙", [[1,0],[0,1]]], ["UpLeft", "↖", [[1,1],[0,0]]]
+        ]
+        elbow := [[0,0],[0,1],[0.75,1]]
+        for flipped in [false, true] {
+            loop 4 {
+                turns := A_Index - 1
+                angle := turns * 90
+                id := flipped ? "LFlip" angle : (angle ? "L" angle : "L")
+                label := flipped ? "L 上下翻转" : "L"
+                if (angle)
+                    label .= " · " angle "°"
+                presets.Push([id, label, this.Transform(elbow, turns, flipped)])
+            }
+        }
+        circle := []
+        loop 33 {
+            angle := (A_Index - 1) * 6.28318530718 / 32
+            circle.Push([Cos(angle), Sin(angle)])
+        }
+        presets.Push(
+            ["ReturnLeftRight", "← →", [[1,0],[0,0],[1,0]]],
+            ["ReturnRightLeft", "→ ←", [[0,0],[1,0],[0,0]]],
+            ["ReturnUpDown", "↑ ↓", [[0,1],[0,0],[0,1]]],
+            ["ReturnDownUp", "↓ ↑", [[0,0],[0,1],[0,0]]],
+            ["Caret", "∧", [[0,1],[0.5,0],[1,1]]],
+            ["V", "V", [[0,0],[0.5,1],[1,0]]],
+            ["CaretLeft", "‹", [[1,0],[0,0.5],[1,1]]],
+            ["CaretRight", "›", [[0,0],[1,0.5],[0,1]]],
+            ["Z", "Z", [[0,0],[1,0],[0,1],[1,1]]],
+            ["S", "S", [[1,0],[0.4,0],[0,0.2],[0.15,0.4],[0.85,0.6],[1,0.8],[0.6,1],[0,1]]],
+            ["N", "N", [[0,1],[0,0],[1,1],[1,0]]],
+            ["W", "W", [[0,0],[0.25,1],[0.5,0.25],[0.75,1],[1,0]]],
+            ["M", "M", [[0,1],[0.25,0],[0.5,0.75],[0.75,0],[1,1]]],
+            ["Circle", "圆", circle],
+            ["Triangle", "三角形", [[0.5,0],[1,1],[0,1],[0.5,0]]],
+            ["Square", "方形", [[0,0],[1,0],[1,1],[0,1],[0,0]]],
+            ["Diamond", "菱形", [[0.5,0],[1,0.5],[0.5,1],[0,0.5],[0.5,0]]]
+        )
+        return presets
+    }
+
+    static Transform(points, turns, flipped) {
+        result := []
+        for point in points {
+            x := point[1]
+            y := flipped ? -point[2] : point[2]
+            loop turns {
+                nextX := -y
+                y := x
+                x := nextX
+            }
+            result.Push([x, y])
+        }
+        return result
+    }
+
     static Labels() {
-        static labels := Map("Right", "→", "DownRight", "↘", "Down", "↓", "DownLeft", "↙",
-            "Left", "←", "UpLeft", "↖", "Up", "↑", "UpRight", "↗",
-            "L", "L", "V", "V", "Caret", "∧", "Z", "Z", "S", "S", "N", "N", "W", "W", "M", "M",
-            "Circle", "圆", "Triangle", "三角形", "Square", "方形", "Diamond", "菱形",
-            "Tilt", "直接触发", "Custom", "自定义")
+        static labels := 0
+        if (!labels) {
+            labels := Map("Tilt", "直接触发", "Custom", "自定义")
+            for preset in this.Presets()
+                labels[preset[1]] := preset[2]
+        }
         return labels
     }
 
@@ -82,35 +160,16 @@ class GesturePath {
         static shapes := 0
         if (shapes)
             return shapes
-        vertices := Map("Right", [[0,0],[1,0]], "DownRight", [[0,0],[1,1]],
-            "Down", [[0,0],[0,1]], "DownLeft", [[1,0],[0,1]],
-            "Left", [[1,0],[0,0]], "UpLeft", [[1,1],[0,0]],
-            "Up", [[0,1],[0,0]], "UpRight", [[0,1],[1,0]],
-            "L", [[0,0],[0,1],[0.75,1]], "V", [[0,0],[0.5,1],[1,0]],
-            "Caret", [[0,1],[0.5,0],[1,1]], "Z", [[0,0],[1,0],[0,1],[1,1]],
-            "N", [[0,1],[0,0],[1,1],[1,0]],
-            "W", [[0,0],[0.25,1],[0.5,0.25],[0.75,1],[1,0]],
-            "M", [[0,1],[0.25,0],[0.5,0.75],[0.75,0],[1,1]],
-            "S", [[1,0],[0.4,0],[0,0.2],[0.15,0.4],[0.85,0.6],[1,0.8],[0.6,1],[0,1]],
-            "Triangle", [[0.5,0],[1,1],[0,1],[0.5,0]],
-            "Square", [[0,0],[1,0],[1,1],[0,1],[0,0]],
-            "Diamond", [[0.5,0],[1,0.5],[0.5,1],[0,0.5],[0.5,0]])
-        circle := []
-        loop 33 {
-            angle := (A_Index - 1) * 6.28318530718 / 32
-            circle.Push([Cos(angle), Sin(angle)])
-        }
-        vertices["Circle"] := circle
         shapes := Map()
-        for name, points in vertices {
+        for preset in this.Presets() {
+            points := preset[3]
             forward := this.Normalize(points)
-            if (this.IsClosed(forward)) {
+            shapes[preset[1]] := [forward]
+            if (this.IsLoop(forward)) {
                 reverse := []
                 loop points.Length
                     reverse.Push(points[points.Length - A_Index + 1])
-                shapes[name] := [forward, this.Normalize(reverse)]
-            } else {
-                shapes[name] := [forward]
+                shapes[preset[1]].Push(this.Normalize(reverse))
             }
         }
         return shapes
@@ -157,10 +216,23 @@ class GesturePath {
 
     static IsClosed(points) => this.Distance(points[1], points[-1]) < 0.23
 
-    static Score(points, template, closed) {
+    ; 折返会回到起点，但没有围成环。比较时保留先后方向。
+    static IsLoop(points) {
+        if (!this.IsClosed(points))
+            return false
+        twiceArea := 0
+        previous := points[-1]
+        for point in points {
+            twiceArea += previous[1] * point[2] - point[1] * previous[2]
+            previous := point
+        }
+        return Abs(twiceArea) >= 0.16
+    }
+
+    static Score(points, template, cyclic) {
         best := 1.0
-        count := closed ? 31 : 32
-        loop (closed ? count : 1) {
+        count := cyclic ? 31 : 32
+        loop (cyclic ? count : 1) {
             shift := A_Index - 1
             total := 0
             loop count {
@@ -190,6 +262,8 @@ class GesturePath {
 class GestureTriggers {
     static Mouse := Map()
     static Touch := Map()
+    static TouchMouse := Map()
+    static LastTouchScroll := Map()
     static TouchIDs := Map()
     static SetupChord := 0
     static LastTilt := Map()
@@ -220,6 +294,8 @@ class GestureTriggers {
             DllCall("UnregisterHotKey", "Ptr", A_ScriptHwnd, "Int", id)
         this.TouchIDs := Map()
         this.Touch := Map()
+        this.TouchMouse := Map()
+        this.LastTouchScroll := Map()
         this.LastTilt := Map()
         this.Mouse := Map()
     }
@@ -238,7 +314,7 @@ class GestureTriggers {
                 gesture.TableID := tableItem.ID
                 gesture.ItemID := item.ID
                 gesture.Config := item.TK
-                mapForSource := gesture.Source == "Touch" ? this.Touch : this.Mouse
+                mapForSource := gesture.Source == "Touch" ? this.Touch : (gesture.Source == "TouchMouse" ? this.TouchMouse : this.Mouse)
                 key := gesture.Source == "Touch" ? gesture.Chord : gesture.Key
                 if (!mapForSource.Has(key))
                     mapForSource[key] := []
@@ -258,7 +334,7 @@ class GestureTriggers {
             else
                 RMTLogSys(RMT_LV_WARN, "Gesture", "Could not register touchpad shortcut: " GestureHotkeyText(chord))
         }
-        if (this.Mouse.Count) {
+        if (this.Mouse.Count || this.TouchMouse.Count) {
             this.MouseCallback := CallbackCreate(ObjBindMethod(GestureTriggers, "OnMouse"), "Fast", 3)
             module := DllCall("GetModuleHandle", "Ptr", 0, "Ptr")
             this.Hook := DllCall("SetWindowsHookEx", "Int", 14, "Ptr", this.MouseCallback, "Ptr", module, "UInt", 0, "Ptr")
@@ -349,13 +425,20 @@ class GestureTriggers {
             0x207, "MButton", 0x208, "MButton")
         if (code >= 0 && !(NumGet(data, 12, "UInt") & 1)) {
             key := buttons.Get(msg, "")
-            down := msg == 0x201 || msg == 0x204 || msg == 0x207 || msg == 0x20B || msg == 0x20E
+            down := msg == 0x201 || msg == 0x204 || msg == 0x207 || msg == 0x20B || msg == 0x20E || msg == 0x20A
             if (msg == 0x20B || msg == 0x20C)
                 key := NumGet(data, 10, "UShort") == 1 ? "XButton1" : "XButton2"
             else if (msg == 0x20E)
                 key := NumGet(data, 10, "Short") < 0 ? "WheelLeft" : "WheelRight"
-            if (key != "" && GestureTriggers.Mouse.Has(key))
-                GestureTriggers.Events.Push({Key: key, Down: down, Point: [NumGet(data, 0, "Int"), NumGet(data, 4, "Int")]})
+            else if (msg == 0x20A)
+                key := NumGet(data, 10, "Short") > 0 ? "WheelUp" : "WheelDown"
+            touchMouse := GestureTriggers.TouchMouse.Has(key)
+            if (touchMouse || GestureTriggers.Mouse.Has(key)) {
+                modified := touchMouse && (DllCall("GetAsyncKeyState", "Int", 0x11, "Short") < 0)
+                    && (DllCall("GetAsyncKeyState", "Int", 0x12, "Short") < 0)
+                GestureTriggers.Events.Push({Key: key, Down: down, Modified: modified,
+                    Point: [NumGet(data, 0, "Int"), NumGet(data, 4, "Int")]})
+            }
         }
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", code, "UPtr", msg, "Ptr", data, "Ptr")
     }
@@ -373,6 +456,8 @@ class GestureTriggers {
         }
         now := A_TickCount
         for event in events {
+            if (event.Down && event.Key != "RButton" && this.HandleTouchScroll(event, now))
+                continue
             if (!event.Down) {
                 if (this.Stroke && this.Stroke.Key == event.Key) {
                     this.Stroke.Points.Push(event.Point)
@@ -383,6 +468,7 @@ class GestureTriggers {
             if (this.Stroke)
                 continue
             wheel := GestureIsWheel(event.Key)
+            tap := event.Key == "RButton" ? this.FindTouchMouse(event) : false
             candidates := []
             direct := false
             hasPath := false
@@ -400,8 +486,9 @@ class GestureTriggers {
                     this.LastTilt[event.Key] := now
                     this.Dispatch(direct)
                 }
-            } else if (candidates.Length)
-                this.Stroke := {Key: event.Key, Candidates: candidates, Points: [event.Point], Started: now, Moved: now, Wheel: wheel}
+            } else if (candidates.Length || tap)
+                this.Stroke := {Key: event.Key, Candidates: candidates, Points: [event.Point], Started: now,
+                    Moved: now, Wheel: wheel, Tap: tap}
         }
         if (!this.Stroke)
             return
@@ -418,11 +505,36 @@ class GestureTriggers {
             this.Stroke := false
     }
 
+    static FindTouchMouse(event) {
+        for gesture in this.TouchMouse.Get(event.Key, []) {
+            if ((!gesture.Modified || event.Modified) && this.CanRun(gesture))
+                return gesture
+        }
+        return false
+    }
+
+    static HandleTouchScroll(event, now) {
+        gesture := this.FindTouchMouse(event)
+        if (!gesture)
+            return false
+        axis := GestureIsWheel(event.Key) ? "horizontal" : "vertical"
+        previous := this.LastTouchScroll.Get(axis, -500)
+        this.LastTouchScroll[axis] := now
+        if (now - previous >= 300)
+            this.Dispatch(gesture)
+        return true
+    }
+
     static FinishStroke() {
         stroke := this.Stroke
         this.Stroke := false
         points := GesturePath.Normalize(stroke.Points, 25)
         if (!points.Length) {
+            ; Windows 的双指轻点与右键共用输入。短点击和拖划在松开时区分。
+            if (stroke.HasOwnProp("Tap") && stroke.Tap && this.CanRun(stroke.Tap)) {
+                this.Dispatch(stroke.Tap)
+                return
+            }
             for gesture in stroke.Candidates {
                 if (gesture.Shape == "Tilt" && this.CanRun(gesture)) {
                     this.Dispatch(gesture)
@@ -433,15 +545,16 @@ class GestureTriggers {
         }
         closed := GesturePath.IsClosed(points)
         best := false
-        score := closed ? 0.16 : 0.18
+        score := 1.0
         for gesture in stroke.Candidates {
             if (!this.CanRun(gesture))
                 continue
             for template in gesture.Path {
                 if (closed != GesturePath.IsClosed(template))
                     continue
-                candidateScore := GesturePath.Score(points, template, closed)
-                if (candidateScore < score) {
+                cyclic := closed && (gesture.Shape == "Custom" || GesturePath.IsLoop(template))
+                candidateScore := GesturePath.Score(points, template, cyclic)
+                if (candidateScore < score && candidateScore < (cyclic ? 0.16 : 0.18)) {
                     best := gesture
                     score := candidateScore
                 }

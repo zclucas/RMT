@@ -202,8 +202,12 @@ class SubMacroGui {
         tables := GetTablesBySymbol(CompatMacroTypeSymbol(macroType))
         for tableItem in tables {
             prefix := tables.Length > 1 ? GetLang(tableItem.Name) " · " : ""
-            for i, item in tableItem.Items
-                targets.Push({ID: item.ID, Label: prefix i ". " item.Remark})
+            for i, item in tableItem.Items {
+                label := prefix i ". " item.Remark
+                if (tableItem.Symbol == "Gesture" && item.TK != "")
+                    label .= " [" GestureDisplay(item.TK) "]"
+                targets.Push({ID: item.ID, Label: label})
+            }
         }
         return targets
     }

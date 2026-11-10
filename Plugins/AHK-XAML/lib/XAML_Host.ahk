@@ -143,6 +143,10 @@ class XAMLHost {
             return nameNoExt "_bundled.dll"
         }
         if (A_IsCompiled) {
+            depDir := A_ScriptDir "\Plugins\AHK-XAML\lib\dep\"
+            ; 开发编译使用项目已有的 WebView2 引擎，发行包仍优先使用打包文件名。
+            if (!FileExist(depDir "ahk-xaml.dll") && FileExist(depDir "ahk-xaml-wv2.dll"))
+                return "ahk-xaml-wv2.dll"
             return "ahk-xaml.dll"
         }
         suffix := ""
