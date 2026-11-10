@@ -144,10 +144,11 @@ class MacroGraphGui {
 
     ; ----------------------------------------------------------------- 入口
 
-    ShowGui(macroStr, key := "") {
+    ShowGui(macroStr, windowBindingContext := "") {
         this._sessionId += 1
         this._closeHandled := false
         this._CloseUI()
+        this.WindowBindingContext := windowBindingContext
         this.startSerial := ""
         this.cmdNodes := Map()
         this.order := []
@@ -411,7 +412,7 @@ class MacroGraphGui {
         MyMacroGui.SureFocusCon := MainSoftData.BtnSave
         MyMacroGui.SureBtnAction := sureAction
         MyMacroGui.SaveBtnAction := OnSaveSetting
-        MyMacroGui.ShowGui(linear, true)
+        MyMacroGui.ShowGui(linear, true, this.WindowBindingContext)
     }
 
     OnWindowClosed(sid := -1, *) {
@@ -737,6 +738,8 @@ class MacroGraphGui {
 
         editor.OwnerHwnd := (this.ui != "" && this.ui.wpfHwnd) ? this.ui.wpfHwnd : ""
         editor.SureBtnAction := (cmd) => this.OnEditorSure(id, cmd)
+        if (editor.HasOwnProp("WindowBindingContext"))
+            editor.WindowBindingContext := this.WindowBindingContext
         ; RMT 指令参数存于 CurCMD 本身，打开编辑器时用规范化后的 CMD，与节点内联显示一致
         if (d.type == GetLang("RMT指令"))
             editor.ShowGui(this._SerializeNodeCommand(d))

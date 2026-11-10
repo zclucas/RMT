@@ -131,7 +131,8 @@
             macroStr := GetLangMacro(item.Macro, 1)
             bpStr := item.HasProp("Breakpoints") ? item.Breakpoints : ""
         }
-        this._sideTree.Load(t, macroStr, bpStr)
+        context := item ? {TableID: MySoftData.TableInfo[t].ID, ItemID: item.ID} : ""
+        this._sideTree.Load(t, macroStr, bpStr, context)
         this._sideTree.SyncToolToggles(t)
         hasCmd := Trim(macroStr) != ""
         try this.ui.Update(emptyName, "Visibility", hasCmd ? "Collapsed" : "Visible")

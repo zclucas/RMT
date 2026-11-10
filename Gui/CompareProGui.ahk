@@ -12,6 +12,7 @@
 
 class CompareProGui {
     __new() {
+        this.WindowBindingContext := ""
         this.ParentTile := ""
         this.Gui := ""          ; 原生 Gui 对象占位（XAML 版不再使用，保留成员）
         this.ui := ""
@@ -530,6 +531,7 @@ class CompareProGui {
         logicStr := this.LVRowArr[item][2]
         macro := this.LVRowArr[item][3]
         controlType := this._RowControlType(NumberIndex)
+        this.ItemEditGui.WindowBindingContext := this.WindowBindingContext
         this.ItemEditGui.ShowGui(EditType, DataArr, logicStr, macro, controlType)
         this.ItemEditGui.SureBtnAction := this.OnSureEditItem.Bind(this, item)
     }

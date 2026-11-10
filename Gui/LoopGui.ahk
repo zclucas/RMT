@@ -9,6 +9,7 @@
 
 class LoopGui {
     __new() {
+        this.WindowBindingContext := ""
         this.ParentTile := ""
         this.Gui := ""
         this.ui := ""
@@ -419,7 +420,7 @@ class LoopGui {
         }
 
         this.MacroGui.SureBtnAction := SureAction
-        this.MacroGui.ShowGui(this.ui.Query("LoopBodyCon"), false)
+        this.MacroGui.ShowGui(this.ui.Query("LoopBodyCon"), false, this.WindowBindingContext)
     }
 
     OnClickSureBtn(state, ctrl, event) {

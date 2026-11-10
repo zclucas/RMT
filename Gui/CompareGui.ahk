@@ -9,6 +9,7 @@
 
 class CompareGui {
     __new() {
+        this.WindowBindingContext := ""
         this.ParentTile := ""
         this.Gui := ""
         this.ui := ""
@@ -484,7 +485,7 @@ class CompareGui {
         }
 
         this.MacroGui.SureBtnAction := (command) => this.OnTrueSure(command)
-        this.MacroGui.ShowGui(this.ui.Query("TrueMacroCon"), false)
+        this.MacroGui.ShowGui(this.ui.Query("TrueMacroCon"), false, this.WindowBindingContext)
     }
 
     OnFalseBtnClick(*) {
@@ -504,7 +505,7 @@ class CompareGui {
         }
 
         this.MacroGui.SureBtnAction := (command) => this.OnFalseSure(command)
-        this.MacroGui.ShowGui(this.ui.Query("FalseMacroCon"), false)
+        this.MacroGui.ShowGui(this.ui.Query("FalseMacroCon"), false, this.WindowBindingContext)
     }
 
     TriggerMacro(*) {

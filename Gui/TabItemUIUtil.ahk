@@ -268,6 +268,7 @@ PersistItemBreakpoints(item, tableItem, bpStr) {
 ; 打开逻辑树（宏指令）编辑器
 OpenItemMacroTreeEditor(tableItem, index, macro, SureAction) {
     item := tableItem.Items[index]
+    context := {TableID: tableItem.ID, ItemID: item.ID}
     bpStr := item.HasProp("Breakpoints") ? item.Breakpoints : ""
     MySoftData.SpecialTableItem.Items[1].Mode := item.Mode
     if (MyMacroGui.Gui != "") {
@@ -282,7 +283,7 @@ OpenItemMacroTreeEditor(tableItem, index, macro, SureAction) {
             MacroGui.SureFocusCon := MainSoftData.BtnSave
             MacroGui.SureBtnAction := SureAction
             MacroGui.SaveBtnAction := OnSaveSetting
-            MacroGui.ShowGui(macro, true)
+            MacroGui.ShowGui(macro, true, context)
             return
         }
     }
@@ -293,14 +294,14 @@ OpenItemMacroTreeEditor(tableItem, index, macro, SureAction) {
     MyMacroGui.SureFocusCon := MainSoftData.BtnSave
     MyMacroGui.SureBtnAction := SureAction
     MyMacroGui.SaveBtnAction := OnSaveSetting
-    MyMacroGui.ShowGui(macro, true)
+    MyMacroGui.ShowGui(macro, true, context)
 }
 
 ; 打开图形节点编辑器
-OpenItemMacroGraphEditor(macro, SureAction) {
+OpenItemMacroGraphEditor(tableItem, item, macro, SureAction) {
     MyMacroGraphGui.OwnerHwnd := ""
     MyMacroGraphGui.SureBtnAction := SureAction
-    MyMacroGraphGui.ShowGui(macro)
+    MyMacroGraphGui.ShowGui(macro, {TableID: tableItem.ID, ItemID: item.ID})
 }
 
 ; 编辑按钮：空宏按「首选编辑器」；已有配置则看首条是否图形开始节点
@@ -322,7 +323,7 @@ OnItemEditMacro(tableItem, index, *) {
         useGraph := IsMacroFirstCmdGraphStart(macro)
 
     if (useGraph)
-        OpenItemMacroGraphEditor(macro, SureAction)
+        OpenItemMacroGraphEditor(tableItem, item, macro, SureAction)
     else
         OpenItemMacroTreeEditor(tableItem, index, macro, SureAction)
 }

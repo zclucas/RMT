@@ -118,13 +118,15 @@ Compat_StagePaths(backupRoot, prefix := "Setting") {
     return {Stage: staged, Backup: backup}
 }
 
-Compat_InstallStagedTree(staged, currentDir, backup, verify) {
+Compat_InstallStagedTree(staged, currentDir, backup, verify, sourceDir := unset) {
     global TomlUtil_Cache
+    if (!IsSet(sourceDir))
+        sourceDir := currentDir
     backedUp := false
     installed := false
     try {
-        if (DirExist(currentDir)) {
-            DirMove(currentDir, backup)
+        if (DirExist(sourceDir)) {
+            DirMove(sourceDir, backup)
             backedUp := true
         }
         DirMove(staged, currentDir)
@@ -137,7 +139,7 @@ Compat_InstallStagedTree(staged, currentDir, backup, verify) {
             if (installed)
                 DirMove(currentDir, staged)
             if (backedUp)
-                DirMove(backup, currentDir)
+                DirMove(backup, sourceDir)
         } catch as restoreError {
             throw Error(e.Message "`n" GetLang("恢复原配置失败，备份位于：") backup "`n" restoreError.Message)
         } finally {
@@ -206,7 +208,7 @@ Compat_ImportSettingsTree(source, currentDir, backupRoot, currentName) {
     }
 }
 
-Compat_ImportProfilePackage(file, root, backupRoot, name) {
+Compat_ImportProfilePackage(file, root, backupRoot, name, commit := unset) {
     if (!Compat_IsSettingName(name))
         throw Error(GetLang("配置名不符合文件目录命名规则，请修改"))
     dest := root "\" name
@@ -221,9 +223,122 @@ Compat_ImportProfilePackage(file, root, backupRoot, name) {
         }
         FolderPackager.UnpackFile(file, paths.Stage)
         Compat_UpgradeDir(paths.Stage)
-        Compat_InstallStagedTree(paths.Stage, dest, paths.Backup, Compat_UpgradeDir.Bind(dest))
+        verify := IsSet(commit) ? () => (Compat_UpgradeDir(dest), commit.Call()) : Compat_UpgradeDir.Bind(dest)
+        Compat_InstallStagedTree(paths.Stage, dest, paths.Backup, verify)
     } finally {
         if (DirExist(paths.Stage))
             try DirDelete(paths.Stage, true)
     }
+}
+
+Compat_RenameProfile(projectDir, oldName, newName, commit) {
+    if (!Compat_IsSettingName(oldName) || !Compat_IsSettingName(newName))
+        throw Error(GetLang("配置名不符合文件目录命名规则，请修改"))
+    oldDir := projectDir "\Setting\" oldName
+    newDir := projectDir "\Setting\" newName
+    backupRoot := projectDir "\SettingOld"
+    if (FileExist(newDir))
+        throw Error(GetLang("配置名已存在"))
+    for path in [oldDir, newDir, backupRoot]
+        Compat_RejectReparseAncestors(path)
+    Compat_CheckPlainTree(oldDir)
+    paths := Compat_StagePaths(backupRoot, "Rename-")
+    try {
+        ; 先改副本，写盘或切换失败时可完整恢复原目录。
+        DirCopy(oldDir, paths.Stage)
+        rebase := Compat_RebaseProfilePath.Bind(oldDir, newDir, projectDir)
+        loop files, paths.Stage "\*.toml" {
+            file := A_LoopFileFullPath
+            data := TomlUtil_Read(file)
+            if (!TomlUtil_Valid(data))
+                continue
+            root := data.tomap()
+            if (Compat_RebaseProfileValues(root, rebase))
+                TomlUtil_Write(Compat_UnquoteTomlKeys(root), file)
+        }
+        Compat_InstallStagedTree(paths.Stage, newDir, paths.Backup, () => commit.Call(rebase), oldDir)
+    } finally {
+        if (DirExist(paths.Stage))
+            try DirDelete(paths.Stage, true)
+    }
+}
+
+; TOML 解析器保留各级键的引号，写入器会按需重新加引号。
+Compat_UnquoteTomlKeys(value) {
+    if (value is Map) {
+        result := Map()
+        for key, child in value
+            result[TomlUtil_StripKey(key)] := Compat_UnquoteTomlKeys(child)
+        return result
+    }
+    if (value is ArrayList) {
+        result := ArrayList()
+        for child in value
+            result.add(Compat_UnquoteTomlKeys(child))
+        return result
+    }
+    return value
+}
+
+; 路径可能是 TOML 字段，也可能在 JSON 指令、数组或组合搜索目标中。
+Compat_RebaseProfileValues(values, rebase) {
+    changed := false
+    for key, value in values {
+        if (value is Map || value is Array || value is ArrayList) {
+            changed := Compat_RebaseProfileValues(value, rebase) || changed
+            continue
+        }
+        if (Type(value) != "String")
+            continue
+        newValue := rebase.Call(value)
+        if (newValue == value && RegExMatch(value, "^\s*(?:\{|\[)")) {
+            data := ""
+            try data := JSON.parse(value, true)
+            if ((data is Map || data is Array) && Compat_RebaseProfileValues(data, rebase))
+                newValue := JSON.stringify(data, 0)
+        }
+        if (newValue !== value) {
+            values[key] := newValue
+            changed := true
+        }
+    }
+    return changed
+}
+
+Compat_RebaseProfilePath(oldDir, newDir, projectDir, value) {
+    ; 运行指令的文件选择器会为程序路径加引号，参数保留原样。
+    if (RegExMatch(value, '^"([^"]+)"(\s.*)?$', &quoted)) {
+        path := Compat_RebaseProfilePath(oldDir, newDir, projectDir, quoted[1])
+        return (path == quoted[1]) ? value : '"' path '"' quoted[2]
+    }
+    path := StrReplace(value, "/", "\")
+    if (!InStr(path, "\") || RegExMatch(path, '[\x00-\x1F"<>|]'))
+        return value
+    absolute := RegExMatch(path, "i)^(?:[a-z]:\\|\\\\)")
+    if (!absolute && (SubStr(path, 1, 1) == "\" || InStr(path, ":")))
+        return value
+    relativePrefix := ""
+    if (!absolute && SubStr(path, 1, 2) == ".\") {
+        relativePrefix := ".\"
+        path := SubStr(path, 3)
+    }
+    ; Worker 的工作目录是 Thread，允许宏用 ..\Setting 引用配置文件。
+    if (!absolute && InStr(path, "..\Setting\") == 1) {
+        relativePrefix .= "..\"
+        path := SubStr(path, 4)
+    }
+    trailingSlash := SubStr(path, -1) == "\" ? "\" : ""
+    path := RTrim(absolute ? path : projectDir "\" path, "\")
+    ; 统一分隔符并消去 . / ..，用目录边界排除同名前缀的其他配置。
+    if (RegExMatch(path, '(?:^|\\)\.{1,2}(?:\\|$)')) {
+        pathBuffer := Buffer(65536 * 2, 0)
+        length := DllCall("GetFullPathNameW", "Str", path, "UInt", 65536, "Ptr", pathBuffer, "Ptr", 0)
+        if (length > 0 && length < 65536)
+            path := StrGet(pathBuffer, length)
+    }
+    prefixLen := StrLen(oldDir)
+    if (path != oldDir && SubStr(path, 1, prefixLen + 1) != oldDir "\")
+        return value
+    target := newDir SubStr(path, prefixLen + 1) trailingSlash
+    return absolute ? target : relativePrefix SubStr(target, StrLen(projectDir) + 2)
 }

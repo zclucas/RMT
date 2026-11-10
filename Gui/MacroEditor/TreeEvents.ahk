@@ -587,13 +587,14 @@
                 this.SubMacroEditGui.OwnerHwnd := ""
             }
 
-            this.SubMacroEditGui.ShowGui(macroStr, false)
+            this.SubMacroEditGui.ShowGui(macroStr, false, this.WindowBindingContext)
             return
         }
         else if (SubStr(itemText, 1, StrLen(GetLang("条件"))) == GetLang("条件")) {
             if (this.CompareProEditItemGui == "")
                 this.CompareProEditItemGui := CompareProEditItemGui()
             this.CompareProEditItemGui.IsSubMacroEdit := true
+            this.CompareProEditItemGui.WindowBindingContext := this.WindowBindingContext
             this.CompareProEditItemGui.SureBtnAction := this.OnSubNodeEdit.Bind(this, this.CurItemID)
 
             if (MainSoftData.IsModalSubGui && this.Gui != "") {
@@ -682,7 +683,7 @@
         this.SubMacroGraphGui.SureBtnAction := (startSerial) => this._OnGraphNodeEditorSure(itemId, startSerial, symbol)
         ; 「逻辑树」：把该子图转成线性宏写回当前逻辑树（循环体等），不打开顶层编辑器
         this.SubMacroGraphGui.OnSwitchToTreeAction := (linear) => this._OnGraphNodeSwitchToTree(parentId, itemId, linear)
-        this.SubMacroGraphGui.ShowGui(serial)
+        this.SubMacroGraphGui.ShowGui(serial, this.WindowBindingContext)
     }
 
     ; 嵌套节点编辑器点「逻辑树」：子图转线性后写回所属分支并刷新树

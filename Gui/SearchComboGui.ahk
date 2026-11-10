@@ -13,6 +13,7 @@
 
 class SearchComboGui {
     __new() {
+        this.WindowBindingContext := ""
         this.ParentTile := ""
         this.Gui := ""
         this.ui := ""
@@ -1252,7 +1253,7 @@ class SearchComboGui {
             this.MacroGui.OwnerHwnd := ""
         }
         this.MacroGui.SureBtnAction := (command) => this.OnSureFoundMacroBtnClick(command)
-        this.MacroGui.ShowGui(this.ui.Query("TrueMacroCon"), false)
+        this.MacroGui.ShowGui(this.ui.Query("TrueMacroCon"), false, this.WindowBindingContext)
     }
 
     OnEditUnFoundMacroBtnClick(*) {
@@ -1269,7 +1270,7 @@ class SearchComboGui {
             this.MacroGui.OwnerHwnd := ""
         }
         this.MacroGui.SureBtnAction := (command) => this.OnSureUnFoundMacroBtnClick(command)
-        this.MacroGui.ShowGui(this.ui.Query("FalseMacroCon"), false)
+        this.MacroGui.ShowGui(this.ui.Query("FalseMacroCon"), false, this.WindowBindingContext)
     }
 
     TriggerMacro() {

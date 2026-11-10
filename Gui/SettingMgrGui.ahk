@@ -86,8 +86,10 @@ class SettingMgrGui {
         rowTop.Cols("*", "Auto")
         this._AddBtn(rowTop, "BtnOpenRepo", GetLang("共享仓库"), replaceW)
             .Grid_Column(0).HorizontalAlignment("Left")
+            .ToolTip(GetLang("下载其他用户分享的配置，上传本地配置"))
         this._AddBtn(rowTop, "BtnReplace", GetLang("升级旧版配置"), replaceW)
             .Grid_Column(1).HorizontalAlignment("Right")
+            .ToolTip(GetLang("迁移本地旧版配置，使其适配当前版本"))
 
         ; 当前配置 + 重命名 / 校准
         rowCur := panel.Add("Grid").Margin("0,10,0,0")
@@ -172,7 +174,7 @@ class SettingMgrGui {
     _AddBtn(parent, name, content, width) {
         icons := Map("BtnOpenRepo", 0xE753, "BtnReplace", 0xE898,
             "BtnRename", 0xE8AC, "BtnRepair", 0xE90F,
-            "BtnAdd", 0xE710, "BtnUnpack", 0xE8B5, "BtnMerge", 0xE8EA,
+            "BtnAdd", 0xE710, "BtnUnpack", 0xE74B, "BtnMerge", 0xE8EA,
             "BtnLoad", 0xE8E5, "BtnPack", 0xE8B6,
             "BtnCourse", 0xE8A5, "BtnDel", 0xE74D)
         btn := parent.Add("Button").Name(name)
@@ -310,18 +312,14 @@ class SettingMgrGui {
             NewSettingArrStr .= value "π"
         }
 
-        oldDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName
-        newDir := A_WorkingDir "\Setting\" newFileName.Value
-        DirMove(oldDir, newDir)
-        NewSettingArrStr := RTrim(NewSettingArrStr, "π")
-        CfgWrite(NewSettingArrStr, SettingFile, SettingSection, "SettingArrStr")
-
-        MySoftData.CurSettingName := newFileName.Value
-        CfgWrite(MySoftData.CurSettingName, SettingFile, SettingSection, "CurSettingName")
-
-        SettingDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName
-        this.OnRepairSetting(SettingDir)
-        RmtDialog.Info(GetLang("重命名成功"))
+        try {
+            Compat_RenameProfile(A_WorkingDir, MySoftData.CurSettingName, newFileName.Value
+                , ObjBindMethod(this, "_SelectProfileForReload", newFileName.Value, RTrim(NewSettingArrStr, "π")))
+        } catch as e {
+            RmtDialog.Info(e.Message, GetLang("错误"), this.ui.wpfHwnd)
+            return
+        }
+        RmtDialog.Info(GetLang("重命名成功"), GetLang("提示"), this.ui.wpfHwnd)
         SafeReload()
     }
 
@@ -420,37 +418,45 @@ class SettingMgrGui {
             fileNameNoExt := IncrementText(this.SettingList, fileNameNoExt)
 
         try {
-            Compat_ImportProfilePackage(selectedFile, A_WorkingDir "\Setting", A_WorkingDir "\SettingOld", fileNameNoExt)
-            if (LoadType != 2) {
-                MainSoftData.SettingArrStr .= "π" fileNameNoExt
-                CfgWrite(MainSoftData.SettingArrStr, SettingFile, SettingSection, "SettingArrStr")
-            }
-
-            ; 覆盖模式且覆盖的正是当前配置 → 当前配置目录的内容已被替换，必须重启重载
-            if (LoadType == 2 && fileNameNoExt == MySoftData.CurSettingName) {
-                CfgWrite(true, SettingFile, SettingSection, "IsReload")
-                RmtDialog.Info(fileNameNoExt GetLang("配置导入成功"), GetLang("提示"), this.ui.wpfHwnd)
-                SafeReload()
-                return
-            }
-
-            ; 其余情况只落盘：当前配置目录未被触碰，不切换 CurSettingName、不写 IsReload、不重启。
-            ; 刷新配置列表即可让新导入的配置出现在下拉框中，用户需要时再去「加载」它。
-            this.Refresh()
-            RmtDialog.Info(fileNameNoExt GetLang("配置导入成功") "`n" GetLang("可在配置管理中切换后使用"), GetLang("提示"), this.ui.wpfHwnd)
+            list := MainSoftData.SettingArrStr
+            if (LoadType != 2)
+                list .= "π" fileNameNoExt
+            Compat_ImportProfilePackage(selectedFile, A_WorkingDir "\Setting", A_WorkingDir "\SettingOld", fileNameNoExt
+                , ObjBindMethod(this, "_SelectProfileForReload", fileNameNoExt, list))
         } catch as e {
             RmtDialog.Info(GetLang("解包失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
+            return
         }
+        SafeReload()
     }
 
     OnLoadBtnClick(state, ctrl, event) {
         settingName := this._RequireSelectedSetting(state)
         if (settingName == "")
             return
-        MySoftData.CurSettingName := settingName
-        CfgWrite(MySoftData.CurSettingName, SettingFile, SettingSection, "CurSettingName")
-        CfgWrite(true, SettingFile, SettingSection, "IsReload")
+        this._SelectProfileForReload(settingName)
         SafeReload()
+    }
+
+    _SelectProfileForReload(name, list := unset, rebase := unset) {
+        ; 一次提交列表和当前项，避免其中一项写入后重载到不完整的配置状态。
+        if (!IsSet(list))
+            list := MainSoftData.SettingArrStr
+        root := Cfg_Load(SettingFile).Clone()
+        settings := Cfg_Seg(root, SettingSection).Clone()
+        if (IsSet(rebase)) {
+            for key, value in settings {
+                if (Type(value) == "String")
+                    settings[key] := rebase.Call(value)
+            }
+        }
+        settings["SettingArrStr"] := list
+        settings["CurSettingName"] := name
+        settings["IsReload"] := "1"
+        root[SettingSection] := settings
+        Cfg_WriteRoot(root, SettingFile)
+        MainSoftData.SettingArrStr := list
+        MySoftData.CurSettingName := name
     }
 
     OnCourseBtnClick(state, ctrl, event) {
@@ -509,12 +515,15 @@ class SettingMgrGui {
         if (!isVaild)
             return false
 
-        MySoftData.CurSettingName := newFileName.Value
-        CfgWrite(MySoftData.CurSettingName, SettingFile, SettingSection, "CurSettingName")
-
-        MainSoftData.SettingArrStr .= "π" newFileName.Value
-        CfgWrite(MainSoftData.SettingArrStr, SettingFile, SettingSection, "SettingArrStr")
-        RmtDialog.Info(GetLang("成功新增配置：") newFileName.Value)
+        if (FileExist(A_WorkingDir "\Setting\" newFileName.Value)) {
+            RmtDialog.Info(GetLang("配置名已存在"), GetLang("错误"), this.ui.wpfHwnd)
+            return
+        }
+        try this._SelectProfileForReload(newFileName.Value, MainSoftData.SettingArrStr "π" newFileName.Value)
+        catch as e {
+            RmtDialog.Info(e.Message, GetLang("错误"), this.ui.wpfHwnd)
+            return
+        }
         SafeReload()
     }
 

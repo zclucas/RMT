@@ -64,11 +64,12 @@ class SideLogicTree {
             this.editors[t].SetSideActive(true)
     }
 
-    Load(t, macroStr, bpStr := "") {
+    Load(t, macroStr, bpStr, windowBindingContext) {
         ed := this.Ensure(t)
         if (!IsObject(ed))
             return
         this.Activate(t)
+        ed.WindowBindingContext := windowBindingContext
         ed.LoadSideMacro(macroStr, bpStr)
     }
 

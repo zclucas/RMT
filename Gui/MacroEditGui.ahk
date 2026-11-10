@@ -81,6 +81,7 @@ class MacroEditGui {
         this.SubMacroGraphGui := ""
         this.CompareProEditItemGui := ""
         this.OwnerHwnd := ""
+        this.WindowBindingContext := ""
         ; 侧栏宿主：控件名可覆盖；_sideMode 时不建独立窗口，变更经 OnMacroChanged 写回
         this.treeName := "MacroTree"
         this.insertLineName := "DragInsertLine"
@@ -168,12 +169,13 @@ class MacroEditGui {
     }
 #Include MacroEditor\CommandCatalog.ahk
 
-    ShowGui(CommandStr, ShowSaveBtn) {
+    ShowGui(CommandStr, ShowSaveBtn, windowBindingContext := "") {
         global MySoftData
         this._revealed := false
         ; XAML 窗口不支持隐藏复用：已打开的实例先关掉再重建
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
+        this.WindowBindingContext := windowBindingContext
         ; 主题/快捷键同款：内容在 _BuildAndShow 里 Show 前填充（入队），LoadedHwnd 时一次刷入
         this._BuildAndShow(CommandStr, ShowSaveBtn)
 
@@ -455,7 +457,7 @@ class MacroEditGui {
 
         MyMacroGraphGui.OwnerHwnd := ""
         MyMacroGraphGui.SureBtnAction := sureAction
-        MyMacroGraphGui.ShowGui(macroStr)
+        MyMacroGraphGui.ShowGui(macroStr, this.WindowBindingContext)
     }
 
     OnSaveBtnClick() {

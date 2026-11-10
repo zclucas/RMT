@@ -207,7 +207,7 @@ class MacroSettingGui {
         this.MacroGui.ParentTile := GetLang(field == "PreMacro" ? "执行前钩子" : "执行后钩子")
         this.MacroGui.SureBtnAction := (command) => this._OnHookEdited(field, command)
         cur := item.HasProp(field) ? item.%field% : ""
-        this.MacroGui.ShowGui(cur, true)
+        this.MacroGui.ShowGui(cur, true, {TableID: this.tableItem.ID, ItemID: item.ID})
     }
 
     _OnHookEdited(field, command) {
