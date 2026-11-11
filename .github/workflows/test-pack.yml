@@ -1,25 +1,27 @@
-name: Test Pack
+name: 资源更新
 
-# 用于测试提交的代码是否能打包成功
+# 分支推送打包并发布资源，手动运行用于检查打包。
 
 on:
   push:
     branches:
-      - Dev
+      - '**'
   workflow_dispatch:
 
 concurrency:
-  group: test-pack-${{ github.ref }}
-  cancel-in-progress: true
+  # 各分支共用同一版本的 Release，推送任务依次运行。
+  group: rmt-pack-${{ github.event_name }}
+  queue: max
 
 permissions:
   contents: read
 
 jobs:
   pack:
-    name: 打包并检查报错
+    name: 打包 x64 / x86 并发布资源
+    if: github.event_name != 'push' || !github.event.deleted
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     defaults:
       run:
         shell: powershell
@@ -94,6 +96,56 @@ jobs:
           & (Join-Path $env:GITHUB_WORKSPACE 'PackRMT.ps1') @params
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           exit 0
+
+      - name: 发布资源到 RMTAssets
+        if: success() && github.repository == 'zclucas/RMT' && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+        run: |
+          $versionFile = Join-Path $env:GITHUB_WORKSPACE 'RMT.ahk'
+          $versionLine = Get-Content -LiteralPath $versionFile -Raw -Encoding UTF8
+          if ($versionLine -notmatch '(?m)^\s*global\s+RMT_VERSION\s*:=\s*"(?<version>\d+\.\d+(?:\.\d+)*)(?:F\d+)?"') {
+            throw '无法从 RMT.ahk 读取资源发布版本。'
+          }
+          $version = $Matches.version
+
+          # 分支已推进或删除时，旧任务仍可完成打包，但不再发布。
+          $head = git ls-remote --refs origin $env:GITHUB_REF
+          if ($LASTEXITCODE -ne 0) { throw "无法读取远端分支：$env:GITHUB_REF" }
+          if (-not $head -or ($head -split '\s+')[0] -ne $env:GITHUB_SHA) {
+            Write-Host "$env:GITHUB_REF_NAME 已更新或删除，跳过这次旧提交的资源发布。"
+            exit 0
+          }
+          if (-not $env:GH_TOKEN) {
+            throw '请配置 Actions Secret RMT_ASSETS_TOKEN，并授予它对 zclucas/RMTAssets 的 Contents 写入权限。'
+          }
+
+          $repo = 'zclucas/RMTAssets'
+          $outDir = Join-Path $env:RUNNER_TEMP 'RMTRelease'
+          $architectures = @('x64', 'x86')
+          $assetsByArch = @{}
+          foreach ($arch in $architectures) {
+            $assetDir = Join-Path $outDir "RMTAssets_$arch"
+            $assets = @(Get-ChildItem -LiteralPath $assetDir -File)
+            if ($assets.Count -eq 0 -or ($assets | Where-Object Length -eq 0)) {
+              throw "资源目录没有生成可上传的完整文件：$assetDir"
+            }
+            $assetsByArch[$arch] = @($assets.FullName)
+          }
+
+          foreach ($arch in $architectures) {
+            $tag = "v${version}_$arch"
+            $assets = $assetsByArch[$arch]
+            gh release view $tag --repo $repo --json tagName 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              gh release upload $tag @assets --repo $repo --clobber
+            } else {
+              gh release create $tag @assets --repo $repo --title $tag --latest=false --notes "RMT build from $env:GITHUB_REF_NAME ($env:GITHUB_SHA)"
+            }
+            if ($LASTEXITCODE -ne 0) { throw "资源发布失败：$repo $tag" }
+            Write-Host "Published $($assets.Count) assets to $repo $tag"
+          }
 
       - name: 汇总日志到任务摘要
         if: always()
