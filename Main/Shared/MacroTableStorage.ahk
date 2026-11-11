@@ -374,6 +374,7 @@ ReadTableItemInfoNew(tableItem, segID := "") {
         fold.ForbidHotkey := TomlUtil_Str(fseg, "ForbidHotkey")
         fold.TKType := Integer(TomlUtil_Str(fseg, "TKType", "4"))
         fold.TK := TomlUtil_Str(fseg, "TK")
+        fold.GestureTK := TomlUtil_Str(fseg, "GestureTK")
         fold.PosMode := TomlUtil_Int(fseg, "PosMode", 0) == 1 ? 1 : 0
         fold.Anchor := TomlUtil_Int(fseg, "Anchor", 6)
         if (fold.Anchor < 0 || fold.Anchor > 8)
@@ -751,6 +752,8 @@ SaveTableItemInfoTomlCore(root, tableItem) {
         fseg["ForbidHotkey"] := fold.ForbidHotkey
         fseg["TKType"] := String(fold.TKType)
         fseg["TK"] := fold.TK
+        if (fold.GestureTK != "")
+            fseg["GestureTK"] := fold.GestureTK
         fseg["HoldTime"] := String(fold.HoldTime)
         fseg["UnorderedTrigger"] := fold.UnorderedTrigger ? 1 : 0
         if (tableItem.Symbol == "UI") {

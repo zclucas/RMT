@@ -372,7 +372,7 @@ class TriggerKeyInfo {
             if (t) {
                 for f, fold in t.Folds {
                     if (fold.ID == this.foldID)
-                        return MainSoftData.CurMenuWheelIndex == f
+                        return MyMenuWheel.TableID == t.ID && MainSoftData.CurMenuWheelIndex == f
                 }
             }
             return false
@@ -381,7 +381,11 @@ class TriggerKeyInfo {
             ; 有任意该模块面板可见则视为工作中（长按等逻辑用）
             if (!IsSet(MyUIMacroGui) || !IsObject(MyUIMacroGui))
                 return false
-            for key, panelInfo in MyUIMacroGui.PanelMap {
+            tableItem := this.GetTable()
+            panel := tableItem ? UIMacroGui.ForTable(tableItem) : ""
+            if (!panel)
+                return false
+            for key, panelInfo in panel.PanelMap {
                 if (panelInfo.foldID == this.foldID && panelInfo.visible)
                     return true
             }
@@ -422,17 +426,17 @@ class TriggerKeyInfo {
             foldIndex := GetFoldIndexInTable(t, this.foldID)
             if (triggerType == 3)
                 this.forbidTrigger := true
-            OpenMenuWheel(foldIndex, triggerType == 4)
+            OpenMenuWheel(foldIndex, triggerType == 4, t.ID)
         }
         else if (this.macroType == 3) {
             ; 界面宏：切换悬浮面板，绝不能误开菜单轮盘
             ; foldID 是折叠框唯一 ID，TogglePanel 要的是表内下标，必须先换算
             if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui)) {
-                t := GetTableBySymbol("UI")
+                t := this.GetTable()
                 if (t) {
                     foldIndex := GetFoldIndexInTable(t, this.foldID)
                     if (foldIndex)
-                        MyUIMacroGui.TogglePanel(foldIndex)
+                        UIMacroGui.ForTable(t, true).TogglePanel(foldIndex)
                 }
             }
         }

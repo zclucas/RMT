@@ -339,8 +339,11 @@ class UIMacroPosSettingGui {
         fold.PosX := posX
         fold.PosY := posY
         try SaveTableItemInfo(this.tableItem)
-        if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui))
-            MyUIMacroGui.ApplyFoldPosition(this.foldIndex)
+        if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui)) {
+            panel := UIMacroGui.ForTable(this.tableItem)
+            if (panel)
+                panel.ApplyFoldPosition(this.foldIndex)
+        }
         this.Close()
     }
 

@@ -57,6 +57,7 @@ class MacroFold {
         ;菜单栏功能
         this.TKType := 4            ;触发类型
         this.TK := ""               ;触发按键，菜单栏功能
+        this.GestureTK := ""        ;打开菜单轮盘或界面浮窗的手势
         this.HoldTime := 500        ;时间参数（长按=长按时间，双击=双击间隔）
         this.UnorderedTrigger := false  ;顺序触发
         ; 界面宏浮窗位置（仅 UI 表使用并落盘）

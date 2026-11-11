@@ -65,8 +65,9 @@
             . this._BuildFoldHeaderRowXaml(0, 0, "", true)
             . '<Grid Margin="0,4,0,0"><Grid.Style><Style TargetType="Grid"><Setter Property="Visibility" Value="{Binding ShowTKRowVisibility}"/><Style.Triggers><DataTrigger Binding="{Binding Folded}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>'
             . '<Grid.ColumnDefinitions>' this._BuildFoldLayoutColDefs() '</Grid.ColumnDefinitions>'
-            . '<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">'
+            . '<StackPanel Grid.Column="2" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">'
             . this._TriggerEntries('<Button Tag="FoldTKEdit" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml("", true, "FoldTKStr") '</Button>', true, "FoldTKEdit")
+            . this._GestureEntries(true, , , true)
             . '<ComboBox Tag="FoldTKType" SelectedIndex="{Binding FoldTKType}" IsEnabled="{Binding FoldTKTypeEnabled}" Style="{StaticResource RmtItemCombo}" Width="82" Margin="0" ToolTip="' GetLang("触发类型") '">'
             . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
             . '</ComboBox>' this._BuildFoldPosBtnXaml(0, 0, true) '</StackPanel></Grid>'

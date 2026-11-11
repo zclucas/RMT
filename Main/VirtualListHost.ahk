@@ -320,6 +320,8 @@ class VirtualListHost {
                 case "FoldFrontBtn": this._DeferDialog("FoldFrontBtn", OnFoldFrontInfoEdit.Bind(tableItem, idx))
                 case "FoldFrontHelp": this._DeferDialog("FoldFrontHelp", OnFoldFrontHelp.Bind(tableItem, idx))
                 case "FoldTKEdit": this._DeferDialog("FoldTKEdit", OnFlodTKEditClick.Bind(tableItem, idx))
+                case "FoldGestureMouse": OnFoldEditGesture(tableItem, idx, "Mouse")
+                case "FoldGestureTouch": OnFoldEditGesture(tableItem, idx, "Touch")
                 ; 模块头（F 前缀）上的按键/手柄子按钮：tag 是 FoldTKEditKeyboard / FoldTKEditJoy，
                 ; 原先只在 R 分支有 case，F 分支没有 → 点了静默无响应。
                 case "FoldTKEditKeyboard": this._DeferDialog("FoldTKEditKeyboard", OnTriggerEntry.Bind(tableItem, idx, true, "keyboard"))

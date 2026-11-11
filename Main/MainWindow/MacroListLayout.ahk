@@ -129,8 +129,9 @@
             tkStr := FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(fold.TK))
             xaml .= '<Grid Margin="0,4,0,0" Visibility="' (fold.FoldState ? "Collapsed" : "Visible") '">'
                 . '<Grid.ColumnDefinitions>' this._BuildFoldLayoutColDefs() '</Grid.ColumnDefinitions>'
-                . '<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">'
+                . '<StackPanel Grid.Column="2" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">'
                 . this._TriggerEntries('<Button Name="FoldTKEdit_' t '_' f '" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml(tkStr, false) '</Button>', false, "FoldTKEdit_" t "_" f, tkStr)
+                . this._GestureEntries(false, "FoldGesture_" t "_" f "_", , true)
                 . '<ComboBox Name="FoldTKType_' t '_' f '" Style="{StaticResource RmtItemCombo}" Width="82" Margin="0" SelectedIndex="' (fold.TKType - 1) '" IsEnabled="' (isUI ? "False" : "True") '" ToolTip="' GetLang("触发类型") '">'
                 . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
                 . '</ComboBox>' this._BuildFoldPosBtnXaml(t, f, false) '</StackPanel></Grid>'

@@ -329,24 +329,19 @@ class GestureTriggers {
         if (this.ShuttingDown)
             return
         for tableItem in MySoftData.TableInfo {
+            if (tableItem.Symbol == "Menu" || tableItem.Symbol == "UI") {
+                for fold in tableItem.Folds {
+                    if (!fold.ForbidState)
+                        this.AddBindings(tableItem.ID, fold.GestureTK, "", fold.ID)
+                }
+                continue
+            }
             if (tableItem.Symbol != "Gesture")
                 continue
             for index, item in tableItem.Items {
                 if (item.Macro == "" || ParseBoolInt(item.Forbid) || GetItemFoldForbidState(tableItem, index))
                     continue
-                for binding in StrSplit(item.TK, "||") {
-                    gesture := GestureRead(binding)
-                    if (!gesture)
-                        continue
-                    gesture.TableID := tableItem.ID
-                    gesture.ItemID := item.ID
-                    gesture.Config := item.TK
-                    mapForSource := gesture.Source == "Touch" ? this.Touch : this.Mouse
-                    key := gesture.Source == "Touch" ? (gesture.Fingers - 1) * 5 + gesture.Action : gesture.Key
-                    if (!mapForSource.Has(key))
-                        mapForSource[key] := []
-                    mapForSource[key].Push(gesture)
-                }
+                this.AddBindings(tableItem.ID, item.TK, item.ID, "")
             }
         }
         if (this.Touch.Count && !GestureTouchpad.Start())
@@ -362,6 +357,23 @@ class GestureTriggers {
                 return
             }
             SetTimer(this.PollCallback(), 15)
+        }
+    }
+
+    static AddBindings(tableID, config, itemID, foldID) {
+        for binding in StrSplit(config, "||") {
+            gesture := GestureRead(binding)
+            if (!gesture)
+                continue
+            gesture.TableID := tableID
+            gesture.ItemID := itemID
+            gesture.FoldID := foldID
+            gesture.Config := config
+            mapForSource := gesture.Source == "Touch" ? this.Touch : this.Mouse
+            key := gesture.Source == "Touch" ? (gesture.Fingers - 1) * 5 + gesture.Action : gesture.Key
+            if (!mapForSource.Has(key))
+                mapForSource[key] := []
+            mapForSource[key].Push(gesture)
         }
     }
 
@@ -488,6 +500,10 @@ class GestureTriggers {
     static CanRun(gesture) {
         if (!this.IsEnabled())
             return false
+        if (gesture.FoldID != "") {
+            fold := GetFoldByID(gesture.TableID, gesture.FoldID)
+            return fold && !fold.ForbidState && fold.GestureTK == gesture.Config && CheckFrontWindowActive(fold.FrontInfo)
+        }
         resolved := ResolveMacroItem(gesture.TableID, gesture.ItemID)
         if (!resolved || resolved.Item.TK != gesture.Config || resolved.Item.Macro == "" || ParseBoolInt(resolved.Item.Forbid))
             return false
@@ -500,7 +516,19 @@ class GestureTriggers {
     }
 
     static Run(gesture) {
-        if (this.CanRun(gesture))
+        if (!this.CanRun(gesture))
+            return
+        if (gesture.FoldID == "") {
             TriggerMacroHandler(gesture.TableID, gesture.ItemID)
+            return
+        }
+        tableItem := GetTableByID(gesture.TableID)
+        foldIndex := GetFoldIndexInTable(tableItem, gesture.FoldID)
+        if (!foldIndex)
+            return
+        if (tableItem.Symbol == "Menu")
+            OpenMenuWheel(foldIndex, true, tableItem.ID)
+        else if (tableItem.Symbol == "UI")
+            UIMacroGui.ForTable(tableItem, true).TogglePanel(foldIndex)
     }
 }

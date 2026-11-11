@@ -5,6 +5,7 @@ class MenuWheelGui {
 
     __new() {
         this.MenuIndex := 1
+        this.TableID := ""
         this.Gui := ""
         this.isOpen := false
         this.sectors := []
@@ -22,24 +23,21 @@ class MenuWheelGui {
     }
 
     OnHotReloadConfigChanged(tableIndex, itemIndex) {
-        tableItem := GetTableBySymbol("Menu")
+        tableItem := GetTableByID(this.TableID)
         if (this.isOpen && (tableIndex == 0 || (tableItem && tableItem.Index == tableIndex)))
             this.Close()
     }
 
-    ShowGui(MenuIndex) {
+    ShowGui(MenuIndex, tableItem) {
         this.PreviousActiveWindow := WinExist("A")
-        this.ShowRadialMenu(MenuIndex)
+        this.ShowRadialMenu(MenuIndex, tableItem)
     }
 
-    ShowRadialMenu(MenuIndex) {
+    ShowRadialMenu(MenuIndex, tableItem) {
         this.MenuIndex := MenuIndex
         this.showTooltip := !!MainSoftData.MenuWheelShowTooltip
         this.selectMode := MainSoftData.HasProp("MenuWheelSelectMode") ? MainSoftData.MenuWheelSelectMode : 2
 
-        tableItem := GetTableBySymbol("Menu")
-        if (!tableItem)
-            return
         this.Close()
         if (!tableItem.Folds.Has(MenuIndex))
             return
@@ -54,6 +52,7 @@ class MenuWheelGui {
         }
         if (visibleIndices.Length == 0)
             return
+        this.TableID := tableItem.ID
 
         itemCount := visibleIndices.Length
 
@@ -91,8 +90,7 @@ class MenuWheelGui {
 
             icoPath := item.IcoPath
 
-            arcNr := originalIndex
-            h := MenuWheelGui._MakeCallback(this, arcNr, MenuIndex)
+            h := this.OnRadialMenuSelect.Bind(this, tableItem.ID, fold.ID, item.ID)
 
             items.Push({
                 Name: btnName,
@@ -143,10 +141,6 @@ class MenuWheelGui {
             CenterPosRatio: 0.58
         })
         MainSoftData.CurMenuWheelIndex := this.MenuIndex
-    }
-
-    static _MakeCallback(guiObj, arcNr, menuIdx) {
-        return (idx, name) => guiObj.OnRadialMenuSelect(arcNr, menuIdx)
     }
 
     ToggleFunc(state) {
@@ -555,18 +549,16 @@ class MenuWheelGui {
             this.swipe := ""
         }
 
-        tableItem := GetTableBySymbol("Menu")
-        if (!tableItem)
-            return
-        fold := tableItem.Folds[this.MenuIndex]
+        tableItem := GetTableByID(this.TableID)
+        fold := tableItem && tableItem.Folds.Has(this.MenuIndex) ? tableItem.Folds[this.MenuIndex] : ""
         if (!fold)
             return
-        foldItems := GetFoldItems(tableItem, fold)
-        Loop itemCount {
-            idx := A_Index
-            item := foldItems[idx]
-            if (!item)
+        idx := 0
+        for item in GetFoldItems(tableItem, fold) {
+            if (ParseBoolInt(item.Forbid))
                 continue
+            if (++idx > itemCount)
+                break
             isWorkRunning := item.IsWorkIndex != 0
             state := isWorkRunning ? 1 : item.ColorState
             if (state > 0 && MacroStateColors.Has(state))
@@ -668,28 +660,23 @@ class MenuWheelGui {
         this._Cleanup()
     }
 
-    OnRadialMenuSelect(ArcNr, MenuIndex) {
-        tableItem := GetTableBySymbol("Menu")
-        if (!tableItem)
+    OnRadialMenuSelect(tableID, foldID, itemID, *) {
+        resolved := ResolveMacroItem(tableID, itemID)
+        fold := GetFoldByID(tableID, foldID)
+        if (!resolved || !fold || resolved.Item.FoldID != foldID)
             return
-        fold := tableItem.Folds[MenuIndex]
-        if (!fold)
-            return
-        foldItems := GetFoldItems(tableItem, fold)
-        item := foldItems[ArcNr]
-        if (!item)
-            return
+        tableItem := resolved.Table
+        item := resolved.Item
         ; §17 统一禁用门控：轮盘条目被禁用（条目 Forbid / 所属模块禁用）→ 选择不触发，
         ; 覆盖轮盘已打开期间条目被禁用（保存选「否」热重载或模块开关热键）的场景
         if (ParseBoolInt(item.Forbid) || fold.ForbidState)
             return
-        macroIndex := GetItemIndexInTable(tableItem, item.ID)
+        macroIndex := resolved.Index
         triggerType := item.TriggerType
 
         ; 开关模式：与按键宏保持一致，统一走 OnToggleTriggerMacro
         if (triggerType == 4) {
-            WorkerIndex := item.IsWorkIndex
-            if (WorkerIndex != 0) {
+            if (item.IsWorkIndex || (WorkPoolEnabled() && MyWorkPool.HasItemWork(tableID, itemID))) {
                 ; Worker 运行中 → 停止
                 MyStopMacro(tableItem, macroIndex)
                 return
@@ -700,8 +687,7 @@ class MenuWheelGui {
         }
 
         ; 非开关模式：直接启动
-        SetTableItemState(tableItem, macroIndex, 1)
-        RunMacroTrigger(tableItem, item.Macro, macroIndex)
+        TriggerMacroHandler(tableItem, macroIndex)
     }
 
     ; ====== 内部轮盘实现 ======

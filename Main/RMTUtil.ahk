@@ -946,8 +946,11 @@ SetTableItemState(tableItem, itemIndex, State) {
     ; 悬浮显示随宏生命周期：停止（0）、终止（3）时关闭
     if (State == 0 || State == 3)
         HudStopItem(tableItem, itemIndex)
-    if (tableItem.Symbol == "UI" && IsSet(MyUIMacroGui))
-        MyUIMacroGui.UpdateButtonsState(itemIndex, State)
+    if (tableItem.Symbol == "UI" && IsSet(MyUIMacroGui)) {
+        panel := UIMacroGui.ForTable(tableItem)
+        if (panel)
+            panel.UpdateButtonsState(itemIndex, State)
+    }
 }
 
 RefreshItemColorUI(tableItem, itemIndex) {
@@ -1956,15 +1959,19 @@ FormatIntegerWithCommas(num) {
     return RegExReplace(num, "(\d)(?=(\d{3})+$)", "$1,")
 }
 
-OpenMenuWheel(MenuIndex, isTog) {
-    if (IsObject(MyMenuWheel) && MyMenuWheel.isOpen && MainSoftData.CurMenuWheelIndex == MenuIndex) {
+OpenMenuWheel(MenuIndex, isTog, tableID := "") {
+    tableItem := tableID == "" ? GetTableBySymbol("Menu") : GetTableByID(tableID)
+    if (!tableItem || !tableItem.Folds.Has(MenuIndex))
+        return
+    if (IsObject(MyMenuWheel) && MyMenuWheel.isOpen && MyMenuWheel.TableID == tableItem.ID
+        && MainSoftData.CurMenuWheelIndex == MenuIndex) {
         if (isTog)
             CloseMenuWheel()
         return
     }
 
     MainSoftData.CurMenuWheelIndex := MenuIndex
-    MyMenuWheel.ShowGui(MenuIndex)
+    MyMenuWheel.ShowGui(MenuIndex, tableItem)
 }
 
 CloseMenuWheel() {

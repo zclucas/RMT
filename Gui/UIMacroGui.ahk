@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 
 class UIMacroGui {
     static STATE_DEFAULT := 0    ; 默认/空闲（隐藏色块）
@@ -9,13 +9,24 @@ class UIMacroGui {
     static DEFAULT_PANEL_OFFSET_X := 100
     static DEFAULT_PANEL_OFFSET_Y := 100
 
-    __new() {
+    static AdditionalTables := Map()
+
+    static ForTable(tableItem, create := false) {
+        if (tableItem == GetTableBySymbol("UI"))
+            return MyUIMacroGui
+        if (create && !this.AdditionalTables.Has(tableItem.ID))
+            this.AdditionalTables[tableItem.ID] := UIMacroGui(tableItem.ID)
+        return this.AdditionalTables.Get(tableItem.ID, "")
+    }
+
+    GetTable() => this.TableID == "" ? GetTableBySymbol("UI") : GetTableByID(this.TableID)
+
+    __new(tableID := "") {
+        this.TableID := tableID
         this.PanelMap := Map()       ; panelKey -> panelInfo
         this.PanelTimers := Map()     ; panelKey -> FuncObj（SetTimer回调引用）
         this.IsCreating := false
         this.MonitorTimer := ""
-        this.RunningMap := Map()
-        this.RecoverTimers := Map()
         this._lastActiveHwnd := 0       ; 上次检测的前台窗口 hwnd
         this._TipTimers := Map()        ; panelKey -> 内联提示定时器
         ; 用户主动关闭（右键关闭/Alt+F4/热键隐藏）后禁止「激活时默认显示」重建，直到热键再开
@@ -90,11 +101,9 @@ class UIMacroGui {
             this.StopFollowTimer(foldIndex)
         }
         this.HideAllPanels()
-        for macroIndex in this.RunningMap {
-            this.StopMacro(macroIndex)
-        }
-        for macroIndex in this.RecoverTimers {
-            this.CancelRecoverTimer(macroIndex)
+        if (this.TableID == "") {
+            for _, panel in UIMacroGui.AdditionalTables
+                panel.StopMonitor()
         }
     }
 
@@ -102,7 +111,7 @@ class UIMacroGui {
 
     ; 获取界面宏表 + 折叠框 + 折叠框内条目（统一入口，避免各处重复 TableInfo[4]/IndexSpan）
     _GetFoldContext(foldIndex) {
-        tableItem := GetTableBySymbol("UI")
+        tableItem := this.GetTable()
         if (!tableItem)
             return ""
         if (!tableItem.Folds.Has(foldIndex))
@@ -139,6 +148,7 @@ class UIMacroGui {
                 name: "Btn_" macroIndex,
                 text: btnText,
                 icon: displayIcon,
+                state: item.ColorState,
                 macroIndex: macroIndex,
                 macroId: String(item.ID)
             })
@@ -217,6 +227,7 @@ class UIMacroGui {
                 name: "Btn_" macroIndex,
                 text: btnText,
                 icon: displayIcon,
+                state: item.ColorState,
                 macroIndex: macroIndex,
                 macroId: String(item.ID)
             })
@@ -316,7 +327,7 @@ class UIMacroGui {
         titleText := MainSoftData.UIPanelTitleText
         fontSize := Integer(MainSoftData.UIPanelFontSize)
 
-        tableItem := GetTableBySymbol("UI")
+        tableItem := this.GetTable()
         fold := tableItem ? tableItem.Folds[foldIndex] : ""
         foldRemark := fold ? fold.Remark : ""
 
@@ -377,10 +388,13 @@ class UIMacroGui {
             sp := btn.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
                 .VerticalAlignment("Center")
 
-            ; 运行状态色点（默认隐藏）
-            sp.Add("Ellipse").Name(item.name "_State")
+            stateDot := sp.Add("Ellipse").Name(item.name "_State")
                 .Width(8).Height(8).VerticalAlignment("Center").Margin("0,0,2,0")
-                .Visibility("Collapsed").IsHitTestVisible("False")
+                .IsHitTestVisible("False")
+            if (MacroStateColors.Has(item.state))
+                stateDot.Fill(MacroStateColors[item.state])
+            else
+                stateDot.Visibility("Collapsed")
 
             if (item.icon != "") {
                 fullIconPath := this.GetFullIconPath(item.icon)
@@ -982,18 +996,18 @@ class UIMacroGui {
     _GetCustomSchema(foldIndex) {
         foldKey := ""
         try {
-            tableItem := GetTableBySymbol("UI")
+            tableItem := this.GetTable()
             fold := (tableItem && tableItem.Folds.Length >= foldIndex) ? tableItem.Folds[foldIndex] : ""
             foldKey := UIMacroSchema.FoldKey(fold)
         }
         if (foldKey == "") {
             foldKey := String(foldIndex)
-        } else {
+        } else if (this.TableID == "") {
             UIMacroSchema.MigrateLegacy(foldIndex, foldKey)
         }
 
         raw := UIMacroSchema.ReadStoreByKey(foldKey)
-        if (Trim(String(raw)) == "")
+        if (Trim(String(raw)) == "" && this.TableID == "")
             raw := UIMacroSchema.DecodeStore(MainSoftData.UIPanelCustom)
         if (Trim(String(raw)) == "")
             return ""
@@ -1131,7 +1145,7 @@ class UIMacroGui {
         legacyKey := String(foldIndex)
         if (foldKey != keys[1])
             keys.Push(foldKey)
-        if (legacyKey != keys[1] && legacyKey != foldKey)
+        if (this.TableID == "" && legacyKey != keys[1] && legacyKey != foldKey)
             keys.Push(legacyKey)
 
         for i, key in keys {
@@ -1176,7 +1190,7 @@ class UIMacroGui {
     _PosForget(store, foldIndex) {
         global SettingSection
         base := this._PositionKey(foldIndex)
-        legacy := String(foldIndex)
+        legacy := this.TableID == "" ? String(foldIndex) : base
         raw := (store == "UIPanelPos") ? MainSoftData.UIPanelPos : MainSoftData.UIPanelBallPos
         out := []
         for part in StrSplit(String(raw), ";") {
@@ -1537,7 +1551,7 @@ class UIMacroGui {
         titleText := MainSoftData.UIPanelTitleText
         fontSize := Integer(MainSoftData.UIPanelFontSize)
 
-        tableItem := GetTableBySymbol("UI")
+        tableItem := this.GetTable()
         fold := (tableItem && tableItem.Folds.Length >= foldIndex) ? tableItem.Folds[foldIndex] : ""
         foldRemark := ""
         if (fold)
@@ -1987,7 +2001,7 @@ class UIMacroGui {
         if (this.IsCreating)
             return
 
-        tableItem := GetTableBySymbol("UI")
+        tableItem := this.GetTable()
         ; 每次触发实时读取，避免编辑前台后仍用旧判断
         frontInfo := ""
         if (tableItem) {
@@ -2229,7 +2243,7 @@ class UIMacroGui {
                 if (activeHwnd != this._lastActiveHwnd) {
                     this._lastActiveHwnd := activeHwnd
 
-                    tableItem := GetTableBySymbol("UI")
+                    tableItem := this.GetTable()
                     if (tableItem) {
                         for foldIndex, fold in tableItem.Folds {
                             ; 用户点过 ✕ → 这次会话内不再自动弹回来（快捷键/点按钮仍可打开）
@@ -2312,20 +2326,14 @@ class UIMacroGui {
             if (!item.Macro)
                 return
 
-            if (tableItem.Symbol == "UI") {
-                if (this.IsMacroRunning(macroIndex))
-                    this.StopMacro(macroIndex)
-                else
-                    this.StartMacro(macroIndex)
-            } else {
-                if (item.ColorState > 0)
-                    MyStopMacro(tableItem, item.ID)
-                else
-                    TriggerMacroHandler(tableItem, item)
-            }
-
-            ; 点击后面板抢走了焦点 → 立即将焦点还给目标窗口
+            ; 恢复目标焦点后再分派，避免本地执行时阻塞焦点恢复。
             this.RestoreTargetFocus(panelKey)
+            if (item.ColorState == 1 || item.ColorState == 2
+                || (WorkPoolEnabled() && MyWorkPool.HasItemWork(tableItem.ID, item.ID))) {
+                MyStopMacro(tableItem, item.ID)
+            } else {
+                SetTimer(TriggerMacroHandler.Bind(tableItem.ID, item.ID), -1)
+            }
         }
         catch as e {
         }
@@ -2338,64 +2346,6 @@ class UIMacroGui {
         panelInfo := this.PanelMap[panelKey]
         if (panelInfo.targetHwnd && DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd))
             WinActivate("ahk_id " panelInfo.targetHwnd)
-    }
-
-    IsMacroRunning(macroIndex) {
-        return (this.RunningMap.Has(macroIndex)
-            && this.RunningMap[macroIndex].IsRunning)
-    }
-
-    StartMacro(macroIndex) {
-        if (this.IsMacroRunning(macroIndex))
-            return
-
-        tableItem := GetTableBySymbol("UI")
-        item := tableItem ? tableItem.Items[macroIndex] : ""
-        if (!item)
-            return
-        macroStr := item.Macro
-
-        this.CancelRecoverTimer(macroIndex)
-
-        actionObj := this
-        action := (*) => (
-            RunMacroTrigger(tableItem, macroStr, macroIndex),
-            SetTimer(() => actionObj.OnMacroComplete(macroIndex), -10)
-        )
-
-        this.RunningMap[macroIndex] := {IsRunning: true, TimerAction: action}
-        SetTimer(action, -1)
-        MySetTableItemState(tableItem, macroIndex, UIMacroGui.STATE_RUNNING)
-        this.UpdateButtonStatus(macroIndex, UIMacroGui.STATE_RUNNING)
-    }
-
-    StopMacro(macroIndex) {
-        tableItem := GetTableBySymbol("UI")
-
-        this.CancelRecoverTimer(macroIndex)
-
-        if (tableItem && tableItem.Items.Has(macroIndex)) {
-            item := tableItem.Items[macroIndex]
-            item.Killed := true
-            item.Pause := false
-        }
-
-        if (this.RunningMap.Has(macroIndex))
-            this.RunningMap.Delete(macroIndex)
-
-        MySetTableItemState(tableItem, macroIndex, UIMacroGui.STATE_STOPPED)
-        this.UpdateButtonStatus(macroIndex, UIMacroGui.STATE_STOPPED)
-    }
-
-    OnMacroComplete(macroIndex) {
-        if (this.IsMacroRunning(macroIndex)) {
-            this.RunningMap.Delete(macroIndex)
-            this.CancelRecoverTimer(macroIndex)
-            tableItem := GetTableBySymbol("UI")
-            if (tableItem)
-                MySetTableItemState(tableItem, macroIndex, UIMacroGui.STATE_DEFAULT)
-            this.UpdateButtonStatus(macroIndex, UIMacroGui.STATE_DEFAULT)
-        }
     }
 
     ; 更新按钮状态色点
@@ -2444,15 +2394,6 @@ class UIMacroGui {
         this.UpdateButtonStatus(macroIndex, state)
     }
 
-    CancelRecoverTimer(macroIndex) {
-        if (this.RecoverTimers.Has(macroIndex)) {
-            oldTimer := this.RecoverTimers[macroIndex]
-            if (oldTimer)
-                SetTimer(oldTimer, 0)
-            this.RecoverTimers.Delete(macroIndex)
-        }
-    }
-
     HideAllPanels() {
         for foldIndex in this.PanelTimers.Clone() {
             this.StopFollowTimer(foldIndex)
@@ -2469,7 +2410,7 @@ class UIMacroGui {
     ; §15.5 RMT指令「打开界面窗口」：为界面宏表全部可用折叠框创建并显示面板；
     ; 没有可用的界面窗口时无操作（调用方据此判断「指令无效」）
     ShowAllPanels() {
-        tableItem := GetTableBySymbol("UI")
+        tableItem := this.GetTable()
         if (!tableItem)
             return
         loop tableItem.Folds.Length {
@@ -2489,6 +2430,10 @@ class UIMacroGui {
     }
 
     ApplyThemeColors() {
+        if (this.TableID == "") {
+            for _, panel in UIMacroGui.AdditionalTables
+                panel.ApplyThemeColors()
+        }
         for , panelInfo in this.PanelMap {
             if (!panelInfo || !IsObject(panelInfo.ui))
                 continue
@@ -2569,7 +2514,7 @@ class UIMacroGui {
 
     ; 把已打开的该模块浮窗立刻挪到当前保存的位置。
     ApplyFoldPosition(foldIndex) {
-        tableItem := GetTableBySymbol("UI")
+        tableItem := this.GetTable()
         if (!tableItem || foldIndex < 1 || foldIndex > tableItem.Folds.Length)
             return
         fold := tableItem.Folds[foldIndex]
@@ -2593,7 +2538,7 @@ class UIMacroGui {
     }
 
     _FoldOf(panelInfo) {
-        tableItem := GetTableBySymbol("UI")
+        tableItem := this.GetTable()
         if (!tableItem || !IsObject(panelInfo) || !panelInfo.HasProp("foldIndex"))
             return ""
         idx := panelInfo.foldIndex

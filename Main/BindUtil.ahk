@@ -1107,6 +1107,8 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
     ; Forbid 用 ParseBoolInt 归一（防旧配置遗留字符串 "0" 被当 truthy）
     if (ParseBoolInt(item.Forbid) || GetItemFoldForbidState(tableItem, itemIndex))
         return
+    if ((tableItem.Symbol == "Menu" || tableItem.Symbol == "UI") && (item.ColorState == 1 || item.ColorState == 2))
+        return
     macro := item.Macro
     tableID := tableItem.ID
     itemID := item.ID
@@ -1120,7 +1122,10 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
             GraphPoolLog("宏触发恢复", Format("tab={1} item={2} 清理上次残留", tableID, itemID))
         MyWorkPool.PrepareItemRun(tableID, itemID)
         GraphPoolLog("宏触发", Format("tab={1} item={2}", tableID, itemID))
-        cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID))
+        ; 自定义界面可直接编辑内存里的宏参数，Worker 要执行点击时的内容。
+        cmd := EncodeBatch(tableItem.Symbol == "UI"
+            ? EncodeCommand("TR", tableID, itemID, "", macro)
+            : EncodeCommand("TR", tableID, itemID))
         item.IsWorkIndex := true
         MyWorkPool.Submit(cmd, tableID, itemID)
         return

@@ -133,14 +133,14 @@
         return result '</StackPanel></Grid>'
     }
 
-    _GestureEntries(virtual, id := "", value := "") {
+    _GestureEntries(virtual, id := "", value := "", isFold := false) {
         tooltip := virtual ? "{Binding TKStr}" : this._XmlEsc(GestureDisplay(value))
         xaml := '<StackPanel Orientation="Horizontal">'
         for entry in [["Mouse", "鼠标手势", "E962"], ["Touch", "触控板手势", "EFA5"]] {
-            attr := virtual ? 'Tag="Gesture' entry[1] '"' : 'Name="' id entry[1] '"'
+            attr := virtual ? 'Tag="' (isFold ? "Fold" : "") 'Gesture' entry[1] '"' : 'Name="' id entry[1] '"'
             label := this._XmlEsc(GetLang(entry[2]))
-            xaml .= '<Button ' attr ' Style="{StaticResource RmtItemFieldBtn}" Width="58" Margin="0,0,4,0"'
-                . ' AutomationProperties.Name="' label '" ToolTip="' tooltip '">'
+            xaml .= '<Button ' attr ' Style="{StaticResource RmtItemFieldBtn}" Width="' (isFold ? 32 : 58) '" Margin="0,0,4,0"'
+                . ' AutomationProperties.Name="' label '" ToolTip="' (isFold ? label : tooltip) '">'
                 . '<TextBlock Text="&#x' entry[3] ';" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"/></Button>'
         }
         return xaml '</StackPanel>'
@@ -568,6 +568,10 @@
             this._Bind("FoldTKEdit_" t "_" f, "Click", this._DeferClick(OnFlodTKEditClick.Bind(tableItem, f)))
             this._Bind("FoldTKEdit_" t "_" f "_Keyboard", "Click", this._DeferClick(OnTriggerEntry.Bind(tableItem, f, true, "keyboard")))
             this._Bind("FoldTKEdit_" t "_" f "_Joy", "Click", this._DeferClick(OnTriggerEntry.Bind(tableItem, f, true, "joy")))
+            if (tableItem.Symbol == "Menu" || tableItem.Symbol == "UI") {
+                for source in ["Mouse", "Touch"]
+                    this._Bind("FoldGesture_" t "_" f "_" source, "Click", OnFoldEditGesture.Bind(tableItem, f, source))
+            }
             this._Bind("FoldAddMacro_" t "_" f, "Click", OnItemAddMacroBtnClick.Bind(tableItem, f))
             this._Bind("FoldPasteMacro_" t "_" f, "Click", OnItemPasteMacroBtnClick.Bind(tableItem, f))
             this._Bind("FoldShare_" t "_" f, "Click", OnFoldShareBtnClick.Bind(tableItem, f))

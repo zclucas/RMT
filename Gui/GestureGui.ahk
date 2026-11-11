@@ -4,7 +4,12 @@
         SetTimer(ShowGestureEditor.Bind(tableItem.ID, item.ID, source), -1)
 }
 
-ShowGestureEditor(tableID, itemID, source) {
+OnFoldEditGesture(tableItem, index, source, *) {
+    if (tableItem.Folds.Has(index))
+        SetTimer(ShowGestureEditor.Bind(tableItem.ID, tableItem.Folds[index].ID, source, true), -1)
+}
+
+ShowGestureEditor(tableID, targetID, source, isFold := false) {
     if (GestureTriggers.ShuttingDown)
         return
     if (GestureTriggers.Editing) {
@@ -13,19 +18,26 @@ ShowGestureEditor(tableID, itemID, source) {
             WinActivate("ahk_id " hwnd)
         return
     }
-    resolved := ResolveMacroItem(tableID, itemID)
-    if (resolved) {
+    if (isFold) {
+        tableItem := GetTableByID(tableID)
+        fold := tableItem ? tableItem.GetFold(targetID) : ""
+        if (fold) {
+            MyMainWin.ReadTabValues(tableItem)
+            GestureGui(tableID, targetID, source, fold.GestureTK, fold.Remark, true)
+        }
+    } else if (resolved := ResolveMacroItem(tableID, targetID)) {
         MyMainWin.ReadTabValues(resolved.Table)
-        GestureGui(tableID, itemID, source, resolved.Item.TK, resolved.Item.Remark)
+        GestureGui(tableID, targetID, source, resolved.Item.TK, resolved.Item.Remark)
     }
 }
 
 class GestureGui {
     static PreviewSize := 154
 
-    __New(tableID, itemID, source, value, remark) {
+    __New(tableID, targetID, source, value, remark, isFold := false) {
         this.TableID := tableID
-        this.ItemID := itemID
+        this.TargetID := targetID
+        this.IsFold := isFold
         this.Source := source
         this.MouseKeys := ["LButton", "MButton", "RButton", "XButton1", "XButton2", "WheelLeft", "WheelRight"]
         this.ShapeIDs := []
@@ -444,12 +456,21 @@ class GestureGui {
             }
             binding := "Mouse|" this.MouseKeys[this.KeyIndex] "|" shape
         }
-        resolved := ResolveMacroItem(this.TableID, this.ItemID)
-        if (!resolved) {
+        if (this.IsFold) {
+            tableItem := GetTableByID(this.TableID)
+            target := tableItem ? tableItem.GetFold(this.TargetID) : ""
+            property := "GestureTK"
+        } else {
+            resolved := ResolveMacroItem(this.TableID, this.TargetID)
+            tableItem := resolved ? resolved.Table : ""
+            target := resolved ? resolved.Item : ""
+            property := "TK"
+        }
+        if (!target) {
             this.Close(true)
             return
         }
-        previous := resolved.Item.TK
+        previous := target.%property%
         value := GestureWithBinding(previous, this.Source, binding)
         if (previous == value) {
             this.Close(true)
@@ -457,21 +478,22 @@ class GestureGui {
         }
         previousCritical := A_IsCritical
         Critical()
-        resolved.Item.TK := value
+        target.%property% := value
         try {
-            if (!SaveTableItemInfo(resolved.Table))
+            if (!SaveTableItemInfo(tableItem))
                 throw Error(GetLang("无法写入当前配置"))
         } catch as err {
-            resolved.Item.TK := previous
+            target.%property% := previous
             this.UI.Update("GestureHint", "Text", GetLang("手势保存失败，请检查配置文件后重试。"))
             try RMTLogSys(RMT_LV_ERROR, "Gesture", err.Message)
             return
         } finally {
             Critical(previousCritical)
         }
-        HotReloadPublish(resolved.Table.Index, 0, false)
+        HotReloadPublish(tableItem.Index, 0, false)
         this.Close(true)
-        MyMainWin.RefreshItemRow(resolved.Table.Index, resolved.Index)
+        if (!this.IsFold)
+            MyMainWin.RefreshItemRow(tableItem.Index, resolved.Index)
     }
 
     CloseForExit() {

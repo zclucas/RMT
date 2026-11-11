@@ -295,13 +295,14 @@
 
             if (opcode == "TR") {
                 RMTLogBusiness("宏:(" item.Remark ")", Format("tab={1} item={2} 开始执行", tableID, itemID))
-                if (parts.Length >= 4) {
+                if (parts.Length == 4) {
                     item.HoldKey := Map()
                     WaitIfPaused(tableItem, index)
                     if (!item.Killed)
                         RunGraphNodeChain(tableItem, UnescapeIPC(parts[4]), index)
                 } else if (!item.Killed) {
-                    RunMacroTrigger(tableItem, item.Macro, index, true)
+                    macro := parts.Length >= 5 ? UnescapeIPC(parts[5]) : item.Macro
+                    RunMacroTrigger(tableItem, macro, index, true)
                 }
                 RMTLogBusiness("宏:(" item.Remark ")", Format("tab={1} item={2} 结束", tableID, itemID))
             } else if (opcode == "HM") {
