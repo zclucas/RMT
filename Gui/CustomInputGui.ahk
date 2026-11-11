@@ -155,19 +155,9 @@ class CustomInputGui {
             this._StopRec(true)
             return
         }
-        if (!IsSet(InitSttEngine))
+        if (!IsSet(InitSttEngine) || !SttGui.RequestModelDownload())
             return
         engine := InitSttEngine()
-        if (IsObject(engine) && !engine.IsDllReady())
-            engine._TryLoadDll()
-        if (!IsObject(engine) || !engine.IsDllReady()) {
-            try Toast.Warning(GetLang("语音引擎未就绪"))
-            return
-        }
-        if (!engine.IsStreamReady()) {
-            SttGui.RequestModelDownload()
-            return
-        }
         if (!engine.StreamBegin()) {
             try Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.StreamGetLastError()))
             return

@@ -20,8 +20,7 @@ class SttGui {
 
     static _promptQueued := false
 
-    ; Ask once at the point where a voice button is used, then download in the
-    ; background so the caller can keep its own window open.
+    ; 语音入口共用的自检。引擎和模型就绪时返回 true，模型未就绪时再询问下载。
     static RequestModelDownload() {
         engine := InitSttEngine()
         if (IsObject(engine) && !engine.IsDllReady())
@@ -50,7 +49,7 @@ class SttGui {
             engine := InitSttEngine()
             if (!IsObject(engine) || engine.IsStreamModelReady() || IsObject(SttGui.activeDownload))
                 return
-            choice := RmtDialog.Choose(GetLang("缺少语音识别模型，是否下载？"), GetLang("提示"), [GetLang("下载识别模型"), GetLang("取消")])
+            choice := RmtDialog.Choose(GetLang("语音识别模型未就绪，是否下载？"), GetLang("提示"), [GetLang("下载识别模型"), GetLang("取消")])
             if (choice != 1)
                 return
             SttGui._BeginModelDownload()

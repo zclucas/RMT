@@ -1862,6 +1862,7 @@ RMT 命令行帮助=RMT Command Line Help
 语音插件未安装（缺少 VoiceDll.dll）=Voice plugin missing (VoiceDll.dll)
 下载识别模型=Download Model
 缺少语音识别模型，是否下载？=The speech model is missing. Download it?
+语音识别模型未就绪，是否下载？=The speech model is not ready. Download it?
 语音引擎未就绪=Speech engine is not ready
 语音引擎未安装=Speech engine is not installed
 模型解压中……=Extracting model...

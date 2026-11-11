@@ -144,17 +144,9 @@
             this._AiStopRec(t)
             return
         }
+        if (!SttGui.RequestModelDownload())
+            return
         engine := InitSttEngine()
-        if (IsObject(engine) && !engine.IsDllReady())
-            engine._TryLoadDll()
-        if (!IsObject(engine) || !engine.IsDllReady()) {
-            Toast.Warning(GetLang("语音引擎未就绪"))
-            return
-        }
-        if (!engine.IsStreamReady()) {
-            SttGui.RequestModelDownload()
-            return
-        }
         inputBefore := ""
         try inputBefore := Trim(this.ui.Query("AiInput_" t))
         initializing := !engine.streamLoaded

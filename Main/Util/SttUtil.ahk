@@ -84,8 +84,26 @@ class SttEngine {
     }
 
     IsStreamModelReady() {
-        f := this._StreamFiles()
-        return (f[1] != "" && FileExist(f[4]))
+        files := this._StreamFiles()
+        if (files[1] == "")
+            return false
+        ; 与 DLL 的选择顺序一致。部分模型不使用 BPE，词表存在时才检查。
+        for name in ["bpe.model", "bbpe.model"] {
+            path := this.StreamModelDir "\" name
+            if (FileExist(path)) {
+                files.Push(path)
+                break
+            }
+        }
+        try {
+            for path in files {
+                if (path != "" && FileOpen(path, "r").Length == 0)
+                    return false
+            }
+        } catch {
+            return false
+        }
+        return true
     }
 
     ; DLL 与模型齐备才可用

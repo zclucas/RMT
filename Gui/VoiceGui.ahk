@@ -339,19 +339,9 @@ class VoiceGui {
             this._StopRec()
             return
         }
-        if (!IsSet(InitSttEngine))
+        if (!IsSet(InitSttEngine) || !SttGui.RequestModelDownload())
             return
         engine := InitSttEngine()
-        if (IsObject(engine) && !engine.IsDllReady())
-            engine._TryLoadDll()
-        if (!IsObject(engine) || !engine.IsDllReady()) {
-            try Toast.Warning(GetLang("语音引擎未就绪"))
-            return
-        }
-        if (!engine.IsStreamReady()) {
-            SttGui.RequestModelDownload()
-            return
-        }
         baseText := ""
         try baseText := Trim(this.ui.Query("EdKeywords"))
         initializing := !engine.streamLoaded
