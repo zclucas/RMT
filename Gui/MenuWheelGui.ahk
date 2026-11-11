@@ -2,6 +2,7 @@
 
 class MenuWheelGui {
     static Hotkeys := ["1", "2", "3", "4", "5", "6", "7", "8"]
+    static _warned := Map()
 
     __new() {
         this.MenuIndex := 1
@@ -13,7 +14,6 @@ class MenuWheelGui {
         this.closed := false
         this.showTooltip := true
         this.selectMode := 1
-        this.swipe := ""
         this.swipeTriggered := false
         this._buildGen := 0          ; 世代計數：每次新建輪盤遞增，舊的異步等待自動失效
         this._hkIds := []
@@ -28,6 +28,14 @@ class MenuWheelGui {
             this.Close()
     }
 
+    ; 轮盘有多个静默返回点，各记一次日志便于区分原因
+    _WarnOnce(tag, msg) {
+        if (MenuWheelGui._warned.Has(tag))
+            return
+        MenuWheelGui._warned[tag] := true
+        RMTLogSys(RMT_LV_WARN, "MenuWheel", msg)
+    }
+
     ShowGui(MenuIndex, tableItem) {
         this.PreviousActiveWindow := WinExist("A")
         this.ShowRadialMenu(MenuIndex, tableItem)
@@ -39,19 +47,25 @@ class MenuWheelGui {
         this.selectMode := MainSoftData.HasProp("MenuWheelSelectMode") ? MainSoftData.MenuWheelSelectMode : 2
 
         this.Close()
-        if (!tableItem.Folds.Has(MenuIndex))
+        if (!tableItem.Folds.Has(MenuIndex)) {
+            this._WarnOnce("no-index", "轮盘打开失败：模块下标不存在 " MenuIndex " (表 " tableItem.ID ")")
             return
+        }
         fold := tableItem.Folds[MenuIndex]
-        if (!fold || fold.ForbidState)
+        if (!fold || fold.ForbidState) {
+            this._WarnOnce("forbid", "轮盘打开失败：模块不存在或已被禁用 " MenuIndex " (表 " tableItem.ID ")")
             return
+        }
         foldItems := GetFoldItems(tableItem, fold)
         visibleIndices := []
         for index, item in foldItems {
             if (!ParseBoolInt(item.Forbid))
                 visibleIndices.Push(index)
         }
-        if (visibleIndices.Length == 0)
+        if (visibleIndices.Length == 0) {
+            this._WarnOnce("empty", "轮盘打开失败：模块内没有可用条目 (表 " tableItem.ID " 模块 " fold.ID ")")
             return
+        }
         this.TableID := tableItem.ID
 
         itemCount := visibleIndices.Length
@@ -141,11 +155,6 @@ class MenuWheelGui {
             CenterPosRatio: 0.58
         })
         MainSoftData.CurMenuWheelIndex := this.MenuIndex
-    }
-
-    ToggleFunc(state) {
-        if (this.selectMode == 2 && IsObject(this.swipe))
-            this.swipe.Toggle(state)
     }
 
     OnSoftKey(key, isDown) {
@@ -487,10 +496,10 @@ class MenuWheelGui {
             h := MenuWheelGui._H(this, idx)
             this.ui.OnEvent("Wedge_" idx, "PreviewMouseLeftButtonDown", h.Select)
             this.ui.OnEvent("IconBg_" idx, "PreviewMouseLeftButtonDown", h.Select)
-            ; 划线模式需要悬停触发选中，绑定 MouseMove/MouseLeave
+            ; 划线模式需要悬停触发选中；MouseMove 限 30fps（leading+trailing，末帧必到）
             if (this.selectMode == 2) {
-                this.ui.OnEvent("Wedge_" idx, "MouseMove", h.Hover)
-                this.ui.OnEvent("IconBg_" idx, "MouseMove", h.Hover)
+                this.ui.OnEvent("Wedge_" idx, "MouseMove", h.Hover).Limit(30)
+                this.ui.OnEvent("IconBg_" idx, "MouseMove", h.Hover).Limit(30)
                 this.ui.OnEvent("Wedge_" idx, "MouseLeave", h.Leave)
                 this.ui.OnEvent("IconBg_" idx, "MouseLeave", h.Leave)
             }
@@ -498,7 +507,8 @@ class MenuWheelGui {
 
         this.ui.OnEvent("CenterCircle", "PreviewMouseLeftButtonDown", (*) => this.DoCancel())
 
-        XamlWin.QueueTheme(this.ui)
+        ; 轮盘颜色已由 GetWheelColor 写进 XAML，跳过 QueueTheme；建窗异步，免去等引擎取队列的顿。
+        this.ui.asyncCreate := true
         this.ui.Show()
 
         ; ── 異步等待 wpfHwnd，避免阻塞主執行緒 ────────────────────────
@@ -537,22 +547,17 @@ class MenuWheelGui {
         }
 
         itemCount := this._buildItemCount
-        for sec in this.sectors {
-            if (sec.ImagePath != "" && FileExist(sec.ImagePath))
-                this.ui.Update("Icon_" sec.Index, "Source", sec.ImagePath)
-        }
-
-        if (this.selectMode == 2) {
-            this.swipe := MenuWheelGui.SwipeSelector(this)
-            this.swipe.Init()
-        } else {
-            this.swipe := ""
-        }
-
         tableItem := GetTableByID(this.TableID)
         fold := tableItem && tableItem.Folds.Has(this.MenuIndex) ? tableItem.Folds[this.MenuIndex] : ""
         if (!fold)
             return
+
+        ; 图标与状态点合成一条多行 payload：逐条 Update 每次都是同步往返，会逐个跳出来
+        updates := []
+        for sec in this.sectors {
+            if (sec.ImagePath != "" && FileExist(sec.ImagePath))
+                updates.Push({ControlName: "Icon_" sec.Index, PropertyName: "Source", Value: sec.ImagePath})
+        }
         idx := 0
         for item in GetFoldItems(tableItem, fold) {
             if (ParseBoolInt(item.Forbid))
@@ -562,7 +567,15 @@ class MenuWheelGui {
             isWorkRunning := item.IsWorkIndex != 0
             state := isWorkRunning ? 1 : item.ColorState
             if (state > 0 && MacroStateColors.Has(state))
-                this.sectors[idx].RenderState(this, MacroStateColors[state])
+                this.sectors[idx].RenderState(MacroStateColors[state], updates)
+        }
+        if (updates.Length > 0) {
+            try this.ui.BatchUpdate(updates)
+        }
+
+        ; 划线交给引擎 FollowCursor 跟光标，AHK 侧不再有定时器和逐帧 IPC
+        if (this.selectMode == 2) {
+            try this.ui.Update("SwipeLine", "FollowCursor", "1")
         }
 
         if (IsObject(this.ui)) {
@@ -593,8 +606,6 @@ class MenuWheelGui {
             return
         this.closed := true
         this.swipeTriggered := true
-        if (IsObject(this.swipe))
-            this.swipe.Stop()
         sec := this.sectors[idx]
         sec.RenderSelected(this)
         if (IsObject(sec.Callback)) {
@@ -618,7 +629,7 @@ class MenuWheelGui {
         if (!this.isOpen || this.closed)
             return
         this.hoveredIdx := idx
-        if (this.selectMode == 2 && IsObject(this.swipe) && !this.swipeTriggered)
+        if (this.selectMode == 2 && !this.swipeTriggered)
             this.DoSelect(idx, "")
     }
 
@@ -632,14 +643,11 @@ class MenuWheelGui {
     _Cleanup() {
         ; 遞增世代，使任何正在等待中的 _WaitForHwnd 計時器自動失效
         this._buildGen += 1
-        this.ToggleFunc(false)
         if (this._hkIds.Length > 0) {
             WinHotkey.UnregisterAll(this._hkIds)
             this._hkIds := []
         }
         this.isOpen := false
-        if (IsObject(this.swipe))
-            this.swipe.Stop()
         MainSoftData.CurMenuWheelIndex := -1
         ToolTip()
         if (this.HasProp("ui") && IsObject(this.ui)) {
@@ -725,67 +733,11 @@ class MenuWheelGui {
             ])
         }
 
-        ; 按宏运行状态渲染色点（使用全局 MacroStateColors）
-        RenderState(menu, stateColor) {
+        ; 按宏运行状态渲染色点；只入列不发送，由调用方合并成一次 IPC
+        RenderState(stateColor, sink) {
             p := this.Index
-            ui := menu.ui
-            if (!IsObject(ui))
-                return
-            ui.BatchUpdate([
-                { ControlName: "StateDot_" p, PropertyName: "Fill", Value: stateColor },
-                { ControlName: "StateDot_" p, PropertyName: "Visibility", Value: "Visible" }
-            ])
-        }
-    }
-
-    class SwipeSelector {
-        menu := ""
-        drawFn := ""
-
-        __New(menu) {
-            this.menu := menu
-        }
-
-        Init() {
-            this.drawFn := ObjBindMethod(this, "_OnTick")
-            SetTimer(this.drawFn, 16)
-        }
-
-        Toggle(state) {
-            if (state) {
-                if (!this.drawFn)
-                    this.drawFn := ObjBindMethod(this, "_OnTick")
-                SetTimer(this.drawFn, 16)
-            } else {
-                this.Stop()
-            }
-        }
-
-        Stop() {
-            if (this.drawFn) {
-                SetTimer(this.drawFn, 0)
-                this.drawFn := ""
-            }
-        }
-
-        _OnTick() {
-            m := this.menu
-            if (!m.isOpen || m.closed || !IsObject(m.ui))
-                return
-            ui := m.ui
-            hwnd := ui.wpfHwnd
-            if (!hwnd)
-                return
-
-            CoordMode("Mouse", "Screen")
-            MouseGetPos(&mx, &my)
-
-            WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
-            relX := (mx - wx) / m.dpiScale
-            relY := (my - wy) / m.dpiScale
-
-            ui.Update("SwipeLine", "X2", String(relX))
-            ui.Update("SwipeLine", "Y2", String(relY))
+            sink.Push({ControlName: "StateDot_" p, PropertyName: "Fill", Value: stateColor})
+            sink.Push({ControlName: "StateDot_" p, PropertyName: "Visibility", Value: "Visible"})
         }
     }
 }

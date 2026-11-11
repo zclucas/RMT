@@ -1970,6 +1970,17 @@ OpenMenuWheel(MenuIndex, isTog, tableID := "") {
     tableItem := tableID == "" ? GetTableBySymbol("Menu") : GetTableByID(tableID)
     if (!tableItem || !tableItem.Folds.Has(MenuIndex))
         return
+    ; 状态自愈：isOpen 为真但窗口已不存在（建窗失败/引擎重启）时，会一直命中 toggle 分支被吞掉
+    if (IsObject(MyMenuWheel) && MyMenuWheel.isOpen) {
+        hwnd := 0
+        if (MyMenuWheel.HasProp("ui") && IsObject(MyMenuWheel.ui) && MyMenuWheel.ui.wpfHwnd)
+            hwnd := Integer(MyMenuWheel.ui.wpfHwnd)
+        alive := hwnd && DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+        if (!alive) {
+            RMTLogSys(RMT_LV_WARN, "MenuWheel", "轮盘状态残留（窗口已失效），已强制清理后重开")
+            try MyMenuWheel._Cleanup()
+        }
+    }
     if (IsObject(MyMenuWheel) && MyMenuWheel.isOpen && MyMenuWheel.TableID == tableItem.ID
         && MainSoftData.CurMenuWheelIndex == MenuIndex) {
         if (isTog)
