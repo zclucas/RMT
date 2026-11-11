@@ -41,10 +41,10 @@ class PromptGui {
         title := this.ParentTile GetLang("提示编辑器")
         titleHeight := XAMLHost.CmdTitleBarHeight()
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
-        main.Rows(titleHeight, "*", 50)
+        main.Rows(titleHeight, "*", 56)
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
-        body := main.Add("ScrollViewer").Grid_Row(1).VerticalScrollBarVisibility("Auto")
-            .Add("StackPanel").Margin("18,12,18,2")
+        body := main.Add("ScrollViewer").Grid_Row(1).MaxHeight(400).VerticalScrollBarVisibility("Auto")
+            .Add("StackPanel").Margin("16,14,16,0")
         this.AddPair(body, &left, &right)
         this.AddField(left, "Type", "提示类型", PromptTypes())
         this.AddField(right, "Remark", "备注")
@@ -99,21 +99,26 @@ class PromptGui {
         this.AddField(body, "ImagePath", "图片路径", , "file")
         this.AddField(body, "AudioPath", "音频路径", , "file")
         this.AddField(body, "Text", "提示内容", , "multiline")
-        vars := this.AddField(body, "Vars", "变量数组", , "tools")
-        vars.Cols("*", "92")
-        choices := vars.Add("ComboBox").Name("InsertValue").SelectedIndex("0").MinHeight(28)
-        for name in GetGuiVarArr(1)
-            choices.Add("ComboBoxItem").Content("{}{" name "}")
-        for name in GetGuiArrNameArr()
-            choices.Add("ComboBoxItem").Content("{}{ε" name "}")
-        vars.Add("Button").Grid_Column(1).Name("AddValue").Margin("6,0,0,0").Content(GetLang("追加值"))
+        vars := this.AddField(body, "Vars", "变量数组：", , "tools")
+        vars.Cols("90", "*", "Auto", "Auto")
+        kind := vars.Add("ComboBox").Name("InsertKind").SelectedIndex(0).MinHeight(28)
+        for label in ["变量", "数组"]
+            kind.Add("ComboBoxItem").Content(GetLang(label))
+        names := vars.Add("ComboBox").Grid_Column(1).Name("InsertValue").SelectedIndex(0).MinHeight(28).Margin("8,0,0,0")
+        for name in GetGuiVarArr(1) {
+            if (name != "")
+                names.Add("ComboBoxItem").Content(name)
+        }
+        vars.Add("Button").Grid_Column(2).Name("AddName").MinWidth(70).Margin("8,0,0,0").Content(GetLang("追加名"))
+        vars.Add("Button").Grid_Column(3).Name("AddValue").MinWidth(70).Margin("8,0,0,0").Content(GetLang("追加值"))
 
         buttons := main.Add("StackPanel").Grid_Row(2).VerticalAlignment("Center").HorizontalAlignment("Center")
         AddCmdOkBtn(buttons)
         template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(template, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' EscapeXamlXml(title) '" Width="660" MinWidth="600" MaxHeight="480" SizeToContent="Height"')
+            'Title="' EscapeXamlXml(title) '" Width="560" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
         this.ui.OnEvent("Window", "LoadedHwnd", this.OnLoaded.Bind(this, this.ui))
         this.ui.OnEvent("Window", "Closing", this.OnClosing.Bind(this, this.ui))
@@ -123,7 +128,9 @@ class PromptGui {
         this.ui.OnEvent("BtnOk", "Click", this.Save.Bind(this))
         this.ui.OnEvent("PickPosition", "Click", this.PickPosition.Bind(this))
         this.ui.OnEvent("PickRegion", "Click", this.PickRegion.Bind(this))
-        this.ui.OnEvent("AddValue", "Click", this.AddValue.Bind(this))
+        this.ui.OnEvent("InsertKind", "SelectionChanged", this.RefreshInsertNames.Bind(this))
+        this.ui.OnEvent("AddName", "Click", this.AppendSelection.Bind(this, false))
+        this.ui.OnEvent("AddValue", "Click", this.AppendSelection.Bind(this, true))
         this.ui.OnEvent("BrowseImagePath", "Click", this.Browse.Bind(this, "ImagePath", "Images (*.png; *.jpg; *.jpeg; *.bmp; *.gif; *.ico)"))
         this.ui.OnEvent("BrowseAudioPath", "Click", this.Browse.Bind(this, "AudioPath", "Audio (*.wav; *.mp3; *.wma; *.mid)"))
         for name, field in this.fields {
@@ -140,7 +147,7 @@ class PromptGui {
     }
 
     AddPair(body, &left, &right) {
-        row := body.Add("Grid").Cols("*", "20", "*")
+        row := body.Add("Grid").Cols("*", "14", "*")
         left := row.Add("StackPanel")
         right := row.Add("StackPanel").Grid_Column(2)
     }
@@ -148,10 +155,17 @@ class PromptGui {
     AddField(body, name, label, options := [], kind := "") {
         this.fields[name] := {label: label, options: options, kind: kind}
         row := body.Add("Grid").Name("Row" name).Margin("0,0,0,8")
-        row.Cols("122", "*")
         row.Visibility(this.FieldVisible(name, this.data) ? "Visible" : "Collapsed")
-        caption := row.Add("TextBlock").Text(GetLang(label)).TextWrapping("Wrap").VerticalAlignment("Center").Margin("0,0,8,0")
-        target := row.Add("Grid").Grid_Column(1)
+        caption := row.Add("TextBlock").Text(GetLang(label))
+        if (kind == "multiline") {
+            row.Rows("Auto", "Auto")
+            caption.Margin("0,0,0,4")
+            target := row.Add("Grid").Grid_Row(1)
+        } else {
+            row.Cols("Auto", "*")
+            caption.MaxWidth(132).TextWrapping("Wrap").VerticalAlignment("Center").Margin("0,0,8,0")
+            target := row.Add("Grid").Grid_Column(1)
+        }
         if (kind == "tools")
             return target
         if (options.Length) {
@@ -172,10 +186,8 @@ class PromptGui {
         box := target.Add("TextBox").Name(name).MinHeight(28).Padding("6,2").VerticalContentAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}")
-        if (kind == "multiline") {
-            caption.VerticalAlignment("Top").Margin("0,5,8,0")
-            box.Height(88).VerticalContentAlignment("Top").AcceptsReturn("True").TextWrapping("Wrap").VerticalScrollBarVisibility("Auto")
-        }
+        if (kind == "multiline")
+            box.Height(112).Padding("6,4").VerticalContentAlignment("Top").AcceptsReturn("True").TextWrapping("Wrap").ScrollViewer_VerticalScrollBarVisibility("Auto")
         return box
     }
 
@@ -251,10 +263,29 @@ class PromptGui {
             this.ui.Update(field, "Text", path)
     }
 
-    AddValue(*) {
-        value := this.ui.Query("InsertValue")
-        if (value != "")
-            this.ui.Update("Text", "Text", this.ui.Query("Text") value)
+    RefreshInsertNames(*) {
+        if (!IsObject(this.ui) || !this.ui.wpfHwnd)
+            return
+        names := this.ui.Query("InsertKind") == GetLang("数组") ? GetGuiArrNameArr() : GetGuiVarArr(1)
+        changes := [{ControlName: "InsertValue", PropertyName: "ClearItems", Value: ""}]
+        for name in names {
+            if (name != "")
+                changes.Push({ControlName: "InsertValue", PropertyName: "AddItem", Value: name})
+        }
+        if (changes.Length > 1)
+            changes.Push({ControlName: "InsertValue", PropertyName: "SelectedIndex", Value: "0"})
+        this.ui.BatchUpdate(changes)
+    }
+
+    AppendSelection(asValue, *) {
+        name := this.ui.Query("InsertValue")
+        if (name == "")
+            return
+        if (asValue) {
+            prefix := this.ui.Query("InsertKind") == GetLang("数组") ? "ε" : ""
+            name := "{" prefix name "}"
+        }
+        this.ui.Update("Text", "Text", this.ui.Query("Text") name)
     }
 
     PickPosition(*) {

@@ -1,55 +1,82 @@
-; 手势配置放在 MacroItem.TK，沿用已有的保存、复制和合并路径。
+﻿; 手势配置放在 MacroItem.TK，沿用已有的保存、复制和合并路径。
 GestureMouseKeys() {
     static keys := Map("LButton", "左键", "MButton", "中键", "RButton", "右键",
         "XButton1", "侧键1", "XButton2", "侧键2", "WheelLeft", "左滚轮", "WheelRight", "右滚轮")
     return keys
 }
 
-GestureTouchNames() {
-    static names := ["三指轻点", "三指上滑", "三指下滑", "三指左滑", "三指右滑",
-        "四指轻点", "四指上滑", "四指下滑", "四指左滑", "四指右滑",
-        "双指轻点", "双指上滑", "双指下滑", "双指左滑", "双指右滑"]
-    return names
+GestureFingerNames() => ["一指", "二指", "三指", "四指"]
+
+GestureTouchActions() => ["轻点", "上滑", "下滑", "左滑", "右滑"]
+
+GestureModifierKeys() {
+    static keys := [
+        ["LShift", 0xA0], ["LCtrl", 0xA2], ["Win", 0x5B, 0x5C], ["LAlt", 0xA4],
+        ["RAlt", 0xA5], ["RCtrl", 0xA3], ["RShift", 0xA1]
+    ]
+    return keys
+}
+
+GestureModifierLabel(mask) {
+    if (mask == 128)
+        return "Ctrl+Alt"
+    label := ""
+    for index, key in GestureModifierKeys() {
+        if (mask & (1 << (index - 1)))
+            label .= (label == "" ? "" : "+") key[1]
+    }
+    return label
+}
+
+GestureHeldModifiers() {
+    mask := 0
+    for index, key in GestureModifierKeys() {
+        if (DllCall("GetAsyncKeyState", "Int", key[2], "Short") < 0
+            || (key.Length == 3 && DllCall("GetAsyncKeyState", "Int", key[3], "Short") < 0))
+            mask |= 1 << (index - 1)
+    }
+    ; 旧的 Ctrl+Alt 绑定允许任一侧 Ctrl 和 Alt。
+    if ((mask & 0x22) && (mask & 0x18))
+        mask |= 128
+    return mask
 }
 
 GestureIsWheel(key) => key == "WheelLeft" || key == "WheelRight"
 
-GestureDefaultChord(slot) => ((0x6F + slot) << 16) | 7
-
-GestureTwoFingerKey(slot) {
-    static keys := ["RButton", "WheelUp", "WheelDown", "WheelLeft", "WheelRight"]
-    return slot >= 11 && slot <= 15 ? keys[slot - 10] : ""
+GestureBinding(value, source) {
+    for binding in StrSplit(value, "||") {
+        if (source == "Mouse" ? InStr(binding, "Mouse|") == 1
+            : (InStr(binding, "Touch|") == 1 || InStr(binding, "Touchpad|") == 1))
+            return binding
+    }
+    return ""
 }
 
-GestureHotkeyText(chord) {
-    return ((chord & 2) ? "^" : "") ((chord & 1) ? "!" : "") ((chord & 4) ? "+" : "")
-        . GetKeyName(Format("vk{:02X}", chord >> 16))
-}
-
-GestureParseHotkey(value) {
-    if (!RegExMatch(value, "^([!^+]+)([^!^+]+)$", &match))
-        return 0
-    vk := GetKeyVK(match[2])
-    modifiers := (InStr(match[1], "!") ? 1 : 0) | (InStr(match[1], "^") ? 2 : 0) | (InStr(match[1], "+") ? 4 : 0)
-    return vk ? (vk << 16) | modifiers : 0
+GestureWithBinding(value, source, binding) {
+    mouse := source == "Mouse" ? binding : GestureBinding(value, "Mouse")
+    touch := source == "Touch" ? binding : GestureBinding(value, "Touch")
+    return mouse (mouse != "" && touch != "" ? "||" : "") touch
 }
 
 GestureRead(value) {
     parts := StrSplit(value, "|")
-    if (parts.Length == 3 && parts[1] == "Touch" && RegExMatch(parts[2], "^1[1-5]$")
-        && (parts[3] == "0" || parts[3] == "1")) {
-        slot := Integer(parts[2])
-        return {Source: "TouchMouse", Slot: slot, Key: GestureTwoFingerKey(slot), Modified: parts[3] == "1"}
+    if (RegExMatch(value, "^Touchpad\|[1-4]\|[1-5]\|(?:[01]|m[1-9][0-9]{0,2})$")) {
+        modifiers := parts[4] == "1" ? 128 : (parts[4] == "0" ? 0 : Integer(SubStr(parts[4], 2)))
+        if (modifiers > 127 && parts[4] != "1")
+            return false
+        return {Source: "Touch", Fingers: Integer(parts[2]), Action: Integer(parts[3]), Modifiers: modifiers}
     }
-    if ((parts.Length == 2 || parts.Length == 4) && parts[1] == "Touch"
-        && RegExMatch(parts[2], "^(?:[1-9]|10)$")) {
+    ; 旧触控板配置保留动作和双指修饰条件，改用触控板输入识别。
+    if (parts.Length >= 2 && parts[1] == "Touch") {
+        if (parts.Length == 3 && RegExMatch(parts[2], "^1[1-5]$") && RegExMatch(parts[3], "^[01]$"))
+            return {Source: "Touch", Fingers: 2, Action: Integer(parts[2]) - 10, Modifiers: parts[3] == "1" ? 128 : 0}
+        if (!RegExMatch(parts[2], "^([1-9]|10)$"))
+            return false
+        if (parts.Length != 2 && !(parts.Length == 4 && RegExMatch(parts[3], "^[1-7]$")
+            && RegExMatch(parts[4], "^[1-9][0-9]{0,2}$") && Integer(parts[4]) <= 254))
+            return false
         slot := Integer(parts[2])
-        if (parts.Length == 2)
-            return {Source: "Touch", Slot: slot, Chord: GestureDefaultChord(slot)}
-        if (RegExMatch(parts[3], "^[1-7]$") && RegExMatch(parts[4], "^[1-9][0-9]{0,2}$")
-            && Integer(parts[4]) <= 254)
-            return {Source: "Touch", Slot: slot, Chord: (Integer(parts[4]) << 16) | Integer(parts[3])}
-        return false
+        return {Source: "Touch", Fingers: slot <= 5 ? 3 : 4, Action: Mod(slot - 1, 5) + 1, Modifiers: 0}
     }
     if (parts.Length != 3 || parts[1] != "Mouse" || !GestureMouseKeys().Has(parts[2]))
         return false
@@ -71,14 +98,14 @@ GestureRead(value) {
 }
 
 GestureDisplay(value) {
-    gesture := GestureRead(value)
-    if (!gesture)
+    mouse := GestureRead(GestureBinding(value, "Mouse"))
+    touch := GestureRead(GestureBinding(value, "Touch"))
+    mouseLabel := mouse ? GetLang(GestureMouseKeys()[mouse.Key]) " · " GetLang(GesturePath.Labels()[mouse.Shape]) : ""
+    touchLabel := touch ? (touch.Modifiers ? GestureModifierLabel(touch.Modifiers) " · " : "")
+        . GetLang(GestureFingerNames()[touch.Fingers]) " " GetLang(GestureTouchActions()[touch.Action]) : ""
+    if (!mouse && !touch)
         return GetLang("编辑手势")
-    if (gesture.Source != "Mouse") {
-        label := GetLang(GestureTouchNames()[gesture.Slot])
-        return gesture.Source == "TouchMouse" && gesture.Modified ? "Ctrl+Alt · " label : label
-    }
-    return GetLang(GestureMouseKeys()[gesture.Key]) " · " GetLang(GesturePath.Labels()[gesture.Shape])
+    return mouseLabel (mouseLabel != "" && touchLabel != "" ? " / " : "") touchLabel
 }
 
 class GesturePath {
@@ -87,8 +114,8 @@ class GesturePath {
         if (presets)
             return presets
         presets := [
-            ["Up", "上滑", [[0,1],[0,0]]], ["Down", "下滑", [[0,0],[0,1]]],
-            ["Left", "左滑", [[1,0],[0,0]]], ["Right", "右滑", [[0,0],[1,0]]],
+            ["Up", "↑", [[0,1],[0,0]]], ["Down", "↓", [[0,0],[0,1]]],
+            ["Left", "←", [[1,0],[0,0]]], ["Right", "→", [[0,0],[1,0]]],
             ["UpRight", "↗", [[0,1],[1,0]]], ["DownRight", "↘", [[0,0],[1,1]]],
             ["DownLeft", "↙", [[1,0],[0,1]]], ["UpLeft", "↖", [[1,1],[0,0]]]
         ]
@@ -98,9 +125,7 @@ class GesturePath {
                 turns := A_Index - 1
                 angle := turns * 90
                 id := flipped ? "LFlip" angle : (angle ? "L" angle : "L")
-                label := flipped ? "L 上下翻转" : "L"
-                if (angle)
-                    label .= " · " angle "°"
+                label := (flipped ? ["┌ →", "┐ ↓", "┘ ←", "└ ↑"] : ["└ →", "┌ ↓", "┐ ←", "┘ ↑"])[turns + 1]
                 presets.Push([id, label, this.Transform(elbow, turns, flipped)])
             }
         }
@@ -115,18 +140,18 @@ class GesturePath {
             ["ReturnUpDown", "↑ ↓", [[0,1],[0,0],[0,1]]],
             ["ReturnDownUp", "↓ ↑", [[0,0],[0,1],[0,0]]],
             ["Caret", "∧", [[0,1],[0.5,0],[1,1]]],
-            ["V", "V", [[0,0],[0.5,1],[1,0]]],
-            ["CaretLeft", "‹", [[1,0],[0,0.5],[1,1]]],
-            ["CaretRight", "›", [[0,0],[1,0.5],[0,1]]],
+            ["V", "∨", [[0,0],[0.5,1],[1,0]]],
+            ["CaretLeft", "〈", [[1,0],[0,0.5],[1,1]]],
+            ["CaretRight", "〉", [[0,0],[1,0.5],[0,1]]],
             ["Z", "Z", [[0,0],[1,0],[0,1],[1,1]]],
             ["S", "S", [[1,0],[0.4,0],[0,0.2],[0.15,0.4],[0.85,0.6],[1,0.8],[0.6,1],[0,1]]],
             ["N", "N", [[0,1],[0,0],[1,1],[1,0]]],
             ["W", "W", [[0,0],[0.25,1],[0.5,0.25],[0.75,1],[1,0]]],
             ["M", "M", [[0,1],[0.25,0],[0.5,0.75],[0.75,0],[1,1]]],
-            ["Circle", "圆", circle],
             ["Triangle", "三角形", [[0.5,0],[1,1],[0,1],[0.5,0]]],
             ["Square", "方形", [[0,0],[1,0],[1,1],[0,1],[0,0]]],
-            ["Diamond", "菱形", [[0.5,0],[1,0.5],[0.5,1],[0,0.5],[0.5,0]]]
+            ["Diamond", "菱形", [[0.5,0],[1,0.5],[0.5,1],[0,0.5],[0.5,0]]],
+            ["Circle", "圆", circle]
         )
         return presets
     }
@@ -262,16 +287,13 @@ class GesturePath {
 class GestureTriggers {
     static Mouse := Map()
     static Touch := Map()
-    static TouchMouse := Map()
-    static LastTouchScroll := Map()
-    static TouchIDs := Map()
-    static SetupChord := 0
     static LastTilt := Map()
     static Events := []
     static Stroke := false
     static Hook := 0
     static MouseCallback := 0
     static Editing := false
+    static ShuttingDown := false
 
     static PollCallback() {
         static callback := ObjBindMethod(GestureTriggers, "Poll")
@@ -290,51 +312,46 @@ class GestureTriggers {
         SetTimer(this.PollCallback(), 0)
         this.Events := []
         this.Stroke := false
-        for chord, id in this.TouchIDs
-            DllCall("UnregisterHotKey", "Ptr", A_ScriptHwnd, "Int", id)
-        this.TouchIDs := Map()
+        GestureTouchpad.Stop()
         this.Touch := Map()
-        this.TouchMouse := Map()
-        this.LastTouchScroll := Map()
         this.LastTilt := Map()
         this.Mouse := Map()
     }
 
+    static Shutdown() {
+        this.ShuttingDown := true
+        this.Reset()
+        if (this.Editing)
+            this.Editing.CloseForExit()
+    }
+
     static Bind() {
-        static listening := false
+        if (this.ShuttingDown)
+            return
         for tableItem in MySoftData.TableInfo {
             if (tableItem.Symbol != "Gesture")
                 continue
             for index, item in tableItem.Items {
                 if (item.Macro == "" || ParseBoolInt(item.Forbid) || GetItemFoldForbidState(tableItem, index))
                     continue
-                gesture := GestureRead(item.TK)
-                if (!gesture)
-                    continue
-                gesture.TableID := tableItem.ID
-                gesture.ItemID := item.ID
-                gesture.Config := item.TK
-                mapForSource := gesture.Source == "Touch" ? this.Touch : (gesture.Source == "TouchMouse" ? this.TouchMouse : this.Mouse)
-                key := gesture.Source == "Touch" ? gesture.Chord : gesture.Key
-                if (!mapForSource.Has(key))
-                    mapForSource[key] := []
-                mapForSource[key].Push(gesture)
+                for binding in StrSplit(item.TK, "||") {
+                    gesture := GestureRead(binding)
+                    if (!gesture)
+                        continue
+                    gesture.TableID := tableItem.ID
+                    gesture.ItemID := item.ID
+                    gesture.Config := item.TK
+                    mapForSource := gesture.Source == "Touch" ? this.Touch : this.Mouse
+                    key := gesture.Source == "Touch" ? (gesture.Fingers - 1) * 5 + gesture.Action : gesture.Key
+                    if (!mapForSource.Has(key))
+                        mapForSource[key] := []
+                    mapForSource[key].Push(gesture)
+                }
             }
         }
-        if (this.Touch.Count && !listening) {
-            OnMessage(0x0312, ObjBindMethod(GestureTriggers, "OnHotkey"))
-            listening := true
-        }
-        for chord, gestures in this.Touch {
-            if (chord == this.SetupChord)
-                continue
-            id := 0x5600 + A_Index
-            if (id < 0x6000 && this.RegisterTouch(id, chord))
-                this.TouchIDs[chord] := id
-            else
-                RMTLogSys(RMT_LV_WARN, "Gesture", "Could not register touchpad shortcut: " GestureHotkeyText(chord))
-        }
-        if (this.Mouse.Count || this.TouchMouse.Count) {
+        if (this.Touch.Count && !GestureTouchpad.Start())
+            RMTLogSys(RMT_LV_WARN, "Gesture", "Could not register precision touchpad raw input.")
+        if (this.Mouse.Count) {
             this.MouseCallback := CallbackCreate(ObjBindMethod(GestureTriggers, "OnMouse"), "Fast", 3)
             module := DllCall("GetModuleHandle", "Ptr", 0, "Ptr")
             this.Hook := DllCall("SetWindowsHookEx", "Int", 14, "Ptr", this.MouseCallback, "Ptr", module, "UInt", 0, "Ptr")
@@ -348,72 +365,10 @@ class GestureTriggers {
         }
     }
 
-    static RegisterTouch(id, chord) {
-        if (this.ConflictsWithAppHotkey(chord))
-            return false
-        return DllCall("RegisterHotKey", "Ptr", A_ScriptHwnd, "Int", id,
-            "UInt", 0x4000 | (chord & 0xFFFF), "UInt", chord >> 16)
-    }
-
-    static ConflictsWithAppHotkey(chord) {
-        global BoundMacroHotkeyList
-        if (!IsSet(BoundMacroHotkeyList) || !IsObject(BoundMacroHotkeyList))
-            return false
-        for hotkey in BoundMacroHotkeyList {
-            if (!RegExMatch(hotkey, "i)^([~*$]*)([!^+]*)([^ !^+&<>#]+)(?: up)?$", &parts))
-                continue
-            if (GetKeyVK(parts[3]) != chord >> 16)
-                continue
-            if (parts[2] == "") {
-                if (InStr(parts[1], "*"))
-                    return true
-                continue
-            }
-            existing := GestureParseHotkey(parts[2] parts[3])
-            if (existing == chord || (InStr(parts[1], "*") && (existing & chord) == existing))
-                return true
-        }
-        return false
-    }
-
-    static ShortcutAvailable(chord) {
-        if (this.TouchIDs.Has(chord))
-            return true
-        probeID := 0x5600
-        if (!this.RegisterTouch(probeID, chord))
-            return false
-        DllCall("UnregisterHotKey", "Ptr", A_ScriptHwnd, "Int", probeID)
-        return true
-    }
-
-    static SetSetupChord(chord := 0) {
-        if (chord == this.SetupChord)
-            return
-        previous := this.SetupChord
-        this.SetupChord := chord
-        if (this.TouchIDs.Has(chord)) {
-            DllCall("UnregisterHotKey", "Ptr", A_ScriptHwnd, "Int", this.TouchIDs[chord])
-            this.TouchIDs.Delete(chord)
-        }
-        for candidate in this.Touch {
-            if (candidate != previous)
-                continue
-            id := 0x5600 + A_Index
-            if (id < 0x6000 && this.RegisterTouch(id, previous))
-                this.TouchIDs[previous] := id
-            else
-                RMTLogSys(RMT_LV_WARN, "Gesture", "Could not restore touchpad shortcut: " GestureHotkeyText(previous))
-            break
-        }
-    }
-
-    static OnHotkey(wParam, lParam, msg, hwnd) {
-        if (!GestureTriggers.IsEnabled() || GestureTriggers.TouchIDs.Get(lParam, 0) != wParam
-            || hwnd != A_ScriptHwnd || !GestureTriggers.Touch.Has(lParam))
-            return
-        for gesture in GestureTriggers.Touch[lParam] {
-            if (GestureTriggers.CanRun(gesture)) {
-                GestureTriggers.Dispatch(gesture)
+    static OnTouch(fingers, action, heldModifiers) {
+        for gesture in this.Touch.Get((fingers - 1) * 5 + action, []) {
+            if (((heldModifiers & gesture.Modifiers) == gesture.Modifiers) && this.CanRun(gesture)) {
+                this.Dispatch(gesture)
                 break
             }
         }
@@ -425,26 +380,20 @@ class GestureTriggers {
             0x207, "MButton", 0x208, "MButton")
         if (code >= 0 && !(NumGet(data, 12, "UInt") & 1)) {
             key := buttons.Get(msg, "")
-            down := msg == 0x201 || msg == 0x204 || msg == 0x207 || msg == 0x20B || msg == 0x20E || msg == 0x20A
+            down := msg == 0x201 || msg == 0x204 || msg == 0x207 || msg == 0x20B || msg == 0x20E
             if (msg == 0x20B || msg == 0x20C)
                 key := NumGet(data, 10, "UShort") == 1 ? "XButton1" : "XButton2"
             else if (msg == 0x20E)
                 key := NumGet(data, 10, "Short") < 0 ? "WheelLeft" : "WheelRight"
-            else if (msg == 0x20A)
-                key := NumGet(data, 10, "Short") > 0 ? "WheelUp" : "WheelDown"
-            touchMouse := GestureTriggers.TouchMouse.Has(key)
-            if (touchMouse || GestureTriggers.Mouse.Has(key)) {
-                modified := touchMouse && (DllCall("GetAsyncKeyState", "Int", 0x11, "Short") < 0)
-                    && (DllCall("GetAsyncKeyState", "Int", 0x12, "Short") < 0)
-                GestureTriggers.Events.Push({Key: key, Down: down, Modified: modified,
+            if (GestureTriggers.Mouse.Has(key))
+                GestureTriggers.Events.Push({Key: key, Down: down,
                     Point: [NumGet(data, 0, "Int"), NumGet(data, 4, "Int")]})
-            }
         }
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", code, "UPtr", msg, "Ptr", data, "Ptr")
     }
 
-    static IsEnabled() => !MainSoftData.IsPause && !A_IsSuspended
-        && (!this.Editing || !WinActive("ahk_id " this.Editing.Window.Hwnd))
+    static IsEnabled() => !this.ShuttingDown && !MainSoftData.IsPause && !A_IsSuspended
+        && (!this.Editing || !this.Editing.Hwnd() || !WinActive("ahk_id " this.Editing.Hwnd()))
 
     static Poll() {
         this := GestureTriggers
@@ -456,8 +405,6 @@ class GestureTriggers {
         }
         now := A_TickCount
         for event in events {
-            if (event.Down && event.Key != "RButton" && this.HandleTouchScroll(event, now))
-                continue
             if (!event.Down) {
                 if (this.Stroke && this.Stroke.Key == event.Key) {
                     this.Stroke.Points.Push(event.Point)
@@ -468,7 +415,6 @@ class GestureTriggers {
             if (this.Stroke)
                 continue
             wheel := GestureIsWheel(event.Key)
-            tap := event.Key == "RButton" ? this.FindTouchMouse(event) : false
             candidates := []
             direct := false
             hasPath := false
@@ -486,9 +432,9 @@ class GestureTriggers {
                     this.LastTilt[event.Key] := now
                     this.Dispatch(direct)
                 }
-            } else if (candidates.Length || tap)
+            } else if (candidates.Length)
                 this.Stroke := {Key: event.Key, Candidates: candidates, Points: [event.Point], Started: now,
-                    Moved: now, Wheel: wheel, Tap: tap}
+                    Moved: now, Wheel: wheel}
         }
         if (!this.Stroke)
             return
@@ -505,36 +451,11 @@ class GestureTriggers {
             this.Stroke := false
     }
 
-    static FindTouchMouse(event) {
-        for gesture in this.TouchMouse.Get(event.Key, []) {
-            if ((!gesture.Modified || event.Modified) && this.CanRun(gesture))
-                return gesture
-        }
-        return false
-    }
-
-    static HandleTouchScroll(event, now) {
-        gesture := this.FindTouchMouse(event)
-        if (!gesture)
-            return false
-        axis := GestureIsWheel(event.Key) ? "horizontal" : "vertical"
-        previous := this.LastTouchScroll.Get(axis, -500)
-        this.LastTouchScroll[axis] := now
-        if (now - previous >= 300)
-            this.Dispatch(gesture)
-        return true
-    }
-
     static FinishStroke() {
         stroke := this.Stroke
         this.Stroke := false
         points := GesturePath.Normalize(stroke.Points, 25)
         if (!points.Length) {
-            ; Windows 的双指轻点与右键共用输入。短点击和拖划在松开时区分。
-            if (stroke.HasOwnProp("Tap") && stroke.Tap && this.CanRun(stroke.Tap)) {
-                this.Dispatch(stroke.Tap)
-                return
-            }
             for gesture in stroke.Candidates {
                 if (gesture.Shape == "Tilt" && this.CanRun(gesture)) {
                     this.Dispatch(gesture)

@@ -133,6 +133,19 @@
         return result '</StackPanel></Grid>'
     }
 
+    _GestureEntries(virtual, id := "", value := "") {
+        tooltip := virtual ? "{Binding TKStr}" : this._XmlEsc(GestureDisplay(value))
+        xaml := '<StackPanel Orientation="Horizontal">'
+        for entry in [["Mouse", "鼠标手势", "E962"], ["Touch", "触控板手势", "EFA5"]] {
+            attr := virtual ? 'Tag="Gesture' entry[1] '"' : 'Name="' id entry[1] '"'
+            label := this._XmlEsc(GetLang(entry[2]))
+            xaml .= '<Button ' attr ' Style="{StaticResource RmtItemFieldBtn}" Width="58" Margin="0,0,4,0"'
+                . ' AutomationProperties.Name="' label '" ToolTip="' tooltip '">'
+                . '<TextBlock Text="&#x' entry[3] ';" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"/></Button>'
+        }
+        return xaml '</StackPanel>'
+    }
+
     _BuildTKBtnInnerXaml(tkStr, vlMode, bindingName := "TKStr") {
         kb := '&#xE92E;'
         if (vlMode) {
@@ -302,9 +315,7 @@
         } else if (isNetwork) {
             ; §23 网络宏：触发键列显示「复制链接」，点击/右键=直接复制单次 URL
             tkStr := item.ID == "" ? GetLang("编辑") : GetLang("复制链接")
-        } else if (tableItem.Symbol == "Gesture") {
-            tkStr := GestureDisplay(item.TK)
-        } else if (isTiming) {
+        } else if (isTiming || tableItem.Symbol == "Gesture") {
             tkStr := ""
         } else {
             tkStr := FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
@@ -322,6 +333,8 @@
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         rowSel := this._sideTreeSel.Has(t) && this._sideTreeSel[t] == item.ID
         triggerField := '<Button Name="TKBtn_' t '_' i '" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang((isMenu || isUI) ? "编辑" : (isTiming ? "定时" : "触发键")) '" IsEnabled="' (isSubMacro ? "False" : "True") '">' ((isMenu || isUI) ? this._BuildImageConfigBtnInnerXaml(false, t, i, this._GetItemConfigImagePath(t, item)) : (isTiming ? this._BuildTimingConfigBtnInnerXaml(false, t, i, HasTimingConfig(item)) : this._BuildTKBtnInnerXaml(tkStr, false))) '</Button>'
+        if (tableItem.Symbol == "Gesture")
+            triggerField := this._GestureEntries(false, "Gesture_" t "_" i "_", item.TK)
         xaml := this._BuildItemCardOpen(ns, t, i, item.Forbid || GetItemFoldForbidState(tableItem, i), rowSel)
             . '<Grid.ColumnDefinitions>' this._ItemInnerColDefs() '</Grid.ColumnDefinitions>'
             . '<Border Grid.Column="0" Name="Color_' t '_' i '" Width="12" Height="12" CornerRadius="6" Background="' colorHex '" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
@@ -494,8 +507,6 @@
             editTK := OnUIMacroSettingClick
         else if (isNetwork)
             editTK := (*) => OnItemNetworkCopyUrl(tableItem, i)   ; §23 网络宏：触发键列点击 → 直接复制单次 URL
-        else if (tableItem.Symbol == "Gesture")
-            editTK := OnItemEditGesture
         else if (GetTableSymbol(t) == "Voice")
             ; 与虚拟列表路径一致：离开 XAML 点击回调后再创建语音编辑窗口。
             editTK := ObjBindMethod(this, "_DeferVoiceTrigger")
@@ -504,15 +515,18 @@
         this.ui.Update("Loop_" t "_" i, "Text", loopStr)
 
         this._Bind("SeqBtn_" t "_" i, "Click", ObjBindMethod(this, "SelectSideTreeItem", t, i))
-        this._Bind("TKBtn_" t "_" i, "Click", editTK.Bind(tableItem, i))
+        if (tableItem.Symbol == "Gesture") {
+            for source in ["Mouse", "Touch"]
+                this._Bind("Gesture_" t "_" i "_" source, "Click", OnItemEditGesture.Bind(tableItem, i, source))
+        } else {
+            this._Bind("TKBtn_" t "_" i, "Click", editTK.Bind(tableItem, i))
+        }
         if (CheckIsNormalTable(t) || GetTableSymbol(t) == "Replace") {
             this._Bind("TKBtn_" t "_" i "_Keyboard", "Click", OnTriggerEntry.Bind(tableItem, i, false, "keyboard"))
             this._Bind("TKBtn_" t "_" i "_Joy", "Click", OnTriggerEntry.Bind(tableItem, i, false, "joy"))
         }
         ; §23 网络宏：右键同为直接复制单次 URL；其余表保持自定义触发串
-        if (tableItem.Symbol == "Gesture")
-            this._Bind("TKBtn_" t "_" i, "MouseRightButtonUp", editTK.Bind(tableItem, i))
-        else
+        if (tableItem.Symbol != "Gesture")
             this._Bind("TKBtn_" t "_" i, "MouseRightButtonUp", isNetwork ? ((*) => OnItemNetworkCopyUrl(tableItem, i)) : OnItemCustomEditTriggerStr.Bind(tableItem, i))
         ; §23 网络宏：触发键左侧「?」按钮 → 网络触发说明弹窗（仅网络表行存在该按钮）
         if (isNetwork)
@@ -612,9 +626,7 @@
             ; 语音宏：触发键列显示唤醒词（无按键）
             tkStr := item.VoiceKeywords
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
-        } else if (tableItem.Symbol == "Gesture") {
-            tkStr := GestureDisplay(item.TK)
-        } else if (isTiming) {
+        } else if (isTiming || tableItem.Symbol == "Gesture") {
             tkStr := ""
         } else {
             tkStr := FormatHotkeyDisplay(MySoftData.FormatJoyTriggerKey(item.TK))
@@ -637,6 +649,9 @@
             configured := HasTimingConfig(item)
             this.ui.Update("TimingCfgEmpty_" t "_" i, "Visibility", configured ? "Collapsed" : "Visible")
             this.ui.Update("TimingCfgSet_" t "_" i, "Visibility", configured ? "Visible" : "Collapsed")
+        } else if (tableItem.Symbol == "Gesture") {
+            for source in ["Mouse", "Touch"]
+                this.ui.Update("Gesture_" t "_" i "_" source, "ToolTip", GestureDisplay(item.TK))
         } else if (tkStr == "") {
             this.ui.Update("TKBtn_" t "_" i, "Content", Chr(0xE92E))
             this.ui.Update("TKBtn_" t "_" i, "FontFamily", "Segoe Fluent Icons, Segoe MDL2 Assets")

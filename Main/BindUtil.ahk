@@ -531,17 +531,21 @@ OnExitSoft(*) {
     global MyPToken, MyChineseOcr, MyEnglishOcr, MyUIMacroGui, MyWorkPool, MyVoiceEngine
     global MainSoftData, MySoftData, SettingFile, SettingSection, MyMainWin
 
-    try ReleaseReplaceKeys()
-    try {
-        if (IsSet(MyMainWin) && IsObject(MyMainWin))
-            MyMainWin._AiPersistAllTabs()
-    }
+    ; 退出清理会阻塞消息循环。先卸载全局鼠标钩子，避免系统等待手势回调。
+    try GestureTriggers.Shutdown()
 
-    ; ① 先隐藏主窗口：WPF 窗口属于 daemon 进程，进程清理期间仍留在屏幕上正是「窗口关得慢」的主因。
-    ;    先隐藏后，用户感知窗口立即关闭，其余清理在后台进行。
+    ; ① 先请求隐藏主窗口，无需同步等待 WPF 线程。
     try {
-        if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui))
-            MainSoftData.MyGui.Hide()
+        if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui)) {
+            hwnd := MainSoftData.MyGui.Hwnd
+            if (hwnd)
+                DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 0) ; SW_HIDE
+        }
+    }
+    try ReleaseReplaceKeys()
+    if (IsSet(MyMainWin) && IsObject(MyMainWin)) {
+        try MyMainWin.HideSideDebugTools()
+        try MyMainWin._AiPersistAllTabs()
     }
 
     ; ② 语音引擎先停：VoiceDll 的采集/识别线程若在进程退出时仍在运行，

@@ -30,6 +30,7 @@
 #Include WindowHotkeyManager.ahk
 #Include BindUtil.ahk
 #Include GestureUtil.ahk
+#Include GestureTouchpad.ahk
 #Include ..\Gui\GestureGui.ahk
 #Include VariableUtil.ahk
 #Include TriggerKeyData.ahk

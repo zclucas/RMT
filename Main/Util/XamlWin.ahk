@@ -621,6 +621,21 @@ class XamlWin {
     }
 }
 
+XamlTabOptionStyle() {
+    return '<Style x:Key="SetTabButton" TargetType="ToggleButton">'
+        . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="Cursor" Value="Hand"/>'
+        . '<Setter Property="Width" Value="85"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0,4,8,4"/>'
+        . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">'
+        . '<Border x:Name="Bd" CornerRadius="6" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"><Grid>'
+        . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>'
+        . '<Ellipse x:Name="Dot" Visibility="Collapsed" Width="7" Height="7" Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,6,0"/>'
+        . '</Grid></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True">'
+        . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>'
+        . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
+        . '<Setter TargetName="Dot" Property="Visibility" Value="Visible"/><Setter Property="FontWeight" Value="Bold"/>'
+        . '</Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+}
+
 ; ---------------- XAML 窗口诊断与主题应用（仅主进程） ----------------
 ; 只服务设置窗与主窗，放在主进程文件里，XAMLHost 可以直接引用，不必再用动态名兜编译。
 

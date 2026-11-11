@@ -234,6 +234,9 @@ class VirtualListHost {
     }
 
     _TKType(tableItem, i, t) {
+        ; 手势没有按下/松开类型，虚拟卡片用 -1 选择双入口。
+        if (tableItem.Symbol == "Gesture")
+            return "-1"
         item := tableItem.Items[i]
         isUI := GetTableSymbol(t) == "UI"
         return isUI ? "3" : (item.TriggerType - 1)
@@ -284,13 +287,13 @@ class VirtualListHost {
                 case "TKBtnJoy": this._DeferDialog("TKBtnJoy", OnTriggerEntry.Bind(tableItem, idx, false, "joy"))
                 case "FoldTKEditKeyboard": this._DeferDialog("FoldTKEditKeyboard", OnTriggerEntry.Bind(tableItem, idx, true, "keyboard"))
                 case "FoldTKEditJoy": this._DeferDialog("FoldTKEditJoy", OnTriggerEntry.Bind(tableItem, idx, true, "joy"))
+                case "GestureMouse": OnItemEditGesture(tableItem, idx, "Mouse")
+                case "GestureTouch": OnItemEditGesture(tableItem, idx, "Touch")
                 case "TKBtn": this._DeferDialog("TKBtn", this._EditTK.Bind(this, tableItem, idx, event))
                 case "TKBtnR":
                     ; §23 网络宏：右键触发键列 = 直接复制单次 URL；其余表保持自定义触发串
                     if (GetTableSymbol(t) == "Network")
                         OnItemNetworkCopyUrl(tableItem, idx, "", event)
-                    else if (tableItem.Symbol == "Gesture")
-                        OnItemEditGesture(tableItem, idx)
                     else
                         OnItemCustomEditTriggerStr(tableItem, idx, event)
                 case "NetHelp":
@@ -334,9 +337,7 @@ class VirtualListHost {
     ; 触发键按钮分发表类型（复刻旧 _BindItemRow）
     _EditTK(tableItem, i, event) {
         t := tableItem.Index
-        if (tableItem.Symbol == "Gesture")
-            OnItemEditGesture(tableItem, i)
-        else if (CheckIsStringMacroTable(t))
+        if (CheckIsStringMacroTable(t))
             OnItemEditTriggerStr(tableItem, i, event)
         else if (CheckIsTimingMacroTable(t))
             OnItemEditTiming(tableItem, i, event)
