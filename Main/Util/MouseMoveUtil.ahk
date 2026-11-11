@@ -8,7 +8,7 @@
 ;
 ; 速度约定（与编辑器一致）：uiSpeed 0~100，越大越快
 ; - AHK MouseMove / SetDefaultMouseSpeed：需转为 0 最快 ~ 100 最慢
-; - 罗技 / AHI 平滑：按步长+延时插值，90+ 步长指数增长
+; - 驱动与虚拟设备沿用各自的发送方式，步进速度按 AHK 的剩余距离衰减
 
 ; ========== 诊断日志 ==========
 ; 输出到 Log\MouseMoveDebug.log，用于排查位移偏差问题
@@ -30,12 +30,13 @@ _MouseMoveLogInit() {
 
 MouseMoveLog(tag, msg) {
     global _mmLogInit, _mmLogPath
+    if (!IsSet(RMTLogSysMinLevel) || !RMTLogLevelEnabled("debug", RMTLogSysMinLevel))
+        return
     if (!_mmLogInit)
         _MouseMoveLogInit()
     if (_mmLogPath == "")
         return
     try {
-        modeStr := "?" ; fallback
         FileAppend(FormatTime(, "HH:mm:ss") "." SubStr(A_TickCount, -2) " [" tag "] " msg "`n"
             , _mmLogPath, "UTF-8")
     }
@@ -68,16 +69,6 @@ NormalizeUiMouseSpeed(uiSpeed) {
 UiSpeedToAhkSpeed(uiSpeed) {
     uiSpeed := NormalizeUiMouseSpeed(uiSpeed)
     return (uiSpeed >= 100) ? 0 : (100 - uiSpeed)
-}
-
-; 罗技/AHI：越大越快；0 表示最慢（用 1，避免旧接口把 <=0 当成瞬移）
-UiSpeedToDriverSpeed(uiSpeed) {
-    uiSpeed := NormalizeUiMouseSpeed(uiSpeed)
-    if (uiSpeed >= 100)
-        return 100
-    if (uiSpeed <= 0)
-        return 1
-    return uiSpeed
 }
 
 ; 初始化对应后端；失败返回 false（AHI/罗技不可用时上层应中止）
@@ -129,7 +120,7 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
     x := Round(x), y := Round(y)
     uiSpeed := NormalizeUiMouseSpeed(speed)
     if (keyMode == 5) {
-        if !MoveWindowsCursorAbs(x, y, UiSpeedToDriverSpeed(uiSpeed), item)
+        if !MoveWindowsCursorAbs(x, y, uiSpeed, item)
             return false
         ; 单次核对落点，避免受限的光标位置触发错误点击。
         MouseGetPos(&endX, &endY)
@@ -146,7 +137,7 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
 
     MouseGetPos(&startX, &startY)
     if (keyMode == 3) {
-        ok := MC_MoveAbsSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed), item)
+        ok := MC_MoveAbsSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("ABS", Format("{} target=({},{}) start=({},{}) end=({},{}) dXY=({},{}) eXY=({},{}) speed={}"
             , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
@@ -154,7 +145,7 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
         return ok
     }
     if (keyMode == 4) {
-        ok := AhiMoveAbsSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed), item)
+        ok := AhiMoveAbsSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("ABS", Format("{} target=({},{}) start=({},{}) end=({},{}) dXY=({},{}) eXY=({},{}) speed={}"
             , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
@@ -164,36 +155,76 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
     return MoveAhkCursor(x, y, uiSpeed, false, item)
 }
 
-MoveWindowsCursorAbs(x, y, speed, item) {
-    MC_SmoothStepParams(speed, &maxStep, &stepDelay)
-    return MoveDriverCursorAbs(x, y, speed, maxStep, stepDelay, SendWindowsCursorPoint, item)
-}
+MoveWindowsCursorAbs(x, y, speed, item)
+    => MoveDriverCursorAbs(x, y, speed, SendWindowsCursorPoint, item)
 
 SendWindowsCursorPoint(x, y, *) => DllCall("SetCursorPos", "Int", x, "Int", y, "Int")
 
-; 读取起点后，以固定步长和间隔发送规划好的绝对坐标。
-MoveDriverCursorAbs(x, y, speed, maxStep, stepDelay, sendPoint, item) {
+; AHK 每轴按剩余距离除以速度取步长，末段以最小步长到达目标。
+; AHK 的最小步长是 32/65536 屏幕尺寸，驱动以整数像素/位移报告发送。
+MouseMoveAxisStep(remaining, ahkSpeed, minStep, maxStep) {
+    distance := Abs(remaining)
+    step := ahkSpeed == 0 ? distance : Max(minStep, distance // ahkSpeed)
+    return (remaining < 0 ? -1 : 1) * Min(distance, step, maxStep)
+}
+
+MoveDriverCursorAbs(x, y, speed, sendPoint, item) {
     CoordMode("Mouse", "Screen")
     left := SysGet(76), top := SysGet(77), width := SysGet(78), height := SysGet(79)
-    x := Max(left, Min(left + width - 1, x))
-    y := Max(top, Min(top + height - 1, y))
-    MouseGetPos(&startX, &startY)
-    dx := x - startX, dy := y - startY
-    distance := Sqrt(dx * dx + dy * dy)
-    if (!distance)
-        return !item || !item.Killed
-
-    steps := speed >= 100 ? 1 : Ceil(distance / maxStep)
-    loop steps {
+    x := Max(left, Min(left + width - 1, Round(x)))
+    y := Max(top, Min(top + height - 1, Round(y)))
+    MouseGetPos(&currentX, &currentY)
+    ahkSpeed := UiSpeedToAhkSpeed(speed)
+    minX := Max(1, Round(A_ScreenWidth / 2048))
+    minY := Max(1, Round(A_ScreenHeight / 2048))
+    while (currentX != x || currentY != y) {
         if (item && item.Killed)
             return false
-        stepX := startX + Round(dx * A_Index / steps)
-        stepY := startY + Round(dy * A_Index / steps)
-        if !sendPoint(stepX, stepY, left, top, width, height)
+        currentX += MouseMoveAxisStep(x - currentX, ahkSpeed, minX, width)
+        currentY += MouseMoveAxisStep(y - currentY, ahkSpeed, minY, height)
+        if !sendPoint(currentX, currentY, left, top, width, height)
             return false
-        Sleep(stepDelay)
+        Sleep(A_MouseDelay)
     }
-    return !item || !item.Killed
+    MouseGetPos(&endX, &endY)
+    return endX == x && endY == y && (!item || !item.Killed)
+}
+
+; 罗技和 AHI 的相对报告会受系统指针加速影响，每次读取实际光标再计算下一步。
+MoveDriverCursorRel(dx, dy, speed, sendDelta, item) {
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&currentX, &currentY)
+    left := SysGet(76), top := SysGet(77)
+    targetX := Max(left, Min(left + SysGet(78) - 1, currentX + Integer(dx)))
+    targetY := Max(top, Min(top + SysGet(79) - 1, currentY + Integer(dy)))
+    ahkSpeed := UiSpeedToAhkSpeed(speed)
+    minX := Max(1, Round(A_ScreenWidth / 2048))
+    minY := Max(1, Round(A_ScreenHeight / 2048))
+    ; 限制单个相对报告的幅度，降低指针加速导致的过冲。
+    maxStep := ahkSpeed == 0 ? 127 : 50
+    bestDistance := Abs(targetX - currentX) + Abs(targetY - currentY)
+    stalled := 0
+    loop 5000 {
+        if (item && item.Killed)
+            return false
+        if (currentX == targetX && currentY == targetY)
+            return true
+        stepX := MouseMoveAxisStep(targetX - currentX, ahkSpeed, minX, maxStep)
+        stepY := MouseMoveAxisStep(targetY - currentY, ahkSpeed, minY, maxStep)
+        if !sendDelta(stepX, stepY)
+            return false
+        Sleep(A_MouseDelay)
+        MouseGetPos(&currentX, &currentY)
+        remaining := Abs(targetX - currentX) + Abs(targetY - currentY)
+        if (remaining < bestDistance) {
+            bestDistance := remaining
+            stalled := 0
+        } else if (++stalled >= 5) {
+            ; 无进展时结束，避免在屏幕边缘或受限窗口里反复移动。
+            return remaining <= 1 && (!item || !item.Killed)
+        }
+    }
+    return currentX == targetX && currentY == targetY && (!item || !item.Killed)
 }
 
 ; 相对移动；speed 为界面速度 0~100
@@ -201,7 +232,7 @@ MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
     keyMode := Integer(keyMode)
     x := Integer(x), y := Integer(y)
     if (keyMode == 5)
-        return ViiperInput.Move(x, y, NormalizeUiMouseSpeed(speed))
+        return ViiperInput.Move(x, y, speed, item)
     uiSpeed := NormalizeUiMouseSpeed(speed)
     SendMode("Event")
     CoordMode("Mouse", "Screen")
@@ -215,44 +246,33 @@ MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
 
     MouseGetPos(&startX, &startY)
     if (keyMode == 3) {
-        MC_MoveRSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed))
+        ok := MC_MoveRSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("REL", Format("{} delta=({},{}) start=({},{}) end=({},{}) expect=({},{}) err=({},{}) speed={}"
             , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
             , startX + x, startY + y, (startX + x) - endX, (startY + y) - endY, uiSpeed))
-        return true
+        return ok
     }
     if (keyMode == 4) {
-        AhiMoveRSmooth(x, y, UiSpeedToDriverSpeed(uiSpeed))
+        ok := AhiMoveRSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("REL", Format("{} delta=({},{}) start=({},{}) end=({},{}) expect=({},{}) err=({},{}) speed={}"
             , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
             , startX + x, startY + y, (startX + x) - endX, (startY + y) - endY, uiSpeed))
-        return true
+        return ok
     }
     return MoveAhkCursor(x, y, uiSpeed, true, item)
 }
 
 MoveAhkCursor(x, y, uiSpeed, relative, item) {
+    if (item && item.Killed)
+        return false
+    ; 由 AHK 原生 MouseMove 控制速度与步进。返回后处理排队的停止消息。
     speed := UiSpeedToAhkSpeed(uiSpeed)
-    if (!item || speed == 0) {
-        MouseMove(x, y, speed, relative ? "R" : "")
-        return true
-    }
-
-    ; AHK 的慢速 MouseMove 返回前不会处理终止消息。分段后在两段之间处理消息。
-    MouseGetPos(&startX, &startY)
-    dx := relative ? x : x - startX
-    dy := relative ? y : y - startY
-    stepSize := 12 + uiSpeed
-    steps := Max(1, Ceil(Max(Abs(dx), Abs(dy)) / stepSize))
-    loop steps {
-        if (item.Killed)
-            return false
-        MouseMove(startX + Round(dx * A_Index / steps), startY + Round(dy * A_Index / steps), speed)
+    MouseMove(x, y, speed, relative ? "R" : "")
+    if (item && speed != 0)
         Sleep(-1)
-    }
-    return !item.Killed
+    return !item || !item.Killed
 }
 
 ; 游戏视角：相对位移，仅移动不点击；固定走 mouse_event，与按键类型无关
@@ -277,6 +297,8 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
     moveMode := CmdEnumMoveMode(moveMode)
     clickCount := Integer(clickCount)
     uiSpeed := NormalizeUiMouseSpeed(speed)
+    if (item && item.Killed)
+        return false
 
     ; 游戏视角与按键类型无关，直接走 mouse_event，无需初始化罗技/AHI 后端
     if (moveMode == "游戏视角")
@@ -306,6 +328,8 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
     if (clickCount > 0) {
         if (moveMode == "相对移动" && keyMode >= 3)
             Sleep(30)
+        if (item && item.Killed)
+            return false
         return MouseClickByKeyMode(keyMode, clickCount)
     }
     return true
@@ -342,9 +366,11 @@ SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount :
 MouseDragByStrategy(tableItem, index, keyMode, moveMode, x, y, endX, endY, speed := 90, isHuman := false) {
     keyMode := Integer(keyMode)
     moveMode := CmdEnumMoveMode(moveMode)
+    item := GetItemByIndex(tableItem, index)
+    if (item && item.Killed)
+        return false
     if (!EnsureMouseBackend(keyMode, moveMode == "相对移动", true))
         return false
-    item := GetItemByIndex(tableItem, index)
     if (moveMode == "绝对移动" && !MouseMoveAbsByKeyMode(keyMode, x, y, speed, false, item))
         return false
     if (keyMode == 3 && !InitLogitechGHubNew())

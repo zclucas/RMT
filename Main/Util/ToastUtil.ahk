@@ -227,6 +227,7 @@ class Toast {
             ; 兜底：若提示窗稍后才异步抢走焦点，再把焦点还给之前的前台窗口（如逻辑树编辑器）
             this._RestoreFocus()
             this._Position()
+            DllCall("user32\MessageBeep", "UInt", 0x40)
             this.phase := "fadein"
             this.phaseTick := A_TickCount
             this._tickFn := ObjBindMethod(this, "_Tick")

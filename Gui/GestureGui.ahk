@@ -1,4 +1,4 @@
-﻿OnItemEditGesture(tableItem, index, source, *) {
+OnItemEditGesture(tableItem, index, source, *) {
     item := GetItemByIndex(tableItem, index)
     if (item)
         SetTimer(ShowGestureEditor.Bind(tableItem.ID, item.ID, source), -1)
@@ -105,7 +105,8 @@ class GestureGui {
 
     AddCombo(panel, name, label, selected) {
         row := panel.Add("Grid").Margin("0,0,0,8").Cols("110", "*")
-        row.Add("TextBlock").Text(GetLang(label)).VerticalAlignment("Center")
+        row.Add("TextBlock").Text(GetLang(label) ":").HorizontalAlignment("Right")
+            .VerticalAlignment("Center").Margin("0,0,8,0")
         return row.Add("ComboBox").Grid_Column(1).Name(name).MinHeight(28).SelectedIndex(selected - 1)
     }
 
@@ -250,67 +251,15 @@ class GestureGui {
             return this.Custom == "" ? [] : GestureRead("Mouse|LButton|" this.Custom).Path[1]
         if (shape == "Tilt")
             return []
-        if (InStr(shape, "Return") == 1) {
-            ; 回程在预览中平移，识别模板仍保留原折返轨迹。
-            points := GesturePath.Shapes()[shape][1]
-            horizontal := shape == "ReturnLeftRight" || shape == "ReturnRightLeft"
-            result := []
-            for index, point in points {
-                offset := Min(0.09, Max(0, (index - 15) * 0.03)) - 0.045
-                result.Push([point[1] + (horizontal ? 0 : offset), point[2] + (horizontal ? offset : 0)])
-            }
-            return result
-        }
-        return GesturePath.Shapes()[shape][1]
+        return GesturePath.PreviewPoints(shape, GesturePath.Shapes()[shape][1])
     }
 
     Geometry(points, useCanvasCoords := false) {
-        if (!points.Length)
-            return ["M0,0", "M0,0"]
         origin := useCanvasCoords ? 0 : GestureGui.PreviewSize / 2
         scale := useCanvasCoords ? 1 : 118
-        vertices := []
-        line := ""
-        for index, point in points {
-            vertex := [Round(origin + point[1] * scale, 1), Round(origin + point[2] * scale, 1)]
-            vertices.Push(vertex)
-            line .= (index == 1 ? "M" : " L") vertex[1] "," vertex[2]
-        }
-        first := vertices[1]
-        dot := "M" (first[1] - 4) "," first[2] " a4,4 0 1 1 8,0 a4,4 0 1 1 -8,0 Z"
-        if (vertices.Length == 1)
-            return [line, dot]
-
-        last := vertices[-1]
-        previous := this.ShapeIDs[this.ShapeIndex] == "Custom" ? this.TailAnchor(vertices) : vertices[-2]
-        distance := GesturePath.Distance(last, previous)
-        if (distance >= 1) {
-            x := last[1]
-            y := last[2]
-            dx := (last[1] - previous[1]) / distance
-            dy := (last[2] - previous[2]) / distance
-            line .= " M" Round(x - dx * 10 - dy * 5, 1) "," Round(y - dy * 10 + dx * 5, 1)
-                . " L" Round(x, 1) "," Round(y, 1)
-                . " L" Round(x - dx * 10 + dy * 5, 1) "," Round(y - dy * 10 - dx * 5, 1)
-        }
-        return [line, dot]
-    }
-
-    TailAnchor(vertices) {
-        ; 从终点沿路径回看约 20 DIP，单个抖动采样点不会单独决定箭头。
-        remaining := 20
-        loop vertices.Length - 1 {
-            current := vertices[vertices.Length - A_Index + 1]
-            previous := vertices[vertices.Length - A_Index]
-            segment := GesturePath.Distance(current, previous)
-            if (segment >= remaining) {
-                fraction := remaining / segment
-                return [current[1] + (previous[1] - current[1]) * fraction,
-                    current[2] + (previous[2] - current[2]) * fraction]
-            }
-            remaining -= segment
-        }
-        return vertices[1]
+        ; 自定义轨迹沿尾段回看，避免单个抖动采样点决定箭头。
+        tailDistance := this.ShapeIDs[this.ShapeIndex] == "Custom" ? 20 : 0
+        return GesturePath.PreviewGeometry(points, origin, origin, scale, 4, 10, tailDistance)
     }
 
     MouseHint() {

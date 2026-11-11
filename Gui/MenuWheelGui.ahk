@@ -15,7 +15,6 @@ class MenuWheelGui {
         this.selectMode := 1
         this.swipe := ""
         this.swipeTriggered := false
-        this._buildGen := 0          ; 世代計數：每次新建輪盤遞增，舊的異步等待自動失效
         this._hkIds := []
         global MyHotReloadBus
         if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
@@ -405,6 +404,7 @@ class MenuWheelGui {
         closeIcon.Style("{StaticResource CloseIconStyle}").TextAlignment("Center").IsHitTestVisible("False")
         closeIcon.Canvas_Left(cx - fontSize * 0.6).Canvas_Top(cy - Round(fontSize * 0.7))
 
+        iconUpdates := []
         Loop itemCount {
             idx := A_Index
             sec := this.sectors[idx]
@@ -429,6 +429,7 @@ class MenuWheelGui {
                 iconEl.Canvas_Left(ipx - iconSize / 2 + 4).Canvas_Top(ipy - iconSize / 2 + 4)
                 iconEl.Stretch("Uniform")
                 iconEl.IsHitTestVisible("False")
+                iconUpdates.Push({ControlName: "Icon_" idx, PropertyName: "Source", Value: sec.ImagePath})
 
                 lbl := canvas.Add("TextBlock").Name("Label_" idx)
                 lbl.Text(sec.Name)
@@ -498,49 +499,23 @@ class MenuWheelGui {
 
         this.ui.OnEvent("CenterCircle", "PreviewMouseLeftButtonDown", (*) => this.DoCancel())
 
-        XamlWin.QueueTheme(this.ui)
-        this.ui.Show()
-
-        ; ── 異步等待 wpfHwnd，避免阻塞主執行緒 ────────────────────────
-        ; 舊做法：while (!wpfHwnd) Sleep(20)  → 最多阻塞 5 秒，鍵鼠凍結
-        ; 新做法：世代計數 + SetTimer，快速重觸時舊等待自動失效，新觸發立即響應
-        this._buildGen += 1
-        this._buildStartTime := A_TickCount
-        this._buildItemCount := itemCount
-        SetTimer(ObjBindMethod(this, "_WaitForHwnd", this._buildGen), 20)
+        ui := this.ui
+        ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_OnLoaded", ui))
+        if (iconUpdates.Length)
+            ui.BatchUpdate(iconUpdates)
+        XamlWin.QueueTheme(ui)
+        ui.asyncCreate := true
+        ui.Show()
+        SetTimer(() => (this.ui == ui && !ui.wpfHwnd ? this.Close() : 0), -5000)
     }
 
-    ; 異步輪詢：等待 WPF 視窗控制代碼就緒後完成初始化
-    ; gen：啟動本次等待時的世代號，若已被新一輪覆蓋則靜默退出
-    _WaitForHwnd(gen) {
-        ; 世代不符 → 已被新觸發取代，靜默退出（計時器為 one-shot，無需手動停止）
-        if (gen != this._buildGen)
+    _OnLoaded(ui, *) {
+        if (this.ui != ui || this.closed || !this.isOpen)
             return
-        ; 輪盤在等待途中被關閉
-        if (this.closed || !this.isOpen || !IsObject(this.ui))
-            return
-        ; 超時 5 秒保護
-        if (A_TickCount - this._buildStartTime > 5000)
-            return
-        ; wpfHwnd 尚未就緒 → 再排一次 20ms 後重試
-        if (!this.ui.wpfHwnd) {
-            SetTimer(ObjBindMethod(this, "_WaitForHwnd", gen), 20)
-            return
-        }
-
-        ; wpfHwnd 已就緒 → 執行後續初始化
-        if (this.ui.wpfHwnd) {
-            try {
-                ; 設置 WS_EX_NOACTIVATE (0x08000000) 防止 WPF 視窗搶走滑鼠和鍵盤焦點
-                WinSetExStyle("+0x08000000", "ahk_id " this.ui.wpfHwnd)
-            }
-        }
-
-        itemCount := this._buildItemCount
-        for sec in this.sectors {
-            if (sec.ImagePath != "" && FileExist(sec.ImagePath))
-                this.ui.Update("Icon_" sec.Index, "Source", sec.ImagePath)
-        }
+        ; 在窗口显示前设置 WS_EX_NOACTIVATE，保留原窗口的键盘焦点。
+        try WinSetExStyle("+0x08000000", "ahk_id " ui.wpfHwnd)
+        this._aliveHwnd := ui.wpfHwnd
+        this.Gui := { Hwnd: ui.wpfHwnd }
 
         if (this.selectMode == 2) {
             this.swipe := MenuWheelGui.SwipeSelector(this)
@@ -554,21 +529,23 @@ class MenuWheelGui {
         if (!fold)
             return
         idx := 0
+        updates := []
         for item in GetFoldItems(tableItem, fold) {
             if (ParseBoolInt(item.Forbid))
                 continue
-            if (++idx > itemCount)
+            if (++idx > this.sectors.Length)
                 break
             isWorkRunning := item.IsWorkIndex != 0
             state := isWorkRunning ? 1 : item.ColorState
-            if (state > 0 && MacroStateColors.Has(state))
-                this.sectors[idx].RenderState(this, MacroStateColors[state])
+            if (state > 0 && MacroStateColors.Has(state)) {
+                updates.Push(
+                    {ControlName: "StateDot_" idx, PropertyName: "Fill", Value: MacroStateColors[state]},
+                    {ControlName: "StateDot_" idx, PropertyName: "Visibility", Value: "Visible"}
+                )
+            }
         }
-
-        if (IsObject(this.ui)) {
-            this._aliveHwnd := this.ui.wpfHwnd
-            this.Gui := { Hwnd: this.ui.wpfHwnd }
-        }
+        if (updates.Length)
+            ui.BatchUpdate(updates)
     }
 
     _OnHotkey(key) {
@@ -630,8 +607,6 @@ class MenuWheelGui {
     }
 
     _Cleanup() {
-        ; 遞增世代，使任何正在等待中的 _WaitForHwnd 計時器自動失效
-        this._buildGen += 1
         this.ToggleFunc(false)
         if (this._hkIds.Length > 0) {
             WinHotkey.UnregisterAll(this._hkIds)
@@ -724,23 +699,12 @@ class MenuWheelGui {
                 { ControlName: "Label_" p, PropertyName: "Foreground", Value: menu.selectedText }
             ])
         }
-
-        ; 按宏运行状态渲染色点（使用全局 MacroStateColors）
-        RenderState(menu, stateColor) {
-            p := this.Index
-            ui := menu.ui
-            if (!IsObject(ui))
-                return
-            ui.BatchUpdate([
-                { ControlName: "StateDot_" p, PropertyName: "Fill", Value: stateColor },
-                { ControlName: "StateDot_" p, PropertyName: "Visibility", Value: "Visible" }
-            ])
-        }
     }
 
     class SwipeSelector {
         menu := ""
         drawFn := ""
+        lastPoint := ""
 
         __New(menu) {
             this.menu := menu
@@ -766,6 +730,7 @@ class MenuWheelGui {
                 SetTimer(this.drawFn, 0)
                 this.drawFn := ""
             }
+            this.lastPoint := ""
         }
 
         _OnTick() {
@@ -780,12 +745,19 @@ class MenuWheelGui {
             CoordMode("Mouse", "Screen")
             MouseGetPos(&mx, &my)
 
-            WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
+            try WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
+            catch
+                return
             relX := (mx - wx) / m.dpiScale
             relY := (my - wy) / m.dpiScale
-
-            ui.Update("SwipeLine", "X2", String(relX))
-            ui.Update("SwipeLine", "Y2", String(relY))
+            point := relX "," relY
+            if (point == this.lastPoint)
+                return
+            this.lastPoint := point
+            ui.BatchUpdate([
+                {ControlName: "SwipeLine", PropertyName: "X2", Value: String(relX)},
+                {ControlName: "SwipeLine", PropertyName: "Y2", Value: String(relY)}
+            ])
         }
     }
 }

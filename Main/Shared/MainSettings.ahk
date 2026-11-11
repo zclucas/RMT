@@ -1,3 +1,10 @@
+ReadMacroTotalCount(file, fallback := 0) {
+    count := CfgRead(file, "UserSettings", "MacroTotalCount")
+    if (IsInteger(count) && count >= 0)
+        return Integer(count)
+    return fallback
+}
+
 LoadMainSetting() {
     global MainSoftData, MySoftData
     global SettingSection := "UserSettings"
@@ -238,7 +245,7 @@ LoadMainSetting() {
     MainSoftData.VarListenTop := CfgRead(SettingFile, SettingSection, "VarListenTop", 1)
     MainSoftData.VarListenWidth := CfgRead(SettingFile, SettingSection, "VarListenWidth", 400)
     MainSoftData.VarListenHeight := CfgRead(SettingFile, SettingSection, "VarListenHeight", 420)
-    MySoftData.MacroTotalCount := CfgRead(SettingFile, SettingSection, "MacroTotalCount", 0)
+    MySoftData.MacroTotalCount := ReadMacroTotalCount(SettingFile)
     MainSoftData.LastShowMonth := CfgRead(SettingFile, SettingSection, "LastShowMonth", A_Mon)
 
     MySoftData.TableInfo := CreateTableItemArr()

@@ -386,7 +386,7 @@ Compat13_JoyShort(key) {
 ; 不迁移运行态/旧界面选中索引，不把旧分散颜色或自定义色板强行映射成新主题槽位。
 Compat13_Settings(sections) {
     supported := Map()
-    for key in ["CurSettingName", "SettingArrStr", "NormalPeriod", "HoldFloat", "PreIntervalFloat", "IntervalFloat", "CoordXFloat", "CoordYFloat"]
+    for key in ["CurSettingName", "SettingArrStr", "MacroTotalCount", "NormalPeriod", "HoldFloat", "PreIntervalFloat", "IntervalFloat", "CoordXFloat", "CoordYFloat"]
         supported[key] := true
     for key in ["SuspendHotkey", "PauseHotkey", "KillMacroHotkey", "IsToolCheck", "ToolCheckHotKey", "RecordMacroHotKey", "ToolTextFilterHotKey", "ScreenShotHotKey"]
         supported[key] := true

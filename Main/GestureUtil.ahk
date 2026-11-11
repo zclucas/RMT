@@ -101,11 +101,38 @@ GestureDisplay(value) {
     mouse := GestureRead(GestureBinding(value, "Mouse"))
     touch := GestureRead(GestureBinding(value, "Touch"))
     mouseLabel := mouse ? GetLang(GestureMouseKeys()[mouse.Key]) " · " GetLang(GesturePath.Labels()[mouse.Shape]) : ""
-    touchLabel := touch ? (touch.Modifiers ? GestureModifierLabel(touch.Modifiers) " · " : "")
-        . GetLang(GestureFingerNames()[touch.Fingers]) " " GetLang(GestureTouchActions()[touch.Action]) : ""
+    touchLabel := touch ? GestureTouchLabel(touch) : ""
     if (!mouse && !touch)
         return GetLang("编辑手势")
     return mouseLabel (mouseLabel != "" && touchLabel != "" ? " / " : "") touchLabel
+}
+
+GestureTouchLabel(touch, actionFirst := false) {
+    action := GetLang(GestureFingerNames()[touch.Fingers]) " " GetLang(GestureTouchActions()[touch.Action])
+    if (!touch.Modifiers)
+        return action
+    modifiers := GestureModifierLabel(touch.Modifiers)
+    return actionFirst ? action " · " modifiers : modifiers " · " action
+}
+
+GestureCardDisplay(value) {
+    mouse := GestureRead(GestureBinding(value, "Mouse"))
+    touch := GestureRead(GestureBinding(value, "Touch"))
+    display := {MouseStart: "M0,0", MousePath: "M0,0",
+        TouchText: touch ? GestureTouchLabel(touch, true) : "",
+        MouseVis: !mouse && touch ? "Collapsed" : "Visible", TouchVis: mouse && !touch ? "Collapsed" : "Visible"}
+    if (!mouse)
+        return display
+    if (mouse.Shape == "Tilt") {
+        left := mouse.Key == "WheelLeft"
+        points := [[left ? 0.5 : -0.5, 0], [left ? -0.5 : 0.5, 0]]
+    } else {
+        points := GesturePath.PreviewPoints(mouse.Shape, mouse.Path[1], 0.25)
+    }
+    geometry := GesturePath.PreviewGeometry(points, 14, 11, 16, 1.5, 4, 3, 2.5)
+    display.MousePath := geometry[1]
+    display.MouseStart := geometry[2]
+    return display
 }
 
 class GesturePath {
@@ -201,6 +228,67 @@ class GesturePath {
     }
 
     static Distance(a, b) => Sqrt((a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+
+    static PreviewPoints(shape, points, returnOffset := 0.09) {
+        if (InStr(shape, "Return") != 1)
+            return points
+        ; 错开折返的两段，分别露出起点和终点。
+        horizontal := shape == "ReturnLeftRight" || shape == "ReturnRightLeft"
+        result := []
+        for index, point in points {
+            offset := (Min(1, Max(0, (index - 15) / 3)) - 0.5) * returnOffset
+            result.Push([point[1] + (horizontal ? 0 : offset), point[2] + (horizontal ? offset : 0)])
+        }
+        return result
+    }
+
+    static PreviewGeometry(points, xOrigin, yOrigin, scale, radius, arrowLength, tailDistance := 0, loopInset := 0) {
+        if (!points.Length)
+            return ["M0,0", "M0,0"]
+        vertices := []
+        line := ""
+        for index, point in points {
+            vertex := [Round(xOrigin + point[1] * scale, 2), Round(yOrigin + point[2] * scale, 2)]
+            vertices.Push(vertex)
+            line .= (index == 1 ? "M" : " L") vertex[1] "," vertex[2]
+        }
+        first := vertices[1]
+        dot := "M" (first[1] - radius) "," first[2]
+            . " a" radius "," radius " 0 1 1 " (radius * 2) ",0"
+            . " a" radius "," radius " 0 1 1 " (-radius * 2) ",0 Z"
+        if (vertices.Length == 1)
+            return [line, dot]
+
+        ; 闭合轨迹的箭头沿尾段稍微内移，避免起点圆点盖住箭头。
+        inset := this.Distance(first, vertices[-1]) < loopInset ? loopInset : 0
+        tip := inset ? this.TailAnchor(vertices, inset) : vertices[-1]
+        previous := tailDistance ? this.TailAnchor(vertices, tailDistance + inset) : vertices[-2]
+        distance := this.Distance(tip, previous)
+        if (distance >= 0.5) {
+            x := tip[1], y := tip[2]
+            dx := (x - previous[1]) / distance, dy := (y - previous[2]) / distance
+            halfWidth := arrowLength / 2
+            line .= " M" Round(x - dx * arrowLength - dy * halfWidth, 2) "," Round(y - dy * arrowLength + dx * halfWidth, 2)
+                . " L" x "," y
+                . " L" Round(x - dx * arrowLength + dy * halfWidth, 2) "," Round(y - dy * arrowLength - dx * halfWidth, 2)
+        }
+        return [line, dot]
+    }
+
+    static TailAnchor(vertices, remaining) {
+        loop vertices.Length - 1 {
+            current := vertices[vertices.Length - A_Index + 1]
+            previous := vertices[vertices.Length - A_Index]
+            segment := this.Distance(current, previous)
+            if (segment > 0 && segment >= remaining) {
+                fraction := remaining / segment
+                return [current[1] + (previous[1] - current[1]) * fraction,
+                    current[2] + (previous[2] - current[2]) * fraction]
+            }
+            remaining -= segment
+        }
+        return vertices[1]
+    }
 
     ; 以等弧长采样，并保留轨迹方向及长宽比。
     static Normalize(points, minSize := 0) {

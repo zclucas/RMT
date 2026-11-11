@@ -116,6 +116,7 @@ class VirtualListHost {
             . US . (CheckIsTimingMacroTable(t) ? "1" : "0")      ; 定时宏：时钟/秒表配置按钮
             . US . (HasTimingConfig(item) ? "1" : "0")
             . US . ((tableItem.Symbol == "Voice" || tableItem.Symbol == "Gesture") ? "1" : "0")
+            . this._GestureFields(tableItem, item)
         this._ui.Update("FoldList_" t, "VL_ROW", val)
     }
 
@@ -193,6 +194,7 @@ class VirtualListHost {
                     . US . (isTiming ? "1" : "0")                         ; 定时宏：时钟/秒表配置按钮
                     . US . (HasTimingConfig(item) ? "1" : "0")
                     . US . ((isVoice || tableItem.Symbol == "Gesture") ? "1" : "0")  ; 单次事件触发
+                    . this._GestureFields(tableItem, item)
                     . RS
             }
         }
@@ -220,6 +222,14 @@ class VirtualListHost {
         if (tkStr == "" && (CheckIsNormalTable(t) || GetTableSymbol(t) == "Replace"))
             return ""
         return tkStr == "" ? GetLang("编辑") : tkStr
+    }
+
+    _GestureFields(tableItem, item) {
+        if (tableItem.Symbol != "Gesture")
+            return ""
+        display := GestureCardDisplay(item.TK)
+        return US display.MouseStart US display.MousePath US this._Esc(display.TouchText)
+            . US display.MouseVis US display.TouchVis
     }
 
     _ConfigImagePath(t, item) {

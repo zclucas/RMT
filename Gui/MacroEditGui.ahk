@@ -228,7 +228,7 @@ class MacroEditGui {
 
     ; §8 视频按钮：占位（指令详细介绍视频制作中）
     OnCmdVideoClick(state, ctrl, event) {
-        MyMsgBoxContent(GetLang("指令介绍视频制作中，敬请期待。"))
+        ShowCmdVideoNotice(this.ui)
     }
 
     ; 拿一次焦点（防重复）：窗口创建时就是最终样子，这里只负责切到前台

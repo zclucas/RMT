@@ -41,9 +41,14 @@ class SubMacroGui {
         } finally {
             this._flushBatch()
         }
-        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
-            this._closed := true
-        this.ToggleFunc(true)
+        ui := this.ui
+        opened := XamlWin.Open(ui, "", XamlWin.Owner(this))
+        if (this.ui != ui)
+            return
+        if (opened)
+            this.ToggleFunc(true)
+        else
+            this._CloseWindow()
     }
 
     Hwnd() {
@@ -125,13 +130,13 @@ class SubMacroGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/33-宏操作", ObjBindMethod(this, "TriggerMacro"))
-        this.ui.OnEvent("TypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
-        this.ui.OnEvent("CallTypeCombo", "SelectionChanged", ObjBindMethod(this, "RefreshCallCount"))
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
+        BindCmdEditorChrome(this.ui, "#指令手册/33-宏操作", XamlWin.BindCurrent(this, "TriggerMacro"))
+        this.ui.OnEvent("TypeCombo", "SelectionChanged", XamlWin.BindCurrent(this, "OnRefresh"))
+        this.ui.OnEvent("CallTypeCombo", "SelectionChanged", XamlWin.BindCurrent(this, "RefreshCallCount"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
 
     }
 
@@ -140,13 +145,13 @@ class SubMacroGui {
         this._syncing := false
     }
 
-    OnWindowClosing(state, ctrl, event) {
-        try this.ToggleFunc(false)
+    OnWindowClosing(*) {
+        this.ui := ""
+        this._closed := true
+        this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
         }
-        this.ui := ""
-        this._closed := true
     }
 
     OnCancelClick(state, ctrl, event) {
@@ -154,15 +159,10 @@ class SubMacroGui {
     }
 
     _CloseWindow() {
-        if (IsObject(this.ui)) {
-            try this.ui.Update("Window", "Close", "")
-        }
-        try this.ToggleFunc(false)
-        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
-            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
-        }
-        this.ui := ""
-        this._closed := true
+        ui := this.ui
+        this.OnWindowClosing()
+        if (IsObject(ui))
+            try ui.Update("Window", "Close", "")
     }
 
     _SetCombo(comboName, items, text) {
@@ -177,14 +177,8 @@ class SubMacroGui {
         this._ComboPush(comboName, "Text", text)
     }
 
-    _SelIndex(comboName) {
-        v := IsObject(this.ui) ? this.ui.Query(comboName ">SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) : -1
-    }
-
-    _TypeValue() => Max(1, this._SelIndex("TypeCombo") + 1)
-    _CallKey() {
-        index := this._SelIndex("CallTypeCombo") + 1
+    _CallKey(selectedIndex) {
+        index := Integer(selectedIndex) + 1
         return this._callKeys.Has(index) ? this._callKeys[index] : ""
     }
 
@@ -258,15 +252,15 @@ class SubMacroGui {
 
     ToggleFunc(state) {
         if (state) {
-            try Hotkey("!l", (*) => this.TriggerMacro(), "On")
-        }
-        else {
-            try Hotkey("!l", (*) => this.TriggerMacro(), "Off")
+            try Hotkey("!l", XamlWin.BindCurrent(this, "TriggerMacro"), "On")
+        } else {
+            try Hotkey("!l", "Off")
         }
     }
 
     OnRefresh(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui) || (this._syncing && state != ""))
+        ui := this.ui
+        if (!IsObject(ui) || (this._syncing && state != ""))
             return
         macroTypes := SubMacroGui.MacroTypes()
         if (this._syncing && IsObject(this.Data)) {
@@ -275,8 +269,11 @@ class SubMacroGui {
             if (callKey == "调用")
                 callKey := "插入到当前宏"
         } else {
-            typeValue := this._TypeValue()
-            callKey := this._CallKey()
+            values := ui.Query("TypeCombo>SelectedIndex", "CallTypeCombo>SelectedIndex")
+            if (this.ui != ui || values.Count != 2)
+                return
+            typeValue := Max(1, Integer(values["TypeCombo>SelectedIndex"]) + 1)
+            callKey := this._CallKey(values["CallTypeCombo>SelectedIndex"])
         }
         currentMacro := typeValue == 1
         if (!this._callKeys.Length || currentMacro != this._currentMacro) {
@@ -315,33 +312,36 @@ class SubMacroGui {
     }
 
     RefreshCallCount(*) {
-        if (IsObject(this.ui) && !this._syncing)
-            this._ComboPush("InsertRow", "Visibility", (this._CallKey() == "插入到当前宏") ? "Visible" : "Collapsed")
+        ui := this.ui
+        if (!IsObject(ui) || this._syncing)
+            return
+        index := ui.Query("CallTypeCombo>SelectedIndex")
+        if (this.ui == ui && IsInteger(index))
+            this._ComboPush("InsertRow", "Visibility", (this._CallKey(index) == "插入到当前宏") ? "Visible" : "Collapsed")
     }
 
     OnClickSureBtn(state, ctrl, event) {
-        if (!this.CheckIfValid(&target))
+        ui := this.ui
+        if (!this.Hwnd())
             return
-        this.SaveSubMacroData(target)
-        CommandStr := this.GetCommandStr()
         action := this.SureBtnAction
-        this.ToggleFunc(false)
+        CommandStr := this.SaveSubMacroData()
+        if (CommandStr == "" || this.ui != ui)
+            return
         this._CloseWindow()
         if (action != "")
             action(CommandStr)
     }
 
-    CheckIfValid(&target) {
+    CheckIfValid(macroType, callKey, targetIndex, &target) {
         target := ""
-        macroType := SubMacroGui.MacroTypes()[this._TypeValue()]
-        if (this._targetType != macroType || SubMacroGui.CallIndex(macroType, this._CallKey()) < 0) {
+        if (this._targetType != macroType || SubMacroGui.CallIndex(macroType, callKey) < 0) {
             RmtDialog.Info(GetLang("请选择操作类型"))
             return false
         }
-        if (this._TypeValue() != 1) {
-            idx := this._SelIndex("DropDownIndexCombo") + 1
-            if (this._targetType == macroType && this._targetIDs.Has(idx)) {
-                targetID := this._targetIDs[idx]
+        if (macroType != "当前宏") {
+            if (this._targetIDs.Has(targetIndex)) {
+                targetID := this._targetIDs[targetIndex]
                 tableItem := GetMacroTypeTargetTable(macroType, targetID)
                 if (tableItem)
                     target := ResolveMacroItem(tableItem.ID, targetID)
@@ -355,17 +355,18 @@ class SubMacroGui {
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
-        if (!this.CheckIfValid(&target))
+        ui := this.ui
+        if (!this.Hwnd())
             return
-        this.SaveSubMacroData(target)
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        CommandStr := this.SaveSubMacroData()
+        if (CommandStr != "" && this.ui == ui)
+            OnTriggerSepcialItemMacro(CommandStr)
     }
 
-    GetCommandStr() {
+    GetCommandStr(Remark) {
         textOnly := RegExReplace(this.Data.SerialStr, "\d+")
         numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
         CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
         if (ShouldAutoGenerateRemark(Remark)) {
             IntervarlStr := MainSoftData.Lang == "中文" ? "" : " "
             OperStr := SubMacroGui.CallLabel(this.Data.CallType)
@@ -377,14 +378,28 @@ class SubMacroGui {
         return CommandStr
     }
 
-    SaveSubMacroData(target) {
-        this.Data.MacroType := SubMacroGui.MacroTypes()[this._TypeValue()]
+    SaveSubMacroData() {
+        ui := this.ui
+        if (!IsObject(ui))
+            return ""
+        hwnd := ui.wpfHwnd
+        values := ui.Query("TypeCombo>SelectedIndex", "CallTypeCombo>SelectedIndex", "DropDownIndexCombo>SelectedIndex", "InsertCountCombo", "RemarkCon")
+        if (this.ui != ui || ui.wpfHwnd != hwnd || values.Count != 5)
+            return ""
+        macroType := SubMacroGui.MacroTypes()[Max(1, Integer(values["TypeCombo>SelectedIndex"]) + 1)]
+        callKey := this._CallKey(values["CallTypeCombo>SelectedIndex"])
+        targetIndex := Integer(values["DropDownIndexCombo>SelectedIndex"]) + 1
+        if (!this.CheckIfValid(macroType, callKey, targetIndex, &target))
+            return ""
+        this.Data.MacroType := macroType
         this.Data.Index := target ? target.Index : 0
-        this.Data.CallType := this._CallKey()
-        this.Data.InsertCount := GetLangKey(this.ui.Query("InsertCountCombo"))
+        this.Data.CallType := callKey
+        this.Data.InsertCount := GetLangKey(values["InsertCountCombo"])
 
         this.Data.MacroSerial := target ? target.Item.ID : ""
+        CommandStr := this.GetCommandStr(values["RemarkCon"])
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 
     _LangArrIndex(arr, langKey) {

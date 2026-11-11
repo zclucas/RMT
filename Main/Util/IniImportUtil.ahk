@@ -583,7 +583,7 @@ IniImport_ExpandFlatMacroFile(settingDir) {
     return true
 }
 
-; 重排宏后按源身份重绑。只有确实没有身份字段的旧完整列表使用原索引。
+; 重排宏后优先按源身份重绑。完整旧列表保留 1.2.2 找不到序列号时的索引回退。
 ; 映射仅来自导入包，不能使用当前正在运行的配置。
 IniImport_MigrateMacroRefs(settingDir, tables, legacyKv) {
     path := settingDir "\SubMacroFile.toml"
@@ -600,10 +600,18 @@ IniImport_MigrateMacroRefs(settingDir, tables, legacyKv) {
     original := root["FlatMacroRefSource"] := Cfg_Seg(root, "FlatMacroRefSource").Clone()
     changed := false
     serialIndices := Map()
-    for symbol, _ in bySymbol {
+    serialLists := Map()
+    fullLists := Map()
+    for symbol, table in bySymbol {
+        ; 旧版完整导出写入全部状态数组。选择性分享缺少这些数组，位置可能已重排。
+        full := IniImport_SplitPi(IniImport_Kv(legacyKv, symbol "ForbidArr")).Length == table.Items.Length
+            && IniImport_SplitPi(IniImport_Kv(legacyKv, symbol "TriggerTypeArr")).Length == table.Items.Length
+        fullLists[symbol] := full
+        serials := IniImport_SplitPi(IniImport_Kv(legacyKv, symbol "SerialArr"))
+        serialLists[symbol] := serials
         indices := Map()
-        for i, oldSerial in IniImport_SplitPi(IniImport_Kv(legacyKv, symbol "SerialArr")) {
-            if (oldSerial != "")
+        for i, oldSerial in serials {
+            if (oldSerial != "" && (!full || !indices.Has(oldSerial)))
                 indices[oldSerial] := indices.Has(oldSerial) ? 0 : i
         }
         serialIndices[symbol] := indices
@@ -618,10 +626,15 @@ IniImport_MigrateMacroRefs(settingDir, tables, legacyKv) {
         tb := bySymbol.Get(symbol, "")
         if (tb) {
             indices := serialIndices[symbol]
-            if (data.HasOwnProp("MacroSerial"))
-                idx := indices.Get(String(data.MacroSerial), 0)
-            else if (indices.Count == 0 && data.HasOwnProp("Index") && IsInteger(data.Index))
-                idx := Integer(data.Index)
+            oldSerial := data.HasOwnProp("MacroSerial") ? String(data.MacroSerial) : ""
+            oldIndex := data.HasOwnProp("Index") && IsInteger(data.Index) ? Integer(data.Index) : 0
+            serials := serialLists[symbol]
+            if (fullLists[symbol] && oldSerial != "" && oldIndex > 0 && serials.Has(oldIndex) && serials[oldIndex] == oldSerial)
+                idx := oldIndex
+            else if (oldSerial != "")
+                idx := indices.Get(oldSerial, 0)
+            if (!idx && (fullLists[symbol] || (!data.HasOwnProp("MacroSerial") && indices.Count == 0)))
+                idx := oldIndex
         }
         if (!tb || idx < 1 || idx > tb.Items.Length) {
             ; 缺失或未选中的目标不能绑定到同一位置的其他宏。

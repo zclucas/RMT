@@ -3,7 +3,7 @@ SplitMacro(macroStr) {
     resultArr := []
 
     for value in cmdArr {
-        curCmd := Trim(value)
+        curCmd := Trim(value, " `t`r")
         if (curCmd != "")
             resultArr.Push(curCmd)
     }

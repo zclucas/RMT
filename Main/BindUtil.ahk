@@ -508,7 +508,7 @@ OnClickFileCheckHelpBtn(*) {
     str3 := GetLang("适用场景：安装包不完整、杀毒误删、自行替换/删除插件文件后功能异常等。")
     str4 := GetLang("提示：此检查不会在启动时自动执行，需要时在「工具」页手动点击「文件校验」。")
     str5 := GetLang("测试版使用对应版本的资源，例如 1.3F3 使用 1.3 的资源。")
-    str6 := GetLang("语音扩展可通过「下载语音扩展」单独补齐。")
+    str6 := GetLang("语音组件可通过「语音扩展」单独补齐。")
 
     str := Format("{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6)
     RmtDialog.Info(str, GetLang("文件校验说明"))

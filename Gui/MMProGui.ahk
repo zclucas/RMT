@@ -461,7 +461,7 @@ class MMProGui {
             action(CommandStr)
     }
 
-    SureMMPro() {
+    SureMMPro(*) {
         CoordMode("Mouse", "Screen")
         MouseGetPos &mouseX, &mouseY
         if (!IsObject(this.ui))
