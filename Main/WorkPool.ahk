@@ -783,37 +783,6 @@ class WorkPool {
                 wd.shmTx.Close()
             if (wd.shmRx)
                 wd.shmRx.Close()
-            if (wd.hEvt)
-                CloseHandle(wd.hEvt)
-            if (wd.hProc)
-                CloseHandle(wd.hProc)
-            wd.hEvt := 0
-            wd.hProc := 0
-        } finally Critical(previousCritical)
-        if (releaseKeys && wd.taskID)
-            this.ReleaseWorkerTaskKeys(wd)
-        if (resetTask)
-            this.ResetWorkerTaskState(wd, 3)
-        this._CancelWorkerInputs(wd)
-        if (wd.pid)
-            try CloseXamlCountDownForWorker(wd.pid)
-        return true
-    }
-
-            this.workerMap.Delete(wd.idx)
-            this.RemoveWorkerFromPools(wd)
-            if (wd.taskID)
-                this.DrainWorkerHoldEvents(wd)
-            if (wd.tx)
-                wd.tx.Invalidate()
-            if (wd.rx)
-                wd.rx.Invalidate()
-            wd.tx := 0
-            wd.rx := 0
-            if (wd.shmTx)
-                wd.shmTx.Close()
-            if (wd.shmRx)
-                wd.shmRx.Close()
             if (wd.shmHud)
                 wd.shmHud.Close()
             if (wd.hEvt)

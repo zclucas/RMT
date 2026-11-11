@@ -15,14 +15,6 @@
 ; 生命周期与宏一致：宏停止或终止时关闭。
 ; =====================================================================
 
-; 文本槽唤醒消息号；与引擎侧 RegisterWindowMessageW("RMT_HUD_TEXT") 返回同一消息 ID
-HudTextMsg() {
-    static m := 0
-    if (!m)
-        m := DllCall("RegisterWindowMessageW", "Str", "RMT_HUD_TEXT", "UInt")
-    return m
-}
-
 ; 位置下拉标签，顺序与指令界面一致
 HudPosLabels() {
     return ["窗口右上", "窗口左上", "窗口右下", "窗口左下", "窗口居中",
@@ -58,9 +50,6 @@ class HudGui {
         this._targetHwnd := 0
         this._openTick := 0        ; Show 成功时刻；用于识别句柄长期未返回的异常窗口
         this._lastPushTick := 0    ; 上次送文本的时刻（限速）
-        this.shmText := ""         ; 文本槽映射，引擎只读挂接
-        this.shmTextName := ""
-        this._pubHwnd := 0         ; 已写入槽中的窗口句柄，0 表示未发布
     }
 
     _Item() {
@@ -118,8 +107,8 @@ class HudGui {
             this.Close()
             return false
         }
-        ; 句柄就绪后写入文本槽：Worker 每帧读取一次，非 0 时自行写文本并唤醒
-        ; 引擎窗口（WorkUtil.WorkHudDirectWrite），该路径不经过主线程。
+        ; 句柄就绪后登记到 Worker 槽尾表：Worker 每帧查表，命中即直接向引擎投递，
+        ; 该路径不经过主线程。
         if (hwnd)
             this._PublishHwnd(hwnd)
 
@@ -137,59 +126,53 @@ class HudGui {
         this._lastShown := c
         this._content := c
 
-        ; 首选共享内存 + 唤醒消息：不等回执，多窗口时延迟不随窗口数累加；
-        ; 引擎收到后以 BeginInvoke 合并渲染，渲染能力不足时自行降频。
-        ; 消息号注册失败时直接回退，不得以 WM_NULL 冒充成功。
-        msg := HudTextMsg()
-        if (msg && this._WriteSlot(c)) {
-            hwnd := this.Hwnd()
-            if (hwnd) {
-                ; 直接调用 PostMessageW：内置 PostMessage 会解析 WinTitle，
-                ; 目标状态异常时抛异常；此处只需 BOOL 结果，失败即回退。
-                sent := 0
-                try sent := DllCall("user32\PostMessageW", "Ptr", hwnd
-                    , "UInt", msg, "Ptr", 0, "Ptr", 0, "Int")
-                if (sent)
-                    return true
-                HudDiagOnce("POST-FAIL")
-            } else {
-                HudDiagOnce("HWND-0")
-            }
-        } else if (msg == 0) {
-            HudDiagOnce("NOMSG")
-        } else {
-            HudDiagOnce("SLOT-FAIL")
-        }
-        ; 回退：共享内存不可用时走同步更新（建窗异常或旧版引擎）
+        ; 引擎侧的 HUD 文本走 0x004A（WM_COPYDATA）同步投递：WndProc 只更新
+        ; PendingText，渲染由帧末合并完成，单次开销为一次字符串拷贝。
         try this.ui.Update("HUD", "Text", c)
         return true
     }
 
-    ; 将窗口句柄写入文本槽偏移 +65008。Worker 每帧读取：非 0 时直连引擎，
-    ; 0 时回落到主进程路径。该值经内存传递而非消息——紧循环中的宏不处理消息队列。
+    ; 把引擎窗口句柄登记到所属 Worker 的 RMT_HUD 槽尾表，供 Worker 直连投递。
+    ; 表布局：+65024 UInt32 项数；+65032 起每项 16 字节（serial / pad / hwnd）。
+    ; 槽与 Worker 一一对应，基址由 ReadWorkerHud 在首次收到该指令的帧时登记到
+    ; MyHudSlotMap；hwnd 传 0 表示摘除该项。
     _PublishHwnd(hwnd) {
-        if (!IsObject(this.shmText))
+        global MyHudSlotMap
+        if (!IsSet(MyHudSlotMap) || !MyHudSlotMap.Has(this.serialStr))
             return
-        if (hwnd == this._pubHwnd)
+        p := MyHudSlotMap[this.serialStr]
+        if (!p)
             return
-        this._pubHwnd := hwnd
-        try NumPut("Ptr", hwnd, this.shmText.ptr, 65008)
-    }
-
-    ; 写入文本槽，格式与引擎侧一致：+0 字节数(UInt32)，+4 UTF-8 文本
-    _WriteSlot(text) {
-        if (!IsObject(this.shmText))
-            return false
-        p := this.shmText.ptr
-        n := StrPut(text, "UTF-8") - 1
-        if (n <= 0 || n > 65000)
-            return false
-        try {
-            StrPut(text, p + 4, "UTF-8")
-            NumPut("UInt", n, p, 0)
-            return true
+        try key := Integer(this.serialStr)
+        catch
+            return
+        count := NumGet(p, 65024, "UInt")
+        if (count > 35)
+            count := 35
+        loop count {
+            off := 65032 + (A_Index - 1) * 16
+            if (NumGet(p, off, "UInt") != key)
+                continue
+            if (hwnd) {
+                NumPut("Ptr", hwnd, p, off + 8)
+            } else {
+                ; 摘除：末项前移补位，避免项数只增不减
+                last := 65032 + (count - 1) * 16
+                if (off != last) {
+                    NumPut("UInt", NumGet(p, last, "UInt"), p, off)
+                    NumPut("Ptr", NumGet(p, last + 8, "Ptr"), p, off + 8)
+                }
+                NumPut("UInt", count - 1, p, 65024)
+            }
+            return
         }
-        return false
+        if (!hwnd)
+            return
+        off := 65032 + count * 16
+        NumPut("UInt", key, p, off)
+        NumPut("UInt", 0, p, off + 4)
+        NumPut("Ptr", hwnd, p, off + 8)
+        NumPut("UInt", count + 1, p, 65024)
     }
 
     _Open(item) {
@@ -198,18 +181,7 @@ class HudGui {
         colors := MainSoftData.ThemeColors
         this._targetHwnd := this._ResolveTarget(item)
 
-        ; 文本槽：引擎按名称只读挂接；写入后只发一条唤醒消息，不等待回执。
-        if (!IsObject(this.shmText)) {
-            this.shmTextName := "RMT_HUDTEXT_" this.serialStr
-            try this.shmText := SharedMemory(this.shmTextName, 65536 + 16)
-            if (!IsObject(this.shmText))
-                HudDiagOnce("SHM-FAIL")
-        }
-        ; 句柄未就绪，先将该空位清零：同名映射可能保留上一窗口的句柄，
-        ; 不清理会使 Worker 向已销毁的窗口投递消息。
-        this._pubHwnd := 0
-        if (IsObject(this.shmText))
-            try NumPut("Ptr", 0, this.shmText.ptr, 65008)
+        ; 窗口重建：旧句柄指向已销毁的窗口，先摘除再等新句柄登记
 
         win := XAML_Generator("Window")
         win.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
@@ -257,12 +229,12 @@ class HudGui {
     ; 位置配置转引擎参数串，第 7 段为文本槽名称
     _BindSpec(data) {
         maxWidth := 420
-        shm := IsObject(this.shmText) ? this.shmTextName : ""
+        ; 第 7 段（文本槽名）留空：Worker 直连改走 WM_COPYDATA，引擎不再挂接共享内存
         if (IsObject(data) && data.HudPos == "自定义")
-            return "0;0;" this._Int(data.HudX, 0) ";" this._Int(data.HudY, 0) ";0;" maxWidth ";" shm
+            return "0;0;" this._Int(data.HudX, 0) ";" this._Int(data.HudY, 0) ";0;" maxWidth ";"
         pos := (IsObject(data) && data.HudPos != "") ? data.HudPos : "窗口右上"
         spec := HudPosSpec(pos)
-        return spec[1] ";" spec[2] ";0;0;" this._targetHwnd ";" maxWidth ";" shm
+        return spec[1] ";" spec[2] ";0;0;" this._targetHwnd ";" maxWidth ";"
     }
 
     ; 拖动结束回调：坐标为 DIP，可直接作为下次的固定坐标
@@ -289,7 +261,7 @@ class HudGui {
     }
 
     Close() {
-        ; 先清除槽中句柄：窗口销毁后，Worker 后续帧需经主进程重建窗口
+        ; 先摘除槽尾表项：窗口销毁后，Worker 查不到句柄会回退主进程路径并触发重建
         this._PublishHwnd(0)
         if (IsObject(this.ui))
             try this.ui.Update("Window", "Close", "")
@@ -297,11 +269,6 @@ class HudGui {
         this._opened := false
         this._openTick := 0
         this._lastShown := ""
-        ; 释放共享内存视图（引擎侧在其 Closed 回调中取消映射）
-        if (IsObject(this.shmText))
-            try this.shmText.Close()
-        this.shmText := ""
-        this.shmTextName := ""
     }
 
     _Data() {

@@ -207,6 +207,8 @@ global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent
 global MyOutputTipContent := OutputTipContent
 global MyHudOutput := HudOutputShow
+; 悬浮显示指令序号 → 所属 Worker 的 RMT_HUD 槽基址，供 HudGui 登记引擎窗口句柄
+global MyHudSlotMap := Map()
 global MyViGJoySetState := ViGJoySetState
 ;宏运行状态颜色（0默认 1运行中 2暂停 3停止）
 global MacroStateColors := Map(1, "#FF4CAF50", 2, "#FFFFC107", 3, "#FFF44336")
