@@ -23,6 +23,53 @@ global RMT_VERSION_DISPLAY := A_IsCompiled
     ? (RMT_VERSION "_" (A_PtrSize = 8 ? "x64" : "x86"))
     : RMT_VERSION
 
+; 主窗句柄就绪等待：回调队列 + 截止时间 + 定时器开关（见 WaitMainWinReady）
+global RmtWinReadyCbs := []
+global RmtWinReadyDeadline := 0
+global RmtWinReadyTimerOn := false
+
+; 主窗句柄由引擎异步回传（Window.LoadedHwnd），这里用定时器轮询等它，主线程不阻塞。
+; 多个回调按注册顺序在同一轮触发，先注册的 UI 收尾一定排在后面的启动命令之前。
+; 超时仍未拿到句柄时照样回调，避免引擎异常导致启动链永久挂起（与旧行为一致）。
+WaitMainWinReady(cb, timeoutMs := 30000) {
+    global RmtWinReadyCbs, RmtWinReadyDeadline, RmtWinReadyTimerOn
+    if (MainWinHwndReady()) {
+        cb()
+        return
+    }
+    RmtWinReadyCbs.Push(cb)
+    if (RmtWinReadyTimerOn)
+        return
+    RmtWinReadyTimerOn := true
+    RmtWinReadyDeadline := A_TickCount + timeoutMs
+    SetTimer(MainWinReadyTick, 25)
+}
+
+MainWinHwndReady() {
+    global MyMainWin
+    ; 与项目其它处一致用真值判断：句柄未回传时是 0，不是空串
+    return IsObject(MyMainWin) && IsObject(MyMainWin.ui)
+        && MyMainWin.ui.HasProp("wpfHwnd") && MyMainWin.ui.wpfHwnd
+}
+
+MainWinReadyTick() {
+    global RmtWinReadyCbs, RmtWinReadyDeadline, RmtWinReadyTimerOn, MyMainWin
+    ready := MainWinHwndReady()
+    if (!ready && A_TickCount <= RmtWinReadyDeadline)
+        return
+    SetTimer(MainWinReadyTick, 0)
+    RmtWinReadyTimerOn := false
+    msg := ready ? ("MainWin hwnd=" MyMainWin.ui.wpfHwnd) : "MainWin hwnd timeout，仍继续 UI 收尾"
+    try XamlUiDiag(msg, "MainWin")
+    ; 揭盖走引擎的 LoadedHwnd 回调 + InitialUpdateComplete。句柄已到说明该回调已入队，
+    ; 先让出一轮消息处理把它放行，再做适配器/OnOpen 这些长任务，否则窗口要多等它们跑完才可见。
+    Sleep(-1)
+    cbs := RmtWinReadyCbs
+    RmtWinReadyCbs := []
+    for fn in cbs
+        try fn()
+}
+
 ;窗口&UI刷新
 InitUI() {
     global MySoftData
@@ -34,8 +81,16 @@ InitUI() {
         CfgWrite(true, SettingFile, SettingSection, "AgreeAgreement")
     }
 
+    ; 建窗走引擎异步通道，Show() 立即返回、这里不再 Sleep 轮询句柄。
+    ; 适配器/托盘菜单/首屏刷新都依赖句柄，交给 WaitMainWinReady 在句柄回传后执行；
+    ; 主线程先回落到启动链，把 PluginInit、热键绑定这类不依赖界面的活并进引擎建窗期间。
     MyMainWin.BuildAndShow()
+    WaitMainWinReady(InitUIFinishUI)
+}
 
+; 主窗句柄就绪后的 UI 收尾。必须跑在句柄回传之后，
+; 否则适配器按名字取控件会全部落空，随后的保存/切页都会失效。
+InitUIFinishUI() {
     MainSoftData.MyGui := GuiAdapter(MyMainWin.ui)
     MainSoftData.MyGui.Title := "RMTv" RMT_VERSION_DISPLAY
     MainSoftData.TabCtrl := TabAdapter(MyMainWin.ui, MyMainWin)

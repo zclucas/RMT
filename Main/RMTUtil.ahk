@@ -20,6 +20,11 @@ global XAML_IN_PROCESS_PREVIEW := false
 ;资源保存（带脏检查优化：只写入实际发生变化的配置项）
 OnSaveSetting(*) {
     global MySoftData, MyWorkPool, MyHotReloadBus, MyMainWin, RMTLogSysMinLevel
+    ; 主窗句柄回传前控件还不存在（启动链现在不阻塞等句柄），此时按保存会取到空控件，直接忽略
+    if (!IsObject(MainSoftData.MyGui)) {
+        XamlUiDiag("OnSaveSetting 忽略：主窗尚未就绪", "MainWin")
+        return
+    }
     threadCount := MainSoftData.MutiThreadNum
     if (IsSet(MyMainWin) && IsObject(MyMainWin) && MyMainWin.HasOwnProp("_setMods"))
         threadCount := Trim(MyMainWin.ui.Query("EditMutiThreadNum>Text"))
@@ -1055,7 +1060,9 @@ CleanupAllMacroStates() {
 }
 
 MsgBoxContent(content, title := "") {
-    MainSoftData.MyGui.Flash()
+    ; 主窗句柄回传前适配器还没建（启动早期可能因插件初始化失败而弹框），此时跳过闪烁
+    if (IsObject(MainSoftData.MyGui))
+        MainSoftData.MyGui.Flash()
     SoundPlay "*-1"
     MyMsgboxGui.ShowGui(content, title)
 }

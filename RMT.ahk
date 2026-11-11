@@ -43,4 +43,9 @@ BindKey()           ;绑定快捷键
 
 ; §3 命令行收尾：启动命令队列监听 + 执行首次启动携带的命令（如 rmt -run 1-2 在无实例时直接启动执行）
 StartCmdQueueListener()
-RmtRunStartupCommands()
+; 启动命令会读主窗适配器（界面状态），排到 UI 收尾之后；两者共用同一个就绪回调
+WaitMainWinReady(RunStartupCommandsAfterUI)
+
+RunStartupCommandsAfterUI() {
+    RmtRunStartupCommands()
+}

@@ -319,17 +319,24 @@ public partial class AhkWpfEngine
                         catch { }
                     }
 
-                    // Force JIT compilation of WPF rendering engine and core control templates in the background
-                    var dummy = new Window { Width = 0, Height = 0, WindowStyle = WindowStyle.None, ShowInTaskbar = false, AllowsTransparency = true, Opacity = 0 };
-                    var prewarmPanel = new StackPanel();
-                    prewarmPanel.Children.Add(new Button { Content = "Prewarm" });
-                    prewarmPanel.Children.Add(new TextBox { Text = "Prewarm" });
-                    prewarmPanel.Children.Add(new System.Windows.Controls.CheckBox { Content = "Prewarm" });
-                    prewarmPanel.Children.Add(new ListBox());
-                    prewarmPanel.Children.Add(new TreeView());
-                    dummy.Content = prewarmPanel;
-                    dummy.Show();
-                    dummy.Hide();
+                    // 预热窗口实验结论（2026-11，实测主窗可见时间，其余条件相同）：
+                    //   原版 dummy（0x0 + Button/TextBox/CheckBox/ListBox/TreeView，Show 后立即 Hide）  859ms
+                    //   轻量版（0x0 + 中文 TextBlock，等一帧再 Hide）                                 715ms
+                    //   完全不预热                                                                    638ms  ← 最优
+                    // 原因：预热窗口在 daemon 的 Ready 路径上是同步执行的（~78ms），换来的渲染/字形
+                    // 收益远小于这笔开销；而主窗自己首次渲染时，渲染线程本来就和 UI 线程并行。
+                    // 所以这里不再预热，保留说明避免以后重复踩坑。
+                    // try
+                    // {
+                    //     var warm = new Window { Width = 0, Height = 0, WindowStyle = WindowStyle.None,
+                    //         ShowInTaskbar = false, ShowActivated = false, ResizeMode = ResizeMode.NoResize,
+                    //         Left = -10000, Top = -10000 };
+                    //     warm.Content = new TextBlock { Text = "正在加载配置 中文预热点 ABCDEFGHIJ 0123456789" };
+                    //     warm.Show();
+                    //     app.Dispatcher.BeginInvoke(new Action(() => { try { warm.Hide(); } catch { } }),
+                    //         System.Windows.Threading.DispatcherPriority.Background);
+                    // }
+                    // catch { }
 #if ENABLE_WEBVIEW
                     try {
                         var wv = new Microsoft.Web.WebView2.Wpf.WebView2();
