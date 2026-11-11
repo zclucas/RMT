@@ -38,6 +38,15 @@ public partial class AhkWpfEngine
 
     bool _maxBtnPressed = false; // HTMAXBUTTON 不走 WPF IsMouseOver/IsPressed，需在 NC 消息里补 hover/按下底
 
+    // 日志类 TextBox 的追加缓冲。AppendText 只写入 StringBuilder，由 Dispatcher
+    // 在帧末统一提交；否则每条日志都要跑一次完整布局，WndProc 长期占用 UI 线程，
+    // 高频写入时主进程的投递队列会堆到 1 万条上限。
+    private class LogAppendBuf
+    {
+        public StringBuilder Sb = new StringBuilder();
+        public bool Scheduled;
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         // 拖动时把自绘阴影跟紧窗口。系统阴影在直角窗口上会裁掉底边，这里不再靠它。
@@ -45,6 +54,19 @@ public partial class AhkWpfEngine
         {
             try { RmtWindowFrame.Follow(win); } catch { }
             ScheduleSystemShadow();
+        }
+        // 异步更新唤醒：HUD 窗口读 HUD 槽，其余窗口读通用指令槽
+        if (msg == WmHudText)
+        {
+            try
+            {
+                if (_hud != null)
+                    HudRefreshFromShared();
+                else
+                    XamlAsyncRefresh(hwnd);
+            }
+            catch { }
+            handled = true;
         }
         if (msg == 0x004A)
         {
@@ -560,6 +582,14 @@ public partial class AhkWpfEngine
             parts[2] = parts[2].Replace("&#x0A;", "\n").Replace("&#x0D;", "\r");
         }
 
+        if (parts[0] == "Window" && parts[1] == "AsyncAttach")
+        {
+            // 该窗口改用共享内存直写：写入后只发一条唤醒消息，不等回执。
+            // 适用于指令流水这类每秒数十次、单次载荷较小的更新。
+            XamlAttachAsync(parts.Length > 2 ? parts[2] : "");
+            return;
+        }
+
         if (parts[0] == "Window" && parts[1] == "InitialUpdateComplete")
         {
             if (firstFrame != null) firstFrame.CompleteInitialization();
@@ -620,6 +650,15 @@ public partial class AhkWpfEngine
                 // 窗口级鼠标移动回传开关（控件级不受影响）。见 EventSystem.ReportWindowMouseMove。
                 ReportWindowMouseMove = parts[2] == "1" || parts[2].ToLower() == "true";
             }
+            return;
+        }
+
+        // HUD：「输出 → 悬浮显示」的窗口侧实现，见 HudHost.cs。
+        // 布局、尺寸、定位、跟随均在引擎侧；AHK 只下发文本与锚点配置。
+        // Format: HUD|Bind|mode;anchor;x;y;targetHwnd;maxWidth  /  HUD|Text|<内容>
+        if (parts[0] == "HUD")
+        {
+            HudProcess(parts[1], parts.Length > 2 ? parts[2] : "");
             return;
         }
 
@@ -3859,9 +3898,35 @@ public partial class AhkWpfEngine
                 }
                 else if (parts[1] == "AppendText" && ctrl is System.Windows.Controls.TextBox)
                 {
+                    // 追加走缓冲，帧末统一提交。同步执行时调用方的 SendMessage 需等待
+                    // 文本变更与布局完成才返回，高频追加会阻塞整个消息循环。
                     var tb = (System.Windows.Controls.TextBox)ctrl;
-                    tb.AppendText(parts[2]);
-                    tb.ScrollToEnd();
+                    var buf = tb.Tag as LogAppendBuf;
+                    if (buf == null)
+                    {
+                        buf = new LogAppendBuf();
+                        tb.Tag = buf;
+                    }
+                    buf.Sb.Append(parts[2]);
+                    if (!buf.Scheduled)
+                    {
+                        buf.Scheduled = true;
+                        win.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                            new Action(delegate()
+                            {
+                                buf.Scheduled = false;
+                                if (buf.Sb.Length == 0)
+                                    return;
+                                string all = buf.Sb.ToString();
+                                buf.Sb.Length = 0;
+                                try
+                                {
+                                    tb.AppendText(all);
+                                    tb.ScrollToEnd();
+                                }
+                                catch { }
+                            }));
+                    }
                 }
                 else if (parts[1] == "ScrollToEnd")
                 {
@@ -3980,6 +4045,17 @@ public partial class AhkWpfEngine
                 }
                 else
                 {
+                    // 整体替换前清空缓冲：待追加的行尚未消费，不清会拼接到新内容之后。
+                    if (parts[1] == "Text")
+                    {
+                        var tbClear = ctrl as System.Windows.Controls.TextBox;
+                        if (tbClear != null)
+                        {
+                            var bufClear = tbClear.Tag as LogAppendBuf;
+                            if (bufClear != null)
+                                bufClear.Sb.Length = 0;
+                        }
+                    }
                     var prop = ctrl.GetType().GetProperty(parts[1]);
                     if (prop != null)
                     {

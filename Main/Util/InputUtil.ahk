@@ -44,7 +44,8 @@ WorkerInputRequest(opcode, timeoutMs, item, args*) {
     payload := EncodeBatch(cmd)
     _workerInputResult := ""
     rx.Push(MsgType.EVENT, 0, payload)
-    PostMessage(WM_WORKER_TO_MASTER, workIndex, 0, , "ahk_id " parentHwnd)
+    ; 队列满时 PostMessage 抛 OSError(1816)，不能让它传播到宏执行流程
+    try PostMessage(WM_WORKER_TO_MASTER, workIndex, 0, , "ahk_id " parentHwnd)
     deadline := InputResponseDeadline(timeoutMs, 2000, item)
     loop {
         Sleep(100)

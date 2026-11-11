@@ -77,6 +77,7 @@
 #Include ..\Gui\VarListenGui.ahk
 #Include ..\Gui\CMDTipGui.ahk
 #Include ..\Gui\FrontInfoGui.ahk
+#Include ..\Gui\HudGui.ahk
 #Include ..\Gui\CMDTipSettingGui.ahk
 #Include ..\Gui\CustomMsgBoxGui.ahk
 #Include ..\Gui\AgreementGui.ahk
@@ -199,6 +200,7 @@ global MyCountDownStop := CloseXamlCountDown
 global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent
 global MyOutputTipContent := OutputTipContent
+global MyHudOutput := HudOutputShow
 global MyViGJoySetState := ViGJoySetState
 ;宏运行状态颜色（0默认 1运行中 2暂停 3停止）
 global MacroStateColors := Map(1, "#FF4CAF50", 2, "#FFFFC107", 3, "#FFF44336")

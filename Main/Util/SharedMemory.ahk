@@ -1,16 +1,26 @@
 #Requires AutoHotkey v2.0
 
 class SharedMemory {
-    __New(name, size) {
+    ; attach = true 时按名称挂到已存在的映射（OpenFileMapping）。
+    ; 悬浮窗文本槽由主进程创建，Worker 只写不建，因此只需 attach 模式：
+    ; Worker 可直接写入最新值并唤醒引擎窗口，全程不经过主进程。
+    __New(name, size, attach := false) {
         this.size := size
-        this.hMap := DllCall("CreateFileMapping"
-            , "ptr", -1
-            , "ptr", 0
-            , "uint", 0x04 ; PAGE_READWRITE
-            , "uint", 0
-            , "uint", size
-            , "str", name
-            , "ptr")
+        if (attach)
+            this.hMap := DllCall("OpenFileMappingW"
+                , "uint", 0xF001F ; FILE_MAP_ALL_ACCESS：视图读写权限
+                , "int", 0
+                , "str", name
+                , "ptr")
+        else
+            this.hMap := DllCall("CreateFileMapping"
+                , "ptr", -1
+                , "ptr", 0
+                , "uint", 0x04 ; PAGE_READWRITE
+                , "uint", 0
+                , "uint", size
+                , "str", name
+                , "ptr")
         if (!this.hMap)
             throw Error("Failed to CreateFileMapping: " name " (Error: " A_LastError ")")
             

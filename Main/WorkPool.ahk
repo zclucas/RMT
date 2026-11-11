@@ -71,6 +71,9 @@ class WorkerData {
         this.tx := 0                  ; 主进程→Worker 的环形缓冲区（RingBuffer），用于发送任务和广播
         this.rx := 0                  ; Worker→主进程 的环形缓冲区（RingBuffer），用于接收结果和事件
         this.hEvt := 0                ; 边沿触发通知用的 Event 句柄
+        ; 悬浮窗最新帧单槽：Worker 覆盖写，主进程按自身节奏读取，不进事件队列
+        this.shmHud := 0              ; 共享内存对象（SharedMemory）
+        this.hudSeq := 0              ; 已处理的帧序号，用于跳过重复读取
 
         ; === 状态追踪 ===
         this.idleTick := 0            ; Worker 进入空闲状态的时间戳（A_TickCount），用于弹性缩容判断
@@ -225,6 +228,10 @@ class WorkPool {
 
         wd.shmRx := SharedMemory(rxName, 1048576 + 192)
         wd.rx := RingBuffer(wd.shmRx.ptr, 1048576)
+
+        ; 悬浮窗单槽：与 tx/rx 一并创建，Worker 启动时按同名打开
+        wd.shmHud := SharedMemory("RMT_HUD_" idx, 65536 + 64)
+        wd.hudSeq := NumGet(wd.shmHud.ptr, 4, "UInt")
 
         wd.hEvt := CreateEvent(evtName)
         wd.createTick := A_TickCount
@@ -852,6 +859,7 @@ class WorkPool {
         ; 必须先切断 tx/rx，正在执行的 ProcessWorkerRx 会因此立刻退出，不再 Pop
         shmTx := wd.shmTx
         shmRx := wd.shmRx
+        shmHud := wd.shmHud
         tx := wd.tx
         rx := wd.rx
         hEvt := wd.hEvt
@@ -860,6 +868,7 @@ class WorkPool {
         wd.rx := 0
         wd.shmTx := 0
         wd.shmRx := 0
+        wd.shmHud := 0
         wd.hEvt := 0
         wd.hProc := 0
 
@@ -883,6 +892,9 @@ class WorkPool {
                 shmTx.Close()
             if (shmRx)
                 shmRx.Close()
+            ; 悬浮窗单槽：不释放会随 Worker 反复重建累积泄漏（同名映射每次均为新视图）
+            if (shmHud)
+                shmHud.Close()
             if (hEvt)
                 CloseHandle(hEvt)
             if (hProc)
@@ -1096,15 +1108,57 @@ class WorkPool {
         }
     }
 
-    ; Worker→主线程消息处理：读取 RingBuffer 中的结果和事件
+    ; Worker→主线程消息处理：读取 RingBuffer 中的结果与事件
+    ; 返回 0 符合 OnMessage 约定（0 表示不拦截该消息）。
     OnWorkerToMaster(wParam := 0, lParam := 0, msg := 0, hwnd := 0) {
         idx := wParam
         if (!this.workerMap.Has(idx)) {
             GraphPoolLog("Worker消息无目标", Format("idx={1} 不在workerMap 闲置=[{2}] 忙碌=[{3}]"
                 , idx, this.GetFreeWorkerIds(), this.GetBusyWorkerIds()))
-            return
+            return 0
         }
-        this.ProcessWorkerRx(this.workerMap[idx])
+        ; 先取出实例引用：ProcessWorkerRx 处理 FINISH 时可能触发 CleanUpWorker，
+        ; 其中会执行 workerMap.Delete(idx)；此后访问该键会触发
+        ; "No value was returned"（宏停止时必然出现）。
+        wd := this.workerMap[idx]
+        ; 先读悬浮窗单槽，再处理事件队列：队列可能积压数百条，处理期间无法读槽，
+        ; 悬浮窗更新随之延迟。读槽仅比较一次序号，开销可忽略。
+        this.ReadWorkerHud(wd)
+        this.ProcessWorkerRx(wd)
+        return 0
+    }
+
+    ; 读取 Worker 的悬浮窗单槽。
+    ; 槽中仅保留最新帧：Worker 覆盖写入，主进程读取即为最新值，中间帧被覆盖属预期行为。
+    ; pending 标志在成功取走一帧后才清除，避免 Worker 在主进程频繁处理其他消息时
+    ; 重复补发通知。
+    ; 返回 1 表示本次读到一帧，0 表示无新帧。
+    ReadWorkerHud(wd) {
+        ; IsRxAlive 同时校验实例仍在 workerMap 中且通道有效：
+        ; 调用方可能传入刚被回收的实例，其共享内存已不可访问。
+        if (!IsObject(wd) || !wd.shmHud || !this.IsRxAlive(wd))
+            return 0
+        p := wd.shmHud.ptr
+        loop 3 {
+            seq := NumGet(p, 4, "UInt")
+            if (seq == wd.hudSeq)
+                return 0        ; 无新帧：不清 pending，否则 Worker 会反复补发通知
+            len := NumGet(p, 8, "UInt")
+            if (len = 0 || len > 65000)
+                return 0
+            raw := StrGet(p + 16, len, "UTF-8")
+            ; 读取期间 Worker 可能覆盖新帧：序号变化则重读，避免取到不一致的数据
+            if (NumGet(p, 4, "UInt") != seq)
+                continue
+            wd.hudSeq := seq
+            NumPut("UInt", 0, p, 0)     ; 标记已取走，允许发送下一次通知
+            parts := StrSplit(raw, Chr(1), , 4)
+            if (parts.Length < 4)
+                return 0
+            HudOutputShow(parts[1], parts[4], parts[2], parts[3])
+            return 1
+        }
+        return 0
     }
 
     GetBusyWorkerIds() {
@@ -1127,6 +1181,18 @@ class WorkPool {
         if (!this.IsRxAlive(wd) || wd.rxBusy)
             return
         wd.rxBusy := true
+        ; 单次处理预算：条数与时间双上限。
+        ;
+        ; 仅限制 200 条不足：指令显示开启时每条事件均需同步更新 XAML，
+        ; 200 条可阻塞数百毫秒；期间 Worker 持续投递，主线程队列迅速达到 1 万条上限，
+        ; PostMessage 随后返回 1816（配额不足），其他 Worker 的通知一并丢失。
+        ;
+        ; 时间上限使主线程约每 15ms 返回一次消息循环，避免队列堆积。
+        maxPerCall := 200
+        maxMs := 15
+        startTick := A_TickCount
+        handled := 0
+        more := false
         try {
             loop {
                 rb := wd.rx
@@ -1199,12 +1265,30 @@ class WorkPool {
                             if (!this.IsRxAlive(wd, rb))
                                 return
                     }
+                    handled += 1
+                    if (handled >= maxPerCall || (A_TickCount - startTick) >= maxMs) {
+                        more := true
+                        break
+                    }
                 }
-                if (!this.IsRxAlive(wd, rb) || rb.IsEmpty())
+                if (more || !this.IsRxAlive(wd, rb) || rb.IsEmpty())
                     break
             }
         } finally {
             wd.rxBusy := false
+        }
+
+        ; 仍有积压：将自身重新投递到消息队列末尾，而非用定时器立即续抽。
+        ; 定时器会先于其他 Worker 的通知反复触发，仍可造成其他 Worker 饥饿；
+        ; 重新投递遵循 FIFO，可与其他 Worker 的通知自然轮转。
+        ;
+        ; 队列满（1816）时 PostMessage 抛出 OSError 而非返回 0；此时退化为一次性
+        ; 伪线程执行，否则积压无法消化（缺少后续通知触发续抽）。
+        if (more) {
+            ok := false
+            try ok := PostMessage(WM_WORKER_TO_MASTER, wd.idx, 0, , "ahk_id " A_ScriptHwnd)
+            if (!ok)
+                SetTimer(ObjBindMethod(this, "ProcessWorkerRx", wd), -1)
         }
     }
 
@@ -1257,6 +1341,12 @@ class WorkPool {
                         ToolTipContent(args[1])
                     case "OT":
                         OutputTipContent(args[1])
+                    case "HO":
+                        ; 输出→悬浮显示：文本已在 Worker 侧按条目变量渲染完成，主进程仅负责显示
+                        HudOutputShow(args.Length >= 1 ? args[1] : ""
+                            , args.Length >= 2 ? args[2] : ""
+                            , args.Length >= 3 ? args[3] : ""
+                            , args.Length >= 4 ? args[4] : "")
                     case "IP":
                         ; Worker 请求输入框：创建独立实例弹窗（不同宏/Worker 并发，互不阻塞；共享主进程 daemon）
                         ; 异步创建：避免在消息轮询/OnMessage 上下文同步 XAMLHost（主进程单线程会与 daemon 回传互堵）

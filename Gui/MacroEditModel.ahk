@@ -40,7 +40,6 @@ class MacroTreeAdapter {
         this._visible := false
         this._iconMap := Map()     ; "IconN" → 文件路径（兼容旧调用）
         this._events := Map()      ; 事件名 → 回调（右键/双击，P5 接线）
-        this._renderCause := ""    ; 临时诊断
         this._suppressRender := false  ; 拖拽期间禁止全量重建
         this._splitRenderPending := false
         this.rootSlot := 20            ; 根节点展开列宽；独立编辑器会收紧
@@ -73,7 +72,6 @@ class MacroTreeAdapter {
             this._redrawSuspended := true
         else if (InStr(options, "+Redraw")) {
             this._redrawSuspended := false
-            this._renderCause := "Opt+Redraw"
             this.Render()
         }
     }
@@ -175,10 +173,8 @@ class MacroTreeAdapter {
         }
         if (InStr(options, "Select"))
             this._Select(id)
-        if (needsRender && !this._redrawSuspended) {
-            this._renderCause := "Modify:" options
+        if (needsRender && !this._redrawSuspended)
             this.Render()
-        }
     }
 
     ; 调试当前位置（→）标记：只改节点字段并增量刷新 Cur_ 图标，绝不修改 node.text。
@@ -316,10 +312,8 @@ class MacroTreeAdapter {
         if (id == "") {
             this.nodes := Map()
             this.roots := []
-            if (!this._redrawSuspended) {
-                this._renderCause := "Delete-all"
+            if (!this._redrawSuspended)
                 this.Render()
-            }
             return
         }
         if (!this.nodes.Has(id))
@@ -358,7 +352,6 @@ class MacroTreeAdapter {
     Render() {
         if (!IsObject(this.ui) || this._redrawSuspended || this._suppressRender)
             return
-        this._renderCause := ""
         this.ui.Update(this.treeName, "ClearItems", "")
         ; 展平为可见节点（仅展开分支），深度=缩进
         cards := []
@@ -418,7 +411,6 @@ class MacroTreeAdapter {
             node.splitView := (cur == "false") ? "both" : "false"
         else
             return
-        this._renderCause := "SplitView"
         this.Render()
     }
 

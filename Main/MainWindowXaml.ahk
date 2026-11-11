@@ -463,6 +463,9 @@ class MainWin {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         tmp := StrReplace(tmp, "%resources%", resStr)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", appStr), "", "")
+        ; 首次填充含数百条属性，同步提交需等引擎逐条设完（实测 344ms），
+        ; 期间主线程阻塞、窗口无法绘制。改为批量异步投递，不等回执。
+        this.ui.asyncUpdate := true
         ; 首帧即定死保存位置：模板 CenterScreen 会让 WPF 强制居中并覆盖后续 WinMove → 先默认位置闪一帧。
         ; 改 Manual + 注入 Left/Top/Width/Height（AHK 逻辑坐标 = WPF DIP，125% DPI 下物理 132,126 已实测吻合，无单位错位）。
         ; LastWinPos 无效或仅含旧坐标时使用新版居中默认尺寸。
@@ -533,6 +536,10 @@ class MainWin {
         ; 主题资源在 Show 之前入队（与弹窗同一套做法）：首帧就能拿到 BgColor/TextMain，
         ; 不必等 Loaded 之后再刷，避免窗口先露一帧无背景色。
         try ApplyXamlTheme(this.ui, MainSoftData.Theme)
+        ; 建窗同样异步：XAML 114KB，同步 SendMessage 需等 daemon 出队处理（实测 244ms）。
+        ; 改走共享内存 + PostMessage 后立即返回，句柄等待不变，主线程不再被占用。
+        ; 失败时自动回退同步路径。
+        this.ui.asyncCreate := true
         this.ui.Show()
 
         ; 冷启动解析主窗口 XAML 可能要几秒。等太短就当没建成，后面的初始化会漏掉。
@@ -541,7 +548,9 @@ class MainWin {
             Sleep(50)
         if (this.ui.wpfHwnd) {
             XamlUiDiag("MainWin hwnd=" this.ui.wpfHwnd, "MainWin")
-            this._EnableAiInputFileDrop()
+            ; AI 输入框的 OLE 拖放目标需多个页签各两次同步 IPC（实测 350ms）。
+            ; 此时首屏已可见，不必阻塞主线程，推迟到窗口出现后执行。
+            try SetTimer(ObjBindMethod(this, "_EnableAiInputFileDrop"), -120)
         } else {
             XamlUiDiag("MainWin hwnd timeout", "MainWin")
         }
@@ -551,10 +560,19 @@ class MainWin {
     _EnableAiInputFileDrop() {
         if (!IsObject(this.ui))
             return
+        ; 每次 EnableDropTarget 都要在引擎侧建立 OLE 拖放目标，多个页签累计 350ms。
+        ; 合并为一批异步投递，主线程不再等待；拖放目标延迟数十毫秒生效，无感知。
+        batch := []
         for t in this._useVirtual {
-            try this.ui.Update("AiInput_" t, "EnableDropTarget", "RmtAiFile")
-            try this.ui.Update("AiInputHost_" t, "EnableDropTarget", "RmtAiFile")
+            batch.Push({ ControlName: "AiInput_" t, PropertyName: "EnableDropTarget", Value: "RmtAiFile" })
+            batch.Push({ ControlName: "AiInputHost_" t, PropertyName: "EnableDropTarget", Value: "RmtAiFile" })
         }
+        if (!batch.Length)
+            return
+        if (this.ui.HasProp("asyncUpdate") && this.ui.asyncUpdate && this.ui.BatchUpdateAsync(batch))
+            return
+        for item in batch
+            try this.ui.Update(item.ControlName, item.PropertyName, item.Value)
     }
 
     PopulateAll() {

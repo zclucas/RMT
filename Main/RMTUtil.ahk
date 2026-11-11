@@ -1016,6 +1016,9 @@ SetTableItemState(tableItem, itemIndex, State) {
     item.ColorState := State
     RefreshItemColorUI(tableItem, itemIndex)
 
+    ; 悬浮显示随宏生命周期：停止（0）、终止（3）时关闭
+    if (State == 0 || State == 3)
+        HudStopItem(tableItem, itemIndex)
     if (tableItem.Symbol == "UI" && IsSet(MyUIMacroGui))
         MyUIMacroGui.UpdateButtonsState(itemIndex, State)
 }
@@ -1085,6 +1088,8 @@ SetItemPauseState(tableItem, itemIndex, state, excludeIdx := 0) {
 
 ;恢复意外退出残留的脏状态，后面要换成热重载就会要
 RecoverAllDirtyStates() {
+    ; 脏状态意味着宏已不在运行，同时清除悬浮窗，避免残留无主窗口
+    HudStopAll()
     loop MySoftData.TableInfo.Length {
         tableItem := MySoftData.TableInfo[A_Index]
         for index, item in tableItem.Items {
@@ -1173,6 +1178,17 @@ ViGJoySetState(JoyType, Key, Value) {
 
 OutputTipContent(content) {
     CursorOutputTip.Show(content)
+}
+
+; 「输出 → 悬浮显示」：Worker 送已渲染文本，主进程负责建窗与更新内容。
+; 位置等配置取自主进程这份副本，拖动写回时不会与 Worker 的旧配置冲突。
+;
+; 统一入队，不在此处直接更新窗口，原因同 case "IP"：本函数运行在 OnMessage
+; 上下文，同步调用 XAMLHost.Update（内部为 SendMessage）会与 daemon 的窗口
+; 消息回传互锁，表现为「指令显示与悬浮显示只能有一个工作」。
+; 由一次性 SetTimer(-1) 移出消息循环执行，同一控件的多帧更新自动合并。
+HudOutputShow(serialStr, content, tID, iID) {
+    HudQueueUpdate(serialStr, content, tID, iID)
 }
 
 ToolTipContent(content) {
