@@ -32,6 +32,21 @@ class CMDTipGui {
         this._viewPos := 0
         this._contentText := ""
         this.closed := true
+        ; 帧末批量提交：宏循环每秒可执行上千条指令，逐条同步 Update（内部 SendMessage）
+        ; 会使主进程产生毫秒级阻塞，投递队列迅速达到 1 万条上限（PostMessage 返回 1816），
+        ; 导致其他 Worker 的通知无法投递。改为帧末一次提交。
+        this._pendingCmd := ""
+        this._flushScheduled := false
+        this._lastFlush := 0
+        this._flushFn := ObjBindMethod(this, "_FlushCmd")
+        ; 窗口可用标志：稳态下 ShowGui 仅读取该值，不做跨进程探测
+        this._windowOK := false
+        this._winCheckTick := 0
+        this._autoClearTick := 0
+        this._readyScheduled := false   ; 补主题与补样式仅调度一次（两个 LoadedHwnd 回调均汇入此处）
+        ; 异步提交通道：指令流水走共享内存，不等待引擎回执。
+        ; 指令流水与补样式共用 XAMLHost 的异步槽，此处不单独持有。
+        this._buildScheduled := false
         ; 日志输出（异步写入缓冲区）
         this._logFlushBuffer := ""
         this._logFlushTimer := ""
@@ -127,17 +142,24 @@ class CMDTipGui {
             this.LoadParams()
         }
 
-        if (this.closed || !IsObject(this.ui) || !XAMLHost.CanReuseWindow(this.ui.HasProp("wpfHwnd") ? this.ui.wpfHwnd : 0)) {
-            this._BuildAndShow()
-            this.OnToggleMacroWorkState()
-        }
-        else if (!this._IsVisible()) {
-            this._ShowWindow()
-            this.OnToggleMacroWorkState()
+        ; 窗口检查成本较高：CanReuseWindow 内含一次 SendMessageTimeout(WM_NULL)
+        ; （跨进程、400ms 超时）；_IsVisible 需调用 WinGetStyle，_AutoClearCheck 需读取文件时间。
+        ; 逐条执行时，两个宏并发即可阻塞主线程与引擎 daemon。
+        ; 改为「失效时必查 + 每 2 秒兜底一次」，稳态下每行仅一次整数比较。
+        ; 兜底检查不做深探测：深探测为同步跨进程调用，引擎排版或追加文本时
+        ; 会一并阻塞主线程，表现为每 2 秒停顿一次。窗口失效可由
+        ; _IsVisible/WinExist 等本地判断发现。
+        now := A_TickCount
+        if (!this._windowOK || now - this._winCheckTick >= 2000) {
+            this._winCheckTick := now
+            this._windowOK := this._EnsureWindow(!this._windowOK)
         }
 
-        ; 自动清理检查
-        this._AutoClearCheck()
+        ; 自动清理降为分钟级：原先每行均执行 FileExist 与 FileGetTime
+        if (!this._autoClearTick || now - this._autoClearTick >= 60000) {
+            this._autoClearTick := now
+            this._AutoClearCheck()
+        }
 
         this.AddCMD(CMDStr)
 
@@ -151,6 +173,40 @@ class CMDTipGui {
         if (!this._keyTimer) {
             this._keyTimer := ObjBindMethod(this, "_PollKeys")
             SetTimer(this._keyTimer, 50)
+        }
+    }
+
+    ; 确保窗口存在且可见。返回 false 表示内容无法显示（窗口创建失败）。
+    ; deep=true 时额外向引擎发起一次响应性探测（同步跨进程，仅在窗口状态未知时使用）。
+    _EnsureWindow(deep := true) {
+        hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
+        if (this.closed || !IsObject(this.ui) || !XAMLHost.CanReuseWindow(hwnd, deep)) {
+            ; 建窗开销较大（XAML 构造、编码、daemon 创建），置于消息回调中会使
+            ; 回调期间主线程完全阻塞。改由伪线程执行，先归还消息循环控制权；
+            ; 期间内容累积在 _pendingCmd，建窗完成后统一发送。
+            if (!this._buildScheduled) {
+                this._buildScheduled := true
+                SetTimer(ObjBindMethod(this, "_DeferredBuild"), -1)
+            }
+            return true
+        }
+        if (!this._IsVisible()) {
+            this._ShowWindow()
+            this.OnToggleMacroWorkState()
+        }
+        return true
+    }
+
+    ; 伪线程中执行建窗
+    _DeferredBuild() {
+        this._buildScheduled := false
+        ; 此处不能判断 this.closed：其初始值为 true（表示尚无窗口），
+        ; 该值在 _BuildAndShow 开头才被清除；提前判断会导致窗口永不创建。
+        this._BuildAndShow()
+        try this.OnToggleMacroWorkState()
+        if (this._pendingCmd != "" && !this._flushScheduled) {
+            this._flushScheduled := true
+            SetTimer(this._flushFn, -1)
         }
     }
 
@@ -192,33 +248,26 @@ class CMDTipGui {
         return Format("#{:02X}{}", this.BgAlpha, rgb6)
     }
 
-    ; 行内字符间插入零宽空格，使 TextWrapping 按字符填满一行再断行（避免在 & 等处提前截断）
+    ; 显示文本与原始文本一致：不插入零宽空格，不做改写。
+    ; （早期为配合 TextWrapping="Wrap" 在字符间插入 ZWSP；改为 NoWrap 后不再需要，
+    ;  且会污染复制文本并增加一次全文正则开销。）
     _ToDisplayText(s) {
-        zw := Chr(0x200B)
-        out := ""
-        loop parse s, "`n", "`r" {
-            if (A_Index > 1)
-                out .= "`n"
-            line := A_LoopField
-            lineOut := ""
-            loop parse line {
-                if (A_Index > 1)
-                    lineOut .= zw
-                lineOut .= A_LoopField
-            }
-            out .= lineOut
-        }
-        return out
+        return s
     }
 
     _SetDisplayText(text) {
-        this.ui.Update("ContentCon", "Text", this._ToDisplayText(text))
-        this._ScrollToEnd()
+        shown := this._ToDisplayText(text)
+        ; 整体替换并滚动到底，单次投递两条命令
+        payload := "ContentCon|Text|" this._CmdValue(shown) "`nContentCon|ScrollToEnd|"
+        if (!this._PushAsync(payload))
+            try this.ui.Update("ContentCon", "Text", shown)
+        this._textLen := StrLen(this._contentText)
+        this._viewPos := this._textLen
     }
 
     _ScrollToEnd() {
         try this.ui.Update("ContentCon", "ScrollToEnd", "")
-        this._textLen := StrLen(this._ToDisplayText(this._contentText))
+        this._textLen := StrLen(this._contentText)
         this._viewPos := this._textLen
     }
 
@@ -263,7 +312,7 @@ class CMDTipGui {
         fg := this.FontColor
         fs := String(this.FontSize)
 
-        ; 无标题浮层：左上对齐；ZWSP 字符换行见 _ToDisplayText；穿透见 IsHitTestVisible
+        ; 无标题浮层：左上对齐；穿透由 IsHitTestVisible 控制
         main := XAML_Generator("Border").Name("RootBorder")
             .Background(bg).BorderThickness("0").CornerRadius("0")
             .IsHitTestVisible("False")
@@ -273,7 +322,11 @@ class CMDTipGui {
             .Text("")
             .IsReadOnly("True")
             .AcceptsReturn("True")
-            .TextWrapping("Wrap")
+            ; 不能启用 Wrap：TextBox 自动换行后，每次追加文本都需重新计算全部行的折行位置
+            ; （折点取决于可用宽度）。100 行内容每秒追加十余次即触发十余次全量重排，
+            ; 全部落在 daemon 的单条 UI 线程上，并延后悬浮窗的渲染。
+            ; 日志类文本无需折行，长行以横向滚动呈现。
+            .TextWrapping("NoWrap")
             .TextAlignment("Left")
             .HorizontalContentAlignment("Left")
             .VerticalContentAlignment("Top")
@@ -284,7 +337,7 @@ class CMDTipGui {
             .FontFamily(MainSoftData.FontType)
             .Padding("6,4")
             .VerticalScrollBarVisibility("Auto")
-            .HorizontalScrollBarVisibility("Disabled")
+            .HorizontalScrollBarVisibility("Auto")
             .IsTabStop("False")
             .Focusable("False")
             .IsHitTestVisible("False")
@@ -312,6 +365,9 @@ class CMDTipGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "0")
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
+        ; 建窗期间的更新由 _AfterWindowReady 统一接管，并入其 collect 一次投递；
+        ; 不得在 LoadedHwnd 分支同步发送（实测 157ms 阻塞，会打断悬浮窗刷新节拍）。
+        this.ui.skipQueueFlush := true
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
             Format('Title="CMDTip" ShowInTaskbar="False" Topmost="True" ShowActivated="False" Left="{}" Top="{}" Width="{}" Height="{}"',
                 dipX, dipY, dipW, dipH))
@@ -327,19 +383,93 @@ class CMDTipGui {
 
         this.Gui := CMDTipGuiFacade(this)
         this._ApplyContentColors()
-        if (!XamlWin.Open(this.ui, "", "", false))
+        ; 至此已占用一整轮消息循环（XAML 构造 + XAMLHost 构造）。
+        ; Show 推迟到下一个循环执行：悬浮窗节拍为 16ms，连续执行两步会跳过多帧。
+        try SetTimer(ObjBindMethod(this, "_ShowDeferred"), -1)
+    }
+
+    ; 建窗第二步（伪线程）：仅执行 Show。
+    ; 不使用 Open：其内部以 Sleep 轮询句柄（实测 200~700ms，最坏 2 秒）。
+    ; 主题同样推迟（deferTheme=true）：该操作为约 30 条 Resource 的同步批量更新。
+    _ShowDeferred() {
+        if (this.closed || !IsObject(this.ui))
             return
-        this._ApplyWinStyles()
-        this._ApplyClickThrough()
+        r := XamlWin.OpenNoWait(this.ui, "", "", true)
+        if (!r) {
+            this._windowOK := false
+            return
+        }
+        this._windowOK := true
+        try this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_OnWindowLoaded"))
+    }
+
+    ; 两个 LoadedHwnd 回调（OnWindowLoad 与本回调）汇入同一入口，仅执行一次。
+    ; 回调栈中不得同步刷新 XAML：引擎正在等待该事件回执，再发送会相互等待。
+    _OnWindowLoaded(state, ctrlName, eventName) {
+        this._QueueWindowReady()
     }
 
     OnWindowLoad(state, ctrl, event) {
-        try {
-            this._ApplyWinStyles()
-            this._ApplyContentColors()
-        } finally {
-            this.ui.Update("Window", "Opacity", "1")
-            this._ApplyClickThrough()
+        this._QueueWindowReady()
+    }
+
+    _QueueWindowReady() {
+        if (this._readyScheduled)
+            return
+        this._readyScheduled := true
+        ; 此时窗口尚未显示：引擎需等待 ContentRendered 后才显示首帧。
+        ; 在该时机修改 EXSTYLE 与置顶不触发分层表面重建；若推迟到 _AfterWindowReady，
+        ; 窗口已显示，单次 SetWindowLong 实测 25ms，会导致悬浮窗跳帧。
+        ; 两者均为本地 Win32 调用，不经 IPC，故可置于事件回调中。
+        try this._ApplyNativeStyles()
+        try SetTimer(ObjBindMethod(this, "_AfterWindowReady"), -1)
+    }
+
+    ; 本地窗口样式（非 XAML）：穿透、不激活、工具窗口、置顶。
+    ; 幂等：已符合目标值时不做修改。
+    _ApplyNativeStyles() {
+        hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
+        if (!hwnd)
+            return
+        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        ; WS_EX_TOPMOST 0x8：XAML 里写了 Topmost="True"，引擎建窗时通常已经设过
+        if (!(ex & 0x8))
+            try WinSetAlwaysOnTop(1, "ahk_id " hwnd)
+        ; WS_EX_TRANSPARENT 0x20 | WS_EX_TOOLWINDOW 0x80 | WS_EX_NOACTIVATE 0x08000000
+        want := ex | 0x20 | 0x80 | 0x08000000
+        if (ex != want)
+            try DllCall("user32\SetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr", want)
+    }
+
+    ; 窗口就绪后：补主题（建窗时推迟，以避免 Show 阻塞百余毫秒）、
+    ; 补窗口样式与内容配色，并发送建窗期间累积的内容。
+    ;
+    ; 上述操作合计十余次 Update。逐条发送即十余次同步 IPC，每次均须等待 daemon 处理，
+    ; 与悬浮窗 16ms 节拍冲突，故先合并再一次性投递：
+    ; 优先使用共享内存异步通道，不可用时回退同步（合并后的 payload 仍优于逐条发送）。
+    _AfterWindowReady() {
+        this._readyScheduled := false
+        if (this.closed || !IsObject(this.ui))
+            return
+
+        this.ui.BeginCollect()
+        ; 先并入建窗期间的更新（配色、GMUIConfigure 等），
+        ; 与下方主题、尺寸同属窗口初始化操作，合并为一次投递。
+        try this.ui.FlushQueueNow()
+        try XamlWin.QueueTheme(this.ui)
+        try this._ApplyWinStyles()
+        try this._ApplyContentColors()
+        try this.ui.Update("Window", "Opacity", "1")
+        cmds := this.ui.EndCollect()
+
+        if (cmds != "") {
+            if (!this._PushAsync(cmds))
+                try this.ui.SendRaw(cmds)
+        }
+
+        if (this._pendingCmd != "" && !this._flushScheduled) {
+            this._flushScheduled := true
+            SetTimer(this._flushFn, -1)
         }
     }
 
@@ -354,26 +484,15 @@ class CMDTipGui {
         try this.ui.Update("ContentCon", "FontSize", String(this.FontSize))
     }
 
+    ; 仅设置位置与尺寸等 XAML 属性（在 _AfterWindowReady 中由 collect 包裹，一次异步投递）。
+    ; 穿透与置顶等本地 EXSTYLE 由 _ApplyNativeStyles 处理：该时机窗口尚未显示，修改不触发表面重建。
     _ApplyWinStyles() {
-        hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
-        if (!hwnd)
+        if (!IsObject(this.ui) || this.closed)
             return
-        try WinSetAlwaysOnTop(1, "ahk_id " hwnd)
         try this.ui.Update("Window", "Left", String(PhysToDip(this.PosX)))
         try this.ui.Update("Window", "Top", String(PhysToDip(this.PosY)))
         try this.ui.Update("Window", "Width", String(PhysToDip(this.Width)))
         try this.ui.Update("Window", "Height", String(PhysToDip(this.Height)))
-        this._ApplyClickThrough()
-    }
-
-    ; 对齐原版 +E0x20：点击穿透（不抢鼠标）
-    _ApplyClickThrough() {
-        hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
-        if (!hwnd)
-            return
-        try WinSetExStyle("+0x20", "ahk_id " hwnd)          ; WS_EX_TRANSPARENT
-        try WinSetExStyle("+0x80", "ahk_id " hwnd)          ; WS_EX_TOOLWINDOW
-        try WinSetExStyle("+0x08000000", "ahk_id " hwnd)    ; WS_EX_NOACTIVATE
     }
 
     OnWindowClosing(state, ctrl, event) {
@@ -384,6 +503,8 @@ class CMDTipGui {
         this.closed := true
         this.ui := ""
         this.Gui := ""
+        this._windowOK := false
+        this._buildScheduled := false
         if (clearWheel && this._wheelCb) {
             try WinHotkey.UnsubscribeMouse("WheelUp", this._wheelCb)
             try WinHotkey.UnsubscribeMouse("WheelDown", this._wheelCb)
@@ -443,33 +564,103 @@ class CMDTipGui {
         if (!IsObject(this.ui) || this.closed)
             return
 
-        this.ShowCount++
-        if (this._contentText == "")
-            this._contentText := CMDStr
-        else
-            this._contentText .= Format("`n{}", CMDStr)
-
-        if (this.ShowCount >= 100) {
-            this.ShowCount--
-            Pos := InStr(this._contentText, "`n")
-            this._contentText := Pos ? SubStr(this._contentText, Pos + 1) : this._contentText
-            this._SetDisplayText(this._contentText)
-        } else if (this.ShowCount == 1) {
-            this._SetDisplayText(this._contentText)
-        } else {
-            ; 新行同样做字符级可断点，AppendText 自带滚到底
-            this.ui.Update("ContentCon", "AppendText", this._ToDisplayText(Format("`n{}", CMDStr)))
-            this._textLen := StrLen(this._ToDisplayText(this._contentText))
-            this._viewPos := this._textLen
+        ; 累积到帧末统一提交，此处不直接 Update。
+        ; 指令显示开启时每秒可达上千条，逐条同步更新会使主线程饱和。
+        this._pendingCmd .= (this._pendingCmd == "" ? "" : "`n") CMDStr
+        if (!this._flushScheduled) {
+            ; 限速 80ms：内容已进入缓冲区，延迟提交不会丢行。
+            ; 若不限速，flush 完成后立即再次排队，每秒产生数百次伪线程调度，
+            ; SetTimer(-1) 会插入消息队列首部，延迟其他消息。
+            ;
+            ; 取值 80ms 而非更小的原因：主要成本在引擎侧 —— 每次 AppendText 都需
+            ; 重新排版 TextBox 全部行，批次越密总成本越高。80ms 一次、每次数十行，
+            ; 重排次数约为原来的三分之一。
+            this._flushScheduled := true
+            wait := 80 - (A_TickCount - this._lastFlush)
+            if (wait < 1)
+                wait := 1
+            SetTimer(this._flushFn, -wait)
         }
 
-        ; 异步写日志文件（不阻塞主线程）
+        ; 异步写入日志文件，不阻塞主线程
         if (this.LogToFile) {
             this._LogToFile(CMDStr)
         }
     }
 
-    ; 写入日志文件（异步：积累缓冲，定时一次写入）
+    ; 帧末提交：本帧累积的所有行由一次 Update 处理完毕。
+    ; 异步提交：写共享内存 + 唤醒消息，不等待引擎回执。
+    ;
+    ; 原实现走 XAMLHost.Update（SendMessage），每次均须等待 daemon 处理完成。
+    ; 引擎繁忙时该等待可达十余毫秒，且发生在主线程上，会阻塞悬浮窗的刷新节拍（SetTimer）。
+    ; payload 以换行分隔多条命令，内容中的换行已转义为 &#x0A;。
+    _PushAsync(payload) {
+        if (!IsObject(this.ui) || this.closed)
+            return false
+        ; 统一使用 XAMLHost 的通道（每窗口一槽，仅挂接一次）。
+        ; 不可另建槽：窗口仅使用最后挂接的槽，两个槽并存会相互覆盖。
+        return this.ui.UpdateRawAsync(payload)
+    }
+
+    ; 命令参数转义：换行为命令分隔符，内容中的换行必须转义
+    _CmdValue(s) {
+        return StrReplace(StrReplace(s, "`r", "&#x0D;"), "`n", "&#x0A;")
+    }
+
+    _FlushCmd() {
+        this._flushScheduled := false
+        this._lastFlush := A_TickCount
+        if (!IsObject(this.ui) || this.closed || this._pendingCmd == "")
+            return
+
+        batch := this._pendingCmd
+        this._pendingCmd := ""
+
+        wasEmpty := (this._contentText == "")
+        this._contentText := wasEmpty ? batch : this._contentText "`n" batch
+        lineCount := this._CountLines(this._contentText)
+        this.ShowCount := lineCount
+
+        if (lineCount > 100) {
+            ; 超上限：裁剪至最近 100 行并整体重设（每帧至多一次，成本低于逐行裁剪）
+            this._contentText := this._TakeTailLines(this._contentText, 100)
+            this.ShowCount := 100
+            this._SetDisplayText(this._contentText)
+        } else if (wasEmpty) {
+            this._SetDisplayText(this._contentText)
+        } else {
+            ; 新行同样经过字符级断点处理，AppendText 自带滚动到底
+            shown := this._ToDisplayText("`n" batch)
+            if (!this._PushAsync("ContentCon|AppendText|" this._CmdValue(shown)))
+                try this.ui.Update("ContentCon", "AppendText", shown)
+            this._textLen := StrLen(this._contentText)
+            this._viewPos := this._textLen
+        }
+    }
+
+    _CountLines(text) {
+        n := 1
+        pos := 1
+        while (pos := InStr(text, "`n", , pos)) {
+            n += 1
+            pos += 1
+        }
+        return n
+    }
+
+    _TakeTailLines(text, maxLines) {
+        lines := StrSplit(text, "`n")
+        if (lines.Length <= maxLines)
+            return text
+        start := lines.Length - maxLines + 1
+        out := ""
+        loop maxLines {
+            out .= (A_Index == 1 ? "" : "`n") lines[start + A_Index - 1]
+        }
+        return out
+    }
+
+    ; 写入日志文件：缓冲累积，定时批量写出
     _LogToFile(text) {
         if (this._logFlushTimer == "") {
             this._logFlushTimer := ObjBindMethod(this, "_FlushLog")
@@ -488,8 +679,8 @@ class CMDTipGui {
         this._logFlushTimer := ""
         if (buf == "")
             return
-        ; 非阻塞写入：FileAppend 在 AHK v2 中是同步的，
-        ; 但 3s 积累批量写入比每行写一次开销小很多
+        ; FileAppend 在 AHK v2 中为同步调用；每 3 秒批量写入，
+        ; 相比逐行写入可显著降低开销。
         try {
             ; 跨天/跨周先删旧文件，再写入这一批。判断依据是文件修改时间，重启后仍然有效
             CMDLogTryAutoClear(this.LogFilePath, this.AutoClear)
@@ -507,6 +698,7 @@ class CMDTipGui {
         this._logFlushBuffer := ""
         this.ShowCount := 0
         this._contentText := ""
+        this._pendingCmd := ""
         this._textLen := 0
         this._viewPos := 0
         if (IsObject(this.ui) && !this.closed)
@@ -522,6 +714,7 @@ class CMDTipGui {
 
         this.ShowCount := 0
         this._contentText := ""
+        this._pendingCmd := ""
         this._textLen := 0
         this._viewPos := 0
         try this.ui.Update("ContentCon", "Text", "")
@@ -538,6 +731,8 @@ class CMDTipGui {
         hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
         if (hwnd)
             try WinHide("ahk_id " hwnd)
+        ; 下次有内容时须重新检查并显示，不等待 2 秒兜底
+        this._windowOK := false
     }
 
     _ShowWindow(opts := "") {
@@ -556,6 +751,7 @@ class CMDTipGui {
         }
         this._ApplyWinStyles()
         try WinShow("ahk_id " hwnd)
+        this._windowOK := true
     }
 
     _IsVisible() {

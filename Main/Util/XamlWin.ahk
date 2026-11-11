@@ -453,53 +453,95 @@ class XamlWin {
         return ok
     }
 
+    ; 句柄就绪后的窗口修饰：属主、任务栏位置、激活、独立性兜底。
+    ; 返回 false 表示句柄尚未就绪。Open/WaitHwnd 与 OpenNoWait 共用此实现。
+    static _ApplyChrome(ui, ownerHwnd := "", activate := true) {
+        if (!IsObject(ui) || !ui.HasProp("wpfHwnd") || !ui.wpfHwnd)
+            return false
+        ; 属主标记：_EnforceIndependent 据此判断该窗口已设属主，不应清除。
+        ui._modalOwner := ownerHwnd
+        popup := InStr(ui.xaml, 'ShowInTaskbar="False"')
+        if (!popup) {
+            owner := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -8, "Ptr")
+            if (ownerHwnd != "") {
+                ; 模态窗口：保留或补设属主，使窗口始终位于主窗口之上
+                if (owner == 0)
+                    try ui.Update("Window", "NativeOwner", String(ownerHwnd))
+            } else if (owner != 0) {
+                ; 非模态：解除属主（daemon 创建时可能已设置），转为独立顶级窗口
+                DllCall("user32\SetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -8, "Ptr", 0)
+                DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 0)
+                DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 8)
+            }
+            ; 有属主 + APPWINDOW：保留自身任务栏按钮与 Alt+Tab 项，同时位于主窗口之上；
+            ; 无属主 + APPWINDOW：确保独立窗口始终具有任务栏按钮。
+            ex := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr")
+            if (!(ex & 0x40000)) {
+                DllCall("user32\SetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr", ex | 0x40000)
+                DllCall("user32\SetWindowPos", "Ptr", ui.wpfHwnd, "Ptr", 0
+                    , "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x37)
+                DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 0)
+                DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 8)
+            }
+        }
+        if (activate) {
+            ; daemon 的 Show 已完成窗口激活，此时窗口已显示；AHK 再同步调用
+            ; SetForegroundWindow / WinActivate 属重复操作，且跨进程调用耗时约 125ms。
+            XamlWin._DeferActivate(ui)
+        }
+        ; 兜底：若 daemon 事后异步修改属主，在 2s 与 5s 后各反制一次
+        SetTimer(() => XamlWin._EnforceIndependent(ui), -2000)
+        SetTimer(() => XamlWin._EnforceIndependent(ui), -5000)
+        return true
+    }
+
+    ; 不等待句柄的建窗：Show 后立即返回，句柄回传时再补窗口修饰。
+    ; 常规 Open 会原地 Sleep 轮询 daemon 回传句柄（实测 200~700ms，最坏 2 秒），
+    ; 期间主线程被完全占用，是指令窗口打开时停顿一两秒的原因。
+    ; 代价：首帧的数百毫秒内窗口尚未具备任务栏与属主修饰，可能产生一次视觉跳变。
+    static OpenNoWait(ui, fill := "", ownerHwnd := "", deferTheme := false, asyncCreate := true) {
+        if (!IsObject(ui))
+            return false
+        ; deferTheme：将主题推迟到窗口显示之后。主题为约 30 条 Resource 的同步批量更新，
+        ; 与 Show 叠加会使主线程额外阻塞百余毫秒；代价是首帧使用默认配色，随后更正。
+        if (!deferTheme)
+            XamlWin.QueueTheme(ui)
+        if (fill != "") {
+            try {
+                if (HasMethod(fill, "Call"))
+                    fill.Call()
+            } catch {
+            }
+        }
+        xaml := ui.HasProp("xaml") ? ui.xaml : ""
+        if (ui.HasProp("_holdZOrder") && ui._holdZOrder && !InStr(xaml, 'Topmost="True"')) {
+            ownerHwnd := XamlWin.ModalOwner(ownerHwnd)
+            ui._modalStack := XamlWin.AppZOrder()
+        }
+        if (ownerHwnd != "")
+            ui.ownerHwnd := ownerHwnd
+        try ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(XamlWin, "_OnLoadedNoWait", ui, ownerHwnd))
+        ; 建窗同样异步：payload 放入共享内存，仅发送一条 PostMessage，不等待 daemon 取走。
+        ; 该步骤属于「不等待」语义的一部分，否则 Show 仍会阻塞主线程。
+        ui.asyncCreate := asyncCreate
+        ui.Show()
+        return true
+    }
+
+    static _OnLoadedNoWait(ui, ownerHwnd, state, ctrlName, eventName) {
+        try XamlWin._ApplyChrome(ui, ownerHwnd, false)
+        if (IsObject(ui) && ui.HasProp("_modalStack") && ui._modalStack)
+            try XamlWin._ArmModalGuard(ui)
+    }
+
     static WaitHwnd(ui, ownerHwnd := "", activate := true) {
         if (!IsObject(ui))
             return false
-        ; 属主标记：_EnforceIndependent 靠它判断「这窗有属主，别清」。
-        ; 弹窗（ShowInTaskbar="False"）以前不设这个标记，2 秒后就被当成独立窗清掉属主并
-        ; hide/show 一遍，看起来就是「窗口闪一下、慢半拍」。所有窗口一律记上。
         ui._modalOwner := ownerHwnd
         ; 探 HWND：头部密一点（窗口多半这时已建好），之后放宽，总上限仍是 2 秒
         loop 80 {
-            if (ui.HasProp("wpfHwnd") && ui.wpfHwnd) {
-                popup := InStr(ui.xaml, 'ShowInTaskbar="False"')
-                if (!popup) {
-                    owner := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -8, "Ptr")
-                    if (ownerHwnd != "") {
-                        ; 模态窗口：保留/补设属主（永远压在主窗口上方）
-                        if (owner == 0)
-                            try ui.Update("Window", "NativeOwner", String(ownerHwnd))
-                    } else if (owner != 0) {
-                        ; 非模态：解除属主（daemon 创建时可能已设），成为独立顶级窗口
-                        DllCall("user32\SetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -8, "Ptr", 0)
-                        DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 0)
-                        DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 8)
-                    }
-                    ; 有属主 + APPWINDOW = 既有自己的任务栏按钮/Alt+Tab，又保持压主窗口上方；
-                    ; 无属主 + APPWINDOW = 独立窗口的任务栏按钮确定性存在
-                    ; daemon 现在在 Show 之前就打好了这个位（ApplyTaskbarExStyle），走到这里通常
-                    ; 是引擎没升级的兜底：补位后必须 hide/show 才生效，这一步实测要 125ms。
-                    ex := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr")
-                    if (!(ex & 0x40000)) {
-                        DllCall("user32\SetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr", ex | 0x40000)
-                        DllCall("user32\SetWindowPos", "Ptr", ui.wpfHwnd, "Ptr", 0
-                            , "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x37)
-                        DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 0)
-                        DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 8)
-                    }
-                }
-                if (activate) {
-                    ; daemon 的 Show 自己就会激活窗口，此刻窗口已经在屏上。AHK 再同步调一次
-                    ; SetForegroundWindow / WinActivate 是重复动作，而且跨进程这一步要等 125ms。
-                    ; 改成返回之后再看一眼：已经是前台就什么都不做，不是才补一次。
-                    XamlWin._DeferActivate(ui)
-                }
-                ; 兜底：daemon 若事后异步改属主，2s/5s 后自动反制（一次性）
-                SetTimer(() => XamlWin._EnforceIndependent(ui), -2000)
-                SetTimer(() => XamlWin._EnforceIndependent(ui), -5000)
+            if (XamlWin._ApplyChrome(ui, ownerHwnd, activate))
                 return true
-            }
             ; 前 40 轮 5ms、之后 20ms：Sleep 的实际粒度常被系统 timer 分辨率拉到 15ms 以上，
             ; 而窗口句柄通常在 200~700ms 才由 daemon 回传，密集探测能省掉「多睡一轮」的延迟
             Sleep(A_Index <= 40 ? 5 : 20)
@@ -672,6 +714,7 @@ ApplyXamlTheme(ui, themeName, iniPath := "", useAppWinTheme := true) {
                 ui.BatchUpdate(batch)
         }
     }
-    if (useAppWinTheme)
+    if (useAppWinTheme) {
         AppThemeUtil.ApplyWinThemeToXaml(ui)
+    }
 }

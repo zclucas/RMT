@@ -1133,6 +1133,11 @@ OnOutput(tableItem, cmd, index) {
     else if (Data.OutputType == "临时提示") {    ;提示
         MyOutputTipContent(Content)
     }
+    else if (Data.OutputType == "悬浮显示") {    ;悬浮窗：内容已按本条目的变量上下文渲染好
+        iID := ""
+        try iID := tableItem.Items[index].ID
+        MyHudOutput(paramArr[1], Content, tableItem.ID, iID)
+    }
     else if (Data.OutputType == "指令窗口") {    ;指令窗口
         MyCMDTipForceAction(Content)
     }

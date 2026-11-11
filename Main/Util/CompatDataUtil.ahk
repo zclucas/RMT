@@ -212,6 +212,25 @@ CompatEnsureCountDownData(Data) {
     return fixed
 }
 
+; 输出：补齐悬浮显示相关字段。旧版配置 JSON 缺少这些键，直接读取会抛属性不存在。
+CompatEnsureOutputData(Data) {
+    if (Data == "" || !IsObject(Data))
+        return false
+    fixed := false
+    defaults := Map(
+        "HudPos", "窗口右上", "HudX", 0, "HudY", 0,
+        "HudFontSize", 22, "HudAlpha", 240,
+        "HudColor", "FFFFFF", "HudBgColor", "202020"
+    )
+    for name, def in defaults {
+        if (!ObjHasOwnProp(Data, name)) {
+            Data.%name% := def
+            fixed := true
+        }
+    }
+    return fixed
+}
+
 ; 1.2.2 英文键名 / TimeFile.toml 回退读取
 CompatLegacyCmdSaveStr(cmd, dataFile, numbersOnly, normalizedSerialStr, serialStr) {
     keys := [normalizedSerialStr, serialStr]

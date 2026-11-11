@@ -74,14 +74,14 @@ class OutputGui {
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("16,10,16,12")
-        body.Rows("36", "22", "*", "36", "56")
+        body.Rows("36", "22", "*", "36", "36", "56")
         body.Cols("80", "150", "12", "80", "*")
 
         ; 行0：输出类型 + 备注（白底，内边距与下拉框一致）
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("输出类型:")).VerticalAlignment("Center").Margin("8,0,0,0")
         ot := body.Add("ComboBox").Grid_Row(0).Grid_Column(1).Name("OutputTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         ; §21.4：字符变量类型已移除（改由 变量指令-字符 的「编辑」按钮构建）
-        for t in GetLangArr(["发送内容", "粘贴内容", "指令窗口", "复制到剪切板"])
+        for t in GetLangArr(["发送内容", "粘贴内容", "悬浮显示", "指令窗口", "复制到剪切板"])
             ot.Add("ComboBoxItem").Content(t)
         body.Add("TextBlock").Grid_Row(0).Grid_Column(3).Text(GetLang("备注：")).VerticalAlignment("Center")
         body.Add("TextBox").Grid_Row(0).Grid_Column(4).Name("RemarkCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
@@ -112,14 +112,24 @@ class OutputGui {
         varRow.Add("Button").Grid_Column(4).Name("BtnAddName").Content(GetLang("追加名")).Height(26).MinHeight(26).VerticalAlignment("Center")
         varRow.Add("Button").Grid_Column(6).Name("BtnAddValue").Content(GetLang("追加值")).Height(26).MinHeight(26).VerticalAlignment("Center")
 
-        ; 行4：确定
-        btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(5).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Bottom").Margin("0,0,0,6")
+        ; 行 4：悬浮显示位置选择，其它输出类型下隐藏
+        hudRow := body.Add("Grid").Grid_Row(4).Grid_ColumnSpan(5).Name("HudPosRow").Visibility("Collapsed")
+        hudRow.Cols("80", "150", "12", "*")
+        hudRow.Add("TextBlock").Grid_Column(0).Text(GetLang("显示位置：")).VerticalAlignment("Center").Margin("8,0,0,0")
+        hp := hudRow.Add("ComboBox").Grid_Column(1).Name("HudPosCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
+        for t in HudPosLabels()
+            hp.Add("ComboBoxItem").Content(t)
+        hudRow.Add("TextBlock").Grid_Column(3).Text(GetLang("运行中可直接拖动调整")).VerticalAlignment("Center").FontSize(11)
+            .Foreground("{DynamicResource TextSub}")
+
+        ; 行 5：确定
+        btnRow := body.Add("StackPanel").Grid_Row(5).Grid_ColumnSpan(5).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Bottom").Margin("0,0,0,6")
         AddCmdOkBtn(btnRow)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="520" Height="292"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="520" Height="330"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -207,13 +217,15 @@ class OutputGui {
             this.Data.VariableName := "Data"
 
         this.ui.Update("TextCon", "Text", GetLangStr(this.Data.Text, 1))
-        this._SetDDL("OutputTypeCombo", GetLangArr(["发送内容", "粘贴内容", "指令窗口", "复制到剪切板"]), GetLang(this.Data.OutputType))
+        this._SetDDL("OutputTypeCombo", GetLangArr(["发送内容", "粘贴内容", "悬浮显示", "指令窗口", "复制到剪切板"]), GetLang(this.Data.OutputType))
+        this._SetDDL("HudPosCombo", HudPosLabels(), this.Data.HudPos)
         this._SetCombo("VariableNameCombo", GetGuiVarArr(), GetLang(this.Data.VariableName))
         this._SetDDL("VarTypeCombo", GetLangArr(["变量", "数组"]), GetLang("变量"))
         this._SetDDL("VariCombo", this.DLVariableArr, "")
         this.ui.Update("VariCombo", "SelectedIndex", "0")
 
-        this.OnChangeOutputType()
+        ; Init 阶段的批量更新尚未提交，Query 取不到刚设置的下拉值，直接按 Data 判断
+        this.ui.Update("HudPosRow", "Visibility", this.Data.OutputType == "悬浮显示" ? "Visible" : "Collapsed")
     }
 
     ToggleFunc(state) {
@@ -234,8 +246,11 @@ class OutputGui {
     }
 
     OnChangeOutputType(state := "", ctrl := "", event := "") {
-        ; §21.4：字符变量类型已移除，无需再控制保存变量行显隐
-        return
+        if (!IsObject(this.ui))
+            return
+        ; 仅悬浮显示需要选位置，其它输出类型无此配置
+        isHud := GetLangKey(this.ui.Query("OutputTypeCombo")) == "悬浮显示"
+        this.ui.Update("HudPosRow", "Visibility", isHud ? "Visible" : "Collapsed")
     }
 
     OnClickAddVarNameBtn(state, ctrl, event) {
@@ -279,6 +294,14 @@ class OutputGui {
         this.Data.Text := GetLangStr(this.ui.Query("TextCon"), 2)
         this.Data.OutputType := GetLangKey(this.ui.Query("OutputTypeCombo"))
         this.Data.VariableName := GetVarName(this.ui.Query("VariableNameCombo"))
+        this.Data.HudPos := this.ui.Query("HudPosCombo")
         SaveMacroCMDData(this.Data)
+        ; 配置已变更，需通知 Worker 丢弃缓存的 Data，否则它仍按旧的 OutputType 执行
+        ; （例如改为「悬浮显示」后，Worker 仍走「发送内容」分支，不会发出 HO）
+        try {
+            if (IsSet(MyWorkPool) && IsObject(MyWorkPool))
+                MyWorkPool.BroadcastConfigRefresh()
+        } catch {
+        }
     }
 }

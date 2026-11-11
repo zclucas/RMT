@@ -39,6 +39,7 @@ global MyShowPrompt := (payload) => MsgSendHandler("Prompt", payload)
 global MyMsgBoxContent := WorkMsgBoxContent
 global MyToolTipContent := WorkToolTipContent
 global MyOutputTipContent := WorkOutputTipContent
+global MyHudOutput := WorkHudOutput
 global MyViGJoySetState := WorkViGJoySetState
 ;数组相关
 global MySetGlobalArray := WorkSetGlobalArray

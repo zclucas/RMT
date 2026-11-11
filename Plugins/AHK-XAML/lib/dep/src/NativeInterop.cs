@@ -27,6 +27,12 @@ public partial class AhkWpfEngine
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, ref COPYDATASTRUCT lParam);
 
+    // 异步建窗通道：wParam 只能携带整数，映射名经全局原子表传递。
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern uint GlobalGetAtomNameW(ushort nAtom, StringBuilder lpBuffer, int nSize);
+    [DllImport("kernel32.dll")]
+    public static extern ushort GlobalDeleteAtom(ushort nAtom);
+
     // 带回传值/超时的版本。引擎→AHK 的每条事件都用它发：AHK 主线程一旦长时间不取消息，
     // 无超时的 SendMessage 会把线程池里唯一的发送 worker 永久挂死，后面的界面事件全部堵住。
     [DllImport("user32.dll", CharSet = CharSet.Auto)]

@@ -188,6 +188,13 @@ class XAMLHost {
         this.wpfHwnd := 0
         this.pid := 0
         this.skipFontScale := false
+        ; 建窗是否走异步通道（共享内存 + PostMessage）。
+        ; 建窗 XAML 常达数十 KB，WM_COPYDATA 仅支持 SendMessage，须等待 daemon 取走；
+        ; daemon 繁忙时该等待为数十至数百毫秒，期间主线程阻塞，其他窗口刷新停滞。
+        ; 默认走同步路径，由调用方按需开启。
+        this.asyncCreate := false
+        this._createMap := 0
+        this._createAtom := 0
         ; Shared styles are consumed in release builds too; only the editor is development-only.
         this.Update("Window", "GMUIConfigure", A_WorkingDir "\Setting\CommonUIStyles.xml|" (!A_IsCompiled ? "1" : "0"))
         XAMLHost.GetAppDir()
@@ -253,6 +260,9 @@ class XAMLHost {
         ; 而且必须排在下面的 wpfHwnd 判空之前：句柄还没回填（窗口刚建、LoadedHwnd 未到）时，
         ; 关窗请求会被塞进 _updateQueue 等一个永远不会再来的 flush，窗口就关不掉了。
         if (controlName = "Window" && (propertyName = "Close" || propertyName = "close")) {
+            ; 建窗用的映射到这里可以释放了：要么引擎早读完了，要么这个窗口不要了
+            try this._ReleaseCreateMap()
+            try this._ReleaseAsyncUpdSlot()
             if this.wpfHwnd
                 DllCall("user32\PostMessageW", "Ptr", this.wpfHwnd, "UInt", 0x0010, "Ptr", 0, "Ptr", 0) ; WM_CLOSE
             else
@@ -270,6 +280,11 @@ class XAMLHost {
         val := StrReplace(valueStr, "`r", "&#x0D;")
         val := StrReplace(val, "`n", "&#x0A;")
         payload := controlName "|" propertyName "|" val
+        ; 收集模式：仅拼接不发送，由 EndCollect 统一投递（建窗后补主题与样式）
+        if (this.HasOwnProp("_collectBuf")) {
+            this._collectBuf .= (this._collectBuf == "" ? "" : "`n") payload
+            return
+        }
         if (!this.IsDevToolsWindow()) {
             XAMLHost.LogDevTools("OUT", payload)
         }
@@ -336,6 +351,71 @@ class XAMLHost {
             return
         }
 
+        payload := this._BuildBatchPayload(updatesArray)
+
+        if (payload != "") {
+            ; 收集模式：仅拼接不发送，由 EndCollect 统一投递
+            if (this.HasOwnProp("_collectBuf")) {
+                this._collectBuf .= (this._collectBuf == "" ? "" : "`n") RTrim(payload, "`n")
+                return
+            }
+            if (!this.IsDevToolsWindow()) {
+                XAMLHost.LogDevTools("OUT", payload)
+            }
+            buf := Buffer(StrPut(payload, "UTF-8"))
+            StrPut(payload, buf, "UTF-8")
+
+            cds := Buffer(A_PtrSize * 3)
+            NumPut("Ptr", 0, cds, 0)
+            NumPut("UInt", buf.Size, cds, A_PtrSize)
+            NumPut("Ptr", buf.Ptr, cds, A_PtrSize * 2)
+
+            DllCall("user32\SendMessageW", "Ptr", this.wpfHwnd, "UInt", 0x004A, "Ptr", 0, "Ptr", cds.Ptr)
+        }
+    }
+
+    ; ---------------------------------------------------------------
+    ; 收集模式：区间内的 Update / BatchUpdate 仅拼接指令，不发送。
+    ;
+    ; 建窗后需补主题（约 30 条 Resource）与窗口位置尺寸，逐条发送即十余次同步 IPC，
+    ; 每次均须等待 daemon 处理完成，主线程将被占用数十至数百毫秒，
+    ; 其他窗口（含悬浮窗）的刷新定时器随之停滞。
+    ;
+    ; 合并为一条多行 payload 一次发送：引擎侧 ProcessMessage 按行解析，
+    ; 并以 DisableProcessing 使这些失效仅结算一次布局，语义不变。
+    ; ---------------------------------------------------------------
+    BeginCollect() {
+        this._collectBuf := ""
+    }
+
+    Collecting() {
+        return this.HasOwnProp("_collectBuf")
+    }
+
+    EndCollect() {
+        if (!this.HasOwnProp("_collectBuf"))
+            return ""
+        buf := this._collectBuf
+        this.DeleteProp("_collectBuf")
+        return buf
+    }
+
+    ; 直接发送已拼装的多行指令（收集模式的产物）
+    SendRaw(text) {
+        if (!this.wpfHwnd || text == "")
+            return false
+        buf := Buffer(StrPut(text, "UTF-8"))
+        StrPut(text, buf, "UTF-8")
+        cds := Buffer(A_PtrSize * 3)
+        NumPut("Ptr", 0, cds, 0)
+        NumPut("UInt", buf.Size, cds, A_PtrSize)
+        NumPut("Ptr", buf.Ptr, cds, A_PtrSize * 2)
+        DllCall("user32\SendMessageW", "Ptr", this.wpfHwnd, "UInt", 0x004A, "Ptr", 0, "Ptr", cds.Ptr)
+        return true
+    }
+
+    ; 批量更新指令转多行 payload（BatchUpdate 与异步版本共用）
+    _BuildBatchPayload(updatesArray) {
         payload := ""
         for updateObj in updatesArray {
             if (!updateObj.HasProp("ControlName") || !updateObj.HasProp("PropertyName") || !updateObj.HasProp("Value"))
@@ -355,21 +435,132 @@ class XAMLHost {
             val := StrReplace(val, "`n", "&#x0A;")
             payload .= updateObj.ControlName "|" propertyName "|" val "`n"
         }
+        return payload
+    }
 
-        if (payload != "") {
-            if (!this.IsDevToolsWindow()) {
-                XAMLHost.LogDevTools("OUT", payload)
-            }
-            buf := Buffer(StrPut(payload, "UTF-8"))
-            StrPut(payload, buf, "UTF-8")
+    ; ---------------------------------------------------------------
+    ; 异步批量更新：写共享内存 + PostMessage，不等待引擎回执
+    ;
+    ; 主窗口首次填充时单次 BatchUpdate 需设置数百条属性。IPC 虽仅一次，但引擎在
+    ; WndProc 中同步逐条执行，SendMessage 须等待其完成（实测 344ms），期间主线程
+    ; 无法处理其他任务。改走本通道后，发送即返回。
+    ;
+    ; 仅用于显式开启 asyncUpdate 的窗口（目前为主窗口）；任一环节失败即回退同步。
+    ; ---------------------------------------------------------------
+    static _asyncUpdMsg := 0
+    static _asyncUpdSlotSize := 4 * 1024 * 1024
 
-            cds := Buffer(A_PtrSize * 3)
-            NumPut("Ptr", 0, cds, 0)
-            NumPut("UInt", buf.Size, cds, A_PtrSize)
-            NumPut("Ptr", buf.Ptr, cds, A_PtrSize * 2)
+    static AsyncUpdateMsg() {
+        if (!XAMLHost._asyncUpdMsg)
+            XAMLHost._asyncUpdMsg := DllCall("user32\RegisterWindowMessageW", "Str", "RMT_HUD_TEXT", "UInt")
+        return XAMLHost._asyncUpdMsg
+    }
 
-            DllCall("user32\SendMessageW", "Ptr", this.wpfHwnd, "UInt", 0x004A, "Ptr", 0, "Ptr", cds.Ptr)
+    ; 创建或复用本窗口的更新槽，并将槽名告知引擎（该步骤同步，引擎仅保存名称）
+    _EnsureAsyncUpdSlot() {
+        if (this.HasOwnProp("_asyncUpdPtr") && this._asyncUpdPtr
+            && this.HasOwnProp("_asyncUpdHwnd") && this._asyncUpdHwnd == this.wpfHwnd)
+            return true
+        this._ReleaseAsyncUpdSlot()
+        name := "RMT_XAU_" this.id
+        size := XAMLHost._asyncUpdSlotSize
+        hMap := DllCall("kernel32\CreateFileMappingW", "Ptr", -1, "Ptr", 0, "UInt", 4
+            , "UInt", 0, "UInt", size + 16, "Str", name, "Ptr")
+        if (!hMap)
+            return false
+        p := DllCall("kernel32\MapViewOfFile", "Ptr", hMap, "UInt", 6, "UInt", 0, "UInt", 0, "UPtr", size + 16, "Ptr")
+        if (!p) {
+            DllCall("kernel32\CloseHandle", "Ptr", hMap)
+            return false
         }
+        ; 引擎按名称 OpenFileMapping，句柄需保留至窗口销毁
+        this._asyncUpdMap := hMap
+        this._asyncUpdPtr := p
+        this._asyncUpdHwnd := this.wpfHwnd
+        try this.Update("Window", "AsyncAttach", name)
+        return true
+    }
+
+    _ReleaseAsyncUpdSlot() {
+        if (this.HasOwnProp("_asyncUpdPtr") && this._asyncUpdPtr) {
+            try DllCall("kernel32\UnmapViewOfFile", "Ptr", this._asyncUpdPtr)
+            this._asyncUpdPtr := 0
+        }
+        if (this.HasOwnProp("_asyncUpdMap") && this._asyncUpdMap) {
+            try DllCall("kernel32\CloseHandle", "Ptr", this._asyncUpdMap)
+            this._asyncUpdMap := 0
+        }
+        this._asyncUpdHwnd := 0
+    }
+
+    ; 异步投递已拼装的多行指令。返回 false 表示通道不可用，调用方回退同步发送。
+    UpdateRawAsync(text) {
+        if (!this.wpfHwnd || text == "")
+            return false
+        if (!this._EnsureAsyncUpdSlot())
+            return false
+        n := StrPut(text, "UTF-8") - 1
+        if (n <= 0 || n + 4 > XAMLHost._asyncUpdSlotSize)
+            return false
+        p := this._asyncUpdPtr
+        StrPut(text, p + 4, "UTF-8")
+        NumPut("UInt", n, p, 0)
+        sent := 0
+        try sent := DllCall("user32\PostMessageW", "Ptr", this.wpfHwnd
+            , "UInt", XAMLHost.AsyncUpdateMsg(), "Ptr", 0, "Ptr", 0, "Int")
+        return sent != 0
+    }
+
+    BatchUpdateAsync(updatesArray) {
+        payload := this._BuildBatchPayload(updatesArray)
+        if (payload == "")
+            return false
+        return this.UpdateRawAsync(RTrim(payload, "`n"))
+    }
+
+    ; 冲刷建窗期间累积的 _updateQueue。
+    ; 处于收集模式（BeginCollect 之后）时仅并入该 payload，由调用方统一投递。
+    FlushQueueNow() {
+        if (!this.HasOwnProp("_updateQueue"))
+            return
+        pending := this._updateQueue
+        this._updateQueue := []
+        batch := []
+        for item in pending {
+            if (item.type == "single")
+                batch.Push({ ControlName: item.ctrl, PropertyName: item.prop, Value: item.val })
+            else if (item.type == "batch") {
+                for sub in item.arr
+                    batch.Push(sub)
+            }
+        }
+        if (batch.Length)
+            try this.BatchUpdate(batch)
+    }
+
+    ; 在伪线程中将排队内容、主题与字体一次投递。
+    ; 由 LoadedHwnd 回调的 SetTimer(-1) 触发：该步骤需发送同步 AsyncAttach，
+    ; 不能位于引擎事件回调栈中，否则会与事件回执相互等待。
+    static _FlushQueueAsync(instance, batch) {
+        if (!IsObject(instance) || !instance.wpfHwnd)
+            return
+        instance.BeginCollect()
+        try {
+            if (batch.Length)
+                try instance.BatchUpdate(batch)
+            if (!instance.IsFontScaleSkipped()) {
+                themeFs := XAMLHost.GetThemeFontSize()
+                instance.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, themeFs))
+                if (InStr(instance.xaml, "AiChatFontSize"))
+                    XAMLHost.SyncChatFontResources(instance)
+                XAMLHost.SyncCmdEditorTitleFont(instance)
+            }
+        }
+        cmds := instance.EndCollect()
+        if (cmds == "")
+            return
+        if (!instance.UpdateRawAsync(cmds))
+            try instance.SendRaw(cmds)   ; 通道不可用：一次同步发送，仍优于逐条发送
     }
 
 
@@ -402,12 +593,18 @@ class XAMLHost {
         return XAMLHost.IsDaemonAlive() && XAMLHost.IsHwndResponsive(XAMLHost.daemonHwnd, timeoutMs)
     }
 
-    ; 设置窗复用前检查：存在、可见、且未卡死
-    static CanReuseWindow(hwnd) {
+    ; 窗口复用前检查：存在、可见且未失去响应
+    ;
+    ; deep=false 仅做本地判断（IsWindow/IsWindowVisible），不跨进程查询引擎。
+    ; 深探测使用同步 SendMessageTimeout：引擎排版或追加文本时调用方（主线程）
+    ; 须一并等待，稳态下每 2 秒一次即造成可感知停顿。
+    static CanReuseWindow(hwnd, deep := true) {
         if (!hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int"))
             return false
         if (!DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int"))
             return false
+        if (!deep)
+            return true
         return XAMLHost.IsHwndResponsive(hwnd, 400)
     }
 
@@ -932,13 +1129,19 @@ class XAMLHost {
         try {
             frozen := []
             customFrozen := []
-            xaml := RegExReplace(xaml, 'Name="(\w+Glyph)"([^>]*?)FontSize="(\d+(?:\.\d+)?)"'
-                , (m) => (frozen.Push(m[3]), 'Name="' m[1] '"' m[2] 'FontSize="@@GLYPH' frozen.Length '@@"'))
-            xaml := RegExReplace(xaml, 'FontSize="(\d+(?:\.\d+)?)"([^>]*?)Name="(\w+Glyph)"'
-                , (m) => (frozen.Push(m[1]), 'FontSize="@@GLYPH' frozen.Length '@@"' m[2] 'Name="' m[3] '"'))
+            ; 前两次仅处理 Name="*Glyph" 图标（按自身尺寸缩放，不随主题）。
+            ; 多数窗口不含此类控件，故先检测再执行正则：主窗口 XAML 为 114KB，
+            ; 无条件执行带回调的全文本替换将耗时数十毫秒。
+            if (InStr(xaml, 'Glyph"')) {
+                xaml := RegExReplace(xaml, 'Name="(\w+Glyph)"([^>]*?)FontSize="(\d+(?:\.\d+)?)"'
+                    , (m) => (frozen.Push(m[3]), 'Name="' m[1] '"' m[2] 'FontSize="@@GLYPH' frozen.Length '@@"'))
+                xaml := RegExReplace(xaml, 'FontSize="(\d+(?:\.\d+)?)"([^>]*?)Name="(\w+Glyph)"'
+                    , (m) => (frozen.Push(m[1]), 'FontSize="@@GLYPH' frozen.Length '@@"' m[2] 'Name="' m[3] '"'))
+            }
             ; 自定义界面字号由控件配置决定，不随主题缩放。
-            xaml := RegExReplace(xaml, '<[^>]*\bTag="UIMacroCustomFont"[^>]*>'
-                , (m) => XAMLHost._FreezeCustomFontTag(m[0], customFrozen))
+            if (InStr(xaml, 'UIMacroCustomFont'))
+                xaml := RegExReplace(xaml, '<[^>]*\bTag="UIMacroCustomFont"[^>]*>'
+                    , (m) => XAMLHost._FreezeCustomFontTag(m[0], customFrozen))
             scale(s) => RegExReplace(s, 'FontSize="\K\d+(?:\.\d+)?'
                 , (m) => XAMLHost.FormatFontSize(XAMLHost.ScaleFontSize(m[0])))
             dragPos := InStr(xaml, 'Name="DragArea"')
@@ -1219,6 +1422,8 @@ class XAMLHost {
         hwnd := XAMLHost.daemonHwnd
         XAMLHost.Diag("KillDaemon hwnd=" hwnd)
         XAMLHost.daemonHwnd := 0
+        ; 重置健康检查时间窗，避免新 daemon 被判定为刚探测过
+        XAMLHost._daemonHealthyTick := 0
         if (hwnd) {
             try {
                 pid := 0
@@ -1241,15 +1446,25 @@ class XAMLHost {
         }
     }
 
+    ; 上次确认 daemon 健康的时刻。WM_NULL 探测为同步 ping：daemon 渲染时该消息
+    ; 须排队处理，每次建窗执行一次会使主线程阻塞数百毫秒。
+    ; 时间窗内直接复用结论，2 秒粒度足以识别真正卡死。
+    static _daemonHealthyTick := 0
+
     static EnsureDaemonHealthy() {
         if (!XAMLHost.daemonHwnd)
+            return
+        if (XAMLHost._daemonHealthyTick && A_TickCount - XAMLHost._daemonHealthyTick < 2000)
             return
         alive := XAMLHost.IsDaemonAlive()
         resp := alive ? XAMLHost.IsDaemonResponsive(500) : false
         if (!alive || !resp) {
             XAMLHost.Diag(Format("EnsureDaemonHealthy BAD alive={} resp={} -> Kill", alive, resp))
             XAMLHost.KillDaemon()
+            XAMLHost._daemonHealthyTick := 0
+            return
         }
+        XAMLHost._daemonHealthyTick := A_TickCount
     }
 
     ; 取 daemon 进程映像路径（用于拒绝误连 Release 旧引擎）
@@ -1464,6 +1679,12 @@ class XAMLHost {
                 return
             }
             SetTimer(ObjBindMethod(this, "CheckForCrashes"), 0)
+
+            ; CompileEngine 将编译器输出写入同一文件（AhkWpfError.log）。
+            ; 启动时若正在重编译，本定时器可能先读到编译告警并将其误判为引擎崩溃
+            ; （内容为 "warning CSxxxx"，不含异常栈）。此处按特征排除。
+            if (Trim(err) == "" || RegExMatch(err, "i)warning CS\d+|error CS\d+"))
+                return
 
             ahkLine := "Unknown"
             snippet := ""
@@ -2332,6 +2553,105 @@ class XAMLHost {
         }
     }
 
+    ; ---------------------------------------------------------------
+    ; 异步建窗：写共享内存 + PostMessage，投递即返回
+    ;
+    ; WM_COPYDATA 仅支持 SendMessage，须等待 daemon 从队列取出后才返回。
+    ; daemon 为单线程，渲染其他窗口时该等待为数十至数百毫秒，期间 AHK 主线程
+    ; 完全阻塞，其他窗口（含悬浮窗）的刷新定时器随之停滞。
+    ; 此处将 payload 放入共享内存，仅以 PostMessage 传递原子号：
+    ; 引擎在 WndProc 中同步取走，随后仍交由 Dispatcher 异步建窗。
+    ;
+    ; 返回 false 表示该路径不可用，调用方回退到同步的 _SendToEngine。
+    ; ---------------------------------------------------------------
+    ; 命名注意：不能命名为 asyncCreateMsg —— AHK 中方法名与属性名共用命名空间
+    ; 且大小写不敏感，会与下方 AsyncCreateMsg() 冲突，赋值时报 "Property is read-only"
+    static _asyncCreateMsgId := 0
+
+    ; 双方以同一注册名获取同一消息 ID
+    static AsyncCreateMsg() {
+        if (!XAMLHost._asyncCreateMsgId)
+            XAMLHost._asyncCreateMsgId := DllCall("user32\RegisterWindowMessageW", "Str", "RMT_XAML_CREATE", "UInt")
+        return XAMLHost._asyncCreateMsgId
+    }
+
+    _SendToEngineAsync(payload) {
+        ; 进程内预览模式无 daemon 接收窗口，异步消息无人处理，直接回退同步路径
+        if (IsSet(XAML_IN_PROCESS_PREVIEW) && XAML_IN_PROCESS_PREVIEW)
+            return false
+        XAMLHost.EnsureDaemonHealthy()
+        if (!XAMLHost.daemonHwnd) {
+            this._EnsureDaemon()
+            startWait := A_TickCount
+            while (!XAMLHost.daemonHwnd && A_TickCount - startWait < 60000)
+                Sleep(10)
+        }
+        if (!XAMLHost.daemonHwnd || !XAMLHost.IsDaemonAlive())
+            return false
+
+        msgId := XAMLHost.AsyncCreateMsg()
+        if (!msgId)
+            return false
+
+        len := StrPut(payload, "UTF-8") - 1      ; 不含结尾 0
+        if (len <= 0)
+            return false
+        size := len + 4
+
+        ; 上一次的映射此时已读取完毕（两次 Show 之间包含完整的界面操作）
+        this._ReleaseCreateMap()
+
+        name := "RMT_XC_" this.id
+        hMap := DllCall("kernel32\CreateFileMappingW", "Ptr", -1, "Ptr", 0, "UInt", 4
+            , "UInt", 0, "UInt", size, "Str", name, "Ptr")
+        if (!hMap)
+            return false
+        p := DllCall("kernel32\MapViewOfFile", "Ptr", hMap, "UInt", 6, "UInt", 0, "UInt", 0, "UPtr", size, "Ptr")
+        if (!p) {
+            DllCall("kernel32\CloseHandle", "Ptr", hMap)
+            return false
+        }
+        try {
+            NumPut("UInt", len, p, 0)
+            StrPut(payload, p + 4, "UTF-8")
+        } finally {
+            DllCall("kernel32\UnmapViewOfFile", "Ptr", p)
+        }
+
+        ; 映射句柄须保留：引擎按名称 OpenFileMapping，句柄关闭后映射即失效
+        this._createMap := hMap
+        atom := DllCall("kernel32\GlobalAddAtomW", "Str", name, "UShort")
+        if (!atom) {
+            this._ReleaseCreateMap()
+            return false
+        }
+        this._createAtom := atom
+
+        sent := 0
+        try sent := DllCall("user32\PostMessageW", "Ptr", XAMLHost.daemonHwnd
+            , "UInt", msgId, "Ptr", atom, "Ptr", 0, "Int")
+        if (!sent) {
+            this._ReleaseCreateMap(true)
+            return false
+        }
+        XAMLHost.Diag(Format("SendToEngineAsync head=[{}] size={}", SubStr(payload, 1, 32), len))
+        return true
+    }
+
+    ; 原子为引用计数：消息送达后由引擎读取并删除，此处不可重复删除
+    ; （重复删除会影响系统复用的原子）。仅在消息未送出时才自行撤销，
+    ; 否则该原子将永久保留在系统原子表中。
+    _ReleaseCreateMap(dropAtom := false) {
+        if (this._createMap) {
+            try DllCall("kernel32\CloseHandle", "Ptr", this._createMap)
+            this._createMap := 0
+        }
+        if (dropAtom && this._createAtom) {
+            try DllCall("kernel32\GlobalDeleteAtom", "UShort", this._createAtom)
+        }
+        this._createAtom := 0
+    }
+
     ; 首帧就使用已排队的颜色；保留队列，Loaded 时仍同步引擎/应用级资源。
     BakeQueuedColorResources() {
         if (!this.HasOwnProp("_updateQueue"))
@@ -2377,8 +2697,6 @@ class XAMLHost {
             eventBindings := this._BuildEventBindings()
             ; 所有窗口都在创建前写入最终主题色，不能等异步 LoadedHwnd 再刷默认配色。
             this.BakeQueuedColorResources()
-            ; 诊断：引擎建窗后有一大段耗时在逐条 BindEvent，先记下条数便于定位
-            try FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " +" A_TickCount " [Show] id=" this.id " events=" (StrLen(eventBindings) ? StrSplit(eventBindings, ",").Length : 0) " xamlKB=" Round(StrLen(this.xaml) / 1024) "`n", A_WorkingDir "\Log\XamlUiDiag.log", "UTF-8")
             cleanXaml := StrReplace(this.xaml, "%resources%", "")
             ; 只改窗口本身的 Transparent，避免把标题栏关闭/最小化钮也刷成 BgColor（和标题栏色不一致）
             winEnd := InStr(cleanXaml, ">")
@@ -2430,7 +2748,10 @@ class XAMLHost {
             ; (the daemon's Dispatcher can process the BeginInvoke during the synchronous wait).
             ; If we reset AFTER, we clobber the valid HWND set by the LoadedHwnd handler.
             this.wpfHwnd := 0
-            this._SendToEngine(payload)
+            ; 异步通道可用就不等回执：建窗要等 daemon 从队列里取出消息，几十到几百毫秒，
+            ; 那段时间主线程全阻塞，界面上别的东西也跟着停。失败自动回退同步路径。
+            if (!this.asyncCreate || !this._SendToEngineAsync(payload))
+                this._SendToEngine(payload)
         }
 
         SetTimer(ObjBindMethod(this, "CheckForCrashes"), 50)
@@ -2604,8 +2925,11 @@ class XAMLHost {
                 try DllCall("user32\PostMessageW", "Ptr", instance.wpfHwnd, "UInt", 0x0010, "Ptr", 0, "Ptr", 0)
             }
             ; 引擎在 HWND 显示前遮住首帧，等初始化完成和 WPF 绘制完成后才显示。
-            if instance.HasOwnProp("_updateQueue") {
-                ; 排队期间攒下的更新合并成**一次** BatchUpdate 发出去。
+            ; skipQueueFlush：调用方接管这批更新（并入自身的 collect 一并投递），
+            ; 此处不执行同步发送。指令窗口即采用该方式（有独立的补主题流程）。
+            if (instance.HasOwnProp("_updateQueue")
+                && !(instance.HasOwnProp("skipQueueFlush") && instance.skipQueueFlush)) {
+                ; 排队期间的更新合并为一次发送。
                 ; 量最大的来源是 ApplyXamlTheme（主题 ~30 条 Resource），本身已是一次批量；
                 ; 剩下的零散项也并进去，避免多条同步 IPC 往返。
                 pending := instance._updateQueue
@@ -2619,19 +2943,30 @@ class XAMLHost {
                             batch.Push(sub)
                     }
                 }
-                if (batch.Length)
-                    try instance.BatchUpdate(batch)
-            }
-            ; 控件样式（xaml.components）里写死的 FontSize 不会被 XAML 字符串替换；
-            ; 与主题滑条一致：开窗后再按主题下限夹一次，重启后才能看到实际字号。
-            if (!instance.IsFontScaleSkipped()) {
-                try {
-                    themeFs := XAMLHost.GetThemeFontSize()
-                    instance.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, themeFs))
-                    ; AiChatFontSize 只服务 AI 聊天界面；不带它的窗口每开一次白跑两次同步 IPC
-                    if (InStr(instance.xaml, "AiChatFontSize"))
-                        XAMLHost.SyncChatFontResources(instance)
-                    XAMLHost.SyncCmdEditorTitleFont(instance)
+
+                ; 已开启异步更新的窗口：将内容、主题与字体合并进同一条 payload
+                ; 一次投递。不可分两次异步发送：槽为覆盖式，后一次会覆盖前一次。
+                ;
+                ; 此处位于引擎事件回调栈中：建槽需发送同步 AsyncAttach，而引擎正在等待
+                ; 该事件回执，再次发送会相互等待，因此整段操作移交伪线程执行。
+                if (instance.HasProp("asyncUpdate") && instance.asyncUpdate) {
+                    try SetTimer(ObjBindMethod(XAMLHost, "_FlushQueueAsync", instance, batch), -1)
+                }
+                else {
+                    if (batch.Length)
+                        try instance.BatchUpdate(batch)
+                    ; 控件样式（xaml.components）中固定写入的 FontSize 不参与 XAML 字符串替换；
+                    ; 与主题滑条行为一致：开窗后按主题下限再夹取一次，重启后生效。
+                    if (!instance.IsFontScaleSkipped()) {
+                        try {
+                            themeFs := XAMLHost.GetThemeFontSize()
+                            instance.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, themeFs))
+                            ; AiChatFontSize 仅用于 AI 聊天界面；不含该资源的窗口每次开窗会多出两次无效同步 IPC
+                            if (InStr(instance.xaml, "AiChatFontSize"))
+                                XAMLHost.SyncChatFontResources(instance)
+                            XAMLHost.SyncCmdEditorTitleFont(instance)
+                        }
+                    }
                 }
             }
         }

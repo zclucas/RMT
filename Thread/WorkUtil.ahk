@@ -3,7 +3,7 @@
 ;初始化数据
 {
     HandleWorkOpenArg() {
-        if (A_Args.Length != 7 || A_Args[1] != "--macro-worker")
+        if (A_Args.Length != 8 || A_Args[1] != "--macro-worker")
             ExitApp(1)
         global workIndex := Integer(A_Args[2])
         global parentHwnd := Integer(A_Args[3])
@@ -11,8 +11,27 @@
         global shmRx := SharedMemory(1048576 + 192, Integer(A_Args[5]))
         global tx := RingBuffer(shmTx.ptr, 1048576)
         global rx := RingBuffer(shmRx.ptr, 1048576)
-        global hEvt := Integer(A_Args[6])
-        global workerParentHandle := Integer(A_Args[7])
+
+        ; 变量同步合并缓冲，见 QueueVariSync
+        global VariSyncPending := Map()
+        global VariSyncScheduled := false
+
+        ; 指令流水攒批缓冲，见 WorkCMDReport
+        global CmdReportBuf := ""
+        global CmdReportScheduled := false
+
+        ; 悬浮窗最新帧单槽，见 WorkHudOutput：不进事件队列，写入即覆盖
+        global shmHud := SharedMemory(65536 + 64, Integer(A_Args[6]))
+        global hudSlotPtr := shmHud.ptr
+        global hudSlotSeq := NumGet(hudSlotPtr, 4, "UInt")
+        global hudPostTick := 0
+        global hudFailTick := 0
+
+        ; 悬浮窗直连表：serial → {hwnd, tick, msg, last}，见 WorkHudDirectSlot
+        global hudDirect := Map()
+
+        global hEvt := Integer(A_Args[7])
+        global workerParentHandle := Integer(A_Args[8])
     }
 
     InitWorkFilePath() {
@@ -130,8 +149,14 @@
 ;通信辅助函数
 {
     MsgPostHandler(type, wParam, lParam) {
-        ; 窗口消息只负责唤醒，定时轮询也会读取已写入的数据。
-        DllCall("PostMessageW", "ptr", parentHwnd, "uint", type, "uptr", wParam, "ptr", lParam)
+        ; 返回 1 表示成功，0 表示失败。
+        ; 投递队列满（每线程上限 1 万条）时 PostMessage 不返回 0，而是抛出 OSError
+        ; （1816 = 配额不足）；异常若外传会沿 OnExecTask 中断宏执行。
+        ; 消息丢失仅导致延迟一拍，主进程侧的槽与环形缓冲区仍保有最新值。
+        try
+            return PostMessage(type, wParam, lParam, , "ahk_id " parentHwnd)
+        catch
+            return 0
     }
 
     WorkNotifyReady() {
@@ -150,6 +175,20 @@
     }
 
     MsgSendHandler(action, args*) {
+        global rx, workIndex, VariSyncPending, CmdReportBuf
+
+        ; 发送任何消息前先冲刷待同步变量。
+        ; 变量同步有 16ms 合并窗口，宏写完变量后若立即发送其他消息（输入框、弹窗、
+        ; 状态变化、悬浮窗等），主进程读取的镜像仍为旧值。先冲刷以保证
+        ; 「变量先到、消息后到」的顺序。FlushVariSync 先清空缓冲再发送，不会递归。
+        if (VariSyncPending.Count)
+            FlushVariSync()
+
+        ; 指令流水同理：待发送日志须先于其他消息（尤其 FINISH）发出，
+        ; 否则宏结束时最后数百毫秒的指令会留在缓冲中。
+        ; action 为 "Report" 时跳过，避免 FlushCmdReport 递归。
+        if (action != "Report" && CmdReportBuf != "")
+            FlushCmdReport()
 
         static actionMap := Map(
             "StopMacro", "ST",
@@ -165,6 +204,7 @@
             "MsgBox", "MB",
             "ToolTip", "TT",
             "OutputTip", "OT",
+            "HudOutput", "HO",        ; 输出→悬浮显示：将渲染后的文本交给主进程建窗或更新
             "Error", "ER",          ; Worker 错误上报主进程（统一日志 C 项）
             "Joy", "JY"
         )
@@ -515,8 +555,34 @@ WorkDelGlobalVariable(names) => WorkCommitGlobalData("DV", names)
 
 ;子程序告诉主程动作
 {
+    ; 指令流水攒批：Worker 侧累积 100ms（或满 4KB）后发送一条 Report。
+    ;
+    ; 逐条发送时，主进程每收一条都要执行一次 ShowGui（窗口检查、字符串拼接、
+    ; Update），开销与指令条数成正比，多宏并发时主线程饱和。
+    ; 攒批后跨进程消息数仅与时间相关（约 10 条/秒），与指令条数无关。
     WorkCMDReport(cmdStr) {
-        MsgSendHandler("Report", cmdStr)
+        global CmdReportBuf, CmdReportScheduled
+        CmdReportBuf .= (CmdReportBuf == "" ? "" : "`n") cmdStr
+        ; 单批上限：RingBuffer 可容纳更大消息，但消息越大主进程解析越慢，4KB 已足够
+        if (StrLen(CmdReportBuf) >= 4000) {
+            FlushCmdReport()
+            return
+        }
+        if (!CmdReportScheduled) {
+            CmdReportScheduled := true
+            SetTimer(FlushCmdReport, -100)
+        }
+    }
+
+    FlushCmdReport() {
+        global CmdReportBuf, CmdReportScheduled
+        CmdReportScheduled := false
+        if (CmdReportBuf == "")
+            return
+        buf := CmdReportBuf
+        CmdReportBuf := ""
+        ; 多行文本一次发送，主进程 AddCMD 按批处理
+        MsgSendHandler("Report", buf)
     }
 
     ; 「输出→指令窗口」专用：不经 CMDTip 门控，始终转发给主进程显示（区别于 Report 溯源）
@@ -538,6 +604,160 @@ WorkDelGlobalVariable(names) => WorkCommitGlobalData("DV", names)
 
     WorkOutputTipContent(content) {
         MsgSendHandler("OutputTip", content)
+    }
+
+    ; 悬浮显示：仅保留最新一帧，走单槽共享内存，不进事件队列。
+    ;
+    ; 逐帧发送 HO 消息存在两个问题：
+    ;   1. 占满 Worker→主进程环形缓冲区，_Push 返回 false，消息丢失；
+    ;   2. 占满主线程投递队列（上限 1 万条），其它 Worker 的通知无法入队。
+    ;
+    ; 现将内容覆盖写入固定槽，主进程按自身节奏读取；通知以 pending 标志保证
+    ; 至多一条未处理，写入频率再高也不积压。
+    WorkHudOutput(serialStr, content, tID, iID) {
+        global hudSlotPtr, hudSlotSeq, hudPostTick, hudFailTick, workIndex, hudDirect
+
+        ; 直连：主进程建窗后把引擎窗口句柄登记到槽尾表，此处每帧查表一次。
+        ; 命中则直接向引擎投递文本，该帧不经过主进程。
+        d := WorkHudDirectSlot(serialStr)
+        if (IsObject(d) && WorkHudDirectWrite(d, content))
+            return
+
+        if (!hudSlotPtr)
+            return
+
+        ; 槽格式：serial \x01 tID \x01 iID \x01 content
+        payload := serialStr Chr(1) tID Chr(1) iID Chr(1) content
+        size := StrPut(payload, "UTF-8")
+        if (size <= 1 || size > 65000)
+            return
+        buf := Buffer(size)
+        StrPut(payload, buf, "UTF-8")
+
+        ; 先写内容，再写长度与序号：主进程读到的必为完整帧
+        DllCall("RtlMoveMemory", "Ptr", hudSlotPtr + 16, "Ptr", buf.Ptr, "Ptr", size)
+        NumPut("UInt", size - 1, hudSlotPtr, 8)
+        hudSlotSeq += 1
+        NumPut("UInt", hudSlotSeq, hudSlotPtr, 4)
+
+        ; 上一帧未被取走时不再通知：天然合并，最多保留一条未处理通知。
+        ;
+        ; 投递失败（队列满）时撤回 pending 以便下次重试，并退避 300ms，
+        ; 避免紧循环中每帧重复失败。数据已写入槽，主进程读取时仍为最新值，
+        ; 丢失的仅是唤醒动作。
+        now := A_TickCount
+        if (NumGet(hudSlotPtr, 0, "UInt") == 0) {
+            if (now - hudFailTick >= 300) {
+                NumPut("UInt", 1, hudSlotPtr, 0)
+                if (MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)) {
+                    hudPostTick := now
+                } else {
+                    NumPut("UInt", 0, hudSlotPtr, 0)
+                    hudFailTick := now
+                }
+            }
+        } else if (now - hudPostTick > 1000) {
+            ; pending 超过 1 秒未被取走：主进程可能忙于长任务，补发一次通知
+            if (MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)) {
+                hudPostTick := now
+            } else {
+                NumPut("UInt", 0, hudSlotPtr, 0)
+                hudFailTick := now
+            }
+        }
+    }
+
+    ; ---------------------------------------------------------------
+    ; 悬浮窗直连
+    ;
+    ; 主进程建窗后把引擎窗口句柄登记到 RMT_HUD 槽尾的句柄表：
+    ;   +65024 UInt32 项数；+65032 起每项 16 字节（serial / pad / hwnd）。
+    ; 文本区只占 +16..+65015，两者互不重叠。
+    ;
+    ; Worker 每帧查一次表：命中则直接向引擎投递，该帧不经过主进程；
+    ; 未命中（窗口未就绪或已关闭）走主进程路径。
+    ;
+    ; 不以消息传句柄：宏处于紧循环时不处理消息队列（仅在 Sleep/Wait 时泵消息），
+    ; 这类通知收不到；槽内数据任意时刻读取都是最新值。
+    ; ---------------------------------------------------------------
+    WorkHudDirectSlot(serialStr) {
+        global hudDirect, hudSlotPtr
+        d := hudDirect.Has(serialStr) ? hudDirect[serialStr] : ""
+        if (IsObject(d)) {
+            if (d.hwnd)
+                return d
+            if (A_TickCount < d.retryAt)
+                return ""          ; 表内暂无此项，退避期间不重复扫描
+        }
+        hwnd := hudSlotPtr ? WorkHudFindHwnd(serialStr) : 0
+        if (!hwnd) {
+            hudDirect[serialStr] := { hwnd: 0, retryAt: A_TickCount + 50, tick: 0, last: "" }
+            return ""
+        }
+        hudDirect[serialStr] := { hwnd: hwnd, retryAt: 0, tick: 0, last: "" }
+        return hudDirect[serialStr]
+    }
+
+    ; 在槽尾句柄表中查找 serial 对应的引擎窗口句柄，未登记返回 0
+    WorkHudFindHwnd(serialStr) {
+        global hudSlotPtr
+        try key := Integer(serialStr)
+        catch
+            return 0
+        count := NumGet(hudSlotPtr, 65024, "UInt")
+        if (count > 35)
+            return 0
+        loop count {
+            off := 65032 + (A_Index - 1) * 16
+            if (NumGet(hudSlotPtr, off, "UInt") == key)
+                return NumGet(hudSlotPtr, off + 8, "Ptr")
+        }
+        return 0
+    }
+
+    ; 直连投递一帧。返回 true 表示该帧已处理（含被限速或超时丢弃），
+    ; false 表示该路径不可用，调用方改走主进程路径。
+    WorkHudDirectWrite(d, content) {
+        ; 限速约 100Hz：宏每秒可产生上千帧，中间帧无需显示
+        now := A_TickCount
+        if (d.retryAt && now < d.retryAt)
+            return true
+        if (d.tick && now - d.tick < 10)
+            return true
+        ; 内容未变化时跳过：静态内容无需周期性投递
+        if (d.last == content)
+            return true
+        n := StrPut(content, "UTF-8") - 1
+        if (n <= 0 || n > 60000)
+            return true            ; 空内容或超长：丢弃，无需回退
+        ; 窗口可能已被销毁，句柄失效即回退主进程路径并重新查表
+        if (!DllCall("IsWindow", "Ptr", d.hwnd)) {
+            d.hwnd := 0
+            d.retryAt := now + 50
+            return false
+        }
+        ; 引擎 0x004A 分支按「op|arg|value」解析且以换行分隔多条指令，须转义
+        body := StrReplace(StrReplace(content, "`r", "&#x0D;"), "`n", "&#x0A;")
+        payload := "HUD|Text|" body
+        size := StrPut(payload, "UTF-8")
+        ; 常驻发送缓冲：超时返回后接收方仍可能读取，不能指向已失效的临时内存
+        static sndBuf := 0
+        if (!IsObject(sndBuf) || sndBuf.Size < size)
+            sndBuf := Buffer(Max(size, 65536))
+        StrPut(payload, sndBuf, "UTF-8")
+        cds := Buffer(A_PtrSize * 3, 0)
+        NumPut("Ptr", size, cds, 0)
+        NumPut("Ptr", sndBuf.Ptr, cds, A_PtrSize)
+        d.tick := now
+        ; SMTO_ABORTIFHUNG：引擎无响应时立即返回，避免 Worker 被挂住
+        res := 0
+        if (!DllCall("SendMessageTimeoutW", "Ptr", d.hwnd, "UInt", 0x004A, "Ptr", 0
+            , "Ptr", cds, "UInt", 0x0002, "UInt", 200, "Ptr*", &res)) {
+            d.retryAt := now + 200
+            return true
+        }
+        d.last := content
+        return true
     }
 
     WorkViGJoySetState(JoyType, Key, Value) {

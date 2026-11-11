@@ -59,6 +59,60 @@ public partial class AhkWpfEngine
     string _loadedDictionaryPath = null;
     static void InitHighlightBrushes() { } // Brushes initialized in static field initializers
 
+    // ---- 异步建窗通道 ----
+    // 建窗 XAML 常达数十 KB，只能通过 WM_COPYDATA 传输，而该消息仅支持 SendMessage：
+    // AHK 须等待 daemon 从队列取出后才返回。daemon 为单线程，渲染其他窗口时该等待
+    // 为数十至数百毫秒，期间 AHK 主线程完全阻塞，悬浮窗刷新定时器随之停滞。
+    //
+    // 改为「AHK 写共享内存 + PostMessage」：投递即返回，payload 在 WndProc 中同步拷出，
+    // 建窗仍交由 Dispatcher 异步执行，AHK 侧不再有同步等待。
+    private static uint _wmCreateAsync = 0;
+
+    private static uint WmCreateAsync
+    {
+        get
+        {
+            if (_wmCreateAsync == 0)
+                _wmCreateAsync = RegisterWindowMessageW("RMT_XAML_CREATE");
+            return _wmCreateAsync;
+        }
+    }
+
+    // 从消息携带的原子读取映射名，取出完整 payload。
+    // 必须在 WndProc 中同步读完：AHK 侧随后可能复用同一映射发送下一条。
+    private static string ReadCreatePayload(ushort atom)
+    {
+        if (atom == 0)
+            return null;
+        StringBuilder sb = new StringBuilder(512);
+        uint n = GlobalGetAtomNameW(atom, sb, sb.Capacity);
+        // 原子为引用计数：AHK 添加一次，此处用毕删除一次，双方无需额外回收
+        try { GlobalDeleteAtom(atom); } catch { }
+        if (n == 0)
+            return null;
+        string name = sb.ToString();
+        IntPtr h = OpenFileMappingW(HUD_FILE_MAP_READ, false, name);
+        if (h == IntPtr.Zero)
+            return null;
+        try
+        {
+            IntPtr p = MapViewOfFile(h, HUD_FILE_MAP_READ, 0, 0, UIntPtr.Zero);
+            if (p == IntPtr.Zero)
+                return null;
+            try
+            {
+                int len = Marshal.ReadInt32(p, 0);
+                if (len <= 0 || len > 64 * 1024 * 1024)
+                    return null;
+                byte[] bytes = new byte[len];
+                Marshal.Copy(new IntPtr(p.ToInt64() + 4), bytes, 0, len);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            finally { UnmapViewOfFile(p); }
+        }
+        finally { CloseHandle(h); }
+    }
+
     [STAThread]
     public static void Main(string[] args)
     {
@@ -140,6 +194,73 @@ public partial class AhkWpfEngine
                     parameters.WindowStyle = 0;
                     HwndSource msgWindow = new HwndSource(parameters);
 
+                    // 建窗派发：同步（COPYDATA）与异步（共享内存 + PostMessage）入口共用。
+                    // 仅执行解析与 BeginInvoke，实际建窗仍在 Dispatcher 上异步执行。
+                    Action<string> dispatchCreate = delegate(string text)
+                    {
+                        if (text.StartsWith("CREATE_WINDOW_INLINE|"))
+                        {
+                            // 内联模式：XAML 与事件表直接嵌入消息
+                            // 格式：CREATE_WINDOW_INLINE|winId|trackedCsv|scriptName|ownerHwnd|xaml\n---AHK-XAML-EVENTS---\nevents
+                            string[] p = text.Split(new[] { '|' }, 6);
+                            if (p.Length >= 6)
+                            {
+                                string wId = p[1];
+                                string tCsv = p[2];
+                                string sName = p[3];
+                                string oHwnd = p[4];
+                                string inlineData = p[5];
+
+                                System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    try
+                                    {
+                                        AhkWpfEngine eng = new AhkWpfEngine();
+                                        eng.RunEngineInline(wId, ahkHwnd.ToString(), tCsv, sName, oHwnd, inlineData, true);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + BridgeUtil.LengthPrefix(ex.ToString()) + "\n");
+                                        var c = new COPYDATASTRUCT { cbData = b.Length + 1, lpData = Marshal.AllocHGlobal(b.Length + 1) };
+                                        Marshal.Copy(b, 0, c.lpData, b.Length); Marshal.WriteByte(c.lpData, b.Length, 0);
+                                        SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref c);
+                                        Marshal.FreeHGlobal(c.lpData);
+                                    }
+                                }));
+                            }
+                        }
+                        else if (text.StartsWith("CREATE_WINDOW|"))
+                        {
+                            string[] p = text.Split(new[] { '|' }, 7);
+                            if (p.Length >= 7)
+                            {
+                                string wId = p[1];
+                                string tCsv = p[2];
+                                string sName = p[3];
+                                string oHwnd = p[4];
+                                string xPath = p[5];
+                                string ePath = p[6];
+
+                                System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    try
+                                    {
+                                        AhkWpfEngine eng = new AhkWpfEngine();
+                                        eng.RunEngine(wId, ahkHwnd.ToString(), tCsv, sName, xPath, ePath, oHwnd, true);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + BridgeUtil.LengthPrefix(ex.ToString()) + "\n");
+                                        var c = new COPYDATASTRUCT { cbData = b.Length + 1, lpData = Marshal.AllocHGlobal(b.Length + 1) };
+                                        Marshal.Copy(b, 0, c.lpData, b.Length); Marshal.WriteByte(c.lpData, b.Length, 0);
+                                        SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref c);
+                                        Marshal.FreeHGlobal(c.lpData);
+                                    }
+                                }));
+                            }
+                        }
+                    };
+
                     msgWindow.AddHook((IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
                     {
                         if (msg == 0x004A)
@@ -149,69 +270,19 @@ public partial class AhkWpfEngine
                                 var cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, typeof(COPYDATASTRUCT));
                                 byte[] bytes = new byte[cds.cbData];
                                 Marshal.Copy(cds.lpData, bytes, 0, cds.cbData);
-                                string text = Encoding.UTF8.GetString(bytes).TrimEnd('\0');
-
-                                if (text.StartsWith("CREATE_WINDOW_INLINE|"))
-                                {
-                                    // Fast path: XAML + events are embedded directly in the message
-                                    // Format: CREATE_WINDOW_INLINE|winId|trackedCsv|scriptName|ownerHwnd|xaml\n---AHK-XAML-EVENTS---\nevents
-                                    string[] p = text.Split(new[] { '|' }, 6);
-                                    if (p.Length >= 6)
-                                    {
-                                        string wId = p[1];
-                                        string tCsv = p[2];
-                                        string sName = p[3];
-                                        string oHwnd = p[4];
-                                        string inlineData = p[5];
-
-                                        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
-                                        {
-                                            try
-                                            {
-                                                AhkWpfEngine eng = new AhkWpfEngine();
-                                                eng.RunEngineInline(wId, ahkHwnd.ToString(), tCsv, sName, oHwnd, inlineData, true);
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + BridgeUtil.LengthPrefix(ex.ToString()) + "\n");
-                                                var c = new COPYDATASTRUCT { cbData = b.Length + 1, lpData = Marshal.AllocHGlobal(b.Length + 1) };
-                                                Marshal.Copy(b, 0, c.lpData, b.Length); Marshal.WriteByte(c.lpData, b.Length, 0);
-                                                SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref c);
-                                                Marshal.FreeHGlobal(c.lpData);
-                                            }
-                                        }));
-                                    }
-                                }
-                                else if (text.StartsWith("CREATE_WINDOW|"))
-                                {
-                                    string[] p = text.Split(new[] { '|' }, 7);
-                                    if (p.Length >= 7)
-                                    {
-                                        string wId = p[1];
-                                        string tCsv = p[2];
-                                        string sName = p[3];
-                                        string oHwnd = p[4];
-                                        string xPath = p[5];
-                                        string ePath = p[6];
-
-                                        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
-                                        {
-                                            try
-                                            {
-                                                AhkWpfEngine eng = new AhkWpfEngine();
-                                                eng.RunEngine(wId, ahkHwnd.ToString(), tCsv, sName, xPath, ePath, oHwnd, true);
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                byte[] b = Encoding.UTF8.GetBytes("EVENT|" + wId + "|Engine|Error|" + BridgeUtil.LengthPrefix(ex.ToString()) + "\n");
-                                                var c = new COPYDATASTRUCT { cbData = b.Length + 1, lpData = Marshal.AllocHGlobal(b.Length + 1) };
-                                                Marshal.Copy(b, 0, c.lpData, b.Length); Marshal.WriteByte(c.lpData, b.Length, 0);
-                                                SendMessage(ahkHwnd, 0x004A, IntPtr.Zero, ref c);
-                                                Marshal.FreeHGlobal(c.lpData);
-                                            }
-                                        }));
-                                    }
-                                }
+                                dispatchCreate(Encoding.UTF8.GetString(bytes).TrimEnd('\0'));
+                            }
+                            catch { }
+                            handled = true;
+                        }
+                        else if (msg == (int)WmCreateAsync)
+                        {
+                            // 异步建窗：payload 存于共享内存，读取后立即返回，不等待建窗完成
+                            try
+                            {
+                                string text = ReadCreatePayload((ushort)(wParam.ToInt64() & 0xFFFF));
+                                if (text != null)
+                                    dispatchCreate(text);
                             }
                             catch { }
                             handled = true;
@@ -475,7 +546,22 @@ public partial class AhkWpfEngine
 
         // Bind standard window chrome handlers
         var dragArea = win.FindName("DragArea") as UIElement;
-        if (dragArea != null) dragArea.MouseLeftButtonDown += (s, e) => { try { win.DragMove(); } catch { } };
+        if (dragArea != null)
+        {
+            dragArea.MouseLeftButtonDown += (s, e) =>
+            {
+                // 悬浮窗自行处理拖动：DragMove 对 NoActivate 透明无边框窗口不保证生效
+                if (_hud != null)
+                {
+                    HudBeginDrag(dragArea);
+                    e.Handled = true;
+                    return;
+                }
+                try { win.DragMove(); } catch { }
+            };
+            dragArea.MouseMove += (s, e) => { if (_hudDragging) HudDragTo(); };
+            dragArea.MouseLeftButtonUp += (s, e) => { if (_hudDragging) HudEndDrag(dragArea); };
+        }
         var btnClose = win.FindName("BtnClose") as ButtonBase;
         if (btnClose != null) btnClose.Click += (s, e) => { try { win.Close(); } catch { } };
         var btnMaximize = win.FindName("BtnMaximize") as ButtonBase;

@@ -118,6 +118,8 @@ GetMacroCMDData(serialStr) {
             CompatEnsureRunData(Data)
         else if (cmd == "文件读写" || cmd == "Excel")
             CompatEnsureFileIOData(Data)
+        else if (cmd == "输出")
+            CompatEnsureOutputData(Data)
     }
     CmdEnumNorm(cmd, Data)
 
