@@ -541,18 +541,23 @@ class MainWin {
         this.ui.asyncCreate := true
         this.ui.Show()
 
-        ; 冷启动解析主窗口 XAML 可能要几秒。等太短就当没建成，后面的初始化会漏掉。
-        hwndWait := A_TickCount
-        while (!this.ui.wpfHwnd && A_TickCount - hwndWait < 30000)
-            Sleep(50)
-        if (this.ui.wpfHwnd) {
-            XamlUiDiag("MainWin hwnd=" this.ui.wpfHwnd, "MainWin")
-            ; AI 输入框的 OLE 拖放目标需多个页签各两次同步 IPC（实测 350ms）。
-            ; 此时首屏已可见，不必阻塞主线程，推迟到窗口出现后执行。
-            try SetTimer(ObjBindMethod(this, "_EnableAiInputFileDrop"), -120)
-        } else {
-            XamlUiDiag("MainWin hwnd timeout", "MainWin")
-        }
+        ; 句柄由引擎异步回传（Window.LoadedHwnd）。这里不再 Sleep 轮询等待：
+        ; 主线程直接回落到启动链（PluginInit / 热键绑定与引擎建窗并行），
+        ; 句柄到达后由 OnWindowLoad 接着做依赖句柄的收尾。
+        ; 极快情况下句柄已经就绪，就地补一次，省掉一轮回调。
+        if (this.ui.wpfHwnd)
+            this._AfterHwndReady()
+    }
+
+    ; 句柄可用后的收尾。OnWindowLoad 回调与 BuildAndShow 尾段都会走到，内部去重。
+    _AfterHwndReady() {
+        if (this.HasOwnProp("_hwndReadyDone") && this._hwndReadyDone)
+            return
+        this._hwndReadyDone := true
+        XamlUiDiag("MainWin hwnd=" this.ui.wpfHwnd, "MainWin")
+        ; AI 输入框的 OLE 拖放目标需多个页签各两次同步 IPC（实测 350ms）。
+        ; 此时首屏已可见，不必阻塞主线程，推迟到窗口出现后执行。
+        try SetTimer(ObjBindMethod(this, "_EnableAiInputFileDrop"), -120)
     }
 
     ; AI 输入框：启用文件拖放（EnableDropTarget 含 DragOver，OnEvent Drop  alone 不够）
@@ -635,6 +640,14 @@ class MainWin {
     }
 
     OnWindowLoad(state, ctrl, event) {
+        ; 引擎要等本回调（以及其它 LoadedHwnd 回调）全部返回后才发 InitialUpdateComplete 揭盖。
+        ; 这里只挂一个延迟任务，图标/左栏数值/鼠标开关这类同步 IPC 统统挪到揭盖之后做，
+        ; 否则它们的耗时会被原样加到"窗口可见"上（实测 400ms+）。
+        try SetTimer(ObjBindMethod(this, "_AfterReveal"), -60)
+    }
+
+    ; 揭盖后的首批界面收尾（原 OnWindowLoad 内容）
+    _AfterReveal() {
         try {
             ; 任务栏/Alt-Tab 图标：托盘已用 rabit.ico，窗口本身也要显式设置（脚本运行时默认是 AHK 图标）
             ; rabit.ico 已内置 16~128 多尺寸，这里取最大尺寸，Windows 会按任务栏尺寸/DPI 自动缩放到合适大小
@@ -649,6 +662,8 @@ class MainWin {
             ; 默认关掉，按下分割条时再开（见 SetWindowMouseMove）：否则鼠标在窗口里划过
             ; 就是每秒六十来条全量状态回传。侧栏逻辑树的拖拽也复用这同一个开关。
             this.ui.SetWindowMouseMove(false)
+            ; 句柄回传（LoadedHwnd）：补做依赖句柄的收尾（AI 输入框拖放目标等）
+            this._AfterHwndReady()
         } catch as e {
             XamlUiDiag("MainWin OnWindowLoad err: " e.Message, "MainWin")
         }
