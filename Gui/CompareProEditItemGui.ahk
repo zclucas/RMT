@@ -12,6 +12,7 @@
 
 class CompareProEditItemGui {
     __new() {
+        this.WindowBindingContext := ""
         this.ParentTile := ""
         this.Gui := ""
         this.ui := ""
@@ -508,7 +509,7 @@ class CompareProEditItemGui {
         }
 
         this.MacroGui.SureBtnAction := (command) => this.OnMacroBtnClick(command)
-        this.MacroGui.ShowGui(this.ui.Query("MacroCon"), false)
+        this.MacroGui.ShowGui(this.ui.Query("MacroCon"), false, this.WindowBindingContext)
     }
 
     OnWindowLoad(state, ctrl, event) {

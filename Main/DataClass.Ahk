@@ -85,6 +85,7 @@ class TableItem {
         this.ItemMap := Map()   ;ItemID -> MacroItem 快速索引
         this.Folds := []        ;MacroFold 对象数组
         this.FoldMap := Map()   ;FoldID -> MacroFold 快速索引
+        this.PathCounters := Map()  ;父路径 → 已分配的最大序号，删除后保留
 
         ; ===== UI 运行时状态 =====
         this.UnderPosY := 0         ; table的最大PosY
@@ -116,14 +117,27 @@ class TableItem {
     RebuildIndex() {
         this.ItemMap := Map()
         for item in this.Items {
-            if (item.ID != "")
+            if (item.ID != "") {
                 this.ItemMap[item.ID] := item
+                this.RememberPath(item.ID)
+            }
         }
         this.FoldMap := Map()
         for fold in this.Folds {
-            if (fold.ID != "")
+            if (fold.ID != "") {
                 this.FoldMap[fold.ID] := fold
+                this.RememberPath(fold.ID)
+            }
         }
+    }
+
+    RememberPath(id) {
+        if (!RegExMatch(id, "^(.*)\.(Module|Macro)(\d+)$", &m))
+            return
+        parent := m[1]
+        this.PathCounters[parent] := Max(this.PathCounters.Get(parent, 0), Integer(m[3]))
+        if (m[2] == "Macro")
+            this.RememberPath(parent)
     }
 }
 
@@ -1809,6 +1823,7 @@ class MsgType {
     static TASK := 1    ;主线程 派发任务给 Worker
     static FINISH := 2  ;Worker 告知 主线程 任务结束
     static EVENT := 3   ;双向广播事件 例如Worker修改变量值后 告知主线程 主线程收到后 广播所有人
+    static READY := 4   ;Worker 通过私有通道报告就绪及窗口句柄
 }
 
 class MacroGraphNode{

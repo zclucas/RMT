@@ -7,7 +7,7 @@
 ; offset 192: buf (data area)
 class RingBuffer {
     __New(ptr, cap) {
-        if (cap & (cap - 1))
+        if (cap < 64 || (cap & (cap - 1)))
             throw Error("RingBuffer capacity must be power of 2")
 
         this.basePtr := ptr
@@ -18,12 +18,57 @@ class RingBuffer {
         this.cap := cap
         this.mask := cap - 1
         this.valid := true
+        this.outbox := []
+        this.partial := ""
+    }
+
+    ; 保留未写入的消息，发送端有空间后按原顺序补发。
+    Send(type, id, payload := "", flags := 0) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (!this.valid)
+                return false
+            this.outbox.Push({type: type, id: id, payload: payload, flags: flags, offset: 1})
+            this.Flush()
+            return true
+        } finally Critical(previousCritical)
+    }
+
+    Flush() {
+        previousCritical := A_IsCritical
+        Critical("On")
+        written := false
+        try {
+            while (this.valid && this.outbox.Length) {
+                packet := this.outbox[1]
+                ; 帧最大占用四分之一容量，尾部填充也不会阻塞空缓冲区。
+                chunkSize := Min(32768, (this.cap // 4 - 20) // 2 - 1)
+                chunk := SubStr(packet.payload, packet.offset, Max(2, chunkSize))
+                more := packet.offset + StrLen(chunk) <= StrLen(packet.payload)
+                if (more) {
+                    lastUnit := NumGet(StrPtr(chunk), (StrLen(chunk) - 1) * 2, "UShort")
+                    if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF)
+                        chunk := SubStr(chunk, 1, -1)
+                }
+                if (!this._Push(more ? 0 : packet.type, packet.id, chunk, packet.flags))
+                    break
+                written := true
+                if (more)
+                    packet.offset += StrLen(chunk)
+                else
+                    this.outbox.RemoveAt(1)
+            }
+            return written
+        } finally Critical(previousCritical)
     }
 
     ; 共享内存被 Unmap 前必须调用：之后任何读写都安全地退化为空/失败，
     ; 避免 Worker 被强杀/重建时，残留引用读取已释放内存导致 invalid memory read/write。
     Invalidate() {
         this.valid := false
+        this.outbox := []
+        this.partial := ""
     }
 
     GetHead() => this.valid ? NumGet(this.headPtr, "UInt") : 0
@@ -88,7 +133,20 @@ class RingBuffer {
     Pop(&type, &id, &str, &hEvent := 0) {
         previousCritical := A_IsCritical
         Critical("On")
-        try return this._Pop(&type, &id, &str, &hEvent)
+        try {
+            while (this._Pop(&type, &id, &str, &hEvent)) {
+                if (type == 0) {
+                    this.partial .= str
+                    continue
+                }
+                if (this.partial != "") {
+                    str := this.partial str
+                    this.partial := ""
+                }
+                return true
+            }
+            return false
+        }
         finally Critical(previousCritical)
     }
 
@@ -102,34 +160,40 @@ class RingBuffer {
         if (tail == head)
             return false
 
+        available := (head - tail) & 0xFFFFFFFF
+        if (available >= this.cap || (available & 7) || (tail & 7))
+            throw Error("Invalid IPC buffer cursor")
         pos := tail & this.mask
 
         type_signed := NumGet(this.bufPtr, pos, "Int")
         if (type_signed == -1) {
+            if (this.cap - pos >= available)
+                throw Error("Invalid IPC wrap marker")
             tail += (this.cap - pos)
             this.SetTail(tail)
             return this._Pop(&type, &id, &str, &hEvent)
         }
 
+        if (Min(available, this.cap - pos) < 24)
+            throw Error("Incomplete IPC frame")
         type := NumGet(this.bufPtr, pos, "UInt")
         id := NumGet(this.bufPtr, pos + 4, "UInt")
         hEvent := NumGet(this.bufPtr, pos + 8, "Int64")
         len := NumGet(this.bufPtr, pos + 16, "UInt")
-        str := StrGet(this.bufPtr + pos + 20, "UTF-16")
-
         total := (20 + len + 7) & ~7
+        if (len < 2 || (len & 1) || total > Min(available, this.cap - pos))
+            throw Error("Invalid IPC frame length")
+        if (NumGet(this.bufPtr, pos + 20 + len - 2, "UShort") != 0)
+            throw Error("Unterminated IPC frame")
+        str := len == 2 ? "" : StrGet(this.bufPtr + pos + 20, len // 2 - 1, "UTF-16")
         this.SetTail(tail + total)
         return true
     }
 }
 
 ; Event Helpers
-CreateEvent(name := "") {
-    return DllCall("CreateEventW", "ptr", 0, "int", false, "int", false, "ptr", name ? StrPtr(name) : 0, "ptr")
-}
-
-OpenEvent(name) {
-    return DllCall("OpenEventW", "uint", 0x00100002, "int", false, "ptr", StrPtr(name), "ptr")
+CreateEvent() {
+    return DllCall("CreateEventW", "ptr", 0, "int", false, "int", false, "ptr", 0, "ptr")
 }
 
 SetEvent(h) {
@@ -168,18 +232,18 @@ EscapeIPC(str) {
 UnescapeIPC(str) {
     result := ""
     pos := 1
-    while (pos <= StrLen(str)) {
-        char := SubStr(str, pos, 1)
-        nextChar := SubStr(str, pos + 1, 1)
-        if (char == IPC_ESC && (nextChar == "1" || nextChar == "2" || nextChar == "3")) {
+    while (esc := InStr(str, IPC_ESC, true, pos)) {
+        result .= SubStr(str, pos, esc - pos)
+        nextChar := SubStr(str, esc + 1, 1)
+        if (nextChar == "1" || nextChar == "2" || nextChar == "3") {
             result .= nextChar == "1" ? IPC_SEP : (nextChar == "2" ? IPC_REC : IPC_ESC)
-            pos += 2
+            pos := esc + 2
         } else {
-            result .= char
-            pos++
+            result .= IPC_ESC
+            pos := esc + 1
         }
     }
-    return result
+    return result SubStr(str, pos)
 }
 
 EncodeCommand(opcode, args*) {

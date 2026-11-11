@@ -70,7 +70,7 @@
             this._sideBound := true
         }
         if (bindHotkeys && this._hkIds.Length == 0 && hwnd)
-            this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), this._GetStepOverHotkey(), this._GetStepIntoHotkey(), this._GetStepOutHotkey(), this._GetRunToCursorHotkey(), "$" this._GetToggleSkipHotkey(), this._GetRunAllHotkey(), "Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), hwnd)
+            this._hkIds := WinHotkey.Register([this._GetContinueHotkey(), this._GetStepOverHotkey(), this._GetStepIntoHotkey(), this._GetStepOutHotkey(), this._GetRunToCursorHotkey(), "$" this._GetToggleSkipHotkey(), this._GetRunAllHotkey(), "$Delete", "$^c", "$^v", "$^z", "$^y"], ObjBindMethod(this, "_OnHotkey"), hwnd)
     }
 
     SetSideActive(active) {

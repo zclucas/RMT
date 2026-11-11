@@ -302,6 +302,8 @@
         } else if (isNetwork) {
             ; §23 网络宏：触发键列显示「复制链接」，点击/右键=直接复制单次 URL
             tkStr := item.ID == "" ? GetLang("编辑") : GetLang("复制链接")
+        } else if (tableItem.Symbol == "Gesture") {
+            tkStr := GestureDisplay(item.TK)
         } else if (isTiming) {
             tkStr := ""
         } else {
@@ -329,7 +331,7 @@
             . ((isNormal || GetTableSymbol(t) == "Replace") ? this._TriggerEntries(triggerField, false, "TKBtn_" t "_" i, tkStr) : triggerField)
             . '</DockPanel>'
             . (isNetwork ? '<Button Grid.Column="5" Name="NetHelp_' t '_' i '" Style="{StaticResource RmtItemFieldBtn}" Width="24" HorizontalAlignment="Left" Margin="0,0,4,0" Content="&#xE946;" ToolTip="' GetLang("网络触发说明") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>' : '')
-            . '<ComboBox Grid.Column="5" Name="TKType_' t '_' i '" Style="{StaticResource RmtItemCombo}" Margin="0" SelectedIndex="' tkTypeIdx '" IsEnabled="' (canEditTKType ? "True" : "False") '" Visibility="' ((isSubMacro || isNetwork || isMenu || isUI || isVoice || isTiming) ? "Collapsed" : "Visible") '" ToolTip="' GetLang("触发类型") '">'
+            . '<ComboBox Grid.Column="5" Name="TKType_' t '_' i '" Style="{StaticResource RmtItemCombo}" Margin="0" SelectedIndex="' tkTypeIdx '" IsEnabled="' (canEditTKType ? "True" : "False") '" Visibility="' ((isSubMacro || isNetwork || isMenu || isUI || isVoice || isTiming || tableItem.Symbol == "Gesture") ? "Collapsed" : "Visible") '" ToolTip="' GetLang("触发类型") '">'
             . '<ComboBoxItem Content="' GetLang("按下") '"/><ComboBoxItem Content="' GetLang("松开") '"/><ComboBoxItem Content="' GetLang("松止") '"/><ComboBoxItem Content="' GetLang("开关") '"/><ComboBoxItem Content="' GetLang("长按") '"/><ComboBoxItem Content="' GetLang("双击") '"/>'
             . '</ComboBox>'
             . this._BuildItemEditGroupWrap(false, t
@@ -492,6 +494,8 @@
             editTK := OnUIMacroSettingClick
         else if (isNetwork)
             editTK := (*) => OnItemNetworkCopyUrl(tableItem, i)   ; §23 网络宏：触发键列点击 → 直接复制单次 URL
+        else if (tableItem.Symbol == "Gesture")
+            editTK := OnItemEditGesture
         else if (GetTableSymbol(t) == "Voice")
             ; 与虚拟列表路径一致：离开 XAML 点击回调后再创建语音编辑窗口。
             editTK := ObjBindMethod(this, "_DeferVoiceTrigger")
@@ -506,7 +510,10 @@
             this._Bind("TKBtn_" t "_" i "_Joy", "Click", OnTriggerEntry.Bind(tableItem, i, false, "joy"))
         }
         ; §23 网络宏：右键同为直接复制单次 URL；其余表保持自定义触发串
-        this._Bind("TKBtn_" t "_" i, "MouseRightButtonUp", isNetwork ? ((*) => OnItemNetworkCopyUrl(tableItem, i)) : OnItemCustomEditTriggerStr.Bind(tableItem, i))
+        if (tableItem.Symbol == "Gesture")
+            this._Bind("TKBtn_" t "_" i, "MouseRightButtonUp", editTK.Bind(tableItem, i))
+        else
+            this._Bind("TKBtn_" t "_" i, "MouseRightButtonUp", isNetwork ? ((*) => OnItemNetworkCopyUrl(tableItem, i)) : OnItemCustomEditTriggerStr.Bind(tableItem, i))
         ; §23 网络宏：触发键左侧「?」按钮 → 网络触发说明弹窗（仅网络表行存在该按钮）
         if (isNetwork)
             this._Bind("NetHelp_" t "_" i, "Click", OnItemNetworkHelp.Bind(tableItem, i))
@@ -605,6 +612,8 @@
             ; 语音宏：触发键列显示唤醒词（无按键）
             tkStr := item.VoiceKeywords
             tkStr := tkStr == "" ? GetLang("编辑") : tkStr
+        } else if (tableItem.Symbol == "Gesture") {
+            tkStr := GestureDisplay(item.TK)
         } else if (isTiming) {
             tkStr := ""
         } else {

@@ -248,9 +248,10 @@ class AiMacroValidation {
     CallMacro(table, idx, data, location, depth) {
         macroType := data.Get("MacroType", "")
         callType := data.Get("CallType", "")
-        target := macroType == "当前宏" ? table : GetTableBySymbol(CompatMacroTypeSymbol(macroType))
+        targetID := data.Get("MacroSerial", "")
+        target := macroType == "当前宏" ? table : GetMacroTypeTargetTable(macroType, targetID)
         targetIndex := IsObject(target)
-            ? (macroType == "当前宏" ? idx : GetItemIndexInTable(target, data.Get("MacroSerial", "")))
+            ? (macroType == "当前宏" ? idx : GetItemIndexInTable(target, targetID))
             : 0
         if (!targetIndex) {
             this.Issue("error", "missing_macro", location, "宏操作找不到目标宏")

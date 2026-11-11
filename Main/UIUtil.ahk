@@ -394,6 +394,7 @@ CmdEditorTitleIcon(title) {
             ["等待", "Images\Soft\Wait.png"],
             ["时间", "Images\Soft\Time.png"],
             ["倒计时", "Images\Soft\Interval.png"],
+            ["提示", "Images\Soft\Prompt.png"],
             ["注释", "Images\Soft\Comment.png"],
             ["抓图", "Images\Soft\ScreenShot.png"]
         ]

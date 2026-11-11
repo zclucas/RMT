@@ -1,16 +1,23 @@
 ﻿; 一次宏触发的完整生命周期。主进程本地执行和 Worker 都从这里进入。
-RunMacroTrigger(tableItem, macro, index) {
+RunMacroTrigger(tableItem, macro, index, workerPrepared := false) {
     item := GetItemByIndex(tableItem, index)
     if (!item)
         return
-    item.Killed := false
-    item.Pause := false
+    if (!workerPrepared) {
+        item.Killed := false
+        item.Pause := false
+    }
     item.ActionCount := 0
     item.HoldKey := Map()
     item.VariableMap["宏循环次数"] := 1
     item.VariableMap["循环次数"] := 0
     ; 执行前钩子：一次触发只跑一次（不是每轮循环）。只在发起者执行——
     ; 图形宏的分支 Worker 走 RunGraphNodeChain，不经本函数，天然不会重复。
+    if (workerPrepared) {
+        WaitIfPaused(tableItem, index)
+        if (item.Killed)
+            return
+    }
     RunMacroHook(tableItem, item, "pre")
     isContinue := MySoftData.ContinueKeyMap.Has(item.TK) && item.LoopCount == 1
     isLoop := item.LoopCount == -1
@@ -84,7 +91,8 @@ FinalizeMacroRun(tableItem, macro, index) {
     ReleaseAllCaches()
 
     itemState := item.Killed ? 3 : 0
-    MySetTableItemState(tableItem, index, itemState)
+    if (workIndex == 0)
+        MySetTableItemState(tableItem, index, itemState)
 }
 
 ; 执行当前条目上的一段宏。分支和循环体共享条目状态，不重新初始化触发状态或钩子。
@@ -289,6 +297,7 @@ MacroCommandActions() {
         "等待", OnWait,
         "时间", OnTimeData,
         "倒计时", OnCountDown,
+        "提示", OnPrompt,
         "注释", (*) => "",
         "抓图", OnScreenShot,
         "图形开始节点", OnGraphStartNode
@@ -1250,35 +1259,39 @@ OnSubMacro(tableItem, cmd, index) {
     global MySoftData
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
-    macroIndex := Data.MacroType == "当前宏" ? index : Data.Index
-    ; 目标表直接取对象（当前宏 → 本表；其它 → 按 Symbol 定位），身份 = 对象/ID，非位置
-    macroItem := Data.MacroType == "当前宏" ? tableItem : GetTableBySymbol(CompatMacroTypeSymbol(Data.MacroType))
+    if (Data.MacroType == "当前宏") {
+        if (Data.CallType == "触发" || Data.CallType == "取消暂停")
+            return
+        for action in FlowJumpActions() {
+            if (Data.CallType == action) {
+                HandleControlType(tableItem, index, action)
+                return
+            }
+        }
+    }
+    isCall := Data.CallType == "插入到当前宏"
+    targetID := Data.HasOwnProp("MacroSerial") ? Data.MacroSerial : ""
+    macroItem := Data.MacroType == "当前宏" ? tableItem : GetMacroTypeTargetTable(Data.MacroType, targetID)
     if (!macroItem) {
+        if (isCall)
+            throw Error(GetLang("宏不存在"))
         GraphPoolLog("宏操作-目标表不存在", Format("type={1} index={2}", Data.MacroType, Data.Index))
         return
     }
     macroTableID := macroItem.ID
-    targetItemID := macroItem.Items.Has(macroIndex) ? macroItem.Items[macroIndex].ID : ""
-
-    IsAbnormal := !macroItem.Items.Has(macroIndex) || macroItem.Items[macroIndex].ID != Data.MacroSerial
-    if (Data.MacroType != "当前宏" && IsAbnormal) {
-        targetItemID := ""
-        for i, item in macroItem.Items {
-            if (Data.MacroSerial == item.ID) {
-                macroIndex := i
-                targetItemID := item.ID
-                break
-            }
-        }
-    }
-
-    if (!targetItemID)
+    ; Index 只用于显示。排序、增删后始终按原目标 ID 查找。
+    macroIndex := Data.MacroType == "当前宏" ? index
+        : GetItemIndexInTable(macroItem, targetID)
+    if (!macroIndex) {
+        if (isCall)
+            throw Error(GetLang("宏不存在"))
         return
+    }
+    targetItem := macroItem.Items[macroIndex]
+    targetItemID := targetItem.ID
 
-    if (Data.CallType == "插入到当前宏") {   ;插入
-        if (!targetItemID)
-            return
-        macro := macroItem.GetItem(targetItemID).Macro
+    if (isCall) {   ;插入
+        macro := targetItem.Macro
         resultMacro := ""
         isHas := TryGetTabVarValue(&Count, tableItem, index, Data.InsertCount, true)
         if (isHas) {
@@ -1757,7 +1770,7 @@ OnRMTCMD(tableItem, cmd, index) {
         category := Data.HasOwnProp("Category") ? Data.Category : GetLang("全部")
         if (GetLangKey(cmdStr) == "显示菜单")
             cmdStr .= "⫶" (Data.HasOwnProp("MenuIndex") ? Data.MenuIndex : 1)
-        ; §2 禁用模块/取消禁用模块：附加目标表符号 + 模块路径身份（⫶ 分隔，执行端按段取参）
+        ; §2 禁用模块/取消禁用模块：附加目标表 ID + 模块路径身份（⫶ 分隔，执行端按段取参）
         if ((cmdStr == GetLang("禁用模块") || cmdStr == GetLang("取消禁用模块"))
             && Data.HasOwnProp("TableSymbol") && Data.TableSymbol != "")
             cmdStr .= "⫶" Data.TableSymbol "⫶" Data.FoldID

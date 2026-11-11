@@ -10,11 +10,11 @@ class InputFilePickerIpc {
     static Failed := 3
 }
 
-RunInputFilePicker(mappingName, parent, parentPID) {
-    memory := SharedMemory(mappingName, InputFilePickerIpc.Size)
+RunInputFilePicker(parent, mappingHandle, parentHandle) {
+    memory := SharedMemory(InputFilePickerIpc.Size, mappingHandle)
     if NumGet(memory.ptr, "Int") = InputFilePickerIpc.CancelRequested
         return
-    title := StrGet(memory.ptr + 4, "UTF-16")
+    title := StrGet(memory.ptr + 4, InputFilePickerIpc.TextCapacity, "UTF-16")
     SetWorkingDir(A_ScriptDir "\..")
     if (parent && !DllCall("IsWindow", "Ptr", parent, "Int"))
         parent := 0
@@ -40,7 +40,7 @@ RunInputFilePicker(mappingName, parent, parentPID) {
     }
 
     CheckPicker() {
-        if (!ProcessExist(parentPID))
+        if (DllCall("WaitForSingleObject", "ptr", parentHandle, "uint", 0, "uint") != 258)
             DllCall("TerminateProcess", "Ptr", -1, "UInt", 0)
         ; FileSelect 可能用额外的 Shell 属主。此进程只显示一个原生文件对话框。
         popup := WinExist("ahk_class #32770 ahk_pid " ProcessExist())

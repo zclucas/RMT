@@ -81,16 +81,15 @@ class TableMgrGui {
         SafeReload()
     }
 
-    ; 选择新表类型：Normal/String/Menu/UI/Voice/Timing/SubMacro/Replace
     _AskSymbol() {
         m := Menu()
-        defs := [["Normal", GetLang("按键宏")], ["String", GetLang("字串宏")], ["Menu", GetLang("菜单宏")],
-            ["UI", GetLang("界面宏")], ["Voice", GetLang("语音宏")], ["Timing", GetLang("定时宏")],
-            ["SubMacro", GetLang("宏")], ["Replace", GetLang("按键替换")]]
         result := ""
-        for def in defs {
+        for def in MacroCategoryDefs() {
+            ; 网络服务只绑定内置网络宏表。
+            if (def[1] == "Network")
+                continue
             ; 必须绑定值而非闭包捕获循环变量（AHK v2 箭头函数捕获引用，所有项会取到最后一个）
-            m.Add(def[2], TableMgrGui._PickSymbol.Bind(&result, def[1]))
+            m.Add(GetLang(def[2]), TableMgrGui._PickSymbol.Bind(&result, def[1]))
         }
         m.Show()
         return result

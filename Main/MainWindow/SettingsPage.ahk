@@ -152,7 +152,9 @@
 
         ; ---------- 公共片段 ----------
         tabsBody := '<WrapPanel>'
-            . togI(GetLang("按键宏"), "TabVisible_Normal", this._TabVisibleVal("Normal")) . togI(GetLang("字串宏"), "TabVisible_String", this._TabVisibleVal("String")) . togI(GetLang("菜单宏"), "TabVisible_Menu", this._TabVisibleVal("Menu")) . togI(GetLang("界面宏"), "TabVisible_UI", this._TabVisibleVal("UI")) . togI(GetLang("语音宏"), "TabVisible_Voice", this._TabVisibleVal("Voice")) . togI(GetLang("定时宏"), "TabVisible_Timing", this._TabVisibleVal("Timing")) . togI(GetLang("宏"), "TabVisible_SubMacro", this._TabVisibleVal("SubMacro")) . togI(GetLang("按键替换"), "TabVisible_Replace", this._TabVisibleVal("Replace")) . togI(GetLang("网络宏"), "TabVisible_Network", this._TabVisibleVal("Network")) . '</WrapPanel>'
+        for def in MacroCategoryDefs()
+            tabsBody .= togI(GetLang(def[2]), "TabVisible_" def[1], this._TabVisibleVal(def[1]))
+        tabsBody .= '</WrapPanel>'
         appearanceBody := cmb(GetLang("软件字体"), "CmbFont", MainSoftData.FontList, MainSoftData.FontType, false, GetLang("软件界面使用的字体，修改后保存设置生效。"), , 160)
             . sld(GetLang("字体大小"), "ThemeFontSizeCon", "ThemeFontSizeVal", MainSoftData.FontSize, 0, 40, 1, GetLang("字号 0~40；保存后统一刷新界面。"))
 
@@ -437,8 +439,8 @@
         this._Bind("EndTipAudioCon", "LostFocus", ObjBindMethod(this, "OnTextEdit", "EndTipAudio"))
         this._Bind("StopTipAudioCon", "LostFocus", ObjBindMethod(this, "OnTextEdit", "StopTipAudio"))
         ; §10 显示页签勾选
-        for sym in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace", "Network"]
-            this._Bind("TabVisible_" sym, "Click", ObjBindMethod(this, "OnTabVisibleCheck", sym))
+        for def in MacroCategoryDefs()
+            this._Bind("TabVisible_" def[1], "Click", ObjBindMethod(this, "OnTabVisibleCheck", def[1]))
         ; ---- 设置中心：左侧导航 ----
         for pid in ["behavior", "macro", "record", "trigger", "hotkey", "appearance", "ai", "diagnostic"]
             this._Bind("SetNav_" pid, "Click", ObjBindMethod(this, "OnSettingNavClick", pid))

@@ -18,6 +18,7 @@ class ShareUploadGui {
         this._pendingSince := 0
         this._pollFn := 0
         this._pendingCtx := ""
+        this._uploadProgress := ""
         this._author := ""
         this._fileUrl := ""
         this._sha256 := ""
@@ -302,7 +303,7 @@ class ShareUploadGui {
         this._rmtPath := path
         this._updateTarget := 0
         this._pendingCtx := {baseUrl: baseUrl, name: name, note: note, level: this._level,
-            ver: ver, author: apiUser}
+            ver: ver, author: apiUser, path: path}
 
         ; 管理员模式用户名已知；用户密钥模式先取当前用户名（失败不阻断，author 留空）
         if (apiUser != "") {
@@ -348,19 +349,21 @@ class ShareUploadGui {
         this._SetStatus(GetLang("正在上传分享包..."))
         this._pending := "upload"
         this._pendingSince := 0
-        try RMT_Discourse.BeginUploadFile(this._pendingCtx.baseUrl "/uploads.json", this._rmtPath)
+        try RMT_Discourse.BeginUploadFile(this._pendingCtx.baseUrl "/uploads.json", this._pendingCtx.path)
         catch as e {
             this._pending := ""
             this._SetStatus(e.Message, "err")
             return
         }
+        this._uploadProgress := RmtProgress(GetLang("上传分享"), GetLang("正在上传分享包..."), this.ui.wpfHwnd)
+        this._uploadProgress.Show()
         this._StartPoll()
     }
 
     _BuildMetaAndPost() {
         ctx := this._pendingCtx
         size := 0
-        try size := FileGetSize(this._rmtPath)
+        try size := FileGetSize(ctx.path)
 
         meta := Map()
         meta["rmt"] := 1
@@ -430,9 +433,18 @@ class ShareUploadGui {
             SetTimer(this._pollFn, 150)
     }
 
-    _StopPoll() {
+    _StopPoll(closeProgress := true) {
         if (IsObject(this._pollFn))
             SetTimer(this._pollFn, 0)
+        if (closeProgress)
+            this._CloseUploadProgress()
+    }
+
+    _CloseUploadProgress() {
+        if (IsObject(this._uploadProgress)) {
+            this._uploadProgress.Close()
+            this._uploadProgress := ""
+        }
     }
 
     _Poll(*) {
@@ -592,12 +604,12 @@ class ShareUploadGui {
                     this._SetStatus(GetLang("正在上传分享包...") " (" elapsedSec "s)")
                 return
             }
-            this._pending := ""
             this._pendingSince := 0
-            this._StopPoll()
+            this._StopPoll(false)
             body := ""
             try body := RMT_Discourse.TakeUploadResult()
             if (body == "") {
+                this._pending := ""
                 err := ""
                 try err := RMT_Discourse.GetUploadError()
                 msg := (err != "") ? (GetLang("上传失败: ") ShareUploadGui._ErrText(err)) : GetLang("上传失败")
@@ -614,12 +626,13 @@ class ShareUploadGui {
                     fileUrl := obj["url"]
             }
             if (fileUrl == "") {
+                this._pending := ""
                 this._SetStatus(GetLang("上传响应异常：未取到附件地址"), "err")
                 return
             }
             this._fileUrl := fileUrl
             sha := ""
-            try sha := RMT_Discourse.Sha256File(this._rmtPath)
+            try sha := RMT_Discourse.Sha256File(this._pendingCtx.path)
             this._sha256 := sha
             this._BuildMetaAndPost()
         }
@@ -713,6 +726,12 @@ class ShareUploadGui {
 
     ; 唯一的反馈出口：kind = "" 普通 / "ok" 成功 / "err" 失败（前缀符号区分，不引入新配色）
     _SetStatus(text, kind := "") {
+        if (IsObject(this._uploadProgress)) {
+            if (kind == "err")
+                this._CloseUploadProgress()
+            else if (kind == "" && this._uploadProgress.message != text)
+                this._uploadProgress.Report(text)
+        }
         if (!IsObject(this.ui))
             return
         prefix := (kind == "ok") ? "✓ " : (kind == "err") ? "✗ " : ""

@@ -136,6 +136,8 @@
                     cmd := GetLang("运行Pro")
                 if (cmd == GetLang("搜索Pro") && this._SearchNeedsMultiEditor(GetCmdStr(paramsArr[1])))
                     cmd := GetLang("搜索Combo")
+                if (PromptUsesEditor(GetCmdStr(cleanItemText)))
+                    cmd := GetLang("提示")
                 if (!this.SubGuiMap.Has(cmd))
                     return
                 subGui := this.SubGuiMap[cmd]

@@ -18,6 +18,9 @@ class SubMacroGui {
         this.Data := ""
         this.SerialStr := ""
         this._syncing := false
+        this._callKeys := []
+        this._targetIDs := []
+        this._targetType := ""
     }
 
     ShowGui(cmd) {
@@ -30,6 +33,8 @@ class SubMacroGui {
         }
         this._syncing := true
         this._batching := true
+        this._callKeys := []
+        this._targetType := ""
         try {
             this.Init(cmd)
             this.OnRefresh()
@@ -91,16 +96,14 @@ class SubMacroGui {
         ; 行1：宏类型 + 宏序号（序号整体左移 20px，下拉加宽 50px）
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("宏类型：")).VerticalAlignment("Center")
         tc := body.Add("ComboBox").Grid_Row(1).Grid_Column(1).Name("TypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
-        for t in GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "网络宏"])
+        for t in GetLangArr(SubMacroGui.MacroTypes())
             tc.Add("ComboBoxItem").Content(t)
         body.Add("TextBlock").Grid_Row(1).Grid_Column(3).Text(GetLang("宏序号：")).VerticalAlignment("Center")
         body.Add("ComboBox").Grid_Row(1).Grid_Column(4).Name("DropDownIndexCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
 
         ; 行2：操作类型 + 调用次数（仅调用时显示在操作类型后）
         body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("操作类型:")).VerticalAlignment("Center")
-        ct := body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("CallTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
-        for c in GetLangArr(["调用", "触发", "暂停", "取消暂停", "终止"])
-            ct.Add("ComboBoxItem").Content(c)
+        body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("CallTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         insertRow := body.Add("Grid").Name("InsertRow").Grid_Row(2).Grid_Column(3).Grid_ColumnSpan(2).Visibility("Collapsed")
         insertRow.Cols("96", "*")
         insertRow.Add("TextBlock").Grid_Column(0).Text(GetLang("调用次数：")).VerticalAlignment("Center")
@@ -125,9 +128,9 @@ class SubMacroGui {
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/10-宏操作", ObjBindMethod(this, "TriggerMacro"))
+        BindCmdEditorChrome(this.ui, "#指令手册/33-宏操作", ObjBindMethod(this, "TriggerMacro"))
         this.ui.OnEvent("TypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
-        this.ui.OnEvent("CallTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
+        this.ui.OnEvent("CallTypeCombo", "SelectionChanged", ObjBindMethod(this, "RefreshCallCount"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
 
     }
@@ -176,22 +179,80 @@ class SubMacroGui {
 
     _SelIndex(comboName) {
         v := IsObject(this.ui) ? this.ui.Query(comboName ">SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) : 0
+        return IsNumber(v) ? Integer(v) : -1
     }
 
-    _TypeValue() => this._SelIndex("TypeCombo") + 1
-    _CallValue() => this._SelIndex("CallTypeCombo") + 1
+    _TypeValue() => Max(1, this._SelIndex("TypeCombo") + 1)
+    _CallKey() {
+        index := this._SelIndex("CallTypeCombo") + 1
+        return this._callKeys.Has(index) ? this._callKeys[index] : ""
+    }
+
+    static MacroTypes() {
+        types := ["当前宏"]
+        for def in MacroCategoryDefs() {
+            if (def[1] != "Replace")
+                types.Push(def[2])
+        }
+        return types
+    }
+
+    static Targets(macroType) {
+        targets := []
+        tables := GetTablesBySymbol(CompatMacroTypeSymbol(macroType))
+        for tableItem in tables {
+            prefix := tables.Length > 1 ? GetLang(tableItem.Name) " · " : ""
+            for i, item in tableItem.Items {
+                label := prefix i ". " item.Remark
+                if (tableItem.Symbol == "Gesture" && item.TK != "")
+                    label .= " [" GestureDisplay(item.TK) "]"
+                targets.Push({ID: item.ID, Label: label})
+            }
+        }
+        return targets
+    }
+
+    static CallKeys(currentMacro) {
+        return currentMacro
+            ? ["循环-跳过本轮", "循环-跳出", "分支-跳出", "插入到当前宏", "暂停", "终止"]
+            : ["插入到当前宏", "触发", "暂停", "取消暂停", "终止"]
+    }
+
+    static CallLabel(key) {
+        switch key {
+            case "插入到当前宏": return GetLang("调用")
+            case "循环-跳过本轮": return GetLang("循环-跳出本轮")
+            case "分支-跳出": return GetLang("分支跳出")
+            default: return GetLang(key)
+        }
+    }
+
+    static CallIndex(macroType, callKey) {
+        for i, key in this.CallKeys(macroType == "当前宏") {
+            if (key == callKey)
+                return i - 1
+        }
+        return -1
+    }
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
+        legacyJump := cmdArr.Length && GetLangKey(GetCmdStr(cmdArr[1])) == "流程跳转"
+        if (legacyJump) {
+            jumpAction := FlowJumpAction(GetLangCmd(cmd, 2))
+            cmdArr := []
+        }
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("宏操作")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        if (legacyJump) {
+            this.Data.MacroType := "当前宏"
+            this.Data.CallType := jumpAction
+        }
         this.DLVariableArr := GetGuiVarArr(2)
 
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "网络宏"])
+        macroTypes := GetLangArr(SubMacroGui.MacroTypes())
         this._ComboPush("TypeCombo", "SelectedIndex", String(this._LangArrIndex(macroTypes, this.Data.MacroType) - 1))
-        this._ComboPush("CallTypeCombo", "SelectedIndex", String(this._CallValueFromData() - 1))
         this._SetCombo("InsertCountCombo", this.DLVariableArr, GetLang(this.Data.InsertCount))
     }
 
@@ -207,44 +268,61 @@ class SubMacroGui {
     OnRefresh(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui) || (this._syncing && state != ""))
             return
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "网络宏"])
+        macroTypes := SubMacroGui.MacroTypes()
         if (this._syncing && IsObject(this.Data)) {
-            typeValue := this._LangArrIndex(macroTypes, this.Data.MacroType)
-            lastIndex := (IsNumber(this.Data.Index) && Integer(this.Data.Index) >= 1) ? Integer(this.Data.Index) : 1
-            callValue := this._CallValueFromData()
+            typeValue := this._LangArrIndex(GetLangArr(macroTypes), this.Data.MacroType)
+            callKey := GetLangKey(this.Data.CallType)
+            if (callKey == "调用")
+                callKey := "插入到当前宏"
         } else {
             typeValue := this._TypeValue()
-            lastIndex := Max(1, this._SelIndex("DropDownIndexCombo") + 1)
-            callValue := this._CallValue()
+            callKey := this._CallKey()
         }
-        EnableIndex := typeValue != 1
-        this._ComboPush("DropDownIndexCombo", "IsEnabled", EnableIndex ? "True" : "False")
-        if (EnableIndex) {
-            tableItem := this._TableByMacroType(macroTypes[typeValue])
-            DropDownArr := []
-            if (tableItem) {
-                for i, item in tableItem.Items {
-                    DropDownArr.Push(i ". " item.Remark)
-                }
+        currentMacro := typeValue == 1
+        if (!this._callKeys.Length || currentMacro != this._currentMacro) {
+            this._currentMacro := currentMacro
+            this._callKeys := SubMacroGui.CallKeys(currentMacro)
+            selectedIndex := this._syncing ? -1 : 0
+            this._ComboPush("CallTypeCombo", "ClearItems", "")
+            for i, key in this._callKeys {
+                this._ComboPush("CallTypeCombo", "AddItem", SubMacroGui.CallLabel(key))
+                if (key == callKey)
+                    selectedIndex := i - 1
             }
+            this._ComboPush("CallTypeCombo", "SelectedIndex", String(selectedIndex))
+        }
+        macroType := macroTypes[typeValue]
+        if (this._targetType != macroType) {
+            this._targetType := macroType
+            this._targetIDs := []
+            this._ComboPush("DropDownIndexCombo", "IsEnabled", currentMacro ? "False" : "True")
             this._ComboPush("DropDownIndexCombo", "ClearItems", "")
-            for it in DropDownArr
-                this._ComboPush("DropDownIndexCombo", "AddItem", it)
-            if (DropDownArr.Length >= lastIndex)
-                this._ComboPush("DropDownIndexCombo", "SelectedIndex", String(lastIndex - 1))
-            else if (DropDownArr.Length >= 1)
-                this._ComboPush("DropDownIndexCombo", "SelectedIndex", "0")
-        } else {
-            this._ComboPush("DropDownIndexCombo", "ClearItems", "")
+            selectedIndex := -1
+            targetID := this._syncing && this.Data.HasOwnProp("MacroSerial") ? this.Data.MacroSerial : ""
+            for i, item in SubMacroGui.Targets(macroType) {
+                this._targetIDs.Push(item.ID)
+                this._ComboPush("DropDownIndexCombo", "AddItem", item.Label)
+                if (item.ID == targetID)
+                    selectedIndex := i - 1
+            }
+            this._ComboPush("DropDownIndexCombo", "SelectedIndex", String(selectedIndex))
         }
 
-        this._ComboPush("InsertRow", "Visibility", (callValue == 1) ? "Visible" : "Collapsed")
+        if (this._syncing)
+            this._ComboPush("InsertRow", "Visibility", (callKey == "插入到当前宏") ? "Visible" : "Collapsed")
+        else
+            this.RefreshCallCount()
+    }
+
+    RefreshCallCount(*) {
+        if (IsObject(this.ui) && !this._syncing)
+            this._ComboPush("InsertRow", "Visibility", (this._CallKey() == "插入到当前宏") ? "Visible" : "Collapsed")
     }
 
     OnClickSureBtn(state, ctrl, event) {
-        if (!this.CheckIfValid())
+        if (!this.CheckIfValid(&target))
             return
-        this.SaveSubMacroData()
+        this.SaveSubMacroData(target)
         CommandStr := this.GetCommandStr()
         action := this.SureBtnAction
         this.ToggleFunc(false)
@@ -253,14 +331,23 @@ class SubMacroGui {
             action(CommandStr)
     }
 
-    CheckIfValid() {
-        tableItem := this._TableByMacroType(this.ui.Query("TypeCombo"))
-        itemArr := this._TypeValue() == 1 ? "" : (tableItem ? tableItem.Items : "")
-
-        if (itemArr != "") {
+    CheckIfValid(&target) {
+        target := ""
+        macroType := SubMacroGui.MacroTypes()[this._TypeValue()]
+        if (this._targetType != macroType || SubMacroGui.CallIndex(macroType, this._CallKey()) < 0) {
+            RmtDialog.Info(GetLang("请选择操作类型"))
+            return false
+        }
+        if (this._TypeValue() != 1) {
             idx := this._SelIndex("DropDownIndexCombo") + 1
-            if (idx > itemArr.Length || idx == 0) {
-                RmtDialog.Info(GetLang("配置无效，序号不正确"))
+            if (this._targetType == macroType && this._targetIDs.Has(idx)) {
+                targetID := this._targetIDs[idx]
+                tableItem := GetMacroTypeTargetTable(macroType, targetID)
+                if (tableItem)
+                    target := ResolveMacroItem(tableItem.ID, targetID)
+            }
+            if (!target) {
+                RmtDialog.Info(GetLang("宏不存在"))
                 return false
             }
         }
@@ -268,7 +355,9 @@ class SubMacroGui {
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
-        this.SaveSubMacroData()
+        if (!this.CheckIfValid(&target))
+            return
+        this.SaveSubMacroData(target)
         OnTriggerSepcialItemMacro(this.GetCommandStr())
     }
 
@@ -278,30 +367,23 @@ class SubMacroGui {
         CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
         Remark := this.ui.Query("RemarkCon")
         if (ShouldAutoGenerateRemark(Remark)) {
-            OperTipArr := GetLangArr(["调用", "触发", "暂停", "取消暂停", "终止"])
             IntervarlStr := MainSoftData.Lang == "中文" ? "" : " "
-            MacroTypeArr := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "网络宏"])
-            OperStr := OperTipArr[this._CallValue()]
-            TypeStr := MacroTypeArr[this._TypeValue()]
-            SerialStr := this._TypeValue() == 1 ? "" : (this._SelIndex("DropDownIndexCombo") + 1)
+            OperStr := SubMacroGui.CallLabel(this.Data.CallType)
+            TypeStr := GetLang(this.Data.MacroType)
+            SerialStr := this.Data.MacroType == "当前宏" ? "" : this.Data.Index
             Remark := OperStr IntervarlStr TypeStr SerialStr
         }
         CommandStr := CorrectRemark(CommandStr, Remark)
         return CommandStr
     }
 
-    SaveSubMacroData() {
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "界面宏", "语音宏", "定时宏", "宏", "网络宏"])
-        callKeys := ["插入到当前宏", "触发", "暂停", "取消暂停", "终止"]
-        this.Data.MacroType := GetLangKey(macroTypes[this._TypeValue()])
-        this.Data.Index := this._SelIndex("DropDownIndexCombo") + 1
-        this.Data.CallType := callKeys[this._CallValue()]
+    SaveSubMacroData(target) {
+        this.Data.MacroType := SubMacroGui.MacroTypes()[this._TypeValue()]
+        this.Data.Index := target ? target.Index : 0
+        this.Data.CallType := this._CallKey()
         this.Data.InsertCount := GetLangKey(this.ui.Query("InsertCountCombo"))
 
-        tableItem := this._TableByMacroType(this.Data.MacroType)
-        itemArr := this._TypeValue() == 1 ? "" : (tableItem ? tableItem.Items : "")
-        this.Data.MacroSerial := itemArr != "" && this.Data.Index >= 1 && this.Data.Index <= itemArr.Length
-            ? itemArr[this.Data.Index].ID : ""
+        this.Data.MacroSerial := target ? target.Item.ID : ""
         SaveMacroCMDData(this.Data)
     }
 
@@ -314,35 +396,4 @@ class SubMacroGui {
         return 1
     }
 
-    _CallValueFromData() {
-        k := IsObject(this.Data) ? GetLangKey(this.Data.CallType) : ""
-        if (k == "插入到当前宏" || k == "调用")
-            return 1
-        displayCall := GetLangArr(["调用", "触发", "暂停", "取消暂停", "终止"])
-        return this._LangArrIndex(displayCall, k)
-    }
-
-    ; 宏类型语言键（按键宏/字串宏…）→ 表 Symbol（Normal/String…）
-    _TableByMacroType(macroType) {
-        k := GetLangKey(macroType)
-        if (k == "" || k == "当前宏")
-            return ""
-        t := GetTableBySymbol(k)
-        if (t)
-            return t
-        typeMap := Map("按键宏", "Normal", "字串宏", "String", "菜单宏", "Menu", "界面宏", "UI", "语音宏", "Voice", "定时宏", "Timing", "宏", "SubMacro", "网络宏", "Network")
-        if (typeMap.Has(k)) {
-            t := GetTableBySymbol(typeMap[k])
-            if (t)
-                return t
-        }
-        global MySoftData
-        if (IsObject(MySoftData) && MySoftData.HasProp("TableInfo")) {
-            for tableItem in MySoftData.TableInfo {
-                if (tableItem.Name == k || GetLang(tableItem.Name) == GetLang(k))
-                    return tableItem
-            }
-        }
-        return ""
-    }
 }

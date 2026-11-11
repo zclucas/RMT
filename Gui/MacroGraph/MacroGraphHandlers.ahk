@@ -1338,7 +1338,7 @@ class MacroGraphHandlersMixin {
     }
 
     _OutputTypeIndex(outputTypeKey) {
-        typeNames := GetLangArr(["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"])
+        typeNames := GetLangArr(["发送内容", "粘贴内容", "指令窗口", "复制到剪切板", "字符变量"])
         target := GetLang(outputTypeKey)
         Loop typeNames.Length {
             if (typeNames[A_Index] == target)
@@ -1348,7 +1348,7 @@ class MacroGraphHandlersMixin {
     }
 
     _OutputTypeFromText(text) {
-        for key in ["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"] {
+        for key in ["发送内容", "粘贴内容", "指令窗口", "复制到剪切板", "字符变量"] {
             if (text == GetLang(key))
                 return key
         }
@@ -1356,7 +1356,7 @@ class MacroGraphHandlersMixin {
     }
 
     _OutputTypeFromState(key, state, fallback := "发送内容") {
-        keys := ["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"]
+        keys := ["发送内容", "粘贴内容", "指令窗口", "复制到剪切板", "字符变量"]
         idx := this._ComboSelectedIndex(key)
         if (idx >= 0 && idx < keys.Length)
             return keys[idx + 1]
@@ -1563,20 +1563,10 @@ class MacroGraphHandlersMixin {
     }
 
     _FlushOneNodeInline(id, state) {
-        if (!this.cmdNodes.Has(id))
+        if (!this.cmdNodes.Has(id) || PromptUsesEditor(this.cmdNodes[id].CurCMD))
             return
         d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
-        if (d.type == GetLang("跳转")) {
-            if (this._InlineVal(state, "JumpCmb_" id, &value)) {
-                for action in FlowJumpActions() {
-                    if (action == GetLangKey(value)) {
-                        this.cmdNodes[id].CurCMD := "流程跳转_" action
-                        break
-                    }
-                }
-            }
-        }
-        else if (d.type == GetLang("间隔"))
+        if (d.type == GetLang("间隔"))
             this._FlushIntervalInline(id, d, state)
         else if (d.type == GetLang("按键"))
             this._FlushKeyInline(id, d, state)
@@ -1625,7 +1615,7 @@ class MacroGraphHandlersMixin {
         try {
             t := d.type
             if (t == GetLang("宏操作"))
-                this._OnFormalSubMacro(id, state, "", "Flush")
+                this._OnFormalSubMacro(id, "Count", state)
             else if (t == GetLang("变量"))
                 this._OnFormalVariable(id, state, "", "Flush")
             else if (t == GetLang("变量提取"))
@@ -1839,7 +1829,7 @@ class MacroGraphHandlersMixin {
         if (data == "")
             return
         dirty := false
-        keys := ["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"]
+        keys := ["发送内容", "粘贴内容", "指令窗口", "复制到剪切板", "字符变量"]
         idx := this._ComboSelectedIndex("OutTypeCmb_" id)
         if (idx >= 0 && idx < keys.Length) {
             data.OutputType := keys[idx + 1]

@@ -578,9 +578,19 @@ class TriggerKeyGui {
 
     ; ---------------- 按键网格 ----------------
 
+    _KeyLabelBox(parent) {
+        ; 键帽文字可能同时受窗口缩放和 Viewbox 缩放。使用连续字形度量，
+        ; 避免在不同坐标系中先按像素取整、再缩放时裁掉字形边缘。
+        return parent.Add("Viewbox").Stretch("Uniform").StretchDirection("DownOnly")
+            .UseLayoutRounding("False").SnapsToDevicePixels("False")
+            .SetProp("TextOptions.TextFormattingMode", "Ideal")
+    }
+
     _PlaceLabel(text, x, y) {
-        this._keyGrid.Add("TextBlock").Text(text).FontWeight("SemiBold").FontSize(12)
+        ; 标题和下一行按键之间只有 20 DIP，大号主题文字也要放进这段高度。
+        label := this._KeyLabelBox(this._keyGrid).Height(20)
             .SetProp("Canvas.Left", String(x)).SetProp("Canvas.Top", String(y))
+        label.Add("TextBlock").Text(text).FontWeight("SemiBold").FontSize(12)
     }
 
     _SetKeyBtnState(con, key, selected) {
@@ -620,14 +630,13 @@ class TriggerKeyGui {
         txtName := name "_Txt"
         btn := this._keyGrid.Add("Button").Name(name).Width(width).Height(height)
             .SetProp("Canvas.Left", String(x)).SetProp("Canvas.Top", String(y))
-            .Cursor("Hand").Padding("2,1").Tag("0")
+            .Cursor("Hand").Tag("0")
             .HorizontalContentAlignment("Stretch").VerticalContentAlignment("Stretch")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource TextMain}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         btn.InjectResources(this.EditorMode == "joy" ? StrReplace(FrontInfoGui._KeyPickBtnStyle(), 'CornerRadius="3"', 'CornerRadius="12"') : FrontInfoGui._KeyPickBtnStyle())
-        ; Viewbox DownOnly：字号上限为当前 11，超出按钮宽度时自适应缩小
-        vb := btn.Add("Viewbox").Stretch("Uniform").StretchDirection("DownOnly")
-            .HorizontalAlignment("Center").VerticalAlignment("Center")
+        ; 按钮模板不读取 Padding，直接为文字留出内边距。
+        vb := this._KeyLabelBox(btn).Margin("2,1").HorizontalAlignment("Center").VerticalAlignment("Center")
         tb := vb.Add("TextBlock").Name(txtName).Text(display).FontSize(11)
             .Foreground("{DynamicResource TextMain}")
             .TextAlignment("Center").TextWrapping("NoWrap")

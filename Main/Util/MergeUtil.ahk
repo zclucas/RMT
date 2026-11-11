@@ -11,6 +11,8 @@ class MergeTreeNode {
         this.TriggerKey := ""
         this.Remark := ""
         this.MacroStr := ""
+        this.PreMacro := ""
+        this.PostMacro := ""
         this.ResourceSerials := []
         this.ModuleName := ""
         this.ItemIndex := 0
@@ -37,18 +39,17 @@ class MergeResult {
 }
 
 class MergeUtil {
-    static TempMergeDir := ""
 
     ; 可合并页签：按 Symbol 读写源 MacroFile.toml，Index 映射到「当前程序」页签。
     ; 旧版（1.2 前）源配置无 UITKArr 等键 → 界面宏解析为空并跳过；
     ; 1.2+ 源配置有 UI 数据 → 正常导入到界面宏页签。无需单独版本分支。
     static GetMergeTabConfig() {
         tabs := []
-        for symbol in ["Normal", "String", "Menu", "UI", "Voice", "Timing", "SubMacro", "Replace"] {
-            idx := GetTableIndex(symbol)
-            if (idx <= 0)
-                continue
-            tabs.Push({ Index: idx, Symbol: symbol, Name: MySoftData.TableInfo[idx].Name })
+        for def in MacroCategoryDefs() {
+            symbol := def[1]
+            tableItem := GetTableBySymbol(symbol)
+            if (tableItem)
+                tabs.Push({ Index: tableItem.Index, Symbol: symbol, Name: tableItem.Name })
         }
         return tabs
     }
@@ -139,7 +140,9 @@ class MergeUtil {
             macroStr := StrReplace(macroStr, "⫶", "`n")
             node.MacroStr := macroStr
 
-            node.ResourceSerials := MergeUtil.ExtractResourceSerials(macroStr)
+            for field in ["PreMacro", "PostMacro"]
+                node.%field% := StrReplace(CfgRead(macroFile, SettingSection, symbol field "Arr" node.ItemIndex, ""), "⫶", "`n")
+            node.ResourceSerials := this.ExtractResourceSerials(node.MacroStr "," node.PreMacro "," node.PostMacro)
 
             allItems.Push(node)
         }
@@ -243,17 +246,18 @@ class MergeUtil {
         if (!TomlUtil_Valid(t))
             return []
 
-        ; [[table]] 表集合中找 Symbol 对应的表（身份 = Symbol）
-        tableID := ""
+        modules := []
         for tbl in TomlUtil_Tables(t, "table") {
             if (TomlUtil_Str(tbl, "symbol", "") == symbol) {
                 tableID := TomlUtil_Str(tbl, "id", symbol)
-                break
+                for node in this._ParseMacroTableToml(t, tableID, tabIndex)
+                    modules.Push(node)
             }
         }
-        if (tableID == "")
-            return []
+        return modules
+    }
 
+    static _ParseMacroTableToml(t, tableID, tabIndex) {
         tableSeg := TomlUtil_Table(t, tableID)
         if (!TomlUtil_Valid(tableSeg))
             return []
@@ -289,7 +293,9 @@ class MergeUtil {
                 item.DisplayName := item.Remark
                 ; TOML 宏内容为真实换行，无需 ⫶ 还原
                 item.MacroStr := TomlUtil_Str(mseg, "Macro", "")
-                item.ResourceSerials := this.ExtractResourceSerials(item.MacroStr)
+                item.PreMacro := TomlUtil_Str(mseg, "PreMacro", "")
+                item.PostMacro := TomlUtil_Str(mseg, "PostMacro", "")
+                item.ResourceSerials := this.ExtractResourceSerials(item.MacroStr "," item.PreMacro "," item.PostMacro)
                 items.Push(item)
             }
 
@@ -337,6 +343,7 @@ class MergeUtil {
 
     static ExtractResourceSerials(macroStr) {
         serials := []
+        seen := Map()
         if (macroStr == "")
             return serials
 
@@ -352,8 +359,10 @@ class MergeUtil {
                 continue
 
             serialStr := MergeUtil.ExtractSerialFromCmdDirect(cleanCmd)
-            if (serialStr != "" && !serials.Has(serialStr))
+            if (serialStr != "" && !seen.Has(serialStr)) {
                 serials.Push(serialStr)
+                seen[serialStr] := true
+            }
         }
 
         return serials
@@ -362,6 +371,8 @@ class MergeUtil {
     static ExtractSerialFromCmdDirect(cmdStr) {
         if (cmdStr == "")
             return ""
+        if (RegExMatch(cmdStr, "i)^(宏操作\d+|Ctrl\d+)(?=$|[_| \t])", &m))
+            return MacroOperationSerial(m[1])
 
         for cmdType, _ in MySoftData.DataFileMap {
             if (SubStr(cmdStr, 1, StrLen(cmdType)) != cmdType)
@@ -493,8 +504,6 @@ class MergeUtil {
     static PreviewSerialReplaceMap(checkedItems, sourceSettingDir := "") {
         replaceMap := Map()
         if (sourceSettingDir == "")
-            sourceSettingDir := MergeUtil.TempMergeDir != "" ? MergeUtil.TempMergeDir : ""
-        if (sourceSettingDir == "")
             return replaceMap
 
         allSourceSerials := MergeUtil.CollectAllResourceSerials(checkedItems)
@@ -584,8 +593,8 @@ class MergeUtil {
 
                 if (IsObject(fieldValue)) {
                     for item in fieldValue {
-                        if (item != "")
-                            PushDep(MergeUtil.ExtractSerialFromCmdDirect(GetCmdStr(String(item))))
+                        for cmd in SplitMacro(item)
+                            PushDep(MergeUtil.ExtractSerialFromCmdDirect(GetCmdStr(cmd)))
                     }
                 } else if (fieldName == "CurCMD") {
                     PushDep(MergeUtil.ExtractSerialFromCmdDirect(GetCmdStr(String(fieldValue))))
@@ -602,7 +611,7 @@ class MergeUtil {
         return depSerials
     }
 
-    static CollectSourceConfigs(sourceSettingDir, sourceSerials) {
+    static CollectSourceConfigs(sourceSettingDir, sourceSerials, requireMacroOperations := false) {
         collectedConfigs := Map()
 
         sourceDataFileMap := MergeUtil.BuildSourceDataFileMap(sourceSettingDir)
@@ -623,12 +632,16 @@ class MergeUtil {
                 continue
 
             cmdType := MergeUtil.FindSerialTypeFromSource(serial, sourceDataFileMap)
-            if (cmdType == "")
+            if (MacroOperationSerial(serial) != "")
+                cmdType := "宏操作"
+            Data := cmdType == "" ? "" : MergeUtil.ReadSourceConfigData(sourceSettingDir, serial, cmdType, sourceDataFileMap)
+            if (!IsObject(Data)) {
+                if (requireMacroOperations && cmdType == "宏操作")
+                    throw Error(GetLang("缺少宏操作配置") " " serial)
                 continue
-
-            Data := MergeUtil.ReadSourceConfigData(sourceSettingDir, serial, cmdType, sourceDataFileMap)
-            if (!IsObject(Data))
-                continue
+            }
+            if (cmdType == "宏操作")
+                Data.SerialStr := serial
 
             configJson := JSON.stringify(Data, 0)
             collectedConfigs.Set(serial, Map("类型", cmdType, "配置", configJson))
@@ -648,22 +661,20 @@ class MergeUtil {
         for cmdType, targetDataFile in MySoftData.DataFileMap {
             fileName := RegExReplace(targetDataFile, ".*\\", "")
             sourceFilePath := sourceSettingDir "\" fileName
-            if (FileExist(sourceFilePath)) {
+            if (FileExist(sourceFilePath))
                 fileMap.Set(cmdType, sourceFilePath)
-            }
-            else {
-                fileMap.Set(cmdType, targetDataFile)
-            }
         }
         return fileMap
     }
 
     static ReadSourceConfigData(sourceSettingDir, serial, cmdType, sourceDataFileMap) {
-        DataFile := sourceDataFileMap.Has(cmdType) ? sourceDataFileMap[cmdType] : MySoftData.DataFileMap[cmdType]
+        DataFile := sourceDataFileMap.Get(cmdType, "")
         if (DataFile == "")
             return ""
 
         saveStr := CfgRead(DataFile, SettingSection, serial, "")
+        if (saveStr == "" && cmdType == "宏操作" && RegExMatch(serial, "^宏操作(\d+)$", &m))
+            saveStr := CfgRead(DataFile, SettingSection, "Ctrl" m[1], "")
         if (saveStr == "") {
             textOnly := RegExReplace(serial, "\d+")
             numbersOnly := RegExReplace(serial, "\D+")
@@ -741,28 +752,18 @@ class MergeUtil {
 
                 Data.SerialStr := newSerialStr
 
-                if (newSerialStr != oldSerialStr) {
+                if (newSerialStr != oldSerialStr || MacroOperationSerial(oldSerialStr) != "") {
                     serialReplaceMap.Set(oldSerialStr, newSerialStr)
                 }
             } catch as e {
             }
         }
 
-        maxPasses := 10
-        loop maxPasses {
-            changedThisPass := false
-
-            for i, configInfo in parsedConfigs {
-                Data := configInfo["Data"]
-
-                try {
-                    UpdateConfigInternalRefs(Data, serialReplaceMap)
-                } catch as e {
-                }
+        for configInfo in parsedConfigs {
+            try {
+                UpdateConfigInternalRefs(configInfo["Data"], serialReplaceMap)
+            } catch as e {
             }
-
-            if (!changedThisPass)
-                break
         }
 
         return { ReplaceMap: serialReplaceMap, ParsedConfigs: parsedConfigs }
@@ -771,10 +772,13 @@ class MergeUtil {
     static RemapMacroTargets(parsedConfigs, macroTargets) {
         for _, configInfo in parsedConfigs {
             Data := configInfo["Data"]
-            if (!Data.HasOwnProp("MacroSerial") || !Data.HasOwnProp("MacroType") || Data.MacroType == "当前宏")
+            if (!Data.HasOwnProp("MacroType") || Data.MacroType == "当前宏")
                 continue
-            if (macroTargets.Has(Data.MacroSerial)) {
-                target := macroTargets[Data.MacroSerial]
+            symbol := CompatMacroTypeSymbol(Data.MacroType)
+            targets := macroTargets.Get(symbol, Map())
+            serial := Data.HasOwnProp("MacroSerial") ? Data.MacroSerial : ""
+            target := targets.Get(serial, "")
+            if (target) {
                 Data.MacroSerial := target.ID
                 Data.Index := target.Index
             } else {
@@ -870,16 +874,8 @@ class MergeUtil {
         updatedItems := []
 
         for item in checkedItems {
-            newMacroStr := item.MacroStr
-
-            for oldSerial, newSerial in serialReplaceMap {
-                newMacroStr := ReplaceSerialInCmdList(newMacroStr, oldSerial, newSerial)
-            }
-
-            if (newMacroStr != item.MacroStr) {
-                item.MacroStr := newMacroStr
-            }
-
+            for field in ["MacroStr", "PreMacro", "PostMacro"]
+                item.%field% := RemapCommandSerials(item.%field%, serialReplaceMap)
             updatedItems.Push(item)
         }
 
@@ -1029,8 +1025,8 @@ class MergeUtil {
         visitSerials := Map()
 
         for item in checkedItems {
-            MergeUtil.CollectIntervalVarsInMacroStr(item.MacroStr, varMap)
-            MergeUtil.CollectVarsWalkingMacro(item.MacroStr, sourceSettingDir, sourceDataFileMap, visitSerials, varMap)
+            for field in ["MacroStr", "PreMacro", "PostMacro"]
+                MergeUtil.CollectVarsWalkingMacro(item.%field%, sourceSettingDir, sourceDataFileMap, visitSerials, varMap)
         }
 
         if (IsObject(replaceInfo) && IsObject(replaceInfo.ParsedConfigs)) {
@@ -1118,8 +1114,6 @@ class MergeUtil {
     ; 预览导入侧变量重命名映射（old → new）；无冲突时返回空 Map
     static PreviewVarReplaceMap(checkedItems, sourceSettingDir := "") {
         if (sourceSettingDir == "")
-            sourceSettingDir := MergeUtil.TempMergeDir != "" ? MergeUtil.TempMergeDir : ""
-        if (sourceSettingDir == "")
             return Map()
         sourceVarMap := MergeUtil.CollectImportVariableNames(checkedItems, sourceSettingDir, "")
         return MergeUtil.BuildVarReplaceMap(sourceVarMap)
@@ -1128,8 +1122,10 @@ class MergeUtil {
     static ApplyVarRenameToMacros(checkedItems, varReplaceMap) {
         if (!IsObject(varReplaceMap) || GetObjectCount(varReplaceMap) == 0)
             return checkedItems
-        for item in checkedItems
-            item.MacroStr := MergeUtil.ApplyVarRenameToMacroStr(item.MacroStr, varReplaceMap)
+        for item in checkedItems {
+            for field in ["MacroStr", "PreMacro", "PostMacro"]
+                item.%field% := MergeUtil.ApplyVarRenameToMacroStr(item.%field%, varReplaceMap)
+        }
         return checkedItems
     }
 
@@ -1246,20 +1242,27 @@ class MergeUtil {
         }
     }
 
-    static ExecuteMerge(checkedItems, sourceName) {
+    static ExecuteMerge(checkedItems, sourceName, sourceDir := "") {
         result := MergeResult()
         result.SourceName := sourceName
         result.GroupName := ""
         result.ImportTime := FormatTime(, "yyyy-MM-dd HH:mm:ss")
 
-        sourceDir := MergeUtil.TempMergeDir != "" ? MergeUtil.TempMergeDir : A_WorkingDir "\Setting\" sourceName
+        if (sourceDir == "")
+            sourceDir := A_WorkingDir "\Setting\" sourceName
+
+        ; 保留树中的源指令，重试或再次导入时仍从源序列号计算映射。
+        sourceItems := checkedItems
+        checkedItems := []
+        for item in sourceItems
+            checkedItems.Push(item.Clone())
 
         allSourceSerials := MergeUtil.CollectAllResourceSerials(checkedItems)
         replaceInfo := ""
         serialReplaceMap := Map()
 
         if (GetObjectCount(allSourceSerials) > 0) {
-            collectedConfigs := MergeUtil.CollectSourceConfigs(sourceDir, allSourceSerials)
+            collectedConfigs := MergeUtil.CollectSourceConfigs(sourceDir, allSourceSerials, true)
 
             if (GetObjectCount(collectedConfigs) > 0) {
                 replaceInfo := MergeUtil.BuildSerialReplaceMap(collectedConfigs)
@@ -1312,6 +1315,7 @@ class MergeUtil {
                 continue
 
             tableItem := MySoftData.TableInfo[tabIndex]
+            targets := macroTargets[tableItem.Symbol] := Map()
 
             moduleGroups := MergeUtil.GroupItemsByModule(items)
 
@@ -1343,11 +1347,13 @@ class MergeUtil {
                     newItem.EndTipSound := 1
                     newItem.VoiceKeywords := ""
                     newItem.Macro := item.MacroStr
+                    newItem.PreMacro := item.PreMacro
+                    newItem.PostMacro := item.PostMacro
                     newItem.IcoPath := ""
                     newItem.FoldID := fold.ID
                     tableItem.Items.Push(newItem)
                     if (item.Serial != "")
-                        macroTargets[item.Serial] := { ID: newSerial, Index: tableItem.Items.Length }
+                        targets[item.Serial] := targets.Has(item.Serial) ? "" : { ID: newSerial, Index: tableItem.Items.Length }
                     serialList.Push(newSerial)
                 }
 
@@ -1420,26 +1426,36 @@ class MergeUtil {
         }
     }
 
-    static PrepareTempFromRmt(rmtFilePath) {
-        tempDir := A_Temp "\RMT_Merge_" A_Now
-        if (DirExist(tempDir))
-            DirDelete(tempDir, true)
+    static PrepareTempFromRmt(rmtFilePath, report := "") {
+        static sequence := 0
+        sequence += 1
+        tempDir := A_Temp "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount "-" sequence
+        if (FileExist(tempDir))
+            throw Error(GetLang("配置导入临时目录已存在，请重试"))
         DirCreate(tempDir)
-
-        FolderPackager.UnpackFile(rmtFilePath, tempDir)
-        MySettingMgrGui.OnRepairSetting(tempDir, true)
-
-        MergeUtil.TempMergeDir := tempDir
+        try {
+            FolderPackager.UnpackFile(rmtFilePath, tempDir, report)
+            if (report)
+                report(GetLang("正在检查配置文件"))
+            Compat_UpgradeDir(tempDir)
+            IniImport_ExpandFlatMacroFile(tempDir)
+        } catch as err {
+            this.CleanupTemp(tempDir)
+            throw err
+        }
         return tempDir
     }
 
-    static CleanupTemp() {
-        if (MergeUtil.TempMergeDir != "" && DirExist(MergeUtil.TempMergeDir)) {
+    static CleanupTemp(tempDir) {
+        prefix := A_Temp "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-"
+        if (SubStr(tempDir, 1, StrLen(prefix)) == prefix
+            && RegExMatch(SubStr(tempDir, StrLen(prefix) + 1), "^\d+-\d+$") && DirExist(tempDir)) {
             try {
-                DirDelete(MergeUtil.TempMergeDir, true)
+                FolderPackager._RejectReparsePoint(tempDir)
+                Compat_CheckPlainTree(tempDir)
+                DirDelete(tempDir, true)
             }
         }
-        MergeUtil.TempMergeDir := ""
     }
 
     static GenerateDefaultGroupName(sourceName) {

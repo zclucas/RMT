@@ -137,72 +137,54 @@ SelfCheckMissingFiles() {
         return
     }
 
-    pg := Gui("+AlwaysOnTop +ToolWindow -MinimizeBox -MaximizeBox", "RMT 资源下载")
-    pg.SetFont("s10")
-    pg.AddText("xm y+8 w380 h28 vStatusText", "准备下载...")
-    pg.AddProgress("xm w380 h20 vProgressBar Range0-" totalMissing)
-    pg.SetFont("s9")
-    pg.AddText("xm y+6 w380 h22 vDetailText", "")
-    btnCancel := pg.AddButton("xm y+12 w100 h30", "取消下载")
-
-    global _dlCancelled := false
-    btnCancel.OnEvent("Click", (*) => (_dlCancelled := true))
-
-    pg.Show("AutoSize Center")
-
+    pg := RmtProgress(GetLang("RMT 资源下载"), GetLang("准备下载"), XamlWin.ActiveOwner(), GetLang("取消下载"))
+    pg.Show()
     successCount := 0
     failList := []
     total := allMissing.Length
 
-    for idx, item in allMissing {
-        if (_dlCancelled)
-            break
-
-        localPath := item[1]
-        assetName := item[2]
-        fullPath := A_WorkingDir "\" localPath
-        downloadUrl := baseUrl assetName
-
-        pg["StatusText"].Value := "(" idx "/" total ") 正在下载：" assetName
-        pg["DetailText"].Value := ""
-        pg["ProgressBar"].Value := idx - 1
-
-        downloaded := false
-
-        if (assetName == "ico.zip") {
-            zipPath := A_ScriptDir "\_rmt_temp_ico.zip"
-            targetDir := A_WorkingDir "\Images\Soft"
-            downloaded := DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, icoFileList, &pg)
-            if (downloaded == "cancel")
+    try {
+        for idx, item in allMissing {
+            if (pg.Cancelled)
                 break
-        } else {
-            SplitPath(fullPath, &outName, &outDir)
-            if (outDir != "" && !DirExist(outDir))
-                DirCreate(outDir)
-            if (FileExist(fullPath))
-                FileDelete(fullPath)
 
-            result := DownloadAsync(downloadUrl, fullPath, 120, &pg)
-            if (result == "cancel")
-                break
-            downloaded := (result == "ok")
+            localPath := item[1]
+            assetName := item[2]
+            fullPath := A_WorkingDir "\" localPath
+            downloadUrl := baseUrl assetName
+
+            pg.Report("(" idx "/" total ") 正在下载：" assetName, 100 * (idx - 1) / total)
+
+            downloaded := false
+
+            if (assetName == "ico.zip") {
+                zipPath := A_ScriptDir "\_rmt_temp_ico.zip"
+                targetDir := A_WorkingDir "\Images\Soft"
+                downloaded := DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, icoFileList, pg)
+                if (downloaded == "cancel")
+                    break
+            } else {
+                SplitPath(fullPath, &outName, &outDir)
+                if (outDir != "" && !DirExist(outDir))
+                    DirCreate(outDir)
+                if (FileExist(fullPath))
+                    FileDelete(fullPath)
+
+                result := DownloadAsync(downloadUrl, fullPath, 120, pg)
+                if (result == "cancel")
+                    break
+                downloaded := (result == "ok")
+            }
+
+            if (downloaded)
+                successCount++
+            else
+                failList.Push(assetName)
         }
-
-        if (downloaded) {
-            successCount++
-            pg["DetailText"].Value := "✓ 下载完成"
-        } else {
-            failList.Push(assetName)
-            pg["DetailText"].Value := "✗ 下载失败"
-        }
-
-        pg["ProgressBar"].Value := idx
-    }
-
-    pg.Destroy()
+    } finally pg.Close()
     ToolTip()
 
-    if (_dlCancelled) {
+    if (pg.Cancelled) {
         stillCritical := false
         for item in missingCritical {
             fullPath := A_WorkingDir "\" item[1]
@@ -238,16 +220,16 @@ SelfCheckMissingFiles() {
     }
 }
 
-DownloadAsync(url, savePath, timeoutSec, &pgGui) {
+DownloadAsync(url, savePath, timeoutSec, pg) {
     maxRetry := 3
     Loop maxRetry {
-        if (_dlCancelled)
+        if (pg.Cancelled)
             return "cancel"
 
         if (A_Index > 1)
-            pgGui["DetailText"].Value := Format("重试 ({}/{})...", A_Index - 1, maxRetry - 1)
+            pg.Report(Format("重试 ({}/{})...", A_Index - 1, maxRetry - 1), pg.percent)
 
-        result := DownloadOnce(url, savePath, timeoutSec, &pgGui)
+        result := DownloadOnce(url, savePath, timeoutSec, pg)
         if (result == "ok")
             return "ok"
         if (result == "cancel")
@@ -261,7 +243,7 @@ DownloadAsync(url, savePath, timeoutSec, &pgGui) {
     return "fail"
 }
 
-DownloadOnce(url, savePath, timeoutSec, &pgGui) {
+DownloadOnce(url, savePath, timeoutSec, pg) {
     try {
         req := ComObject("Msxml2.XMLHTTP")
         req.open("GET", url, true)
@@ -269,17 +251,20 @@ DownloadOnce(url, savePath, timeoutSec, &pgGui) {
 
         startTime := A_TickCount
         Loop {
-            if (_dlCancelled)
+            if (pg.Cancelled) {
+                req.abort()
                 return "cancel"
+            }
 
             if (req.readyState == 4)
                 break
 
             elapsed := (A_TickCount - startTime) / 1000
-            if (elapsed > timeoutSec)
+            if (elapsed > timeoutSec) {
+                req.abort()
                 return "timeout"
+            }
 
-            pgGui["DetailText"].Value := "下载中... (" Round(elapsed, 1) "s)"
             Sleep(200)
         }
 
@@ -294,12 +279,12 @@ DownloadOnce(url, savePath, timeoutSec, &pgGui) {
         }
         return "fail"
     } catch as e {
-        pgGui["DetailText"].Value := "✗ 下载异常: " e.Message
+        pg.Report("✗ 下载异常: " e.Message, pg.percent)
         return "fail"
     }
 }
 
-DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, expectedFiles, &pgGui) {
+DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, expectedFiles, pg) {
     try {
         if (FileExist(zipPath))
             FileDelete(zipPath)
@@ -310,19 +295,17 @@ DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, expectedFiles, &pgGui) {
         if !DirExist(targetDir)
             DirCreate(targetDir)
 
-        pgGui["StatusText"].Value := "正在下载: ico.zip"
-        dlResult := DownloadAsync(downloadUrl, zipPath, 120, &pgGui)
+        pg.Report("正在下载: ico.zip", pg.percent)
+        dlResult := DownloadAsync(downloadUrl, zipPath, 120, pg)
         if (dlResult != "ok")
             return dlResult == "cancel" ? "cancel" : false
 
-        pgGui["StatusText"].Value := "正在解压: ico.zip"
-        pgGui["DetailText"].Value := ""
-
+        pg.Report("正在解压: ico.zip", pg.percent)
         shell := ComObject("Shell.Application")
         zipNamespace := shell.NameSpace(zipPath)
         destNamespace := shell.NameSpace(targetDir)
         if (!(zipNamespace && destNamespace)) {
-            pgGui["DetailText"].Value := "✗ Shell.NameSpace 获取失败"
+            pg.Report("✗ Shell.NameSpace 获取失败", pg.percent)
             return false
         }
         destNamespace.CopyHere(zipNamespace.Items(), 16 | 4 | 1024)
@@ -332,14 +315,14 @@ DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, expectedFiles, &pgGui) {
         stableCount := 0
         stableNeed := 5
         loop 120 {
-            if (_dlCancelled)
+            if (pg.Cancelled)
                 return "cancel"
             foundCount := 0
             for fn in expectedFiles {
                 if (FileExist(targetDir "\" fn))
                     foundCount++
             }
-            pgGui["DetailText"].Value := "已解压 " foundCount "/" expectedFiles.Length " 个文件"
+            pg.Report("已解压 " foundCount "/" expectedFiles.Length " 个文件", pg.percent)
             if (foundCount == lastFoundCount && foundCount > 0) {
                 stableCount++
                 if (stableCount >= stableNeed)
@@ -378,7 +361,7 @@ DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, expectedFiles, &pgGui) {
         try FileDelete(zipPath)
         return foundCount == expectedFiles.Length
     } catch as e {
-        pgGui["DetailText"].Value := "✗ 异常: " e.Message
+        pg.Report("✗ 异常: " e.Message, pg.percent)
         try FileDelete(zipPath)
         return false
     }

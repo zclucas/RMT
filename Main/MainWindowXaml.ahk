@@ -9,7 +9,6 @@ class MainWin {
     __New() {
         this.ui := ""
         this.closed := false
-        this._textFocusName := ""   ; 当前聚焦的文本框名（侧栏编辑热键据此判断是否透传 Ctrl+C/V/Z/Y、Delete）
         this._shareLoginTick := ""  ; 非空 = 正在等浏览器授权回调（SetTimer 的 bound method）
         this._shareVerifyTick := "" ; 非空 = 正在用 key 校验 /session/current.json
         this._linkCounter := 0

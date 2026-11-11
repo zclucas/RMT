@@ -32,6 +32,7 @@ class ShareCenterGui {
         this._detailMeta := 0           ; 本次拿到的「最新版」meta（导入成功后据此写已装记录）
         this._detailPosts := 0          ; 本次拿到的楼层数（已装记录的基线）
         this._downloadPath := ""
+        this._downloadProgress := ""
         this._pollFn := 0
     }
 
@@ -1000,6 +1001,8 @@ class ShareCenterGui {
             this._SetStatus(e.Message)
             return
         }
+        this._downloadProgress := RmtProgress(GetLang("下载共享文件"), titleTxt, this.ui.wpfHwnd)
+        this._downloadProgress.Show()
         this._StartPoll()
     }
 
@@ -1027,18 +1030,20 @@ class ShareCenterGui {
         }
 
         items := []
+        sourceDir := ""
         try {
-            MergeUtil.PrepareTempFromRmt(savePath)
-            root := MergeUtil.ParseSourceConfig(MergeUtil.TempMergeDir)
+            report := IsObject(this._downloadProgress) ? ObjBindMethod(this._downloadProgress, "Report") : ""
+            sourceDir := MergeUtil.PrepareTempFromRmt(savePath, report)
+            root := MergeUtil.ParseSourceConfig(sourceDir)
             this._CollectMergeItems(root, items)
         } catch as e {
-            MergeUtil.CleanupTemp()
+            MergeUtil.CleanupTemp(sourceDir)
             this._SetStatus(GetLang("解包失败: ") e.Message)
             return
         }
 
         if (items.Length == 0) {
-            MergeUtil.CleanupTemp()
+            MergeUtil.CleanupTemp(sourceDir)
             this._SetStatus(GetLang("包里没有可导入的宏"))
             return
         }
@@ -1047,12 +1052,14 @@ class ShareCenterGui {
         oldFolds := this._FindImportedFolds(shareName)
 
         try {
-            result := MergeUtil.ExecuteMerge(items, shareName)
+            if (report)
+                report(GetLang("正在应用配置"))
+            result := MergeUtil.ExecuteMerge(items, shareName, sourceDir)
             removed := this._RemoveFoldsByID(oldFolds)
             ; §18 与「合并导入」同款收尾：显式落盘全部表 + 表集合，再走热重载
             SaveAllTableItemInfo(MySoftData.TableInfo)
             OnSaveSetting()
-            MergeUtil.CleanupTemp()
+            MergeUtil.CleanupTemp(sourceDir)
             ; 主界面当前页签重渲染，新并入的模块立刻可见（其余页签切换时自然重建）
             try MyMainWin.RenderTab(MySoftData.TableInfo[MainSoftData.TableIndex])
             ; 记下「本机装的是这一版（这个 sha256）」——下次刷新索引即可标出新版本
@@ -1064,7 +1071,7 @@ class ShareCenterGui {
                 msg := GetLang("已并入当前配置《{}》：{} 个模块 / {} 个宏（已替换上一版 {} 个模块）")
             this._SetStatus(Format(msg, MySoftData.CurSettingName, result.ModuleCount, items.Length, removed))
         } catch as e {
-            MergeUtil.CleanupTemp()
+            MergeUtil.CleanupTemp(sourceDir)
             this._SetStatus(GetLang("导入失败: ") e.Message)
         }
     }
@@ -1159,9 +1166,13 @@ class ShareCenterGui {
             SetTimer(this._pollFn, 150)
     }
 
-    _StopPoll() {
+    _StopPoll(closeProgress := true) {
         if (IsObject(this._pollFn))
             SetTimer(this._pollFn, 0)
+        if (closeProgress && IsObject(this._downloadProgress)) {
+            this._downloadProgress.Close()
+            this._downloadProgress := ""
+        }
     }
 
     _Poll(*) {
@@ -1302,16 +1313,25 @@ class ShareCenterGui {
             try st := Integer(RMT_Discourse.GetDownloadState())
             if (st == 1)
                 return
-            this._pending := ""
+            this._pending := "import"
             this._pendingSince := 0
-            this._StopPoll()
-            result := ""
-            try result := RMT_Discourse.TakeDownloadResult()
-            if (result == "OK") {
-                this._SetStatus(GetLang("下载完成，开始导入"))
-                this._ImportDownloaded()
-            } else {
-                this._SetStatus(result != "" ? result : GetLang("下载失败"))
+            this._StopPoll(false)
+            try {
+                result := ""
+                try result := RMT_Discourse.TakeDownloadResult()
+                if (result == "OK") {
+                    this._SetStatus(GetLang("下载完成，开始导入"))
+                    if (IsObject(this._downloadProgress))
+                        this._downloadProgress.Report(GetLang("下载完成，开始导入"))
+                    this._ImportDownloaded()
+                } else {
+                    this._SetStatus(result != "" ? result : GetLang("下载失败"))
+                }
+            } finally {
+                this._pending := ""
+                if (IsObject(this._downloadProgress))
+                    this._downloadProgress.Close()
+                this._downloadProgress := ""
             }
         }
     }

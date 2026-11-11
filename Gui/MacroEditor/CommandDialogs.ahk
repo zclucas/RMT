@@ -75,6 +75,8 @@
 
         ; 绑定打开时的编辑上下文，多开时互不干扰
         subGui.SureBtnAction := (CommandStr) => this.OnSubGuiSureBtnClick(CommandStr, editType, itemId)
+        if (subGui.HasOwnProp("WindowBindingContext"))
+            subGui.WindowBindingContext := this.WindowBindingContext
 
         if (modeType == 2) {
             ItemText := this.MacroTreeViewCon.GetText(this.CurItemID)

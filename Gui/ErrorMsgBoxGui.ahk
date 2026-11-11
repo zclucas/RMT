@@ -123,9 +123,8 @@ class ErrorMsgBoxGui {
     ; 把这段报错原样带进反馈窗口，用户只需补复现步骤就能发帖
     OnFeedbackClick(state, ctrl, event) {
         txt := this.GetErrorText()
-        body := "**报错内容**`n`n``````n" txt "`n``````n`n**复现步骤**`n`n1. `n2. `n`n**期望结果**`n`n"
         this._CloseWindow()
-        try FeedbackGui.ShowGui("bug", body)
+        try FeedbackGui.ShowGui("bug", txt)
     }
 
 }

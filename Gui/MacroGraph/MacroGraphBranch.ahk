@@ -185,7 +185,7 @@ class MacroGraphBranchMixin {
         this.BranchGraphGui.OnSwitchToTreeAction := ""
         this.BranchGraphGui.SureBtnAction := (startSerial) => this._OnLoopBodyEditorSure(loopId, startSerial)
         this.BranchGraphGui.OnClosedAction := (*) => this._RefreshLoopBodyNode(loopId)
-        this.BranchGraphGui.ShowGui(cur)
+        this.BranchGraphGui.ShowGui(cur, this.WindowBindingContext)
     }
 
     ; 嵌套循环体编辑器回写：保存循环体子图的开始节点序列码到 LoopData
@@ -385,7 +385,7 @@ class MacroGraphBranchMixin {
         this.BranchGraphGui.SureBtnAction := (startSerial) => this._OnBranchEditorSure(searchId, isTrue, startSerial)
         ; 嵌套编辑器关闭后：就地刷新该分支节点的指令清单（不重建父窗口，避免闪烁/重复窗口）
         this.BranchGraphGui.OnClosedAction := (*) => this._RefreshBranchBody(searchId, isTrue)
-        this.BranchGraphGui.ShowGui(cur)
+        this.BranchGraphGui.ShowGui(cur, this.WindowBindingContext)
     }
 
     ; 嵌套分支编辑器回写：保存分支子图的开始节点序列码到 SearchData（不在此处重建父图，避免实时联动抖动）

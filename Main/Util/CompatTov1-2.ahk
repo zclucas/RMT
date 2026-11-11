@@ -164,6 +164,12 @@ CompatPath(FilePath, Data) {
 CompatPathTarget(settingDir, Data) {
     if (!IsObject(Data) || !ObjHasOwnProp(Data, "SearchImagePath") || Data.SearchImagePath == "")
         return false
+    ; 当前配置内仍有效的图片可以位于任意子目录。
+    path := StrReplace(Data.SearchImagePath, "/", "\")
+    if (!RegExMatch(path, "i)^(?:[a-z]:\\|\\\\)"))
+        path := A_WorkingDir "\" path
+    if (InStr(path, settingDir "\") == 1 && FileExist(path) && !DirExist(path))
+        return false
     ; 优先识别配置的资源根，避免把同名配置或安装路径中的 Images 当成资源目录。
     ; 包内相对路径和导入临时目录仍可直接按 Images 定位。
     if (RegExMatch(Data.SearchImagePath, "i)(?:^|[\\/])Setting[\\/][^\\/]+[\\/]Images[\\/](.+)$", &m)

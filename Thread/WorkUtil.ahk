@@ -3,15 +3,12 @@
 ;初始化数据
 {
     HandleWorkOpenArg() {
-        global workIndex := A_Args[1]
-        global parentHwnd := A_Args[2]
-        global parentPID := A_Args[3]
-        global txName := "RMT_TX_" workIndex
-        global rxName := "RMT_RX_" workIndex
-        global evtName := "RMT_EVT_" workIndex
-
-        global shmTx := SharedMemory(txName, 1048576 + 192)
-        global shmRx := SharedMemory(rxName, 1048576 + 192)
+        if (A_Args.Length != 8 || A_Args[1] != "--macro-worker")
+            ExitApp(1)
+        global workIndex := Integer(A_Args[2])
+        global parentHwnd := Integer(A_Args[3])
+        global shmTx := SharedMemory(1048576 + 192, Integer(A_Args[4]))
+        global shmRx := SharedMemory(1048576 + 192, Integer(A_Args[5]))
         global tx := RingBuffer(shmTx.ptr, 1048576)
         global rx := RingBuffer(shmRx.ptr, 1048576)
 
@@ -24,19 +21,17 @@
         global CmdReportScheduled := false
 
         ; 悬浮窗最新帧单槽，见 WorkHudOutput：不进事件队列，写入即覆盖
-        global shmHud := SharedMemory("RMT_HUD_" workIndex, 65536 + 64)
+        global shmHud := SharedMemory(65536 + 64, Integer(A_Args[6]))
         global hudSlotPtr := shmHud.ptr
         global hudSlotSeq := NumGet(hudSlotPtr, 4, "UInt")
         global hudPostTick := 0
         global hudFailTick := 0
 
-        ; 悬浮窗直连表：serial → {map, retryAt, tick, msg, last}，见 WorkHudDirectSlot
+        ; 悬浮窗直连表：serial → {hwnd, tick, msg, last}，见 WorkHudDirectSlot
         global hudDirect := Map()
 
-        global hEvt := 0
-        if (evtName) {
-            global hEvt := DllCall("OpenEventW", "uint", 0x00100002, "int", false, "ptr", StrPtr(evtName), "ptr")
-        }
+        global hEvt := Integer(A_Args[7])
+        global workerParentHandle := Integer(A_Args[8])
     }
 
     InitWorkFilePath() {
@@ -74,16 +69,15 @@
 
     RunBranchDispatch(tableItem, index, branches, fromStart) {
         item := tableItem.Items[index]
-        ; 从开始节点发起的多分支：本 Worker 记一份总数，用于跳过 FinalizeMacroRun（由 Master 统一释放）
-        if (fromStart && item)
-            item.GraphBranchCount := branches.Length
+        ; 发生并行分支后由主进程统一收尾，包括从中间节点分叉的情况。
+        item.GraphBranchCount := branches.Length
         GraphPoolLog("Worker图形分支", Format("tab={1} item={2} 分支数={3} 本Worker=[{4}] fromStart={5}"
             , tableItem.ID, index, branches.Length, branches[1], fromStart ? 1 : 0))
         subsidiary := []
         loop branches.Length - 1
             subsidiary.Push(branches[A_Index + 1])
         ; 传条目对象（WorkSubmitGraphBranches 取 .ID 作为 ItemID，身份=ID）
-        MySubmitGraphBranches(tableItem, item, fromStart ? branches.Length : 0, subsidiary)
+        MySubmitGraphBranches(tableItem, item, subsidiary)
     }
 
     ; 错误统一展示（同名两套实现里的 Worker 版）：只经 ER 通道上报主进程，
@@ -96,17 +90,16 @@
 
     InitWork() {
         global MySoftData, MyHoldKeyNotify
-        global graphBranchesWaiting := false
         global graphBranchesAckReceived := false
         global graphBranchesAckKey := ""
         global workerTaskBusy := false
-        global workerPendingTasks := []
+        global workerTask := 0
         ; 角色在 WorkGlobalUtil 建 MySoftData 时就置好了，此处不再改 （IsWorker 依赖它）
         ; 按键按住状态同步到主进程（供强杀后松开）
         MyHoldKeyNotify := (tIdx, iIdx, key, state, source) => MsgSendHandler("HoldKey", tIdx, iIdx, key, state, source)
 
         OnError(WorkOnError)
-        SetTimer(CheckParentProcess, 10000)
+        SetTimer(PumpWorkerIpc, 25)
     }
 
     WorkOnError(e, mode) {
@@ -118,33 +111,25 @@
         return 1
     }
 
-    CheckParentProcess() {
-        if !ProcessExist(parentPID) {
-            GraphPoolLog("Worker父进程检测", Format("parentPID={1} 不存在, 即将退出", parentPID))
+    PumpWorkerIpc() {
+        if (DllCall("WaitForSingleObject", "ptr", workerParentHandle, "uint", 0, "uint") != 258)
             ExitApp()
-        }
+        if (rx.Flush())
+            MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+        if (!tx.IsEmpty())
+            CheckTxBuffer()
     }
 
     WaitAndProcessTasks() {
-        global hEvt, workerTaskBusy, tx
-        if (!hEvt)
-            return
-
-        hArr := Buffer(A_PtrSize)
-        NumPut("ptr", hEvt, hArr)
-
-        while (true) {
-            if (!workerTaskBusy && !tx.IsEmpty()) {
-                CheckTxBuffer()
-                continue
-            }
-
-            r := DllCall("MsgWaitForMultipleObjects", "uint", 1, "ptr", hArr.Ptr, "int", false, "uint", -1, "uint", 0x4FF, "uint")
-            if (r == 0) {
-                CheckTxBuffer()
-            } else if (r == 1) {
-                Sleep(-1)
-            }
+        handles := Buffer(A_PtrSize * 2)
+        NumPut("ptr", workerParentHandle, "ptr", hEvt, handles)
+        loop {
+            PumpWorkerIpc()
+            result := DllCall("MsgWaitForMultipleObjects", "uint", 2, "ptr", handles, "int", false
+                , "uint", 50, "uint", 0x4FF, "uint")
+            if (result == 0 || result == 0xFFFFFFFF)
+                ExitApp()
+            Sleep(-1)
         }
     }
 
@@ -175,8 +160,18 @@
     }
 
     WorkNotifyReady() {
-        global workIndex
-        MsgPostHandler(WM_LOAD_WORK, workIndex, A_ScriptHwnd)
+        SendWorkerPacket(MsgType.READY, 0, String(A_ScriptHwnd))
+    }
+
+    SendWorkerPacket(type, id, payload := "") {
+        if (!rx.Send(type, id, payload))
+            return false
+        MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+        return true
+    }
+
+    SendWorkerEvent(payload) {
+        return SendWorkerPacket(MsgType.EVENT, workerTask ? workerTask.id : 0, payload)
     }
 
     MsgSendHandler(action, args*) {
@@ -195,28 +190,17 @@
         if (action != "Report" && CmdReportBuf != "")
             FlushCmdReport()
 
-        ; 推送失败日志的节流状态：缓冲区满时高频写入会持续占用磁盘
-        static ipcFailTick := 0, ipcFailCount := 0
-
         static actionMap := Map(
-            "SetArray", "SA",
-            "CloneArray", "CA",
-            "DeleteArray", "DA",
-            "ModifyArray", "MA",
-            "InsertArray", "IA",
-            "RemoveAtArray", "RA",
-            "SetVari", "SV",
-            "DelVari", "DV",
             "StopMacro", "ST",
             "HoldKey", "HK",
             "TR_MACRO", "TR",
             "GraphMacroBranches", "GB",
-            "ItemState", "IS",
             "PauseState", "PS",
             "Report", "RP",
             "CmdTipForce", "FR",          ; 输出→指令窗口：强制显示，不经 CMDTip 门控
             "RMT指令", "RC",
             "CountDown", "CD",
+            "Prompt", "NT",
             "MsgBox", "MB",
             "ToolTip", "TT",
             "OutputTip", "OT",
@@ -229,44 +213,11 @@
         realArgs := []
 
         switch opcode {
-            case "SV":
-                commands := []
-                nameArr := args[1]
-                valueArr := args[2]
-                loop nameArr.Length {
-                    commands.Push(EncodeCommand("SV", nameArr[A_Index], valueArr[A_Index]))
-                }
-                payload := EncodeBatch(commands*)
-                rx.Push(MsgType.EVENT, 0, payload)
-                MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
-                return
-            case "DV":
-                commands := []
-                nameArr := args[1]
-                loop nameArr.Length {
-                    commands.Push(EncodeCommand("DV", nameArr[A_Index]))
-                }
-                payload := EncodeBatch(commands*)
-                rx.Push(MsgType.EVENT, 0, payload)
-                MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
-                return
-            case "SA":
-                ; args[2] 已是 GetArrayStr，整串转发以保留二维结构
-                realArgs.Push(args[1], args[2])
-            case "CA":
-                realArgs.Push(args[1], args[2])
-            case "MA", "IA":
-                path := args[2] "." args[3]
-                realArgs.Push(args[1], path, args[5])
-            case "RA":
-                path := args[2] "." args[3]
-                realArgs.Push(args[1], path)
             case "GB":
                 tIdx := args[1]
                 iIdx := args[2]
-                branchCount := args[3]
-                nodeSerialArr := args[4]
-                realArgs.Push(tIdx, iIdx, branchCount)
+                nodeSerialArr := args[3]
+                realArgs.Push(tIdx, iIdx)
                 for ns in nodeSerialArr
                     realArgs.Push(ns)
             default:
@@ -276,168 +227,110 @@
 
         cmd := EncodeCommand(opcode, realArgs*)
         payload := EncodeBatch(cmd)
-        ; 缓冲区满或失效时 _Push 返回 false。原先忽略该返回值，消息会静默丢失；
-        ; 现按 3 秒最多记录一条（含累计数），兼顾排查「消息已发但主进程无响应」
-        ; 与避免高频重试导致日志膨胀。
-        if (!rx.Push(MsgType.EVENT, 0, payload)) {
-            ipcFailCount += 1
-            if (ipcFailTick == 0 || A_TickCount - ipcFailTick > 3000) {
-                try FileAppend(FormatTime(A_Now, "HH:mm:ss") " [W" workIndex "] push FAIL opcode=" opcode " len=" StrLen(payload) " 累计=" ipcFailCount "`n"
-                    , A_WorkingDir "\..\Log\WorkerIPC.log", "UTF-8")
-                ipcFailTick := A_TickCount
-                ipcFailCount := 0
-            }
-        }
-        MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
+        return SendWorkerEvent(payload)
     }
 
 }
 
 ;接受主程序指令后回调
 {
-    ; 不遮蔽 AHK 内置 OnExit，输入后端需要注册设备清理回调。
-    OnWorkerExitMessage(wParam, lParam, msg, hwnd) {
-        ExitApp()
-    }
-
     OnMasterToWorker(wParam, lParam, msg, hwnd) {
         CheckTxBuffer()
     }
 
-    ScheduleWorkerTask(id, cmd) {
-        SetTimer(OnExecTask.Bind(id, cmd), -1)
-    }
-
     CheckTxBuffer() {
-        global tx, workIndex, graphBranchesWaiting, workerTaskBusy, workerPendingTasks
-        ; 消息唤醒与共享事件唤醒共用一个消费者，分派顺序不可被另一回调穿插。
+        global workerTaskBusy, workerTask
         previousCritical := A_IsCritical
         Critical("On")
         try {
-            if (graphBranchesWaiting)
-                return
-            loop {
-                while (tx.Pop(&type, &id, &cmd)) {
-                    switch type {
-                        case MsgType.TASK:
-                            if (workerTaskBusy) {
-                                workerPendingTasks.Push({ id: id, cmd: cmd })
-                                GraphPoolLog("Worker任务延后", Format("id={1} 原因=上一任务未完成 pending={2}", id, workerPendingTasks.Length))
-                            } else {
-                                workerTaskBusy := true
-                                ScheduleWorkerTask(id, cmd)
-                            }
-                        case MsgType.EVENT:
-                            OnEventMessage(cmd)
-                    }
+            while (tx.Pop(&type, &id, &cmd, &flags)) {
+                switch type {
+                    case MsgType.TASK:
+                        if (workerTaskBusy)
+                            throw Error("Unexpected concurrent Worker task")
+                        workerTaskBusy := true
+                        workerTask := {id: id, paused: flags != 0, stopped: false, item: 0, table: 0, index: 0}
+                        SetTimer(OnExecTask.Bind(workerTask, cmd), -1)
+                    case MsgType.EVENT:
+                        OnEventMessage(cmd)
+                    default:
+                        throw Error("Unexpected Worker packet")
                 }
-                if (tx.IsEmpty())
-                    break
             }
+        } catch {
+            ; 主进程用进程句柄检测死亡并回收该任务。
+            ExitApp(1)
         } finally Critical(previousCritical)
     }
 
-    OnExecTask(id, cmd) {
-        global rx, workIndex, workerTaskBusy, workerPendingTasks, workerConfigDirty
-        ; 业务日志（C 项阶段3）：缓存当前任务标识供开始/结束埋点使用
-        static _bizCurTab := 0, _bizCurItem := 0, _bizCurRemark := ""
-        workerTaskBusy := true
+    OnExecTask(task, cmd) {
+        global workerTaskBusy, workerTask, workerConfigDirty
+        result := "3"
         try {
-            if (SubStr(cmd, 1, 2) != "R1") {
-                GraphPoolLog("Worker任务解析失败", Format("id={1} err=Protocol header missing cmd={2}", id, SubStr(cmd, 1, 120)))
-                return
-            }
-            commandsStr := SubStr(cmd, 3)
-            for record in StrSplit(commandsStr, IPC_REC) {
-                if (record == "")
-                    continue
-                parts := StrSplit(record, IPC_SEP)
-                if (parts.Length == 0)
-                    continue
-                opcode := parts[1]
-                args := []
-                loop parts.Length - 1 {
-                    args.Push(UnescapeIPC(parts[A_Index + 1]))
-                }
+            ; 主进程每次分派一个 TR 或 HM。
+            if (SubStr(cmd, 1, 3) != "R1" IPC_REC)
+                throw Error("Invalid Worker task protocol")
+            parts := StrSplit(SubStr(cmd, 4), IPC_SEP)
+            if (parts.Length < 3)
+                throw Error("Missing Worker task target")
+            opcode := parts[1]
+            tableID := UnescapeIPC(parts[2])
+            itemID := UnescapeIPC(parts[3])
+            tableItem := GetTableByID(tableID)
+            index := GetItemIndexInTable(tableItem, itemID)
+            item := GetItemByIndex(tableItem, index)
+            if (!item)
+                throw Error("Worker task target unavailable")
 
-                if (opcode == "TR") {
-                    tIdx := args[1]          ; TableID 字符串
-                    iIdx := args[2]          ; ItemID 字符串
-                    _bizCurTab := tIdx
-                    _bizCurItem := iIdx
-                    tableItem := GetTableByID(tIdx)
-                    if (!tableItem) {
-                        GraphPoolLog("Worker任务-表不存在", Format("tab={1} item={2}", tIdx, iIdx))
-                        continue
-                    }
-                    itemIndex := GetItemIndexInTable(tableItem, iIdx)
-                    item := GetItemByIndex(tableItem, itemIndex)
-                    if (!item) {
-                        GraphPoolLog("Worker任务-条目不存在", Format("tab={1} item={2}", tIdx, iIdx))
-                        continue
-                    }
-                    _bizCurRemark := item.Remark
-                    RMTLogBusiness("宏:(" _bizCurRemark ")", Format("tab={1} item={2} 开始执行", tIdx, iIdx))
-                    if (args.Length >= 3) {
-                        nodeSerial := args[3]
-                        GraphPoolLog("Worker开始执行", Format("tab={1} item={2} node={3}", tIdx, iIdx, nodeSerial))
-                        RunGraphNodeChain(tableItem, nodeSerial, itemIndex)
-                    } else {
-                        TriggerMacro(tableItem, itemIndex)
-                    }
-                }
-
-                if (opcode == "HM") {
-                    ; 主进程补派的后置钩子任务。这里直接跑钩子宏串，绝不能转 TriggerMacro ——
-                    ; 那会进 RunMacroTrigger 把前置钩子连带再跑一遍，形成递归。
-                    hookTab := args[1]
-                    hookItemID := args[2]
-                    hookPhase := args.Length >= 3 ? args[3] : "post"
-                    hookForce := (args.Length >= 4 && args[4] == "1")
-                    hookTableItem := GetTableByID(hookTab)
-                    if (!hookTableItem) {
-                        GraphPoolLog("Worker钩子-表不存在", Format("tab={1} item={2}", hookTab, hookItemID))
-                        continue
-                    }
-                    hookIdx := GetItemIndexInTable(hookTableItem, hookItemID)
-                    hookObj := GetItemByIndex(hookTableItem, hookIdx)
-                    if (!hookObj) {
-                        GraphPoolLog("Worker钩子-条目不存在", Format("tab={1} item={2}", hookTab, hookItemID))
-                        continue
-                    }
-                    GraphPoolLog("Worker执行钩子", Format("tab={1} item={2} phase={3} force={4}"
-                        , hookTab, hookItemID, hookPhase, hookForce ? 1 : 0))
-                    RunMacroHook(hookTableItem, hookObj, hookPhase, hookForce)
-                }
-            }
-        } catch as e {
-            GraphPoolLog("Worker任务异常", Format("id={1} err={2} line={3} cmd={4}"
-                , id, e.Message, e.Line, SubStr(cmd, 1, 120)))
-        } finally {
-            ; 业务日志（C 项阶段3）：宏结束（正常/异常统一记录）
-            RMTLogBusiness("宏:(" _bizCurRemark ")", Format("tab{1} item{2} 结束", _bizCurTab, _bizCurItem))
             previousCritical := A_IsCritical
             Critical("On")
             try {
-                ; 空闲前先处理运行中收到的热重载，再回报完成或取下一任务。
+                task.item := item
+                task.table := tableItem
+                task.index := index
+                item.Killed := task.stopped
+                item.Pause := task.paused
+                item.GraphBranchCount := 0
+            } finally Critical(previousCritical)
+
+            if (opcode == "TR") {
+                RMTLogBusiness("宏:(" item.Remark ")", Format("tab={1} item={2} 开始执行", tableID, itemID))
+                if (parts.Length >= 4) {
+                    item.HoldKey := Map()
+                    WaitIfPaused(tableItem, index)
+                    if (!item.Killed)
+                        RunGraphNodeChain(tableItem, UnescapeIPC(parts[4]), index)
+                } else if (!item.Killed) {
+                    RunMacroTrigger(tableItem, item.Macro, index, true)
+                }
+                RMTLogBusiness("宏:(" item.Remark ")", Format("tab={1} item={2} 结束", tableID, itemID))
+            } else if (opcode == "HM") {
+                phase := parts.Length >= 4 ? UnescapeIPC(parts[4]) : "post"
+                force := parts.Length >= 5 && UnescapeIPC(parts[5]) == "1"
+                RunMacroHook(tableItem, item, phase, force)
+            } else {
+                throw Error("Unknown Worker task opcode")
+            }
+            result := (task.stopped || item.Killed) ? "3" : "0"
+        } catch {
+            GraphPoolLog("Worker任务失败", Format("id={1}", task.id))
+        } finally {
+            previousCritical := A_IsCritical
+            Critical("On")
+            try {
                 if (workerConfigDirty) {
                     workerConfigDirty := false
                     ReloadWorkerConfig()
                 }
-                rx.Push(MsgType.FINISH, id)
-                MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)
-                if (workerPendingTasks.Length > 0) {
-                    t := workerPendingTasks.RemoveAt(1)
-                    ScheduleWorkerTask(t.id, t.cmd)
-                } else {
-                    workerTaskBusy := false
-                }
+                workerTask := 0
+                workerTaskBusy := false
+                SendWorkerPacket(MsgType.FINISH, task.id, result)
             } finally Critical(previousCritical)
         }
     }
 
     OnEventMessage(cmd) {
-        global _workerInputResult, workerTaskBusy, workerConfigDirty
+        global workerTaskBusy, workerConfigDirty
         if (SubStr(cmd, 1, 2) != "R1")
             return
 
@@ -460,68 +353,39 @@
                 switch opcode {
                     case "CDR":
                         CountDownComplete(args[1])
-                    case "IPR":
-                        ; 主进程回传输入框结果：[ok, value]
-                        ; 只写首次（主进程可能因 SureAction+HideAction 回传多条，CheckTxBuffer 一次消费，防止覆盖首次结果）
-                        if (!IsObject(_workerInputResult))
-                            _workerInputResult := [args[1], args.Length >= 2 ? args[2] : ""]
-                    case "IBR":
-                        ; 主进程回传按钮条结果：[button]（true/false/continue/cancel）
-                        if (!IsObject(_workerInputResult))
-                            _workerInputResult := [args[1]]
-                    case "SV":
-                        MySoftData.VariableMap[args[1]] := args[2]
-                    case "DV":
-                        if (MySoftData.VariableMap.Has(args[1]))
-                            MySoftData.VariableMap.Delete(args[1])
+                    case "IPR", "IBR":
+                        WorkerInputReply(opcode, args*)
+                    case "VR":
+                        WorkerDataReply(args*)
+                    case "SN":
+                        snapshot := JSON.parse(args[1])
+                        for pair in snapshot[1]
+                            MySoftData.VariableMap[pair[1]] := pair[2]
+                        for pair in snapshot[2]
+                            MySoftData.ArrayMap[pair[1]] := pair[2]
+                    case "SV", "SA":
+                        target := opcode == "SV" ? MySoftData.VariableMap : MySoftData.ArrayMap
+                        target[args[1]] := JSON.parse(args[2])[1]
+                    case "DV", "DA":
+                        target := opcode == "DV" ? MySoftData.VariableMap : MySoftData.ArrayMap
+                        if (target.Has(args[1]))
+                            target.Delete(args[1])
                     case "CT":
                         MySoftData.CMDTip := (args[1] == "1")
                     case "PS":
-                        tableItem := GetTableByID(args[1])
-                        if (tableItem) {
-                            itemIndex := GetItemIndexInTable(tableItem, args[2])
-                            if (itemIndex >= 1)
-                                tableItem.Items[itemIndex].Pause := args[3]
+                        if (workerTask && workerTask.id == Integer(args[1])) {
+                            workerTask.paused := args[2] == "1"
+                            if (workerTask.item)
+                                workerTask.item.Pause := workerTask.paused
                         }
-                    case "SA":
-                        ; 新协议：name + GetArrayStr；旧协议：name + count + items...
-                        if (args.Length == 2) {
-                            MySoftData.ArrayMap[args[1]] := GetArray(args[2])
-                        } else {
-                            name := args[1]
-                            count := Integer(args[2])
-                            arr := []
-                            loop count {
-                                arr.Push(args[A_Index + 2])
-                            }
-                            MySoftData.ArrayMap[name] := arr
-                        }
-                    case "CA":
-                        sourceName := args[1]
-                        newArrName := args[2]
-                        MySoftData.ArrayMap[newArrName] := CloneArray(MySoftData.ArrayMap[sourceName])
-                    case "DA":
-                        if (MySoftData.ArrayMap.Has(args[1]))
-                            MySoftData.ArrayMap.Delete(args[1])
-                    case "MA":
-                        rootArr := MySoftData.ArrayMap[args[1]]
-                        currArr := GetArrayRefByPath(rootArr, args[2], &lastIdx)
-                        currArr[lastIdx] := args[3]
-                    case "IA":
-                        rootArr := MySoftData.ArrayMap[args[1]]
-                        currArr := GetArrayRefByPath(rootArr, args[2], &lastIdx)
-                        currArr.InsertAt(lastIdx, args[3])
-                    case "RA":
-                        rootArr := MySoftData.ArrayMap[args[1]]
-                        currArr := GetArrayRefByPath(rootArr, args[2], &lastIdx)
-                        currArr.RemoveAt(lastIdx)
                     case "ST":
-                        tableItem := GetTableByID(args[1])
-                        if (tableItem) {
-                            itemIndex := GetItemIndexInTable(tableItem, args[2])
-                            KillTableItemMacro(tableItem, itemIndex)
+                        if (workerTask && workerTask.id == Integer(args[1])) {
+                            workerTask.stopped := true
+                            if (workerTask.item)
+                                KillTableItemMacro(workerTask.table, workerTask.index)
                         }
-                        GraphPoolLog("Worker收到终止指令", Format("tab={1} item={2}", args[1], args[2]))
+                    case "QT":
+                        ExitApp()
                     case "CF":
                         ; §17 热重载：主进程保存选「否」后广播 → 重载宏配置（新增宏/宏内容即时生效）
                         ; 忙（正在执行宏）→ 置位，任务结束后再重载；空闲 → 立即重载
@@ -539,6 +403,9 @@
                             graphBranchesAckReceived := true
                 }
             } catch {
+                ; 数据帧无法应用时退出，让主进程重建并重新同步完整快照。
+                if (opcode == "SN" || opcode == "SV" || opcode == "SA" || opcode == "DV" || opcode == "DA")
+                    ExitApp(1)
             }
         }
     }
@@ -563,125 +430,42 @@ ReloadWorkerConfig() {
     } finally Critical(previousCritical)
 }
 
-;变量数据相关函数
-{
-    WorkSetGlobalArray(Name, Value) {
-        MySoftData.ArrayMap[Name] := Value
-        MsgSendHandler("SetArray", Name, GetArrayStr(Value))
-    }
-
-    WorkCloneGlobalArray(SourceArr, NewArrName) {
-        MySoftData.ArrayMap[NewArrName] := CloneArray(SourceArr)
-        sourceName := ""
-        for name, arr in MySoftData.ArrayMap {
-            if (arr == SourceArr && name != NewArrName) {
-                sourceName := name
-                break
-            }
+; Worker 的写入由主进程排序和提交。收到权威值后才继续下一条宏指令。
+WorkCommitGlobalData(opcode, args*) {
+    global workerDataRequest
+    static sequence := 0
+    request := {id: ++sequence, result: ""}
+    workerDataRequest := request
+    try {
+        deadline := DllCall("GetTickCount64", "uint64") + 10000
+        payload := EncodeBatch(EncodeCommand("GS", request.id, deadline, JSON.stringify([opcode, args])))
+        if (!SendWorkerEvent(payload))
+            throw Error("Worker data channel closed")
+        while (request.result == "") {
+            Sleep(10)
+            if (workerTask && workerTask.stopped)
+                return
+            if (DllCall("GetTickCount64", "uint64") >= deadline)
+                throw Error("Worker data commit timed out")
         }
-        if (sourceName == "")
-            sourceName := NewArrName
-        MsgSendHandler("CloneArray", sourceName, NewArrName)
-    }
-
-    WorkDeleteGlobalArray(ArrName) {
-        if (MySoftData.ArrayMap.Has(ArrName))
-            MySoftData.ArrayMap.Delete(ArrName)
-        MsgSendHandler("DeleteArray", ArrName)
-    }
-
-    WorkModifyGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
-        SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-        SourceArr[Index] := Value
-        ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-        MsgSendHandler("ModifyArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
-    }
-
-    WorkInsertGlobalArray(ArrName, MainIndex, Index, IsArrayValue, Value) {
-        SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-        SourceArr.InsertAt(Index, Value)
-        ValueStr := IsArrayValue ? GetArrayStr(Value) : Value
-        MsgSendHandler("InsertArray", ArrName, MainIndex, Index, IsArrayValue, ValueStr)
-    }
-
-    WorkRemoveAtGlobalArray(ArrName, MainIndex, Index) {
-        SourceArr := MainIndex == 0 ? MySoftData.ArrayMap[ArrName] : MySoftData.ArrayMap[ArrName][MainIndex]
-        SourceArr.RemoveAt(Index)
-        MsgSendHandler("RemoveAtArray", ArrName, MainIndex, Index)
-    }
-
-    WorkSetGlobalVariable(NameArr, ValueArr, ignoreExist) {
-        RealNameArr := NameArr.Clone()
-        RealValueArr := ValueArr.Clone()
-
-        if (ignoreExist) {
-            RealNameArr := []
-            RealValueArr := []
-            loop NameArr.Length {
-                if (!MySoftData.VariableMap.Has(NameArr[A_Index])) {
-                    RealNameArr.Push(NameArr[A_Index])
-                    RealValueArr.Push(ValueArr[A_Index])
-                }
-            }
-        }
-        if (RealNameArr.Length == 0)
-            return
-
-        loop RealNameArr.Length {
-            MySoftData.VariableMap[RealNameArr[A_Index]] := ValueArr[A_Index]
-        }
-        QueueVariSync(RealNameArr, RealValueArr)
-    }
-
-    ; ------------------------------------------------------------------
-    ; 变量同步合并（Worker → 主进程）
-    ;
-    ; 主进程的 VariableMap 为镜像（供悬浮窗、变量监听与界面读取），宏执行始终读取
-    ; 本进程的 map，无需每次赋值都同步。若不合并且循环内高频写变量，将产生每轮
-    ; 数百至数千条消息，占满 Worker→主进程环形缓冲区（_Push 返回 false）以及
-    ; 主线程投递队列（上限 1 万条），导致其它 Worker 的通知无法入队。
-    ;
-    ; 合并规则：同一变量保留最后一次写入（赋值语义为最后写入者生效），
-    ; 每 16ms 最多发送一批，事件率约 60 次/秒，与宏执行速度无关。
-    ; ------------------------------------------------------------------
-    QueueVariSync(NameArr, ValueArr) {
-        global VariSyncPending, VariSyncScheduled
-        loop NameArr.Length
-            VariSyncPending[NameArr[A_Index]] := ValueArr[A_Index]
-        if (!VariSyncScheduled) {
-            VariSyncScheduled := true
-            SetTimer(FlushVariSync, -16)
-        }
-    }
-
-    FlushVariSync() {
-        global VariSyncPending, VariSyncScheduled
-        VariSyncScheduled := false
-        if (VariSyncPending.Count == 0)
-            return
-        names := [], values := []
-        for n, v in VariSyncPending {
-            names.Push(n)
-            values.Push(v)
-        }
-        VariSyncPending := Map()
-        MsgSendHandler("SetVari", names, values)
-    }
-
-    WorkDelGlobalVariable(NameArr) {
-        RealNameArr := []
-        loop NameArr.Length {
-            if (MySoftData.VariableMap.Has(NameArr[A_Index])) {
-                MySoftData.VariableMap.Delete(NameArr[A_Index])
-                RealNameArr.Push(NameArr[A_Index])
-            }
-        }
-
-        if (RealNameArr.Length == 0)
-            return
-        MsgSendHandler("DelVari", RealNameArr)
-    }
+        if (request.result != "1")
+            throw Error("Worker data commit failed")
+    } finally workerDataRequest := 0
 }
+
+WorkerDataReply(id, result) {
+    if (IsSet(workerDataRequest) && workerDataRequest && workerDataRequest.id == Integer(id))
+        workerDataRequest.result := result
+}
+
+WorkSetGlobalArray(name, value) => WorkCommitGlobalData("SA", name, value)
+WorkCloneGlobalArray(source, name) => WorkSetGlobalArray(name, source)
+WorkDeleteGlobalArray(name) => WorkCommitGlobalData("DA", name)
+WorkModifyGlobalArray(name, row, index, isArrayValue, value) => WorkCommitGlobalData("MA", name, row, index, value)
+WorkInsertGlobalArray(name, row, index, isArrayValue, value) => WorkCommitGlobalData("IA", name, row, index, value)
+WorkRemoveAtGlobalArray(name, row, index) => WorkCommitGlobalData("RA", name, row, index)
+WorkSetGlobalVariable(names, values, ignoreExist) => WorkCommitGlobalData("SV", names, values, ignoreExist)
+WorkDelGlobalVariable(names) => WorkCommitGlobalData("DV", names)
 
 ; 宏指令相关函数
 {
@@ -695,22 +479,6 @@ ReloadWorkerConfig() {
         return String(itemIndex)
     }
 
-    TriggerMacro(tableItem, itemIndex) {
-        if (!IsObject(tableItem))
-            tableItem := GetTableByID(String(tableItem))
-        if (!tableItem)
-            return
-        if (IsObject(itemIndex)) {
-            itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
-        } else if (!IsNumber(itemIndex)) {
-            itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
-        }
-        item := GetItemByIndex(tableItem, itemIndex)
-        if (!item)
-            return
-        RunMacroTrigger(tableItem, item.Macro, itemIndex)
-    }
-
     WorkStopMacro(tableItem, itemIndex, playStopTip := false) {
         if (!IsObject(tableItem))
             tableItem := GetTableByID(String(tableItem))
@@ -721,6 +489,10 @@ ReloadWorkerConfig() {
         iID := WorkResolveItemID(tableItem, itemIndex)
         if (playStopTip && IsObject(item) && item.StopTipSound == 2)
             PlayTipSound(3)
+        if (workerTask && workerTask.item && workerTask.table.ID == tID && workerTask.item.ID == iID) {
+            workerTask.stopped := true
+            KillTableItemMacro(workerTask.table, workerTask.index)
+        }
         MsgSendHandler("StopMacro", tID, iID)
     }
 
@@ -730,68 +502,36 @@ ReloadWorkerConfig() {
         MsgSendHandler("TR_MACRO", tID, iID)
     }
 
-    WorkSubmitGraphBranches(tableItem, itemIndex, branchCount, nodeSerialArr) {
-        global tx, workIndex, graphBranchesWaiting, graphBranchesAckKey, graphBranchesAckReceived, workerPendingTasks
+    WorkSubmitGraphBranches(tableItem, itemIndex, nodeSerialArr) {
+        global graphBranchesAckKey, graphBranchesAckReceived
         tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
         iID := WorkResolveItemID(tableItem, itemIndex)
         nodes := ""
         for s in nodeSerialArr
             nodes .= (nodes != "" ? "," : "") s
-        GraphPoolLog("Worker批量请求分支", Format("tab={1} item={2} 总数={3} 子分支=[{4}]"
-            , tID, iID, branchCount, nodes))
+        GraphPoolLog("Worker批量请求分支", Format("tab={1} item={2} 子分支=[{3}]", tID, iID, nodes))
         graphBranchesAckKey := tID "_" iID
         graphBranchesAckReceived := false
-        graphBranchesWaiting := true
+
         try {
-            MsgSendHandler("GraphMacroBranches", tID, iID, branchCount, nodeSerialArr)
+            MsgSendHandler("GraphMacroBranches", tID, iID, nodeSerialArr)
             start := A_TickCount
             loop {
-                while (tx.Pop(&type, &id, &payload)) {
-                    if (type == MsgType.TASK) {
-                        workerPendingTasks.Push({ id: id, cmd: payload })
-                        GraphPoolLog("Worker等待分支时缓存任务", Format("id={1} pending={2}", id, workerPendingTasks.Length))
-                        continue
-                    }
-                    if (type == MsgType.EVENT) {
-                        try {
-                            if (SubStr(payload, 1, 2) == "R1") {
-                                commandsStr := SubStr(payload, 3)
-                                for record in StrSplit(commandsStr, IPC_REC) {
-                                    if (record == "")
-                                        continue
-                                    parts := StrSplit(record, IPC_SEP)
-                                    if (parts.Length >= 3 && parts[1] == "GA" && parts[2] == tID && parts[3] == iID) {
-                                        GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tID, iID))
-                                        return
-                                    }
-                                }
-                            }
-                        } catch {
-                        }
-                        OnEventMessage(payload)
-                    }
-                }
                 if (graphBranchesAckReceived) {
                     GraphPoolLog("Worker分支分配就绪", Format("tab={1} item={2}", tID, iID))
                     return
                 }
-                if (A_TickCount - start >= 3000) {
-                    GraphPoolLog("Worker等待分支分配超时", Format("tab={1} item={2}", tID, iID))
+                if (workerTask && workerTask.stopped)
                     return
+                if (A_TickCount - start >= 3000) {
+                    throw Error("Worker graph dispatch timed out")
                 }
                 Sleep(10)
             }
         } finally {
-            graphBranchesWaiting := false
             graphBranchesAckKey := ""
             graphBranchesAckReceived := false
         }
-    }
-
-    WorkSetTableItemState(tableItem, itemIndex, state) {
-        tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
-        iID := WorkResolveItemID(tableItem, itemIndex)
-        MsgSendHandler("ItemState", tID, iID, state)
     }
 
     WorkSetItemPauseState(tableItem, itemIndex, state) {
@@ -877,14 +617,11 @@ ReloadWorkerConfig() {
     WorkHudOutput(serialStr, content, tID, iID) {
         global hudSlotPtr, hudSlotSeq, hudPostTick, hudFailTick, workIndex, hudDirect
 
-        ; 直连：窗口句柄由主进程写入该指令的文本槽，此处每帧读取一次。
-        ; 句柄非 0 时自行写文本并唤醒引擎窗口，该帧不经过主进程。
+        ; 直连：主进程建窗后把引擎窗口句柄登记到槽尾表，此处每帧查表一次。
+        ; 命中则直接向引擎投递文本，该帧不经过主进程。
         d := WorkHudDirectSlot(serialStr)
-        if (IsObject(d)) {
-            hwnd := NumGet(d.map.ptr, 65008, "Ptr")
-            if (hwnd && WorkHudDirectWrite(d, hwnd, content))
-                return
-        }
+        if (IsObject(d) && WorkHudDirectWrite(d, content))
+            return
 
         if (!hudSlotPtr)
             return
@@ -933,68 +670,94 @@ ReloadWorkerConfig() {
     ; ---------------------------------------------------------------
     ; 悬浮窗直连
     ;
-    ; 主进程建窗后将窗口句柄写入该指令的文本槽（偏移 65008，位于文本区之后）。
-    ; Worker 每帧仅增加一次内存读取：
-    ;   句柄非 0 → 自行写文本并唤醒引擎窗口，该帧不经过主进程；
-    ;   句柄为 0 → 窗口未就绪或已关闭，走主进程路径。
+    ; 主进程建窗后把引擎窗口句柄登记到 RMT_HUD 槽尾的句柄表：
+    ;   +65024 UInt32 项数；+65032 起每项 16 字节（serial / pad / hwnd）。
+    ; 文本区只占 +16..+65015，两者互不重叠。
     ;
-    ; 不以消息传递句柄：宏处于紧循环时不处理消息队列（仅在 Sleep/Wait 时泵消息），
-    ; 此类通知无法收到；槽中句柄为内存数据，任意时刻读取均为最新值。
+    ; Worker 每帧查一次表：命中则直接向引擎投递，该帧不经过主进程；
+    ; 未命中（窗口未就绪或已关闭）走主进程路径。
+    ;
+    ; 不以消息传句柄：宏处于紧循环时不处理消息队列（仅在 Sleep/Wait 时泵消息），
+    ; 这类通知收不到；槽内数据任意时刻读取都是最新值。
     ; ---------------------------------------------------------------
     WorkHudDirectSlot(serialStr) {
-        global hudDirect
-        if (hudDirect.Has(serialStr)) {
-            d := hudDirect[serialStr]
-            if (d.map)
+        global hudDirect, hudSlotPtr
+        d := hudDirect.Has(serialStr) ? hudDirect[serialStr] : ""
+        if (IsObject(d)) {
+            if (d.hwnd)
                 return d
             if (A_TickCount < d.retryAt)
-                return ""          ; 槽未就绪，50ms 后重试，避免每帧重复挂接
+                return ""          ; 表内暂无此项，退避期间不重复扫描
         }
-        ; 名称固定：与主进程 _Open 中创建的 RMT_HUDTEXT_<序列码> 一致
-        try map := SharedMemory("RMT_HUDTEXT_" serialStr, 65536 + 16, true)
-        catch {
-            hudDirect[serialStr] := { map: "", retryAt: A_TickCount + 50 }
+        hwnd := hudSlotPtr ? WorkHudFindHwnd(serialStr) : 0
+        if (!hwnd) {
+            hudDirect[serialStr] := { hwnd: 0, retryAt: A_TickCount + 50, tick: 0, last: "" }
             return ""
         }
-        hudDirect[serialStr] := { map: map, retryAt: 0, tick: 0, msg: 0, last: "" }
+        hudDirect[serialStr] := { hwnd: hwnd, retryAt: 0, tick: 0, last: "" }
         return hudDirect[serialStr]
     }
 
-    ; 直连写一帧。返回 true 表示该帧已处理（含被限速丢弃），false 表示该路径
-    ; 不可用，调用方改走主进程路径（窗口重建依赖该路径）。
-    WorkHudDirectWrite(d, hwnd, content) {
-        ; 限速约 60Hz（A_TickCount 精度 15.6ms，实际约 64Hz）：
-        ; 宏每秒可产生上千帧，中间帧无需显示，减少一次投递即减少一次引擎队列占用。
+    ; 在槽尾句柄表中查找 serial 对应的引擎窗口句柄，未登记返回 0
+    WorkHudFindHwnd(serialStr) {
+        global hudSlotPtr
+        try key := Integer(serialStr)
+        catch
+            return 0
+        count := NumGet(hudSlotPtr, 65024, "UInt")
+        if (count > 35)
+            return 0
+        loop count {
+            off := 65032 + (A_Index - 1) * 16
+            if (NumGet(hudSlotPtr, off, "UInt") == key)
+                return NumGet(hudSlotPtr, off + 8, "Ptr")
+        }
+        return 0
+    }
+
+    ; 直连投递一帧。返回 true 表示该帧已处理（含被限速或超时丢弃），
+    ; false 表示该路径不可用，调用方改走主进程路径。
+    WorkHudDirectWrite(d, content) {
+        ; 限速约 100Hz：宏每秒可产生上千帧，中间帧无需显示
         now := A_TickCount
+        if (d.retryAt && now < d.retryAt)
+            return true
         if (d.tick && now - d.tick < 10)
             return true
-
-        if (!d.msg)
-            d.msg := DllCall("RegisterWindowMessageW", "Str", "RMT_HUD_TEXT", "UInt")
-        if (!d.msg)
-            return false
-
-        n := StrPut(content, "UTF-8") - 1
-        if (n <= 0 || n > 65000)
-            return true            ; 空内容或超长：直接丢弃，无需回退
-        ; 内容未变化时跳过：静态内容的窗口无需周期性唤醒引擎
+        ; 内容未变化时跳过：静态内容无需周期性投递
         if (d.last == content)
             return true
-        try {
-            ; 先写文本后写长度：引擎按「读长度 → 读文本」顺序读取，最后写入的长度必为新值
-            StrPut(content, d.map.ptr + 4, "UTF-8")
-            NumPut("UInt", n, d.map.ptr, 0)
-            d.tick := now
-            sent := DllCall("user32\PostMessageW", "Ptr", hwnd
-                , "UInt", d.msg, "Ptr", 0, "Ptr", 0, "Int")
-            if (sent) {
-                ; 仅投递成功才记录上一帧；失败时保留原值以便下一帧重试或回退，
-                ; 否则静态内容会被比对逻辑永久跳过，窗口失效也无法察觉。
-                d.last := content
-                return true
-            }
+        n := StrPut(content, "UTF-8") - 1
+        if (n <= 0 || n > 60000)
+            return true            ; 空内容或超长：丢弃，无需回退
+        ; 窗口可能已被销毁，句柄失效即回退主进程路径并重新查表
+        if (!DllCall("IsWindow", "Ptr", d.hwnd)) {
+            d.hwnd := 0
+            d.retryAt := now + 50
+            return false
         }
-        return false
+        ; 引擎 0x004A 分支按「op|arg|value」解析且以换行分隔多条指令，须转义
+        body := StrReplace(StrReplace(content, "`r", "&#x0D;"), "`n", "&#x0A;")
+        payload := "HUD|Text|" body
+        size := StrPut(payload, "UTF-8")
+        ; 常驻发送缓冲：超时返回后接收方仍可能读取，不能指向已失效的临时内存
+        static sndBuf := 0
+        if (!IsObject(sndBuf) || sndBuf.Size < size)
+            sndBuf := Buffer(Max(size, 65536))
+        StrPut(payload, sndBuf, "UTF-8")
+        cds := Buffer(A_PtrSize * 3, 0)
+        NumPut("Ptr", size, cds, 0)
+        NumPut("Ptr", sndBuf.Ptr, cds, A_PtrSize)
+        d.tick := now
+        ; SMTO_ABORTIFHUNG：引擎无响应时立即返回，避免 Worker 被挂住
+        res := 0
+        if (!DllCall("SendMessageTimeoutW", "Ptr", d.hwnd, "UInt", 0x004A, "Ptr", 0
+            , "Ptr", cds, "UInt", 0x0002, "UInt", 200, "Ptr*", &res)) {
+            d.retryAt := now + 200
+            return true
+        }
+        d.last := content
+        return true
     }
 
     WorkViGJoySetState(JoyType, Key, Value) {
@@ -1033,18 +796,5 @@ ReloadWorkerConfig() {
         return fullMsg
     }
 
-    GetArrayRefByPath(rootArr, path, &lastIdx) {
-        parts := StrSplit(path, ".")
-        curr := rootArr
-        if (parts.Length == 2 && parts[1] == "0") {
-            lastIdx := Integer(parts[2])
-            return rootArr
-        }
-        loop parts.Length - 1 {
-            idx := Integer(parts[A_Index])
-            curr := curr[idx]
-        }
-        lastIdx := Integer(parts[parts.Length])
-        return curr
-    }
+
 }

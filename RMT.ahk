@@ -14,12 +14,22 @@ if (!EnsureSingleInstance())
 ; 把程序路径写入环境变量 rmt，并安装 rmt 命令（仅常驻实例执行，命令行转发进程会先退出）
 RmtRegisterCliCommand()
 XAMLHost.Prewarm()
-InitFilePath()              ;初始化文件路径
-if (LoadCurMacroSetting())  ;加载当前配置宏（只读；返回是否在内存里补全过旧格式）
-    SaveTableCollection()   ;主进程才落盘，Worker 不走这条
-HandleOpenArg()             ;处理打开软件的参数
-RegisterNativeComboWheelGuard()
-InitData()                  ;初始化软件数据，加载所有的宏指令
+startupProgress := RmtProgress(GetLang("正在加载配置"), MySoftData.CurSettingName)
+startupArgs := RmtCmdClientArgs(A_Args)
+if (!startupArgs.Length || !RmtCmdSame(startupArgs[1], "-min"))
+    startupProgress.Show()
+try {
+    InitFilePath()              ;初始化文件路径
+    migratedTables := LoadCurMacroSetting()
+    ; 先固化旧数字索引指向的页签 ID，再保存插入新页签后的顺序。
+    if (MainSoftData.CurTableID != "" && IsInteger(CfgRead(SettingFile, SettingSection, "TableIndex", "")))
+        CfgWrite(MainSoftData.CurTableID, SettingFile, SettingSection, "TableIndex")
+    if (migratedTables)
+        SaveTableCollection()   ;主进程才落盘，Worker 不走这条
+    HandleOpenArg()             ;处理打开软件的参数
+    RegisterNativeComboWheelGuard()
+    InitData()                  ;初始化软件数据，加载所有的宏指令
+} finally startupProgress.Close()
 InitUI()                    ;初始化主界面UI
 SetEditData()               ;缓存编辑器数据，设置下拉框变量，检测是否有手柄按键
 

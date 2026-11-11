@@ -18,6 +18,7 @@
 #Include Util\ToastUtil.ahk
 #Include Util\CursorOutputTip.ahk
 #Include Util\RmtDialog.ahk
+#Include Util\RmtProgress.ahk
 #Include RMTUtil.ahk
 #Include WorkPool.ahk
 #Include ..\Gui\InputFileDialog.ahk
@@ -28,6 +29,8 @@
 #Include NetworkUtil.ahk
 #Include WindowHotkeyManager.ahk
 #Include BindUtil.ahk
+#Include GestureUtil.ahk
+#Include ..\Gui\GestureGui.ahk
 #Include VariableUtil.ahk
 #Include TriggerKeyData.ahk
 #Include Util\CryptoUtil.ahk
@@ -99,6 +102,7 @@
 #Include ..\Gui\WaitGui.ahk
 #Include ..\Gui\TimeGui.ahk
 #Include ..\Gui\CountDownOverlay.ahk
+#Include ..\Gui\PromptOverlay.ahk
 #Include ..\Gui\DeltaMoveGui.ahk
 #Include ..\Gui\TableMgrGui.ahk
 #Include ..\Gui\TabItemUIUtil.ahk
@@ -195,8 +199,10 @@ global MyCMDTipForceAction := CmdTipForceShow
 global MyExcuteRMTCMDAction := ExcuteRMTCMDAction
 global MySetTableItemState := SetTableItemState
 global MySetItemPauseState := SetItemPauseState
-global MyCountDownStart := (token, total, x, y) => StartXamlCountDown(token, total, x, y, CountDownComplete.Bind(token))
+global MyCountDownStart := (token, total, x, y, detached) => StartXamlCountDown(token, total, x, y, CountDownComplete.Bind(token))
 global MyCountDownStop := CloseXamlCountDown
+global MyCountDownCloseByPosition := CloseXamlCountDownAt
+global MyShowPrompt := QueuePromptDisplay
 global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent
 global MyOutputTipContent := OutputTipContent

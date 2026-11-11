@@ -722,7 +722,7 @@ class MacroGraphIfProMixin {
         this.BranchGraphGui.OnSwitchToTreeAction := ""
         this.BranchGraphGui.SureBtnAction := (startSerial) => this._OnProBranchEditorSure(parentId, idx, startSerial)
         this.BranchGraphGui.OnClosedAction := (*) => this._RefreshProBranchBody(parentId, idx)
-        this.BranchGraphGui.ShowGui(cur)
+        this.BranchGraphGui.ShowGui(cur, this.WindowBindingContext)
     }
 
     _OnProBranchEditorSure(parentId, idx, startSerial) {

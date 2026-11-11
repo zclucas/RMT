@@ -294,7 +294,8 @@ class RmtDialog {
         ; 正常情况不动，不会有可见的重新定位）
         XamlWin.NudgeIfOff(ui, owner)
 
-        while (resultObj.Button == "" && WinExist("ahk_id " ui.wpfHwnd)) {
+        ; LoadedHwnd can arrive before the WPF window becomes visible.
+        while (resultObj.Button == "" && DllCall("user32\IsWindow", "Ptr", ui.wpfHwnd, "Int")) {
             if (ui.wpfHwnd && owner && !ownerDisabled) {
                 try WinSetEnabled(0, "ahk_id " owner)
                 ownerDisabled := true

@@ -57,12 +57,12 @@ class MacroGraphFormalMixin {
             GetLang("等待"), this.WaitGui,
             GetLang("等待确定"), this.WaitGui,
             GetLang("时间"), this.TimeGui,
-            GetLang("倒计时"), this.CountDownGui
+            GetLang("倒计时"), this.PromptGui
         )
     }
 
     _RmtOpList() {
-        return GetLangArr(["截图", "截图提取文本", "自由贴", "启用鼠标", "启用键盘", "启用键鼠",
+        return GetLangArr(["截图", "截图提取文本", "启用鼠标", "启用键盘", "启用键鼠",
             "禁用鼠标", "禁用键盘", "禁用键鼠", "显示菜单", "关闭菜单",
             "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
             "关闭指令显示", "关闭软件", "休眠", "重载"])
@@ -144,19 +144,23 @@ class MacroGraphFormalMixin {
         return GetLangArr(CmdEnumOperaNames())
     }
 
-    _FormalMacroIndexItems(macroType) {
-        items := []
-        mt := GetLangKey(macroType)
-        if (mt == "当前宏")
-            return items
-        tableItem := GetTableBySymbol(mt)
-        if (!tableItem)
-            return items
-        try {
-            for i, item in tableItem.Items
-                items.Push(i ". " item.Remark)
+    _FormalSubMacroTargets(id, macroType, targetID) {
+        items := [], ids := [], selected := -1
+        for i, item in SubMacroGui.Targets(macroType) {
+            items.Push(item.Label)
+            ids.Push(item.ID)
+            if (item.ID == targetID)
+                selected := i - 1
         }
-        return items
+        this._subMacroTargets[id] := {Type: macroType, IDs: ids}
+        return {Items: items, Selected: selected}
+    }
+
+    _FormalSubMacroCallLabels(macroType) {
+        labels := []
+        for key in SubMacroGui.CallKeys(macroType == "当前宏")
+            labels.Push(SubMacroGui.CallLabel(key))
+        return labels
     }
 
     _FormalMenuIndexItems() {
@@ -403,7 +407,7 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         sub := TimeGraphNormSubMode(d)
         isCdCmd := (d.type == GetLang("倒计时"))
-        modeItems := GetLangArr(["等待", "区间判断", "倒计时"])
+        modeItems := GetLangArr(["等待", "区间判断"])
         if (!isCdCmd)
             this._AddComboRow(body, "TimeModeRow_" id, GetLang("类型："), "TimeModeCmb_" id, modeItems, this._IndexInLangArr(modeItems, GetLang(sub)), true, true, lw, cw)
         showWait := !isCdCmd && sub == "等待"
@@ -483,20 +487,18 @@ class MacroGraphFormalMixin {
 
     _FillSubMacroBody(id, d, body) {
         lw := this._FormalLW(), cw := this._FormalCW()
-        macroTypes := GetLangArr(["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
-        callTypes := GetLangArr(["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
+        macroTypes := GetLangArr(SubMacroGui.MacroTypes())
         mt := d.HasOwnProp("macroType") ? d.macroType : "按键宏"
         ct := d.HasOwnProp("callType") ? d.callType : "触发"
-        idx := d.HasOwnProp("index") ? d.index : 1
         ins := d.HasOwnProp("insertCount") ? d.insertCount : "1"
-        idxItems := this._FormalMacroIndexItems(mt)
-        showIdx := (GetLangKey(mt) != "当前宏") && idxItems.Length > 0
-        showIns := this._FormalSubCallIsInsert(id, ct)
+        target := this._FormalSubMacroTargets(id, mt, d.HasOwnProp("macroSerial") ? d.macroSerial : "")
+        callTypes := this._FormalSubMacroCallLabels(mt)
+        showIdx := mt != "当前宏"
+        showIns := ct == "插入到当前宏"
         this._AddComboRow(body, "SubTypeRow_" id, GetLang("宏类型："), "SubTypeCmb_" id, macroTypes, this._IndexInLangArr(macroTypes, GetLang(mt)), true, true, lw, cw)
-        this._AddComboRow(body, "SubCallRow_" id, GetLang("操作类型："), "SubCallCmb_" id, callTypes, this._IndexInLangArr(callTypes, GetLang(ct)), true, true, lw, cw)
-        ; 插入次数置于宏序号上方（出现时紧跟操作类型）
-        this._AddEditableComboRow(body, "SubInsRow_" id, GetLang("插入次数："), "SubIns_" id, GetGuiVarArr(), ins, showIns, lw, cw)
-        this._AddComboRow(body, "SubIdxRow_" id, GetLang("宏序号："), "SubIdxCmb_" id, idxItems, Max(0, idx - 1), showIdx, showIdx, lw, cw)
+        this._AddComboRow(body, "SubCallRow_" id, GetLang("操作类型："), "SubCallCmb_" id, callTypes, SubMacroGui.CallIndex(mt, ct), true, true, lw, cw)
+        this._AddEditableComboRow(body, "SubInsRow_" id, GetLang("调用次数："), "SubIns_" id, GetGuiVarArr(), ins, showIns, lw, cw)
+        this._AddComboRow(body, "SubIdxRow_" id, GetLang("宏序号："), "SubIdxCmb_" id, target.Items, target.Selected, showIdx, true, lw, cw)
     }
 
     ; 变量槽（对齐「变量编辑器」：开关 + 变量名 + 变量类型 + 选择/输入 / 最小 / 最大）。
@@ -1605,11 +1607,10 @@ class MacroGraphFormalMixin {
     _RegisterFormalNodeEvents(id, d, runtime := false) {
         t := d.type
         if (t == GetLang("宏操作")) {
-            h := this._OnFormalSubMacro.Bind(this, id)
-            this._FormalTrackCombo(id, "SubTypeCmb", h, runtime)
-            this._FormalTrackCombo(id, "SubCallCmb", h, runtime)
-            this._FormalTrackCombo(id, "SubIdxCmb", h, runtime)
-            this._FormalTrackEditCombo(id, "SubIns", h, runtime)
+            this._FormalTrackCombo(id, "SubTypeCmb", this._OnFormalSubMacro.Bind(this, id, "Type"), runtime)
+            this._FormalTrackCombo(id, "SubCallCmb", this._OnFormalSubMacro.Bind(this, id, "Call"), runtime)
+            this._FormalTrackCombo(id, "SubIdxCmb", this._OnFormalSubMacro.Bind(this, id, "Target"), runtime)
+            this._FormalTrackEditCombo(id, "SubIns", this._OnFormalSubMacro.Bind(this, id, "Count"), runtime)
         } else if (t == GetLang("变量")) {
             h := this._OnFormalVariable.Bind(this, id)
             this._FormalTrackCheck(id, "VarIgn", h, runtime)

@@ -14,6 +14,7 @@ RecordMacroHotkey(hotkeyStr) {
 UnbindAllMacroHotkeys() {
     global BoundMacroHotkeyList
     ReleaseReplaceKeys()
+    GestureTriggers.Reset()
     if (!IsSet(BoundMacroHotkeyList) || !IsObject(BoundMacroHotkeyList))
         return 0
     removed := 0
@@ -63,6 +64,7 @@ BindKey() {
     BindUIPanelHotKey()
     BindTabHotKey()
     BindFoldSwitchHotkey()
+    GestureTriggers.Bind()
     ; §2：保存后热重载（§17 选「否」）订阅触发键重绑，使模块/条目禁用、触发键改动运行时立即生效
     if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
         MyHotReloadBus.Subscribe(OnHotReloadRebindKeys)
@@ -78,6 +80,7 @@ RebindAllTriggerKeys() {
     BindUIPanelHotKey()
     BindTabHotKey()
     BindFoldSwitchHotkey()
+    GestureTriggers.Bind()
 }
 
 ; 保存后热重载订阅者：任何表配置变更都重绑触发键（fold 禁用状态/条目禁用/触发键改动实时生效）
@@ -556,6 +559,13 @@ OnExitSoft(*) {
         RMTLogSys(RMT_LV_WARN, "Exit", "关闭 RMTMcps 失败: " (e.HasProp("Message") ? e.Message : ""))
     }
 
+    if (MyWorkPool != "") {
+        try MyWorkPool.Clear()
+        catch as e {
+            RMTLogSys(RMT_LV_WARN, "Exit", "WorkPool.Clear 失败: " (e.HasProp("Message") ? e.Message : ""))
+        }
+        MyWorkPool := ""
+    }
     ; ④ 各项清理各自 try：任一失败（如 gdiplus 已卸载抛错）都不中断后续清理
     try Gdip_Shutdown(MyPToken)
     catch as e {
@@ -575,13 +585,6 @@ OnExitSoft(*) {
         RMTLogSys(RMT_LV_WARN, "Exit", "CleanupAllMacroStates 失败: " (e.HasProp("Message") ? e.Message : ""))
     }
 
-    if (MyWorkPool != "") {
-        try MyWorkPool.Clear()
-        catch as e {
-            RMTLogSys(RMT_LV_WARN, "Exit", "WorkPool.Clear 失败: " (e.HasProp("Message") ? e.Message : ""))
-        }
-        MyWorkPool := ""
-    }
     if (IsSet(MyUIMacroGui) && MyUIMacroGui != "") {
         try MyUIMacroGui.StopMonitor()
         catch as e {
@@ -1044,7 +1047,7 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
         itemIndex := GetItemIndexInTable(tableItem, itemIndex.ID)
     }
     item := GetItemByIndex(tableItem, itemIndex)
-    if (!item)
+    if (!item || item.HasOwnProp("Stopping"))
         return
     macro := item.Macro
     tableID := tableItem.ID
@@ -1055,8 +1058,8 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
         MyWorkPool.PrepareItemRun(tableID, itemID)
         GraphPoolLog("宏触发", Format("tab={1} item={2} 来源=开关", tableID, itemID))
         cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID))
-        MyWorkPool.Submit(cmd, tableID, itemID)
         item.IsWorkIndex := true
+        MyWorkPool.Submit(cmd, tableID, itemID)
         return
     }
 
@@ -1092,7 +1095,7 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
         itemIndex := GetItemIndexInTable(tableItem, String(itemIndex))
     }
     item := GetItemByIndex(tableItem, itemIndex)
-    if (!item)
+    if (!item || item.HasOwnProp("Stopping"))
         return
     ; §17 统一禁用门控（条目禁用 Forbid / 所属模块禁用 fold.ForbidState → 任何触发来源均不执行）：
     ; 热重载（保存选「否」）后旧热键/定时器排程里的残留条目仍会到达此入口，
@@ -1104,7 +1107,7 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
     tableID := tableItem.ID
     itemID := item.ID
     isWork := item.IsWorkIndex
-    if (isWork && MyWorkPool != "" && IsObject(MyWorkPool) && MyWorkPool.HasItemWork(tableID, itemID))
+    if (WorkPoolEnabled() && MyWorkPool.HasItemWork(tableID, itemID))
         return
 
     SetTableItemState(tableItem, itemIndex, 1)
@@ -1114,8 +1117,8 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
         MyWorkPool.PrepareItemRun(tableID, itemID)
         GraphPoolLog("宏触发", Format("tab={1} item={2}", tableID, itemID))
         cmd := EncodeBatch(EncodeCommand("TR", tableID, itemID))
-        MyWorkPool.Submit(cmd, tableID, itemID)
         item.IsWorkIndex := true
+        MyWorkPool.Submit(cmd, tableID, itemID)
         return
     }
     MySoftData.MacroTotalCount += 1

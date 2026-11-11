@@ -6,7 +6,7 @@
 class ShareExportUtil {
 
     ; 返回缺失依赖的序列号列表（顿号连接；空串=无缺失。不阻断导出）
-    static ExportChecked(checkedItems, sourceDir, outDir) {
+    static ExportChecked(checkedItems, sourceDir, outDir, report := "") {
         if (checkedItems.Length == 0)
             throw Error(GetLang("没有可导出的宏"))
 
@@ -37,8 +37,11 @@ class ShareExportUtil {
         }
 
         ; 2) 图片：整目录拷贝（导入端 CompatPath 按 Setting\...\Images 子串自动改写路径）
-        if (DirExist(sourceDir "\Images"))
+        if (DirExist(sourceDir "\Images")) {
+            if (report)
+                report(GetLang("正在复制配置文件"))
             DirCopy(sourceDir "\Images", outDir "\Images", true)
+        }
 
         ; 3) 宏定义：写 MacroFile.toml 扁平数组布局（π 分隔数组 + FoldInfo 模块分组）
         this._WriteMacroFileFlatToml(checkedItems, outDir)
@@ -58,18 +61,15 @@ class ShareExportUtil {
     static _WriteMacroFileFlatToml(checkedItems, outDir) {
         macroFile := outDir "\MacroFile.toml"
 
-        ; TabIndex → Symbol 映射
-        symbolByIndex := Map()
-        for _, tabInfo in MergeUtil.GetMergeTabConfig()
-            symbolByIndex.Set(tabInfo.Index, tabInfo.Symbol)
-
         ; 按页签分组（保持勾选顺序）
         tabItems := Map()
         tabOrder := []
         for item in checkedItems {
-            if (!symbolByIndex.Has(item.TabIndex))
+            if (item.TabIndex < 1 || !MySoftData.TableInfo.Has(item.TabIndex))
                 continue
-            symbol := symbolByIndex[item.TabIndex]
+            symbol := GetTableSymbol(item.TabIndex)
+            if (!IsItemSymbol(symbol))
+                continue
             if (!tabItems.Has(symbol)) {
                 tabItems.Set(symbol, [])
                 tabOrder.Push(symbol)
@@ -81,11 +81,12 @@ class ShareExportUtil {
             items := tabItems[symbol]
             n := items.Length
 
-            tkArr := [], remarkArr := [], modeArr := [], macroArr := []
+            tkArr := [], remarkArr := [], modeArr := [], macroArr := [], serialArr := []
             for item in items {
                 tkArr.Push(this._FlatSafe(item.TriggerKey))
                 remarkArr.Push(this._FlatSafe(item.Remark))
                 modeArr.Push("1")
+                serialArr.Push(item.Serial)
                 ; 扁平格式用 ⫶ 承载换行
                 macroArr.Push(this._FlatSafe(StrReplace(String(item.MacroStr), "`n", "⫶")))
             }
@@ -93,8 +94,15 @@ class ShareExportUtil {
             CfgWrite(this._JoinPi(modeArr), macroFile, SettingSection, symbol "ModeArr")
             CfgWrite(this._JoinPi(tkArr), macroFile, SettingSection, symbol "TKArr")
             CfgWrite(this._JoinPi(remarkArr), macroFile, SettingSection, symbol "RemarkArr")
+            CfgWrite(this._JoinPi(serialArr), macroFile, SettingSection, symbol "SerialArr")
             loop n
                 CfgWrite(macroArr[A_Index], macroFile, SettingSection, symbol "MacroArr" A_Index)
+            for i, item in items {
+                for field in ["PreMacro", "PostMacro"] {
+                    if (item.HasOwnProp(field) && item.%field% != "")
+                        CfgWrite(this._FlatSafe(StrReplace(item.%field%, "`n", "⫶")), macroFile, SettingSection, symbol field "Arr" i)
+                }
+            }
 
             ; 其余结构数组字段缺省即可：导入端 CompatCMD 按 ModeArr 长度补齐
 
@@ -191,6 +199,7 @@ class ShareExportUtil {
             throw Error(GetLang("宏不存在"))
         shim := {
             TabIndex: tableItem.Index,
+            Serial: item.ID,
             TriggerKey: item.TK,
             Remark: item.Remark,
             MacroStr: item.Macro,
@@ -214,6 +223,7 @@ class ShareExportUtil {
                 continue
             arr.Push({
                 TabIndex: tableItem.Index,
+                Serial: item.ID,
                 TriggerKey: item.TK,
                 Remark: item.Remark,
                 MacroStr: item.Macro,
@@ -234,32 +244,34 @@ class ShareExportUtil {
         if (sourceDir == "" || !DirExist(sourceDir))
             throw Error(GetLang("当前配置目录不存在"))
 
-        outDir := A_Temp "\RMT_Export_" A_Now
-        try missingStr := this.ExportChecked(checkedItems, sourceDir, outDir)
-        catch as e {
-            try DirDelete(outDir, true)
-            throw e
-        }
+        package := this.BuildPackage(checkedItems, sourceDir, defaultName, XamlWin.ActiveOwner())
 
-        exportDir := A_Temp "\RMT_Export"
-        if (!DirExist(exportDir))
-            DirCreate(exportDir)
-        rmtPath := exportDir "\" defaultName ".rmt"
+        if (package.Missing != "")
+            RmtDialog.Info(GetLang("以下被引用的指令配置未找到，分享包可能不完整：") "`n" package.Missing, GetLang("提示"))
+
+        ShareUploadGui.ShowGui(package.Path, defaultName, level)
+    }
+
+    static BuildPackage(checkedItems, sourceDir, name, owner) {
+        return RmtProgress.Run(GetLang("导出配置"), GetLang("正在检查配置文件")
+            , (progress) => this._BuildPackage(checkedItems, sourceDir, name, ObjBindMethod(progress, "Report")), owner)
+    }
+
+    static _BuildPackage(checkedItems, sourceDir, name, report) {
+        outDir := A_Temp "\RMT_Export_" A_Now "_" A_TickCount "_" Random(1000, 9999)
         try {
+            missing := this.ExportChecked(checkedItems, sourceDir, outDir, report)
+            exportDir := A_Temp "\RMT_Export"
+            DirCreate(exportDir)
+            rmtPath := exportDir "\" name ".rmt"
             if (FileExist(rmtPath))
                 FileDelete(rmtPath)
-            ; 论坛分享直接生成普通分享包，不再询问加密密码。
-            FolderPackager.PackFolder(outDir, rmtPath)
-        } catch as e {
+            report(GetLang("正在打包文件"))
+            FolderPackager.PackFolder(outDir, rmtPath, "", report)
+            return {Path: rmtPath, Missing: missing}
+        } finally {
             try DirDelete(outDir, true)
-            throw e
         }
-        try DirDelete(outDir, true)
-
-        if (missingStr != "")
-            RmtDialog.Info(GetLang("以下被引用的指令配置未找到，分享包可能不完整：") "`n" missingStr, GetLang("提示"))
-
-        ShareUploadGui.ShowGui(rmtPath, defaultName, level)
     }
 }
 

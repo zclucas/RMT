@@ -13,22 +13,35 @@ class MacroSettingGui {
         this._closed := true
         this._batch := []
         this._batching := false
-        this.tableItem := ""
-        this.itemIndex := ""
+        this.TableID := ""
+        this.ItemID := ""
+        this.DisabledOwner := 0
         this.MacroGui := ""     ; 执行前/后钩子的宏编辑器（首次点击时创建）
     }
 
     ; 表身份 = TableItem 对象（位置不代表身份）
     ShowGui(tableItem, itemIndex) {
+        item := GetItemByIndex(tableItem, itemIndex)
+        if (!item)
+            return
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
-        this._BuildAndShow()
-        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
-            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+        this.TableID := tableItem.ID
+        this.ItemID := item.ID
+        try {
+            this._BuildAndShow()
+            if (this.OwnerHwnd && MainSoftData.IsModalSubGui
+                && DllCall("IsWindowEnabled", "Ptr", this.OwnerHwnd)) {
+                SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+                this.DisabledOwner := this.OwnerHwnd
+            }
+            this.Init(item)
+            if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
+                this._CloseWindow()
+        } catch as err {
+            this._CloseWindow()
+            throw err
         }
-        this.Init(tableItem, itemIndex)
-        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
-            this._closed := true
     }
 
     Hwnd() {
@@ -123,7 +136,7 @@ class MacroSettingGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing", this.ui))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnHelp", "Click", ObjBindMethod(this, "OnClickModeHelpBtn"))
@@ -138,10 +151,10 @@ class MacroSettingGui {
         XamlWin.OnLoadTheme(this.ui)
     }
 
-    OnWindowClosing(state, ctrl, event) {
-        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
-            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
-        }
+    OnWindowClosing(closingUI, *) {
+        if (closingUI != this.ui)
+            return
+        this._RestoreOwner()
         this.ui := ""
         this._closed := true
     }
@@ -151,25 +164,27 @@ class MacroSettingGui {
     }
 
     _CloseWindow() {
-        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
-            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
-        }
-        if (IsObject(this.ui)) {
-            try this.ui.Update("Window", "Close", "")
-        }
+        closingUI := this.ui
         this.ui := ""
         this._closed := true
+        this._RestoreOwner()
+        if (IsObject(closingUI))
+            try closingUI.Update("Window", "Close", "")
+    }
+
+    _RestoreOwner() {
+        hwnd := this.DisabledOwner
+        this.DisabledOwner := 0
+        if (hwnd)
+            try SafeGuiFromHwnd(hwnd).Opt("-Disabled")
     }
 
     _SelIndex(comboName) {
         v := IsObject(this.ui) ? this.ui.Query(comboName ">SelectedIndex") : ""
-        return IsNumber(v) ? Integer(v) : 0
+        return IsNumber(v) ? Integer(v) : -1
     }
 
-    Init(tableItem, itemIndex) {
-        this.tableItem := tableItem
-        this.itemIndex := itemIndex
-        item := this.tableItem.Items[itemIndex]
+    Init(item) {
         this.ui.Update("TKTypeCombo", "SelectedIndex", String(item.Mode - 1))
         this.ui.Update("StartTipCombo", "SelectedIndex", String(item.StartTipSound - 1))
         this.ui.Update("EndTipCombo", "SelectedIndex", String(item.EndTipSound - 1))
@@ -183,6 +198,8 @@ class MacroSettingGui {
 
     ; §22 窗口绑定编辑：复用 FrontInfoGui 选窗
     OnClickBindWinEdit(state := "", ctrl := "", event := "") {
+        if (this._closed)
+            return
         if (MainSoftData.IsModalSubGui && this.ui != "") {
             MyFrontInfoGui.OwnerHwnd := this.Hwnd()
         }
@@ -195,9 +212,12 @@ class MacroSettingGui {
     ; §钩子：执行前/执行后宏串，复用宏编辑器。保存即写回条目并热重载，
     ; 否则运行中的 Worker 还拿着旧配置（Worker 只在 CF 广播或下次启动时重载）。
     OnClickHookEdit(field, *) {
-        item := this.tableItem.Items[this.itemIndex]
-        if (!IsObject(item))
+        if (this._closed)
             return
+        resolved := ResolveMacroItem(this.TableID, this.ItemID)
+        if (!resolved)
+            return
+        item := resolved.Item
         if (!IsObject(this.MacroGui))
             this.MacroGui := MacroEditGui()
         if (MainSoftData.IsModalSubGui && this.Hwnd() != 0)
@@ -205,17 +225,45 @@ class MacroSettingGui {
         else
             this.MacroGui.OwnerHwnd := ""
         this.MacroGui.ParentTile := GetLang(field == "PreMacro" ? "执行前钩子" : "执行后钩子")
-        this.MacroGui.SureBtnAction := (command) => this._OnHookEdited(field, command)
+        this.MacroGui.SureBtnAction := ObjBindMethod(this, "_OnHookEdited", resolved.Table.ID, item.ID, field)
         cur := item.HasProp(field) ? item.%field% : ""
-        this.MacroGui.ShowGui(cur, true)
+        this.MacroGui.ShowGui(cur, true, {TableID: resolved.Table.ID, ItemID: item.ID})
     }
 
-    _OnHookEdited(field, command) {
-        item := this.tableItem.Items[this.itemIndex]
-        if (!IsObject(item))
+    _OnHookEdited(tableID, itemID, field, command) {
+        resolved := ResolveMacroItem(tableID, itemID)
+        if (!resolved)
             return
-        item.%field% := command
-        HotReloadPublish(this.tableItem.Index, 0)
+        this._SaveFields(resolved, Map(field, command))
+    }
+
+    _SaveFields(resolved, values) {
+        previousCritical := A_IsCritical
+        Critical()
+        item := resolved.Item
+        previous := Map()
+        failed := false
+        try {
+            for field, value in values {
+                previous[field] := item.%field%
+                item.%field% := value
+            }
+            if (!SaveTableItemInfo(resolved.Table))
+                throw Error(GetLang("无法写入当前配置"))
+        } catch as err {
+            for field, value in previous
+                item.%field% := value
+            try RMTLogSys(RMT_LV_ERROR, "MacroSetting", err.Message)
+            failed := true
+        } finally {
+            Critical(previousCritical)
+        }
+        if (failed) {
+            RmtDialog.Info(GetLang("无法写入当前配置"), GetLang("宏高级设置"))
+            return false
+        }
+        HotReloadPublish(resolved.Table.Index, 0, false)
+        return true
     }
 
     OnClickModeHelpBtn(state, ctrl, event) {
@@ -232,7 +280,24 @@ class MacroSettingGui {
     }
 
     OnSureBtnClick(state, ctrl, event) {
+        if (this._closed)
+            return
+        tableID := this.TableID
+        itemID := this.ItemID
+        if (!ResolveMacroItem(tableID, itemID)) {
+            this._CloseWindow()
+            return
+        }
+        ui := this.ui
         mode := this._SelIndex("TKTypeCombo") + 1
+        startSound := this._SelIndex("StartTipCombo") + 1
+        endSound := this._SelIndex("EndTipCombo") + 1
+        stopSound := this._SelIndex("StopTipCombo") + 1
+        ; 清空窗口绑定时继承所属模块。
+        bw := Trim(ui.Query("BindWindowCon"))
+        if (mode < 1 || mode > 5 || startSound < 1 || startSound > 3
+            || endSound < 1 || endSound > 3 || stopSound < 1 || stopSound > 2)
+            return
         ; 改成罗技(3)/AHI(4)时检查对应驱动是否已安装，未安装则弹出安装提示（运行时检测逻辑保持不变）
         needReboot := false
         if (mode == 3) {
@@ -248,17 +313,15 @@ class MacroSettingGui {
                 return
             }
         }
-        item := this.tableItem.Items[this.itemIndex]
-        item.Mode := mode
-        item.StartTipSound := this._SelIndex("StartTipCombo") + 1
-        item.EndTipSound := this._SelIndex("EndTipCombo") + 1
-        item.StopTipSound := this._SelIndex("StopTipCombo") + 1
-        ; §22 窗口绑定保存。手清空文本框时回到模块窗口绑定；「所有窗口」由编辑器写成 {所有窗口}。
-        bw := Trim(this.ui.Query("BindWindowCon"))
-        item.BindWindow := bw == "" ? "{模块窗口绑定}" : bw
+        resolved := ResolveMacroItem(tableID, itemID)
+        if (!resolved || this._closed || this.ui != ui || this.TableID != tableID || this.ItemID != itemID)
+            return
+        values := Map("Mode", mode, "StartTipSound", startSound,
+            "EndTipSound", endSound, "StopTipSound", stopSound,
+            "BindWindow", bw == "" ? "{模块窗口绑定}" : bw)
+        if (!this._SaveFields(resolved, values))
+            return
         this._CloseWindow()
-        ; §18 宏高级设置即时持久化 + Worker 热重载（Mode/提示音/BindWindow 影响执行语义）
-        HotReloadPublish(this.tableItem.Index, 0)
         if (needReboot)
             Shutdown(2)
     }

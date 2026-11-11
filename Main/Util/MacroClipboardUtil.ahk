@@ -157,6 +157,8 @@ ExtractSerialFromCmd(cmdStr) {
         return ""
 
     cleanCmd := GetCmdStr(cmdStr)
+    if (RegExMatch(cleanCmd, "i)^(宏操作\d+|Ctrl\d+)(?=$|[_| \t])", &m))
+        return MacroOperationSerial(m[1])
 
     ; 策略1: 尝试匹配已知的类型前缀（格式: [类型][数字]_备注）
     for cmdType, DataFile in MySoftData.DataFileMap {
@@ -237,6 +239,22 @@ CollectConfigForCmd(cmdStr, cmdConfigMap) {
     if (serialStr == "")
         return false
 
+    if (cmdConfigMap.Has(serialStr))
+        return true
+
+    if (RegExMatch(serialStr, "^宏操作(\d+)$", &m)) {
+        path := MySoftData.DataFileMap["宏操作"]
+        raw := CfgRead(path, SettingSection, serialStr, "")
+        if (raw == "")
+            raw := CfgRead(path, SettingSection, "Ctrl" m[1], "")
+        data := CompatParseData(raw)
+        if (!IsObject(data))
+            return false
+        data.SerialStr := serialStr
+        cmdConfigMap[serialStr] := Map("类型", "宏操作", "配置", JSON.stringify(data, 0))
+        return true
+    }
+
     cmdType := FindSerialType(serialStr)
     if (cmdType == "") {
         paramArr := StrSplit(cleanCmd, "_")
@@ -246,9 +264,6 @@ CollectConfigForCmd(cmdStr, cmdConfigMap) {
             return false
         }
     }
-
-    if (cmdConfigMap.Has(serialStr))
-        return true
 
     try {
         Data := GetMacroCMDData(serialStr)
@@ -292,8 +307,8 @@ FindDependentSerials(dataObj) {
 
             if (IsObject(fieldValue)) {
                 for item in fieldValue {
-                    if (item != "")
-                        PushDep(ExtractSerialFromCmd(item))
+                    for cmd in SplitMacro(item)
+                        PushDep(ExtractSerialFromCmd(cmd))
                 }
             } else if (fieldName == "CurCMD") {
                 PushDep(ExtractSerialFromCmd(fieldValue))
@@ -415,34 +430,10 @@ UpdateConfigInternalRefs(dataObj, replaceMap) {
                 continue
 
             if (IsObject(fieldValue)) {
-                for index, item in fieldValue {
-                    if (item != "") {
-                        for oldSerial, newSerial in replaceMap {
-                            if (item == oldSerial)
-                                ObjAccess(dataObj, [fieldName], newSerial, index)
-                        }
-                    }
-                }
-            } else if (fieldName == "CurCMD") {
-                for oldSerial, newSerial in replaceMap {
-                    if (fieldValue == oldSerial || GetCmdStr(fieldValue) == oldSerial) {
-                        ObjAccess(dataObj, [fieldName], newSerial)
-                        break
-                    }
-                    newValue := ReplaceSerialInCmdList(fieldValue, oldSerial, newSerial)
-                    if (newValue != fieldValue) {
-                        ObjAccess(dataObj, [fieldName], newValue)
-                        fieldValue := newValue
-                    }
-                }
+                for index, item in fieldValue
+                    ObjAccess(dataObj, [fieldName], RemapCommandSerials(item, replaceMap), index)
             } else {
-                for oldSerial, newSerial in replaceMap {
-                    newValue := ReplaceSerialInCmdList(fieldValue, oldSerial, newSerial)
-                    if (newValue != fieldValue) {
-                        fieldValue := newValue
-                        ObjAccess(dataObj, [fieldName], newValue)
-                    }
-                }
+                ObjAccess(dataObj, [fieldName], RemapCommandSerials(fieldValue, replaceMap))
             }
         } catch as e {
             continue
@@ -450,47 +441,38 @@ UpdateConfigInternalRefs(dataObj, replaceMap) {
     }
 }
 
-; 精确替换指令列表中的序列码引用（支持带后缀的序列码）
-ReplaceSerialInCmdList(cmdList, oldSerial, newSerial) {
+MacroOperationSerial(serial) => RegExMatch(serial, "i)^(?:宏操作|Ctrl)(\d+)$", &m) ? "宏操作" m[1] : ""
+
+; 每条指令只用原序列号查映射一次，避免 A→B、B→C 时把原 A 改成 C。
+RemapCommandSerials(cmdList, replaceMap) {
+    if (replaceMap.Count == 0 || Type(cmdList) != "String")
+        return cmdList
+    static pattern := "(^|[,，\r\n⫶])([ \t]*(?:🚫|▶|⭐)*)([^_,，\r\n⫶|]+)"
     result := ""
-    pos := 1
-    oldLen := StrLen(oldSerial)
-
-    while (pos <= StrLen(cmdList)) {
-        foundPos := InStr(cmdList, oldSerial, , pos)
-        if (!foundPos) {
-            result .= SubStr(cmdList, pos)
-            break
-        }
-
-        result .= SubStr(cmdList, pos, foundPos - pos)
-
-        nextCharPos := foundPos + oldLen
-        if (nextCharPos > StrLen(cmdList)) {
-            result .= newSerial
-            break
-        }
-
-        nextChar := SubStr(cmdList, nextCharPos, 1)
-        code := Ord(nextChar)
-        isExtender := (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 19968 && code <= 40959)
-
-        if (!isExtender) {
-            result .= newSerial
-        } else {
-            result .= oldSerial
-        }
-
-        pos := nextCharPos
+    start := 1
+    while (pos := RegExMatch(cmdList, pattern, &m, start)) {
+        serial := RTrim(m[3], " `t")
+        replacement := replaceMap.Get(serial, "")
+        if (replacement == "")
+            replacement := replaceMap.Get(MacroOperationSerial(serial), serial)
+        result .= SubStr(cmdList, start, pos - start) m[1] m[2] replacement SubStr(m[3], StrLen(serial) + 1)
+        start := pos + StrLen(m[0])
     }
-
-    return result
+    return result SubStr(cmdList, start)
 }
 
 
 ; ============================================================================
 ; 主功能层 - 复制/粘贴入口函数
 ; ============================================================================
+
+MacroClipboardSource() {
+    static session := DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount, profiles := Map()
+    profile := MySoftData.CurSettingName
+    if (!profiles.Has(profile))
+        profiles[profile] := session "-" (profiles.Count + 1)
+    return profiles[profile]
+}
 
 ; 复制宏指令集（完整复制所有指令及外部配置，用于跨设备迁移）
 OnItemCopyMacroBtnClick(tableItem, CopyIndex, *) {
@@ -504,7 +486,8 @@ OnItemCopyMacroBtnClick(tableItem, CopyIndex, *) {
 }
 
 OnItemCopyMacroBtnClick_Impl(tableItem, CopyIndex) {
-    macroText := tableItem.Items[CopyIndex].Macro
+    item := tableItem.Items[CopyIndex]
+    macroText := item.Macro
     try RmtDialog._Trace("Copy impl idx=" CopyIndex " macroLen=" StrLen(macroText))
     if (macroText == "") {
         RmtDialog.Info(GetLang("当前宏没有指令内容，无法复制"), GetLang("提示"))
@@ -514,10 +497,13 @@ OnItemCopyMacroBtnClick_Impl(tableItem, CopyIndex) {
     exportData := Map()
     exportData["版本"] := "RMTv" RMT_VERSION
     exportData["导出时间"] := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+    exportData["来源会话"] := MacroClipboardSource()
     exportData["指令列表"] := macroText
+    exportData["执行前"] := item.PreMacro
+    exportData["执行后"] := item.PostMacro
     
     cmdConfigMap := Map()
-    cmdArr := SplitMacro(macroText)
+    cmdArr := SplitMacro(macroText "," item.PreMacro "," item.PostMacro)
 
     ; 第1轮：收集直接引用的配置
     for cmdStr in cmdArr {
@@ -642,12 +628,21 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
 
     RecycleTabItem(tableItem)
 
+    unresolvedTargets := false
     if (isRMTFormat && importData != "") {
         newCmdList := ObjAccess(importData, ["指令列表", "CommandList", "commandList", "MacroList"])
+        newPreMacro := ObjAccess(importData, ["执行前"])
+        newPostMacro := ObjAccess(importData, ["执行后"])
         configMap := ObjAccess(importData, ["指令配置", "ConfigMap", "configMap"])
+        sameSource := ObjAccess(importData, ["来源会话"]) == MacroClipboardSource()
 
         parsedConfigs := []
         serialReplaceMap := Map()
+        operationRefs := Map()
+        for serial in MergeUtil.ExtractResourceSerials(newCmdList "," newPreMacro "," newPostMacro) {
+            if (MacroOperationSerial(serial) != "")
+                operationRefs[serial] := false
+        }
 
         if (IsObject(configMap) && GetObjectCount(configMap) > 0) {
 
@@ -674,11 +669,37 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
                     }
 
                     oldSerialStr := Data.SerialStr
+                    operationSerial := MacroOperationSerial(oldSerialStr)
+                    if (operationSerial != "") {
+                        oldSerialStr := operationSerial
+                        operationRefs[operationSerial] := true
+                    }
+                    if (!sameSource && operationSerial != ""
+                        && Data.HasOwnProp("MacroType") && Data.MacroType != "当前宏") {
+                        Data.MacroSerial := ""
+                        Data.Index := 0
+                        unresolvedTargets := true
+                    }
                     parsedConfigs.Push(Map("oldSerial", oldSerialStr, "Data", Data))
                 } catch as e {
                 }
             }
+        }
 
+        for configInfo in parsedConfigs {
+            for serial in MergeUtil.FindDependentSerialsFromSource(configInfo["Data"]) {
+                if (MacroOperationSerial(serial) != "" && !operationRefs.Has(serial))
+                    operationRefs[serial] := false
+            }
+        }
+        for serial, found in operationRefs {
+            if (!found) {
+                RmtDialog.Info(GetLang("缺少宏操作配置") " " serial)
+                return
+            }
+        }
+
+        if (parsedConfigs.Length) {
             usedSerials := Map()
 
             for i, configInfo in parsedConfigs {
@@ -691,40 +712,24 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
                 Data.SerialStr := newSerialStr
                 configInfo["newSerial"] := newSerialStr
 
-                if (newSerialStr != oldSerialStr) {
+                if (newSerialStr != oldSerialStr || MacroOperationSerial(oldSerialStr) != "") {
                     if (!IsObject(serialReplaceMap))
                         serialReplaceMap := Map()
                     serialReplaceMap.Set(oldSerialStr, newSerialStr)
                 }
             }
 
-            maxPasses := 10
-
-            loop maxPasses {
-                changedThisPass := false
-
-                for i, configInfo in parsedConfigs {
-                    Data := configInfo["Data"]
-
-                    try {
-                        UpdateConfigInternalRefs(Data, serialReplaceMap)
-                        SaveMacroCMDData(Data)
-                    } catch as e {
-                    }
-                }
-
-                if (!changedThisPass)
-                    break
-            }
-
-            for i, configInfo in parsedConfigs {
-                oldSerialStr := configInfo["oldSerial"]
-                newSerialStr := configInfo["newSerial"]
-
-                if (newSerialStr != oldSerialStr) {
-                    newCmdList := ReplaceSerialInCmdList(newCmdList, oldSerialStr, newSerialStr)
+            for configInfo in parsedConfigs {
+                Data := configInfo["Data"]
+                try {
+                    UpdateConfigInternalRefs(Data, serialReplaceMap)
+                    SaveMacroCMDData(Data)
+                } catch as e {
                 }
             }
+            newCmdList := RemapCommandSerials(newCmdList, serialReplaceMap)
+            newPreMacro := RemapCommandSerials(newPreMacro, serialReplaceMap)
+            newPostMacro := RemapCommandSerials(newPostMacro, serialReplaceMap)
         }
 
         if (newCmdList == "" || !IsObject(newCmdList) && StrLen(Trim(newCmdList)) == 0) {
@@ -737,6 +742,8 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
         item.ID := (fold && fold.ID != "") ? NewMacroPath(tableItem, fold.ID) : GetCMDSerialStr("Item")
         item.TimingSerial := GetCMDSerialStr("Timing")
         item.Macro := newCmdList
+        item.PreMacro := newPreMacro
+        item.PostMacro := newPostMacro
         item.Remark := Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm"))
         tableItem.Items.InsertAt(AddIndex, item)
     } else {
@@ -756,5 +763,5 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
     ; §17 热重载：粘贴宏插入新条目 → 重绑触发键（防索引错位）+ 语音/定时订阅者重建
     HotReloadPublish(tableItem.Index, 0)
 
-    RmtDialog.Info(GetLang("已粘贴宏"))
+    RmtDialog.Info(GetLang("已粘贴宏") (unresolvedTargets ? "`n" GetLang("请重新选择宏操作的目标宏") : ""))
 }

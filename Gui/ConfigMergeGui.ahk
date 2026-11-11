@@ -179,7 +179,7 @@ class ConfigMergeGui {
         if (this._instanceKey != "" && ConfigMergeGui.instances.Has(this._instanceKey))
             ConfigMergeGui.instances.Delete(this._instanceKey)
         this.ui := ""
-        MergeUtil.CleanupTemp()
+        this.CleanupSource()
         try {
             if (!XAMLHost.IsDaemonAlive())
                 XAMLHost.ResetDaemon()
@@ -206,7 +206,7 @@ class ConfigMergeGui {
             try this.ui.Update("Window", "Close", "")
             this.ui := ""
         }
-        MergeUtil.CleanupTemp()
+        this.CleanupSource()
     }
 
     OnClose() {
@@ -249,15 +249,19 @@ class ConfigMergeGui {
             return
         }
 
+        this.CleanupSource()
         this.SourceType := "file"
-        this.SourcePath := selectedFile
         this.SourceName := fileNameNoExt
         this.IsFromRmt := true
 
         try {
-            tempDir := MergeUtil.PrepareTempFromRmt(selectedFile)
-            this.LoadSourceConfig(tempDir)
+            RmtProgress.Run(GetLang("正在加载配置"), fileNameNoExt
+                , (progress) => this.LoadRmtSourceConfig(selectedFile, ObjBindMethod(progress, "Report"))
+                , this.ui.wpfHwnd)
         } catch as e {
+            this.CleanupSource()
+            this.TreeRoot := ""
+            this.PopulateListView()
             RmtDialog.Info(GetLang("解包失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
         }
     }
@@ -277,11 +281,36 @@ class ConfigMergeGui {
         if (configName == "")
             return
 
+        this.CleanupSource()
         this.SourceType := "local"
         this.SourceName := configName
         this.SourcePath := A_WorkingDir "\Setting\" configName
         this.IsFromRmt := false
+        try {
+            RmtProgress.Run(GetLang("正在加载配置"), configName
+                , (*) => this.LoadLocalSourceConfig(this.SourcePath), this.ui.wpfHwnd)
+        } catch as e {
+            this.TreeRoot := ""
+            this.PopulateListView()
+            RmtDialog.Info(GetLang("导入失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
+        }
+    }
+
+    LoadLocalSourceConfig(settingDir) {
+        Compat_UpgradeDir(settingDir)
+        IniImport_ExpandFlatMacroFile(settingDir)
+        this.LoadSourceConfig(settingDir)
+    }
+
+    LoadRmtSourceConfig(file, report) {
+        this.SourcePath := MergeUtil.PrepareTempFromRmt(file, report)
         this.LoadSourceConfig(this.SourcePath)
+    }
+
+    CleanupSource() {
+        if (this.IsFromRmt)
+            MergeUtil.CleanupTemp(this.SourcePath)
+        this.SourcePath := ""
     }
 
     LoadSourceConfig(settingDir) {
@@ -347,6 +376,8 @@ class ConfigMergeGui {
                     for itemNode in moduleNode.Children {
                         itemRow := ++row
                         triggerDisplay := itemNode.TriggerKey != "" ? itemNode.TriggerKey : GetLang("无触发键")
+                        if (itemNode.TriggerKey != "" && GetTableSymbol(itemNode.TabIndex) == "Gesture")
+                            triggerDisplay := GestureDisplay(itemNode.TriggerKey)
                         this.ItemNodeMap[itemRow] := itemNode
                         itemNode.ListViewRow := itemRow
                         this._AddListRow(itemRow, itemNode.DisplayName, triggerDisplay, itemNode.IsChecked, 2, false, false, true)
@@ -538,7 +569,7 @@ class ConfigMergeGui {
             return
         }
 
-        sourceDir := this.IsFromRmt ? MergeUtil.TempMergeDir : this.SourcePath
+        sourceDir := this.SourcePath
 
         serialReplaceMap := MergeUtil.PreviewSerialReplaceMap(checkedItems, sourceDir)
         if (GetObjectCount(serialReplaceMap) > 0) {
@@ -580,7 +611,8 @@ class ConfigMergeGui {
             return
 
         try {
-            result := MergeUtil.ExecuteMerge(checkedItems, this.SourceName)
+            result := RmtProgress.Run(GetLang("合并导入"), GetLang("正在应用配置")
+                , (*) => MergeUtil.ExecuteMerge(checkedItems, this.SourceName, sourceDir), this.ui.wpfHwnd)
 
             successMsg := GetLang("合并导入成功") "!`n`n"
             successMsg .= Format("{}: {}`n", GetLang("创建模块数"), result.ModuleCount)
@@ -618,47 +650,31 @@ class ConfigMergeGui {
             return
         }
 
-        sourceDir := this.IsFromRmt ? MergeUtil.TempMergeDir : this.SourcePath
+        sourceDir := this.SourcePath
         if (sourceDir == "" || !DirExist(sourceDir)) {
             RmtDialog.Info(GetLang("源配置目录不存在"), GetLang("错误"), this.ui.wpfHwnd)
             return
         }
 
-        outDir := A_Temp "\RMT_Export_" A_Now
-        try missingStr := ShareExportUtil.ExportChecked(checkedItems, sourceDir, outDir)
+        fileName := ShareExportUtil.SuggestName(checkedItems, this.SourceName)
+        try package := ShareExportUtil.BuildPackage(checkedItems, sourceDir, fileName, this.ui.wpfHwnd)
         catch as e {
             RmtDialog.Info(GetLang("导出失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
             return
         }
 
-        if (missingStr != "")
-            RmtDialog.Info(GetLang("以下被引用的指令配置未找到，分享包可能不完整：") "`n" missingStr, GetLang("提示"), this.ui.wpfHwnd)
-
-        exportDir := A_Temp "\RMT_Export"
-        if (!DirExist(exportDir))
-            DirCreate(exportDir)
-        fileName := ShareExportUtil.SuggestName(checkedItems, this.SourceName)
-        rmtPath := exportDir "\" fileName ".rmt"
-        try {
-            if (FileExist(rmtPath))
-                FileDelete(rmtPath)
-            ; 供论坛发布的分享包使用普通格式。
-            FolderPackager.PackFolder(outDir, rmtPath)
-        } catch as e {
-            RmtDialog.Info(GetLang("打包失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
-            return
-        }
-        try DirDelete(outDir, true)
+        if (package.Missing != "")
+            RmtDialog.Info(GetLang("以下被引用的指令配置未找到，分享包可能不完整：") "`n" package.Missing, GetLang("提示"), this.ui.wpfHwnd)
 
         askMsg := Format("{}: {}`n{}: {}`n`n{}",
             GetLang("导出宏数"), checkedItems.Length,
-            GetLang("文件"), rmtPath,
+            GetLang("文件"), package.Path,
             GetLang("是否继续发布到共享论坛？"))
         if (!RmtDialog.Confirm(askMsg, GetLang("导出完成"), this.ui.wpfHwnd))
             return
 
         this.OnClose()
-        ShareUploadGui.ShowGui(rmtPath, ShareExportUtil.SuggestName(checkedItems, this.SourceName), GetLang("配置"))
+        ShareUploadGui.ShowGui(package.Path, fileName, GetLang("配置"))
     }
 
     _XmlEsc(s) => EscapeXamlXml(s)

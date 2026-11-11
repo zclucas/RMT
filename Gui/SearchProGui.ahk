@@ -25,6 +25,7 @@ class SearchProGui {
         this.Data := ""
         this.LastIsWin := ""
         this.MacroGui := ""
+        this.WindowBindingContext := ""
         this.DLVariableArr := []
         this.AreaPreview := ScreenAreaPreview()
         this.PreviewFollowTimer := 0
@@ -1154,7 +1155,7 @@ class SearchProGui {
         }
         this.MacroGui.OwnerHwnd := (MainSoftData.IsModalSubGui && this.Hwnd() != 0) ? this.Hwnd() : ""
         this.MacroGui.SureBtnAction := isFound ? (command) => this.OnSureFoundMacroBtnClick(command) : (command) => this.OnSureUnFoundMacroBtnClick(command)
-        this.MacroGui.ShowGui(this.ui.Query(isFound ? "TrueMacroCon" : "FalseMacroCon"), false)
+        this.MacroGui.ShowGui(this.ui.Query(isFound ? "TrueMacroCon" : "FalseMacroCon"), false, this.WindowBindingContext)
     }
 
     TriggerMacro(showImageTime := false) {
@@ -1199,12 +1200,13 @@ class SearchProGui {
     }
 
     OnF1SetAreaAction(x1, y1, x2, y2) {
-        isWin := this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本"
-        hwndList := isWin ? GetHwndList(this.ui.Query("WinInfoCon")) : []
-        if (isWin && hwndList.Length == 0)
+        type := this._TypeIndex()
+        isWin := type == "窗口图片" || type == "窗口颜色" || type == "窗口文本"
+        targetHwnd := isWin ? this.FindSearchTargetWindow() : 0
+        if (isWin && !targetHwnd)
             return
-        Point1 := isWin ? GetWinPos(x1, y1, hwndList[1]) : [x1, y1]
-        Point2 := isWin ? GetWinPos(x2, y2, hwndList[1]) : [x2, y2]
+        Point1 := isWin ? GetWinPos(x1, y1, targetHwnd) : [x1, y1]
+        Point2 := isWin ? GetWinPos(x2, y2, targetHwnd) : [x2, y2]
         this.OnSetSearchArea(Point1[1], Point1[2], Point2[1], Point2[2])
     }
 
@@ -1250,6 +1252,14 @@ class SearchProGui {
         this.RefreshPreviewArea()
     }
 
+    FindSearchTargetWindow() {
+        info := this.ui.Query("WinInfoCon")
+        context := this.WindowBindingContext
+        macro := IsObject(context) ? ResolveMacroItem(context.TableID, context.ItemID) : ""
+        info := ResolveBindWindow(macro ? macro.Table : "", macro ? macro.Index : 0, info)
+        return this.AreaPreview.FindTargetWindow(info)
+    }
+
     RefreshPreviewArea(*) {
         if (!IsObject(this.ui) || !this.PreviewShowing) {
             this.StopPreviewFollow()
@@ -1268,7 +1278,7 @@ class SearchProGui {
         isWin := type == "窗口图片" || type == "窗口颜色" || type == "窗口文本"
         targetHwnd := 0
         if (isWin) {
-            targetHwnd := this.AreaPreview.FindTargetWindow(this.ui.Query("WinInfoCon"))
+            targetHwnd := this.FindSearchTargetWindow()
             if (!targetHwnd) {
                 this.StopPreviewFollow()
                 this.HidePreviewRect()

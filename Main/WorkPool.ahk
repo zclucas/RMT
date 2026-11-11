@@ -3,44 +3,57 @@
 #Include Util\RingBuffer.ahk
 #Include Util\JsonUtil.ahk
 
-; 枚举系统中所有进程，返回 [{pid, name, parentPid}, ...]。
-; 用于残留 Worker 检测：找出父进程为当前主进程、但已不在线程池追踪中的 Work.exe。
-; 采用 Toolhelp32 快照（TH32CS_SNAPPROCESS），不依赖窗口可见性，headless Worker 也能枚举到。
-EnumProcesses() {
-    procs := []
-    ; TH32CS_SNAPPROCESS = 0x00000002
-    hSnap := DllCall("CreateToolhelp32Snapshot", "uint", 0x00000002, "uint", 0, "ptr")
-    if (!hSnap)
-        return procs
+; 匿名共享对象仅通过显式句柄清单交给本次创建的 Worker。
+LaunchWorkerProcess(exe, arguments, handles*) {
+    process := DllCall("GetCurrentProcess", "ptr")
+    inherited := []
+    listReady := false
+    attrs := 0
+    try {
+        handles.Push(process)
+        for handle in handles {
+            copy := 0
+            access := handle == process ? 0x00100000 : 0 ; 父进程句柄仅用于等待退出
+            if (!DllCall("DuplicateHandle", "ptr", process, "ptr", handle, "ptr", process
+                , "ptr*", &copy, "uint", access, "int", true, "uint", access ? 0 : 2))
+                throw OSError()
+            inherited.Push(copy)
+        }
+        handleList := Buffer(inherited.Length * A_PtrSize)
+        for i, handle in inherited
+            NumPut("ptr", handle, handleList, (i - 1) * A_PtrSize)
+        size := 0
+        DllCall("InitializeProcThreadAttributeList", "ptr", 0, "uint", 1, "uint", 0, "uptr*", &size)
+        attrs := Buffer(size)
+        if (!DllCall("InitializeProcThreadAttributeList", "ptr", attrs, "uint", 1, "uint", 0, "uptr*", &size))
+            throw OSError()
+        listReady := true
+        if (!DllCall("UpdateProcThreadAttribute", "ptr", attrs, "uint", 0, "uptr", 0x20002
+            , "ptr", handleList, "uptr", handleList.Size, "ptr", 0, "ptr", 0))
+            throw OSError()
 
-    ; PROCESSENTRY32W 字段布局：
-    ;   dwSize(4) cntUsage(4) th32ProcessID(4) th32DefaultHeapID(A_PtrSize)
-    ;   th32ModuleID(4) cntThreads(4) th32ParentProcessID(4) pcPriClassBase(4) dwFlags(4) szExeFile[260]
-    structSize := 32 + A_PtrSize + 520
-    pidOffset := 8
-    parentOffset := 20 + A_PtrSize
-    nameOffset := 32 + A_PtrSize
-
-    entry := Buffer(structSize, 0)
-    NumPut("uint", structSize, entry, 0)   ; dwSize
-
-    if (!DllCall("Process32FirstW", "ptr", hSnap, "ptr", entry)) {
-        DllCall("CloseHandle", "ptr", hSnap)
-        return procs
+        startupSize := A_PtrSize == 8 ? 104 : 68
+        startup := Buffer(startupSize + A_PtrSize, 0)
+        NumPut("uint", startup.Size, startup)
+        NumPut("ptr", attrs.Ptr, startup, startupSize)
+        info := Buffer(A_PtrSize * 2 + 8, 0)
+        cmd := '"' exe '" ' arguments
+        for handle in inherited
+            cmd .= " " handle
+        cmdBuffer := Buffer((StrLen(cmd) + 1) * 2)
+        StrPut(cmd, cmdBuffer, "UTF-16")
+        SplitPath(exe, , &workerDir)
+        if (!DllCall("CreateProcessW", "str", exe, "ptr", cmdBuffer, "ptr", 0, "ptr", 0
+            , "int", true, "uint", 0x80000, "ptr", 0, "str", workerDir, "ptr", startup, "ptr", info))
+            throw OSError()
+        CloseHandle(NumGet(info, A_PtrSize, "ptr"))
+        return {handle: NumGet(info, "ptr"), pid: NumGet(info, A_PtrSize * 2, "uint")}
+    } finally {
+        if (listReady)
+            DllCall("DeleteProcThreadAttributeList", "ptr", attrs)
+        for handle in inherited
+            CloseHandle(handle)
     }
-
-    loop {
-        pid := NumGet(entry, pidOffset, "uint")
-        parentPid := NumGet(entry, parentOffset, "uint")
-        name := StrGet(entry.Ptr + nameOffset, "utf-16")
-        if (pid)
-            procs.Push({ pid: pid, name: name, parentPid: parentPid })
-        if (!DllCall("Process32NextW", "ptr", hSnap, "ptr", entry))
-            break
-    }
-
-    DllCall("CloseHandle", "ptr", hSnap)
-    return procs
 }
 
 class TaskQueue {
@@ -59,7 +72,7 @@ class WorkerData {
 
         ; === 进程信息 ===
         this.pid := 0                 ; Worker 进程 PID
-        this.hProc := 0               ; Worker 进程句柄（OpenProcess），用于 DuplicateHandle 和终止进程
+        this.hProc := 0               ; 创建 Worker 时返回的进程句柄
 
         ; === 窗口/通信 ===
         this.hwnd := 0                ; Worker 主窗口句柄，用于 PostMessage 发送指令
@@ -80,7 +93,8 @@ class WorkerData {
         this.createTick := 0          ; Worker 进程创建时间戳，用于检测启动超时
         this.tableID := ""            ; Worker 当前正在处理的宏所属的表 ID（空=空闲）
         this.itemID := ""             ; Worker 当前正在处理的宏的条目 ID（空=空闲）
-        this.taskID := 0              ; 本次分派的完成令牌，不使用可重复的 Worker 编号
+        this.taskID := 0              ; 当前任务的分派令牌
+        this.stopRequested := false
         this.isGraphBranch := false   ; 是否为图形宏并行分支任务
         this.graphNodeSerial := ""    ; 图形分支起始节点（异常退出时重派）
         this.rxBusy := false          ; ProcessWorkerRx 重入保护
@@ -91,8 +105,6 @@ class WorkerData {
 class WorkPool {
     __New() {
         this.workerExe := A_ScriptDir "\Thread\Work.exe"
-        SplitPath(this.workerExe, &workerExeName)
-        this.workerExeName := workerExeName
         this.maxSize := MainSoftData.MutiThreadNum
         this.isDynamic := (this.maxSize == -1)
         this.dynamicMaxLimit := 16
@@ -106,24 +118,19 @@ class WorkPool {
         this.workerMap := Map()       ; idx -> WorkerData，所有存活 Worker（用于 rx 读取）
 
         this.taskQueue := TaskQueue()     ; 等待分发的任务队列，每项 {cmd, tableIndex, itemIndex}
-        this.mainPID := DllCall("GetCurrentProcessId")
         this.idxCounter := 0          ; Worker 索引计数器（递增，用于分配唯一 idx）
         this.taskSequence := 0
         this.isDispatching := false    ; Dispatch 防重入标志
         this.dispatchPending := false
-        this.targetWorkerCount := 0
-        this.lostWorkerCheckRound := 0
-        this.lostWorkerCheckFunc := ""
         this.rxPollFunc := ""
-        this.residualCheckFunc := ""
         this._inputGuis := Map()      ; 活动输入弹窗实例（key=req）
         this._nativeFileQueue := []
         this._nativeFileActive := false
         this._nativeFileCurrent := ""
         this._nativeFileNext := ""
 
-        OnMessage(WM_LOAD_WORK, ObjBindMethod(this, "OnWorkerReady"))
-        OnMessage(WM_WORKER_TO_MASTER, ObjBindMethod(this, "OnWorkerToMaster"))
+        this.rxWakeFunc := ObjBindMethod(this, "OnWorkerToMaster")
+        OnMessage(WM_WORKER_TO_MASTER, this.rxWakeFunc)
 
         ; §17 热重载订阅：整表保存（OnSaveSetting 选「否」→ Publish(0,0)，落盘后）→ 广播 Worker 重载配置，
         ; 使「新增宏 / 修改宏内容」保存选「否」后 Worker（Work.exe 启动快照）立即生效，不必重启
@@ -137,21 +144,13 @@ class WorkPool {
         }
 
         initWorkerNum := this.isDynamic ? this.corePoolSize : this.maxSize
-        this.targetWorkerCount := initWorkerNum
         loop initWorkerNum
             this.CreateWorker(A_Index)
         this.idxCounter := initWorkerNum
 
-        if (this.targetWorkerCount > 0) {
-            this.lostWorkerCheckFunc := ObjBindMethod(this, "CheckLostWorkers")
-            SetTimer(this.lostWorkerCheckFunc, -10000)
-        }
         this.rxPollFunc := ObjBindMethod(this, "PollWorkerRx")
-        SetTimer(this.rxPollFunc, 300)
+        SetTimer(this.rxPollFunc, 50)
 
-        ; 残留 Worker 清理：每 10 分钟枚举一次 Work.exe，强杀不在线程池追踪中的残留进程
-        this.residualCheckFunc := ObjBindMethod(this, "CheckResidualWorkers")
-        SetTimer(this.residualCheckFunc, 600000)
     }
 
     __Delete() {
@@ -159,52 +158,34 @@ class WorkPool {
     }
 
     Clear() {
+        if (this.HasOwnProp("closing"))
+            return
+        this.closing := true
         if (this._nativeFileNext != "") {
             SetTimer(this._nativeFileNext, 0)
             this._nativeFileNext := ""
         }
         this._nativeFileQueue := []
-        nativeRequests := []
-        for req in this._inputGuis {
-            if (req.HasOwnProp("nativeFile"))
-                nativeRequests.Push(req)
-        }
-        for req in nativeRequests
+        requests := []
+        for req in this._inputGuis
+            requests.Push(req)
+        for req in requests
             this._CancelInput(req)
+        OnMessage(WM_WORKER_TO_MASTER, this.rxWakeFunc, 0)
 
         if (this.rxPollFunc != "") {
             SetTimer(this.rxPollFunc, 0)
             this.rxPollFunc := ""
         }
-        if (this.lostWorkerCheckFunc != "") {
-            SetTimer(this.lostWorkerCheckFunc, 0)
-            this.lostWorkerCheckFunc := ""
-        }
         if (this.isDynamic && this.shrinkTimerFunc != "") {
             SetTimer(this.shrinkTimerFunc, 0)
             this.shrinkTimerFunc := ""
         }
-        if (this.residualCheckFunc != "") {
-            SetTimer(this.residualCheckFunc, 0)
-            this.residualCheckFunc := ""
-        }
-
-        ; 先收集所有存活 Worker，避免遍历时改动 freePool/usePool/pending
         allWorkers := []
-        for idx, wd in this.freePool
+        for idx, wd in this.workerMap
             allWorkers.Push(wd)
-        for idx, wd in this.usePool
-            allWorkers.Push(wd)
-        for idx, wd in this.pending
-            allWorkers.Push(wd)
-
-        ; 优雅通知退出后，强制终止并显式释放共享内存/事件句柄：
-        ; 确保 Reload 前 RMT_TX_/RMT_RX_/RMT_EVT_ 等命名对象被彻底释放，
-        ; 避免新旧实例（Worker 进程）竞争同一命名共享内存/事件导致报错。
-        for wd in allWorkers {
-            this.PostMessage(WM_CLEAR_WORK, wd)
-            this.CleanUpWorker(wd, false, true)
-        }
+        for wd in allWorkers
+            this.CleanUpWorker(wd, false, true, true)
 
         this.freePool := Map()
         this.usePool := Map()
@@ -216,42 +197,36 @@ class WorkPool {
     }
 
     CreateWorker(reuseIdx := 0) {
+        if (this.HasOwnProp("closing"))
+            return
+        previousCritical := A_IsCritical
+        Critical("On")
         idx := reuseIdx > 0 ? reuseIdx : ++this.idxCounter
         wd := WorkerData(idx)
-
-        txName := "RMT_TX_" idx
-        rxName := "RMT_RX_" idx
-        evtName := "RMT_EVT_" idx
-
-        wd.shmTx := SharedMemory(txName, 1048576 + 192)
-        wd.tx := RingBuffer(wd.shmTx.ptr, 1048576)
-
-        wd.shmRx := SharedMemory(rxName, 1048576 + 192)
-        wd.rx := RingBuffer(wd.shmRx.ptr, 1048576)
-
-        ; 悬浮窗单槽：与 tx/rx 一并创建，Worker 启动时按同名打开
-        wd.shmHud := SharedMemory("RMT_HUD_" idx, 65536 + 64)
-        wd.hudSeq := NumGet(wd.shmHud.ptr, 4, "UInt")
-
-        wd.hEvt := CreateEvent(evtName)
-        wd.createTick := A_TickCount
-        this.pending[idx] := wd
-        ; Run 可被 Worker 的就绪消息打断，消息处理前必须能查到这个实例。
         this.workerMap[idx] := wd
-
-        Run(Format('"{}" {} {} {}'
-            ; parentHwnd 必须用主进程窗口（A_ScriptHwnd）：XAML 迁移后 MyGui.Hwnd 是 daemon 进程窗口，
-            ; Worker PostMessage 到它收不到主进程 OnMessage，导致 Worker→主进程消息（MsgSendHandler/输入请求）全部失效
-            , this.workerExe
-            , idx
-            , A_ScriptHwnd
-            , this.mainPID), , , &pid)
-
-        wd.pid := pid
-        ; PROCESS_TERMINATE | PROCESS_DUP_HANDLE | SYNCHRONIZE，供强制停止时 TerminateProcess
-        wd.hProc := DllCall("OpenProcess", "uint", 0x0001 | 0x0040 | 0x00100000, "int", false, "uint", pid, "ptr")
+        this.pending[idx] := wd
+        try {
+            wd.shmTx := SharedMemory(1048576 + 192)
+            wd.tx := RingBuffer(wd.shmTx.ptr, 1048576)
+            wd.shmRx := SharedMemory(1048576 + 192)
+            wd.rx := RingBuffer(wd.shmRx.ptr, 1048576)
+            ; 悬浮窗单槽：主进程写最新帧与引擎窗口句柄表，Worker 只读
+            wd.shmHud := SharedMemory(65536 + 64)
+            wd.hudSeq := NumGet(wd.shmHud.ptr, 4, "UInt")
+            wd.hEvt := CreateEvent()
+            if (!wd.hEvt)
+                throw OSError()
+            wd.createTick := A_TickCount
+            child := LaunchWorkerProcess(this.workerExe, "--macro-worker " idx " " A_ScriptHwnd
+                , wd.shmTx.hMap, wd.shmRx.hMap, wd.shmHud.hMap, wd.hEvt)
+            wd.hProc := child.handle
+            wd.pid := child.pid
+        } catch {
+            this.CleanUpWorker(wd, false, true)
+            throw
+        } finally Critical(previousCritical)
         GraphPoolLog("CreateWorker", Format("Worker#{1} 已启动 pid={2} pending={3} maxSize={4}"
-            , idx, pid, this.pending.Count, this.maxSize))
+            , idx, wd.pid, this.pending.Count, this.maxSize))
     }
 
     GetActiveWorkerCount() {
@@ -296,19 +271,17 @@ class WorkPool {
     }
 
     BroadcastPayloadEx(excludeIdx, payload) {
-        if (!this.isDynamic && this.maxSize < 1)
+        if (this.HasOwnProp("closing") || (!this.isDynamic && this.maxSize < 1))
             return
 
-        for idx, wd in this.usePool {
-            if (excludeIdx && idx == excludeIdx)
-                continue
-            this.PushTask(wd, MsgType.EVENT, 0, payload)
-        }
-        for idx, wd in this.freePool {
-            if (excludeIdx && idx == excludeIdx)
-                continue
-            this.PushTask(wd, MsgType.EVENT, 0, payload)
-        }
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            for idx, wd in this.workerMap {
+                if (!wd.isPending && idx != excludeIdx)
+                    this.PushTask(wd, MsgType.EVENT, 0, payload)
+            }
+        } finally Critical(previousCritical)
     }
 
     ; 图形宏全部分支 Worker 结束后，释放宏项占用状态
@@ -318,12 +291,14 @@ class WorkPool {
         if (!tableItem)
             return
         itemIndex := GetItemIndexInTable(tableItem, itemID)
-        item := tableItem.Items[itemIndex]
+        item := GetItemByIndex(tableItem, itemIndex)
         if (!item)
             return
         itemState := 0
-        if (item.Killed)
+        if (item.Killed) {
             itemState := 3
+            ReleaseTableItemHoldKeys(tableItem, itemIndex)
+        }
         item.Killed := false
         item.IsWorkIndex := 0
         item.GraphBranchCount := 0
@@ -335,17 +310,17 @@ class WorkPool {
     }
 
     DrainItemTaskQueue(tableID, itemID) {
-        kept := []
-        drained := 0
-        while (this.taskQueue.Size() > 0) {
-            task := this.taskQueue.Pop()
-            if (task.tableID == tableID && task.itemID == itemID)
-                drained++
-            else
-                kept.Push(task)
-        }
-        for t in kept
-            this.taskQueue.Push(t)
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            kept := []
+            for task in this.taskQueue.queue {
+                if (task.tableID != tableID || task.itemID != itemID)
+                    kept.Push(task)
+            }
+            drained := this.taskQueue.Size() - kept.Length
+            this.taskQueue.queue := kept
+        } finally Critical(previousCritical)
         if (drained > 0)
             GraphPoolLog("清空任务队列", Format("tab={1} item={2} 丢弃={3}", tableID, itemID, drained))
     }
@@ -354,20 +329,27 @@ class WorkPool {
     ; 搜图等 DllCall 期间协作式 Killed/ST 无法打断，只能杀进程。
     KillWorkersForItem(tableID, itemID) {
         toKill := []
-        for idx, wd in this.usePool {
-            if (wd.tableID == tableID && wd.itemID == itemID)
-                toKill.Push(wd)
-        }
-        for wd in toKill {
-            reuseIdx := wd.idx
-            deadPid := wd.pid
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            for idx, wd in this.usePool {
+                if (wd.tableID == tableID && wd.itemID == itemID) {
+                    wd.stopRequested := true
+                    toKill.Push({worker: wd, id: wd.taskID})
+                }
+            }
+        } finally Critical(previousCritical)
+        killed := 0
+        for assignment in toKill {
+            wd := assignment.worker
             GraphPoolLog("强制停止Worker", Format("Worker#{1} tab={2} item={3} pid={4}"
-                , reuseIdx, tableID, itemID, deadPid))
-            ; 先切断环缓冲引用并移出 workerMap，再杀进程/Unmap，避免 Poll 读已释放内存
-            this.CleanUpWorker(wd, true, true)
-            this.ScheduleRecreateWorker(reuseIdx, deadPid)
+                , wd.idx, tableID, itemID, wd.pid))
+            if (this.CleanUpWorker(wd, false, true, false, assignment.id)) {
+                killed++
+                this.ScheduleRecreateWorker(wd.idx)
+            }
         }
-        return toKill.Length
+        return killed
     }
 
     ; 用户停止宏：按 MainSoftData.MacroStopType 选择终止策略。
@@ -380,9 +362,17 @@ class WorkPool {
         if (!tableItem)
             return
         itemIndex := GetItemIndexInTable(tableItem, itemID)
-        item := tableItem.Items[itemIndex]
-        if (!item)
+        item := GetItemByIndex(tableItem, itemIndex)
+        if (!item || item.HasOwnProp("Stopping"))
             return
+        item.Stopping := true
+        try this.StopItemRun(tableItem, itemIndex, item)
+        finally item.DeleteProp("Stopping")
+    }
+
+    StopItemRun(tableItem, itemIndex, item) {
+        tableID := tableItem.ID
+        itemID := item.ID
         item.GraphBranchCount := 0
 
         ; 协作终止由 Worker 松键，主进程在 Worker 停止后释放剩余按键。
@@ -455,32 +445,52 @@ class WorkPool {
     ; 新一次宏触发前：清队列、强停残留 Worker、重置状态
     PrepareItemRun(tableID, itemID) {
         this.DrainItemTaskQueue(tableID, itemID)
-        this.KillWorkersForItem(tableID, itemID)
+        killed := this.KillWorkersForItem(tableID, itemID)
         tableItem := GetTableByID(tableID)
         if (!tableItem)
             return
         itemIndex := GetItemIndexInTable(tableItem, itemID)
-        item := tableItem.Items[itemIndex]
+        item := GetItemByIndex(tableItem, itemIndex)
         if (!item)
             return
         item.GraphBranchCount := 0
         item.Killed := false
         item.IsWorkIndex := 0
+        if (killed)
+            ReleaseTableItemHoldKeys(tableItem, itemIndex)
         item.HoldKey := Map()
         item.PostHookFired := false   ; 新一轮触发：后置钩子重新可派
     }
 
     ; 协作式通知 Worker 停止并松开按键（强杀前尽量先走这一步）
     RequestItemStop(tableID, itemID) {
-        payload := EncodeBatch(EncodeCommand("ST", tableID, itemID))
-        for idx, wd in this.usePool {
-            if (wd.tableID == tableID && wd.itemID == itemID)
-                this.PushTask(wd, MsgType.EVENT, 0, payload)
-        }
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            for idx, wd in this.usePool {
+                if (wd.tableID == tableID && wd.itemID == itemID) {
+                    wd.stopRequested := true
+                    this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("ST", wd.taskID)))
+                }
+            }
+        } finally Critical(previousCritical)
+    }
+
+    SendItemPause(tableID, itemID, state) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            for idx, wd in this.usePool {
+                if (wd.tableID == tableID && wd.itemID == itemID)
+                    this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("PS", wd.taskID, state)))
+            }
+        } finally Critical(previousCritical)
     }
 
     ;分配任务
     Dispatch() {
+        if (this.HasOwnProp("closing"))
+            return
         if (this.isDispatching) {
             this.dispatchPending := true
             return
@@ -504,17 +514,17 @@ class WorkPool {
         }
     }
 
-    ; 移除 freePool 中已失效的 Worker（进程退出或窗口不可达），并安排补建
+    ; 移除已退出的空闲 Worker，并安排补建
     RemoveDeadFreeWorkers() {
         toClean := []
         for idx, wd in this.freePool {
-            if (!this.IsDispatchable(wd))
+            if (this.IsProcessDead(wd))
                 toClean.Push(wd)
         }
         for wd in toClean {
             GraphPoolLog("Worker不可用", Format("Worker#{1} pid={2} 进程已退出 移出并补建", wd.idx, wd.pid))
-            this.CleanUpWorker(wd)
-            this.ScheduleRecreateWorker(wd.idx, 0)
+            if (this.CleanUpWorker(wd))
+                this.ScheduleRecreateWorker(wd.idx)
         }
     }
 
@@ -527,42 +537,22 @@ class WorkPool {
     }
 
     _AssignTask() {
-        ; 取第一个空闲 Worker（freePool 非空由 Dispatch 调用前保证）
-        freeKeys := []
-        for k in this.freePool {
-            freeKeys.Push(k)
+        if (!this.freePool.Count || !this.taskQueue.Size())
+            return false
+        for key, worker in this.freePool {
+            idx := key
+            wd := worker
             break
-        }
-        idx := freeKeys[1]
-        wd := this.freePool[idx]
-
-        ; 空闲池里可能残留已清理的实例（tx/rx 已置 0，或已被同编号新实例替换），
-        ; 直接拿去 Push 会抛「This value of type "Integer" has no method named "Push"」。
-        ; 先把它剔出空闲池，再让 Dispatch 的 while 继续取下一个，任务不动。
-        if (!this.IsInstanceAlive(wd)) {
-            this.freePool.Delete(idx)
-            ; 进程若还活着（实例被新实例顶替后的孤儿），通知它自行退出，别留在后台
-            if (wd.pid && ProcessExist(wd.pid))
-                try this.PostMessage(WM_CLEAR_WORK, wd)
-            this.CleanUpWorker(wd)
-            GraphPoolLog("Dispatch跳过", Format("Worker#{1} 空闲池实例已失效 pid={2} 进程存活={3} 队列={4}"
-                , idx, wd.pid, (wd.pid && ProcessExist(wd.pid)) ? 1 : 0, this.taskQueue.Size()))
-            return true
         }
 
         task := this.taskQueue.Pop()
         this.taskSequence := (this.taskSequence & 0xFFFFFFFF) + 1
         if (this.taskSequence > 0xFFFFFFFF)
             this.taskSequence := 1
-        if (!wd.tx.Push(MsgType.TASK, this.taskSequence, task.cmd, 0)) {
-            this.taskQueue.queue.InsertAt(1, task)
-            GraphPoolLog("Dispatch失败", Format("Worker#{1} tx已满", wd.idx))
-            return false
-        }
-
         this.freePool.Delete(idx)
         this.usePool[idx] := wd
         wd.taskID := this.taskSequence
+        wd.stopRequested := false
         wd.tableID := task.tableID
         wd.itemID := task.itemID
         wd.isGraphBranch := task.HasOwnProp("isGraphBranch") ? task.isGraphBranch : false
@@ -580,12 +570,14 @@ class WorkPool {
         }
         wd.idleTick := 0
 
-        if (wd.hEvt)
-            DllCall("SetEvent", "ptr", wd.hEvt)
-        if (!this.PostMessage(WM_MASTER_TO_WORKER, wd)) {
-            ; 任务已写入共享缓冲区，事件唤醒仍可执行。重复入队会运行两次；
-            ; 若进程确实已退出，由死亡回收路径结束本次任务。
-            GraphPoolLog("Dispatch消息唤醒失败", Format("Worker#{1} node={2}", wd.idx, wd.graphNodeSerial))
+        tableItem := GetTableByID(task.tableID)
+        item := GetItemByIndex(tableItem, GetItemIndexInTable(tableItem, task.itemID))
+        paused := item && item.Pause ? 1 : 0
+        if (!this.PushTask(wd, MsgType.TASK, wd.taskID, task.cmd, paused)) {
+            this.taskQueue.queue.InsertAt(1, task)
+            if (this.CleanUpWorker(wd, false, true))
+                this.ScheduleRecreateWorker(wd.idx)
+            return false
         }
         GraphPoolLog("Dispatch分配", Format("Worker#{1} tab={2} item={3} graph={4} 闲置={5} 队列={6}"
             , wd.idx, task.tableID, task.itemID, task.isGraphBranch ? 1 : 0
@@ -604,64 +596,10 @@ class WorkPool {
                 return true
         }
         for task in this.taskQueue.queue {
-            if (task.isGraphBranch && task.tableID == tableID && task.itemID == itemID)
+            if (task.tableID == tableID && task.itemID == itemID)
                 return true
         }
         return false
-    }
-
-    ; 延迟尝试结束图形宏项（用于 Worker 完成后还有排队任务的情况）
-    TryFinishGraphItem(tID, iID) {
-        tableItem := GetTableByID(tID)
-        if (!tableItem)
-            return
-        itemIndex := GetItemIndexInTable(tableItem, iID)
-        item := tableItem.Items[itemIndex]
-        if (item && item.GraphBranchCount > 0)
-            return
-        if (this.HasItemWork(tID, iID))
-            return
-        this.FinishGraphMacroItem(tID, iID)
-    }
-
-    ; 进程存活时按 pid 重新解析 Worker 窗口（缓存 hwnd 可能已失效）
-    ResolveWorkerHwnd(wd) {
-        if (!wd.pid || !ProcessExist(wd.pid))
-            return 0
-        if (wd.hwnd) {
-            try {
-                if (WinExist("ahk_id " wd.hwnd) && WinGetPID("ahk_id " wd.hwnd) == wd.pid)
-                    return wd.hwnd
-            }
-        }
-        try {
-            hwnd := WinExist("ahk_pid " wd.pid " ahk_exe " this.workerExeName)
-            if (!hwnd)
-                hwnd := WinExist("ahk_pid " wd.pid)
-            if (hwnd && WinGetPID("ahk_id " hwnd) == wd.pid) {
-                if (wd.hwnd != hwnd)
-                    GraphPoolLog("Workerhwnd恢复", Format("Worker#{1} 旧={2} 新={3} pid={4}"
-                        , wd.idx, wd.hwnd, hwnd, wd.pid))
-                wd.hwnd := hwnd
-                return hwnd
-            }
-        }
-        return 0
-    }
-
-    GetWorkerDispatchBlockReason(wd) {
-        ; tx 已置 0 = 该实例已被清理，只剩坏引用
-        if (!wd || !wd.tx)
-            return "实例已清理"
-        if (!wd.pid || !ProcessExist(wd.pid))
-            return "进程已退出"
-        if (!this.ResolveWorkerHwnd(wd))
-            return "窗口不可达"
-        return ""
-    }
-
-    IsDispatchable(wd) {
-        return this.GetWorkerDispatchBlockReason(wd) == ""
     }
 
     ; 重置 Worker 的任务状态（任务完成或中止时调用）
@@ -703,72 +641,40 @@ class WorkPool {
         wd.isGraphBranch := false
     }
 
-    OnWorkerReady(wParam, lParam, msg, hwnd) {
-        idx := wParam
-        if (!this.pending.Has(idx))
-            return
-        wd := this.pending[idx]
-        ; 迟到的就绪消息：该编号已被新实例占用 → 丢弃，别把旧实例塞进空闲池
-        if (this.workerMap.Has(idx) && this.workerMap[idx] != wd)
-            return
-        ; Worker 可能在 Run 返回并写入 pid 之前发来就绪消息。
-        ; 延后验证，避免把仍在启动的 Worker 当成失效实例清理。
-        if (!wd.pid) {
-            SetTimer(() => this.OnWorkerReady(wParam, lParam, msg, hwnd), -1)
-            return
-        }
-        readyHwnd := lParam > 0 ? lParam : hwnd
-        if (readyHwnd && wd.pid) {
-            try {
-                if (WinGetPID("ahk_id " readyHwnd) != wd.pid) {
-                    GraphPoolLog("Worker就绪忽略", Format("Worker#{1} 迟到就绪 pid不匹配 expect={2}", idx, wd.pid))
-                    return
-                }
-            } catch {
+    OnWorkerReady(wd, hwnd) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (!wd.isPending || this.IsProcessDead(wd) || !this.IsInstanceAlive(wd))
                 return
-            }
-        }
-        this.pending.Delete(idx)
+            pid := 0
+            DllCall("GetWindowThreadProcessId", "ptr", hwnd, "uint*", &pid)
+            if (pid != wd.pid)
+                return
 
-        wd.hwnd := readyHwnd
-        wd.isPending := false
-        wd.idleTick := A_TickCount
-
-        ; 动态创建的 Worker 需要同步主线程当前的变量和数组状态
-        this.SyncStateToWorker(wd)
-
-        ; 同步期间实例可能已被清理/替换，别再往空闲池里放僵尸
-        if (!this.IsInstanceAlive(wd))
-            return
-
-        this.freePool[idx] := wd
-        GraphPoolLog("Worker就绪", Format("Worker#{1} 就绪后闲置={2} 队列={3} 仍启动中=[{4}]"
-            , idx, this.freePool.Count, this.taskQueue.Size(), this.GetPendingWorkerIds()))
-        ; §17 热重载：启动期间收到配置变更（configDirty）→ 就绪后立即补发重载
-        if (wd.configDirty)
-            this.SendConfigRefresh(wd)
+            wd.hwnd := hwnd
+            wd.idleTick := A_TickCount
+            this.SyncStateToWorker(wd)
+            if (wd.configDirty)
+                this.SendConfigRefresh(wd)
+            this.pending.Delete(wd.idx)
+            wd.isPending := false
+            this.freePool[wd.idx] := wd
+        } finally Critical(previousCritical)
         this.Dispatch()
     }
 
-    ; 将主线程的全部变量和数组状态同步到指定 Worker（用于动态创建的 Worker 初始化）
+    ; 快照与后续增量、任务使用同一条有序通道。
     SyncStateToWorker(wd) {
-        ; 同步指令显示状态：Worker 默认 false，需在就绪时拉取主进程当前值
-        this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CT", MySoftData.CMDTip)))
-
-        ; 序列化 VariableMap → [[name, value], ...]
-        VarArr := []
+        variables := []
         for name, value in MySoftData.VariableMap
-            VarArr.Push([name, value])
-
-        ; 序列化 ArrayMap → [[name, arrayStr], ...]
-        ArrArr := []
-        for name, arr in MySoftData.ArrayMap
-            ArrArr.Push([name, GetArrayStr(arr)])
-
-        if (VarArr.Length > 0 || ArrArr.Length > 0) {
-            payload := JSON.stringify(["SyncVarData", VarArr, ArrArr])
-            this.PushTask(wd, MsgType.EVENT, 0, payload)
-        }
+            variables.Push([name, value])
+        arrays := []
+        for name, value in MySoftData.ArrayMap
+            arrays.Push([name, value])
+        payload := EncodeBatch(EncodeCommand("CT", MySoftData.CMDTip)
+            , EncodeCommand("SN", JSON.stringify([variables, arrays])))
+        this.PushTask(wd, MsgType.EVENT, 0, payload)
     }
 
     ; ---- §17 热重载：配置变更 → Worker 重载（新增宏/宏内容保存选「否」即生效） ----
@@ -799,8 +705,8 @@ class WorkPool {
     SendConfigRefresh(wd) {
         if (!wd || !wd.tx)
             return
-        wd.configDirty := false
-        this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CF")))
+        if (this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CF"))))
+            wd.configDirty := false
     }
 
     ; 只摘除「同一个对象」：同编号的新实例（重建）不能被旧实例的清理顺带删掉。
@@ -816,18 +722,24 @@ class WorkPool {
     ; 被新一轮热键或强制停止重入并清掉这个 wd。此时若照旧往池里放，空闲池就留下一个
     ; tx=0 的僵尸实例，下次分派时 wd.tx.Push 直接抛「Integer has no method named Push」。
     ReleaseWorkerToFreePool(wd) {
-        if (!this.IsInstanceAlive(wd)) {
-            this.RemoveWorkerFromPools(wd)
-            return false
-        }
         this._CancelWorkerInputs(wd)
-        if (this.usePool.Has(wd.idx) && this.usePool[wd.idx] == wd)
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (!this.IsInstanceAlive(wd))
+                return false
             this.usePool.Delete(wd.idx)
-        this.freePool[wd.idx] := wd
-        wd.taskID := 0
-        wd.isGraphBranch := false
-        wd.idleTick := A_TickCount
-        return true
+            wd.taskID := 0
+            wd.tableID := ""
+            wd.itemID := ""
+            wd.isGraphBranch := false
+            wd.graphNodeSerial := ""
+            wd.idleTick := A_TickCount
+            if (wd.configDirty)
+                this.SendConfigRefresh(wd)
+            this.freePool[wd.idx] := wd
+            return true
+        } finally Critical(previousCritical)
     }
 
     ; wd 是否仍是线程池里登记在册的活实例（未被强杀/缩容/重载清理，也未被同编号新实例替换）。
@@ -836,200 +748,149 @@ class WorkPool {
         return wd && wd.tx && this.workerMap.Has(wd.idx) && this.workerMap[wd.idx] == wd
     }
 
-    ; resetTask: 是否重置宏项占用状态
-    ; terminateProcess: 强制停止时先杀进程再关映射
-    CleanUpWorker(wd, resetTask := true, terminateProcess := false) {
-        if (!wd)
-            return
-        CloseXamlCountDownForWorker(wd.pid)
-        ; 清理期间可能因消息/定时器重入，旧的 wd 也可能与补建的同编号 Worker 并存。
-        ; 只允许当前登记的实例清理一次，先移除登记再执行可能触发消息的状态更新。
-        if (!this.workerMap.Has(wd.idx) || this.workerMap[wd.idx] != wd) {
-            ; 已被清理或被同编号新实例替换：仍要把这个陈旧对象从池里摘掉，
-            ; 否则它会带着 tx=0 留在 freePool，下次分派直接抛「Integer has no method named Push」。
+    ; 先停止进程，再读取最后已提交的按键状态并关闭通道。
+    CleanUpWorker(wd, resetTask := true, terminateProcess := false, releaseKeys := false, expectedTaskID := 0) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (!wd || !this.workerMap.Has(wd.idx) || this.workerMap[wd.idx] != wd)
+                return false
+            if (expectedTaskID && wd.taskID != expectedTaskID)
+                return false
+            if (wd.hProc && !this.IsProcessDead(wd)) {
+                if (!terminateProcess) {
+                    this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("QT")))
+                    DllCall("WaitForSingleObject", "ptr", wd.hProc, "uint", this.stopTimeoutMs)
+                }
+                if (!this.IsProcessDead(wd)) {
+                    DllCall("TerminateProcess", "ptr", wd.hProc, "uint", 1)
+                    if (DllCall("WaitForSingleObject", "ptr", wd.hProc, "uint", 200, "uint") != 0)
+                        return false
+                }
+            }
+
+            this.workerMap.Delete(wd.idx)
             this.RemoveWorkerFromPools(wd)
-            return
-        }
-        this.workerMap.Delete(wd.idx)
-        this.RemoveWorkerFromPools(wd)
-        this._CancelWorkerInputs(wd)
+            if (wd.taskID)
+                this.DrainWorkerHoldEvents(wd)
+            if (wd.tx)
+                wd.tx.Invalidate()
+            if (wd.rx)
+                wd.rx.Invalidate()
+            wd.tx := 0
+            wd.rx := 0
+            if (wd.shmTx)
+                wd.shmTx.Close()
+            if (wd.shmRx)
+                wd.shmRx.Close()
+            if (wd.hEvt)
+                CloseHandle(wd.hEvt)
+            if (wd.hProc)
+                CloseHandle(wd.hProc)
+            wd.hEvt := 0
+            wd.hProc := 0
+        } finally Critical(previousCritical)
+        if (releaseKeys && wd.taskID)
+            this.ReleaseWorkerTaskKeys(wd)
         if (resetTask)
             this.ResetWorkerTaskState(wd, 3)
+        this._CancelWorkerInputs(wd)
+        if (wd.pid)
+            try CloseXamlCountDownForWorker(wd.pid)
+        return true
+    }
 
-        ; 必须先切断 tx/rx，正在执行的 ProcessWorkerRx 会因此立刻退出，不再 Pop
-        shmTx := wd.shmTx
-        shmRx := wd.shmRx
-        shmHud := wd.shmHud
-        tx := wd.tx
-        rx := wd.rx
-        hEvt := wd.hEvt
-        hProc := wd.hProc
-        wd.tx := 0
-        wd.rx := 0
-        wd.shmTx := 0
-        wd.shmRx := 0
-        wd.shmHud := 0
-        wd.hEvt := 0
-        wd.hProc := 0
+            this.workerMap.Delete(wd.idx)
+            this.RemoveWorkerFromPools(wd)
+            if (wd.taskID)
+                this.DrainWorkerHoldEvents(wd)
+            if (wd.tx)
+                wd.tx.Invalidate()
+            if (wd.rx)
+                wd.rx.Invalidate()
+            wd.tx := 0
+            wd.rx := 0
+            if (wd.shmTx)
+                wd.shmTx.Close()
+            if (wd.shmRx)
+                wd.shmRx.Close()
+            if (wd.shmHud)
+                wd.shmHud.Close()
+            if (wd.hEvt)
+                CloseHandle(wd.hEvt)
+            if (wd.hProc)
+                CloseHandle(wd.hProc)
+            wd.hEvt := 0
+            wd.hProc := 0
+        } finally Critical(previousCritical)
+        if (releaseKeys && wd.taskID)
+            this.ReleaseWorkerTaskKeys(wd)
+        if (resetTask)
+            this.ResetWorkerTaskState(wd, 3)
+        this._CancelWorkerInputs(wd)
+        if (wd.pid)
+            try CloseXamlCountDownForWorker(wd.pid)
+        return true
+    }
 
-        ; 使残留的 RingBuffer 引用（如 ProcessWorkerRx 内暂停时捕获的 rb）失效，
-        ; 防止 Unmap 后再次 NumGet 读取已释放内存
-        if (tx)
-            tx.Invalidate()
-        if (rx)
-            rx.Invalidate()
-
-        if (terminateProcess) {
-            if (hProc)
-                DllCall("TerminateProcess", "ptr", hProc, "uint", 1)
-            if (wd.pid && ProcessExist(wd.pid)) {
-                try ProcessClose(wd.pid)
-            }
-        }
-
+    DrainWorkerHoldEvents(wd) {
         try {
-            if (shmTx)
-                shmTx.Close()
-            if (shmRx)
-                shmRx.Close()
-            ; 悬浮窗单槽：不释放会随 Worker 反复重建累积泄漏（同名映射每次均为新视图）
-            if (shmHud)
-                shmHud.Close()
-            if (hEvt)
-                CloseHandle(hEvt)
-            if (hProc)
-                CloseHandle(hProc)
-        }
-
-        ; 残留诊断：解除追踪后短暂等待，若进程仍存活则记录（残留 Work.exe 的关键线索）。
-        ; 强杀(terminateProcess=true)为异步；缩容/重载(terminateProcess=false)依赖 WM_CLEAR_WORK 让 Worker
-        ; 自行退出，二者都留出短暂时间后仍未退出，才视为疑似残留。后续由 CheckResidualWorkers 兜底强杀。
-        if (wd.pid) {
-            waited := 0
-            while (waited < 200 && ProcessExist(wd.pid)) {
-                Sleep(10)
-                waited += 10
-            }
-            if (ProcessExist(wd.pid))
-                GraphPoolLog("Worker清理后仍存活", Format("Worker#{1} pid={2} 方式={3} 进程未退出"
-                    , wd.idx, wd.pid, terminateProcess ? "强杀" : "仅解除追踪"))
-        }
-    }
-
-    ScheduleRecreateWorker(reuseIdx, deadPid := 0) {
-        SetTimer(() => this.TryRecreateWorker(reuseIdx, deadPid), -500)
-    }
-
-    TryRecreateWorker(reuseIdx, deadPid := 0) {
-        if (deadPid && ProcessExist(deadPid)) {
-            this.ScheduleRecreateWorker(reuseIdx, deadPid)
-            return
-        }
-        if (this.freePool.Has(reuseIdx) || this.usePool.Has(reuseIdx) || this.pending.Has(reuseIdx))
-            return
-        this.CreateWorker(reuseIdx)
-        this.Dispatch()
-    }
-
-    ; 仅进程已退出视为丢失（pending 慢启动不杀）；短暂抖动时二次确认
-    IsProcessDead(wd) {
-        if (!wd.pid)
-            return true
-        if (ProcessExist(wd.pid))
-            return false
-        Sleep(50)
-        return !ProcessExist(wd.pid)
-    }
-
-    ReclaimDeadUsePoolWorkers() {
-        toAbort := []
-        for idx, wd in this.usePool {
-            if (this.IsProcessDead(wd))
-                toAbort.Push(wd)
-        }
-        for wd in toAbort
-            this.AbortDeadWorkerTask(wd)
-    }
-
-    AbortDeadWorkerTask(wd) {
-        tID := wd.tableID
-        iID := wd.itemID
-        startNode := wd.graphNodeSerial
-        GraphPoolLog("Worker进程退出", Format("Worker#{1} Master检测到进程已退出(非StopMacro) tab={2} item={3} graph={4} node={5} pid={6}"
-            , wd.idx, tID, iID, wd.isGraphBranch ? 1 : 0, startNode, wd.pid))
-        isGraphTask := false
-        if (tID && iID) {
-            tableItem := GetTableByID(tID)
-            if (tableItem) {
-                itemIndex := GetItemIndexInTable(tableItem, iID)
-                item := GetItemByIndex(tableItem, itemIndex)
-                branchCount := item ? item.GraphBranchCount : 0
-                isGraphTask := (wd.isGraphBranch || branchCount > 0)
-                if (isGraphTask && item) {
-                    remainCount := branchCount
-                    if (branchCount > 0) {
-                        item.GraphBranchCount--
-                        remainCount := item.GraphBranchCount
-                    }
-                    GraphPoolLog("图形分支Worker异常退出", Format("Worker#{1} tab={2} item={3} 剩余计数={4} 忙碌=[{5}] 队列={6}"
-                        , wd.idx, tID, iID, remainCount, this.GetBusyWorkerIds(), this.taskQueue.Size()))
-                    item.Killed := true
-                    if (!this.HasItemWork(tID, iID))
-                        this.DrainItemTaskQueue(tID, iID)
+            while (wd.rx && wd.rx.Pop(&type, &id, &payload)) {
+                if (type != MsgType.EVENT || id != wd.taskID)
+                    continue
+                for record in StrSplit(SubStr(payload, 3), IPC_REC) {
+                    parts := StrSplit(record, IPC_SEP)
+                    if (parts.Length == 6 && parts[1] == "HK")
+                        SyncWorkerHoldKey(UnescapeIPC(parts[2]), UnescapeIPC(parts[3]), UnescapeIPC(parts[4])
+                            , UnescapeIPC(parts[5]), UnescapeIPC(parts[6]))
                 }
             }
         }
-        reuseIdx := wd.idx
-        skipReset := isGraphTask
-        this.CleanUpWorker(wd, !skipReset)
-        this.ScheduleRecreateWorker(reuseIdx, 0)
-        if (isGraphTask && !this.HasItemWork(tID, iID)) {
-            tableItem := GetTableByID(tID)
-            if (tableItem) {
-                itemIndex := GetItemIndexInTable(tableItem, iID)
-                item := tableItem.Items[itemIndex]
-                if (!(item && item.GraphBranchCount > 0))
-                    this.FinishGraphMacroItem(tID, iID)
-            }
-        }
+    }
+
+    ReleaseWorkerTaskKeys(wd) {
+        tableItem := GetTableByID(wd.tableID)
+        if (tableItem)
+            ReleaseTableItemHoldKeys(tableItem, GetItemIndexInTable(tableItem, wd.itemID))
+    }
+
+    ScheduleRecreateWorker(index) {
+        if (!this.HasOwnProp("closing"))
+            SetTimer(() => this.TryRecreateWorker(index), -500)
+    }
+
+    TryRecreateWorker(index) {
+        if (this.HasOwnProp("closing") || this.workerMap.Has(index))
+            return
+        this.CreateWorker(index)
         this.Dispatch()
     }
 
-    ; 启动 10s 后检测；数量已满则跳过
-    CheckLostWorkers() {
-        active := this.GetActiveWorkerCount()
-        if (active >= this.targetWorkerCount && this.pending.Count == 0) {
-            SetTimer(this.lostWorkerCheckFunc, 0)
-            GraphPoolLog("检测丢失Worker", Format("Worker数量已满足 目标={1} 当前={2} 跳过检测", this.targetWorkerCount, active))
+    IsProcessDead(wd) {
+        return wd.hProc && DllCall("WaitForSingleObject", "ptr", wd.hProc, "uint", 0, "uint") == 0
+    }
+
+    AbortDeadWorkerTask(wd) {
+        tableID := wd.tableID
+        itemID := wd.itemID
+        wasStopping := wd.stopRequested
+        tableItem := GetTableByID(tableID)
+        index := GetItemIndexInTable(tableItem, itemID)
+        item := GetItemByIndex(tableItem, index)
+        if (!this.CleanUpWorker(wd, false, true))
             return
+        this.ScheduleRecreateWorker(wd.idx)
+        if (item && !wasStopping) {
+            ; 图形分支共享按键状态，先停下同一轮的其它分支，再统一松键。
+            if (wd.isGraphBranch || item.GraphBranchCount > 0)
+                this.ForceStopItem(tableID, itemID)
+            else {
+                this.ReleaseWorkerTaskKeys(wd)
+                item.ToggleState := false
+                this.ResetWorkerTaskState(wd, 3)
+            }
         }
-        this.lostWorkerCheckRound++
-        removed := 0
-        toDrop := []
-        for idx, wd in this.pending {
-            if (this.IsProcessDead(wd))
-                toDrop.Push(wd)
-        }
-        for wd in toDrop {
-            reuseIdx := wd.idx
-            if (wd.hwnd)
-                try this.PostMessage(WM_CLEAR_WORK, wd)
-            GraphPoolLog("移除丢失Worker", Format("Worker#{1} pid={2} age={3}ms 进程已退出 将按原编号补建"
-                , wd.idx, wd.pid, A_TickCount - wd.createTick))
-            this.CleanUpWorker(wd)
-            this.ScheduleRecreateWorker(reuseIdx, 0)
-            removed++
-        }
-        active := this.GetActiveWorkerCount()
-        GraphPoolLog("检测丢失Worker", Format("第{1}/5 目标={2} 当前={3} 移除补建={4} 闲置=[{5}] 启动中=[{6}]"
-            , this.lostWorkerCheckRound, this.targetWorkerCount, active, removed
-            , this.GetFreeWorkerIds(), this.GetPendingWorkerIds()))
-        if (active >= this.targetWorkerCount || this.lostWorkerCheckRound >= 5) {
-            SetTimer(this.lostWorkerCheckFunc, 0)
-            this.Dispatch()
-            return
-        }
-        SetTimer(this.lostWorkerCheckFunc, -2000)
+        this.Dispatch()
     }
 
     FreeShrinkCheck() {
@@ -1047,70 +908,36 @@ class WorkPool {
         }
         ; 先收集再清理：CleanUpWorker 会从 freePool 删除元素，直接在遍历中删会跳过/漏项
         for wd in toShrink {
-            this.PostMessage(WM_CLEAR_WORK, wd)
-            this.CleanUpWorker(wd)
-        }
-    }
-
-    ; 残留 Worker 清理：每 10 分钟枚举一次 Work.exe 进程。
-    ; 若存在父进程为当前主进程、但已不在线程池（free/use/pending，均登记在 workerMap）追踪中的
-    ; 进程，说明其为历史强杀/缩容/重载过程中未真正退出的残留，直接强杀回收资源。
-    CheckResidualWorkers() {
-        tracked := Map()
-        for idx, wd in this.workerMap {
-            if (wd.pid)
-                tracked[wd.pid] := true
-        }
-        if (IsObject(this._nativeFileCurrent) && this._nativeFileCurrent.childPID)
-            tracked[this._nativeFileCurrent.childPID] := true
-
-        residual := []
-        for p in EnumProcesses() {
-            if (StrLower(p.name) != StrLower(this.workerExeName))
-                continue
-            ; 只清理归属当前主进程的 Worker，避免误杀其他 RMT 实例；父进程未知(0)按本实例处理
-            if (p.parentPid && p.parentPid != this.mainPID)
-                continue
-            if (tracked.Has(p.pid))
-                continue
-            residual.Push(p)
-        }
-
-        if (residual.Length == 0)
-            return
-
-        for p in residual {
-            GraphPoolLog("清理残留Worker", Format("pid={1} parent={2} 不在线程池追踪中 强杀", p.pid, p.parentPid))
-            this.ForceKillProcess(p.pid)
-        }
-        GraphPoolLog("残留Worker检查", Format("追踪={1} 发现残留={2} 已强杀", tracked.Count, residual.Length))
-    }
-
-    ; 按 PID 强杀进程（残留 Worker 清理用），TerminateProcess + ProcessClose 双保险
-    ForceKillProcess(pid) {
-        hProc := DllCall("OpenProcess", "uint", 0x0001, "int", false, "uint", pid, "ptr")
-        if (hProc) {
-            DllCall("TerminateProcess", "ptr", hProc, "uint", 1)
-            DllCall("CloseHandle", "ptr", hProc)
-        }
-        if (ProcessExist(pid)) {
-            try ProcessClose(pid)
+            if (this.freePool.Has(wd.idx) && this.freePool[wd.idx] == wd)
+                this.CleanUpWorker(wd)
         }
     }
 
     PollWorkerRx() {
-        this.ReclaimDeadUsePoolWorkers()
-        for idx, wd in this.workerMap {
-            if (!wd.rx || wd.rxBusy)
+        if (this.HasOwnProp("closing"))
+            return
+        workers := []
+        for idx, wd in this.workerMap
+            workers.Push(wd)
+        for wd in workers {
+            if (!this.IsInstanceAlive(wd) || wd.rxBusy)
                 continue
+            if (wd.tx.Flush())
+                this.WakeWorker(wd)
             if (!wd.rx.IsEmpty())
                 this.ProcessWorkerRx(wd)
+            if (!this.IsInstanceAlive(wd))
+                continue
+            if (this.IsProcessDead(wd) || (wd.isPending && A_TickCount - wd.createTick > 30000))
+                this.AbortDeadWorkerTask(wd)
         }
     }
 
     ; Worker→主线程消息处理：读取 RingBuffer 中的结果与事件
     ; 返回 0 符合 OnMessage 约定（0 表示不拦截该消息）。
     OnWorkerToMaster(wParam := 0, lParam := 0, msg := 0, hwnd := 0) {
+        if (this.HasOwnProp("closing"))
+            return 0
         idx := wParam
         if (!this.workerMap.Has(idx)) {
             GraphPoolLog("Worker消息无目标", Format("idx={1} 不在workerMap 闲置=[{2}] 忙碌=[{3}]"
@@ -1134,9 +961,10 @@ class WorkPool {
     ; 重复补发通知。
     ; 返回 1 表示本次读到一帧，0 表示无新帧。
     ReadWorkerHud(wd) {
-        ; IsRxAlive 同时校验实例仍在 workerMap 中且通道有效：
+        global MyHudSlotMap
+        ; IsInstanceAlive 同时校验实例仍在 workerMap 中且通道有效：
         ; 调用方可能传入刚被回收的实例，其共享内存已不可访问。
-        if (!IsObject(wd) || !wd.shmHud || !this.IsRxAlive(wd))
+        if (!IsObject(wd) || !wd.shmHud || !this.IsInstanceAlive(wd))
             return 0
         p := wd.shmHud.ptr
         loop 3 {
@@ -1155,6 +983,9 @@ class WorkPool {
             parts := StrSplit(raw, Chr(1), , 4)
             if (parts.Length < 4)
                 return 0
+            ; 记录该指令所属 Worker 的槽基址：窗口建好后把引擎句柄登记进去，
+            ; Worker 下一帧即可直连投递
+            try MyHudSlotMap[parts[1]] := p
             HudOutputShow(parts[1], parts[4], parts[2], parts[3])
             return 1
         }
@@ -1168,114 +999,49 @@ class WorkPool {
         return ids != "" ? ids : "无"
     }
 
-    ; 环缓冲是否仍归属该 Worker 且可安全访问（强制停止会先切断 rx）
-    IsRxAlive(wd, rb := 0) {
-        if (!wd || !wd.rx || !this.workerMap.Has(wd.idx))
-            return false
-        if (rb != 0 && wd.rx != rb)
-            return false
-        return true
-    }
-
     ProcessWorkerRx(wd) {
-        if (!this.IsRxAlive(wd) || wd.rxBusy)
+        if (!this.IsInstanceAlive(wd) || wd.rxBusy)
             return
         wd.rxBusy := true
         ; 单次处理预算：条数与时间双上限。
-        ;
-        ; 仅限制 200 条不足：指令显示开启时每条事件均需同步更新 XAML，
-        ; 200 条可阻塞数百毫秒；期间 Worker 持续投递，主线程队列迅速达到 1 万条上限，
-        ; PostMessage 随后返回 1816（配额不足），其他 Worker 的通知一并丢失。
-        ;
-        ; 时间上限使主线程约每 15ms 返回一次消息循环，避免队列堆积。
+        ; 仅限制条数不足：指令显示开启时每条事件都要同步更新 XAML，
+        ; 200 条可阻塞数百毫秒，期间 Worker 持续投递会顶满主线程队列（1 万条），
+        ; 后续 PostMessage 返回 1816，其他 Worker 的通知一并丢失。
+        ; 时间上限使主线程约每 15ms 返回一次消息循环。
         maxPerCall := 200
         maxMs := 15
         startTick := A_TickCount
         handled := 0
         more := false
+        failed := false
         try {
-            loop {
-                rb := wd.rx
-                if (!this.IsRxAlive(wd, rb))
-                    return
-                while (this.IsRxAlive(wd, rb)) {
-                    if (!rb.Pop(&type, &id, &result))
-                        break
-                    if (!this.IsRxAlive(wd, rb))
-                        return
-                    switch type {
-                        case MsgType.FINISH:
-                            ; FINISH 处理过程会走 Dispatch → CleanUpWorker → Sleep，期间可被新的
-                            ; 热键/强制停止重入：此刻 wd 可能已被清理（tx=0）或被同编号新实例替换。
-                            ; 这时若继续把它放回 freePool，就会留下一个 tx=0 的僵尸空闲 Worker。
-                            if (!this.IsInstanceAlive(wd))
-                                return
-                            if (!this.usePool.Has(wd.idx) || wd.taskID != id)
-                                continue
-                            tID := wd.tableID
-                            iID := wd.itemID
-                            branchCount := 0
-                            if (tID && iID) {
-                                tableItem := GetTableByID(tID)
-                                if (tableItem) {
-                                    itemIndex := GetItemIndexInTable(tableItem, iID)
-                                    item := GetItemByIndex(tableItem, itemIndex)
-                                    if (item)
-                                        branchCount := item.GraphBranchCount
-                                }
-                            }
-                            isGraphTask := (wd.isGraphBranch || branchCount > 0) && tID && iID
-                            if (isGraphTask) {
-                                tableItem := GetTableByID(tID)
-                                item := tableItem ? GetItemByIndex(tableItem, GetItemIndexInTable(tableItem, iID)) : ""
-                                remainCount := branchCount
-                                if (item && branchCount > 0) {
-                                    item.GraphBranchCount--
-                                    remainCount := item.GraphBranchCount
-                                }
-                                GraphPoolLog("Worker完成", Format("Worker#{1} tab={2} item={3} 图形分支 graph={4} 剩余计数={5} 队列={6} 忙碌=[{7}]"
-                                    , wd.idx, tID, iID, wd.isGraphBranch ? 1 : 0, remainCount, this.taskQueue.Size(), this.GetBusyWorkerIds()))
-                                if (!this.ReleaseWorkerToFreePool(wd))
-                                    return
-                                wd.tableID := ""
-                                wd.itemID := ""
-                                wd.graphNodeSerial := ""
-                                ; §17 热重载：忙时延后的配置刷新，任务结束回空闲时补发
-                                if (wd.configDirty)
-                                    this.SendConfigRefresh(wd)
-                                if (remainCount <= 0) {
-                                    if (!this.HasItemWork(tID, iID))
-                                        this.FinishGraphMacroItem(tID, iID)
-                                    else
-                                        SetTimer(() => this.TryFinishGraphItem(tID, iID), -200)
-                                }
-                                this.Dispatch()
-                            } else {
-                                this.ResetWorkerTaskState(wd, 0)
-                                if (!this.ReleaseWorkerToFreePool(wd))
-                                    return
-                                ; §17 热重载：忙时延后的配置刷新，任务结束回空闲时补发
-                                if (wd.configDirty)
-                                    this.SendConfigRefresh(wd)
-                                this.Dispatch()
-                            }
-                        case MsgType.EVENT:
-                            this.OnWorkerEvent(wd, result)
-                            ; OnWorkerEvent 内可能 Sleep（如指令提示），期间强制停止会切断 rx
-                            if (!this.IsRxAlive(wd, rb))
-                                return
-                    }
-                    handled += 1
-                    if (handled >= maxPerCall || (A_TickCount - startTick) >= maxMs) {
-                        more := true
-                        break
-                    }
-                }
-                if (more || !this.IsRxAlive(wd, rb) || rb.IsEmpty())
+            while (this.IsInstanceAlive(wd) && wd.rx.Pop(&type, &id, &result)) {
+                if (!this.IsInstanceAlive(wd))
                     break
+                switch type {
+                    case MsgType.READY:
+                        this.OnWorkerReady(wd, Integer(result))
+                    case MsgType.FINISH:
+                        if (wd.taskID == id && this.usePool.Has(wd.idx))
+                            this.HandleWorkerFinish(wd, result)
+                    case MsgType.EVENT:
+                        if (!wd.isPending && (id == 0 || id == wd.taskID))
+                            this.OnWorkerEvent(wd, result)
+                    default:
+                        throw Error("Unexpected Worker packet")
+                }
+                handled += 1
+                if (handled >= maxPerCall || (A_TickCount - startTick) >= maxMs) {
+                    more := true
+                    break
+                }
             }
-        } finally {
-            wd.rxBusy := false
+        } catch as err {
+            failed := true
+            GraphPoolLog("Worker通信失败", Format("Worker#{1} line={2} op={3}", wd.idx, err.Line, err.What))
+        } finally wd.rxBusy := false
+        if (failed && this.IsInstanceAlive(wd)) {
+            this.AbortDeadWorkerTask(wd)
         }
 
         ; 仍有积压：将自身重新投递到消息队列末尾，而非用定时器立即续抽。
@@ -1290,6 +1056,40 @@ class WorkPool {
             if (!ok)
                 SetTimer(ObjBindMethod(this, "ProcessWorkerRx", wd), -1)
         }
+    }
+
+    HandleWorkerFinish(wd, result) {
+        tableID := wd.tableID
+        itemID := wd.itemID
+        tableItem := GetTableByID(tableID)
+        index := GetItemIndexInTable(tableItem, itemID)
+        item := GetItemByIndex(tableItem, index)
+        isGraphTask := item && (wd.isGraphBranch || item.GraphBranchCount > 0)
+        if (item && !isGraphTask && result == "0")
+            item.PostHookFired := true
+        if (!wd.stopRequested && item) {
+            if (isGraphTask) {
+                item.GraphBranchCount := Max(0, item.GraphBranchCount - 1)
+                if (result != "0")
+                    item.Killed := true
+            } else {
+                if (result != "0") {
+                    this.ReleaseWorkerTaskKeys(wd)
+                    item.ToggleState := false
+                }
+                this.ResetWorkerTaskState(wd, result == "0" ? 0 : 3)
+            }
+        }
+        stopping := wd.stopRequested
+        if (!this.ReleaseWorkerToFreePool(wd))
+            return
+        if (isGraphTask && !stopping) {
+            if (result != "0" && this.HasItemWork(tableID, itemID))
+                this.ForceStopItem(tableID, itemID)
+            else if (!this.HasItemWork(tableID, itemID))
+                this.FinishGraphMacroItem(tableID, itemID)
+        }
+        this.Dispatch()
     }
 
     OnWorkerEvent(wd, payload) {
@@ -1313,10 +1113,8 @@ class WorkPool {
 
             try {
                 switch opcode {
-                    case "SV":
-                        SetGlobalVariable([args[1]], [args[2]], false, wd.idx)
-                    case "DV":
-                        DelGlobalVariable([args[1]], wd.idx)
+                    case "GS":
+                        this.CommitWorkerData(wd, args[1], Integer(args[2]), args[3])
                     case "RP":
                         CMDReport(args[1])
                     case "FR":
@@ -1324,14 +1122,12 @@ class WorkPool {
                         CmdTipForceShow(args[1])
                     case "RC":
                         ExcuteRMTCMDAction(args[1])
-                    case "IS":
-                        tableItem := GetTableByID(args[1])
-                        if (tableItem)
-                            SetTableItemState(tableItem, GetItemIndexInTable(tableItem, args[2]), args[3])
                     case "PS":
                         tableItem := GetTableByID(args[1])
                         if (tableItem)
-                            SetItemPauseState(tableItem, GetItemIndexInTable(tableItem, args[2]), args[3], wd.idx)
+                            SetItemPauseState(tableItem, GetItemIndexInTable(tableItem, args[2]), args[3])
+                    case "NT":
+                        QueuePromptDisplay(args[1])
                     case "CD":
                         ; 交给空闲任务建窗，避免在 Worker 消息回调中同步创建 XAML。
                         SetTimer(this._CountDownUiRequest.Bind(this, args.Clone(), wd, wd.pid), -10)
@@ -1347,53 +1143,15 @@ class WorkPool {
                             , args.Length >= 2 ? args[2] : ""
                             , args.Length >= 3 ? args[3] : ""
                             , args.Length >= 4 ? args[4] : "")
-                    case "IP":
-                        ; Worker 请求输入框：创建独立实例弹窗（不同宏/Worker 并发，互不阻塞；共享主进程 daemon）
-                        ; 异步创建：避免在消息轮询/OnMessage 上下文同步 XAMLHost（主进程单线程会与 daemon 回传互堵）
-                        ip1 := args.Length >= 1 ? args[1] : ""
-                        ip2 := args.Length >= 2 ? args[2] : ""
-                        ip3 := args.Length >= 3 ? args[3] : ""
-                        this._QueueWorkerInput(wd, opcode, ip1, ip2, ip3)
-                    case "IF":
-                        this._QueueWorkerInput(wd, opcode, args*)
-                    case "IB":
-                        ; Worker 请求输入按钮条：创建独立实例，结果回传对应 Worker
-                        a1 := args.Length >= 1 ? args[1] : "1"
-                        a2 := args.Length >= 2 ? args[2] : ""
-                        a3 := args.Length >= 3 ? args[3] : ""
-                        a4 := args.Length >= 4 ? args[4] : ""
-                        a5 := args.Length >= 5 ? args[5] : ""
-                        this._QueueWorkerInput(wd, opcode, a1, a2, a3, a4, a5)
+                    case "IP", "IB", "IF":
+                        this._QueueWorkerInput(wd, Integer(args.RemoveAt(1)), opcode, args*)
+                    case "IC":
+                        this._CancelWorkerInput(wd, Integer(args[1]))
                     case "JY":
                         JoyDebugLog(Format("WorkPool recv JY args=[{}, {}, {}] from worker#{}"
                             , args.Length >= 1 ? args[1] : "", args.Length >= 2 ? args[2] : ""
                             , args.Length >= 3 ? args[3] : "", wd.idx), "pool")
                         ViGJoySetState(args[1], args[2], args[3])
-                    case "SA":
-                        ; 新协议：name + GetArrayStr；旧协议：name + count + items...
-                        if (args.Length == 2) {
-                            SetGlobalArray(args[1], GetArray(args[2]), wd.idx)
-                        } else {
-                            arr := []
-                            count := Integer(args[2])
-                            loop count {
-                                arr.Push(args[A_Index + 2])
-                            }
-                            SetGlobalArray(args[1], arr, wd.idx)
-                        }
-                    case "CA":
-                        CloneGlobalArray(args[1], args[2], wd.idx)
-                    case "DA":
-                        DeleteGlobalArray(args[1], wd.idx)
-                    case "MA":
-                        p := StrSplit(args[2], ".")
-                        ModifyGlobalArray(args[1], p[1], p[2], false, args[3], wd.idx)
-                    case "IA":
-                        p := StrSplit(args[2], ".")
-                        InsertGlobalArray(args[1], p[1], p[2], false, args[3], wd.idx)
-                    case "RA":
-                        p := StrSplit(args[2], ".")
-                        RemoveAtGlobalArray(args[1], p[1], p[2], wd.idx)
                     case "ER":
                         ; Worker 错误上报（统一日志 C 项）：payload = "级别|workerIdx|完整信息"
                         ; 主进程聚合到错误中心 + 写系统日志；错误中心已有 ErrorList 累积显示
@@ -1410,20 +1168,23 @@ class WorkPool {
                         }
                     case "ST":
                         tableItem := GetTableByID(args[1])
-                        if (tableItem)
-                            StopMacro(tableItem, GetItemIndexInTable(tableItem, args[2]))
+                        if (tableItem) {
+                            stopIndex := GetItemIndexInTable(tableItem, args[2])
+                            stopItem := GetItemByIndex(tableItem, stopIndex)
+                            if (stopItem && !(wd.tableID == args[1] && wd.itemID == args[2]))
+                                SetTimer(StopMacro.Bind(tableItem, stopIndex), -1)
+                        }
                     case "HK":
                         ; Worker 同步按键按住状态：tableID, itemID, key, state, source
                         SyncWorkerHoldKey(args[1], args[2], args[3], args[4], args.Length >= 5 ? args[5] : "")
                     case "GB":
                         tIdx := args[1]
                         iIdx := args[2]
-                        branchCount := Integer(args[3])
                         nodeSerials := []
-                        loop args.Length - 3 {
-                            nodeSerials.Push(args[A_Index + 3])
+                        loop args.Length - 2 {
+                            nodeSerials.Push(args[A_Index + 2])
                         }
-                        HandleWorkerGraphBranches(wd, tIdx, iIdx, branchCount, nodeSerials)
+                        HandleWorkerGraphBranches(wd, tIdx, iIdx, nodeSerials)
                     case "TR":
                         ; Worker 请求主进程触发（TR_MACRO 分支指令）：args = tableID, itemID
                         TriggerMacroHandler(args[1], args[2])
@@ -1433,16 +1194,44 @@ class WorkPool {
         }
     }
 
+    CommitWorkerData(wd, requestID, deadline, payload) {
+        ok := false
+        previousCritical := A_IsCritical
+        try {
+            request := JSON.parse(payload)
+            Critical("On")
+            if (this.IsInstanceAlive(wd) && wd.taskID && !wd.stopRequested
+                && DllCall("GetTickCount64", "uint64") < deadline) {
+                CommitGlobalData(request[1], request[2])
+                ok := true
+            }
+        } catch {
+            ok := false
+        } finally Critical(previousCritical)
+        this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("VR", requestID, ok)))
+    }
+
     _RemoveInputGui(req) {
         if (IsObject(this._inputGuis) && this._inputGuis.Has(req))
             this._inputGuis.Delete(req)
     }
 
     ; 输入弹窗：每请求独立实例（并发互不阻塞）；Worker 请求结果跨进程回传，主进程宏请求写本地槽位
-    _QueueWorkerInput(wd, opcode, args*) {
-        req := { wd: wd, local: false, done: false }
+    _QueueWorkerInput(wd, requestID, opcode, args*) {
+        if (!wd.taskID || wd.stopRequested)
+            return
+        req := {wd: wd, taskID: wd.taskID, id: requestID, local: false, done: false}
         this._inputGuis[req] := true
         SetTimer((*) => this._ShowInputDialogReq(req, opcode, args*), -10)
+    }
+
+    _CancelWorkerInput(wd, id) {
+        for req in this._inputGuis {
+            if (!req.local && req.wd == wd && req.id == id) {
+                this._CancelInput(req)
+                break
+            }
+        }
     }
 
     _CancelWorkerInputs(wd) {
@@ -1531,7 +1320,10 @@ class WorkPool {
                 SetTimer((*) => this._TimeoutInputDialog(req, opcode), -pack.timeoutMs)
         } catch as e {
             GraphPoolLog("输入弹窗异常", Format("err={1} wd=#{2}", e.Message, req.wd.idx))
-            this._SendInputResult(req, "IPR", "0", "")
+            if (opcode == "IB")
+                this._SendInputResult(req, "IBR", "cancel")
+            else
+                this._SendInputResult(req, "IPR", "0", "")
         }
     }
 
@@ -1607,27 +1399,18 @@ class WorkPool {
             ; 注意：catch 必须带大括号，否则会吞掉下方回传 try 块
         }
         if (req.local) {
-            ; 主进程宏请求：结果直接写入本地槽位
             req.result := args
-            argStr := ""
-            for a in args
-                argStr .= (argStr != "" ? "," : "") a
-            GraphPoolLog("输入回传", Format("wd=#{1} op={2} args=[{3}] local=1", req.wd.idx, opcode, argStr))
-            return
-        }
-        try {
-            payload := EncodeBatch(EncodeCommand(opcode, args*))
-            ok := this.PushTask(req.wd, MsgType.EVENT, 0, payload)
-            argStr := ""
-            for a in args
-                argStr .= (argStr != "" ? "," : "") a
-            GraphPoolLog("输入回传", Format("wd=#{1} op={2} args=[{3}] push={4}", req.wd.idx, opcode, argStr, ok))
-        } catch as e {
-            GraphPoolLog("输入回传失败", Format("err={1} wd=#{2}", e.Message, req.wd.idx))
+        } else if (this.IsInstanceAlive(req.wd) && req.wd.taskID == req.taskID) {
+            payload := EncodeBatch(EncodeCommand(opcode, req.id, args*))
+            this.PushTask(req.wd, MsgType.EVENT, 0, payload)
         }
     }
 
     _CountDownUiRequest(args, wd, pid) {
+        if (args[1] == "closeAt") {
+            CloseXamlCountDownAt(args[2])
+            return
+        }
         if (args[1] == "stop") {
             CloseXamlCountDown(args[2])
             return
@@ -1636,7 +1419,8 @@ class WorkPool {
             return
         token := args[2]
         done := (*) => this._CountDownUiClosed(wd, pid, token)
-        try StartXamlCountDown(token, Number(args[3]), Number(args[4]), Number(args[5]), done, pid)
+        ownerPid := args.Length >= 6 && args[6] == "1" ? 0 : pid
+        try StartXamlCountDown(token, Number(args[3]), Number(args[4]), Number(args[5]), done, ownerPid)
         catch as e {
             RMTLogSys(RMT_LV_ERROR, "CountDown", e.Message)
             done.Call()
@@ -1648,31 +1432,21 @@ class WorkPool {
             this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CDR", token)))
     }
 
-    PushTask(wd, type, id, payload) {
-        ; 已清理的实例 tx 为 0，直接 Push 会抛「Integer has no method named Push」
-        if (!wd || !wd.tx)
-            return false
-        if (wd.tx.Push(type, id, payload)) {
-            if (wd.hEvt)
-                DllCall("SetEvent", "ptr", wd.hEvt)
-            this.PostMessage(WM_MASTER_TO_WORKER, wd)
+    PushTask(wd, type, id, payload, flags := 0) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (!this.IsInstanceAlive(wd) || !wd.tx.Send(type, id, payload, flags))
+                return false
+            this.WakeWorker(wd)
             return true
-        }
-        return false
+        } finally Critical(previousCritical)
     }
 
-    PostMessage(type, wd, wParam := 0, lParam := 0) {
-        if (!this.ResolveWorkerHwnd(wd)) {
-            GraphPoolLog("PostMessage跳过", Format("Worker#{1} hwnd不可达 pid={2} msg=0x{3:X}", wd.idx, wd.pid, type))
-            return false
-        }
-        try {
-            PostMessage(type, wParam, lParam, , "ahk_id " wd.hwnd)
-            return true
-        } catch as e {
-            GraphPoolLog("PostMessage失败", Format("Worker#{1} hwnd={2} msg=0x{3:X} err={4}"
-                , wd.idx, wd.hwnd, type, e.Message))
-            return false
-        }
+    WakeWorker(wd) {
+        if (wd.hEvt)
+            SetEvent(wd.hEvt)
+        if (wd.hwnd)
+            DllCall("PostMessageW", "ptr", wd.hwnd, "uint", WM_MASTER_TO_WORKER, "uptr", 0, "ptr", 0)
     }
 }
