@@ -17,20 +17,20 @@ UnbindAllMacroHotkeys() {
     GestureTriggers.Reset()
     if (!IsSet(BoundMacroHotkeyList) || !IsObject(BoundMacroHotkeyList))
         return 0
-    removed := 0
+    disabled := 0
     for k in BoundMacroHotkeyList {
-        ; 先确保禁用（旧触发键不再生效），再尝试移除变体，避免旧回调残留
-        try Hotkey(k, "Off")
-        catch {
-        }
+        ; 只有 "Off" 能失活：Hotkey(k,"") 不会移除已存在的变体（实测 2.0.19），重绑必须显式传 "On"。
         try {
-            Hotkey(k, "")
-            removed++
-        } catch as e {
+            Hotkey(k, "Off")
+            disabled++
+        } catch {
+        }
+        try Hotkey(k, "")
+        catch {
         }
     }
     BoundMacroHotkeyList := []
-    return removed
+    return disabled
 }
 
 ; 该「裸键名」是否已被宏触发键占用（只算无修饰键的形式，如 $*WheelDown）。
@@ -65,10 +65,50 @@ BindKey() {
     BindTabHotKey()
     BindFoldSwitchHotkey()
     GestureTriggers.Bind()
+    AuditTriggerKeyMap()
     ; §2：保存后热重载（§17 选「否」）订阅触发键重绑，使模块/条目禁用、触发键改动运行时立即生效
     if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
         MyHotReloadBus.Subscribe(OnHotReloadRebindKeys)
     OnExit(OnExitSoft)
+}
+
+; 重绑后自检：配了触发键但 TriggerKeyMap 里没有 → 按下毫无反应。缺失时记一条 warn。
+AuditTriggerKeyMap() {
+    global MySoftData
+    static lastMissing := ""
+    if (!IsObject(MySoftData) || !MySoftData.HasProp("TriggerKeyMap") || !IsObject(MySoftData.TriggerKeyMap))
+        return
+    missing := ""
+    for sym in ["Normal", "Menu", "UI"] {
+        t := GetTableBySymbol(sym)
+        if (!t)
+            continue
+        if (sym == "Normal") {
+            for i, item in t.Items {
+                if (item.TK == "" || item.Forbid)
+                    continue
+                if (GetItemFoldForbidState(t, i))
+                    continue
+                k := StrLower(LTrim(item.TK, "~"))
+                if (!MySoftData.TriggerKeyMap.Has(k))
+                    missing .= "Normal/" item.TK " "
+            }
+        } else {
+            for f, fold in t.Folds {
+                if (fold.TK == "" || fold.ForbidState)
+                    continue
+                k := StrLower(LTrim(fold.TK, "~"))
+                if (!MySoftData.TriggerKeyMap.Has(k))
+                    missing .= sym "/" (fold.Remark == "" ? fold.ID : fold.Remark) "(" fold.TK ") "
+            }
+        }
+    }
+    if (missing != "" && missing != lastMissing) {
+        lastMissing := missing
+        RMTLogSys(RMT_LV_WARN, "Hotkey", "触发键映射缺失（这些键按下不会有反应）: " missing)
+    } else if (missing == "") {
+        lastMissing := ""
+    }
 }
 
 ; §2 模块独立开关快捷键重绑总入口：fold 级禁用切换 / RMT指令「禁用模块」/ 保存热重载共用
@@ -81,10 +121,21 @@ RebindAllTriggerKeys() {
     BindTabHotKey()
     BindFoldSwitchHotkey()
     GestureTriggers.Bind()
+    AuditTriggerKeyMap()
 }
 
-; 保存后热重载订阅者：任何表配置变更都重绑触发键（fold 禁用状态/条目禁用/触发键改动实时生效）
+; 保存后重绑：一次保存会逐字段广播多次，合并成空闲后执行一次，避免重复全量重绑。
 OnHotReloadRebindKeys(tableIndex, itemIndex) {
+    global RebindPending
+    RebindPending := true
+    SetTimer(RebindAllTriggerKeysDeferred, -1)
+}
+
+RebindAllTriggerKeysDeferred() {
+    global RebindPending
+    if (!IsSet(RebindPending) || !RebindPending)
+        return
+    RebindPending := false
     RebindAllTriggerKeys()
 }
 
@@ -106,7 +157,7 @@ BindFoldSwitchHotkey() {
                 try MyJoyMacro.AddMacro(oriKey, OnFoldSwitchHotkey.Bind(tableItem.Index, index), "", "")
             } else {
                 try {
-                    Hotkey(key, OnFoldSwitchHotkey.Bind(tableItem.Index, index))
+                    Hotkey(key, OnFoldSwitchHotkey.Bind(tableItem.Index, index), "On")
                     RecordMacroHotkey(key)
                 } catch as e {
                     RMTLogSys(RMT_LV_WARN, "Hotkey", "注册模块开关热键失败: " oriKey "｜" (e.HasProp("Message") ? e.Message : ""))
@@ -648,13 +699,14 @@ BindMenuHotKey() {
         }
         else {
             try {
+                ; 必须显式传 "On"：变体被先 "Off" 过、Hotkey(k,"") 又删不掉，不传就一直禁用。
                 if (actionArr[1] != "") {
-                    Hotkey(key, actionArr[1])
+                    Hotkey(key, actionArr[1], "On")
                     RecordMacroHotkey(key)
                 }
 
                 if (actionArr[2] != "" && !isCombo && !IsPulseTriggerKey(oriKey)) {
-                    Hotkey(key " up", actionArr[2])
+                    Hotkey(key " up", actionArr[2], "On")
                     RecordMacroHotkey(key " up")
                 }
 
@@ -663,10 +715,10 @@ BindMenuHotKey() {
                     reversedKey := GetReversedComboKey(oriKey)
                     if (reversedKey != "") {
                         try {
-                            Hotkey(reversedKey, actionArr[1])
+                            Hotkey(reversedKey, actionArr[1], "On")
                             RecordMacroHotkey(reversedKey)
                             if (actionArr[2] != "" && !isCombo)
-                                Hotkey(reversedKey " up", actionArr[2])
+                                Hotkey(reversedKey " up", actionArr[2], "On")
                         }
                         catch as e {
                         }
@@ -714,12 +766,13 @@ BindUIPanelHotKey() {
         }
         else {
             try {
+                ; 同 BindMenuHotKey：显式 "On"，否则被 Off 过的变体重绑后不会恢复
                 if (actionArr[1] != "") {
-                    Hotkey(key, actionArr[1])
+                    Hotkey(key, actionArr[1], "On")
                     RecordMacroHotkey(key)
                 }
                 if (actionArr[2] != "" && !isCombo && !IsPulseTriggerKey(oriKey)) {
-                    Hotkey(key " up", actionArr[2])
+                    Hotkey(key " up", actionArr[2], "On")
                     RecordMacroHotkey(key " up")
                 }
             }
@@ -1019,11 +1072,22 @@ GetBindMacroAction(key) {
     return [actionDown, actionUp]
 }
 
+; 热键注册成功但 TriggerKeyMap 里没这个键 → 回调直接 return，表现为「触发键没反应」。每键只记一次。
+LogUnboundTriggerKey(key) {
+    static warned := Map()
+    if (warned.Has(key))
+        return
+    warned[key] := true
+    RMTLogSys(RMT_LV_WARN, "Hotkey", "触发键回调找不到映射（重绑未覆盖该键）: " key)
+}
+
 OnBindKeyDown(key, *) {
     key := LTrim(key, "~")
     key := StrLower(key)
-    if (!MySoftData.TriggerKeyMap.Has(key))
+    if (!MySoftData.TriggerKeyMap.Has(key)) {
+        LogUnboundTriggerKey(key)
         return
+    }
 
     if (MainSoftData.SelectAreaAction != "")
         return
