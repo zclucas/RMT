@@ -175,8 +175,16 @@ cv::Mat captureScreen(int hwnd, int x, int y, int width, int height) {
         || x > clientW - capWidth || y > clientH - capHeight)
         return cv::Mat();
     const RECT roi{ x, y, x + capWidth, y + capHeight };
-    cv::Mat gpu = CaptureGpuWindow(targetHwnd, roi);
-    if (!gpu.empty()) return gpu;
+
+    // WGC 抓帧默认关闭：部分目标窗口（管理员进程/反作弊）CreateForWindow 被拒，
+    // 冷启动成本也高于 DWM PrintWindow。WindowCapture.h 代码保留，
+    // 改 kUseWgcCapture 为 true 即可切回 WGC 优先、DWM 兜底。
+    static const bool kUseWgcCapture = false;
+    if (kUseWgcCapture) {
+        cv::Mat gpu = CaptureGpuWindow(targetHwnd, roi);
+        if (!gpu.empty()) return gpu;
+        // WGC 未命中（冷启动/不支持/最小化）：落到下面的 DWM 兜底
+    }
 
     // Retain the previous DWM path for unsupported systems and minimized windows.
     ThumbnailCache* cache = GetOrCreateCache(targetHwnd);
@@ -1089,6 +1097,8 @@ extern "C" IMAGEFINDER_API int __cdecl SampleRefineEdgeOffset(
 }
 
 // 释放所有缩略图缓存（搜图结束或切换时调用）
+// 注意：WGC 会话缓存不在清理范围——冷启动成本太高（建会话+等首帧 250ms 级），
+// 关了它每次"突然抓"都会退回最慢路径。会话常驻由 WindowCapture.h 的 LRU 上限封顶。
 extern "C" IMAGEFINDER_API void __cdecl ReleaseAllCaches(void)
 {
 	for (auto& pair : g_thumbnailCache) {
