@@ -1,18 +1,21 @@
 #Requires AutoHotkey v2.0
 
-SelfCheckMissingFiles() {
-    ; 带 F 后缀的测试版（如 1.2F23）无对应资源 tag，不提供自动下载
-    if (RegExMatch(RMT_VERSION, "i)\d+\.\d+F")) {
-        RmtDialog.Info(GetLang("带 F 后缀的测试版本不支持文件校验自动下载") "`n"
-            . GetLang("资源仓库仅对应正式版本 tag（如 v1.2_x64）"), GetLang("RMT 资源自检"), 64)
-        return
-    }
+RmtAssetsReleaseTag() {
+    ; 与 CI 的资源标签一致，仅去掉 F 预览后缀，保留补丁版本号。
+    version := RegExReplace(RMT_VERSION, "i)F\d+$")
+    arch := A_PtrSize == 8 ? "x64" : "x86"
+    return "v" version "_" arch
+}
 
-    version := RMT_VERSION  ; 使用完整版本名，不做 *.* 截断（如 1.3.5 -> tag v1.3.5_x64）
+RmtAssetsBaseUrl(tag) {
+    return "https://gh-proxy.com/https://github.com/zclucas/RMTAssets/releases/download/" tag "/"
+}
+
+SelfCheckMissingFiles() {
     arch := A_PtrSize == 8 ? "x64" : "x86"
     bitArch := A_PtrSize == 8 ? "64bit" : "32bit"
-    tag := "v" version "_" arch
-    baseUrl := "https://gh-proxy.com/https://github.com/zclucas/RMTAssets/releases/download/" tag "/"
+    tag := RmtAssetsReleaseTag()
+    baseUrl := RmtAssetsBaseUrl(tag)
 
     criticalMap := Map(
         "Plugins\RMT\RMT.dll", "RMT.dll",
@@ -27,19 +30,6 @@ SelfCheckMissingFiles() {
         "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll", "WpfAnimatedGif.dll",
         "Plugins\OpenCV\" arch "\RMT_OpenCV.dll", "RMT_OpenCV.dll",
         "Plugins\OpenCV\" arch "\opencv_world481.dll", "opencv_world481.dll",
-        "Plugins\Voice\" arch "\VoiceDll.dll", "VoiceDll.dll",
-        "Plugins\Voice\" arch "\sherpa-onnx-c-api.dll", "sherpa-onnx-c-api.dll",
-        "Plugins\Voice\" arch "\onnxruntime.dll", "onnxruntime.dll",
-        "Plugins\Voice\" arch "\onnxruntime_providers_shared.dll", "onnxruntime_providers_shared.dll",
-        "Plugins\Voice\" arch "\vcruntime140.dll", "vcruntime140.dll",
-        "Plugins\Voice\" arch "\msvcp140.dll", "msvcp140.dll",
-        "Plugins\Voice\" arch "\msvcp140_1.dll", "msvcp140_1.dll",
-        "Plugins\Voice\" arch "\msvcp140_2.dll", "msvcp140_2.dll",
-        "Plugins\Voice\" arch "\api-ms-win-core-path-l1-1-0.dll", "api-ms-win-core-path-l1-1-0.dll",
-        "Plugins\Voice\models\kws\decoder-epoch-13-avg-2-chunk-16-left-64.onnx", "kws_decoder.onnx",
-        "Plugins\Voice\models\kws\encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx", "kws_encoder.int8.onnx",
-        "Plugins\Voice\models\kws\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx", "kws_joiner.int8.onnx",
-        "Plugins\Voice\models\kws\tokens.txt", "kws_tokens.txt",
         "Plugins\RapidOcr\" bitArch "\RapidOcrOnnx.dll", "RapidOcrOnnx.dll",
         "Plugins\TesseractOcr\" arch "\tesseract50.dll", "tesseract50.dll",
         "Plugins\TesseractOcr\" arch "\leptonica-1.82.0.dll", "leptonica-1.82.0.dll",
@@ -58,9 +48,6 @@ SelfCheckMissingFiles() {
         "Lang\English.txt", "English.txt",
         "Thread\Work.exe", "Work.exe",
         "index.html", "index.html")
-    if (arch == "x64")
-        criticalMap["Plugins\Voice\x64\vcruntime140_1.dll"] := "vcruntime140_1.dll"
-
     optionalMap := Map(
         "Plugins\MouseControl.dll", "MouseControl.dll",
         "MinTool\PlayAudio.vbs", "PlayAudio.vbs",

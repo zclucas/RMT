@@ -206,7 +206,7 @@ class SherpaVoiceEngine {
         if (!this.running || this.suspended || this.hDll == 0)
             return ""
         buf := Buffer(256)
-        DllCall(this.DllPath "\Voice_GetTriggered", "Ptr", buf, "Int", 256, "Int")
+        DllCall(this.DllPath "\Voice_GetTriggered", "Ptr", buf, "Int", 256, "CDecl Int")
         return StrGet(buf, 256, "UTF-8")
     }
 
@@ -223,7 +223,7 @@ class SherpaVoiceEngine {
             return false
         r := DllCall(this.DllPath "\Voice_Init",
             "WStr", m.encoder, "WStr", m.decoder,
-            "WStr", m.joiner, "WStr", m.tokens, "Int")
+            "WStr", m.joiner, "WStr", m.tokens, "CDecl Int")
         if (r) {
             this.engineLoaded := true
             this.lastError := ""
@@ -238,7 +238,7 @@ class SherpaVoiceEngine {
         if (this.hDll == 0 || !this.engineLoaded)
             return false
         ; 传纯汉字，DLL 内置 G2P 转拼音音素
-        r := DllCall(this.DllPath "\Voice_SetKeywordsZh", "WStr", this._KeywordsToStr(), "Int")
+        r := DllCall(this.DllPath "\Voice_SetKeywordsZh", "WStr", this._KeywordsToStr(), "CDecl Int")
         if (!r)
             this.lastError := this._GetLastError()
         return r != 0
@@ -256,7 +256,7 @@ class SherpaVoiceEngine {
         if (this.hDll == 0)
             return ""
         buf := Buffer(512)
-        DllCall(this.DllPath "\Voice_GetLastError", "Ptr", buf, "Int", 512, "Int")
+        DllCall(this.DllPath "\Voice_GetLastError", "Ptr", buf, "Int", 512, "CDecl Int")
         return StrGet(buf, 512, "UTF-8")
     }
 

@@ -19,22 +19,19 @@ class SttGui {
     static activeDownload := ""
 
     static _promptQueued := false
+    static _extensionInstalling := false
 
     ; 语音入口共用的自检。引擎和模型就绪时返回 true，模型未就绪时再询问下载。
     static RequestModelDownload() {
-        engine := InitSttEngine()
-        if (IsObject(engine) && !engine.IsDllReady())
-            engine._TryLoadDll()
-        if (!IsObject(engine) || !engine.IsDllReady()) {
-            try Toast.Warning(GetLang("语音引擎未就绪"))
+        if (SttGui._extensionInstalling)
             return false
-        }
         if (IsObject(SttGui.activeDownload)) {
             if (IsObject(SttGui.activeDownload.progress))
                 SetTimer(ObjBindMethod(SttGui.activeDownload.progress, "Show"), -1)
             return false
         }
-        if (engine.IsStreamModelReady())
+        engine := InitSttEngine()
+        if (engine._TryLoadDll() && engine.IsStreamModelReady())
             return true
         ; 离开语音按钮的点击回调再开确认框，避免在回调里同步开窗。
         if (SttGui._promptQueued)
@@ -47,7 +44,15 @@ class SttGui {
     static _PromptModelDownload(*) {
         try {
             engine := InitSttEngine()
-            if (!IsObject(engine) || engine.IsStreamModelReady() || IsObject(SttGui.activeDownload))
+            if (SttGui._extensionInstalling || IsObject(SttGui.activeDownload))
+                return
+            if (!engine._TryLoadDll()) {
+                if (RmtDialog.Choose(GetLang("语音引擎未就绪，是否下载语音扩展？"), GetLang("提示")
+                    , [GetLang("下载语音扩展"), GetLang("取消")]) == 1)
+                    SttGui.DownloadVoiceExtension()
+                return
+            }
+            if (engine.IsStreamModelReady())
                 return
             choice := RmtDialog.Choose(GetLang("语音识别模型未就绪，是否下载？"), GetLang("提示"), [GetLang("下载识别模型"), GetLang("取消")])
             if (choice != 1)
@@ -64,6 +69,88 @@ class SttGui {
         inst := SttGui.instances.Has("global") ? SttGui.instances["global"] : SttGui()
         inst._StartModelDownload()
         return inst.downloadState == "dl" || inst.downloadState == "ex"
+    }
+
+    static DownloadVoiceExtension(*) {
+        if (SttGui._extensionInstalling)
+            return
+        SttGui._extensionInstalling := true
+        try {
+            result := SttGui._DownloadExtensionFiles()
+            if (result == "cancel")
+                return
+            if (result != "ok")
+                throw Error("Voice extension download failed")
+            engine := InitSttEngine()
+            if (!engine._TryLoadDll()) {
+                Toast.Warning(GetLang("语音引擎未就绪"))
+                return
+            }
+            voice := InitVoiceEngine()
+            if (!voice.IsSupported()) {
+                voice._InitEngine()
+                voice.Start()
+            }
+            if (IsObject(SttGui.activeDownload)) {
+                SttGui.activeDownload.progress.Show()
+            } else if (!engine.IsStreamModelReady()) {
+                SttGui._BeginModelDownload()
+            } else {
+                Toast.Success(GetLang("语音扩展已就绪"))
+            }
+        } catch {
+            Toast.Error(GetLang("语音扩展下载失败，请稍后重试"))
+        } finally SttGui._extensionInstalling := false
+    }
+
+    static _DownloadExtensionFiles() {
+        engine := InitSttEngine()
+        runtimeUrl := RmtAssetsBaseUrl(RmtAssetsReleaseTag())
+        commonUrl := RmtAssetsBaseUrl("Common")
+        runtimeFiles := ["sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll"
+            , "vcruntime140.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "api-ms-win-core-path-l1-1-0.dll"]
+        if (A_PtrSize == 8)
+            runtimeFiles.Push("vcruntime140_1.dll")
+        runtimeFiles.Push("VoiceDll.dll")
+
+        assets := Map()
+        for file in runtimeFiles
+            assets[engine.RunDir "\" file] := runtimeUrl file
+        kwsDir := A_WorkingDir "\Plugins\Voice\models\kws\"
+        assets[kwsDir "decoder-epoch-13-avg-2-chunk-16-left-64.onnx"] := commonUrl "kws_decoder.onnx"
+        assets[kwsDir "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx"] := commonUrl "kws_encoder.int8.onnx"
+        assets[kwsDir "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx"] := commonUrl "kws_joiner.onnx"
+        assets[kwsDir "tokens.txt"] := commonUrl "kws_tokens.txt"
+
+        missing := Map()
+        for path, url in assets {
+            if (!FileExist(path) || FileGetSize(path) == 0)
+                missing[path] := url
+        }
+        if (!missing.Count)
+            return "ok"
+
+        progress := RmtProgress(GetLang("下载语音扩展"), GetLang("准备下载"), XamlWin.ActiveOwner(), GetLang("取消下载"))
+        progress.Show()
+        try {
+            for path, url in missing {
+                SplitPath(path, &name, &dir)
+                DirCreate(dir)
+                progress.Report(name)
+                tempPath := path ".download"
+                try {
+                    result := DownloadAsync(url, tempPath, 120, progress)
+                    if (result != "ok")
+                        return result
+                    if (FileGetSize(tempPath) == 0)
+                        return "fail"
+                    FileMove(tempPath, path, true)
+                } finally {
+                    try FileDelete(tempPath)
+                }
+            }
+            return "ok"
+        } finally progress.Close()
     }
 
     ; 流式模型包（chunksize 越大越准、延迟越高：160ms / 480ms / 960ms / 1920ms）
@@ -145,7 +232,7 @@ class SttGui {
         if (!engine.IsStreamModelReady()) {
             list.Push(Map(
                 "pkg", SttGui.StreamPkg,
-                "url", "https://gh-proxy.org/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" SttGui.StreamPkg ".tar.bz2",
+                "url", RmtAssetsBaseUrl("Common") SttGui.StreamPkg ".tar.bz2",
                 "dir", engine.StreamModelDir,
                 "files", ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", "bpe.model"],
                 "minBytes", 100 * 1024 * 1024

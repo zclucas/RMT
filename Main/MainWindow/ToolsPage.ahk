@@ -53,7 +53,10 @@
             . field("进程 PID", "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)
             . field("位置颜色", "&#xE790;", "TxtColor", MainSoftData.Color) '</StackPanel></Grid></Grid>'
 
-        auxiliaryBody := '<StackPanel><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE840;" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' GetLang("窗口置顶") '" FontWeight="Bold" VerticalAlignment="Center"/><CheckBox Name="ChkAlwaysOnTop" Content="' GetLang("保持 RMT 主窗口在最前") '" Style="{StaticResource ToolSwitch}" Margin="12,0,0,0"/></StackPanel><StackPanel Orientation="Horizontal" Margin="0,12,0,0">' openBtn("BtnFileCheck", "&#xE8B7;", GetLang("文件校验"), true) '<Button Name="BtnFileCheckHelp" Content="?" ToolTip="' GetLang("文件校验说明") '" Width="28" Height="28" MinHeight="28" Padding="0" Margin="8,0,0,0"/></StackPanel></StackPanel>'
+        auxiliaryBody := '<StackPanel><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE840;" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' GetLang("窗口置顶") '" FontWeight="Bold" VerticalAlignment="Center"/><CheckBox Name="ChkAlwaysOnTop" Content="' GetLang("保持 RMT 主窗口在最前") '" Style="{StaticResource ToolSwitch}" Margin="12,0,0,0"/></StackPanel>'
+            . '<WrapPanel Margin="0,12,0,0"><StackPanel Orientation="Horizontal" Margin="0,0,8,0">' openBtn("BtnFileCheck", "&#xE8B7;", GetLang("文件校验"), true)
+            . '<Button Name="BtnFileCheckHelp" Content="?" ToolTip="' GetLang("文件校验说明") '" Width="28" Height="28" MinHeight="28" Padding="0" Margin="8,0,0,0"/></StackPanel>'
+            . openBtn("BtnVoiceExtension", "&#xE896;", GetLang("下载语音扩展"), true) '</WrapPanel></StackPanel>'
         recordBody := '<StackPanel>'
             . actionRow(GetLang("指令录制"), GetLang("记录鼠标与键盘操作"), FormatHotkeyDisplay(MainSoftData.ToolRecordMacroHotKey), '<CheckBox Name="ChkToolCheckRecord" Content="&#xE7C8;" ToolTip="' GetLang("开始或停止录制") '" Style="{StaticResource ToolRecordSwitch}"/>')
             . actionRow(GetLang("图片提取文本"), GetLang("从截图或本地图片识别文本"), FormatHotkeyDisplay(MainSoftData.ToolTextFilterHotKey), iconBtn("BtnTextShot", "&#xE7A8;", GetLang("截图提取文本")) iconBtn("BtnTextImage", "&#xE8B7;", GetLang("从图片提取文本")))
@@ -72,6 +75,7 @@
         this._Bind("BtnOpenVarListen", "Click", (*) => MyVarListenGui.ShowGui())
         this._Bind("BtnFileCheck", "Click", (*) => SelfCheckMissingFiles())
         this._Bind("BtnFileCheckHelp", "Click", OnClickFileCheckHelpBtn)
+        this._Bind("BtnVoiceExtension", "Click", (*) => SttGui.DownloadVoiceExtension())
         this._Bind("ChkToolCheck", "Click", OnToolCheckHotkey)
         this._Bind("ChkAlwaysOnTop", "Click", OnToolAlwaysOnTop)
         this._Bind("ChkToolCheckRecord", "Click", OnClickToolRecordMacro.Bind(false))

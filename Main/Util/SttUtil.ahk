@@ -126,7 +126,7 @@ class SttEngine {
         tokens := this.ModelDir "\tokens.txt"
         if (model == "")
             return false
-        r := DllCall(this.DllPath "\Stt_Init", "WStr", model, "WStr", tokens, "Int")
+        r := DllCall(this.DllPath "\Stt_Init", "WStr", model, "WStr", tokens, "CDecl Int")
         if (r) {
             this.loaded := true
             this.lastError := ""
@@ -174,7 +174,7 @@ class SttEngine {
         if (!this.IsDllReady())
             return ""
         buf := Buffer(16384)
-        r := DllCall(this.DllPath "\Stt_GetResult", "Ptr", buf, "Int", 16384, "Int")
+        r := DllCall(this.DllPath "\Stt_GetResult", "Ptr", buf, "Int", 16384, "CDecl Int")
         if (!r)
             return ""
         return StrGet(buf, 16384, "UTF-8")
@@ -184,7 +184,7 @@ class SttEngine {
         if (!this.IsDllReady())
             return this.lastError
         buf := Buffer(512)
-        DllCall(this.DllPath "\Stt_GetLastError", "Ptr", buf, "Int", 512, "Int")
+        DllCall(this.DllPath "\Stt_GetLastError", "Ptr", buf, "Int", 512, "CDecl Int")
         return StrGet(buf, 512, "UTF-8")
     }
 
@@ -208,7 +208,8 @@ class SttEngine {
         f := this._StreamFiles()
         if (f[1] == "")
             return false
-        r := DllCall(this.DllPath "\SttStream_Init", "WStr", f[1], "WStr", f[2], "WStr", f[3], "WStr", f[4], "Int")
+        ; VoiceDll 导出使用 CDecl，32 位调用需要显式指定。
+        r := DllCall(this.DllPath "\SttStream_Init", "WStr", f[1], "WStr", f[2], "WStr", f[3], "WStr", f[4], "CDecl Int")
         if (r) {
             this.streamLoaded := true
             this.lastError := ""
@@ -234,7 +235,7 @@ class SttEngine {
         if (!this.IsDllReady())
             return ""
         buf := Buffer(16384)
-        r := DllCall(this.DllPath "\SttStream_Poll", "Ptr", buf, "Int", 16384, "Int")
+        r := DllCall(this.DllPath "\SttStream_Poll", "Ptr", buf, "Int", 16384, "CDecl Int")
         if (!r)
             return ""
         return StrGet(buf, 16384, "UTF-8")
@@ -244,7 +245,7 @@ class SttEngine {
     StreamEnd(refine := 1) {
         if (!this.IsDllReady())
             return false
-        return DllCall(this.DllPath "\SttStream_End", "Int", refine ? 1 : 0, "Int") != 0
+        return DllCall(this.DllPath "\SttStream_End", "Int", refine ? 1 : 0, "CDecl Int") != 0
     }
 
     ; 停止并丢弃
@@ -265,7 +266,7 @@ class SttEngine {
         if (!this.IsDllReady())
             return ""
         buf := Buffer(16384)
-        r := DllCall(this.DllPath "\SttStream_GetResult", "Ptr", buf, "Int", 16384, "Int")
+        r := DllCall(this.DllPath "\SttStream_GetResult", "Ptr", buf, "Int", 16384, "CDecl Int")
         if (!r)
             return ""
         return StrGet(buf, 16384, "UTF-8")
@@ -275,7 +276,7 @@ class SttEngine {
         if (!this.IsDllReady())
             return this.lastError
         buf := Buffer(512)
-        DllCall(this.DllPath "\SttStream_GetLastError", "Ptr", buf, "Int", 512, "Int")
+        DllCall(this.DllPath "\SttStream_GetLastError", "Ptr", buf, "Int", 512, "CDecl Int")
         return StrGet(buf, 512, "UTF-8")
     }
 
@@ -284,7 +285,7 @@ class SttEngine {
         if (!this.StreamEnsureInit())
             return ""
         buf := Buffer(4096)
-        r := DllCall(this.DllPath "\SttStream_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "Int")
+        r := DllCall(this.DllPath "\SttStream_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "CDecl Int")
         if (!r)
             return ""
         return StrGet(buf, 4096, "UTF-8")
@@ -295,7 +296,7 @@ class SttEngine {
         if (!this.EnsureInit())
             return ""
         buf := Buffer(4096)
-        r := DllCall(this.DllPath "\Stt_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "Int")
+        r := DllCall(this.DllPath "\Stt_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "CDecl Int")
         if (!r)
             return ""
         return StrGet(buf, 4096, "UTF-8")

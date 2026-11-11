@@ -1054,8 +1054,8 @@ function Compress-ReleaseZip {
 }
 
 # 生成 RMTAssets_{arch} 资源清单目录
-# 目录内为扁平化的资源文件，与 Main\SelfCheck.ahk 中 criticalMap / optionalMap / icoFileList
-# 一一对应，用于上传到 RMTAssets 仓库对应 tag（v{version}_{arch}）的 Release 资产
+# 扁平资源用于版本 Release，包括文件校验所需资源和对应架构的语音运行库。
+# 共用语音模型单独存放在 RMTAssets 的 Common Release。
 function New-RMTAssets {
     param([string]$Arch, [string]$ReleaseDir)
 
@@ -1064,7 +1064,7 @@ function New-RMTAssets {
     New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
     Write-Log "生成 $assetsDir ..." "Gray"
 
-    # 关键文件 + 可选文件（本地路径 -> 资源名，与 SelfCheck.ahk 保持一致）
+    # 文件校验资源和按需下载的语音运行库（本地路径 -> 资源名）。
     $assetList = @(
         @{ Dest = "RMT.dll";                         Src = "Plugins\RMT\RMT.dll" },
         @{ Dest = "RMT.ExcelHelper.exe";             Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
@@ -1087,10 +1087,6 @@ function New-RMTAssets {
         @{ Dest = "msvcp140_1.dll";                  Src = "Plugins\Voice\$Arch\msvcp140_1.dll" },
         @{ Dest = "msvcp140_2.dll";                  Src = "Plugins\Voice\$Arch\msvcp140_2.dll" },
         @{ Dest = "api-ms-win-core-path-l1-1-0.dll"; Src = "Plugins\Voice\$Arch\api-ms-win-core-path-l1-1-0.dll" },
-        @{ Dest = "kws_decoder.onnx";                Src = "Plugins\Voice\models\kws\decoder-epoch-13-avg-2-chunk-16-left-64.onnx" },
-        @{ Dest = "kws_encoder.int8.onnx";           Src = "Plugins\Voice\models\kws\encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
-        @{ Dest = "kws_joiner.int8.onnx";            Src = "Plugins\Voice\models\kws\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
-        @{ Dest = "kws_tokens.txt";                  Src = "Plugins\Voice\models\kws\tokens.txt" },
         @{ Dest = "RapidOcrOnnx.dll";                Src = "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll" },
         @{ Dest = "tesseract50.dll";                Src = "Plugins\TesseractOcr\$Arch\tesseract50.dll" },
         @{ Dest = "leptonica-1.82.0.dll";            Src = "Plugins\TesseractOcr\$Arch\leptonica-1.82.0.dll" },
