@@ -1197,6 +1197,12 @@ public partial class AhkWpfEngine
                     }
                     catch { }
                 }
+                // 引擎内跟鼠标：value = "1"/"0"，由 FollowCursor.cs 逐帧贴光标，免去 AHK 逐帧同步
+                else if (parts[1] == "FollowCursor")
+                {
+                    SetFollowCursor(ctrl as System.Windows.Shapes.Line, parts.Length > 2 ? parts[2] : "1");
+                    return;
+                }
                 else if (parts[1] == "AddItem")
                 {
                     _controlCache.Clear();

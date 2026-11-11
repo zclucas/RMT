@@ -37,7 +37,13 @@ class TriggerKeyData {
 
     AddData(info) {
         static PropNames := ["OriDownArr", "OriLoosenArr", "OriLoosenStopArr", "OriTogArr", "OriHoldArr", "OriDblClickArr"]
-        this.%PropNames[info.GetTriggerType()]%.Push(info)
+        n := info.GetTriggerType()
+        ; 越界（0/空/下拉清空后 -1+1=0）直接索引会抛异常并中断 InitTriggerKeyMap，后面的菜单宏就进不了映射表，按「按下」兜底。
+        if (!IsInteger(n) || n < 1 || n > PropNames.Length) {
+            RMTLogSys(RMT_LV_WARN, "TriggerKey", Format("非法触发类型 {1}，按「按下」兜底: {2}", n, this.Key))
+            n := 1
+        }
+        this.%PropNames[n]%.Push(info)
     }
 
     UpdataArr(forceUpdate := false) {
@@ -137,6 +143,17 @@ class TriggerKeyData {
     StopReleaseWatch() {
         if (this.ReleaseWatchFn != "")
             SetTimer(this.ReleaseWatchFn, 0)
+    }
+
+    ; Action 在按键高频路径上，同类告警每进程只写一次
+    static _warned := Map()
+
+    _WarnOnce(tag, msg) {
+        k := tag "|" msg
+        if (TriggerKeyData._warned.Has(k))
+            return
+        TriggerKeyData._warned[k] := true
+        RMTLogSys(RMT_LV_WARN, "TriggerKey", msg)
     }
 
     WatchRelease() {
@@ -421,9 +438,16 @@ class TriggerKeyInfo {
         }
         else if (this.macroType == 2) {
             t := GetTableByID(this.tableID)
-            if (!t)
+            if (!t) {
+                this._WarnOnce("menu-table", "菜单宏触发键找不到菜单表: " this.tableID)
                 return
+            }
             foldIndex := GetFoldIndexInTable(t, this.foldID)
+            ; fold 解析不到时 OpenMenuWheel 会静默返回，留一条一次性告警
+            if (!foldIndex) {
+                this._WarnOnce("menu-fold", "菜单宏触发键找不到模块: " this.foldID " (表 " t.ID ")")
+                return
+            }
             if (triggerType == 3)
                 this.forbidTrigger := true
             OpenMenuWheel(foldIndex, triggerType == 4, t.ID)
