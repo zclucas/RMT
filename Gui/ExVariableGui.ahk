@@ -576,10 +576,10 @@ class ExVariableGui {
             Value := variableName
             return true
         }
-        if (variableName == GetLang("当前鼠标坐标X") || variableName == GetLang("当前鼠标坐标Y")) {
+        if (variableName == GetLang("当前坐标X") || variableName == GetLang("当前坐标Y")) {
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
-            Value := variableName == GetLang("当前鼠标坐标X") ? mouseX : mouseY
+            Value := variableName == GetLang("当前坐标X") ? mouseX : mouseY
             return true
         }
         GlobalVariableMap := MySoftData.VariableMap

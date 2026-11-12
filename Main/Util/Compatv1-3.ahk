@@ -445,7 +445,141 @@ Compat13_Settings(sections) {
 Compat13_UpgradeProfile(dir) {
     changed := Compat13_UpgradeSettings(dir)
     changed := Compat13_UpgradeDir(dir) || changed
-    return IniImport_ExpandFlatMacroFile(dir) || changed
+    changed := IniImport_ExpandFlatMacroFile(dir) || changed
+    return Compat13_UpgradeBuiltinVariables(dir) || changed
+}
+
+Compat13_UpgradeBuiltinVariables(dir) {
+    return Compat_RewriteMacroFiles(dir, Compat13_RewriteBuiltinCommands, Compat13_RewriteBuiltinData, "", "CommentFile.toml")
+}
+
+Compat13_BuiltinName(name) {
+    switch name, false {
+        case "当前鼠标坐标X", "Mouse X": return "当前坐标X"
+        case "当前鼠标坐标Y", "Mouse Y": return "当前坐标Y"
+        case "当前星期几", "Weekday": return "当前星期"
+        case "当前日期", "Current Date": return "日期文本"
+        case "当前时间", "Current Time": return "时分文本"
+        case "当前时间(秒)", "当前时间秒", "Current Time (Seconds)": return "时分秒文本"
+        case "Current Second": return "当前秒"
+    }
+    return name
+}
+
+Compat13_RewriteBuiltinTemplate(text) {
+    start := 1
+    result := ""
+    while (pos := RegExMatch(text, "(?<!/)\{([^{}]+)\}", &ref, start)) {
+        result .= SubStr(text, start, pos - start) "{" Compat13_BuiltinName(ref[1]) "}"
+        start := pos + StrLen(ref[0])
+    }
+    return result SubStr(text, start)
+}
+
+Compat13_RewriteBuiltinCommands(macro) {
+    start := 1
+    result := ""
+    pattern := "i)(^|[,，\r\n⫶])([ \t]*(?:🚫|▶|⭐)*)(间隔|Interval|变量|Var)_([^_,，\r\n⫶]+)(?:_([^_,，\r\n⫶]+))?"
+    while (pos := RegExMatch(macro, pattern, &cmd, start)) {
+        if (cmd[3] = "间隔" || cmd[3] = "Interval") {
+            duration := ""
+            for index, part in StrSplit(cmd[4], "~")
+                duration .= (index == 1 ? "" : "~") Compat13_BuiltinName(part)
+            params := duration (cmd[5] == "" ? "" : "_" cmd[5])
+        } else {
+            params := cmd[4] (cmd[5] == "" ? "" : "_" Compat13_BuiltinName(cmd[5]))
+        }
+        result .= SubStr(macro, start, pos - start) cmd[1] cmd[2] cmd[3] "_" params
+        start := pos + StrLen(cmd[0])
+    }
+    return result SubStr(macro, start)
+}
+
+Compat13_RewriteBuiltinData(data, rewriteMacro) {
+    static names := ["PosVarX", "PosVarY", "EndPosVarX", "EndPosVarY", "DeltaX", "DeltaY",
+        "StartPosX", "StartPosY", "EndPosX", "EndPosY", "PosX", "PosY", "Width", "Height",
+        "Transparency", "RowVar", "ColVar", "RowEndVar", "ColEndVar", "TextRowVar",
+        "InsertCount", "LoopCount", "MainIndex", "ArgsIndex", "ArgsName", "NameArr", "VariNameArr", "MinVariableArr",
+        "MaxVariableArr"]
+    static templates := ["Text", "Target", "StdIn", "FilePath", "Content", "ExtractStr",
+        "SearchText", "SearchImagePath", "WinInfo", "SearchValue", "NewTitle", "Search", "Replace",
+        "ExpressionArr", "Param1", "Param2"]
+    changed := Compat13_RewriteBranches(data, rewriteMacro)
+    if (data.HasOwnProp("CopyVariableArr") && data.HasOwnProp("OperaTypeArr")) {
+        for index, value in data.CopyVariableArr {
+            if (!data.OperaTypeArr.Has(index))
+                continue
+            op := CmdEnumOpera(data.OperaTypeArr[index])
+            if (op != "数值" && op != "系统" && op != "时间")
+                continue
+            next := Compat13_BuiltinName(value)
+            if (next != value) {
+                data.CopyVariableArr[index] := next
+                changed := true
+            }
+            if (op == "系统" && IsTimeCategoryName(next)) {
+                data.OperaTypeArr[index] := "时间"
+                changed := true
+            }
+        }
+    }
+    if (data.HasOwnProp("CompareTypeArr") && data.HasOwnProp("VariableArr"))
+        changed := Compat13_RewriteBuiltinField(data, "VariableArr", Compat13_BuiltinName) || changed
+    for field in names
+        changed := Compat13_RewriteBuiltinField(data, field, Compat13_BuiltinName) || changed
+    for field in templates
+        changed := Compat13_RewriteBuiltinField(data, field, Compat13_RewriteBuiltinTemplate) || changed
+    if (data.HasOwnProp("WaitType")) {
+        if (CmdEnumWait(data.WaitType) == "等待变量值") {
+            for field in ["Param1", "Param2"]
+                changed := Compat13_RewriteBuiltinField(data, field, Compat13_BuiltinName) || changed
+            if (data.HasOwnProp("Conditions") && data.Conditions is Array) {
+                for condition in data.Conditions {
+                    changed := Compat13_RewriteBuiltinField(condition, "Variable", Compat13_BuiltinName) || changed
+                    changed := Compat13_RewriteBuiltinField(condition, "Value", Compat13_BuiltinName) || changed
+                    changed := Compat13_RewriteBuiltinField(condition, "Value", Compat13_RewriteBuiltinTemplate) || changed
+                }
+            }
+        }
+        if (data.HasOwnProp("TimeConfig") && IsObject(data.TimeConfig)) {
+            for field in ["Param1", "Param2", "RandomMaxMs"] {
+                changed := Compat13_RewriteBuiltinField(data.TimeConfig, field, Compat13_BuiltinName) || changed
+                changed := Compat13_RewriteBuiltinField(data.TimeConfig, field, Compat13_RewriteBuiltinTemplate) || changed
+            }
+        }
+    }
+    return changed
+}
+
+Compat13_RewriteBuiltinField(data, field, rewrite) {
+    if (!IsObject(data) || !data.HasOwnProp(field))
+        return false
+    value := data.%field%
+    if (value is Array)
+        return Compat13_RewriteBuiltinArray(value, rewrite)
+    if (Type(value) != "String")
+        return false
+    next := rewrite.Call(value)
+    if (next == value)
+        return false
+    data.%field% := next
+    return true
+}
+
+Compat13_RewriteBuiltinArray(values, rewrite) {
+    changed := false
+    for index, value in values {
+        if (value is Array) {
+            changed := Compat13_RewriteBuiltinArray(value, rewrite) || changed
+        } else if (Type(value) == "String") {
+            next := rewrite.Call(value)
+            if (next != value) {
+                values[index] := next
+                changed := true
+            }
+        }
+    }
+    return changed
 }
 
 Compat13_UpgradeSettings(dir) {

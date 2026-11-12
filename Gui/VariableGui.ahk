@@ -505,6 +505,9 @@ class VariableGui {
         str14 := GetLang("当前分：当前分钟（形如46）")
         str15 := GetLang("当前秒：当前秒（形如58）")
         str := Format("{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6, str7, str7b, str8, str9, str10, str11, str12, str13, str14, str15)
+        str .= "`n" GetLang("日期文本") "  (2026-04-12)"
+            . "`n" GetLang("时分文本") "  (19:46)"
+            . "`n" GetLang("时分秒文本") "  (19:46:58)"
         RmtDialog.Info(str, GetLang("系统变量说明"), "Owner" this.Hwnd())
     }
 

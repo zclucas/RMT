@@ -107,30 +107,29 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLite
     }
 
     switch varName {
-        case "当前鼠标坐标X", "当前鼠标坐标Y", "当前坐标X", "当前坐标Y":
+        case "当前坐标X", "当前坐标Y":
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
-            Value := (varName == "当前鼠标坐标X" || varName == "当前坐标X") ? mouseX : mouseY
+            Value := varName == "当前坐标X" ? mouseX : mouseY
             return true
-        case "当前日期":
+        case "日期文本":
             Value := FormatTime(A_Now, "yyyy-MM-dd")
             return true
-        case "当前时间":
+        case "时分文本":
             Value := FormatTime(A_Now, "HH:mm")
             return true
-        case "当前时间(秒)":
+        case "时分秒文本":
             Value := FormatTime(A_Now, "HH:mm:ss")
             return true
         case "当前秒":
             Value := A_Sec
             return true
-        case "当前星期几", "当前星期":
+        case "当前星期":
             Value := A_WDay == 1 ? 7 : A_WDay - 1
             return true
         case "当前周":
             Value := Integer(SubStr(A_YWeek, 5))
             return true
-        ; §21 数值型时间变量（旧「当前时间/当前秒」字符串型不再列出，此处保留兼容）
         case "当前时间戳":
             Value := UnixNow()
             return true
@@ -225,15 +224,15 @@ GetSystemVarArr() {
 
 GetTimeCategoryVarArr() {
     return [GetLang("当前年"), GetLang("当前月"), GetLang("当前周"), GetLang("当前星期"), GetLang("当前日"),
-    GetLang("当前时"), GetLang("当前分"), GetLang("当前秒")]
+    GetLang("当前时"), GetLang("当前分"), GetLang("当前秒"), GetLang("日期文本"),
+    GetLang("时分文本"), GetLang("时分秒文本")]
 }
 
 ; 系统 + 时间（去重），用于保留名、多语言替换、变量下拉「所有」
 GetSpecialVarArr() {
     seen := Map()
     arr := []
-    extra := [GetLang("当前鼠标坐标X"), GetLang("当前鼠标坐标Y")]
-    for src in [GetSystemVarArr(), GetTimeCategoryVarArr(), extra] {
+    for src in [GetSystemVarArr(), GetTimeCategoryVarArr()] {
         for v in src {
             if (v != "" && !seen.Has(v)) {
                 seen[v] := true

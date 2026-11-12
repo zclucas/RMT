@@ -537,6 +537,9 @@ class MacroGraphFormalMixin {
         sysItems := GetSystemVarArr()
         sysIdx := this._IndexInLangArr(sysItems, GetLang(cv))
         this._AddComboRow(block, p "SysRow_" id, GetLang("系统："), p "SysCmb_" id, sysItems, sysIdx, showSys, true, lw, cw)
+        timeItems := GetTimeCategoryVarArr()
+        timeIdx := this._IndexInLangArr(timeItems, GetLang(cv))
+        this._AddComboRow(block, p "TimeRow_" id, GetLang("时间："), p "TimeCmb_" id, timeItems, timeIdx, on && ot == "时间", true, lw, cw)
         this._AddEditableComboRow(block, p "MinRow_" id, GetLang("最小值："), p "Min_" id, GetGuiVarArr(), minv, showMinMax, lw, cw)
         this._AddEditableComboRow(block, p "MaxRow_" id, GetLang("最大值："), p "Max_" id, GetGuiVarArr(), maxv, showMinMax, lw, cw)
     }
@@ -607,7 +610,7 @@ class MacroGraphFormalMixin {
         if (ot == "系统")
             return GetLang("系统") "：" GetLang(cv)
         if (ot == "时间")
-            return GetLang("时间")
+            return GetLang("时间") "：" GetLang(cv)
         if (ot == "删除")
             return GetLang("删除")
         return cv

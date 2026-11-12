@@ -5,7 +5,7 @@
 #Include "Compatv1-3-2.ahk"
 
 ; 配置格式版本独立于 RMPK 容器版本和软件构建版本。
-Compat_CurrentVersion() => "1.3.2"
+Compat_CurrentVersion() => "1.3.3"
 Compat_VersionFile(dir) => dir "\RmtVersion.toml"
 
 Compat_CompareVersion(left, right) {
@@ -40,7 +40,8 @@ Compat_MigrationSteps() {
     return [{Version: "1.2.2", Run: CompatTo12_UpgradeDir},
         {Version: "1.3", Run: Compat13_UpgradeProfile},
         {Version: "1.3.1", Run: Compat131_UpgradeProfile},
-        {Version: "1.3.2", Run: Compat132_UpgradeProfile}]
+        {Version: "1.3.2", Run: Compat132_UpgradeProfile},
+        {Version: "1.3.3", Run: Compat13_UpgradeBuiltinVariables}]
 }
 
 Compat_UpgradeDir(dir) {
