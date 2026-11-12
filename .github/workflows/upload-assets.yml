@@ -63,8 +63,10 @@ jobs:
           "run_id=$runId" >> $env:GITHUB_OUTPUT
           Write-Host "source run: $runId"
 
-      # 手动重放不做 HEAD 校验；自动触发校验来源分支未被推进或删除
-      - name: 校验来源分支（仅自动触发）
+      # 手动重放不做 HEAD 校验；自动触发校验来源 ref 仍指向同一提交。
+      # 注意：tag 触发的 run 里 workflow_run.head_branch 是 tag 名（v1.3F3）而非分支名，
+      # 所以用 commits/{ref}（任意 ref 通用），不能用 branches/{ref}。
+      - name: 校验来源 ref（仅自动触发）
         if: github.event_name != 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,18 +76,18 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not $env:HEAD_BRANCH) {
-            Write-Host '来源分支为空（可能已删除），跳过上传。'
+            Write-Host '来源 ref 为空（可能已删除），跳过上传。'
             "skip=true" >> $env:GITHUB_ENV
             return
           }
-          $remoteSha = gh api "repos/$env:REPO/branches/$env:HEAD_BRANCH" --jq '.commit.sha'
+          $remoteSha = gh api "repos/$env:REPO/commits/$env:HEAD_BRANCH" --jq '.sha'
           if ($LASTEXITCODE -ne 0 -or -not $remoteSha) {
-            Write-Host "无法读取远端分支 $env:HEAD_BRANCH（可能已删除），跳过上传。"
+            Write-Host "无法解析远端 ref $env:HEAD_BRANCH（可能已删除），跳过上传。"
             "skip=true" >> $env:GITHUB_ENV
             return
           }
-          if ($remoteSha -ne $env:HEAD_SHA) {
-            Write-Host "$env:HEAD_BRANCH 已推进（远端 $remoteSha != 来源 $env:HEAD_SHA），跳过这次旧提交的资源上传。"
+          if ($remoteSha.Trim() -ne $env:HEAD_SHA) {
+            Write-Host "$env:HEAD_BRANCH 已指向其他提交（远端 $remoteSha != 来源 $env:HEAD_SHA），跳过这次旧提交的资源上传。"
             "skip=true" >> $env:GITHUB_ENV
           }
 
