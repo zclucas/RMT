@@ -321,7 +321,7 @@ class OperationGui {
             i := A_Index
             this._BindOp("EditBtn" i, "Click", this.OnEditVariableBtnClick.Bind(this, i))
             this._BindOp("DelOpRow" i, "Click", ObjBindMethod(this, "OnDelOpRow", i))
-            this.ui.Update("Expr" i, "Text", GetLangStr(this.Data.ExpressionArr[i], 1))
+            this.ui.Update("Expr" i, "Text", TranslateOperationExpression(this.Data.ExpressionArr[i], true))
             this._SetCombo("UpdateName" i, this.DLVariableArr, GetLang(this.Data.UpdateNameArr[i]))
         }
         this._BindOp("BtnAddOp", "Click", ObjBindMethod(this, "OnAddOpRow"))
@@ -424,8 +424,7 @@ class OperationGui {
     _ReadOperationRows() {
         loop this.Data.ToggleArr.Length {
             i := A_Index
-            this.Data.ToggleArr[i] := 1
-            this.Data.ExpressionArr[i] := GetLangStr(this.ui.Query("Expr" i), 2)
+            this.Data.ExpressionArr[i] := TranslateOperationExpression(this.ui.Query("Expr" i), false)
             this.Data.UpdateNameArr[i] := GetVarName(this.ui.Query("UpdateName" i))
         }
     }

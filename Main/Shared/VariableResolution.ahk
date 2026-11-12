@@ -94,14 +94,14 @@ GetSmartReplaceVarText(tableItem, index, &text) {
     text := result
 }
 
-TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map()) {
+TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLiteral := true) {
 
-    if (RegExMatch(varName, "^[0-9A-Fa-f]{6}$")) {
+    if (allowLiteral && RegExMatch(varName, "^[0-9A-Fa-f]{6}$")) {
         Value := varName
         return true
     }
 
-    if (IsNumber(varName)) {
+    if (allowLiteral && IsNumber(varName)) {
         Value := Number(varName)
         return true
     }
@@ -193,11 +193,11 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map()) {
     return false
 }
 
-TryGetTabVarValue(&Value, tableItem, index, varName, variTip := true) {
+TryGetTabVarValue(&Value, tableItem, index, varName, variTip := true, allowLiteral := true) {
     item := tableItem.Items[index]
     if (!item)
         return false
-    return TryGetVarValue(&Value, varName, variTip, item.VariableMap)
+    return TryGetVarValue(&Value, varName, variTip, item.VariableMap, allowLiteral)
 }
 
 ShowNoVariableTip(VarName) {

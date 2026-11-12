@@ -671,7 +671,7 @@ class MacroGraphFormalMixin {
         toggled := d.HasOwnProp("opToggle" slot) ? d["opToggle" slot] : (slot == 1 ? 1 : 0)
         on := toggled == 1 || toggled == "1"
         un := d.HasOwnProp("updateName" slot) ? d["updateName" slot] : "Var" slot
-        ex := d.HasOwnProp("expression" slot) ? d["expression" slot] : ""
+        ex := d.HasOwnProp("expression" slot) ? TranslateOperationExpression(d["expression" slot], true) : ""
         ; 逐级展开：仅勾选上一个运算后才显示下一个（visible 控制整组行显隐，降低展开高度）
         this._AddCheckRow(body, p "TogRow_" id, p "Tog_" id, GetLang("运算") slot, on, visible)
         ; 表达式行：文本框 + 编辑按钮（输入框宽度140px）
@@ -691,21 +691,17 @@ class MacroGraphFormalMixin {
         ; 先从 UI 输入框获取当前表达式（这是最新的值）
         ex := ""
         if (this.ui != "") {
-            try {
-                ex := this.ui.Get("OpS" slot "Expr_" id, "Text")
-            }
-        }
-        ; 如果 UI 没有，尝试从数据对象获取
-        if (ex == "") {
+            ex := this.ui.Query("OpS" slot "Expr_" id)
+        } else {
             data := this._FormalIniData(id)
             if (data != "") {
                 ; 优先从 ExpressionArr 数组获取（Data 类实例）
                 if (data.HasOwnProp("ExpressionArr") && data.ExpressionArr.Length >= slot) {
-                    ex := data.ExpressionArr[slot]
+                    ex := TranslateOperationExpression(data.ExpressionArr[slot], true)
                 }
                 ; 其次从 expression1/expression2... 获取（动态对象）
                 else if (data.HasOwnProp("expression" slot)) {
-                    ex := data["expression" slot]
+                    ex := TranslateOperationExpression(data["expression" slot], true)
                 }
             }
         }
@@ -743,7 +739,7 @@ class MacroGraphFormalMixin {
             while (data.ExpressionArr.Length < slot)
                 data.ExpressionArr.Push("")
             data.ToggleArr[slot] := 1
-            data.ExpressionArr[slot] := expr
+            data.ExpressionArr[slot] := TranslateOperationExpression(expr, false)
             SaveMacroCMDData(data)
         }
         ; 折叠态刷新摘要

@@ -253,224 +253,50 @@ class OperationSubGui {
     }
 
     OnCalculateResultBtnClick(state := "", ctrl := "", event := "") {
-        ; 计算当前表达式的结果
         if (!IsObject(this.ui))
             return
-        expr := this.ui.Query("ExpressionCon")
-        if (expr == "") {
+        expression := this.ui.Query("ExpressionCon")
+        if (IsOperationExpressionBlank(expression)) {
             RmtDialog.Info(GetLang("表达式不能为空"))
             return
         }
 
-        ; 先校验表达式语法
-        if (!this.CheckExpressionSyntax(expr)) {
-            return
-        }
-
+        variableCount := 0
         try {
-            result := this.EvaluateWithPlaceholderValues(expr, &variableCount)
-            if (variableCount > 0)
-                RmtDialog.Info(Format("{}：{}{}", GetLang("假定所有变量均为10，计算结果"), result, "`n" GetLang("提示：实际运行时会使用真实的变量值")))
-            else
+            result := EvaluateExpression(expression, , true, &variableCount)
+            if (variableCount > 0) {
+                result := EvaluateExpression(expression)
+                RmtDialog.Info(Format("{}：{}", GetLang("假定所有变量均为10，计算结果"), result) "`n"
+                    GetLang("提示：实际运行时会使用真实的变量值"))
+            } else {
                 RmtDialog.Info(Format(GetLang("计算结果：{}"), result))
+            }
+        } catch OperationExpressionSyntaxError as e {
+            RmtDialog.Info(Format(GetLang("表达式语法错误：{}"), GetLang(e.Message)))
         } catch Error as e {
-            RmtDialog.Info(Format(GetLang("表达式语法错误：{}"), e.Message))
+            if (variableCount > 0)
+                RmtDialog.Info(Format(GetLang("假定所有变量均为10，无法计算：{}"), GetLang(e.Message)) "`n"
+                    GetLang("提示：实际运行时会使用真实的变量值"))
+            else
+                RmtDialog.Info(Format(GetLang("表达式计算失败：{}"), GetLang(e.Message)))
         }
-    }
-
-    EvaluateWithPlaceholderValues(expression, &variableCount := 0) {
-        return EvaluateExpression(RegExReplace(expression, "\{[^{}]+\}", "10", &variableCount))
     }
 
     OnClickSureBtn(state := "", ctrl := "", event := "") {
         if (this.SureBtnAction == "")
             return
 
-        ; 获取表达式
         expression := IsObject(this.ui) ? this.ui.Query("ExpressionCon") : ""
-
-        ; 校验表达式语法（仅当表达式不为空且非基础值时）
-        if (expression != "") {
-            ; 先进行基本语法检查
-            if (!this.CheckExpressionSyntax(expression)) {
-                return
-            }
-
-            ; 尝试计算测试表达式，校验语法
-            try {
-                this.EvaluateWithPlaceholderValues(expression)
-            } catch Error as e {
-                RmtDialog.Info(Format(GetLang("表达式语法错误：{}"), e.Message))
-                return
-            }
+        try {
+            EvaluateExpression(expression, , true)
+        } catch Error as e {
+            message := (e is OperationExpressionSyntaxError) ? "表达式语法错误：{}" : "表达式计算失败：{}"
+            RmtDialog.Info(Format(GetLang(message), GetLang(e.Message)))
+            return
         }
 
         action := this.SureBtnAction
         action(this.Index, expression)
         this._CloseWindow()
-    }
-
-    ; 检查表达式基本语法
-    CheckExpressionSyntax(expr) {
-        errorMsg := ""
-
-        ; ========== 步骤1：单独校验所有{...}变量结构（在删除空格之前）==========
-        varPattern := "\{[^{}]*\}" ; 匹配所有{...}结构（不包含嵌套的{}）
-        if RegExMatch(expr, varPattern, &varMatch, 1) {
-            loop {
-                ; 提取当前匹配的变量整体（如{ var }）
-                varWhole := varMatch[0]
-                ; 提取大括号内的原始内容（去掉首尾{和}）
-                varContentRaw := SubStr(varWhole, 2, -1)
-
-                ; 校验1：变量内容不能为空（包括只有空格的情况）
-                varContentTrim := Trim(varContentRaw)
-                if (varContentTrim = "") {
-                    RmtDialog.Info(GetLang("表达式错误：变量内容不能为空"))
-                    return false
-                }
-                ; 校验2：变量内容（去空格后）不能包含{}
-                if InStr(varContentTrim, "{") || InStr(varContentTrim, "}") {
-                    RmtDialog.Info(GetLang("表达式错误：变量内容不能包含{}"))
-                    return false
-                }
-                ; 校验3：变量内容不能包含任何空白符（包括空格/制表符等）
-                if RegExMatch(varContentRaw, "\s") {
-                    RmtDialog.Info(GetLang("表达式错误：变量内容不能包含空白符"))
-                    return false
-                }
-
-                ; 继续匹配下一个变量（直到无匹配）
-                if !RegExMatch(expr, varPattern, &varMatch, varMatch.Pos + varMatch.Len)
-                    break
-            }
-        }
-
-        ; ========== 步骤2：过滤空格，校验字符集（含数值处理函数名与逗号）==========
-        cleanExpr := StrReplace(expr, " ")
-        cleanExpr := StrReplace(cleanExpr, "　", "")
-        cleanExpr := StrReplace(cleanExpr, "（", "(")
-        cleanExpr := StrReplace(cleanExpr, "）", ")")
-        cleanExpr := StrReplace(cleanExpr, "，", ",")
-
-        ; 仅允许已知函数名
-        checkFn := RegExReplace(cleanExpr, "\{[^{}]+\}", "")
-        pos := 1
-        loop {
-            if !RegExMatch(checkFn, "([a-zA-Z_]+)\(", &fnMatch, pos)
-                break
-            fname := StrLower(fnMatch[1])
-            if (fname != "abs" && fname != "max" && fname != "min" && fname != "round" && fname != "ceil" && fname != "floor") {
-                RmtDialog.Info(Format(GetLang("表达式错误：不支持的函数 {}"), fnMatch[1]))
-                return false
-            }
-            pos := fnMatch.Pos + fnMatch.Len
-        }
-
-        validPattern := "^(?:\{[^{}]+\}|-?\d+\.\d+|-?\d+|[+\-*/%^()⌊⌋,]|[a-zA-Z_])+$"
-        if !RegExMatch(cleanExpr, validPattern) {
-            RmtDialog.Info(GetLang("表达式包含非法字符或格式错误"))
-            return false
-        }
-
-        ; ========== 步骤3：校验括号 / 取整括号是否匹配 ==========
-        openCount := 0, closeCount := 0
-        floorOpen := 0, floorClose := 0
-        for k, char in StrSplit(cleanExpr) {
-            if char = "("
-                openCount++
-            else if char = ")"
-                closeCount++
-            else if char = "⌊"
-                floorOpen++
-            else if char = "⌋"
-                floorClose++
-            if closeCount > openCount {
-                RmtDialog.Info(GetLang("表达式错误：括号不匹配"))
-                return false
-            }
-            if floorClose > floorOpen {
-                RmtDialog.Info(GetLang("表达式错误：取整括号不匹配"))
-                return false
-            }
-        }
-        if openCount != closeCount {
-            RmtDialog.Info(GetLang("表达式错误：括号不匹配"))
-            return false
-        }
-        if floorOpen != floorClose {
-            RmtDialog.Info(GetLang("表达式错误：取整括号不匹配"))
-            return false
-        }
-
-        ; ========== 步骤4：校验表达式首尾是否为非法运算符 ==========
-        firstChar := SubStr(cleanExpr, 1, 1)
-        lastChar := SubStr(cleanExpr, -1)
-        invalidStart := "+*/%^," ; 负号(-)、括号、函数名、⌊ 允许开头
-        invalidEnd := "+-*/%^⌊," ; 运算符与 ⌊、逗号不允许结尾
-        if (InStr(invalidStart, firstChar)) {
-            RmtDialog.Info(GetLang("表达式错误：不能以运算符开头"))
-            return false
-        }
-        if (InStr(invalidEnd, lastChar)) {
-            RmtDialog.Info(GetLang("表达式错误：不能以运算符结尾"))
-            return false
-        }
-
-        ; ========== 步骤5：校验连续运算符（允许+-、--作为负数，不允许其他连续）==========
-        ; 匹配连续的运算符（2个或更多），排除 +-、-+、--（负数的情况）
-        ; 但也要排除变量后的情况：{var}+5 这种不校验
-        exprWithoutVar := RegExReplace(cleanExpr, "\{[^{}]+\}", "Var") ; 去掉变量后再检查
-        if RegExMatch(exprWithoutVar, "[+\-*/%^]{2,}", &opMatch) {
-            matched := opMatch[0]
-            ; 允许 +-、-+、--（负数或正数前缀）
-            if (matched != "+-" && matched != "-+" && matched != "--") {
-                RmtDialog.Info(GetLang("表达式错误：存在连续运算符") matched)
-                return false
-            }
-        }
-
-        ; ========== 步骤6：校验空括号 ==========
-        if RegExMatch(cleanExpr, "\(\)") {
-            RmtDialog.Info(GetLang("表达式错误：空括号"))
-            return false
-        }
-
-        ; ========== 步骤7：校验括号内为空或仅有运算符 ==========
-        ; 检查括号内是否为空或仅有空格/运算符
-        if RegExMatch(cleanExpr, "\([+\-*/%^]*\)", &emptyParenMatch) {
-            if (emptyParenMatch[0] != "()") {
-                RmtDialog.Info(GetLang("表达式错误：括号内内容无效"))
-                return false
-            }
-        }
-
-        ; ========== 步骤8：校验除零风险 ==========
-        ; 检查 /0 或 /(表达式) 的情况
-        if RegExMatch(cleanExpr, "/0(?![\d.])") {
-            RmtDialog.Info(GetLang("表达式错误：除数不能为零"))
-            return false
-        }
-        ; 检查 /(数字) 且数字为0的情况（简单检测）
-        if RegExMatch(cleanExpr, "/\(([^()]*)\)", &divParen) {
-            parenContent := divParen[1]
-            ; 如果括号内是明确的0
-            if (parenContent == "0" || parenContent == "+0" || parenContent == "-0") {
-                RmtDialog.Info(GetLang("表达式错误：除数不能为零"))
-                return false
-            }
-        }
-
-        ; ========== 步骤9：校验乘方运算符周围的负数 ==========
-        ; 负数的非整数次方（如(-2)^0.5）会导致NaN错误，不支持
-        ; 匹配 (-数字)^(小数) 的情况，但排除 .0、.00 等整数形式
-        ; 正则解释：\( + (-数字) + \) + \^ + (数字开头) + \. + (非零数字 + 任意数字)
-        ; 这样 (-2)^3.0 不会匹配，但 (-2)^0.5 会匹配
-        if RegExMatch(cleanExpr, "\(-[^)]*\)\^\d*\.[1-9]\d*") {
-            RmtDialog.Info(GetLang("表达式错误：不支持负数的非整数次方运算"))
-            return false
-        }
-
-        return true
     }
 }

@@ -263,6 +263,19 @@ class MacroGraphFormalHandlersMixin {
             data.UpdateNameArr.Push("Var" (data.UpdateNameArr.Length + 1))
         while (data.ExpressionArr.Length < 4)
             data.ExpressionArr.Push("")
+        missingExprControls := []
+        loop 4 {
+            exprControl := "OpS" A_Index "Expr_" id
+            if (!state.Has(exprControl))
+                missingExprControls.Push(exprControl)
+        }
+        if (this.ui != "" && missingExprControls.Length > 0) {
+            if (missingExprControls.Length == 1)
+                state[missingExprControls[1]] := this.ui.Query(missingExprControls[1])
+            else
+                for name, value in this.ui.Query(missingExprControls*)
+                    state[name] := value
+        }
         loop 4 {
             slot := A_Index
             p := "OpS" slot
@@ -270,13 +283,20 @@ class MacroGraphFormalHandlersMixin {
             data.ToggleArr[slot] := this._FormalReadToggle(state, p "Tog_" id, data.ToggleArr[slot])
             if (state.Has(p "Target_" id) && state[p "Target_" id] != "")
                 data.UpdateNameArr[slot] := GetVarName(state[p "Target_" id])
-            if (!state.Has(p "Expr_" id) && this.ui != "") {
-                q := this.ui.Query(p "Expr_" id)
-                if (q != "")
-                    state[p "Expr_" id] := q
+            exprControl := p "Expr_" id
+            if (!state.Has(exprControl))
+                continue
+            expression := TranslateOperationExpression(state[exprControl], false)
+            if (expression == data.ExpressionArr[slot])
+                continue
+            try {
+                EvaluateExpression(expression, , true)
+                data.ExpressionArr[slot] := expression
+            } catch Error as e {
+                if (this.ui != "")
+                    this.ui.Update(exprControl, "Text", TranslateOperationExpression(data.ExpressionArr[slot], true))
+                RmtDialog.Info(Format(GetLang("第 {} 行表达式语法错误：{}"), slot, GetLang(e.Message)))
             }
-            if (state.Has(p "Expr_" id))
-                data.ExpressionArr[slot] := state[p "Expr_" id]
         }
         SaveMacroCMDData(data)
         this._RefreshFormalOperationVisibility(id)
