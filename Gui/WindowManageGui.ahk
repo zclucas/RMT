@@ -96,7 +96,7 @@ class WindowManageGui {
         compactLayout := isAdjust || isInfo
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,16")
         body.Rows("36", "36", compactLayout ? "Auto" : "36", "Auto", "48")
-        labelWidth := compactLayout ? Ceil(XAMLHost.FontSize() * (MainSoftData.Lang == "中文" ? 5 : 7)) : 108
+        labelWidth := compactLayout ? Ceil(XAMLHost.FontSize() * (MainSoftData.Lang == "简中" ? 5 : 7)) : 108
         fieldCols := [labelWidth, "*", "16", labelWidth, "*"]
         pairCols := [labelWidth, "180", "8", "180"]
         body.Cols(fieldCols*)

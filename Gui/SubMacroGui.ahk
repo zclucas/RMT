@@ -359,7 +359,7 @@ class SubMacroGui {
         numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
         CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
         if (ShouldAutoGenerateRemark(Remark)) {
-            IntervarlStr := MainSoftData.Lang == "中文" ? "" : " "
+            IntervarlStr := MainSoftData.Lang == "简中" ? "" : " "
             OperStr := SubMacroGui.CallLabel(this.Data.CallType)
             TypeStr := GetLang(this.Data.MacroType)
             SerialStr := this.Data.MacroType == "当前宏" ? "" : this.Data.Index

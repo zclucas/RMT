@@ -1,4 +1,4 @@
-﻿# RMT 自动打包脚本
+# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -1086,7 +1086,7 @@ function New-RMTAssets {
 
     $bundles = [ordered]@{
         "Lang.zip" = @(
-            @{ Dest = "chinese.txt"; Src = "Lang\中文.txt" },
+
             @{ Dest = "English.txt"; Src = "Lang\English.txt" }
         )
         "RMT.zip" = @(
