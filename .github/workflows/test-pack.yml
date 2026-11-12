@@ -126,7 +126,6 @@ jobs:
           $releaseDirs = [ordered]@{
             "v${version}_x64" = 'RMTAssets_x64'
             "v${version}_x86" = 'RMTAssets_x86'
-            'Common' = 'RMTAssets_Common'
           }
           $assetsByTag = [ordered]@{}
           $packedFilesByTag = @{}
@@ -165,11 +164,7 @@ jobs:
           # 全部新包发布成功后，再删除已有替代包的旧附件。
           $oldKwsNames = @('kws_decoder.onnx', 'kws_encoder.int8.onnx', 'kws_joiner.onnx', 'kws_tokens.txt')
           foreach ($tag in $assetsByTag.Keys) {
-            $obsolete = if ($tag -eq 'Common') {
-              $oldKwsNames + 'VoiceKws.zip'
-            } else {
-              $packedFilesByTag[$tag] + $packedFilesByTag['Common'] + $oldKwsNames
-            }
+            $obsolete = $packedFilesByTag[$tag] + $oldKwsNames
             $publishedNames = @($assetsByTag[$tag] | Split-Path -Leaf)
             $existingNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name'
             if ($LASTEXITCODE -ne 0) { throw "无法读取 $repo $tag 的附件" }

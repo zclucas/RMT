@@ -86,7 +86,7 @@ SelfCheckMissingFiles() {
             else
                 missingOptional++
 
-            url := (file.bundle == "Lang.zip" ? RmtAssetsBaseUrl("Common") : baseUrl) file.bundle
+            url := baseUrl file.bundle
             if (!downloads.Has(url))
                 downloads[url] := {name: file.bundle, files: []}
             downloads[url].files.Push(file)

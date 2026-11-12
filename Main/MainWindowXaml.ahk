@@ -722,6 +722,8 @@ class MainWin {
         MainSoftData.TableIndex := idx
         ; 惰性构建：首次切到某个页签才生成它的内容（启动时只建当前页签）
         this._EnsureTabBuilt(idx)
+        if (idx == GetTableIndexByID("Tool"))
+            this.RefreshVoiceExtensionButton()
         this._EnsureAiPanel(idx)
         if (idx >= 1 && idx <= MySoftData.TableInfo.Length)
             MainSoftData.CurTableID := MySoftData.TableInfo[idx].ID

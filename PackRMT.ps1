@@ -575,7 +575,6 @@ function New-Release {
 
     # 生成资源清单目录（对应 Main\SelfCheck.ahk 的文件校验清单）
     Write-Section "生成资源清单 (RMTAssets)"
-    New-RMTCommonAssets -ReleaseDir $rmtReleaseDir
     if ($Type -eq "x64" -or $Type -eq "both") {
         New-RMTAssets -Arch "x64" -ReleaseDir $rmtReleaseDir
     }
@@ -617,7 +616,6 @@ function New-Release {
     if ($Type -eq "both") {
         Write-Log "to $rmtReleaseDir\RMTv${version}_x86.zip" "White"
     }
-    Write-Log "to $rmtReleaseDir\RMTAssets_Common" "White"
     Write-Log "to $rmtReleaseDir\RMTAssets_x64" "White"
     if ($Type -eq "both") {
         Write-Log "to $rmtReleaseDir\RMTAssets_x86" "White"
@@ -1074,18 +1072,6 @@ function New-RMTAssetZip {
     Write-Log "  已生成: $(Split-Path $ZipPath -Leaf) ($($Files.Count) 个文件)" "Gray"
 }
 
-function New-RMTCommonAssets {
-    param([string]$ReleaseDir)
-
-    $assetsDir = Join-Path $ReleaseDir "RMTAssets_Common"
-    New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
-    $languages = @(
-        @{ Dest = "chinese.txt"; Src = "Lang\中文.txt" },
-        @{ Dest = "English.txt"; Src = "Lang\English.txt" }
-    )
-    New-RMTAssetZip -ZipPath (Join-Path $assetsDir "Lang.zip") -Files $languages
-}
-
 # 生成按架构发布的资源，供文件校验和语音扩展下载。
 function New-RMTAssets {
     param([string]$Arch, [string]$ReleaseDir)
@@ -1097,6 +1083,10 @@ function New-RMTAssets {
     Write-Log "生成 $assetsDir ..." "Gray"
 
     $bundles = [ordered]@{
+        "Lang.zip" = @(
+            @{ Dest = "chinese.txt"; Src = "Lang\中文.txt" },
+            @{ Dest = "English.txt"; Src = "Lang\English.txt" }
+        )
         "RMT.zip" = @(
             @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },
             @{ Dest = "RMT.ExcelHelper.exe"; Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
