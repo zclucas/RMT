@@ -4,7 +4,7 @@
         this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作", "变量", "变量提取",
             "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图"])
 
-        this.CMDIconFileArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
+        this.CMDIconFileArr := ["Images\Soft\Time.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png",
             "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\DeltaMove.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png", "Images\Soft\Prompt.png",
@@ -31,7 +31,7 @@
 
         ; IconN → 图标文件（顺序与原 IL_Add 一致）
         this.IconFileByNumber := Map(
-            "Icon1", "Images\Soft\Interval.png", "Icon2", "Images\Soft\Key.png",
+            "Icon1", "Images\Soft\Time.png", "Icon2", "Images\Soft\Key.png",
             "Icon3", "Images\Soft\Search.png", "Icon4", "Images\Soft\SearchPro.png",
             "Icon5", "Images\Soft\Move.png", "Icon6", "Images\Soft\MovePro.png",
             "Icon7", "Images\Soft\Output.png", "Icon8", "Images\Soft\Run.png",
@@ -48,7 +48,7 @@
             "IconWindowAdjust", "Images\Soft\WindowAdjustGear32.png", "Icon29", "Images\Soft\WindowManage.png", "Icon30", "Images\Soft\KeyListen.png",
             "Icon31", "Images\Soft\Comment.png", "Icon32", "Images\Soft\ScreenShot.png",
             "Icon33", "Images\Soft\Wait.png", "Icon34", "Images\Soft\DeltaMove.png", "Icon35", "Images\Soft\Time.png",
-            "Icon36", "Images\Soft\WaitConfirm.png", "Icon37", "Images\Soft\Interval.png",
+            "Icon36", "Images\Soft\WaitConfirm.png", "Icon37", "Images\Soft\Time.png",
             "Icon38", "Images\Soft\Joy.png",
             "IconSearchAll", "Images\Soft\SearchAll.png",
             "Icon39", "Images\Soft\SearchCombo.png",
@@ -68,7 +68,7 @@
 
     InitSubGuiConfigs() {
         this.SubGuiConfig := [
-            {class: IntervalGui, name: "间隔", icon: "Images\Soft\Interval.png", propName: "IntervalGui"},
+            {class: IntervalGui, name: "间隔", icon: "Images\Soft\Time.png", propName: "IntervalGui"},
             {class: KeyGui, name: "按键", icon: "Images\Soft\Key.png", propName: "KeyGui"},
             {class: JoyGui, name: "手柄", icon: "Images\Soft\Joy.png", propName: "JoyGui"},
             {class: SearchGui, name: "搜索", icon: "Images\Soft\Search.png", propName: "SearchGui"},

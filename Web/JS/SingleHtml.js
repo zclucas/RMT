@@ -66,7 +66,7 @@ function imageToBase64(relPath, baseDir = WEB_DIR) {
 
 // 与宏编辑器指令图标一致（SubGuiConfig）
 const COMMAND_ICON_FILES = {
-  "间隔": "Images/Soft/Interval.png",
+  "间隔": "Images/Soft/Time.png",
   "按键": "Images/Soft/Key.png",
   "手柄": "Images/Soft/Joy.png",
   "搜索": "Images/Soft/Search.png",
@@ -112,7 +112,8 @@ const COMMAND_ICON_FILES = {
   "等待确定": "Images/Soft/WaitConfirm.png",
   "时间": "Images/Soft/Time.png",
   "跳转": "Images/Soft/FlowJump.png",
-  "倒计时": "Images/Soft/Interval.png",
+  "倒计时": "Images/Soft/Time.png",
+  "提示": "Images/Soft/Prompt.png",
   "移动": "Images/Soft/Move.png",
   "移动Pro": "Images/Soft/MovePro.png",
   "组合搜索": "Images/Soft/SearchCombo.png",

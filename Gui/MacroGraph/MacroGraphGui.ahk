@@ -51,7 +51,7 @@ class MacroGraphGui {
             "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
-        this.CmdIconArr := ["Images\Soft\Interval.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
+        this.CmdIconArr := ["Images\Soft\Time.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png", "Images\Soft\SearchCombo.png",
             "Images\Soft\Move.png", "Images\Soft\Move.png", "Images\Soft\MovePro.png", "Images\Soft\MovePro.png", "Images\Soft\DeltaMove.png",
             "Images\Soft\Input.png", "Images\Soft\Output.png", "Images\Soft\Prompt.png",

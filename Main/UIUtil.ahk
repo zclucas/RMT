@@ -438,7 +438,7 @@ CmdEditorTitleIcon(title) {
             ["流程跳转", "Images\Soft\FlowJump.png"],
             ["跳转", "Images\Soft\FlowJump.png"],
             ["宏操作", "Images\Soft\MacroAction.png"],
-            ["间隔", "Images\Soft\Interval.png"],
+            ["间隔", "Images\Soft\Time.png"],
             ["按键", "Images\Soft\Key.png"],
             ["手柄", "Images\Soft\Joy.png"],
             ["搜索", "Images\Soft\Search.png"],
@@ -454,7 +454,7 @@ CmdEditorTitleIcon(title) {
             ["等待确定", "Images\Soft\WaitConfirm.png"],
             ["等待", "Images\Soft\Wait.png"],
             ["时间", "Images\Soft\Time.png"],
-            ["倒计时", "Images\Soft\Interval.png"],
+            ["倒计时", "Images\Soft\Time.png"],
             ["提示", "Images\Soft\Prompt.png"],
             ["注释", "Images\Soft\Comment.png"],
             ["抓图", "Images\Soft\ScreenShot.png"]
