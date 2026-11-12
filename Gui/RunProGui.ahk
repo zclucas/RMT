@@ -110,10 +110,8 @@ class RunProGui {
 
         ; 行3：目标
         body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("目标：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("TextBox").Grid_Row(3).Grid_Column(1).Grid_ColumnSpan(6).Name("PathTextCon").Height(26).MinHeight(26).VerticalAlignment("Center").Margin("0,0,8,0")
-            .VerticalContentAlignment("Center").FontSize("11").Padding("2,0")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        targetHost := body.Add("Grid").Grid_Row(3).Grid_Column(1).Grid_ColumnSpan(6).Name("RunTargetHost").Margin("0,0,8,0")
+        RunGui.AddTargetCombo(targetHost)
         body.Add("Button").Grid_Row(3).Grid_Column(7).Name("BtnSelectFile").Content(GetLang("选择文件")).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Stretch").Cursor("Hand")
 
         ; 行4：返回值 / 输出 / 错误
@@ -190,6 +188,7 @@ class RunProGui {
         this.ui.OnEvent("BtnAddName", "Click", ObjBindMethod(this, "OnClickAddVarNameBtn"))
         this.ui.OnEvent("BtnAddValue", "Click", ObjBindMethod(this, "OnClickAddVarValueBtn"))
         this.ui.OnEvent("PathTextCon", "GotKeyboardFocus", (*) => this.ActiveEdit := "PathTextCon")
+        this.ui.OnEvent("PathTextCon", "DropDownOpened", RunGui.ResetTargetSelection.Bind(RunGui, this.ui))
         this.ui.OnEvent("StdInCon", "GotKeyboardFocus", (*) => this.ActiveEdit := "StdInCon")
         this.ui.OnEvent("BtnSelectFile", "Click", ObjBindMethod(this, "OnClickFileSelectBtn"))
         this.ui.OnEvent("BtnStdInEdit", "Click", ObjBindMethod(this, "OpenStdInEditor"))
@@ -577,7 +576,10 @@ class RunProGui {
             }
             return
         }
-        if (IsObject(this.ui))
-            this.ui.Update(target, "InsertText", text)
+        if (IsObject(this.ui)) {
+            ; 可编辑下拉框的光标位于模板内的文本框。
+            edit := target == "PathTextCon" ? "RunTargetHost>PART_EditableTextBox" : target
+            this.ui.Update(edit, "InsertText", text)
+        }
     }
 }

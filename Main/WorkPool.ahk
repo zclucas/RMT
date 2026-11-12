@@ -95,10 +95,40 @@ class WorkerData {
         this.itemID := ""             ; Worker 当前正在处理的宏的条目 ID（空=空闲）
         this.taskID := 0              ; 当前任务的分派令牌
         this.stopRequested := false
+        this.stopTimer := 0
+        this.stopDeadline := 0
         this.isGraphBranch := false   ; 是否为图形宏并行分支任务
         this.graphNodeSerial := ""    ; 图形分支起始节点（异常退出时重派）
         this.rxBusy := false          ; ProcessWorkerRx 重入保护
         this.configDirty := false     ; §17 热重载：主进程保存后待补发配置刷新（CF）的标志
+    }
+
+    ArmStopDeadline(timeoutMs) {
+        ; Win32 定时器在系统线程执行。两个参数分别对应 TerminateProcess 的进程句柄和退出码。
+        ; 回调直接进入 Win32，主线程或 Worker 的 AHK 消息循环阻塞时仍可终止进程。
+        static terminate := DllCall("GetProcAddress", "ptr", DllCall("GetModuleHandleW", "str", "kernel32.dll", "ptr")
+            , "astr", "TerminateProcess", "ptr")
+        if (this.stopDeadline)
+            return
+        this.stopDeadline := DllCall("GetTickCount64", "uint64") + timeoutMs
+        timer := 0
+        if (DllCall("CreateTimerQueueTimer", "ptr*", &timer, "ptr", 0, "ptr", terminate, "ptr", this.hProc
+            , "uint", timeoutMs, "uint", 0, "uint", 0x8)) { ; WT_EXECUTEONLYONCE
+            this.stopTimer := timer
+        } else {
+            this.stopDeadline := 1
+            DllCall("TerminateProcess", "ptr", this.hProc, "uint", 1)
+        }
+    }
+
+    CancelStopDeadline() {
+        if (!this.stopTimer)
+            return true
+        ; 等回调退出后才能释放进程句柄，避免句柄值被复用。
+        if (!DllCall("DeleteTimerQueueTimer", "ptr", 0, "ptr", this.stopTimer, "ptr", -1))
+            return false
+        this.stopTimer := 0
+        return true
     }
 }
 
@@ -385,21 +415,15 @@ class WorkPool {
             GraphPoolLog("停止宏-强制终止", Format("tab={1} item={2} 强杀Worker={3} 忙碌=[{4}]"
                 , tableID, itemID, killed, this.GetBusyWorkerIds()))
         } else {
+            start := DllCall("GetTickCount64", "uint64")
             this.RequestItemStop(tableID, itemID)
             GraphPoolLog("停止宏-请求终止", Format("tab={1} item={2} 超时阈值={3}ms 忙碌=[{4}]"
                 , tableID, itemID, this.stopTimeoutMs, this.GetBusyWorkerIds()))
 
-            ; 2) 等待 Worker 回发 FINISH 确认终止（FINISH 处理后 Worker 离开 usePool）
-            start := A_TickCount
-            loop {
-                try this.PollWorkerRx()
-                if (!this.HasItemWork(tableID, itemID))
-                    break
-                if (A_TickCount - start >= this.stopTimeoutMs)
-                    break
+            ; 由正常的 IPC 消息和轮询处理 FINISH；原生定时器独立执行强杀兜底。
+            while (DllCall("GetTickCount64", "uint64") - start < this.stopTimeoutMs && this.HasItemWork(tableID, itemID))
                 Sleep(10)
-            }
-            elapsed := A_TickCount - start
+            elapsed := DllCall("GetTickCount64", "uint64") - start
 
             ; 3) 超时仍未确认 → 强制杀进程重建
             if (this.HasItemWork(tableID, itemID)) {
@@ -467,12 +491,16 @@ class WorkPool {
         previousCritical := A_IsCritical
         Critical("On")
         try {
+            workers := []
             for idx, wd in this.usePool {
                 if (wd.tableID == tableID && wd.itemID == itemID) {
                     wd.stopRequested := true
-                    this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("ST", wd.taskID)))
+                    wd.ArmStopDeadline(this.stopTimeoutMs)
+                    workers.Push(wd)
                 }
             }
+            for wd in workers
+                this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("ST", wd.taskID)))
         } finally Critical(previousCritical)
     }
 
@@ -728,6 +756,14 @@ class WorkPool {
         try {
             if (!this.IsInstanceAlive(wd))
                 return false
+            if (wd.stopDeadline) {
+                ; 期限附近即使已收到 FINISH，强杀回调也可能已经发出终止请求。
+                ; 这种 Worker 继续留在 usePool，由停止流程回收，不能分派新任务。
+                if (DllCall("GetTickCount64", "uint64") >= wd.stopDeadline || !wd.CancelStopDeadline()
+                    || DllCall("GetTickCount64", "uint64") >= wd.stopDeadline)
+                    return false
+                wd.stopDeadline := 0
+            }
             this.usePool.Delete(wd.idx)
             wd.taskID := 0
             wd.tableID := ""
@@ -768,6 +804,8 @@ class WorkPool {
                         return false
                 }
             }
+            if (!wd.CancelStopDeadline())
+                return false
 
             this.workerMap.Delete(wd.idx)
             this.RemoveWorkerFromPools(wd)
@@ -846,6 +884,9 @@ class WorkPool {
         tableItem := GetTableByID(tableID)
         index := GetItemIndexInTable(tableItem, itemID)
         item := GetItemByIndex(tableItem, index)
+        ; 当前停止流程负责回收并记录强杀结果，避免 IPC 轮询提前摘除后误记为协作终止。
+        if (wasStopping && item && item.HasOwnProp("Stopping"))
+            return
         if (!this.CleanUpWorker(wd, false, true))
             return
         this.ScheduleRecreateWorker(wd.idx)
