@@ -1,2 +1,6 @@
 *.html linguist-detectable=false
 *.html linguist-vendored
+
+# .ahk 按字节存取（仓库内已是 CRLF + 例外 BOM），禁止 git 做换行归一化，
+# 避免提交时被 autocrlf 转成 LF 产生整文件伪 diff。CI 编码检查依赖此约定。
+*.ahk -text
