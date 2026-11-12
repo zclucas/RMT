@@ -574,6 +574,8 @@ function New-Release {
     }
 
     # 生成资源清单目录（对应 Main\SelfCheck.ahk 的文件校验清单）
+    # Lang.zip 跟随版本进架构目录（预览版与正式版语言包互不覆盖）；
+    # RMTAssets_Common 仅剩赞助 logo（RMTUtil.ahk），不再由打包生成。
     Write-Section "生成资源清单 (RMTAssets)"
     if ($Type -eq "x64" -or $Type -eq "both") {
         New-RMTAssets -Arch "x64" -ReleaseDir $rmtReleaseDir

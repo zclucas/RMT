@@ -1,0 +1,188 @@
+name: 版本发布
+
+# 由 tag 触发，tag 决定版本性质：
+#   v1.3    （无 F 后缀）= 正式版，PackRMT -Release both，本仓库 Release 为 latest
+#   v1.3F2  （带 F 后缀）= 测试版，同样双架构打包，本仓库 Release 标记 pre-release
+# 两种版本都产出 artifact，资源上传到 RMTAssets 由「资源上传」工作流消费完成。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rmt-release
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    name: 打包
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Node（打包帮助文档 Web/JS/SingleHtml.js 需要）
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 准备 AutoHotkey
+        uses: ./.github/actions/setup-ahk
+
+      # run 块保持 ASCII-only：Windows 上 shell: powershell 按 ANSI 读临时脚本
+      - name: 解析 tag 并校验 RMT_VERSION
+        id: tag
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v(?<ver>\d+\.\d+(?:\.\d+)*)(?<pre>F\d+)?$') {
+            throw "Unexpected tag format: $tag (expected v1.3 / v1.3F2)"
+          }
+          $version = $Matches.ver + $Matches.pre
+          $channel = if ($Matches.pre) { 'test' } else { 'stable' }
+
+          $rmt = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'RMT.ahk') -Raw -Encoding UTF8
+          if ($rmt -notmatch '(?m)^\s*global\s+RMT_VERSION\s*:=\s*"([^"]+)"') {
+            throw 'Cannot read RMT_VERSION from RMT.ahk'
+          }
+          if ($Matches[1] -ne $version) {
+            throw "Tag $tag does not match RMT_VERSION '$($Matches[1])' in RMT.ahk"
+          }
+
+          Add-Content -Path $env:GITHUB_ENV -Value "RMT_TAG_VERSION=$version"
+          Add-Content -Path $env:GITHUB_ENV -Value "RMT_TAG_CHANNEL=$channel"
+          Add-Content -Path $env:GITHUB_ENV -Value "RMT_TAG_ASSET=$version"
+          Write-Host "version=$version channel=$channel asset_tag=$version"
+
+      - name: 运行 PackRMT.ps1（严格模式，任一环节失败即失败）
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $ErrorActionPreference = 'Continue'
+
+          $params = @{
+            NoPause          = $true
+            Strict           = $true
+            SkipProcessCheck = $true
+            Release          = 'both'
+            OutDir           = (Join-Path $env:RUNNER_TEMP 'RMTRelease')
+          }
+          if ($env:A2X)   { $params.Ahk2ExePath = $env:A2X }
+          if ($env:AHK64) { $params.Base64Path  = $env:AHK64 }
+          if ($env:AHK32) { $params.Base32Path  = $env:AHK32 }
+
+          & (Join-Path $env:GITHUB_WORKSPACE 'PackRMT.ps1') @params
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          exit 0
+
+      - name: 写入 release-info.json
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $outDir = Join-Path $env:RUNNER_TEMP 'RMTRelease'
+          $info = [ordered]@{
+            version   = $env:RMT_TAG_VERSION
+            channel   = $env:RMT_TAG_CHANNEL
+            asset_tag = $env:RMT_TAG_ASSET
+            tag       = $env:GITHUB_REF_NAME
+            sha       = $env:GITHUB_SHA
+          }
+          $info | ConvertTo-Json | Out-File -FilePath (Join-Path $outDir 'release-info.json') -Encoding utf8
+          Write-Host (Get-Content (Join-Path $outDir 'release-info.json') -Raw)
+
+      - name: 创建本仓库 Release（测试版标记 pre-release）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $outDir = Join-Path $env:RUNNER_TEMP 'RMTRelease'
+          $zips = @(Get-ChildItem -LiteralPath $outDir -Filter 'RMTv*.zip' -File)
+          if ($zips.Count -eq 0) { throw 'no RMTv*.zip found to attach to the release' }
+          $extra = @()
+          if ($env:RMT_TAG_CHANNEL -eq 'test') { $extra += '--prerelease' }
+          # PS5.1: never redirect native stderr (2>$null/2>&1) with ErrorActionPreference=Stop;
+          # it converts stderr lines into terminating errors. "release not found" in the
+          # log is expected on first publish; the exit code below is the real signal.
+          gh release view $env:GITHUB_REF_NAME | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME @($zips.FullName) --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME @($zips.FullName) @($extra) `
+              --title "RMT $env:RMT_TAG_VERSION" `
+              --notes "RMT $env:RMT_TAG_VERSION ($env:GITHUB_SHA)"
+          }
+          if ($LASTEXITCODE -ne 0) { throw "failed to publish release $env:GITHUB_REF_NAME" }
+          Write-Host "Published $($zips.Count) zip(s) to release $env:GITHUB_REF_NAME"
+
+      - name: 上传打包产物（供资源上传工作流消费）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmt-release
+          path: |
+            ${{ runner.temp }}/RMTRelease/release-info.json
+            ${{ runner.temp }}/RMTRelease/RMTv*.zip
+            ${{ runner.temp }}/RMTRelease/RMTAssets_*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 上传打包日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pack-logs
+          path: Log/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: 汇总日志到任务摘要
+        if: always()
+        shell: pwsh
+        run: |
+          $md = @()
+          $md += '## RMT 版本发布'
+          $md += ''
+          $md += '| 项目 | 值 |'
+          $md += '| --- | --- |'
+          $md += "| tag | $env:GITHUB_REF_NAME |"
+          $md += '| 类型 | ' + $(if ($env:RMT_TAG_CHANNEL -eq 'stable') { '正式版' } else { '测试版' }) + ' |'
+          $md += "| 提交 | $($env:GITHUB_SHA.Substring(0,7)) |"
+
+          $log = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'Log') -Filter 'PackRMT_*.log' -ErrorAction SilentlyContinue |
+                 Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+          if (-not $log) {
+            $md += '| 结果 | 未生成日志（脚本可能在写入前就退出） |'
+          }
+          else {
+            $text  = Get-Content -LiteralPath $log.FullName -Raw
+            $lines = $text -split "`r?`n"
+            $errs  = @($lines | Where-Object { $_ -match '\[ERROR\]' } | ForEach-Object { $_.Trim() })
+            $warns = @($lines | Where-Object { $_ -match '\[WARN\]' })
+            $ok    = $text -match '\[RESULT\] BUILD OK'
+
+            $md += "| 结果 | $(if ($ok) { '成功' } else { '失败' }) |"
+            $md += "| 错误行数 | $($errs.Count) |"
+            $md += "| 警告行数 | $($warns.Count) |"
+            $md += "| 日志文件 | $($log.Name) |"
+
+            if ($errs.Count -gt 0) {
+              $md += ''
+              $md += '### 错误摘录'
+              $md += '```'
+              $md += @($errs | Select-Object -First 20)
+              $md += '```'
+            }
+            if (-not $ok) {
+              foreach ($e in ($errs | Select-Object -First 5)) { Write-Host "::error::$e" }
+            }
+          }
+
+          $md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

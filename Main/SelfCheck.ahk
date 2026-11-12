@@ -1,10 +1,9 @@
 #Requires AutoHotkey v2.0
 
 RmtAssetsReleaseTag() {
-    ; 与 CI 的资源标签一致，仅去掉 F 预览后缀，保留补丁版本号。
-    version := RegExReplace(RMT_VERSION, "i)F\d+$")
+    ; 与 CI 的资源标签一致，带完整版本号：预览版与正式版资源互不覆盖。
     arch := A_PtrSize == 8 ? "x64" : "x86"
-    return "v" version "_" arch
+    return "v" RMT_VERSION "_" arch
 }
 
 RmtAssetsBaseUrl(tag) {

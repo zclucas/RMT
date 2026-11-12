@@ -1,0 +1,59 @@
+name: 'Setup AutoHotkey v2 and Ahk2Exe'
+description: >
+  Downloads the official AutoHotkey v2 runtime and Ahk2Exe compiler release
+  archives (no Chocolatey), locates the executables, and exports the A2X /
+  AHK64 / AHK32 environment variables for later steps.
+
+inputs:
+  ahk-version:
+    description: 'AutoHotkey v2 runtime version'
+    required: false
+    default: '2.0.31'
+  a2x-version:
+    description: 'Ahk2Exe compiler release tag'
+    required: false
+    default: 'Ahk2Exe1.1.37.02a2'
+
+runs:
+  using: composite
+  steps:
+    - name: Download and unpack
+      shell: powershell
+      env:
+        AHK_VER: ${{ inputs.ahk-version }}
+        A2X_VER: ${{ inputs.a2x-version }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # 1) runtime (v2 base binaries) from the official release zip
+        $ahkZip = Join-Path $env:RUNNER_TEMP "autohotkey-$env:AHK_VER.zip"
+        $ahkDir = Join-Path $env:RUNNER_TEMP 'autohotkey'
+        Write-Host "download: AutoHotkey v$env:AHK_VER"
+        Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v$env:AHK_VER/AutoHotkey_$env:AHK_VER.zip" `
+          -OutFile $ahkZip -UseBasicParsing -TimeoutSec 300
+        Expand-Archive -LiteralPath $ahkZip -DestinationPath $ahkDir -Force
+        $ahk64 = (Get-ChildItem -LiteralPath $ahkDir -Recurse -Filter 'AutoHotkey64.exe' |
+                  Select-Object -First 1).FullName
+        $ahk32 = (Get-ChildItem -LiteralPath $ahkDir -Recurse -Filter 'AutoHotkey32.exe' |
+                  Select-Object -First 1).FullName
+        if (-not $ahk64) { throw "AutoHotkey64.exe not found under $ahkDir" }
+        if (-not $ahk32) { throw "AutoHotkey32.exe not found under $ahkDir" }
+
+        # 2) compiler via the official Ahk2Exe zip
+        $a2xZip = Join-Path $env:RUNNER_TEMP 'ahk2exe.zip'
+        Write-Host "download: Ahk2Exe $env:A2X_VER"
+        Invoke-WebRequest -Uri "https://github.com/AutoHotkey/Ahk2Exe/releases/download/$env:A2X_VER/$env:A2X_VER.zip" `
+          -OutFile $a2xZip -UseBasicParsing -TimeoutSec 300
+        $a2xDir = Join-Path $env:RUNNER_TEMP 'ahk2exe'
+        Expand-Archive -LiteralPath $a2xZip -DestinationPath $a2xDir -Force
+        $ahk2exe = (Get-ChildItem -LiteralPath $a2xDir -Recurse -Filter 'Ahk2Exe.exe' |
+                    Select-Object -First 1).FullName
+        if (-not $ahk2exe) { throw 'Ahk2Exe.exe not found in the official zip' }
+
+        Add-Content -Path $env:GITHUB_ENV -Value "A2X=$ahk2exe"
+        Add-Content -Path $env:GITHUB_ENV -Value "AHK64=$ahk64"
+        Add-Content -Path $env:GITHUB_ENV -Value "AHK32=$ahk32"
+
+        Write-Host "Ahk2Exe      : $ahk2exe ($((Get-Item $ahk2exe).VersionInfo.FileVersion))"
+        Write-Host "AutoHotkey64 : $ahk64 ($((Get-Item $ahk64).VersionInfo.FileVersion))"
+        Write-Host "AutoHotkey32 : $ahk32 ($((Get-Item $ahk32).VersionInfo.FileVersion))"
