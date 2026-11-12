@@ -63,7 +63,9 @@ foreach ($tag in $releaseDirs.Keys) {
 # 3) 上传（存在则覆盖，不存在则创建）
 foreach ($tag in $assetsByTag.Keys) {
     $assets = $assetsByTag[$tag]
-    gh release view $tag --repo $Repo --json tagName 2>$null | Out-Null
+    # PS5.1: 原生 stderr 不能重定向（2>$null 在 ErrorActionPreference=Stop 下会抛终止异常），
+    # "release not found" 打到日志属首次发布的正常现象，以下面退出码为准。
+    gh release view $tag --repo $Repo --json tagName | Out-Null
     if ($LASTEXITCODE -eq 0) {
         gh release upload $tag @assets --repo $Repo --clobber
     } else {

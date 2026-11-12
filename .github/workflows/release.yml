@@ -107,7 +107,10 @@ jobs:
           if ($zips.Count -eq 0) { throw 'no RMTv*.zip found to attach to the release' }
           $extra = @()
           if ($env:RMT_TAG_CHANNEL -eq 'test') { $extra += '--prerelease' }
-          gh release view $env:GITHUB_REF_NAME 2>$null | Out-Null
+          # PS5.1: never redirect native stderr (2>$null/2>&1) with ErrorActionPreference=Stop;
+          # it converts stderr lines into terminating errors. "release not found" in the
+          # log is expected on first publish; the exit code below is the real signal.
+          gh release view $env:GITHUB_REF_NAME | Out-Null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:GITHUB_REF_NAME @($zips.FullName) --clobber
           } else {
