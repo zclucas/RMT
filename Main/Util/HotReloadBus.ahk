@@ -54,6 +54,10 @@ class HotReloadBus {
     ; 空闲时统一派发：合并本批次内所有待处理变更，逐个订阅者分发。
     _Flush() {
         this._scheduled := false
+        ; 派发前先把配置落盘：订阅者（例如 Worker 的配置热重载）会直接读文件，
+        ; 而写配置现在是「改内存 + 延迟落盘」，不先刷出去它们读到的是旧内容。
+        try CfgFlushAll()
+        try UIMacroSchema.FlushStore()
         pending := this.pending
         this.pending := Map()
         for tableIndex, items in pending {

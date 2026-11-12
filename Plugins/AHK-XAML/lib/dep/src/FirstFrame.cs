@@ -38,6 +38,24 @@ internal sealed class RmtFirstFrame
             cloaked = AhkWpfEngine.DwmSetWindowAttribute(hwnd, 13, ref cloak, 4) == 0;
         }
         catch { }
+
+        // 不抢焦点的窗口（界面宏的悬浮球）：XAML 根上写 Tag="BallNoActivate"。
+        // 样式必须在这里打 —— EnsureHandle 已建出 HWND、Show 还没发生，正好赶上系统注册窗口样式；
+        // ShowActivated=False 只保证「首次 Show 不上前台」，之后任何一次点击命中都会让系统把窗口
+        // 激活（用户正在输入的窗口当场失焦）。交给 AHK 在句柄回传后补 SetWindowLong 有个
+        // 几十到几百毫秒的空档，而收球后用户第一件事往往就是去点它。
+        try
+        {
+            string tag = window.Tag as string;
+            if (tag != null && tag.IndexOf("BallNoActivate", StringComparison.Ordinal) >= 0)
+            {
+                int ex = AhkWpfEngine.GetWindowLong(hwnd, -20);
+                ex |= 0x80;         // WS_EX_TOOLWINDOW：不进任务栏 / Alt+Tab
+                ex |= 0x08000000;   // WS_EX_NOACTIVATE：点击、拖动都不激活
+                AhkWpfEngine.SetWindowLong(hwnd, -20, new IntPtr(ex));
+            }
+        }
+        catch { }
         if (!cloaked)
         {
             // Windows 7 has no DWMWA_CLOAK. Keep opaque HWNDs transparent at the native layer.

@@ -586,6 +586,11 @@ OnExitSoft(*) {
     ; 退出清理会阻塞消息循环。先卸载全局鼠标钩子，避免系统等待手势回调。
     try GestureTriggers.Shutdown()
 
+    ; 零、配置落盘。写入是「改内存 + 延迟落盘」，进程退出前不刷就丢最后那段改动。
+    ; 放在最前面：后面的清理可能提前结束进程（强杀 Worker / 卸载 DLL）。
+    try CfgFlushAll()
+    try UIMacroSchema.FlushStore()
+
     ; ① 先请求隐藏主窗口，无需同步等待 WPF 线程。
     try {
         if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui)) {
