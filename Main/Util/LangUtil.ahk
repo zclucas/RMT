@@ -77,11 +77,14 @@ LangKeysInit() {
 
             eqPos := InStr(line, "=")
             if (eqPos > 1) {
-                key := Trim(SubStr(line, 1, eqPos - 1))
-                val := Trim(SubStr(line, eqPos + 1))
-                LangKeyMap[key] := val
+                rawKey := SubStr(line, 1, eqPos - 1)
+                val := SubStr(line, eqPos + 1)
+                LangKeyMap[rawKey] := val
+                trimmedKey := Trim(rawKey)
+                if (trimmedKey != rawKey && !LangKeyMap.Has(trimmedKey))
+                    LangKeyMap[trimmedKey] := val
                 if (val != "" && !LangValueMap.Has(val))
-                    LangValueMap[val] := key
+                    LangValueMap[val] := trimmedKey
             }
         }
         file.Close()

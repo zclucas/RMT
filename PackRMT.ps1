@@ -1,4 +1,4 @@
-# RMT 自动打包脚本
+﻿# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -18,7 +18,9 @@ param(
     # 覆盖编译器路径（CI 用自完备的 AHK 安装目录）
     [string]$Ahk2ExePath = "",
     [string]$Base64Path = "",
-    [string]$Base32Path = ""
+    [string]$Base32Path = "",
+    # 跳过多语言翻译完整性检查
+    [switch]$SkipLangCheck
 )
 
 try { $Host.UI.RawUI.WindowTitle = "RMT 打包工具" } catch { }
@@ -1087,7 +1089,10 @@ function New-RMTAssets {
     $bundles = [ordered]@{
         "Lang.zip" = @(
 
-            @{ Dest = "English.txt"; Src = "Lang\English.txt" }
+            # 动态打包 Lang\ 下所有语言包
+            @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang") -Filter "*.txt" -ErrorAction SilentlyContinue |
+                Where-Object { $_.BaseName -ne "简中" -and $_.BaseName -ne "中文" } |
+                ForEach-Object { @{ Dest = $_.Name; Src = "Lang\$($_.Name)" } })
         )
         "RMT.zip" = @(
             @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },
@@ -1205,13 +1210,27 @@ function Main {
     }
 
     # 步骤 1: 检查文件
-    Write-Step 1 "检查源文件"
+    Write-Step 1 "检查源文件与多语言完整性"
     $script:WorkAhk = Join-Path $PSScriptRoot "Thread\Work.ahk"
     $WorkDir = Join-Path $PSScriptRoot "Thread"
     if (-not (Test-Path $script:WorkAhk)) {
         throw "找不到源文件: $($script:WorkAhk)"
     }
     Write-Log "[OK] Work.ahk 存在" "Green"
+
+    if (-not $SkipLangCheck) {
+        $checkScript = Join-Path $PSScriptRoot "CheckTranslations.ps1"
+        if (Test-Path $checkScript) {
+            Write-Log "正在校验多语言翻译完整性（检查漏翻与多翻）..." "Gray"
+            & $checkScript -Strict
+            if ($LASTEXITCODE -ne 0) {
+                throw "多语言翻译检查未通过，打包已被即时中断！请先运行 .\CheckTranslations.ps1 修复漏翻和多翻。"
+            }
+            Write-Log "[OK] 多语言翻译完整性校验通过" "Green"
+        }
+    } else {
+        Write-Log "  已跳过多语言翻译完整性检查（-SkipLangCheck）" "Yellow"
+    }
 
     # 步骤 2: 查找编译工具
     Write-Step 2 "查找编译工具"
