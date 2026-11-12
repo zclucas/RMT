@@ -54,14 +54,6 @@ FileIODefaultMode(operType) {
     }
 }
 
-CompatEnsureFileIOData(Data) {
-    if (Data == "" || !IsObject(Data) || !ObjHasOwnProp(Data, "OperType"))
-        return false
-    old := Data.OperType
-    Data.OperType := FileIONormType(old)
-    return Data.OperType != old
-}
-
 SetFileIOGlobalData(Data) {
     CurType := FileIONormType(Data.OperType)
     CurMode := Data.OperMode

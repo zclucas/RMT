@@ -165,7 +165,6 @@ class MacroEditGui {
             }
         } else
             this.InitSubGui()
-        this.SubGuiMap.Set(GetLang("流程跳转"), this.SubMacroGui)
     }
 #Include MacroEditor\CommandCatalog.ahk
 

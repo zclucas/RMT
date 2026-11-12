@@ -40,9 +40,9 @@ TryGetUserDefinedVarValue(&Value, tableItem, index, varName) {
     return false
 }
 
-; §15.1 兼容取目标数组：旧配置无 SearchTargetArr（或为空）时，由顶层单目标字段构造
+; 组合搜索用目标数组，单目标搜索使用指令自身的目标字段。
 GetSearchTargetArr(Data) {
-    if (ObjHasOwnProp(Data, "SearchTargetArr") && IsObject(Data.SearchTargetArr) && Data.SearchTargetArr.Length > 0)
+    if (ObjHasOwnProp(Data, "SearchTargetArr") && Data.SearchTargetArr is Array && Data.SearchTargetArr.Length > 0)
         return Data.SearchTargetArr
     t := {
         SearchType:   ObjHasOwnProp(Data, "SearchType") ? CmdEnumSearch(Data.SearchType) : "屏幕图片",

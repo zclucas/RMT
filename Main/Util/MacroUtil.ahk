@@ -286,7 +286,6 @@ MacroCommandActions() {
         "后台按键", OnBGKey,
         "RMT指令", OnRMTCMD,
         "循环", OnLoop,
-        "流程跳转", OnFlowJump,
         "文本处理", OnTextOps,
         "数组", OnArray,
         "输入", OnInput,
@@ -299,7 +298,6 @@ MacroCommandActions() {
         "手柄检测", OnJoyCheck,
         "等待", OnWait,
         "时间", OnTimeData,
-        "倒计时", OnCountDown,
         "提示", OnPrompt,
         "注释", (*) => "",
         "抓图", OnScreenShot,
@@ -873,27 +871,6 @@ _ExpandEnvironmentStrings(text) {
     return StrGet(buf, "UTF-16")
 }
 
-; 无序列号、无配置文件：动作直接保存在命令字符串里。
-FlowJumpActions() {
-    return ["循环-跳过本轮", "循环-跳出", "分支-跳出"]
-}
-
-FlowJumpAction(cmd) {
-    parts := StrSplit(cmd, "_")
-    if (parts.Length != 2 || GetLangKey(parts[1]) != "流程跳转")
-        throw Error("Invalid flow jump command: " cmd)
-    action := GetLangKey(parts[2])
-    for valid in FlowJumpActions() {
-        if (action == valid)
-            return action
-    }
-    throw Error("Invalid flow jump action: " parts[2])
-}
-
-OnFlowJump(tableItem, cmd, index) {
-    HandleControlType(tableItem, index, FlowJumpAction(cmd))
-}
-
 OnCompare(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
@@ -1133,9 +1110,6 @@ OnOutput(tableItem, cmd, index) {
         if (Content != "" && SetClipboard(Content))
             Send "{Blind}^v"
     }
-    else if (Data.OutputType == "临时提示") {    ;提示
-        MyOutputTipContent(Content)
-    }
     else if (Data.OutputType == "悬浮显示") {    ;悬浮窗：内容已按本条目的变量上下文渲染好
         iID := ""
         try iID := tableItem.Items[index].ID
@@ -1143,13 +1117,6 @@ OnOutput(tableItem, cmd, index) {
     }
     else if (Data.OutputType == "指令窗口") {    ;指令窗口
         MyCMDTipForceAction(Content)
-    }
-    else if (Data.OutputType == "软件弹窗") {    ;弹窗
-        MyMsgBoxContent(Content)
-    }
-    else if (Data.OutputType == "系统语音") {    ;语音
-        spovice := ComObject("sapi.spvoice")
-        spovice.Speak(Content)
     }
     else if (Data.OutputType == "复制到剪切板") {    ;剪切板
         SetClipboard(Content)
@@ -1265,7 +1232,7 @@ OnSubMacro(tableItem, cmd, index) {
     if (Data.MacroType == "当前宏") {
         if (Data.CallType == "触发" || Data.CallType == "取消暂停")
             return
-        for action in FlowJumpActions() {
+        for action in ["循环-跳过本轮", "循环-跳出", "分支-跳出"] {
             if (Data.CallType == action) {
                 HandleControlType(tableItem, index, action)
                 return

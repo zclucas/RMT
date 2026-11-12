@@ -16,6 +16,7 @@ class FolderPackager {
         ; 导出前先升级真实内容，再写入版本，不能把旧包仅改标签冒充新版。
         Compat_UpgradeDir(folderPath)
         CfgWrite(RMT_VERSION, Compat_VersionFile(folderPath), "RMT", "AppVersion")
+        CfgFlushDir(folderPath)
 
         ; 获取所有文件列表
         files := this._GetAllFiles(folderPath)

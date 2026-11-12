@@ -303,7 +303,6 @@ class FileIOGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CmdKey)
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        CompatEnsureFileIOData(this.Data)
         if (cmd == "")
             this._EnsureDefaultOper()
         this.DLAllVarArr := GetGuiVarArr(1)

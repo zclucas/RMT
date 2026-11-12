@@ -1175,63 +1175,28 @@ class UIMacroGui {
 
     ; 读取该 fold 的自定义定义；没有配置或校验不通过 → 返回 ""（自动降级回自动模式）
     ;
-    ; 存储键 = 折叠框 ID（稳定唯一）；旧版本用数组下标做键，第一次读到时
-    ; 顺手迁移成新键（MigrateLegacy 只做一次，失败静默）。
     _GetCustomSchema(foldIndex) {
-        foldKey := ""
-        try {
-            tableItem := this.GetTable()
-            fold := (tableItem && tableItem.Folds.Length >= foldIndex) ? tableItem.Folds[foldIndex] : ""
-            foldKey := UIMacroSchema.FoldKey(fold)
-        }
-        if (foldKey == "") {
-            foldKey := String(foldIndex)
-        } else if (this.TableID == "") {
-            UIMacroSchema.MigrateLegacy(foldIndex, foldKey)
-        }
-
-        raw := UIMacroSchema.ReadStoreByKey(foldKey)
-        if (Trim(String(raw)) == "" && this.TableID == "")
-            raw := UIMacroSchema.DecodeStore(MainSoftData.UIPanelCustom)
-        if (Trim(String(raw)) == "")
+        tableItem := this.GetTable()
+        fold := (tableItem && tableItem.Folds.Length >= foldIndex) ? tableItem.Folds[foldIndex] : ""
+        foldKey := UIMacroSchema.FoldKey(fold)
+        if (foldKey == "")
             return ""
-        ; 解析结果按「foldKey + 原文」缓存：文本没变就不重复 Parse/Validate/Migrate。
-        ; 读文本这一层已由 UIMacroSchema 的内存缓存接住，这里是第二层（JSON 解析 + 校验 +
-        ; 绑定类型迁移）。按键回填、切页、就绪全部走这里，一次不回填就是十几次解析。
-        ; schema 在调用方只读（渲染 / 取值 / 写入宏），可以放心共享同一份对象。
+        raw := UIMacroSchema.ReadStoreByKey(foldKey)
+        if (Trim(raw) == "")
+            return ""
+        ; 缓存已校验的面板定义，按键回填时复用。
         if (IsObject(this._schemaCache) && this._schemaCache.Has(foldKey)) {
             hit := this._schemaCache[foldKey]
             if (IsObject(hit) && IsObject(hit.schema) && hit.text == raw)
                 return hit.schema
         }
-        ; 单面板文件里直接就是 schema；旧格式可能包了一层 {foldIndex: schema}
-        ; 两条路径统一：Parse 之后必须过 Validate，否则 0 控件 / 越界的损坏文件
-        ; 会被直接拿去渲染（渲染出一堆错位控件，比降级回自动模式更难排查）。
         parsed := UIMacroSchema.Parse(raw)
-        if (IsObject(parsed)) {
-            pv := UIMacroSchema.Validate(parsed)
-            if (!pv.ok)
-                return ""
-            ; 绑定控件类型迁移：枚举字段的旧输入框 → 下拉框等。
-            ; 这是所有消费方的唯一咽喉，迁这里才能保证渲染出来就不是输入框。
-            result := UIMacroStepBinding.MigrateBindingTypes(parsed, tableItem)
-            if (IsObject(result) && IsObject(this._schemaCache))
-                this._schemaCache[foldKey] := { text: raw, schema: result }
-            return result
-        }
-        try obj := JSON.parse(String(raw), , false)
-        catch
+        if (!IsObject(parsed) || !UIMacroSchema.Validate(parsed).ok)
             return ""
-        oldKey := String(foldIndex)
-        if (!IsObject(obj) || !ObjHasOwnProp(obj, oldKey))
-            return ""
-        try schema := UIMacroSchema.Normalize(obj.%oldKey%)
-        catch
-            return ""
-        v := UIMacroSchema.Validate(schema)
-        if (!v.ok)
-            return ""
-        return UIMacroStepBinding.MigrateBindingTypes(schema, tableItem)
+        result := UIMacroStepBinding.MigrateBindingTypes(parsed, tableItem)
+        if (IsObject(result) && IsObject(this._schemaCache))
+            this._schemaCache[foldKey] := {text: raw, schema: result}
+        return result
     }
 
     ; 用 schema 构建浮窗。外壳（位置/透明/标题栏/拖拽）与原逻辑保持一致，
@@ -1340,7 +1305,6 @@ class UIMacroGui {
 
     ; ================= 位置记忆（面板 / 悬浮球 两套独立） =================
     ; 新记录按折叠框 ID 存储；窗口实例可额外按 hwnd 独立保存。
-    ; 读取时兼容旧的 foldIndex 记录，并迁移到当前稳定键。
     _PositionKey(foldIndex, targetHwnd := 0) {
         ctx := this._GetFoldContext(foldIndex)
         foldKey := IsObject(ctx) ? UIMacroSchema.FoldKey(ctx.fold) : ""
@@ -1367,11 +1331,8 @@ class UIMacroGui {
         raw := (store == "UIPanelPos") ? MainSoftData.UIPanelPos : MainSoftData.UIPanelBallPos
         keys := [this._PositionKey(foldIndex, targetHwnd)]
         foldKey := this._PositionKey(foldIndex)
-        legacyKey := String(foldIndex)
         if (foldKey != keys[1])
             keys.Push(foldKey)
-        if (this.TableID == "" && legacyKey != keys[1] && legacyKey != foldKey)
-            keys.Push(legacyKey)
 
         for i, key in keys {
             pos := this._ReadPosition(raw, key)
@@ -1415,7 +1376,6 @@ class UIMacroGui {
     _PosForget(store, foldIndex) {
         global SettingSection
         base := this._PositionKey(foldIndex)
-        legacy := this.TableID == "" ? String(foldIndex) : base
         raw := (store == "UIPanelPos") ? MainSoftData.UIPanelPos : MainSoftData.UIPanelBallPos
         out := []
         for part in StrSplit(String(raw), ";") {
@@ -1428,7 +1388,7 @@ class UIMacroGui {
                 continue
             }
             k := SubStr(p, 1, eq - 1)
-            if (k == base || k == legacy || InStr(k, base "|") == 1 || InStr(k, legacy "|") == 1)
+            if (k == base || InStr(k, base "|") == 1)
                 continue
             out.Push(p)
         }

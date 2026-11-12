@@ -398,7 +398,6 @@ class RMTCMDGui {
             this.Data := RMTCMDData()
         this.Data.Category := this.ui.Query("CategoryCombo")
         this.Data.CmdStr := this.ui.Query("CmdTypeCombo")
-        this.Data.OperateType := 0   ; 旧字段占位（保留兼容）
         this.Data.MenuIndex := this.ui.Query("CmdTypeCombo") == GetLang("显示菜单")
             ? (Integer(this.ui.Query("MenuDLCombo>SelectedIndex")) + 1) : 1
         ; §2 禁用模块/取消禁用模块：保存目标页签符号 + 模块路径身份

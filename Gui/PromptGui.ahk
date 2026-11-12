@@ -14,9 +14,7 @@ class PromptGui {
             this.Close()
         parts := cmd == "" ? [] : StrSplit(cmd, "_", , 2)
         serial := parts.Length ? parts[1] : ""
-        this.data := PromptLegacyData(cmd)
-        if (!IsObject(this.data))
-            this.data := serial == "" ? PromptData() : GetMacroCMDData(serial).Clone()
+        this.data := serial == "" ? PromptData() : GetMacroCMDData(serial).Clone()
         this.remark := parts.Length > 1 ? parts[2] : ""
         if (serial != "" && !RegExMatch(serial, "\d+$"))
             this.remark := ""

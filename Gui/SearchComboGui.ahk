@@ -393,37 +393,6 @@ class SearchComboGui {
 
     ; ---------------- 目标列表（§15.1 多目标） ----------------
 
-    ; 兼容取目标数组：新配置用 SearchTargetArr；旧配置由顶层字段构造单目标
-    _TargetListOf(Data) {
-        if (ObjHasOwnProp(Data, "SearchTargetArr") && IsObject(Data.SearchTargetArr) && Data.SearchTargetArr.Length > 0)
-            return Data.SearchTargetArr
-        t := {
-            SearchType: ObjHasOwnProp(Data, "SearchType") ? Data.SearchType : 1,
-            WinInfo: ObjHasOwnProp(Data, "WinInfo") ? Data.WinInfo : "",
-            SearchColor: ObjHasOwnProp(Data, "SearchColor") ? Data.SearchColor : "FFFFFF",
-            SearchText: ObjHasOwnProp(Data, "SearchText") ? Data.SearchText : GetLang("检索文本"),
-            SearchImagePath: ObjHasOwnProp(Data, "SearchImagePath") ? Data.SearchImagePath : "",
-            Similar: ObjHasOwnProp(Data, "Similar") ? Data.Similar : 90,
-            OCRType: ObjHasOwnProp(Data, "OCRType") ? Data.OCRType : 1,
-            SearchImageType: ObjHasOwnProp(Data, "SearchImageType") ? Data.SearchImageType : SearchImageDefaultType(),
-            ColorMatch: SearchColorMatchOn(Data) ? 1 : 0,
-            Adaptive: ObjHasOwnProp(Data, "Adaptive") ? Data.Adaptive : 0,
-            MultiPointData: ObjHasOwnProp(Data, "MultiPointData") && IsObject(Data.MultiPointData) ? Data.MultiPointData : [],
-            MultiPointSeedData: ObjHasOwnProp(Data, "MultiPointSeedData") && IsObject(Data.MultiPointSeedData) ? Data.MultiPointSeedData : [],
-            SuperMultiPointSeedData: ObjHasOwnProp(Data, "SuperMultiPointSeedData") && IsObject(Data.SuperMultiPointSeedData) ? Data.SuperMultiPointSeedData : [],
-            SuperMultiPointIgnoreData: ObjHasOwnProp(Data, "SuperMultiPointIgnoreData") ? String(Data.SuperMultiPointIgnoreData) : "",
-            MultiPointTolerance: ObjHasOwnProp(Data, "MultiPointTolerance") ? Data.MultiPointTolerance : 8,
-            SuperMultiPointTolerance: ObjHasOwnProp(Data, "SuperMultiPointTolerance") ? Data.SuperMultiPointTolerance : 8,
-            MultiPointMode: ObjHasOwnProp(Data, "MultiPointMode") ? Data.MultiPointMode : "",
-            Remark: ObjHasOwnProp(Data, "Remark") ? Data.Remark : "",
-            StartPosX: ObjHasOwnProp(Data, "StartPosX") ? Data.StartPosX : 0,
-            StartPosY: ObjHasOwnProp(Data, "StartPosY") ? Data.StartPosY : 0,
-            EndPosX: ObjHasOwnProp(Data, "EndPosX") ? Data.EndPosX : A_ScreenWidth,
-            EndPosY: ObjHasOwnProp(Data, "EndPosY") ? Data.EndPosY : A_ScreenHeight
-        }
-        return [t]
-    }
-
     ; 目标卡片 XAML（固定行高，各搜索类型卡片等高；删除按钮叠在右上角）
     _TargetCardXml(n, t) {
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
@@ -1596,10 +1565,7 @@ class SearchComboGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()
 
-        this.TargetList := this._TargetListOf(this.Data)
-        if (this.TargetList.Length == 0) {
-            this.TargetList := [this._TargetListOf(this.Data)[1]]
-        }
+        this.TargetList := GetSearchTargetArr(this.Data)
         this.CurTarget := 1
         this.PreviewShowing := false
 

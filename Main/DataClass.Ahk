@@ -94,10 +94,8 @@ class TableItem {
         this.OffSetPosY := 0        ;   偏移值
         this.AllConArr := []        ;   table中所有的con
         this.AllGroup := []         ; table中所有的group
-        this.FoldOffsetArr := []    ;和初始状态的高度偏移值
         this.FoldBtnArr := []       ;折叠筐按钮
         this.ConIndexMap := Map()
-        this.FoldInfo := ""         ; 旧格式折叠信息（迁移期临时字段，迁移后置空）
     }
 
     ; 便捷：按 ItemID 取条目（无则返回 ""）
@@ -139,81 +137,6 @@ class TableItem {
         this.PathCounters[parent] := Max(this.PathCounters.Get(parent, 0), Integer(m[3]))
         if (m[2] == "Macro")
             this.RememberPath(parent)
-    }
-}
-
-; ============================================================
-; 旧版折叠信息（ItemFoldInfo）—— 保留类定义仅为迁移期读取旧 JSON
-; 新体系使用 MacroFold；迁移完成后可删除
-; ============================================================
-class ItemFoldInfo {
-    __New() {
-        this.RemarkArr := []        ;折叠框备注
-        this.FrontInfoArr := []     ;折叠框前台信息
-        this.IndexSpanArr := []     ;范围索引
-        this.ForbidStateArr := []   ;禁用状态
-        this.FoldStateArr := []    ;折叠状态
-
-        ;菜单栏功能
-        this.TKTypeArr := []    ;触发类型
-        this.TKArr := []        ;触发按键，菜单栏功能
-        this.HoldTimeArr := []  ;时间参数（长按=长按时间，双击=双击间隔）
-        this.UnorderedTriggerArr := []  ;顺序触发（勾选时只按顺序注册，不勾选则正反向都注册）
-    }
-}
-
-class MacroItemInfo {
-    __New(index, itemConInfo) {
-        this.index := index
-        this.itemConInfo := ItemConInfo
-    }
-}
-
-class ItemConInfo {
-    __New(Con, tableItem, FoldIndex) {
-        this.Con := Con
-        this.tableItem := tableItem
-        this.FoldOffsetArr := tableItem.FoldOffsetArr
-        this.FoldInfo := tableItem.FoldInfo
-        this.FoldIndex := FoldIndex
-        this.IsTitle := false
-        this.IsDel := false
-        this.Con.GetPos(&PosX, &PosY)
-        this.OriPosX := PosX
-        this.OriPosY := PosY
-        this.SelfOffsetY := 0
-    }
-
-    UpdatePos(offsetPosY) {
-        try {
-            if (this.IsDel) {
-                this.Con.Move(this.OriPosX, -10000)
-                return
-            }
-
-            isFold := this.FoldInfo.FoldStateArr[this.FoldIndex]
-            if ((isFold && !this.IsTitle)) {
-                this.Con.Move(this.OriPosX, -10000)
-                return
-            }
-            PosY := 0
-            for index, value in this.FoldOffsetArr {
-                if (index >= this.FoldIndex)
-                    break
-                PosY += value
-            }
-
-            PosY := PosY + this.OriPosY + this.SelfOffsetY - offsetPosY
-            this.Con.Move(this.OriPosX, PosY)
-        }
-    }
-
-    DelAfterOffset(offsetY) {
-        this.SelfOffsetY -= offsetY
-    }
-
-    Hide() {
-        this.IsDel := true
     }
 }
 
@@ -357,7 +280,6 @@ class MainConfig {
         this.UIPanelFontSize := 12           ; 按钮字体大小
         this.UIPanelBtnWidth := 80           ; 按钮宽度
         this.UIPanelCols := 3                ; 每行按钮个数
-        this.UIPanelCustom := ""             ; 旧版自定义界面聚合配置（Base64 JSON）
         this.UIPanelBall := ""               ; 处于「悬浮球」收起态的面板（逗号分隔的 fold 键）
         this.UIPanelBallPos := ""            ; 各悬浮球位置（key=x,y;key2=x,y）
         this.UIPanelPos := ""                ; 各展开面板的位置（key=x,y;key2=x,y），手动拖过才记
@@ -1565,7 +1487,6 @@ class RMTCMDData {
         ; §2 禁用模块/取消禁用模块 参数：目标表符号 + 目标模块路径身份（FoldID，如 Normal.Module1）
         this.TableSymbol := ""    ; 目标表符号（Normal/String/Menu/UI/Voice/Timing/SubMacro/Replace）
         this.FoldID := ""         ; 目标模块路径身份
-        this.OperateType := 1 ; 旧字段兼容：1截图 2截图中提取文本 3自由贴 4开启指令显示 5关闭指令显示 6启用键鼠 7禁用键鼠 8休眠 9终止所有宏 10重载
         ; 错误处理（影刀模式，阶段5）
         this.ErrMode := "stop"
         this.ErrRetryCount := 3

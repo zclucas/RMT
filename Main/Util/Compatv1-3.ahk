@@ -42,6 +42,7 @@ Compat13_IsPlainRun(data) {
 Compat13_IsGameView(data) {
     mode := data.HasOwnProp("MouseMoveMode") ? data.MouseMoveMode : 0
     return mode == 2 || mode == "2" || mode == "游戏视角"
+        || (data.HasOwnProp("IsGameView") && ParseBoolInt(data.IsGameView))
 }
 
 ; 序列码前缀即指令键。须在运行/游戏视角拆分之后调用，否则数字比较会失效。
@@ -67,7 +68,7 @@ Compat13_Normalize(data, stem) {
     if (stem == "RunFile")
         CompatEnsureRunData(data)
     if (stem == "TimingFile")
-        NormalizeTimingData(data)
+        CompatNormalizeTimingData(data)
     if ((stem == "SearchFile" || stem == "SearchProFile") && !data.HasOwnProp("SearchImageType"))
         data.SearchImageType := 1 ; 新增软件级模型选项使用默认值，不借用当前正在运行的方案。
     ; 旧文本替换只保存 MatchType，补默认值前同步编辑器使用的 ArgsType。
@@ -121,7 +122,7 @@ Compat13_Rename(root, oldKey, prefix, renames) {
     suffix := RegExReplace(oldKey, "^.*?(\d+)$", "$1")
     newKey := prefix suffix
     n := 1
-    while (root.Has(newKey)) {
+    while (root.Has(newKey) || renames.Has(newKey)) {
         newKey := prefix n
         n++
     }
@@ -133,6 +134,32 @@ Compat13_Rename(root, oldKey, prefix, renames) {
     return newKey
 }
 
+Compat13_MoveGameView(dir, key, data) {
+    path := dir "\DeltaMoveFile.toml"
+    root := Cfg_Load(path)
+    target := Cfg_Seg(root, IniImport_Section())
+    previous := Cfg_Seg(root, "GameViewMigration")
+    if (previous.Has(key) && target.Has(previous[key]))
+        return previous[key]
+    delta := DeltaMoveData()
+    delta.DeltaX := data.HasOwnProp("PosVarX") ? data.PosVarX : 0
+    delta.DeltaY := data.HasOwnProp("PosVarY") ? data.PosVarY : 0
+    delta.Count := data.HasOwnProp("Count") ? data.Count : 1
+    delta.Interval := data.HasOwnProp("Interval") ? data.Interval : 1000
+    for field in ["ErrMode", "ErrRetryCount", "ErrRetryInterval"] {
+        if (data.HasOwnProp(field))
+            delta.%field% := data.%field%
+    }
+    n := 1
+    while (target.Has("增量移动" n))
+        n++
+    delta.SerialStr := "增量移动" n
+    target[delta.SerialStr] := JSON.stringify(delta, 0)
+    previous[key] := delta.SerialStr
+    Cfg_WriteRoot(root, path)
+    return delta.SerialStr
+}
+
 Compat13_UpgradeDir(dir) {
     sec := IniImport_Section()
     renames := Map()
@@ -142,12 +169,15 @@ Compat13_UpgradeDir(dir) {
         if (!FileExist(path))
             continue
         root := Cfg_Load(path)
+        savedRenames := Cfg_Seg(root, "Compat13Renames")
+        for key, target in savedRenames
+            renames[key] := target
         if (!root.Has(sec))
             continue
         values := root[sec]
         before := JSON.stringify(values, 0)
         for key, val in values.Clone() {
-            data := CompatParseData(val)
+            data := TryParseCommandData(val)
             if (!IsObject(data))
                 continue
             Compat13_Normalize(data, stem)
@@ -161,24 +191,8 @@ Compat13_UpgradeDir(dir) {
             }
             else if (stem == "MMProFile" && RegExMatch(key, "^(移动Pro|鼠标移动Pro)\d+$")) {
                 if (Compat13_IsGameView(data)) {
-                    delta := DeltaMoveData()
-                    delta.SerialStr := key
-                    delta.DeltaX := data.PosVarX
-                    delta.DeltaY := data.PosVarY
-                    delta.Count := data.HasOwnProp("Count") ? data.Count : 1
-                    delta.Interval := data.HasOwnProp("Interval") ? data.Interval : 1000
-                    ; 增量移动有独立资源文件，不能写进 MMProFile。
-                    dest := dir "\DeltaMoveFile.toml"
-                    deltaRoot := Cfg_Load(dest)
-                    target := Cfg_Seg(deltaRoot, sec)
-                    n := 1
-                    while (target.Has("增量移动" n))
-                        n++
-                    delta.SerialStr := "增量移动" n
-                    target[delta.SerialStr] := JSON.stringify(delta, 0)
-                    Cfg_WriteRoot(deltaRoot, dest)
+                    renames[key] := Compat13_MoveGameView(dir, key, data)
                     values.Delete(key)
-                    renames[key] := delta.SerialStr
                 } else {
                     Compat13_Drop(data, ["Count", "Interval"])
                     Compat13_Store(values, key, data)
@@ -188,6 +202,8 @@ Compat13_UpgradeDir(dir) {
             }
             else
                 Compat13_Store(values, key, data)
+            if (renames.Has(key))
+                savedRenames[key] := renames[key]
         }
         if (before != JSON.stringify(values, 0)) {
             Cfg_WriteRoot(root, path)
@@ -196,7 +212,26 @@ Compat13_UpgradeDir(dir) {
     }
     changed := Compat13_UpgradeLooseEnums(dir) || changed
     rewrite := (macro) => Compat13_Macro(macro, renames)
-    return Compat_RewriteMacroFiles(dir, rewrite, Compat13_RewriteBranches) || changed
+    changed := Compat_RewriteMacroFiles(dir, rewrite, Compat131_RewriteBranches) || changed
+    Compat13_ClearRenameJournal(dir, ["FileIOFile", "RunFile", "MMProFile"])
+    return changed
+}
+
+Compat13_ClearRenameJournal(dir, stems) {
+    for stem in stems {
+        path := dir "\" stem ".toml"
+        root := Cfg_Load(path)
+        if (root.Has("Compat13Renames") && root["Compat13Renames"].Count) {
+            root.Delete("Compat13Renames")
+            Cfg_WriteRoot(root, path)
+        }
+    }
+    path := dir "\DeltaMoveFile.toml"
+    root := Cfg_Load(path)
+    if (root.Has("GameViewMigration") && root["GameViewMigration"].Count) {
+        root.Delete("GameViewMigration")
+        Cfg_WriteRoot(root, path)
+    }
 }
 
 ; 只遍历宏表和指令资源里的宏字段，避免改写备注、提示正文和路径。
@@ -240,7 +275,7 @@ Compat_RewriteMacroFiles(dir, rewriteMacro, rewriteBranches, beforeWrite := "", 
             for key, value in fields {
                 if (Type(value) != "String")
                     continue
-                data := CompatParseData(value)
+                data := TryParseCommandData(value)
                 if (!IsObject(data))
                     continue
                 if (rewriteBranches.Call(data, rewriteMacro)) {
@@ -274,7 +309,7 @@ Compat13_UpgradeLooseEnums(dir) {
         values := root[sec]
         before := JSON.stringify(values, 0)
         for key, val in values.Clone() {
-            data := CompatParseData(val)
+            data := TryParseCommandData(val)
             if (!IsObject(data))
                 continue
             Compat13_Store(values, key, data)
@@ -396,7 +431,8 @@ Compat13_Settings(sections) {
         supported[key] := true
     for key in ["MenuWheelShowTooltip", "MenuWheelScale", "Theme", "UIPanelShowOnActive", "UIPanelBtnHeight"]
         supported[key] := true
-    for key in ["UIPanelFontSize", "UIPanelBtnWidth", "UIPanelCols", "IsModalSubGui", "MutiThreadNum", "DynamicCorePoolSize", "ElasticTimeout", "MacroStopType"]
+    for key in ["UIPanelFontSize", "UIPanelBtnWidth", "UIPanelCols", "IsModalSubGui", "MutiThreadNum", "DynamicCorePoolSize", "ElasticTimeout", "MacroStopType",
+        "UIPanelCustom", "UIPanelPos", "UIPanelBallPos", "SysLogMinLevel", "SysLogLevels", "AiProvider", "AiApiBaseUrl", "AiApiKey", "AiModel", "AiModelList"]
         supported[key] := true
     for key in ["SoftBGColor", "NoVariableTip", "CMDTip", "CheckForeground", "ScreenShotType", "KeyDownDown", "AutoLoosenModifier", "ContinuousTrigger"]
         supported[key] := true
@@ -441,12 +477,206 @@ Compat13_Settings(sections) {
     return sections
 }
 
-; 完整 1.3 阶段：设置语义、指令拆分、宏结构及宏目标引用。
-Compat13_UpgradeProfile(dir) {
-    changed := Compat13_UpgradeSettings(dir)
-    changed := Compat13_UpgradeDir(dir) || changed
-    changed := IniImport_ExpandFlatMacroFile(dir) || changed
-    return Compat13_UpgradeBuiltinVariables(dir) || changed
+; 1.3 的正式升级入口也接收已带配置版本标记的预览版方案。
+Compat13_UpgradeProfile(dir, version) {
+    if (Compat_CompareVersion(version, "1.3") < 0)
+        Compat13_UpgradeDir(dir)
+    IniImport_ExpandFlatMacroFile(dir)
+    CompatMergeTomlKeys(dir "\TimeFile.toml", dir "\TimeDataFile.toml")
+    CompatMergeTomlKeys(dir "\SearchMultiFile.toml", dir "\SearchComboFile.toml")
+    Compat13_FinalizeCommands(dir)
+    if (Compat_CompareVersion(version, "1.3.3") < 0)
+        Compat13_UpgradeBuiltinVariables(dir)
+    Compat131_UpgradeProfile(dir)
+    Compat132_UpgradeProfile(dir)
+    Compat13_PanelStores(dir, Compat13_PanelKeys(dir))
+    Compat13_FinalizeSettings(dir)
+}
+
+Compat13_FinalizeCommands(dir) {
+    changed := false
+    sec := IniImport_Section()
+    for stem, kind in Map("TimeDataFile", "时间", "CountDownFile", "倒计时", "WaitConfirmFile", "等待确定",
+        "RunFile", "运行", "OutputFile", "输出", "FileIOFile", "文件读写", "SearchComboFile", "搜索Combo",
+        "TimingFile", "Timing", "RMTCMDFile", "RMT指令") {
+        path := dir "\" stem ".toml"
+        if (!FileExist(path))
+            continue
+        root := Cfg_Load(path)
+        values := Cfg_Seg(root, sec)
+        dirty := false
+        for key, raw in values.Clone() {
+            data := TryParseCommandData(raw)
+            if (!IsObject(data))
+                continue
+            target := key
+            switch stem {
+                case "TimeDataFile":
+                    target := RegExReplace(key, "i)^Time(?=\d+$)", "时间")
+                    CompatEnsureTimeData(data)
+                case "CountDownFile":
+                    target := RegExReplace(key, "i)^CountDown(?=\d+$)", "倒计时")
+                    CompatEnsureCountDownData(data)
+                case "WaitConfirmFile":
+                    target := RegExReplace(key, "i)^(?:WaitConfirm|Wait)(?=\d+$)", "等待确定")
+                    if (RegExMatch(key, "^Wait(\d+)$", &alias) && values.Has("WaitConfirm" alias[1]))
+                        continue
+                case "RunFile":
+                    CompatEnsureRunData(data)
+                    CmdEnumNorm(kind, data)
+                case "OutputFile":
+                    CompatEnsureOutputData(data)
+                    CmdEnumNorm(kind, data)
+                case "TimingFile":
+                    CompatNormalizeTimingData(data)
+                    CmdEnumNorm(kind, data)
+                case "FileIOFile":
+                    CmdEnumNorm(kind, data)
+                case "SearchComboFile":
+                    if (!data.HasOwnProp("SearchTargetArr") || !(data.SearchTargetArr is Array) || !data.SearchTargetArr.Length) {
+                        if (!data.HasOwnProp("SearchImageType"))
+                            data.SearchImageType := 1
+                        data.SearchTargetArr := GetSearchTargetArr(data)
+                        if (data.HasOwnProp("Remark"))
+                            data.SearchTargetArr[1].Remark := data.Remark
+                    }
+                case "RMTCMDFile":
+                    if (data.HasOwnProp("OperateType")) {
+                        actions := ["截图", "截图提取文本", "自由贴", "开启指令显示", "关闭指令显示",
+                            "启用键鼠", "禁用键鼠", "休眠", "终止所有宏", "重载"]
+                        if ((!data.HasOwnProp("CmdStr") || data.CmdStr == "") && IsInteger(data.OperateType)
+                            && actions.Has(Integer(data.OperateType)))
+                            data.CmdStr := actions[Integer(data.OperateType)]
+                        data.DeleteProp("OperateType")
+                    }
+            }
+            if (target != key) {
+                ; 与原加载顺序一致，现行键优先。原资源留作恢复。
+                if (!values.Has(target)) {
+                    data.SerialStr := target
+                    values[target] := JSON.stringify(data, 0)
+                    dirty := true
+                }
+            } else {
+                next := JSON.stringify(data, 0)
+                if (next != raw) {
+                    values[key] := next
+                    dirty := true
+                }
+            }
+        }
+        if (dirty) {
+            Cfg_WriteRoot(root, path)
+            changed := true
+        }
+    }
+    return changed
+}
+
+Compat13_FinalizeSettings(dir) {
+    path := dir "\MainSettings.toml"
+    if (!FileExist(path))
+        return false
+    root := Cfg_Load(path)
+    values := Cfg_Seg(root, IniImport_Section())
+    before := JSON.stringify(values, 0)
+    if (values.Has("SysLogMinLevel")) {
+        if (!values.Has("SysLogLevels"))
+            values["SysLogLevels"] := Compat13_LogLevels(values["SysLogMinLevel"])
+        values.Delete("SysLogMinLevel")
+    }
+    if (Trim(values.Get("AiProvider", "")) == "" && (values.Has("AiProvider") || values.Has("AiApiBaseUrl")))
+        values["AiProvider"] := Compat13_AiProvider(values.Get("AiApiBaseUrl", ""))
+    if (values.Get("JoyType", "") == "PS5")
+        values["JoyType"] := "DS4"
+    profile := values.Get("CurSettingName", "RMT默认配置")
+    panel := values.Get("UIPanelCustom", "")
+    hasOldPosition := RegExMatch(values.Get("UIPanelPos", "") ";" values.Get("UIPanelBallPos", ""), "(?:^|;)\d+(?:\|\d+)?=")
+    if ((panel != "" || hasOldPosition) && Compat_IsSettingName(profile) && DirExist(dir "\" profile)) {
+        profileDir := dir "\" profile
+        Compat_UpgradeDir(profileDir)
+        keys := Compat13_PanelKeys(profileDir)
+        if (keys.Length) {
+            Compat13_PanelStores(profileDir, keys, panel)
+            if (values.Has("UIPanelCustom"))
+                values.Delete("UIPanelCustom")
+            for field in ["UIPanelPos", "UIPanelBallPos"] {
+                if (values.Has(field))
+                    values[field] := Compat13_PanelPositions(values[field], keys)
+            }
+        }
+    }
+    if (before == JSON.stringify(values, 0))
+        return false
+    Cfg_WriteRoot(root, path)
+    return true
+}
+
+Compat13_PanelKeys(dir) {
+    path := dir "\MacroFile.toml"
+    toml := TomlUtil_Read(path)
+    keys := []
+    for ref in TomlUtil_List(TomlUtil_Table(toml, "UI"), "ModuleOrder") {
+        key := "UI." Trim(ref)
+        if (TomlUtil_Valid(TomlUtil_Table(toml, key)))
+            keys.Push(key)
+    }
+    return keys
+}
+
+Compat13_PanelStores(dir, keys, encoded := "") {
+    aggregate := Compat13_DecodePanelStore(encoded)
+    changed := false
+    for index, key in keys {
+        if (!RegExMatch(key, "^UI\.[\w-]+$"))
+            continue
+        dest := dir "\UIPanelCustom_" key ".json"
+        source := dir "\UIPanelCustom_" index ".json"
+        existing := !!FileExist(dest)
+        raw := existing ? FileRead(dest, "UTF-8") : (FileExist(source) ? FileRead(source, "UTF-8") : aggregate)
+        schema := UIMacroSchema.Parse(raw)
+        if (existing && IsObject(schema))
+            continue
+        if (!IsObject(schema)) {
+            try wrapped := JSON.parse(raw, , false)
+            catch
+                continue
+            if (!IsObject(wrapped) || !wrapped.HasOwnProp(String(index)))
+                continue
+            oldKey := String(index)
+            schema := UIMacroSchema.Parse(wrapped.%oldKey%)
+        }
+        if (!IsObject(schema) || !UIMacroSchema.Validate(schema).ok)
+            continue
+        file := FileOpen(dest ".tmp", "w", "UTF-8-RAW")
+        try file.Write(JSON.stringify(schema, 0))
+        finally file.Close()
+        FileMove(dest ".tmp", dest, existing)
+        changed := true
+    }
+    return changed
+}
+
+Compat13_PanelPositions(raw, keys) {
+    positions := Map()
+    for entry in StrSplit(raw, ";") {
+        pair := StrSplit(Trim(entry), "=", , 2)
+        if (pair.Length == 2)
+            positions[pair[1]] := pair[2]
+    }
+    for key, pos in positions.Clone() {
+        id := StrSplit(key, "|", , 2)
+        if (!IsInteger(id[1]) || !keys.Has(Integer(id[1])))
+            continue
+        target := keys[Integer(id[1])] (id.Length == 2 ? "|" id[2] : "")
+        if (!positions.Has(target))
+            positions[target] := pos
+        positions.Delete(key)
+    }
+    result := ""
+    for key, pos in positions
+        result .= (result == "" ? "" : ";") key "=" pos
+    return result
 }
 
 Compat13_UpgradeBuiltinVariables(dir) {
@@ -593,4 +823,70 @@ Compat13_UpgradeSettings(dir) {
         return false
     Cfg_WriteRoot(root, path)
     return true
+}
+
+Compat13_LogLevels(level) {
+    ; 旧版除 debug 外的级别始终写入。单独使用新键，以区分只勾选一个级别。
+    if (InStr(level, ","))
+        return level ; 兼容开发版已写入的多选值。
+    switch level {
+        case "": return "warn,error"
+        case "debug": return "debug,info,warn,error"
+        default: return "info,warn,error"
+    }
+}
+
+Compat13_AiProvider(url) {
+    url := RTrim(Trim(url), "/\")
+    for pair in [
+        ["https://api.openai.com/v1", "openai"],
+        ["https://api.deepseek.com/v1", "deepseek"],
+        ["https://dashscope.aliyuncs.com/compatible-mode/v1", "dashscope"],
+        ["https://ark.cn-beijing.volces.com/api/v3", "volcengine"],
+        ["https://api.hunyuan.cloud.tencent.com/v1", "hunyuan"],
+        ["https://qianfan.baidubce.com/v2", "qianfan"],
+        ["https://api.moonshot.cn/v1", "moonshot"],
+        ["https://open.bigmodel.cn/api/paas/v4", "zhipu"],
+        ["https://api.baichuan-ai.com/v1", "baichuan"],
+        ["https://api.lingyiwanwu.com/v1", "yi"],
+        ["https://api.stepfun.com/v1", "stepfun"],
+        ["https://api.minimax.chat/v1", "minimax"],
+        ["https://api.siliconflow.cn/v1", "siliconflow"],
+        ["https://generativelanguage.googleapis.com/v1beta/openai", "gemini"],
+        ["https://api.x.ai/v1", "xai"],
+        ["https://api.mistral.ai/v1", "mistral"],
+        ["https://api.groq.com/openai/v1", "groq"],
+        ["https://api.together.xyz/v1", "together"],
+        ["https://api.fireworks.ai/inference/v1", "fireworks"],
+        ["https://openrouter.ai/api/v1", "openrouter"],
+        ["http://localhost:11434/v1", "ollama"],
+        ["http://localhost:1234/v1", "lmstudio"]
+    ] {
+        if (url = pair[1])
+            return pair[2]
+    }
+    return url == "" ? "openai" : "custom"
+}
+
+Compat13_DecodePanelStore(raw) {
+    s := Trim(String(raw))
+    if (s == "")
+        return ""
+    ; 兼容早期直接存 JSON 的配置
+    if (SubStr(s, 1, 1) == "{")
+        return s
+    try
+        return Compat13_DecodePanelBase64(s)
+    catch
+        return ""
+}
+
+Compat13_DecodePanelBase64(b64) {
+    size := 0
+    if (!DllCall("crypt32\CryptStringToBinaryW", "Str", b64, "UInt", 0, "UInt", 0x1, "Ptr", 0, "UInt*", &size, "Ptr", 0, "Ptr", 0))
+        return ""
+    buf := Buffer(size)
+    if (!DllCall("crypt32\CryptStringToBinaryW", "Str", b64, "UInt", 0, "UInt", 0x1, "Ptr", buf, "UInt*", &size, "Ptr", 0, "Ptr", 0))
+        return ""
+    return StrGet(buf, size, "UTF-8")
 }

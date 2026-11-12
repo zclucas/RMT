@@ -250,7 +250,6 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "Mode", CmdEnumRunModeNames())
             CmdEnumSet(Data, "Option", CmdEnumRunOptionNames(), 0)
         case "Timing":
-            NormalizeTimingData(Data)
             if (Data.HasProp("Type"))
                 Data.Type := CmdEnumTimingType(Data.Type)
             CmdEnumSetNum(Data, "CustomUnit", CmdEnumTimingUnitNames())
@@ -261,10 +260,6 @@ CmdEnumNorm(cmd, Data) {
         case "抓图":
             CmdEnumSet(Data, "ScreenShotType", CmdEnumShotNames())
             CmdEnumSet(Data, "NameType", CmdEnumNameTypeNames(), 0)
-        case "时间":
-            CompatEnsureTimeData(Data)
-        case "倒计时":
-            CompatEnsureCountDownData(Data)
         case "输出":
             CmdEnumSetNum(Data, "OutputType", ["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"])
         case "宏操作":

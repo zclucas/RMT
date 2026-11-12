@@ -298,7 +298,6 @@ class ConfigMergeGui {
 
     LoadLocalSourceConfig(settingDir) {
         Compat_UpgradeDir(settingDir)
-        IniImport_ExpandFlatMacroFile(settingDir)
         this.LoadSourceConfig(settingDir)
     }
 

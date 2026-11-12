@@ -81,6 +81,25 @@ SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly) {
     }
 }
 
+; 配置值（JSON 字符串）→ Data 对象；非 JSON 返回 ""
+TryParseCommandData(val) {
+    if (Type(val) != "String")
+        return ""
+    SaveStr := Trim(val)
+    if (SaveStr == "")
+        return ""
+
+    FirstChar := SubStr(SaveStr, 1, 1)
+    LastChar := SubStr(SaveStr, -1, 1)
+    if (FirstChar != "{" || LastChar != "}")
+        return ""
+
+    try
+        return JSON.parse(SaveStr, , false)
+    catch
+        return ""
+}
+
 GetMacroCMDData(serialStr) {
     if (MySoftData.DataCacheMap.Has(serialStr)) {
         return MySoftData.DataCacheMap[serialStr]
@@ -102,25 +121,12 @@ GetMacroCMDData(serialStr) {
     saveStr := CfgRead(DataFile, SettingSection, normalizedSerialStr, "")
     if (saveStr == "" && normalizedSerialStr != serialStr)
         saveStr := CfgRead(DataFile, SettingSection, serialStr, "")
-    if (saveStr == "")
-        saveStr := CompatLegacyCmdSaveStr(cmd, DataFile, numbersOnly, normalizedSerialStr, serialStr)
     if (saveStr == "") {
         Data := DataClass()
         Data.SerialStr := SerialStr
     }
-    else {
+    else
         Data := JSON.parse(saveStr, , false)
-        if (cmd == "时间")
-            CompatEnsureTimeData(Data)
-        else if (cmd == "倒计时")
-            CompatEnsureCountDownData(Data)
-        else if (cmd == "运行" || cmd == "运行Pro")
-            CompatEnsureRunData(Data)
-        else if (cmd == "文件读写" || cmd == "Excel")
-            CompatEnsureFileIOData(Data)
-        else if (cmd == "输出")
-            CompatEnsureOutputData(Data)
-    }
     CmdEnumNorm(cmd, Data)
 
     MySoftData.DataCacheMap.Set(normalizedSerialStr, Data)

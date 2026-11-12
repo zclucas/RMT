@@ -197,7 +197,7 @@ class AiMacroValidation {
 
     Inline(info, location) {
         static minimum := Map("间隔", 2, "按键", 3, "手柄", 3, "移动", 3, "鼠标移动", 3,
-            "变量", 3, "RMT指令", 2, "流程跳转", 2, "注释", 1)
+            "变量", 3, "RMT指令", 2, "注释", 1)
         if (!minimum.Has(info.kind)) {
             this.Issue("error", "missing_serial", location, "指令需要配置序列号：" info.kind)
             return
@@ -213,11 +213,6 @@ class AiMacroValidation {
                 this.CheckInterval(values[1], values.Length = 2 ? values[2] : unset)
             } catch as e
                 this.Issue("error", "invalid_parameters", location, e.Message)
-        }
-        else if (info.kind == "流程跳转") {
-            try FlowJumpAction(info.clean)
-            catch as e
-                this.Issue("error", "inline_fields", location, e.Message)
         }
     }
 

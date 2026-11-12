@@ -9,7 +9,6 @@
 #Include Util\LangUtil.ahk
 #Include Util\CmdEnumUtil.ahk
 #Include Util\Gdip_All.ahk
-#Include Util\CompatDataUtil.ahk
 #Include Util\CompareUtil.ahk
 #Include Util\PresssKeyUtil.ahk
 #Include Util\TextOpsUtil.ahk

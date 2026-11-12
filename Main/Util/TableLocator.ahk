@@ -13,11 +13,6 @@ GetTableSerialStr() {
     return "t_" FormatTime(, "HHmmss") Random(10, 99)
 }
 
-; 折叠框 ID：f_ + HHmmss + 随机 2 位
-GetFoldSerialStr() {
-    return "f_" FormatTime(, "HHmmss") Random(10, 99)
-}
-
 ; 条目 ID：复用 GetCMDSerialStr("Item")（已全局唯一登记，含时间戳+随机数）
 
 ; ===== 全局索引构建 =====
@@ -113,7 +108,7 @@ GetItemTableGlobal(itemID) {
 ; 宏操作目标使用稳定条目 ID，再核对类别，支持同类别的多个页签。
 GetMacroTypeTargetTable(macroType, itemID) {
     tableItem := GetItemTableGlobal(itemID)
-    return tableItem && tableItem.Symbol == CompatMacroTypeSymbol(macroType) ? tableItem : ""
+    return tableItem && tableItem.Symbol == MacroTypeSymbol(macroType) ? tableItem : ""
 }
 
 ; ===== 折叠框查询 API =====
@@ -307,43 +302,10 @@ RemoveTableFold(tableItem, foldID) {
     return false
 }
 
-; ===== 旧格式兼容辅助（迁移期） =====
-; 旧格式：条目归属由 FoldInfo.IndexSpanArr（"起始-结束" 下标范围）表达。
-; 迁移：把每个折叠框的 IndexSpan 转成 FoldID，条目按范围内下标分配 FoldID。
-; 入参 oldFoldInfo（ItemFoldInfo，JSON.parse 结果），返回 [foldsArr, itemFoldIDArr]
-MigrateIndexSpanToFoldID(oldFoldInfo, itemCount) {
-    itemFoldIDArr := Array(itemCount + 1)
-    loop itemCount
-        itemFoldIDArr[A_Index] := ""
-    foldsArr := []
-    if (!IsObject(oldFoldInfo) || !oldFoldInfo.HasOwnProp("IndexSpanArr"))
-        return [foldsArr, itemFoldIDArr]
-
-    for f, spanStr in oldFoldInfo.IndexSpanArr {
-        fold := MacroFold()
-        fold.ID := GetFoldSerialStr()
-        fold.Remark := oldFoldInfo.HasOwnProp("RemarkArr") && oldFoldInfo.RemarkArr.Has(f) ? oldFoldInfo.RemarkArr[f] : ""
-        fold.FrontInfo := oldFoldInfo.HasOwnProp("FrontInfoArr") && oldFoldInfo.FrontInfoArr.Has(f) ? oldFoldInfo.FrontInfoArr[f] : ""
-        fold.ForbidState := oldFoldInfo.HasOwnProp("ForbidStateArr") && oldFoldInfo.ForbidStateArr.Has(f) ? !!oldFoldInfo.ForbidStateArr[f] : false
-        fold.FoldState := oldFoldInfo.HasOwnProp("FoldStateArr") && oldFoldInfo.FoldStateArr.Has(f) ? !!oldFoldInfo.FoldStateArr[f] : false
-        fold.TKType := oldFoldInfo.HasOwnProp("TKTypeArr") && oldFoldInfo.TKTypeArr.Has(f) ? oldFoldInfo.TKTypeArr[f] : 4
-        fold.TK := oldFoldInfo.HasOwnProp("TKArr") && oldFoldInfo.TKArr.Has(f) ? oldFoldInfo.TKArr[f] : ""
-        fold.HoldTime := oldFoldInfo.HasOwnProp("HoldTimeArr") && oldFoldInfo.HoldTimeArr.Has(f) ? oldFoldInfo.HoldTimeArr[f] : 500
-        fold.UnorderedTrigger := oldFoldInfo.HasOwnProp("UnorderedTriggerArr") && oldFoldInfo.UnorderedTriggerArr.Has(f) ? !!oldFoldInfo.UnorderedTriggerArr[f] : false
-
-        span := StrSplit(spanStr, "-")
-        if (IsInteger(span[1]) && IsInteger(span[2])) {
-            start := Integer(span[1])
-            end := Integer(span[2])
-            if (end > itemCount)
-                end := itemCount
-            loop end - start + 1 {
-                idx := start + A_Index - 1
-                if (idx >= 1 && idx <= itemCount)
-                    itemFoldIDArr[idx] := fold.ID
-            }
-        }
-        foldsArr.Push(fold)
+MacroTypeSymbol(macroType) {
+    for def in MacroCategoryDefs() {
+        if (def[2] == macroType)
+            return def[1]
     }
-    return [foldsArr, itemFoldIDArr]
+    return macroType
 }

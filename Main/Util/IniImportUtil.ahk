@@ -618,10 +618,10 @@ IniImport_MigrateMacroRefs(settingDir, tables, legacyKv) {
     }
     for key, val in root[sec] {
         source := original.Get(key, val)
-        data := CompatParseData(source)
+        data := TryParseCommandData(source)
         if (!IsObject(data) || !data.HasOwnProp("MacroType") || data.MacroType == "当前宏")
             continue
-        symbol := CompatMacroTypeSymbol(data.MacroType)
+        symbol := MacroTypeSymbol(data.MacroType)
         idx := 0
         tb := bySymbol.Get(symbol, "")
         if (tb) {
@@ -653,40 +653,4 @@ IniImport_MigrateMacroRefs(settingDir, tables, legacyKv) {
     }
     if (changed)
         Cfg_WriteRoot(root, path)
-}
-
-; ============================================================
-; 启动期兜底：当前方案的 MacroFile 若仍是旧扁平布局，就地展开成三级段。
-;
-; 只由主进程调用（InitFilePath 里，文件路径确定之后、LoadCurMacroSetting 之前）。
-; 展开依赖本文件的 IniImport_ExpandFlatMacroFile，而 Worker 不加载本文件，
-; 所以这段不能留在共享的 LoadCurMacroSetting 里。
-;
-; 返回 true 表示发生了展开。
-; ============================================================
-ExpandFlatMacroFileIfNeeded() {
-    global MacroFile
-    if (!IsSet(MacroFile) || MacroFile == "" || !FileExist(MacroFile))
-        return false
-    try {
-        kv := CfgSection(MacroFile, "UserSettings")
-    } catch {
-        return false
-    }
-    flat := false
-    for def in CreateDefaultTableDefs() {
-        if (kv.Has(def[1] "ModeArr") || kv.Has(def[1] "FoldInfo") || kv.Has(def[1] "MacroArr1")) {
-            flat := true
-            break
-        }
-    }
-    if (!flat)
-        return false
-    SplitPath MacroFile, , &settingDir
-    try {
-        return IniImport_ExpandFlatMacroFile(settingDir)
-    } catch as e {
-        try RMTLogSys(RMT_LV_ERROR, "配置导入", "展开扁平 MacroFile 失败，已保留原文件: " e.Message)
-        return false
-    }
 }

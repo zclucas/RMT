@@ -1,11 +1,13 @@
 #Requires AutoHotkey v2.0
+#Include "CompatDataUtil.ahk"
 #Include "CompatTov1-2.ahk"
 #Include "Compatv1-3.ahk"
 #Include "Compatv1-3-1.ahk"
 #Include "Compatv1-3-2.ahk"
+#Include "UIMacroSchema.ahk"
 
 ; 配置格式版本独立于 RMPK 容器版本和软件构建版本。
-Compat_CurrentVersion() => "1.3.3"
+Compat_CurrentVersion() => "1.3.4"
 Compat_VersionFile(dir) => dir "\RmtVersion.toml"
 
 Compat_CompareVersion(left, right) {
@@ -32,19 +34,16 @@ Compat_ReadVersion(dir) {
 }
 
 Compat_WriteVersion(dir, version) {
-    CfgWrite(version, Compat_VersionFile(dir), "RMT", "ConfigVersion")
-}
-
-; 新版本新增 CompatvN-M.ahk，并按目标版本顺序登记。
-Compat_MigrationSteps() {
-    return [{Version: "1.2.2", Run: CompatTo12_UpgradeDir},
-        {Version: "1.3", Run: Compat13_UpgradeProfile},
-        {Version: "1.3.1", Run: Compat131_UpgradeProfile},
-        {Version: "1.3.2", Run: Compat132_UpgradeProfile},
-        {Version: "1.3.3", Run: Compat13_UpgradeBuiltinVariables}]
+    path := Compat_VersionFile(dir)
+    root := Cfg_Load(path).Clone()
+    manifest := Cfg_Seg(root, "RMT").Clone()
+    manifest["ConfigVersion"] := version
+    root["RMT"] := manifest
+    Cfg_WriteRoot(root, path)
 }
 
 Compat_UpgradeDir(dir) {
+    CfgFlushDir(dir)
     version := Compat_ReadVersion(dir)
     if (Compat_CompareVersion(version, Compat_CurrentVersion()) > 0)
         throw Error("配置版本 " version " 高于当前支持的 " Compat_CurrentVersion())
@@ -52,35 +51,42 @@ Compat_UpgradeDir(dir) {
         CfgInvalidate(A_LoopFileFullPath)
         TomlUtil_Invalidate(A_LoopFileFullPath)
     }
-    ; 仅转换存储格式，不在 INI 转换器中夹带版本语义迁移。
-    conv := IniImport_ConvertDir(dir)
-    if (conv["Failed"].Count) {
-        msg := ""
-        for name, err in conv["Failed"]
-            msg .= name ": " err "`n"
-        throw Error("配置转换失败：" msg)
-    }
-    changed := conv["Converted"] > 0
-    for step in Compat_MigrationSteps() {
-        if (Compat_CompareVersion(version, step.Version) >= 0)
-            continue
-        changed := step.Run.Call(dir) || changed
-        ; 本阶段完整成功后才推进版本，失败不能标为已迁移。
-        Compat_WriteVersion(dir, step.Version)
-        version := step.Version
+    changed := false
+    if (Compat_CompareVersion(version, Compat_CurrentVersion()) < 0) {
+        ; 先转换存储格式，再迁移配置语义。
+        legacyMainIni := !!FileExist(dir "\MainSettings.ini")
+        conv := IniImport_ConvertDir(dir)
+        if (conv["Failed"].Count) {
+            msg := ""
+            for name, err in conv["Failed"]
+                msg .= name ": " err "`n"
+            throw Error("配置转换失败：" msg)
+        }
+        if (legacyMainIni)
+            Compat13_UpgradeSettings(dir)
+        if (Compat_CompareVersion(version, "1.2.2") < 0) {
+            CompatTo12_UpgradeDir(dir)
+            CfgFlushDir(dir)
+            Compat_WriteVersion(dir, "1.2.2")
+        }
+        Compat13_UpgradeProfile(dir, version)
+        ; 1.3 转换全部完成后才写入新版本，失败时可重新执行。
+        CfgFlushDir(dir)
+        Compat_WriteVersion(dir, Compat_CurrentVersion())
         changed := true
     }
     ; 路径搬迁不是版本升级：同版本包导入也需要定位包内图片。
     loop files, dir "\*.toml" {
         path := A_LoopFileFullPath
         for key, value in CfgSection(path, IniImport_Section()) {
-            data := CompatParseData(value)
+            data := TryParseCommandData(value)
             if (IsObject(data) && CompatPath(path, data)) {
                 CfgWrite(JSON.stringify(data, 0), path, IniImport_Section(), key)
                 changed := true
             }
         }
     }
+    CfgFlushDir(dir)
     return changed
 }
 
@@ -131,6 +137,9 @@ Compat_InstallStagedTree(staged, currentDir, backup, verify, sourceDir := unset)
     installed := false
     try {
         if (DirExist(sourceDir)) {
+            CfgFlushDir(sourceDir)
+            loop files, sourceDir "\*", "D"
+                CfgFlushDir(A_LoopFileFullPath)
             DirMove(sourceDir, backup)
             backedUp := true
         }
@@ -197,7 +206,6 @@ Compat_ImportSettingsTree(source, currentDir, backupRoot, currentName, report :=
             if (report)
                 report(GetLang("正在转换配置") " " name, Round(100 * (i - 1) / profiles.Length))
             Compat_UpgradeDir(staged "\" name)
-            IniImport_ExpandFlatMacroFile(staged "\" name)
             list .= (list = "" ? "" : "π") name
             if (name = currentName)
                 selected := name
@@ -211,6 +219,7 @@ Compat_ImportSettingsTree(source, currentDir, backupRoot, currentName, report :=
         CfgWrite(list, setting, "UserSettings", "SettingArrStr")
         CfgWrite(selected, setting, "UserSettings", "CurSettingName")
         CfgWrite(true, setting, "UserSettings", "IsReload")
+        CfgFlushDir(staged)
 
         if (report)
             report(GetLang("正在应用配置"))
@@ -234,13 +243,13 @@ Compat_ImportProfilePackage(file, root, backupRoot, name, commit := unset, repor
         ; 覆盖导入保留原配置中包内没有的资源，校验通过前只改临时副本。
         if (DirExist(dest)) {
             Compat_CheckPlainTree(dest)
+            CfgFlushDir(dest)
             DirCopy(dest, paths.Stage)
         }
         FolderPackager.UnpackFile(file, paths.Stage, report)
         if (report)
             report(GetLang("正在应用配置"))
         Compat_UpgradeDir(paths.Stage)
-        IniImport_ExpandFlatMacroFile(paths.Stage)
         verify := IsSet(commit) ? () => (Compat_UpgradeDir(dest), commit.Call()) : Compat_UpgradeDir.Bind(dest)
         Compat_InstallStagedTree(paths.Stage, dest, paths.Backup, verify)
     } finally {
@@ -263,6 +272,7 @@ Compat_RenameProfile(projectDir, oldName, newName, commit) {
     paths := Compat_StagePaths(backupRoot, "Rename-")
     try {
         ; 先改副本，写盘或切换失败时可完整恢复原目录。
+        CfgFlushDir(oldDir)
         DirCopy(oldDir, paths.Stage)
         rebase := Compat_RebaseProfilePath.Bind(oldDir, newDir, projectDir)
         loop files, paths.Stage "\*.toml" {

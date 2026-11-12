@@ -1,45 +1,5 @@
 #Requires AutoHotkey v2.0
 
-; 内存数据结构的旧版本兼容补齐，主程序与Worker都会用到，故放在共享层（AssetUtil.ahk）
-; 配置文件的迁移改写逻辑见 FixCompatUtil.ahk，那些仅主程序需要，不要在此处引用
-
-;1.0.8F4到新版本兼容, 模块中新增菜单模块相关数据
-Compat1_0_8F4FlodInfo(FoldInfo) {
-    if (FoldInfo == "")
-        return
-
-    if (!ObjHasOwnProp(FoldInfo, "FrontInfoArr"))
-        FoldInfo.FrontInfoArr := []
-    if (!ObjHasOwnProp(FoldInfo, "TKTypeArr"))
-        FoldInfo.TKTypeArr := []
-    if (!ObjHasOwnProp(FoldInfo, "TKArr"))
-        FoldInfo.TKArr := []
-    if (!ObjHasOwnProp(FoldInfo, "HoldTimeArr"))
-        FoldInfo.HoldTimeArr := []
-    if (!ObjHasOwnProp(FoldInfo, "UnorderedTriggerArr"))
-        FoldInfo.UnorderedTriggerArr := []
-
-    ; 属性存在但长度为 0（如 JSON 序列化了空 UnorderedTriggerArr）时也要按模块数补齐
-    targetLen := 0
-    if (ObjHasOwnProp(FoldInfo, "RemarkArr"))
-        targetLen := FoldInfo.RemarkArr.Length
-    if (ObjHasOwnProp(FoldInfo, "IndexSpanArr") && FoldInfo.IndexSpanArr.Length > targetLen)
-        targetLen := FoldInfo.IndexSpanArr.Length
-
-    loop targetLen {
-        if (FoldInfo.FrontInfoArr.Length < A_Index)
-            FoldInfo.FrontInfoArr.Push("")
-        if (FoldInfo.TKTypeArr.Length < A_Index)
-            FoldInfo.TKTypeArr.Push(1)
-        if (FoldInfo.TKArr.Length < A_Index)
-            FoldInfo.TKArr.Push("")
-        if (FoldInfo.HoldTimeArr.Length < A_Index)
-            FoldInfo.HoldTimeArr.Push(500)
-        if (FoldInfo.UnorderedTriggerArr.Length < A_Index)
-            FoldInfo.UnorderedTriggerArr.Push(false)
-    }
-}
-
 ;「运行」指令字段兼容，对齐到 1.2 RunData：{SerialStr, Target, Mode, Option}
 ; 版本演变：
 ;   1.1.2: {SerialStr, RunPath, BackPlay}          — 仅 Run(路径)，BackPlay 仅用于 mp3 后台播放
@@ -102,8 +62,9 @@ CompatEnsureRunData(Data) {
         fixed := true
     }
 
-    ; 7) 按 Mode 补齐/清理附属字段（与 RunGui.SaveRunData 一致）
-    if (Data.Mode = 1) {
+    ; 7) 按 Mode 补齐/清理附属字段（与 RunProGui 的保存逻辑一致）
+    mode := CmdEnumZh(Data.Mode, CmdEnumRunModeNames())
+    if (mode == "不等待") {
         if (ObjHasOwnProp(Data, "StdIn")) {
             Data.DeleteProp("StdIn")
             fixed := true
@@ -116,7 +77,7 @@ CompatEnsureRunData(Data) {
             Data.DeleteProp("Encoding")
             fixed := true
         }
-    } else if (Data.Mode = 2) {
+    } else if (mode == "等待+返回值") {
         if (ObjHasOwnProp(Data, "StdIn")) {
             Data.DeleteProp("StdIn")
             fixed := true
@@ -125,14 +86,14 @@ CompatEnsureRunData(Data) {
             Data.SaveNameArr := [""]
             fixed := true
         } else if (Data.SaveNameArr.Length != 1) {
-            Data.SaveNameArr := [Data.SaveNameArr[1]]
+            Data.SaveNameArr := [Data.SaveNameArr.Length ? Data.SaveNameArr[1] : ""]
             fixed := true
         }
         if (ObjHasOwnProp(Data, "Encoding")) {
             Data.DeleteProp("Encoding")
             fixed := true
         }
-    } else if (Data.Mode = 3) {
+    } else if (mode == "不等待+输入") {
         if (!ObjHasOwnProp(Data, "StdIn")) {
             Data.StdIn := ""
             fixed := true
@@ -141,7 +102,7 @@ CompatEnsureRunData(Data) {
             Data.DeleteProp("SaveNameArr")
             fixed := true
         }
-    } else if (Data.Mode = 4) {
+    } else if (mode == "等待+输入输出") {
         if (!ObjHasOwnProp(Data, "StdIn")) {
             Data.StdIn := ""
             fixed := true
@@ -151,7 +112,19 @@ CompatEnsureRunData(Data) {
             fixed := true
         } else {
             while (Data.SaveNameArr.Length < 3) {
-                Data.SaveNameArr.Push(Data.SaveNameArr.Length = 1 ? "StdOut" : "StdErr")
+                Data.SaveNameArr.Push(["", "StdOut", "StdErr"][Data.SaveNameArr.Length + 1])
+                fixed := true
+            }
+        }
+    }
+    if (mode == "不等待+输入" || mode == "等待+输入输出") {
+        if (!Data.HasOwnProp("Encoding") || !IsObject(Data.Encoding)) {
+            Data.Encoding := {}
+            fixed := true
+        }
+        for field in (mode == "不等待+输入" ? ["In"] : ["In", "Out", "Err"]) {
+            if (!Data.Encoding.HasOwnProp(field)) {
+                Data.Encoding.%field% := "UTF-8"
                 fixed := true
             }
         }
@@ -231,46 +204,6 @@ CompatEnsureOutputData(Data) {
     return fixed
 }
 
-; 1.2.2 英文键名 / TimeFile.toml 回退读取
-CompatLegacyCmdSaveStr(cmd, dataFile, numbersOnly, normalizedSerialStr, serialStr) {
-    keys := [normalizedSerialStr, serialStr]
-    if (cmd == "时间")
-        keys.Push("Time" numbersOnly)
-    else if (cmd == "倒计时")
-        keys.Push("CountDown" numbersOnly)
-    else if (cmd == "等待确定")
-        keys.Push("WaitConfirm" numbersOnly, "Wait" numbersOnly)
-    saveStr := ""
-    for k in keys {
-        if (k == "")
-            continue
-        saveStr := CfgRead(dataFile, SettingSection, k, "")
-        if (saveStr != "")
-            return saveStr
-    }
-    if (cmd == "时间") {
-        legacy := StrReplace(dataFile, "TimeDataFile.toml", "TimeFile.toml")
-        if (legacy != dataFile && FileExist(legacy)) {
-            for k in keys {
-                if (k == "")
-                    continue
-                saveStr := CfgRead(legacy, SettingSection, k, "")
-                if (saveStr != "")
-                    return saveStr
-            }
-        }
-    }
-    return ""
-}
-
-; 旧版 TimeFile.toml → TimeDataFile.toml（导入前与配置切换时）
-CompatPromoteLegacyFile(oldPath, newPath) {
-    if (newPath == "" || FileExist(newPath) || !FileExist(oldPath))
-        return false
-    FileCopy(oldPath, newPath)
-    return true
-}
-
 ;旧版本兼容：条目对象化后，确保每个 MacroItem 的运行时状态字段已初始化（迁移期）
 CompatEnsureArrLength(tableItem) {
     static CtlKeys := Map(
@@ -292,11 +225,31 @@ CompatEnsureArrLength(tableItem) {
     }
 }
 
-; 1.2.2 宏操作保存中文类型名；界面继续使用中文，执行/迁移统一解析为表 Symbol。
-CompatMacroTypeSymbol(macroType) {
-    for def in MacroCategoryDefs() {
-        if (def[2] == macroType)
-            return def[1]
+CompatNormalizeTimingData(data) {
+    if (data.HasOwnProp("StampUnit") && data.StampUnit == "ms")
+        return false
+    ; 1.1 用 StartTime 保存日期，定时类型编号与 1.2 的 StartStamp 格式不同。
+    if (data.HasOwnProp("StartTime") && data.HasOwnProp("Type") && IsInteger(data.Type)) {
+        switch Integer(data.Type) {
+            case 2, 3, 4, 5:
+                units := ["小时", "天", "周", "月"]
+                data.CustomUnit := units[Integer(data.Type) - 1]
+                data.CustomInterval := 1
+                data.Type := "周期触发"
+            case 6:
+                data.Type := "软件启动时"
+            case 7:
+                data.Type := "周期触发"
+        }
     }
-    return macroType
+    for part in ["Start", "End"] {
+        stamp := part "Stamp"
+        time := part "Time"
+        if (data.HasOwnProp(stamp) && IsNumber(data.%stamp%))
+            data.%stamp% *= 1000
+        else if (data.HasOwnProp(time) && data.%time% != "")
+            data.%stamp% := TimeStrToStamp(data.%time%)
+    }
+    data.StampUnit := "ms"
+    return true
 }

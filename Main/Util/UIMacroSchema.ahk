@@ -603,54 +603,6 @@ class UIMacroSchema {
     }
 
     ; ------------------------------------------------------------------
-    ; 落盘编码
-    ;
-    ; 配置是 TOML，值用双引号包裹；JSON 正文里全是双引号，直接塞会把文件写坏
-    ; （读回来变成空串，表现就是「保存没用」）。所以统一 Base64 后再存。
-    ; 内存里 MainSoftData.UIPanelCustom 始终保存 Base64，读写两侧都走这两个函数。
-    ; ------------------------------------------------------------------
-    static EncodeStore(plainJson) {
-        if (plainJson == "")
-            return ""
-        return UIMacroSchema._B64Enc(plainJson)
-    }
-
-    static DecodeStore(raw) {
-        s := Trim(String(raw))
-        if (s == "")
-            return ""
-        ; 兼容早期直接存 JSON 的配置
-        if (SubStr(s, 1, 1) == "{")
-            return s
-        try
-            return UIMacroSchema._B64Dec(s)
-        catch
-            return ""
-    }
-
-    static _B64Enc(str) {
-        buf := Buffer(StrPut(str, "UTF-8"))
-        StrPut(str, buf, "UTF-8")
-        size := 0
-        if (!DllCall("crypt32\CryptBinaryToStringW", "Ptr", buf, "UInt", buf.Size - 1, "UInt", 0x1, "Ptr", 0, "UInt*", &size))
-            return ""
-        out := Buffer(size * 2)
-        if (!DllCall("crypt32\CryptBinaryToStringW", "Ptr", buf, "UInt", buf.Size - 1, "UInt", 0x1, "Ptr", out, "UInt*", &size))
-            return ""
-        return StrReplace(StrReplace(StrGet(out, "UTF-16"), "`r", ""), "`n", "")
-    }
-
-    static _B64Dec(b64) {
-        size := 0
-        if (!DllCall("crypt32\CryptStringToBinaryW", "Str", b64, "UInt", 0, "UInt", 0x1, "Ptr", 0, "UInt*", &size, "Ptr", 0, "Ptr", 0))
-            return ""
-        buf := Buffer(size)
-        if (!DllCall("crypt32\CryptStringToBinaryW", "Str", b64, "UInt", 0, "UInt", 0x1, "Ptr", buf, "UInt*", &size, "Ptr", 0, "Ptr", 0))
-            return ""
-        return StrGet(buf, size, "UTF-8")
-    }
-
-    ; ------------------------------------------------------------------
     ; 存储：独立 JSON 文件
     ;
     ; 不再走 MainSettings.toml：TOML 用双引号包值，JSON 正文全是引号，
@@ -659,7 +611,7 @@ class UIMacroSchema {
     ;
     ; 存储键（key）：早期用「折叠框数组下标」，折叠框一重排配置就串组，
     ; 而且串组后不报错（读到的 schema 仍合法，只是属于别的面板）。
-    ; 现在键是折叠框 ID（稳定唯一），下标只保留兼容旧文件的读迁移。
+    ; 现在键是折叠框 ID（稳定唯一）。
     ; ------------------------------------------------------------------
 
     ; 折叠框 → 存储键。空折叠框 / 无 ID → ""
@@ -680,39 +632,6 @@ class UIMacroSchema {
         catch
             name := "default"
         return A_WorkingDir "\Setting\" name "\UIPanelCustom_" String(key) ".json"
-    }
-
-    ; 旧接口：按数组下标取路径（仅为兼容保留，内部转发到 StorePathByKey）
-    static StorePath(foldIndex := 0) {
-        return UIMacroSchema.StorePathByKey(String(foldIndex))
-    }
-
-    ; 旧下标文件 → 新 key 文件的一次性迁移。只做一次，任何失败都静默。
-    static MigrateLegacy(foldIndex, key) {
-        k := String(key)
-        if (k == "" || k == String(foldIndex))
-            return false
-        oldPath := UIMacroSchema.StorePathByKey(String(foldIndex))
-        newPath := UIMacroSchema.StorePathByKey(k)
-        ; 旧 key 若有未落盘改动，先写出去再搬，否则会把内存里的最新内容落在原地
-        UIMacroSchema.FlushStore(String(foldIndex))
-        if (!FileExist(oldPath) || FileExist(newPath))
-            return false
-        content := ""
-        try content := FileRead(oldPath, "UTF-8")
-        catch
-            return false
-        try {
-            FileAppend(content, newPath, "UTF-8")
-            ; 保留旧文件为 .bak：迁移出问题时还能手工找回
-            FileMove(oldPath, oldPath ".bak", 1)
-            ; 新 key 的缓存作废：文件是绕过缓存写出来的，只能按盘读一次
-            UIMacroSchema._StoreForget(k)
-            UIMacroSchema._StoreForget(String(foldIndex))
-            return true
-        } catch {
-            return false
-        }
     }
 
     ; ------------------------------------------------------------------
