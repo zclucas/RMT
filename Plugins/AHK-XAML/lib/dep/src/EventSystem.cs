@@ -38,6 +38,8 @@ public partial class AhkWpfEngine
     private int _ballDragStartWindowX;
     private int _ballDragStartWindowY;
     private bool _ballDragMoved;
+    private string _ballDragControlName;   // 拖动心跳要回发到哪个控件的事件名
+    private int _ballDragBeatAt;           // 上次心跳的 TickCount（限频用）
     // Window 级焦点上报只挂一次（RebindEvents 重复下发也只算一次）
     private bool _focusEditableBound;
     // 窗口级 MouseMove/PreviewMouseMove 是否回传。默认 true 保持既有行为；
@@ -194,6 +196,8 @@ public partial class AhkWpfEngine
             }
 
             // 悬浮球在 WPF UI 线程内捕获鼠标并移动窗口，避免逐帧跨进程回调造成拖动滞后。
+            // 移动/抬起同时挂到窗口上：球是 WS_EX_NOACTIVATE 的透明窗，捕获偶发失败时
+            // 只挂元素的话会完全收不到 MouseMove，表现为「拖不动」。
             if (eventName == "BallDrag")
             {
                 var ball = ctrl as FrameworkElement;
@@ -202,7 +206,12 @@ public partial class AhkWpfEngine
                     ball.PreviewMouseLeftButtonDown += (s, e) => BeginBallDrag(ctrlName, ball, e);
                     ball.PreviewMouseMove += (s, e) => UpdateBallDrag(ball, e);
                     ball.PreviewMouseLeftButtonUp += (s, e) => EndBallDrag(ctrlName, ball, e);
-                    ball.LostMouseCapture += (s, e) => CancelBallDrag(ball);
+                    ball.LostMouseCapture += (s, e) => CancelBallDrag(ctrlName, ball);
+                    if (win != null)
+                    {
+                        win.PreviewMouseMove += (s, e) => UpdateBallDrag(ball, e);
+                        win.PreviewMouseLeftButtonUp += (s, e) => EndBallDrag(ctrlName, ball, e);
+                    }
                 }
                 return;
             }
@@ -350,23 +359,29 @@ public partial class AhkWpfEngine
             return;
 
         _ballDragControl = ball;
+        _ballDragControlName = ctrlName;
+        _ballDragBeatAt = 0;
         _ballDragWindowHwnd = hwnd;
         _ballDragStartMouseX = mouse.x;
         _ballDragStartMouseY = mouse.y;
         _ballDragStartWindowX = window.left;
         _ballDragStartWindowY = window.top;
         _ballDragMoved = false;
-        if (!ball.CaptureMouse())
-        {
-            CancelBallDrag(ball);
-            return;
-        }
+        // 捕获失败不放弃拖动：窗口一直跟着鼠标走，球本身始终在光标下方，
+        // 窗口级的 MouseMove/MouseLeftButtonUp 仍能收到事件（见 BallDrag 绑定处）。
+        try { ball.CaptureMouse(); } catch { }
+        // 通知 AHK「开始拖了」：拖动期间窗口位置由这里逐帧接管，AHK 侧跟随定时器
+        // 必须让开，否则慢速拖动时每 50ms 会被拽回上一次的位置（球看着发黏）。
+        SendToAhkAsync("EVENT|" + winId + "|" + ctrlName + "|BallDrag|"
+            + BridgeUtil.LengthPrefix("down") + "\n");
         e.Handled = true;
     }
 
     private void UpdateBallDrag(FrameworkElement ball, System.Windows.Input.MouseEventArgs e)
     {
-        if (!object.ReferenceEquals(_ballDragControl, ball) || !ball.IsMouseCaptured)
+        // 不能要求 IsMouseCaptured：NOACTIVATE 透明窗的捕获不可靠，一旦没捕获成功
+        // 这里就会静默返回，整只球拖不动。以「是否是当前拖动对象」为准即可。
+        if (!object.ReferenceEquals(_ballDragControl, ball))
             return;
 
         POINT mouse;
@@ -375,6 +390,25 @@ public partial class AhkWpfEngine
 
         int dx = mouse.x - _ballDragStartMouseX;
         int dy = mouse.y - _ballDragStartMouseY;
+
+        // 拖动心跳：窗口位置完全由这里接管，AHK 只需要知道「还在拖，别插手」。
+        // 以前是 AHK 自己用 GetKeyState("LButton") 推断，实测靠不住 —— 拖到一半就被判成
+        // 松手，跟随定时器 50ms 一次把窗口拽回起点，画面就在新旧两点之间来回闪。
+        // 放在拖动阈值判断之前：手指轻动但还没到拖动距离时也要报「我还按着」，
+        // 否则 AHK 那边超时解锁，真开始拖的头一帧会被拽回原位。
+        // 按 60ms 限频，一次拖动十几条短消息，开销可以忽略。
+        if (!string.IsNullOrEmpty(_ballDragControlName))
+        {
+            int now = Environment.TickCount;
+            if (now - _ballDragBeatAt >= 60)
+            {
+                _ballDragBeatAt = now;
+                SendToAhkAsync("EVENT|" + winId + "|" + _ballDragControlName + "|BallDrag|"
+                    + BridgeUtil.LengthPrefix("drag|" + (_ballDragStartWindowX + dx) + ","
+                        + (_ballDragStartWindowY + dy)) + "\n");
+            }
+        }
+
         if (!_ballDragMoved)
         {
             double scaleX = 1;
@@ -426,6 +460,7 @@ public partial class AhkWpfEngine
         }
 
         _ballDragControl = null;
+        _ballDragControlName = null;
         _ballDragWindowHwnd = IntPtr.Zero;
         _ballDragMoved = false;
         if (ball.IsMouseCaptured)
@@ -437,13 +472,23 @@ public partial class AhkWpfEngine
         e.Handled = true;
     }
 
-    private void CancelBallDrag(FrameworkElement ball)
+    // 捕获丢失等异常收尾：告诉 AHK「拖结束了」（位置以当前窗口矩形为准），
+    // 否则拖动标记会一直挂着，跟随定时器永久让开、球就不再跟窗口了。
+    private void CancelBallDrag(string ctrlName, FrameworkElement ball)
     {
         if (!object.ReferenceEquals(_ballDragControl, ball))
             return;
+        IntPtr hwnd = _ballDragWindowHwnd;
+        RECT window;
+        bool haveRect = GetWindowRect(hwnd, out window);
+        bool moved = _ballDragMoved && haveRect;
         _ballDragControl = null;
+        _ballDragControlName = null;
         _ballDragWindowHwnd = IntPtr.Zero;
         _ballDragMoved = false;
+        string gesture = moved ? "move|" + window.left + "," + window.top : "up";
+        SendToAhkAsync("EVENT|" + winId + "|" + ctrlName + "|BallDrag|"
+            + BridgeUtil.LengthPrefix(gesture) + "\n");
     }
 
     public class EventThrottler

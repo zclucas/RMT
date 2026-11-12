@@ -694,6 +694,8 @@ class UIMacroSchema {
             return false
         oldPath := UIMacroSchema.StorePathByKey(String(foldIndex))
         newPath := UIMacroSchema.StorePathByKey(k)
+        ; 旧 key 若有未落盘改动，先写出去再搬，否则会把内存里的最新内容落在原地
+        UIMacroSchema.FlushStore(String(foldIndex))
         if (!FileExist(oldPath) || FileExist(newPath))
             return false
         content := ""
@@ -704,25 +706,101 @@ class UIMacroSchema {
             FileAppend(content, newPath, "UTF-8")
             ; 保留旧文件为 .bak：迁移出问题时还能手工找回
             FileMove(oldPath, oldPath ".bak", 1)
+            ; 新 key 的缓存作废：文件是绕过缓存写出来的，只能按盘读一次
+            UIMacroSchema._StoreForget(k)
+            UIMacroSchema._StoreForget(String(foldIndex))
             return true
         } catch {
             return false
         }
     }
 
-    static ReadStoreByKey(key) {
-        p := UIMacroSchema.StorePathByKey(key)
+    ; ------------------------------------------------------------------
+    ; 面板定义的读取与保存
+    ;
+    ; 读侧缓存：文本按 key 缓存，用「修改时间 + 大小」判活。原来每次读取都是一次
+    ; FileExist + FileRead，而读它的路径全是热路径（按键回填、切页、就绪、写入宏），
+    ; 一个绑定输入框里每敲一个字就要读一次盘。
+    ;
+    ; 写侧延迟：只改内存 + 标脏，由 250ms 的泵按「静默 400ms」或「最长 3s」落盘。
+    ; 业务（设计器 / 设置页）只管保存，不必关心磁盘；需要立刻可见时调 FlushStore()。
+    ; ------------------------------------------------------------------
+    static _storeText := Map()      ; key → 文本（含未落盘的最新内容）
+    static _storeStamp := Map()     ; key → 读取时的文件指纹
+    static _storeDirty := Map()     ; key → true：有未落盘改动
+    static _storeLastWriteAt := 0
+    static _storeFirstDirtyAt := 0
+    static _storePumpOn := false
+    static _storePumpFn := 0
+    static _StoreDebounceMs := 400
+    static _StoreMaxDelayMs := 3000
+
+    static _StoreStampOf(p) {
         if (!FileExist(p))
-            return ""
+            return "0"
         try
-            return FileRead(p, "UTF-8")
+            return FileGetTime(p, "M") "|" FileGetSize(p)
         catch
-            return ""
+            return "0"
     }
 
+    static ReadStoreByKey(key) {
+        k := String(key)
+        ; 有未落盘改动：内存就是事实来源（磁盘还是旧内容）
+        if (UIMacroSchema._storeDirty.Has(k))
+            return UIMacroSchema._storeText.Has(k) ? UIMacroSchema._storeText[k] : ""
+        p := UIMacroSchema.StorePathByKey(k)
+        stamp := UIMacroSchema._StoreStampOf(p)
+        if (stamp != "0" && UIMacroSchema._storeText.Has(k)
+            && UIMacroSchema._storeStamp.Has(k) && UIMacroSchema._storeStamp[k] == stamp)
+            return UIMacroSchema._storeText[k]
+        text := ""
+        if (stamp != "0") {
+            try text := FileRead(p, "UTF-8")
+            catch
+                text := ""
+        }
+        UIMacroSchema._storeText[k] := text
+        UIMacroSchema._storeStamp[k] := stamp
+        return text
+    }
+
+    ; 保存面板定义：只进内存并调度落盘，返回 true 表示已接收
     static WriteStoreByKey(key, json) {
-        p := UIMacroSchema.StorePathByKey(key)
+        k := String(key)
+        UIMacroSchema._storeText[k] := String(json)
+        UIMacroSchema._storeDirty[k] := true
+        UIMacroSchema._StoreSchedule()
+        return true
+    }
+
+    ; 立即把未落盘的定义写盘；key 省略 → 全部。返回写成功的个数。
+    static FlushStore(key := "") {
+        if (!IsObject(UIMacroSchema._storeDirty) || !UIMacroSchema._storeDirty.Count)
+            return 0
+        only := String(key)
+        pending := UIMacroSchema._storeDirty
+        UIMacroSchema._storeDirty := Map()
+        n := 0
+        for k, _ in pending {
+            if (only != "" && k != only) {
+                UIMacroSchema._storeDirty[k] := true
+                continue
+            }
+            if (!UIMacroSchema._storeText.Has(k))
+                continue
+            if (UIMacroSchema._StoreWriteNow(k, UIMacroSchema._storeText[k]))
+                n += 1
+            else
+                UIMacroSchema._storeDirty[k] := true     ; 写失败保留，下一轮重试
+        }
+        return n
+    }
+
+    static _StoreWriteNow(k, json) {
+        p := UIMacroSchema.StorePathByKey(k)
         tmp := p ".tmp"
+        f := ""
         try {
             dir := ""
             SplitPath(p, , &dir)
@@ -732,6 +810,7 @@ class UIMacroSchema {
             f.Write(json)
             f.Close()
             FileMove(tmp, p, 1)
+            UIMacroSchema._storeStamp[k] := UIMacroSchema._StoreStampOf(p)
             return true
         } catch {
             try f.Close()
@@ -740,12 +819,63 @@ class UIMacroSchema {
         }
     }
 
+    static _StoreSchedule() {
+        now := A_TickCount
+        UIMacroSchema._storeLastWriteAt := now
+        if (!UIMacroSchema._storeFirstDirtyAt)
+            UIMacroSchema._storeFirstDirtyAt := now
+        if (UIMacroSchema._storePumpOn)
+            return
+        ; 函数引用只取一次：SetTimer 以对象识别定时器，每次新建对象等于叠加定时器。
+        ; 静态方法不能直接写 `UIMacroSchema._StorePump`（那不是函数对象），必须 ObjBindMethod，
+        ; 而 ObjBindMethod 每次都返回新对象，所以缓存进 static。
+        if (!UIMacroSchema._storePumpFn)
+            UIMacroSchema._storePumpFn := ObjBindMethod(UIMacroSchema, "_StorePump")
+        UIMacroSchema._storePumpOn := true
+        SetTimer(UIMacroSchema._storePumpFn, 250)
+    }
+
+    static _StorePump() {
+        if (!UIMacroSchema._storeDirty.Count) {
+            SetTimer(UIMacroSchema._storePumpFn, 0)
+            UIMacroSchema._storePumpOn := false
+            UIMacroSchema._storeFirstDirtyAt := 0
+            return
+        }
+        now := A_TickCount
+        idle := now - UIMacroSchema._storeLastWriteAt
+        age := UIMacroSchema._storeFirstDirtyAt ? now - UIMacroSchema._storeFirstDirtyAt : 999999
+        if (idle < UIMacroSchema._StoreDebounceMs && age < UIMacroSchema._StoreMaxDelayMs)
+            return
+        UIMacroSchema.FlushStore()
+        if (!UIMacroSchema._storeDirty.Count) {
+            SetTimer(UIMacroSchema._storePumpFn, 0)
+            UIMacroSchema._storePumpOn := false
+            UIMacroSchema._storeFirstDirtyAt := 0
+        }
+    }
+
+    ; 丢弃某 key 的缓存（磁盘被别人改写、文件迁移后使用）
+    static _StoreForget(key) {
+        k := String(key)
+        if (UIMacroSchema._storeText.Has(k))
+            UIMacroSchema._storeText.Delete(k)
+        if (UIMacroSchema._storeStamp.Has(k))
+            UIMacroSchema._storeStamp.Delete(k)
+        if (UIMacroSchema._storeDirty.Has(k))
+            UIMacroSchema._storeDirty.Delete(k)
+    }
+
     static DeleteStoreByKey(key) {
-        p := UIMacroSchema.StorePathByKey(key)
+        k := String(key)
+        ; 先丢缓存与待落盘改动：文件都要删了，再把内存内容写回去就是复活它
+        UIMacroSchema._StoreForget(k)
+        p := UIMacroSchema.StorePathByKey(k)
         if (!FileExist(p))
             return false
         try {
             FileDelete(p)
+            UIMacroSchema._storeStamp[k] := "0"
             return true
         } catch {
             return false
