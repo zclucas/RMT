@@ -253,6 +253,10 @@ class ShareExportUtil {
     }
 
     static BuildPackage(checkedItems, sourceDir, name, owner) {
+        ; 导出会按磁盘上的配置文件打包，而写配置现在是「改内存 + 延迟落盘」，
+        ; 不先刷出去，刚改过的宏会以旧内容进包。
+        try CfgFlushAll()
+        try UIMacroSchema.FlushStore()
         return RmtProgress.Run(GetLang("导出配置"), GetLang("正在检查配置文件")
             , (progress) => this._BuildPackage(checkedItems, sourceDir, name, ObjBindMethod(progress, "Report")), owner)
     }

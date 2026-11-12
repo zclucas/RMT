@@ -195,6 +195,16 @@ class XAMLHost {
         this.asyncCreate := false
         this._createMap := 0
         this._createAtom := 0
+        ; 更新是否走异步通道（共享内存 + 序号 + 回执）。开启后 Update / BatchUpdate /
+        ; SendRaw 入队即返回，不再等引擎把整批属性执行完；只影响「已经就绪」的窗口。
+        ; 单槽不会丢帧：上一帧收到回执才发下一帧。需引擎支持（AsyncReady|2），
+        ; 旧版引擎握手超时后自动退回同步，不会把新格式写进旧解析器。
+        this.asyncUpdate := false
+        this._asyncReady := false
+        this._asyncLegacy := false
+        this._asyncQ := []
+        this._asyncSeq := 0
+        this._asyncInFlight := 0
         ; Shared styles are consumed in release builds too; only the editor is development-only.
         this.Update("Window", "GMUIConfigure", A_WorkingDir "\Setting\CommonUIStyles.xml|" (!A_IsCompiled ? "1" : "0"))
         XAMLHost.GetAppDir()
@@ -285,6 +295,12 @@ class XAMLHost {
             this._collectBuf .= (this._collectBuf == "" ? "" : "`n") payload
             return
         }
+        ; 异步：入队即返回，由 _AsyncPump 按「一帧一帧、收到回执再发」投递。
+        ; 引擎忙时不会再把这期间的主线程一起挂住（原来一次 SendMessage 可以等数百毫秒）。
+        if (this.asyncUpdate && this._asyncReady) {
+            this._AsyncEnqueue(payload)
+            return
+        }
         if (!this.IsDevToolsWindow()) {
             XAMLHost.LogDevTools("OUT", payload)
         }
@@ -359,6 +375,11 @@ class XAMLHost {
                 this._collectBuf .= (this._collectBuf == "" ? "" : "`n") RTrim(payload, "`n")
                 return
             }
+            ; 异步：入队即返回（同 BatchUpdate 的多行格式，引擎一次结算布局）
+            if (this.asyncUpdate && this._asyncReady) {
+                this._AsyncEnqueue(RTrim(payload, "`n"))
+                return
+            }
             if (!this.IsDevToolsWindow()) {
                 XAMLHost.LogDevTools("OUT", payload)
             }
@@ -404,6 +425,11 @@ class XAMLHost {
     SendRaw(text) {
         if (!this.wpfHwnd || text == "")
             return false
+        ; 异步：整段同样是一帧多行指令，排队投递即可
+        if (this.asyncUpdate && this._asyncReady) {
+            this._AsyncEnqueue(text)
+            return true
+        }
         buf := Buffer(StrPut(text, "UTF-8"))
         StrPut(text, buf, "UTF-8")
         cds := Buffer(A_PtrSize * 3)
@@ -459,6 +485,7 @@ class XAMLHost {
     ; 创建或复用本窗口的更新槽，并将槽名告知引擎（该步骤同步，引擎仅保存名称）
     _EnsureAsyncUpdSlot() {
         if (this.HasOwnProp("_asyncUpdPtr") && this._asyncUpdPtr
+            && (this._asyncReady || this._asyncLegacy)
             && this.HasOwnProp("_asyncUpdHwnd") && this._asyncUpdHwnd == this.wpfHwnd)
             return true
         this._ReleaseAsyncUpdSlot()
@@ -477,7 +504,20 @@ class XAMLHost {
         this._asyncUpdMap := hMap
         this._asyncUpdPtr := p
         this._asyncUpdHwnd := this.wpfHwnd
+        this._asyncReady := false
+        this._asyncLegacy := false
         try this.Update("Window", "AsyncAttach", name)
+        ; 等引擎握手（新版回 AsyncReady|2）。旧版不回 → 300ms 后放弃：
+        ; 绝不能把新槽格式写进旧解析器（旧版从 +4 开始读，会把序号当正文），
+        ; 于是退回老格式 + 同步发送；槽本身留着，直接用老格式写的那条路径照旧工作。
+        ; Sleep 会走消息泵，握手事件在这期间就能进来。
+        deadline := A_TickCount + 300
+        while (!this._asyncReady && A_TickCount < deadline)
+            Sleep(2)
+        if (!this._asyncReady) {
+            this._asyncLegacy := true
+            this.asyncUpdate := false
+        }
         return true
     }
 
@@ -491,20 +531,33 @@ class XAMLHost {
             this._asyncUpdMap := 0
         }
         this._asyncUpdHwnd := 0
+        this._asyncReady := false
+        this._asyncLegacy := false
+        this._asyncInFlight := 0
     }
 
-    ; 异步投递已拼装的多行指令。返回 false 表示通道不可用，调用方回退同步发送。
-    UpdateRawAsync(text) {
+    ; 异步投递一帧已拼装的多行指令。返回 false 表示通道不可用，调用方回退同步发送。
+    ; 槽布局：+0 长度 / +4 序号 / +8 正文。序号由调用方给，引擎处理完原样回执。
+    UpdateRawAsync(text, seq := 0) {
         if (!this.wpfHwnd || text == "")
             return false
         if (!this._EnsureAsyncUpdSlot())
             return false
         n := StrPut(text, "UTF-8") - 1
-        if (n <= 0 || n + 4 > XAMLHost._asyncUpdSlotSize)
-            return false
         p := this._asyncUpdPtr
-        StrPut(text, p + 4, "UTF-8")
-        NumPut("UInt", n, p, 0)
+        if (this._asyncLegacy) {
+            ; 旧版引擎：+0 长度 / +4 正文，没有序号也没有回执
+            if (n <= 0 || n + 4 > XAMLHost._asyncUpdSlotSize)
+                return false
+            StrPut(text, p + 4, "UTF-8")
+            NumPut("UInt", n, p, 0)
+        } else {
+            if (n <= 0 || n + 8 > XAMLHost._asyncUpdSlotSize)
+                return false
+            StrPut(text, p + 8, "UTF-8")
+            NumPut("UInt", n, p, 0)
+            NumPut("UInt", seq, p, 4)
+        }
         sent := 0
         try sent := DllCall("user32\PostMessageW", "Ptr", this.wpfHwnd
             , "UInt", XAMLHost.AsyncUpdateMsg(), "Ptr", 0, "Ptr", 0, "Int")
@@ -515,7 +568,113 @@ class XAMLHost {
         payload := this._BuildBatchPayload(updatesArray)
         if (payload == "")
             return false
+        ; 与 Update 共用同一个队列：单槽只有一个写入者，绕过队列就会覆盖在飞的那帧
+        if (this.asyncUpdate && this._asyncReady) {
+            this._AsyncEnqueue(RTrim(payload, "`n"))
+            return true
+        }
         return this.UpdateRawAsync(RTrim(payload, "`n"))
+    }
+
+    ; ---------------------------------------------------------------
+    ; 异步更新队列
+    ;
+    ; 单槽 + 单条唤醒消息，天然不能并发：第二帧写在引擎取走第一帧之前就等于覆盖。
+    ; 所以这里串成「发一帧 → 等引擎回执 → 发下一帧」，期间新到的更新只入队。
+    ; 同一轮里连着的多次 Update 会被合并成一帧（一次布局结算），比逐条同步快得多。
+    ;
+    ; 超时兜底：回执 800ms 未到（引擎正忙 / 消息队列拥堵）就放弃等待继续发，
+    ; 否则一次丢包会把后续更新全卡住。
+    ; ---------------------------------------------------------------
+    _AsyncEnqueue(text) {
+        if (text == "")
+            return true
+        if (!this.HasOwnProp("_asyncQ"))
+            this._asyncQ := []
+        this._asyncQ.Push(text)
+        this._AsyncPump()
+        return true
+    }
+
+    _AsyncPump() {
+        if (this._asyncInFlight)
+            return
+        if (!this.HasOwnProp("_asyncQ") || !this._asyncQ.Length)
+            return
+        parts := this._asyncQ
+        this._asyncQ := []
+        text := ""
+        for part in parts {
+            if (text != "")
+                text .= "`n"
+            text .= part
+        }
+        if (!this.IsDevToolsWindow())
+            XAMLHost.LogDevTools("OUT", text)
+        seq := this._asyncSeq + 1
+        if (!this.UpdateRawAsync(text, seq)) {
+            ; 通道不可用（句柄没了 / 槽被释放）：退回同步，内容不能丢
+            this.asyncUpdate := false
+            this._SendPayloadSync(text)
+            return
+        }
+        this._asyncSeq := seq
+        this._asyncInFlight := seq
+        SetTimer(ObjBindMethod(this, "_AsyncTimeout", seq), -800)
+    }
+
+    _AsyncTimeout(seq) {
+        if (!this._asyncInFlight || this._asyncInFlight != seq)
+            return
+        ; 回执迟迟不来：当作已执行，继续发后续帧，避免队列永久卡死
+        this._asyncInFlight := 0
+        this._AsyncPump()
+    }
+
+    ; 引擎回执（Window|AsyncAck|<seq>）
+    OnAsyncAck(seq) {
+        if (!this.HasOwnProp("_asyncInFlight") || !this._asyncInFlight)
+            return
+        if (this._asyncInFlight != Integer(seq))
+            return
+        this._asyncInFlight := 0
+        this._AsyncPump()
+    }
+
+    ; 引擎握手（Window|AsyncReady|2）
+    OnAsyncReady() {
+        this._asyncReady := true
+    }
+
+    ; 把队列里的更新全部发完并等回执落地。Query 前调用以保证「先改后读」的顺序。
+    FlushAsync() {
+        if (!this.HasOwnProp("_asyncQ"))
+            return
+        ; 略大于单帧回执超时（800ms）：保证至少能等到超时兜底把 inFlight 清掉
+        deadline := A_TickCount + 900
+        while (A_TickCount < deadline) {
+            if (!this._asyncInFlight && !this._asyncQ.Length)
+                return
+            if (!this._asyncInFlight)
+                this._AsyncPump()
+            Sleep(2)
+        }
+    }
+
+    ; 同步投递一帧（异步通道不可用时的兜底，也是 asyncUpdate 关闭时的原路径）
+    _SendPayloadSync(text) {
+        if (!this.wpfHwnd || text == "")
+            return false
+        if (!this.IsDevToolsWindow())
+            XAMLHost.LogDevTools("OUT", text)
+        buf := Buffer(StrPut(text, "UTF-8"))
+        StrPut(text, buf, "UTF-8")
+        cds := Buffer(A_PtrSize * 3)
+        NumPut("Ptr", 0, cds, 0)
+        NumPut("UInt", buf.Size, cds, A_PtrSize)
+        NumPut("Ptr", buf.Ptr, cds, A_PtrSize * 2)
+        DllCall("user32\SendMessageW", "Ptr", this.wpfHwnd, "UInt", 0x004A, "Ptr", 0, "Ptr", cds.Ptr)
+        return true
     }
 
     ; 冲刷建窗期间累积的 _updateQueue。
@@ -559,8 +718,9 @@ class XAMLHost {
         cmds := instance.EndCollect()
         if (cmds == "")
             return
-        if (!instance.UpdateRawAsync(cmds))
-            try instance.SendRaw(cmds)   ; 通道不可用：一次同步发送，仍优于逐条发送
+        ; 统一走 SendRaw：开了 asyncUpdate 就排队（与其它帧共用同一个槽，
+        ; 不能绕过队列直接写，否则会覆盖正在等回执的那一帧）；否则同步一次。
+        try instance.SendRaw(cmds)
     }
 
 
@@ -2831,6 +2991,17 @@ class XAMLHost {
         if (eventName == "WebMessageReceived") {
             try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_Temp "\AhkWebViewDebug.log")
         }
+        ; 异步更新的协议控制帧：不走事件表，也不该出现在回调里
+        if (ctrlName == "Window" && (eventName == "AsyncAck" || eventName == "AsyncReady")) {
+            if !XAMLHost._instances.Has(winId)
+                return 0
+            inst := XAMLHost._instances[winId]
+            if (eventName == "AsyncReady")
+                inst.OnAsyncReady()
+            else
+                inst.OnAsyncAck(parts.Length >= 5 ? parts[5] : 0)
+            return 1
+        }
         if !XAMLHost._instances.Has(winId)
             return 0
 
@@ -3137,6 +3308,8 @@ class XAMLHost {
             return Map()
         if (!this.wpfHwnd)
             return this._QueryQueued(names*)
+        ; 异步更新可能还在队列里：先发完再查，否则读到的是改动前的旧值
+        this.FlushAsync()
 
         ; Build CSV of control names
         csv := ""

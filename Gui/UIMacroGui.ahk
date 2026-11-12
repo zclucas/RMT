@@ -25,10 +25,15 @@ class UIMacroGui {
         this.TableID := tableID
         this.PanelMap := Map()       ; panelKey -> panelInfo
         this.PanelTimers := Map()     ; panelKey -> FuncObj（SetTimer回调引用）
+        this._pendingBallHome := Map()  ; panelKey -> {x, y}：刚收起时面板所在的中央，建球时一次性使用
+        this._pendingPanelPos := Map()  ; foldIndex -> {offX, offY}：球展开成面板时的初始偏移，建窗一次性使用
         this.IsCreating := false
+        this._panelGen := 0             ; 建窗轮询世代号：重建同一 panelKey 时旧轮询失效
         this.MonitorTimer := ""
         this._lastActiveHwnd := 0       ; 上次检测的前台窗口 hwnd
         this._TipTimers := Map()        ; panelKey -> 内联提示定时器
+        this._waitFns := Map()          ; panelKey -> 建窗就绪轮询定时器（每个 key 只准有一个）
+        this._schemaCache := Map()      ; foldKey -> {text, schema}：面板定义解析结果缓存
         ; 用户主动关闭（右键关闭/Alt+F4/热键隐藏）后禁止「激活时默认显示」重建，直到热键再开
         this.UserClosedKeys := Map()
         this.UserClosedFolds := Map()   ; fold 级「用户已关闭」：监控不再自动建回来
@@ -122,18 +127,15 @@ class UIMacroGui {
         return { tableItem: tableItem, fold: fold, items: GetFoldItems(tableItem, fold) }
     }
 
-    ; 创建面板入口（对齐 CreateFloatingPanel L182-265）
-    CreatePanel(foldIndex) {
+    ; 折叠框 → 面板按钮列表（手动面板、自动面板、球展开回面板三处共用同一份构造）。
+    ; 以前这段在 CreatePanel / CreateAutoPanel 里各写一遍，球展开时拿不到列表，
+    ; 按钮面板收成球之后就展不回来（只会建出一块空面板）。
+    _CollectBtnItems(foldIndex) {
         ctx := this._GetFoldContext(foldIndex)
         if (!ctx || ctx.items.Length == 0)
-            return
+            return []
         tableItem := ctx.tableItem
-        fold := ctx.fold
-
-        if (this.PanelMap.Has(foldIndex))
-            this.DestroyPanel(foldIndex)
-
-        btnItems := []
+        items := []
         for i, item in ctx.items {
             if (ParseBoolInt(item.Forbid))
                 continue
@@ -144,7 +146,7 @@ class UIMacroGui {
             displayIcon := iconValue == "" ? "" : iconValue
 
             macroIndex := GetItemIndexInTable(tableItem, item.ID)
-            btnItems.Push({
+            items.Push({
                 name: "Btn_" macroIndex,
                 text: btnText,
                 icon: displayIcon,
@@ -153,6 +155,21 @@ class UIMacroGui {
                 macroId: String(item.ID)
             })
         }
+        return items
+    }
+
+    ; 创建面板入口（对齐 CreateFloatingPanel L182-265）
+    CreatePanel(foldIndex) {
+        ctx := this._GetFoldContext(foldIndex)
+        if (!ctx || ctx.items.Length == 0)
+            return
+        fold := ctx.fold
+
+        if (this.PanelMap.Has(foldIndex))
+            this.DestroyPanel(foldIndex)
+
+        ; 按钮列表统一由 _CollectBtnItems 生成：球展开回面板时也用它，两处口径必须一致
+        btnItems := this._CollectBtnItems(foldIndex)
 
         if (btnItems.Length == 0)
             return
@@ -206,32 +223,13 @@ class UIMacroGui {
         ctx := this._GetFoldContext(foldIndex)
         if (!ctx || ctx.items.Length == 0)
             return
-        tableItem := ctx.tableItem
         fold := ctx.fold
 
         if (this.PanelMap.Has(foldIndex))
             this.DestroyPanel(foldIndex)
 
-        btnItems := []
-        for i, item in ctx.items {
-            if (ParseBoolInt(item.Forbid))
-                continue
-
-            remarkValue := item.Remark
-            iconValue := item.IcoPath
-            btnText := remarkValue == "" ? GetLang("操作") i : remarkValue
-            displayIcon := iconValue == "" ? "" : iconValue
-
-            macroIndex := GetItemIndexInTable(tableItem, item.ID)
-            btnItems.Push({
-                name: "Btn_" macroIndex,
-                text: btnText,
-                icon: displayIcon,
-                state: item.ColorState,
-                macroIndex: macroIndex,
-                macroId: String(item.ID)
-            })
-        }
+        ; 按钮列表统一由 _CollectBtnItems 生成：球展开回面板时也用它，两处口径必须一致
+        btnItems := this._CollectBtnItems(foldIndex)
 
         if (btnItems.Length == 0)
             return
@@ -271,7 +269,9 @@ class UIMacroGui {
             return
 
         ; 配置变化检测：按钮尺寸/列数/颜色变化 → 销毁重建
-        if (panelInfo._cfg_BtnHeight != MainSoftData.UIPanelBtnHeight
+        ; 球与按钮配置无关：跳过，否则改个按钮颜色就会把球重建成面板
+        if (!(panelInfo.HasProp("_isBall") && panelInfo._isBall)
+            && (panelInfo._cfg_BtnHeight != MainSoftData.UIPanelBtnHeight
             || panelInfo._cfg_BtnWidth != MainSoftData.UIPanelBtnWidth
             || panelInfo._cfg_Cols != MainSoftData.UIPanelCols
             || panelInfo._cfg_FontSize != MainSoftData.UIPanelFontSize
@@ -279,7 +279,7 @@ class UIMacroGui {
             || panelInfo._cfg_BtnText != MainSoftData.UIPanelBtnText
             || panelInfo._cfg_BgColor != MainSoftData.UIPanelBgColor
             || panelInfo._cfg_TitleBg != MainSoftData.UIPanelTitleBg
-            || panelInfo._cfg_TitleText != MainSoftData.UIPanelTitleText) {
+            || panelInfo._cfg_TitleText != MainSoftData.UIPanelTitleText)) {
             parts := StrSplit(panelKey, "|")
             foldIndex := Integer(parts[1])
             targetHwnd := (parts.Length >= 2) ? Integer(parts[2]) : 0
@@ -305,6 +305,11 @@ class UIMacroGui {
     BuildXAMLPanel(btnItems, foldIndex, targetHwnd, isScreenMode, skipActivate := false, panelKey := "") {
         if (panelKey == "")
             panelKey := foldIndex
+        ; 收起态（悬浮球）优先：按钮面板和自定义面板都能收成球，这里是两种面板共用的入口。
+        ; 以前只有 _BuildCustomPanel 有这道判断，按钮面板点了圆点仍会照空按钮列表建窗，
+        ; 表现就是「点了圆点但什么都没变」。
+        if (this._BallGet(foldIndex))
+            return this._BuildCustomBall(foldIndex, targetHwnd, isScreenMode, skipActivate, panelKey)
         ; 自定义界面优先：该面板在配置里存在合法 schema 时，走独立渲染分支
         customSchema := this._GetCustomSchema(foldIndex)
         if (IsObject(customSchema))
@@ -347,11 +352,40 @@ class UIMacroGui {
         main.Background("{DynamicResource UIPanelBgColor}")
         main.Rows(titleBarH, "*")
 
+        ; 标题栏：标题居中，右上角「收起成球 / 关闭」两个按钮。
+        ; 以前这里是一整条只放标题文字的 Border，于是没有自定义界面的默认面板右上角
+        ; 什么都没有，收球、关闭只能靠热键。现在两种面板共用同一套标题栏。
         titleBar := main.Add("Border").Grid_Row(0).Name("TitleBar").Background("{DynamicResource UIPanelTitleBg}")
             .WindowChrome_IsHitTestVisibleInChrome("True")
-        titleBar.Add("TextBlock").Name("TitleText").Text(foldRemark)
+        tbGrid := titleBar.Add("Grid")
+        tbGrid.Add("TextBlock").Name("TitleText").Text(foldRemark)
             .Foreground("{DynamicResource UIPanelTitleText}").FontSize(11).FontWeight("SemiBold")
             .VerticalAlignment("Center").HorizontalAlignment("Center").Margin("6,0,6,0")
+        ; 两个按钮画成「实色圆点 / 字符 ×」，不走 DynamicResource、也不用图标字体：
+        ; 图标字体回退失败时 E8BB 会渲染成空白，DynamicResource 缺定义时解析成空画刷，
+        ; 两种都会让按钮「明明在、却看不见」。颜色直接取面板标题文字色。
+        tbBtns := tbGrid.Add("StackPanel").Orientation("Horizontal")
+            .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("0,0,4,0")
+        for btnName in ["BtnPanelBall", "BtnPanelClose"] {
+            b := tbBtns.Add("Button").Name(btnName)
+                ; 标题栏属于 WindowChrome 的 caption 区：不声明可命中就点不动
+                .WindowChrome_IsHitTestVisibleInChrome("True")
+                .Width(22).Height(20).MinHeight(20).Margin("2,0,0,0")
+                .Padding("0").Cursor("Hand")
+                .Background("Transparent").BorderThickness("0")
+            try b.InjectResources(UIMacroRenderer.BtnStyle)
+            if (btnName == "BtnPanelBall") {
+                ; 收起 = 悬浮球：直接画一个小圆点
+                b.Add("Border").Width(8).Height(8).CornerRadius("4")
+                    .Background(titleText)
+                    .VerticalAlignment("Center").HorizontalAlignment("Center")
+            } else {
+                b.Add("TextBlock").Name(btnName "Glyph").Text("×")
+                    .FontSize("13").FontWeight("SemiBold").Foreground(titleText)
+                    .VerticalAlignment("Center").HorizontalAlignment("Center")
+                    .Margin("0,0,0,1")
+            }
+        }
 
         body := main.Add("Grid").Grid_Row(1).Name("BodyPanel").Margin("2,1,2,2")
         textMaxW := Max(btnItemW - 8, 24)
@@ -433,25 +467,28 @@ class UIMacroGui {
             ui.OnEvent(item.name, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "_OnBtnClick", item.macroId, panelKey))
         }
         try ui.OnEvent("TitleBar", "PreviewMouseLeftButtonDown", ObjBindMethod(this, "_OnTitleGrab", panelKey))
+        ; 标题栏右上角：收起成球 / 关闭浮窗（与自定义面板同一套回调）
+        try ui.OnEvent("BtnPanelBall", "Click", ObjBindMethod(this, "_OnPanelBallClick", panelKey))
+        try ui.OnEvent("BtnPanelClose", "Click", ObjBindMethod(this, "_OnPanelCloseClick", panelKey))
         try ui.OnEvent("Window", "StateChanged", ObjBindMethod(this, "_OnPanelStateChanged", panelKey))
 
         ; 显示窗口（对齐 floating_panel L254）
+        ; 建窗走异步通道：Show 只把 CREATE 投进共享内存 + PostMessage，立刻返回。
+        ; 同步 Show 要等 daemon 真正建出窗口（实测 200~700ms，最坏 2s），这段时间
+        ; 主线程完全阻塞，热键、跟随定时器、其它浮窗的刷新一起停。
+        ; 句柄回传前 wpfHwnd 为 0，激活与就绪初始化延到 _WaitPanelHwnd 里做。
+        ui.asyncCreate := true
+        ; 更新同样异步：跟随/回填/状态色都在主线程上，同步等引擎执行完等于
+        ; 把这份等待加到每一次刷新上。入队即返回，引擎按帧回执。
+        ui.asyncUpdate := true
         ui.Show()
-
-        ; 等待wpfHwnd就绪（对齐 floating_panel L256-262）
-        loop 20 {
-            if (ui.HasProp("wpfHwnd") && ui.wpfHwnd) {
-                if !skipActivate
-                    WinActivate("ahk_id " ui.wpfHwnd)
-                break
-            }
-            Sleep(50)
-        }
 
         ; 返回面板信息（对齐 floating_panel 全局变量初始化 L207-L211, L251-L252）
         return {
             ui: ui,
-            wpfHwnd: ui.wpfHwnd ? ui.wpfHwnd : 0,
+            wpfHwnd: ui.HasProp("wpfHwnd") ? ui.wpfHwnd : 0,
+            _creating: true,          ; 句柄未回传：CheckAllPanels 不能当「窗口已失效」销毁
+            _skipActivate: skipActivate,
             panelKey: panelKey,
             foldIndex: foldIndex,
             foldID: fold ? fold.ID : "",
@@ -645,41 +682,53 @@ class UIMacroGui {
     }
 
     ; 面板就绪后把宏里的当前值填进控件（只读一次，之后以面板值为准）
+    ; 逐控件 Update 都是一次同步跨进程往返，这里收进收集缓冲，末尾一条 payload 发完，
+    ; 引擎侧对这批失效只结算一次布局。
     _FillBindings(panelKey) {
         info := this._FindPanelInfo(panelKey)
         schema := IsObject(info) ? this._GetCustomSchema(info.foldIndex) : ""
         if (!IsObject(schema) || !IsObject(info) || !IsObject(info.ui))
             return
-        for ctrl in schema.controls {
-            if (!ctrl.HasProp("binding") || !IsObject(ctrl.binding))
-                continue
-            val := ""
-            spec := ""
-            if (String(ctrl.binding.mode) == "data") {
-                got := UIMacroStepBinding.ReadData(ctrl.binding.serial, ctrl.binding.field)
-                if (!got.ok)
+        ui := info.ui
+        cmds := ""
+        ui.BeginCollect()
+        try {
+            for ctrl in schema.controls {
+                if (!ctrl.HasProp("binding") || !IsObject(ctrl.binding))
                     continue
-                val := got.value
-                spec := UIMacroStepBinding.SpecOfData(ctrl.binding.kind, ctrl.binding.field)
-            } else if (String(ctrl.binding.mode) == "skip") {
-                tableItem := this._TableForBinding(ctrl.binding)
-                got := UIMacroStepBinding.ReadSkipDeep(tableItem, ctrl.binding)
-                if (!got.ok)
-                    continue
-                ; 勾选 = 执行（未跳过）
-                val := got.skipped ? "0" : "1"
-                spec := UIMacroStepBinding.SkipSpec()
-            } else {
-                tableItem := this._TableForBinding(ctrl.binding)
-                got := UIMacroStepBinding.ReadParamDeep(tableItem, ctrl.binding)
-                if (!got.ok)
-                    continue
-                val := got.value
-                spec := UIMacroStepBinding.SpecOfBindingDeep(tableItem, ctrl.binding)
+                val := ""
+                spec := ""
+                if (String(ctrl.binding.mode) == "data") {
+                    got := UIMacroStepBinding.ReadData(ctrl.binding.serial, ctrl.binding.field)
+                    if (!got.ok)
+                        continue
+                    val := got.value
+                    spec := UIMacroStepBinding.SpecOfData(ctrl.binding.kind, ctrl.binding.field)
+                } else if (String(ctrl.binding.mode) == "skip") {
+                    tableItem := this._TableForBinding(ctrl.binding)
+                    got := UIMacroStepBinding.ReadSkipDeep(tableItem, ctrl.binding)
+                    if (!got.ok)
+                        continue
+                    ; 勾选 = 执行（未跳过）
+                    val := got.skipped ? "0" : "1"
+                    spec := UIMacroStepBinding.SkipSpec()
+                } else {
+                    tableItem := this._TableForBinding(ctrl.binding)
+                    got := UIMacroStepBinding.ReadParamDeep(tableItem, ctrl.binding)
+                    if (!got.ok)
+                        continue
+                    val := got.value
+                    spec := UIMacroStepBinding.SpecOfBindingDeep(tableItem, ctrl.binding)
+                }
+                ; Edit / CheckBox / ComboBox 三种回填统一走 SetValue
+                UIMacroRenderer.SetValue(ui, ctrl.id, ctrl.type, val, spec)
             }
-            ; Edit / CheckBox / ComboBox 三种回填统一走 SetValue
-            UIMacroRenderer.SetValue(info.ui, ctrl.id, ctrl.type, val, spec)
+        } finally {
+            ; 必须收口：BeginCollect 之后漏掉 EndCollect，后续所有 Update 都会被截留在缓冲里
+            cmds := ui.EndCollect()
         }
+        if (cmds != "")
+            try ui.SendRaw(cmds)
     }
 
     ; 「写入宏」：把内存里的宏改动落盘（复用宏行编辑那条既有保存路径）
@@ -696,6 +745,14 @@ class UIMacroGui {
         touchedMacros := Map()   ; macroId → tableItem（同一条宏只落盘一次）
         touchedData := Map()     ; serial → true（同一序列只落盘一次）
 
+        ; 一次批量取回全部控件的显示值：原来每个绑定控件各发一次同步 Query（还要忙等
+        ; 回执），控件多的面板点一下「写入宏」要排几十趟跨进程往返，界面会顿一下。
+        ; 取不到的控件在下面退回逐控件读取，行为与原来一致。
+        stateAll := Map()
+        try stateAll := info.ui.Query("*")
+        if (!IsObject(stateAll))
+            stateAll := Map()
+
         for ctrl in schema.controls {
             if (!ctrl.HasProp("binding") || !IsObject(ctrl.binding))
                 continue
@@ -711,7 +768,8 @@ class UIMacroGui {
                 : (isSkip ? UIMacroStepBinding.SkipSpec()
                     : UIMacroStepBinding.SpecOfBindingDeep(this._TableForBinding(b), b))
 
-            val := UIMacroRenderer.ReadValue(info.ui, ctrl.id, ctrl.type, spec)
+            pv := UIMacroGui._PanelValueOf(stateAll, ctrl, spec)
+            val := pv.ok ? pv.val : UIMacroRenderer.ReadValue(info.ui, ctrl.id, ctrl.type, spec)
             cres := UIMacroStepBinding.Coerce(spec, val)
             if (!cres.ok) {
                 failed += 1
@@ -808,14 +866,20 @@ class UIMacroGui {
         ; 落盘 1：内联型。只写盘，**不广播**热重载。
         ; 广播会触发 RefreshPanels → HideAllPanels（关掉所有浮窗、清 PanelMap），
         ; 表现就是点一下「写入宏」面板闪一下，而且提示框刚设置就被连窗口一起销毁了。
-        repaintTables := Map()
+        ; 只记「真正改过的宏」所在行：整表重绘等于把没动过的行也逐行下发一遍，
+        ; 行多时点一次「写入宏」就顿一下，而实际需要刷新的通常只有一两行。
+        repaintRows := Map()   ; tableID → Map(itemID → true)
         for snapKey, ent in touchedMacros {
             try {
                 if (!UIMacroStepBinding.SaveContainer(ent.owner))
                     throw Error("容器保存失败")
                 ; 顶层宏落盘后才需要重绘主界面；嵌套容器在数据文件里，主列表不显示它
-                if (IsObject(ent.owner) && ent.owner.type == "item")
-                    repaintTables[String(ent.owner.tableItem.ID)] := true
+                if (IsObject(ent.owner) && ent.owner.type == "item" && IsObject(ent.owner.item)) {
+                    tID := String(ent.owner.tableItem.ID)
+                    if (!repaintRows.Has(tID))
+                        repaintRows[tID] := Map()
+                    repaintRows[tID][String(ent.owner.item.ID)] := true
+                }
                 if (info.HasProp("_macroSnapshot") && IsObject(info._macroSnapshot))
                     info._macroSnapshot.Delete(snapKey)
             } catch {
@@ -825,8 +889,8 @@ class UIMacroGui {
             }
         }
         ; 仅顶层宏会显示在主界面列表中；嵌套容器只需保存数据文件。
-        for tableID, _ in repaintTables
-            this._RepaintMainWindowTable(tableID)
+        for tableID, idSet in repaintRows
+            this._RepaintMainWindowTable(tableID, idSet)
         ; 落盘 2：序列型 → SaveMacroCMDData（既有接口）
         savedData := Map()
         for serial, flag in touchedData {
@@ -872,8 +936,11 @@ class UIMacroGui {
         info := this._FindPanelInfo(panelKey)
         if (!IsObject(info) || !IsObject(info.ui))
             return
-        try info.ui.Update("WriteBackTip", "Text", text)
-        try info.ui.Update("WriteBackTip", "Visibility", "Visible")
+        ; 文本与可见性合成一条：两次同步往返 = 引擎两轮布局结算，点一下能感到顿
+        try info.ui.BatchUpdate([
+            { ControlName: "WriteBackTip", PropertyName: "Text", Value: text },
+            { ControlName: "WriteBackTip", PropertyName: "Visibility", Value: "Visible" }
+        ])
         if (this._TipTimers.Has(panelKey))
             SetTimer(this._TipTimers[panelKey], 0)
         timer := ObjBindMethod(this, "_HideWriteBackTip", panelKey)
@@ -898,8 +965,10 @@ class UIMacroGui {
         return IsObject(resolved) ? resolved.tableItem : ""
     }
 
-    ; 让主界面把某张表的每一行重新画一遍（虚拟列表不会感知 TableInfo 被整体替换）
-    _RepaintMainWindowTable(tableID) {
+    ; 让主界面把某张表的行重新画一遍（虚拟列表不会感知 TableInfo 被整体替换）
+    ; idSet 给出「本次真正改动过的宏 ID」时只刷这些行 —— 每行在非虚拟模式下是十余条
+    ; 同步 IPC，虚拟模式下也各要一条，整表遍历几百行就是一次肉眼可见的停顿。
+    _RepaintMainWindowTable(tableID, idSet := "") {
         if (!IsSet(MyMainWin) || !IsObject(MyMainWin))
             return
         t := GetTableIndexByID(tableID)
@@ -908,69 +977,183 @@ class UIMacroGui {
         tbl := MySoftData.TableInfo[t]
         if (!IsObject(tbl))
             return
+        if (IsObject(idSet)) {
+            if (!idSet.Count)
+                return
+            loop tbl.Items.Length {
+                it := tbl.Items[A_Index]
+                if (IsObject(it) && idSet.Has(String(it.ID)))
+                    try MyMainWin.RefreshItemRow(t, A_Index)
+            }
+            return
+        }
         loop tbl.Items.Length
             try MyMainWin.RefreshItemRow(t, A_Index)
     }
 
-    _OnBoundEdit(panelKey, ctrlId, binding, *) {
+    ; TextChanged 回调：值优先取事件包里的 stateMap —— 引擎 Full 模式已把全部跟踪控件的值
+    ; 随事件一并带回，逐字再补一次同步 Query（还要忙等回执）纯属白付一趟往返。
+    _OnBoundEdit(panelKey, ctrlId, binding, stateMap := "", ctrlName := "", eventName := "") {
         info := this._FindPanelInfo(panelKey)
         if (!IsObject(info) || !IsObject(info.ui))
             return
+        ctrlFullName := UIMacroRenderer.NameOf(ctrlId)
         val := ""
-        try val := info.ui.Query(UIMacroRenderer.NameOf(ctrlId))
-        this._ApplyBoundValue(info, binding, val)
-        this._RefreshDisplayBindings(panelKey)
+        if (IsObject(stateMap) && stateMap.Has(ctrlFullName))
+            val := stateMap[ctrlFullName]
+        else
+            try val := info.ui.Query(ctrlFullName)
+        res := this._ApplyBoundValue(info, binding, val)
+        ; 值没变（光标移动、程序化回填）就不刷显示，省掉一轮无意义下发
+        if (IsObject(res) && res.HasProp("changed") && !res.changed)
+            return
+        this._RefreshDisplayBindings(panelKey, binding)
     }
 
     ; 刷新「只显示」的绑定（TextBlock）：它没有输入，只能跟着别的控件的改动走。
     ; 只碰 TextBlock，避免把用户正在输入的 Edit 内容覆盖掉。
-    _RefreshDisplayBindings(panelKey) {
+    ; srcBinding 非空时只刷同一容器位置的显示控件；结果合并成一条 BatchUpdate，
+    ; 不再逐条同步往返。
+    _RefreshDisplayBindings(panelKey, srcBinding := "") {
         info := this._FindPanelInfo(panelKey)
         schema := IsObject(info) ? this._GetCustomSchema(info.foldIndex) : ""
         if (!IsObject(schema) || !IsObject(info) || !IsObject(info.ui))
             return
+        targets := []
         for ctrl in schema.controls {
             if (ctrl.type != "TextBlock")
                 continue
             if (!ctrl.HasProp("binding") || !IsObject(ctrl.binding))
                 continue
+            targets.Push(ctrl)
+        }
+        if (IsObject(srcBinding) && targets.Length) {
+            filtered := []
+            for ctrl in targets {
+                if (UIMacroGui._TouchSameTarget(srcBinding, ctrl.binding))
+                    filtered.Push(ctrl)
+            }
+            ; 过滤后一个都没命中（绑定形态没覆盖到）→ 退回全刷，宁可多发也不漏刷
+            if (filtered.Length)
+                targets := filtered
+        }
+        updates := []
+        for ctrl in targets {
             b := ctrl.binding
             val := ""
-            spec := ""
             if (String(b.mode) == "data") {
-                spec := UIMacroStepBinding.SpecOfData(b.kind, b.field)
                 cur := UIMacroStepBinding.ReadData(b.serial, b.field)
                 val := cur.ok ? cur.value : ""
             } else {
                 tableItem := this._TableForBinding(b)
                 got := UIMacroStepBinding.ReadParamDeep(tableItem, b)
-                if (got.ok) {
+                if (got.ok)
                     val := got.value
-                    spec := UIMacroStepBinding.SpecOfBindingDeep(tableItem, b)
-                }
             }
-            UIMacroRenderer.SetValue(info.ui, ctrl.id, "TextBlock", val, spec)
+            updates.Push({ ControlName: UIMacroRenderer.NameOf(ctrl.id), PropertyName: "Text", Value: String(val) })
         }
+        if (updates.Length)
+            try info.ui.BatchUpdate(updates)
     }
 
-    ; 下拉框改动：SelectedIndex → options 里的「值」→ 写进宏文本
-    _OnBoundCombo(panelKey, ctrlId, binding, spec := "", *) {
+    ; 把批量查询（Query("*")）里某个控件的显示值，换算成「ReadValue 口径」的值。
+    ; ok=false 表示这批数据里没有它、或无法可靠反查（下拉框显示名重复），调用方退回逐控件读。
+    static _PanelValueOf(stateAll, ctrl, spec) {
+        name := UIMacroRenderer.NameOf(ctrl.id)
+        if (!IsObject(stateAll) || !stateAll.Has(name))
+            return { ok: false, val: "" }
+        raw := String(stateAll[name])
+        t := String(ctrl.HasProp("type") ? ctrl.type : "")
+        if (t == "CheckBox")
+            return { ok: true, val: (raw == "True" || raw == "1") ? 1 : 0 }
+        if (t == "ComboBox") {
+            ; 引擎回报的是选中项的显示文本（ComboBoxItem.Content 即 options[?][2]）
+            if (!IsObject(spec) || String(spec.type) != "enum"
+                || !spec.HasProp("options") || !IsObject(spec.options))
+                return { ok: false, val: "" }
+            if (raw == "")
+                return { ok: true, val: "" }
+            hitIdx := -1, dup := false, i := 0
+            for pair in spec.options {
+                if (String(pair[2]) == raw) {
+                    if (hitIdx >= 0) {
+                        dup := true
+                        break
+                    }
+                    hitIdx := i
+                }
+                i += 1
+            }
+            if (hitIdx < 0 || dup)
+                return { ok: false, val: "" }
+            opts := spec.options
+            return { ok: true, val: String(opts[hitIdx + 1][1]) }
+        }
+        return { ok: true, val: raw }
+    }
+
+    ; 两个绑定是否指向同一容器位置：同一序列的字段，或同一宏的同一步（含嵌套分支路径）
+    static _TouchSameTarget(a, b) {
+        if (!IsObject(a) || !IsObject(b))
+            return false
+        am := a.HasProp("mode") ? String(a.mode) : ""
+        bm := b.HasProp("mode") ? String(b.mode) : ""
+        if (am == "data" || bm == "data") {
+            if (am != "data" || bm != "data")
+                return false
+            return String(a.HasProp("serial") ? a.serial : "") == String(b.HasProp("serial") ? b.serial : "")
+        }
+        if (String(a.HasProp("macroId") ? a.macroId : "") != String(b.HasProp("macroId") ? b.macroId : ""))
+            return false
+        if (String(a.HasProp("step") ? a.step : "") != String(b.HasProp("step") ? b.step : ""))
+            return false
+        return UIMacroStepBinding.HopsKey(a) == UIMacroStepBinding.HopsKey(b)
+    }
+
+    ; 下拉框改动：选中项 → options 里的「值」→ 写进宏文本
+    ; 事件包默认 Full 模式已带回控件的当前值（不可编辑 ComboBox 即选中项文本），
+    ; 能对上就直接用；对不上（空选中、可编辑下拉被手输）才回退一次同步 Query。
+    _OnBoundCombo(panelKey, ctrlId, binding, spec := "", stateMap := "", ctrlName := "", *) {
         info := this._FindPanelInfo(panelKey)
-        if (!IsObject(info) || !IsObject(info.ui))
+        if (!IsObject(info))
+            return
+        if (!IsObject(spec) || !spec.HasProp("options") || !IsObject(spec.options))
+            return
+        name := UIMacroRenderer.NameOf(ctrlId)
+        if (IsObject(stateMap) && stateMap.Has(name)) {
+            selText := String(stateMap[name])
+            ; 显示文本唯一才敢按文本反查值（options 允许两条不同值共用一个显示名）
+            hitIdx := -1, dup := false, i := 0
+            for pair in spec.options {
+                if (String(pair[2]) == selText) {
+                    if (hitIdx >= 0) {
+                        dup := true
+                        break
+                    }
+                    hitIdx := i
+                }
+                i += 1
+            }
+            if (hitIdx >= 0 && !dup) {
+                opts := spec.options
+                this._ApplyBoundValue(info, binding, String(opts[hitIdx + 1][1]))
+                this._RefreshDisplayBindings(panelKey, binding)
+                return
+            }
+        }
+        if (!IsObject(info.ui))
             return
         idx := -1
-        try idx := Integer(info.ui.Query(UIMacroRenderer.NameOf(ctrlId) ">SelectedIndex"))
+        try idx := Integer(info.ui.Query(name ">SelectedIndex"))
         if (idx < 0) {
             this._ApplyBoundValue(info, binding, "")
             return
         }
-        if (!IsObject(spec) || !spec.HasProp("options") || !IsObject(spec.options))
-            return
         i := 0
         for pair in spec.options {
             if (i == idx) {
                 this._ApplyBoundValue(info, binding, String(pair[1]))
-                this._RefreshDisplayBindings(panelKey)
+                this._RefreshDisplayBindings(panelKey, binding)
                 return
             }
             i += 1
@@ -982,7 +1165,7 @@ class UIMacroGui {
         if (!IsObject(info))
             return
         this._ApplyBoundValue(info, binding, checked ? "1" : "0")
-        this._RefreshDisplayBindings(panelKey)
+        this._RefreshDisplayBindings(panelKey, binding)
     }
 
     ; ------------------------------------------------------------------
@@ -1011,6 +1194,15 @@ class UIMacroGui {
             raw := UIMacroSchema.DecodeStore(MainSoftData.UIPanelCustom)
         if (Trim(String(raw)) == "")
             return ""
+        ; 解析结果按「foldKey + 原文」缓存：文本没变就不重复 Parse/Validate/Migrate。
+        ; 读文本这一层已由 UIMacroSchema 的内存缓存接住，这里是第二层（JSON 解析 + 校验 +
+        ; 绑定类型迁移）。按键回填、切页、就绪全部走这里，一次不回填就是十几次解析。
+        ; schema 在调用方只读（渲染 / 取值 / 写入宏），可以放心共享同一份对象。
+        if (IsObject(this._schemaCache) && this._schemaCache.Has(foldKey)) {
+            hit := this._schemaCache[foldKey]
+            if (IsObject(hit) && IsObject(hit.schema) && hit.text == raw)
+                return hit.schema
+        }
         ; 单面板文件里直接就是 schema；旧格式可能包了一层 {foldIndex: schema}
         ; 两条路径统一：Parse 之后必须过 Validate，否则 0 控件 / 越界的损坏文件
         ; 会被直接拿去渲染（渲染出一堆错位控件，比降级回自动模式更难排查）。
@@ -1021,7 +1213,10 @@ class UIMacroGui {
                 return ""
             ; 绑定控件类型迁移：枚举字段的旧输入框 → 下拉框等。
             ; 这是所有消费方的唯一咽喉，迁这里才能保证渲染出来就不是输入框。
-            return UIMacroStepBinding.MigrateBindingTypes(parsed, tableItem)
+            result := UIMacroStepBinding.MigrateBindingTypes(parsed, tableItem)
+            if (IsObject(result) && IsObject(this._schemaCache))
+                this._schemaCache[foldKey] := { text: raw, schema: result }
+            return result
         }
         try obj := JSON.parse(String(raw), , false)
         catch
@@ -1083,30 +1278,59 @@ class UIMacroGui {
         if (!IsObject(info))
             return
         foldIndex := info.foldIndex
+        ; 清掉上一次没被建窗消费掉的残留偏移，避免「这次打开突然出现在上次球的位置」
+        if (this._pendingPanelPos.Has(foldIndex))
+            this._pendingPanelPos.Delete(foldIndex)
         targetHwnd := 0
         isScreen := true
         info._keepEdits := true
         targetHwnd := info.targetHwnd
         isScreen := info.isScreenMode
-        ; 收起前把面板当前真实位置记进「面板」存储，展开回来仍停在原处。
+        ; 面板 → 球：球出现在面板当前位置的中央。两种状态占同一处，视觉上就是「缩小」。
+        ; 这个位置只在建球时用一次、不落盘：建球时会被折算成跟随偏移，之后照常跟窗口走。
+        if (on && info.wpfHwnd && !info.HasProp("_isBall")) {
+            home := this._CenteredBallPos(info.wpfHwnd)
+            if (IsObject(home))
+                this._pendingBallHome[panelKey] := home
+        }
+        ; 收起前只记「用户真拖过」的位置（与 × 关闭、热键隐藏同口径）。
+        ; 跟随模式下绝不能记：UIPanelPos 一旦有记录，FollowSinglePanel 会认定用户
+        ; 手动摆过而永久停止跟随 —— 收成球再展开，面板就再也不跟目标窗口了。
+        ; 没拖过却残留了记录（旧版本在这里无条件写过）时顺手清掉，让跟随恢复。
         if (info.wpfHwnd && !info.HasProp("_isBall")) {
-            px := 0, py := 0
-            try WinGetPos(&px, &py, , , "ahk_id " info.wpfHwnd)
-            if (px != 0 || py != 0)
-                this._PosSave("UIPanelPos", foldIndex, px, py, targetHwnd)
+            if (info.HasProp("_manualPos") && info._manualPos) {
+                px := 0, py := 0
+                try WinGetPos(&px, &py, , , "ahk_id " info.wpfHwnd)
+                if (px != 0 || py != 0)
+                    this._PosSave("UIPanelPos", foldIndex, px, py, targetHwnd)
+            } else if ((info.HasProp("posMode") ? info.posMode : 0) != 1) {
+                ; 跟随模式下这条记忆本来就不参与定位，清掉以免下次又被误当成手动位置
+                try this._PosForget("UIPanelPos", foldIndex)
+            }
+        }
+        ; 展开成面板前确认内容还在：自定义面板要有 schema，按钮面板要有按钮。
+        ; 两者都拿不到时保持球态 —— 否则建出来的是一块空面板，球没了、面板也是空的，
+        ; 看起来就是「点了球之后什么都打不开」。这种情况别把唯一的入口换掉。
+        if (!on && !IsObject(this._GetCustomSchema(foldIndex)) && this._CollectBtnItems(foldIndex).Length == 0) {
+            this._BallSet(foldIndex, true)
+            return
         }
         this._BallSet(foldIndex, on)
         this.DestroyPanel(panelKey)
+        ; 球 → 面板：把球当前位置折算成面板偏移，紧接着的建窗会用它（就地放大）
+        if (!on)
+            this._QueuePanelPosFromBall(foldIndex, info)
         ; 不能走 CreatePanel：它要求「目标窗口必须在前台」，而切换瞬间前台是面板自己，
         ; 会被直接拦掉，表现为「点了最小化但屏幕上什么都没有」。
         this.IsCreating := true
         try {
-            pi := this.BuildXAMLPanel([], foldIndex, targetHwnd, isScreen, true, panelKey)
+            ; 按钮列表在这里重新收集：自定义面板走 schema 分支会忽略它，按钮面板靠它建格子
+            pi := this.BuildXAMLPanel(this._CollectBtnItems(foldIndex), foldIndex, targetHwnd, isScreen, true, panelKey)
             if (IsObject(pi)) {
                 this.PanelMap.Set(panelKey, pi)
-                ; 球不需要等待就绪；展开成面板时才走完整就绪流程
-                if (!on)
-                    this.WaitForPanelReady(panelKey)
+                ; 建窗一律异步，两种形态都要轮询句柄：球只补一次精确对齐后返回，
+                ; 展开成面板才走完整就绪流程（定位、跟随、回填）
+                this.WaitForPanelReady(panelKey)
             }
         } finally {
             this.IsCreating := false
@@ -1224,10 +1448,16 @@ class UIMacroGui {
         if (panelKey == "")
             panelKey := foldIndex
         size := 56
+        ; 颜色写成实色而不是 DynamicResource：球的窗口不注入主题资源时，Border 的
+        ; Background 会解析成空。空 Background 的 Border 不参与命中测试 —— 鼠标事件
+        ; 落到外层 Grid 上，BallView 的点击/拖动回调一次都不会触发（表现为球点不动、
+        ; 拖不动，但窗口本身还看得见）。
+        ballBg := MainSoftData.UIPanelTitleBg
+        ballFg := MainSoftData.UIPanelTitleText
         main := XAML_Generator("Grid").Background("Transparent")
         ball := main.Add("Border").Name("BallView").Width(size).Height(size)
             .CornerRadius(String(size // 2))
-            .Background("{DynamicResource UIPanelTitleBg}")
+            .Background(ballBg)
             .HorizontalAlignment("Center").VerticalAlignment("Center")
             .Cursor("Hand")
         iconPath := A_ScriptDir "\Images\Soft\rabit.ico"
@@ -1236,7 +1466,7 @@ class UIMacroGui {
                 .Width(32).Height(32).HorizontalAlignment("Center").VerticalAlignment("Center")
         } else {
             ball.Add("TextBlock").Name("BallText").Text("RMT").FontSize("13")
-                .Foreground("{DynamicResource UIPanelTitleText}")
+                .Foreground(ballFg)
                 .HorizontalAlignment("Center").VerticalAlignment("Center")
         }
 
@@ -1244,48 +1474,90 @@ class UIMacroGui {
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
         ; 注意不要设 Opacity="0"：面板那套流程会再改回 1，球这边没有这段流程，
         ; 设了就会「窗口存在但完全透明」，表现为点了最小化什么都没出现。
+        ; Tag="BallNoActivate"：引擎在 EnsureHandle 之后、Show 之前按这个标记直接打上
+        ; WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW（见 FirstFrame.cs）。只在 AHK 侧事后补样式
+        ; 是不够的 —— 句柄回传要几十到几百毫秒，而收球后用户第一件事往往就是去点它，
+        ; 这个空档里窗口还是「可激活」的，一点就把当前正在输入的窗口顶掉。
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"'
-            , 'Title="RMT" ShowInTaskbar="False" Width="' size '" Height="' size '"')
+            , 'Title="RMT" ShowInTaskbar="False" Tag="BallNoActivate" Width="' size '" Height="' size '"')
         ; 圆球需要真透明窗口；而 WindowChrome 与 AllowsTransparency 不能共存，
         ; 两者同时存在会导致窗口不渲染——所以把 chrome 整段去掉。
         this.ui.xaml := RegExReplace(this.ui.xaml, "s)<WindowChrome\.WindowChrome>.*?</WindowChrome\.WindowChrome>", "")
         ; 球是固定尺寸，禁掉可调整边框
         this.ui.xaml := StrReplace(this.ui.xaml, 'ResizeMode="%ResizeMode%"', 'ResizeMode="NoResize"')
-        this.ui.xaml := StrReplace(this.ui.xaml, 'AllowsTransparency="False"', 'AllowsTransparency="True"')
+        ; ShowActivated="False"：建窗不上前台，否则球一出现就把用户正在输入的窗口顶掉。
+        ; 真正的「不激活」靠根上的 Tag="BallNoActivate"（引擎建句柄时打 WS_EX_NOACTIVATE），
+        ; 这里只是让首帧 Show 本身也不上前台；句柄回传后 _ApplyBallWindowStyle 再补一次兜底。
+        this.ui.xaml := StrReplace(this.ui.xaml, 'AllowsTransparency="False"'
+            , 'AllowsTransparency="True" ShowActivated="False" Focusable="False"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"'
             , 'FontFamily="' MainSoftData.FontType '"')
-        this.ui.xaml := StrReplace(this.ui.xaml, "%resources%", "")
+        ; 和面板同口径注入面板配色：球的 Border 用实色，但 _ApplyBallWindowStyle、
+        ; 主题刷新等路径仍会下发 UIPanel* 资源名，缺定义时 DynamicResource 会解析成空。
+        this.ui.xaml := StrReplace(this.ui.xaml, "%resources%"
+            , '<SolidColorBrush x:Key="UIPanelTitleBg" Color="' ballBg '"/>'
+            . '<SolidColorBrush x:Key="UIPanelTitleText" Color="' ballFg '"/>')
         this.ui.xaml := StrReplace(this.ui.xaml, "%components%", "")
 
         this.ui.OnEvent("BallView", "BallDrag", ObjBindMethod(this, "_OnBallGesture", panelKey))
 
         ; 建窗前就定好位置：否则窗口会先按 CenterScreen 出现在屏幕中间，
         ; 再被 SetWindowPos 搬走 —— 表现为「球闪一下再跳过去」。
-        ballPos := this._PosGet("UIPanelBallPos", foldIndex, targetHwnd)
-        if (!IsObject(ballPos))
-            ballPos := this._PosGet("UIPanelPos", foldIndex, targetHwnd)
-        if (IsObject(ballPos)) {
-            scaleB := A_ScreenDPI / 96
-            lx := Round(ballPos.x / scaleB)
-            ly := Round(ballPos.y / scaleB)
-            this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"'
-                , 'Left="' lx '" Top="' ly '" WindowStartupLocation="Manual"')
-        }
-
-        try this.ui.Show()
-        loop 40 {
-            if (this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd) {
-                if !skipActivate
-                    WinActivate("ahk_id " this.ui.wpfHwnd)
-                break
+        ; 位置模型和面板完全一样（模块位置设置 + 锚点/偏移），只是把尺寸换成球径：
+        ; 这样球也能跟着目标窗口走，拖动后从新偏移继续跟，和面板行为一致。
+        ctxFold := this._GetFoldContext(foldIndex)
+        fold := IsObject(ctxFold) ? ctxFold.fold : ""
+        mode := 0, anchor := 6, offX := -50, offY := 50
+        this._ReadFoldPos(fold, &mode, &anchor, &offX, &offY)
+        baseLeft := 0, baseTop := 0, contW := A_ScreenWidth, contH := A_ScreenHeight
+        if (!isScreenMode && targetHwnd && mode != 1) {
+            try {
+                trect := this.GetWindowRectCoords(targetHwnd)
+                tw := trect["right"] - trect["left"]
+                th := trect["bottom"] - trect["top"]
+                if (tw > 0 && th > 0) {
+                    contW := tw
+                    contH := th
+                    baseLeft := trect["left"]
+                    baseTop := trect["top"]
+                }
             }
-            Sleep(50)
         }
-        ; 再用物理坐标精确对齐一次（DIP 换算有取整误差，这一步不会造成可见跳动）
-        if (IsObject(ballPos) && this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd) {
-            try DllCall("user32\SetWindowPos", "Ptr", this.ui.wpfHwnd, "Ptr", 0
-                , "Int", ballPos.x, "Int", ballPos.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004)
+        bsp := Round(size * (A_ScreenDPI / 96))
+        ax := 0, ay := 0
+        this._AnchorBase(anchor, bsp, bsp, contW, contH, &ax, &ay)
+        ; 刚收起时用「面板中央」当初始偏移：就地缩小，不跳；之后偏移保持不变继续跟随。
+        pend := this._TakePendingBallHome(panelKey)
+        if (IsObject(pend) && mode != 1) {
+            offX := pend.x - baseLeft - ax
+            offY := pend.y - baseTop - ay
         }
+        wantX := (mode == 1) ? offX : baseLeft + ax + offX
+        wantY := (mode == 1) ? offY : baseTop + ay + offY
+        ballPos := this._ClampBallPos(wantX, wantY, size)
+        ; 夹回屏幕内之后重新折算偏移，保证「偏移 → 位置」永远自洽（否则下一帧会被跟随拉走）
+        if (mode == 1) {
+            offX := ballPos.x
+            offY := ballPos.y
+        } else {
+            offX := ballPos.x - baseLeft - ax
+            offY := ballPos.y - baseTop - ay
+        }
+        scaleB := A_ScreenDPI / 96
+        lx := Round(ballPos.x / scaleB)
+        ly := Round(ballPos.y / scaleB)
+        this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"'
+            , 'Left="' lx '" Top="' ly '" WindowStartupLocation="Manual"')
+
+        ; 建窗异步：同步 Show 要等 daemon 建出窗口（实测 200~700ms，最坏 2s），这期间
+        ; 主线程完全停住，而「最小化成球」是用户会连着点的操作。球的位置上面已写进
+        ; XAML 的 Left/Top（DIP），误差不到 1 像素，物理像素精确对齐挪到句柄回传后做。
+        this.ui.asyncCreate := true
+        this.ui.asyncUpdate := true
+        try this.ui.Show()
+        ; 诊断留痕：一行写完（跨行隐式拼接在 v2 里要靠续行规则，写死一行更稳）
+        traceExtra := "fold=" foldIndex " mode=" mode " anchor=" anchor " off=" offX "," offY " pos=" ballPos.x "," ballPos.y " scr=" (isScreenMode ? 1 : 0) " tgt=" targetHwnd
+        this._BallTrace("ball-build", panelKey, "", traceExtra)
 
         return {
             ui: this.ui,
@@ -1300,6 +1572,11 @@ class UIMacroGui {
             btnItems: [],
             _isCustom: true,
             _isBall: true,
+            ; 句柄回传前 wpfHwnd 是 0：让 200ms 一次的巡检跳过，别当成「用户关窗」销毁
+            _creating: true,
+            ; 精确对齐用的物理坐标（DIP 换算有取整误差），就绪后由 _WaitPanelHwnd 补做
+            _ballPos: ballPos,
+            _skipActivate: skipActivate,
             ; 配置快照：与自动面板同口径，避免「配置变化检测」读到缺字段
             _cfg_BtnHeight: MainSoftData.UIPanelBtnHeight,
             _cfg_BtnWidth: MainSoftData.UIPanelBtnWidth,
@@ -1310,41 +1587,286 @@ class UIMacroGui {
             _cfg_BgColor: MainSoftData.UIPanelBgColor,
             _cfg_TitleBg: MainSoftData.UIPanelTitleBg,
             _cfg_TitleText: MainSoftData.UIPanelTitleText,
-            ; 球态不跟随目标窗口：跟随会把它不停拽回原位，用户拖不走
-            anchorPos: 0,
-            offsetX: 0,
-            offsetY: 0,
+            ; 与面板同一套位置模型：跟随定时器据此逐帧摆位（mode = 1 的绝对坐标不跟随）
+            posMode: mode,
+            anchor: anchor,
+            offsetX: offX,
+            offsetY: offY,
             lastSetX: "",
             lastSetY: "",
-            panelReady: true
+            ; 句柄回传后才置 true：跟随定时器据此跳过还没建出来的窗口
+            panelReady: false
         }
     }
 
-    ; 引擎在 WPF UI 线程内完成拖动；AHK 只处理点击和最终位置。
+    ; 引擎在 WPF UI 线程内完成拖动；AHK 只处理点击和最终落点。
     _OnBallGesture(panelKey, state, *) {
         if (!IsObject(state) || !state.Has("BallDrag"))
             return
         gesture := String(state["BallDrag"])
+        info := this._FindPanelInfo(panelKey)
+        ; 按下：从现在起到松手，窗口位置由引擎逐帧接管，跟随定时器必须让开，
+        ; 否则每 50ms 会把球拽回上一次的位置（慢速拖动时尤其明显，像有黏性）。
+        if (gesture == "down") {
+            if (IsObject(info)) {
+                info._ballDragging := true
+                ; 记时间戳：引擎的 move/up 一旦丢失，靠它超时解锁跟随（见 FollowSinglePanel）
+                info._ballDragAt := A_TickCount
+            }
+            this._BallTrace("gesture", panelKey, info, "down")
+            return
+        }
+        ; 拖动心跳（引擎每 60ms 一条）：窗口位置由引擎逐帧接管，这里只刷新「还在拖」的时间戳。
+        ; 必须放在清 _ballDragging 之前 —— 心跳和结束事件走同一条通道，只是语义不同。
+        if (SubStr(gesture, 1, 5) == "drag|") {
+            if (IsObject(info)) {
+                info._ballDragging := true
+                info._ballDragAt := A_TickCount
+            }
+            return
+        }
+        if (IsObject(info))
+            info._ballDragging := false
+        this._BallTrace("gesture", panelKey, info, gesture)
         if (gesture == "click") {
             this._BallToPanel(panelKey)
             return
         }
-
-        parts := StrSplit(gesture, "|", , 2)
-        if (parts.Length != 2 || parts[1] != "move")
+        ; 异常收尾（捕获丢失）：以当前窗口矩形为落点，别让球弹回原位
+        if (gesture == "up") {
+            if (IsObject(info) && info.wpfHwnd) {
+                px := 0, py := 0
+                try WinGetPos(&px, &py, , , "ahk_id " info.wpfHwnd)
+                if (px != 0 || py != 0)
+                    this._BallAdoptPos(info, px, py)
+            }
             return
-        coords := StrSplit(parts[2], ",", , 2)
-        if (coords.Length != 2 || !IsNumber(coords[1]) || !IsNumber(coords[2]))
+        }
+        ; 拖动松手：引擎已经把窗口拖到落点。和面板拖动同一套处理 —— 把落点换算成
+        ; 「相对目标窗口的偏移」，之后跟随定时器就从这个新偏移继续跟，球停在落点。
+        if (SubStr(gesture, 1, 5) != "move|")
             return
+        if (!IsObject(info))
+            return
+        coords := StrSplit(SubStr(gesture, 6), ",", , 2)
+        if (coords.Length != 2)
+            return
+        x := Trim(coords[1]), y := Trim(coords[2])
+        if (!IsInteger(x) || !IsInteger(y))
+            return
+        this._BallAdoptPos(info, Integer(x), Integer(y))
+    }
 
-        info := this._FindPanelInfo(panelKey)
-        if (IsObject(info))
-            this._PosSave("UIPanelBallPos", info.foldIndex
-                , Integer(coords[1]), Integer(coords[2]), info.targetHwnd)
+    ; 把球摆到 (x, y)（物理像素），并把该位置折算成跟随用的偏移。
+    ; 拖动松手、以及绝对坐标模式下的显式定位都走这里。
+    _BallAdoptPos(info, x, y, size := 56) {
+        if (!IsObject(info))
+            return
+        pos := this._ClampBallPos(x, y, size)
+        mode := info.HasProp("posMode") ? info.posMode : 0
+        if (mode == 1) {
+            info.offsetX := pos.x
+            info.offsetY := pos.y
+        } else {
+            baseLeft := 0, baseTop := 0, contW := A_ScreenWidth, contH := A_ScreenHeight
+            if (!info.isScreenMode && info.targetHwnd) {
+                try {
+                    rect := this.GetWindowRectCoords(info.targetHwnd)
+                    w := rect["right"] - rect["left"]
+                    h := rect["bottom"] - rect["top"]
+                    if (w > 0 && h > 0) {
+                        contW := w
+                        contH := h
+                        baseLeft := rect["left"]
+                        baseTop := rect["top"]
+                    }
+                }
+            }
+            bsp := Round(size * (A_ScreenDPI / 96))
+            ax := 0, ay := 0
+            anchor := info.HasProp("anchor") ? info.anchor : 6
+            this._AnchorBase(anchor, bsp, bsp, contW, contH, &ax, &ay)
+            info.offsetX := pos.x - baseLeft - ax
+            info.offsetY := pos.y - baseTop - ay
+        }
+        info.lastSetX := pos.x
+        info.lastSetY := pos.y
+        info._manualPos := true
+        info._ballPos := pos
+        ; SWP_NOACTIVATE：拖动结束后对齐也不能把焦点抢回去
+        if (info.wpfHwnd)
+            try DllCall("user32\SetWindowPos", "Ptr", info.wpfHwnd, "Ptr", 0
+                , "Int", pos.x, "Int", pos.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004 | 0x0010)
+    }
+
+    ; 悬浮球跟随诊断：只在「同一个 key + tag 的状态内容变了」时写一行，
+    ; 50ms 的跟随定时器不会刷爆日志。只记球（传面板时直接跳过）。
+    ; 文件：Log\UIMacroBall.log，累计 400 行后停写。
+    _BallTrace(tag, panelKey, info := "", extra := "") {
+        static last := Map()
+        static count := 0
+        if (IsObject(info) && !(info.HasProp("_isBall") && info._isBall))
+            return
+        line := ""
+        if (IsObject(info)) {
+            line := "ball=1"
+                . " mode=" (info.HasProp("posMode") ? info.posMode : "?")
+                . " anchor=" (info.HasProp("anchor") ? info.anchor : "?")
+                . " off=" (info.HasProp("offsetX") ? info.offsetX : "?") "," (info.HasProp("offsetY") ? info.offsetY : "?")
+                . " drag=" (info.HasProp("_ballDragging") && info._ballDragging ? 1 : 0)
+                . " ready=" (info.HasProp("panelReady") && info.panelReady ? 1 : 0)
+                . " scr=" (info.HasProp("isScreenMode") && info.isScreenMode ? 1 : 0)
+                . " tgt=" (info.HasProp("targetHwnd") ? info.targetHwnd : 0)
+                . " hwnd=" (info.HasProp("wpfHwnd") ? info.wpfHwnd : 0)
+        }
+        if (extra != "")
+            line .= " " extra
+        ; 焦点诊断：球一旦成为前台窗口，说明「不激活」没生效（样式没打上，或引擎还是旧 dll
+        ; 没重编）。只在真抢到时追加标记，正常情况下这行永远不出现。
+        if (IsObject(info) && info.HasProp("wpfHwnd") && info.wpfHwnd
+            && DllCall("user32\GetForegroundWindow", "Ptr") == info.wpfHwnd)
+            line .= " FOREGROUND"
+        key := String(panelKey) "|" tag
+        if (last.Has(key) && last[key] == line)
+            return
+        last[key] := line
+        if (count >= 2000)
+            return
+        count += 1
+        try FileAppend(FormatTime(A_Now, "HH:mm:ss") " [" tag "] " key " " line "`n"
+            , A_ScriptDir "\Log\UIMacroBall.log")
     }
 
     _BallToPanel(panelKey) {
         this._ToggleBall(panelKey, false)
+    }
+
+    ; 球 → 面板：把球当前位置折算成面板的「跟随偏移」，交给紧接着的这次建窗
+    ; （_PlaceByFold 用它算初始 Left/Top），视觉上就是「就地放大」，不会先闪到默认锚点。
+    _QueuePanelPosFromBall(foldIndex, ballInfo) {
+        if (!IsObject(ballInfo))
+            return
+        if (!(ballInfo.HasProp("_ballPos") && IsObject(ballInfo._ballPos)))
+            return
+        ; 面板尺寸与 _BuildCustomPanel 同口径：宽 = 设计宽 + 10；高 = 标题 30 + 设计高 + 8 + 2
+        pw := 250, ph := 200
+        schema := this._GetCustomSchema(foldIndex)
+        if (IsObject(schema) && schema.HasProp("window") && IsObject(schema.window)) {
+            w := Integer(schema.window.width)
+            h := Integer(schema.window.height)
+            if (w > 0 && h > 0) {
+                pw := w + 10
+                ph := 30 + h + 8 + 2
+            }
+        } else {
+            ; 按钮面板没有 schema：尺寸按按钮网格算（与 BuildXAMLPanel 同口径），
+            ; 否则「从球就地放大」时面板中心会从球心偏出去。
+            n := this._CollectBtnItems(foldIndex).Length
+            if (n > 0) {
+                iw := MainSoftData.UIPanelBtnWidth
+                ih := MainSoftData.UIPanelBtnHeight
+                c := Max(1, Integer(MainSoftData.UIPanelCols))
+                r := Ceil(n / c)
+                pw := c * (iw + 4) + 8
+                ph := 30 + r * ih + (r - 1) * 2 + 6 + 2
+            }
+        }
+        scale := A_ScreenDPI / 96
+        pw := Round(pw * scale)
+        ph := Round(ph * scale)
+        bsp := Round(56 * scale)
+        baseLeft := 0, baseTop := 0, contW := A_ScreenWidth, contH := A_ScreenHeight
+        if (!ballInfo.isScreenMode && ballInfo.targetHwnd) {
+            try {
+                rect := this.GetWindowRectCoords(ballInfo.targetHwnd)
+                w := rect["right"] - rect["left"]
+                h := rect["bottom"] - rect["top"]
+                if (w > 0 && h > 0) {
+                    contW := w
+                    contH := h
+                    baseLeft := rect["left"]
+                    baseTop := rect["top"]
+                }
+            }
+        }
+        ax := 0, ay := 0
+        anchor := ballInfo.HasProp("anchor") ? ballInfo.anchor : 6
+        this._AnchorBase(anchor, pw, ph, contW, contH, &ax, &ay)
+        ; 面板中心对上球心
+        cx := ballInfo._ballPos.x + bsp // 2
+        cy := ballInfo._ballPos.y + bsp // 2
+        this._pendingPanelPos[foldIndex] := {
+            offX: cx - pw // 2 - baseLeft - ax
+            , offY: cy - ph // 2 - baseTop - ay
+        }
+    }
+
+    ; 取某个窗口的矩形，算「球占它正中央」时的物理坐标
+    _CenteredBallPos(hwnd) {
+        try {
+            r := this.GetWindowRectCoords(hwnd)
+            w := r["right"] - r["left"]
+            h := r["bottom"] - r["top"]
+            if (w > 0 && h > 0) {
+                bsp := Round(56 * A_ScreenDPI / 96)
+                return this._ClampBallPos(r["left"] + (w - bsp) // 2
+                    , r["top"] + (h - bsp) // 2)
+            }
+        }
+        return ""
+    }
+
+    ; 球不许跑到屏幕外：桌面上找不到入口，比位置差几像素糟得多。
+    ; 用整个虚拟屏幕（多显示器）兜底，而不是只看主屏。
+    _ClampBallPos(x, y, size := 56) {
+        bsp := Round(size * A_ScreenDPI / 96)
+        vx := DllCall("user32\GetSystemMetrics", "Int", 78, "Int")   ; SM_XVIRTUALSCREEN
+        vy := DllCall("user32\GetSystemMetrics", "Int", 79, "Int")   ; SM_YVIRTUALSCREEN
+        vw := DllCall("user32\GetSystemMetrics", "Int", 76, "Int")   ; SM_CXVIRTUALSCREEN
+        vh := DllCall("user32\GetSystemMetrics", "Int", 77, "Int")   ; SM_CYVIRTUALSCREEN
+        if (vw <= 0 || vh <= 0) {
+            vx := 0, vy := 0, vw := A_ScreenWidth, vh := A_ScreenHeight
+        }
+        return { x: Max(vx, Min(vx + Max(0, vw - bsp), x))
+            , y: Max(vy, Min(vy + Max(0, vh - bsp), y)) }
+    }
+
+    _TakePendingBallHome(panelKey) {
+        if (!this._pendingBallHome.Has(panelKey))
+            return ""
+        home := this._pendingBallHome[panelKey]
+        this._pendingBallHome.Delete(panelKey)
+        return home
+    }
+
+    ; 球的窗口样式：不进任务栏 / Alt+Tab、点击不激活。z 序交给属主（与面板同款）。
+    ;
+    ; 以前球是不带属主的独立 Topmost 窗口，为的是「始终浮在目标窗口上」。代价是它同时
+    ; 浮在了所有窗口之上：目标窗口被遮挡它还在，最小化后它还留在桌面上。现在改成
+    ; 属主 = 目标窗口（见 _WaitPanelHwnd），z 序由系统按「紧贴在属主之上」维护，
+    ; 显隐也跟着属主走 —— 面板怎么表现，球就怎么表现。
+    ; 只有屏幕模式（没有目标窗口、也就没有属主）的球才需要自己 Topmost。
+    ;
+    ; 不抢焦点这件事的主战场在引擎侧：XAML 根上带 Tag="BallNoActivate"，FirstFrame 在
+    ; EnsureHandle 之后、Show 之前就打上 WS_EX_NOACTIVATE（那时系统刚注册完窗口样式，
+    ; 中间没有任何「可激活」的空档）。这里只做兜底 —— 句柄万一被重建、或引擎侧那段
+    ; 异常被吞掉，样式还能补回来。
+    _ApplyBallWindowStyle(info) {
+        if (!IsObject(info) || !info.wpfHwnd || !DllCall("user32\IsWindow", "Ptr", info.wpfHwnd))
+            return
+        hwnd := info.wpfHwnd
+        ex := DllCall("user32\GetWindowLongW", "Ptr", hwnd, "Int", -20, "Int")
+        want := ex | 0x80 | 0x08000000        ; WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+        if (want != ex)
+            try DllCall("user32\SetWindowLongW", "Ptr", hwnd, "Int", -20, "Int", want)
+        owned := (!info.isScreenMode && info.targetHwnd)
+        if (!owned)
+            try WinSetAlwaysOnTop(1, "ahk_id " hwnd)
+        info._topmostDone := true
+        ; 样式是否真的落上了：引擎是旧 dll（Tag 那段没重编）时这里会是 noact=0
+        exNow := DllCall("user32\GetWindowLongW", "Ptr", hwnd, "Int", -20, "Int")
+        this._BallTrace("style", "", info
+            , "noact=" ((exNow & 0x08000000) ? 1 : 0) " tool=" ((exNow & 0x80) ? 1 : 0))
     }
 
     ; 标题栏可命中，双击走这里关闭，不再被系统当成标题栏双击而最大化。
@@ -1498,17 +2020,24 @@ class UIMacroGui {
         info := this._FindPanelInfo(panelKey)
         if (!IsObject(info) || !IsObject(info.ui))
             return
+        ; 逐条 Update 是逐次同步往返：控件多的面板切一页就要几十趟。合并成一条批量下发。
+        updates := []
         for ctrl in schema.controls {
             pg := (ctrl.HasProp("page") ? Integer(ctrl.page) : 1)
-            try info.ui.Update(UIMacroRenderer.NameOf(ctrl.id), "Visibility", pg = cur ? "Visible" : "Collapsed")
+            updates.Push({ ControlName: UIMacroRenderer.NameOf(ctrl.id)
+                , PropertyName: "Visibility", Value: pg = cur ? "Visible" : "Collapsed" })
         }
         ; 当前页码：反白（底色=标题文字色、文字=标题底色），一眼能看出在哪页
         loop pages {
             on := (A_Index == cur)
-            try info.ui.Update("BtnPage" A_Index, "Background", on ? "{DynamicResource UIPanelTitleText}" : "Transparent")
-            try info.ui.Update("PageNum" A_Index, "Foreground", on ? "{DynamicResource UIPanelTitleBg}" : "{DynamicResource UIPanelTitleText}")
-            try info.ui.Update("PageNum" A_Index, "FontWeight", on ? "Bold" : "Normal")
+            updates.Push({ ControlName: "BtnPage" A_Index
+                , PropertyName: "Background", Value: on ? "{DynamicResource UIPanelTitleText}" : "Transparent" })
+            updates.Push({ ControlName: "PageNum" A_Index
+                , PropertyName: "Foreground", Value: on ? "{DynamicResource UIPanelTitleBg}" : "{DynamicResource UIPanelTitleText}" })
+            updates.Push({ ControlName: "PageNum" A_Index
+                , PropertyName: "FontWeight", Value: on ? "Bold" : "Normal" })
         }
+        try info.ui.BatchUpdate(updates)
     }
 
     ; 标题栏「✕」：关闭这个浮窗（记为「用户主动关闭」，避免监控立刻重建）
@@ -1603,24 +2132,28 @@ class UIMacroGui {
 
         tbBtns := tbGrid.Add("StackPanel").Orientation("Horizontal")
             .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("0,0,4,0")
-        for pair in [["BtnPanelBall", Chr(0xE921)], ["BtnPanelClose", Chr(0xE8BB)]] {
-            b := tbBtns.Add("Button").Name(pair[1])
+        ; 两个按钮画成「实色圆点 / 字符 ×」，不走 DynamicResource、也不用图标字体：
+        ; 图标字体在部分机器上回退失败时 E8BB 会渲染成方框或空白，看起来就是「标题栏
+        ; 上没有圆点和 ×」；DynamicResource 在窗口作用域里缺定义时同样会解析成空画刷。
+        ; 颜色直接取面板标题文字色（和标题同一来源），保证任何主题下都看得见。
+        for name in ["BtnPanelBall", "BtnPanelClose"] {
+            b := tbBtns.Add("Button").Name(name)
                 ; 标题栏属于 WindowChrome 的 caption 区：不声明可命中就点不动
                 .WindowChrome_IsHitTestVisibleInChrome("True")
                 .Width(22).Height(20).MinHeight(20).Margin("2,0,0,0")
                 .Padding("0").Cursor("Hand")
                 .Background("Transparent").BorderThickness("0")
             try b.InjectResources(UIMacroRenderer.BtnStyle)
-            if (pair[1] == "BtnPanelBall") {
+            if (name == "BtnPanelBall") {
                 ; 收起 = 悬浮球：直接画一个小圆点，比图标字形的「一横」更表意
                 b.Add("Border").Width(8).Height(8).CornerRadius("4")
-                    .Background("{DynamicResource UIPanelTitleText}")
+                    .Background(titleText)
                     .VerticalAlignment("Center").HorizontalAlignment("Center")
             } else {
-                b.Add("TextBlock").Name(pair[1] "Glyph").Text(pair[2])
-                    .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-                    .FontSize("9").Foreground("{DynamicResource UIPanelTitleText}")
+                b.Add("TextBlock").Name(name "Glyph").Text("×")
+                    .FontSize("13").FontWeight("SemiBold").Foreground(titleText)
                     .VerticalAlignment("Center").HorizontalAlignment("Center")
+                    .Margin("0,0,0,1")
             }
         }
 
@@ -1746,33 +2279,19 @@ class UIMacroGui {
         ; UIPanel* 保留当前浮窗自定义值，不被通用主题颜色覆盖。
         ui._preserveUIPanelColors := true
         try AppThemeUtil.ApplyWinThemeToXaml(ui)
+        ; 建窗异步：Show 只投递不阻塞（同步等 daemon 建窗要 200~700ms，最坏 2s）。
+        ; 分页初值不在这里下发：放到 _WaitPanelHwnd 的就绪分支，和主题刷新错开，
+        ; 也避免首帧先把所有页的控件都画一遍再隐藏。
+        ui.asyncCreate := true
+        ; 自定义面板的刷新全在按键/切页/状态色上，同步 IPC 会直接压在输入手感上
+        ui.asyncUpdate := true
         ui.Show()
-
-        loop 20 {
-            if (ui.HasProp("wpfHwnd") && ui.wpfHwnd) {
-                if !skipActivate
-                    WinActivate("ahk_id " ui.wpfHwnd)
-                break
-            }
-            Sleep(50)
-        }
-
-        ; 分页：初始只显示第 1 页（其余页的元素先隐藏，切页时再显示）
-        if (pages > 1) {
-            this._panelPage[panelKey] := 1
-            for ctrl in schema.controls {
-                pg := (ctrl.HasProp("page") ? Integer(ctrl.page) : 1)
-                if (pg != 1)
-                    try ui.Update(UIMacroRenderer.NameOf(ctrl.id), "Visibility", "Collapsed")
-            }
-            try ui.Update("BtnPage1", "Background", "{DynamicResource UIPanelTitleText}")
-            try ui.Update("PageNum1", "Foreground", "{DynamicResource UIPanelTitleBg}")
-            try ui.Update("PageNum1", "FontWeight", "Bold")
-        }
 
         return {
             ui: ui,
-            wpfHwnd: ui.wpfHwnd ? ui.wpfHwnd : 0,
+            wpfHwnd: ui.HasProp("wpfHwnd") ? ui.wpfHwnd : 0,
+            _creating: true,          ; 句柄未回传：CheckAllPanels 不能当「窗口已失效」销毁
+            _skipActivate: skipActivate,
             panelKey: panelKey,
             foldIndex: foldIndex,
             foldID: fold ? fold.ID : "",
@@ -1803,21 +2322,125 @@ class UIMacroGui {
     }
 
     ; 等待窗口就绪并执行初始化（= floating_panel WaitForHwnd L352-361 + OnPanelReady L363-389）
+    ; 建窗已改异步（见各 Build* 里的 asyncCreate）：这里不再 Sleep 阻塞等句柄，
+    ; 句柄未回传就挂 20ms 轮询，就绪后再补做激活/分页初值/定位/回填。
     WaitForPanelReady(panelKey) {
         panelInfo := this.PanelMap.Has(panelKey) ? this.PanelMap[panelKey] : ""
-        if (!panelInfo)
+        if (!panelInfo || !IsObject(panelInfo.ui))
             return
+        ; 世代号：同一 panelKey 被销毁重建时，上一轮轮询自动失效
+        this._panelGen += 1
+        gen := this._panelGen
+        panelInfo._buildGen := gen
+        panelInfo._buildTick := A_TickCount
+        this._WaitPanelHwnd(panelKey, gen)
+    }
 
-        ; 对齐 WaitForHwnd L352-361：循环等待wpfHwnd
-        loop 50 {
-            if (panelInfo.ui && panelInfo.ui.HasProp("wpfHwnd") && panelInfo.ui.wpfHwnd) {
-                ; 对齐 L355: g_panelReady := true
-                panelInfo.panelReady := true
-                ; 对齐 L356: OnPanelReady()
-                this.OnPanelReady(panelKey)
+    ; 轮询句柄是否回传，就绪后执行原本在 WaitForPanelReady 里同步做完的初始化。
+    _WaitPanelHwnd(panelKey, gen) {
+        panelInfo := this.PanelMap.Has(panelKey) ? this.PanelMap[panelKey] : ""
+        if (!IsObject(panelInfo) || !IsObject(panelInfo.ui)) {
+            this._StopWaitTimer(panelKey)
+            return
+        }
+        if (panelInfo.HasProp("_buildGen") && panelInfo._buildGen != gen) {
+            this._StopWaitTimer(panelKey)
+            return
+        }
+        hwnd := panelInfo.ui.HasProp("wpfHwnd") ? panelInfo.ui.wpfHwnd : 0
+        if (!hwnd) {
+            ; 5 秒还没建出来就别把面板永远挂在 _creating 上，交回 CheckAllPanels 处理
+            if (A_TickCount - panelInfo._buildTick > 5000) {
+                panelInfo._creating := false
+                this._StopWaitTimer(panelKey)
                 return
             }
-            Sleep(50)
+            ; 必须「先停旧的，再起新的」：SetTimer(ObjBindMethod(...)) 每次调用都是一个新的
+            ; 函数对象 = 一个新的定时器，旧的不会自己消失。这里以前是每 20ms 顺手再起一个，
+            ; 句柄回传后那批定时器仍按 20ms 一直跑到进程结束。
+            ; 面板那条分支靠「panelReady 就返回」挡住了，球那条分支没有这道闸 ——
+            ; 于是每个残留回调都会把球搬回建窗时的坐标、重设一次属主与扩展样式，
+            ; 画面就在「旧位置 / 新位置」之间来回闪，而且定时器越攒越多、越闪越快。
+            this._RestartWaitTimer(panelKey, gen)
+            return
+        }
+        this._StopWaitTimer(panelKey)
+
+        panelInfo.wpfHwnd := hwnd
+        panelInfo._creating := false
+        ; 就绪只做一次：与面板分支同口径。球的初始化里有 SetWindowPos(_ballPos) 与
+        ; 属主/样式设置，重复执行就是把球拽回建窗位置。
+        if (panelInfo.HasProp("panelReady") && panelInfo.panelReady)
+            return
+        ; 悬浮球：位置在建窗前已写进 XAML，这里先补一次物理像素精确对齐，再走跟随。
+        if (panelInfo.HasProp("_isBall") && panelInfo._isBall) {
+            ; 属主 = 目标窗口：和面板完全同一套「压在目标窗口上」的机制。
+            ; 不只是 z 序 —— 目标窗口最小化 / 被隐藏时系统会把属主窗口一起收起来，
+            ; 被别的窗口盖住时也随目标窗口一起被盖住。球以前用独立 Topmost 顶在所有人上面，
+            ; 于是最小化后还留在桌面上、被遮挡时也还露着。
+            if (!panelInfo.isScreenMode && panelInfo.targetHwnd)
+                try panelInfo.ui.Update("Window", "NativeOwner", String(panelInfo.targetHwnd))
+            if (IsObject(panelInfo._ballPos))
+                try DllCall("user32\SetWindowPos", "Ptr", hwnd, "Ptr", 0
+                    , "Int", panelInfo._ballPos.x, "Int", panelInfo._ballPos.y, "Int", 0, "Int", 0
+                    , "UInt", 0x0001 | 0x0004 | 0x0010)   ; + SWP_NOACTIVATE：定位不抢焦点
+            ; 球不占任务栏 / 不进 Alt+Tab、点击不激活
+            this._ApplyBallWindowStyle(panelInfo)
+            if (!panelInfo.isScreenMode && panelInfo.targetHwnd)
+                ; 属主刚设上，抬到属主窗口正上方（不移动、不改大小、不抢焦点）
+                try DllCall("user32\SetWindowPos", "Ptr", hwnd, "Ptr", 0
+                    , "Int", 0, "Int", 0, "Int", 0, "Int", 0
+                    , "UInt", 0x0001 | 0x0002 | 0x0010)
+            panelInfo.panelReady := true
+            this._BallTrace("ball-ready", panelKey, panelInfo)
+            ; 和面板一样跟随目标窗口：同一条 50ms 跟随定时器，只是尺寸换成球径
+            this.FollowSinglePanel(panelKey)
+            this.StartFollowTimer(panelKey)
+            return
+        }
+        ; 已经就绪过就别重跑（重复调 WaitForPanelReady 会重启跟随定时器、重填绑定）
+        if (panelInfo.HasProp("panelReady") && panelInfo.panelReady)
+            return
+        if (!(panelInfo.HasProp("_skipActivate") && panelInfo._skipActivate)) {
+            ; 建窗改异步后，这段激活比原来晚了一两百毫秒：期间用户可能已经切走。
+            ; 目标窗口不再是前台就别抢焦点，否则会把人正在操作的窗口顶掉。
+            activate := true
+            if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
+                try activate := (WinGetID("A") == panelInfo.targetHwnd)
+            }
+            if (activate)
+                try WinActivate("ahk_id " hwnd)
+        }
+
+        ; 自定义面板的分页初值：等窗口建出来再下发，一条批量解决；建窗函数里做会撞上
+        ; 主题刷新的首帧，先按「全部页可见」画一遍再隐藏，出现一下抖动。
+        if (panelInfo.HasProp("_pages") && panelInfo._pages > 1) {
+            this._panelPage[panelKey] := 1
+            schema := this._GetCustomSchema(panelInfo.foldIndex)
+            if (IsObject(schema))
+                this._ApplyPanelPage(panelKey, schema, panelInfo._pages, 1)
+        }
+
+        ; 对齐 L355: g_panelReady := true
+        panelInfo.panelReady := true
+        ; 对齐 L356: OnPanelReady()
+        this.OnPanelReady(panelKey)
+    }
+
+    ; 建窗就绪轮询：同一个 panelKey 始终只保留一个定时器。
+    ; 旧写法 SetTimer(ObjBindMethod(...), 20) 在每次回调里重新绑定，AHK 会当成新定时器，
+    ; 旧的继续按 20ms 触发 —— 这是「球来回闪、越闪越快」的根因。
+    _RestartWaitTimer(panelKey, gen) {
+        this._StopWaitTimer(panelKey)
+        cb := ObjBindMethod(this, "_WaitPanelHwnd", panelKey, gen)
+        this._waitFns[panelKey] := cb
+        SetTimer(cb, 20)
+    }
+
+    _StopWaitTimer(panelKey) {
+        if (this._waitFns.Has(panelKey)) {
+            try SetTimer(this._waitFns[panelKey], 0)
+            this._waitFns.Delete(panelKey)
         }
     }
 
@@ -1862,7 +2485,9 @@ class UIMacroGui {
                 , "UInt", 0x0002 | 0x0001 | 0x0004 | 0x0010 | 0x0020)
         }
 
-        ; L387: 立即执行一次跟随
+        ; L387: 立即定位一次。绝对坐标模式按位置记忆摆，其余按锚点摆；
+        ; 之后交给跟随定时器（mode = 1 的闸门会让它保持不动）。
+        this.ApplyPanelPosition(panelInfo)
         this.FollowSinglePanel(panelKey)
 
         ; L388: 启动定时器
@@ -1909,10 +2534,44 @@ class UIMacroGui {
         if (!this.PanelMap.Has(panelKey))
             return
         panelInfo := this.PanelMap[panelKey]
-        ; 用户手动摆过位置 → 不再跟随目标窗口（否则每个 tick 都会被拽回锚点）
-        if (IsObject(this._PosGet("UIPanelPos", panelInfo.foldIndex, panelInfo.targetHwnd)))
+        isBall := (panelInfo.HasProp("_isBall") && panelInfo._isBall)
+        ; 球被按住拖动时，窗口位置由引擎在 WPF 侧逐帧接管；这里插一脚只会把它拽回去。
+        ;
+        ; 判据只看「心跳新鲜度」：引擎每次移动都会发一条 drag|x,y（限频 60ms），收到就刷新
+        ; _ballDragAt。这里曾经补过一条 GetKeyState("LButton","P")，实测每次都把正在进行的
+        ; 拖动判成「已松手」（日志里 down 与 drag-release 同一秒），于是跟随定时器 50ms 一次
+        ; 把球拽回起点、引擎下一帧又拖走 —— 表现为新旧两点之间来回闪。
+        ; 心跳停了 3 秒 = 松手事件丢了或引擎异常，按「已结束」处理，避免永久停摆。
+        if (panelInfo.HasProp("_ballDragging") && panelInfo._ballDragging) {
+            at := panelInfo.HasProp("_ballDragAt") ? panelInfo._ballDragAt : 0
+            if (at && A_TickCount - at < 3000) {
+                this._BallTrace("follow-hold", panelKey, panelInfo)
+                return
+            }
+            ; 解除前以窗口当前矩形为落点折算偏移，否则跟随一恢复就把球弹回拖动前的位置
+            px := 0, py := 0
+            try {
+                if (panelInfo.wpfHwnd && DllCall("user32\IsWindow", "Ptr", panelInfo.wpfHwnd))
+                    WinGetPos(&px, &py, , , "ahk_id " panelInfo.wpfHwnd)
+            } catch {
+            }
+            panelInfo._ballDragging := false
+            ; 只有球才需要把落点折算回偏移（球的位置就等于偏移 + 窗口矩形）；
+            ; 面板有 lastSetX 那套自纠，这里多插一脚反而会改掉它的偏移。
+            if (isBall && (px != 0 || py != 0))
+                this._BallAdoptPos(panelInfo, px, py)
+            this._BallTrace("drag-release", panelKey, panelInfo, "pos=" px "," py)
+        }
+        ; 只有绝对坐标模式（posMode = 1）才用位置记忆锁定，不再跟随。
+        ; 相对锚点模式必须始终跟随：拖动面板产生的偏差，会被下面的 lastSetX 对比
+        ; 吸收进 offsetX（拖动 → 相对偏移改变 → 继续跟随），不需要这道闸门。
+        ; 早先这里对两种模式都判「有记忆就不跟随」，于是收起成球/隐藏时顺手记下的
+        ; 一次位置，就会让面板此后永久停在旧坐标、再也不跟目标窗口。
+        if ((panelInfo.HasProp("posMode") ? panelInfo.posMode : 0) == 1
+            && IsObject(this._PosGet("UIPanelPos", panelInfo.foldIndex, panelInfo.targetHwnd))) {
+            this._BallTrace("skip-abs", panelKey, panelInfo)
             return
-
+        }
         ; L392: if (!g_panelReady) return
         if (!panelInfo.panelReady)
             return
@@ -1935,6 +2594,10 @@ class UIMacroGui {
             this.DestroyPanel(panelKey)
             return
         }
+        ; 目标窗口最小化时 GetWindowRect 给出 -32000 这类哨兵值，照算会把浮窗甩到屏幕外
+        ; （巡检 200ms 之后才隐藏，肉眼能看到它闪一下）。位置保持不动即可。
+        if (DllCall("user32\IsIconic", "Ptr", panelInfo.targetHwnd))
+            return
 
         ; ====== 目标窗口矩形 + 面板尺寸 ======
         rect := this.GetWindowRectCoords(panelInfo.targetHwnd)
@@ -1948,48 +2611,75 @@ class UIMacroGui {
         if (winH <= 0)
             winH := A_ScreenHeight
         if (pw <= 0)
-            pw := 250
+            pw := isBall ? Round(56 * A_ScreenDPI / 96) : 250
         if (ph <= 0)
-            ph := 200
+            ph := isBall ? Round(56 * A_ScreenDPI / 96) : 200
 
         ; 绝对坐标固定在屏幕上。相对坐标跟随目标窗口，锚点随窗口尺寸变化。
+        ;
+        ; 「窗口实际矩形 ≠ 我上次设的坐标」= 有人搬过这个窗口 → 把偏差吸收进偏移。
+        ; 面板和球共用这一条，它也是「拖动」的全部机制：系统拖窗 / 引擎逐帧搬窗时
+        ; AHK 都没有回调，只能事后从矩形反推新偏移。
+        ; 少了它，跟随定时器每 50ms 会按旧偏移把窗口写回去、拖动方下一帧再搬走 ——
+        ; 画面就是「起点和当前点来回闪」。
+        ;
+        ; 但要扣掉「目标窗口自己动了」这一种：那一刻浮窗还没跟上属于正常，若也吸收，
+        ; 一旦某次 SetWindowPos 没落地，偏移就会被改成与旧位置自洽的值，此后每帧都
+        ; 算回同一个坐标 —— 早先的「球永远不跟窗口」正是这么来的。
         mode := panelInfo.HasProp("posMode") ? panelInfo.posMode : 0
-        if (mode == 1) {
-            if (panelInfo.lastSetX != "" && panelInfo.lastSetY != "") {
-                devX := Abs(panelRect["left"] - panelInfo.lastSetX)
-                devY := Abs(panelRect["top"] - panelInfo.lastSetY)
-                if (devX > 3 || devY > 3) {
-                    panelInfo.offsetX := panelRect["left"]
-                    panelInfo.offsetY := panelRect["top"]
-                }
+        anchorX := 0, anchorY := 0
+        anchor := panelInfo.HasProp("anchor") ? panelInfo.anchor : 6
+        this._AnchorBase(anchor, pw, ph, winW, winH, &anchorX, &anchorY)
+        lastWinX := panelInfo.HasProp("lastWinX") ? panelInfo.lastWinX : ""
+        lastWinY := panelInfo.HasProp("lastWinY") ? panelInfo.lastWinY : ""
+        winMoved := (lastWinX != "" && (rect["left"] != lastWinX || rect["top"] != lastWinY))
+        hasLast := (panelInfo.lastSetX != "" && panelInfo.lastSetY != "")
+        if (hasLast && (mode == 1 || !winMoved)
+            && (Abs(panelRect["left"] - panelInfo.lastSetX) > 3
+                || Abs(panelRect["top"] - panelInfo.lastSetY) > 3)) {
+            if (mode == 1) {
+                panelInfo.offsetX := panelRect["left"]
+                panelInfo.offsetY := panelRect["top"]
+            } else {
+                panelInfo.offsetX := panelRect["left"] - rect["left"] - anchorX
+                panelInfo.offsetY := panelRect["top"] - rect["top"] - anchorY
             }
+        }
+        if (mode == 1) {
             newX := panelInfo.offsetX
             newY := panelInfo.offsetY
         } else {
-            anchorX := 0, anchorY := 0
-            anchor := panelInfo.HasProp("anchor") ? panelInfo.anchor : 6
-            this._AnchorBase(anchor, pw, ph, winW, winH, &anchorX, &anchorY)
-            if (panelInfo.lastSetX != "" && panelInfo.lastSetY != "") {
-                devX := Abs(panelRect["left"] - panelInfo.lastSetX)
-                devY := Abs(panelRect["top"] - panelInfo.lastSetY)
-                if (devX > 3 || devY > 3) {
-                    panelInfo.offsetX := panelRect["left"] - rect["left"] - anchorX
-                    panelInfo.offsetY := panelRect["top"] - rect["top"] - anchorY
-                }
-            }
             newX := rect["left"] + anchorX + panelInfo.offsetX
             newY := rect["top"] + anchorY + panelInfo.offsetY
         }
-        ownerHwnd := panelInfo.targetHwnd
+        insertAfter := panelInfo.targetHwnd
+        flags := 0x0001 | 0x0004 | 0x0010 | 0x4000   ; + SWP_ASYNCWINDOWPOS
+        if (isBall) {
+            ; 球几十像素，同步移动的代价可以忽略；跨线程投递（ASYNCWINDOWPOS）在 daemon
+            ; 忙于渲染时会把移动延后落地，看着就是「球跟不上窗口」。同步 + 不传
+            ; hwndInsertAfter（SWP_NOZORDER 本来也不看它，z 序交给属主）。
+            insertAfter := 0
+            flags := 0x0001 | 0x0004 | 0x0010
+        }
         DllCall("user32\SetWindowPos"
             , "Ptr", hwnd
-            , "Ptr", ownerHwnd
+            , "Ptr", insertAfter
             , "Int", newX, "Int", newY
             , "Int", 0, "Int", 0
-            , "UInt", 0x0001 | 0x0004 | 0x0010 | 0x4000)
+            , "UInt", flags)
         ; 记录本次设置的目标位置，供下次回调对比
         panelInfo.lastSetX := newX
         panelInfo.lastSetY := newY
+        ; 同时记下这一帧用的目标窗口矩形：下次判断「偏差是不是因为目标窗口自己移动」用
+        panelInfo.lastWinX := rect["left"]
+        panelInfo.lastWinY := rect["top"]
+        ; 球的每帧落位留痕（内容不变不写）：SetWindowPos 没落地时能在这里一眼看出来
+        if (isBall && A_TickCount - (panelInfo.HasProp("_traceAt") ? panelInfo._traceAt : 0) > 500) {
+            panelInfo._traceAt := A_TickCount
+            act := this.GetWindowRectCoords(hwnd)
+            this._BallTrace("follow-move", panelKey, panelInfo
+                , "want=" newX "," newY " got=" act["left"] "," act["top"] " win=" rect["left"] "," rect["top"])
+        }
     }
 
     ; 切换可见性（严格对齐 floating_panel TogglePanelVisibility L490-513）
@@ -2055,8 +2745,13 @@ class UIMacroGui {
         if (!panelInfo.ui || !panelInfo.wpfHwnd)
             return
 
-        ; 配置变化检测：按钮尺寸/列数/颜色变化时销毁重建
-        if (panelInfo.visible == false  ; 只在从隐藏→显示时检查
+        ; 球和面板是同一个浮窗的两种显示状态：热键只负责打开 / 关闭。
+        ; 球态下关闭就是球消失，再按一次球原样回来，不会被换成面板；
+        ; 形态切换只由标题栏小圆点 / 短按球触发，热键不参与。
+        isBall := (panelInfo.HasProp("_isBall") && panelInfo._isBall)
+
+        ; 配置变化检测：按钮尺寸/列数/颜色变化时销毁重建（球不受按钮配置影响）
+        if (!isBall && panelInfo.visible == false  ; 只在从隐藏→显示时检查
             && (panelInfo._cfg_BtnHeight != MainSoftData.UIPanelBtnHeight
                 || panelInfo._cfg_BtnWidth != MainSoftData.UIPanelBtnWidth
                 || panelInfo._cfg_Cols != MainSoftData.UIPanelCols
@@ -2089,9 +2784,13 @@ class UIMacroGui {
             ; SW_SHOWNA：显示但不抢焦点，保持鼠标下仍是目标窗，下次触发判断更稳定
             DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 8)
             ; 没拖动过：按模块位置重新摆放并继续跟随。拖动过：Apply 会优先用记忆坐标。
-            this._ResetPosFromFold(panelInfo)
-            panelInfo.lastSetX := ""
-            panelInfo.lastSetY := ""
+            ; 球拖动后是「相对目标窗口的偏移」记在 offsetX/offsetY 上，重算回模块默认值
+            ; 会让它跳回原位，所以球被拖过就保留偏移。
+            if (!(isBall && panelInfo.HasProp("_manualPos") && panelInfo._manualPos)) {
+                this._ResetPosFromFold(panelInfo)
+                panelInfo.lastSetX := ""
+                panelInfo.lastSetY := ""
+            }
             this.ApplyPanelPosition(panelInfo)
         } else {
             ; 拖动过才记下屏幕坐标，避免一次隐藏就把相对跟随钉死。
@@ -2154,6 +2853,7 @@ class UIMacroGui {
 
         ; L517: 停止定时器（对齐 SetTimer(FollowTarget, 0)）
         this.StopFollowTimer(panelKey)
+        this._StopWaitTimer(panelKey)
 
         panelInfo := this.PanelMap[panelKey]
         ; 面板要没了：把「只改了内存、没点写入宏」的宏文本还原回去。
@@ -2179,6 +2879,10 @@ class UIMacroGui {
     CheckAllPanels() {
         deadFolds := []
         for panelKey, panelInfo in this.PanelMap {
+            ; 建窗是异步的：句柄回传前 wpfHwnd 还是 0，这不是「窗口已失效」，
+            ; 不跳过的话 200ms 一次的巡检会把刚建的面板当成用户关闭直接销毁。
+            if (panelInfo.HasProp("_creating") && panelInfo._creating)
+                continue
             ; 非屏幕模式面板：目标窗口已关闭则自动销毁
             if (!panelInfo.isScreenMode && panelInfo.targetHwnd
                 && !DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd)) {
@@ -2192,7 +2896,10 @@ class UIMacroGui {
                 continue
             }
 
-            ; 處理目標視窗隱藏/退到後台時，浮窗隱藏；重新顯現時浮窗也重新顯現
+            ; 處理目標視窗隱藏/退到後台時，浮窗隱藏；重新顯現時浮窗也重新顯現。
+            ; 球和面板是同一浮窗的两种状态，这里一视同仁：目标窗口最小化时球跟着收起，
+            ; 恢复时再出来 —— 这正是「跟随窗口」的一半（另一半是位置跟随）。
+            isBallNow := (panelInfo.HasProp("_isBall") && panelInfo._isBall)
             if (!panelInfo.isScreenMode && panelInfo.targetHwnd) {
                 ; 檢查目標視窗是否最小化 (WinGetMinMax 傳回 -1 代表最小化) 或不可見
                 try {
@@ -2214,6 +2921,15 @@ class UIMacroGui {
                 }
             }
 
+            ; 球的 z 序交给属主维护（系统保证紧贴在目标窗口之上），这里不再重复置顶 ——
+            ; 再 Topmost 一次就等于把「被遮挡时跟着一起被挡住」这个行为又破坏掉。
+            ; 只有屏幕模式的球没有属主，才需要常驻最上层，被别的置顶窗挤下去后由这里补回来。
+            if (isBallNow) {
+                if (panelInfo.visible && panelInfo.isScreenMode)
+                    this._EnsureTopmost(panelInfo, panelInfo.wpfHwnd)
+                continue
+            }
+
             if (!panelInfo.isScreenMode)
                 continue
             if (!panelInfo.visible)
@@ -2223,6 +2939,23 @@ class UIMacroGui {
             ; 与 FollowSinglePanel 共用同一套闸门（只设一次 + 菜单期间暂停 + 超时自愈）
             this._EnsureTopmost(panelInfo, hwnd)
         }
+        ; 跟随定时器自愈：定时器是按 panelKey 存放的，收球 / 展开 / 重建时只要有一次
+        ; StartFollowTimer 没跑到（旧窗口的 Closed 事件把新定时器停掉、回调中途异常、
+        ; 建窗回调还没执行到尾部），对应浮窗就永久停在原地且没有任何恢复路径。
+        ; 巡检每 200ms 补一次，缺了就立刻补上；正常情况下只是几次 Map 查询。
+        for panelKey, panelInfo in this.PanelMap {
+            if (!panelInfo.visible || panelInfo.isScreenMode)
+                continue
+            if (!(panelInfo.HasProp("panelReady") && panelInfo.panelReady))
+                continue
+            ; 判据用浮窗自身的 _followOn（不是 PanelTimers 的键）：两套 Map 万一键类型
+            ; 不一致，「没有定时器」会永远成立，就成了每 200ms 造一个 50ms 定时器。
+            if (panelInfo.HasProp("_followOn") && panelInfo._followOn)
+                continue
+            this._BallTrace("timer-revive", panelKey, panelInfo)
+            this.StartFollowTimer(panelKey)
+        }
+
         ; 清理已关闭的面板残留条目（DestroyPanel 会关闭窗口 + 停止定时器）
         for panelKey in deadFolds {
             this.DestroyPanel(panelKey)
@@ -2294,6 +3027,9 @@ class UIMacroGui {
         cb := this.FollowSinglePanel.Bind(this, panelKey)
         this.PanelTimers[panelKey] := cb
         SetTimer(cb, 50)
+        if (this.PanelMap.Has(panelKey))
+            this.PanelMap[panelKey]._followOn := true
+        this._BallTrace("timer-start", panelKey, this.PanelMap.Has(panelKey) ? this.PanelMap[panelKey] : "")
     }
 
     ; 停止跟随定时器（对齐 floating_panel L517: SetTimer(FollowTarget, 0)）
@@ -2304,6 +3040,9 @@ class UIMacroGui {
         if (cb)
             SetTimer(cb, 0)
         this.PanelTimers.Delete(panelKey)
+        if (this.PanelMap.Has(panelKey))
+            this.PanelMap[panelKey]._followOn := false
+        this._BallTrace("timer-stop", panelKey, this.PanelMap.Has(panelKey) ? this.PanelMap[panelKey] : "")
     }
 
     ; ========== 宏执行逻辑 ==========
@@ -2356,34 +3095,19 @@ class UIMacroGui {
             for item in panelInfo.btnItems {
                 if (item.macroIndex == macroIndex) {
                     stateName := item.name "_State"
-                    try {
-                        if (state == UIMacroGui.STATE_DEFAULT) {
-                            panelInfo.ui.Update(stateName, "Visibility", "Collapsed")
-                        } else if (MacroStateColors.Has(state)) {
-                            color := MacroStateColors[state]
-                            panelInfo.ui.Update(stateName, "Visibility", "Visible")
-                            panelInfo.ui.Update(stateName, "Fill", color)
-                        }
+                    updates := []
+                    if (state == UIMacroGui.STATE_DEFAULT)
+                        updates.Push({ ControlName: stateName, PropertyName: "Visibility", Value: "Collapsed" })
+                    else if (MacroStateColors.Has(state)) {
+                        updates.Push({ ControlName: stateName, PropertyName: "Visibility", Value: "Visible" })
+                        updates.Push({ ControlName: stateName, PropertyName: "Fill", Value: MacroStateColors[state] })
                     }
-                    ; ui.Update() 后恢复位置（对齐 MovePanel L171-179）
-                    if (!panelInfo.isScreenMode && panelInfo.panelReady && panelInfo.visible
-                        && panelInfo.wpfHwnd && panelInfo.targetHwnd
-                        && DllCall("user32\IsWindow", "Ptr", panelInfo.wpfHwnd)
-                        && DllCall("user32\IsWindow", "Ptr", panelInfo.targetHwnd)) {
-                        targetRect := this.GetWindowRectCoords(panelInfo.targetHwnd)
-                        winW := targetRect["right"] - targetRect["left"]
-                        winH := targetRect["bottom"] - targetRect["top"]
-                        pr := this.GetWindowRectCoords(panelInfo.wpfHwnd)
-                        pw := pr["right"] - pr["left"]
-                        ph := pr["bottom"] - pr["top"]
-                        restoreX := 0, restoreY := 0
-                        this._PanelScreenPos(panelInfo, targetRect["left"], targetRect["top"], winW, winH, pw, ph, &restoreX, &restoreY)
-                        DllCall("user32\SetWindowPos"
-                            , "Ptr", panelInfo.wpfHwnd, "Ptr", panelInfo.targetHwnd
-                            , "Int", restoreX, "Int", restoreY
-                            , "Int", 0, "Int", 0
-                            , "UInt", 0x0001 | 0x0004 | 0x0010 | 0x4000)
-                    }
+                    ; 两条属性合并成一次 BatchUpdate：少一趟同步往返，引擎侧只结算一次布局
+                    if (updates.Length)
+                        try panelInfo.ui.BatchUpdate(updates)
+                    ; 这里不再补 SetWindowPos：改的是控件属性，窗口矩形没有变；
+                    ; 跟随定时器（50ms）下一帧就会按当前偏移摆正，多搬一次反而是
+                    ; 一次白跑的跨线程窗口移动（宏快速循环时按步频触发）。
                     break
                 }
             }
@@ -2634,6 +3358,16 @@ class UIMacroGui {
     _PlaceByFold(fold, foldIndex, targetHwnd, isScreenMode, pw, ph, &initX, &initY, &mode, &anchor, &offX, &offY) {
         mode := 0, anchor := 6, offX := -50, offY := 50
         this._ReadFoldPos(fold, &mode, &anchor, &offX, &offY)
+        ; 「球 → 面板」展开：用球的位置折算出的偏移当初始位置，视觉上就地放大，
+        ; 不会先出现在默认锚点再跳过去。一次性，用完即删。
+        if (this._pendingPanelPos.Has(foldIndex)) {
+            pend := this._pendingPanelPos[foldIndex]
+            this._pendingPanelPos.Delete(foldIndex)
+            if (mode != 1 && IsObject(pend)) {
+                offX := pend.offX
+                offY := pend.offY
+            }
+        }
         dpi := A_ScreenDPI < 96 ? 96 : A_ScreenDPI
         physPw := pw * dpi // 96
         physPh := ph * dpi // 96
@@ -2661,32 +3395,35 @@ class UIMacroGui {
             initX := physX
             initY := physY
         }
-        savedPos := this._PosGet("UIPanelPos", foldIndex, targetHwnd)
-        if (IsObject(savedPos)) {
-            if (isScreenMode) {
-                scale := A_ScreenDPI / 96
-                initX := Round(savedPos.x / scale)
-                initY := Round(savedPos.y / scale)
-            } else {
-                initX := savedPos.x
-                initY := savedPos.y
+        ; 只有绝对坐标模式才用位置记忆当初始位置。跟随模式若用记忆，窗口会先出现在
+        ; 上次的旧坐标（可能是屏幕外）再被跟随逻辑拉回锚点，看着就是「闪一下再跳」。
+        if (mode == 1) {
+            savedPos := this._PosGet("UIPanelPos", foldIndex, targetHwnd)
+            if (IsObject(savedPos)) {
+                if (isScreenMode) {
+                    scale := A_ScreenDPI / 96
+                    initX := Round(savedPos.x / scale)
+                    initY := Round(savedPos.y / scale)
+                } else {
+                    initX := savedPos.x
+                    initY := savedPos.y
+                }
             }
         }
     }
 
-    ; 有拖动记忆时优先恢复；否则按模块位置设置放置。
+    ; 有拖动记忆时优先恢复；否则按模块位置设置放置。球走同一套：它的 offsetX/offsetY
+    ; 就是「拖动后相对目标窗口的偏移」，由 _BallAdoptPos 维护。
     ApplyPanelPosition(panelInfo) {
-        if (panelInfo.HasProp("foldIndex")) {
-            saved := this._PosGet("UIPanelPos", panelInfo.foldIndex, panelInfo.targetHwnd)
-            if (IsObject(saved) && panelInfo.wpfHwnd) {
-                try DllCall("user32\SetWindowPos", "Ptr", panelInfo.wpfHwnd, "Ptr", 0
-                    , "Int", saved.x, "Int", saved.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004)
-                panelInfo.lastSetX := saved.x
-                panelInfo.lastSetY := saved.y
-                panelInfo._manualPos := true
-                return
-            }
-        }
+        isBall := (panelInfo.HasProp("_isBall") && panelInfo._isBall)
+        ; 球的坐标只由跟随定时器维护（目标矩形 + 偏移，逐帧算）。这里摆一次是用面板尺寸
+        ; 算锚点的，会把球摆到错的位置，下一帧又被「偏差吸收」记成新偏移 —— 越摆越歪。
+        if (isBall)
+            return
+        ; 先算出锚点位置：绝对坐标模式（posMode = 1）若有位置记忆就用记忆，
+        ; 否则一律按锚点摆放。跟随类面板不读记忆——记忆是「上次待的位置」，
+        ; 与「跟着目标窗口走」冲突，读了只会让面板停在旧坐标不动。
+        ; 球不读面板那套记忆：它自己有偏移量，读面板记忆会把球拽到面板待过的地方。
         try {
             rect := this.GetWindowRectCoords(panelInfo.wpfHwnd)
             pw := rect["right"] - rect["left"]
@@ -2716,6 +3453,19 @@ class UIMacroGui {
         }
         initX := 0, initY := 0
         this._PanelScreenPos(panelInfo, baseLeft, baseTop, contW, contH, pw, ph, &initX, &initY)
+
+        if (mode == 1 && !isBall && panelInfo.HasProp("foldIndex")) {
+            saved := this._PosGet("UIPanelPos", panelInfo.foldIndex, panelInfo.targetHwnd)
+            if (IsObject(saved) && panelInfo.wpfHwnd) {
+                try DllCall("user32\SetWindowPos", "Ptr", panelInfo.wpfHwnd, "Ptr", 0
+                    , "Int", saved.x, "Int", saved.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004)
+                panelInfo.lastSetX := saved.x
+                panelInfo.lastSetY := saved.y
+                panelInfo._manualPos := true
+                return
+            }
+        }
+
         DllCall("user32\SetWindowPos", "Ptr", panelInfo.wpfHwnd, "Ptr", 0
             , "Int", initX, "Int", initY, "Int", 0, "Int", 0, "UInt", 0x0001)
         panelInfo.lastSetX := initX

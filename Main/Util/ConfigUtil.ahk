@@ -28,12 +28,26 @@
 ;
 ; 批处理（CfgBatchBegin / CfgBatchEnd）：把逐键写入合并成一次解析 + 一次落盘，
 ; 供旧配置迁移这类「按段遍历、逐键改写」的场景使用，避免整文件重复读写。
+;
+; 延迟落盘（本层的默认行为）：
+;   写配置 = 只改内存 + 标脏，落盘交给一个 250ms 的泵，按「最后一次写入后静默
+;   CfgDebounceMs」或「首个脏文件等满 CfgMaxDelayMs」两个条件择先触发。
+;   调用方（业务）只管改配置，不再为「一次操作写十几次磁盘」负责。
+;   需要立刻落盘的场合（退出、需要让其它进程读到、用户点保存）调 CfgFlushAll()。
+;   读配置永远读到含未落盘改动的最新内存值，语义比「改完才读」更一致。
 ; ============================================================
 #Include "TomlUtil.ahk"
 
 global Cfg_Cache := Map()   ; 文件路径 → {Stamp, Root}；Root: Map(段名 → Map(键 → 值))
 global Cfg_BatchDepth := 0  ; 批处理嵌套深度；>0 时写入只改内存、落盘推迟到 CfgBatchEnd
 global Cfg_BatchDirty := Map()  ; 批处理期间有未落盘改动的文件
+global Cfg_Dirty := Map()   ; 有未落盘改动的文件（延迟落盘队列）
+global Cfg_LastWriteAt := 0 ; 最近一次标脏的时刻（防抖用）
+global Cfg_FirstDirtyAt := 0    ; 本轮首个脏文件的时刻（最长等待用）
+global Cfg_PumpOn := false  ; 落盘泵是否在跑
+global Cfg_PumpFn := 0      ; 落盘泵的函数引用（同一个对象才能「重置」而不是「新增」定时器）
+global CfgDebounceMs := 400 ; 最后一次写入后静默这么久就落盘
+global CfgMaxDelayMs := 3000    ; 持续写入时的最长等待，超时强制落盘
 
 ; ============================================================
 ; 文件级
@@ -51,11 +65,15 @@ Cfg_Stamp(file) {
 
 ; 解析整文件为 Map(段名 → Map(键 → 值))，带指纹缓存；文件不存在/解析失败 → 空 Map
 Cfg_Load(file) {
-    global Cfg_Cache, Cfg_BatchDepth
+    global Cfg_Cache, Cfg_BatchDepth, Cfg_Dirty
     ; 批处理期间该文件的最新内容只在内存里（改动未落盘），指纹比对既无意义又纯属开销
     ;（一次 Cfg_Stamp = FileExist + FileGetTime + FileGetSize 三次文件操作；
     ;  Compat* 逐键写入时会调用几千次）
     if (Cfg_BatchDepth > 0 && Cfg_Cache.Has(file))
+        return Cfg_Cache[file].Root
+    ; 同理：延迟落盘窗口内磁盘是旧内容，内存 root 才是事实来源。
+    ; 少了这一条，下次 CfgRead 会按旧指纹重新解析，把刚改的值原样读回旧值。
+    if (Cfg_Dirty.Has(file) && Cfg_Cache.Has(file))
         return Cfg_Cache[file].Root
     stamp := Cfg_Stamp(file)
     if (Cfg_Cache.Has(file)) {
@@ -139,16 +157,85 @@ Cfg_WriteRoot(root, file) {
     }
 }
 
+; ------------------------------------------------------------
+; 延迟落盘
+;
+; 写入只改内存并标脏，落盘由 Cfg_FlushPump 择机完成：
+;   · 最后一次写入后静默 CfgDebounceMs（默认 400ms）→ 落盘（合并一次操作里的多次写）
+;   · 首个脏文件等满 CfgMaxDelayMs（默认 3s）→ 强制落盘（持续写入也不会无限拖）
+; 需要立刻可见的场合（退出、跨进程交接、用户点保存）直接调 CfgFlushAll()。
+; ------------------------------------------------------------
+
+; 标记文件有未落盘改动并启动落盘泵
+Cfg_MarkDirty(file) {
+    global Cfg_Dirty, Cfg_LastWriteAt, Cfg_FirstDirtyAt, Cfg_PumpOn, Cfg_PumpFn
+    Cfg_Dirty[file] := true
+    now := A_TickCount
+    Cfg_LastWriteAt := now
+    if (!Cfg_FirstDirtyAt)
+        Cfg_FirstDirtyAt := now
+    if (Cfg_PumpOn)
+        return
+    ; 函数引用只取一次并存在全局：SetTimer 以对象识别定时器，每次新建对象等于叠加定时器
+    if (!Cfg_PumpFn)
+        Cfg_PumpFn := Cfg_FlushPump
+    Cfg_PumpOn := true
+    SetTimer(Cfg_PumpFn, 250)
+}
+
+Cfg_FlushPump() {
+    global Cfg_Dirty, Cfg_LastWriteAt, Cfg_FirstDirtyAt, Cfg_PumpOn, Cfg_PumpFn
+    if (!Cfg_Dirty.Count) {
+        SetTimer(Cfg_PumpFn, 0)
+        Cfg_PumpOn := false
+        Cfg_FirstDirtyAt := 0
+        return
+    }
+    now := A_TickCount
+    idle := now - Cfg_LastWriteAt
+    age := Cfg_FirstDirtyAt ? now - Cfg_FirstDirtyAt : 999999
+    if (idle < CfgDebounceMs && age < CfgMaxDelayMs)
+        return
+    CfgFlushAll()
+    if (!Cfg_Dirty.Count) {
+        SetTimer(Cfg_PumpFn, 0)
+        Cfg_PumpOn := false
+        Cfg_FirstDirtyAt := 0
+    }
+}
+
+; 立即把所有脏文件写盘；返回写成功的文件数。写失败的留在脏表里等下一轮。
+CfgFlushAll() {
+    global Cfg_Dirty, Cfg_Cache
+    if (!Cfg_Dirty.Count)
+        return 0
+    pending := Cfg_Dirty
+    Cfg_Dirty := Map()
+    n := 0
+    for file, _ in pending {
+        if (!Cfg_Cache.Has(file))
+            continue
+        try {
+            Cfg_WriteRoot(Cfg_Cache[file].Root, file)
+            n += 1
+        } catch {
+            Cfg_Dirty[file] := true      ; 保留改动，下一轮重试
+        }
+    }
+    return n
+}
+
 ; 失效缓存；file 省略 → 清空全部
 CfgInvalidate(file := "") {
-    global Cfg_Cache, Cfg_BatchDirty
+    global Cfg_Cache, Cfg_BatchDirty, Cfg_Dirty
     ; AHK v2 的 Map.Delete 对不存在的键会抛错，必须 Has 守卫
     if (file == "") {
+        CfgFlushAll()               ; 清缓存前把未落盘的改动写出去，否则等于丢弃
         Cfg_Cache.Clear()
         return
     }
-    ; 批处理期间该文件有未落盘的改动：内存 root 才是最新，不能丢
-    if (Cfg_BatchDirty.Has(file))
+    ; 批处理 / 延迟落盘期间该文件有未落盘的改动：内存 root 才是最新，不能丢
+    if (Cfg_BatchDirty.Has(file) || Cfg_Dirty.Has(file))
         return
     if (Cfg_Cache.Has(file))
         Cfg_Cache.Delete(file)
@@ -175,17 +262,19 @@ CfgBatchBegin() {
     Cfg_BatchDepth += 1
 }
 
-; 结束批处理；最外层结束时把所有脏文件各写一次
+; 结束批处理；最外层结束时把所有脏文件交给延迟落盘（由落盘泵合并写一次）
 CfgBatchEnd() {
-    global Cfg_BatchDepth, Cfg_BatchDirty
+    global Cfg_BatchDepth, Cfg_BatchDirty, Cfg_Cache
     if (Cfg_BatchDepth > 0)
         Cfg_BatchDepth -= 1
     if (Cfg_BatchDepth > 0)
         return
     dirty := Cfg_BatchDirty
     Cfg_BatchDirty := Map()
-    for file, _ in dirty
-        Cfg_WriteRoot(Cfg_Load(file), file)
+    for file, _ in dirty {
+        if (Cfg_Cache.Has(file))
+            Cfg_MarkDirty(file)
+    }
 }
 
 ; 批处理期间：标记脏文件并跳过落盘
@@ -210,6 +299,7 @@ CfgRead(file, section, key, def := "") {
 }
 
 ; 写入标量（值统一字符串化落盘）
+; 非批处理时也只改内存 + 标脏，落盘交给延迟泵（业务不再为「写一次磁盘」负责）
 CfgWrite(value, file, section, key) {
     global Cfg_BatchDepth
     if (file == "")
@@ -220,7 +310,7 @@ CfgWrite(value, file, section, key) {
         CfgBatchTouch(file)
         return
     }
-    Cfg_WriteRoot(root, file)
+    Cfg_MarkDirty(file)
 }
 
 Cfg_Stringify(value) {
@@ -231,8 +321,9 @@ Cfg_Stringify(value) {
 
 ; 删键；key 省略 → 删整段。键/段不存在时不落盘（与 IniDelete 一致）
 CfgDelete(file, section, key := "") {
-    global Cfg_BatchDepth
-    if (file == "" || !FileExist(file))
+    global Cfg_BatchDepth, Cfg_Cache
+    ; 磁盘上还没有但内存里刚写过（延迟落盘窗口内）的文件同样要能删
+    if (file == "" || (!FileExist(file) && !Cfg_Cache.Has(file)))
         return
     root := Cfg_Load(file)
     if (!root.Has(section))
@@ -249,7 +340,7 @@ CfgDelete(file, section, key := "") {
         CfgBatchTouch(file)
         return
     }
-    Cfg_WriteRoot(root, file)
+    Cfg_MarkDirty(file)
 }
 
 ; 段名数组（等价 CfgRead(file)：返回全部段名）
@@ -294,7 +385,7 @@ CfgDeleteSegs(file, section) {
         CfgBatchTouch(file)
         return
     }
-    Cfg_WriteRoot(root, file)
+    Cfg_MarkDirty(file)
 }
 
 ; 枚举某段下的全部直接子段（按段名最后一节的自然数字升序）

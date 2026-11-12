@@ -335,29 +335,49 @@ public partial class AhkWpfEngine
                 return;
             IntPtr p = MapViewOfFile(h, HUD_FILE_MAP_READ, 0, 0, UIntPtr.Zero);
             CloseHandle(h);
-            if (p != IntPtr.Zero)
-                _asyncShared = p;
+            if (p == IntPtr.Zero)
+                return;
+            _asyncShared = p;
+            // 握手：告知 AHK「本版引擎支持带序号与回执的槽格式」。
+            // 旧版引擎不会回这条，AHK 侧据此继续走同步发送 —— 否则新格式写进旧解析器
+            // 会从 +4 开始读，把序号当成正文，收到半截乱码指令。
+            SendToAhkAsync("EVENT|" + winId + "|Window|AsyncReady|2\n");
         }
         catch { }
     }
 
+    // 异步帧的形态：+0 长度 / +4 序号 / +8 正文。
+    // 序号由 AHK 侧递增，处理完原样回传；AHK 只有收到回执才发下一帧，
+    // 单槽因此不会出现「第二条覆盖第一条、第一条丢失」。
     private void XamlAsyncRefresh(IntPtr hwnd)
     {
         if (_asyncShared == IntPtr.Zero)
             return;
+        int seq = 0;
         try
         {
             int len = Marshal.ReadInt32(_asyncShared, 0);
+            seq = Marshal.ReadInt32(_asyncShared, 4);
             // 上限放宽至 4MB：主窗口首次填充会将数百条属性合并为一条（数十至数百 KB），
             // 65000 的限制会整条丢弃该批次，导致窗口停留在空壳状态。槽实际大小由 AHK 侧决定。
-            if (len <= 0 || len > 4 * 1024 * 1024)
-                return;
-            byte[] buf = new byte[len];
-            Marshal.Copy(new IntPtr(_asyncShared.ToInt64() + 4), buf, 0, len);
-            string payload = Encoding.UTF8.GetString(buf);
-            if (payload.Length > 0)
-                ProcessMessage(hwnd, payload);
+            if (len > 0 && len <= 4 * 1024 * 1024)
+            {
+                byte[] buf = new byte[len];
+                Marshal.Copy(new IntPtr(_asyncShared.ToInt64() + 8), buf, 0, len);
+                string payload = Encoding.UTF8.GetString(buf);
+                if (payload.Length > 0)
+                    ProcessMessage(hwnd, payload);
+            }
         }
+        catch { }
+        XamlAckAsync(seq);
+    }
+
+    private void XamlAckAsync(int seq)
+    {
+        if (seq <= 0)
+            return;
+        try { SendToAhkAsync("EVENT|" + winId + "|Window|AsyncAck|" + seq.ToString() + "\n"); }
         catch { }
     }
 
