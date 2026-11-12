@@ -32,9 +32,14 @@ class OutputGui {
         finally {
             this._flushBatch()
         }
-        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
-            this._closed := true
-        this.ToggleFunc(true)
+        ui := this.ui
+        opened := XamlWin.Open(ui, "", XamlWin.Owner(this))
+        if (this.ui != ui)
+            return
+        if (opened)
+            this.ToggleFunc(true)
+        else
+            this._CloseWindow()
     }
 
     Hwnd() {
@@ -134,15 +139,15 @@ class OutputGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/8-输出", ObjBindMethod(this, "TriggerMacro"))
-        this.ui.OnEvent("OutputTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnChangeOutputType"))
-        this.ui.OnEvent("VarTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefreshVarType"))
-        this.ui.OnEvent("BtnAddName", "Click", ObjBindMethod(this, "OnClickAddVarNameBtn"))
-        this.ui.OnEvent("BtnAddValue", "Click", ObjBindMethod(this, "OnClickAddVarValueBtn"))
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
+        BindCmdEditorChrome(this.ui, "#指令手册/8-输出", XamlWin.BindCurrent(this, "TriggerMacro"))
+        this.ui.OnEvent("OutputTypeCombo", "SelectionChanged", XamlWin.BindCurrent(this, "OnChangeOutputType"))
+        this.ui.OnEvent("VarTypeCombo", "SelectionChanged", XamlWin.BindCurrent(this, "OnRefreshVarType"))
+        this.ui.OnEvent("BtnAddName", "Click", XamlWin.BindCurrent(this, "OnClickAddVarNameBtn"))
+        this.ui.OnEvent("BtnAddValue", "Click", XamlWin.BindCurrent(this, "OnClickAddVarValueBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
 
     }
 
@@ -150,13 +155,13 @@ class OutputGui {
         XamlWin.OnLoadTheme(this.ui)
     }
 
-    OnWindowClosing(state, ctrl, event) {
+    OnWindowClosing(*) {
+        this.ui := ""
+        this._closed := true
         this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
         }
-        this.ui := ""
-        this._closed := true
     }
 
     OnCancelClick(state, ctrl, event) {
@@ -164,15 +169,10 @@ class OutputGui {
     }
 
     _CloseWindow() {
-        this.ToggleFunc(false)
-        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
-            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
-        }
-        if (IsObject(this.ui)) {
-            try this.ui.Update("Window", "Close", "")
-        }
-        this.ui := ""
-        this._closed := true
+        ui := this.ui
+        this.OnWindowClosing()
+        if (IsObject(ui))
+            try ui.Update("Window", "Close", "")
     }
 
     ; 非编辑 ComboBox：设置候选项 + 按文本选中
@@ -229,72 +229,93 @@ class OutputGui {
     }
 
     ToggleFunc(state) {
-        MacroAction := (*) => this.TriggerMacro()
         if (state)
-            Hotkey("!l", MacroAction, "On")
+            Hotkey("!l", XamlWin.BindCurrent(this, "TriggerMacro"), "On")
         else
-            Hotkey("!l", MacroAction, "Off")
+            try Hotkey("!l", "Off")
     }
 
     OnRefreshVarType(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
+        ui := this.ui
+        if (!IsObject(ui))
             return
-        IsResVar := this.ui.Query("VarTypeCombo") == GetLang("变量")
+        values := ui.Query("VarTypeCombo", "VariCombo")
+        if (this.ui != ui || values.Count != 2)
+            return
+        IsResVar := values["VarTypeCombo"] == GetLang("变量")
         DLArr := IsResVar ? GetGuiVarArr(1) : GetGuiArrNameArr()
-        curText := this.ui.Query("VariCombo")
-        this._SetDDL("VariCombo", DLArr, curText)
+        this._SetDDL("VariCombo", DLArr, values["VariCombo"])
     }
 
     OnChangeOutputType(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
+        ui := this.ui
+        if (!IsObject(ui))
             return
         ; 仅悬浮显示需要选位置，其它输出类型无此配置
-        isHud := GetLangKey(this.ui.Query("OutputTypeCombo")) == "悬浮显示"
-        this.ui.Update("HudPosRow", "Visibility", isHud ? "Visible" : "Collapsed")
+        isHud := GetLangKey(ui.Query("OutputTypeCombo")) == "悬浮显示"
+        if (this.ui == ui)
+            ui.Update("HudPosRow", "Visibility", isHud ? "Visible" : "Collapsed")
     }
 
     OnClickAddVarNameBtn(state, ctrl, event) {
-        this.ui.Update("TextCon", "Text", this.ui.Query("TextCon") . this.ui.Query("VariCombo"))
+        ui := this.ui
+        values := ui.Query("TextCon", "VariCombo")
+        if (this.ui == ui && values.Count == 2)
+            ui.Update("TextCon", "Text", values["TextCon"] . values["VariCombo"])
     }
 
     OnClickAddVarValueBtn(state, ctrl, event) {
-        ArraySymbol := this.ui.Query("VarTypeCombo") == GetLang("变量") ? "" : "ε"
-        this.ui.Update("TextCon", "Text", this.ui.Query("TextCon") . "{" ArraySymbol this.ui.Query("VariCombo") "}")
+        ui := this.ui
+        values := ui.Query("TextCon", "VarTypeCombo", "VariCombo")
+        if (this.ui == ui && values.Count == 3) {
+            ArraySymbol := values["VarTypeCombo"] == GetLang("变量") ? "" : "ε"
+            ui.Update("TextCon", "Text", values["TextCon"] . "{" ArraySymbol values["VariCombo"] "}")
+        }
     }
 
     OnClickSureBtn(state, ctrl, event) {
-        if (!this.CheckIfValid())
+        ui := this.ui
+        if (!this.Hwnd())
             return
-        this.SaveOutputData()
-        this.ToggleFunc(false)
-        CommandStr := this.GetCommandStr()
         action := this.SureBtnAction
-        action(CommandStr)
+        CommandStr := this.SaveOutputData()
+        if (CommandStr == "" || this.ui != ui)
+            return
         this._CloseWindow()
-    }
-
-    CheckIfValid() {
-        return true
+        if (action != "")
+            action(CommandStr)
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
-        this.SaveOutputData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        ui := this.ui
+        if (!this.Hwnd())
+            return
+        CommandStr := this.SaveOutputData()
+        if (CommandStr != "" && this.ui == ui)
+            OnTriggerSepcialItemMacro(CommandStr)
     }
 
-    GetCommandStr() {
+    GetCommandStr(remark) {
         textOnly := RegExReplace(this.Data.SerialStr, "\d+")
         numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
         CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        CommandStr := CorrectRemark(CommandStr, this.ui.Query("RemarkCon"))
+        CommandStr := CorrectRemark(CommandStr, remark)
         return CommandStr
     }
 
     SaveOutputData() {
-        this.Data.Text := GetLangStr(this.ui.Query("TextCon"), 2)
-        this.Data.OutputType := GetLangKey(this.ui.Query("OutputTypeCombo"))
-        this.Data.VariableName := GetVarName(this.ui.Query("VariableNameCombo"))
-        this.Data.HudPos := this.ui.Query("HudPosCombo")
+        ui := this.ui
+        if (!IsObject(ui))
+            return ""
+        hwnd := ui.wpfHwnd
+        values := ui.Query("TextCon", "OutputTypeCombo", "VariableNameCombo", "HudPosCombo", "RemarkCon")
+        if (this.ui != ui || ui.wpfHwnd != hwnd || values.Count != 5)
+            return ""
+        this.Data.Text := GetLangStr(values["TextCon"], 2)
+        this.Data.OutputType := GetLangKey(values["OutputTypeCombo"])
+        this.Data.VariableName := GetVarName(values["VariableNameCombo"])
+        this.Data.HudPos := values["HudPosCombo"]
+        CommandStr := this.GetCommandStr(values["RemarkCon"])
         SaveMacroCMDData(this.Data)
         ; 配置已变更，需通知 Worker 丢弃缓存的 Data，否则它仍按旧的 OutputType 执行
         ; （例如改为「悬浮显示」后，Worker 仍走「发送内容」分支，不会发出 HO）
@@ -303,5 +324,6 @@ class OutputGui {
                 MyWorkPool.BroadcastConfigRefresh()
         } catch {
         }
+        return CommandStr
     }
 }

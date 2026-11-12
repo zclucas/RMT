@@ -411,22 +411,6 @@ AhiMouseUp(whichButton := "L") {
 
 ; ========== 鼠标移动（Interception，正式接口） ==========
 
-; 平滑步进参数
-; 步长上限 50：避免单次 driver 调用值过大被 Windows 鼠标加速曲线放大
-; speed: 1~100 越大越快
-; 90+ 高速段：步长指数增长，90=46, 91=46*1.3, 92=46*1.3^2, ..., 100=46*1.3^10
-AhiSmoothStepParams(speed, &maxStep, &stepDelay) {
-    speed := Max(1, Min(100, Integer(speed)))
-    if (speed >= 90) {
-        maxStep := Round(46 * (1.3 ** (speed - 90)))
-        stepDelay := 1
-        return
-    }
-    factor := speed / 100.0
-    maxStep := Max(2, Min(50, Round(2 + 50 * (factor ** 1.2))))
-    stepDelay := Max(1, Round(22 * ((1 - factor) ** 1.2) + 1))
-}
-
 ; 相对移动
 AhiMoveR(x, y) {
     if (!InitAHI())
@@ -442,8 +426,7 @@ AhiMoveAbs(targetX, targetY) => AhiMoveAbsSmooth(targetX, targetY, 100)
 AhiMoveAbsSmooth(targetX, targetY, speed := 0, item := "") {
     if (!InitAHI())
         return false
-    AhiSmoothStepParams(speed, &maxStep, &stepDelay)
-    return MoveDriverCursorAbs(targetX, targetY, speed, maxStep, stepDelay, AhiSendAbsolutePoint, item)
+    return MoveDriverCursorAbs(targetX, targetY, speed, AhiSendAbsolutePoint, item)
 }
 
 AhiSendAbsolutePoint(x, y, left, top, width, height) {
@@ -453,91 +436,8 @@ AhiSendAbsolutePoint(x, y, left, top, width, height) {
     return AHI_Driver.SendMouseMoveVirtualDesktop(AHI_MouseId, absX, absY)
 }
 
-; 相对移动（平滑，闭环校正 + 自适应步长）
-;   - 步长随剩余距离等比衰减：≤5px→1，否则≤1/3，上限 maxStep
-;   - speed: 1~100 越大越快
-AhiMoveRSmooth(relX, relY, speed := 0) {
+AhiMoveRSmooth(relX, relY, speed := 0, item := "") {
     if (!InitAHI())
         return false
-
-    CoordMode("Mouse", "Screen")
-    MouseGetPos(&startX, &startY)
-    expectX := startX + Integer(relX)
-    expectY := startY + Integer(relY)
-
-    if (speed <= 0)
-        speed := 1
-    useSpeed := Min(100, Max(1, Integer(speed)))
-
-    AhiSmoothStepParams(useSpeed, &maxStep, &stepDelay)
-
-    stepCount := 0
-    stuckCount := 0
-    oscillationCount := 0
-    prevDxSign := 0, prevDySign := 0
-    lastCurX := -9999, lastCurY := -9999
-    Loop 5000 {
-        MouseGetPos(&curX, &curY)
-        dx := expectX - curX
-        dy := expectY - curY
-        len := Sqrt(dx * dx + dy * dy)
-
-        if (len <= 1)
-            break
-
-        ; 检测震荡死循环（方向反复反转说明在目标附近来回振荡）
-        curDxSign := (dx > 0 ? 1 : (dx < 0 ? -1 : 0))
-        curDySign := (dy > 0 ? 1 : (dy < 0 ? -1 : 0))
-        if (prevDxSign != 0 && curDxSign != 0 && curDxSign != prevDxSign)
-            oscillationCount++
-        else if (prevDySign != 0 && curDySign != 0 && curDySign != prevDySign)
-            oscillationCount++
-        else if (curDxSign != 0 || curDySign != 0)
-            oscillationCount := Max(0, oscillationCount - 1)
-        prevDxSign := curDxSign, prevDySign := curDySign
-        if (oscillationCount >= 5) {
-            ; 陷入震荡，最后再发一次精确微调然后退出
-            if (Abs(dx) <= 2 && Abs(dy) <= 2) {
-                AhiMoveR(dx, dy)
-                Sleep(stepDelay)
-            }
-            break
-        }
-
-        ; 检测卡死（光标不再移动但目标未达成，如触屏边缘）
-        if (curX = lastCurX && curY = lastCurY) {
-            stuckCount++
-            if (stuckCount >= 3)
-                break
-        } else {
-            stuckCount := 0
-        }
-        lastCurX := curX, lastCurY := curY
-
-        stepCount++
-        ; 自适应步长：剩余距离 ≤5px 时降为 1，否则每步最多覆盖 1/3
-        adaptiveMaxStep := Max(1, Min(maxStep, len <= 5 ? 1 : Round(len / 3)))
-
-        if (len <= adaptiveMaxStep) {
-            AhiMoveR(dx, dy)
-            Sleep(stepDelay)
-            continue
-        }
-        sx := Round(dx * adaptiveMaxStep / len)
-        sy := Round(dy * adaptiveMaxStep / len)
-        if (sx = 0 && dx != 0)
-            sx := dx > 0 ? 1 : -1
-        if (sy = 0 && dy != 0)
-            sy := dy > 0 ? 1 : -1
-        AhiMoveR(sx, sy)
-        Sleep(stepDelay)
-    }
-
-    ; 诊断日志
-    MouseGetPos(&endX, &endY)
-    _AHI_Log("AHI_RSmooth", Format("req=({},{}) start=({},{}) expect=({},{}) end=({},{}) err=({},{}) steps={} maxStep={} speed={}"
-        , Integer(relX), Integer(relY), startX, startY, expectX, expectY, endX, endY
-        , expectX - endX, expectY - endY, stepCount, maxStep, useSpeed))
-    return true
+    return MoveDriverCursorRel(relX, relY, speed, AhiMoveR, item)
 }
-

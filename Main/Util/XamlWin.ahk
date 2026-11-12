@@ -18,6 +18,9 @@
 ; =============================================================================
 
 class XamlWin {
+    static _getWindowLong := A_PtrSize == 8 ? "user32\GetWindowLongPtrW" : "user32\GetWindowLongW"
+    static _setWindowLong := A_PtrSize == 8 ? "user32\SetWindowLongPtrW" : "user32\SetWindowLongW"
+
     ; Small business dialogs share the same chrome, theme and GM-UI registration.
     static Create(title, content, width, height, fluidContent := false) {
         visualScale := fluidContent ? XAMLHost.GetMainViewboxScale() : 1
@@ -65,6 +68,13 @@ class XamlWin {
         return ""
     }
 
+    ; XAML 回调由定时器分发。编辑器重用时，旧窗的回调不能操作新窗。
+    static BindCurrent(editor, method) {
+        ui := editor.ui
+        callback := ObjBindMethod(editor, method)
+        return (args*) => editor.ui == ui ? callback(args*) : ""
+    }
+
     ; 弹窗该挂哪个窗口当属主：当前用户正在用的那一层（搜索 Pro / 宏编辑 / 主窗口）。
     ; XAML 窗口在引擎进程里，不能只认本进程，否则会退回主窗口。
     ; 属主一旦是主窗口，系统显示弹窗时会把主窗口和它直接拥有的宏编辑一起抬上来，
@@ -76,7 +86,7 @@ class XamlWin {
             return fg
         for hwnd in XamlWin.AppZOrder() {
             ex := 0
-            try ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+            try ex := DllCall(XamlWin._getWindowLong, "Ptr", hwnd, "Int", -20, "Ptr")
             if (ex & 0x8)   ; WS_EX_TOPMOST：悬浮面板，不当普通弹窗的属主
                 continue
             return hwnd
@@ -176,7 +186,7 @@ class XamlWin {
     static _IsStackWindow(hwnd) {
         if (!hwnd || !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int") || XamlWin._IsCloaked(hwnd))
             return false
-        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        ex := DllCall(XamlWin._getWindowLong, "Ptr", hwnd, "Int", -20, "Ptr")
         if (ex & 0x80000)   ; WS_EX_LAYERED
             return false
         if (ex & 0x80)      ; WS_EX_TOOLWINDOW
@@ -195,7 +205,7 @@ class XamlWin {
     static _IsOrderWindow(hwnd) {
         if (!XamlWin._IsStackWindow(hwnd))
             return false
-        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        ex := DllCall(XamlWin._getWindowLong, "Ptr", hwnd, "Int", -20, "Ptr")
         return !(ex & 0x8)
     }
 
@@ -232,7 +242,7 @@ class XamlWin {
     static _IsPlainTop(hwnd) {
         if (!hwnd || !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int") || XamlWin._IsCloaked(hwnd))
             return false
-        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        ex := DllCall(XamlWin._getWindowLong, "Ptr", hwnd, "Int", -20, "Ptr")
         return !(ex & 0x80088)   ; TOPMOST | TOOLWINDOW | LAYERED
     }
 
@@ -462,22 +472,22 @@ class XamlWin {
         ui._modalOwner := ownerHwnd
         popup := InStr(ui.xaml, 'ShowInTaskbar="False"')
         if (!popup) {
-            owner := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -8, "Ptr")
+            owner := DllCall(XamlWin._getWindowLong, "Ptr", ui.wpfHwnd, "Int", -8, "Ptr")
             if (ownerHwnd != "") {
                 ; 模态窗口：保留或补设属主，使窗口始终位于主窗口之上
                 if (owner == 0)
                     try ui.Update("Window", "NativeOwner", String(ownerHwnd))
             } else if (owner != 0) {
                 ; 非模态：解除属主（daemon 创建时可能已设置），转为独立顶级窗口
-                DllCall("user32\SetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -8, "Ptr", 0)
+                DllCall(XamlWin._setWindowLong, "Ptr", ui.wpfHwnd, "Int", -8, "Ptr", 0)
                 DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 0)
                 DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 8)
             }
             ; 有属主 + APPWINDOW：保留自身任务栏按钮与 Alt+Tab 项，同时位于主窗口之上；
             ; 无属主 + APPWINDOW：确保独立窗口始终具有任务栏按钮。
-            ex := DllCall("user32\GetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr")
+            ex := DllCall(XamlWin._getWindowLong, "Ptr", ui.wpfHwnd, "Int", -20, "Ptr")
             if (!(ex & 0x40000)) {
-                DllCall("user32\SetWindowLongPtrW", "Ptr", ui.wpfHwnd, "Int", -20, "Ptr", ex | 0x40000)
+                DllCall(XamlWin._setWindowLong, "Ptr", ui.wpfHwnd, "Int", -20, "Ptr", ex | 0x40000)
                 DllCall("user32\SetWindowPos", "Ptr", ui.wpfHwnd, "Ptr", 0
                     , "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x37)
                 DllCall("user32\ShowWindow", "Ptr", ui.wpfHwnd, "Int", 0)
@@ -582,9 +592,9 @@ class XamlWin {
         try {
             hwnd := ui.wpfHwnd
             modal := ui.HasProp("_modalOwner") && ui._modalOwner != ""
-            owner := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -8, "Ptr")
+            owner := DllCall(XamlWin._getWindowLong, "Ptr", hwnd, "Int", -8, "Ptr")
             if (!modal && owner != 0) {
-                DllCall("user32\SetWindowLongPtrW", "Ptr", hwnd, "Int", -8, "Ptr", 0)
+                DllCall(XamlWin._setWindowLong, "Ptr", hwnd, "Int", -8, "Ptr", 0)
                 DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 0)
                 DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 8)
                 try WinActivate("ahk_id " hwnd)

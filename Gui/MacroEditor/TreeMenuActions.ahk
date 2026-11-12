@@ -42,6 +42,9 @@
             }
             case this._DebugRunLabel():
             {
+                item := this._SpecialItem()
+                if (item && item.ColorState != 0)
+                    return
                 this.ResetDebugState()
                 MacroStr := this.GetMacroStr()
                 MacroStr := GetLangMacro(macroStr, 2)
@@ -50,8 +53,8 @@
                 else if (InStr(MacroStr, Chr(0x2B50)))
                     MacroStr := StrSplit(MacroStr, Chr(0x2B50), 2)[2]
                 MyCMDTipGui.Hide()
-                OnTriggerSepcialItemMacro(MacroStr)
-                RmtDialog.Info(GetLang("调试运行结束"), "", "Owner" this.Gui.Hwnd)
+                if (OnTriggerSepcialItemMacro(MacroStr))
+                    Toast.Show(GetLang("调试运行结束"))
             }
             case this._ContinueLabel():
             {

@@ -504,6 +504,7 @@ public class VirtualListHost
             dr.TKThumbVis = sr.TKThumbVis;
             dr.ClockVis = sr.ClockVis;
             dr.TimerVis = sr.TimerVis;
+            dr.Gesture = sr.Gesture;
             FillSelMark(dr);
             return;
         }
@@ -1282,6 +1283,7 @@ public class VirtualListHost
         r.TKThumbVis = (isImageConfigRow && r.HasConfigImage) ? "Visible" : "Collapsed";
         r.ClockVis = (isTimingRow && !r.HasTimingConfig) ? "Visible" : "Collapsed";
         r.TimerVis = (isTimingRow && r.HasTimingConfig) ? "Visible" : "Collapsed";
+        r.Gesture = r.TKType == -1 && f.Length > 20 ? new VListGestureDisplay(f) : null;
     }
 
     private static void FillSelMark(VListRow r)
@@ -1379,6 +1381,28 @@ public class VListRow : VLItem
     public string TKThumbVis { get; set; }
     public string ClockVis { get; set; }
     public string TimerVis { get; set; }
+    public VListGestureDisplay Gesture { get { return _gesture; } set { Set(ref _gesture, value, "Gesture"); } }
+    private VListGestureDisplay _gesture;
+}
+
+public class VListGestureDisplay
+{
+    public VListGestureDisplay(string[] fields)
+    {
+        MouseStart = fields[16];
+        MousePath = fields[17];
+        TouchText = fields[18];
+        MouseVis = fields[19];
+        TouchVis = fields[20];
+    }
+
+    public string MouseStart { get; private set; }
+    public string MousePath { get; private set; }
+    public string TouchText { get; private set; }
+    public string MouseVis { get; private set; }
+    public string TouchVis { get; private set; }
+    public string MouseIconVis { get { return MouseStart == "M0,0" ? "Visible" : "Collapsed"; } }
+    public string TouchIconVis { get { return string.IsNullOrEmpty(TouchText) ? "Visible" : "Collapsed"; } }
 }
 
 public class VListFold : VLItem

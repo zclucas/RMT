@@ -340,7 +340,8 @@ class SettingMgrGui {
         try {
             imported := RmtProgress.Run(GetLang("配置迁移"), GetLang("正在检查配置文件")
                 , (progress) => Compat_ImportSettingsTree(SelectedFolder, A_WorkingDir "\Setting"
-                    , A_WorkingDir "\SettingOld", MySoftData.CurSettingName, ObjBindMethod(progress, "Report"))
+                    , A_WorkingDir "\SettingOld", MySoftData.CurSettingName, ObjBindMethod(progress, "Report")
+                    , MySoftData.MacroTotalCount)
                 , this.ui.wpfHwnd)
         } catch as e {
             RmtDialog.Info(GetLang("迁移失败: ") e.Message, GetLang("错误"), this.ui.wpfHwnd)
@@ -348,7 +349,8 @@ class SettingMgrGui {
         }
         MainSoftData.SettingArrStr := imported.Names
         MySoftData.CurSettingName := imported.Selected
-        MySoftData.MacroTotalCount := CfgRead(SettingFile, SettingSection, "MacroTotalCount", 0)
+        ; 重载退出会保存内存中的次数，先同步为已安装的迁移值。
+        MySoftData.MacroTotalCount := imported.MacroTotalCount
         RMTLogSysInfo("配置导入", Format("配置列表已重建：{1}", imported.Names))
         RmtDialog.Info(GetLang("配置迁移成功"), GetLang("提示"), this.ui.wpfHwnd)
         SafeReload()

@@ -295,7 +295,7 @@ class MouseMoveGui {
         OnTriggerSepcialItemMacro(this.ui.Query("CommandStrCon"))
     }
 
-    SureCoord() {
+    SureCoord(*) {
         CoordMode("Mouse", "Screen")
         MouseGetPos &mouseX, &mouseY
         if (!IsObject(this.ui))

@@ -341,7 +341,7 @@ BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", t
     if (helpRoute != "")
         hash := (SubStr(helpRoute, 1, 1) == "#") ? helpRoute : "#" helpRoute
     ui.OnEvent("BtnCmdHelp", "Click", (*) => OnOpenRmtDoc(hash))
-    ui.OnEvent("BtnCmdVideo", "Click", (*) => MyMsgBoxContent(GetLang("指令介绍视频制作中，敬请期待。")))
+    ui.OnEvent("BtnCmdVideo", "Click", (*) => ShowCmdVideoNotice(ui))
     if (playAction != "") {
         try ui.Update("BtnCmdPlay", "Visibility", "Visible")
         disp := CmdEditorPlayTip(playHotkey)
@@ -370,6 +370,11 @@ BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", t
         try ui.Update("BtnCmdF3", "ToolTip", GetLang("F3：选取当前颜色"))
         ui.OnEvent("BtnCmdF3", "Click", f3Action)
     }
+}
+
+ShowCmdVideoNotice(ui) {
+    if (ui.wpfHwnd)
+        RmtDialog.Info(GetLang("指令介绍视频制作中，敬请期待。"), , ui.wpfHwnd)
 }
 
 ; 标题去掉「编辑器」后缀：宏指令-移动编辑器 → 宏指令-移动

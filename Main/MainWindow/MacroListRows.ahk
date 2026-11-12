@@ -1,8 +1,11 @@
 
-    _BuildItemCardOpen(ns := "", t := 0, i := 0, forbid := false, rowSel := false) {
+    _BuildItemCardOpen(ns := "", t := 0, i := 0, forbid := false, rowSel := false, colorHex := "Transparent") {
         nsAttr := ns != "" ? " " ns : ""
         nameAttr := t > 0 ? ' Name="ItemCard_' t '_' i '"' : ""
         defBg := rowSel ? "{DynamicResource TabSelBg}" : ((t > 0 && forbid) ? "{DynamicResource ListRowForbidBg}" : "{DynamicResource ControlBg}")
+        layout := this._ItemLayoutWide()
+        statusWidth := this._ItemDragColW() + layout["color"] + layout["seq"] - 17
+        statusAttrs := t == 0 ? ' Background="{Binding ColorHex}"' : ' Name="Color_' t '_' i '" Background="' colorHex '"'
         ; 宏行最小高度 30；内容随主题字号加高，外层必须同步扩展以免裁掉控件底边。
         return '<Border' nsAttr nameAttr ' BorderBrush="{DynamicResource OutlineStroke}" ClipToBounds="False"' this._BorderSnap() '>'
             . '<Border.Style><Style TargetType="Border">'
@@ -21,6 +24,8 @@
             . '<Grid MinHeight="24" VerticalAlignment="Center"' this._ItemForbidOpacityAttrs(t == 0, t, i, forbid) '>'
             . this._ItemForbidOpacityStyle(t == 0)
             . '<Grid.ColumnDefinitions><ColumnDefinition Width="' this._ItemDragColW() '"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+            . '<Border Grid.ColumnSpan="2" HorizontalAlignment="Left" VerticalAlignment="Stretch" Width="' statusWidth '"'
+            . ' Margin="12,0,0,0" Opacity="0.55" IsHitTestVisible="False"' statusAttrs '/>'
             . '<Grid Grid.Column="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="False">'
             . this._BuildRowSelDotXaml(t == 0, t, i, rowSel)
             . this._BuildRowSelIconXaml(t == 0, t, i, rowSel)
@@ -134,16 +139,50 @@
     }
 
     _GestureEntries(virtual, id := "", value := "", isFold := false) {
-        tooltip := virtual ? "{Binding TKStr}" : this._XmlEsc(GestureDisplay(value))
-        xaml := '<StackPanel Orientation="Horizontal">'
-        for entry in [["Mouse", "鼠标手势", "E962"], ["Touch", "触控板手势", "EFA5"]] {
-            attr := virtual ? 'Tag="' (isFold ? "Fold" : "") 'Gesture' entry[1] '"' : 'Name="' id entry[1] '"'
+        if (!virtual && !isFold)
+            display := GestureCardDisplay(value)
+        xaml := '<UniformGrid Rows="1" Width="124">'
+        for entry in [["Mouse", "鼠标手势", "E962", 18], ["Touch", "触控板手势", "EFA5", 22]] {
+            source := entry[1]
+            mouse := source == "Mouse"
+            attr := virtual ? 'Tag="' (isFold ? "Fold" : "") 'Gesture' source '"' : 'Name="' id source '"'
             label := this._XmlEsc(GetLang(entry[2]))
-            xaml .= '<Button ' attr ' Style="{StaticResource RmtItemFieldBtn}" Width="' (isFold ? 32 : 58) '" Margin="0,0,4,0"'
-                . ' AutomationProperties.Name="' label '" ToolTip="' (isFold ? label : tooltip) '">'
-                . '<TextBlock Text="&#x' entry[3] ';" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"/></Button>'
+            icon := ' Text="&#x' entry[3] ';" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="' entry[4] '"'
+                . ' HorizontalAlignment="Center" VerticalAlignment="Center"'
+            xaml .= '<Button ' attr ' Style="{StaticResource RmtItemFieldBtn}" Margin="0,0,4,0" AutomationProperties.Name="' label '"'
+            if (isFold) {
+                xaml .= ' ToolTip="' label '"><TextBlock' icon '/></Button>'
+                continue
+            }
+            tooltip := virtual ? "{Binding TKStr}" : this._XmlEsc(GestureDisplay(value))
+            visibility := virtual ? "{Binding Gesture." source "Vis}" : display.%source "Vis"%
+            iconVis := virtual ? "{Binding Gesture." source "IconVis}" : this._GestureIconVis(display, source)
+            iconName := virtual ? "" : ' Name="' id source 'Icon"'
+            xaml .= ' Visibility="' visibility '" ToolTip="' tooltip '" HorizontalContentAlignment="Stretch"><Grid>'
+                . '<TextBlock' iconName icon ' Visibility="' iconVis '"/>'
+            if (mouse) {
+                pathName := virtual ? "" : ' Name="' id 'MousePath"'
+                startName := virtual ? "" : ' Name="' id 'MouseStart"'
+                geometry := virtual ? "{Binding Gesture.MousePath}" : display.MousePath
+                start := virtual ? "{Binding Gesture.MouseStart}" : display.MouseStart
+                xaml .= '<Canvas Width="28" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center">'
+                    . '<Path' pathName ' Data="' geometry '" Stroke="{DynamicResource TextMain}" StrokeThickness="1.6"'
+                    . ' StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>'
+                    . '<Path' startName ' Data="' start '" Fill="{DynamicResource TextMain}"/></Canvas>'
+            } else {
+                caption := virtual ? "{Binding Gesture.TouchText}" : this._XmlEsc(display.TouchText)
+                textName := virtual ? "" : ' Name="' id 'TouchText"'
+                xaml .= '<TextBlock' textName ' Text="' caption '" TextAlignment="Center" TextTrimming="CharacterEllipsis"'
+                    . ' VerticalAlignment="Center" FontSize="12"/>'
+            }
+            xaml .= '</Grid></Button>'
         }
-        return xaml '</StackPanel>'
+        return xaml '</UniformGrid>'
+    }
+
+    _GestureIconVis(display, source) {
+        empty := source == "Mouse" ? display.MouseStart == "M0,0" : display.TouchText == ""
+        return empty ? "Visible" : "Collapsed"
     }
 
     _BuildTKBtnInnerXaml(tkStr, vlMode, bindingName := "TKStr") {
@@ -335,9 +374,8 @@
         triggerField := '<Button Name="TKBtn_' t '_' i '" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang((isMenu || isUI) ? "编辑" : (isTiming ? "定时" : "触发键")) '" IsEnabled="' (isSubMacro ? "False" : "True") '">' ((isMenu || isUI) ? this._BuildImageConfigBtnInnerXaml(false, t, i, this._GetItemConfigImagePath(t, item)) : (isTiming ? this._BuildTimingConfigBtnInnerXaml(false, t, i, HasTimingConfig(item)) : this._BuildTKBtnInnerXaml(tkStr, false))) '</Button>'
         if (tableItem.Symbol == "Gesture")
             triggerField := this._GestureEntries(false, "Gesture_" t "_" i "_", item.TK)
-        xaml := this._BuildItemCardOpen(ns, t, i, item.Forbid || GetItemFoldForbidState(tableItem, i), rowSel)
+        xaml := this._BuildItemCardOpen(ns, t, i, item.Forbid || GetItemFoldForbidState(tableItem, i), rowSel, colorHex)
             . '<Grid.ColumnDefinitions>' this._ItemInnerColDefs() '</Grid.ColumnDefinitions>'
-            . '<Border Grid.Column="0" Name="Color_' t '_' i '" Width="12" Height="12" CornerRadius="6" Background="' colorHex '" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
             . this._BuildSeqNoXaml(false, t, i, rowSel)
             . this._BuildItemRemarkFieldXaml(t, i, item.Remark, false)
             . '<DockPanel Grid.Column="4" LastChildFill="True" HorizontalAlignment="Stretch" Visibility="' (isSubMacro ? "Collapsed" : "Visible") '" Margin="' ((isMenu || isUI) ? "45,0,-45,0" : "0") '">'
@@ -654,8 +692,17 @@
             this.ui.Update("TimingCfgEmpty_" t "_" i, "Visibility", configured ? "Collapsed" : "Visible")
             this.ui.Update("TimingCfgSet_" t "_" i, "Visibility", configured ? "Visible" : "Collapsed")
         } else if (tableItem.Symbol == "Gesture") {
-            for source in ["Mouse", "Touch"]
-                this.ui.Update("Gesture_" t "_" i "_" source, "ToolTip", GestureDisplay(item.TK))
+            display := GestureCardDisplay(item.TK)
+            tooltip := GestureDisplay(item.TK)
+            id := "Gesture_" t "_" i "_"
+            for source in ["Mouse", "Touch"] {
+                this.ui.Update(id source, "Visibility", display.%source "Vis"%)
+                this.ui.Update(id source, "ToolTip", tooltip)
+                this.ui.Update(id source "Icon", "Visibility", this._GestureIconVis(display, source))
+            }
+            this.ui.Update(id "TouchText", "Text", display.TouchText)
+            this.ui.Update(id "MousePath", "Data", display.MousePath)
+            this.ui.Update(id "MouseStart", "Data", display.MouseStart)
         } else if (tkStr == "") {
             this.ui.Update("TKBtn_" t "_" i, "Content", Chr(0xE92E))
             this.ui.Update("TKBtn_" t "_" i, "FontFamily", "Segoe Fluent Icons, Segoe MDL2 Assets")

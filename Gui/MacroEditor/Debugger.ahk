@@ -391,7 +391,7 @@
     ; 走步入引擎逐条执行；maxSteps 兜底防止异常宏卡死。
     ContinueRun() {
         tableItem := MySoftData.SpecialTableItem
-        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState != 0)
             return
         maxSteps := 100000
         steps := 0
@@ -447,7 +447,7 @@
     ; 步出（Shift+F11）：跑完/离开当前帧再停（字面帧退出，Q-B）。into=false：不调试嵌套容器内部。
     StepOut() {
         tableItem := MySoftData.SpecialTableItem
-        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState != 0)
             return
         if (this.DebugItemID == 0) {
             Toast.Show(GetLang("请先开始调试"))
@@ -483,7 +483,7 @@
     ; 运行到光标处（Ctrl+F10）：跑到 CurItemID；到达即停（不执行目标，等价 IDE 停在该行前）
     RunToCursor() {
         tableItem := MySoftData.SpecialTableItem
-        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState != 0)
             return
         target := this.CurItemID
         if (!target) {
@@ -629,7 +629,7 @@
     ; into=false（步进 F10 / 步出 / 继续内部推进）：不给 hook 置 active → 容器整体真实执行（天然 Step Over）
     DoDebugStep(into := true) {
         tableItem := MySoftData.SpecialTableItem
-        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState == 1)
+        if (tableItem.Items.Length >= 1 && tableItem.Items[1].ColorState != 0)
             return
         ; 阶段1: 定位（首次或终止后，查找⭐起点或第一项）
         if (this.DebugItemID == 0) {
@@ -671,29 +671,33 @@
         this.MarkCurrentPosition(this.DebugItemID)
         hook := ""
         try {
+            CleanCMD := CmdStripCurPos(CmdStripDebug(CurCMD))
+            ; 还原格式化的手柄键名后执行
+            CleanCMD := MySoftData.ParseCmdJoyDisplay(CleanCMD)
+            CurLangCMD := GetLangMacro(CleanCMD, 2)
+            SplitSerialTextAndNumbers(StrSplit(CurLangCMD, "_", , 2)[1], &command, &numbers)
             ; F8：钩子建立/激活一并纳入 try，避免 _EnsureDebugHook 异常外抛
             hook := this._EnsureDebugHook()
             if (IsObject(hook)) {
                 hook.recorded := false            ; ★每步复位，杜绝上一步残留
                 hook.containerId := this.DebugItemID
-                hook.active := into               ; true=步入；false=步进（不拦截→整体执行）
+                ; 宏操作插入的指令没有对应树节点，作为一条指令完整执行。
+                hook.active := into && command != "宏操作"
             }
-            CleanCMD := CmdStripCurPos(CmdStripDebug(CurCMD))
-            ; 还原格式化的手柄键名后执行
-            CleanCMD := MySoftData.ParseCmdJoyDisplay(CleanCMD)
-            CurLangCMD := GetLangMacro(CleanCMD, 2)
-            OnTriggerSepcialItemMacro(CurLangCMD, true)
+            if (!OnTriggerSepcialItemMacro(CurLangCMD, true)) {
+                this.ResetDebugState()
+                return
+            }
         } catch {
             ; 兜底契约：异常即关钩子 + 清标志 + 退出调试（宁可退出，绝不继续不一致状态）
-            if (IsObject(hook))
-                hook.active := false
             this._ClearFlags()
             this.ResetDebugState()
             Toast.Show(GetLang("调试状态异常，已退出调试"))
             return
+        } finally {
+            if (IsObject(hook))
+                hook.active := false
         }
-        if (IsObject(hook))
-            hook.active := false
         ; 单步执行跳转后立即按调试栈结算，避免先执行本应跳过的同级指令。
         flags := this._Flags()
         if (flags.brk || flags.skip || flags.brch) {

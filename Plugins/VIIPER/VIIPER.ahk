@@ -230,19 +230,26 @@ class ViiperInput {
         return true
     }
 
-    static Move(x, y, speed := 90) {
+    static Move(x, y, speed := 90, item := "") {
+        if (item && item.Killed)
+            return false
         this.Stream("mouse")
-        CoordMode("Mouse", "Screen")
-        steps := Max(1, Ceil(Max(Abs(x), Abs(y)) / (speed >= 100 ? 32767 : Max(1, speed))))
-        px := 0, py := 0
-        loop steps {
-            nx := Round(x * A_Index / steps), ny := Round(y * A_Index / steps)
-            this.Mouse(nx - px, ny - py)
-            px := nx, py := ny
-            if (speed < 100)
-                Sleep(10)
+        ahkSpeed := UiSpeedToAhkSpeed(speed)
+        minX := Max(1, Round(A_ScreenWidth / 2048))
+        minY := Max(1, Round(A_ScreenHeight / 2048))
+        ; 保留虚拟 HID 的原始相对位移总量，单个报告的轴为有符号 16 位。
+        while (x != 0 || y != 0) {
+            if (item && item.Killed)
+                return false
+            stepX := MouseMoveAxisStep(x, ahkSpeed, minX, 32767)
+            stepY := MouseMoveAxisStep(y, ahkSpeed, minY, 32767)
+            this.Mouse(stepX, stepY)
+            x -= stepX
+            y -= stepY
+            if (ahkSpeed != 0)
+                Sleep(A_MouseDelay)
         }
-        return true
+        return !item || !item.Killed
     }
 }
 

@@ -15,7 +15,6 @@
         row := '<DataTemplate x:Key="RmtMacroRow' suf '">'
             . this._BuildItemCardOpen()
             . '<Grid.ColumnDefinitions>' this._ItemInnerColDefs() '</Grid.ColumnDefinitions>'
-            . '<Border Grid.Column="0" Width="12" Height="12" CornerRadius="6" Background="{Binding ColorHex}" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
             . this._BuildSeqNoXaml(true)
             . this._BuildItemRemarkFieldXaml(0, 0, "", true)
             . '<DockPanel Grid.Column="4" LastChildFill="True" HorizontalAlignment="Stretch">'
@@ -65,7 +64,7 @@
             . this._BuildFoldHeaderRowXaml(0, 0, "", true)
             . '<Grid Margin="0,4,0,0"><Grid.Style><Style TargetType="Grid"><Setter Property="Visibility" Value="{Binding ShowTKRowVisibility}"/><Style.Triggers><DataTrigger Binding="{Binding Folded}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>'
             . '<Grid.ColumnDefinitions>' this._BuildFoldLayoutColDefs() '</Grid.ColumnDefinitions>'
-            . '<StackPanel Grid.Column="2" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">'
+            . '<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">'
             . this._TriggerEntries('<Button Tag="FoldTKEdit" Style="{StaticResource RmtItemFieldBtn}" Width="120" Margin="0,0,4,0" ToolTip="' GetLang("触发键") '">' this._BuildTKBtnInnerXaml("", true, "FoldTKStr") '</Button>', true, "FoldTKEdit")
             . this._GestureEntries(true, , , true)
             . '<ComboBox Tag="FoldTKType" SelectedIndex="{Binding FoldTKType}" IsEnabled="{Binding FoldTKTypeEnabled}" Style="{StaticResource RmtItemCombo}" Width="82" Margin="0" ToolTip="' GetLang("触发类型") '">'

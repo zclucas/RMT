@@ -2028,18 +2028,30 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false) {
     ; 否则新 scratch 条目的 VariableMap 为空 Map()，缺失键访问会抛 "No value was returned"
     InitSingleTableState(tableItem)
     item := tableItem.Items[1]
+    if (item.ColorState != 0)
+        return false
     item.Killed := false
     item.Pause := false
     item.ActionCount := 0
     item.ColorState := 1
     item.Remark := ""
+    if (!preserveBranchExit) {
+        item.VariableMap["循环-跳过本轮"] := false
+        item.VariableMap["循环-跳出"] := false
+        item.VariableMap["分支-跳出"] := false
+    }
 
-    UpdateMacroRunningCount(0, 1)
-    RefreshItemColorUI(tableItem, 1)
-    RunMacroBodyOnce(tableItem, MacroStr, 1, preserveBranchExit)
-    item.ColorState := 0
-    UpdateMacroRunningCount(1, 0)
-    RefreshItemColorUI(tableItem, 1)
+    try {
+        UpdateMacroRunningCount(0, 1)
+        RefreshItemColorUI(tableItem, 1)
+        RunMacroBodyOnce(tableItem, MacroStr, 1, preserveBranchExit)
+        return !item.Killed
+    } finally {
+        lastState := item.ColorState
+        item.ColorState := 0
+        UpdateMacroRunningCount(lastState, 0)
+        RefreshItemColorUI(tableItem, 1)
+    }
 }
 
 HandleOpenArg() {

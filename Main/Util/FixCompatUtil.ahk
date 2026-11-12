@@ -161,7 +161,7 @@ Compat_RepairInstalledSettings(root, profiles) {
 }
 
 ; 在独立目录转换所有配置，通过后才替换当前目录，原配置作为可恢复备份保留。
-Compat_ImportSettingsTree(source, currentDir, backupRoot, currentName, report := "") {
+Compat_ImportSettingsTree(source, currentDir, backupRoot, currentName, report := "", fallbackCount := 0) {
     source := ResolvePathNoDotDot(source)
     currentDir := ResolvePathNoDotDot(currentDir)
     backupRoot := ResolvePathNoDotDot(backupRoot)
@@ -204,6 +204,9 @@ Compat_ImportSettingsTree(source, currentDir, backupRoot, currentName, report :=
         if (selected = "")
             selected := profiles[1]
         setting := staged "\MainSettings.toml"
+        ; 次数属于整套设置。源值缺失时保留当前运行计数，合法的 0 照常迁移。
+        macroTotalCount := ReadMacroTotalCount(setting, fallbackCount)
+        CfgWrite(macroTotalCount, setting, "UserSettings", "MacroTotalCount")
         CfgWrite(list, setting, "UserSettings", "SettingArrStr")
         CfgWrite(selected, setting, "UserSettings", "CurSettingName")
         CfgWrite(true, setting, "UserSettings", "IsReload")
@@ -211,7 +214,7 @@ Compat_ImportSettingsTree(source, currentDir, backupRoot, currentName, report :=
         if (report)
             report(GetLang("正在应用配置"))
         Compat_InstallStagedTree(staged, currentDir, paths.Backup, Compat_RepairInstalledSettings.Bind(currentDir, profiles))
-        return {Names: list, Selected: selected, Backup: paths.Backup}
+        return {Names: list, Selected: selected, Backup: paths.Backup, MacroTotalCount: macroTotalCount}
     } finally {
         ; staged 是在固定备份根下新建的独立目录，与源目录及当前配置不重合。
         if (DirExist(staged))
