@@ -61,7 +61,6 @@ foreach ($tag in $releaseDirs.Keys) {
 }
 
 # 3) 上传（存在则覆盖，不存在则创建）；测试版资源标记 pre-release（仅展示区分，不影响下载）
-$prereleaseArgs = if ($info.channel -eq 'test') { @('--prerelease') } else { @() }
 foreach ($tag in $assetsByTag.Keys) {
     $assets = $assetsByTag[$tag]
     # PS5.1: 原生 stderr 不能重定向（2>$null 在 ErrorActionPreference=Stop 下会抛终止异常），
@@ -70,8 +69,14 @@ foreach ($tag in $assetsByTag.Keys) {
     if ($LASTEXITCODE -eq 0) {
         gh release upload $tag @assets --repo $Repo --clobber
     } else {
-        gh release create $tag @assets --repo $Repo --title $tag --latest=false @prereleaseArgs `
-            --notes "RMT $($info.version) from $($info.tag) ($($info.sha))"
+        # 整条命令用数组组装后统一 splat，避免行内混排动态参数；打印便于排查。
+        $createArgs = @('release', 'create', $tag) + @($assets) +
+            @('--repo', $Repo, '--title', $tag,
+              '--notes', "RMT $($info.version) from $($info.tag) ($($info.sha))")
+        if ($info.channel -eq 'test') { $createArgs += '--prerelease' }
+        else { $createArgs += '--latest=false' }
+        Write-Host "gh $($createArgs -join ' ')"
+        gh @createArgs
     }
     if ($LASTEXITCODE -ne 0) { throw "资源发布失败：$Repo $tag" }
     Write-Host "Published $($assets.Count) assets to $Repo $tag"
