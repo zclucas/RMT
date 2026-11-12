@@ -928,6 +928,7 @@ InitTriggerKeyMap() {
     if (IsObject(MySoftData.TriggerKeyMap)) {
         for key, data in MySoftData.TriggerKeyMap {
             try data.StopReleaseWatch()
+            try data.ReleaseLoosenStopPress()
         }
     }
     MySoftData.TriggerKeyMap := Map()
@@ -1158,7 +1159,9 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
 }
 
 ; 触发宏入口：表身份=TableItem 对象（位置不代表身份）
-TriggerMacroHandler(tableItem, itemIndex, *) {
+TriggerMacroHandler(tableItem, itemIndex, *) => StartTriggeredMacro(tableItem, itemIndex)
+
+StartTriggeredMacro(tableItem, itemIndex, press := 0, trigger := 0) {
     if (!IsObject(tableItem))
         tableItem := GetTableByID(String(tableItem))
     if (!tableItem)
@@ -1183,26 +1186,43 @@ TriggerMacroHandler(tableItem, itemIndex, *) {
     macro := item.Macro
     tableID := tableItem.ID
     itemID := item.ID
-    isWork := item.IsWorkIndex
-    if (WorkPoolEnabled() && MyWorkPool.HasItemWork(tableID, itemID))
-        return
+    usesWorker := WorkPoolEnabled()
+    previousCritical := A_IsCritical
+    if (press)
+        Critical("On")
+    try {
+        if ((press && press.released) || (usesWorker && MyWorkPool.HasItemWork(tableID, itemID)))
+            return
 
-    SetTableItemState(tableItem, itemIndex, 1)
-    if (WorkPoolEnabled()) {
-        if (isWork)
-            GraphPoolLog("宏触发恢复", Format("tab={1} item={2} 清理上次残留", tableID, itemID))
-        MyWorkPool.PrepareItemRun(tableID, itemID)
-        GraphPoolLog("宏触发", Format("tab={1} item={2}", tableID, itemID))
-        ; 自定义界面可直接编辑内存里的宏参数，Worker 要执行点击时的内容。
-        cmd := EncodeBatch(tableItem.Symbol == "UI"
-            ? EncodeCommand("TR", tableID, itemID, "", macro)
-            : EncodeCommand("TR", tableID, itemID))
-        item.IsWorkIndex := true
-        MyWorkPool.Submit(cmd, tableID, itemID)
-        return
+        ; 松开只认这次成功发起的运行。其他来源重新启动同一条宏时会替换这个身份。
+        item.LoosenStopRun := press
+        if (press)
+            press.actions[trigger] := true
+        SetTableItemState(tableItem, itemIndex, 1)
+        if (usesWorker) {
+            if (item.IsWorkIndex)
+                GraphPoolLog("宏触发恢复", Format("tab={1} item={2} 清理上次残留", tableID, itemID))
+            MyWorkPool.PrepareItemRun(tableID, itemID)
+            GraphPoolLog("宏触发", Format("tab={1} item={2}", tableID, itemID))
+            ; 自定义界面可直接编辑内存里的宏参数，Worker 要执行点击时的内容。
+            cmd := EncodeBatch(tableItem.Symbol == "UI"
+                ? EncodeCommand("TR", tableID, itemID, "", macro)
+                : EncodeCommand("TR", tableID, itemID))
+            item.IsWorkIndex := true
+            MyWorkPool.Submit(cmd, tableID, itemID)
+            return
+        }
+        MySoftData.MacroTotalCount += 1
+        if (press) {
+            ; 在允许松开回调打断前初始化本地运行状态，避免进宏时覆盖终止标记。
+            item.Killed := false
+            item.Pause := false
+        }
+    } finally {
+        if (press)
+            Critical(previousCritical)
     }
-    MySoftData.MacroTotalCount += 1
-    RunMacroTrigger(tableItem, macro, itemIndex)
+    RunMacroTrigger(tableItem, macro, itemIndex, !!press)
 }
 
 GetReversedComboKey(comboKey) {

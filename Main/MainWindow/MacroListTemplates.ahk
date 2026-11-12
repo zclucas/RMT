@@ -43,7 +43,15 @@
             . '</ComboBox>'
             . this._BuildItemEditGroupWrap(true, 0
                 , this._BuildItemEditBtnXaml(0, 0, "", true)
-                . '<ComboBox Grid.Column="1" Tag="Loop" Text="{Binding LoopText}" IsEditable="True" IsEnabled="{Binding LoopEnabled}" Style="{StaticResource RmtItemCombo}" Margin="0,0,4,0" ToolTip="' GetLang("循环次数") '">'
+                . '<ComboBox Grid.Column="1" Tag="Loop" IsEditable="True" Margin="0,0,4,0" ToolTip="' GetLang("循环次数") '">'
+                . '<ComboBox.Style><Style TargetType="ComboBox" BasedOn="{StaticResource RmtItemCombo}">'
+                . '<Setter Property="Text" Value="{Binding LoopText}"/><Setter Property="IsEnabled" Value="{Binding LoopEnabled}"/>'
+                . '<Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>'
+                . '<Condition Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="Normal"/>'
+                . '<Condition Binding="{Binding TKType}" Value="2"/>'
+                . '</MultiDataTrigger.Conditions><Setter Property="IsEnabled" Value="False"/><Setter Property="Opacity" Value="0.55"/>'
+                . '<Setter Property="Text" Value="' GetLang("无限") '"/>'
+                . '</MultiDataTrigger></Style.Triggers></Style></ComboBox.Style>'
                 . '<ComboBoxItem Content="' GetLang("无限") '"/>'
                 . '</ComboBox>'
                 . '<Button Grid.Column="2" Tag="Setting" Style="{StaticResource RmtItemPrimaryBtn}" Margin="0" Content="&#xE713;" ToolTip="' GetLang("设置") '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"/>')

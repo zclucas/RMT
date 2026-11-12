@@ -14,6 +14,7 @@ class TriggerKeyData {
         this.DownArr := []
         this.LoosenArr := []
         this.LoosenStopArr := []
+        this.LoosenStopPress := 0   ; 本次按下实际启动的松止动作
         this.TogArr := []
         this.HoldArr := []
         this.DblClickArr := []
@@ -160,10 +161,22 @@ class TriggerKeyData {
         ; 读键态出任何异常都按「已松开」处理：宁可退化成可重复触发，也不能把触发键永久锁死
         released := true
         try released := !AreKeysPressed(this.Key)
-        if (!this.NeedReleaseBeforeRetrigger || released) {
+        if (released) {
+            this.DblClickKeyDown := false
             this.NeedReleaseBeforeRetrigger := false
             this.StopReleaseWatch()
+            this.ReleaseLoosenStopPress()
         }
+    }
+
+    ReleaseLoosenStopPress() {
+        press := this.LoosenStopPress
+        if (!press)
+            return
+        this.LoosenStopPress := 0
+        press.released := true
+        for trigger in press.actions
+            trigger.CancelAction(press)
     }
 
     OnTriggerKeyDown() {
@@ -172,6 +185,15 @@ class TriggerKeyData {
         isOnlyDownKey := this.IsOnlyDownKey()
         isNewPress := !this.DblClickKeyDown || isOnlyDownKey || InStr(this.Key, " & ")
         this.DblClickKeyDown := true
+
+        press := 0
+        if (!isOnlyDownKey && !this.LoosenStopPress && this.OriLoosenStopArr.Length) {
+            press := {released: false, actions: Map()}
+            this.LoosenStopPress := press
+            ; 组合键没有 up 热键，绑定窗口失焦也可能丢失 up。手柄有自己的松开检测。
+            if (!InStr(this.Key, "joy"))
+                this.StartReleaseWatch()
+        }
         this.UpdataArr()
 
         ;双击检测逻辑
@@ -195,8 +217,12 @@ class TriggerKeyData {
             value.Action()
         }
 
-        for index, value in this.LoosenStopArr {
-            value.Action()
+        if (isOnlyDownKey) {
+            for value in this.LoosenStopArr
+                value.Action()
+        } else if (press) {
+            for value in this.LoosenStopArr
+                value.Action(press)
         }
 
         for index, value in this.TogArr {
@@ -228,16 +254,13 @@ class TriggerKeyData {
 
     OnTriggerKeyUp() {
         this.DblClickKeyDown := false
-        this.UpdataArr()
         this.NeedReleaseBeforeRetrigger := false
         this.StopReleaseWatch()
+        this.ReleaseLoosenStopPress()
+        this.UpdataArr()
 
         for index, value in this.LoosenArr {
             value.Action()
-        }
-
-        for index, value in this.LoosenStopArr {
-            value.CancelAction()
         }
 
         this.DelHoldTimeChecker()
@@ -411,8 +434,8 @@ class TriggerKeyInfo {
         return false
     }
 
-    Action() {
-        if (this.forbidTrigger)
+    Action(press := 0) {
+        if (this.forbidTrigger || (press && press.released))
             return
         triggerType := this.GetTriggerType()
         if (this.macroType == 1) {
@@ -434,7 +457,7 @@ class TriggerKeyInfo {
                 OnToggleTriggerMacro(t, itemIndex)
             }
             else
-                TriggerMacroHandler(t, itemIndex)
+                StartTriggeredMacro(t, itemIndex, press, this)
         }
         else if (this.macroType == 2) {
             t := GetTableByID(this.tableID)
@@ -448,8 +471,11 @@ class TriggerKeyInfo {
                 this._WarnOnce("menu-fold", "菜单宏触发键找不到模块: " this.foldID " (表 " t.ID ")")
                 return
             }
-            if (triggerType == 3)
+            if (triggerType == 3) {
                 this.forbidTrigger := true
+                if (press)
+                    press.actions[this] := true
+            }
             OpenMenuWheel(foldIndex, triggerType == 4, t.ID)
         }
         else if (this.macroType == 3) {
@@ -466,29 +492,18 @@ class TriggerKeyInfo {
         }
     }
 
-    CancelAction() {
-        triggerType := this.GetTriggerType()
+    CancelAction(press) {
         if (this.macroType == 1) {
-            if (triggerType == 3) {
-                t := GetTableByID(this.tableID)
-                item := this.GetItem()
-                if (!t || !item)
-                    return
-                itemIndex := GetItemIndexInTable(t, item.ID)
-                WorkerIndex := item.IsWorkIndex
-                if (WorkerIndex != 0) {
-                    MyStopMacro(t, itemIndex)
-                    item.IsWorkIndex := 0
-                    return
-                }
-                KillTableItemMacro(t, itemIndex)
-            }
+            t := GetTableByID(this.tableID)
+            item := this.GetItem()
+            if (!t || !item || !item.HasOwnProp("LoosenStopRun") || item.LoosenStopRun != press)
+                return
+            item.DeleteProp("LoosenStopRun")
+            MyStopMacro(t, item)
         }
         else if (this.macroType == 2) {
-            if (triggerType == 3)
-                this.forbidTrigger := false
-            if (triggerType != 4)
-                CloseMenuWheel()
+            this.forbidTrigger := false
+            CloseMenuWheel()
         }
         ; macroType 3：按下切换，松开无需额外处理
     }

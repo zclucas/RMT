@@ -44,6 +44,26 @@ class RunGui {
 
     _EscapeXml(s) => EscapeXamlXml(s)
 
+    static AddTargetCombo(parent) {
+        combo := parent.Add("ComboBox").Name("PathTextCon").Height(26).MinHeight(26).VerticalAlignment("Center")
+            .VerticalContentAlignment("Center").FontSize("11").IsEditable("True").IsTextSearchEnabled("False")
+        tip := GetLang("倒计时结束时会强制关闭应用")
+        combo.Add("ComboBoxItem").Content(GetLang("30 秒后关机")).TextSearch_Text("shutdown.exe /s /t 30").ToolTip(tip)
+        combo.Add("ComboBoxItem").Content(GetLang("30 秒后重启")).TextSearch_Text("shutdown.exe /r /t 30").ToolTip(tip)
+        return combo
+    }
+
+    static ResetTargetSelection(ui, *) {
+        if (ui.Query("PathTextCon>SelectedIndex") == -1)
+            return
+        target := ui.Query("PathTextCon")
+        ; 手动编辑后清掉旧选中项，展开时可以重新选回同一个预设。
+        ui.BatchUpdate([
+            {ControlName: "PathTextCon", PropertyName: "SelectedIndex", Value: "-1"},
+            {ControlName: "PathTextCon", PropertyName: "Text", Value: target}
+        ])
+    }
+
     _ComboPush(comboName, propertyName, value) {
         if (this._batching)
             this._batch.Push({ControlName: comboName, PropertyName: propertyName, Value: value})
@@ -82,10 +102,7 @@ class RunGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("目标：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("TextBox").Grid_Row(1).Grid_Column(1).Name("PathTextCon").Height(26).MinHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Padding("2,0")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        RunGui.AddTargetCombo(body).Grid_Row(1).Grid_Column(1)
         body.Add("Button").Grid_Row(1).Grid_Column(3).Name("BtnSelectFile").Content(GetLang("选择文件")).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Stretch").Cursor("Hand")
 
         body.Add("TextBlock").Grid_Row(2).Grid_ColumnSpan(4).Text(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等"))
@@ -100,12 +117,13 @@ class RunGui {
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/16-运行", ObjBindMethod(this, "TriggerMacro"), "!l")
+        this.ui.OnEvent("PathTextCon", "DropDownOpened", RunGui.ResetTargetSelection.Bind(RunGui, this.ui))
         this.ui.OnEvent("BtnSelectFile", "Click", ObjBindMethod(this, "OnClickFileSelectBtn"))
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
     }
 
     OnWindowLoad(state, ctrl, event) {

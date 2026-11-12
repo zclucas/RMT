@@ -152,26 +152,6 @@ SaveMacroCMDData(Data) {
         MySoftData.DataCacheMap.Delete(normalizedSerialStr)
 }
 
-GetItemColorValue(state) {
-    ColorMap := Map(0, "", 1, "Images\Soft\GreenColor.png", 2, "Images\Soft\YellowColor.png", 3,
-        "Images\Soft\RedColor.png")
-
-    if (ColorMap.Has(state))
-        return ColorMap[state]
-
-    return ""
-}
-
-GetItemColorState(ColorValue) {
-    ColorMap := Map("", 0, "Images\Soft\GreenColor.png", 1, "Images\Soft\YellowColor.png", 2,
-        "Images\Soft\RedColor.png", 3)
-
-    if (ColorMap.Has(ColorValue))
-        return ColorMap[ColorValue]
-
-    return 0
-}
-
 ; 调试起点标记：▶（旧配置兼容 ⭐）；界面用向右键帽 Path，不直接画 ▶
 CmdDebugMark() {
     return Chr(0x25B6)

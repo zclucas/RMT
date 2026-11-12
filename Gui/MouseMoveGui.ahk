@@ -97,16 +97,16 @@ class MouseMoveGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/5-移动", ObjBindMethod(this, "TriggerMacro"), "!l", ObjBindMethod(this, "OnClickTargeterBtn"), ObjBindMethod(this, "SureCoord"))
         this.ui.OnEvent("PosXCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("PosYCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("SpeedCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("MouseMoveModeCombo", "SelectionChanged", ObjBindMethod(this, "OnChangeEditValue"))
         BindMouseMovePreview(this.ui, "move")
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
 
     }
 
@@ -258,8 +258,7 @@ class MouseMoveGui {
     }
 
     OnClickTargeterBtn(state := "", ctrl := "", event := "") {
-        MyTargetGui.SureAction := this.OnSureTarget.Bind(this)
-        MyTargetGui.ShowGui()
+        MyTargetGui.ShowGui(XamlWin.BindCurrent(this, "OnSureTarget"))
     }
 
     OnClickSureBtn(state, ctrl, event) {

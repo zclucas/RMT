@@ -1,9 +1,9 @@
 ﻿; 一次宏触发的完整生命周期。主进程本地执行和 Worker 都从这里进入。
-RunMacroTrigger(tableItem, macro, index, workerPrepared := false) {
+RunMacroTrigger(tableItem, macro, index, prepared := false) {
     item := GetItemByIndex(tableItem, index)
     if (!item)
         return
-    if (!workerPrepared) {
+    if (!prepared) {
         item.Killed := false
         item.Pause := false
     }
@@ -13,10 +13,13 @@ RunMacroTrigger(tableItem, macro, index, workerPrepared := false) {
     item.VariableMap["循环次数"] := 0
     ; 执行前钩子：一次触发只跑一次（不是每轮循环）。只在发起者执行——
     ; 图形宏的分支 Worker 走 RunGraphNodeChain，不经本函数，天然不会重复。
-    if (workerPrepared) {
+    if (prepared) {
         WaitIfPaused(tableItem, index)
-        if (item.Killed)
+        if (item.Killed) {
+            if (workIndex == 0)
+                FinalizeMacroRun(tableItem, macro, index)
             return
+        }
     }
     RunMacroHook(tableItem, item, "pre")
     isContinue := MySoftData.ContinueKeyMap.Has(item.TK) && item.LoopCount == 1

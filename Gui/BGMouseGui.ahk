@@ -174,15 +174,15 @@ class BGMouseGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/21-后台鼠标", ObjBindMethod(this, "TriggerMacro"), "!l", "", ObjBindMethod(this, "OnF1"))
         try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1:确定信息"))
         this.ui.OnEvent("MouseTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
         this.ui.OnEvent("OperateTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
         this.ui.OnEvent("BtnEdit", "Click", ObjBindMethod(this, "OnClickEditBtn"))
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
     }
 
     OnWindowLoad(state, ctrl, event) {

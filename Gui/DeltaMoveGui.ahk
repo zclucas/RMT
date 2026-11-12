@@ -136,12 +136,12 @@ class DeltaMoveGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/增量移动", ObjBindMethod(this, "TriggerMacro"), "!l")
         BindMouseMovePreview(this.ui, "delta")
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnSureBtnClick"))
     }
 
     OnWindowLoad(state, ctrl, event) {

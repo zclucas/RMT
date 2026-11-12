@@ -333,6 +333,7 @@ CmdEditorPlayTip(hotkey := "!l") {
 
 ; 指令编辑器标题栏：手册跳转对应章节，视频暂为占位提示
 ; playAction 非空时显示执行钮；targeterAction 显示定位取色器；f1Action 显示 F1 定位
+; 标题栏动作不需要 XAML Click 传入的 state、控件名和事件名，统一无参调用。
 BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", targeterAction := "", f1Action := "", f2Action := "", f3Action := "") {
     if (!IsObject(ui))
         return
@@ -346,34 +347,34 @@ BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", t
         try ui.Update("BtnCmdPlay", "Visibility", "Visible")
         disp := CmdEditorPlayTip(playHotkey)
         try ui.Update("BtnCmdPlay", "ToolTip", disp)
-        ui.OnEvent("BtnCmdPlay", "Click", playAction)
+        ui.OnEvent("BtnCmdPlay", "Click", (*) => playAction())
     }
     if (targeterAction != "") {
         try ui.Update("BtnCmdTargeter", "Visibility", "Visible")
         try ui.Update("BtnCmdTargeter", "ToolTip", GetLang("定位取色器"))
-        ui.OnEvent("BtnCmdTargeter", "Click", targeterAction)
+        ui.OnEvent("BtnCmdTargeter", "Click", (*) => targeterAction())
     }
     if (f1Action != "") {
         try ui.Update("BtnCmdF1", "Visibility", "Visible")
         f1Tip := GetLang("F1:选取当前坐标")
         f1Tip := StrReplace(f1Tip, "F1:", "F1：")
         try ui.Update("BtnCmdF1", "ToolTip", f1Tip)
-        ui.OnEvent("BtnCmdF1", "Click", f1Action)
+        ui.OnEvent("BtnCmdF1", "Click", (*) => f1Action())
     }
     if (f2Action != "") {
         try ui.Update("BtnCmdF2", "Visibility", "Visible")
         try ui.Update("BtnCmdF2", "ToolTip", GetLang("F2：截图"))
-        ui.OnEvent("BtnCmdF2", "Click", f2Action)
+        ui.OnEvent("BtnCmdF2", "Click", (*) => f2Action())
     }
     if (f3Action != "") {
         try ui.Update("BtnCmdF3", "Visibility", "Visible")
         try ui.Update("BtnCmdF3", "ToolTip", GetLang("F3：选取当前颜色"))
-        ui.OnEvent("BtnCmdF3", "Click", f3Action)
+        ui.OnEvent("BtnCmdF3", "Click", (*) => f3Action())
     }
 }
 
 ShowCmdVideoNotice(ui) {
-    if (ui.wpfHwnd)
+    if (IsObject(ui) && ui.wpfHwnd)
         RmtDialog.Info(GetLang("指令介绍视频制作中，敬请期待。"), , ui.wpfHwnd)
 }
 
@@ -437,7 +438,7 @@ CmdEditorTitleIcon(title) {
             ["流程跳转", "Images\Soft\FlowJump.png"],
             ["跳转", "Images\Soft\FlowJump.png"],
             ["宏操作", "Images\Soft\MacroAction.png"],
-            ["间隔", "Images\Soft\Interval.png"],
+            ["间隔", "Images\Soft\Time.png"],
             ["按键", "Images\Soft\Key.png"],
             ["手柄", "Images\Soft\Joy.png"],
             ["搜索", "Images\Soft\Search.png"],
@@ -453,7 +454,7 @@ CmdEditorTitleIcon(title) {
             ["等待确定", "Images\Soft\WaitConfirm.png"],
             ["等待", "Images\Soft\Wait.png"],
             ["时间", "Images\Soft\Time.png"],
-            ["倒计时", "Images\Soft\Interval.png"],
+            ["倒计时", "Images\Soft\Time.png"],
             ["提示", "Images\Soft\Prompt.png"],
             ["注释", "Images\Soft\Comment.png"],
             ["抓图", "Images\Soft\ScreenShot.png"]
@@ -508,32 +509,45 @@ class ScreenAreaPreview {
     }
 
     Show(x, y, w, h, apply, targetHwnd := 0, context := "") {
-        rect := [Round(x), Round(y), Max(Round(x) + 1, Round(x + w)), Max(Round(y) + 1, Round(y + h))]
-        if (this.IsDragging()) {
-            if (targetHwnd == this.TargetHwnd && context == this.Context && this._SameRect(rect, this.Drag.StartRect))
-                return
-            this._StopDrag()
+        wasCritical := A_IsCritical
+        Critical("On")
+        try {
+            rect := [Round(x), Round(y), Max(Round(x) + 1, Round(x + w)), Max(Round(y) + 1, Round(y + h))]
+            if (this.IsDragging()) {
+                if (targetHwnd == this.TargetHwnd && context == this.Context && this._SameRect(rect, this.Drag.StartRect))
+                    return
+                this._StopDrag()
+            }
+            this.Apply := apply
+            this.TargetHwnd := targetHwnd
+            this.Context := context
+            this._Draw(rect)
+        } finally {
+            Critical(wasCritical)
         }
-        this.Apply := apply
-        this.TargetHwnd := targetHwnd
-        this.Context := context
-        this._Draw(rect)
     }
 
     Hide() {
-        this._StopDrag()
-        if (this.Windows.Length) {
-            OnMessage(0x0201, this.MouseDown, 0) ; WM_LBUTTONDOWN
-            OnMessage(0x0020, this.SetCursor, 0) ; WM_SETCURSOR
+        ; 创建边框时 Gui.Show 可以派发新事件，显隐过程不能相互打断。
+        wasCritical := A_IsCritical
+        Critical("On")
+        try {
+            this._StopDrag()
+            if (IsObject(this.MouseDown))
+                OnMessage(0x0201, this.MouseDown, 0) ; WM_LBUTTONDOWN
+            if (IsObject(this.SetCursor))
+                OnMessage(0x0020, this.SetCursor, 0) ; WM_SETCURSOR
             this.MouseDown := "", this.SetCursor := ""
             for g in this.Windows
                 g.Destroy()
             this.Windows := []
             this.GripByHwnd.Clear()
             this.Rect := []
+            this.Apply := ""
+            this.TargetHwnd := 0
+        } finally {
+            Critical(wasCritical)
         }
-        this.Apply := ""
-        this.TargetHwnd := 0
     }
 
     IsDragging() {

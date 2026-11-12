@@ -5,7 +5,6 @@ class TargetGui {
     __New() {
         this.Gui := ""
         this.ui := ""
-        this.SureAction := ""
         this._hkIds := []
         this._lbuttonCb := ""
         this.active := false
@@ -14,24 +13,28 @@ class TargetGui {
 
     Hwnd() => IsObject(this.ui) ? this.ui.wpfHwnd : 0
 
-    ShowGui(targetHwnd := 0) {
+    ShowGui(sureAction, targetHwnd := 0) {
         if (this.active)
-            return
+            return false
         ; XAML 事件中延后建窗，避免嵌套 CREATE_WINDOW。
-        SetTimer(ObjBindMethod(this, "_Open", targetHwnd), -1)
+        this.active := true
+        SetTimer(ObjBindMethod(this, "_Open", sureAction, targetHwnd), -1)
+        return true
     }
 
-    _Open(targetHwnd, *) {
-        if (this.active)
+    _Open(sureAction, targetHwnd) {
+        if (!this.active)
             return
-        this.active := true
         try {
             CoordMode("Mouse", "Screen")
             MouseGetPos(&startX, &startY)
             this.startX := startX, this.startY := startY
-            this.AddGui()
-            MyColorPanel.SureAction := this.SureAction
-            MyColorPanel.ShowGui(targetHwnd)
+            ui := this.AddGui()
+            if (this.ui != ui)
+                return
+            MyColorPanel.ShowGui(sureAction, targetHwnd)
+            if (this.ui != ui)
+                return
             this._hkIds := WinHotkey.Register(["Left", "Right", "Up", "Down", "Enter", "Escape"], ObjBindMethod(this, "_OnHotkey"))
             SetTimer(this._tick, 60)
         } catch as err {
@@ -53,27 +56,36 @@ class TargetGui {
         }
         this.ui := XAMLHost(win.ToString(), "", WinExist("A"))
         this.ui.skipFontScale := true
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_Loaded"))
-        this.ui.OnEvent("Window", "Closing", (*) => MyColorPanel.OnClose())
+        ui := this.ui
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "_Loaded"))
+        this.ui.OnEvent("Window", "Closing", (*) => this.ui == ui ? MyColorPanel.OnClose() : "")
         ; 准星整块就是 DragArea（窗口靠它拖动），这块客户端区域在 WM_NCHITTEST 里被当成标题栏，
         ; WPF 的 MouseDoubleClick 收不到。引擎把标题栏双击转成 NcDoubleClick 回传。
-        this.ui.OnEvent("Window", "NcDoubleClick", ObjBindMethod(this, "GuiDoubleClick"))
-        this.ui.OnEvent("DragArea", "MouseDoubleClick", ObjBindMethod(this, "GuiDoubleClick"))
+        this.ui.OnEvent("Window", "NcDoubleClick", XamlWin.BindCurrent(this, "GuiDoubleClick"))
+        this.ui.OnEvent("DragArea", "MouseDoubleClick", XamlWin.BindCurrent(this, "GuiDoubleClick"))
         XamlWin.QueueTheme(this.ui)
         ; 不要给准星加「截屏排除」：那是 SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)，
         ; 效果是「只在本机显示器上显示，远程桌面里完全不出现」——远程使用者会看不到准星。
         ; 取色靠 BitBlt(SRCCOPY) 采样，本身不含分层窗口，准星不会污染采样结果。
-        this.ui.Show()
-        this.Gui := GuiAdapter(this.ui)
+        ui.Show()
+        if (this.ui == ui)
+            this.Gui := GuiAdapter(ui)
+        return ui
     }
 
     _Loaded(*) {
-        if (!this.active)
+        ui := this.ui
+        if (!this.active || !IsObject(ui) || !ui.wpfHwnd)
             return
-        hwnd := this.Hwnd()
-        WinGetPos(, , &w, &h, hwnd)
-        WinMove(this.startX - Round(w / 2), this.startY - Round(h / 2), , , hwnd)
-        this.ui.Update("Window", "Opacity", "1")
+        hwnd := ui.wpfHwnd
+        try {
+            WinGetPos(, , &w, &h, hwnd)
+            WinMove(this.startX - Round(w / 2), this.startY - Round(h / 2), , , hwnd)
+            if (this.ui == ui)
+                ui.Update("Window", "Opacity", "1")
+        } catch TargetError {
+            ; 窗口可能在 LoadedHwnd 回调执行期间已经关闭。
+        }
     }
 
     GuiDrag(*) {

@@ -1186,8 +1186,7 @@ class MacroGraphHandlersMixin {
             }
             hwnd := matches[1]
         }
-        MyTargetGui.SureAction := this._OnSearchPickSure.Bind(this, id, isWindowColor)
-        MyTargetGui.ShowGui(hwnd)
+        MyTargetGui.ShowGui(XamlWin.BindCurrent(this, "_OnSearchPickSure", id, isWindowColor), hwnd)
     }
 
     _OnSearchPickSure(id, isWindowColor, posX, posY, color) {

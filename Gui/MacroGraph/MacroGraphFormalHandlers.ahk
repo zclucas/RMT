@@ -165,6 +165,11 @@ class MacroGraphFormalHandlersMixin {
                 this._EnsureComboInState(state, p "SysCmb_" id, sysItems)
                 if (state.Has(p "SysCmb_" id) && state[p "SysCmb_" id] != "")
                     data.CopyVariableArr[slot] := GetLangKey(state[p "SysCmb_" id])
+            } else if (ot == "时间") {
+                timeItems := GetTimeCategoryVarArr()
+                this._EnsureComboInState(state, p "TimeCmb_" id, timeItems)
+                if (state.Has(p "TimeCmb_" id) && state[p "TimeCmb_" id] != "")
+                    data.CopyVariableArr[slot] := GetLangKey(state[p "TimeCmb_" id])
             } else if (ot == "字符") {
                 ; 字符：取纯文本输入（按字面量保存，不做语言键转换，允许为空串）
                 if (state.Has(p "CopyTxt_" id))
@@ -1279,6 +1284,7 @@ class MacroGraphFormalHandlersMixin {
             this._FormalSetVis(id, p "CopyRow_" id, showNum)
             this._FormalSetVis(id, p "CharRow_" id, showChar)
             this._FormalSetVis(id, p "SysRow_" id, showSys)
+            this._FormalSetVis(id, p "TimeRow_" id, on && ot == "时间")
             this._FormalSetVis(id, p "MinRow_" id, showMinMax)
             this._FormalSetVis(id, p "MaxRow_" id, showMinMax)
             prevOn := slotVis && on
@@ -2544,6 +2550,7 @@ class MacroGraphFormalHandlersMixin {
             this.ui.Update(p "Min_" id, "Text", GetLang(minv))
             this.ui.Update(p "Max_" id, "Text", GetLang(maxv))
             this.ui.Update(p "SysCmb_" id, "SelectedIndex", this._IndexInLangArr(sysItems, GetLang(cv)))
+            this.ui.Update(p "TimeCmb_" id, "SelectedIndex", this._IndexInLangArr(GetTimeCategoryVarArr(), GetLang(cv)))
         }
         this._RefreshFormalVariableVisibility(id)
         this._RefreshVariableSummary(id)

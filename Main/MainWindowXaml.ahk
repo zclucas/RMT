@@ -263,6 +263,7 @@ class MainWin {
                 ; 取整会让行 Margin(2)/24px 控件在 125% DPI 下按累计偏移不同而 ±1px（展开/折叠/拖拽后
                 ; 行距忽大忽小、侧边框断点、备注底边被吞）。关闭后位置为稳定小数，边框仍清晰。
                 vg.Add("ListBox").Name("FoldList_" idx).Grid_Column(0).SelectionMode("Single").BorderThickness("0").Background("Transparent")
+                    .Tag(tableItem.Symbol)
                     .Margin("0").UseLayoutRounding("False").SnapsToDevicePixels("True").Panel_ZIndex(1)
                     .VirtualizingPanel_IsVirtualizing("True").VirtualizingPanel_VirtualizationMode("Standard")
                     .VirtualizingPanel_CacheLength("2,2").VirtualizingPanel_CacheLengthUnit("Page")
@@ -722,6 +723,8 @@ class MainWin {
         MainSoftData.TableIndex := idx
         ; 惰性构建：首次切到某个页签才生成它的内容（启动时只建当前页签）
         this._EnsureTabBuilt(idx)
+        if (idx == GetTableIndexByID("Tool"))
+            this.RefreshVoiceExtensionButton()
         this._EnsureAiPanel(idx)
         if (idx >= 1 && idx <= MySoftData.TableInfo.Length)
             MainSoftData.CurTableID := MySoftData.TableInfo[idx].ID

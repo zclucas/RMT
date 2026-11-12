@@ -81,6 +81,7 @@ class SttGui {
                 return
             if (result != "ok")
                 throw Error("Voice extension download failed")
+            try MyMainWin.RefreshVoiceExtensionButton()
             engine := InitSttEngine()
             if (!engine._TryLoadDll()) {
                 Toast.Warning(GetLang("语音引擎未就绪"))
@@ -103,9 +104,8 @@ class SttGui {
         } finally SttGui._extensionInstalling := false
     }
 
-    static _DownloadExtensionFiles() {
-        engine := InitSttEngine()
-        runtimeUrl := RmtAssetsBaseUrl(RmtAssetsReleaseTag())
+    static MissingVoiceExtensionFiles() {
+        runDir := A_WorkingDir "\Plugins\Voice\" (A_PtrSize == 8 ? "x64" : "x86")
         runtimeFiles := ["sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll"
             , "vcruntime140.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "api-ms-win-core-path-l1-1-0.dll"]
         if (A_PtrSize == 8)
@@ -114,8 +114,8 @@ class SttGui {
 
         missing := []
         for file in runtimeFiles
-            if (RmtAssetMissing(engine.RunDir "\" file))
-                missing.Push({fullPath: engine.RunDir "\" file, entry: file})
+            if (RmtAssetMissing(runDir "\" file))
+                missing.Push({fullPath: runDir "\" file, entry: file})
 
         kwsDir := A_WorkingDir "\Plugins\Voice\models\kws\"
         kwsFiles := ["decoder-epoch-13-avg-2-chunk-16-left-64.onnx", "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx"
@@ -124,9 +124,15 @@ class SttGui {
             if (RmtAssetMissing(kwsDir file))
                 missing.Push({fullPath: kwsDir file, entry: file})
 
+        return missing
+    }
+
+    static _DownloadExtensionFiles() {
+        missing := SttGui.MissingVoiceExtensionFiles()
         if (!missing.Length)
             return "ok"
 
+        runtimeUrl := RmtAssetsBaseUrl(RmtAssetsReleaseTag())
         progress := RmtProgress(GetLang("下载语音扩展"), GetLang("准备下载"), XamlWin.ActiveOwner(), GetLang("取消下载"))
         progress.Show()
         try {
@@ -673,6 +679,9 @@ class SttGui {
             DirCreate(spec["dir"])
             for f in files
                 FileCopy(src "\" f, spec["dir"] "\" f, true)
+            license := "voice-models-LICENSE.txt"
+            if (FileExist(src "\" license))
+                FileCopy(src "\" license, spec["dir"] "\" license, true)
         } catch {
             return false
         }

@@ -234,9 +234,9 @@ class SearchGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/3-搜索", (*) => this.TriggerMacro(), "!l"
             , (*) => this.OnClickTargeterBtn(), (*) => this.OnF1()
             , (*) => this.OnImageShotBtnClick(), (*) => this.SureColor())
@@ -251,7 +251,7 @@ class SearchGui {
         this.ui.OnEvent("ImageSelectBtn", "Click", ObjBindMethod(this, "OnClickSetPicBtn"))
         this.ui.OnEvent("BtnEditFoundMacro", "Click", ObjBindMethod(this, "OnEditFoundMacroBtnClick"))
         this.ui.OnEvent("BtnEditUnFoundMacro", "Click", ObjBindMethod(this, "OnEditUnFoundMacroBtnClick"))
-        this.ui.OnEvent("BtnSure", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnSure", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
 
         ; 原生 AddGui 中 MouseActionTypeCon 默认 Value=2（移动至目标）；XAML 默认索引 0，这里先复位为索引 1
         ; （Init 会用 Data.MouseActionType 覆盖；数据校验失败提前 return 时也能保持原生默认）
@@ -504,8 +504,7 @@ class SearchGui {
     }
 
     OnClickTargeterBtn(*) {
-        MyTargetGui.SureAction := this.OnSureTarget.Bind(this)
-        MyTargetGui.ShowGui()
+        MyTargetGui.ShowGui(XamlWin.BindCurrent(this, "OnSureTarget"))
     }
 
     OnClickTargeterHelpBtn(*) {

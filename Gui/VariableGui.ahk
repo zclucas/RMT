@@ -128,12 +128,12 @@ class VariableGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._VarScrollStyles())
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/11-变量")
         this.ui.OnEvent("BtnHelp", "Click", ObjBindMethod(this, "OnClickTypeHelpBtn"))
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         ; 行区事件在 _RebuildRows 动态绑定（OpType/EditChar/DelRow/BtnAddVar）
     }
 
@@ -505,6 +505,9 @@ class VariableGui {
         str14 := GetLang("当前分：当前分钟（形如46）")
         str15 := GetLang("当前秒：当前秒（形如58）")
         str := Format("{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}`n{}", str1, str2, str3, str4, str5, str6, str7, str7b, str8, str9, str10, str11, str12, str13, str14, str15)
+        str .= "`n" GetLang("日期文本") "  (2026-04-12)"
+            . "`n" GetLang("时分文本") "  (19:46)"
+            . "`n" GetLang("时分秒文本") "  (19:46:58)"
         RmtDialog.Info(str, GetLang("系统变量说明"), "Owner" this.Hwnd())
     }
 

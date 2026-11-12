@@ -19,11 +19,11 @@
                 . '<Border Background="{DynamicResource TitleBarColor}" CornerRadius="7,7,0,0" Padding="12,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center">' glyphXaml '<TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" Foreground="{DynamicResource TitleBarForeground}" VerticalAlignment="Center"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">' headerRight '</StackPanel></Grid></Border>'
                 . '<Grid Grid.Row="1" Margin="14,12,14,14">' body '</Grid></Grid></Border>'
         }
-        openBtn(name, glyph, text, primary := false) {
+        openBtn(name, glyph, text, primary := false, margin := "0") {
             bg := primary ? '{DynamicResource ActionBg}' : '{DynamicResource ControlBg}'
             fg := primary ? '{DynamicResource ActionText}' : '{DynamicResource TextMain}'
             br := primary ? '{DynamicResource ActionStroke}' : '{DynamicResource ControlBorder}'
-            return '<Button Name="' name '" Height="28" MinHeight="28" Padding="10,0" Background="' bg '" Foreground="' fg '" BorderBrush="' br '" BorderThickness="1" Cursor="Hand">'
+            return '<Button Name="' name '" Height="28" MinHeight="28" Padding="10,0" Margin="' margin '" Background="' bg '" Foreground="' fg '" BorderBrush="' br '" BorderThickness="1" Cursor="Hand">'
                 . '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions><TextBlock Text="' glyph '" FontFamily="' iconFont '" VerticalAlignment="Center" Margin="0,0,6,0"/><TextBlock Grid.Column="1" Text="' this._XmlEsc(text) '" VerticalAlignment="Center"/><TextBlock Grid.Column="2" Text="↗" FontSize="8" VerticalAlignment="Top" HorizontalAlignment="Right"/></Grid></Button>'
         }
         actionRow(title, detail, hotkey, buttonXaml) {
@@ -55,8 +55,8 @@
 
         auxiliaryBody := '<StackPanel><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE840;" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' GetLang("窗口置顶") '" FontWeight="Bold" VerticalAlignment="Center"/><CheckBox Name="ChkAlwaysOnTop" Content="' GetLang("保持 RMT 主窗口在最前") '" Style="{StaticResource ToolSwitch}" Margin="12,0,0,0"/></StackPanel>'
             . '<StackPanel Orientation="Horizontal" Margin="0,12,0,0">' openBtn("BtnFileCheck", "&#xE8B7;", GetLang("文件校验"), true)
-            . '<Button Name="BtnFileCheckHelp" Content="?" ToolTip="' GetLang("文件校验说明") '" Width="28" Height="28" MinHeight="28" Padding="0" Margin="8,0,208,0"/>'
-            . openBtn("BtnVoiceExtension", "&#xE896;", GetLang("语音扩展"), true) '</StackPanel></StackPanel>'
+            . '<Button Name="BtnFileCheckHelp" Content="?" ToolTip="' GetLang("文件校验说明") '" Width="28" Height="28" MinHeight="28" Padding="0" Margin="8,0,0,0"/>'
+            . openBtn("BtnVoiceExtension", "&#xE896;", GetLang("语音扩展"), true, "208,0,0,0") '</StackPanel></StackPanel>'
         recordBody := '<StackPanel>'
             . actionRow(GetLang("指令录制"), GetLang("记录鼠标与键盘操作"), FormatHotkeyDisplay(MainSoftData.ToolRecordMacroHotKey), '<CheckBox Name="ChkToolCheckRecord" Content="&#xE7C8;" ToolTip="' GetLang("开始或停止录制") '" Style="{StaticResource ToolRecordSwitch}"/>')
             . actionRow(GetLang("图片提取文本"), GetLang("从截图或本地图片识别文本"), FormatHotkeyDisplay(MainSoftData.ToolTextFilterHotKey), iconBtn("BtnTextShot", "&#xE7A8;", GetLang("截图提取文本")) iconBtn("BtnTextImage", "&#xE8B7;", GetLang("从图片提取文本")))
@@ -71,6 +71,7 @@
             . '<StackPanel Grid.Column="0">' card(GetLang("辅助操作"), "&#xE713;", auxiliaryBody) card(GetLang("录制与提取"), "&#xE7C8;", recordBody, "0,14,0,0") '</StackPanel>'
             . '<Border Grid.Column="2">' card(GetLang("监视"), "&#xE7B3;", monitorBody) '</Border><Border Grid.Row="2" Grid.ColumnSpan="3">' card(GetLang("录制指令或提取文本内容"), "", outputBody, "0", clearToolTextBtn) '</Border></Grid>'
         Add(toolXaml)
+        this.RefreshVoiceExtensionButton()
 
         this._Bind("BtnOpenVarListen", "Click", (*) => MyVarListenGui.ShowGui())
         this._Bind("BtnFileCheck", "Click", (*) => SelfCheckMissingFiles())
@@ -102,4 +103,8 @@
         this.ui.Update("ChkToolCheck", "IsChecked", MainSoftData.IsToolCheck ? "True" : "False")
         this.ui.Update("ChkToolCheckRecord", "IsChecked", MainSoftData.IsToolRecord ? "True" : "False")
         this.ui.Update("ChkAlwaysOnTop", "IsChecked", "False")
+    }
+
+    RefreshVoiceExtensionButton() {
+        this.ui.Update("BtnVoiceExtension", "Visibility", SttGui.MissingVoiceExtensionFiles().Length ? "Visible" : "Collapsed")
     }

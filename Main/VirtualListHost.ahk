@@ -253,7 +253,12 @@ class VirtualListHost {
     }
 
     _Loop(tableItem, i) {
-        return tableItem.Items[i].LoopCount == "-1" ? GetLang("无限") : tableItem.Items[i].LoopCount
+        item := tableItem.Items[i]
+        return (item.LoopCount == "-1" || this._IsLoopLocked(tableItem, item)) ? GetLang("无限") : item.LoopCount
+    }
+
+    _IsLoopLocked(tableItem, item) {
+        return tableItem.Symbol == "Normal" && item.TriggerType == 3
     }
 
     _Color(tableItem, i) {
@@ -513,9 +518,16 @@ class VirtualListHost {
                 return
             switch field {
                 case "Remark": item.Remark := value
-                case "TKType": item.TriggerType := Integer(value) + 1
+                case "TKType":
+                    if (this._IsLoopLocked(tableItem, item))
+                        item.LoopCount := "-1"
+                    item.TriggerType := Integer(value) + 1
                 case "Loop": item.LoopCount := (value == GetLang("无限")) ? "-1" : value
                 case "Forbid": item.Forbid := (value == "1")
+            }
+            if ((field == "TKType" || field == "Loop") && this._IsLoopLocked(tableItem, item) && item.LoopCount != "-1") {
+                item.LoopCount := "-1"
+                this.RefreshRow(tableItem.Index, idx)
             }
         }
         else {
