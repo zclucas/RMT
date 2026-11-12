@@ -113,5 +113,5 @@ jobs:
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\Upload-RmtAssets.ps1') `
             -InfoPath (Join-Path $out 'release-info.json') `
             -OutDir $out `
-            -Repo 'yunkuangao/temp-asset'
+            -Repo 'zclucas/RMTAssets'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
