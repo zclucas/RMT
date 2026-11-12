@@ -46,30 +46,18 @@ StrToHex(str) {
 }
 
 GetWinPos(ScreenX, ScreenY, hwnd := 0) {
-    WinX := 0
-    WinY := 0
     DllCall("SetProcessDPIAware")
     if (hwnd == 0) {
         hwnd := DllCall("User32\WindowFromPoint", "int64", (ScreenY << 32) | (ScreenX & 0xFFFFFFFF), "ptr")
     }
-    try {
-
-        ; 获取该窗口的主窗口（避免偏移）
-        GA_ROOT := 2
-        rootHwnd := DllCall("GetAncestor", "ptr", hwnd, "uint", GA_ROOT, "ptr")
-
-        ; 创建结构体 POINT
-        pt := Buffer(8, 0)
-        NumPut("int", ScreenX, pt, 0)  ; X
-        NumPut("int", ScreenY, pt, 4)  ; Y
-
-        ; 屏幕坐标转客户区
-        DllCall("User32\ScreenToClient", "ptr", rootHwnd, "ptr", pt)
-
-        WinX := NumGet(pt, 0, "int")
-        WinY := NumGet(pt, 4, "int")
-    }
-    return [WinX, WinY]
+    ; 鼠标可能指向子控件，坐标以主窗口客户区左上角为原点。
+    rootHwnd := DllCall("GetAncestor", "ptr", hwnd, "uint", 2, "ptr")
+    if (!rootHwnd)
+        return [0, 0]
+    try WinGetClientPos(&clientX, &clientY, , , rootHwnd)
+    catch
+        return [0, 0]
+    return [ScreenX - clientX, ScreenY - clientY]
 }
 
 GetCurWinPos() {

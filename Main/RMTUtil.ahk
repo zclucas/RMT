@@ -2016,7 +2016,7 @@ ShouldAutoGenerateRemark(Remark) {
     return (Remark == "")
 }
 
-OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false) {
+OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "") {
     tableItem := MySoftData.SpecialTableItem
     if (tableItem.Items.Length == 0) {
         item := MacroItem()
@@ -2041,12 +2041,16 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false) {
         item.VariableMap["分支-跳出"] := false
     }
 
+    if (IsObject(windowBindingContext))
+        tableItem.EditorWindowBindingContext := windowBindingContext
     try {
         UpdateMacroRunningCount(0, 1)
         RefreshItemColorUI(tableItem, 1)
         RunMacroBodyOnce(tableItem, MacroStr, 1, preserveBranchExit)
         return !item.Killed
     } finally {
+        if (IsObject(windowBindingContext))
+            tableItem.DeleteProp("EditorWindowBindingContext")
         lastState := item.ColorState
         item.ColorState := 0
         UpdateMacroRunningCount(lastState, 0)

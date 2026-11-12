@@ -412,7 +412,7 @@ class UIMacroGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleBarH)
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
 
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="RMT Panel" ShowInTaskbar="False" Width="' pw '" Height="' ph '"')
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="RMT Panel" ShowInTaskbar="False" ShowActivated="False" Width="' pw '" Height="' ph '"')
         ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         ui.xaml := StrReplace(ui.xaml, 'WindowStartupLocation="CenterScreen"', 'Left="' initX '" Top="' initY '" WindowStartupLocation="Manual"')
         ; 矩形浮窗保持不透明。AllowsTransparency 与 WindowChrome 不能共存，
@@ -440,11 +440,8 @@ class UIMacroGui {
 
         ; 等待wpfHwnd就绪（对齐 floating_panel L256-262）
         loop 20 {
-            if (ui.HasProp("wpfHwnd") && ui.wpfHwnd) {
-                if !skipActivate
-                    WinActivate("ahk_id " ui.wpfHwnd)
+            if (ui.HasProp("wpfHwnd") && ui.wpfHwnd)
                 break
-            }
             Sleep(50)
         }
 
@@ -457,6 +454,7 @@ class UIMacroGui {
             foldID: fold ? fold.ID : "",
             targetHwnd: targetHwnd,
             isScreenMode: isScreenMode,
+            noActivate: true,
             frontInfo: fold ? fold.FrontInfo : "",
             visible: true,
             btnItems: btnItems,
@@ -1220,7 +1218,7 @@ class UIMacroGui {
     }
 
     ; 球态窗口：短按展开，拖动后保存位置。
-    _BuildCustomBall(foldIndex, targetHwnd, isScreenMode, skipActivate, panelKey := "") {
+    _BuildCustomBall(foldIndex, targetHwnd, isScreenMode, panelKey := "") {
         if (panelKey == "")
             panelKey := foldIndex
         size := 56
@@ -1245,7 +1243,7 @@ class UIMacroGui {
         ; 注意不要设 Opacity="0"：面板那套流程会再改回 1，球这边没有这段流程，
         ; 设了就会「窗口存在但完全透明」，表现为点了最小化什么都没出现。
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"'
-            , 'Title="RMT" ShowInTaskbar="False" Width="' size '" Height="' size '"')
+            , 'Title="RMT" ShowInTaskbar="False" ShowActivated="False" Width="' size '" Height="' size '"')
         ; 圆球需要真透明窗口；而 WindowChrome 与 AllowsTransparency 不能共存，
         ; 两者同时存在会导致窗口不渲染——所以把 chrome 整段去掉。
         this.ui.xaml := RegExReplace(this.ui.xaml, "s)<WindowChrome\.WindowChrome>.*?</WindowChrome\.WindowChrome>", "")
@@ -1274,17 +1272,14 @@ class UIMacroGui {
 
         try this.ui.Show()
         loop 40 {
-            if (this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd) {
-                if !skipActivate
-                    WinActivate("ahk_id " this.ui.wpfHwnd)
+            if (this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd)
                 break
-            }
             Sleep(50)
         }
         ; 再用物理坐标精确对齐一次（DIP 换算有取整误差，这一步不会造成可见跳动）
         if (IsObject(ballPos) && this.ui.HasProp("wpfHwnd") && this.ui.wpfHwnd) {
             try DllCall("user32\SetWindowPos", "Ptr", this.ui.wpfHwnd, "Ptr", 0
-                , "Int", ballPos.x, "Int", ballPos.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004)
+                , "Int", ballPos.x, "Int", ballPos.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004 | 0x0010)
         }
 
         return {
@@ -1300,6 +1295,7 @@ class UIMacroGui {
             btnItems: [],
             _isCustom: true,
             _isBall: true,
+            noActivate: true,
             ; 配置快照：与自动面板同口径，避免「配置变化检测」读到缺字段
             _cfg_BtnHeight: MainSoftData.UIPanelBtnHeight,
             _cfg_BtnWidth: MainSoftData.UIPanelBtnWidth,
@@ -1535,7 +1531,16 @@ class UIMacroGui {
             panelKey := foldIndex
         ; 收起态（悬浮球）优先：短按展开，拖动调整位置
         if (this._BallGet(foldIndex))
-            return this._BuildCustomBall(foldIndex, targetHwnd, isScreenMode, skipActivate, panelKey)
+            return this._BuildCustomBall(foldIndex, targetHwnd, isScreenMode, panelKey)
+
+        ; 输入框和下拉框需要键盘焦点，纯按钮面板保留当前前台窗口。
+        noActivate := true
+        for ctrl in schema.controls {
+            if (ctrl.type == "Edit" || ctrl.type == "ComboBox") {
+                noActivate := false
+                break
+            }
+        }
 
         titleBarH := 30
         wpfBorderPad := 2
@@ -1746,11 +1751,13 @@ class UIMacroGui {
         ; UIPanel* 保留当前浮窗自定义值，不被通用主题颜色覆盖。
         ui._preserveUIPanelColors := true
         try AppThemeUtil.ApplyWinThemeToXaml(ui)
+        if (noActivate || skipActivate)
+            ui.xaml := StrReplace(ui.xaml, 'ShowInTaskbar="False"', 'ShowInTaskbar="False" ShowActivated="False"')
         ui.Show()
 
         loop 20 {
             if (ui.HasProp("wpfHwnd") && ui.wpfHwnd) {
-                if !skipActivate
+                if (!skipActivate && !noActivate)
                     WinActivate("ahk_id " ui.wpfHwnd)
                 break
             }
@@ -1782,6 +1789,7 @@ class UIMacroGui {
             visible: true,
             btnItems: [],
             _isCustom: true,
+            noActivate: noActivate,
             _pages: pages,
             posMode: mode,
             anchor: anchor,
@@ -1837,7 +1845,7 @@ class UIMacroGui {
         if (hwnd) {
             exStyle := DllCall("user32\GetWindowLongW", "Ptr", hwnd, "Int", -20, "Int")
             DllCall("user32\SetWindowLongW", "Ptr", hwnd, "Int", -20, "Int"
-                , exStyle | 0x80)
+                , exStyle | 0x80 | (panelInfo.noActivate ? 0x08000000 : 0)) ; WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
             ; 精简系统菜单项，保留 SC_CLOSE / SC_MOVE；置顶时菜单层级由引擎 SysMenu 事件配合处理
             hSysMenu := DllCall("user32\GetSystemMenu", "Ptr", hwnd, "Int", 0, "Ptr")
             if (hSysMenu) {
@@ -2464,7 +2472,7 @@ class UIMacroGui {
 
         try {
             panelInfo.userClosed := false
-            DllCall("user32\ShowWindow", "Ptr", panelInfo.wpfHwnd, "Int", 9)
+            DllCall("user32\ShowWindow", "Ptr", panelInfo.wpfHwnd, "Int", panelInfo.noActivate ? 8 : 9)
             if (panelInfo.isScreenMode) {
                 WinSetAlwaysOnTop(1, "ahk_id " panelInfo.wpfHwnd)
             }
@@ -2472,7 +2480,8 @@ class UIMacroGui {
             ; Show 之后重新应用默认位置（WPF Show 会恢复上次位置）
             this.ApplyPanelPosition(panelInfo)
 
-            WinActivate("ahk_id " panelInfo.wpfHwnd)
+            if (!panelInfo.noActivate)
+                WinActivate("ahk_id " panelInfo.wpfHwnd)
             panelInfo.visible := true
         }
     }
@@ -2680,7 +2689,7 @@ class UIMacroGui {
             saved := this._PosGet("UIPanelPos", panelInfo.foldIndex, panelInfo.targetHwnd)
             if (IsObject(saved) && panelInfo.wpfHwnd) {
                 try DllCall("user32\SetWindowPos", "Ptr", panelInfo.wpfHwnd, "Ptr", 0
-                    , "Int", saved.x, "Int", saved.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004)
+                    , "Int", saved.x, "Int", saved.y, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0004 | 0x0010)
                 panelInfo.lastSetX := saved.x
                 panelInfo.lastSetY := saved.y
                 panelInfo._manualPos := true
@@ -2717,7 +2726,7 @@ class UIMacroGui {
         initX := 0, initY := 0
         this._PanelScreenPos(panelInfo, baseLeft, baseTop, contW, contH, pw, ph, &initX, &initY)
         DllCall("user32\SetWindowPos", "Ptr", panelInfo.wpfHwnd, "Ptr", 0
-            , "Int", initX, "Int", initY, "Int", 0, "Int", 0, "UInt", 0x0001)
+            , "Int", initX, "Int", initY, "Int", 0, "Int", 0, "UInt", 0x0001 | 0x0010)
         panelInfo.lastSetX := initX
         panelInfo.lastSetY := initY
     }

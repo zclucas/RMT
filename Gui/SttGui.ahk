@@ -106,50 +106,32 @@ class SttGui {
     static _DownloadExtensionFiles() {
         engine := InitSttEngine()
         runtimeUrl := RmtAssetsBaseUrl(RmtAssetsReleaseTag())
-        commonUrl := RmtAssetsBaseUrl("Common")
         runtimeFiles := ["sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll"
             , "vcruntime140.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "api-ms-win-core-path-l1-1-0.dll"]
         if (A_PtrSize == 8)
             runtimeFiles.Push("vcruntime140_1.dll")
         runtimeFiles.Push("VoiceDll.dll")
 
-        assets := Map()
+        missing := []
         for file in runtimeFiles
-            assets[engine.RunDir "\" file] := runtimeUrl file
-        kwsDir := A_WorkingDir "\Plugins\Voice\models\kws\"
-        assets[kwsDir "decoder-epoch-13-avg-2-chunk-16-left-64.onnx"] := commonUrl "kws_decoder.onnx"
-        assets[kwsDir "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx"] := commonUrl "kws_encoder.int8.onnx"
-        assets[kwsDir "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx"] := commonUrl "kws_joiner.onnx"
-        assets[kwsDir "tokens.txt"] := commonUrl "kws_tokens.txt"
+            if (RmtAssetMissing(engine.RunDir "\" file))
+                missing.Push({fullPath: engine.RunDir "\" file, entry: file})
 
-        missing := Map()
-        for path, url in assets {
-            if (!FileExist(path) || FileGetSize(path) == 0)
-                missing[path] := url
-        }
-        if (!missing.Count)
+        kwsDir := A_WorkingDir "\Plugins\Voice\models\kws\"
+        kwsFiles := ["decoder-epoch-13-avg-2-chunk-16-left-64.onnx", "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx"
+            , "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx", "tokens.txt"]
+        for file in kwsFiles
+            if (RmtAssetMissing(kwsDir file))
+                missing.Push({fullPath: kwsDir file, entry: file})
+
+        if (!missing.Length)
             return "ok"
 
         progress := RmtProgress(GetLang("下载语音扩展"), GetLang("准备下载"), XamlWin.ActiveOwner(), GetLang("取消下载"))
         progress.Show()
         try {
-            for path, url in missing {
-                SplitPath(path, &name, &dir)
-                DirCreate(dir)
-                progress.Report(name)
-                tempPath := path ".download"
-                try {
-                    result := DownloadAsync(url, tempPath, 120, progress)
-                    if (result != "ok")
-                        return result
-                    if (FileGetSize(tempPath) == 0)
-                        return "fail"
-                    FileMove(tempPath, path, true)
-                } finally {
-                    try FileDelete(tempPath)
-                }
-            }
-            return "ok"
+            progress.Report("Voice.zip")
+            return DownloadRmtAssetBundle(runtimeUrl "Voice.zip", missing, progress)
         } finally progress.Close()
     }
 

@@ -4,6 +4,8 @@ ResolveBindWindow(tableItem, index, winInfoStr) {
     isMacro := winInfoStr == "{宏设置窗口绑定}" || winInfoStr == "{绑定窗口}" || winInfoStr == GetLang("{绑定窗口}")
     if (!isMacro && winInfoStr != "{模块窗口绑定}")
         return winInfoStr
+    if (IsObject(tableItem) && tableItem.HasOwnProp("EditorWindowBindingContext"))
+        return ResolveEditorBindWindow(tableItem.EditorWindowBindingContext, winInfoStr)
     if (!IsObject(tableItem) || !tableItem.Items.Has(index))
         return ""
     item := tableItem.Items[index]
@@ -19,6 +21,11 @@ ResolveBindWindow(tableItem, index, winInfoStr) {
         }
     }
     return GetItemModuleWindowBinding(tableItem, index)
+}
+
+ResolveEditorBindWindow(context, winInfo) {
+    macro := IsObject(context) ? ResolveMacroItem(context.TableID, context.ItemID) : ""
+    return ResolveBindWindow(macro ? macro.Table : "", macro ? macro.Index : 0, winInfo)
 }
 
 IsMouseWindowBinding(infoStr) {

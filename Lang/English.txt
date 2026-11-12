@@ -2049,6 +2049,7 @@ Unix时间戳=Unix Timestamp
 预览移动路径=Preview movement path
 预览需要数值坐标和次数，请先将变量替换为数值。=Preview requires numeric coordinates and count. Replace variables with numbers first.
 预览未找到目标窗口。=Target window not found for preview.
+取色未找到目标窗口。=Target window not found for color picking.
 
 关闭指令预览=Turn off command preview
 图片处理=Image Processing

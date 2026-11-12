@@ -378,6 +378,7 @@ SetToolCheckInfo() {
         }
         MainSoftData.Color := StrReplace(PixelGetColor(mouseX, mouseY, "Slow"), "0x", "")
 
+        ; 窗口位置/尺寸用于描述外框，鼠标窗口坐标使用客户区原点。
         WinPosArr := GetWinPos(mouseX, mouseY, winId)
         MainSoftData.WinPosStr := WinPosArr[1] . "," . WinPosArr[2]
         RefreshToolUI()

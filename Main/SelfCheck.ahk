@@ -17,41 +17,43 @@ SelfCheckMissingFiles() {
     tag := RmtAssetsReleaseTag()
     baseUrl := RmtAssetsBaseUrl(tag)
 
-    criticalMap := Map(
-        "Plugins\RMT\RMT.dll", "RMT.dll",
-        "Plugins\RMT\RMT.ExcelHelper.exe", "RMT.ExcelHelper.exe",
-        "Plugins\IbInputSimulator.dll", "IbInputSimulator.dll",
-        "Audio\Start.wav", "Start.wav",
-        "Audio\End.wav", "End.wav",
-        "Plugins\ViGEm\ViGEmWrapper.dll", "ViGEmWrapper.dll",
-        "Joy\ViGEmBus.exe", "ViGEmBus.exe",
-        "Joy\Xbox按键映射.png", "Xbox.png",
-        "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll", "ahk-xaml.dll",
-        "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll", "WpfAnimatedGif.dll",
-        "Plugins\OpenCV\" arch "\RMT_OpenCV.dll", "RMT_OpenCV.dll",
-        "Plugins\OpenCV\" arch "\opencv_world481.dll", "opencv_world481.dll",
-        "Plugins\RapidOcr\" bitArch "\RapidOcrOnnx.dll", "RapidOcrOnnx.dll",
-        "Plugins\TesseractOcr\" arch "\tesseract50.dll", "tesseract50.dll",
-        "Plugins\TesseractOcr\" arch "\leptonica-1.82.0.dll", "leptonica-1.82.0.dll",
-        "Plugins\TesseractOcr\tessdata\chi_sim.traineddata", "chi_sim.traineddata",
-        "Plugins\TesseractOcr\tessdata\eng.traineddata", "eng.traineddata",
-        "Plugins\ScreenCapture\ScreenCapture.exe", "ScreenCapture.exe",
-        "Plugins\AhiDriver\AutoHotInterception.dll", "AutoHotInterception.dll",
-        "Plugins\AhiDriver\" arch "\interception.dll", "interception_" arch ".dll",
-        "Plugins\AhiDriver\installer\install.ps1", "install.ps1",
-        "Plugins\AhiDriver\installer\安装卸载.bat", "InstallUninstall.bat",
-        "Plugins\AhiDriver\installer\install-interception.exe", "install-interception.exe",
-        "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_det.onnx", "ch_PP-OCRv6_det.onnx",
-        "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_rec.onnx", "ch_PP-OCRv6_rec.onnx",
-        "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt", "ppocrv6_tiny_dict.txt",
-        "Lang\中文.txt", "chinese.txt",
-        "Lang\English.txt", "English.txt",
-        "Thread\Work.exe", "Work.exe",
-        "index.html", "index.html")
-    optionalMap := Map(
-        "Plugins\MouseControl.dll", "MouseControl.dll",
-        "MinTool\PlayAudio.vbs", "PlayAudio.vbs",
-        "Plugins\AhiDriver\installer\使用说明.txt", "InstallReadme.txt")
+    criticalFiles := [
+        {path: "Plugins\RMT\RMT.dll", entry: "RMT.dll", bundle: "RMT.zip"},
+        {path: "Plugins\RMT\RMT.ExcelHelper.exe", entry: "RMT.ExcelHelper.exe", bundle: "RMT.zip"},
+        {path: "Plugins\IbInputSimulator.dll", entry: "IbInputSimulator.dll", bundle: "Input.zip"},
+        {path: "Audio\Start.wav", entry: "Start.wav", bundle: "Audio.zip"},
+        {path: "Audio\End.wav", entry: "End.wav", bundle: "Audio.zip"},
+        {path: "Plugins\ViGEm\ViGEmWrapper.dll", entry: "ViGEmWrapper.dll", bundle: "ViGEm.zip"},
+        {path: "Joy\ViGEmBus.exe", entry: "ViGEmBus.exe", bundle: "ViGEm.zip"},
+        {path: "Joy\Xbox按键映射.png", entry: "Xbox.png", bundle: "ViGEm.zip"},
+        {path: "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll", entry: "ahk-xaml.dll", bundle: "Xaml.zip"},
+        {path: "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll", entry: "WpfAnimatedGif.dll", bundle: "Xaml.zip"},
+        {path: "Plugins\OpenCV\" arch "\RMT_OpenCV.dll", entry: "RMT_OpenCV.dll", bundle: "OpenCV.zip"},
+        {path: "Plugins\OpenCV\" arch "\opencv_world481.dll", entry: "opencv_world481.dll", bundle: "OpenCV.zip"},
+        {path: "Plugins\RapidOcr\" bitArch "\RapidOcrOnnx.dll", entry: "RapidOcrOnnx.dll", bundle: "RapidOcr.zip"},
+        {path: "Plugins\TesseractOcr\" arch "\tesseract50.dll", entry: "tesseract50.dll", bundle: "TesseractOcr.zip"},
+        {path: "Plugins\TesseractOcr\" arch "\leptonica-1.82.0.dll", entry: "leptonica-1.82.0.dll", bundle: "TesseractOcr.zip"},
+        {path: "Plugins\TesseractOcr\tessdata\chi_sim.traineddata", entry: "chi_sim.traineddata", bundle: "TesseractOcr.zip"},
+        {path: "Plugins\TesseractOcr\tessdata\eng.traineddata", entry: "eng.traineddata", bundle: "TesseractOcr.zip"},
+        {path: "Plugins\ScreenCapture\ScreenCapture.exe", entry: "ScreenCapture.exe", bundle: "OpenCV.zip"},
+        {path: "Plugins\AhiDriver\AutoHotInterception.dll", entry: "AutoHotInterception.dll", bundle: "AhiDriver.zip"},
+        {path: "Plugins\AhiDriver\" arch "\interception.dll", entry: "interception_" arch ".dll", bundle: "AhiDriver.zip"},
+        {path: "Plugins\AhiDriver\installer\install.ps1", entry: "install.ps1", bundle: "AhiDriver.zip"},
+        {path: "Plugins\AhiDriver\installer\安装卸载.bat", entry: "InstallUninstall.bat", bundle: "AhiDriver.zip"},
+        {path: "Plugins\AhiDriver\installer\install-interception.exe", entry: "install-interception.exe", bundle: "AhiDriver.zip"},
+        {path: "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_det.onnx", entry: "ch_PP-OCRv6_det.onnx", bundle: "RapidOcr.zip"},
+        {path: "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_rec.onnx", entry: "ch_PP-OCRv6_rec.onnx", bundle: "RapidOcr.zip"},
+        {path: "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt", entry: "ppocrv6_tiny_dict.txt", bundle: "RapidOcr.zip"},
+        {path: "Lang\中文.txt", entry: "chinese.txt", bundle: "Lang.zip"},
+        {path: "Lang\English.txt", entry: "English.txt", bundle: "Lang.zip"},
+        {path: "Thread\Work.exe", entry: "Work.exe", bundle: "RMT.zip"},
+        {path: "index.html", entry: "index.html", bundle: "RMT.zip"},
+    ]
+    optionalFiles := [
+        {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
+        {path: "MinTool\PlayAudio.vbs", entry: "PlayAudio.vbs", bundle: "Audio.zip"},
+        {path: "Plugins\AhiDriver\installer\使用说明.txt", entry: "InstallReadme.txt", bundle: "AhiDriver.zip"},
+    ]
 
     icoFileList := ["Wait.png", "BGKey.png", "IcoRunning.ico", "Joy.png", "DeltaMove.png", "KeyListen.png", "JoyListen.png", "SearchCombo.png", "Excel.png", "Time.png", "WaitConfirm.png", "RunPro.png",
         "Arr.png", "Condition.png", "Control.png", "FlowJump.png", "Extract.png", "False.png",
@@ -63,34 +65,33 @@ SelfCheckMissingFiles() {
         "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "YellowColor.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"]
 
-    missingCritical := []
-    missingOptional := []
-    needIcoZip := false
-    for localPath, assetName in criticalMap {
-        fullPath := A_WorkingDir "\" localPath
-        if (!FileExist(fullPath))
-            missingCritical.Push([localPath, assetName])
-    }
-    for localPath, assetName in optionalMap {
-        fullPath := A_WorkingDir "\" localPath
-        if (!FileExist(fullPath))
-            missingOptional.Push([localPath, assetName])
-    }
-    icoDir := A_WorkingDir "\Images\Soft"
-    for fileName in icoFileList {
-        if (!FileExist(icoDir "\" fileName)) {
-            needIcoZip := true
-            break
-        }
-    }
+    for name in icoFileList
+        criticalFiles.Push({path: "Images\Soft\" name, entry: name, bundle: "ico.zip"})
 
     allMissing := []
-    for item in missingCritical
-        allMissing.Push(item)
-    for item in missingOptional
-        allMissing.Push(item)
-    if (needIcoZip)
-        allMissing.Push(["Images\Soft\_ico_bundle", "ico.zip"])
+    missingCritical := 0
+    missingOptional := 0
+    downloads := Map()
+    for groupIndex, files in [criticalFiles, optionalFiles] {
+        isCritical := groupIndex == 1
+        for file in files {
+            file.fullPath := A_WorkingDir "\" file.path
+            if (!RmtAssetMissing(file.fullPath))
+                continue
+
+            file.critical := isCritical
+            allMissing.Push(file)
+            if (isCritical)
+                missingCritical++
+            else
+                missingOptional++
+
+            url := (file.bundle == "Lang.zip" ? RmtAssetsBaseUrl("Common") : baseUrl) file.bundle
+            if (!downloads.Has(url))
+                downloads[url] := {name: file.bundle, files: []}
+            downloads[url].files.Push(file)
+        }
+    }
 
     totalMissing := allMissing.Length
     if (totalMissing == 0) {
@@ -101,24 +102,25 @@ SelfCheckMissingFiles() {
     fileListStr := ""
     showCount := Min(allMissing.Length, 5)
     loop showCount
-        fileListStr .= "  · " allMissing[A_Index][2] "`n"
+        fileListStr .= "  · " allMissing[A_Index].path "`n"
     if (allMissing.Length > 5)
-        fileListStr .= "  ... 等 " allMissing.Length " 个文件"
+        fileListStr .= "  ... 等 " allMissing.Length " 个文件`n"
 
     detailStr := ""
-    if (missingCritical.Length > 0)
-        detailStr .= "⚠ 关键文件 (" missingCritical.Length ")`n"
-    if (missingOptional.Length > 0)
-        detailStr .= "可选文件 (" missingOptional.Length ")"
+    if (missingCritical > 0)
+        detailStr .= "⚠ 关键文件 (" missingCritical ")`n"
+    if (missingOptional > 0)
+        detailStr .= "可选文件 (" missingOptional ")"
     tipMsg := "检测到 " totalMissing " 个资源文件缺失`n" detailStr "`n`n" fileListStr "`n版本：" tag "`n点击【是】从 GitHub 自动下载`n点击【否】跳过（部分功能可能不可用）"
 
-    btnStyle := missingCritical.Length > 0 ? (4 + 256 + 48) : (4 + 256 + 64)
     result := RmtDialog.Confirm(tipMsg, "RMT 资源自检")
     if (!result) {
-        if (missingCritical.Length > 0) {
+        if (missingCritical > 0) {
             criticalNames := ""
-            for item in missingCritical
-                criticalNames .= item[2] "`n"
+            for file in allMissing {
+                if (file.critical)
+                    criticalNames .= file.path "`n"
+            }
             RmtDialog.Info("以下关键文件缺失，软件可能无法正常运行：`n`n" criticalNames "`n`n请在QQ群 837661891 或者项目仓库寻求帮助", "RMT 警告", 16)
         }
         return
@@ -126,84 +128,41 @@ SelfCheckMissingFiles() {
 
     pg := RmtProgress(GetLang("RMT 资源下载"), GetLang("准备下载"), XamlWin.ActiveOwner(), GetLang("取消下载"))
     pg.Show()
-    successCount := 0
-    failList := []
-    total := allMissing.Length
-
+    cancelled := false
     try {
-        for idx, item in allMissing {
-            if (pg.Cancelled)
+        for url, download in downloads {
+            pg.Report("正在下载：" download.name, 100 * (A_Index - 1) / downloads.Count)
+            result := DownloadRmtAssetBundle(url, download.files, pg)
+            if (result == "cancel") {
+                cancelled := true
                 break
-
-            localPath := item[1]
-            assetName := item[2]
-            fullPath := A_WorkingDir "\" localPath
-            downloadUrl := baseUrl assetName
-
-            pg.Report("(" idx "/" total ") 正在下载：" assetName, 100 * (idx - 1) / total)
-
-            downloaded := false
-
-            if (assetName == "ico.zip") {
-                zipPath := A_ScriptDir "\_rmt_temp_ico.zip"
-                targetDir := A_WorkingDir "\Images\Soft"
-                downloaded := DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, icoFileList, pg)
-                if (downloaded == "cancel")
-                    break
-            } else {
-                SplitPath(fullPath, &outName, &outDir)
-                if (outDir != "" && !DirExist(outDir))
-                    DirCreate(outDir)
-                if (FileExist(fullPath))
-                    FileDelete(fullPath)
-
-                result := DownloadAsync(downloadUrl, fullPath, 120, pg)
-                if (result == "cancel")
-                    break
-                downloaded := (result == "ok")
             }
-
-            if (downloaded)
-                successCount++
-            else
-                failList.Push(assetName)
         }
     } finally pg.Close()
-    ToolTip()
 
-    if (pg.Cancelled) {
-        stillCritical := false
-        for item in missingCritical {
-            fullPath := A_WorkingDir "\" item[1]
-            if (!FileExist(fullPath)) {
-                stillCritical := true
-                break
-            }
+    failed := []
+    stillCritical := false
+    for file in allMissing {
+        if (RmtAssetMissing(file.fullPath)) {
+            failed.Push(file.path)
+            stillCritical := stillCritical || file.critical
         }
-
-        cancelMsg := "下载已取消。`n已成功下载 " successCount "/" total " 个文件。`n可再次点击「文件校验」继续下载。"
-        if (stillCritical)
-            cancelMsg .= "`n`n存在关键文件未下载完成，软件可能无法正常工作。`n`n请在QQ群 837661891 或者项目仓库寻求帮助"
-        RmtDialog.Info(cancelMsg, "RMT 资源自检", 64)
-        return
     }
 
-    if (failList.Length > 0) {
+    successCount := totalMissing - failed.Length
+    if (cancelled) {
+        cancelMsg := "下载已取消。`n已成功补齐 " successCount "/" totalMissing " 个文件。`n可再次点击「文件校验」继续下载。"
+        if (stillCritical)
+            cancelMsg .= "`n`n仍有关键文件缺失，软件可能无法正常工作。"
+        RmtDialog.Info(cancelMsg, "RMT 资源自检", 64)
+    } else if (failed.Length) {
         failStr := ""
-        stillCritical := false
-        for name in failList {
-            failStr .= name "`n"
-            for item in missingCritical {
-                if (item[2] == name)
-                    stillCritical := true
-            }
-        }
-        iconType := stillCritical ? 16 : 48
-        RmtDialog.Info("下载完成：成功 " successCount "/" total "`n`n以下文件下载失败（可能是网络问题）：`n" failStr, "RMT 资源自检", iconType)
-
-        if (stillCritical) {
-            RmtDialog.Info("存在关键文件下载失败，软件可能无法正常工作。`n`n请检查网络连接后重启软件重试。`n`n如仍无法解决，请在QQ群 837661891 或者项目仓库寻求帮助", "RMT 警告", 16)
-        }
+        for path in failed
+            failStr .= path "`n"
+        RmtDialog.Info("已补齐 " successCount "/" totalMissing " 个文件。`n`n以下文件修复失败：`n" failStr,
+            "RMT 资源自检", stillCritical ? 16 : 48)
+    } else {
+        RmtDialog.Info("已补齐 " successCount " 个资源文件。", "RMT 资源自检", 64)
     }
 }
 
@@ -271,85 +230,54 @@ DownloadOnce(url, savePath, timeoutSec, pg) {
     }
 }
 
-DownloadAndUnzipIco(downloadUrl, zipPath, targetDir, expectedFiles, pg) {
+RmtAssetMissing(path) {
+    attrs := FileExist(path)
+    if (!attrs || InStr(attrs, "D"))
+        return true
+    try return FileGetSize(path) == 0
+    return true
+}
+
+; 每个包下载一次，只提取本次需要补齐的条目。
+DownloadRmtAssetBundle(url, files, pg) {
+    static sequence := 0
+    stage := A_WorkingDir "\.rmt-assets-" DllCall("GetCurrentProcessId") "-" A_TickCount "-" (++sequence)
     try {
-        if (FileExist(zipPath))
-            FileDelete(zipPath)
+        DirCreate(stage)
+        payload := stage "\download.zip"
+        result := DownloadAsync(url, payload, 120, pg)
+        if (result != "ok")
+            return result
 
-        SplitPath(targetDir, , &parentDir)
-        if (parentDir && !DirExist(parentDir))
-            DirCreate(parentDir)
-        if !DirExist(targetDir)
-            DirCreate(targetDir)
+        entries := ""
+        for file in files
+            entries .= ' "' file.entry '"'
+        pg.Report("正在解压：" SubStr(url, InStr(url, "/", , -1) + 1), pg.percent)
+        systemDir := A_PtrSize == 4 && A_Is64bitOS ? "\Sysnative" : "\System32"
+        tar := A_WinDir systemDir "\tar.exe"
+        if (RunWait('"' tar '" -xf "' payload '" -C "' stage '" --' entries, , "Hide") != 0)
+            return pg.Cancelled ? "cancel" : "fail"
 
-        pg.Report("正在下载: ico.zip", pg.percent)
-        dlResult := DownloadAsync(downloadUrl, zipPath, 120, pg)
-        if (dlResult != "ok")
-            return dlResult == "cancel" ? "cancel" : false
-
-        pg.Report("正在解压: ico.zip", pg.percent)
-        shell := ComObject("Shell.Application")
-        zipNamespace := shell.NameSpace(zipPath)
-        destNamespace := shell.NameSpace(targetDir)
-        if (!(zipNamespace && destNamespace)) {
-            pg.Report("✗ Shell.NameSpace 获取失败", pg.percent)
-            return false
+        for file in files {
+            if (RmtAssetMissing(stage "\" file.entry))
+                return "fail"
         }
-        destNamespace.CopyHere(zipNamespace.Items(), 16 | 4 | 1024)
 
-        foundCount := 0
-        lastFoundCount := 0
-        stableCount := 0
-        stableNeed := 5
-        loop 120 {
+        for file in files {
             if (pg.Cancelled)
                 return "cancel"
-            foundCount := 0
-            for fn in expectedFiles {
-                if (FileExist(targetDir "\" fn))
-                    foundCount++
-            }
-            pg.Report("已解压 " foundCount "/" expectedFiles.Length " 个文件", pg.percent)
-            if (foundCount == lastFoundCount && foundCount > 0) {
-                stableCount++
-                if (stableCount >= stableNeed)
-                    break
-            } else {
-                stableCount := 0
-                lastFoundCount := foundCount
-            }
-            Sleep(500)
-        }
+            if (!RmtAssetMissing(file.fullPath))
+                continue
 
-        if (foundCount < expectedFiles.Length) {
-            loop Files, targetDir "\*" "D" {
-                if (A_LoopFileName == "." || A_LoopFileName == "..")
-                    continue
-                subDir := A_LoopFileFullPath
-                subCount := 0
-                for fn in expectedFiles {
-                    if (FileExist(subDir "\" fn)) {
-                        try FileMove(subDir "\" fn, targetDir "\" fn, 1)
-                        if (FileExist(targetDir "\" fn))
-                            subCount++
-                    }
-                }
-                if (subCount > 0) {
-                    foundCount := 0
-                    for fn in expectedFiles {
-                        if (FileExist(targetDir "\" fn))
-                            foundCount++
-                    }
-                    break
-                }
-            }
+            SplitPath(file.fullPath, , &dir)
+            DirCreate(dir)
+            FileMove(stage "\" file.entry, file.fullPath, true)
         }
-
-        try FileDelete(zipPath)
-        return foundCount == expectedFiles.Length
-    } catch as e {
-        pg.Report("✗ 异常: " e.Message, pg.percent)
-        try FileDelete(zipPath)
-        return false
+        return "ok"
+    } catch as error {
+        pg.Report("资源修复失败：" error.Message, pg.percent)
+        return "fail"
+    } finally {
+        try DirDelete(stage, true)
     }
 }

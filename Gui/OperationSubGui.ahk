@@ -267,54 +267,19 @@ class OperationSubGui {
             return
         }
 
-        ; 检查是否包含变量（使用{...}格式）
-        hasVariable := RegExMatch(expr, "\{[^{}]+\}")
-
-        ; 如果有变量，先将其替换为假定值（10）
-        if (hasVariable) {
-            ; 获取所有变量名（{变量名}格式）
-            VarNames := []
-            pos := 1
-            loop {
-                match := RegExMatch(expr, "\{([^{}]+)\}", &varMatch, pos)
-                if (!match)
-                    break
-                VarName := varMatch[0]  ; 完整的 {变量名}
-                ; 避免重复添加
-                found := false
-                for v in VarNames {
-                    if (v == VarName) {
-                        found := true
-                        break
-                    }
-                }
-                if (!found)
-                    VarNames.Push(VarName)
-                pos := varMatch.Pos + varMatch.Len
-            }
-
-            ; 替换变量为假定值10
-            testExpr := expr
-            for VarName in VarNames {
-                testExpr := StrReplace(testExpr, VarName, "10")
-            }
-
-            ; 计算包含变量的表达式
-            try {
-                result := EvaluateExpression(testExpr)
+        try {
+            result := this.EvaluateWithPlaceholderValues(expr, &variableCount)
+            if (variableCount > 0)
                 RmtDialog.Info(Format("{}：{}{}", GetLang("假定所有变量均为10，计算结果"), result, "`n" GetLang("提示：实际运行时会使用真实的变量值")))
-            } catch Error as e {
-                RmtDialog.Info(Format(GetLang("表达式语法错误：{}"), e.Message))
-            }
-        } else {
-            ; 没有变量，直接计算
-            try {
-                result := EvaluateExpression(expr)
+            else
                 RmtDialog.Info(Format(GetLang("计算结果：{}"), result))
-            } catch Error as e {
-                RmtDialog.Info(Format(GetLang("表达式语法错误：{}"), e.Message))
-            }
+        } catch Error as e {
+            RmtDialog.Info(Format(GetLang("表达式语法错误：{}"), e.Message))
         }
+    }
+
+    EvaluateWithPlaceholderValues(expression, &variableCount := 0) {
+        return EvaluateExpression(RegExReplace(expression, "\{[^{}]+\}", "10", &variableCount))
     }
 
     OnClickSureBtn(state := "", ctrl := "", event := "") {
@@ -331,35 +296,9 @@ class OperationSubGui {
                 return
             }
 
-            ; 提取所有变量名（{变量名}格式）
-            VarNames := []
-            pos := 1
-            loop {
-                match := RegExMatch(expression, "\{([a-zA-Z一-龥][a-zA-Z0-9一-龥]*)\}", &VarName, pos)
-                if (!match)
-                    break
-                ; 避免重复添加
-                found := false
-                for v in VarNames {
-                    if (v == VarName[0]) {
-                        found := true
-                        break
-                    }
-                }
-                if (!found)
-                    VarNames.Push(VarName[0])
-                pos := match + StrLen(VarName[0])
-            }
-
-            ; 替换所有变量为假定值10
-            testExpr := expression
-            for VarName in VarNames {
-                testExpr := StrReplace(testExpr, "{" VarName "}", "10")
-            }
-
             ; 尝试计算测试表达式，校验语法
             try {
-                EvaluateExpression(testExpr)
+                this.EvaluateWithPlaceholderValues(expression)
             } catch Error as e {
                 RmtDialog.Info(Format(GetLang("表达式语法错误：{}"), e.Message))
                 return

@@ -84,12 +84,19 @@ OpenCvEnsure() {
     return reason
 }
 
-; 窗口颜色识别 x，y 窗口坐标
+SearchColorHex(value) {
+    return RegExReplace(Trim(String(value)), "^(#|0[xX])")
+}
+
+; 窗口颜色识别 x，y 窗口客户区坐标
 FindWinColor(ResXPtr, ResYPtr, colorStr, hwnd, X1, Y1, X2, Y2, matchThreshold) {
+    colorStr := SearchColorHex(colorStr)
+    if (!RegExMatch(colorStr, "i)^[0-9a-f]{1,6}$"))
+        return false
     if (OpenCvEnsure() != "")
         return false
 
-    colorStr := Format("{:06X}", ("0x" colorStr) + 0)
+    colorStr := Format("{:06X}", Integer("0x" colorStr))
     searchX := X1
     searchY := Y1
     searchW := X2 - X1

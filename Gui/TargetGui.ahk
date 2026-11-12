@@ -14,14 +14,14 @@ class TargetGui {
 
     Hwnd() => IsObject(this.ui) ? this.ui.wpfHwnd : 0
 
-    ShowGui() {
+    ShowGui(targetHwnd := 0) {
         if (this.active)
             return
         ; XAML 事件中延后建窗，避免嵌套 CREATE_WINDOW。
-        SetTimer(ObjBindMethod(this, "_Open"), -1)
+        SetTimer(ObjBindMethod(this, "_Open", targetHwnd), -1)
     }
 
-    _Open(*) {
+    _Open(targetHwnd, *) {
         if (this.active)
             return
         this.active := true
@@ -31,7 +31,7 @@ class TargetGui {
             this.startX := startX, this.startY := startY
             this.AddGui()
             MyColorPanel.SureAction := this.SureAction
-            MyColorPanel.ShowGui()
+            MyColorPanel.ShowGui(targetHwnd)
             this._hkIds := WinHotkey.Register(["Left", "Right", "Up", "Down", "Enter", "Escape"], ObjBindMethod(this, "_OnHotkey"))
             SetTimer(this._tick, 60)
         } catch as err {
@@ -91,7 +91,6 @@ class TargetGui {
         if (!this.active || !this.Hwnd() || !IsObject(MyColorPanel.ui) || !MyColorPanel.ui.wpfHwnd)
             return
         try {
-            this.GetPoint(&x, &y)
             ; 面板仅首次定位，用户拖动后保持当前位置。
             MyColorPanel.RefreshCoord()
             MyColorPanel.RefreshMapImage()

@@ -242,7 +242,7 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYLi
         found := SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY)
     }
     else if (searchType == "屏幕颜色") {
-        found := SearchColor(Data, X1, Y1, X2, Y2, &ResX, &ResY)
+        found := SearchColor(Data, X1, Y1, X2, Y2, &ResX, &ResY, tableItem, index)
     }
     else if (searchType == "屏幕文本") {
         found := SearchText(Data, X1, Y1, X2, Y2, &ResX, &ResY, Text)
@@ -251,7 +251,7 @@ DoSearch(Data, X1, Y1, X2, Y2, Text, ImagePath, &ResX, &ResY, &ResXList, &ResYLi
         found := SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, &ResHwndList)
     }
     else if (searchType == "窗口颜色") {
-        found := SearchWinColor(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList)
+        found := SearchWinColor(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList, tableItem, index)
     }
     else if (searchType == "窗口文本") {
         found := SearchWinText(Data, hwndList, X1, Y1, X2, Y2, Text, &ResXList, &ResYList, &ResHwndList)
@@ -393,9 +393,19 @@ SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY) {
     }
 }
 
-SearchColor(Data, X1, Y1, X2, Y2, &ResX, &ResY) {
-    HasValue := TryGetVarValue(&Value, Data.SearchColor, false)
-    color := HasValue ? "0X" Value : "0X" Data.SearchColor
+ResolveSearchColorHex(value, tableItem, index) {
+    ; 先处理颜色字面值，避免变量解析把 0xRRGGBB 当成数值转成十进制。
+    if (RegExMatch(Trim(String(value)), "i)^(?:#|0x)?[0-9a-f]{6}$"))
+        return SearchColorHex(value)
+    variables := IsObject(tableItem) && tableItem.Items.Has(index) ? tableItem.Items[index].VariableMap : Map()
+    return SearchColorHex(TryGetVarValue(&resolved, value, false, variables) ? resolved : value)
+}
+
+SearchColor(Data, X1, Y1, X2, Y2, &ResX, &ResY, tableItem := "", index := 0) {
+    hex := ResolveSearchColorHex(Data.SearchColor, tableItem, index)
+    if (!RegExMatch(hex, "i)^[0-9a-f]{1,6}$"))
+        return false
+    color := Integer("0x" hex)
     Similar := Integer(-2.55 * Data.Similar + 255)
     return PixelSearch(&ResX, &ResY, X1, Y1, X2, Y2, color, Similar)
 }
@@ -444,10 +454,9 @@ SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, 
     return found
 }
 
-SearchWinColor(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList) {
+SearchWinColor(Data, hwndList, X1, Y1, X2, Y2, &ResXList, &ResYList, &ResHwndList, tableItem := "", index := 0) {
     found := false
-    HasValue := TryGetVarValue(&Value, Data.SearchColor, false)
-    ColorStr := HasValue ? Value : Data.SearchColor
+    ColorStr := ResolveSearchColorHex(Data.SearchColor, tableItem, index)
     ResXList := [], ResYList := [], ResHwndList := []
     for i, hwnd in hwndList {
         ResX := 0, ResY := 0

@@ -298,7 +298,7 @@ class MenuWheelGui {
         win.Width(winW).Height(winH)
         win.Left(winLeft).Top(winTop)
         win.WindowStyle("None").AllowsTransparency("True").Background("{x:Null}")
-        win.ShowInTaskbar("False").Topmost("True").ResizeMode("NoResize")
+        win.ShowInTaskbar("False").ShowActivated("False").Topmost("True").ResizeMode("NoResize")
         win.WindowStartupLocation("Manual")
         ; 注入原生 WPF 悬停样式 + 圆角配置 + Tooltip 配置
         wheelStyle := '<CornerRadius x:Key="PanelRadius">0,0,0,0</CornerRadius>'

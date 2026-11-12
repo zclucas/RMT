@@ -123,20 +123,35 @@ jobs:
 
           $repo = 'zclucas/RMTAssets'
           $outDir = Join-Path $env:RUNNER_TEMP 'RMTRelease'
-          $architectures = @('x64', 'x86')
-          $assetsByArch = @{}
-          foreach ($arch in $architectures) {
-            $assetDir = Join-Path $outDir "RMTAssets_$arch"
+          $releaseDirs = [ordered]@{
+            "v${version}_x64" = 'RMTAssets_x64'
+            "v${version}_x86" = 'RMTAssets_x86'
+            'Common' = 'RMTAssets_Common'
+          }
+          $assetsByTag = [ordered]@{}
+          $packedFilesByTag = @{}
+          foreach ($tag in $releaseDirs.Keys) {
+            $assetDir = Join-Path $outDir $releaseDirs[$tag]
             $assets = @(Get-ChildItem -LiteralPath $assetDir -File)
-            if ($assets.Count -eq 0 -or ($assets | Where-Object Length -eq 0)) {
+            if ($assets.Count -eq 0 -or ($assets | Where-Object { $_.Length -eq 0 -or $_.Extension -ne '.zip' })) {
               throw "资源目录没有生成可上传的完整文件：$assetDir"
             }
-            $assetsByArch[$arch] = @($assets.FullName)
+            $assetsByTag[$tag] = @($assets.FullName)
+            $packedFilesByTag[$tag] = @(foreach ($asset in $assets) {
+              $zip = [IO.Compression.ZipFile]::OpenRead($asset.FullName)
+              try {
+                foreach ($entry in $zip.Entries) {
+                  if ($entry.Length -le 0) { throw "资源包条目为空：$($asset.Name) / $($entry.FullName)" }
+                  $entry.FullName
+                }
+              } finally {
+                $zip.Dispose()
+              }
+            })
           }
 
-          foreach ($arch in $architectures) {
-            $tag = "v${version}_$arch"
-            $assets = $assetsByArch[$arch]
+          foreach ($tag in $assetsByTag.Keys) {
+            $assets = $assetsByTag[$tag]
             gh release view $tag --repo $repo --json tagName 2>$null | Out-Null
             if ($LASTEXITCODE -eq 0) {
               gh release upload $tag @assets --repo $repo --clobber
@@ -145,6 +160,24 @@ jobs:
             }
             if ($LASTEXITCODE -ne 0) { throw "资源发布失败：$repo $tag" }
             Write-Host "Published $($assets.Count) assets to $repo $tag"
+          }
+
+          # 全部新包发布成功后，再删除已有替代包的旧附件。
+          $oldKwsNames = @('kws_decoder.onnx', 'kws_encoder.int8.onnx', 'kws_joiner.onnx', 'kws_tokens.txt')
+          foreach ($tag in $assetsByTag.Keys) {
+            $obsolete = if ($tag -eq 'Common') {
+              $oldKwsNames + 'VoiceKws.zip'
+            } else {
+              $packedFilesByTag[$tag] + $packedFilesByTag['Common'] + $oldKwsNames
+            }
+            $publishedNames = @($assetsByTag[$tag] | Split-Path -Leaf)
+            $existingNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name'
+            if ($LASTEXITCODE -ne 0) { throw "无法读取 $repo $tag 的附件" }
+            foreach ($name in $existingNames) {
+              if ($name -cnotin $obsolete -or $name -cin $publishedNames) { continue }
+              gh release delete-asset $tag $name --repo $repo --yes
+              if ($LASTEXITCODE -ne 0) { throw "无法删除 $repo $tag 中的旧附件：$name" }
+            }
           }
 
       - name: 汇总日志到任务摘要

@@ -47,7 +47,7 @@
             . field("窗口标题", "&#xE8A5;", "TxtProcessTile", MainSoftData.ProcessTile)
             . field("窗口类", "&#xE8D7;", "TxtProcessClass", MainSoftData.ProcessClass)
             . field("句柄 Id", "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId) '</StackPanel><StackPanel Grid.Column="1">'
-            . field("窗口坐标", "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
+            . field("窗口客户区坐标", "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
             . field("窗口宽高", "&#xE740;", "TxtWinSize", MainSoftData.WinSizeStr)
             . field("进程名", "&#xE9D9;", "TxtProcessName", MainSoftData.ProcessName)
             . field("进程 PID", "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)

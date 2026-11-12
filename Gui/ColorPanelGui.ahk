@@ -8,6 +8,7 @@ class ColorPanelGui {
         this.ColorValue := 0
         this.CoordX := 0
         this.CoordY := 0
+        this.TargetHwnd := 0
         this.RowColorNum := 11
         this.ColColorNum := 15
         this.active := false
@@ -24,10 +25,11 @@ class ColorPanelGui {
             .WindowStartupLocation("Manual").Opacity(0)
     }
 
-    ShowGui() {
+    ShowGui(targetHwnd := 0) {
         if (this.active)
             return
         this.active := true
+        this.TargetHwnd := targetHwnd
         this._colors := Map()
         this.AddGui()
     }
@@ -142,6 +144,14 @@ class ColorPanelGui {
         this.CoordX := x, this.CoordY := y
     }
 
+    GetSelectedPoint() {
+        if (!this.TargetHwnd)
+            return [this.CoordX, this.CoordY]
+        if (!WinExist("ahk_id " this.TargetHwnd))
+            return []
+        return GetWinPos(this.CoordX, this.CoordY, this.TargetHwnd)
+    }
+
     RefreshMapImage() {
         colors := GetPixelColorMap(this.CoordX, this.CoordY, this.RowColorNum, this.ColColorNum)
         updates := []
@@ -155,9 +165,11 @@ class ColorPanelGui {
         updates.Push({ControlName: "Hex", PropertyName: "Text", Value: hex})
         updates.Push({ControlName: "Swatch", PropertyName: "Background", Value: hex})
         updates.Push({ControlName: "RGB", PropertyName: "Text", Value: Format("RGB {},{},{}", (this.ColorValue >> 16) & 255, (this.ColorValue >> 8) & 255, this.ColorValue & 255)})
-        updates.Push({ControlName: "CoordX", PropertyName: "Text", Value: "X " this.CoordX})
-        updates.Push({ControlName: "CoordY", PropertyName: "Text", Value: "Y " this.CoordY})
+        point := this.GetSelectedPoint()
+        updates.Push({ControlName: "CoordX", PropertyName: "Text", Value: "X " (point.Length ? point[1] : "—")})
+        updates.Push({ControlName: "CoordY", PropertyName: "Text", Value: "Y " (point.Length ? point[2] : "—")})
         this.ui.BatchUpdate(updates)
+        return point
     }
 
     GuiDoubleClick(*) {
@@ -165,12 +177,12 @@ class ColorPanelGui {
             return
         ; 确认时同步重采样，避免取到上一帧的颜色/坐标。
         this.RefreshCoord()
-        this.RefreshMapImage()
+        point := this.RefreshMapImage()
         action := this.SureAction
-        x := this.CoordX, y := this.CoordY, color := Format("{:06X}", this.ColorValue)
+        color := Format("{:06X}", this.ColorValue)
         this.OnClose()
-        if IsObject(action)
-            action(x, y, color)
+        if (IsObject(action) && point.Length)
+            action(point[1], point[2], color)
     }
 
     OnClose(*) {

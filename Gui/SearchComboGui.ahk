@@ -244,7 +244,7 @@ class SearchComboGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/4-搜索Combo", (*) => this.TriggerMacro(), "!l"
-            , "", (*) => this.OnF1()
+            , (*) => this.OnClickTargeterBtn(), (*) => this.OnF1()
             , (*) => this.OnScreenShotBtnClick(this._CurTarget()), (*) => this.SureColor())
         try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
         this.ui.OnEvent("TargetList", "SelectionChanged", ObjBindMethod(this, "OnTargetSelected"))
@@ -748,9 +748,11 @@ class SearchComboGui {
         this._SetImage(n, t.SearchImagePath)
         this._SetCombo(this._TN(n, "ImagePath"), this.DLVariableArr, t.SearchImagePath)
         this._SetCombo(this._TN(n, "Color"), this.DLVariableArr, t.SearchColor)
-        this.ui.Update(this._TN(n, "ColorTip"), "Visibility", RegExMatch(t.SearchColor, "^([0-9A-Fa-f]{6})$") ? "Visible" : "Collapsed")
-        if (RegExMatch(t.SearchColor, "^([0-9A-Fa-f]{6})$"))
-            this.ui.Update(this._TN(n, "ColorTip"), "Background", "#" t.SearchColor)
+        hex := SearchColorHex(t.SearchColor)
+        isHex := RegExMatch(hex, "i)^[0-9a-f]{6}$")
+        this.ui.Update(this._TN(n, "ColorTip"), "Visibility", isHex ? "Visible" : "Collapsed")
+        if (isHex)
+            this.ui.Update(this._TN(n, "ColorTip"), "Background", "#" hex)
         this._SetCombo(this._TN(n, "Text"), this.DLVariableArr, t.SearchText)
         this.ui.Update(this._TN(n, "Similar"), "Text", t.Similar)
         this.ui.Update(this._TN(n, "ColorMatch"), "IsChecked", SearchColorMatchOn(t) ? "True" : "False")
@@ -1071,21 +1073,29 @@ class SearchComboGui {
         }
     }
 
-    OnSureTarget(PosX, PosY, Color) {
-        this.ToggleFunc(true)
-        n := this._CurTarget()
-        ColorText := StrReplace(Color, "0x", "")
+    OnSureTarget(n, PosX, PosY, Color) {
+        if (!IsObject(this.ui) || n != this._CurTarget())
+            return
+        ColorText := SearchColorHex(Color)
         this.ui.Update(this._TN(n, "Color"), "Text", ColorText)
         this.ui.Update(this._TN(n, "ColorTip"), "Visibility", "Visible")
         this.ui.Update(this._TN(n, "ColorTip"), "Background", "#" ColorText)
-        this.OnSetSearchArea(PosX, PosY, PosX, PosY)
+        size := this._TargetType(n) == "窗口颜色" ? 1 : 0
+        this.OnSetSearchArea(PosX, PosY, PosX + size, PosY + size)
     }
 
     OnClickTargeterBtn(*) {
-        ; 停止鼠标信息定时器 + F1-F3 热键，避免干扰取色器拖动
-        this.ToggleFunc(false)
-        MyTargetGui.SureAction := this.OnSureTarget.Bind(this)
-        MyTargetGui.ShowGui()
+        n := this._CurTarget()
+        hwnd := 0
+        if (this._TargetType(n) == "窗口颜色") {
+            hwnd := this.FindSearchTargetWindow(n)
+            if (!hwnd) {
+                RmtDialog.Info(GetLang("取色未找到目标窗口。"))
+                return
+            }
+        }
+        MyTargetGui.SureAction := this.OnSureTarget.Bind(this, n)
+        MyTargetGui.ShowGui(hwnd)
     }
 
     OnClickTargeterHelpBtn(*) {
@@ -1278,7 +1288,7 @@ class SearchComboGui {
         if (!valid)
             return
         this.SaveSearchData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        OnTriggerSepcialItemMacro(this.GetCommandStr(), false, this.WindowBindingContext)
     }
 
     OnF1() {
@@ -1289,17 +1299,12 @@ class SearchComboGui {
         n := this._CurTarget()
         curType := this._TargetType(n)
         isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
-        hwndList := isWin ? GetHwndList(this.ui.Query(this._TN(n, "WinInfo"))) : []
-        if (isWin && hwndList.Length == 0)
+        hwnd := isWin ? this.FindSearchTargetWindow(n) : 0
+        if (isWin && !hwnd)
             return
-        Point1 := isWin ? GetWinPos(x1, y1, hwndList[1]) : [x1, y1]
-        Point2 := isWin ? GetWinPos(x2, y2, hwndList[1]) : [x2, y2]
-        this.ui.Update(this._TN(n, "StartPosX"), "Text", Point1[1])
-        this.ui.Update(this._TN(n, "StartPosY"), "Text", Point1[2])
-        this.ui.Update(this._TN(n, "EndPosX"), "Text", Point2[1])
-        this.ui.Update(this._TN(n, "EndPosY"), "Text", Point2[2])
-        ; 程序化 Update 填数字不触发 TextChanged，需显式刷新预览（框选/取色后立即可见）
-        this.RefreshPreviewArea()
+        Point1 := isWin ? GetWinPos(x1, y1, hwnd) : [x1, y1]
+        Point2 := isWin ? GetWinPos(x2, y2, hwnd) : [x2, y2]
+        this.OnSetSearchArea(Point1[1], Point1[2], Point2[1], Point2[2])
     }
 
     OnSetSearchArea(x1, y1, x2, y2) {
@@ -1316,12 +1321,17 @@ class SearchComboGui {
         MouseGetPos &mouseX, &mouseY
         CoordMode("Pixel", "Screen")
         Color := PixelGetColor(mouseX, mouseY, "Slow")
-        ColorText := StrReplace(Color, "0x", "")
         n := this._CurTarget()
-        this.ui.Update(this._TN(n, "Color"), "Text", ColorText)
-        this.ui.Update(this._TN(n, "ColorTip"), "Visibility", "Visible")
-        this.ui.Update(this._TN(n, "ColorTip"), "Background", "#" ColorText)
-        this.OnSetSearchArea(mouseX, mouseY, mouseX, mouseY)
+        if (this._TargetType(n) == "窗口颜色") {
+            hwnd := this.FindSearchTargetWindow(n)
+            if (!hwnd) {
+                RmtDialog.Info(GetLang("取色未找到目标窗口。"))
+                return
+            }
+            point := GetWinPos(mouseX, mouseY, hwnd)
+            mouseX := point[1], mouseY := point[2]
+        }
+        this.OnSureTarget(n, mouseX, mouseY, Color)
     }
 
     SaveSearchData() {
@@ -1460,7 +1470,7 @@ class SearchComboGui {
         isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
         targetHwnd := 0
         if (isWin) {
-            targetHwnd := this.AreaPreview.FindTargetWindow(this.ui.Query(tn "WinInfo"))
+            targetHwnd := this.FindSearchTargetWindow(n)
             if (!targetHwnd) {
                 this.StopPreviewFollow()
                 this.HidePreviewRect()
@@ -1514,6 +1524,11 @@ class SearchComboGui {
         }
         if (!this.AreaPreview.IsDragging())
             this.RefreshPreviewArea()
+    }
+
+    FindSearchTargetWindow(n) {
+        info := ResolveEditorBindWindow(this.WindowBindingContext, this.ui.Query(this._TN(n, "WinInfo")))
+        return this.AreaPreview.FindTargetWindow(info)
     }
 
     WinToScreen(hwnd, winX, winY) {

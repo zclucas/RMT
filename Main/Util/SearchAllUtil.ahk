@@ -80,9 +80,7 @@ SearchAllInRegion(tableItem, Data, index, x1, y1, x2, y2, kind, hwnd) {
         path := !isColor ? ResolveSearchImagePath(tableItem, index, Data.SearchImagePath) : ""
         color := 0
         if (isColor) {
-            value := Data.SearchColor
-            TryGetTabVarValue(&value, tableItem, index, Data.SearchColor, false)
-            value := RegExReplace(String(value), "^(#|0[xX])")
+            value := ResolveSearchColorHex(Data.SearchColor, tableItem, index)
             if (!RegExMatch(value, "i)^[0-9a-f]{6}$"))
                 throw Error("搜索All：颜色应为六位十六进制值")
             color := Integer("0x" value)

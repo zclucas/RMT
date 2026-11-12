@@ -1170,18 +1170,37 @@ class MacroGraphHandlersMixin {
         this._RefreshSearchInline(id)
     }
 
-    ; 定位取色器（颜色搜索）：仅设置搜索颜色，搜索范围由「框选范围」单独设置
+    ; 窗口取色同时记录客户区像素，屏幕取色保留已框选的范围。
     _OnSearchPick(id, *) {
-        this._shotNodeId := id
-        MyTargetGui.SureAction := this._OnSearchPickSure.Bind(this, id)
-        MyTargetGui.ShowGui()
-    }
-
-    _OnSearchPickSure(id, posX, posY, color) {
         data := this._SearchData(id)
         if (data == "")
             return
-        data.SearchColor := StrReplace(color, "0x", "")
+        isWindowColor := CmdEnumSearch(data.SearchType) == "窗口颜色"
+        hwnd := 0
+        if (isWindowColor) {
+            info := ResolveEditorBindWindow(this.WindowBindingContext, data.WinInfo)
+            matches := GetHwndList(info)
+            if (!matches.Length) {
+                RmtDialog.Info(GetLang("取色未找到目标窗口。"))
+                return
+            }
+            hwnd := matches[1]
+        }
+        MyTargetGui.SureAction := this._OnSearchPickSure.Bind(this, id, isWindowColor)
+        MyTargetGui.ShowGui(hwnd)
+    }
+
+    _OnSearchPickSure(id, isWindowColor, posX, posY, color) {
+        data := this._SearchData(id)
+        if (data == "" || isWindowColor != (CmdEnumSearch(data.SearchType) == "窗口颜色"))
+            return
+        data.SearchColor := SearchColorHex(color)
+        if (isWindowColor) {
+            data.StartPosX := posX
+            data.StartPosY := posY
+            data.EndPosX := posX + 1
+            data.EndPosY := posY + 1
+        }
         SaveMacroCMDData(data)
         this._RefreshSearchInline(id)
     }

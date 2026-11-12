@@ -575,6 +575,7 @@ function New-Release {
 
     # 生成资源清单目录（对应 Main\SelfCheck.ahk 的文件校验清单）
     Write-Section "生成资源清单 (RMTAssets)"
+    New-RMTCommonAssets -ReleaseDir $rmtReleaseDir
     if ($Type -eq "x64" -or $Type -eq "both") {
         New-RMTAssets -Arch "x64" -ReleaseDir $rmtReleaseDir
     }
@@ -616,6 +617,7 @@ function New-Release {
     if ($Type -eq "both") {
         Write-Log "to $rmtReleaseDir\RMTv${version}_x86.zip" "White"
     }
+    Write-Log "to $rmtReleaseDir\RMTAssets_Common" "White"
     Write-Log "to $rmtReleaseDir\RMTAssets_x64" "White"
     if ($Type -eq "both") {
         Write-Log "to $rmtReleaseDir\RMTAssets_x86" "White"
@@ -1053,76 +1055,115 @@ function Compress-ReleaseZip {
     Write-Log "  [OK] $zipName ($size MB)" "Green"
 }
 
-# 生成 RMTAssets_{arch} 资源清单目录
-# 扁平资源用于版本 Release，包括文件校验所需资源和对应架构的语音运行库。
-# 共用语音模型单独存放在 RMTAssets 的 Common Release。
+# ZIP 条目名对应客户端的下载清单，允许与本地路径不同。
+function New-RMTAssetZip {
+    param([string]$ZipPath, [object[]]$Files)
+
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $archive = [IO.Compression.ZipFile]::Open($ZipPath, [IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($file in $Files) {
+            $source = Join-Path $PSScriptRoot $file.Src
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $archive, $source, $file.Dest, [IO.Compression.CompressionLevel]::Optimal
+            ) | Out-Null
+        }
+    } finally {
+        $archive.Dispose()
+    }
+    Write-Log "  已生成: $(Split-Path $ZipPath -Leaf) ($($Files.Count) 个文件)" "Gray"
+}
+
+function New-RMTCommonAssets {
+    param([string]$ReleaseDir)
+
+    $assetsDir = Join-Path $ReleaseDir "RMTAssets_Common"
+    New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
+    $languages = @(
+        @{ Dest = "chinese.txt"; Src = "Lang\中文.txt" },
+        @{ Dest = "English.txt"; Src = "Lang\English.txt" }
+    )
+    New-RMTAssetZip -ZipPath (Join-Path $assetsDir "Lang.zip") -Files $languages
+}
+
+# 生成按架构发布的资源，供文件校验和语音扩展下载。
 function New-RMTAssets {
     param([string]$Arch, [string]$ReleaseDir)
 
     $bitArch = if ($Arch -eq "x64") { "64bit" } else { "32bit" }
+    $kwsDir = "Plugins\Voice\models\kws"
     $assetsDir = Join-Path $ReleaseDir "RMTAssets_$Arch"
     New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
     Write-Log "生成 $assetsDir ..." "Gray"
 
-    # 文件校验资源和按需下载的语音运行库（本地路径 -> 资源名）。
-    $assetList = @(
-        @{ Dest = "RMT.dll";                         Src = "Plugins\RMT\RMT.dll" },
-        @{ Dest = "RMT.ExcelHelper.exe";             Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
-        @{ Dest = "IbInputSimulator.dll";            Src = "Plugins\IbInputSimulator.dll" },
-        @{ Dest = "Start.wav";                       Src = "Audio\Start.wav" },
-        @{ Dest = "End.wav";                         Src = "Audio\End.wav" },
-        @{ Dest = "ViGEmWrapper.dll";                Src = "Plugins\ViGEm\ViGEmWrapper.dll" },
-        @{ Dest = "ViGEmBus.exe";                    Src = "Joy\ViGEmBus.exe" },
-        @{ Dest = "Xbox.png";                        Src = "Joy\Xbox按键映射.png" },
-        @{ Dest = "ahk-xaml.dll";                    Src = "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll" },
-        @{ Dest = "WpfAnimatedGif.dll";              Src = "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll" },
-        @{ Dest = "RMT_OpenCV.dll";                  Src = "Plugins\OpenCV\$Arch\RMT_OpenCV.dll" },
-        @{ Dest = "opencv_world481.dll";             Src = "Plugins\OpenCV\$Arch\opencv_world481.dll" },
-        @{ Dest = "VoiceDll.dll";                    Src = "Plugins\Voice\$Arch\VoiceDll.dll" },
-        @{ Dest = "sherpa-onnx-c-api.dll";           Src = "Plugins\Voice\$Arch\sherpa-onnx-c-api.dll" },
-        @{ Dest = "onnxruntime.dll";                 Src = "Plugins\Voice\$Arch\onnxruntime.dll" },
-        @{ Dest = "onnxruntime_providers_shared.dll"; Src = "Plugins\Voice\$Arch\onnxruntime_providers_shared.dll" },
-        @{ Dest = "vcruntime140.dll";                Src = "Plugins\Voice\$Arch\vcruntime140.dll" },
-        @{ Dest = "msvcp140.dll";                    Src = "Plugins\Voice\$Arch\msvcp140.dll" },
-        @{ Dest = "msvcp140_1.dll";                  Src = "Plugins\Voice\$Arch\msvcp140_1.dll" },
-        @{ Dest = "msvcp140_2.dll";                  Src = "Plugins\Voice\$Arch\msvcp140_2.dll" },
-        @{ Dest = "api-ms-win-core-path-l1-1-0.dll"; Src = "Plugins\Voice\$Arch\api-ms-win-core-path-l1-1-0.dll" },
-        @{ Dest = "RapidOcrOnnx.dll";                Src = "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll" },
-        @{ Dest = "tesseract50.dll";                Src = "Plugins\TesseractOcr\$Arch\tesseract50.dll" },
-        @{ Dest = "leptonica-1.82.0.dll";            Src = "Plugins\TesseractOcr\$Arch\leptonica-1.82.0.dll" },
-        @{ Dest = "chi_sim.traineddata";            Src = "Plugins\TesseractOcr\tessdata\chi_sim.traineddata" },
-        @{ Dest = "eng.traineddata";                Src = "Plugins\TesseractOcr\tessdata\eng.traineddata" },
-        @{ Dest = "ScreenCapture.exe";               Src = "Plugins\ScreenCapture\ScreenCapture.exe" },
-        @{ Dest = "AutoHotInterception.dll";         Src = "Plugins\AhiDriver\AutoHotInterception.dll" },
-        @{ Dest = "interception_$Arch.dll";          Src = "Plugins\AhiDriver\$Arch\interception.dll" },
-        @{ Dest = "install.ps1";                     Src = "Plugins\AhiDriver\installer\install.ps1" },
-        @{ Dest = "InstallUninstall.bat";            Src = "Plugins\AhiDriver\installer\安装卸载.bat" },
-        @{ Dest = "install-interception.exe";        Src = "Plugins\AhiDriver\installer\install-interception.exe" },
-        @{ Dest = "InstallReadme.txt";                 Src = "Plugins\AhiDriver\installer\使用说明.txt" },
-        @{ Dest = "ch_PP-OCRv6_det.onnx";            Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_det.onnx" },
-        @{ Dest = "ch_PP-OCRv6_rec.onnx";            Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_rec.onnx" },
-        @{ Dest = "ppocrv6_tiny_dict.txt";           Src = "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt" },
-        @{ Dest = "chinese.txt";                     Src = "Lang\中文.txt" },
-        @{ Dest = "English.txt";                     Src = "Lang\English.txt" },
-        @{ Dest = "Work.exe";                        Src = "Release$Arch\Thread\Work.exe" },
-        @{ Dest = "index.html";                      Src = "index.html" },
-        @{ Dest = "MouseControl.dll";                Src = "Plugins\MouseControl.dll" },
-        @{ Dest = "PlayAudio.vbs";                   Src = "MinTool\PlayAudio.vbs" }
-    )
-    if ($Arch -eq "x64") {
-        $assetList += @{ Dest = "vcruntime140_1.dll"; Src = "Plugins\Voice\x64\vcruntime140_1.dll" }
+    $bundles = [ordered]@{
+        "RMT.zip" = @(
+            @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },
+            @{ Dest = "RMT.ExcelHelper.exe"; Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
+            @{ Dest = "Work.exe"; Src = "Release$Arch\Thread\Work.exe" },
+            @{ Dest = "index.html"; Src = "index.html" }
+        )
+        "Input.zip" = @(
+            @{ Dest = "IbInputSimulator.dll"; Src = "Plugins\IbInputSimulator.dll" },
+            @{ Dest = "MouseControl.dll"; Src = "Plugins\MouseControl.dll" }
+        )
+        "Audio.zip" = @(
+            @{ Dest = "Start.wav"; Src = "Audio\Start.wav" },
+            @{ Dest = "End.wav"; Src = "Audio\End.wav" },
+            @{ Dest = "PlayAudio.vbs"; Src = "MinTool\PlayAudio.vbs" }
+        )
+        "ViGEm.zip" = @(
+            @{ Dest = "ViGEmWrapper.dll"; Src = "Plugins\ViGEm\ViGEmWrapper.dll" },
+            @{ Dest = "ViGEmBus.exe"; Src = "Joy\ViGEmBus.exe" },
+            @{ Dest = "Xbox.png"; Src = "Joy\Xbox按键映射.png" }
+        )
+        "Xaml.zip" = @(
+            @{ Dest = "ahk-xaml.dll"; Src = "Release$Arch\Plugins\AHK-XAML\lib\dep\ahk-xaml.dll" },
+            @{ Dest = "WpfAnimatedGif.dll"; Src = "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll" }
+        )
+        "OpenCV.zip" = @(
+            @{ Dest = "RMT_OpenCV.dll"; Src = "Plugins\OpenCV\$Arch\RMT_OpenCV.dll" },
+            @{ Dest = "opencv_world481.dll"; Src = "Plugins\OpenCV\$Arch\opencv_world481.dll" },
+            @{ Dest = "ScreenCapture.exe"; Src = "Plugins\ScreenCapture\ScreenCapture.exe" }
+        )
+        "Voice.zip" = @(
+            @{ Dest = "VoiceDll.dll"; Src = "Plugins\Voice\$Arch\VoiceDll.dll" },
+            @{ Dest = "sherpa-onnx-c-api.dll"; Src = "Plugins\Voice\$Arch\sherpa-onnx-c-api.dll" },
+            @{ Dest = "onnxruntime.dll"; Src = "Plugins\Voice\$Arch\onnxruntime.dll" },
+            @{ Dest = "onnxruntime_providers_shared.dll"; Src = "Plugins\Voice\$Arch\onnxruntime_providers_shared.dll" },
+            @{ Dest = "vcruntime140.dll"; Src = "Plugins\Voice\$Arch\vcruntime140.dll" },
+            @{ Dest = "msvcp140.dll"; Src = "Plugins\Voice\$Arch\msvcp140.dll" },
+            @{ Dest = "msvcp140_1.dll"; Src = "Plugins\Voice\$Arch\msvcp140_1.dll" },
+            @{ Dest = "msvcp140_2.dll"; Src = "Plugins\Voice\$Arch\msvcp140_2.dll" },
+            @{ Dest = "api-ms-win-core-path-l1-1-0.dll"; Src = "Plugins\Voice\$Arch\api-ms-win-core-path-l1-1-0.dll" },
+            @{ Dest = "decoder-epoch-13-avg-2-chunk-16-left-64.onnx"; Src = "$kwsDir\decoder-epoch-13-avg-2-chunk-16-left-64.onnx" },
+            @{ Dest = "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx"; Src = "$kwsDir\encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
+            @{ Dest = "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx"; Src = "$kwsDir\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
+            @{ Dest = "tokens.txt"; Src = "$kwsDir\tokens.txt" }
+        )
+        "RapidOcr.zip" = @(
+            @{ Dest = "RapidOcrOnnx.dll"; Src = "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll" },
+            @{ Dest = "ch_PP-OCRv6_det.onnx"; Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_det.onnx" },
+            @{ Dest = "ch_PP-OCRv6_rec.onnx"; Src = "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_rec.onnx" },
+            @{ Dest = "ppocrv6_tiny_dict.txt"; Src = "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt" }
+        )
+        "TesseractOcr.zip" = @(
+            @{ Dest = "tesseract50.dll"; Src = "Plugins\TesseractOcr\$Arch\tesseract50.dll" },
+            @{ Dest = "leptonica-1.82.0.dll"; Src = "Plugins\TesseractOcr\$Arch\leptonica-1.82.0.dll" },
+            @{ Dest = "chi_sim.traineddata"; Src = "Plugins\TesseractOcr\tessdata\chi_sim.traineddata" },
+            @{ Dest = "eng.traineddata"; Src = "Plugins\TesseractOcr\tessdata\eng.traineddata" }
+        )
+        "AhiDriver.zip" = @(
+            @{ Dest = "AutoHotInterception.dll"; Src = "Plugins\AhiDriver\AutoHotInterception.dll" },
+            @{ Dest = "interception_$Arch.dll"; Src = "Plugins\AhiDriver\$Arch\interception.dll" },
+            @{ Dest = "install.ps1"; Src = "Plugins\AhiDriver\installer\install.ps1" },
+            @{ Dest = "InstallUninstall.bat"; Src = "Plugins\AhiDriver\installer\安装卸载.bat" },
+            @{ Dest = "install-interception.exe"; Src = "Plugins\AhiDriver\installer\install-interception.exe" },
+            @{ Dest = "InstallReadme.txt"; Src = "Plugins\AhiDriver\installer\使用说明.txt" }
+        )
     }
-
-    $missing = 0
-    foreach ($asset in $assetList) {
-        $src = Join-Path $PSScriptRoot $asset.Src
-        if (-not (Test-Path $src)) {
-            Write-Log "  [WARN] 未找到: $($asset.Src)" "Yellow"
-            $missing++
-            continue
-        }
-        Copy-Item $src -Destination (Join-Path $assetsDir $asset.Dest) -Force
-        Write-Log "  已复制: $($asset.Dest)" "Gray"
+    if ($Arch -eq "x64") {
+        $bundles["Voice.zip"] += @{ Dest = "vcruntime140_1.dll"; Src = "Plugins\Voice\x64\vcruntime140_1.dll" }
     }
 
     # 生成 ico.zip（Images\Soft 下 SelfCheck.ahk 的 icoFileList）
@@ -1142,30 +1183,14 @@ function New-RMTAssets {
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
     )
 
-    $softDir = Join-Path $PSScriptRoot "Images\Soft"
-    $icoTempDir = Join-Path $assetsDir "_ico_temp"
-    New-Item -ItemType Directory -Path $icoTempDir -Force | Out-Null
-    $icoMissing = 0
-    foreach ($ico in $icoList) {
-        $src = Join-Path $softDir $ico
-        if (Test-Path $src) {
-            Copy-Item $src -Destination (Join-Path $icoTempDir $ico) -Force
-        } else {
-            Write-Log "  [WARN] 未找到图标: $ico" "Yellow"
-            $icoMissing++
-        }
-    }
-    $icoZip = Join-Path $assetsDir "ico.zip"
-    if (Test-Path $icoZip) { Remove-Item $icoZip -Force }
-    Compress-Archive -Path "$icoTempDir\*" -DestinationPath $icoZip -CompressionLevel Optimal
-    Remove-Item $icoTempDir -Recurse -Force
-    Write-Log "  已生成: ico.zip ($($icoList.Count - $icoMissing) 个文件)" "Gray"
+    $bundles["ico.zip"] = @($icoList | ForEach-Object {
+        @{ Dest = $_; Src = "Images\Soft\$_" }
+    })
 
-    if ($missing -gt 0 -or $icoMissing -gt 0) {
-        Write-Log "  [WARN] RMTAssets_$Arch 存在缺失文件" "Yellow"
-    } else {
-        Write-Log "  [OK] RMTAssets_$Arch 生成完成" "Green"
+    foreach ($bundle in $bundles.GetEnumerator()) {
+        New-RMTAssetZip -ZipPath (Join-Path $assetsDir $bundle.Key) -Files $bundle.Value
     }
+    Write-Log "  [OK] RMTAssets_$Arch 生成完成" "Green"
 }
 
 # ============================================================

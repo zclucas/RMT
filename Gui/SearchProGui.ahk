@@ -952,7 +952,7 @@ class SearchProGui {
             return
         if (hex == "")
             hex := this.ui.Query("HexColorCon")
-        hex := StrReplace(StrReplace(hex, "#", ""), "0x", "")
+        hex := SearchColorHex(hex)
         if (!RegExMatch(hex, "^([0-9A-Fa-f]{6})$")) {
             this.ui.Update("HexColorTipCon", "Visibility", "Collapsed")
             return
@@ -1093,15 +1093,27 @@ class SearchProGui {
     }
 
     OnSureTarget(PosX, PosY, Color) {
-        ColorText := StrReplace(Color, "0x", "")
+        if (!IsObject(this.ui))
+            return
+        ColorText := SearchColorHex(Color)
         this.ui.Update("HexColorCon", "Text", ColorText)
         this._ApplyColorSwatch(ColorText)
-        this.OnSetSearchArea(PosX, PosY, PosX, PosY)
+        ; 窗口截图和搜索All使用右下边界，单点范围宽高各为 1。
+        size := this._TypeIndex() == "窗口颜色" || this.IsAll ? 1 : 0
+        this.OnSetSearchArea(PosX, PosY, PosX + size, PosY + size)
     }
 
     OnClickTargeterBtn(*) {
+        hwnd := 0
+        if (this._TypeIndex() == "窗口颜色") {
+            hwnd := this.FindSearchTargetWindow()
+            if (!hwnd) {
+                RmtDialog.Info(GetLang("取色未找到目标窗口。"))
+                return
+            }
+        }
         MyTargetGui.SureAction := this.OnSureTarget.Bind(this)
-        MyTargetGui.ShowGui()
+        MyTargetGui.ShowGui(hwnd)
     }
 
     OnScreenShotGetArea(x1, y1, x2, y2) {
@@ -1169,7 +1181,7 @@ class SearchProGui {
         this.SaveSearchData()
         command := this.GetCommandStr()
         if (!showImageTime) {
-            OnTriggerSepcialItemMacro(command)
+            OnTriggerSepcialItemMacro(command, false, this.WindowBindingContext)
             return
         }
 
@@ -1182,7 +1194,7 @@ class SearchProGui {
         tableItem.ImageSearchTestTiming := timing
         this._imageTestRunning := true
         try {
-            OnTriggerSepcialItemMacro(command)
+            OnTriggerSepcialItemMacro(command, false, this.WindowBindingContext)
         } finally {
             this._imageTestRunning := false
             if (hadTiming)
@@ -1223,10 +1235,16 @@ class SearchProGui {
         MouseGetPos &mouseX, &mouseY
         CoordMode("Pixel", "Screen")
         Color := PixelGetColor(mouseX, mouseY, "Slow")
-        ColorText := StrReplace(Color, "0x", "")
-        this.ui.Update("HexColorCon", "Text", ColorText)
-        this._ApplyColorSwatch(ColorText)
-        this.OnSetSearchArea(mouseX, mouseY, mouseX, mouseY)
+        if (this._TypeIndex() == "窗口颜色") {
+            hwnd := this.FindSearchTargetWindow()
+            if (!hwnd) {
+                RmtDialog.Info(GetLang("取色未找到目标窗口。"))
+                return
+            }
+            point := GetWinPos(mouseX, mouseY, hwnd)
+            mouseX := point[1], mouseY := point[2]
+        }
+        this.OnSureTarget(mouseX, mouseY, Color)
     }
 
     _OnCoordInteract(*) {
@@ -1253,10 +1271,7 @@ class SearchProGui {
     }
 
     FindSearchTargetWindow() {
-        info := this.ui.Query("WinInfoCon")
-        context := this.WindowBindingContext
-        macro := IsObject(context) ? ResolveMacroItem(context.TableID, context.ItemID) : ""
-        info := ResolveBindWindow(macro ? macro.Table : "", macro ? macro.Index : 0, info)
+        info := ResolveEditorBindWindow(this.WindowBindingContext, this.ui.Query("WinInfoCon"))
         return this.AreaPreview.FindTargetWindow(info)
     }
 
