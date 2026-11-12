@@ -3,15 +3,7 @@
 ; 倒计时执行与生命周期代理；XAML 浮层由主进程显示（置顶、无标题、点击穿透）。
 global CountDownAlive := Map()
 
-OnCountDown(tableItem, cmd, index) {
-    paramArr := StrSplit(cmd, "_")
-    Data := GetMacroCMDData(paramArr[1])
-    if (!IsObject(Data))
-        return
-    TimeExecCountDown(tableItem, index, Data)
-}
-
-TimeExecCountDown(tableItem, index, Data, detachNonWaiting := false) {
+TimeExecCountDown(tableItem, index, Data) {
     total := CountDownTotal(tableItem, index, Data)
     if (total <= 0)
         return
@@ -22,7 +14,7 @@ TimeExecCountDown(tableItem, index, Data, detachNonWaiting := false) {
     CountDownReplaceAt(posX, posY)
     ov := CountDownOverlay()
     wait := GetLangKey(Data.WaitEnd) != "不等待"
-    ov.Start(total, posX, posY, detachNonWaiting && !wait)
+    ov.Start(total, posX, posY, !wait)
 
     if (!wait)
         return

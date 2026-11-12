@@ -43,92 +43,7 @@ PromptTypes() => ["软件弹窗", "音频", "临时提示", "自由贴", "区域
 PromptBeepModes() => ["默认", "信息", "警告", "错误", "问题"]
 
 PromptUsesEditor(cmd) {
-    if (cmd == "")
-        return false
-    if (GetLangKey(GetCmdOnlyText(StrSplit(cmd, "_", , 2)[1])) == "提示")
-        return true
-    try return IsObject(PromptLegacyData(cmd))
-    return false
-}
-
-PromptLegacyData(cmd) {
-    if (cmd == "")
-        return ""
-    parts := StrSplit(cmd, InStr(cmd, "⫶") ? "⫶" : "_")
-    serial := parts[1]
-    SplitSerialTextAndNumbers(serial, &key, &number)
-    key := GetLangKey(key)
-    if (key != "输出" && key != "RMT指令" && key != "倒计时" && key != "时间")
-        return ""
-
-    if (key == "RMT指令" && number == "") {
-        if (parts.Length < 3 || GetLangKey(parts[3]) != "自由贴")
-            return ""
-        return PromptFromLegacy(key, {CmdStr: "自由贴"})
-    }
-
-    return PromptFromLegacy(key, GetMacroCMDData(serial))
-}
-
-; 转换仅依赖传入的资源，配置升级和打开旧指令共用。
-PromptFromLegacy(key, old) {
-    data := PromptData()
-    switch key {
-        case "输出":
-            switch old.HasOwnProp("OutputType") ? String(old.OutputType) : "" {
-                case "软件弹窗", "Popup", "5":
-                    data.Type := "软件弹窗"
-                case "临时提示", "Temp Prompt", "3":
-                    data.Type := "临时提示"
-                case "系统语音", "Speech", "6":
-                    data.Type := "音频"
-                    data.AudioMode := "系统语音"
-                default:
-                    return ""
-            }
-            data.Text := old.HasOwnProp("Text") ? old.Text : ""
-        case "RMT指令":
-            action := old.HasOwnProp("CmdStr") ? old.CmdStr : ""
-            if (action != "自由贴" && action != "Free Paste"
-                && !(action == "" && old.HasOwnProp("OperateType") && old.OperateType == 3))
-                return ""
-            data.Type := "自由贴"
-            data.PasteTextSource := "剪贴板图文"
-        case "时间", "倒计时":
-            if (key == "时间" && TimeNormSubMode(old) != "倒计时")
-                return ""
-            data.Type := "倒计时"
-            for field in ["Param1", "PosX", "PosY", "WaitEnd"] {
-                if (old.HasOwnProp(field) && old.%field% != "")
-                    data.%field% := old.%field%
-            }
-            data.Seconds := old.HasOwnProp("Seconds") ? old.Seconds : 0
-            data.Sec := 0
-            for field in ["Hour", "Min", "Sec"] {
-                if (old.HasOwnProp(field))
-                    data.%field% := old.%field%
-            }
-            if (data.WaitEnd == "No Wait")
-                data.WaitEnd := "不等待"
-            else if (data.WaitEnd == "Wait Until End")
-                data.WaitEnd := "等待结束"
-            data.Param2 := CountDownKind(old)
-            if (data.Param2 == "时长" && IsNumber(data.Hour) && IsNumber(data.Min)
-                && IsNumber(data.Sec) && data.Hour * 3600 + data.Min * 60 + data.Sec <= 0) {
-                if (IsInteger(data.Seconds) && data.Seconds > 0) {
-                    data.Hour := data.Seconds // 3600
-                    data.Min := Mod(data.Seconds // 60, 60)
-                    data.Sec := Mod(data.Seconds, 60)
-                } else if (!IsNumber(data.Seconds) && data.Seconds != "") {
-                    data.Hour := 0
-                    data.Min := 0
-                    data.Sec := data.Seconds
-                }
-            }
-            if (data.Param2 == "时刻" && data.Param1 == "")
-                data.Param1 := data.Hour ":" data.Min ":" data.Sec
-    }
-    return data
+    return cmd != "" && GetLangKey(GetCmdOnlyText(GetCmdStr(StrSplit(cmd, "_", , 2)[1]))) == "提示"
 }
 
 PromptInt(value, min, max) {
@@ -160,7 +75,7 @@ OnPrompt(tableItem, cmd, index) {
             return
         }
         if (data.CountDownMode == "显示")
-            TimeExecCountDown(tableItem, index, data, true)
+            TimeExecCountDown(tableItem, index, data)
         else {
             x := PromptInt(resolve(data.PosX), -32768, 32767)
             y := PromptInt(resolve(data.PosY), -32768, 32767)

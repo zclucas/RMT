@@ -16,8 +16,6 @@ class MergeTreeNode {
         this.ResourceSerials := []
         this.ModuleName := ""
         this.ItemIndex := 0
-        this.StartIndex := 0
-        this.EndIndex := 0
         this.Children := []
         this.Level := 0
         this.ListViewRow := 0
@@ -41,8 +39,7 @@ class MergeResult {
 class MergeUtil {
 
     ; 可合并页签：按 Symbol 读写源 MacroFile.toml，Index 映射到「当前程序」页签。
-    ; 旧版（1.2 前）源配置无 UITKArr 等键 → 界面宏解析为空并跳过；
-    ; 1.2+ 源配置有 UI 数据 → 正常导入到界面宏页签。无需单独版本分支。
+    ; 源目录在解析前已升级为当前格式。
     static GetMergeTabConfig() {
         tabs := []
         for def in MacroCategoryDefs() {
@@ -94,150 +91,7 @@ class MergeUtil {
     }
 
     static ParseMacroItemsByModule(settingDir, symbol, tabIndex) {
-        ; 宏定义唯一文件 MacroFile.toml，两种布局：
-        ;   1) 现行三级表格式：[[table]] 表集合 + [tableID].ModuleOrder + 模块段/宏段
-        ;   2) 分享包扁平数组格式：symbol TKArr/ModeArr/MacroArrN + symbol FoldInfo 索引区间
-        macroFile := settingDir "\MacroFile.toml"
-        if (!FileExist(macroFile))
-            return []
-
-        nodes := this._ParseMacroItemsToml(macroFile, symbol, tabIndex)
-        if (nodes.Length > 0)
-            return nodes
-
-        return this._ParseMacroItemsFlat(settingDir, symbol, tabIndex)
-    }
-
-    ; 扁平数组格式（分享包）：模块归属由 FoldInfo 的 IndexSpanArr/RemarkArr 索引区间承载
-    static _ParseMacroItemsFlat(settingDir, symbol, tabIndex) {
-        macroFile := settingDir "\MacroFile.toml"
-
-        tkArrStr := CfgRead(macroFile, "UserSettings", symbol "TKArr", "")
-        modeArrStr := CfgRead(macroFile, "UserSettings", symbol "ModeArr", "")
-        ; 无扁平数组键 → 不是扁平布局（三级表格式但该表无条目），避免 StrSplit("") 造出空条目
-        if (tkArrStr == "" && modeArrStr == "")
-            return []
-
-        remarkArrStr := CfgRead(macroFile, "UserSettings", symbol "RemarkArr", "")
-
-        modeArr := StrSplit(modeArrStr, "π")
-        tkArr := StrSplit(tkArrStr, "π")
-        remarkArr := StrSplit(remarkArrStr, "π")
-
-        sourceSerials := StrSplit(CfgRead(macroFile, "UserSettings", symbol "SerialArr", ""), "π")
-        allItems := []
-        loop modeArr.Length {
-            node := MergeTreeNode()
-            node.Type := "Item"
-            node.TabIndex := tabIndex
-            node.ItemIndex := A_Index
-            node.Serial := A_Index <= sourceSerials.Length ? sourceSerials[A_Index] : ""
-            node.TriggerKey := (A_Index <= tkArr.Length) ? tkArr[A_Index] : ""
-            node.Remark := (A_Index <= remarkArr.Length) ? remarkArr[A_Index] : ""
-            node.DisplayName := A_Index ". " node.Remark
-
-            macroStr := CfgRead(macroFile, "UserSettings", symbol "MacroArr" A_Index, "")
-            macroStr := StrReplace(macroStr, "⫶", "`n")
-            node.MacroStr := macroStr
-
-            for field in ["PreMacro", "PostMacro"]
-                node.%field% := StrReplace(CfgRead(macroFile, SettingSection, symbol field "Arr" node.ItemIndex, ""), "⫶", "`n")
-            node.ResourceSerials := this.ExtractResourceSerials(node.MacroStr "," node.PreMacro "," node.PostMacro)
-
-            allItems.Push(node)
-        }
-
-        foldInfo := MergeUtil.ParseFoldInfo(settingDir, symbol)
-
-        if (!foldInfo || !ObjHasOwnProp(foldInfo, "IndexSpanArr") || !IsObject(foldInfo.IndexSpanArr) || foldInfo.IndexSpanArr
-        .Length == 0) {
-            defaultModule := MergeTreeNode()
-            defaultModule.Type := "Module"
-            defaultModule.ModuleName := GetLang("默认模块")
-            defaultModule.DisplayName := "📦" GetLang("默认模块") " (" allItems.Length GetLang("项") ")"
-            defaultModule.Children := allItems
-            return [defaultModule]
-        }
-
-        moduleNodes := []
-        indexSpanArr := foldInfo.IndexSpanArr
-        foldRemarkArr := (ObjHasOwnProp(foldInfo, "RemarkArr") && IsObject(foldInfo.RemarkArr)) ? foldInfo.RemarkArr : ""
-
-        indexSpanLen := IsObject(indexSpanArr) ? indexSpanArr.Length : 0
-        foldRemarkArrLen := IsObject(foldRemarkArr) ? foldRemarkArr.Length : 0
-        spanCount := (foldRemarkArrLen > 0) ? Min(indexSpanLen, foldRemarkArrLen) : indexSpanLen
-
-        if (spanCount <= 0) {
-            defaultModule := MergeTreeNode()
-            defaultModule.Type := "Module"
-            defaultModule.ModuleName := GetLang("默认模块")
-            defaultModule.DisplayName := "📦" GetLang("默认模块") " (" allItems.Length GetLang("项") ")"
-            defaultModule.Children := allItems
-            return [defaultModule]
-        }
-        loop spanCount {
-            foldIndex := A_Index
-            spanRaw := (indexSpanArr.Has(foldIndex)) ? indexSpanArr[foldIndex] : ""
-            if (!IsObject(spanRaw))
-                spanStr := String(spanRaw)
-            else
-                spanStr := ""
-            if (spanStr == "")
-                continue
-
-            moduleName := (IsObject(foldRemarkArr) && foldRemarkArr.Has(foldIndex)) ? String(foldRemarkArr[foldIndex]) : GetLang(
-                "模块") foldIndex
-
-            spanParts := StrSplit(spanStr, "-")
-            startPart := Trim(spanParts[1])
-            if (startPart == "" || !IsNumber(startPart))
-                continue
-            startIndex := Integer(startPart)
-            endPart := (spanParts.Length > 1) ? Trim(spanParts[2]) : ""
-            endIndex := (endPart != "" && IsNumber(endPart)) ? Integer(endPart) : startIndex
-
-            moduleNode := MergeTreeNode()
-            moduleNode.Type := "Module"
-            moduleNode.ModuleName := moduleName
-            moduleNode.StartIndex := startIndex
-            moduleNode.EndIndex := endIndex
-            moduleNode.DisplayName := "📦" moduleName " (" (endIndex - startIndex + 1) GetLang("项") ")"
-
-            loop (endIndex - startIndex + 1) {
-                idx := startIndex + A_Index - 1
-                if (idx > allItems.Length)
-                    break
-                moduleNode.Children.Push(allItems[idx])
-            }
-
-            if (moduleNode.Children.Length > 0)
-                moduleNodes.Push(moduleNode)
-        }
-
-        usedIndices := Map()
-        for moduleNode in moduleNodes {
-            loop (moduleNode.EndIndex - moduleNode.StartIndex + 1) {
-                idx := moduleNode.StartIndex + A_Index - 1
-                usedIndices.Set(idx, true)
-            }
-        }
-
-        unassignedItems := []
-        for idx, item in allItems {
-            if (!usedIndices.Has(idx))
-                unassignedItems.Push(item)
-        }
-
-        if (unassignedItems.Length > 0) {
-            unassignedModule := MergeTreeNode()
-            unassignedModule.Type := "Module"
-            unassignedModule.ModuleName := GetLang("未分类")
-            unassignedModule.DisplayName := "📦" GetLang("未分类") " (" unassignedItems.Length GetLang("项") ")"
-            unassignedModule.Children := unassignedItems
-            moduleNodes.Push(unassignedModule)
-        }
-
-        return moduleNodes
+        return this._ParseMacroItemsToml(settingDir "\MacroFile.toml", symbol, tabIndex)
     }
 
     ; TOML 格式解析：宏归属由模块段 MacroOrder 显式承载，无需 FoldInfo 索引换算
@@ -308,37 +162,6 @@ class MergeUtil {
         }
 
         return moduleNodes
-    }
-
-    static ParseFoldInfo(settingDir, symbol) {
-        macroFile := settingDir "\MacroFile.toml"
-        if (!FileExist(macroFile))
-            return ""
-
-        foldInfoStr := CfgRead(macroFile, SettingSection, symbol "FoldInfo", "")
-        if (foldInfoStr == "")
-            return ""
-
-        try {
-            parsedObj := JSON.parse(foldInfoStr, , false)
-            if (!IsObject(parsedObj))
-                return ""
-
-            if (!ObjHasOwnProp(parsedObj, "IndexSpanArr") || !ObjHasOwnProp(parsedObj, "RemarkArr"))
-                return ""
-
-            indexSpanArr := parsedObj.IndexSpanArr
-            remarkArr := parsedObj.RemarkArr
-
-            if (!IsObject(indexSpanArr))
-                return ""
-            if (indexSpanArr.Length == 0)
-                return ""
-
-            return parsedObj
-        } catch as e {
-            return ""
-        }
     }
 
     static ExtractResourceSerials(macroStr) {
@@ -774,7 +597,7 @@ class MergeUtil {
             Data := configInfo["Data"]
             if (!Data.HasOwnProp("MacroType") || Data.MacroType == "当前宏")
                 continue
-            symbol := CompatMacroTypeSymbol(Data.MacroType)
+            symbol := MacroTypeSymbol(Data.MacroType)
             targets := macroTargets.Get(symbol, Map())
             serial := Data.HasOwnProp("MacroSerial") ? Data.MacroSerial : ""
             target := targets.Get(serial, "")
@@ -1357,9 +1180,6 @@ class MergeUtil {
                     serialList.Push(newSerial)
                 }
 
-                if (IsObject(tableItem.FoldOffsetArr))
-                    tableItem.FoldOffsetArr.Push(0)
-
                 totalModuleCount++
             }
             tableItem.RebuildIndex()
@@ -1438,7 +1258,6 @@ class MergeUtil {
             if (report)
                 report(GetLang("正在检查配置文件"))
             Compat_UpgradeDir(tempDir)
-            IniImport_ExpandFlatMacroFile(tempDir)
         } catch as err {
             this.CleanupTemp(tempDir)
             throw err

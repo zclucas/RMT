@@ -302,7 +302,7 @@ ReferencedMacroPaths(tableItem) {
         return paths
     prefix := tableItem.ID "."
     for _, raw in CfgSection(SubMacroFile, SettingSection) {
-        data := CompatParseData(raw)
+        data := TryParseCommandData(raw)
         if (IsObject(data) && data.HasOwnProp("MacroSerial") && Type(data.MacroSerial) == "String"
             && SubStr(data.MacroSerial, 1, StrLen(prefix)) == prefix)
             paths.Push(data.MacroSerial)

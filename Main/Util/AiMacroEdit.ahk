@@ -26,7 +26,10 @@ class AiMacroEdit {
         file := MySoftData.DataFileMap.Get(info.kind, "")
         if (file == "" || info.number == "")
             throw Error("指令缺少配置序列号：" info.serial)
-        raw := CompatLegacyCmdSaveStr(info.kind, file, info.number, info.kind info.number, info.serial)
+        canonical := info.kind info.number
+        raw := CfgRead(file, SettingSection, canonical, "")
+        if (raw == "" && canonical != info.serial)
+            raw := CfgRead(file, SettingSection, info.serial, "")
         if (raw == "")
             throw Error("缺少指令配置：" info.serial)
         if (SubStr(LTrim(raw), 1, 1) != "{")

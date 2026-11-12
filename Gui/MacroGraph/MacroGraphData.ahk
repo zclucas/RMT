@@ -979,23 +979,13 @@ class MacroGraphDataMixin {
         d := { type: name, raw: cmd, temp: false, time: "", time2: "", itype: "", key: "", ktype: "", hold: "", count: "", inter: "", posx: "", posy: "", speed: "", mode: "" }
         ObjSetBase(d, MGParseObjBase.Prototype)   ; 启用 d["dynKey"] 中括号读写（见 MGParseObjBase）
         if (PromptUsesEditor(cmd)) {
-            legacy := PromptLegacyData(cmd)
-            d.type := GetLang(GetCmdOnlyText(name))
-            if (IsObject(legacy))
-                d.promptType := legacy.Type
-            else {
-                d.serialStr := name
-                d.promptType := GetMacroCMDData(name).Type
-            }
+            d.type := GetLang("提示")
+            d.serialStr := name
+            d.promptType := GetMacroCMDData(name).Type
             return d
         }
 
-        if (GetLangKey(name) == "流程跳转") {
-            d.type := GetLang("宏操作")
-            d.macroType := "当前宏"
-            try d.callType := FlowJumpAction(GetLangCmd(cmd, 2))
-        }
-        else if (name == GetLang("间隔")) {
+        if (name == GetLang("间隔")) {
             raw := paramArr.Length >= 2 ? paramArr[2] : "500"
             timeArr := StrSplit(raw, "~")
             if (timeArr.Length >= 2) {

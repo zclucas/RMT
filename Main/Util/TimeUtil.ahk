@@ -24,35 +24,6 @@ TimeEpochMilliseconds(value) {
     return StrLen(value) <= 10 ? Integer(value) * 1000 : Integer(value)
 }
 
-NormalizeTimingData(data) {
-    if (data.HasOwnProp("StampUnit") && data.StampUnit == "ms")
-        return false
-    ; 1.1 用 StartTime 保存日期，定时类型编号与 1.2 的 StartStamp 格式不同。
-    if (data.HasOwnProp("StartTime") && data.HasOwnProp("Type") && IsInteger(data.Type)) {
-        switch Integer(data.Type) {
-            case 2, 3, 4, 5:
-                units := ["小时", "天", "周", "月"]
-                data.CustomUnit := units[Integer(data.Type) - 1]
-                data.CustomInterval := 1
-                data.Type := "周期触发"
-            case 6:
-                data.Type := "软件启动时"
-            case 7:
-                data.Type := "周期触发"
-        }
-    }
-    for part in ["Start", "End"] {
-        stamp := part "Stamp"
-        time := part "Time"
-        if (data.HasOwnProp(stamp) && IsNumber(data.%stamp%))
-            data.%stamp% *= 1000
-        else if (data.HasOwnProp(time) && data.%time% != "")
-            data.%stamp% := TimeStrToStamp(data.%time%)
-    }
-    data.StampUnit := "ms"
-    return true
-}
-
 ; =====================================================================
 ; 时间指令执行端
 ;   SubMode 中文：等待 / 区间判断 / 倒计时
@@ -70,8 +41,6 @@ OnTimeData(tableItem, cmd, index) {
             TimeExecWaitUntil(tableItem, index, Data)
         case "区间判断":
             TimeExecWindowCheck(tableItem, index, Data)
-        case "倒计时":
-            TimeExecCountDown(tableItem, index, Data)
         case "获取时间变量":
             TimeExecGetTimeVar(tableItem, index, Data)
         case "获取时间字符串":

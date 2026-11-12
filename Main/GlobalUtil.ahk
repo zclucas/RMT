@@ -63,7 +63,6 @@
 #Include ..\Gui\MenuMacroSettingGui.ahk
 #Include ..\Gui\UIMacroGui.ahk
 #Include ..\Gui\UIMacroSettingGui.ahk
-#Include Util\UIMacroSchema.ahk
 #Include Util\UIMacroStepBinding.ahk
 #Include Util\UIMacroRenderer.ahk
 #Include ..\Gui\UIMacroDesignerGui.ahk
@@ -150,8 +149,8 @@ global MySoftData := SoftData()
 global MainSoftData := MainConfig()
 global SettingFile := A_WorkingDir "\Setting\MainSettings.toml"
 global LangDir := A_WorkingDir "\Lang"
-; 旧安装目录直接升级：先迁移全局设置，避免先读到新版本默认值再覆盖旧偏好。
-if (FileExist(A_WorkingDir "\Setting\MainSettings.ini")) {
+; 全局设置在首次读取前升级，覆盖 INI 和已使用 TOML 的预览版。
+if (FileExist(SettingFile) || FileExist(A_WorkingDir "\Setting\MainSettings.ini")) {
     Compat_UpgradeDir(A_WorkingDir "\Setting")
 }
 ; 首次安装补齐默认主题文件：写盘动作只放主进程。Worker 无界面、不读主题文件，

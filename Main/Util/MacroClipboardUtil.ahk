@@ -247,7 +247,7 @@ CollectConfigForCmd(cmdStr, cmdConfigMap) {
         raw := CfgRead(path, SettingSection, serialStr, "")
         if (raw == "")
             raw := CfgRead(path, SettingSection, "Ctrl" m[1], "")
-        data := CompatParseData(raw)
+        data := TryParseCommandData(raw)
         if (!IsObject(data))
             return false
         data.SerialStr := serialStr

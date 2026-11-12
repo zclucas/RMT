@@ -1,8 +1,8 @@
 #Requires AutoHotkey v2.0
 
-; 选择性导出：把勾选的宏/模块重排成一份自洽的最小配置目录（MacroFile.toml 扁平数组布局）
+; 选择性导出：将勾选的宏和模块写为现行配置目录。
 ; 依赖闭包复用 MergeUtil.CollectSourceConfigs（指令配置/变量都是 DataFileMap 序列码条目，含嵌套分支）
-; 导入端：UnpackFile → OnRepairSetting(Compat* 补齐数组字段) → CompatPath 自动改写图片路径
+; 导入时由配置升级入口按目标目录校正图片路径。
 class ShareExportUtil {
 
     ; 返回缺失依赖的序列号列表（顿号连接；空串=无缺失。不阻断导出）
@@ -17,9 +17,18 @@ class ShareExportUtil {
         ; 1) 指令配置依赖闭包（含嵌套分支与变量）
         serials := MergeUtil.CollectAllResourceSerials(checkedItems)
         collected := Map()
-        if (GetObjectCount(serials) > 0)
+        if (serials.Count)
             collected := MergeUtil.CollectSourceConfigs(sourceDir, serials)
 
+        targets := Map()
+        tableCounts := Map()
+        for item in checkedItems {
+            if (RegExMatch(item.Serial, "^([\w-]+)\.[\w-]+\.[\w-]+$", &path)) {
+                tableID := path[1]
+                tableCounts[tableID] := tableCounts.Get(tableID, 0) + 1
+                targets[item.Serial] := tableCounts[tableID]
+            }
+        }
         for serial, info in collected {
             if (!IsObject(info))
                 continue
@@ -28,7 +37,17 @@ class ShareExportUtil {
                 continue
             dataFile := MySoftData.DataFileMap[cmdType]
             SplitPath dataFile, &baseName
-            CfgWrite(info["配置"], outDir "\" baseName, SettingSection, serial)
+            raw := info["配置"]
+            if (cmdType == "宏操作") {
+                data := TryParseCommandData(raw)
+                if (IsObject(data) && data.HasOwnProp("MacroType") && data.MacroType != "当前宏") {
+                    target := data.HasOwnProp("MacroSerial") ? data.MacroSerial : ""
+                    data.Index := targets.Get(target, 0)
+                    data.MacroSerial := data.Index ? target : ""
+                    raw := JSON.stringify(data, 0)
+                }
+            }
+            CfgWrite(raw, outDir "\" baseName, SettingSection, serial)
         }
         missingNames := []
         for serial, _ in serials {
@@ -43,8 +62,9 @@ class ShareExportUtil {
             DirCopy(sourceDir "\Images", outDir "\Images", true)
         }
 
-        ; 3) 宏定义：写 MacroFile.toml 扁平数组布局（π 分隔数组 + FoldInfo 模块分组）
-        this._WriteMacroFileFlatToml(checkedItems, outDir)
+        this._WriteMacroFile(checkedItems, outDir)
+        CfgFlushDir(outDir)
+        Compat_WriteVersion(outDir, Compat_CurrentVersion())
         return this._JoinName(missingNames)
     }
 
@@ -58,123 +78,68 @@ class ShareExportUtil {
         return out
     }
 
-    static _WriteMacroFileFlatToml(checkedItems, outDir) {
-        macroFile := outDir "\MacroFile.toml"
+    static _WriteMacroFile(checkedItems, outDir) {
+        tables := Map()
+        order := []
+        reserved := Map()
+        for source in checkedItems
+            reserved[source.Serial] := true
 
-        ; 按页签分组（保持勾选顺序）
-        tabItems := Map()
-        tabOrder := []
-        for item in checkedItems {
-            if (item.TabIndex < 1 || !MySoftData.TableInfo.Has(item.TabIndex))
+        for source in checkedItems {
+            if (source.TabIndex < 1 || !MySoftData.TableInfo.Has(source.TabIndex))
                 continue
-            symbol := GetTableSymbol(item.TabIndex)
+            symbol := GetTableSymbol(source.TabIndex)
             if (!IsItemSymbol(symbol))
                 continue
-            if (!tabItems.Has(symbol)) {
-                tabItems.Set(symbol, [])
-                tabOrder.Push(symbol)
+            ; 保留源宏身份，宏操作引用可直接指向分享包中的对应宏。
+            hasID := RegExMatch(source.Serial, "^(" symbol "(?:_\d+)?)\.[\w-]+\.[\w-]+$", &path)
+            tableID := hasID ? path[1] : symbol
+            if (!tables.Has(tableID)) {
+                table := TableItem()
+                table.ID := tableID
+                table.Symbol := symbol
+                table.Name := MySoftData.TableInfo[source.TabIndex].Name
+                tables[tableID] := table
+                order.Push(tableID)
             }
-            tabItems[symbol].Push(item)
-        }
-
-        for _, symbol in tabOrder {
-            items := tabItems[symbol]
-            n := items.Length
-
-            tkArr := [], remarkArr := [], modeArr := [], macroArr := [], serialArr := []
-            for item in items {
-                tkArr.Push(this._FlatSafe(item.TriggerKey))
-                remarkArr.Push(this._FlatSafe(item.Remark))
-                modeArr.Push("1")
-                serialArr.Push(item.Serial)
-                ; 扁平格式用 ⫶ 承载换行
-                macroArr.Push(this._FlatSafe(StrReplace(String(item.MacroStr), "`n", "⫶")))
+            table := tables[tableID]
+            title := source.ModuleName != "" ? source.ModuleName : GetLang("默认模块")
+            if (!table.Folds.Length || table.Folds[-1].Remark != title) {
+                fold := MacroFold()
+                fold.ID := tableID ".Module" (table.Folds.Length + 1)
+                fold.Remark := title
+                table.Folds.Push(fold)
             }
-
-            CfgWrite(this._JoinPi(modeArr), macroFile, SettingSection, symbol "ModeArr")
-            CfgWrite(this._JoinPi(tkArr), macroFile, SettingSection, symbol "TKArr")
-            CfgWrite(this._JoinPi(remarkArr), macroFile, SettingSection, symbol "RemarkArr")
-            CfgWrite(this._JoinPi(serialArr), macroFile, SettingSection, symbol "SerialArr")
-            loop n
-                CfgWrite(macroArr[A_Index], macroFile, SettingSection, symbol "MacroArr" A_Index)
-            for i, item in items {
-                for field in ["PreMacro", "PostMacro"] {
-                    if (item.HasOwnProp(field) && item.%field% != "")
-                        CfgWrite(this._FlatSafe(StrReplace(item.%field%, "`n", "⫶")), macroFile, SettingSection, symbol field "Arr" i)
+            fold := table.Folds[-1]
+            item := MacroItem()
+            item.FoldID := fold.ID
+            if (hasID)
+                item.ID := source.Serial
+            else {
+                loop {
+                    item.ID := NewMacroPath(table, fold.ID)
+                    if (!reserved.Has(item.ID))
+                        break
                 }
             }
-
-            ; 其余结构数组字段缺省即可：导入端 CompatCMD 按 ModeArr 长度补齐
-
-            ; FoldInfo：按模块连续段生成分组（勾选顺序即树顺序，同模块天然连续）
-            spanArr := [], remarkJsonArr := []
-            spanStart := 0, spanModule := ""
-            i := 0
-            for item in items {
-                i++
-                moduleName := (item.ModuleName != "") ? item.ModuleName : GetLang("默认模块")
-                if (moduleName != spanModule) {
-                    if (spanStart > 0) {
-                        spanArr.Push(spanStart "-" (i - 1))
-                        remarkJsonArr.Push(spanModule)
-                    }
-                    spanStart := i
-                    spanModule := moduleName
-                }
-            }
-            if (spanStart > 0) {
-                spanArr.Push(spanStart "-" n)
-                remarkJsonArr.Push(spanModule)
-            }
-
-            if (spanArr.Length > 0) {
-                foldJson := this._BuildFoldJson(spanArr, remarkJsonArr)
-                CfgWrite(foldJson, macroFile, SettingSection, symbol "FoldInfo")
-            }
+            item.TK := source.TriggerKey
+            item.Remark := source.Remark
+            item.Macro := source.MacroStr
+            item.PreMacro := source.HasOwnProp("PreMacro") ? source.PreMacro : ""
+            item.PostMacro := source.HasOwnProp("PostMacro") ? source.PostMacro : ""
+            table.Items.Push(item)
+            table.RememberPath(item.ID)
         }
-    }
 
-    ; π 是内部分隔符（U+03C0），正文里出现会破坏数组，替换为形近的「兀」
-    static _FlatSafe(s) {
-        s := StrReplace(String(s), "π", "兀")
-        s := StrReplace(s, "`r", "")
-        return s
-    }
-
-    static _JoinPi(arr) {
-        out := ""
-        for i, v in arr {
-            if (i > 1)
-                out .= "π"
-            out .= String(v)
+        tableList := []
+        root := Map("table", tableList)
+        for index, tableID in order {
+            table := tables[tableID]
+            table.RebuildIndex()
+            tableList.Push(Map("id", tableID, "symbol", table.Symbol, "name", table.Name, "order", index))
+            SaveTableItemInfoTomlCore(root, table)
         }
-        return out
-    }
-
-    static _JsonEsc(s) {
-        s := StrReplace(String(s), "\", "\\")
-        s := StrReplace(s, '"', '\"')
-        s := StrReplace(s, "`n", "\n")
-        s := StrReplace(s, "`r", "\r")
-        s := StrReplace(s, "`t", "\t")
-        return s
-    }
-
-    static _BuildFoldJson(spanArr, remarkArr) {
-        out := '{"IndexSpanArr":['
-        for i, v in spanArr {
-            if (i > 1)
-                out .= ","
-            out .= '"' this._JsonEsc(v) '"'
-        }
-        out .= '],"RemarkArr":['
-        for i, v in remarkArr {
-            if (i > 1)
-                out .= ","
-            out .= '"' this._JsonEsc(v) '"'
-        }
-        out .= "]}"
-        return out
+        TomlUtil_Write(root, outDir "\MacroFile.toml")
     }
 
     ; 由勾选内容给出默认分享名：单个宏用宏名，多个用来源配置名
@@ -203,9 +168,11 @@ class ShareExportUtil {
             TriggerKey: item.TK,
             Remark: item.Remark,
             MacroStr: item.Macro,
+            PreMacro: item.PreMacro,
+            PostMacro: item.PostMacro,
             ModuleName: "",
             DisplayName: item.Remark,
-            ResourceSerials: MergeUtil.ExtractResourceSerials(item.Macro)
+            ResourceSerials: MergeUtil.ExtractResourceSerials(item.Macro "," item.PreMacro "," item.PostMacro)
         }
         arr := [shim]
         defaultName := this.SuggestName(arr, MySoftData.CurSettingName)
@@ -227,9 +194,11 @@ class ShareExportUtil {
                 TriggerKey: item.TK,
                 Remark: item.Remark,
                 MacroStr: item.Macro,
+                PreMacro: item.PreMacro,
+                PostMacro: item.PostMacro,
                 ModuleName: fold.Remark,
                 DisplayName: item.Remark,
-                ResourceSerials: MergeUtil.ExtractResourceSerials(item.Macro)
+                ResourceSerials: MergeUtil.ExtractResourceSerials(item.Macro "," item.PreMacro "," item.PostMacro)
             })
         }
         if (arr.Length == 0)

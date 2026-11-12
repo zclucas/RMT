@@ -193,7 +193,7 @@ class SubMacroGui {
 
     static Targets(macroType) {
         targets := []
-        tables := GetTablesBySymbol(CompatMacroTypeSymbol(macroType))
+        tables := GetTablesBySymbol(MacroTypeSymbol(macroType))
         for tableItem in tables {
             prefix := tables.Length > 1 ? GetLang(tableItem.Name) " · " : ""
             for i, item in tableItem.Items {
@@ -231,18 +231,9 @@ class SubMacroGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        legacyJump := cmdArr.Length && GetLangKey(GetCmdStr(cmdArr[1])) == "流程跳转"
-        if (legacyJump) {
-            jumpAction := FlowJumpAction(GetLangCmd(cmd, 2))
-            cmdArr := []
-        }
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("宏操作")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        if (legacyJump) {
-            this.Data.MacroType := "当前宏"
-            this.Data.CallType := jumpAction
-        }
         this.DLVariableArr := GetGuiVarArr(2)
 
         macroTypes := GetLangArr(SubMacroGui.MacroTypes())

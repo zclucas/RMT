@@ -225,6 +225,22 @@ CfgFlushAll() {
     return n
 }
 
+; 迁移在写入版本或移动目录前，必须确认该目录的配置已落盘。
+CfgFlushDir(dir) {
+    global Cfg_Dirty, Cfg_Cache
+    criticalState := A_IsCritical
+    Critical("On")
+    try {
+        for file in Cfg_Dirty.Clone() {
+            SplitPath file, , &parent
+            if (parent != dir)
+                continue
+            Cfg_WriteRoot(Cfg_Cache[file].Root, file)
+            Cfg_Dirty.Delete(file)
+        }
+    } finally Critical(criticalState)
+}
+
 ; 失效缓存；file 省略 → 清空全部
 CfgInvalidate(file := "") {
     global Cfg_Cache, Cfg_BatchDirty, Cfg_Dirty

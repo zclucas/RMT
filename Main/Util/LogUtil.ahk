@@ -250,17 +250,6 @@ RMTLogLevelKeys() {
     return ["debug", "info", "warn", "error"]
 }
 
-RMTLogLegacyLevels(level) {
-    ; 旧版除 debug 外的级别始终写入。单独使用新键，以区分只勾选一个级别。
-    if (InStr(level, ","))
-        return level ; 兼容开发版已写入的多选值。
-    switch level {
-        case "": return "warn,error"
-        case "debug": return "debug,info,warn,error"
-        default: return "info,warn,error"
-    }
-}
-
 RMTLogLevelEnabled(level, selected) {
     return level != "" && InStr("," selected ",", "," level ",")
 }

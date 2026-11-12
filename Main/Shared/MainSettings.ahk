@@ -90,7 +90,6 @@ LoadMainSetting() {
     MainSoftData.UIPanelFontSize := CfgRead(SettingFile, SettingSection, "UIPanelFontSize", 12)
     MainSoftData.UIPanelBtnWidth := CfgRead(SettingFile, SettingSection, "UIPanelBtnWidth", 80)
     MainSoftData.UIPanelCols := CfgRead(SettingFile, SettingSection, "UIPanelCols", 3)
-    MainSoftData.UIPanelCustom := CfgRead(SettingFile, SettingSection, "UIPanelCustom", "")
     MainSoftData.UIPanelBall := CfgRead(SettingFile, SettingSection, "UIPanelBall", "")
     MainSoftData.UIPanelBallPos := CfgRead(SettingFile, SettingSection, "UIPanelBallPos", "")
     MainSoftData.UIPanelPos := CfgRead(SettingFile, SettingSection, "UIPanelPos", "")
@@ -124,13 +123,12 @@ LoadMainSetting() {
     RMTLogBusinessEnabled := MainSoftData.BusinessLog
     ; 日志与错误（C 项阶段5）
     global RMTLogSysMinLevel
-    legacyLogLevel := CfgRead(SettingFile, SettingSection, "SysLogMinLevel")
-    MainSoftData.SysLogMinLevel := CfgRead(SettingFile, SettingSection, "SysLogLevels", RMTLogLegacyLevels(legacyLogLevel))
+    MainSoftData.SysLogMinLevel := CfgRead(SettingFile, SettingSection, "SysLogLevels", "warn,error")
     RMTLogSysMinLevel := MainSoftData.SysLogMinLevel
     ; AI 助手（OpenAI 兼容）
     MainSoftData.AiApiKey := CfgRead(SettingFile, SettingSection, "AiApiKey", "")
     MainSoftData.AiApiBaseUrl := CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "https://api.openai.com/v1")
-    MainSoftData.AiProvider := CfgRead(SettingFile, SettingSection, "AiProvider", "")
+    MainSoftData.AiProvider := CfgRead(SettingFile, SettingSection, "AiProvider", "openai")
     MainSoftData.AiModel := CfgRead(SettingFile, SettingSection, "AiModel", "")
     MainSoftData.AiModelList := CfgRead(SettingFile, SettingSection, "AiModelList", "")
     MainSoftData.AiAccessMode := Integer(CfgRead(SettingFile, SettingSection, "AiAccessMode", 2))
@@ -139,42 +137,6 @@ LoadMainSetting() {
         MainSoftData.AiAccessMode := 2
     if (MainSoftData.AiApprovalMode < 1 || MainSoftData.AiApprovalMode > 3)
         MainSoftData.AiApprovalMode := 2
-    if (Trim(MainSoftData.AiProvider) == "") {
-        ; 旧配置无供应商字段时，按 URL 反推
-        MainSoftData.AiProvider := "openai"
-        url := RTrim(Trim(MainSoftData.AiApiBaseUrl), "/\")
-        for pair in [
-            ["https://api.openai.com/v1", "openai"],
-            ["https://api.deepseek.com/v1", "deepseek"],
-            ["https://dashscope.aliyuncs.com/compatible-mode/v1", "dashscope"],
-            ["https://ark.cn-beijing.volces.com/api/v3", "volcengine"],
-            ["https://api.hunyuan.cloud.tencent.com/v1", "hunyuan"],
-            ["https://qianfan.baidubce.com/v2", "qianfan"],
-            ["https://api.moonshot.cn/v1", "moonshot"],
-            ["https://open.bigmodel.cn/api/paas/v4", "zhipu"],
-            ["https://api.baichuan-ai.com/v1", "baichuan"],
-            ["https://api.lingyiwanwu.com/v1", "yi"],
-            ["https://api.stepfun.com/v1", "stepfun"],
-            ["https://api.minimax.chat/v1", "minimax"],
-            ["https://api.siliconflow.cn/v1", "siliconflow"],
-            ["https://generativelanguage.googleapis.com/v1beta/openai", "gemini"],
-            ["https://api.x.ai/v1", "xai"],
-            ["https://api.mistral.ai/v1", "mistral"],
-            ["https://api.groq.com/openai/v1", "groq"],
-            ["https://api.together.xyz/v1", "together"],
-            ["https://api.fireworks.ai/inference/v1", "fireworks"],
-            ["https://openrouter.ai/api/v1", "openrouter"],
-            ["http://localhost:11434/v1", "ollama"],
-            ["http://localhost:1234/v1", "lmstudio"]
-        ] {
-            if (url = pair[1]) {
-                MainSoftData.AiProvider := pair[2]
-                break
-            }
-        }
-        if (url != "" && MainSoftData.AiProvider = "openai" && url != "https://api.openai.com/v1")
-            MainSoftData.AiProvider := "custom"
-    }
     rawPanelW := CfgRead(SettingFile, SettingSection, "AiPanelWidth", 380)
     MainSoftData.AiPanelWidth := IsNumber(rawPanelW) ? Integer(rawPanelW) : 380
     MainSoftData.LogicTreeBranchSplit := !!CfgRead(SettingFile, SettingSection, "LogicTreeBranchSplit", false)
@@ -208,8 +170,6 @@ LoadMainSetting() {
     MainSoftData.Lang := CfgRead(SettingFile, SettingSection, "Lang", "无语言")
     MainSoftData.FontType := CfgRead(SettingFile, SettingSection, "FontType", "微软雅黑")
     MainSoftData.JoyType := CfgRead(SettingFile, SettingSection, "JoyType", "Xbox")
-    if (MainSoftData.JoyType == "PS5")
-        MainSoftData.JoyType := "DS4"   ; 兼容旧配置：ViGEm 仅有 DS4（DualShock 4），无 PS5 类型
     MainSoftData.TriggerJoyType := CfgRead(SettingFile, SettingSection, "TriggerJoyType", "Xbox")
     rawLtRt := CfgRead(SettingFile, SettingSection, "JoyLtRtAsButton", true)
     MainSoftData.JoyLtRtAsButton := !(rawLtRt == 0 || rawLtRt == "0" || rawLtRt == "false" || rawLtRt == "False")

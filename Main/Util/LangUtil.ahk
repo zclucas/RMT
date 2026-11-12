@@ -188,7 +188,7 @@ GetLangCmd(Cmd, Mode) {
     }
     paramArr[1] := Format("{}{}", cmdSymbol, paramArr[1])
 
-    if (IsRMT || GetLangKey(GetCmdStr(paramArr[1])) == "流程跳转") {
+    if (IsRMT && paramArr.Length >= 2) {
         paramArr[2] := action(paramArr[2])
     }
 

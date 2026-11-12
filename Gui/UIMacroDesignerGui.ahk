@@ -110,8 +110,6 @@ class UIMacroDesignerGui {
         this._foldKey := UIMacroSchema.FoldKey(fold)
         if (this._foldKey == "")
             this._foldKey := String(this._foldIndex)
-        else
-            UIMacroSchema.MigrateLegacy(this._foldIndex, this._foldKey)
 
         this._schema := ""
         parsed := UIMacroSchema.Parse(UIMacroSchema.ReadStoreByKey(this._foldKey))

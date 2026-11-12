@@ -881,7 +881,6 @@ class TimingGui {
         }
         data := JSON.parse(saveStr, , false)
         data.SerialStr := SerialStr
-        NormalizeTimingData(data)
         return data
     }
 }

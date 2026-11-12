@@ -165,7 +165,7 @@ OnSaveSetting(*) {
     for key in ["CMDLogToFile", "CMDLogFilePath", "CMDLogAutoClear", "StartTipAudio", "EndTipAudio", "StopTipAudio",
         "FixedMenuWheel", "MenuWheelShowTooltip", "MenuWheelSelectMode", "MenuWheelScale",
         "UIPanelShowOnActive",
-        "UIPanelBtnWidth", "UIPanelBtnHeight", "UIPanelFontSize", "UIPanelCols", "UIPanelCustom", "UIPanelBall", "UIPanelBallPos", "UIPanelPos",
+        "UIPanelBtnWidth", "UIPanelBtnHeight", "UIPanelFontSize", "UIPanelCols", "UIPanelBall", "UIPanelBallPos", "UIPanelPos",
         "CountDownFontSize", "CountDownAlpha", "CountDownStyle", "CountDownPadZero"]
         CheckAndAddDirty(key, MainSoftData.%key%)
 
@@ -746,15 +746,6 @@ InitFilePath() {
     }
 
     InitDataFilePaths(A_WorkingDir)
-    ; 旧格式迁移只在主进程做：Worker 只读配置（见 Thread\WorkUtil.ahk 的 InitWorkFilePath）。
-    global SearchComboFile, TimeDataFile
-    oldSearchMultiFile := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\SearchMultiFile.toml"
-    if (!FileExist(SearchComboFile) && FileExist(oldSearchMultiFile))
-        try FileMove(oldSearchMultiFile, SearchComboFile)
-    CompatPromoteLegacyFile(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\TimeFile.toml", TimeDataFile)
-    ; 旧扁平布局的宏文件就地展开成三级段。放这里而不是 LoadCurMacroSetting：
-    ; 后者是主程序与 Worker 共用的，而展开依赖 IniImportUtil（Worker 不加载）。
-    ExpandFlatMacroFileIfNeeded()
 }
 
 StopMacro(tableItem, itemIndex, playStopTip := false) {

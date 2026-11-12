@@ -3,24 +3,7 @@
 ; 截至 1.2.2 的历史配置修正，仅主程序需要（入口：Gui\SettingMgrGui.ahk）
 ; 配置文件统一为 TOML：读写走 ConfigUtil 的 CfgRead/CfgWrite，文件路径由调用方给出
 ; 由 Main\GlobalUtil.ahk 引入，Worker(Thread\Work.ahk) 不加载本文件
-; 内存数据结构的补齐逻辑在 CompatDataUtil.ahk，那部分主程序与Worker共用
-
-; 配置值（JSON 字符串）→ Data 对象；非 JSON 返回 ""
-CompatParseData(val) {
-    SaveStr := Trim(val)
-    if (SaveStr == "")
-        return ""
-
-    FirstChar := SubStr(SaveStr, 1, 1)
-    LastChar := SubStr(SaveStr, -1, 1)
-    if (FirstChar != "{" || LastChar != "}")
-        return ""
-
-    try
-        return JSON.parse(SaveStr, , false)
-    catch
-        return ""
-}
+; 旧资源字段转换由配置升级入口加载。
 
 CompatMacro(MacroStr, &isFix) {
     CMDArr := SplitMacro(MacroStr)
@@ -331,7 +314,7 @@ CompatTiming(filePath) {
             hasFix := true
             continue
         }
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -342,7 +325,7 @@ CompatTiming(filePath) {
             curFix := true
         }
 
-        curFix := NormalizeTimingData(Data) || curFix
+        curFix := CompatNormalizeTimingData(Data) || curFix
         if (Data.HasOwnProp("StartTime")) {
             Data.DeleteProp("StartTime")
             curFix := true
@@ -369,7 +352,7 @@ CompatSearch(filePath) {
         return hasFix
     hasFix := CompatSerial(filePath, "Search", "搜索")
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
         curFix := CompatPath(filePath, Data)
@@ -404,7 +387,7 @@ CompatSearchPro(filePath) {
             hasFix := true
             continue
         }
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -450,7 +433,7 @@ CompatMMPro(filePath) {
             hasFix := true
             continue
         }
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -492,7 +475,7 @@ CompatOutput(filePath) {
         "4", "指令窗口", "5", "软件弹窗", "6", "系统语音", "7", "复制到剪切板")
     hasFix := CompatSerial(filePath, "Output", "输出")
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
         curFix := false
@@ -519,7 +502,7 @@ CompatRun(filePath) {
     hasFix := CompatSerial(filePath, "Run", "运行")
 
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -542,7 +525,7 @@ CompatTime(filePath) {
     for key, val in CfgSection(filePath, SettingSection) {
         if (!RegExMatch(key, "^(时间|倒计时)\d+$"))
             continue
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
         curFix := false
@@ -566,7 +549,7 @@ CompatCountDown(filePath) {
     for key, val in CfgSection(filePath, SettingSection) {
         if (!RegExMatch(key, "^倒计时\d+$"))
             continue
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
         curFix := false
@@ -589,7 +572,7 @@ CompatLoop(filePath) {
 
     hasFix := CompatSerial(filePath, "Loop", "循环")
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -614,7 +597,7 @@ CompatSubMacro(FilePath) {
     FixCallTypeMap := Map("1", "插入到当前宏", "2", "触发", "3", "暂停", "4", "取消暂停", "5", "终止")
     hasFix := CompatSerial(filePath, "SubMacro", "宏操作")
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -656,7 +639,7 @@ CompatExVariable(filePath) {
         return hasFix
     hasFix := CompatSerial(filePath, "ExVariable", "变量提取")
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -679,7 +662,7 @@ CompatCompare(filePath) {
         return hasFix
     hasFix := CompatSerial(filePath, "Compare", "如果")
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
         curFix := false
@@ -715,7 +698,7 @@ CompatComparePro(filePath) {
     hasFix2 := CompatSerial(filePath, "ComparePro", "如果Pro")
     hasFix := hasFix1 || hasFix2
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
@@ -758,7 +741,7 @@ CompatOperation(filePath) {
     hasFix := hasFix1 || hasFix2
     DeletePropArr := ["NameArr", "OperationArr", "SymbolGroups", "ValueGroups"]
     for key, val in CfgSection(filePath, SettingSection) {
-        Data := CompatParseData(val)
+        Data := TryParseCommandData(val)
         if (Data == "")
             continue
 
