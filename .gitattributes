@@ -1,6 +1,8 @@
 *.html linguist-detectable=false
 *.html linguist-vendored
 
-# .ahk 按字节存取（仓库内已是 CRLF + 例外 BOM），禁止 git 做换行归一化，
-# 避免提交时被 autocrlf 转成 LF 产生整文件伪 diff。CI 编码检查依赖此约定。
-*.ahk -text
+# .ahk：仓库内统一按 LF 存储，检出到工作区自动转回 CRLF。
+# 这样无论谁在什么平台、用什么编辑器提交，git 眼里只有一份规范字节：
+#   - 不会出现整文件伪 diff 或行尾冲突（上游/本地都按 LF 比对）
+#   - 任何平台检出后工作区都是 CRLF，CI 的编码检查与本地编辑器行为一致
+*.ahk text eol=crlf
