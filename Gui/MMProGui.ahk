@@ -197,7 +197,7 @@ class MMProGui {
         ; === 事件 ===
         this.ui.OnEvent("Window", "Closing", this.OnWindowClosing.Bind(this, this.ui.id))
         this.ui.OnEvent("Window", "LoadedHwnd", this.OnWindowLoad.Bind(this, this.ui.id))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/6-移动Pro", ObjBindMethod(this, "TriggerMacro"), "!l", ObjBindMethod(this, "OnClickTargeterBtn"), ObjBindMethod(this, "SureMMPro"))
         this.ui.OnEvent("RefCombo", "SelectionChanged", ObjBindMethod(this, "OnRefChange"))
         this.ui.OnEvent("BtnWinInfoEdit", "Click", ObjBindMethod(this, "OnWinInfoEdit"))
@@ -209,7 +209,7 @@ class MMProGui {
             this.ui.OnEvent(field, "GotKeyboardFocus", (*) => this._posTarget := "EndPosVar")
         this.ui.OnEvent("HumanMouseTog", "Click", ObjBindMethod(this, "OnHumanMouseTogClick"))
         BindMouseMovePreview(this.ui, "pro")
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
 
     }
 
@@ -440,8 +440,7 @@ class MMProGui {
     OnClickTargeterBtn(*) {
         ; 关闭路径预览/双点编辑，避免定位器打开期间旧 Timer 继续访问编辑器控件。
         MouseMovePreview.Clear(this.ui)
-        MyTargetGui.SureAction := this.OnSureTarget.Bind(this)
-        MyTargetGui.ShowGui()
+        MyTargetGui.ShowGui(XamlWin.BindCurrent(this, "OnSureTarget"))
     }
 
     OnClickTargeterHelpBtn(state := "", ctrl := "", event := "") {

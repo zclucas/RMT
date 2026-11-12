@@ -363,8 +363,8 @@ class SearchProGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing").Bind(windowToken))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui
             , this.IsAll ? "#指令手册/11.1-搜索All" : "#指令手册/4-搜索Pro"
             , (*) => this.TriggerMacro(!this.IsAll), "!l"
@@ -392,7 +392,7 @@ class SearchProGui {
         this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEditBtn"))
         this.ui.OnEvent("BtnEditFoundMacro", "Click", ObjBindMethod(this, "OnEditFoundMacroBtnClick"))
         this.ui.OnEvent("BtnEditUnFoundMacro", "Click", ObjBindMethod(this, "OnEditUnFoundMacroBtnClick"))
-        this.ui.OnEvent("BtnSure", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnSure", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         this.ui.OnEvent("StartPosXCon", "LostFocus", ObjBindMethod(this, "RefreshPreviewArea"))
         this.ui.OnEvent("StartPosYCon", "LostFocus", ObjBindMethod(this, "RefreshPreviewArea"))
         this.ui.OnEvent("EndPosXCon", "LostFocus", ObjBindMethod(this, "RefreshPreviewArea"))
@@ -1112,8 +1112,7 @@ class SearchProGui {
                 return
             }
         }
-        MyTargetGui.SureAction := this.OnSureTarget.Bind(this)
-        MyTargetGui.ShowGui(hwnd)
+        MyTargetGui.ShowGui(XamlWin.BindCurrent(this, "OnSureTarget"), hwnd)
     }
 
     OnScreenShotGetArea(x1, y1, x2, y2) {

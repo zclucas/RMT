@@ -269,7 +269,7 @@ class WaitGui {
         ; === 事件 ===
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing", this.ui.id))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad", this.ui.id))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/等待", this.TriggerConfirmation.Bind(this), "!l", "", this.OnClickPickArea.Bind(this))
         this.ui.Update("BtnCmdF1", "ToolTip", GetLang("框选范围"))
         this.ui.OnEvent("WaitTypeCon", "SelectionChanged", ObjBindMethod(this, "OnGroupChange"))
@@ -289,7 +289,7 @@ class WaitGui {
         this.ui.OnEvent("BtnPreviewArea", "Click", this.OnPreviewArea.Bind(this))
         for name in ["StartPosX", "StartPosY", "EndPosX", "EndPosY"]
             this.ui.OnEvent(name, "LostFocus", this.RefreshAreaPreview.Bind(this))
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
     }
 
     _ShowWindow() {

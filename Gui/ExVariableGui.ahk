@@ -187,15 +187,15 @@ class ExVariableGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/12-变量提取", ObjBindMethod(this, "TriggerMacro"), "!l", "", ObjBindMethod(this, "OnF1"))
         try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
         this.ui.OnEvent("ExtractTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
         this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEditBtn"))
         this.ui.OnEvent("BtnExtractEdit", "Click", ObjBindMethod(this, "OnClickExtractBtn"))
-        this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
 
     }
 
@@ -450,38 +450,37 @@ class ExVariableGui {
 
     TestExVariable(Data) {
         tableItem := MySoftData.SpecialTableItem
-        HasX1 := TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
-        HasY1 := TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
-        HasX2 := TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
-        HasY2 := TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY)
-        if (!HasX1 || !HasX2 || !HasY1 || !HasY2)
-            return
-
-        if (CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) == "屏幕") {
-            TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
-            TextObjs := TextObjs == "" ? [] : TextObjs
-        }
-        else if (CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) == "剪切板") {
-            TextObjs := []
+        extractType := CmdEnumZh(Data.ExtractType, CmdEnumExtractNames())
+        TextObjs := []
+        if (extractType == "剪切板") {
             if (!IsClipboardText())
                 return
-            obj := Object()
-            obj.Text := A_Clipboard
-            TextObjs.Push(obj)
-        }
-        else if (CmdEnumZh(Data.ExtractType, CmdEnumExtractNames()) == "窗口") {
-            HasX1 := TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
-            HasY1 := TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
-            HasX2 := TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
-            HasY2 := TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY)
-            if (!HasX1 || !HasX2 || !HasY1 || !HasY2)
+            TextObjs.Push({Text: A_Clipboard})
+        } else {
+            if (!TryGetTabVarValue(&X1, tableItem, 1, Data.StartPosX)
+                || !TryGetTabVarValue(&Y1, tableItem, 1, Data.StartPosY)
+                || !TryGetTabVarValue(&X2, tableItem, 1, Data.EndPosX)
+                || !TryGetTabVarValue(&Y2, tableItem, 1, Data.EndPosY)
+                || !IsNumber(X1) || !IsNumber(Y1) || !IsNumber(X2) || !IsNumber(Y2)
+                || X2 <= X1 || Y2 <= Y1) {
+                RmtDialog.Info(GetLang("请先设置有效的提取范围"))
                 return
-            TextObjs := []
-            hwndList := GetHwndList(Data.WinInfo)
-            loop hwndList.Length {
-                CurWinTextObjs := GetWinTextObjArr(hwndList[A_Index], X1, Y1, X2, Y2, Data.OCRType)
-                if (CurWinTextObjs != "")
-                    TextObjs.Push(CurWinTextObjs*)
+            }
+            try {
+                if (extractType == "屏幕") {
+                    result := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
+                    if (IsObject(result))
+                        TextObjs := result
+                } else if (extractType == "窗口") {
+                    for hwnd in GetHwndList(Data.WinInfo) {
+                        result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType)
+                        if (IsObject(result))
+                            TextObjs.Push(result*)
+                    }
+                }
+            } catch as err {
+                RmtDialog.Info(GetLang("变量提取失败") "`n" err.Message)
+                return
             }
         }
 
@@ -502,10 +501,10 @@ class ExVariableGui {
             if (GetLastEnabledExtractRow(Data.ToggleArr) > VariableValueArr.Length)
                 continue
 
-            loop VariableValueArr.Length {
-                if (Data.ToggleArr[A_Index]) {
-                    NameArr.Push(Data.VariableArr[A_Index])
-                    ValueArr.Push(VariableValueArr[A_Index])
+            for i, enabled in Data.ToggleArr {
+                if (enabled) {
+                    NameArr.Push(Data.VariableArr[i])
+                    ValueArr.Push(VariableValueArr[i])
                 }
             }
             break

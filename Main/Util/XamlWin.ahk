@@ -69,9 +69,9 @@ class XamlWin {
     }
 
     ; XAML 回调由定时器分发。编辑器重用时，旧窗的回调不能操作新窗。
-    static BindCurrent(editor, method) {
+    static BindCurrent(editor, method, boundArgs*) {
         ui := editor.ui
-        callback := ObjBindMethod(editor, method)
+        callback := ObjBindMethod(editor, method, boundArgs*)
         return (args*) => editor.ui == ui ? callback(args*) : ""
     }
 

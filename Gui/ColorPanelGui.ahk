@@ -25,10 +25,11 @@ class ColorPanelGui {
             .WindowStartupLocation("Manual").Opacity(0)
     }
 
-    ShowGui(targetHwnd := 0) {
+    ShowGui(sureAction, targetHwnd := 0) {
         if (this.active)
             return
         this.active := true
+        this.SureAction := sureAction
         this.TargetHwnd := targetHwnd
         this._colors := Map()
         this.AddGui()
@@ -89,15 +90,17 @@ class ColorPanelGui {
         confirm.InjectResources(this._ButtonStyle(true))
         this.ui := XAMLHost(win.ToString(), "", MyTargetGui.Hwnd())
         this.ui.skipFontScale := true
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_Loaded"))
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnClose"))
-        this.ui.OnEvent("Cancel", "Click", ObjBindMethod(this, "OnClose"))
+        ui := this.ui
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "_Loaded"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnClose"))
+        this.ui.OnEvent("Cancel", "Click", XamlWin.BindCurrent(this, "OnClose"))
         this.ui.OnEvent("Reset", "Click", (*) => MyTargetGui.ResetPosition())
-        this.ui.OnEvent("Confirm", "Click", ObjBindMethod(this, "GuiDoubleClick"))
+        this.ui.OnEvent("Confirm", "Click", XamlWin.BindCurrent(this, "GuiDoubleClick"))
         ; 在窗口显示前入队应用主题，避免先出现固定深色再跳色。
-        XamlWin.QueueTheme(this.ui)
-        this.ui.Show()
-        this.Gui := GuiAdapter(this.ui)
+        XamlWin.QueueTheme(ui)
+        ui.Show()
+        if (this.ui == ui)
+            this.Gui := GuiAdapter(ui)
     }
 
     ; 独立模板覆盖默认按钮 hover，避免主题背景被全局模板清空。
@@ -114,14 +117,19 @@ class ColorPanelGui {
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
     }
     _Loaded(*) {
-        if (!this.active)
+        ui := this.ui
+        if (!this.active || !IsObject(ui) || !ui.wpfHwnd)
             return
-        this.AvoidPoint(MyTargetGui.startX, MyTargetGui.startY)
-        this.ui.Update("Window", "Opacity", "1")
+        try {
+            this.AvoidPoint(ui.wpfHwnd, MyTargetGui.startX, MyTargetGui.startY)
+            if (this.ui == ui)
+                ui.Update("Window", "Opacity", "1")
+        } catch TargetError {
+            ; 面板可能在定位时已经关闭。
+        }
     }
 
-    AvoidPoint(x, y) {
-        hwnd := this.ui.wpfHwnd
+    AvoidPoint(hwnd, x, y) {
         WinGetPos(&oldX, &oldY, &w, &h, hwnd)
         monitor := MonitorGetPrimary()
         loop MonitorGetCount() {
@@ -189,6 +197,7 @@ class ColorPanelGui {
         if (!this.active && !MyTargetGui.active)
             return
         this.active := false
+        this.SureAction := ""
         ui := this.ui
         this.ui := ""
         this.Gui := ""
@@ -199,8 +208,8 @@ class ColorPanelGui {
 
     static PickColor(defaultColor := "") {
         result := ""
-        MyTargetGui.SureAction := (x, y, color) => result := "#" color
-        MyTargetGui.ShowGui()
+        if (!MyTargetGui.ShowGui((x, y, color) => result := "#" color))
+            return result
         Sleep(30)
         loop 600 {
             if (!MyTargetGui.active)

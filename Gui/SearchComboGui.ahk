@@ -240,9 +240,9 @@ class SearchComboGui {
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
         ; === 事件 ===
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
-        this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
+        this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
+        this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
+        this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/4-搜索Combo", (*) => this.TriggerMacro(), "!l"
             , (*) => this.OnClickTargeterBtn(), (*) => this.OnF1()
             , (*) => this.OnScreenShotBtnClick(this._CurTarget()), (*) => this.SureColor())
@@ -258,7 +258,7 @@ class SearchComboGui {
         this.ui.OnEvent("CoordToogleCon", "Click", ObjBindMethod(this, "OnOverallChange"))
         this.ui.OnEvent("BtnEditFoundMacro", "Click", ObjBindMethod(this, "OnEditFoundMacroBtnClick"))
         this.ui.OnEvent("BtnEditUnFoundMacro", "Click", ObjBindMethod(this, "OnEditUnFoundMacroBtnClick"))
-        this.ui.OnEvent("BtnSure", "Click", ObjBindMethod(this, "OnClickSureBtn"))
+        this.ui.OnEvent("BtnSure", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         this._RefreshSaveTips()
 
     }
@@ -1094,8 +1094,7 @@ class SearchComboGui {
                 return
             }
         }
-        MyTargetGui.SureAction := this.OnSureTarget.Bind(this, n)
-        MyTargetGui.ShowGui(hwnd)
+        MyTargetGui.ShowGui(XamlWin.BindCurrent(this, "OnSureTarget", n), hwnd)
     }
 
     OnClickTargeterHelpBtn(*) {

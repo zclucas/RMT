@@ -1387,22 +1387,24 @@ SelectAreaDown(*) {
 SelectAreaUp(*) {
     global SelectAreaState
     SetTimer(SelectAreaDraw, 0)
-    UpdateSelectAreaPosition()
-    SelectAreaHo.Hide()
-
-    action := MainSoftData.SelectAreaAction
-    if (action != "") {
-        if (SelectAreaState.winPos != "") {
-            x1 := SelectAreaState.winPos.X
-            y1 := SelectAreaState.winPos.Y
-            x2 := x1 + SelectAreaState.winPos.W
-            y2 := y1 + SelectAreaState.winPos.H
-            action(x1, y1, x2, y2)
-        } else {
-            action(0, 0, 0, 0)
+    try {
+        UpdateSelectAreaPosition()
+        SelectAreaHo.Hide()
+        action := MainSoftData.SelectAreaAction
+        if (action != "") {
+            if (SelectAreaState.winPos != "") {
+                x1 := SelectAreaState.winPos.X
+                y1 := SelectAreaState.winPos.Y
+                x2 := x1 + SelectAreaState.winPos.W
+                y2 := y1 + SelectAreaState.winPos.H
+                action(x1, y1, x2, y2)
+            } else {
+                action(0, 0, 0, 0)
+            }
         }
+    } finally {
+        SelectAreaState.breakFlag := true
     }
-    SelectAreaState.breakFlag := true
 }
 
 SelectAreaCancel(*) {
