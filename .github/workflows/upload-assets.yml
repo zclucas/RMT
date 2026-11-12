@@ -1,0 +1,115 @@
+name: 资源上传
+
+# 消费「版本发布」工作流的 artifact，上传到 zclucas/RMTAssets。
+# 自动：版本发布成功后触发；手动：dispatch 可指定来源 run id（补救通道），
+# 手动重放不做「分支已推进则跳过」校验——这正是它存在的意义。
+
+on:
+  workflow_run:
+    workflows: [版本发布]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: '来源 run id（版本发布；留空 = 最近一次成功的）'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: rmt-assets
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: 上传到 RMTAssets
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: 检出代码（仅为取得上传脚本，不参与打包）
+        uses: actions/checkout@v4
+
+      - name: 确定来源 run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+          WF_RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            if ($env:INPUT_RUN_ID) {
+              $runId = $env:INPUT_RUN_ID
+            } else {
+              $runId = gh run list --repo $env:REPO --workflow "版本发布" --status success --limit 1 --json databaseId --jq '.[0].databaseId'
+              if (-not $runId) { throw '未找到版本发布的成功 run，无法补救上传。' }
+              Write-Host "自动选择最近成功的版本发布 run：$runId"
+            }
+          } else {
+            $runId = $env:WF_RUN_ID
+          }
+          "run_id=$runId" >> $env:GITHUB_OUTPUT
+          Write-Host "source run: $runId"
+
+      # 手动重放不做 HEAD 校验；自动触发校验来源分支未被推进或删除
+      - name: 校验来源分支（仅自动触发）
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:HEAD_BRANCH) {
+            Write-Host '来源分支为空（可能已删除），跳过上传。'
+            "skip=true" >> $env:GITHUB_ENV
+            return
+          }
+          $remoteSha = gh api "repos/$env:REPO/branches/$env:HEAD_BRANCH" --jq '.commit.sha'
+          if ($LASTEXITCODE -ne 0 -or -not $remoteSha) {
+            Write-Host "无法读取远端分支 $env:HEAD_BRANCH（可能已删除），跳过上传。"
+            "skip=true" >> $env:GITHUB_ENV
+            return
+          }
+          if ($remoteSha -ne $env:HEAD_SHA) {
+            Write-Host "$env:HEAD_BRANCH 已推进（远端 $remoteSha != 来源 $env:HEAD_SHA），跳过这次旧提交的资源上传。"
+            "skip=true" >> $env:GITHUB_ENV
+          }
+
+      - name: 下载打包产物
+        if: env.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
+          gh run download $env:RUN_ID --repo $env:REPO --name rmt-release --dir $out
+          if ($LASTEXITCODE -ne 0) { throw "无法下载 run $env:RUN_ID 的 rmt-release artifact" }
+          Get-ChildItem -LiteralPath $out | ForEach-Object { Write-Host $_.Name }
+
+      - name: 上传资源到 RMTAssets
+        if: env.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\Upload-RmtAssets.ps1') `
+            -InfoPath (Join-Path $out 'release-info.json') `
+            -OutDir $out `
+            -Repo 'zclucas/RMTAssets'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

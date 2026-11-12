@@ -1,0 +1,54 @@
+name: PR 检查
+
+# PR 只做判定：真实编译 + 源码编码检查，不打包、不发布、无 secret。
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 编译与编码检查 (x64)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 AutoHotkey
+        uses: ./.github/actions/setup-ahk
+
+      # Build.ps1 的编译器路径是固定默认值（C:\Program Files\AutoHotkey\...），
+      # runner 有管理员权限，把下载的 exe 就位即可，无需改 Build.ps1。
+      - name: 就位编译器到系统路径
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dst = 'C:\Program Files\AutoHotkey'
+          New-Item -ItemType Directory -Force -Path (Join-Path $dst 'Compiler'), (Join-Path $dst 'v2') | Out-Null
+          Copy-Item -LiteralPath $env:A2X   -Destination (Join-Path $dst 'Compiler\Ahk2Exe.exe') -Force
+          Copy-Item -LiteralPath $env:AHK64 -Destination (Join-Path $dst 'v2\AutoHotkey64.exe') -Force
+          Copy-Item -LiteralPath $env:AHK32 -Destination (Join-Path $dst 'v2\AutoHotkey32.exe') -Force
+          Write-Host "installed: $dst"
+
+      - name: 编译主程序与 Worker (x64)
+        run: |
+          & (Join-Path $env:GITHUB_WORKSPACE 'Build.ps1') x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 检查 .ahk 编码 (UTF-8 / BOM 策略 / CRLF)
+        shell: pwsh
+        run: |
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\check-encoding.ps1')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
