@@ -263,13 +263,13 @@ class WindowManageGui {
                 : this.CmdKey == "调整窗口" ? WindowDefaultMatchMode(this.Data.ActionType, InStr(this.Data.SearchValue, "❖")) : ""
             this._FillMatchModes(this.Data.ActionType, matchMode)
         }
-        this._SetCombo("PosXCon", DLVariableArr, this.Data.PosX)
-        this._SetCombo("PosYCon", DLVariableArr, this.Data.PosY)
+        this._ComboPush("PosXCon", "Text", GetLang(this.Data.PosX))
+        this._ComboPush("PosYCon", "Text", GetLang(this.Data.PosY))
         this._SetCombo("WidthCon", DLVariableArr, this.Data.Width)
         this._SetCombo("HeightCon", DLVariableArr, this.Data.Height)
         this._SetCombo("WidthVarNameCon", DLVariableArr, this.Data.WidthVarName)
         this._SetCombo("HeightVarNameCon", DLVariableArr, this.Data.HeightVarName)
-        this._SetCombo("NewTitleCon", DLVariableArr, this.Data.NewTitle)
+        this._SetCombo("NewTitleCon", GetGuiVarReferences("text"), TranslateBuiltinVarReferences(this.Data.NewTitle, true))
         this._SetCombo("TransparencyCon", DLVariableArr, this.Data.Transparency)
         ; 透明度：原生在变量项之后追加 0%~100% 列表
         for p in ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"]
@@ -349,6 +349,14 @@ class WindowManageGui {
         this._resultAction := actionKey
         this._ComboPush("CloseProcessCon", "Visibility", actionKey == "关闭窗口" ? "Visible" : "Collapsed")
         isShowPos := actionKey == "移动窗口" || actionKey == "相对移动" || actionKey == "位置和宽高"
+        if (isShowPos) {
+            for axis in ["X", "Y"] {
+                field := "Pos" axis
+                name := field "Con"
+                items := actionKey == "相对移动" ? GetGuiVarArr() : GetGuiVarArr(StrLower(axis))
+                this._SetCombo(name, items, this._syncing ? GetLang(this.Data.%field%) : this.ui.Query(name))
+            }
+        }
         isShowSize := actionKey == "调整宽高" || actionKey == "位置和宽高"
         isShowResult := actionKey == "获取窗口宽高"
         isShowTitle := actionKey == "修改标题"
@@ -507,8 +515,8 @@ class WindowManageGui {
         }
         WindowRegisterResults(this.Data)
         this.Data.SearchValue := this.ui.Query("SearchValueCon")
-        this.Data.PosX := this.ui.Query("PosXCon")
-        this.Data.PosY := this.ui.Query("PosYCon")
+        this.Data.PosX := GetVarName(this.ui.Query("PosXCon"))
+        this.Data.PosY := GetVarName(this.ui.Query("PosYCon"))
         this.Data.Width := this.ui.Query("WidthCon")
         this.Data.Height := this.ui.Query("HeightCon")
         this.Data.WidthVarName := GetVarName(this.ui.Query("WidthVarNameCon"))
@@ -519,7 +527,7 @@ class WindowManageGui {
             if (this.Data.HeightVarName != "")
                 MySoftData.GlobalVariMap[this.Data.HeightVarName] := true
         }
-        this.Data.NewTitle := this.ui.Query("NewTitleCon")
+        this.Data.NewTitle := TranslateBuiltinVarReferences(this.ui.Query("NewTitleCon"))
         this.Data.Transparency := StrReplace(this.ui.Query("TransparencyCon"), "%")
         SaveMacroCMDData(this.Data)
     }

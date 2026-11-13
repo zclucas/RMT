@@ -7,7 +7,7 @@
 ; 卡片阶梯：ScrollViewer + BranchPanel，每张卡包含条件、分支指令和编辑操作；
 ;   行模型 this.LVRowArr（[condiStr, logicStr, macro, controlType]），最后一行永远是兜底。
 ; 与 CompareProEditItemGui（分支编辑器）联动契约不变：ShowGui(EditType, DataArr, logicStr, macro, controlType) /
-;   SureBtnAction(condiStr, logicStr, macro, controlType) / DLVariableArr / ParentTile / OwnerHwnd。
+;   SureBtnAction(condiStr, logicStr, macro, controlType) / ParentTile / OwnerHwnd。
 ; =====================================================================
 
 class CompareProGui {
@@ -414,7 +414,6 @@ class CompareProGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("如果Pro")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr(1)
 
         this.LVRowArr := []
         loop this.Data.MacroArr.Length {
@@ -524,7 +523,6 @@ class CompareProGui {
             this.ItemEditGui.OwnerHwnd := ""
         }
 
-        this.ItemEditGui.DLVariableArr := this.DLVariableArr
         NumberIndex := item
         EditType := this._IsFinally(item) ? 2 : 1
         DataArr := this.GetCondiStrDataArr(this.LVRowArr[item][1])

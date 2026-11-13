@@ -1086,13 +1086,20 @@ function New-RMTAssets {
     New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
     Write-Log "生成 $assetsDir ..." "Gray"
 
+    # Windows tar 在部分系统代码页下无法按名称提取带重音的条目。
+    $langArchiveNames = @{ "Español.txt" = "Spanish.txt"; "Français.txt" = "French.txt" }
     $bundles = [ordered]@{
         "Lang.zip" = @(
 
             # 动态打包 Lang\ 下所有语言包
             @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang") -Filter "*.txt" -ErrorAction SilentlyContinue |
                 Where-Object { $_.BaseName -ne "简中" -and $_.BaseName -ne "中文" } |
-                ForEach-Object { @{ Dest = $_.Name; Src = "Lang\$($_.Name)" } })
+                ForEach-Object {
+                    $entry = $langArchiveNames[$_.Name] ?? $_.Name
+                    @{ Dest = $entry; Src = "Lang\$($_.Name)" }
+                })
+            @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang\Flags") -Filter "*.png" -File |
+                ForEach-Object { @{ Dest = "Flags/$($_.Name)"; Src = "Lang\Flags\$($_.Name)" } })
         )
         "RMT.zip" = @(
             @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },

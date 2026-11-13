@@ -339,12 +339,12 @@ class VoiceGui {
             this._StopRec()
             return
         }
-        if (!IsSet(InitSttEngine) || !SttGui.RequestModelDownload())
+        if (!SttGui.RequestModelDownload("zh-en"))
             return
         engine := InitSttEngine()
         baseText := ""
         try baseText := Trim(this.ui.Query("EdKeywords"))
-        initializing := !engine.streamLoaded
+        initializing := engine.streamLanguage != "zh-en"
         if (initializing && baseText == "") {
             try this.ui.Update("EdKeywordsPh", "Text", GetLang("模型正在加载…"))
             try this.ui.Update("EdKeywordsPh", "Visibility", "Visible")
@@ -352,7 +352,7 @@ class VoiceGui {
         }
         if (!engine.StreamBegin()) {
             this._SyncPlaceholder()
-            try Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.StreamGetLastError()))
+            try Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.lastError))
             return
         }
         this._rec := true

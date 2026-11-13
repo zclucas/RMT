@@ -217,30 +217,67 @@ GetBrightness() {
     return 20
 }
 
+GetBuiltinVarGroups() {
+    static groups := Map(
+        "count", ["循环次数", "宏循环次数"],
+        "x", ["当前坐标X"],
+        "y", ["当前坐标Y"],
+        "handle", ["句柄ID"],
+        "color", ["当前鼠标颜色"],
+        "clipboard", ["当前剪切板"],
+        "timestamp", ["当前时间戳"],
+        "calendar", ["当前年", "当前月", "当前周", "当前星期", "当前日"],
+        "hour", ["当前时"],
+        "minute", ["当前分"],
+        "second", ["当前秒"],
+        "dateText", ["日期文本"],
+        "clockText", ["时分文本", "时分秒文本"]
+    )
+    return groups
+}
+
+GetBuiltinVarNames(categories*) {
+    names := []
+    for category in categories
+        names.Push(GetBuiltinVarGroups()[category]*)
+    return GetLangArr(names)
+}
+
 GetSystemVarArr() {
-    return [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("句柄ID"), GetLang("当前鼠标颜色"),
-    GetLang("当前坐标X"), GetLang("当前坐标Y"), GetLang("当前剪切板"), GetLang("当前时间戳")]
+    return GetBuiltinVarNames("count", "handle", "color", "x", "y", "clipboard", "timestamp")
 }
 
 GetTimeCategoryVarArr() {
-    return [GetLang("当前年"), GetLang("当前月"), GetLang("当前周"), GetLang("当前星期"), GetLang("当前日"),
-    GetLang("当前时"), GetLang("当前分"), GetLang("当前秒"), GetLang("日期文本"),
-    GetLang("时分文本"), GetLang("时分秒文本")]
+    return GetBuiltinVarNames("calendar", "hour", "minute", "second", "dateText", "clockText")
 }
 
-; 系统 + 时间（去重），用于保留名、多语言替换、变量下拉「所有」
+; 保留名、多语言替换和通用文本插入使用完整列表。
 GetSpecialVarArr() {
-    seen := Map()
-    arr := []
-    for src in [GetSystemVarArr(), GetTimeCategoryVarArr()] {
-        for v in src {
-            if (v != "" && !seen.Has(v)) {
-                seen[v] := true
-                arr.Push(v)
-            }
+    names := GetSystemVarArr()
+    names.Push(GetTimeCategoryVarArr()*)
+    return names
+}
+
+; 在可同时输入字面值和变量名的字段里，只转换内置变量名。
+GetBuiltinVarName(value, toDisplay := false) {
+    for _, keys in GetBuiltinVarGroups() {
+        for key in keys {
+            display := GetLang(key)
+            if (value == key || value == display)
+                return toDisplay ? display : key
         }
     }
-    return arr
+    return value
+}
+
+TranslateBuiltinVarReferences(value, toDisplay := false) {
+    pos := 1
+    result := ""
+    while (found := RegExMatch(value, "(?<!/)\{([^{}]+)\}", &match, pos)) {
+        result .= SubStr(value, pos, found - pos) "{" GetBuiltinVarName(match[1], toDisplay) "}"
+        pos := found + match.Len
+    }
+    return result SubStr(value, pos)
 }
 
 IsTimeCategoryName(name) {

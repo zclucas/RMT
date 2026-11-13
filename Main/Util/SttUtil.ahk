@@ -3,7 +3,7 @@
 ; =================================================================
 ; SttUtil — 语音转文字（STT）引擎封装
 ;
-; 【当前方案：单模型流式】本地 CPU 推理，不联网
+; 【当前方案：单模型流式】按语言加载一个模型，本地 CPU 推理
 ;   链路：SttStream_* → sherpa-onnx OnlineRecognizer
 ;   模型：models\stt_stream\ —— x-asr streaming zipformer2 transducer
 ;         （encoder/decoder/joiner + tokens.txt + bpe.model，中英混排带标点）
@@ -18,17 +18,30 @@
 ; =================================================================
 
 class SttEngine {
+    static LanguageModels := Map(
+        "zh-en", {label: "中英混合", flag: ""},
+        "es", {label: "Español", flag: "es"},
+        "fr", {label: "Français", flag: "fr"},
+        "de", {label: "Deutsch", flag: "de"})
+
+    static DefaultLanguage() {
+        languages := OfficialLanguages()
+        code := languages.Has(MainSoftData.Lang) ? languages[MainSoftData.Lang].code : ""
+        return SttEngine.LanguageModels.Has(code) ? code : "zh-en"
+    }
+
     __New() {
         this.hDll := 0
         this.loaded := false          ; 离线模型是否已在 DLL 内加载（Stt_Init 成功）
         this.streamLoaded := false    ; 流式模型是否已在 DLL 内加载（SttStream_Init 成功）
+        this.streamLanguage := ""
         this.lastError := ""
         ; 按 AHK 进程位宽选择运行时目录（与 SherpaVoiceEngine 一致）
         arch := (A_PtrSize == 8) ? "x64" : "x86"
         this.RunDir := A_WorkingDir "\Plugins\Voice\" arch
         this.DllPath := this.RunDir "\VoiceDll.dll"
         this.ModelDir := A_WorkingDir "\Plugins\Voice\models\stt"                ; [已停用] 离线 paraformer
-        this.StreamModelDir := A_WorkingDir "\Plugins\Voice\models\stt_stream"   ; 流式（当前唯一链路）
+        this.StreamModelDir := A_WorkingDir "\Plugins\Voice\models\stt_stream"
         this._TryLoadDll()
     }
 
@@ -71,9 +84,15 @@ class SttEngine {
     ;   transducer 三件套（encoder/decoder/joiner + tokens，如 x-asr zipformer2）
     ;   zipformer2 CTC 单模型（model*.onnx + tokens）
     ; 返回 [encoder, decoder, joiner, tokens]；CTC 形态时 decoder/joiner 为 ""
-    _StreamFiles() {
-        dir := this.StreamModelDir
+    StreamDirectory(language) {
+        return language == "zh-en" ? this.StreamModelDir : this.StreamModelDir "\" language
+    }
+
+    _StreamFiles(language) {
+        dir := this.StreamDirectory(language)
         tokens := dir "\tokens.txt"
+        if (language != "zh-en")
+            return [dir "\encoder.onnx", dir "\decoder.onnx", dir "\joiner.onnx", tokens]
         enc := this._FindFirst(dir "\encoder*.onnx")
         dec := this._FindFirst(dir "\decoder*.onnx")
         join := this._FindFirst(dir "\joiner*.onnx")
@@ -83,13 +102,13 @@ class SttEngine {
         return [model, "", "", tokens]
     }
 
-    IsStreamModelReady() {
-        files := this._StreamFiles()
+    IsStreamModelReady(language := "zh-en") {
+        files := this._StreamFiles(language)
         if (files[1] == "")
             return false
         ; 与 DLL 的选择顺序一致。部分模型不使用 BPE，词表存在时才检查。
         for name in ["bpe.model", "bbpe.model"] {
-            path := this.StreamModelDir "\" name
+            path := this.StreamDirectory(language) "\" name
             if (FileExist(path)) {
                 files.Push(path)
                 break
@@ -112,8 +131,8 @@ class SttEngine {
     }
 
     ; 流式主链路是否可用
-    IsStreamReady() {
-        return this.IsDllReady() && this.IsStreamModelReady()
+    IsStreamReady(language := "zh-en") {
+        return this.IsDllReady() && this.IsStreamModelReady(language)
     }
 
     ; 确保模型已加载（首次调用真正执行 Stt_Init，之后直接返回）
@@ -196,38 +215,67 @@ class SttEngine {
         DllCall(this.DllPath "\SttStream_Close")
         this.loaded := false
         this.streamLoaded := false
+        this.streamLanguage := ""
     }
 
     ; ---------- 流式识别（本地 OnlineRecognizer + zipformer2 CTC） ----------
     ; 确保流式模型已加载（首次调用真正执行 SttStream_Init）
-    StreamEnsureInit() {
-        if (this.streamLoaded)
+    StreamEnsureInit(language := "zh-en") {
+        wasCritical := A_IsCritical
+        Critical("On")
+        try return this._EnsureStreamModel(language)
+        finally Critical(wasCritical)
+    }
+
+    _EnsureStreamModel(language) {
+        if (this.streamLoaded && this.streamLanguage == language)
             return true
-        if (!this.IsStreamReady())
+        if (!this.IsStreamReady(language) || this.StreamBusy())
             return false
-        f := this._StreamFiles()
+        f := this._StreamFiles(language)
         if (f[1] == "")
             return false
         ; VoiceDll 导出使用 CDecl，32 位调用需要显式指定。
         r := DllCall(this.DllPath "\SttStream_Init", "WStr", f[1], "WStr", f[2], "WStr", f[3], "WStr", f[4], "CDecl Int")
         if (r) {
             this.streamLoaded := true
+            this.streamLanguage := language
             this.lastError := ""
         } else {
             this.streamLoaded := false
+            this.streamLanguage := ""
             this.lastError := this.StreamGetLastError()
         }
         return this.streamLoaded
     }
 
     ; 建流 + 起采集
-    StreamBegin() {
-        if (!this.StreamEnsureInit())
+    StreamBegin(language := "zh-en") {
+        wasCritical := A_IsCritical
+        Critical("On")
+        try return this._BeginStream(language)
+        finally Critical(wasCritical)
+    }
+
+    _BeginStream(language) {
+        if (this.StreamBusy()) {
+            this.lastError := GetLang("已有语音录入正在进行")
             return false
+        }
+        this.lastError := ""
+        if (!this.StreamEnsureInit(language)) {
+            if (this.lastError == "")
+                this.lastError := GetLang("识别模型未就绪，请先下载模型")
+            return false
+        }
         r := DllCall(this.DllPath "\SttStream_Begin", "Int")
-        if (!r)
-            this.lastError := this.StreamGetLastError()
+        this.lastError := r ? "" : this.StreamGetLastError()
         return r != 0
+    }
+
+    StreamBusy() {
+        state := this.StreamGetState()
+        return state == 1 || state == 2
     }
 
     ; 喂音频 + 增量解码 + 取当前累积文本（录音中每 ~150ms 调一次）
@@ -281,8 +329,8 @@ class SttEngine {
     }
 
     ; 离线验证：分片喂 wav 模拟实时上屏（不依赖麦克风）
-    StreamTestWav(wavPath) {
-        if (!this.StreamEnsureInit())
+    StreamTestWav(wavPath, language := "zh-en") {
+        if (!this.StreamEnsureInit(language))
             return ""
         buf := Buffer(4096)
         r := DllCall(this.DllPath "\SttStream_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "CDecl Int")

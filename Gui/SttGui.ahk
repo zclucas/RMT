@@ -1,7 +1,7 @@
 #Requires AutoHotkey v2.0
 
 ; =================================================================
-; 语音转文字窗口（SttGui）—— XAML 版，本地流式识别（单模型）
+; 语音转文字窗口（SttGui）—— XAML 版，本地流式识别
 ; 工具页入口 → 打开窗口 →「开始」边说边出字 →「停止」出最终结果 → 可复制。
 ; 全部本地 CPU 推理，不联网。
 ;
@@ -9,7 +9,7 @@
 ;   目录 models\stt_stream\ —— encoder/decoder/joiner + tokens.txt + bpe.model
 ;   chunk 档位 160/480/960/1920ms，见 SttGui.StreamPkg（默认 480ms）
 ; 见 Main\Util\SttUtil.ahk 的 SttEngine.Stream* 系列封装。
-; 模型缺失时，在工具页入口询问是否下载（按需下载，不进发布包）。
+; 西班牙语、法语、德语使用 Kroko 流式模型，首次使用时按需下载。
 ; 默认不置顶；窗口内提供「窗口置顶」可选框。
 ; =================================================================
 
@@ -22,26 +22,26 @@ class SttGui {
     static _extensionInstalling := false
 
     ; 语音入口共用的自检。引擎和模型就绪时返回 true，模型未就绪时再询问下载。
-    static RequestModelDownload() {
+    static RequestModelDownload(language) {
         if (SttGui._extensionInstalling)
             return false
+        engine := InitSttEngine()
+        if (engine._TryLoadDll() && engine.IsStreamModelReady(language))
+            return true
         if (IsObject(SttGui.activeDownload)) {
             if (IsObject(SttGui.activeDownload.progress))
                 SetTimer(ObjBindMethod(SttGui.activeDownload.progress, "Show"), -1)
             return false
         }
-        engine := InitSttEngine()
-        if (engine._TryLoadDll() && engine.IsStreamModelReady())
-            return true
         ; 离开语音按钮的点击回调再开确认框，避免在回调里同步开窗。
         if (SttGui._promptQueued)
             return false
         SttGui._promptQueued := true
-        SetTimer(ObjBindMethod(SttGui, "_PromptModelDownload"), -1)
+        SetTimer(ObjBindMethod(SttGui, "_PromptModelDownload", language), -1)
         return false
     }
 
-    static _PromptModelDownload(*) {
+    static _PromptModelDownload(language) {
         try {
             engine := InitSttEngine()
             if (SttGui._extensionInstalling || IsObject(SttGui.activeDownload))
@@ -49,29 +49,33 @@ class SttGui {
             if (!engine._TryLoadDll()) {
                 if (RmtDialog.Choose(GetLang("语音引擎未就绪，是否下载语音扩展？"), GetLang("提示")
                     , [GetLang("下载语音扩展"), GetLang("取消")]) == 1)
-                    SttGui.DownloadVoiceExtension()
+                    SttGui._InstallVoiceExtension(language)
                 return
             }
-            if (engine.IsStreamModelReady())
+            if (engine.IsStreamModelReady(language))
                 return
             choice := RmtDialog.Choose(GetLang("语音识别模型未就绪，是否下载？"), GetLang("提示"), [GetLang("下载识别模型"), GetLang("取消")])
             if (choice != 1)
                 return
-            SttGui._BeginModelDownload()
+            SttGui._BeginModelDownload(language)
         } finally {
             SttGui._promptQueued := false
         }
     }
 
-    static _BeginModelDownload() {
+    static _BeginModelDownload(language) {
         if (IsObject(SttGui.activeDownload))
             return true
-        inst := SttGui.instances.Has("global") ? SttGui.instances["global"] : SttGui()
-        inst._StartModelDownload()
+        inst := SttGui()
+        inst._StartModelDownload(language)
         return inst.downloadState == "dl" || inst.downloadState == "ex"
     }
 
     static DownloadVoiceExtension(*) {
+        SttGui._InstallVoiceExtension(SttEngine.DefaultLanguage())
+    }
+
+    static _InstallVoiceExtension(language) {
         if (SttGui._extensionInstalling)
             return
         SttGui._extensionInstalling := true
@@ -94,8 +98,8 @@ class SttGui {
             }
             if (IsObject(SttGui.activeDownload)) {
                 SttGui.activeDownload.progress.Show()
-            } else if (!engine.IsStreamModelReady()) {
-                SttGui._BeginModelDownload()
+            } else if (!engine.IsStreamModelReady(language)) {
+                SttGui._BeginModelDownload(language)
             } else {
                 Toast.Success(GetLang("语音扩展已就绪"))
             }
@@ -143,11 +147,10 @@ class SttGui {
 
     ; 流式模型包（chunksize 越大越准、延迟越高：160ms / 480ms / 960ms / 1920ms）
     static StreamPkg := "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
+    ; Banafo Kroko-ASR 社区模型（CC BY-SA），下载包中的 README 保留上游署名与许可链接。
+    static KrokoArchiveBytes := Map("es", 124394665, "fr", 57220361, "de", 57565698)
 
     static ShowGui() {
-        if (!SttGui.RequestModelDownload())
-            return
-
         key := "global"
         if (SttGui.instances.Has(key)) {
             inst := SttGui.instances[key]
@@ -165,8 +168,8 @@ class SttGui {
     __New() {
         this.ui := ""
         this.hasGui := false
-        this.recording := false        ; 正在采集（流式或离线）
-        this.finalizing := false       ; 停止后等待最终文本（精修中）
+        this.language := SttEngine.DefaultLanguage()
+        this.recording := false
         this.recordStartTick := 0
         this.lastLiveText := ""        ; 上一次 Poll 到的文本（避免重复入队）
         this.shownText := ""           ; 已上屏文本
@@ -196,11 +199,11 @@ class SttGui {
         if (!this.hasGui || !IsObject(this.ui))
             return
         engine := InitSttEngine()
-        if (engine.streamLoaded || !engine.IsStreamReady())
+        if (engine.streamLanguage == this.language || !engine.IsStreamReady(this.language) || engine.StreamBusy())
             return
         this.loading := true
         this._RefreshUi()
-        try engine.StreamEnsureInit()
+        try engine.StreamEnsureInit(this.language)
         this.loading := false
         try this._RefreshUi()
     }
@@ -212,21 +215,27 @@ class SttGui {
     _EscapeXml(s) => EscapeXamlXml(s)
 
     ; ---------- 模型下载清单 ----------
-    ; 返回缺失的模型规格数组（顺序：先流式后精修）
-    _MissingModels() {
+    ; 返回所选语言缺失的模型规格
+    _MissingModels(language) {
         engine := InitSttEngine()
-        ; 单模型：只下载流式模型（transducer 三件套 encoder/decoder/joiner + tokens）
-        list := []
-        if (!engine.IsStreamModelReady()) {
-            list.Push(Map(
+        if (engine.IsStreamModelReady(language))
+            return []
+        if (language == "zh-en")
+            return [Map(
                 "pkg", SttGui.StreamPkg,
                 "url", RmtAssetsBaseUrl("Common") SttGui.StreamPkg ".tar.bz2",
                 "dir", engine.StreamModelDir,
                 "files", ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", "bpe.model"],
                 "minBytes", 100 * 1024 * 1024
-            ))
-        }
-        return list
+            )]
+        pkg := "sherpa-onnx-streaming-zipformer-" language "-kroko-2025-08-06"
+        return [Map(
+            "pkg", pkg,
+            "url", "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" pkg ".tar.bz2",
+            "dir", engine.StreamDirectory(language),
+            "files", ["encoder.onnx", "decoder.onnx", "joiner.onnx", "README.md", "tokens.txt"],
+            "exactBytes", SttGui.KrokoArchiveBytes[language]
+        )]
     }
 
     _BuildAndShow() {
@@ -243,16 +252,26 @@ class SttGui {
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("12,10")
-        body.Rows("26", "40", "Auto", "*", "Auto")
+        body.Rows("Auto", "26", "40", "Auto", "*", "Auto")
+
+        selector := body.Add("StackPanel").Orientation("Horizontal").Margin("0,0,0,6")
+        selector.Add("TextBlock").Text(GetLang("识别语言")).VerticalAlignment("Center").Margin("0,0,10,0")
+        languageItems := ""
+        selectedIndex := 0
+        for code, info in SttEngine.LanguageModels {
+            languageItems .= LanguageOptionXaml(code, code == "zh-en" ? GetLang("中英混合") : info.label, info.flag)
+            if (code == this.language)
+                selectedIndex := A_Index - 1
+        }
 
         ; 状态行
-        body.Add("TextBlock").Grid_Row(0).Name("TxtStatus").Text("").Foreground("{DynamicResource TextMain}")
+        body.Add("TextBlock").Grid_Row(1).Name("TxtStatus").Text("").Foreground("{DynamicResource TextMain}")
             .VerticalAlignment("Center").TextTrimming("CharacterEllipsis")
 
         ; 按钮行（置顶开关靠右）
-        btnRow := body.Add("Grid").Grid_Row(1)
+        btnRow := body.Add("Grid").Grid_Row(2)
         btnRow.Cols("Auto", "Auto", "Auto", "Auto", "*", "Auto")
-        btnRow.Add("Button").Grid_Column(0).Name("BtnStart").Content(GetLang("开始")).Width(80).Height(32).MinHeight(32).Margin("0,4,6,4")
+        btnRow.Add("Button").Grid_Column(0).Name("BtnStart").Content(GetLang("开始")).MinWidth(80).Padding("8,0").Height(32).MinHeight(32).Margin("0,4,6,4")
         btnRow.Add("Button").Grid_Column(1).Name("BtnStop").Content(GetLang("停止")).Width(80).Height(32).MinHeight(32).Margin("0,4,6,4")
         btnRow.Add("Button").Grid_Column(2).Name("BtnCopy").Content(GetLang("复制")).Width(80).Height(32).MinHeight(32).Margin("0,4,6,4")
         btnRow.Add("Button").Grid_Column(3).Name("BtnClear").Content(GetLang("清空")).Width(80).Height(32).MinHeight(32).Margin("0,4,6,4")
@@ -260,24 +279,25 @@ class SttGui {
             .VerticalAlignment("Center").Margin("0,0,0,0").Foreground("{DynamicResource TextMain}")
 
         ; 结果标题
-        body.Add("TextBlock").Grid_Row(2).Text(GetLang("识别结果：")).Margin("0,8,0,4").VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(3).Text(GetLang("识别结果：")).Margin("0,8,0,4").VerticalAlignment("Center")
 
         ; 结果编辑框（只读，可全选复制）
-        body.Add("TextBox").Grid_Row(3).Name("EdResult").TextWrapping("Wrap").IsReadOnly("True")
+        body.Add("TextBox").Grid_Row(4).Name("EdResult").TextWrapping("Wrap").IsReadOnly("True")
             .VerticalContentAlignment("Top").Margin("0,0,0,4")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
 
         ; 提示文案
-        body.Add("TextBlock").Grid_Row(4).Text(GetLang("边说边出字，全部本地运行，不联网。支持中英文混合。"))
+        body.Add("TextBlock").Grid_Row(5).Text(GetLang("语音在本地实时转写。首次使用某种语言时需下载模型。"))
             .Foreground("{DynamicResource TextSub}").TextWrapping("Wrap").Margin("0,2,0,0")
 
         ; === 创建 XAMLHost ===
         ownerHwnd := (IsObject(MainSoftData.MyGui) && MainSoftData.MyGui.HasProp("Hwnd")) ? MainSoftData.MyGui.Hwnd : 0
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
+        selector.Add("ComboBox", languageItems).Name("SttLanguage").MinWidth(155).MinHeight(28).SelectedIndex(selectedIndex)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", ownerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="580" Height="440"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="640" Height="440"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -289,6 +309,7 @@ class SttGui {
         this.ui.OnEvent("BtnStop", "Click", ObjBindMethod(this, "OnStopClick"))
         this.ui.OnEvent("BtnCopy", "Click", ObjBindMethod(this, "OnCopyClick"))
         this.ui.OnEvent("BtnClear", "Click", ObjBindMethod(this, "OnClearClick"))
+        this.ui.OnEvent("SttLanguage", "SelectionChanged", ObjBindMethod(this, "OnLanguageChanged"))
         this.ui.OnEvent("TopCon", "Checked", ObjBindMethod(this, "OnTogTop"))
         this.ui.OnEvent("TopCon", "Unchecked", ObjBindMethod(this, "OnTogTop"))
 
@@ -310,6 +331,15 @@ class SttGui {
 
     OnWindowClosing(state, ctrl, event) {
         this._Cleanup()
+    }
+
+    OnLanguageChanged(state, ctrl, event) {
+        language := this.ui.Query(ctrl)
+        if (!SttEngine.LanguageModels.Has(language) || this.recording || this.loading)
+            return
+        this.language := language
+        this._RefreshUi()
+        SetTimer(this.preloadFunc, -300)
     }
 
     ; ---------- 开关 ----------
@@ -339,32 +369,32 @@ class SttGui {
             return
         engine := InitSttEngine()
         dllOk := engine.IsDllReady()
-        streamOk := engine.IsStreamModelReady()
-        canStart := dllOk && streamOk && !this.recording && !this.finalizing && !this.loading
+        streamOk := engine.IsStreamModelReady(this.language)
+        download := SttGui.activeDownload
+        downloading := IsObject(download) && download.language == this.language
+        canStart := !this.recording && !this.loading && !downloading
 
         if (this.loading) {
             status := GetLang("模型正在加载…")
-        } else if (this.downloadState == "dl") {
+        } else if (downloading && download.downloadState == "dl") {
             status := GetLang("模型下载中，请稍候")
-        } else if (this.downloadState == "ex") {
+        } else if (downloading) {
             status := GetLang("模型解压中……")
         } else if (this.recording) {
             status := GetLang("正在聆听…")
-        } else if (this.finalizing) {
-            status := GetLang("识别中……")
-        } else if (this.downloadState == "err") {
-            status := GetLang("模型下载失败，请检查网络后重试")
         } else if (!dllOk) {
             status := GetLang("语音插件未安装（缺少 VoiceDll.dll）")
         } else if (!streamOk) {
             status := GetLang("识别模型未就绪，请先下载模型")
-        } else if (!engine.streamLoaded) {
+        } else if (engine.streamLanguage != this.language) {
             status := GetLang("就绪（模型预热中）")
         } else {
             status := GetLang("就绪（流式模型已加载）")
         }
         this.ui.Update("TxtStatus", "Text", status)
+        this.ui.Update("BtnStart", "Content", dllOk && streamOk ? GetLang("开始") : GetLang("下载识别模型"))
         this.ui.Update("BtnStart", "IsEnabled", canStart ? "True" : "False")
+        this.ui.Update("SttLanguage", "IsEnabled", canStart ? "True" : "False")
         this.ui.Update("BtnStop", "IsEnabled", this.recording ? "True" : "False")
     }
 
@@ -426,16 +456,22 @@ class SttGui {
                 if (oldState != "dl" || A_TickCount - this._lastProgressTick >= 500)
                     this._UpdateDownloadProgress()
             } else if (oldState != this.downloadState) {
-                this._RefreshUi()
                 if (this.downloadState == "ex") {
                     this.progress.Report(GetLang("模型解压中……"))
+                    if (SttGui.instances.Has("global"))
+                        SttGui.instances["global"]._RefreshUi()
                     return
                 }
                 SttGui.activeDownload := ""
+                this._ClearDownloadFiles()
                 this.progress.Close()
                 this.progress := ""
-                if (!this.hasGui)
-                    SetTimer(this.timerFunc, 0)
+                SetTimer(this.timerFunc, 0)
+                if (SttGui.instances.Has("global")) {
+                    window := SttGui.instances["global"]
+                    window._RefreshUi()
+                    SetTimer(window.preloadFunc, -300)
+                }
                 if (this.downloadState == "")
                     Toast.Success(GetLang("语音识别模型下载成功"))
                 else
@@ -447,36 +483,18 @@ class SttGui {
         if (!this.hasGui || !IsObject(this.ui))
             return
 
-        if (!this.recording && !this.finalizing)
+        if (!this.recording)
             return
 
         engine := InitSttEngine()
 
         ; --- 流式：增量上屏（平滑逐字渲染） ---
-        if (this.recording) {
-            txt := engine.StreamPoll()
-            if (txt != this.lastLiveText) {
-                this.lastLiveText := txt
-                this._EnqueueLive(txt)
-            }
-            this._FlushLive()
+        txt := engine.StreamPoll()
+        if (txt != this.lastLiveText) {
+            this.lastLiveText := txt
+            this._EnqueueLive(txt)
         }
-
-        ; --- 停止后收尾 ---
-        if (this.finalizing) {
-            state := engine.StreamGetState()
-            if (state == 3 || state == 4) {
-                this.finalizing := false
-                if (state == 3) {
-                    this._SetFinalText(engine.StreamGetResult())
-                    this.ui.Update("EdResult", "Foreground", "{DynamicResource InputText}")
-                } else {
-                    this.ui.Update("EdResult", "Foreground", "{DynamicResource InputText}")
-                    this.ui.Update("TxtStatus", "Text", GetLang("识别失败：") engine._ErrText(engine.StreamGetLastError()))
-                }
-            }
-        }
-        this._RefreshUi()
+        this._FlushLive()
     }
 
     ; ---------- 平滑上屏：把模型一次性吐出的一块文本，按节拍逐字流出 ----------
@@ -538,26 +556,24 @@ class SttGui {
     ; ---------- 按钮 ----------
     OnStartClick(state := "", ctrl := "", event := "") {
         engine := InitSttEngine()
-        if (this.recording || this.finalizing)
+        if (this.recording || this.loading)
             return
 
-        if (!engine.IsStreamReady()) {
-            this._RefreshUi()
+        if (!SttGui.RequestModelDownload(this.language))
             return
-        }
         ; 若预热还没跑完（开窗 300ms 内就点了开始），这里会阻塞加载一次；
         ; 正常情况下 OnPreload 已加载好，这一步直接返回。
-        if (!engine.streamLoaded) {
+        if (engine.streamLanguage != this.language) {
             this.loading := true
             this._RefreshUi()
             Sleep(50)
         }
-        ok := engine.StreamBegin()
+        ok := engine.StreamBegin(this.language)
         this.loading := false
         if (!ok) {
             this.ui.Update("EdResult", "Foreground", "{DynamicResource InputText}")
-            this.ui.Update("TxtStatus", "Text", GetLang("开始录音失败：") engine._ErrText(engine.StreamGetLastError()))
             this._RefreshUi()
+            this.ui.Update("TxtStatus", "Text", GetLang("开始录音失败：") engine._ErrText(engine.lastError))
             return
         }
         this.recording := true
@@ -580,12 +596,13 @@ class SttGui {
         if (!engine.StreamEnd(0)) {
             this.recording := false
             this.ui.Update("EdResult", "Foreground", "{DynamicResource InputText}")
-            this.ui.Update("TxtStatus", "Text", GetLang("识别失败：") engine._ErrText(engine.StreamGetLastError()))
             this._RefreshUi()
+            this.ui.Update("TxtStatus", "Text", GetLang("识别失败：") engine._ErrText(engine.StreamGetLastError()))
             return
         }
+        this._SetFinalText(engine.StreamGetResult())
         this.recording := false
-        this.finalizing := true
+        this.ui.Update("EdResult", "Foreground", "{DynamicResource InputText}")
         this._RefreshUi()
     }
 
@@ -607,10 +624,11 @@ class SttGui {
     }
 
     ; ---------- 模型按需下载（curl + tar，异步 Run + 进程轮询，支持多模型排队） ----------
-    _StartModelDownload() {
+    _StartModelDownload(language) {
         if (IsObject(SttGui.activeDownload))
             return
-        this.dlQueue := this._MissingModels()
+        this.language := language
+        this.dlQueue := this._MissingModels(language)
         if (!this.dlQueue.Length)
             return
         if (!this._StartNextDownload()) {
@@ -623,7 +641,8 @@ class SttGui {
         this.progress := RmtProgress(GetLang("下载识别模型"), GetLang("模型下载中，请稍候"))
         SetTimer(this.timerFunc, 0)
         this.progress.Show()
-        this._RefreshUi()
+        if (SttGui.instances.Has("global"))
+            SttGui.instances["global"]._RefreshUi()
         this._UpdateDownloadProgress()
         SetTimer(this.timerFunc, 100)
     }
@@ -635,7 +654,7 @@ class SttGui {
         this.dlBytes := 0
         this.dlExpectedBytes := 0
         this.dlTar := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".tar.bz2"
-        cmd := Format('curl.exe -k --ssl-no-revoke -L --fail -s -S --suppress-connect-headers -D "{}" -o "{}" "{}"',
+        cmd := Format('curl.exe -L --fail -s -S --suppress-connect-headers -D "{}" -o "{}" "{}"',
             this.dlTar ".headers", this.dlTar, spec["url"])
         try {
             Run(cmd, A_Temp, "Hide", &pid)
@@ -644,16 +663,18 @@ class SttGui {
             this.downloadState := "dl"
             return true
         } catch {
+            this._ClearDownloadFiles()
             return false
         }
     }
 
     _StartExtract() {
-        if (!this.dlSpec.Has("minBytes"))
-            return false
         try {
             ; 每次使用独立目录；tar -C 要求目标目录已存在。
-            if (!FileExist(this.dlTar) || FileGetSize(this.dlTar) < this.dlSpec["minBytes"])
+            if (!FileExist(this.dlTar))
+                return false
+            bytes := FileGetSize(this.dlTar)
+            if (this.dlSpec.Has("exactBytes") ? bytes != this.dlSpec["exactBytes"] : bytes < this.dlSpec["minBytes"])
                 return false
             this.dlDir := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount "-" Random(1000, 9999)
             DirCreate(this.dlDir)
@@ -685,12 +706,18 @@ class SttGui {
         } catch {
             return false
         }
-        ; 清理临时文件
-        try FileDelete(this.dlTar)
-        try DirDelete(this.dlDir, true)
+        return true
+    }
+
+    _ClearDownloadFiles() {
+        if (this.dlTar != "") {
+            try FileDelete(this.dlTar ".headers")
+            try FileDelete(this.dlTar)
+        }
+        if (this.dlDir != "")
+            try DirDelete(this.dlDir, true)
         this.dlTar := ""
         this.dlDir := ""
-        return true
     }
 
     ; ---------- 关闭 ----------
@@ -702,7 +729,7 @@ class SttGui {
         if (this.recording)
             engine.StreamCancel()
         ; 识别中则等下一轮轮询自然结束（结果丢弃）；释放模型回收内存
-        if (!this.finalizing)
+        if (!engine.StreamBusy())
             engine.Close()
         this.ui := ""
         this.hasGui := false

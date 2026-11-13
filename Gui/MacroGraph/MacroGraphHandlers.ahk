@@ -183,9 +183,9 @@ class MacroGraphHandlersMixin {
         key := "ITypeCmb_" id
         d := this._ParseNodeCommand(this.cmdNodes[id].CurCMD)
         if (state.Has("Time_" id) && state["Time_" id] != "")
-            d.time := state["Time_" id]
+            d.time := GetBuiltinVarName(state["Time_" id])
         if (state.Has("Time2_" id) && state["Time2_" id] != "")
-            d.time2 := state["Time2_" id]
+            d.time2 := GetBuiltinVarName(state["Time2_" id])
         ; 优先用 SelectedIndex（不依赖下拉项 Content 文本；多节点/主题下 state 文本可能为空）
         d.itype := this._IntervalTypeFromState(key, state, d.itype)
         if (d.itype == GetLang("随机") && d.time2 == "")
@@ -203,8 +203,8 @@ class MacroGraphHandlersMixin {
         isRandom := d.itype == GetLang("随机")
         ; 先显隐再同步文本，避免对仍折叠的 Time2 写 Text 触发无效事件
         this.ui.Update("Time2Row_" id, "Visibility", isRandom ? "Visible" : "Collapsed")
-        this.ui.Update("Time_" id, "Text", d.time)
-        this.ui.Update("Time2_" id, "Text", d.time2)
+        this.ui.Update("Time_" id, "Text", GetLang(d.time))
+        this.ui.Update("Time2_" id, "Text", GetLang(d.time2))
     }
 
     ; 间隔类型 -> 下拉项索引
@@ -578,6 +578,9 @@ class MacroGraphHandlersMixin {
         this.ui.Update("MPEndYRow_" id, "Visibility", isABDrag ? "Visible" : "Collapsed")
         this.ui.Update("MPPosXRow_" id "Label", "Text", GetLang(isABDrag ? "起始坐标X:" : (isSimpleDrag ? "目标点：" : (modeZh == "相对移动" ? "偏移值" : "坐标位置X:"))))
         this.ui.Update("MPPosYRow_" id "Label", "Text", GetLang(isABDrag || isSimpleDrag || modeZh == "相对移动" ? "" : "坐标位置Y:"))
+        useScreen := modeZh == "绝对移动" && CmdEnumRef(data.HasOwnProp("RefMode") ? data.RefMode : "屏幕") != "窗口"
+        for name in ["MPPosX", "MPPosY", "MPEndX", "MPEndY"]
+            this._SetVariableComboItems(name "_" id, useScreen ? GetGuiVarArr(StrLower(SubStr(name, -1))) : GetGuiVarArr())
 
         ; 移动次数 / 每次间隔：仅游戏视角显示；同步控件值
         this.ui.Update("MPCount_" id, "Text", ObjHasOwnProp(data, "Count") ? data.Count : "1")
@@ -697,6 +700,12 @@ class MacroGraphHandlersMixin {
             return
         st := data.SearchType
         c := this._SearchTypeClass(st)
+        if (this._IsNodePro(id)) {
+            for name in ["SStartX", "SStartY", "SEndX", "SEndY"] {
+                items := c.isWin ? GetGuiVarArr() : GetGuiVarArr(StrLower(SubStr(name, -1)))
+                this._SetVariableComboItems(name "_" id, items)
+            }
+        }
         ; 同步控件值，避免切换类型后显示旧值
         if (ObjHasOwnProp(data, "SearchColor"))
             this.ui.Update("SColor_" id, "Text", data.SearchColor)
@@ -854,10 +863,10 @@ class MacroGraphHandlersMixin {
         if (state.Has(key)) {
             val := state[key]
             if (field == "SearchText") {
-                data.SearchText := val
+                data.SearchText := GetBuiltinVarName(val)
             }
             else if (field == "SearchColor") {
-                data.SearchColor := val
+                data.SearchColor := GetBuiltinVarName(val)
             }
             else if (field == "Similar") {
                 ; 相似度：限制 1~100，手动输入超界时夹紧并回写输入框
@@ -873,12 +882,12 @@ class MacroGraphHandlersMixin {
                 data.Similar := v
             }
             else {
-                ; 坐标字段：搜索Pro 允许变量名（原样存）；普通搜索仅接受数值
+                ; 坐标字段：搜索Pro 允许变量名；普通搜索仅接受数值
                 isCoord := (field == "StartPosX" || field == "StartPosY" || field == "EndPosX" || field == "EndPosY")
                 if (isCoord && this._IsNodePro(id)) {
                     if (val == "")
                         return
-                    data.%field% := val
+                    data.%field% := GetVarName(val)
                 }
                 else {
                     if (val == "" || !IsNumber(val))
@@ -1683,11 +1692,11 @@ class MacroGraphHandlersMixin {
     _FlushIntervalInline(id, d, state) {
         dirty := false
         if (this._InlineVal(state, "Time_" id, &val)) {
-            d.time := val
+            d.time := GetBuiltinVarName(val)
             dirty := true
         }
         if (this._InlineVal(state, "Time2_" id, &val)) {
-            d.time2 := val
+            d.time2 := GetBuiltinVarName(val)
             dirty := true
         }
         idx := this._ComboSelectedIndex("ITypeCmb_" id)
@@ -1752,7 +1761,7 @@ class MacroGraphHandlersMixin {
         for field, prefix in Map("posx", "DPosX_", "posy", "DPosY_", "count", "DCount_", "interval", "DInterval_") {
             if (!this._InlineVal(state, prefix id, &val))
                 continue
-            d.%field% := val
+            d.%field% := field == "count" ? GetBuiltinVarName(val) : val
             dirty := true
         }
         if (dirty)
@@ -1900,13 +1909,13 @@ class MacroGraphHandlersMixin {
                 continue
             }
             if (field == "SearchColor" || field == "SearchText") {
-                data.%field% := val
+                data.%field% := GetVarName(val)
                 dirty := true
                 continue
             }
             ; 坐标
             if (isPro) {
-                data.%field% := val
+                data.%field% := GetVarName(val)
                 dirty := true
             } else if (IsNumber(val)) {
                 data.%field% := val + 0

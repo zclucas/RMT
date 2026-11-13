@@ -42,6 +42,7 @@ class CustomInputGui {
     _BuildAndShow() {
         global MySoftData
         this._closed := false
+        this._submitting := false
         this._rec := false
         title := GetLang("输入-弹窗")
         this._title := title
@@ -54,21 +55,19 @@ class CustomInputGui {
 
         body := main.Add("Grid").Grid_Row(1).Margin("10,12")
         body.Rows("28", "*", "48")
-        body.Add("TextBlock").Grid_Row(0).Name("LabelCon").Text("").VerticalAlignment("Center")
+        promptRow := body.Add("DockPanel").Grid_Row(0)
+        promptRow.Add("Button").Name("BtnMic").DockPanel_Dock("Right").Width(26).Height(26)
+            .VerticalAlignment("Center").Padding("0").Margin("6,0,0,0")
+            .Background("Transparent").BorderThickness("0").Cursor("Hand")
+            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14)
+            .Foreground("{DynamicResource TextSub}").ToolTip(GetLang("语音输入"))
+        promptRow.Add("TextBlock").Name("LabelCon").Text("").VerticalAlignment("Center")
 
-        ; 输入区：左右内边距与 ComboBox 一致（约 6px），上下略加大；语音按钮叠在右下角不占布局
-        inputHost := body.Add("Grid").Grid_Row(1).Margin("0,8,0,8")
-        inputHost.Add("TextBox").Name("ContentCon").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("6,8,6,8").Margin("0")
+        body.Add("TextBox").Grid_Row(1).Name("ContentCon").AcceptsReturn("True").TextWrapping("Wrap")
+            .VerticalContentAlignment("Top").Padding("6,8,6,8").Margin("0,8,0,8")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
-        inputHost.Add("Button").Name("BtnMic").Width(26).Height(26).MinHeight(26).MinWidth(26)
-            .HorizontalAlignment("Right").VerticalAlignment("Bottom").Margin("0,0,6,6")
-            .Background("Transparent").BorderThickness("0").Cursor("Hand")
-            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(12)
-            .Foreground("{DynamicResource TextSub}").ToolTip(GetLang("语音输入"))
-            .SetProp("Panel.ZIndex", "2")
 
         btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow)
@@ -81,6 +80,7 @@ class CustomInputGui {
 
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
+        this.ui.OnEvent("Window", "PreviewKeyDown:Return", XamlWin.BindCurrent(this, "OnEnter"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
         this.ui.OnEvent("BtnMic", "Click", ObjBindMethod(this, "OnMicClick"))
@@ -88,6 +88,25 @@ class CustomInputGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        this.ui.Update("ContentCon", "Focus", "True")
+    }
+
+    OnEnter(state, ctrl, event) {
+        if (this._closed || this._submitting)
+            return
+        mods := state.Has("KeyModifiers") ? state["KeyModifiers"] : ""
+        if (mods == "Shift") {
+            if (state.Has("KeyFromEditable")) {
+                ; PreviewKeyDown:Return 已拦截原生换行，替换选区并将光标移到下一行。
+                start := this.ui.Query("ContentCon>SelectionStart")
+                if (!IsInteger(start))
+                    return
+                this.ui.Update("ContentCon", "SelectedText", "`r`n")
+                this.ui.Update("ContentCon", "CaretIndex", start + 2)
+            }
+        } else if (mods == "") {
+            this.OnSureBtnClick(state, ctrl, event)
+        }
     }
 
     OnWindowClosing(state, ctrl, event) {
@@ -113,6 +132,9 @@ class CustomInputGui {
     }
 
     OnSureBtnClick(state, ctrl, event) {
+        if (this._closed || this._submitting)
+            return
+        this._submitting := true
         this._StopRec(true)
         this.OnSure()
         this.OnHide()
@@ -155,11 +177,12 @@ class CustomInputGui {
             this._StopRec(true)
             return
         }
-        if (!IsSet(InitSttEngine) || !SttGui.RequestModelDownload())
+        language := SttEngine.DefaultLanguage()
+        if (!SttGui.RequestModelDownload(language))
             return
         engine := InitSttEngine()
-        if (!engine.StreamBegin()) {
-            try Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.StreamGetLastError()))
+        if (!engine.StreamBegin(language)) {
+            try Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.lastError))
             return
         }
         this._rec := true

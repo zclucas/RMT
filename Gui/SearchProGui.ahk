@@ -24,6 +24,7 @@ class SearchProGui {
         this.CheckClipboardAction := () => this.CheckClipboard()
         this.Data := ""
         this.LastIsWin := ""
+        this._coordinateIsWin := -1
         this.MacroGui := ""
         this.WindowBindingContext := ""
         this.DLVariableArr := []
@@ -639,6 +640,7 @@ class SearchProGui {
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()
+        this._coordinateIsWin := -1
         this._SyncFromFirstTarget()
         if (!this.CheckIfDataValid())
             return
@@ -661,12 +663,12 @@ class SearchProGui {
         this._SyncImageProcessBtn()
         this._SetCombo("ImagePathCon", this.DLVariableArr, this.Data.SearchImagePath)
         this._SetImage(this.Data.SearchImagePath)
-        this._SetCombo("HexColorCon", this.DLVariableArr, this.Data.SearchColor)
-        this._SetCombo("TextCon", this.DLVariableArr, this.Data.SearchText)
-        this._SetCombo("StartPosXCon", this.DLVariableArr, this.Data.StartPosX)
-        this._SetCombo("StartPosYCon", this.DLVariableArr, this.Data.StartPosY)
-        this._SetCombo("EndPosXCon", this.DLVariableArr, this.Data.EndPosX)
-        this._SetCombo("EndPosYCon", this.DLVariableArr, this.Data.EndPosY)
+        this._SetCombo("HexColorCon", GetGuiVarArr("color"), GetBuiltinVarName(this.Data.SearchColor, true))
+        this._SetCombo("TextCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.SearchText, true))
+        this.ui.Update("StartPosXCon", "Text", GetLang(this.Data.StartPosX))
+        this.ui.Update("StartPosYCon", "Text", GetLang(this.Data.StartPosY))
+        this.ui.Update("EndPosXCon", "Text", GetLang(this.Data.EndPosX))
+        this.ui.Update("EndPosYCon", "Text", GetLang(this.Data.EndPosY))
         this._SetCombo("SearchCountCon", [GetLang("无限")], this.Data.SearchCount == -1 ? GetLang("无限") : this.Data.SearchCount)
         this.ui.Update("SearchIntervalCon", "Text", this.Data.SearchInterval)
         if (!this.IsAll) {
@@ -814,12 +816,12 @@ class SearchProGui {
         data.MultiPointMode := this.MultiPointMode
         data.SearchType := this._TypeIndex()
         data.WinInfo := this.ui.Query("WinInfoCon")
-        data.SearchColor := this.ui.Query("HexColorCon")
-        data.SearchText := this.ui.Query("TextCon")
-        data.StartPosX := this.ui.Query("StartPosXCon")
-        data.StartPosY := this.ui.Query("StartPosYCon")
-        data.EndPosX := this.ui.Query("EndPosXCon")
-        data.EndPosY := this.ui.Query("EndPosYCon")
+        data.SearchColor := GetBuiltinVarName(this.ui.Query("HexColorCon"))
+        data.SearchText := GetBuiltinVarName(this.ui.Query("TextCon"))
+        data.StartPosX := GetBuiltinVarName(this.ui.Query("StartPosXCon"))
+        data.StartPosY := GetBuiltinVarName(this.ui.Query("StartPosYCon"))
+        data.EndPosX := GetBuiltinVarName(this.ui.Query("EndPosXCon"))
+        data.EndPosY := GetBuiltinVarName(this.ui.Query("EndPosYCon"))
         data.SearchCount := this.ui.Query("SearchCountCon") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCon")
         data.SearchInterval := this.ui.Query("SearchIntervalCon")
         if (!this.IsAll) {
@@ -899,6 +901,13 @@ class SearchProGui {
         isColor := curType == "屏幕颜色" || curType == "窗口颜色"
         isText := curType == "屏幕文本" || curType == "窗口文本"
         isWin := this._IsWinType(curType)
+        if (this._coordinateIsWin != isWin) {
+            this._coordinateIsWin := isWin
+            for field in ["StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
+                items := isWin ? this.DLVariableArr : GetGuiVarArr(StrLower(SubStr(field, -1)))
+                this._SetCombo(field "Con", items, this.ui.Query(field "Con"))
+            }
+        }
         isInfinite := this.ui.Query("SearchCountCon") == GetLang("无限")
         this.SetConArrState(this.ImageVariArr, false, isImage)
         this.ui.Update("SearchTypeHost", "Height", isImage ? "168" : "64")
@@ -1160,7 +1169,6 @@ class SearchProGui {
     _OpenMacroEditor(isFound) {
         if (this.MacroGui == "") {
             this.MacroGui := MacroEditGui()
-            this.MacroGui.DLVariableArr := this.DLVariableArr
             this.MacroGui.SureFocusCon := {Focus: (*) => ""}
             this.MacroGui.ParentTile := StrReplace(this._title, GetLang("编辑器"), "") "-"
         }

@@ -206,7 +206,6 @@ class VariableGui {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("变量")
         this.Data := JSON.parse(JSON.stringify(GetMacroCMDData(this.SerialStr)), , false)
-        this.DLVariableArr := GetGuiVarArr(1)
 
         this._EnsureVarDataLen()
         rows := this.Data.ToggleArr.Length
@@ -384,8 +383,8 @@ class VariableGui {
             if (copyVal == "" && this._UiOpIndex(i) == 0)
                 copyVal := "0"
             this._BatchSetCombo(batch, "Copy" i, this.GetGuiVarArrByType(CmdEnumFromIndex(this._UiOpIndex(i), CmdEnumOperaNames())), GetLang(copyVal))
-            this._BatchSetCombo(batch, "Min" i, GetGuiVarArr(), GetLang(this.Data.MinVariableArr[i]))
-            this._BatchSetCombo(batch, "Max" i, GetGuiVarArr(), GetLang(this.Data.MaxVariableArr[i]))
+            this._BatchSetCombo(batch, "Min" i, GetGuiVarArr("number"), GetLang(this.Data.MinVariableArr[i]))
+            this._BatchSetCombo(batch, "Max" i, GetGuiVarArr("number"), GetLang(this.Data.MaxVariableArr[i]))
         }
         this.ui.BatchUpdate(batch)
     }
@@ -431,7 +430,7 @@ class VariableGui {
     GetGuiVarArrByType(type) {
         switch CmdEnumOpera(type) {
             case "数值":
-                return GetGuiVarArr()
+                return GetGuiVarArr("number")
             case "系统":
                 return GetSystemVarArr()
             case "时间":

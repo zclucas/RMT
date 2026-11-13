@@ -144,20 +144,21 @@
             this._AiStopRec(t)
             return
         }
-        if (!SttGui.RequestModelDownload())
+        language := SttEngine.DefaultLanguage()
+        if (!SttGui.RequestModelDownload(language))
             return
         engine := InitSttEngine()
         inputBefore := ""
         try inputBefore := Trim(this.ui.Query("AiInput_" t))
-        initializing := !engine.streamLoaded
+        initializing := engine.streamLanguage != language
         if (initializing && inputBefore == "") {
             try this.ui.Update("AiInputPh_" t, "Text", GetLang("模型正在加载…"))
             try this.ui.Update("AiInputPh_" t, "Visibility", "Visible")
             Sleep(50)
         }
-        if (!engine.StreamBegin()) {
+        if (!engine.StreamBegin(language)) {
             this._AiSyncPlaceholder(t)
-            Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.StreamGetLastError()))
+            Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.lastError))
             return
         }
         this._aiRec[t] := true

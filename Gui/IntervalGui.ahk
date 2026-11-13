@@ -168,15 +168,15 @@ class IntervalGui {
         global MySoftData
         cmd := RMTParseErrHandle(cmd).cmd
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        DLVarArr := GetGuiVarArr()
+        DLVarArr := GetGuiVarArr("count")
         this.Data := IntervalData()
         SplitSerialTextAndNumbers(cmdArr.Length >= 1 ? cmdArr[1] : "", &textOnly, &numbersOnly)
         if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
             this.Data := GetMacroCMDData(cmdArr[1])
             this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
             this.ui.Update("TypeCombo", "SelectedIndex", CmdEnumZh(this.Data.Type, CmdEnumIntervalNames()) == "随机" ? "1" : "0")
-            this._SetCombo("TimeVarCon1", DLVarArr, this.Data.Time1)
-            this._SetCombo("TimeVarCon2", DLVarArr, this.Data.Time2)
+            this._SetCombo("TimeVarCon1", DLVarArr, GetLang(this.Data.Time1))
+            this._SetCombo("TimeVarCon2", DLVarArr, GetLang(this.Data.Time2))
         } else if (cmdArr.Length <= 1) {
             this.ui.Update("RemarkCon", "Text", "")
             this.ui.Update("TypeCombo", "SelectedIndex", "0")
@@ -208,8 +208,8 @@ class IntervalGui {
 
     ; 间隔_时间A_备注  /  间隔_时间A~时间B_备注
     GetCmdStr() {
-        time1 := this.ui.Query("TimeVarCon1")
-        timePart := this._TypeValue() == "随机" ? time1 "~" this.ui.Query("TimeVarCon2") : time1
+        time1 := GetVarName(this.ui.Query("TimeVarCon1"))
+        timePart := this._TypeValue() == "随机" ? time1 "~" GetVarName(this.ui.Query("TimeVarCon2")) : time1
         return CorrectRemark(GetLang("间隔") "_" timePart, Trim(this.ui.Query("RemarkCon")))
     }
 

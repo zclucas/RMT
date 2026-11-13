@@ -631,7 +631,7 @@ class XamlWin {
     }
 }
 
-XamlTabOptionStyle() {
+XamlTabOptionStyle(showDot := true) {
     return '<Style x:Key="SetTabButton" TargetType="ToggleButton">'
         . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="Cursor" Value="Hand"/>'
         . '<Setter Property="Width" Value="85"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0,4,8,4"/>'
@@ -642,7 +642,8 @@ XamlTabOptionStyle() {
         . '</Grid></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True">'
         . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>'
         . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
-        . '<Setter TargetName="Dot" Property="Visibility" Value="Visible"/><Setter Property="FontWeight" Value="Bold"/>'
+        . (showDot ? '<Setter TargetName="Dot" Property="Visibility" Value="Visible"/>' : '')
+        . '<Setter Property="FontWeight" Value="Bold"/>'
         . '</Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 }
 

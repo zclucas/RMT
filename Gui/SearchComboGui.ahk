@@ -709,20 +709,20 @@ class SearchComboGui {
         this.ui.Update(this._TN(n, "Type"), "SelectedIndex", String(CmdEnumIndex(t.SearchType ? t.SearchType : "屏幕图片", CmdEnumSearchNames())))
         this.ui.Update(this._TN(n, "Remark"), "Text", ObjHasOwnProp(t, "Remark") ? t.Remark : "")
         this.ui.Update(this._TN(n, "WinInfo"), "Text", t.WinInfo)
-        this._SetCombo(this._TN(n, "StartPosX"), this.DLVariableArr, t.StartPosX)
-        this._SetCombo(this._TN(n, "StartPosY"), this.DLVariableArr, t.StartPosY)
-        this._SetCombo(this._TN(n, "EndPosX"), this.DLVariableArr, t.EndPosX)
-        this._SetCombo(this._TN(n, "EndPosY"), this.DLVariableArr, t.EndPosY)
+        this.ui.Update(this._TN(n, "StartPosX"), "Text", GetLang(t.StartPosX))
+        this.ui.Update(this._TN(n, "StartPosY"), "Text", GetLang(t.StartPosY))
+        this.ui.Update(this._TN(n, "EndPosX"), "Text", GetLang(t.EndPosX))
+        this.ui.Update(this._TN(n, "EndPosY"), "Text", GetLang(t.EndPosY))
         this._SyncProcessBtn(n)
         this._SetImage(n, t.SearchImagePath)
         this._SetCombo(this._TN(n, "ImagePath"), this.DLVariableArr, t.SearchImagePath)
-        this._SetCombo(this._TN(n, "Color"), this.DLVariableArr, t.SearchColor)
+        this._SetCombo(this._TN(n, "Color"), GetGuiVarArr("color"), GetBuiltinVarName(t.SearchColor, true))
         hex := SearchColorHex(t.SearchColor)
         isHex := RegExMatch(hex, "i)^[0-9a-f]{6}$")
         this.ui.Update(this._TN(n, "ColorTip"), "Visibility", isHex ? "Visible" : "Collapsed")
         if (isHex)
             this.ui.Update(this._TN(n, "ColorTip"), "Background", "#" hex)
-        this._SetCombo(this._TN(n, "Text"), this.DLVariableArr, t.SearchText)
+        this._SetCombo(this._TN(n, "Text"), GetGuiVarArr("text"), GetBuiltinVarName(t.SearchText, true))
         this.ui.Update(this._TN(n, "Similar"), "Text", t.Similar)
         this.ui.Update(this._TN(n, "ColorMatch"), "IsChecked", SearchColorMatchOn(t) ? "True" : "False")
         this.OnTargetTypeChanged(n)
@@ -825,6 +825,10 @@ class SearchComboGui {
         isText := curType == "屏幕文本" || curType == "窗口文本"
         isWin := curType == "窗口图片" || curType == "窗口颜色" || curType == "窗口文本"
         tn := this._TN(n, "")
+        for field in ["StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
+            items := isWin ? this.DLVariableArr : GetGuiVarArr(StrLower(SubStr(field, -1)))
+            this._SetCombo(tn field, items, this.ui.Query(tn field))
+        }
         this.ui.Update(tn "WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
         this.ui.Update(tn "ImagePathTip", "Visibility", isImage ? "Visible" : "Hidden")
         this.ui.Update(tn "ImagePathRow", "Visibility", isImage ? "Visible" : "Hidden")
@@ -1220,7 +1224,6 @@ class SearchComboGui {
     OnEditFoundMacroBtnClick(*) {
         if (this.MacroGui == "") {
             this.MacroGui := MacroEditGui()
-            this.MacroGui.DLVariableArr := this.DLVariableArr
             ParentTile := StrReplace(this._title, GetLang("编辑器"), "")
             this.MacroGui.ParentTile := ParentTile "-"
         }
@@ -1237,7 +1240,6 @@ class SearchComboGui {
     OnEditUnFoundMacroBtnClick(*) {
         if (this.MacroGui == "") {
             this.MacroGui := MacroEditGui()
-            this.MacroGui.DLVariableArr := this.DLVariableArr
             ParentTile := StrReplace(this._title, GetLang("编辑器"), "")
             this.MacroGui.ParentTile := ParentTile "-"
         }
@@ -1312,8 +1314,8 @@ class SearchComboGui {
             t := {
                 SearchType: this._TargetType(n),
                 WinInfo: this.ui.Query(tn "WinInfo"),
-                SearchColor: this.ui.Query(tn "Color"),
-                SearchText: this.ui.Query(tn "Text"),
+                SearchColor: GetBuiltinVarName(this.ui.Query(tn "Color")),
+                SearchText: GetBuiltinVarName(this.ui.Query(tn "Text")),
                 SearchImagePath: this.ui.Query(tn "ImagePath"),
                 Similar: this.ui.Query(tn "Similar"),
                 OCRType: 1,   ; v6 统一多语言模型，不再区分
@@ -1330,10 +1332,10 @@ class SearchComboGui {
                 SuperMultiPointTolerance: ObjHasOwnProp(this.TargetList[n], "SuperMultiPointTolerance") ? this.TargetList[n].SuperMultiPointTolerance : 8,
                 MultiPointMode: SearchMatchMode(this.TargetList[n]),
                 Remark: this.ui.Query(tn "Remark"),
-                StartPosX: this.ui.Query(tn "StartPosX"),
-                StartPosY: this.ui.Query(tn "StartPosY"),
-                EndPosX: this.ui.Query(tn "EndPosX"),
-                EndPosY: this.ui.Query(tn "EndPosY")
+                StartPosX: GetBuiltinVarName(this.ui.Query(tn "StartPosX")),
+                StartPosY: GetBuiltinVarName(this.ui.Query(tn "StartPosY")),
+                EndPosX: GetBuiltinVarName(this.ui.Query(tn "EndPosX")),
+                EndPosY: GetBuiltinVarName(this.ui.Query(tn "EndPosY"))
             }
             data.SearchTargetArr.Push(t)
             if (n == 1) {
