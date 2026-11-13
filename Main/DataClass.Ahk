@@ -175,7 +175,6 @@ class MainConfig {
         ; 表集合动态化：表定义（ID/Symbol/Name/Order）存于 MySoftData.TableInfo + 配置文件 [Tables] 段，
         ; 不再使用固定 TabNameArr/TabSymbolArr 平行数组
         this.TableIndex := 1            ; 当前显示的 Tab 页索引（1 基，UI 槽位，运行时同步）
-        this.CurTableID := ""           ; 当前显示的表 ID（身份，持久化用；空则回落 TableIndex）
         this.TabPosX := 0               ; Tab 组件左上角 X 坐标
         this.TabPosY := 0               ; Tab 组件左上角 Y 坐标
         ; §10 显示页签选项：symbol → 是否显示（隐藏仅显示效果，不影响触发）；非配置表恒显示
@@ -319,9 +318,6 @@ class MainConfig {
         this.GetAreaAction := ""        ; 获取区域回调（不显示框选范围，用于系统截图）
         this.StartAreaPosX := ""        ; 框选起点 X 坐标
         this.StartAreaPosY := ""        ; 框选起点 Y 坐标
-
-        ; ========== 其他 ==========
-        this.LastShowMonth := 0         ; 上次显示"赞助"Tab 的月份
 
         ; ============================================================
         ; 以下为原 ToolCheckInfo 字段 — 工具检测 / 录制 / OCR

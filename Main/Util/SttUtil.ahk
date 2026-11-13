@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Shared\OfficialLanguages.ahk
 
 ; =================================================================
 ; SttUtil — 语音转文字（STT）引擎封装
@@ -20,13 +21,20 @@
 class SttEngine {
     static LanguageModels := Map(
         "zh-en", {label: "中英混合", flag: ""},
+        "zh-TW", {label: "繁體中文", flag: "tw"},
         "es", {label: "Español", flag: "es"},
         "fr", {label: "Français", flag: "fr"},
-        "de", {label: "Deutsch", flag: "de"})
+        "de", {label: "Deutsch", flag: "de"},
+        "it", {label: "Italiano", flag: "it"})
+
+    static ModelLanguage(language) => language == "zh-TW" ? "zh-en" : language
 
     static DefaultLanguage() {
+        global MainSoftData
+        lang := ""
+        try lang := MainSoftData.Lang
         languages := OfficialLanguages()
-        code := languages.Has(MainSoftData.Lang) ? languages[MainSoftData.Lang].code : ""
+        code := languages.Has(lang) ? languages[lang].code : ""
         return SttEngine.LanguageModels.Has(code) ? code : "zh-en"
     }
 
@@ -35,6 +43,7 @@ class SttEngine {
         this.loaded := false          ; 离线模型是否已在 DLL 内加载（Stt_Init 成功）
         this.streamLoaded := false    ; 流式模型是否已在 DLL 内加载（SttStream_Init 成功）
         this.streamLanguage := ""
+        this._streamStart := ""
         this.lastError := ""
         ; 按 AHK 进程位宽选择运行时目录（与 SherpaVoiceEngine 一致）
         arch := (A_PtrSize == 8) ? "x64" : "x86"
@@ -85,10 +94,12 @@ class SttEngine {
     ;   zipformer2 CTC 单模型（model*.onnx + tokens）
     ; 返回 [encoder, decoder, joiner, tokens]；CTC 形态时 decoder/joiner 为 ""
     StreamDirectory(language) {
+        language := SttEngine.ModelLanguage(language)
         return language == "zh-en" ? this.StreamModelDir : this.StreamModelDir "\" language
     }
 
     _StreamFiles(language) {
+        language := SttEngine.ModelLanguage(language)
         dir := this.StreamDirectory(language)
         tokens := dir "\tokens.txt"
         if (language != "zh-en")
@@ -209,7 +220,7 @@ class SttEngine {
 
     ; 释放模型（窗口关闭时调用，及时回收 ~80MB 内存）
     Close() {
-        if (!this.IsDllReady())
+        if (!this.IsDllReady() || IsObject(this._streamStart))
             return
         DllCall(this.DllPath "\Stt_Close")
         DllCall(this.DllPath "\SttStream_Close")
@@ -232,6 +243,10 @@ class SttEngine {
             return true
         if (!this.IsStreamReady(language) || this.StreamBusy())
             return false
+        if (this.streamLoaded && SttEngine.ModelLanguage(this.streamLanguage) == SttEngine.ModelLanguage(language)) {
+            this.streamLanguage := language
+            return true
+        }
         f := this._StreamFiles(language)
         if (f[1] == "")
             return false
@@ -273,7 +288,70 @@ class SttEngine {
         return r != 0
     }
 
+    ; 输入弹窗异步建流。旧语音扩展仍可通过同步接口录音。
+    StreamStartAsync(language, onDone) {
+        if (this.StreamBusy()) {
+            onDone.Call(false, GetLang("已有语音录入正在进行"))
+            return
+        }
+        if (!DllCall("GetProcAddress", "Ptr", this.hDll, "AStr", "SttStream_StartAsync", "Ptr")) {
+            ok := this.StreamBegin(language)
+            onDone.Call(ok, this.lastError)
+            return
+        }
+        loadModel := !this.streamLoaded || SttEngine.ModelLanguage(this.streamLanguage) != SttEngine.ModelLanguage(language)
+        files := loadModel ? this._StreamFiles(language) : ["", "", "", ""]
+        if (loadModel && files[1] == "") {
+            onDone.Call(false, GetLang("识别模型未就绪，请先下载模型"))
+            return
+        }
+        request := {language: language, loadModel: loadModel, onDone: onDone, cancelled: false}
+        this._streamStart := request
+        try {
+            if (DllCall(this.DllPath "\SttStream_StartAsync", "WStr", files[1], "WStr", files[2]
+                , "WStr", files[3], "WStr", files[4], "CDecl Int")) {
+                request.poll := ObjBindMethod(this, "_PollStreamStart")
+                SetTimer(request.poll, 30)
+                return
+            }
+        } catch {
+        }
+        this._streamStart := ""
+        onDone.Call(false, "")
+    }
+
+    StreamCancelStart() {
+        if (!IsObject(this._streamStart))
+            return
+        this._streamStart.cancelled := true
+        DllCall(this.DllPath "\SttStream_CancelStart", "CDecl")
+    }
+
+    _PollStreamStart() {
+        Critical("On")
+        request := this._streamStart
+        status := DllCall(this.DllPath "\SttStream_GetStartStatus", "CDecl Int")
+        if (status == 0)
+            return
+        SetTimer(request.poll, 0)
+        ; 失败或取消时保守地让下次重载，避免沿用已被替换的模型。
+        if (request.loadModel) {
+            this.streamLoaded := status == 1
+            this.streamLanguage := this.streamLoaded ? request.language : ""
+        }
+        if (status == 1)
+            this.streamLanguage := request.language
+        if (request.cancelled && status == 1)
+            this.StreamCancel()
+        errorText := status == -1 ? this.StreamGetLastError() : ""
+        this._streamStart := ""
+        if (!request.cancelled)
+            request.onDone.Call(status == 1, errorText)
+    }
+
     StreamBusy() {
+        if (IsObject(this._streamStart))
+            return true
         state := this.StreamGetState()
         return state == 1 || state == 2
     }
@@ -286,7 +364,7 @@ class SttEngine {
         r := DllCall(this.DllPath "\SttStream_Poll", "Ptr", buf, "Int", 16384, "CDecl Int")
         if (!r)
             return ""
-        return StrGet(buf, 16384, "UTF-8")
+        return this._StreamOutput(StrGet(buf, 16384, "UTF-8"))
     }
 
     ; 停止并收尾；refine=1 时再交给离线 paraformer 精修（异步）
@@ -317,7 +395,21 @@ class SttEngine {
         r := DllCall(this.DllPath "\SttStream_GetResult", "Ptr", buf, "Int", 16384, "CDecl Int")
         if (!r)
             return ""
-        return StrGet(buf, 16384, "UTF-8")
+        return this._StreamOutput(StrGet(buf, 16384, "UTF-8"))
+    }
+
+    _StreamOutput(text) {
+        if (text == "" || this.streamLanguage != "zh-TW")
+            return text
+        ; LCMAP_TRADITIONAL_CHINESE
+        size := DllCall("Kernel32\LCMapStringEx", "WStr", "zh-TW", "UInt", 0x04000000
+            , "WStr", text, "Int", -1, "Ptr", 0, "Int", 0, "Ptr", 0, "Ptr", 0, "Ptr", 0, "Int")
+        if (!size)
+            return text
+        output := Buffer(size * 2)
+        written := DllCall("Kernel32\LCMapStringEx", "WStr", "zh-TW", "UInt", 0x04000000
+            , "WStr", text, "Int", -1, "Ptr", output, "Int", size, "Ptr", 0, "Ptr", 0, "Ptr", 0, "Int")
+        return written ? StrGet(output, "UTF-16") : text
     }
 
     StreamGetLastError() {
@@ -336,7 +428,7 @@ class SttEngine {
         r := DllCall(this.DllPath "\SttStream_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "CDecl Int")
         if (!r)
             return ""
-        return StrGet(buf, 4096, "UTF-8")
+        return this._StreamOutput(StrGet(buf, 4096, "UTF-8"))
     }
 
     ; 离线测试：转写一个 wav 文件（自动化验证用）

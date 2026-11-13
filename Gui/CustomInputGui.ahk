@@ -16,6 +16,7 @@ class CustomInputGui {
         this.SureAction := ""
         this.CloseAction := ""
         this._rec := false
+        this._recStarting := false
         this._recBase := ""
         this._recLive := ""
         this._sttTick := ObjBindMethod(this, "_PollStt")
@@ -53,24 +54,28 @@ class CustomInputGui {
 
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
-        body := main.Add("Grid").Grid_Row(1).Margin("10,12")
-        body.Rows("28", "*", "48")
-        promptRow := body.Add("DockPanel").Grid_Row(0)
-        promptRow.Add("Button").Name("BtnMic").DockPanel_Dock("Right").Width(26).Height(26)
-            .VerticalAlignment("Center").Padding("0").Margin("6,0,0,0")
-            .Background("Transparent").BorderThickness("0").Cursor("Hand")
-            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14)
-            .Foreground("{DynamicResource TextSub}").ToolTip(GetLang("语音输入"))
-        promptRow.Add("TextBlock").Name("LabelCon").Text("").VerticalAlignment("Center")
+        body := main.Add("Grid").Grid_Row(1).Margin("10,6,10,12")
+        body.Rows("Auto", "*", "48")
+        prompt := body.Add("StackPanel").Grid_Row(0)
+        prompt.Add("TextBlock").Name("LabelCon").Text("").Margin("0,0,0,5")
+        prompt.Add("TextBlock").Name("MicStatus").Visibility("Collapsed").TextWrapping("Wrap")
+            .Foreground("{DynamicResource TextSub}").Margin("0,0,0,5")
 
+        ; 主题在滚动容器内外各应用一次 Padding，边框另占 1。
         body.Add("TextBox").Grid_Row(1).Name("ContentCon").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("6,8,6,8").Margin("0,8,0,8")
+            .VerticalContentAlignment("Top").Padding("2.5,3").Margin("0,0,0,8")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
 
         btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow)
+
+        mic := body.Add("Button").Grid_Row(2).Name("BtnMic").Width(30).Height(30)
+            .HorizontalAlignment("Right").VerticalAlignment("Bottom").Padding("0")
+            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14)
+            .ToolTip(GetLang("语音输入"))
+        mic.InjectResources(this._MicButtonStyle())
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
@@ -84,6 +89,58 @@ class CustomInputGui {
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
         this.ui.OnEvent("BtnMic", "Click", ObjBindMethod(this, "OnMicClick"))
+    }
+
+    _MicButtonStyle() {
+        return '
+        (
+        <Style TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource EditText}"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" Background="{DynamicResource EditBg}"
+                                BorderBrush="{DynamicResource EditStroke}" BorderThickness="1" CornerRadius="6">
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Ellipse x:Name="RecordingDot" Width="7" Height="7" Fill="#E53935"
+                                         Stroke="White" StrokeThickness="1" Margin="0,2,2,0"
+                                         HorizontalAlignment="Right" VerticalAlignment="Top"
+                                         IsHitTestVisible="False" Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource EditHoverBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Recording">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActionBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionStroke}"/>
+                                <Setter TargetName="RecordingDot" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="{DynamicResource ActionText}"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Starting">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource EditHoverBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/>
+                                <Setter Property="Cursor" Value="Wait"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="Recording"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActionHoverBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        )'
     }
 
     OnWindowLoad(state, ctrl, event) {
@@ -173,7 +230,9 @@ class CustomInputGui {
     }
 
     OnMicClick(*) {
-        if (this._rec) {
+        if (this._closed || this._submitting)
+            return
+        if (this._rec || this._recStarting) {
             this._StopRec(true)
             return
         }
@@ -181,8 +240,18 @@ class CustomInputGui {
         if (!SttGui.RequestModelDownload(language))
             return
         engine := InitSttEngine()
-        if (!engine.StreamBegin(language)) {
-            try Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.lastError))
+        this._recStarting := true
+        status := engine.streamLoaded && engine.streamLanguage == language
+            ? GetLang("准备录音…") : GetLang("正在加载识别模型…")
+        this._SetMicStatus("Starting", status, status)
+        engine.StreamStartAsync(language, ObjBindMethod(this, "_OnMicStarted"))
+    }
+
+    _OnMicStarted(ok, errorText) {
+        this._recStarting := false
+        if (!ok) {
+            try this._SetMicStatus("", GetLang("语音输入"))
+            try Toast.Error(GetLang("开始录音失败：") InitSttEngine()._ErrText(errorText))
             return
         }
         this._rec := true
@@ -190,9 +259,17 @@ class CustomInputGui {
         try this._recBase := this.ui.Query("ContentCon")
         this._recLive := ""
         try this.ui.Update("ContentCon", "Foreground", "{DynamicResource TextSub}")
-        try this.ui.Update("BtnMic", "Foreground", "{DynamicResource Accent}")
-        try this.ui.Update("BtnMic", "ToolTip", GetLang("停止录音"))
+        try this._SetMicStatus("Recording", GetLang("停止录音"), GetLang("模型加载完成 · 录音中"))
         SetTimer(this._sttTick, 150)
+    }
+
+    _SetMicStatus(tag, tooltip, status := "") {
+        this.ui.BatchUpdate([
+            {ControlName: "BtnMic", PropertyName: "Tag", Value: tag},
+            {ControlName: "BtnMic", PropertyName: "ToolTip", Value: tooltip},
+            {ControlName: "MicStatus", PropertyName: "Text", Value: status},
+            {ControlName: "MicStatus", PropertyName: "Visibility", Value: status == "" ? "Collapsed" : "Visible"}
+        ])
     }
 
     _PollStt() {
@@ -218,14 +295,18 @@ class CustomInputGui {
     }
 
     _StopRec(commit := true) {
+        if (this._recStarting) {
+            this._recStarting := false
+            InitSttEngine().StreamCancelStart()
+            try this._SetMicStatus("", GetLang("语音输入"))
+        }
         if (!this._rec) {
             SetTimer(this._sttTick, 0)
             return
         }
         this._rec := false
         SetTimer(this._sttTick, 0)
-        try this.ui.Update("BtnMic", "Foreground", "{DynamicResource TextSub}")
-        try this.ui.Update("BtnMic", "ToolTip", GetLang("语音输入"))
+        try this._SetMicStatus("", GetLang("语音输入"))
         try this.ui.Update("ContentCon", "Foreground", "{DynamicResource InputText}")
         if (!IsSet(InitSttEngine))
             return

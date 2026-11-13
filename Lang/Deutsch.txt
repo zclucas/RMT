@@ -2028,6 +2028,9 @@ tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持
 配置=Konfigurieren
 语音输入=Spracheingabe
 停止录音=Aufnahme stoppen
+准备录音…=Aufnahme wird vorbereitet…
+正在加载识别模型…=Spracherkennungsmodell wird geladen…
+模型加载完成 · 录音中=Modell geladen · Aufnahme läuft
 RMT错误=RMT-Fehler
 反馈=Feedback
 把这段报错带到论坛反馈窗口=Bringen Sie dies in das Forum Feedback-Fenster.

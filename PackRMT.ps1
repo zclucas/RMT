@@ -1087,7 +1087,7 @@ function New-RMTAssets {
     Write-Log "生成 $assetsDir ..." "Gray"
 
     # Windows tar 在部分系统代码页下无法按名称提取带重音的条目。
-    $langArchiveNames = @{ "Español.txt" = "Spanish.txt"; "Français.txt" = "French.txt" }
+    $langArchiveNames = @{ "Español.txt" = "Spanish.txt"; "Français.txt" = "French.txt"; "繁體中文.txt" = "TraditionalChinese.txt" }
     $bundles = [ordered]@{
         "Lang.zip" = @(
 

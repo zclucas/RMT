@@ -15,12 +15,7 @@ if (!EnsureSingleInstance())
 RmtRegisterCliCommand()
 XAMLHost.Prewarm()
 InitFilePath()              ;初始化文件路径
-migratedTables := LoadCurMacroSetting()
-; 先固化旧数字索引指向的页签 ID，再保存插入新页签后的顺序。
-if (MainSoftData.CurTableID != "" && IsInteger(CfgRead(SettingFile, SettingSection, "TableIndex", "")))
-    CfgWrite(MainSoftData.CurTableID, SettingFile, SettingSection, "TableIndex")
-if (migratedTables)
-    SaveTableCollection()   ;主进程才落盘，Worker 不走这条
+LoadCurMacroSetting()       ;加载当前宏配置
 HandleOpenArg()             ;处理打开软件的参数
 RegisterNativeComboWheelGuard()
 InitData()                  ;初始化软件数据，加载所有的宏指令

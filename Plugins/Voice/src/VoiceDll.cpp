@@ -140,7 +140,6 @@ private:
     int sampleRate_ = 16000;
     std::vector<float> pool_;       // 待消费采样缓冲
     std::mutex poolMx_;
-    static UINT32 latencyFramesLocal;
 };
 
 bool WasapiCapture::Start(int targetRate) {
@@ -149,6 +148,10 @@ bool WasapiCapture::Start(int targetRate) {
     if (FAILED(hr) && hr != RPC_E_CHANGED_MODE && hr != S_FALSE) {
         return false;
     }
+    struct ComScope {
+        bool initialized;
+        ~ComScope() { if (initialized) CoUninitialize(); }
+    } com{SUCCEEDED(hr)};
     IMMDeviceEnumerator* enumerator = nullptr;
     hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                           IID_PPV_ARGS(&enumerator));
@@ -171,11 +174,7 @@ bool WasapiCapture::Start(int targetRate) {
     hr = client_->GetMixFormat(&mixFmt);
     if (FAILED(hr)) return false;
 
-    if (mixFmt->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
-        // 提取样本格式信息
-        WAVEFORMATEXTENSIBLE* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(mixFmt);
-        // 强制 16k 单声道 float —— 通过共享模式，系统自动重采样
-    }
+    CoTaskMemFree(mixFmt);
 
     // 构造请求格式：16k 单声道 float
     WAVEFORMATEX fmt;
@@ -192,10 +191,6 @@ bool WasapiCapture::Start(int targetRate) {
                              200000, 0, &fmt, nullptr);
     if (FAILED(hr)) return false;
 
-    REFERENCE_TIME hnsLatency = 0;
-    hr = client_->GetBufferSize(&latencyFramesLocal);
-    if (FAILED(hr)) return false;
-
     hr = client_->GetService(IID_PPV_ARGS(&capture_));
     if (FAILED(hr)) return false;
 
@@ -203,8 +198,6 @@ bool WasapiCapture::Start(int targetRate) {
     thread_ = std::thread(&WasapiCapture::CaptureLoop, this);
     return true;
 }
-
-UINT32 WasapiCapture::latencyFramesLocal = 0;
 
 void WasapiCapture::Stop() {
     running_ = false;
@@ -802,6 +795,12 @@ static std::vector<float> g_ssSamples;      // 整段音频，供精修使用
 static WasapiCapture g_ssCapture;           // 独立采集实例（与 KWS / 离线 STT 三者并存）
 static std::thread g_ssThread;
 static std::atomic<int> g_ssState{0};       // 0空闲 1录音中 2精修中 3完成 4错误
+static std::atomic<int> g_ssStartStatus{0}; // 0准备中 1成功 -1失败 -2取消
+static std::atomic<bool> g_ssStartCancelled{false};
+
+struct SsStartRequest {
+    std::wstring encoder, decoder, joiner, tokens;
+};
 
 static void SsSetErr(const std::string& s) { g_ssError = s; }
 
@@ -936,6 +935,7 @@ __declspec(dllexport) int SttStream_Begin() {
     g_ssSamples.clear();
     g_ssResult.clear();
     if (!g_ssCapture.Start(16000)) {
+        g_ssCapture.Stop();
         SherpaOnnxDestroyOnlineStream(g_ssStream);
         g_ssStream = nullptr;
         SsSetErr("麦克风采集启动失败");
@@ -1005,6 +1005,53 @@ __declspec(dllexport) int SttStream_Cancel() {
     g_ssResult.clear();
     g_ssState = 0;
     return 1;
+}
+
+static void CALLBACK SsStartInBackground(PTP_CALLBACK_INSTANCE, void* context) {
+    auto* request = static_cast<SsStartRequest*>(context);
+    int status = -1;
+    try {
+        if (g_ssStartCancelled) {
+            status = -2;
+        } else if (request->encoder.empty() || SttStream_Init(request->encoder.c_str(),
+                       request->decoder.c_str(), request->joiner.c_str(), request->tokens.c_str())) {
+            if (g_ssStartCancelled) {
+                status = -2;
+            } else if (SttStream_Begin()) {
+                status = 1;
+                if (g_ssStartCancelled) {
+                    SttStream_Cancel();
+                    status = -2;
+                }
+            }
+        }
+    } catch (...) {
+        SsSetErr("启动流式录音失败");
+    }
+    delete request;
+    g_ssStartStatus = status;
+}
+
+__declspec(dllexport) int SttStream_StartAsync(const wchar_t* encoder, const wchar_t* decoder,
+                                             const wchar_t* joiner, const wchar_t* tokens) {
+    try {
+        auto* request = new SsStartRequest{encoder, decoder, joiner, tokens};
+        g_ssStartCancelled = false;
+        g_ssStartStatus = 0;
+        if (TrySubmitThreadpoolCallback(SsStartInBackground, request, nullptr))
+            return 1;
+        delete request;
+    } catch (...) {
+    }
+    return 0;
+}
+
+__declspec(dllexport) int SttStream_GetStartStatus() {
+    return g_ssStartStatus.load();
+}
+
+__declspec(dllexport) void SttStream_CancelStart() {
+    g_ssStartCancelled = true;
 }
 
 __declspec(dllexport) int SttStream_GetState() {

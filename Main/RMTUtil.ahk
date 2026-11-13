@@ -138,7 +138,6 @@ OnSaveSetting(*) {
     CheckAndAddDirty("ExcelBackend", MainSoftData.ExcelBackend)
 
     ; 状态设置（这些每次都变化，始终写入）
-    CheckAndAddDirty("TableIndex", MainSoftData.CurTableID != "" ? MainSoftData.CurTableID : MainSoftData.TabCtrl.Value)
     CheckAndAddDirty("Lang", MainSoftData.Lang)
     CheckAndAddDirty("FontType", MainSoftData.FontType)
     CheckAndAddDirty("FontSize", MainSoftData.HasProp("FontSize") ? MainSoftData.FontSize : 15)
@@ -147,7 +146,6 @@ OnSaveSetting(*) {
     CheckAndAddDirty("JoyLtRtAsButton", MainSoftData.HasProp("JoyLtRtAsButton") ? MainSoftData.JoyLtRtAsButton : true)
     CheckAndAddDirty("PreferredMacroEditor", MainSoftData.PreferredMacroEditor)
     CheckAndAddDirty("MacroTotalCount", MySoftData.MacroTotalCount)
-    CheckAndAddDirty("LastShowMonth", MainSoftData.LastShowMonth)
     CheckAndAddDirty("HasSaved", true)
     CheckAndAddDirty("IsReload", true)
 

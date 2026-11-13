@@ -115,11 +115,6 @@ OnOpen() {
     }
 
     CfgWrite(false, SettingFile, SettingSection, "IsReload")
-    if (MainSoftData.LastShowMonth != A_Mon) {
-        MainSoftData.TabCtrl.Value := 9
-        MainSoftData.LastShowMonth := A_Mon
-        CfgWrite(MainSoftData.LastShowMonth, SettingFile, SettingSection, "LastShowMonth")
-    }
     ; 首次打开不 WinMove/WinShow：主窗口 Opacity=0，内容填完再揭盖；再 Move 会抖一下
     RefreshListenVarGui()
 }
@@ -184,12 +179,6 @@ RefreshGui() {
         MainSoftData.MyGui.Show(Format("x{} y{} w{} h{}", pos[1], pos[2], pos[3], pos[4]))
         RefreshListenVarGui()
         return
-    }
-
-    if (MainSoftData.LastShowMonth != A_Mon) {
-        MainSoftData.TabCtrl.Value := 9
-        MainSoftData.LastShowMonth := A_Mon
-        CfgWrite(MainSoftData.LastShowMonth, SettingFile, SettingSection, "LastShowMonth")
     }
 
     size := GetMainWindowDefaultSize()

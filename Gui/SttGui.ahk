@@ -149,6 +149,7 @@ class SttGui {
     static StreamPkg := "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
     ; Banafo Kroko-ASR 社区模型（CC BY-SA），下载包中的 README 保留上游署名与许可链接。
     static KrokoArchiveBytes := Map("es", 124394665, "fr", 57220361, "de", 57565698)
+    static ItalianModelSource := "https://huggingface.co/Banafo/Kroko-ASR/resolve/d45212aeb212dd66083dd22710c9954f40ff8cc1/Kroko-IT-Community-64-L-Streaming-001.data"
 
     static ShowGui() {
         key := "global"
@@ -220,6 +221,7 @@ class SttGui {
         engine := InitSttEngine()
         if (engine.IsStreamModelReady(language))
             return []
+        language := SttEngine.ModelLanguage(language)
         if (language == "zh-en")
             return [Map(
                 "pkg", SttGui.StreamPkg,
@@ -227,6 +229,14 @@ class SttGui {
                 "dir", engine.StreamModelDir,
                 "files", ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", "bpe.model"],
                 "minBytes", 100 * 1024 * 1024
+            )]
+        if (language == "it")
+            return [Map(
+                "url", SttGui.ItalianModelSource,
+                "dir", engine.StreamDirectory(language),
+                "files", ["encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt", "voice-models-LICENSE.txt"],
+                "krokoBlocks", [154878660, 617488, 336817, 6107],
+                "exactBytes", 155839229
             )]
         pkg := "sherpa-onnx-streaming-zipformer-" language "-kroko-2025-08-06"
         return [Map(
@@ -371,7 +381,8 @@ class SttGui {
         dllOk := engine.IsDllReady()
         streamOk := engine.IsStreamModelReady(this.language)
         download := SttGui.activeDownload
-        downloading := IsObject(download) && download.language == this.language
+        downloading := IsObject(download)
+            && SttEngine.ModelLanguage(download.language) == SttEngine.ModelLanguage(this.language)
         canStart := !this.recording && !this.loading && !downloading
 
         if (this.loading) {
@@ -434,7 +445,7 @@ class SttGui {
         ; --- 模型下载/解压 ---
         if (this.downloadState == "dl" || this.downloadState == "ex") {
             oldState := this.downloadState
-            if (!ProcessExist(this.dlPid)) {
+            if (!this.dlPid || !ProcessExist(this.dlPid)) {
                 if (this.downloadState == "dl") {
                     try FileDelete(this.dlTar ".headers")
                     if (this._StartExtract())
@@ -653,7 +664,7 @@ class SttGui {
         spec := this.dlQueue.RemoveAt(1)
         this.dlBytes := 0
         this.dlExpectedBytes := 0
-        this.dlTar := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".tar.bz2"
+        this.dlTar := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".download"
         cmd := Format('curl.exe -L --fail -s -S --suppress-connect-headers -D "{}" -o "{}" "{}"',
             this.dlTar ".headers", this.dlTar, spec["url"])
         try {
@@ -678,6 +689,10 @@ class SttGui {
                 return false
             this.dlDir := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount "-" Random(1000, 9999)
             DirCreate(this.dlDir)
+            if (this.dlSpec.Has("krokoBlocks")) {
+                this.dlPid := 0
+                return this._ExtractKrokoModel()
+            }
             cmd := Format('tar.exe -xjf "{}" -C "{}"', this.dlTar, this.dlDir)
             Run(cmd, A_Temp, "Hide", &pid)
             this.dlPid := pid
@@ -687,9 +702,46 @@ class SttGui {
         }
     }
 
+    _ExtractKrokoModel() {
+        ; Kroko 社区容器：小端 UInt 长度、JSON 头，再跟四个带长度的文件。
+        spec := this.dlSpec
+        source := FileOpen(this.dlTar, "r")
+        headerSize := source.ReadUInt()
+        if (headerSize == 0 || headerSize > 4096)
+            return false
+        headerBytes := Buffer(headerSize)
+        if (source.RawRead(headerBytes, headerSize) != headerSize)
+            return false
+        header := JSON.parse(StrGet(headerBytes, headerSize, "UTF-8"))
+        if (!header["free"] || header["language"]["iso"] != "IT")
+            return false
+        chunk := Buffer(1024 * 1024)
+        for i, expected in spec["krokoBlocks"] {
+            if (source.ReadUInt() != expected || source.Pos + expected > source.Length)
+                return false
+            target := FileOpen(this.dlDir "\" spec["files"][i], "w")
+            remaining := expected
+            while (remaining > 0) {
+                count := Min(remaining, chunk.Size)
+                if (source.RawRead(chunk, count) != count || target.RawWrite(chunk, count) != count)
+                    return false
+                remaining -= count
+            }
+            target.Close()
+        }
+        if (!source.AtEOF)
+            return false
+        source.Close()
+        FileAppend("Banafo Kroko-ASR, Italian 64-L Community model (CC BY-SA).`n"
+            . "ONNX files extracted from the upstream container without modifying the weights.`n"
+            . "https://huggingface.co/Banafo/Kroko-ASR`n" SttGui.ItalianModelSource "`n"
+            , this.dlDir "\voice-models-LICENSE.txt", "UTF-8")
+        return true
+    }
+
     _FinishExtract() {
         spec := this.dlSpec
-        src := this.dlDir "\" spec["pkg"]
+        src := spec.Has("pkg") ? this.dlDir "\" spec["pkg"] : this.dlDir
         files := spec.Has("files") ? spec["files"] : ["model.int8.onnx", "tokens.txt"]
         try {
             ; 校验完整文件集后再部署，避免损坏/不完整的压缩包被当作成功。
@@ -701,7 +753,7 @@ class SttGui {
             for f in files
                 FileCopy(src "\" f, spec["dir"] "\" f, true)
             license := "voice-models-LICENSE.txt"
-            if (FileExist(src "\" license))
+            if (FileExist(src "\" license) && !spec.Has("krokoBlocks"))
                 FileCopy(src "\" license, spec["dir"] "\" license, true)
         } catch {
             return false

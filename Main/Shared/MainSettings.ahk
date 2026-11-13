@@ -153,8 +153,6 @@ LoadMainSetting() {
     MainSoftData.AgreeAgreement := CfgRead(SettingFile, SettingSection, "AgreeAgreement", false)
     MySoftData.WinPosX := CfgRead(SettingFile, SettingSection, "WinPosX", 0)
     MySoftData.WinPosY := CfgRead(SettingFile, SettingSection, "WinPosY", 0)
-    MainSoftData.TableIndex := CfgRead(SettingFile, SettingSection, "TableIndex", 1)
-    MainSoftData.CurTableID := IsNumber(MainSoftData.TableIndex) ? "" : MainSoftData.TableIndex
     ; 宏相关页签可见性（隐藏不影响触发）；静态页签恒显示
     MainSoftData.TabVisibleMap := Map()
     rawTabVis := CfgRead(SettingFile, SettingSection, "TabVisible", "")
@@ -206,7 +204,6 @@ LoadMainSetting() {
     MainSoftData.VarListenWidth := CfgRead(SettingFile, SettingSection, "VarListenWidth", 400)
     MainSoftData.VarListenHeight := CfgRead(SettingFile, SettingSection, "VarListenHeight", 420)
     MySoftData.MacroTotalCount := ReadMacroTotalCount(SettingFile)
-    MainSoftData.LastShowMonth := CfgRead(SettingFile, SettingSection, "LastShowMonth", A_Mon)
 
     MySoftData.TableInfo := CreateTableItemArr()
     SetFontList()

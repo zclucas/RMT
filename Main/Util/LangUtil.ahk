@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Shared\OfficialLanguages.ahk
 global MainSoftData                ; 在 GlobalUtil.ahk 中由 MainConfig() 赋值
 LangKeyMap := Map()
 LangValueMap := Map()              ; 文本反向映射（本地化显示名 -> 内部简中键）
@@ -26,15 +27,6 @@ LangCmdKeyArr := [
     "指定区域-列", "网络请求", "JSON", "表单", "原始文本", "文件读写", "Excel", "读取文件", "写入文件", "读取文本文件", "写入文本文件",
     "发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"
 ]
-
-OfficialLanguages() {
-    static languages := Map("简中", {code: "zh", flag: "cn"},
-        "English", {code: "en", flag: "gb", entry: "English.txt"},
-        "Español", {code: "es", flag: "es", entry: "Spanish.txt"},
-        "Français", {code: "fr", flag: "fr", entry: "French.txt"},
-        "Deutsch", {code: "de", flag: "de", entry: "Deutsch.txt"})
-    return languages
-}
 
 LanguageOptionXaml(key, label, flag := "") {
     label := EscapeXamlXml(label)

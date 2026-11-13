@@ -122,9 +122,6 @@ class MainWin {
             if (savedW > 0)
                 this.aiPanelW := this._ClampAiPanelW(savedW)
         }
-        ; 动态表集合：配置持久化的 TableIndex 可能越界（表已删/表数变化），钳制到有效范围
-        if (MainSoftData.TableIndex < 1 || MainSoftData.TableIndex > MySoftData.TableInfo.Length)
-            MainSoftData.TableIndex := 1
         this.closed := false
         title := "RMTv" RMT_VERSION
         titleHeight := XAMLHost.GetTitleBarHeight()
@@ -216,22 +213,20 @@ class MainWin {
         ; §10 显示页签：先按可见性过滤生成 _tabOrder（TableInfo 下标数组），页签位置 ↔ 表下标经 TabAdapter/OnTabChanged 映射
         this._tabOrder := []
         this._aiPanels := Map()    ; 已建出 AI 侧栏的页签（其余按需构建）
-        loop MySoftData.TableInfo.Length {
-            if (IsTabVisible(MySoftData.TableInfo[A_Index]))
-                this._tabOrder.Push(A_Index)
-        }
+        ; 启动时选中可见的按键宏页签，缺失或隐藏时选中首个可见页签。
         initSel := 0
-        for i, t in this._tabOrder {
-            if (t == MainSoftData.TableIndex) {
-                initSel := i - 1
+        for i, tableItem in MySoftData.TableInfo {
+            if (IsTabVisible(tableItem))
+                this._tabOrder.Push(i)
+        }
+        for pos, idx in this._tabOrder {
+            if (MySoftData.TableInfo[idx].Symbol == "Normal") {
+                initSel := pos - 1
                 break
             }
         }
-        if (initSel == 0 && this._tabOrder.Length >= 1) {
-            ; 当前表被隐藏 → 落到第一个可见页签，并同步身份（避免保存时持久化隐藏表 ID）
-            MainSoftData.TableIndex := this._tabOrder[1]
-            MainSoftData.CurTableID := MySoftData.TableInfo[this._tabOrder[1]].ID
-        }
+        if (this._tabOrder.Length)
+            MainSoftData.TableIndex := this._tabOrder[initSel + 1]
         tab := right.Add("TabControl").Name("TabControl").Style("{StaticResource RmtMainTabCtrl}").Background("{DynamicResource BgColor}").SelectedIndex(String(initSel))
         loop this._tabOrder.Length {
             pos := A_Index
@@ -726,8 +721,6 @@ class MainWin {
         if (idx == GetTableIndexByID("Tool"))
             this.RefreshVoiceExtensionButton()
         this._EnsureAiPanel(idx)
-        if (idx >= 1 && idx <= MySoftData.TableInfo.Length)
-            MainSoftData.CurTableID := MySoftData.TableInfo[idx].ID
         try MainSoftData.TabCtrl._value := idx
         OnTabValueChanged()
         ; 惰性渲染：该 tab 尚未构建过则首次切换时渲染（启动只渲染当前 tab）
