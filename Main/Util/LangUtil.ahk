@@ -1,118 +1,121 @@
 #Requires AutoHotkey v2.0
 global MainSoftData                ; 在 GlobalUtil.ahk 中由 MainConfig() 赋值
 LangKeyMap := Map()
+LangValueMap := Map()              ; 文本反向映射（本地化显示名 -> 内部简中键）
 
-;指令相关的key
-LangCmdKeyArr := ["关闭进程", "窗口操作", "调整尺寸", "仅宽高", "激活", "显示状态", "置顶", "鼠标穿透", "绝对位置", "最大化", "最小化", "还原", "开启", "关闭", "切换", "窗口位置", "获取窗口宽高", "位置与宽高", "标题类名句柄", "进程信息", "窗口状态", "透明度与鼠标穿透状态", "匹配窗口列表", "激活窗口", "移动窗口", "相对移动", "窗口居中", "调整宽高", "位置和宽高", "最大化窗口", "最小化窗口", "还原窗口", "置顶窗口", "取消置顶", "切换置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透", "切换鼠标穿透", "关闭窗口", "截图", "截图提取文本", "自由贴", "开启指令显示", "关闭指令显示", "显示菜单", "关闭菜单",
+; 指令与界面关键 key（优先保证反向映射正确）
+LangCmdKeyArr := [
+    "关闭进程", "窗口操作", "调整尺寸", "仅宽高", "激活", "显示状态", "置顶", "鼠标穿透", "绝对位置", "最大化", "最小化", "还原", "开启", "关闭", "切换",
+    "窗口位置", "获取窗口宽高", "位置与宽高", "标题类名句柄", "进程信息", "窗口状态", "透明度与鼠标穿透状态", "匹配窗口列表", "激活窗口", "移动窗口", "相对移动",
+    "窗口居中", "调整宽高", "位置和宽高", "最大化窗口", "最小化窗口", "还原窗口", "置顶窗口", "取消置顶", "切换置顶", "修改标题", "修改透明度",
+    "开启鼠标穿透", "关闭鼠标穿透", "切换鼠标穿透", "关闭窗口", "截图", "截图提取文本", "自由贴", "开启指令显示", "关闭指令显示", "显示菜单", "关闭菜单",
     "打开界面窗口", "关闭界面窗口", "禁用模块", "取消禁用模块",
     "启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠",
-    "休眠", "暂停所有宏", "恢复所有宏", "终止所有宏", "重载", "关闭软件", "间隔", "按键", "手柄", "手柄检测", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi", "移动", "移动Pro",
-    "鼠标移动", "鼠标移动Pro", "增量移动", "流程跳转", "循环-跳过本轮", "循环-跳出", "分支-跳出",
+    "休眠", "暂停所有宏", "恢复所有宏", "终止所有宏", "重载", "关闭软件", "间隔", "按键", "手柄", "手柄检测", "搜索", "搜索Pro", "搜索All", "搜索Combo",
+    "组合搜索", "搜索Multi", "移动", "移动Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "流程跳转", "循环-跳过本轮", "循环-跳出", "分支-跳出",
     "输出", "提示", "运行", "运行Pro", "循环", "宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "RMT指令", "后台鼠标", "后台按键",
     "等待", "等待确定", "时间", "倒计时", "按键检测", "窗口管理", "窗口信息", "调整窗口", "注释", "抓图",
     "循环次数", "宏循环次数", "当前坐标X", "当前坐标Y", "按下", "松开", "点击", "创建", "克隆", "删除", "包含",
     "取值", "赋值", "插入", "追加", "移除", "移除最后", "长度", "变量或值", "数组", "文本分割", "文本提取", "文本替换", "去除空格",
     "大小写转换", "文本统计", "去除前空白字符", "去除后空白字符", "去除前后空白字符", "去除所有空白字符", "全部大写", "全部小写",
     "首字母大写", "字符数", "单词数", "行数", "数字提取", "字母提取", "中文提取", "内容分割", "定长分割", "当前宏",
-     "插入到当前宏", "触发", "暂停", "取消暂停", "终止", "制表符", "弹窗", "状态", "选择", "选择文件", "多选", "文本文件", "继续", "继续&取消", "继续&终止&暂停",
+    "插入到当前宏", "触发", "暂停", "取消暂停", "终止", "制表符", "弹窗", "状态", "选择", "选择文件", "多选", "文本文件", "继续", "继续&取消", "继续&终止&暂停",
     "用默认值", "保持原值", "自动继续", "自动终止", "自动暂停", "等待结束",
-    "暂停当前宏", "暂停所有宏", "终止当前宏", "终止所有宏", "读取全部内容", "逐行读取", "指定行", "单元格", "指定行", "指定列", "指定区域-行",
-    "指定区域-列", "网络请求", "JSON", "表单", "原始文本", "文件读写", "Excel", "读取文件", "写入文件", "读取文本文件", "写入文本文件", "发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "激活窗口", "最大化窗口", 
-    "最小化窗口", "还原窗口", "关闭窗口", "移动窗口", "获取窗口宽高", "调整宽高", "置顶窗口", "取消置顶", "修改标题",
-    "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"]
-LangValueMap := Map()   ;部分文本需要反向映射
+    "暂停当前宏", "暂停所有宏", "终止当前宏", "终止所有宏", "读取全部内容", "逐行读取", "指定行", "单元格", "指定列", "指定区域-行",
+    "指定区域-列", "网络请求", "JSON", "表单", "原始文本", "文件读写", "Excel", "读取文件", "写入文件", "读取文本文件", "写入文本文件",
+    "发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"
+]
 
 LangInitSetting() {
-    LangMap := Map("中文", 1)   ;确保存在中文
+    MainSoftData.LangArr := ["简中"]   ; 简中为内置默认，首位展示
+    LangMap := Map("简中", 1)
+
     if (DirExist(LangDir)) {
         loop files, LangDir "\*.txt" {
             SplitPath A_LoopFileName, &OutFileName, &OutDir, &OutExtension, &OutNameNoExt, &OutDrive
-            LangMap[OutNameNoExt] := 1
+            if (OutNameNoExt == "简中" || OutNameNoExt == "中文")
+                continue
+            if (!LangMap.Has(OutNameNoExt)) {
+                LangMap[OutNameNoExt] := 1
+                MainSoftData.LangArr.Push(OutNameNoExt)
+            }
         }
     }
 
-    for Key, Value in LangMap {
-        MainSoftData.LangArr.Push(Key)
-    }
-
-    if (MainSoftData.Lang == "无语言") {
+    ; 未知语言统一换成简中
+    if (!LangMap.Has(MainSoftData.Lang)) {
         ChineseMap := Map("7804", 1, "0004", 1, "0804", 1, "1004", 1, "7C04", 1, "0C04", 1, "1404", 1, "0404", 1)
         if (ChineseMap.Has(A_Language))
-            MainSoftData.Lang := "中文"
-        else {
+            MainSoftData.Lang := "简中"
+        else if (LangMap.Has("English"))
             MainSoftData.Lang := "English"
-        }
+        else
+            MainSoftData.Lang := "简中"
     }
 }
 
 LangKeysInit() {
-    if (MainSoftData.Lang == "中文")  ;中文就不用做处理了
+    LangKeyMap.Clear()
+    LangValueMap.Clear()
+
+    ; 内部硬编码即为简中，简中模式下无需加载外部文件，直接直通
+    if (MainSoftData.Lang == "简中")
         return
 
     LangFilePath := Format("{}\{}.txt", LangDir, MainSoftData.Lang)
-    if (!FileExist(LangFilePath))
+    if (!FileExist(LangFilePath)) {
+        MainSoftData.Lang := "简中"
         return
+    }
 
     try {
-        ; 以 UTF-8 编码打开文件
         file := FileOpen(LangFilePath, "r", "UTF-8")
-
         while !file.AtEOF {
             line := file.ReadLine()
-            if (line = "")  ; 跳过空行
+            if (line = "")
                 continue
 
-            LineStrArr := StrSplit(line, "=")
-            if (LineStrArr.Length == 2) {
-                LangKeyMap[Trim(LineStrArr[1])] := Trim(LineStrArr[2])
+            eqPos := InStr(line, "=")
+            if (eqPos > 1) {
+                rawKey := SubStr(line, 1, eqPos - 1)
+                val := SubStr(line, eqPos + 1)
+                LangKeyMap[rawKey] := val
+                trimmedKey := Trim(rawKey)
+                if (trimmedKey != rawKey && !LangKeyMap.Has(trimmedKey))
+                    LangKeyMap[trimmedKey] := val
+                if (val != "" && !LangValueMap.Has(val))
+                    LangValueMap[val] := trimmedKey
             }
         }
-
         file.Close()
     } catch as e {
         MsgBox GetLang("读取文件失败:") e.Message
     }
 
+    ; 指令关键 key 优先保证反向映射准确
     commandKeys := LangCmdKeyArr.Clone()
-    for def in MacroCategoryDefs()
-        commandKeys.Push(def[2])
+    try {
+        for def in MacroCategoryDefs()
+            commandKeys.Push(def[2])
+    }
     for value in commandKeys {
         key := GetLang(value)
         if (key != value)
-            LangValueMap.Set(key, value)
+            LangValueMap[key] := value
     }
 }
 
-LangRemoveRepeat() {
-    LangFilePath := Format("{}\{}.txt", LangDir, "中文")
-    NewLangFilePath := Format("{}\{}.txt", LangDir, "New中文")
-    file := FileOpen(LangFilePath, "r", "UTF-8")
-    ResultArr := []
-    KeyMap := Map()
-    while !file.AtEOF {
-        line := file.ReadLine()
-        if (line = "")  ; 跳过空行
-            continue
-        key := Trim(line)
-        if (!KeyMap.Has(key)) {
-            KeyMap[key] := 1
-            ResultArr.Push(key)
-        }
-    }
-    file.Close()
-
-    ; FileDelete(LangFilePath)
-    for value in ResultArr {
-        FileAppend(value "`n", NewLangFilePath, "UTF-8")
-    }
-    RmtDialog.Info("中文Key去重成功")
+; 动态切换当前应用语言
+SetAppLanguage(lang) {
+    MainSoftData.Lang := lang
+    LangKeysInit()
 }
 
-; getstatus 的 language：中文 zh，英文 en，其它语言包用文件名（小写、去空格）
+; getstatus 的 language：简中 zh，英文 en，其它语言包用文件名（小写、去空格）
 GetClientLanguageCode() {
     lang := ""
     try lang := MainSoftData.Lang
-    if (lang == "" || lang == "无语言" || lang == "中文")
+    if (lang == "" || lang == "简中")
         return "zh"
     if (lang == "English")
         return "en"
@@ -121,9 +124,9 @@ GetClientLanguageCode() {
 }
 
 GetLang(Key) {
-    ;中文或者LangKeyMap不存在时 直接返回key就行
-    if (MainSoftData.Lang == "中文" || LangKeyMap.Count == 0)
-        return key
+    ; 简中模式或未加载映射时直接返回原 key
+    if (MainSoftData.Lang == "简中" || LangKeyMap.Count == 0)
+        return Key
 
     if (LangKeyMap.Has(Key))
         return LangKeyMap[Key]
@@ -132,33 +135,41 @@ GetLang(Key) {
 }
 
 GetLangArr(KeyArr) {
+    if (MainSoftData.Lang == "简中" || LangKeyMap.Count == 0)
+        return KeyArr.Clone()
+
     ResArr := []
-    for Value in KeyArr {
+    for Value in KeyArr
         ResArr.Push(GetLang(Value))
-    }
     return ResArr
 }
 
-GetLangKey(value) {
-    ;中文或者LangKeyMap不存在时 直接返回key就行
-    if (MainSoftData.Lang == "中文" || LangValueMap.Count == 0)
-        return value
+GetLangKey(Value) {
+    ; 简中模式或未加载映射时直接返回原 value
+    if (MainSoftData.Lang == "简中" || LangValueMap.Count == 0)
+        return Value
 
-    if (LangValueMap.Has(value))
-        return LangValueMap[value]
+    if (LangValueMap.Has(Value))
+        return LangValueMap[Value]
 
-    return value
+    return Value
 }
 
 GetLangKeyArr(ValueArr) {
+    if (MainSoftData.Lang == "简中" || LangValueMap.Count == 0)
+        return ValueArr.Clone()
+
     ResArr := []
-    for Value in ValueArr {
+    for Value in ValueArr
         ResArr.Push(GetLangKey(Value))
-    }
     return ResArr
 }
 
 GetLangMacro(MacroStr, Mode) {
+    ; 简中多语言展示模式下无需转换，直接返回
+    if (MacroStr == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+        return MacroStr
+
     cmdArr := SplitMacro(MacroStr)
     for cmdStr in cmdArr {
         cmdStr := GetLangCmd(cmdStr, Mode)
@@ -167,9 +178,15 @@ GetLangMacro(MacroStr, Mode) {
     return GetMacroStrByCmdArr(cmdArr)
 }
 
-;mode 1多语言模式  2中文语言模式
+; mode 1多语言模式  2简中语言模式
 GetLangCmd(Cmd, Mode) {
+    if (Cmd == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+        return Cmd
+
     paramArr := SplitCommand(Cmd)
+    if (paramArr.Length == 0)
+        return Cmd
+
     action := Mode == 1 ? GetLang : GetLangKey
     cmdSymbol := GetCmdSymbol(paramArr[1])
     paramArr[1] := GetCmdStr(paramArr[1])
@@ -198,8 +215,11 @@ GetLangCmd(Cmd, Mode) {
     return GetCmdByParams(paramArr)
 }
 
-;mode 1多语言模式  2中文语言模式
+; mode 1多语言模式  2简中语言模式
 GetLangStr(Str, Mode) {
+    if (Str == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+        return Str
+
     SpecialKeyArr1 := GetLangKeyArr(GetSpecialVarArr())
     SpecialKeyArr2 := GetSpecialVarArr()
     KeyArr := Mode == 1 ? SpecialKeyArr1 : SpecialKeyArr2

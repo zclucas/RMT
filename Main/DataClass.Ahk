@@ -216,7 +216,7 @@ class MainConfig {
         this.FontType := "微软雅黑"     ; 软件字体名称
         this.FontSize := 15             ; 主题字体大小（设计与默认均为 15）
         this.FontList := []             ; 系统可用字体列表
-        this.Lang := "中文"             ; 当前语言
+        this.Lang := "简中"             ; 当前语言
         this.LangArr := []              ; 可用语言列表
 
         ; ========== 手柄 ==========
