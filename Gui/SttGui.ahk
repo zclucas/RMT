@@ -146,6 +146,9 @@ class SttGui {
     }
 
     ; 流式模型包（chunksize 越大越准、延迟越高：160ms / 480ms / 960ms / 1920ms）
+    ; 默认 480ms。试过 160ms：实测文本变化间隔只从 500ms 缩到约 300ms，
+    ; 但解码耗时涨到 3 倍，且 4 句测试里有 2 句出现错字（礼拜二→礼八二、时态→时代），
+    ; chunk 变小后每次解码的固定开销摊不薄，性价比不成立，故退回 480ms。
     static StreamPkg := "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
     ; Banafo Kroko-ASR 社区模型（CC BY-SA），下载包中的 README 保留上游署名与许可链接。
     static KrokoArchiveBytes := Map("es", 124394665, "fr", 57220361, "de", 57565698)
@@ -793,4 +796,15 @@ class SttGui {
         if (IsObject(this.ui))
             try this.ui.Update("Window", "Close", "")
     }
+}
+
+; 模型缺失时的下载引导（供输入弹窗等外部模块调用）。
+; 包成全局函数而不是让调用方直接写 SttGui.RequestModelDownload()：
+; 跨文件引用类名时，AHK 的 #Warn 会把它当成「从未赋值的局部变量」，
+; 而且类定义在本文件末尾的 include 顺序也会影响解析。函数调用没有这个问题。
+; language 省略时按界面语言选（与 VoiceInput 开录时的口径一致）。
+SttPromptModelDownload(language := "") {
+    if (language == "")
+        language := SttEngine.DefaultLanguage()
+    return SttGui.RequestModelDownload(language)
 }

@@ -238,6 +238,7 @@
                 {f: "SuspendHotkey", l: "软件休眠", t: true},
                 {f: "PauseHotkey", l: "暂停宏", t: false},
                 {f: "KillMacroHotkey", l: "终止宏", t: false},
+                {f: "VoiceInputHotkey", l: "语音输入", t: true},
                 {f: "ToolRecordMacroHotKey", l: "指令录制", t: false},
                 {f: "ToolTextFilterHotKey", l: "文本提取", t: false}]},
             {title: "截图与工具", glyph: "&#xE8D4;", defs: [

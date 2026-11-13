@@ -57,9 +57,15 @@ class MainWin {
         this.aiStartTick := ObjBindMethod(this, "_AiStartChat")
         this._aiAttach := Map()      ; 页签 → [{id, kind, path, name}]
         this._aiAttachSeq := 0
-        this._aiRec := Map()         ; 页签 → 录音中
-        this._aiSttTab := 0
-        this.aiSttTick := ObjBindMethod(this, "_AiPollStt")
+        this._aiSttTab := 0          ; 正在录音的页签（同一时刻只有一路录音）
+        this._aiVoiceRec := false    ; 录音中标志（占位符显隐要用）
+        this._aiSttBase := ""        ; 开录时该页签框内原文
+        this._aiSttLive := ""        ; 本轮识别文本
+        ; AI 输入框的语音：开录 / 取字 / 收尾全在 VoiceInput 里，本处只把结果贴进框
+        this._aiVoice := VoiceInput()
+        this._aiVoice.OnText := ObjBindMethod(this, "_AiOnVoiceText")
+        this._aiVoice.OnState := ObjBindMethod(this, "_AiOnVoiceState")
+        this._aiVoice.OnNotify := ObjBindMethod(this, "_AiOnVoiceNotify")
         this._sideTreeSel := Map()
         this._dblOpenMacro := Map()  ; 页签 → 双击展开逻辑树的目标宏（再双击同一宏即折叠）
         this._sideTreeCmds := Map()
@@ -668,6 +674,7 @@ class MainWin {
 
     OnWindowClosing(state, ctrl, event) {
         this.HideSideDebugTools()
+        this._AiVoiceClose()
         this._AiPersistAllTabs()
         this.closed := true
         OnGuiClose()
@@ -676,6 +683,7 @@ class MainWin {
 
     OnCloseClick(state, ctrl, event) {
         ; 主窗口关闭 = 隐藏（应用继续托盘运行），不真正销毁窗口，托盘可恢复
+        this._AiVoiceStop()
         this._AiPersistAllTabs()
         this.HideSideDebugTools()
         OnGuiClose()

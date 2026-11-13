@@ -21,6 +21,8 @@ LoadMainSetting() {
     MainSoftData.SuspendHotkey := CfgRead(SettingFile, SettingSection, "SuspendHotkey", "!p")
     MainSoftData.PauseHotkey := CfgRead(SettingFile, SettingSection, "PauseHotkey", "!i")
     MainSoftData.KillMacroHotkey := CfgRead(SettingFile, SettingSection, "KillMacroHotkey", "!k")
+    ; 输入弹窗「按住说话」（设置→快捷键→语音输入）。单键，默认左 Alt。
+    MainSoftData.VoiceInputHotkey := CfgRead(SettingFile, SettingSection, "VoiceInputHotkey", "LAlt")
     ; §14.5 / IDE 式调试：逻辑树调试热键（默认 继续=F5 / 步入=F11，可在设置→快捷键修改）
     MainSoftData.DebugRunHotkey := CfgRead(SettingFile, SettingSection, "DebugRunHotkey", "f5")
     MainSoftData.DebugStepHotkey := CfgRead(SettingFile, SettingSection, "DebugStepHotkey", "f11")

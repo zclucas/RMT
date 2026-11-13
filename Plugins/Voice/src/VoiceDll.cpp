@@ -3,6 +3,12 @@
 // 封装 sherpa-onnx KWS (sherpa-onnx-c-api.dll) + WASAPI 麦克风采集
 // 导出简单 C 接口供 AHK DllCall 调用。
 //
+// 边界：本 DLL 只处理「流」——采集、分块、解码、出文本。
+//   · 不认识窗口：不 PostMessage、不找 HWND、不做任何 UI 动作
+//   · 不假设调用方：文本怎么显示、何时显示、要不要拼接，都是调用方的事
+//   · 设备知识不外泄：设备缓冲有多深、采集线程多久拉一次，收尾时由本文件自己
+//     等干净再落定（见 WasapiCapture::Stop 的 drainMs），调用方松手调 End 即可
+//
 // 导出函数（参数均为宽字符 UTF-16，DLL 内转 UTF-8，避开 ANSI/GBK 乱码）：
 //   int   Voice_Init(const wchar_t* encoder, const wchar_t* decoder,
 //                     const wchar_t* joiner, const wchar_t* tokens)
@@ -29,8 +35,8 @@
 // STT 流式（本地在线识别，sherpa-onnx OnlineRecognizer + zipformer2 CTC，不联网）：
 //   int   SttStream_Init(const wchar_t* model, const wchar_t* tokens)
 //   int   SttStream_Begin()                   ; 建流 + 起采集
-//   int   SttStream_Poll(char* out, int outSize) ; 喂音频 + 增量解码 + 取当前文本（~150ms 调一次）
-//   int   SttStream_End(int refine)           ; 收尾解码；refine!=0 时再交给离线识别器精修
+//   int   SttStream_Poll(char* out, int outSize) ; 取当前文本（解码在 DLL 内部线程完成，本调用仅内存拷贝）
+//   int   SttStream_End(int refine)           ; 收尾解码（内部先等设备尾音落定）；refine!=0 时再交给离线识别器精修
 //   int   SttStream_Cancel()
 //   int   SttStream_GetState()                ; 0空闲 1录音中 2精修中 3完成 4错误
 //   int   SttStream_GetResult(char* buf, int bufSize)
@@ -62,8 +68,13 @@
 #include <atomic>
 #include <chrono>
 #include <algorithm>
+#include <condition_variable>
 
 #include "sherpa-onnx/c-api/c-api.h"
+
+// 对外契约：所有导出的签名以 VoiceDll.h 为准（宿主换语言也只依赖它）
+#define VOICE_BUILD
+#include "VoiceDll.h"
 
 // ---- 汉字 -> 带声调拼音音素 内置映射表（生成物，勿手改） ----
 #include "g2p_data.h"
@@ -126,7 +137,9 @@ private:
 class WasapiCapture {
 public:
     bool Start(int targetRate);
-    void Stop();
+    // drainMs>0：先让采集线程继续跑这么久，把设备缓冲里最后几十毫秒的音频收进 pool_，
+    // 再停下。收尾要的「尾音」是流的属性，由本类负责，调用方不需要知道缓冲有多深。
+    void Stop(int drainMs = 0);
     // 提取所有等待的采样（float, [-1,1]），供喂给 KWS。非阻塞。
     int PullSamples(std::vector<float>& out);
 
@@ -199,7 +212,11 @@ bool WasapiCapture::Start(int targetRate) {
     return true;
 }
 
-void WasapiCapture::Stop() {
+void WasapiCapture::Stop(int drainMs) {
+    // 设备缓冲里的音频还没被拉走，停了就永久丢失（WASAPI 共享模式缓冲约 20ms，
+    // 采集线程 10ms 拉一次）。收尾时给足一拍再停，让最后一句话完整进流。
+    if (drainMs > 0 && running_)
+        Sleep(drainMs);
     running_ = false;
     if (thread_.joinable()) thread_.join();
     if (capture_) { capture_->Release(); capture_ = nullptr; }
@@ -407,6 +424,12 @@ static void WorkLoop() {
 // 导出接口
 // ---------------------------------------------------------------------
 extern "C" {
+
+// ABI 版本。宿主启动时校验：取不到（更旧的 DLL）或数值不符，说明语音组件与本
+// 头文件不是一次编译出来的，宁可提示更新，也别让它带着错的假设跑下去。
+__declspec(dllexport) int Voice_ApiVersion(void) {
+    return VOICE_API_VERSION;
+}
 
 __declspec(dllexport) int Voice_Init(const wchar_t* encoder, const wchar_t* decoder,
                                      const wchar_t* joiner, const wchar_t* tokens) {
@@ -795,12 +818,25 @@ static std::vector<float> g_ssSamples;      // 整段音频，供精修使用
 static WasapiCapture g_ssCapture;           // 独立采集实例（与 KWS / 离线 STT 三者并存）
 static std::thread g_ssThread;
 static std::atomic<int> g_ssState{0};       // 0空闲 1录音中 2精修中 3完成 4错误
-static std::atomic<int> g_ssStartStatus{0}; // 0准备中 1成功 -1失败 -2取消
-static std::atomic<bool> g_ssStartCancelled{false};
+static std::thread g_ssInitThread;          // 后台加载流式模型（SttStream_InitAsync）
+static std::atomic<int> g_ssInitState{0};   // 0未开始 1加载中 2成功 3失败
 
-struct SsStartRequest {
-    std::wstring encoder, decoder, joiner, tokens;
-};
+// 解码头程：把「拉采集 → 喂流 → 增量解码 → 取文本」从 AHK 主线程剥离。
+// 原先 SttStream_Poll 由 AHK 每 150ms 调用一次，解码（5~15ms）就压在主线程上；
+// 现在 Poll 只是一次内存拷贝（微秒级），解码按节拍在 DLL 内完成。
+static std::mutex g_ssDecMx;                            // 解码串行：Accept/Drain/TakeText 必须互斥
+static std::mutex g_ssResMx;                            // g_ssResult 读写
+static std::mutex g_ssDecCvMx;
+static std::condition_variable g_ssDecCv;
+static std::thread g_ssDecThread;
+static std::atomic<bool> g_ssDecRunning{false};
+// 收尾前给采集留的时间：设备缓冲 20ms + 采集线程 10ms 拉取间隔，取 40ms 留余量。
+// 这段等待放在 End 里，调用方松手就能直接收尾，不用自己掐表等尾音。
+static const int SsTailDrainMs = 40;
+static std::atomic<int> g_ssDecTickMs{25};              // 解码节拍（毫秒）
+// 上一拍已算出的文本。只在变化时才写 g_ssResult：Poll 拿到的内容与本拍一致时
+// 调用方本来也不会重绘，省下的是每拍一次 O(文本长度) 的字符串拷贝与结果对象构造。
+static std::string g_ssLastText;
 
 static void SsSetErr(const std::string& s) { g_ssError = s; }
 
@@ -855,13 +891,66 @@ static void SsRefineThread(std::vector<float> samples) {
                 SherpaOnnxAcceptWaveformOffline(s, 16000, samples.data(), (int32_t)samples.size());
             SherpaOnnxDecodeOfflineStream(g_sttRec, s);
             const SherpaOnnxOfflineRecognizerResult* r = SherpaOnnxGetOfflineStreamResult(s);
-            if (r && r->text && strlen(r->text) > 0)
+            if (r && r->text && strlen(r->text) > 0) {
+                // 与 Poll/GetResult 的读取互斥（AHK 可能同时在取文本）
+                std::lock_guard<std::mutex> rk(g_ssResMx);
                 g_ssResult = r->text;
+            }
             if (r) SherpaOnnxDestroyOfflineRecognizerResult(r);
             SherpaOnnxDestroyOfflineStream(s);
         }
     }
     g_ssState = 3;
+}
+
+// 解码线程主循环：按节拍拉采集 → 喂流 → 解码就绪 chunk → 取当前文本。
+// 只持有 g_ssDecMx（解码串行）与 g_ssResMx（结果），**绝不拿 g_ssMx**，
+// 因此 Begin/End 在持 g_ssMx 时 join 本线程不会死锁。
+static void SsDecodeLoop() {
+    while (g_ssDecRunning) {
+        {
+            std::unique_lock<std::mutex> lk(g_ssDecCvMx);
+            g_ssDecCv.wait_for(lk, std::chrono::milliseconds(g_ssDecTickMs.load()),
+                               [] { return !g_ssDecRunning.load(); });
+        }
+        if (!g_ssDecRunning) break;
+        std::lock_guard<std::mutex> dk(g_ssDecMx);
+        if (!g_ssRec || !g_ssStream) continue;
+        std::vector<float> chunk;
+        g_ssCapture.PullSamples(chunk);
+        if (!chunk.empty()) {
+            SherpaOnnxOnlineStreamAcceptWaveform(g_ssStream, 16000, chunk.data(), (int32_t)chunk.size());
+            g_ssSamples.insert(g_ssSamples.end(), chunk.begin(), chunk.end());
+        }
+        SsDrain();
+        std::string text;
+        SsTakeText(text);
+        // 节拍缩短到 25ms 后，多数拍其实没有新字（模型 480ms 才吐一次），
+        // 比对一下再写：省掉每拍的拷贝与加锁，Poll 侧也只会读到真正的新文本。
+        if (text != g_ssLastText) {
+            g_ssLastText = text;
+            std::lock_guard<std::mutex> rk(g_ssResMx);
+            g_ssResult.swap(text);
+        }
+    }
+}
+
+static void SsStartDecode() {
+    if (g_ssDecThread.joinable()) g_ssDecThread.join();
+    g_ssDecRunning = true;
+    g_ssDecThread = std::thread(SsDecodeLoop);
+}
+
+// 停解码并等它退出。调用方不得持有 g_ssDecMx（本函数要等它释放）；
+// 持 g_ssMx 调用是安全的——解码头程不拿该锁。
+static void SsStopDecode() {
+    if (!g_ssDecRunning.exchange(false)) {
+        if (g_ssDecThread.joinable()) g_ssDecThread.join();
+        return;
+    }
+    { std::lock_guard<std::mutex> lk(g_ssDecCvMx); }
+    g_ssDecCv.notify_all();
+    if (g_ssDecThread.joinable()) g_ssDecThread.join();
 }
 
 // 加载流式模型。两种形态按参数自动判定：
@@ -870,15 +959,19 @@ static void SsRefineThread(std::vector<float> samples) {
 __declspec(dllexport) int SttStream_Init(const wchar_t* encoder, const wchar_t* decoder,
                                         const wchar_t* joiner, const wchar_t* tokens) {
     std::lock_guard<std::mutex> lk(g_ssMx);
+    g_ssInitState = 1;
     g_ssModel  = WToUtf8(encoder);
     g_ssDec    = WToUtf8(decoder ? decoder : L"");
     g_ssJoin   = WToUtf8(joiner  ? joiner  : L"");
     g_ssTokens = WToUtf8(tokens);
     if (g_ssModel.empty() || g_ssTokens.empty()) {
         SsSetErr("流式模型路径不完整");
+        g_ssInitState = 3;
         return 0;
     }
     bool isTransducer = (!g_ssDec.empty() && !g_ssJoin.empty());
+    // 重建识别器/流之前必须停解码线程，否则它会持有即将销毁的指针
+    SsStopDecode();
     if (g_ssThread.joinable()) g_ssThread.join();
     if (g_ssStream) { SherpaOnnxDestroyOnlineStream(g_ssStream); g_ssStream = nullptr; }
     if (g_ssRec)    { SherpaOnnxDestroyOnlineRecognizer(g_ssRec); g_ssRec = nullptr; }
@@ -894,7 +987,15 @@ __declspec(dllexport) int SttStream_Init(const wchar_t* encoder, const wchar_t* 
         c.model_config.zipformer2_ctc.model = g_ssModel.c_str();
     }
     c.model_config.tokens   = g_ssTokens.c_str();
-    c.model_config.num_threads = 2;
+    // 解码线程数影响「一个 chunk 从凑满到出字」的那段纯计算时间（实测 2 线程约 35ms）。
+    // 按核心数自适应：2~4 线程，取一半核留给界面和其它程序。
+    {
+        unsigned hw = std::thread::hardware_concurrency();
+        int nt = (int)(hw / 2);
+        if (nt < 2) nt = 2;
+        if (nt > 4) nt = 4;
+        c.model_config.num_threads = nt;
+    }
     c.model_config.provider = "cpu";
     // 检测到 BPE 词表就显式启用（否则会按 cjkchar 解 tokens，输出乱码）；
     // model_type 留空 → 由 sherpa 依据模型元数据自动判定
@@ -911,31 +1012,79 @@ __declspec(dllexport) int SttStream_Init(const wchar_t* encoder, const wchar_t* 
             isTransducer ? "transducer" : "zipformer2_ctc", (void*)g_ssRec);
     if (!g_ssRec) {
         SsSetErr("创建流式识别器失败（模型加载失败）");
+        g_ssInitState = 3;
         return 0;
     }
-    g_ssResult.clear();
+    {
+        std::lock_guard<std::mutex> rk(g_ssResMx);
+        g_ssResult.clear();
+    }
     g_ssSamples.clear();
     g_ssState = 0;
     SsSetErr("");
+    g_ssInitState = 2;
     return 1;
 }
 
-// 建流 + 起采集
+// 异步加载：起后台线程跑 SttStream_Init，立刻返回；调用方轮询 SttStream_InitState。
+// 这样 AHK 单线程不会被模型加载阻塞（首次读 onnx + 建 session 要 1~3 秒）。
+// 返回 1：已排队 / 正在加载 / 已就绪；0：参数不完整
+__declspec(dllexport) int SttStream_InitAsync(const wchar_t* encoder, const wchar_t* decoder,
+                                              const wchar_t* joiner, const wchar_t* tokens) {
+    if (!encoder || !tokens) return 0;
+    if (encoder[0] == L'\0' || tokens[0] == L'\0') return 0;
+    int st = g_ssInitState.load();
+    if (st == 1 || st == 2) return 1;   // 已在加载 / 已就绪，不重复排队
+
+    // 线程里要用的路径先拷出来（入参指针在调用返回后不保证有效）
+    std::wstring* args = new std::wstring[4];
+    args[0] = encoder;
+    args[1] = decoder ? decoder : L"";
+    args[2] = joiner ? joiner : L"";
+    args[3] = tokens;
+
+    if (g_ssInitThread.joinable()) g_ssInitThread.join();
+    g_ssInitState = 1;
+    g_ssInitThread = std::thread([args]() {
+        int r = SttStream_Init(args[0].c_str(), args[1].c_str(), args[2].c_str(), args[3].c_str());
+        g_ssInitState = r ? 2 : 3;
+        delete[] args;
+    });
+    return 1;
+}
+
+// 后台加载状态：0未开始 1加载中 2成功 3失败
+__declspec(dllexport) int SttStream_InitState() {
+    return g_ssInitState.load();
+}
+
+// 建流 + 起采集；采集就绪后拉起解码线程
 __declspec(dllexport) int SttStream_Begin() {
     std::lock_guard<std::mutex> lk(g_ssMx);
     if (!g_ssRec) { SsSetErr("流式模型未加载"); return 0; }
     if (g_ssState == 1) return 1;
     if (g_ssState == 2) { SsSetErr("正在精修上一段，请稍候"); return 0; }
+    // 先停解码线程：下面要换 g_ssStream，不能让它在旧流上继续喂数据
+    SsStopDecode();
     if (g_ssThread.joinable()) g_ssThread.join();
-    if (g_ssStream) { SherpaOnnxDestroyOnlineStream(g_ssStream); g_ssStream = nullptr; }
-    g_ssStream = SherpaOnnxCreateOnlineStream(g_ssRec);
-    if (!g_ssStream) { SsSetErr("创建流式识别流失败"); return 0; }
+    {
+        std::lock_guard<std::mutex> dk(g_ssDecMx);
+        if (g_ssStream) { SherpaOnnxDestroyOnlineStream(g_ssStream); g_ssStream = nullptr; }
+        g_ssStream = SherpaOnnxCreateOnlineStream(g_ssRec);
+        if (!g_ssStream) { SsSetErr("创建流式识别流失败"); return 0; }
+    }
     std::vector<float> discard;
     g_ssCapture.PullSamples(discard);
     g_ssSamples.clear();
-    g_ssResult.clear();
+    g_ssLastText.clear();          // 本轮从零开始，别让上一轮的文本挡住首拍写入
+    {
+        std::lock_guard<std::mutex> rk(g_ssResMx);
+        g_ssResult.clear();
+    }
     if (!g_ssCapture.Start(16000)) {
+        // 起流失败时 client_/dev_ 可能已创建：不 Stop 会一直占着麦克风
         g_ssCapture.Stop();
+        std::lock_guard<std::mutex> dk(g_ssDecMx);
         SherpaOnnxDestroyOnlineStream(g_ssStream);
         g_ssStream = nullptr;
         SsSetErr("麦克风采集启动失败");
@@ -943,33 +1092,31 @@ __declspec(dllexport) int SttStream_Begin() {
     }
     g_ssState = 1;
     SsSetErr("");
+    SsStartDecode();
     return 1;
 }
 
-// 录音中轮询：喂入新采集到的音频 → 增量解码 → 回写当前文本
+// 录音中轮询：只回传解码线程已经算好的文本（内存拷贝，微秒级）。
+// 解码本身在 SsDecodeLoop 里做——放到 AHK 主线程上会每 150ms 压 5~15ms。
 __declspec(dllexport) int SttStream_Poll(char* out, int outSize) {
     if (!out || outSize <= 0) return 0;
-    std::lock_guard<std::mutex> lk(g_ssMx);
-    if (g_ssState != 1 || !g_ssRec || !g_ssStream) { out[0] = '\0'; return 0; }
-    std::vector<float> chunk;
-    g_ssCapture.PullSamples(chunk);
-    if (!chunk.empty()) {
-        SherpaOnnxOnlineStreamAcceptWaveform(g_ssStream, 16000, chunk.data(), (int32_t)chunk.size());
-        g_ssSamples.insert(g_ssSamples.end(), chunk.begin(), chunk.end());
-    }
-    SsDrain();
-    SsTakeText(g_ssResult);
+    if (g_ssState != 1) { out[0] = '\0'; return 0; }
+    std::lock_guard<std::mutex> lk(g_ssResMx);
     int n = std::min((int)g_ssResult.size(), outSize - 1);
-    memcpy(out, g_ssResult.c_str(), n);
+    if (n > 0) memcpy(out, g_ssResult.c_str(), n);
     out[n] = '\0';
     return 1;
 }
 
-// 停止录音并收尾；refine!=0 且离线模型已加载时，异步精修
+// 停止录音并收尾；refine!=0 且离线模型已加载时，异步精修。
+// 返回时本轮文本已经落定（state=3），调用方取 GetResult 直接用即可。
 __declspec(dllexport) int SttStream_End(int refine) {
     std::lock_guard<std::mutex> lk(g_ssMx);
     if (g_ssState != 1 || !g_ssRec || !g_ssStream) return 0;
-    g_ssCapture.Stop();
+    // 先停解码头程：收尾要独占流，否则它会抢先拉走 tail，并与 InputFinished 竞争
+    SsStopDecode();
+    g_ssCapture.Stop(SsTailDrainMs);
+    std::lock_guard<std::mutex> dk(g_ssDecMx);
     std::vector<float> tail;
     g_ssCapture.PullSamples(tail);
     if (!tail.empty()) {
@@ -978,7 +1125,14 @@ __declspec(dllexport) int SttStream_End(int refine) {
     }
     SherpaOnnxOnlineStreamInputFinished(g_ssStream);
     SsDrain();
-    SsTakeText(g_ssResult);
+    std::string finalText;
+    SsTakeText(finalText);
+    {
+        std::lock_guard<std::mutex> rk(g_ssResMx);
+        // 收尾解码偶尔比实时文本短（尾部 chunk 没解全），此时保留更完整的那份
+        if (finalText.size() >= g_ssResult.size())
+            g_ssResult = finalText;
+    }
     if (g_ssSamples.empty()) {
         SsSetErr("未采集到音频");
         g_ssState = 0;
@@ -998,60 +1152,18 @@ __declspec(dllexport) int SttStream_End(int refine) {
 __declspec(dllexport) int SttStream_Cancel() {
     std::lock_guard<std::mutex> lk(g_ssMx);
     if (g_ssState != 1) return 0;
+    SsStopDecode();
     g_ssCapture.Stop();
     std::vector<float> discard;
     g_ssCapture.PullSamples(discard);
     g_ssSamples.clear();
-    g_ssResult.clear();
+    g_ssLastText.clear();          // 本轮从零开始，别让上一轮的文本挡住首拍写入
+    {
+        std::lock_guard<std::mutex> rk(g_ssResMx);
+        g_ssResult.clear();
+    }
     g_ssState = 0;
     return 1;
-}
-
-static void CALLBACK SsStartInBackground(PTP_CALLBACK_INSTANCE, void* context) {
-    auto* request = static_cast<SsStartRequest*>(context);
-    int status = -1;
-    try {
-        if (g_ssStartCancelled) {
-            status = -2;
-        } else if (request->encoder.empty() || SttStream_Init(request->encoder.c_str(),
-                       request->decoder.c_str(), request->joiner.c_str(), request->tokens.c_str())) {
-            if (g_ssStartCancelled) {
-                status = -2;
-            } else if (SttStream_Begin()) {
-                status = 1;
-                if (g_ssStartCancelled) {
-                    SttStream_Cancel();
-                    status = -2;
-                }
-            }
-        }
-    } catch (...) {
-        SsSetErr("启动流式录音失败");
-    }
-    delete request;
-    g_ssStartStatus = status;
-}
-
-__declspec(dllexport) int SttStream_StartAsync(const wchar_t* encoder, const wchar_t* decoder,
-                                             const wchar_t* joiner, const wchar_t* tokens) {
-    try {
-        auto* request = new SsStartRequest{encoder, decoder, joiner, tokens};
-        g_ssStartCancelled = false;
-        g_ssStartStatus = 0;
-        if (TrySubmitThreadpoolCallback(SsStartInBackground, request, nullptr))
-            return 1;
-        delete request;
-    } catch (...) {
-    }
-    return 0;
-}
-
-__declspec(dllexport) int SttStream_GetStartStatus() {
-    return g_ssStartStatus.load();
-}
-
-__declspec(dllexport) void SttStream_CancelStart() {
-    g_ssStartCancelled = true;
 }
 
 __declspec(dllexport) int SttStream_GetState() {
@@ -1061,8 +1173,9 @@ __declspec(dllexport) int SttStream_GetState() {
 __declspec(dllexport) int SttStream_GetResult(char* buf, int bufSize) {
     if (!buf || bufSize <= 0) return 0;
     if (g_ssState != 3 && g_ssState != 1) { buf[0] = '\0'; return 0; }
+    std::lock_guard<std::mutex> lk(g_ssResMx);
     int n = std::min((int)g_ssResult.size(), bufSize - 1);
-    memcpy(buf, g_ssResult.c_str(), n);
+    if (n > 0) memcpy(buf, g_ssResult.c_str(), n);
     buf[n] = '\0';
     return 1;
 }
@@ -1076,6 +1189,11 @@ __declspec(dllexport) int SttStream_GetLastError(char* buf, int bufSize) {
 }
 
 __declspec(dllexport) void SttStream_Close() {
+    // 后台加载线程要拿 g_ssMx，必须在加锁前 join，否则死锁
+    if (g_ssInitThread.joinable()) g_ssInitThread.join();
+    g_ssInitState = 0;
+    // 解码线程不拿 g_ssMx，可在锁内 join；必须先停，否则会用到已销毁的流
+    SsStopDecode();
     std::lock_guard<std::mutex> lk(g_ssMx);
     if (g_ssState == 1) {
         g_ssCapture.Stop();
@@ -1086,7 +1204,10 @@ __declspec(dllexport) void SttStream_Close() {
     if (g_ssThread.joinable()) g_ssThread.join();
     if (g_ssStream) { SherpaOnnxDestroyOnlineStream(g_ssStream); g_ssStream = nullptr; }
     if (g_ssRec)    { SherpaOnnxDestroyOnlineRecognizer(g_ssRec); g_ssRec = nullptr; }
-    g_ssResult.clear();
+    {
+        std::lock_guard<std::mutex> rk(g_ssResMx);
+        g_ssResult.clear();
+    }
     g_ssSamples.clear();
     SsSetErr("");
 }
