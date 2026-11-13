@@ -263,7 +263,7 @@ CmdEnumNorm(cmd, Data) {
         case "输出":
             CmdEnumSetNum(Data, "OutputType", ["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"])
         case "宏操作":
-            CmdEnumSetNum(Data, "MacroType", ["当前宏", "按键宏", "字串宏", "菜单宏", "定时宏", "宏"])
+            CmdEnumSetNum(Data, "MacroType", ["当前宏", "按键宏", "字串宏", "轮盘宏", "定时宏", "宏"])
             CmdEnumSetNum(Data, "CallType", ["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
         case "窗口管理", "窗口信息", "调整窗口":
             ; 保留旧数字顺序，新类型只在界面插入，避免旧配置操作错位。

@@ -593,7 +593,7 @@ CompatSubMacro(FilePath) {
     hasFix := false
     if (!FileExist(FilePath))
         return hasFix
-    FixTypeMap := Map("1", "当前宏", "2", "按键宏", "3", "字串宏", "4", "菜单宏", "5", "定时宏", "6", "宏")
+    FixTypeMap := Map("1", "当前宏", "2", "按键宏", "3", "字串宏", "4", "轮盘宏", "5", "定时宏", "6", "宏")
     FixCallTypeMap := Map("1", "插入到当前宏", "2", "触发", "3", "暂停", "4", "取消暂停", "5", "终止")
     hasFix := CompatSerial(filePath, "SubMacro", "宏操作")
     for key, val in CfgSection(filePath, SettingSection) {

@@ -878,7 +878,7 @@ MacroCategoryDefs() {
         ["Normal", "按键宏", 1],
         ["String", "字串宏", 2],
         ["Gesture", "手势宏", 3],
-        ["Menu", "菜单宏", 4],
+        ["Menu", "轮盘宏", 4],
         ["UI", "界面宏", 5],
         ["Voice", "语音宏", 6],
         ["Timing", "定时宏", 7],
