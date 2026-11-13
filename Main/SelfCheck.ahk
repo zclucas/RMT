@@ -43,7 +43,7 @@ SelfCheckMissingFiles() {
         {path: "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_det.onnx", entry: "ch_PP-OCRv6_det.onnx", bundle: "RapidOcr.zip"},
         {path: "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_rec.onnx", entry: "ch_PP-OCRv6_rec.onnx", bundle: "RapidOcr.zip"},
         {path: "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt", entry: "ppocrv6_tiny_dict.txt", bundle: "RapidOcr.zip"},
-        {path: "Lang\中文.txt", entry: "chinese.txt", bundle: "Lang.zip"},
+
         {path: "Lang\English.txt", entry: "English.txt", bundle: "Lang.zip"},
         {path: "Thread\Work.exe", entry: "Work.exe", bundle: "RMT.zip"},
         {path: "index.html", entry: "index.html", bundle: "RMT.zip"},

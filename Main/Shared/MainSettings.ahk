@@ -167,7 +167,7 @@ LoadMainSetting() {
                 MainSoftData.TabVisibleMap[p[1]] := (p[2] == "1")
         }
     }
-    MainSoftData.Lang := CfgRead(SettingFile, SettingSection, "Lang", "无语言")
+    MainSoftData.Lang := CfgRead(SettingFile, SettingSection, "Lang", "简中")
     MainSoftData.FontType := CfgRead(SettingFile, SettingSection, "FontType", "微软雅黑")
     MainSoftData.JoyType := CfgRead(SettingFile, SettingSection, "JoyType", "Xbox")
     MainSoftData.TriggerJoyType := CfgRead(SettingFile, SettingSection, "TriggerJoyType", "Xbox")

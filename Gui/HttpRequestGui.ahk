@@ -179,7 +179,7 @@ class HttpRequestGui extends CommentGui {
     }
 
     _TranslateReferences(field, text, mode) {
-        if (MainSoftData.Lang == "中文" || !InStr(text, "{")
+        if (MainSoftData.Lang == "简中" || !InStr(text, "{")
             || (field != "Url" && field != "Headers" && field != "Body" && field != "Retries"))
             return text
         for displayName in GetSpecialVarArr() {

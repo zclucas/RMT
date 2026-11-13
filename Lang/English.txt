@@ -97,6 +97,8 @@ vjoy加载失败，请安装或卸载后重新安装vjoy，然后尝试使用手
 不可向最后的分支插入=Cannot insert after last
 且=And
 中文=Chinese
+简体中文=Simplified Chinese
+简中=Simplified Chinese
 中文字符数=Chinese Char Count
 中文提取=Extract Chinese
 中键=Middle
