@@ -481,80 +481,52 @@
         this.CurItemID := 0
     }
 
-    ; 將剪貼簿中的單條或多條宏指令逐條貼上（整段粘贴记一次撤销）。
-    PasteClipboardCommands(ClipboardStr) {
-        ClipboardStr := Trim(ClipboardStr, " `t`r`n")
-        if (ClipboardStr == "")
+    ; 整段粘贴记一次撤销。根层批量插入只修改宏串，分支还需要回写参数。
+    PasteClipboardCommands(clipboardStr) {
+        cmds := SplitMacro(clipboardStr)
+        if (!cmds.Length)
             return
 
-        cmds := SplitMacro(ClipboardStr)
-        if (cmds.Length == 0)
-            return
-
-        this._PushUndo()
-        this._BeginUndoBatch()
-        try {
-
+        tree := this.MacroTreeViewCon
         anchorID := this.CurItemID
-        anchorText := ""
-        if (anchorID) {
-            try anchorText := this.MacroTreeViewCon.GetText(anchorID)
-            catch
-                anchorID := 0
-        }
-        anchorText := CmdStripCurPos(anchorText)
-
-        ; 無有效錨點（空樹或刪光後）：逐條追加到根層
-        if (!anchorID) {
-            firstInserted := 0
-            for _, cmdStr in cmds {
-                cmdStr := Trim(cmdStr, " `t`r`n")
-                if (cmdStr == "")
-                    continue
-                this.OnAddCmd(cmdStr)
-                if (!firstInserted && this.CurItemID)
-                    firstInserted := this.CurItemID
-            }
-            if (firstInserted)
-                this.MacroTreeViewCon.Modify(firstInserted, "Select")
-            return
-        }
-
-        ; ⎖ 開頭的是資訊/控制顯示節點（循環次數、繼續/退出條件、流程控制），不允許粘貼。
+        anchorText := CmdStripCurPos(tree.GetText(anchorID))
         if (SubStr(anchorText, 1, 1) == "⎖")
             return
+        if (anchorText == "")
+            anchorID := 0
 
-        ; 真/假/循環體/條件 容器節點：粘貼到容器內部（追加到該分支），而非與容器同層級。
-        if (this.IsContainerNode(anchorText)) {
-            this.PasteIntoContainer(anchorID, cmds)
-            return
-        }
-
-        ; 單條直接走原本的插入流程。
-        if (cmds.Length == 1) {
-            this.OnNextInsertCmd(cmds[1])
-            return
-        }
-
-        parentID := this.MacroTreeViewCon.GetParent(anchorID)
-
-        ; 根層：逐條插入，OnNextInsertCmd 會把 CurItemID 推進到上一條新指令。
-        if (parentID == 0) {
-            firstInserted := 0
-            for _, cmdStr in cmds {
-                cmdStr := Trim(cmdStr, " `t`r`n")
-                if (cmdStr == "")
-                    continue
-
-                insertedID := this.OnNextInsertCmd(cmdStr)
-                if (!firstInserted && insertedID)
-                    firstInserted := insertedID
+        isContainer := this.IsContainerNode(anchorText)
+        parentID := tree.GetParent(anchorID)
+        isRoot := !isContainer && parentID == 0
+        this._PushUndo(!isRoot)
+        this._BeginUndoBatch()
+        try {
+            if (isRoot) {
+                this.ResetDebugState()
+                firstInserted := tree.InsertRootCommands(cmds, anchorID,
+                    this.TreeAddBranch.Bind(this), this.GetCmdIconStr.Bind(this))
+                this.LastItemID := tree.roots[tree.roots.Length].id
+                this.CurItemID := firstInserted
+                tree.Modify(firstInserted, "Select")
+                return
             }
-            if (firstInserted)
-                this.MacroTreeViewCon.Modify(firstInserted, "Select")
-            return
+            if (isContainer) {
+                this.PasteIntoContainer(anchorID, cmds)
+                return
+            }
+            if (cmds.Length == 1) {
+                this.OnNextInsertCmd(cmds[1])
+                return
+            }
+            this._PasteAfterBranchCommand(cmds, parentID, anchorID)
+        } finally {
+            ; 在结束批次前统一登记，侧栏只回写一次宏串。
+            this._NotifyMacroChanged()
+            this._EndUndoBatch()
         }
+    }
 
+    _PasteAfterBranchCommand(cmds, parentID, anchorID) {
         ; 分支內：一次重建該分支宏，避免 RefreshTree 後舊 ItemID 失效。
         branchIndex := this.GetItemNumber(parentID)
         anchorIndex := this.GetItemNumber(anchorID)
@@ -608,9 +580,5 @@
             this.CurItemID := targetID
             this.MultiSelectAnchor := targetID
             this.MacroTreeViewCon.Modify(targetID, "Select")
-        }
-        } finally {
-            this._EndUndoBatch()
-            this._NotifyMacroChanged()
         }
     }

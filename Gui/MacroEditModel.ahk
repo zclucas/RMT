@@ -283,6 +283,50 @@ class MacroTreeAdapter {
         return id
     }
 
+    ; 批量建出根节点及分支，再一次定位并插入新增卡片。
+    InsertRootCommands(cmds, anchorID, buildBranch, getIcon) {
+        oldCount := this.roots.Length
+        insertAt := anchorID ? this.nodes[anchorID].siblingIndex + 1 : oldCount + 1
+        wasSuspended := this._redrawSuspended
+        this._redrawSuspended := true
+        try {
+            for cmd in cmds {
+                id := this.Add(MySoftData.FormatCmdJoyDisplay(cmd), 0, getIcon.Call(cmd))
+                buildBranch.Call(id, cmd)
+            }
+        } finally {
+            this._redrawSuspended := wasSuspended
+            if (this.roots.Length > oldCount) {
+                this._MoveAppendedRoots(insertAt, oldCount)
+                if (!wasSuspended)
+                    this._RenderInsertedRoots(insertAt, this.roots.Length - oldCount)
+            }
+        }
+        return this.roots[insertAt].id
+    }
+
+    _MoveAppendedRoots(insertAt, oldCount) {
+        if (insertAt > oldCount)
+            return
+        oldRoots := this.roots
+        this.roots := []
+        loop insertAt - 1
+            this.roots.Push(oldRoots[A_Index])
+        loop oldRoots.Length - oldCount
+            this.roots.Push(oldRoots[oldCount + A_Index])
+        loop oldCount - insertAt + 1
+            this.roots.Push(oldRoots[insertAt + A_Index - 1])
+        this._ReindexFrom(this.roots, insertAt)
+    }
+
+    _RenderInsertedRoots(insertAt, count) {
+        start := this._FlatIndexOf(this.roots[insertAt].id)
+        cards := []
+        loop count
+            this._AppendVisibleCards(this.roots[insertAt + A_Index - 1], 0, &cards, start)
+        this._BatchPushCards(cards, start)
+    }
+
     _InsertInto(arr, node, insertBefore, insertAfterId) {
         index := arr.Length + 1
         if (insertBefore)
@@ -364,7 +408,7 @@ class MacroTreeAdapter {
 
     ; 分块批量推送 AddXamlItem：单块控制在 ~36KB 以内（含 UTF-8 中文 3 字节/字），
     ; 单次 WM_COPYDATA 安全上限 64KB，留足余量避免大宏超限丢消息。
-    _BatchPushCards(cards) {
+    _BatchPushCards(cards, insertAt := -1) {
         if (cards.Length == 0)
             return
         chunk := []
@@ -373,7 +417,12 @@ class MacroTreeAdapter {
         for xml in cards {
             if (xml == "")
                 continue
-            chunk.Push({ControlName: this.treeName, PropertyName: "AddXamlItem", Value: xml})
+            if (insertAt >= 0) {
+                chunk.Push({ControlName: this.treeName, PropertyName: "InsertXamlItem", Value: insertAt "|" xml})
+                insertAt += 1
+            } else {
+                chunk.Push({ControlName: this.treeName, PropertyName: "AddXamlItem", Value: xml})
+            }
             chunkBytes += StrPut(xml, "UTF-8") - 1
             if (chunkBytes >= maxBytes) {
                 if (chunk.Length > 0)
@@ -484,21 +533,21 @@ class MacroTreeAdapter {
     }
 
     ; 递归收集可见节点卡片（塌陷分支不进入）
-    _AppendVisibleCards(node, depth, &cards) {
-        cards.Push(this._BuildCardXml(node, depth, cards.Length))
+    _AppendVisibleCards(node, depth, &cards, start := 0) {
+        cards.Push(this._BuildCardXml(node, depth, start + cards.Length))
         if (!node.expanded)
             return
         pair := this._FindTrueFalsePair(node)
         if (IsObject(pair) && this._ShouldUseSplit(node)) {
-            cards.Push(this._BuildSplitPairXml(pair, cards.Length))
+            cards.Push(this._BuildSplitPairXml(pair, start + cards.Length))
             for child in node.children {
                 if (child != pair.true && child != pair.false)
-                    this._AppendVisibleCards(child, depth + 1, &cards)
+                    this._AppendVisibleCards(child, depth + 1, &cards, start)
             }
             return
         }
         for child in node.children
-            this._AppendVisibleCards(child, depth + 1, &cards)
+            this._AppendVisibleCards(child, depth + 1, &cards, start)
     }
 
     _SplitViewMode(pair) {
@@ -919,10 +968,28 @@ class MacroTreeAdapter {
 
     ; 节点在扁平可见列表中的索引（与 Render 展平顺序一致），不可见/不存在返回 -1
     _FlatIndexOf(id) {
+        if (!this.nodes.Has(id))
+            return -1
+        ; 分栏内的子节点共用分栏卡片的索引。
+        node := this.nodes[id]
+        while (node.parent) {
+            if (!node.parent.expanded)
+                return -1
+            owner := node.parent
+            pair := this._FindTrueFalsePair(owner)
+            if (IsObject(pair) && (node == pair.true || node == pair.false) && this._ShouldUseSplit(owner)) {
+                id := pair.true.id
+                break
+            }
+            node := owner
+        }
         idx := 0
         found := -1
-        for node in this.roots
+        for node in this.roots {
             this._WalkFlatIndex(node, &idx, id, &found)
+            if (found >= 0)
+                break
+        }
         return found
     }
 
@@ -934,9 +1001,23 @@ class MacroTreeAdapter {
             return
         }
         idx += 1
-        if (node.expanded)
+        if (!node.expanded)
+            return
+        pair := this._FindTrueFalsePair(node)
+        if (IsObject(pair) && this._ShouldUseSplit(node)) {
+            if (targetId == pair.true.id) {
+                found := idx
+                return
+            }
+            idx += 1
+            for child in node.children {
+                if (child != pair.true && child != pair.false)
+                    this._WalkFlatIndex(child, &idx, targetId, &found)
+            }
+        } else {
             for child in node.children
                 this._WalkFlatIndex(child, &idx, targetId, &found)
+        }
     }
 
     ; 收集节点及其可见后代的 id（展平顺序，用于增量移除）
