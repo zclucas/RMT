@@ -794,6 +794,19 @@
         this.MarkSettingDirty(ctrl)
     }
 
+
+    OnLangChanged(state, ctrl, event) {
+        newLang := this.ui.Query(ctrl)
+        MainSoftData.Lang := newLang
+        this.MarkSettingDirty(ctrl)
+        SetAppLanguage(newLang)
+        ; 重建设定页以刷新所有翻译文字
+        settingIdx := GetTableIndexByID("Setting")
+        if (IsObject(MyMainWin) && IsObject(MyMainWin.ui)) {
+            MyMainWin._builtTabs.Delete(settingIdx)
+            MyMainWin._EnsureTabBuilt(settingIdx)
+        }
+    }
     OnComboText(fieldName, state, ctrl, event) {
         MainSoftData.%fieldName% := this.ui.Query(ctrl)
         this.MarkSettingDirty(ctrl)

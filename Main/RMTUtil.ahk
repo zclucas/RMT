@@ -149,7 +149,6 @@ OnSaveSetting(*) {
     CheckAndAddDirty("MacroTotalCount", MySoftData.MacroTotalCount)
     CheckAndAddDirty("LastShowMonth", MainSoftData.LastShowMonth)
     CheckAndAddDirty("HasSaved", true)
-    CheckAndAddDirty("IsReload", true)
 
     ; CMD窗口设置
     CheckAndAddDirty("CMDPosX", MainSoftData.CMDPosX)

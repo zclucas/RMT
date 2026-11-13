@@ -96,7 +96,7 @@
             return row(label, '<CheckBox Name="' name '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>', tip)
         }
         togI(label, name, val) {
-            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' GetLang("隐藏的页签不影响宏触发，保存后重启生效。") '"/>'
+            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' GetLang("隐藏的页签不影响宏触发，保存后生效。") '"/>'
         }
         cmb(label, name, items, sel, zero := false, tip := "", descriptions := [], width := 0, editable := false) {
             selIdx := ""
@@ -419,7 +419,7 @@
         this._Bind("ChkNoVariable", "Click", ObjBindMethod(this, "OnCheckEdit", "NoVariableTip"))
         this._Bind("ChkModalSubGui", "Click", ObjBindMethod(this, "OnCheckEdit", "IsModalSubGui"))
         this._Bind("ChkDataReport", "Click", ObjBindMethod(this, "OnCheckEdit", "IsDataReport"))
-        this._Bind("CmbLang", "SelectionChanged", ObjBindMethod(this, "OnComboText", "Lang"))
+        this._Bind("CmbLang", "SelectionChanged", ObjBindMethod(this, "OnLangChanged"))
         this._Bind("CmbPreferredEditor", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "PreferredMacroEditor"))
         this._Bind("CmbScreenShot", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "ScreenShotType"))
         this._Bind("CmbOCRType", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "OCRTypeValue"))
