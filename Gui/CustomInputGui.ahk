@@ -5,7 +5,7 @@
 ; 公开接口保持：ShowGui(Label, Content) / SureAction / HideAction / CloseAction
 ;
 ; 本文件只管窗口：布局、主题、确定/取消、Enter 确认与 Shift+Enter 换行，
-; 以及把语音识别出的文字贴进输入框、把录音状态反映到麦克风图标上。
+; 以及把语音识别出的文字贴进输入框、把录音状态反映到麦克风按钮与状态行上。
 ; 语音本身由 Main\Util\SttUtil.ahk 里的 class VoiceInput 提供接口，
 ; 窗口不碰模型、不碰解码、不碰轮询节奏。
 ; =====================================================================
@@ -64,25 +64,30 @@ class CustomInputGui {
 
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
-        body := main.Add("Grid").Grid_Row(1).Margin("10,12")
-        body.Rows("28", "*", "48")
-        ; 麦克风按钮放标签行右侧：不占输入区、也不压到文本上（输入区叠按钮会被裁切）
-        promptRow := body.Add("DockPanel").Grid_Row(0)
-        promptRow.Add("Button").Name("BtnMic").DockPanel_Dock("Right").Width(26).Height(26)
-            .VerticalAlignment("Center").Padding("0").Margin("6,0,0,0")
-            .Background("Transparent").BorderThickness("0").Cursor("Hand")
-            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14)
-            .Foreground("{DynamicResource TextSub}").ToolTip(this._VoiceToolTip())
-        promptRow.Add("TextBlock").Name("LabelCon").Text("").VerticalAlignment("Center")
+        body := main.Add("Grid").Grid_Row(1).Margin("10,6,10,12")
+        body.Rows("Auto", "*", "48")
+        prompt := body.Add("StackPanel").Grid_Row(0)
+        prompt.Add("TextBlock").Name("LabelCon").Text("").Margin("0,0,0,5")
+        ; 语音状态行：等模型 / 录音中写在这里，平时收起不占高度
+        prompt.Add("TextBlock").Name("MicStatus").Visibility("Collapsed").TextWrapping("Wrap")
+            .Foreground("{DynamicResource TextSub}").Margin("0,0,0,5")
 
+        ; 主题在滚动容器内外各应用一次 Padding，边框另占 1。
         body.Add("TextBox").Grid_Row(1).Name("ContentCon").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("6,8,6,8").Margin("0,8,0,8")
+            .VerticalContentAlignment("Top").Padding("2.5,3").Margin("0,0,0,8")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
 
         btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         okBtn := AddCmdOkBtn(btnRow).IsDefault("True")
+
+        ; 麦克风放按钮行右下角：不压文本区、也不和确定按钮抢位置
+        mic := body.Add("Button").Grid_Row(2).Name("BtnMic").Width(30).Height(30)
+            .HorizontalAlignment("Right").VerticalAlignment("Bottom").Padding("0")
+            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14)
+            .ToolTip(this._VoiceToolTip())
+        mic.InjectResources(this._MicButtonStyle())
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
@@ -97,6 +102,60 @@ class CustomInputGui {
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
         this._SetupVoice()
+    }
+
+    ; 麦克风按钮的模板：边框、悬停、录音红点全交给 XAML 触发器，
+    ; AHK 侧只改 Tag（"" / Starting / Recording），颜色不用逐条 Update。
+    _MicButtonStyle() {
+        return '
+        (
+        <Style TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource EditText}"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" Background="{DynamicResource EditBg}"
+                                BorderBrush="{DynamicResource EditStroke}" BorderThickness="1" CornerRadius="6">
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Ellipse x:Name="RecordingDot" Width="7" Height="7" Fill="#E53935"
+                                         Stroke="White" StrokeThickness="1" Margin="0,2,2,0"
+                                         HorizontalAlignment="Right" VerticalAlignment="Top"
+                                         IsHitTestVisible="False" Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource EditHoverBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Recording">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActionBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionStroke}"/>
+                                <Setter TargetName="RecordingDot" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="{DynamicResource ActionText}"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Starting">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource EditHoverBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/>
+                                <Setter Property="Cursor" Value="Wait"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="Recording"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActionHoverBg}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        )'
     }
 
     OnWindowLoad(state, ctrl, event) {
@@ -259,6 +318,19 @@ class CustomInputGui {
         return key == "" ? GetLang("语音输入") : GetLang("语音输入") " · " FormatHotkeyDisplay(key)
     }
 
+    ; 麦克风的三态一次性刷到按钮与状态行。Tag 驱动样式里的触发器（底色、光标、红点），
+    ; 所以这里不写 BtnMic 的 Foreground——本地值会盖掉样式触发器，录音态就不变色了。
+    _SetMicStatus(tag, tooltip, status := "") {
+        if (!IsObject(this.ui) || this._closed)
+            return
+        try this.ui.BatchUpdate([
+            {ControlName: "BtnMic", PropertyName: "Tag", Value: tag},
+            {ControlName: "BtnMic", PropertyName: "ToolTip", Value: tooltip},
+            {ControlName: "MicStatus", PropertyName: "Text", Value: status},
+            {ControlName: "MicStatus", PropertyName: "Visibility", Value: status == "" ? "Collapsed" : "Visible"}
+        ])
+    }
+
     ; 停掉语音、注销热键，避免窗口销毁后回调还在跑
     _TeardownVoice() {
         if (this._pttIds.Length > 0) {
@@ -339,7 +411,7 @@ class CustomInputGui {
             this.ui.Update("ContentCon", "Text", full)
     }
 
-    ; 录音状态变化 → 图标与文字颜色
+    ; 录音状态变化 → 按钮三态与文字颜色
     OnVoiceState(state) {
         if (!IsObject(this.ui) || this._closed)
             return
@@ -350,14 +422,12 @@ class CustomInputGui {
             this._recBase := cur
             this._recText := cur
             try this.ui.Update("ContentCon", "Foreground", "{DynamicResource TextSub}")
-            try this.ui.Update("BtnMic", "Foreground", "{DynamicResource Accent}")
-            try this.ui.Update("BtnMic", "ToolTip", GetLang("停止录音"))
+            try this._SetMicStatus("Recording", GetLang("停止录音"), GetLang("模型加载完成 · 录音中"))
             return
         }
         ; idle
         try this.ui.Update("ContentCon", "Foreground", "{DynamicResource InputText}")
-        try this.ui.Update("BtnMic", "Foreground", "{DynamicResource TextSub}")
-        try this.ui.Update("BtnMic", "ToolTip", this._VoiceToolTip())
+        try this._SetMicStatus("", this._VoiceToolTip())
     }
 
     ; 需要告诉用户的事。文案与提示方式都归窗口管，语音层只给 key。
@@ -365,10 +435,13 @@ class CustomInputGui {
         ; 注意：try 后面必须跟大括号，不能让 try 直接做 if 的单条语句体，
         ; 否则 AHK 解析到下一个 else 会报 Unexpected "Else"。
         if (key == "loading") {
-            try Toast.Info(GetLang("语音模型加载中…加载完自动开始"))
+            ; 等模型时写在状态行上，不弹 Toast——输入框上方就能看到，不打断正在打的字
+            try this._SetMicStatus("Starting", GetLang("正在加载识别模型…"), GetLang("正在加载识别模型…"))
         } else if (key == "loadFailed") {
+            try this._SetMicStatus("", this._VoiceToolTip())
             try Toast.Error(GetLang("语音模型加载失败，请重试"))
         } else if (key == "readyRetry") {
+            try this._SetMicStatus("", this._VoiceToolTip())
             ; 有配键就带上键名，没配就只说就绪
             k := this._PttHotkey()
             if (k == "") {
@@ -377,6 +450,7 @@ class CustomInputGui {
                 try Toast.Info(GetLang("语音模型已就绪，按住") " " FormatHotkeyDisplay(k) " " GetLang("再说一次"))
             }
         } else if (key == "startFailed") {
+            try this._SetMicStatus("", this._VoiceToolTip())
             try Toast.Error(GetLang("开始录音失败：") (detail != "" ? detail : GetLang("未知错误")))
         }
     }

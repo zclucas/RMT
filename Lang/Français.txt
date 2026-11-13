@@ -2028,6 +2028,9 @@ tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持
 配置=Configurer
 语音输入=Saisie vocale
 停止录音=Arrêter l’enregistrement
+准备录音…=Préparation de l’enregistrement…
+正在加载识别模型…=Chargement du modèle de reconnaissance vocale…
+模型加载完成 · 录音中=Modèle chargé · Enregistrement en cours
 RMT错误=Erreur RMT
 反馈=Commentaires
 把这段报错带到论坛反馈窗口=Apportez ceci à la fenêtre de rétroaction du forum.

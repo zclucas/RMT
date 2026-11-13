@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Shared\OfficialLanguages.ahk
 
 ; =================================================================
 ; SttUtil — 语音转文字（STT）：DLL 宿主 + 会话编排
@@ -30,14 +31,21 @@ class SttEngine {
     ; label/flag 供下载界面显示；新增语言只需在这里加一项 + 放好模型目录。
     static LanguageModels := Map(
         "zh-en", {label: "中英混合", flag: ""},
+        "zh-TW", {label: "繁體中文", flag: "tw"},
         "es", {label: "Español", flag: "es"},
         "fr", {label: "Français", flag: "fr"},
-        "de", {label: "Deutsch", flag: "de"})
+        "de", {label: "Deutsch", flag: "de"},
+        "it", {label: "Italiano", flag: "it"})
+
+    static ModelLanguage(language) => language == "zh-TW" ? "zh-en" : language
 
     ; 界面语言 → 语音语言。没装对应模型的语言回落到中英混合。
     static DefaultLanguage() {
+        global MainSoftData
+        lang := ""
+        try lang := MainSoftData.Lang
         languages := OfficialLanguages()
-        code := languages.Has(MainSoftData.Lang) ? languages[MainSoftData.Lang].code : ""
+        code := languages.Has(lang) ? languages[lang].code : ""
         return SttEngine.LanguageModels.Has(code) ? code : "zh-en"
     }
 
@@ -97,8 +105,10 @@ class SttEngine {
             return -1
     }
 
-    ; 某语言的模型目录：中英混合在根目录，其余语言各占一个子目录
+    ; 某语言的模型目录：中英混合在根目录，其余语言各占一个子目录。
+    ; 繁體中文复用中英混合模型（结果由 _StreamOutput 转繁），所以先过 ModelLanguage。
     StreamDirectory(language := "zh-en") {
+        language := SttEngine.ModelLanguage(language)
         return language == "zh-en" ? this.StreamModelDir : this.StreamModelDir "\" language
     }
 
@@ -108,6 +118,7 @@ class SttEngine {
     ; 返回 [encoder, decoder, joiner, tokens]；CTC 形态时 decoder/joiner 为 ""
     ; 非中英混合的语言包文件名固定，不走 glob（避免同目录里的旧文件被误选）。
     _StreamFiles(language := "zh-en") {
+        language := SttEngine.ModelLanguage(language)
         dir := this.StreamDirectory(language)
         tokens := dir "\tokens.txt"
         if (language != "zh-en")
@@ -175,8 +186,11 @@ class SttEngine {
     ; 旧 DLL 没有该导出或模型不就绪时返回 false，调用方回退到同步 StreamEnsureInit。
     ; 记下申请的语言：DLL 不暴露「后台加载的是哪种」，加载完靠它确认能否采纳。
     StreamEnsureInitAsync(language := "zh-en") {
-        if (this.streamLoaded && this.streamLanguage == language)
+        ; 同一种模型（简/繁共用 zh-en）已在内存里：只需换标签，不用再排一次后台加载
+        if (this.streamLoaded && SttEngine.ModelLanguage(this.streamLanguage) == SttEngine.ModelLanguage(language)) {
+            this.streamLanguage := language
             return true
+        }
         if (!this.IsStreamReady(language))
             return false
         f := this._StreamFiles(language)
@@ -200,8 +214,12 @@ class SttEngine {
     }
 
     _EnsureStreamModel(language) {
-        if (this.streamLoaded && this.streamLanguage == language)
+        ; 同一种模型就不重载：简体与繁體共用 zh-en 模型，只换输出转换，不重读 80MB。
+        ; 命中时把 streamLanguage 改成这次要的语言，_StreamOutput 据此决定要不要转繁。
+        if (this.streamLoaded && SttEngine.ModelLanguage(this.streamLanguage) == SttEngine.ModelLanguage(language)) {
+            this.streamLanguage := language
             return true
+        }
         ; 后台已加载完：同一个语言就直接采纳，避免重复加载一份模型
         stA := this.StreamInitState()
         if (stA == 2 && this._AsyncLangMatches(language)) {
@@ -294,7 +312,7 @@ class SttEngine {
         r := DllCall(this.DllPath "\SttStream_Poll", "Ptr", this._pollBuf, "Int", 16384, "CDecl Int")
         if (!r)
             return ""
-        return StrGet(this._pollBuf, "UTF-8")
+        return this._StreamOutput(StrGet(this._pollBuf, "UTF-8"))
     }
 
     ; 停止并收尾。返回时本轮文本已落定（state=3），可直接 StreamGetResult。
@@ -327,7 +345,21 @@ class SttEngine {
         r := DllCall(this.DllPath "\SttStream_GetResult", "Ptr", buf, "Int", 16384, "CDecl Int")
         if (!r)
             return ""
-        return StrGet(buf, 16384, "UTF-8")
+        return this._StreamOutput(StrGet(buf, 16384, "UTF-8"))
+    }
+
+    _StreamOutput(text) {
+        if (text == "" || this.streamLanguage != "zh-TW")
+            return text
+        ; LCMAP_TRADITIONAL_CHINESE
+        size := DllCall("Kernel32\LCMapStringEx", "WStr", "zh-TW", "UInt", 0x04000000
+            , "WStr", text, "Int", -1, "Ptr", 0, "Int", 0, "Ptr", 0, "Ptr", 0, "Ptr", 0, "Int")
+        if (!size)
+            return text
+        output := Buffer(size * 2)
+        written := DllCall("Kernel32\LCMapStringEx", "WStr", "zh-TW", "UInt", 0x04000000
+            , "WStr", text, "Int", -1, "Ptr", output, "Int", size, "Ptr", 0, "Ptr", 0, "Ptr", 0, "Int")
+        return written ? StrGet(output, "UTF-16") : text
     }
 
     StreamGetLastError() {
@@ -346,7 +378,7 @@ class SttEngine {
         r := DllCall(this.DllPath "\SttStream_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "CDecl Int")
         if (!r)
             return ""
-        return StrGet(buf, 4096, "UTF-8")
+        return this._StreamOutput(StrGet(buf, 4096, "UTF-8"))
     }
 
     ; 错误消息兜底（空错误串 → 未知错误）
@@ -376,6 +408,8 @@ InitSttEngine() {
 ; 只探磁盘：该语言的流式模型齐备（encoder/model + tokens）才算装了。
 ; 不碰 DLL，未安装语音扩展的机器零开销。
 SttStreamModelOnDisk(language := "zh-en") {
+    ; 繁體中文用的是中英混合模型，目录仍在根上
+    language := SttEngine.ModelLanguage(language)
     dir := A_WorkingDir "\Plugins\Voice\models\stt_stream"
     if (language != "zh-en")
         dir .= "\" language
@@ -394,8 +428,11 @@ SttWarmupStreamAsync(language := "") {
         return false
     try {
         engine := InitSttEngine()
-        if (engine.streamLoaded && engine.streamLanguage == language)
+        ; 简/繁共用 zh-en 模型：模型已在内存就只换标签，不再排后台加载
+        if (engine.streamLoaded && SttEngine.ModelLanguage(engine.streamLanguage) == SttEngine.ModelLanguage(language)) {
+            engine.streamLanguage := language
             return true
+        }
         if (!engine.IsDllReady() || !engine.IsStreamModelReady(language))
             return false
         st := engine.StreamInitState()

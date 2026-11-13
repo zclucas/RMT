@@ -2010,9 +2010,6 @@ ReplaceKeySend(tableID, itemID, state) {
 
 ;按钮回调
 MenuReload(*) {
-    ; 持久化当前 tab 用 TableID（身份）；未切换过则回落 TabCtrl.Value
-    savedTab := MainSoftData.CurTableID != "" ? MainSoftData.CurTableID : MainSoftData.TabCtrl.Value
-    CfgWrite(savedTab, SettingFile, SettingSection, "TableIndex")
     CfgWrite(true, SettingFile, SettingSection, "IsReload")
     SafeReload()
 }

@@ -153,7 +153,6 @@ private:
     int sampleRate_ = 16000;
     std::vector<float> pool_;       // 待消费采样缓冲
     std::mutex poolMx_;
-    static UINT32 latencyFramesLocal;
 };
 
 bool WasapiCapture::Start(int targetRate) {
@@ -162,6 +161,10 @@ bool WasapiCapture::Start(int targetRate) {
     if (FAILED(hr) && hr != RPC_E_CHANGED_MODE && hr != S_FALSE) {
         return false;
     }
+    struct ComScope {
+        bool initialized;
+        ~ComScope() { if (initialized) CoUninitialize(); }
+    } com{SUCCEEDED(hr)};
     IMMDeviceEnumerator* enumerator = nullptr;
     hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                           IID_PPV_ARGS(&enumerator));
@@ -184,11 +187,7 @@ bool WasapiCapture::Start(int targetRate) {
     hr = client_->GetMixFormat(&mixFmt);
     if (FAILED(hr)) return false;
 
-    if (mixFmt->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
-        // 提取样本格式信息
-        WAVEFORMATEXTENSIBLE* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(mixFmt);
-        // 强制 16k 单声道 float —— 通过共享模式，系统自动重采样
-    }
+    CoTaskMemFree(mixFmt);
 
     // 构造请求格式：16k 单声道 float
     WAVEFORMATEX fmt;
@@ -205,10 +204,6 @@ bool WasapiCapture::Start(int targetRate) {
                              200000, 0, &fmt, nullptr);
     if (FAILED(hr)) return false;
 
-    REFERENCE_TIME hnsLatency = 0;
-    hr = client_->GetBufferSize(&latencyFramesLocal);
-    if (FAILED(hr)) return false;
-
     hr = client_->GetService(IID_PPV_ARGS(&capture_));
     if (FAILED(hr)) return false;
 
@@ -216,8 +211,6 @@ bool WasapiCapture::Start(int targetRate) {
     thread_ = std::thread(&WasapiCapture::CaptureLoop, this);
     return true;
 }
-
-UINT32 WasapiCapture::latencyFramesLocal = 0;
 
 void WasapiCapture::Stop(int drainMs) {
     // 设备缓冲里的音频还没被拉走，停了就永久丢失（WASAPI 共享模式缓冲约 20ms，
@@ -1089,6 +1082,8 @@ __declspec(dllexport) int SttStream_Begin() {
         g_ssResult.clear();
     }
     if (!g_ssCapture.Start(16000)) {
+        // 起流失败时 client_/dev_ 可能已创建：不 Stop 会一直占着麦克风
+        g_ssCapture.Stop();
         std::lock_guard<std::mutex> dk(g_ssDecMx);
         SherpaOnnxDestroyOnlineStream(g_ssStream);
         g_ssStream = nullptr;

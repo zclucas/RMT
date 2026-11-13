@@ -52,7 +52,7 @@
         InitWorkFilePath()
         if (!isReload)
             HandleWorkOpenArg()
-        LoadCurMacroSetting()
+        LoadCurMacroSetting(false)  ; Worker 只加载配置
         InitData()
     }
 
