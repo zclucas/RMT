@@ -245,11 +245,11 @@ class SherpaVoiceEngine {
     }
 
     _CallStart() {
-        return DllCall(this.DllPath "\Voice_Start", "Int") != 0
+        return DllCall(this.DllPath "\Voice_Start", "CDecl Int") != 0
     }
 
     _CallStop() {
-        DllCall(this.DllPath "\Voice_Stop", "Int")
+        DllCall(this.DllPath "\Voice_Stop", "CDecl Int")
     }
 
     _GetLastError() {

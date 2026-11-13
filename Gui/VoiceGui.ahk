@@ -19,8 +19,10 @@ class VoiceGui {
         this.SureBtnAction := ""
         this.keywords := []
         this._nextChipId := 0
-        this._rec := false
-        this._sttTick := ObjBindMethod(this, "_PollStt")
+        this._rec := false            ; 由 VoiceInput 的状态回调维护（占位符/刷新要用）
+        this._recBase := ""           ; 开录时框内原文（识别结果的追加起点）
+        this._recLive := ""           ; 本轮识别文本
+        this._voice := ""             ; VoiceInput 实例：语音的开关/取字/收尾全归它
     }
 
     ; ShowGui(tableItem, index)
@@ -56,12 +58,15 @@ class VoiceGui {
             this.ui.OnEvent("EdKeywords", "TextChanged", (*) => this._SyncPlaceholder())
             this.ui.OnEvent("Window", "Closing", (*) => this._OnClosed())
             this.ui.OnEvent("Window", "Closed", (*) => this._OnClosed())
+            this._SetupVoice()
             this.hasGui := true
             opened := XamlWin.Open(this.ui, (*) => this._RenderChips(), mainGui)
             if (opened) {
                 this.Gui := {Hwnd: this.ui.wpfHwnd}
                 this._BindChipClicks()
                 this._SyncPlaceholder()
+                ; 预热模型（异步、不阻塞）：首次点麦克风就不必等加载
+                this._voice.Warmup()
             } else
                 this.Cancel()
         } catch as err {
@@ -334,93 +339,76 @@ class VoiceGui {
         try this.ui.Update("EdKeywordsPh", "Visibility", (text == "" && !hasLive) ? "Visible" : "Collapsed")
     }
 
+    ; 麦克风按钮：开录 / 停止 / 取消等待三态都由 VoiceInput 判断，
+    ; 缺模型时的下载引导也在它内部完成，本窗口不需要知道模型的存在。
     _OnMicClick(*) {
-        if (this._rec) {
-            this._StopRec()
-            return
-        }
-        if (!IsSet(InitSttEngine) || !SttGui.RequestModelDownload())
-            return
-        engine := InitSttEngine()
-        baseText := ""
-        try baseText := Trim(this.ui.Query("EdKeywords"))
-        initializing := !engine.streamLoaded
-        if (initializing && baseText == "") {
-            try this.ui.Update("EdKeywordsPh", "Text", GetLang("模型正在加载…"))
-            try this.ui.Update("EdKeywordsPh", "Visibility", "Visible")
-            Sleep(50)
-        }
-        if (!engine.StreamBegin()) {
-            this._SyncPlaceholder()
-            try Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.StreamGetLastError()))
-            return
-        }
-        this._rec := true
-        this._recBase := baseText
-        this._recLive := ""
-        try this.ui.Update("EdKeywords", "Foreground", "{DynamicResource TextSub}")
-        try this.ui.Update("BtnKwMic", "Foreground", "{DynamicResource Accent}")
-        try this.ui.Update("BtnKwMic", "ToolTip", GetLang("停止录音"))
-        try this.ui.Update("EdKeywordsPh", "Text", GetLang("正在聆听…"))
-        try this.ui.Update("EdKeywordsPh", "Visibility", this._recBase == "" ? "Visible" : "Collapsed")
-        SetTimer(this._sttTick, 150)
+        if (IsObject(this._voice))
+            this._voice.Toggle()
     }
 
-    _PollStt() {
-        if (!this._rec) {
-            SetTimer(this._sttTick, 0)
-            return
-        }
-        if (!IsSet(InitSttEngine))
-            return
-        engine := InitSttEngine()
-        live := ""
-        try live := engine.StreamPoll()
-        if (Trim(live) != "" && live != this._recLive) {
-            this._recLive := live
-            base := this._recBase
-            sep := (base != "" && !RegExMatch(base, "\s$")) ? " " : ""
-            try this.ui.Update("EdKeywords", "Text", base sep live)
-            try this.ui.Update("EdKeywordsPh", "Text", GetLang("请输入宏触发关键词"))
-            try this.ui.Update("EdKeywordsPh", "Visibility", "Collapsed")
-        }
+    ; 语音输入统一走 VoiceInput：本窗口只负责「结果贴进关键词框 + 图标换色」。
+    _SetupVoice() {
+        this._voice := VoiceInput()
+        this._voice.OnText := ObjBindMethod(this, "_OnVoiceText")
+        this._voice.OnState := ObjBindMethod(this, "_OnVoiceState")
+        this._voice.OnNotify := ObjBindMethod(this, "_OnVoiceNotify")
     }
 
-    _StopRec() {
+    ; 识别文本（整段，不含框内原文）→ 原文 + 空格 + 识别文本
+    _OnVoiceText(text) {
+        if (!IsObject(this.ui) || !this.hasGui)
+            return
+        this._recLive := text
+        base := this._recBase
+        sep := (base != "" && !RegExMatch(base, "\s$")) ? " " : ""
+        try this.ui.Update("EdKeywords", "Text", base sep text)
+        try this.ui.Update("EdKeywordsPh", "Text", GetLang("请输入宏触发关键词"))
+        try this.ui.Update("EdKeywordsPh", "Visibility", "Collapsed")
+    }
+
+    ; 录音状态 → 图标与占位符
+    _OnVoiceState(state) {
+        if (!IsObject(this.ui) || !this.hasGui)
+            return
+        if (state == "recording") {
+            ; 记下框内原文作为追加起点，之后整轮不再查询输入框
+            cur := ""
+            try cur := Trim(this.ui.Query("EdKeywords"))
+            this._recBase := cur
+            this._recLive := ""
+            this._rec := true
+            try this.ui.Update("BtnKwMic", "Foreground", "{DynamicResource Accent}")
+            try this.ui.Update("BtnKwMic", "ToolTip", GetLang("停止录音"))
+            try this.ui.Update("EdKeywordsPh", "Text", GetLang("正在聆听…"))
+            try this.ui.Update("EdKeywordsPh", "Visibility", cur == "" ? "Visible" : "Collapsed")
+            return
+        }
         this._rec := false
-        SetTimer(this._sttTick, 0)
+        try this.ui.Update("EdKeywords", "Foreground", "{DynamicResource InputText}")
         try this.ui.Update("BtnKwMic", "Foreground", "{DynamicResource TextSub}")
         try this.ui.Update("BtnKwMic", "ToolTip", GetLang("语音输入"))
         try this.ui.Update("EdKeywordsPh", "Text", GetLang("请输入宏触发关键词"))
-        if (!IsSet(InitSttEngine)) {
-            try this.ui.Update("EdKeywords", "Foreground", "{DynamicResource InputText}")
-            this._SyncPlaceholder()
-            return
-        }
-        engine := InitSttEngine()
-        if (!IsObject(engine)) {
-            try this.ui.Update("EdKeywords", "Foreground", "{DynamicResource InputText}")
-            this._SyncPlaceholder()
-            return
-        }
-        if (!engine.StreamEnd(0)) {
-            try this.ui.Update("EdKeywords", "Foreground", "{DynamicResource InputText}")
-            this._SyncPlaceholder()
-            return
-        }
-        loop 40 {
-            st := engine.StreamGetState()
-            if (st == 3 || st == 4)
-                break
-            Sleep(50)
-        }
-        result := Trim(engine.StreamGetResult())
-        if (result != "")
-            this.ui.Update("EdKeywords", "Text", this._recBase (this._recBase != "" ? " " : "") result)
-        else
-            this.ui.Update("EdKeywords", "Text", this._recBase)
-        try this.ui.Update("EdKeywords", "Foreground", "{DynamicResource InputText}")
         this._SyncPlaceholder()
+    }
+
+    ; 需要告诉用户的事，文案归窗口
+    _OnVoiceNotify(key, detail := "") {
+        if (!IsObject(this.ui) || !this.hasGui)
+            return
+        if (key == "loading") {
+            try this.ui.Update("EdKeywordsPh", "Text", GetLang("模型正在加载…"))
+            try this.ui.Update("EdKeywordsPh", "Visibility", "Visible")
+        } else if (key == "loadFailed") {
+            try Toast.Error(GetLang("语音模型加载失败，请重试"))
+        } else if (key == "startFailed") {
+            try Toast.Error(GetLang("开始录音失败：") (detail != "" ? detail : GetLang("未知错误")))
+        }
+    }
+
+    ; 停录（按钮在录、窗口关闭都走这里）；收尾结果经 _OnVoiceText 回来
+    _StopRec(*) {
+        if (IsObject(this._voice))
+            this._voice.Stop(true)
     }
 
     _XmlEsc(s) => EscapeXamlXml(s)
@@ -489,8 +477,12 @@ class VoiceGui {
     }
 
     _OnClosed() {
-        if (this._rec)
-            this._StopRec()
+        ; 关窗前必须释放 VoiceInput：停录、清定时器、把唯一一路麦克风让出来
+        if (IsObject(this._voice)) {
+            try this._voice.Close()
+            this._voice := ""
+        }
+        this._rec := false
         this.hasGui := false
         this.Gui := ""
         this.ui := ""

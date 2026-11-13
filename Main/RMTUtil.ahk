@@ -72,6 +72,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("SuspendHotkey", MainSoftData.SuspendHotkey)
     CheckAndAddDirty("PauseHotkey", MainSoftData.PauseHotkey)
     CheckAndAddDirty("KillMacroHotkey", MainSoftData.KillMacroHotkey)
+    CheckAndAddDirty("VoiceInputHotkey", MainSoftData.HasProp("VoiceInputHotkey") ? MainSoftData.VoiceInputHotkey : "LAlt")
     CheckAndAddDirty("DebugRunHotkey", MainSoftData.HasProp("DebugRunHotkey") ? MainSoftData.DebugRunHotkey : "f5")
     CheckAndAddDirty("DebugStepHotkey", MainSoftData.HasProp("DebugStepHotkey") ? MainSoftData.DebugStepHotkey : "f11")
     CheckAndAddDirty("DebugStepOverHotkey", MainSoftData.HasProp("DebugStepOverHotkey") ? MainSoftData.DebugStepOverHotkey : "f10")

@@ -187,6 +187,9 @@ class MainConfig {
         this.IsPause := false           ; 暂停所有宏状态
         this.PauseHotkey := "!i"        ; 暂停快捷键（Alt+I）
         this.KillMacroHotkey := "!k"    ; 终止所有宏快捷键（Alt+K）
+        ; 输入弹窗「按住说话」：只在弹窗获得焦点时生效，不是全局热键。
+        ; 值取单键（AHK 键名，如 LAlt / RAlt / F2），默认左 Alt。
+        this.VoiceInputHotkey := "LAlt"
 
         ; ========== 数值浮动选项 ==========
         this.HoldFloat := 0             ; 点击持续时间浮动 (%)

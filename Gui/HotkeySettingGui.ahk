@@ -19,6 +19,7 @@ class HotkeySettingGui {
         {Field: "SuspendHotkey", Label: "软件休眠", OnlyTrigger: true, Default: "!p"},
         {Field: "PauseHotkey", Label: "暂停宏", OnlyTrigger: false, Default: "!i"},
         {Field: "KillMacroHotkey", Label: "终止宏", OnlyTrigger: false, Default: "!k"},
+        {Field: "VoiceInputHotkey", Label: "语音输入", OnlyTrigger: true, Default: "LAlt"},
         {Field: "ToolRecordMacroHotKey", Label: "指令录制", OnlyTrigger: false, Default: "!r"},
         {Field: "ToolTextFilterHotKey", Label: "文本提取", OnlyTrigger: false, Default: ""},
         {Field: "ScreenShotHotKey", Label: "屏幕截图", OnlyTrigger: false, Default: ""},
