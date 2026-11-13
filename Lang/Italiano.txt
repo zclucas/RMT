@@ -2028,7 +2028,6 @@ tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持
 配置=Configurazione
 语音输入=Dettatura
 停止录音=Ferma registrazione
-准备录音…=Prepararsi a registrare...
 正在加载识别模型…=Caricamento del modello di riconoscimento vocale...
 模型加载完成 · 录音中=Modello caricato · Registrazione
 RMT错误=Errore di RMT
@@ -2707,3 +2706,8 @@ JSON=JSON
 用多个色块匹配；相似度\=命中比例；可点击右上角效果图，查看搜索时参与的色块。操作流程：选基准点后可自动补点或手动增删，最多 256 点。=Confronta più aree di colore. La somiglianza indica la percentuale di corrispondenze. Apri l’anteprima in alto a destra per vedere le aree usate. Scegli un punto di riferimento, poi aggiungi o modifica fino a 256 punti.
 坐标基准\=窗口时，坐标按所选窗口左上角偏移计算（绝对移动）。=Con la finestra come riferimento, il movimento assoluto è calcolato dal suo angolo in alto a sinistra.
 生成透明底 PNG，存为新文件（分辨率 \= 第 1 张样本）=Salva un nuovo PNG trasparente alla risoluzione del primo campione
+语音模型加载失败，请重试=Impossibile caricare il modello vocale, riprova
+语音模型已就绪=Modello vocale pronto
+语音模型已就绪，按住=Modello vocale pronto, tieni premuto
+再说一次=per parlare di nuovo
+未知错误=Errore sconosciuto

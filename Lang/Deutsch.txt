@@ -2028,7 +2028,6 @@ tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持
 配置=Konfigurieren
 语音输入=Spracheingabe
 停止录音=Aufnahme stoppen
-准备录音…=Aufnahme wird vorbereitet…
 正在加载识别模型…=Spracherkennungsmodell wird geladen…
 模型加载完成 · 录音中=Modell geladen · Aufnahme läuft
 RMT错误=RMT-Fehler
@@ -2707,7 +2706,6 @@ JSON=JSON
 用多个色块匹配；相似度\=命中比例；可点击右上角效果图，查看搜索时参与的色块。操作流程：选基准点后可自动补点或手动增删，最多 256 点。=Vergleicht mehrere Farbfelder. Die Ähnlichkeit gibt die Trefferquote an. Klicken Sie oben rechts auf die Vorschau, um die verwendeten Felder zu sehen. Wählen Sie einen Bezugspunkt und ergänzen oder bearbeiten Sie bis zu 256 Punkte.
 坐标基准\=窗口时，坐标按所选窗口左上角偏移计算（绝对移动）。=Bei Fensterkoordinaten wird die absolute Bewegung von der linken oberen Ecke des ausgewählten Fensters aus berechnet.
 生成透明底 PNG，存为新文件（分辨率 \= 第 1 张样本）=Transparentes PNG mit der Auflösung des ersten Musters als neue Datei speichern
-语音模型加载中…加载完自动开始=Sprachmodell wird geladen… die Aufnahme startet danach automatisch
 语音模型加载失败，请重试=Sprachmodell konnte nicht geladen werden, bitte erneut versuchen
 语音模型已就绪=Sprachmodell bereit
 语音模型已就绪，按住=Sprachmodell bereit, halten Sie
