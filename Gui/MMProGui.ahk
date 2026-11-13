@@ -277,6 +277,7 @@ class MMProGui {
     _RefMode() => CmdEnumFromIndex(this._SelIndex("RefCombo"), CmdEnumRefNames(), "屏幕")
 
     Init(cmd) {
+        this._screenCoordinateItems := -1
         
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("移动Pro")
@@ -284,13 +285,8 @@ class MMProGui {
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr()
 
         
-        this._SetCombo("PosVarX", this.DLVariableArr, GetLang(this.Data.PosVarX))
-        this._SetCombo("PosVarY", this.DLVariableArr, GetLang(this.Data.PosVarY))
-        this._SetCombo("EndPosVarX", this.DLVariableArr, GetLang(this.Data.HasOwnProp("EndPosVarX") ? this.Data.EndPosVarX : 200))
-        this._SetCombo("EndPosVarY", this.DLVariableArr, GetLang(this.Data.HasOwnProp("EndPosVarY") ? this.Data.EndPosVarY : 200))
         this._RefreshActionItems(this.Data.ActionType)
 
         MoveMode := ObjHasOwnProp(this.Data, "MouseMoveMode") ? CmdEnumMoveMode(this.Data.MouseMoveMode) : "绝对移动"
@@ -301,6 +297,7 @@ class MMProGui {
         RefMode := ObjHasOwnProp(this.Data, "RefMode") ? this.Data.RefMode : "屏幕"
         this.ui.Update("RefCombo", "SelectedIndex", String(CmdEnumIndex(RefMode, CmdEnumRefNames(), 0)))
         this.ui.Update("WinInfoCon", "Text", ObjHasOwnProp(this.Data, "WinInfo") ? this.Data.WinInfo : "")
+        this._RefreshCoordinateItems(true)
         this.OnRefChange()
 
         this.ui.Update("SpeedCon", "Text", this.Data.Speed)
@@ -343,6 +340,7 @@ class MMProGui {
         if (this._syncing || !IsObject(this.ui))
             return
         isWin := this._RefMode() == "窗口"
+        this._RefreshCoordinateItems()
         this.ui.Update("WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
     }
 
@@ -387,6 +385,7 @@ class MMProGui {
         if (this._syncing || !IsObject(this.ui))
             return
         isRel := this._MoveMode() == "相对移动"
+        this._RefreshCoordinateItems()
         action := this._TypeValue()
         isABDrag := action == "A到B拖拽" && !isRel
         isTargetPoint := !isRel && !isABDrag
@@ -398,6 +397,18 @@ class MMProGui {
             this._posTarget := "PosVar"
         this.ui.Update("PosXLabel", "Text", GetLang(isRel ? "偏移值" : (isABDrag ? "起始点" : "目标点：")))
         this.ui.Update("PosYLabel", "Text", "")
+    }
+
+    _RefreshCoordinateItems(initial := false) {
+        useScreen := this._MoveMode() == "绝对移动" && this._RefMode() != "窗口"
+        if (this._screenCoordinateItems == useScreen)
+            return
+        this._screenCoordinateItems := useScreen
+        for name in ["PosVarX", "PosVarY", "EndPosVarX", "EndPosVarY"] {
+            items := useScreen ? GetGuiVarArr(StrLower(SubStr(name, -1))) : GetGuiVarArr()
+            value := initial ? GetLang(this.Data.HasOwnProp(name) ? this.Data.%name% : 200) : this.ui.Query(name)
+            this._SetCombo(name, items, value)
+        }
     }
 
     _RefreshActionItems(action := "移动") {

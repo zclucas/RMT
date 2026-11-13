@@ -183,7 +183,11 @@
                 try this.ui.Update(f.ctrl, "SelectedIndex", Integer(def))
             case "cmbText":
                 MainSoftData.%f.key% := def
-                try this.ui.Update(f.ctrl, "Text", String(def))
+                if (f.key == "Lang") {
+                    try this.ui.Update(f.ctrl, "SelectedIndex", 0)
+                } else {
+                    try this.ui.Update(f.ctrl, "Text", String(def))
+                }
             case "logLevel":
                 MainSoftData.%f.key% := def
                 for level in RMTLogLevelKeys()

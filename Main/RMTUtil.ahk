@@ -2194,8 +2194,10 @@ UnblockZoneIdentifier() {
 ; ──────────────────────────────────────────────────────────────────────
 SmartEscapeVarText(text) {
     varMap := Map()
-    for v in GetGuiVarArr(1)
+    for v in GetGuiVarArr("all") {
         varMap[v] := true
+        varMap[GetBuiltinVarName(v)] := true
+    }
 
     result := ""
     pos := 1

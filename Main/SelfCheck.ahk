@@ -44,10 +44,14 @@ SelfCheckMissingFiles() {
         {path: "Plugins\RapidOcr\ch_models\ch_PP-OCRv6_rec.onnx", entry: "ch_PP-OCRv6_rec.onnx", bundle: "RapidOcr.zip"},
         {path: "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt", entry: "ppocrv6_tiny_dict.txt", bundle: "RapidOcr.zip"},
 
-        {path: "Lang\English.txt", entry: "English.txt", bundle: "Lang.zip"},
         {path: "Thread\Work.exe", entry: "Work.exe", bundle: "RMT.zip"},
         {path: "index.html", entry: "index.html", bundle: "RMT.zip"},
     ]
+    for name, language in OfficialLanguages() {
+        if (language.HasOwnProp("entry"))
+            criticalFiles.Push({path: "Lang\" name ".txt", entry: language.entry, bundle: "Lang.zip"})
+        criticalFiles.Push({path: "Lang\Flags\" language.flag ".png", entry: "Flags/" language.flag ".png", bundle: "Lang.zip"})
+    }
     optionalFiles := [
         {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
         {path: "MinTool\PlayAudio.vbs", entry: "PlayAudio.vbs", bundle: "Audio.zip"},

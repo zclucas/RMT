@@ -103,7 +103,7 @@ class PromptGui {
         for label in ["变量", "数组"]
             kind.Add("ComboBoxItem").Content(GetLang(label))
         names := vars.Add("ComboBox").Grid_Column(1).Name("InsertValue").SelectedIndex(0).MinHeight(28).Margin("8,0,0,0")
-        for name in GetGuiVarArr(1) {
+        for name in GetGuiVarArr("all") {
             if (name != "")
                 names.Add("ComboBoxItem").Content(name)
         }
@@ -264,7 +264,7 @@ class PromptGui {
     RefreshInsertNames(*) {
         if (!IsObject(this.ui) || !this.ui.wpfHwnd)
             return
-        names := this.ui.Query("InsertKind") == GetLang("数组") ? GetGuiArrNameArr() : GetGuiVarArr(1)
+        names := this.ui.Query("InsertKind") == GetLang("数组") ? GetGuiArrNameArr() : GetGuiVarArr("all")
         changes := [{ControlName: "InsertValue", PropertyName: "ClearItems", Value: ""}]
         for name in names {
             if (name != "")

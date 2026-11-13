@@ -250,7 +250,6 @@ class ExVariableGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("变量提取")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr(1)
 
         this._EnsureExVarDataLen()
         this._FillExVars()
@@ -259,10 +258,10 @@ class ExVariableGui {
         this.ui.Update("ExtractTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.ExtractType, CmdEnumExtractNames())))
         this.ui.Update("WinInfoCon", "Text", this.Data.WinInfo)
 
-        this._SetCombo("StartPosX", GetGuiVarArr(), this.Data.StartPosX)
-        this._SetCombo("StartPosY", GetGuiVarArr(), this.Data.StartPosY)
-        this._SetCombo("EndPosX", GetGuiVarArr(), this.Data.EndPosX)
-        this._SetCombo("EndPosY", GetGuiVarArr(), this.Data.EndPosY)
+        this._ComboPush("StartPosX", "Text", GetLang(this.Data.StartPosX))
+        this._ComboPush("StartPosY", "Text", GetLang(this.Data.StartPosY))
+        this._ComboPush("EndPosX", "Text", GetLang(this.Data.EndPosX))
+        this._ComboPush("EndPosY", "Text", GetLang(this.Data.EndPosY))
         this._SetCombo("SearchCountCombo", [GetLang("无限")], this.Data.SearchCount == -1 ? GetLang("无限") : this.Data.SearchCount)
         this.ui.Update("SearchIntervalCon", "Text", this.Data.SearchInterval)
     }
@@ -315,6 +314,10 @@ class ExVariableGui {
         if (!IsObject(this.ui))
             return
         isWin := this._TypeValue() == "窗口"
+        for name in ["StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
+            items := isWin ? GetGuiVarArr() : GetGuiVarArr(StrLower(SubStr(name, -1)))
+            this._SetCombo(name, items, this.ui.Query(name))
+        }
         this.ui.Update("WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
     }
 
@@ -535,10 +538,10 @@ class ExVariableGui {
         this.Data.ExtractType := this._TypeValue()
         this.Data.WinInfo := this.ui.Query("WinInfoCon")
         this.Data.OCRType := 1 ; v6 统一多语言模型，不再区分
-        this.Data.StartPosX := this.ui.Query("StartPosX")
-        this.Data.StartPosY := this.ui.Query("StartPosY")
-        this.Data.EndPosX := this.ui.Query("EndPosX")
-        this.Data.EndPosY := this.ui.Query("EndPosY")
+        this.Data.StartPosX := GetVarName(this.ui.Query("StartPosX"))
+        this.Data.StartPosY := GetVarName(this.ui.Query("StartPosY"))
+        this.Data.EndPosX := GetVarName(this.ui.Query("EndPosX"))
+        this.Data.EndPosY := GetVarName(this.ui.Query("EndPosY"))
         this.Data.SearchCount := this.ui.Query("SearchCountCombo") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCombo")
         this.Data.SearchInterval := this.ui.Query("SearchIntervalCon")
         this.Data.IsIgnoreExist := this.ui.Query("IsIgnoreExist") == "True"

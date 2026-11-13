@@ -17,6 +17,7 @@ LangCmdKeyArr := [
     "等待", "等待确定", "时间", "倒计时", "按键检测", "窗口管理", "窗口信息", "调整窗口", "注释", "抓图",
     "循环次数", "宏循环次数", "当前坐标X", "当前坐标Y", "按下", "松开", "点击", "创建", "克隆", "删除", "包含",
     "取值", "赋值", "插入", "追加", "移除", "移除最后", "长度", "变量或值", "数组", "文本分割", "文本提取", "文本替换", "去除空格",
+    "时间戳处理", "自定义格式", "提取时间量", "提取所有时间量", "日期时间", "日期", "时刻",
     "大小写转换", "文本统计", "去除前空白字符", "去除后空白字符", "去除前后空白字符", "去除所有空白字符", "全部大写", "全部小写",
     "首字母大写", "字符数", "单词数", "行数", "数字提取", "字母提取", "中文提取", "内容分割", "定长分割", "当前宏",
     "插入到当前宏", "触发", "暂停", "取消暂停", "终止", "制表符", "弹窗", "状态", "选择", "选择文件", "多选", "文本文件", "继续", "继续&取消", "继续&终止&暂停",
@@ -26,11 +27,42 @@ LangCmdKeyArr := [
     "发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"
 ]
 
+OfficialLanguages() {
+    static languages := Map("简中", {code: "zh", flag: "cn"},
+        "English", {code: "en", flag: "gb", entry: "English.txt"},
+        "Español", {code: "es", flag: "es", entry: "Spanish.txt"},
+        "Français", {code: "fr", flag: "fr", entry: "French.txt"},
+        "Deutsch", {code: "de", flag: "de", entry: "Deutsch.txt"})
+    return languages
+}
+
+LanguageOptionXaml(key, label, flag := "") {
+    label := EscapeXamlXml(label)
+    key := EscapeXamlXml(key)
+    if (SubStr(key, 1, 1) == "{")
+        key := "{}" key
+    if (SubStr(label, 1, 1) == "{")
+        label := "{}" label
+    attrs := ' Tag="' key '" TextSearch.Text="' label '"'
+    path := LangDir "\Flags\" flag ".png"
+    if (flag == "" || !FileExist(path))
+        return '<ComboBoxItem' attrs ' Content="' label '"/>'
+    return '<ComboBoxItem' attrs '><StackPanel Orientation="Horizontal">'
+        . '<Image Width="20" Height="14" Margin="0,0,7,0" Source="' EscapeXamlXml(StrReplace(path, "\", "/")) '"/>'
+        . '<TextBlock VerticalAlignment="Center" Text="' label '"/></StackPanel></ComboBoxItem>'
+}
+
 LangInitSetting() {
     MainSoftData.LangArr := ["简中"]   ; 简中为内置默认，首位展示
     LangMap := Map("简中", 1)
 
     if (DirExist(LangDir)) {
+        for name in OfficialLanguages() {
+            if (name != "简中" && FileExist(LangDir "\" name ".txt")) {
+                LangMap[name] := 1
+                MainSoftData.LangArr.Push(name)
+            }
+        }
         loop files, LangDir "\*.txt" {
             SplitPath A_LoopFileName, &OutFileName, &OutDir, &OutExtension, &OutNameNoExt, &OutDrive
             if (OutNameNoExt == "简中" || OutNameNoExt == "中文")
@@ -75,9 +107,9 @@ LangKeysInit() {
             if (line = "")
                 continue
 
-            eqPos := InStr(line, "=")
+            eqPos := RegExMatch(line, "(?<!\\)=")
             if (eqPos > 1) {
-                rawKey := SubStr(line, 1, eqPos - 1)
+                rawKey := StrReplace(SubStr(line, 1, eqPos - 1), "\=", "=")
                 val := SubStr(line, eqPos + 1)
                 LangKeyMap[rawKey] := val
                 trimmedKey := Trim(rawKey)
@@ -111,14 +143,15 @@ SetAppLanguage(lang) {
     LangKeysInit()
 }
 
-; getstatus 的 language：简中 zh，英文 en，其它语言包用文件名（小写、去空格）
+; getstatus 的 language：内置语言用语言代码，自定义语言用文件名（小写、去空格）
 GetClientLanguageCode() {
     lang := ""
     try lang := MainSoftData.Lang
-    if (lang == "" || lang == "简中")
+    if (lang == "")
         return "zh"
-    if (lang == "English")
-        return "en"
+    languages := OfficialLanguages()
+    if (languages.Has(lang))
+        return languages[lang].code
     code := StrLower(StrReplace(lang, " ", ""))
     return code == "" ? "zh" : code
 }

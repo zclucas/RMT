@@ -4,9 +4,10 @@
 ; 输入弹窗 —— XAML 迁移版（独立实现）
 ; 公开接口保持：ShowGui(Label, Content) / SureAction / HideAction / CloseAction
 ;
-; 本文件只管窗口：布局、主题、确定/取消、Tab 换行，以及把语音识别出的文字
-; 贴进输入框、把录音状态反映到麦克风图标上。语音本身由 Main\Util\SttUtil.ahk 里的
-; class VoiceInput 提供接口，窗口不碰模型、不碰解码、不碰轮询节奏。
+; 本文件只管窗口：布局、主题、确定/取消、Enter 确认与 Shift+Enter 换行，
+; 以及把语音识别出的文字贴进输入框、把录音状态反映到麦克风图标上。
+; 语音本身由 Main\Util\SttUtil.ahk 里的 class VoiceInput 提供接口，
+; 窗口不碰模型、不碰解码、不碰轮询节奏。
 ; =====================================================================
 
 class CustomInputGui {
@@ -14,10 +15,11 @@ class CustomInputGui {
         this.ui := ""
         this.Gui := ""
         this._closed := true
+        this._submitting := false ; 确定已按下：吃掉连点与重复的 Enter
         this._voice := ""
         this._recBase := ""      ; 开录时框内的原文（识别的追加起点）
         this._recText := ""      ; 本轮已写入框内的完整文本（本地副本，免去反复查询）
-        this._pttAt := 0         ; 上次按住说话键按下的时刻（吃掉键盘连发）
+        this._pttAt := 0         ; 上次按住说话键按下的时刻（吃掉热键连发）
         this._pttIds := []       ; 窗口级热键的注册令牌，关窗时注销
         this.HideAction := ""
         this.SureAction := ""
@@ -47,6 +49,7 @@ class CustomInputGui {
     _BuildAndShow() {
         global MySoftData
         this._closed := false
+        this._submitting := false
         this._voice := ""
         this._recBase := ""
         this._recText := ""
@@ -63,26 +66,20 @@ class CustomInputGui {
 
         body := main.Add("Grid").Grid_Row(1).Margin("10,12")
         body.Rows("28", "*", "48")
-        body.Add("TextBlock").Grid_Row(0).Name("LabelCon").Text("").VerticalAlignment("Center")
+        ; 麦克风按钮放标签行右侧：不占输入区、也不压到文本上（输入区叠按钮会被裁切）
+        promptRow := body.Add("DockPanel").Grid_Row(0)
+        promptRow.Add("Button").Name("BtnMic").DockPanel_Dock("Right").Width(26).Height(26)
+            .VerticalAlignment("Center").Padding("0").Margin("6,0,0,0")
+            .Background("Transparent").BorderThickness("0").Cursor("Hand")
+            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14)
+            .Foreground("{DynamicResource TextSub}").ToolTip(this._VoiceToolTip())
+        promptRow.Add("TextBlock").Name("LabelCon").Text("").VerticalAlignment("Center")
 
-        ; 输入区：语音按钮叠在右下角（论坛反馈#503）。TextBox 右侧预留 36px 给麦克风。
-        ; 图标按钮直接用默认 Button 模板：Padding(0) + 内容居中 + 字号 14 足够，
-        ; 不需要自定义 ControlTemplate（E720 在 12px 下笔画过细，看起来像被裁掉）。
-        inputHost := body.Add("Grid").Grid_Row(1).Margin("0,8,0,8")
-        inputHost.Add("TextBox").Name("ContentCon").AcceptsReturn("False").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("6,8,36,8").Margin("0")
+        body.Add("TextBox").Grid_Row(1).Name("ContentCon").AcceptsReturn("True").TextWrapping("Wrap")
+            .VerticalContentAlignment("Top").Padding("6,8,6,8").Margin("0,8,0,8")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
-        inputHost.Add("Button").Name("BtnMic").Width(28).Height(26).MinHeight(26).MinWidth(28)
-            .HorizontalAlignment("Right").VerticalAlignment("Bottom").Margin("0,0,3,3")
-            .Padding("0").Background("Transparent").BorderThickness("0").Cursor("Hand")
-            .SetProp("HorizontalContentAlignment", "Center")
-            .SetProp("VerticalContentAlignment", "Center")
-            .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(14)
-            .Foreground("{DynamicResource TextSub}")
-            .ToolTip(this._VoiceToolTip())
-            .SetProp("Panel.ZIndex", "2")
 
         btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         okBtn := AddCmdOkBtn(btnRow).IsDefault("True")
@@ -95,15 +92,16 @@ class CustomInputGui {
 
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
+        ; Enter 确认、Shift+Enter 换行：引擎对 PreviewKeyDown:Return 已置 Handled，不会插入原生换行
+        this.ui.OnEvent("Window", "PreviewKeyDown:Return", XamlWin.BindCurrent(this, "OnEnter"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.OnEvent("BtnOk", "Click", ObjBindMethod(this, "OnSureBtnClick"))
-        ; Tab 换行：引擎对 PreviewKeyDown:Tab 已置 Handled（不跳焦点），这里在光标处插入换行
-        this.ui.OnEvent("ContentCon", "PreviewKeyDown:Tab", ObjBindMethod(this, "OnTabKey"))
         this._SetupVoice()
     }
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        try this.ui.Update("ContentCon", "Focus", "True")
         ; 录音时每 40ms 要刷新一次文本，而默认的 Update 是同步 SendMessage，会把主线程
         ; 按在引擎的渲染节奏上。必须走伪线程——建槽要发同步 AsyncAttach，
         ; 在引擎事件回调栈里发会互等死锁。
@@ -125,6 +123,24 @@ class CustomInputGui {
         if (this._closed || !IsObject(this._voice))
             return
         this._voice.Warmup()
+    }
+
+    ; 输入框里的回车：Enter 提交，Shift+Enter 在光标处换行（多行粘贴保留换行）
+    OnEnter(state, ctrl, event) {
+        if (this._closed || this._submitting)
+            return
+        mods := state.Has("KeyModifiers") ? state["KeyModifiers"] : ""
+        if (mods == "Shift") {
+            if (state.Has("KeyFromEditable")) {
+                start := this.ui.Query("ContentCon>SelectionStart")
+                if (!IsInteger(start))
+                    return
+                this.ui.Update("ContentCon", "SelectedText", "`r`n")
+                this.ui.Update("ContentCon", "CaretIndex", start + 2)
+            }
+        } else if (mods == "") {
+            this.OnSureBtnClick(state, ctrl, event)
+        }
     }
 
     OnWindowClosing(state, ctrl, event) {
@@ -150,6 +166,9 @@ class CustomInputGui {
     }
 
     OnSureBtnClick(state, ctrl, event) {
+        if (this._closed || this._submitting)
+            return
+        this._submitting := true
         ; 停录并拿最终识别文本（DLL 在 End 里会把尾音收干净再返回），避免丢最后一句。
         ; 收尾结果会经 OnVoiceText 回来，这里不用再手动上屏。
         if (IsObject(this._voice))
@@ -188,13 +207,6 @@ class CustomInputGui {
             Action()
             this.HideAction := ""
         }
-    }
-
-    ; Tab 在光标处插入换行（论坛反馈#503：Tab 切行、回车确认）
-    OnTabKey(state, ctrl, info) {
-        if (!IsObject(this.ui) || this._closed)
-            return
-        this.ui.Update("ContentCon", "InsertText", "`n")
     }
 
     ; =================================================================

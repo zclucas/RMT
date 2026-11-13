@@ -167,7 +167,7 @@ class OperationSubGui {
     }
 
     Init(Index, ExpressStr) {
-        this.DLVariableArr := GetGuiVarArr(6)   ; 6-可运算变量
+        this.DLVariableArr := GetGuiVarArr("number")
         this.Index := Index
 
         ; 初始化变量列表下拉框（每次打开都重建，等价原生 Delete+Add+Text）

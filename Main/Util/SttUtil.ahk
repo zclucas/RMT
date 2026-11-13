@@ -9,11 +9,13 @@
 ;   class VoiceInput   会话编排层。什么时候开录、按节拍取文本、说完怎么收尾。
 ;                      不持有窗口、不碰控件、不弹提示；一个 DllCall 都没有，全经 SttEngine。
 ;
-; 【当前方案：单模型流式】本地 CPU 推理，不联网
+; 【当前方案：流式，本地 CPU 推理，不联网】
 ;   链路：SttStream_* → sherpa-onnx OnlineRecognizer
-;   模型：models\stt_stream\ —— x-asr streaming zipformer2 transducer
-;         （encoder/decoder/joiner + tokens.txt + bpe.model，中英混排带标点）
+;   模型：models\stt_stream\            —— 中英混合（x-asr streaming zipformer2 transducer）
+;         models\stt_stream\<语言>\     —— 其他语言（es / fr / de，固定 encoder/decoder/joiner）
 ;         chunk 档位 160/480/960/1920ms，见 SttGui.StreamPkg（默认 480ms）
+;   语言：SttEngine.LanguageModels + DefaultLanguage()，跟着界面语言走；
+;         同一时刻 DLL 内只有一份模型，切语言会重新 Init（1~3 秒，只在换语言时发生一次）
 ;   生命周期：StreamEnsureInit → StreamBegin → 每 40ms StreamPoll（取当前文本）
 ;            → StreamEnd(0)（返回即落定，内部已等完尾音并做完收尾解码）→ StreamGetResult
 ;   所有 DllCall 必须显式写 CDecl —— 32 位下 AHK 默认按 stdcall 调，漏了会弹坏栈。
@@ -24,16 +26,33 @@
 ; =================================================================
 
 class SttEngine {
+    ; 支持的语音语言。code 是模型目录名（zh-en 直接用 models\stt_stream 根目录），
+    ; label/flag 供下载界面显示；新增语言只需在这里加一项 + 放好模型目录。
+    static LanguageModels := Map(
+        "zh-en", {label: "中英混合", flag: ""},
+        "es", {label: "Español", flag: "es"},
+        "fr", {label: "Français", flag: "fr"},
+        "de", {label: "Deutsch", flag: "de"})
+
+    ; 界面语言 → 语音语言。没装对应模型的语言回落到中英混合。
+    static DefaultLanguage() {
+        languages := OfficialLanguages()
+        code := languages.Has(MainSoftData.Lang) ? languages[MainSoftData.Lang].code : ""
+        return SttEngine.LanguageModels.Has(code) ? code : "zh-en"
+    }
+
     __New() {
         this.hDll := 0
         this.streamLoaded := false    ; 流式模型是否已在 DLL 内加载（SttStream_Init 成功）
+        this.streamLanguage := ""     ; 已加载的是哪种语言（DLL 内只有一份模型）
+        this.asyncLanguage := ""      ; 后台加载（InitAsync）申请的语言，用于确认加载完的是不是它
         this.lastError := ""
         ; 按 AHK 进程位宽选择运行时目录（与 SherpaVoiceEngine 一致）
         arch := (A_PtrSize == 8) ? "x64" : "x86"
         this.RunDir := A_WorkingDir "\Plugins\Voice\" arch
         this.DllPath := this.RunDir "\VoiceDll.dll"
         this.StreamModelDir := A_WorkingDir "\Plugins\Voice\models\stt_stream"   ; 流式（当前唯一链路）
-        this._pollBuf := 0            ; StreamPoll 复用的接收缓冲（每 80ms 一次，别反复分配 16KB）
+        this._pollBuf := 0            ; StreamPoll 复用的接收缓冲（每 40ms 一次，别反复分配 16KB）
         this._TryLoadDll()
     }
 
@@ -78,13 +97,21 @@ class SttEngine {
             return -1
     }
 
+    ; 某语言的模型目录：中英混合在根目录，其余语言各占一个子目录
+    StreamDirectory(language := "zh-en") {
+        return language == "zh-en" ? this.StreamModelDir : this.StreamModelDir "\" language
+    }
+
     ; 流式模型两种形态：
     ;   transducer 三件套（encoder/decoder/joiner + tokens，如 x-asr zipformer2）
     ;   zipformer2 CTC 单模型（model*.onnx + tokens）
     ; 返回 [encoder, decoder, joiner, tokens]；CTC 形态时 decoder/joiner 为 ""
-    _StreamFiles() {
-        dir := this.StreamModelDir
+    ; 非中英混合的语言包文件名固定，不走 glob（避免同目录里的旧文件被误选）。
+    _StreamFiles(language := "zh-en") {
+        dir := this.StreamDirectory(language)
         tokens := dir "\tokens.txt"
+        if (language != "zh-en")
+            return [dir "\encoder.onnx", dir "\decoder.onnx", dir "\joiner.onnx", tokens]
         enc := this._FindFirst(dir "\encoder*.onnx")
         dec := this._FindFirst(dir "\decoder*.onnx")
         join := this._FindFirst(dir "\joiner*.onnx")
@@ -94,13 +121,14 @@ class SttEngine {
         return [model, "", "", tokens]
     }
 
-    IsStreamModelReady() {
-        files := this._StreamFiles()
+    IsStreamModelReady(language := "zh-en") {
+        files := this._StreamFiles(language)
         if (files[1] == "")
             return false
         ; 与 DLL 的选择顺序一致。部分模型不使用 BPE，词表存在时才检查。
+        dir := this.StreamDirectory(language)
         for name in ["bpe.model", "bbpe.model"] {
-            path := this.StreamModelDir "\" name
+            path := dir "\" name
             if (FileExist(path)) {
                 files.Push(path)
                 break
@@ -118,8 +146,8 @@ class SttEngine {
     }
 
     ; 流式主链路是否可用
-    IsStreamReady() {
-        return this.IsDllReady() && this.IsStreamModelReady()
+    IsStreamReady(language := "zh-en") {
+        return this.IsDllReady() && this.IsStreamModelReady(language)
     }
 
     ; 释放流式模型（窗口关闭时调用，及时回收内存）
@@ -128,6 +156,8 @@ class SttEngine {
             return
         DllCall(this.DllPath "\SttStream_Close", "CDecl Int")
         this.streamLoaded := false
+        this.streamLanguage := ""
+        this.asyncLanguage := ""
     }
 
     ; ---------- 流式识别（本地 OnlineRecognizer + zipformer2 CTC） ----------
@@ -142,15 +172,17 @@ class SttEngine {
     }
 
     ; 后台线程加载流式模型（不阻塞调用方）。返回 true 表示已排队/已在加载/已就绪；
-    ; 旧 DLL 没有该导出或模型不就绪时返回 false，调用方回退到同步 StreamEnsureInit
-    StreamEnsureInitAsync() {
-        if (this.streamLoaded)
+    ; 旧 DLL 没有该导出或模型不就绪时返回 false，调用方回退到同步 StreamEnsureInit。
+    ; 记下申请的语言：DLL 不暴露「后台加载的是哪种」，加载完靠它确认能否采纳。
+    StreamEnsureInitAsync(language := "zh-en") {
+        if (this.streamLoaded && this.streamLanguage == language)
             return true
-        if (!this.IsStreamReady())
+        if (!this.IsStreamReady(language))
             return false
-        f := this._StreamFiles()
+        f := this._StreamFiles(language)
         if (f[1] == "")
             return false
+        this.asyncLanguage := language
         try
             r := DllCall(this.DllPath "\SttStream_InitAsync", "WStr", f[1], "WStr", f[2], "WStr", f[3], "WStr", f[4], "CDecl Int")
         catch
@@ -159,61 +191,101 @@ class SttEngine {
     }
 
     ; 确保流式模型已加载（首次调用真正执行 SttStream_Init）
-    StreamEnsureInit() {
-        if (this.streamLoaded)
+    StreamEnsureInit(language := "zh-en") {
+        ; 加载期间别的线程来查状态要读到一致的结果，也避免两处同时发起加载
+        wasCritical := A_IsCritical
+        Critical("On")
+        try return this._EnsureStreamModel(language)
+        finally Critical(wasCritical)
+    }
+
+    _EnsureStreamModel(language) {
+        if (this.streamLoaded && this.streamLanguage == language)
             return true
-        ; 后台已加载完：直接采纳，避免重复加载一份模型
+        ; 后台已加载完：同一个语言就直接采纳，避免重复加载一份模型
         stA := this.StreamInitState()
-        if (stA == 2) {
+        if (stA == 2 && this._AsyncLangMatches(language)) {
             this.streamLoaded := true
+            this.streamLanguage := language
             return true
         }
-        ; 后台正在加载：等它完成（最多 6 秒）
-        if (stA == 1) {
+        ; 后台正在加载同一个语言：等它完成（最多 6 秒）
+        if (stA == 1 && this._AsyncLangMatches(language)) {
             loop 120 {
                 Sleep(50)
                 stA := this.StreamInitState()
                 if (stA == 2) {
                     this.streamLoaded := true
+                    this.streamLanguage := language
                     return true
                 }
                 if (stA == 3) {
                     this.streamLoaded := false
+                    this.streamLanguage := ""
                     this.lastError := this.StreamGetLastError()
                     return false
                 }
             }
             return false
         }
-        if (!this.IsStreamReady())
+        ; 走到这里：要么后台加载的是别的语言，要么根本没在加载。
+        ; 换语言只能同步重载（1~3 秒），录音中不允许换（StreamBusy）。
+        if (!this.IsStreamReady(language) || this.StreamBusy())
             return false
-        f := this._StreamFiles()
+        f := this._StreamFiles(language)
         if (f[1] == "")
             return false
         ; VoiceDll 导出使用 CDecl，32 位调用需要显式指定。
         r := DllCall(this.DllPath "\SttStream_Init", "WStr", f[1], "WStr", f[2], "WStr", f[3], "WStr", f[4], "CDecl Int")
         if (r) {
             this.streamLoaded := true
+            this.streamLanguage := language
             this.lastError := ""
         } else {
             this.streamLoaded := false
+            this.streamLanguage := ""
             this.lastError := this.StreamGetLastError()
         }
         return this.streamLoaded
     }
 
+    ; 后台那次加载申请的就是这个语言（也可能是不知道 —— 老 DLL 或外部发起，按同语言处理）
+    _AsyncLangMatches(language) {
+        return this.asyncLanguage == "" || this.asyncLanguage == language
+    }
+
     ; 建流 + 起采集
-    StreamBegin() {
-        if (!this.StreamEnsureInit())
+    StreamBegin(language := "zh-en") {
+        wasCritical := A_IsCritical
+        Critical("On")
+        try return this._BeginStream(language)
+        finally Critical(wasCritical)
+    }
+
+    _BeginStream(language) {
+        if (this.StreamBusy()) {
+            this.lastError := GetLang("已有语音录入正在进行")
             return false
+        }
+        this.lastError := ""
+        if (!this.StreamEnsureInit(language)) {
+            if (this.lastError == "")
+                this.lastError := GetLang("识别模型未就绪，请先下载模型")
+            return false
+        }
         r := DllCall(this.DllPath "\SttStream_Begin", "CDecl Int")
-        if (!r)
-            this.lastError := this.StreamGetLastError()
+        this.lastError := r ? "" : this.StreamGetLastError()
         return r != 0
     }
 
+    ; 有没有正在占用的流（录音中 / 收尾中）。这两个状态下不能重载模型。
+    StreamBusy() {
+        state := this.StreamGetState()
+        return state == 1 || state == 2
+    }
+
     ; 取当前累积文本。解码已在 DLL 内部线程完成，这里只是一次内存拷贝；
-    ; 录音中每 ~80ms 调一次，成本可忽略。
+    ; 录音中每 ~40ms 调一次，成本可忽略。
     StreamPoll() {
         if (!this.IsDllReady())
             return ""
@@ -267,8 +339,8 @@ class SttEngine {
     }
 
     ; 离线验证：分片喂 wav 模拟实时上屏（不依赖麦克风）
-    StreamTestWav(wavPath) {
-        if (!this.StreamEnsureInit())
+    StreamTestWav(wavPath, language := "zh-en") {
+        if (!this.StreamEnsureInit(language))
             return ""
         buf := Buffer(4096)
         r := DllCall(this.DllPath "\SttStream_TestWav", "WStr", wavPath, "Ptr", buf, "Int", 4096, "CDecl Int")
@@ -301,10 +373,12 @@ InitSttEngine() {
 }
 
 ; ---------- 启动预热 ----------
-; 只探磁盘：流式模型齐备（encoder/model + tokens）才算装了语音组件。
+; 只探磁盘：该语言的流式模型齐备（encoder/model + tokens）才算装了。
 ; 不碰 DLL，未安装语音扩展的机器零开销。
-SttStreamModelOnDisk() {
+SttStreamModelOnDisk(language := "zh-en") {
     dir := A_WorkingDir "\Plugins\Voice\models\stt_stream"
+    if (language != "zh-en")
+        dir .= "\" language
     if (!FileExist(dir "\tokens.txt"))
         return false
     return FileExist(dir "\encoder*.onnx") || FileExist(dir "\model*.onnx")
@@ -313,23 +387,26 @@ SttStreamModelOnDisk() {
 ; 后台预热流式语音模型（RMT 启动后调用）：只走 DLL 的异步加载，绝不阻塞主线程。
 ; 返回 true = 已在加载 / 已就绪；false = 缺模型、缺 DLL，或旧版 DLL 没有异步导出
 ; （旧 DLL 不在这里退化成同步加载——那会把启动卡住 1~3 秒，弹窗里再懒加载即可）。
-SttWarmupStreamAsync() {
-    if (!SttStreamModelOnDisk())
+SttWarmupStreamAsync(language := "") {
+    if (language == "")
+        language := SttEngine.DefaultLanguage()
+    if (!SttStreamModelOnDisk(language))
         return false
     try {
         engine := InitSttEngine()
-        if (engine.streamLoaded)
+        if (engine.streamLoaded && engine.streamLanguage == language)
             return true
-        if (!engine.IsDllReady() || !engine.IsStreamModelReady())
+        if (!engine.IsDllReady() || !engine.IsStreamModelReady(language))
             return false
         st := engine.StreamInitState()
-        if (st == 2) {               ; 后台已加载完：采纳，别重复加载一份
+        if (st == 2 && engine._AsyncLangMatches(language)) {   ; 后台已加载完：采纳，别重复加载一份
             engine.streamLoaded := true
+            engine.streamLanguage := language
             return true
         }
-        if (st == 1)                 ; 后台正在加载
+        if (st == 1 && engine._AsyncLangMatches(language))     ; 后台正在加载
             return true
-        return engine.StreamEnsureInitAsync()
+        return engine.StreamEnsureInitAsync(language)
     } catch {
         return false
     }
@@ -344,6 +421,9 @@ SttWarmupStreamAsync() {
 ;
 ; 真正的活在 VoiceDll 里：WASAPI 采集、分块、解码、收尾补零、收尾前的尾音
 ; 落定全在 DLL 内部完成。本类每次调用只是一次 DllCall，取文本是一次内存拷贝。
+;
+; 识别语言由 Start 决定：跟着界面语言（SttEngine.DefaultLanguage）走，
+; 一个会话内固定不变，中途改界面语言要等下一次开录才生效。
 ;
 ; 回调（构造后赋值，都可选）：
 ;   OnText(text)      实时识别文本，整段而非增量；没变化不重复触发
@@ -385,6 +465,9 @@ class VoiceInput {
         this.waitByHold := false
         this.waitTicks := 0
         this.live := ""            ; 本轮识别文本（不含输入框原有内容）
+        this.lang := ""            ; 本轮用的语音语言（Start 时定，会话内不变）
+                                   ; 叫 lang 不叫 language：类成员名大小写不敏感，
+                                   ; 与下面的 Language() 访问器同名会互相覆盖（Property is read-only）
 
         this.tickTimer := ObjBindMethod(this, "_Poll")
         this.waitTimer := ObjBindMethod(this, "_PollWait")
@@ -395,6 +478,7 @@ class VoiceInput {
 
     IsRecording() => this.rec
     IsWaiting() => this.waiting
+    Language() => this.lang
 
     ; ---------- 生命周期 ----------
 
@@ -403,7 +487,7 @@ class VoiceInput {
     Warmup() {
         if (this.disposed || this.rec)
             return false
-        return SttWarmupStreamAsync()
+        return SttWarmupStreamAsync(SttEngine.DefaultLanguage())
     }
 
     ; 麦克风按钮的统一入口：录音中→停并落定；等模型→取消；否则开录。
@@ -427,15 +511,18 @@ class VoiceInput {
     Start(byHold := false) {
         if (this.disposed || this.rec || this.waiting)
             return false
-        ; 没装扩展/没下模型：这里会把下载引导排到伪线程再弹，业务方不用管。
-        if (!SttPromptModelDownload())
+        ; 语言跟着界面走，一个会话内不变（换语言要重载模型，不能在录到一半换）
+        this.lang := SttEngine.DefaultLanguage()
+        ; 没装扩展/没下该语言的模型：这里会把下载引导排到伪线程再弹，业务方不用管。
+        if (!SttPromptModelDownload(this.lang))
             return false
         engine := this._Engine()
         if (!IsObject(engine))
             return false
         this._Acquire()
-        ; 模型还在后台加载：排个队，加载完自动开录，不用让用户干等重按
-        if (engine.StreamInitState() == 1) {
+        ; 模型还在后台加载：排个队，加载完自动开录，不用让用户干等重按。
+        ; 只有后台加载的就是本语言时才值得等；加载的是别的语言，等完也得重载，没意义。
+        if (engine.StreamInitState() == 1 && engine._AsyncLangMatches(this.lang)) {
             this._BeginWait(byHold)
             return true
         }
@@ -525,8 +612,8 @@ class VoiceInput {
         engine := this._Engine()
         if (!IsObject(engine))
             return false
-        if (!engine.StreamBegin()) {
-            this._Notify("startFailed", engine.StreamGetLastError())
+        if (!engine.StreamBegin(this.lang)) {
+            this._Notify("startFailed", engine.lastError)
             this._Release()
             return false
         }

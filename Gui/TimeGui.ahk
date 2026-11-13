@@ -279,18 +279,19 @@ class TimeGui {
         this.ui.Update("TimeModeCon", "SelectedIndex", modeIdx - 1)
 
         vars := GetGuiVarArr()
+        timestampVars := GetGuiVarArr("timeVars", "timestamp")
         param1 := ObjHasOwnProp(this.Data, "Param1") ? this.Data.Param1 : ""
         param2 := ObjHasOwnProp(this.Data, "Param2") ? this.Data.Param2 : ""
         param4 := ObjHasOwnProp(this.Data, "Param4") ? this.Data.Param4 : ""
         subMode := TimeNormSubMode(this.Data)
         waitType := TimeNormWaitType(param2 != "" ? param2 : "时刻")
         this._SetSelectedByKey("WaitUnitCon", waitType, TimeGui.WaitUnitKeys)
-        this._SetCombo("WaitVarCon", vars, waitType == "时间戳" ? param1 : "")
+        this._SetCombo("WaitVarCon", timestampVars, GetLang(waitType == "时间戳" ? param1 : ""))
         wh := 14, wm := 30, ws := 0
         this._ParseClockToHMS(waitType == "时刻" ? param1 : "", 14, 30, 0, &wh, &wm, &ws)
-        this._SetCombo("WaitHourCon", vars, wh)
-        this._SetCombo("WaitMinCon", vars, wm)
-        this._SetCombo("WaitSecCon", vars, ws)
+        this._SetCombo("WaitHourCon", GetGuiVarArr("hour"), GetLang(wh))
+        this._SetCombo("WaitMinCon", GetGuiVarArr("minute"), GetLang(wm))
+        this._SetCombo("WaitSecCon", GetGuiVarArr("second"), GetLang(ws))
         h := 0, m := 0, s := 10
         this._ParseDurationToHMS(param1, param2, &h, &m, &s)
         this._SetCombo("HourCon", vars, h)
@@ -302,16 +303,16 @@ class TimeGui {
         this._SetSelectedByKey("WinKindCon", winKind, TimeGui.WindowKindKeys)
         sh := 9, sm := 0, ss := 0
         this._ParseClockToHMS(subMode == "区间判断" && winKind == "时刻" ? param1 : "", 9, 0, 0, &sh, &sm, &ss)
-        this._SetCombo("StartHourCon", vars, sh)
-        this._SetCombo("StartMinCon", vars, sm)
-        this._SetCombo("StartSecCon", vars, ss)
+        this._SetCombo("StartHourCon", GetGuiVarArr("hour"), GetLang(sh))
+        this._SetCombo("StartMinCon", GetGuiVarArr("minute"), GetLang(sm))
+        this._SetCombo("StartSecCon", GetGuiVarArr("second"), GetLang(ss))
         eh := 18, em := 0, es := 0
         this._ParseClockToHMS(subMode == "区间判断" && winKind == "时刻" ? param2 : "", 18, 0, 0, &eh, &em, &es)
-        this._SetCombo("EndHourCon", vars, eh)
-        this._SetCombo("EndMinCon", vars, em)
-        this._SetCombo("EndSecCon", vars, es)
-        this._SetCombo("StartVarCon", vars, subMode == "区间判断" && winKind == "时间戳" ? param1 : "")
-        this._SetCombo("EndVarCon", vars, subMode == "区间判断" && winKind == "时间戳" ? param2 : "")
+        this._SetCombo("EndHourCon", GetGuiVarArr("hour"), GetLang(eh))
+        this._SetCombo("EndMinCon", GetGuiVarArr("minute"), GetLang(em))
+        this._SetCombo("EndSecCon", GetGuiVarArr("second"), GetLang(es))
+        this._SetCombo("StartVarCon", timestampVars, GetLang(subMode == "区间判断" && winKind == "时间戳" ? param1 : ""))
+        this._SetCombo("EndVarCon", timestampVars, GetLang(subMode == "区间判断" && winKind == "时间戳" ? param2 : ""))
         mismatch := param4 != "" ? param4 : "跳过"
         this._SetSelectedByKey("MismatchActionCon", mismatch, TimeGui.MismatchActionKeys)
         this.OnWaitTypeChange()
@@ -407,7 +408,7 @@ class TimeGui {
     }
 
     _ReadHms(hName, mName, sName) {
-        return this.ui.Query(hName) ":" this.ui.Query(mName) ":" this.ui.Query(sName)
+        return GetVarName(this.ui.Query(hName)) ":" GetVarName(this.ui.Query(mName)) ":" GetVarName(this.ui.Query(sName))
     }
 
     _HmsEmpty(hName, mName, sName) {
@@ -501,7 +502,7 @@ class TimeGui {
                 if (t == "时长")
                     this.Data.Param1 := this._ReadHms("HourCon", "MinCon", "SecCon")
                 else if (t == "时间戳")
-                    this.Data.Param1 := this.ui.Query("WaitVarCon")
+                    this.Data.Param1 := GetVarName(this.ui.Query("WaitVarCon"))
                 else
                     this.Data.Param1 := this._ReadHms("WaitHourCon", "WaitMinCon", "WaitSecCon")
                 ; 不再展示高级轮询选项；保留已加载的兼容参数，新指令沿用 TimeData 默认值。
@@ -509,8 +510,8 @@ class TimeGui {
                 wt := TimeNormWindowType(this._GetSelectedKey("WinKindCon", TimeGui.WindowKindKeys))
                 this.Data.Param5 := wt
                 if (wt == "时间戳") {
-                    this.Data.Param1 := this.ui.Query("StartVarCon")
-                    this.Data.Param2 := this.ui.Query("EndVarCon")
+                    this.Data.Param1 := GetVarName(this.ui.Query("StartVarCon"))
+                    this.Data.Param2 := GetVarName(this.ui.Query("EndVarCon"))
                 } else {
                     this.Data.Param1 := this._ReadHms("StartHourCon", "StartMinCon", "StartSecCon")
                     this.Data.Param2 := this._ReadHms("EndHourCon", "EndMinCon", "EndSecCon")

@@ -27,7 +27,6 @@ class LoopGui {
         this._title := ""
 
         this.Data := ""
-        this.DLVariableArr := []
     }
 
     Hwnd() {
@@ -242,7 +241,7 @@ class LoopGui {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             this._Bind("ToggleCon_" i, "Click", ObjBindMethod(this, "OnRefresh"))
-            this._Bind("CompareTypeCon_" i, "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
+            this._Bind("CompareTypeCon_" i, "SelectionChanged", this._OnCompareTypeChange.Bind(this, i))
             this._Bind("DelCondi_" i, "Click", ObjBindMethod(this, "OnDelCondi", i))
         }
     }
@@ -278,10 +277,11 @@ class LoopGui {
             i := A_Index
             tog := this.Data.ToggleArr[i] ? "True" : "False"
             batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
-            this._BatchSetCombo(batch, "NameCon_" i, this.DLVariableArr, GetLang(this.Data.NameArr[i]))
             ct := this.Data.CompareTypeArr[i]
+            items := GetCompareGuiVarArr(ct)
+            this._BatchSetCombo(batch, "NameCon_" i, items, GetLang(this.Data.NameArr[i]))
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
-            this._BatchSetCombo(batch, "VariableCon_" i, this.DLVariableArr, GetLang(this.Data.VariableArr[i]))
+            this._BatchSetCombo(batch, "VariableCon_" i, items, GetLang(this.Data.VariableArr[i]))
             onlyOne := this.Data.ToggleArr.Length <= 1
             batch.Push({ControlName: "DelCondi_" i, PropertyName: "IsEnabled", Value: onlyOne ? "False" : "True"})
         }
@@ -359,11 +359,10 @@ class LoopGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("循环")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr(1)
 
-        CountVariableArr := GetGuiVarArr(2)
+        CountVariableArr := GetGuiVarArr("count")
         CountVariableArr.Push(GetLang("无限"))
-        this._SetCombo("CountCon", CountVariableArr, this.Data.LoopCount == -1 ? GetLang("无限") : this.Data.LoopCount)
+        this._SetCombo("CountCon", CountVariableArr, this.Data.LoopCount == -1 ? GetLang("无限") : GetLang(this.Data.LoopCount))
 
         ; 原生 DropDownList.Value 为 1-based，XAML SelectedIndex 为 0-based
         this.ui.Update("CondiCon", "SelectedIndex", String(CmdEnumIndex(this.Data.CondiType, CmdEnumCondiNames())))
@@ -380,6 +379,15 @@ class LoopGui {
         else {
             Hotkey("!l", MacroAction, "Off")
         }
+    }
+
+    _OnCompareTypeChange(i, *) {
+        if (!IsObject(this.ui))
+            return
+        items := GetCompareGuiVarArr(ComboIndexToCompareType(this._CompareIndex(i)))
+        for name in ["NameCon_" i, "VariableCon_" i]
+            this._SetCombo(name, items, this.ui.Query(name))
+        this.OnRefresh()
     }
 
     OnRefresh(*) {
@@ -400,7 +408,6 @@ class LoopGui {
     OnEditMacroBtnClick(*) {
         if (this.MacroGui == "") {
             this.MacroGui := MacroEditGui()
-            this.MacroGui.DLVariableArr := this.DLVariableArr
             this.MacroGui.SureFocusCon := this.FocusCon
 
             ParentTile := StrReplace(this._title, GetLang("编辑器"), "")
@@ -456,7 +463,7 @@ class LoopGui {
     }
 
     SaveLoopData() {
-        this.Data.LoopCount := this.ui.Query("CountCon") == GetLang("无限") ? -1 : this.ui.Query("CountCon")
+        this.Data.LoopCount := this.ui.Query("CountCon") == GetLang("无限") ? -1 : GetBuiltinVarName(this.ui.Query("CountCon"))
         this.Data.CondiType := CmdEnumFromIndex(this._CondiIndex(), CmdEnumCondiNames())
         this.Data.LogicType := CmdEnumFromIndex(this._LogicIndex(), CmdEnumLogicNames())
         this.Data.LoopBody := GetLangMacro(this.ui.Query("LoopBodyCon"), 2)

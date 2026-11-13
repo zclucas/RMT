@@ -85,6 +85,115 @@ TextOpsEx(Data, tableItem, index) {
     MySetGlobalArray(Data.SaveName, ResArr)
 }
 
+TextOpsTypeNames() {
+    return ["文本拼接", "文本分割", "文本提取", "文本替换", "时间戳处理", "去除空格", "大小写转换", "文本统计"]
+}
+
+TextOpsTimestampModes() {
+    return ["自定义格式", "提取时间量", "提取所有时间量", "日期时间", "日期", "时刻"]
+}
+
+TextOpsTimestampPresetFormat(mode) {
+    switch mode {
+        case "日期时间": return "yyyy-MM-dd HH:mm:ss"
+        case "日期": return "yyyy-MM-dd"
+        case "时刻": return "HH:mm:ss"
+    }
+    return ""
+}
+
+TextOpsTimestampComponents() {
+    return [
+        ["年", "YYYY", "年份", 1, 4, "-"],
+        ["月", "MM", "月份", 5, 2, "-"],
+        ["日", "DD", "日号", 7, 2, " "],
+        ["时", "HH", "小时", 9, 2, ":"],
+        ["分", "mm", "分钟", 11, 2, ":"],
+        ["秒", "ss", "秒钟", 13, 2, ""],
+        ["毫秒", "fff", "毫秒", 0, 3, ""]
+    ]
+}
+
+TextOpsTimestampComponentIndex(componentName) {
+    for i, component in TextOpsTimestampComponents() {
+        if (component[1] == componentName)
+            return i - 1
+    }
+    return 0
+}
+
+TextOpsTimestampComponentLabels() {
+    labels := []
+    for component in TextOpsTimestampComponents() {
+        label := GetLang(component[3])
+        labels.Push(label == component[3] ? component[1] : label)
+    }
+    return labels
+}
+
+TextOpsTimestampFormatParts(data) {
+    components := TextOpsTimestampComponents()
+    parts := []
+    seen := Map()
+    if (data.HasOwnProp("TimestampFormatParts") && data.TimestampFormatParts is Array) {
+        for part in data.TimestampFormatParts {
+            if (!IsObject(part) || !part.HasOwnProp("Index") || !part.HasOwnProp("Enabled") || !part.HasOwnProp("Suffix"))
+                continue
+            if (!IsInteger(part.Index) || part.Index < 1 || part.Index > components.Length || seen.Has(part.Index))
+                continue
+            parts.Push({Index: part.Index, Enabled: part.Enabled, Suffix: components[part.Index][1] == "毫秒" ? "" : part.Suffix})
+            seen[part.Index] := true
+        }
+    }
+    for i, component in components {
+        if (!seen.Has(i))
+            parts.Push({Index: i, Enabled: component[1] != "毫秒", Suffix: component[6]})
+    }
+    return parts
+}
+
+TextOpsResultType(type, mode) {
+    return (type == "文本分割" || type == "文本提取" || (type == "时间戳处理" && mode == "提取所有时间量"))
+        ? "数组" : "变量"
+}
+
+TextOpsTimestamp(data, tableItem, index) {
+    source := Trim(data.Name)
+    if (RegExMatch(source, "^\{([^{}]+)\}$", &reference) && GetLangKey(reference[1]) == "当前时间戳")
+        source := "当前时间戳"
+    epochMs := TimeEpochMilliseconds(TimeResolveValue(tableItem, index, source))
+    if (epochMs == "") {
+        RMTErrorShow(GetLang("无效的时间戳"), RMT_LV_WARN, "宏")
+        return
+    }
+    stamp := StampToTimeStr(epochMs)
+    components := TextOpsTimestampComponents()
+    fields := []
+    for component in components
+        fields.Push(component[4] ? SubStr(stamp, component[4], component[5]) : Format("{:03}", Mod(epochMs, 1000)))
+
+    switch data.ArgsType {
+        case "提取时间量":
+            result := Integer(fields[TextOpsTimestampComponentIndex(data.ArgsName) + 1])
+        case "提取所有时间量":
+            values := []
+            for field in fields
+                values.Push(Integer(field))
+            MySetGlobalArray(data.SaveName, values)
+            return
+        case "自定义格式":
+            result := ""
+            for part in TextOpsTimestampFormatParts(data) {
+                if (part.Enabled)
+                    result .= fields[part.Index] part.Suffix
+            }
+        default:
+            preset := TextOpsTimestampPresetFormat(data.ArgsType)
+            result := FormatTime(stamp, preset != "" ? preset : TextOpsTimestampPresetFormat("日期时间"))
+    }
+    MySetGlobalVariable([data.SaveName], [result], false)
+}
+
 TextOpsTrimSpace(Data, tableItem, index) {
     SourceText := TextGetSource(Data, tableItem, index)
 

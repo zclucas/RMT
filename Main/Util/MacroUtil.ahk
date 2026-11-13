@@ -2085,6 +2085,8 @@ OnTextOps(tableItem, cmd, index) {
             TextOpsEx(Data, tableItem, index)
         case "文本替换":
             TextOpsReplace(Data, tableItem, index)
+        case "时间戳处理":
+            TextOpsTimestamp(Data, tableItem, index)
         case "去除空格":
             TextOpsTrimSpace(Data, tableItem, index)
         case "大小写转换":

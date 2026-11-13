@@ -159,7 +159,7 @@ public partial class AhkWpfEngine
                             {
                                 DumpStateWithArgs(ctrlName, baseEvt, e);
                                 // Enter：交给 AHK（发送 / Shift+换行），阻止 TextBox 再插入换行
-                                // Tab：交给 AHK（输入弹窗 Tab 换行），阻止默认焦点移动
+                                // Tab：交给 AHK 处理，阻止默认焦点移动（绑了 Tab 的窗口才会走到）
                                 if (keyFilter == "Return" || keyFilter == "Tab")
                                     e.Handled = true;
                             }

@@ -106,7 +106,11 @@
                 if (isSel)
                     selIdx := k - 1
                 descAttr := descriptions.Length ? ' Tag="' this._XmlEsc(GetLang(descriptions[k])) '"' : ""
-                itemsXaml .= '<ComboBoxItem Content="' this._XmlEsc(it) '"' descAttr '/>'
+                if (name == "CmbLang") {
+                    official := OfficialLanguages()
+                    itemsXaml .= LanguageOptionXaml(it, it, official.Has(it) ? official[it].flag : "")
+                } else
+                    itemsXaml .= '<ComboBoxItem Content="' this._XmlEsc(it) '"' descAttr '/>'
             }
             selAttr := (selIdx == "") ? "" : ' SelectedIndex="' selIdx '"'
             if (editable)
