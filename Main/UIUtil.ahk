@@ -147,7 +147,7 @@ GetLastWinPos() {
             ; 新格式 xπyπSπ缩放系数：尺寸 = 1400×787 基准 × 当前屏幕 fs × 系数（物理像素）
             ; 跨分辨率（4K→1080p 等）时窗口比例不变，不会因保存的绝对尺寸而巨大化
             if (WinPosArr.Length >= 4 && WinPosArr[3] == "S" && IsNumber(WinPosArr[4])) {
-                dpi := DllCall("GetDpiForSystem", "UInt") / 96.0
+                dpi := A_ScreenDPI / 96.0
                 dipSW := A_ScreenWidth / dpi
                 dipSH := A_ScreenHeight / dpi
                 fs := Min(dipSW / 1920, dipSH / 1080)

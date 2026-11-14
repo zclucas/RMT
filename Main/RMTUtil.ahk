@@ -244,7 +244,7 @@ SaveCurWinPos() {
     MyGui.GetPos(&x, &y, &w, &h)
     ; 保存「缩放系数」而非绝对尺寸：系数 = 窗口尺寸 / (1400×787 基准 × 当前屏幕缩放 fs)。
     ; 加载时按目标屏幕的 fs×系数推导尺寸 → 4K 到 1080p 等跨分辨率切换时窗口比例不变，不会巨大化。
-    dpi := DllCall("GetDpiForSystem", "UInt") / 96.0
+    dpi := A_ScreenDPI / 96.0
     dipSW := A_ScreenWidth / dpi
     dipSH := A_ScreenHeight / dpi
     fs := Min(dipSW / 1920, dipSH / 1080)

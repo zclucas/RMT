@@ -51,6 +51,9 @@ _ShowError(msg, stack := "") {
     try {
         ; 主进程：归口系统日志 + 错误中心聚合（不模态弹窗打断）
         RMTLogSys(RMT_LV_ERROR, "Master", fullMsg)
+        ; 必须立刻落盘：启动期出错时自动执行线程就此结束、进程随即退出，
+        ; 日志只留在缓冲区里，用户看到的就是「托盘一闪就没了」且零痕迹。
+        try FlushRMTLogAsync()
         if (IsSet(MyErrorMsgBoxGui) && IsObject(MyErrorMsgBoxGui))
             MyErrorMsgBoxGui.ShowGui(Format("[Master] {}", fullMsg))
     } catch {

@@ -86,18 +86,12 @@ class SherpaVoiceEngine {
             return true
         if (!FileExist(this.DllPath))
             return false
-        pluginDir := this.RunDir
-        ; 依次加载依赖（顺序无关，重在把插件目录挂进搜索路径）。
-        ; 先加载随包携带的 VC 运行库，否则 Win10 上 onnxruntime 起不来。
-        for dep in ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll", "sherpa-onnx-c-api.dll"] {
-            dp := pluginDir "\" dep
-            if (FileExist(dp)) {
-                try
-                    DllCall("LoadLibrary", "Str", dp, "Ptr")
-            }
-        }
+        ; 用 LOAD_WITH_ALTERED_SEARCH_PATH(0x8)：依赖从插件目录开始解析，
+        ; 同目录的 onnxruntime / sherpa 自动找到；
+        ; VC++ 运行库不随包携带，会继续按标准路径落到系统目录。
+        ; 不再手工枚举依赖清单——列了会漏，也管不了以后新加的依赖。
         try {
-            this.hDll := DllCall("LoadLibrary", "Str", this.DllPath, "Ptr")
+            this.hDll := DllCall("LoadLibraryExW", "Str", this.DllPath, "Ptr", 0, "UInt", 0x8, "Ptr")
             if (this.hDll != 0)
                 return true
         } catch as e {

@@ -1,5 +1,6 @@
 #Requires AutoHotkey v2.0
 #Include ..\Shared\OfficialLanguages.ahk
+#Include XamlText.ahk                 ; EscapeXamlXml：本文件第 32 行直接用，不能等 XAML 库
 global MainSoftData                ; 在 GlobalUtil.ahk 中由 MainConfig() 赋值
 LangKeyMap := Map()
 LangValueMap := Map()              ; 文本反向映射（本地化显示名 -> 内部简中键）

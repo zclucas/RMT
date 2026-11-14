@@ -1,10 +1,12 @@
 #Requires AutoHotkey v2.0
 ; #NoTrayIcon
 global RMT_VERSION := "1.3F3"
-#Include Main\SelfCheck.ahk
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
 #Include Main\MainGlobalUtil.ahk
+#Include Main\SelfCheck.ahk   ; 必须排在 AssetUtil/GlobalUtil 之后：
+                               ; 它用到 RmtAssetsBaseUrl、OfficialLanguages、RmtDialog 等，
+                               ; 排在前面时 AHK 编译期会把这些当「未赋值局部变量」报 #Warn。
 #SingleInstance Off ; 命令行客户端先走应用互斥，不能由界面库的 Force 规则替换常驻进程。
 
 ; §3 单实例：已有实例且携带命令行参数 → 转发命令队列后退出；否则（无参数/提权切换）接管
@@ -13,8 +15,12 @@ if (!EnsureSingleInstance())
 
 ; 把程序路径写入环境变量 rmt，并安装 rmt 命令（仅常驻实例执行，命令行转发进程会先退出）
 RmtRegisterCliCommand()
+; 启动前环境预检：KB4474419 / .NET，用原生界面，必须先于引擎加载
+if (!RuntimePrecheck())
+    ExitApp()
 XAMLHost.Prewarm()
 InitFilePath()              ;初始化文件路径
+IconFontRegisterCached()    ;图标字体：本地已有缓存时注册（毫秒级，不联网）
 LoadCurMacroSetting()       ;加载当前宏配置
 HandleOpenArg()             ;处理打开软件的参数
 RegisterNativeComboWheelGuard()
@@ -41,4 +47,10 @@ RunStartupCommandsAfterUI() {
     ; 这样输入弹窗「按住 Alt 说话」不必等首次加载。放启动链末尾再延迟 2 秒，
     ; 避开开窗/拉起 Worker 的高峰；加载在 DLL 线程里做，主线程不阻塞。
     SetTimer(SttWarmupStreamAsync, -2000)
+    ; VC++ 运行库自检：齐全时静默返回；缺了才问一次，排在开窗高峰之后。
+    SetTimer(VcRuntimeStartupCheck, -2500)
+    ; 手柄组件自检：排在运行库之后，避免两个询问框叠在一起
+    SetTimer(DirectXStartupCheck, -6000)
+    ; 图标字体：非必要资源，缺了才后台下载，装完提示重启生效，不拖慢启动
+    SetTimer(IconFontStartupCheck, -8000)
 }

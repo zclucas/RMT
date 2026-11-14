@@ -64,23 +64,18 @@ class SttEngine {
         this._TryLoadDll()
     }
 
-    ; 尝试加载 VoiceDll（先预加载依赖，避免依赖搜索错位；与 SherpaVoiceEngine 同法）
+    ; 尝试加载 VoiceDll。
+    ; 用 LOAD_WITH_ALTERED_SEARCH_PATH(0x8)：依赖先按 VoiceDll 所在目录解析，
+    ; 同目录的 onnxruntime / sherpa 自动找到；
+    ; 同目录没有的 VC++ 运行库会继续按标准路径落到系统目录，不依赖随包副本。
+    ; 所以不需要手工维护依赖清单——那玩意儿会漏，也管不了以后新加的依赖。
     _TryLoadDll() {
         if (this.hDll != 0)
             return true
         if (!FileExist(this.DllPath))
             return false
-        ; Win10 常未安装带 VCRUNTIME140_1 的 VC++ 运行库。运行库不在旁边时，
-        ; onnxruntime 加载失败，语音按钮只会弹出「语音引擎未就绪」，到不了模型下载。
-        for dep in ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll", "sherpa-onnx-c-api.dll"] {
-            dp := this.RunDir "\" dep
-            if (FileExist(dp)) {
-                try
-                    DllCall("LoadLibrary", "Str", dp, "Ptr")
-            }
-        }
         try {
-            this.hDll := DllCall("LoadLibrary", "Str", this.DllPath, "Ptr")
+            this.hDll := DllCall("LoadLibraryExW", "Str", this.DllPath, "Ptr", 0, "UInt", 0x8, "Ptr")
             if (this.hDll != 0)
                 return true
         } catch as e {
