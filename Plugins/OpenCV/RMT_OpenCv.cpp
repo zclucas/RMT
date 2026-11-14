@@ -28,6 +28,20 @@
 #include "SearchAll.h"
 #pragma comment(lib, "Dwmapi.lib")
 
+// Win7 兼容：VS2022 在 C++ 异常抛出路径上会自动引用 RoOriginateLanguageException，
+// 该符号来自 api-ms-win-core-winrt-error-l1-1-1.dll（Win8+ 才有的 API set），
+// Win7 的 loader 不认识这个名字，加载本 DLL 会直接报 126。
+// 插件里从未用到 WinRT，这里给一个 no-op 本地定义并导出，让 __imp_ 指向自身，
+// 导入表里就不再出现该 API set；Win8+ 行为不变（原调用只是给 WER 记录异常来源）。
+extern "C" __declspec(dllexport)
+HRESULT __stdcall RoOriginateLanguageException(HRESULT hr, void* message, void* languageException)
+{
+    (void)hr;
+    (void)message;
+    (void)languageException;
+    return S_OK;
+}
+
 // 兜底：某些 SDK/config 仍会在别处引入 min/max 宏
 #ifdef min
 #undef min

@@ -434,7 +434,7 @@ class XamlWin {
     }
 
     ; fill：Show 前入队内容的回调（Func / BoundFunc / 有 Call 的对象）
-    static Open(ui, fill := "", ownerHwnd := "", activate := true) {
+    static Open(ui, fill := "", ownerHwnd := "", activate := true, waitMs := 0) {
         if (!IsObject(ui))
             return false
         XamlWin.QueueTheme(ui)
@@ -457,7 +457,7 @@ class XamlWin {
         if (ownerHwnd != "")
             ui.ownerHwnd := ownerHwnd
         ui.Show()
-        ok := XamlWin.WaitHwnd(ui, ownerHwnd, activate)
+        ok := XamlWin.WaitHwnd(ui, ownerHwnd, activate, waitMs)
         if (ok && ui.HasProp("_modalStack"))
             XamlWin._ArmModalGuard(ui)
         return ok
@@ -544,19 +544,25 @@ class XamlWin {
             try XamlWin._ArmModalGuard(ui)
     }
 
-    static WaitHwnd(ui, ownerHwnd := "", activate := true) {
+    ; timeoutMs 只在「首次建窗」这类需要等引擎冷启动的场合显式给：默认 2 秒是按热引擎
+    ; （daemon 已就绪、WPF 已初始化）算的，新机器上第一扇窗要等 WPF 首次初始化，2 秒不够。
+    static WaitHwnd(ui, ownerHwnd := "", activate := true, timeoutMs := 0) {
         if (!IsObject(ui))
             return false
         ui._modalOwner := ownerHwnd
-        ; 探 HWND：头部密一点（窗口多半这时已建好），之后放宽，总上限仍是 2 秒
-        loop 80 {
+        ; 探 HWND：头部密一点（窗口多半这时已建好），之后放宽，默认总上限 2 秒
+        if (timeoutMs <= 0)
+            timeoutMs := 2000
+        deadline := A_TickCount + timeoutMs
+        loop {
             if (XamlWin._ApplyChrome(ui, ownerHwnd, activate))
                 return true
+            if (A_TickCount >= deadline)
+                return false
             ; 前 40 轮 5ms、之后 20ms：Sleep 的实际粒度常被系统 timer 分辨率拉到 15ms 以上，
             ; 而窗口句柄通常在 200~700ms 才由 daemon 回传，密集探测能省掉「多睡一轮」的延迟
             Sleep(A_Index <= 40 ? 5 : 20)
         }
-        return false
     }
 
     ; 开窗不在这里同步激活，交给消息循环下一轮再看（见 WaitHwnd 里的说明）。

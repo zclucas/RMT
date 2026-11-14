@@ -110,11 +110,10 @@ class SttGui {
 
     static MissingVoiceExtensionFiles() {
         runDir := A_WorkingDir "\Plugins\Voice\" (A_PtrSize == 8 ? "x64" : "x86")
+        ; 只列系统拿不到的私有组件。VC++ 运行库由主进程检测并装进系统，
+        ; 扩展包里不再重复携带，否则这里会永远判定「缺文件」并反复触发下载。
         runtimeFiles := ["sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll"
-            , "vcruntime140.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "api-ms-win-core-path-l1-1-0.dll"]
-        if (A_PtrSize == 8)
-            runtimeFiles.Push("vcruntime140_1.dll")
-        runtimeFiles.Push("VoiceDll.dll")
+            , "VoiceDll.dll"]
 
         missing := []
         for file in runtimeFiles

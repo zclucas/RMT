@@ -76,8 +76,17 @@ class AgreementGui {
         this.ui.OnEvent("BtnDisagree", "Click", ObjBindMethod(this, "OnDisagreeClick"))
         this.ui.OnEvent("BtnAgree", "Click", ObjBindMethod(this, "OnAgreeClick"))
 
-        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
+        ; 这是程序的第一扇窗，必须等引擎冷启动：新机器上 WPF 首次初始化会明显超过
+        ; 默认的 2 秒。以前超时后静静把 _closed 置 true，用户看到的就是「托盘一闪就没了」，
+        ; 什么都没有，也查不到原因——所以这里既放宽超时，也把失败明确报出来。
+        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this), true, 15000)) {
+            try RMTLogSys(RMT_LV_ERROR, "Startup", "免责声明窗口创建失败：引擎未在 15 秒内回传窗口句柄")
+            try FlushRMTLogAsync()
+            MsgBox("免责声明窗口未能显示，RMT 无法继续启动。`n`n"
+                . "如果这是本机第一次运行，重启 RMT 再试一次（首次启动要初始化界面引擎，会比较慢）；`n"
+                . "仍然不行的话，请把 " A_ScriptDir "\Log 目录整个发给开发者。", "RMT 启动失败", "Iconx")
             this._closed := true
+        }
     }
 
     OnWindowLoad(state, ctrl, event) {

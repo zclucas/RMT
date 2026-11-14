@@ -919,6 +919,10 @@ function Copy-Voice {
     }
 }
 
+# VC++ 2015-2022 运行库不随包分发：客户端检测到系统未安装时，下载官方
+# vc_redist.{arch}.exe 静默安装。官方安装包自己知道该装什么，
+# 不需要我们维护一份"完整依赖清单"，也不会出现清单漏项导致干净机器起不来。
+
 # 发行目录运行时要靠磁盘加载、以前打包漏掉的插件
 function Copy-RuntimePlugins {
     param([string]$ReleaseDir)
@@ -1130,16 +1134,13 @@ function New-RMTAssets {
             @{ Dest = "opencv_world481.dll"; Src = "Plugins\OpenCV\$Arch\opencv_world481.dll" },
             @{ Dest = "ScreenCapture.exe"; Src = "Plugins\ScreenCapture\ScreenCapture.exe" }
         )
+        # 只带系统拿不到的私有组件。VC++ 运行库由客户端检测后装进系统，不重复随包，
+        # 否则这份清单会引用不存在的源文件，New-RMTAssetZip 会直接抛异常中断打包。
         "Voice.zip" = @(
             @{ Dest = "VoiceDll.dll"; Src = "Plugins\Voice\$Arch\VoiceDll.dll" },
             @{ Dest = "sherpa-onnx-c-api.dll"; Src = "Plugins\Voice\$Arch\sherpa-onnx-c-api.dll" },
             @{ Dest = "onnxruntime.dll"; Src = "Plugins\Voice\$Arch\onnxruntime.dll" },
             @{ Dest = "onnxruntime_providers_shared.dll"; Src = "Plugins\Voice\$Arch\onnxruntime_providers_shared.dll" },
-            @{ Dest = "vcruntime140.dll"; Src = "Plugins\Voice\$Arch\vcruntime140.dll" },
-            @{ Dest = "msvcp140.dll"; Src = "Plugins\Voice\$Arch\msvcp140.dll" },
-            @{ Dest = "msvcp140_1.dll"; Src = "Plugins\Voice\$Arch\msvcp140_1.dll" },
-            @{ Dest = "msvcp140_2.dll"; Src = "Plugins\Voice\$Arch\msvcp140_2.dll" },
-            @{ Dest = "api-ms-win-core-path-l1-1-0.dll"; Src = "Plugins\Voice\$Arch\api-ms-win-core-path-l1-1-0.dll" },
             @{ Dest = "decoder-epoch-13-avg-2-chunk-16-left-64.onnx"; Src = "$kwsDir\decoder-epoch-13-avg-2-chunk-16-left-64.onnx" },
             @{ Dest = "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx"; Src = "$kwsDir\encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
             @{ Dest = "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx"; Src = "$kwsDir\joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx" },
@@ -1165,9 +1166,6 @@ function New-RMTAssets {
             @{ Dest = "install-interception.exe"; Src = "Plugins\AhiDriver\installer\install-interception.exe" },
             @{ Dest = "InstallReadme.txt"; Src = "Plugins\AhiDriver\installer\使用说明.txt" }
         )
-    }
-    if ($Arch -eq "x64") {
-        $bundles["Voice.zip"] += @{ Dest = "vcruntime140_1.dll"; Src = "Plugins\Voice\x64\vcruntime140_1.dll" }
     }
 
     # 生成 ico.zip（Images\Soft 下 SelfCheck.ahk 的 icoFileList）

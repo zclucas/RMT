@@ -475,13 +475,13 @@ class MainWin {
         ; 主界面默认尺寸按屏幕等比缩放：1920×1080 参考 1400×787。
         ; 更宽的屏幕（横向富余）按高度缩放、更高的屏幕（纵向富余）按宽度缩放，
         ; 即缩放系数 = min(屏幕宽/1920, 屏幕高/1080)；用 DIP 屏幕尺寸计算，物理像素随 DPI 正确。
-        dpiScale := DllCall("GetDpiForSystem", "UInt") / 96.0
+        dpiScale := A_ScreenDPI / 96.0
         size := GetMainWindowDefaultSize()
         wh := 'Width="' Round(size[1] / dpiScale) '" Height="' Round(size[2] / dpiScale) '"'
         if (pos.Length) {
             ; AHK 进程 DPI aware，WinGetPos/LastWinPos 是物理像素；XAML 注入按 DIP 解释，须换算（实测 125% 屏偏右下 26px）
-            ; ponytail: 用 GetDpiForSystem 单值；跨屏不同 DPI 时可能偏差，待真机多屏再按 per-monitor 换算
-            scale := DllCall("GetDpiForSystem", "UInt") / 96.0
+            ; ponytail: 用 A_ScreenDPI 单值；跨屏不同 DPI 时可能偏差，待真机多屏再按 per-monitor 换算
+            scale := A_ScreenDPI / 96.0
             x := Round(pos[1] / scale), y := Round(pos[2] / scale), w := Round(pos[3] / scale), h := Round(pos[4] / scale)
             startLoc := 'WindowStartupLocation="Manual" Left="' x '" Top="' y '"'
             wh := 'Width="' w '" Height="' h '"'
