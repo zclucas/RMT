@@ -143,7 +143,7 @@ class HttpRequestGui extends CommentGui {
         this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr("网络请求")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
-        for varName in GetGuiVarArr(1) {
+        for varName in GetGuiVarArr("count") {
             if (varName != "")
                 this._ComboPush("Retries", "AddItem", "{" varName "}")
         }

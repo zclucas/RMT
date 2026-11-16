@@ -1,18 +1,17 @@
 
     ; ==================== §1 撤销/重做 ====================
 
-    ; 捕获当前完整编辑状态：根宏串（树或文本）+ 树上所有命令的 Data 深快照。
-    ; 命令参数存在以序列号为键的 Data 对象里（含 搜索/如果/循环 等分支内容），
-    ; 仅存根宏串无法还原分支，因此必须连 Data 一起快照。
-    _CaptureUndoSnapshot() {
-        snap := {root: "", data: Map()}
+    ; 保存根宏串。会改动指令参数的操作同时保存 Data，以便还原分支内容。
+    _CaptureUndoSnapshot(captureData := true) {
+        snap := {root: "", data: Map(), captureData: captureData}
         if (this.EditModeCon.Value == 1) {
             snap.root := this.GetTreeMacroStr(0)
         }
         else {
             snap.root := this.MacroEditTextCon.Value
         }
-        this._CollectSnapshotData(0, snap.data)
+        if (captureData)
+            this._CollectSnapshotData(0, snap.data)
         return snap
     }
 
@@ -24,14 +23,11 @@
         while (childID) {
             text := this.MacroTreeViewCon.GetText(childID)
             if (text != "" && SubStr(text, 1, 1) != "⎖") {
-                cmdStr := MySoftData.ParseCmdJoyDisplay(text)
-                ; N11：取「命令名」（首段），非身份签名；与 OnLoop 的 StrSplit(cmd,"_")[1] 取 Data 惯例一致
-                cmdName := StrSplit(GetCmdStr(CmdStripCurPos(cmdStr)), "_")[1]
-                if (cmdName != "" && !dataMap.Has(cmdName)) {
-                    try {
-                        Data := GetMacroCMDData(cmdName)
-                        dataMap[cmdName] := JSON.stringify(Data, 0)
-                    }
+                ; 参数由首段的序列码定位，无需解析后面的手柄显示文本。
+                serial := GetCmdStr(CmdStripCurPos(StrSplit(text, "_", , 2)[1]))
+                if (serial != "" && !dataMap.Has(serial)
+                    && MySoftData.DataFileMap.Has(GetLangKey(GetCmdOnlyText(serial)))) {
+                    try dataMap[serial] := JSON.stringify(GetMacroCMDData(serial), 0)
                 }
                 this._CollectSnapshotData(childID, dataMap)
             }
@@ -40,10 +36,10 @@
     }
 
     ; 入栈前状态快照（上限 100 条，超出丢最旧）；批量组合操作期间静默
-    _PushUndo() {
+    _PushUndo(captureData := true) {
         if (this._undoBatch > 0)
             return
-        snap := this._CaptureUndoSnapshot()
+        snap := this._CaptureUndoSnapshot(captureData)
         this._undoStack.Push(snap)
         if (this._undoStack.Length > 100)
             this._undoStack.RemoveAt(1)
@@ -54,8 +50,9 @@
     Undo() {
         if (this._undoStack.Length == 0)
             return
-        this._redoStack.Push(this._CaptureUndoSnapshot())
-        snap := this._undoStack.Pop()
+        snap := this._undoStack[this._undoStack.Length]
+        this._redoStack.Push(this._CaptureUndoSnapshot(snap.captureData))
+        this._undoStack.Pop()
         this._RestoreSnapshot(snap)
         this._SyncUndoBtns()
     }
@@ -63,8 +60,9 @@
     Redo() {
         if (this._redoStack.Length == 0)
             return
-        this._undoStack.Push(this._CaptureUndoSnapshot())
-        snap := this._redoStack.Pop()
+        snap := this._redoStack[this._redoStack.Length]
+        this._undoStack.Push(this._CaptureUndoSnapshot(snap.captureData))
+        this._redoStack.Pop()
         this._RestoreSnapshot(snap)
         this._SyncUndoBtns()
     }
@@ -92,6 +90,7 @@
         else {
             this.InitMacroText(snap.root)
         }
+        this._NotifyMacroChanged()
     }
 
     ; 把某命令的 Data 快照写回数据文件并清缓存（与 SaveMacroCMDData 同链路）

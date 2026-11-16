@@ -258,29 +258,6 @@ foreach ($depDll in @("sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_p
     if (-not (Test-Path $srcDll)) { Write-Host "[警告] 依赖缺失: $srcDll（跳过）" -ForegroundColor Yellow; continue }
     Copy-Item $srcDll (Join-Path $RunDir $depDll) -Force
 }
-# Win10 若没有带 VCRUNTIME140_1 的 VC++ 运行库，或 1903 之前没有 PathCch API set，
-# onnxruntime 加载失败，语音按钮只会右下角提示，不会弹出模型下载。
-$shimBat = Join-Path $BuildDir "_build_shim.bat"
-$shimC = Join-Path $VoiceDir "src\pathcch_shim.c"
-$shimDef = Join-Path $VoiceDir "src\pathcch_shim.def"
-$shimOut = Join-Path $RunDir "api-ms-win-core-path-l1-1-0.dll"
-@"
-@echo off
-call "$VcVarsBat" >nul
-cl /nologo /O2 /MD /LD /W3 /Fo"$BuildDir\pathcch_shim.obj" "$shimC" /link /DEF:"$shimDef" /MACHINE:$($Arch.ToUpper()) /OUT:"$shimOut"
-if errorlevel 1 exit /b 102
-if defined VCToolsRedistDir (
-  for /d %%D in ("%VCToolsRedistDir%\%Arch%\Microsoft.VC*.CRT") do (
-    for %%F in (vcruntime140.dll vcruntime140_1.dll msvcp140.dll msvcp140_1.dll msvcp140_2.dll) do (
-      if exist "%%D\%%F" copy /Y "%%D\%%F" "$RunDir\" >nul
-    )
-  )
-)
-exit /b 0
-"@ | Set-Content -Path $shimBat -Encoding ASCII
-& cmd.exe /c "`"$shimBat`""
-if ($LASTEXITCODE -ne 0) { Write-Host "[警告] Win10 语音运行库补齐失败 exit=$LASTEXITCODE" -ForegroundColor Yellow }
-Remove-Item $shimBat, "$BuildDir\pathcch_shim.obj", "$BuildDir\pathcch_shim.lib", "$BuildDir\pathcch_shim.exp" -ErrorAction SilentlyContinue
 Write-Host "[OK] 依赖 DLL 已组装到 $Arch" -ForegroundColor Green
 
 # 模型（chunk-16 组 4 个文件）→ models\kws（跨架构共享，缺才复制）

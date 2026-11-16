@@ -204,10 +204,7 @@ class CMDTipGui {
         ; 该值在 _BuildAndShow 开头才被清除；提前判断会导致窗口永不创建。
         this._BuildAndShow()
         try this.OnToggleMacroWorkState()
-        if (this._pendingCmd != "" && !this._flushScheduled) {
-            this._flushScheduled := true
-            SetTimer(this._flushFn, -1)
-        }
+        ; 数据不在此处补发：建窗期间累积的内容由 _AfterWindowReady 全量渲染
     }
 
     LoadParams() {
@@ -467,10 +464,16 @@ class CMDTipGui {
                 try this.ui.SendRaw(cmds)
         }
 
-        if (this._pendingCmd != "" && !this._flushScheduled) {
-            this._flushScheduled := true
-            SetTimer(this._flushFn, -1)
+        ; 数据与窗口解耦的收口：把建窗期间/窗口关闭期间累积的数据层内容
+        ; （_pendingCmd 尚未合并的，连同 _contentText 已有的历史）全量渲染一次。
+        ; 此后新到数据由 AddCMD → _FlushCmd 常规链路增量追加。
+        if (this._pendingCmd != "") {
+            this._contentText := this._contentText == "" ? this._pendingCmd : this._contentText "`n" this._pendingCmd
+            this._pendingCmd := ""
+            this.ShowCount := this._CountLines(this._contentText)
         }
+        if (this._contentText != "")
+            this._SetDisplayText(this._contentText)
     }
 
     _ApplyContentColors() {
@@ -561,11 +564,8 @@ class CMDTipGui {
     }
 
     AddCMD(CMDStr) {
-        if (!IsObject(this.ui) || this.closed)
-            return
-
-        ; 累积到帧末统一提交，此处不直接 Update。
-        ; 指令显示开启时每秒可达上千条，逐条同步更新会使主线程饱和。
+        ; 数据与窗口解耦：无论窗口是否已建，内容一律先入数据层缓冲，
+        ; 窗口就绪后由 _AfterWindowReady 统一渲染，窗口状态不丢数据。
         this._pendingCmd .= (this._pendingCmd == "" ? "" : "`n") CMDStr
         if (!this._flushScheduled) {
             ; 限速 80ms：内容已进入缓冲区，延迟提交不会丢行。
@@ -610,12 +610,13 @@ class CMDTipGui {
     _FlushCmd() {
         this._flushScheduled := false
         this._lastFlush := A_TickCount
-        if (!IsObject(this.ui) || this.closed || this._pendingCmd == "")
+        if (this._pendingCmd == "")
             return
 
         batch := this._pendingCmd
         this._pendingCmd := ""
 
+        ; 数据层先行：无论窗口是否就绪，内容一律并入 _contentText
         wasEmpty := (this._contentText == "")
         this._contentText := wasEmpty ? batch : this._contentText "`n" batch
         lineCount := this._CountLines(this._contentText)
@@ -625,8 +626,13 @@ class CMDTipGui {
             ; 超上限：裁剪至最近 100 行并整体重设（每帧至多一次，成本低于逐行裁剪）
             this._contentText := this._TakeTailLines(this._contentText, 100)
             this.ShowCount := 100
-            this._SetDisplayText(this._contentText)
-        } else if (wasEmpty) {
+        }
+
+        ; 窗口未建/已关闭：只留数据层，窗口就绪后由 _AfterWindowReady 补发全量内容
+        if (!IsObject(this.ui) || this.closed)
+            return
+
+        if (lineCount > 100 || wasEmpty) {
             this._SetDisplayText(this._contentText)
         } else {
             ; 新行同样经过字符级断点处理，AppendText 自带滚动到底

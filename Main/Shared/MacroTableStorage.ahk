@@ -20,16 +20,12 @@ BuildTableItemListFromToml(tables) {
 ; 加载当前配置方案的所有表（动态表集合）
 ; 使用 TOML 的 [[table]] 顺序。没有集合时按默认表结构恢复。
 ; ============================================================
-LoadCurMacroSetting() {
-    global MySoftData, MacroFileSeedDefaults
+LoadCurMacroSetting(saveChanges := true) {
+    global MySoftData, MacroFile, MacroFileSeedDefaults
     migrated := false
 
-    ; 目录里已经有宏文件（含尚未转换的旧 ini）时，禁止再种入「快捷启动」那套默认列表。
-    ; 1.3 写宏列表会按 14 个 [[table]] 重建整文件；读不懂的表以前会在这里回落成默认值，
-    ; 复杂旧配置看起来就像整份宏列表被默认配置换掉。
-    ; 旧扁平布局的展开由主进程在 InitFilePath 里做（依赖 IniImportUtil，Worker 不加载）。
-    ; 这里只管「目录里已有配置」的判定，避免把复杂旧配置当全新表写默认宏。
-    MacroFileSeedDefaults := !MacroFileHasExistingSource()
+    ; 主进程在加载前完成旧配置迁移。已有内容的 TOML 不填入默认宏。
+    MacroFileSeedDefaults := !MacroFileNonEmpty(MacroFile)
 
     ; ---- 表集合 [[table]] 数组 ----
     t := TomlUtil_Read()
@@ -48,10 +44,6 @@ LoadCurMacroSetting() {
         CreateTableItemArr(!MacroFileSeedDefaults)
         migrated := true
     }
-    ; 旧配置按页签 ID 保留当前选中项，再补建缺失的内置宏表。
-    if (MainSoftData.CurTableID == "" && IsInteger(MainSoftData.TableIndex)
-        && MainSoftData.TableIndex >= 1 && MySoftData.TableInfo.Has(MainSoftData.TableIndex))
-        MainSoftData.CurTableID := MySoftData.TableInfo[MainSoftData.TableIndex].ID
     if (EnsureBuiltInMacroTable("Network", "网络宏", "Replace")) {
         RMTLogSysInfo("网络触发", "旧配置迁移：已自动补建「网络宏」表（插在按键替换之后）")
         migrated := true
@@ -59,26 +51,13 @@ LoadCurMacroSetting() {
     if (EnsureBuiltInMacroTable("Gesture", "手势宏", "String"))
         migrated := true
     for tableItem in MySoftData.TableInfo {
-        if (ReadTableItemInfo(tableItem))
+        if (ReadTableItemInfo(tableItem, saveChanges))
             migrated := true
         EnsureTableHasFold(tableItem)
     }
     RebuildTableLocator()
-    ResolveCurTableIndex()
-    ; 本函数只读：上面所有「补全」都只发生在内存里。要不要把表集合写回磁盘，
-    ; 由调用方决定——主进程落盘，Worker 只读（它只管拿这份配置去执行宏）。
-    return migrated
-}
-
-; 持久化的当前 tab 是 TableID（身份）：解析为显示顺序下标；无效则回落 1
-ResolveCurTableIndex() {
-    global MySoftData
-    if (MainSoftData.CurTableID != "") {
-        idx := GetTableIndexByID(MainSoftData.CurTableID)
-        MainSoftData.TableIndex := idx > 0 ? idx : 1
-    } else if (MainSoftData.TableIndex < 1 || MainSoftData.TableIndex > MySoftData.TableInfo.Length) {
-        MainSoftData.TableIndex := 1
-    }
+    if (saveChanges && migrated)
+        SaveTableCollection()
 }
 
 ; ============================================================
@@ -86,7 +65,7 @@ ResolveCurTableIndex() {
 ; 读三级段结构：[表ID]/[表ID.ModuleN]/[表ID.ModuleN.MacroM]，无三级数据则按全新表生成默认
 ; 返回 true 表示发生了初始化（需要落盘表集合），false 表示纯三级格式读取
 ; ============================================================
-ReadTableItemInfo(tableItem) {
+ReadTableItemInfo(tableItem, saveChanges) {
     global MySoftData
     symbol := tableItem.Symbol
 
@@ -126,19 +105,11 @@ ReadTableItemInfo(tableItem) {
         return false
     }
 
-    ; ---- 全新表：初始化默认条目并落盘为三级格式 ----
+    ; 全新表初始化默认条目，由主进程写入三级格式。
     InitTableItemDefault(tableItem)
-    SaveTableItemInfo(tableItem)
+    if (saveChanges)
+        SaveTableItemInfo(tableItem)
     return true
-}
-
-; toml 已有内容，或同目录还留着旧 ini，都算用户配置，不能当空白方案种默认宏。
-MacroFileHasExistingSource() {
-    global MacroFile
-    if (MacroFileNonEmpty(MacroFile))
-        return true
-    ini := MacroFileIniSibling()
-    return ini != "" && FileExist(ini)
 }
 
 MacroFileNonEmpty(path) {
@@ -150,15 +121,7 @@ MacroFileNonEmpty(path) {
         return true
 }
 
-MacroFileIniSibling() {
-    global MacroFile
-    if (!IsSet(MacroFile) || SubStr(MacroFile, -5) != ".toml")
-        return ""
-    return SubStr(MacroFile, 1, -5) ".ini"
-}
-
-; 导入漏展开、或 Worker 没有导入器时：只要还能看到扁平键 / 文件解析失败，就不要落盘默认宏。
-; 主进程会在 LoadCurMacroSetting 开头先尝试展开；这里是最后一道，避免 Save 把原文件盖成 8KB 默认列表。
+; TOML 解析失败时保留原文件；读取单表时也检查是否残留旧扁平数据。
 MacroFileMustKeep(symbol) {
     global MacroFile
     if (!IsSet(MacroFile) || MacroFile == "" || !FileExist(MacroFile))

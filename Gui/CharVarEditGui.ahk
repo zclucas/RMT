@@ -67,7 +67,7 @@ class CharVarEditGui {
         vt.Add("ComboBoxItem").Content(GetLang("变量"))
         vt.Add("ComboBoxItem").Content(GetLang("数组"))
         variables := row1.Add("ComboBox").Grid_Column(3).Name("VariCombo").Width("200").Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left").IsEditable("True")
-        for name in GetGuiVarArr(1) {
+        for name in GetGuiVarArr("all") {
             if (name != "")
                 variables.Add("ComboBoxItem").Content(name)
         }
@@ -130,7 +130,7 @@ class CharVarEditGui {
         if (!IsObject(this.ui))
             return
         IsResVar := this.ui.Query("VarTypeCombo") == GetLang("变量")
-        DLArr := IsResVar ? GetGuiVarArr(1) : GetGuiArrNameArr()
+        DLArr := IsResVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
         curText := this.ui.Query("VariCombo")
         this.ui.Update("VariCombo", "ClearItems", "")
         for it in DLArr {

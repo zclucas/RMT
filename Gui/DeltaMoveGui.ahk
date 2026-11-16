@@ -204,7 +204,7 @@ class DeltaMoveGui {
         }
         this._SetCombo("DeltaXCon", DLVarArr, dX)
         this._SetCombo("DeltaYCon", DLVarArr, dY)
-        this._SetCombo("CountCon", DLVarArr, cnt)
+        this._SetCombo("CountCon", GetGuiVarArr("count"), GetLang(cnt))
         this._SetCombo("IntervalCon", DLVarArr, iv)
     }
 
@@ -259,7 +259,7 @@ class DeltaMoveGui {
     GetCmdStr() {
         this.Data.DeltaX := this.ui.Query("DeltaXCon")
         this.Data.DeltaY := this.ui.Query("DeltaYCon")
-        this.Data.Count := this.ui.Query("CountCon")
+        this.Data.Count := GetVarName(this.ui.Query("CountCon"))
         this.Data.Interval := this.ui.Query("IntervalCon")
 
         if (this.Data.SerialStr == "")

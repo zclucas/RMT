@@ -27,7 +27,6 @@ class CompareGui {
         this._title := ""
 
         this.Data := ""
-        this.DLVariableArr := []
         this.ResultConArr := ["ResultSaveLabel", "SaveNameCon", "ResultLabelTrueCon", "TrueValueCon", "ResultLabelFalseCon", "FalseValueCon"]
     }
 
@@ -264,7 +263,7 @@ class CompareGui {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             this._Bind("ToggleCon_" i, "Click", ObjBindMethod(this, "OnRefresh"))
-            this._Bind("CompareTypeCon_" i, "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
+            this._Bind("CompareTypeCon_" i, "SelectionChanged", this._OnCompareTypeChange.Bind(this, i))
             this._Bind("DelCondi_" i, "Click", ObjBindMethod(this, "OnDelCondi", i))
         }
     }
@@ -300,10 +299,11 @@ class CompareGui {
             i := A_Index
             tog := this.Data.ToggleArr[i] ? "True" : "False"
             batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
-            this._BatchSetCombo(batch, "NameCon_" i, this.DLVariableArr, GetLang(this.Data.NameArr[i]))
             ct := this.Data.CompareTypeArr[i]
+            items := GetCompareGuiVarArr(ct)
+            this._BatchSetCombo(batch, "NameCon_" i, items, GetLang(this.Data.NameArr[i]))
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
-            this._BatchSetCombo(batch, "VariableCon_" i, this.DLVariableArr, GetLang(this.Data.VariableArr[i]))
+            this._BatchSetCombo(batch, "VariableCon_" i, items, GetLang(this.Data.VariableArr[i]))
             onlyOne := this.Data.ToggleArr.Length <= 1
             batch.Push({ControlName: "DelCondi_" i, PropertyName: "IsEnabled", Value: onlyOne ? "False" : "True"})
         }
@@ -391,7 +391,6 @@ class CompareGui {
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.Data.SerialStr := this.SerialStr
-        this.DLVariableArr := GetGuiVarArr(1)
 
         ; 原生 DropDownList.Value 为 1-based，XAML SelectedIndex 为 0-based
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(ObjHasOwnProp(this.Data, "TrueMacro") ? this.Data.TrueMacro : "", 1))
@@ -428,6 +427,15 @@ class CompareGui {
         else {
             Hotkey("!l", MacroAction, "Off")
         }
+    }
+
+    _OnCompareTypeChange(i, *) {
+        if (!IsObject(this.ui))
+            return
+        items := GetCompareGuiVarArr(ComboIndexToCompareType(this._CompareIndex(i)))
+        for name in ["NameCon_" i, "VariableCon_" i]
+            this._SetCombo(name, items, this.ui.Query(name))
+        this.OnRefresh()
     }
 
     OnRefresh(*) {

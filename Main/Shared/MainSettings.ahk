@@ -21,6 +21,8 @@ LoadMainSetting() {
     MainSoftData.SuspendHotkey := CfgRead(SettingFile, SettingSection, "SuspendHotkey", "!p")
     MainSoftData.PauseHotkey := CfgRead(SettingFile, SettingSection, "PauseHotkey", "!i")
     MainSoftData.KillMacroHotkey := CfgRead(SettingFile, SettingSection, "KillMacroHotkey", "!k")
+    ; 输入弹窗「按住说话」（设置→快捷键→语音输入）。单键，默认左 Alt。
+    MainSoftData.VoiceInputHotkey := CfgRead(SettingFile, SettingSection, "VoiceInputHotkey", "LAlt")
     ; §14.5 / IDE 式调试：逻辑树调试热键（默认 继续=F5 / 步入=F11，可在设置→快捷键修改）
     MainSoftData.DebugRunHotkey := CfgRead(SettingFile, SettingSection, "DebugRunHotkey", "f5")
     MainSoftData.DebugStepHotkey := CfgRead(SettingFile, SettingSection, "DebugStepHotkey", "f11")
@@ -153,8 +155,6 @@ LoadMainSetting() {
     MainSoftData.AgreeAgreement := CfgRead(SettingFile, SettingSection, "AgreeAgreement", false)
     MySoftData.WinPosX := CfgRead(SettingFile, SettingSection, "WinPosX", 0)
     MySoftData.WinPosY := CfgRead(SettingFile, SettingSection, "WinPosY", 0)
-    MainSoftData.TableIndex := CfgRead(SettingFile, SettingSection, "TableIndex", 1)
-    MainSoftData.CurTableID := IsNumber(MainSoftData.TableIndex) ? "" : MainSoftData.TableIndex
     ; 宏相关页签可见性（隐藏不影响触发）；静态页签恒显示
     MainSoftData.TabVisibleMap := Map()
     rawTabVis := CfgRead(SettingFile, SettingSection, "TabVisible", "")
@@ -206,7 +206,6 @@ LoadMainSetting() {
     MainSoftData.VarListenWidth := CfgRead(SettingFile, SettingSection, "VarListenWidth", 400)
     MainSoftData.VarListenHeight := CfgRead(SettingFile, SettingSection, "VarListenHeight", 420)
     MySoftData.MacroTotalCount := ReadMacroTotalCount(SettingFile)
-    MainSoftData.LastShowMonth := CfgRead(SettingFile, SettingSection, "LastShowMonth", A_Mon)
 
     MySoftData.TableInfo := CreateTableItemArr()
     SetFontList()

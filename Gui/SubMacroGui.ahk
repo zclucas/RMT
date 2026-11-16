@@ -234,7 +234,7 @@ class SubMacroGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("宏操作")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr(2)
+        this.DLVariableArr := GetGuiVarArr("count")
 
         macroTypes := GetLangArr(SubMacroGui.MacroTypes())
         this._ComboPush("TypeCombo", "SelectedIndex", String(this._LangArrIndex(macroTypes, this.Data.MacroType) - 1))

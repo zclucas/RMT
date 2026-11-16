@@ -255,7 +255,7 @@ class MenuWheelGui {
         NumPut("Int", finalY, ptDpi, 4)
         hwndMon := DllCall("user32\MonitorFromPoint", "Ptr", ptDpi, "UInt", 2, "Ptr")
         dpiX := 0, dpiY := 0
-        DllCall("shcore\GetDpiForMonitor", "Ptr", hwndMon, "Int", 0, "UInt*", &dpiX, "UInt*", &dpiY)
+        try DllCall("shcore\GetDpiForMonitor", "Ptr", hwndMon, "Int", 0, "UInt*", &dpiX, "UInt*", &dpiY)
         this.dpiScale := (dpiX > 0) ? (dpiX / 96.0) : (A_ScreenDPI / 96.0)
 
         itemCount := items.Length

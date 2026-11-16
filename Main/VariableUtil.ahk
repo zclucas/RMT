@@ -125,68 +125,71 @@ SetGlobalData(macroStr, visitMap) {
     }
 }
 
-GetTimeVarArr() {
-    ResultArr := []
-    if (IsObject(MySoftData) && MySoftData.HasOwnProp("TimeVarMap")) {
-        for Key in MySoftData.TimeVarMap {
-            ResultArr.Push(Key)
-        }
-    }
-    return ResultArr
-}
-
-;mode 0自定义 1-所有 2-循环次数 3-坐标 4-句柄ID 5-颜色 6-可运算变量 7-时间变量
-GetGuiVarArr(Mode := 0) {
-    if (Mode == 7) {
-        return GetTimeVarArr()
-    }
-    ResultArr := []
-    ResultMap := Map()
-    SpecialKeyArr0 := []
-    SpecialKeyArr1 := GetSpecialVarArr()     ;系统 + 时间类别
-    SpecialKeyArr2 := [GetLang("循环次数"), GetLang("宏循环次数")]
-    SpecialKeyArr3 := [GetLang("当前坐标X"), GetLang("当前坐标Y")]
-    SpecialKeyArr4 := [GetLang("句柄ID")]
-    SpecialKeyArr5 := [GetLang("当前鼠标颜色")]
-    SpecialKeyArr6 := [GetLang("循环次数"), GetLang("宏循环次数"), GetLang("当前坐标X"), GetLang("当前坐标Y")]
-    SpecialMap := Map(0, SpecialKeyArr0, 1, SpecialKeyArr1, 2, SpecialKeyArr2, 3, SpecialKeyArr3, 4, SpecialKeyArr4, 5,
-        SpecialKeyArr5, 6, SpecialKeyArr6)
-    SpecialKeyArr := SpecialMap[Mode]
-
-    ; 添加全局变量（如果不存在）
-    for Key in MySoftData.GlobalVariMap {
-        if !ResultMap.Has(Key) {
-            ResultMap[Key] := true
+; 无类别时只列自定义变量，供保存结果等字段使用。
+GetGuiVarArr(categories*) {
+    reserved := Map()
+    for _, keys in GetBuiltinVarGroups() {
+        for key in keys {
+            reserved[key] := true
+            reserved[GetLang(key)] := true
         }
     }
 
-    ;为了让特殊变量出现在末尾，先删除
-    for curKey in SpecialKeyArr {
-        if ResultMap.Has(curKey) {
-            ResultMap.Delete(curKey)
+    items := []
+    seen := Map()
+    sources := [MySoftData.GlobalVariMap]
+    for category in categories {
+        if (category == "timeVars") {
+            if (MySoftData.HasOwnProp("TimeVarMap"))
+                sources.Push(MySoftData.TimeVarMap)
+            break
         }
     }
-
-    ; 将映射的键收集到数组中
-    for Key in ResultMap {
-        ResultArr.Push(Key)
-    }
-
-    Length := ResultArr.Length
-    loop Length {
-        i := A_Index
-        loop Length - i {
-            j := A_Index + i
-            if (!StrCompare(ResultArr[i], ResultArr[j])) {
-                temp := ResultArr[i]
-                ResultArr[i] := ResultArr[j]
-                ResultArr[j] := temp
+    for source in sources {
+        for name in source {
+            if (name != "" && !reserved.Has(name) && !seen.Has(name)) {
+                seen[name] := true
+                items.Push(name)
             }
         }
     }
 
-    ResultArr.Push(SpecialKeyArr*)
-    return ResultArr
+    for category in categories {
+        switch category {
+            case "all": names := GetSpecialVarArr()
+            case "text": names := GetBuiltinVarNames("clipboard", "dateText", "clockText")
+            case "number": names := GetBuiltinVarNames("count", "x", "y", "calendar", "hour", "minute", "second", "timestamp")
+            case "timeVars": continue
+            default: names := GetBuiltinVarNames(category)
+        }
+        for name in names {
+            if (!seen.Has(name)) {
+                seen[name] := true
+                items.Push(name)
+            }
+        }
+    }
+    return items
+}
+
+GetGuiVarReferences(categories*) {
+    items := []
+    for name in GetGuiVarArr(categories*)
+        items.Push("{" name "}")
+    return items
+}
+
+GetCompareGuiVarArr(operator) {
+    if (IsNumber(operator))
+        operator := CmdEnumCompare(operator)
+    switch GetLangKey(operator) {
+        case "大于", "大于等于", "小于", "小于等于":
+            return GetGuiVarArr("number")
+        case "字符包含", "包含", "正则匹配":
+            return GetGuiVarArr("text")
+        default:
+            return GetGuiVarArr("all")
+    }
 }
 
 CheckVarNameIfValid(Name) {

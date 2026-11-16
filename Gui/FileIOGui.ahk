@@ -131,7 +131,7 @@ class FileIOGui {
         excelRow.Rows("36", "36")
         excelRow.Cols("96", "*", "16", "96", "*")
         excelRow.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("表名或序号:")).VerticalAlignment("Center")
-        excelRow.Add("ComboBox").Grid_Row(0).Grid_Column(1).Name("NameOrSerialCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
+        excelRow.Add("TextBox").Grid_Row(0).Grid_Column(1).Name("NameOrSerialCon").Height(26).MinHeight(26).VerticalAlignment("Center")
         excelRow.Add("TextBlock").Grid_Row(0).Grid_Column(3).Text(GetLang("表格行号:")).VerticalAlignment("Center")
         excelRow.Add("ComboBox").Grid_Row(0).Grid_Column(4).Name("RowCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
         excelRow.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("表格列号:")).VerticalAlignment("Center")
@@ -305,29 +305,25 @@ class FileIOGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         if (cmd == "")
             this._EnsureDefaultOper()
-        this.DLAllVarArr := GetGuiVarArr(1)
-        this.DLVarArr := GetGuiVarArr(2)
+        this.DLVarArr := GetGuiVarArr("count")
         this.DLArrayArr := GetGuiArrNameArr()
 
         this._SetDDL("OperTypeCombo", this._OperTypes(), GetLang(this.Data.OperType))
         this._SetDDL("EncodingCombo", GetLangArr(MySoftData.FileEncodingArr), GetEncodingDisplayName(this.Data.Encoding))
         ; 路径下拉给的是 {变量} 形式：选中即得到可被 GetReplaceVarText 解析的完整占位符
-        PathVarArr := []
-        for v in GetGuiVarArr(2)
-            PathVarArr.Push("{" v "}")
-        this._SetCombo("FilePathCombo", PathVarArr, this.Data.FilePath)
+        this._SetCombo("FilePathCombo", GetGuiVarReferences("clipboard"), TranslateBuiltinVarReferences(this.Data.FilePath, true))
         this._ComboPush("ContentCon", "Text", GetLangStr(this.Data.Content, 1))
         this._SetDDL("SaveTypeCombo", GetLangArr(["变量", "数组"]), GetLang(this.Data.SaveType))
-        this._SetCombo("SaveNameCombo", this.DLVarArr, this.Data.SaveName)
+        this._SetCombo("SaveNameCombo", GetGuiVarArr(), this.Data.SaveName)
 
         ModeArr := this.OperModeMap[GetLang(this.Data.OperType)]
         this._SetDDL("OperModeCombo", ModeArr, GetLang(this.Data.OperMode))
-        this._SetCombo("TextRowCombo", this.DLVarArr, this.Data.TextRowVar)
-        this._SetCombo("NameOrSerialCombo", this.DLVarArr, this.Data.NameOrSerial)
-        this._SetCombo("RowCombo", this.DLVarArr, this.Data.RowVar)
-        this._SetCombo("ColCombo", this.DLVarArr, this.Data.ColVar)
-        this._SetCombo("RowEndCombo", this.DLVarArr, this.Data.RowEndVar)
-        this._SetCombo("ColEndCombo", this.DLVarArr, this.Data.ColEndVar)
+        this._SetCombo("TextRowCombo", this.DLVarArr, GetLang(this.Data.TextRowVar))
+        this._ComboPush("NameOrSerialCon", "Text", this.Data.NameOrSerial)
+        this._SetCombo("RowCombo", this.DLVarArr, GetLang(this.Data.RowVar))
+        this._SetCombo("ColCombo", this.DLVarArr, GetLang(this.Data.ColVar))
+        this._SetCombo("RowEndCombo", this.DLVarArr, GetLang(this.Data.RowEndVar))
+        this._SetCombo("ColEndCombo", this.DLVarArr, GetLang(this.Data.ColEndVar))
         this._SetCombo("WriteArrCombo", this.DLArrayArr, this.Data.ArrName)
     }
 
@@ -489,7 +485,7 @@ class FileIOGui {
         if (!IsObject(this.ContentEditGui) || this._contentEditClosed)
             return
         isVar := this.ContentEditGui.Query("ContentEditVarTypeCombo") == GetLang("变量")
-        items := isVar ? GetGuiVarArr(1) : GetGuiArrNameArr()
+        items := isVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
         cur := this.ContentEditGui.Query("ContentEditVariCombo")
         this.ContentEditGui.Update("ContentEditVariCombo", "ClearItems", "")
         for v in items {
@@ -608,10 +604,10 @@ class FileIOGui {
     SaveData() {
         this.Data.OperType := FileIONormType(this._TypeText())
         this.Data.Encoding := GetAhkEncodingName(this.ui.Query("EncodingCombo"))
-        this.Data.FilePath := this.ui.Query("FilePathCombo")
+        this.Data.FilePath := TranslateBuiltinVarReferences(this.ui.Query("FilePathCombo"))
         this.Data.OperMode := GetLangKey(this._ModeText())
         this.Data.TextRowVar := GetLangKey(this.ui.Query("TextRowCombo"))
-        this.Data.NameOrSerial := GetLangKey(this.ui.Query("NameOrSerialCombo"))
+        this.Data.NameOrSerial := this.ui.Query("NameOrSerialCon")
         this.Data.RowVar := GetLangKey(this.ui.Query("RowCombo"))
         this.Data.ColVar := GetLangKey(this.ui.Query("ColCombo"))
         this.Data.RowEndVar := GetLangKey(this.ui.Query("RowEndCombo"))

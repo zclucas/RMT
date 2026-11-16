@@ -2,8 +2,20 @@
 
 ; ========== OpenCV DLL 加载与诊断 ==========
 ; RMT_OpenCV.dll 依赖 opencv_world481.dll，后者又依赖 Microsoft Visual C++ 2015-2022 运行库
-; （MSVCP140.dll / VCRUNTIME140.dll / VCRUNTIME140_1.dll / CONCRT140.dll）。
-; 若目标机器未安装该运行库，LoadLibrary 会失败，抓图、搜图等 OpenCV 功能将全部不可用。
+; （MSVCP140.dll / MSVCP140_1.dll / MSVCP140_2.dll / VCRUNTIME140.dll /
+;  VCRUNTIME140_1.dll / CONCRT140.dll）。
+; 目标机器没装该运行库时 LoadLibrary 会失败，抓图、搜图、文字识别会全部不可用。
+;
+; 处理分两层，互不干扰：
+;   1. 本文件只负责「尝试加载 + 给出失败原因」，不预加载任何随包 DLL。
+;      一旦提前把运行库塞进进程，「缺运行库」这个事实就被掩盖了，检测形同虚设。
+;   2. 检测与自动安装在主进程 SelfCheck.ahk（VcRuntimeEnsureInstalled），
+;      由调用方拿到失败原因后触发；Worker 没有界面层，只把原因上报。
+
+; OpenCvEnsure 的会话级缓存。运行库补齐后需要重新尝试加载，
+; 所以状态放全局，不能用函数内 static（外部无法清除）。
+global OpenCvEnsureTried := false
+global OpenCvEnsureReason := ""
 
 OpenCvDllDir() {
     ; 目录由路径表统一给出（ProjectRootDir），主进程和 Worker 是同一个值，
@@ -17,38 +29,27 @@ IsOpenCvLoaded() {
 }
 
 ; 检测 VC++ 2015-2022 运行库 DLL 是否缺失，返回缺失的 DLL 名（逗号分隔），无缺失返回 ""
+; 实现已迁到 VcRuntimeUtil.ahk（注册表 + 系统目录文件，判据只有一处），这里只保留原签名。
 GetMissingVcRuntime() {
-    names := ["VCRUNTIME140.dll", "MSVCP140.dll", "CONCRT140.dll"]
-    if (A_PtrSize == 8)
-        names.Push("VCRUNTIME140_1.dll")
-    missing := []
-    for n in names {
-        if (DllCall("GetModuleHandle", "Str", n, "Ptr"))
-            continue
-        h := DllCall("LoadLibrary", "Str", n, "Ptr")
-        if (h)
-            DllCall("FreeLibrary", "Ptr", h)
-        else
-            missing.Push(n)
-    }
-    if (missing.Length == 0)
-        return ""
-    str := ""
-    for i, n in missing
-        str .= (i > 1 ? ", " : "") . n
-    return str
+    return VcRuntimeMissingText()
+}
+
+; 运行库补齐后调用，让下一次 OpenCvEnsure() 重新尝试加载
+OpenCvResetEnsureCache() {
+    global OpenCvEnsureTried, OpenCvEnsureReason
+    OpenCvEnsureTried := false
+    OpenCvEnsureReason := ""
 }
 
 ; 确保 OpenCV DLL 可用。返回 "" 表示可用；否则返回失败原因（会话内只诊断/加载一次，避免刷日志）。
 OpenCvEnsure() {
-    static cached := false
-    static cachedReason := ""
+    global OpenCvEnsureTried, OpenCvEnsureReason
 
     if (IsOpenCvLoaded())
         return ""
 
-    if (cached)
-        return cachedReason
+    if (OpenCvEnsureTried)
+        return OpenCvEnsureReason
 
     reason := ""
     dllDir := OpenCvDllDir()
@@ -65,7 +66,7 @@ OpenCvEnsure() {
             worldErr := A_LastError
             vc := GetMissingVcRuntime()
             if (vc != "")
-                reason := Format("缺少 Microsoft Visual C++ 运行库（{}），请安装 vc_redist.{}.exe 后重启软件", vc, (A_PtrSize = 4 ? "x86" : "x64"))
+                reason := Format("缺少 Microsoft Visual C++ 运行库（{}）", vc)
             else
                 reason := Format("opencv_world481.dll 加载失败（错误码 {}）", worldErr)
         } else {
@@ -77,8 +78,8 @@ OpenCvEnsure() {
         }
     }
 
-    cached := true
-    cachedReason := reason
+    OpenCvEnsureTried := true
+    OpenCvEnsureReason := reason
     if (reason != "")
         SearchDebugLog(Format("OpenCV 不可用：{}", reason), "opencv")
     return reason

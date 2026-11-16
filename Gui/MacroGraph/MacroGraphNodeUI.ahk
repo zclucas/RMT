@@ -48,11 +48,11 @@ class MacroGraphNodeUIMixin {
             this._AddComboRow(body, "ITypeRow_" id, GetLang("类型："), "ITypeCmb_" id
                 , [GetLang("固定"), GetLang("随机")], this._IntervalTypeIndex(d.itype), true)
             ; 时间：可编辑下拉（既能下拉选变量，也能手动输入数值），与间隔编辑器一致
-            varList := GetGuiVarArr()
+            varList := GetGuiVarArr("count")
             ; 固定值 / 随机最小值
-            this._AddEditableComboRow(body, "Time1Row_" id, GetLang("时间A："), "Time_" id, varList, d.time, true)
+            this._AddEditableComboRow(body, "Time1Row_" id, GetLang("时间A："), "Time_" id, varList, GetLang(d.time), true)
             ; 随机最大值（仅随机模式显示）
-            this._AddEditableComboRow(body, "Time2Row_" id, GetLang("时间B："), "Time2_" id, varList, d.time2, isRandom)
+            this._AddEditableComboRow(body, "Time2Row_" id, GetLang("时间B："), "Time2_" id, varList, GetLang(d.time2), isRandom)
         }
         else if (d.type == GetLang("按键")) {
             body.Add("TextBlock").Name("KeyName_" id).Text(d.key).Foreground("{DynamicResource EditText}").FontWeight("Bold").FontSize(this._MGFontSize(13)).TextWrapping("Wrap")
@@ -95,7 +95,7 @@ class MacroGraphNodeUIMixin {
             varList := GetGuiVarArr()
             this._AddEditableComboRow(body, "DPosXRow_" id, GetLang("偏移值X:"), "DPosX_" id, varList, d.posx, true)
             this._AddEditableComboRow(body, "DPosYRow_" id, GetLang("偏移值Y:"), "DPosY_" id, varList, d.posy, true)
-            this._AddEditableComboRow(body, "DCountRow_" id, GetLang("偏移次数："), "DCount_" id, varList, d.HasOwnProp("count") && d.count != "" ? d.count : "1", true)
+            this._AddEditableComboRow(body, "DCountRow_" id, GetLang("偏移次数："), "DCount_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("count") && d.count != "" ? d.count : "1"), true)
             this._AddEditableComboRow(body, "DIntervalRow_" id, GetLang("每次间隔："), "DInterval_" id, varList, d.HasOwnProp("interval") && d.interval != "" ? d.interval : "0", true)
         }
         else if (IsMoveProCmd(d.type)) {
@@ -107,16 +107,16 @@ class MacroGraphNodeUIMixin {
             ;   拟真轨迹：动作=移动且禁用、移动方式禁用
             actionEnabled := !(isGameView || isHuman)
             actionIdx := (isGameView || isHuman) ? 0 : this._MMProActionIndex(d.HasOwnProp("actionType") ? d.actionType : 1, mmmode)
-            varList := GetGuiVarArr()
+            useScreen := mmmode == "绝对移动" && CmdEnumRef(d.HasOwnProp("refMode") ? d.refMode : "屏幕") != "窗口"
             actionType := CmdEnumMMAction(d.HasOwnProp("actionType") ? d.actionType : "移动")
             isABDrag := actionType == "A到B拖拽" && mmmode == "绝对移动"
             isSimpleDrag := actionType == "拖拽" && mmmode == "绝对移动"
             isTargetPoint := mmmode == "绝对移动" && !isABDrag
             ; 坐标X / 坐标Y：可编辑下拉（既能下拉选变量，也能手动输入数值）
-            this._AddEditableComboRow(body, "MPPosXRow_" id, GetLang(isABDrag ? "起始点" : (isTargetPoint ? "目标点：" : "偏移值")), "MPPosX_" id, varList, this._MMProVarText(d, "posVarX"), true)
-            this._AddEditableComboRow(body, "MPPosYRow_" id, GetLang(isABDrag || isTargetPoint ? "" : "偏移值Y:"), "MPPosY_" id, varList, this._MMProVarText(d, "posVarY"), true)
-            this._AddEditableComboRow(body, "MPEndXRow_" id, GetLang("终止坐标X:"), "MPEndX_" id, varList, this._MMProVarText(d, "endPosVarX"), isABDrag)
-            this._AddEditableComboRow(body, "MPEndYRow_" id, GetLang("终止坐标Y:"), "MPEndY_" id, varList, this._MMProVarText(d, "endPosVarY"), isABDrag)
+            this._AddEditableComboRow(body, "MPPosXRow_" id, GetLang(isABDrag ? "起始点" : (isTargetPoint ? "目标点：" : "偏移值")), "MPPosX_" id, useScreen ? GetGuiVarArr("x") : GetGuiVarArr(), this._MMProVarText(d, "posVarX"), true)
+            this._AddEditableComboRow(body, "MPPosYRow_" id, GetLang(isABDrag || isTargetPoint ? "" : "偏移值Y:"), "MPPosY_" id, useScreen ? GetGuiVarArr("y") : GetGuiVarArr(), this._MMProVarText(d, "posVarY"), true)
+            this._AddEditableComboRow(body, "MPEndXRow_" id, GetLang("终止坐标X:"), "MPEndX_" id, useScreen ? GetGuiVarArr("x") : GetGuiVarArr(), this._MMProVarText(d, "endPosVarX"), isABDrag)
+            this._AddEditableComboRow(body, "MPEndYRow_" id, GetLang("终止坐标Y:"), "MPEndY_" id, useScreen ? GetGuiVarArr("y") : GetGuiVarArr(), this._MMProVarText(d, "endPosVarY"), isABDrag)
             ; 移动速度（文本框，支持标签拖拽改值）；游戏视角固定100且禁用
             this._AddFieldRow(body, "MPSpeedRow_" id, GetLang("移动速度："), "MPSpeed_" id, isGameView ? "100" : (d.HasOwnProp("speed") ? d.speed : "90"), true, !isGameView, id, "")
             ; 鼠标动作下拉：绝对模式增加普通拖拽与 A 到 B 拖拽两种动作。
@@ -248,11 +248,11 @@ class MacroGraphNodeUIMixin {
 
         ; 搜索范围坐标（可编辑下拉，选变量或手输数值）：起点X|起点Y 一行，终点X|终点Y 一行
         rStart := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
-        this._ProCellEdit(rStart, "SStartXRow_" id, GetLang("起始坐标X："), "SStartX_" id, varList, "" (d.HasOwnProp("startPosX") ? d.startPosX : 0), true, LW, CW, false)
-        this._ProCellEdit(rStart, "SStartYRow_" id, GetLang("起始坐标Y："), "SStartY_" id, varList, "" (d.HasOwnProp("startPosY") ? d.startPosY : 0), true, LW, CW, true)
+        this._ProCellEdit(rStart, "SStartXRow_" id, GetLang("起始坐标X："), "SStartX_" id, c.isWin ? varList : GetGuiVarArr("x"), GetLang(d.HasOwnProp("startPosX") ? d.startPosX : 0), true, LW, CW, false)
+        this._ProCellEdit(rStart, "SStartYRow_" id, GetLang("起始坐标Y："), "SStartY_" id, c.isWin ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("startPosY") ? d.startPosY : 0), true, LW, CW, true)
         rEnd := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
-        this._ProCellEdit(rEnd, "SEndXRow_" id, GetLang("终止坐标X："), "SEndX_" id, varList, "" (d.HasOwnProp("endPosX") ? d.endPosX : A_ScreenWidth), true, LW, CW, false)
-        this._ProCellEdit(rEnd, "SEndYRow_" id, GetLang("终止坐标Y："), "SEndY_" id, varList, "" (d.HasOwnProp("endPosY") ? d.endPosY : A_ScreenHeight), true, LW, CW, true)
+        this._ProCellEdit(rEnd, "SEndXRow_" id, GetLang("终止坐标X："), "SEndX_" id, c.isWin ? varList : GetGuiVarArr("x"), GetLang(d.HasOwnProp("endPosX") ? d.endPosX : A_ScreenWidth), true, LW, CW, false)
+        this._ProCellEdit(rEnd, "SEndYRow_" id, GetLang("终止坐标Y："), "SEndY_" id, c.isWin ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("endPosY") ? d.endPosY : A_ScreenHeight), true, LW, CW, true)
 
         ; 搜索次数（含「无限」）| 每次间隔（次数为无限或大于1时显示）同一行
         cnt := d.HasOwnProp("searchCount") ? d.searchCount : 1
@@ -1529,6 +1529,16 @@ class MacroGraphNodeUIMixin {
     }
 
     ; 标签 + 可编辑下拉（IsEditable）：既能从下拉选项中选，也能手动输入文本/数值
+    _SetVariableComboItems(name, items, text := unset) {
+        if (!IsSet(text))
+            text := this.ui.Query(name)
+        batch := [{ControlName: name, PropertyName: "ClearItems", Value: ""}]
+        for item in items
+            batch.Push({ControlName: name, PropertyName: "AddItem", Value: item})
+        batch.Push({ControlName: name, PropertyName: "Text", Value: text})
+        this.ui.BatchUpdate(batch)
+    }
+
     _AddEditableComboRow(body, rowName, labelText, comboName, items, textValue, visible, labelW := "80", comboW := "96", labelName := "", labelTip := "") {
         row := body.Add("StackPanel").Name(rowName).Orientation("Horizontal").Margin("0,5,0,0")
         if (!visible)

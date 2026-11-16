@@ -288,19 +288,19 @@ class ArrayGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("数组")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr(1)
+        this.DLVariableArr := GetGuiVarArr("all")
         this.DLArrayArr := GetGuiArrNameArr()
 
         this._SetDDL("TypeCombo", GetLangArr(["创建", "克隆", "删除", "包含", "取值", "赋值", "插入", "追加", "移除", "移除最后", "反转", "长度"]), GetLang(this.Data.Type))
         this.ui.Update("IsIgnoreExist", "IsChecked", this.Data.IsIgnoreExist ? "True" : "False")
         this._SetCombo("NameCon", this.DLArrayArr, this.Data.Name)
-        this._SetCombo("MainIndexCon", GetGuiVarArr(2), this.Data.MainIndex)
+        this._SetCombo("MainIndexCon", GetGuiVarArr("count"), GetLang(this.Data.MainIndex))
         this.ui.Update("InitArrCon", "Text", GetArrayStr(this.Data.InitArr))
-        this._SetCombo("ArgsIndexCon", GetGuiVarArr(2), this.Data.ArgsIndex)
+        this._SetCombo("ArgsIndexCon", GetGuiVarArr("count"), GetLang(this.Data.ArgsIndex))
         this._SetDDL("ArgsTypeCon", GetLangArr(["变量或值", "数组"]), GetLang(this.Data.ArgsType))
-        this._SetCombo("ArgsNameCon", this.DLVariableArr, this.Data.ArgsName)
+        this._SetCombo("ArgsNameCon", this.DLVariableArr, GetLang(this.Data.ArgsName))
         this._SetDDL("SaveTypeCon", GetLangArr(["变量", "数组"]), GetLang(this.Data.SaveType))
-        this._SetCombo("SaveNameCon", this.DLVariableArr, this.Data.SaveName)
+        this._SetCombo("SaveNameCon", GetGuiVarArr(), this.Data.SaveName)
     }
 
     OnRefresh(state := "", ctrl := "", event := "") {
@@ -351,7 +351,7 @@ class ArrayGui {
         IsArgsVar := this.ui.Query("ArgsTypeCon") == GetLang("变量或值")
         IsResVar := this.ui.Query("SaveTypeCon") == GetLang("变量")
         ArgsArr := IsArgsVar ? this.DLVariableArr : this.DLArrayArr
-        ResArr := IsResVar ? GetGuiVarArr(0) : this.DLArrayArr
+        ResArr := IsResVar ? GetGuiVarArr() : this.DLArrayArr
         curArgs := this.ui.Query("ArgsNameCon")
         curSave := this.ui.Query("SaveNameCon")
         this._SetCombo("ArgsNameCon", ArgsArr, curArgs)

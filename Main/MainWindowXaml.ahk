@@ -57,9 +57,15 @@ class MainWin {
         this.aiStartTick := ObjBindMethod(this, "_AiStartChat")
         this._aiAttach := Map()      ; 页签 → [{id, kind, path, name}]
         this._aiAttachSeq := 0
-        this._aiRec := Map()         ; 页签 → 录音中
-        this._aiSttTab := 0
-        this.aiSttTick := ObjBindMethod(this, "_AiPollStt")
+        this._aiSttTab := 0          ; 正在录音的页签（同一时刻只有一路录音）
+        this._aiVoiceRec := false    ; 录音中标志（占位符显隐要用）
+        this._aiSttBase := ""        ; 开录时该页签框内原文
+        this._aiSttLive := ""        ; 本轮识别文本
+        ; AI 输入框的语音：开录 / 取字 / 收尾全在 VoiceInput 里，本处只把结果贴进框
+        this._aiVoice := VoiceInput()
+        this._aiVoice.OnText := ObjBindMethod(this, "_AiOnVoiceText")
+        this._aiVoice.OnState := ObjBindMethod(this, "_AiOnVoiceState")
+        this._aiVoice.OnNotify := ObjBindMethod(this, "_AiOnVoiceNotify")
         this._sideTreeSel := Map()
         this._dblOpenMacro := Map()  ; 页签 → 双击展开逻辑树的目标宏（再双击同一宏即折叠）
         this._sideTreeCmds := Map()
@@ -122,9 +128,6 @@ class MainWin {
             if (savedW > 0)
                 this.aiPanelW := this._ClampAiPanelW(savedW)
         }
-        ; 动态表集合：配置持久化的 TableIndex 可能越界（表已删/表数变化），钳制到有效范围
-        if (MainSoftData.TableIndex < 1 || MainSoftData.TableIndex > MySoftData.TableInfo.Length)
-            MainSoftData.TableIndex := 1
         this.closed := false
         title := "RMTv" RMT_VERSION
         titleHeight := XAMLHost.GetTitleBarHeight()
@@ -216,22 +219,20 @@ class MainWin {
         ; §10 显示页签：先按可见性过滤生成 _tabOrder（TableInfo 下标数组），页签位置 ↔ 表下标经 TabAdapter/OnTabChanged 映射
         this._tabOrder := []
         this._aiPanels := Map()    ; 已建出 AI 侧栏的页签（其余按需构建）
-        loop MySoftData.TableInfo.Length {
-            if (IsTabVisible(MySoftData.TableInfo[A_Index]))
-                this._tabOrder.Push(A_Index)
-        }
+        ; 启动时选中可见的按键宏页签，缺失或隐藏时选中首个可见页签。
         initSel := 0
-        for i, t in this._tabOrder {
-            if (t == MainSoftData.TableIndex) {
-                initSel := i - 1
+        for i, tableItem in MySoftData.TableInfo {
+            if (IsTabVisible(tableItem))
+                this._tabOrder.Push(i)
+        }
+        for pos, idx in this._tabOrder {
+            if (MySoftData.TableInfo[idx].Symbol == "Normal") {
+                initSel := pos - 1
                 break
             }
         }
-        if (initSel == 0 && this._tabOrder.Length >= 1) {
-            ; 当前表被隐藏 → 落到第一个可见页签，并同步身份（避免保存时持久化隐藏表 ID）
-            MainSoftData.TableIndex := this._tabOrder[1]
-            MainSoftData.CurTableID := MySoftData.TableInfo[this._tabOrder[1]].ID
-        }
+        if (this._tabOrder.Length)
+            MainSoftData.TableIndex := this._tabOrder[initSel + 1]
         tab := right.Add("TabControl").Name("TabControl").Style("{StaticResource RmtMainTabCtrl}").Background("{DynamicResource BgColor}").SelectedIndex(String(initSel))
         loop this._tabOrder.Length {
             pos := A_Index
@@ -474,13 +475,13 @@ class MainWin {
         ; 主界面默认尺寸按屏幕等比缩放：1920×1080 参考 1400×787。
         ; 更宽的屏幕（横向富余）按高度缩放、更高的屏幕（纵向富余）按宽度缩放，
         ; 即缩放系数 = min(屏幕宽/1920, 屏幕高/1080)；用 DIP 屏幕尺寸计算，物理像素随 DPI 正确。
-        dpiScale := DllCall("GetDpiForSystem", "UInt") / 96.0
+        dpiScale := A_ScreenDPI / 96.0
         size := GetMainWindowDefaultSize()
         wh := 'Width="' Round(size[1] / dpiScale) '" Height="' Round(size[2] / dpiScale) '"'
         if (pos.Length) {
             ; AHK 进程 DPI aware，WinGetPos/LastWinPos 是物理像素；XAML 注入按 DIP 解释，须换算（实测 125% 屏偏右下 26px）
-            ; ponytail: 用 GetDpiForSystem 单值；跨屏不同 DPI 时可能偏差，待真机多屏再按 per-monitor 换算
-            scale := DllCall("GetDpiForSystem", "UInt") / 96.0
+            ; ponytail: 用 A_ScreenDPI 单值；跨屏不同 DPI 时可能偏差，待真机多屏再按 per-monitor 换算
+            scale := A_ScreenDPI / 96.0
             x := Round(pos[1] / scale), y := Round(pos[2] / scale), w := Round(pos[3] / scale), h := Round(pos[4] / scale)
             startLoc := 'WindowStartupLocation="Manual" Left="' x '" Top="' y '"'
             wh := 'Width="' w '" Height="' h '"'
@@ -673,6 +674,7 @@ class MainWin {
 
     OnWindowClosing(state, ctrl, event) {
         this.HideSideDebugTools()
+        this._AiVoiceClose()
         this._AiPersistAllTabs()
         this.closed := true
         OnGuiClose()
@@ -681,6 +683,7 @@ class MainWin {
 
     OnCloseClick(state, ctrl, event) {
         ; 主窗口关闭 = 隐藏（应用继续托盘运行），不真正销毁窗口，托盘可恢复
+        this._AiVoiceStop()
         this._AiPersistAllTabs()
         this.HideSideDebugTools()
         OnGuiClose()
@@ -726,8 +729,6 @@ class MainWin {
         if (idx == GetTableIndexByID("Tool"))
             this.RefreshVoiceExtensionButton()
         this._EnsureAiPanel(idx)
-        if (idx >= 1 && idx <= MySoftData.TableInfo.Length)
-            MainSoftData.CurTableID := MySoftData.TableInfo[idx].ID
         try MainSoftData.TabCtrl._value := idx
         OnTabValueChanged()
         ; 惰性渲染：该 tab 尚未构建过则首次切换时渲染（启动只渲染当前 tab）

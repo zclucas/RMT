@@ -1153,9 +1153,12 @@ class XAMLHost {
                 hwnd := MyMainWin.ui.wpfHwnd
             if (hwnd && DllCall("user32\IsWindow", "Ptr", hwnd, "Int")) {
                 WinGetPos(, , &w, &h, "ahk_id " hwnd)
-                dpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
+                dpi := 0
+                try dpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
                 if (!dpi)
-                    dpi := DllCall("user32\GetDpiForSystem", "UInt")
+                    dpi := A_ScreenDPI
+                if (!dpi)
+                    dpi := 96
                 dipW := w / (dpi / 96.0)
                 dipH := h / (dpi / 96.0)
                 if (dipW > 0 && dipH > 0)

@@ -21,6 +21,9 @@ class TextOpsGui {
         this.lastArgsNameConText := ""
         this.ConcatEditGui := ""
         this._concatEditClosed := true
+        this._timestampDragFrom := 0
+        this._timestampDragLabel := ""
+        this._timestampDragTick := ObjBindMethod(this, "_FollowTimestampDrag")
 
         this.ArgsTypeMap := Map(
             GetLang("去除空格"), [GetLang("去除前空白字符"), GetLang("去除后空白字符"), GetLang("去除前后空白字符"), GetLang("去除所有空白字符")],
@@ -29,6 +32,7 @@ class TextOpsGui {
             GetLang("文本提取"), [GetLang("数字提取"), GetLang("字母提取"), GetLang("中文提取"), GetLang("正则匹配")],
             GetLang("文本分割"), [GetLang("内容分割"), GetLang("定长分割"), GetLang("正则匹配")],
             GetLang("文本替换"), [GetLang("普通文本"), GetLang("正则匹配")],
+            GetLang("时间戳处理"), GetLangArr(TextOpsTimestampModes()),
             GetLang("文本拼接"), [GetLang("拼接文本")])
         this.ArgsTipMap := Map(
             GetLang("内容分割"), GetLang("分割文本："),
@@ -108,6 +112,10 @@ class TextOpsGui {
         this._ComboPush(name, "Visibility", vis)
     }
 
+    static TimestampSlotWidth := 70
+    static TimestampButtonWidth := 40
+    static TimestampMillisecondsWidth := 45
+
     _BuildAndShow() {
         global MySoftData
         this._closed := false
@@ -137,7 +145,7 @@ class TextOpsGui {
 
         this._AddLabel(top, GetLang("处理类型:")).Grid_Row(1).Grid_Column(0)
         tc := this._StyleCombo(top.Add("ComboBox").Name("TypeCombo").Grid_Row(1).Grid_Column(1))
-        for t in GetLangArr(["文本拼接", "文本分割", "文本提取", "文本替换", "去除空格", "大小写转换", "文本统计"])
+        for t in GetLangArr(TextOpsTypeNames())
             tc.Add("ComboBoxItem").Content(t)
         this._AddLabel(top, GetLang("文本来源:")).Grid_Row(1).Grid_Column(3).Name("NameTip")
         this._StyleCombo(top.Add("ComboBox").Name("NameCon").Grid_Row(1).Grid_Column(4).IsEditable("True"))
@@ -163,6 +171,25 @@ class TextOpsGui {
         this._StyleCombo(searchRow.Add("ComboBox").Name("SearchCon").Grid_Column(1).IsEditable("True"))
         this._AddLabel(searchRow, GetLang("替换文本:")).Grid_Column(3)
         this._StyleCombo(searchRow.Add("ComboBox").Name("ReplaceCon").Grid_Column(4).IsEditable("True"))
+
+        this._AddLabel(argsGrid, GetLang("时间量：")).Grid_Column(3).Name("TimestampComponentLabel").Visibility("Collapsed")
+        componentCombo := this._StyleCombo(argsGrid.Add("ComboBox").Name("TimestampComponent").Grid_Column(4).Visibility("Collapsed"))
+        for label in TextOpsTimestampComponentLabels()
+            componentCombo.Add("ComboBoxItem").Content(label)
+        componentCombo.SelectedIndex(0)
+        this._AddLabel(argsGrid, "").Name("TimestampPresetHint").Grid_Column(3).Grid_ColumnSpan(2).Visibility("Collapsed")
+
+        formatRow := param.Add("StackPanel").Name("TimestampFormatRow").Grid_Row(1).Grid_ColumnSpan(5)
+            .Orientation("Horizontal").HorizontalAlignment("Center").Background("Transparent")
+            .Visibility("Collapsed").InjectResources(XamlTabOptionStyle(false))
+        for i, component in TextOpsTimestampComponents() {
+            pair := formatRow.Add("StackPanel").Name("TimestampPair" i).Orientation("Horizontal")
+            pair.Add("ToggleButton").Name("TimestampField" i).Content(component[2]).Width(TextOpsGui.TimestampButtonWidth).Height("26")
+                .Margin("0,0,2,0").VerticalAlignment("Center").Style("{StaticResource SetTabButton}")
+            this._StyleBox(pair.Add("TextBox").Name("TimestampSuffix" i), "25")
+                .Padding("0").TextAlignment("Center").Visibility("Collapsed")
+                .ToolTip(GetLang("此时间量后的文本"))
+        }
 
         concatRow := param.Add("Grid").Name("ConcatRow").Grid_Row(0).Grid_RowSpan(3).Grid_ColumnSpan(5).Visibility("Collapsed")
         concatRow.Add("TextBox").Name("ConcatCon").AcceptsReturn("True").TextWrapping("Wrap")
@@ -205,8 +232,9 @@ class TextOpsGui {
         this.ui.OnEvent("TypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
         this.ui.OnEvent("ArgsTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefreshArgsType"))
         this.ui.OnEvent("ArgsNameCon", "TextChanged", ObjBindMethod(this, "OnArgsNameConChange"))
-        this.ui.OnEvent("SaveTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefreshDataType"))
         this.ui.OnEvent("BtnConcatEdit", "Click", ObjBindMethod(this, "OpenConcatEditor"))
+        this.ui.OnEvent("TimestampFormatRow", "PreviewMouseLeftButtonDown", ObjBindMethod(this, "_OnTimestampFormatDown"))
+        this.ui.OnEvent("TimestampFormatRow", "PreviewMouseLeftButtonUp", ObjBindMethod(this, "_OnTimestampFormatUp"))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
 
     }
@@ -216,6 +244,7 @@ class TextOpsGui {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        this._EndTimestampDrag()
         this._CloseConcatEditor()
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
@@ -229,6 +258,7 @@ class TextOpsGui {
     }
 
     _CloseWindow() {
+        this._EndTimestampDrag()
         this._CloseConcatEditor()
         if (IsObject(this.ui)) {
             try this.ui.Update("Window", "Close", "")
@@ -291,22 +321,153 @@ class TextOpsGui {
         if (this.Data.Type == "文本替换")
             this.Data.ArgsType := this.Data.MatchType
         this.DLArrayArr := GetGuiArrNameArr()
-        ArgsNameArr := GetGuiVarArr(2)
+        ArgsNameArr := GetGuiVarArr("clipboard")
         ArgsNameArr.InsertAt(1, GetLang("制表符"))
         this.ArgsNameOptions := ArgsNameArr.Clone()
 
-        this._SetDDL("TypeCombo", GetLangArr(["文本拼接", "文本分割", "文本提取", "文本替换", "去除空格", "大小写转换", "文本统计"]), GetLang(this.Data.Type))
-        this._SetCombo("NameCon", GetGuiVarArr(), this.Data.Name)
+        this._SetDDL("TypeCombo", GetLangArr(TextOpsTypeNames()), GetLang(this.Data.Type))
+        this._SetCombo("NameCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.Name, true))
         concatArgs := this.Data.ArgsName
         if (cmd == "" && GetLang(this.Data.Type) == GetLang("文本拼接") && this._IsConcatPlaceholder(concatArgs))
             concatArgs := this._ConcatDefaultText()
-        this._SetCombo("ArgsNameCon", ArgsNameArr, concatArgs)
+        this._SetCombo("ArgsNameCon", ArgsNameArr, GetBuiltinVarName(concatArgs, true))
         this.ui.Update("ConcatCon", "Text", concatArgs)
         this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
-        this._SetCombo("SearchCon", GetGuiVarArr(2), this.Data.Search)
-        this._SetCombo("ReplaceCon", GetGuiVarArr(2), this.Data.Replace)
+        this._SetCombo("SearchCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.Search, true))
+        this._SetCombo("ReplaceCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.Replace, true))
         this._SetDDL("SaveTypeCombo", GetLangArr(["变量", "数组"]), GetLang(this.Data.SaveType))
         this._SetCombo("SaveNameCon", this.DLArrayArr, this.Data.SaveName)
+
+        this._timestampParts := TextOpsTimestampFormatParts(this.Data)
+        this._ShowTimestampParts()
+        this._ComboPush("TimestampComponent", "SelectedIndex", TextOpsTimestampComponentIndex(this.Data.ArgsName))
+    }
+
+    _ShowTimestampParts() {
+        components := TextOpsTimestampComponents()
+        labels := TextOpsTimestampComponentLabels()
+        batch := []
+        for i, part in this._timestampParts {
+            field := "TimestampField" i
+            batch.Push({ControlName: field, PropertyName: "Content", Value: components[part.Index][2]})
+            batch.Push({ControlName: field, PropertyName: "ToolTip", Value: labels[part.Index]})
+            batch.Push({ControlName: field, PropertyName: "IsChecked", Value: part.Enabled ? "True" : "False"})
+            suffix := "TimestampSuffix" i
+            width := this._TimestampPartWidth(part)
+            batch.Push({ControlName: "TimestampPair" i, PropertyName: "Width", Value: width})
+            batch.Push({ControlName: suffix, PropertyName: "Text", Value: part.Suffix})
+            batch.Push({ControlName: suffix, PropertyName: "Visibility", Value: width == TextOpsGui.TimestampMillisecondsWidth ? "Collapsed" : "Visible"})
+        }
+        if (this._batching) {
+            for update in batch
+                this._batch.Push(update)
+        } else {
+            this.ui.BatchUpdate(batch)
+        }
+    }
+
+    _ReadTimestampParts() {
+        names := []
+        loop this._timestampParts.Length
+            names.Push("TimestampField" A_Index, "TimestampSuffix" A_Index)
+        state := this.ui.Query(names*)
+        for i, part in this._timestampParts {
+            part.Enabled := state["TimestampField" i] == "True"
+            part.Suffix := state["TimestampSuffix" i]
+        }
+    }
+
+    _TimestampPartWidth(part) {
+        return part.Index == TextOpsTimestampComponents().Length ? TextOpsGui.TimestampMillisecondsWidth : TextOpsGui.TimestampSlotWidth
+    }
+
+    _TimestampSlotAt(state, buttonOnly := false) {
+        coords := StrSplit(state.Get("TimestampFormatRow", ""), ",")
+        if (coords.Length != 2)
+            return 0
+        x := Integer(coords[1]), y := Integer(coords[2])
+        if (x < 0 || y < 0 || y >= 36)
+            return 0
+        for i, part in this._timestampParts {
+            width := this._TimestampPartWidth(part)
+            if (x < width)
+                return !buttonOnly || x < TextOpsGui.TimestampButtonWidth ? i : 0
+            x -= width
+        }
+        return 0
+    }
+
+    _OnTimestampFormatDown(state, *) {
+        this._EndTimestampDrag()
+        slot := this._TimestampSlotAt(state, true)
+        if (!slot || !IsObject(this.ui))
+            return
+        this._timestampDragFrom := slot
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&startX, &startY)
+        this._timestampDragStart := {X: startX, Y: startY}
+        SetTimer(this._timestampDragTick, 16)
+    }
+
+    _FollowTimestampDrag() {
+        Critical()
+        if (!GetKeyState("LButton", "P")) {
+            ; 松手后立即收起浮标，落点仍由 XAML 的抬起事件处理。
+            SetTimer(this._timestampDragTick, 0)
+            this._DestroyTimestampDragLabel()
+            return
+        }
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&x, &y)
+        start := this._timestampDragStart
+        if (!IsObject(this._timestampDragLabel)) {
+            if (Max(Abs(x - start.X), Abs(y - start.Y)) < 5)
+                return
+            component := TextOpsTimestampComponents()[this._timestampParts[this._timestampDragFrom].Index]
+            colors := MainSoftData.ThemeColors
+            bg := AppThemeUtil.ArgbToRgb6(AppThemeUtil.ResolveColor(colors, "Win_ActionBg"))
+            fg := AppThemeUtil.ArgbToRgb6(AppThemeUtil.ResolveColor(colors, "Win_ActionText"))
+            label := Gui("-Caption +ToolWindow +AlwaysOnTop +E0x08000020")
+            label.BackColor := bg
+            label.MarginX := 0
+            label.MarginY := 0
+            label.SetFont("s10 Bold c" fg, MainSoftData.FontType)
+            label.AddText("w40 h24 Center +0x200", component[2])
+            this._timestampDragLabel := label
+            WinSetTransparent(240, label.Hwnd)
+            label.Show("Hide AutoSize")
+        }
+        ; 屏幕坐标直接交给 Win32，避免原生 GUI 把坐标再次按 DPI 缩放。
+        DllCall("user32\SetWindowPos", "Ptr", this._timestampDragLabel.Hwnd, "Ptr", -1,
+            "Int", x + 12, "Int", y + 16, "Int", 0, "Int", 0, "UInt", 0x0051)
+    }
+
+    _DestroyTimestampDragLabel() {
+        if (IsObject(this._timestampDragLabel)) {
+            this._timestampDragLabel.Destroy()
+            this._timestampDragLabel := ""
+        }
+    }
+
+    _EndTimestampDrag() {
+        SetTimer(this._timestampDragTick, 0)
+        this._timestampDragFrom := 0
+        this._DestroyTimestampDragLabel()
+    }
+
+    _OnTimestampFormatUp(state, *) {
+        from := this._timestampDragFrom
+        this._EndTimestampDrag()
+        if (!from || !IsObject(this.ui))
+            return
+        target := this._TimestampSlotAt(state)
+        if (!target || target == from)
+            return
+        this._ReadTimestampParts()
+        part := this._timestampParts[from]
+        this._timestampParts[from] := this._timestampParts[target]
+        this._timestampParts[target] := part
+        this._ShowTimestampParts()
     }
 
     OnRefresh(state := "", ctrl := "", event := "") {
@@ -319,22 +480,19 @@ class TextOpsGui {
         IsSpace := typeText == GetLang("去除空格")
         IsUpLow := typeText == GetLang("大小写转换")
         IsStatistics := typeText == GetLang("文本统计")
+        IsTimestamp := typeText == GetLang("时间戳处理")
         IsConcat := typeText == GetLang("文本拼接")
 
         ArgsDLArr := []
         if (this.ArgsTypeMap.Has(typeText)) {
             ArgsDLArr := this.ArgsTypeMap[typeText]
-            idx := 1
-            loop ArgsDLArr.Length {
-                if (ArgsDLArr[A_Index] == GetLang(this.Data.ArgsType)) {
-                    idx := A_Index
-                    break
-                }
-            }
-            this._SetDDL("ArgsTypeCombo", ArgsDLArr, GetLang(this.Data.ArgsType))
+            selected := IsTimestamp && this.Data.Type != "时间戳处理" ? "自定义格式" : this.Data.ArgsType
+            this._SetDDL("ArgsTypeCombo", ArgsDLArr, GetLang(selected))
         }
 
-        ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics || IsReplace
+        ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics || IsReplace || IsTimestamp
+        this.ui.Update("NameTip", "Text", GetLang(IsTimestamp ? "时间戳：" : "文本来源:"))
+        this._SetCombo("NameCon", IsTimestamp ? GetGuiVarArr("timestamp") : GetGuiVarArr("text"), this.ui.Query("NameCon"))
         this.ui.Update("ArgsTypeCombo", "IsEnabled", ShowArgsType ? "True" : "False")
         this._Vis("NameTip", !IsConcat, true)
         this._Vis("NameCon", !IsConcat, true)
@@ -344,30 +502,39 @@ class TextOpsGui {
         this.ui.Update("SearchCon", "IsEnabled", IsReplace ? "True" : "False")
         this.ui.Update("ReplaceCon", "IsEnabled", IsReplace ? "True" : "False")
 
-        OnlyResVar := IsReplace || IsSpace || IsUpLow || IsStatistics || IsConcat
-        OnlyResArr := IsSplit || IsGetEx
-        this._SetDDL("SaveTypeCombo", GetLangArr(["变量", "数组"]), OnlyResVar ? GetLang("变量") : GetLang("数组"))
         this.OnRefreshArgsType()
-        this.OnRefreshDataType()
     }
 
     OnRefreshArgsType(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
-        tipText := GetLang("类型参数:")
-        if (this.ArgsTipMap.Has(this._ArgsTypeText()))
-            tipText := this.ArgsTipMap[this._ArgsTypeText()]
+        mode := this._ArgsTypeText()
+        tipText := this.ArgsTipMap.Get(mode, GetLang("类型参数:"))
         this.ui.Update("ArgsNameTip", "Text", tipText)
         this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
         typeText := this._TypeText()
         IsSplit := typeText == GetLang("文本分割")
-        IsConcat := typeText == GetLang("文本拼接")
         IsGetEx := typeText == GetLang("文本提取")
-        IsGetExReg := IsGetEx && this._ArgsTypeText() == GetLang("正则匹配")
+        IsGetExReg := IsGetEx && mode == GetLang("正则匹配")
         ShowArgsName := IsSplit || IsGetExReg
         this._Vis("ArgsNameTip", ShowArgsName, false)
         this._Vis("ArgsNameCon", ShowArgsName, false)
         this.ui.Update("ArgsNameCon", "IsEnabled", ShowArgsName ? "True" : "False")
+        isTimestamp := typeText == GetLang("时间戳处理")
+        showComponent := isTimestamp && mode == GetLang("提取时间量")
+        this._Vis("TimestampComponentLabel", showComponent)
+        this._Vis("TimestampComponent", showComponent)
+        showFormat := isTimestamp && mode == GetLang("自定义格式")
+        this._Vis("TimestampFormatRow", showFormat)
+        if (!showFormat)
+            this._EndTimestampDrag()
+        modeKey := GetLangKey(mode)
+        preset := isTimestamp ? TextOpsTimestampPresetFormat(modeKey) : ""
+        this.ui.Update("TimestampPresetHint", "Text", preset)
+        this._Vis("TimestampPresetHint", preset != "")
+        resultType := TextOpsResultType(GetLangKey(typeText), modeKey)
+        this._ComboPush("SaveTypeCombo", "SelectedIndex", resultType == "数组" ? "1" : "0")
+        this.OnRefreshDataType()
     }
 
     OnRefreshDataType(state := "", ctrl := "", event := "") {
@@ -500,7 +667,7 @@ class TextOpsGui {
         if (!IsObject(this.ConcatEditGui) || this._concatEditClosed)
             return
         isVar := this.ConcatEditGui.Query("ConcatEditVarTypeCombo") == GetLang("变量")
-        items := isVar ? GetGuiVarArr(1) : GetGuiArrNameArr()
+        items := isVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
         cur := this.ConcatEditGui.Query("ConcatEditVariCombo")
         this.ConcatEditGui.Update("ConcatEditVariCombo", "ClearItems", "")
         for v in items {
@@ -578,6 +745,22 @@ class TextOpsGui {
                 return false
             }
         }
+        if (this._TypeText() == GetLang("时间戳处理")) {
+            if (Trim(this.ui.Query("NameCon")) == "") {
+                RmtDialog.Info(GetLang("时间戳不能为空"))
+                return false
+            }
+            if (this._ArgsTypeText() == GetLang("自定义格式")) {
+                this._ReadTimestampParts()
+                enabled := false
+                for part in this._timestampParts
+                    enabled := enabled || part.Enabled
+                if (!enabled) {
+                    RmtDialog.Info(GetLang("请至少选择一个时间量"))
+                    return false
+                }
+            }
+        }
         if (!CheckVarNameIfValid(this.ui.Query("SaveNameCon")))
             return false
         return true
@@ -618,13 +801,22 @@ class TextOpsGui {
             ArgsName := ArgsName == GetLang("制表符") ? "`t" : ArgsName
         }
         this.Data.Type := GetLangKey(this._TypeText())
-        this.Data.Name := isConcat ? "" : this.ui.Query("NameCon")
+        this.Data.Name := isConcat ? "" : GetBuiltinVarName(this.ui.Query("NameCon"))
         this.Data.ArgsType := isConcat ? "拼接文本" : GetLangKey(this._ArgsTypeText())
-        this.Data.ArgsName := ArgsName
-        this.Data.Search := this.ui.Query("SearchCon")
-        this.Data.Replace := this.ui.Query("ReplaceCon")
+        if (this.Data.Type == "时间戳处理" && this.Data.ArgsType == "提取时间量") {
+            componentIndex := this.ui.Query("TimestampComponent>SelectedIndex")
+            ArgsName := TextOpsTimestampComponents()[Integer(componentIndex) + 1][1]
+        }
+        if (this.Data.Type == "时间戳处理" && this.Data.ArgsType == "自定义格式") {
+            this.Data.TimestampFormatParts := []
+            for part in this._timestampParts
+                this.Data.TimestampFormatParts.Push(part.Clone())
+        }
+        this.Data.ArgsName := isConcat ? ArgsName : GetBuiltinVarName(ArgsName)
+        this.Data.Search := GetBuiltinVarName(this.ui.Query("SearchCon"))
+        this.Data.Replace := GetBuiltinVarName(this.ui.Query("ReplaceCon"))
         this.Data.MatchType := GetLangKey(this._ArgsTypeText())
-        this.Data.SaveType := GetLangKey(this.ui.Query("SaveTypeCombo"))
+        this.Data.SaveType := TextOpsResultType(this.Data.Type, this.Data.ArgsType)
         this.Data.SaveName := GetVarName(this.ui.Query("SaveNameCon"))
         if (this.Data.SaveType == "变量")
             MySoftData.GlobalVariMap[this.Data.SaveName] := true

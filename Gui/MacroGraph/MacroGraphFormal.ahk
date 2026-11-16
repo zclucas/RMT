@@ -205,6 +205,7 @@ class MacroGraphFormalMixin {
             "文本分割", GetLangArr(["内容分割", "定长分割", "正则匹配"]),
             "文本提取", GetLangArr(["数字提取", "字母提取", "中文提取", "正则匹配"]),
             "文本替换", GetLangArr(["普通文本", "正则匹配"]),
+            "时间戳处理", GetLangArr(TextOpsTimestampModes()),
             "去除空格", GetLangArr(["去除前空白字符", "去除后空白字符", "去除前后空白字符", "去除所有空白字符"]),
             "大小写转换", GetLangArr(["全部大写", "全部小写", "首字母大写"]),
             "文本统计", GetLangArr(["字符数", "单词数", "行数"]),
@@ -216,7 +217,7 @@ class MacroGraphFormalMixin {
 
     ; 类型顺序需与 TextOpsGui.ahk 保持一致
     _FormalTextOpsTypeNames() {
-        return GetLangArr(["文本拼接", "文本分割", "文本提取", "文本替换", "去除空格", "大小写转换", "文本统计"])
+        return GetLangArr(TextOpsTypeNames())
     }
 
     _FormalTextOpsTypeIdx(typeName) {
@@ -391,16 +392,15 @@ class MacroGraphFormalMixin {
         p1 := d.HasOwnProp("timeParam1") ? d.timeParam1 : ""
         posx := d.HasOwnProp("cdPosX") ? d.cdPosX : 200
         posy := d.HasOwnProp("cdPosY") ? d.cdPosY : 200
-        varList := GetGuiVarArr()
         showHms := visible && kindKey != "时间戳"
         showVar := visible && kindKey == "时间戳"
         this._AddComboRow(body, "CdKindRow_" id, GetLang("模式："), "CdKindCmb_" id, kindItems, this._IndexInLangArr(kindItems, GetLang(kindKey)), visible, true, lw, cw)
         this._AddFieldRow(body, "CdHourRow_" id, GetLang("时") "：", "CdHour_" id, hour, showHms, true, "", "", "", lw, cw)
         this._AddFieldRow(body, "CdMinRow_" id, GetLang("分") "：", "CdMin_" id, minv, showHms, true, "", "", "", lw, cw)
         this._AddFieldRow(body, "CdSecRow_" id, GetLang("秒") "：", "CdSec_" id, sec, showHms, true, "", "", "", lw, cw)
-        this._AddEditableComboRow(body, "CdVarRow_" id, GetLang("时间戳："), "CdVar_" id, varList, p1, showVar, lw, cw)
-        this._AddEditableComboRow(body, "CdPosXRow_" id, GetLang("显示位置："), "CdPosX_" id, varList, posx, visible, lw, cw)
-        this._AddEditableComboRow(body, "CdPosYRow_" id, GetLang(""), "CdPosY_" id, varList, posy, visible, lw, cw)
+        this._AddEditableComboRow(body, "CdVarRow_" id, GetLang("时间戳："), "CdVar_" id, GetGuiVarArr("timeVars", "timestamp"), GetLang(p1), showVar, lw, cw)
+        this._AddEditableComboRow(body, "CdPosXRow_" id, GetLang("显示位置："), "CdPosX_" id, GetGuiVarArr("x"), GetLang(posx), visible, lw, cw)
+        this._AddEditableComboRow(body, "CdPosYRow_" id, GetLang(""), "CdPosY_" id, GetGuiVarArr("y"), GetLang(posy), visible, lw, cw)
     }
 
     _FillTimeBody(id, d, body) {
@@ -497,7 +497,7 @@ class MacroGraphFormalMixin {
         showIns := ct == "插入到当前宏"
         this._AddComboRow(body, "SubTypeRow_" id, GetLang("宏类型："), "SubTypeCmb_" id, macroTypes, this._IndexInLangArr(macroTypes, GetLang(mt)), true, true, lw, cw)
         this._AddComboRow(body, "SubCallRow_" id, GetLang("操作类型："), "SubCallCmb_" id, callTypes, SubMacroGui.CallIndex(mt, ct), true, true, lw, cw)
-        this._AddEditableComboRow(body, "SubInsRow_" id, GetLang("调用次数："), "SubIns_" id, GetGuiVarArr(), ins, showIns, lw, cw)
+        this._AddEditableComboRow(body, "SubInsRow_" id, GetLang("调用次数："), "SubIns_" id, GetGuiVarArr("count"), GetLang(ins), showIns, lw, cw)
         this._AddComboRow(body, "SubIdxRow_" id, GetLang("宏序号："), "SubIdxCmb_" id, target.Items, target.Selected, showIdx, true, lw, cw)
     }
 
@@ -532,7 +532,7 @@ class MacroGraphFormalMixin {
         this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量名："), p "Name_" id, GetGuiVarArr(), vn, on, lw, cw)
         this._AddComboRow(block, p "OpRow_" id, GetLang("类型："), p "OpCmb_" id, opTypes, CmdEnumIndex(ot, CmdEnumOperaNames()), on, true, lw, cw)
         ; 数值：可下拉选变量或手输数字；字符：纯文本输入框（无下拉）。两行各自固定标签、按类型显隐切换。
-        this._AddEditableComboRow(block, p "CopyRow_" id, GetLang("数值："), p "Copy_" id, GetGuiVarArr(), cv, showNum, lw, cw)
+        this._AddEditableComboRow(block, p "CopyRow_" id, GetLang("数值："), p "Copy_" id, GetGuiVarArr("number"), GetLang(cv), showNum, lw, cw)
         this._AddFieldRow(block, p "CharRow_" id, GetLang("字符："), p "CopyTxt_" id, cv, showChar, true, "", "", "", lw, cw)
         sysItems := GetSystemVarArr()
         sysIdx := this._IndexInLangArr(sysItems, GetLang(cv))
@@ -540,8 +540,8 @@ class MacroGraphFormalMixin {
         timeItems := GetTimeCategoryVarArr()
         timeIdx := this._IndexInLangArr(timeItems, GetLang(cv))
         this._AddComboRow(block, p "TimeRow_" id, GetLang("时间："), p "TimeCmb_" id, timeItems, timeIdx, on && ot == "时间", true, lw, cw)
-        this._AddEditableComboRow(block, p "MinRow_" id, GetLang("最小值："), p "Min_" id, GetGuiVarArr(), minv, showMinMax, lw, cw)
-        this._AddEditableComboRow(block, p "MaxRow_" id, GetLang("最大值："), p "Max_" id, GetGuiVarArr(), maxv, showMinMax, lw, cw)
+        this._AddEditableComboRow(block, p "MinRow_" id, GetLang("最小值："), p "Min_" id, GetGuiVarArr("number"), GetLang(minv), showMinMax, lw, cw)
+        this._AddEditableComboRow(block, p "MaxRow_" id, GetLang("最大值："), p "Max_" id, GetGuiVarArr("number"), GetLang(maxv), showMinMax, lw, cw)
     }
 
     _FillVariableBody(id, d, body) {
@@ -645,13 +645,13 @@ class MacroGraphFormalMixin {
 
         ; 起始X | 起始Y
         r := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
-        this._ProCellEdit(r, "ExSXRow_" id, GetLang("起始X："), "ExSX_" id, varList, "" (d.HasOwnProp("startPosX") ? d.startPosX : 0), isOcr, LW, CW, false)
-        this._ProCellEdit(r, "ExSYRow_" id, GetLang("起始Y："), "ExSY_" id, varList, "" (d.HasOwnProp("startPosY") ? d.startPosY : 0), isOcr, LW, CW, true)
+        this._ProCellEdit(r, "ExSXRow_" id, GetLang("起始X："), "ExSX_" id, isWin ? varList : GetGuiVarArr("x"), GetLang(d.HasOwnProp("startPosX") ? d.startPosX : 0), isOcr, LW, CW, false)
+        this._ProCellEdit(r, "ExSYRow_" id, GetLang("起始Y："), "ExSY_" id, isWin ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("startPosY") ? d.startPosY : 0), isOcr, LW, CW, true)
 
         ; 终止X | 终止Y
         r := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
-        this._ProCellEdit(r, "ExEXRow_" id, GetLang("终止X："), "ExEX_" id, varList, "" (d.HasOwnProp("endPosX") ? d.endPosX : A_ScreenWidth), isOcr, LW, CW, false)
-        this._ProCellEdit(r, "ExEYRow_" id, GetLang("终止Y："), "ExEY_" id, varList, "" (d.HasOwnProp("endPosY") ? d.endPosY : A_ScreenHeight), isOcr, LW, CW, true)
+        this._ProCellEdit(r, "ExEXRow_" id, GetLang("终止X："), "ExEX_" id, isWin ? varList : GetGuiVarArr("x"), GetLang(d.HasOwnProp("endPosX") ? d.endPosX : A_ScreenWidth), isOcr, LW, CW, false)
+        this._ProCellEdit(r, "ExEYRow_" id, GetLang("终止Y："), "ExEY_" id, isWin ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("endPosY") ? d.endPosY : A_ScreenHeight), isOcr, LW, CW, true)
 
         ; 次数 | 间隔（次数在前）
         sc := d.HasOwnProp("searchCount") ? d.searchCount : 1
@@ -947,11 +947,11 @@ class MacroGraphFormalMixin {
         nameOrSerial := d.HasOwnProp("NameOrSerial") ? d.NameOrSerial : 1
         this._AddFieldRow(body, "FIOSheetRow_" id, GetLang("表名："), "FIOSheet_" id, nameOrSerial, IsExcel, true, "", "", "", lw, cw)
         this._AddComboRow(body, "FIOEncRow_" id, GetLang("编码："), "FIOEncCmb_" id, encodings, this._IndexInLangArr(encodings, GetLang(enc)), IsText, true, lw, cw)
-        this._AddEditableComboRow(body, "FIORowRow_" id, GetLang("行号："), "FIORow_" id, GetGuiVarArr(), d.HasOwnProp("rowVar") ? d.rowVar : 1, IsExcel, lw, cw)
-        this._AddEditableComboRow(body, "FIOColRow_" id, GetLang("列号："), "FIOCol_" id, GetGuiVarArr(), d.HasOwnProp("colVar") ? d.colVar : 1, IsExcel, lw, cw)
-        this._AddEditableComboRow(body, "FIORowEndRow_" id, GetLang("终止行："), "FIORowEnd_" id, GetGuiVarArr(), d.HasOwnProp("rowEndVar") ? d.rowEndVar : 1, HasRegion, lw, cw)
-        this._AddEditableComboRow(body, "FIOColEndRow_" id, GetLang("终止列："), "FIOColEnd_" id, GetGuiVarArr(), d.HasOwnProp("colEndVar") ? d.colEndVar : 1, HasRegion, lw, cw)
-        this._AddEditableComboRow(body, "FIOTxtRowRow_" id, GetLang("文本行："), "FIOTxtRow_" id, GetGuiVarArr(), d.HasOwnProp("textRowVar") ? d.textRowVar : 1, HasTextRow, lw, cw)
+        this._AddEditableComboRow(body, "FIORowRow_" id, GetLang("行号："), "FIORow_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("rowVar") ? d.rowVar : 1), IsExcel, lw, cw)
+        this._AddEditableComboRow(body, "FIOColRow_" id, GetLang("列号："), "FIOCol_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("colVar") ? d.colVar : 1), IsExcel, lw, cw)
+        this._AddEditableComboRow(body, "FIORowEndRow_" id, GetLang("终止行："), "FIORowEnd_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("rowEndVar") ? d.rowEndVar : 1), HasRegion, lw, cw)
+        this._AddEditableComboRow(body, "FIOColEndRow_" id, GetLang("终止列："), "FIOColEnd_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("colEndVar") ? d.colEndVar : 1), HasRegion, lw, cw)
+        this._AddEditableComboRow(body, "FIOTxtRowRow_" id, GetLang("文本行："), "FIOTxtRow_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("textRowVar") ? d.textRowVar : 1), HasTextRow, lw, cw)
         this._AddMultilineFieldBlock(body, "FIOContentBlock_" id, GetLang("写入内容："), "FIOContent_" id, d.HasOwnProp("content") ? d.content : GetLang("写入的内容"), HasWriteContent, this._FormalContentW())
         this._AddEditableComboRow(body, "FIOArrRow_" id, GetLang("数组名："), "FIOArr_" id, GetGuiArrNameArr(), d.HasOwnProp("arrName") ? d.arrName : "Arr", HasWriteArr, lw, cw)
         ; 保存类型：根据模式和操作类型自动固定（结果保存仅读取时出现，与编辑器一致）
@@ -976,21 +976,27 @@ class MacroGraphFormalMixin {
         rp := d.HasOwnProp("replace") ? d.replace : ""
         sn := d.HasOwnProp("saveName") ? d.saveName : "Data"
         IsReplace := tt == "文本替换"
-        IsSplit := tt == "文本分割"
-        IsGetEx := tt == "文本提取"
-        IsConcat := tt == "文本拼接"
-        ShowArgsType := IsSplit || IsGetEx || tt == "大小写转换" || tt == "去除空格" || tt == "文本统计" || IsConcat || IsReplace
+        IsTimestamp := tt == "时间戳处理"
         ShowArgsName := this._FormalTextOpsShowArgsName(tt, at)
-        fixedSt := (IsSplit || IsGetEx) ? "数组" : "变量"
+        fixedSt := TextOpsResultType(tt, at)
+        sourceOptions := IsTimestamp ? GetGuiVarArr("timestamp") : GetGuiVarArr("text")
+        saveOptions := fixedSt == "数组" ? GetGuiArrNameArr() : GetGuiVarArr()
+        componentIndex := TextOpsTimestampComponentIndex(an)
         this._AddComboRow(body, "TxtTypeRow_" id, GetLang("类型："), "TxtTypeCmb_" id, typeNames, this._IndexInLangArr(typeNames, tt), true, true, lw, cw)
-        this._AddEditableComboRow(body, "TxtNameRow_" id, GetLang("文本变量："), "TxtName_" id, GetGuiVarArr(), tn, true, lw, cw)
-        this._AddTextOpsArgsTypeRow(body, id, tt, at, ShowArgsType && this._FormalTextOpsArgsTypes(tt).Length > 0, lw, cw)
-        this._AddEditableComboRow(body, "TxtArgsNameRow_" id, GetLang("参数值："), "TxtArgsName_" id, GetGuiVarArr(2), an, ShowArgsName, lw, cw)
+        this._AddEditableComboRow(body, "TxtNameRow_" id, GetLang("文本变量："), "TxtName_" id, sourceOptions, GetLang(tn), true, lw, cw)
+        this._AddTextOpsArgsTypeRow(body, id, tt, at, this._FormalTextOpsArgsTypes(tt).Length > 0, lw, cw)
+        this._AddEditableComboRow(body, "TxtArgsNameRow_" id, GetLang("参数值："), "TxtArgsName_" id, GetGuiVarArr("clipboard"), GetLang(an), ShowArgsName, lw, cw)
+        this._AddComboRow(body, "TxtTimestampComponentRow_" id, GetLang("时间量："), "TxtTimestampComponent_" id,
+            TextOpsTimestampComponentLabels(), componentIndex, IsTimestamp && at == "提取时间量", true, lw, cw)
+        editRow := body.Add("StackPanel").Name("TxtTimestampEditRow_" id).Margin("0,5,0,0")
+            .Visibility(IsTimestamp && at == "自定义格式" ? "Visible" : "Collapsed")
+        this._ApplyActionBtnStyle(editRow.Add("Button").Name("TxtTimestampEdit_" id).Content(GetLang("自定义格式"))
+            .HorizontalAlignment("Left").Padding("6,0").Height("22").FontSize(this._MGFontSize(12)))
         this._AddFieldRow(body, "TxtSearchRow_" id, GetLang("查找："), "TxtSearch_" id, sr, IsReplace, true, "", "", "", lw, cw)
         this._AddFieldRow(body, "TxtReplaceRow_" id, GetLang("替换："), "TxtReplace_" id, rp, IsReplace, true, "", "", "", lw, cw)
         ; 保存类型固定为文本框（参考文件读写节点），避免切换类型时闪烁
-        this._AddFieldRow(body, "TxtSaveTypeRow_" id, GetLang("保存类型："), "TxtSaveTypeTxt_" id, fixedSt, true, false, "", "", "", lw, cw)
-        this._AddEditableComboRow(body, "TxtSaveRow_" id, GetLang("保存名："), "TxtSave_" id, GetGuiVarArr(), sn, true, lw, cw)
+        this._AddFieldRow(body, "TxtSaveTypeRow_" id, GetLang("保存类型："), "TxtSaveTypeTxt_" id, GetLang(fixedSt), true, false, "", "", "", lw, cw)
+        this._AddEditableComboRow(body, "TxtSaveRow_" id, GetLang("保存名："), "TxtSave_" id, saveOptions, sn, true, lw, cw)
     }
 
     _FillArrayBody(id, d, body) {
@@ -1013,14 +1019,14 @@ class MacroGraphFormalMixin {
         effSt := fixedSt != "" ? fixedSt : st
         showIdx := f.IsShowArgs && !f.OnlyArgsData
         showData := f.IsShowArgs && !f.OnlyArgsIndex
-        argsNameList := (agt == "数组") ? GetGuiArrNameArr() : GetGuiVarArr()
+        argsNameList := (agt == "数组") ? GetGuiArrNameArr() : GetGuiVarArr("all")
         saveNameList := (effSt == "数组") ? GetGuiArrNameArr() : GetGuiVarArr()
         this._AddComboRow(body, "ArrTypeRow_" id, GetLang("操作："), "ArrTypeCmb_" id, typeNames, this._IndexInLangArr(typeNames, GetLang(at)), true, true, lw, cw)
         this._AddEditableComboRow(body, "ArrNameRow_" id, GetLang("数组："), "ArrName_" id, GetGuiArrNameArr(), an, true, lw, cw)
         this._AddCheckRow(body, "ArrIgnRow_" id, "ArrIgn_" id, GetLang("如果数组存在则不改变数据"), (ign == 1 || ign == "1") && f.ShowIgn, f.ShowIgn)
         this._AddFieldRow(body, "ArrInitRow_" id, GetLang("初始值："), "ArrInit_" id, initTxt, f.IsCreate, true, "", "", "", lw, cw)
-        this._AddEditableComboRow(body, "ArrMainRow_" id, GetLang("子索引："), "ArrMain_" id, GetGuiVarArr(), mi, f.IsShowMainIndex, lw, cw)
-        this._AddEditableComboRow(body, "ArrArgsIdxRow_" id, GetLang("索引："), "ArrArgsIdx_" id, GetGuiVarArr(), ai, showIdx, lw, cw)
+        this._AddEditableComboRow(body, "ArrMainRow_" id, GetLang("子索引："), "ArrMain_" id, GetGuiVarArr("count"), GetLang(mi), f.IsShowMainIndex, lw, cw)
+        this._AddEditableComboRow(body, "ArrArgsIdxRow_" id, GetLang("索引："), "ArrArgsIdx_" id, GetGuiVarArr("count"), GetLang(ai), showIdx, lw, cw)
         this._AddComboRow(body, "ArrArgsTypeRow_" id, GetLang("参数类型："), "ArrArgsTypeCmb_" id, argsTypes, this._IndexInLangArr(argsTypes, GetLang(agt)), showData, true, lw, cw)
         this._AddEditableComboRow(body, "ArrArgsNameRow_" id, GetLang("参数值："), "ArrArgsName_" id, argsNameList, agn, showData, lw, cw)
         this._AddComboRow(body, "ArrSaveTypeRow_" id, GetLang("保存类型："), "ArrSaveTypeCmb_" id, saveTypes, this._IndexInLangArr(saveTypes, GetLang(effSt)), f.IsShowResult, fixedSt == "", lw, cw)
@@ -1127,8 +1133,8 @@ class MacroGraphFormalMixin {
         winRow := body.Add("StackPanel").Name("WmWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         this._MakeTextBox(winRow, "WmWin_" id, sv, "130")
         this._ApplyActionBtnStyle(winRow.Add("Button").Name("WmWinEdit_" id).Content(GetLang("编辑")).Width("40").Height("20").FontSize(this._MGFontSize(11)).Padding("0").Margin("4,0,0,0").VerticalAlignment("Center").Cursor("Hand").Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").BorderThickness("1").BorderBrush("{DynamicResource ActionStroke}"))
-        this._AddEditableComboRow(body, "WmXRow_" id, GetLang(atKey == "相对移动" ? "偏移X：" : "坐标X："), "WmX_" id, varList, d.HasOwnProp("wmPosX") ? d.wmPosX : 0, isMove, lw, cw, "WmXLabel_" id)
-        this._AddEditableComboRow(body, "WmYRow_" id, GetLang(atKey == "相对移动" ? "偏移Y：" : "坐标Y："), "WmY_" id, varList, d.HasOwnProp("wmPosY") ? d.wmPosY : 0, isMove, lw, cw, "WmYLabel_" id)
+        this._AddEditableComboRow(body, "WmXRow_" id, GetLang(atKey == "相对移动" ? "偏移X：" : "坐标X："), "WmX_" id, atKey == "相对移动" ? varList : GetGuiVarArr("x"), GetLang(d.HasOwnProp("wmPosX") ? d.wmPosX : 0), isMove, lw, cw, "WmXLabel_" id)
+        this._AddEditableComboRow(body, "WmYRow_" id, GetLang(atKey == "相对移动" ? "偏移Y：" : "坐标Y："), "WmY_" id, atKey == "相对移动" ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("wmPosY") ? d.wmPosY : 0), isMove, lw, cw, "WmYLabel_" id)
         this._AddEditableComboRow(body, "WmWRow_" id, GetLang("宽度："), "WmW_" id, varList, d.HasOwnProp("wmWidth") ? d.wmWidth : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmHRow_" id, GetLang("高度："), "WmH_" id, varList, d.HasOwnProp("wmHeight") ? d.wmHeight : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmWidthVarRow_" id, GetLang("宽度变量："), "WmWidthVar_" id, varList, d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "Var1", isGetSize, lw, cw)
@@ -1141,7 +1147,7 @@ class MacroGraphFormalMixin {
             this._AddEditableComboRow(body, "WmResultRow" A_Index "_" id, label, "WmResult" A_Index "_" id, atKey == "匹配窗口列表" ? GetGuiArrNameArr() : varList,
                 d.HasOwnProp(prop) ? d.%prop% : "Var" A_Index, A_Index <= fields.Length, lw, cw, "WmResultLabel" A_Index "_" id, GetLang(WindowInfoFieldTip(atKey, A_Index)))
         }
-        this._AddEditableComboRow(body, "WmTitleRow_" id, GetLang("新标题："), "WmTitle_" id, varList, d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", isTitle, lw, cw)
+        this._AddEditableComboRow(body, "WmTitleRow_" id, GetLang("新标题："), "WmTitle_" id, GetGuiVarReferences("text"), TranslateBuiltinVarReferences(d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", true), isTitle, lw, cw)
         this._AddEditableComboRow(body, "WmTransRow_" id, GetLang("透明度："), "WmTrans_" id, varList, d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80", isTrans, lw, cw)
     }
 
@@ -1191,10 +1197,10 @@ class MacroGraphFormalMixin {
             winRow.Visibility("Collapsed")
         this._MakeTextBox(winRow, "SsWin_" id, wi, "130")
         winRow.Add("Button").Name("SsWinEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
-        this._AddEditableComboRow(body, "SsSXRow_" id, GetLang("起始X："), "SsSX_" id, varList, d.HasOwnProp("ssStartX") ? d.ssStartX : 0, true, lw, cw)
-        this._AddEditableComboRow(body, "SsSYRow_" id, GetLang("起始Y："), "SsSY_" id, varList, d.HasOwnProp("ssStartY") ? d.ssStartY : 0, true, lw, cw)
-        this._AddEditableComboRow(body, "SsEXRow_" id, GetLang("终止X："), "SsEX_" id, varList, d.HasOwnProp("ssEndX") ? d.ssEndX : A_ScreenWidth, true, lw, cw)
-        this._AddEditableComboRow(body, "SsEYRow_" id, GetLang("终止Y："), "SsEY_" id, varList, d.HasOwnProp("ssEndY") ? d.ssEndY : A_ScreenHeight, true, lw, cw)
+        this._AddEditableComboRow(body, "SsSXRow_" id, GetLang("起始X："), "SsSX_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("x"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartX") ? d.ssStartX : 0, true), true, lw, cw)
+        this._AddEditableComboRow(body, "SsSYRow_" id, GetLang("起始Y："), "SsSY_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("y"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartY") ? d.ssStartY : 0, true), true, lw, cw)
+        this._AddEditableComboRow(body, "SsEXRow_" id, GetLang("终止X："), "SsEX_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("x"), TranslateBuiltinVarReferences(d.HasOwnProp("ssEndX") ? d.ssEndX : A_ScreenWidth, true), true, lw, cw)
+        this._AddEditableComboRow(body, "SsEYRow_" id, GetLang("终止Y："), "SsEY_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("y"), TranslateBuiltinVarReferences(d.HasOwnProp("ssEndY") ? d.ssEndY : A_ScreenHeight, true), true, lw, cw)
         this._AddCheckRow(body, "SsNameTogRow_" id, "SsNameTog_" id, GetLang("固定名称："), showFixed, true)
         this._AddFieldRow(body, "SsFixedRow_" id, GetLang("名称："), "SsFixed_" id, fixed, showFixed, true, "", "", "", lw, cw)
         this._AddCheckRow(body, "SsResTogRow_" id, "SsResTog_" id, GetLang("保存到变量"), on, true)
@@ -1239,9 +1245,9 @@ class MacroGraphFormalMixin {
             block.Visibility("Collapsed")
         block.Add("Border").Name(p "Sep_" id).Height("1").Margin("0,6,0,4").BorderThickness("0").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
         this._AddCheckRow(block, p "TogChkRow_" id, p "Tog_" id, GetLang("条件") slot, on, true)
-        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetGuiVarArr(), GetLang(nm), showRow, lw, cw)
+        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), GetLang(nm), showRow, lw, cw)
         this._AddComboRow(block, p "CmpRow_" id, GetLang("比较："), p "Cmp_" id, cmpTypes, CompareTypeToComboIndex(cmp), showRow, true, lw, cw)
-        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetGuiVarArr(), GetLang(vr), showVal, lw, cw)
+        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), GetLang(vr), showVal, lw, cw)
     }
 
     ; 如果条件收起态简要：{on, text}
@@ -1492,9 +1498,9 @@ class MacroGraphFormalMixin {
         ; 顶部分隔线：与上方字段 / 上一条件分割
         block.Add("Border").Name(p "Sep_" id).Height("1").Margin("0,6,0,4").BorderThickness("0").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
         this._AddCheckRow(block, p "TogChkRow_" id, p "Tog_" id, GetLang("条件") slot, on, true)
-        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetGuiVarArr(), GetLang(nm), showRow, lw, cw)
+        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), GetLang(nm), showRow, lw, cw)
         this._AddComboRow(block, p "CmpRow_" id, GetLang("比较："), p "Cmp_" id, cmpTypes, CompareTypeToComboIndex(cmp), showRow, true, lw, cw)
-        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetGuiVarArr(), GetLang(vr), showVal, lw, cw)
+        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), GetLang(vr), showVal, lw, cw)
     }
 
     ; 循环节点收起态摘要信息：循环次数 / 循环条件类型 / 逻辑关系。
@@ -1563,9 +1569,9 @@ class MacroGraphFormalMixin {
         showCondi := CmdEnumZh(condiType, CmdEnumCondiNames()) != "无"
         cmds := this._LoopBodyCmds(d)
 
-        countItems := GetGuiVarArr()
+        countItems := GetGuiVarArr("count")
         countItems.Push(GetLang("无限"))
-        this._AddEditableComboRow(body, "LoopCountRow_" id, GetLang("循环次数："), "LoopCount_" id, countItems, this._LoopCountText(d), true, lw, cw)
+        this._AddEditableComboRow(body, "LoopCountRow_" id, GetLang("循环次数："), "LoopCount_" id, countItems, GetLang(this._LoopCountText(d)), true, lw, cw)
         this._AddComboRow(body, "LoopCondiRow_" id, GetLang("循环条件："), "LoopCondiCmb_" id, condiTypes, CmdEnumIndex(condiType, CmdEnumCondiNames()), true, true, lw, cw)
         ; 展开态完整条件；收起时隐藏，改用下方摘要
         this._AddComboRow(body, "LoopLogicRow_" id, GetLang("逻辑关系："), "LoopLogicCmb_" id, logicTypes, CmdEnumIndex(logicType, CmdEnumLogicNames()), showCondi && !folded, true, lw, cw)
@@ -1683,6 +1689,8 @@ class MacroGraphFormalMixin {
             loop this._FormalTextOpsTypeNames().Length
                 this._FormalTrackCombo(id, "TxtArgsTypeCmb_" A_Index, h, runtime)
             this._FormalTrackEditCombo(id, "TxtArgsName", h, runtime)
+            this._FormalTrackCombo(id, "TxtTimestampComponent", h, runtime)
+            this._BindCtrl("TxtTimestampEdit_" id, "Click", (*) => this.OpenNodeEditor(id), runtime)
             this._FormalTrackField(id, "TxtSearch", h, runtime)
             this._FormalTrackField(id, "TxtReplace", h, runtime)
             ; 保存类型是固定的文本框，不需要追踪

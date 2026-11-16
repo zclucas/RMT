@@ -266,7 +266,6 @@ class SearchGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("搜索")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr(1)
         if (!this.CheckIfDataValid())
             return
 
@@ -543,7 +542,6 @@ class SearchGui {
     OnEditFoundMacroBtnClick(*) {
         if (this.MacroGui == "") {
             this.MacroGui := MacroEditGui()
-            this.MacroGui.DLVariableArr := this.DLVariableArr
             ; 原生传 this.MousePosCon（原生控件）；XAML 版无原生控件，给无操作焦点对象，
             ; 避免 MacroEditGui.OnSureBtnClick 对空值调用 .Focus() 抛错（MacroEditGui.ahk:707）
             this.MacroGui.SureFocusCon := {Focus: (*) => ""}
@@ -566,7 +564,6 @@ class SearchGui {
     OnEditUnFoundMacroBtnClick(*) {
         if (this.MacroGui == "") {
             this.MacroGui := MacroEditGui()
-            this.MacroGui.DLVariableArr := this.DLVariableArr
             ; 同 OnEditFoundMacroBtnClick：无操作焦点对象替代原生控件
             this.MacroGui.SureFocusCon := {Focus: (*) => ""}
 

@@ -137,53 +137,69 @@
         return files.Length > 0
     }
 
+    ; 麦克风按钮：开录 / 停止 / 取消等待三态归 VoiceInput，本处只决定「哪个页签」
     OnAiMicClick(t, *) {
-        if (!IsObject(this._aiRec))
-            this._aiRec := Map()
-        if (this._aiRec.Has(t) && this._aiRec[t]) {
-            this._AiStopRec(t)
+        if (!IsObject(this._aiVoice))
+            return
+        if (this._aiVoice.IsRecording()) {
+            if (this._aiSttTab == t) {
+                this._aiVoice.Toggle()
+                return
+            }
+            ; 正在录另一个页签：先把它落定到自己的框里，再给当前页签开新录
+            this._aiVoice.Stop(true)
+        } else if (this._aiVoice.IsWaiting()) {
+            this._aiVoice.CancelWait()
             return
         }
-        if (!SttGui.RequestModelDownload())
-            return
-        engine := InitSttEngine()
-        inputBefore := ""
-        try inputBefore := Trim(this.ui.Query("AiInput_" t))
-        initializing := !engine.streamLoaded
-        if (initializing && inputBefore == "") {
-            try this.ui.Update("AiInputPh_" t, "Text", GetLang("模型正在加载…"))
-            try this.ui.Update("AiInputPh_" t, "Visibility", "Visible")
-            Sleep(50)
-        }
-        if (!engine.StreamBegin()) {
-            this._AiSyncPlaceholder(t)
-            Toast.Error(GetLang("开始录音失败：") engine._ErrText(engine.StreamGetLastError()))
-            return
-        }
-        this._aiRec[t] := true
         this._aiSttTab := t
-        this._aiSttBase := ""
-        try this._aiSttBase := this.ui.Query("AiInput_" t)
-        this._aiSttLive := ""
-        try this.ui.Update("AiInput_" t, "Foreground", "{DynamicResource TextSub}")
-        try this.ui.Update("AiMic_" t, "Foreground", "{DynamicResource Accent}")
-        try this.ui.Update("AiMic_" t, "ToolTip", GetLang("停止录音"))
-        try this.ui.Update("AiInputPh_" t, "Text", GetLang("正在聆听…"))
-        this._AiSyncPlaceholder(t)
-        SetTimer(this.aiSttTick, 150)
+        this._aiVoice.Start(false)
     }
 
-    _AiPollStt() {
+    ; 语音输入的三个回调（VoiceInput → 界面动作）
+    _AiOnVoiceText(text) {
         t := this._aiSttTab
-        if (t < 1 || !IsObject(this._aiRec) || !this._aiRec.Has(t) || !this._aiRec[t]) {
-            SetTimer(this.aiSttTick, 0)
+        if (t < 1)
             return
+        this._AiSetVoiceText(t, text)
+    }
+
+    _AiOnVoiceState(state) {
+        t := this._aiSttTab
+        rec := (state == "recording")
+        this._aiVoiceRec := rec
+        if (t < 1)
+            return
+        if (rec) {
+            base := ""
+            try base := this.ui.Query("AiInput_" t)
+            this._aiSttBase := base
+            this._aiSttLive := ""
+            try this.ui.Update("AiInput_" t, "Foreground", "{DynamicResource TextSub}")
+            try this.ui.Update("AiMic_" t, "Foreground", "{DynamicResource Accent}")
+            try this.ui.Update("AiMic_" t, "ToolTip", GetLang("停止录音"))
+            try this.ui.Update("AiInputPh_" t, "Text", GetLang("正在聆听…"))
+        } else {
+            try this.ui.Update("AiInput_" t, "Foreground", "{DynamicResource InputText}")
+            try this.ui.Update("AiMic_" t, "Foreground", "{DynamicResource TextMain}")
+            try this.ui.Update("AiMic_" t, "ToolTip", GetLang("语音输入"))
+            try this.ui.Update("AiInputPh_" t, "Text", GetLang("询问关于宏的任何问题…"))
         }
-        engine := InitSttEngine()
-        live := ""
-        try live := engine.StreamPoll()
-        if (Trim(live) != "" && live != this._aiSttLive)
-            this._AiSetVoiceText(t, live)
+        this._AiSyncPlaceholder(t)
+    }
+
+    _AiOnVoiceNotify(key, detail := "") {
+        t := this._aiSttTab
+        if (key == "loading") {
+            if (t >= 1) {
+                try this.ui.Update("AiInputPh_" t, "Text", GetLang("模型正在加载…"))
+                try this.ui.Update("AiInputPh_" t, "Visibility", "Visible")
+            }
+        } else if (key == "loadFailed") {
+            try Toast.Error(GetLang("语音模型加载失败，请重试"))
+        } else if (key == "startFailed") {
+            try Toast.Error(GetLang("开始录音失败：") (detail != "" ? detail : GetLang("未知错误")))
+        }
     }
 
     _AiSetVoiceText(t, text) {
@@ -198,32 +214,19 @@
         this._AiSyncPlaceholder(t)
     }
 
-    _AiStopRec(t) {
-        if (!IsObject(this._aiRec))
-            this._aiRec := Map()
-        this._aiRec[t] := false
-        SetTimer(this.aiSttTick, 0)
-        try this.ui.Update("AiInput_" t, "Foreground", "{DynamicResource InputText}")
-        try this.ui.Update("AiMic_" t, "Foreground", "{DynamicResource TextMain}")
-        try this.ui.Update("AiMic_" t, "ToolTip", GetLang("语音输入"))
-        try this.ui.Update("AiInputPh_" t, "Text", GetLang("询问关于宏的任何问题…"))
-        engine := InitSttEngine()
-        if (!IsObject(engine))
+    ; 隐藏到托盘时把还在进行的录音落定（避免麦克风一直开着）
+    _AiVoiceStop() {
+        if (IsObject(this._aiVoice) && (this._aiVoice.IsRecording() || this._aiVoice.IsWaiting()))
+            this._aiVoice.Stop(true)
+    }
+
+    ; 窗口销毁前释放：停录、清定时器、让出麦克风
+    _AiVoiceClose() {
+        if (!IsObject(this._aiVoice))
             return
-        if (!engine.StreamEnd(0)) {
-            this._AiSyncPlaceholder(t)
-            return
-        }
-        loop 40 {
-            st := engine.StreamGetState()
-            if (st == 3 || st == 4)
-                break
-            Sleep(50)
-        }
-        result := Trim(engine.StreamGetResult())
-        if (result != "" && result != this._aiSttLive)
-            this._AiSetVoiceText(t, result)
-        this._AiSyncPlaceholder(t)
+        try this._aiVoice.Close()
+        this._aiVoice := ""
+        this._aiVoiceRec := false
     }
 
     ; 拖入文件：顶部芯片（仅文件名，下划线，整块删除）
@@ -400,7 +403,7 @@
     _AiSyncPlaceholder(t) {
         text := ""
         try text := this.ui.Query("AiInput_" t)
-        rec := IsObject(this._aiRec) && this._aiRec.Has(t) && this._aiRec[t]
+        rec := this._aiVoiceRec && this._aiSttTab == t
         hasAtt := this._AiAttachList(t).Length > 0
         hasLive := rec && this._aiSttLive != ""
         vis := (Trim(text) == "" && !hasAtt && !hasLive) ? "Visible" : "Collapsed"

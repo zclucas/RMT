@@ -142,8 +142,8 @@ public partial class AhkWpfEngine
                 return;
             }
 
-            // KeyDown:Return / PreviewKeyDown:Delete 等：绑底层键盘事件，仅在目标键时上报
-            if (eventName.StartsWith("KeyDown:") || eventName.StartsWith("PreviewKeyDown:"))
+            // KeyDown:Return / KeyUp:Alt / PreviewKeyDown:Delete 等：绑底层键盘事件，仅在目标键时上报
+            if (eventName.StartsWith("KeyDown:") || eventName.StartsWith("PreviewKeyDown:") || eventName.StartsWith("KeyUp:"))
             {
                 int colon = eventName.IndexOf(':');
                 string baseEvt = eventName.Substring(0, colon);
@@ -155,20 +155,29 @@ public partial class AhkWpfEngine
                     {
                         ue.PreviewKeyDown += (s, e) =>
                         {
-                            if (e.Key.ToString() == keyFilter || (keyFilter == "Return" && e.Key == System.Windows.Input.Key.Enter))
+                            if (KeyMatchesFilter(e, keyFilter))
                             {
                                 DumpStateWithArgs(ctrlName, baseEvt, e);
                                 // Enter：交给 AHK（发送 / Shift+换行），阻止 TextBox 再插入换行
-                                if (keyFilter == "Return")
+                                // Tab：交给 AHK 处理，阻止默认焦点移动（绑了 Tab 的窗口才会走到）
+                                if (keyFilter == "Return" || keyFilter == "Tab")
                                     e.Handled = true;
                             }
+                        };
+                    }
+                    else if (baseEvt == "KeyUp")
+                    {
+                        ue.KeyUp += (s, e) =>
+                        {
+                            if (KeyMatchesFilter(e, keyFilter))
+                                DumpStateWithArgs(ctrlName, baseEvt, e);
                         };
                     }
                     else
                     {
                         ue.KeyDown += (s, e) =>
                         {
-                            if (e.Key.ToString() == keyFilter || (keyFilter == "Return" && e.Key == System.Windows.Input.Key.Enter))
+                            if (KeyMatchesFilter(e, keyFilter))
                                 DumpStateWithArgs(ctrlName, baseEvt, e);
                         };
                     }
@@ -610,6 +619,27 @@ public partial class AhkWpfEngine
             }
         }
     }
+    // 键名匹配：Enter→Return 别名；Alt/Ctrl 等修饰键在 WPF 里是 Key.System，真实键在 SystemKey。
+    // 修饰键支持聚合名：Alt 同时匹配 LeftAlt/RightAlt（Win 同理），AHK 侧只绑一个即可。
+    private static bool KeyMatchesFilter(System.Windows.Input.KeyEventArgs e, string keyFilter)
+    {
+        if (e.Key.ToString() == keyFilter)
+            return true;
+        if (keyFilter == "Return" && e.Key == System.Windows.Input.Key.Enter)
+            return true;
+        if (e.Key == System.Windows.Input.Key.System && e.SystemKey != System.Windows.Input.Key.None)
+        {
+            string sk = e.SystemKey.ToString();
+            if (sk == keyFilter)
+                return true;
+            if (keyFilter == "Alt" && (e.SystemKey == System.Windows.Input.Key.LeftAlt || e.SystemKey == System.Windows.Input.Key.RightAlt))
+                return true;
+            if (keyFilter == "Win" && (e.SystemKey == System.Windows.Input.Key.LWin || e.SystemKey == System.Windows.Input.Key.RWin))
+                return true;
+        }
+        return false;
+    }
+
     private void DumpStateWithArgs(string cName, string eName, object e)
     {
         if (e is System.Windows.Input.KeyEventArgs)

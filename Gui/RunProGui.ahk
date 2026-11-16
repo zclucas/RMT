@@ -187,9 +187,9 @@ class RunProGui {
         this.ui.OnEvent("RunModeCombo", "SelectionChanged", ObjBindMethod(this, "OnModeChange"))
         this.ui.OnEvent("BtnAddName", "Click", ObjBindMethod(this, "OnClickAddVarNameBtn"))
         this.ui.OnEvent("BtnAddValue", "Click", ObjBindMethod(this, "OnClickAddVarValueBtn"))
-        this.ui.OnEvent("PathTextCon", "GotKeyboardFocus", (*) => this.ActiveEdit := "PathTextCon")
+        this.ui.OnEvent("PathTextCon", "GotKeyboardFocus", (*) => this._SetVariableTarget("PathTextCon"))
         this.ui.OnEvent("PathTextCon", "DropDownOpened", RunGui.ResetTargetSelection.Bind(RunGui, this.ui))
-        this.ui.OnEvent("StdInCon", "GotKeyboardFocus", (*) => this.ActiveEdit := "StdInCon")
+        this.ui.OnEvent("StdInCon", "GotKeyboardFocus", (*) => this._SetVariableTarget("StdInCon"))
         this.ui.OnEvent("BtnSelectFile", "Click", ObjBindMethod(this, "OnClickFileSelectBtn"))
         this.ui.OnEvent("BtnStdInEdit", "Click", ObjBindMethod(this, "OpenStdInEditor"))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
@@ -261,8 +261,8 @@ class RunProGui {
         ; 還原跳脫的花括號供介面顯示（{{xxx}} → {xxx}）
         this.ui.Update("PathTextCon", "Text", UnescapeVarText(this.Data.Target))
 
-        DLVariableArr := GetGuiVarArr(1)
-        this._SetCombo("VariCombo", DLVariableArr, "")
+        this.ActiveEdit := "PathTextCon"
+        this._SetCombo("VariCombo", GetGuiVarArr("clipboard"), "")
 
         this.ui.Update("RunModeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.Mode, CmdEnumRunModeNames())))
         this.ui.Update("OptionCombo", "SelectedIndex", String(CmdEnumIndex(ObjHasOwnProp(this.Data, "Option") ? this.Data.Option : "默认", CmdEnumRunOptionNames(), 0)))
@@ -278,7 +278,7 @@ class RunProGui {
                 saveText := this.Data.SaveNameArr[A_Index]
             else
                 saveText := (A_Index == 1 ? "ExitCode" : (A_Index == 2 ? "StdOut" : "StdErr"))
-            this._SetCombo("SaveName" A_Index, GetGuiVarArr(0), saveText)
+            this._SetCombo("SaveName" A_Index, GetGuiVarArr(), saveText)
         }
         this.OnModeChange()
     }
@@ -423,7 +423,7 @@ class RunProGui {
         if (!IsObject(this.StdInEditGui) || this._stdInClosed)
             return
         isVar := this.StdInEditGui.Query("StdInEditVarTypeCombo") == GetLang("变量")
-        items := isVar ? GetGuiVarArr(1) : GetGuiArrNameArr()
+        items := isVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
         cur := this.StdInEditGui.Query("StdInEditVariCombo")
         this.StdInEditGui.Update("StdInEditVariCombo", "ClearItems", "")
         for v in items {
@@ -510,7 +510,7 @@ class RunProGui {
     }
 
     SaveRunData() {
-        this.Data.Target := SmartEscapeVarText(GetLangStr(this.ui.Query("PathTextCon"), 2))
+        this.Data.Target := SmartEscapeVarText(TranslateBuiltinVarReferences(this.ui.Query("PathTextCon")))
         this.Data.Mode := CmdEnumFromIndex(this._SelIndex("RunModeCombo"), CmdEnumRunModeNames())
         this.Data.Option := CmdEnumFromIndex(this._SelIndex("OptionCombo"), CmdEnumRunOptionNames())
 
@@ -528,14 +528,14 @@ class RunProGui {
             if (ObjHasOwnProp(this.Data, "Encoding"))
                 this.Data.DeleteProp("Encoding")
         } else if (this.Data.Mode == "不等待+输入") {
-            this.Data.StdIn := SmartEscapeVarText(this.ui.Query("StdInCon"))
+            this.Data.StdIn := SmartEscapeVarText(TranslateBuiltinVarReferences(this.ui.Query("StdInCon")))
             if (ObjHasOwnProp(this.Data, "SaveNameArr"))
                 this.Data.DeleteProp("SaveNameArr")
             enc := {}
             enc.In := this.ui.Query("EncIn")
             this.Data.Encoding := enc
         } else if (this.Data.Mode == "等待+输入输出") {
-            this.Data.StdIn := SmartEscapeVarText(this.ui.Query("StdInCon"))
+            this.Data.StdIn := SmartEscapeVarText(TranslateBuiltinVarReferences(this.ui.Query("StdInCon")))
             this.Data.SaveNameArr := [this.ui.Query("SaveName1"), this.ui.Query("SaveName2"), this.ui.Query("SaveName3")]
             enc := {}
             enc.In := this.ui.Query("EncIn")
@@ -544,6 +544,12 @@ class RunProGui {
             this.Data.Encoding := enc
         }
         SaveMacroCMDData(this.Data)
+    }
+
+    _SetVariableTarget(name) {
+        this.ActiveEdit := name
+        items := name == "PathTextCon" ? GetGuiVarArr("clipboard") : GetGuiVarArr("all")
+        this._SetCombo("VariCombo", items, this.ui.Query("VariCombo"))
     }
 
     OnClickAddVarNameBtn(state := "", ctrl := "", event := "") {

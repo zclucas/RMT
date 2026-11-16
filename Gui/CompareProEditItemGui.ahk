@@ -5,7 +5,7 @@
 ; 如果Pro分支编辑器 —— XAML 迁移版（独立实现）
 ; 公开接口保持：ShowGui(EditType, DataArr, logicStr, macro, controlType)
 ;              / MacroEditShowGui(CommandStr, CondiNumber) / SureBtnAction
-;              / OwnerHwnd / ParentTile / IsSubMacroEdit / DLVariableArr / SureFocusCon
+;              / OwnerHwnd / ParentTile / IsSubMacroEdit / SureFocusCon
 ; 调用方：CompareProGui.ahk:221 OnEditItem（原生，ShowGui 后设 SureBtnAction）
 ;         MacroEditGui.ahk:1166 OnDoubleClick（XAML，IsSubMacroEdit + MacroEditShowGui）
 ; =====================================================================
@@ -36,7 +36,6 @@ class CompareProEditItemGui {
         this.LogicalTypeCon := "LogicalTypeCon"
         this.MacroCon := "MacroCon"
         this.SureFocusCon := ""      ; 外部（CompareProGui:224）可能赋值；内部不使用
-        this.DLVariableArr := []
     }
 
     Hwnd() {
@@ -249,7 +248,7 @@ class CompareProEditItemGui {
         loop this.ToggleArr.Length {
             i := A_Index
             this._Bind("ToggleCon_" i, "Click", ObjBindMethod(this, "OnRefresh"))
-            this._Bind("CompareTypeCon_" i, "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
+            this._Bind("CompareTypeCon_" i, "SelectionChanged", this._OnCompareTypeChange.Bind(this, i))
             this._Bind("DelCondi_" i, "Click", ObjBindMethod(this, "OnDelCondi", i))
         }
     }
@@ -286,10 +285,11 @@ class CompareProEditItemGui {
             i := A_Index
             tog := this.ToggleArr[i] ? "True" : "False"
             batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
-            this._BatchSetCombo(batch, "NameCon_" i, this.DLVariableArr, GetLang(this.NameArr[i]))
             ct := this.CompareTypeArr[i]
+            items := GetCompareGuiVarArr(ct)
+            this._BatchSetCombo(batch, "NameCon_" i, items, GetLang(this.NameArr[i]))
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
-            this._BatchSetCombo(batch, "VariableCon_" i, this.DLVariableArr, GetLang(this.VariableArr[i]))
+            this._BatchSetCombo(batch, "VariableCon_" i, items, GetLang(this.VariableArr[i]))
             onlyOne := this.ToggleArr.Length <= 1
             batch.Push({ControlName: "DelCondi_" i, PropertyName: "IsEnabled", Value: (canEdit && !onlyOne) ? "True" : "False"})
             batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsEnabled", Value: canEdit ? "True" : "False"})
@@ -372,7 +372,6 @@ class CompareProEditItemGui {
         this.ui.Update("LogicalTypeCon", "Text", logicStr == "" ? GetLang("且") : logicStr)
         this.ui.Update("MacroCon", "Text", macro)
         this.LegacyControlType := controlType ; 只保留旧配置的执行语义，不再提供流程下拉
-        this.DLVariableArr := GetGuiVarArr(1)
 
         VariNameArr := DataArr[1]
         CompareTypeArr := DataArr[2]
@@ -400,6 +399,15 @@ class CompareProEditItemGui {
         isEnabled := EditType == 1
         this.ui.Update("LogicalTypeCon", "IsEnabled", isEnabled ? "True" : "False")
         ; 程序化填值不触发 SelectionChanged，需显式刷新联动（§4.3）
+        this.OnRefresh()
+    }
+
+    _OnCompareTypeChange(i, *) {
+        if (!IsObject(this.ui))
+            return
+        items := GetCompareGuiVarArr(this._CompareTypeIndex(i))
+        for name in ["NameCon_" i, "VariableCon_" i]
+            this._SetCombo(name, items, this.ui.Query(name))
         this.OnRefresh()
     }
 
@@ -493,7 +501,6 @@ class CompareProEditItemGui {
     OnEditMacroBtnClick(*) {
         if (this.MacroGui == "") {
             this.MacroGui := MacroEditGui()
-            this.MacroGui.DLVariableArr := this.DLVariableArr
             ; MacroEditGui 关闭确定后会调用 SureFocusCon.Focus()：传 XAML 焦点 facade
             this.MacroGui.SureFocusCon := CompareProEditFocusCon(this, "LogicalTypeCon")
 

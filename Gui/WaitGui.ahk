@@ -26,7 +26,6 @@ class WaitGui {
         this._closed := true
         this.Data := ""
         this.SerialStr := ""
-        this.DLVariableArr := []
         this.WaitTypeKeys := []
         this._currentGroup := ""
         this._loading := false
@@ -425,7 +424,6 @@ class WaitGui {
             this.Data.TimeConfig.Param1 := this.Data.Param1
             this.Data.TimeConfig.Param2 := unit == "具体时间" ? "时刻" : (unit == "时间变量" ? "时间戳" : unit)
         }
-        this.DLVariableArr := GetGuiVarArr(1)
 
         batch := []
         batch.Push({ControlName: "RemarkCon", PropertyName: "Text", Value: cmdArr.Length >= 2 ? cmdArr[2] : ""})
@@ -455,8 +453,8 @@ class WaitGui {
         processMode := procWait ? this.Data.ProcessTargetType : "进程名"
         name := procWait && processMode == "进程名" && this.Data.Param1 != "" ? this.Data.Param1 : "notepad.exe"
         pid := procWait && processMode == "PID" ? this.Data.Param1 : ""
-        this._QueueCombo(batch, "ProcCon", this.DLVariableArr, name)
-        this._QueueCombo(batch, "ProcPidCon", this.DLVariableArr, pid)
+        this._QueueCombo(batch, "ProcCon", GetGuiVarArr("clipboard"), GetLang(name))
+        this._QueueCombo(batch, "ProcPidCon", GetGuiVarArr(), pid)
         batch.Push({ControlName: "ProcTargetTypeCon", PropertyName: "SelectedIndex",
             Value: CmdEnumIndex(processMode, WaitGui.ProcessTargetTypes)})
         winWait := this._PanelOf(CmdEnumWait(this.Data.WaitType)) == "WinPanel"
@@ -466,10 +464,10 @@ class WaitGui {
         this.ui.BatchUpdate(batch)
         this._RefreshTimeout(timeout)
         ; 坐标与下拉数据
-        this._SetCombo("StartPosX", GetGuiVarArr(), this.Data.StartPosX)
-        this._SetCombo("StartPosY", GetGuiVarArr(), this.Data.StartPosY)
-        this._SetCombo("EndPosX", GetGuiVarArr(), this.Data.EndPosX)
-        this._SetCombo("EndPosY", GetGuiVarArr(), this.Data.EndPosY)
+        this._SetCombo("StartPosX", GetGuiVarArr("x"), GetLang(this.Data.StartPosX))
+        this._SetCombo("StartPosY", GetGuiVarArr("y"), GetLang(this.Data.StartPosY))
+        this._SetCombo("EndPosX", GetGuiVarArr("x"), GetLang(this.Data.EndPosX))
+        this._SetCombo("EndPosY", GetGuiVarArr("y"), GetLang(this.Data.EndPosY))
         ; 日期单位（Param2 存中文键）
         unitKey := GetLangKey(this.Data.Param2)
         unitIdx := 0
@@ -504,8 +502,6 @@ class WaitGui {
         }
         if (saved.Length)
             this._timeValues[(range ? "区间" : "等待") kind] := saved
-        for name in ["TimeValueCon", "TimeStartCon", "TimeEndCon"]
-            this._SetCombo(name, GetGuiVarArr(), "")
         this.ui.Update("TimeWaitOutsideCon", "IsChecked", InputField(cfg, "WaitOutside", false) ? "True" : "False")
         this._RefreshTimeTarget(range, kind)
         this._FillKeyModes(this._pickedKeyText, keyWait ? this.Data.KeyOptions.CheckType : "")
@@ -577,25 +573,11 @@ class WaitGui {
             label := "日期时间："
         else if (unit == "时间变量") {
             label := "时间变量："
-            items := this._DateVarItems()
+            items := GetGuiVarArr("timeVars", "timestamp", "dateText", "clockText")
         }
         cur := this.ui.Query("DateValCon")
         this.ui.Update("DateValLabel", "Text", GetLang(label))
-        this._SetCombo("DateValCon", items, cur)
-    }
-
-    _DateVarItems() {
-        seen := Map()
-        items := []
-        for src in [GetTimeVarArr(), GetGuiVarArr(1)] {
-            for name in src {
-                if (name != "" && !seen.Has(name)) {
-                    seen[name] := true
-                    items.Push(name)
-                }
-            }
-        }
-        return items
+        this._SetCombo("DateValCon", items, GetLang(cur))
     }
 
     OnClickWinEdit(state := "", ctrl := "", event := "") {
@@ -901,10 +883,10 @@ class WaitGui {
                 }
                 this.Data.Param2 := ""
             case "等待屏幕变化":
-                this.Data.StartPosX := this.ui.Query("StartPosX")
-                this.Data.StartPosY := this.ui.Query("StartPosY")
-                this.Data.EndPosX := this.ui.Query("EndPosX")
-                this.Data.EndPosY := this.ui.Query("EndPosY")
+                this.Data.StartPosX := GetBuiltinVarName(this.ui.Query("StartPosX"))
+                this.Data.StartPosY := GetBuiltinVarName(this.ui.Query("StartPosY"))
+                this.Data.EndPosX := GetBuiltinVarName(this.ui.Query("EndPosX"))
+                this.Data.EndPosY := GetBuiltinVarName(this.ui.Query("EndPosY"))
                 this.Data.Param1 := ""
                 this.Data.Param2 := ""
             case "等待鼠标移动", "等待鼠标停止移动", "等待剪切板变化":
@@ -912,7 +894,7 @@ class WaitGui {
                 this.Data.Param2 := ""
             case "等待进程存在", "等待进程关闭":
                 this.Data.ProcessTargetType := this._ProcessTargetType()
-                this.Data.Param1 := Trim(this.ui.Query(this.Data.ProcessTargetType == "PID" ? "ProcPidCon" : "ProcCon"))
+                this.Data.Param1 := GetBuiltinVarName(Trim(this.ui.Query(this.Data.ProcessTargetType == "PID" ? "ProcPidCon" : "ProcCon")))
                 this.Data.Param2 := ""
             case "等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口移动", "等待窗口关闭", "等待窗口最小化":
                 this.Data.Param1 := this.ui.Query("WinInfoCon")
@@ -925,8 +907,8 @@ class WaitGui {
                 cfg.SubMode := t == "等待时间区间" ? "区间判断" : "等待"
                 kind := GetLangKey(this.ui.Query("TimeKindCon"))
                 if (t == "等待时间区间") {
-                    cfg.Param1 := this.ui.Query("TimeStartCon")
-                    cfg.Param2 := this.ui.Query("TimeEndCon")
+                    cfg.Param1 := GetVarName(this.ui.Query("TimeStartCon"))
+                    cfg.Param2 := GetVarName(this.ui.Query("TimeEndCon"))
                     if (kind == "时间戳") {
                         cfg.Param1 := this._NormalizeTimestampText(cfg.Param1)
                         cfg.Param2 := this._NormalizeTimestampText(cfg.Param2)
@@ -935,7 +917,7 @@ class WaitGui {
                     cfg.WaitOutside := this.ui.Query("TimeWaitOutsideCon") == "True" ? 1 : 0
                     cfg.Param4 := "等待"
                 } else {
-                    cfg.Param1 := this.ui.Query(kind == "毫秒-随机" ? "TimeStartCon" : "TimeValueCon")
+                    cfg.Param1 := GetVarName(this.ui.Query(kind == "毫秒-随机" ? "TimeStartCon" : "TimeValueCon"))
                     if (kind == "时间戳")
                         cfg.Param1 := this._NormalizeTimestampText(cfg.Param1)
                     if (kind == "毫秒-随机")
@@ -944,7 +926,7 @@ class WaitGui {
                 }
                 cfg.CheckInterval := this.Data.Interval
             case "等待日期":
-                this.Data.Param1 := this.ui.Query("DateValCon")
+                this.Data.Param1 := GetBuiltinVarName(this.ui.Query("DateValCon"))
                 this.Data.Param2 := GetLangKey(this.ui.Query("DateUnitCon"))
         }
         SaveMacroCMDData(this.Data)
@@ -1122,8 +1104,13 @@ class WaitGui {
             }
         }
         saved := this._timeValues.Get(key, [])
+        switch kind {
+            case "时间戳": items := GetGuiVarArr("timeVars", "timestamp")
+            case "时刻": items := GetGuiVarArr("clockText")
+            default: items := GetGuiVarArr()
+        }
         for i, name in this._timeTargetControls
-            this.ui.Update(name, "Text", saved.Has(i) ? saved[i] : this._timeDefaults[i])
+            this._SetCombo(name, items, GetLang(saved.Has(i) ? saved[i] : this._timeDefaults[i]))
     }
 
     _NormalizeTimestampText(value) {
@@ -1157,8 +1144,9 @@ class WaitGui {
         this.ui.Update("VarRows", "ClearItems", "")
         for i, condition in conditions {
             batch := [{ControlName: "VarRows", PropertyName: "AddXamlItem", Value: this._ConditionRow(i, conditions.Length > 1)}]
-            this._QueueCombo(batch, "VarName_" i, this.DLVariableArr, condition.Variable)
-            this._QueueCombo(batch, "VarValue_" i, this.DLVariableArr, condition.Value)
+            items := GetCompareGuiVarArr(condition.Operator)
+            this._QueueCombo(batch, "VarName_" i, items, GetLang(condition.Variable))
+            this._QueueCombo(batch, "VarValue_" i, items, GetBuiltinVarName(condition.Value, true))
             batch.Push({ControlName: "VarCompare_" i, PropertyName: "SelectedIndex",
                 Value: CmdEnumIndex(condition.Operator, WaitGui.CompareKeys)})
             this.ui.BatchUpdate(batch)
@@ -1180,7 +1168,7 @@ class WaitGui {
             i := A_Index
             operator := GetLangKey(this.ui.Query("VarCompare_" i))
             conditions.Push({Variable: GetVarName(this.ui.Query("VarName_" i)),
-                Operator: operator, Value: this.ui.Query("VarValue_" i)})
+                Operator: operator, Value: GetBuiltinVarName(this.ui.Query("VarValue_" i))})
         }
         return conditions
     }
@@ -1201,7 +1189,11 @@ class WaitGui {
     }
 
     OnConditionOperator(i, *) {
-        this._RefreshConditionValue(i, GetLangKey(this.ui.Query("VarCompare_" i)))
+        operator := GetLangKey(this.ui.Query("VarCompare_" i))
+        items := GetCompareGuiVarArr(operator)
+        for name in ["VarName_" i, "VarValue_" i]
+            this._SetCombo(name, items, this.ui.Query(name))
+        this._RefreshConditionValue(i, operator)
     }
 
     _RefreshConditionValue(i, operator) {

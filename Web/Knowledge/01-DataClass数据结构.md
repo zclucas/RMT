@@ -147,6 +147,7 @@
 | `ToolTextFilterHotKey` | `!u` | 文本提取 |
 | `ScreenShotHotKey` | `!y` | 截图 |
 | `FreePasteHotKey` | `!t` | 自由贴 |
+| `VoiceInputHotkey` | `LAlt` | 输入弹窗「按住说话」（单键；仅弹窗聚焦时生效，不是全局热键） |
 
 `!` = Alt，`^` = Ctrl，`+` = Shift，`#` = Win。空字符串表示未绑定。
 

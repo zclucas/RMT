@@ -216,7 +216,6 @@ class InputGui {
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         EnsureInputData(this.Data)
-        this.DLVariableArr := GetGuiVarArr(1)
         this.DLArrayArr := GetGuiArrNameArr()
 
         this._SetDDL("TypeCombo", GetLangArr(InputTypeKeys(this.Data.Type)), GetLang(this.Data.Type))

@@ -283,7 +283,7 @@ class FrontInfoGui {
             this.ui.Update("Tog" i, "IsChecked", fields[A_Index] != "" ? "True" : "False")
         }
         this.ui.Update("VariCon", "ClearItems", "")
-        for value in GetGuiVarArr(4) {
+        for value in GetGuiVarArr("handle") {
             if (value != "")
                 this.ui.Update("VariCon", "AddItem", value)
         }

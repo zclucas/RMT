@@ -72,6 +72,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("SuspendHotkey", MainSoftData.SuspendHotkey)
     CheckAndAddDirty("PauseHotkey", MainSoftData.PauseHotkey)
     CheckAndAddDirty("KillMacroHotkey", MainSoftData.KillMacroHotkey)
+    CheckAndAddDirty("VoiceInputHotkey", MainSoftData.HasProp("VoiceInputHotkey") ? MainSoftData.VoiceInputHotkey : "LAlt")
     CheckAndAddDirty("DebugRunHotkey", MainSoftData.HasProp("DebugRunHotkey") ? MainSoftData.DebugRunHotkey : "f5")
     CheckAndAddDirty("DebugStepHotkey", MainSoftData.HasProp("DebugStepHotkey") ? MainSoftData.DebugStepHotkey : "f11")
     CheckAndAddDirty("DebugStepOverHotkey", MainSoftData.HasProp("DebugStepOverHotkey") ? MainSoftData.DebugStepOverHotkey : "f10")
@@ -138,7 +139,6 @@ OnSaveSetting(*) {
     CheckAndAddDirty("ExcelBackend", MainSoftData.ExcelBackend)
 
     ; 状态设置（这些每次都变化，始终写入）
-    CheckAndAddDirty("TableIndex", MainSoftData.CurTableID != "" ? MainSoftData.CurTableID : MainSoftData.TabCtrl.Value)
     CheckAndAddDirty("Lang", MainSoftData.Lang)
     CheckAndAddDirty("FontType", MainSoftData.FontType)
     CheckAndAddDirty("FontSize", MainSoftData.HasProp("FontSize") ? MainSoftData.FontSize : 15)
@@ -147,7 +147,6 @@ OnSaveSetting(*) {
     CheckAndAddDirty("JoyLtRtAsButton", MainSoftData.HasProp("JoyLtRtAsButton") ? MainSoftData.JoyLtRtAsButton : true)
     CheckAndAddDirty("PreferredMacroEditor", MainSoftData.PreferredMacroEditor)
     CheckAndAddDirty("MacroTotalCount", MySoftData.MacroTotalCount)
-    CheckAndAddDirty("LastShowMonth", MainSoftData.LastShowMonth)
     CheckAndAddDirty("HasSaved", true)
 
     ; CMD窗口设置
@@ -244,7 +243,7 @@ SaveCurWinPos() {
     MyGui.GetPos(&x, &y, &w, &h)
     ; 保存「缩放系数」而非绝对尺寸：系数 = 窗口尺寸 / (1400×787 基准 × 当前屏幕缩放 fs)。
     ; 加载时按目标屏幕的 fs×系数推导尺寸 → 4K 到 1080p 等跨分辨率切换时窗口比例不变，不会巨大化。
-    dpi := DllCall("GetDpiForSystem", "UInt") / 96.0
+    dpi := A_ScreenDPI / 96.0
     dipSW := A_ScreenWidth / dpi
     dipSH := A_ScreenHeight / dpi
     fs := Min(dipSW / 1920, dipSH / 1080)
@@ -2192,8 +2191,10 @@ UnblockZoneIdentifier() {
 ; ──────────────────────────────────────────────────────────────────────
 SmartEscapeVarText(text) {
     varMap := Map()
-    for v in GetGuiVarArr(1)
+    for v in GetGuiVarArr("all") {
         varMap[v] := true
+        varMap[GetBuiltinVarName(v)] := true
+    }
 
     result := ""
     pos := 1

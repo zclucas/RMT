@@ -170,9 +170,10 @@ function Analyze-LangFile([string]$filePath) {
 
         # 常规分割：首个等号
         if ($null -eq $k) {
-            $eqPos = $trimmed.IndexOf("=")
+            $eq = [regex]::Match($trimmed, '(?<!\\)=')
+            $eqPos = if ($eq.Success) { $eq.Index } else { -1 }
             if ($eqPos -gt 0) {
-                $k = $trimmed.Substring(0, $eqPos)
+                $k = $trimmed.Substring(0, $eqPos).Replace('\=', '=')
                 $v = $trimmed.Substring($eqPos + 1).Trim()
             }
         }
@@ -328,9 +329,10 @@ foreach ($file in $targetFiles) {
 
         foreach ($line in $result.RawLines) {
             $trimmed = $line.Trim()
-            $eqPos = $trimmed.IndexOf("=")
+            $eq = [regex]::Match($trimmed, '(?<!\\)=')
+            $eqPos = if ($eq.Success) { $eq.Index } else { -1 }
             if ($eqPos -gt 0) {
-                $k = $trimmed.Substring(0, $eqPos).Trim()
+                $k = $trimmed.Substring(0, $eqPos).Replace('\=', '=').Trim()
                 # 剔除废弃项
                 if ($redundantSet.Contains($k)) {
                     continue
@@ -366,7 +368,8 @@ foreach ($file in $targetFiles) {
 
         $appendLines = [System.Collections.Generic.List[string]]::new()
         foreach ($k in $result.Missing) {
-            $appendLines.Add("$k=$k")
+            $escapedKey = $k.Replace('=', '\=')
+            $appendLines.Add("$escapedKey=$k")
         }
         [System.IO.File]::AppendAllLines($file.FullName, $appendLines, $utf8Bom)
         $fileModified = $true

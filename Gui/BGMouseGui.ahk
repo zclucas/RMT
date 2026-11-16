@@ -245,8 +245,8 @@ class BGMouseGui {
         this.ui.Update("OperateTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.OperateType, CmdEnumBgOperNames())))
         this.ui.Update("MouseTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.MouseType, CmdEnumMouseBtnNames())))
         this.ui.Update("ClickTimeCon", "Text", this.Data.ClickTime)
-        this._SetCombo("PosVarX", GetGuiVarArr(0), GetLang(this.Data.PosVarX))
-        this._SetCombo("PosVarY", GetGuiVarArr(0), GetLang(this.Data.PosVarY))
+        this._SetCombo("PosVarX", GetGuiVarArr(), GetLang(this.Data.PosVarX))
+        this._SetCombo("PosVarY", GetGuiVarArr(), GetLang(this.Data.PosVarY))
         this.ui.Update("ScrollV", "Text", this.Data.ScrollV)
         this.ui.Update("ScrollH", "Text", this.Data.ScrollH)
     }

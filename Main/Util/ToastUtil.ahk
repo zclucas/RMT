@@ -342,7 +342,7 @@ class Toast {
             NumPut("Int", y, pt, 4)
             hMon := DllCall("user32\MonitorFromPoint", "Ptr", pt, "UInt", 2, "Ptr")
             dpiX := 0, dpiY := 0
-            DllCall("shcore\GetDpiForMonitor", "Ptr", hMon, "Int", 0, "UInt*", &dpiX, "UInt*", &dpiY)
+            try DllCall("shcore\GetDpiForMonitor", "Ptr", hMon, "Int", 0, "UInt*", &dpiX, "UInt*", &dpiY)
             return (dpiX > 0) ? (dpiX / 96.0) : (A_ScreenDPI / 96.0)
         }
 

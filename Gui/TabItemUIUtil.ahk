@@ -63,13 +63,19 @@ OnItemAddMacroBtnClick(tableItem, foldIndex, *) {
 }
 
 ;删除宏配置
-OnItemDelMacroBtnClick(tableItem, DelIndex, *) {
-    try RmtDialog._Trace("Del click idx=" DelIndex)
-    if (!RmtDialog.Confirm(GetLang("是否删除当前宏"), GetLang("提示")))
+OnItemDelMacroBtnClick(tableItem, index, *) {
+    item := GetItemByIndex(tableItem, index)
+    if (!item)
+        return
+    MyMainWin.ReadTabValues(tableItem)
+    name := FormatMacroDeleteTarget(index, item.Remark)
+    if (!RmtDialog.Confirm(Format(GetLang("确定删除宏「{1}」吗？"), name), GetLang("提示")))
         return
 
-    MyMainWin.ReadTabValues(tableItem)
-    OnItemDelMacro(tableItem, DelIndex)
+    index := GetItemIndexInTable(tableItem, item.ID)
+    if (GetItemByIndex(tableItem, index) != item)
+        return
+    OnItemDelMacro(tableItem, index)
     MyMainWin.RenderTab(tableItem)
     ; §17 热重载：删除宏 live 广播 → 立即解除旧热键（防索引错位误触发错误宏）
     HotReloadPublish(tableItem.Index, 0)
@@ -124,10 +130,8 @@ OnItemAddMenuItem(tableItem, foldIndex, count := 4) {
 
 ;删除模块
 OnItemDelFoldBtnClick(tableItem, foldIndex, *) {
-    try RmtDialog._Trace("FoldDel click idx=" foldIndex)
-    if (!RmtDialog.Confirm(GetLang("是否删除当前模块以及模块中所有的宏配置"), GetLang("提示")))
+    if (!tableItem.Folds.Has(foldIndex))
         return
-
     if (tableItem.Folds.Length == 1) {
         RmtDialog.Info(GetLang("最后一个模块，不可删除！！！"), GetLang("提示"))
         return
@@ -135,26 +139,36 @@ OnItemDelFoldBtnClick(tableItem, foldIndex, *) {
 
     MyMainWin.ReadTabValues(tableItem)
     fold := tableItem.Folds[foldIndex]
-    if (fold) {
-        ; 删除归属该折叠框的所有条目。先松开按住的键，避免删空后键抬起打到空数组。
-        for index, item in tableItem.Items {
-            if (item.FoldID == fold.ID)
-                try ReleaseTableItemHoldKeys(tableItem, index)
+    name := FormatMacroDeleteTarget(foldIndex, fold.Remark)
+    count := GetFoldItems(tableItem, fold).Length
+    if (!RmtDialog.Confirm(Format(GetLang("确定删除模块「{1}」及其中的 {2} 条宏吗？"), name, count), GetLang("提示")))
+        return
+
+    foldIndex := GetFoldIndexInTable(tableItem, fold.ID)
+    if (!foldIndex || tableItem.Folds[foldIndex] != fold || tableItem.Folds.Length == 1)
+        return
+    ; 先松开按住的键，避免删空后键抬起打到空数组。
+    keep := []
+    for index, item in tableItem.Items {
+        if (item.FoldID == fold.ID) {
+            try ReleaseTableItemHoldKeys(tableItem, index)
+        } else {
+            keep.Push(item)
         }
-        keep := []
-        for item in tableItem.Items {
-            if (item.FoldID != fold.ID)
-                keep.Push(item)
-        }
-        tableItem.Items := keep
-        tableItem.Folds.RemoveAt(foldIndex)
-        tableItem.RebuildIndex()
-        RebuildTableLocator()
-        try RebindAllTriggerKeys()
     }
+    tableItem.Items := keep
+    tableItem.Folds.RemoveAt(foldIndex)
+    tableItem.RebuildIndex()
+    RebuildTableLocator()
+    try RebindAllTriggerKeys()
     MyMainWin.RenderTab(tableItem)
     ; §17 热重载：删除模块 live 广播 → 立即解除旧模块开关热键（防 foldIndex 错位切换错误模块）
     HotReloadPublish(tableItem.Index, 0)
+}
+
+FormatMacroDeleteTarget(index, remark) {
+    remark := Trim(remark, " `t`r`n")
+    return "#" index (remark == "" ? "" : " " remark)
 }
 
 ;编辑字串宏触发键

@@ -11,8 +11,6 @@
     Parameters:
         dll     -   The path or name of the XInput DLL to load.
 */
-XInput_Init()
-
 XInput_Init(dll:="")
 {
     global
@@ -57,27 +55,50 @@ XInput_Init(dll:="")
     
     ;=============== END CONSTANTS =================
     
+    ; 候选顺序与 JoyXInputEx() 保持一致。不能只认 XInput1_3：Windows 7 常见
+    ; 只有 xinput9_1_0（Vista 时代的兼容层），缺 1_3 时整块直接失败。
+    ; 每个候选都要「加载 + 解析导出」全通过才算可用，否则换下一个——
+    ; 只判断文件存在，遇到「有文件但缺函数」的版本会直接判死。
+    local cands, nm, hm, gs, ss, gc
+
+    _XInput_hm := 0
+    _XInput_GetState := _XInput_SetState := _XInput_GetCapabilities := 0
+
     if (dll = "")
-        Loop Files A_WinDir "\System32\XInput1_*.dll"
-            dll := A_LoopFileName
-    if (dll = "")
-        dll := "XInput1_3.dll"
-    
-    _XInput_hm := DllCall("LoadLibrary" ,"str",dll ,"ptr")
-    
-    if !_XInput_hm
-        throw Error("Failed to initialize XInput: " dll " not found.")
-    
-   (_XInput_GetState        := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"ptr",100 ,"ptr"))
-|| (_XInput_GetState        := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"astr","XInputGetState" ,"ptr"))
-    _XInput_SetState        := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"astr","XInputSetState" ,"ptr")
-    _XInput_GetCapabilities := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"astr","XInputGetCapabilities" ,"ptr")
-    
-    if !(_XInput_GetState && _XInput_SetState && _XInput_GetCapabilities) {
-        XInput_Term()
-        throw Error("Failed to initialize XInput: function not found.")
+        cands := ["xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll", "xinput1_2.dll", "xinput1_1.dll"]
+    else
+        cands := [dll]
+
+    for nm in cands {
+        hm := DllCall("LoadLibrary", "str", nm, "ptr")
+        if (!hm)
+            continue
+        ; 旧实现优先用 ordinal 100（带 Guide 位的扩展 GetState），不支持再按名字取
+        gs := DllCall("GetProcAddress", "ptr", hm, "ptr", 100, "ptr")
+        if (!gs)
+            gs := DllCall("GetProcAddress", "ptr", hm, "astr", "XInputGetState", "ptr")
+        ss := DllCall("GetProcAddress", "ptr", hm, "astr", "XInputSetState", "ptr")
+        gc := DllCall("GetProcAddress", "ptr", hm, "astr", "XInputGetCapabilities", "ptr")
+        if (gs && ss && gc) {
+            _XInput_hm := hm
+            _XInput_GetState := gs
+            _XInput_SetState := ss
+            _XInput_GetCapabilities := gc
+            break
+        }
+        DllCall("FreeLibrary", "ptr", hm)
     }
+
+    if !_XInput_hm
+        throw Error("Failed to initialize XInput: 系统没有可用的 XInput DLL（已试 xinput1_4 / 1_3 / 9_1_0 / 1_2 / 1_1）")
 }
+
+; XInput 只是可选能力，系统里没有任何可用的 XInput DLL 时不该让主程序起不来。
+; 生产代码读手柄走 JoyXInputEx()（自带多候选 + 优雅降级），本库只给
+; Plugins\ViGEm\test.ahk 用，所以自动初始化失败只留标志（_XInput_hm=0），不抛错。
+try XInput_Init()
+catch
+    _XInput_hm := 0
 
 /*
     Function: XInput_GetState

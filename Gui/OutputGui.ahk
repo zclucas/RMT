@@ -212,7 +212,7 @@ class OutputGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("输出")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
-        this.DLVariableArr := GetGuiVarArr(1)
+        this.DLVariableArr := GetGuiVarArr("all")
         if (this.Data.VariableName == "")
             this.Data.VariableName := "Data"
 
@@ -243,7 +243,7 @@ class OutputGui {
         if (this.ui != ui || values.Count != 2)
             return
         IsResVar := values["VarTypeCombo"] == GetLang("变量")
-        DLArr := IsResVar ? GetGuiVarArr(1) : GetGuiArrNameArr()
+        DLArr := IsResVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
         this._SetDDL("VariCombo", DLArr, values["VariCombo"])
     }
 
