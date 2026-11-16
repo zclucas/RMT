@@ -180,53 +180,45 @@ GetLangMacro(MacroStr, Mode) {
 
 ; mode 1多语言模式  2简中语言模式
 GetLangCmd(Cmd, Mode) {
-    if (Cmd == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+    if (Mode == 1 && MainSoftData.Lang == "简中")
         return Cmd
 
     paramArr := SplitCommand(Cmd)
-    if (paramArr.Length == 0)
-        return Cmd
 
     action := Mode == 1 ? GetLang : GetLangKey
     cmdSymbol := GetCmdSymbol(paramArr[1])
-    paramArr[1] := GetCmdStr(paramArr[1])
+    rawCmd := GetCmdStr(paramArr[1])
 
-    IsMM := IsMoveCmd(paramArr[1])
-    IsPressKey := paramArr[1] == "按键" || paramArr[1] == GetLang("按键")
-    IsInterval := paramArr[1] == "间隔" || paramArr[1] == GetLang("间隔")
-    IsRMT := paramArr[1] == "RMT指令" || paramArr[1] == GetLang("RMT指令")
-    if (IsMM || IsPressKey || IsInterval || IsRMT) {
-        paramArr[1] := action(paramArr[1])
-    }
-    else {
-        textOnly := RegExReplace(paramArr[1], "\d+")
-        numbersOnly := RegExReplace(paramArr[1], "\D+")
-        paramArr[1] := Format("{}{}", action(textOnly), numbersOnly)
-    }
-    paramArr[1] := Format("{}{}", cmdSymbol, paramArr[1])
+    ; 統一拆分指令名與尾部編號：
+    ; - 帶編號序列指令（如 "搜尋1"）：textOnly="搜尋", numbersOnly="1"
+    ; - 無編號純指令（如 "按鍵"、"間隔"）：textOnly="按鍵", numbersOnly=""
+    ; 兩者皆可通用同一行邏輯轉換，省去繁瑣的分支判斷與正規表示式（RegExReplace）
+    SplitSerialTextAndNumbers(rawCmd, &textOnly, &numbersOnly)
+    paramArr[1] := cmdSymbol . action(textOnly) . numbersOnly
 
-    if (IsRMT && paramArr.Length >= 2) {
+    ; 將指令名歸一化為內部簡中鍵，統一處理特定指令的內部參數翻譯
+    key := GetLangKey(textOnly)
+    if (key == "RMT指令" && paramArr.Length >= 2)
         paramArr[2] := action(paramArr[2])
-    }
-
-    if (IsPressKey && paramArr.Length >= 3) {
+    else if (key == "按键" && paramArr.Length >= 3)
         paramArr[3] := action(paramArr[3])
-    }
+
+    ; 重組並返回處理後的完整指令字串
     return GetCmdByParams(paramArr)
 }
 
 ; mode 1多语言模式  2简中语言模式
 GetLangStr(Str, Mode) {
-    if (Str == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+    if (Mode == 1 && MainSoftData.Lang == "简中")
         return Str
 
-    SpecialKeyArr1 := GetLangKeyArr(GetSpecialVarArr())
-    SpecialKeyArr2 := GetSpecialVarArr()
-    KeyArr := Mode == 1 ? SpecialKeyArr1 : SpecialKeyArr2
-    action := Mode == 1 ? GetLang : GetLangKey
-
-    for index, value in KeyArr {
-        Str := StrReplace(Str, value, action(value))
+    for displayVar in GetSpecialVarArr() {
+        zhKey := GetLangKey(displayVar)
+        if (zhKey == displayVar)
+            continue
+        fromStr := Mode == 1 ? zhKey : displayVar
+        toStr   := Mode == 1 ? displayVar : zhKey
+        Str := StrReplace(Str, fromStr, toStr)
     }
     return Str
 }
