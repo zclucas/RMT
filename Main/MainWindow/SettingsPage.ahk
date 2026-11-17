@@ -96,7 +96,7 @@
             return row(label, '<CheckBox Name="' name '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>', tip)
         }
         togI(label, name, val) {
-            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' this._XmlEsc(GetLang("隐藏的页签不影响宏触发，保存后生效。")) '"/>'
+            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' GetLang("隐藏的页签不影响宏触发，保存后生效。") '"/>'
         }
         cmb(label, name, items, sel, zero := false, tip := "", descriptions := [], width := 0, editable := false) {
             selIdx := ""

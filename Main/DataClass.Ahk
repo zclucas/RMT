@@ -1559,6 +1559,34 @@ class HttpRequestData {
     }
 }
 
+class BrowserData {
+    __New() {
+        this.SerialStr := ""
+        this.ActionType := "打开网址" ; 打开网址/新建分页/切换分页/关闭分页/获取分页列表/等待元素/等待文字/等待加载/点击/输入/清空/选择下拉/勾选/滚动至元素/悬停/元素数量/执行JS/提取文本/提取属性/提取HTML/获取网址/获取标题/网页截图/刷新/后退/前进/关闭浏览器
+        this.BrowserType := "Chrome" ; Chrome/Edge/Chromium/自定义路径
+        this.Url := "https://www.google.com"
+        this.TargetRef := "1" ; 分页索引、ID或关键词
+        this.Selector := ""
+        this.SelectorType := "CSS" ; CSS / XPath
+        this.Condition := "出现" ; 出现(appear) / 消失(disappear) / 可见(visible)
+        this.LoadState := "完全加载" ; 完全加载(load) / DOM加载(domcontentloaded) / 网络空闲(networkidle)
+        this.Text := ""
+        this.ClearBefore := 1
+        this.Checked := 1
+        this.OuterHtml := 1
+        this.JsCode := ""
+        this.AttrName := "href"
+        this.SaveVar := "网页提取内容"
+        this.TimeoutMs := 10000
+        this.Headless := 0
+        this.BrowserPort := 9222
+        this.BrowserPath := ""
+        this.UserDataDir := ""
+        this.OnError := "停止" ; 停止 / 忽略 / 重试
+        this.RetryCount := 3
+    }
+}
+
 class TextOpsData {
     __New() {
         this.SerialStr := ""

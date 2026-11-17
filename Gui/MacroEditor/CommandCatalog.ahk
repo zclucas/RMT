@@ -2,7 +2,7 @@
     InitCommandConfigs() {
         ; 指令名称：移动、移动Pro、增量移动（原游戏视角）
         this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图"])
+            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图"])
 
         this.CMDIconFileArr := ["Images\Soft\Time.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png",
@@ -25,7 +25,7 @@
         GetLang("变量提取"), "Icon12", GetLang("如果"), "Icon13", GetLang("如果Pro"), "Icon14", GetLang("运算"), "Icon15",
         GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
-        GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27", GetLang("Excel"), "Icon41", GetLang("网络请求"), "IconHttpRequest",
+        GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27", GetLang("Excel"), "Icon41", GetLang("网络请求"), "IconHttpRequest", GetLang("浏览器"), "IconBrowser",
         GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("窗口信息"), "Icon29", GetLang("调整窗口"), "IconWindowAdjust", GetLang("按键检测"), "Icon30", GetLang("手柄检测"), "Icon42", GetLang("跳转"), "Icon43", GetLang("注释"), "Icon31",
         GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33", GetLang("等待确定"), "Icon36", GetLang("时间"), "Icon35", GetLang("倒计时"), "Icon37", GetLang("提示"), "IconPrompt")
 
@@ -53,7 +53,7 @@
             "IconSearchAll", "Images\Soft\SearchAll.png",
             "Icon39", "Images\Soft\SearchCombo.png",
             "Icon40", "Images\Soft\RunPro.png",
-            "IconHttpRequest", "Images\Soft\HttpRequest.png",
+            "IconHttpRequest", "Images\Soft\HttpRequest.png", "IconBrowser", "Images\Soft\Browser.png",
             "Icon41", "Images\Soft\Excel.png",
             "Icon42", "Images\Soft\JoyListen.png",
             "Icon43", "Images\Soft\FlowJump.png", "IconPrompt", "Images\Soft\Prompt.png")
@@ -91,6 +91,7 @@
             {class: RunGui, name: "运行", icon: "Images\Soft\Run.png", propName: "RunGui"},
             {class: RunProGui, name: "运行Pro", icon: "Images\Soft\RunPro.png", propName: "RunProGui"},
             {class: HttpRequestGui, name: "网络请求", icon: "Images\Soft\HttpRequest.png", propName: "HttpRequestGui"},
+            {class: BrowserGui, name: "浏览器", icon: "Images\Soft\Browser.png", propName: "BrowserGui"},
             {class: FileIOGui, name: "文件读写", icon: "Images\Soft\FileIO.png", propName: "FileIOGui"},
             {class: FileIOGui, name: "Excel", icon: "Images\Soft\Excel.png", propName: "ExcelGui"},
             {class: TextOpsGui, name: "文本处理", icon: "Images\Soft\TextOps.png", propName: "TextOpsGui"},
