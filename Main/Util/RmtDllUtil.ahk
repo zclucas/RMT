@@ -29,7 +29,7 @@ EnsureRmtDll(force := false) {
     if (!need)
         return dllPath
     if (!BuildRmtDll(rmtDir, dllPath))
-        throw Error("RMT.dll 编译失败，详见 %TEMP%\RMT-dll-build.log")
+        throw Error("RMT.dll 编译失败，详见软件目录 Log\RMT-dll-build.log")
     return dllPath
 }
 
@@ -71,7 +71,9 @@ BuildRmtDll(rmtDir := "", dllPath := "") {
             refs .= ' /reference:"' p '"'
     }
 
-    errLog := A_Temp "\RMT-dll-build.log"
+    errLog := RMTLogDir() "\RMT-dll-build.log"
+    try if (!DirExist(RMTLogDir()))
+        DirCreate(RMTLogDir())
     try FileDelete(errLog)
     wpfRefs := ' /reference:"' fwLib '\WPF\PresentationCore.dll" /reference:"' fwLib '\WPF\WindowsBase.dll"'
     cmd := Format('"{}" /nologo /target:library /optimize+ /out:"{}" /lib:"{}"{}{}{}'

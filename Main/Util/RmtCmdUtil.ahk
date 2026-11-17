@@ -34,9 +34,14 @@ global RMT_CmdOwnConsole := false
 
 RmtCmdInitPaths() {
     global RMT_CmdQueueDir, RMT_PidFile, RMT_CmdReadyFile
-    RMT_CmdQueueDir := A_Temp "\RMT_CmdQueue"
-    RMT_PidFile := A_Temp "\RMT_SingleInstance.pid"
-    RMT_CmdReadyFile := A_Temp "\RMT_SingleInstance.ready"
+    ; 队列/单实例文件放软件目录 Cache\，不用 %TEMP%（部分用户账户对该目录无写权限）。
+    ; CLI 客户端进程也走这里，A_ScriptDir 对主程序与编译版都指向软件根目录。
+    cacheDir := A_ScriptDir "\Cache"
+    if (!DirExist(cacheDir))
+        DirCreate(cacheDir)
+    RMT_CmdQueueDir := cacheDir "\RMT_CmdQueue"
+    RMT_PidFile := cacheDir "\RMT_SingleInstance.pid"
+    RMT_CmdReadyFile := cacheDir "\RMT_SingleInstance.ready"
 }
 
 ; 创建并持有命名互斥。已被占用时返回 0。
@@ -240,7 +245,37 @@ RmtCmdSpawnServer(args) {
         if (RmtCmdSame(a, "-min") || RmtCmdSame(a, "-admin"))
             launch .= " " RmtCmdQuote(a)
     }
-    ; start 脱离当前控制台，调用方退出后常驻实例继续运行
+    ; 直接 CreateProcess 且不继承句柄。经 cmd /c start 启动时，cmd 以
+    ; bInheritHandles=TRUE 建进程，会把客户端被重定向的 stdout
+    ; （Cache\RMT_cli_*.txt，cmd 打开时不带 FILE_SHARE_DELETE）句柄
+    ; 带给常驻实例，文件被握住直到它退出，批处理 del /q 一直删不掉。
+    ; DETACHED_PROCESS 保持「脱离当前控制台」的原语义。
+    exe := A_IsCompiled ? A_ScriptFullPath : A_AhkPath
+    cmdLine := RmtCmdQuote(exe)
+    if (!A_IsCompiled)
+        cmdLine .= " " RmtCmdQuote(A_ScriptFullPath)
+    cmdLine .= launch
+    cmdBuf := Buffer((StrLen(cmdLine) + 1) * 2, 0)
+    StrPut(cmdLine, cmdBuf, "UTF-16")
+    si := Buffer(104, 0)
+    NumPut("UInt", 104, si, 0)
+    pi := Buffer(24, 0)
+    if (DllCall("CreateProcessW"
+        , "Ptr", 0
+        , "Ptr", cmdBuf.Ptr
+        , "Ptr", 0
+        , "Ptr", 0
+        , "Int", 0          ; bInheritHandles = FALSE
+        , "UInt", 0x8       ; DETACHED_PROCESS
+        , "Ptr", 0
+        , "Ptr", 0
+        , "Ptr", si
+        , "Ptr", pi)) {
+        DllCall("CloseHandle", "Ptr", NumGet(pi, 0, "Ptr"))     ; hProcess
+        DllCall("CloseHandle", "Ptr", NumGet(pi, 8, "Ptr"))     ; hThread
+        return true
+    }
+    ; 兜底：老方式经 cmd start 启动（可能继承句柄，但不至于起不来）
     cmd := RmtCmdQuote(A_ComSpec) " /c start `"`" " RmtCmdHostCommand() launch
     try {
         Run(cmd)
@@ -733,11 +768,13 @@ RmtCmdInstallLauncher(dir) {
     text := RmtCmdLauncherText()
     old := ""
     if (FileExist(path)) {
-        try old := FileRead(path, "UTF-8")
+        ; UTF-8-RAW 读回不剥 BOM：旧版写入带 BOM 时这里能检出差异并重写修复。
+        try old := FileRead(path, "UTF-8-RAW")
     }
     if (old != text) {
         try FileDelete(path)
-        FileAppend(text, path, "UTF-8")
+        ; cmd.exe 按 ANSI 解析批处理，开头不能有 BOM，否则 @echo off 失效、全脚本回显。
+        FileAppend(text, path, "UTF-8-RAW")
     }
     return path
 }
@@ -748,7 +785,9 @@ RmtCmdLauncherText() {
         . "chcp 65001 >nul`r`n"
     tail := "set `"RMT_EC=%ERRORLEVEL%`"`r`n"
         . "if exist `"%RMT_OUT%`" type `"%RMT_OUT%`"`r`n"
+        ; 个别杀软会短暂锁住刚写完的文件：删不掉时间隔重试，最多再试 5 次
         . "del /q `"%RMT_OUT%`" 2>nul`r`n"
+        . "if exist `"%RMT_OUT%`" for /L %%I in (1,1,5) do (ping -n 1 127.0.0.1 >nul & del /q `"%RMT_OUT%`" 2>nul)`r`n"
         . "if defined RMT_CP chcp %RMT_CP% >nul`r`n"
         . "exit /b %RMT_EC%`r`n"
     if (A_IsCompiled) {
@@ -761,7 +800,8 @@ RmtCmdLauncherText() {
             . "    if defined RMT_CP chcp %RMT_CP% >nul`r`n"
             . "    exit /b 0`r`n"
             . ")`r`n"
-            . "set `"RMT_OUT=%TEMP%\RMT_cli_%RANDOM%%RANDOM%.txt`"`r`n"
+            . "for %%I in (`"%RMT_EXE%`") do set `"RMT_DIR=%%~dpI`"`r`n"
+            . "set `"RMT_OUT=%RMT_DIR%Cache\RMT_cli_%RANDOM%%RANDOM%.txt`"`r`n"
             . "`"%RMT_EXE%`" %* > `"%RMT_OUT%`"`r`n"
             . tail
     }
@@ -774,7 +814,8 @@ RmtCmdLauncherText() {
         . "    if defined RMT_CP chcp %RMT_CP% >nul`r`n"
         . "    exit /b 0`r`n"
         . ")`r`n"
-        . "set `"RMT_OUT=%TEMP%\RMT_cli_%RANDOM%%RANDOM%.txt`"`r`n"
+        . "for %%I in (`"%RMT_SCRIPT%`") do set `"RMT_DIR=%%~dpI`"`r`n"
+        . "set `"RMT_OUT=%RMT_DIR%Cache\RMT_cli_%RANDOM%%RANDOM%.txt`"`r`n"
         . "`"%RMT_HOST%`" `"%RMT_SCRIPT%`" %* > `"%RMT_OUT%`"`r`n"
         . tail
 }

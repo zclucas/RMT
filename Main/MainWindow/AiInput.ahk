@@ -411,7 +411,7 @@
     }
 
     _AiPasteClipboardImage(t) {
-        dir := A_Temp "\RMT\AiPaste"
+        dir := RmtCacheDir() "\AiPaste"
         if (!DirExist(dir))
             DirCreate(dir)
         path := dir "\" FormatTime(A_Now, "yyyyMMddHHmmss") "_" Random(100, 999) ".png"

@@ -20,7 +20,7 @@
         side := 144
         zoomPercent := Max(1, Round(Min(side / w0, side / h0) * 100))
 
-        outBase := A_Temp "\RMT_fe_thumb_" A_TickCount "_" this._windowToken
+        outBase := RmtCacheDir() "\RMT_fe_thumb_" A_TickCount "_" this._windowToken
         o1 := outBase "_o.png"
         o2 := outBase "_e.png"
         seedsText := this.EditorMode == "super" ? this._MultiPointText(this.SuperSeedPoints) : ""
@@ -71,7 +71,7 @@
         points := this.Points
 
         this._ptsSeq += 1
-        output := A_Temp "\RMT_fe_pts_" A_TickCount "_" this._windowToken "_" this._ptsSeq ".png"
+        output := RmtCacheDir() "\RMT_fe_pts_" A_TickCount "_" this._windowToken "_" this._ptsSeq ".png"
         bitmap := 0, graphics := 0, brush := 0
         try {
             bitmap := Gdip_CreateBitmap(this.CanvasSide, this.CanvasSide, 0x26200A)
@@ -157,7 +157,7 @@
         }
         tol := Min(255, Max(0, Integer(this.Tol)))
 
-        output := A_Temp "\RMT_fe_super_" A_TickCount "_" this._windowToken ".png"
+        output := RmtCacheDir() "\RMT_fe_super_" A_TickCount "_" this._windowToken ".png"
         maskBmp := 0, maskGfx := 0, maskBrush := 0, clearBrush := 0
         srcA := 0, pOrig := 0, pOut := 0
         gA := 0, gO := 0

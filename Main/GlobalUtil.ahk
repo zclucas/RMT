@@ -116,6 +116,10 @@ DetectHiddenWindows true
 Persistent
 A_MaxHotkeysPerInterval := 400
 
+; ===== 临时文件/日志目录 =====
+; 不再使用系统 %TEMP%：临时文件统一放软件目录 Cache\（RmtCacheDir，见 LogUtil），
+; 日志统一放 Log\（RMTLogDir，见 LogUtil）。主进程与 Worker 共用。
+
 ; ===== GuiFromHwnd 安全包装 =====
 ; 原生子编辑器会 GuiFromHwnd(OwnerHwnd).Opt("+Disabled/-Disabled") 实现模态；
 ; 当 Owner 是 XAML/WPF 窗口时 GuiFromHwnd 返回 ""，直接 .Opt() 会崩。
