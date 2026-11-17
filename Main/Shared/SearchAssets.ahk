@@ -5,25 +5,30 @@ SaveClipToBitmap(filePath) {
         RMTErrorShow(GetLang("剪切板中没有位图"), RMT_LV_WARN, "宏")
     }
 
-    ; 打开剪切板
-    if !DllCall("OpenClipboard", "ptr", 0) {
+    ; 剪贴板可能正被复制来源或其他应用短暂占用。
+    opened := false
+    loop 6 {
+        opened := DllCall("OpenClipboard", "ptr", 0)
+        if opened
+            break
+        if (A_Index < 6)
+            Sleep(20)
+    }
+    if !opened {
         RMTErrorShow(GetLang("无法打开剪切板"), RMT_LV_WARN, "宏")
         return
     }
 
-    ; 获取剪切板中的位图句柄
-    hBitmap := DllCall("GetClipboardData", "uint", 2, "ptr")  ; 2 是 CF_BITMAP
+    ; 在剪贴板仍打开时复制位图，防止来源变更导致句柄失效。
+    try {
+        hBitmap := DllCall("GetClipboardData", "uint", 2, "ptr")  ; 2 是 CF_BITMAP
+        pBitmap := hBitmap ? Gdip_CreateBitmapFromHBITMAP(hBitmap) : 0
+    } finally DllCall("CloseClipboard")
     if !hBitmap {
         RMTErrorShow(GetLang("无法获取位图句柄"), RMT_LV_WARN, "宏")
-        DllCall("CloseClipboard")
         return
     }
 
-    ; 关闭剪切板
-    DllCall("CloseClipboard")
-
-    ; 创建 GDI+ 位图对象
-    pBitmap := Gdip_CreateBitmapFromHBITMAP(hBitmap)
     if !pBitmap {
         RMTErrorShow(GetLang("无法创建 GDI+ 位图对象"), RMT_LV_WARN, "宏")
         return

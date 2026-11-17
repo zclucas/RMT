@@ -87,7 +87,7 @@ class XamlCountDownOverlay {
         fontSize := CountDownStyleFontSize()
         alpha := CountDownUiAlpha(CountDownStyleAlpha()) / 100
         xaml := '<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-            . ' Title="' title '" Width="' size[1] '" Height="' size[2] '" Left="' this.x '" Top="' this.y '"'
+            . ' Title="' title '" Width="' size[1] '" Height="' size[2] '" Left="' PhysToDip(this.x) '" Top="' PhysToDip(this.y) '"'
             . ' WindowStartupLocation="Manual" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"'
             . ' Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False" Opacity="' alpha '">'
             . '<Border Background="#' bg '" CornerRadius="5" Padding="4">'
@@ -109,7 +109,7 @@ class XamlCountDownOverlay {
         hwnd := this.ui.wpfHwnd
         if (hwnd) {
             WinSetExStyle("+0x080000A0", "ahk_id " hwnd) ; 不激活、工具窗、鼠标穿透
-            DllCall("SetWindowPos", "ptr", hwnd, "ptr", -1, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)
+            DllCall("SetWindowPos", "ptr", hwnd, "ptr", -1, "int", this.x, "int", this.y, "int", 0, "int", 0, "uint", 0x11)
         }
         this.Tick()
     }

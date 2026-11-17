@@ -105,7 +105,6 @@ class FreePasteGui {
             if (size[1] <= 0 || size[2] <= 0)
                 throw ValueError(GetLang("无法读取图片") ": " value)
             main.Add("Image").Name("ImageCon").Width(size[1]).Height(size[2]).Stretch("Uniform")
-                .Source(StrReplace(value, "\", "/"))
         }
         else {
             main.Add("TextBlock").Name("TextCon").Text(value).FontSize(13).FontWeight("SemiBold")
@@ -123,6 +122,9 @@ class FreePasteGui {
 
         ; === 事件（闭包捕获本面板 ui，支持多面板并存；事件回调为异步 SetTimer，勿做阻塞操作）===
         localUi := this.ui
+        ; 通过 Source 更新完整加载位图，便于关闭时立即清理剪贴板临时文件。
+        if (isImage)
+            localUi.Update("ImageCon", "Source", value)
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing").Bind(localUi))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("OverlayCon", "PreviewMouseLeftButtonDown", ObjBindMethod(this, "OnOverlayMouseDown").Bind(localUi))

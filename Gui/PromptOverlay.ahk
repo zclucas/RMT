@@ -50,16 +50,7 @@ ShowPromptDisplay(data) {
                         MyFreePasteGui.ShowPrompt(false, data.Text, data.PasteName, false, center)
             }
         case "区域高亮":
-            overlay := PromptOutline(data.Color, data.Thickness)
-            try {
-                overlay.AddRect(data.PosX, data.PosY, data.Width, data.Height)
-                if (data.Text != "")
-                    overlay.AddCaption(data.PosX, data.PosY, data.Width, data.Text)
-                overlay.Show(data.Duration)
-            } catch {
-                overlay.Close()
-                throw
-            }
+            PromptRegionDisplay.Apply(data)
         case "屏幕边缘闪光":
             overlay := PromptOutline(data.Color, data.Thickness)
             primary := MonitorGetPrimary()
@@ -83,13 +74,64 @@ ShowPromptDisplay(data) {
     }
 }
 
+class PromptRegionDisplay {
+    static Active := []
+
+    static Apply(data) {
+        name := data.HasProp("RegionName") ? data.RegionName : ""
+        wasCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (data.HasProp("RegionMode") && data.RegionMode == "关闭") {
+                this.Close(name)
+                return
+            }
+            overlay := PromptOutline(data.Color, data.Thickness, this.Forget.Bind(this))
+            try {
+                overlay.AddRect(data.PosX, data.PosY, data.Width, data.Height)
+                if (data.Text != "")
+                    overlay.AddCaption(data.PosX, data.PosY, data.Width, data.Text)
+                overlay.Show(data.Duration)
+                if (name != "")
+                    this.Close(name)
+                this.Active.Push({Name: name, Overlay: overlay})
+            } catch {
+                overlay.Close()
+                throw
+            }
+        } finally {
+            Critical(wasCritical)
+        }
+    }
+
+    static Close(name) {
+        loop this.Active.Length {
+            entry := this.Active[-A_Index]
+            if (name == "" || entry.Name == name) {
+                entry.Overlay.Close()
+                return
+            }
+        }
+    }
+
+    static Forget(overlay) {
+        for index, entry in this.Active {
+            if (entry.Overlay == overlay) {
+                this.Active.RemoveAt(index)
+                return
+            }
+        }
+    }
+}
+
 ; 只创建边框和标签窗口，区域内部仍可正常操作。
 class PromptOutline {
-    __New(color, thickness) {
+    __New(color, thickness, onClose := "") {
         this.color := color
         this.thickness := thickness
         this.windows := []
         this.timer := this.Tick.Bind(this)
+        this.onClose := onClose
     }
 
     AddRect(x, y, w, h) {
@@ -147,10 +189,15 @@ class PromptOutline {
     }
 
     Close() {
-        SetTimer(this.timer, 0)
+        timer := this.timer
+        if (timer == "")
+            return
+        this.timer := ""
+        SetTimer(timer, 0)
+        if (this.onClose != "")
+            this.onClose.Call(this)
         for item in this.windows
             try item.panel.Destroy()
         this.windows := []
-        this.timer := ""
     }
 }

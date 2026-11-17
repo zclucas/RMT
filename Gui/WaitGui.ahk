@@ -32,6 +32,7 @@ class WaitGui {
         this._areaPreview := ScreenAreaPreview(WaitGui.MinScreenAreaSize)
         this._previewShowing := false
         this._areaAction := ""
+        this._areaHotkeys := []
         this._confirmHotkeys := []
     }
 
@@ -270,7 +271,7 @@ class WaitGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad", this.ui.id))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/等待", this.TriggerConfirmation.Bind(this), "!l", "", this.OnClickPickArea.Bind(this))
-        this.ui.Update("BtnCmdF1", "ToolTip", GetLang("框选范围"))
+        this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
         this.ui.OnEvent("WaitTypeCon", "SelectionChanged", ObjBindMethod(this, "OnGroupChange"))
         this.ui.OnEvent("WaitConditionCon", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
         this.ui.OnEvent("ProcTargetTypeCon", "SelectionChanged", this.OnProcessTargetChange.Bind(this))
@@ -531,8 +532,12 @@ class WaitGui {
             batch.Push({ControlName: "HintPanel", PropertyName: "Text", Value: GetLang(hint)})
         this.ui.BatchUpdate(batch)
         this._BindConfirmHotkey(confirmation)
-        if (show != "RangePanel")
+        if (show == "RangePanel") {
+            if (!this._areaHotkeys.Length && this.Hwnd())
+                this._areaHotkeys := WinHotkey.Register(["F1"], this.OnClickPickArea.Bind(this), this.Hwnd())
+        } else {
             this._ClearAreaInteraction()
+        }
         if (show == "KeyPanel")
             this._FillKeyModes(this.ui.Query("KeyCon"))
         if (show == "ProcPanel")
@@ -671,7 +676,8 @@ class WaitGui {
         id := this.ui.id
         while (GetKeyState("LButton", "P"))
             Sleep(15)
-        if (!IsObject(this.ui) || this.ui.id != id || this._TypeValue() != "等待屏幕变化")
+        if (!IsObject(this.ui) || this.ui.id != id || this._TypeValue() != "等待屏幕变化"
+            || IsObject(this._areaAction) || MainSoftData.SelectAreaAction != "" || MainSoftData.GetAreaAction != "")
             return
         action := this.OnAreaPicked.Bind(this, id)
         this._areaAction := action
@@ -720,8 +726,10 @@ class WaitGui {
     }
 
     _ClearAreaInteraction() {
+        WinHotkey.UnregisterAll(this._areaHotkeys)
+        this._areaHotkeys := []
         if (IsObject(this._areaAction) && MainSoftData.SelectAreaAction == this._areaAction)
-            TogSelectArea(false)
+            SelectAreaCancel()
         if (this._previewShowing && IsObject(this.ui))
             this.ui.Update("BtnPreviewArea", "Tag", "0")
         this._previewShowing := false
