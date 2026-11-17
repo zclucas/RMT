@@ -26,6 +26,7 @@ RmtAssetsBaseUrl(tag) {
 #Include Util\SearchImageAssetUtil.ahk
 #Include Util\FileIOUtil.ahk
 #Include Util\HttpRequestUtil.ahk
+#Include Util\BrowserUtil.ahk
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
 #Include Util\WaitUtil.ahk
