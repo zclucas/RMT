@@ -242,7 +242,7 @@
         zoomPercent := Max(1, Round(this.Zoom * 100))
         if (this.OrigW <= 0) {
             ; 先探一次原图尺寸
-            probeBase := A_Temp "\RMT_fe_probe_" A_TickCount "_" this._seq
+            probeBase := RmtCacheDir() "\RMT_fe_probe_" A_TickCount "_" this._seq
             probeOrig := probeBase "_o.png"
             probeEff := probeBase "_e.png"
             probe := this._Call(0, 0, 0, 0, zoomPercent, probeOrig, probeEff)
@@ -273,7 +273,7 @@
         renderViewY := Min(maxY, Max(0, Round(this.ViewY)))
 
         this._seq += 1
-        outBase := A_Temp "\RMT_fe_" A_TickCount "_" this._seq
+        outBase := RmtCacheDir() "\RMT_fe_" A_TickCount "_" this._seq
         outOrig := outBase "_o.png"
         outEff := outBase "_e.png"
         ; 有效图靠「压暗/未压暗」比对，网格线会同时画进两张图被误判成命中，所以该视图下不画网格

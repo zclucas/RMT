@@ -50,8 +50,13 @@ LangInitSetting() {
     LangMap := Map("简中", 1)
 
     if (DirExist(LangDir)) {
+        officialNames := ["繁體中文"]
         for name in OfficialLanguages() {
-            if (name != "简中" && FileExist(LangDir "\" name ".txt")) {
+            if (name != "简中" && name != "繁體中文")
+                officialNames.Push(name)
+        }
+        for name in officialNames {
+            if (FileExist(LangDir "\" name ".txt")) {
                 LangMap[name] := 1
                 MainSoftData.LangArr.Push(name)
             }
@@ -104,6 +109,10 @@ LangKeysInit() {
             if (eqPos > 1) {
                 rawKey := StrReplace(SubStr(line, 1, eqPos - 1), "\=", "=")
                 val := SubStr(line, eqPos + 1)
+                if (InStr(rawKey, "``n", true)) {
+                    rawKey := StrReplace(rawKey, "``n", "`n", true)
+                    val := StrReplace(val, "``n", "`n", true)
+                }
                 LangKeyMap[rawKey] := val
                 trimmedKey := Trim(rawKey)
                 if (trimmedKey != rawKey && !LangKeyMap.Has(trimmedKey))

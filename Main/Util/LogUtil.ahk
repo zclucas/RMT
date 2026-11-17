@@ -64,6 +64,15 @@ RMTLogDir() {
     return CMDLogAppDir() "\Log"
 }
 
+; 临时文件目录：不再使用系统 %TEMP%（部分用户账户对该目录无写权限），
+; 统一放软件目录 Cache\ 下。主进程与 Worker 共用本文件，两侧都可调用。
+RmtCacheDir() {
+    dir := CMDLogAppDir() "\Cache"
+    try if (!DirExist(dir))
+        DirCreate(dir)
+    return dir
+}
+
 ; ---------------- 指令显示日志路径 ----------------
 ; 配置里存的是目录（空 = 软件所在目录\Log），不是某一次浏览得到的绝对路径。
 ; 软件文件夹挪走之后，空值和下一次仍落在旧安装目录里的 Log 会自动改到当前软件目录。

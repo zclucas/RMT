@@ -47,15 +47,17 @@ class CursorOutputTip {
                 .BorderBrush(AppThemeUtil.ResolveColor(colors, "Win_InputStroke"))
                 .IsHitTestVisible("False")
             if (request.isImage)
-                border.Add("Image").MaxWidth(400).MaxHeight(320).Stretch("Uniform").StretchDirection("DownOnly")
-                    .Source(StrReplace(request.value, "\", "/"))
+                border.Add("Image").Name("TipImage").MaxWidth(400).MaxHeight(320).Stretch("Uniform").StretchDirection("DownOnly")
             else
                 border.Add("TextBlock").Name("TipText").TextWrapping("Wrap")
                     .Foreground(AppThemeUtil.ResolveColor(colors, "Win_InputText"))
                     .FontFamily(MainSoftData.FontType).FontSize(XAMLHost.FontSize())
             this.ui := XAMLHost(win.ToString(), "", 0)
             this.ui.skipFontScale := true
-            if (!request.isImage)
+            ; 通过 Source 更新完整加载位图，释放对剪贴板临时文件的占用。
+            if (request.isImage)
+                this.ui.Update("TipImage", "Source", request.value)
+            else
                 this.ui.Update("TipText", "Text", request.value)
             try this.ui.Show()
             catch {

@@ -352,7 +352,7 @@ RuntimeOfflinePrompt(name := "") {
 
 ; 返回本地安装包路径；失败返回 ""。
 ; 先看 <RMT目录>\Runtime\ 的离线副本（用户可手工放置，绕过网络问题），
-; 再复用 %TEMP%\RMT-Setup 里上次下完的文件，最后才联网下载。
+; 再复用软件目录 Cache\RMT-Setup 里上次下完的文件，最后才联网下载。
 ; expectSize 用来识别上次被中断的半成品：尺寸不够就删掉重下，否则会一直复用坏包。
 RuntimePrepareAsset(name, hint, expectSize := 0) {
     offline := RuntimeOfflineAsset(name)
@@ -366,7 +366,7 @@ RuntimePrepareAsset(name, hint, expectSize := 0) {
         return ""
     }
 
-    dir := A_Temp "\RMT-Setup"
+    dir := RmtCacheDir() "\RMT-Setup"
     if (!DirExist(dir))
         try DirCreate(dir)
     path := dir "\" name
@@ -492,6 +492,7 @@ SelfCheckMissingFiles() {
         criticalFiles.Push({path: "Lang\Flags\" language.flag ".png", entry: "Flags/" language.flag ".png", bundle: "Lang.zip"})
     }
     optionalFiles := [
+        {path: "Thread\Update.exe", entry: "Update.exe", bundle: "RMT.zip"},
         {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
         {path: "MinTool\PlayAudio.vbs", entry: "PlayAudio.vbs", bundle: "Audio.zip"},
         {path: "Plugins\AhiDriver\installer\使用说明.txt", entry: "InstallReadme.txt", bundle: "AhiDriver.zip"},

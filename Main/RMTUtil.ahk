@@ -1050,7 +1050,7 @@ CleanupAllMacroStates() {
 
 MsgBoxContent(content, title := "") {
     ; 主窗句柄回传前适配器还没建（启动早期可能因插件初始化失败而弹框），此时跳过闪烁
-    if (IsObject(MainSoftData.MyGui))
+    if (HasMethod(MainSoftData.MyGui, "Flash"))
         MainSoftData.MyGui.Flash()
     SoundPlay "*-1"
     MyMsgboxGui.ShowGui(content, title)
@@ -1330,18 +1330,18 @@ OnGetSelectAreaCancel(*) {
     TogGetSelectArea(false)
 }
 
-TogSelectArea(isEnable, action := "", showPrompt := true) {
+TogSelectArea(isEnable, action := "", showPrompt := true, pointOnly := false) {
     global SelectAreaState
     if (isEnable && action != "") {
+        SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0, pointOnly: pointOnly}
         MainSoftData.SelectAreaAction := action
         if (showPrompt)
-            ToolTipContent(GetLang("请框选截图范围"))
+            ToolTipContent(GetLang(pointOnly ? "请点击选取坐标，右键或 Esc 取消" : "请框选截图范围"))
         SetSystemCursor("CROSS")
         Hotkey("*LButton", SelectAreaDown, "On")
         Hotkey("*LButton Up", SelectAreaUp, "On")
         Hotkey("*RButton", SelectAreaCancel, "On")
 
-        SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0}
         while (!SelectAreaState.breakFlag) {
             Sleep(30)
         }
@@ -1369,17 +1369,24 @@ TogSelectArea(isEnable, action := "", showPrompt := true) {
 }
 
 SelectAreaDown(*) {
-    BeginSelectArea(true)
-    SetTimer(SelectAreaDraw, 30)
+    global SelectAreaState
+    BeginSelectArea(!SelectAreaState.pointOnly)
+    if (!SelectAreaState.pointOnly)
+        SetTimer(SelectAreaDraw, 30)
 }
 
 SelectAreaUp(*) {
     global SelectAreaState
     SetTimer(SelectAreaDraw, 0)
     try {
+        action := MainSoftData.SelectAreaAction
+        if (SelectAreaState.pointOnly) {
+            if (action != "" && SelectAreaState.firstPos)
+                action(SelectAreaState.sx, SelectAreaState.sy, SelectAreaState.sx, SelectAreaState.sy)
+            return
+        }
         UpdateSelectAreaPosition()
         SelectAreaHo.Hide()
-        action := MainSoftData.SelectAreaAction
         if (action != "") {
             if (SelectAreaState.winPos != "") {
                 x1 := SelectAreaState.winPos.X

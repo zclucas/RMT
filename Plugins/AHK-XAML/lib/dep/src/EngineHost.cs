@@ -152,7 +152,7 @@ public partial class AhkWpfEngine
             }
             try
             {
-                string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
+                string tempPath = GetCacheDir();
                 string localDllPath = System.IO.Path.Combine(tempPath, resourceName);
                 if (System.IO.File.Exists(localDllPath))
                 {
@@ -1755,7 +1755,10 @@ public class AhkInProcessBootstrapper
     private static System.Reflection.Assembly ResolveAssembly(object sender, ResolveEventArgs args)
     {
         try {
-            string folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
+            string folder = "";
+            string asmLoc = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            if (!string.IsNullOrEmpty(asmLoc))
+                folder = System.IO.Path.GetDirectoryName(asmLoc);
             string name = new System.Reflection.AssemblyName(args.Name).Name;
             string assemblyPath = System.IO.Path.Combine(folder, name + ".dll");
             if (System.IO.File.Exists(assemblyPath)) {

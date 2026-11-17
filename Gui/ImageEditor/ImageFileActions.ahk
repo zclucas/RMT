@@ -5,7 +5,7 @@
         if (this.SelW < 2 || this.SelH < 2)
             return
         src := this.TemplatePath
-        tmp := A_Temp "\RMT_crop_tmp.png"
+        tmp := RmtCacheDir() "\RMT_crop_tmp.png"
         try FileDelete(tmp)
         ret := DllCall("RMT_OpenCV.dll\CropImageFile", "Str", src
             , "Int", this.SelX, "Int", this.SelY, "Int", this.SelW, "Int", this.SelH

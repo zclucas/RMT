@@ -1,7 +1,7 @@
 
     _SampleTempPath() {
         this._sampleSeq += 1
-        path := (A_Temp "\RMT_sample_" DllCall("GetCurrentProcessId") "_" this._windowToken
+        path := (RmtCacheDir() "\RMT_sample_" DllCall("GetCurrentProcessId") "_" this._windowToken
             "_" A_TickCount "_" this._sampleSeq ".png")
         this._sampleTemp.Push(path)
         return path

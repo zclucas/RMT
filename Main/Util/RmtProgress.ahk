@@ -18,11 +18,12 @@ class RmtProgress {
         }
     }
 
-    __New(title, message, owner := "", cancelText := "") {
+    __New(title, message, owner := "", cancelText := "", standalone := false) {
         this.title := title
         this.message := message
         this.owner := owner
         this.cancelText := cancelText
+        this.standalone := standalone
         this.Cancelled := false
         this.finished := false
         this.opening := false
@@ -33,6 +34,11 @@ class RmtProgress {
     }
 
     Show() {
+        if (this.standalone) {
+            if (!this.finished && !IsObject(this.ui))
+                this._ShowStandalone()
+            return
+        }
         if (this.finished || this.opening || IsObject(this.showTimer))
             return
         if (IsObject(this.ui)) {
@@ -106,6 +112,20 @@ class RmtProgress {
     }
 
     _Refresh(force := false) {
+        if (this.standalone) {
+            if (IsObject(this.ui)) {
+                this.ui["ProgressText"].Text := this._DisplayText()
+                bar := this.ui["OperationProgress"]
+                if (this.displayedPercent == "") != (this.percent == "") {
+                    bar.Opt(this.percent == "" ? "+0x8" : "-0x8")
+                    SendMessage(0x40A, this.percent == "", 40, bar)
+                }
+                if (this.percent != "")
+                    bar.Value := Floor(this.percent)
+                this.displayedPercent := this.percent
+            }
+            return
+        }
         if (!IsObject(this.ui) || !this.ui.wpfHwnd)
             return
         message := this._DisplayText()
@@ -132,6 +152,22 @@ class RmtProgress {
             this.Cancelled := true
     }
 
+    ; 独立程序使用同一进度接口，避免加载待替换的 XAML 运行时。
+    _ShowStandalone() {
+        ui := Gui("-MinimizeBox -MaximizeBox", this.title)
+        ui.MarginX := 20
+        ui.MarginY := 16
+        ui.SetFont("s10", "Segoe UI")
+        ui.AddText("w420 r2 vProgressText", this._DisplayText())
+        ui.AddProgress("w420 h9 vOperationProgress +0x8")
+        ui.OnEvent("Close", (*) => 1)
+        this.ui := ui
+        this.displayedPercent := ""
+        SendMessage(0x40A, 1, 40, ui["OperationProgress"])
+        this._Refresh()
+        ui.Show("AutoSize Center")
+    }
+
     Close() {
         this.finished := true
         showTimer := this.showTimer
@@ -140,7 +176,11 @@ class RmtProgress {
             SetTimer(showTimer, 0)
         ui := this.ui
         this.ui := ""
-        if (IsObject(ui) && ui.wpfHwnd)
-            try ui.Update("Window", "Close", "")
+        if (IsObject(ui)) {
+            if (this.standalone)
+                ui.Destroy()
+            else if (ui.wpfHwnd)
+                try ui.Update("Window", "Close", "")
+        }
     }
 }

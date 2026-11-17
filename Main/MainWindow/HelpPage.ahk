@@ -4,6 +4,16 @@
         ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Help 起顺延 +1，改按 Symbol 动态取位
         p := "Panel_" GetTableIndexByID("Help")
         Add := (x) => this.ui.Update(p, "AddXamlItem", x)
+        updater := '<StackPanel Orientation="Horizontal"><TextBlock Text="' this._XmlEsc(Format(GetLang("当前版本 {}"), "RMTv" RMT_VERSION))
+            . '" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" Margin="0,0,14,0"/>'
+            . '<Grid>' this._HelpLinkButton("rmt:update", GetLang("检查更新"), true)
+            . '<Ellipse Name="HelpUpdateDot" Width="8" Height="8" Fill="{DynamicResource Accent}" Stroke="{DynamicResource ControlBg}"'
+            . ' StrokeThickness="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0" IsHitTestVisible="False"'
+            . ' Visibility="' (IsObject(RmtUpdate.Available) ? "Visible" : "Collapsed") '"/></Grid>'
+            . '<TextBlock Name="HelpUpdateChecking" Text="' this._XmlEsc(GetLang("正在检查发行版本…"))
+            . '" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" Margin="12,0,0,0"'
+            . ' Visibility="' (IsObject(RmtUpdate.Scan) && RmtUpdate.Scan.Manual ? "Visible" : "Collapsed") '"/></StackPanel>'
+        Add(this._HelpCard(GetLang("软件更新"), "&#xE895;", updater, "", "0,2,0,14"))
         ; 先说明合法使用，再给出文档、社区与反馈入口。
         disclaimerRules := '<Grid Margin="10,8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
             . '<Border Grid.Row="0" Grid.Column="0" Margin="0,0,8,5" Padding="8,6" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="5">' this._HelpDisclaimerItem("1", "本软件按“原样”提供。因使用、修改、传播或分发本软件所产生的风险与后果，由使用者自行承担；开发者不作任何明示或默示担保。") '</Border>'
@@ -115,6 +125,10 @@
         ; 软件内反馈：不走浏览器，直接开反馈窗口
         if (url = "rmt:feedback") {
             FeedbackGui.ShowGui()
+            return
+        }
+        if (url = "rmt:update") {
+            RmtUpdate.Check(false, this.ui.wpfHwnd)
             return
         }
         ; 本地 html 帮助文档 → 优先用 Chromium app 模式小窗打开

@@ -120,10 +120,14 @@ class XAMLHost {
         logDir := A_WorkingDir "\Log"
         if !DirExist(logDir)
             DirCreate(logDir)
+        cacheDir := A_WorkingDir "\Cache"
+        if !DirExist(cacheDir)
+            DirCreate(cacheDir)
         if !DirExist(XAMLHost._appDir "\Cache")
             DirCreate(XAMLHost._appDir "\Cache")
 
         EnvSet("RMT_LOG_DIR", logDir)
+        EnvSet("RMT_CACHE_DIR", cacheDir)
             
         return XAMLHost._appDir
     }
@@ -1673,9 +1677,9 @@ class XAMLHost {
     static Prewarm(exePath := "") {
         ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR
         ; 先设 RMT_LOG_DIR：引擎日志写哪由这个环境变量决定，Prewarm 是最早拉 daemon 的地方，
-        ; 若此时还没实例化过 XAMLHost（GetAppDir 未跑），daemon 就会把日志写去 %TEMP%\AhkWpf
+        ; 若此时还没实例化过 XAMLHost（GetAppDir 未跑），daemon 就会把日志写去软件目录 Cache\AhkWpf
         XAMLHost.GetAppDir()
-        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
+        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_WorkingDir "\Cache\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         XAMLHost.EnsureDaemonHealthy()
         if XAMLHost.daemonHwnd
@@ -1689,11 +1693,11 @@ class XAMLHost {
             }
         }
 
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
+        if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+            DirCreate(A_WorkingDir "\Cache\AhkWpf")
 
         baseDllName := XAMLHost.GetEngineDllName()
-        targetExe := (exePath != "") ? exePath : A_Temp "\AhkWpf\" baseDllName
+        targetExe := (exePath != "") ? exePath : A_WorkingDir "\Cache\AhkWpf\" baseDllName
 
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\dep\" baseDllName
@@ -1706,7 +1710,7 @@ class XAMLHost {
                 if (buildLoc == "lib/dep") {
                     targetExe := sharedExe
                 } else {
-                    targetExe := A_Temp "\AhkWpf\" baseDllName
+                    targetExe := A_WorkingDir "\Cache\AhkWpf\" baseDllName
                 }
             }
 
@@ -2107,16 +2111,16 @@ class XAMLHost {
 
         payload := this.xaml "`n---AHK-XAML-EVENTS---`n" eventBindings
 
-        tempTxt := A_Temp "\AhkWpf\gui_temp.txt"
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
+        tempTxt := A_WorkingDir "\Cache\AhkWpf\gui_temp.txt"
+        if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+            DirCreate(A_WorkingDir "\Cache\AhkWpf")
 
         if FileExist(tempTxt)
             FileDelete(tempTxt)
         FileAppend(payload, tempTxt, "UTF-8")
 
         baseDllName := XAMLHost.GetEngineDllName()
-        targetExe := (this.exePath != "") ? this.exePath : A_Temp "\AhkWpf\" baseDllName
+        targetExe := (this.exePath != "") ? this.exePath : A_WorkingDir "\Cache\AhkWpf\" baseDllName
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\dep\" baseDllName
 
@@ -2404,7 +2408,7 @@ class XAMLHost {
         cleanXaml := StrReplace(this.xaml, "%resources%", "")
         cleanXaml := StrReplace(cleanXaml, "%components%", "")
 
-        tempDir := A_Temp "\AhkWpf"
+        tempDir := A_WorkingDir "\Cache\AhkWpf"
         if !DirExist(tempDir)
             DirCreate(tempDir)
 
@@ -2512,12 +2516,12 @@ class XAMLHost {
         ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR, XAML_FORCE_DYNAMIC_COMPILE
         ; 保证引擎日志进项目 Log\：spawn 前必须已设 RMT_LOG_DIR
         XAMLHost.GetAppDir()
-        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
+        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_WorkingDir "\Cache\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         baseDllName := XAMLHost.GetEngineDllName()
-        targetExe := (this.exePath != "") ? this.exePath : A_Temp "\AhkWpf\" baseDllName
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
+        targetExe := (this.exePath != "") ? this.exePath : A_WorkingDir "\Cache\AhkWpf\" baseDllName
+        if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+            DirCreate(A_WorkingDir "\Cache\AhkWpf")
         if FileExist(this.errLog) {
             try FileDelete(this.errLog)
         }
@@ -2547,7 +2551,7 @@ class XAMLHost {
             if (buildLoc == "lib/dep") {
                 targetExe := sharedExe
             } else {
-                targetExe := A_Temp "\AhkWpf\" baseDllName
+                targetExe := A_WorkingDir "\Cache\AhkWpf\" baseDllName
             }
 
             ; 先重编译（必要时杀掉任意 ahk-xaml），再校验 daemon 路径，避免误连桌面 Release 旧引擎
@@ -2992,7 +2996,7 @@ class XAMLHost {
 
         winId := parts[2], ctrlName := parts[3], eventName := parts[4]
         if (eventName == "WebMessageReceived") {
-            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_Temp "\AhkWebViewDebug.log")
+            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_WorkingDir "\Log\AhkWebViewDebug.log")
         }
         ; 异步更新的协议控制帧：不走事件表，也不该出现在回调里
         if (ctrlName == "Window" && (eventName == "AsyncAck" || eventName == "AsyncReady")) {
@@ -3623,14 +3627,14 @@ class XAMLHost {
             wvDir "\WebView2Loader.dll"
         ]
 
-        tmpDir := A_Temp "\AhkWpf\nuget_Microsoft_Web_WebView2"
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_Microsoft_Web_WebView2"
         extractCmds := "Copy-Item '" tmpDir "\lib\net45\Microsoft.Web.WebView2.Core.dll' '" wvDir "\Microsoft.Web.WebView2.Core.dll' -Force; "
             . "Copy-Item '" tmpDir "\lib\net45\Microsoft.Web.WebView2.Wpf.dll' '" wvDir "\Microsoft.Web.WebView2.Wpf.dll' -Force; "
             . "Copy-Item '" tmpDir "\build\native\" loaderArch "\WebView2Loader.dll' '" wvDir "\WebView2Loader.dll' -Force"
 
         if XAMLHost.Downloader("Microsoft.Web.WebView2", "1.0.1722.45", "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.1722.45", wvDir, targetDlls, extractCmds) {
             try FileDelete(libDir "\dep\ahk-xaml-webview.dll")
-            try FileDelete(A_Temp "\AhkWpf\ahk-xaml-webview.dll")
+            try FileDelete(A_WorkingDir "\Cache\AhkWpf\ahk-xaml-webview.dll")
             return true
         }
         return false
@@ -3647,12 +3651,12 @@ class XAMLHost {
         if FileExist(aeDll)
             return false
 
-        tmpDir := A_Temp "\AhkWpf\nuget_AvalonEdit"
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_AvalonEdit"
         extractCmds := "Copy-Item '" tmpDir "\lib\net462\ICSharpCode.AvalonEdit.dll' '" aeDll "' -Force"
 
         if XAMLHost.Downloader("AvalonEdit", "6.3.0.90", "https://www.nuget.org/api/v2/package/AvalonEdit/6.3.0.90", aeDir, [aeDll], extractCmds) {
             try FileDelete(libDir "\dep\ahk-xaml*.dll")
-            try FileDelete(A_Temp "\AhkWpf\ahk-xaml*.dll")
+            try FileDelete(A_WorkingDir "\Cache\AhkWpf\ahk-xaml*.dll")
             return true
         }
         return false
@@ -3669,12 +3673,12 @@ class XAMLHost {
         if FileExist(oxDll)
             return false
 
-        tmpDir := A_Temp "\AhkWpf\nuget_DocumentFormat_OpenXml"
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_DocumentFormat_OpenXml"
         extractCmds := "Copy-Item '" tmpDir "\lib\net46\DocumentFormat.OpenXml.dll' '" oxDll "' -Force"
 
         if XAMLHost.Downloader("DocumentFormat.OpenXml", "2.20.0", "https://www.nuget.org/api/v2/package/DocumentFormat.OpenXml/2.20.0", oxDir, [oxDll], extractCmds) {
             try FileDelete(libDir "\dep\ahk-xaml*.dll")
-            try FileDelete(A_Temp "\AhkWpf\ahk-xaml*.dll")
+            try FileDelete(A_WorkingDir "\Cache\AhkWpf\ahk-xaml*.dll")
             return true
         }
         return false
@@ -3696,12 +3700,12 @@ class XAMLHost {
         ; Enable continuous marquee style (PBM_SETMARQUEE)
         SendMessage(0x040A, 1, 30, progressBar.Hwnd)
 
-        tmpDir := A_Temp "\AhkWpf\nuget_" StrReplace(packageName, ".", "_")
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_" StrReplace(packageName, ".", "_")
         nupkg := tmpDir "\package.nupkg.zip"
 
         try {
-            if !DirExist(A_Temp "\AhkWpf")
-                DirCreate(A_Temp "\AhkWpf")
+            if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+                DirCreate(A_WorkingDir "\Cache\AhkWpf")
             if DirExist(tmpDir)
                 DirDelete(tmpDir, true)
             DirCreate(tmpDir)

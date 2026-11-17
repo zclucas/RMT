@@ -7,6 +7,7 @@ class TesseractOcr {
     leptModule := 0
 
     __New(root) {
+        this.root := root
         dir := root "\Plugins\TesseractOcr"
         bin := dir (A_PtrSize == 8 ? "\x64" : "\x86")
         for lang in ["chi_sim", "eng"]
@@ -103,14 +104,18 @@ class TesseractOcr {
             throw Error("Tesseract OCR 窗口截图失败。")
         ; 复用 OpenCV 的导出接口，不依赖 cv::Mat 的内部布局。
         name := Buffer(520, 0)
-        if !DllCall("GetTempFileName", "str", A_Temp, "str", "rmt", "uint", 0, "ptr", name)
+        ; 临时 bmp 放软件目录 Cache\，不用 %TEMP%（部分用户账户无写权限）
+        cacheDir := this.root "\Cache"
+        try if (!DirExist(cacheDir))
+            DirCreate(cacheDir)
+        if !DllCall("GetTempFileName", "str", cacheDir, "str", "rmt", "uint", 0, "ptr", name)
             throw OSError()
         temp := StrGet(name)
         path := temp ".bmp"
         try {
             ; OpenCV 此接口使用 ANSI 路径；短路径保证中文用户目录可用。
             SplitPath(path, &fileName)
-            path := this.NativePath(A_Temp) "\" fileName
+            path := this.NativePath(cacheDir) "\" fileName
             if !DllCall("RMT_OpenCV.dll\SaveMatToFile", "ptr", mat, "astr", path, "cdecl int")
                 throw Error("Tesseract OCR 无法转换窗口截图。")
             return this.ocr_from_file(path, param, allresult)

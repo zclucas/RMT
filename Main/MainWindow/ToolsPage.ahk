@@ -8,8 +8,8 @@
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         iconFont := 'Segoe Fluent Icons, Segoe MDL2 Assets'
         field(label, glyph, name, value) {
-            return '<Grid Margin="0,0,16,10"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" MinWidth="116" SharedSizeGroup="MonitorLabel"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                . '<StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,6,0" VerticalAlignment="Center"/><TextBlock Text="' this._XmlEsc(label) '：" VerticalAlignment="Center"/></StackPanel>'
+            return '<Grid Margin="0,0,16,10"><Grid.ColumnDefinitions><ColumnDefinition Width="116"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+                . '<DockPanel Margin="0,0,6,0"><TextBlock DockPanel.Dock="Left" Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,6,0" VerticalAlignment="Center"/><Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" VerticalAlignment="Center"><TextBlock Text="' this._XmlEsc(label) '"/></Viewbox></DockPanel>'
                 . '<TextBox Grid.Column="1" Name="' name '" Text="' this._XmlEsc(value) '" Height="26" MinHeight="26" Padding="6,0" VerticalContentAlignment="Center" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/></Grid>'
         }
         card(title, glyph, body, margin := "0", headerRight := "") {
@@ -28,7 +28,7 @@
         }
         actionRow(title, detail, hotkey, buttonXaml) {
             return '<Border Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" CornerRadius="5" Padding="10,7" Margin="0,0,0,8"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
-                . '<StackPanel><StackPanel Orientation="Horizontal"><TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold"/><TextBlock Text="' this._XmlEsc(hotkey) '" Opacity="0.65" Margin="7,0,0,0"/></StackPanel><TextBlock Text="' this._XmlEsc(detail) '" FontSize="11" Opacity="0.7" Margin="0,3,0,0"/></StackPanel>'
+                . '<StackPanel><StackPanel Orientation="Horizontal"><TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold"/><TextBlock Text="' this._XmlEsc(hotkey) '" Opacity="0.65" Margin="7,0,0,0"/></StackPanel><TextBlock Text="' this._XmlEsc(detail) '" FontSize="11" Opacity="0.7" Margin="0,3,8,0" TextWrapping="Wrap"/></StackPanel>'
                 . '<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">' buttonXaml '</StackPanel></Grid></Border>'
         }
         iconBtn(name, glyph, tip, action := false) {
@@ -41,17 +41,17 @@
         monitorBody := '<Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>'
             . '<StackPanel Orientation="Horizontal" VerticalAlignment="Center">' openBtn("BtnOpenVarListen", "&#xE7B3;", GetLang("变量监视器"), true) '</StackPanel>'
             . '<StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,12" VerticalAlignment="Center"><TextBlock Text="&#xE962;" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,7,0" VerticalAlignment="Center"/><TextBlock Text="' GetLang("鼠标信息：") '" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Name="TxtToolCheckKey" Text="' FormatHotkeyDisplay(MainSoftData.ToolCheckHotkey) '" Opacity="0.65" Margin="9,0,8,0" VerticalAlignment="Center"/><CheckBox Name="ChkToolCheck" Content="' GetLang("开关") '" Style="{StaticResource ToolSwitch}"/> </StackPanel>'
-            . '<Grid Grid.Row="2" Grid.IsSharedSizeScope="True"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel>'
-            . field("屏幕坐标", "&#xE81D;", "TxtMousePos", MainSoftData.PosStr)
-            . field("窗口位置", "&#xE7B7;", "TxtWinOrigin", MainSoftData.WinOriginStr)
-            . field("窗口标题", "&#xE8A5;", "TxtProcessTile", MainSoftData.ProcessTile)
-            . field("窗口类", "&#xE8D7;", "TxtProcessClass", MainSoftData.ProcessClass)
-            . field("句柄 Id", "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId) '</StackPanel><StackPanel Grid.Column="1">'
-            . field("窗口客户区坐标", "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
-            . field("窗口宽高", "&#xE740;", "TxtWinSize", MainSoftData.WinSizeStr)
-            . field("进程名", "&#xE9D9;", "TxtProcessName", MainSoftData.ProcessName)
-            . field("进程 PID", "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)
-            . field("位置颜色", "&#xE790;", "TxtColor", MainSoftData.Color) '</StackPanel></Grid></Grid>'
+            . '<Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel>'
+            . field(GetLang("屏幕坐标"), "&#xE81D;", "TxtMousePos", MainSoftData.PosStr)
+            . field(GetLang("窗口位置"), "&#xE7B7;", "TxtWinOrigin", MainSoftData.WinOriginStr)
+            . field(GetLang("窗口标题"), "&#xE8A5;", "TxtProcessTile", MainSoftData.ProcessTile)
+            . field(GetLang("窗口类"), "&#xE8D7;", "TxtProcessClass", MainSoftData.ProcessClass)
+            . field(GetLang("句柄 Id"), "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId) '</StackPanel><StackPanel Grid.Column="1">'
+            . field(GetLang("窗口客户区坐标"), "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
+            . field(GetLang("窗口宽高"), "&#xE740;", "TxtWinSize", MainSoftData.WinSizeStr)
+            . field(GetLang("进程名"), "&#xE9D9;", "TxtProcessName", MainSoftData.ProcessName)
+            . field(GetLang("进程 PID"), "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)
+            . field(GetLang("位置颜色"), "&#xE790;", "TxtColor", MainSoftData.Color) '</StackPanel></Grid></Grid>'
 
         auxiliaryBody := '<StackPanel><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE840;" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' GetLang("窗口置顶") '" FontWeight="Bold" VerticalAlignment="Center"/><CheckBox Name="ChkAlwaysOnTop" Content="' GetLang("保持 RMT 主窗口在最前") '" Style="{StaticResource ToolSwitch}" Margin="12,0,0,0"/></StackPanel>'
             . '<StackPanel Orientation="Horizontal" Margin="0,12,0,0">' openBtn("BtnFileCheck", "&#xE8B7;", GetLang("文件校验"), true)

@@ -67,9 +67,21 @@ class RmtDialog {
         XAMLHost.AddTitleBar(main, title, "30", "BtnClosePanel", "DialogTitle", Chr(0xE70F), "{DynamicResource Accent}")
         body := main.Add("StackPanel").Grid_Row(1).Margin("22,16,22,6")
         body.Add("TextBlock").Text(String(prompt)).Foreground("{DynamicResource TextMain}").TextWrapping("Wrap").Margin("0,0,0,10")
-        body.Add("TextBox").Name("InputValue").Text(String(defaultValue)).Height(34).MinHeight(34).Padding("8,4").Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        input := body.Add("TextBox").Name("InputValue").Text(String(defaultValue)).Height(34).MinHeight(34)
+            .Padding("6,0,18,0").VerticalContentAlignment("Center")
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        inputTemplate := input.Add("TextBox.Template").Add("ControlTemplate").TargetType("TextBox")
+        inputTemplate.Add("Border").CornerRadius("3").SnapsToDevicePixels("True").UseLayoutRounding("True")
+            .Background("{TemplateBinding Background}").BorderBrush("{TemplateBinding BorderBrush}")
+            .BorderThickness("{TemplateBinding BorderThickness}")
+            .Add("ScrollViewer").Name("PART_ContentHost").VerticalAlignment("{TemplateBinding VerticalContentAlignment}")
         row := main.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,4,0,10")
-        row.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(96).Height(34).IsDefault("True").Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").Cursor("Hand")
+        row.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(96).Height(34).IsDefault("True")
+            .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").Cursor("Hand")
+            .FocusVisualStyle("{DynamicResource GlobalFocusVisual}")
+            .InjectResources(RmtDialog._PrimaryButtonStyle())
         row.Add("Button").Name("BtnCancel").Content(GetLang("取消")).Width(96).Height(34).Margin("14,0,0,0").IsCancel("True").Background("{DynamicResource ControlBg}").Foreground("{DynamicResource TextMain}").Cursor("Hand")
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", "30")
         ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
@@ -93,6 +105,15 @@ class RmtDialog {
         if (rec.Done && rec.OK)
             return { Value: rec.Value, Result: "OK" }
         return { Value: String(defaultValue), Result: "Cancel" }
+    }
+
+    static _PrimaryButtonStyle() {
+        return '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
+            . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>'
+            . '<ControlTemplate.Triggers>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger>'
+            . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionPressBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger>'
+            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
     }
 
     ; 只读正文右键：只换菜单外观（与 AI 助手同色/同结构），不改弹窗正文字号
@@ -150,7 +171,7 @@ class RmtDialog {
         return { Tall: tall, WinW: w, Lines: nl }
     }
 
-    static _Show(msg, title, buttons, iconChar, iconColor, owner := 0) {
+    static _Show(msg, title, buttons, iconChar, iconColor, owner := 0, options := "") {
         owner := XamlWin.ModalOwner(RmtDialog._NormalizeOwner(owner))
         try XAMLHost.EnsureDaemonHealthy()
 
@@ -212,7 +233,7 @@ class RmtDialog {
         if (fontFamily != "")
             msgTb.FontFamily(fontFamily)
 
-        PrimaryBtnStyle := '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ActionPressBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ActionHoverStroke}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        PrimaryBtnStyle := RmtDialog._PrimaryButtonStyle()
         btnRow := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,18,0,2")
         okText := GetLang("确定")
         cancelText := GetLang("取消")
@@ -234,8 +255,13 @@ class RmtDialog {
                 btnEl.IsDefault("True")
             if (isSecondary || btnText == cancelText)
                 btnEl.IsCancel("True")
+            if (IsObject(options) && options.Disabled == idx)
+                btnEl.IsEnabled("False").Opacity("0.5").ToolTip(options.DisabledHint).SetProp("ToolTipService.ShowOnDisabled", "True")
             btnEl.InjectResources(PrimaryBtnStyle)
         }
+        if (IsObject(options))
+            panel.Add("CheckBox").Name("DialogSkip").Content(options.Checkbox)
+                .Foreground("{DynamicResource TextMain}").HorizontalAlignment("Left").Margin("0,14,0,0")
 
         ; 落点写进 XAML：引擎揭盖时直接用 Left/Top，不再按「高 600」估，开窗就在正确位置。
         ; 尺寸仍由 SizeToContent 决定，estH 只参与算落点，估偏几像素不影响显示。
@@ -244,6 +270,8 @@ class RmtDialog {
             estH := 30 + 38 + 4 + lay.Lines * lineH + 20 + 34
         else
             estH := 30 + 28 + Min(lay.Lines * lineH, 440) + 21 + 20 + 34
+        if (IsObject(options))
+            estH += 34
         posAttr := XamlWin.PosAttr(winW, estH, owner)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
@@ -267,12 +295,16 @@ class RmtDialog {
         ui.xaml := StrReplace(ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         ui.xaml := StrReplace(ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
 
-        resultObj := { Button: "", Instance: ui }
+        resultObj := { Button: "", Instance: ui, Options: options }
         ownerDisabled := false
 
         ui.OnEvent("Window", "Closing", (state, ctrl, event) => RmtDialog._OnClosing(resultObj, owner))
         ui.OnEvent("Window", "LoadedHwnd", (state, ctrl, event) => RmtDialog._OnLoad(ui, owner))
         ui.OnEvent("BtnClosePanel", "Click", (state, ctrl, event) => RmtDialog._OnPick(ui, resultObj, "Closed", owner))
+        if (IsObject(options)) {
+            ui.OnEvent("DialogSkip", "Checked", (*) => options.Checked := true)
+            ui.OnEvent("DialogSkip", "Unchecked", (*) => options.Checked := false)
+        }
         loop buttons.Length {
             idx := A_Index
             btnText := buttons[idx]
@@ -327,6 +359,8 @@ class RmtDialog {
     }
 
     static _OnPick(ui, resultObj, btnText, owner, state := "", ctrl := "", event := "") {
+        if (IsObject(resultObj.Options))
+            try resultObj.Options.Checked := ui.Query("DialogSkip>IsChecked") = "True"
         resultObj.Button := btnText
         if (owner) {
             try WinSetEnabled(1, "ahk_id " owner)

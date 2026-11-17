@@ -666,11 +666,11 @@ class SttGui {
         spec := this.dlQueue.RemoveAt(1)
         this.dlBytes := 0
         this.dlExpectedBytes := 0
-        this.dlTar := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".download"
+        this.dlTar := RmtCacheDir() "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".download"
         cmd := Format('curl.exe -L --fail -s -S --suppress-connect-headers -D "{}" -o "{}" "{}"',
             this.dlTar ".headers", this.dlTar, spec["url"])
         try {
-            Run(cmd, A_Temp, "Hide", &pid)
+            Run(cmd, RmtCacheDir(), "Hide", &pid)
             this.dlPid := pid
             this.dlSpec := spec
             this.downloadState := "dl"
@@ -689,14 +689,14 @@ class SttGui {
             bytes := FileGetSize(this.dlTar)
             if (this.dlSpec.Has("exactBytes") ? bytes != this.dlSpec["exactBytes"] : bytes < this.dlSpec["minBytes"])
                 return false
-            this.dlDir := A_Temp "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount "-" Random(1000, 9999)
+            this.dlDir := RmtCacheDir() "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount "-" Random(1000, 9999)
             DirCreate(this.dlDir)
             if (this.dlSpec.Has("krokoBlocks")) {
                 this.dlPid := 0
                 return this._ExtractKrokoModel()
             }
             cmd := Format('tar.exe -xjf "{}" -C "{}"', this.dlTar, this.dlDir)
-            Run(cmd, A_Temp, "Hide", &pid)
+            Run(cmd, RmtCacheDir(), "Hide", &pid)
             this.dlPid := pid
             return true
         } catch {

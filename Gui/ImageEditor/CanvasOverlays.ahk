@@ -48,7 +48,7 @@
 
     _CreateIgnoreOverlay() {
         this._ignoreOverlaySeq += 1
-        output := A_Temp "\RMT_fe_ignore_" A_TickCount "_" this._windowToken "_" this._ignoreOverlaySeq ".png"
+        output := RmtCacheDir() "\RMT_fe_ignore_" A_TickCount "_" this._windowToken "_" this._ignoreOverlaySeq ".png"
         bitmap := 0, graphics := 0, maskBrush := 0, clearBrush := 0
         try {
             bitmap := Gdip_CreateBitmap(this.CanvasSide, this.CanvasSide, 0x26200A)

@@ -1,3 +1,6 @@
+global RMT_ThemeFontSizeMin := 15
+global RMT_ThemeFontSizeMax := 20
+
 ; 主题资源文件（XAML Resource_* / Window_DWM / 字体）路径
 GetThemesPath() {
     if (IsSet(ThemesPath) && ThemesPath != "")
@@ -12,11 +15,7 @@ ApplyUserFontSize(fs, persist := true) {
     defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
     if (!IsNumber(fs))
         fs := defFs
-    fs := Integer(fs)
-    if (fs < 0)
-        fs := 0
-    if (fs > 40)
-        fs := 40
+    fs := Max(RMT_ThemeFontSizeMin, Min(RMT_ThemeFontSizeMax, Round(Number(fs))))
     MainSoftData.FontSize := fs
     XAML_FontSizeDelta := fs - baseFs
     if (persist) {

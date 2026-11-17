@@ -18,6 +18,7 @@ class TextOpsGui {
         this.Data := ""
         this.SerialStr := ""
         this.ArgsNameOptions := []
+        this.HasLineBreakOptions := false
         this.lastArgsNameConText := ""
         this.ConcatEditGui := ""
         this._concatEditClosed := true
@@ -303,6 +304,25 @@ class TextOpsGui {
     _TypeText() => IsObject(this.ui) ? this.ui.Query("TypeCombo") : ""
     _ArgsTypeText() => IsObject(this.ui) ? this.ui.Query("ArgsTypeCombo") : ""
 
+    _LineBreakOptions() {
+        return [[GetLang("回车"), "`r"], [GetLang("换行"), "`n"], [GetLang("回车换行"), "`r`n"]]
+    }
+
+    _SetArgsNameCombo(value, isContentSplit) {
+        items := this.ArgsNameOptions.Clone()
+        if (isContentSplit) {
+            for i, option in this._LineBreakOptions() {
+                items.InsertAt(i + 1, option[1])
+                if (value == option[2])
+                    value := option[1]
+            }
+            if (value == "`t")
+                value := GetLang("制表符")
+        }
+        this.HasLineBreakOptions := isContentSplit
+        this._SetCombo("ArgsNameCon", items, value)
+    }
+
     _ConcatDefaultText() {
         return "{当前年}{当前月}{当前日}"
     }
@@ -330,7 +350,8 @@ class TextOpsGui {
         concatArgs := this.Data.ArgsName
         if (cmd == "" && GetLang(this.Data.Type) == GetLang("文本拼接") && this._IsConcatPlaceholder(concatArgs))
             concatArgs := this._ConcatDefaultText()
-        this._SetCombo("ArgsNameCon", ArgsNameArr, GetBuiltinVarName(concatArgs, true))
+        isContentSplit := this.Data.Type == "文本分割" && this.Data.ArgsType == "内容分割"
+        this._SetArgsNameCombo(GetBuiltinVarName(concatArgs, true), isContentSplit)
         this.ui.Update("ConcatCon", "Text", concatArgs)
         this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
         this._SetCombo("SearchCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.Search, true))
@@ -514,6 +535,9 @@ class TextOpsGui {
         this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
         typeText := this._TypeText()
         IsSplit := typeText == GetLang("文本分割")
+        isContentSplit := IsSplit && mode == GetLang("内容分割")
+        if (isContentSplit != this.HasLineBreakOptions)
+            this._SetArgsNameCombo(this.lastArgsNameConText, isContentSplit)
         IsGetEx := typeText == GetLang("文本提取")
         IsGetExReg := IsGetEx && mode == GetLang("正则匹配")
         ShowArgsName := IsSplit || IsGetExReg
@@ -803,6 +827,14 @@ class TextOpsGui {
         this.Data.Type := GetLangKey(this._TypeText())
         this.Data.Name := isConcat ? "" : GetBuiltinVarName(this.ui.Query("NameCon"))
         this.Data.ArgsType := isConcat ? "拼接文本" : GetLangKey(this._ArgsTypeText())
+        if (this.Data.Type == "文本分割" && this.Data.ArgsType == "内容分割") {
+            for option in this._LineBreakOptions() {
+                if (ArgsName == option[1]) {
+                    ArgsName := option[2]
+                    break
+                }
+            }
+        }
         if (this.Data.Type == "时间戳处理" && this.Data.ArgsType == "提取时间量") {
             componentIndex := this.ui.Query("TimestampComponent>SelectedIndex")
             ArgsName := TextOpsTimestampComponents()[Integer(componentIndex) + 1][1]

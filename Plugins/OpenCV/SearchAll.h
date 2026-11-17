@@ -1,10 +1,20 @@
 #pragma once
+#include <cstdint>
 #include <stdexcept>
+#include <unordered_map>
 // SearchAll owns a single screen/window snapshot and returns an opaque result handle.
 // The caller must release it even when copying the points is interrupted.
 namespace rmt_search_all {
 struct Result { std::vector<cv::Point> points; };
 struct Hit { cv::Rect box; double score; };
+
+inline bool scanBefore(cv::Point a, cv::Point b) {
+    return a.y != b.y ? a.y < b.y : a.x < b.x;
+}
+
+inline std::uint64_t hitCell(int x, int y) {
+    return (static_cast<std::uint64_t>(y) << 32) | static_cast<std::uint32_t>(x);
+}
 
 inline cv::Mat readImage(const wchar_t* path) {
     FILE* file = nullptr;
@@ -44,13 +54,17 @@ inline cv::Mat edges(const cv::Mat& gray) {
 }
 
 inline std::vector<cv::Point> images(const cv::Mat& shot, const cv::Mat& original,
-    int threshold, bool color, bool adaptive, bool topLeft = false) {
+    int threshold, bool color, bool adaptive, bool firstOnly = false) {
     cv::Mat image = channels(shot, color), templ = channels(original, color), alpha;
     if (original.channels() == 4) {
         cv::extractChannel(original, alpha, 3);
         cv::threshold(alpha, alpha, 0, 255, cv::THRESH_BINARY);
-        if (!cv::countNonZero(alpha)) throw std::runtime_error("empty alpha mask");
-        if (cv::countNonZero(alpha) == alpha.rows * alpha.cols) alpha.release();
+        const int visiblePixels = cv::countNonZero(alpha);
+        if (!visiblePixels) {
+            if (firstOnly) return {};
+            throw std::runtime_error("empty alpha mask");
+        }
+        if (visiblePixels == alpha.total()) alpha.release();
     }
     std::vector<double> scales{1.0};
     if (adaptive) {
@@ -63,11 +77,6 @@ inline std::vector<cv::Point> images(const cv::Mat& shot, const cv::Mat& origina
     // Keep the existing adaptive grayscale tolerance for re-rasterized text:
     // scaled weak matches require matching edges; transparent pixels are excluded.
     cv::Mat imageEdges, templateEdges;
-    if (adaptive && !color) {
-        imageEdges = edges(image);
-        templateEdges = edges(templ);
-        if (!alpha.empty()) cv::bitwise_and(templateEdges, templateEdges, templateEdges, alpha);
-    }
     std::vector<Hit> hits;
     for (double scale : scales) {
         cv::Size size(std::max(1, cvRound(templ.cols * scale)), std::max(1, cvRound(templ.rows * scale)));
@@ -81,25 +90,51 @@ inline std::vector<cv::Point> images(const cv::Mat& shot, const cv::Mat& origina
         int method = constant ? cv::TM_SQDIFF : mask.empty() ? cv::TM_CCOEFF_NORMED : cv::TM_CCORR_NORMED;
         cv::matchTemplate(image, target, scores, method, mask);
         double norm = (mask.empty() ? target.total() : cv::countNonZero(mask)) * target.channels() * 255.0 * 255.0;
+        const bool relaxed = adaptive && !color && !constant && std::abs(scale - 1.) >= .005;
+        const double required = threshold / 100.0;
+        std::vector<cv::Point> candidates;
+        float highest = -1;
         for (int y = 0; y < scores.rows; ++y) {
             float* row = scores.ptr<float>(y);
-            for (int x = 0; x < scores.cols; ++x)
-                row[x] = std::isfinite(row[x]) ? (constant ? static_cast<float>(1.0 - std::sqrt(std::max(0.f, row[x]) / norm)) : row[x]) : -1.f;
+            for (int x = 0; x < scores.cols; ++x) {
+                float& score = row[x];
+                if (!std::isfinite(score)) continue;
+                if (constant)
+                    score = static_cast<float>(1.0 - std::sqrt(std::max(0.f, score) / norm));
+                if (score >= 0 && score + 1e-6 >= required - (relaxed ? .12 : 0.)) {
+                    candidates.emplace_back(x, y);
+                    highest = std::max(highest, score);
+                }
+            }
         }
-        bool relaxed = adaptive && !color && !constant && std::abs(scale - 1.) >= .005;
+        if (candidates.empty()) continue;
+        const bool firstAtOriginalSize = firstOnly && scale == 1.0;
+        const cv::Point firstCandidate = candidates.front();
+        if (firstAtOriginalSize && (color || !adaptive || mask.empty())
+            && scores.at<float>(firstCandidate) == highest)
+            return {firstCandidate};
+
+        // Visit peaks in the same order as repeated minMaxLoc, without scanning
+        // the whole score map again after suppressing each one.
+        std::sort(candidates.begin(), candidates.end(), [&](cv::Point a, cv::Point b) {
+            const float sa = scores.at<float>(a), sb = scores.at<float>(b);
+            return sa != sb ? sa > sb : scanBefore(a, b);
+        });
         cv::Mat edgeScores;
         if (relaxed) {
+            if (imageEdges.empty()) {
+                imageEdges = edges(image);
+                templateEdges = edges(templ);
+                if (!alpha.empty()) cv::bitwise_and(templateEdges, templateEdges, templateEdges, alpha);
+            }
             cv::Mat targetEdges;
             cv::resize(templateEdges, targetEdges, size, 0, 0, scale < 1 ? cv::INTER_AREA : cv::INTER_LINEAR);
             cv::matchTemplate(imageEdges, targetEdges, edgeScores, cv::TM_CCOEFF_NORMED);
             cv::patchNaNs(edgeScores, -1);
         }
-        while (true) {
-            double best;
-            cv::Point pos;
-            cv::minMaxLoc(scores, nullptr, &best, nullptr, &pos);
-            double required = threshold / 100.0;
-            if (best + 1e-6 < required - (relaxed ? .12 : 0.) || best < 0) break;
+        for (cv::Point pos : candidates) {
+            const double best = scores.at<float>(pos);
+            if (best < 0) continue;
             bool accepted = best + 1e-6 >= required;
             if (!accepted && relaxed) {
                 cv::Rect vicinity(std::max(0, pos.x - 4), std::max(0, pos.y - 4), 1, 1);
@@ -116,7 +151,13 @@ inline std::vector<cv::Point> images(const cv::Mat& shot, const cv::Mat& origina
                 if (best < required) tolerance *= 2;
                 accepted = cv::mean(diff, mask)[0] <= tolerance;
             }
-            if (accepted) hits.push_back({cv::Rect(pos, size), best});
+            if (accepted) {
+                // This point wins both by score and by position, so no other
+                // fixed-size candidate can replace or suppress it.
+                if (firstAtOriginalSize && pos == firstCandidate && hits.empty())
+                    return {pos};
+                hits.push_back({cv::Rect(pos, size), best});
+            }
             // Local peak suppression: one response per target instead of neighboring pixels.
             int dx = std::max(1, size.width / 2), dy = std::max(1, size.height / 2);
             cv::Rect suppress(std::max(0, pos.x - dx), std::max(0, pos.y - dy), 1, 1);
@@ -124,20 +165,41 @@ inline std::vector<cv::Point> images(const cv::Mat& shot, const cv::Mat& origina
             suppress.height = std::min(scores.rows, pos.y + dy + 1) - suppress.y;
             scores(suppress).setTo(-1);
         }
+        if (firstAtOriginalSize && !hits.empty()) break;
     }
     std::stable_sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.score > b.score; });
-    std::vector<cv::Rect> accepted;
+    // Boxes with a nonzero overlap have origins in the same or neighboring cells.
+    cv::Size cellSize(1, 1);
+    for (const auto& hit : hits) {
+        cellSize.width = std::max(cellSize.width, hit.box.width);
+        cellSize.height = std::max(cellSize.height, hit.box.height);
+    }
+    std::unordered_map<std::uint64_t, std::vector<cv::Rect>> accepted;
     std::vector<cv::Point> points;
     for (const auto& hit : hits) {
+        const int cx = hit.box.x / cellSize.width, cy = hit.box.y / cellSize.height;
         bool duplicate = false;
-        for (const auto& box : accepted) {
-            double intersection = (box & hit.box).area();
-            if (intersection / (box.area() + hit.box.area() - intersection) > .3) { duplicate = true; break; }
+        for (int y = std::max(0, cy - 1); y <= cy + 1 && !duplicate; ++y) {
+            for (int x = std::max(0, cx - 1); x <= cx + 1 && !duplicate; ++x) {
+                const auto cell = accepted.find(hitCell(x, y));
+                if (cell == accepted.end()) continue;
+                for (const auto& box : cell->second) {
+                    double intersection = (box & hit.box).area();
+                    if (intersection / (box.area() + hit.box.area() - intersection) > .3) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+            }
         }
-        if (!duplicate) {
-            accepted.push_back(hit.box);
-            points.emplace_back(hit.box.x + (topLeft ? 0 : hit.box.width / 2), hit.box.y + (topLeft ? 0 : hit.box.height / 2));
-        }
+        if (duplicate) continue;
+        accepted[hitCell(cx, cy)].push_back(hit.box);
+        if (!firstOnly)
+            points.emplace_back(hit.box.x + hit.box.width / 2, hit.box.y + hit.box.height / 2);
+        else if (points.empty())
+            points.push_back(hit.box.tl());
+        else if (scanBefore(hit.box.tl(), points.front()))
+            points.front() = hit.box.tl();
     }
     return points;
 }

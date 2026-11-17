@@ -1,5 +1,9 @@
 Log/
 /Test/
+/RMT.exe
+/Thread/Update.exe
+/ReleaseX64/Thread/Update.exe
+/ReleaseX86/Thread/Update.exe
 Setting/
 OldSetting/
 settings.ini
@@ -28,3 +32,4 @@ _bmad-output
 Plugins/SupportQr/bin/
 Plugins/SupportQr/obj/
 .workbuddy/
+Cache/

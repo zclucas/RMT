@@ -522,7 +522,7 @@ class FeedbackGui {
 
     ; 静默存剪贴板位图：SaveClipToBitmap 会弹 RMTErrorShow，这里自己用 GDI+ 存到临时目录
     _SaveClipImage() {
-        dir := A_Temp "\RMTFeedback"
+        dir := RmtCacheDir() "\RMTFeedback"
         if (!DirExist(dir))
             try DirCreate(dir)
         if (!DirExist(dir))

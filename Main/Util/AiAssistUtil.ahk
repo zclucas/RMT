@@ -941,7 +941,7 @@ class AiAssist {
                 throw Error(GetLang("请提供脚本路径或正文"))
             if (lang == "")
                 lang := "ahk"
-            dir := A_Temp "\RMT\AiScript"
+            dir := RmtCacheDir() "\AiScript"
             if (!DirExist(dir))
                 DirCreate(dir)
             ext := lang
@@ -982,9 +982,9 @@ class AiAssist {
         workdir := AiAssist._NormPath(workdir)
         if (!AiAssist.CanRun())
             throw Error(GetLang("当前权限不能执行命令"))
-        outFile := A_Temp "\RMT\ai_cmd_out.txt"
-        errFile := A_Temp "\RMT\ai_cmd_err.txt"
-        dir := A_Temp "\RMT"
+        outFile := RmtCacheDir() "\ai_cmd_out.txt"
+        errFile := RmtCacheDir() "\ai_cmd_err.txt"
+        dir := RmtCacheDir()
         if (!DirExist(dir))
             DirCreate(dir)
         try FileDelete(outFile)

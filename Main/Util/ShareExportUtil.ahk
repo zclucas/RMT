@@ -231,10 +231,10 @@ class ShareExportUtil {
     }
 
     static _BuildPackage(checkedItems, sourceDir, name, report) {
-        outDir := A_Temp "\RMT_Export_" A_Now "_" A_TickCount "_" Random(1000, 9999)
+        outDir := RmtCacheDir() "\RMT_Export_" A_Now "_" A_TickCount "_" Random(1000, 9999)
         try {
             missing := this.ExportChecked(checkedItems, sourceDir, outDir, report)
-            exportDir := A_Temp "\RMT_Export"
+            exportDir := RmtCacheDir() "\RMT_Export"
             DirCreate(exportDir)
             rmtPath := exportDir "\" name ".rmt"
             if (FileExist(rmtPath))

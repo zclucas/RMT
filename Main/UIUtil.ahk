@@ -90,7 +90,7 @@ InitUI() {
 
 ; 主窗句柄就绪后的 UI 收尾。必须跑在句柄回传之后，
 ; 否则适配器按名字取控件会全部落空，随后的保存/切页都会失效。
-InitUIFinishUI() {
+InitUIFinishUI(startup := true) {
     MainSoftData.MyGui := GuiAdapter(MyMainWin.ui)
     MainSoftData.MyGui.Title := "RMTv" RMT_VERSION_DISPLAY
     MainSoftData.TabCtrl := TabAdapter(MyMainWin.ui, MyMainWin)
@@ -103,7 +103,10 @@ InitUIFinishUI() {
     MyUIMacroSettingGui.SureFocusCon := MainSoftData.BtnSave
 
     CustomTrayMenu()
-    OnOpen()
+    if (startup)
+        OnOpen()
+    else
+        RefreshListenVarGui()
 }
 
 OnOpen() {
@@ -704,7 +707,7 @@ OnOpenRmtDoc(pageHash := "") {
             return
         }
     }
-    jump := A_Temp "\RmtDocJump.html"
+    jump := RmtCacheDir() "\RmtDocJump.html"
     js := StrReplace(StrReplace(target, "\", "\\"), "'", "\'")
     html := "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body><script>location.replace('" js "');</script></body></html>"
     try FileDelete(jump)
@@ -758,7 +761,7 @@ OpenHelpInAppWindow(pageHash := "", winW := 560, winH := 0) {
 
     ; 独立 user-data-dir：不与用户已开的浏览器共进程，
     ; 既不会被「恢复上次会话」/插件干扰，用户关浏览器时也不会连带关掉帮助窗
-    profileDir := A_Temp "\RMT_HelpBrowser"
+    profileDir := RmtCacheDir() "\RMT_HelpBrowser"
     if (!DirExist(profileDir))
         DirCreate(profileDir)
 

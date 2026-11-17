@@ -62,6 +62,7 @@ $codeOrigins = @{}
 $fullCodeBuilder = [System.Text.StringBuilder]::new()
 
 $getLangRegex = [regex]'GetLang(?:Key)?\s*\(\s*(["''])(.*?)\1\s*\)'
+$getLangChoiceRegex = [regex]'\bGetLang\(\s*[^()\r\n]+?\?\s*(["''])([^"''\r\n]*)\1\s*:\s*(["''])([^"''\r\n]*)\3\s*\)'
 # 支持跨行匹配的 GetLangArr / GetLangKeyArr
 $getLangArrRegex = [regex]::new('GetLang(?:Key)?Arr\s*\(\s*\[(.*?)\]\s*\)', [System.Text.RegularExpressions.RegexOptions]::Singleline)
 $itemRegex = [regex]'["''](.*?)["'']'
@@ -89,6 +90,17 @@ foreach ($file in $ahkFiles) {
         if ($val -ne "" -and $val -notmatch '^\$') {
             [void]$codeKeys.Add($val)
             if (-not $codeOrigins.ContainsKey($val)) { $codeOrigins[$val] = $rel }
+        }
+    }
+
+    # 提取 GetLang(条件 ? "..." : "...") 的两个显示值。
+    foreach ($m in $getLangChoiceRegex.Matches($cleanContent)) {
+        foreach ($group in 2, 4) {
+            $val = $m.Groups[$group].Value
+            if ($val -ne "") {
+                [void]$codeKeys.Add($val)
+                if (-not $codeOrigins.ContainsKey($val)) { $codeOrigins[$val] = $rel }
+            }
         }
     }
 
@@ -136,8 +148,20 @@ if (Test-Path $storagePath) {
     }
 }
 
-# 提取含有等号的 codeKey 列表，用于解决拆分歧义
-$keysWithEquals = @($codeKeys | Where-Object { $_.Contains("=") })
+# Excel DLL 异常通过 ExcelUtil.ahk 的 GetLang(line) 和 GetLang(accessError) 翻译。
+$excelSources = "ExcelEditor.cs", "ExcelElevation.cs", "ExcelWorkbookLookup.cs"
+foreach ($name in $excelSources) {
+    $rel = "Plugins\RMT\$name"
+    $path = Join-Path $Root $rel
+    if (-not (Test-Path -LiteralPath $path)) { continue }
+    $content = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    $errorRegex = [regex]'(?:throw\s+new\s+\w+Exception\s*\(\s*|\bconst\s+string\s+AccessDenied\s*=\s*)"([^"\r\n]*\p{IsCJKUnifiedIdeographs}[^"\r\n]*)"'
+    foreach ($m in $errorRegex.Matches($content)) {
+        $val = $m.Groups[1].Value
+        [void]$codeKeys.Add($val)
+        if (-not $codeOrigins.ContainsKey($val)) { $codeOrigins[$val] = $rel }
+    }
+}
 
 $fullCodeString = $fullCodeBuilder.ToString()
 Write-Host "扫描完成: 共在 $($ahkFiles.Count) 个源码文件中提取出 $($codeKeys.Count) 个有效多语言词条`n" -ForegroundColor Gray
@@ -159,23 +183,11 @@ function Analyze-LangFile([string]$filePath) {
         $k = $null
         $v = $null
 
-        # 优先匹配已知包含 '=' 的词条
-        foreach ($eqk in $keysWithEquals) {
-            if ($trimmed.StartsWith("$eqk=")) {
-                $k = $eqk
-                $v = $trimmed.Substring($eqk.Length + 1).Trim()
-                break
-            }
-        }
-
-        # 常规分割：首个等号
-        if ($null -eq $k) {
-            $eq = [regex]::Match($trimmed, '(?<!\\)=')
-            $eqPos = if ($eq.Success) { $eq.Index } else { -1 }
-            if ($eqPos -gt 0) {
-                $k = $trimmed.Substring(0, $eqPos).Replace('\=', '=')
-                $v = $trimmed.Substring($eqPos + 1).Trim()
-            }
+        # 与 LangKeysInit 一致：首个未转义的等号分隔键和值。
+        $eq = [regex]::Match($line, '(?<!\\)=')
+        if ($eq.Success -and $eq.Index -gt 0) {
+            $k = $line.Substring(0, $eq.Index).Replace('\=', '=')
+            $v = $line.Substring($eq.Index + 1).Trim()
         }
 
         if ($k -ne $null -and $k -ne "") {
