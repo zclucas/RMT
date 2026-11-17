@@ -38,14 +38,16 @@ ShowPromptDisplay(data) {
             else
                 CursorOutputTip.Show(data.Text, data.Duration)
         case "自由贴":
+            center := data.HasProp("PastePosition") && (data.PastePosition == "固定位置" || data.PastePosition == "鼠标位置")
+                && (data.PasteMode == "文本" || data.PasteMode == "图片") ? [data.PosX, data.PosY] : ""
             switch data.PasteMode {
                 case "关闭", "关闭所有":
                     MyFreePasteGui.ClosePrompt(data.PasteMode == "关闭所有", data.PasteName)
                 case "图片":
-                    MyFreePasteGui.ShowPrompt(true, data.ImagePath, data.PasteName, data.TemporaryImage)
+                    MyFreePasteGui.ShowPrompt(true, data.ImagePath, data.PasteName, data.TemporaryImage, center)
                 case "文本":
                     if (data.Text != "")
-                        MyFreePasteGui.ShowPrompt(false, data.Text, data.PasteName)
+                        MyFreePasteGui.ShowPrompt(false, data.Text, data.PasteName, false, center)
             }
         case "区域高亮":
             overlay := PromptOutline(data.Color, data.Thickness)

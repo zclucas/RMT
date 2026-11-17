@@ -7,6 +7,7 @@ class PromptData {
         this.AudioMode := "系统提示音"
         this.TipMode := "文本"
         this.PasteMode := "文本"
+        this.PastePosition := "鼠标位置"
         this.FlashMode := "主屏"
         this.CountDownMode := "显示"
         this.Text := ""
@@ -112,6 +113,19 @@ OnPrompt(tableItem, cmd, index) {
         return
     }
     switch data.Type {
+        case "自由贴":
+            if (data.HasProp("PastePosition") && (data.PasteMode == "文本" || data.PasteMode == "图片")) {
+                if (data.PastePosition == "固定位置") {
+                    data.PosX := PromptInt(resolve(data.PosX), -32768, 32767)
+                    data.PosY := PromptInt(resolve(data.PosY), -32768, 32767)
+                } else if (data.PastePosition == "鼠标位置") {
+                    point := Buffer(8)
+                    if (!DllCall("user32\GetCursorPos", "Ptr", point, "Int"))
+                        throw OSError()
+                    data.PosX := NumGet(point, 0, "Int")
+                    data.PosY := NumGet(point, 4, "Int")
+                }
+            }
         case "临时提示":
             data.Duration := PromptInt(resolve(data.Duration), 1, 600000)
         case "区域高亮", "屏幕边缘闪光":

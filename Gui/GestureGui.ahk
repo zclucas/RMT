@@ -52,20 +52,26 @@ class GestureGui {
         binding := GestureBinding(value, source)
         current := GestureRead(binding)
         mouse := source == "Mouse"
-        panel := XAML_Generator("StackPanel").Margin("16,12")
-        if (mouse)
+        if (mouse) {
+            panel := XAML_Generator("StackPanel").Margin("16,12")
+            layout := panel
             this.BuildMouse(panel, current, binding)
-        else
+        } else {
+            layout := XAML_Generator("Grid").Margin("16,12").Rows("*", "Auto")
+            panel := layout.Add("ScrollViewer").VerticalScrollBarVisibility("Auto").Add("StackPanel")
             this.BuildTouch(panel, current)
+        }
         panel.Add("TextBlock").Name("GestureHint").TextWrapping("Wrap").Margin("0,8,0,0")
             .Text(mouse ? this.MouseHint() : GetLang("使用 Windows 精确式触控板，松开手指时触发宏。"))
 
-        buttons := panel.Add("DockPanel").LastChildFill("False").Margin("0,10,0,0")
+        buttons := layout.Add("DockPanel").LastChildFill("False").Margin("0,10,0,0")
+        if (!mouse)
+            buttons.Grid_Row(1)
         AddCmdOkBtn(buttons, "ClearGesture", "", GetLang("清除")).DockPanel_Dock("Left").Width(96)
         AddCmdOkBtn(buttons, "SaveGesture", "8,0,0,0", GetLang("确定")).DockPanel_Dock("Right").IsDefault("True")
         AddCmdOkBtn(buttons, "CancelGesture", "", GetLang("取消")).DockPanel_Dock("Right")
         title := GetLang(mouse ? "鼠标手势" : "触控板手势") (remark == "" ? "" : " · " remark)
-        this.UI := XamlWin.Create(title, panel, 460, "Auto")
+        this.UI := XamlWin.Create(title, layout, 460, mouse ? "Auto" : 264)
         this.UI.OnEvent("Window", "Closing", this.Close.Bind(this, false))
         this.UI.OnEvent("Window", "KeyDown:Escape", this.Close.Bind(this, true))
         this.UI.OnEvent("CancelGesture", "Click", this.Close.Bind(this, true))
@@ -77,6 +83,7 @@ class GestureGui {
             this.UI.OnEvent("Shape", "SelectionChanged", this.OnShape.Bind(this))
             this.UI.OnEvent("GesturePad", "MouseLeftButtonDown", this.StartRecording.Bind(this))
         } else {
+            this.UI.xaml := StrReplace(this.UI.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
             for name in ["FingerCount", "TouchAction"]
                 this.UI.Track(name)
             for index, key in GestureModifierKeys()
@@ -119,16 +126,23 @@ class GestureGui {
         modifiers := current ? current.Modifiers : 0
         if (modifiers == 128)
             modifiers := 0x0A ; 旧 Ctrl+Alt 配置在编辑时提供左侧按键作为初始选项。
-        row := panel.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
+        ; 整排一起缩放，避免较长的键名被单独缩小。
+        row := panel.Add("Viewbox").StretchDirection("DownOnly").HorizontalAlignment("Center")
+            .Add("UniformGrid").SetProp("Rows", 1)
             .InjectResources(XamlTabOptionStyle())
-        keys := GestureModifierKeys()
-        for index, key in keys {
-            row.Add("ToggleButton").Name("TouchModifier" index).Content(key[1]).Width(54)
-                .Margin(index == keys.Length ? "0,4,0,4" : "0,4,5,4")
+        for index, key in GestureModifierKeys() {
+            row.Add("ToggleButton").Name("TouchModifier" index).Content(key[1])
+                .Width("Auto").MinWidth(54).FontWeight("Normal")
+                .Margin("2.5,4")
                 .Style("{StaticResource SetTabButton}").IsChecked(modifiers & (1 << (index - 1)) ? "True" : "False")
         }
-        panel.Add("TextBlock").Name("TouchModifierHint").Text(this.ModifierHint(modifiers)).TextWrapping("Wrap")
-            .Visibility(modifiers ? "Visible" : "Collapsed")
+        hintParts := StrSplit(GetLang("仅在按住 {1} 时触发"), "{1}", , 2)
+        hint := panel.Add("TextBlock").Name("TouchModifierHint").TextWrapping("Wrap")
+            .Visibility(modifiers ? "Visible" : "Hidden")
+        hint.Add("Run").Text(hintParts[1])
+        hint.Add("Run").Name("TouchModifierKeys").Text(GestureModifierLabel(modifiers))
+            .Background("{DynamicResource EditHoverBg}")
+        hint.Add("Run").Text(hintParts.Length == 2 ? hintParts[2] : "")
     }
 
     SelectedModifiers(state) {
@@ -140,15 +154,13 @@ class GestureGui {
         return mask
     }
 
-    ModifierHint(mask) => mask ? Format(GetLang("仅在按住 {1} 时触发"), GestureModifierLabel(mask)) : ""
-
     UpdateModifierHint(state, *) {
         if (GestureTriggers.Editing != this)
             return
         mask := this.SelectedModifiers(state)
         this.UI.BatchUpdate([
-            {ControlName: "TouchModifierHint", PropertyName: "Text", Value: this.ModifierHint(mask)},
-            {ControlName: "TouchModifierHint", PropertyName: "Visibility", Value: mask ? "Visible" : "Collapsed"}
+            {ControlName: "TouchModifierKeys", PropertyName: "Text", Value: GestureModifierLabel(mask)},
+            {ControlName: "TouchModifierHint", PropertyName: "Visibility", Value: mask ? "Visible" : "Hidden"}
         ])
     }
 
@@ -364,7 +376,7 @@ class GestureGui {
             updates := [
                 {ControlName: "FingerCount", PropertyName: "SelectedIndex", Value: "-1"},
                 {ControlName: "TouchAction", PropertyName: "SelectedIndex", Value: "-1"},
-                {ControlName: "TouchModifierHint", PropertyName: "Visibility", Value: "Collapsed"}
+                {ControlName: "TouchModifierHint", PropertyName: "Visibility", Value: "Hidden"}
             ]
             for index, key in GestureModifierKeys()
                 updates.Push({ControlName: "TouchModifier" index, PropertyName: "IsChecked", Value: "False"})

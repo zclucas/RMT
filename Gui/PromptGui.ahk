@@ -17,6 +17,10 @@ class PromptGui {
         this.data := serial == "" ? PromptData() : GetMacroCMDData(serial).Clone()
         if (!this.data.HasProp("AudioPlayback"))
             this.data.AudioPlayback := "后台播放"
+        if (!this.data.HasProp("PastePosition"))
+            this.data.PastePosition := "鼠标位置"
+        if (this.data.PasteTextSource == "剪贴板图文")
+            this.data.PasteTextSource := "剪贴板"
         this.remark := parts.Length > 1 ? parts[2] : ""
         if (serial != "" && !RegExMatch(serial, "\d+$"))
             this.remark := ""
@@ -58,7 +62,7 @@ class PromptGui {
         this.AddField(right, "Beep", "提示音", PromptBeepModes())
         this.AddField(right, "AudioPlayback", "播放方式", ["后台播放", "使用播放器"])
         this.AddField(right, "TextSource", "内容来源", ["直接填写", "剪贴板"])
-        this.AddField(right, "PasteTextSource", "内容来源", ["直接填写", "剪贴板", "剪贴板图文"])
+        this.AddField(right, "PasteTextSource", "内容来源", ["直接填写", "剪贴板"])
         this.AddField(right, "ImageSource", "内容来源", ["文件", "剪贴板"])
         this.AddField(right, "Monitors", "屏幕编号").ToolTip(GetLang("多个屏幕编号用逗号分隔"))
         this.AddField(right, "Param2", "计时方式", ["时长", "时刻", "时间戳"])
@@ -66,7 +70,8 @@ class PromptGui {
         this.AddPair(body, &left, &right)
         this.AddField(left, "AudioWait", "播放时", ["不等待", "等待结束"])
         this.AddField(left, "PasteName", "贴片名称").ToolTip(GetLang("同名贴片会替换，关闭时留空则关闭最后一张"))
-        this.AddField(left, "Duration", "显示时长（毫秒）")
+        this.AddField(right, "PastePosition", "位置模式", ["鼠标位置", "固定位置"])
+        this.AddField(left, "Duration", "显示时长")
         this.AddField(left, "Hour", "小时")
         this.AddField(right, "Min", "分钟")
 
@@ -163,8 +168,9 @@ class PromptGui {
             caption.Margin("0,0,0,4")
             target := row.Add("Grid").Grid_Row(1)
         } else {
-            row.Cols(110, "*")
-            caption.TextWrapping("Wrap").VerticalAlignment("Center").Margin("0,0,8,0")
+            labelWidth := Ceil(XAMLHost.GetThemeFontSize() * 5.5) + 6
+            row.Cols(labelWidth, "*")
+            caption.TextWrapping("Wrap").VerticalAlignment("Center").Margin("0,0,6,0")
             target := row.Add("Grid").Grid_Column(1)
         }
         if (kind == "tools")
@@ -184,17 +190,33 @@ class PromptGui {
             target.Cols("*", 80)
             target.Add("Button").Grid_Column(1).Name("Browse" name).Margin("6,0,0,0").Content(GetLang("浏览"))
         }
-        box := target.Add("TextBox").Name(name).MinHeight(28).Padding("6,2").VerticalContentAlignment("Center")
+        ; The TextBox template applies padding twice, so 1.5 aligns the text with the ComboBox content.
+        box := target.Add("TextBox").Name(name).MinHeight(28).Padding("1.5,2").VerticalContentAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}")
         if (kind == "multiline")
-            box.Height(112).Padding("6,4").VerticalContentAlignment("Top").AcceptsReturn("True").TextWrapping("Wrap").ScrollViewer_VerticalScrollBarVisibility("Auto")
+            box.Height(112).Padding("1.5,1,1.5,4").VerticalContentAlignment("Top").AcceptsReturn("True").TextWrapping("Wrap").ScrollViewer_VerticalScrollBarVisibility("Auto")
+        if (name == "Duration") {
+            unitPadding := Ceil(XAMLHost.GetThemeFontSize()) + 3
+            box.Padding("1.5,2," unitPadding ",2")
+            target.Add("TextBlock").Name("DurationUnit").Text("ms").IsHitTestVisible("False")
+                .HorizontalAlignment("Right").VerticalAlignment("Bottom").Margin("0,0,6,2")
+                .Foreground("{DynamicResource TextSub}")
+        }
         return box
     }
 
     FieldCaption(name, data) {
-        text := name == "Text" && data.Type == "音频" && data.AudioMode == "系统语音"
-            ? GetLang("语音文本") : GetLang(this.fields[name].label)
+        label := this.fields[name].label
+        if (name == "Text" && data.Type == "音频" && data.AudioMode == "系统语音")
+            label := "语音文本"
+        if (data.Type == "自由贴") {
+            if (name == "PosX")
+                label := "中心 X"
+            else if (name == "PosY")
+                label := "中心 Y"
+        }
+        text := GetLang(label)
         return RTrim(text, " `t:：") ":"
     }
 
@@ -209,6 +231,7 @@ class PromptGui {
         showTimer := countdown && data.CountDownMode == "显示"
         tipText := tip && data.TipMode == "文本"
         pasteText := paste && data.PasteMode == "文本"
+        pasteShown := paste && (data.PasteMode == "文本" || data.PasteMode == "图片")
         image := tip && data.TipMode == "图片" || paste && data.PasteMode == "图片"
         text := type == "软件弹窗" || audio && data.AudioMode == "系统语音" || region
             || tipText && data.TextSource == "直接填写" || pasteText && data.PasteTextSource == "直接填写"
@@ -227,7 +250,9 @@ class PromptGui {
             case "AudioWait": return audio && data.AudioMode == "自定义音频" && data.AudioPlayback == "后台播放"
             case "Beep": return audio && data.AudioMode == "系统提示音"
             case "PasteName": return paste && data.PasteMode != "关闭所有"
-            case "PosX", "PosY", "PickPosition": return region || countdown && data.CountDownMode != "关闭所有"
+            case "PastePosition": return pasteShown
+            case "PosX", "PosY", "PickPosition":
+                return region || countdown && data.CountDownMode != "关闭所有" || pasteShown && data.PastePosition == "固定位置"
             case "Width", "Height", "PickRegion": return region
             case "Color", "Thickness": return region || flash
             case "Duration": return tip || region
@@ -262,7 +287,8 @@ class PromptGui {
         changes := []
         for name in this.fields
             changes.Push({ControlName: "Row" name, PropertyName: "Visibility", Value: this.FieldVisible(name, data) ? "Visible" : "Collapsed"})
-        changes.Push({ControlName: "LabelText", PropertyName: "Text", Value: this.FieldCaption("Text", data)})
+        for name in ["Text", "PosX", "PosY"]
+            changes.Push({ControlName: "Label" name, PropertyName: "Text", Value: this.FieldCaption(name, data)})
         this.ui.BatchUpdate(changes)
     }
 

@@ -109,6 +109,10 @@ LangKeysInit() {
             if (eqPos > 1) {
                 rawKey := StrReplace(SubStr(line, 1, eqPos - 1), "\=", "=")
                 val := SubStr(line, eqPos + 1)
+                if (InStr(rawKey, "``n", true)) {
+                    rawKey := StrReplace(rawKey, "``n", "`n", true)
+                    val := StrReplace(val, "``n", "`n", true)
+                }
                 LangKeyMap[rawKey] := val
                 trimmedKey := Trim(rawKey)
                 if (trimmedKey != rawKey && !LangKeyMap.Has(trimmedKey))

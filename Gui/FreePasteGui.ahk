@@ -21,11 +21,11 @@ class FreePasteGui {
         this.AddGui()
     }
 
-    ShowPrompt(isImage, value, name := "", temporary := false) {
+    ShowPrompt(isImage, value, name := "", temporary := false, center := "") {
         if (name != "")
             this.ClosePrompt(false, name)
         try {
-            if (!this._BuildAndShow(isImage, value, name, temporary) && temporary)
+            if (!this._BuildAndShow(isImage, value, name, temporary, center) && temporary)
                 PromptReleaseImage(value)
         } catch {
             if (temporary)
@@ -93,7 +93,7 @@ class FreePasteGui {
             this.ShowPrompt(false, A_Clipboard)
     }
 
-    _BuildAndShow(isImage, value, name, temporary) {
+    _BuildAndShow(isImage, value, name, temporary, center) {
         global MySoftData
         title := "RMT-FreePaste"
         this._title := title
@@ -130,6 +130,16 @@ class FreePasteGui {
         if (!XamlWin.Open(localUi)) {
             this.DestroyGui(localUi)
             return false
+        }
+        if (IsObject(center)) {
+            try {
+                win := "ahk_id " localUi.wpfHwnd
+                WinGetPos(,, &width, &height, win)
+                WinMove(center[1] - width // 2, center[2] - height // 2,,, win)
+            } catch {
+                this.DestroyGui(localUi)
+                throw
+            }
         }
 
         ; 登记 GuiMap（以窗口句柄为键，滚轮回调/双击/关闭共用）
