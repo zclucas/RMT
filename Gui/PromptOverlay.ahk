@@ -28,6 +28,8 @@ FlushPromptDisplay(queue) {
 
 ShowPromptDisplay(data) {
     switch data.Type {
+        case "音频":
+            PromptPlayAudio(data.AudioPath)
         case "软件弹窗":
             MsgBoxContent(data.Text, GetLang("提示"))
         case "临时提示":

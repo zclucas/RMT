@@ -73,8 +73,9 @@ BuildRmtDll(rmtDir := "", dllPath := "") {
 
     errLog := A_Temp "\RMT-dll-build.log"
     try FileDelete(errLog)
-    cmd := Format('"{}" /nologo /target:library /optimize+ /out:"{}" /lib:"{}"{}{}'
-        , csc, dllPath, fwLib, refs, srcArgs)
+    wpfRefs := ' /reference:"' fwLib '\WPF\PresentationCore.dll" /reference:"' fwLib '\WPF\WindowsBase.dll"'
+    cmd := Format('"{}" /nologo /target:library /optimize+ /out:"{}" /lib:"{}"{}{}{}'
+        , csc, dllPath, fwLib, refs, wpfRefs, srcArgs)
     if (RunWait(A_ComSpec ' /c "' cmd ' > "' errLog '" 2>&1"', , "Hide") != 0 || !FileExist(dllPath))
         return false
     helperPath := rmtDir "\RMT.ExcelHelper.exe"

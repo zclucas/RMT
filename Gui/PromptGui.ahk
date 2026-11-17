@@ -15,6 +15,8 @@ class PromptGui {
         parts := cmd == "" ? [] : StrSplit(cmd, "_", , 2)
         serial := parts.Length ? parts[1] : ""
         this.data := serial == "" ? PromptData() : GetMacroCMDData(serial).Clone()
+        if (!this.data.HasProp("AudioPlayback"))
+            this.data.AudioPlayback := "后台播放"
         this.remark := parts.Length > 1 ? parts[2] : ""
         if (serial != "" && !RegExMatch(serial, "\d+$"))
             this.remark := ""
@@ -53,8 +55,8 @@ class PromptGui {
         this.AddField(left, "PasteMode", "操作", ["文本", "图片", "关闭", "关闭所有"])
         this.AddField(left, "FlashMode", "显示屏", ["主屏", "副屏", "主副屏", "自定义"])
         this.AddField(left, "CountDownMode", "操作", ["显示", "关闭", "关闭所有"])
-        this.AddField(right, "Beep", "系统提示音", PromptBeepModes())
-        this.AddField(right, "AudioWait", "播放时", ["不等待", "等待结束"])
+        this.AddField(right, "Beep", "提示音", PromptBeepModes())
+        this.AddField(right, "AudioPlayback", "播放方式", ["后台播放", "使用播放器"])
         this.AddField(right, "TextSource", "内容来源", ["直接填写", "剪贴板"])
         this.AddField(right, "PasteTextSource", "内容来源", ["直接填写", "剪贴板", "剪贴板图文"])
         this.AddField(right, "ImageSource", "内容来源", ["文件", "剪贴板"])
@@ -62,6 +64,7 @@ class PromptGui {
         this.AddField(right, "Param2", "计时方式", ["时长", "时刻", "时间戳"])
 
         this.AddPair(body, &left, &right)
+        this.AddField(left, "AudioWait", "播放时", ["不等待", "等待结束"])
         this.AddField(left, "PasteName", "贴片名称").ToolTip(GetLang("同名贴片会替换，关闭时留空则关闭最后一张"))
         this.AddField(left, "Duration", "显示时长（毫秒）")
         this.AddField(left, "Hour", "小时")
@@ -130,7 +133,7 @@ class PromptGui {
         this.ui.OnEvent("AddName", "Click", this.AppendSelection.Bind(this, false))
         this.ui.OnEvent("AddValue", "Click", this.AppendSelection.Bind(this, true))
         this.ui.OnEvent("BrowseImagePath", "Click", this.Browse.Bind(this, "ImagePath", "Images (*.png; *.jpg; *.jpeg; *.bmp; *.gif; *.ico)"))
-        this.ui.OnEvent("BrowseAudioPath", "Click", this.Browse.Bind(this, "AudioPath", "Audio (*.wav; *.mp3; *.wma; *.mid)"))
+        this.ui.OnEvent("BrowseAudioPath", "Click", this.Browse.Bind(this, "AudioPath", "Audio (*.wav; *.mp3; *.wma; *.mid; *.midi)"))
         for name, field in this.fields {
             if (field.kind == "tools")
                 continue
@@ -154,14 +157,14 @@ class PromptGui {
         this.fields[name] := {label: label, options: options, kind: kind}
         row := body.Add("Grid").Name("Row" name).Margin("0,0,0,8")
         row.Visibility(this.FieldVisible(name, this.data) ? "Visible" : "Collapsed")
-        caption := row.Add("TextBlock").Text(GetLang(label))
+        caption := row.Add("TextBlock").Name("Label" name).Text(this.FieldCaption(name, this.data))
         if (kind == "multiline") {
             row.Rows("Auto", "Auto")
             caption.Margin("0,0,0,4")
             target := row.Add("Grid").Grid_Row(1)
         } else {
-            row.Cols("Auto", "*")
-            caption.MaxWidth(132).TextWrapping("Wrap").VerticalAlignment("Center").Margin("0,0,8,0")
+            row.Cols(110, "*")
+            caption.TextWrapping("Wrap").VerticalAlignment("Center").Margin("0,0,8,0")
             target := row.Add("Grid").Grid_Column(1)
         }
         if (kind == "tools")
@@ -189,6 +192,12 @@ class PromptGui {
         return box
     }
 
+    FieldCaption(name, data) {
+        text := name == "Text" && data.Type == "音频" && data.AudioMode == "系统语音"
+            ? GetLang("语音文本") : GetLang(this.fields[name].label)
+        return RTrim(text, " `t:：") ":"
+    }
+
     FieldVisible(name, data) {
         type := data.Type
         tip := type == "临时提示"
@@ -214,7 +223,8 @@ class PromptGui {
             case "ImageSource": return image
             case "Text", "Vars": return text
             case "ImagePath": return image && data.ImageSource == "文件"
-            case "AudioPath", "AudioWait": return audio && data.AudioMode == "自定义音频"
+            case "AudioPath", "AudioPlayback": return audio && data.AudioMode == "自定义音频"
+            case "AudioWait": return audio && data.AudioMode == "自定义音频" && data.AudioPlayback == "后台播放"
             case "Beep": return audio && data.AudioMode == "系统提示音"
             case "PasteName": return paste && data.PasteMode != "关闭所有"
             case "PosX", "PosY", "PickPosition": return region || countdown && data.CountDownMode != "关闭所有"
@@ -252,6 +262,7 @@ class PromptGui {
         changes := []
         for name in this.fields
             changes.Push({ControlName: "Row" name, PropertyName: "Visibility", Value: this.FieldVisible(name, data) ? "Visible" : "Collapsed"})
+        changes.Push({ControlName: "LabelText", PropertyName: "Text", Value: this.FieldCaption("Text", data)})
         this.ui.BatchUpdate(changes)
     }
 
@@ -330,8 +341,11 @@ class PromptGui {
             if (name != "Text" && name != "PasteName" && data.%name% == "")
                 throw ValueError(GetLang("提示参数不能为空") ": " GetLang(field.label))
         }
-        if (this.FieldVisible("Text", data) && data.Type != "区域高亮" && Trim(data.Text) == "")
+        if (this.FieldVisible("Text", data) && data.Type != "区域高亮" && Trim(data.Text) == "") {
+            if (data.Type == "音频")
+                throw ValueError(GetLang("提示参数不能为空") ": " GetLang("语音文本"))
             throw ValueError(GetLang("提示内容不能为空"))
+        }
         if (this.FieldVisible("Hour", data)) {
             if (IsNumber(data.Hour) && IsNumber(data.Min) && IsNumber(data.Sec) && data.Hour * 3600 + data.Min * 60 + data.Sec <= 0)
                 throw ValueError(GetLang("倒计时时长必须大于零"))

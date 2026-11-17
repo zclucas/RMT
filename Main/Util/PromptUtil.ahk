@@ -35,6 +35,7 @@ class PromptData {
         this.Param2 := "时长"
         this.WaitEnd := "不等待"
         this.AudioWait := "不等待"
+        this.AudioPlayback := "后台播放"
     }
 }
 
@@ -93,7 +94,20 @@ OnPrompt(tableItem, cmd, index) {
                 voice := ComObject("SAPI.SpVoice")
                 voice.Speak(data.Text, 16) ; 按纯文本朗读
             case "自定义音频":
-                SoundPlay(replace(data.AudioPath), data.AudioWait == "等待结束")
+                path := replace(data.AudioPath)
+                if (data.HasProp("AudioPlayback") && data.AudioPlayback == "使用播放器")
+                    PromptOpenAudioPlayer(path)
+                else if (data.AudioWait == "等待结束")
+                    PromptPlayAudio(path, true, tableItem, index)
+                else {
+                    ; 后台音频交给常驻主进程，空闲 Worker 缩容时仍可播放到结束。
+                    attributes := FileExist(path)
+                    if (!attributes || InStr(attributes, "D"))
+                        throw ValueError(GetLang("音频文件无效") ": " path)
+                    request := {Type: "音频", AudioPath: SearchImageFullPath(path)}
+                    if (MyShowPrompt(JSON.stringify(request, 0)) == false)
+                        throw Error(GetLang("提示请求发送失败"))
+                }
         }
         return
     }
@@ -154,6 +168,46 @@ OnPrompt(tableItem, cmd, index) {
             PromptReleaseImage(data.ImagePath)
         throw
     }
+}
+
+PromptPlayAudio(path, wait := false, tableItem := "", index := 0) {
+    global RMT_ASM
+    if (!IsObject(RMT_ASM))
+        RMT_ASM := CLR_LoadLibrary(EnsureRmtDll())
+    playback := RMT_ASM.CreateInstance("RMT.AudioPlayback")
+    if (!IsObject(playback))
+        throw Error(GetLang("后台播放失败") ": RMT.AudioPlayback")
+
+    item := IsObject(tableItem) ? GetItemByIndex(tableItem, index) : ""
+    if (IsObject(item) && item.Killed)
+        return
+    try playback.Start(path)
+    catch as err
+        throw Error(GetLang("后台播放失败") ": " path "`n" err.Message)
+
+    loop {
+        state := playback.State
+        if (state == "Failed")
+            throw Error(GetLang("后台播放失败") ": " path "`n" playback.ErrorMessage)
+        if (state != "Opening" && (!wait || state != "Playing"))
+            return
+        if (IsObject(item) && item.Killed) {
+            playback.Cancel()
+            return
+        }
+        Sleep(25)
+    }
+}
+
+PromptOpenAudioPlayer(path) {
+    attributes := FileExist(path)
+    if (!attributes || InStr(attributes, "D") || !RegExMatch(path, "i)\.(wav|mp3|wma|midi?)$"))
+        throw ValueError(GetLang("音频文件无效") ": " path)
+
+    result := DllCall("shell32\ShellExecuteW", "Ptr", 0, "Str", "open", "Str", path,
+        "Ptr", 0, "Str", A_WorkingDir, "Int", 1, "Ptr")
+    if (result <= 32)
+        throw Error(GetLang("无法打开音频播放器") ": " path, -1, result)
 }
 
 PromptClipboardImage() {
