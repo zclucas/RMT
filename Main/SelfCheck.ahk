@@ -500,7 +500,7 @@ SelfCheckMissingFiles() {
 
     icoFileList := ["Wait.png", "BGKey.png", "IcoRunning.ico", "Joy.png", "DeltaMove.png", "KeyListen.png", "JoyListen.png", "SearchCombo.png", "Excel.png", "Time.png", "WaitConfirm.png", "RunPro.png",
         "Arr.png", "Condition.png", "Control.png", "FlowJump.png", "Extract.png", "False.png",
-        "HttpRequest.png", "FileIO.png", "IcoPause.ico", "If.png", "IfPro.png",
+        "HttpRequest.png", "Browser.png", "FileIO.png", "IcoPause.ico", "If.png", "IfPro.png",
         "Input.png", "Key.png", "Loop.png",
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",

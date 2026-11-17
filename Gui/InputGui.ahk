@@ -215,6 +215,7 @@ class InputGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("输入")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         EnsureInputData(this.Data)
         this.DLArrayArr := GetGuiArrNameArr()
 
@@ -289,8 +290,7 @@ class InputGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveData(true)
         action := this.SureBtnAction
         action(CommandStr)
         this._CloseWindow()
@@ -314,8 +314,7 @@ class InputGui {
     TriggerMacro(state := "", ctrl := "", event := "") {
         if (!this._CheckTimeout())
             return
-        this.SaveData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveData()
         OnTriggerSepcialItemMacro(CommandStr)
 
         typeText := this.ui.Query("TypeCombo")
@@ -333,19 +332,11 @@ class InputGui {
         }
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
-        if (ShouldAutoGenerateRemark(Remark)) {
-            Remark := this.ui.Query("TypeCombo")
-        }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+    _GenerateRemark(data) {
+        return GetLang(data.Type)
     }
 
-    SaveData() {
+    SaveData(commitRemark := false) {
         this.Data.Type := GetLangKey(this.ui.Query("TypeCombo"))
         this.Data.PauseType := GetLangKey(this.ui.Query("PauseTypeCombo"))
         this.Data.CancelType := GetLangKey(this.ui.Query("CancelTypeCombo"))
@@ -365,6 +356,9 @@ class InputGui {
         if (this.ui.Query("ResultRow>Visibility") != "Collapsed") {
             MySoftData.GlobalVariMap[this.Data.SaveName] := true
         }
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), commitRemark)
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 }

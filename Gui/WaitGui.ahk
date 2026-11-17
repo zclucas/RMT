@@ -426,6 +426,7 @@ class WaitGui {
             this.Data.TimeConfig.Param2 := unit == "具体时间" ? "时刻" : (unit == "时间变量" ? "时间戳" : unit)
         }
 
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         batch := []
         batch.Push({ControlName: "RemarkCon", PropertyName: "Text", Value: cmdArr.Length >= 2 ? cmdArr[2] : ""})
         confirm := this.Data.ConfirmConfig
@@ -747,27 +748,18 @@ class WaitGui {
 
     TriggerConfirmation(*) {
         if (this._TypeValue() == "等待确定" && this.CheckIfValid()) {
-            this.SaveWaitData()
-            OnTriggerSepcialItemMacro(this.GetCommandStr())
+            OnTriggerSepcialItemMacro(this.SaveWaitData())
         }
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        remark := this.ui.Query("RemarkCon")
-        if (this._TypeValue() == "等待确定" && ShouldAutoGenerateRemark(remark))
-            remark := this.ui.Query("WaitConditionCon")
-        CommandStr := CorrectRemark(CommandStr, remark)
-        return CommandStr
+    _GenerateRemark(data) {
+        return data.WaitType == "等待确定" ? GetLang(data.ConfirmConfig.Type) : ""
     }
 
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveWaitData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveWaitData(true)
         action := this.SureBtnAction
         this._CloseWindow()
         if (action != "")
@@ -859,7 +851,7 @@ class WaitGui {
         return WaitParseMilliseconds(text)
     }
 
-    SaveWaitData() {
+    SaveWaitData(commitRemark := false) {
         this.Data.WaitType := this._TypeValue()
         this.Data.Interval := this.ui.Query("IntervalCon")
         this.Data.TimeoutMs := this._ParseTimeoutMs(this.ui.Query("TimeoutCon"))
@@ -937,8 +929,11 @@ class WaitGui {
                 this.Data.Param1 := GetBuiltinVarName(this.ui.Query("DateValCon"))
                 this.Data.Param2 := GetLangKey(this.ui.Query("DateUnitCon"))
         }
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), commitRemark)
         SaveMacroCMDData(this.Data)
         MySoftData.GlobalVariMap[this.Data.ResultSaveName] := true
+        return CommandStr
     }
 
     _AreaOk() {

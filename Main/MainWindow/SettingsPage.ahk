@@ -185,7 +185,7 @@
                     . cmb(GetLang("多线程数"), "EditMutiThreadNum", ["-1", "0"], MainSoftData.MutiThreadNum, false
                         , GetLang("-1：动态多线程；0：单线程；n：固定线程数（推荐 3~5）"), , , true)
                     . num(GetLang("网络宏端口"), "EditNetPort", MainSoftData.NetworkPort, GetLang("网络宏端口 1-65535，默认 16888；仅监听本机回环地址。"))
-                    . cmb(GetLang("指令备注生成"), "CmbRemarkAuto", GetLangArr(["不生成", "自动生成", "覆盖生成"]), MainSoftData.RemarkAutoType), "0", "", "general")
+                    . cmb(GetLang("指令备注"), "CmbRemarkAuto", GetLangArr(["不生成", "自动生成", "覆盖生成"]), MainSoftData.RemarkAutoType), "0", "", "general")
                 . card(GetLang("手柄"), "&#xE7FC;", cmb(GetLang("手柄映射"), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType)
                     . cmb(GetLang("宏手柄类型"), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType)
                     . row(this._JoyLtRtAsButtonLabel(), afterHint(ltRtSwitch, this._JoyLtRtAsButtonDesc(), "LblJoyLtRtAsButton_Desc"), "", "LblJoyLtRtAsButton"), "0,18,0,0", "", "joy"))

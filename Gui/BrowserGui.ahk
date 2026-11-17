@@ -1,7 +1,7 @@
 #Requires AutoHotkey v2.0
 
 ; ==============================================================================
-; 浏览器操作编辑器 (BrowserGui)
+; 浏览器编辑器 (BrowserGui)
 ; ==============================================================================
 
 class BrowserGui extends CommentGui {
@@ -39,7 +39,7 @@ class BrowserGui extends CommentGui {
 
     _BuildAndShow() {
         this._closed := false
-        title := this.ParentTile GetLang("浏览器操作编辑器")
+        title := this.ParentTile GetLang("浏览器")
         this._title := title
         height := XAMLHost.CmdTitleBarHeight()
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())

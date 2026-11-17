@@ -1996,24 +1996,41 @@ CloseMenuWheel() {
     MyMenuWheel.Close()
 }
 
-CorrectRemark(CommandStr, Remark) {
+CleanCommandRemark(Remark) {
     charsToRemove := [",", "，", "`n", "⫶", "_"]
-    for char in charsToRemove {
+    for char in charsToRemove
         Remark := StrReplace(Remark, char)
-    }
-    if (Remark != "") {
-        CommandStr .= "_" Remark
-    }
-    return CommandStr
+    return Remark
 }
 
-; 指令备注是否应自动生成：1=不生成；2=仅备注为空时生成；3=强制生成（覆盖已有备注）
-ShouldAutoGenerateRemark(Remark) {
-    if (MainSoftData.RemarkAutoType == 1)
-        return false
-    if (MainSoftData.RemarkAutoType == 3)
-        return true
-    return (Remark == "")
+CorrectRemark(CommandStr, Remark) {
+    Remark := CleanCommandRemark(Remark)
+    return Remark != "" ? CommandStr "_" Remark : CommandStr
+}
+
+ReadCommandAutoRemark(data, generate) {
+    if (data.HasOwnProp("AutoRemark"))
+        return data.AutoRemark
+    ; 旧配置没有来源字段，用打开编辑器时的参数还原旧版自动备注。
+    try return CleanCommandRemark(generate.Call(data))
+    return ""
+}
+
+FormatCommandAutoRemark(data, remark, previousAutoRemark, generate, commitRemark) {
+    SplitSerialTextAndNumbers(data.SerialStr, &name, &number)
+    remark := CleanCommandRemark(remark)
+    isAuto := previousAutoRemark != "" && remark == previousAutoRemark
+    mode := MainSoftData.RemarkAutoType
+    if (mode == 3 || (mode == 2 && (Trim(remark, " `t`r`n") == "" || isAuto))) {
+        generated := CleanCommandRemark(generate.Call(data))
+        if (generated != "") {
+            remark := generated
+            isAuto := true
+        }
+    }
+    if (commitRemark)
+        data.AutoRemark := isAuto ? remark : ""
+    return CorrectRemark(GetLang(name) number, remark)
 }
 
 OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "") {

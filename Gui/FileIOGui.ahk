@@ -305,6 +305,7 @@ class FileIOGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         if (cmd == "")
             this._EnsureDefaultOper()
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         this.DLVarArr := GetGuiVarArr("count")
         this.DLArrayArr := GetGuiArrNameArr()
 
@@ -536,8 +537,7 @@ class FileIOGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveData(true)
         action := this.SureBtnAction
         this._CloseWindow()
         if (action != "")
@@ -569,8 +569,7 @@ class FileIOGui {
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
-        this.SaveData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveData()
         OnTriggerSepcialItemMacro(CommandStr)
 
         CurType := this._TypeText()
@@ -589,19 +588,11 @@ class FileIOGui {
         }
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
-        if (ShouldAutoGenerateRemark(Remark)) {
-            Remark := this._TypeText()
-        }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+    _GenerateRemark(data) {
+        return GetLang(data.OperType)
     }
 
-    SaveData() {
+    SaveData(commitRemark := false) {
         this.Data.OperType := FileIONormType(this._TypeText())
         this.Data.Encoding := GetAhkEncodingName(this.ui.Query("EncodingCombo"))
         this.Data.FilePath := TranslateBuiltinVarReferences(this.ui.Query("FilePathCombo"))
@@ -625,6 +616,9 @@ class FileIOGui {
             if (this.Data.SaveType == "数组")
                 MySoftData.GlobalArrMap[this.Data.SaveName] := true
         }
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), commitRemark)
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 }

@@ -288,6 +288,7 @@ class ArrayGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("数组")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         this.DLVariableArr := GetGuiVarArr("all")
         this.DLArrayArr := GetGuiArrNameArr()
 
@@ -439,8 +440,7 @@ class ArrayGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveSubMacroData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveSubMacroData()
         action := this.SureBtnAction
         this._CloseWindow()
         if (action != "")
@@ -461,55 +461,49 @@ class ArrayGui {
         return true
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
-        if (ShouldAutoGenerateRemark(Remark)) {
-            switch this.Data.Type {
-                case "创建":
-                    Remark := Format(GetLang("创建{}"), this.Data.Name)
-                case "克隆":
-                    Remark := Format(GetLang("克隆{}到{}"), this.Data.Name, this.Data.SaveName)
-                case "删除":
-                    Remark := Format(GetLang("删除{}"), this.Data.Name)
-                case "包含":
-                    tip1 := Format(GetLang("{}包含数据{}"), this.Data.Name, this.Data.ArgsName)
-                    tip2 := Format(GetLang("{}-{}包含数据{}"), this.Data.Name, this.Data.MainIndex, this.Data.ArgsName)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-                case "取值":
-                    tip1 := Format(GetLang("取值{}-{}到{}"), this.Data.Name, this.Data.ArgsIndex, this.Data.SaveName)
-                    tip2 := Format(GetLang("取值{}-{}-{}到{}"), this.Data.Name, this.Data.MainIndex, this.Data.ArgsIndex, this.Data.SaveName)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-                case "赋值":
-                    tip1 := Format(GetLang("{}-{}赋值为{}"), this.Data.Name, this.Data.ArgsIndex, this.Data.ArgsName)
-                    tip2 := Format(GetLang("{}-{}-{}赋值为{}"), this.Data.Name, this.Data.MainIndex, this.Data.ArgsIndex, this.Data.ArgsName)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-                case "插入":
-                    tip1 := Format(GetLang("{}-{}插入数据{}"), this.Data.Name, this.Data.ArgsIndex, this.Data.ArgsName)
-                    tip2 := Format(GetLang("{}-{}-{}插入数据{}"), this.Data.Name, this.Data.MainIndex, this.Data.ArgsIndex, this.Data.ArgsName)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-                case "追加":
-                    tip1 := Format(GetLang("{}追加数据{}"), this.Data.Name, this.Data.ArgsName)
-                    tip2 := Format(GetLang("{}-{}追加数据{}"), this.Data.Name, this.Data.MainIndex, this.Data.ArgsName)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-                case "移除":
-                    tip1 := Format(GetLang("移除{}-{}"), this.Data.Name, this.Data.ArgsIndex)
-                    tip2 := Format(GetLang("移除{}-{}-{}"), this.Data.Name, this.Data.MainIndex, this.Data.ArgsIndex)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-                case "移除最后":
-                    tip1 := Format(GetLang("移除{}-最后数据"), this.Data.Name)
-                    tip2 := Format(GetLang("移除{}-{}最后数据"), this.Data.Name, this.Data.MainIndex)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-                case "长度":
-                    tip1 := Format(GetLang("{}长度"), this.Data.Name)
-                    tip2 := Format(GetLang("{}-{}长度"), this.Data.Name, this.Data.MainIndex)
-                    Remark := this.Data.MainIndex == 0 ? tip1 : tip2
-            }
+    _GenerateRemark(data) {
+        remark := ""
+        switch data.Type {
+            case "创建":
+                remark := Format(GetLang("创建{}"), data.Name)
+            case "克隆":
+                remark := Format(GetLang("克隆{}到{}"), data.Name, data.SaveName)
+            case "删除":
+                remark := Format(GetLang("删除{}"), data.Name)
+            case "包含":
+                tip1 := Format(GetLang("{}包含数据{}"), data.Name, data.ArgsName)
+                tip2 := Format(GetLang("{}-{}包含数据{}"), data.Name, data.MainIndex, data.ArgsName)
+                remark := data.MainIndex == 0 ? tip1 : tip2
+            case "取值":
+                tip1 := Format(GetLang("取值{}-{}到{}"), data.Name, data.ArgsIndex, data.SaveName)
+                tip2 := Format(GetLang("取值{}-{}-{}到{}"), data.Name, data.MainIndex, data.ArgsIndex, data.SaveName)
+                remark := data.MainIndex == 0 ? tip1 : tip2
+            case "赋值":
+                tip1 := Format(GetLang("{}-{}赋值为{}"), data.Name, data.ArgsIndex, data.ArgsName)
+                tip2 := Format(GetLang("{}-{}-{}赋值为{}"), data.Name, data.MainIndex, data.ArgsIndex, data.ArgsName)
+                remark := data.MainIndex == 0 ? tip1 : tip2
+            case "插入":
+                tip1 := Format(GetLang("{}-{}插入数据{}"), data.Name, data.ArgsIndex, data.ArgsName)
+                tip2 := Format(GetLang("{}-{}-{}插入数据{}"), data.Name, data.MainIndex, data.ArgsIndex, data.ArgsName)
+                remark := data.MainIndex == 0 ? tip1 : tip2
+            case "追加":
+                tip1 := Format(GetLang("{}追加数据{}"), data.Name, data.ArgsName)
+                tip2 := Format(GetLang("{}-{}追加数据{}"), data.Name, data.MainIndex, data.ArgsName)
+                remark := data.MainIndex == 0 ? tip1 : tip2
+            case "移除":
+                tip1 := Format(GetLang("移除{}-{}"), data.Name, data.ArgsIndex)
+                tip2 := Format(GetLang("移除{}-{}-{}"), data.Name, data.MainIndex, data.ArgsIndex)
+                remark := data.MainIndex == 0 ? tip1 : tip2
+            case "移除最后":
+                tip1 := Format(GetLang("移除{}-最后数据"), data.Name)
+                tip2 := Format(GetLang("移除{}-{}最后数据"), data.Name, data.MainIndex)
+                remark := data.MainIndex == 0 ? tip1 : tip2
+            case "长度":
+                tip1 := Format(GetLang("{}长度"), data.Name)
+                tip2 := Format(GetLang("{}-{}长度"), data.Name, data.MainIndex)
+                remark := data.MainIndex == 0 ? tip1 : tip2
         }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+        return remark
     }
 
     SaveSubMacroData() {
@@ -526,6 +520,9 @@ class ArrayGui {
         this.Data.SaveName := GetVarName(this.ui.Query("SaveNameCon"))
         SetArrayDataNewArr(this.Data)
         SetArrayDataNewVar(this.Data)
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), true)
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 }

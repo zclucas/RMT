@@ -231,6 +231,7 @@ class OperationGui {
 
         this._EnsureOpDataLen()
         this._RebuildOpRows()
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
     }
 
     ; ---------- 动态行区 ----------
@@ -360,22 +361,13 @@ class OperationGui {
         this._RebuildOpRows()
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
-        if (ShouldAutoGenerateRemark(Remark)) {
-            Remark := GetLang("更新")
-            loop this.Data.ToggleArr.Length {
-                name := this.ui.Query("UpdateName" A_Index)
-                if (name != "")
-                    Remark .= name "&"
-            }
-            Remark := RTrim(Remark, "&")
+    _GenerateRemark(data) {
+        remark := GetLang("更新")
+        for name in data.UpdateNameArr {
+            if (name != "")
+                remark .= GetLang(name) "&"
         }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+        return RTrim(remark, "&")
     }
 
     OnEditVariableBtnClick(Index, state := "", ctrl := "", event := "") {
@@ -407,9 +399,9 @@ class OperationGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveOperationData()
+        CommandStr := this.SaveOperationData()
         action := this.SureBtnAction
-        action(this.GetCommandStr())
+        action(CommandStr)
         this._CloseWindow()
     }
 
@@ -433,6 +425,9 @@ class OperationGui {
         this._ReadOperationRows()
         loop this.Data.ToggleArr.Length
             MySoftData.GlobalVariMap[this.Data.UpdateNameArr[A_Index]] := true
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), true)
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 }

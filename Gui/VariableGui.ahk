@@ -215,6 +215,7 @@ class VariableGui {
                 this._RemoveVarRow(row)
         }
         this._EnsureVarDataLen()
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         this._RebuildRows()
         batch := []
         batch.Push({ControlName: "RemarkCon", PropertyName: "Text", Value: cmdArr.Length >= 2 ? cmdArr[2] : ""})
@@ -513,8 +514,7 @@ class VariableGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveVariableData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveVariableData()
         action := this.SureBtnAction
         this._CloseWindow()
         if (action != "")
@@ -529,39 +529,29 @@ class VariableGui {
         return true
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
-        if (ShouldAutoGenerateRemark(Remark)) {
-            Remark := ""
-            loop this.Data.ToggleArr.Length {
-                i := A_Index
-                CurVarRemark := this.ui.Query("Var" i)
-                if (this._OpTypeValue(i) == "数值") {
-                    if (IsNumber(this.ui.Query("Copy" i))) {
-                        CurVarRemark .= "=" this.ui.Query("Copy" i)
-                    }
-                }
-                else if (this._OpTypeValue(i) == "随机数值") {
-                    CurVarRemark .= GetLang("随机")
-                    isNumSpan := IsNumber(this.ui.Query("Min" i)) && IsNumber(this.ui.Query("Max" i))
-                    if (isNumSpan)
-                        CurVarRemark .= this.ui.Query("Min" i) "~" this.ui.Query("Max" i)
-                }
-                else if (this._OpTypeValue(i) == "时间") {
-                    CurVarRemark .= GetLang("时间")
-                }
-                else if (this._OpTypeValue(i) == "删除") {
-                    CurVarRemark .= GetLang("删除")
-                }
-                Remark .= CurVarRemark "&"
+    _GenerateRemark(data) {
+        remark := ""
+        loop data.ToggleArr.Length {
+            i := A_Index
+            part := GetLang(data.VariableArr[i])
+            switch CmdEnumOpera(data.OperaTypeArr[i]) {
+                case "数值":
+                    value := data.CopyVariableArr[i]
+                    if (IsNumber(value))
+                        part .= "=" value
+                case "随机数值":
+                    part .= GetLang("随机")
+                    min := data.MinVariableArr[i], max := data.MaxVariableArr[i]
+                    if (IsNumber(min) && IsNumber(max))
+                        part .= min "~" max
+                case "时间":
+                    part .= GetLang("时间")
+                case "删除":
+                    part .= GetLang("删除")
             }
-            Remark := RTrim(Remark, "&")
+            remark .= part "&"
         }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+        return RTrim(remark, "&")
     }
 
     _ReadVariableRows() {
@@ -583,6 +573,9 @@ class VariableGui {
             if (this.Data.ToggleArr[A_Index])
                 MySoftData.GlobalVariMap[this.Data.VariableArr[A_Index]] := true
         }
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), true)
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 }
