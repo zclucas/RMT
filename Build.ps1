@@ -1,5 +1,5 @@
 ﻿# RMT 编译脚本（开发用，只编译，不打包）
-# 编译主程序 RMTv<版本>.exe 与 Thread\Work.exe，输出到项目根目录，编译完即可直接运行。
+# 编译主程序 RMT.exe、Thread\Update.exe 和 Thread\Work.exe，输出到项目根目录。
 # 完整的发行包打包见 PackRMT.ps1。
 #
 # 没有位置参数时：x64，编译主程序 + Worker，不清理。
@@ -196,7 +196,7 @@ if ($hasClean) {
         if ($errMsg -ne "") {
             # 多半是正在运行的实例占着 Log\System.log，结束后占用进程再试一次
             Write-Warn "删除被占用，结束本项目目录内的实例后重试"
-            $null = Stop-ProjectProcess -Names @("RMTv*", "Work")
+            $null = Stop-ProjectProcess -Names @("RMT", "RMTv*", "Work", "Update")
             Start-Sleep -Milliseconds 200
             try {
                 Remove-Item -LiteralPath $dir -Recurse -Force
@@ -317,8 +317,13 @@ $failed = $false
 $stamp = Get-Date -Format "HH:mm:ss"
 
 if ($WantRmt) {
-    Write-Step "编译主程序 RMTv$Version.exe ($Arch)"
-    if (-not (Compile -AhkFile $rmtAhk -OutputExe (Join-Path $OutDir "RMTv$Version.exe") -Name "主程序")) {
+    Write-Step "编译主程序 RMT.exe (v$Version, $Arch)"
+    if (-not (Compile -AhkFile $rmtAhk -OutputExe (Join-Path $OutDir "RMT.exe") -Name "主程序")) {
+        $failed = $true
+    }
+    $threadDir = Join-Path $OutDir "Thread"
+    New-Item -ItemType Directory -Path $threadDir -Force | Out-Null
+    if (-not (Compile -AhkFile (Join-Path $Root "Thread\Update.ahk") -OutputExe (Join-Path $threadDir "Update.exe") -Name "更新程序")) {
         $failed = $true
     }
 }

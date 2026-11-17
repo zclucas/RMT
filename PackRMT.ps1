@@ -210,7 +210,8 @@ function Get-Version {
 
 function Stop-RunningRMT {
     Write-Log "检查当前项目的 RMT 和 Work.exe..." "Gray"
-    $processes = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'AutoHotkey%.exe' OR Name = 'Work.exe' OR Name LIKE 'RMTv%.exe'")
+    $filter = "Name LIKE 'AutoHotkey%.exe' OR Name = 'Work.exe' OR Name = 'Update.exe' OR Name = 'RMT.exe' OR Name LIKE 'RMTv%.exe'"
+    $processes = @(Get-CimInstance Win32_Process -Filter $filter)
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     # 高权限进程的 CommandLine / ExecutablePath 对普通用户可能均为空。
     # 只给清理子流程提权，避免因检测漏报而继续删除仍被占用的 Work.exe。
@@ -240,7 +241,7 @@ function Stop-RunningRMT {
         }
     }
     # 再次枚举，发现残留时中止，不带着占用继续编译。
-    $remaining = @(Get-RMTBuildProcesses -Processes @(Get-CimInstance Win32_Process -Filter "Name LIKE 'AutoHotkey%.exe' OR Name = 'Work.exe' OR Name LIKE 'RMTv%.exe'") -Root $PSScriptRoot)
+    $remaining = @(Get-RMTBuildProcesses -Processes @(Get-CimInstance Win32_Process -Filter $filter) -Root $PSScriptRoot)
     if ($remaining.Count) { throw "RMT 工作进程仍在运行：$($remaining.ProcessId -join ', ')，已取消打包。" }
     Write-Log "[OK] 当前项目的 RMT 和 Worker 已退出，可开始打包" "Green"
 }
@@ -251,12 +252,14 @@ function Get-RMTBuildProcesses {
     $mainScript = Join-Path $rootPath 'RMT.ahk'
     $workerScript = Join-Path $rootPath 'Thread\Work.ahk'
     $workerPaths = @('Thread\Work.exe', 'ReleaseX64\Thread\Work.exe', 'ReleaseX86\Thread\Work.exe') | ForEach-Object { Join-Path $rootPath $_ }
+    $updatePaths = $workerPaths | ForEach-Object { Join-Path (Split-Path $_ -Parent) 'Update.exe' }
     foreach ($proc in $Processes) {
         $exe = $proc.ExecutablePath
         if ($exe) {
             $exe = [IO.Path]::GetFullPath($exe)
             if ($proc.Name -eq 'Work.exe' -and $workerPaths -contains $exe) { $proc; continue }
-            if ($proc.Name -like 'RMTv*.exe' -and (Split-Path $exe -Parent) -in @($rootPath, (Join-Path $rootPath 'ReleaseX64'), (Join-Path $rootPath 'ReleaseX86'))) { $proc; continue }
+            if ($proc.Name -eq 'Update.exe' -and $updatePaths -contains $exe) { $proc; continue }
+            if (($proc.Name -eq 'RMT.exe' -or $proc.Name -like 'RMTv*.exe') -and (Split-Path $exe -Parent) -in @($rootPath, (Join-Path $rootPath 'ReleaseX64'), (Join-Path $rootPath 'ReleaseX86'))) { $proc; continue }
         }
         if ($proc.Name -notlike 'AutoHotkey*' -or -not $proc.CommandLine) { continue }
         # 匹配完整脚本参数，避免误关其它项目或 RMT.ahk.bak 等相似名称。
@@ -444,8 +447,11 @@ function New-Release {
             return $false
         }
 
-        # 编译主程序 RMTv{version}.exe
-        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base64Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
+        Remove-OldFiles -Dir $releaseDir -Filter "RMTv*.exe"
+        if (-not (Compile -AhkFile $script:UpdateAhk -BaseExe $script:Base64Exe -OutputExe "$releaseThread\Update.exe" -IconPath $IconPath -Name "Update.exe")) {
+            return $false
+        }
+        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base64Exe -OutputExe "$releaseDir\RMT.exe" -IconPath $IconPath -Name "RMT.exe")) {
             return $false
         }
 
@@ -510,8 +516,11 @@ function New-Release {
             return $false
         }
 
-        # 编译主程序 RMTv{version}.exe
-        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base32Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
+        Remove-OldFiles -Dir $releaseDir -Filter "RMTv*.exe"
+        if (-not (Compile -AhkFile $script:UpdateAhk -BaseExe $script:Base32Exe -OutputExe "$releaseThread\Update.exe" -IconPath $IconPath -Name "Update.exe")) {
+            return $false
+        }
+        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base32Exe -OutputExe "$releaseDir\RMT.exe" -IconPath $IconPath -Name "RMT.exe")) {
             return $false
         }
 
@@ -1109,6 +1118,7 @@ function New-RMTAssets {
             @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },
             @{ Dest = "RMT.ExcelHelper.exe"; Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
             @{ Dest = "Work.exe"; Src = "Release$Arch\Thread\Work.exe" },
+            @{ Dest = "Update.exe"; Src = "Release$Arch\Thread\Update.exe" },
             @{ Dest = "index.html"; Src = "index.html" }
         )
         "Input.zip" = @(
@@ -1217,6 +1227,7 @@ function Main {
     # 步骤 1: 检查文件
     Write-Step 1 "检查源文件与多语言完整性"
     $script:WorkAhk = Join-Path $PSScriptRoot "Thread\Work.ahk"
+    $script:UpdateAhk = Join-Path $PSScriptRoot "Thread\Update.ahk"
     $WorkDir = Join-Path $PSScriptRoot "Thread"
     if (-not (Test-Path $script:WorkAhk)) {
         throw "找不到源文件: $($script:WorkAhk)"
@@ -1268,6 +1279,9 @@ function Main {
     $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
     if (-not (Compile -AhkFile $script:WorkAhk -BaseExe $script:Base64Exe -OutputExe "$WorkDir\Work.exe" -IconPath $IconPath -Name "Work.exe")) {
         throw "编译 Work.exe 失败，详见上方 Ahk2Exe 输出"
+    }
+    if (-not (Compile -AhkFile $script:UpdateAhk -BaseExe $script:Base64Exe -OutputExe "$WorkDir\Update.exe" -IconPath $IconPath -Name "Update.exe")) {
+        throw "编译 Update.exe 失败，详见上方 Ahk2Exe 输出"
     }
 
     # 步骤 6: 打包帮助文档

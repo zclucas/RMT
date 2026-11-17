@@ -19,6 +19,7 @@
 #Include Util\CursorOutputTip.ahk
 #Include Util\RmtDialog.ahk
 #Include Util\RmtProgress.ahk
+#Include Util\RmtUpdate.ahk
 #Include RMTUtil.ahk
 #Include WorkPool.ahk
 #Include ..\Gui\InputFileDialog.ahk
