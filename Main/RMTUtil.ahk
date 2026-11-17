@@ -148,7 +148,6 @@ OnSaveSetting(*) {
     CheckAndAddDirty("PreferredMacroEditor", MainSoftData.PreferredMacroEditor)
     CheckAndAddDirty("MacroTotalCount", MySoftData.MacroTotalCount)
     CheckAndAddDirty("HasSaved", true)
-    CheckAndAddDirty("IsReload", true)
 
     ; CMD窗口设置
     CheckAndAddDirty("CMDPosX", MainSoftData.CMDPosX)

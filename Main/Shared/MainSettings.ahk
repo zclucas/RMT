@@ -284,6 +284,7 @@ InitDataFilePaths(rootDir) {
     global BGMouseFile := cfgDir "\BGMouseFile.toml"
     global InputFile := cfgDir "\InputFile.toml"
     global HttpRequestFile := cfgDir "\HttpRequestFile.toml"
+    global BrowserFile := cfgDir "\BrowserFile.toml"
     global FileIOFile := cfgDir "\FileIOFile.toml"
     global WindowManageFile := cfgDir "\WindowManageFile.toml"
     global KeyCheckFile := cfgDir "\KeyCheckFile.toml"
