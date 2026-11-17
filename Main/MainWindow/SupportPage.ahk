@@ -83,19 +83,19 @@
         switch kind {
             case "stripe2":
                 rel := "Images\Soft\Stripe2.png"
-                tempPath := A_Temp "\RMT_Stripe2.png"
+                tempPath := RmtCacheDir() "\RMT_Stripe2.png"
                 try {
                     FileInstall("Images\Soft\Stripe2.png", tempPath, 1)
                 }
             case "stripe5":
                 rel := "Images\Soft\Stripe5.png"
-                tempPath := A_Temp "\RMT_Stripe5.png"
+                tempPath := RmtCacheDir() "\RMT_Stripe5.png"
                 try {
                     FileInstall("Images\Soft\Stripe5.png", tempPath, 1)
                 }
             default:
                 rel := "Images\Soft\AiFaDian.png"
-                tempPath := A_Temp "\RMT_AiFaDian.png"
+                tempPath := RmtCacheDir() "\RMT_AiFaDian.png"
                 try {
                     FileInstall("Images\Soft\AiFaDian.png", tempPath, 1)
                 }
@@ -111,7 +111,7 @@
         static exePath := ""
         if (exePath != "" && this._IsPeImage(exePath))
             return exePath
-        dir := A_Temp "\RMT_SupportQr"
+        dir := RmtCacheDir() "\RMT_SupportQr"
         DirCreate(dir)
         destExe := dir "\QrDecode.exe"
         destDll := dir "\zxing.dll"
@@ -187,7 +187,8 @@
         winPath := StrReplace(imagePath, "/", "\")
         if (!this._FileHasData(winPath))
             return ""
-        dir := A_Temp "\RMT_SupportQr"
+        dir := RmtCacheDir() "\RMT_SupportQr"
+        DirCreate(dir)
         outFile := dir "\out.txt"
         try FileDelete(outFile)
         cmd := Format('"{1}" /c ""{2}" "{3}" > "{4}""', A_ComSpec, exe, winPath, outFile)

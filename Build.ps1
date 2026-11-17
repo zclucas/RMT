@@ -16,7 +16,7 @@
 #   .\Build.ps1 clean work   先清理再编译 Worker
 #   .\Build.ps1 x64 clean    先清理再编译（与上一个等价）
 #
-# 注意：clean xaml 删的是 lib\dep 下 ahk-xaml*.dll 与 %TEMP%\AhkWpf 的同名副本，
+# 注意：clean xaml 删的是 lib\dep 下 ahk-xaml*.dll 与 Cache\AhkWpf 的同名副本，
 # 会先结束本项目目录内正在运行的引擎进程（XAML 界面会随之关闭）。
 #
 # 版本号自动读 RMT.ahk 的 RMT_VERSION；图标固定用 Images\Soft\rabit.ico；
@@ -149,10 +149,10 @@ function Stop-ProjectProcess {
 }
 
 # ---------- 清理 ----------
-# 引擎是独立 daemon 进程（映像名 ahk-xaml*.dll），可能从项目 dep 或 %TEMP%\AhkWpf 启动，
-# 只结束这两处路径下的，避免误杀其它项目的同名引擎。
+# 引擎是独立 daemon 进程（映像名 ahk-xaml*.dll），可能从项目 dep 或 Cache\AhkWpf 启动，
+# 只结束这些路径下的，避免误杀其它项目的同名引擎（%TEMP%\AhkWpf 是旧版遗留，一并清理）。
 function Stop-XamlEngine {
-    $prefixes = @($Root)
+    $prefixes = @($Root, (Join-Path $Root "Cache\AhkWpf"))
     if ($env:TEMP) { $prefixes += (Join-Path $env:TEMP "AhkWpf") }
     $killed = 0
     Get-Process -Name "ahk-xaml*" -ErrorAction SilentlyContinue | ForEach-Object {
@@ -215,8 +215,10 @@ if ($hasClean) {
             (Join-Path $Root "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll"),
             (Join-Path $Root "Plugins\AHK-XAML\lib\dep\ahk-xaml-wv2.dll")
         )
-        # 开发模式（XAML_ENGINE_BUILD_LOCATION = "both"）还会往 %TEMP%\AhkWpf 放一份，
-        # 那份不清掉的话引擎仍会跑旧代码。
+        # 开发模式（XAML_ENGINE_BUILD_LOCATION = "both"）还会往 Cache\AhkWpf 放一份，
+        # 那份不清掉的话引擎仍会跑旧代码；%TEMP%\AhkWpf 是旧版遗留位置，一并清掉。
+        $xamlDlls += (Join-Path $Root "Cache\AhkWpf\ahk-xaml.dll")
+        $xamlDlls += (Join-Path $Root "Cache\AhkWpf\ahk-xaml-wv2.dll")
         if ($env:TEMP) {
             $xamlDlls += (Join-Path $env:TEMP "AhkWpf\ahk-xaml.dll")
             $xamlDlls += (Join-Path $env:TEMP "AhkWpf\ahk-xaml-wv2.dll")
@@ -285,8 +287,10 @@ function Compile([string]$AhkFile, [string]$OutputExe, [string]$Name) {
         $exeArgs = @("/in", "`"$AhkFile`"", "/icon", "`"$IconPath`"", "/base", "`"$BaseExe`"", "/out", "`"$OutputExe`"", "/silent")
     }
 
-    $logOut = Join-Path $env:TEMP "rmt-build-$Name.out.log"
-    $logErr = Join-Path $env:TEMP "rmt-build-$Name.err.log"
+    $buildLogDir = Join-Path $Root "Log"
+    if (-not (Test-Path -LiteralPath $buildLogDir)) { New-Item -ItemType Directory -Path $buildLogDir | Out-Null }
+    $logOut = Join-Path $buildLogDir "rmt-build-$Name.out.log"
+    $logErr = Join-Path $buildLogDir "rmt-build-$Name.err.log"
     Remove-Item -LiteralPath $logOut, $logErr -Force -ErrorAction SilentlyContinue
     # 用 cmd 重定向而不是 Start-Process：本机环境变量里若同时存在 HTTPS_PROXY / https_proxy
     # 这类只差大小写的键，Start-Process 会因字典冲突直接抛异常。

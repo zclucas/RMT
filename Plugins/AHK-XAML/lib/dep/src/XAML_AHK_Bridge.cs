@@ -58,12 +58,24 @@ public partial class AhkWpfEngine
             _logDir = System.Environment.GetEnvironmentVariable("RMT_LOG_DIR");
             if (string.IsNullOrEmpty(_logDir))
             {
-                _logDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
+                // 不再退回 %TEMP%（部分用户账户无写权限），退回引擎所在目录的 Log
+                _logDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Log");
             }
         }
         if (!System.IO.Directory.Exists(_logDir))
             System.IO.Directory.CreateDirectory(_logDir);
         return _logDir;
+    }
+
+    // 临时文件目录：宿主通过 RMT_CACHE_DIR 环境变量传入（软件目录 Cache），无该变量时退回 Log 目录下 Cache
+    internal static string GetCacheDir()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("RMT_CACHE_DIR");
+        if (string.IsNullOrEmpty(dir))
+            dir = System.IO.Path.Combine(GetLogDir(), "Cache");
+        if (!System.IO.Directory.Exists(dir))
+            System.IO.Directory.CreateDirectory(dir);
+        return dir;
     }
 
     private static string GetLogPath(string filename)

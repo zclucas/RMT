@@ -704,7 +704,7 @@ OnOpenRmtDoc(pageHash := "") {
             return
         }
     }
-    jump := A_Temp "\RmtDocJump.html"
+    jump := RmtCacheDir() "\RmtDocJump.html"
     js := StrReplace(StrReplace(target, "\", "\\"), "'", "\'")
     html := "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body><script>location.replace('" js "');</script></body></html>"
     try FileDelete(jump)
@@ -758,7 +758,7 @@ OpenHelpInAppWindow(pageHash := "", winW := 560, winH := 0) {
 
     ; 独立 user-data-dir：不与用户已开的浏览器共进程，
     ; 既不会被「恢复上次会话」/插件干扰，用户关浏览器时也不会连带关掉帮助窗
-    profileDir := A_Temp "\RMT_HelpBrowser"
+    profileDir := RmtCacheDir() "\RMT_HelpBrowser"
     if (!DirExist(profileDir))
         DirCreate(profileDir)
 

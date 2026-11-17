@@ -154,7 +154,7 @@ public partial class AhkWpfEngine
                         }
                         try
                         {
-                            string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkWpf");
+                            string tempPath = GetCacheDir();
                             string localDllPath = System.IO.Path.Combine(tempPath, resourceName);
                             if (System.IO.File.Exists(localDllPath))
                             {

@@ -161,7 +161,7 @@ PromptClipboardImage() {
         return ""
     static sequence := 0
     pid := DllCall("GetCurrentProcessId", "UInt")
-    path := A_Temp "\RMT-Prompt-" pid "-" A_TickCount "-" (++sequence) ".png"
+    path := RmtCacheDir() "\RMT-Prompt-" pid "-" A_TickCount "-" (++sequence) ".png"
     SaveClipToBitmap(path)
     return FileExist(path) ? path : ""
 }

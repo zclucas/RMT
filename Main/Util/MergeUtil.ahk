@@ -1249,7 +1249,7 @@ class MergeUtil {
     static PrepareTempFromRmt(rmtFilePath, report := "") {
         static sequence := 0
         sequence += 1
-        tempDir := A_Temp "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount "-" sequence
+        tempDir := RmtCacheDir() "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount "-" sequence
         if (FileExist(tempDir))
             throw Error(GetLang("配置导入临时目录已存在，请重试"))
         DirCreate(tempDir)
@@ -1266,7 +1266,7 @@ class MergeUtil {
     }
 
     static CleanupTemp(tempDir) {
-        prefix := A_Temp "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-"
+        prefix := RmtCacheDir() "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-"
         if (SubStr(tempDir, 1, StrLen(prefix)) == prefix
             && RegExMatch(SubStr(tempDir, StrLen(prefix) + 1), "^\d+-\d+$") && DirExist(tempDir)) {
             try {

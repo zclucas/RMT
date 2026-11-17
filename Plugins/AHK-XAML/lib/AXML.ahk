@@ -284,9 +284,9 @@ class AXML {
         if (IsSet(XAML_AXML_DEBUG_MODE) && XAML_AXML_DEBUG_MODE) {
             try {
                 dumpStr := "AST Nodes:`n" this.DumpNode(astResult.Nodes) "`n`nTemplates:`n" this.DumpNode(astResult.Templates)
-                FileDelete(A_Temp "\AXML_AST_Debug.txt")
-                FileAppend(dumpStr, A_Temp "\AXML_AST_Debug.txt")
-                Run("notepad.exe " A_Temp "\AXML_AST_Debug.txt")
+                FileDelete(A_WorkingDir "\Log\AXML_AST_Debug.txt")
+                FileAppend(dumpStr, A_WorkingDir "\Log\AXML_AST_Debug.txt")
+                Run("notepad.exe " A_WorkingDir "\Log\AXML_AST_Debug.txt")
             }
         }
         

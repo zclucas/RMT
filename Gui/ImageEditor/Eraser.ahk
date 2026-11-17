@@ -164,7 +164,7 @@
 
     _CreateSelectionOverlay() {
         this._selOverlaySeq += 1
-        output := A_Temp "\RMT_fe_sel_" A_TickCount "_" this._windowToken "_" this._selOverlaySeq ".png"
+        output := RmtCacheDir() "\RMT_fe_sel_" A_TickCount "_" this._windowToken "_" this._selOverlaySeq ".png"
         bitmap := 0, graphics := 0, pen := 0, handleBrush := 0
         try {
             ; 与 DLL 的网格线同一套取整规则（pasteX + Round(i * zoom)），否则框线会压在像素中间
@@ -216,7 +216,7 @@
 
     _CreateEraseOverlay() {
         this._eraseOverlaySeq += 1
-        output := A_Temp "\RMT_fe_erase_" A_TickCount "_" this._windowToken "_" this._eraseOverlaySeq ".png"
+        output := RmtCacheDir() "\RMT_fe_erase_" A_TickCount "_" this._windowToken "_" this._eraseOverlaySeq ".png"
         bitmap := 0, graphics := 0, brush := 0, clearBrush := 0
         try {
             bitmap := Gdip_CreateBitmap(this.CanvasSide, this.CanvasSide, 0x26200A)
@@ -301,7 +301,7 @@
         if (src == "" || !FileExist(src))
             return
 
-        tmp := A_Temp "\RMT_erase_tmp.png"
+        tmp := RmtCacheDir() "\RMT_erase_tmp.png"
         try FileDelete(tmp)
         if (!this._EraseToPng(src, tmp)) {
             RmtDialog.Info(GetLang("背景擦除失败"), GetLang("背景擦除"))

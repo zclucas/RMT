@@ -162,7 +162,7 @@
             return ""
         f := files[id]
         rel := "Web\assets\thank-avatars\" f[1]
-        tempPath := A_Temp "\" f[2]
+        tempPath := RmtCacheDir() "\" f[2]
         ; 只在临时文件不存在时才 FileInstall：同名临时图仍被上一轮实例的 WPF 持有时，
         ; 覆盖写会抛 Failed，而这个异常会中断整个 BuildThankTab（感谢页整页空白）。
         if (!FileExist(tempPath))

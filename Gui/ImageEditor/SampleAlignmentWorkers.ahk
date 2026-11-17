@@ -171,7 +171,7 @@
             }
         }
         if (this._sampleWorkerDir == "") {
-            this._sampleWorkerDir := A_Temp "\RMT_SampleAlign_" DllCall("GetCurrentProcessId") "_" Format("{:X}", ObjPtr(this))
+            this._sampleWorkerDir := RmtCacheDir() "\RMT_SampleAlign_" DllCall("GetCurrentProcessId") "_" Format("{:X}", ObjPtr(this))
             DirCreate(this._sampleWorkerDir)
         }
         while (this._sampleAlignWorkers.Length < workerCount) {

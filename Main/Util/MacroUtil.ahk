@@ -2662,8 +2662,8 @@ OnScreenShot(tableItem, cmd, index) {
     if (!DirExist(baseDir))
         try DirCreate(baseDir)
     if (!DirExist(baseDir)) {
-        ; 安装目录（如 Program Files）无写权限时，回退到用户临时目录
-        baseDir := A_Temp "\RMT_TempShot\" MySoftData.CurSettingName
+        ; 安装目录（如 Program Files）无写权限时，回退到软件目录 Cache\（不用 %TEMP%，部分账户无权限）
+        baseDir := RmtCacheDir() "\RMT_TempShot\" MySoftData.CurSettingName
         ShotDebugLog(Format("主 TempShot 目录不可用，回退到：{}", baseDir))
         if (!DirExist(baseDir))
             try DirCreate(baseDir)
