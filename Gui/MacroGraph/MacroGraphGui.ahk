@@ -47,8 +47,8 @@ class MacroGraphGui {
 
         ; 若梦兔全部指令（移动、移动Pro、增量移动）
         this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作",
-            "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组", "RMT指令", "后台鼠标",
-            "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图"])
+            "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "文本处理", "数组", "RMT指令", "后台鼠标",
+            "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图", "窗口控件", "AI判断"])
 
         ; 各指令对应图标（顺序与 CmdList 一一对应，复用 MacroEditGui 的图标资源）
         this.CmdIconArr := ["Images\Soft\Time.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
@@ -59,12 +59,12 @@ class MacroGraphGui {
             "Images\Soft\Var.png", "Images\Soft\Extract.png",
             "Images\Soft\If.png", "Images\Soft\IfPro.png",
             "Images\Soft\Operation.png", "Images\Soft\Run.png", "Images\Soft\RunPro.png",
-            "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\HttpRequest.png", "Images\Soft\TextOps.png",
+            "Images\Soft\FileIO.png", "Images\Soft\Excel.png", "Images\Soft\HttpRequest.png", "Images\Soft\Browser.png", "Images\Soft\TextOps.png",
             "Images\Soft\Arr.png", "Images\Soft\rabit.png",
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
             "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjustGear32.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
             "Images\Soft\Wait.png",
-            "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png"]
+            "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\WindowManage.png", "Images\Soft\AiDecision.png"]
 
         ; 复用现有子编辑器（双击节点时打开）
         this.IntervalGui := IntervalGui()
@@ -87,6 +87,9 @@ class MacroGraphGui {
         this.RunGui := RunGui()
         this.RunProGui := RunProGui()
         this.HttpRequestGui := HttpRequestGui()
+        this.BrowserGui := BrowserGui()
+        this.WindowControlGui := WindowControlGui()
+        this.AiDecisionGui := AiDecisionGui()
         this.FileIOGui := FileIOGui()
         this.TextOpsGui := TextOpsGui()
         this.ArrayGui := ArrayGui()

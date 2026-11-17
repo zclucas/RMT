@@ -68,6 +68,13 @@ SetGlobalData(macroStr, visitMap) {
             case "输入":
                 if (Data.Type == "弹窗" || Data.Type == "状态" || Data.Type == "选择" || Data.Type == "多选")
                     VariableMap[Data.SaveName] := true
+            case "窗口控件", "AI判断":
+                RegisterCommandResultVars(Data)
+            case "浏览器":
+                if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
+                    && !BrowserUtil.IsCloseAction(CmdEnumZh(Data.ActionType, BrowserUtil.Actions)))
+                    for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
+                        VariableMap[Data.SaveVar suffix] := true
             case "网络请求":
                 HttpRequestRegisterResults(Data)
             case "等待":

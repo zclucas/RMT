@@ -430,6 +430,8 @@ CmdEditorTitleIcon(title) {
             ["窗口管理", "Images\Soft\WindowManage.png"],
             ["窗口信息", "Images\Soft\WindowManage.png"],
             ["调整窗口", "Images\Soft\WindowAdjustGear32.png"],
+            ["窗口控件", "Images\Soft\WindowManage.png"],
+            ["AI判断", "Images\Soft\AiDecision.png"],
             ["按键检测", "Images\Soft\KeyListen.png"],
             ["手柄检测", "Images\Soft\JoyListen.png"],
             ["后台鼠标", "Images\Soft\Mouse.png"],

@@ -37,6 +37,9 @@ class MacroGraphFormalMixin {
             GetLang("运行"), this.RunGui,
             GetLang("运行Pro"), this.RunProGui,
             GetLang("网络请求"), this.HttpRequestGui,
+            GetLang("浏览器"), this.BrowserGui,
+            GetLang("窗口控件"), this.WindowControlGui,
+            GetLang("AI判断"), this.AiDecisionGui,
             GetLang("文件读写"), this.FileIOGui,
             GetLang("Excel"), this.FileIOGui,
             GetLang("文本处理"), this.TextOpsGui,
@@ -307,6 +310,8 @@ class MacroGraphFormalMixin {
             this._FillRunSimpleBody(id, d, body)
         else if (d.type == GetLang("网络请求"))
             this._FillHttpRequestBody(id, d, body)
+        else if (this._IsFullEditorCommand(d.type))
+            body.Add("Button").Name("FullCommandEdit_" id).Content(GetLang("编辑")).Height(26).Margin("0,8,0,0")
         else if (this._IsFileIOType(d.type))
             this._FillFileIOBody(id, d, body)
         else if (d.type == GetLang("文本处理"))
@@ -341,6 +346,10 @@ class MacroGraphFormalMixin {
             this._FillCountDownBody(id, d, body)
         else if (d.type == GetLang("时间"))
             this._FillTimeBody(id, d, body)
+    }
+
+    _IsFullEditorCommand(type) {
+        return type == GetLang("浏览器") || type == GetLang("窗口控件") || type == GetLang("AI判断")
     }
 
     _FillHttpRequestBody(id, d, body) {
@@ -1821,6 +1830,8 @@ class MacroGraphFormalMixin {
                 }
             }
             this._BindCtrl("SFold_" id, "Click", this._OnToggleIfProFold.Bind(this, id), runtime)
+        } else if (this._IsFullEditorCommand(t)) {
+            this._BindCtrl("FullCommandEdit_" id, "Click", (*) => SetTimer((*) => this.OpenNodeEditor(id), -1), runtime)
         } else if (t == GetLang("网络请求")) {
             this._BindCtrl("HttpEdit_" id, "Click", (*) => SetTimer((*) => this.OpenNodeEditor(id), -1), runtime)
         } else if (t == GetLang("等待")) {

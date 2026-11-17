@@ -1552,6 +1552,7 @@ class HttpRequestData {
         this.BodyType := "JSON"
         this.Body := ""
         this.TimeoutMs := 10000
+        this.TimeoutAction := "" ; 空值保留旧配置的重试逻辑
         this.Retries := 0
         this.StatusVar := "HTTP状态码"
         this.ResponseVar := "HTTP响应体"
@@ -1562,8 +1563,9 @@ class HttpRequestData {
 class BrowserData {
     __New() {
         this.SerialStr := ""
-        this.ActionType := "打开网址" ; 打开网址/新建分页/切换分页/关闭分页/获取分页列表/等待元素/等待文字/等待加载/点击/输入/清空/选择下拉/勾选/滚动至元素/悬停/元素数量/执行JS/提取文本/提取属性/提取HTML/获取网址/获取标题/网页截图/刷新/后退/前进/关闭浏览器
+        this.ActionType := "打开网址"
         this.BrowserType := "Chrome" ; Chrome/Edge/Chromium/自定义路径
+        this.CloseScope := "所有页签"
         this.Url := "https://www.google.com"
         this.TargetRef := "1" ; 分页索引、ID或关键词
         this.Selector := ""
@@ -1576,12 +1578,13 @@ class BrowserData {
         this.OuterHtml := 1
         this.JsCode := ""
         this.AttrName := "href"
-        this.SaveVar := "网页提取内容"
+        this.SaveVar := ""
         this.TimeoutMs := 10000
         this.Headless := 0
         this.BrowserPort := 9222
         this.BrowserPath := ""
         this.UserDataDir := ""
+        this.TimeoutAction := "" ; 空值保留旧配置的失败处理
         this.OnError := "停止" ; 停止 / 忽略 / 重试
         this.RetryCount := 3
     }

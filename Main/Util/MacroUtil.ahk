@@ -287,6 +287,8 @@ MacroCommandActions() {
         "等待确定", OnWaitConfirm,
         "网络请求", OnHttpRequest,
         "浏览器", OnBrowser,
+        "窗口控件", OnWindowControl,
+        "AI判断", OnAiDecision,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
         "窗口信息", OnWindowManage,

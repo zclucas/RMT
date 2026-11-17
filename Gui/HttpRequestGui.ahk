@@ -2,7 +2,7 @@
 
 ; 复用标准指令窗口的生命周期、主题和模态关闭处理。
 class HttpRequestGui extends CommentGui {
-    static Fields := ["Url", "Headers", "Body", "TimeoutMs", "Retries", "StatusVar", "ResponseVar", "ErrorVar"]
+    static Fields := ["Url", "Headers", "Body", "TimeoutMs", "StatusVar", "ResponseVar", "ErrorVar"]
     static Methods := ["GET", "POST", "PUT", "DELETE"]
     static BodyTypes := ["JSON", "表单", "原始文本"]
     static ResultFields := ["StatusVar", "ResponseVar", "ErrorVar"]
@@ -35,7 +35,7 @@ class HttpRequestGui extends CommentGui {
         this._Columns(options, true)
         options.Rows("Auto", "Auto", "Auto")
         this._Option(options, 0, 0, "超时（毫秒）：", "TimeoutMs", false)
-        this._Option(options, 0, 3, "失败重试次数：", "Retries")
+        this._Option(options, 0, 3, "超时处理：", "TimeoutAction", false, TimeoutPolicy.Actions)
         this._Option(options, 1, 0, "状态码变量：", "StatusVar")
         this._Option(options, 1, 3, "响应体变量：", "ResponseVar")
         this._Option(options, 2, 0, "错误信息变量：", "ErrorVar")
@@ -103,11 +103,12 @@ class HttpRequestGui extends CommentGui {
         return box
     }
 
-    _Option(grid, row, column, label, name, isVariable := true) {
+    _Option(grid, row, column, label, name, isVariable := true, choices := unset) {
         grid.Add("TextBlock").Grid_Row(row).Grid_Column(column).Text(GetLang(label))
             .VerticalAlignment("Center").Margin("0,0,8,0").Foreground("{DynamicResource TextMain}")
         ; 可编辑下拉内部的 TextBox 自带 2 DIP 文本留白。
-        box := isVariable ? grid.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0")
+        box := IsSet(choices) ? this._Choice(grid, name, choices)
+            : isVariable ? grid.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0")
             : this._TextBox(grid, name)
         box.Grid_Row(row).Grid_Column(column + 1).Margin("0,3")
     }
@@ -143,10 +144,14 @@ class HttpRequestGui extends CommentGui {
         this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr("网络请求")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
-        for varName in GetGuiVarArr("count") {
-            if (varName != "")
-                this._ComboPush("Retries", "AddItem", "{" varName "}")
+        action := TimeoutPolicy.Get(this.Data)
+        if (action == "") {
+            retries := this.Data.Retries
+            action := !parts.Length ? "停止" : TimeoutPolicy.LegacyRetryAction(retries)
         }
+        this._ComboPush("TimeoutAction", "SelectedIndex", action == "" ? -1 : CmdEnumIndex(action, TimeoutPolicy.Actions))
+        if (action == "")
+            this._ComboPush("TimeoutAction", "ToolTip", GetLang("选择超时处理方式前，保留旧重试设置。"))
         for varName in GetGuiVarArr() {
             if (varName == "")
                 continue
@@ -172,7 +177,9 @@ class HttpRequestGui extends CommentGui {
             data.%name% := this._TranslateReferences(name, this.ui.Query(name), 2)
         data.Method := this.ui.Query("Method")
         data.BodyType := this.ui.Query("BodyType")
-        data.Retries := Trim(data.Retries)
+        data.TimeoutAction := GetLangKey(this.ui.Query("TimeoutAction"))
+        if (data.TimeoutAction == "")
+            data.Retries := this.Data.Retries
         for name in HttpRequestGui.ResultFields
             data.%name% := GetVarName(Trim(data.%name%))
         return data
@@ -180,7 +187,7 @@ class HttpRequestGui extends CommentGui {
 
     _TranslateReferences(field, text, mode) {
         if (MainSoftData.Lang == "简中" || !InStr(text, "{")
-            || (field != "Url" && field != "Headers" && field != "Body" && field != "Retries"))
+            || (field != "Url" && field != "Headers" && field != "Body"))
             return text
         for displayName in GetSpecialVarArr() {
             key := GetLangKey(displayName)

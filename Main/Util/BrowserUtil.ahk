@@ -1,10 +1,31 @@
 #Requires AutoHotkey v2.0
+#Include TimeoutPolicy.ahk
+
+class BrowserTimeoutError extends Error {
+}
 
 ; ==============================================================================
 ; 浏览器操作底层工具 (CDP / RMT_Browser.dll)
 ; ==============================================================================
 
 class BrowserUtil {
+    static Actions := [
+        "打开网址", "新建分页", "切换分页", "关闭分页", "获取分页列表",
+        "等待元素", "等待文字", "等待加载",
+        "点击", "输入", "清空", "选择下拉", "勾选", "滚动至元素", "悬停", "元素数量",
+        "执行JS", "提取文本", "提取属性", "提取HTML", "获取网址", "获取标题", "网页截图",
+        "刷新", "后退", "前进", "关闭标签", "关闭浏览器", "当前页跳转", "提取控件值", "关闭"
+    ]
+    static CloseBrowserTypes := ["Chrome", "Edge", "所有浏览器", "自定义"]
+    static CloseScopes := ["所有页签", "非当前页签", "当前页签"]
+
+    static IsCloseAction(action) => action == "关闭" || action == "关闭浏览器"
+
+    static GetCloseBrowserType(value) {
+        name := GetLangKey(value)
+        return name == "自定义路径" ? "自定义" : name
+    }
+
     static _hDll := 0
     static _dllPath := ""
 
@@ -32,6 +53,12 @@ class BrowserUtil {
         return false
     }
 
+    static _Utf8(value) {
+        bytes := Buffer(StrPut(String(value), "UTF-8"))
+        StrPut(String(value), bytes, "UTF-8")
+        return bytes
+    }
+
     static GetLastError() {
         if (!this.InitDll())
             return "RMT_Browser.dll 未找到或加载失败"
@@ -44,6 +71,17 @@ class BrowserUtil {
         if (!this.InitDll())
             return -1
         return DllCall("RMT_Browser\Browser_GetLastErrorCode", "Cdecl Int")
+    }
+
+    static _ThrowLastError(selectorType := "") {
+        message := this.GetLastError()
+        ; CSS 交互在找元素超时后返回 Element not found，XPath 的即时查找用另一种错误。
+        if (InStr(message, "Element not found") == 1) {
+            if (selectorType = "CSS" && InStr(message, "Element not found:") == 1)
+                throw BrowserTimeoutError(message)
+        } else if (RegExMatch(message, "i)^(?:(?:Launch browser failed|Connect failed):\s*)?(?:timeout\b|timed out\b)|\b(?:ERR_(?:CONNECTION_)?TIMED_OUT|(?:request|navigation|operation|command|response) (?:timed out|timeout))\b"))
+            throw BrowserTimeoutError(message)
+        throw Error(message)
     }
 
     ; 获取系统中已安装的 Chromium 浏览器列表及路径
@@ -128,27 +166,27 @@ class BrowserUtil {
     static Launch(browserType := "Chrome", browserPath := "", headless := 0, userDataDir := "", port := 9222) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Launch", "AStr", browserType, "AStr", browserPath, "Int", headless, "AStr", userDataDir, "Int", port, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Launch", "Ptr", this._Utf8(browserType), "Ptr", this._Utf8(browserPath), "Int", headless, "Ptr", this._Utf8(userDataDir), "Int", port, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
     static Connect(host := "127.0.0.1", port := 9222) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Connect", "AStr", host, "Int", port, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Connect", "Ptr", this._Utf8(host), "Int", port, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
     static Navigate(url, timeoutMs := 30000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Navigate", "AStr", url, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Navigate", "Ptr", this._Utf8(url), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -157,7 +195,7 @@ class BrowserUtil {
             throw Error("RMT_Browser.dll 未找到或加载失败")
         res := DllCall("RMT_Browser\Browser_Reload", "Int", ignoreCache, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -166,7 +204,7 @@ class BrowserUtil {
             throw Error("RMT_Browser.dll 未找到或加载失败")
         res := DllCall("RMT_Browser\Browser_GoBack", "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -175,7 +213,7 @@ class BrowserUtil {
             throw Error("RMT_Browser.dll 未找到或加载失败")
         res := DllCall("RMT_Browser\Browser_GoForward", "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -187,16 +225,16 @@ class BrowserUtil {
         buf := Buffer(65536, 0)
         res := DllCall("RMT_Browser\Browser_GetTabs", "Ptr", buf.Ptr, "Int", 65536, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
     }
 
     static SwitchTab(targetRef) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_SwitchTab", "AStr", String(targetRef), "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_SwitchTab", "Ptr", this._Utf8(String(targetRef)), "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -204,18 +242,18 @@ class BrowserUtil {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         buf := Buffer(256, 0)
-        res := DllCall("RMT_Browser\Browser_NewTab", "AStr", url, "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_NewTab", "Ptr", this._Utf8(url), "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
     }
 
     static CloseTabByRef(targetRef := "") {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_CloseTabByRef", "AStr", String(targetRef), "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_CloseTabByRef", "Ptr", this._Utf8(String(targetRef)), "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -224,27 +262,27 @@ class BrowserUtil {
     static WaitElement(selector, selectorType := "CSS", condition := "appear", timeoutMs := 10000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_WaitElement", "AStr", selector, "AStr", selectorType, "AStr", condition, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_WaitElement", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", this._Utf8(condition), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
     static WaitText(selector, selectorType := "CSS", expectedText := "", timeoutMs := 10000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_WaitText", "AStr", selector, "AStr", selectorType, "AStr", expectedText, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_WaitText", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", this._Utf8(expectedText), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
     static WaitPageLoad(loadState := "load", timeoutMs := 30000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_WaitPageLoad", "AStr", loadState, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_WaitPageLoad", "Ptr", this._Utf8(loadState), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -253,63 +291,63 @@ class BrowserUtil {
     static Click(selector, selectorType := "CSS", timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Click", "AStr", selector, "AStr", selectorType, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Click", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError(selectorType)
         return true
     }
 
     static Type(selector, selectorType := "CSS", text := "", clearBefore := 1, timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Type", "AStr", selector, "AStr", selectorType, "AStr", text, "Int", clearBefore, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Type", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", this._Utf8(text), "Int", clearBefore, "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError(selectorType)
         return true
     }
 
     static Clear(selector, selectorType := "CSS", timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Clear", "AStr", selector, "AStr", selectorType, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Clear", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError(selectorType)
         return true
     }
 
     static Select(selector, selectorType := "CSS", value := "", timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Select", "AStr", selector, "AStr", selectorType, "AStr", value, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Select", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", this._Utf8(value), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError(selectorType)
         return true
     }
 
     static Check(selector, selectorType := "CSS", checked := 1, timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Check", "AStr", selector, "AStr", selectorType, "Int", checked, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Check", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", checked, "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError(selectorType)
         return true
     }
 
     static ScrollTo(selector, selectorType := "CSS", timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_ScrollTo", "AStr", selector, "AStr", selectorType, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_ScrollTo", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError(selectorType)
         return true
     }
 
     static Hover(selector, selectorType := "CSS", timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_Hover", "AStr", selector, "AStr", selectorType, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Hover", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError(selectorType)
         return true
     }
 
@@ -317,9 +355,9 @@ class BrowserUtil {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         count := 0
-        res := DllCall("RMT_Browser\Browser_GetElementCount", "AStr", selector, "AStr", selectorType, "Int*", &count, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_GetElementCount", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int*", &count, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return count
     }
 
@@ -329,19 +367,189 @@ class BrowserUtil {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         buf := Buffer(65536, 0)
-        res := DllCall("RMT_Browser\Browser_Evaluate", "AStr", script, "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_Evaluate", "Ptr", this._Utf8(script), "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static StartElementPicker(token, selectorType, preferControl := false) {
+        args := JSON.stringify([token, selectorType, preferControl], 0)
+        script := "
+        (
+            (([token, type, preferControl]) => {
+                window.__rmtActivePicker?.stop();
+                const overlay = document.createElement('rmt-element-picker');
+                overlay.style.cssText = 'all:initial!important;position:fixed!important;inset:0!important;'
+                    + 'display:block!important;pointer-events:none!important;z-index:2147483647!important';
+                const canvas = document.createElement('canvas');
+                canvas.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none';
+                overlay.attachShadow({mode: 'closed'}).append(canvas);
+                const ctx = canvas.getContext('2d');
+                document.documentElement.append(overlay);
+                let pointer = null, frame = 0, lastRect = '';
+
+                function selectorFor(el) {
+                    if (type === 'CSS' && el.id) {
+                        const byId = '#' + CSS.escape(el.id);
+                        const matches = document.querySelectorAll(byId);
+                        if (matches.length === 1 && matches[0] === el) return byId;
+                    }
+                    const parts = [];
+                    for (let node = el; node; node = node.parentElement) {
+                        const name = node.localName;
+                        let index = 1;
+                        let hasSibling = false;
+                        for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+                            if (sibling.localName === name) {
+                                index++;
+                                hasSibling = true;
+                            }
+                        }
+                        if (type === 'XPath') {
+                            parts.unshift('*[local-name()="' + name + '"][' + index + ']');
+                        } else {
+                            for (let sibling = node.nextElementSibling; !hasSibling && sibling; sibling = sibling.nextElementSibling)
+                                hasSibling = sibling.localName === name;
+                            parts.unshift(CSS.escape(name) + (hasSibling ? ':nth-of-type(' + index + ')' : ''));
+                        }
+                    }
+                    return type === 'XPath' ? '/' + parts.join('/') : parts.join(' > ');
+                }
+
+                function targetFor(target) {
+                    if (!(target instanceof Element) || target.getRootNode() !== document) return null;
+                    return preferControl ? target.closest('button,a,input,select,textarea,[role=button],[contenteditable]') || target : target;
+                }
+                function hover(event) {
+                    pointer = [event.clientX, event.clientY];
+                    if (!frame) frame = requestAnimationFrame(draw);
+                }
+                function clearOverlay() {
+                    if (!lastRect) return;
+                    ctx.resetTransform();
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    lastRect = '';
+                }
+                function leave(event) {
+                    if (event.type === 'pointerout' && event.relatedTarget) return;
+                    if (event.type === 'blur' && event.target !== window) return;
+                    pointer = null;
+                    cancelAnimationFrame(frame);
+                    frame = 0;
+                    clearOverlay();
+                }
+                function draw() {
+                    // 重新命中鼠标位置，滚动和布局变化时高亮也能跟上。
+                    frame = requestAnimationFrame(draw);
+                    const target = targetFor(document.elementFromPoint(...pointer));
+                    if (!target || target.matches('iframe,frame')) return clearOverlay();
+                    const rect = target.getBoundingClientRect();
+                    const w = innerWidth, h = innerHeight, scale = devicePixelRatio || 1;
+                    const l = Math.max(0, rect.left), t = Math.max(0, rect.top);
+                    const r = Math.min(w, rect.right), b = Math.min(h, rect.bottom);
+                    if (r <= l || b <= t) return clearOverlay();
+
+                    let pl = 0, pt = 0, pr = w, pb = h;
+                    for (let node = target.parentElement; node; node = node.parentElement) {
+                        const parent = node.getBoundingClientRect();
+                        if (parent.left > rect.left || parent.top > rect.top
+                            || parent.right < rect.right || parent.bottom < rect.bottom) continue;
+                        if (parent.left === rect.left && parent.top === rect.top
+                            && parent.right === rect.right && parent.bottom === rect.bottom) continue;
+                        pl = Math.max(0, parent.left);
+                        pt = Math.max(0, parent.top);
+                        pr = Math.min(w, parent.right);
+                        pb = Math.min(h, parent.bottom);
+                        break;
+                    }
+                    const key = [w, h, scale, l, t, r, b, pl, pt, pr, pb].join();
+                    if (key === lastRect) return;
+                    lastRect = key;
+                    const width = Math.round(w * scale), height = Math.round(h * scale);
+                    if (canvas.width !== width) canvas.width = width;
+                    if (canvas.height !== height) canvas.height = height;
+                    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+                    ctx.clearRect(0, 0, w, h);
+                    ctx.fillStyle = '#0c142260';
+                    ctx.beginPath();
+                    ctx.rect(0, 0, w, h);
+                    ctx.rect(l, t, r - l, b - t);
+                    ctx.fill('evenodd');
+                    ctx.fillStyle = '#2c90ef38';
+                    ctx.fillRect(l, t, r - l, b - t);
+
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = '#9bd5ffe6';
+                    ctx.setLineDash([4, 3]);
+                    ctx.beginPath();
+                    for (const x of [l, r]) {
+                        ctx.moveTo(x, t); ctx.lineTo(x, pt);
+                        ctx.moveTo(x, b); ctx.lineTo(x, pb);
+                    }
+                    for (const y of [t, b]) {
+                        ctx.moveTo(l, y); ctx.lineTo(pl, y);
+                        ctx.moveTo(r, y); ctx.lineTo(pr, y);
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle = '#55b5ff';
+                    ctx.strokeRect(l, t, r - l, b - t);
+                }
+                function suppress(event) {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                }
+                function click(event) {
+                    if (event.button !== 0) return;
+                    suppress(event);
+                    const target = targetFor(event.target);
+                    if (target) finish('picked:' + selectorFor(target));
+                }
+                function escape(event) {
+                    if (event.key !== 'Escape') return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    finish('cancelled');
+                }
+                function finish(result) {
+                    if (picker.result !== 'pending') return;
+                    picker.result = result;
+                    clearTimeout(deadline);
+                    cancelAnimationFrame(frame);
+                    overlay.remove();
+                    for (const [type, listener] of Object.entries(listeners))
+                        window.removeEventListener(type, listener, true);
+                }
+                const picker = {
+                    result: 'pending',
+                    stop() {
+                        finish('cancelled');
+                        delete window[token];
+                        if (window.__rmtActivePicker === picker) delete window.__rmtActivePicker;
+                    }
+                };
+                const listeners = {pointermove: hover, pointerout: leave, blur: leave,
+                    pointerdown: suppress, pointerup: suppress, click, keydown: escape};
+                const deadline = setTimeout(() => finish('cancelled'), 120000);
+                window[token] = window.__rmtActivePicker = picker;
+                for (const [type, listener] of Object.entries(listeners))
+                    window.addEventListener(type, listener, true);
+                return 'ready';
+            })
+        )"
+        if (this.Evaluate(script "(" args ")") != "ready")
+            throw Error(GetLang("无法在当前网页启动元素拾取。"))
     }
 
     static GetText(selector, selectorType := "CSS", timeoutMs := 5000) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         buf := Buffer(65536, 0)
-        res := DllCall("RMT_Browser\Browser_GetText", "AStr", selector, "AStr", selectorType, "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_GetText", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
     }
 
@@ -349,9 +557,9 @@ class BrowserUtil {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         buf := Buffer(65536, 0)
-        res := DllCall("RMT_Browser\Browser_GetAttribute", "AStr", selector, "AStr", selectorType, "AStr", attrName, "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_GetAttribute", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", this._Utf8(attrName), "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
     }
 
@@ -359,9 +567,9 @@ class BrowserUtil {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         buf := Buffer(131072, 0)
-        res := DllCall("RMT_Browser\Browser_GetHtml", "AStr", selector, "AStr", selectorType, "Int", outerHtml, "Ptr", buf.Ptr, "Int", 131072, "Int", timeoutMs, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_GetHtml", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", outerHtml, "Ptr", buf.Ptr, "Int", 131072, "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
     }
 
@@ -371,7 +579,7 @@ class BrowserUtil {
         buf := Buffer(4096, 0)
         res := DllCall("RMT_Browser\Browser_GetUrl", "Ptr", buf.Ptr, "Int", 4096, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
     }
 
@@ -381,16 +589,16 @@ class BrowserUtil {
         buf := Buffer(4096, 0)
         res := DllCall("RMT_Browser\Browser_GetTitle", "Ptr", buf.Ptr, "Int", 4096, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
     }
 
     static CaptureScreenshot(filePath, fullPage := 0) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
-        res := DllCall("RMT_Browser\Browser_CaptureScreenshot", "AStr", filePath, "Int", fullPage, "Cdecl Int")
+        res := DllCall("RMT_Browser\Browser_CaptureScreenshot", "Ptr", this._Utf8(filePath), "Int", fullPage, "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -399,7 +607,7 @@ class BrowserUtil {
             throw Error("RMT_Browser.dll 未找到或加载失败")
         res := DllCall("RMT_Browser\Browser_CloseTab", "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
     }
 
@@ -408,8 +616,143 @@ class BrowserUtil {
             throw Error("RMT_Browser.dll 未找到或加载失败")
         res := DllCall("RMT_Browser\Browser_CloseBrowser", "Cdecl Int")
         if (res != 0)
-            throw Error(this.GetLastError())
+            this._ThrowLastError()
         return true
+    }
+
+    static CloseWindows(browser, scope, customPath, cancelled) {
+        static browsers := Map("chrome.exe", "Chrome", "msedge.exe", "Edge", "chromium.exe", "Chromium",
+            "brave.exe", "Brave", "vivaldi.exe", "Vivaldi", "opera.exe", "Opera")
+        customPath := Trim(customPath, ' "')
+        if (browser == "自定义" ? customPath == "" : (browser != "Chrome" && browser != "Edge" && browser != "所有浏览器"))
+            return
+        if (scope != "所有页签" && scope != "非当前页签" && scope != "当前页签")
+            return
+
+        for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1") {
+            if (cancelled())
+                break
+            try {
+                if (DllCall("GetWindow", "Ptr", hwnd, "UInt", 4, "Ptr")) ; GW_OWNER
+                    continue
+                name := browsers.Get(StrLower(WinGetProcessName(hwnd)), "")
+                if (browser == "自定义" ? WinGetProcessPath(hwnd) != customPath
+                    : (name == "" || (browser != "所有浏览器" && name != browser)))
+                    continue
+                this._CloseWindow(hwnd, scope, cancelled)
+            }
+        }
+    }
+
+    static _CloseWindow(hwnd, scope, cancelled) {
+        if (scope == "所有页签") {
+            WinClose(hwnd)
+            return
+        }
+        automation := WindowControl._Automation()
+        root := WindowControl._Object(6, automation, "Ptr", hwnd)
+        walker := WindowControl._Object(14, automation)
+        tabs := []
+        this._CollectWindowTabs(root, walker, tabs)
+        current := 0
+        for index, tab in tabs {
+            if (WindowControl._Int(tab.selection, 6)) { ; get_CurrentIsSelected
+                current := index
+                break
+            }
+        }
+        if (!current)
+            return
+
+        restore := false
+        try {
+            for index, tab in tabs {
+                if (cancelled())
+                    break
+                if ((index == current) != (scope == "当前页签"))
+                    continue
+                try {
+                    if (this._InvokeTabClose(tab.element, walker))
+                        continue
+                    ; 紧凑页签可能只在选中时提供关闭按钮。
+                    if (index != current) {
+                        restore := true
+                        ComCall(3, tab.selection) ; Select
+                    }
+                    if (!cancelled() && WindowControl._Int(tab.selection, 6)
+                        && (index == current || !this._InvokeTabClose(tab.element, walker))
+                        && !this._MiddleClickTab(hwnd, tab, cancelled))
+                        break
+                }
+            }
+        } finally {
+            if (restore)
+                try ComCall(3, tabs[current].selection)
+        }
+    }
+
+    static _CollectWindowTabs(element, walker, tabs) {
+        if (!element)
+            return
+        type := WindowControl._Int(element, 21)
+        if (type == 50030) ; 跳过网页文档
+            return
+        if (type == 50019 && RegExMatch(WindowControl._String(element, 30), "^(?:Edge)?Tab$")) {
+            selection := WindowControl._Pattern(element, "selection")
+            if (selection)
+                tabs.Push({element: element, selection: selection})
+            return
+        }
+        child := WindowControl._Object(4, walker, "Ptr", element)
+        while (child) {
+            this._CollectWindowTabs(child, walker, tabs)
+            child := WindowControl._Object(6, walker, "Ptr", child)
+        }
+    }
+
+    static _InvokeTabClose(tab, walker) {
+        child := WindowControl._Object(4, walker, "Ptr", tab)
+        while (child) {
+            if (RegExMatch(WindowControl._String(child, 30), "^(?:Edge)?TabCloseButton$")) {
+                invoke := WindowControl._Pattern(child, "invoke")
+                if (invoke) {
+                    ComCall(3, invoke)
+                    return true
+                }
+            }
+            child := WindowControl._Object(6, walker, "Ptr", child)
+        }
+        return false
+    }
+
+    static _MiddleClickTab(hwnd, tab, cancelled) {
+        ; 固定页签可能没有关闭按钮，中键只发送到当前匹配窗口的页签位置。
+        if (WindowControl._Int(tab.element, 38)) ; get_CurrentIsOffscreen
+            return false
+        rect := Buffer(16)
+        ComCall(43, tab.element, "Ptr", rect)
+        left := NumGet(rect, 0, "Int"), top := NumGet(rect, 4, "Int")
+        right := NumGet(rect, 8, "Int"), bottom := NumGet(rect, 12, "Int")
+        if (right <= left || bottom <= top)
+            return false
+        point := Buffer(8)
+        NumPut("Int", (left + right) // 2, "Int", (top + bottom) // 2, point)
+        if (!DllCall("ScreenToClient", "Ptr", hwnd, "Ptr", point))
+            return false
+        ControlClick("x" NumGet(point, 0, "Int") " y" NumGet(point, 4, "Int"), hwnd, , "Middle", 1, "NA Pos")
+        ; 等浏览器处理这次点击，再继续切换或关闭其他页签。
+        loop 10 {
+            if (cancelled())
+                break
+            try {
+                if (!WindowControl._Int(tab.selection, 6))
+                    return true
+            } catch {
+                return true
+            }
+            Sleep(25)
+        }
+        return false
     }
 }
 
@@ -423,41 +766,52 @@ OnBrowser(tableItem, cmd, index) {
 
     resolve := (text) => GetReplaceVarText(tableItem, index, text)
 
-    actionType := CmdEnumZh(data.ActionType, [
-        "打开网址", "新建分页", "切换分页", "关闭分页", "获取分页列表",
-        "等待元素", "等待文字", "等待加载",
-        "点击", "输入", "清空", "选择下拉", "勾选", "滚动至元素", "悬停", "元素数量",
-        "执行JS", "提取文本", "提取属性", "提取HTML", "获取网址", "获取标题", "网页截图",
-        "刷新", "后退", "前进", "关闭标签", "关闭浏览器"
-    ])
+    actionType := CmdEnumZh(data.ActionType, BrowserUtil.Actions)
+    if (BrowserUtil.IsCloseAction(actionType)) {
+        if (actionType == "关闭浏览器") {
+            try BrowserUtil.CloseBrowser() ; 保留旧宏关闭受控会话的行为
+        } else {
+            browser := BrowserUtil.GetCloseBrowserType(data.HasOwnProp("BrowserType") ? data.BrowserType : "Chrome")
+            scope := data.HasOwnProp("CloseScope") ? GetLangKey(data.CloseScope) : "所有页签"
+            path := ""
+            try {
+                if (browser == "自定义" && data.HasOwnProp("BrowserPath"))
+                    path := resolve(data.BrowserPath)
+                BrowserUtil.CloseWindows(browser, scope, path, () => item.Killed)
+            }
+        }
+        return
+    }
 
     selType := data.HasOwnProp("SelectorType") ? data.SelectorType : "CSS"
     onError := data.HasOwnProp("OnError") ? data.OnError : "停止"
-    retryCount := data.HasOwnProp("RetryCount") ? Integer(data.RetryCount) : 3
-    if (retryCount < 1)
-        retryCount := 1
+    timeoutAction := TimeoutPolicy.Get(data)
+    attempts := 1
+    if (timeoutAction == "" && onError == "重试")
+        attempts := data.HasOwnProp("RetryCount") ? Max(1, Integer(data.RetryCount)) : 3
 
     startTime := A_TickCount
     success := false
     lastErrMsg := ""
     val := ""
 
-    runAction := () => (
-        _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType)
-    )
-
-    ; 失败重试循环
-    loop retryCount {
+    lastError := ""
+    loop {
         if (item.Killed)
             return
         try {
-            val := runAction()
+            val := _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType)
             success := true
             break
         } catch as err {
+            lastError := err
             lastErrMsg := err.Message
-            if (A_Index < retryCount && onError == "重试")
-                Sleep(500)
+            retry := timeoutAction == "" ? A_Index < attempts
+                : (err is BrowserTimeoutError) && TimeoutPolicy.CanRetry(timeoutAction, A_Index)
+            if (!retry)
+                break
+            if (!TimeoutPolicy.WaitBeforeRetry(() => item.Killed))
+                return
         }
     }
 
@@ -472,13 +826,10 @@ OnBrowser(tableItem, cmd, index) {
         MySetGlobalVariable([saveVar "_ElapsedMs"], [String(elapsed)], false)
     }
 
-    if (!success) {
-        if (onError == "停止") {
-            throw Error("浏览器操作失败 [" actionType "]: " lastErrMsg)
-        } else if (onError == "忽略") {
-            return
-        }
-    }
+    stop := timeoutAction == "" ? onError == "停止"
+        : !(lastError is BrowserTimeoutError && timeoutAction == "忽略")
+    if (!success && !item.Killed && stop)
+        throw Error("浏览器操作失败 [" actionType "]: " lastErrMsg)
 }
 
 _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
@@ -496,6 +847,13 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
 
             BrowserUtil.Launch(bType, bPath, hLess, uDir, hPort)
             BrowserUtil.Navigate(url, timeoutMs)
+            return url
+
+        case "当前页跳转":
+            url := resolve(data.Url)
+            if (url == "")
+                throw Error("URL 不能为空")
+            BrowserUtil.Navigate(url, Integer(data.TimeoutMs))
             return url
 
         case "新建分页":
@@ -611,6 +969,27 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             selector := resolve(data.Selector)
             return BrowserUtil.GetText(selector, selType, Integer(data.TimeoutMs))
 
+        case "提取控件值":
+            selector := resolve(data.Selector)
+            BrowserUtil.WaitElement(selector, selType, "appear", Integer(data.TimeoutMs))
+            args := JSON.stringify([selector, selType], 0)
+            result := BrowserUtil.Evaluate("
+            (
+                (([selector, type]) => {
+                    const el = type.toLowerCase() === 'xpath'
+                        ? document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue
+                        : document.querySelector(selector);
+                    if (!el || !('value' in el)) return 'missing';
+                    if (el.type === 'checkbox' || el.type === 'radio') return el.checked ? 'value:1' : 'value:0';
+                    if (el.multiple && el.selectedOptions)
+                        return 'value:' + JSON.stringify(Array.from(el.selectedOptions, option => option.value));
+                    return 'value:' + el.value;
+                })
+            )" "(" args ")")
+            if (SubStr(result, 1, 6) != "value:")
+                throw Error(GetLang("找不到可读取值的控件。"))
+            return SubStr(result, 7)
+
         case "提取属性":
             selector := resolve(data.Selector)
             attr := resolve(data.AttrName)
@@ -651,8 +1030,5 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             BrowserUtil.GoForward()
             return true
 
-        case "关闭浏览器":
-            BrowserUtil.CloseBrowser()
-            return true
     }
 }

@@ -285,6 +285,8 @@ InitDataFilePaths(rootDir) {
     global InputFile := cfgDir "\InputFile.toml"
     global HttpRequestFile := cfgDir "\HttpRequestFile.toml"
     global BrowserFile := cfgDir "\BrowserFile.toml"
+    global WindowControlFile := cfgDir "\WindowControlFile.toml"
+    global AiDecisionFile := cfgDir "\AiDecisionFile.toml"
     global FileIOFile := cfgDir "\FileIOFile.toml"
     global WindowManageFile := cfgDir "\WindowManageFile.toml"
     global KeyCheckFile := cfgDir "\KeyCheckFile.toml"

@@ -69,6 +69,7 @@ BindKey() {
     ; §2：保存后热重载（§17 选「否」）订阅触发键重绑，使模块/条目禁用、触发键改动运行时立即生效
     if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
         MyHotReloadBus.Subscribe(OnHotReloadRebindKeys)
+    OnExit(HideMainWindowOnExit, -1)
     OnExit(OnExitSoft)
 }
 
@@ -586,6 +587,17 @@ OnClickTriggerJoyTypeHelpBtn(*) {
     RmtDialog.Info(str1, GetLang("手柄映射说明"))
 }
 
+HideMainWindowOnExit(*) {
+    ; 在退出清理开始前请求隐藏 WPF 主窗口，避免等待窗口线程。
+    try {
+        if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui)) {
+            hwnd := MainSoftData.MyGui.Hwnd
+            if (hwnd)
+                DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 0) ; SW_HIDE
+        }
+    }
+}
+
 OnExitSoft(*) {
     global MyPToken, MyChineseOcr, MyEnglishOcr, MyUIMacroGui, MyWorkPool, MyVoiceEngine
     global MainSoftData, MySoftData, SettingFile, SettingSection, MyMainWin
@@ -598,14 +610,6 @@ OnExitSoft(*) {
     try CfgFlushAll()
     try UIMacroSchema.FlushStore()
 
-    ; ① 先请求隐藏主窗口，无需同步等待 WPF 线程。
-    try {
-        if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui)) {
-            hwnd := MainSoftData.MyGui.Hwnd
-            if (hwnd)
-                DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 0) ; SW_HIDE
-        }
-    }
     try ReleaseReplaceKeys()
     if (IsSet(MyMainWin) && IsObject(MyMainWin)) {
         try MyMainWin.HideSideDebugTools()
