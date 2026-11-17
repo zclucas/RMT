@@ -72,7 +72,7 @@ MainWinReadyTick() {
 
 ;窗口&UI刷新
 InitUI() {
-    global MySoftData
+    global MacroFileSeedDefaults
     ; 首次启动：先同意免责声明，再显示主界面
     if (!MainSoftData.AgreeAgreement) {
         if (!AgreementGui.ShowAndWait())
@@ -84,7 +84,7 @@ InitUI() {
     ; 建窗走引擎异步通道，Show() 立即返回、这里不再 Sleep 轮询句柄。
     ; 适配器/托盘菜单/首屏刷新都依赖句柄，交给 WaitMainWinReady 在句柄回传后执行；
     ; 主线程先回落到启动链，把 PluginInit、热键绑定这类不依赖界面的活并进引擎建窗期间。
-    MyMainWin.BuildAndShow()
+    MyMainWin.BuildAndShow(,,, MainSoftData.IsReload && MacroFileSeedDefaults)
     WaitMainWinReady(InitUIFinishUI)
 }
 
@@ -363,6 +363,16 @@ BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", t
         try ui.Update("BtnCmdF3", "ToolTip", GetLang("F3：选取当前颜色"))
         ui.OnEvent("BtnCmdF3", "Click", (*) => f3Action())
     }
+}
+
+CmdEditorF1Updates(mode) {
+    isRange := mode == "area"
+    tip := GetLang(isRange ? "F1：框选范围" : "F1:选取当前坐标")
+    return [
+        {ControlName: "BtnCmdF1Glyph", PropertyName: "Visibility", Value: isRange ? "Collapsed" : "Visible"},
+        {ControlName: "BtnCmdF1RangeGlyph", PropertyName: "Visibility", Value: isRange ? "Visible" : "Collapsed"},
+        {ControlName: "BtnCmdF1", PropertyName: "ToolTip", Value: tip},
+        {ControlName: "BtnCmdF1", PropertyName: "Visibility", Value: mode == "" ? "Collapsed" : "Visible"}]
 }
 
 ShowCmdVideoNotice(ui) {

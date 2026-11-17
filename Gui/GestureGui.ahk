@@ -129,7 +129,7 @@ class GestureGui {
         ; 整排一起缩放，避免较长的键名被单独缩小。
         row := panel.Add("Viewbox").StretchDirection("DownOnly").HorizontalAlignment("Center")
             .Add("UniformGrid").SetProp("Rows", 1)
-            .InjectResources(XamlTabOptionStyle())
+            .InjectResources(XamlTabOptionStyle(true, true))
         for index, key in GestureModifierKeys() {
             row.Add("ToggleButton").Name("TouchModifier" index).Content(key[1])
                 .Width("Auto").MinWidth(54).FontWeight("Normal")

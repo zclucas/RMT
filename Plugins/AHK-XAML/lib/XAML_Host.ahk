@@ -841,7 +841,7 @@ class XAMLHost {
         return btn
     }
 
-    static AddTitleChromeBtn(parent, name, titleHeight := "30", glyph := "", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", glyphSize := 10) {
+    static AddTitleChromeBtn(parent, name, titleHeight := "30", glyph := "", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", glyphSize := 10, includeRangeGlyph := false) {
         btn := parent.Add("Button").Name(name)
             .Style(style)
             .WindowChrome_IsHitTestVisibleInChrome("True")
@@ -849,15 +849,23 @@ class XAMLHost {
             .VerticalAlignment("Stretch").Background("Transparent")
             .Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
             .Visibility(visibility)
+        content := includeRangeGlyph ? btn.Add("Grid") : btn
+        XAMLHost._AddTitleChromeGlyph(content, name "Glyph", glyph, glyphSize)
+        if (includeRangeGlyph)
+            XAMLHost._AddTitleChromeGlyph(content, name "RangeGlyph", "RangeSelect", glyphSize).Visibility("Collapsed")
+        return btn
+    }
+
+    static _AddTitleChromeGlyph(parent, name, glyph, glyphSize) {
         ; Win11 有 Segoe Fluent，沿用系统字形。Win10 只有 MDL2，里面没有 U+ECAF（POI 定位针），
         ; 会画出空方框，缺字宽度不稳时还会把右侧标题按钮挤出窗口。Win7 两套图标字体都没有。
         ; 这些情况改画固定尺寸的矢量，Win7~Win11 看到的是同一套按钮。
         spec := ""
-        if (!XAMLHost._HasSegoeFluent() && (!XAMLHost._HasMdl2() || glyph = Chr(0xECAF)))
+        if (glyph = "RangeSelect" || (!XAMLHost._HasSegoeFluent() && (!XAMLHost._HasMdl2() || glyph = Chr(0xECAF))))
             spec := XAMLHost._TitleChromeIconSpec(glyph)
         drawSize := XAMLHost._ChromeGlyphDrawSize(glyph, glyphSize)
         if (IsObject(spec)) {
-            icon := btn.Add("Path").Name(name "Glyph").Data(spec.data)
+            icon := parent.Add("Path").Name(name).Data(spec.data)
                 .Width(drawSize).Height(drawSize).Stretch("Uniform")
                 .HorizontalAlignment("Center").VerticalAlignment("Center")
             ; Path.FillRule 的默认值就是 EvenOdd（定位针、取色针中间的孔靠它挖出来）。
@@ -869,11 +877,10 @@ class XAMLHost {
                 icon.Fill("Transparent").Stroke("{DynamicResource TitleBarForeground}")
                     .StrokeThickness(spec.thick).StrokeStartLineCap("Round").StrokeEndLineCap("Round")
                     .StrokeLineJoin("Round")
-        } else {
-            btn.Add("TextBlock").Name(name "Glyph").Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
-                .FontSize(drawSize).VerticalAlignment("Center").HorizontalAlignment("Center")
+            return icon
         }
-        return btn
+        return parent.Add("TextBlock").Name(name).Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
+            .FontSize(drawSize).VerticalAlignment("Center").HorizontalAlignment("Center")
     }
 
     static _HasSegoeFluent() {
@@ -890,10 +897,12 @@ class XAMLHost {
         return flag
     }
 
-    ; 框选/取点定位针统一尺寸：兼顾字体与矢量回退，避免实心图标压过相邻按钮。
+    ; 定位针尺寸兼顾系统字形与矢量回退。
     static _ChromeGlyphDrawSize(glyph, glyphSize) {
         if (glyph = Chr(0xECAF))
             return XAMLHost.FormatFontSize(glyphSize * 1.05)
+        if (glyph = "RangeSelect")
+            return XAMLHost.FormatFontSize(glyphSize * 14.3 / 16)
         return glyphSize
     }
 
@@ -902,8 +911,11 @@ class XAMLHost {
         static specs := ""
         if (!IsObject(specs)) {
             specs := Map()
-            ; POI：定位针（框选/取点）。Win11 Fluent U+ECAF，Win10 MDL2 没有这个字。
+            ; POI：定位针（取点）。Win11 Fluent U+ECAF，Win10 MDL2 没有这个字。
             specs[Chr(0xECAF)] := { mode: "even", data: "M8,0.9 C4.7,0.9 2.2,3.4 2.2,6.6 C2.2,10.4 8,15.2 8,15.2 C8,15.2 13.8,10.4 13.8,6.6 C13.8,3.4 11.3,0.9 8,0.9 Z M8,4.4 A2.15,2.15 0 0 1 8,8.7 A2.15,2.15 0 0 1 8,4.4 Z" }
+            ; 框选范围：十字拖选。
+            specs["RangeSelect"] := { mode: "stroke", thick: "1.3"
+                , data: "M2 6V2H6 M9 2H13.5V7 M2 9V13.5H7 M10 11H15 M12.5 8.5V13.5" }
             ; MapPin：定位取色器
             specs[Chr(0xE707)] := { mode: "even", data: "M8,1.2 C5.2,1.2 3,3.4 3,6.2 C3,9.6 8,14.6 8,14.6 C8,14.6 13,9.6 13,6.2 C13,3.4 10.8,1.2 8,1.2 Z M8,4.6 A1.7,1.7 0 0 1 8,8 A1.7,1.7 0 0 1 8,4.6 Z" }
             ; Crop：截图四角
@@ -1036,7 +1048,7 @@ class XAMLHost {
         ; 双点编辑与路径预览分开显示：编辑按钮在定位类按钮最左侧，预览按钮保留原图标。
         chrome.PointEdit := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdPointEdit", titleHeight, Chr(0xE8A7), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
         chrome.Preview := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdPreview", titleHeight, Chr(0xE890), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
-        chrome.F1 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF1", titleHeight, Chr(0xECAF), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
+        chrome.F1 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF1", titleHeight, Chr(0xECAF), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize, true)
         chrome.F1.ToolTip(f1Tip)
         f2Tip := "F2：截图"
         try {
@@ -1532,6 +1544,9 @@ class XAMLHost {
         }
         try host.Update("BtnCmdF1Glyph", "Width", pin)
         try host.Update("BtnCmdF1Glyph", "Height", pin)
+        rangeSize := XAMLHost._ChromeGlyphDrawSize("RangeSelect", glyphSize)
+        try host.Update("BtnCmdF1RangeGlyph", "Width", rangeSize)
+        try host.Update("BtnCmdF1RangeGlyph", "Height", rangeSize)
         iconFs := InStr(host.xaml, 'Name="MacroEditorTitle"') ? "20" : "14"
         try host.Update("TitleIconGlyph", "FontSize", iconFs)
     }

@@ -52,15 +52,16 @@ ShowPromptDisplay(data) {
         case "区域高亮":
             PromptRegionDisplay.Apply(data)
         case "屏幕边缘闪光":
-            overlay := PromptOutline(data.Color, data.Thickness)
             primary := MonitorGetPrimary()
             numbers := data.FlashMode == "自定义" ? PromptMonitorNumbers(data.Monitors) : []
+            allScreens := data.FlashMode == "所有屏" || data.FlashMode == "主副屏"
             if (data.FlashMode != "自定义") {
                 loop MonitorGetCount() {
-                    if (data.FlashMode == "主副屏" || (A_Index == primary) == (data.FlashMode == "主屏"))
+                    if (allScreens || (A_Index == primary) == (data.FlashMode == "主屏"))
                         numbers.Push(A_Index)
                 }
             }
+            overlay := PromptEdgeFlash(data.Color, data.Thickness)
             try {
                 for number in numbers {
                     if (MonitorGet(number, &left, &top, &right, &bottom))
@@ -199,5 +200,82 @@ class PromptOutline {
         for item in this.windows
             try item.panel.Destroy()
         this.windows := []
+    }
+}
+
+class PromptEdgeFlash extends PromptOutline {
+    AddRect(x, y, w, h) {
+        token := Gdip_Startup()
+        if (!token)
+            throw Error("GDI+ startup failed")
+        hdc := 0, bitmap := 0, oldBitmap := 0, graphics := 0
+        try {
+            hdc := CreateCompatibleDC()
+            bitmap := CreateDIBSection(w, h, hdc)
+            if (!hdc || !bitmap)
+                throw OSError()
+            oldBitmap := SelectObject(hdc, bitmap)
+            graphics := Gdip_GraphicsFromHDC(hdc)
+            if (!oldBitmap || !graphics)
+                throw Error("Could not create the screen flash surface")
+            this.Paint(graphics, w, h)
+            Gdip_DeleteGraphics(graphics)
+            graphics := 0
+
+            panel := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08080020 -DPIScale")
+            this.windows.Push({panel: panel, options: Format("NA x{} y{} w{} h{}", x, y, w, h)})
+            if (!UpdateLayeredWindow(panel.Hwnd, hdc, x, y, w, h))
+                throw OSError()
+        } finally {
+            if (graphics)
+                Gdip_DeleteGraphics(graphics)
+            if (oldBitmap)
+                SelectObject(hdc, oldBitmap)
+            if (bitmap)
+                DeleteObject(bitmap)
+            if (hdc)
+                DeleteDC(hdc)
+            Gdip_Shutdown(token)
+        }
+    }
+
+    Paint(graphics, w, h) {
+        rgb := Integer("0x" this.color)
+        opaque := rgb | 0xFF000000
+        ; 保留实色边框，渐变的透明终点距各边为对应屏幕尺寸的 10%。
+        insetX := Min(this.thickness, Max(0, Floor(w * 0.1) - 1))
+        insetY := Min(this.thickness, Max(0, Floor(h * 0.1) - 1))
+        right := w - insetX, bottom := h - insetY
+        innerWidth := right - insetX, innerHeight := bottom - insetY
+        points := Buffer(32)
+        NumPut("Float", insetX, "Float", insetY, "Float", right, "Float", insetY,
+            "Float", right, "Float", bottom, "Float", insetX, "Float", bottom, points)
+
+        gradient := 0, border := 0
+        try {
+            if (DllCall("gdiplus\GdipCreatePathGradient", "Ptr", points, "Int", 4, "Int", 4, "Ptr*", &gradient)
+                || DllCall("gdiplus\GdipSetPathGradientCenterColor", "Ptr", gradient, "UInt", rgb)
+                || DllCall("gdiplus\GdipSetPathGradientSurroundColorsWithCount", "Ptr", gradient, "UInt*", opaque, "Int*", 1)
+                || DllCall("gdiplus\GdipSetPathGradientFocusScales", "Ptr", gradient,
+                    "Float", w * 0.8 / innerWidth, "Float", h * 0.8 / innerHeight))
+                throw Error("Could not create the screen flash gradient")
+            Gdip_GraphicsClear(graphics, 0)
+            if (Gdip_FillRectangle(graphics, gradient, insetX, insetY, innerWidth, innerHeight))
+                throw Error("Could not paint the screen flash gradient")
+            border := Gdip_BrushCreateSolid(opaque)
+            if (insetY) {
+                Gdip_FillRectangle(graphics, border, 0, 0, w, insetY)
+                Gdip_FillRectangle(graphics, border, 0, bottom, w, insetY)
+            }
+            if (insetX) {
+                Gdip_FillRectangle(graphics, border, 0, insetY, insetX, innerHeight)
+                Gdip_FillRectangle(graphics, border, right, insetY, insetX, innerHeight)
+            }
+        } finally {
+            if (gradient)
+                Gdip_DeleteBrush(gradient)
+            if (border)
+                Gdip_DeleteBrush(border)
+        }
     }
 }

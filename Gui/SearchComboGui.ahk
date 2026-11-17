@@ -246,7 +246,7 @@ class SearchComboGui {
         BindCmdEditorChrome(this.ui, "#指令手册/4-搜索Combo", (*) => this.TriggerMacro(), "!l"
             , (*) => this.OnClickTargeterBtn(), (*) => this.OnF1()
             , (*) => this.OnScreenShotBtnClick(this._CurTarget()), (*) => this.SureColor())
-        try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
+        this.ui.BatchUpdate(CmdEditorF1Updates("area"))
         this.ui.OnEvent("TargetList", "SelectionChanged", ObjBindMethod(this, "OnTargetSelected"))
         this.ui.OnEvent("SatisfyCountCon", "TextChanged", ObjBindMethod(this, "OnOverallChange"))
         this.ui.OnEvent("SearchCountCon", "TextChanged", ObjBindMethod(this, "OnOverallChange"))

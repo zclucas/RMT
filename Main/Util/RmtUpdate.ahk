@@ -4,6 +4,7 @@
 class RmtUpdate {
     static Scan := ""
     static Available := ""
+    static CheckResult := ""
     static Offering := false
 
     static Check(automatic := false, owner := 0) {
@@ -13,7 +14,6 @@ class RmtUpdate {
             if (!automatic) {
                 this.Scan.Manual := true
                 this.Scan.Owner := owner
-                this.SyncHelp()
             }
             return
         }
@@ -45,7 +45,7 @@ class RmtUpdate {
         } catch as err {
             if (stage != "")
                 try DirDelete(stage, true)
-            this.ReportError(err.Message, !automatic, owner)
+            this.ReportCheckError(err.Message, !automatic, owner)
         }
     }
 
@@ -58,7 +58,6 @@ class RmtUpdate {
         if (waiting && A_TickCount < scan.Deadline)
             return
         this.EndScan(scan)
-        this.SyncHelp()
         try {
             if (waiting)
                 throw Error("Release check timed out.")
@@ -70,14 +69,15 @@ class RmtUpdate {
             asset := RmtRelease.Select(response.assets, current, arch, A_Is64bitOS, !scan.Manual,
                 CfgRead(SettingFile, SettingSection, "RmtSkippedStableVersion", ""),
                 CfgRead(SettingFile, SettingSection, "RmtSkippedPreviewVersion", ""))
+            ; 跳过的版本仍显示在帮助页。
+            latest := IsObject(asset) ? asset : RmtRelease.Select(response.assets, current, arch, A_Is64bitOS, !scan.Manual)
+            this.CheckResult := IsObject(latest) ? latest : "current"
             this.Available := asset
             this.SyncHelp()
             if (IsObject(asset))
                 this.ShowAvailable(scan.Owner)
-            else if (scan.Manual)
-                RmtDialog.Info(GetLang("没有需要提示的更新。"), GetLang("检查更新"), scan.Owner)
         } catch as err
-            this.ReportError(err.Message, scan.Manual, scan.Owner)
+            this.ReportCheckError(err.Message, scan.Manual, scan.Owner)
         finally
             try DirDelete(scan.Stage, true)
     }
@@ -97,11 +97,31 @@ class RmtUpdate {
         }
     }
 
+    static HelpStatus() {
+        if (IsObject(this.Scan))
+            return GetLang("正在检查发行版本…")
+        result := this.CheckResult
+        if (IsObject(result))
+            return Format(GetLang("有新版本 {}"), "RMTv" result.version.label)
+        if (result == "current")
+            return GetLang("已是最新版本")
+        if (result == "failed")
+            return GetLang("检查更新失败")
+        return ""
+    }
+
     static SyncHelp() {
+        status := this.HelpStatus()
         try MyMainWin.ui.BatchUpdate([
             {ControlName: "HelpUpdateDot", PropertyName: "Visibility", Value: IsObject(this.Available) ? "Visible" : "Collapsed"},
-            {ControlName: "HelpUpdateChecking", PropertyName: "Visibility",
-                Value: IsObject(this.Scan) && this.Scan.Manual ? "Visible" : "Collapsed"}])
+            {ControlName: "HelpUpdateStatus", PropertyName: "Text", Value: status},
+            {ControlName: "HelpUpdateStatus", PropertyName: "Visibility", Value: status != "" ? "Visible" : "Collapsed"}])
+    }
+
+    static ReportCheckError(detail, show, owner) {
+        this.CheckResult := "failed"
+        this.SyncHelp()
+        this.ReportError(detail, show, owner)
     }
 
     static ShowAvailable(owner) {

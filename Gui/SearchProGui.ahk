@@ -371,7 +371,7 @@ class SearchProGui {
             , (*) => this.TriggerMacro(!this.IsAll), "!l"
             , (*) => this.OnClickTargeterBtn(), (*) => this.OnF1()
             , (*) => this.OnImageShotBtnClick(), (*) => this.SureColor())
-        try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
+        this.ui.BatchUpdate(CmdEditorF1Updates("area"))
         try this.ui.Update("BtnCmdTargeter", "ToolTip", GetLang("定位取色器"))
         this.ui.OnEvent("SearchTypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("BtnPreviewArea", "Click", ObjBindMethod(this, "OnClickPreviewArea"))

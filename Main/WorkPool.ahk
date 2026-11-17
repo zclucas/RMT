@@ -1520,7 +1520,7 @@ class WorkPool {
 
     _CountDownUiRequest(args, wd, pid) {
         if (args[1] == "closeAt") {
-            CloseXamlCountDownAt(args[2])
+            CloseXamlCountDowns(args[2], args.Length >= 3 ? args[3] : "")
             return
         }
         if (args[1] == "stop") {
@@ -1532,7 +1532,8 @@ class WorkPool {
         token := args[2]
         done := (*) => this._CountDownUiClosed(wd, pid, token)
         ownerPid := args.Length >= 6 && args[6] == "1" ? 0 : pid
-        try StartXamlCountDown(token, Number(args[3]), Number(args[4]), Number(args[5]), done, ownerPid)
+        name := args.Length >= 7 ? args[7] : ""
+        try StartXamlCountDown(token, Number(args[3]), Number(args[4]), Number(args[5]), done, ownerPid, name)
         catch as e {
             RMTLogSys(RMT_LV_ERROR, "CountDown", e.Message)
             done.Call()

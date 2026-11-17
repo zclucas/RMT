@@ -204,9 +204,9 @@ global MyCMDTipForceAction := CmdTipForceShow
 global MyExcuteRMTCMDAction := ExcuteRMTCMDAction
 global MySetTableItemState := SetTableItemState
 global MySetItemPauseState := SetItemPauseState
-global MyCountDownStart := (token, total, x, y, detached) => StartXamlCountDown(token, total, x, y, CountDownComplete.Bind(token))
+global MyCountDownStart := (token, total, x, y, detached, name) => StartXamlCountDown(token, total, x, y, CountDownComplete.Bind(token), 0, name)
 global MyCountDownStop := CloseXamlCountDown
-global MyCountDownCloseByPosition := CloseXamlCountDownAt
+global MyCountDownClose := CloseXamlCountDowns
 global MyShowPrompt := QueuePromptDisplay
 global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent

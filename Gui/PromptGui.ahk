@@ -4,6 +4,8 @@ class PromptGui {
     static WindowWidth := 560
     static BodyInset := 16
     static PairGap := 14
+    static TimePartWidth := 136
+    static TimePartGap := 16
 
     __New() {
         this.ParentTile := ""
@@ -24,6 +26,13 @@ class PromptGui {
         parts := cmd == "" ? [] : StrSplit(cmd, "_", , 2)
         serial := parts.Length ? parts[1] : ""
         this.data := serial == "" ? PromptData() : GetMacroCMDData(serial).Clone()
+        if (serial == "") {
+            this.data.PasteName := "自由贴"
+            this.data.RegionName := "框选范围"
+            this.data.CountDownName := "倒计时"
+        }
+        if (this.data.FlashMode == "主副屏")
+            this.data.FlashMode := "所有屏"
         if (!this.data.HasProp("AudioPlayback"))
             this.data.AudioPlayback := "后台播放"
         if (!this.data.HasProp("PastePosition"))
@@ -32,6 +41,8 @@ class PromptGui {
             this.data.RegionMode := "显示"
         if (!this.data.HasProp("RegionName"))
             this.data.RegionName := ""
+        if (!this.data.HasProp("CountDownName"))
+            this.data.CountDownName := ""
         this.remark := parts.Length > 1 ? parts[2] : ""
         if (serial != "" && !RegExMatch(serial, "\d+$"))
             this.remark := ""
@@ -78,7 +89,7 @@ class PromptGui {
         this.AddField(left, "TipMode", "内容类型", ["文本", "图片"])
         this.AddField(left, "PasteMode", "操作", ["文本", "图片", "关闭", "关闭所有"])
         this.AddField(left, "RegionMode", "操作", ["显示", "关闭"])
-        this.AddField(left, "FlashMode", "显示屏", ["主屏", "副屏", "主副屏", "自定义"])
+        this.AddField(left, "FlashMode", "显示屏", ["主屏", "副屏", "所有屏", "自定义"])
         this.AddField(left, "CountDownMode", "操作", ["显示", "关闭", "关闭所有"])
         this.AddField(right, "Beep", "提示音", PromptBeepModes())
         this.AddField(right, "AudioPlayback", "播放方式", ["后台播放", "使用播放器"])
@@ -88,20 +99,19 @@ class PromptGui {
         this.AddField(right, "ImageSource", "内容来源", ["文件", "剪贴板"])
         this.AddField(right, "Monitors", "屏幕编号").ToolTip(GetLang("多个屏幕编号用逗号分隔"))
         this.AddField(right, "Param2", "计时方式", ["时长", "时刻", "时间戳"])
-        this.AddField(right, "RegionName", "框选名称").ToolTip(GetLang("同名框选会替换，关闭时留空则关闭最后一个"))
+        this.AddField(right, "RegionName", "名称", , "name").ToolTip(GetLang("同名框选会替换，关闭时留空则关闭最后一个"))
 
         this.AddPair(body, &left, &right)
         this.AddField(left, "AudioWait", "播放时", ["不等待", "等待结束"])
-        this.AddField(left, "PasteName", "贴片名称").ToolTip(GetLang("同名贴片会替换，关闭时留空则关闭最后一张"))
+        this.AddField(left, "PasteName", "名称", , "name").ToolTip(GetLang("同名贴片会替换，关闭时留空则关闭最后一张"))
+        this.AddField(left, "CountDownName", "名称", , "name")
         this.AddField(right, "PastePosition", "位置模式", ["鼠标位置", "固定位置"])
         this.AddField(left, "Duration", "显示时长")
-        this.AddField(left, "Hour", "小时")
-        this.AddField(right, "Min", "分钟")
+        this.AddField(right, "WaitEnd", "显示后", ["不等待", "等待结束"])
 
         this.AddPair(body, &left, &right)
-        this.AddField(left, "Sec", "秒数")
-        this.AddField(left, "Param1", "目标时间").ToolTip("HH:mm:ss / YYYYMMDDHHmmss / Unix")
-        this.AddField(right, "WaitEnd", "显示后", ["不等待", "等待结束"])
+        this.AddField(left, "Param1", "时间戳", , "timestamp")
+        this.AddCountDownTime(body)
 
         this.AddPair(body, &left, &right)
         this.AddField(left, "PosX", "屏幕 X")
@@ -137,7 +147,7 @@ class PromptGui {
         template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(template, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' EscapeXamlXml(title) '" Width="' PromptGui.WindowWidth '" SizeToContent="Height"')
+            'Title="' EscapeXamlXml(title) '" Width="' this.LayoutWidth() '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
         this.ui.OnEvent("Window", "LoadedHwnd", this.OnLoaded.Bind(this, this.ui))
@@ -146,7 +156,7 @@ class PromptGui {
         BindCmdEditorChrome(this.ui, "#指令手册/30-提示", this.Preview.Bind(this), "!l", this.PickFlashColor.Bind(this), this.PickScreen.Bind(this))
         this.ui.Update("BtnCmdPlay", "ToolTip", GetLang("执行"))
         this.ui.Update("BtnCmdTargeter", "Visibility", this.FieldVisible("Color", this.data) ? "Visible" : "Collapsed")
-        this.ui.BatchUpdate(this.PickButtonUpdates(this.PickMode(this.data)))
+        this.ui.BatchUpdate(CmdEditorF1Updates(this.PickMode(this.data)))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "Save"))
         this.ui.OnEvent("BtnPreviewArea", "Click", this.ToggleAreaPreview.Bind(this))
         for name, value in Map("RegionStartX", this.data.PosX, "RegionStartY", this.data.PosY
@@ -164,6 +174,8 @@ class PromptGui {
         this.ui.OnEvent("AddValue", "Click", this.AppendSelection.Bind(this, true))
         this.ui.OnEvent("BrowseImagePath", "Click", this.Browse.Bind(this, "ImagePath", "Images (*.png; *.jpg; *.jpeg; *.bmp; *.gif; *.ico)"))
         this.ui.OnEvent("BrowseAudioPath", "Click", this.Browse.Bind(this, "AudioPath", "Audio (*.wav; *.mp3; *.wma; *.mid; *.midi)"))
+        this.ui.OnEvent("CountDownName", "TextChanged", this.Refresh.Bind(this))
+        this.ui.OnEvent("CountDownName", "SelectionChanged", this.Refresh.Bind(this))
         for name, field in this.fields {
             if (field.kind == "tools")
                 continue
@@ -173,8 +185,14 @@ class PromptGui {
                     this.ui.OnEvent(name, "SelectionChanged", this.Refresh.Bind(this))
             } else
                 this.ui.Update(name, "Text", name == "Remark" ? this.remark
-                    : name == "Text" ? GetLangStr(this.data.Text, 1) : String(this.data.%name%))
+                    : name == "Text" ? GetLangStr(this.data.Text, 1)
+                    : field.kind == "name" ? TranslateBuiltinVarReferences(this.data.%name%, true)
+                    : name == "Param1" ? (this.data.Param2 == "时间戳" ? GetLang(this.data.Param1) : "")
+                    : String(this.data.%name%))
         }
+        for prefix in ["CountDownDuration", "CountDownClock"]
+            for part in ["Hour", "Min", "Sec"]
+                this.ui.Track(prefix part)
     }
 
     AddPair(body, &left, &right) {
@@ -185,7 +203,12 @@ class PromptGui {
 
     LabelColumnWidth() => Ceil(XAMLHost.GetThemeFontSize() * 5.5) + 6
 
-    PairedInputWidth() => (PromptGui.WindowWidth - 2 * PromptGui.BodyInset - PromptGui.PairGap) / 2 - this.LabelColumnWidth()
+    LayoutWidth() {
+        timeWidth := 3 * PromptGui.TimePartWidth + 2 * PromptGui.TimePartGap
+        return Max(PromptGui.WindowWidth, 2 * PromptGui.BodyInset + this.LabelColumnWidth() + timeWidth + 16)
+    }
+
+    PairedInputWidth() => (this.LayoutWidth() - 2 * PromptGui.BodyInset - PromptGui.PairGap) / 2 - this.LabelColumnWidth()
 
     AddRegionFields(body) {
         area := body.Add("Grid").Name("RegionFields").Margin("0,0,0,8")
@@ -235,6 +258,10 @@ class PromptGui {
         }
         if (kind == "tools")
             return target
+        if (kind == "timestamp")
+            return this.AddEditableCombo(target, name, GetGuiVarArr("timeVars", "timestamp"))
+        if (kind == "name")
+            return this.AddEditableCombo(target, name, GetGuiVarReferences("text")).IsTextSearchEnabled("False")
         if (options.Length) {
             index := 0
             for i, value in options {
@@ -265,6 +292,56 @@ class PromptGui {
                 .Foreground("{DynamicResource TextSub}")
         }
         return box
+    }
+
+    AddEditableCombo(parent, name, items) {
+        combo := parent.Add("ComboBox").Name(name).MinHeight(28).IsEditable("True").MaxDropDownHeight(260)
+        for item in items
+            combo.Add("ComboBoxItem").Content(item)
+        return combo
+    }
+
+    AddCountDownTime(body) {
+        data := this.data
+        clock := ["14", "30", "00"]
+        this.legacyClock := ""
+        if (data.Param2 == "时刻") {
+            clock := [data.Hour, data.Min, data.Sec]
+            if (data.Param1 != "") {
+                raw := Trim(data.Param1)
+                parts := StrSplit(raw, ":", " `t")
+                if (parts.Length >= 2 && parts.Length <= 3 && !RegExMatch(raw, "^\d{4}[-/.]"))
+                    clock := [parts[1], parts[2], parts.Length == 3 ? parts[3] : "00"]
+                else {
+                    ; 旧配置也允许整段时刻变量或完整日期时间。
+                    this.legacyClock := raw
+                    clock := [raw, "00", "00"]
+                }
+            }
+        }
+        this.AddCountDownParts(body, "CountDownDuration", "时长", [data.Hour, data.Min, data.Sec], 59)
+        this.AddCountDownParts(body, "CountDownClock", "目标时间", clock, 23)
+    }
+
+    AddCountDownParts(body, prefix, label, values, maxHour) {
+        partWidth := PromptGui.TimePartWidth, gap := PromptGui.TimePartGap
+        row := this.AddField(body, prefix, label, , "tools").Cols(partWidth, gap, partWidth, gap, partWidth)
+        for i, part in ["Hour", "Min", "Sec"] {
+            col := (i - 1) * 2
+            if (i > 1)
+                row.Add("TextBlock").Grid_Column(col - 1).Text(":").HorizontalAlignment("Center")
+                    .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
+            items := []
+            Loop (i == 1 ? maxHour + 1 : 60)
+                items.Push(Format("{:02}", A_Index - 1))
+            for variable in GetGuiVarArr(["hour", "minute", "second"][i])
+                items.Push(variable)
+            value := values[i]
+            if (IsInteger(value) && !(prefix == "CountDownClock" && i == 1 && this.legacyClock != ""))
+                value := Format("{:02}", Integer(value))
+            this.AddEditableCombo(row, prefix part, items).Grid_Column(col).SetProp("Text", GetLang(value))
+                .ToolTip(GetLang(["时", "分", "秒"][i]))
+        }
     }
 
     FieldCaption(name, data) {
@@ -310,6 +387,7 @@ class PromptGui {
             case "RegionMode", "RegionName": return region
             case "FlashMode": return flash
             case "CountDownMode": return countdown
+            case "CountDownName": return countdown && data.CountDownMode != "关闭所有"
             case "TextSource": return tipText
             case "PasteTextSource": return pasteText
             case "ImageSource": return image
@@ -321,14 +399,16 @@ class PromptGui {
             case "PasteName": return paste && data.PasteMode != "关闭所有"
             case "PastePosition": return pasteShown
             case "PosX", "PosY":
-                return countdown && data.CountDownMode != "关闭所有" || pasteShown && data.PastePosition == "固定位置"
+                return showTimer || countdown && data.CountDownMode == "关闭" && data.CountDownName == ""
+                    || pasteShown && data.PastePosition == "固定位置"
             case "Color": return flash
             case "Duration": return tip || showRegion
             case "FlashDuration", "FlashCount": return flash
             case "Monitors": return flash && data.FlashMode == "自定义"
             case "Param2", "WaitEnd": return showTimer
-            case "Hour", "Min", "Sec": return showTimer && data.Param2 == "时长"
-            case "Param1": return showTimer && data.Param2 != "时长"
+            case "CountDownDuration": return showTimer && data.Param2 == "时长"
+            case "CountDownClock": return showTimer && data.Param2 == "时刻"
+            case "Param1": return showTimer && data.Param2 == "时间戳"
             default: return true
         }
     }
@@ -345,6 +425,7 @@ class PromptGui {
                 }
             }
         }
+        data.CountDownName := Trim(state.Get("CountDownName", ""))
     }
 
     Refresh(*) {
@@ -364,7 +445,7 @@ class PromptGui {
             if (mode != "area" && this._previewShowing)
                 this.SetAreaPreview(false)
             this.BindPickHotkey(mode)
-            changes.Push(this.PickButtonUpdates(mode)*)
+            changes.Push(CmdEditorF1Updates(mode)*)
         }
         changes.Push({ControlName: "RegionFields", PropertyName: "Visibility", Value: mode == "area" ? "Visible" : "Collapsed"})
         this.ui.BatchUpdate(changes)
@@ -415,12 +496,6 @@ class PromptGui {
         if (data.Type == "区域高亮" && data.RegionMode == "显示")
             return "area"
         return this.FieldVisible("PosX", data) ? "point" : ""
-    }
-
-    PickButtonUpdates(mode) {
-        return [
-            {ControlName: "BtnCmdF1", PropertyName: "Visibility", Value: mode == "" ? "Collapsed" : "Visible"},
-            {ControlName: "BtnCmdF1", PropertyName: "ToolTip", Value: GetLang(mode == "area" ? "F1：框选范围" : "F1:选取当前坐标")}]
     }
 
     BindPickHotkey(mode) {
@@ -554,8 +629,9 @@ class PromptGui {
             if (name == "Remark" || field.options.Length || field.kind == "tools" || !this.FieldVisible(name, data))
                 continue
             value := state.Get(name, "")
-            data.%name% := name == "Text" ? GetLangStr(value, 2) : Trim(value)
-            if (name != "Text" && name != "PasteName" && name != "RegionName" && data.%name% == "")
+            data.%name% := name == "Text" ? GetLangStr(value, 2)
+                : field.kind == "name" ? TranslateBuiltinVarReferences(Trim(value)) : Trim(value)
+            if (name != "Text" && field.kind != "name" && data.%name% == "")
                 throw ValueError(GetLang("提示参数不能为空") ": " GetLang(field.label))
         }
         if (this.FieldVisible("Text", data) && data.Type != "区域高亮" && Trim(data.Text) == "") {
@@ -565,14 +641,10 @@ class PromptGui {
         }
         if (this.PickMode(data) == "area")
             this.ReadRegion(data, state)
-        if (this.FieldVisible("Hour", data)) {
-            if (IsNumber(data.Hour) && IsNumber(data.Min) && IsNumber(data.Sec) && data.Hour * 3600 + data.Min * 60 + data.Sec <= 0)
-                throw ValueError(GetLang("倒计时时长必须大于零"))
-            data.Seconds := 0
-        }
+        if (data.Type == "倒计时" && data.CountDownMode == "显示")
+            this.ReadCountDownTime(data, state)
         for name, range in Map("PosX", [-32768, 32767], "PosY", [-32768, 32767],
-            "Duration", [1, 600000], "FlashDuration", [50, 5000], "FlashCount", [1, 20],
-            "Hour", [0, 8760], "Min", [0, 525600], "Sec", [0, 31536000]) {
+            "Duration", [1, 600000], "FlashDuration", [50, 5000], "FlashCount", [1, 20]) {
             if (this.FieldVisible(name, data) && IsNumber(data.%name%))
                 PromptInt(data.%name%, range[1], range[2])
         }
@@ -581,6 +653,38 @@ class PromptGui {
         if (this.FieldVisible("Monitors", data) && !InStr(data.Monitors, "{"))
             PromptMonitorNumbers(data.Monitors)
         return data
+    }
+
+    ReadCountDownTime(data, state) {
+        if (data.Param2 == "时间戳") {
+            data.Param1 := GetVarName(data.Param1)
+            return
+        }
+        duration := data.Param2 == "时长"
+        prefix := duration ? "CountDownDuration" : "CountDownClock"
+        parts := []
+        for part in ["Hour", "Min", "Sec"]
+            parts.Push(GetVarName(Trim(state.Get(prefix part, ""))))
+        if (!duration && this.legacyClock != "" && parts[1] == GetVarName(this.legacyClock)
+            && parts[2] == "00" && parts[3] == "00") {
+            data.Param1 := this.legacyClock
+            return
+        }
+        limits := duration ? [8760, 525600, 31536000] : [23, 59, 59]
+        for i, value in parts {
+            if (value == "")
+                throw ValueError(GetLang("提示参数不能为空") ": " GetLang(["小时", "分钟", "秒数"][i]))
+            if (IsNumber(value))
+                PromptInt(value, 0, limits[i])
+        }
+        if (!duration) {
+            data.Param1 := parts[1] ":" parts[2] ":" parts[3]
+            return
+        }
+        data.Hour := parts[1], data.Min := parts[2], data.Sec := parts[3]
+        if (IsNumber(data.Hour) && IsNumber(data.Min) && IsNumber(data.Sec) && data.Hour * 3600 + data.Min * 60 + data.Sec <= 0)
+            throw ValueError(GetLang("倒计时时长必须大于零"))
+        data.Seconds := 0
     }
 
     GetCommand(data, preview := false) {

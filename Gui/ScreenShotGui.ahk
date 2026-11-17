@@ -149,7 +149,7 @@ class ScreenShotGui {
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/26-抓图", ObjBindMethod(this, "TriggerMacro"), "!l", "", ObjBindMethod(this, "OnF1"))
-        try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
+        this.ui.BatchUpdate(CmdEditorF1Updates("area"))
         this.ui.OnEvent("ScreenShotTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("NameType", "Click", ObjBindMethod(this, "OnChangeNameType"))
         this.ui.OnEvent("ResultToggle", "Click", ObjBindMethod(this, "OnChangeResultToggle"))

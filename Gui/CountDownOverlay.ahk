@@ -4,7 +4,7 @@
 global XamlCountDownWindows := Map()
 global XamlCountDownCancelled := Map()
 
-StartXamlCountDown(token, total, x, y, done, workerPid := 0) {
+StartXamlCountDown(token, total, x, y, done, workerPid := 0, name := "") {
     global XamlCountDownWindows, XamlCountDownCancelled
     if (XamlCountDownCancelled.Has(token)) {
         XamlCountDownCancelled.Delete(token)
@@ -14,12 +14,13 @@ StartXamlCountDown(token, total, x, y, done, workerPid := 0) {
     posKey := CountDownPosKey(x, y)
     previous := []
     for id, overlay in XamlCountDownWindows
-        if (overlay.posKey == posKey)
+        if (overlay.posKey == posKey || (name != "" && overlay.name == name))
             previous.Push(overlay)
     for overlay in previous
         overlay.Close()
     overlay := XamlCountDownOverlay(token, posKey, total, x, y, done)
     overlay.workerPid := workerPid
+    overlay.name := name
     XamlCountDownWindows[token] := overlay
     try overlay.Show()
     catch {
@@ -40,10 +41,10 @@ CloseXamlCountDownForWorker(pid) {
         overlay.Close()
 }
 
-CloseXamlCountDownAt(posKey) {
+CloseXamlCountDowns(posKey, name := "") {
     overlays := []
     for _, overlay in XamlCountDownWindows {
-        if (posKey == "" || overlay.posKey == posKey)
+        if (name != "" ? overlay.name == name : (posKey == "" || overlay.posKey == posKey))
             overlays.Push(overlay)
     }
     for overlay in overlays

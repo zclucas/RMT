@@ -51,13 +51,17 @@ LoadCurMacroSetting(saveChanges := true) {
     if (EnsureBuiltInMacroTable("Gesture", "手势宏", "String"))
         migrated := true
     for tableItem in MySoftData.TableInfo {
-        if (ReadTableItemInfo(tableItem, saveChanges))
+        if (ReadTableItemInfo(tableItem))
             migrated := true
         EnsureTableHasFold(tableItem)
     }
     RebuildTableLocator()
-    if (saveChanges && migrated)
-        SaveTableCollection()
+    if (saveChanges && migrated) {
+        if (MacroFileSeedDefaults)
+            SaveAllTableItemInfo(MySoftData.TableInfo)
+        else
+            SaveTableCollection()
+    }
 }
 
 ; ============================================================
@@ -65,7 +69,7 @@ LoadCurMacroSetting(saveChanges := true) {
 ; 读三级段结构：[表ID]/[表ID.ModuleN]/[表ID.ModuleN.MacroM]，无三级数据则按全新表生成默认
 ; 返回 true 表示发生了初始化（需要落盘表集合），false 表示纯三级格式读取
 ; ============================================================
-ReadTableItemInfo(tableItem, saveChanges) {
+ReadTableItemInfo(tableItem) {
     global MySoftData
     symbol := tableItem.Symbol
 
@@ -105,10 +109,8 @@ ReadTableItemInfo(tableItem, saveChanges) {
         return false
     }
 
-    ; 全新表初始化默认条目，由主进程写入三级格式。
+    ; 全新表先在内存初始化，加载完成后由主进程一次写入所有表。
     InitTableItemDefault(tableItem)
-    if (saveChanges)
-        SaveTableItemInfo(tableItem)
     return true
 }
 

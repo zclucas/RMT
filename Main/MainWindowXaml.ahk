@@ -122,7 +122,7 @@ class MainWin {
             . '</Trigger>'
     }
 
-    BuildAndShow(windowPos := unset, maximized := false, initialTab := 0) {
+    BuildAndShow(windowPos := unset, maximized := false, initialTab := 0, deferOtherTabs := false) {
         this._InitUseVirtual()
         if (IsSet(MainSoftData) && MainSoftData.HasProp("AiPanelWidth")) {
             savedW := Integer(MainSoftData.AiPanelWidth)
@@ -534,7 +534,7 @@ class MainWin {
         this.ui._startHidden := this._startHidden
         ; ===== 先填充内容（Show 前入队，LoadedHwnd 时一次刷入），填充完再显示，避免空壳闪烁 =====
         try {
-            this.PopulateAll()
+            this.PopulateAll(deferOtherTabs)
         } catch as e {
             XamlUiDiag("PopulateAll 异常: " e.Message " @ " e.File ":" e.Line "`n" e.Stack, "MainWin")
         }
@@ -585,9 +585,7 @@ class MainWin {
             try this.ui.Update(item.ControlName, item.PropertyName, item.Value)
     }
 
-    PopulateAll() {
-        ; 页签内容按需构建：启动只建轻量页签，重页签等用户首次切过去再建。
-        ; 赞助页要起 QrDecode.exe 解两张二维码图（实测 313ms），启动时根本不显示，这笔钱是白付的。
+    PopulateAll(deferOtherTabs := false) {
         this._tabBuilders := Map(
             GetTableIndexByID("Tool"), "BuildToolTab",
             GetTableIndexByID("Setting"), "BuildSettingTab",
@@ -595,13 +593,12 @@ class MainWin {
             GetTableIndexByID("Reward"), "BuildRewardTab",
             GetTableIndexByID("Thank"), "BuildThankTab")
         this._builtTabs := Map()
-        this._deferredTabs := Map(GetTableIndexByID("Reward"), true)
-
-        ; 各页签独立构建：任一失败不得阻断后续 RenderTab（否则主界面宏列表空白）
-        for idx, fn in this._tabBuilders {
-            if (this._deferredTabs.Has(idx) && idx != MainSoftData.TableIndex)
-                continue
-            this._EnsureTabBuilt(idx)
+        ; 工具页的控件供全局快捷键使用，新增配置重载时其余非当前页可按需构建。
+        toolTab := GetTableIndexByID("Tool")
+        rewardTab := GetTableIndexByID("Reward")
+        for idx in this._tabBuilders {
+            if (idx != rewardTab && (!deferOtherTabs || idx == toolTab))
+                this._EnsureTabBuilt(idx)
         }
         ; 惰性渲染：只渲染当前 tab（旧路径全量渲染 7 tab 是启动 1.3s 的主因），切 tab 时由 OnTabChanged 补渲染
         this._renderedTabs := Map()

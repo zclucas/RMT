@@ -271,7 +271,7 @@ class WaitGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad", this.ui.id))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/等待", this.TriggerConfirmation.Bind(this), "!l", "", this.OnClickPickArea.Bind(this))
-        this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
+        this.ui.BatchUpdate(CmdEditorF1Updates("area"))
         this.ui.OnEvent("WaitTypeCon", "SelectionChanged", ObjBindMethod(this, "OnGroupChange"))
         this.ui.OnEvent("WaitConditionCon", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
         this.ui.OnEvent("ProcTargetTypeCon", "SelectionChanged", this.OnProcessTargetChange.Bind(this))

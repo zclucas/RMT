@@ -704,22 +704,24 @@ InitFilePath() {
     if (!DirExist(A_WorkingDir "\Setting")) {
         DirCreate(A_WorkingDir "\Setting")
     }
-    if (!DirExist(A_WorkingDir "\Setting\" MySoftData.CurSettingName)) {
-        DirCreate(A_WorkingDir "\Setting\" MySoftData.CurSettingName)
+    profileDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName
+    if (!DirExist(profileDir)) {
+        DirCreate(profileDir)
+        Compat_WriteVersion(profileDir, Compat_CurrentVersion())
+    } else {
+        ; 在任何默认宏表写入之前迁移直接覆盖安装的旧方案。
+        Compat_UpgradeDir(profileDir)
     }
 
-    ; 在任何默认宏表写入之前迁移直接覆盖安装的旧方案；失败必须中止加载。
-    Compat_UpgradeDir(A_WorkingDir "\Setting\" MySoftData.CurSettingName)
-
-    if (!DirExist(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UseExplain")) {
-        DirCreate(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UseExplain")
+    if (!DirExist(profileDir "\Images\UseExplain")) {
+        DirCreate(profileDir "\Images\UseExplain")
     }
 
-    if (!DirExist(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot")) {
-        DirCreate(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot")
+    if (!DirExist(profileDir "\Images\ScreenShot")) {
+        DirCreate(profileDir "\Images\ScreenShot")
     }
 
-    filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\使用说明&署名.txt"
+    filePath := profileDir "\使用说明&署名.txt"
     if (!FileExist(filePath)) {
         str1 := GetLang("协议：CC BY - NC - SA 4.0")
         str2 := GetLang("原始来源：RMT(若梦兔) 软件导出")

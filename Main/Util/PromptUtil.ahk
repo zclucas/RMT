@@ -13,6 +13,7 @@ class PromptData {
         this.PastePosition := "鼠标位置"
         this.FlashMode := "主屏"
         this.CountDownMode := "显示"
+        this.CountDownName := ""
         this.Text := ""
         this.ImageSource := "文件"
         this.TextSource := "直接填写"
@@ -87,7 +88,12 @@ OnPrompt(tableItem, cmd, index) {
     resolve := (value) => TimeResolveValue(tableItem, index, value)
     if (data.Type == "倒计时") {
         if (data.CountDownMode == "关闭所有") {
-            MyCountDownCloseByPosition("")
+            MyCountDownClose("")
+            return
+        }
+        data.CountDownName := data.HasProp("CountDownName") ? Trim(replace(data.CountDownName)) : ""
+        if (data.CountDownMode == "关闭" && data.CountDownName != "") {
+            MyCountDownClose("", data.CountDownName)
             return
         }
         data.PosX := PromptInt(resolve(data.PosX), -32768, 32767)
@@ -101,7 +107,7 @@ OnPrompt(tableItem, cmd, index) {
             }
             TimeExecCountDown(tableItem, index, data)
         } else
-            MyCountDownCloseByPosition(CountDownPosKey(data.PosX, data.PosY))
+            MyCountDownClose(CountDownPosKey(data.PosX, data.PosY))
         return
     }
     if (data.Type == "区域高亮") {
