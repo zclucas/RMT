@@ -182,10 +182,10 @@
                 MainSoftData.%f.key% := Integer(def)
                 try this.ui.Update(f.ctrl, "SelectedIndex", Integer(def))
             case "cmbText":
-                MainSoftData.%f.key% := def
                 if (f.key == "Lang") {
-                    try this.ui.Update(f.ctrl, "SelectedIndex", 0)
+                    SetTimer(ObjBindMethod(this, "RefreshLanguage", def), -1)
                 } else {
+                    MainSoftData.%f.key% := def
                     try this.ui.Update(f.ctrl, "Text", String(def))
                 }
             case "logLevel":
@@ -801,14 +801,70 @@
 
     OnLangChanged(state, ctrl, event) {
         newLang := this.ui.Query(ctrl)
-        MainSoftData.Lang := newLang
-        this.MarkSettingDirty(ctrl)
+        if (newLang != "" && newLang != MainSoftData.Lang)
+            SetTimer(ObjBindMethod(this, "RefreshLanguage", newLang), -1)
+    }
+
+    RefreshLanguage(newLang) {
+        global MyMainWin
+        if (this != MyMainWin || !IsObject(this.ui) || this._languageRefreshPending || newLang == MainSoftData.Lang)
+            return
+
+        oldLang := MainSoftData.Lang
+        oldUi := this.ui
+        toolText := oldUi.Query("TxtToolText")
+        alwaysOnTop := oldUi.Query("ChkAlwaysOnTop") == "True"
+        win := "ahk_id " oldUi.wpfHwnd
+        maximized := WinGetMinMax(win) == 1
+        WinGetPos(&x, &y, &w, &h, win)
+        pos := maximized ? [] : [x, y, w, h]
+
+        selectedTab := MainSoftData.TableIndex
+        this._languageRefreshPending := true
         SetAppLanguage(newLang)
-        ; 重建设定页以刷新所有翻译文字
-        settingIdx := GetTableIndexByID("Setting")
-        if (IsObject(MyMainWin) && IsObject(MyMainWin.ui)) {
-            MyMainWin._builtTabs.Delete(settingIdx)
-            MyMainWin._EnsureTabBuilt(settingIdx)
+        ; 独立构建新窗口，句柄就绪后再关闭旧窗口。
+        replacement := MainWin()
+        replacement._settingDirty := this._settingDirty.Clone()
+        replacement._settingDirty["behavior"] := true
+        try {
+            replacement.BuildAndShow(pos, maximized, selectedTab)
+        } catch as e {
+            RestoreLanguage()
+            throw e
+        }
+        MyMainWin := replacement
+        WaitMainWinReady(FinishLanguageRefresh)
+
+        FinishLanguageRefresh() {
+            if (!MainWinHwndReady()) {
+                RestoreLanguage()
+                return
+            }
+            try {
+                InitUIFinishUI(false)
+                replacement.ui.Update("TxtToolText", "Text", toolText)
+                if (alwaysOnTop) {
+                    replacement.ui.Update("ChkAlwaysOnTop", "IsChecked", "True")
+                    MainSoftData.MyGui.Opt("+AlwaysOnTop")
+                }
+            } finally {
+                oldUi.Update("Window", "Close", "")
+            }
+        }
+
+        RestoreLanguage() {
+            global MyMainWin
+            MyMainWin := this
+            MainSoftData.TableIndex := selectedTab
+            SetAppLanguage(oldLang)
+            this.LoadLeftBarValues()
+            this._languageRefreshPending := false
+            for index, lang in MainSoftData.LangArr {
+                if (lang == oldLang) {
+                    oldUi.Update("CmbLang", "SelectedIndex", index - 1)
+                    break
+                }
+            }
         }
     }
     OnComboText(fieldName, state, ctrl, event) {
@@ -823,7 +879,7 @@
 
     _JoyLtRtAsButtonLabel() {
         isPs5 := (MainSoftData.TriggerJoyType == "PS5")
-        return GetLang(isPs5 ? "L2、R2按键化" : "LT、RT按键化")
+        return isPs5 ? GetLang("L2、R2按键化") : GetLang("LT、RT按键化")
     }
 
     _JoyLtRtAsButtonDesc() {

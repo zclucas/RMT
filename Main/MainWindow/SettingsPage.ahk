@@ -48,7 +48,7 @@
 
         ; ---------- 行/卡片构建 ----------
         ; 中文标签列预留 6 个 13 DIP 全角字及右侧留白。
-        labelWidth := MainSoftData.Lang == "English" ? 112 : 84
+        labelWidth := (MainSoftData.Lang == "简中" || MainSoftData.Lang == "繁體中文") ? 84 : 112
         this._setHelpMap := Map()
         this._setHelpSeq := 0
         helpFnByLabel := Map()
@@ -96,7 +96,7 @@
             return row(label, '<CheckBox Name="' name '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>', tip)
         }
         togI(label, name, val) {
-            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' GetLang("隐藏的页签不影响宏触发，保存后生效。") '"/>'
+            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' this._XmlEsc(GetLang("隐藏的页签不影响宏触发，保存后生效。")) '"/>'
         }
         cmb(label, name, items, sel, zero := false, tip := "", descriptions := [], width := 0, editable := false) {
             selIdx := ""
@@ -144,7 +144,7 @@
             return '<Grid VerticalAlignment="Top"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" VerticalAlignment="Top">' l '</StackPanel><StackPanel Grid.Column="2" VerticalAlignment="Top">' r '</StackPanel></Grid>'
         }
         navItem(id, glyph, text, checked := false) {
-            return '<RadioButton Name="SetNav_' id '" GroupName="SetNav" Style="{StaticResource SetNavItem}"' (checked ? ' IsChecked="True"' : '') '><StackPanel Orientation="Horizontal" Margin="12,0,0,0"><TextBlock Text="' glyph '" FontFamily="' iconFont '" FontSize="14" Foreground="{DynamicResource TextMain}" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock Name="SetNavText_' id '" Text="' this._XmlEsc(text) '" VerticalAlignment="Center" FontSize="13"/></StackPanel></RadioButton>'
+            return '<RadioButton Name="SetNav_' id '" GroupName="SetNav" Style="{StaticResource SetNavItem}"' (checked ? ' IsChecked="True"' : '') '><DockPanel Margin="12,0,8,0"><TextBlock DockPanel.Dock="Left" Text="' glyph '" FontFamily="' iconFont '" FontSize="14" Foreground="{DynamicResource TextMain}" Margin="0,0,9,0" VerticalAlignment="Center"/><Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" VerticalAlignment="Center"><TextBlock Name="SetNavText_' id '" Text="' this._XmlEsc(text) '" FontSize="13"/></Viewbox></DockPanel></RadioButton>'
         }
         pending(body) {
             return '<Expander Header="' GetLang("待确认的原有功能") '" IsExpanded="False" Margin="0,20,0,0" Foreground="{DynamicResource TextSub}"><StackPanel Margin="12">' body '</StackPanel></Expander>'
@@ -397,7 +397,7 @@
         for ni, nd in navDefs {
             if (ni > 1)
                 navAll .= navSep
-            navAll .= navItem(nd[1], nd[2], GetLang(nd[3]), ni == 1)
+            navAll .= navItem(nd[1], nd[2], GetLang(nd[3]) (this._settingDirty.Has(nd[1]) ? " *" : ""), ni == 1)
         }
         navAll .= navSep
         pagesAll := behaviorPage . macroPage . recordPage . triggerPage . hotkeyPage . themePage . aiPage . logPage

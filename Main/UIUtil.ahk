@@ -90,7 +90,7 @@ InitUI() {
 
 ; 主窗句柄就绪后的 UI 收尾。必须跑在句柄回传之后，
 ; 否则适配器按名字取控件会全部落空，随后的保存/切页都会失效。
-InitUIFinishUI() {
+InitUIFinishUI(startup := true) {
     MainSoftData.MyGui := GuiAdapter(MyMainWin.ui)
     MainSoftData.MyGui.Title := "RMTv" RMT_VERSION_DISPLAY
     MainSoftData.TabCtrl := TabAdapter(MyMainWin.ui, MyMainWin)
@@ -103,7 +103,10 @@ InitUIFinishUI() {
     MyUIMacroSettingGui.SureFocusCon := MainSoftData.BtnSave
 
     CustomTrayMenu()
-    OnOpen()
+    if (startup)
+        OnOpen()
+    else
+        RefreshListenVarGui()
 }
 
 OnOpen() {

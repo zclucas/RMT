@@ -50,8 +50,13 @@ LangInitSetting() {
     LangMap := Map("简中", 1)
 
     if (DirExist(LangDir)) {
+        officialNames := ["繁體中文"]
         for name in OfficialLanguages() {
-            if (name != "简中" && FileExist(LangDir "\" name ".txt")) {
+            if (name != "简中" && name != "繁體中文")
+                officialNames.Push(name)
+        }
+        for name in officialNames {
+            if (FileExist(LangDir "\" name ".txt")) {
                 LangMap[name] := 1
                 MainSoftData.LangArr.Push(name)
             }
