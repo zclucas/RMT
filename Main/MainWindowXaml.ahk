@@ -384,17 +384,15 @@ class MainWin {
             . '</Style>'
         foldRowStyles := this._BuildFoldRowStyles()
         ; 主窗口页签样式（隐式 Style，只作用于本窗口）：
-        ; - 固定每个页签大小（宽 80），页签间用 1px 垂直线分割，仅上 20% ~ 下 20%（高度 60%）显示
+        ; - 固定宽 80，高度随标题内容变化，页签间用垂直线分割
         ; - 选中态：整块主题强调色低透明度背景（TabSelBg，各主题自动适配）+ 右上角 Accent 小圆点
         ; - 悬停：ControlBorder（TabItem 无 IsPressed，按下态无法用 Storyboard+DynamicResource，故仅做 hover）
         ; - 圆角：仅第一个页签左侧（4,0,0,4）、最后一个页签右侧（0,4,4,0）适配页签条圆角，其余页签直角
         tabItemStyle := '<Style TargetType="TabItem">'
             . '<Setter Property="Width" Value="80"/>'
-            . '<Setter Property="Height" Value="28"/>'
             . '<Setter Property="MinHeight" Value="28"/>'
-            . '<Setter Property="MaxHeight" Value="28"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">'
-            . '<Grid Height="28" ClipToBounds="True">'
+            . '<Grid ClipToBounds="True">'
             . '<Border x:Name="Bd" Background="Transparent" BorderThickness="0" BorderBrush="Transparent" Padding="5,4,5,4" Cursor="Hand" CornerRadius="0">'
             . '<Grid>'
             . '<Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Center"><ContentPresenter ContentSource="Header" TextElement.Foreground="{DynamicResource TextMain}" TextElement.FontSize="14" TextElement.FontWeight="SemiBold"/></Viewbox>'
@@ -631,13 +629,13 @@ class MainWin {
             XamlUiDiag(fn " 异常: " e.Message " @ " e.File ":" e.Line, "MainWin")
     }
 
-    ; VL_INIT 重建虚拟行后补刷主题字号（否则新行仍用样式声明 11，比已缩放行偏小）
-    RefreshVLFonts() {
+    ; 主题字号预览及 VL_INIT 重建虚拟行后补刷字号
+    RefreshWindowFonts(change := 0) {
         if (!IsObject(this.ui) || this.ui.IsFontScaleSkipped())
             return
         try {
             fs := XAMLHost.GetThemeFontSize()
-            this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, fs))
+            this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(change, fs))
             XAMLHost.SyncChatFontResources(this.ui)
             ; 字号变了行高也跟着变，输入框的最大高度要按新行高重算
             this._aiRowH := Map()

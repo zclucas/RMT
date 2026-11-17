@@ -160,7 +160,7 @@
             tabsBody .= togI(GetLang(def[2]), "TabVisible_" def[1], this._TabVisibleVal(def[1]))
         tabsBody .= '</WrapPanel>'
         appearanceBody := cmb(GetLang("软件字体"), "CmbFont", MainSoftData.FontList, MainSoftData.FontType, false, GetLang("软件界面使用的字体，修改后保存设置生效。"), , 160)
-            . sld(GetLang("字体大小"), "ThemeFontSizeCon", "ThemeFontSizeVal", MainSoftData.FontSize, 0, 40, 1, GetLang("字号 0~40；保存后统一刷新界面。"))
+            . sld(GetLang("字体大小"), "ThemeFontSizeCon", "ThemeFontSizeVal", MainSoftData.FontSize, RMT_ThemeFontSizeMin, RMT_ThemeFontSizeMax, 1, GetLang("字号 15~20，默认 15。"))
 
         ; ---------- 页：系统（按参考稿逐行排列） ----------
         ltRtSwitch := '<CheckBox Name="ChkJoyLtRtAsButton" IsChecked="' (MainSoftData.JoyLtRtAsButton ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>'

@@ -1711,15 +1711,13 @@ extern "C" IMAGEFINDER_API int __cdecl GetApiVersion()
 // Ex 接口保留旧导出 ABI；颜色模式沿用原彩色模板的相似度算法，
 // 不允许灰度/边缘回退绕过颜色检查。未勾选时沿用灰度匹配。
 static int findImageExplicitCore(const cv::Mat& captured, const cv::Mat& tpl,
-	int threshold, bool colorMatch, bool adaptive, const char* key, cv::Point* pt)
+	int threshold, bool colorMatch, bool adaptive, cv::Point* pt)
 {
     if (captured.empty() || tpl.empty()) return 0;
     auto positions = rmt_search_all::images(captured, tpl,
         std::max(0, std::min(100, threshold)), colorMatch, adaptive, true);
     if (positions.empty()) return 0;
-    *pt = *std::min_element(positions.begin(), positions.end(), [](const cv::Point& a, const cv::Point& b) {
-        return a.y != b.y ? a.y < b.y : a.x < b.x;
-    });
+    *pt = positions.front();
     return 1;
 }
 
@@ -1731,7 +1729,7 @@ extern "C" IMAGEFINDER_API int __cdecl FindScreenImageEx(const char* path,
 		cv::Mat tpl = cv::imread(path, cv::IMREAD_UNCHANGED);
 		cv::Mat image = captureScreen(sx, sy, sw, sh);
 		cv::Point pt;
-		if (!findImageExplicitCore(image, tpl, threshold, colorMatch != 0, adaptive != 0, path, &pt)) return 0;
+		if (!findImageExplicitCore(image, tpl, threshold, colorMatch != 0, adaptive != 0, &pt)) return 0;
 		*x = sx + pt.x; *y = sy + pt.y; return 1;
 	} catch (const cv::Exception&) { return 0; }
 }
@@ -1744,7 +1742,7 @@ extern "C" IMAGEFINDER_API int __cdecl FindWinImageEx(const char* path, int hwnd
 		cv::Mat tpl = cv::imread(path, cv::IMREAD_UNCHANGED);
 		cv::Mat image = captureScreen(hwnd, sx, sy, sw, sh);
 		cv::Point pt;
-		if (!findImageExplicitCore(image, tpl, threshold, colorMatch != 0, adaptive != 0, path, &pt)) return 0;
+		if (!findImageExplicitCore(image, tpl, threshold, colorMatch != 0, adaptive != 0, &pt)) return 0;
 		*x = sx + pt.x; *y = sy + pt.y; return 1;
 	} catch (const cv::Exception&) { return 0; }
 }

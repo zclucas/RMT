@@ -42,7 +42,8 @@ class XamlWin {
         safeTitle := StrReplace(StrReplace(StrReplace(title, "&", "&amp;"), '"', "&quot;"), "<", "&lt;")
         ; Emit design DIP sizes. ApplyDialogVisualScale enlarges the window and pins the root
         ; so EngineHost's Viewbox matches the main UI. Pre-multiplying here would double-scale.
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * visualScale) '" Height="' Round(height * visualScale) '"')
+        heightAttr := height == "Auto" ? 'SizeToContent="Height"' : 'Height="' Round(height * visualScale) '"'
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * visualScale) '" ' heightAttr)
         ; Window chrome corners sit outside the title row. Paint them with TitleBarColor so a
         ; Viewbox letterbox cannot show the default white/BgColor strip above the title.
         winEnd := InStr(ui.xaml, ">")

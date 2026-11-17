@@ -28,3 +28,4 @@ _bmad-output
 Plugins/SupportQr/bin/
 Plugins/SupportQr/obj/
 .workbuddy/
+Cache/

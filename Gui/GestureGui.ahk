@@ -52,12 +52,7 @@ class GestureGui {
         binding := GestureBinding(value, source)
         current := GestureRead(binding)
         mouse := source == "Mouse"
-        body := XAML_Generator("DockPanel").Margin("16,12").LastChildFill("True")
-        buttons := body.Add("DockPanel").DockPanel_Dock("Bottom").LastChildFill("False").Margin("0,10,0,0")
-        AddCmdOkBtn(buttons, "ClearGesture", "", GetLang("清除")).DockPanel_Dock("Left").Width(96)
-        AddCmdOkBtn(buttons, "SaveGesture", "8,0,0,0", GetLang("确定")).DockPanel_Dock("Right").IsDefault("True")
-        AddCmdOkBtn(buttons, "CancelGesture", "", GetLang("取消")).DockPanel_Dock("Right")
-        panel := body.Add("StackPanel")
+        panel := XAML_Generator("StackPanel").Margin("16,12")
         if (mouse)
             this.BuildMouse(panel, current, binding)
         else
@@ -65,8 +60,12 @@ class GestureGui {
         panel.Add("TextBlock").Name("GestureHint").TextWrapping("Wrap").Margin("0,8,0,0")
             .Text(mouse ? this.MouseHint() : GetLang("使用 Windows 精确式触控板，松开手指时触发宏。"))
 
+        buttons := panel.Add("DockPanel").LastChildFill("False").Margin("0,10,0,0")
+        AddCmdOkBtn(buttons, "ClearGesture", "", GetLang("清除")).DockPanel_Dock("Left").Width(96)
+        AddCmdOkBtn(buttons, "SaveGesture", "8,0,0,0", GetLang("确定")).DockPanel_Dock("Right").IsDefault("True")
+        AddCmdOkBtn(buttons, "CancelGesture", "", GetLang("取消")).DockPanel_Dock("Right")
         title := GetLang(mouse ? "鼠标手势" : "触控板手势") (remark == "" ? "" : " · " remark)
-        this.UI := XamlWin.Create(title, body, 460, mouse ? 370 : 275)
+        this.UI := XamlWin.Create(title, panel, 460, "Auto")
         this.UI.OnEvent("Window", "Closing", this.Close.Bind(this, false))
         this.UI.OnEvent("Window", "KeyDown:Escape", this.Close.Bind(this, true))
         this.UI.OnEvent("CancelGesture", "Click", this.Close.Bind(this, true))
@@ -104,19 +103,17 @@ class GestureGui {
     Hwnd() => this.UI.HasProp("wpfHwnd") ? this.UI.wpfHwnd : 0
 
     AddCombo(row, column, name, label, selected) {
-        field := row.Add("Grid").Grid_Column(column).Cols("Auto", "*")
-        labelBox := field.Add("Viewbox").MaxWidth(92).Margin("0,0,8,0").StretchDirection("DownOnly")
-            .HorizontalAlignment("Left").VerticalAlignment("Center")
-        labelBox.Add("TextBlock").Text(GetLang(label) ":").TextAlignment("Left")
-        return field.Add("ComboBox").Grid_Column(1).Name(name).MinHeight(28).SelectedIndex(selected - 1)
+        row.Add("TextBlock").Grid_Column(column).Text(label).TextWrapping("Wrap").Margin("0,0,0,4")
+        return row.Add("ComboBox").Grid_Row(1).Grid_Column(column).Name(name)
+            .AutomationProperties_Name(label).Height("Auto").MinHeight(28).SelectedIndex(selected - 1)
     }
 
     BuildTouch(panel, current) {
-        options := panel.Add("Grid").Margin("0,0,0,8").Cols("*", "16", "*")
-        fingers := this.AddCombo(options, 0, "FingerCount", "手指数量", current ? current.Fingers : 1)
+        options := panel.Add("Grid").Margin("0,0,0,8").Cols("*", "16", "*").Rows("Auto", "Auto")
+        fingers := this.AddCombo(options, 0, "FingerCount", GetLang("手指数量"), current ? current.Fingers : 1)
         for index, label in GestureFingerNames()
             fingers.Add("ComboBoxItem").Tag(index).Content(GetLang(label))
-        actions := this.AddCombo(options, 2, "TouchAction", "动作", current ? current.Action : 1)
+        actions := this.AddCombo(options, 2, "TouchAction", GetLang("动作"), current ? current.Action : 1)
         for index, label in GestureTouchActions()
             actions.Add("ComboBoxItem").Tag(index).Content(GetLang(label))
         modifiers := current ? current.Modifiers : 0
@@ -165,8 +162,8 @@ class GestureGui {
             if (current.Shape == "Custom")
                 this.Custom := StrSplit(binding, "|")[3]
         }
-        options := panel.Add("Grid").Margin("0,0,0,8").Cols("*", "16", "*")
-        keyCombo := this.AddCombo(options, 0, "MouseKey", "鼠标按键", this.KeyIndex)
+        options := panel.Add("Grid").Margin("0,0,0,8").Cols("*", "16", "*").Rows("Auto", "Auto")
+        keyCombo := this.AddCombo(options, 0, "MouseKey", GetLang("鼠标按键"), this.KeyIndex)
         for index, key in this.MouseKeys
             keyCombo.Add("ComboBoxItem").Tag(index).Content(GetLang(GestureMouseKeys()[key]))
 
@@ -180,7 +177,7 @@ class GestureGui {
             if (id == (current ? current.Shape : "Custom"))
                 this.ShapeIndex := index
         }
-        shapes := this.AddCombo(options, 2, "Shape", "手势轨迹", this.ShapeIndex).MaxDropDownHeight(340)
+        shapes := this.AddCombo(options, 2, "Shape", GetLang("手势轨迹"), this.ShapeIndex).MaxDropDownHeight(340)
         chevrons := Map("Caret", 0xE96D, "V", 0xE96E, "CaretLeft", 0xE96F, "CaretRight", 0xE970)
         for index, id in this.ShapeIDs {
             item := shapes.Add("ComboBoxItem").Tag(index).MinHeight(24).VerticalContentAlignment("Center")

@@ -120,7 +120,8 @@ class ThemeSettingGui {
             .Foreground(this._colorUi.labelFg).FontSize(this._colorUi.labelFs)
             .VerticalAlignment("Center")
         sizeSlider := sizeCol.Add("Slider").Grid_Column(1).Name("FontSizeCon").Height(this._colorUi.boxH).MinHeight(this._colorUi.boxH).Margin("2,0,4,0")
-            .Minimum("0").Maximum("40").Value(String(defFs)).IsMoveToPointEnabled("True")
+            .Minimum(RMT_ThemeFontSizeMin).Maximum(RMT_ThemeFontSizeMax).Value(String(defFs)).IsMoveToPointEnabled("True")
+            .TickFrequency(1).IsSnapToTickEnabled("True")
             .VerticalAlignment("Center")
         sizeVal := sizeCol.Add("TextBlock").Grid_Column(2).Name("FontSizeVal").Text(String(defFs))
             .FontSize(this._colorUi.labelFs).Foreground("{DynamicResource TextMain}")
@@ -337,7 +338,6 @@ class ThemeSettingGui {
             return
         try this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(change, fs))
         this._previewFontSize := fs
-        ApplyUserFontSize(fs, false)
     }
 
     OnPickColor(slot, state, ctrl, event) {
@@ -386,7 +386,7 @@ class ThemeSettingGui {
         MainSoftData.ThemeColors := AppThemeUtil.CloneColorMap(this._colors)
         AppThemeUtil.ApplyToRuntime(MainSoftData.ThemeColors)
         AppThemeUtil.SaveToToml()
-        global XAML_FontSizeDelta, XAML_FontSizeBase, XAML_FontWeight, XAML_TextClarity
+        global XAML_TextClarity
         try {
             try {
                 sel := this.ui.Query("FontFamilyCon")
@@ -395,21 +395,22 @@ class ThemeSettingGui {
                     CfgWrite(sel, SettingFile, SettingSection, "FontType")
                 }
             }
-            oldDelta := XAML_FontSizeDelta
+            oldSize := XAMLHost.GetThemeFontSize()
             defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
-            fs := this.HasProp("_previewFontSize") ? this._previewFontSize : defFs
+            previewSize := this.HasProp("_previewFontSize") ? this._previewFontSize : defFs
+            fs := previewSize
             try {
                 q := this.ui.Query("FontSizeCon")
                 if (q != "" && IsNumber(q))
                     fs := Integer(q)
             }
             fs := ApplyUserFontSize(fs, true)
-            change := XAML_FontSizeDelta - oldDelta
+            change := fs - oldSize
             MainSoftData.FontClarity := "1"
             XAML_TextClarity := 1
             this._previewFontSize := fs
             XAMLHost.ApplyFontsToAllWindows(change, fs, this.ui)
-            try this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, fs))
+            try this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(fs - previewSize, fs))
         }
         ; 已打开的全部界面同步「通用窗口」色与业务浮层色
         AppThemeUtil.RefreshAllOpenWindows()

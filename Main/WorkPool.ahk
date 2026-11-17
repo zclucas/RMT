@@ -149,6 +149,7 @@ class WorkPool {
 
         this.taskQueue := TaskQueue()     ; 等待分发的任务队列，每项 {cmd, tableIndex, itemIndex}
         this.idxCounter := 0          ; Worker 索引计数器（递增，用于分配唯一 idx）
+        this.stoppedWorkerIndex := 0  ; 全局停止前已分配的编号，旧补建定时器不再使用
         this.taskSequence := 0
         this.isDispatching := false    ; Dispatch 防重入标志
         this.dispatchPending := false
@@ -227,10 +228,12 @@ class WorkPool {
     }
 
     CreateWorker(reuseIdx := 0) {
-        if (this.HasOwnProp("closing"))
-            return
         previousCritical := A_IsCritical
         Critical("On")
+        if (this.HasOwnProp("closing") || MainSoftData.IsSuspend) {
+            Critical(previousCritical)
+            return
+        }
         idx := reuseIdx > 0 ? reuseIdx : ++this.idxCounter
         wd := WorkerData(idx)
         this.workerMap[idx] := wd
@@ -257,6 +260,96 @@ class WorkPool {
         } finally Critical(previousCritical)
         GraphPoolLog("CreateWorker", Format("Worker#{1} 已启动 pid={2} pending={3} maxSize={4}"
             , idx, wd.pid, this.pending.Count, this.maxSize))
+    }
+
+    StopAllWorkers() {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            this.stoppedWorkerIndex := this.idxCounter
+            tasks := this.taskQueue.queue
+            this.taskQueue := TaskQueue()
+            workers := []
+            ; 先发出全部终止请求，再回收通道，避免逐个等待时其它 Worker 继续发送输入。
+            for idx, wd in this.workerMap {
+                workers.Push(wd)
+                wd.stopRequested := true
+                if (wd.taskID)
+                    tasks.Push(wd)
+                if (wd.hProc)
+                    DllCall("TerminateProcess", "ptr", wd.hProc, "uint", 1)
+            }
+            this.TerminateResidualWorkers()
+            for wd in workers {
+                try this.CleanUpWorker(wd, false, true)
+                catch as e {
+                    GraphPoolLog("全局停止清理失败", Format("Worker#{1} {2}", wd.idx, e.Message))
+                }
+            }
+            ; 回收进程后，松开最后同步的按键并清除排队任务、分支和后置钩子的占用。
+            for task in tasks {
+                tableItem := GetTableByID(task.tableID)
+                itemIndex := GetItemIndexInTable(tableItem, RegExReplace(task.itemID, "_hook$"))
+                item := GetItemByIndex(tableItem, itemIndex)
+                if (!item)
+                    continue
+                item.Killed := true
+                item.ToggleState := false
+                item.GraphBranchCount := 0
+                item.IsWorkIndex := 0
+                try ReleaseTableItemHoldKeys(tableItem, itemIndex)
+                try SetTableItemState(tableItem, itemIndex, 3)
+            }
+        } finally {
+            this.ScheduleCoreWorkers()
+            Critical(previousCritical)
+        }
+    }
+
+    TerminateResidualWorkers() {
+        ; 进程可能已脱离池登记。按完整路径核对，覆盖本目录的所有 Work.exe。
+        entry := Buffer(A_PtrSize == 8 ? 568 : 556, 0) ; PROCESSENTRY32W
+        nameOffset := A_PtrSize == 8 ? 44 : 36
+        NumPut("uint", entry.Size, entry)
+        path := Buffer(32768 * 2)
+        snapshot := DllCall("CreateToolhelp32Snapshot", "uint", 2, "uint", 0, "ptr") ; TH32CS_SNAPPROCESS
+        if (snapshot == -1)
+            return
+        try {
+            found := DllCall("Process32FirstW", "ptr", snapshot, "ptr", entry)
+            while (found) {
+                if (StrGet(entry.Ptr + nameOffset, "UTF-16") = "Work.exe") {
+                    pid := NumGet(entry, 8, "uint")
+                    process := DllCall("OpenProcess", "uint", 0x1001, "int", false, "uint", pid, "ptr") ; 查询路径和终止权限
+                    if (process) {
+                        try {
+                            length := path.Size // 2
+                            if (DllCall("QueryFullProcessImageNameW", "ptr", process, "uint", 0
+                                , "ptr", path, "uint*", &length) && StrGet(path, length, "UTF-16") = this.workerExe)
+                                DllCall("TerminateProcess", "ptr", process, "uint", 1)
+                        } finally CloseHandle(process)
+                    }
+                }
+                found := DllCall("Process32NextW", "ptr", snapshot, "ptr", entry)
+            }
+        } finally CloseHandle(snapshot)
+    }
+
+    ScheduleCoreWorkers() {
+        if (!MainSoftData.IsSuspend && !this.HasOwnProp("closing"))
+            SetTimer(ObjBindMethod(this, "RestoreCoreWorkers"), -500)
+    }
+
+    RestoreCoreWorkers() {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (MainSoftData.IsSuspend || this.HasOwnProp("closing"))
+                return
+            target := this.isDynamic ? this.corePoolSize : this.maxSize
+            loop Max(0, target - this.GetActiveWorkerCount())
+                this.CreateWorker()
+        } finally Critical(previousCritical)
     }
 
     GetActiveWorkerCount() {
@@ -517,7 +610,7 @@ class WorkPool {
 
     ;分配任务
     Dispatch() {
-        if (this.HasOwnProp("closing"))
+        if (this.HasOwnProp("closing") || MainSoftData.IsSuspend)
             return
         if (this.isDispatching) {
             this.dispatchPending := true
@@ -565,7 +658,7 @@ class WorkPool {
     }
 
     _AssignTask() {
-        if (!this.freePool.Count || !this.taskQueue.Size())
+        if (MainSoftData.IsSuspend || !this.freePool.Count || !this.taskQueue.Size())
             return false
         for key, worker in this.freePool {
             idx := key
@@ -867,9 +960,16 @@ class WorkPool {
     }
 
     TryRecreateWorker(index) {
-        if (this.HasOwnProp("closing") || this.workerMap.Has(index))
-            return
-        this.CreateWorker(index)
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (this.HasOwnProp("closing") || this.workerMap.Has(index))
+                return
+            if (index <= this.stoppedWorkerIndex)
+                this.RestoreCoreWorkers()
+            else
+                this.CreateWorker(index)
+        } finally Critical(previousCritical)
         this.Dispatch()
     }
 
@@ -1108,6 +1208,8 @@ class WorkPool {
 
         commandsStr := SubStr(payload, 3)
         for record in StrSplit(commandsStr, IPC_REC) {
+            if (!this.IsInstanceAlive(wd))
+                break
             if (record == "")
                 continue
 
