@@ -1,6 +1,9 @@
 #Requires AutoHotkey v2.0
 
 class PromptData {
+    static RegionColor := "FF8A00"
+    static RegionThickness := 4
+
     __New() {
         this.SerialStr := ""
         this.Type := "软件弹窗"
@@ -19,12 +22,14 @@ class PromptData {
         this.Beep := "默认"
         this.Duration := 5000
         this.PasteName := ""
+        this.RegionMode := "显示"
+        this.RegionName := ""
         this.PosX := 200
         this.PosY := 200
         this.Width := 200
         this.Height := 100
-        this.Color := "FF8A00"
-        this.Thickness := 4
+        this.Color := PromptData.RegionColor
+        this.Thickness := PromptData.RegionThickness
         this.FlashDuration := 300
         this.FlashCount := 2
         this.Monitors := "1"
@@ -54,6 +59,15 @@ PromptInt(value, min, max) {
     return Integer(value)
 }
 
+; 旧版区域以起点和长度保存，新版可使用起点和终点。
+PromptRangeAxis(start, end, length, resolve) {
+    start := PromptInt(resolve(start), -32768, 65534)
+    if (end == "")
+        return [PromptInt(start, -32768, 32767), PromptInt(resolve(length), 1, 32767)]
+    end := PromptInt(resolve(end), -32768, 65534)
+    return [PromptInt(Min(start, end), -32768, 32767), PromptInt(Abs(end - start), 1, 32767)]
+}
+
 PromptMonitorNumbers(value) {
     monitors := []
     seen := Map()
@@ -76,14 +90,28 @@ OnPrompt(tableItem, cmd, index) {
             MyCountDownCloseByPosition("")
             return
         }
-        if (data.CountDownMode == "显示")
+        data.PosX := PromptInt(resolve(data.PosX), -32768, 32767)
+        data.PosY := PromptInt(resolve(data.PosY), -32768, 32767)
+        if (data.CountDownMode == "显示") {
+            if (CountDownKind(data) == "时长") {
+                for name, limit in Map("Hour", 8760, "Min", 525600, "Sec", 31536000) {
+                    if (data.HasProp(name))
+                        data.%name% := PromptInt(resolve(data.%name%), 0, limit)
+                }
+            }
             TimeExecCountDown(tableItem, index, data)
-        else {
-            x := PromptInt(resolve(data.PosX), -32768, 32767)
-            y := PromptInt(resolve(data.PosY), -32768, 32767)
-            MyCountDownCloseByPosition(CountDownPosKey(x, y))
-        }
+        } else
+            MyCountDownCloseByPosition(CountDownPosKey(data.PosX, data.PosY))
         return
+    }
+    if (data.Type == "区域高亮") {
+        data.RegionName := data.HasProp("RegionName") ? Trim(replace(data.RegionName)) : ""
+        if (data.HasProp("RegionMode") && data.RegionMode == "关闭") {
+            request := {Type: data.Type, RegionMode: data.RegionMode, RegionName: data.RegionName}
+            if (MyShowPrompt(JSON.stringify(request, 0)) == false)
+                throw Error(GetLang("提示请求发送失败"))
+            return
+        }
     }
     data.Text := replace(data.Text)
     if (data.Type == "音频") {
@@ -128,24 +156,24 @@ OnPrompt(tableItem, cmd, index) {
             }
         case "临时提示":
             data.Duration := PromptInt(resolve(data.Duration), 1, 600000)
-        case "区域高亮", "屏幕边缘闪光":
+        case "区域高亮":
+            x := PromptRangeAxis(data.PosX, data.HasProp("EndPosX") ? data.EndPosX : "", data.Width, resolve)
+            y := PromptRangeAxis(data.PosY, data.HasProp("EndPosY") ? data.EndPosY : "", data.Height, resolve)
+            data.PosX := x[1], data.Width := x[2]
+            data.PosY := y[1], data.Height := y[2]
+            data.Duration := PromptInt(resolve(data.Duration), 1, 600000)
+            data.Color := PromptData.RegionColor
+            data.Thickness := PromptData.RegionThickness
+        case "屏幕边缘闪光":
             data.Thickness := PromptInt(resolve(data.Thickness), 1, 100)
             data.Color := StrReplace(Trim(replace(data.Color)), "#")
             if (!RegExMatch(data.Color, "i)^[0-9a-f]{6}$"))
                 throw ValueError(GetLang("颜色使用六位十六进制 RGB"))
-            if (data.Type == "区域高亮") {
-                data.PosX := PromptInt(resolve(data.PosX), -32768, 32767)
-                data.PosY := PromptInt(resolve(data.PosY), -32768, 32767)
-                data.Width := PromptInt(resolve(data.Width), 1, 32767)
-                data.Height := PromptInt(resolve(data.Height), 1, 32767)
-                data.Duration := PromptInt(resolve(data.Duration), 1, 600000)
-            } else {
-                data.FlashDuration := PromptInt(resolve(data.FlashDuration), 50, 5000)
-                data.FlashCount := PromptInt(resolve(data.FlashCount), 1, 20)
-                data.Monitors := replace(data.Monitors)
-                if (data.FlashMode == "自定义")
-                    PromptMonitorNumbers(data.Monitors)
-            }
+            data.FlashDuration := PromptInt(resolve(data.FlashDuration), 50, 5000)
+            data.FlashCount := PromptInt(resolve(data.FlashCount), 1, 20)
+            data.Monitors := replace(data.Monitors)
+            if (data.FlashMode == "自定义")
+                PromptMonitorNumbers(data.Monitors)
     }
     data.PasteName := Trim(replace(data.PasteName))
     if (data.Type == "自由贴" && data.PasteMode == "文本" && data.PasteTextSource == "剪贴板图文"

@@ -1116,7 +1116,7 @@ function New-RMTAssets {
             @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang") -Filter "*.txt" -ErrorAction SilentlyContinue |
                 Where-Object { $_.BaseName -ne "简中" -and $_.BaseName -ne "中文" } |
                 ForEach-Object {
-                    $entry = $langArchiveNames[$_.Name] ?? $_.Name
+                    $entry = if ($langArchiveNames.ContainsKey($_.Name)) { $langArchiveNames[$_.Name] } else { $_.Name }
                     @{ Dest = $entry; Src = "Lang\$($_.Name)" }
                 })
             @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang\Flags") -Filter "*.png" -File |

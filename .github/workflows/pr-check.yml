@@ -42,7 +42,7 @@ jobs:
           Copy-Item -LiteralPath $env:AHK32 -Destination (Join-Path $dst 'v2\AutoHotkey32.exe') -Force
           Write-Host "installed: $dst"
 
-      - name: 编译主程序与 Worker (x64)
+      - name: 编译主程序和 Worker (x64) 及更新程序 (x64 / x86)
         run: |
           & (Join-Path $env:GITHUB_WORKSPACE 'Build.ps1') x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

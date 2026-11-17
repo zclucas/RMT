@@ -22,6 +22,7 @@ class WindowManageGui {
         this._batching := false
         this._syncing := false
         this._positionPick := ""
+        this._positionHotkeys := []
         this.Data := ""
         this.SerialStr := ""
 
@@ -204,7 +205,7 @@ class WindowManageGui {
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/23-窗口管理", ObjBindMethod(this, "TriggerMacro"))
         if (isAdjust)
-            this.ui.OnEvent("BtnCmdTargeter", "Click", ObjBindMethod(this, "StartPositionPick"))
+            this.ui.OnEvent("BtnCmdF1", "Click", this.StartPositionPick.Bind(this))
         this.ui.OnEvent("WindowModeCon", "SelectionChanged", ObjBindMethod(this, "OnActionChange"))
         this.ui.OnEvent("ActionTypeCon", "SelectionChanged", ObjBindMethod(this, "OnActionChange"))
         this.ui.OnEvent("WinInfoEditBtn", "Click", ObjBindMethod(this, "OnClickWinEditBtn"))
@@ -348,7 +349,7 @@ class WindowManageGui {
         }
         this._resultAction := actionKey
         this._ComboPush("CloseProcessCon", "Visibility", actionKey == "关闭窗口" ? "Visible" : "Collapsed")
-        isShowPos := actionKey == "移动窗口" || actionKey == "相对移动" || actionKey == "位置和宽高"
+        isShowPos := this.HasPositionAction(actionKey)
         if (isShowPos) {
             for axis in ["X", "Y"] {
                 field := "Pos" axis
@@ -364,8 +365,9 @@ class WindowManageGui {
 
         this._ComboPush("PositionLabel", "Text", GetLang(actionKey == "相对移动" ? "偏移值" : "坐标值") "：")
         if (this.CmdKey == "调整窗口") {
-            this._ComboPush("BtnCmdTargeter", "Visibility", isShowPos ? "Visible" : "Collapsed")
-            this._ComboPush("BtnCmdTargeter", "ToolTip", GetLang(actionKey == "相对移动" ? "选取偏移值" : "选取坐标"))
+            this._ComboPush("BtnCmdF1", "Visibility", isShowPos ? "Visible" : "Collapsed")
+            this._ComboPush("BtnCmdF1", "ToolTip", actionKey == "相对移动" ? "F1: " GetLang("选取偏移值") : GetLang("F1：选取坐标"))
+            this._BindPositionHotkey(isShowPos)
         }
         this._ComboPush("ActionHint", "Text", GetLang(WindowEditorHint(actionKey)))
         fields := WindowInfoFields(actionKey)
@@ -389,11 +391,24 @@ class WindowManageGui {
         this.SetConArrState(this.TransparencyRelateArrCon, false, isShowTransparency)
     }
 
+    HasPositionAction(action) {
+        return action == "移动窗口" || action == "相对移动" || action == "位置和宽高"
+    }
+
+    _BindPositionHotkey(enable) {
+        if (enable && !this._positionHotkeys.Length && this.Hwnd())
+            this._positionHotkeys := WinHotkey.Register(["F1"], this.StartPositionPick.Bind(this), this.Hwnd())
+        else if (!enable && this._positionHotkeys.Length) {
+            WinHotkey.UnregisterAll(this._positionHotkeys)
+            this._positionHotkeys := []
+        }
+    }
+
     StartPositionPick(*) {
         if (!IsObject(this.ui) || IsObject(this._positionPick) || MainSoftData.SelectAreaAction != "" || MainSoftData.GetAreaAction != "")
             return
         action := this._SelectedAction()
-        if (action != "移动窗口" && action != "相对移动" && action != "位置和宽高")
+        if (!this.HasPositionAction(action))
             return
         this._positionPick := {Action: action, Origin: ""}
         try {
@@ -583,9 +598,12 @@ class WindowManageGui {
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
         this._syncing := false
+        if (this.CmdKey == "调整窗口")
+            this._BindPositionHotkey(this.HasPositionAction(this._SelectedAction()))
     }
 
     OnWindowClosing(state, ctrl, event) {
+        this._BindPositionHotkey(false)
         this._EndPositionPick()
         try this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
@@ -600,6 +618,7 @@ class WindowManageGui {
     }
 
     _CloseWindow() {
+        this._BindPositionHotkey(false)
         this._EndPositionPick()
         try this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {

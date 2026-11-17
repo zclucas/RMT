@@ -83,6 +83,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           exit 0
 
+      - name: 校验两个架构的更新程序已打包
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          function Assert-ZipEntry($zipPath, $entryPath) {
+            $zip = [IO.Compression.ZipFile]::OpenRead($zipPath)
+            try {
+              $entry = $zip.Entries | Where-Object { $_.FullName.Replace('\', '/') -ceq $entryPath }
+              if (-not $entry -or $entry.Length -eq 0) {
+                throw "Missing or empty ${entryPath} in $zipPath"
+              }
+            } finally {
+              $zip.Dispose()
+            }
+          }
+
+          $outDir = Join-Path $env:RUNNER_TEMP 'RMTRelease'
+          foreach ($arch in 'x64', 'x86') {
+            Assert-ZipEntry (Join-Path $outDir "RMTv$($env:RMT_TAG_VERSION)_$arch.zip") 'Thread/Update.exe'
+            Assert-ZipEntry (Join-Path $outDir "RMTAssets_$arch/RMT.zip") 'Update.exe'
+          }
+
       - name: 写入 release-info.json
         run: |
           $ErrorActionPreference = 'Stop'
