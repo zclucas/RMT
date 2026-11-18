@@ -1588,6 +1588,7 @@ class BrowserData {
         this.SaveVar := ""
         this.TimeoutMs := 10000
         this.Headless := 0
+        this.Incognito := 0 ; 0=默认会话, 1=独立会话(无痕)
         this.BrowserPort := 9222
         this.BrowserPath := ""
         this.UserDataDir := ""

@@ -30,7 +30,11 @@ BROWSER_API int Browser_CloseBrowser();
 BROWSER_API int Browser_GetTabs(char* outResult, int maxLen);
 // targetRef: can be "1" (index, 1-based), targetId, or keyword in title/url
 BROWSER_API int Browser_SwitchTab(const char* targetRef);
+BROWSER_API int Browser_GetActiveTabId(char* outTargetId, int maxLen);
 BROWSER_API int Browser_NewTab(const char* url, char* outTargetId, int maxLen);
+BROWSER_API int Browser_NewTabInContext(const char* url, const char* contextId, char* outTargetId, int maxLen);
+BROWSER_API int Browser_CreateContext(char* outContextId, int maxLen);
+BROWSER_API int Browser_CloseContext(const char* contextId);
 BROWSER_API int Browser_CloseTabByRef(const char* targetRef);
 
 // --- Wait Conditions ---

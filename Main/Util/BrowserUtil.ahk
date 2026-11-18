@@ -240,6 +240,16 @@ class BrowserUtil {
         return true
     }
 
+    static GetActiveTabId() {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(256, 0)
+        res := DllCall("RMT_Browser\Browser_GetActiveTabId", "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
     static NewTab(url := "about:blank") {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
@@ -248,6 +258,35 @@ class BrowserUtil {
         if (res != 0)
             this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static NewTabInContext(url := "about:blank", contextId := "") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(256, 0)
+        res := DllCall("RMT_Browser\Browser_NewTabInContext", "Ptr", this._Utf8(url), "Ptr", this._Utf8(contextId), "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static CreateContext() {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(256, 0)
+        res := DllCall("RMT_Browser\Browser_CreateContext", "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static CloseContext(contextId) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_CloseContext", "Ptr", this._Utf8(String(contextId)), "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
     }
 
     static CloseTabByRef(targetRef := "") {
@@ -950,6 +989,13 @@ OnBrowser(tableItem, cmd, index) {
 }
 
 _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
+    if (data.HasOwnProp("TargetRef") && actionType != "打开网址" && actionType != "新建分页" && actionType != "切换分页" && actionType != "关闭分页" && actionType != "关闭标签" && actionType != "关闭") {
+        rawRef := Trim(data.TargetRef)
+        targetRef := (rawRef != "" && !InStr(rawRef, "{") && TryGetTabVarValue(&vVal, tableItem, index, rawRef, true)) ? vVal : resolve(rawRef)
+        if (targetRef != "")
+            BrowserUtil.SwitchTab(targetRef)
+    }
+
     switch actionType {
         case "打开网址":
             url := resolve(data.Url)
@@ -963,7 +1009,12 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             timeoutMs := Integer(data.TimeoutMs)
 
             BrowserUtil.Launch(bType, bPath, hLess, uDir, hPort)
-            BrowserUtil.Navigate(url, timeoutMs)
+            if (data.HasOwnProp("Incognito") && Integer(data.Incognito)) {
+                ctxId := BrowserUtil.CreateContext()
+                BrowserUtil.NewTabInContext(url, ctxId)
+            } else {
+                BrowserUtil.Navigate(url, timeoutMs)
+            }
             return url
 
         case "当前页跳转":
@@ -980,19 +1031,24 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             return BrowserUtil.NewTab(url)
 
         case "切换分页":
-            targetRef := data.HasOwnProp("TargetRef") ? resolve(data.TargetRef) : "1"
+            rawRef := data.HasOwnProp("TargetRef") ? Trim(data.TargetRef) : "1"
+            targetRef := (rawRef != "" && !InStr(rawRef, "{") && TryGetTabVarValue(&vVal, tableItem, index, rawRef, true)) ? vVal : resolve(rawRef)
             if (targetRef == "")
                 targetRef := "1"
             BrowserUtil.SwitchTab(targetRef)
             return targetRef
 
         case "关闭分页", "关闭标签":
-            targetRef := data.HasOwnProp("TargetRef") ? resolve(data.TargetRef) : ""
+            rawRef := data.HasOwnProp("TargetRef") ? Trim(data.TargetRef) : ""
+            targetRef := (rawRef != "" && !InStr(rawRef, "{") && TryGetTabVarValue(&vVal, tableItem, index, rawRef, true)) ? vVal : resolve(rawRef)
             BrowserUtil.CloseTabByRef(targetRef)
             return true
 
         case "获取分页列表":
             return BrowserUtil.GetTabs()
+
+        case "获取当前分页ID":
+            return BrowserUtil.GetActiveTabId()
 
         case "等待元素":
             selector := resolve(data.Selector)
@@ -1117,12 +1173,16 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             return true
 
         case "按键输入":
-            key := resolve(data.Text)
-            if (key == "")
+            keyStr := resolve(data.Text)
+            if (keyStr == "")
                 throw Error("按键不能为空")
             mod := data.HasOwnProp("Modifiers") ? Integer(data.Modifiers) : 0
-            BrowserUtil.KeyPress(key, mod)
-            return key
+            for singleKey in StrSplit(keyStr, ["⎖", ","]) {
+                singleKey := Trim(singleKey)
+                if (singleKey != "")
+                    BrowserUtil.KeyPress(singleKey, mod)
+            }
+            return keyStr
 
         case "Cookie操作":
             opt := resolve(data.Text) ; "get" / "set" / "clear"

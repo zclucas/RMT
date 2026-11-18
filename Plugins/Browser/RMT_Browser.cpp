@@ -160,6 +160,8 @@ BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath,
             opts.useTempProfile = false;
         }
 
+        opts.additionalFlags.push_back("--disable-blink-features=AutomationControlled");
+
         auto res = cdp::quick::launch(opts);
         if (!res.ok()) {
             SetLastError("Launch browser failed: " + res.error, -5);
@@ -410,6 +412,19 @@ BROWSER_API int Browser_SwitchTab(const char* targetRef) {
     }
 }
 
+BROWSER_API int Browser_GetActiveTabId(char* outTargetId, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
 BROWSER_API int Browser_NewTab(const char* url, char* outTargetId, int maxLen) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
@@ -427,6 +442,103 @@ BROWSER_API int Browser_NewTab(const char* url, char* outTargetId, int maxLen) {
         g_activePage = pres.page;
         g_activePage->bringToFront();
         CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_CreateContext(char* outContextId, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!g_browser) {
+            if (!EnsureActivePage()) return -1;
+        }
+
+        auto cRes = g_browser->newContext();
+        if (!cRes.ok() || !cRes.context) {
+            SetLastError("Failed to create browser context: " + cRes.error, -1);
+            return -1;
+        }
+
+        CopyToOut(cRes.context->id(), outContextId, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_NewTabInContext(const char* url, const char* contextId, char* outTargetId, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!g_browser) {
+            if (!EnsureActivePage()) return -1;
+        }
+
+        std::string targetUrl = (url && url[0] != '\0') ? url : "about:blank";
+        std::string ctxId = (contextId && contextId[0] != '\0') ? contextId : "";
+
+        if (ctxId.empty()) {
+            auto pres = g_browser->newPage(targetUrl);
+            if (!pres.ok()) {
+                SetLastError("Failed to create new tab: " + pres.error, -1);
+                return -1;
+            }
+            g_activePage = pres.page;
+        } else {
+            // Find context or create page in context
+            cdp::quick::QuickContext* targetCtx = nullptr;
+            for (auto* c : g_browser->contexts()) {
+                if (c && c->id() == ctxId) {
+                    targetCtx = c;
+                    break;
+                }
+            }
+            if (!targetCtx) {
+                // If context doesn't exist, create it with this id or report error
+                SetLastError("Browser context not found: " + ctxId, -4);
+                return -4;
+            }
+            auto pres = targetCtx->newPage(targetUrl);
+            if (!pres.ok()) {
+                SetLastError("Failed to create new tab in context: " + pres.error, -1);
+                return -1;
+            }
+            g_activePage = pres.page;
+        }
+
+        if (g_activePage) {
+            g_activePage->bringToFront();
+            CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
+        }
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_CloseContext(const char* contextId) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!g_browser) return 0;
+        if (!contextId || contextId[0] == '\0') return 0;
+
+        std::string ctxId = contextId;
+        for (auto* c : g_browser->contexts()) {
+            if (c && c->id() == ctxId) {
+                c->close();
+                break;
+            }
+        }
+        // If active page was in this context, reset activePage
+        g_activePage = nullptr;
+        AttachToFirstPage();
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
