@@ -127,7 +127,7 @@ try {
         Write-Host "Uploading $name to Gitee."
         $file = Join-Path $dir $name
         $result = curl --silent --show-error --fail --http1.1 --header 'Expect:' `
-            --connect-timeout 20 --max-time 360 --speed-limit 1024 --speed-time 60 `
+            --connect-timeout 20 --max-time 4200 --speed-limit 1024 --speed-time 60 `
             --variable '%GITEE_RELEASE_TOKEN' --expand-form 'access_token={{GITEE_RELEASE_TOKEN}}' `
             --form "file=@$file;type=application/zip" `
             --write-out '%{stderr}Gitee HTTP %{http_code}, sent %{size_upload} bytes in %{time_total}s\n' `
