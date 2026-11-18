@@ -449,6 +449,9 @@ function New-Release {
         # 复制帮助文档
         Copy-HelpDocs -ReleaseDir $releaseDir
 
+        # 复制许可证与附加声明（AGPL-3.0 分发义务）
+        Copy-LegalDocs -ReleaseDir $releaseDir
+
         # 删除旧 Work.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
 
@@ -515,6 +518,9 @@ function New-Release {
 
         # 复制帮助文档
         Copy-HelpDocs -ReleaseDir $releaseDir
+
+        # 复制许可证与附加声明（AGPL-3.0 分发义务）
+        Copy-LegalDocs -ReleaseDir $releaseDir
 
         # 删除旧 Work.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
@@ -656,6 +662,22 @@ function Copy-HelpDocs {
         Write-Log "  已复制: index.html" "Gray"
     } else {
         Write-Log "  [WARN] 未找到帮助文档: index.html（先确认 Web\JS\SingleHtml.js 已生成）" "Yellow"
+    }
+}
+
+# AGPL-3.0 要求随目标代码附带许可文本，发行包根放一份 LICENSE 与附加声明。
+# YOLO 内核依赖的 ultralytics-inference 同为 AGPL-3.0，靠这份许可与公开源码满足义务。
+function Copy-LegalDocs {
+    param([string]$ReleaseDir)
+
+    foreach ($name in @("LICENSE", "DISCLAIMER.md")) {
+        $src = Join-Path $PSScriptRoot $name
+        if (Test-Path -LiteralPath $src) {
+            Copy-Item -LiteralPath $src -Destination (Join-Path $ReleaseDir $name) -Force
+            Write-Log "  已复制: $name" "Gray"
+        } else {
+            Write-Log "  [WARN] 未找到许可文件: $name" "Yellow"
+        }
     }
 }
 
