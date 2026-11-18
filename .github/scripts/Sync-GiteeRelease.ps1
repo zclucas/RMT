@@ -25,31 +25,38 @@ if ($env:RELEASE_RUN_SHA -and $env:RELEASE_RUN_SHA -cne $sha) {
     throw "GitHub tag $Tag has moved since the build."
 }
 
-# The code mirror can lag behind the release workflow. Resolve annotated tags to commits.
-$ref = "refs/tags/$Tag"
-for ($attempt = 1; $attempt -le 21; $attempt++) {
-    $refs = git ls-remote "https://gitee.com/$target.git" $ref "$ref^{}"
-    if ($LASTEXITCODE -ne 0) { throw "Cannot query tags on $target." }
-    $match = $refs | Where-Object { ($_ -split "`t", 2)[1] -ceq "$ref^{}" }
-    if (-not $match) { $match = $refs | Where-Object { ($_ -split "`t", 2)[1] -ceq $ref } }
-    if ($match) {
-        $mirrorSha = ($match -split "`t", 2)[0]
-        if ($mirrorSha -ceq $sha) { break }
-        throw "Gitee tag $Tag points to $mirrorSha; expected $sha."
-    }
-    if ($attempt -eq 21) {
-        throw "Tag $Tag is not on $target yet. Refresh the code mirror, then re-run this workflow."
-    }
-    Write-Host "Waiting for Gitee to mirror $Tag ($attempt/20)."
-    Start-Sleep -Seconds 15
-}
-
 $names = @("RMT$($Tag)_x64.zip", "RMT$($Tag)_x86.zip")
 foreach ($name in $names) {
     $asset = $release.assets | Where-Object name -CEQ $name
     if (-not $asset -or $asset.size -le 0 -or $asset.size -gt 100MB) {
         throw "GitHub asset $name is missing, empty or above the Gitee size limit."
     }
+}
+
+# Resolve annotated tags to their commit. Push only the release tag when the mirror lacks it.
+$ref = "refs/tags/$Tag"
+$giteeRemote = "https://gitee.com/$target.git"
+$refs = git ls-remote $giteeRemote $ref "$ref^{}"
+if ($LASTEXITCODE -ne 0) { throw "Cannot query tags on $target." }
+$match = $refs | Where-Object { ($_ -split "`t", 2)[1] -ceq "$ref^{}" }
+if (-not $match) { $match = $refs | Where-Object { ($_ -split "`t", 2)[1] -ceq $ref } }
+if ($match) {
+    $mirrorSha = ($match -split "`t", 2)[0]
+    if ($mirrorSha -cne $sha) { throw "Gitee tag $Tag points to $mirrorSha; expected $sha." }
+} else {
+    # Gitee may lack the commit history, so a shallow fetch is insufficient for the push.
+    $fetchOptions = @('--no-tags')
+    $shallow = git rev-parse --is-shallow-repository
+    if ($LASTEXITCODE -ne 0) { throw 'Run the sync from a Git checkout.' }
+    if ($shallow -eq 'true') { $fetchOptions += '--unshallow' }
+    git fetch @fetchOptions "https://github.com/$source.git" $sha
+    if ($LASTEXITCODE -ne 0) { throw "Cannot fetch GitHub release commit $sha." }
+
+    # Git reads the token from the environment without putting it in argv or remote URLs.
+    $credentialHelper = '!f() { if test "$1" = get; then printf "username=oauth2\npassword=%s\n" "$GITEE_RELEASE_TOKEN"; fi; }; f'
+    git -c 'credential.helper=' -c "credential.helper=$credentialHelper" push --no-follow-tags $giteeRemote "${sha}:$ref"
+    if ($LASTEXITCODE -ne 0) { throw "Cannot create Gitee tag $Tag from GitHub commit $sha." }
+    Write-Host "Created Gitee tag $Tag at $sha."
 }
 
 $dir = Join-Path ([IO.Path]::GetTempPath()) ("rmt-gitee-" + [guid]::NewGuid())

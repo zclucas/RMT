@@ -31,10 +31,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: 同步发行说明及两个 ZIP
+      - name: 同步标签、发行说明及两个 ZIP
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          GIT_TERMINAL_PROMPT: '0'
           GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
           RELEASE_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
