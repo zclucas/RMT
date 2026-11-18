@@ -1,0 +1,39 @@
+[package]
+name = "rmt_yolo"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+description = "RMT YOLO inference kernel (ABI v2, see src/RMT_Yolo.h)"
+publish = false
+
+[lib]
+name = "RMT_YOLO"
+crate-type = ["cdylib"]
+
+[dependencies]
+# YOLO26 / YOLO11 / YOLOv8 的 ONNX 推理，覆盖 detect / segment / semantic /
+# depth / classify / pose / obb。升级前先看 docs.rs 的 YOLOModel 与 Results 字段，
+# 本 crate 只依赖这两处的公开字段与方法。
+ultralytics-inference = "0.0.60"
+serde_json = "1"
+# 必须与 ultralytics-inference 内部使用的 image 同一 minor 版本，
+# 否则 DynamicImage 会变成两个不兼容的类型。
+image = "0.25"
+
+# 不静态链接 onnxruntime：改用 load-dynamic，运行时 LoadLibrary "onnxruntime.dll"
+# （ort-sys 的 disable-linking 会让构建脚本跳过下载与链接）。
+#
+# 为什么：ort 的 win-x64 预编译包只有带执行后端的组合、没有纯 CPU 条目，静态链接会把
+# DirectML EP 一起编进来，产物硬导入 DirectML.dll / d3d12.dll / dxgi.dll，多出 17.67 MB。
+# 改动态加载后 RMT_YOLO.dll 不再硬导入它们，onnxruntime.dll 可与 Voice 插件共用同一份
+# （1.27.1，OrtGetApiBase()->GetApi(17) 非空，满足 ort 2.0 的 ORT_API_VERSION）。
+# 分发时必须把 onnxruntime.dll 放在 RMT_YOLO.dll 同目录：宿主的 EnsureDll 会先加载
+# 该目录下所有 DLL，ort 的 Library::new("onnxruntime.dll") 命中已加载模块。
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# strip 掉符号，生成的 DLL 体积约为不带的一半。
+strip = true

@@ -1016,6 +1016,33 @@ function Copy-RuntimePlugins {
             Write-Log "  [WARN] 未找到: $($item.Name)" "Yellow"
         }
     }
+
+    Copy-YoloKernel -ReleaseDir $ReleaseDir -Arch $Arch
+}
+
+# YOLO 推理内核：产物在 Plugins\YOLO\<架构>\，onnxruntime.dll 必须与主库同目录
+# （内核用 load-dynamic 加载运行库，见 Plugins\YOLO\dll\README.md）。
+# 模型不进包（体积大），由用户放到 Plugins\YOLO\models 后在模型库里登记。
+function Copy-YoloKernel {
+    param([string]$ReleaseDir, [string]$Arch)
+
+    $srcDir = Join-Path $PSScriptRoot "Plugins\YOLO\$Arch"
+    if (-not (Test-Path $srcDir)) {
+        Write-Log "  [WARN] YOLO 内核未构建：Plugins\YOLO\$Arch（YOLO检测 指令不可用）" "Yellow"
+        return
+    }
+    $dlls = Get-ChildItem $srcDir -Filter *.dll -File
+    if ($dlls.Count -eq 0) {
+        Write-Log "  [WARN] YOLO 内核目录没有 DLL：$srcDir" "Yellow"
+        return
+    }
+
+    $dstDir = Join-Path $ReleaseDir "Plugins\YOLO\$Arch"
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+    foreach ($dll in $dlls) {
+        Copy-IntoRelease -Source $dll.FullName -Destination (Join-Path $dstDir $dll.Name)
+        Write-Log "  已复制: YOLO/$Arch/$($dll.Name)" "Gray"
+    }
 }
 
 # 文字识别插件（RapidOcr）：按架构复制 DLL + PP-OCRv6 ch_models（v6 统一多语言模型，无 en_models）
@@ -1108,7 +1135,7 @@ function New-RMTAssetZip {
     Write-Log "  已生成: $(Split-Path $ZipPath -Leaf) ($($Files.Count) 个文件)" "Gray"
 }
 
-# 生成按架构发布的资源，供文件校验和语音扩展下载。
+# 生成按架构发布的资源，供文件校验和插件按需下载（语音、YOLO 内核等）。
 function New-RMTAssets {
     param([string]$Arch, [string]$ReleaseDir, [string]$PackageDir)
 
@@ -1220,6 +1247,20 @@ function New-RMTAssets {
     $bundles["ico.zip"] = @($icoList | ForEach-Object {
         @{ Dest = $_; Src = "Images\Soft\$_" }
     })
+
+    # YOLO 检测内核：RMT_YOLO.dll 用 load-dynamic 找 onnxruntime.dll，三个文件必须成套。
+    # 内核未构建的架构跳过该包，避免一条 CreateEntryFromFile 抛异常中断整轮打包
+    # （与 Copy-YoloKernel 的 WARN 行为一致）。
+    $yoloDir = "Plugins\YOLO\$Arch"
+    $yoloFiles = @("RMT_YOLO.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll")
+    $yoloMissing = @($yoloFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "$yoloDir\$_")) })
+    if ($yoloMissing.Count -eq 0) {
+        $bundles["Yolo.zip"] = @($yoloFiles | ForEach-Object {
+            @{ Dest = $_; Src = "$yoloDir\$_" }
+        })
+    } else {
+        Write-Log "  [WARN] 跳过 Yolo.zip：$yoloDir 缺少 $($yoloMissing -join ', ')" "Yellow"
+    }
 
     foreach ($bundle in $bundles.GetEnumerator()) {
         New-RMTAssetZip -ZipPath (Join-Path $assetsDir $bundle.Key) -Files $bundle.Value
