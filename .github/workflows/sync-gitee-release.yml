@@ -22,7 +22,7 @@ jobs:
        (github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push'))
     runs-on: windows-latest
-    timeout-minutes: 150
+    timeout-minutes: 270
     concurrency:
       group: gitee-release-${{ inputs.tag || github.event.workflow_run.head_branch }}
       cancel-in-progress: false
@@ -40,8 +40,4 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
           RELEASE_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          if (-not $env:GITEE_RELEASE_TOKEN -and $env:GITHUB_EVENT_NAME -eq 'workflow_run') {
-            Write-Host '::notice::GITEE_RELEASE_TOKEN is not configured; skipping the mirror release.'
-            exit 0
-          }
           ./.github/scripts/Sync-GiteeRelease.ps1 -Tag $env:RELEASE_TAG

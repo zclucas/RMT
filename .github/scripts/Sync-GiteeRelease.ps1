@@ -139,6 +139,11 @@ try {
         }
         Write-Host "Uploaded: $name"
     }
+    foreach ($arch in 'x64', 'x86') {
+        $original = Join-Path $dir "RMT${Tag}_$arch.zip"
+        $hash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash
+        & "$PSScriptRoot/Get-GiteeReleasePackage.ps1" -Tag $Tag -Arch $arch -Sha256 $hash -OutDir $dir
+    }
     Write-Host "Gitee release: https://gitee.com/$target/releases/tag/$Tag"
 } finally {
     Remove-Item -LiteralPath (Join-Path $dir $names[0]), (Join-Path $dir $names[1]) -ErrorAction SilentlyContinue
