@@ -122,10 +122,15 @@ try {
             continue
         }
         Write-Host "Uploading $name to Gitee."
-        $uploaded = Invoke-RestMethod -Uri $attachmentApi -Method Post -TimeoutSec 180 -Form @{
-            access_token = $env:GITEE_RELEASE_TOKEN
-            file         = Get-Item -LiteralPath (Join-Path $dir $name)
-        }
+        $file = Join-Path $dir $name
+        $result = curl --silent --show-error --fail --http1.1 --header 'Expect:' `
+            --connect-timeout 20 --max-time 360 --speed-limit 1024 --speed-time 60 `
+            --variable '%GITEE_RELEASE_TOKEN' --expand-form 'access_token={{GITEE_RELEASE_TOKEN}}' `
+            --form "file=@$file;type=application/zip" `
+            --write-out '%{stderr}Gitee HTTP %{http_code}, sent %{size_upload} bytes in %{time_total}s\n' `
+            $attachmentApi
+        if ($LASTEXITCODE -ne 0) { throw "Attachment upload failed for $name (curl exit $LASTEXITCODE)." }
+        $uploaded = $result | ConvertFrom-Json
         if ($uploaded.name -cne $name -or $uploaded.size -ne $asset.size) {
             throw "Gitee did not confirm upload of $name."
         }
