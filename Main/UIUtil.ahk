@@ -471,6 +471,55 @@ CmdEditorTitleIcon(title) {
 }
 
 ; 指令编辑器确定按钮：与间隔编辑器同款
+class CmdEditorForm {
+    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "") {
+        row := parent.Add("Grid").Margin("0,4")
+        if (name != "")
+            row.Name(name)
+        columns := row.Add("Grid.ColumnDefinitions")
+        columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(group)
+        columns.Add("ColumnDefinition").Width("*")
+        caption := this.Label(row, label).VerticalAlignment(alignment)
+        if (labelName != "")
+            caption.Name(labelName)
+        return row
+    }
+
+    static Label(parent, text) {
+        return parent.Add("TextBlock").Text(GetLang(text)).Margin("0,0,8,0")
+            .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
+    }
+
+    static TextBox(parent, name, height := 26) {
+        box := parent.Add("TextBox").Name(name).Height(height).MinHeight(height)
+            .Padding("4,0").VerticalContentAlignment("Center")
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness(1)
+        if (height > 26)
+            box.AcceptsReturn("True").TextWrapping("Wrap").Padding("4,3")
+                .VerticalContentAlignment("Top").ScrollViewer_VerticalScrollBarVisibility("Auto")
+        return box
+    }
+
+    static Combo(parent, name, editable := false) {
+        return parent.Add("ComboBox").Name(name).Height(26).MinHeight(26)
+            .VerticalAlignment("Center").VerticalContentAlignment("Center")
+            .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
+    }
+
+    static IconButton(parent, name, glyph, tip) {
+        return parent.Add("Button").Name(name).Content(Chr(glyph)).ToolTip(GetLang(tip))
+            .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(12)
+            .Width(28).Height(26).MinHeight(26).Padding("0").Cursor("Hand").VerticalAlignment("Center")
+    }
+
+    static Footer(parent) {
+        buttons := parent.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
+        AddCmdOkBtn(buttons)
+        return buttons
+    }
+}
+
 AddCmdOkBtn(parent, name := "BtnOk", extraMargin := "", content := "") {
     btn := parent.Add("Button").Name(name).Content(content != "" ? content : GetLang("确定")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
         .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")

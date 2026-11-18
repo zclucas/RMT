@@ -3,8 +3,9 @@
 ; RMTAssets 的下载根地址。放在这里而不是 SelfCheck：Worker 进程也 include AssetUtil，
 ; 但不在 SelfCheck 的 include 链里，URL 拼在这里两边都能用。
 RmtAssetsBaseUrl(tag) {
-    return "https://gh-proxy.com/https://github.com/zclucas/RMTAssets/releases/download/" tag "/"
+    return RmtDownloadUrl("https://github.com/zclucas/RMTAssets/releases/download/" tag "/")
 }
+#Include Util\RmtDownload.ahk
 #Include "DataClass.ahk"
 #Include "VariableUtil.ahk"
 #Include Util\TableLocator.ahk

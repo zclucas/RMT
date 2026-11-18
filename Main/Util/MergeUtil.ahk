@@ -783,7 +783,7 @@ class MergeUtil {
         if (!IsObject(Data) || !IsObject(varMap))
             return
 
-        for f in ["ResultSaveName", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
+        for f in ["ResultSaveName", "TimeoutStatusVar", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
             if (ObjHasOwnProp(Data, f))
                 MergeUtil.AddVarNameCandidate(varMap, Data.%f%)
         }
@@ -1006,7 +1006,7 @@ class MergeUtil {
         if (!IsObject(Data) || !IsObject(varReplaceMap) || GetObjectCount(varReplaceMap) == 0)
             return
 
-        for f in ["ResultSaveName", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
+        for f in ["ResultSaveName", "TimeoutStatusVar", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
             if (ObjHasOwnProp(Data, f))
                 Data.%f% := MergeUtil.ReplaceVarExact(Data.%f%, varReplaceMap)
         }

@@ -29,6 +29,8 @@ class RmtProgress {
         this.opening := false
         this.showTimer := ""
         this.percent := ""
+        this.downloadAlternative := ""
+        this.downloadAlternativeLabel := ""
         this.ui := ""
         this.lastUpdate := 0
     }
@@ -69,13 +71,19 @@ class RmtProgress {
                 .Foreground("{DynamicResource ProgressBar}").Maximum(100)
                 .IsIndeterminate(this.displayedPercent == "" ? "True" : "False")
                 .Value(this.displayedPercent == "" ? 0 : this.displayedPercent)
+            alternative := body.Add("StackPanel").Name("DownloadAlternative").Margin("0,10,0,0")
+                .Visibility(this.downloadAlternative == "" ? "Collapsed" : "Visible")
+            alternative.Add("TextBlock").Name("DownloadAlternativeLabel").Text(this.downloadAlternativeLabel)
+                .Foreground("{DynamicResource TextMain}")
+            alternative.Add("TextBox").Name("DownloadAlternativeUrl").Text(this.downloadAlternative)
+                .IsReadOnly("True").TextWrapping("Wrap").Margin("0,4,0,0")
             height := 120
             if (this.cancelText != "") {
                 body.Add("Button").Name("CancelOperation").Content(this.cancelText).Height(30)
                     .HorizontalAlignment("Right").MinWidth(90).Margin("0,14,0,0")
                 height := 164
             }
-            ui := XamlWin.Create(this.title, body, 440, height)
+            ui := XamlWin.Create(this.title, body, 440, "Auto")
             ui.xaml := StrReplace(ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
             ui.xaml := StrReplace(ui.xaml, 'WindowStartupLocation="CenterScreen"',
                 'WindowStartupLocation="Manual"' XamlWin.PosAttr(440, height, this.owner))
@@ -101,6 +109,28 @@ class RmtProgress {
         this._Refresh()
     }
 
+    SetDownloadAlternative(url, label := "备用下载地址", force := false) {
+        if (!force && url == this.downloadAlternative)
+            return
+        this.downloadAlternative := url
+        this.downloadAlternativeLabel := label
+        if (!IsObject(this.ui))
+            return
+        if (this.standalone) {
+            this.ui["DownloadAlternativeLabel"].Value := label
+            this.ui["DownloadAlternativeUrl"].Value := url
+            this.ui["DownloadAlternativeLabel"].Visible := url != ""
+            this.ui["DownloadAlternativeUrl"].Visible := url != ""
+            this.ui.Show("AutoSize NA")
+        } else if (this.ui.wpfHwnd) {
+            try this.ui.BatchUpdate([
+                {ControlName: "DownloadAlternativeLabel", PropertyName: "Text", Value: label},
+                {ControlName: "DownloadAlternativeUrl", PropertyName: "Text", Value: url},
+                {ControlName: "DownloadAlternative", PropertyName: "Visibility", Value: url == "" ? "Collapsed" : "Visible"}
+            ])
+        }
+    }
+
     _OnLoaded(ui, *) {
         ; 异步建窗可能尚未读取共享内存，等句柄回传后再关窗。
         if (this.finished) {
@@ -109,6 +139,7 @@ class RmtProgress {
             return
         }
         this._Refresh(true)
+        this.SetDownloadAlternative(this.downloadAlternative, this.downloadAlternativeLabel, true)
     }
 
     _Refresh(force := false) {
@@ -160,12 +191,16 @@ class RmtProgress {
         ui.SetFont("s10", "Segoe UI")
         ui.AddText("w420 r2 vProgressText", this._DisplayText())
         ui.AddProgress("w420 h9 vOperationProgress +0x8")
+        ui.AddText("w420 Hidden vDownloadAlternativeLabel")
+        ui.AddEdit("w420 r3 ReadOnly -VScroll Hidden vDownloadAlternativeUrl")
         ui.OnEvent("Close", (*) => 1)
         this.ui := ui
         this.displayedPercent := ""
         SendMessage(0x40A, 1, 40, ui["OperationProgress"])
         this._Refresh()
         ui.Show("AutoSize Center")
+        if (this.downloadAlternative != "")
+            this.SetDownloadAlternative(this.downloadAlternative, this.downloadAlternativeLabel, true)
     }
 
     Close() {

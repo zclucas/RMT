@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include TimeoutPolicy.ahk
 
 ; =================================================================
 ; §16 等待指令执行端 —— 检测间隔与轮询
@@ -28,6 +29,26 @@ OnWait(tableItem, cmd, index) {
     t := WaitTypeNum(Data)
     if (t == "等待确定")
         return RunWaitConfirmation(tableItem, index, Data.ConfirmConfig, Data)
+    item := GetItemByIndex(tableItem, index)
+    if (!IsObject(item))
+        return
+    cancelled := () => item.Killed || GetItemByIndex(tableItem, index) != item
+    action := TimeoutPolicy.Get(Data)
+    loop {
+        timedOut := WaitRunOnce(tableItem, index, Data, t)
+        if (cancelled() || timedOut == "")
+            return
+        if (!timedOut || !TimeoutPolicy.CanRetry(action, A_Index))
+            break
+        if (!TimeoutPolicy.WaitBeforeRetry(cancelled))
+            return
+    }
+    WaitWriteStatus(Data, timedOut)
+    if (timedOut && TimeoutPolicy.Stops(action))
+        throw Error(GetLang("等待超时。"))
+}
+
+WaitRunOnce(tableItem, index, Data, t) {
     cfg := Data.TimeConfig
     targetMs := ""
     if (t == "等待时间") {
@@ -99,8 +120,7 @@ OnWait(tableItem, cmd, index) {
         if (WaitStateMap.Has(key))
             WaitStateMap.Delete(key)
     }
-    if (!item.Killed)
-        WaitWriteStatus(Data, timedOut)
+    return timedOut
 }
 
 WaitMilliseconds(tableItem, index, Data, useRandom := false) {
@@ -120,10 +140,10 @@ WaitMilliseconds(tableItem, index, Data, useRandom := false) {
     WaitIfPaused(tableItem, index)
     if (item.Killed)
         return
-    timedOut := Data.TimeoutMs > 0 && Data.TimeoutMs <= duration
+    timedOut := Data.TimeoutMs > 0 && (duration > Data.TimeoutMs
+        || (duration == Data.TimeoutMs && !Data.HasOwnProp("TimeoutStatusVar")))
     InterruptibleSleep(tableItem, index, timedOut ? Data.TimeoutMs : duration)
-    if (!item.Killed)
-        WaitWriteStatus(Data, timedOut)
+    return timedOut
 }
 
 WaitParseMilliseconds(value) {
@@ -134,7 +154,9 @@ WaitParseMilliseconds(value) {
 }
 
 WaitWriteStatus(Data, timedOut) {
-    if (Data.ResultSaveName != "") {
+    if (Data.HasOwnProp("TimeoutStatusVar"))
+        TimeoutPolicy.WriteStatus(Data, timedOut)
+    else if (Data.ResultSaveName != "") {
         value := timedOut ? Data.WaitTimedOutValue : (Data.TimeoutMs > 0 ? Data.WaitCompletedValue : 0)
         MySetGlobalVariable([Data.ResultSaveName], [value], false)
     }
@@ -781,7 +803,7 @@ WaitHintText(waitType) {
 
 ; 新字段仅补默认值，旧宏的等值、按键与日期语义保持不变。
 WaitEnsureData(Data) {
-    defaults := WaitData()
+    defaults := WaitData(true)
     if (!Data.HasOwnProp("WaitType"))
         Data.WaitType := "等待变量值"
     if (!Data.HasOwnProp("TimeoutMs") && WaitTypeNum(Data) == "等待时间"

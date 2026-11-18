@@ -63,6 +63,19 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "RMT_TAG_ASSET=$version"
           Write-Host "version=$version channel=$channel asset_tag=$version"
 
+      - name: 提取当前版本更新日志
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changelog = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'Web/更新日志.md') -Raw -Encoding UTF8
+          $version = [regex]::Escape($env:RMT_TAG_VERSION)
+          $sections = [regex]::Matches($changelog, "(?ms)^##[ \t]+RMT[ \t]*v$version[ \t]*更新内容[ \t]*\r?\n(?<body>.*?)(?=^##[ \t]+|\z)")
+          if ($sections.Count -ne 1 -or [string]::IsNullOrWhiteSpace($sections[0].Groups['body'].Value)) {
+            throw "Expected one non-empty changelog section for $env:GITHUB_REF_NAME."
+          }
+          $notesPath = Join-Path $env:RUNNER_TEMP 'rmt-release-notes.md'
+          Set-Content -LiteralPath $notesPath -Value $sections[0].Value.Trim() -Encoding utf8
+
       - name: 运行 PackRMT.ps1（严格模式，任一环节失败即失败）
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -126,6 +139,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $outDir = Join-Path $env:RUNNER_TEMP 'RMTRelease'
+          $notesPath = Join-Path $env:RUNNER_TEMP 'rmt-release-notes.md'
           $zips = @(Get-ChildItem -LiteralPath $outDir -Filter 'RMTv*.zip' -File)
           if ($zips.Count -eq 0) { throw 'no RMTv*.zip found to attach to the release' }
           $extra = @()
@@ -136,10 +150,12 @@ jobs:
           gh release view $env:GITHUB_REF_NAME | Out-Null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:GITHUB_REF_NAME @($zips.FullName) --clobber
+            if ($LASTEXITCODE -ne 0) { throw "failed to upload assets for $env:GITHUB_REF_NAME" }
+            gh release edit $env:GITHUB_REF_NAME --notes-file $notesPath
           } else {
             gh release create $env:GITHUB_REF_NAME @($zips.FullName) @($extra) `
               --title "RMT $env:RMT_TAG_VERSION" `
-              --notes "RMT $env:RMT_TAG_VERSION ($env:GITHUB_SHA)"
+              --notes-file $notesPath
           }
           if ($LASTEXITCODE -ne 0) { throw "failed to publish release $env:GITHUB_REF_NAME" }
           Write-Host "Published $($zips.Count) zip(s) to release $env:GITHUB_REF_NAME"

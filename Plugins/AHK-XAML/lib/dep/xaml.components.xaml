@@ -305,6 +305,19 @@
         </Setter>
     </Style>
     
+    <Style x:Key="RmtSingleLineTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <!-- The template and WPF each apply Padding. Match the ComboBox text inset. -->
+        <Setter Property="Padding" Value="1.5,0"/>
+    </Style>
+
+    <Style x:Key="RmtMultiLineTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <Setter Property="AcceptsReturn" Value="True"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="VerticalContentAlignment" Value="Top"/>
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="Padding" Value="4,0,4,3"/>
+    </Style>
+
     <Style TargetType="PasswordBox">
         <Setter Property="Background" Value="{DynamicResource ControlBg}"/>
         <Setter Property="FocusVisualStyle" Value="{DynamicResource GlobalFocusVisual}"/>

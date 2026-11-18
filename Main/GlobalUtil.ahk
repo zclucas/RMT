@@ -100,6 +100,7 @@
 #Include Util\ShareExportUtil.ahk
 #Include ..\Gui\VoiceGui.ahk
 #Include ..\Gui\SttGui.ahk
+#Include ..\Gui\CommandTimeoutFields.ahk
 #Include ..\Gui\WaitGui.ahk
 #Include ..\Gui\TimeGui.ahk
 #Include ..\Gui\CountDownOverlay.ahk

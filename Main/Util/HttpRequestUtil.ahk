@@ -10,14 +10,16 @@ OnHttpRequest(tableItem, cmd, index) {
         return
     MySetGlobalVariable([data.StatusVar, data.ResponseVar, data.ErrorVar],
         [result.Status, result.Body, result.Error], false)
+    TimeoutPolicy.WriteStatus(data, result.TimedOut)
     action := TimeoutPolicy.Get(data)
-    if (result.TimedOut && action != "" && action != "忽略")
+    if (result.TimedOut && TimeoutPolicy.Stops(action))
         throw Error(GetLang("请求超时"))
 }
 
 HttpRequestRegisterResults(data) {
     for name in [data.StatusVar, data.ResponseVar, data.ErrorVar]
         MySoftData.GlobalVariMap[name] := true
+    TimeoutPolicy.RegisterStatus(data)
 }
 
 HttpRequestValidate(data) {
@@ -142,7 +144,7 @@ HttpRequestExecute(data, resolve, cancelled := () => false) {
             }
         } catch as e {
             ; 仅返回数值错误码，原始消息可能含请求地址或凭据。
-            result.TimedOut := e.HasProp("Number") && (e.Number & 0xFFFFFFFF) == 0x80072EE2
+            result.TimedOut := result.TimedOut || (e.HasProp("Number") && (e.Number & 0xFFFFFFFF) == 0x80072EE2)
             result.Error := result.TimedOut ? "请求超时" : "网络请求失败"
             if (!result.TimedOut && e.HasProp("Number"))
                 result.Error .= " (" Format("0x{:08X}", e.Number & 0xFFFFFFFF) ")"

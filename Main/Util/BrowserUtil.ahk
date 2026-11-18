@@ -23,6 +23,15 @@ class BrowserUtil {
 
     static IsCloseAction(action) => action == "关闭" || action == "关闭浏览器"
 
+    static UsesTimeout(action) {
+        static actions := Map(
+            "打开网址", true, "当前页跳转", true, "等待元素", true, "等待文字", true, "等待加载", true,
+            "点击", true, "双击", true, "右键", true, "输入", true, "清空", true, "选择下拉", true,
+            "勾选", true, "滚动至元素", true, "悬停", true, "执行JS", true,
+            "提取文本", true, "提取控件值", true, "提取属性", true, "提取HTML", true)
+        return actions.Has(action)
+    }
+
     static GetCloseBrowserType(value) {
         name := GetLangKey(value)
         return name == "自定义路径" ? "自定义" : name
@@ -941,9 +950,11 @@ OnBrowser(tableItem, cmd, index) {
 
     selType := data.HasOwnProp("SelectorType") ? data.SelectorType : "CSS"
     onError := data.HasOwnProp("OnError") ? data.OnError : "停止"
-    timeoutAction := TimeoutPolicy.Get(data)
+    usesTimeout := BrowserUtil.UsesTimeout(actionType)
+    legacy := !data.HasOwnProp("TimeoutStatusVar")
+    timeoutAction := usesTimeout || legacy ? TimeoutPolicy.Get(data) : ""
     attempts := 1
-    if (timeoutAction == "" && onError == "重试")
+    if (timeoutAction == "" && (usesTimeout || legacy) && onError == "重试")
         attempts := data.HasOwnProp("RetryCount") ? Max(1, Integer(data.RetryCount)) : 3
 
     startTime := A_TickCount
@@ -982,8 +993,11 @@ OnBrowser(tableItem, cmd, index) {
         MySetGlobalVariable([saveVar "_ElapsedMs"], [String(elapsed)], false)
     }
 
-    stop := timeoutAction == "" ? onError == "停止"
-        : !(lastError is BrowserTimeoutError && timeoutAction == "忽略")
+    timedOut := !success && (lastError is BrowserTimeoutError)
+    if (!item.Killed && usesTimeout)
+        TimeoutPolicy.WriteStatus(data, timedOut)
+    stop := timeoutAction == "" ? (!(usesTimeout || legacy) || onError == "停止")
+        : (!timedOut || TimeoutPolicy.Stops(timeoutAction))
     if (!success && !item.Killed && stop)
         throw Error("浏览器操作失败 [" actionType "]: " lastErrMsg)
 }
@@ -1011,7 +1025,16 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             BrowserUtil.Launch(bType, bPath, hLess, uDir, hPort)
             if (data.HasOwnProp("Incognito") && Integer(data.Incognito)) {
                 ctxId := BrowserUtil.CreateContext()
-                BrowserUtil.NewTabInContext(url, ctxId)
+                if (data.HasOwnProp("TimeoutStatusVar")) {
+                    tabId := BrowserUtil.NewTabInContext("about:blank", ctxId)
+                    try BrowserUtil.Navigate(url, timeoutMs)
+                    catch as err {
+                        if (err is BrowserTimeoutError && TimeoutPolicy.Get(data) != "忽略")
+                            try BrowserUtil.CloseTabByRef(tabId)
+                        throw err
+                    }
+                } else
+                    BrowserUtil.NewTabInContext(url, ctxId)
             } else {
                 BrowserUtil.Navigate(url, timeoutMs)
             }
@@ -1238,7 +1261,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
                         return 'value:' + JSON.stringify(Array.from(el.selectedOptions, option => option.value));
                     return 'value:' + el.value;
                 })
-            )" "(" args ")")
+            )" "(" args ")", Integer(data.TimeoutMs))
             if (SubStr(result, 1, 6) != "value:")
                 throw Error(GetLang("找不到可读取值的控件。"))
             return SubStr(result, 7)

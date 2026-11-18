@@ -2,7 +2,7 @@
 
 ; 复用标准指令窗口的生命周期、主题和模态关闭处理。
 class HttpRequestGui extends CommentGui {
-    static Fields := ["Url", "Headers", "Body", "TimeoutMs", "StatusVar", "ResponseVar", "ErrorVar"]
+    static Fields := ["Url", "Headers", "Body", "StatusVar", "ResponseVar", "ErrorVar"]
     static Methods := ["GET", "POST", "PUT", "DELETE"]
     static BodyTypes := ["JSON", "表单", "原始文本"]
     static ResultFields := ["StatusVar", "ResponseVar", "ErrorVar"]
@@ -31,14 +31,13 @@ class HttpRequestGui extends CommentGui {
         this._Choice(this._Row(payload, "Body 类型："), "BodyType", HttpRequestGui.BodyTypes).Grid_Column(1)
         this._Field(payload, "Body：", "Body", true, 110)
 
+        CommandTimeoutFields.Add(body)
         options := body.Add("Grid")
         this._Columns(options, true)
-        options.Rows("Auto", "Auto", "Auto")
-        this._Option(options, 0, 0, "超时（毫秒）：", "TimeoutMs", false)
-        this._Option(options, 0, 3, "超时处理：", "TimeoutAction", false, TimeoutPolicy.Actions)
-        this._Option(options, 1, 0, "状态码变量：", "StatusVar")
-        this._Option(options, 1, 3, "响应体变量：", "ResponseVar")
-        this._Option(options, 2, 0, "错误信息变量：", "ErrorVar")
+        options.Rows("Auto", "Auto")
+        this._Option(options, 0, 0, "状态码变量：", "StatusVar")
+        this._Option(options, 0, 3, "响应体变量：", "ResponseVar")
+        this._Option(options, 1, 0, "错误信息变量：", "ErrorVar")
         buttons := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
         AddCmdOkBtn(buttons)
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
@@ -103,13 +102,11 @@ class HttpRequestGui extends CommentGui {
         return box
     }
 
-    _Option(grid, row, column, label, name, isVariable := true, choices := unset) {
+    _Option(grid, row, column, label, name) {
         grid.Add("TextBlock").Grid_Row(row).Grid_Column(column).Text(GetLang(label))
             .VerticalAlignment("Center").Margin("0,0,8,0").Foreground("{DynamicResource TextMain}")
         ; 可编辑下拉内部的 TextBox 自带 2 DIP 文本留白。
-        box := IsSet(choices) ? this._Choice(grid, name, choices)
-            : isVariable ? grid.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0")
-            : this._TextBox(grid, name)
+        box := grid.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0")
         box.Grid_Row(row).Grid_Column(column + 1).Margin("0,3")
     }
 
@@ -145,13 +142,10 @@ class HttpRequestGui extends CommentGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         action := TimeoutPolicy.Get(this.Data)
-        if (action == "") {
-            retries := this.Data.Retries
-            action := !parts.Length ? "停止" : TimeoutPolicy.LegacyRetryAction(retries)
-        }
-        this._ComboPush("TimeoutAction", "SelectedIndex", action == "" ? -1 : CmdEnumIndex(action, TimeoutPolicy.Actions))
         if (action == "")
-            this._ComboPush("TimeoutAction", "ToolTip", GetLang("选择超时处理方式前，保留旧重试设置。"))
+            action := TimeoutPolicy.LegacyRetryAction(this.Data.Retries)
+        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action,
+            InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
         for varName in GetGuiVarArr() {
             if (varName == "")
                 continue
@@ -177,7 +171,7 @@ class HttpRequestGui extends CommentGui {
             data.%name% := this._TranslateReferences(name, this.ui.Query(name), 2)
         data.Method := this.ui.Query("Method")
         data.BodyType := this.ui.Query("BodyType")
-        data.TimeoutAction := GetLangKey(this.ui.Query("TimeoutAction"))
+        CommandTimeoutFields.Read(this.ui, data)
         if (data.TimeoutAction == "")
             data.Retries := this.Data.Retries
         for name in HttpRequestGui.ResultFields
@@ -215,12 +209,11 @@ class HttpRequestGui extends CommentGui {
             RmtDialog.Info(GetLang("三个结果变量名不能相同。"))
             return false
         }
-        return true
+        return CommandTimeoutFields.ValidateStatus(data, data.StatusVar, data.ResponseVar, data.ErrorVar)
     }
 
     SaveData() {
         this.Data := this._ReadData()
-        this.Data.TimeoutMs := Integer(this.Data.TimeoutMs)
         if (IsInteger(this.Data.Retries))
             this.Data.Retries := Integer(this.Data.Retries)
         HttpRequestRegisterResults(this.Data)

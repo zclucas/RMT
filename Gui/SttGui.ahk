@@ -243,7 +243,7 @@ class SttGui {
         pkg := "sherpa-onnx-streaming-zipformer-" language "-kroko-2025-08-06"
         return [Map(
             "pkg", pkg,
-            "url", "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" pkg ".tar.bz2",
+            "url", RmtDownloadUrl("https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" pkg ".tar.bz2"),
             "dir", engine.StreamDirectory(language),
             "files", ["encoder.onnx", "decoder.onnx", "joiner.onnx", "README.md", "tokens.txt"],
             "exactBytes", SttGui.KrokoArchiveBytes[language]
@@ -429,16 +429,11 @@ class SttGui {
 
     _UpdateDownloadProgress() {
         this._lastProgressTick := A_TickCount
-        ; 只读取最终下载响应的长度，跳过重定向头。无长度时仍显示已下载量。
-        if (!this.dlExpectedBytes) {
-            try {
-                headers := FileRead(this.dlTar ".headers", "UTF-8")
-                if (RegExMatch(headers, "m)^HTTP/\S+ 200[^\r\n]*\R((?:[^\r\n]+\R)*)\R", &response)
-                    && RegExMatch(response[1], "im)^Content-Length:[ \t]*(\d+)", &length))
-                    this.dlExpectedBytes := Integer(length[1])
-            }
-        }
+        if (!this.dlExpectedBytes)
+            this.dlExpectedBytes := RmtDownloadContentLength(this.dlTar ".headers")
         try this.dlBytes := FileGetSize(this.dlTar)
+        this.progress.SetDownloadAlternative(RmtDownloadAlternative(this.dlSpec["url"], this.dlBytes,
+            this.dlExpectedBytes, A_TickCount - this.dlStarted), GetLang("备用下载地址"))
         this.progress.Report(this._DownloadProgressText(), this.dlExpectedBytes > 0 ? this._DownloadPercent() : "")
     }
 
@@ -470,6 +465,7 @@ class SttGui {
                     this._UpdateDownloadProgress()
             } else if (oldState != this.downloadState) {
                 if (this.downloadState == "ex") {
+                    this.progress.SetDownloadAlternative("")
                     this.progress.Report(GetLang("模型解压中……"))
                     if (SttGui.instances.Has("global"))
                         SttGui.instances["global"]._RefreshUi()
@@ -665,7 +661,8 @@ class SttGui {
             return false
         spec := this.dlQueue.RemoveAt(1)
         this.dlBytes := 0
-        this.dlExpectedBytes := 0
+        this.dlExpectedBytes := spec.Get("exactBytes", 0)
+        this.dlStarted := A_TickCount
         this.dlTar := RmtCacheDir() "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".download"
         cmd := Format('curl.exe -L --fail -s -S --suppress-connect-headers -D "{}" -o "{}" "{}"',
             this.dlTar ".headers", this.dlTar, spec["url"])

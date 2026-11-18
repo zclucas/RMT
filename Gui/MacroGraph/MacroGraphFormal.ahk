@@ -204,18 +204,7 @@ class MacroGraphFormalMixin {
     }
 
     _FormalTextOpsArgsTypes(typeName) {
-        m := Map(
-            "文本分割", GetLangArr(["内容分割", "定长分割", "正则匹配"]),
-            "文本提取", GetLangArr(["数字提取", "字母提取", "中文提取", "正则匹配"]),
-            "文本替换", GetLangArr(["普通文本", "正则匹配"]),
-            "时间戳处理", GetLangArr(TextOpsTimestampModes()),
-            "去除空格", GetLangArr(["去除前空白字符", "去除后空白字符", "去除前后空白字符", "去除所有空白字符"]),
-            "大小写转换", GetLangArr(["全部大写", "全部小写", "首字母大写"]),
-            "文本统计", GetLangArr(["字符数", "单词数", "行数"]),
-            "文本拼接", GetLangArr(["拼接文本"])
-        )
-        ; typeName 已经是中文，直接用 Map 的 key 匹配
-        return m.Has(typeName) ? m[typeName] : []
+        return GetLangArr(TextOpsModes(GetLangKey(typeName)))
     }
 
     ; 类型顺序需与 TextOpsGui.ahk 保持一致
@@ -238,7 +227,8 @@ class MacroGraphFormalMixin {
         row := body.Add("StackPanel").Name("TxtArgsTypeRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         if (!visible)
             row.Visibility("Collapsed")
-        row.Add("TextBlock").Text(GetLang("参数类型：")).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(lw).VerticalAlignment("Center")
+        row.Add("TextBlock").Name("TxtArgsTypeLabel_" id).Text(GetLang(tt == "文本拼接" ? "文本来源:" : "参数类型："))
+            .Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(lw).VerticalAlignment("Center")
         slot := row.Add("StackPanel").Name("TxtArgsTypeSlot_" id)
         activeTi := this._FormalTextOpsTypeIdx(tt)
         for tidx, tn in this._FormalTextOpsTypeNames() {
@@ -385,9 +375,14 @@ class MacroGraphFormalMixin {
     _FillWaitBody(id, d, body) {
         type := d.HasOwnProp("waitType") ? CmdEnumWait(d.waitType) : "等待变量值"
         body.Add("TextBlock").Name("WaitTypeSummary_" id).Text(GetLang(type)).TextWrapping("Wrap").Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12))
-        body.Add("TextBlock").Name("WaitIntervalSummary_" id).Text(GetLang("检测间隔：") (d.HasOwnProp("waitInterval") ? d.waitInterval : 500) " ms").Margin("0,5,0,0").Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12))
-            .Visibility(type == "等待确定" ? "Collapsed" : "Visible")
+        body.Add("TextBlock").Name("WaitTimeoutSummary_" id).Text(this._WaitTimeoutSummary(d))
+            .Margin("0,5,0,0").Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12))
         body.Add("Button").Name("WaitEdit_" id).Content(GetLang("编辑等待条件")).Height(26).Margin("0,8,0,0")
+    }
+
+    _WaitTimeoutSummary(d) {
+        ms := InputField(d, "waitTimeout", 0)
+        return GetLang("超时(ms)：") (ms > 0 ? ms : GetLang("不限时"))
     }
 
     _FillCountDownBody(id, d, body, visible := true) {
@@ -988,13 +983,17 @@ class MacroGraphFormalMixin {
         IsTimestamp := tt == "时间戳处理"
         ShowArgsName := this._FormalTextOpsShowArgsName(tt, at)
         fixedSt := TextOpsResultType(tt, at)
-        sourceOptions := IsTimestamp ? GetGuiVarArr("timestamp") : GetGuiVarArr("text")
+        isArraySource := tt == "文本拼接" && at == "数组"
+        sourceOptions := this._FormalTextOpsSourceOptions(tt, at)
+        argsOptions := this._FormalTextOpsArgsOptions(tt, at)
         saveOptions := fixedSt == "数组" ? GetGuiArrNameArr() : GetGuiVarArr()
         componentIndex := TextOpsTimestampComponentIndex(an)
         this._AddComboRow(body, "TxtTypeRow_" id, GetLang("类型："), "TxtTypeCmb_" id, typeNames, this._IndexInLangArr(typeNames, tt), true, true, lw, cw)
-        this._AddEditableComboRow(body, "TxtNameRow_" id, GetLang("文本变量："), "TxtName_" id, sourceOptions, GetLang(tn), true, lw, cw)
         this._AddTextOpsArgsTypeRow(body, id, tt, at, this._FormalTextOpsArgsTypes(tt).Length > 0, lw, cw)
-        this._AddEditableComboRow(body, "TxtArgsNameRow_" id, GetLang("参数值："), "TxtArgsName_" id, GetGuiVarArr("clipboard"), GetLang(an), ShowArgsName, lw, cw)
+        this._AddEditableComboRow(body, "TxtNameRow_" id, GetLang(isArraySource ? "数组名：" : "文本变量："),
+            "TxtName_" id, sourceOptions, isArraySource ? tn : GetBuiltinVarName(tn, true), true, lw, cw, "TxtNameLabel_" id)
+        this._AddEditableComboRow(body, "TxtArgsNameRow_" id, this._FormalTextOpsArgsLabel(tt, at),
+            "TxtArgsName_" id, argsOptions, this._FormalTextOpsArgsText(tt, at, an, true), ShowArgsName, lw, cw, "TxtArgsNameLabel_" id)
         this._AddComboRow(body, "TxtTimestampComponentRow_" id, GetLang("时间量："), "TxtTimestampComponent_" id,
             TextOpsTimestampComponentLabels(), componentIndex, IsTimestamp && at == "提取时间量", true, lw, cw)
         editRow := body.Add("StackPanel").Name("TxtTimestampEditRow_" id).Margin("0,5,0,0")

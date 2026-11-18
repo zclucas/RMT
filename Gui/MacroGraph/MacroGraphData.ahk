@@ -674,9 +674,8 @@ class MacroGraphDataMixin {
             d.cdPosX := ObjHasOwnProp(data, "PosX") ? data.PosX : 200
             d.cdPosY := ObjHasOwnProp(data, "PosY") ? data.PosY : 200
         } else if (cmdKey == "等待") {
-            ; 等待编辑器使用统一的 WaitData 字段：类型、轮询间隔、参数和区域坐标。
             d.waitType := ObjHasOwnProp(data, "WaitType") ? data.WaitType : 1
-            d.waitInterval := ObjHasOwnProp(data, "Interval") ? data.Interval : 500
+            d.waitTimeout := InputField(data, "TimeoutMs", 0)
             d.waitParam1 := ObjHasOwnProp(data, "Param1") ? data.Param1 : ""
             d.waitParam2 := ObjHasOwnProp(data, "Param2") ? data.Param2 : ""
             d.waitStartX := ObjHasOwnProp(data, "StartPosX") ? data.StartPosX : 0

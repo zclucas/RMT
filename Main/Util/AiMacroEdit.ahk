@@ -154,7 +154,10 @@ class AiMacroEdit {
             case "TimeoutMs", "Interval":
                 AiMacroEdit.Set(data, field, AiMacroEdit.Int(value, field = "Interval" ? 1 : 0, 4294967295, field), diff)
             case "ResultSaveName":
-                AiMacroEdit.Set(data, field, value == "" ? "" : AiMacroEdit.VarName(value, field), diff)
+                name := value == "" ? "" : AiMacroEdit.VarName(value, field)
+                AiMacroEdit.Set(data, field, name, diff)
+                if (data.Has("TimeoutStatusVar"))
+                    AiMacroEdit.Set(data, "TimeoutStatusVar", name, diff)
             case "DurationMs", "RandomMaxMs":
                 time := data.Get("TimeConfig", "")
                 unit := Type(time) == "Map" ? TimeNormWaitType(time.Get("Param2", "")) : ""

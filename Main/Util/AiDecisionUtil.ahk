@@ -149,7 +149,7 @@ RegisterCommandResultVars(data) {
             MySoftData.GlobalVariMap[name] := true
 }
 
-SaveCommandResult(data, value, failure) {
+SaveCommandResult(data, value, failure, throwOnFailure := true) {
     names := []
     values := []
     for pair in [[data.ResultVar, value], [data.ErrorVar, failure]] {
@@ -160,6 +160,6 @@ SaveCommandResult(data, value, failure) {
     }
     if (names.Length)
         MySetGlobalVariable(names, values, false)
-    if (failure != "" && data.ErrorVar == "")
+    if (throwOnFailure && failure != "" && data.ErrorVar == "")
         throw Error(failure)
 }

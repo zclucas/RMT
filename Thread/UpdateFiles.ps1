@@ -1,14 +1,18 @@
 ﻿param([int]$CleanupPid = 0, [switch]$Recover)
 $ErrorActionPreference = 'Stop'
 
-function Write-RmtUpdateProgress([string]$Phase, [string]$Percent = '') {
-    try { [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'progress.txt'), "$Percent|$Phase", [Text.Encoding]::UTF8) } catch { }
+function Write-RmtUpdateProgress([string]$Phase, [string]$Percent = '', [bool]$ShowAlternative = $false) {
+    $progress = "$Percent|$Phase"
+    if ($ShowAlternative) { $progress += '|1' }
+    try { [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'progress.txt'), $progress, [Text.Encoding]::UTF8) } catch { }
 }
 
 function Receive-RmtPackage($Job, [string]$Path) {
     Write-RmtUpdateProgress '正在下载更新包…'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $request = [Net.HttpWebRequest]::Create($Job.url)
+    $useProxy = $Job.url -like 'https://github.com/*'
+    $url = if ($useProxy) { 'https://gh-proxy.com/' + $Job.url } else { $Job.url }
+    $request = [Net.HttpWebRequest]::Create($url)
     $request.UserAgent = 'RMT-Updater'
     $request.Timeout = 30000
     $request.ReadWriteTimeout = 30000
@@ -24,6 +28,7 @@ function Receive-RmtPackage($Job, [string]$Path) {
                 $buffer = New-Object byte[] (256KB)
                 $done = 0L
                 $last = -1
+                $lastAlternative = $false
                 $timer = [Diagnostics.Stopwatch]::StartNew()
                 while (($size = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
                     if ($timer.Elapsed.TotalMinutes -ge 30) { throw 'Download timed out.' }
@@ -32,9 +37,12 @@ function Receive-RmtPackage($Job, [string]$Path) {
                     if ($total -gt 0) {
                         if ($done -gt $total) { throw 'Unexpected package size.' }
                         $percent = [int][Math]::Floor(65 * $done / $total)
-                        if ($percent -ne $last) {
-                            Write-RmtUpdateProgress '正在下载更新包…' $percent
+                        $elapsed = $timer.Elapsed.TotalSeconds
+                        $showAlternative = $useProxy -and $elapsed -ge 3 -and $elapsed * ($total - $done) / $done -gt 3600
+                        if ($percent -ne $last -or $showAlternative -ne $lastAlternative) {
+                            Write-RmtUpdateProgress '正在下载更新包…' $percent $showAlternative
                             $last = $percent
+                            $lastAlternative = $showAlternative
                         }
                     }
                 }

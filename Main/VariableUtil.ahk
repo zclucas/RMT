@@ -70,7 +70,11 @@ SetGlobalData(macroStr, visitMap) {
                     VariableMap[Data.SaveName] := true
             case "窗口控件", "AI判断":
                 RegisterCommandResultVars(Data)
+                if (baseCmd == "窗口控件" && WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
+                    TimeoutPolicy.RegisterStatus(Data)
             case "浏览器":
+                if (BrowserUtil.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserUtil.Actions)))
+                    TimeoutPolicy.RegisterStatus(Data)
                 if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
                     && !BrowserUtil.IsCloseAction(CmdEnumZh(Data.ActionType, BrowserUtil.Actions)))
                     for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
@@ -78,7 +82,9 @@ SetGlobalData(macroStr, visitMap) {
             case "网络请求":
                 HttpRequestRegisterResults(Data)
             case "等待":
-                if (Data.HasOwnProp("ResultSaveName") && Data.ResultSaveName != "")
+                if (Data.HasOwnProp("TimeoutStatusVar"))
+                    TimeoutPolicy.RegisterStatus(Data)
+                else if (Data.HasOwnProp("ResultSaveName") && Data.ResultSaveName != "")
                     VariableMap[Data.ResultSaveName] := true
             case "文件读写", "Excel":
                 SetFileIOGlobalData(Data)

@@ -83,8 +83,10 @@ try {
         current := ""
         try current := FileRead(stage "\progress.txt", "UTF-8")
         if (current != "" && current != previous) {
-            parts := StrSplit(Trim(current, "`r`n"), "|", , 2)
-            if (parts.Length == 2) {
+            parts := StrSplit(Trim(current, "`r`n"), "|")
+            if (parts.Length >= 2) {
+                alternative := !recovering && parts.Length == 3 && parts[3] == "1" ? job.url : ""
+                progress.SetDownloadAlternative(alternative, UpdateText(job, "备用下载地址"))
                 progress.Report(UpdateText(job, parts[2]), IsNumber(parts[1]) ? Number(parts[1]) : "")
                 previous := current
             }

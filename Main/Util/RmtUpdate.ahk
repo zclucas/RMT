@@ -189,7 +189,7 @@ class RmtUpdate {
         temp := path ".rmt-part-" ProcessExist() "-" A_TickCount
         try {
             result := RmtProgress.Run(GetLang("下载整包"), GetLang("正在下载更新包…"),
-                (pg) => DownloadAsync(asset.url, temp, 1800, pg), owner)
+                (pg) => DownloadAsync(RmtDownloadUrl(asset.url), temp, 1800, pg), owner)
             if (result != "ok" || (asset.bytes && FileGetSize(temp) != asset.bytes))
                 throw Error(GetLang("下载失败"))
             FileMove(temp, path, overwrite)
@@ -205,7 +205,8 @@ class RmtUpdate {
         pid := 0
         try {
             texts := Map("软件更新", GetLang("软件更新"), "等待 RMT 退出…", GetLang("等待 RMT 退出…"),
-                "正在下载更新包…", GetLang("正在下载更新包…"), "正在验证更新包…", GetLang("正在验证更新包…"),
+                "正在下载更新包…", GetLang("正在下载更新包…"), "备用下载地址", GetLang("备用下载地址"),
+                "正在验证更新包…", GetLang("正在验证更新包…"),
                 "正在解压更新包…", GetLang("正在解压更新包…"), "正在替换程序文件…", GetLang("正在替换程序文件…"),
                 "正在恢复原程序…", GetLang("正在恢复原程序…"), "更新失败。", GetLang("更新失败。"),
                 "更新包已保存。", GetLang("更新包已保存。"), "更新已完成，无法自动启动 RMT。", GetLang("更新已完成，无法自动启动 RMT。"))

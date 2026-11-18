@@ -10,17 +10,17 @@ class ClassifierCommandGui extends CommentGui {
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height)
-        body := main.Add("StackPanel").Grid_Row(1).Margin("16,10").Grid_IsSharedSizeScope("True")
+        body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
         this._Field(body, "备注：", "Remark")
         this._BuildFields(body)
         this._BuildResultFields(body)
-        buttons := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
-        AddCmdOkBtn(buttons)
+        CmdEditorForm.Footer(body)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
             'Title="' this._EscapeXml(title) '" Width="620" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, "%resources%", "")
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
@@ -33,61 +33,38 @@ class ClassifierCommandGui extends CommentGui {
     }
 
     _BuildResultFields(body) {
-        body.Add("Separator").Margin("0,8,0,4")
-        this._Variable(body, "保存结果变量：", "ResultVar")
-        this._Variable(body, "错误信息变量：", "ErrorVar")
-        this._Field(body, "超时（毫秒）：", "TimeoutMs").Width(112).HorizontalAlignment("Left")
+        results := body.Add("Grid")
+        results.Cols("*", 16, "*")
+        this._Variable(results, "保存结果变量：", "ResultVar")
+        this._Variable(results, "错误信息变量：", "ErrorVar", 2)
     }
 
     _Row(body, label, name, labelAlignment := "Center", labelGroup := "CommandLabel") {
-        row := body.Add("Grid").Name(name "Row").Margin("0,3")
-        cols := row.Add("Grid.ColumnDefinitions")
-        cols.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(labelGroup)
-        cols.Add("ColumnDefinition").Width("*")
-        row.Add("TextBlock").Name(name "Label").Text(GetLang(label)).VerticalAlignment(labelAlignment).Margin("0,2,8,0")
-            .Foreground("{DynamicResource TextMain}")
-        return row
+        return CmdEditorForm.Row(body, label, name "Row", labelGroup, labelAlignment, name "Label")
     }
 
-    _TextBox(parent, name, height) {
-        box := parent.Add("TextBox").Name(name).Height(height).MinHeight(height)
-            .Padding("4,2").Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        if (height > 28)
-            box.AcceptsReturn("True").TextWrapping("Wrap").VerticalContentAlignment("Top")
-                .ScrollViewer_VerticalScrollBarVisibility("Auto")
-        else
-            box.VerticalContentAlignment("Center")
-        return box
-    }
-
-    _Field(body, label, name, height := 28) {
-        return this._TextBox(this._Row(body, label, name), name, height).Grid_Column(1)
+    _Field(body, label, name, height := 26) {
+        return CmdEditorForm.TextBox(this._Row(body, label, name), name, height).Grid_Column(1)
     }
 
     _Variable(body, label, name, column := 0) {
         labelGroup := column == 0 ? "CommandLabel" : "CommandRightLabel"
-        this._Row(body, label, name, "Center", labelGroup).Grid_Column(column).Add("ComboBox").Name(name).Grid_Column(1)
-            .IsEditable("True").Height(28).MinHeight(28).Padding("5,0,21,0")
+        row := this._Row(body, label, name, "Center", labelGroup).Grid_Column(column)
+        CmdEditorForm.Combo(row, name, true).Grid_Column(1)
     }
 
     _Choice(body, label) {
         name := this.ChoiceField
-        combo := this._Row(body, label, name).Add("ComboBox").Name(name).Grid_Column(1).Height(28).MinHeight(28)
+        combo := CmdEditorForm.Combo(this._Row(body, label, name), name).Grid_Column(1)
         for choice in this.Choices
             combo.Add("ComboBoxItem").Content(GetLang(choice))
     }
 
-    _PickerField(body, label, name, tip, height := 28) {
+    _PickerField(body, label, name, tip) {
         inner := this._Row(body, label, name).Add("Grid").Grid_Column(1)
-        inner.Cols("*", "Auto")
-        this._TextBox(inner, name, height)
-        this._PickerButton(inner, GetLang("框选范围"), tip)
-    }
-
-    _PickerButton(parent, content, tip) {
-        parent.Add("Button").Name("BtnPick").Grid_Column(1).Margin("6,0,0,0")
-            .Height(28).MinHeight(28).Padding("10,0").Cursor("Hand").Content(content).ToolTip(GetLang(tip))
+        inner.Cols("*", 6, "Auto")
+        CmdEditorForm.TextBox(inner, name)
+        CmdEditorForm.IconButton(inner, "BtnPick", 0xECAF, tip).Grid_Column(2)
     }
 
     _BindFields() {
@@ -153,8 +130,10 @@ class ClassifierCommandGui extends CommentGui {
         for name in [data.ResultVar, data.ErrorVar]
             if (name != "" && !CheckVarNameIfValid(name))
                 return false
-        return true
+        return this._ValidateResultFields(data)
     }
+
+    _ValidateResultFields(data) => true
 
     SaveData() {
         this.Data := this._ReadData()
@@ -241,23 +220,55 @@ class WindowControlGui extends ClassifierCommandGui {
     }
 
     _BuildFields(body) {
-        this._Choice(body, "动作类型：")
+        this._Choice(body, "类型：")
         target := this._Row(body, "控件选择器：", "TargetControl").Add("Grid").Grid_Column(1)
-        target.Cols("*", "Auto")
-        target.Add("Border").Height(28).Padding("6,0").CornerRadius(4)
+        target.Cols("*", 6, "Auto")
+        target.Add("Border").Height(26).Padding("4,0")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness(1)
             .Add("TextBlock").Name("TargetSummary").VerticalAlignment("Center").TextTrimming("CharacterEllipsis")
             .Foreground("{DynamicResource TextMain}")
-        this._PickerButton(target, GetLang("拾取"), "拾取窗口控件")
-        detail := this._Row(body, "", "SelectorDetail").Add("Expander").Grid_Column(1)
-            .Header(GetLang("选择器详情")).Foreground("{DynamicResource TextMain}")
-        this._TextBox(detail, "Selector", 92).FontFamily("Consolas").Margin("0,4,0,0")
+        CmdEditorForm.IconButton(target, "BtnPick", 0xE707, "拾取窗口控件").Grid_Column(2)
+        detail := this._Row(body, "", "SelectorDetail").Add("StackPanel").Grid_Column(1)
+        detail.Add("CheckBox").Name("ShowSelectorDetails").Content(GetLang("选择器详情"))
+            .Foreground("{DynamicResource TextMain}")
+        box := CmdEditorForm.TextBox(detail, "Selector", 84).FontFamily("Consolas").Margin("0,6,0,0")
+        style := box.Add("TextBox.Style").Add("Style").TargetType("TextBox").BasedOn("{StaticResource {x:Type TextBox}}")
+        style.Add("Setter").Property("Visibility").Value("Collapsed")
+        style.Add("Style.Triggers").Add("DataTrigger").Binding("{Binding IsChecked, ElementName=ShowSelectorDetails}").Value("True")
+            .Add("Setter").Property("Visibility").Value("Visible")
         this._Field(body, "控件参数：", "Argument")
+    }
+
+    _BuildResultFields(body) {
+        super._BuildResultFields(body)
+        CommandTimeoutFields.Add(body)
     }
 
     Init(cmd) {
         super.Init(cmd)
+        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs,
+            InputField(this.Data, "TimeoutAction", TimeoutPolicy.DefaultAction),
+            InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
         this._UpdateSelectorSummary(this.Data.Selector)
+    }
+
+    _ReadData() {
+        data := super._ReadData()
+        CommandTimeoutFields.Read(this.ui, data)
+        if (!WindowControl.UsesTimeout(data.ActionType))
+            data.TimeoutMs := this.Data.TimeoutMs
+        return data
+    }
+
+    _ValidateResultFields(data) {
+        return !WindowControl.UsesTimeout(data.ActionType)
+            || CommandTimeoutFields.ValidateStatus(data, data.ResultVar, data.ErrorVar)
+    }
+
+    SaveData() {
+        super.SaveData()
+        if (WindowControl.UsesTimeout(this.Data.ActionType))
+            TimeoutPolicy.RegisterStatus(this.Data)
     }
 
     _BindFields() {
@@ -285,6 +296,7 @@ class WindowControlGui extends ClassifierCommandGui {
     }
 
     _UpdateChoice(action) {
+        this._ComboPush("CommandTimeoutRow", "Visibility", WindowControl.UsesTimeout(action) ? "Visible" : "Collapsed")
         this._ComboPush("ArgumentRow", "Visibility", WindowControl.UsesArgument(action) ? "Visible" : "Collapsed")
         label := action == "设置勾选" ? GetLang("勾选状态（0/1）：") : GetLang("控件参数：")
         this._ComboPush("ArgumentLabel", "Text", label)
@@ -415,32 +427,25 @@ class AiDecisionGui extends ClassifierCommandGui {
     _optionCount := 0
 
     _BuildFields(body) {
-        this._Field(body, "判断问题：", "Question", 64)
         source := body.Add("Grid")
-        source.Cols("*", 18, "*")
+        source.Cols("*", 16, "*")
         this._Choice(source, "判断依据：")
         timeout := this._Row(source, "超时（毫秒）：", "TimeoutMs", "Center", "CommandRightLabel").Grid_Column(2)
-        this._TextBox(timeout, "TimeoutMs", 28).Grid_Column(1)
+        CmdEditorForm.TextBox(timeout, "TimeoutMs").Grid_Column(1)
+        this._Field(body, "判断问题：", "Question", 64)
         this._PickerField(body, "屏幕范围：", "Region", "框选范围")
         this._Field(body, "输入内容：", "Text", 64)
         choices := this._Row(body, "候选选项：", "Options", "Top").Add("StackPanel").Grid_Column(1)
         header := choices.Add("Grid").Margin("0,0,0,2")
         this._OptionColumns(header)
-        header.Add("TextBlock").Text(GetLang("选项名称")).Foreground("{DynamicResource TextSub}")
+        header.Add("TextBlock").Text(GetLang("选项名称")).Foreground("{DynamicResource TextMain}")
         header.Add("TextBlock").Grid_Column(2).Text(GetLang("保存值")).ToolTip(GetLang("留空时保存选项名称"))
-            .Foreground("{DynamicResource TextSub}")
+            .Foreground("{DynamicResource TextMain}")
         list := choices.Add("ScrollViewer").Name("ChoicesScroll").MaxHeight(132)
             .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
         list.Add("StackPanel").Name("ChoiceRows")
-        choices.Add("Button").Name("AddChoice").HorizontalAlignment("Left").Margin("0,4,0,0")
-            .Content(GetLang("添加选项")).Padding("8,0").Height(26).MinHeight(26).Cursor("Hand")
-    }
-
-    _BuildResultFields(body) {
-        results := body.Add("Grid")
-        results.Cols("*", 18, "*")
-        this._Variable(results, "保存结果变量：", "ResultVar")
-        this._Variable(results, "错误信息变量：", "ErrorVar", 2)
+        CmdEditorForm.IconButton(choices, "AddChoice", 0xE710, "添加选项")
+            .HorizontalAlignment("Left").Margin("0,4,0,0")
     }
 
     _BindFields() {
@@ -480,7 +485,7 @@ class AiDecisionGui extends ClassifierCommandGui {
         return options
     }
 
-    _OptionColumns(grid) => grid.Cols("*", 8, "*", 8, 26)
+    _OptionColumns(grid) => grid.Cols("*", 8, "*", 8, 28)
 
     _RenderOptions(options) {
         this._optionCount := options.Length
@@ -490,11 +495,10 @@ class AiDecisionGui extends ClassifierCommandGui {
             row := XAML_Generator("Grid").Margin("0,2")
             row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
             this._OptionColumns(row)
-            this._TextBox(row, "OptionLabel_" i, 28).ToolTip(GetLang("选项名称"))
-            this._TextBox(row, "OptionValue_" i, 28).Grid_Column(2).ToolTip(GetLang("留空时保存选项名称"))
-            row.Add("Button").Name(name).Grid_Column(4).Height(26).MinHeight(26).Padding("0").Cursor("Hand")
-                .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(12).Content(Chr(0xE74D))
-                .ToolTip(GetLang("删除")).IsEnabled(options.Length > 2 ? "True" : "False")
+            CmdEditorForm.TextBox(row, "OptionLabel_" i).ToolTip(GetLang("选项名称"))
+            CmdEditorForm.TextBox(row, "OptionValue_" i).Grid_Column(2).ToolTip(GetLang("留空时保存选项名称"))
+            CmdEditorForm.IconButton(row, name, 0xE74D, "删除").Grid_Column(4)
+                .IsEnabled(options.Length > 2 ? "True" : "False")
             this._ComboPush("ChoiceRows", "AddXamlItem", row.ToString())
             this._ComboPush("OptionLabel_" i, "Text", option.Label)
             this._ComboPush("OptionValue_" i, "Text", option.Value)

@@ -6,6 +6,44 @@ RmtAssetsReleaseTag() {
     return "v" RMT_VERSION "_" arch
 }
 
+CheckStartupDirectory(rootDir) {
+    settingDir := rootDir "\Setting"
+    for dir in [rootDir, settingDir] {
+        if (dir == settingDir && !FileExist(dir))
+            continue
+        if (CanCreateStartupFiles(dir))
+            continue
+        MsgBox("RMT 需要在软件目录中创建文件夹和配置文件，但以下目录无法正常读写："
+            . "`n`n" dir "`n`n请将整个 RMT 软件文件夹移到有读写权限的位置，再重新运行。"
+            , "RMT 目录权限", "Icon!")
+        return false
+    }
+    return true
+}
+
+CanCreateStartupFiles(dir) {
+    ; FILE_LIST_DIRECTORY，OPEN_EXISTING，FILE_FLAG_BACKUP_SEMANTICS（打开目录）。
+    dirHandle := DllCall("CreateFileW", "Str", dir, "UInt", 1, "UInt", 7,
+        "Ptr", 0, "UInt", 3, "UInt", 0x02000000, "Ptr", 0, "Ptr")
+    if (dirHandle == -1)
+        return false
+    DllCall("CloseHandle", "Ptr", dirHandle)
+
+    probe := dir "\.rmt-access-" DllCall("GetCurrentProcessId", "UInt") "-" Random(0, 0x7FFFFFFF)
+
+    ; GENERIC_READ | GENERIC_WRITE，CREATE_NEW，FILE_FLAG_DELETE_ON_CLOSE。
+    ; 只创建新文件，关闭句柄后自动清理。
+    probeHandle := DllCall("CreateFileW", "Str", probe ".tmp", "UInt", 0xC0000000, "UInt", 0,
+        "Ptr", 0, "UInt", 1, "UInt", 0x04000000, "Ptr", 0, "Ptr")
+    if (probeHandle == -1)
+        return false
+    DllCall("CloseHandle", "Ptr", probeHandle)
+
+    if (!DllCall("CreateDirectoryW", "Str", probe, "Ptr", 0))
+        return false
+    return !!DllCall("RemoveDirectoryW", "Str", probe)
+}
+
 ; =============================================================================
 ; 启动前环境预检（原生界面，必须先于 XAML 引擎）
 ;
@@ -395,7 +433,7 @@ RuntimePrepareAsset(name, hint, expectSize := 0) {
 }
 
 ; 原生进度窗：.NET / XAML 都还没就绪时唯一可用的进度提示。
-; DownloadAsync 只用到 percent / Cancelled / Report 三个成员，接口与 RmtProgress 对齐。
+; 下载进度接口与 RmtProgress 对齐。
 class NativeProgress {
     percent := 0
     Cancelled := false
@@ -408,6 +446,8 @@ class NativeProgress {
         this.txt := g.Add("Text", "w400", text)
         this.bar := g.Add("Progress", "w400 h14 Range0-100", 0)
         this.sub := g.Add("Text", "w400 cGray", "已用时 0 秒")
+        this.alternativeLabel := g.AddText("w400 Hidden", "备用下载地址")
+        this.alternativeUrl := g.AddEdit("w400 r3 ReadOnly -VScroll Hidden")
         g.OnEvent("Close", (*) => this.Cancelled := true)
         g.Show("AutoSize Center")
         this.gui := g
@@ -425,6 +465,16 @@ class NativeProgress {
             this.txt.Value := msg
             this.bar.Value := Round(pct)
         }
+    }
+
+    SetDownloadAlternative(url, label := "备用下载地址") {
+        if (this.alternativeUrl.Value == url)
+            return
+        this.alternativeLabel.Value := label
+        this.alternativeUrl.Value := url
+        this.alternativeLabel.Visible := url != ""
+        this.alternativeUrl.Visible := url != ""
+        this.gui.Show("AutoSize NA")
     }
 
     Tick() {
@@ -641,6 +691,11 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
 }
 
 DownloadOnce(url, savePath, timeoutSec, pg) {
+    systemDir := A_PtrSize == 4 && A_Is64bitOS ? "\Sysnative" : "\System32"
+    curl := A_WinDir systemDir "\curl.exe"
+    if (HasMethod(pg, "SetDownloadAlternative") && RmtDownloadDirectUrl(url) != "" && FileExist(curl))
+        return DownloadWithProgress(curl, url, savePath, timeoutSec, pg)
+
     try {
         req := ComObject("Msxml2.XMLHTTP")
         req.open("GET", url, true)
@@ -678,6 +733,46 @@ DownloadOnce(url, savePath, timeoutSec, pg) {
     } catch as e {
         pg.Report("✗ 下载异常: " e.Message, pg.percent)
         return "fail"
+    }
+}
+
+DownloadWithProgress(curl, url, savePath, timeoutSec, pg) {
+    headers := savePath ".headers"
+    cmd := Format('"{}" -q -L --fail -s -S --suppress-connect-headers --max-time {} -D "{}" -o "{}" "{}"',
+        curl, timeoutSec, headers, savePath, url)
+    pid := 0
+    total := 0
+    started := A_TickCount
+    label := GetLang("备用下载地址")
+    sample := SampleDownload
+    try {
+        SetTimer(sample, 500)
+        status := RunWait(cmd, , "Hide", &pid)
+        if (pg.Cancelled)
+            return "cancel"
+        if (status == 0 && !RmtAssetMissing(savePath))
+            return "ok"
+        return status == 28 ? "timeout" : "fail"
+    } catch as err {
+        pg.Report("✗ 下载异常: " err.Message, pg.percent)
+        return "fail"
+    } finally {
+        SetTimer(sample, 0)
+        pg.SetDownloadAlternative("")
+        try FileDelete(headers)
+    }
+
+    SampleDownload() {
+        if (pg.Cancelled) {
+            if (pid)
+                try ProcessClose(pid)
+            return
+        }
+        if (!total)
+            total := RmtDownloadContentLength(headers)
+        received := 0
+        try received := FileGetSize(savePath)
+        pg.SetDownloadAlternative(RmtDownloadAlternative(url, received, total, A_TickCount - started), label)
     }
 }
 
@@ -1086,7 +1181,7 @@ IconFontStartupCheck() {
         try Toast.Info("图标字体已安装，重启 RMT 后主界面图标生效", 5000)
 }
 
-; DownloadAsync 只用 Cancelled / percent / Report 三样，这里给个静默占位。
+; 图标字体下载在后台完成，不创建进度窗口。
 class IconFontSilentProgress {
     percent := 0
     Cancelled := false

@@ -736,7 +736,7 @@ class UIMacroStepBinding {
             case "变量": return ["VariableArr.1", "MinVariableArr.1", "MaxVariableArr.1"]
             case "循环": return ["LoopCount"]
             case "运行": return ["Target"]
-            case "等待": return ["Interval", "Param1"]
+            case "等待": return ["TimeoutMs", "Param1"]
             ; 搜索家族共用 SearchData、共用 SearchOnTrigger（MacroUtil:164）：
             ; 只留常用 4 项；搜索颜色/OCR类型/搜索类型 按需求不开放。
             case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
@@ -769,6 +769,7 @@ class UIMacroStepBinding {
             case "等待":
                 switch String(field) {
                     case "Interval": return { label: "检测间隔", type: "int", min: 0, max: 60000, store: "int" }
+                    case "TimeoutMs": return { label: "超时(ms)", type: "int", min: 0, max: 4294967295, store: "int" }
                     case "Param1":   return { label: "主参数", type: "text", store: "str" }
                 }
             case "输出":

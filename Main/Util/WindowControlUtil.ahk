@@ -1,4 +1,8 @@
 #Requires AutoHotkey v2.0
+#Include TimeoutPolicy.ahk
+
+class WindowControlTimeoutError extends Error {
+}
 
 class WindowControlData {
     SerialStr := ""
@@ -7,7 +11,9 @@ class WindowControlData {
     Argument := ""
     ResultVar := ""
     ErrorVar := ""
-    TimeoutMs := 3000
+    TimeoutMs := TimeoutPolicy.DefaultMs
+    TimeoutAction := TimeoutPolicy.DefaultAction
+    TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
 }
 
 class WindowControl {
@@ -146,12 +152,14 @@ class WindowControl {
             element := this.Find(selector)
             if (element)
                 break
+            if (!this.UsesTimeout(action) && data.HasOwnProp("TimeoutStatusVar"))
+                return 0
             if (A_TickCount >= deadline) {
-                if (action == "检测控件存在")
+                if (!this.UsesTimeout(action))
                     return 0
-                throw Error(GetLang("等待控件超时。"))
+                throw WindowControlTimeoutError(GetLang("等待控件超时。"))
             }
-            Sleep(75)
+            Sleep(Max(0, Min(75, deadline - A_TickCount)))
         }
         if (cancelled())
             return ""
@@ -216,6 +224,8 @@ class WindowControl {
     }
 
     static UsesArgument(action) => action == "写入控件值" || action == "设置勾选" || action == "设置范围值"
+
+    static UsesTimeout(action) => action != "检测控件存在"
 
     static _Automation() {
         static automation := ComObject("{FF48DBA4-60EF-4201-AA87-54103EEF594E}", "{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")
@@ -310,9 +320,28 @@ OnWindowControl(tableItem, cmd, index) {
         return
     value := ""
     failure := ""
-    try value := WindowControl.Execute(data, GetReplaceVarText(tableItem, index, data.Argument), cancelled)
-    catch as e
-        failure := e.Message
-    if (!cancelled())
-        SaveCommandResult(data, value, failure)
+    timedOut := false
+    action := TimeoutPolicy.Get(data)
+    loop {
+        try {
+            value := WindowControl.Execute(data, GetReplaceVarText(tableItem, index, data.Argument), cancelled)
+            failure := ""
+            timedOut := false
+            break
+        } catch as e {
+            failure := e.Message
+            timedOut := e is WindowControlTimeoutError
+            if (!timedOut || !TimeoutPolicy.CanRetry(action, A_Index))
+                break
+            if (!TimeoutPolicy.WaitBeforeRetry(cancelled))
+                return
+        }
+    }
+    if (cancelled())
+        return
+    if (WindowControl.UsesTimeout(CmdEnumZh(data.ActionType, WindowControl.Actions)))
+        TimeoutPolicy.WriteStatus(data, timedOut)
+    SaveCommandResult(data, value, failure, !timedOut || action == "")
+    if (timedOut && TimeoutPolicy.Stops(action))
+        throw Error(failure)
 }
