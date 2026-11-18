@@ -1572,7 +1572,7 @@ class BrowserData {
         this.BrowserType := "Chrome" ; Chrome/Edge/Chromium/自定义路径
         this.CloseScope := "所有页签"
         this.Url := "https://www.google.com"
-        this.TargetRef := "1" ; 分页索引、ID或关键词
+        this.TargetRef := "" ; 留空操作当前分页，否则按索引、ID或关键词定位
         this.Selector := ""
         this.SelectorType := "CSS" ; CSS / XPath
         this.Condition := "出现" ; 出现(appear) / 消失(disappear) / 可见(visible)

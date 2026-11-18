@@ -270,7 +270,7 @@ class RMTCMDGui {
         ; 禁用模块参数：页签与模块
         tabRow := paramArea.Add("Grid").Name("TabRow").Margin("0,3").Visibility("Collapsed")
         tabRow.Cols("76", "*")
-        tabRow.Add("TextBlock").Grid_Column(0).Text(GetLang("页签：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        tabRow.Add("TextBlock").Grid_Column(0).Text(GetLang("页签：")).ToolTip(GetLang("选择页签后，再选择其中的模块。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         tabRow.Add("ComboBox").Grid_Column(1).Name("TabCombo").Height(26).MinHeight(26).HorizontalAlignment("Stretch").VerticalAlignment("Center")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 

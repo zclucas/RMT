@@ -330,26 +330,7 @@ ReadTableItemInfoNew(tableItem, segID := "") {
         fseg := TomlUtil_Table(t, foldSeg)
         if (!TomlUtil_Valid(fseg))
             continue
-        fold := MacroFold()
-        fold.ID := foldSeg
-        fold.Remark := TomlUtil_Str(fseg, "Remark")
-        fold.FrontInfo := TomlUtil_Str(fseg, "FrontInfo")
-        fold.ForbidState := !!TomlUtil_Bool(fseg, "ForbidState")
-        fold.FoldState := !!TomlUtil_Bool(fseg, "FoldState")
-        fold.ForbidHotkey := TomlUtil_Str(fseg, "ForbidHotkey")
-        fold.TKType := Integer(TomlUtil_Str(fseg, "TKType", "4"))
-        fold.TK := TomlUtil_Str(fseg, "TK")
-        fold.GestureTK := TomlUtil_Str(fseg, "GestureTK")
-        fold.PosMode := TomlUtil_Int(fseg, "PosMode", 0) == 1 ? 1 : 0
-        fold.Anchor := TomlUtil_Int(fseg, "Anchor", 6)
-        if (fold.Anchor < 0 || fold.Anchor > 8)
-            fold.Anchor := 6
-        fold.OffsetX := TomlUtil_Int(fseg, "OffsetX", -50)
-        fold.OffsetY := TomlUtil_Int(fseg, "OffsetY", 50)
-        fold.PosX := TomlUtil_Int(fseg, "PosX", 0)
-        fold.PosY := TomlUtil_Int(fseg, "PosY", 0)
-        fold.HoldTime := TomlUtil_Str(fseg, "HoldTime", "500")
-        fold.UnorderedTrigger := !!TomlUtil_Bool(fseg, "UnorderedTrigger")
+        fold := ReadStoredMacroFold(fseg, foldSeg)
         tableItem.Folds.Push(fold)
         tableItem.FoldMap[foldSeg] := fold
 
@@ -362,35 +343,64 @@ ReadTableItemInfoNew(tableItem, segID := "") {
             mseg := TomlUtil_Table(t, macroSeg)
             if (!TomlUtil_Valid(mseg))
                 continue
-            item := MacroItem()
+            item := ReadStoredMacroItem(mseg)
             item.ID := macroSeg
-            item.TK := TomlUtil_Str(mseg, "TK")
-            item.HoldTime := TomlUtil_Str(mseg, "HoldTime", "500")
-            item.UnorderedTrigger := !!TomlUtil_Bool(mseg, "UnorderedTrigger")
-            item.Forbid := TomlUtil_Bool(mseg, "Forbid")
-            item.LoopCount := TomlUtil_Str(mseg, "LoopCount", "1")
-            item.Remark := TomlUtil_Str(mseg, "Remark")
-            item.TriggerType := TomlUtil_Str(mseg, "TriggerType", "1")
-            item.TimingSerial := TomlUtil_Str(mseg, "TimingSerial")
-            ; 兼容旧版保存的整数 Mode；字符串读取器不会自动转换整数。
-            item.Mode := TomlUtil_Str(mseg, "Mode", TomlUtil_Int(mseg, "Mode", 1))
-            item.StartTipSound := TomlUtil_Str(mseg, "StartTipSound", "1")
-            item.EndTipSound := TomlUtil_Str(mseg, "EndTipSound", "1")
-            item.StopTipSound := TomlUtil_Str(mseg, "StopTipSound", "1")
-            item.BindWindow := TomlUtil_Str(mseg, "BindWindow", "{模块窗口绑定}")
-            if (item.BindWindow == "")
-                item.BindWindow := "{模块窗口绑定}"
-            item.IcoPath := TomlUtil_Str(mseg, "IcoPath")
-            item.VoiceKeywords := TomlUtil_Str(mseg, "VoiceKeywords")
-            item.Macro := TomlUtil_Str(mseg, "Macro")
-            item.PreMacro := TomlUtil_Str(mseg, "PreMacro")     ;执行前钩子（缺省 ""）
-            item.PostMacro := TomlUtil_Str(mseg, "PostMacro")   ;执行后钩子（缺省 ""）
-            item.Breakpoints := TomlUtil_Str(mseg, "Breakpoints")   ;断点集合（缺省 ""）
             item.FoldID := foldSeg
             tableItem.Items.Push(item)
             tableItem.ItemMap[macroSeg] := item
         }
     }
+}
+
+ReadStoredMacroFold(fseg, foldSeg) {
+    fold := MacroFold()
+    fold.ID := foldSeg
+    fold.Remark := TomlUtil_Str(fseg, "Remark")
+    fold.FrontInfo := TomlUtil_Str(fseg, "FrontInfo")
+    fold.ForbidState := !!TomlUtil_Bool(fseg, "ForbidState")
+    fold.FoldState := !!TomlUtil_Bool(fseg, "FoldState")
+    fold.ForbidHotkey := TomlUtil_Str(fseg, "ForbidHotkey")
+    fold.TKType := Integer(TomlUtil_Str(fseg, "TKType", "4"))
+    fold.TK := TomlUtil_Str(fseg, "TK")
+    fold.GestureTK := TomlUtil_Str(fseg, "GestureTK")
+    fold.PosMode := TomlUtil_Int(fseg, "PosMode", 0) == 1 ? 1 : 0
+    fold.Anchor := TomlUtil_Int(fseg, "Anchor", 6)
+    if (fold.Anchor < 0 || fold.Anchor > 8)
+        fold.Anchor := 6
+    fold.OffsetX := TomlUtil_Int(fseg, "OffsetX", -50)
+    fold.OffsetY := TomlUtil_Int(fseg, "OffsetY", 50)
+    fold.PosX := TomlUtil_Int(fseg, "PosX", 0)
+    fold.PosY := TomlUtil_Int(fseg, "PosY", 0)
+    fold.HoldTime := TomlUtil_Str(fseg, "HoldTime", "500")
+    fold.UnorderedTrigger := !!TomlUtil_Bool(fseg, "UnorderedTrigger")
+    return fold
+}
+
+ReadStoredMacroItem(mseg) {
+    item := MacroItem()
+    item.TK := TomlUtil_Str(mseg, "TK")
+    item.HoldTime := TomlUtil_Str(mseg, "HoldTime", "500")
+    item.UnorderedTrigger := !!TomlUtil_Bool(mseg, "UnorderedTrigger")
+    item.Forbid := TomlUtil_Bool(mseg, "Forbid")
+    item.LoopCount := TomlUtil_Str(mseg, "LoopCount", "1")
+    item.Remark := TomlUtil_Str(mseg, "Remark")
+    item.TriggerType := TomlUtil_Str(mseg, "TriggerType", "1")
+    item.TimingSerial := TomlUtil_Str(mseg, "TimingSerial")
+    ; 兼容旧版保存的整数 Mode；字符串读取器不会自动转换整数。
+    item.Mode := TomlUtil_Str(mseg, "Mode", TomlUtil_Int(mseg, "Mode", 1))
+    item.StartTipSound := TomlUtil_Str(mseg, "StartTipSound", "1")
+    item.EndTipSound := TomlUtil_Str(mseg, "EndTipSound", "1")
+    item.StopTipSound := TomlUtil_Str(mseg, "StopTipSound", "1")
+    item.BindWindow := TomlUtil_Str(mseg, "BindWindow", "{模块窗口绑定}")
+    if (item.BindWindow == "")
+        item.BindWindow := "{模块窗口绑定}"
+    item.IcoPath := TomlUtil_Str(mseg, "IcoPath")
+    item.VoiceKeywords := TomlUtil_Str(mseg, "VoiceKeywords")
+    item.Macro := TomlUtil_Str(mseg, "Macro")
+    item.PreMacro := TomlUtil_Str(mseg, "PreMacro")     ;执行前钩子（缺省 ""）
+    item.PostMacro := TomlUtil_Str(mseg, "PostMacro")   ;执行后钩子（缺省 ""）
+    item.Breakpoints := TomlUtil_Str(mseg, "Breakpoints")   ;断点集合（缺省 ""）
+    return item
 }
 
 ; 判断 seg 是否在 segList（已枚举的子段名数组）中

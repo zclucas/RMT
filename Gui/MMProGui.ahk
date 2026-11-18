@@ -105,7 +105,7 @@ class MMProGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行1：坐标基准 + 拟真轨迹
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("坐标基准：")).VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("坐标基准：")).ToolTip(GetLang("坐标基准=窗口时，坐标按所选窗口左上角偏移计算（绝对移动）。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         ref := body.Add("ComboBox").Grid_Row(1).Grid_Column(1).Name("RefCombo").Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").FontSize("11")

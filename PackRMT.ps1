@@ -488,7 +488,7 @@ function New-Release {
         Write-Log "复制 Voice 插件 (x64)..." "Gray"
         Copy-Voice -ReleaseDir $releaseDir -Arch "x64"
 
-        Copy-RuntimePlugins -ReleaseDir $releaseDir
+        Copy-RuntimePlugins -ReleaseDir $releaseDir -Arch "x64"
     }
 
     if ($Type -eq "x86" -or $Type -eq "both") {
@@ -557,7 +557,7 @@ function New-Release {
         Write-Log "复制 Voice 插件 (x86)..." "Gray"
         Copy-Voice -ReleaseDir $releaseDir -Arch "x86"
 
-        Copy-RuntimePlugins -ReleaseDir $releaseDir
+        Copy-RuntimePlugins -ReleaseDir $releaseDir -Arch "x86"
     }
 
     # 输出目录：命令行 -OutDir 优先，默认桌面\RMTRelease
@@ -942,9 +942,20 @@ function Copy-Voice {
 
 # 发行目录运行时要靠磁盘加载、以前打包漏掉的插件
 function Copy-RuntimePlugins {
-    param([string]$ReleaseDir)
+    param([string]$ReleaseDir, [string]$Arch)
 
+    $browserDll = if ($Arch -eq "x86") { "Plugins\Browser\x86\RMT_Browser.dll" } else { "Plugins\Browser\RMT_Browser.dll" }
     $bundles = @(
+        @{
+            Name = "Browser/RMT_Browser.dll"
+            Src  = $browserDll
+            Dst  = "Plugins\Browser\RMT_Browser.dll"
+        },
+        @{
+            Name = "Browser/LICENSE.txt"
+            Src  = "Plugins\Browser\LICENSE.txt"
+            Dst  = "Plugins\Browser\LICENSE.txt"
+        },
         @{
             Name = "RMT/RMT.dll"
             Src  = "Plugins\RMT\RMT.dll"
@@ -1123,6 +1134,8 @@ function New-RMTAssets {
                 ForEach-Object { @{ Dest = "Flags/$($_.Name)"; Src = "Lang\Flags\$($_.Name)" } })
         )
         "RMT.zip" = @(
+            @{ Dest = "RMT_Browser.dll"; Src = "Release$Arch\Plugins\Browser\RMT_Browser.dll" },
+            @{ Dest = "Browser-LICENSE.txt"; Src = "Plugins\Browser\LICENSE.txt" },
             @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },
             @{ Dest = "RMT.ExcelHelper.exe"; Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
             @{ Dest = "Work.exe"; Src = "Release$Arch\Thread\Work.exe" },

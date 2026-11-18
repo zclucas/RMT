@@ -106,11 +106,11 @@ class PromptGui {
         this.AddField(left, "PasteName", "名称", , "name").ToolTip(GetLang("同名贴片会替换，关闭时留空则关闭最后一张"))
         this.AddField(left, "CountDownName", "名称", , "name")
         this.AddField(right, "PastePosition", "位置模式", ["鼠标位置", "固定位置"])
-        this.AddField(left, "Duration", "显示时长")
+        this.AddField(left, "Duration", "显示时长", , , GetLang("内容在屏幕上停留的毫秒数。"))
         this.AddField(right, "WaitEnd", "显示后", ["不等待", "等待结束"])
 
         this.AddPair(body, &left, &right)
-        this.AddField(left, "Param1", "时间戳", , "timestamp")
+        this.AddField(left, "Param1", "时间戳", , "timestamp", GetLang("填写毫秒时间戳或选择时间变量。"))
         this.AddCountDownTime(body)
 
         this.AddPair(body, &left, &right)
@@ -123,7 +123,7 @@ class PromptGui {
         this.AddField(left, "Color", "颜色")
 
         this.AddPair(body, &left, &right)
-        this.AddField(left, "FlashDuration", "单次闪光")
+        this.AddField(left, "FlashDuration", "单次闪光", , , GetLang("每次闪光持续的毫秒数。"))
         this.AddField(right, "FlashCount", "闪光次数")
 
         this.AddField(body, "ImagePath", "图片路径", , "file")
@@ -242,11 +242,13 @@ class PromptGui {
         return IsInteger(data.%start%) && IsInteger(data.%size%) ? data.%start% + data.%size% : ""
     }
 
-    AddField(body, name, label, options := [], kind := "") {
+    AddField(body, name, label, options := [], kind := "", labelTip := "") {
         this.fields[name] := {label: label, options: options, kind: kind}
         row := body.Add("Grid").Name("Row" name).Margin("0,0,0,8")
         row.Visibility(this.FieldVisible(name, this.data) ? "Visible" : "Collapsed")
         caption := row.Add("TextBlock").Name("Label" name).Text(this.FieldCaption(name, this.data))
+        if (labelTip != "")
+            caption.ToolTip(labelTip)
         if (kind == "multiline") {
             row.Rows("Auto", "Auto")
             caption.Margin("0,0,0,4")
@@ -325,7 +327,8 @@ class PromptGui {
 
     AddCountDownParts(body, prefix, label, values, maxHour) {
         partWidth := PromptGui.TimePartWidth, gap := PromptGui.TimePartGap
-        row := this.AddField(body, prefix, label, , "tools").Cols(partWidth, gap, partWidth, gap, partWidth)
+        row := this.AddField(body, prefix, label, , "tools", prefix == "CountDownClock"
+            ? GetLang("按时、分、秒填写一天中的时刻。") : GetLang("按时、分、秒填写持续时间。")).Cols(partWidth, gap, partWidth, gap, partWidth)
         for i, part in ["Hour", "Min", "Sec"] {
             col := (i - 1) * 2
             if (i > 1)

@@ -107,7 +107,7 @@ class ScreenShotGui {
         ; 行2：窗口信息（屏幕抓图时 Hidden 占位，避免下面行上移）
         winRow := body.Add("Grid").Name("WinInfoRow").Grid_Row(2).Grid_ColumnSpan(5).Visibility("Hidden")
         winRow.Cols("108", "*", "8", "70")
-        winRow.Add("TextBlock").Grid_Column(0).Text(GetLang("窗口绑定:")).VerticalAlignment("Center")
+        winRow.Add("TextBlock").Grid_Column(0).Text(GetLang("窗口绑定:")).ToolTip(GetLang("指定这条指令要操作的窗口。")).VerticalAlignment("Center")
         winRow.Add("TextBox").Grid_Column(1).Name("WinInfoCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
             .VerticalContentAlignment("Center").Padding("2,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")

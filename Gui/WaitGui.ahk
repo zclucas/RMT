@@ -79,15 +79,15 @@ class WaitGui {
 
         types := body.Add("Grid")
         types.Cols("*", 16, "*")
-        typeRow := CmdEditorForm.Row(types, "类型：")
+        typeRow := CmdEditorForm.Row(types, "等待对象：")
         this._Choice(typeRow, "WaitTypeCon", WaitGroupNames()).Grid_Column(1)
-        conditionRow := CmdEditorForm.Row(types, "条件：", "", "CommandRightLabel", "Center", "WaitConditionLabel").Grid_Column(2)
+        conditionRow := CmdEditorForm.Row(types, "条件：", "WaitConditionRow", "CommandRightLabel", "Center", "WaitConditionLabel").Grid_Column(2)
         CmdEditorForm.Combo(conditionRow, "WaitConditionCon").Grid_Column(1)
 
         pStack := body.Add("Grid")
 
         vp := pStack.Add("StackPanel").Name("VarPanel").Visibility("Collapsed")
-        logicRow := CmdEditorForm.Row(vp, "条件关系：")
+        logicRow := CmdEditorForm.Row(vp, "条件关系：", , , , , GetLang("选择全部条件成立，或任一条件成立。"))
         this._Choice(logicRow, "VarLogicCon", CmdEnumLogicNames()).Grid_Column(1)
         conditions := CmdEditorForm.Row(vp, "")
         list := conditions.Add("StackPanel").Grid_Column(1)
@@ -101,13 +101,13 @@ class WaitGui {
         keyRow := CmdEditorForm.Row(kp, "按键：").Add("Grid").Grid_Column(1)
         keyRow.Cols("*", 6, "Auto", 6, "Auto")
         CmdEditorForm.TextBox(keyRow, "KeyCon")
-        CmdEditorForm.IconButton(keyRow, "BtnPickKey", 0xE92E, "键盘按键选择").Grid_Column(2).FontSize(16)
-        CmdEditorForm.IconButton(keyRow, "BtnPickJoy", 0xE7FC, "手柄按键选择").Grid_Column(4).FontSize(16)
+        CmdEditorForm.TextButton(keyRow, "BtnPickKey", "键盘", "键盘按键选择").Grid_Column(2)
+        CmdEditorForm.TextButton(keyRow, "BtnPickJoy", "手柄", "手柄按键选择").Grid_Column(4).FontSize(16)
         keyOptions := kp.Add("Grid")
         keyOptions.Cols("*", 16, "*")
         mode := CmdEditorForm.Row(keyOptions, "检测模式:")
         this._Choice(mode, "KeyCheckTypeCon", []).Grid_Column(1)
-        state := CmdEditorForm.Row(keyOptions, "检测类型:", "", "CommandRightLabel").Grid_Column(2)
+        state := CmdEditorForm.Row(keyOptions, "检测类型:", "", "CommandRightLabel", , , GetLang("物理状态看实际按键，逻辑状态看系统收到的输入。")).Grid_Column(2)
         this._Choice(state, "KeyStateTypeCon", CmdEnumStateNames()).Grid_Column(1)
 
         ; 范围面板：起始X/Y、终止X/Y
@@ -148,7 +148,7 @@ class WaitGui {
         winInput := wp.Add("Grid").Grid_Column(1)
         winInput.Cols("*", 6, "Auto")
         CmdEditorForm.TextBox(winInput, "WinInfoCon")
-        CmdEditorForm.IconButton(winInput, "BtnWinEdit", 0xE70F, "编辑").Grid_Column(2)
+        CmdEditorForm.TextButton(winInput, "BtnWinEdit", "编辑").Grid_Column(2)
 
         ; 文件面板
         fp := CmdEditorForm.Row(pStack, "文件路径：", "FilePanel").Visibility("Collapsed")
@@ -164,7 +164,7 @@ class WaitGui {
         tp := pStack.Add("StackPanel").Name("TimePanel").Visibility("Collapsed")
         tr := tp.Add("Grid")
         tr.Cols("*", 16, "*")
-        timeMode := CmdEditorForm.Row(tr, "模式：", "", "CommandLabel", "Center", "TimeModeLabel")
+        timeMode := CmdEditorForm.Row(tr, "时间格式：", "", "CommandLabel", "Center", "TimeModeLabel")
         this._Choice(timeMode, "TimeKindCon", []).Grid_Column(1)
         targetRow := CmdEditorForm.Row(tr, "目标：", "TimeTargetFields", "CommandRightLabel", "Center", "TimeValueLabel").Grid_Column(2)
         CmdEditorForm.Combo(targetRow, "TimeValueCon", true).Grid_Column(1)
@@ -176,8 +176,6 @@ class WaitGui {
         CmdEditorForm.Combo(startRow, "TimeStartCon", true).Grid_Column(1)
         endRow := CmdEditorForm.Row(rangeRow, "结束：", "", "CommandRightLabel", "Center", "TimeEndLabel").Grid_Column(2)
         CmdEditorForm.Combo(endRow, "TimeEndCon", true).Grid_Column(1)
-        tp.Add("TextBlock").Name("TimeHintCon").TextWrapping("Wrap").Margin("0,4")
-            .Foreground("{DynamicResource TextSub}")
 
         confirm := pStack.Add("StackPanel").Name("ConfirmPanel").Visibility("Collapsed")
         promptRow := CmdEditorForm.Row(confirm, "提示：")
@@ -922,6 +920,7 @@ class WaitGui {
     _FillTypes(group, selected := "") {
         this._currentGroup := group
         this.WaitTypeKeys := group == "确定" ? WaitGui.ConfirmModes : WaitGroupTypes(group)
+        this.ui.Update("WaitConditionRow", "Visibility", this.WaitTypeKeys.Length > 1 ? "Visible" : "Collapsed")
         this.ui.Update("WaitConditionCon", "ClearItems", "")
         for key in this.WaitTypeKeys {
             label := group == "确定" ? key : (key == "等待时间" ? "等待" : (key == "等待时间区间" ? "区间判断" : SubStr(key, 3)))
@@ -967,21 +966,16 @@ class WaitGui {
         random := kind == "毫秒-随机"
         pair := range || random
         this._RefreshTimeTarget(range, kind)
-        label := kind == "毫秒" ? "目标(ms)：" : "目标："
+        label := kind == "毫秒" ? "时长(ms)：" : (kind == "时刻" || kind == "时间戳" ? "目标时间：" : "时长：")
+        help := CmdEditorForm.TimeValueTip(kind)
+        for name in ["TimeValueLabel", "TimeStartLabel", "TimeEndLabel"]
+            this.ui.Update(name, "ToolTip", help)
         this.ui.Update("TimeValueLabel", "Text", GetLang(label))
         this.ui.Update("TimeStartLabel", "Text", GetLang(random ? "最短：" : "开始："))
         this.ui.Update("TimeEndLabel", "Text", GetLang(random ? "最长：" : "结束："))
         this.ui.Update("TimeTargetFields", "Visibility", pair ? "Collapsed" : "Visible")
-        this.ui.Update("TimeRangeFields", "Visibility", pair ? "Visible" : "Hidden")
+        this.ui.Update("TimeRangeFields", "Visibility", pair ? "Visible" : "Collapsed")
         this.ui.Update("TimeWaitOutsideCon", "Visibility", range ? "Visible" : "Collapsed")
-        hint := kind == "时长" ? "格式：时:分:秒，例如 00:01:30；支持变量。" : (kind == "时刻" ? "格式：时:分:秒，例如 14:30:00；区间支持跨午夜。" : "填写毫秒时间戳或选择时间变量。")
-        if (random)
-            hint := "从最短与最长毫秒数之间随机等待，支持变量。"
-        else if (kind == "毫秒")
-            hint := "输入毫秒数或选择变量，例如 500。"
-        else if (kind == "分钟" || kind == "小时" || kind == "天")
-            hint := "旧配置时长单位：" kind "，支持数值或变量。"
-        this.ui.Update("TimeHintCon", "Text", GetLang(hint))
     }
 
     _RefreshTimeTarget(range, kind) {

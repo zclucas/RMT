@@ -45,7 +45,9 @@ class FolderPackager {
             fileChunk := this._AddFile(relativePath, filePath)
 
             ; 将文件块复制到主缓冲区
-            DllCall("RtlMoveMemory", "ptr", mainBuffer.ptr + pos, "ptr", fileChunk.ptr, "uint", fileChunk.Size)
+            if (fileChunk.Size > mainBuffer.Size - pos)
+                throw Error(GetLang("文件写入失败:") " " filePath)
+            DllCall("RtlMoveMemory", "ptr", mainBuffer.ptr + pos, "ptr", fileChunk.ptr, "uptr", fileChunk.Size)
             pos += fileChunk.Size
 
             if (report)
@@ -56,9 +58,21 @@ class FolderPackager {
         ; 加密作用于整个包：连文件名、图片内容都看不到，比逐个文件加密更干净
         if (report)
             report(GetLang("正在保存配置包"))
+        if (pos < mainBuffer.Size)
+            mainBuffer.Size := pos
         buf := (password == "") ? mainBuffer : RMTC_SealBuffer(mainBuffer, password)
-        FileEncoding("CP0")
-        FileOpen(outputFile, "w").RawWrite(buf)
+        tmp := outputFile "." DllCall("GetCurrentProcessId", "UInt") "." A_TickCount "." Random(1000, 9999) ".tmp"
+        try {
+            file := FileOpen(tmp, "w", "CP0")
+            try {
+                if (file.RawWrite(buf) != buf.Size)
+                    throw Error(GetLang("文件写入失败:") " " outputFile)
+            } finally file.Close()
+            FileMove(tmp, outputFile, 1)
+        } finally {
+            if (FileExist(tmp))
+                try FileDelete(tmp)
+        }
         return true
     }
 
@@ -80,9 +94,7 @@ class FolderPackager {
         if callback
             callback(GetLang("正在检查配置文件"))
 
-        ; 读取二进制数据 - 修正这里
-        FileEncoding("CP0")
-        file := FileOpen(packedFile, "r")
+        file := FileOpen(packedFile, "r", "CP0")
         fileSize := file.Length
         if (fileSize > this.MAX_TOTAL_SIZE + 16 * 1024 * 1024) {
             file.Close()
@@ -145,7 +157,8 @@ class FolderPackager {
             }
         }
 
-        ; 创建输出文件夹
+        ; 先提交目标方案尚在队列的旧值，避免延迟写盘覆盖解包结果。
+        Compat_FlushProfile(outputFolder)
         DirCreate(outputFolder)
         ; 覆盖解包无版本旧包时，不继承目标目录残留的新版本标记。
         versionPath := Compat_VersionFile(outputFolder)
@@ -180,6 +193,10 @@ class FolderPackager {
                 if (fileInfo.size && out.RawWrite(data.Ptr + fileInfo.offset, fileInfo.size) != fileInfo.size)
                     throw Error(GetLang("文件写入失败:") " " fileInfo.path)
             } finally out.Close()
+            if (RegExMatch(fileInfo.path, "i)\.toml$")) {
+                CfgInvalidate(outputPath)
+                TomlUtil_Invalidate(outputPath)
+            }
 
             if callback {
                 progress := Round((fileInfo.nextPos / totalSize) * 100)

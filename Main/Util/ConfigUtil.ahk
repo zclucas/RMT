@@ -37,6 +37,7 @@
 ;   读配置永远读到含未落盘改动的最新内存值，语义比「改完才读」更一致。
 ; ============================================================
 #Include "TomlUtil.ahk"
+#Include FileStamp.ahk
 
 global Cfg_Cache := Map()   ; 文件路径 → {Stamp, Root}；Root: Map(段名 → Map(键 → 值))
 global Cfg_BatchDepth := 0  ; 批处理嵌套深度；>0 时写入只改内存、落盘推迟到 CfgBatchEnd
@@ -54,21 +55,13 @@ global CfgMaxDelayMs := 3000    ; 持续写入时的最长等待，超时强制�
 ; ============================================================
 
 ; 文件指纹（修改时间 + 大小）；不存在返回 "0"
-Cfg_Stamp(file) {
-    if (file == "" || !FileExist(file))
-        return "0"
-    try
-        return FileGetTime(file, "M") "|" FileGetSize(file)
-    catch
-        return "0"
-}
+Cfg_Stamp(file) => FileStamp(file)
 
 ; 解析整文件为 Map(段名 → Map(键 → 值))，带指纹缓存；文件不存在/解析失败 → 空 Map
-Cfg_Load(file) {
+Cfg_Load(file, forWrite := false) {
     global Cfg_Cache, Cfg_BatchDepth, Cfg_Dirty
     ; 批处理期间该文件的最新内容只在内存里（改动未落盘），指纹比对既无意义又纯属开销
-    ;（一次 Cfg_Stamp = FileExist + FileGetTime + FileGetSize 三次文件操作；
-    ;  Compat* 逐键写入时会调用几千次）
+    ; 升级大量配置时避免逐键查询文件属性。
     if (Cfg_BatchDepth > 0 && Cfg_Cache.Has(file))
         return Cfg_Cache[file].Root
     ; 同理：延迟落盘窗口内磁盘是旧内容，内存 root 才是事实来源。
@@ -83,8 +76,15 @@ Cfg_Load(file) {
     }
     root := Map()
     if (stamp != "0") {
+        ; 共享锁或临时 I/O 错误不是空文件；下次读取需重试，写操作不能清空原配置。
+        try content := FileRead(file, "UTF-8")
+        catch as err {
+            if (forWrite)
+                throw err
+            return Cfg_Cache.Has(file) ? Cfg_Cache[file].Root : Map()
+        }
         try {
-            t := Toml().read(FileRead(file, "UTF-8"))
+            t := Toml().read(content)
             if (TomlUtil_Valid(t))
                 Cfg_Flatten(t.tomap(), root, "")
         } catch as e {
@@ -209,36 +209,38 @@ CfgFlushAll() {
     global Cfg_Dirty, Cfg_Cache
     if (!Cfg_Dirty.Count)
         return 0
-    pending := Cfg_Dirty
-    Cfg_Dirty := Map()
     n := 0
-    for file, _ in pending {
-        if (!Cfg_Cache.Has(file))
-            continue
-        try {
-            Cfg_WriteRoot(Cfg_Cache[file].Root, file)
-            n += 1
-        } catch {
-            Cfg_Dirty[file] := true      ; 保留改动，下一轮重试
-        }
+    for file in Cfg_Dirty.Clone() {
+        try n += Cfg_FlushFile(file)
     }
     return n
 }
 
+Cfg_FlushFile(file) {
+    global Cfg_Dirty, Cfg_Cache
+    previous := A_IsCritical
+    Critical("On")
+    try {
+        if (!Cfg_Dirty.Has(file))
+            return 0
+        Cfg_WriteRoot(Cfg_Cache[file].Root, file)
+        Cfg_Dirty.Delete(file)
+        return 1
+    } finally Critical(previous)
+}
+
 ; 迁移在写入版本或移动目录前，必须确认该目录的配置已落盘。
 CfgFlushDir(dir) {
-    global Cfg_Dirty, Cfg_Cache
-    criticalState := A_IsCritical
+    global Cfg_Dirty
+    previous := A_IsCritical
     Critical("On")
     try {
         for file in Cfg_Dirty.Clone() {
             SplitPath file, , &parent
-            if (parent != dir)
-                continue
-            Cfg_WriteRoot(Cfg_Cache[file].Root, file)
-            Cfg_Dirty.Delete(file)
+            if (parent = dir)
+                Cfg_FlushFile(file)
         }
-    } finally Critical(criticalState)
+    } finally Critical(previous)
 }
 
 ; 失效缓存；file 省略 → 清空全部
@@ -247,7 +249,8 @@ CfgInvalidate(file := "") {
     ; AHK v2 的 Map.Delete 对不存在的键会抛错，必须 Has 守卫
     if (file == "") {
         CfgFlushAll()               ; 清缓存前把未落盘的改动写出去，否则等于丢弃
-        Cfg_Cache.Clear()
+        for path in Cfg_Cache.Clone()
+            CfgInvalidate(path)
         return
     }
     ; 批处理 / 延迟落盘期间该文件有未落盘的改动：内存 root 才是最新，不能丢
@@ -320,7 +323,7 @@ CfgWrite(value, file, section, key) {
     global Cfg_BatchDepth
     if (file == "")
         return
-    root := Cfg_Load(file)
+    root := Cfg_Load(file, true)
     Cfg_Seg(root, section)[key] := Cfg_Stringify(value)
     if (Cfg_BatchDepth > 0) {
         CfgBatchTouch(file)
@@ -341,7 +344,7 @@ CfgDelete(file, section, key := "") {
     ; 磁盘上还没有但内存里刚写过（延迟落盘窗口内）的文件同样要能删
     if (file == "" || (!FileExist(file) && !Cfg_Cache.Has(file)))
         return
-    root := Cfg_Load(file)
+    root := Cfg_Load(file, true)
     if (!root.Has(section))
         return
     if (key == "") {
@@ -386,7 +389,7 @@ CfgHasSection(file, section) {
 ; 删除某段及其全部带点子段（供表清空/孤儿清理）
 CfgDeleteSegs(file, section) {
     global Cfg_BatchDepth
-    root := Cfg_Load(file)
+    root := Cfg_Load(file, true)
     prefixDot := section "."
     changed := false
     for name in root.Clone() {

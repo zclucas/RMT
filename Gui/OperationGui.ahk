@@ -129,7 +129,7 @@ class OperationGui {
         bdInner.Rows("Auto", "*")
         head := bdInner.Add("Grid").Grid_Row(0).Margin("0,0,8,4")
         head.Cols("*", "55", "8", "120", "28")
-        head.Add("TextBlock").Grid_Column(0).Text(GetLang("运算表达式")).VerticalAlignment("Center")
+        head.Add("TextBlock").Grid_Column(0).Text(GetLang("运算表达式")).ToolTip(GetLang("提示：实际运行时会使用真实的变量值")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         head.Add("TextBlock").Grid_Column(3).Text(GetLang("结果保存变量")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")

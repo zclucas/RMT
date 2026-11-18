@@ -73,10 +73,10 @@ SetGlobalData(macroStr, visitMap) {
                 if (baseCmd == "窗口控件" && WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
                     TimeoutPolicy.RegisterStatus(Data)
             case "浏览器":
-                if (BrowserUtil.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserUtil.Actions)))
+                if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
                     TimeoutPolicy.RegisterStatus(Data)
                 if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
-                    && !BrowserUtil.IsCloseAction(CmdEnumZh(Data.ActionType, BrowserUtil.Actions)))
+                    && !BrowserActions.IsCloseAction(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
                     for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
                         VariableMap[Data.SaveVar suffix] := true
             case "网络请求":
@@ -89,15 +89,11 @@ SetGlobalData(macroStr, visitMap) {
             case "文件读写", "Excel":
                 SetFileIOGlobalData(Data)
             case "运行", "运行Pro":
-                if (Data.Mode = 2) {
-                    if (Data.SaveNameArr[1] != "")
-                        VariableMap[Data.SaveNameArr[1]] := true
-                }
-                else if (Data.Mode = 4) {
-                    loop 3 {
-                        if (Data.SaveNameArr[A_Index] != "")
-                            VariableMap[Data.SaveNameArr[A_Index]] := true
-                    }
+                mode := CmdEnumZh(Data.Mode, CmdEnumRunModeNames())
+                count := mode == "等待+输入输出" ? 3 : mode == "等待+返回值" ? 1 : 0
+                loop count {
+                    if (Data.SaveNameArr.Has(A_Index) && Data.SaveNameArr[A_Index] != "")
+                        VariableMap[Data.SaveNameArr[A_Index]] := true
                 }
             case "循环":
                 SetGlobalData(Data.LoopBody, visitMap)

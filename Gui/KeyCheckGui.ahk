@@ -97,7 +97,7 @@ class KeyCheckGui {
                 .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             for t in GetLangArr(["同时按下", "有一个按下"])
                 cc.Add("ComboBoxItem").Content(t)
-            bottom.Add("TextBlock").Text(GetLang("检测类型:")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            bottom.Add("TextBlock").Text(GetLang("检测类型:")).ToolTip(GetLang("物理状态看实际按键，逻辑状态看系统收到的输入。")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
             st := bottom.Add("ComboBox").Name("StateTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
                 .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             for t in GetLangArr(["物理状态", "逻辑状态"])

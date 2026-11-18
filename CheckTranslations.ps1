@@ -54,7 +54,8 @@ Write-Host " 正在提取 RMT 源码中的多语言键 (GetLang / 指令集 / �
 Write-Host "========================================================" -ForegroundColor Cyan
 
 $ahkFiles = Get-ChildItem -Path $Root -Filter "*.ahk" -Recurse | Where-Object {
-    $_.FullName -notmatch '\\Test\\' -and $_.FullName -notmatch '\\\.git\\'
+    $relative = $_.FullName.Substring($Root.Length)
+    $relative -notmatch '\\(?:Test|\.git)\\'
 }
 
 $codeKeys = [System.Collections.Generic.HashSet[string]]::new()

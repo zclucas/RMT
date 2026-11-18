@@ -130,7 +130,7 @@ class FileIOGui {
         excelRow := body.Add("Grid").Name("ExcelRow").Grid_Row(4).Grid_ColumnSpan(5)
         excelRow.Rows("36", "36")
         excelRow.Cols("96", "*", "16", "96", "*")
-        excelRow.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("表名或序号:")).VerticalAlignment("Center")
+        excelRow.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("表名或序号:")).ToolTip(GetLang("填工作表名称，或从 1 开始的工作表序号。")).VerticalAlignment("Center")
         excelRow.Add("TextBox").Grid_Row(0).Grid_Column(1).Name("NameOrSerialCon").Height(26).MinHeight(26).VerticalAlignment("Center")
         excelRow.Add("TextBlock").Grid_Row(0).Grid_Column(3).Text(GetLang("表格行号:")).VerticalAlignment("Center")
         excelRow.Add("ComboBox").Grid_Row(0).Grid_Column(4).Name("RowCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
@@ -439,7 +439,7 @@ class FileIOGui {
 
         row1 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row1.Cols("88", "80", "8", "200", "8", "70", "8", "70")
-        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).VerticalAlignment("Center")
+        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         vt := row1.Add("ComboBox").Grid_Column(1).Name("ContentEditVarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))

@@ -8,7 +8,7 @@ class SearchAllGui extends SearchProGui {
     SortOrders => ["上下左右", "上下右左", "下上左右", "下上右左"]
 
     BuildAllSortField(coord) {
-        coord.Add("TextBlock").Grid_Row(2).Text(GetLang("搜索顺序：")).VerticalAlignment("Center")
+        coord.Add("TextBlock").Grid_Row(2).Text(GetLang("搜索顺序：")).ToolTip(GetLang("决定匹配坐标在结果数组中的排列顺序。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         sort := coord.Add("ComboBox").Grid_Row(2).Grid_Column(2).Grid_ColumnSpan(3).Name("AllSortCon").Height(28).MinHeight(28)
             .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
@@ -21,7 +21,7 @@ class SearchAllGui extends SearchProGui {
     BuildAllArrayField(saveRow) {
         coord := saveRow.Add("Grid").Grid_Column(2)
         coord.Cols("Auto", "8", "*")
-        coord.Add("TextBlock").Text(GetLang("坐标数据：")).VerticalAlignment("Center")
+        coord.Add("TextBlock").Text(GetLang("坐标数据：")).ToolTip(GetLang("批量返回坐标数组")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         this._AddEditCombo(coord, "AllSaveNameCon", 0, 2)
     }

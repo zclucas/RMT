@@ -607,6 +607,7 @@ OnExitSoft(*) {
 
     ; 零、配置落盘。写入是「改内存 + 延迟落盘」，进程退出前不刷就丢最后那段改动。
     ; 放在最前面：后面的清理可能提前结束进程（强杀 Worker / 卸载 DLL）。
+    try CfgWrite(MySoftData.MacroTotalCount, SettingFile, SettingSection, "MacroTotalCount")
     try CfgFlushAll()
     try UIMacroSchema.FlushStore()
 
@@ -663,9 +664,7 @@ OnExitSoft(*) {
             RMTLogSys(RMT_LV_WARN, "Exit", "UIMacro.StopMonitor 失败: " (e.HasProp("Message") ? e.Message : ""))
         }
     }
-    try CfgWrite(MySoftData.MacroTotalCount, SettingFile, SettingSection, "MacroTotalCount")
-    catch {
-    }
+    try CfgFlushAll()
 }
 
 ; 结束与本程序同目录的 RMTMcps.exe。按可执行文件路径判断，不按进程名一刀切。

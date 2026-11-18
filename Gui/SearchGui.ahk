@@ -152,7 +152,7 @@ class SearchGui {
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
 
         clrPanel := extra.Add("StackPanel").Name("ColorPanel").Orientation("Horizontal").VerticalAlignment("Center").Visibility("Collapsed")
-        clrPanel.Add("TextBlock").Name("ColorTipCon").Text(GetLang("搜索颜色：")).VerticalAlignment("Center")
+        clrPanel.Add("TextBlock").Name("ColorTipCon").Text(GetLang("搜索颜色：")).ToolTip(GetLang("颜色使用六位十六进制 RGB")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         clrPanel.Add("TextBox").Name("HexColorCon").Text("FFFFFF").Width(90).Height(28).MinHeight(28).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center").FontSize("11")

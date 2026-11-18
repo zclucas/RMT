@@ -101,7 +101,7 @@ class RunGui {
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("目标：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("目标：")).ToolTip(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         RunGui.AddTargetCombo(body).Grid_Row(1).Grid_Column(1)
         body.Add("Button").Grid_Row(1).Grid_Column(3).Name("BtnSelectFile").Content(GetLang("选择文件")).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Stretch").Cursor("Hand")
 

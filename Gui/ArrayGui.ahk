@@ -108,7 +108,7 @@ class ArrayGui {
             .SnapsToDevicePixels("True")
         mainIndexRow := body.Add("Grid").Name("MainIndexRow").Grid_Row(1).Grid_Column(4).Grid_ColumnSpan(3).Visibility("Collapsed")
         mainIndexRow.Cols("60", "8", "160")
-        mainIndexRow.Add("TextBlock").Grid_Column(0).Text(GetLang("子索引：")).VerticalAlignment("Center").HorizontalAlignment("Left")
+        mainIndexRow.Add("TextBlock").Grid_Column(0).Text(GetLang("子索引：")).ToolTip(GetLang("0 表示整个数组；N 表示第 N 项子数组")).VerticalAlignment("Center").HorizontalAlignment("Left")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
             .ToolTip(GetLang("0 表示整个数组；N 表示第 N 项子数组"))
         mainIndexRow.Add("ComboBox").Grid_Column(2).Name("MainIndexCon").Width(160).Height(28).MinHeight(28)

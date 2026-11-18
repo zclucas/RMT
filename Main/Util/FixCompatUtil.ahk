@@ -35,15 +35,20 @@ Compat_ReadVersion(dir) {
 
 Compat_WriteVersion(dir, version) {
     path := Compat_VersionFile(dir)
-    root := Cfg_Load(path).Clone()
+    root := Cfg_Load(path, true).Clone()
     manifest := Cfg_Seg(root, "RMT").Clone()
     manifest["ConfigVersion"] := version
     root["RMT"] := manifest
     Cfg_WriteRoot(root, path)
 }
 
-Compat_UpgradeDir(dir) {
+Compat_FlushProfile(dir) {
     CfgFlushDir(dir)
+    UIMacroPanelStore.FlushDir(dir)
+}
+
+Compat_UpgradeDir(dir) {
+    Compat_FlushProfile(dir)
     version := Compat_ReadVersion(dir)
     if (Compat_CompareVersion(version, Compat_CurrentVersion()) > 0)
         throw Error("配置版本 " version " 高于当前支持的 " Compat_CurrentVersion())
@@ -137,9 +142,9 @@ Compat_InstallStagedTree(staged, currentDir, backup, verify, sourceDir := unset)
     installed := false
     try {
         if (DirExist(sourceDir)) {
-            CfgFlushDir(sourceDir)
+            Compat_FlushProfile(sourceDir)
             loop files, sourceDir "\*", "D"
-                CfgFlushDir(A_LoopFileFullPath)
+                Compat_FlushProfile(A_LoopFileFullPath)
             DirMove(sourceDir, backup)
             backedUp := true
         }
@@ -243,7 +248,7 @@ Compat_ImportProfilePackage(file, root, backupRoot, name, commit := unset, repor
         ; 覆盖导入保留原配置中包内没有的资源，校验通过前只改临时副本。
         if (DirExist(dest)) {
             Compat_CheckPlainTree(dest)
-            CfgFlushDir(dest)
+            Compat_FlushProfile(dest)
             DirCopy(dest, paths.Stage)
         }
         FolderPackager.UnpackFile(file, paths.Stage, report)
@@ -259,6 +264,10 @@ Compat_ImportProfilePackage(file, root, backupRoot, name, commit := unset, repor
 }
 
 Compat_RenameProfile(projectDir, oldName, newName, commit) {
+    Compat_TransferProfile(projectDir, oldName, newName, commit, true)
+}
+
+Compat_TransferProfile(projectDir, oldName, newName, commit, rename := false) {
     if (!Compat_IsSettingName(oldName) || !Compat_IsSettingName(newName))
         throw Error(GetLang("配置名不符合文件目录命名规则，请修改"))
     oldDir := projectDir "\Setting\" oldName
@@ -272,7 +281,7 @@ Compat_RenameProfile(projectDir, oldName, newName, commit) {
     paths := Compat_StagePaths(backupRoot, "Rename-")
     try {
         ; 先改副本，写盘或切换失败时可完整恢复原目录。
-        CfgFlushDir(oldDir)
+        Compat_FlushProfile(oldDir)
         DirCopy(oldDir, paths.Stage)
         rebase := Compat_RebaseProfilePath.Bind(oldDir, newDir, projectDir)
         loop files, paths.Stage "\*.toml" {
@@ -284,7 +293,8 @@ Compat_RenameProfile(projectDir, oldName, newName, commit) {
             if (Compat_RebaseProfileValues(root, rebase))
                 TomlUtil_Write(Compat_UnquoteTomlKeys(root), file)
         }
-        Compat_InstallStagedTree(paths.Stage, newDir, paths.Backup, () => commit.Call(rebase), oldDir)
+        verify := rename ? () => commit.Call(rebase) : () => (Compat_UpgradeDir(newDir), commit.Call(rebase))
+        Compat_InstallStagedTree(paths.Stage, newDir, paths.Backup, verify, rename ? oldDir : newDir)
     } finally {
         if (DirExist(paths.Stage))
             try DirDelete(paths.Stage, true)

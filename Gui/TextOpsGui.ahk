@@ -162,7 +162,7 @@ class TextOpsGui {
         this._AddLabel(searchRow, GetLang("替换文本:")).Grid_Column(3)
         this._StyleCombo(searchRow.Add("ComboBox").Name("ReplaceCon").Grid_Column(4).IsEditable("True"))
 
-        this._AddLabel(argsGrid, GetLang("时间量：")).Grid_Column(3).Name("TimestampComponentLabel").Visibility("Collapsed")
+        this._AddLabel(argsGrid, GetLang("时间量：")).ToolTip(GetLang("选择要从时间戳中提取的部分，例如年或月。")).Grid_Column(3).Name("TimestampComponentLabel").Visibility("Collapsed")
         componentCombo := this._StyleCombo(argsGrid.Add("ComboBox").Name("TimestampComponent").Grid_Column(4).Visibility("Collapsed"))
         for label in TextOpsTimestampComponentLabels()
             componentCombo.Add("ComboBoxItem").Content(label)
@@ -599,7 +599,7 @@ class TextOpsGui {
 
         row1 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row1.Cols("88", "80", "8", "200", "8", "70", "8", "70")
-        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).VerticalAlignment("Center")
+        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         vt := row1.Add("ComboBox").Grid_Column(1).Name("ConcatEditVarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))

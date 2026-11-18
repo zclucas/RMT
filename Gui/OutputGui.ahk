@@ -107,7 +107,7 @@ class OutputGui {
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
 
         ; 行3：变量数组（标签与输出类型对齐）
-        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("变量数组：")).VerticalAlignment("Center").Margin("8,0,0,0")
+        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center").Margin("8,0,0,0")
         varRow := body.Add("Grid").Grid_Row(3).Grid_Column(1).Grid_ColumnSpan(4)
         varRow.Cols("90", "8", "*", "8", "70", "8", "70")
         vt := varRow.Add("ComboBox").Grid_Column(0).Name("VarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")

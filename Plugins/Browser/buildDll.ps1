@@ -1,51 +1,28 @@
 param(
-    [ValidateSet("x64")]
-    [string]$Arch = "x64"
+    [ValidateSet("x64", "x86")]
+    [string]$Arch = "x64",
+    # 可传入本地 CDP-for-CPP 源码目录进行离线构建。
+    [string]$CdpSource = ""
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-
-$CdpInclude = "c:\sundry\project\RMT\Test\reference\CDP-for-CPP\include"
-$CdpLib = "c:\sundry\project\RMT\Test\reference\CDP-for-CPP\build\Release\cdp.lib"
-
-$OutputDir = $ScriptDir
-$OutDll = Join-Path $OutputDir "RMT_Browser.dll"
-
-$vcvars = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
-if (-not (Test-Path $vcvars)) {
-    Write-Error "vcvars64.bat not found"
+$repo = (Resolve-Path "$PSScriptRoot\..\..").Path
+$source = if ($CdpSource) { (Resolve-Path -LiteralPath $CdpSource).Path } else { "" }
+$build = Join-Path $repo "Test\output\browser-native-$Arch"
+$cmake = (Get-Command cmake.exe -ErrorAction SilentlyContinue).Source
+if (!$cmake) {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path -LiteralPath $vswhere) {
+        $cmake = & $vswhere -latest -products '*' -find 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe' | Select-Object -First 1
+    }
 }
+if (!$cmake) { throw "CMake was not found." }
+$platform = if ($Arch -eq "x86") { "Win32" } else { "x64" }
+& $cmake -S $PSScriptRoot -B $build -A $platform "-DCDP_SOURCE_DIR=$source"
+if ($LASTEXITCODE) { throw "CMake configuration failed ($LASTEXITCODE)" }
+& $cmake --build $build --config Release --target RMT_Browser --parallel 4
+if ($LASTEXITCODE) { throw "Browser DLL build failed ($LASTEXITCODE)" }
 
-$SrcFile = Join-Path $ScriptDir "RMT_Browser.cpp"
-$ObjFile = Join-Path $ScriptDir "RMT_Browser.obj"
-
-Write-Host "Compiling RMT_Browser.cpp..." -ForegroundColor Cyan
-$compileCmd = @"
-chcp 65001 >nul && call "$vcvars" >nul 2>&1 && cl /c /EHsc /std:c++latest /O2 /MD /utf-8 /D "WIN32" /D "_WINDOWS" /D "NDEBUG" /D "BROWSER_EXPORTS" /I "$CdpInclude" /Fo"$ObjFile" "$SrcFile"
-"@
-
-cmd /c $compileCmd
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Compilation failed"
-}
-
-Write-Host "Linking RMT_Browser.dll..." -ForegroundColor Cyan
-$linkCmd = @"
-chcp 65001 >nul && call "$vcvars" >nul 2>&1 && link /DLL /MACHINE:X64 /OUT:"$OutDll" "$ObjFile" "$CdpLib" ws2_32.lib crypt32.lib shell32.lib ole32.lib advapi32.lib kernel32.lib user32.lib
-"@
-
-cmd /c $linkCmd
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Linking failed"
-}
-
-Write-Host "Build succeeded: $OutDll" -ForegroundColor Green
-
-# Copy to ReleaseX64\Plugins\Browser
-$ReleasePluginDir = "c:\sundry\project\RMT\ReleaseX64\Plugins\Browser"
-if (-not (Test-Path $ReleasePluginDir)) {
-    New-Item -ItemType Directory -Path $ReleasePluginDir -Force | Out-Null
-}
-Copy-Item -Path $OutDll -Destination $ReleasePluginDir -Force
-Write-Host "Copied to $ReleasePluginDir" -ForegroundColor Green
+$destination = if ($Arch -eq "x86") { Join-Path $PSScriptRoot "x86" } else { $PSScriptRoot }
+New-Item -ItemType Directory -Force -Path $destination | Out-Null
+Copy-Item -LiteralPath "$build\Release\RMT_Browser.dll" -Destination $destination -Force

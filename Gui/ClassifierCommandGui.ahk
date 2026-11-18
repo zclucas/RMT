@@ -39,8 +39,8 @@ class ClassifierCommandGui extends CommentGui {
         this._Variable(results, "错误信息变量：", "ErrorVar", 2)
     }
 
-    _Row(body, label, name, labelAlignment := "Center", labelGroup := "CommandLabel") {
-        return CmdEditorForm.Row(body, label, name "Row", labelGroup, labelAlignment, name "Label")
+    _Row(body, label, name, labelAlignment := "Center", labelGroup := "CommandLabel", labelTip := "") {
+        return CmdEditorForm.Row(body, label, name "Row", labelGroup, labelAlignment, name "Label", labelTip)
     }
 
     _Field(body, label, name, height := 26) {
@@ -220,14 +220,14 @@ class WindowControlGui extends ClassifierCommandGui {
     }
 
     _BuildFields(body) {
-        this._Choice(body, "类型：")
-        target := this._Row(body, "控件选择器：", "TargetControl").Add("Grid").Grid_Column(1)
+        this._Choice(body, "操作：")
+        target := this._Row(body, "目标控件：", "TargetControl", , , GetLang("匹配到多个窗口，请在选择器中填写标题关键词。")).Add("Grid").Grid_Column(1)
         target.Cols("*", 6, "Auto")
         target.Add("Border").Height(26).Padding("4,0")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness(1)
             .Add("TextBlock").Name("TargetSummary").VerticalAlignment("Center").TextTrimming("CharacterEllipsis")
             .Foreground("{DynamicResource TextMain}")
-        CmdEditorForm.IconButton(target, "BtnPick", 0xE707, "拾取窗口控件").Grid_Column(2)
+        CmdEditorForm.TextButton(target, "BtnPick", "拾取", "拾取窗口控件").Grid_Column(2)
         detail := this._Row(body, "", "SelectorDetail").Add("StackPanel").Grid_Column(1)
         detail.Add("CheckBox").Name("ShowSelectorDetails").Content(GetLang("选择器详情"))
             .Foreground("{DynamicResource TextMain}")
@@ -298,7 +298,8 @@ class WindowControlGui extends ClassifierCommandGui {
     _UpdateChoice(action) {
         this._ComboPush("CommandTimeoutRow", "Visibility", WindowControl.UsesTimeout(action) ? "Visible" : "Collapsed")
         this._ComboPush("ArgumentRow", "Visibility", WindowControl.UsesArgument(action) ? "Visible" : "Collapsed")
-        label := action == "设置勾选" ? GetLang("勾选状态（0/1）：") : GetLang("控件参数：")
+        label := action == "设置勾选" ? GetLang("勾选状态（0/1）：")
+            : GetLang(action == "设置范围值" ? "数值：" : "写入内容：")
         this._ComboPush("ArgumentLabel", "Text", label)
     }
 
@@ -430,7 +431,7 @@ class AiDecisionGui extends ClassifierCommandGui {
         source := body.Add("Grid")
         source.Cols("*", 16, "*")
         this._Choice(source, "判断依据：")
-        timeout := this._Row(source, "超时（毫秒）：", "TimeoutMs", "Center", "CommandRightLabel").Grid_Column(2)
+        timeout := this._Row(source, "超时（毫秒）：", "TimeoutMs", "Center", "CommandRightLabel", GetLang("本次操作最多等待的毫秒数。")).Grid_Column(2)
         CmdEditorForm.TextBox(timeout, "TimeoutMs").Grid_Column(1)
         this._Field(body, "判断问题：", "Question", 64)
         this._PickerField(body, "屏幕范围：", "Region", "框选范围")

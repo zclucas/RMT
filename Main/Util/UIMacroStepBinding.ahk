@@ -1021,29 +1021,10 @@ class UIMacroStepBinding {
     ;   最后一跳之后，step/param 相对「最终容器文本」而言。
     ; 无 hops = 现状（容器就是顶层 item.Macro），老配置零迁移。
     ; ==================================================================
-    static MaxHops := 5
+    static MaxHops => UIMacroSchema.MaxHops
 
     ; hops 规格化：合法 → 规范化数组；非法 → ""（调用方应丢弃整个绑定）
-    static NormalizeHops(hopsRaw) {
-        if (!IsObject(hopsRaw))
-            return ""
-        out := []
-        for h in hopsRaw {
-            if (!IsObject(h))
-                return ""
-            st := UIMacroStepBinding._ToInt(h.HasProp("step") ? h.step : 0, 0)
-            kind := h.HasProp("kind") ? String(h.kind) : ""
-            serial := h.HasProp("serial") ? String(h.serial) : ""
-            field := h.HasProp("field") ? String(h.field) : ""
-            idx := UIMacroStepBinding._ToInt(h.HasProp("index") ? h.index : 0, 0)
-            if (st < 1 || kind == "" || serial == "" || field == "" || idx < 0)
-                return ""
-            out.Push({ step: st, kind: kind, serial: serial, field: field, index: idx })
-        }
-        if (out.Length < 1 || out.Length > UIMacroStepBinding.MaxHops)
-            return ""
-        return out
-    }
+    static NormalizeHops(hopsRaw) => UIMacroSchema.NormalizeHops(hopsRaw)
 
     ; 某序列型指令里可作为「嵌套宏文本容器」的字段。
     ; obj 为该指令的数据对象（用于枚举数组容器，如如果Pro 的分支列表）。

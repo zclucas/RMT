@@ -54,8 +54,14 @@ IniImport_ConvertDir(dir) {
             sectionMap := IniImport_ParseIni(iniPath)
             if (IniImport_CountKeys(sectionMap) == 0) {
                 ; 连段头都没解析出来 → 编码/行格式异常，保留原文件待查
-                if (sectionMap.Count == 0)
-                    throw Error("未解析到任何配置项（编码或行格式异常），已跳过并保留原文件")
+                if (sectionMap.Count == 0) {
+                    ; 旧包可能附带零字节或只有 BOM 的空指令库。FileOpen 自动越过 BOM。
+                    file := FileOpen(iniPath, "r")
+                    empty := file.AtEOF
+                    file.Close()
+                    if (!empty || name = "MacroFile.ini")
+                        throw Error("未解析到任何配置项（编码或行格式异常），已跳过并保留原文件")
+                }
                 ; 文件其实不小，却一个键都没读到：多半是编码判错，不能当成空配置删掉。
                 ; 删了之后同名的默认 toml 会留在目录里，加载时看起来就像宏列表被默认配置覆盖。
                 if (A_LoopFileSize > 512)
@@ -331,18 +337,14 @@ IniImport_ReadTableItemFlat(tableItem, filePath := "") {
 
     modeArr := IniImport_SplitPi(modeArrStr)
     itemCount := modeArr.Length
-    ; ModeArr 为空时仍可能有 MacroArrN（子宏常见：ModeArr 空、FoldInfo 的区间是「无-无」、正文在 MacroArr1）。
-    ; 只按 ModeArr 计条目会把这些宏展开成 0 条，随后清掉扁平键，正文就没了。
-    macroCount := 0
-    loop {
-        if (!kv.Has(symbol "MacroArr" A_Index))
-            break
-        macroCount := A_Index
-        if (A_Index >= 5000)
-            break
+    ; 1.2.2 按 ModeArr 长度加载；删除宏后旧 INI 可能仍有越界的 MacroArrN。
+    ; 只有缺少有效列表时才从正文恢复（部分分享包只含正文）。
+    fullList := kv.Has(symbol "ModeArr") && kv.Has(symbol "ForbidArr")
+        && kv.Has(symbol "TriggerTypeArr") && kv.Has(symbol "SerialArr")
+    if (!itemCount && !fullList) {
+        while (itemCount < 5000 && kv.Has(symbol "MacroArr" (itemCount + 1)))
+            itemCount++
     }
-    if (macroCount > itemCount)
-        itemCount := macroCount
 
     ; ---- 模块：FoldInfo → MacroFold（身份 = 路径 表ID.ModuleN）----
     ; JSON.parse(text, , false) → 普通 Object + Array；取值语法见 IniImport_ArrGet 顶部注释。

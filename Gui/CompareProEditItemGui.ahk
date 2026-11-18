@@ -100,7 +100,7 @@ class CompareProEditItemGui {
 
         ; 行0：逻辑关系
         logicRow := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
-        logicRow.Add("TextBlock").Text(GetLang("逻辑关系：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        logicRow.Add("TextBlock").Text(GetLang("逻辑关系：")).ToolTip(GetLang("选择全部条件成立，或任一条件成立。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         lc := logicRow.Add("ComboBox").Name("LogicalTypeCon").Width(70).Height(26).MinHeight(26).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")

@@ -133,24 +133,24 @@ class SearchComboGui {
 
         ; 满足个数
         scRow := rightPanel.Add("StackPanel").Orientation("Horizontal").Margin("0,2,0,0")
-        scRow.Add("TextBlock").Text(GetLang("满足个数：")).VerticalAlignment("Center")
+        scRow.Add("TextBlock").Text(GetLang("满足个数：")).ToolTip(GetLang("找到至少这么多个目标，就算搜索成功。")).VerticalAlignment("Center")
         scRow.Add("ComboBox").Name("SatisfyCountCon").Width(90).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
 
         ; 搜索次数 + 每次间隔（间隔叠 ms，与搜索Pro 相同）
         sr := rightPanel.Add("Grid").Margin("0,8,0,0")
         sr.Cols("Auto", "8", "*", "8", "*")
-        sr.Add("TextBlock").Grid_Column(0).Text(GetLang("搜索次数：")).VerticalAlignment("Center")
+        sr.Add("TextBlock").Grid_Column(0).Text(GetLang("搜索次数：")).ToolTip(GetLang("左侧设置尝试次数，右侧设置重试前等待的毫秒数。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         sr.Add("ComboBox").Grid_Column(2).Name("SearchCountCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
             .IsEditable("True").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        intervalHost := sr.Add("Grid").Grid_Column(4).Name("SearchIntervalHost").ToolTip(GetLang("每次间隔"))
+        intervalHost := sr.Add("Grid").Grid_Column(4).Name("SearchIntervalHost").ToolTip(GetLang("两次操作之间等待的毫秒数。"))
         intervalHost.Add("TextBox").Name("SearchIntervalCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
             .Padding("2,0").TextAlignment("Center").FontSize("11")
-            .ToolTip(GetLang("每次间隔"))
+            .ToolTip(GetLang("两次操作之间等待的毫秒数。"))
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         intervalHost.Add("TextBlock").Text("ms").FontSize("7").IsHitTestVisible("False")
@@ -469,7 +469,7 @@ class SearchComboGui {
             . this._AreaComboXml(this._TN(n, "StartPosY"), 0, 2)
             . this._AreaComboXml(this._TN(n, "EndPosX"), 1, 0)
             . this._AreaComboXml(this._TN(n, "EndPosY"), 1, 2)
-            . '<TextBlock Name="' this._TN(n, "SimilarRow") '" Grid.Row="0" Grid.Column="4" Text="' GetLang("相似度(%)：") '"'
+            . '<TextBlock Name="' this._TN(n, "SimilarRow") '" Grid.Row="0" Grid.Column="4" Text="' GetLang("相似度(%)：") '" ToolTip="' EscapeXamlXml(GetLang("百分比越高，匹配要求越严格。")) '"'
             . ' VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="{DynamicResource TextMain}" FontSize="' fs '"/>'
             . '<TextBox Name="' this._TN(n, "Similar") '" Grid.Row="0" Grid.Column="6" Height="28" MinHeight="28" MinWidth="80"'
             . ' HorizontalAlignment="Stretch" VerticalContentAlignment="Center" Padding="2,0" TextAlignment="Center" FontSize="' fs '"'

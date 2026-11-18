@@ -139,32 +139,32 @@ class TimeGui {
 
         p1 := pStack.Add("StackPanel").Name("WaitPanel")
         p1Time := p1.Add("StackPanel").Name("WaitTimeRow").Orientation("Horizontal").Height("32").VerticalAlignment("Center")
-        this._Lab(p1Time, "目标时间：")
+        this._Lab(p1Time, "目标时间：").ToolTip(GetLang("按时、分、秒填写一天中的时刻。"))
         this._AddHms(p1Time, "Wait")
 
         p1Dur := p1.Add("StackPanel").Name("WaitDurRow").Orientation("Horizontal").Height("32").VerticalAlignment("Center").Visibility("Collapsed")
-        this._Lab(p1Dur, "时长：")
+        this._Lab(p1Dur, "时长：").ToolTip(GetLang("按时、分、秒填写持续时间。"))
         this._AddHms(p1Dur, "")
 
         p1Var := p1.Add("StackPanel").Name("WaitVarRow").Orientation("Horizontal").Height("32").VerticalAlignment("Center").Visibility("Collapsed")
-        this._Lab(p1Var, "时间戳：")
+        this._Lab(p1Var, "时间戳：").ToolTip(GetLang("填写毫秒时间戳或选择时间变量。"))
         this._Combo(p1Var, "WaitVarCon", true, 220)
 
         p2 := pStack.Add("StackPanel").Name("WindowPanel").Visibility("Collapsed")
         p2r1 := p2.Add("StackPanel").Name("WinTimeRow").Orientation("Horizontal").Height("32").VerticalAlignment("Center")
-        this._Lab(p2r1, "开始时间：")
+        this._Lab(p2r1, "开始时间：").ToolTip(GetLang("按时、分、秒填写一天中的时刻。"))
         this._AddHms(p2r1, "Start")
 
         p2r1b := p2.Add("StackPanel").Name("WinTimeRow2").Orientation("Horizontal").Height("32").VerticalAlignment("Center")
-        this._Lab(p2r1b, "结束时间：")
+        this._Lab(p2r1b, "结束时间：").ToolTip(GetLang("按时、分、秒填写一天中的时刻。"))
         this._AddHms(p2r1b, "End")
 
         p2Var := p2.Add("StackPanel").Name("WinVarRow").Orientation("Horizontal").Height("32").VerticalAlignment("Center").Visibility("Collapsed")
-        this._Lab(p2Var, "开始时间：")
+        this._Lab(p2Var, "开始时间：").ToolTip(GetLang("填写毫秒时间戳或选择时间变量。"))
         this._Combo(p2Var, "StartVarCon", true, 220)
 
         p2Var2 := p2.Add("StackPanel").Name("WinVarRow2").Orientation("Horizontal").Height("32").VerticalAlignment("Center").Visibility("Collapsed")
-        this._Lab(p2Var2, "结束时间：")
+        this._Lab(p2Var2, "结束时间：").ToolTip(GetLang("填写毫秒时间戳或选择时间变量。"))
         this._Combo(p2Var2, "EndVarCon", true, 220)
 
         p2r3 := p2.Add("StackPanel").Orientation("Horizontal").Height("32").VerticalAlignment("Center")

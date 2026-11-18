@@ -57,8 +57,10 @@ class HttpRequestGui extends CommentGui {
     _Row(body, label) {
         row := body.Add("Grid").Margin("0,3")
         this._Columns(row)
-        row.Add("TextBlock").Text(GetLang(label)).VerticalAlignment("Center").Margin("0,0,8,0")
+        caption := row.Add("TextBlock").Text(GetLang(label)).VerticalAlignment("Center").Margin("0,0,8,0")
             .Foreground("{DynamicResource TextMain}")
+        if (label == "Header：")
+            caption.ToolTip(GetLang("Header 每行 名称: 值；"))
         return row
     }
 

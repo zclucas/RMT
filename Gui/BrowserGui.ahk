@@ -6,35 +6,6 @@
 ; ==============================================================================
 
 class BrowserGui extends CommentGui {
-    static PickerGlyph := 0xE707
-    ; 分组结构定义
-    static Groups := [
-        {
-            name: "页签",
-            actions: ["打开网址", "当前页跳转", "新建分页", "切换分页", "关闭分页", "获取当前分页ID", "刷新", "后退", "前进", "关闭"]
-        },
-        {
-            name: "等待条件",
-            actions: ["等待元素", "等待文字", "等待加载"]
-        },
-        {
-            name: "元素互动",
-            actions: ["点击", "双击", "右键", "输入", "清空", "选择下拉", "勾选", "滚动至元素", "悬停"]
-        },
-        {
-            name: "键鼠模拟",
-            actions: ["鼠标移动", "鼠标点击", "鼠标滚轮", "按键输入"]
-        },
-        {
-            name: "数据提取",
-            actions: ["提取文本", "提取控件值", "提取属性", "提取HTML", "元素数量", "元素状态", "获取网址", "获取标题", "获取分页列表"]
-        },
-        {
-            name: "页面工具",
-            actions: ["网页截图", "执行JS", "Cookie操作", "Storage操作"]
-        }
-    ]
-
     static SelectorTypes := ["CSS", "XPath"]
     static Conditions := ["出现", "消失", "可见"]
     static LoadStates := ["完全加载", "DOM加载", "网络空闲"]
@@ -57,31 +28,32 @@ class BrowserGui extends CommentGui {
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
         this._Field(body, "备注：", "Remark", false)
 
-        actions := this._Row(body, "类型：").Add("Grid").Grid_Column(1)
-        actions.Cols("*", 8, "*")
+        actions := body.Add("Grid")
+        actions.Cols("*", 16, "*")
+        category := CmdEditorForm.Row(actions, "类别：")
+        operation := CmdEditorForm.Row(actions, "操作：", "", "CommandRightLabel").Grid_Column(2)
         groupNames := []
-        for group in BrowserGui.Groups
+        for group in BrowserActions.Groups
             groupNames.Push(group.name)
-        this._Choice(actions, "ActionGroup", groupNames)
-        this._Choice(actions, "ActionType", BrowserGui.Groups[1].actions).Grid_Column(2)
+        this._Choice(category, "ActionGroup", groupNames).Grid_Column(1)
+        this._Choice(operation, "ActionType", BrowserActions.Groups[1].actions).Grid_Column(1)
 
         this._Choice(this._Row(body, "浏览器：", "BrowserRow"), "BrowserType", []).Grid_Column(1)
-        this._Choice(this._Row(body, "浏览器：", "CloseBrowserRow"), "CloseBrowserType", BrowserUtil.CloseBrowserTypes).Grid_Column(1)
+        this._Choice(this._Row(body, "浏览器：", "CloseBrowserRow"), "CloseBrowserType", BrowserActions.CloseBrowserTypes).Grid_Column(1)
         this._Field(body, "浏览器路径：", "BrowserPath", false, 26, "BrowserPathRow")
-        this._Choice(this._Row(body, "页签范围：", "CloseScopeRow"), "CloseScope", BrowserUtil.CloseScopes).Grid_Column(1)
-        targetRefRow := this._Row(body, "目标分页：", "TargetRefRow")
+        this._Choice(this._Row(body, "页签范围：", "CloseScopeRow"), "CloseScope", BrowserActions.CloseScopes).Grid_Column(1)
+        targetRefRow := this._Row(body, "目标分页：", "TargetRefRow", , GetLang("支持直接输入索引(1开始)、TargetID、标题/URL关键词，或选择变量 {变量名}"))
         CmdEditorForm.Combo(targetRefRow, "TargetRef", true).Grid_Column(1)
-            .ToolTip(GetLang("支持直接输入索引(1开始)、TargetID、标题/URL关键词，或选择变量 {变量名}"))
         urlRow := this._Row(body, "网址：", "UrlRow")
         this._TextBox(urlRow, "Url").Grid_Column(1).TextWrapping("NoWrap")
             .ScrollViewer_HorizontalScrollBarVisibility("Hidden")
             .ToolTip("{Binding Text, RelativeSource={RelativeSource Self}}")
 
-        selector := this._Row(body, "元素选择器：", "SelectorRow").Add("Grid").Grid_Column(1)
+        selector := this._Row(body, "网页元素：", "SelectorRow").Add("Grid").Grid_Column(1)
         selector.Cols("Auto", 6, "*", 6, "Auto")
         this._Choice(selector, "SelectorType", BrowserGui.SelectorTypes).ToolTip(GetLang("选择器类型：")).Grid_Column(0)
         this._TextBox(selector, "Selector").Grid_Column(2).HorizontalScrollBarVisibility("Hidden")
-        CmdEditorForm.IconButton(selector, "BtnPickSelector", BrowserGui.PickerGlyph, "拾取网页元素").Grid_Column(4)
+        CmdEditorForm.TextButton(selector, "BtnPickSelector", "拾取", "拾取网页元素").Grid_Column(4)
 
         this._Choice(this._Row(body, "等待状态：", "ConditionRow"), "Condition", BrowserGui.Conditions).Grid_Column(1)
         this._Choice(this._Row(body, "加载状态：", "LoadStateRow"), "LoadState", BrowserGui.LoadStates).Grid_Column(1)
@@ -119,9 +91,8 @@ class BrowserGui extends CommentGui {
         this._Field(body, "属性名称：", "AttrName", false, 26, "AttrNameRow")
         this._Field(body, "截图路径：", "SavePath", false, 26, "SavePathRow")
 
-        saveRow := this._Row(body, "结果变量：", "SaveVarRow")
+        saveRow := this._Row(body, "结果变量：", "SaveVarRow", , GetLang("留空时不保存结果"))
         CmdEditorForm.Combo(saveRow, "SaveVar", true).Grid_Column(1)
-            .ToolTip(GetLang("留空时不保存结果"))
         CommandTimeoutFields.Add(body)
         CmdEditorForm.Footer(body)
 
@@ -146,12 +117,12 @@ class BrowserGui extends CommentGui {
         BindCmdEditorChrome(this.ui, "#指令手册/浏览器")
     }
 
-    _Row(body, label, rowName := "", labelName := "") {
-        return CmdEditorForm.Row(body, label, rowName, "CommandLabel", "Center", labelName)
+    _Row(body, label, rowName := "", labelName := "", labelTip := "") {
+        return CmdEditorForm.Row(body, label, rowName, "CommandLabel", "Center", labelName, labelTip)
     }
 
     _Field(body, label, name, multiline, height := 26, rowName := "") {
-        row := this._Row(body, label, rowName)
+        row := this._Row(body, label, rowName, name "Label")
         if (!multiline) {
             this._TextBox(row, name, height).Grid_Column(1)
             return
@@ -190,9 +161,9 @@ class BrowserGui extends CommentGui {
         if (this._updatingActions)
             return
         index := this.ui.Query("ActionGroup>SelectedIndex")
-        if (!IsInteger(index) || index < 0 || index >= BrowserGui.Groups.Length)
+        if (!IsInteger(index) || index < 0 || index >= BrowserActions.Groups.Length)
             return
-        actions := BrowserGui.Groups[index + 1].actions
+        actions := BrowserActions.Groups[index + 1].actions
         if (actions == this._activeActions)
             return
         this._activeActions := actions
@@ -221,7 +192,7 @@ class BrowserGui extends CommentGui {
         state := this.ui.Query("BrowserType", "CloseBrowserType")
         action := this._Action(this.ui)
         browser := action == "关闭"
-            ? CmdEnumZh(state.Get("CloseBrowserType", ""), BrowserUtil.CloseBrowserTypes)
+            ? CmdEnumZh(state.Get("CloseBrowserType", ""), BrowserActions.CloseBrowserTypes)
             : CmdEnumZh(state.Get("BrowserType", ""), this._browserNames)
         this._UpdateFieldVisibilities(action, browser)
     }
@@ -243,12 +214,12 @@ class BrowserGui extends CommentGui {
         isOpen := action == "打开网址"
         isClose := action == "关闭"
         isMouseCoord := action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"
-        hasSelector := this._UsesSelector(action)
+        hasSelector := BrowserActions.UsesSelector(action)
         rows := Map(
             "BrowserRow", isOpen, "CloseBrowserRow", isClose, "CloseScopeRow", isClose,
             "BrowserPathRow", (isOpen && browser == "自定义路径") || (isClose && browser == "自定义"),
             "UrlRow", isOpen || action == "当前页跳转" || action == "新建分页",
-            "TargetRefRow", action == "切换分页" || action == "关闭分页" || hasSelector || action == "执行JS" || action == "网页截图" || action == "获取网址" || action == "获取标题",
+            "TargetRefRow", action == "切换分页" || action == "关闭分页" || BrowserActions.UsesTarget(action),
             "SelectorRow", hasSelector, "ConditionRow", action == "等待元素",
             "LoadStateRow", action == "等待加载", "TextRow", textLabels.Has(action),
             "ClearBeforeRow", action == "输入", "CheckedRow", action == "勾选",
@@ -257,12 +228,15 @@ class BrowserGui extends CommentGui {
             "CoordRow", isMouseCoord,
             "MouseBtnRow", action == "鼠标点击",
             "StorageTypeRow", action == "Storage操作",
-            "JsCodeRow", action == "执行JS" || (action == "Cookie操作" && this.ui.Query("Text") == "set") || (action == "Storage操作" && this.ui.Query("Text") == "set"),
+            "JsCodeRow", action == "执行JS" || action == "Cookie操作" || action == "Storage操作",
             "AttrNameRow", attrLabels.Has(action),
-            "SavePathRow", action == "网页截图", "CommandTimeoutRow", BrowserUtil.UsesTimeout(action),
-            "SaveVarRow", !isClose)
+            "SavePathRow", action == "网页截图", "CommandTimeoutRow", BrowserActions.UsesTimeout(action),
+            "SaveVarRow", !BrowserActions.IsCloseAction(action))
         for name, visible in rows
             this._ComboPush(name, "Visibility", visible ? "Visible" : "Collapsed")
+        if (attrLabels.Has(action))
+            this._ComboPush("AttrNameLabel", "Text", attrLabels[action])
+        this._ComboPush("JsCodeLabel", "Text", action == "执行JS" ? GetLang("JS 脚本：") : GetLang("值："))
         if (textLabels.Has(action))
             this._ComboPush("TextLabel", "Text", textLabels[action])
         this._ComboPush("BtnPickKey", "Visibility", action == "按键输入" ? "Visible" : "Collapsed")
@@ -270,13 +244,6 @@ class BrowserGui extends CommentGui {
             coordLabel := (action == "鼠标滚轮") ? GetLang("滚轮增量 (dX, dY)：") : GetLang("坐标 (X, Y)：")
             this._ComboPush("CoordLabel", "Text", coordLabel)
         }
-    }
-
-    _UsesSelector(action) {
-        static actions := Map("等待元素", true, "等待文字", true, "点击", true, "双击", true, "右键", true,
-            "输入", true, "清空", true, "选择下拉", true, "勾选", true, "滚动至元素", true, "悬停", true,
-            "元素数量", true, "元素状态", true, "提取文本", true, "提取控件值", true, "提取属性", true, "提取HTML", true)
-        return actions.Has(action)
     }
 
     _PickSelector(ui) {
@@ -327,7 +294,7 @@ class BrowserGui extends CommentGui {
             BrowserUtil.StartElementPicker(this._pickerToken, selectorType, preferControl)
             this._pickTimer := this._PollPicker.Bind(this, ui, this._pickerToken, selectorType)
             SetTimer(this._pickTimer, 150)
-            ui.Update("BtnPickSelector", "Content", Chr(0xE711))
+            ui.Update("BtnPickSelector", "Content", GetLang("取消拾取"))
             ui.Update("BtnPickSelector", "ToolTip", GetLang("取消拾取"))
             Toast.Info(GetLang("在网页上单击选取，按 Esc 取消。"))
         } catch as e {
@@ -397,7 +364,7 @@ class BrowserGui extends CommentGui {
         }
         this._picking := false
         if (IsObject(this.ui)) {
-            this.ui.Update("BtnPickSelector", "Content", Chr(BrowserGui.PickerGlyph))
+            this.ui.Update("BtnPickSelector", "Content", GetLang("拾取"))
             this.ui.Update("BtnPickSelector", "ToolTip", GetLang("拾取网页元素"))
         }
     }
@@ -425,11 +392,9 @@ class BrowserGui extends CommentGui {
         for name, value in defaults.OwnProps()
             if (!this.Data.HasOwnProp(name) && name != "TimeoutAction" && name != "TimeoutStatusVar")
                 this.Data.%name% := value
-        actionType := CmdEnumZh(this.Data.ActionType, BrowserUtil.Actions)
+        actionType := CmdEnumZh(this.Data.ActionType, BrowserActions.Names)
         if (actionType == "关闭标签")
             actionType := "关闭分页"
-        else if (actionType == "关闭浏览器")
-            actionType := "关闭"
 
         this._browserNames := []
         seen := Map()
@@ -443,7 +408,7 @@ class BrowserGui extends CommentGui {
             seen["Chrome"] := seen["Edge"] := true
         }
         browserType := GetLangKey(this.Data.BrowserType)
-        closeBrowserType := BrowserUtil.GetCloseBrowserType(browserType)
+        closeBrowserType := BrowserActions.GetCloseBrowserType(browserType)
         if (browserType == "自定义")
             browserType := "自定义路径"
         if (parts.Length && browserType != "" && browserType != "自定义路径" && browserType != "所有浏览器" && !seen.Has(browserType))
@@ -468,7 +433,7 @@ class BrowserGui extends CommentGui {
         this._ComboPush("FullPage", "IsChecked", actionType == "网页截图" && this.Data.OuterHtml ? "True" : "False")
         this._ComboPush("IncludeTag", "IsChecked", actionType != "提取HTML" || this.Data.OuterHtml ? "True" : "False")
 
-        for groupIndex, group in BrowserGui.Groups {
+        for groupIndex, group in BrowserActions.Groups {
             for actionIndex, action in group.actions {
                 if (action == actionType) {
                     this._activeActions := group.actions
@@ -494,10 +459,10 @@ class BrowserGui extends CommentGui {
         }
         CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, timeoutAction,
             InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
-        this._ComboPush("CloseBrowserType", "SelectedIndex", CmdEnumIndex(closeBrowserType, BrowserUtil.CloseBrowserTypes))
-        this._ComboPush("CloseScope", "SelectedIndex", CmdEnumIndex(this.Data.CloseScope, BrowserUtil.CloseScopes))
+        this._ComboPush("CloseBrowserType", "SelectedIndex", CmdEnumIndex(closeBrowserType, BrowserActions.CloseBrowserTypes))
+        this._ComboPush("CloseScope", "SelectedIndex", CmdEnumIndex(this.Data.CloseScope, BrowserActions.CloseScopes))
         this._UpdateFieldVisibilities(actionType, actionType == "关闭"
-            ? CmdEnumZh(closeBrowserType, BrowserUtil.CloseBrowserTypes) : CmdEnumZh(browserType, this._browserNames))
+            ? CmdEnumZh(closeBrowserType, BrowserActions.CloseBrowserTypes) : CmdEnumZh(browserType, this._browserNames))
     }
 
     _ReadData() {
@@ -508,8 +473,8 @@ class BrowserGui extends CommentGui {
             "CoordX", "CoordY", "MouseBtn", "StorageType")
         data.ActionType := this._Action(this.ui)
         if (data.ActionType == "关闭") {
-            data.BrowserType := CmdEnumZh(state["CloseBrowserType"], BrowserUtil.CloseBrowserTypes)
-            data.CloseScope := CmdEnumZh(state["CloseScope"], BrowserUtil.CloseScopes)
+            data.BrowserType := CmdEnumZh(state["CloseBrowserType"], BrowserActions.CloseBrowserTypes)
+            data.CloseScope := CmdEnumZh(state["CloseScope"], BrowserActions.CloseScopes)
             data.BrowserPath := data.BrowserType == "自定义" ? state["BrowserPath"] : ""
             data.OnError := "忽略"
             data.SaveVar := ""
@@ -518,7 +483,7 @@ class BrowserGui extends CommentGui {
         for name, values in Map("SelectorType", BrowserGui.SelectorTypes, "Condition", BrowserGui.Conditions,
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
             data.%name% := CmdEnumZh(state[name], values)
-        if (BrowserUtil.UsesTimeout(data.ActionType))
+        if (BrowserActions.UsesTimeout(data.ActionType))
             CommandTimeoutFields.Read(this.ui, data)
         for name in ["Url", "TargetRef", "Selector", "JsCode", "AttrName", "BrowserPath", "CoordX", "CoordY"]
             data.%name% := state[name]
@@ -537,14 +502,14 @@ class BrowserGui extends CommentGui {
         if (data.ActionType == "关闭") {
             if (data.BrowserType == "自定义" && Trim(data.BrowserPath) == "")
                 message := GetLang("浏览器路径不能为空。")
-        } else if (BrowserUtil.UsesTimeout(data.ActionType)
+        } else if (BrowserActions.UsesTimeout(data.ActionType)
             && (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 1 || data.TimeoutMs > 2147483647))
             message := GetLang("超时必须是正整数。")
         else if ((data.ActionType == "打开网址" || data.ActionType == "当前页跳转") && Trim(data.Url) == "")
             message := GetLang("网址不能为空。")
         else if (data.ActionType == "打开网址" && data.BrowserType == "自定义路径" && Trim(data.BrowserPath) == "")
             message := GetLang("浏览器路径不能为空。")
-        else if (this._UsesSelector(data.ActionType) && data.ActionType != "等待文字" && data.ActionType != "提取文本"
+        else if (BrowserActions.UsesSelector(data.ActionType) && data.ActionType != "等待文字" && data.ActionType != "提取文本"
             && data.ActionType != "提取HTML" && Trim(data.Selector) == "")
             message := GetLang("元素选择器不能为空。")
         else if (data.ActionType == "提取属性" && Trim(data.AttrName) == "")
@@ -557,7 +522,7 @@ class BrowserGui extends CommentGui {
         }
         if (data.SaveVar != "" && !CheckVarNameIfValid(data.SaveVar))
             return false
-        if (!BrowserUtil.UsesTimeout(data.ActionType))
+        if (!BrowserActions.UsesTimeout(data.ActionType))
             return true
         results := []
         if (data.SaveVar != "")
@@ -568,7 +533,7 @@ class BrowserGui extends CommentGui {
 
     SaveData() {
         this.Data := this._ReadData()
-        if (BrowserUtil.UsesTimeout(this.Data.ActionType))
+        if (BrowserActions.UsesTimeout(this.Data.ActionType))
             TimeoutPolicy.RegisterStatus(this.Data)
         if (this.Data.SaveVar != "") {
             for suffix in ["", "_Success", "_Error", "_ElapsedMs"]

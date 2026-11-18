@@ -2,19 +2,18 @@
 
 class CommandTimeoutFields {
     static Add(parent, allowUnlimited := false) {
-        panel := parent.Add("StackPanel").Name("CommandTimeoutRow")
-        pair := panel.Add("Grid")
-        pair.Cols("*", 16, "*")
-        time := CmdEditorForm.Row(pair, "超时(ms)：")
-        status := CmdEditorForm.Row(pair, "超时状态：", "", "CommandRightLabel").Grid_Column(2)
-        action := CmdEditorForm.Row(panel, "超时处理：")
+        panel := parent.Add("Grid").Name("CommandTimeoutRow")
+        panel.Rows("Auto", "Auto")
+        panel.Cols("*", 16, "*")
+        time := CmdEditorForm.Row(panel, "超时(ms)：", , , , , GetLang("本次操作最多等待的毫秒数。"))
+        status := CmdEditorForm.Row(panel, "超时状态：", "", "CommandRightLabel", "Center", "TimeoutStatusLabel").Grid_Column(2)
+        action := CmdEditorForm.Row(panel, "超时处理：").Grid_Row(1)
         times := ["1000", "3000", "5000", "10000", "30000", "60000"]
         if (allowUnlimited)
             times.Push("不限时")
         this.Combo(time, "TimeoutMs", times, true)
         this.Combo(action, "TimeoutAction", TimeoutPolicy.Actions)
         this.Combo(status, "TimeoutStatusVar", [TimeoutPolicy.DefaultStatusVar], true)
-            .ToolTip(GetLang("超时：1，不超时：0"))
         return panel
     }
 
@@ -26,7 +25,7 @@ class CommandTimeoutFields {
     }
 
     static Init(ui, ms, action, statusVar) {
-        batch := []
+        batch := [{ControlName: "TimeoutStatusLabel", PropertyName: "ToolTip", Value: GetLang("超时：1，不超时：0")}]
         for name in GetGuiVarArr()
             if (name != "" && name != TimeoutPolicy.DefaultStatusVar)
                 batch.Push({ControlName: "TimeoutStatusVar", PropertyName: "AddItem", Value: name})

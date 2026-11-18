@@ -7,6 +7,7 @@
 #include <cstring>
 #include <algorithm>
 #include <chrono>
+#include <charconv>
 #include <thread>
 #include <vector>
 #include <sstream>
@@ -108,6 +109,7 @@ BROWSER_API int Browser_Connect(const char* host, int port) {
             return -5;
         }
 
+        g_activePage = nullptr;
         g_browser = std::move(res.browser);
         if (!AttachToFirstPage()) {
             return -4;
@@ -168,6 +170,7 @@ BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath,
             return -5;
         }
 
+        g_activePage = nullptr;
         g_browser = std::move(res.browser);
         if (!AttachToFirstPage()) {
             return -4;
@@ -297,32 +300,14 @@ BROWSER_API int Browser_GetTabs(char* outResult, int maxLen) {
         }
 
         auto targets = g_browser->listPages();
-        std::ostringstream ss;
-        ss << "[";
-        for (size_t i = 0; i < targets.size(); ++i) {
-            const auto& t = targets[i];
-            if (i > 0) ss << ",";
-            ss << "{";
-            ss << "\"index\":" << (i + 1) << ",";
-            ss << "\"targetId\":\"" << t.id << "\",";
-            ss << "\"title\":\"";
-            for (char c : t.title) {
-                if (c == '"' || c == '\\') ss << '\\';
-                ss << c;
-            }
-            ss << "\",";
-            ss << "\"url\":\"";
-            for (char c : t.url) {
-                if (c == '"' || c == '\\') ss << '\\';
-                ss << c;
-            }
-            ss << "\",";
-            ss << "\"type\":\"" << t.type << "\"";
-            ss << "}";
+        cdp::JsonArray tabs;
+        for (const auto& target : targets) {
+            tabs.emplace_back(cdp::JsonObject{
+                {"index", static_cast<int>(tabs.size() + 1)}, {"targetId", target.id},
+                {"title", target.title}, {"url", target.url}, {"type", target.type}
+            });
         }
-        ss << "]";
-
-        CopyToOut(ss.str(), outResult, maxLen);
+        CopyToOut(cdp::JsonValue(tabs).serialize(), outResult, maxLen);
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
@@ -331,81 +316,61 @@ BROWSER_API int Browser_GetTabs(char* outResult, int maxLen) {
     }
 }
 
+static std::string LowerAscii(std::string value) {
+    for (char& c : value) {
+        if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+    }
+    return value;
+}
+
+// Both selection and close accept the same 1-based index, target ID or title/URL keyword.
+static cdp::quick::QuickPage* FindTab(const std::string& ref) {
+    const auto targets = g_browser->listPages();
+    auto target = targets.end();
+    size_t index = 0;
+    const auto parsed = std::from_chars(ref.data(), ref.data() + ref.size(), index);
+    if (parsed.ec == std::errc{} && parsed.ptr == ref.data() + ref.size()
+        && index > 0 && index <= targets.size()) {
+        target = targets.begin() + (index - 1);
+    } else {
+        target = std::find_if(targets.begin(), targets.end(), [&](const auto& tab) { return tab.id == ref; });
+        if (target == targets.end()) {
+            const auto keyword = LowerAscii(ref);
+            target = std::find_if(targets.begin(), targets.end(), [&](const auto& tab) {
+                return LowerAscii(tab.title).find(keyword) != std::string::npos
+                    || LowerAscii(tab.url).find(keyword) != std::string::npos;
+            });
+        }
+    }
+    if (target == targets.end()) {
+        SetLastError("Target tab not found: " + ref, -4);
+        return nullptr;
+    }
+    for (auto* page : g_browser->pages()) {
+        if (page->targetId() == target->id) return page;
+    }
+    auto connected = g_browser->connectToPage(*target);
+    if (!connected.ok()) {
+        SetLastError(connected.error, -4);
+        return nullptr;
+    }
+    return connected.page;
+}
+
 BROWSER_API int Browser_SwitchTab(const char* targetRef) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
-        if (!g_browser) {
-            if (!EnsureActivePage()) return -1;
-        }
-        if (!targetRef || targetRef[0] == '\0') {
+        if (!targetRef || !*targetRef) {
             SetLastError("Target reference cannot be empty", -6);
             return -6;
         }
-
-        std::string ref = targetRef;
-        auto targets = g_browser->listPages();
-        if (targets.empty()) {
-            SetLastError("No pages found", -4);
-            return -4;
-        }
-
-        // 1. Check if ref is a 1-based index (digits)
-        bool isNumber = true;
-        for (char c : ref) {
-            if (!isdigit(static_cast<unsigned char>(c))) {
-                isNumber = false;
-                break;
-            }
-        }
-
-        if (isNumber) {
-            int idx = std::stoi(ref) - 1; // 1-based to 0-based
-            if (idx >= 0 && idx < (int)targets.size()) {
-                auto pres = g_browser->connectToPage(targets[idx]);
-                if (pres.ok()) {
-                    g_activePage = pres.page;
-                    g_activePage->bringToFront();
-                    SetLastError("", 0);
-                    return 0;
-                }
-            }
-        }
-
-        // 2. Match exact targetId
-        for (const auto& t : targets) {
-            if (t.id == ref) {
-                auto pres = g_browser->connectToPage(t);
-                if (pres.ok()) {
-                    g_activePage = pres.page;
-                    g_activePage->bringToFront();
-                    SetLastError("", 0);
-                    return 0;
-                }
-            }
-        }
-
-        // 3. Match substring in title or url
-        std::string refLower = ref;
-        std::transform(refLower.begin(), refLower.end(), refLower.begin(), ::tolower);
-        for (const auto& t : targets) {
-            std::string titleLower = t.title;
-            std::string urlLower = t.url;
-            std::transform(titleLower.begin(), titleLower.end(), titleLower.begin(), ::tolower);
-            std::transform(urlLower.begin(), urlLower.end(), urlLower.begin(), ::tolower);
-
-            if (titleLower.find(refLower) != std::string::npos || urlLower.find(refLower) != std::string::npos) {
-                auto pres = g_browser->connectToPage(t);
-                if (pres.ok()) {
-                    g_activePage = pres.page;
-                    g_activePage->bringToFront();
-                    SetLastError("", 0);
-                    return 0;
-                }
-            }
-        }
-
-        SetLastError("Target tab not found: " + ref, -4);
-        return -4;
+        if (!g_browser && !EnsureActivePage()) return -1;
+        auto* page = FindTab(targetRef);
+        if (!page) return -4;
+        page->bringToFront();
+        g_activePage = page;
+        SetLastError("", 0);
+        return 0;
     } catch (const std::exception& e) {
         SetLastError(e.what(), -1);
         return -1;
@@ -426,28 +391,7 @@ BROWSER_API int Browser_GetActiveTabId(char* outTargetId, int maxLen) {
 }
 
 BROWSER_API int Browser_NewTab(const char* url, char* outTargetId, int maxLen) {
-    std::lock_guard<std::mutex> lock(g_browserMutex);
-    try {
-        if (!g_browser) {
-            if (!EnsureActivePage()) return -1;
-        }
-
-        std::string targetUrl = (url && url[0] != '\0') ? url : "about:blank";
-        auto pres = g_browser->newPage(targetUrl);
-        if (!pres.ok()) {
-            SetLastError("Failed to create new tab: " + pres.error, -1);
-            return -1;
-        }
-
-        g_activePage = pres.page;
-        g_activePage->bringToFront();
-        CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
-        SetLastError("", 0);
-        return 0;
-    } catch (const std::exception& e) {
-        SetLastError(e.what(), -1);
-        return -1;
-    }
+    return Browser_NewTabInContext(url, "", outTargetId, maxLen);
 }
 
 BROWSER_API int Browser_CreateContext(char* outContextId, int maxLen) {
@@ -482,39 +426,33 @@ BROWSER_API int Browser_NewTabInContext(const char* url, const char* contextId, 
         std::string targetUrl = (url && url[0] != '\0') ? url : "about:blank";
         std::string ctxId = (contextId && contextId[0] != '\0') ? contextId : "";
 
-        if (ctxId.empty()) {
-            auto pres = g_browser->newPage(targetUrl);
-            if (!pres.ok()) {
-                SetLastError("Failed to create new tab: " + pres.error, -1);
-                return -1;
-            }
-            g_activePage = pres.page;
-        } else {
-            // Find context or create page in context
-            cdp::quick::QuickContext* targetCtx = nullptr;
-            for (auto* c : g_browser->contexts()) {
-                if (c && c->id() == ctxId) {
-                    targetCtx = c;
+        cdp::quick::QuickContext* context = nullptr;
+        if (!ctxId.empty()) {
+            for (auto* candidate : g_browser->contexts()) {
+                if (candidate && candidate->id() == ctxId) {
+                    context = candidate;
                     break;
                 }
             }
-            if (!targetCtx) {
-                // If context doesn't exist, create it with this id or report error
+            if (!context) {
                 SetLastError("Browser context not found: " + ctxId, -4);
                 return -4;
             }
-            auto pres = targetCtx->newPage(targetUrl);
-            if (!pres.ok()) {
-                SetLastError("Failed to create new tab in context: " + pres.error, -1);
-                return -1;
-            }
-            g_activePage = pres.page;
         }
-
-        if (g_activePage) {
-            g_activePage->bringToFront();
-            CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
+        // Connect before navigating so a fast page cannot finish before we subscribe.
+        auto created = context ? context->newPage("about:blank") : g_browser->newPage("about:blank");
+        if (!created.ok()) {
+            SetLastError("Failed to create new tab: " + created.error, -1);
+            return -1;
         }
+        if (targetUrl != "about:blank" && !created.page->navigate(targetUrl, 30000)) {
+            SetLastError(created.page->lastError(), -2);
+            created.page->close();
+            return -2;
+        }
+        g_activePage = created.page;
+        g_activePage->bringToFront();
+        CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
@@ -548,57 +486,26 @@ BROWSER_API int Browser_CloseContext(const char* contextId) {
 }
 
 BROWSER_API int Browser_CloseTabByRef(const char* targetRef) {
+    if (!targetRef || targetRef[0] == '\0') {
+        return Browser_CloseTab();
+    }
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
         if (!g_browser) {
             if (!EnsureActivePage()) return -1;
         }
-        if (!targetRef || targetRef[0] == '\0') {
-            return Browser_CloseTab();
+        auto* page = FindTab(targetRef);
+        if (!page) return -4;
+        if (!page->close()) {
+            SetLastError(page->lastError(), -1);
+            return -1;
         }
-
-        std::string ref = targetRef;
-        auto targets = g_browser->listPages();
-
-        int targetIdx = -1;
-        bool isNumber = true;
-        for (char c : ref) {
-            if (!isdigit(static_cast<unsigned char>(c))) {
-                isNumber = false;
-                break;
-            }
+        if (g_activePage == page) {
+            const auto remaining = g_browser->pages();
+            g_activePage = remaining.empty() ? nullptr : remaining.front();
         }
-
-        if (isNumber) {
-            int idx = std::stoi(ref) - 1;
-            if (idx >= 0 && idx < (int)targets.size()) targetIdx = idx;
-        }
-
-        if (targetIdx == -1) {
-            for (size_t i = 0; i < targets.size(); ++i) {
-                if (targets[i].id == ref) {
-                    targetIdx = (int)i;
-                    break;
-                }
-            }
-        }
-
-        if (targetIdx >= 0) {
-            auto pres = g_browser->connectToPage(targets[targetIdx]);
-            if (pres.ok()) {
-                pres.page->close();
-                if (g_activePage == pres.page) {
-                    g_activePage = nullptr;
-                    auto remaining = g_browser->pages();
-                    if (!remaining.empty()) g_activePage = remaining[0];
-                }
-                SetLastError("", 0);
-                return 0;
-            }
-        }
-
-        SetLastError("Tab not found: " + ref, -4);
-        return -4;
+        SetLastError("", 0);
+        return 0;
     } catch (const std::exception& e) {
         SetLastError(e.what(), -1);
         return -1;
@@ -1454,13 +1361,7 @@ BROWSER_API int Browser_GetStorage(const char* storageType, const char* key, cha
         if (k.empty()) {
             js = "(() => { return JSON.stringify(" + storageName + "); })()";
         } else {
-            std::string escKey = "";
-            for (char c : k) {
-                if (c == '\\') escKey += "\\\\";
-                else if (c == '\'') escKey += "\\'";
-                else escKey += c;
-            }
-            js = "(() => { return " + storageName + ".getItem('" + escKey + "') || ''; })()";
+            js = storageName + ".getItem(" + cdp::JsonValue(k).serialize() + ") || ''";
         }
 
         std::string res = g_activePage->evalString(js);
@@ -1484,21 +1385,12 @@ BROWSER_API int Browser_SetStorage(const char* storageType, const char* key, con
         std::string sType = storageType ? storageType : "local";
         std::string storageName = (sType == "session") ? "sessionStorage" : "localStorage";
 
-        std::string escKey = "";
-        for (char c : std::string(key)) {
-            if (c == '\\') escKey += "\\\\";
-            else if (c == '\'') escKey += "\\'";
-            else escKey += c;
+        const std::string js = storageName + ".setItem(" + cdp::JsonValue(key).serialize()
+            + ", " + cdp::JsonValue(value ? value : "").serialize() + ")";
+        if (g_activePage->evalString("(() => { " + js + "; return true; })()") != "true") {
+            SetLastError("SetStorage failed: " + g_activePage->lastError(), -1);
+            return -1;
         }
-        std::string escVal = "";
-        for (char c : std::string(value ? value : "")) {
-            if (c == '\\') escVal += "\\\\";
-            else if (c == '\'') escVal += "\\'";
-            else escVal += c;
-        }
-
-        std::string js = "(() => { " + storageName + ".setItem('" + escKey + "', '" + escVal + "'); return 'OK'; })()";
-        g_activePage->evalString(js);
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {

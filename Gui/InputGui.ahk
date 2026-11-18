@@ -103,7 +103,7 @@ class InputGui {
 
         optRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(5).Name("OptionsRow")
         optRow.Cols("80", "*")
-        optRow.Add("TextBlock").Grid_Column(0).Text(GetLang("选项：")).VerticalAlignment("Center")
+        optRow.Add("TextBlock").Grid_Column(0).Text(GetLang("选项：")).ToolTip(GetLang("逗号分隔选项")).VerticalAlignment("Center")
         optRow.Add("TextBox").Grid_Column(1).Name("OptionsCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
             .VerticalContentAlignment("Center").Padding("2,0")
             .ToolTip(GetLang("逗号分隔选项"))
@@ -122,7 +122,7 @@ class InputGui {
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        body.Add("TextBlock").Grid_Row(5).Grid_Column(0).Text(GetLang("超时(ms)：")).VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(5).Grid_Column(0).Text(GetLang("超时(ms)：")).ToolTip(GetLang("本次操作最多等待的毫秒数。")).VerticalAlignment("Center")
         timeoutCombo := body.Add("ComboBox").Grid_Row(5).Grid_Column(1).Name("TimeoutCon").Height(26).MinHeight(26).VerticalAlignment("Center")
             .IsEditable("True").IsTextSearchEnabled("False").Tag("AllowPassive")
         timeoutCombo.Add("ComboBoxItem").Content(GetLang("不限时"))

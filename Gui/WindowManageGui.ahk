@@ -113,7 +113,7 @@ class WindowManageGui {
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("窗口绑定：")).VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("窗口绑定：")).ToolTip(GetLang("指定这条指令要操作的窗口。")).VerticalAlignment("Center")
         wiRow := body.Add("Grid").Grid_Row(1).Grid_Column(1).Grid_ColumnSpan(compactLayout ? 1 : 4)
         wiRow.Cols("*", "6", "28")
         wiRow.Add("TextBox").Grid_Column(0).Name("SearchValueCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
@@ -138,7 +138,7 @@ class WindowManageGui {
         extra := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(5)
         transRow := extra.Add("Grid").Name("TransparencyRelateRow").Height(36).Visibility("Collapsed")
         transRow.Cols(fieldCols*)
-        transRow.Add("TextBlock").Grid_Column(0).Text(GetLang("透明度：")).VerticalAlignment("Center")
+        transRow.Add("TextBlock").Grid_Column(0).Text(GetLang("透明度：")).ToolTip(GetLang("0 为完全透明，100 为完全不透明。")).VerticalAlignment("Center")
         transRow.Add("ComboBox").Grid_Column(1).Name("TransparencyCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
 
         closeProcess := isAdjust

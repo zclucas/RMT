@@ -89,13 +89,13 @@ class IntervalGui {
         combo.Add("ComboBoxItem").Content(GetLang("固定")).Tag("1")
         combo.Add("ComboBoxItem").Content(GetLang("随机")).Tag("2")
 
-        form.Add("TextBlock").Grid_Row(2).Grid_Column(0).Name("TimeTip1").Text(GetLang("时间A：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        form.Add("TextBlock").Grid_Row(2).Grid_Column(0).Name("TimeTip1").Text(GetLang("时间A：")).ToolTip(GetLang("等待的毫秒数；随机模式下为最短时长。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         form.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("TimeVarCon1").Height(26).MinHeight(26).IsEditable("True")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         timeRow2 := form.Add("Grid").Name("TimeRow2").Grid_Row(3).Grid_ColumnSpan(2).Visibility("Collapsed")
         timeRow2.Cols("80", "*")
-        timeRow2.Add("TextBlock").Grid_Column(0).Text(GetLang("时间B：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        timeRow2.Add("TextBlock").Grid_Column(0).Text(GetLang("时间B：")).ToolTip(GetLang("随机等待的最长毫秒数。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         timeRow2.Add("ComboBox").Grid_Column(1).Name("TimeVarCon2").Height(26).MinHeight(26).IsEditable("True")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 

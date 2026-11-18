@@ -506,6 +506,7 @@ SelfCheckMissingFiles() {
     baseUrl := RmtAssetsBaseUrl(tag)
 
     criticalFiles := [
+        {path: "Plugins\Browser\RMT_Browser.dll", entry: "RMT_Browser.dll", bundle: "RMT.zip"},
         {path: "Plugins\RMT\RMT.dll", entry: "RMT.dll", bundle: "RMT.zip"},
         {path: "Plugins\RMT\RMT.ExcelHelper.exe", entry: "RMT.ExcelHelper.exe", bundle: "RMT.zip"},
         {path: "Plugins\IbInputSimulator.dll", entry: "IbInputSimulator.dll", bundle: "Input.zip"},
@@ -542,6 +543,7 @@ SelfCheckMissingFiles() {
         criticalFiles.Push({path: "Lang\Flags\" language.flag ".png", entry: "Flags/" language.flag ".png", bundle: "Lang.zip"})
     }
     optionalFiles := [
+        {path: "Plugins\Browser\LICENSE.txt", entry: "Browser-LICENSE.txt", bundle: "RMT.zip"},
         {path: "Thread\Update.exe", entry: "Update.exe", bundle: "RMT.zip"},
         {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
         {path: "MinTool\PlayAudio.vbs", entry: "PlayAudio.vbs", bundle: "Audio.zip"},

@@ -120,11 +120,11 @@ class JoyGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["按下", "松开", "点击"])
             kt.Add("ComboBoxItem").Content(t)
-        digitalRow.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("点击时长:")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        digitalRow.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("点击时长:")).ToolTip(GetLang("从按下到松开的毫秒数。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         this._AddNumBox(digitalRow, "HoldTimeCon", "60", "100")
         digitalRow.Add("TextBlock").Name("KeyCountTipCon").Text(GetLang("点击次数：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         this._AddNumBox(digitalRow, "KeyCountCon", "60", "1")
-        digitalRow.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12").Visibility("Collapsed")
+        digitalRow.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12").Visibility("Collapsed")
         this._AddNumBox(digitalRow, "PerIntervalCon", "60", "200", "Collapsed")
 
         analogRow := param.Add("StackPanel").Name("AnalogRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,8,0,0").MinHeight("26").Height("26").Visibility("Hidden")

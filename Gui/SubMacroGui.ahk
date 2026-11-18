@@ -107,7 +107,7 @@ class SubMacroGui {
         body.Add("ComboBox").Grid_Row(1).Grid_Column(4).Name("DropDownIndexCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
 
         ; 行2：操作类型 + 调用次数（仅调用时显示在操作类型后）
-        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("操作类型:")).VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("操作类型:")).ToolTip(GetLang("调用会等待目标宏结束，触发会让两个宏同时运行。")).VerticalAlignment("Center")
         body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("CallTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         insertRow := body.Add("Grid").Name("InsertRow").Grid_Row(2).Grid_Column(3).Grid_ColumnSpan(2).Visibility("Collapsed")
         insertRow.Cols("96", "*")

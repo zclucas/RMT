@@ -2378,6 +2378,13 @@ class MacroGraphFormalHandlersMixin {
         showCd := isCdCmd || sub == "倒计时"
         kind := TimeNormWaitType(d.HasOwnProp("cdKind") ? d.cdKind : (d.HasOwnProp("timeParam2") ? d.timeParam2 : "时长"))
         if (!isCdCmd) {
+            if (showWait)
+                this.ui.Update("TimeTargetRow_" id "Label", "ToolTip", CmdEditorForm.TimeValueTip(TimeNormWaitType(InputField(d, "timeParam2", ""))))
+            if (showWin) {
+                tip := CmdEditorForm.TimeValueTip(TimeNormWindowType(InputField(d, "timeParam5", "")))
+                for prefix in ["TimeStartRow_", "TimeEndRow_"]
+                    this.ui.Update(prefix id "Label", "ToolTip", tip)
+            }
             this._FormalSetVis(id, "TimeUnitRow_" id, showWait)
             this._FormalSetVis(id, "TimeTargetRow_" id, showWait)
             this._FormalSetVis(id, "TimeTimeoutRow_" id, showWait)

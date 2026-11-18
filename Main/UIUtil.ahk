@@ -472,7 +472,18 @@ CmdEditorTitleIcon(title) {
 
 ; 指令编辑器确定按钮：与间隔编辑器同款
 class CmdEditorForm {
-    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "") {
+    static TimeValueTip(kind) {
+        switch kind {
+            case "时刻": return GetLang("按时、分、秒填写一天中的时刻。")
+            case "时长": return GetLang("按时、分、秒填写持续时间。")
+            case "时间戳": return GetLang("填写毫秒时间戳或选择时间变量。")
+            case "毫秒": return GetLang("输入毫秒数或选择变量，例如 500。")
+            case "毫秒-随机": return GetLang("从最短与最长毫秒数之间随机等待，支持变量。")
+            default: return GetLang("时长：") " " GetLang(kind)
+        }
+    }
+
+    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "", labelTip := "") {
         row := parent.Add("Grid").Margin("0,4")
         if (name != "")
             row.Name(name)
@@ -480,6 +491,8 @@ class CmdEditorForm {
         columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(group)
         columns.Add("ColumnDefinition").Width("*")
         caption := this.Label(row, label).VerticalAlignment(alignment)
+        if (labelTip != "")
+            caption.ToolTip(labelTip)
         if (labelName != "")
             caption.Name(labelName)
         return row
@@ -505,6 +518,14 @@ class CmdEditorForm {
         return parent.Add("ComboBox").Name(name).Height(26).MinHeight(26)
             .VerticalAlignment("Center").VerticalContentAlignment("Center")
             .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
+    }
+
+    static TextButton(parent, name, text, tip := "") {
+        button := parent.Add("Button").Name(name).Content(GetLang(text)).Height(26).MinHeight(26)
+            .Padding("8,0").Cursor("Hand").VerticalAlignment("Center")
+        if (tip != "")
+            button.ToolTip(GetLang(tip))
+        return button
     }
 
     static IconButton(parent, name, glyph, tip) {

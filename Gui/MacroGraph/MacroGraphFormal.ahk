@@ -366,7 +366,7 @@ class MacroGraphFormalMixin {
         this._AddComboRow(body, "WcTypeRow_" id, GetLang("类型:"), "WcTypeCmb_" id, typeItems, this._IndexInLangArr(typeItems, GetLang(typeKey)), true, true, lw, cw)
         this._AddComboRow(body, "WcPauseRow_" id, GetLang("交互时:"), "WcPauseCmb_" id, pauseItems, this._IndexInLangArr(pauseItems, GetLang(pauseKey)), true, true, lw, cw)
         this._AddFieldRow(body, "WcPromptRow_" id, GetLang("提示："), "WcPrompt_" id, prompt, true, true, "", "", "", lw, "156")
-        this._AddFieldRow(body, "WcTimeoutRow_" id, GetLang("超时(ms)："), "WcTimeout_" id, timeout, true, true, "", "", "", lw, cw)
+        this._AddFieldRow(body, "WcTimeoutRow_" id, GetLang("超时(ms)："), "WcTimeout_" id, timeout, true, true, "", "", "", lw, cw, , GetLang("本次操作最多等待的毫秒数。"))
         this._AddComboRow(body, "WcToActRow_" id, GetLang("超时后:"), "WcToActCmb_" id, timeoutItems, this._IndexInLangArr(timeoutItems, GetLang(toAct)), true, true, lw, cw)
         this._AddComboRow(body, "WcTermRow_" id, GetLang("终止时:"), "WcTermCmb_" id, termItems, this._IndexInLangArr(termItems, GetLang(termKey)), isTriple, true, lw, cw)
         this._AddComboRow(body, "WcPauseBtnRow_" id, GetLang("暂停时:"), "WcPauseBtnCmb_" id, pauseItems, this._IndexInLangArr(pauseItems, GetLang(pauseBtn)), isTriple, true, lw, cw)
@@ -402,7 +402,7 @@ class MacroGraphFormalMixin {
         this._AddFieldRow(body, "CdHourRow_" id, GetLang("时") "：", "CdHour_" id, hour, showHms, true, "", "", "", lw, cw)
         this._AddFieldRow(body, "CdMinRow_" id, GetLang("分") "：", "CdMin_" id, minv, showHms, true, "", "", "", lw, cw)
         this._AddFieldRow(body, "CdSecRow_" id, GetLang("秒") "：", "CdSec_" id, sec, showHms, true, "", "", "", lw, cw)
-        this._AddEditableComboRow(body, "CdVarRow_" id, GetLang("时间戳："), "CdVar_" id, GetGuiVarArr("timeVars", "timestamp"), GetLang(p1), showVar, lw, cw)
+        this._AddEditableComboRow(body, "CdVarRow_" id, GetLang("时间戳："), "CdVar_" id, GetGuiVarArr("timeVars", "timestamp"), GetLang(p1), showVar, lw, cw, , GetLang("填写毫秒时间戳或选择时间变量。"))
         this._AddEditableComboRow(body, "CdPosXRow_" id, GetLang("显示位置："), "CdPosX_" id, GetGuiVarArr("x"), GetLang(posx), visible, lw, cw)
         this._AddEditableComboRow(body, "CdPosYRow_" id, GetLang(""), "CdPosY_" id, GetGuiVarArr("y"), GetLang(posy), visible, lw, cw)
     }
@@ -426,14 +426,14 @@ class MacroGraphFormalMixin {
         unitItems := GetLangArr(TimeGui.WaitUnitKeys)
         unitKey := TimeNormWaitType(p2)
         this._AddComboRow(body, "TimeUnitRow_" id, GetLang("模式："), "TimeUnitCmb_" id, unitItems, this._IndexInLangArr(unitItems, GetLang(unitKey)), showWait, true, lw, cw)
-        this._AddFieldRow(body, "TimeTargetRow_" id, GetLang(unitKey == "时长" ? "时长：" : (unitKey == "时间戳" ? "时间戳：" : "目标时间：")), "TimeTarget_" id, p1, showWait, true, "", "", "", lw, cw)
-        this._AddFieldRow(body, "TimeTimeoutRow_" id, GetLang("超时(ms)："), "TimeTimeout_" id, timeout, showWait, true, "", "", "", lw, cw)
-        this._AddFieldRow(body, "TimeIntervalRow_" id, GetLang("轮询间隔(ms)："), "TimeInterval_" id, interval, showWait, true, "", "", "", lw, cw)
+        this._AddFieldRow(body, "TimeTargetRow_" id, GetLang(unitKey == "时长" ? "时长：" : (unitKey == "时间戳" ? "时间戳：" : "目标时间：")), "TimeTarget_" id, p1, showWait, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(unitKey))
+        this._AddFieldRow(body, "TimeTimeoutRow_" id, GetLang("超时(ms)："), "TimeTimeout_" id, timeout, showWait, true, "", "", "", lw, cw, , GetLang("本次操作最多等待的毫秒数。"))
+        this._AddFieldRow(body, "TimeIntervalRow_" id, GetLang("轮询间隔(ms)："), "TimeInterval_" id, interval, showWait, true, "", "", "", lw, cw, , GetLang("两次操作之间等待的毫秒数。"))
         winKinds := GetLangArr(TimeGui.WindowKindKeys)
         acts := GetLangArr(TimeGui.MismatchActionKeys)
         this._AddComboRow(body, "TimeWinKindRow_" id, GetLang("模式："), "TimeWinKindCmb_" id, winKinds, this._IndexInLangArr(winKinds, GetLang(TimeNormWindowType(p5))), showWin, true, lw, cw)
-        this._AddFieldRow(body, "TimeStartRow_" id, GetLang("开始时间："), "TimeStart_" id, p1, showWin, true, "", "", "", lw, cw)
-        this._AddFieldRow(body, "TimeEndRow_" id, GetLang("结束时间："), "TimeEnd_" id, p2, showWin, true, "", "", "", lw, cw)
+        this._AddFieldRow(body, "TimeStartRow_" id, GetLang("开始时间："), "TimeStart_" id, p1, showWin, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(TimeNormWindowType(p5)))
+        this._AddFieldRow(body, "TimeEndRow_" id, GetLang("结束时间："), "TimeEnd_" id, p2, showWin, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(TimeNormWindowType(p5)))
         this._AddComboRow(body, "TimeActRow_" id, GetLang("动作："), "TimeActCmb_" id, acts, this._IndexInLangArr(acts, GetLang(p4)), showWin, true, lw, cw)
         this._FillCountDownBody(id, d, body, showCd)
     }
@@ -662,7 +662,7 @@ class MacroGraphFormalMixin {
         scText := (sc == -1 || sc == "-1" || sc == GetLang("无限")) ? GetLang("无限") : String(sc)
         r := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
         this._ProCellEdit(r, "ExCntRow_" id, GetLang("次数："), "ExCnt_" id, [GetLang("无限")], scText, isOcr, LW, CW, false)
-        this._ProCellField(r, "ExIntRow_" id, GetLang("间隔："), "ExInt_" id, d.HasOwnProp("searchInterval") ? d.searchInterval : 1000, isOcr, "", LW, CW, true)
+        this._ProCellField(r, "ExIntRow_" id, GetLang("间隔："), "ExInt_" id, d.HasOwnProp("searchInterval") ? d.searchInterval : 1000, isOcr, "", LW, CW, true, , GetLang("两次操作之间等待的毫秒数。"))
 
         ; 提取变量：6 个，复选框+名称为一格，两格一行（左列对齐次数、右列对齐间隔）
         loop 3 {
@@ -1090,7 +1090,7 @@ class MacroGraphFormalMixin {
         titleRow.Add("Button").Name("BgmTitleEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
         this._AddComboRow(body, "BgmMouseRow_" id, GetLang("按键："), "BgmMouseCmb_" id, mouseTypes, CmdEnumIndex(mt, CmdEnumMouseBtnNames()), true, true, lw, cw)
         this._AddComboRow(body, "BgmOpRow_" id, GetLang("动作："), "BgmOpCmb_" id, opTypes, CmdEnumIndex(ot, CmdEnumBgOperNames()), !isScroll, !isScroll, lw, cw)
-        this._AddFieldRow(body, "BgmTimeRow_" id, GetLang("点击时间:"), "BgmTime_" id, ctm, showClickTime, true, "", "", "", lw, cw)
+        this._AddFieldRow(body, "BgmTimeRow_" id, GetLang("点击时间:"), "BgmTime_" id, ctm, showClickTime, true, "", "", "", lw, cw, , GetLang("从按下到松开的毫秒数。"))
         this._AddEditableComboRow(body, "BgmXRow_" id, GetLang("坐标X："), "BgmX_" id, varList, px, true, lw, cw)
         this._AddEditableComboRow(body, "BgmYRow_" id, GetLang("坐标Y："), "BgmY_" id, varList, py, true, lw, cw)
         this._AddFieldRow(body, "BgmSVRow_" id, GetLang("垂直滚动："), "BgmSV_" id, sv, isScroll, true, "", "", "", lw, cw)
@@ -1112,9 +1112,9 @@ class MacroGraphFormalMixin {
         this._MakeTextBox(frontRow, "BgkFront_" id, fs, "130")
         frontRow.Add("Button").Name("BgkFrontEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
         this._AddComboRow(body, "BgkTypeRow_" id, GetLang("类型："), "BgkTypeCmb_" id, typeNames, CmdEnumIndex(tt, CmdEnumKeyActNames()), true, true, lw, cw)
-        this._AddFieldRow(body, "BgkTimeRow_" id, GetLang("点击时长："), "BgkTime_" id, ctm, isClick, true, "", "", "", lw, cw)
+        this._AddFieldRow(body, "BgkTimeRow_" id, GetLang("点击时长："), "BgkTime_" id, ctm, isClick, true, "", "", "", lw, cw, , GetLang("从按下到松开的毫秒数。"))
         this._AddFieldRow(body, "BgkCountRow_" id, GetLang("点击次数："), "BgkCount_" id, cc, isClick, true, "", "", "", lw, cw)
-        this._AddFieldRow(body, "BgkInterRow_" id, GetLang("每次间隔："), "BgkInter_" id, ci, isClick, true, "", "", "", lw, cw)
+        this._AddFieldRow(body, "BgkInterRow_" id, GetLang("每次间隔："), "BgkInter_" id, ci, isClick, true, "", "", "", lw, cw, , GetLang("两次操作之间等待的毫秒数。"))
     }
 
     ; 与 WindowManageGui.ActionTypeArr 一致

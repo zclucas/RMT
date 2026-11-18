@@ -36,14 +36,12 @@ CompatMacro(MacroStr, &isFix) {
         }
 
         ;1.1 简化配置命令    形如搜索_Search1234_备注 => 搜索1234_备注
-        if (modifyKeyMap.Has(paramArr[1])) {
+        if (modifyKeyMap.Has(paramArr[1]) && paramArr.Length >= 2
+            && RegExMatch(paramArr[2], "^([^\d]*)(\d+)$", &serial)
+            && (paramArr[1] != "变量" || serial[1] == "Variable" || serial[1] == "变量" || serial[1] == "" && paramArr.Length == 2)) {
             isFix := true
-            textOnly := RegExReplace(paramArr[2], "\d+")
-            numbersOnly := RegExReplace(paramArr[2], "\D+")
-            paramArr[1] := paramArr[1] numbersOnly
-            paramArr[2] := paramArr.Length == 3 ? paramArr[3] : ""
-            paramArr.Pop()
-            CMDArr[A_Index] := GetCmdByParams(paramArr)
+            ; 只替换旧序列码，备注里的下划线也是正文的一部分。
+            CMDArr[A_Index] := paramArr[1] serial[2] SubStr(CMDArr[A_Index], StrLen(paramArr[1] "_" paramArr[2]) + 1)
         }
 
         ;RMT指令旧格式归一化: RMT指令_指令 → RMT指令_类别_指令, RMT指令_显示菜单_序号 → RMT指令_宏控制_显示菜单_序号
