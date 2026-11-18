@@ -41,6 +41,8 @@ BROWSER_API int Browser_WaitPageLoad(const char* loadState, int timeoutMs); // l
 
 // --- DOM & Interactions ---
 BROWSER_API int Browser_Click(const char* selector, const char* selectorType, int timeoutMs);
+BROWSER_API int Browser_DoubleClick(const char* selector, const char* selectorType, int timeoutMs);
+BROWSER_API int Browser_RightClick(const char* selector, const char* selectorType, int timeoutMs);
 BROWSER_API int Browser_Type(const char* selector, const char* selectorType, const char* text, int clearBefore, int timeoutMs);
 BROWSER_API int Browser_Clear(const char* selector, const char* selectorType, int timeoutMs);
 BROWSER_API int Browser_Select(const char* selector, const char* selectorType, const char* value, int timeoutMs);
@@ -48,6 +50,13 @@ BROWSER_API int Browser_Check(const char* selector, const char* selectorType, in
 BROWSER_API int Browser_ScrollTo(const char* selector, const char* selectorType, int timeoutMs);
 BROWSER_API int Browser_Hover(const char* selector, const char* selectorType, int timeoutMs);
 BROWSER_API int Browser_GetElementCount(const char* selector, const char* selectorType, int* outCount);
+BROWSER_API int Browser_GetElementState(const char* selector, const char* selectorType, char* outResult, int maxLen);
+
+// --- CDP Input (Mouse & Keyboard) ---
+BROWSER_API int Browser_MouseMove(double x, double y);
+BROWSER_API int Browser_MouseClick(double x, double y, const char* button); // button: "left", "right", "middle"
+BROWSER_API int Browser_MouseWheel(double deltaX, double deltaY);
+BROWSER_API int Browser_KeyPress(const char* key, int modifiers); // modifiers: 1=Alt, 2=Ctrl, 8=Shift
 
 // --- Data Extraction & JS ---
 BROWSER_API int Browser_Evaluate(const char* script, char* outResult, int maxLen, int timeoutMs);
@@ -57,6 +66,13 @@ BROWSER_API int Browser_GetHtml(const char* selector, const char* selectorType, 
 BROWSER_API int Browser_GetUrl(char* outResult, int maxLen);
 BROWSER_API int Browser_GetTitle(char* outResult, int maxLen);
 BROWSER_API int Browser_CaptureScreenshot(const char* filePath, int fullPage);
+
+// --- Storage & Cookies ---
+BROWSER_API int Browser_GetCookie(const char* name, char* outResult, int maxLen);
+BROWSER_API int Browser_SetCookie(const char* name, const char* value, const char* domain, const char* path);
+BROWSER_API int Browser_ClearCookies();
+BROWSER_API int Browser_GetStorage(const char* storageType, const char* key, char* outResult, int maxLen); // "local" / "session"
+BROWSER_API int Browser_SetStorage(const char* storageType, const char* key, const char* value);
 
 // --- Error & Diagnostics ---
 BROWSER_API int Browser_GetLastError(char* outResult, int maxLen);

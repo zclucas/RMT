@@ -1578,6 +1578,13 @@ class BrowserData {
         this.OuterHtml := 1
         this.JsCode := ""
         this.AttrName := "href"
+        this.MouseBtn := "左键" ; 左键 / 右键 / 中键
+        this.CoordX := 0
+        this.CoordY := 0
+        this.Modifiers := 0 ; 1=Alt, 2=Ctrl, 8=Shift
+        this.StorageType := "Local" ; Local / Session
+        this.CookieDomain := ""
+        this.CookiePath := "/"
         this.SaveVar := ""
         this.TimeoutMs := 10000
         this.Headless := 0
