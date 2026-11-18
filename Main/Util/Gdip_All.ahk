@@ -351,14 +351,31 @@ Gdip_BitmapFromScreen(Screen:=0, Raster:="")
 ;
 ; notes					Window must not be not minimised in order to get a handle to it's client area
 
-Gdip_BitmapFromHWND(hwnd)
+Gdip_BitmapFromHWND(hwnd, clientOnly := false)
 {
-	WinGetRect(hwnd,,, &Width, &Height)
-	hbm := CreateDIBSection(Width, Height), hdc := CreateCompatibleDC(), obm := SelectObject(hdc, hbm)
-	PrintWindow(hwnd, hdc)
-	pBitmap := Gdip_CreateBitmapFromHBITMAP(hbm)
-	SelectObject(hdc, obm), DeleteObject(hbm), DeleteDC(hdc)
-	return pBitmap
+	if (clientOnly)
+		WinGetClientPos(,, &Width, &Height, hwnd)
+	else
+		WinGetPos(,, &Width, &Height, hwnd)
+	if (Width <= 0 || Height <= 0)
+		return 0
+	hbm := CreateDIBSection(Width, Height), hdc := CreateCompatibleDC(), obm := 0
+	try {
+		if (!hbm || !hdc)
+			return 0
+		obm := SelectObject(hdc, hbm)
+		; PW_CLIENTONLY | PW_RENDERFULLCONTENT
+		if (!obm || !PrintWindow(hwnd, hdc, clientOnly ? 3 : 0))
+			return 0
+		return Gdip_CreateBitmapFromHBITMAP(hbm)
+	} finally {
+		if (obm)
+			SelectObject(hdc, obm)
+		if (hbm)
+			DeleteObject(hbm)
+		if (hdc)
+			DeleteDC(hdc)
+	}
 }
 
 ;#####################################################################################
@@ -860,27 +877,30 @@ Gdip_EncodeBitmapTo64string(pBitmap, extension := "png", quality := "") {
 
     ; Create a Stream.
     DllCall("ole32\CreateStreamOnHGlobal", "ptr", 0, "int", True, "ptr*", &pStream:=0, "HRESULT")
-    DllCall("gdiplus\GdipSaveImageToStream", "ptr", pBitmap, "ptr", pStream, "ptr", pCodec, "ptr", IsSet(ep) ? ep : 0)
-
-    ; Get a pointer to binary data.
-    DllCall("ole32\GetHGlobalFromStream", "ptr", pStream, "ptr*", &hbin:=0, "HRESULT")
-    bin := DllCall("GlobalLock", "ptr", hbin, "ptr")
-    size := DllCall("GlobalSize", "uint", bin, "uptr")
-
-    ; Calculate the length of the base64 string.
-    flags := 0x40000001 ; CRYPT_STRING_NOCRLF | CRYPT_STRING_BASE64
-    length := 4 * Ceil(size/3) + 1 ; An extra byte of padding is required.
-    str := Buffer(length)
-
-    ; Using CryptBinaryToStringA saves about 2MB in memory.
-    DllCall("crypt32\CryptBinaryToStringA", "ptr", bin, "uint", size, "uint", flags, "ptr", str, "uint*", &length)
-
-    ; Release binary data and stream.
-    DllCall("GlobalUnlock", "ptr", hbin)
-    ObjRelease(pStream)
-    
-    ; Return encoded string length minus 1.
-    return StrGet(str, length, "CP0")
+    try {
+        if DllCall("gdiplus\GdipSaveImageToStream", "ptr", pBitmap, "ptr", pStream, "ptr", pCodec, "ptr", IsSet(ep) ? ep : 0)
+            return ""
+        ; IStream::Seek gives the encoded length, excluding unused HGLOBAL capacity.
+        ComCall(5, pStream, "int64", 0, "uint", 2, "uint64*", &size := 0)
+        if (!size)
+            return ""
+        DllCall("ole32\GetHGlobalFromStream", "ptr", pStream, "ptr*", &hbin := 0, "HRESULT")
+        bin := DllCall("GlobalLock", "ptr", hbin, "ptr")
+        if (!bin)
+            return ""
+        try {
+            flags := 0x40000001 ; CRYPT_STRING_NOCRLF | CRYPT_STRING_BASE64
+            length := 4 * Ceil(size / 3) + 1
+            str := Buffer(length)
+            if !DllCall("crypt32\CryptBinaryToStringA", "ptr", bin, "uint", size, "uint", flags, "ptr", str, "uint*", &length)
+                return ""
+            return StrGet(str, "CP0")
+        } finally {
+            DllCall("GlobalUnlock", "ptr", hbin)
+        }
+    } finally {
+        ObjRelease(pStream)
+    }
 }
 
 ;#####################################################################################
