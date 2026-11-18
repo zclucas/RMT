@@ -11,6 +11,7 @@ if (-not $env:GITEE_RELEASE_TOKEN) { throw 'Set the GITEE_RELEASE_TOKEN secret b
 $source = 'zclucas/RMT'
 $target = 'fateman/RMT'
 $api = "https://gitee.com/api/v5/repos/$target"
+Write-Host "Reading GitHub release $Tag."
 $release = gh release view $Tag --repo $source --json tagName,name,body,isDraft,isPrerelease,assets
 if ($LASTEXITCODE -ne 0) { throw "Cannot read GitHub release $Tag." }
 $release = $release | ConvertFrom-Json
@@ -36,7 +37,9 @@ foreach ($name in $names) {
 # Resolve annotated tags to their commit. Push only the release tag when the mirror lacks it.
 $ref = "refs/tags/$Tag"
 $giteeRemote = "https://gitee.com/$target.git"
-$refs = git ls-remote $giteeRemote $ref "$ref^{}"
+$gitHttp = @('-c', 'http.lowSpeedLimit=1', '-c', 'http.lowSpeedTime=45')
+Write-Host "Checking Gitee tag $Tag."
+$refs = git @gitHttp ls-remote $giteeRemote $ref "$ref^{}"
 if ($LASTEXITCODE -ne 0) { throw "Cannot query tags on $target." }
 $match = $refs | Where-Object { ($_ -split "`t", 2)[1] -ceq "$ref^{}" }
 if (-not $match) { $match = $refs | Where-Object { ($_ -split "`t", 2)[1] -ceq $ref } }
@@ -44,24 +47,41 @@ if ($match) {
     $mirrorSha = ($match -split "`t", 2)[0]
     if ($mirrorSha -cne $sha) { throw "Gitee tag $Tag points to $mirrorSha; expected $sha." }
 } else {
-    # Gitee may lack the commit history, so a shallow fetch is insufficient for the push.
-    $fetchOptions = @('--no-tags')
-    $shallow = git rev-parse --is-shallow-repository
-    if ($LASTEXITCODE -ne 0) { throw 'Run the sync from a Git checkout.' }
-    if ($shallow -eq 'true') { $fetchOptions += '--unshallow' }
-    git fetch @fetchOptions "https://github.com/$source.git" $sha
-    if ($LASTEXITCODE -ne 0) { throw "Cannot fetch GitHub release commit $sha." }
+    Write-Host "Creating Gitee tag $Tag at $sha."
+    $createdTag = Invoke-RestMethod -Uri "$api/tags" -Method Post -TimeoutSec 30 -SkipHttpErrorCheck -StatusCodeVariable tagStatus -Body @{
+        access_token = $env:GITEE_RELEASE_TOKEN
+        refs         = $sha
+        tag_name     = $Tag
+    }
+    if ($tagStatus -eq 201) {
+        if ($createdTag.name -cne $Tag -or $createdTag.commit.sha -cne $sha) {
+            throw "Gitee did not confirm tag $Tag at $sha."
+        }
+    } elseif ($tagStatus -in 400, 404, 422) {
+        # Gitee may lack the commit history, so a shallow fetch is insufficient for the push.
+        Write-Host "Gitee tag API returned HTTP $tagStatus. Fetching the GitHub commit for a Git push."
+        $fetchOptions = @('--no-tags')
+        $shallow = git rev-parse --is-shallow-repository
+        if ($LASTEXITCODE -ne 0) { throw 'Run the sync from a Git checkout.' }
+        if ($shallow -eq 'true') { $fetchOptions += '--unshallow' }
+        git @gitHttp fetch @fetchOptions "https://github.com/$source.git" $sha
+        if ($LASTEXITCODE -ne 0) { throw "Cannot fetch GitHub release commit $sha." }
 
-    # Git reads the token from the environment without putting it in argv or remote URLs.
-    $credentialHelper = '!f() { if test "$1" = get; then printf "username=oauth2\npassword=%s\n" "$GITEE_RELEASE_TOKEN"; fi; }; f'
-    git -c 'credential.helper=' -c "credential.helper=$credentialHelper" push --no-follow-tags $giteeRemote "${sha}:$ref"
-    if ($LASTEXITCODE -ne 0) { throw "Cannot create Gitee tag $Tag from GitHub commit $sha." }
+        # Git reads the token from the environment without putting it in argv or remote URLs.
+        $credentialHelper = '!f() { if test "$1" = get; then printf "username=oauth2\npassword=%s\n" "$GITEE_RELEASE_TOKEN"; fi; }; f'
+        Write-Host "Pushing $ref to Gitee."
+        git @gitHttp -c 'credential.helper=' -c "credential.helper=$credentialHelper" push --no-follow-tags $giteeRemote "${sha}:$ref"
+        if ($LASTEXITCODE -ne 0) { throw "Cannot create Gitee tag $Tag from GitHub commit $sha." }
+    } else {
+        throw "Could not create Gitee tag $Tag (HTTP $tagStatus)."
+    }
     Write-Host "Created Gitee tag $Tag at $sha."
 }
 
 $dir = Join-Path ([IO.Path]::GetTempPath()) ("rmt-gitee-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $dir | Out-Null
 try {
+    Write-Host "Downloading the two GitHub release ZIPs."
     gh release download $Tag --repo $source --dir $dir --pattern $names[0] --pattern $names[1]
     if ($LASTEXITCODE -ne 0) { throw "Cannot download the GitHub release assets for $Tag." }
     foreach ($name in $names) {
@@ -71,6 +91,7 @@ try {
         }
     }
 
+    Write-Host "Checking Gitee release $Tag."
     $gitee = Invoke-RestMethod -Uri "$api/releases/tags/$Tag" -TimeoutSec 30 -SkipHttpErrorCheck -StatusCodeVariable status
     if ($status -eq 404 -or ($status -eq 200 -and $null -eq $gitee)) {
         $gitee = Invoke-RestMethod -Uri "$api/releases" -Method Post -TimeoutSec 30 -Body @{
@@ -81,6 +102,8 @@ try {
             body             = $release.body
             prerelease       = $release.isPrerelease.ToString().ToLowerInvariant()
         }
+    } elseif ($status -ne 200) {
+        throw "Could not read Gitee release $Tag (HTTP $status)."
     }
     if (-not $gitee.id -or $gitee.tag_name -cne $Tag -or $gitee.prerelease -ne $release.isPrerelease) {
         throw "Gitee release $Tag could not be read or has a different prerelease setting."
@@ -98,6 +121,7 @@ try {
             Write-Host "Already uploaded: $name"
             continue
         }
+        Write-Host "Uploading $name to Gitee."
         $uploaded = Invoke-RestMethod -Uri $attachmentApi -Method Post -TimeoutSec 180 -Form @{
             access_token = $env:GITEE_RELEASE_TOKEN
             file         = Get-Item -LiteralPath (Join-Path $dir $name)
