@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory)]
     [ValidatePattern('^v\d+\.\d+(?:\.\d+)*(?:F\d+)?$')]
-    [string]$Tag
+    [string]$Tag,
+    [ValidateSet('x64', 'x86')][string]$Arch,
+    [switch]$PrepareOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -81,16 +83,6 @@ if ($match) {
 $dir = Join-Path ([IO.Path]::GetTempPath()) ("rmt-gitee-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $dir | Out-Null
 try {
-    Write-Host "Downloading the two GitHub release ZIPs."
-    gh release download $Tag --repo $source --dir $dir --pattern $names[0] --pattern $names[1]
-    if ($LASTEXITCODE -ne 0) { throw "Cannot download the GitHub release assets for $Tag." }
-    foreach ($name in $names) {
-        $asset = $release.assets | Where-Object name -CEQ $name
-        if ((Get-Item -LiteralPath (Join-Path $dir $name)).Length -ne $asset.size) {
-            throw "Downloaded size does not match GitHub for $name."
-        }
-    }
-
     Write-Host "Checking Gitee release $Tag."
     $gitee = Invoke-RestMethod -Uri "$api/releases/tags/$Tag" -TimeoutSec 30 -SkipHttpErrorCheck -StatusCodeVariable status
     if ($status -eq 404 -or ($status -eq 200 -and $null -eq $gitee)) {
@@ -109,6 +101,8 @@ try {
         throw "Gitee release $Tag could not be read or has a different prerelease setting."
     }
 
+    if ($PrepareOnly) { return }
+    if ($Arch) { $names = @("RMT${Tag}_$Arch.zip") }
     $attachmentApi = "$api/releases/$($gitee.id)/attach_files"
     $attachments = @()
     if ($gitee.assets | Where-Object { $_.name -cin $names }) {
@@ -117,35 +111,43 @@ try {
     foreach ($name in $names) {
         $asset = $release.assets | Where-Object name -CEQ $name
         $attached = $attachments | Where-Object name -CEQ $name
+        $file = Join-Path $dir $name
+        $hash = $null
+        if ($asset.digest -match '^sha256:([a-fA-F0-9]{64})$') { $hash = $Matches[1] }
+        if (-not $attached -or -not $hash) {
+            gh release download $Tag --repo $source --dir $dir --pattern $name
+            if ($LASTEXITCODE -ne 0 -or (Get-Item -LiteralPath $file).Length -ne $asset.size) {
+                throw "Could not download the complete GitHub asset $name."
+            }
+            $downloadHash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+            if ($hash -and $hash -ne $downloadHash) { throw "GitHub SHA-256 mismatch for $name." }
+            $hash = $downloadHash
+        }
         if ($attached) {
             if ($attached.size -ne $asset.size) {
                 throw "Gitee already has a different file named $name; check the existing attachment."
             }
             Write-Host "Already uploaded: $name"
-            continue
+        } else {
+            Write-Host "Uploading $name to Gitee."
+            $result = curl --silent --show-error --fail --http1.1 --header 'Expect:' `
+                --connect-timeout 20 --max-time 4200 --speed-limit 1024 --speed-time 60 `
+                --variable '%GITEE_RELEASE_TOKEN' --expand-form 'access_token={{GITEE_RELEASE_TOKEN}}' `
+                --form "file=@$file;type=application/zip" `
+                --write-out '%{stderr}Gitee HTTP %{http_code}, sent %{size_upload} bytes in %{time_total}s\n' `
+                $attachmentApi
+            if ($LASTEXITCODE -ne 0) { throw "Attachment upload failed for $name (curl exit $LASTEXITCODE)." }
+            $uploaded = $result | ConvertFrom-Json
+            if ($uploaded.name -cne $name -or $uploaded.size -ne $asset.size) {
+                throw "Gitee did not confirm upload of $name."
+            }
+            Write-Host "Uploaded: $name"
         }
-        Write-Host "Uploading $name to Gitee."
-        $file = Join-Path $dir $name
-        $result = curl --silent --show-error --fail --http1.1 --header 'Expect:' `
-            --connect-timeout 20 --max-time 4200 --speed-limit 1024 --speed-time 60 `
-            --variable '%GITEE_RELEASE_TOKEN' --expand-form 'access_token={{GITEE_RELEASE_TOKEN}}' `
-            --form "file=@$file;type=application/zip" `
-            --write-out '%{stderr}Gitee HTTP %{http_code}, sent %{size_upload} bytes in %{time_total}s\n' `
-            $attachmentApi
-        if ($LASTEXITCODE -ne 0) { throw "Attachment upload failed for $name (curl exit $LASTEXITCODE)." }
-        $uploaded = $result | ConvertFrom-Json
-        if ($uploaded.name -cne $name -or $uploaded.size -ne $asset.size) {
-            throw "Gitee did not confirm upload of $name."
-        }
-        Write-Host "Uploaded: $name"
-    }
-    foreach ($arch in 'x64', 'x86') {
-        $original = Join-Path $dir "RMT${Tag}_$arch.zip"
-        $hash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash
-        & "$PSScriptRoot/Get-GiteeReleasePackage.ps1" -Tag $Tag -Arch $arch -Sha256 $hash -OutDir $dir
+        $packageArch = if ($name.EndsWith('_x64.zip')) { 'x64' } else { 'x86' }
+        & "$PSScriptRoot/Get-GiteeReleasePackage.ps1" -Tag $Tag -Arch $packageArch -Sha256 $hash -OutDir $dir
     }
     Write-Host "Gitee release: https://gitee.com/$target/releases/tag/$Tag"
 } finally {
-    Remove-Item -LiteralPath (Join-Path $dir $names[0]), (Join-Path $dir $names[1]) -ErrorAction SilentlyContinue
+    foreach ($name in $names) { [IO.File]::Delete((Join-Path $dir $name)) }
     Remove-Item -LiteralPath $dir -ErrorAction SilentlyContinue
 }

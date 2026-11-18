@@ -14,30 +14,51 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: gitee-release-${{ inputs.tag || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+  RELEASE_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+  GIT_TERMINAL_PROMPT: '0'
+
 jobs:
-  sync:
+  prepare:
     if: >-
       github.repository == 'zclucas/RMT' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push'))
     runs-on: windows-latest
-    timeout-minutes: 270
-    concurrency:
-      group: gitee-release-${{ inputs.tag || github.event.workflow_run.head_branch }}
-      cancel-in-progress: false
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      - name: 同步标签、发行说明及两个 ZIP
+      - name: 准备 Gitee 标签和发行说明
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          GIT_TERMINAL_PROMPT: '0'
           GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
-          RELEASE_TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
-          RELEASE_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          ./.github/scripts/Sync-GiteeRelease.ps1 -Tag $env:RELEASE_TAG
+        run: ./.github/scripts/Sync-GiteeRelease.ps1 -Tag $env:RELEASE_TAG -PrepareOnly
+
+  package:
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 上传并回读校验 ${{ matrix.arch }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
+          ARCH: ${{ matrix.arch }}
+        run: ./.github/scripts/Sync-GiteeRelease.ps1 -Tag $env:RELEASE_TAG -Arch $env:ARCH
