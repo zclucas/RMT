@@ -43,7 +43,17 @@ jobs:
           GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
         run: ./.github/scripts/Sync-GiteeRelease.ps1 -Tag $env:RELEASE_TAG -PrepareOnly
 
+      - name: 触发 CNB 上传并等待公开下载校验
+        if: vars.CNB_RELEASE_REPO != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CNB_RELEASE_REPO: ${{ vars.CNB_RELEASE_REPO }}
+          CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
+        run: ./.github/scripts/Start-CnbGiteeRelease.ps1 -Tag $env:RELEASE_TAG
+
   package:
+    if: vars.CNB_RELEASE_REPO == ''
     needs: prepare
     runs-on: windows-latest
     timeout-minutes: 100
