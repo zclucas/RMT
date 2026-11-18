@@ -12,7 +12,9 @@ class BrowserUtil {
     static Actions := [
         "打开网址", "新建分页", "切换分页", "关闭分页", "获取分页列表",
         "等待元素", "等待文字", "等待加载",
-        "点击", "输入", "清空", "选择下拉", "勾选", "滚动至元素", "悬停", "元素数量",
+        "点击", "双击", "右键", "输入", "清空", "选择下拉", "勾选", "滚动至元素", "悬停", "元素数量", "元素状态",
+        "鼠标移动", "鼠标点击", "鼠标滚轮", "按键输入",
+        "Cookie操作", "Storage操作",
         "执行JS", "提取文本", "提取属性", "提取HTML", "获取网址", "获取标题", "网页截图",
         "刷新", "后退", "前进", "关闭标签", "关闭浏览器", "当前页跳转", "提取控件值", "关闭"
     ]
@@ -238,6 +240,16 @@ class BrowserUtil {
         return true
     }
 
+    static GetActiveTabId() {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(256, 0)
+        res := DllCall("RMT_Browser\Browser_GetActiveTabId", "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
     static NewTab(url := "about:blank") {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
@@ -246,6 +258,35 @@ class BrowserUtil {
         if (res != 0)
             this._ThrowLastError()
         return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static NewTabInContext(url := "about:blank", contextId := "") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(256, 0)
+        res := DllCall("RMT_Browser\Browser_NewTabInContext", "Ptr", this._Utf8(url), "Ptr", this._Utf8(contextId), "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static CreateContext() {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(256, 0)
+        res := DllCall("RMT_Browser\Browser_CreateContext", "Ptr", buf.Ptr, "Int", 256, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static CloseContext(contextId) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_CloseContext", "Ptr", this._Utf8(String(contextId)), "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
     }
 
     static CloseTabByRef(targetRef := "") {
@@ -292,6 +333,24 @@ class BrowserUtil {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         res := DllCall("RMT_Browser\Browser_Click", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", timeoutMs, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError(selectorType)
+        return true
+    }
+
+    static DoubleClick(selector, selectorType := "CSS", timeoutMs := 5000) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_DoubleClick", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", timeoutMs, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError(selectorType)
+        return true
+    }
+
+    static RightClick(selector, selectorType := "CSS", timeoutMs := 5000) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_RightClick", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", timeoutMs, "Cdecl Int")
         if (res != 0)
             this._ThrowLastError(selectorType)
         return true
@@ -359,6 +418,103 @@ class BrowserUtil {
         if (res != 0)
             this._ThrowLastError()
         return count
+    }
+
+    static GetElementState(selector, selectorType := "CSS") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(2048, 0)
+        res := DllCall("RMT_Browser\Browser_GetElementState", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", buf.Ptr, "Int", 2048, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    ; --- CDP 鼠标与键盘模拟 ---
+
+    static MouseMove(x, y) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_MouseMove", "Double", Float(x), "Double", Float(y), "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    static MouseClick(x, y, button := "left") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_MouseClick", "Double", Float(x), "Double", Float(y), "Ptr", this._Utf8(button), "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    static MouseWheel(deltaX, deltaY) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_MouseWheel", "Double", Float(deltaX), "Double", Float(deltaY), "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    static KeyPress(key, modifiers := 0) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_KeyPress", "Ptr", this._Utf8(key), "Int", modifiers, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    ; --- Storage & Cookies ---
+
+    static GetCookie(name := "") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(65536, 0)
+        res := DllCall("RMT_Browser\Browser_GetCookie", "Ptr", this._Utf8(name), "Ptr", buf.Ptr, "Int", 65536, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static SetCookie(name, value, domain := "", path := "/") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_SetCookie", "Ptr", this._Utf8(name), "Ptr", this._Utf8(value), "Ptr", this._Utf8(domain), "Ptr", this._Utf8(path), "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    static ClearCookies() {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_ClearCookies", "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    static GetStorage(storageType := "local", key := "") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        buf := Buffer(65536, 0)
+        res := DllCall("RMT_Browser\Browser_GetStorage", "Ptr", this._Utf8(StrLower(storageType)), "Ptr", this._Utf8(key), "Ptr", buf.Ptr, "Int", 65536, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return StrGet(buf.Ptr, "UTF-8")
+    }
+
+    static SetStorage(storageType := "local", key := "", value := "") {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_SetStorage", "Ptr", this._Utf8(StrLower(storageType)), "Ptr", this._Utf8(key), "Ptr", this._Utf8(value), "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
     }
 
     ; --- 数据提取与 JS ---
@@ -833,6 +989,13 @@ OnBrowser(tableItem, cmd, index) {
 }
 
 _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
+    if (data.HasOwnProp("TargetRef") && actionType != "打开网址" && actionType != "新建分页" && actionType != "切换分页" && actionType != "关闭分页" && actionType != "关闭标签" && actionType != "关闭") {
+        rawRef := Trim(data.TargetRef)
+        targetRef := (rawRef != "" && !InStr(rawRef, "{") && TryGetTabVarValue(&vVal, tableItem, index, rawRef, true)) ? vVal : resolve(rawRef)
+        if (targetRef != "")
+            BrowserUtil.SwitchTab(targetRef)
+    }
+
     switch actionType {
         case "打开网址":
             url := resolve(data.Url)
@@ -846,7 +1009,12 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             timeoutMs := Integer(data.TimeoutMs)
 
             BrowserUtil.Launch(bType, bPath, hLess, uDir, hPort)
-            BrowserUtil.Navigate(url, timeoutMs)
+            if (data.HasOwnProp("Incognito") && Integer(data.Incognito)) {
+                ctxId := BrowserUtil.CreateContext()
+                BrowserUtil.NewTabInContext(url, ctxId)
+            } else {
+                BrowserUtil.Navigate(url, timeoutMs)
+            }
             return url
 
         case "当前页跳转":
@@ -863,19 +1031,24 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             return BrowserUtil.NewTab(url)
 
         case "切换分页":
-            targetRef := data.HasOwnProp("TargetRef") ? resolve(data.TargetRef) : "1"
+            rawRef := data.HasOwnProp("TargetRef") ? Trim(data.TargetRef) : "1"
+            targetRef := (rawRef != "" && !InStr(rawRef, "{") && TryGetTabVarValue(&vVal, tableItem, index, rawRef, true)) ? vVal : resolve(rawRef)
             if (targetRef == "")
                 targetRef := "1"
             BrowserUtil.SwitchTab(targetRef)
             return targetRef
 
         case "关闭分页", "关闭标签":
-            targetRef := data.HasOwnProp("TargetRef") ? resolve(data.TargetRef) : ""
+            rawRef := data.HasOwnProp("TargetRef") ? Trim(data.TargetRef) : ""
+            targetRef := (rawRef != "" && !InStr(rawRef, "{") && TryGetTabVarValue(&vVal, tableItem, index, rawRef, true)) ? vVal : resolve(rawRef)
             BrowserUtil.CloseTabByRef(targetRef)
             return true
 
         case "获取分页列表":
             return BrowserUtil.GetTabs()
+
+        case "获取当前分页ID":
+            return BrowserUtil.GetActiveTabId()
 
         case "等待元素":
             selector := resolve(data.Selector)
@@ -905,6 +1078,20 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             if (selector == "")
                 throw Error("Selector 不能为空")
             BrowserUtil.Click(selector, selType, Integer(data.TimeoutMs))
+            return true
+
+        case "双击":
+            selector := resolve(data.Selector)
+            if (selector == "")
+                throw Error("Selector 不能为空")
+            BrowserUtil.DoubleClick(selector, selType, Integer(data.TimeoutMs))
+            return true
+
+        case "右键":
+            selector := resolve(data.Selector)
+            if (selector == "")
+                throw Error("Selector 不能为空")
+            BrowserUtil.RightClick(selector, selType, Integer(data.TimeoutMs))
             return true
 
         case "输入":
@@ -958,6 +1145,72 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
                 throw Error("Selector 不能为空")
             cnt := BrowserUtil.GetElementCount(selector, selType)
             return cnt
+
+        case "元素状态":
+            selector := resolve(data.Selector)
+            if (selector == "")
+                throw Error("Selector 不能为空")
+            return BrowserUtil.GetElementState(selector, selType)
+
+        case "鼠标移动":
+            x := Float(resolve(data.CoordX))
+            y := Float(resolve(data.CoordY))
+            BrowserUtil.MouseMove(x, y)
+            return true
+
+        case "鼠标点击":
+            x := Float(resolve(data.CoordX))
+            y := Float(resolve(data.CoordY))
+            btn := data.HasOwnProp("MouseBtn") ? data.MouseBtn : "左键"
+            btnEn := (btn == "右键") ? "right" : ((btn == "中键") ? "middle" : "left")
+            BrowserUtil.MouseClick(x, y, btnEn)
+            return true
+
+        case "鼠标滚轮":
+            dx := Float(resolve(data.CoordX))
+            dy := Float(resolve(data.CoordY))
+            BrowserUtil.MouseWheel(dx, dy)
+            return true
+
+        case "按键输入":
+            keyStr := resolve(data.Text)
+            if (keyStr == "")
+                throw Error("按键不能为空")
+            mod := data.HasOwnProp("Modifiers") ? Integer(data.Modifiers) : 0
+            for singleKey in StrSplit(keyStr, ["⎖", ","]) {
+                singleKey := Trim(singleKey)
+                if (singleKey != "")
+                    BrowserUtil.KeyPress(singleKey, mod)
+            }
+            return keyStr
+
+        case "Cookie操作":
+            opt := resolve(data.Text) ; "get" / "set" / "clear"
+            cName := resolve(data.AttrName)
+            if (opt == "clear" || opt == "清空") {
+                BrowserUtil.ClearCookies()
+                return true
+            } else if (opt == "set" || opt == "设置") {
+                cVal := resolve(data.JsCode)
+                cDom := data.HasOwnProp("CookieDomain") ? resolve(data.CookieDomain) : ""
+                cPath := data.HasOwnProp("CookiePath") ? resolve(data.CookiePath) : "/"
+                BrowserUtil.SetCookie(cName, cVal, cDom, cPath)
+                return true
+            } else {
+                return BrowserUtil.GetCookie(cName)
+            }
+
+        case "Storage操作":
+            opt := resolve(data.Text) ; "get" / "set"
+            sType := data.HasOwnProp("StorageType") ? data.StorageType : "Local"
+            sKey := resolve(data.AttrName)
+            if (opt == "set" || opt == "设置") {
+                sVal := resolve(data.JsCode)
+                BrowserUtil.SetStorage(sType, sKey, sVal)
+                return true
+            } else {
+                return BrowserUtil.GetStorage(sType, sKey)
+            }
 
         case "执行JS":
             js := resolve(data.JsCode)

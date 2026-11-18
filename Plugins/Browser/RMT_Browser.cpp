@@ -47,7 +47,6 @@ static std::string BuildElementQueryJs(const std::string& selector, const std::s
     std::string sType = selectorType;
     std::transform(sType.begin(), sType.end(), sType.begin(), ::tolower);
 
-    // Escape backslashes and single quotes
     std::string escapedSel = "";
     for (char c : selector) {
         if (c == '\\') escapedSel += "\\\\";
@@ -58,7 +57,6 @@ static std::string BuildElementQueryJs(const std::string& selector, const std::s
     if (sType == "xpath") {
         return "document.evaluate('" + escapedSel + "', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue";
     } else {
-        // default CSS selector
         return "document.querySelector('" + escapedSel + "')";
     }
 }
@@ -161,6 +159,8 @@ BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath,
             opts.userDataDir = userDataDir;
             opts.useTempProfile = false;
         }
+
+        opts.additionalFlags.push_back("--disable-blink-features=AutomationControlled");
 
         auto res = cdp::quick::launch(opts);
         if (!res.ok()) {
@@ -412,6 +412,19 @@ BROWSER_API int Browser_SwitchTab(const char* targetRef) {
     }
 }
 
+BROWSER_API int Browser_GetActiveTabId(char* outTargetId, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
 BROWSER_API int Browser_NewTab(const char* url, char* outTargetId, int maxLen) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
@@ -429,6 +442,103 @@ BROWSER_API int Browser_NewTab(const char* url, char* outTargetId, int maxLen) {
         g_activePage = pres.page;
         g_activePage->bringToFront();
         CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_CreateContext(char* outContextId, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!g_browser) {
+            if (!EnsureActivePage()) return -1;
+        }
+
+        auto cRes = g_browser->newContext();
+        if (!cRes.ok() || !cRes.context) {
+            SetLastError("Failed to create browser context: " + cRes.error, -1);
+            return -1;
+        }
+
+        CopyToOut(cRes.context->id(), outContextId, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_NewTabInContext(const char* url, const char* contextId, char* outTargetId, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!g_browser) {
+            if (!EnsureActivePage()) return -1;
+        }
+
+        std::string targetUrl = (url && url[0] != '\0') ? url : "about:blank";
+        std::string ctxId = (contextId && contextId[0] != '\0') ? contextId : "";
+
+        if (ctxId.empty()) {
+            auto pres = g_browser->newPage(targetUrl);
+            if (!pres.ok()) {
+                SetLastError("Failed to create new tab: " + pres.error, -1);
+                return -1;
+            }
+            g_activePage = pres.page;
+        } else {
+            // Find context or create page in context
+            cdp::quick::QuickContext* targetCtx = nullptr;
+            for (auto* c : g_browser->contexts()) {
+                if (c && c->id() == ctxId) {
+                    targetCtx = c;
+                    break;
+                }
+            }
+            if (!targetCtx) {
+                // If context doesn't exist, create it with this id or report error
+                SetLastError("Browser context not found: " + ctxId, -4);
+                return -4;
+            }
+            auto pres = targetCtx->newPage(targetUrl);
+            if (!pres.ok()) {
+                SetLastError("Failed to create new tab in context: " + pres.error, -1);
+                return -1;
+            }
+            g_activePage = pres.page;
+        }
+
+        if (g_activePage) {
+            g_activePage->bringToFront();
+            CopyToOut(g_activePage->targetId(), outTargetId, maxLen);
+        }
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_CloseContext(const char* contextId) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!g_browser) return 0;
+        if (!contextId || contextId[0] == '\0') return 0;
+
+        std::string ctxId = contextId;
+        for (auto* c : g_browser->contexts()) {
+            if (c && c->id() == ctxId) {
+                c->close();
+                break;
+            }
+        }
+        // If active page was in this context, reset activePage
+        g_activePage = nullptr;
+        AttachToFirstPage();
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
@@ -662,14 +772,12 @@ BROWSER_API int Browser_Click(const char* selector, const char* selectorType, in
         std::string sType = selectorType ? selectorType : "css";
         int waitMs = (timeoutMs > 0) ? timeoutMs : 5000;
 
-        // If pure CSS, use built-in click
         if (sType == "css" || sType == "") {
             if (!g_activePage->click(selector, waitMs)) {
                 SetLastError(g_activePage->lastError().empty() ? "Click failed" : g_activePage->lastError(), -3);
                 return -3;
             }
         } else {
-            // XPath or customized dispatch
             std::string queryElem = BuildElementQueryJs(selector, sType);
             std::string jsClick = "(() => { const el = " + queryElem + "; if(!el) return 'NOT_FOUND'; el.scrollIntoView({block:'center'}); el.click(); return 'OK'; })()";
             std::string res = g_activePage->evalString(jsClick);
@@ -677,6 +785,67 @@ BROWSER_API int Browser_Click(const char* selector, const char* selectorType, in
                 SetLastError("Element not found for click: " + std::string(selector), -3);
                 return -3;
             }
+        }
+
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_DoubleClick(const char* selector, const char* selectorType, int timeoutMs) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        if (!selector || selector[0] == '\0') {
+            SetLastError("Selector cannot be empty", -6);
+            return -6;
+        }
+
+        std::string sType = selectorType ? selectorType : "css";
+        int waitMs = (timeoutMs > 0) ? timeoutMs : 5000;
+
+        if (sType == "css" || sType == "") {
+            if (!g_activePage->doubleClick(selector, waitMs)) {
+                SetLastError(g_activePage->lastError().empty() ? "DoubleClick failed" : g_activePage->lastError(), -3);
+                return -3;
+            }
+        } else {
+            std::string queryElem = BuildElementQueryJs(selector, sType);
+            std::string jsDbl = "(() => { const el = " + queryElem + "; if(!el) return 'NOT_FOUND'; el.scrollIntoView({block:'center'}); el.dispatchEvent(new MouseEvent('dblclick', {bubbles:true})); return 'OK'; })()";
+            std::string res = g_activePage->evalString(jsDbl);
+            if (res == "NOT_FOUND") {
+                SetLastError("Element not found for doubleClick: " + std::string(selector), -3);
+                return -3;
+            }
+        }
+
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_RightClick(const char* selector, const char* selectorType, int timeoutMs) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        if (!selector || selector[0] == '\0') {
+            SetLastError("Selector cannot be empty", -6);
+            return -6;
+        }
+
+        std::string sType = selectorType ? selectorType : "css";
+        std::string queryElem = BuildElementQueryJs(selector, sType);
+        std::string jsRight = "(() => { const el = " + queryElem + "; if(!el) return 'NOT_FOUND'; el.scrollIntoView({block:'center'}); el.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, button:2})); return 'OK'; })()";
+        std::string res = g_activePage->evalString(jsRight);
+        if (res == "NOT_FOUND") {
+            SetLastError("Element not found for right click: " + std::string(selector), -3);
+            return -3;
         }
 
         SetLastError("", 0);
@@ -709,7 +878,6 @@ BROWSER_API int Browser_Type(const char* selector, const char* selectorType, con
                 return -3;
             }
         } else {
-            // XPath
             std::string queryElem = BuildElementQueryJs(selector, sType);
             std::string escapedTxt = "";
             for (char c : txt) {
@@ -953,6 +1121,103 @@ BROWSER_API int Browser_GetElementCount(const char* selector, const char* select
     }
 }
 
+BROWSER_API int Browser_GetElementState(const char* selector, const char* selectorType, char* outResult, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        if (!selector || selector[0] == '\0') {
+            SetLastError("Selector cannot be empty", -6);
+            return -6;
+        }
+
+        std::string sType = selectorType ? selectorType : "css";
+        std::string queryElem = BuildElementQueryJs(selector, sType);
+        std::string jsState = "(() => { const el = " + queryElem + "; if(!el) return JSON.stringify({exists:false,visible:false,enabled:false});"
+            + " const rect = el.getBoundingClientRect();"
+            + " const visible = (el.offsetWidth > 0 || el.offsetHeight > 0 || rect.width > 0 || rect.height > 0) && window.getComputedStyle(el).visibility !== 'hidden';"
+            + " const enabled = !el.disabled;"
+            + " return JSON.stringify({exists:true,visible:visible,enabled:enabled}); })()";
+
+        std::string res = g_activePage->evalString(jsState);
+        CopyToOut(res, outResult, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+// --- CDP Input (Mouse & Keyboard) ---
+
+BROWSER_API int Browser_MouseMove(double x, double y) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        cdp::highlevel::Mouse mouse(g_activePage->client().connection());
+        mouse.moveTo(x, y);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_MouseClick(double x, double y, const char* button) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        cdp::highlevel::Mouse mouse(g_activePage->client().connection());
+        std::string btn = button ? button : "left";
+        std::transform(btn.begin(), btn.end(), btn.begin(), ::tolower);
+
+        cdp::MouseButton mBtn = cdp::MouseButton::Left;
+        if (btn == "right") mBtn = cdp::MouseButton::Right;
+        else if (btn == "middle") mBtn = cdp::MouseButton::Middle;
+
+        mouse.clickAt(x, y, mBtn);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_MouseWheel(double deltaX, double deltaY) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        cdp::highlevel::Mouse mouse(g_activePage->client().connection());
+        mouse.scroll(deltaX, deltaY);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_KeyPress(const char* key, int modifiers) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        if (!key || key[0] == '\0') {
+            SetLastError("Key cannot be empty", -6);
+            return -6;
+        }
+
+        cdp::highlevel::Keyboard kbd(g_activePage->client().connection());
+        kbd.press(key, modifiers);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
 // --- Data Extraction & JS ---
 
 BROWSER_API int Browser_Evaluate(const char* script, char* outResult, int maxLen, int timeoutMs) {
@@ -1111,6 +1376,129 @@ BROWSER_API int Browser_CaptureScreenshot(const char* filePath, int fullPage) {
             return -1;
         }
 
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+// --- Storage & Cookies ---
+
+BROWSER_API int Browser_GetCookie(const char* name, char* outResult, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        std::string n = name ? name : "";
+        std::string val = n.empty() ? g_activePage->getAllCookies() : g_activePage->getCookie(n);
+        CopyToOut(val, outResult, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_SetCookie(const char* name, const char* value, const char* domain, const char* path) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        if (!name || name[0] == '\0') {
+            SetLastError("Cookie name cannot be empty", -6);
+            return -6;
+        }
+        std::string n = name;
+        std::string v = value ? value : "";
+        std::string d = domain ? domain : "";
+        std::string p = (path && path[0] != '\0') ? path : "/";
+
+        if (!g_activePage->setCookie(n, v, d, p)) {
+            SetLastError("SetCookie failed: " + g_activePage->lastError(), -1);
+            return -1;
+        }
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_ClearCookies() {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        if (!g_activePage->deleteAllCookies()) {
+            SetLastError("ClearCookies failed: " + g_activePage->lastError(), -1);
+            return -1;
+        }
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_GetStorage(const char* storageType, const char* key, char* outResult, int maxLen) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        std::string sType = storageType ? storageType : "local";
+        std::string storageName = (sType == "session") ? "sessionStorage" : "localStorage";
+        std::string k = key ? key : "";
+
+        std::string js;
+        if (k.empty()) {
+            js = "(() => { return JSON.stringify(" + storageName + "); })()";
+        } else {
+            std::string escKey = "";
+            for (char c : k) {
+                if (c == '\\') escKey += "\\\\";
+                else if (c == '\'') escKey += "\\'";
+                else escKey += c;
+            }
+            js = "(() => { return " + storageName + ".getItem('" + escKey + "') || ''; })()";
+        }
+
+        std::string res = g_activePage->evalString(js);
+        CopyToOut(res, outResult, maxLen);
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_SetStorage(const char* storageType, const char* key, const char* value) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        if (!key || key[0] == '\0') {
+            SetLastError("Storage key cannot be empty", -6);
+            return -6;
+        }
+        std::string sType = storageType ? storageType : "local";
+        std::string storageName = (sType == "session") ? "sessionStorage" : "localStorage";
+
+        std::string escKey = "";
+        for (char c : std::string(key)) {
+            if (c == '\\') escKey += "\\\\";
+            else if (c == '\'') escKey += "\\'";
+            else escKey += c;
+        }
+        std::string escVal = "";
+        for (char c : std::string(value ? value : "")) {
+            if (c == '\\') escVal += "\\\\";
+            else if (c == '\'') escVal += "\\'";
+            else escVal += c;
+        }
+
+        std::string js = "(() => { " + storageName + ".setItem('" + escKey + "', '" + escVal + "'); return 'OK'; })()";
+        g_activePage->evalString(js);
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
