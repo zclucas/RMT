@@ -110,7 +110,10 @@ try {
     }
 
     $attachmentApi = "$api/releases/$($gitee.id)/attach_files"
-    $attachments = Invoke-RestMethod -Uri "${attachmentApi}?per_page=100" -TimeoutSec 30
+    $attachments = @()
+    if ($gitee.assets | Where-Object { $_.name -cin $names }) {
+        $attachments = Invoke-RestMethod -Uri "${attachmentApi}?per_page=100" -TimeoutSec 30
+    }
     foreach ($name in $names) {
         $asset = $release.assets | Where-Object name -CEQ $name
         $attached = $attachments | Where-Object name -CEQ $name
