@@ -1,0 +1,46 @@
+name: 同步 Gitee 发行版
+
+on:
+  workflow_run:
+    workflows: [版本发布]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '已在 GitHub 发布的标签（例如 v1.3F3）'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: >-
+      github.repository == 'zclucas/RMT' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: gitee-release-${{ inputs.tag || github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 同步发行说明及两个 ZIP
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+          RELEASE_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if (-not $env:GITEE_RELEASE_TOKEN -and $env:GITHUB_EVENT_NAME -eq 'workflow_run') {
+            Write-Host '::notice::GITEE_RELEASE_TOKEN is not configured; skipping the mirror release.'
+            exit 0
+          }
+          ./.github/scripts/Sync-GiteeRelease.ps1 -Tag $env:RELEASE_TAG
