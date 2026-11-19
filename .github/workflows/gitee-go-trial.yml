@@ -8,6 +8,14 @@ on:
         required: true
         type: string
 
+      sample:
+        description: 样本范围（small 用于快速验证上传和回读）
+        type: choice
+        default: both
+        options:
+          - both
+          - small
+
 permissions:
   contents: read
 
@@ -23,5 +31,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
+          SAMPLE: ${{ inputs.sample }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: python3 .github/scripts/gitee_go_trial.py

@@ -28,10 +28,11 @@ def go(path, data=None):
     return reply["data"]
 
 
-params = {"RELEASE_TAG": tag, "TRIAL_TAG": trial_tag}
+sample = os.environ.get("SAMPLE") or "both"
+params = {"RELEASE_TAG": tag, "TRIAL_TAG": trial_tag, "SAMPLE": sample}
 for repo, ref, name, param in [
     ("RMT", tag, f"RMT{tag}_x64.zip", "PACKAGE_SHA"),
-    ("RMTAssets", tag + "_x64", "RMT.zip", "RESOURCE_SHA"),
+    ("RMTAssets", tag + "_x64", "Lang.zip" if sample == "small" else "RMT.zip", "RESOURCE_SHA"),
 ]:
     release = request(f"https://api.github.com/repos/zclucas/{repo}/releases/tags/{ref}", os.environ["GH_TOKEN"])
     asset = next(a for a in release["assets"] if a["name"] == name and a["state"] == "uploaded")
