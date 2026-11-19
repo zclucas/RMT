@@ -85,12 +85,10 @@ class KeyGui {
             this._PlaceFlowKey(mouseKeys, mouseDefs[A_Index][1], mouseDefs[A_Index][2], mouseDefs[A_Index][3], A_Index < mouseDefs.Length)
         }
 
-        ; 行2：类型/时长/次数/间隔固定居中；当前指令单独一行，左对齐类型 label
-        optWrap := body.Add("Grid").Grid_Row(2).Grid_ColumnSpan(11).HorizontalAlignment("Center").Margin("10,12,10,2")
-        optWrap.Rows("Auto", "Auto")
-        bottom := optWrap.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").HorizontalAlignment("Left").VerticalAlignment("Center")
-        typeBox := bottom.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center")
-        typeBox.Add("TextBlock").Text(GetLang("类型:")).ToolTip(this._TypeHelpText()).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        ; 行2：类型/时长/次数/间隔
+        bottom := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("10,12,10,2")
+        typeBox := bottom.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center").ToolTip(this._TypeHelpText())
+        typeBox.Add("TextBlock").Text(GetLang("类型:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         kt := typeBox.Add("ComboBox").Name("KeyTypeCon").Width(80).Height(26).MinHeight(26).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["按下", "松开", "点击"])
@@ -119,9 +117,6 @@ class KeyGui {
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .Tag("NumOnly|NoIME|MaxLen:5")
-        optWrap.Add("TextBlock").Name("CommandStrCon").Grid_Row(1).Text(GetLang("当前指令：无"))
-            .HorizontalAlignment("Left").VerticalAlignment("Center").Margin("0,8,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
 
         ; 行3：底部按钮行
         btnRow := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -404,14 +399,15 @@ class KeyGui {
         this.KeyStr := this.GetTriggerKey()
         this.UpdateCommandStr()
 
-        this.ui.Update("TypeBox", "Visibility", "Visible")
-        this.ui.Update("HoldTimeTipCon", "Visibility", "Visible")
-        this.ui.Update("HoldTimeCon", "Visibility", "Visible")
-        this.ui.Update("KeyCountTipCon", "Visibility", "Visible")
-        this.ui.Update("KeyCountCon", "Visibility", "Visible")
-        this.ui.Update("PerIntervalTipCon", "Visibility", "Visible")
-        this.ui.Update("PerIntervalCon", "Visibility", "Visible")
-        this.ui.Update("CommandStrCon", "Text", Format("{}{}", GetLang("当前指令："), this.CommandStr))
+        isShowClickParams := this._KeyTypeIndex() == "点击"
+        isShowInterval := isShowClickParams && this.ui.Query("KeyCountCon") != 1
+
+        this.ui.Update("HoldTimeTipCon", "Visibility", isShowClickParams ? "Visible" : "Hidden")
+        this.ui.Update("HoldTimeCon", "Visibility", isShowClickParams ? "Visible" : "Hidden")
+        this.ui.Update("KeyCountTipCon", "Visibility", isShowClickParams ? "Visible" : "Hidden")
+        this.ui.Update("KeyCountCon", "Visibility", isShowClickParams ? "Visible" : "Hidden")
+        this.ui.Update("PerIntervalTipCon", "Visibility", isShowInterval ? "Visible" : "Hidden")
+        this.ui.Update("PerIntervalCon", "Visibility", isShowInterval ? "Visible" : "Hidden")
     }
 
     UpdateCommandStr() {
