@@ -31,8 +31,8 @@ if ($env:RELEASE_RUN_SHA -and $env:RELEASE_RUN_SHA -cne $sha) {
 $names = @("RMT$($Tag)_x64.zip", "RMT$($Tag)_x86.zip")
 foreach ($name in $names) {
     $asset = $release.assets | Where-Object name -CEQ $name
-    if (-not $asset -or $asset.size -le 0 -or $asset.size -gt 100MB) {
-        throw "GitHub asset $name is missing, empty or above the Gitee size limit."
+    if (-not $asset -or $asset.size -le 0) {
+        throw "GitHub asset $name is missing or empty."
     }
 }
 
@@ -103,6 +103,11 @@ try {
 
     if ($PrepareOnly) { return }
     if ($Arch) { $names = @("RMT${Tag}_$Arch.zip") }
+    $names = @(foreach ($name in $names) {
+        $asset = $release.assets | Where-Object name -CEQ $name
+        if ($asset.size -gt 100MB) { Write-Host "Skip $Tag/$name ($($asset.size) bytes exceeds 100 MiB)" }
+        else { $name }
+    })
     $attachmentApi = "$api/releases/$($gitee.id)/attach_files"
     $attachments = @()
     if ($gitee.assets | Where-Object { $_.name -cin $names }) {

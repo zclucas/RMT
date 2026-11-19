@@ -16,6 +16,7 @@ from mirror_rmt_refs import git
 
 VERSION = r"v[0-9]+(?:\.[0-9]+)+(?:F[0-9]+)?"
 SCRIPTS = Path(__file__).resolve().parent / "gitee-go"
+GITEE_MAX_BYTES = 100 * 1024**2
 
 
 def http(url, token=None, data=None, form=False):
@@ -36,19 +37,25 @@ def prepare(repo, tag):
     if source["draft"] or source["tag_name"] != tag:
         raise ValueError("Unpublished release " + tag)
     assets = []
+    source_names = set()
     for page in range(1, 101):
         batch = http(f"{gh}/{source['id']}/assets?per_page=100&page={page}", os.environ["GH_TOKEN"])
         for a in batch:
-            if (a["state"] != "uploaded" or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._-]*", a["name"])
-                    or not re.fullmatch("sha256:[0-9a-f]{64}", a.get("digest") or "")
-                    or not 0 < a["size"] <= 100 * 1024**2):
+            if a["name"] in source_names or a["state"] != "uploaded" or a["size"] <= 0:
+                raise ValueError("Invalid GitHub attachment: " + a["name"])
+            source_names.add(a["name"])
+            if a["size"] > GITEE_MAX_BYTES:
+                print(f"Skip {repo}/{tag}/{a['name']} ({a['size']} bytes > {GITEE_MAX_BYTES})", flush=True)
+                continue
+            if (not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._-]*", a["name"])
+                    or not re.fullmatch("sha256:[0-9a-f]{64}", a.get("digest") or "")):
                 raise ValueError("Unsupported GitHub attachment: " + a["name"])
             assets.append({k: a[k] for k in ("name", "digest", "size")})
         if len(batch) < 100:
             break
     names = {a["name"] for a in assets}
-    if not assets or len(names) != len(assets) or (repo == "RMT" and
-            not {"RMT" + tag + "_" + arch + ".zip" for arch in ("x64", "x86")} <= names):
+    if not source_names or (repo == "RMT" and
+            not {"RMT" + tag + "_" + arch + ".zip" for arch in ("x64", "x86")} <= source_names):
         raise ValueError("Incomplete release " + tag)
     api = "https://gitee.com/api/v5/repos/fateman/" + repo
     try:
@@ -182,10 +189,23 @@ if __name__ == "__main__":
         raise ValueError("Unexpected resource releases")
     manifests = [prepare("RMT", tag)] + [prepare("RMTAssets", ref) for ref in tags]
     for manifest in manifests:
+        if not manifest["assets"]:
+            print(f"{manifest['repo']}/{manifest['tag']}: no attachments within the Gitee limit")
+            continue
         if sys.argv[1] == "go":
             dispatch(manifest)
         elif sys.argv[1] == "relay":
-            subprocess.run(["bash", ".github/scripts/gitee-relay.sh"], input=json.dumps(
-                {k: manifest[k] for k in ("repo", "tag", "assets")}).encode(), check=True)
+            # The restricted SSH endpoint has a per-connection wall clock limit.
+            for asset in manifest["assets"]:
+                payload = dict(repo=manifest["repo"], tag=manifest["tag"], assets=[asset])
+                for attempt in range(2):
+                    result = subprocess.run(["bash", ".github/scripts/gitee-relay.sh"],
+                                            input=json.dumps(payload).encode())
+                    if result.returncode == 0:
+                        break
+                    if attempt:
+                        result.check_returncode()
+                    print(f"Retry {manifest['tag']}/{asset['name']} after exit {result.returncode}", flush=True)
+                    time.sleep(5)
         else:
             raise ValueError("Unknown mode")

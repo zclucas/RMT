@@ -34,6 +34,10 @@ $dir = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP ([guid]::N
 $failed = @()
 foreach ($asset in ($release.assets | Sort-Object size)) {
     $name = $asset.name
+    if ($asset.size -gt 100MB) {
+        Write-Host "Skip $Tag/$name ($($asset.size) bytes exceeds 100 MiB)"
+        continue
+    }
     if ($name -notmatch '^[\w.-]+$' -or $name -in '.', '..') { throw "Invalid attachment name: $name" }
     $path = Join-Path $dir $name
     try {
