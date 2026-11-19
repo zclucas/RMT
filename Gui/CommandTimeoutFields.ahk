@@ -7,7 +7,7 @@ class CommandTimeoutFields {
         panel.Cols("*", 16, "*")
         time := CmdEditorForm.Row(panel, "超时(ms)：", , labelGroup, , , GetLang("本次操作最多等待的毫秒数。"))
         status := CmdEditorForm.Row(panel, "超时状态：", , rightLabelGroup, , "TimeoutStatusLabel").Grid_Column(2)
-        action := CmdEditorForm.Row(panel, "超时处理：", , labelGroup).Grid_Row(1)
+        action := CmdEditorForm.Row(panel, "超时处理：", , labelGroup, , "TimeoutActionLabel").Grid_Row(1)
         times := ["1000", "3000", "5000", "10000", "30000", "60000"]
         if (allowUnlimited)
             times.Push("不限时")
@@ -35,7 +35,7 @@ class CommandTimeoutFields {
                 Value: action == "" ? -1 : CmdEnumIndex(action, TimeoutPolicy.Actions)},
             {ControlName: "TimeoutStatusVar", PropertyName: "Text", Value: GetLang(statusVar)})
         if (action == "")
-            batch.Push({ControlName: "TimeoutAction", PropertyName: "ToolTip", Value: GetLang("留空时沿用旧版超时处理。")})
+            batch.Push({ControlName: "TimeoutActionLabel", PropertyName: "ToolTip", Value: GetLang("留空时沿用旧版超时处理。")})
         ui.BatchUpdate(batch)
     }
 

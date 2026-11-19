@@ -16,6 +16,7 @@ class WindowManageGui {
         this.ui := ""
         this.SureBtnAction := ""
         this.OwnerHwnd := ""
+        this.WindowBindingContext := ""
         this.MyFrontInfoGui := ""
         this._closed := true
         this._batch := []
@@ -116,10 +117,7 @@ class WindowManageGui {
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("窗口绑定：")).ToolTip(GetLang("指定这条指令要操作的窗口。")).VerticalAlignment("Center")
         wiRow := body.Add("Grid").Grid_Row(1).Grid_Column(1).Grid_ColumnSpan(compactLayout ? 1 : 4)
         wiRow.Cols("*", "6", "28")
-        wiRow.Add("TextBox").Grid_Column(0).Name("SearchValueCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").Padding("2,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        CmdEditorForm.WindowBindingCombo(wiRow, "SearchValueCon").MaxHeight(26)
         wiRow.Add("Button").Grid_Column(2).Name("WinInfoEditBtn").Content(Chr(0xE70F)).ToolTip(GetLang("编辑"))
             .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(12)
             .Height(26).MinHeight(26).Padding("0").Cursor("Hand").VerticalAlignment("Center")
@@ -153,7 +151,7 @@ class WindowManageGui {
         posRow.Add("TextBlock").Name("PositionLabel").Grid_Column(0).VerticalAlignment("Center")
         for i, axis in ["X", "Y"] {
             posRow.Add("ComboBox").Grid_Column(i == 1 ? 1 : 3).Name("Pos" axis "Con").Height(26).MinHeight(26)
-                .ToolTip(axis).IsEditable("True").VerticalAlignment("Center")
+                .IsEditable("True").VerticalAlignment("Center")
         }
 
         resultRow := extra.Add("Grid").Name("ResultRelateRow").Visibility("Collapsed")
@@ -169,8 +167,9 @@ class WindowManageGui {
         sizeRow.Rows("36")
         sizeRow.Cols(pairCols*)
         sizeRow.Add("TextBlock").Grid_Column(0).Text(GetLang("宽高：")).VerticalAlignment("Center")
-        sizeRow.Add("ComboBox").Grid_Column(1).Name("WidthCon").Height(26).MinHeight(26).ToolTip(GetLang("宽度：")).IsEditable("True").VerticalAlignment("Center")
-        sizeRow.Add("ComboBox").Grid_Column(3).Name("HeightCon").Height(26).MinHeight(26).ToolTip(GetLang("高度：")).IsEditable("True").VerticalAlignment("Center")
+            .ToolTip(GetLang(WindowEditorHint("调整宽高")))
+        sizeRow.Add("ComboBox").Grid_Column(1).Name("WidthCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
+        sizeRow.Add("ComboBox").Grid_Column(3).Name("HeightCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
 
         titleRow := extra.Add("Grid").Name("TitleRelateRow").Visibility("Collapsed")
         titleRow.Rows("36")
@@ -184,7 +183,7 @@ class WindowManageGui {
             row := results.Add("Grid").Name("InfoResultRow" A_Index).Grid_Row((A_Index - 1) // 2).Grid_Column(Mod(A_Index - 1, 2) * 2).Visibility("Collapsed")
             row.Rows("36").Cols(labelWidth, "*")
             row.Add("TextBlock").Name("InfoResultLabel" A_Index).Grid_Column(0).VerticalAlignment("Center")
-            row.Add("ComboBox").ToolTip(GetLang("填写保存结果的变量名；留空则跳过")).Name("InfoResultCon" A_Index).Grid_Column(1).Height(26).MinHeight(26).MaxDropDownHeight(220).IsEditable("True").IsTextSearchEnabled("False").VerticalAlignment("Center")
+            row.Add("ComboBox").Name("InfoResultCon" A_Index).Grid_Column(1).Height(26).MinHeight(26).MaxDropDownHeight(220).IsEditable("True").IsTextSearchEnabled("False").VerticalAlignment("Center")
         }
         extra.Add("TextBlock").Name("ActionHint").TextWrapping("Wrap").Margin("0,6,0,8").Opacity(0.75)
 
@@ -364,6 +363,8 @@ class WindowManageGui {
         isShowTransparency := actionKey == "修改透明度"
 
         this._ComboPush("PositionLabel", "Text", GetLang(actionKey == "相对移动" ? "偏移值" : "坐标值") "：")
+        if (isShowPos)
+            this._ComboPush("PositionLabel", "ToolTip", GetLang(WindowEditorHint(actionKey == "相对移动" ? actionKey : "移动窗口")))
         if (this.CmdKey == "调整窗口") {
             this._ComboPush("BtnCmdF1", "Visibility", isShowPos ? "Visible" : "Collapsed")
             this._ComboPush("BtnCmdF1", "ToolTip", actionKey == "相对移动" ? "F1: " GetLang("选取偏移值") : GetLang("F1：选取坐标"))
@@ -460,10 +461,10 @@ class WindowManageGui {
         ToolTip(, , , 20)
     }
 
-    CheckIfValid() {
+    CheckIfValid(allowNoResults := false) {
         actionType := IsObject(this.ui) ? GetLang(this._SelectedAction()) : ""
         if (this.ui.Query("SearchValueCon") == "") {
-            RmtDialog.Info(GetLang("窗口绑定不能为空"))
+            RmtDialog.Info(GetLang("窗口绑定不能为空"), "", this.Hwnd())
             return false
         }
 
@@ -486,7 +487,7 @@ class WindowManageGui {
                 usedNames[name] := true
             }
         }
-        if (fields.Length && !hasResult) {
+        if (fields.Length && !hasResult && !allowNoResults) {
             RmtDialog.Info(GetLang("请至少填写一个结果变量"), "", "Owner" this.Hwnd())
             return false
         }
@@ -556,11 +557,40 @@ class WindowManageGui {
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
-        if (!this.CheckIfValid())
+        isInfo := this.CmdKey == "窗口信息"
+        if (!this.CheckIfValid(isInfo))
             return
         this.SaveData()
         CommandStr := this.GetCommandStr()
-        OnTriggerSepcialItemMacro(CommandStr)
+        if (!isInfo) {
+            OnTriggerSepcialItemMacro(CommandStr)
+            return
+        }
+
+        preview := {}
+        owner := this.Hwnd()
+        action := this.Data.ActionType
+        OnTriggerSepcialItemMacro(CommandStr, false, this.WindowBindingContext, preview)
+        this.ShowInfoPreview(action, preview, owner)
+    }
+
+    ShowInfoPreview(action, preview, owner) {
+        if (!preview.HasOwnProp("Matched"))
+            message := GetLang("读取失败：") " " GetLang("窗口信息")
+        else if (!preview.Matched)
+            message := GetLang("未找到目标窗口。")
+        else if (preview.Error != "")
+            message := GetLang("读取失败：") " " preview.Error
+        else if (action == "匹配窗口列表") {
+            message := GetLang("句柄数组")
+            for hwnd in preview.Values
+                message .= "`n" hwnd
+        } else {
+            message := ""
+            for i, label in WindowInfoFields(action)
+                message .= (i > 1 ? "`n" : "") GetLang(label) "：" preview.Values[i]
+        }
+        RmtDialog.Info(message, GetLang("窗口信息") " · " GetLang(action), owner)
     }
 
     ToggleFunc(state) {

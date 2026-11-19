@@ -135,7 +135,7 @@ class ExVariableGui {
         winRow := param.Add("Grid").Name("WinInfoRow").Grid_Row(1).Grid_ColumnSpan(8).Visibility("Hidden")
         winRow.Cols("96", "*", "8", "70")
         this._AddLabel(winRow, GetLang("窗口绑定：")).Grid_Column(0)
-        this._StyleBox(winRow.Add("TextBox").Name("WinInfoCon").Grid_Column(1))
+        this._StyleCombo(CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1))
         this._AddEditBtn(winRow, "BtnWinEdit").Grid_Column(3)
 
         extRow := param.Add("Grid").Grid_Row(2).Grid_ColumnSpan(8)

@@ -3,9 +3,10 @@
 class ProcessManageGui extends CommentGui {
     static CmdKey := "进程管理"
     static Outputs := [
-        ["ResultVar", "保存结果变量："], ["CountVar", "匹配数量变量："],
+        ["ResultVar", "保存结果变量：", "检测返回 1 或 0，结束返回成功提交的结束请求数。"], ["CountVar", "匹配数量变量："],
         ["NameVar", "进程名变量："], ["PidVar", "PID 变量："], ["PathVar", "程序路径变量："],
-        ["ResultArray", "数组名："], ["ErrorVar", "错误信息变量："]]
+        ["ResultArray", "数组名：", "数组每项为 [进程名, PID, 程序路径]。"],
+        ["ErrorVar", "错误信息变量：", "无错误时为空。留空则按宏的错误处理方式报告错误。"]]
 
     _BuildAndShow() {
         this._closed := false
@@ -18,25 +19,22 @@ class ProcessManageGui extends CommentGui {
         this._TextField(body, "备注：", "Remark")
         this._Choice(body, "操作：", "Action", ProcessManage.Actions)
         this._Choice(body, "匹配方式：", "MatchBy", ProcessManage.MatchModes)
-        this._TextField(body, "目标：", "Target").ToolTip(GetLang("输入进程名或 PID，支持 {变量}。列出进程时可留空。"))
+        this._TextField(body, "目标：", "Target", "输入进程名或 PID，支持 {变量}。列出进程时可留空。")
 
         row := CmdEditorForm.Row(body, "")
         row.Add("CheckBox").Name("EndAll").Grid_Column(1).Content(GetLang("结束全部匹配项")).VerticalAlignment("Center")
         this._ShowFor(row, [3], true)
         for output in ProcessManageGui.Outputs {
             field := output[1]
-            row := CmdEditorForm.Row(body, output[2])
-            combo := CmdEditorForm.Combo(row, field, true).Grid_Column(1)
+            tip := output.Length >= 3 ? GetLang(output[3]) : ""
+            row := CmdEditorForm.Row(body, output[2], , , , , tip)
+            CmdEditorForm.Combo(row, field, true).Grid_Column(1)
             switch field {
                 case "ResultVar":
-                    combo.ToolTip(GetLang("检测返回 1 或 0，结束返回成功提交的结束请求数。"))
                     this._ShowFor(row, [0, 3])
                 case "ResultArray":
-                    combo.ToolTip(GetLang("数组每项为 [进程名, PID, 程序路径]。"))
                     this._ShowFor(row, [2])
-                case "ErrorVar":
-                    combo.ToolTip(GetLang("无错误时为空。留空则按宏的错误处理方式报告错误。"))
-                default:
+                case "CountVar", "NameVar", "PidVar", "PathVar":
                     this._ShowFor(row, [1])
             }
         }
@@ -56,8 +54,8 @@ class ProcessManageGui extends CommentGui {
         BindCmdEditorChrome(this.ui, "#指令手册/41-进程")
     }
 
-    _TextField(body, label, name) {
-        row := CmdEditorForm.Row(body, label)
+    _TextField(body, label, name, tip := "") {
+        row := CmdEditorForm.Row(body, label, , , , , GetLang(tip))
         return row.Add("TextBox").Name(name).Grid_Column(1).Height(26).MinHeight(26)
             .Style("{StaticResource RmtSingleLineTextBox}")
     }

@@ -49,9 +49,10 @@ class BrowserGui extends CommentGui {
             .ScrollViewer_HorizontalScrollBarVisibility("Hidden")
             .ToolTip("{Binding Text, RelativeSource={RelativeSource Self}}")
 
-        selector := this._Row(body, "网页元素：", "SelectorRow").Add("Grid").Grid_Column(1)
+        selector := this._Row(body, "网页元素：", "SelectorRow", ,
+            GetLang("左侧选择类型，右侧填写选择器。")).Add("Grid").Grid_Column(1)
         selector.Cols("Auto", 6, "*", 6, "Auto")
-        this._Choice(selector, "SelectorType", BrowserGui.SelectorTypes).ToolTip(GetLang("选择器类型：")).Grid_Column(0)
+        this._Choice(selector, "SelectorType", BrowserGui.SelectorTypes).Grid_Column(0)
         this._TextBox(selector, "Selector").Grid_Column(2).HorizontalScrollBarVisibility("Hidden")
         CmdEditorForm.TextButton(selector, "BtnPickSelector", "拾取", "拾取网页元素").Grid_Column(4)
 

@@ -522,6 +522,26 @@ class CmdEditorForm {
             .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
     }
 
+    static WindowBindingOptions := [
+        ["当前窗口", "❖{句柄ID}"],
+        ["宏设置窗口绑定", "{宏设置窗口绑定}"],
+        ["模块窗口绑定", "{模块窗口绑定}"],
+    ]
+
+    static WindowBindingCombo(parent, name) {
+        combo := this.Combo(parent, name, true).IsTextSearchEnabled("True")
+        for option in this.WindowBindingOptions
+            combo.Add("ComboBoxItem").Content(GetLang(option[1])).TextSearch_Text("{}" option[2])
+        return combo
+    }
+
+    static WindowBindingItemsXaml() {
+        items := ""
+        for option in this.WindowBindingOptions
+            items .= '<ComboBoxItem Content="' EscapeXamlXml(GetLang(option[1])) '" TextSearch.Text="{}' option[2] '"/>'
+        return items
+    }
+
     static TextButton(parent, name, text, tip := "") {
         button := parent.Add("Button").Name(name).Content(GetLang(text)).Height(26).MinHeight(26)
             .Padding("8,0").Cursor("Hand").VerticalAlignment("Center")

@@ -106,7 +106,6 @@ class InputGui {
         optRow.Add("TextBlock").Grid_Column(0).Text(GetLang("选项：")).ToolTip(GetLang("逗号分隔选项")).VerticalAlignment("Center")
         optRow.Add("TextBox").Grid_Column(1).Name("OptionsCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
             .VerticalContentAlignment("Center").Padding("2,0")
-            .ToolTip(GetLang("逗号分隔选项"))
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 

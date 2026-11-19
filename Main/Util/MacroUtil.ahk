@@ -2241,7 +2241,7 @@ WindowMatchedHandles(query, matchMode := "所有") {
     return result
 }
 
-WindowReadInfo(data, query) {
+WindowReadInfo(data, query, preview := "") {
     WindowEnsureResults(data)
     fields := WindowInfoFields(data.ActionType)
     if (!fields.Length)
@@ -2252,7 +2252,13 @@ WindowReadInfo(data, query) {
     isList := data.ActionType == "匹配窗口列表"
     matchMode := data.HasProp("MatchMode") ? data.MatchMode : (isList ? "所有" : "首个")
     hwnds := WindowMatchedHandles(query, matchMode)
+    if (IsObject(preview)) {
+        preview.Matched := hwnds.Length > 0
+        preview.Error := ""
+    }
     if (isList) {
+        if (IsObject(preview))
+            preview.Values := hwnds
         name := GetVarName(data.ResultVar1)
         if (name != "")
             MySetGlobalArray(name, hwnds)
@@ -2284,8 +2290,13 @@ WindowReadInfo(data, query) {
                     alpha := WinGetTransparent(target)
                     values := [alpha == "" ? 100 : Round(alpha * 100 / 255), (WinGetExStyle(target) & 0x20) ? 1 : 0]
             }
+        } catch as e {
+            if (IsObject(preview))
+                preview.Error := e.Message
         }
     }
+    if (IsObject(preview))
+        preview.Values := values
     names := [], results := []
     for i, value in values {
         prop := "ResultVar" i
@@ -2319,7 +2330,8 @@ OnWindowManage(tableItem, cmd, index) {
 
     searchValue := GetReplaceVarText(tableItem, index, ResolveBindWindow(tableItem, index, Data.SearchValue))
     winTitle := GetParamsWinInfoStr(searchValue)
-    if (WindowReadInfo(Data, winTitle))
+    preview := tableItem.HasOwnProp("WindowInfoPreview") ? tableItem.WindowInfoPreview : ""
+    if (WindowReadInfo(Data, winTitle, preview))
         return
     matchMode := Data.HasProp("MatchMode") ? Data.MatchMode
         : WindowDefaultMatchMode(Data.ActionType, InStr(winTitle, "ahk_id ") || InStr(winTitle, "ahk_group "))

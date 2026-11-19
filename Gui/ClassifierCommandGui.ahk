@@ -466,7 +466,7 @@ class AiDecisionGui extends ClassifierCommandGui {
         this._BuildRange(body, "WindowRegion")
         binding := this._Row(body, "窗口绑定：", "WinInfo").Visibility("Collapsed").Add("Grid").Grid_Column(1)
         binding.Cols("*", 6, "Auto")
-        this._TextBox(binding, "WinInfo")
+        CmdEditorForm.WindowBindingCombo(binding, "WinInfo")
         CmdEditorForm.TextButton(binding, "BtnWinEdit", "编辑").Grid_Column(2)
 
         choices := this._Row(body, "候选选项：", "Options", "Top").Add("StackPanel").Grid_Column(1)
@@ -632,8 +632,8 @@ class AiDecisionGui extends ClassifierCommandGui {
             row := XAML_Generator("Grid").Margin("0,2")
             row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
             this._OptionColumns(row)
-            this._TextBox(row, "OptionLabel_" i).ToolTip(GetLang("选项名称"))
-            this._TextBox(row, "OptionValue_" i).Grid_Column(2).ToolTip(GetLang("留空时保存选项名称"))
+            this._TextBox(row, "OptionLabel_" i)
+            this._TextBox(row, "OptionValue_" i).Grid_Column(2)
             if (AiDecisionGui.OptionExamples.Has(i)) {
                 this._Placeholder(row, "OptionLabel_" i, GetLang(AiDecisionGui.OptionExamples[i]))
                 this._Placeholder(row, "OptionValue_" i, String(i), false, 2)

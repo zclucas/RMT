@@ -75,7 +75,7 @@ class MouseMoveGui {
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         body.Add("TextBox").Grid_Row(2).Grid_Column(1).Name("SpeedCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize("11").Padding("4,0").Text("90")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").ToolTip(speedTip).Tag("NumOnly|NoIME|MaxLen:3")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:3")
         body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("移动方式：")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         mm := body.Add("ComboBox").Grid_Row(2).Grid_Column(3).Name("MouseMoveModeCombo").Height(26).MinHeight(26).Margin("10,0,0,0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")

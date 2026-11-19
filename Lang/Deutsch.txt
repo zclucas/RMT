@@ -958,7 +958,7 @@ Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装�
 说明：仅限非商业用途，转载请注明来源并保持相同协议=Hinweis: Nicht-kommerzielle, Kreditquelle.
 请从下面字符中组合你想要触发宏的字串：=Trigger-String erstellen:
 请从下面选框中勾选替换后的按键：=Wählen Sie Ersatzschlüssel:
-请先安装Joy目录下ViGEmBus.exe后运行软件=Bitte installieren Sie ViGEmBus.exe (Joy-Ordner), bevor Sie die Software ausführen.
+请先安装Plugins/Joy目录下ViGEmBus.exe后运行软件=Bitte installieren Sie ViGEmBus.exe (Ordner Plugins/Joy), bevor Sie die Software ausführen.
 手柄功能需要使用 ViGEmBus 驱动，是否现在安装？=Die Gamepad-Funktion erfordert den ViGEmBus-Treiber.
 未找到 ViGEm 驱动安装程序=ViGEm-Treiberinstallateur nicht gefunden
 安装=Installieren
@@ -3065,3 +3065,13 @@ PID 必须是有效的正整数。=Die PID muss eine gültige positive Ganzzahl 
 进程已变化，请重新检测。=Der Prozess hat sich geändert. Erneut prüfen.
 请填写至少一个结果保存名称。=Mindestens ein Ausgabeziel angeben.
 结果变量名不能重复。=Ausgabevariablen müssen verschieden sein.
+
+窗口左上角的屏幕 X 坐标。留空则跳过。=X-Bildschirmkoordinate der oberen linken Fensterecke. Zum Überspringen leer lassen.
+窗口左上角的屏幕 Y 坐标。留空则跳过。=Y-Bildschirmkoordinate der oberen linken Fensterecke. Zum Überspringen leer lassen.
+窗口左上角的屏幕坐标。留空则跳过。=Bildschirmkoordinaten der oberen linken Fensterecke. Zum Überspringen leer lassen.
+窗口尺寸包含标题栏和边框。留空则跳过。=Die Fenstergröße enthält Titelleiste und Rahmen. Zum Überspringen leer lassen.
+坐标取窗口左上角，宽高包含标题栏和边框。结果留空则跳过。=Die Koordinaten beziehen sich auf die obere linke Fensterecke. Die Größe enthält Titelleiste und Rahmen. Leere Ergebnisfelder werden übersprungen.
+左侧选择类型，右侧填写选择器。=Links den Typ auswählen und rechts den Selektor eingeben.
+左侧填写移动速度，右侧填写点击次数。=Links die Bewegungsgeschwindigkeit und rechts die Anzahl der Klicks eingeben.
+从左到右填写结果变量、找到时的值、未找到时的值。=Von links nach rechts: Ergebnisvariable, Wert bei Treffer und Wert ohne Treffer.
+左侧填写 X 坐标变量，右侧填写 Y 坐标变量。=Links die Variable für X und rechts die Variable für Y eingeben.

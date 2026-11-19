@@ -648,7 +648,10 @@ class MacroGraphFormalMixin {
         exStrRow.Add("Button").Name("ExStrEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
 
         ; 窗口信息（窗口类型才显示）
-        this._AddFieldRow(body, "ExWinRow_" id, GetLang("窗口绑定："), "ExWin_" id, wi, isWin, true, "", "", "", LW, "226")
+        winRow := body.Add("StackPanel").Name("ExWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
+            .Visibility(isWin ? "Visible" : "Collapsed")
+        winRow.Add("TextBlock").Text(GetLang("窗口绑定：")).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(LW).VerticalAlignment("Center")
+        this._MakeWindowBindingCombo(winRow, "ExWin_" id, wi, "226")
 
         ; 起始X | 起始Y
         r := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
@@ -1089,7 +1092,7 @@ class MacroGraphFormalMixin {
         sv := d.HasOwnProp("scrollV") ? d.scrollV : 1
         sh := d.HasOwnProp("scrollH") ? d.scrollH : 0
         titleRow := body.Add("StackPanel").Name("BgmTitleRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
-        this._MakeTextBox(titleRow, "BgmTitle_" id, tt, "130")
+        this._MakeWindowBindingCombo(titleRow, "BgmTitle_" id, tt, "130")
         titleRow.Add("Button").Name("BgmTitleEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
         this._AddComboRow(body, "BgmMouseRow_" id, GetLang("按键："), "BgmMouseCmb_" id, mouseTypes, CmdEnumIndex(mt, CmdEnumMouseBtnNames()), true, true, lw, cw)
         this._AddComboRow(body, "BgmOpRow_" id, GetLang("动作："), "BgmOpCmb_" id, opTypes, CmdEnumIndex(ot, CmdEnumBgOperNames()), !isScroll, !isScroll, lw, cw)
@@ -1112,7 +1115,7 @@ class MacroGraphFormalMixin {
         isClick := tt == "点击"
         body.Add("TextBlock").Name("BgkKeys_" id).Text(keyStr).Foreground("{DynamicResource EditText}").FontWeight("Bold").FontSize(this._MGFontSize(13)).TextWrapping("Wrap")
         frontRow := body.Add("StackPanel").Name("BgkFrontRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
-        this._MakeTextBox(frontRow, "BgkFront_" id, fs, "130")
+        this._MakeWindowBindingCombo(frontRow, "BgkFront_" id, fs, "130")
         frontRow.Add("Button").Name("BgkFrontEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
         this._AddComboRow(body, "BgkTypeRow_" id, GetLang("类型："), "BgkTypeCmb_" id, typeNames, CmdEnumIndex(tt, CmdEnumKeyActNames()), true, true, lw, cw)
         this._AddFieldRow(body, "BgkTimeRow_" id, GetLang("点击时长："), "BgkTime_" id, ctm, isClick, true, "", "", "", lw, cw, , GetLang("从按下到松开的毫秒数。"))
@@ -1142,7 +1145,7 @@ class MacroGraphFormalMixin {
         this._AddComboRow(body, "WmModeRow_" id, GetLang("模式："), "WmModeCmb_" id, modes, WindowModeIndex(atKey), modes.Length > 0, true, lw, cw)
         this._AddCheckRow(body, "WmCloseProcessRow_" id, "WmCloseProcess_" id, GetLang("关闭进程"), d.HasOwnProp("wmCloseProcess") ? d.wmCloseProcess : 0, atKey == "关闭窗口")
         winRow := body.Add("StackPanel").Name("WmWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
-        this._MakeTextBox(winRow, "WmWin_" id, sv, "130")
+        this._MakeWindowBindingCombo(winRow, "WmWin_" id, sv, "130")
         this._ApplyActionBtnStyle(winRow.Add("Button").Name("WmWinEdit_" id).Content(GetLang("编辑")).Width("40").Height("20").FontSize(this._MGFontSize(11)).Padding("0").Margin("4,0,0,0").VerticalAlignment("Center").Cursor("Hand").Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}").BorderThickness("1").BorderBrush("{DynamicResource ActionStroke}"))
         this._AddEditableComboRow(body, "WmXRow_" id, GetLang(atKey == "相对移动" ? "偏移X：" : "坐标X："), "WmX_" id, atKey == "相对移动" ? varList : GetGuiVarArr("x"), GetLang(d.HasOwnProp("wmPosX") ? d.wmPosX : 0), isMove, lw, cw, "WmXLabel_" id)
         this._AddEditableComboRow(body, "WmYRow_" id, GetLang(atKey == "相对移动" ? "偏移Y：" : "坐标Y："), "WmY_" id, atKey == "相对移动" ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("wmPosY") ? d.wmPosY : 0), isMove, lw, cw, "WmYLabel_" id)
@@ -1206,7 +1209,7 @@ class MacroGraphFormalMixin {
         winRow := body.Add("StackPanel").Name("SsWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         if (!isWin)
             winRow.Visibility("Collapsed")
-        this._MakeTextBox(winRow, "SsWin_" id, wi, "130")
+        this._MakeWindowBindingCombo(winRow, "SsWin_" id, wi, "130")
         winRow.Add("Button").Name("SsWinEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
         this._AddEditableComboRow(body, "SsSXRow_" id, GetLang("起始X："), "SsSX_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("x"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartX") ? d.ssStartX : 0, true), true, lw, cw)
         this._AddEditableComboRow(body, "SsSYRow_" id, GetLang("起始Y："), "SsSY_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("y"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartY") ? d.ssStartY : 0, true), true, lw, cw)
@@ -1647,7 +1650,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackCombo(id, "ExTypeCmb", h, runtime)
             this._FormalTrackField(id, "ExStr", h, runtime)
             this._BindCtrl("ExStrEdit_" id, "Click", this._OnFormalExTemplateEdit.Bind(this, id), runtime)
-            this._FormalTrackField(id, "ExWin", h, runtime)
+            this._FormalTrackEditCombo(id, "ExWin", h, runtime)
             for nm in ["ExSX", "ExSY", "ExEX", "ExEY", "ExCnt"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
             this._FormalTrackField(id, "ExInt", h, runtime)
@@ -1728,7 +1731,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackCombo(id, "RmtMenuCmb", hField, runtime)
         } else if (t == GetLang("后台鼠标")) {
             h := this._OnFormalBGMouse.Bind(this, id)
-            this._FormalTrackField(id, "BgmTitle", h, runtime)
+            this._FormalTrackEditCombo(id, "BgmTitle", h, runtime)
             this._BindCtrl("BgmTitleEdit_" id, "Click", this._OnFormalBGMouseTitleEdit.Bind(this, id), runtime)
             this._FormalTrackCombo(id, "BgmOpCmb", h, runtime)
             this._FormalTrackCombo(id, "BgmMouseCmb", h, runtime)
@@ -1739,7 +1742,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackField(id, "BgmSH", h, runtime)
         } else if (t == GetLang("后台按键")) {
             h := this._OnFormalBGKey.Bind(this, id)
-            this._FormalTrackField(id, "BgkFront", h, runtime)
+            this._FormalTrackEditCombo(id, "BgkFront", h, runtime)
             this._BindCtrl("BgkFrontEdit_" id, "Click", this._OnFormalBGKeyFrontEdit.Bind(this, id), runtime)
             this._FormalTrackCombo(id, "BgkTypeCmb", h, runtime)
             this._FormalTrackField(id, "BgkTime", h, runtime)
@@ -1750,7 +1753,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackCombo(id, "WmActCmb", h, runtime)
             this._FormalTrackCombo(id, "WmModeCmb", h, runtime)
             this._FormalTrackCheck(id, "WmCloseProcess", h, runtime)
-            this._FormalTrackField(id, "WmWin", h, runtime)
+            this._FormalTrackEditCombo(id, "WmWin", h, runtime)
             this._BindCtrl("WmWinEdit_" id, "Click", this._OnFormalWmWinEdit.Bind(this, id), runtime)
             Loop 7
                 this._FormalTrackEditCombo(id, "WmResult" A_Index, h, runtime)
@@ -1764,7 +1767,7 @@ class MacroGraphFormalMixin {
         } else if (t == GetLang("抓图")) {
             h := this._OnFormalScreenShot.Bind(this, id)
             this._FormalTrackCombo(id, "SsTypeCmb", h, runtime)
-            this._FormalTrackField(id, "SsWin", h, runtime)
+            this._FormalTrackEditCombo(id, "SsWin", h, runtime)
             this._BindCtrl("SsWinEdit_" id, "Click", this._OnFormalSsWinEdit.Bind(this, id), runtime)
             for nm in ["SsSX", "SsSY", "SsEX", "SsEY"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)

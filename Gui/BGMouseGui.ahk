@@ -97,10 +97,7 @@ class BGMouseGui {
         ; 行1：窗口信息
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("窗口绑定:")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12").ToolTip(this._BGHelpText())
-        body.Add("TextBox").Grid_Row(1).Grid_Column(1).Grid_ColumnSpan(2).Name("TargetTitleCon").Height(26).MinHeight(26)
-            .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
-            .Foreground("{DynamicResource InputText}").Background("#FFFFFF")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        CmdEditorForm.WindowBindingCombo(body, "TargetTitleCon").Grid_Row(1).Grid_Column(1).Grid_ColumnSpan(2).FontSize(11)
         body.Add("Button").Grid_Row(1).Grid_Column(3).Name("BtnEdit").Content(GetLang("编辑")).Height(26).MinHeight(26)
             .HorizontalAlignment("Left").Margin("6,0,0,0").Cursor("Hand")
 

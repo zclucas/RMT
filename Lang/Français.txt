@@ -958,7 +958,7 @@ Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装�
 说明：仅限非商业用途，转载请注明来源并保持相同协议=Note : Source de crédit non commerciale.
 请从下面字符中组合你想要触发宏的字串：= Composez la chaîne de déclenchement & #160;:
 请从下面选框中勾选替换后的按键：= Sélectionnez la clé de remplacement & #160;:
-请先安装Joy目录下ViGEmBus.exe后运行软件= Veuillez installer ViGEmBus.exe (dossierJoy) avant d'exécuter le logiciel.
+请先安装Plugins/Joy目录下ViGEmBus.exe后运行软件= Veuillez installer ViGEmBus.exe (dossier Plugins/Joy) avant d'exécuter le logiciel.
 手柄功能需要使用 ViGEmBus 驱动，是否现在安装？=La fonction de gamepad nécessite le pilote ViGEmBus. Installez-vous maintenant?
 未找到 ViGEm 驱动安装程序=L'installateur du pilote ViGEm n'a pas été trouvé
 安装=Installer
@@ -3065,3 +3065,13 @@ PID 必须是有效的正整数。=Le PID doit être un entier positif valide.
 进程已变化，请重新检测。=Le processus a changé. Vérifiez de nouveau.
 请填写至少一个结果保存名称。=Indiquez au moins une destination de sortie.
 结果变量名不能重复。=Les variables de sortie doivent être distinctes.
+
+窗口左上角的屏幕 X 坐标。留空则跳过。=Coordonnée X à l’écran du coin supérieur gauche de la fenêtre. Laissez vide pour ignorer.
+窗口左上角的屏幕 Y 坐标。留空则跳过。=Coordonnée Y à l’écran du coin supérieur gauche de la fenêtre. Laissez vide pour ignorer.
+窗口左上角的屏幕坐标。留空则跳过。=Coordonnées à l’écran du coin supérieur gauche de la fenêtre. Laissez vide pour ignorer.
+窗口尺寸包含标题栏和边框。留空则跳过。=Les dimensions incluent la barre de titre et les bordures. Laissez vide pour ignorer.
+坐标取窗口左上角，宽高包含标题栏和边框。结果留空则跳过。=Les coordonnées correspondent au coin supérieur gauche de la fenêtre. Les dimensions incluent la barre de titre et les bordures. Les champs de résultat vides sont ignorés.
+左侧选择类型，右侧填写选择器。=Choisissez le type à gauche et saisissez le sélecteur à droite.
+左侧填写移动速度，右侧填写点击次数。=Indiquez la vitesse à gauche et le nombre de clics à droite.
+从左到右填写结果变量、找到时的值、未找到时的值。=De gauche à droite, indiquez la variable de résultat, la valeur en cas de succès et celle en cas d’échec.
+左侧填写 X 坐标变量，右侧填写 Y 坐标变量。=Indiquez la variable de coordonnée X à gauche et la variable Y à droite.
