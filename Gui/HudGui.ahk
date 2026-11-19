@@ -10,7 +10,8 @@
 ; 协议
 ;   HUD|Bind|mode;anchor;x;y;targetHwnd;maxWidth;shmName
 ;   HUD|Text|<文本>                        异步合并，同帧仅渲染最后一帧
-;   EVENT ...|Window|HudMoved|left,top     拖动结束回传坐标，由本文件持久化
+;   EVENT ...|Window|HudMoved|left,top     拖动结束回传：跟随模式为锚点偏移，自定义模式为屏幕坐标；
+;                                          由此持久化（跟随模式保持原锚点，拖动只改偏移不丢跟随）
 ;
 ; 生命周期与宏一致：宏停止或终止时关闭。
 ; =====================================================================
@@ -227,6 +228,7 @@ class HudGui {
     }
 
     ; 位置配置转引擎参数串，第 7 段为文本槽名称
+    ; 第 3/4 段在跟随模式下是锚点偏移：拖动过的落点以偏移持久化，重建后保持相对位置
     _BindSpec(data) {
         maxWidth := 420
         ; 第 7 段（文本槽名）留空：Worker 直连改走 WM_COPYDATA，引擎不再挂接共享内存
@@ -234,10 +236,12 @@ class HudGui {
             return "0;0;" this._Int(data.HudX, 0) ";" this._Int(data.HudY, 0) ";0;" maxWidth ";"
         pos := (IsObject(data) && data.HudPos != "") ? data.HudPos : "窗口右上"
         spec := HudPosSpec(pos)
-        return spec[1] ";" spec[2] ";0;0;" this._targetHwnd ";" maxWidth ";"
+        offX := IsObject(data) ? this._Int(data.HudX, 0) : 0
+        offY := IsObject(data) ? this._Int(data.HudY, 0) : 0
+        return spec[1] ";" spec[2] ";" offX ";" offY ";" this._targetHwnd ";" maxWidth ";"
     }
 
-    ; 拖动结束回调：坐标为 DIP，可直接作为下次的固定坐标
+    ; 拖动结束回调：跟随模式回传锚点偏移（保持原锚点继续跟随），自定义模式回传屏幕坐标
     _OnMoved(state, ctrlName, eventName) {
         v := state.Has("HudMoved") ? state["HudMoved"] : ""
         if (v == "")
@@ -245,7 +249,17 @@ class HudGui {
         parts := StrSplit(v, ",")
         if (parts.Length < 2)
             return
-        this._SaveFreePos(Integer(parts[1]), Integer(parts[2]))
+        data := this._Data()
+        if (IsObject(data) && data.HudPos != "自定义") {
+            x := Integer(parts[1]), y := Integer(parts[2])
+            if (this._Int(data.HudX, 0) == x && this._Int(data.HudY, 0) == y)
+                return
+            data.HudX := x
+            data.HudY := y
+            try SaveMacroCMDData(data)
+        } else {
+            this._SaveFreePos(Integer(parts[1]), Integer(parts[2]))
+        }
     }
 
     _SaveFreePos(x, y) {

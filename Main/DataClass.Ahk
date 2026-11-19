@@ -1237,7 +1237,8 @@ class OutputData {
         this.Text := GetLang("将要输出的文本")
         this.OutputType := "发送内容"   ;sendtest  粘贴   粘贴
         this.VariableName := "Data"         ;字符变量时的变量名（默认 Data）
-        ; 悬浮显示：位置在指令中指定；拖动后自动转为「自定义」并记录屏幕坐标
+        ; 悬浮显示：位置在指令中指定。HudX/HudY 在「自定义」下是屏幕坐标，
+        ; 在锚点模式下是相对锚点的偏移（拖动只改偏移，跟随不中断）
         this.HudPos := "窗口右上"
         this.HudX := 0
         this.HudY := 0

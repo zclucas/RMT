@@ -16,7 +16,7 @@
 //   HUD|Text|<文本>                                         异步合并更新文本
 //
 // 事件（引擎 → AHK）
-//   EVENT|<winId>|Window|HudMoved|<x>,<y>                   拖动结束，坐标单位 DIP
+//   EVENT|<winId>|Window|HudMoved|<x>,<y>                   拖动结束回传；跟随模式为锚点偏移，固定模式为屏幕坐标（DIP）
 // =============================================================================
 using System;
 using System.Globalization;
@@ -40,19 +40,22 @@ public partial class AhkWpfEngine
         public double OffX, OffY;              // Mode=1/2 时的锚点偏移（DIP）
         public IntPtr Target = IntPtr.Zero;
         public double MaxWidth = 420;
-        public bool UserMoved;                 // 用户已拖动：不再自动定位
+        public bool UserMoved;                 // 固定坐标模式下已拖动过（跟随模式不再使用：偏移由逐帧吸收维护）
         public bool TextQueued;
         public string PendingText;
         public bool ReposQueued;
         public bool Positioned;                // 已成功定位过；首帧前允许回退到整屏
         public bool SizeMode;                  // 已切换为宽度固定、高度自适应
         public double LastLeft, LastTop;       // 最近一次由引擎设定的位置
+        public double LastWinX, LastWinY;      // 上一帧目标窗口左上角：区分「窗口自己动」与「有人搬了悬浮窗」
+        public bool HasLastWin;
         public IntPtr SharedPtr;               // 文本槽视图：AHK 写入，此处读取
     }
 
     private HudInfo _hud;
     private IntPtr _hudHook;
     private HudHookProc _hudHookProc;
+    private DispatcherTimer _hudTimer;
 
     private delegate void HudHookProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd,
         int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
@@ -124,6 +127,7 @@ public partial class AhkWpfEngine
         }
         if (op == "Detach")
         {
+            HudStopFollow();
             HudUnhook();
             _hud = null;
             return;
@@ -179,6 +183,7 @@ public partial class AhkWpfEngine
         info.MaxWidth = maxw;
         info.UserMoved = false;
         info.Positioned = false;
+        info.HasLastWin = false;
 
         if (info.Text != null)
         {
@@ -204,6 +209,8 @@ public partial class AhkWpfEngine
             // 首次定位允许回退到整屏：宏启动时目标窗口可能尚不可枚举
             HudReposition(info, true);
         }
+        // 跟随交给定时器：目标窗口移动与用户拖动都由「偏差吸收」处理，不需要拖动状态
+        HudStartFollow();
     }
 
     private static void HudParseDouble(string s, out double v)
@@ -520,6 +527,7 @@ public partial class AhkWpfEngine
         win.Closed += delegate
         {
             _hudDragging = false;
+            HudStopFollow();
             HudUnhook();
             HudDetachShared(_hud);
             _hud = null;
@@ -543,8 +551,51 @@ public partial class AhkWpfEngine
     }
 
     // ---------------------------------------------------------------
-    // 定位：锚点对齐 + 偏移，均使用 WPF Left/Top（DIP）
+    // 跟随：与界面宏 FollowSinglePanel 同一套 —— 定时器每帧「偏差吸收 + 摆位」。
+    //
+    // 「窗口实际矩形 ≠ 我上次设的坐标」= 有人搬过这个悬浮窗 → 偏差折进偏移。
+    // 拖动只是「有人搬过它」的一种：拖动期间让开（由 HudDragTo 逐帧接管），松手那
+    // 一帧把落点吸收成偏移，之后照旧跟随。少了这条吸收，松手后下一帧就会按旧偏移
+    // 把它写回锚点，表现就是「一拖就弹回默认位置」。
+    //
+    // 但要扣掉「目标窗口自己动了」这一帧：那一刻悬浮窗还没跟上属于正常，若也吸收，
+    // 跟随滞后会被记成偏移，此后每帧都算回同一个错位置。
     // ---------------------------------------------------------------
+    private void HudStartFollow()
+    {
+        HudStopFollow();
+        if (_hud == null || win == null || _hud.Mode == 0)
+            return;   // 固定坐标模式不跟随
+        try
+        {
+            DispatcherTimer t = new DispatcherTimer(DispatcherPriority.Background, win.Dispatcher);
+            t.Interval = TimeSpan.FromMilliseconds(40);
+            t.Tick += delegate { HudFollowTick(); };
+            _hudTimer = t;
+            t.Start();
+        }
+        catch { _hudTimer = null; }
+    }
+
+    private void HudStopFollow()
+    {
+        if (_hudTimer == null)
+            return;
+        try { _hudTimer.Stop(); } catch { }
+        _hudTimer = null;
+    }
+
+    private void HudFollowTick()
+    {
+        if (_hud == null || win == null)
+        {
+            HudStopFollow();
+            return;
+        }
+        HudReposition(_hud, false);
+    }
+
+    // 定位：锚点对齐 + 偏移，均使用 WPF Left/Top（DIP）
     private void HudReposition(HudInfo info)
     {
         HudReposition(info, false);
@@ -554,9 +605,12 @@ public partial class AhkWpfEngine
     // 避免停留在 WPF 默认的 (0,0)。后续跟随不允许回退，保持原位而非跳变。
     private void HudReposition(HudInfo info, bool allowScreenFallback)
     {
-        if (info == null || win == null)
+        if (info == null || win == null || info.Mode == 0)
             return;
-        if (info.Mode == 0 || info.UserMoved || _hudDragging)
+
+        // 拖动期间窗口由引擎逐帧接管（HudDragTo），定时器让开，避免两边互相写位置。
+        // 松手后 _hudDragging 已为 false，HudOnDragEnd 里再用同一条式子把落点吸收成偏移。
+        if (_hudDragging)
             return;
 
         try
@@ -577,17 +631,36 @@ public partial class AhkWpfEngine
             double ax, ay, fx, fy;
             HudAnchorPoint(info.Anchor, bw, bh, out ax, out ay);
             HudAnchorPoint(info.Anchor, aw, ah, out fx, out fy);
+            double baseX = bx + ax - fx;
+            double baseY = by + ay - fy;
 
-            double nx = Math.Round(bx + ax - fx + info.OffX);
-            double ny = Math.Round(by + ay - fy + info.OffY);
+            double left = win.Left, top = win.Top;
+            bool located = !double.IsNaN(left) && !double.IsNaN(top);
+
+            // 目标窗口自己移动的那一帧不吸收，否则跟随滞后会被误记成偏移
+            bool winMoved = info.HasLastWin
+                && (Math.Abs(bx - info.LastWinX) > 0.5 || Math.Abs(by - info.LastWinY) > 0.5);
+            if (located && info.Positioned && !winMoved
+                && (Math.Abs(left - info.LastLeft) > 3 || Math.Abs(top - info.LastTop) > 3))
+            {
+                info.OffX = Math.Round(left - baseX);
+                info.OffY = Math.Round(top - baseY);
+            }
+
+            double nx = Math.Round(baseX + info.OffX);
+            double ny = Math.Round(baseY + info.OffY);
 
             // 窗口未定位时 Left/Top 为 NaN，与任何值比较均为 false，须单独判断
-            if (double.IsNaN(win.Left) || Math.Abs(nx - win.Left) > 0.4)
+            if (!located || Math.Abs(nx - left) > 0.4)
                 win.Left = nx;
-            if (double.IsNaN(win.Top) || Math.Abs(ny - win.Top) > 0.4)
+            if (!located || Math.Abs(ny - top) > 0.4)
                 win.Top = ny;
+
             info.LastLeft = nx;
             info.LastTop = ny;
+            info.LastWinX = bx;
+            info.LastWinY = by;
+            info.HasLastWin = true;
             info.Positioned = true;
         }
         catch { }
@@ -827,7 +900,8 @@ public partial class AhkWpfEngine
     }
 
     // ---------------------------------------------------------------
-    // 拖动结束：将新坐标回传 AHK 持久化
+    // 拖动结束：只负责回传持久化值。落点由这一帧的「偏差吸收」折算成偏移
+    // （与界面宏 FollowSinglePanel 同一条式子），定位不额外参与拖动计算。
     // ---------------------------------------------------------------
     private void HudOnDragEnd()
     {
@@ -839,14 +913,25 @@ public partial class AhkWpfEngine
             double l = win.Left, t = win.Top;
             if (double.IsNaN(l) || double.IsNaN(t))
                 return;
-            // 未发生位移（仅点击）：保持自动定位
-            if (Math.Abs(l - info.LastLeft) <= 1 && Math.Abs(t - info.LastTop) <= 1)
-                return;
-            info.UserMoved = true;
-            info.LastLeft = l;
-            info.LastTop = t;
-            string payload = ((long)Math.Round(l)).ToString(CultureInfo.InvariantCulture)
-                + "," + ((long)Math.Round(t)).ToString(CultureInfo.InvariantCulture);
+            string payload;
+            if (info.Mode == 0)
+            {
+                info.UserMoved = true;
+                info.LastLeft = l;
+                info.LastTop = t;
+                payload = ((long)Math.Round(l)).ToString(CultureInfo.InvariantCulture)
+                    + "," + ((long)Math.Round(t)).ToString(CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                // 松手可能落在两次 tick 之间，补一次吸收
+                HudReposition(info, false);
+                // 取不到基准矩形（目标已关闭/最小化）时偏移没吸收，别把错值写回去
+                if (Math.Abs(info.LastLeft - l) > 2 || Math.Abs(info.LastTop - t) > 2)
+                    return;
+                payload = ((long)Math.Round(info.OffX)).ToString(CultureInfo.InvariantCulture)
+                    + "," + ((long)Math.Round(info.OffY)).ToString(CultureInfo.InvariantCulture);
+            }
             SendToAhkAsync("EVENT|" + winId + "|Window|HudMoved|" + BridgeUtil.LengthPrefix(payload) + "\n");
         }
         catch { }
