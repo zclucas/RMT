@@ -588,7 +588,22 @@ OnClickTriggerJoyTypeHelpBtn(*) {
 }
 
 HideMainWindowOnExit(*) {
-    ; 在退出清理开始前请求隐藏 WPF 主窗口，避免等待窗口线程。
+    ; 退出清理（落盘 / 停语音 / 回收 Worker）会阻塞消息循环几百毫秒到一两秒。先把本进程
+    ; 所有 XAML 窗口藏掉，否则清理期间窗口还挂在屏幕上，看着就是「点了退出不关」。
+    ; 不只藏主窗口：设置、编辑器、日志中心这些也是顶层窗口，只藏主窗它们照样留在前台。
+    ; 用 ShowWindowAsync 而不是 WinHide：同步 ShowWindow 在对端 UI 线程忙时会把本线程一起挂住。
+    try {
+        if (IsObject(XAMLHost._instances)) {
+            for , host in XAMLHost._instances {
+                if (!IsObject(host) || !host.HasProp("wpfHwnd") || !host.wpfHwnd)
+                    continue
+                if (!DllCall("user32\IsWindow", "Ptr", host.wpfHwnd, "Int"))
+                    continue
+                DllCall("user32\ShowWindowAsync", "Ptr", host.wpfHwnd, "Int", 0) ; SW_HIDE
+            }
+        }
+    }
+    ; 宿主未登记时的兜底：走主窗口适配器
     try {
         if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui)) {
             hwnd := MainSoftData.MyGui.Hwnd

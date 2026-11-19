@@ -683,12 +683,14 @@ class MainWin {
     }
 
     OnCloseClick(state, ctrl, event) {
-        ; 主窗口关闭 = 隐藏（应用继续托盘运行），不真正销毁窗口，托盘可恢复
+        ; 主窗口关闭 = 隐藏（应用继续托盘运行），不真正销毁窗口，托盘可恢复。
+        ; 先藏窗再做清理：_AiPersistAllTabs 每个页签都要整库读 + 整库写，历史多时是几百毫秒级，
+        ; 放在 WinHide 之前就等于让窗口挂在那儿等。
+        try WinHide(this.ui.wpfHwnd)
         this._AiVoiceStop()
         this._AiPersistAllTabs()
         this.HideSideDebugTools()
         OnGuiClose()
-        try WinHide(this.ui.wpfHwnd)
     }
 
     OnMinimizeClick(state, ctrl, event) {
