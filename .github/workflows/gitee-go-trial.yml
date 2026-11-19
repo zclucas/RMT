@@ -1,0 +1,35 @@
+name: Gitee Go 传输试跑
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已同时发布整包及资源的 GitHub 标签
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+    secrets:
+      GITEE_RELEASE_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 触发并核对 Gitee Go 试跑结果
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 .github/scripts/gitee_go_trial.py
