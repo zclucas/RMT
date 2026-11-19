@@ -3,6 +3,7 @@ import json
 import os
 import re
 import time
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 API = "https://go-api.gitee.com/fateman/RMTAssets/gitee-go/ipipe/rest/v5"
@@ -44,13 +45,45 @@ build_id = int(build["id"])
 print(f"Gitee Go build {build_id}, release {tag}, trial tag {trial_tag}", flush=True)
 with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
     print(f"Gitee Go build **{build_id}** · {tag} · {trial_tag}", file=summary)
+def report(stages):
+    lines = []
+    for stage in stages:
+        detail = go(f"/pipelines/stages/builds/{int(stage['id'])}")
+        for group in detail["jobs"]:
+            for job in group:
+                record = job.get("record") or {}
+                for step in record.get("stages") or []:
+                    plugin = step["plugin"]
+                    if plugin.startswith("SYSTEM_"):
+                        continue
+                    started, ended = step.get("realStartTime"), step.get("finishTime")
+                    if plugin.startswith("gitee-release@") and started and ended:
+                        lines.append(f"Upload plugin: {(ended - started) / 1000:.1f}s (includes plugin processing)")
+                    url = step.get("logger") or ""
+                    parsed = urlsplit(url)
+                    if (parsed.scheme, parsed.netloc) != ("https", "go-api.gitee.com"):
+                        continue
+                    log = request(url, os.environ["GITEE_RELEASE_TOKEN"])
+                    for text in (log.get("data") or {}).get("logs", []):
+                        if " MEASURE " in text:
+                            lines.append(text.split(" MEASURE ", 1)[1].strip())
+    for line in lines:
+        print(line)
+    with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+        for line in lines:
+            print(f"- `{line}`", file=summary)
+
+
 deadline = time.monotonic() + 18 * 60
 while time.monotonic() < deadline:
-    status = go(f"/pipelines/builds/{build_id}/status")["status"]
+    current = go(f"/pipelines/builds/{build_id}/status")
+    status = current["status"]
     if status in ("SUCCESS", "SUCCEEDED"):
+        report(current["stages"])
         print("Gitee Go readback passed")
         break
     if status in ("FAILED", "FAIL", "CANCELED", "CANCELLED", "ERROR", "STOPPED", "TIMEOUT"):
+        report(current["stages"])
         raise RuntimeError(f"Gitee Go build {build_id}: {status}")
     time.sleep(12)
 else:
