@@ -151,10 +151,10 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:GITHUB_REF_NAME @($zips.FullName) --clobber
             if ($LASTEXITCODE -ne 0) { throw "failed to upload assets for $env:GITHUB_REF_NAME" }
-            gh release edit $env:GITHUB_REF_NAME --notes-file $notesPath
+            gh release edit $env:GITHUB_REF_NAME --title "RMT$env:GITHUB_REF_NAME" --notes-file $notesPath
           } else {
             gh release create $env:GITHUB_REF_NAME @($zips.FullName) @($extra) `
-              --title "RMT $env:RMT_TAG_VERSION" `
+              --title "RMT$env:GITHUB_REF_NAME" `
               --notes-file $notesPath
           }
           if ($LASTEXITCODE -ne 0) { throw "failed to publish release $env:GITHUB_REF_NAME" }

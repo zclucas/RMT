@@ -104,13 +104,10 @@ def dispatch(m):
     import yaml
     repo, tag = m["repo"], m["tag"]
     remote = "https://gitee.com/fateman/" + repo + ".git"
-    branch = "ci/rmt-release-" + tag
+    branch = f"ci/rmt-release-{tag}-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         git("init", "-q", "-b", branch, tmp)
-        if git("ls-remote", "--heads", remote, "refs/heads/" + branch).strip():
-            git("fetch", "--depth=1", remote, "refs/heads/" + branch, cwd=root)
-            git("reset", "--hard", "FETCH_HEAD", cwd=root)
         (root / ".workflow").mkdir(exist_ok=True)
         shutil.copytree(SCRIPTS, root / "ci", dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
         (root / "manifest.json").write_text(json.dumps(m, ensure_ascii=True), encoding="utf8")
@@ -121,6 +118,16 @@ def dispatch(m):
             git("-c", "user.name=RMT release", "-c", "user.email=release@users.noreply.github.com",
                 "commit", "-qm", "Sync " + tag, cwd=root)
             git("push", remote, "HEAD:refs/heads/" + branch, cwd=root)
+        commit = git("rev-parse", "HEAD", cwd=root).strip()
+        ref = "refs/heads/" + branch
+        try:
+            wait_for_build(m, branch)
+        finally:
+            git("push", "--force-with-lease=" + ref + ":" + commit, remote, ":" + ref, cwd=root)
+
+
+def wait_for_build(m, branch):
+    repo, tag = m["repo"], m["tag"]
     base = "https://go-api.gitee.com/fateman/" + repo + "/gitee-go/ipipe/rest/v5/pipelines/builds"
     def go(path, data=None):
         res = http(base + path, os.environ["GITEE_RELEASE_TOKEN"], data)
