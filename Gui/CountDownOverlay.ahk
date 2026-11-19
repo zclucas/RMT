@@ -4,7 +4,7 @@
 global XamlCountDownWindows := Map()
 global XamlCountDownCancelled := Map()
 
-StartXamlCountDown(token, total, x, y, done, workerPid := 0) {
+StartXamlCountDown(token, total, x, y, done, workerPid := 0, name := "") {
     global XamlCountDownWindows, XamlCountDownCancelled
     if (XamlCountDownCancelled.Has(token)) {
         XamlCountDownCancelled.Delete(token)
@@ -14,12 +14,13 @@ StartXamlCountDown(token, total, x, y, done, workerPid := 0) {
     posKey := CountDownPosKey(x, y)
     previous := []
     for id, overlay in XamlCountDownWindows
-        if (overlay.posKey == posKey)
+        if (overlay.posKey == posKey || (name != "" && overlay.name == name))
             previous.Push(overlay)
     for overlay in previous
         overlay.Close()
     overlay := XamlCountDownOverlay(token, posKey, total, x, y, done)
     overlay.workerPid := workerPid
+    overlay.name := name
     XamlCountDownWindows[token] := overlay
     try overlay.Show()
     catch {
@@ -40,10 +41,10 @@ CloseXamlCountDownForWorker(pid) {
         overlay.Close()
 }
 
-CloseXamlCountDownAt(posKey) {
+CloseXamlCountDowns(posKey, name := "") {
     overlays := []
     for _, overlay in XamlCountDownWindows {
-        if (posKey == "" || overlay.posKey == posKey)
+        if (name != "" ? overlay.name == name : (posKey == "" || overlay.posKey == posKey))
             overlays.Push(overlay)
     }
     for overlay in overlays
@@ -87,7 +88,7 @@ class XamlCountDownOverlay {
         fontSize := CountDownStyleFontSize()
         alpha := CountDownUiAlpha(CountDownStyleAlpha()) / 100
         xaml := '<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-            . ' Title="' title '" Width="' size[1] '" Height="' size[2] '" Left="' this.x '" Top="' this.y '"'
+            . ' Title="' title '" Width="' size[1] '" Height="' size[2] '" Left="' PhysToDip(this.x) '" Top="' PhysToDip(this.y) '"'
             . ' WindowStartupLocation="Manual" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"'
             . ' Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False" Opacity="' alpha '">'
             . '<Border Background="#' bg '" CornerRadius="5" Padding="4">'
@@ -109,7 +110,7 @@ class XamlCountDownOverlay {
         hwnd := this.ui.wpfHwnd
         if (hwnd) {
             WinSetExStyle("+0x080000A0", "ahk_id " hwnd) ; 不激活、工具窗、鼠标穿透
-            DllCall("SetWindowPos", "ptr", hwnd, "ptr", -1, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)
+            DllCall("SetWindowPos", "ptr", hwnd, "ptr", -1, "int", this.x, "int", this.y, "int", 0, "int", 0, "uint", 0x11)
         }
         this.Tick()
     }

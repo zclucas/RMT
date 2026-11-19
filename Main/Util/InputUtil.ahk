@@ -324,14 +324,22 @@ RunWaitConfirmation(tableItem, index, Data, waitData := "") {
 
     prompt := InputResolveText(tableItem, index, InputField(Data, "Prompt", ""))
     ibType := GetLangKey(InputField(Data, "Type", "继续")) == "继续&终止&暂停" ? "4" : "2"
-    result := RequestMacroInput(IsObject(waitData) ? waitData : Data, tableItem, index, "IB", ibType, prompt, "", "")
-    action := InputBtnResult(result)
-    if (IsObject(item) && (item.Killed || GetItemByIndex(tableItem, index) != item))
-        action := ""
+    cancelled := () => IsObject(item) && (item.Killed || GetItemByIndex(tableItem, index) != item)
+    timeoutAction := IsObject(waitData) ? TimeoutPolicy.Get(waitData) : ""
+    loop {
+        result := RequestMacroInput(IsObject(waitData) ? waitData : Data, tableItem, index, "IB", ibType, prompt, "", "")
+        action := cancelled() ? "" : InputBtnResult(result)
+        if (action != "timeout" || !TimeoutPolicy.CanRetry(timeoutAction, A_Index))
+            break
+        if (!TimeoutPolicy.WaitBeforeRetry(cancelled)) {
+            action := ""
+            break
+        }
+    }
     if (IsObject(waitData) && IsObject(item)
         && (action == "timeout" || action == "continue" || action == "terminate" || action == "pause"))
         WaitWriteStatus(waitData, action == "timeout")
-    if (action == "timeout")
+    if (action == "timeout" && timeoutAction == "")
         action := WaitConfirmTimeoutAction(InputField(Data, "TimeoutAction", "无"))
 
     if (action == "terminate") {
@@ -356,6 +364,8 @@ RunWaitConfirmation(tableItem, index, Data, waitData := "") {
 
     if (pausedAll)
         MyExcuteRMTCMDAction("RMT指令_宏控制_恢复所有宏")
+    if (action == "timeout" && TimeoutPolicy.Stops(timeoutAction))
+        throw Error(GetLang("等待超时。"))
 }
 
 WaitConfirmTimeoutAction(action) {

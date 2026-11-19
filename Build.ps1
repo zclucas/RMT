@@ -1,14 +1,16 @@
 ﻿# RMT 编译脚本（开发用，只编译，不打包）
-# 编译主程序 RMTv<版本>.exe 与 Thread\Work.exe，输出到项目根目录，编译完即可直接运行。
+# 编译主程序 RMT.exe、Thread\Work.exe 和更新程序 Update.exe。
 # 完整的发行包打包见 PackRMT.ps1。
 #
 # 没有位置参数时：x64，编译主程序 + Worker，不清理。
+# 每次编译都会刷新两个发行目录的 Update.exe，并将所选架构同步到 Thread。
 # 带参数时按参数执行，参数之间没有顺序要求：
 #
 #   .\Build.ps1              主程序 + Worker（x64）
 #   .\Build.ps1 x86          主程序 + Worker（32 位）
-#   .\Build.ps1 rmt          只编译主程序
-#   .\Build.ps1 work         只编译 Worker
+#   .\Build.ps1 rmt          编译主程序和更新程序
+#   .\Build.ps1 work         编译 Worker 和更新程序
+#   .\Build.ps1 update       只编译更新程序（Thread 默认使用 x64）
 #   .\Build.ps1 clean        只清理 Log + Setting，不编译
 #   .\Build.ps1 clean log    只清理 Log
 #   .\Build.ps1 clean xaml   只清理 XAML 引擎 dll（下次启动自动重编）
@@ -16,11 +18,11 @@
 #   .\Build.ps1 clean work   先清理再编译 Worker
 #   .\Build.ps1 x64 clean    先清理再编译（与上一个等价）
 #
-# 注意：clean xaml 删的是 lib\dep 下 ahk-xaml*.dll 与 %TEMP%\AhkWpf 的同名副本，
+# 注意：clean xaml 删的是 lib\dep 下 ahk-xaml*.dll 与 Cache\AhkWpf 的同名副本，
 # 会先结束本项目目录内正在运行的引擎进程（XAML 界面会随之关闭）。
 #
 # 版本号自动读 RMT.ahk 的 RMT_VERSION；图标固定用 Images\Soft\rabit.ico；
-# 输出固定到项目根目录（Worker 在其下的 Thread）。
+# 主程序输出到项目根目录，Worker 输出到 Thread。
 # 编译/清理前如果文件被本项目目录内正在运行的实例占用，会自动结束该实例。
 
 $ErrorActionPreference = "Stop"
@@ -44,7 +46,7 @@ function Write-Err([string]$Text) {
 }
 
 function Show-Usage {
-    Write-Host "  可用参数：x64  x86  rmt  work  clean [log|setting|xaml|all]" -ForegroundColor Gray
+    Write-Host "  可用参数：x64  x86  rmt  work  update  clean [log|setting|xaml|all]" -ForegroundColor Gray
     Write-Host "  例：.\Build.ps1    .\Build.ps1 work    .\Build.ps1 clean log    .\Build.ps1 clean xaml    .\Build.ps1 x86 clean" -ForegroundColor Gray
 }
 
@@ -56,7 +58,7 @@ foreach ($t in $args) {
     }
 }
 
-$unknown = @($tokens | Where-Object { $_ -notin @("x64", "x86", "rmt", "work", "clean", "log", "setting", "xaml", "all") })
+$unknown = @($tokens | Where-Object { $_ -notin @("x64", "x86", "rmt", "work", "update", "clean", "log", "setting", "xaml", "all") })
 if ($unknown.Count -gt 0) {
     Write-Err "不认识的参数：$($unknown -join ' ')"
     Show-Usage
@@ -82,30 +84,32 @@ if ($hasClean) {
     if ($tokens -contains "xaml") { $CleanXaml = $true }
 }
 
-$selectedBuild = ($tokens -contains "rmt") -or ($tokens -contains "work") -or
-                 ($tokens -contains "x64") -or ($tokens -contains "x86")
+$selectedBuild = @($tokens | Where-Object { $_ -in @("rmt", "work", "update", "x64", "x86") }).Count -gt 0
 $WantRmt = $false
 $WantWork = $false
+$WantUpdate = $tokens -contains "update"
 if ($tokens.Count -eq 0) {
     $WantRmt = $true
     $WantWork = $true
 } elseif ($selectedBuild) {
     $WantRmt = $tokens -contains "rmt"
     $WantWork = $tokens -contains "work"
-    if (-not $WantRmt -and -not $WantWork) {   # 只给了架构：两个都编
+    if (-not ($WantRmt -or $WantWork -or $WantUpdate)) {   # 只给了架构：两个都编
         $WantRmt = $true
         $WantWork = $true
     }
 }
+$WantUpdate = $WantUpdate -or $WantRmt -or $WantWork
 
 # ---------- 编译器 ----------
 $Ahk2Exe = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
 $BaseX64 = "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
 $BaseX86 = "C:\Program Files\AutoHotkey\v2\AutoHotkey32.exe"
-$BaseExe = if ($Arch -eq "x86") { $BaseX86 } else { $BaseX64 }
+$Bases = [ordered]@{ x64 = $BaseX64; x86 = $BaseX86 }
+$BaseExe = $Bases[$Arch]
 
-if ($WantRmt -or $WantWork) {
-    foreach ($p in @($Ahk2Exe, $BaseExe)) {
+if ($WantUpdate) {
+    foreach ($p in @($Ahk2Exe, $BaseX64, $BaseX86)) {
         if (-not (Test-Path -LiteralPath $p)) {
             Write-Err "找不到编译器：$p"
             Write-Host "  请安装 AutoHotkey v2（含编译器），或修改本脚本顶部的默认路径。" -ForegroundColor Yellow
@@ -149,10 +153,10 @@ function Stop-ProjectProcess {
 }
 
 # ---------- 清理 ----------
-# 引擎是独立 daemon 进程（映像名 ahk-xaml*.dll），可能从项目 dep 或 %TEMP%\AhkWpf 启动，
-# 只结束这两处路径下的，避免误杀其它项目的同名引擎。
+# 引擎是独立 daemon 进程（映像名 ahk-xaml*.dll），可能从项目 dep 或 Cache\AhkWpf 启动，
+# 只结束这些路径下的，避免误杀其它项目的同名引擎（%TEMP%\AhkWpf 是旧版遗留，一并清理）。
 function Stop-XamlEngine {
-    $prefixes = @($Root)
+    $prefixes = @($Root, (Join-Path $Root "Cache\AhkWpf"))
     if ($env:TEMP) { $prefixes += (Join-Path $env:TEMP "AhkWpf") }
     $killed = 0
     Get-Process -Name "ahk-xaml*" -ErrorAction SilentlyContinue | ForEach-Object {
@@ -196,7 +200,7 @@ if ($hasClean) {
         if ($errMsg -ne "") {
             # 多半是正在运行的实例占着 Log\System.log，结束后占用进程再试一次
             Write-Warn "删除被占用，结束本项目目录内的实例后重试"
-            $null = Stop-ProjectProcess -Names @("RMTv*", "Work")
+            $null = Stop-ProjectProcess -Names @("RMT", "RMTv*", "Work", "Update")
             Start-Sleep -Milliseconds 200
             try {
                 Remove-Item -LiteralPath $dir -Recurse -Force
@@ -215,8 +219,10 @@ if ($hasClean) {
             (Join-Path $Root "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll"),
             (Join-Path $Root "Plugins\AHK-XAML\lib\dep\ahk-xaml-wv2.dll")
         )
-        # 开发模式（XAML_ENGINE_BUILD_LOCATION = "both"）还会往 %TEMP%\AhkWpf 放一份，
-        # 那份不清掉的话引擎仍会跑旧代码。
+        # 开发模式（XAML_ENGINE_BUILD_LOCATION = "both"）还会往 Cache\AhkWpf 放一份，
+        # 那份不清掉的话引擎仍会跑旧代码；%TEMP%\AhkWpf 是旧版遗留位置，一并清掉。
+        $xamlDlls += (Join-Path $Root "Cache\AhkWpf\ahk-xaml.dll")
+        $xamlDlls += (Join-Path $Root "Cache\AhkWpf\ahk-xaml-wv2.dll")
         if ($env:TEMP) {
             $xamlDlls += (Join-Path $env:TEMP "AhkWpf\ahk-xaml.dll")
             $xamlDlls += (Join-Path $env:TEMP "AhkWpf\ahk-xaml-wv2.dll")
@@ -270,23 +276,25 @@ function Stop-OwnerIfLocked([string]$Path) {
     if ($n -eq 0) { Write-Warn "$full 被占用，但没有找到本项目目录内的进程" }
 }
 
-function Compile([string]$AhkFile, [string]$OutputExe, [string]$Name) {
+function Compile([string]$AhkFile, [string]$OutputExe, [string]$Name, [string]$Base = $BaseExe) {
     if (-not (Test-Path -LiteralPath $AhkFile)) {
         Write-Err "找不到脚本：$AhkFile"
         return $false
     }
     Stop-OwnerIfLocked $OutputExe
     if (Test-Path -LiteralPath $OutputExe) {
-        Remove-Item -LiteralPath $OutputExe -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $OutputExe -Force
     }
 
-    $exeArgs = @("/in", "`"$AhkFile`"", "/base", "`"$BaseExe`"", "/out", "`"$OutputExe`"", "/silent")
+    $exeArgs = @("/in", "`"$AhkFile`"", "/base", "`"$Base`"", "/out", "`"$OutputExe`"", "/silent")
     if ($IconPath) {
-        $exeArgs = @("/in", "`"$AhkFile`"", "/icon", "`"$IconPath`"", "/base", "`"$BaseExe`"", "/out", "`"$OutputExe`"", "/silent")
+        $exeArgs = @("/in", "`"$AhkFile`"", "/icon", "`"$IconPath`"", "/base", "`"$Base`"", "/out", "`"$OutputExe`"", "/silent")
     }
 
-    $logOut = Join-Path $env:TEMP "rmt-build-$Name.out.log"
-    $logErr = Join-Path $env:TEMP "rmt-build-$Name.err.log"
+    $buildLogDir = Join-Path $Root "Log"
+    if (-not (Test-Path -LiteralPath $buildLogDir)) { New-Item -ItemType Directory -Path $buildLogDir | Out-Null }
+    $logOut = Join-Path $buildLogDir "rmt-build-$Name.out.log"
+    $logErr = Join-Path $buildLogDir "rmt-build-$Name.err.log"
     Remove-Item -LiteralPath $logOut, $logErr -Force -ErrorAction SilentlyContinue
     # 用 cmd 重定向而不是 Start-Process：本机环境变量里若同时存在 HTTPS_PROXY / https_proxy
     # 这类只差大小写的键，Start-Process 会因字典冲突直接抛异常。
@@ -294,7 +302,7 @@ function Compile([string]$AhkFile, [string]$OutputExe, [string]$Name) {
     & $env:ComSpec /c $cmdLine | Out-Null
     $code = $LASTEXITCODE
 
-    if ($code -ne 0 -or -not (Test-Path -LiteralPath $OutputExe)) {
+    if ($code -ne 0 -or -not (Test-Path -LiteralPath $OutputExe -PathType Leaf) -or (Get-Item -LiteralPath $OutputExe).Length -eq 0) {
         Write-Err "$Name 编译失败（退出码 $code）"
         foreach ($log in @($logErr, $logOut)) {
             if ((Test-Path -LiteralPath $log) -and (Get-Item $log).Length -gt 0) {
@@ -312,9 +320,27 @@ function Compile([string]$AhkFile, [string]$OutputExe, [string]$Name) {
 $failed = $false
 $stamp = Get-Date -Format "HH:mm:ss"
 
+if ($WantUpdate) {
+    Write-Step "编译更新程序 Update.exe (x64 + x86)"
+    $updateAhk = Join-Path $Root "Thread\Update.ahk"
+    foreach ($targetArch in $Bases.Keys) {
+        $releaseThread = Join-Path $Root "Release$($targetArch.ToUpperInvariant())\Thread"
+        New-Item -ItemType Directory -Path $releaseThread -Force | Out-Null
+        $output = Join-Path $releaseThread "Update.exe"
+        if (-not (Compile -AhkFile $updateAhk -OutputExe $output -Name "更新程序-$targetArch" -Base $Bases[$targetArch])) {
+            exit 1
+        }
+        if ($targetArch -eq $Arch) { $selectedUpdate = $output }
+    }
+    $localUpdate = Join-Path $Root "Thread\Update.exe"
+    Stop-OwnerIfLocked $localUpdate
+    Copy-Item -LiteralPath $selectedUpdate -Destination $localUpdate -Force
+    Write-Ok "已同步 $Arch 更新程序 -> $localUpdate"
+}
+
 if ($WantRmt) {
-    Write-Step "编译主程序 RMTv$Version.exe ($Arch)"
-    if (-not (Compile -AhkFile $rmtAhk -OutputExe (Join-Path $OutDir "RMTv$Version.exe") -Name "主程序")) {
+    Write-Step "编译主程序 RMT.exe (v$Version, $Arch)"
+    if (-not (Compile -AhkFile $rmtAhk -OutputExe (Join-Path $OutDir "RMT.exe") -Name "主程序")) {
         $failed = $true
     }
 }
@@ -334,7 +360,7 @@ if ($WantWork) {
 Write-Host ""
 if ($failed) {
     Write-Host "[$stamp] 编译未全部成功" -ForegroundColor Red
-} elseif (-not ($WantRmt -or $WantWork)) {
+} elseif (-not $WantUpdate) {
     Write-Host "[$stamp] 清理完成（未编译）" -ForegroundColor Green
 } else {
     Write-Host "[$stamp] 编译完成：$OutDir" -ForegroundColor Green

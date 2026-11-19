@@ -551,16 +551,26 @@ class SettingMgrGui {
         if (!isVaild)
             return false
 
-        MainSoftData.SettingArrStr .= "π" newFileName.Value
-        CfgWrite(MainSoftData.SettingArrStr, SettingFile, SettingSection, "SettingArrStr")
-        SourcePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName
-        DestPath := A_WorkingDir "\Setting\" newFileName.Value
-        DirCopy(SourcePath, DestPath, 1)
-        this.OnRepairSetting(DestPath)
+        try Compat_TransferProfile(A_WorkingDir, MySoftData.CurSettingName, newFileName.Value,
+            ObjBindMethod(this, "_RegisterCopy", newFileName.Value))
+        catch as err {
+            RmtDialog.Info(err.Message, GetLang("错误"), this.ui.wpfHwnd)
+            return
+        }
         RmtDialog.Info(Format(GetLang("成功复制<{}>配置到<{}>中"), MySoftData.CurSettingName, newFileName.Value))
 
         ; 只落盘：源（当前）配置未被触碰，不切换 CurSettingName、不写 IsReload、不重启，仅刷新配置列表
         this.Refresh()
+    }
+
+    _RegisterCopy(name, *) {
+        root := Cfg_Load(SettingFile).Clone()
+        settings := Cfg_Seg(root, SettingSection).Clone()
+        list := MainSoftData.SettingArrStr "π" name
+        settings["SettingArrStr"] := list
+        root[SettingSection] := settings
+        Cfg_WriteRoot(root, SettingFile)
+        MainSoftData.SettingArrStr := list
     }
 
     OnRepairSetting(SettringDir, strict := false) {

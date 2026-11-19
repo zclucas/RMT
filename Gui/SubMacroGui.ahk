@@ -107,7 +107,7 @@ class SubMacroGui {
         body.Add("ComboBox").Grid_Row(1).Grid_Column(4).Name("DropDownIndexCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
 
         ; 行2：操作类型 + 调用次数（仅调用时显示在操作类型后）
-        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("操作类型:")).VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("操作类型:")).ToolTip(GetLang("调用会等待目标宏结束，触发会让两个宏同时运行。")).VerticalAlignment("Center")
         body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("CallTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         insertRow := body.Add("Grid").Name("InsertRow").Grid_Row(2).Grid_Column(3).Grid_ColumnSpan(2).Visibility("Collapsed")
         insertRow.Cols("96", "*")
@@ -234,6 +234,7 @@ class SubMacroGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("宏操作")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         this.DLVariableArr := GetGuiVarArr("count")
 
         macroTypes := GetLangArr(SubMacroGui.MacroTypes())
@@ -316,7 +317,7 @@ class SubMacroGui {
         if (!this.Hwnd())
             return
         action := this.SureBtnAction
-        CommandStr := this.SaveSubMacroData()
+        CommandStr := this.SaveSubMacroData(true)
         if (CommandStr == "" || this.ui != ui)
             return
         this._CloseWindow()
@@ -354,22 +355,13 @@ class SubMacroGui {
             OnTriggerSepcialItemMacro(CommandStr)
     }
 
-    GetCommandStr(Remark) {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        if (ShouldAutoGenerateRemark(Remark)) {
-            IntervarlStr := MainSoftData.Lang == "简中" ? "" : " "
-            OperStr := SubMacroGui.CallLabel(this.Data.CallType)
-            TypeStr := GetLang(this.Data.MacroType)
-            SerialStr := this.Data.MacroType == "当前宏" ? "" : this.Data.Index
-            Remark := OperStr IntervarlStr TypeStr SerialStr
-        }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+    _GenerateRemark(data) {
+        space := MainSoftData.Lang == "简中" ? "" : " "
+        index := data.MacroType == "当前宏" ? "" : data.Index
+        return SubMacroGui.CallLabel(data.CallType) space GetLang(data.MacroType) index
     }
 
-    SaveSubMacroData() {
+    SaveSubMacroData(commitRemark := false) {
         ui := this.ui
         if (!IsObject(ui))
             return ""
@@ -388,7 +380,8 @@ class SubMacroGui {
         this.Data.InsertCount := GetLangKey(values["InsertCountCombo"])
 
         this.Data.MacroSerial := target ? target.Item.ID : ""
-        CommandStr := this.GetCommandStr(values["RemarkCon"])
+        CommandStr := FormatCommandAutoRemark(this.Data, values["RemarkCon"], this._autoRemark
+            , this._GenerateRemark.Bind(this), commitRemark)
         SaveMacroCMDData(this.Data)
         return CommandStr
     }

@@ -50,7 +50,7 @@ $files = @(Get-ChildItem -LiteralPath $Root -Recurse -Filter '*.ahk' -File | Whe
     $rel = $_.FullName.Substring($Root.Length + 1).Replace('/', '\')
     $keep = $true
     foreach ($d in $excludedDirs) {
-        if ($rel -like "*$d*") { $keep = $false; break }
+        if ("\$rel" -like "*$d*") { $keep = $false; break }
     }
     $keep
 })

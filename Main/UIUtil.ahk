@@ -72,7 +72,7 @@ MainWinReadyTick() {
 
 ;窗口&UI刷新
 InitUI() {
-    global MySoftData
+    global MacroFileSeedDefaults
     ; 首次启动：先同意免责声明，再显示主界面
     if (!MainSoftData.AgreeAgreement) {
         if (!AgreementGui.ShowAndWait())
@@ -84,13 +84,13 @@ InitUI() {
     ; 建窗走引擎异步通道，Show() 立即返回、这里不再 Sleep 轮询句柄。
     ; 适配器/托盘菜单/首屏刷新都依赖句柄，交给 WaitMainWinReady 在句柄回传后执行；
     ; 主线程先回落到启动链，把 PluginInit、热键绑定这类不依赖界面的活并进引擎建窗期间。
-    MyMainWin.BuildAndShow()
+    MyMainWin.BuildAndShow(,,, MainSoftData.IsReload && MacroFileSeedDefaults)
     WaitMainWinReady(InitUIFinishUI)
 }
 
 ; 主窗句柄就绪后的 UI 收尾。必须跑在句柄回传之后，
 ; 否则适配器按名字取控件会全部落空，随后的保存/切页都会失效。
-InitUIFinishUI() {
+InitUIFinishUI(startup := true) {
     MainSoftData.MyGui := GuiAdapter(MyMainWin.ui)
     MainSoftData.MyGui.Title := "RMTv" RMT_VERSION_DISPLAY
     MainSoftData.TabCtrl := TabAdapter(MyMainWin.ui, MyMainWin)
@@ -103,7 +103,10 @@ InitUIFinishUI() {
     MyUIMacroSettingGui.SureFocusCon := MainSoftData.BtnSave
 
     CustomTrayMenu()
-    OnOpen()
+    if (startup)
+        OnOpen()
+    else
+        RefreshListenVarGui()
 }
 
 OnOpen() {
@@ -362,6 +365,16 @@ BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", t
     }
 }
 
+CmdEditorF1Updates(mode) {
+    isRange := mode == "area"
+    tip := GetLang(isRange ? "F1：框选范围" : "F1:选取当前坐标")
+    return [
+        {ControlName: "BtnCmdF1Glyph", PropertyName: "Visibility", Value: isRange ? "Collapsed" : "Visible"},
+        {ControlName: "BtnCmdF1RangeGlyph", PropertyName: "Visibility", Value: isRange ? "Visible" : "Collapsed"},
+        {ControlName: "BtnCmdF1", PropertyName: "ToolTip", Value: tip},
+        {ControlName: "BtnCmdF1", PropertyName: "Visibility", Value: mode == "" ? "Collapsed" : "Visible"}]
+}
+
 ShowCmdVideoNotice(ui) {
     if (IsObject(ui) && ui.wpfHwnd)
         RmtDialog.Info(GetLang("指令介绍视频制作中，敬请期待。"), , ui.wpfHwnd)
@@ -417,6 +430,9 @@ CmdEditorTitleIcon(title) {
             ["窗口管理", "Images\Soft\WindowManage.png"],
             ["窗口信息", "Images\Soft\WindowManage.png"],
             ["调整窗口", "Images\Soft\WindowAdjustGear32.png"],
+            ["窗口控件", "Images\Soft\WindowManage.png"],
+            ["AI判断", "Images\Soft\AiDecision.png"],
+            ["YOLO检测", "Images\Soft\Yolo.png"],
             ["按键检测", "Images\Soft\KeyListen.png"],
             ["手柄检测", "Images\Soft\JoyListen.png"],
             ["后台鼠标", "Images\Soft\Mouse.png"],
@@ -456,6 +472,76 @@ CmdEditorTitleIcon(title) {
 }
 
 ; 指令编辑器确定按钮：与间隔编辑器同款
+class CmdEditorForm {
+    static TimeValueTip(kind) {
+        switch kind {
+            case "时刻": return GetLang("按时、分、秒填写一天中的时刻。")
+            case "时长": return GetLang("按时、分、秒填写持续时间。")
+            case "时间戳": return GetLang("填写毫秒时间戳或选择时间变量。")
+            case "毫秒": return GetLang("输入毫秒数或选择变量，例如 500。")
+            case "毫秒-随机": return GetLang("从最短与最长毫秒数之间随机等待，支持变量。")
+            default: return GetLang("时长：") " " GetLang(kind)
+        }
+    }
+
+    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "", labelTip := "") {
+        row := parent.Add("Grid").Margin("0,4")
+        if (name != "")
+            row.Name(name)
+        columns := row.Add("Grid.ColumnDefinitions")
+        columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(group)
+        columns.Add("ColumnDefinition").Width("*")
+        caption := this.Label(row, label).VerticalAlignment(alignment)
+        if (labelTip != "")
+            caption.ToolTip(labelTip)
+        if (labelName != "")
+            caption.Name(labelName)
+        return row
+    }
+
+    static Label(parent, text) {
+        return parent.Add("TextBlock").Text(GetLang(text)).Margin("0,0,8,0")
+            .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
+    }
+
+    static TextBox(parent, name, height := 26) {
+        box := parent.Add("TextBox").Name(name).Height(height).MinHeight(height)
+            .Padding("4,0").VerticalContentAlignment("Center")
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
+            .BorderBrush("{DynamicResource InputStroke}").BorderThickness(1)
+        if (height > 26)
+            box.AcceptsReturn("True").TextWrapping("Wrap").Padding("4,3")
+                .VerticalContentAlignment("Top").ScrollViewer_VerticalScrollBarVisibility("Auto")
+        return box
+    }
+
+    static Combo(parent, name, editable := false) {
+        return parent.Add("ComboBox").Name(name).Height(26).MinHeight(26)
+            .VerticalAlignment("Center").VerticalContentAlignment("Center")
+            .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
+    }
+
+    static TextButton(parent, name, text, tip := "") {
+        button := parent.Add("Button").Name(name).Content(GetLang(text)).Height(26).MinHeight(26)
+            .Padding("8,0").Cursor("Hand").VerticalAlignment("Center")
+        if (tip != "")
+            button.ToolTip(GetLang(tip))
+        return button
+    }
+
+    static IconButton(parent, name, glyph, tip) {
+        return parent.Add("Button").Name(name).Content(Chr(glyph)).ToolTip(GetLang(tip))
+            .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(12)
+            .Width(28).Height(26).MinHeight(26).Padding("0").Cursor("Hand").VerticalAlignment("Center")
+    }
+
+    static Footer(parent) {
+        buttons := parent.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
+        AddCmdOkBtn(buttons)
+        return buttons
+    }
+}
+
 AddCmdOkBtn(parent, name := "BtnOk", extraMargin := "", content := "") {
     btn := parent.Add("Button").Name(name).Content(content != "" ? content : GetLang("确定")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
         .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
@@ -468,7 +554,9 @@ AddCmdOkBtn(parent, name := "BtnOk", extraMargin := "", content := "") {
 
 class ScreenAreaPreview {
     static ButtonStyle() {
-        return '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
+        ; 左移的距离抵消边框与内边距，让内容与同列普通标签对齐。
+        return '<Style TargetType="Button"><Setter Property="Margin" Value="-7,0,0,0"/><Setter Property="Padding" Value="6,0"/>'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
             . '<Border x:Name="surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True">'
             . '<Grid><Border x:Name="hoverTint" Background="{DynamicResource Accent}" Opacity="0.16" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>'
             . '<ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Grid></Border>'
@@ -704,7 +792,7 @@ OnOpenRmtDoc(pageHash := "") {
             return
         }
     }
-    jump := A_Temp "\RmtDocJump.html"
+    jump := RmtCacheDir() "\RmtDocJump.html"
     js := StrReplace(StrReplace(target, "\", "\\"), "'", "\'")
     html := "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body><script>location.replace('" js "');</script></body></html>"
     try FileDelete(jump)
@@ -758,7 +846,7 @@ OpenHelpInAppWindow(pageHash := "", winW := 560, winH := 0) {
 
     ; 独立 user-data-dir：不与用户已开的浏览器共进程，
     ; 既不会被「恢复上次会话」/插件干扰，用户关浏览器时也不会连带关掉帮助窗
-    profileDir := A_Temp "\RMT_HelpBrowser"
+    profileDir := RmtCacheDir() "\RMT_HelpBrowser"
     if (!DirExist(profileDir))
         DirCreate(profileDir)
 

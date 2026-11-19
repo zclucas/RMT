@@ -16,11 +16,24 @@
             . '<TextBlock Text="' this._XmlEsc(GetLang("若不同意上述条款，请立即停止使用本软件。")) '" Foreground="{DynamicResource Accent}" FontWeight="Bold" FontSize="12" Margin="0,9,0,0"/></StackPanel>'
         Add(this._HelpCard(GetLang("免责声明与合法使用提醒"), "&#xE7BA;", disclaimer, "", "0,2,0,14", true))
 
-        docs := '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-            . '<Border Grid.Column="0" Padding="0,0,12,0">' this._HelpResource("&#xE8A5;", GetLang("软件说明文档"), GetLang("快速上手、指令手册、命令行、常见问题、常见报错与更新日志。"), "https://docs.ruomengtu.com/", GetLang("打开文档")) '</Border>'
-            . '<Border Grid.Column="1" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0">' this._HelpResource("&#xE714;", GetLang("更新视频合集"), GetLang("查看版本更新视频与直播交流问答。"), "https://www.bilibili.com/video/BV1yR8x6xEBW", GetLang("观看视频")) '</Border>'
-            . '<Border Grid.Column="2" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0,0,0">' this._HelpResource("&#xE8B7;", GetLang("配置共享仓库"), GetLang("案例学习、获取他人分享的宏配置，并支持下载导入。"), "https://zclucas.github.io/RMT-Setting/", GetLang("查看仓库")) '</Border></Grid>'
+        docsButton := this._HelpLinkButton("https://docs.ruomengtu.com/", GetLang("打开文档"))
+        videoButton := this._HelpLinkButton("https://www.bilibili.com/video/BV1yR8x6xEBW", GetLang("观看视频"))
+        updateAction := '<Grid>' this._HelpLinkButton("rmt:update", GetLang("检查更新"), true)
+            . '<Ellipse Name="HelpUpdateDot" Width="8" Height="8" Fill="{DynamicResource Accent}" Stroke="{DynamicResource ControlBg}"'
+            . ' StrokeThickness="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0" IsHitTestVisible="False"'
+            . ' Visibility="' (IsObject(RmtUpdate.Available) ? "Visible" : "Collapsed") '"/></Grid>'
+        updateStatus := RmtUpdate.HelpStatus()
+        updateDetails := '<TextBlock Name="HelpUpdateStatus" Text="' this._XmlEsc(updateStatus)
+            . '" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0"'
+            . ' Visibility="' (updateStatus != "" ? "Visible" : "Collapsed") '"/>'
+        repoButton := this._HelpLinkButton("https://zclucas.github.io/RMT-Setting/", GetLang("查看仓库"))
+        docs := '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+            . '<Border Grid.Column="0" Padding="0,0,12,0">' this._HelpResource("&#xE8A5;", GetLang("软件说明文档"), GetLang("快速上手、指令手册、命令行、常见问题、常见报错与更新日志。"), docsButton) '</Border>'
+            . '<Border Grid.Column="1" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0">' this._HelpResource("&#xE714;", GetLang("更新视频合集"), GetLang("查看版本更新视频与直播交流问答。"), videoButton) '</Border>'
+            . '<Border Grid.Column="2" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0">' this._HelpResource("&#xE895;", GetLang("软件更新"), Format(GetLang("当前版本 {}"), "RMTv" RMT_VERSION), updateAction, updateDetails) '</Border>'
+            . '<Border Grid.Column="3" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0,0,0">' this._HelpResource("&#xE8B7;", GetLang("配置共享仓库"), GetLang("案例学习、获取他人分享的宏配置，并支持下载导入。"), repoButton) '</Border></Grid>'
         Add(this._HelpCard(GetLang("文档与学习"), "&#xE8A5;", docs, GetLang("从入门到进阶"), "0,0,0,14"))
+        RmtUpdate.SyncHelp()
 
         community := '<Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
             . this._HelpCommunityTile(0, 0, "&#xE902;", GetLang("RMT 交流论坛"), GetLang("经验交流、问题讨论与社区动态"), "https://forum.ruomengtu.com/", "0,0,5,5")
@@ -34,7 +47,7 @@
             . this._HelpFeedbackItem(1, "&#xE8F2;", GetLang("需求文档"), GetLang("描述使用场景、期望能力与优先级，帮助我们评估和规划。"), "https://docs.qq.com/sheet/DVWRQaXBFUVV5bERo", GetLang("打开需求文档"), "5,0,0,0")
             . '</Grid>'
             . '<Border Margin="0,10,0,0">' this._HelpFeedbackItem(0, "&#xE8BD;", GetLang("在软件内直接提交"), GetLang("可直接向论坛提交反馈，支持多个附件，并自动附带版本号、系统和分辨率。"), "rmt:feedback", GetLang("立即反馈"), "0") '</Border>'
-            . '<Border Margin="0,10,0,0" Padding="9,7" Background="{DynamicResource EditHoverBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="5"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' this._XmlEsc(GetLang("Bug 文档和需求文档需要加入交流群后才可编辑；未加入时仍可打开查看现有内容。")) '" TextWrapping="Wrap" Foreground="{DynamicResource TextSub}" FontSize="11"/></StackPanel></Border></StackPanel>'
+            . '<Border Margin="0,10,0,0" Padding="9,7" Background="{DynamicResource EditHoverBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="5"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' this._XmlEsc(GetLang("Bug 和需求文档可直接查看，编辑需加群。")) '" TextWrapping="Wrap" Foreground="{DynamicResource TextSub}" FontSize="11"/></StackPanel></Border></StackPanel>'
 
         lower := '<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Grid.Column="0" Margin="0,0,7,0">'
             . this._HelpCard(GetLang("社区"), "&#xE8BD;", community, GetLang("交流、群组与开源"), "0")
@@ -62,9 +75,14 @@
         return '<Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Width="19" Height="19" CornerRadius="9.5" Background="{DynamicResource Accent}" VerticalAlignment="Top"><TextBlock Text="' number '" Foreground="{DynamicResource ActionText}" FontWeight="Bold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Grid.Column="1" Text="' this._XmlEsc(GetLang(text)) '" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextMain}"/></Grid>'
     }
 
-    _HelpResource(glyph, title, description, url, buttonText) {
-        return '<StackPanel><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><StackPanel Orientation="Horizontal"><Border Width="27" Height="27" CornerRadius="6" Background="{DynamicResource EditHoverBg}" Margin="0,0,7,0"><TextBlock Text="' glyph '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"/></StackPanel><TextBlock Grid.Row="1" Text="' this._XmlEsc(description) '" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextSub}" Margin="0,8,0,9"/></Grid>'
-            . this._HelpLinkButton(url, buttonText) '</StackPanel>'
+    _HelpResource(glyph, title, description, action, details := "") {
+        return '<StackPanel><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
+            . '<Border Width="26" Height="26" CornerRadius="6" Background="{DynamicResource EditHoverBg}" Margin="0,0,7,0" VerticalAlignment="Top">'
+            . '<TextBlock Text="' glyph '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>'
+            . '<TextBlock Grid.Column="1" Text="' this._XmlEsc(title) '" TextWrapping="Wrap" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"/>'
+            . '<Border Grid.Column="2" MaxWidth="128" Margin="6,0,0,0" VerticalAlignment="Top">' action '</Border></Grid>'
+            . '<TextBlock Text="' this._XmlEsc(description) '" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextSub}" Margin="0,7,0,0"/>'
+            . details '</StackPanel>'
     }
 
     _HelpCommunityTile(row, col, glyph, title, description, url, margin) {
@@ -73,7 +91,8 @@
     }
 
     _HelpFeedbackItem(col, glyph, title, description, url, buttonText, margin) {
-        return '<Border Grid.Column="' col '" Margin="' margin '" Padding="10" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="6"><StackPanel><StackPanel Orientation="Horizontal"><Border Width="26" Height="26" CornerRadius="6" Background="{DynamicResource EditHoverBg}" Margin="0,0,7,0"><TextBlock Text="' glyph '" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"/></StackPanel><TextBlock Text="' this._XmlEsc(description) '" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextSub}" Margin="0,7,0,8"/>' this._HelpLinkButton(url, buttonText) '</StackPanel></Border>'
+        return '<Border Grid.Column="' col '" Margin="' margin '" Padding="10" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="6">'
+            . this._HelpResource(glyph, title, description, this._HelpLinkButton(url, buttonText)) '</Border>'
     }
 
     _HelpTileButton(url, glyph, title, description) {
@@ -90,7 +109,11 @@
         bg := accent ? "{DynamicResource EditHoverBg}" : "{DynamicResource InputBg}"
         fg := accent ? "{DynamicResource Accent}" : "{DynamicResource TextMain}"
         weight := accent ? "Bold" : "Normal"
-        return '<Button Name="' name '" Cursor="Hand" HorizontalAlignment="Left" MinHeight="25" Padding="8,0" VerticalContentAlignment="Center" Background="' bg '" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1"><Grid VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="' this._XmlEsc(text) '" FontSize="10" FontWeight="' weight '" Foreground="' fg '" VerticalAlignment="Center"/><TextBlock Grid.Column="1" Text="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="9" Foreground="{DynamicResource Accent}" Margin="5,0,0,0" VerticalAlignment="Center"/></Grid></Button>'
+        label := this._XmlEsc(text)
+        return '<Button Name="' name '" ToolTip="' label '" AutomationProperties.Name="' label '" Cursor="Hand" HorizontalAlignment="Left" MinHeight="25" Padding="8,0" VerticalContentAlignment="Center" Background="' bg '" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1">'
+            . '<Grid VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
+            . '<TextBlock Text="' label '" FontSize="10" FontWeight="' weight '" Foreground="' fg '" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>'
+            . '<TextBlock Grid.Column="1" Text="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="9" Foreground="{DynamicResource Accent}" Margin="5,0,0,0" VerticalAlignment="Center"/></Grid></Button>'
     }
 
     _Para(text) {
@@ -115,6 +138,10 @@
         ; 软件内反馈：不走浏览器，直接开反馈窗口
         if (url = "rmt:feedback") {
             FeedbackGui.ShowGui()
+            return
+        }
+        if (url = "rmt:update") {
+            RmtUpdate.Check(false, this.ui.wpfHwnd)
             return
         }
         ; 本地 html 帮助文档 → 优先用 Chromium app 模式小窗打开

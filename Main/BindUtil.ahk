@@ -69,6 +69,7 @@ BindKey() {
     ; §2：保存后热重载（§17 选「否」）订阅触发键重绑，使模块/条目禁用、触发键改动运行时立即生效
     if (IsSet(MyHotReloadBus) && IsObject(MyHotReloadBus))
         MyHotReloadBus.Subscribe(OnHotReloadRebindKeys)
+    OnExit(HideMainWindowOnExit, -1)
     OnExit(OnExitSoft)
 }
 
@@ -240,18 +241,20 @@ BindSuspendHotkey() {
 }
 
 OnSuspendHotkey(*) {
-    global MySoftData
+    global MySoftData, MyWorkPool
     MainSoftData.IsSuspend := !MainSoftData.IsSuspend
-    UIControls.SuspendToggle.Value := MainSoftData.IsSuspend
+    Suspend(MainSoftData.IsSuspend)
     if (MainSoftData.IsSuspend) {
-        OnKillAllMacro()
-        MyTimingScheduler.Stop()
+        try OnKillAllMacro()
+        finally MyTimingScheduler.Stop()
         if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
             MyVoiceEngine.Suspend()
         A_TrayMenu.Check(GetLang("休眠"))
         UpdateMacroTrayIcon()
     }
     else {
+        if (IsObject(MyWorkPool))
+            MyWorkPool.ScheduleCoreWorkers()
         MyTimingScheduler.Start()
         if (IsSet(MyVoiceEngine) && IsObject(MyVoiceEngine))
             MyVoiceEngine.Resume()
@@ -259,11 +262,10 @@ OnSuspendHotkey(*) {
         UpdateMacroTrayIcon()
     }
 
+    UIControls.SuspendToggle.Value := MainSoftData.IsSuspend
     tipStr := MainSoftData.IsSuspend ? GetLang("软件休眠") : GetLang("取消软件休眠")
     if (MySoftData.CMDTip)
         MyCMDReportAciton(tipStr)
-
-    Suspend(MainSoftData.IsSuspend)
 }
 
 OnPauseHotKey(*) {
@@ -313,24 +315,29 @@ OnKillAllMacro(*) {
     global MySoftData, MyWorkPool
     ; 只停正在跑的宏，不要取消 AI 对话；取消走输入框暂停按钮
 
-    ReleaseReplaceKeys()
-    CloseMenuWheel()
-
-    MySoftData.MacroRunningCount := 0
-    UpdateMacroRunningCount(0, 0)
-
     shouldPlayStopTip := false
-    for tableItem in MySoftData.TableInfo {
-        for index, item in tableItem.Items {
-            if (item.ColorState == 1 || item.ColorState == 2) {
-                if (item.StopTipSound == 2)
-                    shouldPlayStopTip := true
-                MyStopMacro(tableItem, index)
+    try {
+        ReleaseReplaceKeys()
+        CloseMenuWheel()
+
+        MySoftData.MacroRunningCount := 0
+        UpdateMacroRunningCount(0, 0)
+
+        for tableItem in MySoftData.TableInfo {
+            for index, item in tableItem.Items {
+                if (item.ColorState == 1 || item.ColorState == 2) {
+                    if (item.StopTipSound == 2)
+                        shouldPlayStopTip := true
+                    MyStopMacro(tableItem, index)
+                }
             }
         }
+        KillSingleTableMacro(MySoftData.SpecialTableItem)
+    } finally {
+        if (IsObject(MyWorkPool))
+            MyWorkPool.StopAllWorkers()
     }
 
-    KillSingleTableMacro(MySoftData.SpecialTableItem)
     if (shouldPlayStopTip)
         PlayTipSound(3)
 
@@ -580,6 +587,17 @@ OnClickTriggerJoyTypeHelpBtn(*) {
     RmtDialog.Info(str1, GetLang("手柄映射说明"))
 }
 
+HideMainWindowOnExit(*) {
+    ; 在退出清理开始前请求隐藏 WPF 主窗口，避免等待窗口线程。
+    try {
+        if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui)) {
+            hwnd := MainSoftData.MyGui.Hwnd
+            if (hwnd)
+                DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 0) ; SW_HIDE
+        }
+    }
+}
+
 OnExitSoft(*) {
     global MyPToken, MyChineseOcr, MyEnglishOcr, MyUIMacroGui, MyWorkPool, MyVoiceEngine
     global MainSoftData, MySoftData, SettingFile, SettingSection, MyMainWin
@@ -589,17 +607,10 @@ OnExitSoft(*) {
 
     ; 零、配置落盘。写入是「改内存 + 延迟落盘」，进程退出前不刷就丢最后那段改动。
     ; 放在最前面：后面的清理可能提前结束进程（强杀 Worker / 卸载 DLL）。
+    try CfgWrite(MySoftData.MacroTotalCount, SettingFile, SettingSection, "MacroTotalCount")
     try CfgFlushAll()
     try UIMacroSchema.FlushStore()
 
-    ; ① 先请求隐藏主窗口，无需同步等待 WPF 线程。
-    try {
-        if (IsSet(MainSoftData) && IsObject(MainSoftData) && IsObject(MainSoftData.MyGui)) {
-            hwnd := MainSoftData.MyGui.Hwnd
-            if (hwnd)
-                DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 0) ; SW_HIDE
-        }
-    }
     try ReleaseReplaceKeys()
     if (IsSet(MyMainWin) && IsObject(MyMainWin)) {
         try MyMainWin.HideSideDebugTools()
@@ -653,9 +664,7 @@ OnExitSoft(*) {
             RMTLogSys(RMT_LV_WARN, "Exit", "UIMacro.StopMonitor 失败: " (e.HasProp("Message") ? e.Message : ""))
         }
     }
-    try CfgWrite(MySoftData.MacroTotalCount, SettingFile, SettingSection, "MacroTotalCount")
-    catch {
-    }
+    try CfgFlushAll()
 }
 
 ; 结束与本程序同目录的 RMTMcps.exe。按可执行文件路径判断，不按进程名一刀切。
@@ -1115,6 +1124,8 @@ OnBindKeyUp(key, *) {
 
 ; 开关触发：表身份=TableItem 对象
 OnToggleTriggerMacro(tableItem, itemIndex) {
+    if (MainSoftData.IsSuspend)
+        return
     if (!IsObject(tableItem))
         tableItem := GetTableByID(String(tableItem))
     if (!tableItem)
@@ -1162,6 +1173,8 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
 TriggerMacroHandler(tableItem, itemIndex, *) => StartTriggeredMacro(tableItem, itemIndex)
 
 StartTriggeredMacro(tableItem, itemIndex, press := 0, trigger := 0) {
+    if (MainSoftData.IsSuspend)
+        return
     if (!IsObject(tableItem))
         tableItem := GetTableByID(String(tableItem))
     if (!tableItem)

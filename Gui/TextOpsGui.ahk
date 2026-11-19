@@ -18,27 +18,16 @@ class TextOpsGui {
         this.Data := ""
         this.SerialStr := ""
         this.ArgsNameOptions := []
-        this.lastArgsNameConText := ""
         this.ConcatEditGui := ""
         this._concatEditClosed := true
         this._timestampDragFrom := 0
         this._timestampDragLabel := ""
         this._timestampDragTick := ObjBindMethod(this, "_FollowTimestampDrag")
 
-        this.ArgsTypeMap := Map(
-            GetLang("去除空格"), [GetLang("去除前空白字符"), GetLang("去除后空白字符"), GetLang("去除前后空白字符"), GetLang("去除所有空白字符")],
-            GetLang("大小写转换"), [GetLang("全部大写"), GetLang("全部小写"), GetLang("首字母大写")],
-            GetLang("文本统计"), [GetLang("字符数"), GetLang("单词数"), GetLang("行数")],
-            GetLang("文本提取"), [GetLang("数字提取"), GetLang("字母提取"), GetLang("中文提取"), GetLang("正则匹配")],
-            GetLang("文本分割"), [GetLang("内容分割"), GetLang("定长分割"), GetLang("正则匹配")],
-            GetLang("文本替换"), [GetLang("普通文本"), GetLang("正则匹配")],
-            GetLang("时间戳处理"), GetLangArr(TextOpsTimestampModes()),
-            GetLang("文本拼接"), [GetLang("拼接文本")])
         this.ArgsTipMap := Map(
             GetLang("内容分割"), GetLang("分割文本："),
             GetLang("定长分割"), GetLang("分割长度："),
-            GetLang("正则匹配"), GetLang("正则表达式："),
-            GetLang("拼接文本"), GetLang("拼接内容："))
+            GetLang("正则匹配"), GetLang("正则表达式："))
     }
 
     ShowGui(cmd) {
@@ -54,8 +43,6 @@ class TextOpsGui {
         finally {
             this._flushBatch()
         }
-        this.OnRefresh()
-        this.lastArgsNameConText := ""
         if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
             this._closed := true
     }
@@ -149,6 +136,9 @@ class TextOpsGui {
             tc.Add("ComboBoxItem").Content(t)
         this._AddLabel(top, GetLang("文本来源:")).Grid_Row(1).Grid_Column(3).Name("NameTip")
         this._StyleCombo(top.Add("ComboBox").Name("NameCon").Grid_Row(1).Grid_Column(4).IsEditable("True"))
+        concatSource := this._StyleCombo(top.Add("ComboBox").Name("ConcatSource").Grid_Row(1).Grid_Column(4))
+        for mode in GetLangArr(TextOpsModes("文本拼接"))
+            concatSource.Add("ComboBoxItem").Content(mode)
 
         paramCard := body.Add("Border").Grid_Row(1).CornerRadius("8").Padding("12,8,12,8").Margin("0,0,0,8")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
@@ -172,7 +162,7 @@ class TextOpsGui {
         this._AddLabel(searchRow, GetLang("替换文本:")).Grid_Column(3)
         this._StyleCombo(searchRow.Add("ComboBox").Name("ReplaceCon").Grid_Column(4).IsEditable("True"))
 
-        this._AddLabel(argsGrid, GetLang("时间量：")).Grid_Column(3).Name("TimestampComponentLabel").Visibility("Collapsed")
+        this._AddLabel(argsGrid, GetLang("时间量：")).ToolTip(GetLang("选择要从时间戳中提取的部分，例如年或月。")).Grid_Column(3).Name("TimestampComponentLabel").Visibility("Collapsed")
         componentCombo := this._StyleCombo(argsGrid.Add("ComboBox").Name("TimestampComponent").Grid_Column(4).Visibility("Collapsed"))
         for label in TextOpsTimestampComponentLabels()
             componentCombo.Add("ComboBoxItem").Content(label)
@@ -204,6 +194,13 @@ class TextOpsGui {
             .ToolTip(GetLang("编辑")).Foreground("{DynamicResource TextMain}")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
+        concatArrayRow := param.Add("Grid").Name("ConcatArrayRow").Grid_Row(0).Grid_ColumnSpan(5).Visibility("Collapsed")
+        concatArrayRow.Cols("90", "*", "10", "90", "*")
+        this._AddLabel(concatArrayRow, GetLang("数组名：")).Grid_Column(0)
+        this._StyleCombo(concatArrayRow.Add("ComboBox").Name("ConcatArrayName").Grid_Column(1).IsEditable("True"))
+        this._AddLabel(concatArrayRow, GetLang("拼接符号：")).Grid_Column(3)
+        this._StyleCombo(concatArrayRow.Add("ComboBox").Name("ConcatSeparator").Grid_Column(4).IsEditable("True"))
+
         res := body.Add("Grid").Grid_Row(2).Margin("12,0,12,0")
         res.Cols("90", "96", "10", "160")
         res.Rows("36")
@@ -231,7 +228,7 @@ class TextOpsGui {
         BindCmdEditorChrome(this.ui, "#指令手册/18-文本处理", ObjBindMethod(this, "TriggerMacro"))
         this.ui.OnEvent("TypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
         this.ui.OnEvent("ArgsTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefreshArgsType"))
-        this.ui.OnEvent("ArgsNameCon", "TextChanged", ObjBindMethod(this, "OnArgsNameConChange"))
+        this.ui.OnEvent("ConcatSource", "SelectionChanged", ObjBindMethod(this, "OnRefreshConcatSource"))
         this.ui.OnEvent("BtnConcatEdit", "Click", ObjBindMethod(this, "OpenConcatEditor"))
         this.ui.OnEvent("TimestampFormatRow", "PreviewMouseLeftButtonDown", ObjBindMethod(this, "_OnTimestampFormatDown"))
         this.ui.OnEvent("TimestampFormatRow", "PreviewMouseLeftButtonUp", ObjBindMethod(this, "_OnTimestampFormatUp"))
@@ -303,44 +300,50 @@ class TextOpsGui {
     _TypeText() => IsObject(this.ui) ? this.ui.Query("TypeCombo") : ""
     _ArgsTypeText() => IsObject(this.ui) ? this.ui.Query("ArgsTypeCombo") : ""
 
-    _ConcatDefaultText() {
-        return "{当前年}{当前月}{当前日}"
-    }
-
-    _IsConcatPlaceholder(s) {
-        s := Trim(s)
-        return s == "" || s == ","
+    _SetArgsNameCombo(value) {
+        items := this.ArgsNameOptions.Clone()
+        if (this._activeType == "文本分割" && this._activeMode == "内容分割") {
+            for i, option in TextOpsSeparatorOptions()
+                items.InsertAt(i, GetLang(option[1]))
+            value := TextOpsSeparatorText(value, true)
+        } else if (value == "`t") {
+            value := GetLang("制表符")
+        }
+        this._SetCombo("ArgsNameCon", items, GetBuiltinVarName(value, true))
     }
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("文本处理")
-        this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
+        this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         ; 旧替换指令以 MatchType 为准，ArgsType 可能仍为旧默认值。
         if (this.Data.Type == "文本替换")
             this.Data.ArgsType := this.Data.MatchType
         this.DLArrayArr := GetGuiArrNameArr()
-        ArgsNameArr := GetGuiVarArr("clipboard")
-        ArgsNameArr.InsertAt(1, GetLang("制表符"))
-        this.ArgsNameOptions := ArgsNameArr.Clone()
+        this.ArgsNameOptions := GetGuiVarArr("clipboard")
+        this._activeType := this.Data.Type
+        this._activeMode := this.Data.ArgsType
+        isConcat := this._activeType == "文本拼接"
+        this._concatMode := isConcat && this.Data.ArgsType == "数组" ? "数组" : "自定义"
+        isArray := this._concatMode == "数组"
+        this._concatPrefix := isConcat && !isArray ? this.Data.Name : ""
 
         this._SetDDL("TypeCombo", GetLangArr(TextOpsTypeNames()), GetLang(this.Data.Type))
-        this._SetCombo("NameCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.Name, true))
-        concatArgs := this.Data.ArgsName
-        if (cmd == "" && GetLang(this.Data.Type) == GetLang("文本拼接") && this._IsConcatPlaceholder(concatArgs))
-            concatArgs := this._ConcatDefaultText()
-        this._SetCombo("ArgsNameCon", ArgsNameArr, GetBuiltinVarName(concatArgs, true))
-        this.ui.Update("ConcatCon", "Text", concatArgs)
-        this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
+        this._SetTextSource(this.Data.Name)
+        this._SetArgsNameCombo(this.Data.ArgsName)
+        this._ComboPush("ConcatSource", "SelectedIndex", isArray ? "1" : "0")
+        this._ComboPush("ConcatCon", "Text", isConcat && !isArray ? this.Data.ArgsName : TextOpsDefaultArgs("文本拼接", "自定义"))
+        this._SetCombo("ConcatArrayName", this.DLArrayArr, isArray ? this.Data.Name : "")
+        this._SetCombo("ConcatSeparator", TextOpsSeparatorChoices(),
+            isArray ? TextOpsSeparatorText(this.Data.ArgsName, true) : TextOpsDefaultArgs("文本拼接", "数组"))
         this._SetCombo("SearchCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.Search, true))
         this._SetCombo("ReplaceCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.Replace, true))
-        this._SetDDL("SaveTypeCombo", GetLangArr(["变量", "数组"]), GetLang(this.Data.SaveType))
-        this._SetCombo("SaveNameCon", this.DLArrayArr, this.Data.SaveName)
-
         this._timestampParts := TextOpsTimestampFormatParts(this.Data)
         this._ShowTimestampParts()
         this._ComboPush("TimestampComponent", "SelectedIndex", TextOpsTimestampComponentIndex(this.Data.ArgsName))
+        this._RefreshTypeControls()
+        this._RefreshModeControls(this.Data.SaveName)
     }
 
     _ShowTimestampParts() {
@@ -470,110 +473,86 @@ class TextOpsGui {
         this._ShowTimestampParts()
     }
 
-    OnRefresh(state := "", ctrl := "", event := "") {
+    OnRefresh(*) {
         if (!IsObject(this.ui))
             return
-        typeText := this._TypeText()
-        IsSplit := typeText == GetLang("文本分割")
-        IsReplace := typeText == GetLang("文本替换")
-        IsGetEx := typeText == GetLang("文本提取")
-        IsSpace := typeText == GetLang("去除空格")
-        IsUpLow := typeText == GetLang("大小写转换")
-        IsStatistics := typeText == GetLang("文本统计")
-        IsTimestamp := typeText == GetLang("时间戳处理")
-        IsConcat := typeText == GetLang("文本拼接")
-
-        ArgsDLArr := []
-        if (this.ArgsTypeMap.Has(typeText)) {
-            ArgsDLArr := this.ArgsTypeMap[typeText]
-            selected := IsTimestamp && this.Data.Type != "时间戳处理" ? "自定义格式" : this.Data.ArgsType
-            this._SetDDL("ArgsTypeCombo", ArgsDLArr, GetLang(selected))
-        }
-
-        ShowArgsType := IsSplit || IsGetEx || IsUpLow || IsSpace || IsStatistics || IsReplace || IsTimestamp
-        this.ui.Update("NameTip", "Text", GetLang(IsTimestamp ? "时间戳：" : "文本来源:"))
-        this._SetCombo("NameCon", IsTimestamp ? GetGuiVarArr("timestamp") : GetGuiVarArr("text"), this.ui.Query("NameCon"))
-        this.ui.Update("ArgsTypeCombo", "IsEnabled", ShowArgsType ? "True" : "False")
-        this._Vis("NameTip", !IsConcat, true)
-        this._Vis("NameCon", !IsConcat, true)
-        this._Vis("ArgsGrid", !IsConcat, true)
-        this._Vis("ConcatRow", IsConcat, true)
-        this._Vis("SearchRow", IsReplace, false)
-        this.ui.Update("SearchCon", "IsEnabled", IsReplace ? "True" : "False")
-        this.ui.Update("ReplaceCon", "IsEnabled", IsReplace ? "True" : "False")
-
-        this.OnRefreshArgsType()
+        type := GetLangKey(this._TypeText())
+        if (type == "" || type == this._activeType)
+            return
+        saveName := this.ui.Query("SaveNameCon")
+        this._activeType := type
+        this._activeMode := TextOpsDefaultMode(type)
+        this._SetTextSource(TextOpsDefaultSource(type))
+        this._SetArgsNameCombo(TextOpsDefaultArgs(type, this._activeMode))
+        this._RefreshTypeControls()
+        this._RefreshModeControls(saveName)
     }
 
-    OnRefreshArgsType(state := "", ctrl := "", event := "") {
+    _SetTextSource(value) {
+        options := this._activeType == "时间戳处理" ? GetGuiVarArr("timestamp") : GetGuiVarArr("text")
+        this._SetCombo("NameCon", options, GetBuiltinVarName(value, true))
+    }
+
+    _RefreshTypeControls() {
+        type := this._activeType
+        isConcat := type == "文本拼接"
+        isReplace := type == "文本替换"
+        if (!isConcat)
+            this._SetDDL("ArgsTypeCombo", GetLangArr(TextOpsModes(type)), GetLang(this._activeMode))
+        this._ComboPush("NameTip", "Text", GetLang(type == "时间戳处理" ? "时间戳：" : "文本来源:"))
+        this._Vis("NameCon", !isConcat)
+        this._Vis("ConcatSource", isConcat)
+        this._Vis("ArgsGrid", !isConcat)
+        this._Vis("SearchRow", isReplace, false)
+        this._RefreshConcatSource()
+    }
+
+    OnRefreshConcatSource(*) {
         if (!IsObject(this.ui))
             return
-        mode := this._ArgsTypeText()
-        tipText := this.ArgsTipMap.Get(mode, GetLang("类型参数:"))
-        this.ui.Update("ArgsNameTip", "Text", tipText)
-        this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
-        typeText := this._TypeText()
-        IsSplit := typeText == GetLang("文本分割")
-        IsGetEx := typeText == GetLang("文本提取")
-        IsGetExReg := IsGetEx && mode == GetLang("正则匹配")
-        ShowArgsName := IsSplit || IsGetExReg
-        this._Vis("ArgsNameTip", ShowArgsName, false)
-        this._Vis("ArgsNameCon", ShowArgsName, false)
-        this.ui.Update("ArgsNameCon", "IsEnabled", ShowArgsName ? "True" : "False")
-        isTimestamp := typeText == GetLang("时间戳处理")
-        showComponent := isTimestamp && mode == GetLang("提取时间量")
+        this._concatMode := GetLangKey(this.ui.Query("ConcatSource"))
+        this._RefreshConcatSource()
+    }
+
+    _RefreshConcatSource() {
+        isConcat := this._activeType == "文本拼接"
+        isArray := this._concatMode == "数组"
+        this._Vis("ConcatRow", isConcat && !isArray)
+        this._Vis("ConcatArrayRow", isConcat && isArray)
+    }
+
+    OnRefreshArgsType(*) {
+        if (!IsObject(this.ui) || this._activeType == "文本拼接")
+            return
+        mode := GetLangKey(this._ArgsTypeText())
+        if (mode == "" || mode == this._activeMode)
+            return
+        this._activeMode := mode
+        this._SetArgsNameCombo(TextOpsDefaultArgs(this._activeType, mode))
+        this._RefreshModeControls(this.ui.Query("SaveNameCon"))
+    }
+
+    _RefreshModeControls(saveName) {
+        type := this._activeType
+        mode := this._activeMode
+        this._ComboPush("ArgsNameTip", "Text", this.ArgsTipMap.Get(GetLang(mode), GetLang("类型参数:")))
+        showArgs := type == "文本分割" || (type == "文本提取" && mode == "正则匹配")
+        this._Vis("ArgsNameTip", showArgs, false)
+        this._Vis("ArgsNameCon", showArgs, false)
+        isTimestamp := type == "时间戳处理"
+        showComponent := isTimestamp && mode == "提取时间量"
         this._Vis("TimestampComponentLabel", showComponent)
         this._Vis("TimestampComponent", showComponent)
-        showFormat := isTimestamp && mode == GetLang("自定义格式")
+        showFormat := isTimestamp && mode == "自定义格式"
         this._Vis("TimestampFormatRow", showFormat)
         if (!showFormat)
             this._EndTimestampDrag()
-        modeKey := GetLangKey(mode)
-        preset := isTimestamp ? TextOpsTimestampPresetFormat(modeKey) : ""
-        this.ui.Update("TimestampPresetHint", "Text", preset)
+        preset := isTimestamp ? TextOpsTimestampPresetFormat(mode) : ""
+        this._ComboPush("TimestampPresetHint", "Text", preset)
         this._Vis("TimestampPresetHint", preset != "")
-        resultType := TextOpsResultType(GetLangKey(typeText), modeKey)
-        this._ComboPush("SaveTypeCombo", "SelectedIndex", resultType == "数组" ? "1" : "0")
-        this.OnRefreshDataType()
-    }
-
-    OnRefreshDataType(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
-            return
-        IsResVar := this.ui.Query("SaveTypeCombo") == GetLang("变量")
-        ResArr := IsResVar ? GetGuiVarArr() : this.DLArrayArr
-        curText := this.ui.Query("SaveNameCon")
-        this._SetCombo("SaveNameCon", ResArr, curText)
-        this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
-    }
-
-    OnArgsNameConChange(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
-            return
-        IsConcat := this._TypeText() == GetLang("文本拼接")
-        if (!IsConcat) {
-            this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
-            return
-        }
-        newText := this.ui.Query("ArgsNameCon")
-        if (newText == "") {
-            this.lastArgsNameConText := ""
-            return
-        }
-        isFromDropdown := false
-        loop this.ArgsNameOptions.Length {
-            if (this.ArgsNameOptions[A_Index] == newText) {
-                isFromDropdown := true
-                break
-            }
-        }
-        if (isFromDropdown && this.lastArgsNameConText != "" && newText != this.lastArgsNameConText) {
-            this.ui.Update("ArgsNameCon", "Text", this.lastArgsNameConText "{" newText "}")
-        }
-        else if (isFromDropdown && (this.lastArgsNameConText == "" || newText == this.lastArgsNameConText)) {
-            this.ui.Update("ArgsNameCon", "Text", "{" newText "}")
-        }
-        this.lastArgsNameConText := this.ui.Query("ArgsNameCon")
+        isArray := TextOpsResultType(type, mode) == "数组"
+        this._ComboPush("SaveTypeCombo", "SelectedIndex", isArray ? "1" : "0")
+        this._SetCombo("SaveNameCon", isArray ? this.DLArrayArr : GetGuiVarArr(), saveName)
     }
 
     _CloseConcatEditor() {
@@ -620,7 +599,7 @@ class TextOpsGui {
 
         row1 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row1.Cols("88", "80", "8", "200", "8", "70", "8", "70")
-        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).VerticalAlignment("Center")
+        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         vt := row1.Add("ComboBox").Grid_Column(1).Name("ConcatEditVarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))
@@ -727,6 +706,12 @@ class TextOpsGui {
     }
 
     CheckIfValid() {
+        if (this._TypeText() == GetLang("文本拼接") && this.ui.Query("ConcatSource") == GetLang("数组")) {
+            if (Trim(this.ui.Query("ConcatArrayName")) == "") {
+                RmtDialog.Info(GetLang("数组名不能为空"))
+                return false
+            }
+        }
         if (this._TypeText() == GetLang("文本替换")) {
             if (this.ui.Query("SearchCon") == "") {
                 RmtDialog.Info(GetLang("搜索文本不能为空"))
@@ -793,16 +778,24 @@ class TextOpsGui {
     }
 
     SaveTextOpsData() {
-        isConcat := this._TypeText() == GetLang("文本拼接")
-        if (isConcat) {
-            ArgsName := this.ui.Query("ConcatCon")
-        } else {
-            ArgsName := this.ui.Query("ArgsNameCon")
-            ArgsName := ArgsName == GetLang("制表符") ? "`t" : ArgsName
-        }
         this.Data.Type := GetLangKey(this._TypeText())
-        this.Data.Name := isConcat ? "" : GetBuiltinVarName(this.ui.Query("NameCon"))
-        this.Data.ArgsType := isConcat ? "拼接文本" : GetLangKey(this._ArgsTypeText())
+        if (this.Data.Type == "文本拼接") {
+            if (this.ui.Query("ConcatSource") == GetLang("数组")) {
+                this.Data.ArgsType := "数组"
+                this.Data.Name := Trim(this.ui.Query("ConcatArrayName"))
+                ArgsName := TextOpsSeparatorText(this.ui.Query("ConcatSeparator"))
+            } else {
+                this.Data.ArgsType := "拼接文本"
+                this.Data.Name := this._concatPrefix
+                ArgsName := this.ui.Query("ConcatCon")
+            }
+        } else {
+            this.Data.ArgsType := GetLangKey(this._ArgsTypeText())
+            this.Data.Name := GetBuiltinVarName(this.ui.Query("NameCon"))
+            ArgsName := GetBuiltinVarName(this.ui.Query("ArgsNameCon"))
+            if (this.Data.Type == "文本分割" && this.Data.ArgsType == "内容分割")
+                ArgsName := TextOpsSeparatorText(ArgsName)
+        }
         if (this.Data.Type == "时间戳处理" && this.Data.ArgsType == "提取时间量") {
             componentIndex := this.ui.Query("TimestampComponent>SelectedIndex")
             ArgsName := TextOpsTimestampComponents()[Integer(componentIndex) + 1][1]
@@ -812,10 +805,11 @@ class TextOpsGui {
             for part in this._timestampParts
                 this.Data.TimestampFormatParts.Push(part.Clone())
         }
-        this.Data.ArgsName := isConcat ? ArgsName : GetBuiltinVarName(ArgsName)
+        this.Data.ArgsName := ArgsName
         this.Data.Search := GetBuiltinVarName(this.ui.Query("SearchCon"))
         this.Data.Replace := GetBuiltinVarName(this.ui.Query("ReplaceCon"))
-        this.Data.MatchType := GetLangKey(this._ArgsTypeText())
+        if (this.Data.Type == "文本替换")
+            this.Data.MatchType := this.Data.ArgsType
         this.Data.SaveType := TextOpsResultType(this.Data.Type, this.Data.ArgsType)
         this.Data.SaveName := GetVarName(this.ui.Query("SaveNameCon"))
         if (this.Data.SaveType == "变量")

@@ -989,7 +989,7 @@ class ShareCenterGui {
         SplitPath fileName, &baseName
         if (baseName == "")
             baseName := "shared.rmt"
-        this._downloadPath := A_Temp "\RMT_Share\" baseName
+        this._downloadPath := RmtCacheDir() "\RMT_Share\" baseName
 
         topic := this._detailTopic
         titleTxt := IsObject(topic) ? topic["title"] : ""
@@ -1302,8 +1302,8 @@ class ShareCenterGui {
                         info .= " cooked=未取得或非字符串"
                     RMTLogSys(RMT_LV_INFO, "ShareCenter", info)
                     ; 落盘完整 body，便于与服务端直抓数据对比
-                    try FileDelete(A_Temp "\rmt_body_dump.json")
-                    FileAppend(body, A_Temp "\rmt_body_dump.json", "UTF-8")
+                    try FileDelete(RmtCacheDir() "\rmt_body_dump.json")
+                    FileAppend(body, RmtCacheDir() "\rmt_body_dump.json", "UTF-8")
                 }
                 this._SetStatus(GetLang("解析共享信息失败: ") e.Message GetLang("（若帖子已删除或非共享帖，点「刷新」更新索引）"))
             }

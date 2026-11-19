@@ -148,7 +148,6 @@ OnSaveSetting(*) {
     CheckAndAddDirty("PreferredMacroEditor", MainSoftData.PreferredMacroEditor)
     CheckAndAddDirty("MacroTotalCount", MySoftData.MacroTotalCount)
     CheckAndAddDirty("HasSaved", true)
-    CheckAndAddDirty("IsReload", true)
 
     ; CMD窗口设置
     CheckAndAddDirty("CMDPosX", MainSoftData.CMDPosX)
@@ -705,22 +704,24 @@ InitFilePath() {
     if (!DirExist(A_WorkingDir "\Setting")) {
         DirCreate(A_WorkingDir "\Setting")
     }
-    if (!DirExist(A_WorkingDir "\Setting\" MySoftData.CurSettingName)) {
-        DirCreate(A_WorkingDir "\Setting\" MySoftData.CurSettingName)
+    profileDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName
+    if (!DirExist(profileDir)) {
+        DirCreate(profileDir)
+        Compat_WriteVersion(profileDir, Compat_CurrentVersion())
+    } else {
+        ; 在任何默认宏表写入之前迁移直接覆盖安装的旧方案。
+        Compat_UpgradeDir(profileDir)
     }
 
-    ; 在任何默认宏表写入之前迁移直接覆盖安装的旧方案；失败必须中止加载。
-    Compat_UpgradeDir(A_WorkingDir "\Setting\" MySoftData.CurSettingName)
-
-    if (!DirExist(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UseExplain")) {
-        DirCreate(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\UseExplain")
+    if (!DirExist(profileDir "\Images\UseExplain")) {
+        DirCreate(profileDir "\Images\UseExplain")
     }
 
-    if (!DirExist(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot")) {
-        DirCreate(A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images\ScreenShot")
+    if (!DirExist(profileDir "\Images\ScreenShot")) {
+        DirCreate(profileDir "\Images\ScreenShot")
     }
 
-    filePath := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\使用说明&署名.txt"
+    filePath := profileDir "\使用说明&署名.txt"
     if (!FileExist(filePath)) {
         str1 := GetLang("协议：CC BY - NC - SA 4.0")
         str2 := GetLang("原始来源：RMT(若梦兔) 软件导出")
@@ -1051,7 +1052,7 @@ CleanupAllMacroStates() {
 
 MsgBoxContent(content, title := "") {
     ; 主窗句柄回传前适配器还没建（启动早期可能因插件初始化失败而弹框），此时跳过闪烁
-    if (IsObject(MainSoftData.MyGui))
+    if (HasMethod(MainSoftData.MyGui, "Flash"))
         MainSoftData.MyGui.Flash()
     SoundPlay "*-1"
     MyMsgboxGui.ShowGui(content, title)
@@ -1331,18 +1332,18 @@ OnGetSelectAreaCancel(*) {
     TogGetSelectArea(false)
 }
 
-TogSelectArea(isEnable, action := "", showPrompt := true) {
+TogSelectArea(isEnable, action := "", showPrompt := true, pointOnly := false) {
     global SelectAreaState
     if (isEnable && action != "") {
+        SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0, pointOnly: pointOnly}
         MainSoftData.SelectAreaAction := action
         if (showPrompt)
-            ToolTipContent(GetLang("请框选截图范围"))
+            ToolTipContent(GetLang(pointOnly ? "请点击选取坐标，右键或 Esc 取消" : "请框选截图范围"))
         SetSystemCursor("CROSS")
         Hotkey("*LButton", SelectAreaDown, "On")
         Hotkey("*LButton Up", SelectAreaUp, "On")
         Hotkey("*RButton", SelectAreaCancel, "On")
 
-        SelectAreaState := {breakFlag: false, winPos: "", firstPos: false, sx: 0, sy: 0}
         while (!SelectAreaState.breakFlag) {
             Sleep(30)
         }
@@ -1370,17 +1371,24 @@ TogSelectArea(isEnable, action := "", showPrompt := true) {
 }
 
 SelectAreaDown(*) {
-    BeginSelectArea(true)
-    SetTimer(SelectAreaDraw, 30)
+    global SelectAreaState
+    BeginSelectArea(!SelectAreaState.pointOnly)
+    if (!SelectAreaState.pointOnly)
+        SetTimer(SelectAreaDraw, 30)
 }
 
 SelectAreaUp(*) {
     global SelectAreaState
     SetTimer(SelectAreaDraw, 0)
     try {
+        action := MainSoftData.SelectAreaAction
+        if (SelectAreaState.pointOnly) {
+            if (action != "" && SelectAreaState.firstPos)
+                action(SelectAreaState.sx, SelectAreaState.sy, SelectAreaState.sx, SelectAreaState.sy)
+            return
+        }
         UpdateSelectAreaPosition()
         SelectAreaHo.Hide()
-        action := MainSoftData.SelectAreaAction
         if (action != "") {
             if (SelectAreaState.winPos != "") {
                 x1 := SelectAreaState.winPos.X
@@ -1988,24 +1996,41 @@ CloseMenuWheel() {
     MyMenuWheel.Close()
 }
 
-CorrectRemark(CommandStr, Remark) {
+CleanCommandRemark(Remark) {
     charsToRemove := [",", "，", "`n", "⫶", "_"]
-    for char in charsToRemove {
+    for char in charsToRemove
         Remark := StrReplace(Remark, char)
-    }
-    if (Remark != "") {
-        CommandStr .= "_" Remark
-    }
-    return CommandStr
+    return Remark
 }
 
-; 指令备注是否应自动生成：1=不生成；2=仅备注为空时生成；3=强制生成（覆盖已有备注）
-ShouldAutoGenerateRemark(Remark) {
-    if (MainSoftData.RemarkAutoType == 1)
-        return false
-    if (MainSoftData.RemarkAutoType == 3)
-        return true
-    return (Remark == "")
+CorrectRemark(CommandStr, Remark) {
+    Remark := CleanCommandRemark(Remark)
+    return Remark != "" ? CommandStr "_" Remark : CommandStr
+}
+
+ReadCommandAutoRemark(data, generate) {
+    if (data.HasOwnProp("AutoRemark"))
+        return data.AutoRemark
+    ; 旧配置没有来源字段，用打开编辑器时的参数还原旧版自动备注。
+    try return CleanCommandRemark(generate.Call(data))
+    return ""
+}
+
+FormatCommandAutoRemark(data, remark, previousAutoRemark, generate, commitRemark) {
+    SplitSerialTextAndNumbers(data.SerialStr, &name, &number)
+    remark := CleanCommandRemark(remark)
+    isAuto := previousAutoRemark != "" && remark == previousAutoRemark
+    mode := MainSoftData.RemarkAutoType
+    if (mode == 3 || (mode == 2 && (Trim(remark, " `t`r`n") == "" || isAuto))) {
+        generated := CleanCommandRemark(generate.Call(data))
+        if (generated != "") {
+            remark := generated
+            isAuto := true
+        }
+    }
+    if (commitRemark)
+        data.AutoRemark := isAuto ? remark : ""
+    return CorrectRemark(GetLang(name) number, remark)
 }
 
 OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "") {

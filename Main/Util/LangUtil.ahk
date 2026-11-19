@@ -25,7 +25,7 @@ LangCmdKeyArr := [
     "插入到当前宏", "触发", "暂停", "取消暂停", "终止", "制表符", "弹窗", "状态", "选择", "选择文件", "多选", "文本文件", "继续", "继续&取消", "继续&终止&暂停",
     "用默认值", "保持原值", "自动继续", "自动终止", "自动暂停", "等待结束",
     "暂停当前宏", "暂停所有宏", "终止当前宏", "终止所有宏", "读取全部内容", "逐行读取", "指定行", "单元格", "指定列", "指定区域-行",
-    "指定区域-列", "网络请求", "JSON", "表单", "原始文本", "文件读写", "Excel", "读取文件", "写入文件", "读取文本文件", "写入文本文件",
+    "指定区域-列", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测", "JSON", "表单", "原始文本", "文件读写", "Excel", "读取文件", "写入文件", "读取文本文件", "写入文本文件",
     "发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"
 ]
 
@@ -50,8 +50,13 @@ LangInitSetting() {
     LangMap := Map("简中", 1)
 
     if (DirExist(LangDir)) {
+        officialNames := ["繁體中文"]
         for name in OfficialLanguages() {
-            if (name != "简中" && FileExist(LangDir "\" name ".txt")) {
+            if (name != "简中" && name != "繁體中文")
+                officialNames.Push(name)
+        }
+        for name in officialNames {
+            if (FileExist(LangDir "\" name ".txt")) {
                 LangMap[name] := 1
                 MainSoftData.LangArr.Push(name)
             }
@@ -104,6 +109,10 @@ LangKeysInit() {
             if (eqPos > 1) {
                 rawKey := StrReplace(SubStr(line, 1, eqPos - 1), "\=", "=")
                 val := SubStr(line, eqPos + 1)
+                if (InStr(rawKey, "``n", true)) {
+                    rawKey := StrReplace(rawKey, "``n", "`n", true)
+                    val := StrReplace(val, "``n", "`n", true)
+                }
                 LangKeyMap[rawKey] := val
                 trimmedKey := Trim(rawKey)
                 if (trimmedKey != rawKey && !LangKeyMap.Has(trimmedKey))
@@ -206,53 +215,45 @@ GetLangMacro(MacroStr, Mode) {
 
 ; mode 1多语言模式  2简中语言模式
 GetLangCmd(Cmd, Mode) {
-    if (Cmd == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+    if (Mode == 1 && MainSoftData.Lang == "简中")
         return Cmd
 
     paramArr := SplitCommand(Cmd)
-    if (paramArr.Length == 0)
-        return Cmd
 
     action := Mode == 1 ? GetLang : GetLangKey
     cmdSymbol := GetCmdSymbol(paramArr[1])
-    paramArr[1] := GetCmdStr(paramArr[1])
+    rawCmd := GetCmdStr(paramArr[1])
 
-    IsMM := IsMoveCmd(paramArr[1])
-    IsPressKey := paramArr[1] == "按键" || paramArr[1] == GetLang("按键")
-    IsInterval := paramArr[1] == "间隔" || paramArr[1] == GetLang("间隔")
-    IsRMT := paramArr[1] == "RMT指令" || paramArr[1] == GetLang("RMT指令")
-    if (IsMM || IsPressKey || IsInterval || IsRMT) {
-        paramArr[1] := action(paramArr[1])
-    }
-    else {
-        textOnly := RegExReplace(paramArr[1], "\d+")
-        numbersOnly := RegExReplace(paramArr[1], "\D+")
-        paramArr[1] := Format("{}{}", action(textOnly), numbersOnly)
-    }
-    paramArr[1] := Format("{}{}", cmdSymbol, paramArr[1])
+    ; 統一拆分指令名與尾部編號：
+    ; - 帶編號序列指令（如 "搜尋1"）：textOnly="搜尋", numbersOnly="1"
+    ; - 無編號純指令（如 "按鍵"、"間隔"）：textOnly="按鍵", numbersOnly=""
+    ; 兩者皆可通用同一行邏輯轉換，省去繁瑣的分支判斷與正規表示式（RegExReplace）
+    SplitSerialTextAndNumbers(rawCmd, &textOnly, &numbersOnly)
+    paramArr[1] := cmdSymbol . action(textOnly) . numbersOnly
 
-    if (IsRMT && paramArr.Length >= 2) {
+    ; 將指令名歸一化為內部簡中鍵，統一處理特定指令的內部參數翻譯
+    key := GetLangKey(textOnly)
+    if (key == "RMT指令" && paramArr.Length >= 2)
         paramArr[2] := action(paramArr[2])
-    }
-
-    if (IsPressKey && paramArr.Length >= 3) {
+    else if (key == "按键" && paramArr.Length >= 3)
         paramArr[3] := action(paramArr[3])
-    }
+
+    ; 重組並返回處理後的完整指令字串
     return GetCmdByParams(paramArr)
 }
 
 ; mode 1多语言模式  2简中语言模式
 GetLangStr(Str, Mode) {
-    if (Str == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+    if (Mode == 1 && MainSoftData.Lang == "简中")
         return Str
 
-    SpecialKeyArr1 := GetLangKeyArr(GetSpecialVarArr())
-    SpecialKeyArr2 := GetSpecialVarArr()
-    KeyArr := Mode == 1 ? SpecialKeyArr1 : SpecialKeyArr2
-    action := Mode == 1 ? GetLang : GetLangKey
-
-    for index, value in KeyArr {
-        Str := StrReplace(Str, value, action(value))
+    for displayVar in GetSpecialVarArr() {
+        zhKey := GetLangKey(displayVar)
+        if (zhKey == displayVar)
+            continue
+        fromStr := Mode == 1 ? zhKey : displayVar
+        toStr   := Mode == 1 ? displayVar : zhKey
+        Str := StrReplace(Str, fromStr, toStr)
     }
     return Str
 }

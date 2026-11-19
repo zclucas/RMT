@@ -726,11 +726,14 @@ class MacroGraphFormalHandlersMixin {
             if (data.Type == tt)
                 return
             data.Type := tt
-            argsItems := this._FormalTextOpsArgsTypes(tt)
-            if (argsItems.Length > 0)
-                data.ArgsType := GetLangKey(argsItems[1])
+            mode := TextOpsDefaultMode(tt)
+            data.ArgsType := tt == "文本拼接" ? "拼接文本" : mode
+            data.Name := TextOpsDefaultSource(tt)
+            data.ArgsName := TextOpsDefaultArgs(tt, mode)
+            if (tt == "文本替换")
+                data.MatchType := mode
             data.SaveType := TextOpsResultType(tt, data.ArgsType)
-            this._RefreshTextOpsSource(id, tt, data.Name)
+            this._RefreshTextOpsFields(id, tt, data.ArgsType, data.Name, data.ArgsName)
             this._RefreshTextOpsOptions(id, tt, data.ArgsType, data.HasOwnProp("SaveName") ? data.SaveName : "")
             SaveMacroCMDData(data)
             this._SaveGraphAndNotifyParent()
@@ -746,15 +749,22 @@ class MacroGraphFormalHandlersMixin {
             if (atTxt == "")
                 return
             newMode := GetLangKey(atTxt)
+            if (tt == "文本拼接" && newMode == "自定义")
+                newMode := "拼接文本"
             if (data.ArgsType == newMode)
                 return
             data.ArgsType := newMode
             data.SaveType := TextOpsResultType(tt, newMode)
+            data.ArgsName := TextOpsDefaultArgs(tt, newMode)
+            if (tt == "文本拼接")
+                data.Name := ""
+            if (tt == "文本替换")
+                data.MatchType := newMode
             if (tt == "时间戳处理" && newMode == "提取时间量") {
                 componentIndex := TextOpsTimestampComponentIndex(data.ArgsName)
-                data.ArgsName := TextOpsTimestampComponents()[componentIndex + 1][1]
                 this.ui.Update("TxtTimestampComponent_" id, "SelectedIndex", componentIndex)
             }
+            this._RefreshTextOpsFields(id, tt, newMode, data.Name, data.ArgsName)
             this._RefreshTextOpsOptions(id, tt, newMode, data.SaveName)
             SaveMacroCMDData(data)
             this._SaveGraphAndNotifyParent()
@@ -762,6 +772,7 @@ class MacroGraphFormalHandlersMixin {
         }
 
         hasChange := false
+        isArraySource := data.Type == "文本拼接" && data.ArgsType == "数组"
         if (ctrl == "TxtTimestampComponent_" id && data.Type == "时间戳处理" && data.ArgsType == "提取时间量") {
             labels := TextOpsTimestampComponentLabels()
             componentText := this._ComboText(ctrl, state, labels)
@@ -776,16 +787,19 @@ class MacroGraphFormalHandlersMixin {
                 }
             }
         }
-        if (ctrl == "TxtName_" id && state.Has(ctrl) && state[ctrl] != "") {
-            newName := GetBuiltinVarName(Trim(state[ctrl]))
+        if (ctrl == "TxtName_" id && state.Has(ctrl) && (state[ctrl] != "" || data.Type == "文本拼接")) {
+            newName := Trim(state[ctrl])
+            if (!isArraySource)
+                newName := GetBuiltinVarName(newName)
             if (data.Name != newName) {
                 data.Name := newName
                 hasChange := true
             }
         }
-        if (ctrl == "TxtArgsName_" id && state.Has(ctrl) && state[ctrl] != "") {
-            if (data.ArgsName != state[ctrl]) {
-                data.ArgsName := GetBuiltinVarName(state[ctrl])
+        if (ctrl == "TxtArgsName_" id && state.Has(ctrl) && (state[ctrl] != "" || data.Type == "文本拼接")) {
+            args := this._FormalTextOpsArgsText(data.Type, data.ArgsType, state[ctrl])
+            if (data.ArgsName != args) {
+                data.ArgsName := args
                 hasChange := true
             }
         }
@@ -1430,12 +1444,52 @@ class MacroGraphFormalHandlersMixin {
         this._FormalSetVis(id, "TxtReplaceRow_" id, IsReplace)
     }
 
-    _RefreshTextOpsSource(id, type, source) {
-        name := "TxtName_" id
-        this.ui.Update(name, "ClearItems", "")
-        for option in (type == "时间戳处理" ? GetGuiVarArr("timestamp") : GetGuiVarArr("text"))
-            this.ui.Update(name, "AddItem", option)
-        this.ui.Update(name, "Text", GetLang(source))
+    _FormalTextOpsSourceOptions(type, mode) {
+        if (type == "文本拼接" && mode == "数组")
+            return GetGuiArrNameArr()
+        return type == "时间戳处理" ? GetGuiVarArr("timestamp") : GetGuiVarArr("text")
+    }
+
+    _FormalTextOpsArgsOptions(type, mode) {
+        if (type == "文本拼接" && mode == "数组")
+            return TextOpsSeparatorChoices()
+        items := GetGuiVarArr("clipboard")
+        if (type == "文本分割" && mode == "内容分割") {
+            for i, option in TextOpsSeparatorOptions()
+                items.InsertAt(i, GetLang(option[1]))
+        }
+        return items
+    }
+
+    _FormalTextOpsArgsText(type, mode, value, toDisplay := false) {
+        if (type == "文本拼接")
+            return mode == "数组" ? TextOpsSeparatorText(value, toDisplay) : value
+        if (type == "文本分割" && mode == "内容分割")
+            value := TextOpsSeparatorText(value, toDisplay)
+        return GetBuiltinVarName(value, toDisplay)
+    }
+
+    _FormalTextOpsArgsLabel(type, mode) {
+        if (type == "文本拼接")
+            return GetLang(mode == "数组" ? "拼接符号：" : "拼接内容：")
+        return GetLang("参数值：")
+    }
+
+    _RefreshTextOpsFields(id, type, mode, source, args) {
+        isArraySource := type == "文本拼接" && mode == "数组"
+        this.ui.Update("TxtArgsTypeLabel_" id, "Text", GetLang(type == "文本拼接" ? "文本来源:" : "参数类型："))
+        this.ui.Update("TxtNameLabel_" id, "Text", GetLang(isArraySource ? "数组名：" : "文本变量："))
+        this.ui.Update("TxtArgsNameLabel_" id, "Text", this._FormalTextOpsArgsLabel(type, mode))
+        nameControl := "TxtName_" id
+        argsControl := "TxtArgsName_" id
+        this.ui.Update(nameControl, "ClearItems", "")
+        for option in this._FormalTextOpsSourceOptions(type, mode)
+            this.ui.Update(nameControl, "AddItem", option)
+        this.ui.Update(nameControl, "Text", isArraySource ? source : GetBuiltinVarName(source, true))
+        this.ui.Update(argsControl, "ClearItems", "")
+        for option in this._FormalTextOpsArgsOptions(type, mode)
+            this.ui.Update(argsControl, "AddItem", option)
+        this.ui.Update(argsControl, "Text", this._FormalTextOpsArgsText(type, mode, args, true))
     }
 
     ; 文本处理节点：编辑器确定后就地刷新内联控件值（避免整窗 _Render 闪烁）。
@@ -1449,16 +1503,10 @@ class MacroGraphFormalHandlersMixin {
         rp := d.HasOwnProp("replace") ? d.replace : ""
         sn := d.HasOwnProp("saveName") ? d.saveName : "Data"
         this.ui.Update("TxtTypeCmb_" id, "SelectedIndex", this._IndexInLangArr(typeNames, tt))
-        this._RefreshTextOpsSource(id, tt, tn)
+        this._RefreshTextOpsFields(id, tt, at, tn, an)
         this.ui.Update("TxtSearch_" id, "Text", sr)
         this.ui.Update("TxtReplace_" id, "Text", rp)
         this.ui.Update("TxtTimestampComponent_" id, "SelectedIndex", TextOpsTimestampComponentIndex(an))
-
-        varList := GetGuiVarArr("clipboard")
-        this.ui.Update("TxtArgsName_" id, "ClearItems", "")
-        for item in varList
-            this.ui.Update("TxtArgsName_" id, "AddItem", item)
-        this.ui.Update("TxtArgsName_" id, "Text", GetLang(an))
 
         this._RefreshTextOpsOptions(id, tt, at, sn)
     }
@@ -2125,8 +2173,7 @@ class MacroGraphFormalHandlersMixin {
         d := this._FormalDFromId(id)
         type := CmdEnumWait(d.HasOwnProp("waitType") ? d.waitType : "等待变量值")
         this.ui.Update("WaitTypeSummary_" id, "Text", GetLang(type))
-        this.ui.Update("WaitIntervalSummary_" id, "Text", GetLang("检测间隔：") (d.HasOwnProp("waitInterval") ? d.waitInterval : 500) " ms")
-        this.ui.Update("WaitIntervalSummary_" id, "Visibility", type == "等待确定" ? "Collapsed" : "Visible")
+        this.ui.Update("WaitTimeoutSummary_" id, "Text", this._WaitTimeoutSummary(d))
     }
 
     _OnWaitKeyPick(id, *) {
@@ -2331,6 +2378,13 @@ class MacroGraphFormalHandlersMixin {
         showCd := isCdCmd || sub == "倒计时"
         kind := TimeNormWaitType(d.HasOwnProp("cdKind") ? d.cdKind : (d.HasOwnProp("timeParam2") ? d.timeParam2 : "时长"))
         if (!isCdCmd) {
+            if (showWait)
+                this.ui.Update("TimeTargetRow_" id "Label", "ToolTip", CmdEditorForm.TimeValueTip(TimeNormWaitType(InputField(d, "timeParam2", ""))))
+            if (showWin) {
+                tip := CmdEditorForm.TimeValueTip(TimeNormWindowType(InputField(d, "timeParam5", "")))
+                for prefix in ["TimeStartRow_", "TimeEndRow_"]
+                    this.ui.Update(prefix id "Label", "ToolTip", tip)
+            }
             this._FormalSetVis(id, "TimeUnitRow_" id, showWait)
             this._FormalSetVis(id, "TimeTargetRow_" id, showWait)
             this._FormalSetVis(id, "TimeTimeoutRow_" id, showWait)

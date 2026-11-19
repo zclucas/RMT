@@ -126,13 +126,17 @@ FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, text, mode) {
 
 ;RapidOcr文本识别 result里面都是窗口坐标
 GetScreenTextObjArr(X1, Y1, X2, Y2, mode) {
-    global MyChineseOcr, MyEnglishOcr
     width := X2 - X1
     height := Y2 - Y1
     pBitmap := Gdip_BitmapFromScreen(X1 "|" Y1 "|" width "|" height)
 
     if !pBitmap
         throw Error("OCR 屏幕截图失败。")
+    try return GetBitmapTextObjArr(pBitmap)
+    finally Gdip_DisposeImage(pBitmap)
+}
+
+GetBitmapTextObjArr(pBitmap) {
     locked := false
     try {
         ; 获取位图的宽度和高度
@@ -162,13 +166,12 @@ GetScreenTextObjArr(X1, Y1, X2, Y2, mode) {
             NumPut("int", 4, BITMAP_DATA, 16)       ; bytespixel (4字节)
         }
 
-        ; 调用 ocr_from_bitmapdata 方法（mode 参数保留兼容，v6 统一多语言模型不再区分）
+        ; v6 统一多语言模型。
         ocr := GetChineseOcr()
         result := ocr.ocr_from_bitmapdata(BITMAP_DATA, , true)
     } finally {
         if locked
             Gdip_UnlockBits(pBitmap, &BitmapData)
-        Gdip_DisposeImage(pBitmap)
     }
     return result
 }

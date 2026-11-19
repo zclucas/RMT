@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include TimeoutPolicy.ahk
 
 OnHttpRequest(tableItem, cmd, index) {
     data := GetMacroCMDData(StrSplit(cmd, "_")[1])
@@ -9,11 +10,16 @@ OnHttpRequest(tableItem, cmd, index) {
         return
     MySetGlobalVariable([data.StatusVar, data.ResponseVar, data.ErrorVar],
         [result.Status, result.Body, result.Error], false)
+    TimeoutPolicy.WriteStatus(data, result.TimedOut)
+    action := TimeoutPolicy.Get(data)
+    if (result.TimedOut && TimeoutPolicy.Stops(action))
+        throw Error(GetLang("请求超时"))
 }
 
 HttpRequestRegisterResults(data) {
     for name in [data.StatusVar, data.ResponseVar, data.ErrorVar]
         MySoftData.GlobalVariMap[name] := true
+    TimeoutPolicy.RegisterStatus(data)
 }
 
 HttpRequestValidate(data) {
@@ -23,7 +29,7 @@ HttpRequestValidate(data) {
         throw Error("URL 不能为空。")
     if (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 1 || data.TimeoutMs > 3600000)
         throw Error("超时时间应为 1～3600000 毫秒。")
-    if (!RegExMatch(data.Retries, "^\{[^{}\r\n]+\}$"))
+    if (TimeoutPolicy.Get(data) == "" && !RegExMatch(data.Retries, "^\{[^{}\r\n]+\}$"))
         HttpRequestRetryCount(data.Retries)
     if (data.Method != "GET" && !RegExMatch(data.BodyType, "^(JSON|表单|原始文本)$"))
         throw Error("请选择有效的 Body 类型。")
@@ -50,7 +56,8 @@ HttpRequestUrlEncode(text) {
 
 HttpRequestPrepare(data, resolve) {
     HttpRequestValidate(data)
-    retries := HttpRequestRetryCount(IsInteger(data.Retries) ? data.Retries : Trim(resolve(data.Retries)))
+    retries := TimeoutPolicy.Get(data) == ""
+        ? HttpRequestRetryCount(IsInteger(data.Retries) ? data.Retries : Trim(resolve(data.Retries))) : 0
     url := Trim(resolve(data.Url))
     if (!RegExMatch(url, "i)^https?://[^/\s]+") || RegExMatch(url, "[\r\n]"))
         throw Error("URL 必须以 http:// 或 https:// 开头。")
@@ -92,16 +99,18 @@ HttpRequestPrepare(data, resolve) {
 ; 每次尝试均有总时限；异步请求轮询使宏中止能及时 Abort。
 ; 不记录 URL/Header/Body 或 COM 异常原文，以免密钥进入日志。
 HttpRequestExecute(data, resolve, cancelled := () => false) {
-    result := {Status: 0, Body: "", Error: ""}
+    result := {Status: 0, Body: "", Error: "", TimedOut: false}
     try prepared := HttpRequestPrepare(data, resolve)
     catch as e {
         result.Error := e.Message
         return result
     }
-    loop prepared.Retries + 1 {
+    timeoutAction := TimeoutPolicy.Get(data)
+    cancelledResult := {Status: 0, Body: "", Error: "请求已取消", TimedOut: false}
+    loop {
         if (cancelled())
-            return {Status: 0, Body: "", Error: "请求已取消"}
-        result := {Status: 0, Body: "", Error: ""}
+            return cancelledResult
+        result := {Status: 0, Body: "", Error: "", TimedOut: false}
         request := ""
         try {
             request := ComObject("WinHttp.WinHttpRequest.5.1")
@@ -116,16 +125,16 @@ HttpRequestExecute(data, resolve, cancelled := () => false) {
             request.Send(prepared.Body)
             loop {
                 if (cancelled()) {
-                    request.Abort()
-                    return {Status: 0, Body: "", Error: "请求已取消"}
+                    return cancelledResult
                 }
                 if (A_TickCount - started >= data.TimeoutMs) {
-                    request.Abort()
+                    result.TimedOut := true
                     result.Error := "请求超时"
                     break
                 }
                 if (request.WaitForResponse(0)) {
                     result.Status := request.Status
+                    result.TimedOut := result.Status == 408 || result.Status == 504
                     result.Body := request.ResponseText
                     if (result.Status >= 400)
                         result.Error := "HTTP " result.Status
@@ -135,23 +144,23 @@ HttpRequestExecute(data, resolve, cancelled := () => false) {
             }
         } catch as e {
             ; 仅返回数值错误码，原始消息可能含请求地址或凭据。
-            result.Error := "网络请求失败"
-            if (e.HasProp("Number"))
+            result.TimedOut := result.TimedOut || (e.HasProp("Number") && (e.Number & 0xFFFFFFFF) == 0x80072EE2)
+            result.Error := result.TimedOut ? "请求超时" : "网络请求失败"
+            if (!result.TimedOut && e.HasProp("Number"))
                 result.Error .= " (" Format("0x{:08X}", e.Number & 0xFFFFFFFF) ")"
         } finally {
             if (IsObject(request)) {
                 try request.Abort()
             }
         }
-        retryable := result.Status == 0 || result.Status == 408 || result.Status == 429 || result.Status >= 500
-        if (!retryable || A_Index > prepared.Retries)
+        if (timeoutAction == "") {
+            retry := A_Index <= prepared.Retries
+                && (result.Status == 0 || result.Status == 408 || result.Status == 429 || result.Status >= 500)
+        } else
+            retry := result.TimedOut && TimeoutPolicy.CanRetry(timeoutAction, A_Index)
+        if (!retry)
             return result
-        ; 短暂退避，也允许终止宏。
-        loop 20 {
-            if (cancelled())
-                return {Status: 0, Body: "", Error: "请求已取消"}
-            Sleep(25)
-        }
+        if (!TimeoutPolicy.WaitBeforeRetry(cancelled))
+            return cancelledResult
     }
-    return result
 }

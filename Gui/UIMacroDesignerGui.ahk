@@ -2225,9 +2225,7 @@ class UIMacroDesignerGui {
             this._Notice("生成配置失败：没有可保存的内容")
             return
         }
-        if (UIMacroSchema.WriteStoreByKey(this._foldKey, json)) {
-            ; 点保存就是「手动落盘」的时机：立刻写盘，别等延迟泵
-            UIMacroSchema.FlushStore(this._foldKey)
+        if (UIMacroSchema.WriteStoreByKey(this._foldKey, json, true)) {
             try this.ui.Update("TipCon", "Text", "已保存 " Format("{:02}:{:02}", A_Hour, A_Min))
             ; 保存即生效：销毁该面板缓存，下次触发按键会按新配置重建（无需重启）
             ; 用 DestroyFoldPanels：带前台信息的面板 key 是 "<idx>|<hwnd>"，

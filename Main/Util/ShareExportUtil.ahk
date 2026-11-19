@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include UIMacroPanelTransfer.ahk
 
 ; 选择性导出：将勾选的宏和模块写为现行配置目录。
 ; 依赖闭包复用 MergeUtil.CollectSourceConfigs（指令配置/变量都是 DataFileMap 序列码条目，含嵌套分支）
@@ -10,6 +11,7 @@ class ShareExportUtil {
         if (checkedItems.Length == 0)
             throw Error(GetLang("没有可导出的宏"))
 
+        Compat_FlushProfile(sourceDir)
         if (DirExist(outDir))
             DirDelete(outDir, true)
         DirCreate(outDir)
@@ -62,7 +64,7 @@ class ShareExportUtil {
             DirCopy(sourceDir "\Images", outDir "\Images", true)
         }
 
-        this._WriteMacroFile(checkedItems, outDir)
+        this._WriteMacroFile(checkedItems, outDir, sourceDir)
         CfgFlushDir(outDir)
         Compat_WriteVersion(outDir, Compat_CurrentVersion())
         return this._JoinName(missingNames)
@@ -78,8 +80,10 @@ class ShareExportUtil {
         return out
     }
 
-    static _WriteMacroFile(checkedItems, outDir) {
+    static _WriteMacroFile(checkedItems, outDir, sourceDir := "") {
         tables := Map()
+        foldsByTable := Map()
+        panelMacros := Map()
         order := []
         reserved := Map()
         for source in checkedItems
@@ -100,18 +104,22 @@ class ShareExportUtil {
                 table.Symbol := symbol
                 table.Name := MySoftData.TableInfo[source.TabIndex].Name
                 tables[tableID] := table
+                foldsByTable[tableID] := Map()
                 order.Push(tableID)
             }
             table := tables[tableID]
-            title := source.ModuleName != "" ? source.ModuleName : GetLang("默认模块")
-            if (!table.Folds.Length || table.Folds[-1].Remark != title) {
-                fold := MacroFold()
+            folds := foldsByTable[tableID]
+            key := MergeTreeNode.FoldKey(source)
+            if (!folds.Has(key)) {
+                fold := MergeTreeNode.MakeFold(source)
                 fold.ID := tableID ".Module" (table.Folds.Length + 1)
-                fold.Remark := title
                 table.Folds.Push(fold)
+                folds[key] := fold
+                if (symbol == "UI" && IsObject(key))
+                    panelMacros[fold] := {Source: key, IDs: Map()}
             }
-            fold := table.Folds[-1]
-            item := MacroItem()
+            fold := folds[key]
+            item := MergeTreeNode.MakeMacro(source)
             item.FoldID := fold.ID
             if (hasID)
                 item.ID := source.Serial
@@ -122,15 +130,16 @@ class ShareExportUtil {
                         break
                 }
             }
-            item.TK := source.TriggerKey
-            item.Remark := source.Remark
-            item.Macro := source.MacroStr
-            item.PreMacro := source.HasOwnProp("PreMacro") ? source.PreMacro : ""
-            item.PostMacro := source.HasOwnProp("PostMacro") ? source.PostMacro : ""
+            if (panelMacros.Has(fold))
+                panelMacros[fold].IDs[source.Serial] := item.ID
             table.Items.Push(item)
             table.RememberPath(item.ID)
         }
 
+        if (sourceDir != "") {
+            for fold, panel in panelMacros
+                CopySelectedUIMacroPanel(sourceDir, panel.Source, outDir, fold, panel.IDs, Map())
+        }
         tableList := []
         root := Map("table", tableList)
         for index, tableID in order {
@@ -162,19 +171,7 @@ class ShareExportUtil {
         item := tableItem.Items[i]
         if (!IsObject(item))
             throw Error(GetLang("宏不存在"))
-        shim := {
-            TabIndex: tableItem.Index,
-            Serial: item.ID,
-            TriggerKey: item.TK,
-            Remark: item.Remark,
-            MacroStr: item.Macro,
-            PreMacro: item.PreMacro,
-            PostMacro: item.PostMacro,
-            ModuleName: "",
-            DisplayName: item.Remark,
-            ResourceSerials: MergeUtil.ExtractResourceSerials(item.Macro "," item.PreMacro "," item.PostMacro)
-        }
-        arr := [shim]
+        arr := [MergeTreeNode.FromMacro(item, tableItem.Index)]
         defaultName := this.SuggestName(arr, MySoftData.CurSettingName)
         this._ExportAndOpen(arr, defaultName, GetLang("宏"))
     }
@@ -188,18 +185,7 @@ class ShareExportUtil {
         for item in tableItem.Items {
             if (item.FoldID != fold.ID)
                 continue
-            arr.Push({
-                TabIndex: tableItem.Index,
-                Serial: item.ID,
-                TriggerKey: item.TK,
-                Remark: item.Remark,
-                MacroStr: item.Macro,
-                PreMacro: item.PreMacro,
-                PostMacro: item.PostMacro,
-                ModuleName: fold.Remark,
-                DisplayName: item.Remark,
-                ResourceSerials: MergeUtil.ExtractResourceSerials(item.Macro "," item.PreMacro "," item.PostMacro)
-            })
+            arr.Push(MergeTreeNode.FromMacro(item, tableItem.Index, fold.Remark, fold))
         }
         if (arr.Length == 0)
             throw Error(GetLang("该模块下没有宏"))
@@ -231,10 +217,10 @@ class ShareExportUtil {
     }
 
     static _BuildPackage(checkedItems, sourceDir, name, report) {
-        outDir := A_Temp "\RMT_Export_" A_Now "_" A_TickCount "_" Random(1000, 9999)
+        outDir := RmtCacheDir() "\RMT_Export_" A_Now "_" A_TickCount "_" Random(1000, 9999)
         try {
             missing := this.ExportChecked(checkedItems, sourceDir, outDir, report)
-            exportDir := A_Temp "\RMT_Export"
+            exportDir := RmtCacheDir() "\RMT_Export"
             DirCreate(exportDir)
             rmtPath := exportDir "\" name ".rmt"
             if (FileExist(rmtPath))

@@ -19,6 +19,7 @@
 #Include Util\CursorOutputTip.ahk
 #Include Util\RmtDialog.ahk
 #Include Util\RmtProgress.ahk
+#Include Util\RmtUpdate.ahk
 #Include RMTUtil.ahk
 #Include WorkPool.ahk
 #Include ..\Gui\InputFileDialog.ahk
@@ -99,6 +100,7 @@
 #Include Util\ShareExportUtil.ahk
 #Include ..\Gui\VoiceGui.ahk
 #Include ..\Gui\SttGui.ahk
+#Include ..\Gui\CommandTimeoutFields.ahk
 #Include ..\Gui\WaitGui.ahk
 #Include ..\Gui\TimeGui.ahk
 #Include ..\Gui\CountDownOverlay.ahk
@@ -115,6 +117,10 @@ global AppRootDir := RTrim(A_WorkingDir, "\")
 DetectHiddenWindows true
 Persistent
 A_MaxHotkeysPerInterval := 400
+
+; ===== 临时文件/日志目录 =====
+; 不再使用系统 %TEMP%：临时文件统一放软件目录 Cache\（RmtCacheDir，见 LogUtil），
+; 日志统一放 Log\（RMTLogDir，见 LogUtil）。主进程与 Worker 共用。
 
 ; ===== GuiFromHwnd 安全包装 =====
 ; 原生子编辑器会 GuiFromHwnd(OwnerHwnd).Opt("+Disabled/-Disabled") 实现模态；
@@ -199,9 +205,9 @@ global MyCMDTipForceAction := CmdTipForceShow
 global MyExcuteRMTCMDAction := ExcuteRMTCMDAction
 global MySetTableItemState := SetTableItemState
 global MySetItemPauseState := SetItemPauseState
-global MyCountDownStart := (token, total, x, y, detached) => StartXamlCountDown(token, total, x, y, CountDownComplete.Bind(token))
+global MyCountDownStart := (token, total, x, y, detached, name) => StartXamlCountDown(token, total, x, y, CountDownComplete.Bind(token), 0, name)
 global MyCountDownStop := CloseXamlCountDown
-global MyCountDownCloseByPosition := CloseXamlCountDownAt
+global MyCountDownClose := CloseXamlCountDowns
 global MyShowPrompt := QueuePromptDisplay
 global MyMsgBoxContent := MsgBoxContent
 global MyToolTipContent := ToolTipContent

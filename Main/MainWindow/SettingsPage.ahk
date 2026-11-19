@@ -48,7 +48,7 @@
 
         ; ---------- 行/卡片构建 ----------
         ; 中文标签列预留 6 个 13 DIP 全角字及右侧留白。
-        labelWidth := MainSoftData.Lang == "English" ? 112 : 84
+        labelWidth := (MainSoftData.Lang == "简中" || MainSoftData.Lang == "繁體中文") ? 84 : 112
         this._setHelpMap := Map()
         this._setHelpSeq := 0
         helpFnByLabel := Map()
@@ -96,7 +96,7 @@
             return row(label, '<CheckBox Name="' name '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>', tip)
         }
         togI(label, name, val) {
-            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' GetLang("隐藏的页签不影响宏触发，保存后重启生效。") '"/>'
+            return '<CheckBox Name="' name '" Content="' this._XmlEsc(label) '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetTabButton}" ToolTip="' GetLang("隐藏的页签不影响宏触发，保存后生效。") '"/>'
         }
         cmb(label, name, items, sel, zero := false, tip := "", descriptions := [], width := 0, editable := false) {
             selIdx := ""
@@ -144,7 +144,7 @@
             return '<Grid VerticalAlignment="Top"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" VerticalAlignment="Top">' l '</StackPanel><StackPanel Grid.Column="2" VerticalAlignment="Top">' r '</StackPanel></Grid>'
         }
         navItem(id, glyph, text, checked := false) {
-            return '<RadioButton Name="SetNav_' id '" GroupName="SetNav" Style="{StaticResource SetNavItem}"' (checked ? ' IsChecked="True"' : '') '><StackPanel Orientation="Horizontal" Margin="12,0,0,0"><TextBlock Text="' glyph '" FontFamily="' iconFont '" FontSize="14" Foreground="{DynamicResource TextMain}" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock Name="SetNavText_' id '" Text="' this._XmlEsc(text) '" VerticalAlignment="Center" FontSize="13"/></StackPanel></RadioButton>'
+            return '<RadioButton Name="SetNav_' id '" GroupName="SetNav" Style="{StaticResource SetNavItem}"' (checked ? ' IsChecked="True"' : '') '><DockPanel Margin="12,0,8,0"><TextBlock DockPanel.Dock="Left" Text="' glyph '" FontFamily="' iconFont '" FontSize="14" Foreground="{DynamicResource TextMain}" Margin="0,0,9,0" VerticalAlignment="Center"/><Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" VerticalAlignment="Center"><TextBlock Name="SetNavText_' id '" Text="' this._XmlEsc(text) '" FontSize="13"/></Viewbox></DockPanel></RadioButton>'
         }
         pending(body) {
             return '<Expander Header="' GetLang("待确认的原有功能") '" IsExpanded="False" Margin="0,20,0,0" Foreground="{DynamicResource TextSub}"><StackPanel Margin="12">' body '</StackPanel></Expander>'
@@ -160,7 +160,7 @@
             tabsBody .= togI(GetLang(def[2]), "TabVisible_" def[1], this._TabVisibleVal(def[1]))
         tabsBody .= '</WrapPanel>'
         appearanceBody := cmb(GetLang("软件字体"), "CmbFont", MainSoftData.FontList, MainSoftData.FontType, false, GetLang("软件界面使用的字体，修改后保存设置生效。"), , 160)
-            . sld(GetLang("字体大小"), "ThemeFontSizeCon", "ThemeFontSizeVal", MainSoftData.FontSize, 0, 40, 1, GetLang("字号 0~40；保存后统一刷新界面。"))
+            . sld(GetLang("字体大小"), "ThemeFontSizeCon", "ThemeFontSizeVal", MainSoftData.FontSize, RMT_ThemeFontSizeMin, RMT_ThemeFontSizeMax, 1, GetLang("字号 15~20，默认 15。"))
 
         ; ---------- 页：系统（按参考稿逐行排列） ----------
         ltRtSwitch := '<CheckBox Name="ChkJoyLtRtAsButton" IsChecked="' (MainSoftData.JoyLtRtAsButton ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>'
@@ -185,7 +185,7 @@
                     . cmb(GetLang("多线程数"), "EditMutiThreadNum", ["-1", "0"], MainSoftData.MutiThreadNum, false
                         , GetLang("-1：动态多线程；0：单线程；n：固定线程数（推荐 3~5）"), , , true)
                     . num(GetLang("网络宏端口"), "EditNetPort", MainSoftData.NetworkPort, GetLang("网络宏端口 1-65535，默认 16888；仅监听本机回环地址。"))
-                    . cmb(GetLang("指令备注生成"), "CmbRemarkAuto", GetLangArr(["不生成", "自动生成", "覆盖生成"]), MainSoftData.RemarkAutoType), "0", "", "general")
+                    . cmb(GetLang("指令备注"), "CmbRemarkAuto", GetLangArr(["不生成", "自动生成", "覆盖生成"]), MainSoftData.RemarkAutoType), "0", "", "general")
                 . card(GetLang("手柄"), "&#xE7FC;", cmb(GetLang("手柄映射"), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType)
                     . cmb(GetLang("宏手柄类型"), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType)
                     . row(this._JoyLtRtAsButtonLabel(), afterHint(ltRtSwitch, this._JoyLtRtAsButtonDesc(), "LblJoyLtRtAsButton_Desc"), "", "LblJoyLtRtAsButton"), "0,18,0,0", "", "joy"))
@@ -397,7 +397,7 @@
         for ni, nd in navDefs {
             if (ni > 1)
                 navAll .= navSep
-            navAll .= navItem(nd[1], nd[2], GetLang(nd[3]), ni == 1)
+            navAll .= navItem(nd[1], nd[2], GetLang(nd[3]) (this._settingDirty.Has(nd[1]) ? " *" : ""), ni == 1)
         }
         navAll .= navSep
         pagesAll := behaviorPage . macroPage . recordPage . triggerPage . hotkeyPage . themePage . aiPage . logPage
@@ -424,7 +424,7 @@
         this._Bind("ChkNoVariable", "Click", ObjBindMethod(this, "OnCheckEdit", "NoVariableTip"))
         this._Bind("ChkModalSubGui", "Click", ObjBindMethod(this, "OnCheckEdit", "IsModalSubGui"))
         this._Bind("ChkDataReport", "Click", ObjBindMethod(this, "OnCheckEdit", "IsDataReport"))
-        this._Bind("CmbLang", "SelectionChanged", ObjBindMethod(this, "OnComboText", "Lang"))
+        this._Bind("CmbLang", "SelectionChanged", ObjBindMethod(this, "OnLangChanged"))
         this._Bind("CmbPreferredEditor", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "PreferredMacroEditor"))
         this._Bind("CmbScreenShot", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "ScreenShotType"))
         this._Bind("CmbOCRType", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "OCRTypeValue"))

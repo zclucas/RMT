@@ -735,6 +735,15 @@ Compat13_RewriteBuiltinData(data, rewriteMacro) {
         "SearchText", "SearchImagePath", "WinInfo", "SearchValue", "NewTitle", "Search", "Replace",
         "ExpressionArr", "Param1", "Param2"]
     changed := Compat13_RewriteBranches(data, rewriteMacro)
+    ; 文本处理的这些参数先按变量名查找，找不到才作为文字使用。
+    if (data.HasOwnProp("ArgsType") && data.HasOwnProp("Type") && data.HasOwnProp("SaveType")
+        && data.HasOwnProp("MatchType")) {
+        changed := Compat13_RewriteBuiltinField(data, "Name", Compat13_BuiltinName) || changed
+        if (data.Type == "文本替换") {
+            for field in ["Search", "Replace"]
+                changed := Compat13_RewriteBuiltinField(data, field, Compat13_BuiltinName) || changed
+        }
+    }
     if (data.HasOwnProp("CopyVariableArr") && data.HasOwnProp("OperaTypeArr")) {
         for index, value in data.CopyVariableArr {
             if (!data.OperaTypeArr.Has(index))

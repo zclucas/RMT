@@ -72,7 +72,7 @@ class CompareGui {
         top := body.Add("Grid").Grid_Row(0).Grid_ColumnSpan(7)
         top.Cols("28", "*", "8", "90", "8", "*", "28")
         logicSp := top.Add("StackPanel").Grid_Column(0).Grid_ColumnSpan(2).Orientation("Horizontal").VerticalAlignment("Center")
-        logicSp.Add("TextBlock").Text(GetLang("逻辑关系：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        logicSp.Add("TextBlock").Text(GetLang("逻辑关系：")).ToolTip(GetLang("选择全部条件成立，或任一条件成立。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         logicCon := logicSp.Add("ComboBox").Name("LogicalTypeCon").Width(70).Height(26).MinHeight(26).Margin("4,0,0,0").SelectedIndex("0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")

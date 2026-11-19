@@ -91,6 +91,7 @@ class MainWin {
         this._aiNormGuard := Map()
         this._pendingMacroNav := ""
         this._settingDirty := Map()
+        this._languageRefreshPending := false
     }
 #Include MainWindow\SidePanelMetrics.ahk
 
@@ -121,7 +122,7 @@ class MainWin {
             . '</Trigger>'
     }
 
-    BuildAndShow() {
+    BuildAndShow(windowPos := unset, maximized := false, initialTab := 0, deferOtherTabs := false) {
         this._InitUseVirtual()
         if (IsSet(MainSoftData) && MainSoftData.HasProp("AiPanelWidth")) {
             savedW := Integer(MainSoftData.AiPanelWidth)
@@ -177,42 +178,44 @@ class MainWin {
         curNameBox := leftTop.Add("Viewbox").Margin("0,3,0,2").Stretch("Uniform").StretchDirection("DownOnly").HorizontalAlignment("Stretch")
         curNameBox.Add("TextBlock").Name("TxtCurSetting").Text(MySoftData.CurSettingName).TextAlignment("Center").HorizontalAlignment("Center").VerticalAlignment("Center").TextWrapping("NoWrap")
         sidebarButton := leftTop.Add("Button").Name("BtnConfig").Uid("gm:Main.Config").Height(33).MinHeight(33).Margin("0,3,0,2").Style("{StaticResource RmtSidebarBtn}")
-        this._AddSidebarButtonContent(sidebarButton, "配置管理", 0xE8B7)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("配置管理"), 0xE8B7)
         leftTop.Add("Rectangle").Height(1).Margin("2,6,2,6").Fill("{DynamicResource ControlBorder}").Stretch("Fill")
         ; 全局操作标题 + 右侧展开按钮（控制休眠/暂停/终止所有宏的快捷键提示显隐，默认显示）
         globalOps := leftTop.Add("Grid").Margin("4,0,0,4")
-        globalOps.Add("TextBlock").Text(GetLang("全局操作")).FontWeight("Bold").FontSize(11).Opacity("0.7").VerticalAlignment("Center").HorizontalAlignment("Left")
-        globalOps.Add("Button").Name("BtnToggleHotkeyHint").Content(Chr(0xE70D)).Width(24).Height(24).MinHeight(24).Margin("0,0,2,0").HorizontalAlignment("Right").VerticalAlignment("Center").FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).Style("{StaticResource RmtIconBtn}")
+        globalOps.Cols("*", "26")
+        opsTitle := globalOps.Add("Viewbox").StretchDirection("DownOnly").HorizontalAlignment("Left").VerticalAlignment("Center")
+        opsTitle.Add("TextBlock").Text(GetLang("全局操作")).FontWeight("Bold").FontSize(11).Opacity("0.7").VerticalAlignment("Center").HorizontalAlignment("Left")
+        globalOps.Add("Button").Grid_Column(1).Name("BtnToggleHotkeyHint").Content(Chr(0xE70D)).Width(24).Height(24).MinHeight(24).Margin("0,0,2,0").HorizontalAlignment("Right").VerticalAlignment("Center").FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).Style("{StaticResource RmtIconBtn}")
         ; 休眠按钮：激活（休眠中）时切换为主题 Action 色背景 + 右上角白点
         suspendGrid := leftTop.Add("Grid").Margin("2,0,0,0")
         sidebarButton := suspendGrid.Add("Button").Name("BtnSuspend").Height(33).MinHeight(33).Style("{StaticResource RmtSidebarBtn}")
-        this._AddSidebarButtonContent(sidebarButton, "休眠", 0xE708)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("休眠"), 0xE708)
         susGridAct := suspendGrid.Add("Grid").Name("SuspendActiveGrid").Visibility("Collapsed")
         sidebarButton := susGridAct.Add("Button").Name("BtnSuspendActive").Height(33).MinHeight(33).Style("{StaticResource StateBtnActive}")
-        this._AddSidebarButtonContent(sidebarButton, "休眠", 0xE708)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("休眠"), 0xE708)
         susGridAct.Add("Ellipse").Name("SuspendDot").Width(8).Height(8).Fill("#FFFFFFFF").HorizontalAlignment("Right").VerticalAlignment("Top").Margin("0,4,4,0").IsHitTestVisible("False")
         leftTop.Add("TextBlock").Name("TxtSuspendKey").Text(FormatHotkeyDisplay(MainSoftData.SuspendHotkey)).Opacity("0.6").FontSize(11).Margin("0,0,6,0").HorizontalAlignment("Right").TextAlignment("Right")
         ; 暂停按钮：激活（暂停中）时切换为主题 Action 色背景 + 右上角白点
         pauseGrid := leftTop.Add("Grid").Margin("2,8,0,0")
         sidebarButton := pauseGrid.Add("Button").Name("BtnPause").Height(33).MinHeight(33).Style("{StaticResource RmtSidebarBtn}")
-        this._AddSidebarButtonContent(sidebarButton, "暂停", 0xE769)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("暂停"), 0xE769)
         pauGridAct := pauseGrid.Add("Grid").Name("PauseActiveGrid").Visibility("Collapsed")
         sidebarButton := pauGridAct.Add("Button").Name("BtnPauseActive").Height(33).MinHeight(33).Style("{StaticResource StateBtnActive}")
-        this._AddSidebarButtonContent(sidebarButton, "暂停", 0xE769)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("暂停"), 0xE769)
         pauGridAct.Add("Ellipse").Name("PauseDot").Width(8).Height(8).Fill("#FFFFFFFF").HorizontalAlignment("Right").VerticalAlignment("Top").Margin("0,4,4,0").IsHitTestVisible("False")
         leftTop.Add("TextBlock").Name("TxtPauseKey").Text(FormatHotkeyDisplay(MainSoftData.PauseHotkey)).Opacity("0.6").FontSize(11).Margin("0,0,6,0").HorizontalAlignment("Right").TextAlignment("Right")
         sidebarButton := leftTop.Add("Button").Name("BtnKill").Height(33).MinHeight(33).Margin("0,8,0,0").Style("{StaticResource RmtSidebarBtn}")
-        this._AddSidebarButtonContent(sidebarButton, "终止所有宏", 0xE71A)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("终止所有宏"), 0xE71A)
         leftTop.Add("TextBlock").Name("TxtKillKey").Text(FormatHotkeyDisplay(MainSoftData.KillMacroHotkey)).Opacity("0.6").FontSize(11).Margin("0,0,6,0").HorizontalAlignment("Right").TextAlignment("Right")
         sidebarButton := leftTop.Add("Button").Name("BtnReload").Height(33).MinHeight(33).Margin("0,8,0,0").Style("{StaticResource RmtSidebarBtn}")
-        this._AddSidebarButtonContent(sidebarButton, "重启", 0xE777)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("重启"), 0xE777)
         if (!A_IsCompiled)
             leftTop.Add("Button").Name("BtnGMUI").Content("GM-UI").Height(33).MinHeight(33).Margin("0,8,0,0").Style("{StaticResource RmtSidebarBtn}")
         leftBottom := left.Add("StackPanel").Grid_Row(1).VerticalAlignment("Bottom")
         sidebarButton := leftBottom.Add("Button").Name("BtnHelp").Height(28).MinHeight(28).Margin("0,2,0,2")
-        this._AddSidebarButtonContent(sidebarButton, "RMT文档", 0xE8A5)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("RMT文档"), 0xE8A5)
         sidebarButton := leftBottom.Add("Button").Name("BtnSave").Uid("gm:Main.Save").Height(36).MinHeight(36).Margin("0,2,0,0").FontWeight("Bold")
-        this._AddSidebarButtonContent(sidebarButton, "应用并保存", 0xE74E)
+        this._AddSidebarButtonContent(sidebarButton, GetLang("应用并保存"), 0xE74E)
 
         ; ---- 右侧 TabControl ----
         right := main.Add("Grid").Grid_Row(1).Grid_Column(1).Margin("0,2,2,4")
@@ -226,7 +229,7 @@ class MainWin {
                 this._tabOrder.Push(i)
         }
         for pos, idx in this._tabOrder {
-            if (MySoftData.TableInfo[idx].Symbol == "Normal") {
+            if ((initialTab && idx == initialTab) || (!initialTab && MySoftData.TableInfo[idx].Symbol == "Normal")) {
                 initSel := pos - 1
                 break
             }
@@ -381,20 +384,18 @@ class MainWin {
             . '</Style>'
         foldRowStyles := this._BuildFoldRowStyles()
         ; 主窗口页签样式（隐式 Style，只作用于本窗口）：
-        ; - 固定每个页签大小（宽 80），页签间用 1px 垂直线分割，仅上 20% ~ 下 20%（高度 60%）显示
+        ; - 固定宽 80，高度随标题内容变化，页签间用垂直线分割
         ; - 选中态：整块主题强调色低透明度背景（TabSelBg，各主题自动适配）+ 右上角 Accent 小圆点
         ; - 悬停：ControlBorder（TabItem 无 IsPressed，按下态无法用 Storyboard+DynamicResource，故仅做 hover）
         ; - 圆角：仅第一个页签左侧（4,0,0,4）、最后一个页签右侧（0,4,4,0）适配页签条圆角，其余页签直角
         tabItemStyle := '<Style TargetType="TabItem">'
             . '<Setter Property="Width" Value="80"/>'
-            . '<Setter Property="Height" Value="28"/>'
             . '<Setter Property="MinHeight" Value="28"/>'
-            . '<Setter Property="MaxHeight" Value="28"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">'
-            . '<Grid Height="28" ClipToBounds="True">'
+            . '<Grid ClipToBounds="True">'
             . '<Border x:Name="Bd" Background="Transparent" BorderThickness="0" BorderBrush="Transparent" Padding="5,4,5,4" Cursor="Hand" CornerRadius="0">'
             . '<Grid>'
-            . '<ContentPresenter ContentSource="Header" TextElement.Foreground="{DynamicResource TextMain}" TextElement.FontSize="14" TextElement.FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
+            . '<Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Center"><ContentPresenter ContentSource="Header" TextElement.Foreground="{DynamicResource TextMain}" TextElement.FontSize="14" TextElement.FontWeight="SemiBold"/></Viewbox>'
             . '<Ellipse x:Name="SelDot" Width="6" Height="6" Fill="{DynamicResource Accent}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-3,-1,-3" Visibility="Collapsed" IsHitTestVisible="False"/>'
             . '</Grid>'
             . '</Border>'
@@ -470,7 +471,8 @@ class MainWin {
         ; 首帧即定死保存位置：模板 CenterScreen 会让 WPF 强制居中并覆盖后续 WinMove → 先默认位置闪一帧。
         ; 改 Manual + 注入 Left/Top/Width/Height（AHK 逻辑坐标 = WPF DIP，125% DPI 下物理 132,126 已实测吻合，无单位错位）。
         ; LastWinPos 无效或仅含旧坐标时使用新版居中默认尺寸。
-        pos := GetLastWinPos()
+        if (!IsSet(windowPos))
+            windowPos := GetLastWinPos()
         startLoc := 'WindowStartupLocation="CenterScreen"'
         ; 主界面默认尺寸按屏幕等比缩放：1920×1080 参考 1400×787。
         ; 更宽的屏幕（横向富余）按高度缩放、更高的屏幕（纵向富余）按宽度缩放，
@@ -478,16 +480,18 @@ class MainWin {
         dpiScale := A_ScreenDPI / 96.0
         size := GetMainWindowDefaultSize()
         wh := 'Width="' Round(size[1] / dpiScale) '" Height="' Round(size[2] / dpiScale) '"'
-        if (pos.Length) {
+        if (windowPos.Length) {
             ; AHK 进程 DPI aware，WinGetPos/LastWinPos 是物理像素；XAML 注入按 DIP 解释，须换算（实测 125% 屏偏右下 26px）
             ; ponytail: 用 A_ScreenDPI 单值；跨屏不同 DPI 时可能偏差，待真机多屏再按 per-monitor 换算
             scale := A_ScreenDPI / 96.0
-            x := Round(pos[1] / scale), y := Round(pos[2] / scale), w := Round(pos[3] / scale), h := Round(pos[4] / scale)
+            x := Round(windowPos[1] / scale), y := Round(windowPos[2] / scale), w := Round(windowPos[3] / scale), h := Round(windowPos[4] / scale)
             startLoc := 'WindowStartupLocation="Manual" Left="' x '" Top="' y '"'
             wh := 'Width="' w '" Height="' h '"'
         }
         ; 先填内容再显示：引擎等待初始化和首帧绘制完成，避免主题/列表刷入时抖动
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ' wh '')
+        if (maximized)
+            startLoc .= ' WindowState="Maximized"'
         this.ui.xaml := StrReplace(this.ui.xaml, 'WindowStartupLocation="CenterScreen"', startLoc)
         ; Viewbox 或窗口非客户区露出的边缘也使用主题底色，避免透明背景呈黑色。
         winEnd := InStr(this.ui.xaml, ">")
@@ -530,7 +534,7 @@ class MainWin {
         this.ui._startHidden := this._startHidden
         ; ===== 先填充内容（Show 前入队，LoadedHwnd 时一次刷入），填充完再显示，避免空壳闪烁 =====
         try {
-            this.PopulateAll()
+            this.PopulateAll(deferOtherTabs)
         } catch as e {
             XamlUiDiag("PopulateAll 异常: " e.Message " @ " e.File ":" e.Line "`n" e.Stack, "MainWin")
         }
@@ -581,9 +585,7 @@ class MainWin {
             try this.ui.Update(item.ControlName, item.PropertyName, item.Value)
     }
 
-    PopulateAll() {
-        ; 页签内容按需构建：启动只建轻量页签，重页签等用户首次切过去再建。
-        ; 赞助页要起 QrDecode.exe 解两张二维码图（实测 313ms），启动时根本不显示，这笔钱是白付的。
+    PopulateAll(deferOtherTabs := false) {
         this._tabBuilders := Map(
             GetTableIndexByID("Tool"), "BuildToolTab",
             GetTableIndexByID("Setting"), "BuildSettingTab",
@@ -591,13 +593,12 @@ class MainWin {
             GetTableIndexByID("Reward"), "BuildRewardTab",
             GetTableIndexByID("Thank"), "BuildThankTab")
         this._builtTabs := Map()
-        this._deferredTabs := Map(GetTableIndexByID("Reward"), true)
-
-        ; 各页签独立构建：任一失败不得阻断后续 RenderTab（否则主界面宏列表空白）
-        for idx, fn in this._tabBuilders {
-            if (this._deferredTabs.Has(idx) && idx != MainSoftData.TableIndex)
-                continue
-            this._EnsureTabBuilt(idx)
+        ; 工具页的控件供全局快捷键使用，新增配置重载时其余非当前页可按需构建。
+        toolTab := GetTableIndexByID("Tool")
+        rewardTab := GetTableIndexByID("Reward")
+        for idx in this._tabBuilders {
+            if (idx != rewardTab && (!deferOtherTabs || idx == toolTab))
+                this._EnsureTabBuilt(idx)
         }
         ; 惰性渲染：只渲染当前 tab（旧路径全量渲染 7 tab 是启动 1.3s 的主因），切 tab 时由 OnTabChanged 补渲染
         this._renderedTabs := Map()
@@ -625,13 +626,13 @@ class MainWin {
             XamlUiDiag(fn " 异常: " e.Message " @ " e.File ":" e.Line, "MainWin")
     }
 
-    ; VL_INIT 重建虚拟行后补刷主题字号（否则新行仍用样式声明 11，比已缩放行偏小）
-    RefreshVLFonts() {
+    ; 主题字号预览及 VL_INIT 重建虚拟行后补刷字号
+    RefreshWindowFonts(change := 0) {
         if (!IsObject(this.ui) || this.ui.IsFontScaleSkipped())
             return
         try {
             fs := XAMLHost.GetThemeFontSize()
-            this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, fs))
+            this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(change, fs))
             XAMLHost.SyncChatFontResources(this.ui)
             ; 字号变了行高也跟着变，输入框的最大高度要按新行高重算
             this._aiRowH := Map()
@@ -751,14 +752,15 @@ class MainWin {
     }
 
     _AddSidebarButtonContent(button, label, glyph) {
-        content := button.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
+        fit := button.Add("Viewbox").StretchDirection("DownOnly")
+        content := fit.Add("StackPanel").Orientation("Horizontal")
         content.Add("TextBlock").Text(Chr(glyph)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
             .FontSize(14).Margin("0,0,7,0").VerticalAlignment("Center")
-        content.Add("TextBlock").Text(GetLang(label)).VerticalAlignment("Center")
+        content.Add("TextBlock").Text(label).VerticalAlignment("Center")
     }
 
     LoadLeftBarValues() {
-        this.ui.Update("TxtCurSetting", "Text", MySoftData.CurSettingName)
+        this.ui.Update("TxtCurSetting", "Text", MySoftData.CurSettingName == "RMT默认配置" ? GetLang("RMT默认配置") : MySoftData.CurSettingName)
         ; 休眠/暂停按钮状态：普通态 ↔ 激活态（蓝色背景+红点）；BindUtil 通过 UIControls.*Toggle.Value 写入状态
         UIControls.SuspendToggle := StateBtnAdapter("BtnSuspend", "SuspendActiveGrid", this.ui)
         UIControls.PauseToggle := StateBtnAdapter("BtnPause", "PauseActiveGrid", this.ui)

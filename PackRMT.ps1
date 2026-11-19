@@ -1,11 +1,11 @@
 ﻿# RMT 自动打包脚本
-# 使用 Ahk2Exe.exe 编译 Work.ahk 为 Work.exe
+# 使用 Ahk2Exe.exe 编译主程序、Worker 和更新程序
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 param(
     [switch]$NoPause,
     [switch]$StopRunningOnly,
-    # 发行版类型：none=只编译 Work.exe（含帮助文档）/ x64=测试版 / both=正式版
+    # 发行版类型：none=只编译开发环境的 Worker 和更新程序（含帮助文档）/ x64=测试版 / both=正式版
     # 留空 = 交互式询问（本地双击运行的默认行为不受影响）
     [ValidateSet("none", "x64", "both")]
     [string]$Release = "",
@@ -210,7 +210,8 @@ function Get-Version {
 
 function Stop-RunningRMT {
     Write-Log "检查当前项目的 RMT 和 Work.exe..." "Gray"
-    $processes = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'AutoHotkey%.exe' OR Name = 'Work.exe' OR Name LIKE 'RMTv%.exe'")
+    $filter = "Name LIKE 'AutoHotkey%.exe' OR Name = 'Work.exe' OR Name = 'Update.exe' OR Name = 'RMT.exe' OR Name LIKE 'RMTv%.exe'"
+    $processes = @(Get-CimInstance Win32_Process -Filter $filter)
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     # 高权限进程的 CommandLine / ExecutablePath 对普通用户可能均为空。
     # 只给清理子流程提权，避免因检测漏报而继续删除仍被占用的 Work.exe。
@@ -240,7 +241,7 @@ function Stop-RunningRMT {
         }
     }
     # 再次枚举，发现残留时中止，不带着占用继续编译。
-    $remaining = @(Get-RMTBuildProcesses -Processes @(Get-CimInstance Win32_Process -Filter "Name LIKE 'AutoHotkey%.exe' OR Name = 'Work.exe' OR Name LIKE 'RMTv%.exe'") -Root $PSScriptRoot)
+    $remaining = @(Get-RMTBuildProcesses -Processes @(Get-CimInstance Win32_Process -Filter $filter) -Root $PSScriptRoot)
     if ($remaining.Count) { throw "RMT 工作进程仍在运行：$($remaining.ProcessId -join ', ')，已取消打包。" }
     Write-Log "[OK] 当前项目的 RMT 和 Worker 已退出，可开始打包" "Green"
 }
@@ -251,12 +252,14 @@ function Get-RMTBuildProcesses {
     $mainScript = Join-Path $rootPath 'RMT.ahk'
     $workerScript = Join-Path $rootPath 'Thread\Work.ahk'
     $workerPaths = @('Thread\Work.exe', 'ReleaseX64\Thread\Work.exe', 'ReleaseX86\Thread\Work.exe') | ForEach-Object { Join-Path $rootPath $_ }
+    $updatePaths = $workerPaths | ForEach-Object { Join-Path (Split-Path $_ -Parent) 'Update.exe' }
     foreach ($proc in $Processes) {
         $exe = $proc.ExecutablePath
         if ($exe) {
             $exe = [IO.Path]::GetFullPath($exe)
             if ($proc.Name -eq 'Work.exe' -and $workerPaths -contains $exe) { $proc; continue }
-            if ($proc.Name -like 'RMTv*.exe' -and (Split-Path $exe -Parent) -in @($rootPath, (Join-Path $rootPath 'ReleaseX64'), (Join-Path $rootPath 'ReleaseX86'))) { $proc; continue }
+            if ($proc.Name -eq 'Update.exe' -and $updatePaths -contains $exe) { $proc; continue }
+            if (($proc.Name -eq 'RMT.exe' -or $proc.Name -like 'RMTv*.exe') -and (Split-Path $exe -Parent) -in @($rootPath, (Join-Path $rootPath 'ReleaseX64'), (Join-Path $rootPath 'ReleaseX86'))) { $proc; continue }
         }
         if ($proc.Name -notlike 'AutoHotkey*' -or -not $proc.CommandLine) { continue }
         # 匹配完整脚本参数，避免误关其它项目或 RMT.ahk.bak 等相似名称。
@@ -315,7 +318,7 @@ function Compile {
     Start-Sleep -Milliseconds 500
 
     # 个别环境下重定向后取不到退出码，此时以输出文件是否生成为准
-    if (-not (Test-Path $OutputExe)) {
+    if (-not (Test-Path -LiteralPath $OutputExe -PathType Leaf) -or (Get-Item -LiteralPath $OutputExe).Length -eq 0) {
         Write-Log "  [ERROR] $Name 编译失败（未生成输出文件）" "Red"
         Show-CompileOutput -StderrLog $stderrLog -StdoutLog $stdoutLog
         return $false
@@ -385,6 +388,16 @@ function Pack-HelpDoc {
 # 发行版函数
 # ============================================================
 
+function Compile-Updater {
+    param([string]$BaseExe, [string]$OutputExe, [string]$IconPath)
+
+    # 先移除旧文件；即使编译器未返回退出码，也不能把旧文件当作本次产物。
+    if (Test-Path -LiteralPath $OutputExe) {
+        Remove-Item -LiteralPath $OutputExe -Force
+    }
+    return (Compile -AhkFile $script:UpdateAhk -BaseExe $BaseExe -OutputExe $OutputExe -IconPath $IconPath -Name "Update.exe")
+}
+
 function New-Release {
     param([string]$Type) # "x64" or "x86" or "both"
 
@@ -436,6 +449,9 @@ function New-Release {
         # 复制帮助文档
         Copy-HelpDocs -ReleaseDir $releaseDir
 
+        # 复制许可证与附加声明（AGPL-3.0 分发义务）
+        Copy-LegalDocs -ReleaseDir $releaseDir
+
         # 删除旧 Work.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
 
@@ -444,8 +460,9 @@ function New-Release {
             return $false
         }
 
-        # 编译主程序 RMTv{version}.exe
-        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base64Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
+        Remove-OldFiles -Dir $releaseDir -Filter "RMTv*.exe"
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Thread\Update.exe") -Destination "$releaseThread\Update.exe" -Force
+        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base64Exe -OutputExe "$releaseDir\RMT.exe" -IconPath $IconPath -Name "RMT.exe")) {
             return $false
         }
 
@@ -474,7 +491,7 @@ function New-Release {
         Write-Log "复制 Voice 插件 (x64)..." "Gray"
         Copy-Voice -ReleaseDir $releaseDir -Arch "x64"
 
-        Copy-RuntimePlugins -ReleaseDir $releaseDir
+        Copy-RuntimePlugins -ReleaseDir $releaseDir -Arch "x64"
     }
 
     if ($Type -eq "x86" -or $Type -eq "both") {
@@ -502,6 +519,9 @@ function New-Release {
         # 复制帮助文档
         Copy-HelpDocs -ReleaseDir $releaseDir
 
+        # 复制许可证与附加声明（AGPL-3.0 分发义务）
+        Copy-LegalDocs -ReleaseDir $releaseDir
+
         # 删除旧 Work.exe
         Remove-OldFiles -Dir $releaseThread -Filter "Work.exe"
 
@@ -510,8 +530,11 @@ function New-Release {
             return $false
         }
 
-        # 编译主程序 RMTv{version}.exe
-        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base32Exe -OutputExe "$releaseDir\RMTv$version.exe" -IconPath $IconPath -Name "RMTv$version.exe")) {
+        Remove-OldFiles -Dir $releaseDir -Filter "RMTv*.exe"
+        if (-not (Compile-Updater -BaseExe $script:Base32Exe -OutputExe "$releaseThread\Update.exe" -IconPath $IconPath)) {
+            return $false
+        }
+        if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base32Exe -OutputExe "$releaseDir\RMT.exe" -IconPath $IconPath -Name "RMT.exe")) {
             return $false
         }
 
@@ -540,7 +563,7 @@ function New-Release {
         Write-Log "复制 Voice 插件 (x86)..." "Gray"
         Copy-Voice -ReleaseDir $releaseDir -Arch "x86"
 
-        Copy-RuntimePlugins -ReleaseDir $releaseDir
+        Copy-RuntimePlugins -ReleaseDir $releaseDir -Arch "x86"
     }
 
     # 输出目录：命令行 -OutDir 优先，默认桌面\RMTRelease
@@ -580,10 +603,10 @@ function New-Release {
     # RMTAssets_Common 仅剩赞助 logo（RMTUtil.ahk），不再由打包生成。
     Write-Section "生成资源清单 (RMTAssets)"
     if ($Type -eq "x64" -or $Type -eq "both") {
-        New-RMTAssets -Arch "x64" -ReleaseDir $rmtReleaseDir
+        New-RMTAssets -Arch "x64" -ReleaseDir $rmtReleaseDir -PackageDir $destX64
     }
     if ($Type -eq "x86" -or $Type -eq "both") {
-        New-RMTAssets -Arch "x86" -ReleaseDir $rmtReleaseDir
+        New-RMTAssets -Arch "x86" -ReleaseDir $rmtReleaseDir -PackageDir $destX86
     }
 
     Write-Section "压缩发行包"
@@ -639,6 +662,22 @@ function Copy-HelpDocs {
         Write-Log "  已复制: index.html" "Gray"
     } else {
         Write-Log "  [WARN] 未找到帮助文档: index.html（先确认 Web\JS\SingleHtml.js 已生成）" "Yellow"
+    }
+}
+
+# AGPL-3.0 要求随目标代码附带许可文本，发行包根放一份 LICENSE 与附加声明。
+# YOLO 内核依赖的 ultralytics-inference 同为 AGPL-3.0，靠这份许可与公开源码满足义务。
+function Copy-LegalDocs {
+    param([string]$ReleaseDir)
+
+    foreach ($name in @("LICENSE", "DISCLAIMER.md")) {
+        $src = Join-Path $PSScriptRoot $name
+        if (Test-Path -LiteralPath $src) {
+            Copy-Item -LiteralPath $src -Destination (Join-Path $ReleaseDir $name) -Force
+            Write-Log "  已复制: $name" "Gray"
+        } else {
+            Write-Log "  [WARN] 未找到许可文件: $name" "Yellow"
+        }
     }
 }
 
@@ -925,9 +964,20 @@ function Copy-Voice {
 
 # 发行目录运行时要靠磁盘加载、以前打包漏掉的插件
 function Copy-RuntimePlugins {
-    param([string]$ReleaseDir)
+    param([string]$ReleaseDir, [string]$Arch)
 
+    $browserDll = if ($Arch -eq "x86") { "Plugins\Browser\x86\RMT_Browser.dll" } else { "Plugins\Browser\RMT_Browser.dll" }
     $bundles = @(
+        @{
+            Name = "Browser/RMT_Browser.dll"
+            Src  = $browserDll
+            Dst  = "Plugins\Browser\RMT_Browser.dll"
+        },
+        @{
+            Name = "Browser/LICENSE.txt"
+            Src  = "Plugins\Browser\LICENSE.txt"
+            Dst  = "Plugins\Browser\LICENSE.txt"
+        },
         @{
             Name = "RMT/RMT.dll"
             Src  = "Plugins\RMT\RMT.dll"
@@ -987,6 +1037,33 @@ function Copy-RuntimePlugins {
         } else {
             Write-Log "  [WARN] 未找到: $($item.Name)" "Yellow"
         }
+    }
+
+    Copy-YoloKernel -ReleaseDir $ReleaseDir -Arch $Arch
+}
+
+# YOLO 推理内核：产物在 Plugins\YOLO\<架构>\，onnxruntime.dll 必须与主库同目录
+# （内核用 load-dynamic 加载运行库，见 Plugins\YOLO\dll\README.md）。
+# 模型不进包（体积大），由用户放到 Plugins\YOLO\models 后在模型库里登记。
+function Copy-YoloKernel {
+    param([string]$ReleaseDir, [string]$Arch)
+
+    $srcDir = Join-Path $PSScriptRoot "Plugins\YOLO\$Arch"
+    if (-not (Test-Path $srcDir)) {
+        Write-Log "  [WARN] YOLO 内核未构建：Plugins\YOLO\$Arch（YOLO检测 指令不可用）" "Yellow"
+        return
+    }
+    $dlls = Get-ChildItem $srcDir -Filter *.dll -File
+    if ($dlls.Count -eq 0) {
+        Write-Log "  [WARN] YOLO 内核目录没有 DLL：$srcDir" "Yellow"
+        return
+    }
+
+    $dstDir = Join-Path $ReleaseDir "Plugins\YOLO\$Arch"
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+    foreach ($dll in $dlls) {
+        Copy-IntoRelease -Source $dll.FullName -Destination (Join-Path $dstDir $dll.Name)
+        Write-Log "  已复制: YOLO/$Arch/$($dll.Name)" "Gray"
     }
 }
 
@@ -1069,7 +1146,7 @@ function New-RMTAssetZip {
     $archive = [IO.Compression.ZipFile]::Open($ZipPath, [IO.Compression.ZipArchiveMode]::Create)
     try {
         foreach ($file in $Files) {
-            $source = Join-Path $PSScriptRoot $file.Src
+            $source = if ([IO.Path]::IsPathRooted($file.Src)) { $file.Src } else { Join-Path $PSScriptRoot $file.Src }
             [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
                 $archive, $source, $file.Dest, [IO.Compression.CompressionLevel]::Optimal
             ) | Out-Null
@@ -1080,9 +1157,9 @@ function New-RMTAssetZip {
     Write-Log "  已生成: $(Split-Path $ZipPath -Leaf) ($($Files.Count) 个文件)" "Gray"
 }
 
-# 生成按架构发布的资源，供文件校验和语音扩展下载。
+# 生成按架构发布的资源，供文件校验和插件按需下载（语音、YOLO 内核等）。
 function New-RMTAssets {
-    param([string]$Arch, [string]$ReleaseDir)
+    param([string]$Arch, [string]$ReleaseDir, [string]$PackageDir)
 
     $bitArch = if ($Arch -eq "x64") { "64bit" } else { "32bit" }
     $kwsDir = "Plugins\Voice\models\kws"
@@ -1099,16 +1176,20 @@ function New-RMTAssets {
             @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang") -Filter "*.txt" -ErrorAction SilentlyContinue |
                 Where-Object { $_.BaseName -ne "简中" -and $_.BaseName -ne "中文" } |
                 ForEach-Object {
-                    $entry = $langArchiveNames[$_.Name] ?? $_.Name
+                    $entry = if ($langArchiveNames.ContainsKey($_.Name)) { $langArchiveNames[$_.Name] } else { $_.Name }
                     @{ Dest = $entry; Src = "Lang\$($_.Name)" }
                 })
             @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang\Flags") -Filter "*.png" -File |
                 ForEach-Object { @{ Dest = "Flags/$($_.Name)"; Src = "Lang\Flags\$($_.Name)" } })
         )
         "RMT.zip" = @(
+            @{ Dest = "RMT_Browser.dll"; Src = "Release$Arch\Plugins\Browser\RMT_Browser.dll" },
+            @{ Dest = "Browser-LICENSE.txt"; Src = "Plugins\Browser\LICENSE.txt" },
             @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },
             @{ Dest = "RMT.ExcelHelper.exe"; Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
             @{ Dest = "Work.exe"; Src = "Release$Arch\Thread\Work.exe" },
+            # 使用整包中的成品，确保文件校验下载到的更新程序与发行版一致。
+            @{ Dest = "Update.exe"; Src = (Join-Path $PackageDir "Thread\Update.exe") },
             @{ Dest = "index.html"; Src = "index.html" }
         )
         "Input.zip" = @(
@@ -1176,7 +1257,7 @@ function New-RMTAssets {
         "KeyListen.png", "JoyListen.png", "SearchCombo.png", "Excel.png",
         "Time.png", "WaitConfirm.png", "RunPro.png",
         "Arr.png", "Condition.png", "Control.png", "FlowJump.png", "Extract.png", "False.png",
-        "HttpRequest.png", "FileIO.png", "IcoPause.ico", "If.png", "IfPro.png",
+        "HttpRequest.png", "Browser.png", "AiDecision.png", "FileIO.png", "IcoPause.ico", "If.png", "IfPro.png",
         "Input.png", "Key.png", "Loop.png",
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",
@@ -1188,6 +1269,20 @@ function New-RMTAssets {
     $bundles["ico.zip"] = @($icoList | ForEach-Object {
         @{ Dest = $_; Src = "Images\Soft\$_" }
     })
+
+    # YOLO 检测内核：RMT_YOLO.dll 用 load-dynamic 找 onnxruntime.dll，三个文件必须成套。
+    # 内核未构建的架构跳过该包，避免一条 CreateEntryFromFile 抛异常中断整轮打包
+    # （与 Copy-YoloKernel 的 WARN 行为一致）。
+    $yoloDir = "Plugins\YOLO\$Arch"
+    $yoloFiles = @("RMT_YOLO.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll")
+    $yoloMissing = @($yoloFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "$yoloDir\$_")) })
+    if ($yoloMissing.Count -eq 0) {
+        $bundles["Yolo.zip"] = @($yoloFiles | ForEach-Object {
+            @{ Dest = $_; Src = "$yoloDir\$_" }
+        })
+    } else {
+        Write-Log "  [WARN] 跳过 Yolo.zip：$yoloDir 缺少 $($yoloMissing -join ', ')" "Yellow"
+    }
 
     foreach ($bundle in $bundles.GetEnumerator()) {
         New-RMTAssetZip -ZipPath (Join-Path $assetsDir $bundle.Key) -Files $bundle.Value
@@ -1217,6 +1312,7 @@ function Main {
     # 步骤 1: 检查文件
     Write-Step 1 "检查源文件与多语言完整性"
     $script:WorkAhk = Join-Path $PSScriptRoot "Thread\Work.ahk"
+    $script:UpdateAhk = Join-Path $PSScriptRoot "Thread\Update.ahk"
     $WorkDir = Join-Path $PSScriptRoot "Thread"
     if (-not (Test-Path $script:WorkAhk)) {
         throw "找不到源文件: $($script:WorkAhk)"
@@ -1263,9 +1359,12 @@ function Main {
     Write-Step 4 "清理旧文件"
     Remove-OldFiles -Dir $WorkDir -Filter "Work.exe"
 
-    # 步骤 5: 编译 Work.exe
-    Write-Step 5 "编译 Work.exe"
+    # 步骤 5: 编译开发环境的 Worker 和更新程序
+    Write-Step 5 "编译 Work.exe 和 Update.exe"
     $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
+    if (-not (Compile-Updater -BaseExe $script:Base64Exe -OutputExe "$WorkDir\Update.exe" -IconPath $IconPath)) {
+        throw "编译 Update.exe 失败，详见上方 Ahk2Exe 输出"
+    }
     if (-not (Compile -AhkFile $script:WorkAhk -BaseExe $script:Base64Exe -OutputExe "$WorkDir\Work.exe" -IconPath $IconPath -Name "Work.exe")) {
         throw "编译 Work.exe 失败，详见上方 Ahk2Exe 输出"
     }

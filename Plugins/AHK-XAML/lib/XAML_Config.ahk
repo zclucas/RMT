@@ -10,12 +10,12 @@ global XAML_FORCE_DYNAMIC_COMPILE := true
 
 ; --- Engine Build Location ---
 ; Controls where the C# engine (.dll) is compiled or placed during development runs:
-;   "temp"    - Only compile/copy to %TEMP%\AhkWpf (keeps lib/dep clean, default)
+;   "temp"    - Only compile/copy to <软件目录>\Cache\AhkWpf (keeps lib/dep clean, default)
 ;   "lib/dep" - Compile to lib/dep and run from there directly
-;   "both"    - Compile to lib/dep and also copy to %TEMP%\AhkWpf (old behavior)
+;   "both"    - Compile to lib/dep and also copy to <软件目录>\Cache\AhkWpf (old behavior)
 ;
 ; 本项目取 "both"：WebView2 打开后引擎产物名带后缀（见 XAMLHost.GetEngineDllName
-; → ahk-xaml-wv2.dll）。留 "temp" 的话它只落在 %TEMP%，lib\dep 里始终是旧的无
+; → ahk-xaml-wv2.dll）。留 "temp" 的话它只落在软件目录 Cache\AhkWpf，lib\dep 里始终是旧的无
 ; WebView 版本，PackRMT.ps1 打出来的 Release 会缺引擎、进而要在用户机上重编。
 global XAML_ENGINE_BUILD_LOCATION := "both"
 
@@ -47,7 +47,7 @@ global XAML_ENABLE_WEBVIEW := true
 
 ; --- WebView2 User Data Directory ---
 ; The directory where WebView2 stores its browser cache, cookies, and user data.
-; If not specified, defaults to A_Temp "\AhkWpf\WebView2Data".
+; If not specified, defaults to <软件目录>\Cache\AhkWpf\WebView2Data.
 global XAML_WEBVIEW_USER_DATA_DIR := ""
 
 ; --- AvalonEdit IDE Component ---

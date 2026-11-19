@@ -2,7 +2,7 @@
 
 ; 复用标准指令窗口的生命周期、主题和模态关闭处理。
 class HttpRequestGui extends CommentGui {
-    static Fields := ["Url", "Headers", "Body", "TimeoutMs", "Retries", "StatusVar", "ResponseVar", "ErrorVar"]
+    static Fields := ["Url", "Headers", "Body", "StatusVar", "ResponseVar", "ErrorVar"]
     static Methods := ["GET", "POST", "PUT", "DELETE"]
     static BodyTypes := ["JSON", "表单", "原始文本"]
     static ResultFields := ["StatusVar", "ResponseVar", "ErrorVar"]
@@ -17,11 +17,13 @@ class HttpRequestGui extends CommentGui {
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height)
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,10").Grid_IsSharedSizeScope("True")
-        this._Field(body, "备注：", "Remark", false)
-        method := this._Row(body, "类型：").Add("StackPanel").Grid_Column(1).Orientation("Horizontal")
-        this._Choice(method, "Method", HttpRequestGui.Methods).Width(140)
-        method.Add("Button").Name("BtnMethodHelp").Content("?").ToolTip(GetLang("请求类型说明"))
+        request := body.Add("Grid").Cols("*", 16, "*")
+        method := this._Row(request, "类型：").Add("Grid").Grid_Column(1).Cols("*", "Auto")
+        this._Choice(method, "Method", HttpRequestGui.Methods)
+        method.Add("Button").Grid_Column(1).Name("BtnMethodHelp").Content("?").ToolTip(GetLang("请求类型说明"))
             .Width(28).Height(28).MinHeight(28).Margin("6,0,0,0").Padding("0").Cursor("Hand")
+        remark := this._Row(request, "备注：").Grid_Column(2)
+        this._TextBox(remark, "Remark").Grid_Column(1)
         this._Field(body, "URL：", "Url", false)
         this._Field(body, "Header：", "Headers", true, 78)
         payload := body.Add("StackPanel").Name("BodySettings")
@@ -32,13 +34,12 @@ class HttpRequestGui extends CommentGui {
         this._Field(payload, "Body：", "Body", true, 110)
 
         options := body.Add("Grid")
-        this._Columns(options, true)
-        options.Rows("Auto", "Auto", "Auto")
-        this._Option(options, 0, 0, "超时（毫秒）：", "TimeoutMs", false)
-        this._Option(options, 0, 3, "失败重试次数：", "Retries")
-        this._Option(options, 1, 0, "状态码变量：", "StatusVar")
-        this._Option(options, 1, 3, "响应体变量：", "ResponseVar")
-        this._Option(options, 2, 0, "错误信息变量：", "ErrorVar")
+        options.Rows("Auto", "Auto")
+        options.Cols("*", 16, "*")
+        this._Option(options, 0, 0, "状态码变量：", "StatusVar", "保存 HTTP 状态码，未收到响应时为 0。")
+        this._Option(options, 0, 2, "响应体变量：", "ResponseVar", "保存服务器返回的响应体，包括 HTTP 错误响应的正文。")
+        this._Option(options, 1, 0, "错误体变量：", "ErrorVar", "保存 HTTP 错误状态或请求失败信息，无错误时为空。")
+        CommandTimeoutFields.Add(body, false, "HttpRequestLabel", "HttpRequestLabel")
         buttons := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
         AddCmdOkBtn(buttons)
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
@@ -55,23 +56,10 @@ class HttpRequestGui extends CommentGui {
         BindCmdEditorChrome(this.ui, "#指令手册/网络请求")
     }
 
-    _Row(body, label) {
-        row := body.Add("Grid").Margin("0,3")
-        this._Columns(row)
-        row.Add("TextBlock").Text(GetLang(label)).VerticalAlignment("Center").Margin("0,0,8,0")
-            .Foreground("{DynamicResource TextMain}")
-        return row
-    }
-
-    _Columns(grid, paired := false) {
-        columns := grid.Add("Grid.ColumnDefinitions")
-        columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup("HttpRequestLabel")
-        columns.Add("ColumnDefinition").Width("*")
-        if (paired) {
-            columns.Add("ColumnDefinition").Width(20)
-            columns.Add("ColumnDefinition").Width("Auto")
-            columns.Add("ColumnDefinition").Width("*")
-        }
+    _Row(body, label, tip := "") {
+        if (label == "Header：")
+            tip := GetLang("Header 每行 名称: 值；")
+        return CmdEditorForm.Row(body, label, , "HttpRequestLabel", , , tip).Margin("0,3")
     }
 
     _Field(body, label, name, multiline, height := 28) {
@@ -103,13 +91,12 @@ class HttpRequestGui extends CommentGui {
         return box
     }
 
-    _Option(grid, row, column, label, name, isVariable := true) {
-        grid.Add("TextBlock").Grid_Row(row).Grid_Column(column).Text(GetLang(label))
-            .VerticalAlignment("Center").Margin("0,0,8,0").Foreground("{DynamicResource TextMain}")
+    _Option(grid, row, column, label, name, tip) {
+        tip := GetLang(tip)
+        field := this._Row(grid, label, tip).Grid_Row(row).Grid_Column(column)
         ; 可编辑下拉内部的 TextBox 自带 2 DIP 文本留白。
-        box := isVariable ? grid.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0")
-            : this._TextBox(grid, name)
-        box.Grid_Row(row).Grid_Column(column + 1).Margin("0,3")
+        field.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0").Grid_Column(1)
+            .ToolTip(tip)
     }
 
     _ShowMethodHelp(ui) {
@@ -143,10 +130,11 @@ class HttpRequestGui extends CommentGui {
         this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr("网络请求")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
-        for varName in GetGuiVarArr("count") {
-            if (varName != "")
-                this._ComboPush("Retries", "AddItem", "{" varName "}")
-        }
+        action := TimeoutPolicy.Get(this.Data)
+        if (action == "")
+            action := TimeoutPolicy.LegacyRetryAction(this.Data.Retries)
+        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action,
+            InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
         for varName in GetGuiVarArr() {
             if (varName == "")
                 continue
@@ -172,7 +160,9 @@ class HttpRequestGui extends CommentGui {
             data.%name% := this._TranslateReferences(name, this.ui.Query(name), 2)
         data.Method := this.ui.Query("Method")
         data.BodyType := this.ui.Query("BodyType")
-        data.Retries := Trim(data.Retries)
+        CommandTimeoutFields.Read(this.ui, data)
+        if (data.TimeoutAction == "")
+            data.Retries := this.Data.Retries
         for name in HttpRequestGui.ResultFields
             data.%name% := GetVarName(Trim(data.%name%))
         return data
@@ -180,7 +170,7 @@ class HttpRequestGui extends CommentGui {
 
     _TranslateReferences(field, text, mode) {
         if (MainSoftData.Lang == "简中" || !InStr(text, "{")
-            || (field != "Url" && field != "Headers" && field != "Body" && field != "Retries"))
+            || (field != "Url" && field != "Headers" && field != "Body"))
             return text
         for displayName in GetSpecialVarArr() {
             key := GetLangKey(displayName)
@@ -208,12 +198,11 @@ class HttpRequestGui extends CommentGui {
             RmtDialog.Info(GetLang("三个结果变量名不能相同。"))
             return false
         }
-        return true
+        return CommandTimeoutFields.ValidateStatus(data, data.StatusVar, data.ResponseVar, data.ErrorVar)
     }
 
     SaveData() {
         this.Data := this._ReadData()
-        this.Data.TimeoutMs := Integer(this.Data.TimeoutMs)
         if (IsInteger(this.Data.Retries))
             this.Data.Retries := Integer(this.Data.Retries)
         HttpRequestRegisterResults(this.Data)

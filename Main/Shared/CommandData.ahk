@@ -68,17 +68,18 @@ GetPressKeyArr(KeyArrStr) {
     return GetComboKeyArr(KeyArrStr)    ;兼容旧版本
 }
 
-; 高效的序列号拆分函数：一次遍历同时提取文本和数字部分（避免2次RegExReplace）
+; 高效的序列號拆分：將序列號拆為「指令名」與「尾部編號」
 SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly) {
-    textOnly := ""
-    numbersOnly := ""
-    loop parse serialStr {
-        ch := A_LoopField
-        if (IsInteger(ch))
-            numbersOnly .= ch
-        else
-            textOnly .= ch
+    len := StrLen(serialStr)
+    i := 1
+    while (i <= len) {
+        c := Ord(SubStr(serialStr, i, 1))
+        if (c >= 48 && c <= 57)   ; '0'..'9'
+            break
+        i++
     }
+    textOnly    := SubStr(serialStr, 1, i - 1)
+    numbersOnly := SubStr(serialStr, i)
 }
 
 ; 配置值（JSON 字符串）→ Data 对象；非 JSON 返回 ""

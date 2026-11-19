@@ -103,7 +103,7 @@ class InputGui {
 
         optRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(5).Name("OptionsRow")
         optRow.Cols("80", "*")
-        optRow.Add("TextBlock").Grid_Column(0).Text(GetLang("选项：")).VerticalAlignment("Center")
+        optRow.Add("TextBlock").Grid_Column(0).Text(GetLang("选项：")).ToolTip(GetLang("逗号分隔选项")).VerticalAlignment("Center")
         optRow.Add("TextBox").Grid_Column(1).Name("OptionsCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
             .VerticalContentAlignment("Center").Padding("2,0")
             .ToolTip(GetLang("逗号分隔选项"))
@@ -122,7 +122,7 @@ class InputGui {
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        body.Add("TextBlock").Grid_Row(5).Grid_Column(0).Text(GetLang("超时(ms)：")).VerticalAlignment("Center")
+        body.Add("TextBlock").Grid_Row(5).Grid_Column(0).Text(GetLang("超时(ms)：")).ToolTip(GetLang("本次操作最多等待的毫秒数。")).VerticalAlignment("Center")
         timeoutCombo := body.Add("ComboBox").Grid_Row(5).Grid_Column(1).Name("TimeoutCon").Height(26).MinHeight(26).VerticalAlignment("Center")
             .IsEditable("True").IsTextSearchEnabled("False").Tag("AllowPassive")
         timeoutCombo.Add("ComboBoxItem").Content(GetLang("不限时"))
@@ -215,6 +215,7 @@ class InputGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("输入")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         EnsureInputData(this.Data)
         this.DLArrayArr := GetGuiArrNameArr()
 
@@ -289,8 +290,7 @@ class InputGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveData(true)
         action := this.SureBtnAction
         action(CommandStr)
         this._CloseWindow()
@@ -314,8 +314,7 @@ class InputGui {
     TriggerMacro(state := "", ctrl := "", event := "") {
         if (!this._CheckTimeout())
             return
-        this.SaveData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveData()
         OnTriggerSepcialItemMacro(CommandStr)
 
         typeText := this.ui.Query("TypeCombo")
@@ -333,19 +332,11 @@ class InputGui {
         }
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
-        if (ShouldAutoGenerateRemark(Remark)) {
-            Remark := this.ui.Query("TypeCombo")
-        }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+    _GenerateRemark(data) {
+        return GetLang(data.Type)
     }
 
-    SaveData() {
+    SaveData(commitRemark := false) {
         this.Data.Type := GetLangKey(this.ui.Query("TypeCombo"))
         this.Data.PauseType := GetLangKey(this.ui.Query("PauseTypeCombo"))
         this.Data.CancelType := GetLangKey(this.ui.Query("CancelTypeCombo"))
@@ -365,6 +356,9 @@ class InputGui {
         if (this.ui.Query("ResultRow>Visibility") != "Collapsed") {
             MySoftData.GlobalVariMap[this.Data.SaveName] := true
         }
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), commitRemark)
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 }

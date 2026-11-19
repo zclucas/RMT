@@ -68,23 +68,34 @@ SetGlobalData(macroStr, visitMap) {
             case "输入":
                 if (Data.Type == "弹窗" || Data.Type == "状态" || Data.Type == "选择" || Data.Type == "多选")
                     VariableMap[Data.SaveName] := true
+            case "窗口控件", "AI判断":
+                RegisterCommandResultVars(Data)
+                if (baseCmd == "AI判断" || WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
+                    TimeoutPolicy.RegisterStatus(Data)
+            case "YOLO检测":
+                RegisterYoloVars(Data)
+            case "浏览器":
+                if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
+                    TimeoutPolicy.RegisterStatus(Data)
+                if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
+                    && !BrowserActions.IsCloseAction(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
+                    for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
+                        VariableMap[Data.SaveVar suffix] := true
             case "网络请求":
                 HttpRequestRegisterResults(Data)
             case "等待":
-                if (Data.HasOwnProp("ResultSaveName") && Data.ResultSaveName != "")
+                if (Data.HasOwnProp("TimeoutStatusVar"))
+                    TimeoutPolicy.RegisterStatus(Data)
+                else if (Data.HasOwnProp("ResultSaveName") && Data.ResultSaveName != "")
                     VariableMap[Data.ResultSaveName] := true
             case "文件读写", "Excel":
                 SetFileIOGlobalData(Data)
             case "运行", "运行Pro":
-                if (Data.Mode = 2) {
-                    if (Data.SaveNameArr[1] != "")
-                        VariableMap[Data.SaveNameArr[1]] := true
-                }
-                else if (Data.Mode = 4) {
-                    loop 3 {
-                        if (Data.SaveNameArr[A_Index] != "")
-                            VariableMap[Data.SaveNameArr[A_Index]] := true
-                    }
+                mode := CmdEnumZh(Data.Mode, CmdEnumRunModeNames())
+                count := mode == "等待+输入输出" ? 3 : mode == "等待+返回值" ? 1 : 0
+                loop count {
+                    if (Data.SaveNameArr.Has(A_Index) && Data.SaveNameArr[A_Index] != "")
+                        VariableMap[Data.SaveNameArr[A_Index]] := true
                 }
             case "循环":
                 SetGlobalData(Data.LoopBody, visitMap)

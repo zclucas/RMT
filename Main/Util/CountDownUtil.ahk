@@ -14,7 +14,7 @@ TimeExecCountDown(tableItem, index, Data) {
     CountDownReplaceAt(posX, posY)
     ov := CountDownOverlay()
     wait := GetLangKey(Data.WaitEnd) != "不等待"
-    ov.Start(total, posX, posY, !wait)
+    ov.Start(total, posX, posY, !wait, Data.HasProp("CountDownName") ? Data.CountDownName : "")
 
     if (!wait)
         return
@@ -265,7 +265,7 @@ class CountDownOverlay {
         this.timer := ObjBindMethod(this, "Tick")
     }
 
-    Start(total, posX, posY, detached := false) {
+    Start(total, posX, posY, detached, name) {
         global CountDownAlive, CountDownRequests, MyCountDownStart
         this.token := DllCall("GetCurrentProcessId", "uint") ":" A_TickCount ":" Random(100000, 999999)
         this.posKey := CountDownPosKey(posX, posY)
@@ -274,7 +274,7 @@ class CountDownOverlay {
         CountDownAlive[this.posKey] := this
         CountDownRequests[this.token] := this
         try {
-            if (MyCountDownStart.Call(this.token, total, posX, posY, detached) == false)
+            if (MyCountDownStart.Call(this.token, total, posX, posY, detached, name) == false)
                 throw Error(GetLang("提示请求发送失败"))
         }
         catch {

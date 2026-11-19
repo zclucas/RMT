@@ -215,7 +215,7 @@
         if (!IsObject(seedPoints))
             seedPoints := this.SeedPoints
         this._overlaySeq += 1
-        output := A_Temp "\RMT_fe_overlay_" A_TickCount "_" this._windowToken "_" this._overlaySeq ".png"
+        output := RmtCacheDir() "\RMT_fe_overlay_" A_TickCount "_" this._windowToken "_" this._overlaySeq ".png"
         bitmap := 0, graphics := 0, seedBrush := 0, autoBrush := 0, outlinePen := 0
         try {
             ; 32 位 ARGB 位图保留透明背景；基准点用暖色，自动点用冷色。

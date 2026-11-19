@@ -124,6 +124,7 @@ PromptFromLegacy(key, old) {
                 && !(action == "" && old.HasOwnProp("OperateType") && old.OperateType == 3))
                 return ""
             data.Type := "自由贴"
+            data.DeleteProp("PastePosition")
             data.PasteTextSource := "剪贴板图文"
         case "时间", "倒计时":
             if (key == "时间" && TimeNormSubMode(old) != "倒计时")

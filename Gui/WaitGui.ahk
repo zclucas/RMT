@@ -12,7 +12,6 @@ class WaitGui {
     static ConfirmModes := ["继续", "继续&终止&暂停"]
     static ConfirmOptions := [
         ["PauseType", "交互时:", ["暂停当前宏", "暂停所有宏"]],
-        ["TimeoutAction", "超时后:", ["无", "自动继续", "自动终止", "自动暂停"]],
         ["TerminateType", "终止时:", ["终止当前宏", "终止所有宏"]],
         ["PauseBtnType", "暂停时:", ["暂停当前宏", "暂停所有宏"]]
     ]
@@ -32,6 +31,7 @@ class WaitGui {
         this._areaPreview := ScreenAreaPreview(WaitGui.MinScreenAreaSize)
         this._previewShowing := false
         this._areaAction := ""
+        this._areaHotkeys := []
         this._confirmHotkeys := []
     }
 
@@ -72,152 +72,139 @@ class WaitGui {
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         ; === 内容 ===
-        body := main.Add("Grid").Grid_Row(1).Margin("16,12,16,16")
-        body.Rows("Auto", "Auto", "Auto", "Auto")
-        body.Cols("Auto", "Auto", "*")
+        body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
 
-        ; 行0：类型 + 条件 + 备注
-        typeGroup := body.Add("StackPanel").Grid_Row(0).Grid_Column(0).Orientation("Horizontal").Margin("0,0,12,8")
-        typeGroup.Add("TextBlock").Text(GetLang("类型：")).VerticalAlignment("Center")
-        wt := typeGroup.Add("ComboBox").Name("WaitTypeCon").Width(160).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .BorderThickness("1").BorderBrush("{DynamicResource InputStroke}")
-        for t in GetLangArr(WaitGroupNames())
-            wt.Add("ComboBoxItem").Content(t)
-        conditionGroup := body.Add("StackPanel").Grid_Row(0).Grid_Column(1).Orientation("Horizontal").Margin("0,0,16,8")
-        conditionGroup.Add("TextBlock").Name("WaitConditionLabel").Text(GetLang("条件：")).VerticalAlignment("Center")
-        conditionGroup.Add("ComboBox").Name("WaitConditionCon").Width(160).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .BorderThickness("1").BorderBrush("{DynamicResource InputStroke}")
-        remarkGroup := body.Add("Grid").Grid_Row(0).Grid_Column(2).Margin("0,0,24,8")
-        remarkGroup.Cols("Auto", "*")
-        remarkGroup.Add("TextBlock").Name("WaitRemarkLabel").Text(GetLang("备注：")).VerticalAlignment("Center")
-        remarkGroup.Add("TextBox").Grid_Column(1).Name("RemarkCon").Height(26).MinHeight(26).Margin("4,0,0,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
-        ; 行1：参数直接排版，不显示分组标题或外框。
-        pStack := body.Add("Grid").Grid_Row(1).Grid_ColumnSpan(3).Margin("0,6,0,2")
+        remark := CmdEditorForm.Row(body, "备注：")
+        CmdEditorForm.TextBox(remark, "RemarkCon").Grid_Column(1)
 
-        vp := pStack.Add("StackPanel").Name("VarPanel").Visibility("Collapsed")
-        logicRow := vp.Add("StackPanel").Orientation("Horizontal").Margin("0,0,0,6")
-        logicRow.Add("TextBlock").Text(GetLang("条件关系：")).VerticalAlignment("Center")
-        this._Choice(logicRow, "VarLogicCon", CmdEnumLogicNames(), 80).Margin("4,0,0,0")
-        listBorder := vp.Add("Border").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-            .CornerRadius("4").Padding("8,4")
-        list := listBorder.Add("StackPanel")
-        scroll := list.Add("ScrollViewer").Name("VarScroll").Height(120)
-            .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
-        scroll.Add("StackPanel").Name("VarRows")
-        this._ConditionButton(list, "BtnAddVar", 0xE710, "添加").Margin("0,2")
+        types := body.Add("Grid")
+        types.Cols("*", 16, "*")
+        typeRow := CmdEditorForm.Row(types, "等待对象：")
+        this._Choice(typeRow, "WaitTypeCon", WaitGroupNames()).Grid_Column(1)
+        conditionRow := CmdEditorForm.Row(types, "条件：", "WaitConditionRow", "CommandRightLabel", "Center", "WaitConditionLabel").Grid_Column(2)
+        CmdEditorForm.Combo(conditionRow, "WaitConditionCon").Grid_Column(1)
+        logicRow := CmdEditorForm.Row(types, "条件关系：", "VarLogicRow", "CommandRightLabel", , , GetLang("选择全部条件成立，或任一条件成立。"))
+            .Grid_Column(2).Visibility("Collapsed")
+        this._Choice(logicRow, "VarLogicCon", CmdEnumLogicNames()).Grid_Column(1)
+
+        pStack := body.Add("Grid")
+
+        vp := pStack.Add("Border").Name("VarPanel").Visibility("Collapsed")
+            .Margin("0,5,0,4").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1).CornerRadius(4)
+        scroll := vp.Add("ScrollViewer").Name("VarScroll")
+            .Height(4 * 30).VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
+        template := scroll.Add("ScrollViewer.Template").Add("ControlTemplate").TargetType("ScrollViewer")
+        viewport := template.Add("Grid")
+        viewport.Cols("*", "Auto")
+        viewport.Add("ScrollContentPresenter").Name("PART_ScrollContentPresenter")
+        viewport.Add("ScrollBar").Name("PART_VerticalScrollBar").Grid_Column(1).Margin("0,2,2,2")
+            .Style("{DynamicResource VerticalScrollBarStyle}").Visibility("Hidden")
+            .Value("{TemplateBinding VerticalOffset}").Maximum("{TemplateBinding ScrollableHeight}")
+            .ViewportSize("{TemplateBinding ViewportHeight}")
+        ; 隐藏时仍保留滚动条列的宽度，避免条件行在溢出时改变宽度。
+        template.Add("ControlTemplate.Triggers").Add("Trigger").Property("ComputedVerticalScrollBarVisibility").Value("Visible")
+            .Add("Setter").TargetName("PART_VerticalScrollBar").Property("Visibility").Value("Visible")
+        list := scroll.Add("StackPanel").Margin("6,0").VerticalAlignment("Top")
+        list.Add("StackPanel").Name("VarRows")
+        CmdEditorForm.IconButton(list, "BtnAddVar", 0xE710, "添加").HorizontalAlignment("Center").Margin("0,2")
 
         ; 按键面板
-        kp := pStack.Add("StackPanel").Name("KeyPanel").HorizontalAlignment("Center").Visibility("Collapsed")
-        keyRow := kp.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
-        keyRow.Add("TextBlock").Text(GetLang("按键：")).VerticalAlignment("Center")
-        keyRow.Add("TextBox").Name("KeyCon").Width(240).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
-        ; 与主界面触发键入口使用相同的字形。
-        for entry in [["BtnPickKey", 0xE92E, "键盘按键选择"], ["BtnPickJoy", 0xE7FC, "手柄按键选择"]] {
-            keyRow.Add("Button").Name(entry[1]).Content(Chr(entry[2])).ToolTip(GetLang(entry[3]))
-                .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(18)
-                .Width(42).Height(26).MinHeight(26).Margin("6,0,0,0").Padding("0").Cursor("Hand")
-        }
-        keyOptions := kp.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
-        keyOptions.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center")
-        this._Choice(keyOptions, "KeyCheckTypeCon", [], 140).Margin("4,0,0,0")
-        keyOptions.Add("TextBlock").Text(GetLang("检测类型:")).VerticalAlignment("Center").Margin("14,0,0,0")
-        this._Choice(keyOptions, "KeyStateTypeCon", CmdEnumStateNames(), 120).Margin("4,0,0,0")
+        kp := pStack.Add("StackPanel").Name("KeyPanel").Visibility("Collapsed")
+        keyRow := CmdEditorForm.Row(kp, "按键：").Add("Grid").Grid_Column(1)
+        keyRow.Cols("*", 6, "Auto", 6, "Auto")
+        CmdEditorForm.TextBox(keyRow, "KeyCon")
+        CmdEditorForm.IconButton(keyRow, "BtnPickKey", 0xE92E, "键盘按键选择").Grid_Column(2).FontSize(18)
+        CmdEditorForm.IconButton(keyRow, "BtnPickJoy", 0xE7FC, "手柄按键选择").Grid_Column(4).FontSize(18)
+        keyOptions := kp.Add("Grid")
+        keyOptions.Cols("*", 16, "*")
+        mode := CmdEditorForm.Row(keyOptions, "检测模式:")
+        this._Choice(mode, "KeyCheckTypeCon", []).Grid_Column(1)
+        state := CmdEditorForm.Row(keyOptions, "检测类型:", "", "CommandRightLabel", , , GetLang("物理状态看实际按键，逻辑状态看系统收到的输入。")).Grid_Column(2)
+        this._Choice(state, "KeyStateTypeCon", CmdEnumStateNames()).Grid_Column(1)
 
         ; 范围面板：起始X/Y、终止X/Y
-        rp := pStack.Add("Grid").Name("RangePanel").HorizontalAlignment("Center").Visibility("Collapsed")
+        rp := pStack.Add("Grid").Name("RangePanel").Margin("0,4").Visibility("Collapsed")
         rp.Rows("30", "30")
-        rp.Cols("Auto", "Auto", "Auto")
+        columns := rp.Add("Grid.ColumnDefinitions")
+        columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup("CommandLabel")
+        columns.Add("ColumnDefinition").Width("Auto")
+        columns.Add("ColumnDefinition").Width(8)
+        columns.Add("ColumnDefinition").Width("Auto")
         preview := rp.Add("Button").Name("BtnPreviewArea").Grid_RowSpan(2).Cursor("Hand")
-            .ToolTip(GetLang("框选范围预览")).Padding("6,0").Margin("0,0,8,0")
+            .ToolTip(GetLang("框选范围预览")).Margin("-7,0,8,0")
             .HorizontalContentAlignment("Left").VerticalContentAlignment("Stretch")
             .Tag("0").Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         preview.InjectResources(ScreenAreaPreview.ButtonStyle())
         labels := preview.Add("Grid").IsHitTestVisible("False")
         labels.Rows("*", "*")
-        labels.Add("TextBlock").Text(GetLang("起始坐标：")).VerticalAlignment("Center")
-        labels.Add("TextBlock").Grid_Row(1).Text(GetLang("终止坐标：")).VerticalAlignment("Center")
+        labels.Add("TextBlock").Text(GetLang("起始坐标：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
+        labels.Add("TextBlock").Grid_Row(1).Text(GetLang("终止坐标：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
         for i, endpoint in ["Start", "End"] {
             for j, axis in ["X", "Y"] {
-                rp.Add("ComboBox").Grid_Row(i - 1).Grid_Column(j).Name(endpoint "Pos" axis)
-                    .Width(120).Height(26).MinHeight(26).VerticalAlignment("Center")
-                    .Margin(j == 2 ? "8,0,0,0" : "0").IsEditable("True")
+                rp.Add("ComboBox").Grid_Row(i - 1).Grid_Column(2 * j - 1).Name(endpoint "Pos" axis)
+                    .Height(26).MinHeight(26).VerticalAlignment("Center")
+                    .Width("{Binding ActualWidth, ElementName=WaitTypeCon}").IsEditable("True")
                     .ToolTip(GetLang((i == 1 ? "起始坐标" : "终止坐标") axis "："))
             }
         }
 
         ; 进程面板
-        pp := pStack.Add("Grid").Name("ProcPanel").HorizontalAlignment("Center").Visibility("Collapsed")
-        pp.Cols("Auto", "124", "8", "240")
-        pp.Add("TextBlock").Text(GetLang("匹配方式：")).VerticalAlignment("Center").Margin("0,0,4,0")
-        this._Choice(pp, "ProcTargetTypeCon", WaitGui.ProcessTargetTypes, 124).Grid_Column(1)
-        pp.Add("ComboBox").Grid_Column(3).Name("ProcCon").Height(26).MinHeight(26)
-            .IsEditable("True").IsTextSearchEnabled("False")
-        pp.Add("ComboBox").Grid_Column(3).Name("ProcPidCon").Height(26).MinHeight(26)
-            .IsEditable("True").IsTextSearchEnabled("False").Visibility("Collapsed")
+        proc := pStack.Add("StackPanel").Name("ProcPanel").Visibility("Collapsed")
+        pp := CmdEditorForm.Row(proc, "匹配方式：").Add("Grid").Grid_Column(1)
+        pp.Cols("*", 16, "1.6*")
+        this._Choice(pp, "ProcTargetTypeCon", WaitGui.ProcessTargetTypes)
+        CmdEditorForm.Combo(pp, "ProcCon", true).Grid_Column(2)
+        CmdEditorForm.Combo(pp, "ProcPidCon", true).Grid_Column(2).Visibility("Collapsed")
 
         ; 窗口面板
-        wp := pStack.Add("StackPanel").Name("WinPanel").Orientation("Horizontal").HorizontalAlignment("Center").Visibility("Collapsed")
-        wp.Add("TextBlock").Text(GetLang("窗口绑定：")).VerticalAlignment("Center")
-        wp.Add("TextBox").Name("WinInfoCon").Width(314).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
-        wp.Add("Button").Name("BtnWinEdit").Content(Chr(0xE70F)).ToolTip(GetLang("编辑"))
-            .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(12)
-            .Width(28).Height(26).MinHeight(26).Margin("6,0,0,0").Padding("0").Cursor("Hand")
+        wp := CmdEditorForm.Row(pStack, "窗口绑定：", "WinPanel").Visibility("Collapsed")
+        winInput := wp.Add("Grid").Grid_Column(1)
+        winInput.Cols("*", 6, "Auto")
+        CmdEditorForm.TextBox(winInput, "WinInfoCon")
+        CmdEditorForm.TextButton(winInput, "BtnWinEdit", "编辑").Grid_Column(2)
 
         ; 文件面板
-        fp := pStack.Add("StackPanel").Name("FilePanel").Orientation("Horizontal").HorizontalAlignment("Center").Visibility("Collapsed")
-        fp.Add("TextBlock").Text(GetLang("文件路径：")).VerticalAlignment("Center")
-        fp.Add("TextBox").Name("FilePathCon").Width(240).Height(24).MinHeight(24).Margin("4,0,0,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
-        fp.Add("Button").Name("BtnFileBrowse").Content(GetLang("浏览")).Height(24).MinHeight(24).Margin("6,0,0,0").Cursor("Hand")
+        fp := CmdEditorForm.Row(pStack, "文件路径：", "FilePanel").Visibility("Collapsed")
+        fileInput := fp.Add("Grid").Grid_Column(1)
+        fileInput.Cols("*", 6, "Auto")
+        CmdEditorForm.TextBox(fileInput, "FilePathCon")
+        fileInput.Add("Button").Grid_Column(2).Name("BtnFileBrowse").Content(GetLang("浏览"))
+            .Height(26).MinHeight(26).Cursor("Hand")
 
-        hint := pStack.Add("TextBlock").Name("HintPanel").TextWrapping("Wrap").Visibility("Collapsed")
-            .Foreground("{DynamicResource TextMain}").HorizontalAlignment("Center").VerticalAlignment("Center").TextAlignment("Center")
+        pStack.Add("TextBlock").Name("HintPanel").TextWrapping("Wrap").Visibility("Collapsed").Margin("0,4")
+            .Foreground("{DynamicResource TextSub}").VerticalAlignment("Center")
 
-        tp := pStack.Add("StackPanel").Name("TimePanel").Width(532).HorizontalAlignment("Center").Visibility("Collapsed")
-        timeCols := ["56", "168", "16", "56", "168"]
-        tr := tp.Add("Grid").HorizontalAlignment("Center")
-        tr.Cols(timeCols*)
-        tr.Add("TextBlock").Name("TimeModeLabel").Text(GetLang("模式：")).VerticalAlignment("Center")
-        this._Choice(tr, "TimeKindCon", [], 168).Grid_Column(1)
-        targetRow := tr.Add("Grid").Name("TimeTargetFields").Grid_Column(3).Grid_ColumnSpan(2)
-        targetRow.Cols("Auto", "*")
-        targetRow.Add("TextBlock").Name("TimeValueLabel").Text(GetLang("目标：")).VerticalAlignment("Center").Margin("0,0,4,0")
-        targetRow.Add("ComboBox").Grid_Column(1).Name("TimeValueCon").Height(26).MinHeight(26).IsEditable("True")
-        tr.Add("CheckBox").Grid_Column(3).Grid_ColumnSpan(2).Name("TimeWaitOutsideCon")
+        tp := pStack.Add("StackPanel").Name("TimePanel").Visibility("Collapsed")
+        tr := tp.Add("Grid")
+        tr.Cols("*", 16, "*")
+        timeMode := CmdEditorForm.Row(tr, "时间格式：", "", "CommandLabel", "Center", "TimeModeLabel")
+        this._Choice(timeMode, "TimeKindCon", []).Grid_Column(1)
+        targetRow := CmdEditorForm.Row(tr, "目标：", "TimeTargetFields", "CommandRightLabel", "Center", "TimeValueLabel").Grid_Column(2)
+        CmdEditorForm.Combo(targetRow, "TimeValueCon", true).Grid_Column(1)
+        tr.Add("CheckBox").Grid_Column(2).Name("TimeWaitOutsideCon")
             .Content(GetLang("在区间外继续")).VerticalAlignment("Center").Visibility("Collapsed")
-        rangeRow := tp.Add("Grid").Name("TimeRangeFields").HorizontalAlignment("Center").Margin("0,6,0,0")
-        rangeRow.Cols(timeCols*)
-        rangeRow.Add("TextBlock").Name("TimeStartLabel").Text(GetLang("开始：")).VerticalAlignment("Center")
-        rangeRow.Add("ComboBox").Grid_Column(1).Name("TimeStartCon").Height(26).MinHeight(26).IsEditable("True")
-        rangeRow.Add("TextBlock").Grid_Column(3).Name("TimeEndLabel").Text(GetLang("结束：")).VerticalAlignment("Center")
-        rangeRow.Add("ComboBox").Grid_Column(4).Name("TimeEndCon").Height(26).MinHeight(26).IsEditable("True")
-        tp.Add("TextBlock").Name("TimeHintCon").TextWrapping("Wrap").TextAlignment("Center").MinHeight(22).Margin("0,6,0,0")
+        rangeRow := tp.Add("Grid").Name("TimeRangeFields")
+        rangeRow.Cols("*", 16, "*")
+        startRow := CmdEditorForm.Row(rangeRow, "开始：", "", "CommandLabel", "Center", "TimeStartLabel")
+        CmdEditorForm.Combo(startRow, "TimeStartCon", true).Grid_Column(1)
+        endRow := CmdEditorForm.Row(rangeRow, "结束：", "", "CommandRightLabel", "Center", "TimeEndLabel").Grid_Column(2)
+        CmdEditorForm.Combo(endRow, "TimeEndCon", true).Grid_Column(1)
 
-        confirm := pStack.Add("StackPanel").Name("ConfirmPanel").Width(540).HorizontalAlignment("Center").Visibility("Collapsed")
-        promptRow := confirm.Add("Grid").Margin("0,0,0,8")
-        promptRow.Cols("112", "*")
-        promptRow.Add("TextBlock").Text(GetLang("提示：")).VerticalAlignment("Center")
-        promptRow.Add("TextBox").Name("ConfirmPrompt").Grid_Column(1).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").Padding("4,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        confirm := pStack.Add("StackPanel").Name("ConfirmPanel").Visibility("Collapsed")
+        promptRow := CmdEditorForm.Row(confirm, "提示：")
+        CmdEditorForm.TextBox(promptRow, "ConfirmPrompt").Grid_Column(1)
+        option := WaitGui.ConfirmOptions[1]
+        row := CmdEditorForm.Row(confirm, option[2])
+        this._Choice(row, "Confirm" option[1], option[3]).Grid_Column(1)
+        extra := confirm.Add("Grid").Name("ConfirmExtra")
+        extra.Cols("*", 16, "*")
         for i, option in WaitGui.ConfirmOptions {
-            if (Mod(i, 2)) {
-                options := confirm.Add("Grid")
-                options.Cols("112", "150", "16", "112", "150")
-                if (i == 3)
-                    options.Name("ConfirmExtra").Margin("0,8,0,0")
-            }
-            column := Mod(i, 2) ? 0 : 3
-            options.Add("TextBlock").Grid_Column(column).Text(GetLang(option[2])).VerticalAlignment("Center")
-            this._Choice(options, "Confirm" option[1], option[3], 150).Grid_Column(column + 1)
+            if (i == 1)
+                continue
+            row := CmdEditorForm.Row(extra, option[2], "", i == 3 ? "CommandRightLabel" : "CommandLabel")
+            this._Choice(row, "Confirm" option[1], option[3]).Grid_Column(1)
+            if (i == 3)
+                row.Grid_Column(2)
         }
 
         ; 日期面板：仅用于读取旧字段，新编辑统一使用时间面板
@@ -229,39 +216,13 @@ class WaitGui {
         for t in GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
             dunit.Add("ComboBoxItem").Content(t)
 
-        ; 行2：检测间隔 + 超时 + 状态变量
-        intervalGroup := body.Add("StackPanel").Name("WaitIntervalGroup").Grid_Row(2).Grid_Column(0).Orientation("Horizontal").Margin("0,14,12,0")
-        intervalGroup.Add("TextBlock").Text(GetLang("检测间隔(ms)：")).VerticalAlignment("Center")
-        intervalGroup.Add("TextBox").Name("IntervalCon").Width(72).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:6")
-        timeoutGroup := body.Add("StackPanel").Grid_Row(2).Grid_Column(1).Orientation("Horizontal").Margin("0,14,16,0")
-        timeoutGroup.Add("TextBlock").Name("WaitTimeoutLabel").Text(GetLang("超时(ms)：")).VerticalAlignment("Center").Margin("0,0,4,0")
-        this._Choice(timeoutGroup, "TimeoutCon", ["不限时", "10000"], 115)
-            .IsEditable("True").IsTextSearchEnabled("False").Tag("AllowPassive")
-        statusGroup := body.Add("Grid").Grid_Row(2).Grid_Column(2).Margin("0,14,0,0")
-        statusGroup.Cols("Auto", "*", "46", "46")
-        statusGroup.Add("TextBlock").Name("WaitStatusLabel").Text(GetLang("状态变量：")).VerticalAlignment("Center").Margin("0,0,4,0")
-        statusGroup.Add("ComboBox").Grid_Column(1).Name("TimeoutStatusCon").Height(26).MinHeight(26)
-            .IsEditable("True").ToolTip(GetLang("变量名"))
-        for field in [["WaitCompletedValueCon", "不超时", 2], ["WaitTimedOutValueCon", "超时", 3], ["WaitUnlimitedValueCon", "不超时", 2]] {
-            valueBox := statusGroup.Add("TextBox").Grid_Column(field[3]).Name(field[1]).Height(26).MinHeight(26).Margin("6,0,0,0")
-                .VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center").ToolTip(GetLang(field[2]))
-                .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-                .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            if (field[1] == "WaitUnlimitedValueCon")
-                valueBox.Text("0").IsReadOnly("True")
-            else
-                valueBox.Visibility("Collapsed")
-        }
-        btnRow := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(3).HorizontalAlignment("Center").Margin("0,12,0,0")
-        AddCmdOkBtn(btnRow)
+        CommandTimeoutFields.Add(body, true)
+        CmdEditorForm.Footer(body)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="760" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="640" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -270,12 +231,10 @@ class WaitGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad", this.ui.id))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/等待", this.TriggerConfirmation.Bind(this), "!l", "", this.OnClickPickArea.Bind(this))
-        this.ui.Update("BtnCmdF1", "ToolTip", GetLang("框选范围"))
+        this.ui.BatchUpdate(CmdEditorF1Updates("area"))
         this.ui.OnEvent("WaitTypeCon", "SelectionChanged", ObjBindMethod(this, "OnGroupChange"))
         this.ui.OnEvent("WaitConditionCon", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
         this.ui.OnEvent("ProcTargetTypeCon", "SelectionChanged", this.OnProcessTargetChange.Bind(this))
-        this.ui.Track("TimeoutCon")
-        this.ui.OnEvent("TimeoutCon", "TextChanged", ObjBindMethod(this, "OnTimeoutChange"))
         this.ui.OnEvent("TimeKindCon", "SelectionChanged", ObjBindMethod(this, "OnTimeKindChange"))
         this.ui.OnEvent("BtnAddVar", "Click", ObjBindMethod(this, "OnAddCondition"))
         this.ui.Track("KeyCon")
@@ -301,7 +260,6 @@ class WaitGui {
             return
         XamlWin.OnLoadTheme(this.ui)
         this.OnTypeChange()
-        this._RefreshTimeout(this.ui.Query("TimeoutCon"))
         this._SyncDateUnit()
         this._RebuildConditions(this._initialConditions)
     }
@@ -393,7 +351,7 @@ class WaitGui {
         sourceKey := GetLangKey(RegExReplace(this.SerialStr, "\d+"))
         if (sourceKey == "时间") {
             old := this.Data
-            this.Data := WaitData()
+            this.Data := WaitData(true)
             this.Data.WaitType := TimeNormSubMode(old) == "区间判断" ? "等待时间区间" : "等待时间"
             this.Data.TimeConfig := JSON.parse(JSON.stringify(old), , false)
             this.Data.Interval := old.HasOwnProp("CheckInterval") ? old.CheckInterval : this.Data.Interval
@@ -405,11 +363,12 @@ class WaitGui {
             this.Data.SerialStr := this.SerialStr
         } else if (sourceKey == "等待确定") {
             old := this.Data
-            this.Data := WaitData()
+            this.Data := WaitData(true)
             this.Data.WaitType := "等待确定"
             this.Data.TimeoutMs := InputField(old, "TimeoutMs", 0)
             this.Data.ConfirmConfig.Type := InputField(old, "Type", "继续")
             this.Data.ConfirmConfig.Prompt := InputField(old, "Prompt", "")
+            this.Data.ConfirmConfig.TimeoutAction := InputField(old, "TimeoutAction", "无")
             for option in WaitGui.ConfirmOptions {
                 property := option[1]
                 this.Data.ConfirmConfig.%property% := InputField(old, property, option[3][1])
@@ -425,6 +384,7 @@ class WaitGui {
             this.Data.TimeConfig.Param2 := unit == "具体时间" ? "时刻" : (unit == "时间变量" ? "时间戳" : unit)
         }
 
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         batch := []
         batch.Push({ControlName: "RemarkCon", PropertyName: "Text", Value: cmdArr.Length >= 2 ? cmdArr[2] : ""})
         confirm := this.Data.ConfirmConfig
@@ -435,13 +395,15 @@ class WaitGui {
             selected := InputField(confirm, option[1], option[3][1])
             batch.Push({ControlName: "Confirm" option[1], PropertyName: "SelectedIndex", Value: CmdEnumIndex(selected, option[3])})
         }
-        batch.Push({ControlName: "IntervalCon", PropertyName: "Text", Value: this.Data.Interval})
-        timeout := this.Data.TimeoutMs > 0 ? String(this.Data.TimeoutMs) : GetLang("不限时")
-        batch.Push({ControlName: "TimeoutCon", PropertyName: "Text", Value: timeout})
-        batch.Push({ControlName: "WaitCompletedValueCon", PropertyName: "Text", Value: this.Data.WaitCompletedValue})
-        batch.Push({ControlName: "WaitTimedOutValueCon", PropertyName: "Text", Value: this.Data.WaitTimedOutValue})
-        resultName := this.Data.ResultSaveName == "" ? GetLang("超时状态") : this.Data.ResultSaveName
-        this._QueueCombo(batch, "TimeoutStatusCon", GetGuiVarArr(), resultName)
+        action := TimeoutPolicy.Get(this.Data)
+        confirmTimeoutAction := InputField(confirm, "TimeoutAction")
+        legacyConfirm := WaitTypeNum(this.Data) == "等待确定"
+            && (confirmTimeoutAction == "自动暂停" || confirmTimeoutAction == "自动终止")
+        if (action == "" && !legacyConfirm)
+            action := "忽略"
+        statusVar := InputField(this.Data, "TimeoutStatusVar",
+            this.Data.ResultSaveName != "" ? this.Data.ResultSaveName : TimeoutPolicy.DefaultStatusVar)
+        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action, statusVar)
         keyWait := this._PanelOf(CmdEnumWait(this.Data.WaitType)) == "KeyPanel"
         this._pickedKeyText := keyWait ? this.Data.Param1 : ""
         this._pickedKeys := keyWait ? this.Data.KeyOptions.KeyArr : []
@@ -462,7 +424,6 @@ class WaitGui {
         batch.Push({ControlName: "FilePathCon", PropertyName: "Text", Value: this.Data.Param1})
         batch.Push({ControlName: "DateValCon", PropertyName: "Text", Value: this.Data.Param1})
         this.ui.BatchUpdate(batch)
-        this._RefreshTimeout(timeout)
         ; 坐标与下拉数据
         this._SetCombo("StartPosX", GetGuiVarArr("x"), GetLang(this.Data.StartPosX))
         this._SetCombo("StartPosY", GetGuiVarArr("y"), GetLang(this.Data.StartPosY))
@@ -515,15 +476,13 @@ class WaitGui {
         t := this._TypeValue()
         show := this._PanelOf(t)
         batch := []
-        for name in ["VarPanel", "KeyPanel", "RangePanel", "ProcPanel", "WinPanel", "FilePanel", "DatePanel", "HintPanel", "TimePanel", "ConfirmPanel"] {
-            reserve := (name == "RangePanel" && this._currentGroup == "屏幕与鼠标")
-                || (name == "FilePanel" && this._currentGroup == "文件与剪切板")
-            batch.Push({ControlName: name, PropertyName: "Visibility", Value: name == show ? "Visible" : (reserve ? "Hidden" : "Collapsed")})
-        }
+        for name in ["VarPanel", "KeyPanel", "RangePanel", "ProcPanel", "WinPanel", "FilePanel", "DatePanel", "HintPanel", "TimePanel", "ConfirmPanel"]
+            batch.Push({ControlName: name, PropertyName: "Visibility", Value: name == show ? "Visible" : "Collapsed"})
+        batch.Push({ControlName: "VarLogicRow", PropertyName: "Visibility", Value: show == "VarPanel" ? "Visible" : "Collapsed"})
         confirmation := t == "等待确定"
         if (confirmation)
             this._confirmMode := GetLangKey(this.ui.Query("WaitConditionCon"))
-        batch.Push({ControlName: "ConfirmExtra", PropertyName: "Visibility", Value: this._confirmMode == "继续&终止&暂停" ? "Visible" : "Hidden"})
+        batch.Push({ControlName: "ConfirmExtra", PropertyName: "Visibility", Value: this._confirmMode == "继续&终止&暂停" ? "Visible" : "Collapsed"})
         batch.Push({ControlName: "BtnCmdPlay", PropertyName: "Visibility", Value: confirmation ? "Visible" : "Collapsed"})
         batch.Push({ControlName: "BtnCmdF1", PropertyName: "Visibility", Value: show == "RangePanel" ? "Visible" : "Collapsed"})
         hint := WaitHintText(t)
@@ -531,8 +490,12 @@ class WaitGui {
             batch.Push({ControlName: "HintPanel", PropertyName: "Text", Value: GetLang(hint)})
         this.ui.BatchUpdate(batch)
         this._BindConfirmHotkey(confirmation)
-        if (show != "RangePanel")
+        if (show == "RangePanel") {
+            if (!this._areaHotkeys.Length && this.Hwnd())
+                this._areaHotkeys := WinHotkey.Register(["F1"], this.OnClickPickArea.Bind(this), this.Hwnd())
+        } else {
             this._ClearAreaInteraction()
+        }
         if (show == "KeyPanel")
             this._FillKeyModes(this.ui.Query("KeyCon"))
         if (show == "ProcPanel")
@@ -671,7 +634,8 @@ class WaitGui {
         id := this.ui.id
         while (GetKeyState("LButton", "P"))
             Sleep(15)
-        if (!IsObject(this.ui) || this.ui.id != id || this._TypeValue() != "等待屏幕变化")
+        if (!IsObject(this.ui) || this.ui.id != id || this._TypeValue() != "等待屏幕变化"
+            || IsObject(this._areaAction) || MainSoftData.SelectAreaAction != "" || MainSoftData.GetAreaAction != "")
             return
         action := this.OnAreaPicked.Bind(this, id)
         this._areaAction := action
@@ -720,8 +684,10 @@ class WaitGui {
     }
 
     _ClearAreaInteraction() {
+        WinHotkey.UnregisterAll(this._areaHotkeys)
+        this._areaHotkeys := []
         if (IsObject(this._areaAction) && MainSoftData.SelectAreaAction == this._areaAction)
-            TogSelectArea(false)
+            SelectAreaCancel()
         if (this._previewShowing && IsObject(this.ui))
             this.ui.Update("BtnPreviewArea", "Tag", "0")
         this._previewShowing := false
@@ -739,27 +705,18 @@ class WaitGui {
 
     TriggerConfirmation(*) {
         if (this._TypeValue() == "等待确定" && this.CheckIfValid()) {
-            this.SaveWaitData()
-            OnTriggerSepcialItemMacro(this.GetCommandStr())
+            OnTriggerSepcialItemMacro(this.SaveWaitData())
         }
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        remark := this.ui.Query("RemarkCon")
-        if (this._TypeValue() == "等待确定" && ShouldAutoGenerateRemark(remark))
-            remark := this.ui.Query("WaitConditionCon")
-        CommandStr := CorrectRemark(CommandStr, remark)
-        return CommandStr
+    _GenerateRemark(data) {
+        return data.WaitType == "等待确定" ? GetLang(data.ConfirmConfig.Type) : ""
     }
 
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveWaitData()
-        CommandStr := this.GetCommandStr()
+        CommandStr := this.SaveWaitData(true)
         action := this.SureBtnAction
         this._CloseWindow()
         if (action != "")
@@ -818,47 +775,20 @@ class WaitGui {
                 if (!this._DateOk())
                     return false
         }
-        interval := this.ui.Query("IntervalCon")
-        if (t != "等待确定" && (!IsNumber(interval) || Number(interval) <= 0)) {
-            RmtDialog.Info(GetLang("检测间隔请输入大于0的数字（毫秒）"))
-            return false
-        }
-        if (this._ParseTimeoutMs(this.ui.Query("TimeoutCon")) < 0) {
+        data := {}
+        CommandTimeoutFields.Read(this.ui, data, true)
+        if (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 0 || data.TimeoutMs > 4294967295) {
             RmtDialog.Info(GetLang("超时请输入 0 到 4294967295 的整数（毫秒）"))
             return false
         }
-        return CheckVarNameIfValid(this.ui.Query("TimeoutStatusCon"))
+        return CommandTimeoutFields.ValidateStatus(data)
     }
 
-    OnTimeoutChange(state, *) {
-        if (IsObject(this.ui) && IsObject(state) && state.Has("TimeoutCon"))
-            this._RefreshTimeout(state["TimeoutCon"])
-    }
-
-    _RefreshTimeout(text) {
-        unlimited := this._ParseTimeoutMs(text) == 0
-        this.ui.BatchUpdate([
-            {ControlName: "WaitUnlimitedValueCon", PropertyName: "Visibility", Value: unlimited ? "Visible" : "Collapsed"},
-            {ControlName: "WaitCompletedValueCon", PropertyName: "Visibility", Value: unlimited ? "Collapsed" : "Visible"},
-            {ControlName: "WaitTimedOutValueCon", PropertyName: "Visibility", Value: unlimited ? "Collapsed" : "Visible"}
-        ])
-    }
-
-    _ParseTimeoutMs(text) {
-        text := Trim(text)
-        if (text == "" || text = GetLang("不限时"))
-            return 0
-        return WaitParseMilliseconds(text)
-    }
-
-    SaveWaitData() {
+    SaveWaitData(commitRemark := false) {
         this.Data.WaitType := this._TypeValue()
-        this.Data.Interval := this.ui.Query("IntervalCon")
-        this.Data.TimeoutMs := this._ParseTimeoutMs(this.ui.Query("TimeoutCon"))
-        this.Data.ResultSaveName := GetVarName(this.ui.Query("TimeoutStatusCon"))
-        this.Data.WaitCompletedValue := this.ui.Query("WaitCompletedValueCon")
-        this.Data.WaitTimedOutValue := this.ui.Query("WaitTimedOutValueCon")
-        t := this._TypeValue()
+        CommandTimeoutFields.Read(this.ui, this.Data, true)
+        this.Data.ResultSaveName := this.Data.TimeoutStatusVar
+        t := this.Data.WaitType
         switch t {
             case "等待确定":
                 cfg := this.Data.ConfirmConfig
@@ -924,13 +854,15 @@ class WaitGui {
                         cfg.RandomMaxMs := this.ui.Query("TimeEndCon")
                     cfg.Param2 := kind
                 }
-                cfg.CheckInterval := this.Data.Interval
             case "等待日期":
                 this.Data.Param1 := GetBuiltinVarName(this.ui.Query("DateValCon"))
                 this.Data.Param2 := GetLangKey(this.ui.Query("DateUnitCon"))
         }
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), commitRemark)
         SaveMacroCMDData(this.Data)
-        MySoftData.GlobalVariMap[this.Data.ResultSaveName] := true
+        TimeoutPolicy.RegisterStatus(this.Data)
+        return CommandStr
     }
 
     _AreaOk() {
@@ -974,8 +906,8 @@ class WaitGui {
     }
     static CompareKeys := ["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "包含", "变量存在", "变量不存在"]
 
-    _Choice(parent, name, keys, width) {
-        combo := parent.Add("ComboBox").Name(name).Width(width).Height(26).MinHeight(26)
+    _Choice(parent, name, keys) {
+        combo := CmdEditorForm.Combo(parent, name)
         for key in keys
             combo.Add("ComboBoxItem").Content(GetLang(key))
         return combo
@@ -1002,6 +934,7 @@ class WaitGui {
     _FillTypes(group, selected := "") {
         this._currentGroup := group
         this.WaitTypeKeys := group == "确定" ? WaitGui.ConfirmModes : WaitGroupTypes(group)
+        this.ui.Update("WaitConditionRow", "Visibility", this.WaitTypeKeys.Length > 1 ? "Visible" : "Collapsed")
         this.ui.Update("WaitConditionCon", "ClearItems", "")
         for key in this.WaitTypeKeys {
             label := group == "确定" ? key : (key == "等待时间" ? "等待" : (key == "等待时间区间" ? "区间判断" : SubStr(key, 3)))
@@ -1047,21 +980,16 @@ class WaitGui {
         random := kind == "毫秒-随机"
         pair := range || random
         this._RefreshTimeTarget(range, kind)
-        label := kind == "毫秒" ? "目标(ms)：" : "目标："
+        label := kind == "毫秒" ? "时长(ms)：" : (kind == "时刻" || kind == "时间戳" ? "目标时间：" : "时长：")
+        help := CmdEditorForm.TimeValueTip(kind)
+        for name in ["TimeValueLabel", "TimeStartLabel", "TimeEndLabel"]
+            this.ui.Update(name, "ToolTip", help)
         this.ui.Update("TimeValueLabel", "Text", GetLang(label))
         this.ui.Update("TimeStartLabel", "Text", GetLang(random ? "最短：" : "开始："))
         this.ui.Update("TimeEndLabel", "Text", GetLang(random ? "最长：" : "结束："))
         this.ui.Update("TimeTargetFields", "Visibility", pair ? "Collapsed" : "Visible")
-        this.ui.Update("TimeRangeFields", "Visibility", pair ? "Visible" : "Hidden")
+        this.ui.Update("TimeRangeFields", "Visibility", pair ? "Visible" : "Collapsed")
         this.ui.Update("TimeWaitOutsideCon", "Visibility", range ? "Visible" : "Collapsed")
-        hint := kind == "时长" ? "格式：时:分:秒，例如 00:01:30；支持变量。" : (kind == "时刻" ? "格式：时:分:秒，例如 14:30:00；区间支持跨午夜。" : "填写毫秒时间戳或选择时间变量。")
-        if (random)
-            hint := "从最短与最长毫秒数之间随机等待，支持变量。"
-        else if (kind == "毫秒")
-            hint := "输入毫秒数或选择变量，例如 500。"
-        else if (kind == "分钟" || kind == "小时" || kind == "天")
-            hint := "旧配置时长单位：" kind "，支持数值或变量。"
-        this.ui.Update("TimeHintCon", "Text", GetLang(hint))
     }
 
     _RefreshTimeTarget(range, kind) {
@@ -1118,23 +1046,14 @@ class WaitGui {
         return ms == "" ? value : String(ms)
     }
 
-    _ConditionButton(parent, name, glyph, tip) {
-        return parent.Add("Button").Name(name).Content(Chr(glyph)).ToolTip(GetLang(tip))
-            .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(12)
-            .Width(24).Height(24).MinHeight(24).Padding("0").HorizontalAlignment("Center").Cursor("Hand")
-            .Foreground("{DynamicResource TextMain}").Background("{DynamicResource ControlBg}")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-    }
-
     _ConditionRow(i, canDelete) {
         row := XAML_Generator("Grid").Margin("0,2")
         row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
-        row.Cols("*", "8", "128", "8", "*", "32")
-        row.Add("ComboBox").Grid_Column(0).Name("VarName_" i).Height(26).MinHeight(26)
-            .IsEditable("True").ToolTip(GetLang("变量名："))
-        this._Choice(row, "VarCompare_" i, WaitGui.CompareKeys, 128).Grid_Column(2)
-        row.Add("ComboBox").Grid_Column(4).Name("VarValue_" i).Height(26).MinHeight(26).IsEditable("True")
-        this._ConditionButton(row, "BtnDeleteVar_" i, 0xE74D, "删除").Grid_Column(5)
+        row.Cols("*", 8, "*", 8, "*", 6, 28)
+        CmdEditorForm.Combo(row, "VarName_" i, true).ToolTip(GetLang("变量名："))
+        this._Choice(row, "VarCompare_" i, WaitGui.CompareKeys).Grid_Column(2)
+        CmdEditorForm.Combo(row, "VarValue_" i, true).Grid_Column(4)
+        CmdEditorForm.IconButton(row, "BtnDeleteVar_" i, 0xE74D, "删除").Grid_Column(6)
             .IsEnabled(canDelete ? "True" : "False")
         return row.ToString()
     }

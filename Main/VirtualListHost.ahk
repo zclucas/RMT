@@ -72,7 +72,7 @@ class VirtualListHost {
         if (doFonts) {
             this._vlFonts[0] := true
             this._vlFonts[t] := true
-            try MyMainWin.RefreshVLFonts()
+            try MyMainWin.RefreshWindowFonts()
         }
         try MyMainWin.RefreshSideTree(t)
     }

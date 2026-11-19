@@ -139,7 +139,7 @@ class BGMouseGui {
         ; 行4：点击时间 / 垂直+水平滚动
         clickRow := body.Add("Grid").Grid_Row(4).Grid_ColumnSpan(4).Name("ClickTimeRow")
         clickRow.Cols("90", "120", "110", "120")
-        clickRow.Add("TextBlock").Grid_Column(0).Text(GetLang("点击时间:")).VerticalAlignment("Center")
+        clickRow.Add("TextBlock").Grid_Column(0).Text(GetLang("点击时间:")).ToolTip(GetLang("从按下到松开的毫秒数。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         clickRow.Add("TextBox").Grid_Column(1).Name("ClickTimeCon").Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")

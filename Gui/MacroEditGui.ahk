@@ -34,6 +34,9 @@
 #Include JoyCheckGui.ahk
 #Include CommentGui.ahk
 #Include HttpRequestGui.ahk
+#Include BrowserGui.ahk
+#Include ClassifierCommandGui.ahk
+#Include YoloGui.ahk
 #Include MacroEditModel.ahk
 
 class MacroEditGui {
@@ -133,12 +136,12 @@ class MacroEditGui {
         ; §13 左侧指令面板：按类型分类 + 收藏星标 + 分类展开状态（持久化到 INI）
         this.CmdCategory := [
             {name: "键鼠/手柄", icon: Chr(0xE765), cmds: ["按键", "手柄", "移动", "移动Pro", "增量移动", "后台按键", "后台鼠标", "按键检测", "手柄检测"]},
-            {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro", "搜索All", "搜索Combo"]},
+            {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro", "搜索All", "搜索Combo", "YOLO检测"]},
             {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出", "提示"]},
             {name: "变量/数据", icon: Chr(0xE8EF), cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
-            {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel", "网络请求"]},
+            {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel"]},
             {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "等待", "循环", "如果", "如果Pro"]},
-            {name: "调控", icon: Chr(0xE713), cmds: ["运行", "运行Pro", "宏操作", "窗口信息", "调整窗口", "RMT指令"]},
+            {name: "调控", icon: Chr(0xE713), cmds: ["RMT指令", "运行", "运行Pro", "宏操作", "窗口信息", "调整窗口", "窗口控件", "网络请求", "浏览器", "AI判断"]},
             {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
         ]
         this._favSet := Map()            ; 收藏指令名（中文）→ true

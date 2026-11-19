@@ -4546,7 +4546,7 @@ class XDocumentEditor {
                 wordApp.Visible := false
                 wordDoc := wordApp.Documents.Open(filePath)
 
-                tempDir := A_Temp "\AhkDocEditor"
+                tempDir := A_WorkingDir "\Cache\AhkDocEditor"
                 if !DirExist(tempDir)
                     DirCreate(tempDir)
 
@@ -4581,7 +4581,7 @@ class XDocumentEditor {
         isDoc := (LTrim(String(SubStr(filePath, -3)), ".") = "doc")
 
         if (isDoc) {
-            tempDir := A_Temp "\AhkDocEditor"
+            tempDir := A_WorkingDir "\Cache\AhkDocEditor"
             if !DirExist(tempDir)
                 DirCreate(tempDir)
             tempPath := tempDir "\temp_save_" A_TickCount ".docx"

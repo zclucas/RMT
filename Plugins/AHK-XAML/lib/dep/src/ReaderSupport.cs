@@ -73,7 +73,7 @@ public partial class AhkWpfEngine
         }
         catch (Exception ex)
         {
-            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_editor_debug.log"), 
+            System.IO.File.AppendAllText(System.IO.Path.Combine(GetLogDir(), "ahk_editor_debug.log"), 
                 "HideReaderToolbar Exception: " + ex.ToString() + "\n");
         }
     }
@@ -130,7 +130,7 @@ public partial class AhkWpfEngine
             reader.Resources.MergedDictionaries.Add(resDict);
         }
         catch (Exception ex) {
-            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_editor_debug.log"), 
+            System.IO.File.AppendAllText(System.IO.Path.Combine(GetLogDir(), "ahk_editor_debug.log"), 
                 "StyleReaderVisuals XAML Parse Exception: " + ex.ToString() + "\n");
         }
 
@@ -140,7 +140,7 @@ public partial class AhkWpfEngine
             StyleVisualTreeRecursive(reader, theme, win);
         }
         catch (Exception ex) {
-            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_editor_debug.log"), 
+            System.IO.File.AppendAllText(System.IO.Path.Combine(GetLogDir(), "ahk_editor_debug.log"), 
                 "StyleReaderVisuals VisualTree Walk Exception: " + ex.ToString() + "\n");
         }
     }

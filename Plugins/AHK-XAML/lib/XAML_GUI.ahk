@@ -442,8 +442,8 @@ class XAML_GUI {
 
         ; Save XAML to temp file for compilation
         SplitPath(filePath, , , , &bamlName)
-        DirCreate(A_Temp "\AhkWpf")
-        tempXaml := A_Temp "\AhkWpf\" bamlName ".xaml"
+        DirCreate(A_WorkingDir "\Cache\AhkWpf")
+        tempXaml := A_WorkingDir "\Cache\AhkWpf\" bamlName ".xaml"
         try FileDelete(tempXaml)
         FileAppend(cleanXaml, tempXaml, "UTF-8")
 

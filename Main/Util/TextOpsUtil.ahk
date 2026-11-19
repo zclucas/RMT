@@ -89,6 +89,69 @@ TextOpsTypeNames() {
     return ["文本拼接", "文本分割", "文本提取", "文本替换", "时间戳处理", "去除空格", "大小写转换", "文本统计"]
 }
 
+TextOpsModes(type) {
+    switch type {
+        case "文本拼接": return ["自定义", "数组"]
+        case "文本分割": return ["内容分割", "定长分割", "正则匹配"]
+        case "文本提取": return ["数字提取", "字母提取", "中文提取", "正则匹配"]
+        case "文本替换": return ["普通文本", "正则匹配"]
+        case "时间戳处理": return TextOpsTimestampModes()
+        case "去除空格": return ["去除前空白字符", "去除后空白字符", "去除前后空白字符", "去除所有空白字符"]
+        case "大小写转换": return ["全部大写", "全部小写", "首字母大写"]
+        case "文本统计": return ["字符数", "单词数", "行数"]
+    }
+    return []
+}
+
+TextOpsDefaultMode(type) => type == "去除空格" ? "去除前后空白字符" : TextOpsModes(type)[1]
+
+TextOpsDefaultSource(type) {
+    switch type {
+        case "文本拼接": return ""
+        case "时间戳处理": return "当前时间戳"
+        default: return "当前剪切板"
+    }
+}
+
+TextOpsDefaultArgs(type, mode) {
+    switch type {
+        case "文本拼接": return mode == "数组" ? "-" : "{当前年}{当前月}{当前日}"
+        case "文本分割":
+            switch mode {
+                case "内容分割": return ","
+                case "定长分割": return "1"
+                case "正则匹配": return "\s+"
+            }
+        case "文本提取": return mode == "正则匹配" ? "\d+" : ""
+        case "时间戳处理": return mode == "提取时间量" ? TextOpsTimestampComponents()[1][1] : ""
+    }
+    return ""
+}
+
+TextOpsSeparatorOptions() {
+    return [["制表符", "`t"], ["回车", "`r"], ["换行", "`n"], ["回车换行", "`r`n"]]
+}
+
+TextOpsSeparatorChoices() {
+    items := []
+    for option in TextOpsSeparatorOptions()
+        items.Push(GetLang(option[1]))
+    items.Push(GetLang("当前剪切板"))
+    return items
+}
+
+TextOpsSeparatorText(value, toDisplay := false) {
+    for option in TextOpsSeparatorOptions() {
+        label := GetLang(option[1])
+        if (value == option[2] || value == label)
+            return toDisplay ? label : option[2]
+    }
+    clipboard := GetLang("当前剪切板")
+    if (value == "当前剪切板" || value == clipboard)
+        return toDisplay ? clipboard : "当前剪切板"
+    return value
+}
+
 TextOpsTimestampModes() {
     return ["自定义格式", "提取时间量", "提取所有时间量", "日期时间", "日期", "时刻"]
 }
@@ -245,6 +308,23 @@ TextOpsStatistics(Data, tableItem, index) {
 }
 
 TextOpsConcat(Data, tableItem, index) {
+    if (Data.ArgsType == "数组") {
+        if (!TryGetArrValue(&source, Data.Name))
+            return
+        separator := Data.ArgsName
+        if (separator == "当前剪切板")
+            TryGetVarValue(&separator, "当前剪切板", false)
+        result := ""
+        loop source.Length {
+            if (A_Index > 1)
+                result .= separator
+            value := source.Has(A_Index) ? source[A_Index] : ""
+            result .= value is Array ? "[" GetArrayStr(value) "]" : value
+        }
+        MySetGlobalVariable([Data.SaveName], [result], false)
+        return
+    }
+
     IsHas := TryGetTabVarValue(&ConcatArgs, tableItem, index, Data.ArgsName, false)
     ConcatArgs := IsHas ? ConcatArgs : Data.ArgsName
 

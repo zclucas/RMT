@@ -115,7 +115,7 @@ class DeltaMoveGui {
             .VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("每次间隔：")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
         body.Add("ComboBox").Grid_Row(2).Grid_Column(3).Name("IntervalCon").Height(26).MinHeight(26).Margin("10,0,0,0").IsEditable("True")
             .VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")

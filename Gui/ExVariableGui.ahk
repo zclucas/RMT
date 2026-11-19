@@ -140,7 +140,7 @@ class ExVariableGui {
 
         extRow := param.Add("Grid").Grid_Row(2).Grid_ColumnSpan(8)
         extRow.Cols("96", "*", "8", "70")
-        this._AddLabel(extRow, GetLang("提取文本：")).Grid_Column(0)
+        this._AddLabel(extRow, GetLang("提取文本：")).ToolTip(GetLang("源文本留空则全部写入第一个变量；只需包含要提取的片段即可。")).Grid_Column(0)
         this._StyleBox(extRow.Add("TextBox").Name("ExtractStrCon").Grid_Column(1))
         this._AddEditBtn(extRow, "BtnExtractEdit").Grid_Column(3)
 
@@ -152,7 +152,7 @@ class ExVariableGui {
         this._AddLabel(param, GetLang("起始坐标Y：")).Grid_Row(3).Grid_Column(6)
         this._StyleCombo(param.Add("ComboBox").Name("StartPosY").Grid_Row(3).Grid_Column(7).IsEditable("True"))
 
-        this._AddLabel(param, GetLang("每次间隔：")).Grid_Row(4).Grid_Column(0)
+        this._AddLabel(param, GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).Grid_Row(4).Grid_Column(0)
         this._StyleBox(param.Add("TextBox").Name("SearchIntervalCon").Grid_Row(4).Grid_Column(1), "80")
             .TextAlignment("Center").HorizontalAlignment("Left")
         this._AddLabel(param, GetLang("终止坐标X：")).Grid_Row(4).Grid_Column(3)
@@ -191,7 +191,7 @@ class ExVariableGui {
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/12-变量提取", ObjBindMethod(this, "TriggerMacro"), "!l", "", ObjBindMethod(this, "OnF1"))
-        try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：框选范围"))
+        this.ui.BatchUpdate(CmdEditorF1Updates("area"))
         this.ui.OnEvent("ExtractTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
         this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEditBtn"))
         this.ui.OnEvent("BtnExtractEdit", "Click", ObjBindMethod(this, "OnClickExtractBtn"))

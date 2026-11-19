@@ -92,7 +92,10 @@ foreach ($s in $sources) {
     $srcArgs += "`"$s`""
 }
 
-$argList = @("/nologo", "/target:library", "/optimize+", "/out:`"$OutDll`"", "/lib:`"$fwLib`"") + $refArgs + $srcArgs
+$wpfRefs = @("PresentationCore.dll", "WindowsBase.dll" | ForEach-Object {
+    "/reference:`"$(Join-Path $fwLib ('WPF\' + $_))`""
+})
+$argList = @("/nologo", "/target:library", "/optimize+", "/out:`"$OutDll`"", "/lib:`"$fwLib`"") + $refArgs + $wpfRefs + $srcArgs
 $argString = ($argList -join " ")
 
 cmd.exe /c "`"$csc`" $argString > `"$ErrLog`" 2>&1"

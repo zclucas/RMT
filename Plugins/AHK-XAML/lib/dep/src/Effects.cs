@@ -39,7 +39,7 @@ namespace AhkEffects
 
         static AcrylicEffect()
         {
-            string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkAcrylicEffect.ps");
+            string tempPath = System.IO.Path.Combine(AhkWpfEngine.GetCacheDir(), "AhkAcrylicEffect.ps");
             try
             {
                 if (!System.IO.File.Exists(tempPath))
@@ -96,7 +96,7 @@ namespace AhkEffects
 
         static GlowEffect()
         {
-            string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkGlowEffect.ps");
+            string tempPath = System.IO.Path.Combine(AhkWpfEngine.GetCacheDir(), "AhkGlowEffect.ps");
             try
             {
                 if (!System.IO.File.Exists(tempPath))
@@ -161,7 +161,7 @@ namespace AhkEffects
 
         static RippleEffect()
         {
-            string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkRippleEffect.ps");
+            string tempPath = System.IO.Path.Combine(AhkWpfEngine.GetCacheDir(), "AhkRippleEffect.ps");
             try
             {
                 if (!System.IO.File.Exists(tempPath))
@@ -234,7 +234,7 @@ namespace AhkEffects
 
         static CyberpunkGradientEffect()
         {
-            string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AhkCyberpunkGradientEffect.ps");
+            string tempPath = System.IO.Path.Combine(AhkWpfEngine.GetCacheDir(), "AhkCyberpunkGradientEffect.ps");
             try
             {
                 if (!System.IO.File.Exists(tempPath))

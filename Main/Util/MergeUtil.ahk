@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include UIMacroPanelTransfer.ahk
 
 class MergeTreeNode {
     __New() {
@@ -21,6 +22,54 @@ class MergeTreeNode {
         this.ListViewRow := 0
         this.IsTabNode := false
     }
+    ; 分享按钮和合并树使用相同的宏属性及资源依赖。
+    static FromMacro(source, tabIndex, moduleName := "", fold := "") {
+        node := MergeTreeNode()
+        node.Type := "Item"
+        node.TabIndex := tabIndex
+        node.Serial := source.ID
+        node.TriggerKey := source.TK
+        node.Remark := node.DisplayName := source.Remark
+        node.MacroStr := source.Macro
+        node.PreMacro := source.PreMacro
+        node.PostMacro := source.PostMacro
+        node.ModuleName := moduleName
+        node.SourceFold := fold
+        node.Options := {}
+        for field in ["Mode", "Forbid", "LoopCount", "TriggerType", "HoldTime", "UnorderedTrigger",
+            "StartTipSound", "EndTipSound", "StopTipSound", "BindWindow", "IcoPath", "VoiceKeywords", "Breakpoints"]
+            node.Options.%field% := source.%field%
+        node.TimingSerial := GetTableSymbol(tabIndex) == "Timing" ? source.TimingSerial : ""
+        node.ResourceSerials := MergeUtil.ExtractResourceSerials(source.Macro "," source.PreMacro "," source.PostMacro)
+        return node
+    }
+
+    static FoldKey(node) {
+        return node.HasOwnProp("SourceFold") && IsObject(node.SourceFold) ? node.SourceFold : node.ModuleName
+    }
+
+    static MakeFold(node) {
+        key := this.FoldKey(node)
+        fold := IsObject(key) ? key.Clone() : MacroFold()
+        fold.Remark := node.ModuleName != "" ? node.ModuleName : GetLang("默认模块")
+        return fold
+    }
+
+    static MakeMacro(node) {
+        item := MacroItem()
+        if (node.HasOwnProp("Options")) {
+            for name, value in node.Options.OwnProps()
+                item.%name% := value
+        }
+        item.TK := node.TriggerKey
+        item.Remark := node.Remark
+        item.Macro := node.MacroStr
+        item.PreMacro := node.HasOwnProp("PreMacro") ? node.PreMacro : ""
+        item.PostMacro := node.HasOwnProp("PostMacro") ? node.PostMacro : ""
+        item.TimingSerial := node.HasOwnProp("TimingSerial") ? node.TimingSerial : ""
+        return item
+    }
+
 }
 
 class MergeResult {
@@ -124,7 +173,8 @@ class MergeUtil {
             if (!TomlUtil_Valid(fseg))
                 continue
 
-            moduleName := TomlUtil_Str(fseg, "Remark", "")
+            fold := ReadStoredMacroFold(fseg, foldSeg)
+            moduleName := fold.Remark
             if (moduleName == "")
                 moduleName := tail
 
@@ -137,19 +187,10 @@ class MergeUtil {
                 if (!TomlUtil_Valid(mseg))
                     continue
                 loadedMacros[macroSeg] := true
-                item := MergeTreeNode()
-                item.Type := "Item"
-                item.TabIndex := tabIndex
+                source := ReadStoredMacroItem(mseg)
+                source.ID := macroSeg
+                item := MergeTreeNode.FromMacro(source, tabIndex, moduleName, fold)
                 item.ItemIndex := items.Length + 1
-                item.Serial := macroSeg
-                item.TriggerKey := TomlUtil_Str(mseg, "TK", "")
-                item.Remark := TomlUtil_Str(mseg, "Remark", "")
-                item.DisplayName := item.Remark
-                ; TOML 宏内容为真实换行，无需 ⫶ 还原
-                item.MacroStr := TomlUtil_Str(mseg, "Macro", "")
-                item.PreMacro := TomlUtil_Str(mseg, "PreMacro", "")
-                item.PostMacro := TomlUtil_Str(mseg, "PostMacro", "")
-                item.ResourceSerials := this.ExtractResourceSerials(item.MacroStr "," item.PreMacro "," item.PostMacro)
                 items.Push(item)
             }
 
@@ -238,11 +279,11 @@ class MergeUtil {
                 underscorePos := InStr(afterType, "_")
                 if (underscorePos > 0) {
                     pureSerial := SubStr(afterType, 1, underscorePos - 1)
-                    if (pureSerial != "" && IsNumber(pureSerial) && !isInterval)
+                    if (pureSerial != "" && IsNumber(pureSerial))
                         return cmdType . pureSerial
                 }
                 else {
-                    if (IsNumber(afterType) && !isInterval)
+                    if (IsNumber(afterType))
                         return cmdType . afterType
                 }
             }
@@ -287,6 +328,8 @@ class MergeUtil {
     static CollectAllResourceSerials(checkedItems) {
         allSerials := Map()
         for item in checkedItems {
+            if (item.HasOwnProp("TimingSerial") && item.TimingSerial != "")
+                allSerials[item.TimingSerial] := item.DisplayName
             for serial in item.ResourceSerials {
                 if (serial != "" && !allSerials.Has(serial))
                     allSerials.Set(serial, item.DisplayName)
@@ -376,14 +419,18 @@ class MergeUtil {
     }
 
     static GroupItemsByModule(checkedItems) {
-        moduleGroups := Map()
+        byKey := Map()
+        groups := []
         for item in checkedItems {
-            moduleName := item.ModuleName != "" ? item.ModuleName : GetLang("默认模块")
-            if (!moduleGroups.Has(moduleName))
-                moduleGroups.Set(moduleName, [])
-            moduleGroups[moduleName].Push(item)
+            key := MergeTreeNode.FoldKey(item)
+            if (!byKey.Has(key)) {
+                items := []
+                byKey[key] := items
+                groups.Push(items)
+            }
+            byKey[key].Push(item)
         }
-        return moduleGroups
+        return groups
     }
 
     ; 源配置依赖序列码收集：与 MacroClipboardUtil.FindDependentSerials 字段集一致，
@@ -612,7 +659,7 @@ class MergeUtil {
         }
     }
 
-    static ProcessAndSaveRenamedConfigs(replaceInfo, sourceSettingDir, result) {
+    static ProcessAndSaveRenamedConfigs(replaceInfo, imagePaths, result) {
         serialReplaceMap := replaceInfo.ReplaceMap
         parsedConfigs := replaceInfo.ParsedConfigs
 
@@ -621,11 +668,7 @@ class MergeUtil {
             oldSerialStr := configInfo["oldSerial"]
             newSerialStr := Data.SerialStr
 
-            if (newSerialStr != oldSerialStr && serialReplaceMap.Has(oldSerialStr)) {
-                imageRenameCount := MergeUtil.RenameImagesForSerial(Data, oldSerialStr, newSerialStr, sourceSettingDir,
-                    result)
-            }
-
+            MergeUtil.RemapSearchImages(Data, imagePaths)
             try {
                 SaveMacroCMDData(Data)
                 result.RenamedResources.Push({ OldSerial: oldSerialStr, NewSerial: newSerialStr })
@@ -636,61 +679,14 @@ class MergeUtil {
         return serialReplaceMap
     }
 
-    static RenameImagesForSerial(Data, oldSerial, newSerial, sourceSettingDir, result) {
-        renamedCount := 0
-
-        if (oldSerial == "" || newSerial == "")
-            return renamedCount
-
-        oldTextPart := RegExReplace(oldSerial, "\d+")
-        newTextPart := RegExReplace(newSerial, "\d+")
-        oldNumPart := RegExReplace(oldSerial, "\D+")
-        newNumPart := RegExReplace(newSerial, "\D+")
-
-        imageDataArr := [Data]
-        if (ObjHasOwnProp(Data, "SearchTargetArr") && IsObject(Data.SearchTargetArr)) {
-            for target in Data.SearchTargetArr {
-                if (IsObject(target))
-                    imageDataArr.Push(target)
-            }
+    static RemapSearchImages(data, imagePaths) {
+        targets := [data]
+        if (data.HasOwnProp("SearchTargetArr") && data.SearchTargetArr is Array)
+            targets.Push(data.SearchTargetArr*)
+        for target in targets {
+            if (IsObject(target) && target.HasOwnProp("SearchImagePath"))
+                target.SearchImagePath := imagePaths.Get(target.SearchImagePath, target.SearchImagePath)
         }
-
-        targetImagesDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images"
-        pathMap := Map()
-        for imageData in imageDataArr {
-            if (!ObjHasOwnProp(imageData, "SearchImagePath") || imageData.SearchImagePath == "")
-                continue
-
-            sourceImagePath := String(imageData.SearchImagePath)
-            if (pathMap.Has(sourceImagePath)) {
-                imageData.SearchImagePath := pathMap[sourceImagePath]
-                continue
-            }
-
-            if (!FileExist(sourceImagePath))
-                continue
-
-            SplitPath sourceImagePath, &imageFileName, &sourceImageDir, &imageExt, &imageNameNoExt
-            newImageName := RegExReplace(imageNameNoExt, oldTextPart . oldNumPart "$", newTextPart . newNumPart)
-            if (newImageName == imageNameNoExt)
-                newImageName := newSerial "_" imageNameNoExt
-
-            targetImagePath := targetImagesDir "\" newImageName "." imageExt
-            try {
-                if (!DirExist(targetImagesDir))
-                    DirCreate(targetImagesDir)
-                FileCopy(sourceImagePath, targetImagePath, true)
-                if (FileExist(targetImagePath)) {
-                    imageData.SearchImagePath := targetImagePath
-                    pathMap.Set(sourceImagePath, targetImagePath)
-                    renamedCount++
-                    result.CopiedImages.Push({ SourcePath: sourceImagePath, TargetPath: targetImagePath })
-                }
-            } catch as e {
-            }
-        }
-
-        return renamedCount
     }
 
     static ApplySerialReplaceToMacros(checkedItems, serialReplaceMap) {
@@ -783,7 +779,7 @@ class MergeUtil {
         if (!IsObject(Data) || !IsObject(varMap))
             return
 
-        for f in ["ResultSaveName", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
+        for f in ["ResultSaveName", "TimeoutStatusVar", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
             if (ObjHasOwnProp(Data, f))
                 MergeUtil.AddVarNameCandidate(varMap, Data.%f%)
         }
@@ -1006,7 +1002,7 @@ class MergeUtil {
         if (!IsObject(Data) || !IsObject(varReplaceMap) || GetObjectCount(varReplaceMap) == 0)
             return
 
-        for f in ["ResultSaveName", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
+        for f in ["ResultSaveName", "TimeoutStatusVar", "CoordXName", "CoordYName", "SaveName", "VariableName", "VarName", "Name", "ArgsName"] {
             if (ObjHasOwnProp(Data, f))
                 Data.%f% := MergeUtil.ReplaceVarExact(Data.%f%, varReplaceMap)
         }
@@ -1074,6 +1070,8 @@ class MergeUtil {
         if (sourceDir == "")
             sourceDir := A_WorkingDir "\Setting\" sourceName
 
+        Compat_FlushProfile(sourceDir)
+
         ; 保留树中的源指令，重试或再次导入时仍从源序列号计算映射。
         sourceItems := checkedItems
         checkedItems := []
@@ -1118,7 +1116,7 @@ class MergeUtil {
                 MySoftData.GlobalVariMap[varName] := true
         }
 
-        MergeUtil.CopyNonConflictingImages(sourceDir, result)
+        imagePaths := MergeUtil.CopyNonConflictingImages(sourceDir, result)
 
         tabGrouped := Map()
         for _, tabInfo in MergeUtil.GetMergeTabConfig() {
@@ -1142,44 +1140,37 @@ class MergeUtil {
 
             moduleGroups := MergeUtil.GroupItemsByModule(items)
 
-            for moduleName, moduleItems in moduleGroups {
-                fold := MacroFold()
+            for moduleItems in moduleGroups {
+                fold := MergeTreeNode.MakeFold(moduleItems[1])
                 fold.ID := NewModulePath(tableItem)   ; 路径身份，按目标表重建
-                fold.Remark := moduleName " (" sourceName ")"
+                fold.Remark .= " (" sourceName ")"
                 tableItem.Folds.Push(fold)
-                serialList := []
+                panelIDs := Map()
 
                 for i, item in moduleItems {
                     newSerial := NewMacroPath(tableItem, fold.ID)   ; 路径身份 foldSeg.Macro{max+1}
-                    newTimingSerial := GetCMDSerialStr("Timing")
-                    if (newTimingSerial == "")
-                        newTimingSerial := newSerial
-
-                    newItem := MacroItem()
+                    newItem := MergeTreeNode.MakeMacro(item)
                     newItem.ID := newSerial
-                    newItem.TimingSerial := newTimingSerial
-                    newItem.TK := item.TriggerKey
-                    newItem.Mode := 1
-                    newItem.Forbid := 0
-                    newItem.Remark := item.Remark
-                    newItem.LoopCount := 1
-                    newItem.TriggerType := 1
-                    newItem.HoldTime := 500
-                    newItem.UnorderedTrigger := false
-                    newItem.StartTipSound := 1
-                    newItem.EndTipSound := 1
-                    newItem.VoiceKeywords := ""
-                    newItem.Macro := item.MacroStr
-                    newItem.PreMacro := item.PreMacro
-                    newItem.PostMacro := item.PostMacro
-                    newItem.IcoPath := ""
+                    newItem.IcoPath := imagePaths.Get(newItem.IcoPath, newItem.IcoPath)
+                    if (newItem.TimingSerial != "" && IsObject(replaceInfo) && collectedConfigs.Has(newItem.TimingSerial))
+                        newItem.TimingSerial := serialReplaceMap.Get(newItem.TimingSerial, newItem.TimingSerial)
+                    else {
+                        newItem.TimingSerial := GetCMDSerialStr("Timing")
+                        if (newItem.TimingSerial == "")
+                            newItem.TimingSerial := newSerial
+                    }
                     newItem.FoldID := fold.ID
                     tableItem.Items.Push(newItem)
                     if (item.Serial != "")
                         targets[item.Serial] := targets.Has(item.Serial) ? "" : { ID: newSerial, Index: tableItem.Items.Length }
-                    serialList.Push(newSerial)
+                    panelIDs[item.Serial] := newSerial
                 }
 
+                if (tableItem.Symbol == "UI") {
+                    destDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName
+                    CopySelectedUIMacroPanel(sourceDir, MergeTreeNode.FoldKey(moduleItems[1]),
+                        destDir, fold, panelIDs, serialReplaceMap)
+                }
                 totalModuleCount++
             }
             tableItem.RebuildIndex()
@@ -1191,7 +1182,7 @@ class MergeUtil {
         ; 目标路径全部分配后才保存资源，支持跨模块/跨页签与前向引用。
         if (IsObject(replaceInfo) && IsObject(replaceInfo.ParsedConfigs)) {
             MergeUtil.RemapMacroTargets(replaceInfo.ParsedConfigs, macroTargets)
-            MergeUtil.ProcessAndSaveRenamedConfigs(replaceInfo, sourceDir, result)
+            MergeUtil.ProcessAndSaveRenamedConfigs(replaceInfo, imagePaths, result)
         }
 
         result.ModuleCount := totalModuleCount
@@ -1209,47 +1200,58 @@ class MergeUtil {
         sourceImagesDir := sourceSettingDir "\Images"
         targetImagesDir := A_WorkingDir "\Setting\" MySoftData.CurSettingName "\Images"
 
-        if (!DirExist(sourceImagesDir))
-            return
-
-        if (!DirExist(targetImagesDir))
-            DirCreate(targetImagesDir)
-
-        loop files, sourceImagesDir "\*.*", "FR" {
-            targetPath := targetImagesDir "\" A_LoopFileName
-            if (!FileExist(targetPath)) {
-                try {
-                    FileCopy(A_LoopFilePath, targetPath, true)
-                    result.CopiedImages.Push({ SourcePath: A_LoopFilePath, TargetPath: targetPath })
-                }
+        imagePaths := Map()
+        imagePaths.CaseSense := "Off"
+        loop files, sourceImagesDir "\*", "FR" {
+            source := A_LoopFileFullPath
+            relative := SubStr(A_LoopFilePath, StrLen(sourceImagesDir) + 2)
+            dest := targetImagesDir "\" relative
+            if (source = dest) {
+                imagePaths[source] := dest
+                continue
             }
+            SplitPath dest, , &parent, &extension, &stem
+            DirCreate(parent)
+            suffix := extension == "" ? "" : "." extension
+            loop {
+                if (!FileExist(dest)) {
+                    FileCopy(source, dest)
+                    result.CopiedImages.Push({SourcePath: source, TargetPath: dest})
+                    break
+                }
+                same := false
+                try same := this.SameImageFile(source, dest)
+                if (same)
+                    break
+                dest := parent "\" stem " (" A_Index ")" suffix
+            }
+            imagePaths[source] := dest
         }
+        return imagePaths
+    }
 
-        subDirs := ["ScreenShot", "SearchPro", "SearchCombo", "SearchMulti"]
-        for subDir in subDirs {
-            srcSub := sourceImagesDir "\" subDir
-            tgtSub := targetImagesDir "\" subDir
-            if (DirExist(srcSub)) {
-                if (!DirExist(tgtSub))
-                    DirCreate(tgtSub)
-
-                loop files, srcSub "\*.*", "FR" {
-                    tgtPath := tgtSub "\" A_LoopFileName
-                    if (!FileExist(tgtPath)) {
-                        try {
-                            FileCopy(A_LoopFilePath, tgtPath, true)
-                            result.CopiedImages.Push({ SourcePath: A_LoopFilePath, TargetPath: tgtPath })
-                        }
-                    }
-                }
-            }
+    static SameImageFile(source, dest) {
+        if (InStr(FileExist(dest), "D") || FileGetSize(source) != FileGetSize(dest))
+            return false
+        a := FileOpen(source, "r", "CP0")
+        b := FileOpen(dest, "r", "CP0")
+        a.Pos := b.Pos := 0
+        left := Buffer(65536), right := Buffer(65536)
+        loop {
+            count := a.RawRead(left)
+            if (b.RawRead(right) != count)
+                return false
+            if (!count)
+                return true
+            if (DllCall("ntdll\RtlCompareMemory", "ptr", left, "ptr", right, "uptr", count, "uptr") != count)
+                return false
         }
     }
 
     static PrepareTempFromRmt(rmtFilePath, report := "") {
         static sequence := 0
         sequence += 1
-        tempDir := A_Temp "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount "-" sequence
+        tempDir := RmtCacheDir() "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount "-" sequence
         if (FileExist(tempDir))
             throw Error(GetLang("配置导入临时目录已存在，请重试"))
         DirCreate(tempDir)
@@ -1266,7 +1268,7 @@ class MergeUtil {
     }
 
     static CleanupTemp(tempDir) {
-        prefix := A_Temp "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-"
+        prefix := RmtCacheDir() "\RMT_Merge_" DllCall("GetCurrentProcessId", "UInt") "-"
         if (SubStr(tempDir, 1, StrLen(prefix)) == prefix
             && RegExMatch(SubStr(tempDir, StrLen(prefix) + 1), "^\d+-\d+$") && DirExist(tempDir)) {
             try {

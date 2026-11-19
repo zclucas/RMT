@@ -322,7 +322,9 @@ class Toast {
                 MonitorGetWorkArea(1, &targetL, &targetT, &targetR, &targetB)
 
             dpi := this._GetDpiScale((targetL + targetR) // 2, (targetT + targetB) // 2)
-            WinGetPos(&wx, &wy, &ww, &wh, "ahk_id " this.ui.wpfHwnd)
+            try WinGetPos(, , &ww, &wh, "ahk_id " this.ui.wpfHwnd)
+            catch TargetError
+                return
             if (ww <= 0 || wh <= 0)
                 return
             if (ww == this.lastW && wh == this.lastH)

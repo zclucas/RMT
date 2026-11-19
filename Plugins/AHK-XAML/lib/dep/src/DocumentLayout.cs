@@ -235,7 +235,7 @@ public partial class AhkWpfEngine
 
     private void LogEditorState(string context, RichTextBox rtb) {
         try {
-            string debugPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_editor_debug.log");
+            string debugPath = System.IO.Path.Combine(GetLogDir(), "ahk_editor_debug.log");
             var sb = new StringBuilder();
             sb.AppendLine(string.Format("--- Editor State: {0} ({1:HH:mm:ss.fff}) ---", context, DateTime.Now));
             if (rtb == null) {
@@ -1133,7 +1133,7 @@ public partial class AhkWpfEngine
                 }
             }
         } catch (Exception ex) {
-            string debugPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_editor_debug.log");
+            string debugPath = System.IO.Path.Combine(GetLogDir(), "ahk_editor_debug.log");
             System.IO.File.AppendAllText(debugPath, string.Format("InsertSpacers ERROR: {0}\n", ex.ToString()));
         } finally {
             rtb.EndChange();
@@ -1441,7 +1441,7 @@ public partial class AhkWpfEngine
             double est = lines * lineHeight + top + bottom + 4;
             
             try {
-                string debugPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_editor_debug.log");
+                string debugPath = System.IO.Path.Combine(GetLogDir(), "ahk_editor_debug.log");
                 System.IO.File.AppendAllText(debugPath, string.Format("EstimateBlockHeight: textLen={0}, fontSize={1}, lineHeight={2}, charsPerLine={3}, lines={4}, margin.top={5}, margin.bottom={6}, est={7}\n",
                     text != null ? text.Length : 0, fontSize, lineHeight, charsPerLine, lines, top, bottom, est));
             } catch { }

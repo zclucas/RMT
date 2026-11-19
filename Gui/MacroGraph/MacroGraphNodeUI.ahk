@@ -50,9 +50,9 @@ class MacroGraphNodeUIMixin {
             ; 时间：可编辑下拉（既能下拉选变量，也能手动输入数值），与间隔编辑器一致
             varList := GetGuiVarArr("count")
             ; 固定值 / 随机最小值
-            this._AddEditableComboRow(body, "Time1Row_" id, GetLang("时间A："), "Time_" id, varList, GetLang(d.time), true)
+            this._AddEditableComboRow(body, "Time1Row_" id, GetLang("时间A："), "Time_" id, varList, GetLang(d.time), true, , , , GetLang("等待的毫秒数；随机模式下为最短时长。"))
             ; 随机最大值（仅随机模式显示）
-            this._AddEditableComboRow(body, "Time2Row_" id, GetLang("时间B："), "Time2_" id, varList, GetLang(d.time2), isRandom)
+            this._AddEditableComboRow(body, "Time2Row_" id, GetLang("时间B："), "Time2_" id, varList, GetLang(d.time2), isRandom, , , , GetLang("随机等待的最长毫秒数。"))
         }
         else if (d.type == GetLang("按键")) {
             body.Add("TextBlock").Name("KeyName_" id).Text(d.key).Foreground("{DynamicResource EditText}").FontWeight("Bold").FontSize(this._MGFontSize(13)).TextWrapping("Wrap")
@@ -64,9 +64,9 @@ class MacroGraphNodeUIMixin {
             isClick := d.ktype == GetLang("点击")
             showInter := isClick && IsNumber(d.count) && (d.count + 0) > 1
 
-            this._AddFieldRow(body, "HoldRow_" id, GetLang("点击时长:"), "Hold_" id, d.hold, isClick, true, id, "hold")
+            this._AddFieldRow(body, "HoldRow_" id, GetLang("点击时长:"), "Hold_" id, d.hold, isClick, true, id, "hold", , , , , GetLang("从按下到松开的毫秒数。"))
             this._AddFieldRow(body, "CountRow_" id, GetLang("点击次数："), "Count_" id, d.count, isClick, true, id, "count")
-            this._AddFieldRow(body, "InterRow_" id, GetLang("每次间隔："), "Inter_" id, d.inter, showInter, true, id, "inter")
+            this._AddFieldRow(body, "InterRow_" id, GetLang("每次间隔："), "Inter_" id, d.inter, showInter, true, id, "inter", , , , , GetLang("两次操作之间等待的毫秒数。"))
         }
         else if (d.type == GetLang("手柄")) {
             isAnalog := InStr(d.key, ":") || InStr(d.HasOwnProp("raw") ? d.raw : "", ":")
@@ -75,9 +75,9 @@ class MacroGraphNodeUIMixin {
                 , [GetLang("按下"), GetLang("松开"), GetLang("点击")], this._KeyActionIndex(d.ktype), !isAnalog)
             isClick := d.ktype == GetLang("点击")
             showInter := isClick && IsNumber(d.count) && (d.count + 0) > 1
-            this._AddFieldRow(body, "HoldRow_" id, GetLang("点击时长:"), "Hold_" id, d.hold, !isAnalog && isClick, true, id, "hold")
+            this._AddFieldRow(body, "HoldRow_" id, GetLang("点击时长:"), "Hold_" id, d.hold, !isAnalog && isClick, true, id, "hold", , , , , GetLang("从按下到松开的毫秒数。"))
             this._AddFieldRow(body, "CountRow_" id, GetLang("点击次数："), "Count_" id, d.count, !isAnalog && isClick, true, id, "count")
-            this._AddFieldRow(body, "InterRow_" id, GetLang("每次间隔："), "Inter_" id, d.inter, !isAnalog && showInter, true, id, "inter")
+            this._AddFieldRow(body, "InterRow_" id, GetLang("每次间隔："), "Inter_" id, d.inter, !isAnalog && showInter, true, id, "inter", , , , , GetLang("两次操作之间等待的毫秒数。"))
             body.Add("TextBlock").Text(GetLang("双击打开手柄编辑器")).Foreground("{DynamicResource TextSub}").FontSize(this._MGFontSize(11)).Margin("0,6,0,0")
         }
         else if (IsMoveCmd(d.type)) {
@@ -96,7 +96,7 @@ class MacroGraphNodeUIMixin {
             this._AddEditableComboRow(body, "DPosXRow_" id, GetLang("偏移值X:"), "DPosX_" id, varList, d.posx, true)
             this._AddEditableComboRow(body, "DPosYRow_" id, GetLang("偏移值Y:"), "DPosY_" id, varList, d.posy, true)
             this._AddEditableComboRow(body, "DCountRow_" id, GetLang("偏移次数："), "DCount_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("count") && d.count != "" ? d.count : "1"), true)
-            this._AddEditableComboRow(body, "DIntervalRow_" id, GetLang("每次间隔："), "DInterval_" id, varList, d.HasOwnProp("interval") && d.interval != "" ? d.interval : "0", true)
+            this._AddEditableComboRow(body, "DIntervalRow_" id, GetLang("每次间隔："), "DInterval_" id, varList, d.HasOwnProp("interval") && d.interval != "" ? d.interval : "0", true, , , , GetLang("两次操作之间等待的毫秒数。"))
         }
         else if (IsMoveProCmd(d.type)) {
             mmmode := CmdEnumMoveMode(d.HasOwnProp("mmmode") ? d.mmmode : "绝对移动")
@@ -129,7 +129,7 @@ class MacroGraphNodeUIMixin {
             this._AddCheckRow(body, "MPHumanRow_" id, "MPHuman_" id, GetLang("启用拟真轨迹"), (isHuman && !isGameView) ? 1 : 0, true, !isGameView)
             ; 移动次数 / 每次间隔（仅游戏视角显示）
             this._AddFieldRow(body, "MPCountRow_" id, GetLang("移动次数:"), "MPCount_" id, d.HasOwnProp("count") ? d.count : "1", isGameView, true, id, "")
-            this._AddFieldRow(body, "MPIntervalRow_" id, GetLang("每次间隔："), "MPInterval_" id, d.HasOwnProp("interval") ? d.interval : "1000", isGameView, true, id, "")
+            this._AddFieldRow(body, "MPIntervalRow_" id, GetLang("每次间隔："), "MPInterval_" id, d.HasOwnProp("interval") ? d.interval : "1000", isGameView, true, id, "", , , , , GetLang("两次操作之间等待的毫秒数。"))
         }
         else if (d.type == GetLang("搜索All")) {
             body.Add("TextBlock").Text(GetLang("批量返回坐标数组")).TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
@@ -260,7 +260,7 @@ class MacroGraphNodeUIMixin {
         isCount := (cnt == -1 || cnt == "-1" || (IsNumber(cnt) && cnt + 0 > 1))
         rCnt := body.Add("StackPanel").Orientation("Horizontal").Margin("0,5,0,0")
         this._ProCellEdit(rCnt, "SCountRow_" id, GetLang("搜索次数："), "SCount_" id, [GetLang("无限")], cntText, true, LW, CW, false)
-        this._ProCellField(rCnt, "SIntervalRow_" id, GetLang("每次间隔："), "SInterval_" id, d.HasOwnProp("searchInterval") ? d.searchInterval : 1000, isCount, id, LW, CW, true)
+        this._ProCellField(rCnt, "SIntervalRow_" id, GetLang("每次间隔："), "SInterval_" id, d.HasOwnProp("searchInterval") ? d.searchInterval : 1000, isCount, id, LW, CW, true, , GetLang("两次操作之间等待的毫秒数。"))
 
         ; 鼠标动作：仅下拉；宽度=两列坐标行(70+96+14+70+96)，右边与上方终点Y输入框右对齐
         actionNames := [GetLang("无动作"), GetLang("移动至目标"), GetLang("移动至目标点击")]
@@ -307,13 +307,15 @@ class MacroGraphNodeUIMixin {
     }
 
     ; 行内单元格：标签 + 文本框（自成命名 StackPanel，便于按显隐切换）；rightCell=true 时加左间距形成第二列
-    _ProCellField(rowSP, cellName, label, boxName, val, visible, id, lw, cw, rightCell, tag := "") {
+    _ProCellField(rowSP, cellName, label, boxName, val, visible, id, lw, cw, rightCell, tag := "", labelTip := "") {
         cell := rowSP.Add("StackPanel").Name(cellName).Orientation("Horizontal")
         if (rightCell)
             cell.Margin("14,0,0,0")
         if (!visible)
             cell.Visibility("Collapsed")
-        cell.Add("TextBlock").Text(label).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(lw).VerticalAlignment("Center")
+        caption := cell.Add("TextBlock").Text(label).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(lw).VerticalAlignment("Center")
+        if (labelTip != "")
+            caption.ToolTip(labelTip)
         box := this._MakeTextBox(cell, boxName, val, cw, id, "")
         if (tag != "")
             box.SetProp("Tag", tag)
@@ -1452,11 +1454,13 @@ class MacroGraphNodeUIMixin {
 
     ; 一行 "标签 + 文本框"，visible 控制初始显隐，enabled 控制文本框是否可编辑
     ; textAlign：可选 Left/Center/Right，覆盖默认居中
-    _AddFieldRow(body, rowName, labelText, boxName, boxValue, visible, enabled := true, nodeId := "", field := "", boxTag := "", labelW := "80", boxW := "96", textAlign := "") {
+    _AddFieldRow(body, rowName, labelText, boxName, boxValue, visible, enabled := true, nodeId := "", field := "", boxTag := "", labelW := "80", boxW := "96", textAlign := "", labelTip := "") {
         row := body.Add("StackPanel").Name(rowName).Orientation("Horizontal").Margin("0,5,0,0")
         if (!visible)
             row.Visibility("Collapsed")
-        row.Add("TextBlock").Name(rowName "Label").Text(labelText).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(labelW).VerticalAlignment("Center")
+        caption := row.Add("TextBlock").Name(rowName "Label").Text(labelText).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(labelW).VerticalAlignment("Center")
+        if (labelTip != "")
+            caption.ToolTip(labelTip)
         box := this._MakeTextBox(row, boxName, boxValue, boxW, nodeId, field)
         ; boxTag 形如 "Min:0,Max:100"：限制 label 拖动改值的取值区间（引擎读取 Tag；未指定时默认 Min=0）
         if (boxTag != "")

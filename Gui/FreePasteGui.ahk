@@ -21,11 +21,11 @@ class FreePasteGui {
         this.AddGui()
     }
 
-    ShowPrompt(isImage, value, name := "", temporary := false) {
+    ShowPrompt(isImage, value, name := "", temporary := false, center := "") {
         if (name != "")
             this.ClosePrompt(false, name)
         try {
-            if (!this._BuildAndShow(isImage, value, name, temporary) && temporary)
+            if (!this._BuildAndShow(isImage, value, name, temporary, center) && temporary)
                 PromptReleaseImage(value)
         } catch {
             if (temporary)
@@ -93,7 +93,7 @@ class FreePasteGui {
             this.ShowPrompt(false, A_Clipboard)
     }
 
-    _BuildAndShow(isImage, value, name, temporary) {
+    _BuildAndShow(isImage, value, name, temporary, center) {
         global MySoftData
         title := "RMT-FreePaste"
         this._title := title
@@ -105,7 +105,6 @@ class FreePasteGui {
             if (size[1] <= 0 || size[2] <= 0)
                 throw ValueError(GetLang("无法读取图片") ": " value)
             main.Add("Image").Name("ImageCon").Width(size[1]).Height(size[2]).Stretch("Uniform")
-                .Source(StrReplace(value, "\", "/"))
         }
         else {
             main.Add("TextBlock").Name("TextCon").Text(value).FontSize(13).FontWeight("SemiBold")
@@ -123,6 +122,9 @@ class FreePasteGui {
 
         ; === 事件（闭包捕获本面板 ui，支持多面板并存；事件回调为异步 SetTimer，勿做阻塞操作）===
         localUi := this.ui
+        ; 通过 Source 更新完整加载位图，便于关闭时立即清理剪贴板临时文件。
+        if (isImage)
+            localUi.Update("ImageCon", "Source", value)
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing").Bind(localUi))
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("OverlayCon", "PreviewMouseLeftButtonDown", ObjBindMethod(this, "OnOverlayMouseDown").Bind(localUi))
@@ -130,6 +132,16 @@ class FreePasteGui {
         if (!XamlWin.Open(localUi)) {
             this.DestroyGui(localUi)
             return false
+        }
+        if (IsObject(center)) {
+            try {
+                win := "ahk_id " localUi.wpfHwnd
+                WinGetPos(,, &width, &height, win)
+                WinMove(center[1] - width // 2, center[2] - height // 2,,, win)
+            } catch {
+                this.DestroyGui(localUi)
+                throw
+            }
         }
 
         ; 登记 GuiMap（以窗口句柄为键，滚轮回调/双击/关闭共用）

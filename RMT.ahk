@@ -1,6 +1,9 @@
 #Requires AutoHotkey v2.0
 ; #NoTrayIcon
 global RMT_VERSION := "1.3F3"
+if (RmtUpdateIsRunning() || !CheckStartupDirectory(A_ScriptDir) || RmtUpdateRecoverAtStartup())
+    ExitApp()
+
 #Include Main\AssetUtil.ahk
 #Include Main\GlobalUtil.ahk
 #Include Main\MainGlobalUtil.ahk
@@ -19,7 +22,7 @@ RmtRegisterCliCommand()
 if (!RuntimePrecheck())
     ExitApp()
 XAMLHost.Prewarm()
-InitFilePath()              ;初始化文件路径
+InitFilePath()              ;初始化文件路径.
 IconFontRegisterCached()    ;图标字体：本地已有缓存时注册（毫秒级，不联网）
 LoadCurMacroSetting()       ;加载当前宏配置
 HandleOpenArg()             ;处理打开软件的参数
@@ -42,6 +45,7 @@ StartCmdQueueListener()
 WaitMainWinReady(RunStartupCommandsAfterUI)
 
 RunStartupCommandsAfterUI() {
+    SetTimer(RmtUpdate.Check.Bind(RmtUpdate, true), -3000)
     RmtRunStartupCommands()
     ; 语音模型预热：磁盘上有流式模型就在后台线程加载（1~3 秒），
     ; 这样输入弹窗「按住 Alt 说话」不必等首次加载。放启动链末尾再延迟 2 秒，

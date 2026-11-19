@@ -120,10 +120,14 @@ class XAMLHost {
         logDir := A_WorkingDir "\Log"
         if !DirExist(logDir)
             DirCreate(logDir)
+        cacheDir := A_WorkingDir "\Cache"
+        if !DirExist(cacheDir)
+            DirCreate(cacheDir)
         if !DirExist(XAMLHost._appDir "\Cache")
             DirCreate(XAMLHost._appDir "\Cache")
 
         EnvSet("RMT_LOG_DIR", logDir)
+        EnvSet("RMT_CACHE_DIR", cacheDir)
             
         return XAMLHost._appDir
     }
@@ -837,7 +841,7 @@ class XAMLHost {
         return btn
     }
 
-    static AddTitleChromeBtn(parent, name, titleHeight := "30", glyph := "", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", glyphSize := 10) {
+    static AddTitleChromeBtn(parent, name, titleHeight := "30", glyph := "", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", glyphSize := 10, includeRangeGlyph := false) {
         btn := parent.Add("Button").Name(name)
             .Style(style)
             .WindowChrome_IsHitTestVisibleInChrome("True")
@@ -845,15 +849,23 @@ class XAMLHost {
             .VerticalAlignment("Stretch").Background("Transparent")
             .Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
             .Visibility(visibility)
+        content := includeRangeGlyph ? btn.Add("Grid") : btn
+        XAMLHost._AddTitleChromeGlyph(content, name "Glyph", glyph, glyphSize)
+        if (includeRangeGlyph)
+            XAMLHost._AddTitleChromeGlyph(content, name "RangeGlyph", "RangeSelect", glyphSize).Visibility("Collapsed")
+        return btn
+    }
+
+    static _AddTitleChromeGlyph(parent, name, glyph, glyphSize) {
         ; Win11 有 Segoe Fluent，沿用系统字形。Win10 只有 MDL2，里面没有 U+ECAF（POI 定位针），
         ; 会画出空方框，缺字宽度不稳时还会把右侧标题按钮挤出窗口。Win7 两套图标字体都没有。
         ; 这些情况改画固定尺寸的矢量，Win7~Win11 看到的是同一套按钮。
         spec := ""
-        if (!XAMLHost._HasSegoeFluent() && (!XAMLHost._HasMdl2() || glyph = Chr(0xECAF)))
+        if (glyph = "RangeSelect" || (!XAMLHost._HasSegoeFluent() && (!XAMLHost._HasMdl2() || glyph = Chr(0xECAF))))
             spec := XAMLHost._TitleChromeIconSpec(glyph)
         drawSize := XAMLHost._ChromeGlyphDrawSize(glyph, glyphSize)
         if (IsObject(spec)) {
-            icon := btn.Add("Path").Name(name "Glyph").Data(spec.data)
+            icon := parent.Add("Path").Name(name).Data(spec.data)
                 .Width(drawSize).Height(drawSize).Stretch("Uniform")
                 .HorizontalAlignment("Center").VerticalAlignment("Center")
             ; Path.FillRule 的默认值就是 EvenOdd（定位针、取色针中间的孔靠它挖出来）。
@@ -865,11 +877,10 @@ class XAMLHost {
                 icon.Fill("Transparent").Stroke("{DynamicResource TitleBarForeground}")
                     .StrokeThickness(spec.thick).StrokeStartLineCap("Round").StrokeEndLineCap("Round")
                     .StrokeLineJoin("Round")
-        } else {
-            btn.Add("TextBlock").Name(name "Glyph").Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
-                .FontSize(drawSize).VerticalAlignment("Center").HorizontalAlignment("Center")
+            return icon
         }
-        return btn
+        return parent.Add("TextBlock").Name(name).Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
+            .FontSize(drawSize).VerticalAlignment("Center").HorizontalAlignment("Center")
     }
 
     static _HasSegoeFluent() {
@@ -886,10 +897,12 @@ class XAMLHost {
         return flag
     }
 
-    ; 框选/取点定位针统一尺寸：兼顾字体与矢量回退，避免实心图标压过相邻按钮。
+    ; 定位针尺寸兼顾系统字形与矢量回退。
     static _ChromeGlyphDrawSize(glyph, glyphSize) {
         if (glyph = Chr(0xECAF))
             return XAMLHost.FormatFontSize(glyphSize * 1.05)
+        if (glyph = "RangeSelect")
+            return XAMLHost.FormatFontSize(glyphSize * 14.3 / 16)
         return glyphSize
     }
 
@@ -898,8 +911,11 @@ class XAMLHost {
         static specs := ""
         if (!IsObject(specs)) {
             specs := Map()
-            ; POI：定位针（框选/取点）。Win11 Fluent U+ECAF，Win10 MDL2 没有这个字。
+            ; POI：定位针（取点）。Win11 Fluent U+ECAF，Win10 MDL2 没有这个字。
             specs[Chr(0xECAF)] := { mode: "even", data: "M8,0.9 C4.7,0.9 2.2,3.4 2.2,6.6 C2.2,10.4 8,15.2 8,15.2 C8,15.2 13.8,10.4 13.8,6.6 C13.8,3.4 11.3,0.9 8,0.9 Z M8,4.4 A2.15,2.15 0 0 1 8,8.7 A2.15,2.15 0 0 1 8,4.4 Z" }
+            ; 框选范围：十字拖选。
+            specs["RangeSelect"] := { mode: "stroke", thick: "1.3"
+                , data: "M2 6V2H6 M9 2H13.5V7 M2 9V13.5H7 M10 11H15 M12.5 8.5V13.5" }
             ; MapPin：定位取色器
             specs[Chr(0xE707)] := { mode: "even", data: "M8,1.2 C5.2,1.2 3,3.4 3,6.2 C3,9.6 8,14.6 8,14.6 C8,14.6 13,9.6 13,6.2 C13,3.4 10.8,1.2 8,1.2 Z M8,4.6 A1.7,1.7 0 0 1 8,8 A1.7,1.7 0 0 1 8,4.6 Z" }
             ; Crop：截图四角
@@ -1032,7 +1048,7 @@ class XAMLHost {
         ; 双点编辑与路径预览分开显示：编辑按钮在定位类按钮最左侧，预览按钮保留原图标。
         chrome.PointEdit := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdPointEdit", titleHeight, Chr(0xE8A7), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
         chrome.Preview := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdPreview", titleHeight, Chr(0xE890), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
-        chrome.F1 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF1", titleHeight, Chr(0xECAF), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
+        chrome.F1 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF1", titleHeight, Chr(0xECAF), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize, true)
         chrome.F1.ToolTip(f1Tip)
         f2Tip := "F2：截图"
         try {
@@ -1528,6 +1544,9 @@ class XAMLHost {
         }
         try host.Update("BtnCmdF1Glyph", "Width", pin)
         try host.Update("BtnCmdF1Glyph", "Height", pin)
+        rangeSize := XAMLHost._ChromeGlyphDrawSize("RangeSelect", glyphSize)
+        try host.Update("BtnCmdF1RangeGlyph", "Width", rangeSize)
+        try host.Update("BtnCmdF1RangeGlyph", "Height", rangeSize)
         iconFs := InStr(host.xaml, 'Name="MacroEditorTitle"') ? "20" : "14"
         try host.Update("TitleIconGlyph", "FontSize", iconFs)
     }
@@ -1673,9 +1692,9 @@ class XAMLHost {
     static Prewarm(exePath := "") {
         ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR
         ; 先设 RMT_LOG_DIR：引擎日志写哪由这个环境变量决定，Prewarm 是最早拉 daemon 的地方，
-        ; 若此时还没实例化过 XAMLHost（GetAppDir 未跑），daemon 就会把日志写去 %TEMP%\AhkWpf
+        ; 若此时还没实例化过 XAMLHost（GetAppDir 未跑），daemon 就会把日志写去软件目录 Cache\AhkWpf
         XAMLHost.GetAppDir()
-        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
+        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_WorkingDir "\Cache\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         XAMLHost.EnsureDaemonHealthy()
         if XAMLHost.daemonHwnd
@@ -1689,11 +1708,11 @@ class XAMLHost {
             }
         }
 
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
+        if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+            DirCreate(A_WorkingDir "\Cache\AhkWpf")
 
         baseDllName := XAMLHost.GetEngineDllName()
-        targetExe := (exePath != "") ? exePath : A_Temp "\AhkWpf\" baseDllName
+        targetExe := (exePath != "") ? exePath : A_WorkingDir "\Cache\AhkWpf\" baseDllName
 
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\dep\" baseDllName
@@ -1706,7 +1725,7 @@ class XAMLHost {
                 if (buildLoc == "lib/dep") {
                     targetExe := sharedExe
                 } else {
-                    targetExe := A_Temp "\AhkWpf\" baseDllName
+                    targetExe := A_WorkingDir "\Cache\AhkWpf\" baseDllName
                 }
             }
 
@@ -2107,16 +2126,16 @@ class XAMLHost {
 
         payload := this.xaml "`n---AHK-XAML-EVENTS---`n" eventBindings
 
-        tempTxt := A_Temp "\AhkWpf\gui_temp.txt"
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
+        tempTxt := A_WorkingDir "\Cache\AhkWpf\gui_temp.txt"
+        if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+            DirCreate(A_WorkingDir "\Cache\AhkWpf")
 
         if FileExist(tempTxt)
             FileDelete(tempTxt)
         FileAppend(payload, tempTxt, "UTF-8")
 
         baseDllName := XAMLHost.GetEngineDllName()
-        targetExe := (this.exePath != "") ? this.exePath : A_Temp "\AhkWpf\" baseDllName
+        targetExe := (this.exePath != "") ? this.exePath : A_WorkingDir "\Cache\AhkWpf\" baseDllName
         SplitPath(A_LineFile, , &libDir)
         sharedExe := libDir "\dep\" baseDllName
 
@@ -2404,7 +2423,7 @@ class XAMLHost {
         cleanXaml := StrReplace(this.xaml, "%resources%", "")
         cleanXaml := StrReplace(cleanXaml, "%components%", "")
 
-        tempDir := A_Temp "\AhkWpf"
+        tempDir := A_WorkingDir "\Cache\AhkWpf"
         if !DirExist(tempDir)
             DirCreate(tempDir)
 
@@ -2512,12 +2531,12 @@ class XAMLHost {
         ; global XAML_ENGINE_BUILD_LOCATION, XAML_WEBVIEW_USER_DATA_DIR, XAML_FORCE_DYNAMIC_COMPILE
         ; 保证引擎日志进项目 Log\：spawn 前必须已设 RMT_LOG_DIR
         XAMLHost.GetAppDir()
-        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_Temp "\AhkWpf\WebView2Data"
+        wvDataDir := (IsSet(XAML_WEBVIEW_USER_DATA_DIR) && XAML_WEBVIEW_USER_DATA_DIR != "") ? XAML_WEBVIEW_USER_DATA_DIR : A_WorkingDir "\Cache\AhkWpf\WebView2Data"
         EnvSet("AHK_XAML_WEBVIEW_DIR", wvDataDir)
         baseDllName := XAMLHost.GetEngineDllName()
-        targetExe := (this.exePath != "") ? this.exePath : A_Temp "\AhkWpf\" baseDllName
-        if !DirExist(A_Temp "\AhkWpf")
-            DirCreate(A_Temp "\AhkWpf")
+        targetExe := (this.exePath != "") ? this.exePath : A_WorkingDir "\Cache\AhkWpf\" baseDllName
+        if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+            DirCreate(A_WorkingDir "\Cache\AhkWpf")
         if FileExist(this.errLog) {
             try FileDelete(this.errLog)
         }
@@ -2547,7 +2566,7 @@ class XAMLHost {
             if (buildLoc == "lib/dep") {
                 targetExe := sharedExe
             } else {
-                targetExe := A_Temp "\AhkWpf\" baseDllName
+                targetExe := A_WorkingDir "\Cache\AhkWpf\" baseDllName
             }
 
             ; 先重编译（必要时杀掉任意 ahk-xaml），再校验 daemon 路径，避免误连桌面 Release 旧引擎
@@ -2992,7 +3011,7 @@ class XAMLHost {
 
         winId := parts[2], ctrlName := parts[3], eventName := parts[4]
         if (eventName == "WebMessageReceived") {
-            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_Temp "\AhkWebViewDebug.log")
+            try FileAppend("AHK OnCopyData WebMessageReceived: " payload "`n", A_WorkingDir "\Log\AhkWebViewDebug.log")
         }
         ; 异步更新的协议控制帧：不走事件表，也不该出现在回调里
         if (ctrlName == "Window" && (eventName == "AsyncAck" || eventName == "AsyncReady")) {
@@ -3623,14 +3642,14 @@ class XAMLHost {
             wvDir "\WebView2Loader.dll"
         ]
 
-        tmpDir := A_Temp "\AhkWpf\nuget_Microsoft_Web_WebView2"
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_Microsoft_Web_WebView2"
         extractCmds := "Copy-Item '" tmpDir "\lib\net45\Microsoft.Web.WebView2.Core.dll' '" wvDir "\Microsoft.Web.WebView2.Core.dll' -Force; "
             . "Copy-Item '" tmpDir "\lib\net45\Microsoft.Web.WebView2.Wpf.dll' '" wvDir "\Microsoft.Web.WebView2.Wpf.dll' -Force; "
             . "Copy-Item '" tmpDir "\build\native\" loaderArch "\WebView2Loader.dll' '" wvDir "\WebView2Loader.dll' -Force"
 
         if XAMLHost.Downloader("Microsoft.Web.WebView2", "1.0.1722.45", "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.1722.45", wvDir, targetDlls, extractCmds) {
             try FileDelete(libDir "\dep\ahk-xaml-webview.dll")
-            try FileDelete(A_Temp "\AhkWpf\ahk-xaml-webview.dll")
+            try FileDelete(A_WorkingDir "\Cache\AhkWpf\ahk-xaml-webview.dll")
             return true
         }
         return false
@@ -3647,12 +3666,12 @@ class XAMLHost {
         if FileExist(aeDll)
             return false
 
-        tmpDir := A_Temp "\AhkWpf\nuget_AvalonEdit"
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_AvalonEdit"
         extractCmds := "Copy-Item '" tmpDir "\lib\net462\ICSharpCode.AvalonEdit.dll' '" aeDll "' -Force"
 
         if XAMLHost.Downloader("AvalonEdit", "6.3.0.90", "https://www.nuget.org/api/v2/package/AvalonEdit/6.3.0.90", aeDir, [aeDll], extractCmds) {
             try FileDelete(libDir "\dep\ahk-xaml*.dll")
-            try FileDelete(A_Temp "\AhkWpf\ahk-xaml*.dll")
+            try FileDelete(A_WorkingDir "\Cache\AhkWpf\ahk-xaml*.dll")
             return true
         }
         return false
@@ -3669,12 +3688,12 @@ class XAMLHost {
         if FileExist(oxDll)
             return false
 
-        tmpDir := A_Temp "\AhkWpf\nuget_DocumentFormat_OpenXml"
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_DocumentFormat_OpenXml"
         extractCmds := "Copy-Item '" tmpDir "\lib\net46\DocumentFormat.OpenXml.dll' '" oxDll "' -Force"
 
         if XAMLHost.Downloader("DocumentFormat.OpenXml", "2.20.0", "https://www.nuget.org/api/v2/package/DocumentFormat.OpenXml/2.20.0", oxDir, [oxDll], extractCmds) {
             try FileDelete(libDir "\dep\ahk-xaml*.dll")
-            try FileDelete(A_Temp "\AhkWpf\ahk-xaml*.dll")
+            try FileDelete(A_WorkingDir "\Cache\AhkWpf\ahk-xaml*.dll")
             return true
         }
         return false
@@ -3696,12 +3715,12 @@ class XAMLHost {
         ; Enable continuous marquee style (PBM_SETMARQUEE)
         SendMessage(0x040A, 1, 30, progressBar.Hwnd)
 
-        tmpDir := A_Temp "\AhkWpf\nuget_" StrReplace(packageName, ".", "_")
+        tmpDir := A_WorkingDir "\Cache\AhkWpf\nuget_" StrReplace(packageName, ".", "_")
         nupkg := tmpDir "\package.nupkg.zip"
 
         try {
-            if !DirExist(A_Temp "\AhkWpf")
-                DirCreate(A_Temp "\AhkWpf")
+            if !DirExist(A_WorkingDir "\Cache\AhkWpf")
+                DirCreate(A_WorkingDir "\Cache\AhkWpf")
             if DirExist(tmpDir)
                 DirDelete(tmpDir, true)
             DirCreate(tmpDir)

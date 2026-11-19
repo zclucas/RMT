@@ -129,7 +129,7 @@ class OperationGui {
         bdInner.Rows("Auto", "*")
         head := bdInner.Add("Grid").Grid_Row(0).Margin("0,0,8,4")
         head.Cols("*", "55", "8", "120", "28")
-        head.Add("TextBlock").Grid_Column(0).Text(GetLang("运算表达式")).VerticalAlignment("Center")
+        head.Add("TextBlock").Grid_Column(0).Text(GetLang("运算表达式")).ToolTip(GetLang("提示：实际运行时会使用真实的变量值")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         head.Add("TextBlock").Grid_Column(3).Text(GetLang("结果保存变量")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
@@ -231,6 +231,7 @@ class OperationGui {
 
         this._EnsureOpDataLen()
         this._RebuildOpRows()
+        this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
     }
 
     ; ---------- 动态行区 ----------
@@ -360,22 +361,13 @@ class OperationGui {
         this._RebuildOpRows()
     }
 
-    GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        Remark := this.ui.Query("RemarkCon")
-        if (ShouldAutoGenerateRemark(Remark)) {
-            Remark := GetLang("更新")
-            loop this.Data.ToggleArr.Length {
-                name := this.ui.Query("UpdateName" A_Index)
-                if (name != "")
-                    Remark .= name "&"
-            }
-            Remark := RTrim(Remark, "&")
+    _GenerateRemark(data) {
+        remark := GetLang("更新")
+        for name in data.UpdateNameArr {
+            if (name != "")
+                remark .= GetLang(name) "&"
         }
-        CommandStr := CorrectRemark(CommandStr, Remark)
-        return CommandStr
+        return RTrim(remark, "&")
     }
 
     OnEditVariableBtnClick(Index, state := "", ctrl := "", event := "") {
@@ -407,9 +399,9 @@ class OperationGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        this.SaveOperationData()
+        CommandStr := this.SaveOperationData()
         action := this.SureBtnAction
-        action(this.GetCommandStr())
+        action(CommandStr)
         this._CloseWindow()
     }
 
@@ -433,6 +425,9 @@ class OperationGui {
         this._ReadOperationRows()
         loop this.Data.ToggleArr.Length
             MySoftData.GlobalVariMap[this.Data.UpdateNameArr[A_Index]] := true
+        CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
+            , this._GenerateRemark.Bind(this), true)
         SaveMacroCMDData(this.Data)
+        return CommandStr
     }
 }

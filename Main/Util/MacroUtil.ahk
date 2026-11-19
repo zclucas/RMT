@@ -265,13 +265,8 @@ MacroCommandActions() {
         "搜索Pro", SearchOnTrigger,
         "搜索All", SearchOnTrigger,
         "搜索Combo", SearchOnTrigger,
-        "组合搜索", SearchOnTrigger,
-        "搜索Multi", SearchOnTrigger,
         "移动", OnMouseMove,
         "移动Pro", OnMMPro,
-        ; §20 改名双键：新名「鼠标移动/鼠标移动Pro/增量移动」；旧名键保留兼容旧配置宏
-        "鼠标移动", OnMouseMove,
-        "鼠标移动Pro", OnMMPro,
         "增量移动", OnDeltaMove,
         "运行", OnRunFile,
         "运行Pro", OnRunFile,
@@ -291,9 +286,14 @@ MacroCommandActions() {
         "输入", OnInput,
         "等待确定", OnWaitConfirm,
         "网络请求", OnHttpRequest,
+        "浏览器", OnBrowser,
+        "窗口控件", OnWindowControl,
+        "AI判断", OnAiDecision,
+        "YOLO检测", OnYolo,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
-        "窗口信息", OnWindowManage, "调整窗口", OnWindowManage, "窗口管理", OnWindowManage,
+        "窗口信息", OnWindowManage,
+        "调整窗口", OnWindowManage,
         "按键检测", OnKeyCheck,
         "手柄检测", OnJoyCheck,
         "等待", OnWait,
@@ -303,7 +303,6 @@ MacroCommandActions() {
         "抓图", OnScreenShot,
         "图形开始节点", OnGraphStartNode
     )
-
     return Actions
 }
 
@@ -2662,8 +2661,8 @@ OnScreenShot(tableItem, cmd, index) {
     if (!DirExist(baseDir))
         try DirCreate(baseDir)
     if (!DirExist(baseDir)) {
-        ; 安装目录（如 Program Files）无写权限时，回退到用户临时目录
-        baseDir := A_Temp "\RMT_TempShot\" MySoftData.CurSettingName
+        ; 安装目录（如 Program Files）无写权限时，回退到软件目录 Cache\（不用 %TEMP%，部分账户无权限）
+        baseDir := RmtCacheDir() "\RMT_TempShot\" MySoftData.CurSettingName
         ShotDebugLog(Format("主 TempShot 目录不可用，回退到：{}", baseDir))
         if (!DirExist(baseDir))
             try DirCreate(baseDir)

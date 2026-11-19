@@ -86,7 +86,7 @@ class LoopGui {
             .SnapsToDevicePixels("True").ClipToBounds("False")
         for t in GetLangArr(["无", "继续条件", "退出条件"])
             condiCon.Add("ComboBoxItem").Content(t)
-        head.Add("TextBlock").Grid_Row(1).Grid_Column(4).Text(GetLang("逻辑关系：")).VerticalAlignment("Center").HorizontalAlignment("Right").Foreground("{DynamicResource TextMain}").FontSize("12")
+        head.Add("TextBlock").Grid_Row(1).Grid_Column(4).Text(GetLang("逻辑关系：")).ToolTip(GetLang("选择全部条件成立，或任一条件成立。")).VerticalAlignment("Center").HorizontalAlignment("Right").Foreground("{DynamicResource TextMain}").FontSize("12")
         logicCon := head.Add("ComboBox").Grid_Row(1).Grid_Column(6).Name("LogicCon").Width(70).Height(28).MinHeight(28)
             .HorizontalAlignment("Left").VerticalAlignment("Center")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}")

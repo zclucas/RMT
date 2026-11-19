@@ -1,5 +1,9 @@
 Log/
 /Test/
+/RMT.exe
+/Thread/Update.exe
+/ReleaseX64/Thread/Update.exe
+/ReleaseX86/Thread/Update.exe
 Setting/
 OldSetting/
 settings.ini
@@ -28,3 +32,13 @@ _bmad-output
 Plugins/SupportQr/bin/
 Plugins/SupportQr/obj/
 .workbuddy/
+Cache/
+
+# YOLO 插件：Rust 构建缓存与模型不进库。
+# 二进制内核 Plugins/YOLO/<架构>/ 仍入库（与 Plugins/OpenCV/<架构>/ 一致），打包脚本从这里取。
+Plugins/YOLO/dll/target/
+Plugins/YOLO/dll/x64/
+Plugins/YOLO/dll/x86/
+Plugins/YOLO/dll/runtime/
+Plugins/YOLO/models/*
+!Plugins/YOLO/models/.gitkeep

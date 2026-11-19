@@ -3366,7 +3366,7 @@ public partial class AhkWpfEngine
                                 string currentTheme = (containerEl != null && containerEl.Tag is string) ? (string)containerEl.Tag : "Normal";
                                 ApplyViewMode(rtb, viewMode, currentTheme, win);
                             } catch (Exception ex) {
-                                string debugPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_editor_debug.log");
+                                string debugPath = System.IO.Path.Combine(GetLogDir(), "ahk_editor_debug.log");
                                 System.IO.File.AppendAllText(debugPath, "SetPageView EXCEPTION: " + ex.ToString() + "\n");
                             }
                             break;
@@ -4017,7 +4017,7 @@ public partial class AhkWpfEngine
                     // Navigate through the Effect property to set sub-properties on ShaderEffect objects.
                     // e.g. "MyBorder|Effect.BlurRadius|0.5" => get MyBorder.Effect, then set .BlurRadius = 0.5
                     var effect = ((UIElement)ctrl).Effect;
-                    string debugPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ahk_effect_debug.log");
+                    string debugPath = System.IO.Path.Combine(GetLogDir(), "ahk_effect_debug.log");
                     try { System.IO.File.AppendAllText(debugPath, DateTime.Now.ToString("HH:mm:ss.fff") + " ctrl=" + parts[0] + " type=" + ctrl.GetType().Name + " effect=" + (effect != null ? effect.GetType().FullName : "NULL") + " prop=" + parts[1] + " val=" + parts[2] + "\n"); } catch { }
                     if (effect != null)
                     {

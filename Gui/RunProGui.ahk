@@ -109,7 +109,7 @@ class RunProGui {
         varBtns.Add("Button").Name("BtnAddValue").Content(GetLang("追加值")).Height(26).MinHeight(26).Margin("6,0,0,0").Cursor("Hand")
 
         ; 行3：目标
-        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("目标：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("目标：")).ToolTip(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         targetHost := body.Add("Grid").Grid_Row(3).Grid_Column(1).Grid_ColumnSpan(6).Name("RunTargetHost").Margin("0,0,8,0")
         RunGui.AddTargetCombo(targetHost)
         body.Add("Button").Grid_Row(3).Grid_Column(7).Name("BtnSelectFile").Content(GetLang("选择文件")).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Stretch").Cursor("Hand")
@@ -370,7 +370,7 @@ class RunProGui {
         ; 行2：变量数组 + 变量/数组 + 名称 + 追加名 + 追加值
         row1 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row1.Cols("88", "80", "8", "200", "8", "70", "8", "70")
-        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).VerticalAlignment("Center")
+        row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         vt := row1.Add("ComboBox").Grid_Column(1).Name("StdInEditVarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))

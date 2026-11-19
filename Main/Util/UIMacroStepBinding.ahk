@@ -736,7 +736,7 @@ class UIMacroStepBinding {
             case "变量": return ["VariableArr.1", "MinVariableArr.1", "MaxVariableArr.1"]
             case "循环": return ["LoopCount"]
             case "运行": return ["Target"]
-            case "等待": return ["Interval", "Param1"]
+            case "等待": return ["TimeoutMs", "Param1"]
             ; 搜索家族共用 SearchData、共用 SearchOnTrigger（MacroUtil:164）：
             ; 只留常用 4 项；搜索颜色/OCR类型/搜索类型 按需求不开放。
             case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
@@ -769,6 +769,7 @@ class UIMacroStepBinding {
             case "等待":
                 switch String(field) {
                     case "Interval": return { label: "检测间隔", type: "int", min: 0, max: 60000, store: "int" }
+                    case "TimeoutMs": return { label: "超时(ms)", type: "int", min: 0, max: 4294967295, store: "int" }
                     case "Param1":   return { label: "主参数", type: "text", store: "str" }
                 }
             case "输出":
@@ -1020,29 +1021,10 @@ class UIMacroStepBinding {
     ;   最后一跳之后，step/param 相对「最终容器文本」而言。
     ; 无 hops = 现状（容器就是顶层 item.Macro），老配置零迁移。
     ; ==================================================================
-    static MaxHops := 5
+    static MaxHops => UIMacroSchema.MaxHops
 
     ; hops 规格化：合法 → 规范化数组；非法 → ""（调用方应丢弃整个绑定）
-    static NormalizeHops(hopsRaw) {
-        if (!IsObject(hopsRaw))
-            return ""
-        out := []
-        for h in hopsRaw {
-            if (!IsObject(h))
-                return ""
-            st := UIMacroStepBinding._ToInt(h.HasProp("step") ? h.step : 0, 0)
-            kind := h.HasProp("kind") ? String(h.kind) : ""
-            serial := h.HasProp("serial") ? String(h.serial) : ""
-            field := h.HasProp("field") ? String(h.field) : ""
-            idx := UIMacroStepBinding._ToInt(h.HasProp("index") ? h.index : 0, 0)
-            if (st < 1 || kind == "" || serial == "" || field == "" || idx < 0)
-                return ""
-            out.Push({ step: st, kind: kind, serial: serial, field: field, index: idx })
-        }
-        if (out.Length < 1 || out.Length > UIMacroStepBinding.MaxHops)
-            return ""
-        return out
-    }
+    static NormalizeHops(hopsRaw) => UIMacroSchema.NormalizeHops(hopsRaw)
 
     ; 某序列型指令里可作为「嵌套宏文本容器」的字段。
     ; obj 为该指令的数据对象（用于枚举数组容器，如如果Pro 的分支列表）。

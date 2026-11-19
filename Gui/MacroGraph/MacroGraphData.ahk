@@ -241,7 +241,7 @@ class MacroGraphDataMixin {
     ; 形式化 INI 指令的 cmdKey 列表（与 AssetUtil 中 CMD 映射一致；阶段5 含新配置化 间隔/按键/移动/RMT指令）
     ; §20 改名：加「鼠标移动/增量移动」新键（旧「移动」键保留兼容旧图）
     _FormalIniCmdKeys() {
-        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "文本处理", "数组",
+        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测", "文本处理", "数组",
             "后台鼠标", "后台按键", "窗口管理", "窗口信息", "调整窗口", "按键检测", "手柄检测", "注释", "抓图", "循环",
             "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间", "提示"]
     }
@@ -270,6 +270,10 @@ class MacroGraphDataMixin {
                 "运行", RunData,
                 "运行Pro", RunData,
                 "网络请求", HttpRequestData,
+                "浏览器", BrowserData,
+                "窗口控件", WindowControlData,
+                "AI判断", AiDecisionData,
+                "YOLO检测", YoloData,
                 "文件读写", FileIOData,
                 "Excel", FileIOData,
                 "文本处理", TextOpsData,
@@ -671,9 +675,8 @@ class MacroGraphDataMixin {
             d.cdPosX := ObjHasOwnProp(data, "PosX") ? data.PosX : 200
             d.cdPosY := ObjHasOwnProp(data, "PosY") ? data.PosY : 200
         } else if (cmdKey == "等待") {
-            ; 等待编辑器使用统一的 WaitData 字段：类型、轮询间隔、参数和区域坐标。
             d.waitType := ObjHasOwnProp(data, "WaitType") ? data.WaitType : 1
-            d.waitInterval := ObjHasOwnProp(data, "Interval") ? data.Interval : 500
+            d.waitTimeout := InputField(data, "TimeoutMs", 0)
             d.waitParam1 := ObjHasOwnProp(data, "Param1") ? data.Param1 : ""
             d.waitParam2 := ObjHasOwnProp(data, "Param2") ? data.Param2 : ""
             d.waitStartX := ObjHasOwnProp(data, "StartPosX") ? data.StartPosX : 0

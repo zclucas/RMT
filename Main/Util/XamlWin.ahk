@@ -42,7 +42,8 @@ class XamlWin {
         safeTitle := StrReplace(StrReplace(StrReplace(title, "&", "&amp;"), '"', "&quot;"), "<", "&lt;")
         ; Emit design DIP sizes. ApplyDialogVisualScale enlarges the window and pins the root
         ; so EngineHost's Viewbox matches the main UI. Pre-multiplying here would double-scale.
-        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * visualScale) '" Height="' Round(height * visualScale) '"')
+        heightAttr := height == "Auto" ? 'SizeToContent="Height"' : 'Height="' Round(height * visualScale) '"'
+        ui.xaml := StrReplace(ui.xaml, 'Width="940" Height="700"', 'Title="' safeTitle '" ShowInTaskbar="False" Width="' Round(width * visualScale) '" ' heightAttr)
         ; Window chrome corners sit outside the title row. Paint them with TitleBarColor so a
         ; Viewbox letterbox cannot show the default white/BgColor strip above the title.
         winEnd := InStr(ui.xaml, ">")
@@ -637,13 +638,14 @@ class XamlWin {
     }
 }
 
-XamlTabOptionStyle(showDot := true) {
+XamlTabOptionStyle(showDot := true, centerContent := false) {
+    contentMargin := showDot ? (centerContent ? "10,0" : "5,0,15,0") : "5,0"
     return '<Style x:Key="SetTabButton" TargetType="ToggleButton">'
         . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/><Setter Property="Cursor" Value="Hand"/>'
         . '<Setter Property="Width" Value="85"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0,4,8,4"/>'
         . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">'
         . '<Border x:Name="Bd" CornerRadius="6" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"><Grid>'
-        . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>'
+        . '<Viewbox Margin="' contentMargin '" StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Center"><ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"/></Viewbox>'
         . '<Ellipse x:Name="Dot" Visibility="Collapsed" Width="7" Height="7" Fill="{DynamicResource TextMain}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,6,0"/>'
         . '</Grid></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True">'
         . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>'

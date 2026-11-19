@@ -1433,7 +1433,7 @@ class TimeData {
 }
 
 class WaitData {
-    __New() {
+    __New(legacy := false) {
         this.SerialStr := ""
         ; 等待变量值 等待按键按下 等待按键松开 等待屏幕变化 等待鼠标移动 等待鼠标停止移动 等待剪切板变化
         ; 等待进程存在 等待进程关闭 等待窗口存在 等待窗口激活 等待窗口屏幕变化 等待窗口大小变化
@@ -1446,7 +1446,11 @@ class WaitData {
         this.TimeConfig := {SubMode: "等待", Param1: "", Param2: "毫秒", Param4: "等待", Param5: "时刻", CheckInterval: 500, Timeout: 0}
         this.ConfirmConfig := WaitConfirmData.DefaultOptions()
         this.Interval := 500        ; 检测间隔（毫秒）
-        this.TimeoutMs := 0
+        this.TimeoutMs := legacy ? 0 : TimeoutPolicy.DefaultMs
+        if (!legacy) {
+            this.TimeoutAction := TimeoutPolicy.DefaultAction
+            this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
+        }
         this.ResultSaveName := ""
         this.WaitCompletedValue := 0
         this.WaitTimedOutValue := 1
@@ -1551,11 +1555,52 @@ class HttpRequestData {
         this.Headers := ""
         this.BodyType := "JSON"
         this.Body := ""
-        this.TimeoutMs := 10000
+        this.TimeoutMs := TimeoutPolicy.DefaultMs
+        this.TimeoutAction := TimeoutPolicy.DefaultAction
+        this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
         this.Retries := 0
         this.StatusVar := "HTTP状态码"
         this.ResponseVar := "HTTP响应体"
         this.ErrorVar := "HTTP错误信息"
+    }
+}
+
+class BrowserData {
+    __New() {
+        this.SerialStr := ""
+        this.ActionType := "打开网址"
+        this.BrowserType := "Chrome" ; Chrome/Edge/Chromium/自定义路径
+        this.CloseScope := "所有页签"
+        this.Url := "https://www.google.com"
+        this.TargetRef := "" ; 留空操作当前分页，否则按索引、ID或关键词定位
+        this.Selector := ""
+        this.SelectorType := "CSS" ; CSS / XPath
+        this.Condition := "出现" ; 出现(appear) / 消失(disappear) / 可见(visible)
+        this.LoadState := "完全加载" ; 完全加载(load) / DOM加载(domcontentloaded) / 网络空闲(networkidle)
+        this.Text := ""
+        this.ClearBefore := 1
+        this.Checked := 1
+        this.OuterHtml := 1
+        this.JsCode := ""
+        this.AttrName := "href"
+        this.MouseBtn := "左键" ; 左键 / 右键 / 中键
+        this.CoordX := 0
+        this.CoordY := 0
+        this.Modifiers := 0 ; 1=Alt, 2=Ctrl, 8=Shift
+        this.StorageType := "Local" ; Local / Session
+        this.CookieDomain := ""
+        this.CookiePath := "/"
+        this.SaveVar := ""
+        this.TimeoutMs := TimeoutPolicy.DefaultMs
+        this.TimeoutAction := TimeoutPolicy.DefaultAction
+        this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
+        this.Headless := 0
+        this.Incognito := 0 ; 0=默认会话, 1=独立会话(无痕)
+        this.BrowserPort := 9222
+        this.BrowserPath := ""
+        this.UserDataDir := ""
+        this.OnError := "停止" ; 停止 / 忽略 / 重试
+        this.RetryCount := 3
     }
 }
 

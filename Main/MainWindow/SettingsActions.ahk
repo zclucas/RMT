@@ -67,7 +67,7 @@
             {id: "countdown", fields: [{key: "CountDownStyle", def: 2, ctrl: "CountDownStyleCon", kind: "cmb"}, {key: "CountDownPadZero", def: true, ctrl: "CountDownPadCon", kind: "chk"}, {key: "CountDownAlpha", def: 70, ctrl: "CountDownAlphaCon", kind: "sld", val: "CountDownAlphaVal"}, {key: "CountDownFontSize", def: 15, ctrl: "CountDownFontCon", kind: "sld", val: "CountDownFontVal"}]},
             {id: "uipanel", fields: [{key: "UIPanelBtnWidth", def: 80, ctrl: "UIPanelBtnWidthCon", kind: "sld", val: "UIPanelBtnWidthVal"}, {key: "UIPanelBtnHeight", def: 34, ctrl: "UIPanelBtnHeightCon", kind: "sld", val: "UIPanelBtnHeightVal"}, {key: "UIPanelFontSize", def: 12, ctrl: "UIPanelFontSizeCon", kind: "sld", val: "UIPanelFontSizeVal"}, {key: "UIPanelCols", def: 3, ctrl: "UIPanelColsCon", kind: "sld", val: "UIPanelColsVal"}, {key: "UIPanelShowOnActive", def: true, ctrl: "UIPanelShowOnActiveCon", kind: "chk"}]},
             {id: "theme", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
-            {id: "font", fields: [{key: "FontType", def: "微软雅黑", ctrl: "CmbFont", kind: "cmbText"}, {key: "FontSize", def: 15, ctrl: "ThemeFontSizeCon", kind: "sld", val: "ThemeFontSizeVal"}]},
+            {id: "font", fields: [{key: "FontType", def: "微软雅黑", ctrl: "CmbFont", kind: "cmbText"}, {key: "FontSize", def: XAML_FontSizeDefault, ctrl: "ThemeFontSizeCon", kind: "themeFontSize"}]},
             {id: "palette", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
             {id: "aiModel", fields: [{key: "AiProvider", def: "openai", ctrl: "AiProviderCon", kind: "aiProv"}, {key: "AiApiBaseUrl", def: "https://api.openai.com/v1", ctrl: "AiBaseUrlCon", kind: "txt"}, {key: "AiApiKey", def: "", ctrl: "AiApiKeyCon", kind: "pwd"}, {key: "AiModel", def: "", ctrl: "AiModelCon", kind: "txt"}]},
             {id: "aiPerm", fields: [{key: "AiAccessMode", def: 2, ctrl: "AiAccessCon", kind: "cmb"}, {key: "AiApprovalMode", def: 2, ctrl: "AiApprovalCon", kind: "cmb"}]}
@@ -182,16 +182,18 @@
                 MainSoftData.%f.key% := Integer(def)
                 try this.ui.Update(f.ctrl, "SelectedIndex", Integer(def))
             case "cmbText":
-                MainSoftData.%f.key% := def
                 if (f.key == "Lang") {
-                    try this.ui.Update(f.ctrl, "SelectedIndex", 0)
+                    SetTimer(ObjBindMethod(this, "RefreshLanguage", def), -1)
                 } else {
+                    MainSoftData.%f.key% := def
                     try this.ui.Update(f.ctrl, "Text", String(def))
                 }
             case "logLevel":
                 MainSoftData.%f.key% := def
                 for level in RMTLogLevelKeys()
                     try this.ui.Update("LogLevel_" level, "IsChecked", RMTLogLevelEnabled(level, def) ? "True" : "False")
+            case "themeFontSize":
+                this._ApplySettingFontSize(def)
             case "sld":
                 MainSoftData.%f.key% := def
                 try this.ui.Update(f.ctrl, "Value", String(def))
@@ -305,7 +307,7 @@
         v := this.ui.Query("ThemeFontSizeCon")
         if (!IsNumber(v))
             return
-        this._ApplySettingFontSize(Integer(Round(Number(v))))
+        this._ApplySettingFontSize(v)
     }
     OnSettingFontSizeText(state, ctrl, event) {
         t := Trim(this.ui.Query("ThemeFontSizeVal"))
@@ -313,17 +315,16 @@
             try this.ui.Update("ThemeFontSizeVal", "Text", String(MainSoftData.FontSize))
             return
         }
-        this._ApplySettingFontSize(Integer(Round(Number(t))))
+        this._ApplySettingFontSize(t)
     }
     _ApplySettingFontSize(fs) {
-        fs := Max(0, Min(40, fs))
-        MainSoftData.FontSize := fs
-        this.MarkSettingDirty("ThemeFontSizeCon")
+        oldSize := MainSoftData.FontSize
+        fs := ApplyUserFontSize(fs, false)
         try this.ui.Update("ThemeFontSizeCon", "Value", String(fs))
         try this.ui.Update("ThemeFontSizeVal", "Text", String(fs))
-        try {
-            ApplyUserFontSize(fs, false)
-            this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(0, fs))
+        if (fs != oldSize) {
+            this.MarkSettingDirty("ThemeFontSizeCon")
+            this.RefreshWindowFonts(fs - oldSize)
         }
     }
 
@@ -798,6 +799,75 @@
         this.MarkSettingDirty(ctrl)
     }
 
+
+    OnLangChanged(state, ctrl, event) {
+        newLang := this.ui.Query(ctrl)
+        if (newLang != "" && newLang != MainSoftData.Lang)
+            SetTimer(ObjBindMethod(this, "RefreshLanguage", newLang), -1)
+    }
+
+    RefreshLanguage(newLang) {
+        global MyMainWin
+        if (this != MyMainWin || !IsObject(this.ui) || this._languageRefreshPending || newLang == MainSoftData.Lang)
+            return
+
+        oldLang := MainSoftData.Lang
+        oldUi := this.ui
+        toolText := oldUi.Query("TxtToolText")
+        alwaysOnTop := oldUi.Query("ChkAlwaysOnTop") == "True"
+        win := "ahk_id " oldUi.wpfHwnd
+        maximized := WinGetMinMax(win) == 1
+        WinGetPos(&x, &y, &w, &h, win)
+        pos := maximized ? [] : [x, y, w, h]
+
+        selectedTab := MainSoftData.TableIndex
+        this._languageRefreshPending := true
+        SetAppLanguage(newLang)
+        ; 独立构建新窗口，句柄就绪后再关闭旧窗口。
+        replacement := MainWin()
+        replacement._settingDirty := this._settingDirty.Clone()
+        replacement._settingDirty["behavior"] := true
+        try {
+            replacement.BuildAndShow(pos, maximized, selectedTab)
+        } catch as e {
+            RestoreLanguage()
+            throw e
+        }
+        MyMainWin := replacement
+        WaitMainWinReady(FinishLanguageRefresh)
+
+        FinishLanguageRefresh() {
+            if (!MainWinHwndReady()) {
+                RestoreLanguage()
+                return
+            }
+            try {
+                InitUIFinishUI(false)
+                replacement.ui.Update("TxtToolText", "Text", toolText)
+                if (alwaysOnTop) {
+                    replacement.ui.Update("ChkAlwaysOnTop", "IsChecked", "True")
+                    MainSoftData.MyGui.Opt("+AlwaysOnTop")
+                }
+            } finally {
+                oldUi.Update("Window", "Close", "")
+            }
+        }
+
+        RestoreLanguage() {
+            global MyMainWin
+            MyMainWin := this
+            MainSoftData.TableIndex := selectedTab
+            SetAppLanguage(oldLang)
+            this.LoadLeftBarValues()
+            this._languageRefreshPending := false
+            for index, lang in MainSoftData.LangArr {
+                if (lang == oldLang) {
+                    oldUi.Update("CmbLang", "SelectedIndex", index - 1)
+                    break
+                }
+            }
+        }
+    }
     OnComboText(fieldName, state, ctrl, event) {
         MainSoftData.%fieldName% := this.ui.Query(ctrl)
         this.MarkSettingDirty(ctrl)
@@ -810,7 +880,7 @@
 
     _JoyLtRtAsButtonLabel() {
         isPs5 := (MainSoftData.TriggerJoyType == "PS5")
-        return GetLang(isPs5 ? "L2、R2按键化" : "LT、RT按键化")
+        return isPs5 ? GetLang("L2、R2按键化") : GetLang("LT、RT按键化")
     }
 
     _JoyLtRtAsButtonDesc() {

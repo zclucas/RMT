@@ -4,6 +4,12 @@
 - 按用途建立子目录，例如 `Test/scripts/`、`Test/reference/`、`Test/output/`；脚本生成的测试结果也写入该目录。
 - `Test/` 已加入 `.gitignore`，不要强制将其中内容加入 Git，也不要把临时测试内容放入正式源码、文档或打包资源目录。
 
+# XAML 输入框
+
+- 后续新增的单行输入框使用 `Style="{StaticResource RmtSingleLineTextBox}"`，文字起点与普通下拉框对齐。
+- 后续新增的多行输入框使用 `Style="{StaticResource RmtMultiLineTextBox}"`，文字顶部留白比原指令编辑器多行输入框少 6 个设备无关像素。
+- 使用 AHK 构建控件时，通过 `.Style("{StaticResource RmtSingleLineTextBox}")` 或 `.Style("{StaticResource RmtMultiLineTextBox}")` 引用样式。保留已有输入框的布局。
+
 # 更新日志
 
 - 更新日志写在 `Web/更新日志.md`，按版本倒序。当前版本以 `RMT.ahk` 里的 `RMT_VERSION` 为准，开发中的新增、优化、修复只写入对应的 `RMTv{版本}` 一节。现在是 `1.3F2`，条目写入 `RMTv1.3F2`。

@@ -275,6 +275,10 @@ CmdEnumNorm(cmd, Data) {
             if (!Data.HasProp("HeightVarName"))
                 Data.HeightVarName := "Var2"
             WindowNormalizeInfo(Data)
+        case "YOLO检测":
+            CmdEnumSet(Data, "Device", ["CPU", "CUDA", "DirectML", "TensorRT", "CoreML"])
+            CmdEnumSet(Data, "TargetMode", ["最高置信度", "最左", "最上", "面积最大"])
+            CmdEnumSet(Data, "ActionType", ["无动作", "左键单击", "左键双击", "右键单击"])
         case "文件读写", "Excel":
             if (Data.HasProp("OperType")) {
                 types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")
