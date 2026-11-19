@@ -39,14 +39,14 @@ for repo, ref, name, param in [
     params[param] = asset["digest"][7:]
 
 build = go("/pipelines/builds", {"fileName": "rmt-go-trial.yml", "ref": "codex/gitee-go-trial",
-                                "params": [{"name": k, "value": v} for k, v in params.items()]})
+                                "params": [{"key": k, "name": k, "value": v} for k, v in params.items()]})
 build_id = int(build["id"])
 print(f"Gitee Go build {build_id}, release {tag}, trial tag {trial_tag}", flush=True)
 with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
     print(f"Gitee Go build **{build_id}** · {tag} · {trial_tag}", file=summary)
 deadline = time.monotonic() + 18 * 60
 while time.monotonic() < deadline:
-    status = go(f"/pipelines/builds/{build_id}")["status"]
+    status = go(f"/pipelines/builds/{build_id}/status")["status"]
     if status in ("SUCCESS", "SUCCEEDED"):
         print("Gitee Go readback passed")
         break
