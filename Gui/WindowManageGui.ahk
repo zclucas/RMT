@@ -203,7 +203,7 @@ class WindowManageGui {
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/23-窗口管理", ObjBindMethod(this, "TriggerMacro"))
+        BindCmdEditorChrome(this.ui, "#指令手册/" this.CmdKey, ObjBindMethod(this, "TriggerMacro"))
         if (isAdjust)
             this.ui.OnEvent("BtnCmdF1", "Click", this.StartPositionPick.Bind(this))
         this.ui.OnEvent("WindowModeCon", "SelectionChanged", ObjBindMethod(this, "OnActionChange"))

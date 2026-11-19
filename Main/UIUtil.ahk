@@ -554,7 +554,9 @@ AddCmdOkBtn(parent, name := "BtnOk", extraMargin := "", content := "") {
 
 class ScreenAreaPreview {
     static ButtonStyle() {
-        return '<Style TargetType="Button"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
+        ; 左移的距离抵消边框与内边距，让内容与同列普通标签对齐。
+        return '<Style TargetType="Button"><Setter Property="Margin" Value="-7,0,0,0"/><Setter Property="Padding" Value="6,0"/>'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
             . '<Border x:Name="surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True">'
             . '<Grid><Border x:Name="hoverTint" Background="{DynamicResource Accent}" Opacity="0.16" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>'
             . '<ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Grid></Border>'

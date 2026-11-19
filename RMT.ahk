@@ -22,7 +22,7 @@ RmtRegisterCliCommand()
 if (!RuntimePrecheck())
     ExitApp()
 XAMLHost.Prewarm()
-InitFilePath()              ;初始化文件路径
+InitFilePath()              ;初始化文件路径.
 IconFontRegisterCached()    ;图标字体：本地已有缓存时注册（毫秒级，不联网）
 LoadCurMacroSetting()       ;加载当前宏配置
 HandleOpenArg()             ;处理打开软件的参数

@@ -70,7 +70,7 @@ SetGlobalData(macroStr, visitMap) {
                     VariableMap[Data.SaveName] := true
             case "窗口控件", "AI判断":
                 RegisterCommandResultVars(Data)
-                if (baseCmd == "窗口控件" && WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
+                if (baseCmd == "AI判断" || WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
                     TimeoutPolicy.RegisterStatus(Data)
             case "YOLO检测":
                 RegisterYoloVars(Data)

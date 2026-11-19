@@ -17,11 +17,13 @@ class HttpRequestGui extends CommentGui {
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height)
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,10").Grid_IsSharedSizeScope("True")
-        this._Field(body, "备注：", "Remark", false)
-        method := this._Row(body, "类型：").Add("StackPanel").Grid_Column(1).Orientation("Horizontal")
-        this._Choice(method, "Method", HttpRequestGui.Methods).Width(140)
-        method.Add("Button").Name("BtnMethodHelp").Content("?").ToolTip(GetLang("请求类型说明"))
+        request := body.Add("Grid").Cols("*", 16, "*")
+        method := this._Row(request, "类型：").Add("Grid").Grid_Column(1).Cols("*", "Auto")
+        this._Choice(method, "Method", HttpRequestGui.Methods)
+        method.Add("Button").Grid_Column(1).Name("BtnMethodHelp").Content("?").ToolTip(GetLang("请求类型说明"))
             .Width(28).Height(28).MinHeight(28).Margin("6,0,0,0").Padding("0").Cursor("Hand")
+        remark := this._Row(request, "备注：").Grid_Column(2)
+        this._TextBox(remark, "Remark").Grid_Column(1)
         this._Field(body, "URL：", "Url", false)
         this._Field(body, "Header：", "Headers", true, 78)
         payload := body.Add("StackPanel").Name("BodySettings")
@@ -31,13 +33,13 @@ class HttpRequestGui extends CommentGui {
         this._Choice(this._Row(payload, "Body 类型："), "BodyType", HttpRequestGui.BodyTypes).Grid_Column(1)
         this._Field(payload, "Body：", "Body", true, 110)
 
-        CommandTimeoutFields.Add(body)
         options := body.Add("Grid")
-        this._Columns(options, true)
         options.Rows("Auto", "Auto")
-        this._Option(options, 0, 0, "状态码变量：", "StatusVar")
-        this._Option(options, 0, 3, "响应体变量：", "ResponseVar")
-        this._Option(options, 1, 0, "错误信息变量：", "ErrorVar")
+        options.Cols("*", 16, "*")
+        this._Option(options, 0, 0, "状态码变量：", "StatusVar", "保存 HTTP 状态码，未收到响应时为 0。")
+        this._Option(options, 0, 2, "响应体变量：", "ResponseVar", "保存服务器返回的响应体，包括 HTTP 错误响应的正文。")
+        this._Option(options, 1, 0, "错误体变量：", "ErrorVar", "保存 HTTP 错误状态或请求失败信息，无错误时为空。")
+        CommandTimeoutFields.Add(body, false, "HttpRequestLabel", "HttpRequestLabel")
         buttons := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
         AddCmdOkBtn(buttons)
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
@@ -54,25 +56,10 @@ class HttpRequestGui extends CommentGui {
         BindCmdEditorChrome(this.ui, "#指令手册/网络请求")
     }
 
-    _Row(body, label) {
-        row := body.Add("Grid").Margin("0,3")
-        this._Columns(row)
-        caption := row.Add("TextBlock").Text(GetLang(label)).VerticalAlignment("Center").Margin("0,0,8,0")
-            .Foreground("{DynamicResource TextMain}")
+    _Row(body, label, tip := "") {
         if (label == "Header：")
-            caption.ToolTip(GetLang("Header 每行 名称: 值；"))
-        return row
-    }
-
-    _Columns(grid, paired := false) {
-        columns := grid.Add("Grid.ColumnDefinitions")
-        columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup("HttpRequestLabel")
-        columns.Add("ColumnDefinition").Width("*")
-        if (paired) {
-            columns.Add("ColumnDefinition").Width(20)
-            columns.Add("ColumnDefinition").Width("Auto")
-            columns.Add("ColumnDefinition").Width("*")
-        }
+            tip := GetLang("Header 每行 名称: 值；")
+        return CmdEditorForm.Row(body, label, , "HttpRequestLabel", , , tip).Margin("0,3")
     }
 
     _Field(body, label, name, multiline, height := 28) {
@@ -104,12 +91,12 @@ class HttpRequestGui extends CommentGui {
         return box
     }
 
-    _Option(grid, row, column, label, name) {
-        grid.Add("TextBlock").Grid_Row(row).Grid_Column(column).Text(GetLang(label))
-            .VerticalAlignment("Center").Margin("0,0,8,0").Foreground("{DynamicResource TextMain}")
+    _Option(grid, row, column, label, name, tip) {
+        tip := GetLang(tip)
+        field := this._Row(grid, label, tip).Grid_Row(row).Grid_Column(column)
         ; 可编辑下拉内部的 TextBox 自带 2 DIP 文本留白。
-        box := grid.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0")
-        box.Grid_Row(row).Grid_Column(column + 1).Margin("0,3")
+        field.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0").Grid_Column(1)
+            .ToolTip(tip)
     }
 
     _ShowMethodHelp(ui) {
