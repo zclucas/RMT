@@ -24,7 +24,7 @@ if ($status -eq 404 -or ($status -eq 200 -and !$target)) {
         tag_name = $Tag
         target_commitish = 'main'
         name = $release.name
-        body = $release.body
+        body = if ([string]::IsNullOrWhiteSpace($release.body)) { $Tag } else { $release.body }
         prerelease = $release.isPrerelease.ToString().ToLowerInvariant()
     }
 }
