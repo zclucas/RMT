@@ -308,10 +308,11 @@ class VariableGui {
             ot := 5
         copyOn := ot == 1 || ot == 3 || ot == 4 || ot == 5
         mmOn := ot == 2
-        copyEn := copyOn ? "True" : "False"
-        copyOp := copyOn ? "1" : "0.45"
-        mmEn := mmOn ? "True" : "False"
-        mmOp := mmOn ? "1" : "0.45"
+        copyVis := copyOn ? "Visible" : "Hidden"
+        copyHintVis := copyOn ? "Hidden" : "Visible"
+        mmVis := mmOn ? "Visible" : "Hidden"
+        mmHintVis := mmOn ? "Hidden" : "Visible"
+        hint := ' HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}" FontSize="14" IsHitTestVisible="False"'
         return '<Grid ' ns ' Height="28" HorizontalAlignment="Center">'
             . '<Grid.ColumnDefinitions>'
             . '<ColumnDefinition Width="100"/><ColumnDefinition Width="8"/><ColumnDefinition Width="90"/>'
@@ -323,11 +324,12 @@ class VariableGui {
             . '<ComboBox Grid.Column="2" Name="OpType' i '"' combo '>' opItems '</ComboBox>'
             . '<Grid Grid.Column="4">'
             . '<Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
-            . '<ComboBox Grid.Column="0" Name="Copy' i '" IsEditable="True" IsEnabled="' copyEn '" Opacity="' copyOp '"' combo '/>'
+            . '<ComboBox Grid.Column="0" Name="Copy' i '" IsEditable="True" Visibility="' copyVis '"' combo '/>'
+            . '<TextBlock Grid.Column="0" Name="HintCopy' i '" Text="—" Visibility="' copyHintVis '"' hint '/>'
             . this._IconBtnXml("EditChar" i, "&#xE70F;", GetLang("编辑"), "Collapsed", "1", "8,0,0,0")
             . '</Grid>'
-            . '<ComboBox Grid.Column="6" Name="Min' i '" IsEditable="True" IsEnabled="' mmEn '" Opacity="' mmOp '"' combo '/>'
-            . '<ComboBox Grid.Column="8" Name="Max' i '" IsEditable="True" IsEnabled="' mmEn '" Opacity="' mmOp '"' combo '/>'
+            . '<Grid Grid.Column="6"><ComboBox Name="Min' i '" IsEditable="True" Visibility="' mmVis '"' combo '/><TextBlock Name="HintMin' i '" Text="—" Visibility="' mmHintVis '"' hint '/></Grid>'
+            . '<Grid Grid.Column="8"><ComboBox Name="Max' i '" IsEditable="True" Visibility="' mmVis '"' combo '/><TextBlock Name="HintMax' i '" Text="—" Visibility="' mmHintVis '"' hint '/></Grid>'
             . this._IconBtnXml("DelRow" i, "&#xE74D;", GetLang("删除该变量"), "Visible", "10")
             . '</Grid>'
     }
@@ -451,12 +453,12 @@ class VariableGui {
             OperaTypeValue := this._OpTypeValue(i)
             EnableCopy := OperaTypeValue == "数值" || OperaTypeValue == "字符" || OperaTypeValue == "系统" || OperaTypeValue == "时间"
             EnableMinMax := OperaTypeValue == "随机数值"
-            batch.Push({ControlName: "Copy" i, PropertyName: "IsEnabled", Value: EnableCopy ? "True" : "False"})
-            batch.Push({ControlName: "Copy" i, PropertyName: "Opacity", Value: EnableCopy ? "1" : "0.45"})
-            batch.Push({ControlName: "Min" i, PropertyName: "IsEnabled", Value: EnableMinMax ? "True" : "False"})
-            batch.Push({ControlName: "Max" i, PropertyName: "IsEnabled", Value: EnableMinMax ? "True" : "False"})
-            batch.Push({ControlName: "Min" i, PropertyName: "Opacity", Value: EnableMinMax ? "1" : "0.45"})
-            batch.Push({ControlName: "Max" i, PropertyName: "Opacity", Value: EnableMinMax ? "1" : "0.45"})
+            batch.Push({ControlName: "Copy" i, PropertyName: "Visibility", Value: EnableCopy ? "Visible" : "Hidden"})
+            batch.Push({ControlName: "HintCopy" i, PropertyName: "Visibility", Value: EnableCopy ? "Hidden" : "Visible"})
+            batch.Push({ControlName: "Min" i, PropertyName: "Visibility", Value: EnableMinMax ? "Visible" : "Hidden"})
+            batch.Push({ControlName: "HintMin" i, PropertyName: "Visibility", Value: EnableMinMax ? "Hidden" : "Visible"})
+            batch.Push({ControlName: "Max" i, PropertyName: "Visibility", Value: EnableMinMax ? "Visible" : "Hidden"})
+            batch.Push({ControlName: "HintMax" i, PropertyName: "Visibility", Value: EnableMinMax ? "Hidden" : "Visible"})
             ; 字符类型时显示「编辑」按钮（叠在「值」框右侧，不占列间距）
             batch.Push({ControlName: "EditChar" i, PropertyName: "Visibility", Value: OperaTypeValue == "字符" ? "Visible" : "Collapsed"})
             CurValue := GetLang(this.ui.Query("Copy" i))
