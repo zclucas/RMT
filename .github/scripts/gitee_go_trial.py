@@ -38,6 +38,7 @@ for repo, ref, name, param in [
     if release["draft"] or not re.fullmatch(r"sha256:[a-f0-9]{64}", asset["digest"] or ""):
         raise ValueError(f"Unpublished release or missing digest: {repo}/{ref}/{name}")
     params[param] = asset["digest"][7:]
+    params[param.replace("_SHA", "_BYTES")] = str(asset["size"])
 
 build = go("/pipelines/builds", {"fileName": "rmt-go-trial.yml", "ref": "codex/gitee-go-trial",
                                 "params": [{"key": k, "name": k, "value": v} for k, v in params.items()]})
