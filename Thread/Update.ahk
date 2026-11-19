@@ -85,7 +85,7 @@ try {
         if (current != "" && current != previous) {
             parts := StrSplit(Trim(current, "`r`n"), "|")
             if (parts.Length >= 2) {
-                alternative := !recovering && parts.Length == 3 && parts[3] == "1" ? (InStr(job.url, "https://gitee.com/") == 1 ? RmtDownloadDirectUrl(job.url) : job.url) : ""
+                alternative := !recovering && parts.Length == 3 && parts[3] == "1" ? RmtDownloadDirectUrl(job.url) : ""
                 progress.SetDownloadAlternative(alternative, UpdateText(job, "备用下载地址"))
                 progress.Report(UpdateText(job, parts[2]), IsNumber(parts[1]) ? Number(parts[1]) : "")
                 previous := current

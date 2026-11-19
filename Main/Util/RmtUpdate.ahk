@@ -189,7 +189,7 @@ class RmtUpdate {
         temp := path ".rmt-part-" ProcessExist() "-" A_TickCount
         try {
             result := RmtProgress.Run(GetLang("下载整包"), GetLang("正在下载更新包…"),
-                (pg) => DownloadAsync(RmtDownloadUrl(asset.url), temp, 1800, pg), owner)
+                (pg) => DownloadAsync(asset.url, temp, 1800, pg), owner)
             if (result != "ok" || (asset.bytes && FileGetSize(temp) != asset.bytes))
                 throw Error(GetLang("下载失败"))
             FileMove(temp, path, overwrite)

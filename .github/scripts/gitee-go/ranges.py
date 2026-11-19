@@ -23,7 +23,7 @@ def piece(url, start, end, size, dest, timeout, retries=0):
 
 
 def fetch(url, cdn, path, size):
-    routes = {"github": url, "github-cdn": cdn, "project-proxy": "https://gh-proxy.com/" + url}
+    routes = {"github": url, "github-cdn": cdn}
     with TemporaryDirectory() as tmp:
         root = Path(tmp)
         end = min(size, 128 * 1024) - 1
@@ -54,7 +54,7 @@ def fetch(url, cdn, path, size):
         if len(prefix) == size:
             path.write_bytes(prefix)
             return
-        routes_by_speed = [selected] + [name for name in ("project-proxy", "github-cdn", "github") if name != selected]
+        routes_by_speed = [selected] + [name for name in routes if name != selected]
         block = 512 * 1024
 
         def part(start):

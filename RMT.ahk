@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.0
 ; #NoTrayIcon
-global RMT_VERSION := "1.3F3"
+global RMT_VERSION := "1.3F4"
 if (RmtUpdateIsRunning() || !CheckStartupDirectory(A_ScriptDir) || RmtUpdateRecoverAtStartup())
     ExitApp()
 

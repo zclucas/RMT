@@ -146,7 +146,7 @@ RuntimeHasSp1() {
 }
 
 ; ---- 下载前放开 TLS 1.2 ----
-; Msxml2.XMLHTTP 走 WinINET，Win7 默认只启用 TLS 1.0；GitHub 与 gh-proxy 都要求
+; Msxml2.XMLHTTP 走 WinINET，Win7 默认只启用 TLS 1.0；Gitee 与 GitHub 都要求
 ; TLS 1.2。不放开的话 readyState 永远到不了 4，表现为超时而不是明确报错。
 ; INTERNET_OPTION_SECURE_PROTOCOLS = 84；TLS 1.0|1.1|1.2 = 0xA80。仅作用于本进程。
 RuntimeEnableTls12() {
@@ -359,7 +359,7 @@ RuntimeOfflineBundleName() {
 }
 
 RuntimeOfflineBundleUrl() {
-    return RmtAssetsBaseUrl("Common") RuntimeOfflineBundleName()
+    return RmtLargeAssetUrl(RuntimeOfflineBundleName())
 }
 
 ; Win7 在线版：三项系统组件里任意一项缺、且没有对应离线副本，就说明这个包不能用。
@@ -376,11 +376,12 @@ RuntimeNeedsOfflineOnWin7() {
 ; Win7 上缺组件时的统一出口：不联网，引导去拿离线运行环境压缩包。
 ; name 非空时额外说明还缺哪个文件。
 RuntimeOfflinePrompt(name := "") {
+    url := RuntimeOfflineBundleUrl()
     msg := "当前是 Windows 7，RMT 无法自动联网安装环境组件。`n`n"
         . "原因：Windows 7 默认未启用 TLS 1.2，根证书库也缺少 GitHub 与 CDN 使用的根证书，"
         . "系统自带的下载组件又不支持忽略证书错误。`n`n"
         . "请在任意一台能上网的电脑下载离线运行环境包（" RuntimeOfflineBundleName() "）：`n"
-        . RuntimeOfflineBundleUrl() "`n`n"
+        . url "`n备用下载地址：`n" RmtDownloadDirectUrl(url) "`n`n"
         . "拷到本机解压，双击解压出来的 InstallRuntime.bat，它会按依赖顺序装齐全部组件，"
         . "中途需要重启就重启后把脚本再跑一次。装完再启动 RMT 即可。"
     if (name != "")
@@ -418,7 +419,8 @@ RuntimePrepareAsset(name, hint, expectSize := 0) {
     pg.Show()
     result := ""
     try {
-        result := DownloadAsync(RmtAssetsBaseUrl("Common") name, path, 3600, pg)
+        url := name == "NDP48-x86-x64-AllOS-ENU.exe" ? RmtLargeAssetUrl(name) : RmtAssetsBaseUrl("Common") name
+        result := DownloadAsync(url, path, 3600, pg)
     } finally pg.Close()
 
     if (result = "ok")
