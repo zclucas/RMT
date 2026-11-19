@@ -52,7 +52,6 @@ $ModelUrl    = "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-mode
 #   chunk 可选 160ms / 480ms / 960ms / 1920ms：越大越准、首字延迟越高。默认 480ms。
 #   包体 ~128MB，解压后 encoder 149M + decoder 11M + joiner 2.5M。
 $SttStreamModelName = "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
-$SttStreamModelUrl  = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$SttStreamModelName.tar.bz2"
 
 # ==================== 目录 ====================
 # 依赖下载解压区（git 忽略）
@@ -88,8 +87,7 @@ Write-Host "[OK] 源码: $Src" -ForegroundColor Green
 Write-Host "[OK] G2P表: $G2pH" -ForegroundColor Green
 
 # ==================== 下载依赖（有缓存则跳过） ====================
-# GitHub 下载代理前缀（加速国内下载；留空则直连 GitHub）
-$ProxyPrefix = "https://gh-proxy.org/"
+. "$PSScriptRoot/DownloadDependency.ps1"
 
 function Invoke-Download($Url, $Dest, $Label) {
     if (Test-Path $Dest) {
@@ -97,27 +95,8 @@ function Invoke-Download($Url, $Dest, $Label) {
         if ($sz -gt 1MB) { Write-Host "[OK] $Label 已缓存: $Dest ($([math]::Round($sz/1MB,1)) MB)" -ForegroundColor Green; return }
         Remove-Item $Dest -Force
     }
-    # 走代理：gh-proxy 用法是 前缀 + 完整原 URL
-    $dlUrl = if ($ProxyPrefix -ne "") { $ProxyPrefix + $Url } else { $Url }
     Write-Host "[下载] $Label ..." -ForegroundColor Yellow
-    Write-Host "       $dlUrl" -ForegroundColor DarkGray
-    # 优先 curl（-k --ssl-no-revoke 绕过代理吊销检查）；失败回退 Invoke-WebRequest
-    $ok = $false
-    try {
-        & curl.exe -k --ssl-no-revoke -L --fail --silent --show-error -o $Dest $dlUrl 2>$null
-        if ($LASTEXITCODE -eq 0 -and (Get-Item $Dest).Length -gt 1MB) { $ok = $true }
-    } catch {}
-    if (-not $ok) {
-        Write-Host "       curl 失败，改用 Invoke-WebRequest ..." -ForegroundColor DarkGray
-        try {
-            Invoke-WebRequest -Uri $dlUrl -OutFile $Dest -SkipCertificateCheck -UseBasicParsing -TimeoutSec 300
-            if ((Get-Item $Dest).Length -gt 1MB) { $ok = $true }
-        } catch {
-            Write-Host "[错误] 下载失败: $($_.Exception.Message)" -ForegroundColor Red
-            if (-not $NoPause) { Read-Host "按回车退出" }
-            exit 1
-        }
-    }
+    Receive-VoiceDependency $Url $Dest
     Write-Host "[OK] $Label 下载完成 ($([math]::Round((Get-Item $Dest).Length/1MB,1)) MB)" -ForegroundColor Green
 }
 
@@ -164,7 +143,7 @@ if ($SkipSttModel) {
     Write-Host "[跳过] STT 流式模型（-SkipSttModel）；需要时运行 .\GetSttModel.ps1" -ForegroundColor DarkGray
 } elseif (-not $sttStreamModelOk) {
     $sttStreamTar = Join-Path $DlDir "$SttStreamModelName.tar.bz2"
-    Invoke-Download $SttStreamModelUrl $sttStreamTar "STT 流式模型（transducer，约 128MB）"
+    Invoke-Download (Get-VoiceModelUrls "$SttStreamModelName.tar.bz2") $sttStreamTar "STT 流式模型（transducer，约 128MB）"
     Expand-TarBz2 $sttStreamTar $DepDir
     $sttStreamSrcDir = Join-Path $DepDir $SttStreamModelName
     if (-not (Test-Path $sttStreamSrcDir)) { Write-Host "[错误] 解压后未找到 STT 流式模型目录: $sttStreamSrcDir" -ForegroundColor Red; if (-not $NoPause) { Read-Host "按回车退出" }; exit 1 }

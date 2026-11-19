@@ -1,14 +1,19 @@
 #Requires AutoHotkey v2.0
 
-RmtDownloadProxyPrefix() => "https://gh-proxy.com/"
+; Gitee 无法托管的 Common 大文件走 GitHub 下载加速。
+RmtLargeAssetProxy() => "https://ghfile.geekertao.top/"
 
-RmtDownloadUrl(url) => InStr(url, "https://github.com/") == 1 ? RmtDownloadProxyPrefix() url : url
+RmtLargeAssetUrl(name) {
+    return RmtLargeAssetProxy() "https://github.com/zclucas/RMTAssets/releases/download/Common/" name
+}
 
 RmtDownloadDirectUrl(url) {
+    prefix := RmtLargeAssetProxy()
+    if (InStr(url, prefix "https://github.com/zclucas/RMTAssets/releases/download/Common/") == 1)
+        return SubStr(url, StrLen(prefix) + 1)
     if RegExMatch(url, "^https://gitee\.com/fateman/(RMT(?:Assets)?/releases/download/.+)$", &match)
         return "https://github.com/zclucas/" match[1]
-    prefix := RmtDownloadProxyPrefix()
-    return InStr(url, prefix "https://github.com/") == 1 ? SubStr(url, StrLen(prefix) + 1) : ""
+    return ""
 }
 
 RmtDownloadAlternative(url, received, total, elapsedMs) {

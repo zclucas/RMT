@@ -10,12 +10,10 @@ function Write-RmtUpdateProgress([string]$Phase, [string]$Percent = '', [bool]$S
 function Receive-RmtPackage($Job, [string]$Path) {
     Write-RmtUpdateProgress '正在下载更新包…'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $useProxy = $Job.url -like 'https://github.com/*'
-    $url = if ($useProxy) { 'https://gh-proxy.com/' + $Job.url } else { $Job.url }
     $backup = if ($Job.url -like 'https://gitee.com/fateman/RMT/releases/download/*') {
         $Job.url.Replace('https://gitee.com/fateman/', 'https://github.com/zclucas/')
-    } elseif ($useProxy) { $Job.url }
-    try { Receive-RmtPackageFromUrl $Job $Path $url ([bool]$backup) }
+    }
+    try { Receive-RmtPackageFromUrl $Job $Path $Job.url ([bool]$backup) }
     catch {
         if (!$backup) { throw }
         [IO.File]::Delete($Path)

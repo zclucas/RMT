@@ -17,7 +17,7 @@
     目标已存在时也强制重新下载。
 
 .PARAMETER NoProxy
-    不走 gh-proxy 加速，直连 GitHub（国内网络通常很慢）。
+    直接从模型上游下载，跳过 RMTAssets 镜像。
 
 .EXAMPLE
     .\GetSttModel.ps1
@@ -40,7 +40,7 @@ $TargetDir  = Join-Path $VoiceDir 'models\stt_stream'
 $PkgName = "sherpa-onnx-x-asr-$Chunk-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
 $BaseUrl = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models'
 $Url     = "$BaseUrl/$PkgName.tar.bz2"
-$Proxy   = if ($NoProxy) { '' } else { 'https://gh-proxy.org/' }
+. "$PSScriptRoot/DownloadDependency.ps1"
 
 # 包内实际文件名（decoder 不带 .int8 后缀，别写成 decoder.int8.onnx）
 $Files = @('encoder.int8.onnx', 'decoder.onnx', 'joiner.int8.onnx', 'tokens.txt', 'bpe.model')
@@ -73,27 +73,11 @@ if ((Test-Path $Tar) -and ((Get-Item $Tar).Length -lt 1MB)) { Remove-Item $Tar -
 if (Test-Path $Tar) {
     Write-Host "[OK] 压缩包已缓存: $Tar ($([math]::Round((Get-Item $Tar).Length/1MB,1)) MB)" -ForegroundColor Green
 } else {
-    $dlUrl = if ($Proxy -ne '') { $Proxy + $Url } else { $Url }
+    $urls = if ($Chunk -eq '480ms' -and -not $NoProxy) {
+        Get-VoiceModelUrls "$PkgName.tar.bz2"
+    } else { $Url }
     Write-Host '[下载] x-asr 流式模型（约 128MB）...' -ForegroundColor Yellow
-    Write-Host "       $dlUrl" -ForegroundColor DarkGray
-
-    $ok = $false
-    try {
-        & curl.exe -k --ssl-no-revoke -L --fail --silent --show-error -o $Tar $dlUrl 2>$null
-        if ($LASTEXITCODE -eq 0 -and (Test-Path $Tar) -and (Get-Item $Tar).Length -gt 1MB) { $ok = $true }
-    } catch {}
-
-    if (-not $ok) {
-        Write-Host '       curl 失败，改用 Invoke-WebRequest ...' -ForegroundColor DarkGray
-        try {
-            Invoke-WebRequest -Uri $dlUrl -OutFile $Tar -SkipCertificateCheck -UseBasicParsing -TimeoutSec 600
-            if ((Get-Item $Tar).Length -gt 1MB) { $ok = $true }
-        } catch {
-            Write-Host "[错误] 下载失败：$($_.Exception.Message)" -ForegroundColor Red
-            Write-Host '       可尝试 -NoProxy 直连，或挂代理后重试。' -ForegroundColor DarkGray
-            exit 1
-        }
-    }
+    Receive-VoiceDependency $urls $Tar
     Write-Host "[OK] 下载完成 ($([math]::Round((Get-Item $Tar).Length/1MB,1)) MB)" -ForegroundColor Green
 }
 

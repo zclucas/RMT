@@ -227,7 +227,7 @@ class SttGui {
         if (language == "zh-en")
             return [Map(
                 "pkg", SttGui.StreamPkg,
-                "url", RmtAssetsBaseUrl("Common") SttGui.StreamPkg ".tar.bz2",
+                "url", RmtLargeAssetUrl(SttGui.StreamPkg ".tar.bz2"),
                 "dir", engine.StreamModelDir,
                 "files", ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", "bpe.model"],
                 "minBytes", 100 * 1024 * 1024
@@ -243,7 +243,7 @@ class SttGui {
         pkg := "sherpa-onnx-streaming-zipformer-" language "-kroko-2025-08-06"
         return [Map(
             "pkg", pkg,
-            "url", RmtDownloadUrl("https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" pkg ".tar.bz2"),
+            "url", "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" pkg ".tar.bz2",
             "dir", engine.StreamDirectory(language),
             "files", ["encoder.onnx", "decoder.onnx", "joiner.onnx", "README.md", "tokens.txt"],
             "exactBytes", SttGui.KrokoArchiveBytes[language]
