@@ -6,12 +6,15 @@ on:
   pull_request:
     branches:
       - '**'
+  push:
+    branches:
+      - dev
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-check-${{ github.event.pull_request.number }}
+  group: pr-check-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
