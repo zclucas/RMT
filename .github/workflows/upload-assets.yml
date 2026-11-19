@@ -26,7 +26,7 @@ concurrency:
 jobs:
   upload:
     outputs:
-      trial_tag: ${{ steps.github_assets.outputs.tag }}
+      release_tag: ${{ steps.github_assets.outputs.tag }}
       asset_tags: ${{ steps.github_assets.outputs.asset_tags }}
     name: 上传到 RMTAssets
     if: >-
@@ -130,37 +130,12 @@ jobs:
           "asset_tags=$(ConvertTo-Json -InputObject $tags -Compress)" >> $env:GITHUB_OUTPUT
 
   mirror:
-    name: 同步并校验 Gitee 资源附件
+    name: 同步 Gitee 正式发行版
     needs: upload
-    if: needs.upload.outputs.asset_tags != ''
-    runs-on: windows-latest
-    timeout-minutes: 180
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
-          ASSET_TAGS: ${{ needs.upload.outputs.asset_tags }}
-        run: |
-          foreach ($tag in ($env:ASSET_TAGS | ConvertFrom-Json)) {
-            ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $tag
-          }
-
-  gitee-go-trial:
-    needs: upload
-    if: github.event_name == 'workflow_run' && needs.upload.outputs.trial_tag != ''
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      actions: write
-    steps:
-      - name: 启动独立试跑
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          BRANCH: ${{ github.event.repository.default_branch }}
-          TAG: ${{ needs.upload.outputs.trial_tag }}
-        run: gh workflow run gitee-go-trial.yml --repo "$REPO" --ref "$BRANCH" -f tag="$TAG"
+    if: needs.upload.outputs.release_tag != ''
+    uses: ./.github/workflows/sync-gitee-release.yml
+    with:
+      tag: ${{ needs.upload.outputs.release_tag }}
+      asset_tags: ${{ needs.upload.outputs.asset_tags }}
+      source_sha: ${{ github.event.workflow_run.head_sha || '' }}
+    secrets: inherit

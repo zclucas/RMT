@@ -1,76 +1,82 @@
 name: 同步 Gitee 发行版
-
 on:
-  workflow_run:
-    workflows: [版本发布]
-    types: [completed]
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      asset_tags:
+        required: true
+        type: string
+      source_sha:
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       tag:
-        description: '已在 GitHub 发布的标签（例如 v1.3F3）'
+        description: 已在 GitHub 发布的版本标签
         required: true
+        type: string
+      asset_tags:
+        description: 资源标签 JSON 数组（默认此版本 x64 和 x86）
         type: string
 
 permissions:
   contents: read
-
 concurrency:
-  group: gitee-release-${{ inputs.tag || github.event.workflow_run.head_branch }}
+  group: rmt-gitee-publish
   cancel-in-progress: false
-
 env:
-  RELEASE_TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
-  RELEASE_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+  RELEASE_TAG: ${{ inputs.tag }}
+  ASSET_TAGS: ${{ inputs.asset_tags }}
   GIT_TERMINAL_PROMPT: '0'
 
 jobs:
-  prepare:
-    if: >-
-      github.repository == 'zclucas/RMT' &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push'))
-    runs-on: windows-latest
-    timeout-minutes: 15
+  refs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: 准备 Gitee 标签和发行说明
-        shell: pwsh
+      - name: 对齐 Gitee RMT 的代码、分支和标签
+        env:
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -eu
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+(\.[0-9]+)+(F[0-9]+)?$ ]]
+          actual=$(gh api "repos/zclucas/RMT/commits/$RELEASE_TAG" --jq .sha)
+          [[ -z "$SOURCE_SHA" || "$SOURCE_SHA" == "$actual" ]]
+          python3 .github/scripts/mirror_rmt_refs.py
+  go:
+    needs: refs
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 -m pip install PyYAML==6.0.2
+      - name: Gitee Go 发布并回读所有附件
         env:
           GH_TOKEN: ${{ github.token }}
           GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
-        run: ./.github/scripts/Sync-GiteeRelease.ps1 -Tag $env:RELEASE_TAG -PrepareOnly
-
-  relay:
-    needs: prepare
+        run: python3 -u .github/scripts/sync_gitee_go.py go
+  fallback:
+    needs: [refs, go]
+    if: ${{ failure() && needs.refs.result == 'success' && needs.go.result == 'failure' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 120
     steps:
-      - name: 由 RMTServer 拉取、上传和校验 x64 与 x86
-        shell: bash
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 服务器补传并回读所有附件
         env:
           GH_TOKEN: ${{ github.token }}
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
           RELAY_KEY: ${{ secrets.RMT_RELAY_SSH_KEY }}
           KNOWN_HOST: ${{ vars.RMT_RELAY_KNOWN_HOST }}
-          PROBE: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          set -euo pipefail
-          umask 077
-          dir=$(mktemp -d)
-          trap 'rm -rf -- "$dir"' EXIT
-          printf '%s\n' "$RELAY_KEY" > "$dir/key"
-          unset RELAY_KEY
-          printf '%s\n' "$KNOWN_HOST" > "$dir/known_hosts"
-          host=${KNOWN_HOST%% *}
-          [[ $host =~ ^[0-9]+(\.[0-9]+){3}$ ]]
-          gh release view "$RELEASE_TAG" --repo zclucas/RMT --json assets |
-            jq -ec --arg tag "$RELEASE_TAG" --argjson probe "$PROBE" '
-              {tag: $tag, probe: $probe, assets: [.assets[] |
-                select(.name == ("RMT" + $tag + "_x64.zip") or .name == ("RMT" + $tag + "_x86.zip")) |
-                {name,size,digest}]} | select(.assets | length == 2)' > "$dir/request"
-          ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$dir/known_hosts" -o ConnectTimeout=15 \
-            -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$dir/key" \
-            "rmt-release@$host" < "$dir/request"
+        run: python3 -u .github/scripts/sync_gitee_go.py relay
