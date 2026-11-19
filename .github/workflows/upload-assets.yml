@@ -27,6 +27,7 @@ jobs:
   upload:
     outputs:
       trial_tag: ${{ steps.github_assets.outputs.tag }}
+      asset_tags: ${{ steps.github_assets.outputs.asset_tags }}
     name: 上传到 RMTAssets
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -121,24 +122,36 @@ jobs:
           $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json
           "tag=$($info.tag)" >> $env:GITHUB_OUTPUT
 
-      - name: 同步并校验 Gitee 资源附件
-        if: env.skip != 'true'
+          $tags = @(foreach ($arch in 'x64', 'x86', 'Common') {
+            if (Test-Path (Join-Path $out "RMTAssets_$arch")) {
+              if ($arch -eq 'Common') { 'Common' } else { "v$($info.asset_tag)_$arch" }
+            }
+          })
+          "asset_tags=$(ConvertTo-Json -InputObject $tags -Compress)" >> $env:GITHUB_OUTPUT
+
+  mirror:
+    name: 同步并校验 Gitee 资源附件
+    needs: upload
+    if: needs.upload.outputs.asset_tags != ''
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
+          ASSET_TAGS: ${{ needs.upload.outputs.asset_tags }}
         run: |
-          $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
-          $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json
-          foreach ($arch in 'x64', 'x86', 'Common') {
-            if (Test-Path (Join-Path $out "RMTAssets_$arch")) {
-              $tag = if ($arch -eq 'Common') { 'Common' } else { "v$($info.asset_tag)_$arch" }
-              ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $tag
-            }
+          foreach ($tag in ($env:ASSET_TAGS | ConvertFrom-Json)) {
+            ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $tag
           }
 
   gitee-go-trial:
     needs: upload
-    if: ${{ !cancelled() && github.event_name == 'workflow_run' && needs.upload.outputs.trial_tag != '' }}
+    if: github.event_name == 'workflow_run' && needs.upload.outputs.trial_tag != ''
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
