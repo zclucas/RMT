@@ -64,12 +64,11 @@ class ErrorMsgBoxGui {
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
-        btnRow := body.Add("Grid").Grid_Row(1).HorizontalAlignment("Center").VerticalAlignment("Center")
-        btnRow.Cols("Auto", "*", "Auto")
-        btnRow.Add("Button").Name("BtnCopy").Grid_Column(0).Content(GetLang("复制")).Width(80).Height(30).MinHeight(30)
-        btnRow.Add("Button").Name("BtnFeedback").Grid_Column(1).Content(GetLang("反馈")).Width(80).Height(30).MinHeight(30)
-            .HorizontalAlignment("Center").ToolTip(GetLang("把这段报错带到论坛反馈窗口"))
-        btnRow.Add("Button").Name("BtnOk").Grid_Column(2).Content(GetLang("确定")).Width(80).Height(30).MinHeight(30)
+        btnRow := body.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        AddCmdOkBtn(btnRow, "BtnCopy", "0,0,50,0", GetLang("复制"))
+        AddCmdOkBtn(btnRow, "BtnFeedback", "0,0,50,0", GetLang("反馈"))
+            .ToolTip(GetLang("把这段报错带到论坛反馈窗口"))
+        AddCmdOkBtn(btnRow)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)

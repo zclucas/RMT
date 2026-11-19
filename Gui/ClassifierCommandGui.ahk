@@ -30,8 +30,10 @@ class ClassifierCommandGui extends CommentGui {
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         this.ui.OnEvent(this.ChoiceField, "SelectionChanged", XamlWin.BindCurrent(this, "OnChoiceChanged"))
         this._BindFields()
-        BindCmdEditorChrome(this.ui, "#指令手册/" (this.HelpTopic == "" ? this.CmdKey : this.HelpTopic))
+        BindCmdEditorChrome(this.ui, "#指令手册/" (this.HelpTopic == "" ? this.CmdKey : this.HelpTopic), this._PlayAction())
     }
+
+    _PlayAction() => ""
 
     _BuildHeaderFields(body) => this._Field(body, "备注：", "Remark")
 
@@ -169,7 +171,7 @@ class ClassifierCommandGui extends CommentGui {
             if (this.ui == ui && result.Length)
                 this._ApplyPick(ui, result)
         } catch as e {
-            failure := e.Message
+            failure := this._PickErrorMessage(e)
         } finally {
             WinHotkey.UnregisterAll(keys)
             this._pickAction := ""
@@ -188,6 +190,8 @@ class ClassifierCommandGui extends CommentGui {
     _PickArea(action) {
         TogSelectArea(true, action)
     }
+
+    _PickErrorMessage(error) => error.Message
 
     _CancelPick(*) {
         if (this._pickAction != "" && MainSoftData.SelectAreaAction == this._pickAction)
@@ -434,9 +438,11 @@ class AiDecisionGui extends ClassifierCommandGui {
     WindowBindingContext := ""
     static OptionExamples := ["星期一", "星期二", "其他"]
     static CoordFields := ["StartX", "StartY", "EndX", "EndY"]
-    _optionCount := 0
+    _options := []
     _previewField := ""
     _previewTimer := 0
+    _playHotkeys := []
+    _testRunning := false
 
     __New() {
         super.__New()
@@ -445,8 +451,34 @@ class AiDecisionGui extends ClassifierCommandGui {
 
     ShowGui(cmd) {
         if (A_IsCompiled && !AiAssist.IsConfigured())
-            RmtDialog.Info(GetLang("请先在 AI 设置中填写 API Key、API URL 与模型"), GetLang(this.CmdKey), this.OwnerHwnd)
+            RmtDialog.Info(GetLang("请先在设置-AI中填写 API Key、API URL 与模型"), GetLang(this.CmdKey), this.OwnerHwnd)
         super.ShowGui(cmd)
+    }
+
+    _PlayAction() => XamlWin.BindCurrent(this, "TriggerMacro")
+
+    OnWindowLoad(state, ctrl, event) {
+        super.OnWindowLoad(state, ctrl, event)
+        if (!this._playHotkeys.Length && this.Hwnd())
+            this._playHotkeys := WinHotkey.Register(["!l"], this._PlayAction(), this.Hwnd())
+    }
+
+    TriggerMacro(*) {
+        if (this._testRunning || !this.CheckIfValid())
+            return
+        ui := this.ui
+        this._testRunning := true
+        try {
+            this.SaveData()
+            resultVar := this.Data.ResultVar
+            if (OnTriggerSepcialItemMacro(this.GetCommandStr(), false, this.WindowBindingContext)
+                && this.ui == ui && MySoftData.VariableMap.Has(resultVar)) {
+                value := MySoftData.VariableMap[resultVar]
+                RmtDialog.Info(resultVar " = " value, GetLang(this.CmdKey), this.Hwnd())
+            }
+        } finally {
+            this._testRunning := false
+        }
     }
 
     _BuildHeaderFields(body) {
@@ -462,24 +494,16 @@ class AiDecisionGui extends ClassifierCommandGui {
         this._TextBox(question, "Question", 64)
         this._Placeholder(question, "Question", GetLang("今天星期几？"), true)
 
-        this._BuildRange(body, "Region")
-        this._BuildRange(body, "WindowRegion")
         binding := this._Row(body, "窗口绑定：", "WinInfo").Visibility("Collapsed").Add("Grid").Grid_Column(1)
         binding.Cols("*", 6, "Auto")
         CmdEditorForm.WindowBindingCombo(binding, "WinInfo")
         CmdEditorForm.TextButton(binding, "BtnWinEdit", "编辑").Grid_Column(2)
+        this._BuildRange(body, "Region")
+        this._BuildRange(body, "WindowRegion")
 
         choices := this._Row(body, "候选选项：", "Options", "Top").Add("StackPanel").Grid_Column(1)
         border := choices.Add("Border").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1).CornerRadius(4)
-        grid := border.Add("Grid")
-        grid.Rows("Auto", "Auto")
-        grid.Cols("*", "Auto")
-        header := grid.Add("Grid").Margin("6,4,6,2")
-        this._OptionColumns(header)
-        header.Add("TextBlock").Text(GetLang("选项名称")).Foreground("{DynamicResource TextMain}")
-        header.Add("TextBlock").Grid_Column(2).Text(GetLang("保存值")).ToolTip(GetLang("留空时保存选项名称"))
-            .Foreground("{DynamicResource TextMain}")
-        scroll := grid.Add("ScrollViewer").Name("ChoicesScroll").Grid_Row(1).Grid_ColumnSpan(2).Height(4 * 30)
+        scroll := border.Add("ScrollViewer").Name("ChoicesScroll").Height(4 * 30)
             .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
         template := scroll.Add("ScrollViewer.Template").Add("ControlTemplate").TargetType("ScrollViewer")
         viewport := template.Add("Grid")
@@ -492,11 +516,14 @@ class AiDecisionGui extends ClassifierCommandGui {
             .ViewportSize("{TemplateBinding ViewportHeight}")
         template.Add("ControlTemplate.Triggers").Add("Trigger").Property("ComputedVerticalScrollBarVisibility").Value("Visible")
             .Add("Setter").TargetName("PART_VerticalScrollBar").Property("Visibility").Value("Visible")
-        grid.Add("Border").Grid_Column(1).Width("{DynamicResource ScrollBarWidth}").Margin("0,0,2,0")
         list := scroll.Add("StackPanel").Margin("6,0")
         list.Add("StackPanel").Name("ChoiceRows")
-        CmdEditorForm.IconButton(list, "AddChoice", 0xE710, "添加选项")
+        add := list.Add("Button").Name("AddChoice").ToolTip(GetLang("添加选项"))
+            .Width(28).Height(26).MinHeight(26).Padding("0").Cursor("Hand")
             .HorizontalAlignment("Center").Margin("0,2")
+            .HorizontalContentAlignment("Center").VerticalContentAlignment("Center")
+        add.Add("Path").Data("M 0,5 H 10 M 5,0 V 10").Width(12).Height(12).Stretch("Uniform")
+            .Stroke("{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}").StrokeThickness(1.2)
     }
 
     _BuildRange(body, field) {
@@ -540,8 +567,8 @@ class AiDecisionGui extends ClassifierCommandGui {
         return box.Style("{StaticResource RmtSingleLineTextBox}").Padding("1.5,0")
     }
 
-    _Placeholder(parent, field, text, multiline := false, column := 0) {
-        label := parent.Add("TextBlock").Grid_Column(column).Text(text).IsHitTestVisible("False")
+    _Placeholder(parent, field, text, multiline := false) {
+        label := parent.Add("TextBlock").Text(text).IsHitTestVisible("False")
             .Margin(multiline ? "6,2,6,0" : "6,0,6,0")
             .VerticalAlignment(multiline ? "Top" : "Center").Foreground("{DynamicResource TextSub}").Opacity("0.65")
         style := label.Add("TextBlock.Style").Add("Style").TargetType("TextBlock")
@@ -569,13 +596,16 @@ class AiDecisionGui extends ClassifierCommandGui {
         this._ComboPush("WinInfo", "Text", InputField(this.Data, "WinInfo", "{宏设置窗口绑定}"))
         for field in ["Region", "WindowRegion"] {
             value := InputField(this.Data, field, "")
-            this._SetRange(this.ui, field, value == "" ? [] : StrSplit(value, ","))
+            this._SetRange(this.ui, field, value == "" ? [0, 0, A_ScreenWidth, A_ScreenHeight] : StrSplit(value, ","))
         }
         CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, TimeoutPolicy.Get(this.Data), TimeoutPolicy.StatusVar(this.Data))
         options := AiDecision.ParseOptions(this.Data.Options, false)
-        if (!options.Length)
-            loop AiDecisionGui.OptionExamples.Length
-                options.Push({Label: "", Value: ""})
+        if (!options.Length) {
+            loop AiDecisionGui.OptionExamples.Length {
+                value := String(A_Index)
+                options.Push({Label: "", Value: value, DefaultValue: value})
+            }
+        }
         this._RenderOptions(options)
     }
 
@@ -600,7 +630,7 @@ class AiDecisionGui extends ClassifierCommandGui {
         for option in this._ReadOptions() {
             label := Trim(option.Label)
             value := Trim(option.Value)
-            if (label == "" && value == "")
+            if (label == "" && (value == "" || value == InputField(option, "DefaultValue")))
                 continue
             if (InStr(label, "|"))
                 throw Error(GetLang("选项名称不能包含竖线。"))
@@ -613,32 +643,33 @@ class AiDecisionGui extends ClassifierCommandGui {
 
     _ReadOptions() {
         fields := []
-        loop this._optionCount
+        loop this._options.Length
             fields.Push("OptionLabel_" A_Index, "OptionValue_" A_Index)
         state := this.ui.Query(fields*)
         options := []
-        loop this._optionCount
-            options.Push({Label: state.Get("OptionLabel_" A_Index, ""), Value: state.Get("OptionValue_" A_Index, "")})
+        for i, original in this._options {
+            option := original.Clone()
+            option.Label := state.Get("OptionLabel_" i, "")
+            option.Value := state.Get("OptionValue_" i, "")
+            options.Push(option)
+        }
         return options
     }
 
-    _OptionColumns(grid) => grid.Cols("*", 8, "*", 8, 28)
-
     _RenderOptions(options) {
-        this._optionCount := options.Length
+        this._options := options
         this._ComboPush("ChoiceRows", "ClearItems", "")
         for i, option in options {
             name := "DeleteChoice_" i
             row := XAML_Generator("Grid").Margin("0,2")
             row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
-            this._OptionColumns(row)
-            this._TextBox(row, "OptionLabel_" i)
-            this._TextBox(row, "OptionValue_" i).Grid_Column(2)
-            if (AiDecisionGui.OptionExamples.Has(i)) {
+            ; 两列平分剩余宽度，选项列多占 300，实际各增减 150。
+            row.Cols(300, "*", 8, "*", 8, 28)
+            this._TextBox(row, "OptionLabel_" i).Grid_ColumnSpan(2)
+            this._TextBox(row, "OptionValue_" i).Grid_Column(3).ToolTip(GetLang("留空时保存选项名称"))
+            if (AiDecisionGui.OptionExamples.Has(i))
                 this._Placeholder(row, "OptionLabel_" i, GetLang(AiDecisionGui.OptionExamples[i]))
-                this._Placeholder(row, "OptionValue_" i, String(i), false, 2)
-            }
-            CmdEditorForm.IconButton(row, name, 0xE74D, "删除").Grid_Column(4)
+            CmdEditorForm.IconButton(row, name, 0xE74D, "删除").Grid_Column(5)
                 .IsEnabled(options.Length > 2 ? "True" : "False")
             this._ComboPush("ChoiceRows", "AddXamlItem", row.ToString())
             this._ComboPush("OptionLabel_" i, "Text", option.Label)
@@ -714,6 +745,14 @@ class AiDecisionGui extends ClassifierCommandGui {
     }
 
     _ResolveEditorWindow() => ResolveEditorBindWindow(this.WindowBindingContext, Trim(this.ui.Query("WinInfo")))
+
+    _PickErrorMessage(error) {
+        if (error is TargetError)
+            return GetLang("未找到目标窗口。")
+        if (error is ValueError)
+            return GetLang("框选范围必须在窗口客户区内。")
+        return GetLang("框选范围失败。")
+    }
 
     _ApplyPick(ui, coords) {
         source := this._ChoiceValue(ui.Query("Source"))
@@ -805,12 +844,19 @@ class AiDecisionGui extends ClassifierCommandGui {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        this._UnregisterPlayHotkeys()
         this._CloseAreaPreview()
         super.OnWindowClosing(state, ctrl, event)
     }
 
     _CloseWindow() {
+        this._UnregisterPlayHotkeys()
         this._CloseAreaPreview()
         super._CloseWindow()
+    }
+
+    _UnregisterPlayHotkeys() {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
     }
 }
