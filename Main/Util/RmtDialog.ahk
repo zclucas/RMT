@@ -251,7 +251,7 @@ class RmtDialog {
                 .BorderBrush(isSecondary ? "{DynamicResource ControlBorder}" : "{DynamicResource ActionStroke}")
                 .BorderThickness("1")
                 .FontSize(fs).Cursor("Hand").Width(btnW).Height(34).Margin(gap)
-            if (btnText == okText)
+            if (btnText == okText || buttons.Length == 1)
                 btnEl.IsDefault("True")
             if (isSecondary || btnText == cancelText)
                 btnEl.IsCancel("True")

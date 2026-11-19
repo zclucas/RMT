@@ -1639,7 +1639,7 @@ Unix时间戳=Unix Timestamp
 测试版=Pruebas de construcción
 请选择版本标签=Seleccione una etiqueta de la versión
 点击选择多个附件，或将文件拖入反馈窗口=Elija múltiples archivos adjuntos o desplegue archivos en esta ventana
-支持 Markdown，按 Ctrl+V 可粘贴图片=Se admite el marcador. Presione Ctrl+V para pegar una imagen
+支持 Markdown，Ctrl+V 添加图片附件=Admite Markdown. Ctrl+V adjunta imágenes
 选择附件=Seleccione archivos adjuntos
 正在上传第 {1}/{2} 个文件…=Carga de descarga {1} de {2} ...
 附件上传失败：{1}=Fallado para cargar el accesorio: {1}
@@ -2122,6 +2122,7 @@ tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持
 RMT错误=Error RMT
 反馈=Reacción
 把这段报错带到论坛反馈窗口=Lleve esto a la ventana de comentarios del foro.
+总是报错很烦恼吧，反馈试试吧，开发者帮您解决。=¿Le molestan los errores repetidos? Repórtelos y el desarrollador le ayudará a resolverlos.
 Bug 反馈=Retroalimentación de errores
 功能建议=Recomendaciones funcionales
 一句话说清问题，至少 4 个字；不要和已有帖子重名=Una palabra para aclarar la cuestión, al menos cuatro palabras; no renombrar un puesto existente

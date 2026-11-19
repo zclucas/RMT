@@ -1659,7 +1659,7 @@ Unix时间戳=Unix Timestamp
 测试版=Test build
 请选择版本标签=Select a version tag
 点击选择多个附件，或将文件拖入反馈窗口=Choose multiple attachments or drop files into this window
-支持 Markdown，按 Ctrl+V 可粘贴图片=Markdown is supported. Press Ctrl+V to paste an image
+支持 Markdown，Ctrl+V 添加图片附件=Markdown supported. Ctrl+V attaches images
 选择附件=Select attachments
 正在上传第 {1}/{2} 个文件…=Uploading file {1} of {2}…
 附件上传失败：{1}=Failed to upload attachment: {1}
@@ -2347,6 +2347,7 @@ tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持
 RMT错误=RMT Error
 反馈=Feedback
 把这段报错带到论坛反馈窗口=Include this error in the forum feedback form
+总是报错很烦恼吧，反馈试试吧，开发者帮您解决。=Frustrated by repeated errors? Report them and the developer will help you fix them.
 Bug 反馈=Bug Report
 功能建议=Feature Request
 一句话说清问题，至少 4 个字；不要和已有帖子重名=Describe the issue in one sentence of at least 4 characters. Use a unique title

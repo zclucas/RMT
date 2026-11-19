@@ -1639,7 +1639,7 @@ Unix时间戳=Unix Timestamp
 测试版=Testbau
 请选择版本标签=Wählen Sie ein Versions-Tag
 点击选择多个附件，或将文件拖入反馈窗口=Wählen Sie mehrere Anhänge aus oder legen Sie Dateien in dieses Fenster
-支持 Markdown，按 Ctrl+V 可粘贴图片=Markdown wird unterstützt. Drücken Sie Strg+V, um ein Bild einzufügen
+支持 Markdown，Ctrl+V 添加图片附件=Markdown unterstützt. Strg+V hängt Bilder an
 选择附件=Wähle Anlagen
 正在上传第 {1}/{2} 个文件…=Hochladen der Datei {1} von {2} ...
 附件上传失败：{1}=Anhang nicht hochgeladen: {1}
@@ -2122,6 +2122,7 @@ tip2:若浏览器界面正常，实际窗口无效，那就是该窗口不支持
 RMT错误=RMT-Fehler
 反馈=Feedback
 把这段报错带到论坛反馈窗口=Bringen Sie dies in das Forum Feedback-Fenster.
+总是报错很烦恼吧，反馈试试吧，开发者帮您解决。=Wiederholte Fehler sind ärgerlich, oder? Melden Sie sie, damit der Entwickler Ihnen helfen kann.
 Bug 反馈=Bug Feedback
 功能建议=Funktionsempfehlungen
 一句话说清问题，至少 4 个字；不要和已有帖子重名=Ein Wort, um die Frage zu klären, mindestens vier Wörter; Benennen Sie keinen bestehenden Beitrag um.
