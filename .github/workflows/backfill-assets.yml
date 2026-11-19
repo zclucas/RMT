@@ -32,6 +32,6 @@ jobs:
       - shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
           RELEASE_TAG: ${{ matrix.tag }}
         run: ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $env:RELEASE_TAG

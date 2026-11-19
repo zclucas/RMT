@@ -9,6 +9,16 @@ if ($LASTEXITCODE -or $release.isDraft -or $release.tagName -cne $Tag) { throw "
 
 $target = Invoke-RestMethod "$api/releases/tags/$Tag" -SkipHttpErrorCheck -StatusCodeVariable status -TimeoutSec 60
 if ($status -eq 404 -or ($status -eq 200 -and !$target)) {
+    $ref = git ls-remote --refs https://gitee.com/fateman/RMTAssets.git "refs/tags/$Tag"
+    if ($LASTEXITCODE) { throw "Cannot query Gitee tag $Tag." }
+    if (!$ref) {
+        $tagInfo = Invoke-RestMethod "$api/tags" -Method Post -TimeoutSec 60 -Body @{
+            access_token = $env:GITEE_RELEASE_TOKEN
+            tag_name = $Tag
+            refs = 'main'
+        }
+        if ($tagInfo.name -cne $Tag) { throw "Cannot prepare Gitee tag $Tag." }
+    }
     $target = Invoke-RestMethod "$api/releases" -Method Post -TimeoutSec 60 -Body @{
         access_token = $env:GITEE_RELEASE_TOKEN
         tag_name = $Tag

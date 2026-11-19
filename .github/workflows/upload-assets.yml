@@ -120,7 +120,7 @@ jobs:
         if: env.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
           $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json

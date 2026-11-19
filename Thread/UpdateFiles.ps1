@@ -12,6 +12,19 @@ function Receive-RmtPackage($Job, [string]$Path) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $useProxy = $Job.url -like 'https://github.com/*'
     $url = if ($useProxy) { 'https://gh-proxy.com/' + $Job.url } else { $Job.url }
+    $backup = if ($Job.url -like 'https://gitee.com/fateman/RMT/releases/download/*') {
+        $Job.url.Replace('https://gitee.com/fateman/', 'https://github.com/zclucas/')
+    } elseif ($useProxy) { $Job.url }
+    try { Receive-RmtPackageFromUrl $Job $Path $url ([bool]$backup) }
+    catch {
+        if (!$backup) { throw }
+        [IO.File]::Delete($Path)
+        Write-RmtUpdateProgress '正在下载更新包…'
+        Receive-RmtPackageFromUrl $Job $Path $backup $false
+    }
+}
+
+function Receive-RmtPackageFromUrl($Job, [string]$Path, [string]$url, [bool]$hasAlternative) {
     $request = [Net.HttpWebRequest]::Create($url)
     $request.UserAgent = 'RMT-Updater'
     $request.Timeout = 30000
@@ -38,7 +51,7 @@ function Receive-RmtPackage($Job, [string]$Path) {
                         if ($done -gt $total) { throw 'Unexpected package size.' }
                         $percent = [int][Math]::Floor(65 * $done / $total)
                         $elapsed = $timer.Elapsed.TotalSeconds
-                        $showAlternative = $useProxy -and $elapsed -ge 3 -and $elapsed * ($total - $done) / $done -gt 3600
+                        $showAlternative = $hasAlternative -and $elapsed -ge 3 -and $elapsed * ($total - $done) / $done -gt 3600
                         if ($percent -ne $last -or $showAlternative -ne $lastAlternative) {
                             Write-RmtUpdateProgress '正在下载更新包…' $percent $showAlternative
                             $last = $percent

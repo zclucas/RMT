@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include RmtDownload.ahk
 
 class RmtReleaseScan {
     static Request(url, deadline) {
@@ -94,6 +95,19 @@ class RmtReleaseScan {
             for message in errors
                 detail .= (detail == "" ? "" : "`n") message
             throw Error(detail)
+        }
+        ; 同一包保留 GitHub 的大小和摘要，优先使用 Gitee 附件。
+        github := Map()
+        for asset in assets {
+            if InStr(asset.url, "https://github.com/") == 1
+                github[asset.url] := asset
+        }
+        for asset in assets {
+            backup := RmtDownloadDirectUrl(asset.url)
+            if (backup != "" && github.Has(backup)) {
+                asset.digest := github[backup].digest
+                asset.bytes := github[backup].bytes
+            }
         }
         return assets
     }
