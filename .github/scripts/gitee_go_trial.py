@@ -31,13 +31,21 @@ def go(path, data=None):
 sample = os.environ.get("SAMPLE") or "both"
 params = {"RELEASE_TAG": tag, "TRIAL_TAG": trial_tag, "SAMPLE": sample}
 for repo, ref, name, param in [
-    ("RMT", tag, f"RMT{tag}_x64.zip", "PACKAGE_SHA"),
+    (("RMTAssets", tag + "_x64", "Audio.zip", "PACKAGE_SHA") if sample == "small" else
+     ("RMT", tag, f"RMT{tag}_x64.zip", "PACKAGE_SHA")),
     ("RMTAssets", tag + "_x64", "Lang.zip" if sample == "small" else "RMT.zip", "RESOURCE_SHA"),
 ]:
     release = request(f"https://api.github.com/repos/zclucas/{repo}/releases/tags/{ref}", os.environ["GH_TOKEN"])
     asset = next(a for a in release["assets"] if a["name"] == name and a["state"] == "uploaded")
     if release["draft"] or not re.fullmatch(r"sha256:[a-f0-9]{64}", asset["digest"] or ""):
         raise ValueError(f"Unpublished release or missing digest: {repo}/{ref}/{name}")
+    # Only public assets: resolve the official CDN without sending the GitHub token.
+    with urlopen(Request(asset["browser_download_url"], method="HEAD"), timeout=30) as res:
+        cdn = res.geturl()
+    if urlsplit(cdn).hostname != "release-assets.githubusercontent.com":
+        raise ValueError("Unexpected GitHub asset CDN")
+    params[param.replace("_SHA", "_CDN")] = cdn
+    params[param.replace("_SHA", "_NAME")] = name
     params[param] = asset["digest"][7:]
     params[param.replace("_SHA", "_BYTES")] = str(asset["size"])
 
