@@ -245,7 +245,7 @@ BpSig(cmdText) {
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
     if (numbersOnly == "")
         return StrReplace(txt, ",", "")             ; 旧格式：纯文本整串（剥离逗号防 ,sig, 假阳）
-    return GetLangKey(textOnly) . numbersOnly        ; 现代格式：序列号（跨语言稳定）
+    return GetCommandKey(textOnly) . numbersOnly     ; 现代格式：序列号（跨语言稳定）
 }
 
 ; 断点集合包含判定：断点串规范化为 ",sig1,sig2,"，用 ",sig," 包夹 InStr 做无歧义匹配。
@@ -290,6 +290,7 @@ MacroCommandActions() {
         "窗口控件", OnWindowControl,
         "AI判断", OnAiDecision,
         "YOLO检测", OnYolo,
+        "进程管理", OnProcessManage,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
         "窗口信息", OnWindowManage,
@@ -336,7 +337,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     firstUnderscore := InStr(cleanCmdStr, "_")
     firstPart := firstUnderscore ? SubStr(cleanCmdStr, 1, firstUnderscore - 1) : cleanCmdStr
     cmdKey := RTrim(firstPart, "0123456789")
-    mappedKey := GetLangKey(cmdKey)
+    mappedKey := GetCommandKey(cmdKey)
     if (Actions.Has(mappedKey))
         cmdKey := mappedKey
 

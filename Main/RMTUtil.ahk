@@ -1721,7 +1721,7 @@ FullCopyCmd(cmdStr, CopyedMap := Map()) {
         return FullCopyGraphStart(paramArr[1], CopyedMap)
 
     textOnly := GetCmdOnlyText(paramArr[1])
-    cmd := GetLangKey(textOnly)
+    cmd := GetCommandKey(textOnly)
     if (!MySoftData.DataFileMap.Has(cmd))
         return cmdStr
     Data := GetMacroCMDData(paramArr[1]).Clone()

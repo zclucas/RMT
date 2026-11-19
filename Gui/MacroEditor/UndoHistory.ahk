@@ -26,7 +26,7 @@
                 ; 参数由首段的序列码定位，无需解析后面的手柄显示文本。
                 serial := GetCmdStr(CmdStripCurPos(StrSplit(text, "_", , 2)[1]))
                 if (serial != "" && !dataMap.Has(serial)
-                    && MySoftData.DataFileMap.Has(GetLangKey(GetCmdOnlyText(serial)))) {
+                    && MySoftData.DataFileMap.Has(GetCommandKey(GetCmdOnlyText(serial)))) {
                     try dataMap[serial] := JSON.stringify(GetMacroCMDData(serial), 0)
                 }
                 this._CollectSnapshotData(childID, dataMap)
@@ -100,7 +100,7 @@
     _RestoreCmdData(serial, json) {
         dummy := ""
         SplitSerialTextAndNumbers(serial, &textOnly, &dummy)
-        cmdKey := GetLangKey(textOnly)
+        cmdKey := GetCommandKey(textOnly)
         if (!MySoftData.DataFileMap.Has(cmdKey))
             return
         file := MySoftData.DataFileMap[cmdKey]

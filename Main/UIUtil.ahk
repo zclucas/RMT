@@ -428,6 +428,7 @@ CmdEditorTitleIcon(title) {
             ["文件读写", "Images\Soft\FileIO.png"],
             ["Excel", "Images\Soft\Excel.png"],
             ["窗口管理", "Images\Soft\WindowManage.png"],
+            ["进程管理", "Images\Soft\ProcessManage.png"],
             ["窗口信息", "Images\Soft\WindowManage.png"],
             ["调整窗口", "Images\Soft\WindowAdjustGear32.png"],
             ["窗口控件", "Images\Soft\WindowManage.png"],

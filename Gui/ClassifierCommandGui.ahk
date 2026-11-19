@@ -3,6 +3,7 @@
 class ClassifierCommandGui extends CommentGui {
     _pickAction := ""
     HasErrorField := true
+    HelpTopic := ""
 
     _BuildAndShow() {
         this._closed := false
@@ -29,7 +30,7 @@ class ClassifierCommandGui extends CommentGui {
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         this.ui.OnEvent(this.ChoiceField, "SelectionChanged", XamlWin.BindCurrent(this, "OnChoiceChanged"))
         this._BindFields()
-        BindCmdEditorChrome(this.ui, "#指令手册/" this.CmdKey)
+        BindCmdEditorChrome(this.ui, "#指令手册/" (this.HelpTopic == "" ? this.CmdKey : this.HelpTopic))
     }
 
     _BuildHeaderFields(body) => this._Field(body, "备注：", "Remark")
@@ -206,6 +207,7 @@ class ClassifierCommandGui extends CommentGui {
 
 class WindowControlGui extends ClassifierCommandGui {
     CmdKey := "窗口控件"
+    HelpTopic := "35-控件"
     ChoiceField := "ActionType"
     Choices := WindowControl.Actions
     TextFields := ["Selector", "Argument"]

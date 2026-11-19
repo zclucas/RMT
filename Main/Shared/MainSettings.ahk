@@ -288,6 +288,7 @@ InitDataFilePaths(rootDir) {
     global WindowControlFile := cfgDir "\WindowControlFile.toml"
     global AiDecisionFile := cfgDir "\AiDecisionFile.toml"
     global YoloFile := cfgDir "\YoloFile.toml"
+    global ProcessManageFile := cfgDir "\ProcessManageFile.toml"
     global FileIOFile := cfgDir "\FileIOFile.toml"
     global WindowManageFile := cfgDir "\WindowManageFile.toml"
     global KeyCheckFile := cfgDir "\KeyCheckFile.toml"

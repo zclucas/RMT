@@ -30,6 +30,7 @@ RmtAssetsBaseUrl(tag) {
 #Include Util\AiDecisionUtil.ahk
 #Include Util\YoloUtil.ahk
 #Include Util\WindowControlUtil.ahk
+#include Util\ProcessManageUtil.ahk
 #Include Util\BrowserUtil.ahk
 #Include Util\HumanMouse.ahk
 #Include Util\MacroUtil.ahk
