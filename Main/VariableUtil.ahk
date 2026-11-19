@@ -72,6 +72,8 @@ SetGlobalData(macroStr, visitMap) {
                 RegisterCommandResultVars(Data)
                 if (baseCmd == "AI判断" || WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
                     TimeoutPolicy.RegisterStatus(Data)
+            case "YOLO检测":
+                RegisterYoloVars(Data)
             case "浏览器":
                 if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
                     TimeoutPolicy.RegisterStatus(Data)

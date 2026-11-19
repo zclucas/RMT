@@ -289,6 +289,7 @@ MacroCommandActions() {
         "浏览器", OnBrowser,
         "窗口控件", OnWindowControl,
         "AI判断", OnAiDecision,
+        "YOLO检测", OnYolo,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
         "窗口信息", OnWindowManage,

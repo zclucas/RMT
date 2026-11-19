@@ -548,6 +548,11 @@ SelfCheckMissingFiles() {
         {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
         {path: "MinTool\PlayAudio.vbs", entry: "PlayAudio.vbs", bundle: "Audio.zip"},
         {path: "Plugins\AhiDriver\installer\使用说明.txt", entry: "InstallReadme.txt", bundle: "AhiDriver.zip"},
+        ; YOLO 是可选指令：缺了只影响这一个指令，不该按关键文件告警，
+        ; 但要能被「文件校验」查出来并一键补齐。清单与 Yolo.Files 保持一致。
+        {path: "Plugins\YOLO\" arch "\RMT_YOLO.dll", entry: "RMT_YOLO.dll", bundle: "Yolo.zip"},
+        {path: "Plugins\YOLO\" arch "\onnxruntime.dll", entry: "onnxruntime.dll", bundle: "Yolo.zip"},
+        {path: "Plugins\YOLO\" arch "\onnxruntime_providers_shared.dll", entry: "onnxruntime_providers_shared.dll", bundle: "Yolo.zip"},
     ]
 
     icoFileList := ["Wait.png", "BGKey.png", "IcoRunning.ico", "Joy.png", "DeltaMove.png", "KeyListen.png", "JoyListen.png", "SearchCombo.png", "Excel.png", "Time.png", "WaitConfirm.png", "RunPro.png",
