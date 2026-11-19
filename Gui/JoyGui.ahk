@@ -113,8 +113,8 @@ class JoyGui {
         param := paramCard.Add("StackPanel")
 
         digitalRow := param.Add("StackPanel").Name("DigitalRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").MinHeight("26")
-        typeBox := digitalRow.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center").ToolTip(this._TypeHelpText())
-        typeBox.Add("TextBlock").Text(GetLang("类型:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        typeBox := digitalRow.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center")
+        typeBox.Add("TextBlock").Text(GetLang("类型:")).ToolTip(this._TypeHelpText()).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         kt := typeBox.Add("ComboBox").Name("KeyTypeCon").Width(80).Height(26).MinHeight(26).Margin("4,0,0,0")
             .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")

@@ -515,8 +515,8 @@ SelfCheckMissingFiles() {
         {path: "Audio\Start.wav", entry: "Start.wav", bundle: "Audio.zip"},
         {path: "Audio\End.wav", entry: "End.wav", bundle: "Audio.zip"},
         {path: "Plugins\ViGEm\ViGEmWrapper.dll", entry: "ViGEmWrapper.dll", bundle: "ViGEm.zip"},
-        {path: "Joy\ViGEmBus.exe", entry: "ViGEmBus.exe", bundle: "ViGEm.zip"},
-        {path: "Joy\Xbox按键映射.png", entry: "Xbox.png", bundle: "ViGEm.zip"},
+        {path: "Plugins\Joy\ViGEmBus.exe", entry: "ViGEmBus.exe", bundle: "ViGEm.zip"},
+        {path: "Plugins\Joy\Xbox按键映射.png", entry: "Xbox.png", bundle: "ViGEm.zip"},
         {path: "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll", entry: "ahk-xaml.dll", bundle: "Xaml.zip"},
         {path: "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll", entry: "WpfAnimatedGif.dll", bundle: "Xaml.zip"},
         {path: "Plugins\OpenCV\" arch "\RMT_OpenCV.dll", entry: "RMT_OpenCV.dll", bundle: "OpenCV.zip"},
@@ -548,7 +548,6 @@ SelfCheckMissingFiles() {
         {path: "Plugins\Browser\LICENSE.txt", entry: "Browser-LICENSE.txt", bundle: "RMT.zip"},
         {path: "Thread\Update.exe", entry: "Update.exe", bundle: "RMT.zip"},
         {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
-        {path: "MinTool\PlayAudio.vbs", entry: "PlayAudio.vbs", bundle: "Audio.zip"},
         {path: "Plugins\AhiDriver\installer\使用说明.txt", entry: "InstallReadme.txt", bundle: "AhiDriver.zip"},
         ; YOLO 是可选指令：缺了只影响这一个指令，不该按关键文件告警，
         ; 但要能被「文件校验」查出来并一键补齐。清单与 Yolo.Files 保持一致。
@@ -564,7 +563,7 @@ SelfCheckMissingFiles() {
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",
         "SearchPro.png", "SearchAll.png", "MacroAction.png", "TextOps.png", "True.png",
-        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png",
+        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ProcessManage.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"]
 
     for name in icoFileList

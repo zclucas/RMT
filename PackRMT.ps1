@@ -969,6 +969,16 @@ function Copy-RuntimePlugins {
     $browserDll = if ($Arch -eq "x86") { "Plugins\Browser\x86\RMT_Browser.dll" } else { "Plugins\Browser\RMT_Browser.dll" }
     $bundles = @(
         @{
+            Name = "Joy/ViGEmBus.exe"
+            Src  = "Plugins\Joy\ViGEmBus.exe"
+            Dst  = "Plugins\Joy\ViGEmBus.exe"
+        },
+        @{
+            Name = "Joy/Xbox按键映射.png"
+            Src  = "Plugins\Joy\Xbox按键映射.png"
+            Dst  = "Plugins\Joy\Xbox按键映射.png"
+        },
+        @{
             Name = "Browser/RMT_Browser.dll"
             Src  = $browserDll
             Dst  = "Plugins\Browser\RMT_Browser.dll"
@@ -1198,13 +1208,12 @@ function New-RMTAssets {
         )
         "Audio.zip" = @(
             @{ Dest = "Start.wav"; Src = "Audio\Start.wav" },
-            @{ Dest = "End.wav"; Src = "Audio\End.wav" },
-            @{ Dest = "PlayAudio.vbs"; Src = "MinTool\PlayAudio.vbs" }
+            @{ Dest = "End.wav"; Src = "Audio\End.wav" }
         )
         "ViGEm.zip" = @(
             @{ Dest = "ViGEmWrapper.dll"; Src = "Plugins\ViGEm\ViGEmWrapper.dll" },
-            @{ Dest = "ViGEmBus.exe"; Src = "Joy\ViGEmBus.exe" },
-            @{ Dest = "Xbox.png"; Src = "Joy\Xbox按键映射.png" }
+            @{ Dest = "ViGEmBus.exe"; Src = "Plugins\Joy\ViGEmBus.exe" },
+            @{ Dest = "Xbox.png"; Src = "Plugins\Joy\Xbox按键映射.png" }
         )
         "Xaml.zip" = @(
             @{ Dest = "ahk-xaml.dll"; Src = "Release$Arch\Plugins\AHK-XAML\lib\dep\ahk-xaml.dll" },
@@ -1262,7 +1271,7 @@ function New-RMTAssets {
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",
         "SearchPro.png", "SearchAll.png", "MacroAction.png", "TextOps.png", "True.png",
-        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png",
+        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ProcessManage.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
     )
 

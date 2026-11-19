@@ -160,7 +160,7 @@ class WaitGui {
         wp := CmdEditorForm.Row(pStack, "窗口绑定：", "WinPanel").Visibility("Collapsed")
         winInput := wp.Add("Grid").Grid_Column(1)
         winInput.Cols("*", 6, "Auto")
-        CmdEditorForm.TextBox(winInput, "WinInfoCon")
+        CmdEditorForm.WindowBindingCombo(winInput, "WinInfoCon")
         CmdEditorForm.TextButton(winInput, "BtnWinEdit", "编辑").Grid_Column(2)
 
         ; 文件面板

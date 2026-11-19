@@ -85,7 +85,7 @@ class KeyGui {
             this._PlaceFlowKey(mouseKeys, mouseDefs[A_Index][1], mouseDefs[A_Index][2], mouseDefs[A_Index][3], A_Index < mouseDefs.Length)
         }
 
-        ; 行2：类型/时长/次数/间隔居中排列
+        ; 行2：类型/时长/次数/间隔
         bottom := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("10,12,10,2")
         typeBox := bottom.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center").ToolTip(this._TypeHelpText())
         typeBox.Add("TextBlock").Text(GetLang("类型:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")

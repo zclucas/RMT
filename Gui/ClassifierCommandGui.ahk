@@ -3,6 +3,7 @@
 class ClassifierCommandGui extends CommentGui {
     _pickAction := ""
     HasErrorField := true
+    HelpTopic := ""
 
     _BuildAndShow() {
         this._closed := false
@@ -29,7 +30,7 @@ class ClassifierCommandGui extends CommentGui {
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         this.ui.OnEvent(this.ChoiceField, "SelectionChanged", XamlWin.BindCurrent(this, "OnChoiceChanged"))
         this._BindFields()
-        BindCmdEditorChrome(this.ui, "#指令手册/" this.CmdKey)
+        BindCmdEditorChrome(this.ui, "#指令手册/" (this.HelpTopic == "" ? this.CmdKey : this.HelpTopic))
     }
 
     _BuildHeaderFields(body) => this._Field(body, "备注：", "Remark")
@@ -206,6 +207,7 @@ class ClassifierCommandGui extends CommentGui {
 
 class WindowControlGui extends ClassifierCommandGui {
     CmdKey := "窗口控件"
+    HelpTopic := "35-控件"
     ChoiceField := "ActionType"
     Choices := WindowControl.Actions
     TextFields := ["Selector", "Argument"]
@@ -464,7 +466,7 @@ class AiDecisionGui extends ClassifierCommandGui {
         this._BuildRange(body, "WindowRegion")
         binding := this._Row(body, "窗口绑定：", "WinInfo").Visibility("Collapsed").Add("Grid").Grid_Column(1)
         binding.Cols("*", 6, "Auto")
-        this._TextBox(binding, "WinInfo")
+        CmdEditorForm.WindowBindingCombo(binding, "WinInfo")
         CmdEditorForm.TextButton(binding, "BtnWinEdit", "编辑").Grid_Column(2)
 
         choices := this._Row(body, "候选选项：", "Options", "Top").Add("StackPanel").Grid_Column(1)
@@ -630,8 +632,8 @@ class AiDecisionGui extends ClassifierCommandGui {
             row := XAML_Generator("Grid").Margin("0,2")
             row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
             this._OptionColumns(row)
-            this._TextBox(row, "OptionLabel_" i).ToolTip(GetLang("选项名称"))
-            this._TextBox(row, "OptionValue_" i).Grid_Column(2).ToolTip(GetLang("留空时保存选项名称"))
+            this._TextBox(row, "OptionLabel_" i)
+            this._TextBox(row, "OptionValue_" i).Grid_Column(2)
             if (AiDecisionGui.OptionExamples.Has(i)) {
                 this._Placeholder(row, "OptionLabel_" i, GetLang(AiDecisionGui.OptionExamples[i]))
                 this._Placeholder(row, "OptionValue_" i, String(i), false, 2)

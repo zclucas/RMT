@@ -238,10 +238,14 @@ class FrontInfoGui {
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}")
             .BorderThickness("1").CornerRadius("3").Height(28).MinHeight(28).Padding("0")
             .SnapsToDevicePixels("True")
-        box.Add("TextBox").Name("InfoText" idx)
+        input := box.Add("TextBox").Name("InfoText" idx)
             .Height(26).MinHeight(26).BorderThickness("0").Background("Transparent")
-            .Foreground("{DynamicResource InputText}").VerticalContentAlignment("Center").Padding("4,1")
+            .Foreground("{DynamicResource InputText}").VerticalContentAlignment("Center")
             .HorizontalScrollBarVisibility("Disabled").VerticalScrollBarVisibility("Disabled")
+        if (idx == 2)
+            input.Style("{StaticResource RmtSingleLineTextBox}").VerticalAlignment("Center")
+        else
+            input.Padding("4,1")
     }
 
     Init(winInfoCon) {

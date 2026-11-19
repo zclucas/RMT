@@ -108,7 +108,7 @@ GetMacroCMDData(serialStr) {
 
     ; 优化：使用单次遍历拆分（替代2次RegExReplace）
     SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly)
-    cmd := GetLangKey(textOnly)
+    cmd := GetCommandKey(textOnly)
 
     ; 同一步骤可能带显示语言中的指令名。优先读取规范化键，再回退到旧配置中的原键。
     normalizedSerialStr := Format("{}{}", cmd, numbersOnly)
@@ -124,7 +124,7 @@ GetMacroCMDData(serialStr) {
         saveStr := CfgRead(DataFile, SettingSection, serialStr, "")
     if (saveStr == "") {
         Data := DataClass()
-        Data.SerialStr := SerialStr
+        Data.SerialStr := (textOnly == "进程" || textOnly == "控件") ? normalizedSerialStr : serialStr
     }
     else
         Data := JSON.parse(saveStr, , false)
@@ -144,7 +144,7 @@ SaveMacroCMDData(Data) {
     ; 优化：使用单次遍历拆分（替代RegExReplace）
     dummyNumbers := ""
     SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &dummyNumbers)
-    cmdKey := GetLangKey(cmd)
+    cmdKey := GetCommandKey(cmd)
     if (!MySoftData.DataFileMap.Has(cmdKey))
         cmdKey := cmd
     DataFile := MySoftData.DataFileMap[cmdKey]
