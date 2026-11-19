@@ -5,6 +5,8 @@ RmtDownloadProxyPrefix() => "https://gh-proxy.com/"
 RmtDownloadUrl(url) => InStr(url, "https://github.com/") == 1 ? RmtDownloadProxyPrefix() url : url
 
 RmtDownloadDirectUrl(url) {
+    if RegExMatch(url, "^https://gitee\.com/fateman/(RMT(?:Assets)?/releases/download/.+)$", &match)
+        return "https://github.com/zclucas/" match[1]
     prefix := RmtDownloadProxyPrefix()
     return InStr(url, prefix "https://github.com/") == 1 ? SubStr(url, StrLen(prefix) + 1) : ""
 }

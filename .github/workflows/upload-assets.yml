@@ -30,7 +30,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 180
     defaults:
       run:
         shell: pwsh
@@ -115,3 +115,18 @@ jobs:
             -OutDir $out `
             -Repo 'zclucas/RMTAssets'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 同步并校验 Gitee 资源附件
+        if: env.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
+          $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json
+          foreach ($arch in 'x64', 'x86', 'Common') {
+            if (Test-Path (Join-Path $out "RMTAssets_$arch")) {
+              $tag = if ($arch -eq 'Common') { 'Common' } else { "v$($info.asset_tag)_$arch" }
+              ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $tag
+            }
+          }

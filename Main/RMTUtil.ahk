@@ -542,7 +542,7 @@ ApplyRMTServerRsp(rspStr) {
 
 ; 赞助 logo 文件名对应资源仓库 Common 标签下的图片
 GetSponsorLogoBaseUrl() {
-    return "https://gh-proxy.com/https://github.com/zclucas/RMTAssets/releases/download/Common/"
+    return RmtAssetsBaseUrl("Common")
 }
 
 GetSponsorLogoDir() {
@@ -590,7 +590,8 @@ EnsureSponsorLogo(logo) {
     }
     if (FileExist(path))
         try FileDelete(path)
-    if (!DownloadSponsorLogo(GetSponsorLogoBaseUrl() . name, path))
+    url := GetSponsorLogoBaseUrl() . name
+    if (DownloadAsync(url, path, 12, RmtSilentDownloadProgress()) != "ok")
         return ""
     if (!FileExist(path))
         return ""
@@ -603,33 +604,6 @@ EnsureSponsorLogo(logo) {
         return ""
     }
     return path
-}
-
-DownloadSponsorLogo(url, savePath) {
-    try {
-        req := ComObject("Msxml2.XMLHTTP")
-        req.open("GET", url, true)
-        req.send()
-        start := A_TickCount
-        while (req.readyState != 4) {
-            if (A_TickCount - start > 12000)
-                return false
-            Sleep(50)
-        }
-        if (req.status != 200)
-            return false
-        stream := ComObject("ADODB.Stream")
-        stream.Type := 1
-        stream.Open()
-        stream.Write(req.responseBody)
-        stream.SaveToFile(savePath, 2)
-        stream.Close()
-        return true
-    } catch {
-        if (FileExist(savePath))
-            try FileDelete(savePath)
-        return false
-    }
 }
 
 _RspText(v) {

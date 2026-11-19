@@ -447,7 +447,13 @@ class SttGui {
                     try FileDelete(this.dlTar ".headers")
                     if (this._StartExtract())
                         this.downloadState := "ex"
-                    else
+                    else if (alternative := RmtDownloadDirectUrl(this.dlSpec["url"])) {
+                        this._ClearDownloadFiles()
+                        this.dlSpec["url"] := alternative
+                        this.dlQueue.InsertAt(1, this.dlSpec)
+                        if (!this._StartNextDownload())
+                            this.downloadState := "err"
+                    } else
                         this.downloadState := "err"
                 } else {
                     if (!this._FinishExtract()) {

@@ -676,6 +676,9 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
         if (timeoutSec > 120)
             timeoutSec := 120
     }
+    alternative := RmtDownloadDirectUrl(url)
+    if (alternative != "")
+        maxRetry := Max(maxRetry, 2)
     Loop maxRetry {
         if (pg.Cancelled)
             return "cancel"
@@ -683,7 +686,7 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
         if (A_Index > 1)
             pg.Report(Format("重试 ({}/{})...", A_Index - 1, maxRetry - 1), pg.percent)
 
-        result := DownloadOnce(url, savePath, timeoutSec, pg)
+        result := DownloadOnce(A_Index > 1 && alternative != "" ? alternative : url, savePath, timeoutSec, pg)
         if (result == "ok")
             return "ok"
         if (result == "cancel")
@@ -700,7 +703,7 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
 DownloadOnce(url, savePath, timeoutSec, pg) {
     systemDir := A_PtrSize == 4 && A_Is64bitOS ? "\Sysnative" : "\System32"
     curl := A_WinDir systemDir "\curl.exe"
-    if (HasMethod(pg, "SetDownloadAlternative") && RmtDownloadDirectUrl(url) != "" && FileExist(curl))
+    if (HasMethod(pg, "SetDownloadAlternative") && FileExist(curl))
         return DownloadWithProgress(curl, url, savePath, timeoutSec, pg)
 
     try {
@@ -1180,7 +1183,7 @@ IconFontStartupCheck() {
             try FileCopy(src, cache, true)
         } else {
             ; 约 283 KB，超时给 20 秒；DownloadAsync 自带 3 次重试
-            if (DownloadAsync(IconFontAssetUrl(), cache, 20, IconFontSilentProgress()) != "ok")
+            if (DownloadAsync(IconFontAssetUrl(), cache, 20, RmtSilentDownloadProgress()) != "ok")
                 return
         }
     }
@@ -1188,10 +1191,13 @@ IconFontStartupCheck() {
         try Toast.Info("图标字体已安装，重启 RMT 后主界面图标生效", 5000)
 }
 
-; 图标字体下载在后台完成，不创建进度窗口。
-class IconFontSilentProgress {
+; 后台资源下载不创建进度窗口。
+class RmtSilentDownloadProgress {
     percent := 0
     Cancelled := false
+
+    SetDownloadAlternative(*) {
+    }
 
     Report(msg, pct) {
     }
