@@ -24,7 +24,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: rmt-gitee-publish
+  group: gitee-publish-${{ inputs.tag }}
   cancel-in-progress: false
 env:
   RELEASE_TAG: ${{ inputs.tag }}
@@ -51,6 +51,8 @@ jobs:
           [[ -z "$SOURCE_SHA" || "$SOURCE_SHA" == "$actual" ]]
           python3 .github/scripts/mirror_rmt_refs.py
   go:
+    outputs:
+      primary_result: ${{ steps.publish.outcome }}
     needs: refs
     runs-on: ubuntu-latest
     timeout-minutes: 300
@@ -60,13 +62,15 @@ jobs:
           persist-credentials: false
       - run: python3 -m pip install PyYAML==6.0.2
       - name: Gitee Go 发布并回读所有附件
+        id: publish
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_RELEASE_TOKEN }}
         run: python3 -u .github/scripts/sync_gitee_go.py go
   fallback:
     needs: [refs, go]
-    if: ${{ failure() && needs.refs.result == 'success' && needs.go.result == 'failure' }}
+    if: ${{ !cancelled() && needs.refs.result == 'success' && (needs.go.result == 'failure' || needs.go.outputs.primary_result == 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:

@@ -21,6 +21,10 @@ def refs(url):
 
 
 if __name__ == "__main__":
+    source, target = refs(SOURCE), refs(TARGET)
+    if source and all(target.get(ref) == sha for ref, sha in source.items()):
+        print(f"Verified {len(source)} GitHub refs on Gitee")
+        raise SystemExit(0)
     with tempfile.TemporaryDirectory() as directory:
         git("init", "--bare", "--quiet", directory)
         git("fetch", "--quiet", "--no-tags", SOURCE, "+refs/heads/*:refs/heads/*",

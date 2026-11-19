@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from mirror_rmt_refs import git
@@ -52,7 +52,7 @@ def prepare(repo, tag):
         raise ValueError("Incomplete release " + tag)
     api = "https://gitee.com/api/v5/repos/fateman/" + repo
     try:
-        target = http(api + "/releases/tags/" + tag)
+        target = http(api + "/releases/tags/" + tag, os.environ["GITEE_RELEASE_TOKEN"])
     except HTTPError as exc:
         if exc.code != 404:
             raise
@@ -92,6 +92,14 @@ def pipeline(m):
                 dict(name="sync", displayName="Sync", trigger="auto", strategy="naturally", steps=steps)]}
 
 
+def go_stage(base, stage_id):
+    api = base.rsplit("/builds", 1)[0]
+    reply = http(f"{api}/stages/builds/{int(stage_id)}", os.environ["GITEE_RELEASE_TOKEN"])
+    if reply.get("code") != 0:
+        raise RuntimeError("Gitee Go step logs unavailable")
+    return reply["data"]
+
+
 def dispatch(m):
     import yaml
     repo, tag = m["repo"], m["tag"]
@@ -123,8 +131,30 @@ def dispatch(m):
     print(f"{repo}/{tag}: Gitee Go {build}", flush=True)
     deadline = time.monotonic() + 65 * 60
     while time.monotonic() < deadline:
-        status = go(f"/{build}/status")["status"]
+        current = go(f"/{build}/status")
+        status = current["status"]
         if status in {"SUCCESS", "SUCCEEDED"}:
+            expected = {f"readback {repo}/{tag}/{a['name']} {a['size']} {a['digest'][7:]}"
+                        for a in m["assets"]}
+            seen = set()
+            for stage in current["stages"]:
+                detail = go_stage(base, stage["id"])
+                for group in detail["jobs"]:
+                    for job in group:
+                        for entry in (job.get("record") or {}).get("stages") or []:
+                            url = entry.get("logger") or ""
+                            if entry["plugin"].startswith("SYSTEM_") or (urlsplit(url).scheme,
+                                    urlsplit(url).netloc) != ("https", "go-api.gitee.com"):
+                                continue
+                            logs = http(url, os.environ["GITEE_RELEASE_TOKEN"])
+                            for line in (logs.get("data") or {}).get("logs", []):
+                                seen.update(proof for proof in expected if proof in line)
+            if seen != expected:
+                raise RuntimeError(f"Gitee Go {build} missing readback receipts for {expected - seen}")
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf8") as summary:
+                print(f"### {repo} · {tag} · Gitee Go {build}\n", file=summary)
+                for line in sorted(seen):
+                    print(f"- `{line}`", file=summary)
             print(f"Gitee Go {build} verified {len(m['assets'])} attachments", flush=True)
             return
         if status in {"FAILED", "FAIL", "CANCELED", "CANCELLED", "ERROR", "STOPPED", "TIMEOUT"}:

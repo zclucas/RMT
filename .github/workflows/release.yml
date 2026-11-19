@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: rmt-release
+  group: rmt-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
