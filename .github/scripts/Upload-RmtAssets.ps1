@@ -1,4 +1,4 @@
-﻿# 上传打包产物到 zclucas/RMTAssets（从 CI 迁出的独立脚本，可本地测试）
+# 上传打包产物到 zclucas/RMTAssets（从 CI 迁出的独立脚本，可本地测试）
 # 输入：release-info.json + RMTv*.zip + RMTAssets_* 目录（版本发布工作流的 artifact）
 # 行为：
 #   1. 按 RMTAssets_* 目录实际存在情况决定 tag 组（Common 恒有，x64/x86 看产物）
@@ -69,9 +69,20 @@ foreach ($tag in $assetsByTag.Keys) {
     if ($LASTEXITCODE -eq 0) {
         gh release upload $tag @assets --repo $Repo --clobber
     } else {
-        # 整条命令用数组组装后统一 splat，避免行内混排动态参数；打印便于排查。
+        # 附注标签记录本次资源发布日期。轻量标签会沿用资源库旧提交的日期。
+        $ref = "refs/tags/$tag"
+        $refs = gh api "repos/$Repo/git/matching-refs/tags/$tag" --jq '.[].ref'
+        if ($LASTEXITCODE -ne 0) { throw "无法读取 $Repo 标签 $tag" }
+        if ($ref -cnotin @($refs)) {
+            $commit = gh api "repos/$Repo/commits/HEAD" --jq '.sha'
+            if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') { throw "无法解析 $Repo 的 HEAD" }
+            $object = gh api --method POST "repos/$Repo/git/tags" -f "tag=$tag" -f "message=RMT resources $tag" -f "object=$commit" -f 'type=commit' --jq '.sha'
+            if ($LASTEXITCODE -ne 0 -or $object -notmatch '^[0-9a-f]{40}$') { throw "无法创建附注标签 $tag" }
+            gh api --method POST "repos/$Repo/git/refs" -f "ref=$ref" -f "sha=$object" --silent
+            if ($LASTEXITCODE -ne 0) { throw "无法发布标签 $tag" }
+        }
         $createArgs = @('release', 'create', $tag) + @($assets) +
-            @('--repo', $Repo, '--title', $tag,
+            @('--repo', $Repo, '--verify-tag', '--title', $tag,
               '--notes', "RMT $($info.version) from $($info.tag) ($($info.sha))")
         if ($info.channel -eq 'test') { $createArgs += '--prerelease' }
         else { $createArgs += '--latest=false' }

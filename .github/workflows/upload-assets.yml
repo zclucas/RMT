@@ -20,11 +20,14 @@ permissions:
   actions: read
 
 concurrency:
-  group: rmt-assets
+  group: rmt-assets-${{ github.event.workflow_run.head_branch || inputs.run_id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   upload:
+    outputs:
+      release_tag: ${{ steps.github_assets.outputs.tag }}
+      asset_tags: ${{ steps.github_assets.outputs.asset_tags }}
     name: 上传到 RMTAssets
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -105,6 +108,7 @@ jobs:
           Get-ChildItem -LiteralPath $out | ForEach-Object { Write-Host $_.Name }
 
       - name: 上传资源到 RMTAssets
+        id: github_assets
         if: env.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
@@ -115,18 +119,23 @@ jobs:
             -OutDir $out `
             -Repo 'zclucas/RMTAssets'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: 同步并校验 Gitee 资源附件
-        if: env.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
-        run: |
-          $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
           $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json
-          foreach ($arch in 'x64', 'x86', 'Common') {
+          "tag=$($info.tag)" >> $env:GITHUB_OUTPUT
+
+          $tags = @(foreach ($arch in 'x64', 'x86', 'Common') {
             if (Test-Path (Join-Path $out "RMTAssets_$arch")) {
-              $tag = if ($arch -eq 'Common') { 'Common' } else { "v$($info.asset_tag)_$arch" }
-              ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $tag
+              if ($arch -eq 'Common') { 'Common' } else { "v$($info.asset_tag)_$arch" }
             }
-          }
+          })
+          "asset_tags=$(ConvertTo-Json -InputObject $tags -Compress)" >> $env:GITHUB_OUTPUT
+
+  mirror:
+    name: 同步 Gitee 正式发行版
+    needs: upload
+    if: needs.upload.outputs.release_tag != ''
+    uses: ./.github/workflows/sync-gitee-release.yml
+    with:
+      tag: ${{ needs.upload.outputs.release_tag }}
+      asset_tags: ${{ needs.upload.outputs.asset_tags }}
+      source_sha: ${{ github.event.workflow_run.head_sha || '' }}
+    secrets: inherit
