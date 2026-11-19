@@ -7,14 +7,6 @@ on:
         description: 已同时发布整包及资源的 GitHub 标签
         required: true
         type: string
-  workflow_call:
-    inputs:
-      tag:
-        required: true
-        type: string
-    secrets:
-      GITEE_RELEASE_TOKEN:
-        required: true
 
 permissions:
   contents: read
