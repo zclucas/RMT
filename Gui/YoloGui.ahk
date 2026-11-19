@@ -3,20 +3,78 @@
 ; =====================================================================
 ; YOLO 检测指令编辑器。
 ;
-; 结构沿用「窗口控件 / AI判断」的骨架（CommentGui + CmdEditorForm），
-; 但结果变量有五个（数量/类别/置信度/覆盖率/距离），所以不继承
-; ClassifierCommandGui 的读写实现，自己读全部字段，避免基类固定字段名带来的空控件查询。
+; 独立实现，不继承任何窗口类：开窗、模态、关闭这些窗口生命周期在本类里各写一份，
+; 只与其它指令编辑器共用 CmdEditorForm 的行 / 控件工厂。
 ;
 ; 任务由模型决定，参数与输出也跟着任务走：所有行先建好，再按任务把用不上的行
 ; 收起来（Visibility），而不是给每个任务各写一套编辑器。这样保存时是一次
 ; 全字段读取，切换模型也不会丢已经填好的值。
 ; =====================================================================
 
-class YoloGui extends CommentGui {
+class YoloGui {
     CmdKey := "YOLO检测"
     _pickAction := ""      ; 框选进行中的回调，用于 Esc 取消
     _task := ""            ; 当前模型的任务码
     _rows := Map()         ; 字段名 → 行控件（用于按任务显隐）
+    _offsetVisible := false ; 点击偏移行当前是否展开（首帧落点要用）
+
+    __new() {
+        this.ParentTile := ""
+        this.ui := ""
+        this.Gui := ""
+        this.SureBtnAction := ""
+        this.OwnerHwnd := ""
+        this._closed := true
+        this._batch := []
+        this._batching := false
+        this.SerialStr := ""
+        this.Data := ""
+        this._title := ""
+        ; 编辑器在宏编辑器和节点编辑器里各有一个实例，这几个容器必须一人一份。
+        this._rows := Map()
+        this._task := ""
+        this._offsetVisible := false
+        this._pickAction := ""
+    }
+
+    ; 打开编辑器。Init 里的多次控件更新先攒着，一次性批投递，避免几十次 IPC。
+    ShowGui(cmd) {
+        if (IsObject(this.ui) && !this._closed)
+            this._CloseWindow()
+        this._BuildAndShow()
+        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
+            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
+        }
+        this._batching := true
+        try this.Init(cmd)
+        finally {
+            this._flushBatch()
+        }
+        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
+            this._closed := true
+    }
+
+    Hwnd() {
+        return (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
+    }
+
+    _EscapeXml(s) => EscapeXamlXml(s)
+
+    ; batching 中入队，_flushBatch 一次性 BatchUpdate（合并 Init 的多次 Update 为一次 IPC）
+    _ComboPush(comboName, propertyName, value) {
+        if (this._batching)
+            this._batch.Push({ControlName: comboName, PropertyName: propertyName, Value: value})
+        else
+            this.ui.Update(comboName, propertyName, value)
+    }
+
+    _flushBatch() {
+        this._batching := false
+        if (IsObject(this.ui) && this._batch.Length > 0) {
+            this.ui.BatchUpdate(this._batch)
+            this._batch := []
+        }
+    }
 
     ; 任务 → 需要显示的行。模型读不出来时用 Fallback，保证还能填常用的几项。
     static Layout := Map(
@@ -39,6 +97,7 @@ class YoloGui extends CommentGui {
     _BuildAndShow() {
         this._closed := false
         title := this.ParentTile GetLang(this.CmdKey)
+        this._title := title
         height := XAMLHost.CmdTitleBarHeight()
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(height, "Auto")
@@ -242,6 +301,8 @@ class YoloGui extends CommentGui {
 
         this._ApplyTask(Yolo.TaskOf(this.Data.ModelName),
             CmdEnumZh(this.Data.ActionType, Yolo.Actions), this.Data.ModelName)
+        ; 首帧就按任务收好行，落点交给模板里的 CenterScreen 一次算准。
+        this._HideRowsInXaml()
     }
 
     _FillChoice(name, names, current) {
@@ -286,8 +347,8 @@ class YoloGui extends CommentGui {
 
     _UpdateAction(action) {
         clickable := this._task == "" || this._Has(YoloGui.Clickable, this._task)
-        visible := (clickable && action != "无动作") ? "Visible" : "Collapsed"
-        this._ComboPush("OffsetXRow", "Visibility", visible)
+        this._offsetVisible := clickable && action != "无动作"
+        this._ComboPush("OffsetXRow", "Visibility", this._offsetVisible ? "Visible" : "Collapsed")
     }
 
     _Has(list, value) {
@@ -295,6 +356,28 @@ class YoloGui extends CommentGui {
             if (item == value)
                 return true
         return false
+    }
+
+    ; ---------- 首帧显隐：让开窗高度一次就是最终高度 ----------
+    ; SizeToContent 窗口靠模板里的 CenterScreen 居中，而 WPF 只在首次 Show 时按当时的
+    ; 尺寸算一次，之后尺寸变了不再重新定位。本编辑器是唯一「开窗后还要收行」的指令窗口：
+    ; 行收起走 Init 的批次更新，要等 LoadedHwnd 才发到引擎，于是首帧按「全部行展开」
+    ; 的高度居中，收完行窗变矮而 Top 不动，看着就不在屏幕中间（差 行数差×34/2）。
+    ; 这里把用不上的行在 Show 之前直接写进 XAML，首帧高度即最终高度，其余与别的编辑器一致。
+    _HideRowsInXaml() {
+        if (!IsObject(this.ui))
+            return
+        layout := YoloGui.Layout.Has(this._task) ? YoloGui.Layout[this._task] : YoloGui.Fallback
+        for name, _ in this._rows {
+            if (this._Has(layout, name))
+                continue
+            this.ui.xaml := StrReplace(this.ui.xaml, 'Name="' name 'Row"',
+                'Name="' name 'Row" Visibility="Collapsed"')
+        }
+        ; 偏移行不在任务映射里，单独按动作类型决定。
+        if (!this._offsetVisible)
+            this.ui.xaml := StrReplace(this.ui.xaml, 'Name="OffsetXRow"',
+                'Name="OffsetXRow" Visibility="Collapsed"')
     }
 
     _ReadData() {
@@ -445,13 +528,43 @@ class YoloGui extends CommentGui {
             TogSelectArea(false)
     }
 
+    ; ---------- 窗口生命周期 ----------
+
+    OnClickSureBtn(state, ctrl, event) {
+        if (!this.CheckIfValid())
+            return
+        this.SaveData()
+        action := this.SureBtnAction
+        action(this.GetCommandStr())
+        this._CloseWindow()
+    }
+
+    OnCancelClick(state, ctrl, event) {
+        this._CloseWindow()
+    }
+
+    OnWindowLoad(state, ctrl, event) {
+        XamlWin.OnLoadTheme(this.ui)
+    }
+
     OnWindowClosing(state, ctrl, event) {
         this._CancelPick()
-        super.OnWindowClosing(state, ctrl, event)
+        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
+            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+        }
+        this.ui := ""
+        this._closed := true
     }
 
     _CloseWindow() {
         this._CancelPick()
-        super._CloseWindow()
+        if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
+            try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
+        }
+        if (IsObject(this.ui)) {
+            try this.ui.Update("Window", "Close", "")
+        }
+        this.ui := ""
+        this._closed := true
     }
 }
