@@ -38,6 +38,7 @@
 #Include ClassifierCommandGui.ahk
 #Include YoloGui.ahk
 #Include TranslateGui.ahk
+#Include ProcessManageGui.ahk
 #Include MacroEditModel.ahk
 
 class MacroEditGui {
@@ -140,9 +141,10 @@ class MacroEditGui {
             {name: "搜索/识图", icon: Chr(0xE721), cmds: ["搜索", "搜索Pro", "搜索All", "搜索Combo", "YOLO检测"]},
             {name: "输入/输出", icon: Chr(0xE8A1), cmds: ["输入", "输出", "提示"]},
             {name: "变量/数据", icon: Chr(0xE8EF), cmds: ["变量", "变量提取", "运算", "数组", "文本处理"]},
-            {name: "文件", icon: Chr(0xE8A5), cmds: ["文件读写", "Excel"]},
             {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "等待", "循环", "如果", "如果Pro"]},
-            {name: "调控", icon: Chr(0xE713), cmds: ["RMT指令", "运行", "运行Pro", "宏操作", "窗口信息", "调整窗口", "窗口控件", "网络请求", "浏览器", "AI判断", "翻译"]},
+            {name: "进程/窗口", icon: Chr(0xE737), cmds: ["进程管理", "窗口信息", "调整窗口", "窗口控件"]},
+            {name: "调控", icon: Chr(0xE713), cmds: ["宏操作", "RMT指令", "运行", "运行Pro"]},
+            {name: "扩展", icon: Chr(0xEA86), cmds: ["Excel", "浏览器", "文件读写", "AI判断", "网络请求", "翻译"]},
             {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
         ]
         this._favSet := Map()            ; 收藏指令名（中文）→ true

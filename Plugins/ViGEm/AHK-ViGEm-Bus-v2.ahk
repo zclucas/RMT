@@ -42,7 +42,7 @@ IsViGEmInstalled() {
 
 ; 未安装 ViGEmBus 时提示；返回 true 表示用户点了「安装」并已启动安装程序
 ShowViGEmInstallTip() {
-    exePath := A_WorkingDir "\Joy\ViGEmBus.exe"
+    exePath := ProjectRootDir "\Plugins\Joy\ViGEmBus.exe"
     JoyDebugLog(Format("ShowViGEmInstallTip enter exePath='{}' exists={}", exePath, FileExist(exePath)), "vigeminstall")
     if (!FileExist(exePath)) {
         RmtDialog.Info(GetLang("未找到 ViGEm 驱动安装程序") "`n" exePath, GetLang("提示"), 48)
@@ -118,7 +118,7 @@ class ViGEmWrapper {
             ; MsgBox "Fallo al crear instancia de " cls ":`n" err.Message, "Error", 16
             ; ExitApp
             str1 := GetLang("ViGEm创建实例失败,手柄功能无法生效")
-            str2 := GetLang("请先安装Joy目录下ViGEmBus.exe后运行软件")
+            str2 := GetLang("请先安装Plugins/Joy目录下ViGEmBus.exe后运行软件")
             RmtDialog.Info(Format("{}`n{}", str1, str2))
         }
     }

@@ -428,6 +428,7 @@ CmdEditorTitleIcon(title) {
             ["文件读写", "Images\Soft\FileIO.png"],
             ["Excel", "Images\Soft\Excel.png"],
             ["窗口管理", "Images\Soft\WindowManage.png"],
+            ["进程管理", "Images\Soft\ProcessManage.png"],
             ["窗口信息", "Images\Soft\WindowManage.png"],
             ["调整窗口", "Images\Soft\WindowAdjustGear32.png"],
             ["窗口控件", "Images\Soft\WindowManage.png"],
@@ -520,6 +521,26 @@ class CmdEditorForm {
         return parent.Add("ComboBox").Name(name).Height(26).MinHeight(26)
             .VerticalAlignment("Center").VerticalContentAlignment("Center")
             .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
+    }
+
+    static WindowBindingOptions := [
+        ["当前窗口", "❖{句柄ID}"],
+        ["宏设置窗口绑定", "{宏设置窗口绑定}"],
+        ["模块窗口绑定", "{模块窗口绑定}"],
+    ]
+
+    static WindowBindingCombo(parent, name) {
+        combo := this.Combo(parent, name, true).IsTextSearchEnabled("True")
+        for option in this.WindowBindingOptions
+            combo.Add("ComboBoxItem").Content(GetLang(option[1])).TextSearch_Text("{}" option[2])
+        return combo
+    }
+
+    static WindowBindingItemsXaml() {
+        items := ""
+        for option in this.WindowBindingOptions
+            items .= '<ComboBoxItem Content="' EscapeXamlXml(GetLang(option[1])) '" TextSearch.Text="{}' option[2] '"/>'
+        return items
     }
 
     static TextButton(parent, name, text, tip := "") {

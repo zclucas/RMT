@@ -79,9 +79,7 @@ class BGKeyGui {
         front := top.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
         front.Add("TextBlock").Text(GetLang("窗口绑定:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
             .ToolTip(this._BGHelpText())
-        front.Add("TextBox").Name("FrontCon").Width(200).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
+        CmdEditorForm.WindowBindingCombo(front, "FrontCon").Width(200).Margin("4,0,0,0")
         front.Add("Button").Name("BtnEdit").Content(GetLang("编辑")).Height(28).MinHeight(28).Padding("14,0").Margin("6,0,0,0").Cursor("Hand")
 
         remark := top.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center").Margin("200,0,0,0")

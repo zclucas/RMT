@@ -101,12 +101,13 @@ const COMMAND_ICON_FILES = {
   "Excel": "Images/Soft/Excel.png",
   "网络请求": "Images/Soft/HttpRequest.png",
   "浏览器": "Images/Soft/Browser.png",
-  "窗口控件": "Images/Soft/WindowManage.png",
+  "控件": "Images/Soft/WindowManage.png",
   "AI判断": "Images/Soft/AiDecision.png",
   "流程控制": "Images/Soft/Control.png",
   "窗口管理": "Images/Soft/WindowManage.png",
   "窗口信息": "Images/Soft/WindowManage.png",
   "调整窗口": "Images/Soft/WindowAdjustGear32.png",
+  "进程": "Images/Soft/ProcessManage.png",
   "按键检测": "Images/Soft/KeyListen.png",
   "手柄检测": "Images/Soft/JoyListen.png",
   "注释": "Images/Soft/Comment.png",
@@ -456,7 +457,7 @@ function findPageIndexByRoute(route){
   // 指令重排后，编辑器及旧书签里的编号可能过期，优先按完整指令名定位。
   if(group === '指令手册'){
     // 别名统一为「旧名 -> 现名」：新名直接与页面标题相等，旧名经别名映射后命中，保证新编辑器与历史书签都能跳转
-    const aliases = {'鼠标移动': '移动', '鼠标移动Pro': '移动Pro', '组合搜索': '搜索Combo', '搜索Multi': '搜索Combo', '时间': '提示', '倒计时': '提示', '自由贴': '提示', '等待确定': '等待', '窗口管理': '窗口信息', '流程跳转': '宏操作', '跳转': '宏操作'};
+    const aliases = {'鼠标移动': '移动', '鼠标移动Pro': '移动Pro', '组合搜索': '搜索Combo', '搜索Multi': '搜索Combo', '时间': '提示', '倒计时': '提示', '自由贴': '提示', '等待确定': '等待', '窗口管理': '窗口信息', '窗口控件': '控件', '进程管理': '进程', '流程跳转': '宏操作', '跳转': '宏操作'};
     const name = key.replace(/^\\d+(?:\\.\\d+)?[-\\s]+/, '');
     const command = aliases[name] || name;
     idx = PAGE_META.findIndex(p => p.group === group && p.title.replace(/^\\d+(?:\\.\\d+)?\\s+/, '') === command);

@@ -108,10 +108,7 @@ class ScreenShotGui {
         winRow := body.Add("Grid").Name("WinInfoRow").Grid_Row(2).Grid_ColumnSpan(5).Visibility("Hidden")
         winRow.Cols("108", "*", "8", "70")
         winRow.Add("TextBlock").Grid_Column(0).Text(GetLang("窗口绑定:")).ToolTip(GetLang("指定这条指令要操作的窗口。")).VerticalAlignment("Center")
-        winRow.Add("TextBox").Grid_Column(1).Name("WinInfoCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").Padding("2,0")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1).MaxHeight(26)
         winRow.Add("Button").Grid_Column(3).Name("BtnWinEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).VerticalAlignment("Center")
 
         ; 行3-4：起始/终止坐标

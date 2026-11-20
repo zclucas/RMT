@@ -245,7 +245,7 @@ BpSig(cmdText) {
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
     if (numbersOnly == "")
         return StrReplace(txt, ",", "")             ; 旧格式：纯文本整串（剥离逗号防 ,sig, 假阳）
-    return GetLangKey(textOnly) . numbersOnly        ; 现代格式：序列号（跨语言稳定）
+    return GetCommandKey(textOnly) . numbersOnly     ; 现代格式：序列号（跨语言稳定）
 }
 
 ; 断点集合包含判定：断点串规范化为 ",sig1,sig2,"，用 ",sig," 包夹 InStr 做无歧义匹配。
@@ -291,6 +291,7 @@ MacroCommandActions() {
         "AI判断", OnAiDecision,
         "YOLO检测", OnYolo,
         "翻译", OnTranslate,
+        "进程管理", OnProcessManage,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
         "窗口信息", OnWindowManage,
@@ -337,7 +338,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     firstUnderscore := InStr(cleanCmdStr, "_")
     firstPart := firstUnderscore ? SubStr(cleanCmdStr, 1, firstUnderscore - 1) : cleanCmdStr
     cmdKey := RTrim(firstPart, "0123456789")
-    mappedKey := GetLangKey(cmdKey)
+    mappedKey := GetCommandKey(cmdKey)
     if (Actions.Has(mappedKey))
         cmdKey := mappedKey
 
@@ -2241,7 +2242,7 @@ WindowMatchedHandles(query, matchMode := "所有") {
     return result
 }
 
-WindowReadInfo(data, query) {
+WindowReadInfo(data, query, preview := "") {
     WindowEnsureResults(data)
     fields := WindowInfoFields(data.ActionType)
     if (!fields.Length)
@@ -2252,7 +2253,13 @@ WindowReadInfo(data, query) {
     isList := data.ActionType == "匹配窗口列表"
     matchMode := data.HasProp("MatchMode") ? data.MatchMode : (isList ? "所有" : "首个")
     hwnds := WindowMatchedHandles(query, matchMode)
+    if (IsObject(preview)) {
+        preview.Matched := hwnds.Length > 0
+        preview.Error := ""
+    }
     if (isList) {
+        if (IsObject(preview))
+            preview.Values := hwnds
         name := GetVarName(data.ResultVar1)
         if (name != "")
             MySetGlobalArray(name, hwnds)
@@ -2284,8 +2291,13 @@ WindowReadInfo(data, query) {
                     alpha := WinGetTransparent(target)
                     values := [alpha == "" ? 100 : Round(alpha * 100 / 255), (WinGetExStyle(target) & 0x20) ? 1 : 0]
             }
+        } catch as e {
+            if (IsObject(preview))
+                preview.Error := e.Message
         }
     }
+    if (IsObject(preview))
+        preview.Values := values
     names := [], results := []
     for i, value in values {
         prop := "ResultVar" i
@@ -2319,7 +2331,8 @@ OnWindowManage(tableItem, cmd, index) {
 
     searchValue := GetReplaceVarText(tableItem, index, ResolveBindWindow(tableItem, index, Data.SearchValue))
     winTitle := GetParamsWinInfoStr(searchValue)
-    if (WindowReadInfo(Data, winTitle))
+    preview := tableItem.HasOwnProp("WindowInfoPreview") ? tableItem.WindowInfoPreview : ""
+    if (WindowReadInfo(Data, winTitle, preview))
         return
     matchMode := Data.HasProp("MatchMode") ? Data.MatchMode
         : WindowDefaultMatchMode(Data.ActionType, InStr(winTitle, "ahk_id ") || InStr(winTitle, "ahk_group "))

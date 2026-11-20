@@ -237,7 +237,7 @@ class MacroGraphNodeUIMixin {
         if (!c.isWin)
             winRow.Visibility("Collapsed")
         winRow.Add("TextBlock").Text(GetLang("窗口绑定:")).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(LW).VerticalAlignment("Center")
-        this._MakeTextBox(winRow, "SWin_" id, d.HasOwnProp("winInfo") ? d.winInfo : "", "196")
+        this._MakeWindowBindingCombo(winRow, "SWin_" id, d.HasOwnProp("winInfo") ? d.winInfo : "", "196")
         winRow.Add("Button").Name("SWinEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0")
 
         ; 颜色 / 文本 / 图片（整行，按类型显隐）；文本/图片输入宽 276，右缘与起点Y 对齐
@@ -382,7 +382,7 @@ class MacroGraphNodeUIMixin {
         cmb.SetProp("Text", vn)
     }
 
-    ; 打开窗口信息编辑器（复用 FrontInfoGui）。用一个带 Value 属性的适配对象桥接 WPF 文本框。
+    ; 打开窗口信息编辑器（复用 FrontInfoGui）。用一个带 Value 属性的适配对象桥接 WPF 下拉框。
     _OnSearchWinEdit(id, *) {
         data := this._SearchData(id)
         if (data == "")
@@ -1578,6 +1578,12 @@ class MacroGraphNodeUIMixin {
         if (!enabled)
             chk.IsEnabled("False")
         return row
+    }
+
+    _MakeWindowBindingCombo(parent, name, value, width) {
+        return CmdEditorForm.WindowBindingCombo(parent, name).Width(width).Height(22).MinHeight(0)
+            .FontSize(this._MGFontSize(12)).Padding(this._MGComboPadding())
+            .SetProp("Text", value)
     }
 
     ; 统一的小高度文本框（MinHeight=0 覆盖主题默认的 36，否则高度不生效）

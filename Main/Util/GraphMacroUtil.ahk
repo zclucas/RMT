@@ -293,7 +293,7 @@ ExpandNestedGraphStartsInCmd(cmdStr, visited) {
     if (visited.Has(visitKey))
         return
 
-    cmdKey := GetLangKey(GetCmdOnlyText(serial))
+    cmdKey := GetCommandKey(GetCmdOnlyText(serial))
     static branchCmdMap := Map("循环", true, "搜索", true, "搜索Pro", true, "搜索All", true, "搜索Combo", true, "组合搜索", true, "搜索Multi", true, "如果", true, "如果Pro", true)
     if (!branchCmdMap.Has(cmdKey))
         return

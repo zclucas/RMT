@@ -16,7 +16,7 @@ LangCmdKeyArr := [
     "休眠", "暂停所有宏", "恢复所有宏", "终止所有宏", "重载", "关闭软件", "间隔", "按键", "手柄", "手柄检测", "搜索", "搜索Pro", "搜索All", "搜索Combo",
     "组合搜索", "搜索Multi", "移动", "移动Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "流程跳转", "循环-跳过本轮", "循环-跳出", "分支-跳出",
     "输出", "提示", "运行", "运行Pro", "循环", "宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "RMT指令", "后台鼠标", "后台按键",
-    "等待", "等待确定", "时间", "倒计时", "按键检测", "窗口管理", "窗口信息", "调整窗口", "注释", "抓图",
+    "等待", "等待确定", "时间", "倒计时", "按键检测", "窗口管理", "窗口信息", "调整窗口", "进程管理", "注释", "抓图",
     "循环次数", "宏循环次数", "当前坐标X", "当前坐标Y", "按下", "松开", "点击", "创建", "克隆", "删除", "包含",
     "取值", "赋值", "插入", "追加", "移除", "移除最后", "长度", "变量或值", "数组", "文本分割", "文本提取", "文本替换", "去除空格",
     "时间戳处理", "自定义格式", "提取时间量", "提取所有时间量", "日期时间", "日期", "时刻",
@@ -162,8 +162,15 @@ GetClientLanguageCode() {
 }
 
 GetLang(Key) {
-    ; 简中模式或未加载映射时直接返回原 key
-    if (MainSoftData.Lang == "简中" || LangKeyMap.Count == 0)
+    ; 简中指令显示短名称，配置继续使用原指令键。
+    if (MainSoftData.Lang == "简中") {
+        switch Key {
+            case "进程管理": return "进程"
+            case "窗口控件": return "控件"
+        }
+        return Key
+    }
+    if (LangKeyMap.Count == 0)
         return Key
 
     if (LangKeyMap.Has(Key))
@@ -173,9 +180,6 @@ GetLang(Key) {
 }
 
 GetLangArr(KeyArr) {
-    if (MainSoftData.Lang == "简中" || LangKeyMap.Count == 0)
-        return KeyArr.Clone()
-
     ResArr := []
     for Value in KeyArr
         ResArr.Push(GetLang(Value))
@@ -203,9 +207,20 @@ GetLangKeyArr(ValueArr) {
     return ResArr
 }
 
+; 短名称只在解析指令时反查，避免影响「等待」的进程分类和普通词条。
+GetCommandKey(name) {
+    switch name {
+        case "进程": return "进程管理"
+        case "控件": return "窗口控件"
+        default: return GetLangKey(name)
+    }
+}
+
 GetLangMacro(MacroStr, Mode) {
-    ; 简中多语言展示模式下无需转换，直接返回
-    if (MacroStr == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
+    if (MacroStr == "")
+        return MacroStr
+    if (Mode == 1 && MainSoftData.Lang == "简中"
+        && !InStr(MacroStr, "进程管理") && !InStr(MacroStr, "窗口控件"))
         return MacroStr
 
     cmdArr := SplitMacro(MacroStr)
@@ -218,9 +233,8 @@ GetLangMacro(MacroStr, Mode) {
 
 ; mode 1多语言模式  2简中语言模式
 GetLangCmd(Cmd, Mode) {
-    if (Mode == 1 && MainSoftData.Lang == "简中")
+    if (Cmd == "")
         return Cmd
-
     paramArr := SplitCommand(Cmd)
 
     action := Mode == 1 ? GetLang : GetLangKey
@@ -232,10 +246,15 @@ GetLangCmd(Cmd, Mode) {
     ; - 無編號純指令（如 "按鍵"、"間隔"）：textOnly="按鍵", numbersOnly=""
     ; 兩者皆可通用同一行邏輯轉換，省去繁瑣的分支判斷與正規表示式（RegExReplace）
     SplitSerialTextAndNumbers(rawCmd, &textOnly, &numbersOnly)
-    paramArr[1] := cmdSymbol . action(textOnly) . numbersOnly
-
     ; 將指令名歸一化為內部簡中鍵，統一處理特定指令的內部參數翻譯
-    key := GetLangKey(textOnly)
+    key := GetCommandKey(textOnly)
+    displayName := Mode == 1 ? GetLang(key == "进程管理" || key == "窗口控件" ? key : textOnly) : key
+    if (Mode == 1 && MainSoftData.Lang == "简中") {
+        if (displayName == textOnly)
+            return Cmd
+        return cmdSymbol . displayName . numbersOnly . SubStr(Cmd, StrLen(paramArr[1]) + 1)
+    }
+    paramArr[1] := cmdSymbol . displayName . numbersOnly
     if (key == "RMT指令" && paramArr.Length >= 2)
         paramArr[2] := action(paramArr[2])
     else if (key == "按键" && paramArr.Length >= 3)

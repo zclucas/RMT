@@ -17,7 +17,7 @@ SetGlobalData(macroStr, visitMap) {
         visitMap[cmdName] := true
         SetCMDSerialData(cmdArr[A_Index])
 
-        baseCmd := RTrim(cmdName, "0123456789")
+        baseCmd := GetCommandKey(RTrim(cmdName, "0123456789"))
         
         if (baseCmd == "按键" || baseCmd == "手柄") {
             if (!MySoftData.HasJoyMacro) {
@@ -76,6 +76,8 @@ SetGlobalData(macroStr, visitMap) {
                 RegisterYoloVars(Data)
             case "翻译":
                 RegisterTranslateVars(Data)
+            case "进程管理":
+                ProcessManage.RegisterOutputs(Data)
             case "浏览器":
                 if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
                     TimeoutPolicy.RegisterStatus(Data)

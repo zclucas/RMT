@@ -1721,7 +1721,7 @@ FullCopyCmd(cmdStr, CopyedMap := Map()) {
         return FullCopyGraphStart(paramArr[1], CopyedMap)
 
     textOnly := GetCmdOnlyText(paramArr[1])
-    cmd := GetLangKey(textOnly)
+    cmd := GetCommandKey(textOnly)
     if (!MySoftData.DataFileMap.Has(cmd))
         return cmdStr
     Data := GetMacroCMDData(paramArr[1]).Clone()
@@ -2007,7 +2007,7 @@ FormatCommandAutoRemark(data, remark, previousAutoRemark, generate, commitRemark
     return CorrectRemark(GetLang(name) number, remark)
 }
 
-OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "") {
+OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "", windowInfoPreview := "") {
     tableItem := MySoftData.SpecialTableItem
     if (tableItem.Items.Length == 0) {
         item := MacroItem()
@@ -2034,6 +2034,8 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingCo
 
     if (IsObject(windowBindingContext))
         tableItem.EditorWindowBindingContext := windowBindingContext
+    if (IsObject(windowInfoPreview))
+        tableItem.WindowInfoPreview := windowInfoPreview
     try {
         UpdateMacroRunningCount(0, 1)
         RefreshItemColorUI(tableItem, 1)
@@ -2042,6 +2044,8 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingCo
     } finally {
         if (IsObject(windowBindingContext))
             tableItem.DeleteProp("EditorWindowBindingContext")
+        if (IsObject(windowInfoPreview))
+            tableItem.DeleteProp("WindowInfoPreview")
         lastState := item.ColorState
         item.ColorState := 0
         UpdateMacroRunningCount(lastState, 0)

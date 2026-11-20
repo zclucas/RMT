@@ -252,7 +252,6 @@ ResolvePathNoDotDot(p) {
 ; ============================================================
 InitDataFilePaths(rootDir) {
     global ProjectRootDir := ResolvePathNoDotDot(rootDir)
-    global VBSPath := ProjectRootDir "\MinTool\PlayAudio.vbs"
     global StartTipAudio := (MainSoftData.StartTipAudio != "" && FileExist(MainSoftData.StartTipAudio)) ? MainSoftData.StartTipAudio : ProjectRootDir "\Audio\Start.wav"
     global EndTipAudio := (MainSoftData.EndTipAudio != "" && FileExist(MainSoftData.EndTipAudio)) ? MainSoftData.EndTipAudio : ProjectRootDir "\Audio\End.wav"
     global StopTipAudio := (MainSoftData.StopTipAudio != "" && FileExist(MainSoftData.StopTipAudio)) ? MainSoftData.StopTipAudio : EndTipAudio
@@ -289,6 +288,7 @@ InitDataFilePaths(rootDir) {
     global AiDecisionFile := cfgDir "\AiDecisionFile.toml"
     global YoloFile := cfgDir "\YoloFile.toml"
     global TranslateFile := cfgDir "\TranslateFile.toml"
+    global ProcessManageFile := cfgDir "\ProcessManageFile.toml"
     global FileIOFile := cfgDir "\FileIOFile.toml"
     global WindowManageFile := cfgDir "\WindowManageFile.toml"
     global KeyCheckFile := cfgDir "\KeyCheckFile.toml"

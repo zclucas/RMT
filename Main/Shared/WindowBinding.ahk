@@ -52,13 +52,13 @@ GetHwndList(infoStr) {
     if (InStr(infoStr, "❖")) {
         infoStr := StrReplace(infoStr, "❖")
         hwndIdStrList := StrSplit(infoStr, "|")
-        for index, hwndIdStr in hwndIdStrList {
+        for hwndIdStr in hwndIdStrList {
+            hwndIdStr := Trim(hwndIdStr)
             if (SubStr(hwndIdStr, 1, 1) = "{" && SubStr(hwndIdStr, -1) = "}")
                 hwndIdStr := SubStr(hwndIdStr, 2, -1)
 
-            hasValue := TryGetVarValue(&hwnd, hwndIdStr)
-            if (hasValue)
-                HwndList.Push(hwnd)
+            if (TryGetVarValue(&hwnd, hwndIdStr) && IsInteger(hwnd))
+                HwndList.Push(Integer(hwnd))
         }
         return HwndList
     }

@@ -156,7 +156,7 @@ ExtractSerialFromCmd(cmdStr) {
     if (cmdStr == "")
         return ""
 
-    cleanCmd := GetCmdStr(cmdStr)
+    cleanCmd := NormalizeClipboardCommandName(GetCmdStr(cmdStr))
     if (RegExMatch(cleanCmd, "i)^(宏操作\d+|Ctrl\d+)(?=$|[_| \t])", &m))
         return MacroOperationSerial(m[1])
 
@@ -194,6 +194,12 @@ ExtractSerialFromCmd(cmdStr) {
         return trimmedSerial
 
     return ""
+}
+
+NormalizeClipboardCommandName(cmd) {
+    if (RegExMatch(cmd, "^(进程|控件)(?=\d)", &shortName))
+        return GetCommandKey(shortName[1]) . SubStr(cmd, shortName.Len + 1)
+    return cmd
 }
 
 ; 在已知类型的配置文件中查找或验证序列码
@@ -453,6 +459,8 @@ RemapCommandSerials(cmdList, replaceMap) {
     while (pos := RegExMatch(cmdList, pattern, &m, start)) {
         serial := RTrim(m[3], " `t")
         replacement := replaceMap.Get(serial, "")
+        if (replacement == "")
+            replacement := replaceMap.Get(NormalizeClipboardCommandName(serial), "")
         if (replacement == "")
             replacement := replaceMap.Get(MacroOperationSerial(serial), serial)
         result .= SubStr(cmdList, start, pos - start) m[1] m[2] replacement SubStr(m[3], StrLen(serial) + 1)

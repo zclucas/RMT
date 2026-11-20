@@ -2,7 +2,7 @@
     InitCommandConfigs() {
         ; 指令名称：移动、移动Pro、增量移动（原游戏视角）
         this.CMDStrArr := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作", "变量", "变量提取",
-            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图", "窗口控件", "AI判断", "YOLO检测", "翻译"])
+            "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "文本处理", "数组", "RMT指令", "后台鼠标", "后台按键", "窗口信息", "调整窗口", "按键检测", "手柄检测", "等待", "注释", "抓图", "窗口控件", "AI判断", "YOLO检测", "翻译", "进程管理"])
 
         this.CMDIconFileArr := ["Images\Soft\Time.png", "Images\Soft\Key.png", "Images\Soft\Joy.png",
             "Images\Soft\Search.png", "Images\Soft\SearchPro.png", "Images\Soft\SearchAll.png", "Images\Soft\SearchCombo.png",
@@ -17,7 +17,7 @@
             "Images\Soft\Mouse.png", "Images\Soft\BGKey.png",
             "Images\Soft\WindowManage.png", "Images\Soft\WindowAdjustGear32.png", "Images\Soft\KeyListen.png", "Images\Soft\JoyListen.png",
             "Images\Soft\Wait.png",
-            "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\WindowManage.png", "Images\Soft\AiDecision.png", "Images\Soft\Yolo.png", "Images\Soft\FlowJump.png", "Images\Soft\TextOps.png"]
+            "Images\Soft\Comment.png", "Images\Soft\ScreenShot.png", "Images\Soft\WindowManage.png", "Images\Soft\AiDecision.png", "Images\Soft\Yolo.png", "Images\Soft\TextOps.png", "Images\Soft\ProcessManage.png", "Images\Soft\FlowJump.png"]
 
         this.IconMap := Map(GetLang("间隔"), "Icon1", GetLang("按键"), "Icon2", GetLang("手柄"), "Icon38", GetLang("搜索"), "Icon3",
         GetLang("搜索Pro"), "Icon4", GetLang("搜索All"), "IconSearchAll", GetLang("搜索Combo"), "Icon39", GetLang("移动"), "Icon5", GetLang("移动Pro"), "Icon6", GetLang("增量移动"), "Icon34", GetLang("输出"), "Icon7",
@@ -26,7 +26,7 @@
         GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
         GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27", GetLang("Excel"), "Icon41", GetLang("网络请求"), "IconHttpRequest", GetLang("浏览器"), "IconBrowser",
-        GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("窗口信息"), "Icon29", GetLang("调整窗口"), "IconWindowAdjust", GetLang("窗口控件"), "Icon29", GetLang("AI判断"), "IconAiDecision", GetLang("YOLO检测"), "IconYolo", GetLang("按键检测"), "Icon30", GetLang("手柄检测"), "Icon42", GetLang("跳转"), "Icon43", GetLang("注释"), "Icon31",
+        GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("窗口信息"), "Icon29", GetLang("调整窗口"), "IconWindowAdjust", GetLang("窗口控件"), "Icon29", GetLang("AI判断"), "IconAiDecision", GetLang("YOLO检测"), "IconYolo", GetLang("进程管理"), "IconProcessManage", GetLang("按键检测"), "Icon30", GetLang("手柄检测"), "Icon42", GetLang("跳转"), "Icon43", GetLang("注释"), "Icon31",
         GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33", GetLang("等待确定"), "Icon36", GetLang("时间"), "Icon35", GetLang("倒计时"), "Icon37", GetLang("提示"), "IconPrompt", GetLang("翻译"), "IconTranslate")
 
         ; IconN → 图标文件（顺序与原 IL_Add 一致）
@@ -45,7 +45,7 @@
             "Icon23", "Images\Soft\LoopBody.png", "Icon24", "Images\Soft\TextOps.png",
             "Icon25", "Images\Soft\Arr.png", "Icon26", "Images\Soft\Input.png",
             "Icon27", "Images\Soft\FileIO.png", "Icon28", "Images\Soft\Control.png",
-            "IconAiDecision", "Images\Soft\AiDecision.png", "IconYolo", "Images\Soft\Yolo.png", "IconWindowAdjust", "Images\Soft\WindowAdjustGear32.png", "Icon29", "Images\Soft\WindowManage.png", "Icon30", "Images\Soft\KeyListen.png",
+            "IconAiDecision", "Images\Soft\AiDecision.png", "IconYolo", "Images\Soft\Yolo.png", "IconProcessManage", "Images\Soft\ProcessManage.png", "IconWindowAdjust", "Images\Soft\WindowAdjustGear32.png", "Icon29", "Images\Soft\WindowManage.png", "Icon30", "Images\Soft\KeyListen.png",
             "Icon31", "Images\Soft\Comment.png", "Icon32", "Images\Soft\ScreenShot.png",
             "Icon33", "Images\Soft\Wait.png", "Icon34", "Images\Soft\DeltaMove.png", "Icon35", "Images\Soft\Time.png",
             "Icon36", "Images\Soft\WaitConfirm.png", "Icon37", "Images\Soft\Time.png",
@@ -103,6 +103,7 @@
             {class: WindowManageGui, name: "调整窗口", icon: "Images\Soft\WindowAdjustGear32.png", propName: "WindowAdjustGui"},
             {class: WindowControlGui, name: "窗口控件", icon: "Images\Soft\WindowManage.png", propName: "WindowControlGui"},
             {class: AiDecisionGui, name: "AI判断", icon: "Images\Soft\AiDecision.png", propName: "AiDecisionGui"},
+            {class: ProcessManageGui, name: "进程管理", icon: "Images\Soft\ProcessManage.png", propName: "ProcessManageGui"},
             {class: YoloGui, name: "YOLO检测", icon: "Images\Soft\Yolo.png", propName: "YoloGui"},
             {class: TranslateGui, name: "翻译", icon: "Images\Soft\TextOps.png", propName: "TranslateGui"},
             {class: WindowManageGui, name: "窗口管理", icon: "Images\Soft\WindowManage.png", propName: "WindowManageGui"},

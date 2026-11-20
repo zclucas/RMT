@@ -424,7 +424,8 @@ WindowNormalizeInfo(data) {
 
 WindowEditorHint(action) {
     switch action {
-        case "位置与宽高": return "结果保存到变量，留空则跳过。坐标为屏幕坐标，宽高包含标题栏和边框。"
+        case "窗口位置": return "窗口左上角的屏幕坐标。留空则跳过。"
+        case "位置与宽高": return "坐标取窗口左上角，宽高包含标题栏和边框。结果留空则跳过。"
         case "窗口状态": return "结果保存到变量，留空则跳过。状态为 0/1；透明度为 0–100，100 表示完全不透明。"
         case "匹配窗口列表": return "填写数组名，按匹配方式保存窗口句柄；没有匹配时返回空数组。"
         case "标题类名句柄", "进程信息": return "结果保存到变量，留空则跳过。没有匹配时返回空值。"
@@ -473,8 +474,17 @@ WindowNextResultName(value, oldAction, newAction, index) {
 }
 
 WindowInfoFieldTip(action, index) {
+    if (action == "窗口位置" || action == "位置与宽高") {
+        switch index {
+            case 1: return "窗口左上角的屏幕 X 坐标。留空则跳过。"
+            case 2: return "窗口左上角的屏幕 Y 坐标。留空则跳过。"
+            case 3, 4: return "窗口尺寸包含标题栏和边框。留空则跳过。"
+        }
+    }
+    if (action == "匹配窗口列表")
+        return WindowEditorHint(action)
     if (action != "窗口状态")
-        return "填写保存结果的变量名；留空则跳过。"
+        return "填写保存结果的变量名；留空则跳过"
     tips := [
         "1：找到匹配窗口；0：未找到匹配窗口。",
         "1：目标窗口是当前活动窗口；0：未激活或未找到窗口。",

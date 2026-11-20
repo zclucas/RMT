@@ -2,14 +2,11 @@
 
 ; 一键反馈：软件内直接向论坛提交 Bug / 建议（bug反馈 cat 42、功能建议 cat 44）
 ; 鉴权复用共享那套：设置页「登录论坛」授权写入 ini 的 ShareApiKey；管理员 Key 模式另走 ShareApiUser
-; 正文就是 Discourse 的 Markdown 原文：图片用 ![名](路径) 直接写在正文里（Ctrl+V 粘贴 / 拖文件进输入框，
-; 插在光标处）。两种反馈都支持文件附件，在提交时统一上传。
+; 正文支持 Discourse Markdown。粘贴的图片和拖入的文件都放入附件列表，提交时统一上传。
 class FeedbackGui {
     static instances := Map()
     static _opening := false
     static MaxImgs := 9          ; 站点 newuser_max_images=20，留点余量
-    ; 论坛「版本」标签组中的原名，显示时才翻译。
-    static VersionTags := ["旧版本", "正式版", "测试版"]
 
     __New() {
         this.ui := 0
@@ -36,7 +33,7 @@ class FeedbackGui {
         this._titleRetried := 0
         this._prefillError := ""
         this._autoTpl := ""          ; 上一次自动写进描述框的骨架，用于判断用户是否动过
-        this._done := false          ; 已提交成功：输入只读、不再弹放弃确认
+        this._done := false          ; 提交成功后锁定表单，关闭时无需确认
     }
 
     static ShowGui(kind := "bug", prefillError := "") {
@@ -115,11 +112,12 @@ class FeedbackGui {
         descriptionRow.Cols("Auto", "*")
         descriptionRow.Add("TextBlock").Grid_Column(0).Text(GetLang("描述"))
             .Foreground("{DynamicResource TextSub}").FontSize(12).VerticalAlignment("Center")
-        descriptionRow.Add("TextBlock").Grid_Column(1).Text(GetLang("支持 Markdown，按 Ctrl+V 可粘贴图片"))
+        descriptionRow.Add("TextBlock").Grid_Column(1).Text(GetLang("支持 Markdown，Ctrl+V 添加图片附件"))
             .Foreground("{DynamicResource TextSub}").FontSize(11).VerticalAlignment("Center")
             .TextAlignment("Right").TextWrapping("Wrap").Margin("10,0,0,0")
         root.Add("TextBox").Name("BodyInput").Grid_Row(4)
             .TextWrapping("Wrap").AcceptsReturn("True").VerticalScrollBarVisibility("Auto")
+            .VerticalContentAlignment("Top")
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
@@ -128,6 +126,7 @@ class FeedbackGui {
             .Foreground("{DynamicResource TextSub}").FontSize(12).Margin("2,0,0,5")
         bugPanel.Add("TextBox").Name("ErrorInput").Height(76)
             .TextWrapping("Wrap").AcceptsReturn("True").VerticalScrollBarVisibility("Auto")
+            .VerticalContentAlignment("Top")
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
@@ -144,15 +143,9 @@ class FeedbackGui {
         this._AddBtn(attachRow, "RemoveAttachment", GetLang("移除"), 66).Grid_Column(2).IsEnabled("False")
         infoRow := details.Add("Grid").Margin("2,8,0,0")
         infoRow.Cols("Auto", "*")
-        versionRow := infoRow.Add("StackPanel").Name("VersionRow").Grid_Column(0)
-            .Orientation("Horizontal").Margin("0,0,12,0")
-        versionRow.Add("TextBlock").Text(GetLang("版本标签")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextSub}").FontSize(12)
-        versionCombo := versionRow.Add("ComboBox").Name("VersionTag").MinWidth(104).Height(26)
-            .Margin("10,0,0,0").SelectedIndex("1")
-            .SetProp("AutomationProperties.Name", GetLang("版本标签"))
-        for tag in FeedbackGui.VersionTags
-            versionCombo.Add("ComboBoxItem").Content(GetLang(tag))
+        infoRow.Add("TextBlock").Name("VersionRow").Grid_Column(0).Margin("0,0,12,0")
+            .Text(GetLang("版本标签") " · " GetLang(this._VersionTag()))
+            .Foreground("{DynamicResource TextSub}").FontSize(12).VerticalAlignment("Center")
 
         infoRow.Add("TextBlock").Grid_Column(1).Text(GetLang("环境信息：") " " this._EnvPreview())
             .Foreground("{DynamicResource TextSub}").FontSize(12).VerticalAlignment("Center").TextWrapping("Wrap")
@@ -165,7 +158,6 @@ class FeedbackGui {
             .TextWrapping("Wrap").VerticalAlignment("Center").MaxHeight("42")
         btnRow := bar.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Center")
         this._AddBtn(btnRow, "LoginBtn", GetLang("登录论坛"), 84).Margin("0,0,14,0")
-        this._AddBtn(btnRow, "OpenTopicBtn", GetLang("打开帖子"), 84).Margin("0,0,8,0").Visibility("Collapsed")
         this._AddBtn(btnRow, "CancelBtn", GetLang("取消"), 70).Margin("0,0,8,0")
         this._AddBtn(btnRow, "SubmitBtn", GetLang("提交反馈"), 92, true)
 
@@ -187,12 +179,10 @@ class FeedbackGui {
         this.ui.OnEvent("KindIdea", "Click", ObjBindMethod(this, "OnKindClick", "idea"))
         this.ui.OnEvent("AddAttachments", "Click", ObjBindMethod(this, "OnAddAttachments"))
         this.ui.OnEvent("RemoveAttachment", "Click", ObjBindMethod(this, "OnRemoveAttachment"))
-        ; 正文仍可粘贴图片，拖入窗口的文件统一放到附件栏。
         this.ui.OnEvent("BodyInput", "PreviewKeyDown:V", ObjBindMethod(this, "OnBodyPasteKey"))
         this.ui.OnEvent("FeedbackDropTarget", "FileDrop", ObjBindMethod(this, "OnAttachmentDrop"))
         this.ui.OnEvent("SubmitBtn", "Click", ObjBindMethod(this, "OnSubmit"))
         this.ui.OnEvent("LoginBtn", "Click", ObjBindMethod(this, "OnLoginClick"))
-        this.ui.OnEvent("OpenTopicBtn", "Click", ObjBindMethod(this, "OnOpenTopicClick"))
         this.ui.OnEvent("CancelBtn", "Click", ObjBindMethod(this, "OnCancelClick"))
 
         this._pollFn := ObjBindMethod(this, "_Poll")
@@ -288,11 +278,6 @@ class FeedbackGui {
             try this.ui.Update("Window", "Close", "")
             this.ui := ""
         }
-    }
-
-    OnOpenTopicClick(state := unset, ctrl := unset, event := unset) {
-        if (this._openUrl != "")
-            try Run(this._openUrl)
     }
 
     ; ===== 反馈类型 =====
@@ -450,7 +435,7 @@ class FeedbackGui {
 
     ; ===== 正文图片 =====
 
-    ; 正文框里 Ctrl+V：剪贴板是图就存盘并插一行 ![名](路径)；不是图就交给 TextBox 自己粘文本
+    ; Ctrl+V 粘贴的图片进入附件列表，普通文本由输入框处理。
     OnBodyPasteKey(state := unset, ctrl := unset, event := unset) {
         if (this._done || this._pending != "")
             return
@@ -462,39 +447,8 @@ class FeedbackGui {
         if (!DllCall("IsClipboardFormatAvailable", "uint", 2) && !DllCall("IsClipboardFormatAvailable", "uint", 8))
             return
         path := this._SaveClipImage()
-        if (path == "")
-            return
-        this._InsertMdImgs([path])
-    }
-
-    ; 插在光标处，前后补换行，保证是独立一段
-    _InsertMdImgs(paths) {
-        if (!IsObject(this.ui) || this._done)
-            return
-        text := "", caret := 0
-        try text := String(this.ui.Query("BodyInput>Text"))
-        try caret := Integer(this.ui.Query("BodyInput>CaretIndex"))
-        if (caret < 0 || caret > StrLen(text))
-            caret := StrLen(text)
-        block := ""
-        for p in paths {
-            name := ""
-            SplitPath p, &name
-            if (InStr(p, " "))
-                block .= "![" name "](<" p ">)`n"
-            else
-                block .= "![" name "](" p ")`n"
-        }
-        pre := SubStr(text, 1, caret)
-        post := SubStr(text, caret + 1)
-        if (pre != "" && SubStr(pre, -1) != "`n")
-            block := "`n" block
-        if (post != "" && SubStr(post, 1, 1) != "`n")
-            block .= "`n"
-        try this.ui.Update("BodyInput", "InsertText", block)
-        try this.ui.Update("BodyInput", "Focus", "True")
-        ; 正文里已经能看到插入的 ![名](路径)，不再额外占用状态行
-        this._SetStatus("")
+        if (path != "")
+            this._AddAttachmentPaths([path])
     }
 
     static _IsImg(path) {
@@ -552,26 +506,16 @@ class FeedbackGui {
         }
         title := Trim(String(this.ui.Query("TitleInput>Text")))
         body := Trim(String(this.ui.Query("BodyInput>Text")))
-        if (StrLen(title) < 4) {
-            this._SetStatus(GetLang("标题太短：一句话说清是什么问题（至少 4 个字）"), "err")
+        validationMessage := ""
+        if (StrLen(title) < 4)
+            validationMessage := GetLang("标题太短：一句话说清是什么问题（至少 4 个字）")
+        else if (FeedbackGui._LooksEmptyTemplate(body))
+            validationMessage := GetLang("描述里还只有骨架，把步骤或场景补上再提交")
+        else if (StrLen(body) < 10)
+            validationMessage := GetLang("描述太短，请把复现步骤或使用场景写清楚一点")
+        if (validationMessage != "") {
+            RmtDialog.Info(validationMessage, GetLang("提交反馈"), this.ui.wpfHwnd)
             return
-        }
-        if (FeedbackGui._LooksEmptyTemplate(body)) {
-            this._SetStatus(GetLang("描述里还只有骨架，把步骤或场景补上再提交"), "err")
-            return
-        }
-        if (StrLen(body) < 10) {
-            this._SetStatus(GetLang("描述太短，请把复现步骤或使用场景写清楚一点"), "err")
-            return
-        }
-        versionTag := ""
-        if (this._kind = "bug") {
-            selected := this.ui.Query("VersionTag>SelectedIndex")
-            if (!IsInteger(selected) || selected < 0 || selected >= FeedbackGui.VersionTags.Length) {
-                this._SetStatus(GetLang("请选择版本标签"), "err")
-                return
-            }
-            versionTag := FeedbackGui.VersionTags[Integer(selected) + 1]
         }
         apiKey := GetShareApiKey()
         if (apiKey == "") {
@@ -580,12 +524,13 @@ class FeedbackGui {
             return
         }
         errorText := this._kind = "bug" ? Trim(String(this.ui.Query("ErrorInput>Text"))) : ""
+        versionTag := this._kind = "bug" ? this._VersionTag() : ""
         this._DoSubmit(title, body, apiKey, errorText, versionTag)
     }
 
     _DoSubmit(title, body, apiKey, errorText, versionTag) {
         global RMT_ASM
-        this._ResetResult()
+        this._SetStatus("")
         this._SetBusy(true)
         try {
             GetDiscourse()
@@ -717,6 +662,11 @@ class FeedbackGui {
         if (links != "")
             raw .= "**" GetLang("附件") "**`n`n" links "`n"
         return raw "---`n`n**" GetLang("环境信息") "**`n`n" this._EnvPreview()
+    }
+
+    _VersionTag() {
+        version := RmtRelease.Version(RMT_VERSION)
+        return IsObject(version) && version.preview ? "测试版" : "正式版"
     }
 
     _EnvPreview() {
@@ -967,7 +917,7 @@ class FeedbackGui {
         try this.ui.Update("SubmitBtn", "Content", on ? GetLang("提交中…") : GetLang("提交反馈"))
         try this.ui.Update("SubmitBtn", "IsEnabled", on ? "False" : "True")
         enabled := !on && !this._done
-        for name in ["KindBug", "KindIdea", "AddAttachments", "AttachmentList", "VersionTag"]
+        for name in ["KindBug", "KindIdea", "AddAttachments", "AttachmentList"]
             try this.ui.Update(name, "IsEnabled", enabled ? "True" : "False")
         try this.ui.Update("RemoveAttachment", "IsEnabled", enabled && this._attachments.Length ? "True" : "False")
         for name in ["TitleInput", "BodyInput", "ErrorInput"]
@@ -986,24 +936,20 @@ class FeedbackGui {
         }
     }
 
-    ; 成功后：收起提交/登录，输入只读，按钮变「关闭」
     _SetDone(text, url) {
         this._done := true
         this._openUrl := url
-        this._SetBusy(false)
-        ; 地址不写进状态行（点「打开帖子」就能看），一行文字省一截高度
-        this._SetStatus(text, "ok")
-        try this.ui.Update("SubmitBtn", "Visibility", "Collapsed")
-        try this.ui.Update("LoginBtn", "Visibility", "Collapsed")
-        try this.ui.Update("OpenTopicBtn", "Visibility", url = "" ? "Collapsed" : "Visible")
-        try this.ui.Update("CancelBtn", "Content", GetLang("关闭"))
-    }
-
-    _ResetResult() {
-        this._openUrl := ""
-        try this.ui.Update("StatusText", "Text", "")
-        try this.ui.Update("StatusText", "Foreground", "{DynamicResource TextSub}")
-        try this.ui.Update("OpenTopicBtn", "Visibility", "Collapsed")
+        this._CloseAttachmentProgress()
+        this._SetStatus("")
+        title := GetLang("提交反馈")
+        openTopic := false
+        if (url == "")
+            RmtDialog.Info(text, title, this.ui.wpfHwnd)
+        else
+            openTopic := RmtDialog.Choose(text, title, [GetLang("打开帖子")], this.ui.wpfHwnd) == 1
+        this.Close()
+        if (openTopic)
+            try Run(this._openUrl)
     }
 
     ; 去掉 C# 侧的步骤标记（[D3]/[D4]…）再给用户看
