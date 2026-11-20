@@ -409,7 +409,6 @@
             .Height(31).MinHeight(31)
             .HorizontalAlignment("Right").VerticalAlignment("Top").Margin("0,8,8,0")
             .SetProp("Panel.ZIndex", "20")
-            .ToolTip(GetLang("图形节点"))
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)

@@ -396,9 +396,9 @@ ReadStoredMacroItem(mseg) {
         item.BindWindow := "{模块窗口绑定}"
     item.IcoPath := TomlUtil_Str(mseg, "IcoPath")
     item.VoiceKeywords := TomlUtil_Str(mseg, "VoiceKeywords")
-    item.Macro := TomlUtil_Str(mseg, "Macro")
-    item.PreMacro := TomlUtil_Str(mseg, "PreMacro")     ;执行前钩子（缺省 ""）
-    item.PostMacro := TomlUtil_Str(mseg, "PostMacro")   ;执行后钩子（缺省 ""）
+    item.Macro := GetLangMacro(TomlUtil_Str(mseg, "Macro"), 2)
+    item.PreMacro := GetLangMacro(TomlUtil_Str(mseg, "PreMacro"), 2)
+    item.PostMacro := GetLangMacro(TomlUtil_Str(mseg, "PostMacro"), 2)
     item.Breakpoints := TomlUtil_Str(mseg, "Breakpoints")   ;断点集合（缺省 ""）
     return item
 }
@@ -768,11 +768,10 @@ SaveTableItemInfoTomlCore(root, tableItem) {
             mseg["IcoPath"] := item.IcoPath
             mseg["UnorderedTrigger"] := item.UnorderedTrigger ? 1 : 0
             mseg["VoiceKeywords"] := item.VoiceKeywords
-            ; 宏内容：原样存储（多行换行由 TomlWriter 转义为 \n，读回自动还原，无需 ⫶ 编码）
-            mseg["Macro"] := item.Macro
+            mseg["Macro"] := GetLangMacro(item.Macro, 2)
             ; 执行前/后钩子：与 Macro 同段的条目级宏串（缺省 ""，不启用）
-            mseg["PreMacro"] := item.HasProp("PreMacro") ? item.PreMacro : ""
-            mseg["PostMacro"] := item.HasProp("PostMacro") ? item.PostMacro : ""
+            mseg["PreMacro"] := item.HasProp("PreMacro") ? GetLangMacro(item.PreMacro, 2) : ""
+            mseg["PostMacro"] := item.HasProp("PostMacro") ? GetLangMacro(item.PostMacro, 2) : ""
             ; 断点集合：与 Macro 同段的条目级字段，值形如 ",sig1,sig2,"（缺省 ""）
             mseg["Breakpoints"] := item.Breakpoints
             root[macroSeg] := mseg
@@ -886,16 +885,9 @@ IsTabVisible(tableItem) {
 
 ; §20 指令改名兼容判断：旧名「移动/移动Pro」与新名「鼠标移动/鼠标移动Pro」都识别
 ; （旧配置宏内容/流程图节点类型零迁移兼容；增量移动为全新指令无旧名）
-; 入参可为当前语言显示文本（如 "Mouse Move"）或中文键，内部统一 GetLangKey 后按键比较
-IsMoveCmd(t) {
-    k := GetLangKey(t)
-    return k == "移动" || k == "鼠标移动"
-}
-IsMoveProCmd(t) {
-    k := GetLangKey(t)
-    return k == "移动Pro" || k == "鼠标移动Pro"
-}
-IsDeltaMoveCmd(t) => GetLangKey(t) == "增量移动"
+IsMoveCmd(t) => GetCommandKey(t) == "移动"
+IsMoveProCmd(t) => GetCommandKey(t) == "移动Pro"
+IsDeltaMoveCmd(t) => GetCommandKey(t) == "增量移动"
 
 CreateTableItemArr(legacyOrder := false) {
     global MySoftData

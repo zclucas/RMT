@@ -37,7 +37,7 @@ WindowBindingMouseActive(*) {
     return hwnd != 0 && WinActive("ahk_id " hwnd)
 }
 
-GetHwndList(infoStr) {
+GetHwndList(infoStr, variTip := true) {
     HwndList := []
     if (infoStr == "")
         return HwndList
@@ -57,7 +57,7 @@ GetHwndList(infoStr) {
             if (SubStr(hwndIdStr, 1, 1) = "{" && SubStr(hwndIdStr, -1) = "}")
                 hwndIdStr := SubStr(hwndIdStr, 2, -1)
 
-            if (TryGetVarValue(&hwnd, hwndIdStr) && IsInteger(hwnd))
+            if (TryGetVarValue(&hwnd, hwndIdStr, variTip) && IsInteger(hwnd))
                 HwndList.Push(Integer(hwnd))
         }
         return HwndList

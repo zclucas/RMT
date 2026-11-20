@@ -202,6 +202,8 @@ class WaitGui {
             if (i == 1)
                 continue
             row := CmdEditorForm.Row(extra, option[2], "", i == 3 ? "CommandRightLabel" : "CommandLabel")
+            if (i == 3)
+                row.Name("ConfirmPauseBtnRow")
             this._Choice(row, "Confirm" option[1], option[3]).Grid_Column(1)
             if (i == 3)
                 row.Grid_Column(2)
@@ -482,7 +484,8 @@ class WaitGui {
         confirmation := t == "等待确定"
         if (confirmation)
             this._confirmMode := GetLangKey(this.ui.Query("WaitConditionCon"))
-        batch.Push({ControlName: "ConfirmExtra", PropertyName: "Visibility", Value: this._confirmMode == "继续&终止&暂停" ? "Visible" : "Collapsed"})
+        batch.Push({ControlName: "ConfirmExtra", PropertyName: "Visibility", Value: this._confirmMode != "继续" ? "Visible" : "Collapsed"})
+        batch.Push({ControlName: "ConfirmPauseBtnRow", PropertyName: "Visibility", Value: this._confirmMode == "继续&终止&暂停" ? "Visible" : "Collapsed"})
         batch.Push({ControlName: "BtnCmdPlay", PropertyName: "Visibility", Value: confirmation ? "Visible" : "Collapsed"})
         batch.Push({ControlName: "BtnCmdF1", PropertyName: "Visibility", Value: show == "RangePanel" ? "Visible" : "Collapsed"})
         hint := WaitHintText(t)
@@ -933,14 +936,16 @@ class WaitGui {
 
     _FillTypes(group, selected := "") {
         this._currentGroup := group
-        this.WaitTypeKeys := group == "确定" ? WaitGui.ConfirmModes : WaitGroupTypes(group)
+        this.WaitTypeKeys := group == "确定" ? WaitGui.ConfirmModes.Clone() : WaitGroupTypes(group)
+        if (group == "确定" && this.Data.ConfirmConfig.Type == "继续&取消")
+            this.WaitTypeKeys.Push("继续&取消")
         this.ui.Update("WaitConditionRow", "Visibility", this.WaitTypeKeys.Length > 1 ? "Visible" : "Collapsed")
         this.ui.Update("WaitConditionCon", "ClearItems", "")
         for key in this.WaitTypeKeys {
             label := group == "确定" ? key : (key == "等待时间" ? "等待" : (key == "等待时间区间" ? "区间判断" : SubStr(key, 3)))
             this.ui.Update("WaitConditionCon", "AddItem", GetLang(label))
         }
-        index := group == "确定" ? CmdEnumIndex(this._confirmMode, WaitGui.ConfirmModes) : CmdEnumIndex(selected, this.WaitTypeKeys)
+        index := CmdEnumIndex(group == "确定" ? this._confirmMode : selected, this.WaitTypeKeys)
         this.ui.Update("WaitConditionCon", "SelectedIndex", index)
     }
 

@@ -203,6 +203,18 @@ function Install-RmtPackage($Job, [string]$Zip, [string]$UpdaterExe) {
     try {
         Write-RmtUpdateProgress '正在解压更新包…' 70
         $files = Expand-RmtPackage $Zip $staged $Job.arch $Job.name
+        if ($Job.name -match '^RMTv[0-9.]+F\d+_(x64|x86|x32)\.zip$') {
+            $settings = Get-RmtInstallPath $root 'Setting'
+            if ([IO.Directory]::Exists($settings)) {
+                Write-RmtUpdateProgress '正在备份配置…' 80
+                $settingsBackup = Get-RmtInstallPath $root 'SettingOld'
+                [void][IO.Directory]::CreateDirectory($settingsBackup)
+                $stagedSettings = Join-Path $stage 'Setting'
+                Copy-Item -LiteralPath $settings -Destination $stagedSettings -Recurse -Force
+                $backupName = 'Update-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N')
+                [IO.Directory]::Move($stagedSettings, (Join-Path $settingsBackup $backupName))
+            }
+        }
         $pending = @($files.Keys | Where-Object { $_ -ine 'RMT.exe' } | Sort-Object) + @('RMT.exe')
         if ($originalName -ine 'RMT.exe') { $pending += $originalName }
         $plan = @{ Original = $originalName; Texts = $Job.texts; Files = @(foreach ($relative in $pending) {

@@ -67,19 +67,17 @@ class MacroGraphInlineMixin {
                     return
                 cc := this._IfProCaseCountFromData(data)
                 if (bi.proIdx < cc)
-                    data.MacroArr[bi.proIdx + 1] := startSerial
+                    data.MacroArr[bi.proIdx + 1] := ReplaceCompareBranchBody(data.MacroArr[bi.proIdx + 1], startSerial)
                 else
-                    data.DefaultMacro := startSerial
+                    data.DefaultMacro := ReplaceCompareBranchBody(data.DefaultMacro, startSerial)
                 SaveMacroCMDData(data)
                 return
             }
             data := this._BranchParentData(bi.searchId)
             if (!IsObject(data))
                 return
-            if (bi.isTrue)
-                data.TrueMacro := startSerial
-            else
-                data.FalseMacro := startSerial
+            field := bi.isTrue ? "TrueMacro" : "FalseMacro"
+            data.%field% := ReplaceCompareBranchBody(data.HasOwnProp(field) ? data.%field% : "", startSerial)
             SaveMacroCMDData(data)
             return
         }
@@ -150,6 +148,8 @@ class MacroGraphInlineMixin {
         if (this._ilExpanded.Has(brId) && this._ilExpanded[brId])
             return
         startSerial := this._InlineContainerStartSerial(brId)
+        if (this._BranchInfo(brId) != "")
+            startSerial := SplitCompareBranchTail(startSerial).Body
         ; 记住可复用的分支开始节点序列码（图结构才复用；线性/空则留空，序列化时再分配）
         SplitSerialTextAndNumbers(startSerial, &t, &n)
         this._ilStartSerial[brId] := (t == GetLangKey("图形开始节点") && n != "") ? startSerial : ""

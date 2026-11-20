@@ -111,7 +111,7 @@ FindSerialType(serialStr) {
     inferredType := InferSerialTypeByPrefix(serialStr)
     if (inferredType != "" && MySoftData.DataFileMap.Has(inferredType)) {
         try {
-            if (CfgRead(MySoftData.DataFileMap[inferredType], SettingSection, serialStr, "") != "")
+            if (ReadCommandConfig(MySoftData.DataFileMap[inferredType], serialStr, inferredType) != "")
                 return inferredType
         } catch as e {
         }
@@ -173,13 +173,13 @@ ExtractSerialFromCmd(cmdStr) {
             if (underscorePos > 0) {
                 pureSerial := SubStr(afterType, 1, underscorePos - 1)
                 fullSerial := cmdType . pureSerial
-                if (CfgRead(DataFile, SettingSection, fullSerial, "") != "")
+                if (ReadCommandConfig(DataFile, fullSerial, cmdType) != "")
                     return fullSerial
             }
 
             ; 如果没有 _ ，整个 afterType 就是序列码
             fullSerial := cmdType . afterType
-            if (CfgRead(DataFile, SettingSection, fullSerial, "") != "")
+            if (ReadCommandConfig(DataFile, fullSerial, cmdType) != "")
                 return fullSerial
         }
     }
@@ -197,9 +197,7 @@ ExtractSerialFromCmd(cmdStr) {
 }
 
 NormalizeClipboardCommandName(cmd) {
-    if (RegExMatch(cmd, "^(进程|控件)(?=\d)", &shortName))
-        return GetCommandKey(shortName[1]) . SubStr(cmd, shortName.Len + 1)
-    return cmd
+    return GetLangCmd(cmd, 2)
 }
 
 ; 在已知类型的配置文件中查找或验证序列码
@@ -257,6 +255,7 @@ CollectConfigForCmd(cmdStr, cmdConfigMap) {
         if (!IsObject(data))
             return false
         data.SerialStr := serialStr
+        NormalizeCommandData("宏操作", data)
         cmdConfigMap[serialStr] := Map("类型", "宏操作", "配置", JSON.stringify(data, 0))
         return true
     }
@@ -356,6 +355,7 @@ GenerateUniqueSerialBatch(baseSerial, usedSerials) {
     }
     if (textOnly == "")
         textOnly := "Item"
+    textOnly := GetCommandKey(textOnly)
 
     ; 已知指令类型：直接用全局序号自增（移动Pro74/83/93 粘贴时各拿新号）
     if (MySoftData.DataFileMap.Has(textOnly)) {
@@ -638,9 +638,9 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
 
     unresolvedTargets := false
     if (isRMTFormat && importData != "") {
-        newCmdList := ObjAccess(importData, ["指令列表", "CommandList", "commandList", "MacroList"])
-        newPreMacro := ObjAccess(importData, ["执行前"])
-        newPostMacro := ObjAccess(importData, ["执行后"])
+        newCmdList := GetLangMacro(ObjAccess(importData, ["指令列表", "CommandList", "commandList", "MacroList"]), 2)
+        newPreMacro := GetLangMacro(ObjAccess(importData, ["执行前"]), 2)
+        newPostMacro := GetLangMacro(ObjAccess(importData, ["执行后"]), 2)
         configMap := ObjAccess(importData, ["指令配置", "ConfigMap", "configMap"])
         sameSource := ObjAccess(importData, ["来源会话"]) == MacroClipboardSource()
 
@@ -676,7 +676,10 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
                         }
                     }
 
-                    oldSerialStr := Data.SerialStr
+                    oldSerialStr := NormalizeClipboardCommandName(Data.SerialStr)
+                    cmdType := InferSerialTypeByPrefix(oldSerialStr)
+                    if (cmdType != "")
+                        NormalizeCommandData(cmdType, Data)
                     operationSerial := MacroOperationSerial(oldSerialStr)
                     if (operationSerial != "") {
                         oldSerialStr := operationSerial

@@ -217,7 +217,7 @@ RefreshToolUI() {
     if (!MainSoftData.HasProp("ToolMousePosCtrl") || !IsObject(MainSoftData.ToolMousePosCtrl))
         return
     ; 100ms 一次整块刷新，合并下发，避免逐条同步跨进程往返。
-    CtrlAdapter.RefreshAll([
+    pairs := [
         [MainSoftData.ToolMousePosCtrl, MainSoftData.PosStr],
         [MainSoftData.ToolProcessNameCtrl, MainSoftData.ProcessName],
         [MainSoftData.ToolProcessTileCtrl, MainSoftData.ProcessTile],
@@ -228,7 +228,12 @@ RefreshToolUI() {
         [MainSoftData.ToolWinSizeCtrl, MainSoftData.WinSizeStr],
         [MainSoftData.ToolColorCtrl, MainSoftData.Color],
         [MainSoftData.ToolMouseWinPosCtrl, MainSoftData.WinPosStr]
-    ])
+    ]
+    if (MainSoftData.HasProp("ToolProcessMetricsCtrls")) {
+        for field, ctrl in MainSoftData.ToolProcessMetricsCtrls
+            pairs.Push([ctrl, MouseProcessMonitor.Text(field)])
+    }
+    CtrlAdapter.RefreshAll(pairs)
 }
 
 ; 编辑快捷键：确认选择后再同步到 MainSoftData（以及显示控件）
@@ -320,7 +325,7 @@ CmdEditorPlayTip(hotkey := "!l") {
     act := GetLang("执行")
     if (act == "")
         act := "执行"
-    return disp "：" act
+    return disp == "" ? act : disp "：" act
 }
 
 ; 指令编辑器标题栏：手册跳转对应章节，视频暂为占位提示
@@ -493,7 +498,7 @@ class CmdEditorForm {
         columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(group)
         columns.Add("ColumnDefinition").Width("*")
         caption := this.Label(row, label).VerticalAlignment(alignment)
-        if (labelTip != "")
+        if (labelTip != "" && RTrim(labelTip, " ：:") != RTrim(GetLang(label), " ：:"))
             caption.ToolTip(labelTip)
         if (labelName != "")
             caption.Name(labelName)
@@ -651,8 +656,8 @@ class ScreenAreaPreview {
         return IsObject(this.Drag)
     }
 
-    FindTargetWindow(info) {
-        matches := GetHwndList(info)
+    FindTargetWindow(info, variTip := true) {
+        matches := GetHwndList(info, variTip)
         if (!matches.Length)
             return 0
         hwnd := matches[1]

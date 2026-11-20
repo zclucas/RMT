@@ -235,6 +235,7 @@ class MergeUtil {
     static ExtractSerialFromCmdDirect(cmdStr) {
         if (cmdStr == "")
             return ""
+        cmdStr := GetLangCmd(cmdStr, 2)
         if (RegExMatch(cmdStr, "i)^(宏操作\d+|Ctrl\d+)(?=$|[_| \t])", &m))
             return MacroOperationSerial(m[1])
 
@@ -510,8 +511,7 @@ class MergeUtil {
                     throw Error(GetLang("缺少宏操作配置") " " serial)
                 continue
             }
-            if (cmdType == "宏操作")
-                Data.SerialStr := serial
+            Data.SerialStr := serial
 
             configJson := JSON.stringify(Data, 0)
             collectedConfigs.Set(serial, Map("类型", cmdType, "配置", configJson))
@@ -542,21 +542,16 @@ class MergeUtil {
         if (DataFile == "")
             return ""
 
-        saveStr := CfgRead(DataFile, SettingSection, serial, "")
+        saveStr := ReadCommandConfig(DataFile, serial, cmdType)
         if (saveStr == "" && cmdType == "宏操作" && RegExMatch(serial, "^宏操作(\d+)$", &m))
             saveStr := CfgRead(DataFile, SettingSection, "Ctrl" m[1], "")
-        if (saveStr == "") {
-            textOnly := RegExReplace(serial, "\d+")
-            numbersOnly := RegExReplace(serial, "\D+")
-            normalizedKey := GetLangKey(textOnly) . numbersOnly
-            saveStr := CfgRead(DataFile, SettingSection, normalizedKey, "")
-        }
-
         if (saveStr == "")
             return ""
 
         try {
-            return JSON.parse(saveStr, , false)
+            data := JSON.parse(saveStr, , false)
+            NormalizeCommandData(cmdType, data)
+            return data
         } catch as e {
             return ""
         }
@@ -567,7 +562,7 @@ class MergeUtil {
         inferredType := MergeUtil.InferSerialType(serialStr)
         if (inferredType != "" && sourceDataFileMap.Has(inferredType)) {
             try {
-                if (CfgRead(sourceDataFileMap[inferredType], SettingSection, serialStr, "") != "")
+                if (ReadCommandConfig(sourceDataFileMap[inferredType], serialStr, inferredType) != "")
                     return inferredType
             } catch as e {
             }
@@ -694,7 +689,7 @@ class MergeUtil {
 
         for item in checkedItems {
             for field in ["MacroStr", "PreMacro", "PostMacro"]
-                item.%field% := RemapCommandSerials(item.%field%, serialReplaceMap)
+                item.%field% := RemapCommandSerials(GetLangMacro(item.%field%, 2), serialReplaceMap)
             updatedItems.Push(item)
         }
 

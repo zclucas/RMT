@@ -6,7 +6,7 @@
 CmdEnumZh(value, names, base := 1) {
     if (!IsObject(names) || names.Length == 0)
         return ""
-    key := GetLangKey(Trim(String(value)))
+    key := GetConfigKey(String(value), names)
     for name in names {
         if (key == name)
             return name
@@ -55,7 +55,7 @@ CmdEnumSet(Data, field, names, base := 1) {
 ; 只把数字收成中文。已经是中文或名单外的值保持原样，避免误伤旧别名。
 CmdEnumNum(value, names, base := 1) {
     if (!IsNumber(value)) {
-        key := GetLangKey(Trim(String(value)))
+        key := GetConfigKey(String(value), names)
         for name in names
             if (key == name)
                 return name
@@ -71,6 +71,11 @@ CmdEnumSetNum(Data, field, names, base := 1) {
     if (!IsObject(Data) || !Data.HasProp(field))
         return
     Data.%field% := CmdEnumNum(Data.%field%, names, base)
+}
+
+CmdEnumSetKey(Data, field, names) {
+    if (Data.HasProp(field) && Type(Data.%field%) == "String")
+        Data.%field% := GetConfigKey(Data.%field%, names)
 }
 
 CmdEnumCompareNames() => ["大于", "大于等于", "等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配", "不等于"]
@@ -125,13 +130,28 @@ CmdEnumLogic(value) => CmdEnumZh(value, CmdEnumLogicNames())
 CmdEnumOpera(value) {
     if (IsNumber(value) && Integer(value) == 7)
         return "时间"
-    key := GetLangKey(Trim(String(value)))
+    key := GetConfigKey(String(value), ["随机"])
     if (key == "随机")
         return "随机数值"
     return CmdEnumZh(value, CmdEnumOperaNames())
 }
 
-CmdEnumMoveMode(value) => CmdEnumZh(value, CmdEnumMoveModeNames(), 0)
+CmdEnumMoveMode(value) {
+    switch value, false {
+        case "Absolute", "Absolute Move", "絕對移動": return "绝对移动"
+        case "Relative", "Relative Move", "相對移動": return "相对移动"
+        case "Game View", "遊戲視角": return "游戏视角"
+    }
+    return CmdEnumZh(value, CmdEnumMoveModeNames(), 0)
+}
+
+CanonicalMoveCommandName(key) {
+    switch key, false {
+        case "移动", "鼠标移动", "滑鼠移動", "移動", "Mouse Move", "Move": return "移动"
+        case "移动Pro", "鼠标移动Pro", "滑鼠移動Pro", "移動Pro", "Mouse Move Pro", "Move Pro", "Move+": return "移动Pro"
+    }
+    return key
+}
 CmdEnumRef(value) => CmdEnumZh(value, CmdEnumRefNames(), 0)
 CmdEnumKeyAct(value) => CmdEnumZh(value, CmdEnumKeyActNames())
 CmdEnumRunOption(value) => CmdEnumZh(value, CmdEnumRunOptionNames(), 0)
@@ -141,7 +161,7 @@ CmdEnumSearch(value) => CmdEnumZh(value, CmdEnumSearchNames())
 CmdEnumMouseAct(value) => CmdEnumZh(value, CmdEnumMouseActNames())
 CmdEnumMMAction(value) => CmdEnumZh(value, CmdEnumMMActionNames())
 CmdEnumTimingType(value) {
-    key := GetLangKey(Trim(String(value)))
+    key := GetConfigKey(String(value), ["自定义"])
     if (key == "自定义")
         return "周期触发"
     return CmdEnumZh(value, CmdEnumTimingTypeNames())
@@ -150,14 +170,14 @@ CmdEnumTimingUnit(value) => CmdEnumZh(value, CmdEnumTimingUnitNames())
 CmdEnumTimingDuration(value) => CmdEnumZh(value, CmdEnumTimingDurationNames())
 
 CmdEnumJoyCheck(value, analog) {
-    key := GetLangKey(Trim(String(value)))
-    for name in CmdEnumKeyCheckNames() {
-        if (key == name)
-            return name
-    }
-    for name in CmdEnumJoyAnalogNames() {
-        if (key == name)
-            return name
+    if (!IsNumber(value)) {
+        names := CmdEnumKeyCheckNames()
+        names.Push(CmdEnumJoyAnalogNames()*)
+        key := GetConfigKey(String(value), names)
+        for name in names {
+            if (key == name)
+                return name
+        }
     }
     return CmdEnumZh(value, analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames())
 }
@@ -193,6 +213,11 @@ CmdEnumNorm(cmd, Data) {
     if (!IsObject(Data))
         return
     switch cmd {
+        case "RMT指令":
+            if (Data.HasProp("Category"))
+                Data.Category := RmtCommandCategoryKey(Data.Category)
+            if (Data.HasProp("CmdStr"))
+                Data.CmdStr := RmtCommandActionKey(Data.CmdStr)
         case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
             CmdEnumNormSearchObj(Data)
             if (Data.HasProp("SearchTargetArr") && IsObject(Data.SearchTargetArr)) {
@@ -208,7 +233,8 @@ CmdEnumNorm(cmd, Data) {
                 CmdEnumSet(Data, "ActionType", CmdEnumMMActionNames())
             CmdEnumSet(Data, "RefMode", CmdEnumRefNames(), 0)
         case "移动", "鼠标移动":
-            CmdEnumSet(Data, "MoveMode", CmdEnumMoveModeNames(), 0)
+            if (Data.HasProp("MoveMode"))
+                Data.MoveMode := CmdEnumMoveMode(Data.MoveMode)
         case "等待":
             CmdEnumSet(Data, "WaitType", CmdEnumWaitNames())
         case "如果":
@@ -237,6 +263,19 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "Type", CmdEnumKeyActNames())
         case "按键":
             CmdEnumSet(Data, "KeyType", CmdEnumKeyActNames())
+        case "输入":
+            types := InputTypeKeys("继续")
+            types.Push("继续&取消")
+            CmdEnumSetKey(Data, "Type", types)
+            CmdEnumSetKey(Data, "PauseType", ["暂停当前宏", "暂停所有宏"])
+            CmdEnumSetKey(Data, "CancelType", ["终止当前宏", "终止所有宏"])
+            CmdEnumSetKey(Data, "TimeoutAction", ["无", "用默认值", "保持原值", "终止当前宏", "终止所有宏"])
+        case "等待确定":
+            CmdEnumSetKey(Data, "Type", ["继续", "继续&终止&暂停"])
+            CmdEnumSetKey(Data, "PauseType", ["暂停当前宏", "暂停所有宏"])
+            CmdEnumSetKey(Data, "PauseBtnType", ["暂停当前宏", "暂停所有宏"])
+            CmdEnumSetKey(Data, "TerminateType", ["终止当前宏", "终止所有宏"])
+            CmdEnumSetKey(Data, "TimeoutAction", ["无", "自动继续", "自动终止", "自动暂停"])
         case "间隔":
             CmdEnumSet(Data, "Type", CmdEnumIntervalNames())
         case "按键检测":
@@ -264,12 +303,27 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSetNum(Data, "OutputType", ["发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板", "字符变量"])
         case "宏操作":
             CmdEnumSetNum(Data, "MacroType", ["当前宏", "按键宏", "字串宏", "轮盘宏", "定时宏", "宏"])
-            CmdEnumSetNum(Data, "CallType", ["插入到当前宏", "触发", "暂停", "取消暂停", "终止"])
+            if (Data.HasProp("MacroType") && Data.MacroType == "菜单宏")
+                Data.MacroType := "轮盘宏"
+            callTypes := ["插入到当前宏", "触发", "暂停", "取消暂停", "终止"]
+            if (Data.HasProp("CallType") && !IsNumber(Data.CallType))
+                callTypes.Push("循环-跳过本轮", "循环-跳出", "分支-跳出")
+            CmdEnumSetNum(Data, "CallType", callTypes)
         case "窗口管理", "窗口信息", "调整窗口":
             ; 保留旧数字顺序，新类型只在界面插入，避免旧配置操作错位。
             CmdEnumSetNum(Data, "ActionType", ["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口", "调整宽高", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
-            if (Data.ActionType == "调整大小")
-                Data.ActionType := "调整宽高"
+            static windowActions := Map(
+                "Activate Window", "激活窗口", "Maximize Window", "最大化窗口", "Minimize Window", "最小化窗口",
+                "Restore Window", "还原窗口", "Close Window", "关闭窗口", "Move Window", "移动窗口",
+                "Resize Window", "调整宽高", "Set Topmost", "置顶窗口", "Unset Topmost", "取消置顶",
+                "Set Title", "修改标题", "Set Transparency", "修改透明度", "Enable Click-Through", "开启鼠标穿透",
+                "Disable Click-Through", "关闭鼠标穿透", "Get Window Dimensions", "获取窗口宽高", "Window Position", "窗口位置",
+                "调整大小", "调整宽高")
+            if (!Data.HasProp("ActionType"))
+                return
+            actions := ["窗口位置", "获取窗口宽高", "位置与宽高", "标题类名句柄", "进程信息", "窗口状态", "透明度与鼠标穿透状态",
+                "匹配窗口列表", "相对移动", "窗口居中", "位置和宽高", "切换置顶", "切换鼠标穿透"]
+            Data.ActionType := GetConfigKey(windowActions.Get(Data.ActionType, Data.ActionType), actions)
             if (!Data.HasProp("WidthVarName"))
                 Data.WidthVarName := "Var1"
             if (!Data.HasProp("HeightVarName"))
@@ -285,6 +339,13 @@ CmdEnumNorm(cmd, Data) {
                 key := String(Data.OperType)
                 Data.OperType := types.Has(key) ? types[key] : FileIONormType(Data.OperType)
             }
+            CmdEnumSetKey(Data, "OperMode", ["读取全部内容", "逐行读取", "指定行", "覆盖写入", "追加写入", "追加写入-行", "行号自增",
+                "单元格", "指定列", "指定区域-行", "指定区域-列", "列号自增"])
+        case "文本处理":
+            textTypes := TextOpsTypeNames()
+            CmdEnumSetKey(Data, "Type", textTypes)
+            if (Data.HasProp("Type"))
+                CmdEnumSetKey(Data, "ArgsType", TextOpsModes(Data.Type))
     }
 }
 

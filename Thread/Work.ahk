@@ -1,5 +1,22 @@
 #Requires AutoHotkey v2.0
 #Warn All, Off
+#Include "..\Main\Util\JsonUtil.ahk"
+
+if (A_Args.Length == 5 && A_Args[1] == "--mouse-process-info") {
+    try {
+        memory := SharedMemory(ProcessInfo.MouseSampleSize, Integer(A_Args[4]))
+        parent := Integer(A_Args[5])
+        if (DllCall("WaitForSingleObject", "Ptr", parent, "UInt", 0, "UInt") == 258) {
+            sample := ProcessInfo.MouseSample(Integer(A_Args[2]), Integer(A_Args[3]))
+            payload := JSON.stringify(sample, 0)
+            if (StrLen(payload) < (memory.size - 4) // 2) {
+                StrPut(payload, memory.ptr + 4, (memory.size - 4) // 2, "UTF-16")
+                NumPut("UInt", StrLen(payload), memory.ptr)
+            }
+        }
+    }
+    ExitApp()
+}
 
 ; Worker 不加载任何界面：所有对话框请求都转给主进程渲染，本进程只发请求、等回执。
 ; 走项目已有的「输入 / 等待确认」通道（InputRequest → 主进程独立弹窗 → IBR 回传）。
@@ -41,7 +58,6 @@ class RmtDialog {
 }
 
 #Include "..\Main\Util\Gdip_All.ahk"
-#Include "..\Main\Util\JsonUtil.ahk"
 #Include "..\Gui\ImageProcessGui.ahk"
 
 if (A_Args.Length >= 3 && A_Args[1] == "--sample-align-worker") {

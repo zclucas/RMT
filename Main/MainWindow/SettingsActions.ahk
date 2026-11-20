@@ -67,7 +67,7 @@
             {id: "countdown", fields: [{key: "CountDownStyle", def: 2, ctrl: "CountDownStyleCon", kind: "cmb"}, {key: "CountDownPadZero", def: true, ctrl: "CountDownPadCon", kind: "chk"}, {key: "CountDownAlpha", def: 70, ctrl: "CountDownAlphaCon", kind: "sld", val: "CountDownAlphaVal"}, {key: "CountDownFontSize", def: 15, ctrl: "CountDownFontCon", kind: "sld", val: "CountDownFontVal"}]},
             {id: "uipanel", fields: [{key: "UIPanelBtnWidth", def: 80, ctrl: "UIPanelBtnWidthCon", kind: "sld", val: "UIPanelBtnWidthVal"}, {key: "UIPanelBtnHeight", def: 34, ctrl: "UIPanelBtnHeightCon", kind: "sld", val: "UIPanelBtnHeightVal"}, {key: "UIPanelFontSize", def: 12, ctrl: "UIPanelFontSizeCon", kind: "sld", val: "UIPanelFontSizeVal"}, {key: "UIPanelCols", def: 3, ctrl: "UIPanelColsCon", kind: "sld", val: "UIPanelColsVal"}, {key: "UIPanelShowOnActive", def: true, ctrl: "UIPanelShowOnActiveCon", kind: "chk"}]},
             {id: "theme", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
-            {id: "font", fields: [{key: "FontType", def: "微软雅黑", ctrl: "CmbFont", kind: "cmbText"}, {key: "FontSize", def: XAML_FontSizeDefault, ctrl: "ThemeFontSizeCon", kind: "themeFontSize"}]},
+            {id: "font", fields: [{key: "FontType", def: ResolveUiFont(MainSoftData.FontList), ctrl: "CmbFont", kind: "cmbText"}, {key: "FontSize", def: XAML_FontSizeDefault, ctrl: "ThemeFontSizeCon", kind: "themeFontSize"}]},
             {id: "palette", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
             {id: "aiModel", fields: [{key: "AiProvider", def: "openai", ctrl: "AiProviderCon", kind: "aiProv"}, {key: "AiApiBaseUrl", def: "https://api.openai.com/v1", ctrl: "AiBaseUrlCon", kind: "txt"}, {key: "AiApiKey", def: "", ctrl: "AiApiKeyCon", kind: "pwd"}, {key: "AiModel", def: "", ctrl: "AiModelCon", kind: "txt"}]},
             {id: "aiPerm", fields: [{key: "AiAccessMode", def: 2, ctrl: "AiAccessCon", kind: "cmb"}, {key: "AiApprovalMode", def: 2, ctrl: "AiApprovalCon", kind: "cmb"}]}
@@ -168,6 +168,8 @@
                     OnBootStartChanged("")
                 else if (f.HasOwnProp("hook") && f.hook == "admin")
                     OnAdminStartChanged("")
+                else if (f.key == "IsDataReport")
+                    RmtUpdate.SyncHelp()
             case "chkMy":
                 try this.ui.Update(f.ctrl, "IsChecked", def ? "True" : "False")
                 MySoftData.CMDTip := !!def
@@ -778,6 +780,8 @@
     OnCheckEdit(fieldName, state, ctrl, event) {
         MainSoftData.%fieldName% := this.ui.Query(ctrl) == "True"
         this.MarkSettingDirty(ctrl)
+        if (fieldName == "IsDataReport")
+            RmtUpdate.SyncHelp()
     }
 
     ; §10 显示页签勾选：写入 TabVisibleMap（保存后重启生效）

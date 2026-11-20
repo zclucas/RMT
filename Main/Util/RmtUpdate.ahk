@@ -8,6 +8,11 @@ class RmtUpdate {
     static Offering := false
 
     static Check(automatic := false, owner := 0) {
+        if (!MainSoftData.IsDataReport) {
+            if (!automatic)
+                RmtDialog.Info(GetLang("请先在设置中开启在线功能。"), GetLang("检查更新"), owner)
+            return
+        }
         if (this.Offering)
             return
         if (IsObject(this.Scan)) {
@@ -17,11 +22,6 @@ class RmtUpdate {
             }
             return
         }
-        if (!automatic && IsObject(this.Available)) {
-            this.ShowAvailable(owner)
-            return
-        }
-
         stage := ""
         try {
             helper := A_ScriptDir "\Thread\Update.exe"
@@ -59,6 +59,8 @@ class RmtUpdate {
             return
         this.EndScan(scan)
         try {
+            if (!MainSoftData.IsDataReport)
+                return
             if (waiting)
                 throw Error("Release check timed out.")
             response := JSON.parse(FileRead(scan.Stage "\result.json", "UTF-8"), , false)
@@ -66,11 +68,10 @@ class RmtUpdate {
                 throw Error(response.error)
             current := RmtRelease.Version(RMT_VERSION)
             arch := A_PtrSize == 8 ? "x64" : "x86"
-            asset := RmtRelease.Select(response.assets, current, arch, A_Is64bitOS, !scan.Manual,
+            latest := RmtRelease.Select(response.assets, current, arch, A_Is64bitOS, !scan.Manual)
+            asset := scan.Manual ? latest : RmtRelease.Select(response.assets, current, arch, A_Is64bitOS, true,
                 CfgRead(SettingFile, SettingSection, "RmtSkippedStableVersion", ""),
                 CfgRead(SettingFile, SettingSection, "RmtSkippedPreviewVersion", ""))
-            ; 跳过的版本仍显示在帮助页。
-            latest := IsObject(asset) ? asset : RmtRelease.Select(response.assets, current, arch, A_Is64bitOS, !scan.Manual)
             this.CheckResult := IsObject(latest) ? latest : "current"
             this.Available := asset
             this.SyncHelp()
@@ -98,6 +99,8 @@ class RmtUpdate {
     }
 
     static HelpStatus() {
+        if (!MainSoftData.IsDataReport)
+            return ""
         if (IsObject(this.Scan))
             return GetLang("正在检查发行版本…")
         result := this.CheckResult
@@ -113,7 +116,7 @@ class RmtUpdate {
     static SyncHelp() {
         status := this.HelpStatus()
         try MyMainWin.ui.BatchUpdate([
-            {ControlName: "HelpUpdateDot", PropertyName: "Visibility", Value: IsObject(this.Available) ? "Visible" : "Collapsed"},
+            {ControlName: "HelpUpdateDot", PropertyName: "Visibility", Value: MainSoftData.IsDataReport && IsObject(this.Available) ? "Visible" : "Collapsed"},
             {ControlName: "HelpUpdateStatus", PropertyName: "Text", Value: status},
             {ControlName: "HelpUpdateStatus", PropertyName: "Visibility", Value: status != "" ? "Visible" : "Collapsed"}])
     }
@@ -146,14 +149,13 @@ class RmtUpdate {
 
     static Offer(current, asset, arch, owner) {
         upgrade := asset.version.preview
-            ? (current.preview ? GetLang("发现新的测试版 {}。是否更新？") : GetLang("发现新的测试版 {}。可下载整包体验。"))
+            ? GetLang("发现新的测试版 {}。是否更新？")
             : (current.preview ? GetLang("正式版 {} 已发布。是否从测试版更新？") : GetLang("发现新的正式版 {}。是否更新？"))
         helper := A_ScriptDir "\Thread\Update.exe"
-        canReplace := !(asset.version.preview && !current.preview) && asset.arch == arch && A_IsCompiled && FileExist(helper)
-        hint := asset.version.preview && !current.preview ? GetLang("正式版切换测试版时仅可下载整包。")
-            : asset.arch != arch ? GetLang("该发行包的架构与当前程序不同。")
+        canReplace := asset.arch == arch && A_IsCompiled && FileExist(helper)
+        hint := asset.arch != arch ? GetLang("该发行包的架构与当前程序不同。")
             : GetLang("当前程序无法执行替换更新。")
-        options := {Checkbox: GetLang("此版本不再更新"), Checked: false, Disabled: canReplace ? 0 : 1, DisabledHint: hint}
+        options := {Checkbox: GetLang("跳过此版本的自动提醒"), Checked: false, Disabled: canReplace ? 0 : 1, DisabledHint: hint}
         replaceText := GetLang("替换更新")
         downloadText := GetLang("下载整包")
         message := Format(upgrade, "RMTv" asset.version.label " (" asset.arch ")")
@@ -208,7 +210,7 @@ class RmtUpdate {
                 "正在下载更新包…", GetLang("正在下载更新包…"), "备用下载地址", GetLang("备用下载地址"),
                 "正在验证更新包…", GetLang("正在验证更新包…"),
                 "正在解压更新包…", GetLang("正在解压更新包…"), "正在替换程序文件…", GetLang("正在替换程序文件…"),
-                "正在恢复原程序…", GetLang("正在恢复原程序…"), "更新失败。", GetLang("更新失败。"),
+                "正在备份配置…", GetLang("正在备份配置…"), "正在恢复原程序…", GetLang("正在恢复原程序…"), "更新失败。", GetLang("更新失败。"),
                 "更新包已保存。", GetLang("更新包已保存。"), "更新已完成，无法自动启动 RMT。", GetLang("更新已完成，无法自动启动 RMT。"))
             enginePid := 0
             if (replace && XAMLHost.daemonHwnd)

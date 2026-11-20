@@ -293,3 +293,40 @@ RoundOperationNumber(value, decimals := 0) {
         return value
     return ReadOperationNumber(Round(value, decimals))
 }
+
+
+; 1.0.x 运算规则按操作符顺序计算，字符串拼接也可以出现在任意位置。
+RunLegacyOperation(data, tableItem, index) {
+    legacy := data.LegacyOperation
+    names := [], values := []
+    for row, enabled in data.ToggleArr {
+        if (!enabled || !legacy.Names.Has(row) || !data.UpdateNameArr.Has(row))
+            continue
+        if (!TryGetTabVarValue(&result, tableItem, index, legacy.Names[row]))
+            continue
+        complete := true
+        if (legacy.Symbols.Has(row) && legacy.Values.Has(row)) {
+            for column, symbol in legacy.Symbols[row] {
+                if (!legacy.Values[row].Has(column)
+                    || !TryGetTabVarValue(&operand, tableItem, index, legacy.Values[row][column])) {
+                    complete := false
+                    break
+                }
+                switch symbol {
+                    case "+": result += operand
+                    case "-": result -= operand
+                    case "*": result *= operand
+                    case "/": result /= operand
+                    case "^": result := result ** operand
+                    case "..": result .= operand
+                }
+            }
+        }
+        if (complete) {
+            names.Push(data.UpdateNameArr[row])
+            values.Push(result)
+        }
+    }
+    if (names.Length)
+        MySetGlobalVariable(names, values, legacy.IgnoreExisting)
+}

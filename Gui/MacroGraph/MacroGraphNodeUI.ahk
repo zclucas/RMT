@@ -872,18 +872,14 @@ class MacroGraphNodeUIMixin {
         result := []
         if (startSerial == "")
             return result
-        SplitSerialTextAndNumbers(startSerial, &t, &n)
-        ; 非「图形开始节点」：按线性指令宏直接拆分显示，无需图遍历
-        if (t != GetLangKey("图形开始节点") || n == "") {
-            for cmd in SplitMacro(startSerial) {
-                if (cmd != "")
-                    result.Push(cmd)
-            }
-            return result
-        }
-        startData := GetMacroCMDData(startSerial)
+        branch := SplitCompareBranchTail(startSerial)
+        SplitSerialTextAndNumbers(branch.Body, &t, &n)
+        ; 线性宏按原顺序显示，包括迁移生成的末尾宏操作。
+        if (t != GetLangKey("图形开始节点") || !RegExMatch(n, "^\d+$"))
+            return SplitMacro(startSerial)
+        startData := GetMacroCMDData(branch.Body)
         if (!IsObject(startData))
-            return result
+            return branch.Tail == "" ? result : [branch.Tail]
         nodeArr := (startData.HasOwnProp("NodeArr") && IsObject(startData.NodeArr)) ? startData.NodeArr : []
         emptyArr := (startData.HasOwnProp("EmptyNode") && IsObject(startData.EmptyNode)) ? startData.EmptyNode : []
         ; 优先走开始节点后继；若 NodeArr 为空（异常落盘）则回退 EmptyNode 首个，避免分支预览空白
@@ -900,6 +896,8 @@ class MacroGraphNodeUIMixin {
             nexts := (nd.HasOwnProp("NextNodeArr") && IsObject(nd.NextNodeArr)) ? nd.NextNodeArr : []
             cur := nexts.Length >= 1 ? nexts[1] : ""
         }
+        if (branch.Tail != "")
+            result.Push(branch.Tail)
         return result
     }
 

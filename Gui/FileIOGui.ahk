@@ -406,8 +406,6 @@ class FileIOGui {
     OpenContentEditor(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ContentEditGui) || this._contentEditClosed)
             this._BuildContentEditor()
-        if (this.ContentEditGui.Query("ContentEditVarTypeCombo") == "")
-            this.ContentEditGui.Update("ContentEditVarTypeCombo", "SelectedIndex", "0")
         this._FillContentEditNameCombo()
         curText := IsObject(this.ui) ? this.ui.Query("ContentCon") : ""
         this.ContentEditGui.Update("ContentEditCon", "Text", curText)
@@ -483,26 +481,8 @@ class FileIOGui {
     }
 
     _FillContentEditNameCombo() {
-        if (!IsObject(this.ContentEditGui) || this._contentEditClosed)
-            return
-        isVar := this.ContentEditGui.Query("ContentEditVarTypeCombo") == GetLang("变量")
-        items := isVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
-        cur := this.ContentEditGui.Query("ContentEditVariCombo")
-        this.ContentEditGui.Update("ContentEditVariCombo", "ClearItems", "")
-        for v in items {
-            if (v != "")
-                this.ContentEditGui.Update("ContentEditVariCombo", "AddItem", v)
-        }
-        found := false
-        loop items.Length {
-            if (items[A_Index] == cur) {
-                this.ContentEditGui.Update("ContentEditVariCombo", "SelectedIndex", String(A_Index - 1))
-                found := true
-                break
-            }
-        }
-        if (!found && items.Length > 0)
-            this.ContentEditGui.Update("ContentEditVariCombo", "SelectedIndex", "0")
+        if (!this._contentEditClosed)
+            CharVarEditGui.RefreshNameCombo(this.ContentEditGui, "ContentEditVarTypeCombo", "ContentEditVariCombo")
     }
 
     OnContentEditVarTypeChange(state := "", ctrl := "", event := "") {

@@ -26,7 +26,7 @@ class CharVarEditGui {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
         }
         this.ui.Update("TextCon", "Text", this._initialText)
-        this.ui.Update("VariCombo", "SelectedIndex", "0")
+        CharVarEditGui.RefreshNameCombo(this.ui, "VarTypeCombo", "VariCombo")
         this._ShowWindow()
     }
 
@@ -66,11 +66,7 @@ class CharVarEditGui {
         vt := row1.Add("ComboBox").Grid_Column(1).Name("VarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))
         vt.Add("ComboBoxItem").Content(GetLang("数组"))
-        variables := row1.Add("ComboBox").Grid_Column(3).Name("VariCombo").Width("200").Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left").IsEditable("True")
-        for name in GetGuiVarArr("all") {
-            if (name != "")
-                variables.Add("ComboBoxItem").Content(name)
-        }
+        row1.Add("ComboBox").Grid_Column(3).Name("VariCombo").Width("200").Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left").IsEditable("True")
         row1.Add("Button").Grid_Column(5).Name("BtnAddName").Content(GetLang("追加名")).Height(26).MinHeight(26).VerticalAlignment("Center")
         row1.Add("Button").Grid_Column(7).Name("BtnAddValue").Content(GetLang("追加值")).Height(26).MinHeight(26).VerticalAlignment("Center")
 
@@ -127,21 +123,33 @@ class CharVarEditGui {
     }
 
     OnRefreshVarType(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
+        CharVarEditGui.RefreshNameCombo(this.ui, "VarTypeCombo", "VariCombo", true)
+    }
+
+    static RefreshNameCombo(ui, typeCombo, nameCombo, keepTypedName := false) {
+        if (!IsObject(ui))
             return
-        IsResVar := this.ui.Query("VarTypeCombo") == GetLang("变量")
-        DLArr := IsResVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
-        curText := this.ui.Query("VariCombo")
-        this.ui.Update("VariCombo", "ClearItems", "")
-        for it in DLArr {
-            if (it == "")
+        ; Show 前查不到 XAML 的默认选项，此时使用第 0 项「变量」。
+        typeKey := typeCombo ">SelectedIndex"
+        state := ui.Query(typeKey, nameCombo)
+        items := state.Get(typeKey, "") == "1" ? GetGuiArrNameArr() : GetGuiVarArr("all")
+        currentName := state.Get(nameCombo, "")
+        updates := [{ControlName: nameCombo, PropertyName: "ClearItems", Value: ""}]
+        selectedIndex := 0
+        itemCount := 0
+        for name in items {
+            if (name == "")
                 continue
-            this.ui.Update("VariCombo", "AddItem", it)
+            if (name == currentName)
+                selectedIndex := itemCount
+            updates.Push({ControlName: nameCombo, PropertyName: "AddItem", Value: name})
+            itemCount++
         }
-        if (curText != "")
-            this.ui.Update("VariCombo", "Text", curText)
-        else
-            this.ui.Update("VariCombo", "SelectedIndex", "0")
+        if (keepTypedName && currentName != "")
+            updates.Push({ControlName: nameCombo, PropertyName: "Text", Value: currentName})
+        else if (itemCount > 0)
+            updates.Push({ControlName: nameCombo, PropertyName: "SelectedIndex", Value: String(selectedIndex)})
+        ui.BatchUpdate(updates)
     }
 
     OnClickAddVarNameBtn(state, ctrl, event) {

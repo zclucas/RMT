@@ -1,4 +1,4 @@
-GetReplaceVarText(tableItem, tableIndex, text) {
+GetReplaceVarText(tableItem, tableIndex, text, variTip := true) {
     matches := []      ; 存储变量名（不含花括号）
     arrayMatches := [] ; 存储数组名（不含花括号和ε）
     pos := 1
@@ -17,7 +17,7 @@ GetReplaceVarText(tableItem, tableIndex, text) {
     ResText := text
     ; 替换普通变量
     for index, value in matches {
-        hasValue := TryGetTabVarValue(&variValue, tableItem, tableIndex, value, true)
+        hasValue := TryGetTabVarValue(&variValue, tableItem, tableIndex, value, variTip)
         if (hasValue)
             ResText := StrReplace(ResText, "{" value "}", variValue)
     }
@@ -260,14 +260,19 @@ GetSpecialVarArr() {
 
 ; 在可同时输入字面值和变量名的字段里，只转换内置变量名。
 GetBuiltinVarName(value, toDisplay := false) {
-    for _, keys in GetBuiltinVarGroups() {
-        for key in keys {
-            display := GetLang(key)
-            if (value == key || value == display)
-                return toDisplay ? display : key
+    static names := []
+    if (names.Length == 0) {
+        for _, keys in GetBuiltinVarGroups()
+            names.Push(keys*)
+    }
+    key := GetConfigKey(value, names)
+    if (toDisplay) {
+        for name in names {
+            if (name == key)
+                return GetLang(key)
         }
     }
-    return value
+    return key
 }
 
 TranslateBuiltinVarReferences(value, toDisplay := false) {
