@@ -290,6 +290,7 @@ MacroCommandActions() {
         "窗口控件", OnWindowControl,
         "AI判断", OnAiDecision,
         "YOLO检测", OnYolo,
+        "翻译", OnTranslate,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
         "窗口信息", OnWindowManage,

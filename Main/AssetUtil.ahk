@@ -28,6 +28,7 @@ RmtAssetsBaseUrl(tag) {
 #Include Util\FileIOUtil.ahk
 #Include Util\HttpRequestUtil.ahk
 #Include Util\AiDecisionUtil.ahk
+#Include Util\TranslateCommand.ahk
 #Include Util\YoloUtil.ahk
 #Include Util\WindowControlUtil.ahk
 #Include Util\BrowserUtil.ahk
