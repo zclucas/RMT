@@ -303,6 +303,8 @@ RemoveTableFold(tableItem, foldID) {
 }
 
 MacroTypeSymbol(macroType) {
+    if (macroType == "菜单宏")
+        return "Menu"
     for def in MacroCategoryDefs() {
         if (def[2] == macroType)
             return def[1]

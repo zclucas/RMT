@@ -1052,8 +1052,8 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         categories := this._RmtCategories()
         ; 获取当前指令和类别
-        currentOp := d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
-        currentCategory := d.HasOwnProp("rmtCategory") ? d.rmtCategory : GetLang("全部")
+        currentOp := GetLang(d.HasOwnProp("rmtOp") ? RmtCommandActionKey(d.rmtOp) : "截图")
+        currentCategory := GetLang(d.HasOwnProp("rmtCategory") ? RmtCommandCategoryKey(d.rmtCategory) : "全部")
         ; 根据类别获取指令列表，如果当前指令不在列表中则使用全部
         ops := this._RmtCategoryOps(currentCategory)
         if (!this._ArrayContains(ops, currentOp)) {

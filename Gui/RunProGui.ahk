@@ -330,8 +330,6 @@ class RunProGui {
         if (!IsObject(this.StdInEditGui) || this._stdInClosed) {
             this.AddStdInEditorGui()
         }
-        if (this.StdInEditGui.Query("StdInEditVarTypeCombo") == "")
-            this.StdInEditGui.Update("StdInEditVarTypeCombo", "SelectedIndex", "0")
         this._FillStdInEditNameCombo()
 
         curText := IsObject(this.ui) ? this.ui.Query("StdInCon") : ""
@@ -420,26 +418,8 @@ class RunProGui {
     }
 
     _FillStdInEditNameCombo() {
-        if (!IsObject(this.StdInEditGui) || this._stdInClosed)
-            return
-        isVar := this.StdInEditGui.Query("StdInEditVarTypeCombo") == GetLang("变量")
-        items := isVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
-        cur := this.StdInEditGui.Query("StdInEditVariCombo")
-        this.StdInEditGui.Update("StdInEditVariCombo", "ClearItems", "")
-        for v in items {
-            if (v != "")
-                this.StdInEditGui.Update("StdInEditVariCombo", "AddItem", v)
-        }
-        found := false
-        loop items.Length {
-            if (items[A_Index] == cur) {
-                this.StdInEditGui.Update("StdInEditVariCombo", "SelectedIndex", String(A_Index - 1))
-                found := true
-                break
-            }
-        }
-        if (!found && items.Length > 0)
-            this.StdInEditGui.Update("StdInEditVariCombo", "SelectedIndex", "0")
+        if (!this._stdInClosed)
+            CharVarEditGui.RefreshNameCombo(this.StdInEditGui, "StdInEditVarTypeCombo", "StdInEditVariCombo")
     }
 
     OnStdInEditVarTypeChange(state := "", ctrl := "", event := "") {

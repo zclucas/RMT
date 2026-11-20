@@ -566,8 +566,6 @@ class TextOpsGui {
     OpenConcatEditor(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ConcatEditGui) || this._concatEditClosed)
             this._BuildConcatEditor()
-        if (this.ConcatEditGui.Query("ConcatEditVarTypeCombo") == "")
-            this.ConcatEditGui.Update("ConcatEditVarTypeCombo", "SelectedIndex", "0")
         this._FillConcatEditNameCombo()
         curText := IsObject(this.ui) ? this.ui.Query("ConcatCon") : ""
         this.ConcatEditGui.Update("ConcatEditCon", "Text", curText)
@@ -643,26 +641,8 @@ class TextOpsGui {
     }
 
     _FillConcatEditNameCombo() {
-        if (!IsObject(this.ConcatEditGui) || this._concatEditClosed)
-            return
-        isVar := this.ConcatEditGui.Query("ConcatEditVarTypeCombo") == GetLang("变量")
-        items := isVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
-        cur := this.ConcatEditGui.Query("ConcatEditVariCombo")
-        this.ConcatEditGui.Update("ConcatEditVariCombo", "ClearItems", "")
-        for v in items {
-            if (v != "")
-                this.ConcatEditGui.Update("ConcatEditVariCombo", "AddItem", v)
-        }
-        found := false
-        loop items.Length {
-            if (items[A_Index] == cur) {
-                this.ConcatEditGui.Update("ConcatEditVariCombo", "SelectedIndex", String(A_Index - 1))
-                found := true
-                break
-            }
-        }
-        if (!found && items.Length > 0)
-            this.ConcatEditGui.Update("ConcatEditVariCombo", "SelectedIndex", "0")
+        if (!this._concatEditClosed)
+            CharVarEditGui.RefreshNameCombo(this.ConcatEditGui, "ConcatEditVarTypeCombo", "ConcatEditVariCombo")
     }
 
     OnConcatEditVarTypeChange(state := "", ctrl := "", event := "") {

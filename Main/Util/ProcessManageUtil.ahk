@@ -1,27 +1,40 @@
 #Requires AutoHotkey v2.0
+#Include ProcessInfoUtil.ahk
 
 class ProcessManageData {
     SerialStr := ""
     Action := "检测进程"
     MatchBy := "进程名"
     Target := ""
+    PickMatch := "首个"
     EndAll := false
     ResultVar := ""
     CountVar := ""
     NameVar := ""
     PidVar := ""
     PathVar := ""
+    ExistVar := ""
+    StatusVar := ""
+    StartTimeVar := ""
+    UptimeVar := ""
+    CpuVar := ""
+    GpuVar := ""
+    IntegrityVar := ""
     ResultArray := ""
+    ; 兼容已保存的宏，编辑器不再提供这个输出。
     ErrorVar := ""
 }
 
 class ProcessManage {
-    static Actions := ["检测进程", "获取进程信息", "列出进程", "结束进程"]
-    static MatchModes := ["进程名", "PID"]
+    static Actions := ["检测进程", "进程信息", "列出进程", "结束进程"]
+    static MatchModes := ["窗口绑定", "进程名", "PID", "正则匹配"]
+    static MatchPicks := ["首个", "最后"]
+
+    static ActionKey(action) => action == "获取进程信息" ? "进程信息" : action
 
     static OutputFields(action) {
-        switch action {
-            case "获取进程信息": return ["CountVar", "NameVar", "PidVar", "PathVar"]
+        switch this.ActionKey(action) {
+            case "进程信息": return ["CountVar", "NameVar", "PidVar", "PathVar", "ExistVar", ProcessInfo.Metrics*]
             case "列出进程": return []
             default: return ["ResultVar"]
         }
@@ -29,7 +42,7 @@ class ProcessManage {
 
     static RegisterOutputs(data) {
         for field in this.OutputFields(data.Action) {
-            if (data.%field% != "")
+            if (data.HasProp(field) && data.%field% != "")
                 MySoftData.GlobalVariMap[data.%field%] := true
         }
         if (data.ErrorVar != "")
@@ -40,9 +53,25 @@ class ProcessManage {
 
     static ValidateTarget(data, target, editing := false) {
         if (target == "") {
+            if (data.MatchBy == "窗口绑定") {
+                if (!editing && data.Target != "")
+                    return
+                throw ValueError(GetLang("窗口绑定不能为空"))
+            }
             if (data.Action == "列出进程" && data.MatchBy == "进程名" && Trim(data.Target) == "")
                 return
+            if (data.MatchBy == "正则匹配")
+                throw ValueError(GetLang("正则表达式不能为空"))
             throw ValueError(GetLang("请输入进程名或 PID。"))
+        }
+        if (data.MatchBy == "正则匹配") {
+            if (target == data.Target && this.RegexVariable(target)) {
+                if (editing)
+                    return
+                throw ValueError(GetLang("当前环境不存在变量") " " SubStr(target, 2, -1))
+            }
+            RegExMatch("", target)
+            return
         }
         if (editing && RegExMatch(target, "\{[^{}]+\}"))
             return
@@ -51,25 +80,46 @@ class ProcessManage {
             throw ValueError(GetLang("PID 必须是有效的正整数。"))
     }
 
-    static Execute(data, target) {
-        result := {ResultVar: 0, CountVar: 0, NameVar: "", PidVar: "", PathVar: "", ResultArray: [], ErrorVar: ""}
+    static RegexVariable(target) => RegExMatch(target, "^\{[^\d{},][^{}]*\}$")
+
+    static ResolveTarget(data, resolve, resolveBinding := unset) {
+        if (data.MatchBy == "窗口绑定") {
+            binding := resolveBinding.Call(data.Target)
+            return IsMouseWindowBinding(binding) ? binding : Trim(resolve.Call(binding))
+        }
+        ; 正则以整项变量引用读取，保留表达式本身的量词和 Unicode 属性。
+        if (data.MatchBy == "正则匹配" && !this.RegexVariable(data.Target))
+            return data.Target
+        return Trim(resolve.Call(data.Target))
+    }
+
+    static Execute(data, target, preview := false) {
+        result := {ResultVar: 0, CountVar: 0, NameVar: "", PidVar: "", PathVar: "", ExistVar: 0,
+            ResultArray: [], EndedCount: 0, ErrorVar: ""}
+        for field in ProcessInfo.Metrics
+            result.%field% := ""
         try {
             this.ValidateTarget(data, target)
             if (data.MatchBy == "PID")
                 target := Integer(target)
             snapshotTime := 0
             DllCall("GetSystemTimeAsFileTime", "Int64*", &snapshotTime)
-            matches := this.Find(data.MatchBy, target)
-            switch data.Action {
+            matches := data.MatchBy == "窗口绑定" ? this.FindBoundProcesses(target) : this.Find(data.MatchBy, target)
+            switch this.ActionKey(data.Action) {
                 case "检测进程":
                     result.ResultVar := matches.Length > 0 ? 1 : 0
-                case "获取进程信息":
+                case "进程信息":
                     result.CountVar := matches.Length
-                    if (matches.Length == 1) {
-                        process := matches[1]
+                    result.ExistVar := matches.Length ? 1 : 0
+                    if (matches.Length) {
+                        ; 旧版宏未保存选取方式，多项匹配时仍只写匹配数量。
+                        if (matches.Length > 1 && !data.HasProp("PickMatch"))
+                            return result
+                        process := this.PickProcess(matches, data.MatchBy, data.HasProp("PickMatch") && data.PickMatch == "最后")
                         result.NameVar := process.Name
                         result.PidVar := process.Pid
                         result.PathVar := this.Path(process.Pid)
+                        ProcessInfo.ReadMetrics(data, process, snapshotTime, result, preview)
                     }
                 case "列出进程":
                     for process in matches
@@ -80,16 +130,43 @@ class ProcessManage {
                     for process in matches {
                         try {
                             this.End(process.Pid, snapshotTime)
-                            result.ResultVar += 1
+                            result.EndedCount += 1
                         } catch as e {
                             result.ErrorVar .= (result.ErrorVar == "" ? "" : "`n") "PID " process.Pid " · " e.Message
                         }
                     }
+                    result.ResultVar := result.EndedCount > 0 && result.ErrorVar == "" ? 1 : 0
             }
         } catch as e {
             result.ErrorVar := e.Message
         }
         return result
+    }
+
+    static FindBoundProcesses(binding) {
+        matches := [], seen := Map()
+        for hwnd in GetHwndList(binding) {
+            try {
+                pid := WinGetPID(hwnd)
+                if (!seen.Has(pid)) {
+                    name := WinGetProcessName(hwnd)
+                    matches.Push({Name: name, Pid: pid, Hwnd: hwnd})
+                    seen[pid] := true
+                }
+            }
+        }
+        return matches
+    }
+
+    static PickProcess(matches, matchBy, pickLast) {
+        if (matchBy == "窗口绑定")
+            return matches[pickLast ? -1 : 1]
+        picked := matches[1]
+        for process in matches {
+            if (pickLast ? process.Pid > picked.Pid : process.Pid < picked.Pid)
+                picked := process
+        }
+        return picked
     }
 
     static Find(matchBy, target) {
@@ -109,7 +186,12 @@ class ProcessManage {
                 if (!pid)
                     continue
                 name := StrGet(entry.Ptr + nameOffset, "UTF-16")
-                if (matchBy == "PID" ? pid == target : target == "" || name = target)
+                switch matchBy {
+                    case "PID": matched := pid == target
+                    case "正则匹配": matched := RegExMatch(name, target)
+                    default: matched := target == "" || name = target
+                }
+                if (matched)
                     matches.Push({Name: name, Pid: pid})
             }
             if (A_LastError != 18) ; ERROR_NO_MORE_FILES
@@ -143,7 +225,8 @@ class ProcessManage {
 
 OnProcessManage(tableItem, cmd, index) {
     data := GetMacroCMDData(SplitCommand(cmd)[1])
-    target := Trim(GetReplaceVarText(tableItem, index, data.Target))
+    target := ProcessManage.ResolveTarget(data, (text) => GetReplaceVarText(tableItem, index, text),
+        (binding) => ResolveBindWindow(tableItem, index, binding))
     result := ProcessManage.Execute(data, target)
     if (data.Action == "列出进程" && data.ResultArray != "")
         MySetGlobalArray(data.ResultArray, result.ResultArray)
@@ -151,7 +234,7 @@ OnProcessManage(tableItem, cmd, index) {
     fields := ProcessManage.OutputFields(data.Action)
     fields.Push("ErrorVar")
     for field in fields {
-        if (data.%field% == "")
+        if (!data.HasProp(field) || data.%field% == "")
             continue
         names.Push(data.%field%)
         values.Push(result.%field%)

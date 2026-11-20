@@ -661,8 +661,7 @@
 
     ; 是否为「图形开始节点」序列码（逻辑树中的图入口指令）
     _IsGraphStartCmd(cmd) {
-        key := GetLangKey(cmd)
-        return key == "图形开始节点" || cmd == GetLang("图形开始节点")
+        return GetCommandKey(cmd) == "图形开始节点"
     }
 
     ; 双击/编辑：打开嵌套节点编辑器，编辑该图形开始节点子图

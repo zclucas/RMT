@@ -231,10 +231,13 @@ RmtCmdQuote(text) {
 
 ; ---------- 客户端：拉起常驻实例、转发、取回结果 ----------
 
-RmtCmdHostCommand() {
+RmtCmdHostCommand(switches := "") {
+    command := RmtCmdQuote(A_IsCompiled ? A_ScriptFullPath : A_AhkPath)
+    if (switches != "")
+        command .= " " switches
     if (A_IsCompiled)
-        return RmtCmdQuote(A_ScriptFullPath)
-    return RmtCmdQuote(A_AhkPath) " " RmtCmdQuote(A_ScriptFullPath)
+        return command
+    return command " " RmtCmdQuote(A_ScriptFullPath)
 }
 
 RmtCmdSpawnServer(args) {

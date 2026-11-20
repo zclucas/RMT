@@ -490,10 +490,10 @@ class MacroGraphFormalHandlersMixin {
     _RmtReadLive(id) {
         categories := this._RmtCategories()
         catTxt := this._ComboText("RmtCatCmb_" id, unset, categories)
-        cat := catTxt != "" ? GetLangKey(catTxt) : ""
+        cat := RmtCommandCategoryKey(catTxt)
         ops := this._RmtCategoryOps(catTxt != "" ? catTxt : GetLang("全部"))
         opTxt := this._ComboText("RmtOpCmb_" id, unset, ops)
-        op := opTxt != "" ? GetLangKey(opTxt) : ""
+        op := RmtCommandActionKey(opTxt)
         return { cat: cat, op: op }
     }
 
@@ -504,6 +504,7 @@ class MacroGraphFormalHandlersMixin {
 
     ; RMT 类别对应的指令列表（与 RMTCMDGui.CategoriesMap 保持一致）
     _RmtCategoryOps(category) {
+        category := GetLang(RmtCommandCategoryKey(category))
         allOps := GetLangArr(["截图", "截图提取文本", "启用鼠标", "启用键盘", "启用键鼠",
             "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速", "显示菜单", "关闭菜单",
             "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
@@ -544,7 +545,7 @@ class MacroGraphFormalHandlersMixin {
         if (cat == "")
             return
         ops := this._RmtCategoryOps(cat)
-        op := ops.Length > 0 ? GetLangKey(ops[1]) : GetLang("截图")   ; 切类别 → 指令回到第一个
+        op := ops.Length > 0 ? RmtCommandActionKey(ops[1]) : "截图"
         if (this.ui != "" && HasMethod(this.ui, "Update")) {
             this.ui.Update("RmtOpCmb_" id, "ClearItems", "")
             for it in ops
@@ -555,7 +556,7 @@ class MacroGraphFormalHandlersMixin {
         d := this._FormalDFromId(id)
         d.rmtCategory := cat
         d.rmtOp := op
-        if (op != GetLang("显示菜单"))
+        if (op != "显示菜单")
             d.rmtMenuIdx := "1"
         this._RmtSyncCurCMD(id, d)
         this._SaveGraphAndNotifyParent()
@@ -574,7 +575,7 @@ class MacroGraphFormalHandlersMixin {
         d := this._FormalDFromId(id)
         d.rmtCategory := cat
         d.rmtOp := op
-        if (op != GetLang("显示菜单"))
+        if (op != "显示菜单")
             d.rmtMenuIdx := "1"
         this._RmtSyncCurCMD(id, d)
         this._SaveGraphAndNotifyParent()
@@ -582,7 +583,7 @@ class MacroGraphFormalHandlersMixin {
 
     ; 刷新 RMT 指令节点下方选项（菜单序号的显示/隐藏）
     _RefreshRmtOptions(id, cat, op) {
-        showMenu := op == GetLang("显示菜单")
+        showMenu := op == "显示菜单"
         if (this.ui == "")
             return
         ; 设置行可见性
@@ -1818,7 +1819,7 @@ class MacroGraphFormalHandlersMixin {
         d := this._FormalDFromId(id)
         op := d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
         menuItems := this._FormalMenuIndexItems()
-        showMenu := op == GetLang("显示菜单") && menuItems.Length > 0
+        showMenu := RmtCommandActionKey(op) == "显示菜单" && menuItems.Length > 0
         this._FormalSetVis(id, "RmtMenuRow_" id, showMenu)
     }
 
@@ -2714,7 +2715,7 @@ class MacroGraphFormalHandlersMixin {
         if (d.type == GetLang("数组"))
             return GetLang(d.HasOwnProp("arrayType") ? d.arrayType : "创建") " / " (d.HasOwnProp("arrayName") ? d.arrayName : "Arr")
         if (d.type == GetLang("RMT指令"))
-            return d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
+            return GetLang(d.HasOwnProp("rmtOp") ? RmtCommandActionKey(d.rmtOp) : "截图")
         if (d.type == GetLang("后台鼠标")) {
             mt := CmdEnumZh(d.HasOwnProp("bgMouseType") ? d.bgMouseType : "左键", CmdEnumMouseBtnNames())
             if (mt == "滚轮")

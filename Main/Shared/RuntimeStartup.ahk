@@ -168,12 +168,21 @@ CheckOcrIdle() {
 
 SafeReload() {
     ; 重载是同一次使用里的重启，不算再次打开软件，跳过下一次 getstatus
-    try CfgWrite(true, SettingFile, SettingSection, "SkipDataReport")
-    if (A_IsAdmin) {
-        Run('"' A_ScriptFullPath '" -elevated')
-        ExitApp()
-    } else {
-        Reload()
+    try {
+        CfgWrite(true, SettingFile, SettingSection, "SkipDataReport")
+        Cfg_FlushFile(SettingFile)
+    }
+    ; 使用程序目录启动，并由 AHK 的重载协议在新实例执行前完成旧实例的退出清理。
+    command := RmtCmdHostCommand("/restart") (A_IsAdmin ? " -elevated" : "")
+    try Run(command, A_ScriptDir)
+    catch as e {
+        code := A_LastError
+        try {
+            CfgDelete(SettingFile, SettingSection, "SkipDataReport")
+            Cfg_FlushFile(SettingFile)
+        }
+        try RMTLogSys(RMT_LV_ERROR, "SafeReload", e.Message " (Win32: " code ")")
+        RmtDialog.Info(GetLang("自动重启失败，请关闭后重新打开若梦兔。"), GetLang("提示"))
     }
 }
 

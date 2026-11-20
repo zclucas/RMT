@@ -459,8 +459,8 @@ class RMTCMDGui {
             cmdStr := this.Data.CmdStr
             menuDLIndex := this.Data.HasOwnProp("MenuIndex") ? this.Data.MenuIndex : 1
         } else if (cmdArr.Length >= 3) {
-            cmdCategory := cmdArr[2]
-            cmdStr := cmdArr[3]
+            cmdCategory := RmtCommandCategoryKey(cmdArr[2])
+            cmdStr := RmtCommandActionKey(cmdArr[3])
             menuDLIndex := (cmdStr == "显示菜单" || cmdStr == GetLang("显示菜单")) && cmdArr.Length >= 4 ? Integer(cmdArr[4]) : 1
         } else {
             cmdCategory := "图文"
@@ -651,8 +651,8 @@ class RMTCMDGui {
     GetCmdStr() {
         if (!IsObject(this.Data))
             this.Data := RMTCMDData()
-        this.Data.Category := GetLang(this._category)
-        this.Data.CmdStr := GetLang(this._cmdType)
+        this.Data.Category := this._category
+        this.Data.CmdStr := this._cmdType
         this.Data.MenuIndex := (this._cmdType == "显示菜单" || this._cmdType == GetLang("显示菜单"))
             ? (Integer(this.ui.Query("MenuDLCombo>SelectedIndex")) + 1) : 1
         ; 禁用模块/取消禁用模块：保存目标页签符号 + 模块路径身份
@@ -668,7 +668,7 @@ class RMTCMDGui {
         }
 
         if (this.Data.SerialStr == "")
-            this.Data.SerialStr := GetCMDSerialStr(GetLang("RMT指令"))
+            this.Data.SerialStr := GetCMDSerialStr("RMT指令")
         SaveMacroCMDData(this.Data)
         remark := this.Data.CmdStr
         return CorrectRemark(this.Data.SerialStr, remark)

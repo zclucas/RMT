@@ -722,7 +722,7 @@ class MacroGraphIfProMixin {
         this.BranchGraphGui.OnSwitchToTreeAction := ""
         this.BranchGraphGui.SureBtnAction := (startSerial) => this._OnProBranchEditorSure(parentId, idx, startSerial)
         this.BranchGraphGui.OnClosedAction := (*) => this._RefreshProBranchBody(parentId, idx)
-        this.BranchGraphGui.ShowGui(cur, this.WindowBindingContext)
+        this.BranchGraphGui.ShowGui(SplitCompareBranchTail(cur).Body, this.WindowBindingContext)
     }
 
     _OnProBranchEditorSure(parentId, idx, startSerial) {
@@ -731,9 +731,9 @@ class MacroGraphIfProMixin {
             return
         cc := this._IfProCaseCountFromData(data)
         if (idx < cc)
-            data.MacroArr[idx + 1] := startSerial
+            data.MacroArr[idx + 1] := ReplaceCompareBranchBody(data.MacroArr[idx + 1], startSerial)
         else
-            data.DefaultMacro := startSerial
+            data.DefaultMacro := ReplaceCompareBranchBody(data.DefaultMacro, startSerial)
         SaveMacroCMDData(data)
     }
 

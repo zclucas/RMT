@@ -75,9 +75,11 @@ class RmtRelease {
             return order > 0
         if (asset.arch != previous.arch)
             return asset.arch == arch
-        if ((asset.digest == "") != (previous.digest == ""))
-            return asset.digest != ""
-        return InStr(asset.url, "https://gitee.com/") == 1 && InStr(previous.url, "https://github.com/") == 1
+        isGitee := InStr(asset.url, "https://gitee.com/") == 1
+        previousIsGitee := InStr(previous.url, "https://gitee.com/") == 1
+        if (isGitee != previousIsGitee)
+            return isGitee
+        return asset.digest != "" && previous.digest == ""
     }
 }
 

@@ -51,6 +51,14 @@ SetGlobalData(macroStr, visitMap) {
                         VariableMap[Data.VariableArr[A_Index]] := true
                 }
             case "文本处理":
+                if (Data.HasOwnProp("LegacyTextProcess")) {
+                    legacy := Data.LegacyTextProcess
+                    for row, enabled in legacy.ToggleArr {
+                        if (enabled && legacy.VariableArr.Has(row))
+                            VariableMap[legacy.VariableArr[row]] := true
+                    }
+                    continue
+                }
                 if (Data.SaveType == "变量")
                     VariableMap[Data.SaveName] := true
                 if (Data.SaveType == "数组")

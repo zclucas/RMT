@@ -10,6 +10,11 @@
 - 后续新增的多行输入框使用 `Style="{StaticResource RmtMultiLineTextBox}"`，文字顶部留白比原指令编辑器多行输入框少 6 个设备无关像素。
 - 使用 AHK 构建控件时，通过 `.Style("{StaticResource RmtSingleLineTextBox}")` 或 `.Style("{StaticResource RmtMultiLineTextBox}")` 引用样式。保留已有输入框的布局。
 
+# XAML 表单标签
+
+- 新增或调整指令编辑器表单时，每列标签按 5 个中文字加 1 个全角冒号的宽度预留，随当前字号变化。输入控件紧接标签列，同列起点对齐。
+- 标签简写到 5 个字以内。悬停提示只用于补充用法、取值或限制等信息。
+
 # 更新日志
 
 - 更新日志写在 `Web/更新日志.md`，按版本倒序。当前版本以 `RMT.ahk` 里的 `RMT_VERSION` 为准，开发中的新增、优化、修复只写入对应的 `RMTv{版本}` 一节。现在是 `1.3F2`，条目写入 `RMTv1.3F2`。

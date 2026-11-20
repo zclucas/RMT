@@ -430,7 +430,7 @@ class CompareProEditItemGui {
         action := this.SureBtnAction
         if (this.IsSubMacroEdit) {
             if (this.EditType == 2) {
-                this.Data.DefaultMacro := GetLangStr(this.ui.Query("MacroCon"), 2)
+                this.Data.DefaultMacro := GetLangMacro(this.ui.Query("MacroCon"), 2)
                 this.Data.DefaultControlType := GetLangKey(this.LegacyControlType)
             }
             else {
@@ -449,7 +449,7 @@ class CompareProEditItemGui {
                 this.Data.CompareTypeArr[this.CondiNumber] := GetLangKeyArr(CompareTypeArr)
                 this.Data.VariableArr[this.CondiNumber] := GetLangKeyArr(VariableArr)
                 this.Data.LogicTypeArr[this.CondiNumber] := this._LogicalTypeIndex()
-                this.Data.MacroArr[this.CondiNumber] := GetLangStr(this.ui.Query("MacroCon"), 2)
+                this.Data.MacroArr[this.CondiNumber] := GetLangMacro(this.ui.Query("MacroCon"), 2)
                 this.Data.ControlTypeArr[this.CondiNumber] := GetLangKey(this.LegacyControlType)
             }
             saveStr := JSON.stringify(this.Data, 0)

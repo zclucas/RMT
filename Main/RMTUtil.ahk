@@ -684,7 +684,7 @@ InitFilePath() {
         Compat_WriteVersion(profileDir, Compat_CurrentVersion())
     } else {
         ; 在任何默认宏表写入之前迁移直接覆盖安装的旧方案。
-        Compat_UpgradeDir(profileDir)
+        Compat_UpgradeDir(profileDir, true)
     }
 
     if (!DirExist(profileDir "\Images\UseExplain")) {
@@ -1121,7 +1121,7 @@ ExcuteRMTCMDAction(Cmd) {
     paramArr := StrSplit(Cmd, InStr(Cmd, "⫶") ? "⫶" : "_")
     if (paramArr.Length < 3 || ApplyRmtInputControl(paramArr[3]))
         return
-    switch GetLangKey(paramArr[3]) {
+    switch RmtCommandActionKey(paramArr[3]) {
         case "截图":
             OnToolScreenShot()
         case "截图提取文本":

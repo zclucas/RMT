@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include Util\MouseProcessMonitor.ahk
 
 ; ============================================================
 ; 宏触发键热键登记表：注册成功的热键统一记录，重绑前先全部注销。
@@ -354,25 +355,30 @@ OnToolCheckHotkey(*) {
     if (MainSoftData.IsToolCheck) {
         SetTimer SetToolCheckInfo, 100
     }
-    else
+    else {
         SetTimer SetToolCheckInfo, 0
+        MouseProcessMonitor.Stop()
+    }
 }
 
 SetToolCheckInfo() {
     global MainSoftData
     CoordMode("Mouse", "Screen")
     MouseGetPos &mouseX, &mouseY, &winId
+    winPID := 0
+    try winPID := WinGetPID(winId)
+    if (MainSoftData.HasProp("ToolProcessMetricsCtrls"))
+        MouseProcessMonitor.Update(winId, winPID)
     try {
         MainSoftData.PosStr := mouseX . "," . mouseY
         try {
-            WinPID := WinGetPID("ahk_id " winId)
             MainSoftData.ProcessName := ProcessGetName(WinPID)
         }
         catch {
             MainSoftData.ProcessName := ""
         }
         MainSoftData.ProcessTile := WinGetTitle(winId)
-        MainSoftData.ProcessPid := WinGetPID(winId)
+        MainSoftData.ProcessPid := winPID
         MainSoftData.ProcessClass := WinGetClass(winId)
         MainSoftData.ProcessId := winId
         ; 同一次读取获取窗口外框的屏幕位置和尺寸。
@@ -388,8 +394,8 @@ SetToolCheckInfo() {
         ; 窗口位置/尺寸用于描述外框，鼠标窗口坐标使用客户区原点。
         WinPosArr := GetWinPos(mouseX, mouseY, winId)
         MainSoftData.WinPosStr := WinPosArr[1] . "," . WinPosArr[2]
-        RefreshToolUI()
     }
+    RefreshToolUI()
 }
 
 OnClickToolRecordSettingBtn(*) {
