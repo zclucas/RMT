@@ -8,7 +8,7 @@ on:
       - '**'
   push:
     branches:
-      - dev
+      - Dev
 
 permissions:
   contents: read
