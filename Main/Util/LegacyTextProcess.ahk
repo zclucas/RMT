@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 1.0.9 文本处理写的是多个独立变量，另有部分模式在新版中没有对应项。
 ; 仅执行由旧配置保留的参数。

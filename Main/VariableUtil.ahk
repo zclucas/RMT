@@ -82,6 +82,8 @@ SetGlobalData(macroStr, visitMap) {
                     TimeoutPolicy.RegisterStatus(Data)
             case "YOLO检测":
                 RegisterYoloVars(Data)
+            case "翻译":
+                RegisterTranslateVars(Data)
             case "进程管理":
                 ProcessManage.RegisterOutputs(Data)
             case "浏览器":

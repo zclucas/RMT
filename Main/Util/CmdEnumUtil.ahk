@@ -333,6 +333,15 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "Device", ["CPU", "CUDA", "DirectML", "TensorRT", "CoreML"])
             CmdEnumSet(Data, "TargetMode", ["最高置信度", "最左", "最上", "面积最大"])
             CmdEnumSet(Data, "ActionType", ["无动作", "左键单击", "左键双击", "右键单击"])
+        case "翻译":
+            CmdEnumSet(Data, "Source", ["变量", "剪切板", "固定文本"])
+            ; 名单要与 TranslateCommand.Targets 一致：漏掉「自定义」会被归一成简体中文
+            CmdEnumSet(Data, "Target", ["简体中文", "繁体中文", "英语", "日语", "韩语", "俄语", "法语", "德语", "西班牙语", "自定义"])
+            CmdEnumSet(Data, "Engine", ["Index-Translate 2B", "Index-Translate 9B", "AI 通道"])
+            ; 旧配置没有设备字段，补默认值，编辑器与执行都按「自动」
+            if (!Data.HasProp("Device"))
+                Data.Device := "自动"
+            CmdEnumSet(Data, "Device", ["自动", "GPU", "CPU"])
         case "文件读写", "Excel":
             if (Data.HasProp("OperType")) {
                 types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")

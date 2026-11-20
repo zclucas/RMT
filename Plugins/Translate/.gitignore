@@ -1,0 +1,10 @@
+# TranslateDll 构建依赖/缓存（buildDll.ps1 自动下载生成，不提交 git）
+third_party/
+models/
+*.obj
+*.lib
+*.exp
+_build.bat
+
+# x64/TranslateDll.dll 是产物但入库：与 Plugins/YOLO、Plugins/Voice 一致，
+# 拿到仓库就能直接用，不必先装 MSVC 编一遍。

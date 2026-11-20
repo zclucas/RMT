@@ -37,6 +37,7 @@
 #Include BrowserGui.ahk
 #Include ClassifierCommandGui.ahk
 #Include YoloGui.ahk
+#Include TranslateGui.ahk
 #Include ProcessManageGui.ahk
 #Include MacroEditModel.ahk
 
@@ -143,7 +144,7 @@ class MacroEditGui {
             {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "等待", "循环", "如果", "如果Pro"]},
             {name: "进程/窗口", icon: Chr(0xE737), cmds: ["进程管理", "窗口信息", "调整窗口", "窗口控件"]},
             {name: "调控", icon: Chr(0xE713), cmds: ["宏操作", "RMT指令", "运行", "运行Pro"]},
-            {name: "扩展", icon: Chr(0xEA86), cmds: ["Excel", "浏览器", "文件读写", "AI判断", "网络请求"]},
+            {name: "扩展", icon: Chr(0xEA86), cmds: ["Excel", "浏览器", "文件读写", "AI判断", "网络请求", "翻译"]},
             {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
         ]
         this._favSet := Map()            ; 收藏指令名（中文）→ true

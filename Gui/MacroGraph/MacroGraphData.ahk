@@ -278,6 +278,7 @@ class MacroGraphDataMixin {
                 "窗口控件", WindowControlData,
                 "AI判断", AiDecisionData,
                 "YOLO检测", YoloData,
+                "翻译", TranslateData,
                 "进程管理", ProcessManageData,
                 "文件读写", FileIOData,
                 "Excel", FileIOData,
