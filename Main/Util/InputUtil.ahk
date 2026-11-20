@@ -323,12 +323,18 @@ RunWaitConfirmation(tableItem, index, Data, waitData := "") {
         MyExcuteRMTCMDAction("RMT指令_宏控制_暂停所有宏")
 
     prompt := InputResolveText(tableItem, index, InputField(Data, "Prompt", ""))
-    ibType := GetLangKey(InputField(Data, "Type", "继续")) == "继续&终止&暂停" ? "4" : "2"
+    switch GetLangKey(InputField(Data, "Type", "继续")) {
+        case "继续&取消": ibType := "3"
+        case "继续&终止&暂停": ibType := "4"
+        default: ibType := "2"
+    }
     cancelled := () => IsObject(item) && (item.Killed || GetItemByIndex(tableItem, index) != item)
     timeoutAction := IsObject(waitData) ? TimeoutPolicy.Get(waitData) : ""
     loop {
         result := RequestMacroInput(IsObject(waitData) ? waitData : Data, tableItem, index, "IB", ibType, prompt, "", "")
         action := cancelled() ? "" : InputBtnResult(result)
+        if (ibType == "3" && action == "cancel")
+            action := "terminate"
         if (action != "timeout" || !TimeoutPolicy.CanRetry(timeoutAction, A_Index))
             break
         if (!TimeoutPolicy.WaitBeforeRetry(cancelled)) {

@@ -1,31 +1,19 @@
 
     SaveCommandData(RealCommandStr, macroStr, nodeItemID) {
         paramArr := StrSplit(RealCommandStr, "_")
-        cmd := RegExReplace(paramArr[1], "\d+")
-
-        ; 映射表：命令 → 文件名
-        fileMap := Map(
-            GetLang("搜索"), SearchFile,
-            GetLang("搜索Pro"), SearchProFile,
-            GetLang("搜索All"), SearchAllFile,
-            GetLang("搜索Combo"), SearchComboFile,
-            GetLang("组合搜索"), SearchComboFile,
-            GetLang("搜索Multi"), SearchComboFile,
-            GetLang("抓图"), ScreenShotFile,
-            GetLang("如果"), CompareFile,
-            GetLang("如果Pro"), CompareProFile,
-            GetLang("循环"), LoopFile
-        )
-        if (!fileMap.Has(cmd))
+        cmd := GetCommandKey(GetCmdOnlyText(paramArr[1]))
+        static branchCommands := Map("搜索", true, "搜索Pro", true, "搜索All", true, "搜索Combo", true, "组合搜索", true,
+            "搜索Multi", true, "抓图", true, "如果", true, "如果Pro", true, "循环", true)
+        if (!branchCommands.Has(cmd))
             return
 
         ItemNumber := this.GetItemNumber(nodeItemID)
         Data := GetMacroCMDData(paramArr[1])
         macroStr := GetLangMacro(macroStr, 2)
-        if (cmd == GetLang("循环")) {
+        if (cmd == "循环") {
             Data.LoopBody := macroStr
         }
-        else if (cmd == GetLang("如果Pro")) {
+        else if (cmd == "如果Pro") {
             if (ItemNumber > Data.VariNameArr.Length) {
                 if (macroStr == "")
                     RmtDialog.Info("最后的分支不能删除，已清空分支指令")

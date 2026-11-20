@@ -60,7 +60,7 @@ InitData() {
         "输出", OutputFile, "提示", PromptFile, "运行", RunFile, "运行Pro", RunFile, "循环", LoopFile, "宏操作", SubMacroFile, "变量", VariableFile,
         "变量提取", ExVariableFile, "如果", CompareFile, "如果Pro", CompareProFile, "运算", OperationFile,
         "后台鼠标", BGMouseFile, "后台按键", BGKeyFile, "文本处理", TextOpsFile, "Timing", TimingFile, "数组", ArrayFile,
-        "输入", InputFile, "网络请求", HttpRequestFile, "浏览器", BrowserFile, "窗口控件", WindowControlFile, "AI判断", AiDecisionFile, "YOLO检测", YoloFile, "文件读写", FileIOFile, "Excel", FileIOFile, "窗口信息", WindowManageFile, "调整窗口", WindowManageFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile, "手柄检测", JoyCheckFile,
+        "输入", InputFile, "网络请求", HttpRequestFile, "浏览器", BrowserFile, "窗口控件", WindowControlFile, "AI判断", AiDecisionFile, "YOLO检测", YoloFile, "翻译", TranslateFile, "进程管理", ProcessManageFile, "文件读写", FileIOFile, "Excel", FileIOFile, "窗口信息", WindowManageFile, "调整窗口", WindowManageFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile, "手柄检测", JoyCheckFile,
         "注释", CommentFile, "抓图", ScreenShotFile, "图形节点", GraphNodeFile, "图形开始节点", GraphStartNodeFile,
         "间隔", IntervalFile, "按键", KeyDataFile, "移动", MoveDataFile, "RMT指令", RMTCMDFile,
         "等待", WaitFile, "等待确定", WaitConfirmFile, "时间", TimeDataFile, "倒计时", CountDownFile,
@@ -70,7 +70,7 @@ InitData() {
         "输出", OutputData, "提示", PromptData, "运行", RunData, "运行Pro", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
         "变量提取", ExVariableData, "如果", CompareData, "如果Pro", CompareProData, "运算", OperationData,
         "后台鼠标", BGMouseData, "后台按键", BGKeyData, "文本处理", TextOpsData, "Timing", TimingData, "数组", ArrayData,
-        "输入", InputData, "网络请求", HttpRequestData, "浏览器", BrowserData, "窗口控件", WindowControlData, "AI判断", AiDecisionData, "YOLO检测", YoloData, "文件读写", FileIOData, "Excel", FileIOData, "窗口信息", WindowInfoData, "调整窗口", WindowManageData, "窗口管理", WindowManageData, "按键检测", KeyCheckData, "手柄检测", KeyCheckData,
+        "输入", InputData, "网络请求", HttpRequestData, "浏览器", BrowserData, "窗口控件", WindowControlData, "AI判断", AiDecisionData, "YOLO检测", YoloData, "翻译", TranslateData, "进程管理", ProcessManageData, "文件读写", FileIOData, "Excel", FileIOData, "窗口信息", WindowInfoData, "调整窗口", WindowManageData, "窗口管理", WindowManageData, "按键检测", KeyCheckData, "手柄检测", KeyCheckData,
         "注释", CommentData, "抓图", ScreenShotData, "图形节点", MacroGraphNode, "图形开始节点", MacroGraphStartNode,
         "间隔", IntervalData, "按键", KeyDataConfig, "移动", MoveDataConfig, "RMT指令", RMTCMDData,
         "等待", WaitData, "等待确定", WaitConfirmData, "时间", TimeData, "倒计时", CountDownData,
@@ -168,12 +168,21 @@ CheckOcrIdle() {
 
 SafeReload() {
     ; 重载是同一次使用里的重启，不算再次打开软件，跳过下一次 getstatus
-    try CfgWrite(true, SettingFile, SettingSection, "SkipDataReport")
-    if (A_IsAdmin) {
-        Run('"' A_ScriptFullPath '" -elevated')
-        ExitApp()
-    } else {
-        Reload()
+    try {
+        CfgWrite(true, SettingFile, SettingSection, "SkipDataReport")
+        Cfg_FlushFile(SettingFile)
+    }
+    ; 使用程序目录启动，并由 AHK 的重载协议在新实例执行前完成旧实例的退出清理。
+    command := RmtCmdHostCommand("/restart") (A_IsAdmin ? " -elevated" : "")
+    try Run(command, A_ScriptDir)
+    catch as e {
+        code := A_LastError
+        try {
+            CfgDelete(SettingFile, SettingSection, "SkipDataReport")
+            Cfg_FlushFile(SettingFile)
+        }
+        try RMTLogSys(RMT_LV_ERROR, "SafeReload", e.Message " (Win32: " code ")")
+        RmtDialog.Info(GetLang("自动重启失败，请关闭后重新打开若梦兔。"), GetLang("提示"))
     }
 }
 

@@ -120,10 +120,7 @@ class MMProGui {
         winRow.Cols("90", "130", "110", "150")
         winRow.Add("TextBlock").Grid_Column(0).Text(GetLang("窗口绑定：")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
-        winRow.Add("TextBox").Grid_Column(1).Grid_ColumnSpan(2).Name("WinInfoCon").Height(26).MinHeight(26)
-            .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1).Grid_ColumnSpan(2).FontSize(11)
         winRow.Add("Button").Grid_Column(3).Name("BtnWinInfoEdit").Content(GetLang("编辑")).Height(26).MinHeight(26)
             .Margin("20,0,0,0").HorizontalAlignment("Left").VerticalAlignment("Center")
 

@@ -16,7 +16,7 @@ LangCmdKeyArr := [
     "休眠", "暂停所有宏", "恢复所有宏", "终止所有宏", "重载", "关闭软件", "间隔", "按键", "手柄", "手柄检测", "搜索", "搜索Pro", "搜索All", "搜索Combo",
     "组合搜索", "搜索Multi", "移动", "移动Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "流程跳转", "循环-跳过本轮", "循环-跳出", "分支-跳出",
     "输出", "提示", "运行", "运行Pro", "循环", "宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "RMT指令", "后台鼠标", "后台按键",
-    "等待", "等待确定", "时间", "倒计时", "按键检测", "窗口管理", "窗口信息", "调整窗口", "注释", "抓图",
+    "等待", "等待确定", "时间", "倒计时", "按键检测", "窗口管理", "窗口信息", "调整窗口", "进程管理", "注释", "抓图",
     "循环次数", "宏循环次数", "当前坐标X", "当前坐标Y", "按下", "松开", "点击", "创建", "克隆", "删除", "包含",
     "取值", "赋值", "插入", "追加", "移除", "移除最后", "长度", "变量或值", "数组", "文本分割", "文本提取", "文本替换", "去除空格",
     "时间戳处理", "自定义格式", "提取时间量", "提取所有时间量", "日期时间", "日期", "时刻",
@@ -26,7 +26,10 @@ LangCmdKeyArr := [
     "用默认值", "保持原值", "自动继续", "自动终止", "自动暂停", "等待结束",
     "暂停当前宏", "暂停所有宏", "终止当前宏", "终止所有宏", "读取全部内容", "逐行读取", "指定行", "单元格", "指定列", "指定区域-行",
     "指定区域-列", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测", "JSON", "表单", "原始文本", "文件读写", "Excel", "读取文件", "写入文件", "读取文本文件", "写入文本文件",
-    "发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板"
+    "发送内容", "粘贴内容", "临时提示", "指令窗口", "软件弹窗", "系统语音", "复制到剪切板",
+    "翻译", "翻译编辑器", "来源", "内容", "目标语言", "引擎", "术语表", "固定文本",
+    "简体中文", "繁体中文", "英语", "日语", "韩语", "俄语", "法语", "德语", "西班牙语",
+    "翻译内容为空", "翻译模型未下载", "翻译组件缺失，请先编译 Plugins\Translate", "翻译组件版本不匹配，请重新编译", "翻译已取消", "翻译组件仅支持 64 位"
 ]
 
 LanguageOptionXaml(key, label, flag := "") {
@@ -85,10 +88,11 @@ LangInitSetting() {
 }
 
 LangKeysInit() {
-    LangKeyMap.Clear()
+    global LangKeyMap
+    LangKeyMap := Map()
     LangValueMap.Clear()
+    CommandLanguageIndex(true)
 
-    ; 内部硬编码即为简中，简中模式下无需加载外部文件，直接直通
     if (MainSoftData.Lang == "简中")
         return
 
@@ -99,34 +103,15 @@ LangKeysInit() {
     }
 
     try {
-        file := FileOpen(LangFilePath, "r", "UTF-8")
-        while !file.AtEOF {
-            line := file.ReadLine()
-            if (line = "")
-                continue
-
-            eqPos := RegExMatch(line, "(?<!\\)=")
-            if (eqPos > 1) {
-                rawKey := StrReplace(SubStr(line, 1, eqPos - 1), "\=", "=")
-                val := SubStr(line, eqPos + 1)
-                if (InStr(rawKey, "``n", true)) {
-                    rawKey := StrReplace(rawKey, "``n", "`n", true)
-                    val := StrReplace(val, "``n", "`n", true)
-                }
-                LangKeyMap[rawKey] := val
-                trimmedKey := Trim(rawKey)
-                if (trimmedKey != rawKey && !LangKeyMap.Has(trimmedKey))
-                    LangKeyMap[trimmedKey] := val
-                if (val != "" && !LangValueMap.Has(val))
-                    LangValueMap[val] := trimmedKey
-            }
+        LangKeyMap := ReadLanguageFile(LangFilePath)
+        for key, val in LangKeyMap {
+            if (val != "" && !LangValueMap.Has(val))
+                LangValueMap[val] := Trim(key)
         }
-        file.Close()
     } catch as e {
         MsgBox GetLang("读取文件失败:") e.Message
     }
 
-    ; 指令关键 key 优先保证反向映射准确
     commandKeys := LangCmdKeyArr.Clone()
     try {
         for def in MacroCategoryDefs()
@@ -137,6 +122,70 @@ LangKeysInit() {
         if (key != value)
             LangValueMap[key] := value
     }
+}
+
+ReadLanguageFile(path) {
+    translations := Map()
+    file := FileOpen(path, "r", "UTF-8")
+    try {
+        while !file.AtEOF {
+            line := file.ReadLine()
+            eqPos := RegExMatch(line, "(?<!\\)=")
+            if (eqPos <= 1)
+                continue
+            rawKey := StrReplace(SubStr(line, 1, eqPos - 1), "\=", "=")
+            val := SubStr(line, eqPos + 1)
+            if (InStr(rawKey, "``n", true)) {
+                rawKey := StrReplace(rawKey, "``n", "`n", true)
+                val := StrReplace(val, "``n", "`n", true)
+            }
+            translations[rawKey] := val
+            trimmedKey := Trim(rawKey)
+            if (trimmedKey != rawKey && !translations.Has(trimmedKey))
+                translations[trimmedKey] := val
+        }
+    } finally {
+        file.Close()
+    }
+    return translations
+}
+
+InstalledLanguageMaps() {
+    static cache := Map()
+    if (!IsSet(LangDir) || LangDir == "")
+        return []
+    if (!cache.Has(LangDir)) {
+        maps := []
+        loop files, LangDir "\*.txt" {
+            if (A_LoopFileName == "简中.txt" || A_LoopFileName == "中文.txt")
+                continue
+            try maps.Push(ReadLanguageFile(A_LoopFileFullPath))
+        }
+        cache[LangDir] := maps
+    }
+    return cache[LangDir]
+}
+
+; 同一译文可能用于不同字段，按当前字段的可选键查找。
+GetConfigKey(value, keys) {
+    for key in keys {
+        if (value == key)
+            return key
+    }
+    label := Trim(value)
+    if (label == "")
+        return value
+    for key in keys {
+        if (label == Trim(GetLang(key)))
+            return key
+    }
+    for translations in InstalledLanguageMaps() {
+        for key in keys {
+            if (label == Trim(translations.Get(key, "")))
+                return key
+        }
+    }
+    return value
 }
 
 ; 动态切换当前应用语言
@@ -159,8 +208,15 @@ GetClientLanguageCode() {
 }
 
 GetLang(Key) {
-    ; 简中模式或未加载映射时直接返回原 key
-    if (MainSoftData.Lang == "简中" || LangKeyMap.Count == 0)
+    ; 简中指令显示短名称，配置继续使用原指令键。
+    if (MainSoftData.Lang == "简中") {
+        switch Key {
+            case "进程管理": return "进程"
+            case "窗口控件": return "控件"
+        }
+        return Key
+    }
+    if (LangKeyMap.Count == 0)
         return Key
 
     if (LangKeyMap.Has(Key))
@@ -170,9 +226,6 @@ GetLang(Key) {
 }
 
 GetLangArr(KeyArr) {
-    if (MainSoftData.Lang == "简中" || LangKeyMap.Count == 0)
-        return KeyArr.Clone()
-
     ResArr := []
     for Value in KeyArr
         ResArr.Push(GetLang(Value))
@@ -200,60 +253,112 @@ GetLangKeyArr(ValueArr) {
     return ResArr
 }
 
+CommandNames() {
+    static names := [
+        "间隔", "按键", "手柄", "手柄检测", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi",
+        "移动", "移动Pro", "鼠标移动", "鼠标移动Pro", "增量移动", "输出", "提示", "运行", "运行Pro",
+        "循环", "宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "RMT指令", "后台鼠标", "后台按键",
+        "文本处理", "数组", "输入", "等待", "等待确定", "时间", "倒计时", "按键检测", "窗口管理", "窗口信息",
+        "调整窗口", "进程管理", "注释", "抓图", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测",
+        "文件读写", "Excel", "图形节点", "图形开始节点", "Timing", "流程跳转"
+    ]
+    return names
+}
+
+CommandLanguageIndex(reset := false) {
+    static index := ""
+    if (reset) {
+        index := ""
+        return
+    }
+    if (IsObject(index))
+        return index
+    keys := Map("进程", "进程管理", "控件", "窗口控件")
+    aliases := Map()
+    for name in CommandNames() {
+        key := CanonicalMoveCommandName(name)
+        keys[name] := key
+        if (!aliases.Has(key))
+            aliases[key] := Map()
+        if (name != key)
+            aliases[key][name] := true
+    }
+    for label, key in keys {
+        if (label != key)
+            aliases[key][label] := true
+    }
+    maps := [LangKeyMap]
+    maps.Push(InstalledLanguageMaps()*)
+    for translations in maps {
+        for name in CommandNames() {
+            label := Trim(translations.Get(name, ""))
+            if (label == "" || label == name)
+                continue
+            key := CanonicalMoveCommandName(name)
+            if (!keys.Has(label))
+                keys[label] := key
+            aliases[key][label] := true
+        }
+    }
+    index := {Keys: keys, Aliases: aliases}
+    return index
+}
+
+; 指令名称使用独立索引，避免与普通界面词条混淆。
+GetCommandKey(name) {
+    return CommandLanguageIndex().Keys.Get(name, CanonicalMoveCommandName(name))
+}
+
+RmtCommandCategoryKey(value) => GetConfigKey(value, ["全部", "图文", "输入控制", "宏控制", "调试", "软件自身"])
+
+RmtCommandActionKey(value) {
+    static names := ["截图", "截图提取文本", "自由贴", "启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠",
+        "禁用鼠标移动", "启用鼠标加速", "禁用鼠标加速", "显示菜单", "关闭菜单", "打开界面窗口", "关闭界面窗口",
+        "禁用模块", "取消禁用模块", "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视",
+        "开启指令显示", "关闭指令显示", "关闭软件", "休眠", "重载"]
+    return GetConfigKey(value, names)
+}
+
 GetLangMacro(MacroStr, Mode) {
-    ; 简中多语言展示模式下无需转换，直接返回
-    if (MacroStr == "" || (Mode == 1 && MainSoftData.Lang == "简中"))
-        return MacroStr
-
-    cmdArr := SplitMacro(MacroStr)
-    for cmdStr in cmdArr {
-        cmdStr := GetLangCmd(cmdStr, Mode)
-        cmdArr[A_Index] := cmdStr
+    result := ""
+    start := 1
+    while (pos := RegExMatch(MacroStr, "[^,，\r\n⫶]+", &match, start)) {
+        line := match[0]
+        command := Trim(line, " `t")
+        if (command != "") {
+            leading := StrLen(line) - StrLen(LTrim(line, " `t"))
+            line := SubStr(line, 1, leading) . GetLangCmd(command, Mode)
+                . SubStr(line, leading + StrLen(command) + 1)
+        }
+        result .= SubStr(MacroStr, start, pos - start) line
+        start := pos + match.Len
     }
-    return GetMacroStrByCmdArr(cmdArr)
+    return result SubStr(MacroStr, start)
 }
 
-; mode 1多语言模式  2简中语言模式
+; mode 1 多语言显示，mode 2 简中存储。
 GetLangCmd(Cmd, Mode) {
-    if (Mode == 1 && MainSoftData.Lang == "简中")
+    if (!RegExMatch(Cmd, "^((?:🚫|▶|⭐)*)([^_\d|]+)(\d*)", &head))
         return Cmd
-
-    paramArr := SplitCommand(Cmd)
-
-    action := Mode == 1 ? GetLang : GetLangKey
-    cmdSymbol := GetCmdSymbol(paramArr[1])
-    rawCmd := GetCmdStr(paramArr[1])
-
-    ; 統一拆分指令名與尾部編號：
-    ; - 帶編號序列指令（如 "搜尋1"）：textOnly="搜尋", numbersOnly="1"
-    ; - 無編號純指令（如 "按鍵"、"間隔"）：textOnly="按鍵", numbersOnly=""
-    ; 兩者皆可通用同一行邏輯轉換，省去繁瑣的分支判斷與正規表示式（RegExReplace）
-    SplitSerialTextAndNumbers(rawCmd, &textOnly, &numbersOnly)
-    paramArr[1] := cmdSymbol . action(textOnly) . numbersOnly
-
-    ; 將指令名歸一化為內部簡中鍵，統一處理特定指令的內部參數翻譯
-    key := GetLangKey(textOnly)
-    if (key == "RMT指令" && paramArr.Length >= 2)
-        paramArr[2] := action(paramArr[2])
-    else if (key == "按键" && paramArr.Length >= 3)
-        paramArr[3] := action(paramArr[3])
-
-    ; 重組並返回處理後的完整指令字串
-    return GetCmdByParams(paramArr)
+    key := GetCommandKey(head[2])
+    tail := SubStr(Cmd, head.Len + 1)
+    if (head[3] == "" && (key == "RMT指令" || key == "按键" || key == "手柄") && SubStr(tail, 1, 1) == "_") {
+        params := SplitCommand(Cmd)
+        if (params.Length >= 3) {
+            second := key == "RMT指令" ? RmtCommandCategoryKey(params[2]) : params[2]
+            third := key == "RMT指令" ? RmtCommandActionKey(params[3]) : GetConfigKey(params[3], CmdEnumKeyActNames())
+            if (Mode == 1) {
+                if (key == "RMT指令")
+                    second := GetLang(second)
+                third := GetLang(third)
+            }
+            tail := "_" second "_" third SubStr(tail, StrLen(params[2]) + StrLen(params[3]) + 3)
+        }
+    }
+    name := Mode == 1 ? Trim(GetLang(key)) : key
+    return head[1] name head[3] tail
 }
 
-; mode 1多语言模式  2简中语言模式
 GetLangStr(Str, Mode) {
-    if (Mode == 1 && MainSoftData.Lang == "简中")
-        return Str
-
-    for displayVar in GetSpecialVarArr() {
-        zhKey := GetLangKey(displayVar)
-        if (zhKey == displayVar)
-            continue
-        fromStr := Mode == 1 ? zhKey : displayVar
-        toStr   := Mode == 1 ? displayVar : zhKey
-        Str := StrReplace(Str, fromStr, toStr)
-    }
-    return Str
+    return TranslateBuiltinVarReferences(Str, Mode == 1)
 }

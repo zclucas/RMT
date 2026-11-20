@@ -1,7 +1,7 @@
 ﻿#Requires AutoHotkey v2.0
 
 FileIONormType(t) {
-    t := GetLangKey(t)
+    t := GetConfigKey(t, ["读取Excel", "写入Excel", "读取文件", "写入文件", "读取文本文件", "写入文本文件"])
     if (t == "读取文本文件")
         return "读取文件"
     if (t == "写入文本文件")

@@ -58,18 +58,19 @@ class ErrorMsgBoxGui {
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("10,12")
-        body.Rows("*", "42")
+        body.Rows("*", "Auto", "42")
         body.Add("TextBox").Grid_Row(0).Name("TextCon").AcceptsReturn("True").TextWrapping("Wrap").IsReadOnly("True")
             .VerticalContentAlignment("Top")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
-        btnRow := body.Add("Grid").Grid_Row(1).HorizontalAlignment("Center").VerticalAlignment("Center")
-        btnRow.Cols("Auto", "*", "Auto")
-        btnRow.Add("Button").Name("BtnCopy").Grid_Column(0).Content(GetLang("复制")).Width(80).Height(30).MinHeight(30)
-        btnRow.Add("Button").Name("BtnFeedback").Grid_Column(1).Content(GetLang("反馈")).Width(80).Height(30).MinHeight(30)
-            .HorizontalAlignment("Center").ToolTip(GetLang("把这段报错带到论坛反馈窗口"))
-        btnRow.Add("Button").Name("BtnOk").Grid_Column(2).Content(GetLang("确定")).Width(80).Height(30).MinHeight(30)
+        body.Add("TextBlock").Grid_Row(1).Text(GetLang("总是报错很烦恼吧，反馈试试吧，开发者帮您解决。"))
+            .Foreground("{DynamicResource TextSub}").FontSize(12).TextAlignment("Center").TextWrapping("Wrap").Margin("0,8,0,0")
+        btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        AddCmdOkBtn(btnRow, "BtnCopy", "0,0,50,0", GetLang("复制"))
+        AddCmdOkBtn(btnRow, "BtnFeedback", "0,0,50,0", GetLang("反馈"))
+            .ToolTip(GetLang("把这段报错带到论坛反馈窗口"))
+        AddCmdOkBtn(btnRow)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)

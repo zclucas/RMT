@@ -73,8 +73,14 @@ class RmtReleaseScan {
     static FetchReleases(current) {
         assets := []
         errors := []
-        gitHubDeadline := A_TickCount + 21000
         sources := 0
+        try {
+            assets.Push(this.ParseApi(this.Request("https://gitee.com/api/v5/repos/fateman/RMT/releases?page=1&per_page=100", A_TickCount + 8500))*)
+            sources++
+        } catch as err
+            errors.Push(err.Message)
+
+        gitHubDeadline := A_TickCount + 21000
         try {
             assets.Push(this.ParseApi(this.Request("https://api.github.com/repos/zclucas/RMT/releases?per_page=30", gitHubDeadline))*)
             sources++
@@ -85,11 +91,6 @@ class RmtReleaseScan {
             } catch as htmlErr
                 errors.Push(err.Message "`n" htmlErr.Message)
         }
-        try {
-            assets.Push(this.ParseApi(this.Request("https://gitee.com/api/v5/repos/fateman/RMT/releases?page=1&per_page=100", A_TickCount + 8500))*)
-            sources++
-        } catch as err
-            errors.Push(err.Message)
         if (!sources) {
             detail := ""
             for message in errors
@@ -105,8 +106,10 @@ class RmtReleaseScan {
         for asset in assets {
             backup := RmtDownloadDirectUrl(asset.url)
             if (backup != "" && github.Has(backup)) {
-                asset.digest := github[backup].digest
-                asset.bytes := github[backup].bytes
+                if (github[backup].digest != "")
+                    asset.digest := github[backup].digest
+                if (github[backup].bytes)
+                    asset.bytes := github[backup].bytes
             }
         }
         return assets

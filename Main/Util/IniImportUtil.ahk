@@ -18,7 +18,7 @@
 ; 不参与转换的 INI（第三方库自带，不属于 RMT 配置体系）
 global IniImportSkipNames := Map(
     "docking_layout.ini", 1,   ; AHK-XAML 面板停靠布局
-    "config.ini", 1            ; MinTool 倒计时等独立小工具
+    "config.ini", 1            ; 旧版独立小工具配置
 )
 
 ; 配置段名（AssetUtil 启动时建同名全局；此处兜底，避免调用时序问题）

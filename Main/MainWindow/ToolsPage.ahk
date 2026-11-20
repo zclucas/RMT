@@ -12,6 +12,9 @@
                 . '<DockPanel Margin="0,0,6,0"><TextBlock DockPanel.Dock="Left" Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,6,0" VerticalAlignment="Center"/><Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" VerticalAlignment="Center"><TextBlock Text="' this._XmlEsc(label) '"/></Viewbox></DockPanel>'
                 . '<TextBox Grid.Column="1" Name="' name '" Text="' this._XmlEsc(value) '" Height="26" MinHeight="26" Padding="6,0" VerticalContentAlignment="Center" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/></Grid>'
         }
+        processField(key, label, glyph) {
+            return field(RTrim(GetLang(label), " ：:"), glyph, "TxtTool" key, MouseProcessMonitor.Text(key))
+        }
         card(title, glyph, body, margin := "0", headerRight := "") {
             glyphXaml := glyph == "" ? "" : '<TextBlock Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource TitleBarForeground}" FontSize="13" Margin="0,0,7,0" VerticalAlignment="Center"/>'
             return '<Border Margin="' margin '" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource OutlineStroke}" TextElement.Foreground="{DynamicResource TextMain}" BorderThickness="1.25" CornerRadius="7" Padding="0">'
@@ -46,12 +49,18 @@
             . field(GetLang("窗口位置"), "&#xE7B7;", "TxtWinOrigin", MainSoftData.WinOriginStr)
             . field(GetLang("窗口标题"), "&#xE8A5;", "TxtProcessTile", MainSoftData.ProcessTile)
             . field(GetLang("窗口类"), "&#xE8D7;", "TxtProcessClass", MainSoftData.ProcessClass)
-            . field(GetLang("句柄 Id"), "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId) '</StackPanel><StackPanel Grid.Column="1">'
+            . field(GetLang("句柄 Id"), "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId)
+            . processField("IntegrityVar", "权限级别：", "&#xEA18;")
+            . processField("StartTimeVar", "启动时间：", "&#xE823;")
+            . processField("CpuVar", "CPU 占用：", "&#xE950;") '</StackPanel><StackPanel Grid.Column="1">'
             . field(GetLang("窗口客户区坐标"), "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
             . field(GetLang("窗口宽高"), "&#xE740;", "TxtWinSize", MainSoftData.WinSizeStr)
             . field(GetLang("进程名"), "&#xE9D9;", "TxtProcessName", MainSoftData.ProcessName)
             . field(GetLang("进程 PID"), "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)
-            . field(GetLang("位置颜色"), "&#xE790;", "TxtColor", MainSoftData.Color) '</StackPanel></Grid></Grid>'
+            . field(GetLang("位置颜色"), "&#xE790;", "TxtColor", MainSoftData.Color)
+            . processField("StatusVar", "状态：", "&#xE9D9;")
+            . processField("UptimeVar", "运行时长：", "&#xE916;")
+            . processField("GpuVar", "GPU 占用：", "&#xE7F4;") '</StackPanel></Grid></Grid>'
 
         auxiliaryBody := '<StackPanel><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE840;" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock Text="' GetLang("窗口置顶") '" FontWeight="Bold" VerticalAlignment="Center"/><CheckBox Name="ChkAlwaysOnTop" Content="' GetLang("保持 RMT 主窗口在最前") '" Style="{StaticResource ToolSwitch}" Margin="12,0,0,0"/></StackPanel>'
             . '<StackPanel Orientation="Horizontal" Margin="0,12,0,0">' openBtn("BtnFileCheck", "&#xE8B7;", GetLang("文件校验"), true)
@@ -99,6 +108,9 @@
         MainSoftData.ToolProcessIdCtrl := CtrlAdapter("TxtProcessId", this.ui, "Text")
         MainSoftData.ToolWinSizeCtrl := CtrlAdapter("TxtWinSize", this.ui, "Text")
         MainSoftData.ToolColorCtrl := CtrlAdapter("TxtColor", this.ui, "Text")
+        MainSoftData.ToolProcessMetricsCtrls := Map()
+        for fieldName in ProcessInfo.Metrics
+            MainSoftData.ToolProcessMetricsCtrls[fieldName] := CtrlAdapter("TxtTool" fieldName, this.ui, "Text")
 
         this.ui.Update("ChkToolCheck", "IsChecked", MainSoftData.IsToolCheck ? "True" : "False")
         this.ui.Update("ChkToolCheckRecord", "IsChecked", MainSoftData.IsToolRecord ? "True" : "False")

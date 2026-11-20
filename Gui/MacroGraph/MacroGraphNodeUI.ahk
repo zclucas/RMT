@@ -237,7 +237,7 @@ class MacroGraphNodeUIMixin {
         if (!c.isWin)
             winRow.Visibility("Collapsed")
         winRow.Add("TextBlock").Text(GetLang("窗口绑定:")).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(LW).VerticalAlignment("Center")
-        this._MakeTextBox(winRow, "SWin_" id, d.HasOwnProp("winInfo") ? d.winInfo : "", "196")
+        this._MakeWindowBindingCombo(winRow, "SWin_" id, d.HasOwnProp("winInfo") ? d.winInfo : "", "196")
         winRow.Add("Button").Name("SWinEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0")
 
         ; 颜色 / 文本 / 图片（整行，按类型显隐）；文本/图片输入宽 276，右缘与起点Y 对齐
@@ -382,7 +382,7 @@ class MacroGraphNodeUIMixin {
         cmb.SetProp("Text", vn)
     }
 
-    ; 打开窗口信息编辑器（复用 FrontInfoGui）。用一个带 Value 属性的适配对象桥接 WPF 文本框。
+    ; 打开窗口信息编辑器（复用 FrontInfoGui）。用一个带 Value 属性的适配对象桥接 WPF 下拉框。
     _OnSearchWinEdit(id, *) {
         data := this._SearchData(id)
         if (data == "")
@@ -872,18 +872,14 @@ class MacroGraphNodeUIMixin {
         result := []
         if (startSerial == "")
             return result
-        SplitSerialTextAndNumbers(startSerial, &t, &n)
-        ; 非「图形开始节点」：按线性指令宏直接拆分显示，无需图遍历
-        if (t != GetLangKey("图形开始节点") || n == "") {
-            for cmd in SplitMacro(startSerial) {
-                if (cmd != "")
-                    result.Push(cmd)
-            }
-            return result
-        }
-        startData := GetMacroCMDData(startSerial)
+        branch := SplitCompareBranchTail(startSerial)
+        SplitSerialTextAndNumbers(branch.Body, &t, &n)
+        ; 线性宏按原顺序显示，包括迁移生成的末尾宏操作。
+        if (t != GetLangKey("图形开始节点") || !RegExMatch(n, "^\d+$"))
+            return SplitMacro(startSerial)
+        startData := GetMacroCMDData(branch.Body)
         if (!IsObject(startData))
-            return result
+            return branch.Tail == "" ? result : [branch.Tail]
         nodeArr := (startData.HasOwnProp("NodeArr") && IsObject(startData.NodeArr)) ? startData.NodeArr : []
         emptyArr := (startData.HasOwnProp("EmptyNode") && IsObject(startData.EmptyNode)) ? startData.EmptyNode : []
         ; 优先走开始节点后继；若 NodeArr 为空（异常落盘）则回退 EmptyNode 首个，避免分支预览空白
@@ -900,6 +896,8 @@ class MacroGraphNodeUIMixin {
             nexts := (nd.HasOwnProp("NextNodeArr") && IsObject(nd.NextNodeArr)) ? nd.NextNodeArr : []
             cur := nexts.Length >= 1 ? nexts[1] : ""
         }
+        if (branch.Tail != "")
+            result.Push(branch.Tail)
         return result
     }
 
@@ -1578,6 +1576,12 @@ class MacroGraphNodeUIMixin {
         if (!enabled)
             chk.IsEnabled("False")
         return row
+    }
+
+    _MakeWindowBindingCombo(parent, name, value, width) {
+        return CmdEditorForm.WindowBindingCombo(parent, name).Width(width).Height(22).MinHeight(0)
+            .FontSize(this._MGFontSize(12)).Padding(this._MGComboPadding())
+            .SetProp("Text", value)
     }
 
     ; 统一的小高度文本框（MinHeight=0 覆盖主题默认的 36，否则高度不生效）

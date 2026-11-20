@@ -102,61 +102,78 @@ TryParseCommandData(val) {
 }
 
 GetMacroCMDData(serialStr) {
-    if (MySoftData.DataCacheMap.Has(serialStr)) {
-        return MySoftData.DataCacheMap[serialStr]
-    }
-
-    ; 优化：使用单次遍历拆分（替代2次RegExReplace）
     SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly)
-    cmd := GetLangKey(textOnly)
-
-    ; 同一步骤可能带显示语言中的指令名。优先读取规范化键，再回退到旧配置中的原键。
-    normalizedSerialStr := Format("{}{}", cmd, numbersOnly)
-
-    if (normalizedSerialStr != serialStr && MySoftData.DataCacheMap.Has(normalizedSerialStr)) {
+    cmd := GetCommandKey(textOnly)
+    normalizedSerialStr := cmd numbersOnly
+    if (MySoftData.DataCacheMap.Has(normalizedSerialStr))
         return MySoftData.DataCacheMap[normalizedSerialStr]
-    }
 
     DataFile := MySoftData.DataFileMap[cmd]
     DataClass := MySoftData.DataClassMap[cmd]
-    saveStr := CfgRead(DataFile, SettingSection, normalizedSerialStr, "")
-    if (saveStr == "" && normalizedSerialStr != serialStr)
-        saveStr := CfgRead(DataFile, SettingSection, serialStr, "")
-    if (saveStr == "") {
-        Data := DataClass()
-        Data.SerialStr := SerialStr
-    }
-    else
-        Data := JSON.parse(saveStr, , false)
-    CmdEnumNorm(cmd, Data)
-
-    MySoftData.DataCacheMap.Set(normalizedSerialStr, Data)
-
-    ; 两个缓存键引用同一个对象，写入时要一起失效。
-    if (normalizedSerialStr != serialStr) {
-        MySoftData.DataCacheMap.Set(serialStr, Data)
-    }
-
+    saveStr := ReadCommandConfig(DataFile, serialStr, cmd)
+    Data := saveStr == "" ? DataClass() : JSON.parse(saveStr, , false)
+    Data.SerialStr := normalizedSerialStr
+    NormalizeCommandData(cmd, Data)
+    MySoftData.DataCacheMap[normalizedSerialStr] := Data
     return Data
 }
 
-SaveMacroCMDData(Data) {
-    ; 优化：使用单次遍历拆分（替代RegExReplace）
-    dummyNumbers := ""
-    SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &dummyNumbers)
-    cmdKey := GetLangKey(cmd)
-    if (!MySoftData.DataFileMap.Has(cmdKey))
-        cmdKey := cmd
-    DataFile := MySoftData.DataFileMap[cmdKey]
+; 旧配置可能把当前译名写到了配置键。无论界面语言如何，先找中文键，再找旧键。
+ReadCommandConfig(path, serial, cmd) {
+    SplitSerialTextAndNumbers(serial, &name, &number)
+    canonical := cmd number
+    value := CfgRead(path, SettingSection, canonical, "")
+    if (value != "")
+        return value
+    if (serial != canonical) {
+        value := CfgRead(path, SettingSection, serial, "")
+        if (value != "")
+            return value
+    }
+    for alias in CommandLanguageIndex().Aliases.Get(cmd, Map()) {
+        if (alias == name)
+            continue
+        value := CfgRead(path, SettingSection, alias number, "")
+        if (value != "")
+            return value
+    }
+    ; 旧英文版把三个组合搜索指令显示成同一个 Search Combo。
+    if (cmd == "搜索Combo") {
+        for alias in ["组合搜索", "搜索Multi"] {
+            value := CfgRead(path, SettingSection, alias number, "")
+            if (value != "")
+                return value
+        }
+    }
+    return ""
+}
 
+NormalizeCommandData(cmd, Data) {
+    CmdEnumNorm(cmd, Data)
+    for field in ["CurCMD", "LoopBody", "TrueMacro", "FalseMacro", "DefaultMacro", "SubMacro"] {
+        if (Data.HasOwnProp(field) && Type(Data.%field%) == "String")
+            Data.%field% := GetLangMacro(Data.%field%, 2)
+    }
+    for field in ["MacroArr", "TrueMacroArr", "FalseMacroArr", "StartMacroArr", "EndMacroArr", "NodeArr", "EmptyNode", "NextNodeArr"] {
+        if (!Data.HasOwnProp(field) || !(Data.%field% is Array))
+            continue
+        for i, value in Data.%field% {
+            if (Type(value) == "String")
+                Data.%field%[i] := GetLangMacro(value, 2)
+        }
+    }
+}
+
+SaveMacroCMDData(Data) {
+    SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &number)
+    cmdKey := GetCommandKey(cmd)
+    DataFile := MySoftData.DataFileMap[cmdKey]
+    Data.SerialStr := cmdKey number
+    NormalizeCommandData(cmdKey, Data)
     saveStr := JSON.stringify(Data, 0)
     CfgWrite(saveStr, DataFile, SettingSection, Data.SerialStr)
-    ; 清掉原串与规范化键，避免中英文序列码双缓存导致读到旧对象（勾选未回显）
     if (MySoftData.DataCacheMap.Has(Data.SerialStr))
         MySoftData.DataCacheMap.Delete(Data.SerialStr)
-    normalizedSerialStr := Format("{}{}", cmdKey, dummyNumbers)
-    if (normalizedSerialStr != Data.SerialStr && MySoftData.DataCacheMap.Has(normalizedSerialStr))
-        MySoftData.DataCacheMap.Delete(normalizedSerialStr)
 }
 
 ; 调试起点标记：▶（旧配置兼容 ⭐）；界面用向右键帽 Path，不直接画 ▶
@@ -272,4 +289,33 @@ GetAhkEncodingName(Encoding) {
     if (Encoding == "BIG5")
         return "CP950"
     return Encoding
+}
+
+
+; 迁移生成的末尾宏操作随分支保存。分支体提前返回后，仍在原来的边界执行它。
+SplitCompareBranchTail(macro) {
+    static pattern := "is)^([\s\S]*[,，\r\n⫶])?[ \t]*((?:🚫|▶|⭐)*(?:宏操作|Ctrl)(\d+)(?=[_| \t]|$)[^,，\r\n⫶]*)[ \t]*$"
+    if (RegExMatch(RTrim(macro, " `t`r`n,，⫶"), pattern, &m)) {
+        data := GetMacroCMDData("宏操作" m[3])
+        if (IsObject(data) && data.HasOwnProp("BranchTail") && data.BranchTail) {
+            action := ""
+            if (SubStr(m[2], 1, 2) != "🚫" && data.MacroType == "当前宏"
+                && (data.CallType == "循环-跳过本轮" || data.CallType == "循环-跳出" || data.CallType == "分支-跳出"))
+                action := data.CallType
+            return {Body: RTrim(m[1], " `t`r`n,，⫶"), Tail: m[2], Action: action}
+        }
+    }
+    return {Body: macro, Tail: "", Action: ""}
+}
+
+ReplaceCompareBranchBody(macro, body) {
+    return AppendCompareBranchTail(body, SplitCompareBranchTail(macro).Tail)
+}
+
+AppendCompareBranchTail(body, tail) {
+    if (tail == "")
+        return body
+    if (Trim(body, " `t`r`n") == "" || RegExMatch(body, "[,，\r\n⫶][ \t]*$"))
+        return body tail
+    return body "," tail
 }

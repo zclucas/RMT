@@ -1,4 +1,5 @@
 ﻿#Requires AutoHotkey v2.0
+#Include LegacyTextProcess.ahk
 
 TextGetSource(Data, tableItem, index) {
     IsHas := TryGetTabVarValue(&SourceText, tableItem, index, Data.Name, false)

@@ -17,7 +17,7 @@ SetGlobalData(macroStr, visitMap) {
         visitMap[cmdName] := true
         SetCMDSerialData(cmdArr[A_Index])
 
-        baseCmd := RTrim(cmdName, "0123456789")
+        baseCmd := GetCommandKey(RTrim(cmdName, "0123456789"))
         
         if (baseCmd == "按键" || baseCmd == "手柄") {
             if (!MySoftData.HasJoyMacro) {
@@ -51,6 +51,14 @@ SetGlobalData(macroStr, visitMap) {
                         VariableMap[Data.VariableArr[A_Index]] := true
                 }
             case "文本处理":
+                if (Data.HasOwnProp("LegacyTextProcess")) {
+                    legacy := Data.LegacyTextProcess
+                    for row, enabled in legacy.ToggleArr {
+                        if (enabled && legacy.VariableArr.Has(row))
+                            VariableMap[legacy.VariableArr[row]] := true
+                    }
+                    continue
+                }
                 if (Data.SaveType == "变量")
                     VariableMap[Data.SaveName] := true
                 if (Data.SaveType == "数组")
@@ -74,6 +82,10 @@ SetGlobalData(macroStr, visitMap) {
                     TimeoutPolicy.RegisterStatus(Data)
             case "YOLO检测":
                 RegisterYoloVars(Data)
+            case "翻译":
+                RegisterTranslateVars(Data)
+            case "进程管理":
+                ProcessManage.RegisterOutputs(Data)
             case "浏览器":
                 if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
                     TimeoutPolicy.RegisterStatus(Data)

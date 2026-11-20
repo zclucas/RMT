@@ -187,11 +187,11 @@ class MacroGraphEventsMixin {
                 this._TrackCtrl("SImg_" id, runtime)
                 this._BindCtrl("SImg_" id, "GotFocus", this._OnSearchImgGotFocus.Bind(this, id), runtime)
                 this._BindCtrl("SImg_" id, "LostFocus", this._OnSearchImgLostFocus.Bind(this, id), runtime)
-                for nm in ["SWin_", "SCount_", "SInterval_", "SClick_", "SSpeed_", "SResName_", "SResTrue_", "SResFalse_", "SCoordX_", "SCoordY_"]
+                for nm in ["SCount_", "SInterval_", "SClick_", "SSpeed_", "SResName_", "SResTrue_", "SResFalse_", "SCoordX_", "SCoordY_"]
                     this._TrackCtrl(nm id, runtime)
                 this._TrackCtrl("SResTog_" id, runtime)
                 this._TrackCtrl("SCoordTog_" id, runtime)
-                this._BindCtrl("SWin_" id, "LostFocus", this._OnSearchProField.Bind(this, id, "WinInfo"), runtime)
+                this._FormalTrackEditCombo(id, "SWin", this._OnSearchProField.Bind(this, id, "WinInfo"), runtime)
                 this._BindCtrl("SWinEdit_" id, "Click", this._OnSearchWinEdit.Bind(this, id), runtime)
                 this._BindCtrl("SCount_" id, "LostFocus", this._OnSearchCount.Bind(this, id), runtime)
                 this._BindCtrl("SCount_" id, "KeyDown", this._OnSearchCount.Bind(this, id), runtime)

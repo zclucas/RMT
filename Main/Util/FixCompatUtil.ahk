@@ -1,36 +1,28 @@
 #Requires AutoHotkey v2.0
 #Include "CompatDataUtil.ahk"
-#Include "CompatTov1-2.ahk"
 #Include "Compatv1-3.ahk"
 #Include "Compatv1-3-1.ahk"
 #Include "Compatv1-3-2.ahk"
+#Include "Compatv1-3-5.ahk"
 #Include "UIMacroSchema.ahk"
 
 ; 配置格式版本独立于 RMPK 容器版本和软件构建版本。
-Compat_CurrentVersion() => "1.3.4"
+Compat_CurrentVersion() => "1.3.7"
 Compat_VersionFile(dir) => dir "\RmtVersion.toml"
-
-Compat_CompareVersion(left, right) {
-    if (!RegExMatch(left, "^\d+\.\d+(?:\.\d+)?$") || !RegExMatch(right, "^\d+\.\d+(?:\.\d+)?$"))
-        throw Error("无效的 RMT 配置版本：" left " / " right)
-    a := StrSplit(left, "."), b := StrSplit(right, ".")
-    loop 3 {
-        x := A_Index <= a.Length ? Integer(a[A_Index]) : 0
-        y := A_Index <= b.Length ? Integer(b[A_Index]) : 0
-        if (x != y)
-            return x > y ? 1 : -1
-    }
-    return 0
-}
 
 Compat_ReadVersion(dir) {
     path := Compat_VersionFile(dir)
-    if (!FileExist(path))
-        return "0.0"
-    CfgInvalidate(path)
-    version := CfgRead(path, "RMT", "ConfigVersion", "")
-    Compat_CompareVersion(version, Compat_CurrentVersion())
-    return version
+    if (FileExist(path)) {
+        CfgInvalidate(path)
+        version := CfgRead(path, "RMT", "ConfigVersion", "")
+        if (version != "")
+            return version
+        version := CfgRead(path, "RMT", "AppVersion", "")
+        if (version != "")
+            return version
+    }
+    ; 1.2.2 没有版本清单，使用 INI。无版本 TOML 不进入旧版语义转换。
+    return FileExist(dir "\MacroFile.ini") || FileExist(dir "\MainSettings.ini") ? "1.2.2" : ""
 }
 
 Compat_WriteVersion(dir, version) {
@@ -47,19 +39,21 @@ Compat_FlushProfile(dir) {
     UIMacroPanelStore.FlushDir(dir)
 }
 
-Compat_UpgradeDir(dir) {
+Compat_UpgradeDir(dir, installed := false) {
+    dir := ResolvePathNoDotDot(dir)
     Compat_FlushProfile(dir)
     version := Compat_ReadVersion(dir)
-    if (Compat_CompareVersion(version, Compat_CurrentVersion()) > 0)
-        throw Error("配置版本 " version " 高于当前支持的 " Compat_CurrentVersion())
+    upgradePreview := installed && version == "1.3.6"
+    if (version != "" && version != "1.2.2" && version != Compat_CurrentVersion() && !upgradePreview)
+        throw Error("不支持直接升级配置版本 " version "。请选择 RMT 1.2.2 的配置，或使用当前版本导出的配置。")
     loop files, dir "\*.toml" {
         CfgInvalidate(A_LoopFileFullPath)
         TomlUtil_Invalidate(A_LoopFileFullPath)
     }
     changed := false
-    if (Compat_CompareVersion(version, Compat_CurrentVersion()) < 0) {
-        ; 先转换存储格式，再迁移配置语义。
-        legacyMainIni := !!FileExist(dir "\MainSettings.ini")
+    if (version == "1.2.2") {
+        ; 转换会逐个清理 INI。先记下来源版本，部分写入失败时仍可继续。
+        Compat_WriteVersion(dir, "1.2.2")
         conv := IniImport_ConvertDir(dir)
         if (conv["Failed"].Count) {
             msg := ""
@@ -67,18 +61,12 @@ Compat_UpgradeDir(dir) {
                 msg .= name ": " err "`n"
             throw Error("配置转换失败：" msg)
         }
-        if (legacyMainIni)
+        if (FileExist(dir "\MainSettings.toml"))
             Compat13_UpgradeSettings(dir)
-        if (Compat_CompareVersion(version, "1.2.2") < 0) {
-            CompatTo12_UpgradeDir(dir)
-            CfgFlushDir(dir)
-            Compat_WriteVersion(dir, "1.2.2")
-        }
-        Compat13_UpgradeProfile(dir, version)
-        ; 1.3 转换全部完成后才写入新版本，失败时可重新执行。
-        CfgFlushDir(dir)
-        Compat_WriteVersion(dir, Compat_CurrentVersion())
-        changed := true
+        Compat13_UpgradeProfile(dir)
+    } else if (upgradePreview) {
+        ; 已安装的上一版预览配置只需迁移分支末尾的流程控制。
+        Compat13_UpgradeCompareBranches(dir)
     }
     ; 路径搬迁不是版本升级：同版本包导入也需要定位包内图片。
     loop files, dir "\*.toml" {
@@ -92,7 +80,61 @@ Compat_UpgradeDir(dir) {
         }
     }
     CfgFlushDir(dir)
+    ; 转换与写盘完成后才更新版本，失败时可重新执行。
+    if (version == "1.2.2" || upgradePreview) {
+        Compat_WriteVersion(dir, Compat_CurrentVersion())
+        changed := true
+    }
     return changed
+}
+
+CompatPath(FilePath, Data) {
+    if (!IsObject(Data))
+        return false
+    SplitPath FilePath, , &settingDir
+
+    changed := CompatPathTarget(settingDir, Data)
+    if (ObjHasOwnProp(Data, "SearchTargetArr") && IsObject(Data.SearchTargetArr)) {
+        for target in Data.SearchTargetArr {
+            if (IsObject(target))
+                changed := CompatPathTarget(settingDir, target) || changed
+        }
+    }
+    return changed
+}
+
+CompatPathTarget(settingDir, Data) {
+    if (!IsObject(Data) || !ObjHasOwnProp(Data, "SearchImagePath") || Data.SearchImagePath == "")
+        return false
+    ; 当前配置内仍有效的图片可以位于任意子目录。
+    path := StrReplace(Data.SearchImagePath, "/", "\")
+    if (!RegExMatch(path, "i)^(?:[a-z]:\\|\\\\)"))
+        path := A_WorkingDir "\" path
+    if (InStr(path, settingDir "\") == 1 && FileExist(path) && !DirExist(path))
+        return false
+    ; 优先识别配置的资源根，避免把同名配置或安装路径中的 Images 当成资源目录。
+    ; 包内相对路径和导入临时目录仍可直接按 Images 定位。
+    if (RegExMatch(Data.SearchImagePath, "i)(?:^|[\\/])Setting[\\/][^\\/]+[\\/]Images[\\/](.+)$", &m)
+        || RegExMatch(Data.SearchImagePath, "i)(?:^|[\\/])Images[\\/](.+)$", &m)) {
+        newPath := settingDir "\Images\" StrReplace(m[1], "/", "\")
+        if (FileExist(newPath) && !DirExist(newPath)) {
+            if (newPath = Data.SearchImagePath)
+                return false
+            Data.SearchImagePath := newPath
+            return true
+        }
+    }
+    ; 旧版“选择图片”只记录外部绝对路径。原图尚在时收进配置，导出才会携带。
+    ; 变量名/表达式不按文件处理，缺失的原图也不伪造替代路径。
+    if (RegExMatch(Data.SearchImagePath, "i)^(?:[a-z]:[\\/]|\\\\)")
+        && FileExist(Data.SearchImagePath) && !DirExist(Data.SearchImagePath)) {
+        newPath := StoreSearchImage(Data.SearchImagePath, settingDir)
+        if (newPath != Data.SearchImagePath) {
+            Data.SearchImagePath := newPath
+            return true
+        }
+    }
+    return false
 }
 
 Compat_IsSettingName(name) {

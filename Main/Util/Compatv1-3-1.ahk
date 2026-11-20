@@ -1,12 +1,12 @@
 #Requires AutoHotkey v2.0
 
-Compat131_UpgradeProfile(dir) {
+Compat13_UpgradePrompts(dir) {
     migration := CompatPromptMigration(dir)
     return Compat_RewriteMacroFiles(dir, migration.Rewrite.Bind(migration),
-        Compat131_RewriteBranches, migration.Save.Bind(migration), "PromptFile.toml")
+        Compat13_RewriteAllBranches, migration.Save.Bind(migration), "PromptFile.toml")
 }
 
-Compat131_RewriteBranches(data, rewrite) {
+Compat13_RewriteAllBranches(data, rewrite) {
     return Compat_RewriteMacroFields(data, rewrite,
         ["CurCMD", "LoopBody", "TrueMacro", "FalseMacro", "DefaultMacro", "SubMacro"],
         ["MacroArr", "TrueMacroArr", "FalseMacroArr", "StartMacroArr", "EndMacroArr"])
@@ -14,9 +14,7 @@ Compat131_RewriteBranches(data, rewrite) {
 
 class CompatPromptMigration {
     static Prefixes := Map("输出", "输出", "Output", "输出", "Out", "输出",
-        "RMT指令", "RMT指令", "RMT Inst", "RMT指令", "RMTCMD", "RMT指令",
-        "倒计时", "倒计时", "CountDown", "倒计时", "Countdown", "倒计时",
-        "时间", "时间", "Time", "时间")
+        "RMT指令", "RMT指令", "RMT Inst", "RMT指令", "RMTCMD", "RMT指令")
 
     __New(dir) {
         this.path := dir "\PromptFile.toml"
@@ -28,12 +26,12 @@ class CompatPromptMigration {
         this.sources := Map()
         this.next := 1
         this.dirty := false
-        for file in ["OutputFile", "RMTCMDFile", "CountDownFile", "TimeDataFile", "TimeFile"] {
+        for file in ["OutputFile", "RMTCMDFile"] {
             for serial, value in CfgSection(dir "\" file ".toml", section) {
                 if (!RegExMatch(serial, "^(.+?)(\d+)$", &m) || !CompatPromptMigration.Prefixes.Has(m[1]))
                     continue
                 canonical := CompatPromptMigration.Prefixes[m[1]] m[2]
-                if (!this.sources.Has(canonical) || (file != "TimeFile" && serial == canonical))
+                if (!this.sources.Has(canonical) || serial == canonical)
                     this.sources[canonical] := value
             }
         }
@@ -53,8 +51,6 @@ class CompatPromptMigration {
 
     Command(command) {
         static markers := "^([ \t]*(?:🚫|▶|⭐)*)"
-        if (RegExMatch(command, markers "WaitConfirm(\d+)(?=$|[_| \t])", &m))
-            return m[1] "等待确定" m[2] SubStr(command, StrLen(m[0]) + 1)
         if (RegExMatch(command, markers "(?:RMT指令|RMT Inst|RMTCMD)([_⫶])[^_⫶]+\2(?:自由贴|Free Paste)(?=$|[_| \t])", &m)) {
             target := this.Target("RMT指令_自由贴", "RMT指令", {CmdStr: "自由贴"})
             return m[1] target SubStr(command, StrLen(m[0]) + 1)
@@ -65,8 +61,6 @@ class CompatPromptMigration {
         key := CompatPromptMigration.Prefixes[m[2]]
         source := key m[3]
         target := this.Target(source, key)
-        if (target == "" && key == "时间" && this.sources.Has(source))
-            target := source
         return target == "" ? command : m[1] target SubStr(command, StrLen(m[0]) + 1)
     }
 
@@ -126,39 +120,6 @@ PromptFromLegacy(key, old) {
             data.Type := "自由贴"
             data.DeleteProp("PastePosition")
             data.PasteTextSource := "剪贴板图文"
-        case "时间", "倒计时":
-            if (key == "时间" && TimeNormSubMode(old) != "倒计时")
-                return ""
-            data.Type := "倒计时"
-            for field in ["Param1", "PosX", "PosY", "WaitEnd"] {
-                if (old.HasOwnProp(field) && old.%field% != "")
-                    data.%field% := old.%field%
-            }
-            data.Seconds := old.HasOwnProp("Seconds") ? old.Seconds : 0
-            data.Sec := 0
-            for field in ["Hour", "Min", "Sec"] {
-                if (old.HasOwnProp(field))
-                    data.%field% := old.%field%
-            }
-            if (data.WaitEnd == "No Wait")
-                data.WaitEnd := "不等待"
-            else if (data.WaitEnd == "Wait Until End")
-                data.WaitEnd := "等待结束"
-            data.Param2 := CountDownKind(old)
-            if (data.Param2 == "时长" && IsNumber(data.Hour) && IsNumber(data.Min)
-                && IsNumber(data.Sec) && data.Hour * 3600 + data.Min * 60 + data.Sec <= 0) {
-                if (IsInteger(data.Seconds) && data.Seconds > 0) {
-                    data.Hour := data.Seconds // 3600
-                    data.Min := Mod(data.Seconds // 60, 60)
-                    data.Sec := Mod(data.Seconds, 60)
-                } else if (!IsNumber(data.Seconds) && data.Seconds != "") {
-                    data.Hour := 0
-                    data.Min := 0
-                    data.Sec := data.Seconds
-                }
-            }
-            if (data.Param2 == "时刻" && data.Param1 == "")
-                data.Param1 := data.Hour ":" data.Min ":" data.Sec
     }
     return data
 }

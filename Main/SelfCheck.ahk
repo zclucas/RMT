@@ -515,8 +515,8 @@ SelfCheckMissingFiles() {
         {path: "Audio\Start.wav", entry: "Start.wav", bundle: "Audio.zip"},
         {path: "Audio\End.wav", entry: "End.wav", bundle: "Audio.zip"},
         {path: "Plugins\ViGEm\ViGEmWrapper.dll", entry: "ViGEmWrapper.dll", bundle: "ViGEm.zip"},
-        {path: "Joy\ViGEmBus.exe", entry: "ViGEmBus.exe", bundle: "ViGEm.zip"},
-        {path: "Joy\Xbox按键映射.png", entry: "Xbox.png", bundle: "ViGEm.zip"},
+        {path: "Plugins\Joy\ViGEmBus.exe", entry: "ViGEmBus.exe", bundle: "ViGEm.zip"},
+        {path: "Plugins\Joy\Xbox按键映射.png", entry: "Xbox.png", bundle: "ViGEm.zip"},
         {path: "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll", entry: "ahk-xaml.dll", bundle: "Xaml.zip"},
         {path: "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll", entry: "WpfAnimatedGif.dll", bundle: "Xaml.zip"},
         {path: "Plugins\OpenCV\" arch "\RMT_OpenCV.dll", entry: "RMT_OpenCV.dll", bundle: "OpenCV.zip"},
@@ -548,7 +548,6 @@ SelfCheckMissingFiles() {
         {path: "Plugins\Browser\LICENSE.txt", entry: "Browser-LICENSE.txt", bundle: "RMT.zip"},
         {path: "Thread\Update.exe", entry: "Update.exe", bundle: "RMT.zip"},
         {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
-        {path: "MinTool\PlayAudio.vbs", entry: "PlayAudio.vbs", bundle: "Audio.zip"},
         {path: "Plugins\AhiDriver\installer\使用说明.txt", entry: "InstallReadme.txt", bundle: "AhiDriver.zip"},
         ; YOLO 是可选指令：缺了只影响这一个指令，不该按关键文件告警，
         ; 但要能被「文件校验」查出来并一键补齐。清单与 Yolo.Files 保持一致。
@@ -556,6 +555,21 @@ SelfCheckMissingFiles() {
         {path: "Plugins\YOLO\" arch "\onnxruntime.dll", entry: "onnxruntime.dll", bundle: "Yolo.zip"},
         {path: "Plugins\YOLO\" arch "\onnxruntime_providers_shared.dll", entry: "onnxruntime_providers_shared.dll", bundle: "Yolo.zip"},
     ]
+    ; 翻译同样是可选指令：DLL 缺失只影响这一个指令；模型 1.3 GB 不进包，走按需下载。
+    ; 只提供 x64：2B 模型的常驻内存放不进 32 位地址空间，32 位包里没有这个插件。
+    ; CPU 变体后端与 llama.cpp 的 MSVC 变体表对应（x64/sse42/sandybridge/haswell/
+    ; skylakex/cannonlake/cascadelake/icelake/alderlake），升级 llama.cpp 若增删变体要同步这里。
+    ; ggml-vulkan.dll 是官方 b12540 预编译件（体积 43 MB，着色器已内嵌），
+    ; 有显卡的机器走 GPU 推理，没有 vulkan-1.dll 的机器加载失败自动落 CPU。
+    if (arch == "x64") {
+        optionalFiles.Push({path: "Plugins\Translate\x64\TranslateDll.dll", entry: "TranslateDll.dll", bundle: "Translate.zip"})
+        optionalFiles.Push({path: "Plugins\Translate\x64\llama.dll", entry: "llama.dll", bundle: "Translate.zip"})
+        optionalFiles.Push({path: "Plugins\Translate\x64\ggml.dll", entry: "ggml.dll", bundle: "Translate.zip"})
+        optionalFiles.Push({path: "Plugins\Translate\x64\ggml-base.dll", entry: "ggml-base.dll", bundle: "Translate.zip"})
+        optionalFiles.Push({path: "Plugins\Translate\x64\ggml-vulkan.dll", entry: "ggml-vulkan.dll", bundle: "Translate.zip"})
+        for _, cpuVariant in ["x64", "sse42", "sandybridge", "haswell", "skylakex", "cannonlake", "cascadelake", "icelake", "alderlake"]
+            optionalFiles.Push({path: "Plugins\Translate\x64\ggml-cpu-" cpuVariant ".dll", entry: "ggml-cpu-" cpuVariant ".dll", bundle: "Translate.zip"})
+    }
 
     icoFileList := ["Wait.png", "BGKey.png", "IcoRunning.ico", "Joy.png", "DeltaMove.png", "KeyListen.png", "JoyListen.png", "SearchCombo.png", "Excel.png", "Time.png", "WaitConfirm.png", "RunPro.png",
         "Arr.png", "Condition.png", "Control.png", "FlowJump.png", "Extract.png", "False.png",
@@ -564,7 +578,7 @@ SelfCheckMissingFiles() {
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",
         "SearchPro.png", "SearchAll.png", "MacroAction.png", "TextOps.png", "True.png",
-        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png",
+        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ProcessManage.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"]
 
     for name in icoFileList

@@ -491,6 +491,10 @@ function New-Release {
         Write-Log "复制 Voice 插件 (x64)..." "Gray"
         Copy-Voice -ReleaseDir $releaseDir -Arch "x64"
 
+        # 复制本地翻译插件 Translate（x64 专用：1.3 GB 模型放不进 32 位地址空间）
+        Write-Log "复制 Translate 插件 (x64)..." "Gray"
+        Copy-Translate -ReleaseDir $releaseDir
+
         Copy-RuntimePlugins -ReleaseDir $releaseDir -Arch "x64"
     }
 
@@ -958,6 +962,35 @@ function Copy-Voice {
     }
 }
 
+# 本地翻译插件（Translate）：x64 专用。llama.cpp 以共享库分发（llama.dll + ggml*.dll），
+# CPU 计算后端拆成 ggml-cpu-<variant>.dll（按机器指令集自动挑），GPU 后端是官方 b12540
+# 的预编译件 ggml-vulkan.dll（43 MB，着色器已内嵌），随 x64 目录一起进包。
+# 翻译模型 GGUF 约 1.3 GB，超 GitHub 单文件限制且体积过大，缺文件时走按需下载，不进发行包。
+function Copy-Translate {
+    param([string]$ReleaseDir)
+
+    $srcDir = Join-Path $PSScriptRoot "Plugins\Translate\x64"
+    $dstDir = Join-Path $ReleaseDir "Plugins\Translate\x64"
+
+    if (-not (Test-Path $srcDir)) {
+        Write-Log "  [WARN] Translate 源目录不存在: $srcDir" "Yellow"
+        return
+    }
+
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+    Get-ChildItem $srcDir -File | ForEach-Object {
+        Copy-Item $_.FullName -Destination $dstDir -Force
+        Write-Log "  已复制: Translate/x64/$($_.Name)" "Gray"
+    }
+
+    # 与 Voice 的按需模型同理：上次打包可能复制过，发行目录里留着会再次打进 zip
+    $modelDst = Join-Path $ReleaseDir "Plugins\Translate\models"
+    if (Test-Path $modelDst) {
+        Remove-Item $modelDst -Recurse -Force
+        Write-Log "  已移除按需下载模型: Translate/models" "Yellow"
+    }
+}
+
 # VC++ 2015-2022 运行库不随包分发：客户端检测到系统未安装时，下载官方
 # vc_redist.{arch}.exe 静默安装。官方安装包自己知道该装什么，
 # 不需要我们维护一份"完整依赖清单"，也不会出现清单漏项导致干净机器起不来。
@@ -968,6 +1001,16 @@ function Copy-RuntimePlugins {
 
     $browserDll = if ($Arch -eq "x86") { "Plugins\Browser\x86\RMT_Browser.dll" } else { "Plugins\Browser\RMT_Browser.dll" }
     $bundles = @(
+        @{
+            Name = "Joy/ViGEmBus.exe"
+            Src  = "Plugins\Joy\ViGEmBus.exe"
+            Dst  = "Plugins\Joy\ViGEmBus.exe"
+        },
+        @{
+            Name = "Joy/Xbox按键映射.png"
+            Src  = "Plugins\Joy\Xbox按键映射.png"
+            Dst  = "Plugins\Joy\Xbox按键映射.png"
+        },
         @{
             Name = "Browser/RMT_Browser.dll"
             Src  = $browserDll
@@ -1198,13 +1241,12 @@ function New-RMTAssets {
         )
         "Audio.zip" = @(
             @{ Dest = "Start.wav"; Src = "Audio\Start.wav" },
-            @{ Dest = "End.wav"; Src = "Audio\End.wav" },
-            @{ Dest = "PlayAudio.vbs"; Src = "MinTool\PlayAudio.vbs" }
+            @{ Dest = "End.wav"; Src = "Audio\End.wav" }
         )
         "ViGEm.zip" = @(
             @{ Dest = "ViGEmWrapper.dll"; Src = "Plugins\ViGEm\ViGEmWrapper.dll" },
-            @{ Dest = "ViGEmBus.exe"; Src = "Joy\ViGEmBus.exe" },
-            @{ Dest = "Xbox.png"; Src = "Joy\Xbox按键映射.png" }
+            @{ Dest = "ViGEmBus.exe"; Src = "Plugins\Joy\ViGEmBus.exe" },
+            @{ Dest = "Xbox.png"; Src = "Plugins\Joy\Xbox按键映射.png" }
         )
         "Xaml.zip" = @(
             @{ Dest = "ahk-xaml.dll"; Src = "Release$Arch\Plugins\AHK-XAML\lib\dep\ahk-xaml.dll" },
@@ -1262,7 +1304,7 @@ function New-RMTAssets {
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",
         "SearchPro.png", "SearchAll.png", "MacroAction.png", "TextOps.png", "True.png",
-        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png",
+        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ProcessManage.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
     )
 
@@ -1282,6 +1324,24 @@ function New-RMTAssets {
         })
     } else {
         Write-Log "  [WARN] 跳过 Yolo.zip：$yoloDir 缺少 $($yoloMissing -join ', ')" "Yellow"
+    }
+
+    # 翻译内核（x64 专用）：TranslateDll.dll + llama/ggml 共享库 + CPU 变体后端 +
+    # ggml-vulkan 预编译件，条目为扁平文件名，与 SelfCheck.ahk 的 optionalFiles 一致。
+    # 清单升级 llama.cpp 若增删变体要同步 SelfCheck；模型 GGUF 不进包，按需下载。
+    if ($Arch -eq "x64") {
+        $transDir = "Plugins\Translate\x64"
+        $transFiles = @("TranslateDll.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "ggml-vulkan.dll") +
+            @("x64", "sse42", "sandybridge", "haswell", "skylakex", "cannonlake", "cascadelake", "icelake", "alderlake" |
+                ForEach-Object { "ggml-cpu-$_.dll" })
+        $transMissing = @($transFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "$transDir\$_")) })
+        if ($transMissing.Count -eq 0) {
+            $bundles["Translate.zip"] = @($transFiles | ForEach-Object {
+                @{ Dest = $_; Src = "$transDir\$_" }
+            })
+        } else {
+            Write-Log "  [WARN] 跳过 Translate.zip：$transDir 缺少 $($transMissing -join ', ')" "Yellow"
+        }
     }
 
     foreach ($bundle in $bundles.GetEnumerator()) {

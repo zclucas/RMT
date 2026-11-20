@@ -119,39 +119,44 @@ FontWeightToNum(w) {
 }
 
 SetFontList() {
-    MainSoftData.FontList := []
-    callback := CallbackCreate(EnumFontFamilies)
-    DllCall("gdi32\EnumFontFamilies", "uint", DllCall("GetDC", "uint", 0), "uint", 0, "uint", callback, "ptr", 0)
-    CallbackFree(callback)
+    fontList := []
+    hdc := DllCall("user32\GetDC", "ptr", 0, "ptr")
+    if (hdc) {
+        callback := CallbackCreate(EnumFontFamilies)
+        try DllCall("gdi32\EnumFontFamiliesW", "ptr", hdc, "ptr", 0, "ptr", callback, "ptr", 0)
+        finally {
+            CallbackFree(callback)
+            DllCall("user32\ReleaseDC", "ptr", 0, "ptr", hdc)
+        }
+    }
+    MainSoftData.FontList := fontList
+    MainSoftData.FontType := ResolveUiFont(fontList, MainSoftData.FontType)
 
-    ; Font enumeration callback
     EnumFontFamilies(lpelf, lpntm, FontType, lP) {
-        if (SubStr(StrGet(lpelf + 28), 1, 1) != "@")
-            MainSoftData.FontList.push(StrGet(lpelf + 28))
+        family := StrGet(lpelf + 28, "UTF-16") ; LOGFONTW.lfFaceName
+        if (family != "" && SubStr(family, 1, 1) != "@")
+            fontList.Push(family)
         return 1
     }
+}
 
-    if (MainSoftData.FontList.Length == 0)
-        return
+ResolveUiFont(fontList, configuredFont := "") {
+    installed := Map()
+    installed.CaseSense := "Off"
+    for family in fontList
+        installed[family] := family
 
-    DefaultFontMap := Map("微软雅黑", 0, "Arial", 0, "Consolas", 0, "SimHei", 0, "Dotum", 0, "Meiryo", 0)
-    if (DefaultFontMap.Has(MainSoftData.FontType)) {
-        for index, value in MainSoftData.FontList {
-            if (DefaultFontMap.Has(value))
-                DefaultFontMap[value] := index
-        }
+    configuredFont := Trim(configuredFont)
+    if (installed.Has(configuredFont))
+        return installed[configuredFont]
+
+    ; 按优先级尝试中文字体及其英文名称，再尝试常见 Windows 字体。
+    for family in ["微软雅黑", "Microsoft YaHei", "微软雅黑 UI", "Microsoft YaHei UI",
+        "等线", "DengXian", "宋体", "SimSun", "黑体", "SimHei", "新宋体", "NSimSun",
+        "微軟正黑體", "Microsoft JhengHei", "Noto Sans CJK SC", "思源黑体", "Source Han Sans SC",
+        "Segoe UI", "Arial", "Tahoma", "Meiryo", "Dotum", "Consolas"] {
+        if (installed.Has(family))
+            return installed[family]
     }
-    if (DefaultFontMap.Has(MainSoftData.FontType)) {
-        if (DefaultFontMap[MainSoftData.FontType] != 0)
-            return
-
-        for key, value in DefaultFontMap {
-            if (value != 0) {
-                MainSoftData.FontType := key
-                return
-            }
-        }
-
-        MainSoftData.FontType := MainSoftData.FontList[1]
-    }
+    return "Global User Interface" ; WPF 内置复合字体，按字符选择系统字体。
 }

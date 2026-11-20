@@ -96,7 +96,6 @@ class HttpRequestGui extends CommentGui {
         field := this._Row(grid, label, tip).Grid_Row(row).Grid_Column(column)
         ; 可编辑下拉内部的 TextBox 自带 2 DIP 文本留白。
         field.Add("ComboBox").Name(name).Height(28).MinHeight(28).IsEditable("True").Padding("5,0,21,0").Grid_Column(1)
-            .ToolTip(tip)
     }
 
     _ShowMethodHelp(ui) {

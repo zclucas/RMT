@@ -1168,7 +1168,7 @@ Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装�
 请从下面按钮中选择按键：
 请从下面选框中勾选替换后的按键：
 请从下面选框中勾选触发宏的按键：
-请先安装Joy目录下ViGEmBus.exe后运行软件
+请先安装Plugins/Joy目录下ViGEmBus.exe后运行软件
 手柄功能需要使用 ViGEmBus 驱动，是否现在安装？
 未找到 ViGEm 驱动安装程序
 安装

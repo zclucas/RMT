@@ -173,6 +173,7 @@ class RMTCMDGui {
     _BuildAndShow() {
         global MySoftData
         this._closed := false
+        this._filterExpand := ""
         title := this.ParentTile GetLang("RMT指令编辑器")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
@@ -313,8 +314,10 @@ class RMTCMDGui {
     }
 
     OnWindowLoad(id, *) {
-        if (IsObject(this.ui) && this.ui.id == id)
+        if (IsObject(this.ui) && this.ui.id == id) {
             XamlWin.OnLoadTheme(this.ui)
+            this.ui.Update(this._selectedBtnName, "BringIntoView", "")
+        }
     }
 
     OnWindowClosing(id, *) {
@@ -367,9 +370,14 @@ class RMTCMDGui {
         if (!IsObject(this.ui) || catIdx < 1 || catIdx > this.CategoryDefs.Length)
             return
         cat := this.CategoryDefs[catIdx]
-        expanded := !this._catExpand.Get(cat.name, true)
-        this._catExpand[cat.name] := expanded
-        try this.ui.Update("CatPanel_" catIdx, "Visibility", expanded ? "Visible" : "Collapsed")
+        expandState := IsObject(this._filterExpand) ? this._filterExpand : this._catExpand
+        expanded := !expandState.Get(cat.name, true)
+        expandState[cat.name] := expanded
+        this._UpdateCatDisplay(catIdx, expanded)
+    }
+
+    _UpdateCatDisplay(catIdx, expanded, visible := true) {
+        try this.ui.Update("CatPanel_" catIdx, "Visibility", visible && expanded ? "Visible" : "Collapsed")
         try this.ui.Update("CatArrow_" catIdx, "Text", expanded ? Chr(0xE70D) : Chr(0xE76C))
     }
 
@@ -417,6 +425,9 @@ class RMTCMDGui {
         if (!IsSet(q))
             q := this.ui.Query("CmdFilter")
         q := Trim(String(q))
+        ; 筛选时展开匹配分类，清空后恢复原有折叠状态。
+        this._filterExpand := q == "" ? "" : Map()
+        expandState := IsObject(this._filterExpand) ? this._filterExpand : this._catExpand
         try this.ui.Update("CmdFilterHint", "Visibility", q == "" ? "Visible" : "Collapsed")
 
         for catIdx, cat in this.CategoryDefs {
@@ -428,9 +439,8 @@ class RMTCMDGui {
                 try this.ui.Update("CmdRow_" catIdx "_" cmdIdx, "Visibility", match ? "Visible" : "Collapsed")
             }
             showCat := cnt > 0
-            expanded := this._catExpand.Get(cat.name, true)
             try this.ui.Update("CatToggle_" catIdx, "Visibility", showCat ? "Visible" : "Collapsed")
-            try this.ui.Update("CatPanel_" catIdx, "Visibility", (showCat && expanded) ? "Visible" : "Collapsed")
+            this._UpdateCatDisplay(catIdx, expandState.Get(cat.name, true), showCat)
             try this.ui.Update("CatCount_" catIdx, "Text", String(cnt))
         }
     }
@@ -449,8 +459,8 @@ class RMTCMDGui {
             cmdStr := this.Data.CmdStr
             menuDLIndex := this.Data.HasOwnProp("MenuIndex") ? this.Data.MenuIndex : 1
         } else if (cmdArr.Length >= 3) {
-            cmdCategory := cmdArr[2]
-            cmdStr := cmdArr[3]
+            cmdCategory := RmtCommandCategoryKey(cmdArr[2])
+            cmdStr := RmtCommandActionKey(cmdArr[3])
             menuDLIndex := (cmdStr == "显示菜单" || cmdStr == GetLang("显示菜单")) && cmdArr.Length >= 4 ? Integer(cmdArr[4]) : 1
         } else {
             cmdCategory := "图文"
@@ -476,10 +486,12 @@ class RMTCMDGui {
         foundCatName := ""
         foundCmdName := ""
         foundBtnName := ""
+        foundCatIdx := 1
         for catIdx, cat in this.CategoryDefs {
             if (cat.name == cmdCategory || GetLang(cat.name) == cmdCategory) {
                 for cmdIdx, c in cat.cmds {
                     if (c == cmdStr || GetLang(c) == cmdStr) {
+                        foundCatIdx := catIdx
                         foundCatName := cat.name
                         foundCmdName := c
                         foundBtnName := this._CmdBtnName(catIdx, cmdIdx)
@@ -493,6 +505,7 @@ class RMTCMDGui {
             for catIdx, cat in this.CategoryDefs {
                 for cmdIdx, c in cat.cmds {
                     if (c == cmdStr || GetLang(c) == cmdStr) {
+                        foundCatIdx := catIdx
                         foundCatName := cat.name
                         foundCmdName := c
                         foundBtnName := this._CmdBtnName(catIdx, cmdIdx)
@@ -507,6 +520,10 @@ class RMTCMDGui {
             foundBtnName := this._CmdBtnName(1, 1)
         }
 
+        if (!this._catExpand.Get(foundCatName, true)) {
+            this._catExpand[foundCatName] := true
+            this._UpdateCatDisplay(foundCatIdx, true)
+        }
         this._SelectCmd(foundCatName, foundCmdName, foundBtnName)
 
         ; 轮盘菜单下拉选项
@@ -634,8 +651,8 @@ class RMTCMDGui {
     GetCmdStr() {
         if (!IsObject(this.Data))
             this.Data := RMTCMDData()
-        this.Data.Category := GetLang(this._category)
-        this.Data.CmdStr := GetLang(this._cmdType)
+        this.Data.Category := this._category
+        this.Data.CmdStr := this._cmdType
         this.Data.MenuIndex := (this._cmdType == "显示菜单" || this._cmdType == GetLang("显示菜单"))
             ? (Integer(this.ui.Query("MenuDLCombo>SelectedIndex")) + 1) : 1
         ; 禁用模块/取消禁用模块：保存目标页签符号 + 模块路径身份
@@ -651,7 +668,7 @@ class RMTCMDGui {
         }
 
         if (this.Data.SerialStr == "")
-            this.Data.SerialStr := GetCMDSerialStr(GetLang("RMT指令"))
+            this.Data.SerialStr := GetCMDSerialStr("RMT指令")
         SaveMacroCMDData(this.Data)
         remark := this.Data.CmdStr
         return CorrectRemark(this.Data.SerialStr, remark)

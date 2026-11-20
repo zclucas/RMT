@@ -7,8 +7,11 @@
 ; =====================================================================
 
 class ExVariableGui {
+    static AreaFields := ["StartPosX", "StartPosY", "EndPosX", "EndPosY"]
+
     __new() {
         this.ParentTile := ""
+        this.WindowBindingContext := ""
         this.ui := ""
         this.Gui := ""
         this.SureBtnAction := ""
@@ -18,7 +21,12 @@ class ExVariableGui {
         this._batching := false
         this.Data := ""
         this.SerialStr := ""
-        this.SetAreaAction := (x1, y1, x2, y2) => this.OnSetSearchArea(x1, y1, x2, y2)
+        this.AreaPreview := ScreenAreaPreview()
+        this.PreviewShowing := false
+        this.PreviewFollowAction := this.RefreshPreviewArea.Bind(this)
+        this.SetAreaAction := this.OnSetSearchArea.Bind(this)
+        this._pickAction := ""
+        this._f1Hotkeys := []
         this.MyEditGui := ExVariableEditGui()
     }
 
@@ -35,8 +43,10 @@ class ExVariableGui {
         finally {
             this._flushBatch()
         }
-        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))
-            this._closed := true
+        if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this))) {
+            this._CloseWindow()
+            return
+        }
         this.ToggleFunc(true)
         this.OnTypeChange()
     }
@@ -69,11 +79,6 @@ class ExVariableGui {
         if (width != "")
             el.Width(width)
         return el
-    }
-
-    _AddEditBtn(parent, name) {
-        return parent.Add("Button").Name(name).Content(GetLang("编辑")).Height(26).MinHeight(26)
-            .Cursor("Hand").VerticalAlignment("Center").HorizontalAlignment("Left")
     }
 
     _AddVarSlot(parent, i, row, col) {
@@ -133,32 +138,41 @@ class ExVariableGui {
         this._StyleBox(param.Add("TextBox").Name("RemarkCon").Grid_Row(0).Grid_Column(4).Grid_ColumnSpan(4))
 
         winRow := param.Add("Grid").Name("WinInfoRow").Grid_Row(1).Grid_ColumnSpan(8).Visibility("Hidden")
-        winRow.Cols("96", "*", "8", "70")
+        winRow.Cols("96", "*", "8", "28")
         this._AddLabel(winRow, GetLang("窗口绑定：")).Grid_Column(0)
-        this._StyleBox(winRow.Add("TextBox").Name("WinInfoCon").Grid_Column(1))
-        this._AddEditBtn(winRow, "BtnWinEdit").Grid_Column(3)
+        this._StyleCombo(CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1))
+        CmdEditorForm.IconButton(winRow, "BtnWinEdit", 0xE70F, "编辑").Grid_Column(3)
 
         extRow := param.Add("Grid").Grid_Row(2).Grid_ColumnSpan(8)
-        extRow.Cols("96", "*", "8", "70")
+        extRow.Cols("96", "*", "8", "28")
         this._AddLabel(extRow, GetLang("提取文本：")).ToolTip(GetLang("源文本留空则全部写入第一个变量；只需包含要提取的片段即可。")).Grid_Column(0)
         this._StyleBox(extRow.Add("TextBox").Name("ExtractStrCon").Grid_Column(1))
-        this._AddEditBtn(extRow, "BtnExtractEdit").Grid_Column(3)
+        CmdEditorForm.IconButton(extRow, "BtnExtractEdit", 0xE70F, "编辑").Grid_Column(3)
 
         this._AddLabel(param, GetLang("提取次数:")).Grid_Row(3).Grid_Column(0)
         this._StyleCombo(param.Add("ComboBox").Name("SearchCountCombo").Grid_Row(3).Grid_Column(1).IsEditable("True"), "80")
             .HorizontalAlignment("Left")
-        this._AddLabel(param, GetLang("起始坐标X：")).Grid_Row(3).Grid_Column(3)
-        this._StyleCombo(param.Add("ComboBox").Name("StartPosX").Grid_Row(3).Grid_Column(4).IsEditable("True"))
-        this._AddLabel(param, GetLang("起始坐标Y：")).Grid_Row(3).Grid_Column(6)
-        this._StyleCombo(param.Add("ComboBox").Name("StartPosY").Grid_Row(3).Grid_Column(7).IsEditable("True"))
-
         this._AddLabel(param, GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).Grid_Row(4).Grid_Column(0)
         this._StyleBox(param.Add("TextBox").Name("SearchIntervalCon").Grid_Row(4).Grid_Column(1), "80")
             .TextAlignment("Center").HorizontalAlignment("Left")
-        this._AddLabel(param, GetLang("终止坐标X：")).Grid_Row(4).Grid_Column(3)
-        this._StyleCombo(param.Add("ComboBox").Name("EndPosX").Grid_Row(4).Grid_Column(4).IsEditable("True"))
-        this._AddLabel(param, GetLang("终止坐标Y：")).Grid_Row(4).Grid_Column(6)
-        this._StyleCombo(param.Add("ComboBox").Name("EndPosY").Grid_Row(4).Grid_Column(7).IsEditable("True"))
+
+        area := param.Add("Grid").Name("AreaRow").Grid_Row(3).Grid_RowSpan(2).Grid_Column(3).Grid_ColumnSpan(5)
+        area.Rows("*", "*")
+        area.Cols("96", "8", "*", "8", "*")
+        areaBtn := area.Add("Button").Name("BtnPreviewArea").Grid_RowSpan(2).Cursor("Hand").Focusable("False")
+            .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
+            .Tag("0").ToolTip(GetLang("搜索范围"))
+            .HorizontalContentAlignment("Left").VerticalContentAlignment("Stretch")
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+        areaBtn.InjectResources(ScreenAreaPreview.ButtonStyle())
+        areaLabels := areaBtn.Add("Grid")
+        areaLabels.Rows("*", "*")
+        this._AddLabel(areaLabels, GetLang("起始坐标：")).Grid_Row(0).IsHitTestVisible("False")
+        this._AddLabel(areaLabels, GetLang("终止坐标：")).Grid_Row(1).IsHitTestVisible("False")
+        for i, name in ExVariableGui.AreaFields {
+            this._StyleCombo(area.Add("ComboBox").Name(name).Grid_Row((i - 1) // 2)
+                .Grid_Column(Mod(i - 1, 2) ? 4 : 2).IsEditable("True").SetProp("Panel.ZIndex", "2"))
+        }
 
         resCard := body.Add("Border").Grid_Row(1).Name("ResultGroup").CornerRadius("8").Padding("12,6,12,18")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
@@ -190,13 +204,17 @@ class ExVariableGui {
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/12-变量提取", ObjBindMethod(this, "TriggerMacro"), "!l", "", ObjBindMethod(this, "OnF1"))
-        this.ui.BatchUpdate(CmdEditorF1Updates("area"))
-        this.ui.OnEvent("ExtractTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnTypeChange"))
-        this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEditBtn"))
-        this.ui.OnEvent("BtnExtractEdit", "Click", ObjBindMethod(this, "OnClickExtractBtn"))
+        BindCmdEditorChrome(this.ui, "#指令手册/12-变量提取", XamlWin.BindCurrent(this, "TriggerMacro"), "!l", "", XamlWin.BindCurrent(this, "OnF1"))
+        this.ui.OnEvent("ExtractTypeCombo", "SelectionChanged", XamlWin.BindCurrent(this, "OnTypeChange"))
+        this.ui.OnEvent("BtnWinEdit", "Click", XamlWin.BindCurrent(this, "OnClickWinEditBtn"))
+        this.ui.OnEvent("BtnExtractEdit", "Click", XamlWin.BindCurrent(this, "OnClickExtractBtn"))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
-
+        this.ui.OnEvent("BtnPreviewArea", "Click", XamlWin.BindCurrent(this, "OnClickPreviewArea"))
+        refresh := XamlWin.BindCurrent(this, "RefreshPreviewArea")
+        this.ui.OnEvent("WinInfoCon", "TextChanged", refresh)
+        this.ui.OnEvent("WinInfoCon", "SelectionChanged", refresh)
+        for name in ExVariableGui.AreaFields
+            this.ui.OnEvent(name, "LostFocus", refresh)
     }
 
     OnWindowLoad(state, ctrl, event) {
@@ -299,30 +317,46 @@ class ExVariableGui {
     }
 
     ToggleFunc(state) {
-        MacroAction := (*) => this.TriggerMacro()
         if (state) {
-            Hotkey("!l", MacroAction, "On")
-            Hotkey("F1", (*) => this.OnF1(), "On")
+            Hotkey("!l", (*) => this.TriggerMacro(), "On")
         }
         else {
-            Hotkey("!l", MacroAction, "Off")
-            Hotkey("F1", (*) => this.OnF1(), "Off")
+            try Hotkey("!l", "Off")
+            WinHotkey.UnregisterAll(this._f1Hotkeys)
+            this._f1Hotkeys := []
+            this._CancelPick()
+            this.PreviewShowing := false
+            SetTimer(this.PreviewFollowAction, 0)
+            this.AreaPreview.Hide()
         }
     }
 
     OnTypeChange(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
-        isWin := this._TypeValue() == "窗口"
-        for name in ["StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
+        type := this._TypeValue()
+        isWin := type == "窗口"
+        for name in ExVariableGui.AreaFields {
             items := isWin ? GetGuiVarArr() : GetGuiVarArr(StrLower(SubStr(name, -1)))
             this._SetCombo(name, items, this.ui.Query(name))
         }
         this.ui.Update("WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
+        hasArea := type != "剪切板"
+        this.ui.Update("AreaRow", "IsEnabled", hasArea ? "True" : "False")
+        this.ui.BatchUpdate(CmdEditorF1Updates(hasArea ? "area" : ""))
+        if (hasArea && this.Hwnd() && !this._f1Hotkeys.Length)
+            this._f1Hotkeys := WinHotkey.Register(["F1"], this.OnF1.Bind(this), this.Hwnd())
+        else if (!hasArea) {
+            WinHotkey.UnregisterAll(this._f1Hotkeys)
+            this._f1Hotkeys := []
+            this._CancelPick()
+            this.PreviewShowing := false
+        }
+        this._SyncPreviewArea(type)
     }
 
     OnClickWinEditBtn(state := "", ctrl := "", event := "") {
-        MyFrontInfoGui.HideAction := () => this.ToggleFunc(true)
+        MyFrontInfoGui.HideAction := XamlWin.BindCurrent(this, "RefreshPreviewArea")
         if (MainSoftData.IsModalSubGui && this.ui != "") {
             MyFrontInfoGui.OwnerHwnd := this.Hwnd()
         }
@@ -373,20 +407,139 @@ class ExVariableGui {
     }
 
     OnF1(*) {
-        TogSelectArea(true, this.SetAreaAction)
+        if (!IsObject(this.ui) || this._pickAction != "" || MainSoftData.SelectAreaAction != "" || MainSoftData.GetAreaAction != "")
+            return
+        ui := this.ui
+        type := this._TypeValue()
+        if (type == "剪切板")
+            return
+
+        isWin := type == "窗口"
+        info := isWin ? this._ResolveWindowBinding(ui.Query("WinInfoCon")) : ""
+        followsMouse := isWin && IsMouseWindowBinding(info)
+        hwnd := isWin && !followsMouse ? this._FindTargetWindow(info) : 0
+        if (isWin && !followsMouse && !hwnd) {
+            RmtDialog.Info(GetLang("未找到目标窗口。"), "", this.Hwnd())
+            return
+        }
+
+        coords := []
+        action := (x1, y1, x2, y2) => coords.Push(x1, y1, x2, y2)
+        this._pickAction := action
+        this.AreaPreview.Hide()
+        try TogSelectArea(true, action)
+        finally {
+            try this._CancelPick()
+            this._pickAction := ""
+        }
+        if (this.ui != ui)
+            return
+        if (this._TypeValue() != type || !coords.Length || coords[1] == coords[3] || coords[2] == coords[4]) {
+            this.RefreshPreviewArea()
+            return
+        }
+        if (isWin) {
+            if (followsMouse)
+                hwnd := this._FindTargetWindow(info)
+            if (!this._TryGetClientOrigin(hwnd, &clientX, &clientY)) {
+                this.RefreshPreviewArea()
+                RmtDialog.Info(GetLang("未找到目标窗口。"), "", this.Hwnd())
+                return
+            }
+            coords := [coords[1] - clientX, coords[2] - clientY, coords[3] - clientX, coords[4] - clientY]
+        }
+        this.OnSetSearchArea(coords*)
+    }
+
+    _CancelPick() {
+        if (this._pickAction != "" && MainSoftData.SelectAreaAction == this._pickAction)
+            TogSelectArea(false)
     }
 
     OnSetSearchArea(x1, y1, x2, y2) {
         if (!IsObject(this.ui))
             return
-        isWin := this._TypeValue() == "窗口"
-        Point1 := isWin ? GetWinPos(x1, y1) : [x1, y1]
-        Point2 := isWin ? GetWinPos(x2, y2) : [x2, y2]
+        values := [x1, y1, x2, y2]
+        updates := []
+        for i, name in ExVariableGui.AreaFields
+            updates.Push({ControlName: name, PropertyName: "Text", Value: String(values[i])})
+        this.ui.BatchUpdate(updates)
+        this.RefreshPreviewArea()
+    }
 
-        this.ui.Update("StartPosX", "Text", Point1[1])
-        this.ui.Update("StartPosY", "Text", Point1[2])
-        this.ui.Update("EndPosX", "Text", Point2[1])
-        this.ui.Update("EndPosY", "Text", Point2[2])
+    _ResolveWindowBinding(info) => ResolveEditorBindWindow(this.WindowBindingContext, Trim(info))
+
+    _FindTargetWindow(info) {
+        try return this.AreaPreview.FindTargetWindow(info, false)
+        return 0
+    }
+
+    _TryGetClientOrigin(hwnd, &x, &y) {
+        root := DllCall("GetAncestor", "ptr", hwnd, "uint", 2, "ptr")
+        if (!root)
+            return false
+        try {
+            if (WinGetMinMax(root) == -1)
+                return false
+            WinGetClientPos(&x, &y, , , root)
+            return true
+        }
+        return false
+    }
+
+    OnClickPreviewArea(*) {
+        type := this._TypeValue()
+        if (type == "剪切板")
+            return
+        this.PreviewShowing := !this.PreviewShowing
+        this._SyncPreviewArea(type)
+    }
+
+    _SyncPreviewArea(type) {
+        this.ui.Update("BtnPreviewArea", "Tag", this.PreviewShowing ? "1" : "0")
+        SetTimer(this.PreviewFollowAction, this.PreviewShowing && type == "窗口" ? 100 : 0)
+        this.RefreshPreviewArea()
+    }
+
+    RefreshPreviewArea(*) {
+        if (!IsObject(this.ui) || !this.PreviewShowing || this._pickAction != "") {
+            this.AreaPreview.Hide()
+            return
+        }
+        if (this.AreaPreview.IsDragging())
+            return
+
+        ui := this.ui
+        state := ui.Query("ExtractTypeCombo>SelectedIndex", "WinInfoCon", ExVariableGui.AreaFields*)
+        if (this.ui != ui || !this.PreviewShowing || this._pickAction != "" || this.AreaPreview.IsDragging())
+            return
+        type := CmdEnumFromIndex(state.Get("ExtractTypeCombo>SelectedIndex", ""), CmdEnumExtractNames())
+        coords := []
+        for name in ExVariableGui.AreaFields {
+            value := state.Get(name, "")
+            if (!IsNumber(value)) {
+                this.AreaPreview.Hide()
+                return
+            }
+            coords.Push(Number(value))
+        }
+        width := Abs(coords[3] - coords[1]), height := Abs(coords[4] - coords[2])
+        if (type == "剪切板" || !width || !height) {
+            this.AreaPreview.Hide()
+            return
+        }
+
+        targetHwnd := 0
+        x := Min(coords[1], coords[3]), y := Min(coords[2], coords[4])
+        if (type == "窗口") {
+            targetHwnd := this._FindTargetWindow(this._ResolveWindowBinding(state.Get("WinInfoCon", "")))
+            if (!this._TryGetClientOrigin(targetHwnd, &clientX, &clientY)) {
+                this.AreaPreview.Hide()
+                return
+            }
+            x += clientX, y += clientY
+        }
+        this.AreaPreview.Show(x, y, width, height, this.SetAreaAction, targetHwnd, type)
     }
 
     CheckIfValid() {
@@ -475,7 +628,7 @@ class ExVariableGui {
                     if (IsObject(result))
                         TextObjs := result
                 } else if (extractType == "窗口") {
-                    for hwnd in GetHwndList(Data.WinInfo) {
+                    for hwnd in GetHwndList(this._ResolveWindowBinding(Data.WinInfo)) {
                         result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType)
                         if (IsObject(result))
                             TextObjs.Push(result*)

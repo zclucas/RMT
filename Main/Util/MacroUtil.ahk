@@ -245,7 +245,7 @@ BpSig(cmdText) {
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
     if (numbersOnly == "")
         return StrReplace(txt, ",", "")             ; 旧格式：纯文本整串（剥离逗号防 ,sig, 假阳）
-    return GetLangKey(textOnly) . numbersOnly        ; 现代格式：序列号（跨语言稳定）
+    return GetCommandKey(textOnly) . numbersOnly     ; 现代格式：序列号（跨语言稳定）
 }
 
 ; 断点集合包含判定：断点串规范化为 ",sig1,sig2,"，用 ",sig," 包夹 InStr 做无歧义匹配。
@@ -265,6 +265,8 @@ MacroCommandActions() {
         "搜索Pro", SearchOnTrigger,
         "搜索All", SearchOnTrigger,
         "搜索Combo", SearchOnTrigger,
+        "组合搜索", SearchOnTrigger,
+        "搜索Multi", SearchOnTrigger,
         "移动", OnMouseMove,
         "移动Pro", OnMMPro,
         "增量移动", OnDeltaMove,
@@ -290,6 +292,8 @@ MacroCommandActions() {
         "窗口控件", OnWindowControl,
         "AI判断", OnAiDecision,
         "YOLO检测", OnYolo,
+        "翻译", OnTranslate,
+        "进程管理", OnProcessManage,
         "文件读写", OnFileIO,
         "Excel", OnFileIO,
         "窗口信息", OnWindowManage,
@@ -332,11 +336,11 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
     ; 避免重复调用 GetCmdStr，并用 InStr 提取首段 Key 替代全量 StrSplit
     ; 解 G2：清洗串只剥离 🚫/▶/⭐（参数段完整保留），交给处理器一律用 cleanCmdStr，
     ; 避免调试起点 ▶ 进入处理器导致序列号解析失败而误杀宏
-    cleanCmdStr := GetCmdStr(cmdStr)
+    cleanCmdStr := GetLangCmd(GetCmdStr(cmdStr), 2)
     firstUnderscore := InStr(cleanCmdStr, "_")
     firstPart := firstUnderscore ? SubStr(cleanCmdStr, 1, firstUnderscore - 1) : cleanCmdStr
     cmdKey := RTrim(firstPart, "0123456789")
-    mappedKey := GetLangKey(cmdKey)
+    mappedKey := GetCommandKey(cmdKey)
     if (Actions.Has(mappedKey))
         cmdKey := mappedKey
 
@@ -900,16 +904,10 @@ OnCompare(tableItem, cmd, index) {
         MySetGlobalVariable([Data.SaveName], [SaveValue], false)
     }
 
-    ; 调试步入拦截：命中则仅判定、不执行分支体，控制类型延后到调试帧结算
-    if (TryInterceptDebugBranch("If", result ? "TrueMacro" : "FalseMacro", result ? Data.TrueControlType : Data.FalseControlType))
-        return
-
-    macro := result ? Data.TrueMacro : Data.FalseMacro
-    if (macro != "")
-        RunMacroBodyOnce(tableItem, macro, index)
-
-    ControlType := result ? Data.TrueControlType : Data.FalseControlType
-    HandleControlType(tableItem, index, ControlType)
+    branchField := result ? "TrueMacro" : "FalseMacro"
+    controlField := result ? "TrueControlType" : "FalseControlType"
+    RunCompareBranch(tableItem, index, "If", branchField, Data.%branchField%,
+        Data.HasOwnProp(controlField) ? Data.%controlField% : "无")
 }
 
 OnComparePro(tableItem, cmd, index) {
@@ -921,8 +919,7 @@ OnComparePro(tableItem, cmd, index) {
         CompareTypeArr := Data.CompareTypeArr[A_Index]
         VariableArr := Data.VariableArr[A_Index]
         LogicType := Data.LogicTypeArr[A_Index]
-        Macro := Data.MacroArr[A_Index]
-        ControlType := Data.ControlTypeArr[A_Index]
+        caseIndex := A_Index
         result := CmdEnumLogic(LogicType) == "且" ? true : false
 
         for i, Name in NameArr {
@@ -943,20 +940,27 @@ OnComparePro(tableItem, cmd, index) {
         }
 
         if (result) {
-            ; 调试步入拦截：命中分支，仅判定不执行体
-            if (TryInterceptDebugBranch("IfPro", "MacroArr", ControlType, A_Index))
-                return
-            if (Macro != "")
-                RunMacroBodyOnce(tableItem, Macro, index)
-            HandleControlType(tableItem, index, ControlType)
+            control := Data.HasOwnProp("ControlTypeArr") && Data.ControlTypeArr.Has(caseIndex)
+                ? Data.ControlTypeArr[caseIndex] : "无"
+            macro := Data.MacroArr.Has(caseIndex) ? Data.MacroArr[caseIndex] : ""
+            RunCompareBranch(tableItem, index, "IfPro", "MacroArr", macro, control, caseIndex)
             return
         }
     }
-    ; 调试步入拦截：默认分支（以上都不是），仅判定不执行体
-    if (TryInterceptDebugBranch("IfPro", "DefaultMacro", Data.DefaultControlType, -1))
+    RunCompareBranch(tableItem, index, "IfPro", "DefaultMacro", Data.DefaultMacro,
+        Data.HasOwnProp("DefaultControlType") ? Data.DefaultControlType : "无")
+}
+
+RunCompareBranch(tableItem, index, kind, field, macro, control, caseIndex := -1) {
+    branch := SplitCompareBranchTail(macro)
+    if (TryInterceptDebugBranch(kind, field, branch.Action != "" ? branch.Action : control, caseIndex))
         return
-    RunMacroBodyOnce(tableItem, Data.DefaultMacro, index)
-    HandleControlType(tableItem, index, Data.DefaultControlType)
+    if (branch.Body != "")
+        RunMacroBodyOnce(tableItem, branch.Body, index)
+    ; 旧分支控制在分支体返回后生效，尤其是「分支跳出」要交给外层消费。
+    if (branch.Tail != "")
+        RunMacroBodyOnce(tableItem, branch.Tail, index, true)
+    HandleControlType(tableItem, index, control)
 }
 
 OnMMPro(tableItem, cmd, index) {
@@ -1046,7 +1050,7 @@ OnMMProOnce(tableItem, index, Data) {
 OnDeltaMove(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    if (numbersOnly != "" && MySoftData.DataFileMap.Has(GetLangKey(textOnly))) {
+    if (numbersOnly != "" && MySoftData.DataFileMap.Has(GetCommandKey(textOnly))) {
         Data := GetMacroCMDData(paramArr[1])
         deltaX := Data.DeltaX
         deltaY := Data.DeltaY
@@ -1478,6 +1482,8 @@ OnExVariableOnce(tableItem, index, Data) {
 OnOperation(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
+    if (Data.HasOwnProp("LegacyOperation"))
+        return RunLegacyOperation(Data, tableItem, index)
     NewNameArr := []
     NewValueArr := []
     loop Data.ToggleArr.Length {
@@ -1646,11 +1652,11 @@ OnMouseMove(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     ; 阶段5：新格式 移动<serial> 走配置文件；旧格式 移动_X_Y_Speed_MoveMode 兼容
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    textOnly := GetLangKey(textOnly)   ; 英文模式序列码前缀反译（旧名「移动」/新名「鼠标移动」都命中 DataFileMap）
+    textOnly := GetCommandKey(textOnly)
     if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
         Data := GetMacroCMDData(paramArr[1])
-        PosX := Integer(Data.PosX)
-        PosY := Integer(Data.PosY)
+        PosX := Integer(Number(Data.PosX))
+        PosY := Integer(Number(Data.PosY))
         Speed := Integer(Data.Speed)
         MoveMode := CmdEnumMoveMode(Data.MoveMode)
     } else {
@@ -1659,7 +1665,7 @@ OnMouseMove(tableItem, cmd, index) {
             PosX := (paramArr.Length >= 2 && IsNumber(paramArr[2])) ? Integer(paramArr[2]) : 0
         if (paramArr.Length < 3 || !TryGetTabVarValue(&PosY, tableItem, index, paramArr[3], false))
             PosY := (paramArr.Length >= 3 && IsNumber(paramArr[3])) ? Integer(paramArr[3]) : 0
-        Speed := paramArr.Length >= 4 ? Integer(paramArr[4]) : 90
+        Speed := paramArr.Length >= 4 && IsInteger(paramArr[4]) ? Integer(paramArr[4]) : 90
         MoveMode := CmdEnumMoveMode(paramArr.Length >= 5 ? paramArr[5] : 0)
     }
 
@@ -1671,7 +1677,7 @@ OnMouseMove(tableItem, cmd, index) {
 
 ; RMT 输入控制：键鼠/鼠标/键盘 启用与禁用（cmd 可为中文键或当前语言文本）
 ApplyRmtInputControl(cmdStr) {
-    key := GetLangKey(cmdStr)
+    key := RmtCommandActionKey(cmdStr)
     switch key {
         case "启用键鼠":
             BlockInput false
@@ -1733,14 +1739,14 @@ OnRMTCMD(tableItem, cmd, index) {
     ; 新格式: RMT指令<serial> 走配置文件；旧格式 RMT指令_类别_指令 兼容
     paramArr := StrSplit(cmd, "_")
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
+    if (numbersOnly != "" && GetCommandKey(textOnly) == "RMT指令") {
         Data := GetMacroCMDData(paramArr[1])
         cmdStr := Data.CmdStr
-        category := Data.HasOwnProp("Category") ? Data.Category : GetLang("全部")
-        if (GetLangKey(cmdStr) == "显示菜单")
+        category := Data.HasOwnProp("Category") ? Data.Category : "全部"
+        if (cmdStr == "显示菜单")
             cmdStr .= "⫶" (Data.HasOwnProp("MenuIndex") ? Data.MenuIndex : 1)
         ; §2 禁用模块/取消禁用模块：附加目标表 ID + 模块路径身份（⫶ 分隔，执行端按段取参）
-        if ((cmdStr == GetLang("禁用模块") || cmdStr == GetLang("取消禁用模块"))
+        if ((cmdStr == "禁用模块" || cmdStr == "取消禁用模块")
             && Data.HasOwnProp("TableSymbol") && Data.TableSymbol != "")
             cmdStr .= "⫶" Data.TableSymbol "⫶" Data.FoldID
         cmd := "RMT指令⫶" category "⫶" cmdStr
@@ -1748,7 +1754,7 @@ OnRMTCMD(tableItem, cmd, index) {
         if (paramArr.Length < 3)
             return
         cmdStr := paramArr[3]
-        if (GetLangKey(cmdStr) == "显示菜单" && paramArr.Length < 4)
+        if (RmtCommandActionKey(cmdStr) == "显示菜单" && paramArr.Length < 4)
             cmd .= "_1"
         cmd := StrReplace(cmd, "_", "⫶")
     }
@@ -2074,6 +2080,9 @@ OnTextOps(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
+    if (Data.HasOwnProp("LegacyTextProcess"))
+        return LegacyTextProcess.Run(Data.LegacyTextProcess, tableItem, index)
+
     switch Data.Type {
         case "文本分割":
             TextOpsSplit(Data, tableItem, index)
@@ -2240,7 +2249,7 @@ WindowMatchedHandles(query, matchMode := "所有") {
     return result
 }
 
-WindowReadInfo(data, query) {
+WindowReadInfo(data, query, preview := "") {
     WindowEnsureResults(data)
     fields := WindowInfoFields(data.ActionType)
     if (!fields.Length)
@@ -2251,7 +2260,13 @@ WindowReadInfo(data, query) {
     isList := data.ActionType == "匹配窗口列表"
     matchMode := data.HasProp("MatchMode") ? data.MatchMode : (isList ? "所有" : "首个")
     hwnds := WindowMatchedHandles(query, matchMode)
+    if (IsObject(preview)) {
+        preview.Matched := hwnds.Length > 0
+        preview.Error := ""
+    }
     if (isList) {
+        if (IsObject(preview))
+            preview.Values := hwnds
         name := GetVarName(data.ResultVar1)
         if (name != "")
             MySetGlobalArray(name, hwnds)
@@ -2283,8 +2298,13 @@ WindowReadInfo(data, query) {
                     alpha := WinGetTransparent(target)
                     values := [alpha == "" ? 100 : Round(alpha * 100 / 255), (WinGetExStyle(target) & 0x20) ? 1 : 0]
             }
+        } catch as e {
+            if (IsObject(preview))
+                preview.Error := e.Message
         }
     }
+    if (IsObject(preview))
+        preview.Values := values
     names := [], results := []
     for i, value in values {
         prop := "ResultVar" i
@@ -2318,7 +2338,8 @@ OnWindowManage(tableItem, cmd, index) {
 
     searchValue := GetReplaceVarText(tableItem, index, ResolveBindWindow(tableItem, index, Data.SearchValue))
     winTitle := GetParamsWinInfoStr(searchValue)
-    if (WindowReadInfo(Data, winTitle))
+    preview := tableItem.HasOwnProp("WindowInfoPreview") ? tableItem.WindowInfoPreview : ""
+    if (WindowReadInfo(Data, winTitle, preview))
         return
     matchMode := Data.HasProp("MatchMode") ? Data.MatchMode
         : WindowDefaultMatchMode(Data.ActionType, InStr(winTitle, "ahk_id ") || InStr(winTitle, "ahk_group "))

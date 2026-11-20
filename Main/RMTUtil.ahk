@@ -684,7 +684,7 @@ InitFilePath() {
         Compat_WriteVersion(profileDir, Compat_CurrentVersion())
     } else {
         ; 在任何默认宏表写入之前迁移直接覆盖安装的旧方案。
-        Compat_UpgradeDir(profileDir)
+        Compat_UpgradeDir(profileDir, true)
     }
 
     if (!DirExist(profileDir "\Images\UseExplain")) {
@@ -1121,7 +1121,7 @@ ExcuteRMTCMDAction(Cmd) {
     paramArr := StrSplit(Cmd, InStr(Cmd, "⫶") ? "⫶" : "_")
     if (paramArr.Length < 3 || ApplyRmtInputControl(paramArr[3]))
         return
-    switch GetLangKey(paramArr[3]) {
+    switch RmtCommandActionKey(paramArr[3]) {
         case "截图":
             OnToolScreenShot()
         case "截图提取文本":
@@ -1721,7 +1721,7 @@ FullCopyCmd(cmdStr, CopyedMap := Map()) {
         return FullCopyGraphStart(paramArr[1], CopyedMap)
 
     textOnly := GetCmdOnlyText(paramArr[1])
-    cmd := GetLangKey(textOnly)
+    cmd := GetCommandKey(textOnly)
     if (!MySoftData.DataFileMap.Has(cmd))
         return cmdStr
     Data := GetMacroCMDData(paramArr[1]).Clone()
@@ -2007,7 +2007,7 @@ FormatCommandAutoRemark(data, remark, previousAutoRemark, generate, commitRemark
     return CorrectRemark(GetLang(name) number, remark)
 }
 
-OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "") {
+OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "", windowInfoPreview := "") {
     tableItem := MySoftData.SpecialTableItem
     if (tableItem.Items.Length == 0) {
         item := MacroItem()
@@ -2034,6 +2034,8 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingCo
 
     if (IsObject(windowBindingContext))
         tableItem.EditorWindowBindingContext := windowBindingContext
+    if (IsObject(windowInfoPreview))
+        tableItem.WindowInfoPreview := windowInfoPreview
     try {
         UpdateMacroRunningCount(0, 1)
         RefreshItemColorUI(tableItem, 1)
@@ -2042,6 +2044,8 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingCo
     } finally {
         if (IsObject(windowBindingContext))
             tableItem.DeleteProp("EditorWindowBindingContext")
+        if (IsObject(windowInfoPreview))
+            tableItem.DeleteProp("WindowInfoPreview")
         lastState := item.ColorState
         item.ColorState := 0
         UpdateMacroRunningCount(lastState, 0)

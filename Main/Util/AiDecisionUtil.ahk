@@ -82,12 +82,12 @@ class AiDecision {
         for hwnd in GetHwndList(info)
             if (hwnd && DllCall("IsWindow", "Ptr", hwnd))
                 return hwnd
-        throw Error(GetLang("未找到目标窗口。"))
+        throw TargetError(GetLang("未找到目标窗口。"))
     }
 
     static CheckWindowRegion(coords, width, height) {
         if (coords[1] < 0 || coords[2] < 0 || coords[3] > width || coords[4] > height)
-            throw Error(GetLang("框选范围必须在窗口客户区内。"))
+            throw ValueError(GetLang("框选范围必须在窗口客户区内。"))
     }
 
     static CaptureRegion(coords, hwnd := 0) {
@@ -122,7 +122,7 @@ class AiDecision {
         baseUrl := RTrim(Trim(CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "")), "/")
         model := Trim(CfgRead(SettingFile, SettingSection, "AiModel", ""))
         if (key == "" || baseUrl == "" || model == "")
-            throw Error(GetLang("请先在 AI 设置中填写 API Key、API URL 与模型"))
+            throw Error(GetLang("请先在设置-AI中填写 API Key、API URL 与模型"))
 
         context := {date: FormatTime(A_Now, "yyyy-MM-dd"), weekday: A_WDay}
         ; 旧指令保存的补充文本继续参与判断。

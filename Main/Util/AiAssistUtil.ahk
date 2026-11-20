@@ -201,7 +201,7 @@ class AiAssist {
             model := MainSoftData.AiModel
         baseUrl := AiAssist.NormalizeBaseUrl(baseUrl)
         if (baseUrl == "" || Trim(apiKey) == "" || Trim(model) == "")
-            throw Error(GetLang("请先在 AI 设置中填写 API Key、API URL 与模型"))
+            throw Error(GetLang("请先在设置-AI中填写 API Key、API URL 与模型"))
         messagesJson := AiAssist._BuildMessagesJson(messages)
         ai := GetRmtAi()
         return String(ai.ChatCompletion(baseUrl, apiKey, model, messagesJson))
@@ -219,7 +219,7 @@ class AiAssist {
             model := MainSoftData.AiModel
         baseUrl := AiAssist.NormalizeBaseUrl(baseUrl)
         if (baseUrl == "" || Trim(apiKey) == "" || Trim(model) == "")
-            throw Error(GetLang("请先在 AI 设置中填写 API Key、API URL 与模型"))
+            throw Error(GetLang("请先在设置-AI中填写 API Key、API URL 与模型"))
         messagesJson := AiAssist._BuildMessagesJson(messages)
         toolsJson := AiAssist.BuildToolsJson()
         ai := GetRmtAi()

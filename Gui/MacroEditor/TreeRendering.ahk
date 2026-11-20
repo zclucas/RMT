@@ -40,17 +40,16 @@
     TreeAddBranch(root, cmdStr) {
         paramArr := StrSplit(cmdStr, "_")
         IsSkip := SubStr(paramArr[1], 1, 2) == "🚫"
-        IsSearchCombo := InStr(paramArr[1], GetLang("搜索Combo")) || InStr(paramArr[1], GetLang("组合搜索")) || InStr(paramArr[1], GetLang("搜索Multi"))
-        IsSearchPro := InStr(paramArr[1], GetLang("搜索Pro")) || InStr(paramArr[1], GetLang("搜索All"))
-        IsSearch := InStr(paramArr[1], GetLang("搜索")) && !IsSearchPro && !IsSearchCombo
-        IsIfPro := InStr(paramArr[1], GetLang("如果Pro"))
-        IsIf := InStr(paramArr[1], GetLang("如果")) && !IsIfPro
-        IsLoop := InStr(paramArr[1], GetLang("循环"))
-        Cmd := GetCmdOnlyText(paramArr[1])
+        Cmd := GetCommandKey(GetCmdOnlyText(paramArr[1]))
+        IsSearch := Cmd == "搜索" || Cmd == "搜索Pro" || Cmd == "搜索All"
+            || Cmd == "搜索Combo" || Cmd == "组合搜索" || Cmd == "搜索Multi"
+        IsIfPro := Cmd == "如果Pro"
+        IsIf := Cmd == "如果"
+        IsLoop := Cmd == "循环"
         SerialStr := GetCmdStr(paramArr[1])
         if (IsSkip)
             return
-        if (!IsSearch && !IsSearchPro && !IsSearchCombo && !IsIf && !IsLoop && !IsIfPro)
+        if (!IsSearch && !IsIf && !IsLoop && !IsIfPro)
             return
 
         ParentID := this.MacroTreeViewCon.GetParent(root)
@@ -63,7 +62,7 @@
         }
 
         Data := GetMacroCMDData(SerialStr)
-        if (IsIf || IsSearch || IsSearchPro || IsSearchCombo) {
+        if (IsIf || IsSearch) {
             TrueMacro := GetLangMacro(Data.TrueMacro, 1)
             FalseMacro := GetLangMacro(Data.FalseMacro, 1)
 

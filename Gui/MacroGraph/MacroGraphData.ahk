@@ -80,9 +80,12 @@ class MacroGraphDataMixin {
     _CloneBranchContent(macroStr) {
         if (macroStr == "")
             return ""
-        SplitSerialTextAndNumbers(macroStr, &t0, &n0)
-        if (t0 == GetLangKey("图形开始节点") && n0 != "")
-            return this._CloneBranchGraph(macroStr)
+        branch := SplitCompareBranchTail(macroStr)
+        SplitSerialTextAndNumbers(branch.Body, &t0, &n0)
+        if (t0 == GetLangKey("图形开始节点") && RegExMatch(n0, "^\d+$")) {
+            graph := this._CloneBranchGraph(branch.Body)
+            return AppendCompareBranchTail(graph, this._CloneNodeCurCMD(branch.Tail))
+        }
         cmdArr := SplitMacro(macroStr)
         newArr := []
         for cmd in cmdArr {
@@ -241,7 +244,7 @@ class MacroGraphDataMixin {
     ; 形式化 INI 指令的 cmdKey 列表（与 AssetUtil 中 CMD 映射一致；阶段5 含新配置化 间隔/按键/移动/RMT指令）
     ; §20 改名：加「鼠标移动/增量移动」新键（旧「移动」键保留兼容旧图）
     _FormalIniCmdKeys() {
-        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测", "文本处理", "数组",
+        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测", "进程管理", "文本处理", "数组",
             "后台鼠标", "后台按键", "窗口管理", "窗口信息", "调整窗口", "按键检测", "手柄检测", "注释", "抓图", "循环",
             "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间", "提示"]
     }
@@ -250,8 +253,9 @@ class MacroGraphDataMixin {
         if (name == "")
             return ""
         base := RegExReplace(name, "\d+$", "")
+        cmdKey := GetCommandKey(base)
         for key in this._FormalIniCmdKeys() {
-            if (base == GetLang(key))
+            if (cmdKey == key || base == GetLang(key))
                 return key
         }
         return ""
@@ -274,6 +278,8 @@ class MacroGraphDataMixin {
                 "窗口控件", WindowControlData,
                 "AI判断", AiDecisionData,
                 "YOLO检测", YoloData,
+                "翻译", TranslateData,
+                "进程管理", ProcessManageData,
                 "文件读写", FileIOData,
                 "Excel", FileIOData,
                 "文本处理", TextOpsData,
@@ -931,7 +937,8 @@ class MacroGraphDataMixin {
 
     ; 判断 RMT CMD 分段是否为「类别」名（用于区分新格式 RMT指令_类别_指令 与旧格式 RMT指令_指令_序号）
     _IsRmtCategoryName(name) {
-        for cat in GetLangArr(["全部", "图文", "输入控制", "宏控制", "调试", "软件自身"]) {
+        name := RmtCommandCategoryKey(name)
+        for cat in ["全部", "图文", "输入控制", "宏控制", "调试", "软件自身"] {
             if (name == cat)
                 return true
         }
@@ -988,7 +995,9 @@ class MacroGraphDataMixin {
             return d
         }
 
-        if (name == GetLang("间隔")) {
+        key := GetCommandKey(name)
+        if (key == "间隔") {
+            d.type := GetLang(key)
             raw := paramArr.Length >= 2 ? paramArr[2] : "500"
             timeArr := StrSplit(raw, "~")
             if (timeArr.Length >= 2) {
@@ -1008,7 +1017,8 @@ class MacroGraphDataMixin {
                 d.remark := remark
             }
         }
-        else if (name == GetLang("按键") || name == GetLang("手柄")) {
+        else if (key == "按键" || key == "手柄") {
+            d.type := GetLang(key)
             d.key := paramArr.Length >= 2 ? paramArr[2] : ""
             d.ktype := paramArr.Length >= 3 ? paramArr[3] : GetLang("点击")
             d.hold := paramArr.Length >= 4 ? paramArr[4] : "100"
@@ -1016,6 +1026,7 @@ class MacroGraphDataMixin {
             d.inter := paramArr.Length >= 6 ? paramArr[6] : "200"
         }
         else if (IsMoveCmd(name)) {
+            d.type := GetLang("移动")
             d.posx := paramArr.Length >= 2 ? paramArr[2] : "0"
             d.posy := paramArr.Length >= 3 ? paramArr[3] : "0"
             d.speed := paramArr.Length >= 4 ? paramArr[4] : "90"
@@ -1120,7 +1131,7 @@ class MacroGraphDataMixin {
                 }
             }
         }
-        else if (name == GetLang("RMT指令")) {
+        else if (key == "RMT指令") {
             d.type := GetLang("RMT指令")
             ; CMD格式: RMT指令_类别_指令_序号（新）或 RMT指令_指令_序号（旧兼容）
             if (paramArr.Length >= 4) {
@@ -1148,6 +1159,8 @@ class MacroGraphDataMixin {
                 d.rmtOp := GetLang("截图")
                 d.rmtMenuIdx := "1"
             }
+            d.rmtCategory := RmtCommandCategoryKey(d.rmtCategory)
+            d.rmtOp := RmtCommandActionKey(d.rmtOp)
         }
         else if (iniKey := this._FormalIniKeyFromName(name)) {
             d.type := GetLang(iniKey)
@@ -1218,8 +1231,8 @@ class MacroGraphDataMixin {
                             data.Interval := d.HasOwnProp("interval") && d.interval != "" ? d.interval : 0
                             remark := data.DeltaX " " data.DeltaY
                         } else if (d.type == GetLang("RMT指令")) {
-                            data.Category := d.HasOwnProp("rmtCategory") ? d.rmtCategory : GetLang("全部")
-                            data.CmdStr := d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
+                            data.Category := d.HasOwnProp("rmtCategory") ? RmtCommandCategoryKey(d.rmtCategory) : "全部"
+                            data.CmdStr := d.HasOwnProp("rmtOp") ? RmtCommandActionKey(d.rmtOp) : "截图"
                             data.MenuIndex := d.HasOwnProp("rmtMenuIdx") ? d.rmtMenuIdx : 1
                             remark := data.CmdStr
                         }
@@ -1272,10 +1285,10 @@ class MacroGraphDataMixin {
         }
         if (d.type == GetLang("RMT指令")) {
             ; CMD格式: RMT指令_类别_指令_序号
-            category := d.HasOwnProp("rmtCategory") ? d.rmtCategory : GetLang("全部")
-            op := d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
-            cmd := GetLang("RMT指令") "_" category "_" op
-            if (op == GetLang("显示菜单") && d.HasOwnProp("rmtMenuIdx") && d.rmtMenuIdx != "")
+            category := d.HasOwnProp("rmtCategory") ? RmtCommandCategoryKey(d.rmtCategory) : "全部"
+            op := d.HasOwnProp("rmtOp") ? RmtCommandActionKey(d.rmtOp) : "截图"
+            cmd := "RMT指令_" category "_" op
+            if (op == "显示菜单" && d.HasOwnProp("rmtMenuIdx") && d.rmtMenuIdx != "")
                 cmd .= "_" d.rmtMenuIdx
             return cmd
         }

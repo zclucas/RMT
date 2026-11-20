@@ -217,7 +217,7 @@ RefreshToolUI() {
     if (!MainSoftData.HasProp("ToolMousePosCtrl") || !IsObject(MainSoftData.ToolMousePosCtrl))
         return
     ; 100ms 一次整块刷新，合并下发，避免逐条同步跨进程往返。
-    CtrlAdapter.RefreshAll([
+    pairs := [
         [MainSoftData.ToolMousePosCtrl, MainSoftData.PosStr],
         [MainSoftData.ToolProcessNameCtrl, MainSoftData.ProcessName],
         [MainSoftData.ToolProcessTileCtrl, MainSoftData.ProcessTile],
@@ -228,7 +228,12 @@ RefreshToolUI() {
         [MainSoftData.ToolWinSizeCtrl, MainSoftData.WinSizeStr],
         [MainSoftData.ToolColorCtrl, MainSoftData.Color],
         [MainSoftData.ToolMouseWinPosCtrl, MainSoftData.WinPosStr]
-    ])
+    ]
+    if (MainSoftData.HasProp("ToolProcessMetricsCtrls")) {
+        for field, ctrl in MainSoftData.ToolProcessMetricsCtrls
+            pairs.Push([ctrl, MouseProcessMonitor.Text(field)])
+    }
+    CtrlAdapter.RefreshAll(pairs)
 }
 
 ; 编辑快捷键：确认选择后再同步到 MainSoftData（以及显示控件）
@@ -320,7 +325,7 @@ CmdEditorPlayTip(hotkey := "!l") {
     act := GetLang("执行")
     if (act == "")
         act := "执行"
-    return disp "：" act
+    return disp == "" ? act : disp "：" act
 }
 
 ; 指令编辑器标题栏：手册跳转对应章节，视频暂为占位提示
@@ -428,11 +433,13 @@ CmdEditorTitleIcon(title) {
             ["文件读写", "Images\Soft\FileIO.png"],
             ["Excel", "Images\Soft\Excel.png"],
             ["窗口管理", "Images\Soft\WindowManage.png"],
+            ["进程管理", "Images\Soft\ProcessManage.png"],
             ["窗口信息", "Images\Soft\WindowManage.png"],
             ["调整窗口", "Images\Soft\WindowAdjustGear32.png"],
             ["窗口控件", "Images\Soft\WindowManage.png"],
             ["AI判断", "Images\Soft\AiDecision.png"],
             ["YOLO检测", "Images\Soft\Yolo.png"],
+            ["翻译", "Images\Soft\TextOps.png"],
             ["按键检测", "Images\Soft\KeyListen.png"],
             ["手柄检测", "Images\Soft\JoyListen.png"],
             ["后台鼠标", "Images\Soft\Mouse.png"],
@@ -492,7 +499,7 @@ class CmdEditorForm {
         columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(group)
         columns.Add("ColumnDefinition").Width("*")
         caption := this.Label(row, label).VerticalAlignment(alignment)
-        if (labelTip != "")
+        if (labelTip != "" && RTrim(labelTip, " ：:") != RTrim(GetLang(label), " ：:"))
             caption.ToolTip(labelTip)
         if (labelName != "")
             caption.Name(labelName)
@@ -519,6 +526,26 @@ class CmdEditorForm {
         return parent.Add("ComboBox").Name(name).Height(26).MinHeight(26)
             .VerticalAlignment("Center").VerticalContentAlignment("Center")
             .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
+    }
+
+    static WindowBindingOptions := [
+        ["当前窗口", "❖{句柄ID}"],
+        ["宏设置窗口绑定", "{宏设置窗口绑定}"],
+        ["模块窗口绑定", "{模块窗口绑定}"],
+    ]
+
+    static WindowBindingCombo(parent, name) {
+        combo := this.Combo(parent, name, true).IsTextSearchEnabled("True")
+        for option in this.WindowBindingOptions
+            combo.Add("ComboBoxItem").Content(GetLang(option[1])).TextSearch_Text("{}" option[2])
+        return combo
+    }
+
+    static WindowBindingItemsXaml() {
+        items := ""
+        for option in this.WindowBindingOptions
+            items .= '<ComboBoxItem Content="' EscapeXamlXml(GetLang(option[1])) '" TextSearch.Text="{}' option[2] '"/>'
+        return items
     }
 
     static TextButton(parent, name, text, tip := "") {
@@ -630,8 +657,8 @@ class ScreenAreaPreview {
         return IsObject(this.Drag)
     }
 
-    FindTargetWindow(info) {
-        matches := GetHwndList(info)
+    FindTargetWindow(info, variTip := true) {
+        matches := GetHwndList(info, variTip)
         if (!matches.Length)
             return 0
         hwnd := matches[1]

@@ -196,10 +196,10 @@ class YoloGui {
     }
 
     _BuildFields(body) {
-        model := this._Row(body, "模型：", "ModelName").Add("Grid").Grid_Column(1)
+        model := this._Row(body, "模型：", "ModelName", , ,
+            GetLang("从全局模型库选择；点右侧按钮可挑选新的 ONNX 文件并登记")).Add("Grid").Grid_Column(1)
         model.Cols("*", 6, "Auto")
         CmdEditorForm.Combo(model, "ModelName", true)
-            .ToolTip(GetLang("从全局模型库选择；点右侧按钮可挑选新的 ONNX 文件并登记"))
         CmdEditorForm.IconButton(model, "BtnBrowse", 0xE8E5, "选择 ONNX 模型文件").Grid_Column(2)
 
         ; 任务不是选项，是模型自带的：只做展示，让用户知道接下来会看到哪套参数。

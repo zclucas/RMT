@@ -146,11 +146,10 @@ class SearchComboGui {
             .IsEditable("True").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        intervalHost := sr.Add("Grid").Grid_Column(4).Name("SearchIntervalHost").ToolTip(GetLang("两次操作之间等待的毫秒数。"))
+        intervalHost := sr.Add("Grid").Grid_Column(4).Name("SearchIntervalHost")
         intervalHost.Add("TextBox").Name("SearchIntervalCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
             .Padding("2,0").TextAlignment("Center").FontSize("11")
-            .ToolTip(GetLang("两次操作之间等待的毫秒数。"))
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         intervalHost.Add("TextBlock").Text("ms").FontSize("7").IsHitTestVisible("False")
@@ -171,7 +170,7 @@ class SearchComboGui {
 
         ms := rightPanel.Add("Grid").Margin("0,8,0,0")
         ms.Cols("Auto", "8", "*", "8", "*")
-        ms.Add("TextBlock").Grid_Column(0).Name("SpeedTipCon").Text(GetLang("移动速度：")).VerticalAlignment("Center")
+        ms.Add("TextBlock").Grid_Column(0).Name("SpeedTipCon").Text(GetLang("移动速度：")).ToolTip(GetLang("左侧填写移动速度，右侧填写点击次数。")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         ms.Add("TextBox").Grid_Column(2).Name("SpeedCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
@@ -181,7 +180,6 @@ class SearchComboGui {
         ms.Add("TextBox").Grid_Column(4).Name("ClickCountCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
             .Padding("2,0").TextAlignment("Center").FontSize("11")
-            .ToolTip(GetLang("鼠标点击次数"))
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
@@ -218,15 +216,15 @@ class SearchComboGui {
         ; 结果保存 / 目标点保存
         resCol := rightPanel.Add("StackPanel").Orientation("Horizontal").Margin("0,10,0,0").VerticalAlignment("Center")
         resCol.Add("CheckBox").Name("ResultToggleCon").VerticalAlignment("Center").Margin("0,0,2,0")
-            .ToolTip(GetLang("结果保存"))
-        this._AddTipField(resCol, "ResultSaveNameCon", "ResultSaveNameTipHost", "ComboBox", 96, GetLang("变量名"), "0,0,6,0")
-        this._AddTipField(resCol, "TrueValueCon", "TrueValueTipHost", "TextBox", 48, GetLang("真值"), "0,0,6,0")
-        this._AddTipField(resCol, "FalseValueCon", "FalseValueTipHost", "TextBox", 48, GetLang("假值"), "")
+            .ToolTip(GetLang("从左到右填写结果变量、找到时的值、未找到时的值。"))
+        this._AddSaveField(resCol, "ResultSaveNameCon", "ComboBox", 96, "0,0,6,0")
+        this._AddSaveField(resCol, "TrueValueCon", "TextBox", 48, "0,0,6,0")
+        this._AddSaveField(resCol, "FalseValueCon", "TextBox", 48, "")
         coordCol := rightPanel.Add("StackPanel").Orientation("Horizontal").Margin("0,6,0,0").VerticalAlignment("Center")
         coordCol.Add("CheckBox").Name("CoordToogleCon").VerticalAlignment("Center").Margin("0,0,2,0")
-            .ToolTip(GetLang("目标点保存"))
-        this._AddTipField(coordCol, "CoordXNameCon", "CoordXTipHost", "ComboBox", 110, GetLang("坐标X变量名"), "0,0,6,0")
-        this._AddTipField(coordCol, "CoordYNameCon", "CoordYTipHost", "ComboBox", 110, GetLang("坐标Y变量名"), "")
+            .ToolTip(GetLang("左侧填写 X 坐标变量，右侧填写 Y 坐标变量。"))
+        this._AddSaveField(coordCol, "CoordXNameCon", "ComboBox", 110, "0,0,6,0")
+        this._AddSaveField(coordCol, "CoordYNameCon", "ComboBox", 110, "")
 
         ; === 底部按钮 ===
         btnRow := main.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -259,42 +257,19 @@ class SearchComboGui {
         this.ui.OnEvent("BtnEditFoundMacro", "Click", ObjBindMethod(this, "OnEditFoundMacroBtnClick"))
         this.ui.OnEvent("BtnEditUnFoundMacro", "Click", ObjBindMethod(this, "OnEditUnFoundMacroBtnClick"))
         this.ui.OnEvent("BtnSure", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
-        this._RefreshSaveTips()
-
     }
 
-    _SaveTipText(name) {
-        tips := Map("ResultSaveNameCon", GetLang("变量名"), "TrueValueCon", GetLang("真值"), "FalseValueCon", GetLang("假值")
-            , "CoordXNameCon", GetLang("坐标X变量名"), "CoordYNameCon", GetLang("坐标Y变量名")
-            , "ResultSaveNameTipHost", GetLang("变量名"), "TrueValueTipHost", GetLang("真值"), "FalseValueTipHost", GetLang("假值")
-            , "CoordXTipHost", GetLang("坐标X变量名"), "CoordYTipHost", GetLang("坐标Y变量名"))
-        return tips.Has(name) ? tips[name] : ""
-    }
-
-    _AddTipField(parent, name, hostName, kind, width, tip, margin) {
-        wrap := parent.Add("Grid").Name(hostName).Width(width).Height(28).MinHeight(28)
-            .VerticalAlignment("Center").Background("Transparent").ToolTip(tip)
-        if (margin != "")
-            wrap.Margin(margin)
-        c := wrap.Add(kind).Name(name).Height(28).MinHeight(28)
-            .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+    _AddSaveField(parent, name, kind, width, margin) {
+        field := parent.Add(kind).Name(name).Width(width).Height(28).MinHeight(28)
+            .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+        if (margin != "")
+            field.Margin(margin)
         if (kind == "TextBox")
-            c.Padding("2,0").TextAlignment("Center").ToolTip(tip)
+            field.Padding("2,0").TextAlignment("Center")
         else
-            c.IsEditable("True")
-    }
-
-    _RefreshSaveTips() {
-        if (!IsObject(this.ui))
-            return
-        for cn in ["ResultSaveNameTipHost", "TrueValueTipHost", "FalseValueTipHost", "CoordXTipHost", "CoordYTipHost"
-            , "ResultSaveNameCon", "TrueValueCon", "FalseValueCon", "CoordXNameCon", "CoordYNameCon"] {
-            tip := this._SaveTipText(cn)
-            if (tip != "")
-                try this.ui.Update(cn, "ToolTip", tip)
-        }
+            field.IsEditable("True")
     }
 
     ; ---------------- 数据读写辅助 ----------------
@@ -436,8 +411,8 @@ class SearchComboGui {
             . '<Grid Name="' this._TN(n, "WinInfoRow") '" Grid.Column="2" Grid.ColumnSpan="5" VerticalAlignment="Center">'
             . '<Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="8"/><ColumnDefinition Width="140"/><ColumnDefinition Width="8"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>'
             . '<TextBlock Grid.Column="0" Text="' GetLang("窗口绑定:") '" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource TextMain}" FontSize="' fs '"/>'
-            . '<TextBox Name="' this._TN(n, "WinInfo") '" Grid.Column="2" Width="140" Height="28" MinHeight="28" FontSize="' fs '"'
-            . ' Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputText}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" VerticalContentAlignment="Center" Padding="4,0"/>'
+            . '<ComboBox Name="' this._TN(n, "WinInfo") '" Grid.Column="2" Width="140" Height="28" MinHeight="28" FontSize="' fs '"'
+            . ' IsEditable="True" VerticalAlignment="Center" VerticalContentAlignment="Center">' CmdEditorForm.WindowBindingItemsXaml() '</ComboBox>'
             . '<Button Name="' this._TN(n, "WinInfoEditBtn") '" Grid.Column="4" Width="28" Height="28" MinHeight="28" Padding="0" Cursor="Hand"'
             . ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="' fs '" Content="' Chr(0xE70F) '"'
             . ' ToolTip="' GetLang("编辑") '" Foreground="{DynamicResource TextMain}"'
@@ -882,7 +857,6 @@ class SearchComboGui {
 
         isCoord := this.ui.Query("CoordToogleCon") == "True"
         this.SetConArrState(this.CoordTogArr, true, isCoord)
-        this._RefreshSaveTips()
     }
 
     FalseConArr2() {

@@ -385,7 +385,7 @@ class MacroGraphBranchMixin {
         this.BranchGraphGui.SureBtnAction := (startSerial) => this._OnBranchEditorSure(searchId, isTrue, startSerial)
         ; 嵌套编辑器关闭后：就地刷新该分支节点的指令清单（不重建父窗口，避免闪烁/重复窗口）
         this.BranchGraphGui.OnClosedAction := (*) => this._RefreshBranchBody(searchId, isTrue)
-        this.BranchGraphGui.ShowGui(cur, this.WindowBindingContext)
+        this.BranchGraphGui.ShowGui(SplitCompareBranchTail(cur).Body, this.WindowBindingContext)
     }
 
     ; 嵌套分支编辑器回写：保存分支子图的开始节点序列码到 SearchData（不在此处重建父图，避免实时联动抖动）
@@ -393,10 +393,8 @@ class MacroGraphBranchMixin {
         data := this._BranchParentData(searchId)
         if (data == "")
             return
-        if (isTrue)
-            data.TrueMacro := startSerial
-        else
-            data.FalseMacro := startSerial
+        field := isTrue ? "TrueMacro" : "FalseMacro"
+        data.%field% := ReplaceCompareBranchBody(data.HasOwnProp(field) ? data.%field% : "", startSerial)
         SaveMacroCMDData(data)
     }
 
