@@ -147,12 +147,11 @@ class MouseMoveGui {
     }
 
     Init(cmd) {
-        ; 阶段5：指令配置化。新格式 移动<serial> 读配置文件；旧格式 移动_X_Y_Speed_MoveMode 兼容
+        ; 内联 移动_X_Y_速度_方式；编号 移动<serial> 仍可读旧配置
         cmd := RMTParseErrHandle(cmd).cmd
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         SplitSerialTextAndNumbers(cmdArr.Length >= 1 ? cmdArr[1] : "", &textOnly, &numbersOnly)
         if (numbersOnly != "") {
-            ; 新格式：读配置文件 Data
             this.Data := GetMacroCMDData(cmdArr[1])
             PosX := this.Data.PosX
             PosY := this.Data.PosY
@@ -196,13 +195,9 @@ class MouseMoveGui {
         MoveMode := this._MoveMode()
         this.ui.Update("PosXLabel", "Text", GetLang(MoveMode == "相对移动" ? "偏移值X:" : "坐标位置X:"))
         this.ui.Update("PosYLabel", "Text", GetLang(MoveMode == "相对移动" ? "偏移值Y:" : "坐标位置Y:"))
-        CommandStr := GetLang("移动")
-        CommandStr .= "_" this.ui.Query("PosXCon")
-        CommandStr .= "_" this.ui.Query("PosYCon")
-        CommandStr .= "_" this.ui.Query("SpeedCon")
-        if (MoveMode != "绝对移动")
-            CommandStr .= "_" MoveMode
-        this.ui.Update("CommandStrCon", "Text", CommandStr)
+        this.ui.Update("CommandStrCon", "Text", FormatMoveInlineCmd(
+            this.ui.Query("PosXCon"), this.ui.Query("PosYCon"),
+            this.ui.Query("SpeedCon"), MoveMode, GetLang("移动")))
     }
 
     ToggleFunc(state) {
@@ -273,18 +268,10 @@ class MouseMoveGui {
             action(cmdStr)
     }
 
-    ; 阶段5：指令配置化——组装 Data 保存到配置文件，返回 移动<serial>_备注
     GetCmdStr() {
-        this.Data.PosX := this.ui.Query("PosXCon")
-        this.Data.PosY := this.ui.Query("PosYCon")
-        this.Data.Speed := this.ui.Query("SpeedCon")
-        this.Data.MoveMode := this._MoveMode()
-
-        if (this.Data.SerialStr == "")
-            this.Data.SerialStr := GetCMDSerialStr(GetLang("移动"))
-        SaveMacroCMDData(this.Data)
-        remark := this.Data.PosX " " this.Data.PosY
-        return CorrectRemark(this.Data.SerialStr, remark)
+        return FormatMoveInlineCmd(
+            this.ui.Query("PosXCon"), this.ui.Query("PosYCon"),
+            this.ui.Query("SpeedCon"), this._MoveMode(), GetLang("移动"))
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {

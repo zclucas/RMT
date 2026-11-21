@@ -86,6 +86,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("IsModalSubGui", MainSoftData.IsModalSubGui)
     CheckAndAddDirty("BackImagePath", MainSoftData.BackImagePath)   ; §11 主界面背景图
     CheckAndAddDirty("MutiThreadNum", MainSoftData.MutiThreadNum)
+    CheckAndAddDirty("TranslateTimeoutMs", MainSoftData.TranslateTimeoutMs)
     CheckAndAddDirty("SoftBGColor", MainSoftData.SoftBGColor)
     CheckAndAddDirty("NoVariableTip", MainSoftData.NoVariableTip)
     CheckAndAddDirty("BusinessLog", MainSoftData.BusinessLog)
@@ -591,7 +592,7 @@ EnsureSponsorLogo(logo) {
     if (FileExist(path))
         try FileDelete(path)
     url := GetSponsorLogoBaseUrl() . name
-    if (DownloadAsync(url, path, 12, RmtSilentDownloadProgress()) != "ok")
+    if (RmtDownloadManager.DownloadBlocking(url, path, 12, RmtSilentDownloadProgress()) != "ok")
         return ""
     if (!FileExist(path))
         return ""
@@ -697,11 +698,13 @@ InitFilePath() {
 
     filePath := profileDir "\使用说明&署名.txt"
     if (!FileExist(filePath)) {
-        str1 := GetLang("协议：CC BY - NC - SA 4.0")
-        str2 := GetLang("原始来源：RMT(若梦兔) 软件导出")
-        str3 := GetLang("说明：仅限非商业用途，转载请注明来源并保持相同协议")
-        Str := Format("{}`n{}`n{}", str1, str2, str3)
-        FileAppend(Str, filePath, "UTF-16")
+        explainSection := "Instructions for Use & Attribution"
+        CfgWrite("", filePath, explainSection, "Author")
+        CfgWrite("", filePath, explainSection, "Effect")
+        CfgWrite("", filePath, explainSection, "Operation")
+        notice := Format("{}`n{}`n{}", GetLang("协议：CC BY - NC - SA 4.0"), GetLang("原始来源：RMT(若梦兔) 软件导出"), GetLang("说明：仅限非商业用途，转载请注明来源并保持相同协议"))
+        CfgWrite(notice, filePath, explainSection, "Notice")
+        Cfg_FlushFile(filePath)
     }
 
     if (!DirExist(A_WorkingDir "\Images")) {
@@ -1707,7 +1710,7 @@ FullCopyCmd(cmdStr, CopyedMap := Map()) {
     if (paramArr[1] == GetLang("手柄"))
         return cmdStr
     if (IsMoveCmd(paramArr[1]))
-        return cmdStr
+        return ExpandNumberedMoveCommand(cmdStr)
     if (paramArr[1] == GetLang("RMT指令"))
         return cmdStr
 

@@ -12,7 +12,7 @@
 ; =====================================================================
 
 class TranslateGui {
-    static TextFields := ["Text", "ResultVar", "ErrorVar", "TimeoutMs", "TargetCustom"]
+    static TextFields := ["Text", "ResultVar", "ErrorVar", "TargetCustom"]
     static Choices := Map(
         "Source", TranslateCommand.Sources,
         "Target", TranslateCommand.Targets,
@@ -31,7 +31,9 @@ class TranslateGui {
         this.SerialStr := ""
         this.Data := ""
         this._title := ""
-        this._glossary := []   ; 术语表条目 {id, text}，id 对应标签上的删除按钮
+        this._glossary := []   ; 结构化术语和未迁移旧条目
+        this._legacyGlossary := ""
+        this._legacyGlossaryLines := []
         this._glossSeq := 0
         this._glossBound := Map()  ; 已登记过 Click 回调的标签按钮 id（OnEvent 是 Push 会叠）
     }
@@ -123,9 +125,7 @@ class TranslateGui {
 
         results := body.Add("Grid").Margin("0,4").Cols("*", 16, "*")
         this._Variable(results, "结果变量：", "ResultVar", 0, GetLang("译文写入该变量。"))
-        this._Variable(results, "错误变量：", "ErrorVar", 2, GetLang("留空：失败直接报错中断宏；填了：错误信息写进该变量，宏继续跑。"))
-
-        this._Field(body, "超时(ms)：", "TimeoutMs", GetLang("本地推理按毫秒计时，超时返回已生成部分。"))
+        this._Variable(results, "错误变量：", "ErrorVar", 2, GetLang("友好错误会提示并继续；技术错误仍会中断。填入后也会把错误信息写入该变量。"))
 
         CmdEditorForm.Footer(body)
 
@@ -138,6 +138,7 @@ class TranslateGui {
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
+        this.ui.OnEvent("Engine", "SelectionChanged", XamlWin.BindCurrent(this, "OnEngineChanged"))
         this.ui.OnEvent("Target", "SelectionChanged", XamlWin.BindCurrent(this, "OnTargetChanged"))
         this.ui.OnEvent("Source", "SelectionChanged", XamlWin.BindCurrent(this, "OnSourceChanged"))
         this.ui.OnEvent("BtnGlossAdd", "Click", XamlWin.BindCurrent(this, "OnGlossAdd"))
@@ -196,15 +197,28 @@ class TranslateGui {
         }
         for name in TranslateGui.TextFields
             this._ComboPush(name, "Text", String(this.Data.HasOwnProp(name) ? this.Data.%name% : ""))
-        ; 术语表：存量按行解析成条目（id 发给每条标签的删除按钮），窗口加载后重建标签
+        ; 旧格式原文保留到用户明确删除；新条目从结构化字段读取。
         this._glossary := []
         this._glossSeq := 0
         this._glossBound := Map()
-        for line in StrSplit(String(this.Data.HasOwnProp("Glossary") ? this.Data.Glossary : ""), "`n", " `t`r") {
-            line := Trim(line)
-            if (line != "") {
+        this._legacyGlossary := String(this.Data.HasOwnProp("Glossary") ? this.Data.Glossary : "")
+        this._legacyGlossaryLines := []
+        if (this._legacyGlossary != "") {
+            for line in StrSplit(this._legacyGlossary, "`n") {
+                line := RTrim(line, "`r")
+                if (line == "")
+                    continue
+                this._legacyGlossaryLines.Push(line)
                 this._glossSeq++
-                this._glossary.Push({id: this._glossSeq, text: line})
+                this._glossary.Push({id: this._glossSeq, legacy: true, legacyIndex: this._legacyGlossaryLines.Length, text: line})
+            }
+        }
+        if (this.Data.HasOwnProp("GlossaryItems") && this.Data.GlossaryItems is Array) {
+            for item in this.Data.GlossaryItems {
+                if (!IsObject(item) || !item.HasOwnProp("source") || !item.HasOwnProp("target"))
+                    continue
+                this._glossSeq++
+                this._glossary.Push({id: this._glossSeq, legacy: false, source: String(item.source), target: String(item.target)})
             }
         }
         for name, values in TranslateGui.Choices {
@@ -231,10 +245,13 @@ class TranslateGui {
             data.Text := Trim(this.ui.Query("TextVar"))
         else if (data.Source == "剪切板")
             data.Text := ""
-        data.Glossary := this._GlossaryText()
+        data.Glossary := this._legacyGlossary
+        data.GlossaryItems := []
+        for item in this._glossary
+            if (!item.legacy)
+                data.GlossaryItems.Push({source: item.source, target: item.target})
         data.ResultVar := GetVarName(Trim(data.ResultVar))
         data.ErrorVar := GetVarName(Trim(data.ErrorVar))
-        data.TimeoutMs := IsInteger(Trim(data.TimeoutMs)) ? Integer(Trim(data.TimeoutMs)) : 0
         return data
     }
 
@@ -249,10 +266,6 @@ class TranslateGui {
         data := this._ReadData()
         if (data.Target == "自定义" && Trim(data.TargetCustom) == "") {
             RmtDialog.Info(GetLang("自定义目标语言不能为空"), GetLang("翻译"), this.Hwnd())
-            return false
-        }
-        if (data.TimeoutMs < 1 || data.TimeoutMs > 3600000) {
-            RmtDialog.Info(GetLang("超时时间应为 1～3600000 毫秒。"), GetLang("翻译"), this.Hwnd())
             return false
         }
         if (data.ResultVar != "" && data.ResultVar = data.ErrorVar) {
@@ -302,15 +315,24 @@ class TranslateGui {
             target := TranslateCommand.ResolveTarget(data)
             promptTarget := TranslateCommand.TargetPrompt.Has(target) ? TranslateCommand.TargetPrompt[target] : target
             if (TranslateCommand.IsLocal(data.Engine))
-                result := TranslateCommand.ExecuteLocal(text, promptTarget, data.Glossary, data, () => false, &timedOut, &elapsedMs)
+                result := TranslateCommand.ExecuteLocal(text, promptTarget, data.Glossary, data.GlossaryItems, data, () => false, &timedOut, &elapsedMs)
             else
-                result := TranslateCommand.ExecuteRemote(text, promptTarget, data.Glossary, data, () => false, &timedOut, &elapsedMs)
+                result := TranslateCommand.ExecuteRemote(text, promptTarget, data.Glossary, data.GlossaryItems, data, () => false, &timedOut, &elapsedMs)
         } catch as e {
-            RmtDialog.Info(e.Message, GetLang("翻译"), this.Hwnd())
+            message := e.Message
+            if (SubStr(message, 1, StrLen(TranslateCommand.MissingModelPrefix)) == TranslateCommand.MissingModelPrefix) {
+                modelName := SubStr(message, StrLen(TranslateCommand.MissingModelPrefix) + 1)
+                TranslateGui._PromptModelDownload(modelName)
+                return
+            }
+            if (SubStr(message, 1, StrLen(TranslateCommand.FriendlyErrorPrefix)) == TranslateCommand.FriendlyErrorPrefix)
+                message := SubStr(message, StrLen(TranslateCommand.FriendlyErrorPrefix) + 1)
+            RmtDialog.Info(message, GetLang("翻译"), this.Hwnd())
             return
         }
         ; 结果独立弹窗：耗时一行 + 译文（长文本走 RmtDialog 的只读框，可复制）
-        RmtDialog.Info(Format(GetLang("试译耗时 {} 毫秒"), elapsedMs) "`n`n" result, GetLang("试译结果"), this.Hwnd())
+        hint := timedOut ? GetLang("结果可能不完整") "`n`n" : ""
+        RmtDialog.Info(Format(GetLang("试译耗时 {} 毫秒"), elapsedMs) "`n`n" hint result, GetLang("试译结果"), this.Hwnd())
     }
 
     ; Alt+L 与标题栏执行钮同一动作；关窗必须摘掉，否则编辑器关了热键还在。
@@ -365,8 +387,10 @@ class TranslateGui {
         if (!IsObject(this.ui))
             return
         updates := [{ControlName: "GlossaryTags", PropertyName: "ClearItems", Value: ""}]
-        for item in this._glossary
-            updates.Push({ControlName: "GlossaryTags", PropertyName: "AddXamlItem", Value: this._GlossChipXaml(item.id, item.text)})
+        for item in this._glossary {
+            text := item.legacy ? item.text : item.source " → " item.target
+            updates.Push({ControlName: "GlossaryTags", PropertyName: "AddXamlItem", Value: this._GlossChipXaml(item.id, text)})
+        }
         this.ui.BatchUpdate(updates)
         for item in this._glossary {
             if (!this._glossBound.Has(item.id)) {
@@ -383,31 +407,27 @@ class TranslateGui {
         return (state, ctrl, event) => this.OnGlossDelId(id)
     }
 
-    _GlossaryText() {
-        text := ""
-        for idx, item in this._glossary
-            text .= (idx == 1 ? "" : "`n") item.text
-        return text
-    }
-
     OnGlossAdd(state, ctrl, event) {
         if (!IsObject(this.ui))
             return
-        src := Trim(this.ui.Query("GlossarySrc"))
-        dst := Trim(this.ui.Query("GlossaryDst"))
-        if (src == "" || dst == "") {
+        src := this.ui.Query("GlossarySrc")
+        dst := this.ui.Query("GlossaryDst")
+        if (Trim(src) == "" || Trim(dst) == "") {
             RmtDialog.Info(GetLang("原文和译文都要填，才能添加一条术语对照。"), GetLang("翻译"), this.Hwnd())
             return
         }
-        text := src ":" dst
-        for idx, item in this._glossary {
-            if (item.text == text) {
+        for item in this._glossary {
+            if (!item.legacy && item.source == src && item.target == dst) {
                 RmtDialog.Info(GetLang("这条术语对照已经在列表里。"), GetLang("翻译"), this.Hwnd())
+                return
+            }
+            if (!item.legacy && item.source == src) {
+                RmtDialog.Info(GetLang("原文已存在，请先删除旧术语对照。"), GetLang("翻译"), this.Hwnd())
                 return
             }
         }
         this._glossSeq++
-        this._glossary.Push({id: this._glossSeq, text: text})
+        this._glossary.Push({id: this._glossSeq, legacy: false, source: src, target: dst})
         this._RebuildGlossaryChips()
         this.ui.BatchUpdate([
             {ControlName: "GlossarySrc", PropertyName: "Text", Value: ""},
@@ -420,6 +440,15 @@ class TranslateGui {
             return
         for idx, item in this._glossary {
             if (item.id == id) {
+                if (item.legacy) {
+                    this._legacyGlossaryLines.RemoveAt(item.legacyIndex)
+                    this._legacyGlossary := ""
+                    for lineIndex, line in this._legacyGlossaryLines
+                        this._legacyGlossary .= (lineIndex == 1 ? "" : "`n") line
+                    for other in this._glossary
+                        if (other.legacy && other.legacyIndex > item.legacyIndex)
+                            other.legacyIndex -= 1
+                }
                 this._glossary.RemoveAt(idx)
                 break
             }
@@ -427,7 +456,7 @@ class TranslateGui {
         this._RebuildGlossaryChips()
     }
 
-    ; ---------- 组件与模型按需下载（Voice 同款） ----------
+    ; ---------- 组件与模型按需下载 ----------
 
     ; Translate.zip 覆盖的全部运行库文件；与 SelfCheck.ahk 的翻译 optionalFiles
     ; 同一份清单，增删要两处同步。模型 GGUF 不在包里，走下面的模型下载。
@@ -446,26 +475,6 @@ class TranslateGui {
         return missing
     }
 
-    static _DownloadRuntimeFiles() {
-        missing := TranslateGui.MissingRuntimeFiles()
-        if (!missing.Length)
-            return
-        progress := RmtProgress(GetLang("下载翻译组件"), GetLang("准备下载"),
-            XamlWin.ActiveOwner(), GetLang("取消下载"))
-        result := ""
-        try {
-            progress.Show()
-            progress.Report("Translate.zip")
-            result := DownloadRmtAssetBundle(RmtAssetsBaseUrl(RmtAssetsReleaseTag()) "Translate.zip", missing, progress)
-        } finally progress.Close()
-        if (result == "ok")
-            Toast.Success(GetLang("翻译组件已就绪"))
-        else if (result != "cancel")
-            Toast.Error(GetLang("翻译组件下载失败，请稍后重试"))
-    }
-
-    static _modelDownloading := false
-
     ; 模型下载源：ModelScope 主（国内快），HuggingFace 兜底；两个仓库均已实测可达。
     static _ModelUrls(modelName) {
         repo := InStr(modelName, "-9B") ? "IndexTeam/Index-Translate-9B-GGUF" : "IndexTeam/Index-Translate-2B-GGUF"
@@ -473,44 +482,92 @@ class TranslateGui {
                 "https://huggingface.co/" repo "/resolve/main/" modelName]
     }
 
-    ; 缺模型时按当前引擎下载对应 GGUF。curl 带进度与速度估算（DownloadAsync 内建 3 次重试），
-    ; 小于下限视为半包丢弃：2B 实际 1312164352 字节，9B 约 5.9 GB。
-    _BeginModelDownload(modelName) {
-        if (TranslateGui._modelDownloading)
+    ; 模型下载由通用下载管理器执行；翻译模块只提供来源、目标和完成提示。
+    static BeginModelDownload(modelName) {
+        if (TranslateEngine.HasModel(modelName))
             return
-        TranslateGui._modelDownloading := true
-        DirCreate(A_WorkingDir "\Plugins\Translate\models")
         savePath := A_WorkingDir "\Plugins\Translate\models\" modelName
         minBytes := InStr(modelName, "-9B") ? 5000 * 1024 * 1024 : 1200 * 1024 * 1024
-        progress := RmtProgress(Format(GetLang("下载翻译模型：{}"), modelName), GetLang("准备下载"),
-            XamlWin.ActiveOwner(), GetLang("取消下载"))
+        try {
+            RmtDownloadManager.Enqueue(Format(GetLang("翻译模型：{}"), modelName),
+                TranslateGui._ModelUrls(modelName), savePath, minBytes, 7200,
+                (job) => TranslateGui._OnModelDownloadComplete(job))
+            Toast.Info(GetLang("已加入后台下载，可在设置中查看进度。"))
+        } catch as error {
+            RMTErrorShow("翻译模型下载任务创建失败：" error.Message, RMT_LV_ERROR, "TranslateGui")
+            Toast.Error(GetLang("翻译模型下载失败，请在下载管理中重试。"))
+        }
+    }
+
+    static _OnModelDownloadComplete(job) {
+        if (job.status == "completed")
+            Toast.Success(GetLang("翻译模型已就绪"))
+        else if (job.status == "failed")
+            Toast.Error(GetLang("翻译模型下载失败，请在下载管理中重试。"))
+    }
+
+    static _PromptModelDownload(modelName) {
+        if (TranslateEngine.HasModel(modelName))
+            return
+        sizeHint := InStr(modelName, "-9B") ? "5.9 GB" : "1.3 GB"
+        prompt := Format(GetLang("本地翻译模型未下载（{}，约 {}），是否加入后台下载？"), modelName, sizeHint)
+        if (RmtDialog.Confirm(prompt, GetLang("翻译")))
+            TranslateGui.BeginModelDownload(modelName)
+    }
+
+    static RequestInternalDownload(assetId) {
+        prefix := "translate-model:"
+        if (SubStr(assetId, 1, StrLen(prefix)) != prefix)
+            return
+        modelName := SubStr(assetId, StrLen(prefix) + 1)
+        validModel := false
+        for _, name in TranslateCommand.EngineModels
+            if (name == modelName) {
+                validModel := true
+                break
+            }
+        if (!validModel)
+            return
+        SetTimer((*) => TranslateGui._PromptModelDownload(modelName), -10)
+    }
+
+    static _DownloadRuntimeFiles() {
+        missing := TranslateGui.MissingRuntimeFiles()
+        if (!missing.Length)
+            return
+        target := RmtCacheDir() "\Downloads\Translate.zip"
+        url := RmtAssetsBaseUrl(RmtAssetsReleaseTag()) "Translate.zip"
+        try {
+            RmtDownloadManager.Enqueue(GetLang("翻译组件"), [url], target, 10 * 1024 * 1024, 120,
+                (job) => TranslateGui._OnRuntimeDownloadComplete(job, missing))
+            Toast.Info(GetLang("翻译组件已加入后台下载，可在设置中查看进度。"))
+        } catch as error {
+            RMTErrorShow("翻译组件下载任务创建失败：" error.Message, RMT_LV_ERROR, "TranslateGui")
+            Toast.Error(GetLang("翻译组件下载失败，请在下载管理中重试。"))
+        }
+    }
+
+    static _OnRuntimeDownloadComplete(job, files) {
+        if (job.status != "completed") {
+            if (job.status == "failed")
+                Toast.Error(GetLang("翻译组件下载失败，请在下载管理中重试。"))
+            return
+        }
+        SetTimer((*) => TranslateGui._ExtractRuntimeBundle(job.targetPath, files), -10)
+    }
+
+    static _ExtractRuntimeBundle(zipPath, files) {
+        progress := RmtProgress(GetLang("安装翻译组件"), GetLang("正在解压"),
+            XamlWin.ActiveOwner())
         result := ""
         try {
             progress.Show()
-            for url in TranslateGui._ModelUrls(modelName) {
-                if (progress.Cancelled) {
-                    result := "cancel"
-                    break
-                }
-                progress.Report(InStr(url, "modelscope") ? GetLang("ModelScope 源") : GetLang("HuggingFace 源"))
-                result := DownloadAsync(url, savePath, 7200, progress)
-                if (result == "ok" && !RmtAssetMissing(savePath) && FileGetSize(savePath) >= minBytes)
-                    break
-                if (result == "cancel") {
-                    if (FileExist(savePath))
-                        try FileDelete(savePath)
-                    break
-                }
-                result := ""    ; 该源失败（DownloadAsync 已清理残留），换下一个源
-            }
-            if (result == "ok")
-                Toast.Success(GetLang("翻译模型已就绪"))
-            else if (result != "cancel")
-                Toast.Error(GetLang("翻译模型下载失败，请稍后重试"))
-        } finally {
-            progress.Close()
-            TranslateGui._modelDownloading := false
-        }
+            result := RmtExtractAssetBundle(zipPath, files, progress)
+        } finally progress.Close()
+        if (result == "ok")
+            Toast.Success(GetLang("翻译组件已就绪"))
+        else
+            Toast.Error(GetLang("翻译组件下载完成，但解压失败。"))
     }
 
     _EnsureReady() {
@@ -533,10 +590,11 @@ class TranslateGui {
         modelName := TranslateCommand.EngineModels[engine]
         if (TranslateEngine.HasModel(modelName))
             return
-        sizeHint := InStr(modelName, "-9B") ? "5.9 GB" : "1.3 GB"
-        prompt := Format(GetLang("本地翻译模型未下载（{}，约 {}），是否立即下载？"), modelName, sizeHint)
-        if (RmtDialog.Confirm(prompt, GetLang("翻译"), this.Hwnd()))
-            this._BeginModelDownload(modelName)
+        TranslateGui._PromptModelDownload(modelName)
+    }
+
+    OnEngineChanged(state, ctrl, event) {
+        SetTimer(ObjBindMethod(this, "_EnsureReady"), -10)
     }
 
     ; ---------- 窗口生命周期 ----------
@@ -580,3 +638,5 @@ class TranslateGui {
         this._closed := true
     }
 }
+
+RmtRequestInternalDownload(assetId) => TranslateGui.RequestInternalDownload(assetId)

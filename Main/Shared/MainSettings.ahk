@@ -106,6 +106,10 @@ LoadMainSetting() {
     AppThemeUtil.LoadFromToml()
     MainSoftData.IsModalSubGui := CfgRead(SettingFile, SettingSection, "IsModalSubGui", true)
     MainSoftData.MutiThreadNum := CfgRead(SettingFile, SettingSection, "MutiThreadNum", -1)
+    rawTranslateTimeout := CfgRead(SettingFile, SettingSection, "TranslateTimeoutMs", 30000)
+    MainSoftData.TranslateTimeoutMs := IsInteger(rawTranslateTimeout) ? Integer(rawTranslateTimeout) : 30000
+    if (MainSoftData.TranslateTimeoutMs < 1000 || MainSoftData.TranslateTimeoutMs > 3600000)
+        MainSoftData.TranslateTimeoutMs := 30000
     MainSoftData.DynamicCorePoolSize := CfgRead(SettingFile, SettingSection, "DynamicCorePoolSize", 2)
     MainSoftData.ElasticTimeout := CfgRead(SettingFile, SettingSection, "ElasticTimeout", 30)
     MainSoftData.MacroStopType := Integer(CfgRead(SettingFile, SettingSection, "MacroStopType", 1))
@@ -297,7 +301,7 @@ InitDataFilePaths(rootDir) {
     global ScreenShotFile := cfgDir "\ScreenShotFile.toml"
     global GraphNodeFile := cfgDir "\GraphNodeFile.toml"
     global GraphStartNodeFile := cfgDir "\GraphStartNodeFile.toml"
-    ; 阶段5：纯文本指令迁移到配置文件模式（间隔/按键/移动/RMT指令）
+    ; 间隔/按键/RMT 可走配置文件；普通移动为内联，MoveDataFile 仅兼容旧编号指令
     global IntervalFile := cfgDir "\IntervalFile.toml"
     global KeyDataFile := cfgDir "\KeyDataFile.toml"
     global MoveDataFile := cfgDir "\MoveDataFile.toml"

@@ -95,7 +95,7 @@ RMT（若梦兔）是完全免费的开源项目。
 RMT 支持用户自由 **分享 / 下载** 宏配置文件，你可以在以下平台获取或贡献配置：
 
 🔗 **RMT 配置共享仓库**  
-📦 https://zclucas.github.io/RMT-Setting/
+📦 https://forum.ruomengtu.com/c/share/61
 
 > ✨ 你可以将自己录制或编辑的宏上传到共享仓库，与社区共同成长  
 > ⚠️ 若默认浏览器无法访问，请尝试更换其他浏览器

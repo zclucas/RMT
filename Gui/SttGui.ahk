@@ -17,6 +17,7 @@ class SttGui {
     ; ---------- 单例入口 ----------
     static instances := Map()
     static activeDownload := ""
+    static pendingArchives := []
 
     static _promptQueued := false
     static _extensionInstalling := false
@@ -29,8 +30,7 @@ class SttGui {
         if (engine._TryLoadDll() && engine.IsStreamModelReady(language))
             return true
         if (IsObject(SttGui.activeDownload)) {
-            if (IsObject(SttGui.activeDownload.progress))
-                SetTimer(ObjBindMethod(SttGui.activeDownload.progress, "Show"), -1)
+            DownloadManagerGui.Open()
             return false
         }
         ; 离开语音按钮的点击回调再开确认框，避免在回调里同步开窗。
@@ -68,7 +68,7 @@ class SttGui {
             return true
         inst := SttGui()
         inst._StartModelDownload(language)
-        return inst.downloadState == "dl" || inst.downloadState == "ex"
+        return inst.downloadState == "wait" || inst.downloadState == "dl" || inst.downloadState == "ex"
     }
 
     static DownloadVoiceExtension(*) {
@@ -80,32 +80,22 @@ class SttGui {
             return
         SttGui._extensionInstalling := true
         try {
-            result := SttGui._DownloadExtensionFiles()
-            if (result == "cancel")
-                return
-            if (result != "ok")
-                throw Error("Voice extension download failed")
-            try MyMainWin.RefreshVoiceExtensionButton()
-            engine := InitSttEngine()
-            if (!engine._TryLoadDll()) {
-                Toast.Warning(GetLang("语音引擎未就绪"))
+            missing := SttGui.MissingVoiceExtensionFiles()
+            if (!missing.Length) {
+                SttGui._CompleteVoiceExtensionInstall(language)
                 return
             }
-            voice := InitVoiceEngine()
-            if (!voice.IsSupported()) {
-                voice._InitEngine()
-                voice.Start()
-            }
-            if (IsObject(SttGui.activeDownload)) {
-                SttGui.activeDownload.progress.Show()
-            } else if (!engine.IsStreamModelReady(language)) {
-                SttGui._BeginModelDownload(language)
-            } else {
-                Toast.Success(GetLang("语音扩展已就绪"))
-            }
-        } catch {
+            runtimeUrl := RmtAssetsBaseUrl(RmtAssetsReleaseTag())
+            targetPath := RmtCacheDir() "\Downloads\Voice.zip"
+            RmtDownloadManager.Enqueue(GetLang("下载语音扩展"), [runtimeUrl "Voice.zip"], targetPath,
+                10 * 1024 * 1024, 3600,
+                ObjBindMethod(SttGui, "_OnVoiceExtensionDownloaded", language))
+            Toast.Info(GetLang("已加入后台下载，可在设置中查看进度。"))
+        } catch as error {
+            SttGui._extensionInstalling := false
+            RMTErrorShow("语音扩展下载任务创建失败：" error.Message, RMT_LV_ERROR, "SttGui")
             Toast.Error(GetLang("语音扩展下载失败，请稍后重试"))
-        } finally SttGui._extensionInstalling := false
+        }
     }
 
     static MissingVoiceExtensionFiles() {
@@ -130,18 +120,45 @@ class SttGui {
         return missing
     }
 
-    static _DownloadExtensionFiles() {
-        missing := SttGui.MissingVoiceExtensionFiles()
-        if (!missing.Length)
-            return "ok"
-
-        runtimeUrl := RmtAssetsBaseUrl(RmtAssetsReleaseTag())
-        progress := RmtProgress(GetLang("下载语音扩展"), GetLang("准备下载"), XamlWin.ActiveOwner(), GetLang("取消下载"))
-        progress.Show()
+    static _OnVoiceExtensionDownloaded(language, job) {
+        SttGui._extensionInstalling := false
+        if (job.status != "completed") {
+            if (job.status != "cancelled")
+                Toast.Error(GetLang("语音扩展下载失败，请稍后重试"))
+            return
+        }
         try {
-            progress.Report("Voice.zip")
-            return DownloadRmtAssetBundle(runtimeUrl "Voice.zip", missing, progress)
-        } finally progress.Close()
+            missing := SttGui.MissingVoiceExtensionFiles()
+            if (missing.Length
+                && RmtExtractAssetBundle(job.targetPath, missing, RmtSilentDownloadProgress()) != "ok")
+                throw Error("Voice extension extraction failed")
+            SttGui._CompleteVoiceExtensionInstall(language)
+        } catch as error {
+            RMTErrorShow("语音扩展安装失败：" error.Message, RMT_LV_ERROR, "SttGui")
+            Toast.Error(GetLang("语音扩展下载失败，请稍后重试"))
+        }
+    }
+
+    static _CompleteVoiceExtensionInstall(language) {
+        SttGui._extensionInstalling := false
+        try MyMainWin.RefreshVoiceExtensionButton()
+        engine := InitSttEngine()
+        if (!engine._TryLoadDll()) {
+            Toast.Warning(GetLang("语音引擎未就绪"))
+            return
+        }
+        voice := InitVoiceEngine()
+        if (!voice.IsSupported()) {
+            voice._InitEngine()
+            voice.Start()
+        }
+        if (IsObject(SttGui.activeDownload)) {
+            DownloadManagerGui.Open()
+        } else if (!engine.IsStreamModelReady(language)) {
+            SttGui._BeginModelDownload(language)
+        } else {
+            Toast.Success(GetLang("语音扩展已就绪"))
+        }
     }
 
     ; 流式模型包（chunksize 越大越准、延迟越高：160ms / 480ms / 960ms / 1920ms）
@@ -180,16 +197,14 @@ class SttGui {
         this.liveRate := 1.0           ; 每 tick 放字数（按积压量自适应）
         this.liveAcc := 0.0            ; 小数累加器
         this.loading := false          ; 正在加载模型（会阻塞，用于状态提示）
-        ; 下载流程状态："" 无 / "dl" 下载中 / "ex" 解压中 / "err" 失败
+        ; 下载流程状态："" 无 / "wait" 排队中 / "dl" 等待解压 / "ex" 解压中 / "err" 失败
         this.downloadState := ""
         this.dlQueue := []             ; 待下载模型队列
         this.dlPid := 0
         this.dlTar := ""
-        this.dlBytes := 0
-        this.dlExpectedBytes := 0
+        this.dlJobId := ""
         this.dlDir := ""
         this.dlSpec := ""              ; 当前模型规格（Map）
-        this.progress := ""
         this._lastProgressTick := 0
         this._topOn := false
         this.timerFunc := ObjBindMethod(this, "OnTimer")
@@ -389,8 +404,11 @@ class SttGui {
 
         if (this.loading) {
             status := GetLang("模型正在加载…")
-        } else if (downloading && download.downloadState == "dl") {
-            status := GetLang("模型下载中，请稍候")
+        } else if (downloading && (download.downloadState == "wait" || download.downloadState == "dl")) {
+            job := download.dlJobId != "" && RmtDownloadManager.jobs.Has(download.dlJobId)
+                ? RmtDownloadManager.jobs[download.dlJobId] : ""
+            status := IsObject(job) && job.status == "queued"
+                ? GetLang("排队中") : GetLang("模型下载中，请稍候")
         } else if (downloading) {
             status := GetLang("模型解压中……")
         } else if (this.recording) {
@@ -416,44 +434,24 @@ class SttGui {
         return Format("{:02d}:{:02d}", Floor(sec / 60), Mod(sec, 60))
     }
 
-    _DownloadPercent() => Min(100, Floor(100 * this.dlBytes / this.dlExpectedBytes))
-
-    _DownloadProgressText() {
-        status := GetLang("模型下载中，请稍候") "  " Format("{:.1f}", this.dlBytes / 1000000)
-        if (this.dlExpectedBytes > 0)
-            status .= Format(" / {:.1f} MB", this.dlExpectedBytes / 1000000)
-        else
-            status .= " MB"
-        return status
-    }
-
-    _UpdateDownloadProgress() {
-        this._lastProgressTick := A_TickCount
-        if (!this.dlExpectedBytes)
-            this.dlExpectedBytes := RmtDownloadContentLength(this.dlTar ".headers")
-        try this.dlBytes := FileGetSize(this.dlTar)
-        this.progress.SetDownloadAlternative(RmtDownloadAlternative(this.dlSpec["url"], this.dlBytes,
-            this.dlExpectedBytes, A_TickCount - this.dlStarted), GetLang("备用下载地址"))
-        this.progress.Report(this._DownloadProgressText(), this.dlExpectedBytes > 0 ? this._DownloadPercent() : "")
-    }
-
-    ; ---------- 定时器：实时上屏 + 收尾轮询 + 下载进度 ----------
+    ; ---------- 定时器：实时上屏 + 模型解压 ----------
     OnTimer() {
         ; --- 模型下载/解压 ---
+        if (this.downloadState == "wait") {
+            if (A_TickCount - this._lastProgressTick >= 500) {
+                this._lastProgressTick := A_TickCount
+                if (SttGui.instances.Has("global"))
+                    SttGui.instances["global"]._RefreshUi()
+            }
+            return
+        }
         if (this.downloadState == "dl" || this.downloadState == "ex") {
             oldState := this.downloadState
             if (!this.dlPid || !ProcessExist(this.dlPid)) {
                 if (this.downloadState == "dl") {
-                    try FileDelete(this.dlTar ".headers")
                     if (this._StartExtract())
                         this.downloadState := "ex"
-                    else if (alternative := RmtDownloadDirectUrl(this.dlSpec["url"])) {
-                        this._ClearDownloadFiles()
-                        this.dlSpec["url"] := alternative
-                        this.dlQueue.InsertAt(1, this.dlSpec)
-                        if (!this._StartNextDownload())
-                            this.downloadState := "err"
-                    } else
+                    else
                         this.downloadState := "err"
                 } else {
                     if (!this._FinishExtract()) {
@@ -466,22 +464,21 @@ class SttGui {
                     }
                 }
             }
-            if (this.downloadState == "dl") {
-                if (oldState != "dl" || A_TickCount - this._lastProgressTick >= 500)
-                    this._UpdateDownloadProgress()
-            } else if (oldState != this.downloadState) {
+            if (oldState != this.downloadState) {
                 if (this.downloadState == "ex") {
-                    this.progress.SetDownloadAlternative("")
-                    this.progress.Report(GetLang("模型解压中……"))
                     if (SttGui.instances.Has("global"))
                         SttGui.instances["global"]._RefreshUi()
                     return
                 }
-                SttGui.activeDownload := ""
+                if (this.downloadState == "wait" || this.downloadState == "dl") {
+                    if (SttGui.instances.Has("global"))
+                        SttGui.instances["global"]._RefreshUi()
+                    return
+                }
                 this._ClearDownloadFiles()
-                this.progress.Close()
-                this.progress := ""
                 SetTimer(this.timerFunc, 0)
+                if (SttGui.activeDownload == this)
+                    SttGui.activeDownload := ""
                 if (SttGui.instances.Has("global")) {
                     window := SttGui.instances["global"]
                     window._RefreshUi()
@@ -491,6 +488,7 @@ class SttGui {
                     Toast.Success(GetLang("语音识别模型下载成功"))
                 else
                     Toast.Error(GetLang("模型下载失败，请检查网络后重试"))
+                SttGui._StartPendingArchive()
             }
             return
         }
@@ -638,7 +636,7 @@ class SttGui {
         this.liveAcc := 0.0
     }
 
-    ; ---------- 模型按需下载（curl + tar，异步 Run + 进程轮询，支持多模型排队） ----------
+    ; ---------- 模型按需下载（统一下载平台 + tar 解压） ----------
     _StartModelDownload(language) {
         if (IsObject(SttGui.activeDownload))
             return
@@ -646,41 +644,97 @@ class SttGui {
         this.dlQueue := this._MissingModels(language)
         if (!this.dlQueue.Length)
             return
+        SttGui.activeDownload := this
+        this._lastProgressTick := 0
+        SetTimer(this.timerFunc, 0)
+        SetTimer(this.timerFunc, 100)
         if (!this._StartNextDownload()) {
             this.downloadState := "err"
+            SttGui.activeDownload := ""
+            SetTimer(this.timerFunc, 0)
+            this._ClearDownloadFiles()
             this._RefreshUi()
             Toast.Error(GetLang("模型下载启动失败，请稍后重试"))
             return
         }
-        SttGui.activeDownload := this
-        this.progress := RmtProgress(GetLang("下载识别模型"), GetLang("模型下载中，请稍候"))
-        SetTimer(this.timerFunc, 0)
-        this.progress.Show()
         if (SttGui.instances.Has("global"))
             SttGui.instances["global"]._RefreshUi()
-        this._UpdateDownloadProgress()
-        SetTimer(this.timerFunc, 100)
+        if (this.downloadState != "err")
+            Toast.Info(GetLang("已加入后台下载，可在设置中查看进度。"))
     }
 
     _StartNextDownload() {
         if (!this.dlQueue.Length)
             return false
         spec := this.dlQueue.RemoveAt(1)
-        this.dlBytes := 0
-        this.dlExpectedBytes := spec.Get("exactBytes", 0)
-        this.dlStarted := A_TickCount
-        this.dlTar := RmtCacheDir() "\rmt-stt-model-" DllCall("GetCurrentProcessId") "-" A_TickCount ".download"
-        cmd := Format('curl.exe -L --fail -s -S --suppress-connect-headers -D "{}" -o "{}" "{}"',
-            this.dlTar ".headers", this.dlTar, spec["url"])
+        this.dlSpec := spec
         try {
-            Run(cmd, RmtCacheDir(), "Hide", &pid)
-            this.dlPid := pid
-            this.dlSpec := spec
-            this.downloadState := "dl"
+            assetName := spec.Has("pkg") ? spec["pkg"] : "stt-" SttEngine.ModelLanguage(this.language)
+            this.dlTar := RmtCacheDir() "\Downloads\Stt\" assetName ".download"
+            urls := [spec["url"]]
+            if ((alternative := RmtDownloadDirectUrl(spec["url"])) != "" && alternative != spec["url"])
+                urls.Push(alternative)
+            minBytes := spec.Get("exactBytes", spec.Get("minBytes", 0))
+            this.downloadState := "wait"
+            this.dlJobId := RmtDownloadManager.Enqueue(
+                GetLang("下载识别模型") " - " this.language, urls, this.dlTar, minBytes, 7200,
+                ObjBindMethod(this, "_OnModelArchiveDownloaded"))
             return true
-        } catch {
+        } catch as error {
+            RMTErrorShow("语音模型下载任务创建失败：" error.Message, RMT_LV_ERROR, "SttGui")
             this._ClearDownloadFiles()
             return false
+        }
+    }
+
+    _OnModelArchiveDownloaded(job) {
+        if (job.status == "completed") {
+            if (IsObject(SttGui.activeDownload) && SttGui.activeDownload != this) {
+                SttGui.pendingArchives.Push({instance: this, job: job})
+                return
+            }
+            SttGui.activeDownload := this
+            this.dlTar := job.targetPath
+            this.dlPid := 0
+            this.downloadState := "dl"
+            SetTimer(this.timerFunc, 100)
+            if (SttGui.instances.Has("global"))
+                SttGui.instances["global"]._RefreshUi()
+            return
+        }
+
+        if (SttGui.activeDownload == this)
+            SttGui.activeDownload := ""
+        this.downloadState := job.status == "cancelled" ? "" : "err"
+        this.dlPid := 0
+        this._ClearDownloadFiles()
+        SetTimer(this.timerFunc, 0)
+        if (job.status != "cancelled")
+            Toast.Error(GetLang("模型下载失败，请检查网络后重试"))
+        if (SttGui.instances.Has("global")) {
+            window := SttGui.instances["global"]
+            window._RefreshUi()
+            SetTimer(window.preloadFunc, -300)
+        }
+        SttGui._StartPendingArchive()
+    }
+
+    static _StartPendingArchive() {
+        if (IsObject(SttGui.activeDownload) || !SttGui.pendingArchives.Length)
+            return
+        while (SttGui.pendingArchives.Length) {
+            pending := SttGui.pendingArchives.RemoveAt(1)
+            instance := pending.instance
+            if (!IsObject(instance))
+                continue
+            SttGui.activeDownload := instance
+            instance.dlTar := pending.job.targetPath
+            instance.dlPid := 0
+            instance.downloadState := "dl"
+            SetTimer(instance.timerFunc, 100)
+            if (SttGui.instances.Has("global"))
+                SttGui.instances["global"]._RefreshUi()
+            return
         }
     }
 

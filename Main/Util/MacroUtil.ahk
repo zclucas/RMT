@@ -1426,7 +1426,7 @@ OnExVariableOnce(tableItem, index, Data) {
              || !TryGetTabVarValue(&X2, tableItem, index, Data.EndPosX)
              || !TryGetTabVarValue(&Y2, tableItem, index, Data.EndPosY))
                 return false
-            TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
+            TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType, OcrEngineValue(Data))
             if (TextObjs == "")
                 TextObjs := []
 
@@ -1443,7 +1443,7 @@ OnExVariableOnce(tableItem, index, Data) {
                 return false
             hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.WinInfo))   ; §22 绑定窗口替换
             for hwnd in hwndList {
-                if ((CurWinTextObjs := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType)) != "")
+                if ((CurWinTextObjs := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType, OcrEngineValue(Data))) != "")
                     TextObjs.Push(CurWinTextObjs*)
             }
     }
@@ -1650,7 +1650,7 @@ SendBGKeyState(hwnd, Key, state, tableItem, index) {
 
 OnMouseMove(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
-    ; 阶段5：新格式 移动<serial> 走配置文件；旧格式 移动_X_Y_Speed_MoveMode 兼容
+    ; 内联 移动_X_Y_Speed_MoveMode；编号 移动<serial> 兼容 1.3 过渡配置
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
     textOnly := GetCommandKey(textOnly)
     if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {

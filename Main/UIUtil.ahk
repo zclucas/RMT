@@ -528,6 +528,13 @@ class CmdEditorForm {
             .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
     }
 
+    static OcrCombo(parent, name) {
+        combo := this.Combo(parent, name)
+        for label in [GetLang("跟随全局"), "RapidOCR", "Tesseract OCR"]
+            combo.Add("ComboBoxItem").Content(label)
+        return combo
+    }
+
     static WindowBindingOptions := [
         ["当前窗口", "❖{句柄ID}"],
         ["宏设置窗口绑定", "{宏设置窗口绑定}"],
@@ -976,6 +983,8 @@ RMTErrorShow(msg, level := RMT_LV_ERROR, source := "") {
         source := "Master"
 
     RMTLogSys(level, source, msg)
+    if (level == RMT_LV_WARN || level == RMT_LV_ERROR)
+        RmtNotifications.Add(Format("[{1}] {2}", source, msg), level)
     if (level == RMT_LV_WARN) {
         ; warn：托盘气泡（2s 自动消失）
         if (!(IsSet(MainSoftData) && ObjHasOwnProp(MainSoftData, "LogWarnBubble") && !MainSoftData.LogWarnBubble)) {
