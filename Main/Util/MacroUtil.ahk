@@ -1650,7 +1650,7 @@ SendBGKeyState(hwnd, Key, state, tableItem, index) {
 
 OnMouseMove(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
-    ; 阶段5：新格式 移动<serial> 走配置文件；旧格式 移动_X_Y_Speed_MoveMode 兼容
+    ; 内联 移动_X_Y_Speed_MoveMode；编号 移动<serial> 兼容 1.3 过渡配置
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
     textOnly := GetCommandKey(textOnly)
     if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {

@@ -12,6 +12,7 @@ Compat13_UpgradeCommands(dir) {
         migration.Save.Bind(migration))
     migration.Finish()
     Compat13_ClearRenameJournal(dir, ["WindowManageFile"])
+    Compat13_ExpandMoveSerials(dir)
 }
 
 Compat13_UpgradeWindows(dir, renames) {
@@ -163,14 +164,11 @@ class Compat13_InlineCommands {
                     data := DeltaMoveData()
                     data.DeltaX := Integer(Number(move[1])), data.DeltaY := Integer(Number(move[2]))
                     target := this.Store("DeltaMoveFile", "增量移动", data)
-                } else {
-                    data := MoveDataConfig()
-                    data.PosX := Integer(Number(move[1])), data.PosY := Integer(Number(move[2]))
-                    data.Speed := move[3] == "" ? 90 : Integer(move[3])
-                    data.MoveMode := mode
-                    target := this.Store("MoveDataFile", "移动", data)
+                    return m[1] target SubStr(tail, StrLen(move[0]) + 1)
                 }
-                return m[1] target SubStr(tail, StrLen(move[0]) + 1)
+                inline := FormatMoveInlineCmd(Integer(Number(move[1])), Integer(Number(move[2])),
+                    move[3] == "" ? 90 : Integer(move[3]), mode)
+                return m[1] inline SubStr(tail, StrLen(move[0]) + 1)
             }
             return m[1] "移动" tail
         }
@@ -214,7 +212,7 @@ class Compat13_InlineCommands {
 
     Finish() {
         pending := Map()
-        for stem in ["MoveDataFile", "DeltaMoveFile", "RMTCMDFile"] {
+        for stem in ["DeltaMoveFile", "RMTCMDFile"] {
             if (!CfgHasSection(this.dir "\" stem ".toml", "CompatInlinePending"))
                 continue
             file := this.Open(stem)
@@ -252,5 +250,85 @@ class Compat13_InlineCommands {
                 file.Dirty := false
             }
         }
+    }
+}
+
+; 1.3 曾把普通移动写成 移动1。还原为 移动_X_Y_速度[_方式]，并清理未再引用的 MoveDataFile 条目。
+Compat13_ExpandMoveSerials(dir) {
+    migration := Compat13_MoveSerialExpand(dir)
+    if (!migration.moves.Count)
+        return false
+    Compat_RewriteMacroFiles(dir, migration.Rewrite.Bind(migration), Compat13_RewriteAllBranches)
+    return migration.Finish()
+}
+
+class Compat13_MoveSerialExpand {
+    __New(dir) {
+        this.dir := dir
+        this.moves := Map()
+        this.path := dir "\MoveDataFile.toml"
+        this.root := Cfg_Load(this.path)
+        this.section := IniImport_Section()
+        this.values := Cfg_Seg(this.root, this.section)
+        for key, raw in this.values {
+            if (!RegExMatch(key, "^(移动|鼠标移动)\d+$"))
+                continue
+            data := TryParseCommandData(raw)
+            if (IsObject(data))
+                this.moves[key] := data
+        }
+    }
+
+    Rewrite(macro) {
+        result := ""
+        start := 1
+        while (pos := RegExMatch(macro, "[^,，\r\n⫶]+", &m, start)) {
+            result .= SubStr(macro, start, pos - start) this.Command(m[0])
+            start := pos + StrLen(m[0])
+        }
+        return result SubStr(macro, start)
+    }
+
+    Command(command) {
+        if (!RegExMatch(command, "^([ \t]*(?:🚫|▶|⭐)*)([^_|]+?)(?=[ \t]*(?:[_|]|$))", &m))
+            return command
+        key := m[2]
+        if (!this.moves.Has(key))
+            return command
+        data := this.moves[key]
+        inline := FormatMoveInlineCmd(data.HasOwnProp("PosX") ? data.PosX : 0,
+            data.HasOwnProp("PosY") ? data.PosY : 0,
+            data.HasOwnProp("Speed") ? data.Speed : 90,
+            data.HasOwnProp("MoveMode") ? data.MoveMode : "绝对移动")
+        tail := SubStr(command, StrLen(m[0]) + 1)
+        auto := (data.HasOwnProp("PosX") ? data.PosX : 0) " " (data.HasOwnProp("PosY") ? data.PosY : 0)
+        if (RegExMatch(tail, "^_([^_|]+)(?=[_| \t]|$)", &rm) && rm[1] == auto)
+            tail := SubStr(tail, StrLen(rm[0]) + 1)
+        return m[1] inline tail
+    }
+
+    Finish() {
+        if (!this.moves.Count)
+            return false
+        unreferenced := this.moves.Clone()
+        Compat_RewriteMacroFiles(this.dir, this.MarkReferenced.Bind(this, unreferenced), Compat13_RewriteAllBranches)
+        dirty := false
+        for key in this.moves {
+            if (!unreferenced.Has(key) || !this.values.Has(key))
+                continue
+            this.values.Delete(key)
+            dirty := true
+        }
+        if (dirty)
+            Cfg_WriteRoot(this.root, this.path)
+        return dirty
+    }
+
+    MarkReferenced(remaining, macro) {
+        for command in SplitMacro(macro) {
+            if (RegExMatch(command, "^(?:🚫|▶|⭐)*([^_| 	]+)", &m) && remaining.Has(m[1]))
+                remaining.Delete(m[1])
+        }
+        return macro
     }
 }

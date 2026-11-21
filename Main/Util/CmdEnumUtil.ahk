@@ -152,6 +152,15 @@ CanonicalMoveCommandName(key) {
     }
     return key
 }
+
+; 普通移动始终内联：移动_X_Y_速度[_相对移动|_游戏视角]。绝对移动省略方式段。
+FormatMoveInlineCmd(posX, posY, speed := 90, moveMode := 0, name := "移动") {
+    cmd := name "_" posX "_" posY "_" (speed == "" ? 90 : speed)
+    mode := CmdEnumMoveMode(moveMode)
+    if (mode == "相对移动" || mode == "游戏视角")
+        cmd .= "_" mode
+    return cmd
+}
 CmdEnumRef(value) => CmdEnumZh(value, CmdEnumRefNames(), 0)
 CmdEnumKeyAct(value) => CmdEnumZh(value, CmdEnumKeyActNames())
 CmdEnumRunOption(value) => CmdEnumZh(value, CmdEnumRunOptionNames(), 0)

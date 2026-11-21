@@ -26,7 +26,7 @@
         updateDetails := '<TextBlock Name="HelpUpdateStatus" Text="' this._XmlEsc(updateStatus)
             . '" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0"'
             . ' Visibility="' (updateStatus != "" ? "Visible" : "Collapsed") '"/>'
-        repoButton := this._HelpLinkButton("https://zclucas.github.io/RMT-Setting/", GetLang("查看仓库"))
+        repoButton := this._HelpLinkButton("https://forum.ruomengtu.com/c/share/61", GetLang("查看仓库"))
         docs := '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
             . '<Border Grid.Column="0" Padding="0,0,12,0">' this._HelpResource("&#xE8A5;", GetLang("软件说明文档"), GetLang("快速上手、指令手册、命令行、常见问题、常见报错与更新日志。"), docsButton) '</Border>'
             . '<Border Grid.Column="1" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1,0,0,0" Padding="12,0">' this._HelpResource("&#xE714;", GetLang("更新视频合集"), GetLang("查看版本更新视频与直播交流问答。"), videoButton) '</Border>'
