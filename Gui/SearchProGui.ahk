@@ -278,13 +278,16 @@ class SearchProGui {
             .BorderBrush("#FF4B5563").BorderThickness("1").VerticalAlignment("Center")
 
         txtPanel := typeHost.Add("Grid").Name("TextPanel").VerticalAlignment("Top").Visibility("Collapsed")
-        txtPanel.Cols("78", "8", "*")
+        txtPanel.Rows("32", "32")
+        txtPanel.Cols(String(XAMLHost.FontSize() * 6), "*")
         txtPanel.Add("TextBlock").Grid_Column(0).Text(GetLang("搜索文本：")).VerticalAlignment("Center").HorizontalAlignment("Left")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
-        txtPanel.Add("ComboBox").Grid_Column(2).Name("TextCon").Height(28).MinHeight(28).IsEditable("True")
+        txtPanel.Add("ComboBox").Grid_Column(1).Name("TextCon").Height(28).MinHeight(28).IsEditable("True")
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+        txtPanel.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("OCR模型：")).VerticalAlignment("Center")
+        CmdEditorForm.OcrCombo(txtPanel, "OcrEngineCon").Grid_Row(1).Grid_Column(1)
 
         ; 行3：找到 / 未找到
         macroRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(3).Margin("0,4,0,0")
@@ -635,6 +638,7 @@ class SearchProGui {
         this._SetImage(this.Data.SearchImagePath)
         this._SetCombo("HexColorCon", GetGuiVarArr("color"), GetBuiltinVarName(this.Data.SearchColor, true))
         this._SetCombo("TextCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.SearchText, true))
+        this.ui.Update("OcrEngineCon", "SelectedIndex", String(OcrEngineIndex(OcrEngineValue(this.Data))))
         this.ui.Update("StartPosXCon", "Text", GetLang(this.Data.StartPosX))
         this.ui.Update("StartPosYCon", "Text", GetLang(this.Data.StartPosY))
         this.ui.Update("EndPosXCon", "Text", GetLang(this.Data.EndPosX))
@@ -672,10 +676,11 @@ class SearchProGui {
         if (!ObjHasOwnProp(data, "SearchTargetArr") || !IsObject(data.SearchTargetArr) || data.SearchTargetArr.Length < 1)
             return
         t := data.SearchTargetArr[1]
-        for key in ["SearchType", "WinInfo", "SearchColor", "SearchText", "SearchImagePath", "Similar", "ColorMatch", "OCRType", "SearchImageType", "Adaptive", "StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
+        for key in ["SearchType", "WinInfo", "SearchColor", "SearchText", "SearchImagePath", "Similar", "ColorMatch", "OCRType", "OcrEngine", "SearchImageType", "Adaptive", "StartPosX", "StartPosY", "EndPosX", "EndPosY"] {
             if (ObjHasOwnProp(t, key))
                 data.%key% := t.%key%
         }
+        data.OcrEngine := OcrEngineValue(t)
         for key in ["MultiPointData", "MultiPointSeedData", "SuperMultiPointSeedData"
             , "SuperMultiPointIgnoreData", "MultiPointTolerance", "SuperMultiPointTolerance", "MultiPointMode"] {
             if (ObjHasOwnProp(t, key))
@@ -775,6 +780,7 @@ class SearchProGui {
         data.SearchImagePath := this.ui.Query("ImagePathCon")
         data.Similar := (this._TypeIndex() == "屏幕颜色" || this._TypeIndex() == "窗口颜色") ? this.ui.Query("ColorSimilarCon") : this.ui.Query("SimilarCon")
         data.OCRType := 1
+        data.OcrEngine := OcrEngineFromIndex(this.ui.Query("OcrEngineCon>SelectedIndex"))
         data.SearchImageType := SearchImageDefaultType()
         data.ColorMatch := this._IsChecked("ColorMatchCon") ? 1 : 0
         data.MultiPointData := this.MultiPointData

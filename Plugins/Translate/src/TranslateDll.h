@@ -33,8 +33,8 @@
 #include <wchar.h>      // wchar_t（C 宿主需要；C++ 内置）
 
 // ABI 版本：宿主可用 Translate_ApiVersion() 校验 DLL 是否与本头文件匹配。
-// 历史：1 = 初版（Load / Run / Cancel）。
-#define TRANSLATE_API_VERSION 1
+// 历史：1 = 初版（Load / Run / Cancel）；2 = Run 支持逐次超时与结构化术语表。
+#define TRANSLATE_API_VERSION 2
 
 #if defined(_WIN32)
 #  if defined(TRANSLATE_BUILD)
@@ -56,18 +56,23 @@ typedef struct TranslateOptions {
     int32_t nThreads;       // 计算线程数，0 = 由 DLL 按 CPU 核数决定（只对 CPU 计算生效）
     int32_t maxTokens;      // 单次输出 token 上限，0 = 512
     int32_t nBatch;         // 批大小，0 = 512
-    int32_t timeoutMs;      // 单次翻译的时间上限，0 = 30000。超时按「已生成部分」返回并置 truncated
+    int32_t timeoutMs;      // 兼容字段；v2 的单次超时由 Translate_Run 传入
     int32_t nGpuLayers;     // GPU 卸载层数：-1 = 自动（有 Vulkan/GPGPU 后端就全卸载，没有落 CPU）；
                             // 0 = 仅 CPU（不碰显存）；>0 = 卸载指定层数。
                             // 换了取值要重新 Load 才生效，登录后不可切换。
 } TranslateOptions;
+
+typedef struct TranslateGlossaryItem {
+    const wchar_t* source;
+    const wchar_t* target;
+} TranslateGlossaryItem;
 
 // 一次翻译的统计信息，用于宿主日志与「翻到一半被截断」的判定。
 typedef struct TranslateStats {
     int32_t promptTokens;   // prompt 的 token 数（含模板与术语表）
     int32_t outputTokens;   // 实际生成的 token 数
     int32_t elapsedMs;      // 从开始 prefill 到生成结束的毫秒数
-    int32_t truncated;      // 1 = 达到 maxTokens 上限，译文可能不完整
+    int32_t truncated;      // 1 = 超时、达到输出上限或写满缓冲，译文可能不完整
 } TranslateStats;
 
 #ifdef __cplusplus
@@ -111,7 +116,9 @@ TRANSLATE_API void TRANSLATE_CALL Translate_Unload(void);
 // text     源文本（UTF-16）
 // target   目标语言：语言码（zh / en / ja / ko / ru / fr / de / es …）或语言名
 //          （“简体中文” / “English”），会原样写进 prompt，不做映射表
-// glossary 术语表，可为 NULL 或空串。每行一条，格式 “原文:译文” 或 “原文=译文”
+// legacyGlossary 旧版术语表原文，保持兼容；新条目使用 glossaryItems，不解析分隔符
+// glossaryItems / glossaryCount 结构化术语对照；字符串内容原样写入 prompt
+// timeoutMs 单次调用的时间上限，超时按「已生成部分」返回并置 truncated
 // out/outChars  译文出参，宿主提供缓冲，按 wchar_t 计数（含 NUL）
 // stats    可为 NULL
 //
@@ -119,7 +126,10 @@ TRANSLATE_API void TRANSLATE_CALL Translate_Unload(void);
 // 译文不做任何加工：不去引号、不补句号。要去掉模型可能带出的思考块与解释，
 // 由 DLL 内部处理（prompt 约束 + 后处理剥离），宿主拿到的是干净译文。
 TRANSLATE_API int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target,
-                                               const wchar_t* glossary,
+                                               const wchar_t* legacyGlossary,
+                                               const TranslateGlossaryItem* glossaryItems,
+                                               int32_t glossaryCount,
+                                               int32_t timeoutMs,
                                                wchar_t* out, int32_t outChars,
                                                TranslateStats* stats);
 

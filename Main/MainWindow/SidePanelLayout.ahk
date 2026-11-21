@@ -96,8 +96,8 @@
 
     _AiRailMargin() {
         ; -2：钮的右边框压在内容框 1.5px 右边框内侧（贴边）。
-        ; 主窗口模板 ResizeBorderThickness=4：贴边后仅最外 0.5px 落在非客户区拖拽带里，
-        ; hover/点击全程有效（早先 6px 带会吞掉按钮右缘 2.5px，贴边侧鼠标未出钮就丢高亮）
+        ; 主界面已把 ResizeBorderThickness 关成 0：右边整条都没有非客户区缩放带，
+        ; hover/点击全程有效（早先带 4/6 DIP 时，贴边侧鼠标还没出钮就丢高亮）
         return "0,0,-2,0"
     }
 

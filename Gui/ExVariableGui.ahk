@@ -59,7 +59,7 @@ class ExVariableGui {
 
     _AddLabel(parent, text, margin := "0,0,0,0") {
         return parent.Add("TextBlock").Text(text).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12").Margin(margin)
+            .Foreground("{DynamicResource TextMain}").Margin(margin)
     }
 
     _StyleBox(el, width := "") {
@@ -125,8 +125,9 @@ class ExVariableGui {
         paramCard := body.Add("Border").Grid_Row(0).CornerRadius("8").Padding("12,10,12,8").Margin("0,0,0,8")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         param := paramCard.Add("Grid")
-        param.Rows("36", "36", "36", "36", "36", "12")
-        param.Cols("96", "*", "12", "96", "*", "12", "96", "*")
+        labelWidth := String(XAMLHost.FontSize() * 6)
+        param.Rows("36", "36", "36", "36", "36", "36", "12")
+        param.Cols(labelWidth, "*", "12", labelWidth, "*", "12", labelWidth, "*")
 
         this._AddLabel(param, GetLang("提取来源：")).Grid_Row(0).Grid_Column(0)
         et := this._StyleCombo(param.Add("ComboBox").Name("ExtractTypeCombo").Grid_Row(0).Grid_Column(1), "96")
@@ -138,13 +139,13 @@ class ExVariableGui {
         this._StyleBox(param.Add("TextBox").Name("RemarkCon").Grid_Row(0).Grid_Column(4).Grid_ColumnSpan(4))
 
         winRow := param.Add("Grid").Name("WinInfoRow").Grid_Row(1).Grid_ColumnSpan(8).Visibility("Hidden")
-        winRow.Cols("96", "*", "8", "28")
+        winRow.Cols(labelWidth, "*", "8", "28")
         this._AddLabel(winRow, GetLang("窗口绑定：")).Grid_Column(0)
         this._StyleCombo(CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1))
         CmdEditorForm.IconButton(winRow, "BtnWinEdit", 0xE70F, "编辑").Grid_Column(3)
 
         extRow := param.Add("Grid").Grid_Row(2).Grid_ColumnSpan(8)
-        extRow.Cols("96", "*", "8", "28")
+        extRow.Cols(labelWidth, "*", "8", "28")
         this._AddLabel(extRow, GetLang("提取文本：")).ToolTip(GetLang("源文本留空则全部写入第一个变量；只需包含要提取的片段即可。")).Grid_Column(0)
         this._StyleBox(extRow.Add("TextBox").Name("ExtractStrCon").Grid_Column(1))
         CmdEditorForm.IconButton(extRow, "BtnExtractEdit", 0xE70F, "编辑").Grid_Column(3)
@@ -158,7 +159,7 @@ class ExVariableGui {
 
         area := param.Add("Grid").Name("AreaRow").Grid_Row(3).Grid_RowSpan(2).Grid_Column(3).Grid_ColumnSpan(5)
         area.Rows("*", "*")
-        area.Cols("96", "8", "*", "8", "*")
+        area.Cols(labelWidth, "0", "*", "8", "*")
         areaBtn := area.Add("Button").Name("BtnPreviewArea").Grid_RowSpan(2).Cursor("Hand").Focusable("False")
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
             .Tag("0").ToolTip(GetLang("搜索范围"))
@@ -173,6 +174,10 @@ class ExVariableGui {
             this._StyleCombo(area.Add("ComboBox").Name(name).Grid_Row((i - 1) // 2)
                 .Grid_Column(Mod(i - 1, 2) ? 4 : 2).IsEditable("True").SetProp("Panel.ZIndex", "2"))
         }
+        ocrRow := param.Add("Grid").Name("OcrEngineRow").Grid_Row(5).Grid_ColumnSpan(8)
+        ocrRow.Cols(labelWidth, "*")
+        this._AddLabel(ocrRow, GetLang("OCR模型："))
+        this._StyleCombo(CmdEditorForm.OcrCombo(ocrRow, "OcrEngineCon").Grid_Column(1))
 
         resCard := body.Add("Border").Grid_Row(1).Name("ResultGroup").CornerRadius("8").Padding("12,6,12,18")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
@@ -275,6 +280,7 @@ class ExVariableGui {
         this.ui.Update("ExtractStrCon", "Text", this.Data.ExtractStr)
         this.ui.Update("ExtractTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.ExtractType, CmdEnumExtractNames())))
         this.ui.Update("WinInfoCon", "Text", this.Data.WinInfo)
+        this.ui.Update("OcrEngineCon", "SelectedIndex", String(OcrEngineIndex(OcrEngineValue(this.Data))))
 
         this._ComboPush("StartPosX", "Text", GetLang(this.Data.StartPosX))
         this._ComboPush("StartPosY", "Text", GetLang(this.Data.StartPosY))
@@ -343,6 +349,7 @@ class ExVariableGui {
         this.ui.Update("WinInfoRow", "Visibility", isWin ? "Visible" : "Hidden")
         hasArea := type != "剪切板"
         this.ui.Update("AreaRow", "IsEnabled", hasArea ? "True" : "False")
+        this.ui.Update("OcrEngineRow", "Visibility", hasArea ? "Visible" : "Hidden")
         this.ui.BatchUpdate(CmdEditorF1Updates(hasArea ? "area" : ""))
         if (hasArea && this.Hwnd() && !this._f1Hotkeys.Length)
             this._f1Hotkeys := WinHotkey.Register(["F1"], this.OnF1.Bind(this), this.Hwnd())
@@ -624,12 +631,12 @@ class ExVariableGui {
             }
             try {
                 if (extractType == "屏幕") {
-                    result := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
+                    result := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType, OcrEngineValue(Data))
                     if (IsObject(result))
                         TextObjs := result
                 } else if (extractType == "窗口") {
                     for hwnd in GetHwndList(this._ResolveWindowBinding(Data.WinInfo)) {
-                        result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType)
+                        result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType, OcrEngineValue(Data))
                         if (IsObject(result))
                             TextObjs.Push(result*)
                     }
@@ -691,6 +698,7 @@ class ExVariableGui {
         this.Data.ExtractType := this._TypeValue()
         this.Data.WinInfo := this.ui.Query("WinInfoCon")
         this.Data.OCRType := 1 ; v6 统一多语言模型，不再区分
+        this.Data.OcrEngine := OcrEngineFromIndex(this.ui.Query("OcrEngineCon>SelectedIndex"))
         this.Data.StartPosX := GetVarName(this.ui.Query("StartPosX"))
         this.Data.StartPosY := GetVarName(this.ui.Query("StartPosY"))
         this.Data.EndPosX := GetVarName(this.ui.Query("EndPosX"))

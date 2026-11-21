@@ -1426,7 +1426,7 @@ OnExVariableOnce(tableItem, index, Data) {
              || !TryGetTabVarValue(&X2, tableItem, index, Data.EndPosX)
              || !TryGetTabVarValue(&Y2, tableItem, index, Data.EndPosY))
                 return false
-            TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType)
+            TextObjs := GetScreenTextObjArr(X1, Y1, X2, Y2, Data.OCRType, OcrEngineValue(Data))
             if (TextObjs == "")
                 TextObjs := []
 
@@ -1443,7 +1443,7 @@ OnExVariableOnce(tableItem, index, Data) {
                 return false
             hwndList := GetHwndList(ResolveBindWindow(tableItem, index, Data.WinInfo))   ; §22 绑定窗口替换
             for hwnd in hwndList {
-                if ((CurWinTextObjs := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType)) != "")
+                if ((CurWinTextObjs := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, Data.OCRType, OcrEngineValue(Data))) != "")
                     TextObjs.Push(CurWinTextObjs*)
             }
     }
