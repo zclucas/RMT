@@ -20,7 +20,7 @@
         this.ui.OnEvent(this.treeName, "TreeDragStart", ObjBindMethod(this, "_OnTreeDragStartNative"))
         this.ui.OnEvent(this.treeName, "TreeDragCancel", ObjBindMethod(this, "_OnTreeDragCancelNative"))
         try this.ui.Update(this.treeName, "TreeDrag"
-            , this.insertLineName "|" this.dragGhostName "|" this.dragGhostTxtName)
+            , this.insertLineName "|" this.dragGhostName "|" this.dragGhostTxtName "|" this.dragGhostImgName)
     }
 
     _BindTreeContextMenuEvents() {

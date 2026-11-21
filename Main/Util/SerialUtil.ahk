@@ -10,8 +10,7 @@ GetSerialStr(CmdStr) {
 SetCMDSerialData(CMD) {
     paramArr := StrSplit(CMD, "_")
     paramArr[1] := GetCmdStr(paramArr[1])
-    ; 阶段5：纯文本指令（间隔/按键/移动/RMT指令）已迁移到配置文件模式，
-    ; 与其它指令一样登记序列码（旧配置无序列号则跳过，避免 Integer("") 报错）
+    ; 间隔/按键/RMT 等配置化指令登记序列码；普通移动为内联，无序列号则跳过
     textOnly := GetCommandKey(RegExReplace(paramArr[1], "\d+"))
     numbersOnly := RegExReplace(paramArr[1], "\D+")
     if (numbersOnly == "")          ; 旧纯文本格式（如 间隔_500）无序列号，跳过

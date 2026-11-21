@@ -488,13 +488,7 @@ class MacroGraphGui {
             return this._MakeNode(GetLang("手柄") "_A_" GetLang("点击"))
         }
         if (IsMoveCmd(cmdName)) {
-            ; 阶段5：配置化
-            serial := GetCMDSerialStr(GetLangKey(cmdName))
-            data := MoveDataConfig()
-            data.SerialStr := serial
-            data.Speed := 90
-            SaveMacroCMDData(data)
-            return this._MakeNode(CorrectRemark(serial, "0 0"))
+            return this._MakeNode(FormatMoveInlineCmd(0, 0, 90, "绝对移动", GetLang("移动")))
         }
         if (IsMoveProCmd(cmdName)) {
             ; 移动Pro 走 INI 持久化（参数存 MMProFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）

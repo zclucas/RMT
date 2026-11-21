@@ -11,6 +11,7 @@ class SettingMgrGui {
         this.SettingList := []
         this._selectedSetting := ""
         this._applyingUI := false
+        this._comboGen := 0
         this._btnStyle := ""
         this._revealed := false
     }
@@ -151,6 +152,7 @@ class SettingMgrGui {
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.Track("OperSettingCon")
         this.ui.OnEvent("OperSettingCon", "SelectionChanged", ObjBindMethod(this, "OnOperSettingChanged"))
+        this.ui.OnEvent("OperSettingCon", "DropDownClosed", ObjBindMethod(this, "OnOperSettingChanged"))
 
         this.ui.OnEvent("BtnReplace", "Click", ObjBindMethod(this, "OnReplaceBtnClick"))
         this.ui.OnEvent("BtnRename", "Click", ObjBindMethod(this, "OnReNameBtnClick"))
@@ -247,10 +249,12 @@ class SettingMgrGui {
             return
 
         this._applyingUI := true
+        this._comboGen := (this.HasOwnProp("_comboGen") ? this._comboGen : 0) + 1
+        gen := this._comboGen
+        selIdx := 0
         try {
             this.ui.Update("CurSettingCon", "Text", MySoftData.CurSettingName)
             this.ui.Update("OperSettingCon", "ClearItems", "")
-            selIdx := 0
             ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
             for i, name in this.SettingList {
                 this.ui.Update("OperSettingCon", "AddXamlItem",
@@ -261,8 +265,18 @@ class SettingMgrGui {
             if (this.SettingList.Length > 0)
                 this.ui.Update("OperSettingCon", "SelectedIndex", String(selIdx))
         } finally {
-            this._applyingUI := false
+            ; ClearItems 的 SelectionChanged 可能异步到达，延迟结束保护，避免把已选项打回第一项。
+            SetTimer(() => this._EndComboApply(gen, selIdx), -80)
         }
+    }
+
+    _EndComboApply(gen, selIdx) {
+        if (this._comboGen != gen)
+            return
+        if (IsObject(this.ui) && this.SettingList.Length > 0) {
+            try this.ui.Update("OperSettingCon", "SelectedIndex", String(selIdx))
+        }
+        this._applyingUI := false
     }
 
     _XmlEsc(s) => EscapeXamlXml(s)
@@ -270,20 +284,39 @@ class SettingMgrGui {
     OnOperSettingChanged(state, ctrl, event) {
         if (this._applyingUI)
             return
-        this._selectedSetting := this._GetSelectedSetting(state)
+        name := this._MatchSettingName(this._ComboValue(state))
+        if (name != "")
+            this._selectedSetting := name
+    }
+
+    _ComboValue(state := unset) {
+        name := ""
+        if (IsSet(state) && IsObject(state) && state.Has("OperSettingCon"))
+            name := state["OperSettingCon"]
+        if (name == "" && IsObject(this.ui)) {
+            try name := this.ui.Query("OperSettingCon")
+        }
+        return name
+    }
+
+    _MatchSettingName(name) {
+        if (!Compat_IsSettingName(name))
+            return ""
+        for item in this.SettingList {
+            if (item = name)
+                return item
+        }
+        return ""
     }
 
     _GetSelectedSetting(state := unset) {
-        name := this._selectedSetting != "" ? this._selectedSetting : MySoftData.CurSettingName
-        if (IsSet(state) && IsObject(state) && state.Has("OperSettingCon"))
-            name := state["OperSettingCon"]
-        if (Compat_IsSettingName(name)) {
-            for item in this.SettingList {
-                if (item = name)
-                    return item
-            }
-        }
-        return ""
+        name := this._MatchSettingName(this._ComboValue(state))
+        if (name != "")
+            return name
+        name := this._MatchSettingName(this._selectedSetting)
+        if (name != "")
+            return name
+        return this._MatchSettingName(MySoftData.CurSettingName)
     }
 
     _RequireSelectedSetting(state) {
@@ -375,7 +408,7 @@ class SettingMgrGui {
     }
 
     OnOpenRMTSettingBtnClick(state, ctrl, event) {
-        Run("https://forum.ruomengtu.com/c/shared-repository")
+        Run("https://forum.ruomengtu.com/c/share/61")
     }
 
     OnPackBtnClick(state, ctrl, event) {
@@ -470,6 +503,7 @@ class SettingMgrGui {
         settings["IsReload"] := "1"
         root[SettingSection] := settings
         Cfg_WriteRoot(root, SettingFile)
+        Cfg_FlushFile(SettingFile)
         MainSoftData.SettingArrStr := list
         MySoftData.CurSettingName := name
     }

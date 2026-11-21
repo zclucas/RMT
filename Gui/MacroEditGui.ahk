@@ -92,6 +92,7 @@ class MacroEditGui {
         this.insertLineName := "DragInsertLine"
         this.dragGhostName := "DragGhost"
         this.dragGhostTxtName := "DragGhostTxt"
+        this.dragGhostImgName := "DragGhostImg"
         this.ctxMenuName := "TreeCtxMenu"
         this.branchCtxMenuName := "BranchCtxMenu"
         this.blankCtxMenuName := "TreeBlankCtxMenu"

@@ -97,7 +97,7 @@ RMT allows users to freely **share, download, and exchange** macro configuration
 You can browse or contribute configurations via the platform below:
 
 🔗 **RMT Configuration Repository**  
-📦 https://zclucas.github.io/RMT-Setting/
+📦 https://forum.ruomengtu.com/c/share/61
 
 > ✨ You can upload your recorded or edited macros to the repository and grow with the community  
 > ⚠️ If the page is not accessible in your default browser, please try another browser

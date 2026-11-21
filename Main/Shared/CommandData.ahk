@@ -164,6 +164,28 @@ NormalizeCommandData(cmd, Data) {
     }
 }
 
+; 编号移动（移动1）读配置后还原为内联；已是 移动_X_Y_速度 则原样返回。
+ExpandNumberedMoveCommand(cmd) {
+    if (!RegExMatch(cmd, "^([ \t]*(?:🚫|▶|⭐)*)([^_|]+?)(?=[ \t]*(?:[_|]|$))", &m))
+        return cmd
+    key := m[2]
+    SplitSerialTextAndNumbers(key, &text, &num)
+    if (num == "" || GetCommandKey(text) != "移动")
+        return cmd
+    cmdKey := GetCommandKey(text)
+    if (!MySoftData.DataFileMap.Has(cmdKey) || ReadCommandConfig(MySoftData.DataFileMap[cmdKey], key, cmdKey) == "")
+        return cmd
+    data := GetMacroCMDData(key)
+    if (!IsObject(data))
+        return cmd
+    inline := FormatMoveInlineCmd(data.PosX, data.PosY, data.Speed, data.MoveMode)
+    tail := SubStr(cmd, StrLen(m[0]) + 1)
+    auto := data.PosX " " data.PosY
+    if (RegExMatch(tail, "^_([^_|]+)(?=[_| \t]|$)", &rm) && rm[1] == auto)
+        tail := SubStr(tail, StrLen(rm[0]) + 1)
+    return m[1] inline tail
+}
+
 SaveMacroCMDData(Data) {
     SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &number)
     cmdKey := GetCommandKey(cmd)

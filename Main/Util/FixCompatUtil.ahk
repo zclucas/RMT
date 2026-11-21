@@ -7,7 +7,7 @@
 #Include "UIMacroSchema.ahk"
 
 ; 配置格式版本独立于 RMPK 容器版本和软件构建版本。
-Compat_CurrentVersion() => "1.3.7"
+Compat_CurrentVersion() => "1.3.8"
 Compat_VersionFile(dir) => dir "\RmtVersion.toml"
 
 Compat_ReadVersion(dir) {
@@ -44,7 +44,8 @@ Compat_UpgradeDir(dir, installed := false) {
     Compat_FlushProfile(dir)
     version := Compat_ReadVersion(dir)
     upgradePreview := installed && version == "1.3.6"
-    if (version != "" && version != "1.2.2" && version != Compat_CurrentVersion() && !upgradePreview)
+    upgradeMove := version == "1.3.7"
+    if (version != "" && version != "1.2.2" && version != Compat_CurrentVersion() && !upgradePreview && !upgradeMove)
         throw Error("不支持直接升级配置版本 " version "。请选择 RMT 1.2.2 的配置，或使用当前版本导出的配置。")
     loop files, dir "\*.toml" {
         CfgInvalidate(A_LoopFileFullPath)
@@ -68,6 +69,8 @@ Compat_UpgradeDir(dir, installed := false) {
         ; 已安装的上一版预览配置只需迁移分支末尾的流程控制。
         Compat13_UpgradeCompareBranches(dir)
     }
+    if (upgradeMove || upgradePreview)
+        Compat13_ExpandMoveSerials(dir)
     ; 路径搬迁不是版本升级：同版本包导入也需要定位包内图片。
     loop files, dir "\*.toml" {
         path := A_LoopFileFullPath
@@ -81,7 +84,7 @@ Compat_UpgradeDir(dir, installed := false) {
     }
     CfgFlushDir(dir)
     ; 转换与写盘完成后才更新版本，失败时可重新执行。
-    if (version == "1.2.2" || upgradePreview) {
+    if (version == "1.2.2" || upgradePreview || upgradeMove) {
         Compat_WriteVersion(dir, Compat_CurrentVersion())
         changed := true
     }
