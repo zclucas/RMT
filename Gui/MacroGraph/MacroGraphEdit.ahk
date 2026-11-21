@@ -212,26 +212,7 @@ class MacroGraphEditMixin {
         newIds := []
         for cd in this._clipboard.nodes {
             id := this._NewId()
-            ; 移动Pro 的参数存于 INI，复制时需克隆出独立序列码与数据，避免与源节点共享同一份配置
-            pasteCmd := cd.cmd
-            pasteHead := SplitCommand(pasteCmd)
-            if (pasteHead.Length >= 1 && this._IsMMProName(pasteHead[1]))
-                pasteCmd := this._CloneMMPro(pasteCmd)
-            else if (pasteHead.Length >= 1 && this._IsSearchFamilyName(pasteHead[1]))
-                pasteCmd := this._CloneSearch(pasteCmd)
-            else if (pasteHead.Length >= 1 && this._IsCompareName(pasteHead[1]))
-                pasteCmd := this._CloneIf(pasteCmd)
-            else if (pasteHead.Length >= 1 && this._IsCompareProName(pasteHead[1]))
-                pasteCmd := this._CloneComparePro(pasteCmd)
-            else if (pasteHead.Length >= 1 && this._IsInputName(pasteHead[1]))
-                pasteCmd := this._CloneInput(pasteCmd)
-            else if (pasteHead.Length >= 1 && this._IsOutputName(pasteHead[1]))
-                pasteCmd := this._CloneOutput(pasteCmd)
-            else if (pasteHead.Length >= 1) {
-                iniKey := this._FormalIniKeyFromName(pasteHead[1])
-                if (iniKey != "")
-                    pasteCmd := this._CloneFormalIni(pasteCmd, iniKey)
-            }
+            pasteCmd := this._CloneNodeCurCMD(cd.cmd)
             node := this._MakeNode(pasteCmd)
             this.cmdNodes[id] := node
             this.order.Push(id)

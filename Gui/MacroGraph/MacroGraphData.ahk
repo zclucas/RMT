@@ -103,6 +103,8 @@ class MacroGraphDataMixin {
         if (head.Length < 1)
             return srcCmd
         name := head[1]
+        if (IsMoveCmd(name))
+            return ExpandNumberedMoveCommand(srcCmd)
         if (this._IsMMProName(name))
             return this._CloneMMPro(srcCmd)
         if (this._IsSearchFamilyName(name))
@@ -241,12 +243,11 @@ class MacroGraphDataMixin {
         return newSerial
     }
 
-    ; 形式化 INI 指令的 cmdKey 列表（与 AssetUtil 中 CMD 映射一致；阶段5 含新配置化 间隔/按键/移动/RMT指令）
-    ; §20 改名：加「鼠标移动/增量移动」新键（旧「移动」键保留兼容旧图）
+    ; 形式化 INI 指令的 cmdKey 列表。普通移动为内联，不在此列。
     _FormalIniCmdKeys() {
         return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测", "进程管理", "文本处理", "数组",
             "后台鼠标", "后台按键", "窗口管理", "窗口信息", "调整窗口", "按键检测", "手柄检测", "注释", "抓图", "循环",
-            "间隔", "按键", "移动", "鼠标移动", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间", "提示"]
+            "间隔", "按键", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间", "提示"]
     }
 
     _FormalIniKeyFromName(name) {
@@ -294,8 +295,6 @@ class MacroGraphDataMixin {
                 "注释", CommentData,
                 "间隔", IntervalData,
                 "按键", KeyDataConfig,
-                "移动", MoveDataConfig,
-                "鼠标移动", MoveDataConfig,
                 "增量移动", DeltaMoveData,
                 "RMT指令", RMTCMDData,
                 "等待", WaitData,
@@ -1028,10 +1027,24 @@ class MacroGraphDataMixin {
         }
         else if (IsMoveCmd(name)) {
             d.type := GetLang("移动")
-            d.posx := paramArr.Length >= 2 ? paramArr[2] : "0"
-            d.posy := paramArr.Length >= 3 ? paramArr[3] : "0"
-            d.speed := paramArr.Length >= 4 ? paramArr[4] : "90"
-            d.mode := paramArr.Length >= 5 ? paramArr[5] : "0"
+            SplitSerialTextAndNumbers(name, &moveText, &moveNum)
+            if (moveNum != "") {
+                d.posx := "0", d.posy := "0", d.speed := "90", d.mode := "0"
+                try {
+                    data := GetMacroCMDData(name)
+                    if (IsObject(data)) {
+                        d.posx := data.PosX
+                        d.posy := data.PosY
+                        d.speed := data.Speed
+                        d.mode := data.MoveMode
+                    }
+                }
+            } else {
+                d.posx := paramArr.Length >= 2 ? paramArr[2] : "0"
+                d.posy := paramArr.Length >= 3 ? paramArr[3] : "0"
+                d.speed := paramArr.Length >= 4 ? paramArr[4] : "90"
+                d.mode := paramArr.Length >= 5 ? paramArr[5] : "0"
+            }
         }
         else if (this._IsMMProName(name)) {
             ; 移动Pro 参数存储在 MMProFile.toml 中，CurCMD 即其 SerialStr（如 "移动Pro3" / "鼠标移动Pro3"）
@@ -1201,7 +1214,7 @@ class MacroGraphDataMixin {
         }
         ; 阶段5：配置化节点（有 serialStr）→ 更新 Data 并保存，返回序列码+备注
         if (d.HasOwnProp("serialStr") && d.serialStr != "") {
-            if (d.type == GetLang("按键") || IsMoveCmd(d.type) || IsDeltaMoveCmd(d.type) || d.type == GetLang("RMT指令")) {
+            if (d.type == GetLang("按键") || IsDeltaMoveCmd(d.type) || d.type == GetLang("RMT指令")) {
                 try {
                     data := GetMacroCMDData(d.serialStr)
                     if (IsObject(data)) {
@@ -1219,12 +1232,6 @@ class MacroGraphDataMixin {
                             data.Count := d.count
                             data.IntervalTime := d.inter
                             remark := data.KeyName "_" d.ktype
-                        } else if (IsMoveCmd(d.type)) {
-                            data.PosX := d.posx
-                            data.PosY := d.posy
-                            data.Speed := d.speed
-                            data.MoveMode := d.mode
-                            remark := data.PosX " " data.PosY
                         } else if (IsDeltaMoveCmd(d.type)) {
                             data.DeltaX := d.posx
                             data.DeltaY := d.posy
@@ -1277,12 +1284,7 @@ class MacroGraphDataMixin {
         }
 
         if (IsMoveCmd(d.type)) {
-            ; 旧格式纯文本指令（无序列码）：按当前语言显示名重建（旧名/新名都兼容）
-            cmd := GetLang(GetLangKey(d.type)) "_" d.posx "_" d.posy "_" d.speed
-            ; 模式：0=绝对移动(省略) 1=相对移动 2=游戏视角（旧数据），与 MouseMoveGui 保持一致
-            if (d.mode != "0" && d.mode != 0 && d.mode != "")
-                cmd .= "_" d.mode
-            return cmd
+            return FormatMoveInlineCmd(d.posx, d.posy, d.speed, d.mode, GetLang("移动"))
         }
         if (d.type == GetLang("RMT指令")) {
             ; CMD格式: RMT指令_类别_指令_序号

@@ -885,7 +885,10 @@ IsTabVisible(tableItem) {
 
 ; §20 指令改名兼容判断：旧名「移动/移动Pro」与新名「鼠标移动/鼠标移动Pro」都识别
 ; （旧配置宏内容/流程图节点类型零迁移兼容；增量移动为全新指令无旧名）
-IsMoveCmd(t) => GetCommandKey(t) == "移动"
+IsMoveCmd(t) {
+    SplitSerialTextAndNumbers(String(t), &text, &num)
+    return GetCommandKey(text) == "移动"
+}
 IsMoveProCmd(t) => GetCommandKey(t) == "移动Pro"
 IsDeltaMoveCmd(t) => GetCommandKey(t) == "增量移动"
 

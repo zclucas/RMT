@@ -1515,7 +1515,7 @@ class IntervalData {
     }
 }
 
-; 移动指令配置（阶段5：纯文本指令迁移到配置文件模式）
+; 移动指令配置（仅兼容旧编号 移动1；新指令为内联 移动_X_Y_速度）
 class MoveDataConfig {
     __New() {
         this.SerialStr := ""

@@ -308,7 +308,7 @@ changes_json={"data_configs": {"变量1": {"CopyVariableArr": ["99", "0", "0", "
 
 `{"type":"move","x":800,"y":600,"speed":90}` 移到屏幕目标点。加 `"mode":"相对"` 或 `"relative":true` 时，X/Y 是相对当前指针的像素偏移，可为负数。速度为 0 到 100 的整数，100 表示瞬间到达。移动本身只改变指针位置。
 
-整数坐标使用 `MoveDataFile.toml`，参数为 `PosX`、`PosY`、`Speed`、`MoveMode`。变量坐标可传 `"TargetX"` 或 `"{TargetX}"`，生成旧内联格式以保留运行时变量解析。
+一律生成内联 `移动_X_Y_速度[_方式]`。变量坐标可传 `"TargetX"` 或 `"{TargetX}"`。旧编号 `移动1` 仍可执行，仅移动Pro使用编号配置。
 
 #### 移动Pro
 
