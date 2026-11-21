@@ -297,7 +297,7 @@ InitDataFilePaths(rootDir) {
     global ScreenShotFile := cfgDir "\ScreenShotFile.toml"
     global GraphNodeFile := cfgDir "\GraphNodeFile.toml"
     global GraphStartNodeFile := cfgDir "\GraphStartNodeFile.toml"
-    ; 阶段5：纯文本指令迁移到配置文件模式（间隔/按键/移动/RMT指令）
+    ; 间隔/按键/RMT 可走配置文件；普通移动为内联，MoveDataFile 仅兼容旧编号指令
     global IntervalFile := cfgDir "\IntervalFile.toml"
     global KeyDataFile := cfgDir "\KeyDataFile.toml"
     global MoveDataFile := cfgDir "\MoveDataFile.toml"
