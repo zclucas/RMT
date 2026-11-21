@@ -69,7 +69,7 @@ SearchAllInRegion(tableItem, Data, index, x1, y1, x2, y2, kind, hwnd) {
         TryGetTabVarValue(&text, tableItem, index, Data.SearchText, false)
         if (text == "")
             throw Error("搜索All：搜索文本不能为空")
-        result := hwnd ? GetWinTextObjArr(hwnd, x1, y1, x2, y2, Data.OCRType) : GetScreenTextObjArr(x1, y1, x2, y2, Data.OCRType)
+        result := hwnd ? GetWinTextObjArr(hwnd, x1, y1, x2, y2, Data.OCRType, OcrEngineValue(Data)) : GetScreenTextObjArr(x1, y1, x2, y2, Data.OCRType, OcrEngineValue(Data))
         points := SearchAllTextPoints(result, text, x1, y1)
     } else if (kind == "屏幕图片" || kind == "屏幕颜色" || kind == "窗口图片" || kind == "窗口颜色") {
         if (OpenCvEnsure() != "")

@@ -1240,6 +1240,9 @@ class WorkPool {
                             SetItemPauseState(tableItem, GetItemIndexInTable(tableItem, args[2]), args[3])
                     case "NT":
                         QueuePromptDisplay(args[1])
+                    case "ID":
+                        assetId := args[1]
+                        SetTimer((*) => TranslateGui.RequestInternalDownload(assetId), -10)
                     case "CD":
                         ; 交给空闲任务建窗，避免在 Worker 消息回调中同步创建 XAML。
                         SetTimer(this._CountDownUiRequest.Bind(this, args.Clone(), wd, wd.pid), -10)

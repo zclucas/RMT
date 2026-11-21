@@ -55,6 +55,8 @@ class Toast {
         msg := Trim(String(msg))
         if (msg == "")
             return
+        if (type != "progress")
+            RmtNotifications.Add(msg, type)
         ; 不能在 XAML Click/SendMessage 回调里同步 CREATE_WINDOW：会嵌套死锁，
         ; _SendToEngine 超时后 KillDaemon，表现为点按钮闪退。
         Toast._pending := { msg: msg, type: type, holdMs: holdMs }

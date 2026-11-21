@@ -16,9 +16,11 @@
 #Include Util\XamlWin.ahk
 #Include Util\HelpDocWin.ahk
 #Include Util\ToastUtil.ahk
+#Include Util\NotificationCenter.ahk
 #Include Util\CursorOutputTip.ahk
 #Include Util\RmtDialog.ahk
 #Include Util\RmtProgress.ahk
+#Include Util\RmtDownloadManager.ahk
 #Include Util\RmtUpdate.ahk
 #Include RMTUtil.ahk
 #Include WorkPool.ahk
@@ -100,6 +102,7 @@
 #Include Util\ShareExportUtil.ahk
 #Include ..\Gui\VoiceGui.ahk
 #Include ..\Gui\SttGui.ahk
+#Include ..\Gui\DownloadManagerGui.ahk
 #Include ..\Gui\CommandTimeoutFields.ahk
 #Include ..\Gui\WaitGui.ahk
 #Include ..\Gui\TimeGui.ahk
