@@ -360,17 +360,16 @@
                         WorkerDataReply(args*)
                     case "SN":
                         snapshot := JSON.parse(args[1])
-                        for pair in snapshot[1]
-                            MySoftData.VariableMap[pair[1]] := pair[2]
                         for pair in snapshot[2]
                             MySoftData.ArrayMap[pair[1]] := pair[2]
-                    case "SV", "SA":
-                        target := opcode == "SV" ? MySoftData.VariableMap : MySoftData.ArrayMap
-                        target[args[1]] := JSON.parse(args[2])[1]
-                    case "DV", "DA":
-                        target := opcode == "DV" ? MySoftData.VariableMap : MySoftData.ArrayMap
-                        if (target.Has(args[1]))
-                            target.Delete(args[1])
+                    case "SA":
+                        MySoftData.ArrayMap[args[1]] := JSON.parse(args[2])[1]
+                    case "DA":
+                        if (MySoftData.ArrayMap.Has(args[1]))
+                            MySoftData.ArrayMap.Delete(args[1])
+                    ; SV/DV 已透過共享記憶體直接同步，Worker 無需再接收廣播，此 case 保留為 no-op
+                    case "SV":  ; no-op: 共享記憶體已同步
+                    case "DV":  ; no-op: 共享記憶體已同步
                     case "CT":
                         MySoftData.CMDTip := (args[1] == "1")
                     case "PS":
@@ -405,7 +404,8 @@
                 }
             } catch {
                 ; 数据帧无法应用时退出，让主进程重建并重新同步完整快照。
-                if (opcode == "SN" || opcode == "SV" || opcode == "SA" || opcode == "DV" || opcode == "DA")
+                ; SV/DV 已是 no-op（共享記憶體直接同步），即使 catch 也不必退出
+                if (opcode == "SN" || opcode == "SA" || opcode == "DA")
                     ExitApp(1)
             }
         }
@@ -465,8 +465,19 @@ WorkDeleteGlobalArray(name) => WorkCommitGlobalData("DA", name)
 WorkModifyGlobalArray(name, row, index, isArrayValue, value) => WorkCommitGlobalData("MA", name, row, index, value)
 WorkInsertGlobalArray(name, row, index, isArrayValue, value) => WorkCommitGlobalData("IA", name, row, index, value)
 WorkRemoveAtGlobalArray(name, row, index) => WorkCommitGlobalData("RA", name, row, index)
-WorkSetGlobalVariable(names, values, ignoreExist) => WorkCommitGlobalData("SV", names, values, ignoreExist)
-WorkDelGlobalVariable(names) => WorkCommitGlobalData("DV", names)
+WorkSetGlobalVariable(names, values, ignoreExist) {
+    for i, name in names {
+        if (!ignoreExist || !MySoftData.VariableMap.Has(name))
+            MySoftData.VariableMap[name] := values[i]
+    }
+}
+
+WorkDelGlobalVariable(names) {
+    for name in names {
+        if (MySoftData.VariableMap.Has(name))
+            MySoftData.VariableMap.Delete(name)
+    }
+}
 
 ; 宏指令相关函数
 {

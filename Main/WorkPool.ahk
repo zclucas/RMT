@@ -787,14 +787,11 @@ class WorkPool {
 
     ; 快照与后续增量、任务使用同一条有序通道。
     SyncStateToWorker(wd) {
-        variables := []
-        for name, value in MySoftData.VariableMap
-            variables.Push([name, value])
         arrays := []
         for name, value in MySoftData.ArrayMap
             arrays.Push([name, value])
         payload := EncodeBatch(EncodeCommand("CT", MySoftData.CMDTip)
-            , EncodeCommand("SN", JSON.stringify([variables, arrays])))
+            , EncodeCommand("SN", JSON.stringify([[], arrays])))
         this.PushTask(wd, MsgType.EVENT, 0, payload)
     }
 
