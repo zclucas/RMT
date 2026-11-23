@@ -249,6 +249,9 @@ def upload(tag, path, expected, max_time=5400):
         result = subprocess.run(['curl', '--config', str(config), '--upload-file', str(path), '--http1.1',
                                  '--header', 'Expect:', '--silent', '--show-error', '--fail',
                                  '--connect-timeout', '30', '--max-time', str(max_time),
+                                 '--speed-limit', '1024', '--speed-time', '90',
+                                 '--retry', '2', '--retry-all-errors', '--retry-delay', '5',
+                                 '--retry-max-time', str(max_time),
                                  '--output', str(Path(directory) / 'response')], timeout=max_time + 30)
         if result.returncode:
             raise RuntimeError('GitCode object upload failed (curl {})'.format(result.returncode))
