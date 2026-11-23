@@ -11,7 +11,7 @@ def git(*args, cwd=None, timeout=None):
     command = ["git"]
     if os.environ.get("GITCODE_TOKEN"):
         helper = '!f() { if test "$1" = get; then printf "username=ruomengtu\\npassword=%s\\n" "$GITCODE_TOKEN"; fi; }; f'
-        command += ["-c", "credential.helper=", "-c", "credential.helper=" + helper]
+        command += ["-c", "credential.helper=", "-c", "credential.https://gitcode.com.helper=" + helper]
     return subprocess.check_output(command + list(args), cwd=cwd, text=True, timeout=timeout)
 
 

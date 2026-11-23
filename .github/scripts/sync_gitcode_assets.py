@@ -316,7 +316,7 @@ def sync(tags=None, asset_name='', workers=4):
 
 def git(*args, cwd=None, timeout=90):
     helper = '!f() { if test "$1" = get; then printf "username=ruomengtu\\npassword=%s\\n" "$GITCODE_TOKEN"; fi; }; f'
-    command = ['git', '-c', 'credential.helper=', '-c', 'credential.helper=' + helper]
+    command = ['git', '-c', 'credential.helper=', '-c', 'credential.https://gitcode.com.helper=' + helper]
     command += list(args)
     if os.name == 'posix' and shutil.which('timeout'):
         command = ['timeout', '--kill-after=5', str(timeout)] + command
