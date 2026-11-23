@@ -8,6 +8,8 @@ RmtAssetsBaseUrl(tag) {
 #Include Util\RmtDownload.ahk
 #Include "DataClass.ahk"
 #Include "VariableUtil.ahk"
+#Include Util\SharedMemory.ahk
+#Include Util\ShmVariableMap.ahk
 #Include Util\TableLocator.ahk
 #Include Util\ExcelUtil.ahk
 #Include Util\RmtDllUtil.ahk

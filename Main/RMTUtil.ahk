@@ -803,19 +803,14 @@ CommitGlobalData(opcode, args) {
                 names := args[1]
                 values := args[2]
                 ignoreExist := args[3]
-                updates := []
                 for i, name in names {
-                    value := ignoreExist && variables.Has(name) ? variables[name] : values[i]
-                    commands.Push(EncodeCommand("SV", name, JSON.stringify([value])))
-                    updates.Push([name, value])
+                    if (!ignoreExist || !variables.Has(name))
+                        variables[name] := values[i]
                 }
-                for pair in updates
-                    variables[pair[1]] := pair[2]
             case "DV":
                 for name in args[1] {
                     if (variables.Has(name))
                         variables.Delete(name)
-                    commands.Push(EncodeCommand("DV", name))
                 }
             case "DA":
                 if (arrays.Has(args[1]))
@@ -843,8 +838,7 @@ CommitGlobalData(opcode, args) {
         if (commands.Length && WorkPoolEnabled())
             MyWorkPool.BroadcastPayloadEx(0, EncodeBatch(commands*))
     } finally Critical(previousCritical)
-    if (commands.Length)
-        SetTimer(RefreshGlobalDataView, -1)
+    SetTimer(RefreshGlobalDataView, -1)
 }
 
 RefreshGlobalDataView() {
