@@ -3,12 +3,13 @@
 class ProcessManageGui extends CommentGui {
     static CmdKey := "进程管理"
     static Outputs := ["ResultVar", "NameVar", "PidVar", "PathVar", "ResultArray", "ExistVar", ProcessInfo.Metrics*]
-    static OutputDefaults := Map("ResultVar", "Res", "NameVar", "Name", "PidVar", "PID", "PathVar", "Path")
+    static OutputDefaults := Map("ResultVar", "Res", "NameVar", "Name", "PidVar", "PID", "PathVar", "Path",
+        "ResultArray", "Procs", "ExistVar", "Exists", "StatusVar", "Status", "StartTimeVar", "Start",
+        "UptimeVar", "Time", "CpuVar", "CPU", "GpuVar", "GPU")
     static MetricRows := [
-        [["ExistVar", "是否存在：", "存在：1，不存在：0。"], ["StatusVar", "状态：", "正常、无响应、阻塞、加载或挂起。"]],
+        [["NameVar", "进程名：", "匹配进程的可执行文件名。"], ["StatusVar", "状态：", "正常、无响应、阻塞、加载或挂起。"]],
         [["StartTimeVar", "启动时间：", "本地时间，格式为 yyyy-MM-dd HH:mm:ss。"], ["UptimeVar", "运行时长：", "从进程启动到查询时的秒数。"]],
-        [["CpuVar", "CPU 占用：", "短时采样，占全部逻辑处理器的百分比。"], ["GpuVar", "GPU 占用：", "进程最忙的 GPU 引擎占用率（%）。"]],
-        [["IntegrityVar", "权限级别：", "Windows 访问令牌的完整性级别。"]]]
+        [["CpuVar", "CPU 占用：", "短时采样，占全部逻辑处理器的百分比。"], ["GpuVar", "GPU 占用：", "进程最忙的 GPU 引擎占用率（%）。"]]]
     WindowBindingContext := ""
     _pickKeys := []
     _picking := false
@@ -42,7 +43,7 @@ class ProcessManageGui extends CommentGui {
         row := this._Pair(body)
         pick := this._Choice(row, "选取方式：", "PickMatch", ProcessManage.MatchPicks)
         pick.Name("ProcessPickRow")
-        this._Output(row, "NameVar", "进程名：", true)
+        this._Output(row, "ExistVar", "是否存在：", true, GetLang("存在：1，不存在：0。"))
         this._ShowFor(row, [1])
         row := this._Pair(body)
         this._Output(row, "PidVar", "PID：")
@@ -167,7 +168,7 @@ class ProcessManageGui extends CommentGui {
             for name in (field == "ResultArray" ? arrays : vars)
                 this._ComboPush(field, "AddItem", name)
             value := parts.Length && this.Data.HasProp(field) ? this.Data.%field% : ""
-            if (!parts.Length || (action != "进程信息" && (field == "NameVar" || field == "PidVar" || field == "PathVar") && value == ""))
+            if (value == "")
                 value := ProcessManageGui.OutputDefaults.Get(field, "")
             this._ComboPush(field, "Text", value)
         }
@@ -179,7 +180,7 @@ class ProcessManageGui extends CommentGui {
         this._ComboPush("ProcessWindowRow", "Visibility", isBinding ? "Visible" : "Collapsed")
         this._ComboPush("ProcessPickRow", "Visibility", this._matchMode == "PID" ? "Collapsed" : "Visible")
         if (isBinding) {
-            this._ComboPush("ProcessWindowBinding", "Text", this._targets.Get(this._matchMode, "❖{句柄ID}"))
+            this._ComboPush("ProcessWindowBinding", "Text", this._targets.Get(this._matchMode, "❖{运行时句柄ID}"))
             return
         }
         this._ComboPush("Target", "ClearItems", "")
@@ -381,11 +382,33 @@ class ProcessManageGui extends CommentGui {
                     [GetLang("结束进程"), GetLang("取消")], owner) != 1)
                     return
             }
-            message := this._PreviewMessage(data.Action, ProcessManage.Execute(data, target, true))
+            result := ProcessManage.Execute(data, target, true)
+            if (data.Action == "进程信息") {
+                RmtDialog.InfoFields(this._PreviewFields(result), title, owner)
+                return
+            }
+            message := this._PreviewMessage(data.Action, result)
         } catch as e {
             message := e.Message
         }
         RmtDialog.Info(message, title, owner)
+    }
+
+    _PreviewFields(result) {
+        shown(value) => value == "" ? "—" : String(value)
+        percent(value) => value == "" ? "—" : Format("{:.2f}%", value)
+        fields := [
+            [GetLang("是否存在："), String(result.ExistVar), GetLang("（1存在，0不存在）")],
+            [GetLang("进程名："), shown(result.NameVar)],
+            [GetLang("PID："), shown(result.PidVar)],
+            [GetLang("程序路径："), shown(result.PathVar)],
+            [GetLang("状态："), shown(result.StatusVar), GetLang("正常、无响应、阻塞、加载、挂起")],
+            [[GetLang("启动时间："), shown(result.StartTimeVar)],
+                [GetLang("运行时长："), result.UptimeVar == "" ? "—" : ProcessInfo.FormatUptime(result.UptimeVar)]],
+            [[GetLang("CPU 占用："), percent(result.CpuVar)], [GetLang("GPU 占用："), percent(result.GpuVar)]]]
+        if (result.ErrorVar != "")
+            fields.Push([GetLang("错误信息："), result.ErrorVar])
+        return fields
     }
 
     _PreviewMessage(action, result) {
@@ -395,24 +418,18 @@ class ProcessManageGui extends CommentGui {
                 if (action == "结束进程")
                     message .= "`n" Format(GetLang("已提交 {} 个结束请求。"), result.EndedCount)
             case "进程信息":
-                message := Format(GetLang("匹配进程数：{}"), result.CountVar)
-                if (result.PidVar != "") {
-                    message .= "`n" result.NameVar " · PID " result.PidVar "`n" result.PathVar
-                    for fields in ProcessManageGui.MetricRows {
-                        for field in fields {
-                            value := result.%field[1]%
-                            message .= "`n" GetLang(field[2]) " " (value == "" ? "—" : value)
-                        }
-                    }
-                } else {
-                    message .= "`n" GetLang("是否存在：") " " result.ExistVar
+                message := ""
+                for field in this._PreviewFields(result) {
+                    line := field[1] is Array ? field[1][1] " " field[1][2] "    " field[2][1] " " field[2][2]
+                        : field[1] " " field[2] (field.Length >= 3 ? "    " field[3] : "")
+                    message .= (message == "" ? "" : "`n") line
                 }
             case "列出进程":
                 message := Format(GetLang("匹配进程数：{}"), result.ResultArray.Length)
                 for process in result.ResultArray
                     message .= "`n" process[1] " · PID " process[2] (process[3] == "" ? "" : " · " process[3])
         }
-        if (result.ErrorVar != "")
+        if (result.ErrorVar != "" && action != "进程信息")
             message .= "`n" Format(GetLang("错误信息：{}"), result.ErrorVar)
         return message
     }

@@ -71,6 +71,8 @@ Compat_UpgradeDir(dir, installed := false) {
     }
     if (upgradeMove || upgradePreview)
         Compat13_ExpandMoveSerials(dir)
+    ; 同版本预览配置也可能保留旧内置名称；替换幂等，不改变普通文字。
+    changed := Compat13_UpgradeBuiltinVariables(dir) || changed
     ; 路径搬迁不是版本升级：同版本包导入也需要定位包内图片。
     loop files, dir "\*.toml" {
         path := A_LoopFileFullPath

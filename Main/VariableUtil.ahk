@@ -46,6 +46,8 @@ SetGlobalData(macroStr, visitMap) {
         ; 每個指令的變量提取 + 子宏遞歸 合併在同一個 switch 裡
         switch baseCmd {
             case "变量", "变量提取":
+                if (baseCmd == "变量")
+                    RegisterHandleVariableRows(Data)
                 loop Data.ToggleArr.Length {
                     if (Data.ToggleArr[A_Index])
                         VariableMap[Data.VariableArr[A_Index]] := true
@@ -86,6 +88,9 @@ SetGlobalData(macroStr, visitMap) {
                 RegisterTranslateVars(Data)
             case "进程管理":
                 ProcessManage.RegisterOutputs(Data)
+            case "窗口信息", "调整窗口", "窗口管理":
+                WindowEnsureResults(Data)
+                WindowRegisterResults(Data)
             case "浏览器":
                 if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
                     TimeoutPolicy.RegisterStatus(Data)
@@ -148,6 +153,16 @@ SetGlobalData(macroStr, visitMap) {
     }
 }
 
+; 只有明确读取句柄的变量行才加入窗口绑定候选，不按变量名猜测类型。
+RegisterHandleVariableRows(data) {
+    for i, enabled in data.ToggleArr {
+        if (enabled && data.VariableArr[i] != ""
+            && (CmdEnumOpera(data.OperaTypeArr[i]) == "系统" || CmdEnumOpera(data.OperaTypeArr[i]) == "数值")
+            && GetBuiltinVarName(data.CopyVariableArr[i]) == "运行时句柄ID")
+            MySoftData.HandleVarMap[data.VariableArr[i]] := true
+    }
+}
+
 ; 无类别时只列自定义变量，供保存结果等字段使用。
 GetGuiVarArr(categories*) {
     reserved := Map()
@@ -156,6 +171,10 @@ GetGuiVarArr(categories*) {
             reserved[key] := true
             reserved[GetLang(key)] := true
         }
+    }
+    for old in LegacyRuntimeVarNames() {
+        reserved[old] := true
+        reserved[GetLang(old)] := true
     }
 
     items := []
