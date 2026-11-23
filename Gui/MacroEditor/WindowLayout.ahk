@@ -394,13 +394,15 @@
         view.Add("Border").Name("DragInsertLine").Height(2).HorizontalAlignment("Stretch").VerticalAlignment("Top")
             .Background("{DynamicResource Accent}").BorderThickness(0)
             .SetProp("Panel.ZIndex", "10").Visibility("Collapsed").IsHitTestVisible("False")
-        ; 拖拽幽灵（跟鼠标，仅显示指令文本，风格对齐宏配置 VL 拖拽）
+        ; 拖拽幽灵（跟鼠标，显示图标+指令文本，风格对齐宏配置 VL 拖拽）
         ghostPop := view.Add("Popup").Name("DragGhost").Placement("Absolute").AllowsTransparency("True")
             .IsHitTestVisible("False").IsOpen("False")
-        ghostBd := ghostPop.Add("Border").CornerRadius("3").BorderThickness("1").Padding("10,5")
+        ghostBd := ghostPop.Add("Border").CornerRadius("3").BorderThickness("1").Padding("8,5")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource Accent}").Opacity("0.94")
-        ghostBd.Add("TextBlock").Name("DragGhostTxt").MaxWidth("280").TextTrimming("CharacterEllipsis")
-            .Foreground("{DynamicResource TextMain}").FontSize(XAMLHost.MacroBodyFontSize())
+        ghostRow := ghostBd.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
+        ghostRow.Add("Image").Name("DragGhostImg").Width(16).Height(16).Margin("0,0,6,0").VerticalAlignment("Center")
+        ghostRow.Add("TextBlock").Name("DragGhostTxt").MaxWidth("280").TextTrimming("CharacterEllipsis")
+            .Foreground("{DynamicResource TextMain}").FontSize(XAMLHost.MacroBodyFontSize()).VerticalAlignment("Center")
         view.Add("TextBox").Name("MacroText").AcceptsReturn("True").FontSize(XAMLHost.MacroBodyFontSize()).Visibility("Collapsed")
             .VerticalContentAlignment("Top")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
@@ -477,10 +479,10 @@
             guiInstance := this.%config.propName%
             btnName := "CmdBtn_" config.propName
             this.ui.OnEvent(btnName, "Click", CreateSubGuiClickHandler(this, guiInstance))
-            this.ui.OnEvent(btnName, "PreviewMouseLeftButtonDown", this._OnPanelDragStart.Bind(this, guiInstance, GetLang(config.name)))
+            this.ui.OnEvent(btnName, "PreviewMouseLeftButtonDown", this._OnPanelDragStart.Bind(this, guiInstance, GetLang(config.name), StrReplace(A_WorkingDir "\" config.icon, "\", "/")))
             ; §13 收藏区行（同名指令按钮，点击/拖拽同分类区）
             this.ui.OnEvent("CmdBtnFav_" config.propName, "Click", CreateSubGuiClickHandler(this, guiInstance))
-            this.ui.OnEvent("CmdBtnFav_" config.propName, "PreviewMouseLeftButtonDown", this._OnPanelDragStart.Bind(this, guiInstance, GetLang(config.name)))
+            this.ui.OnEvent("CmdBtnFav_" config.propName, "PreviewMouseLeftButtonDown", this._OnPanelDragStart.Bind(this, guiInstance, GetLang(config.name), StrReplace(A_WorkingDir "\" config.icon, "\", "/")))
             this.ui.OnEvent(btnName, "PreviewMouseRightButtonDown", this._OnCmdRowRightClick.Bind(this, config.propName))
             this.ui.OnEvent("CmdBtnFav_" config.propName, "PreviewMouseRightButtonDown", this._OnCmdRowRightClick.Bind(this, config.propName))
         }

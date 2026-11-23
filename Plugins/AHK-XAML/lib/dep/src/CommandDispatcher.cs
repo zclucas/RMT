@@ -1235,14 +1235,16 @@ public partial class AhkWpfEngine
                 {
                     AttachTreeDrag(ctrl, parts.Length > 2 ? parts[2] : "");
                 }
-                // 外部拖入：左侧指令面板按下后调用。value = "目标树名|幽灵文本|控件名三件套"
+                // 外部拖入：左侧指令面板按下后调用。value = "目标树名|幽灵文本|图标路径|控件名四件套"
                 else if (parts[1] == "TreeDragExternal")
                 {
                     string eraw = parts.Length > 2 ? parts[2] : "";
-                    string[] eseg = eraw.Split(new[] { '|' }, 3);
+                    string[] eseg = eraw.Split(new[] { '|' }, 4);
                     if (eseg.Length >= 1)
-                        BeginExternalTreeDrag(eseg[0].Trim(), eseg.Length >= 2 ? eseg[1] : "",
-                            eseg.Length >= 3 ? eseg[2] : "");
+                        BeginExternalTreeDrag(eseg[0].Trim(),
+                            eseg.Length >= 2 ? eseg[1] : "",
+                            eseg.Length >= 3 ? eseg[2] : "",
+                            eseg.Length >= 4 ? eseg[3] : "");
                 }
                 // 运行期重绑事件：value = "ctrl:event,ctrl:event,..."
                 // 用于「画布原地重灌」之后——注入的新元素需要重新挂鼠标事件。
