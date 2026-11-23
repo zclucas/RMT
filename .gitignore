@@ -33,6 +33,7 @@ Plugins/SupportQr/bin/
 Plugins/SupportQr/obj/
 .workbuddy/
 Cache/
+.arch/
 
 # YOLO 插件：Rust 构建缓存与模型不进库。
 # 二进制内核 Plugins/YOLO/<架构>/ 仍入库（与 Plugins/OpenCV/<架构>/ 一致），打包脚本从这里取。

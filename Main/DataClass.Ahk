@@ -413,7 +413,7 @@ class SoftData {
         this.GlobalArrMap := Map()      ;UI下拉显示数组
         this.ArrayMap := Map()          ;真正的全局数组
         this.GlobalVariMap := Map()     ;UI下拉显示变量
-        this.VariableMap := Map()       ;真正的全局变量
+        this.VariableMap := ShmVariableMap("RMT_Shared_Variables")       ;真正的全局变量（跨进程纯共享内存）
         this.TimeVarMap := Map()        ;记录时间变量（包含获取时间变量指令生成的变量）
         this.DataFileMap := Map()       ;配置命令对应的文件路径
         this.DataClassMap := Map()      ;配置对应的数据类型
