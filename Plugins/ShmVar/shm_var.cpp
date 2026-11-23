@@ -19,7 +19,7 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         return SHMVAR_ERR_INVALID_ARG;
     }
 
-    std::unique_lock<std::shared_mutex> guard(g_lifecycleLock);
+    std::lock_guard<std::mutex> guard(g_lifecycleLock);
 
     // If already initialized with same name, return OK
     if (g_ctx.baseAddr != nullptr && g_ctx.mapName == mapName) {
@@ -38,25 +38,27 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
 
     std::string shmName = std::string("Local\\ShmVar_Map_") + mapName;
     std::string mtxName = std::string("Local\\ShmVar_Mtx_") + mapName;
-    std::string evtName = std::string("Local\\ShmVar_Evt_") + mapName;
+    std::string nrEvtName = std::string("Local\\ShmVar_NREvt_") + mapName;
+    std::string ntfEvtName = std::string("Local\\ShmVar_Evt_") + mapName;
 
-    // Create / Open Mutex
-    HANDLE hMutex = CreateMutexA(NULL, FALSE, mtxName.c_str());
-    if (!hMutex) {
+    // Create / Open Writer Mutex
+    HANDLE hWriterMutex = CreateMutexA(NULL, FALSE, mtxName.c_str());
+    if (!hWriterMutex) {
         return SHMVAR_ERR_SYS_FAIL;
     }
 
-    // Lock mutex while initializing mapping
-    CrossProcessLock lock(hMutex);
-    if (!lock.isLocked()) {
-        CloseHandle(hMutex);
+    // Create / Open NoReaders Event (Manual-reset, initially signaled when created)
+    HANDLE hNoReadersEvent = CreateEventA(NULL, TRUE, TRUE, nrEvtName.c_str());
+    if (!hNoReadersEvent) {
+        CloseHandle(hWriterMutex);
         return SHMVAR_ERR_SYS_FAIL;
     }
 
-    // Create / Open Event
-    HANDLE hEvent = CreateEventA(NULL, FALSE, FALSE, evtName.c_str());
-    if (!hEvent) {
-        CloseHandle(hMutex);
+    // Create / Open Notify Event (Auto-reset event for change broadcast)
+    HANDLE hNotifyEvent = CreateEventA(NULL, FALSE, FALSE, ntfEvtName.c_str());
+    if (!hNotifyEvent) {
+        CloseHandle(hNoReadersEvent);
+        CloseHandle(hWriterMutex);
         return SHMVAR_ERR_SYS_FAIL;
     }
 
@@ -74,8 +76,9 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
     );
 
     if (hMap == NULL) {
-        CloseHandle(hEvent);
-        CloseHandle(hMutex);
+        CloseHandle(hNotifyEvent);
+        CloseHandle(hNoReadersEvent);
+        CloseHandle(hWriterMutex);
         return SHMVAR_ERR_SYS_FAIL;
     }
 
@@ -85,8 +88,9 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
     uint8_t* pBase = static_cast<uint8_t*>(MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, 0));
     if (!pBase) {
         CloseHandle(hMap);
-        CloseHandle(hEvent);
-        CloseHandle(hMutex);
+        CloseHandle(hNotifyEvent);
+        CloseHandle(hNoReadersEvent);
+        CloseHandle(hWriterMutex);
         return SHMVAR_ERR_SYS_FAIL;
     }
 
@@ -101,8 +105,9 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         if (!shm::ShmBuddyAllocator::Format(pBase + arenaOff, arenaSz)) {
             UnmapViewOfFile(pBase);
             CloseHandle(hMap);
-            CloseHandle(hEvent);
-            CloseHandle(hMutex);
+            CloseHandle(hNotifyEvent);
+            CloseHandle(hNoReadersEvent);
+            CloseHandle(hWriterMutex);
             return SHMVAR_ERR_SYS_FAIL;
         }
 
@@ -113,17 +118,21 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         header->arenaSize = arenaSz;
         header->changeCount = 0;
         header->entryCount = 0;
+        header->readerCount.store(0, std::memory_order_relaxed);
+        header->writerWaiting.store(0, std::memory_order_relaxed);
         header->reserved = 0;
         for (size_t i = 0; i < shm::HASH_BUCKET_COUNT; ++i) {
             header->buckets[i] = shm::OFFSET_NIL;
         }
+        SetEvent(hNoReadersEvent); // Initially no readers
     } else {
         // Validate existing shared memory layout
         if (header->magic != shm::SHM_MAGIC || header->version != shm::SHM_VERSION || header->totalSize > shm::MAX_SHM_SIZE) {
             UnmapViewOfFile(pBase);
             CloseHandle(hMap);
-            CloseHandle(hEvent);
-            CloseHandle(hMutex);
+            CloseHandle(hNotifyEvent);
+            CloseHandle(hNoReadersEvent);
+            CloseHandle(hWriterMutex);
             return SHMVAR_ERR_SYS_FAIL;
         }
     }
@@ -132,8 +141,9 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
     g_ctx.hMapFile = hMap;
     g_ctx.baseAddr = pBase;
     g_ctx.mappedSize = initialSize;
-    g_ctx.hMutex = hMutex;
-    g_ctx.hEvent = hEvent;
+    g_ctx.sync.hWriterMutex = hWriterMutex;
+    g_ctx.sync.hNoReadersEvent = hNoReadersEvent;
+    g_ctx.sync.hNotifyEvent = hNotifyEvent;
     g_ctx.mapName = mapName;
     g_ctx.isCreator = isCreator;
 
@@ -141,44 +151,40 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
 }
 
 SHMVAR_API int32_t ShmVar_Close(void) {
-    std::unique_lock<std::shared_mutex> guard(g_lifecycleLock);
+    std::lock_guard<std::mutex> guard(g_lifecycleLock);
     CloseInternal();
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_SetInt(const char* key, int64_t val) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessExclusiveLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     int32_t rc = SetScalarValue(*header, g_ctx.baseAddr, keyView, keyHash, val);
     if (rc != SHMVAR_OK) return rc;
 
-    NotifyChange(header, g_ctx.hEvent);
+    NotifyChange(header, g_ctx.sync.hNotifyEvent);
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_GetInt(const char* key, int64_t* outVal) {
     if (!key || !outVal) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessSharedLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
@@ -190,37 +196,33 @@ SHMVAR_API int32_t ShmVar_GetInt(const char* key, int64_t* outVal) {
 
 SHMVAR_API int32_t ShmVar_SetDouble(const char* key, double val) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessExclusiveLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     int32_t rc = SetScalarValue(*header, g_ctx.baseAddr, keyView, keyHash, val);
     if (rc != SHMVAR_OK) return rc;
 
-    NotifyChange(header, g_ctx.hEvent);
+    NotifyChange(header, g_ctx.sync.hNotifyEvent);
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_GetDouble(const char* key, double* outVal) {
     if (!key || !outVal) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessSharedLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
@@ -232,38 +234,34 @@ SHMVAR_API int32_t ShmVar_GetDouble(const char* key, double* outVal) {
 
 SHMVAR_API int32_t ShmVar_SetStr(const char* key, const char* str) {
     if (!key || !str) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     std::string_view valView(str);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessExclusiveLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     int32_t rc = SetBlobValue(*header, g_ctx.baseAddr, keyView, keyHash, valView.data(), valView.size(), SHMVAR_TYPE_STRING, true);
     if (rc != SHMVAR_OK) return rc;
 
-    NotifyChange(header, g_ctx.hEvent);
+    NotifyChange(header, g_ctx.sync.hNotifyEvent);
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_GetStr(const char* key, char* buf, size_t bufSize, size_t* outLen) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessSharedLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
@@ -289,37 +287,33 @@ SHMVAR_API int32_t ShmVar_GetStr(const char* key, char* buf, size_t bufSize, siz
 
 SHMVAR_API int32_t ShmVar_SetBytes(const char* key, const void* data, size_t size) {
     if (!key || (!data && size > 0)) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessExclusiveLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     int32_t rc = SetBlobValue(*header, g_ctx.baseAddr, keyView, keyHash, data, size, SHMVAR_TYPE_BYTES, false);
     if (rc != SHMVAR_OK) return rc;
 
-    NotifyChange(header, g_ctx.hEvent);
+    NotifyChange(header, g_ctx.sync.hNotifyEvent);
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_GetBytes(const char* key, void* buf, size_t bufSize, size_t* outLen) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessSharedLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
@@ -345,17 +339,15 @@ SHMVAR_API int32_t ShmVar_GetBytes(const char* key, void* buf, size_t bufSize, s
 
 SHMVAR_API int32_t ShmVar_Delete(const char* key) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessExclusiveLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     uint32_t prevOffset = shm::OFFSET_NIL;
     uint32_t bucketIdx = 0;
     uint32_t nodeOffset = shm::OFFSET_NIL;
@@ -397,16 +389,16 @@ SHMVAR_API int32_t ShmVar_Delete(const char* key) {
         }
     }
 
-    NotifyChange(header, g_ctx.hEvent);
+    NotifyChange(header, g_ctx.sync.hNotifyEvent);
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_WaitForChange(uint32_t timeoutMs) {
     HANDLE hEvt = nullptr;
     {
-        std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
-        if (!g_ctx.hEvent) return SHMVAR_ERR_NOT_INIT;
-        hEvt = g_ctx.hEvent;
+        std::lock_guard<std::mutex> guard(g_lifecycleLock);
+        if (!g_ctx.sync.hNotifyEvent) return SHMVAR_ERR_NOT_INIT;
+        hEvt = g_ctx.sync.hNotifyEvent;
     }
 
     DWORD res = WaitForSingleObject(hEvt, timeoutMs);
@@ -420,17 +412,15 @@ SHMVAR_API int32_t ShmVar_WaitForChange(uint32_t timeoutMs) {
 
 SHMVAR_API int32_t ShmVar_GetType(const char* key, int32_t* outType, size_t* outSize) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
-
-    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     uint32_t keyHash = shm::HashKey(keyView);
 
-    CrossProcessLock lock(g_ctx.hMutex);
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessSharedLock lock(header, g_ctx.sync);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
-    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;

@@ -4,12 +4,12 @@
 #include "shm_var.h"
 #include "shm_internal.h"
 #include "shm_allocator.h"
+#include "shm_rwlock.h"
 
 #include <string>
 #include <string_view>
 #include <memory>
 #include <mutex>
-#include <shared_mutex>
 #include <limits>
 #include <type_traits>
 #include <cstring>
@@ -22,41 +22,14 @@ struct ShmContext {
     HANDLE hMapFile = nullptr;
     uint8_t* baseAddr = nullptr;
     size_t mappedSize = 0;
-    HANDLE hMutex = nullptr;
-    HANDLE hEvent = nullptr;
+    ShmSyncHandles sync;
     std::string mapName;
     bool isCreator = false;
 };
 
 // Global in-process context & lifecycle lock declarations
 extern ShmContext g_ctx;
-extern std::shared_mutex g_lifecycleLock;
-
-// RAII lock for Win32 cross-process Mutex
-class CrossProcessLock {
-public:
-    explicit CrossProcessLock(HANDLE hMutex, DWORD timeoutMs = INFINITE)
-        : m_hMutex(hMutex), m_acquired(false) {
-        if (m_hMutex) {
-            DWORD res = WaitForSingleObject(m_hMutex, timeoutMs);
-            if (res == WAIT_OBJECT_0 || res == WAIT_ABANDONED) {
-                m_acquired = true;
-            }
-        }
-    }
-
-    ~CrossProcessLock() {
-        if (m_acquired && m_hMutex) {
-            ReleaseMutex(m_hMutex);
-        }
-    }
-
-    bool isLocked() const noexcept { return m_acquired; }
-
-private:
-    HANDLE m_hMutex;
-    bool m_acquired;
-};
+extern std::mutex g_lifecycleLock;
 
 // Convert relative offset to pointer in current process address space
 template <typename T = void>

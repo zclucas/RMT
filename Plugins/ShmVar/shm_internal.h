@@ -30,7 +30,12 @@ struct ShmHeader {
     uint32_t arenaSize;       // Size in bytes of Buddy Allocator arena
     uint64_t changeCount;     // Monotonic counter for change notifications
     uint32_t entryCount;      // Total live entries
+
+    // Cross-process RWLock synchronization fields
+    std::atomic<uint32_t> readerCount; // Active concurrent readers in all processes
+    std::atomic<uint32_t> writerWaiting; // Flag/count indicating writer waiting (prevents reader starvation)
     uint32_t reserved;
+
     uint32_t buckets[HASH_BUCKET_COUNT]; // Offset to head of linked list in each bucket
 };
 

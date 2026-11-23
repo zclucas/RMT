@@ -13,6 +13,7 @@ add_library(ShmVar SHARED
     shm_var.h
     shm_internal.h
     shm_allocator.h
+    shm_rwlock.h
     buddy_alloc.h
 )
 

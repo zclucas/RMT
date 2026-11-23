@@ -145,7 +145,35 @@ int main(int argc, char* argv[]) {
     }
     PrintResult("ShmVar_Recycle_50x256KB_MemoryReused", recyclingSuccess);
 
-    // Test 11: Close Shm
+    // Test 11: Cross-Process / Concurrent Shared-Reader Stress Test
+    // Multiple concurrent readers reading concurrently while writer periodically updates
+    ShmVar_SetInt("rw_counter", 100);
+    std::atomic<bool> rwStop{false};
+    std::atomic<int> readCount{0};
+    std::vector<std::thread> readers;
+    for (int i = 0; i < 4; ++i) {
+        readers.emplace_back([&]() {
+            while (!rwStop.load()) {
+                int64_t val = 0;
+                if (ShmVar_GetInt("rw_counter", &val) == SHMVAR_OK) {
+                    readCount.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    // Writer updates 20 times concurrently with the 4 readers
+    for (int w = 0; w < 20; ++w) {
+        ShmVar_SetInt("rw_counter", 100 + w);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    rwStop.store(true);
+    for (auto& t : readers) {
+        t.join();
+    }
+    PrintResult("ShmVar_Concurrent_RWLock_4Readers_1Writer", readCount.load() > 100);
+
+    // Test 12: Close Shm
     rc = ShmVar_Close();
     PrintResult("ShmVar_Close", rc == SHMVAR_OK);
 
