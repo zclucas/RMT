@@ -171,32 +171,7 @@ class MainWin {
         closeBtn := btnGroup.Add("Button").Name("BtnWinClose").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
         closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
 
-        status := main.Add("Grid").Grid_Row(2).Grid_ColumnSpan(2).Background("{DynamicResource TitleBarColor}")
-        status.Cols("*", "Auto")
-        stats := status.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Stretch").Margin("6,0,0,0")
-        ; 底栏读数统一「RMT / 系统」在前，内存多一项总内存
-        this._AddStatusMetric(stats, "StatusCpu", "CPU — / —")
-        this._AddStatusMetric(stats, "StatusGpu", "GPU — / —")
-        this._AddStatusMetric(stats, "StatusMemory", GetLang("内存") " — / — / —")
-        stats.Add("TextBlock").Name("StatusNetwork").Text("↓ —  ↑ —").Margin("8,0,18,0")
-            .VerticalAlignment("Center").ToolTip(GetLang("系统网络，包含虚拟网卡")).Foreground("{DynamicResource TextMain}")
-        statusButtons := status.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Center")
-        statusButtons.Add("Button").Name("StatusDownloads").Content(GetLang("下载") " 0")
-            .Height(24).MinHeight(24).Padding("8,0").Margin("0,0,4,0")
-        statusButtons.Add("Button").Name("StatusNotifications").Content(GetLang("通知") " 0")
-            .Height(24).MinHeight(24).Padding("8,0").Margin("0,0,8,0")
-
-        ; ---- 底栏资源明细浮层 ----
-        ; 是窗口内的子控件，不是 Popup：跟着窗口一起移动，切到别的窗口也不会消失。
-        ; 位置由引擎按被钉住的指标实时算（见 AnchoredPanel.cs），这里只留一个空壳。
-        detailLayer := main.Add("Grid").Grid_Row(0).Grid_RowSpan(3).Grid_Column(0).Grid_ColumnSpan(2)
-            .IsHitTestVisible("False").Panel_ZIndex(30)
-        detailBox := detailLayer.Add("Border").Name("StatusDetail").Visibility("Collapsed")
-            .HorizontalAlignment("Left").VerticalAlignment("Bottom").MaxWidth(460)
-            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource OutlineStroke}")
-            .BorderThickness("1").CornerRadius("4").Padding("10,7").IsHitTestVisible("False")
-        detailBox.Add("TextBlock").Name("StatusDetailText").Text("").Foreground("{DynamicResource TextMain}")
-            .TextWrapping("Wrap")
+        this._BuildStatusBar(main)
 
         ; ---- 左操作栏 ----
         left := main.Add("Grid").Grid_Row(1).Grid_Column(0).Margin("6,6,4,6")

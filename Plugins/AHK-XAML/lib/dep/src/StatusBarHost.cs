@@ -7,6 +7,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 // =============================================================================
@@ -23,7 +24,6 @@ using System.Windows.Threading;
 //   GPU  —— PDH 的 \GPU Engine(*)\Utilization Percentage。单个进程取它最忙的那个引擎；
 //           整机 / RMT 的总量按引擎求和后取最大值（不把 3D、Copy、Decode 叠一起）。
 //   内存 —— GlobalMemoryStatusEx 取整机，psapi 逐进程取工作集。
-//   网速 —— PDH 的 \Network Interface(*)\Bytes Received|Sent/sec，全实例求和。
 public partial class AhkWpfEngine
 {
     private const uint StatusTh32CsSnapshotProcess = 0x00000002;
@@ -154,17 +154,21 @@ public partial class AhkWpfEngine
         public double Cpu = double.NaN;
         public double Memory = double.NaN;
         public double Gpu = double.NaN;
+        public double GpuMemory = double.NaN;
     }
 
     private sealed class StatusSnapshot
     {
-        public string CpuText = "";
-        public string GpuText = "";
-        public string MemoryText = "";
-        public string NetworkText = "";
+        public double SystemCpu = double.NaN;
+        public double RmtCpu = double.NaN;
+        public double SystemMemory = double.NaN;
+        public double RmtMemory = double.NaN;
+        public double TotalMemory = double.NaN;
         public List<StatusRow> Rows = new List<StatusRow>();
         public double SystemGpu = double.NaN;
         public double RmtGpu = double.NaN;
+        public double SystemGpuMemory = double.NaN;
+        public double RmtGpuMemory = double.NaN;
         public bool GpuReady;
         public bool InternalComplete = true;
     }
@@ -172,9 +176,10 @@ public partial class AhkWpfEngine
     private sealed class StatusMetricControls
     {
         public string BoxName;
+        public FrameworkElement Box;
+        public System.Windows.Shapes.Path SystemPie;
+        public System.Windows.Shapes.Path RmtPie;
         public FrameworkElement Selected;
-        public FrameworkElement PinOn;
-        public FrameworkElement PinOff;
     }
 
     private System.Threading.Timer statusSampler;
@@ -185,7 +190,6 @@ public partial class AhkWpfEngine
     private TextBlock statusCpuBlock;
     private TextBlock statusGpuBlock;
     private TextBlock statusMemoryBlock;
-    private TextBlock statusNetworkBlock;
     private Button statusDownloadsButton;
     private Button statusNotificationsButton;
     private FrameworkElement statusDetailPanel;
@@ -208,8 +212,10 @@ public partial class AhkWpfEngine
 
     private IntPtr statusPdhQuery = IntPtr.Zero;
     private IntPtr statusPdhGpu = IntPtr.Zero;
-    private IntPtr statusPdhNetIn = IntPtr.Zero;
-    private IntPtr statusPdhNetOut = IntPtr.Zero;
+    private IntPtr statusPdhGpuMemoryDedicated = IntPtr.Zero;
+    private IntPtr statusPdhGpuMemoryShared = IntPtr.Zero;
+    private IntPtr statusPdhAdapterMemoryDedicated = IntPtr.Zero;
+    private IntPtr statusPdhAdapterMemoryShared = IntPtr.Zero;
     private bool statusPdhLogged;
     private bool statusPdhCollectOk;
 
@@ -228,9 +234,15 @@ public partial class AhkWpfEngine
             statusCpuBlock = FindControlByPath("StatusCpu") as TextBlock;
             statusGpuBlock = FindControlByPath("StatusGpu") as TextBlock;
             statusMemoryBlock = FindControlByPath("StatusMemory") as TextBlock;
-            statusNetworkBlock = FindControlByPath("StatusNetwork") as TextBlock;
             statusDownloadsButton = FindControlByPath("StatusDownloads") as Button;
             statusNotificationsButton = FindControlByPath("StatusNotifications") as Button;
+            // 在引擎中设置，避免 XAML 的主题字号下限把小字号重新抬大。
+            double fontSize = Math.Max(9, statusCpuBlock == null ? 12
+                : System.Windows.Documents.TextElement.GetFontSize(statusCpuBlock.Parent) - 2);
+            foreach (TextBlock label in new[] { statusCpuBlock, statusGpuBlock, statusMemoryBlock, statusDetailText })
+                if (label != null) label.FontSize = fontSize;
+            if (statusDownloadsButton != null) statusDownloadsButton.FontSize = fontSize;
+            if (statusNotificationsButton != null) statusNotificationsButton.FontSize = fontSize;
 
             statusDetailMetric = null;
             statusHoveredMetric = null;
@@ -362,9 +374,10 @@ public partial class AhkWpfEngine
 
         var controls = new StatusMetricControls();
         controls.BoxName = boxName + "Box";
+        controls.Box = box;
+        controls.SystemPie = FindControlByPath(boxName + "SystemPie") as System.Windows.Shapes.Path;
+        controls.RmtPie = FindControlByPath(boxName + "RmtPie") as System.Windows.Shapes.Path;
         controls.Selected = FindControlByPath(boxName + "Sel") as FrameworkElement;
-        controls.PinOn = FindControlByPath(boxName + "PinOn") as FrameworkElement;
-        controls.PinOff = FindControlByPath(boxName + "PinOff") as FrameworkElement;
         statusMetricControls[metric] = controls;
     }
 
@@ -453,12 +466,9 @@ public partial class AhkWpfEngine
         StatusMetricControls controls;
         if (!statusMetricControls.TryGetValue(metric, out controls))
             return;
+        // 选中状态只用背景表示，不再依赖图钉图标。
         if (controls.Selected != null)
             controls.Selected.Visibility = pinned ? Visibility.Visible : Visibility.Collapsed;
-        if (controls.PinOn != null)
-            controls.PinOn.Visibility = pinned ? Visibility.Visible : Visibility.Collapsed;
-        if (controls.PinOff != null)
-            controls.PinOff.Visibility = pinned ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void ShowStatusDetail(string metric)
@@ -531,10 +541,10 @@ public partial class AhkWpfEngine
         try
         {
             statusSnapshot = snapshot;
-            SetText(statusCpuBlock, snapshot.CpuText);
-            SetText(statusGpuBlock, snapshot.GpuText);
-            SetText(statusMemoryBlock, snapshot.MemoryText);
-            SetText(statusNetworkBlock, snapshot.NetworkText);
+            UpdateStatusPie("cpu", snapshot.RmtCpu, snapshot.SystemCpu);
+            UpdateStatusPie("gpu", snapshot.RmtGpu, snapshot.SystemGpu);
+            UpdateStatusPie("memory", StatusMemoryPercent(snapshot.RmtMemory, snapshot.TotalMemory),
+                StatusMemoryPercent(snapshot.SystemMemory, snapshot.TotalMemory));
             // 明细正显示着就跟一次：钉住时数字与进程列表要能自己更新
             if (statusDetailMetric != null)
                 ApplyStatusDetail();
@@ -705,16 +715,12 @@ public partial class AhkWpfEngine
 
         CollectStatusPdh();
         CollectStatusGpu(snapshot, internalPids);
-        double netIn;
-        double netOut;
-        CollectStatusNetwork(out netIn, out netOut);
-
-        // 底栏统一「RMT / 系统」在前
-        snapshot.CpuText = "CPU " + FormatStatusPercent(rmtCpu) + " / " + FormatStatusPercent(systemCpu);
-        snapshot.GpuText = "GPU " + FormatStatusPercent(snapshot.RmtGpu) + " / " + FormatStatusPercent(snapshot.SystemGpu);
-        snapshot.MemoryText = "内存 " + FormatStatusMemory(rmtMemory) + " / "
-            + FormatStatusMemory(usedMemory) + " / " + FormatStatusMemory(totalMemory);
-        snapshot.NetworkText = "↓ " + FormatStatusRate(netIn) + "  ↑ " + FormatStatusRate(netOut);
+        CollectStatusGpuMemory(snapshot, internalPids);
+        snapshot.RmtCpu = rmtCpu;
+        snapshot.SystemCpu = systemCpu;
+        snapshot.RmtMemory = rmtMemory;
+        snapshot.SystemMemory = usedMemory;
+        snapshot.TotalMemory = totalMemory;
         return snapshot;
     }
 
@@ -847,14 +853,6 @@ public partial class AhkWpfEngine
             perPidPeak[pid] = Math.Max(peak, pair.Value);
         }
 
-        for (int i = 0; i < snapshot.Rows.Count; i++)
-        {
-            StatusRow row = snapshot.Rows[i];
-            double peak;
-            if (perPidPeak.TryGetValue(row.Pid, out peak))
-                row.Gpu = ClampPercent(peak);
-        }
-
         double total = 0;
         foreach (KeyValuePair<string, double> pair in engineTotal)
             total = Math.Max(total, pair.Value);
@@ -866,45 +864,56 @@ public partial class AhkWpfEngine
         if (engineTotal.Count == 0)
             return;
 
+        foreach (StatusRow row in snapshot.Rows) {
+            double peak;
+            // GPU 计数器有效时，未登记引擎实例的进程表示没有 GPU 活动。
+            row.Gpu = perPidPeak.TryGetValue(row.Pid, out peak) ? ClampPercent(peak) : 0;
+        }
+
         snapshot.SystemGpu = ClampPercent(total);
         // 有 GPU 数据但内部进程一点没占：那是 0，不是「不可用」
         snapshot.RmtGpu = ClampPercent(ours);
         snapshot.GpuReady = true;
     }
 
-    private void CollectStatusNetwork(out double received, out double sent)
+    private void CollectStatusGpuMemory(StatusSnapshot snapshot, HashSet<int> internalPids)
     {
-        received = double.NaN;
-        sent = double.NaN;
         if (!statusPdhCollectOk)
             return;
-        if (statusPdhNetIn != IntPtr.Zero)
-        {
-            List<KeyValuePair<string, double>> values = ReadStatusCounter(statusPdhNetIn);
-            if (values.Count > 0)
-            {
-                double sum = 0;
-                for (int i = 0; i < values.Count; i++)
-                    if (!double.IsNaN(values[i].Value) && values[i].Value > 0)
-                        sum += values[i].Value;
-                received = sum;
+        var dedicated = ReadStatusCounter(statusPdhGpuMemoryDedicated);
+        var shared = ReadStatusCounter(statusPdhGpuMemoryShared);
+        if (dedicated.Count > 0 && shared.Count > 0) {
+            var perPid = new Dictionary<int, double>();
+            foreach (var values in new[] { dedicated, shared }) {
+                foreach (var value in values) {
+                    Match match = Regex.Match(value.Key, @"^pid_(\d+)_");
+                    int pid;
+                    if (!match.Success || !int.TryParse(match.Groups[1].Value, out pid)
+                        || double.IsNaN(value.Value) || value.Value < 0)
+                        continue;
+                    perPid[pid] = (perPid.ContainsKey(pid) ? perPid[pid] : 0) + value.Value;
+                }
+            }
+            snapshot.RmtGpuMemory = 0;
+            foreach (var pair in perPid)
+                if (internalPids.Contains(pair.Key)) snapshot.RmtGpuMemory += pair.Value;
+            foreach (StatusRow row in snapshot.Rows) {
+                double bytes;
+                row.GpuMemory = perPid.TryGetValue(row.Pid, out bytes) ? bytes : 0;
             }
         }
-        if (statusPdhNetOut != IntPtr.Zero)
-        {
-            List<KeyValuePair<string, double>> values = ReadStatusCounter(statusPdhNetOut);
-            if (values.Count > 0)
-            {
-                double sum = 0;
-                for (int i = 0; i < values.Count; i++)
-                    if (!double.IsNaN(values[i].Value) && values[i].Value > 0)
-                        sum += values[i].Value;
-                sent = sum;
-            }
+        var adapterDedicated = ReadStatusCounter(statusPdhAdapterMemoryDedicated);
+        var adapterShared = ReadStatusCounter(statusPdhAdapterMemoryShared);
+        if (adapterDedicated.Count > 0 && adapterShared.Count > 0) {
+            snapshot.SystemGpuMemory = 0;
+            foreach (var values in new[] { adapterDedicated, adapterShared })
+                foreach (var value in values)
+                    if (!double.IsNaN(value.Value) && value.Value >= 0)
+                        snapshot.SystemGpuMemory += value.Value;
         }
     }
 
-    // 每个周期只采集一次：GPU 与网速都在同一个查询里，重复采集会让速率窗口错位。
+    // 每个周期只采集一次 GPU 查询，避免重复采集让速率窗口错位。
     // 首个周期速率型计数器还没有基线，采出来是无效值，底栏那一秒显示不可用。
     private void CollectStatusPdh()
     {
@@ -929,8 +938,10 @@ public partial class AhkWpfEngine
         }
         statusPdhQuery = query;
         statusPdhGpu = AddStatusPdHCounter(query, @"\GPU Engine(*)\Utilization Percentage");
-        statusPdhNetIn = AddStatusPdHCounter(query, @"\Network Interface(*)\Bytes Received/sec");
-        statusPdhNetOut = AddStatusPdHCounter(query, @"\Network Interface(*)\Bytes Sent/sec");
+        statusPdhGpuMemoryDedicated = AddStatusPdHCounter(query, @"\GPU Process Memory(*)\Dedicated Usage");
+        statusPdhGpuMemoryShared = AddStatusPdHCounter(query, @"\GPU Process Memory(*)\Shared Usage");
+        statusPdhAdapterMemoryDedicated = AddStatusPdHCounter(query, @"\GPU Adapter Memory(*)\Dedicated Usage");
+        statusPdhAdapterMemoryShared = AddStatusPdHCounter(query, @"\GPU Adapter Memory(*)\Shared Usage");
         // 这里不垫采集：速率型计数器要两个有间隔的样本，紧接着再采一次只会拿到无效值
     }
 
@@ -995,8 +1006,6 @@ public partial class AhkWpfEngine
         StatusSnapshot snapshot = statusSnapshot;
         if (snapshot == null || snapshot.Rows.Count == 0)
             return title + "\n不可用";
-        if (metric == "gpu" && !snapshot.GpuReady)
-            return title + "\n不可用";
 
         var mine = new List<StatusRow>();
         var others = new List<StatusRow>();
@@ -1014,10 +1023,17 @@ public partial class AhkWpfEngine
             labels = new Dictionary<int, string>(statusMacroLabels);
 
         var text = new System.Text.StringBuilder();
-        text.Append(title);
+        double rmt = metric == "cpu" ? snapshot.RmtCpu : (metric == "gpu" ? snapshot.RmtGpu
+            : StatusMemoryPercent(snapshot.RmtMemory, snapshot.TotalMemory));
+        double system = metric == "cpu" ? snapshot.SystemCpu : (metric == "gpu" ? snapshot.SystemGpu
+            : StatusMemoryPercent(snapshot.SystemMemory, snapshot.TotalMemory));
+        text.Append(title).Append(metric == "gpu" ? " 利用率  " : "  ")
+            .Append(FormatStatusPercent(rmt)).Append(" / ").Append(FormatStatusPercent(system));
         // 分组顺序跟底栏读数一致：RMT 在前，系统在后
-        AppendStatusDetailSection(text, "RMT", mine, metric, labels, 0);
-        AppendStatusDetailSection(text, "系统", others, metric, labels, StatusSystemTopLimit);
+        string rmtHeader = "RMT  " + FormatStatusMemory(metric == "gpu" ? snapshot.RmtGpuMemory : snapshot.RmtMemory);
+        string systemHeader = "系统  " + FormatStatusMemory(metric == "gpu" ? snapshot.SystemGpuMemory : snapshot.SystemMemory);
+        AppendStatusDetailSection(text, rmtHeader, mine, metric, labels, 0);
+        AppendStatusDetailSection(text, systemHeader, others, metric, labels, StatusSystemTopLimit);
         if (!snapshot.InternalComplete)
             text.Append("\n\n部分内部进程未计入");
         return text.ToString();
@@ -1038,7 +1054,7 @@ public partial class AhkWpfEngine
         {
             StatusRow row = sorted[i];
             double value = StatusRowValue(row, metric);
-            if (double.IsNaN(value) && !row.Internal)
+            if (double.IsNaN(value) && !row.Internal && !(metric == "gpu" && row.GpuMemory > 0))
                 continue;
             if (limit > 0 && shown >= limit)
                 break;
@@ -1048,7 +1064,8 @@ public partial class AhkWpfEngine
             if (row.Internal && labels.TryGetValue(row.Pid, out label) && !string.IsNullOrEmpty(label))
                 line += " [" + label + "]";
             line += "  ";
-            line += metric == "memory" ? FormatStatusMemory(value) : FormatStatusPercent(value);
+            line += metric == "gpu" ? FormatStatusMemory(row.GpuMemory)
+                : (metric == "memory" ? FormatStatusMemory(value) : FormatStatusPercent(value));
             text.Append("\n").Append(line);
         }
         if (shown == 0)
@@ -1068,11 +1085,65 @@ public partial class AhkWpfEngine
     // 格式化：数字一律用不变文化，别让系统区域设置把小数点变成逗号
     // -------------------------------------------------------------------------
 
-    private static void SetText(TextBlock block, string value)
+    private void UpdateStatusPie(string metric, double rmt, double system)
     {
-        if (block == null || value == null || block.Text == value)
+        StatusMetricControls controls;
+        if (!statusMetricControls.TryGetValue(metric, out controls))
             return;
-        block.Text = value;
+        if (controls.SystemPie != null) {
+            controls.SystemPie.Data = StatusPieGeometry(system);
+            var brush = new SolidColorBrush(StatusLoadColor(system));
+            brush.Freeze();
+            controls.SystemPie.Fill = brush;
+        }
+        // RMT 是系统总占用的一部分，蓝色覆盖橙色中的 RMT 部分，避免重复计数。
+        double visibleRmt = double.IsNaN(system) ? rmt : Math.Min(rmt, system);
+        if (controls.RmtPie != null)
+            controls.RmtPie.Data = StatusPieGeometry(visibleRmt);
+        System.Windows.Automation.AutomationProperties.SetHelpText(controls.Box,
+            "RMT " + FormatStatusPercent(rmt) + " / 系统 " + FormatStatusPercent(system));
+    }
+
+    private static double StatusMemoryPercent(double bytes, double total)
+    {
+        return double.IsNaN(bytes) || double.IsNaN(total) || total <= 0
+            ? double.NaN : ClampPercent(bytes / total * 100);
+    }
+
+    private static Color StatusLoadColor(double percent)
+    {
+        percent = double.IsNaN(percent) ? 0 : ClampPercent(percent);
+        Color green = Color.FromRgb(0x22, 0xC5, 0x5E);
+        Color yellow = Color.FromRgb(0xEA, 0xB3, 0x08);
+        Color red = Color.FromRgb(0xEF, 0x44, 0x44);
+        Color from = percent <= 80 ? green : yellow;
+        Color to = percent <= 80 ? yellow : red;
+        double amount = percent <= 80 ? percent / 80 : (percent - 80) / 20;
+        return Color.FromRgb((byte)Math.Round(from.R + (to.R - from.R) * amount),
+            (byte)Math.Round(from.G + (to.G - from.G) * amount),
+            (byte)Math.Round(from.B + (to.B - from.B) * amount));
+    }
+
+    private static Geometry StatusPieGeometry(double percent)
+    {
+        percent = ClampPercent(percent);
+        if (double.IsNaN(percent) || percent <= 0)
+            return null;
+        if (percent >= 100) {
+            var circle = new EllipseGeometry(new Point(9, 9), 9, 9);
+            circle.Freeze();
+            return circle;
+        }
+        double radians = percent * Math.PI / 50 - Math.PI / 2;
+        var geometry = new StreamGeometry();
+        using (StreamGeometryContext context = geometry.Open()) {
+            context.BeginFigure(new Point(9, 9), true, true);
+            context.LineTo(new Point(9, 0), true, false);
+            context.ArcTo(new Point(9 + 9 * Math.Cos(radians), 9 + 9 * Math.Sin(radians)),
+                new Size(9, 9), 0, percent > 50, SweepDirection.Clockwise, true, false);
+        }
+        geometry.Freeze();
+        return geometry;
     }
 
     private static void SetButtonText(Button button, string value)
@@ -1112,12 +1183,4 @@ public partial class AhkWpfEngine
         return (bytes / 1048576).ToString("0.0", CultureInfo.InvariantCulture) + " MB";
     }
 
-    private static string FormatStatusRate(double bytesPerSecond)
-    {
-        if (double.IsNaN(bytesPerSecond) || bytesPerSecond < 0)
-            return "不可用";
-        if (bytesPerSecond >= 1048576)
-            return (bytesPerSecond / 1048576).ToString("0.0", CultureInfo.InvariantCulture) + " MB/s";
-        return (bytesPerSecond / 1024).ToString("0.0", CultureInfo.InvariantCulture) + " KB/s";
-    }
 }

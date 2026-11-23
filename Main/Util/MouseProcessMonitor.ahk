@@ -78,19 +78,18 @@ class MouseProcessMonitor {
         value := this._values.Get(field, "")
         if (field == "CpuVar") {
             if (value == "")
-                return "—"
+                return ""
             size := Format(GetLang("{} / {} 核"), Format("{:.2f}", this._values["CpuCores"]), this._values["CpuTotalCores"])
             return size " · " Format("{:.2f}%", value)
         }
         if (field == "GpuVar") {
             bytes := this._values.Get("GpuMemory", "")
-            if (value == "" && bytes == "")
-                return "—"
-            size := bytes == "" ? "—" : Format("{:.1f} MiB", bytes / 1048576)
-            return size " · " (value == "" ? "—" : Format("{:.2f}%", value))
+            size := bytes == "" ? "" : Format("{:.1f} MiB", bytes / 1048576)
+            percent := value == "" ? "" : Format("{:.2f}%", value)
+            return size (size != "" && percent != "" ? " · " : "") percent
         }
         if (field == "UptimeVar" && value != "")
             return Format("{:.1f} s", value)
-        return value == "" ? "—" : value
+        return value
     }
 }

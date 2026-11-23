@@ -131,9 +131,11 @@ OnGuiClose(*) {
 }
 
 ; 统一主窗口默认尺寸（物理像素），与 1400×787 设计比例一致。
-GetMainWindowDefaultSize() {
-    scale := Min(A_ScreenWidth / 1920, A_ScreenHeight / 1080)
-    return [Round(1400 * scale), Round(787 * scale)]
+GetMainWindowDefaultSize() => GetScreenScaledWindowSize(1400, 787)
+
+GetScreenScaledWindowSize(designWidth, designHeight, screenWidth := A_ScreenWidth, screenHeight := A_ScreenHeight) {
+    scale := Min(screenWidth / 1920, screenHeight / 1080)
+    return [Round(designWidth * scale), Round(designHeight * scale)]
 }
 
 ; 读取保存的主窗口位置尺寸；旧格式只有坐标，使用新版默认居中尺寸。

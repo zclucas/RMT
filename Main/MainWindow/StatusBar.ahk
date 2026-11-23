@@ -1,3 +1,30 @@
+    _BuildStatusBar(main) {
+        status := main.Add("Grid").Grid_Row(2).Grid_ColumnSpan(2).Background("{DynamicResource TitleBarColor}")
+        status.Cols("*", "Auto")
+        stats := status.Add("Grid").VerticalAlignment("Stretch").Margin("6,0,0,0")
+        stats.Cols(104, 104, 104, "*")
+        this._AddStatusMetric(stats, "StatusCpu", "CPU", 0)
+        this._AddStatusMetric(stats, "StatusGpu", "GPU", 1)
+        this._AddStatusMetric(stats, "StatusMemory", GetLang("内存"), 2)
+        statusButtons := status.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Center")
+        statusButtons.Add("Button").Name("StatusDownloads").Content(GetLang("下载") " 0")
+            .Width(82).Height(24).MinHeight(24).Padding("8,0").Margin("0,0,4,0")
+        statusButtons.Add("Button").Name("StatusNotifications").Content(GetLang("通知") " 0")
+            .Width(82).Height(24).MinHeight(24).Padding("8,0").Margin("0,0,8,0")
+
+        ; ---- 底栏资源明细浮层 ----
+        ; 是窗口内的子控件，不是 Popup：跟着窗口一起移动，切到别的窗口也不会消失。
+        ; 位置由引擎按被钉住的指标实时算（见 AnchoredPanel.cs），这里只留一个空壳。
+        detailLayer := main.Add("Grid").Grid_Row(0).Grid_RowSpan(3).Grid_Column(0).Grid_ColumnSpan(2)
+            .IsHitTestVisible("False").Panel_ZIndex(30)
+        detailBox := detailLayer.Add("Border").Name("StatusDetail").Visibility("Collapsed")
+            .HorizontalAlignment("Left").VerticalAlignment("Bottom").MaxWidth(460)
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource OutlineStroke}")
+            .BorderThickness("1").CornerRadius("4").Padding("10,7").IsHitTestVisible("False")
+        detailBox.Add("TextBlock").Name("StatusDetailText").Text("").Foreground("{DynamicResource TextMain}")
+            .TextWrapping("Wrap")
+    }
+
     ; 底栏读数、资源明细、悬停与钉住都在引擎进程里（Plugins/AHK-XAML/lib/dep/src/StatusBarHost.cs）：
     ; 采样走 PDH + Toolhelp，跑在后台线程，不再经过 AHK 的定时器与批量更新。
     ; AHK 只推两样，都不涉及持久化：启动、下载/通知计数与运行中宏的标签。
@@ -83,25 +110,24 @@
         SetTimer(() => RmtNotifications.Open(), -1)
     }
 
-    ; 底栏指标：整块容器撑满底栏高度（文字上下的空白也能悬停/点击），行尾固定一个钉住图标；
-    ; 钉住时容器垫一层选中底色、图标换实心并转强调色。
+    ; 底栏指标：文字与饼图作为整体点击，选中时高亮并固定明细。
     ; 选中态不用动态样式与触发器：底色是独立一层 Border，只切 Visibility。
     ; 运行时给 Background 传画刷要走反射 + 类型转换，能给 DynamicResource 的只有建窗期。
     ; 明细不在这里建：它是窗口内的锚定浮层 StatusDetail（见 MainWindowXaml），不是 Popup。
     ; 悬停/点击由引擎直接接管容器上的鼠标事件，AHK 不再绑定。
-    _AddStatusMetric(parent, name, text) {
-        box := parent.Add("Grid").Name(name "Box").VerticalAlignment("Stretch")
-            .Margin("0,0,8,0").Background("Transparent")
-        box.Add("Border").Name(name "Sel").Background("{DynamicResource ControlBorder}")
+    _AddStatusMetric(parent, name, text, column) {
+        box := parent.Add("Grid").Name(name "Box").Grid_Column(column).VerticalAlignment("Stretch")
+            .Margin("0,0,8,0").Background("Transparent").Cursor("Hand")
+        box.Add("Border").Name(name "Sel").Background("{DynamicResource Accent}").Opacity("0.22")
             .CornerRadius("4").Margin("0,3").Visibility("Collapsed").IsHitTestVisible("False")
         ; 文字与图标都不吃鼠标：命中统一落在容器上，整块区域行为一致
-        row := box.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
+        row := box.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
             .Margin("6,0").IsHitTestVisible("False")
         row.Add("TextBlock").Name(name).Text(text).Margin("0").VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}")
-        row.Add("TextBlock").Name(name "PinOff").Text(Chr(0xE840)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-            .FontSize(11).Margin("6,0,0,0").VerticalAlignment("Center").Foreground("{DynamicResource TextSub}")
-        row.Add("TextBlock").Name(name "PinOn").Text(Chr(0xE718)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
-            .FontSize(11).Margin("6,0,0,0").VerticalAlignment("Center")
-            .Foreground("{DynamicResource Accent}").Visibility("Collapsed")
+        pie := row.Add("Grid").Width(18).Height(18).Margin("2,0,0,0").VerticalAlignment("Center")
+        ; 整圆代表全部资源：蓝色 RMT、系统占用按负载渐变、灰色剩余资源。
+        pie.Add("Ellipse").Fill("#CBD5E1")
+        pie.Add("Path").Name(name "SystemPie").Fill("#22C55E")
+        pie.Add("Path").Name(name "RmtPie").Fill("#3B82F6")
     }
