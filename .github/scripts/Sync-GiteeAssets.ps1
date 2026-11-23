@@ -82,3 +82,20 @@ foreach ($asset in ($release.assets | Sort-Object size)) {
 }
 $dir.Delete()
 if ($failed.Count) { throw "Failed $Tag attachments: $($failed -join ', ')" }
+$sourceNames = @($release.assets.name)
+$originalNames = @($sourceNames | Where-Object { $_ -cnotmatch '\.(?:parts\.json|part\d{4})$' })
+$obsolete = @(Get-RmtObsoleteAssetVolumes -OriginalNames $originalNames -PublishedNames $sourceNames -ExistingNames $target.assets.name)
+if ($obsolete.Count) {
+    $headers = @{ Authorization = "Bearer $env:GITEE_RELEASE_TOKEN" }
+    $attachments = @()
+    for ($page = 1; $page -le 100; $page++) {
+        $batch = @(Invoke-RestMethod "$api/releases/$($target.id)/attach_files?per_page=100&page=$page" -Headers $headers -TimeoutSec 60)
+        $attachments += $batch
+        if ($batch.Count -lt 100) { break }
+    }
+    foreach ($attachment in @($attachments | Sort-Object { if ($_.name.EndsWith('.parts.json')) { 0 } else { 1 } })) {
+        if ($attachment.name -cin $obsolete) {
+            Invoke-RestMethod "$api/releases/$($target.id)/attach_files/$($attachment.id)" -Method Delete -Headers $headers -TimeoutSec 60 | Out-Null
+        }
+    }
+}

@@ -207,9 +207,9 @@ class RmtDownloadManager {
         cmd := this._Quote(curl) " -L --fail -sS --show-error --connect-timeout 30"
             . " --max-time " job.timeoutSec " --retry 2 -C - -D " this._Quote(job.headersPath)
             . " -o " this._Quote(job.partPath) " " this._Quote(job.urls[job.urlIndex])
-        if (RmtIsAssetUrl(job.urls[job.urlIndex]))
-            cmd := RmtAssetDownloadCommand(job.urls[job.urlIndex], job.partPath, job.headersPath, job.timeoutSec)
         try {
+            if (RmtIsAssetUrl(job.urls[job.urlIndex]))
+                cmd := RmtAssetDownloadCommand(job.urls[job.urlIndex], job.partPath, job.headersPath, job.timeoutSec)
             Run(cmd, A_WorkingDir, "Hide", &pid)
             job.pid := pid
             job.processHandle := DllCall("OpenProcess", "UInt", 0x1000, "Int", false, "UInt", pid, "Ptr")

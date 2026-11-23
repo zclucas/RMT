@@ -12,14 +12,14 @@ on:
         description: 从 Gitee 下载合并并解压指定 tar.bz2
         type: boolean
         default: false
-      diagnostic_build:
-        description: 仅回读已有 Gitee Go 构建日志（排障用）
-        type: string
+      split_only:
+        description: 仅补齐 GitHub 分片，保留原附件
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   list:
-    if: inputs.diagnostic_build == ''
     runs-on: ubuntu-latest
     outputs:
       tags: ${{ steps.list.outputs.tags }}
@@ -30,12 +30,14 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
           ASSET_NAME: ${{ inputs.asset_name }}
           VERIFY: ${{ inputs.verify_archive }}
+          SPLIT_ONLY: ${{ inputs.split_only }}
         run: |
           set -euo pipefail
           if [[ -n "$ASSET_NAME" || "$VERIFY" == true ]]; then
             [[ -n "$INPUT_TAG" ]] || { echo 'A tag is required for a targeted test.'; exit 1; }
           fi
           if [[ "$VERIFY" == true ]]; then
+            [[ "$SPLIT_ONLY" != true ]] || { echo 'Archive verification requires Gitee synchronization.'; exit 1; }
             [[ "$ASSET_NAME" == *.tar.bz2 ]] || { echo 'Select a tar.bz2 attachment to verify.'; exit 1; }
           fi
           if [[ -n "$INPUT_TAG" ]]; then
@@ -65,6 +67,7 @@ jobs:
           ASSET_NAME: ${{ inputs.asset_name }}
         run: ./.github/scripts/Publish-RmtAssetVolumes.ps1 -Tag $env:RELEASE_TAG -AssetName $env:ASSET_NAME
   mirror:
+    if: ${{ !inputs.split_only }}
     name: 复用 Gitee Go 同步与回读
     needs: [list, prepare]
     strategy:
@@ -85,21 +88,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - run: python3 -m pip install PyYAML==6.0.2
+      - name: Gitee Go 同步分片并回读 SHA-256
+        id: go
+        continue-on-error: true
+        run: python3 -u .github/scripts/sync_gitee_go.py assets-go
       - name: API 上传并回读指定附件
         id: direct
+        if: steps.go.outcome == 'failure'
         continue-on-error: true
         timeout-minutes: 12
         shell: pwsh
         run: ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $env:RELEASE_TAG -AssetName $env:ASSET_NAME
-      - run: python3 -m pip install PyYAML==6.0.2
-        if: steps.direct.outcome == 'failure'
-      - name: Gitee Go 同步分片并回读 SHA-256
-        id: go
-        if: steps.direct.outcome == 'failure'
-        continue-on-error: true
-        run: python3 -u .github/scripts/sync_gitee_go.py assets-go
       - name: 服务器补传并回读
-        if: steps.go.outcome == 'failure'
+        if: steps.go.outcome == 'failure' && steps.direct.outcome == 'failure'
         env:
           RELAY_KEY: ${{ secrets.RMT_RELAY_SSH_KEY }}
           KNOWN_HOST: ${{ vars.RMT_RELAY_KNOWN_HOST }}
@@ -107,7 +109,7 @@ jobs:
   verify:
     name: Gitee 下载合并解压实测
     needs: mirror
-    if: inputs.verify_archive
+    if: inputs.verify_archive && !inputs.split_only
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -127,28 +129,3 @@ jobs:
           name: asset-roundtrip-result
           path: ${{ runner.temp }}/rmt-volume-check/result.json
           if-no-files-found: warn
-  diagnose:
-    if: inputs.diagnostic_build != ''
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - env:
-          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
-          GITEE_BUILD_ID: ${{ inputs.diagnostic_build }}
-        run: |
-          python3 - <<'PY'
-          import json, os, sys
-          sys.path.insert(0, '.github/scripts')
-          from sync_gitee_go import http, go_stage
-          base = 'https://go-api.gitee.com/fateman/RMTAssets/gitee-go/ipipe/rest/v5/pipelines/builds'
-          current = http(base + '/' + str(int(os.environ['GITEE_BUILD_ID'])) + '/status', os.environ['GITEE_RELEASE_TOKEN'])['data']
-          for stage in current.get('stages', []):
-              detail = go_stage(base, stage['id'])
-              for group in detail['jobs']:
-                  for job in group:
-                      for entry in (job.get('record') or {}).get('stages') or []:
-                          from urllib.parse import urlsplit
-                          url = entry.get('logger') or ''
-                          if urlsplit(url).netloc == 'go-api.gitee.com' and urlsplit(url).scheme == 'https':
-                              print(json.dumps(http(url, os.environ['GITEE_RELEASE_TOKEN']).get('data', {}).get('logs', [])[-80:], ensure_ascii=True))
-          PY

@@ -19,7 +19,7 @@ SCRIPTS = Path(__file__).resolve().parent / "gitee-go"
 GITEE_MAX_BYTES = 100_000_000
 
 
-def http(url, token=None, data=None, form=False):
+def http(url, token=None, data=None, form=False, method=None):
     headers = {"User-Agent": "RMT-release-sync"}
     if token:
         headers["Authorization"] = "Bearer " + token
@@ -27,8 +27,32 @@ def http(url, token=None, data=None, form=False):
     if data is not None:
         headers["Content-Type"] = "application/x-www-form-urlencoded" if form else "application/json"
         body = (urlencode(data) if form else json.dumps(data)).encode()
-    with urlopen(Request(url, body, headers), timeout=60) as res:
-        return json.load(res)
+    with urlopen(Request(url, body, headers, method=method), timeout=60) as res:
+        raw = res.read()
+        return json.loads(raw) if raw else None
+
+
+def obsolete_volumes(source_names, target_names):
+    return sorted(name for name in target_names if name not in source_names
+                  and (match := re.fullmatch(r"(.+)\.(?:parts\.json|part\d{4})", name))
+                  and match[1] in source_names)
+
+
+def cleanup_volumes(m):
+    if not m.get("stale_volumes"):
+        return
+    api = f"https://gitee.com/api/v5/repos/fateman/{m['repo']}/releases/{m['target_id']}/attach_files"
+    attachments = []
+    for page in range(1, 101):
+        batch = http(f"{api}?per_page=100&page={page}", os.environ["GITEE_RELEASE_TOKEN"])
+        attachments.extend(batch)
+        if len(batch) < 100:
+            break
+    # Retire the old manifest first so clients cannot install its superseded contents.
+    for attachment in sorted(attachments, key=lambda a: not a["name"].endswith(".parts.json")):
+        if attachment["name"] in m["stale_volumes"]:
+            http(f"{api}/{int(attachment['id'])}", os.environ["GITEE_RELEASE_TOKEN"], method="DELETE")
+            print(f"Removed obsolete volume {m['tag']}/{attachment['name']}", flush=True)
 
 
 def prepare(repo, tag, asset_name=""):
@@ -81,6 +105,7 @@ def prepare(repo, tag, asset_name=""):
         raise ValueError("Gitee release identity mismatch " + tag)
     existing = {a.get("name") for a in target["assets"]}
     return dict(repo=repo, tag=tag, assets=assets, missing=sorted(names-existing),
+                target_id=target["id"], stale_volumes=obsolete_volumes(source_names, existing),
                 title=source["name"] or tag, body=source["body"] or tag, prerelease=source["prerelease"])
 
 
@@ -91,10 +116,11 @@ def pipeline(m):
     steps = []
     if m["missing"]:
         steps.append(step("download", artifacts=[{"name": "PACKAGES", "path": m["missing"]}]))
+        # The release plugin requires a CSV string; a YAML list becomes its id001 default.
         steps.append(dict(step="release@gitee", name="upload", displayName="upload", dependsOn="download",
                           releaseName=m["title"], tagName=m["tag"], description=m["body"],
                           prerelease=m["prerelease"], allowUpdate=True, upstreamArtifact=["PACKAGES"],
-                          assertFiles=m["missing"]))
+                          assertFiles=",".join(m["missing"])))
     steps.append(step("readback", **({"dependsOn": "upload"} if steps else {})))
     return {"version": "1.0", "name": "rmt-sync", "displayName": "RMT Release SHA-256",
             "triggers": {"trigger": "manual"}, "strategy": {"timeout": 60}, "stages": [
@@ -230,3 +256,4 @@ if __name__ == "__main__":
                     time.sleep(5)
         else:
             raise ValueError("Unknown mode")
+        cleanup_volumes(manifest)

@@ -359,7 +359,8 @@ RuntimeOfflineBundleName() {
 }
 
 RuntimeOfflineBundleUrl() {
-    return RmtLargeAssetUrl(RuntimeOfflineBundleName())
+    ; 手工下载必须提供完整包，浏览器不会运行分片合并器。
+    return RmtLargeAssetProxy() RmtDownloadDirectUrl(RmtLargeAssetUrl(RuntimeOfflineBundleName()))
 }
 
 ; Win7 在线版：三项系统组件里任意一项缺、且没有对应离线副本，就说明这个包不能用。
@@ -771,14 +772,14 @@ DownloadWithProgress(curl, url, savePath, timeoutSec, pg) {
     headers := savePath ".headers"
     cmd := Format('"{}" -q -L --fail -s -S --suppress-connect-headers --max-time {} -D "{}" -o "{}" "{}"',
         curl, timeoutSec, headers, savePath, url)
-    if (RmtIsAssetUrl(url))
-        cmd := RmtAssetDownloadCommand(url, savePath, headers, timeoutSec)
     pid := 0
     total := 0
     started := A_TickCount
     label := GetLang("备用下载地址")
     sample := SampleDownload
     try {
+        if (RmtIsAssetUrl(url))
+            cmd := RmtAssetDownloadCommand(url, savePath, headers, timeoutSec)
         SetTimer(sample, 500)
         status := RunWait(cmd, , "Hide", &pid)
         if (pg.Cancelled)

@@ -9,7 +9,7 @@ import time
 
 def piece(url, start, end, size, dest, timeout, retries=0):
     headers = dest.with_suffix(".headers")
-    cmd = ["curl", "-q", "-fsSL", "--retry", str(retries), "--connect-timeout", "8",
+    cmd = ["curl", "-q", "-fsSL", "--retry", str(retries), "--retry-all-errors", "--connect-timeout", "15",
            "--max-time", str(timeout), "--range", f"{start}-{end}", "-D", str(headers),
            "-o", str(dest), url]
     result = subprocess.run(cmd, capture_output=True)
@@ -55,19 +55,19 @@ def fetch(url, cdn, path, size):
             path.write_bytes(prefix)
             return
         routes_by_speed = [selected] + [name for name in routes if name != selected]
-        block = 512 * 1024
+        block = 2 * 1024 * 1024
 
         def part(start):
             dest = root / f"{start}.part"
             for name in routes_by_speed:
                 try:
-                    piece(routes[name], start, min(size, start+block)-1, size, dest, 45)
+                    piece(routes[name], start, min(size, start+block)-1, size, dest, 60, retries=2)
                     return dest
                 except (RuntimeError, ValueError) as exc:
                     print(f"RETRY {name} {start}: {exc}", flush=True)
             raise RuntimeError(f"no valid copy of range at {start}")
 
-        with ThreadPoolExecutor(max_workers=8) as pool, path.open("wb") as output:
+        with ThreadPoolExecutor(max_workers=4) as pool, path.open("wb") as output:
             output.write(prefix)
             for dest in pool.map(part, range(len(prefix), size, block)):
                 output.write(dest.read_bytes())

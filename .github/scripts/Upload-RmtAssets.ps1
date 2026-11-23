@@ -118,7 +118,9 @@ foreach ($tag in $assetsByTag.Keys) {
     $publishedNames = @($assetsByTag[$tag] | Split-Path -Leaf)
     $existingNames = gh release view $tag --repo $Repo --json assets --jq '.assets[].name'
     if ($LASTEXITCODE -ne 0) { throw "无法读取 $Repo $tag 的附件" }
-    foreach ($name in $existingNames) {
+    $originalNames = @($publishedNames | Where-Object { $_.EndsWith('.zip') })
+    $obsolete += @(Get-RmtObsoleteAssetVolumes -OriginalNames $originalNames -PublishedNames $publishedNames -ExistingNames $existingNames)
+    foreach ($name in @($existingNames | Sort-Object { if ($_.EndsWith('.parts.json')) { 0 } else { 1 } })) {
         if ($name -cnotin $obsolete -or $name -cin $publishedNames) { continue }
         gh release delete-asset $tag $name --repo $Repo --yes
         if ($LASTEXITCODE -ne 0) { throw "无法删除 $Repo $tag 中的旧附件：$name" }

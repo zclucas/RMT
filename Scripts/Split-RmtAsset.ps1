@@ -1,4 +1,17 @@
 ﻿# Byte volumes preserve the original archive/installer; no extra decompressor is needed.
+function Get-RmtObsoleteAssetVolumes {
+    param([string[]]$OriginalNames, [string[]]$PublishedNames, [string[]]$ExistingNames)
+    foreach ($name in $ExistingNames) {
+        if ($name -cin $PublishedNames) { continue }
+        foreach ($original in $OriginalNames) {
+            if ($name -cmatch ('^' + [regex]::Escape($original) + '\.(?:parts\.json|part\d{4})$')) {
+                $name
+                break
+            }
+        }
+    }
+}
+
 function Split-RmtAsset {
     param(
         [Parameter(Mandatory)][string]$Path,
