@@ -26,6 +26,7 @@ class SideLogicTree {
             insertLineName: "SideDragInsertLine_" t,
             dragGhostName: "SideDragGhost_" t,
             dragGhostTxtName: "SideDragGhostTxt_" t,
+            dragGhostImgName: "SideDragGhostImg_" t,
             ctxMenuName: "SideTreeCtxMenu",
             branchCtxMenuName: "SideBranchCtxMenu",
             blankCtxMenuName: "SideTreeBlankCtxMenu",
