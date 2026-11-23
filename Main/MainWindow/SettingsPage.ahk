@@ -121,8 +121,10 @@
                 ctrl := afterHint(ctrl, "{Binding SelectedItem.Tag, ElementName=" name "}")
             return row(label, ctrl, tip)
         }
-        num(label, name, val, tip := "", help := "") {
-            return row(label, '<TextBox Name="' name '" Text="' this._XmlEsc(String(val)) '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" TextAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', tip, , help)
+        num(label, name, val, tip := "", help := "", singleLineStyle := false) {
+            style := singleLineStyle ? ' Style="{StaticResource RmtSingleLineTextBox}"' : ""
+            padding := singleLineStyle ? "" : ' Padding="10,0" TextAlignment="Center"'
+            return row(label, '<TextBox Name="' name '" Text="' this._XmlEsc(String(val)) '" Height="33" MinHeight="33"' padding style ' VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', tip, , help)
         }
         sld(label, name, valName, val, mn, mx, tk, tip := "") {
             return row(label, '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="9"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Slider Name="' name '" Height="28" Minimum="' mn '" Maximum="' mx '" Value="' val '" TickFrequency="' tk '" IsSnapToTickEnabled="True" VerticalAlignment="Center" Cursor="Hand"/>'
@@ -184,7 +186,10 @@
                     . tog(GetLang("图片识别自适应"), "ChkSearchImageAdaptive", MainSoftData.SearchImageAdaptive, GetLang("仅 OpenCV 生效，匹配分辨率或 DPI 缩放变化后的图片"))
                     . cmb(GetLang("多线程数"), "EditMutiThreadNum", ["-1", "0"], MainSoftData.MutiThreadNum, false
                         , GetLang("-1：动态多线程；0：单线程；n：固定线程数（推荐 3~5）"), , , true)
+                    . num(GetLang("翻译超时(ms)"), "EditTranslateTimeout", MainSoftData.TranslateTimeoutMs,
+                        GetLang("本地与 AI 通道共用，范围 1000～3600000 毫秒。"), "", true)
                     . num(GetLang("网络宏端口"), "EditNetPort", MainSoftData.NetworkPort, GetLang("网络宏端口 1-65535，默认 16888；仅监听本机回环地址。"))
+                    . row(GetLang("下载管理"), '<Button Name="BtnDownloadManager" Content="' GetLang("管理下载") '" HorizontalAlignment="Left" Padding="10,0"/>')
                     . cmb(GetLang("指令备注"), "CmbRemarkAuto", GetLangArr(["不生成", "自动生成", "覆盖生成"]), MainSoftData.RemarkAutoType), "0", "", "general")
                 . card(GetLang("手柄"), "&#xE7FC;", cmb(GetLang("手柄映射"), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType)
                     . cmb(GetLang("宏手柄类型"), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType)
@@ -415,6 +420,7 @@
         this._Bind("EditCoordYFloat", "LostFocus", ObjBindMethod(this, "OnIntEdit", "CoordYFloat"))
         this._Bind("EditMutiThreadNum", "LostFocus", ObjBindMethod(this, "OnIntEdit", "MutiThreadNum"))
         this._Bind("EditMutiThreadNum", "SelectionChanged", ObjBindMethod(this, "OnIntEdit", "MutiThreadNum"))
+        this._Bind("EditTranslateTimeout", "LostFocus", ObjBindMethod(this, "OnSettingBoundedIntText", "TranslateTimeoutMs", 1000, 3600000))
         this._Bind("CmbFont", "SelectionChanged", ObjBindMethod(this, "OnComboText", "FontType"))
         this._Bind("ChkBootStart", "Click", OnBootStartChanged)
         this._Bind("ChkAdminStart", "Click", OnAdminStartChanged)
@@ -452,6 +458,7 @@
 
         ; ---- 设置中心：仅「日志中心」仍为独立查看窗口（非设置项）----
         this._Bind("BtnLogCenter", "Click", (*) => LogCenterGui.ShowGui())
+        this._Bind("BtnDownloadManager", "Click", (*) => DownloadManagerGui.Open())
         this._Bind("BtnEditUIPanelCustom", "Click", (*) => OpenUIPanelCustomDesigner(this))
         this._Bind("BtnResetUIPanelCustom", "Click", (*) => ResetUIPanelCustomSchema(this))
 

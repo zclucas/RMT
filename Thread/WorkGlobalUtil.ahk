@@ -23,6 +23,11 @@ global MyPToken := Gdip_Startup()
 ; §17 热重载：主进程广播 CF 后待重载配置的标志（忙时置位，任务结束 finally 重载）
 global workerConfigDirty := false
 MySendWorkerEvent := SendWorkerEvent
+global MyInternalDownloadRequest := (assetId) => MsgSendHandler("InternalDownload", assetId)
+RmtRequestInternalDownload(assetId) {
+    global MyInternalDownloadRequest
+    return MyInternalDownloadRequest(assetId)
+}
 global MyStopMacro := WorkStopMacro
 global MyTriggerSubMacro := WorkTriggerSubMacro
 global MySubmitGraphBranches := WorkSubmitGraphBranches

@@ -449,8 +449,7 @@ OnToolScreenShot(*) {
         if !FileExist(scPath)
             return
         SetClipboard("")
-        Run('"' scPath '" --tool:"rect,ellipse,arrow,number,line,text,mosaic,eraser,|,undo,redo,|,pin,clipboard,save,close"'
-        )
+        Run('"' scPath '" --tool:"rect,ellipse,arrow,number,line,text,mosaic,eraser,|,undo,redo,|,pin,clipboard,save,close"')
     }
     else {
         TogSelectArea(true, OnToolScreenShotGetArea)

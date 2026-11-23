@@ -114,8 +114,8 @@ ReleaseAllCaches() {
     DllCall("RMT_OpenCV.dll\ReleaseAllCaches", "Cdecl")
 }
 
-FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, text, mode) {
-    result := GetScreenTextObjArr(X1, Y1, X2, Y2, mode)
+FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, text, mode, engine := "") {
+    result := GetScreenTextObjArr(X1, Y1, X2, Y2, mode, engine)
     points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "左右优先")
     if (!points.Length)
         return false
@@ -125,18 +125,18 @@ FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, text, mode) {
 }
 
 ;RapidOcr文本识别 result里面都是窗口坐标
-GetScreenTextObjArr(X1, Y1, X2, Y2, mode) {
+GetScreenTextObjArr(X1, Y1, X2, Y2, mode, engine := "") {
     width := X2 - X1
     height := Y2 - Y1
     pBitmap := Gdip_BitmapFromScreen(X1 "|" Y1 "|" width "|" height)
 
     if !pBitmap
         throw Error("OCR 屏幕截图失败。")
-    try return GetBitmapTextObjArr(pBitmap)
+    try return GetBitmapTextObjArr(pBitmap, engine)
     finally Gdip_DisposeImage(pBitmap)
 }
 
-GetBitmapTextObjArr(pBitmap) {
+GetBitmapTextObjArr(pBitmap, engine := "") {
     locked := false
     try {
         ; 获取位图的宽度和高度
@@ -166,8 +166,7 @@ GetBitmapTextObjArr(pBitmap) {
             NumPut("int", 4, BITMAP_DATA, 16)       ; bytespixel (4字节)
         }
 
-        ; v6 统一多语言模型。
-        ocr := GetChineseOcr()
+        ocr := GetChineseOcr(engine)
         result := ocr.ocr_from_bitmapdata(BITMAP_DATA, , true)
     } finally {
         if locked
@@ -176,8 +175,8 @@ GetBitmapTextObjArr(pBitmap) {
     return result
 }
 
-FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, text, mode) {
-    result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode)
+FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, text, mode, engine := "") {
+    result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode, engine)
     points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "左右优先")
     if (!points.Length)
         return false
@@ -188,7 +187,7 @@ FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, text, mode) {
 
 ; 窗口文本识别
 ; C++ 后台截图 -> OpenCv 转 Mat -> RapidOcr 识别 Mat
-GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode) {
+GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode, engine := "") {
     if (OpenCvEnsure() != "")
         return ""
 
@@ -201,7 +200,7 @@ GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode) {
     if !matPtr
         throw Error("OCR 窗口截图失败。")
     try {
-        ocr := GetChineseOcr()
+        ocr := GetChineseOcr(engine)
         return ocr.ocr_from_mat(matPtr, , true)
     } finally {
         DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")

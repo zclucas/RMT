@@ -202,6 +202,7 @@ class MainConfig {
         this.DynamicCorePoolSize := 3   ; 动态模式核心池大小
         this.ElasticTimeout := 30       ; 弹性 Worker 超时 (秒)
         this.MacroStopType := 1         ; 宏终止方式 (1=智能终止, 2=强制终止)
+        this.TranslateTimeoutMs := 30000 ; 翻译请求全局超时（毫秒）
 
         ; ========== 按键选项 ==========
         this.KeyDownDownType := 1       ; 按下时按下处理 (1=自动松开, 2=忽略重复按下, 3=允许重复按下)
@@ -1084,6 +1085,7 @@ class SearchData {
         this.SuperMultiPointTolerance := 8
         this.MultiPointMode := ""
         this.OCRType := 1   ;1中文  2英文
+        this.OcrEngine := ""
         this.SearchImageType := SearchImageDefaultType() ; 1 OpenCV  2 RMT搜图
         this.ColorMatch := 0 ; OpenCV 图片匹配是否比较颜色，独立于相似度
         this.StartPosX := 0
@@ -1349,6 +1351,7 @@ class ExVariableData {
         this.ExtractType := "屏幕"
         this.WinInfo := "{宏设置窗口绑定}"
         this.OCRType := 1
+        this.OcrEngine := ""
         this.StartPosX := 0
         this.StartPosY := 0
         this.EndPosX := A_ScreenWidth

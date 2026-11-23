@@ -388,10 +388,11 @@ class SearchComboGui {
             . '<RowDefinition Height="32"/>'
             . '<RowDefinition Height="64"/>'
             . '<RowDefinition Height="32"/>'
+            . '<RowDefinition Height="32"/>'
             . '</Grid.RowDefinitions>'
             . '<Grid.ColumnDefinitions>'
-            . '<ColumnDefinition Width="72"/>'
-            . '<ColumnDefinition Width="4"/>'
+            . '<ColumnDefinition Width="' (fs * 6) '"/>'
+            . '<ColumnDefinition Width="0"/>'
             . '<ColumnDefinition Width="*"/>'
             . '<ColumnDefinition Width="8"/>'
             . '<ColumnDefinition Width="64" MinWidth="64"/>'
@@ -498,6 +499,9 @@ class SearchComboGui {
             . '<Grid Name="' this._TN(n, "TextRow") '" Grid.Row="3" Grid.Column="2" Width="228" HorizontalAlignment="Left">'
             . '<ComboBox Name="' this._TN(n, "Text") '" Height="28" MinHeight="28" HorizontalAlignment="Stretch" VerticalAlignment="Center" VerticalContentAlignment="Center" FontSize="' fs '" IsEditable="True"/>'
             . '</Grid>'
+            . '<TextBlock Name="' this._TN(n, "OcrEngineLabel") '" Grid.Row="4" Grid.Column="0" Text="' EscapeXamlXml(GetLang("OCR模型：")) '" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}" FontSize="' fs '"/>'
+            . '<ComboBox Name="' this._TN(n, "OcrEngine") '" Grid.Row="4" Grid.Column="2" Width="228" HorizontalAlignment="Left" Height="28" MinHeight="28" VerticalAlignment="Center" FontSize="' fs '">'
+            . '<ComboBoxItem Content="' EscapeXamlXml(GetLang("跟随全局")) '"/><ComboBoxItem Content="RapidOCR"/><ComboBoxItem Content="Tesseract OCR"/></ComboBox>'
             . '</Grid>'
             . '<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,1,0">'
         if (n > 1)
@@ -698,6 +702,7 @@ class SearchComboGui {
         if (isHex)
             this.ui.Update(this._TN(n, "ColorTip"), "Background", "#" hex)
         this._SetCombo(this._TN(n, "Text"), GetGuiVarArr("text"), GetBuiltinVarName(t.SearchText, true))
+        this.ui.Update(this._TN(n, "OcrEngine"), "SelectedIndex", String(OcrEngineIndex(OcrEngineValue(t))))
         this.ui.Update(this._TN(n, "Similar"), "Text", t.Similar)
         this.ui.Update(this._TN(n, "ColorMatch"), "IsChecked", SearchColorMatchOn(t) ? "True" : "False")
         this.OnTargetTypeChanged(n)
@@ -741,6 +746,7 @@ class SearchComboGui {
             SearchImagePath: last.SearchImagePath,
             Similar: last.Similar,
             OCRType: last.OCRType,
+            OcrEngine: OcrEngineValue(last),
             SearchImageType: last.SearchImageType,
             ColorMatch: SearchColorMatchOn(last) ? 1 : 0,
             Adaptive: ObjHasOwnProp(last, "Adaptive") ? last.Adaptive : 0,
@@ -813,6 +819,8 @@ class SearchComboGui {
         this.ui.Update(tn "ColorRow", "Visibility", isColor ? "Visible" : "Hidden")
         this.ui.Update(tn "TextTipLabel", "Visibility", isText ? "Visible" : "Hidden")
         this.ui.Update(tn "TextRow", "Visibility", isText ? "Visible" : "Hidden")
+        this.ui.Update(tn "OcrEngineLabel", "Visibility", isText ? "Visible" : "Hidden")
+        this.ui.Update(tn "OcrEngine", "Visibility", isText ? "Visible" : "Hidden")
         this.ui.Update(tn "SimilarRow", "Visibility", isText ? "Hidden" : "Visible")
         this.ui.Update(tn "Similar", "Visibility", isText ? "Hidden" : "Visible")
         this.ui.Update(tn "ColorMatchHost", "Visibility", isImage && SearchImageDefaultType() == 1 ? "Visible" : "Collapsed")
@@ -1293,6 +1301,7 @@ class SearchComboGui {
                 SearchImagePath: this.ui.Query(tn "ImagePath"),
                 Similar: this.ui.Query(tn "Similar"),
                 OCRType: 1,   ; v6 统一多语言模型，不再区分
+                OcrEngine: OcrEngineFromIndex(this.ui.Query(tn "OcrEngine>SelectedIndex")),
                 SearchImageType: SearchImageDefaultType(),
                 ColorMatch: this._ToggleInt(this.ui.Query(tn "ColorMatch")),
                 Adaptive: ObjHasOwnProp(this.TargetList[n], "Adaptive") ? this.TargetList[n].Adaptive : 0,
@@ -1321,6 +1330,7 @@ class SearchComboGui {
                 data.SearchImagePath := t.SearchImagePath
                 data.Similar := t.Similar
                 data.OCRType := t.OCRType
+                data.OcrEngine := t.OcrEngine
                 data.SearchImageType := t.SearchImageType
                 data.ColorMatch := t.ColorMatch
                 data.Adaptive := t.Adaptive

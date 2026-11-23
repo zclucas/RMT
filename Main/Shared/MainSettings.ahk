@@ -106,6 +106,10 @@ LoadMainSetting() {
     AppThemeUtil.LoadFromToml()
     MainSoftData.IsModalSubGui := CfgRead(SettingFile, SettingSection, "IsModalSubGui", true)
     MainSoftData.MutiThreadNum := CfgRead(SettingFile, SettingSection, "MutiThreadNum", -1)
+    rawTranslateTimeout := CfgRead(SettingFile, SettingSection, "TranslateTimeoutMs", 30000)
+    MainSoftData.TranslateTimeoutMs := IsInteger(rawTranslateTimeout) ? Integer(rawTranslateTimeout) : 30000
+    if (MainSoftData.TranslateTimeoutMs < 1000 || MainSoftData.TranslateTimeoutMs > 3600000)
+        MainSoftData.TranslateTimeoutMs := 30000
     MainSoftData.DynamicCorePoolSize := CfgRead(SettingFile, SettingSection, "DynamicCorePoolSize", 2)
     MainSoftData.ElasticTimeout := CfgRead(SettingFile, SettingSection, "ElasticTimeout", 30)
     MainSoftData.MacroStopType := Integer(CfgRead(SettingFile, SettingSection, "MacroStopType", 1))

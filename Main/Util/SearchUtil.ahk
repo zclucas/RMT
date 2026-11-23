@@ -59,6 +59,7 @@ GetSearchTargetArr(Data) {
         SuperMultiPointTolerance: ObjHasOwnProp(Data, "SuperMultiPointTolerance") ? Data.SuperMultiPointTolerance : 8,
         MultiPointMode: ObjHasOwnProp(Data, "MultiPointMode") ? Data.MultiPointMode : "",
         OCRType:      ObjHasOwnProp(Data, "OCRType") ? Data.OCRType : 1,
+        OcrEngine:    OcrEngineValue(Data),
         SearchImageType: ObjHasOwnProp(Data, "SearchImageType") ? Data.SearchImageType : SearchImageDefaultType(),
         ColorMatch:   SearchColorMatchOn(Data) ? 1 : 0,
         Adaptive:     ObjHasOwnProp(Data, "Adaptive") ? Data.Adaptive : 0,
@@ -411,7 +412,7 @@ SearchColor(Data, X1, Y1, X2, Y2, &ResX, &ResY, tableItem := "", index := 0) {
 }
 
 SearchText(Data, X1, Y1, X2, Y2, &ResX, &ResY, Text) {
-    return FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, Text, Data.OCRType)
+    return FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, Text, Data.OCRType, OcrEngineValue(Data))
 }
 
 SearchWinImage(Data, hwndList, X1, Y1, X2, Y2, ImagePath, &ResXList, &ResYList, &ResHwndList) {
@@ -476,7 +477,7 @@ SearchWinText(Data, hwndList, X1, Y1, X2, Y2, searchText, &ResXList, &ResYList, 
     ResXList := [], ResYList := [], ResHwndList := []
     for i, hwnd in hwndList {
         ResX := 0, ResY := 0
-        isFound := FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, searchText, Data.OCRType)
+        isFound := FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, searchText, Data.OCRType, OcrEngineValue(Data))
         if (isFound) {
             found := true
             ResHwndList.Push(hwnd)
