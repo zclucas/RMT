@@ -353,24 +353,20 @@
 
             try {
                 switch opcode {
-                    case "CDR":
+                    case "CC":
                         CountDownComplete(args[1])
-                    case "IPR", "IBR":
-                        WorkerInputReply(opcode, args*)
+                    case "IR":
+                        WorkerInputReply(args*)
                     case "VR":
                         WorkerDataReply(args*)
                     case "SN":
-                        snapshot := JSON.parse(args[1])
-                        for pair in snapshot[2]
+                        for pair in JSON.parse(args[1])
                             MySoftData.ArrayMap[pair[1]] := pair[2]
                     case "SA":
                         MySoftData.ArrayMap[args[1]] := JSON.parse(args[2])[1]
                     case "DA":
                         if (MySoftData.ArrayMap.Has(args[1]))
                             MySoftData.ArrayMap.Delete(args[1])
-                    ; SV/DV 已透過共享記憶體直接同步，Worker 無需再接收廣播，此 case 保留為 no-op
-                    case "SV":  ; no-op: 共享記憶體已同步
-                    case "DV":  ; no-op: 共享記憶體已同步
                     case "CT":
                         MySoftData.CMDTip := (args[1] == "1")
                     case "PS":
@@ -405,7 +401,6 @@
                 }
             } catch {
                 ; 数据帧无法应用时退出，让主进程重建并重新同步完整快照。
-                ; SV/DV 已是 no-op（共享記憶體直接同步），即使 catch 也不必退出
                 if (opcode == "SN" || opcode == "SA" || opcode == "DA")
                     ExitApp(1)
             }
