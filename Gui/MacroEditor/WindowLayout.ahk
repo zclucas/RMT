@@ -492,6 +492,7 @@
         this.ui.OnEvent("FavToggle", "Click", ObjBindMethod(this, "_OnToggleFavSection"))
         this.ui.OnEvent("MenuFavToggle", "Click", ObjBindMethod(this, "_OnMenuFavToggle"))
         this.ui.OnEvent("CmdFilter", "TextChanged", ObjBindMethod(this, "_OnCmdFilterChanged"))
+        this.ui.OnEvent("BtnClearCmdFilter", "Click", ObjBindMethod(this, "_OnClearCmdFilter"))
 
         this.ui.Track("EditModeCombo")
         this.ui.Track("MacroText")

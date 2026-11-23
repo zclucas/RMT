@@ -116,14 +116,19 @@
         box.Rows("Auto", "*")
 
         filterHost := box.Add("Grid").Grid_Row(0).Margin("0,0,6,8")
-        filterHost.Add("TextBox").Name("CmdFilter").Height(26).MinHeight(26)
-            .VerticalContentAlignment("Center").Padding("8,0")
+        filterHost.Cols("*", 4, 26)
+        filterHost.Add("TextBox").Name("CmdFilter").Grid_Column(0).Height(26).MinHeight(26)
+            .Style("{StaticResource RmtSingleLineTextBox}").VerticalContentAlignment("Center")
             .FontSize(XAMLHost.MacroBodyFontSize())
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         filterHost.Add("TextBlock").Name("CmdFilterHint").Text(GetLang("筛选指令"))
-            .IsHitTestVisible("False").VerticalAlignment("Center").Margin("10,0,0,0")
+            .Grid_Column(0).IsHitTestVisible("False").VerticalAlignment("Center").Margin("4,0,0,0")
             .Foreground("{DynamicResource TextSub}").FontSize(XAMLHost.MacroBodyFontSize())
+        filterHost.Add("Button").Name("BtnClearCmdFilter").Grid_Column(2)
+            .Style("{StaticResource RmtFoldToolBtn}").Width(26).Height(26).MinHeight(26)
+            .Padding(0).Content(Chr(0xE74D)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+            .FontSize(14).ToolTip(GetLang("清空"))
 
         sv := box.Add("ScrollViewer").Grid_Row(1).VerticalScrollBarVisibility("Auto")
             .HorizontalScrollBarVisibility("Disabled").Padding("0").Margin("0")
@@ -215,6 +220,14 @@
         else if (IsObject(this.ui))
             q := this.ui.Query("CmdFilter")
         this._ApplyCmdFilter(q)
+    }
+
+    _OnClearCmdFilter(*) {
+        if (!IsObject(this.ui))
+            return
+        this.ui.Update("CmdFilter", "Text", "")
+        this._ApplyCmdFilter("")
+        this.ui.Update("CmdFilter", "Focus", "")
     }
 
     _CmdFilterMatch(name, q) {
