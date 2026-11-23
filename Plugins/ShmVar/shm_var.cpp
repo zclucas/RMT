@@ -1,14 +1,18 @@
+#ifndef SHMVAR_EXPORTS
 #define SHMVAR_EXPORTS
+#endif
+
 #include "shm_var.h"
 #include "shm_internal.h"
 
 #include <string>
 #include <string_view>
-#include <format>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <iostream>
+#include <limits>
+#include <type_traits>
+#include <cstring>
 
 namespace {
 
@@ -22,9 +26,9 @@ struct ShmContext {
     bool isCreator = false;
 };
 
-// Thread-local or process-global context
+// Thread-safe in-process context managed by shared_mutex
 static ShmContext g_ctx;
-static std::mutex g_localLock;
+static std::shared_mutex g_lifecycleLock;
 
 // RAII lock for Win32 cross-process Mutex
 class CrossProcessLock {
@@ -52,17 +56,6 @@ private:
     bool m_acquired;
 };
 
-// Helper: allocate relative offset in shared memory
-uint32_t AllocateOffset(shm::ShmHeader* header, size_t size) {
-    size_t aligned = shm::Align8(size);
-    uint64_t current = header->freeOffset;
-    if (current + aligned > header->totalSize) {
-        return shm::OFFSET_NIL; // Out of memory
-    }
-    header->freeOffset += aligned;
-    return static_cast<uint32_t>(current);
-}
-
 // Convert relative offset to pointer in current process address space
 template <typename T = void>
 inline T* OffsetToPointer(uint8_t* base, uint32_t offset) noexcept {
@@ -70,15 +63,166 @@ inline T* OffsetToPointer(uint8_t* base, uint32_t offset) noexcept {
     return reinterpret_cast<T*>(base + offset);
 }
 
-// Notify change via Win32 Event & atomic counter
-void NotifyChange(shm::ShmHeader* header, HANDLE hEvent) {
+// Robust memory allocation within shared memory (avoids overflow)
+uint32_t AllocateOffset(shm::ShmHeader& header, size_t size) noexcept {
+    if (size > SIZE_MAX - 7) return shm::OFFSET_NIL;
+
+    const size_t aligned = shm::Align8(size);
+    const uint64_t current = header.freeOffset;
+
+    if (current >= shm::OFFSET_NIL ||
+        current > header.totalSize ||
+        aligned > header.totalSize - current) {
+        return shm::OFFSET_NIL;
+    }
+
+    header.freeOffset = current + aligned;
+    return static_cast<uint32_t>(current);
+}
+
+// Find existing node or bucket insertion point. keyHash can be provided if already computed.
+static shm::ShmNode* FindNode(uint8_t* base, shm::ShmHeader* header, std::string_view key, uint32_t keyHash, uint32_t* outPrevOffset, uint32_t* outBucketIdx) noexcept {
+    uint32_t bucket = keyHash % shm::HASH_BUCKET_COUNT;
+    if (outBucketIdx) *outBucketIdx = bucket;
+
+    uint32_t prev = shm::OFFSET_NIL;
+    uint32_t curr = header->buckets[bucket];
+
+    while (curr != shm::OFFSET_NIL) {
+        auto* node = OffsetToPointer<shm::ShmNode>(base, curr);
+        if (!node) break;
+        if (node->keyLen == key.size()) {
+            const char* keyPtr = OffsetToPointer<const char>(base, node->keyOffset);
+            if (keyPtr && key == std::string_view(keyPtr, node->keyLen)) {
+                if (outPrevOffset) *outPrevOffset = prev;
+                return node;
+            }
+        }
+        prev = curr;
+        curr = node->nextOffset;
+    }
+
+    if (outPrevOffset) *outPrevOffset = prev;
+    return nullptr;
+}
+
+// Find or allocate a new ShmNode and key buffer
+static shm::ShmNode* GetOrCreateNode(shm::ShmHeader& header, uint8_t* base, std::string_view key, uint32_t keyHash) noexcept {
+    uint32_t prevOffset = shm::OFFSET_NIL;
+    uint32_t bucketIdx = 0;
+    auto* node = FindNode(base, &header, key, keyHash, &prevOffset, &bucketIdx);
+    if (node) {
+        return node;
+    }
+
+    uint32_t nodeOff = AllocateOffset(header, sizeof(shm::ShmNode));
+    if (nodeOff == shm::OFFSET_NIL) return nullptr;
+
+    uint32_t keyOff = AllocateOffset(header, key.size() + 1);
+    if (keyOff == shm::OFFSET_NIL) return nullptr;
+
+    char* keyDst = OffsetToPointer<char>(base, keyOff);
+    std::memcpy(keyDst, key.data(), key.size());
+    keyDst[key.size()] = '\0';
+
+    node = OffsetToPointer<shm::ShmNode>(base, nodeOff);
+    node->nextOffset = header.buckets[bucketIdx];
+    node->type = SHMVAR_TYPE_NONE;
+    node->keyLen = static_cast<uint32_t>(key.size());
+    node->dataLen = 0;
+    node->payload.intVal = 0;
+    node->keyOffset = keyOff;
+    node->reserved = 0;
+
+    header.buckets[bucketIdx] = nodeOff;
+    header.entryCount++;
+
+    return node;
+}
+
+// Template helper to set scalar values (int64_t or double) without variant overhead
+template <typename T>
+static int32_t SetScalarValue(shm::ShmHeader& header, uint8_t* base, std::string_view key, uint32_t keyHash, T val) noexcept {
+    auto* node = GetOrCreateNode(header, base, key, keyHash);
+    if (!node) return SHMVAR_ERR_NO_MEM;
+
+    if constexpr (std::is_same_v<T, int64_t>) {
+        node->type = SHMVAR_TYPE_INT;
+        node->dataLen = sizeof(int64_t);
+        node->payload.intVal = val;
+    } else {
+        node->type = SHMVAR_TYPE_DOUBLE;
+        node->dataLen = sizeof(double);
+        node->payload.doubleVal = val;
+    }
+    return SHMVAR_OK;
+}
+
+// Common blob (string/bytes) write logic with buffer reuse
+static int32_t SetBlobValue(shm::ShmHeader& header, uint8_t* base, std::string_view key, uint32_t keyHash, const void* data, size_t size, uint32_t type, bool nullTerminate) noexcept {
+    auto* node = GetOrCreateNode(header, base, key, keyHash);
+    if (!node) return SHMVAR_ERR_NO_MEM;
+
+    size_t reqLen = nullTerminate ? (size + 1) : size;
+    uint32_t dataOff = shm::OFFSET_NIL;
+
+    if (reqLen > 0) {
+        // Reuse buffer if previously allocated and large enough
+        if ((node->type == SHMVAR_TYPE_STRING || node->type == SHMVAR_TYPE_BYTES) &&
+            node->payload.dataOffset != shm::OFFSET_NIL && node->dataLen >= reqLen) {
+            dataOff = node->payload.dataOffset;
+        } else {
+            dataOff = AllocateOffset(header, reqLen);
+            if (dataOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
+        }
+
+        if (data && size > 0) {
+            void* dst = OffsetToPointer(base, dataOff);
+            std::memcpy(dst, data, size);
+        }
+        if (nullTerminate) {
+            char* dstChar = OffsetToPointer<char>(base, dataOff);
+            dstChar[size] = '\0';
+        }
+    }
+
+    node->type = type;
+    node->dataLen = static_cast<uint32_t>(reqLen);
+    node->payload.dataOffset = dataOff;
+    return SHMVAR_OK;
+}
+
+// Reliable notification via event signaling
+inline void NotifyChange(shm::ShmHeader* header, HANDLE hEvent) noexcept {
     if (header) {
         header->changeCount++;
     }
     if (hEvent) {
-        PulseEvent(hEvent);
         SetEvent(hEvent);
     }
+}
+
+// Internal close without lock
+static void CloseInternal() noexcept {
+    if (g_ctx.baseAddr) {
+        UnmapViewOfFile(g_ctx.baseAddr);
+        g_ctx.baseAddr = nullptr;
+    }
+    if (g_ctx.hMapFile) {
+        CloseHandle(g_ctx.hMapFile);
+        g_ctx.hMapFile = nullptr;
+    }
+    if (g_ctx.hMutex) {
+        CloseHandle(g_ctx.hMutex);
+        g_ctx.hMutex = nullptr;
+    }
+    if (g_ctx.hEvent) {
+        CloseHandle(g_ctx.hEvent);
+        g_ctx.hEvent = nullptr;
+    }
+    g_ctx.mappedSize = 0;
+    g_ctx.mapName.clear();
+    g_ctx.isCreator = false;
 }
 
 } // anonymous namespace
@@ -90,11 +234,21 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         return SHMVAR_ERR_INVALID_ARG;
     }
 
-    std::lock_guard<std::mutex> guard(g_localLock);
+    // Limit maximum size to 4GB due to 32-bit offset indexing
+    if (initialSize > shm::MAX_SHM_SIZE) {
+        return SHMVAR_ERR_INVALID_ARG;
+    }
+
+    std::unique_lock<std::shared_mutex> guard(g_lifecycleLock);
 
     // If already initialized with same name, return OK
     if (g_ctx.baseAddr != nullptr && g_ctx.mapName == mapName) {
         return SHMVAR_OK;
+    }
+
+    // If already attached to a different map, safely close old resources first
+    if (g_ctx.baseAddr != nullptr) {
+        CloseInternal();
     }
 
     // Default 16MB if 0 or too small
@@ -119,8 +273,12 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         return SHMVAR_ERR_SYS_FAIL;
     }
 
-    // Create / Open Event (Auto-reset event for broadcast)
+    // Create / Open Event
     HANDLE hEvent = CreateEventA(NULL, FALSE, FALSE, evtName.c_str());
+    if (!hEvent) {
+        CloseHandle(hMutex);
+        return SHMVAR_ERR_SYS_FAIL;
+    }
 
     // Create File Mapping using INVALID_HANDLE_VALUE (pure RAM)
     DWORD sizeHigh = static_cast<DWORD>((initialSize >> 32) & 0xFFFFFFFF);
@@ -135,30 +293,27 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         shmName.c_str()
     );
 
-    bool isCreator = false;
     if (hMap == NULL) {
+        CloseHandle(hEvent);
         CloseHandle(hMutex);
-        if (hEvent) CloseHandle(hEvent);
         return SHMVAR_ERR_SYS_FAIL;
     }
 
-    if (GetLastError() != ERROR_ALREADY_EXISTS) {
-        isCreator = true;
-    }
+    bool isCreator = (GetLastError() != ERROR_ALREADY_EXISTS);
 
     // Map view
     uint8_t* pBase = static_cast<uint8_t*>(MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, 0));
     if (!pBase) {
         CloseHandle(hMap);
+        CloseHandle(hEvent);
         CloseHandle(hMutex);
-        if (hEvent) CloseHandle(hEvent);
         return SHMVAR_ERR_SYS_FAIL;
     }
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(pBase);
 
-    if (isCreator || header->magic != shm::SHM_MAGIC) {
-        // Initialize header
+    if (isCreator) {
+        // Initialize brand-new header
         header->magic = shm::SHM_MAGIC;
         header->version = shm::SHM_VERSION;
         header->totalSize = initialSize;
@@ -168,6 +323,15 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         header->reserved = 0;
         for (size_t i = 0; i < shm::HASH_BUCKET_COUNT; ++i) {
             header->buckets[i] = shm::OFFSET_NIL;
+        }
+    } else {
+        // Validate existing shared memory layout
+        if (header->magic != shm::SHM_MAGIC || header->version != shm::SHM_VERSION || header->totalSize > shm::MAX_SHM_SIZE) {
+            UnmapViewOfFile(pBase);
+            CloseHandle(hMap);
+            CloseHandle(hEvent);
+            CloseHandle(hMutex);
+            return SHMVAR_ERR_SYS_FAIL;
         }
     }
 
@@ -184,92 +348,26 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
 }
 
 SHMVAR_API int32_t ShmVar_Close(void) {
-    std::lock_guard<std::mutex> guard(g_localLock);
-
-    if (!g_ctx.baseAddr) {
-        return SHMVAR_OK;
-    }
-
-    UnmapViewOfFile(g_ctx.baseAddr);
-    if (g_ctx.hMapFile) CloseHandle(g_ctx.hMapFile);
-    if (g_ctx.hMutex) CloseHandle(g_ctx.hMutex);
-    if (g_ctx.hEvent) CloseHandle(g_ctx.hEvent);
-
-    g_ctx.hMapFile = nullptr;
-    g_ctx.baseAddr = nullptr;
-    g_ctx.mappedSize = 0;
-    g_ctx.hMutex = nullptr;
-    g_ctx.hEvent = nullptr;
-    g_ctx.mapName.clear();
-
+    std::unique_lock<std::shared_mutex> guard(g_lifecycleLock);
+    CloseInternal();
     return SHMVAR_OK;
-}
-
-static shm::ShmNode* FindNode(uint8_t* base, shm::ShmHeader* header, std::string_view key, uint32_t* outPrevOffset, uint32_t* outBucketIdx) {
-    uint32_t bucket = shm::HashKey(key) % shm::HASH_BUCKET_COUNT;
-    if (outBucketIdx) *outBucketIdx = bucket;
-
-    uint32_t prev = shm::OFFSET_NIL;
-    uint32_t curr = header->buckets[bucket];
-
-    while (curr != shm::OFFSET_NIL) {
-        auto* node = OffsetToPointer<shm::ShmNode>(base, curr);
-        if (node->keyLen == key.size()) {
-            const char* keyPtr = OffsetToPointer<const char>(base, node->keyOffset);
-            if (keyPtr && key == std::string_view(keyPtr, node->keyLen)) {
-                if (outPrevOffset) *outPrevOffset = prev;
-                return node;
-            }
-        }
-        prev = curr;
-        curr = node->nextOffset;
-    }
-
-    if (outPrevOffset) *outPrevOffset = prev;
-    return nullptr;
 }
 
 SHMVAR_API int32_t ShmVar_SetInt(const char* key, int64_t val) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    uint32_t prevOffset = shm::OFFSET_NIL;
-    uint32_t bucketIdx = 0;
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, &prevOffset, &bucketIdx);
-
-    if (node) {
-        node->type = SHMVAR_TYPE_INT;
-        node->intVal = val;
-    } else {
-        // Allocate node and key
-        uint32_t nodeOff = AllocateOffset(header, sizeof(shm::ShmNode));
-        if (nodeOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        uint32_t keyOff = AllocateOffset(header, keyView.size() + 1);
-        if (keyOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        char* keyDst = OffsetToPointer<char>(g_ctx.baseAddr, keyOff);
-        std::memcpy(keyDst, keyView.data(), keyView.size());
-        keyDst[keyView.size()] = '\0';
-
-        node = OffsetToPointer<shm::ShmNode>(g_ctx.baseAddr, nodeOff);
-        node->nextOffset = header->buckets[bucketIdx];
-        node->type = SHMVAR_TYPE_INT;
-        node->keyLen = static_cast<uint32_t>(keyView.size());
-        node->dataLen = sizeof(int64_t);
-        node->intVal = val;
-        node->doubleVal = 0.0;
-        node->dataOffset = shm::OFFSET_NIL;
-        node->keyOffset = keyOff;
-
-        header->buckets[bucketIdx] = nodeOff;
-        header->entryCount++;
-    }
+    int32_t rc = SetScalarValue(*header, g_ctx.baseAddr, keyView, keyHash, val);
+    if (rc != SHMVAR_OK) return rc;
 
     NotifyChange(header, g_ctx.hEvent);
     return SHMVAR_OK;
@@ -277,62 +375,41 @@ SHMVAR_API int32_t ShmVar_SetInt(const char* key, int64_t val) {
 
 SHMVAR_API int32_t ShmVar_GetInt(const char* key, int64_t* outVal) {
     if (!key || !outVal) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, nullptr, nullptr);
+    auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
     if (node->type != SHMVAR_TYPE_INT) return SHMVAR_ERR_TYPE_MISMATCH;
 
-    *outVal = node->intVal;
+    *outVal = node->payload.intVal;
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_SetDouble(const char* key, double val) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    uint32_t prevOffset = shm::OFFSET_NIL;
-    uint32_t bucketIdx = 0;
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, &prevOffset, &bucketIdx);
-
-    if (node) {
-        node->type = SHMVAR_TYPE_DOUBLE;
-        node->doubleVal = val;
-    } else {
-        uint32_t nodeOff = AllocateOffset(header, sizeof(shm::ShmNode));
-        if (nodeOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        uint32_t keyOff = AllocateOffset(header, keyView.size() + 1);
-        if (keyOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        char* keyDst = OffsetToPointer<char>(g_ctx.baseAddr, keyOff);
-        std::memcpy(keyDst, keyView.data(), keyView.size());
-        keyDst[keyView.size()] = '\0';
-
-        node = OffsetToPointer<shm::ShmNode>(g_ctx.baseAddr, nodeOff);
-        node->nextOffset = header->buckets[bucketIdx];
-        node->type = SHMVAR_TYPE_DOUBLE;
-        node->keyLen = static_cast<uint32_t>(keyView.size());
-        node->dataLen = sizeof(double);
-        node->intVal = 0;
-        node->doubleVal = val;
-        node->dataOffset = shm::OFFSET_NIL;
-        node->keyOffset = keyOff;
-
-        header->buckets[bucketIdx] = nodeOff;
-        header->entryCount++;
-    }
+    int32_t rc = SetScalarValue(*header, g_ctx.baseAddr, keyView, keyHash, val);
+    if (rc != SHMVAR_OK) return rc;
 
     NotifyChange(header, g_ctx.hEvent);
     return SHMVAR_OK;
@@ -340,81 +417,42 @@ SHMVAR_API int32_t ShmVar_SetDouble(const char* key, double val) {
 
 SHMVAR_API int32_t ShmVar_GetDouble(const char* key, double* outVal) {
     if (!key || !outVal) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, nullptr, nullptr);
+    auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
     if (node->type != SHMVAR_TYPE_DOUBLE) return SHMVAR_ERR_TYPE_MISMATCH;
 
-    *outVal = node->doubleVal;
+    *outVal = node->payload.doubleVal;
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_SetStr(const char* key, const char* str) {
     if (!key || !str) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
     std::string_view valView(str);
-    size_t reqLen = valView.size() + 1; // Include null terminator
+    uint32_t keyHash = shm::HashKey(keyView);
 
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    uint32_t prevOffset = shm::OFFSET_NIL;
-    uint32_t bucketIdx = 0;
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, &prevOffset, &bucketIdx);
-
-    if (node) {
-        // Reuse buffer if capacity allows, otherwise reallocate
-        if (node->dataOffset == shm::OFFSET_NIL || node->dataLen < reqLen) {
-            uint32_t dataOff = AllocateOffset(header, reqLen);
-            if (dataOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-            node->dataOffset = dataOff;
-        }
-        char* dst = OffsetToPointer<char>(g_ctx.baseAddr, node->dataOffset);
-        std::memcpy(dst, valView.data(), valView.size());
-        dst[valView.size()] = '\0';
-        node->type = SHMVAR_TYPE_STRING;
-        node->dataLen = static_cast<uint32_t>(reqLen);
-    } else {
-        uint32_t nodeOff = AllocateOffset(header, sizeof(shm::ShmNode));
-        if (nodeOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        uint32_t keyOff = AllocateOffset(header, keyView.size() + 1);
-        if (keyOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        char* keyDst = OffsetToPointer<char>(g_ctx.baseAddr, keyOff);
-        std::memcpy(keyDst, keyView.data(), keyView.size());
-        keyDst[keyView.size()] = '\0';
-
-        uint32_t dataOff = AllocateOffset(header, reqLen);
-        if (dataOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        char* dst = OffsetToPointer<char>(g_ctx.baseAddr, dataOff);
-        std::memcpy(dst, valView.data(), valView.size());
-        dst[valView.size()] = '\0';
-
-        node = OffsetToPointer<shm::ShmNode>(g_ctx.baseAddr, nodeOff);
-        node->nextOffset = header->buckets[bucketIdx];
-        node->type = SHMVAR_TYPE_STRING;
-        node->keyLen = static_cast<uint32_t>(keyView.size());
-        node->dataLen = static_cast<uint32_t>(reqLen);
-        node->intVal = 0;
-        node->doubleVal = 0.0;
-        node->dataOffset = dataOff;
-        node->keyOffset = keyOff;
-
-        header->buckets[bucketIdx] = nodeOff;
-        header->entryCount++;
-    }
+    int32_t rc = SetBlobValue(*header, g_ctx.baseAddr, keyView, keyHash, valView.data(), valView.size(), SHMVAR_TYPE_STRING, true);
+    if (rc != SHMVAR_OK) return rc;
 
     NotifyChange(header, g_ctx.hEvent);
     return SHMVAR_OK;
@@ -422,90 +460,55 @@ SHMVAR_API int32_t ShmVar_SetStr(const char* key, const char* str) {
 
 SHMVAR_API int32_t ShmVar_GetStr(const char* key, char* buf, size_t bufSize, size_t* outLen) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, nullptr, nullptr);
+    auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
     if (node->type != SHMVAR_TYPE_STRING) return SHMVAR_ERR_TYPE_MISMATCH;
 
+    const uint32_t dataLen = node->dataLen; // includes null terminator
     if (outLen) {
-        *outLen = node->dataLen; // includes null terminator
+        *outLen = dataLen;
     }
 
-    if (!buf || bufSize < node->dataLen) {
+    if (!buf || bufSize < dataLen) {
         return SHMVAR_ERR_BUF_TOO_SMALL;
     }
 
-    const char* src = OffsetToPointer<const char>(g_ctx.baseAddr, node->dataOffset);
-    if (src) {
-        std::memcpy(buf, src, node->dataLen);
+    if (dataLen > 0 && node->payload.dataOffset != shm::OFFSET_NIL) {
+        const char* src = OffsetToPointer<const char>(g_ctx.baseAddr, node->payload.dataOffset);
+        if (src) {
+            std::memcpy(buf, src, dataLen);
+        }
     }
     return SHMVAR_OK;
 }
 
 SHMVAR_API int32_t ShmVar_SetBytes(const char* key, const void* data, size_t size) {
     if (!key || (!data && size > 0)) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    uint32_t prevOffset = shm::OFFSET_NIL;
-    uint32_t bucketIdx = 0;
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, &prevOffset, &bucketIdx);
-
-    if (node) {
-        if (node->dataOffset == shm::OFFSET_NIL || node->dataLen < size) {
-            uint32_t dataOff = AllocateOffset(header, size);
-            if (size > 0 && dataOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-            node->dataOffset = dataOff;
-        }
-        if (size > 0 && data) {
-            void* dst = OffsetToPointer(g_ctx.baseAddr, node->dataOffset);
-            std::memcpy(dst, data, size);
-        }
-        node->type = SHMVAR_TYPE_BYTES;
-        node->dataLen = static_cast<uint32_t>(size);
-    } else {
-        uint32_t nodeOff = AllocateOffset(header, sizeof(shm::ShmNode));
-        if (nodeOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        uint32_t keyOff = AllocateOffset(header, keyView.size() + 1);
-        if (keyOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-
-        char* keyDst = OffsetToPointer<char>(g_ctx.baseAddr, keyOff);
-        std::memcpy(keyDst, keyView.data(), keyView.size());
-        keyDst[keyView.size()] = '\0';
-
-        uint32_t dataOff = shm::OFFSET_NIL;
-        if (size > 0) {
-            dataOff = AllocateOffset(header, size);
-            if (dataOff == shm::OFFSET_NIL) return SHMVAR_ERR_NO_MEM;
-            void* dst = OffsetToPointer(g_ctx.baseAddr, dataOff);
-            std::memcpy(dst, data, size);
-        }
-
-        node = OffsetToPointer<shm::ShmNode>(g_ctx.baseAddr, nodeOff);
-        node->nextOffset = header->buckets[bucketIdx];
-        node->type = SHMVAR_TYPE_BYTES;
-        node->keyLen = static_cast<uint32_t>(keyView.size());
-        node->dataLen = static_cast<uint32_t>(size);
-        node->intVal = 0;
-        node->doubleVal = 0.0;
-        node->dataOffset = dataOff;
-        node->keyOffset = keyOff;
-
-        header->buckets[bucketIdx] = nodeOff;
-        header->entryCount++;
-    }
+    int32_t rc = SetBlobValue(*header, g_ctx.baseAddr, keyView, keyHash, data, size, SHMVAR_TYPE_BYTES, false);
+    if (rc != SHMVAR_OK) return rc;
 
     NotifyChange(header, g_ctx.hEvent);
     return SHMVAR_OK;
@@ -513,30 +516,35 @@ SHMVAR_API int32_t ShmVar_SetBytes(const char* key, const void* data, size_t siz
 
 SHMVAR_API int32_t ShmVar_GetBytes(const char* key, void* buf, size_t bufSize, size_t* outLen) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, nullptr, nullptr);
+    auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
     if (node->type != SHMVAR_TYPE_BYTES) return SHMVAR_ERR_TYPE_MISMATCH;
 
+    const uint32_t dataLen = node->dataLen;
     if (outLen) {
-        *outLen = node->dataLen;
+        *outLen = dataLen;
     }
 
-    if (!buf || bufSize < node->dataLen) {
+    if (!buf || bufSize < dataLen) {
         return SHMVAR_ERR_BUF_TOO_SMALL;
     }
 
-    if (node->dataLen > 0 && node->dataOffset != shm::OFFSET_NIL) {
-        const void* src = OffsetToPointer(g_ctx.baseAddr, node->dataOffset);
+    if (dataLen > 0 && node->payload.dataOffset != shm::OFFSET_NIL) {
+        const void* src = OffsetToPointer(g_ctx.baseAddr, node->payload.dataOffset);
         if (src) {
-            std::memcpy(buf, src, node->dataLen);
+            std::memcpy(buf, src, dataLen);
         }
     }
     return SHMVAR_OK;
@@ -544,16 +552,20 @@ SHMVAR_API int32_t ShmVar_GetBytes(const char* key, void* buf, size_t bufSize, s
 
 SHMVAR_API int32_t ShmVar_Delete(const char* key) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
     uint32_t prevOffset = shm::OFFSET_NIL;
     uint32_t bucketIdx = 0;
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, &prevOffset, &bucketIdx);
+    auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, &prevOffset, &bucketIdx);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
 
@@ -575,9 +587,14 @@ SHMVAR_API int32_t ShmVar_Delete(const char* key) {
 }
 
 SHMVAR_API int32_t ShmVar_WaitForChange(uint32_t timeoutMs) {
-    if (!g_ctx.hEvent) return SHMVAR_ERR_NOT_INIT;
+    HANDLE hEvt = nullptr;
+    {
+        std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
+        if (!g_ctx.hEvent) return SHMVAR_ERR_NOT_INIT;
+        hEvt = g_ctx.hEvent;
+    }
 
-    DWORD res = WaitForSingleObject(g_ctx.hEvent, timeoutMs);
+    DWORD res = WaitForSingleObject(hEvt, timeoutMs);
     if (res == WAIT_OBJECT_0) {
         return SHMVAR_OK;
     } else if (res == WAIT_TIMEOUT) {
@@ -588,14 +605,18 @@ SHMVAR_API int32_t ShmVar_WaitForChange(uint32_t timeoutMs) {
 
 SHMVAR_API int32_t ShmVar_GetType(const char* key, int32_t* outType, size_t* outSize) {
     if (!key) return SHMVAR_ERR_INVALID_ARG;
+
+    std::shared_lock<std::shared_mutex> lifecycleGuard(g_lifecycleLock);
     if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
 
     std::string_view keyView(key);
+    uint32_t keyHash = shm::HashKey(keyView);
+
     CrossProcessLock lock(g_ctx.hMutex);
     if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
 
     auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
-    auto* node = FindNode(g_ctx.baseAddr, header, keyView, nullptr, nullptr);
+    auto* node = FindNode(g_ctx.baseAddr, header, keyView, keyHash, nullptr, nullptr);
 
     if (!node) return SHMVAR_ERR_NOT_FOUND;
 
