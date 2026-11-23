@@ -17,13 +17,17 @@
 - `ShmVar.dll`: 原生動態鏈接庫
 - `test_shm.exe`: 測試驗證執行檔
 
-## 編譯方式 (MinGW-w64 g++ C++23)
-```powershell
-# 編譯 DLL
-& "C:\environment\mingw64\bin\g++.exe" -std=c++23 -O3 -shared -DSHMVAR_EXPORTS -o Plugins\ShmVar\ShmVar.dll Plugins\ShmVar\shm_var.cpp "-Wl,--out-implib,Plugins\ShmVar\libShmVar.a"
+## 編譯方式 (g++ C++23)
 
-# 編譯測試程式
-& "C:\environment\mingw64\bin\g++.exe" -std=c++23 -O3 -o Plugins\ShmVar\test_shm.exe Plugins\ShmVar\test_shm.cpp -IPlugins\ShmVar -LPlugins\ShmVar -lShmVar
+```cmd
+:: 編譯 DLL（啟用 Release 優化、去除斷言，靜態鏈接 C/C++ 運行庫）
+g++ -std=c++23 -O3 -DNDEBUG -DSHMVAR_EXPORTS -shared ^
+    -static-libgcc -static-libstdc++ ^
+    -o Plugins/ShmVar/ShmVar.dll Plugins/ShmVar/shm_var.cpp
+
+:: 編譯測試程式
+g++ -std=c++23 -O3 -o Plugins/ShmVar/test_shm.exe Plugins/ShmVar/test_shm.cpp -LPlugins/ShmVar -lShmVar
+
 ```
 
 ## 測試驗證結果
