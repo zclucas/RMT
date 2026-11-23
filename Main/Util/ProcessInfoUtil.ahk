@@ -2,9 +2,10 @@
 #Include MouseGpuSampler.ahk
 
 class ProcessInfo {
-    static Metrics := ["StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar", "IntegrityVar"]
+    static Metrics := ["StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar"]
     static MouseMetrics := ["StartTimeVar", "UptimeVar", "CpuVar", "GpuVar"]
     static MouseSampleSize := 4096
+    static _previewGpu := 0
 
     static ReadMetrics(data, process, snapshotTime, result, preview, withUsageSize := false, onProgress := 0) {
         want := Map()
@@ -27,16 +28,22 @@ class ProcessInfo {
                 try result.StartTimeVar := this.LocalTime(times.Created)
             if (want.Has("UptimeVar"))
                 result.UptimeVar := Round(Max(0, snapshotTime - times.Created) / 10000000, 3)
-            if (want.Has("IntegrityVar"))
-                try result.IntegrityVar := this.Integrity(handle)
             if (want.Has("StatusVar"))
                 try result.StatusVar := this.Status(handle, process)
+            ; 预览先建立 GPU 基线，与 CPU 的短采样窗口重叠，避免串行 WMI 查询。
+            if (preview && want.Has("GpuVar")) {
+                try {
+                    if (!this._previewGpu)
+                        this._previewGpu := MouseGpuSampler()
+                    this._previewGpu.Sample(process.Pid)
+                }
+            }
             ; 鼠标监视先回传基础信息，避免 GPU/WMI 或 CPU 采样拖住整组字段。
             if (onProgress)
                 onProgress.Call(result)
             if (want.Has("CpuVar")) {
                 try {
-                    sample := this.CpuUsage(handle)
+                    sample := this.CpuUsage(handle, preview ? 100 : 250)
                     if (sample) {
                         result.CpuVar := sample.Percent
                         if (withUsageSize) {
@@ -49,9 +56,19 @@ class ProcessInfo {
             if (onProgress)
                 onProgress.Call(result)
             if (want.Has("GpuVar") && DllCall("WaitForSingleObject", "Ptr", handle, "UInt", 0, "UInt") == 258) {
-                try result.GpuVar := this.GpuUsage(process.Pid)
-                if (withUsageSize)
-                    try result.GpuMemory := this.GpuMemory(process.Pid)
+                if (preview) {
+                    try {
+                        gpu := this._previewGpu.Sample(process.Pid)
+                        if (gpu.Has("GpuVar"))
+                            result.GpuVar := gpu["GpuVar"]
+                        if (withUsageSize && gpu.Has("GpuMemory"))
+                            result.GpuMemory := gpu["GpuMemory"]
+                    }
+                } else {
+                    try result.GpuVar := this.GpuUsage(process.Pid)
+                    if (withUsageSize)
+                        try result.GpuMemory := this.GpuMemory(process.Pid)
+                }
             }
         } finally DllCall("CloseHandle", "Ptr", handle)
     }
@@ -100,12 +117,24 @@ class ProcessInfo {
             NumGet(localTime, 8, "UShort"), NumGet(localTime, 10, "UShort"), NumGet(localTime, 12, "UShort"))
     }
 
-    static CpuUsage(handle) {
+    static FormatUptime(value) {
+        if (value == "")
+            return ""
+        seconds := Floor(value)
+        if (seconds >= 3600)
+            return Format("{} {} {} {} {} {}", Floor(seconds / 3600), GetLang("小时"),
+                Floor(Mod(seconds, 3600) / 60), GetLang("分钟"), Mod(seconds, 60), GetLang("秒"))
+        if (seconds >= 60)
+            return Format("{} {} {} {}", Floor(seconds / 60), GetLang("分钟"), Mod(seconds, 60), GetLang("秒"))
+        return Format("{:.1f} {}", value, GetLang("秒"))
+    }
+
+    static CpuUsage(handle, sampleMs := 250) {
         before := this.Times(handle)
         start := DllCall("GetTickCount64", "UInt64")
         if (!before || before.Exited)
             return ""
-        Sleep(250)
+        Sleep(sampleMs)
         after := this.Times(handle)
         elapsed := DllCall("GetTickCount64", "UInt64") - start
         cores := DllCall("GetActiveProcessorCount", "UShort", 0xffff, "UInt")

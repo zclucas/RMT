@@ -109,14 +109,14 @@ TextOpsDefaultMode(type) => type == "去除空格" ? "去除前后空白字符" 
 TextOpsDefaultSource(type) {
     switch type {
         case "文本拼接": return ""
-        case "时间戳处理": return "当前时间戳"
-        default: return "当前剪切板"
+        case "时间戳处理": return "运行时时间戳"
+        default: return "运行时剪切板"
     }
 }
 
 TextOpsDefaultArgs(type, mode) {
     switch type {
-        case "文本拼接": return mode == "数组" ? "-" : "{当前年}{当前月}{当前日}"
+        case "文本拼接": return mode == "数组" ? "-" : "{运行时年}{运行时月}{运行时日}"
         case "文本分割":
             switch mode {
                 case "内容分割": return ","
@@ -137,7 +137,7 @@ TextOpsSeparatorChoices() {
     items := []
     for option in TextOpsSeparatorOptions()
         items.Push(GetLang(option[1]))
-    items.Push(GetLang("当前剪切板"))
+    items.Push(GetLang("运行时剪切板"))
     return items
 }
 
@@ -147,9 +147,9 @@ TextOpsSeparatorText(value, toDisplay := false) {
         if (value == option[2] || value == label)
             return toDisplay ? label : option[2]
     }
-    clipboard := GetLang("当前剪切板")
-    if (value == "当前剪切板" || value == clipboard)
-        return toDisplay ? clipboard : "当前剪切板"
+    clipboard := GetLang("运行时剪切板")
+    if (value == "运行时剪切板" || value == clipboard)
+        return toDisplay ? clipboard : "运行时剪切板"
     return value
 }
 
@@ -223,8 +223,8 @@ TextOpsResultType(type, mode) {
 
 TextOpsTimestamp(data, tableItem, index) {
     source := Trim(data.Name)
-    if (RegExMatch(source, "^\{([^{}]+)\}$", &reference) && GetLangKey(reference[1]) == "当前时间戳")
-        source := "当前时间戳"
+    if (RegExMatch(source, "^\{([^{}]+)\}$", &reference) && GetLangKey(reference[1]) == "运行时时间戳")
+        source := "运行时时间戳"
     epochMs := TimeEpochMilliseconds(TimeResolveValue(tableItem, index, source))
     if (epochMs == "") {
         RMTErrorShow(GetLang("无效的时间戳"), RMT_LV_WARN, "宏")
@@ -313,8 +313,8 @@ TextOpsConcat(Data, tableItem, index) {
         if (!TryGetArrValue(&source, Data.Name))
             return
         separator := Data.ArgsName
-        if (separator == "当前剪切板")
-            TryGetVarValue(&separator, "当前剪切板", false)
+        if (separator == "运行时剪切板")
+            TryGetVarValue(&separator, "运行时剪切板", false)
         result := ""
         loop source.Length {
             if (A_Index > 1)

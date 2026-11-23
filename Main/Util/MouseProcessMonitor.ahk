@@ -167,13 +167,7 @@ class MouseProcessMonitor {
             return size (size != "" && percent != "" ? " · " : "") percent
         }
         if (field == "UptimeVar" && value != "") {
-            seconds := Floor(value)
-            if (seconds >= 3600)
-                return Format("{} {} {} {} {} {}", Floor(seconds / 3600), GetLang("小时"),
-                    Floor(Mod(seconds, 3600) / 60), GetLang("分钟"), Mod(seconds, 60), GetLang("秒"))
-            if (seconds >= 60)
-                return Format("{} {} {} {}", Floor(seconds / 60), GetLang("分钟"), Mod(seconds, 60), GetLang("秒"))
-            return Format("{:.1f} {}", value, GetLang("秒"))
+            return ProcessInfo.FormatUptime(value)
         }
         return value
     }

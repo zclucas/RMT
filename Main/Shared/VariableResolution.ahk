@@ -95,6 +95,7 @@ GetSmartReplaceVarText(tableItem, index, &text) {
 }
 
 TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLiteral := true) {
+    varName := LegacyRuntimeVarNames().Get(varName, varName)
 
     if (allowLiteral && RegExMatch(varName, "^[0-9A-Fa-f]{6}$")) {
         Value := varName
@@ -107,10 +108,14 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLite
     }
 
     switch varName {
-        case "当前坐标X", "当前坐标Y":
+        case "运行时坐标X", "运行时坐标Y":
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
-            Value := varName == "当前坐标X" ? mouseX : mouseY
+            Value := varName == "运行时坐标X" ? mouseX : mouseY
+            return true
+        case "运行时窗口坐标X", "运行时窗口坐标Y":
+            pos := GetCurWinPos()
+            Value := pos[varName == "运行时窗口坐标X" ? 1 : 2]
             return true
         case "日期文本":
             Value := FormatTime(A_Now, "yyyy-MM-dd")
@@ -121,34 +126,34 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLite
         case "时分秒文本":
             Value := FormatTime(A_Now, "HH:mm:ss")
             return true
-        case "当前秒":
+        case "运行时秒":
             Value := A_Sec
             return true
-        case "当前星期":
+        case "运行时星期":
             Value := A_WDay == 1 ? 7 : A_WDay - 1
             return true
-        case "当前周":
+        case "运行时周":
             Value := Integer(SubStr(A_YWeek, 5))
             return true
-        case "当前时间戳":
+        case "运行时时间戳":
             Value := UnixNow()
             return true
-        case "当前年":
+        case "运行时年":
             Value := A_YYYY
             return true
-        case "当前月":
+        case "运行时月":
             Value := A_MM
             return true
-        case "当前日":
+        case "运行时日":
             Value := A_DD
             return true
-        case "当前时":
+        case "运行时时":
             Value := A_Hour
             return true
-        case "当前分":
+        case "运行时分":
             Value := A_Min
             return true
-        case "当前剪切板":
+        case "运行时剪切板":
             ; 仅剪切板是文本时取值；图片/文件等非文本，或没有文本内容时为「空」
             Value := "空"
             if (DllCall("IsClipboardFormatAvailable", "UInt", 13) || DllCall("IsClipboardFormatAvailable", "UInt", 1)) {
@@ -159,14 +164,14 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLite
                 }
             }
             return true
-        case "当前鼠标颜色":
+        case "运行时鼠标颜色":
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
             CoordMode("Pixel", "Screen")
             Color := PixelGetColor(mouseX, mouseY, "Slow")
             Value := StrReplace(Color, "0x", "")
             return true
-        case "句柄ID":
+        case "运行时句柄ID":
             winId := 0
             try {
                 CoordMode("Mouse", "Screen")
@@ -217,19 +222,30 @@ GetBrightness() {
     return 20
 }
 
+; 旧名称只用于配置迁移和运行兼容，不再出现在变量选项中。
+LegacyRuntimeVarNames() {
+    static names := Map("句柄ID", "运行时句柄ID",
+        "当前坐标X", "运行时坐标X", "当前坐标Y", "运行时坐标Y",
+        "当前鼠标颜色", "运行时鼠标颜色", "当前剪切板", "运行时剪切板",
+        "当前时间戳", "运行时时间戳", "当前年", "运行时年", "当前月", "运行时月",
+        "当前周", "运行时周", "当前星期", "运行时星期", "当前日", "运行时日",
+        "当前时", "运行时时", "当前分", "运行时分", "当前秒", "运行时秒")
+    return names
+}
+
 GetBuiltinVarGroups() {
     static groups := Map(
         "count", ["循环次数", "宏循环次数"],
-        "x", ["当前坐标X"],
-        "y", ["当前坐标Y"],
-        "handle", ["句柄ID"],
-        "color", ["当前鼠标颜色"],
-        "clipboard", ["当前剪切板"],
-        "timestamp", ["当前时间戳"],
-        "calendar", ["当前年", "当前月", "当前周", "当前星期", "当前日"],
-        "hour", ["当前时"],
-        "minute", ["当前分"],
-        "second", ["当前秒"],
+        "x", ["运行时坐标X", "运行时窗口坐标X"],
+        "y", ["运行时坐标Y", "运行时窗口坐标Y"],
+        "handle", ["运行时句柄ID"],
+        "color", ["运行时鼠标颜色"],
+        "clipboard", ["运行时剪切板"],
+        "timestamp", ["运行时时间戳"],
+        "calendar", ["运行时年", "运行时月", "运行时周", "运行时星期", "运行时日"],
+        "hour", ["运行时时"],
+        "minute", ["运行时分"],
+        "second", ["运行时秒"],
         "dateText", ["日期文本"],
         "clockText", ["时分文本", "时分秒文本"]
     )
@@ -265,7 +281,11 @@ GetBuiltinVarName(value, toDisplay := false) {
         for _, keys in GetBuiltinVarGroups()
             names.Push(keys*)
     }
-    key := GetConfigKey(value, names)
+    keys := names.Clone()
+    for old in LegacyRuntimeVarNames()
+        keys.Push(old)
+    key := GetConfigKey(value, keys)
+    key := LegacyRuntimeVarNames().Get(key, key)
     if (toDisplay) {
         for name in names {
             if (name == key)
@@ -288,7 +308,7 @@ TranslateBuiltinVarReferences(value, toDisplay := false) {
 IsTimeCategoryName(name) {
     if (name == "")
         return false
-    key := GetLangKey(name)
+    key := GetBuiltinVarName(name)
     for v in GetTimeCategoryVarArr() {
         if (name == v || key == v || key == GetLangKey(v))
             return true

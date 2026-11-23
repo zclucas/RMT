@@ -142,23 +142,20 @@ class FrontInfoGui {
         body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("绑定来源：")).VerticalAlignment("Center").Margin("0,8,0,8")
         source := body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("SourceCombo").Width(240).Height(28).MinHeight(28)
             .HorizontalAlignment("Left").Margin("0,8,0,8")
-        ; 显示顺序固定：窗口信息、句柄、当前窗口、所有窗口、模块窗口绑定、宏设置窗口绑定。
-        ; 宏设置不提供“当前窗口”，避免把一次性鼠标取窗误当成宏级绑定。
-        this.sources := ["窗口信息", "句柄"]
-        this.sourceModes := [2, 1]
-        if (this.scope != "macro") {
-            this.sources.Push("当前窗口")
-            this.sourceModes.Push(0)
+        ; 运行时窗口按执行时鼠标位置取窗；只有模块绑定可选择不限制窗口。
+        this.sources := ["窗口信息", "句柄", "运行时窗口"]
+        this.sourceModes := [2, 1, 0]
+        if (this.scope == "module") {
+            this.sources.Push("所有窗口")
+            this.sourceModes.Push(3)
         }
-        this.sources.Push("所有窗口")
-        this.sourceModes.Push(3)
+        if (this.scope == "command") {
+            this.sources.Push("宏窗口绑定")
+            this.sourceModes.Push(5)
+        }
         if (this.scope != "module") {
             this.sources.Push("模块窗口绑定")
             this.sourceModes.Push(4)
-        }
-        if (this.scope == "command") {
-            this.sources.Push("宏设置窗口绑定")
-            this.sourceModes.Push(5)
         }
         for label in this.sources
             source.Add("ComboBoxItem").Content(GetLang(label))
@@ -239,13 +236,12 @@ class FrontInfoGui {
             .BorderThickness("1").CornerRadius("3").Height(28).MinHeight(28).Padding("0")
             .SnapsToDevicePixels("True")
         input := box.Add("TextBox").Name("InfoText" idx)
+            .Style("{StaticResource RmtSingleLineTextBox}")
             .Height(26).MinHeight(26).BorderThickness("0").Background("Transparent")
             .Foreground("{DynamicResource InputText}").VerticalContentAlignment("Center")
             .HorizontalScrollBarVisibility("Disabled").VerticalScrollBarVisibility("Disabled")
         if (idx == 2)
-            input.Style("{StaticResource RmtSingleLineTextBox}").VerticalAlignment("Center")
-        else
-            input.Padding("4,1")
+            input.VerticalAlignment("Center")
     }
 
     Init(winInfoCon) {
@@ -253,8 +249,8 @@ class FrontInfoGui {
         this._topOn := true
         this._SyncTopBtn()
         value := winInfoCon.Value
-        mode := this.scope == "module" ? 4 : (this.scope == "macro" ? 5 : 5)
-        if (value == "" || value == "{所有窗口}")
+        mode := 2
+        if (value == "{所有窗口}")
             mode := 3
         fields := ["", "", ""]
         handle := ""
@@ -264,8 +260,8 @@ class FrontInfoGui {
             mode := 5
         else if (InStr(value, "❖") == 1) {
             handle := SubStr(value, 2)
-            mode := (handle == "{句柄ID}" || handle == "{" GetLang("句柄ID") "}") ? 0 : 1
-        } else if (value != "") {
+            mode := IsMouseWindowBinding(value) ? 0 : 1
+        } else if (value != "" && value != "{所有窗口}") {
             mode := 2
             parts := StrSplit(value, "⎖")
             if (parts.Length == 3)
@@ -273,7 +269,7 @@ class FrontInfoGui {
             else
                 fields[1] := value
         }
-        selected := 1
+        selected := 0
         for i, sourceMode in this.sourceModes {
             if (sourceMode == mode) {
                 selected := i - 1
@@ -314,9 +310,9 @@ class FrontInfoGui {
             this.ui.Update("InfoBorder" i, "Visibility", visible)
         }
         this.ui.Update("VarRow", "Visibility", mode == 1 ? "Visible" : "Collapsed")
-        hints := ["窗口信息中的标题、窗口类和进程名共同参与匹配。",
+        hints := ["运行时绑定鼠标所在的窗口。",
             "句柄支持多个 ID，用 | 分隔。",
-            "运行时绑定鼠标所在的窗口。",
+            "窗口信息中的标题、窗口类和进程名共同参与匹配。",
             "本模块不限制窗口。",
             "引用所属模块的窗口绑定。修改模块后自动生效；模块未绑定时没有可用目标。",
             "引用当前宏设置的窗口绑定，并跟随其对模块的继承。修改父级后自动生效。"]
@@ -394,7 +390,7 @@ class FrontInfoGui {
 
     GetInfoStr() {
         switch this.SourceMode() {
-            case 0: return "❖{句柄ID}"
+            case 0: return "❖{运行时句柄ID}"
             case 1: return "❖" Trim(this.ui.Query("InfoText2"))
             case 3: return this.scope == "macro" ? "{所有窗口}" : ""
             case 4: return "{模块窗口绑定}"

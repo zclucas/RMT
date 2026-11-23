@@ -19,7 +19,7 @@ class ProcessManageData {
     UptimeVar := ""
     CpuVar := ""
     GpuVar := ""
-    IntegrityVar := ""
+    IntegrityVar := "" ; 兼容旧配置字段，不再提供权限级别输出。
     ResultArray := ""
     ; 兼容已保存的宏，编辑器不再提供这个输出。
     ErrorVar := ""

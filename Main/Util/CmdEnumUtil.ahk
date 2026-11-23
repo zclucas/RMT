@@ -399,8 +399,11 @@ WindowRegisterResults(data) {
             continue
         if (data.ActionType == "匹配窗口列表")
             MySoftData.GlobalArrMap[name] := true
-        else
+        else {
             MySoftData.GlobalVariMap[name] := true
+            if (label == "句柄")
+                MySoftData.HandleVarMap[name] := true
+        }
     }
 }
 

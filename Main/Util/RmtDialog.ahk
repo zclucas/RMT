@@ -171,14 +171,51 @@ class RmtDialog {
         return { Tall: tall, WinW: w, Lines: nl }
     }
 
-    static _Show(msg, title, buttons, iconChar, iconColor, owner := 0, options := "") {
+    ; 字段式反馈沿用统一弹窗生命周期，避免用空格拼列或为每种指令另建窗口。
+    static InfoFields(fields, title := "", owner := 0) {
+        return this._Show("", title != "" ? title : GetLang("提示"), [GetLang("确定")],
+            Chr(0xE946), "{DynamicResource Accent}", owner, "", ObjBindMethod(this, "_FieldsBody", fields))
+    }
+
+    static _FieldsBody(fields, panel) {
+        labelWidth := 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())
+        box := panel.Add("Border").Background("{DynamicResource InputBg}")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").CornerRadius("4").Padding("10,8")
+        grid := box.Add("ScrollViewer").MaxHeight(440).VerticalScrollBarVisibility("Auto")
+            .HorizontalScrollBarVisibility("Disabled").Add("Grid").Cols(labelWidth, "*", 12, labelWidth, "*")
+        rows := []
+        for field in fields
+            rows.Push("Auto")
+        grid.Rows(rows*)
+        for index, field in fields {
+            row := index - 1
+            if (field[1] is Array) {
+                for side, pair in field {
+                    column := side == 1 ? 0 : 3
+                    grid.Add("TextBlock").Grid_Row(row).Grid_Column(column).Text(pair[1]).Margin("0,5,0,5")
+                        .VerticalAlignment("Center")
+                    grid.Add("TextBlock").Grid_Row(row).Grid_Column(column + 1).Text(pair[2]).Margin("0,5,0,5")
+                        .VerticalAlignment("Center").TextWrapping("Wrap")
+                }
+            } else {
+                grid.Add("TextBlock").Grid_Row(row).Text(field[1]).Margin("0,5,0,5").VerticalAlignment("Top")
+                grid.Add("TextBlock").Grid_Row(row).Grid_Column(1).Grid_ColumnSpan(field.Length >= 3 ? 1 : 4)
+                    .Text(field[2]).Margin("0,5,0,5").TextWrapping("Wrap")
+                if (field.Length >= 3)
+                    grid.Add("TextBlock").Grid_Row(row).Grid_Column(3).Grid_ColumnSpan(2)
+                        .Text(field[3]).Foreground("{DynamicResource TextSub}").Margin("0,5,0,5").TextWrapping("Wrap")
+            }
+        }
+    }
+
+    static _Show(msg, title, buttons, iconChar, iconColor, owner := 0, options := "", bodyBuilder := 0) {
         owner := XamlWin.ModalOwner(RmtDialog._NormalizeOwner(owner))
         try XAMLHost.EnsureDaemonHealthy()
 
         titleHeight := "30"
         fs := XAMLHost.FontSize()
         msg := RmtDialog._LoosenLines(msg)
-        lay := RmtDialog._MsgLayout(msg, fs)
+        lay := bodyBuilder ? {Tall: true, WinW: Max(620, 34 * XAMLHost.ScaleFontSize(fs) + 56), Lines: 12} : RmtDialog._MsgLayout(msg, fs)
         winW := lay.WinW
         fontFamily := ""
         try {
@@ -193,7 +230,9 @@ class RmtDialog {
             btnW := Max(btnW, Round(RmtDialog._LinePx(buttons[A_Index], fs) + 36))
         gapX := (buttons.Length > 2) ? 18 : 52
         ; +56 = 内容区左右各 22 的边距 + 余量，保证按钮行不被窗口边缘裁切
-        winW := Min(640, Max(winW, btnW * buttons.Length + gapX * Max(0, buttons.Length - 1) + 56))
+        winW := Max(winW, btnW * buttons.Length + gapX * Max(0, buttons.Length - 1) + 56)
+        if (!bodyBuilder)
+            winW := Min(640, winW)
 
         main := XAML_Generator("Grid").Name("RmtDialogRoot").Background("{DynamicResource BgColor}")
         if (fontFamily != "")
@@ -209,7 +248,9 @@ class RmtDialog {
             body.MinHeight("96")
         panel := body.Add("StackPanel").Margin(lay.Tall ? "14,14,14,14" : "22,20,22,18")
 
-        if (!lay.Tall) {
+        if (bodyBuilder) {
+            bodyBuilder.Call(panel)
+        } else if (!lay.Tall) {
             ; 短文案：整段居中，窗宽按最长行收紧
             msgTb := panel.Add("TextBlock").Text(msg).Foreground("{DynamicResource TextMain}").FontSize(fs)
                 .HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -230,7 +271,7 @@ class RmtDialog {
             msgTb.InjectResources(roStyle)
             RmtDialog._AttachReadonlyCtxMenu(msgTb)
         }
-        if (fontFamily != "")
+        if (fontFamily != "" && !bodyBuilder)
             msgTb.FontFamily(fontFamily)
 
         PrimaryBtnStyle := RmtDialog._PrimaryButtonStyle()

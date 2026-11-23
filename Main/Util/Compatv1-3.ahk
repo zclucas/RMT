@@ -251,7 +251,7 @@ Compat13_ClearRenameJournal(dir, stems) {
 }
 
 ; 只遍历宏表和指令资源里的宏字段，避免改写备注、提示正文和路径。
-Compat_RewriteMacroFiles(dir, rewriteMacro, rewriteBranches, beforeWrite := "", skipFile := "") {
+Compat_RewriteMacroFiles(dir, rewriteMacro, rewriteBranches, beforeWrite := "", skipFile := "", rewriteBinding := "") {
     changed := false
     loop files, dir "\*.toml" {
         if (A_LoopFileName == skipFile)
@@ -269,6 +269,13 @@ Compat_RewriteMacroFiles(dir, rewriteMacro, rewriteBranches, beforeWrite := "", 
                     field := TomlUtil_StripKey(key)
                     if (Type(value) == "String" && RegExMatch(field, "^(?:Macro|PreMacro|PostMacro|[A-Za-z]+MacroArr\d+)$")) {
                         next := rewriteMacro.Call(value)
+                        if (next != value) {
+                            fields[key] := next
+                            dirty := true
+                        }
+                    }
+                    if (rewriteBinding != "" && Type(value) == "String" && (field == "FrontInfo" || field == "BindWindow")) {
+                        next := rewriteBinding.Call(value)
                         if (next != value) {
                             fields[key] := next
                             dirty := true
@@ -476,20 +483,20 @@ Compat13_UpgradeProfile(dir) {
 }
 
 Compat13_UpgradeBuiltinVariables(dir) {
-    return Compat_RewriteMacroFiles(dir, Compat13_RewriteBuiltinCommands, Compat13_RewriteBuiltinData, "", "CommentFile.toml")
+    return Compat_RewriteMacroFiles(dir, Compat13_RewriteBuiltinCommands, Compat13_RewriteBuiltinData, "", "CommentFile.toml", Compat13_RewriteBuiltinTemplate)
 }
 
 Compat13_BuiltinName(name) {
     switch name, false {
-        case "当前鼠标坐标X", "Mouse X": return "当前坐标X"
-        case "当前鼠标坐标Y", "Mouse Y": return "当前坐标Y"
-        case "当前星期几", "Weekday": return "当前星期"
+        case "当前鼠标坐标X", "Mouse X": return "运行时坐标X"
+        case "当前鼠标坐标Y", "Mouse Y": return "运行时坐标Y"
+        case "当前星期几", "Weekday": return "运行时星期"
         case "当前日期", "Current Date": return "日期文本"
         case "当前时间", "Current Time": return "时分文本"
         case "当前时间(秒)", "当前时间秒", "Current Time (Seconds)": return "时分秒文本"
-        case "Current Second": return "当前秒"
+        case "Current Second": return "运行时秒"
     }
-    return name
+    return GetBuiltinVarName(name)
 }
 
 Compat13_RewriteBuiltinTemplate(text) {
@@ -529,7 +536,7 @@ Compat13_RewriteBuiltinData(data, rewriteMacro) {
         "MaxVariableArr"]
     static templates := ["Text", "Target", "StdIn", "FilePath", "Content", "ExtractStr",
         "SearchText", "SearchImagePath", "WinInfo", "SearchValue", "NewTitle", "Search", "Replace",
-        "ExpressionArr", "Param1", "Param2"]
+        "ExpressionArr", "Param1", "Param2", "ArgsName", "BindWindow", "FrontInfo", "Front", "FrontStr", "TargetTitle"]
     changed := Compat13_RewriteBranches(data, rewriteMacro)
     ; 文本处理的这些参数先按变量名查找，找不到才作为文字使用。
     if (data.HasOwnProp("ArgsType") && data.HasOwnProp("Type") && data.HasOwnProp("SaveType")
@@ -582,6 +589,16 @@ Compat13_RewriteBuiltinData(data, rewriteMacro) {
                 changed := Compat13_RewriteBuiltinField(data.TimeConfig, field, Compat13_RewriteBuiltinTemplate) || changed
             }
         }
+    }
+    ; 分辨率配置、组合搜索目标等嵌套对象同样按字段用途迁移。
+    for _, value in data.OwnProps() {
+        if (value is Array) {
+            for item in value {
+                if (IsObject(item) && !(item is Array))
+                    changed := Compat13_RewriteBuiltinData(item, rewriteMacro) || changed
+            }
+        } else if (IsObject(value))
+            changed := Compat13_RewriteBuiltinData(value, rewriteMacro) || changed
     }
     return changed
 }

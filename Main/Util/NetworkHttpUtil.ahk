@@ -360,6 +360,7 @@ NetworkIsValidVarName(name) {
 
 ; 系统变量重名判定：对照 GetSystemVarArr()（本地化显示名）与 GetLangKey() 键名两套（架构文档 §7-6）
 IsSystemVarName(name) {
+    name := GetBuiltinVarName(name)
     for v in GetSpecialVarArr() {
         if (name == v || name == GetLangKey(v))
             return true

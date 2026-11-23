@@ -537,11 +537,21 @@ class CmdEditorForm {
         return combo
     }
 
-    static WindowBindingOptions := [
-        ["当前窗口", "❖{句柄ID}"],
-        ["宏设置窗口绑定", "{宏设置窗口绑定}"],
-        ["模块窗口绑定", "{模块窗口绑定}"],
-    ]
+    static WindowBindingOptions {
+        get {
+            options := [
+                ["运行时窗口", "❖{运行时句柄ID}"],
+                ["宏窗口绑定", "{宏设置窗口绑定}"],
+                ["模块窗口绑定", "{模块窗口绑定}"]]
+            if (MySoftData.HasOwnProp("HandleVarMap")) {
+                for name in MySoftData.HandleVarMap {
+                    if (name != "")
+                        options.Push([name, "❖{" name "}"])
+                }
+            }
+            return options
+        }
+    }
 
     static WindowBindingCombo(parent, name) {
         combo := this.Combo(parent, name, true).IsTextSearchEnabled("True")

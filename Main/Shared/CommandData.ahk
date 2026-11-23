@@ -194,6 +194,8 @@ SaveMacroCMDData(Data) {
     NormalizeCommandData(cmdKey, Data)
     saveStr := JSON.stringify(Data, 0)
     CfgWrite(saveStr, DataFile, SettingSection, Data.SerialStr)
+    if (cmdKey == "变量")
+        RegisterHandleVariableRows(Data)
     if (MySoftData.DataCacheMap.Has(Data.SerialStr))
         MySoftData.DataCacheMap.Delete(Data.SerialStr)
 }
