@@ -29,7 +29,9 @@ ResolveEditorBindWindow(context, winInfo) {
 }
 
 IsMouseWindowBinding(infoStr) {
-    return infoStr == "❖{句柄ID}" || infoStr == "❖{" GetLang("句柄ID") "}"
+    if (infoStr == "❖{运行时句柄ID}" || infoStr == "❖{句柄ID}")
+        return true
+    return RegExMatch(infoStr, "^❖\{([^{}]+)\}$", &name) && GetBuiltinVarName(name[1]) == "运行时句柄ID"
 }
 
 WindowBindingMouseActive(*) {

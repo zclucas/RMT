@@ -415,6 +415,7 @@ class SoftData {
         this.GlobalVariMap := Map()     ;UI下拉显示变量
         this.VariableMap := ShmVariableMap("RMT_Shared_Variables")       ;真正的全局变量（跨进程纯共享内存）
         this.TimeVarMap := Map()        ;记录时间变量（包含获取时间变量指令生成的变量）
+        this.HandleVarMap := Map()      ;窗口信息指令生成的句柄变量
         this.DataFileMap := Map()       ;配置命令对应的文件路径
         this.DataClassMap := Map()      ;配置对应的数据类型
 
@@ -1614,7 +1615,7 @@ class TextOpsData {
         this.Type := "文本拼接"
         this.Name := ""
         this.ArgsType := "拼接文本"
-        this.ArgsName := "{当前年}{当前月}{当前日}"
+        this.ArgsName := "{运行时年}{运行时月}{运行时日}"
         this.Search := "" ; 查找文本
         this.Replace := "" ; 替换文本
         this.MatchType := "普通文本"

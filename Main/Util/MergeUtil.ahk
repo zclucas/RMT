@@ -703,6 +703,7 @@ class MergeUtil {
     static IsSystemVarName(name) {
         if (name == "")
             return true
+        name := GetBuiltinVarName(name)
         for v in GetSpecialVarArr() {
             if (name == v || name == GetLangKey(v))
                 return true

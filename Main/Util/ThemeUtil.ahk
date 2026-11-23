@@ -78,7 +78,7 @@ class AppThemeUtil {
             Theme_Color01: "#FF0078D7",
             Theme_Color02: "#FF106EBE",
             Theme_Color03: "#FFE3F2FD",
-            Theme_Color04: "#FFEBEBEB",
+            Theme_Color04: "#FFD8DDE5",
             Theme_Color05: "#FF1A1A1A",
             Theme_Color06: "#FFF0F0F0",
             Theme_Color07: "#FFFFFFFF",
@@ -93,7 +93,7 @@ class AppThemeUtil {
             Theme_Color01: "#FF475569",
             Theme_Color02: "#FF334155",
             Theme_Color03: "#FFE2E8F0",
-            Theme_Color04: "#FFE2E8F0",
+            Theme_Color04: "#FFD9E1EA",
             Theme_Color05: "#FF1E293B",
             Theme_Color06: "#FFF8FAFC",
             Theme_Color07: "#FFFFFFFF",
@@ -108,7 +108,7 @@ class AppThemeUtil {
             Theme_Color01: "#FF4A4A4A",
             Theme_Color02: "#FF5A5A5A",
             Theme_Color03: "#FF3D3D3D",
-            Theme_Color04: "#FF111111",
+            Theme_Color04: "#FF383838",
             Theme_Color05: "#FFE8E8E8",
             Theme_Color06: "#FF1E1E1E",
             Theme_Color07: "#FF2D2D2D",
@@ -138,7 +138,7 @@ class AppThemeUtil {
             Theme_Color01: "#FF1E90FF",
             Theme_Color02: "#FF187BCD",
             Theme_Color03: "#FFE0F0FF",
-            Theme_Color04: "#FFD6EAF8",
+            Theme_Color04: "#FFC7E1F4",
             Theme_Color05: "#FF1A365D",
             Theme_Color06: "#FFF0F8FF",
             Theme_Color07: "#FFFFFFFF",
@@ -153,7 +153,7 @@ class AppThemeUtil {
             Theme_Color01: "#FFDB2777",
             Theme_Color02: "#FFBE185D",
             Theme_Color03: "#FFFFE4EC",
-            Theme_Color04: "#FFFFE4EC",
+            Theme_Color04: "#FFF7CEDD",
             Theme_Color05: "#FF9F1239",
             Theme_Color06: "#FFFFF0F5",
             Theme_Color07: "#FFFFFFFF",
@@ -168,7 +168,7 @@ class AppThemeUtil {
             Theme_Color01: "#FF65A30D",
             Theme_Color02: "#FF4D7C0F",
             Theme_Color03: "#FFECF4D3",
-            Theme_Color04: "#FFECF4D3",
+            Theme_Color04: "#FFDDE9B7",
             Theme_Color05: "#FF365314",
             Theme_Color06: "#FFF7FBEA",
             Theme_Color07: "#FFFFFFFF",
@@ -183,7 +183,7 @@ class AppThemeUtil {
             Theme_Color01: "#FF0D9488",
             Theme_Color02: "#FF0F766E",
             Theme_Color03: "#FFCCFBF1",
-            Theme_Color04: "#FFCCFBF1",
+            Theme_Color04: "#FFBFE9DF",
             Theme_Color05: "#FF134E4A",
             Theme_Color06: "#FFF0FDFA",
             Theme_Color07: "#FFFFFFFF",
@@ -198,7 +198,7 @@ class AppThemeUtil {
             Theme_Color01: "#FF7C3AED",
             Theme_Color02: "#FF6D28D9",
             Theme_Color03: "#FFF3E8FF",
-            Theme_Color04: "#FFF3E8FF",
+            Theme_Color04: "#FFE5D3F5",
             Theme_Color05: "#FF4C1D95",
             Theme_Color06: "#FFFAF5FF",
             Theme_Color07: "#FFFFFFFF",
@@ -527,6 +527,10 @@ class AppThemeUtil {
     ; ---------- toml 读写 ----------
 
     static LoadFromToml() {
+        static legacyTitleColors := Map(
+            "Default", "#FFEBEBEB", "FrostGray", "#FFE2E8F0", "DarkNight", "#FF111111",
+            "Ocean", "#FFD6EAF8", "PinkSakura", "#FFFFE4EC", "Matcha", "#FFECF4D3",
+            "Celadon", "#FFCCFBF1", "DuskPurple", "#FFF3E8FF")
         static legacyGraphColors := Map(
             "Default", "#FFFFFFFF", "FrostGray", "#FFF8FAFC", "WarmSun", "#FFFFF8DC",
             "Ocean", "#FFF0F8FF", "PinkSakura", "#FFFFF0F5", "Matcha", "#FFF7FBEA",
@@ -548,6 +552,9 @@ class AppThemeUtil {
             if (saved == "")
                 continue
             color := AppThemeUtil.NormalizeArgb(saved)
+            ; 旧预设保存过全部色值，只升级仍等于旧预设的标题色；Custom 与手调颜色保留。
+            if (def.Key == "Theme_Color04" && color == legacyTitleColors.Get(themeKey, ""))
+                continue
             ; 仅升级浅色预设的旧连线色，自定义主题按已保存值读取。
             if (def.Key == "Theme_Color13" && color == legacyGraphColors.Get(themeKey, ""))
                 continue

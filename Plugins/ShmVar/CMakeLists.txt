@@ -8,8 +8,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Shared Library (DLL)
 add_library(ShmVar SHARED
     shm_var.cpp
+    shm_core.cpp
+    shm_core.h
     shm_var.h
     shm_internal.h
+    shm_allocator.h
+    buddy_alloc.h
 )
 
 target_compile_definitions(ShmVar PRIVATE SHMVAR_EXPORTS)

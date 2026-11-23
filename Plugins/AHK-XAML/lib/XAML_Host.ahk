@@ -1202,7 +1202,38 @@ class XAMLHost {
     ; 子窗口只跟主界面 Viewbox 比例，不因主题字号改变宽高。
     ; 主界面 / 主题选项 / 取色与准星等已自带根尺寸则跳过；图形节点 skipFontScale 跳过。
     ; 透明浮层、自由粘贴不改尺寸，避免坐标/内容被拉伸。
-    static ApplyDialogVisualScale(&xaml, skip := false) {
+    static EditorDisplay(ownerHwnd := 0) {
+        hwnd := IsInteger(ownerHwnd) && ownerHwnd ? Integer(ownerHwnd) : DllCall("GetForegroundWindow", "Ptr")
+        monitor := DllCall("MonitorFromWindow", "Ptr", hwnd, "UInt", 2, "Ptr")
+        info := Buffer(40, 0)
+        NumPut("UInt", 40, info)
+        dpi := A_ScreenDPI
+        width := A_ScreenWidth, height := A_ScreenHeight
+        workWidth := width, workHeight := height
+        if (DllCall("GetMonitorInfoW", "Ptr", monitor, "Ptr", info)) {
+            width := NumGet(info, 12, "Int") - NumGet(info, 4, "Int")
+            height := NumGet(info, 16, "Int") - NumGet(info, 8, "Int")
+            workWidth := NumGet(info, 28, "Int") - NumGet(info, 20, "Int")
+            workHeight := NumGet(info, 32, "Int") - NumGet(info, 24, "Int")
+            try {
+                dx := 0, dy := 0
+                if (DllCall("shcore\GetDpiForMonitor", "Ptr", monitor, "Int", 0, "UInt*", &dx, "UInt*", &dy, "Int") == 0 && dx > 0)
+                    dpi := dx
+            }
+            ; 主屏沿用主窗口的 AHK 屏幕坐标口径，兼容远程桌面分辨率虚拟化。
+            if (NumGet(info, 36, "UInt") & 1) {
+                workWidth *= A_ScreenWidth / width
+                workHeight *= A_ScreenHeight / height
+                width := A_ScreenWidth, height := A_ScreenHeight, dpi := A_ScreenDPI
+            }
+        }
+        return {Scale: XAMLHost.EditorDisplayScale(width, height, dpi),
+            WorkWidth: workWidth * 96 / dpi, WorkHeight: workHeight * 96 / dpi}
+    }
+
+    static EditorDisplayScale(width, height, dpi) => Min(width / 1920, height / 1080) * 96 / dpi
+
+    static ApplyDialogVisualScale(&xaml, skip := false, ownerHwnd := 0) {
         if (skip || InStr(xaml, 'x:Key="RmtFluidDialogLayout"'))
             return
         winEnd := InStr(xaml, ">")
@@ -1221,14 +1252,29 @@ class XAMLHost {
         pos := InStr(xaml, "</Window.Resources>")
         if (!pos)
             return
-        uiScale := XAMLHost.GetMainViewboxScale()
+        isCommandEditor := InStr(xaml, 'Name="CmdEditorTitle"') || InStr(xaml, 'Name="MacroEditorTitle"')
+        if (isCommandEditor)
+            display := XAMLHost.EditorDisplay(ownerHwnd)
+        uiScale := isCommandEditor
+            ? display.Scale
+            : XAMLHost.GetMainViewboxScale()
         hasSizeToContent := InStr(xaml, "SizeToContent=")
-        if (uiScale <= 1.001)
+        ; 内容自适应高度的编辑器也要留在工作区内；Viewbox 在到达上限时等比缩小。
+        if (isCommandEditor && hasSizeToContent && !InStr(windowHead, "MaxHeight=")) {
+            maxHeight := Max(1, Floor(display.WorkHeight - 16))
+            xaml := RegExReplace(xaml, "i)<Window\b", '<Window MaxHeight="' maxHeight '"', , 1)
+        }
+        if (!isCommandEditor && uiScale <= 1.001)
             return
         if (!RegExMatch(xaml, 'Width="(\d+(?:\.\d+)?)"', &mw))
             return
         designW := Float(mw[1])
         rootW := Round(designW)
+        if (isCommandEditor) {
+            uiScale := Min(uiScale, Max(1, display.WorkWidth - 16) / rootW)
+            if (!hasSizeToContent && RegExMatch(windowHead, '\bHeight="(\d+(?:\.\d+)?)"', &heightMatch))
+                uiScale := Min(uiScale, Max(1, display.WorkHeight - 16) / Float(heightMatch[1]))
+        }
         winW := Round(rootW * uiScale)
         xaml := RegExReplace(xaml, 'Width="' mw[1] '"', 'Width="' winW '"', , 1)
 
@@ -2278,9 +2324,9 @@ class XAMLHost {
         bamlPath := libDir "\dep\xaml.components.baml"
         xamlPath := libDir "\dep\xaml.components.xaml"
         if FileExist(bamlPath) {
-            embeddedRes .= ' /resource:"' bamlPath '"'
+            embeddedRes .= ' /resource:"' bamlPath '",xaml.components.baml'
         } else if FileExist(xamlPath) {
-            embeddedRes .= ' /resource:"' xamlPath '"'
+            embeddedRes .= ' /resource:"' xamlPath '",xaml.components.xaml'
         }
 
         for _, res in extraResources {
@@ -2918,7 +2964,7 @@ class XAMLHost {
                     cleanXaml := StrReplace(cleanXaml, 'TextOptions.TextRenderingMode="ClearType"', 'TextOptions.TextRenderingMode="Aliased"')
                 }
             }
-            XAMLHost.ApplyDialogVisualScale(&cleanXaml, this.IsFontScaleSkipped())
+            XAMLHost.ApplyDialogVisualScale(&cleanXaml, this.IsFontScaleSkipped(), this.ownerHwnd)
             inlinePayload := "#INIT#" cleanXaml "`n---AHK-XAML-EVENTS---`n" eventBindings
             ; 后台启动（rmt -min）：让引擎建完窗立刻收起，避免「先显示再被隐藏」的那一下
             if (this.HasOwnProp("_startHidden") && this._startHidden)
@@ -3913,7 +3959,7 @@ XAML_TEMPLATE := '
         <Window.Resources>
             <sys:Double x:Key="TitleBarHeight">%CaptionHeight%</sys:Double>
             <SolidColorBrush x:Key="BgColor" Color="#F0F0F0" />
-            <SolidColorBrush x:Key="TitleBarColor" Color="#EBEBEB" />
+            <SolidColorBrush x:Key="TitleBarColor" Color="#D8DDE5" />
             <SolidColorBrush x:Key="TitleBarForeground" Color="#1A1A1A" />
             <SolidColorBrush x:Key="TextMain" Color="#1A1A1A" />
             <SolidColorBrush x:Key="TextSub" Color="#666666" />

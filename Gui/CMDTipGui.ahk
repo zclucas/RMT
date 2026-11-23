@@ -11,6 +11,7 @@ class CMDTipGuiFacade {
     }
 
     Show(opts := "") {
+        this._owner._displayRequested := true
         this._owner._ShowWindow(opts)
     }
 
@@ -32,6 +33,11 @@ class CMDTipGui {
         this._viewPos := 0
         this._contentText := ""
         this.closed := true
+        ; 显示意图独立于 HWND：关闭可能早于异步建窗或 Loaded 回调。
+        this._displayRequested := false
+        this._buildVersion := 0
+        this._windowVersion := 0
+        this._opening := false
         ; 帧末批量提交：宏循环每秒可执行上千条指令，逐条同步 Update（内部 SendMessage）
         ; 会使主进程产生毫秒级阻塞，投递队列迅速达到 1 万条上限（PostMessage 返回 1816），
         ; 导致其他 Worker 的通知无法投递。改为帧末一次提交。
@@ -137,6 +143,7 @@ class CMDTipGui {
     }
 
     ShowGui(CMDStr) {
+        this._displayRequested := true
         if (!this.isLoadParams) {
             this.isLoadParams := true
             this.LoadParams()
@@ -161,6 +168,8 @@ class CMDTipGui {
             this._AutoClearCheck()
         }
 
+        if (!this._displayRequested)
+            return
         this.AddCMD(CMDStr)
 
         if (!this._wheelCb) {
@@ -179,14 +188,22 @@ class CMDTipGui {
     ; 确保窗口存在且可见。返回 false 表示内容无法显示（窗口创建失败）。
     ; deep=true 时额外向引擎发起一次响应性探测（同步跨进程，仅在窗口状态未知时使用）。
     _EnsureWindow(deep := true) {
+        ; 句柄尚未回传时复用在建窗口，避免快速开关创建多个浮层。
+        if (this._opening)
+            return true
         hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
-        if (this.closed || !IsObject(this.ui) || !XAMLHost.CanReuseWindow(hwnd, deep)) {
+        ; 通用 CanReuseWindow 将隐藏窗口视为失效；本浮层的 Hide 是正常状态，
+        ; 只检查句柄与响应性，重新开启时复用它，而不是留下旧窗口再建一个。
+        reusable := hwnd && DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+        if (reusable && deep)
+            reusable := XAMLHost.IsHwndResponsive(hwnd, 400)
+        if (this.closed || !IsObject(this.ui) || !reusable) {
             ; 建窗开销较大（XAML 构造、编码、daemon 创建），置于消息回调中会使
             ; 回调期间主线程完全阻塞。改由伪线程执行，先归还消息循环控制权；
             ; 期间内容累积在 _pendingCmd，建窗完成后统一发送。
             if (!this._buildScheduled) {
                 this._buildScheduled := true
-                SetTimer(ObjBindMethod(this, "_DeferredBuild"), -1)
+                SetTimer(ObjBindMethod(this, "_DeferredBuild", this._buildVersion), -1)
             }
             return true
         }
@@ -198,10 +215,10 @@ class CMDTipGui {
     }
 
     ; 伪线程中执行建窗
-    _DeferredBuild() {
+    _DeferredBuild(version) {
+        if (version != this._buildVersion || !this._displayRequested)
+            return
         this._buildScheduled := false
-        ; 此处不能判断 this.closed：其初始值为 true（表示尚无窗口），
-        ; 该值在 _BuildAndShow 开头才被清除；提前判断会导致窗口永不创建。
         this._BuildAndShow()
         try this.OnToggleMacroWorkState()
         ; 数据不在此处补发：建窗期间累积的内容由 _AfterWindowReady 全量渲染
@@ -281,6 +298,7 @@ class CMDTipGui {
         if (!wasVisible)
             return
 
+        this._displayRequested := true
         this._BuildAndShow()
         this._contentText := savedText
         this.ShowCount := savedCount
@@ -304,6 +322,8 @@ class CMDTipGui {
     }
 
     _BuildAndShow() {
+        this._opening := true
+        version := ++this._windowVersion
         this.closed := false
         bg := this._BgBrush(this.BGColor)
         fg := this.FontColor
@@ -375,42 +395,54 @@ class CMDTipGui {
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
-        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
-        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
+        this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing", version))
+        this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad", version))
 
         this.Gui := CMDTipGuiFacade(this)
         this._ApplyContentColors()
         ; 至此已占用一整轮消息循环（XAML 构造 + XAMLHost 构造）。
         ; Show 推迟到下一个循环执行：悬浮窗节拍为 16ms，连续执行两步会跳过多帧。
-        try SetTimer(ObjBindMethod(this, "_ShowDeferred"), -1)
+        try SetTimer(ObjBindMethod(this, "_ShowDeferred", version), -1)
     }
 
     ; 建窗第二步（伪线程）：仅执行 Show。
     ; 不使用 Open：其内部以 Sleep 轮询句柄（实测 200~700ms，最坏 2 秒）。
     ; 主题同样推迟（deferTheme=true）：该操作为约 30 条 Resource 的同步批量更新。
-    _ShowDeferred() {
+    _ShowDeferred(version) {
+        if (version != this._windowVersion)
+            return
+        if (!this._displayRequested) {
+            this._opening := false
+            return
+        }
         if (this.closed || !IsObject(this.ui))
             return
         r := XamlWin.OpenNoWait(this.ui, "", "", true)
         if (!r) {
+            this._opening := false
             this._windowOK := false
             return
         }
-        this._windowOK := true
-        try this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_OnWindowLoaded"))
+        this._windowOK := this._displayRequested
+        try this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "_OnWindowLoaded", version))
     }
 
     ; 两个 LoadedHwnd 回调（OnWindowLoad 与本回调）汇入同一入口，仅执行一次。
     ; 回调栈中不得同步刷新 XAML：引擎正在等待该事件回执，再发送会相互等待。
-    _OnWindowLoaded(state, ctrlName, eventName) {
-        this._QueueWindowReady()
+    _OnWindowLoaded(version, state, ctrlName, eventName) {
+        this._QueueWindowReady(version)
     }
 
-    OnWindowLoad(state, ctrl, event) {
-        this._QueueWindowReady()
+    OnWindowLoad(version, state, ctrl, event) {
+        this._QueueWindowReady(version)
     }
 
-    _QueueWindowReady() {
+    _QueueWindowReady(version) {
+        if (version != this._windowVersion)
+            return
+        ; 引擎此时已经 Show，但首帧仍被遮住；关闭请求须在揭示前落实。
+        if (!this._displayRequested)
+            this._SyncVisibility(false)
         if (this._readyScheduled)
             return
         this._readyScheduled := true
@@ -419,7 +451,7 @@ class CMDTipGui {
         ; 窗口已显示，单次 SetWindowLong 实测 25ms，会导致悬浮窗跳帧。
         ; 两者均为本地 Win32 调用，不经 IPC，故可置于事件回调中。
         try this._ApplyNativeStyles()
-        try SetTimer(ObjBindMethod(this, "_AfterWindowReady"), -1)
+        try SetTimer(ObjBindMethod(this, "_AfterWindowReady", version), -1)
     }
 
     ; 本地窗口样式（非 XAML）：穿透、不激活、工具窗口、置顶。
@@ -444,7 +476,9 @@ class CMDTipGui {
     ; 上述操作合计十余次 Update。逐条发送即十余次同步 IPC，每次均须等待 daemon 处理，
     ; 与悬浮窗 16ms 节拍冲突，故先合并再一次性投递：
     ; 优先使用共享内存异步通道，不可用时回退同步（合并后的 payload 仍优于逐条发送）。
-    _AfterWindowReady() {
+    _AfterWindowReady(version) {
+        if (version != this._windowVersion)
+            return
         this._readyScheduled := false
         if (this.closed || !IsObject(this.ui))
             return
@@ -474,6 +508,8 @@ class CMDTipGui {
         }
         if (this._contentText != "")
             this._SetDisplayText(this._contentText)
+        this._opening := false
+        this._SyncVisibility()
     }
 
     _ApplyContentColors() {
@@ -498,11 +534,18 @@ class CMDTipGui {
         try this.ui.Update("Window", "Height", String(PhysToDip(this.Height)))
     }
 
-    OnWindowClosing(state, ctrl, event) {
+    OnWindowClosing(version, state, ctrl, event) {
+        if (version != this._windowVersion)
+            return
         this._DestroyUi(true)
     }
 
     _DestroyUi(clearWheel) {
+        this._displayRequested := false
+        this._buildVersion += 1
+        this._windowVersion += 1
+        this._opening := false
+        this._readyScheduled := false
         this.closed := true
         this.ui := ""
         this.Gui := ""
@@ -712,8 +755,8 @@ class CMDTipGui {
     }
 
     Hide() {
-        if (this.closed || !IsObject(this.ui))
-            return
+        ; 先取消意图，即使还没有 ui / HWND，也不能让排队的任务重新打开。
+        this._HideWindowOnly()
 
         ; 刷新最后一波日志
         this._FlushLog()
@@ -723,8 +766,10 @@ class CMDTipGui {
         this._pendingCmd := ""
         this._textLen := 0
         this._viewPos := 0
-        try this.ui.Update("ContentCon", "Text", "")
-        this._HideWindowOnly()
+        SetTimer(this._flushFn, 0)
+        this._flushScheduled := false
+        if (IsObject(this.ui))
+            try this.ui.Update("ContentCon", "Text", "")
 
         if (this._wheelCb) {
             try WinHotkey.UnsubscribeMouse("WheelUp", this._wheelCb)
@@ -734,9 +779,10 @@ class CMDTipGui {
     }
 
     _HideWindowOnly() {
-        hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
-        if (hwnd)
-            try WinHide("ahk_id " hwnd)
+        this._displayRequested := false
+        this._buildVersion += 1
+        this._buildScheduled := false
+        this._SyncVisibility()
         ; 下次有内容时须重新检查并显示，不等待 2 秒兜底
         this._windowOK := false
     }
@@ -756,8 +802,20 @@ class CMDTipGui {
                 this.Height := Integer(mh[1])
         }
         this._ApplyWinStyles()
-        try WinShow("ahk_id " hwnd)
-        this._windowOK := true
+        this._SyncVisibility()
+    }
+
+    _SyncVisibility(updateXaml := true) {
+        ; 仅 WinHide 不够：WPF 仍认为窗口可见，后续布局/尺寸更新可能再次显示 HWND。
+        ; 同步 WPF 的 Visibility，句柄尚未回传时由 XAMLHost 暂存这次更新。
+        if (updateXaml && IsObject(this.ui))
+            try this.ui.Update("Window", "Visibility", this._displayRequested ? "Visible" : "Hidden")
+        hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
+        ; 显示统一交给 WPF（ShowActivated=False）；不要在其 Visibility 尚未落实时
+        ; 再用 WinShow 强制显示 HWND。关闭额外用原生 SW_HIDE 即刻收起。
+        if (hwnd && !this._displayRequested)
+            try DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 0)
+        this._windowOK := this._displayRequested && !!hwnd
     }
 
     _IsVisible() {

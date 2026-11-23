@@ -45,7 +45,7 @@ EnsureXAMLThemesToml() {
     CfgWrite("1", iniPath, "RMT_Light", "FontClarity")
     CfgWrite("CornerRadius:8", iniPath, "RMT_Light", "Resource_WindowRadius")
     CfgWrite("#FFF0F0F0", iniPath, "RMT_Light", "Resource_BgColor")
-    CfgWrite("#FFEBEBEB", iniPath, "RMT_Light", "Resource_TitleBarColor")
+    CfgWrite(AppThemeUtil.GetDefaultColor("Win_TitleBg"), iniPath, "RMT_Light", "Resource_TitleBarColor")
     CfgWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_TitleBarForeground")
     CfgWrite("#20E0E0E0", iniPath, "RMT_Light", "Resource_SidebarColor")
     CfgWrite("#FF1A1A1A", iniPath, "RMT_Light", "Resource_TextMain")

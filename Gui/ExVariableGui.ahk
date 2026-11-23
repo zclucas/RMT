@@ -736,14 +736,17 @@ class ExVariableGui {
     }
 
     TryGetVariableValue(&Value, variableName, variTip := true) {
+        key := GetBuiltinVarName(variableName)
+        if (key == "运行时窗口坐标X" || key == "运行时窗口坐标Y")
+            return TryGetVarValue(&Value, key, variTip)
         if (IsNumber(variableName)) {
             Value := variableName
             return true
         }
-        if (variableName == GetLang("当前坐标X") || variableName == GetLang("当前坐标Y")) {
+        if (variableName == GetLang("运行时坐标X") || variableName == GetLang("运行时坐标Y")) {
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
-            Value := variableName == GetLang("当前坐标X") ? mouseX : mouseY
+            Value := variableName == GetLang("运行时坐标X") ? mouseX : mouseY
             return true
         }
         GlobalVariableMap := MySoftData.VariableMap

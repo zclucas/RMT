@@ -16,6 +16,7 @@ class DownloadManagerGui {
     __New() {
         this.ui := ""
         this.rowIds := []
+        this.rowKeys := Map()
         this.rowBindings := Map()
         this.signature := "__initial__"
         this.timer := ObjBindMethod(this, "Refresh")
@@ -42,8 +43,6 @@ class DownloadManagerGui {
         buttons := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal")
             .HorizontalAlignment("Right").Margin("0,10,0,0")
         buttons.Add("Button").Name("BtnOpenDownloadFolder").Content(GetLang("打开下载目录"))
-            .Padding("10,4").Margin("0,0,8,0")
-        buttons.Add("Button").Name("BtnCloseDownloadManager").Content(GetLang("关闭"))
             .Padding("10,4")
 
         ownerHwnd := (IsObject(MainSoftData.MyGui) && MainSoftData.MyGui.HasProp("Hwnd")) ? MainSoftData.MyGui.Hwnd : 0
@@ -55,7 +54,6 @@ class DownloadManagerGui {
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnClosing"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnClose"))
         this.ui.OnEvent("BtnOpenDownloadFolder", "Click", ObjBindMethod(this, "OnOpenFolder"))
-        this.ui.OnEvent("BtnCloseDownloadManager", "Click", ObjBindMethod(this, "OnClose"))
 
         if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this))) {
             this.ui := ""
@@ -88,20 +86,25 @@ class DownloadManagerGui {
             Format(GetLang("共 {} 个下载任务，{} 个进行中"), jobs.Length, activeCount))
 
         updates := [{ControlName: "DownloadItems", PropertyName: "ClearItems", Value: ""}]
-        this.rowIds := []
         for index, job in jobs {
-            this.rowIds.Push(job.id)
+            if (!this.rowKeys.Has(job.id)) {
+                this.rowIds.Push(job.id)
+                this.rowKeys[job.id] := this.rowIds.Length
+            }
+            rowKey := this.rowKeys[job.id]
             updates.Push({ControlName: "DownloadItems", PropertyName: "AddXamlItem",
-                Value: this._JobRowXaml(index, job)})
+                Value: this._JobRowXaml(rowKey, job)})
         }
         this.ui.BatchUpdate(updates)
         for index, job in jobs {
-            for action in ["Open", "Cancel", "Retry"] {
-                name := "Btn" action "Download_" index
+            rowKey := this.rowKeys[job.id]
+            removeAction := job.status == "queued" || job.status == "downloading" ? "Cancel" : "Delete"
+            for action in ["Open", "Retry", removeAction] {
+                name := "Btn" action "Download_" rowKey
                 bindingKey := name
                 if (!this.rowBindings.Has(bindingKey)) {
                     this.rowBindings[bindingKey] := true
-                    this.ui.OnEvent(name, "Click", this._JobActionHandler(index, action))
+                    this.ui.OnEvent(name, "Click", this._JobActionHandler(rowKey, action))
                 }
                 this.ui.BindEventBatched(name, "Click")
             }
@@ -118,7 +121,9 @@ class DownloadManagerGui {
             ? Format("  {:.0f}% ", Min(100, 100 * job.receivedBytes / job.expectedBytes)) : "  "
         progress := job.status == "downloading" ? percent received total : ""
         canCancel := job.status == "queued" || job.status == "downloading"
-        canRetry := job.status == "failed" || job.status == "cancelled"
+        canRetry := job.status == "completed" || job.status == "failed" || job.status == "cancelled"
+        removeAction := canCancel ? "Cancel" : "Delete"
+        removeLabel := canCancel ? GetLang("取消") : GetLang("删除")
         return '<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
             . ' CornerRadius="6" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}"'
             . ' BorderThickness="1" Margin="0,0,0,8" Padding="10,8">'
@@ -130,10 +135,10 @@ class DownloadManagerGui {
             . ' TextWrapping="Wrap" Margin="0,3,8,0"/></StackPanel>'
             . '<Button Grid.Column="1" Name="BtnOpenDownload_' index '" Content="' EscapeXamlXml(GetLang("打开目录")) '"'
             . ' Padding="8,3" Margin="4,0"/>'
-            . '<Button Grid.Column="2" Name="BtnCancelDownload_' index '" Content="' EscapeXamlXml(GetLang("取消")) '"'
-            . ' IsEnabled="' (canCancel ? "True" : "False") '" Padding="8,3" Margin="4,0"/>'
-            . '<Button Grid.Column="3" Name="BtnRetryDownload_' index '" Content="' EscapeXamlXml(GetLang("重试")) '"'
+            . '<Button Grid.Column="2" Name="BtnRetryDownload_' index '" Content="' EscapeXamlXml(GetLang("重试")) '"'
             . ' IsEnabled="' (canRetry ? "True" : "False") '" Padding="8,3" Margin="4,0"/>'
+            . '<Button Grid.Column="3" Name="Btn' removeAction 'Download_' index '" Content="' EscapeXamlXml(removeLabel) '"'
+            . ' Padding="8,3" Margin="4,0"/>'
             . '</Grid></Border>'
     }
 
@@ -162,10 +167,18 @@ class DownloadManagerGui {
                 if (dir != "")
                     Run('"' dir '"')
             }
-        } else if (action == "Cancel")
-            RmtDownloadManager.Cancel(id)
-        else
-            RmtDownloadManager.Retry(id)
+        } else {
+            try {
+                if (action == "Cancel")
+                    RmtDownloadManager.Cancel(id)
+                else if (action == "Delete")
+                    RmtDownloadManager.Delete(id)
+                else if (action == "Retry")
+                    RmtDownloadManager.Retry(id)
+            } catch as error {
+                RmtDialog.Info(error.Message, GetLang("下载管理"), this.Hwnd())
+            }
+        }
         this.signature := ""
         this.Refresh()
     }

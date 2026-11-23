@@ -254,7 +254,9 @@
         this._title := title
         titleHeight := XAMLHost.MacroTitleBarHeight()
 
+        designWidth := 1400, designHeight := 867
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.VisualFontSizeDeclared())
+        main.Width(designWidth).Height(designHeight)
         main.Rows(titleHeight, "*")
 
         chrome := XAMLHost.AddMacroTitleBar(main, title)
@@ -415,7 +417,10 @@
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="1400" Height="867"')
+        display := XAMLHost.EditorDisplay(this.OwnerHwnd)
+        scale := Min(display.Scale, (display.WorkWidth - 16) / designWidth, (display.WorkHeight - 16) / designHeight)
+        wh := 'Width="' Round(designWidth * scale) '" Height="' Round(designHeight * scale) '"'
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" ' wh)
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._EditLayoutStyles())
 
@@ -487,6 +492,7 @@
         this.ui.OnEvent("FavToggle", "Click", ObjBindMethod(this, "_OnToggleFavSection"))
         this.ui.OnEvent("MenuFavToggle", "Click", ObjBindMethod(this, "_OnMenuFavToggle"))
         this.ui.OnEvent("CmdFilter", "TextChanged", ObjBindMethod(this, "_OnCmdFilterChanged"))
+        this.ui.OnEvent("BtnClearCmdFilter", "Click", ObjBindMethod(this, "_OnClearCmdFilter"))
 
         this.ui.Track("EditModeCombo")
         this.ui.Track("MacroText")

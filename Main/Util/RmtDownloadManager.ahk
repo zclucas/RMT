@@ -67,13 +67,58 @@ class RmtDownloadManager {
     }
 
     static Retry(id) {
-        if (!this.jobs.Has(id))
-            return false
-        job := this.jobs[id]
-        if (job.status != "failed" && job.status != "cancelled")
-            return false
-        this.Enqueue(job.name, job.urls, job.targetPath, job.minBytes, job.timeoutSec, job.onComplete)
-        return true
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (!this.jobs.Has(id))
+                return false
+            job := this.jobs[id]
+            if (job.status != "completed" && job.status != "failed" && job.status != "cancelled")
+                return false
+            this._DeleteJobFiles(job)
+            this.Enqueue(job.name, job.urls, job.targetPath, job.minBytes, job.timeoutSec, job.onComplete)
+            return true
+        } finally Critical(previousCritical)
+    }
+
+    static Delete(id) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if (!this.jobs.Has(id))
+                return false
+            job := this.jobs[id]
+            if (job.status != "completed" && job.status != "failed" && job.status != "cancelled")
+                return false
+            this._DeleteJobFiles(job)
+            this.jobs.Delete(id)
+            return true
+        } finally Critical(previousCritical)
+    }
+
+    static _DeleteJobFiles(job) {
+        paths := [job.headersPath, job.partPath, job.targetPath]
+        try {
+            ; 先确认全部文件可删除，避免目标正在使用时先丢掉断点文件。
+            for path in paths {
+                if (InStr(path, "*") || InStr(path, "?") || InStr(FileExist(path), "D"))
+                    throw Error(GetLang("下载目标不是文件，无法删除"))
+                if (!FileExist(path))
+                    continue
+                handle := DllCall("CreateFileW", "Str", path, "UInt", 0x10000, "UInt", 0,
+                    "Ptr", 0, "UInt", 3, "UInt", 0x80, "Ptr", 0, "Ptr")
+                if (handle == -1)
+                    throw OSError(A_LastError)
+                DllCall("CloseHandle", "Ptr", handle)
+            }
+            for path in paths
+                if (FileExist(path))
+                    FileDelete(path)
+        } catch OSError as problem {
+            if (problem.Number == 32 || problem.Number == 33 || problem.Number == 1224)
+                throw Error(GetLang("正在使用，无法删除"))
+            throw Error(GetLang("删除失败") "：" problem.Message)
+        }
     }
 
     static Cancel(id) {
