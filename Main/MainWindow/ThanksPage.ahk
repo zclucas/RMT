@@ -53,10 +53,10 @@
     ; 有赞助时显示在开发贡献者上方。回包晚于页面构建时，由 ApplyRMTServerRsp 再调用。
     ApplyThankSponsors() {
         global RMT_Sponsors
-        if (!this._thankReady || this._thankSponsorShown)
+        if (!this._thankReady)
             return
-        if (!IsSet(RMT_Sponsors) || !(RMT_Sponsors is Array) || RMT_Sponsors.Length < 1)
-            return
+        if (!IsSet(RMT_Sponsors) || !(RMT_Sponsors is Array))
+            RMT_Sponsors := LoadSponsorList()
         queued := this._linkQueue.Length
         shown := []
         for sp in RMT_Sponsors {
@@ -69,8 +69,15 @@
                 "url", sp.Has("url") ? sp["url"] : ""
             ))
         }
-        if (shown.Length < 1)
+        key := JSON.stringify(shown, 0)
+        if (key == this._thankSponsorKey)
             return
+        if (shown.Length < 1) {
+            try this.ui.Update("ThankSponsorHost", "Visibility", "Collapsed")
+            this._thankSponsorShown := false
+            this._thankSponsorKey := key
+            return
+        }
         ; 「感谢支持」与「QQ 昵称」同走提示文字：字号 11、常规字重
         body := '<StackPanel Name="ThankSponsorLogos" HorizontalAlignment="Stretch"/>'
         card := this._HelpCard(GetLang("企业赞助"), "&#xE731;", body, GetLang("感谢支持"), "0,0,0,14", false, 30)
@@ -83,6 +90,7 @@
             return
         }
         this._thankSponsorShown := true
+        this._thankSponsorKey := key
         ; logo 一次性交给引擎，分行与居中由引擎的 FlowLayout 完成：宽度变化时引擎自己重排，
         ; 这里不监听 SizeChanged，也不回读 ActualWidth。
         for sp in shown {
@@ -109,7 +117,8 @@
             cursor := "Hand"
         }
         nameAttr := btnName == "" ? "" : ' Name="' btnName '"'
-        return '<Button' nameAttr ' Cursor="' cursor '" Background="Transparent" BorderThickness="0" Padding="0" Margin="12,8" FocusVisualStyle="{x:Null}">' tpl tip img '</Button>'
+        ; 此片段单独交给 XamlReader.Parse，不能继承宿主的默认命名空间或 x:Null 声明。
+        return '<Button xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"' nameAttr ' Cursor="' cursor '" Background="Transparent" BorderThickness="0" Padding="0" Margin="12,8" FocusVisualStyle="{x:Null}">' tpl tip img '</Button>'
     }
 
     _ThankLinkButton(url, text, glyph := "&#xE8A7;") {

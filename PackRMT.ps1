@@ -1249,7 +1249,7 @@ function New-RMTAssets {
             @{ Dest = "Xbox.png"; Src = "Plugins\Joy\Xbox按键映射.png" }
         )
         "Xaml.zip" = @(
-            @{ Dest = "ahk-xaml.dll"; Src = "Release$Arch\Plugins\AHK-XAML\lib\dep\ahk-xaml.dll" },
+            @{ Dest = "ahk-xaml.dll"; Src = (Join-Path $PackageDir "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll") },
             @{ Dest = "WpfAnimatedGif.dll"; Src = "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll" }
         )
         "OpenCV.zip" = @(

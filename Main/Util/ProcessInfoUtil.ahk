@@ -1,10 +1,12 @@
 #Requires AutoHotkey v2.0
+#Include MouseGpuSampler.ahk
 
 class ProcessInfo {
     static Metrics := ["StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar", "IntegrityVar"]
+    static MouseMetrics := ["StartTimeVar", "UptimeVar", "CpuVar", "GpuVar"]
     static MouseSampleSize := 4096
 
-    static ReadMetrics(data, process, snapshotTime, result, preview, withUsageSize := false) {
+    static ReadMetrics(data, process, snapshotTime, result, preview, withUsageSize := false, onProgress := 0) {
         want := Map()
         for field in this.Metrics {
             if (preview || (data.HasProp(field) && data.%field% != ""))
@@ -29,6 +31,9 @@ class ProcessInfo {
                 try result.IntegrityVar := this.Integrity(handle)
             if (want.Has("StatusVar"))
                 try result.StatusVar := this.Status(handle, process)
+            ; 鼠标监视先回传基础信息，避免 GPU/WMI 或 CPU 采样拖住整组字段。
+            if (onProgress)
+                onProgress.Call(result)
             if (want.Has("CpuVar")) {
                 try {
                     sample := this.CpuUsage(handle)
@@ -41,6 +46,8 @@ class ProcessInfo {
                     }
                 }
             }
+            if (onProgress)
+                onProgress.Call(result)
             if (want.Has("GpuVar") && DllCall("WaitForSingleObject", "Ptr", handle, "UInt", 0, "UInt") == 258) {
                 try result.GpuVar := this.GpuUsage(process.Pid)
                 if (withUsageSize)
@@ -49,14 +56,30 @@ class ProcessInfo {
         } finally DllCall("CloseHandle", "Ptr", handle)
     }
 
-    static MouseSample(hwnd, pid) {
+    static MouseSample(hwnd, pid, onProgress := 0) {
         result := {}
         if (WinGetPID(hwnd) != pid)
             return result
         snapshotTime := 0
         DllCall("GetSystemTimeAsFileTime", "Int64*", &snapshotTime)
-        this.ReadMetrics({}, {Hwnd: hwnd, Pid: pid}, snapshotTime, result, true, true)
+        requested := {}
+        for field in this.MouseMetrics
+            requested.%field% := true
+        this.ReadMetrics(requested, {Hwnd: hwnd, Pid: pid}, snapshotTime, result, false, true, onProgress)
         return result
+    }
+
+    static PublishMouseSample(memory, sample) {
+        payload := JSON.stringify(sample, 0)
+        ; 首部 4 字节存长度，尾部 8 字节保留请求 PID 与写入序号，正文不覆盖控制字段。
+        if (StrLen(payload) >= (memory.size - 12) // 2)
+            return
+        version := NumGet(memory.ptr, memory.size - 4, "UInt")
+        NumPut("UInt", version + 1, memory.ptr, memory.size - 4)
+        NumPut("UInt", 0, memory.ptr)
+        StrPut(payload, memory.ptr + 4, (memory.size - 12) // 2, "UTF-16")
+        NumPut("UInt", StrLen(payload), memory.ptr)
+        NumPut("UInt", version + 2, memory.ptr, memory.size - 4)
     }
 
     static Times(handle) {
