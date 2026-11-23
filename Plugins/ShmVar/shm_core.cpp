@@ -9,7 +9,7 @@ namespace shm {
 
 // Global in-process context & lifecycle lock definitions
 ShmContext g_ctx;
-std::shared_mutex g_lifecycleLock;
+std::mutex g_lifecycleLock;
 
 // Find existing node or bucket insertion point
 ShmNode* FindNode(uint8_t* base, ShmHeader* header, std::string_view key, uint32_t keyHash, uint32_t* outPrevOffset, uint32_t* outBucketIdx, uint32_t* outNodeOffset) noexcept {
@@ -150,13 +150,17 @@ void CloseInternal() noexcept {
         CloseHandle(g_ctx.hMapFile);
         g_ctx.hMapFile = nullptr;
     }
-    if (g_ctx.hMutex) {
-        CloseHandle(g_ctx.hMutex);
-        g_ctx.hMutex = nullptr;
+    if (g_ctx.sync.hWriterMutex) {
+        CloseHandle(g_ctx.sync.hWriterMutex);
+        g_ctx.sync.hWriterMutex = nullptr;
     }
-    if (g_ctx.hEvent) {
-        CloseHandle(g_ctx.hEvent);
-        g_ctx.hEvent = nullptr;
+    if (g_ctx.sync.hNoReadersEvent) {
+        CloseHandle(g_ctx.sync.hNoReadersEvent);
+        g_ctx.sync.hNoReadersEvent = nullptr;
+    }
+    if (g_ctx.sync.hNotifyEvent) {
+        CloseHandle(g_ctx.sync.hNotifyEvent);
+        g_ctx.sync.hNotifyEvent = nullptr;
     }
     g_ctx.mappedSize = 0;
     g_ctx.mapName.clear();
