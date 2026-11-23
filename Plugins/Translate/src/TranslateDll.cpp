@@ -70,8 +70,9 @@ std::string Utf16ToUtf8(const wchar_t* w) {
     if (!w || !*w) return std::string();
     int n = ::WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
     if (n <= 1) return std::string();
-    std::string out(static_cast<size_t>(n - 1), '\0');
+    std::string out(static_cast<size_t>(n), '\0');
     ::WideCharToMultiByte(CP_UTF8, 0, w, -1, &out[0], n, nullptr, nullptr);
+    out.resize(static_cast<size_t>(n - 1));
     return out;
 }
 
@@ -97,32 +98,40 @@ std::string Trim(const std::string& s) {
 // ---------------------------------------------------------------------
 // prompt
 // ---------------------------------------------------------------------
-// 术语表按行拆，每行 “原文:译文” 或 “原文=译文”。只把能拆开的行收进去，
-// 拆不开的行原样当一句要求塞进 prompt（用户可能写的是自由文本）。
-std::string BuildGlossaryBlock(const std::string& glossary) {
-    if (glossary.empty()) return std::string();
+// 旧格式继续按行兼容；新条目由 ABI 结构体传入，避免内容与分隔符冲突。
+std::string BuildGlossaryBlock(const std::string& legacyGlossary,
+                               const TranslateGlossaryItem* glossaryItems, int32_t glossaryCount) {
     std::string pairs;
     std::string extra;
     size_t pos = 0;
-    while (pos <= glossary.size()) {
-        size_t nl = glossary.find('\n', pos);
-        std::string line = Trim(glossary.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos));
-        if (!line.empty()) {
-            size_t sep = line.find_first_of(":：=");
-            if (sep != std::string::npos && sep + 1 < line.size()) {
-                std::string k = Trim(line.substr(0, sep));
-                std::string v = Trim(line.substr(sep + 1));
-                if (!k.empty() && !v.empty()) {
-                    if (!pairs.empty()) pairs += "；";
-                    pairs += k + " → " + v;
+    if (!legacyGlossary.empty()) {
+        while (pos <= legacyGlossary.size()) {
+            size_t nl = legacyGlossary.find('\n', pos);
+            std::string line = Trim(legacyGlossary.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos));
+            if (!line.empty()) {
+                size_t sep = line.find_first_of(":：=");
+                if (sep != std::string::npos && sep + 1 < line.size()) {
+                    std::string k = Trim(line.substr(0, sep));
+                    std::string v = Trim(line.substr(sep + 1));
+                    if (!k.empty() && !v.empty()) {
+                        if (!pairs.empty()) pairs += "；";
+                        pairs += k + " → " + v;
+                    }
+                } else {
+                    if (!extra.empty()) extra += "；";
+                    extra += line;
                 }
-            } else {
-                if (!extra.empty()) extra += "；";
-                extra += line;
             }
+            if (nl == std::string::npos) break;
+            pos = nl + 1;
         }
-        if (nl == std::string::npos) break;
-        pos = nl + 1;
+    }
+    for (int32_t i = 0; glossaryItems && i < glossaryCount; ++i) {
+        const auto& item = glossaryItems[i];
+        if (!item.source || !item.target || !item.source[0] || !item.target[0])
+            continue;
+        if (!pairs.empty()) pairs += "；";
+        pairs += Utf16ToUtf8(item.source) + " → " + Utf16ToUtf8(item.target);
     }
     std::string out;
     if (!pairs.empty()) out += "术语对照（必须遵守）：" + pairs + "\n";
@@ -130,12 +139,13 @@ std::string BuildGlossaryBlock(const std::string& glossary) {
     return out;
 }
 
-std::string BuildPrompt(const std::string& text, const std::string& target, const std::string& glossary) {
+std::string BuildPrompt(const std::string& text, const std::string& target, const std::string& legacyGlossary,
+                        const TranslateGlossaryItem* glossaryItems, int32_t glossaryCount) {
     std::string lang = target.empty() ? std::string("简体中文") : target;
     std::string p;
     p += "<|im_start|>user\n";
     p += "把下面的内容翻译成" + lang + "。只输出译文，不要解释、不要加引号、不要重复原文、不要保留原文。\n";
-    p += BuildGlossaryBlock(glossary);
+    p += BuildGlossaryBlock(legacyGlossary, glossaryItems, glossaryCount);
     p += "\n";
     p += text;
     p += "<|im_end|>\n";
@@ -346,8 +356,9 @@ void TRANSLATE_CALL Translate_Cancel(void) {
     g_cancel.store(true);
 }
 
-int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, const wchar_t* glossary,
-                                 wchar_t* out, int32_t outChars, TranslateStats* stats) {
+int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, const wchar_t* legacyGlossary,
+                                 const TranslateGlossaryItem* glossaryItems, int32_t glossaryCount,
+                                 int32_t timeoutMs, wchar_t* out, int32_t outChars, TranslateStats* stats) {
     std::lock_guard<std::mutex> lock(g_mu);
     g_lastError.clear();
     g_cancel.store(false);
@@ -355,6 +366,10 @@ int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, con
 
     if (!out || outChars <= 1) {
         SetError("输出缓冲无效");
+        return 0;
+    }
+    if (glossaryCount < 0 || glossaryCount > 4096 || (glossaryCount > 0 && !glossaryItems)) {
+        SetError("术语表参数无效");
         return 0;
     }
     out[0] = L'\0';
@@ -384,11 +399,13 @@ int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, con
     int rc = 1;
     std::string generated;
     int64_t t0 = NowMs();
+    const int32_t runTimeoutMs = timeoutMs > 0 ? timeoutMs : g_opt.timeoutMs;
 
     auto tokens_free = [&]() { llama_free(ctx); };
 
     // ---- tokenize ----
-    std::string prompt = BuildPrompt(src, Utf16ToUtf8(target), Utf16ToUtf8(glossary));
+    std::string prompt = BuildPrompt(src, Utf16ToUtf8(target), Utf16ToUtf8(legacyGlossary),
+                                     glossaryItems, glossaryCount);
     const int n_max = static_cast<int>(prompt.size()) + 32;
     std::vector<llama_token> tokens(static_cast<size_t>(n_max));
     int n = llama_tokenize(g_vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()),
@@ -435,7 +452,7 @@ int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, con
         piece.resize(256);
         while (produced < g_opt.maxTokens) {
             if (g_cancel.load()) { rc = -1; break; }
-            if (NowMs() - t0 > g_opt.timeoutMs) {
+            if (NowMs() - t0 > runTimeoutMs) {
                 if (stats) stats->truncated = 1;
                 break;
             }
@@ -475,7 +492,9 @@ int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, con
     std::string result = CleanOutput(generated);
     if (result.empty()) {
         // 超时且一个 token 都没出来时，说「没有产出内容」会让人以为是模型问题
-        SetError((stats && stats->truncated) ? "翻译超时（未生成内容）" : "模型没有产出内容");
+        if (stats && stats->truncated)
+            return 1;
+        SetError("模型没有产出内容");
         return 0;
     }
     std::wstring w = Utf8ToUtf16(result);

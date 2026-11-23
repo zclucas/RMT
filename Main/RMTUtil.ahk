@@ -86,6 +86,7 @@ OnSaveSetting(*) {
     CheckAndAddDirty("IsModalSubGui", MainSoftData.IsModalSubGui)
     CheckAndAddDirty("BackImagePath", MainSoftData.BackImagePath)   ; §11 主界面背景图
     CheckAndAddDirty("MutiThreadNum", MainSoftData.MutiThreadNum)
+    CheckAndAddDirty("TranslateTimeoutMs", MainSoftData.TranslateTimeoutMs)
     CheckAndAddDirty("SoftBGColor", MainSoftData.SoftBGColor)
     CheckAndAddDirty("NoVariableTip", MainSoftData.NoVariableTip)
     CheckAndAddDirty("BusinessLog", MainSoftData.BusinessLog)
@@ -591,7 +592,7 @@ EnsureSponsorLogo(logo) {
     if (FileExist(path))
         try FileDelete(path)
     url := GetSponsorLogoBaseUrl() . name
-    if (DownloadAsync(url, path, 12, RmtSilentDownloadProgress()) != "ok")
+    if (RmtDownloadManager.DownloadBlocking(url, path, 12, RmtSilentDownloadProgress()) != "ok")
         return ""
     if (!FileExist(path))
         return ""

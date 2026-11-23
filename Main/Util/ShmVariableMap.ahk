@@ -18,7 +18,6 @@ class ShmVariableMap {
     __New(mapName := "RMT_Shared_Variables", initialSize := 16777216) {
         this.mapName := mapName
         this.initialSize := initialSize
-        this._localKeys := Map() ; 辅助本地跟踪键名以支持 __Enum 与 Count
         ShmVariableMap._EnsureDll()
 
         nameBuf := Buffer(StrPut(mapName, "UTF-8"))
@@ -117,7 +116,6 @@ class ShmVariableMap {
         if (rc < 0) {
             throw Error("ShmVar_Set 失败，key=" key " 错误码=" rc)
         }
-        this._localKeys[String(key)] := true
     }
 
     _Get(key) {
@@ -170,13 +168,7 @@ class ShmVariableMap {
         vType := 0
         vSize := 0
         rc := DllCall(ShmVariableMap.DLL_PATH "\ShmVar_GetType", "Ptr", kBuf.Ptr, "Int*", &vType, "UPtr*", &vSize, "Cdecl Int")
-        if (rc == 0) {
-            this._localKeys[String(key)] := true
-            return true
-        }
-        if (this._localKeys.Has(String(key)))
-            this._localKeys.Delete(String(key))
-        return false
+        return rc == 0
     }
 
     Delete(key) {
@@ -186,8 +178,6 @@ class ShmVariableMap {
             try prevVal := this._Get(key)
         }
         rc := DllCall(ShmVariableMap.DLL_PATH "\ShmVar_Delete", "Ptr", kBuf.Ptr, "Cdecl Int")
-        if (this._localKeys.Has(String(key)))
-            this._localKeys.Delete(String(key))
         if (rc < 0 && rc != -4) { ; -4 is SHMVAR_ERR_NOT_FOUND
             throw Error("ShmVar_Delete 失败，key=" key " 错误码=" rc)
         }
@@ -195,41 +185,49 @@ class ShmVariableMap {
     }
 
     Clear() {
-        for k in [this._localKeys*] {
+        for k in this._Keys() {
             try this.Delete(k)
         }
-        this._localKeys.Clear()
     }
 
     Count {
-        get {
-            cnt := 0
-            stale := []
-            for k in this._localKeys {
-                if (this.Has(k))
-                    cnt++
-                else
-                    stale.Push(k)
+        get => this._Keys().Length
+    }
+
+    _Keys() {
+        ; 从共享内存枚举，主进程与新 Worker 都能发现其他进程创建的键。
+        loop 8 {
+            required := 0
+            rc := DllCall(ShmVariableMap.DLL_PATH "\ShmVar_GetKeys", "Ptr", 0, "UPtr", 0, "UPtr*", &required, "Cdecl Int")
+            if (rc == 0 && required == 0)
+                return []
+            if (rc != -6)
+                throw Error("ShmVar_GetKeys 失败，错误码=" rc)
+            buf := Buffer(required)
+            rc := DllCall(ShmVariableMap.DLL_PATH "\ShmVar_GetKeys", "Ptr", buf.Ptr, "UPtr", buf.Size, "UPtr*", &required, "Cdecl Int")
+            if (rc == -6)
+                continue ; 查询长度后其他进程新增了键，重新取快照。
+            if (rc < 0)
+                throw Error("ShmVar_GetKeys 失败，错误码=" rc)
+            keys := [], offset := 0
+            while (offset < required) {
+                key := StrGet(buf.Ptr + offset, "UTF-8")
+                keys.Push(key)
+                offset += StrPut(key, "UTF-8")
             }
-            for k in stale
-                this._localKeys.Delete(k)
-            return cnt
+            return keys
         }
+        throw Error("共享变量持续变化，无法获取键名快照")
     }
 
     __Enum(numParams) {
         ; 过滤并收集当前实际存在的键值
         items := []
-        stale := []
-        for k in this._localKeys {
+        for k in this._Keys() {
             if (this.Has(k)) {
                 try items.Push([k, this._Get(k)])
-            } else {
-                stale.Push(k)
             }
         }
-        for k in stale
-            this._localKeys.Delete(k)
 
         idx := 0
         total := items.Length

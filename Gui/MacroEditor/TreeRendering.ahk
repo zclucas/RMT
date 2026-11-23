@@ -39,76 +39,81 @@
 
     TreeAddBranch(root, cmdStr) {
         paramArr := StrSplit(cmdStr, "_")
-        IsSkip := SubStr(paramArr[1], 1, 2) == "🚫"
-        Cmd := GetCommandKey(GetCmdOnlyText(paramArr[1]))
-        IsSearch := Cmd == "搜索" || Cmd == "搜索Pro" || Cmd == "搜索All"
-            || Cmd == "搜索Combo" || Cmd == "组合搜索" || Cmd == "搜索Multi"
-        IsIfPro := Cmd == "如果Pro"
-        IsIf := Cmd == "如果"
-        IsLoop := Cmd == "循环"
-        SerialStr := GetCmdStr(paramArr[1])
-        if (IsSkip)
-            return
-        if (!IsSearch && !IsIf && !IsLoop && !IsIfPro)
+        cmdText := paramArr[1]
+
+        if (SubStr(cmdText, 1, 2) == "🚫")
             return
 
+        Cmd := GetCommandKey(GetCmdOnlyText(cmdText))
+
+        IsSearch := Cmd == "搜索" || Cmd == "搜索Pro"
+            || Cmd == "搜索All" || Cmd == "搜索Combo"
+        IsIf := Cmd == "如果"
+        IsIfPro := Cmd == "如果Pro"
+        IsLoop := Cmd == "循环"
+
+        if (!IsSearch && !IsIf && !IsIfPro && !IsLoop)
+            return
+
+        ; 避免重複建立相同命令的分支
         ParentID := this.MacroTreeViewCon.GetParent(root)
-        while (ParentID != 0) {
-            itemText := this.MacroTreeViewCon.GetText(ParentID)
-            itemParamArr := StrSplit(itemText, "_")
-            ParentID := this.MacroTreeViewCon.GetParent(ParentID)
-            if (itemParamArr[1] == paramArr[1])
+        while (ParentID) {
+            if (StrSplit(this.MacroTreeViewCon.GetText(ParentID), "_")[1] == cmdText)
                 return
+            ParentID := this.MacroTreeViewCon.GetParent(ParentID)
         }
 
-        Data := GetMacroCMDData(SerialStr)
+        Data := GetMacroCMDData(GetCmdStr(cmdText))
+
         if (IsIf || IsSearch) {
-            TrueMacro := GetLangMacro(Data.TrueMacro, 1)
-            FalseMacro := GetLangMacro(Data.FalseMacro, 1)
+            TrueRoot := this.MacroTreeViewCon.Add(
+                GetLang("真"), root, this.GetCmdIconStr(GetLang("真")))
+            FalseRoot := this.MacroTreeViewCon.Add(
+                GetLang("假"), root, this.GetCmdIconStr(GetLang("假")))
 
-            iconStr := this.GetCmdIconStr(GetLang("真"))
-            trueRoot := this.MacroTreeViewCon.Add(GetLang("真"), root, iconStr)
-            ControlType := IsIf ? Data.TrueControlType : "无"
-            this.TreeAddSubTree(trueRoot, TrueMacro)
-            this.TreeAddControl(trueRoot, ControlType)
+            this.TreeAddSubTree(TrueRoot, GetLangMacro(Data.TrueMacro, 1))
+            this.TreeAddSubTree(FalseRoot, GetLangMacro(Data.FalseMacro, 1))
 
-            iconStr := this.GetCmdIconStr(GetLang("假"))
-            falseRoot := this.MacroTreeViewCon.Add(GetLang("假"), root, iconStr)
-            ControlType := IsIf ? Data.FalseControlType : "无"
-            this.TreeAddSubTree(falseRoot, FalseMacro)
-            this.TreeAddControl(falseRoot, ControlType)
+            this.TreeAddControl(TrueRoot, IsIf ? Data.TrueControlType : "无")
+            this.TreeAddControl(FalseRoot, IsIf ? Data.FalseControlType : "无")
         }
         else if (IsLoop) {
-            iconStr := this.GetCmdIconStr(GetLang("循环次数"))
+            iconStr := this.GetCmdIconStr(GetLang("循環次数"))
             countStr := Data.LoopCount == -1 ? GetLang("无限") : Data.LoopCount
-            CountRoot := this.MacroTreeViewCon.Add(Format("{}:{}", GetLang("⎖循环次数"), countStr), root, iconStr)
 
-            if (CmdEnumZh(Data.CondiType, CmdEnumCondiNames()) != "无") {
-                iconStr := this.GetCmdIconStr(GetLang("条件"))
-                CondiStr := CmdEnumZh(Data.CondiType, CmdEnumCondiNames()) == "继续条件" ? GetLang("⎖继续条件：") : GetLang("⎖退出条件：")
+            this.MacroTreeViewCon.Add(
+                Format("{}:{}", GetLang("⎖循环次数"), countStr), root, iconStr)
+
+            CondiType := CmdEnumZh(Data.CondiType, CmdEnumCondiNames())
+            if (CondiType != "无") {
+                CondiStr := CondiType == "继续条件"
+                    ? GetLang("⎖继续条件：")
+                    : GetLang("⎖退出条件：")
                 ItemStr := CondiStr . LoopData.GetCondiStr(Data)
-                CondiRoot := this.MacroTreeViewCon.Add(ItemStr, root, iconStr)
+
+                this.MacroTreeViewCon.Add(ItemStr, root, this.GetCmdIconStr(GetLang("条件")))
             }
 
-            iconStr := this.GetCmdIconStr(GetLang("循环体"))
-            BodyRoot := this.MacroTreeViewCon.Add(GetLang("循环体"), root, iconStr)
-            LoopBody := GetLangMacro(Data.LoopBody, 1)
-            this.TreeAddSubTree(BodyRoot, LoopBody)
+            BodyRoot := this.MacroTreeViewCon.Add(
+                GetLang("循环体"), root, this.GetCmdIconStr(GetLang("循环体")))
+
+            this.TreeAddSubTree(BodyRoot, GetLangMacro(Data.LoopBody, 1))
         }
         else if (IsIfPro) {
             iconStr := this.GetCmdIconStr(GetLang("条件"))
+
             loop Data.VariNameArr.Length {
-                CondiStr := GetLang("条件：") CompareProData.GetCondiStr(Data, A_Index)
+                CondiStr := GetLang("条件：") . CompareProData.GetCondiStr(Data, A_Index)
                 CondiRoot := this.MacroTreeViewCon.Add(CondiStr, root, iconStr)
-                MacroStr := GetLangMacro(Data.MacroArr[A_Index], 1)
-                this.TreeAddSubTree(CondiRoot, MacroStr)
+
+                this.TreeAddSubTree(CondiRoot, GetLangMacro(Data.MacroArr[A_Index], 1))
                 this.TreeAddControl(CondiRoot, Data.ControlTypeArr[A_Index])
             }
 
-            CondiStr := GetLang("条件：以上都不是")
-            CondiRoot := this.MacroTreeViewCon.Add(CondiStr, root, iconStr)
-            DefaultMacro := GetLangMacro(Data.DefaultMacro, 1)
-            this.TreeAddSubTree(CondiRoot, DefaultMacro)
+            CondiRoot := this.MacroTreeViewCon.Add(
+                GetLang("条件：以上都不是"), root, iconStr)
+
+            this.TreeAddSubTree(CondiRoot, GetLangMacro(Data.DefaultMacro, 1))
             this.TreeAddControl(CondiRoot, Data.DefaultControlType)
         }
     }

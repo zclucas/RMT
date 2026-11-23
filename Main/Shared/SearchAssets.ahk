@@ -104,20 +104,45 @@ global LastChineseOcrUseTime := 0
 global LastEnglishOcrUseTime := 0
 global OCR_IDLE_TIMEOUT := 300000
 
-GetChineseOcr() {
-    global MyChineseOcr, LastChineseOcrUseTime, MainSoftData
-    engineType := MainSoftData.OCRTypeValue == 2 ? 2 : 1
-    if (MyChineseOcr && ((MyChineseOcr is TesseractOcr) != (engineType == 2))) {
-        UnloadChineseOcr()
-        UnloadEnglishOcr()
-    }
-    if (!MyChineseOcr)
-        MyChineseOcr := engineType == 2 ? TesseractOcr(GetProjectRoot()) : RapidOcr(GetProjectRoot())
-    LastChineseOcrUseTime := A_TickCount
-    return MyChineseOcr
+OcrEngineValue(data) {
+    return IsObject(data) && data.HasOwnProp("OcrEngine") ? String(data.OcrEngine) : ""
 }
 
-; 已弃用：PP-OCRv6 为统一多语言模型，GetChineseOcr/GetEnglishOcr 返回同一模型实例，保留仅为兼容旧调用
+OcrEngineIndex(engine) {
+    switch engine {
+        case "": return 0
+        case "RapidOCR": return 1
+        case "Tesseract OCR": return 2
+        default: throw Error("不支持的 OCR 引擎：" engine)
+    }
+}
+
+OcrEngineFromIndex(index) {
+    if (!IsInteger(index) || index < 0 || index > 2)
+        throw Error("无效的 OCR 引擎选项：" index)
+    return ["", "RapidOCR", "Tesseract OCR"][Integer(index) + 1]
+}
+
+GetChineseOcr(engine := "") {
+    global MyChineseOcr, MyEnglishOcr, LastChineseOcrUseTime, LastEnglishOcrUseTime, MainSoftData
+    if (engine == "")
+        engine := MainSoftData.OCRTypeValue == 2 ? "Tesseract OCR" : "RapidOCR"
+    if (engine == "RapidOCR") {
+        if (!MyChineseOcr)
+            MyChineseOcr := RapidOcr(GetProjectRoot())
+        LastChineseOcrUseTime := A_TickCount
+        return MyChineseOcr
+    }
+    if (engine == "Tesseract OCR") {
+        if (!MyEnglishOcr)
+            MyEnglishOcr := TesseractOcr(GetProjectRoot())
+        LastEnglishOcrUseTime := A_TickCount
+        return MyEnglishOcr
+    }
+    throw Error("不支持的 OCR 引擎：" engine)
+}
+
+; 旧调用仍使用全局设置。
 GetEnglishOcr() {
     return GetChineseOcr()
 }

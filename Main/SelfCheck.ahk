@@ -420,7 +420,7 @@ RuntimePrepareAsset(name, hint, expectSize := 0) {
     result := ""
     try {
         url := name == "NDP48-x86-x64-AllOS-ENU.exe" ? RmtLargeAssetUrl(name) : RmtAssetsBaseUrl("Common") name
-        result := DownloadAsync(url, path, 3600, pg)
+        result := RmtDownloadManager.DownloadBlocking(url, path, 3600, pg)
     } finally pg.Close()
 
     if (result = "ok")
@@ -817,17 +817,29 @@ DownloadRmtAssetBundle(url, files, pg) {
     try {
         DirCreate(stage)
         payload := stage "\download.zip"
-        result := DownloadAsync(url, payload, 120, pg)
+        result := RmtDownloadManager.DownloadBlocking(url, payload, 120, pg)
         if (result != "ok")
             return result
+        return RmtExtractAssetBundle(payload, files, pg, stage)
+    } finally {
+        try DirDelete(stage, true)
+    }
+}
 
+RmtExtractAssetBundle(zipPath, files, pg, stage := "") {
+    static sequence := 0
+    ownStage := stage == ""
+    if (ownStage)
+        stage := A_WorkingDir "\.rmt-assets-" DllCall("GetCurrentProcessId") "-" A_TickCount "-" (++sequence)
+    try {
+        DirCreate(stage)
         entries := ""
         for file in files
             entries .= ' "' file.entry '"'
-        pg.Report("正在解压：" SubStr(url, InStr(url, "/", , -1) + 1), pg.percent)
+        pg.Report("正在解压：" SubStr(zipPath, InStr(zipPath, "\", , -1) + 1), pg.percent)
         systemDir := A_PtrSize == 4 && A_Is64bitOS ? "\Sysnative" : "\System32"
         tar := A_WinDir systemDir "\tar.exe"
-        if (RunWait('"' tar '" -xf "' payload '" -C "' stage '" --' entries, , "Hide") != 0)
+        if (RunWait('"' tar '" -xf "' zipPath '" -C "' stage '" --' entries, , "Hide") != 0)
             return pg.Cancelled ? "cancel" : "fail"
 
         for file in files {
@@ -840,7 +852,6 @@ DownloadRmtAssetBundle(url, files, pg) {
                 return "cancel"
             if (!RmtAssetMissing(file.fullPath))
                 continue
-
             SplitPath(file.fullPath, , &dir)
             DirCreate(dir)
             FileMove(stage "\" file.entry, file.fullPath, true)
@@ -850,7 +861,8 @@ DownloadRmtAssetBundle(url, files, pg) {
         pg.Report("资源修复失败：" error.Message, pg.percent)
         return "fail"
     } finally {
-        try DirDelete(stage, true)
+        if (ownStage)
+            try DirDelete(stage, true)
     }
 }
 
@@ -927,7 +939,7 @@ VcRuntimeInstallRedist() {
                 pg := RmtProgress("RMT 运行库修复", "正在下载官方 VC++ 运行库…", XamlWin.ActiveOwner(), "取消下载")
                 pg.Show()
                 try {
-                    result := DownloadAsync(url, exePath, 600, pg)
+                    result := RmtDownloadManager.DownloadBlocking(url, exePath, 600, pg)
                 } finally pg.Close()
                 if (result = "ok" || result = "cancel")
                     break
@@ -1062,7 +1074,7 @@ DirectXInstallFromRedist() {
             pg.Show()
             result := ""
             try {
-                result := DownloadAsync(DirectXAssetUrl(), redist, 1800, pg)
+                result := RmtDownloadManager.DownloadBlocking(DirectXAssetUrl(), redist, 1800, pg)
             } finally pg.Close()
             if (result != "ok")
                 return false
@@ -1199,7 +1211,7 @@ IconFontStartupCheck() {
             try FileCopy(src, cache, true)
         } else {
             ; 约 283 KB，超时给 20 秒；DownloadAsync 自带 3 次重试
-            if (DownloadAsync(IconFontAssetUrl(), cache, 20, RmtSilentDownloadProgress()) != "ok")
+            if (RmtDownloadManager.DownloadBlocking(IconFontAssetUrl(), cache, 20, RmtSilentDownloadProgress()) != "ok")
                 return
         }
     }

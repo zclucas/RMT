@@ -15,7 +15,8 @@ public partial class AhkWpfEngine
     private FrameworkElement _tdLine;      // 插入线 Border
     private Popup _tdGhost;                // 跟手幽灵 Popup
     private TextBlock _tdGhostTxt;         // 幽灵文本
-    private FrameworkElement _tdSrcItem;   // 起拖的源行（取幽灵文本）
+    private System.Windows.Controls.Image _tdGhostImg; // 幽灵图标
+    private FrameworkElement _tdSrcItem;   // 起拖的源行（取幽灵文本与图标）
     private bool _tdArmed;                 // 已按下，未超过拖动阈值
     private bool _tdActive;                // 已进入拖拽
     private bool _tdExternal;              // 外部拖入（左侧指令面板 → 树）
@@ -24,6 +25,7 @@ public partial class AhkWpfEngine
     private string _tdTarget = "";
     private string _tdSlot = "";
     private string _tdGhostText = "";      // 外部拖入的幽灵文本，真正起拖时才填
+    private string _tdGhostIcon = "";      // 外部拖入的幽灵图标路径，真正起拖时才填
 
     private string TdName()
     {
@@ -31,7 +33,7 @@ public partial class AhkWpfEngine
         return fe != null && !string.IsNullOrEmpty(fe.Name) ? fe.Name : "Window";
     }
 
-    // 树内拖拽：把 ListBox 与它的插入线/幽灵接起来。spec = "插入线名|幽灵名|幽灵文本名"
+    // 树内拖拽：把 ListBox 与它的插入线/幽灵接起来。spec = "插入线名|幽灵名|幽灵文本名|幽灵图标名"
     internal void AttachTreeDrag(object ctrl, string spec)
     {
         var lb = ctrl as FrameworkElement;
@@ -51,19 +53,21 @@ public partial class AhkWpfEngine
 
     private void ResolveTreeDragParts(string spec)
     {
-        string lineName = "", ghostName = "", txtName = "";
+        string lineName = "", ghostName = "", txtName = "", imgName = "";
         string[] sp = (spec ?? "").Split('|');
         if (sp.Length >= 1) lineName = sp[0].Trim();
         if (sp.Length >= 2) ghostName = sp[1].Trim();
         if (sp.Length >= 3) txtName = sp[2].Trim();
+        if (sp.Length >= 4) imgName = sp[3].Trim();
         _tdLine = string.IsNullOrEmpty(lineName) ? null : FindControlByPath(lineName) as FrameworkElement;
         _tdGhost = string.IsNullOrEmpty(ghostName) ? null : FindControlByPath(ghostName) as Popup;
         _tdGhostTxt = string.IsNullOrEmpty(txtName) ? null : FindControlByPath(txtName) as TextBlock;
+        _tdGhostImg = string.IsNullOrEmpty(imgName) ? null : FindControlByPath(imgName) as System.Windows.Controls.Image;
     }
 
-    // 外部拖入：左侧指令面板按下后调用。treeName 为落点树，text 为幽灵显示文本。
+    // 外部拖入：左侧指令面板按下后调用。treeName 为落点树，text 为幽灵显示文本，icon 为图标路径。
     // spec 同上；为空时沿用 treeName 上次 AttachTreeDrag 接好的那套控件。
-    internal void BeginExternalTreeDrag(string treeName, string text, string spec)
+    internal void BeginExternalTreeDrag(string treeName, string text, string icon, string spec)
     {
         var lb = FindControlByPath(treeName) as FrameworkElement;
         if (lb == null)
@@ -82,6 +86,7 @@ public partial class AhkWpfEngine
         _tdSlot = "";
         _tdSrcItem = null;
         _tdGhostText = text ?? "";
+        _tdGhostIcon = icon ?? "";
 
         POINT p;
         if (GetCursorPos(out p))
@@ -162,6 +167,8 @@ public partial class AhkWpfEngine
             try { _tdLb.CaptureMouse(); } catch { }
             if (_tdGhostTxt != null)
                 _tdGhostTxt.Text = ItemText(srcItem);
+            if (_tdGhostImg != null)
+                _tdGhostImg.Source = ItemImage(srcItem);
             // 通知 AHK 进入拖拽态（它要暂停树的整棵重建，否则拖到一半列表被重建会丢源）
             SendToAhkAsync("EVENT|" + winId + "|" + TdName() + "|TreeDragStart|\n");
         }
@@ -215,6 +222,8 @@ public partial class AhkWpfEngine
             _tdActive = true;
             if (_tdGhostTxt != null)
                 _tdGhostTxt.Text = _tdGhostText ?? "";
+            if (_tdGhostImg != null)
+                SetGhostIcon(_tdGhostIcon);
             if (_tdGhost != null)
                 _tdGhost.IsOpen = true;
         }
@@ -247,6 +256,7 @@ public partial class AhkWpfEngine
         _tdTarget = "";
         _tdSlot = "";
         _tdGhostText = "";
+        _tdGhostIcon = "";
         if (_tdLine != null)
             _tdLine.Visibility = Visibility.Collapsed;
         if (_tdGhost != null)
@@ -388,5 +398,35 @@ public partial class AhkWpfEngine
     {
         var tb = BridgeUtil.FindVisualChild<TextBlock>(root);
         return tb != null && tb.Text != null ? tb.Text : "";
+    }
+
+    private ImageSource ItemImage(DependencyObject root)
+    {
+        var img = BridgeUtil.FindVisualChild<System.Windows.Controls.Image>(root);
+        return img != null ? img.Source : null;
+    }
+
+    private void SetGhostIcon(string path)
+    {
+        if (_tdGhostImg == null) return;
+        if (string.IsNullOrEmpty(path))
+        {
+            _tdGhostImg.Source = null;
+            return;
+        }
+        try
+        {
+            var bi = new System.Windows.Media.Imaging.BitmapImage();
+            bi.BeginInit();
+            bi.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bi.UriSource = new Uri(path, UriKind.RelativeOrAbsolute);
+            bi.EndInit();
+            bi.Freeze();
+            _tdGhostImg.Source = bi;
+        }
+        catch
+        {
+            _tdGhostImg.Source = null;
+        }
     }
 }
