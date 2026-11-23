@@ -206,6 +206,7 @@
             "OutputTip", "OT",
             "HudOutput", "HO",        ; 输出→悬浮显示：将渲染后的文本交给主进程建窗或更新
             "Error", "ER",          ; Worker 错误上报主进程（统一日志 C 项）
+            "InternalDownload", "ID",
             "Joy", "JY"
         )
 

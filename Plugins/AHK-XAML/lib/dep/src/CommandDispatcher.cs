@@ -47,6 +47,36 @@ public partial class AhkWpfEngine
         public bool Scheduled;
     }
 
+    // 窗口边缘非客户区的带宽（物理像素），由窗口自己的 WindowChrome 缩放带换算。
+    // 主界面把 ResizeBorderThickness 改写成 0（MainWindowXaml），这里就返回 0：整圈客户区
+    // 都能接鼠标，贴边的按钮/状态栏下沿不再有拖不动的死区，四角缩放改走 cornerCode。
+    private int ChromeResizeBandPx()
+    {
+        try
+        {
+            if (win == null)
+                return 0;
+            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(win);
+            if (chrome == null || !(chrome.ResizeBorderThickness.Left > 0))
+                return 0;
+            double scale = 1.0;
+            try
+            {
+                var src = PresentationSource.FromVisual(win);
+                if (src != null && src.CompositionTarget != null)
+                    scale = src.CompositionTarget.TransformToDevice.M11;
+            }
+            catch { }
+            if (!(scale > 0))
+                scale = 1.0;
+            // +2 吸收 DIP→物理像素的取整：热区宁可比 chrome 的带宽一点，也不能漏，
+            // 漏了单边缩放就会从剩下那条缝里钻出来。
+            return (int)Math.Ceiling(chrome.ResizeBorderThickness.Left * scale) + 2;
+        }
+        catch { }
+        return 0;
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         // 拖动时把自绘阴影跟紧窗口。系统阴影在直角窗口上会裁掉底边，这里不再靠它。
@@ -86,22 +116,32 @@ public partial class AhkWpfEngine
             {
                 short px = (short)(lParam.ToInt64() & 0xFFFF);
                 short py = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
-                // 只允许四角缩放：点落在窗口四边（非四角）时返回 HTBORDER，禁止单边调整大小。
+                // 只允许四角缩放：四角直接回缩放码，四边（非四角）回 HTBORDER，禁止单边调整大小。
+                // 边带宽度取窗口自己的 WindowChrome 缩放带换算（见 ChromeResizeBandPx）：原来硬编码
+                // 10 物理像素，比实际缩放带宽，等于白吃掉一截可点的客户区（贴边的按钮、状态栏下沿都点不到）。
                 // 边带要留到标题栏判断之后：标题栏上沿也在这条带里，先返回 HTBORDER 的话那一截不能拖、也不能双击最大化。
                 bool corner = false;
                 bool edge = false;
+                int cornerCode = 0;
                 try
                 {
                     RECT wr;
                     if (GetWindowRect(hwnd, out wr))
                     {
-                        int band = 10; // 边缘带宽度（物理像素）
-                        bool onLeft = px >= wr.left && px <= wr.left + band;
-                        bool onRight = px >= wr.right - band && px <= wr.right;
-                        bool onTop = py >= wr.top && py <= wr.top + band;
-                        bool onBottom = py >= wr.bottom - band && py <= wr.bottom;
+                        int band = ChromeResizeBandPx();
+                        // 四角至少 8px：缩放带为 0 的窗口（主界面）也还能拖角缩放；
+                        // 高 DPI 下带宽可能超过 8，角区跟着放大，免得角上那段落回 HTBORDER。
+                        int cornerZone = Math.Max(8, band);
+                        bool onLeft = px >= wr.left && px <= wr.left + cornerZone;
+                        bool onRight = px >= wr.right - cornerZone && px <= wr.right;
+                        bool onTop = py >= wr.top && py <= wr.top + cornerZone;
+                        bool onBottom = py >= wr.bottom - cornerZone && py <= wr.bottom;
                         corner = (onLeft || onRight) && (onTop || onBottom);
-                        edge = (onLeft || onRight || onTop || onBottom) && !corner;
+                        if (corner)
+                            cornerCode = onLeft ? (onTop ? 13 : 16) : (onTop ? 14 : 17); // 左上/左下/右上/右下
+                        else if (band > 0)
+                            edge = (px <= wr.left + band) || (px >= wr.right - band)
+                                || (py <= wr.top + band) || (py >= wr.bottom - band);
                     }
                 }
                 catch { }
@@ -120,16 +160,23 @@ public partial class AhkWpfEngine
                         SetMaxBtnChrome(btn, false, false);
                     }
                 }
+                // 四角缩放自己回缩放码，不再依赖 chrome 的缩放带：主界面那条带已经关成 0
+                // （见 MainWindowXaml 里对 ResizeBorderThickness 的改写），否则四角就拖不动了。
+                if (corner)
+                {
+                    handled = true;
+                    return new IntPtr(cornerCode);
+                }
                 // 视觉标题栏（DragArea）整段都是拖拽 / 双击最大化区。WindowChrome 只认窗口顶部
                 // 一条 DIP 热区，不跟着根内容 Viewbox 走，标题栏上半截会落在热区外面。
-                if (!corner && TitleBarCaptionContains(px, py))
+                if (TitleBarCaptionContains(px, py))
                 {
                     handled = true;
                     return new IntPtr(2); // HTCAPTION
                 }
                 // 标题栏其余部分（右侧铬钮区）交回客户区：同一段 DIP 热区会把按钮上半截
                 // 当成标题栏，按钮点不动、也出不来悬停高亮。
-                if (!corner && TitleBarRowContains(px, py))
+                if (TitleBarRowContains(px, py))
                 {
                     handled = true;
                     return new IntPtr(1); // HTCLIENT
@@ -593,6 +640,25 @@ public partial class AhkWpfEngine
         if (parts[0] == "Window" && parts[1] == "InitialUpdateComplete")
         {
             if (firstFrame != null) firstFrame.CompleteInitialization();
+            return;
+        }
+
+        // 状态栏：采样、读数、明细与悬停/钉住都在引擎进程内完成（见 StatusBarHost.cs）。
+        // AHK 只发三条：启停、下载/通知计数、运行中宏的标签 —— 都是它才知道的状态。
+        // 停止不在这条协议里：窗口 Closed 时引擎自己收（此刻同步投递会和引擎互相等待）。
+        if (parts[0] == "Window" && parts[1] == "StatusBarStart")
+        {
+            StartStatusBar();
+            return;
+        }
+        if (parts[0] == "Window" && parts[1] == "StatusBarCounts")
+        {
+            SetStatusBarCounts(parts.Length > 2 ? parts[2] : "");
+            return;
+        }
+        if (parts[0] == "Window" && parts[1] == "StatusBarLabels")
+        {
+            SetStatusBarLabels(parts.Length > 2 ? parts[2] : "");
             return;
         }
 
@@ -1169,14 +1235,16 @@ public partial class AhkWpfEngine
                 {
                     AttachTreeDrag(ctrl, parts.Length > 2 ? parts[2] : "");
                 }
-                // 外部拖入：左侧指令面板按下后调用。value = "目标树名|幽灵文本|控件名三件套"
+                // 外部拖入：左侧指令面板按下后调用。value = "目标树名|幽灵文本|图标路径|控件名四件套"
                 else if (parts[1] == "TreeDragExternal")
                 {
                     string eraw = parts.Length > 2 ? parts[2] : "";
-                    string[] eseg = eraw.Split(new[] { '|' }, 3);
+                    string[] eseg = eraw.Split(new[] { '|' }, 4);
                     if (eseg.Length >= 1)
-                        BeginExternalTreeDrag(eseg[0].Trim(), eseg.Length >= 2 ? eseg[1] : "",
-                            eseg.Length >= 3 ? eseg[2] : "");
+                        BeginExternalTreeDrag(eseg[0].Trim(),
+                            eseg.Length >= 2 ? eseg[1] : "",
+                            eseg.Length >= 3 ? eseg[2] : "",
+                            eseg.Length >= 4 ? eseg[3] : "");
                 }
                 // 运行期重绑事件：value = "ctrl:event,ctrl:event,..."
                 // 用于「画布原地重灌」之后——注入的新元素需要重新挂鼠标事件。
@@ -4048,6 +4116,12 @@ public partial class AhkWpfEngine
                             try { System.IO.File.AppendAllText(debugPath, "  -> Property '" + subPropName + "' NOT FOUND on " + effect.GetType().Name + "\n"); } catch { }
                         }
                     }
+                }
+                else if (parts[1] == "Overlay" && parts.Length > 2)
+                {
+                    // 窗口内锚定浮层：把 ctrl（面板自身）贴到 parts[2] 指定控件的上沿。
+                    // 位置由引擎在布局变化时持续重算，AHK 侧只在切换目标与显隐时发一条。
+                    AttachAnchoredPanel(ctrl as System.Windows.FrameworkElement, parts[2]);
                 }
                 else
                 {

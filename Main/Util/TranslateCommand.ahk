@@ -19,13 +19,15 @@ class TranslateData {
     TargetCustom := ""               ; Target 选「自定义」时的语言名，如 泰语
     Engine := "Index-Translate 2B"   ; 见 TranslateCommand.Engines
     Device := "自动"                 ; 自动 / GPU / CPU，只对本地引擎有效
-    Glossary := ""                   ; 术语表，每行 原文:译文
+    Glossary := ""                   ; 旧版术语表原文，兼容读取且不自动改写
+    GlossaryItems := []              ; 新版结构化术语表 [{source, target}]
     ResultVar := "TransRes"
     ErrorVar := ""
-    TimeoutMs := 30000
 }
 
 class TranslateCommand {
+    static FriendlyErrorPrefix := "RMT_TRANSLATE_USER|"
+    static MissingModelPrefix := "RMT_TRANSLATE_MISSING_MODEL|"
     static Sources := ["变量", "剪切板", "固定文本"]
     static Engines := ["Index-Translate 2B", "Index-Translate 9B", "AI 通道"]
     ; 推理设备，只对本地引擎有效。自动与 GPU 在功能上只差一件事：
@@ -45,6 +47,14 @@ class TranslateCommand {
         "Index-Translate 9B", "Index-Translate-9B.Q4_K_M.gguf")
 
     static IsLocal(engine) => TranslateCommand.EngineModels.Has(engine)
+
+    static TimeoutMs() {
+        global MainSoftData
+        timeout := MainSoftData.HasOwnProp("TranslateTimeoutMs") ? Integer(MainSoftData.TranslateTimeoutMs) : 30000
+        return (timeout >= 1000 && timeout <= 3600000) ? timeout : 30000
+    }
+
+    static UserError(message) => Error(TranslateCommand.FriendlyErrorPrefix . message)
 
     ; 设备归一：旧配置没有 Device 字段，按「自动」处理。
     static ResolveDevice(data) {
@@ -74,7 +84,7 @@ class TranslateCommand {
         if (target == "自定义") {
             target := Trim(data.HasOwnProp("TargetCustom") ? data.TargetCustom : "")
             if (target == "")
-                throw Error(GetLang("自定义目标语言不能为空"))
+                throw TranslateCommand.UserError(GetLang("自定义目标语言不能为空"))
         }
         return target
     }
@@ -83,18 +93,19 @@ class TranslateCommand {
         timedOut := false
         text := Trim(TranslateCommand.ReadSource(data, resolve))
         if (text == "")
-            throw Error(GetLang("翻译内容为空"))
+            throw TranslateCommand.UserError(GetLang("翻译内容为空"))
 
         target := TranslateCommand.ResolveTarget(data)
         promptTarget := TranslateCommand.TargetPrompt.Has(target) ? TranslateCommand.TargetPrompt[target] : target
         glossary := data.HasOwnProp("Glossary") ? data.Glossary : ""
+        glossaryItems := data.HasOwnProp("GlossaryItems") && data.GlossaryItems is Array ? data.GlossaryItems : []
 
         if (TranslateCommand.IsLocal(data.Engine))
-            return TranslateCommand.ExecuteLocal(text, promptTarget, glossary, data, cancelled, &timedOut)
-        return TranslateCommand.ExecuteRemote(text, promptTarget, glossary, data, cancelled, &timedOut)
+            return TranslateCommand.ExecuteLocal(text, promptTarget, glossary, glossaryItems, data, cancelled, &timedOut)
+        return TranslateCommand.ExecuteRemote(text, promptTarget, glossary, glossaryItems, data, cancelled, &timedOut)
     }
 
-    static ExecuteLocal(text, target, glossary, data, cancelled, &timedOut := false, &elapsedMs := 0) {
+    static ExecuteLocal(text, target, glossary, glossaryItems, data, cancelled, &timedOut := false, &elapsedMs := 0) {
         if (cancelled())
             return ""
         engine := TranslateEngine.Shared()
@@ -102,40 +113,50 @@ class TranslateCommand {
             throw Error(GetLang("翻译组件缺失，请先编译 Plugins\Translate"))
         ; 换模型或换推理设备才重新 Load；同一组合内反复调用复用已加载的模型
         want := TranslateCommand.EngineModels[data.Engine]
+        if (!TranslateEngine.HasModel(want))
+            throw Error(TranslateCommand.MissingModelPrefix want)
         layers := TranslateCommand.ResolveGpuLayers(data)
         ; 明确选 GPU 却没有可用后端时直接报，不要静默落 CPU 让人以为在用显卡
         if (layers == -1 && TranslateCommand.ResolveDevice(data) == "GPU" && !engine.HasGpu())
-            throw Error(GetLang("本机没有可用的 GPU 推理后端，请把设备改成自动或 CPU"))
+            throw TranslateCommand.UserError(GetLang("本机没有可用的 GPU 推理后端，请把设备改成自动或 CPU"))
         if (engine.modelPath == "" || !InStr(engine.modelPath, want) || engine.gpuLayers != layers) {
-            err := engine.Load(want, Map("timeoutMs", Integer(data.TimeoutMs), "nGpuLayers", layers))
+            err := engine.Load(want, Map("nGpuLayers", layers))
             if (err != "")
                 throw Error(err)
         }
-        result := engine.Translate(text, target, glossary)
+        result := engine.Translate(text, target, glossary, glossaryItems, TranslateCommand.TimeoutMs())
+        if (result["ok"] != 1 && InStr(result["error"], "文本过长"))
+            throw TranslateCommand.UserError(result["error"])
         if (result["ok"] != 1)
             throw Error(result["error"])
         elapsedMs := result["elapsedMs"]
+        timedOut := result["truncated"] == 1
         return result["text"]
     }
 
     ; 与 AI判断 同一条链路：POST {base}/chat/completions。
     ; 区别只在 prompt 与不需要 JSON 约束。
-    static ExecuteRemote(text, target, glossary, data, cancelled, &timedOut := false, &elapsedMs := 0) {
+    static ExecuteRemote(text, target, glossary, glossaryItems, data, cancelled, &timedOut := false, &elapsedMs := 0) {
         global SettingFile, SettingSection
         key := Trim(CfgRead(SettingFile, SettingSection, "AiApiKey", ""))
         baseUrl := RTrim(Trim(CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "")), "/")
         model := Trim(CfgRead(SettingFile, SettingSection, "AiModel", ""))
         if (baseUrl == "" || model == "")
-            throw Error(GetLang("请先在 AI 设置中填写 API URL 与模型"))
+            throw TranslateCommand.UserError(GetLang("请先在 AI 设置中填写 API URL 与模型"))
 
         prompt := "把下面的内容翻译成" target "。只输出译文，不要解释、不要加引号、不要重复原文。"
         if (Trim(glossary) != "")
             prompt .= "`n术语对照（必须遵守）：`n" glossary
+        if (glossaryItems.Length) {
+            prompt .= "`n术语对照（必须遵守）："
+            for item in glossaryItems
+                prompt .= "`n" item.source " → " item.target
+        }
         request := HttpRequestData()
         request.Method := "POST"
         request.Url := baseUrl "/chat/completions"
         request.Headers := "Content-Type: application/json; charset=utf-8" (key == "" ? "" : "`nAuthorization: Bearer " key)
-        request.TimeoutMs := Integer(data.TimeoutMs)
+        request.TimeoutMs := TranslateCommand.TimeoutMs()
         request.Retries := 0
         request.Body := JSON.stringify({model: model, temperature: 0, messages: [
             {role: "system", content: "你是翻译器，只输出译文。"},
@@ -148,15 +169,15 @@ class TranslateCommand {
             return ""
         timedOut := response.TimedOut
         if (response.Status < 200 || response.Status >= 300)
-            throw Error(GetLang(response.Error != "" ? response.Error : "AI 请求失败") " [" response.Status "]")
+            throw TranslateCommand.UserError(GetLang(response.Error != "" ? response.Error : "AI 请求失败") " [" response.Status "]")
         try {
             body := JSON.parse(response.Body)
             content := Trim(body["choices"][1]["message"]["content"], " `t`r`n")
         } catch {
-            throw Error(GetLang("AI 返回内容无法解析"))
+            throw TranslateCommand.UserError(GetLang("AI 返回内容无法解析"))
         }
         if (content == "")
-            throw Error(GetLang("AI 返回内容为空"))
+            throw TranslateCommand.UserError(GetLang("AI 返回内容为空"))
         return content
     }
 }
@@ -168,15 +189,31 @@ OnTranslate(tableItem, cmd, index) {
         return
     value := ""
     failure := ""
+    friendlyFailure := false
     timedOut := false
     resolve := (text) => GetReplaceVarText(tableItem, index, text)
     try value := TranslateCommand.Execute(data, resolve, cancelled, &timedOut)
-    catch as e
+    catch as e {
         failure := e.Message
+        if (SubStr(failure, 1, StrLen(TranslateCommand.FriendlyErrorPrefix)) == TranslateCommand.FriendlyErrorPrefix) {
+            failure := SubStr(failure, StrLen(TranslateCommand.FriendlyErrorPrefix) + 1)
+            friendlyFailure := true
+        } else if (SubStr(failure, 1, StrLen(TranslateCommand.MissingModelPrefix)) == TranslateCommand.MissingModelPrefix) {
+            modelName := SubStr(failure, StrLen(TranslateCommand.MissingModelPrefix) + 1)
+            try RmtRequestInternalDownload("translate-model:" . modelName)
+            failure := Format(GetLang("本地翻译模型 {} 未下载，已请求后台下载；当前宏已中断。"), modelName)
+        }
+    }
     if (cancelled())
         return
     SaveTranslateResult(data, value, failure)
-    if (failure != "" && (!data.HasOwnProp("ErrorVar") || data.ErrorVar == ""))
+    if (friendlyFailure) {
+        RMTErrorShow(failure, RMT_LV_WARN, "TranslateCommand")
+        return
+    }
+    if (timedOut)
+        RMTErrorShow(GetLang("翻译结果可能不完整，已写入部分译文。"), RMT_LV_WARN, "TranslateCommand")
+    if (failure != "")
         throw Error(failure)
 }
 

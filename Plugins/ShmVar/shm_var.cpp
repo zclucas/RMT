@@ -605,4 +605,35 @@ SHMVAR_API int32_t ShmVar_GetType(const char* key, int32_t* outType, size_t* out
     return SHMVAR_OK;
 }
 
+SHMVAR_API int32_t ShmVar_GetKeys(char* buf, size_t bufSize, size_t* outLen) {
+    if (!outLen) return SHMVAR_ERR_INVALID_ARG;
+    if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
+    CrossProcessLock lock(g_ctx.hMutex);
+    if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
+
+    auto* header = reinterpret_cast<shm::ShmHeader*>(g_ctx.baseAddr);
+    size_t required = 0;
+    for (uint32_t bucket = 0; bucket < shm::HASH_BUCKET_COUNT; ++bucket) {
+        for (uint32_t offset = header->buckets[bucket]; offset != shm::OFFSET_NIL;) {
+            auto* node = OffsetToPointer<shm::ShmNode>(g_ctx.baseAddr, offset);
+            required += node->keyLen + 1;
+            offset = node->nextOffset;
+        }
+    }
+    *outLen = required;
+    if (required == 0) return SHMVAR_OK;
+    if (!buf || bufSize < required) return SHMVAR_ERR_BUF_TOO_SMALL;
+
+    size_t position = 0;
+    for (uint32_t bucket = 0; bucket < shm::HASH_BUCKET_COUNT; ++bucket) {
+        for (uint32_t offset = header->buckets[bucket]; offset != shm::OFFSET_NIL;) {
+            auto* node = OffsetToPointer<shm::ShmNode>(g_ctx.baseAddr, offset);
+            std::memcpy(buf + position, OffsetToPointer(g_ctx.baseAddr, node->keyOffset), node->keyLen + 1);
+            position += node->keyLen + 1;
+            offset = node->nextOffset;
+        }
+    }
+    return SHMVAR_OK;
+}
+
 } // extern "C"

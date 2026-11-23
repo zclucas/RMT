@@ -19,6 +19,8 @@
                 this.dragGhostName := names.dragGhostName
             if (names.HasProp("dragGhostTxtName") && names.dragGhostTxtName != "")
                 this.dragGhostTxtName := names.dragGhostTxtName
+            if (names.HasProp("dragGhostImgName") && names.dragGhostImgName != "")
+                this.dragGhostImgName := names.dragGhostImgName
             if (names.HasProp("ctxMenuName") && names.ctxMenuName != "")
                 this.ctxMenuName := names.ctxMenuName
             if (names.HasProp("branchCtxMenuName") && names.branchCtxMenuName != "")

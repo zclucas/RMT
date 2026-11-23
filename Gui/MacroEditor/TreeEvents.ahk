@@ -294,13 +294,13 @@
     }
 
     ; 左面板按钮按下：把"拖的是哪条指令"交给引擎，由引擎在窗口内跟手并在松手时回报落点
-    _OnPanelDragStart(guiInstance, displayName, state, ctrl, event) {
+    _OnPanelDragStart(guiInstance, displayName, iconPath, state, ctrl, event) {
         if (this.EditModeCon.Value != 1 || !IsObject(this.ui))
             return
         this._extDragGui := guiInstance
-        ; value = 目标树名|幽灵文本|插入线名|幽灵名|幽灵文本名
+        ; value = 目标树名|幽灵文本|图标路径|插入线名|幽灵名|幽灵文本名|幽灵图标名
         try this.ui.Update("Window", "TreeDragExternal"
-            , this.treeName "|" displayName "|" this.insertLineName "|" this.dragGhostName "|" this.dragGhostTxtName)
+            , this.treeName "|" displayName "|" iconPath "|" this.insertLineName "|" this.dragGhostName "|" this.dragGhostTxtName "|" this.dragGhostImgName)
     }
 
     ; ==== 拖拽结果（命中/插入线/幽灵都在引擎内跑完，这里只落模型）====

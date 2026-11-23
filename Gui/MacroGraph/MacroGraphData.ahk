@@ -440,6 +440,7 @@ class MacroGraphDataMixin {
             d.extractStr := data.ExtractStr
             d.winInfo := data.WinInfo
             d.ocrType := data.OCRType
+            d.ocrEngine := OcrEngineValue(data)
             d.startPosX := data.StartPosX
             d.startPosY := data.StartPosY
             d.endPosX := data.EndPosX

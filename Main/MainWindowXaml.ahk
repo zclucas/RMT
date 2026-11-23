@@ -130,6 +130,7 @@ class MainWin {
                 this.aiPanelW := this._ClampAiPanelW(savedW)
         }
         this.closed := false
+        this._hwndReadyDone := false
         title := "RMTv" RMT_VERSION
         titleHeight := XAMLHost.GetTitleBarHeight()
 
@@ -138,14 +139,14 @@ class MainWin {
         ; 任何分辨率下内容布局完全一致（高分屏只是整体放大）。
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}")
         main.Width(1400).Height(787)
-        main.Rows(titleHeight, "*")
+        main.Rows(titleHeight, "*", "28")
         main.Cols("130", "*")
 
         ; §11 主界面背景图（全局配置；铺满窗口最底层，内容面板未覆盖处可见）
         _bgImg := Trim(MainSoftData.BackImagePath)
         if (_bgImg != "" && FileExist(_bgImg)) {
             try {
-                main.Add("Image").Name("WinBgImage").Grid_Row(0).Grid_RowSpan(2).Grid_Column(0).Grid_ColumnSpan(2)
+                main.Add("Image").Name("WinBgImage").Grid_Row(0).Grid_RowSpan(3).Grid_Column(0).Grid_ColumnSpan(2)
                     .Source(_bgImg).Stretch("Fill").Opacity("0.9").IsHitTestVisible("False")
             } catch as e {
             }
@@ -169,6 +170,33 @@ class MainWin {
         maxBtn.Add("TextBlock").Text(Chr(0xE922)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
         closeBtn := btnGroup.Add("Button").Name("BtnWinClose").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
         closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+
+        status := main.Add("Grid").Grid_Row(2).Grid_ColumnSpan(2).Background("{DynamicResource TitleBarColor}")
+        status.Cols("*", "Auto")
+        stats := status.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Stretch").Margin("6,0,0,0")
+        ; 底栏读数统一「RMT / 系统」在前，内存多一项总内存
+        this._AddStatusMetric(stats, "StatusCpu", "CPU — / —")
+        this._AddStatusMetric(stats, "StatusGpu", "GPU — / —")
+        this._AddStatusMetric(stats, "StatusMemory", GetLang("内存") " — / — / —")
+        stats.Add("TextBlock").Name("StatusNetwork").Text("↓ —  ↑ —").Margin("8,0,18,0")
+            .VerticalAlignment("Center").ToolTip(GetLang("系统网络，包含虚拟网卡")).Foreground("{DynamicResource TextMain}")
+        statusButtons := status.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Center")
+        statusButtons.Add("Button").Name("StatusDownloads").Content(GetLang("下载") " 0")
+            .Height(24).MinHeight(24).Padding("8,0").Margin("0,0,4,0")
+        statusButtons.Add("Button").Name("StatusNotifications").Content(GetLang("通知") " 0")
+            .Height(24).MinHeight(24).Padding("8,0").Margin("0,0,8,0")
+
+        ; ---- 底栏资源明细浮层 ----
+        ; 是窗口内的子控件，不是 Popup：跟着窗口一起移动，切到别的窗口也不会消失。
+        ; 位置由引擎按被钉住的指标实时算（见 AnchoredPanel.cs），这里只留一个空壳。
+        detailLayer := main.Add("Grid").Grid_Row(0).Grid_RowSpan(3).Grid_Column(0).Grid_ColumnSpan(2)
+            .IsHitTestVisible("False").Panel_ZIndex(30)
+        detailBox := detailLayer.Add("Border").Name("StatusDetail").Visibility("Collapsed")
+            .HorizontalAlignment("Left").VerticalAlignment("Bottom").MaxWidth(460)
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource OutlineStroke}")
+            .BorderThickness("1").CornerRadius("4").Padding("10,7").IsHitTestVisible("False")
+        detailBox.Add("TextBlock").Name("StatusDetailText").Text("").Foreground("{DynamicResource TextMain}")
+            .TextWrapping("Wrap")
 
         ; ---- 左操作栏 ----
         left := main.Add("Grid").Grid_Row(1).Grid_Column(0).Margin("6,6,4,6")
@@ -497,6 +525,10 @@ class MainWin {
         winEnd := InStr(this.ui.xaml, ">")
         head := StrReplace(SubStr(this.ui.xaml, 1, winEnd), 'Background="Transparent"', 'Background="{DynamicResource BgColor}"')
         this.ui.xaml := head SubStr(this.ui.xaml, winEnd + 1)
+        ; 关掉 chrome 的缩放带：那 4 DIP 是非客户区，任何落进去的控件都收不到鼠标（悬停、点击、钉住图标全失效）。
+        ; 内容在 Viewbox 里等比缩放，本来也不需要单边拖尺寸；四角缩放由引擎在 WM_NCHITTEST 里
+        ; 直接回缩放码（CommandDispatcher.ChromeResizeBandPx 只对 ResizeBorderThickness>0 的窗口留边带）。
+        this.ui.xaml := StrReplace(this.ui.xaml, 'ResizeBorderThickness="4"', 'ResizeBorderThickness="0"')
 
         ; ---- 壳级事件（初始 XAML 内，经 eventBindings 绑定） ----
         this.ui.OnEvent("Window", "Closing", ObjBindMethod(this, "OnWindowClosing"))
@@ -527,6 +559,10 @@ class MainWin {
             this.ui.OnEvent("BtnGMUI", "Click", (*) => this.ui.Update("Window", "GMUIOpen", ""))
         this.ui.OnEvent("BtnHelp", "Click", (*) => OnOpenRmtDoc())
         this.ui.OnEvent("BtnSave", "Click", OnSaveSetting)
+        this.ui.OnEvent("StatusDownloads", "Click", ObjBindMethod(this, "_OpenStatusDownloads"))
+        this.ui.OnEvent("StatusNotifications", "Click", ObjBindMethod(this, "_OpenStatusNotifications"))
+        ; 底栏指标上的悬停与点击不在这里绑：引擎自己接管容器事件（StatusBarHost.cs），
+        ; 省掉「事件回 AHK → SetTimer 转回引擎」这一圈
 
         this._vl := VirtualListHost(this.ui)
         this.LoadLeftBarValues()
@@ -560,6 +596,7 @@ class MainWin {
         if (this.HasOwnProp("_hwndReadyDone") && this._hwndReadyDone)
             return
         this._hwndReadyDone := true
+        SetTimer(ObjBindMethod(this, "_StartStatusBar"), -1000)
         XamlUiDiag("MainWin hwnd=" this.ui.wpfHwnd, "MainWin")
         ; AI 输入框的 OLE 拖放目标需多个页签各两次同步 IPC（实测 350ms）。
         ; 此时首屏已可见，不必阻塞主线程，推迟到窗口出现后执行。
@@ -674,6 +711,7 @@ class MainWin {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        this._StopStatusBar()
         this.HideSideDebugTools()
         this._AiVoiceClose()
         this._AiPersistAllTabs()
@@ -781,6 +819,7 @@ class MainWin {
         this.ui.Update("TxtKillKey", "Visibility", vis)
         this.ui.Update("BtnToggleHotkeyHint", "Content", this._showHotkeyHint ? Chr(0xE70D) : Chr(0xE76C))
     }
+#Include MainWindow\StatusBar.ahk
 #Include MainWindow\SidePanelLayout.ahk
 #Include MainWindow\SideMacroEditor.ahk
 #Include MainWindow\AiConversationView.ahk

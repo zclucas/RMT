@@ -111,6 +111,12 @@ SHMVAR_API int32_t ShmVar_WaitForChange(uint32_t timeoutMs);
  */
 SHMVAR_API int32_t ShmVar_GetType(const char* key, int32_t* outType, size_t* outSize);
 
+/**
+ * Snapshot all live keys as consecutive null-terminated UTF-8 strings.
+ * outLen receives the required/used bytes; an empty map uses zero bytes.
+ */
+SHMVAR_API int32_t ShmVar_GetKeys(char* buf, size_t bufSize, size_t* outLen);
+
 #ifdef __cplusplus
 }
 #endif

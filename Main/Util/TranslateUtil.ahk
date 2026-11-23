@@ -16,7 +16,7 @@
 
 class TranslateEngine {
     ; 与 TranslateDll.h 的 TRANSLATE_API_VERSION 对应
-    static ContractVersion := 1
+    static ContractVersion := 2
     ; 默认模型文件名（Plugins\Translate\models 下）
     static DefaultModel := "Index-Translate-2B.Q4_K_M.gguf"
     ; 输出缓冲（wchar_t 计）。译文按字符截断，8192 字足够一屏文案；超出会在 stats 里标 truncated
@@ -52,7 +52,12 @@ class TranslateEngine {
     ; 模型是否已下载
     static HasModel(name := "") {
         name := (name == "" ? TranslateEngine.DefaultModel : name)
-        return FileExist(TranslateEngine.ModelDir() "\" name) != ""
+        path := TranslateEngine.ModelDir() "\" name
+        if (!FileExist(path))
+            return false
+        minBytes := InStr(name, "-9B") ? 5000 * 1024 * 1024 : 1200 * 1024 * 1024
+        try return FileGetSize(path) >= minBytes
+        return false
     }
 
     __New() {
@@ -142,7 +147,7 @@ class TranslateEngine {
     }
 
     ; 加载模型。opt 可省：
-    ;   nCtx（默认 2048）nThreads（0=自动）maxTokens（默认 512）timeoutMs（默认 30000）
+    ;   nCtx（默认 2048）nThreads（0=自动）maxTokens（默认 512）；timeoutMs 仅保留兼容
     ; 返回 "" 表示成功，否则是错误文本。
     Load(modelName := "", opt := "") {
         ; 2B 模型的常驻内存放不进 32 位地址空间，32 位宿主没有这个插件，别报成「组件缺失」
@@ -202,7 +207,7 @@ class TranslateEngine {
     ;   text    译文（ok=1）
     ;   error   错误文本（ok=0）
     ;   promptTokens / outputTokens / elapsedMs / truncated
-    Translate(text, target, glossary := "") {
+    Translate(text, target, legacyGlossary := "", glossaryItems := [], timeoutMs := 30000) {
         if (!this.IsLoaded()) {
             err := this.Load()
             if (err != "")
@@ -215,9 +220,28 @@ class TranslateEngine {
         NumPut("Int", 0, this._out, 0)
         NumPut("Int", 0, this._stats, 0)
 
+        itemBuffer := 0
+        itemBuffers := []
+        if (IsObject(glossaryItems) && glossaryItems.Length) {
+            itemBuffer := Buffer(glossaryItems.Length * A_PtrSize * 2, 0)
+            for index, item in glossaryItems {
+                source := String(item.source)
+                targetText := String(item.target)
+                sourceBuffer := Buffer(StrPut(source, "UTF-16") * 2, 0)
+                targetBuffer := Buffer(StrPut(targetText, "UTF-16") * 2, 0)
+                StrPut(source, sourceBuffer, "UTF-16")
+                StrPut(targetText, targetBuffer, "UTF-16")
+                offset := (index - 1) * A_PtrSize * 2
+                NumPut("Ptr", sourceBuffer.Ptr, itemBuffer, offset)
+                NumPut("Ptr", targetBuffer.Ptr, itemBuffer, offset + A_PtrSize)
+                itemBuffers.Push(sourceBuffer, targetBuffer)
+            }
+        }
+
         r := 0
         try
-            r := DllCall(this.dllPath "\Translate_Run", "WStr", text, "WStr", target, "WStr", glossary,
+            r := DllCall(this.dllPath "\Translate_Run", "WStr", text, "WStr", target, "WStr", legacyGlossary,
+                "Ptr", itemBuffer, "Int", IsObject(glossaryItems) ? glossaryItems.Length : 0, "Int", Integer(timeoutMs),
                 "Ptr", this._out, "Int", TranslateEngine.OutChars, "Ptr", this._stats, "CDecl Int")
         catch as e {
             return Map("ok", 0, "text", "", "error", "Run 调用失败: " (e.HasProp("Message") ? e.Message : ""))
