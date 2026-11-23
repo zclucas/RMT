@@ -327,7 +327,7 @@ class KeyCheckGui {
         if (!this.HasProp("SelectionData")) {
             this.ui.Update("CheckTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.CheckType, CmdEnumKeyCheckNames())))
             this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
-            this._SetCombo("VarNameCon", this.DLVariableArr, this.Data.VarName != "" ? this.Data.VarName : "Var1")
+            this._SetCombo("VarNameCon", this.DLVariableArr, this.Data.VarName != "" ? this.Data.VarName : "KeyDown")
         }
 
         this.RefreshCheckCon(this.KeyStr)

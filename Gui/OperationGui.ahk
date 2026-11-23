@@ -245,12 +245,12 @@ class OperationGui {
         this._CompactOpData()
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1]
-            this.Data.UpdateNameArr := ["Var1"]
+            this.Data.UpdateNameArr := ["Result1"]
             this.Data.ExpressionArr := [""]
         }
         n := this.Data.ToggleArr.Length
         while (this.Data.UpdateNameArr.Length < n)
-            this.Data.UpdateNameArr.Push("Var" (this.Data.UpdateNameArr.Length + 1))
+            this.Data.UpdateNameArr.Push("Result" (this.Data.UpdateNameArr.Length + 1))
         while (this.Data.UpdateNameArr.Length > n)
             this.Data.UpdateNameArr.RemoveAt(this.Data.UpdateNameArr.Length)
         while (this.Data.ExpressionArr.Length < n)
@@ -268,7 +268,7 @@ class OperationGui {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             expr := (this.Data.ExpressionArr.Length >= i) ? this.Data.ExpressionArr[i] : ""
-            name := (this.Data.UpdateNameArr.Length >= i) ? this.Data.UpdateNameArr[i] : ("Var" i)
+            name := (this.Data.UpdateNameArr.Length >= i) ? this.Data.UpdateNameArr[i] : ("Result" i)
             if (this.Data.ToggleArr[i]) {
                 newTog.Push(1)
                 newName.Push(name)
@@ -277,7 +277,7 @@ class OperationGui {
         }
         if (newTog.Length == 0) {
             newTog := [1]
-            newName := ["Var1"]
+            newName := ["Result1"]
             newExpr := [""]
         }
         this.Data.ToggleArr := newTog
@@ -342,7 +342,7 @@ class OperationGui {
         this._ReadOperationRows()
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
-        this.Data.UpdateNameArr.Push("Var" n)
+        this.Data.UpdateNameArr.Push("Result" n)
         this.Data.ExpressionArr.Push("")
         this._RebuildOpRows()
     }

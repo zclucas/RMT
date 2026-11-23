@@ -16,10 +16,28 @@ class WindowControlData {
     TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
 }
 
+class ControlInfoData extends WindowControlData {
+    ActionType := "读取控件信息"
+    ResultVar := "Res"
+    TimeoutAction := ""
+    TimeoutStatusVar := ""
+}
+
 class WindowControl {
     static Actions := ["点击控件", "聚焦控件", "写入控件值", "读取控件值", "读取控件文本", "读取控件信息",
         "选中控件", "加入选区", "移出选区", "切换勾选", "设置勾选", "展开控件", "折叠控件", "滚动到控件",
         "设置范围值", "读取范围值", "等待控件出现", "检测控件存在"]
+    static InfoActions := ["检测控件存在", "读取控件文本", "读取控件值", "读取控件信息", "读取范围值"]
+    static OperationActions := ["点击控件", "聚焦控件", "写入控件值", "选中控件", "加入选区", "移出选区",
+        "切换勾选", "设置勾选", "展开控件", "折叠控件", "滚动到控件", "设置范围值", "等待控件出现"]
+
+    static CommandKey(action) {
+        action := CmdEnumZh(action, this.Actions)
+        for name in this.InfoActions
+            if (action == name)
+                return "控件信息"
+        return "控件操作"
+    }
 
     ; Automation ID is scoped to siblings. Fall back to name and class, then the occurrence in that group.
     static Describe(element) {
@@ -147,18 +165,18 @@ class WindowControl {
     static Execute(data, arg, cancelled) {
         selector := this.ParseSelector(data.Selector)
         action := CmdEnumZh(data.ActionType, this.Actions)
-        deadline := A_TickCount + Integer(data.TimeoutMs)
+        deadline := this.UsesTimeout(action) ? A_TickCount + Integer(data.TimeoutMs) : 0
         while (!cancelled()) {
             element := this.Find(selector)
             if (element)
                 break
-            if (!this.UsesTimeout(action) && data.HasOwnProp("TimeoutStatusVar"))
-                return 0
-            if (A_TickCount >= deadline) {
-                if (!this.UsesTimeout(action))
+            if (!this.UsesTimeout(action)) {
+                if (action == "检测控件存在")
                     return 0
-                throw WindowControlTimeoutError(GetLang("等待控件超时。"))
+                throw TargetError(GetLang("没有找到可选取的窗口控件。"))
             }
+            if (A_TickCount >= deadline)
+                throw WindowControlTimeoutError(GetLang("等待控件超时。"))
             Sleep(Max(0, Min(75, deadline - A_TickCount)))
         }
         if (cancelled())
@@ -225,7 +243,7 @@ class WindowControl {
 
     static UsesArgument(action) => action == "写入控件值" || action == "设置勾选" || action == "设置范围值"
 
-    static UsesTimeout(action) => action != "检测控件存在"
+    static UsesTimeout(action) => this.CommandKey(action) != "控件信息"
 
     static _Automation() {
         static automation := ComObject("{FF48DBA4-60EF-4201-AA87-54103EEF594E}", "{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")

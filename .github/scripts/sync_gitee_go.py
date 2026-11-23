@@ -16,7 +16,7 @@ from mirror_rmt_refs import git
 
 VERSION = r"v[0-9]+(?:\.[0-9]+)+(?:F[0-9]+)?"
 SCRIPTS = Path(__file__).resolve().parent / "gitee-go"
-GITEE_MAX_BYTES = 100 * 1024**2
+GITEE_MAX_BYTES = 100_000_000
 
 
 def http(url, token=None, data=None, form=False):
@@ -31,7 +31,7 @@ def http(url, token=None, data=None, form=False):
         return json.load(res)
 
 
-def prepare(repo, tag):
+def prepare(repo, tag, asset_name=""):
     gh = "https://api.github.com/repos/zclucas/" + repo + "/releases"
     source = http(gh + "/tags/" + tag, os.environ["GH_TOKEN"])
     if source["draft"] or source["tag_name"] != tag:
@@ -41,11 +41,13 @@ def prepare(repo, tag):
     for page in range(1, 101):
         batch = http(f"{gh}/{source['id']}/assets?per_page=100&page={page}", os.environ["GH_TOKEN"])
         for a in batch:
+            if asset_name and a["name"] not in {asset_name, asset_name + ".parts.json"} and not re.fullmatch(re.escape(asset_name) + r"\.part\d{4}", a["name"]):
+                continue
             if a["name"] in source_names or a["state"] != "uploaded" or a["size"] <= 0:
                 raise ValueError("Invalid GitHub attachment: " + a["name"])
             source_names.add(a["name"])
-            if a["size"] > GITEE_MAX_BYTES:
-                print(f"Skip {repo}/{tag}/{a['name']} ({a['size']} bytes > {GITEE_MAX_BYTES})", flush=True)
+            if a["size"] >= GITEE_MAX_BYTES:
+                print(f"Skip {repo}/{tag}/{a['name']} ({a['size']} bytes >= {GITEE_MAX_BYTES})", flush=True)
                 continue
             if (not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._-]*", a["name"])
                     or not re.fullmatch("sha256:[0-9a-f]{64}", a.get("digest") or "")):
@@ -172,6 +174,18 @@ def wait_for_build(m, branch):
             print(f"Gitee Go {build} verified {len(m['assets'])} attachments", flush=True)
             return
         if status in {"FAILED", "FAIL", "CANCELED", "CANCELLED", "ERROR", "STOPPED", "TIMEOUT"}:
+            for stage in current.get("stages", []):
+                try:
+                    detail = go_stage(base, stage["id"])
+                    for group in detail["jobs"]:
+                        for job in group:
+                            for entry in (job.get("record") or {}).get("stages") or []:
+                                url = entry.get("logger") or ""
+                                if urlsplit(url).netloc == "go-api.gitee.com" and urlsplit(url).scheme == "https":
+                                    logs = http(url, os.environ["GITEE_RELEASE_TOKEN"])
+                                    print(json.dumps((logs.get("data") or {}).get("logs", [])[-50:], ensure_ascii=True), flush=True)
+                except Exception as exc:
+                    print(f"Cannot read failed Gitee stage logs: {type(exc).__name__}", flush=True)
             raise RuntimeError(f"Gitee Go {build}: {status}")
         time.sleep(10)
     raise TimeoutError(f"Gitee Go {build}")
@@ -179,22 +193,29 @@ def wait_for_build(m, branch):
 
 if __name__ == "__main__":
     tag = os.environ["RELEASE_TAG"]
-    if not re.fullmatch(VERSION, tag):
+    assets_only = sys.argv[1] in {"assets-go", "assets-relay"}
+    mode = sys.argv[1].removeprefix("assets-")
+    if assets_only:
+        if not re.fullmatch(r"Common|" + VERSION + r"_x(?:64|86)", tag):
+            raise ValueError("Invalid asset release tag")
+        manifests = [prepare("RMTAssets", tag, os.environ.get("ASSET_NAME", ""))]
+    elif not re.fullmatch(VERSION, tag):
         raise ValueError("Invalid release tag")
-    tags = json.loads(os.environ.get("ASSET_TAGS") or "null")
-    arch = {tag + "_x64", tag + "_x86"}
-    if tags is None:
-        tags = sorted(arch)
-    if not arch <= set(tags) <= arch | {"Common"} or len(tags) != len(set(tags)):
-        raise ValueError("Unexpected resource releases")
-    manifests = [prepare("RMT", tag)] + [prepare("RMTAssets", ref) for ref in tags]
+    else:
+        tags = json.loads(os.environ.get("ASSET_TAGS") or "null")
+        arch = {tag + "_x64", tag + "_x86"}
+        if tags is None:
+            tags = sorted(arch)
+        if not arch <= set(tags) <= arch | {"Common"} or len(tags) != len(set(tags)):
+            raise ValueError("Unexpected resource releases")
+        manifests = [prepare("RMT", tag)] + [prepare("RMTAssets", ref) for ref in tags]
     for manifest in manifests:
         if not manifest["assets"]:
             print(f"{manifest['repo']}/{manifest['tag']}: no attachments within the Gitee limit")
             continue
-        if sys.argv[1] == "go":
+        if mode == "go":
             dispatch(manifest)
-        elif sys.argv[1] == "relay":
+        elif mode == "relay":
             # The restricted SSH endpoint has a per-connection wall clock limit.
             for asset in manifest["assets"]:
                 payload = dict(repo=manifest["repo"], tag=manifest["tag"], assets=[asset])

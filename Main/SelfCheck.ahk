@@ -540,7 +540,7 @@ SelfCheckMissingFiles() {
         {path: "Plugins\RapidOcr\ch_models\ppocrv6_tiny_dict.txt", entry: "ppocrv6_tiny_dict.txt", bundle: "RapidOcr.zip"},
 
         {path: "Thread\Work.exe", entry: "Work.exe", bundle: "RMT.zip"},
-        {path: "index.html", entry: "index.html", bundle: "RMT.zip"},
+        {path: GetHelpDocRelativePath(), entry: "index.html", bundle: "RMT.zip"},
     ]
     for name, language in OfficialLanguages() {
         if (language.HasOwnProp("entry"))
@@ -583,7 +583,7 @@ SelfCheckMissingFiles() {
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",
         "SearchPro.png", "SearchAll.png", "MacroAction.png", "TextOps.png", "True.png",
-        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ProcessManage.png",
+        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ControlInfo.png", "ControlOperation.png", "ProcessManage.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"]
 
     for name in icoFileList
@@ -724,7 +724,7 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
 DownloadOnce(url, savePath, timeoutSec, pg) {
     systemDir := A_PtrSize == 4 && A_Is64bitOS ? "\Sysnative" : "\System32"
     curl := A_WinDir systemDir "\curl.exe"
-    if (HasMethod(pg, "SetDownloadAlternative") && FileExist(curl))
+    if (RmtIsAssetUrl(url) || HasMethod(pg, "SetDownloadAlternative") && FileExist(curl))
         return DownloadWithProgress(curl, url, savePath, timeoutSec, pg)
 
     try {
@@ -771,6 +771,8 @@ DownloadWithProgress(curl, url, savePath, timeoutSec, pg) {
     headers := savePath ".headers"
     cmd := Format('"{}" -q -L --fail -s -S --suppress-connect-headers --max-time {} -D "{}" -o "{}" "{}"',
         curl, timeoutSec, headers, savePath, url)
+    if (RmtIsAssetUrl(url))
+        cmd := RmtAssetDownloadCommand(url, savePath, headers, timeoutSec)
     pid := 0
     total := 0
     started := A_TickCount
@@ -789,7 +791,8 @@ DownloadWithProgress(curl, url, savePath, timeoutSec, pg) {
         return "fail"
     } finally {
         SetTimer(sample, 0)
-        pg.SetDownloadAlternative("")
+        if (HasMethod(pg, "SetDownloadAlternative"))
+            pg.SetDownloadAlternative("")
         try FileDelete(headers)
     }
 
@@ -803,7 +806,8 @@ DownloadWithProgress(curl, url, savePath, timeoutSec, pg) {
             total := RmtDownloadContentLength(headers)
         received := 0
         try received := FileGetSize(savePath)
-        pg.SetDownloadAlternative(RmtDownloadAlternative(url, received, total, A_TickCount - started), label)
+        if (HasMethod(pg, "SetDownloadAlternative"))
+            pg.SetDownloadAlternative(RmtDownloadAlternative(url, received, total, A_TickCount - started), label)
     }
 }
 

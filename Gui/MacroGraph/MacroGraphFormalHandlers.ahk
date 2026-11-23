@@ -272,7 +272,7 @@ class MacroGraphFormalHandlersMixin {
         while (data.ToggleArr.Length < 4)
             data.ToggleArr.Push(0)
         while (data.UpdateNameArr.Length < 4)
-            data.UpdateNameArr.Push("Var" (data.UpdateNameArr.Length + 1))
+            data.UpdateNameArr.Push("Result" (data.UpdateNameArr.Length + 1))
         while (data.ExpressionArr.Length < 4)
             data.ExpressionArr.Push("")
         missingExprControls := []
@@ -1551,11 +1551,11 @@ class MacroGraphFormalHandlersMixin {
                 on := this._FormalReadToggle(state, ps "Tog_" id, slot <= data.VariNameArr[ci].Length ? 1 : 0)
                 if (!on)
                     continue
-                nm := state.Has(ps "Name_" id) ? GetLangKey(state[ps "Name_" id]) : ("Var" slot)
+                nm := state.Has(ps "Name_" id) ? GetLangKey(state[ps "Name_" id]) : ("Value" slot)
                 cmp := 3
                 if (state.Has(ps "Cmp_" id) && state[ps "Cmp_" id] != "")
                     cmp := ComboIndexToCompareType(this._IndexInLangArr(cmpTypes, state[ps "Cmp_" id]))
-                vr := state.Has(ps "Var_" id) ? GetLangKey(state[ps "Var_" id]) : ("Var" slot)
+                vr := state.Has(ps "Var_" id) ? GetLangKey(state[ps "Var_" id]) : ("Target" slot)
                 names.Push(nm)
                 cmps.Push(cmp)
                 vals.Push(vr)
@@ -1566,9 +1566,9 @@ class MacroGraphFormalHandlersMixin {
                 }
             }
             if (names.Length == 0) {
-                names.Push("Var1")
+                names.Push("Value1")
                 cmps.Push(3)
-                vals.Push("Var1")
+                vals.Push("Target1")
             }
             data.VariNameArr[ci] := names
             data.CompareTypeArr[ci] := cmps
@@ -1629,9 +1629,9 @@ class MacroGraphFormalHandlersMixin {
                 slot := A_Index
                 ps := p "S" slot
                 on := slot <= condiN
-                nm := on ? data.VariNameArr[ci][slot] : ("Var" slot)
+                nm := on ? data.VariNameArr[ci][slot] : ("Value" slot)
                 cmp := on ? data.CompareTypeArr[ci][slot] : 3
-                vr := on ? data.VariableArr[ci][slot] : ("Var" slot)
+                vr := on ? data.VariableArr[ci][slot] : ("Target" slot)
                 this.ui.Update(ps "Tog_" id, "IsChecked", on ? "True" : "False")
                 items := GetCompareGuiVarArr(cmp)
                 this._SetVariableComboItems(ps "Name_" id, items, GetLang(nm))
@@ -1668,9 +1668,9 @@ class MacroGraphFormalHandlersMixin {
         while (data.ToggleArr.Length < 4) {
             n := data.ToggleArr.Length + 1
             data.ToggleArr.Push(0)
-            data.NameArr.Push("Var" n)
+            data.NameArr.Push("Value" n)
             data.CompareTypeArr.Push(1)
-            data.VariableArr.Push("Var" n)
+            data.VariableArr.Push("Target" n)
         }
         loop 4 {
             slot := A_Index
@@ -1753,9 +1753,9 @@ class MacroGraphFormalHandlersMixin {
         while (data.ToggleArr.Length < 4) {
             n := data.ToggleArr.Length + 1
             data.ToggleArr.Push(0)
-            data.NameArr.Push("Var" n)
+            data.NameArr.Push("Value" n)
             data.CompareTypeArr.Push(1)
-            data.VariableArr.Push("Var" n)
+            data.VariableArr.Push("Target" n)
         }
         loop 4 {
             slot := A_Index
@@ -1956,7 +1956,7 @@ class MacroGraphFormalHandlersMixin {
         this.ui.Update("WmCloseProcess_" id, "IsChecked", d.HasOwnProp("wmCloseProcess") && d.wmCloseProcess ? "True" : "False")
         for nm, val in Map("WmX", d.HasOwnProp("wmPosX") ? d.wmPosX : 0, "WmY", d.HasOwnProp("wmPosY") ? d.wmPosY : 0,
             "WmW", d.HasOwnProp("wmWidth") ? d.wmWidth : 0, "WmH", d.HasOwnProp("wmHeight") ? d.wmHeight : 0,
-            "WmWidthVar", d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "Var1", "WmHeightVar", d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "Var2",
+            "WmWidthVar", d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "WinWidth", "WmHeightVar", d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "WinHeight",
             "WmTitle", d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", "WmTrans", d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80") {
             this.ui.Update(nm "_" id, "ClearItems", "")
             for item in (nm == "WmTitle" ? GetGuiVarReferences("text") : varList)
@@ -1965,7 +1965,7 @@ class MacroGraphFormalHandlersMixin {
         }
         Loop 7 {
             prop := "wmResultVar" A_Index
-            this.ui.Update("WmResult" A_Index "_" id, "Text", d.HasOwnProp(prop) ? d.%prop% : "Var" A_Index)
+            this.ui.Update("WmResult" A_Index "_" id, "Text", d.HasOwnProp(prop) ? d.%prop% : WindowResultDefaultName(d.HasOwnProp("wmActionType") ? d.wmActionType : "激活窗口", A_Index))
         }
         this._RefreshWmModes(id, GetLangKey(at))
         this._RefreshFormalWindowManageVisibility(id, at)
@@ -2076,7 +2076,7 @@ class MacroGraphFormalHandlersMixin {
             this._RefreshFormalBGMouseVisibility(id)
         else if (d.type == GetLang("后台按键"))
             this._RefreshFormalBGKeyVisibility(id)
-        else if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口")))
+        else if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("窗口操作")))
             this._RefreshFormalWindowManageVisibility(id)
         else if (d.type == GetLang("抓图"))
             this._RefreshFormalScreenShotVisibility(id)
@@ -2145,7 +2145,7 @@ class MacroGraphFormalHandlersMixin {
             this._RefreshBGKeyInline(id, d)
             return true
         }
-        if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口"))) {
+        if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("窗口操作"))) {
             this._RefreshWindowManageInline(id, d)
             return true
         }
@@ -2501,9 +2501,9 @@ class MacroGraphFormalHandlersMixin {
             slot := A_Index
             p := "LoopC" slot
             on := d.HasOwnProp("loopTog" slot) && (d["loopTog" slot] == 1 || d["loopTog" slot] == "1")
-            nm := d.HasOwnProp("loopName" slot) ? d["loopName" slot] : "Var" slot
+            nm := d.HasOwnProp("loopName" slot) ? d["loopName" slot] : "Value" slot
             cmp := d.HasOwnProp("loopCmp" slot) ? d["loopCmp" slot] : 1
-            vr := d.HasOwnProp("loopVar" slot) ? d["loopVar" slot] : "Var" slot
+            vr := d.HasOwnProp("loopVar" slot) ? d["loopVar" slot] : "Target" slot
             this.ui.Update(p "Tog_" id, "IsChecked", on ? "True" : "False")
             items := GetCompareGuiVarArr(cmp)
             this._SetVariableComboItems(p "Name_" id, items, GetLang(nm))
@@ -2532,9 +2532,9 @@ class MacroGraphFormalHandlersMixin {
             on := (slot == 1) ? true : (d.HasOwnProp("ifTog" slot) && (d["ifTog" slot] == 1 || d["ifTog" slot] == "1"))
             if (slot == 1 && d.HasOwnProp("ifTog1"))
                 on := d["ifTog1"] == 1 || d["ifTog1"] == "1"
-            nm := d.HasOwnProp("ifName" slot) ? d["ifName" slot] : "Var" slot
+            nm := d.HasOwnProp("ifName" slot) ? d["ifName" slot] : "Value" slot
             cmp := d.HasOwnProp("ifCmp" slot) ? d["ifCmp" slot] : 1
-            vr := d.HasOwnProp("ifVar" slot) ? d["ifVar" slot] : "Var" slot
+            vr := d.HasOwnProp("ifVar" slot) ? d["ifVar" slot] : "Target" slot
             this.ui.Update(p "Tog_" id, "IsChecked", on ? "True" : "False")
             items := GetCompareGuiVarArr(cmp)
             this._SetVariableComboItems(p "Name_" id, items, GetLang(nm))
@@ -2563,7 +2563,7 @@ class MacroGraphFormalHandlersMixin {
         mi := d.HasOwnProp("mainIndex") ? d.mainIndex : 0
         ai := d.HasOwnProp("argsIndex") ? d.argsIndex : 1
         agt := d.HasOwnProp("argsType") ? d.argsType : "变量或值"
-        agn := d.HasOwnProp("argsName") ? d.argsName : "Var1"
+        agn := d.HasOwnProp("argsName") ? d.argsName : "Item"
         st := d.HasOwnProp("saveType") ? d.saveType : "变量"
         sn := d.HasOwnProp("saveName") ? d.saveName : "Data"
         f := this._ArrFlags(at)
@@ -2639,7 +2639,7 @@ class MacroGraphFormalHandlersMixin {
             toggled := d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0)
             on := this._FormalVarSlotOn(toggled)
             ot := d.HasOwnProp("operaType" slot) ? d["operaType" slot] : 1
-            vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Var" slot
+            vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Data" slot
             cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : "0"
             minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
             maxv := d.HasOwnProp("maxVar" slot) ? d["maxVar" slot] : "10"
@@ -2669,7 +2669,7 @@ class MacroGraphFormalHandlersMixin {
             loop 4 {
                 slot := A_Index
                 if (d.HasOwnProp("toggle" slot) && (d["toggle" slot] == 1 || d["toggle" slot] == "1")) {
-                    vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Var" slot
+                    vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Data" slot
                     ot := d.HasOwnProp("operaType" slot) ? d["operaType" slot] : 1
                     cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : ""
                     minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : ""
@@ -2698,7 +2698,7 @@ class MacroGraphFormalHandlersMixin {
         if (d.type == GetLang("运算")) {
             loop 4 {
                 if (d.HasOwnProp("opToggle" A_Index) && (d["opToggle" A_Index] == 1 || d["opToggle" A_Index] == "1"))
-                    return (d.HasOwnProp("updateName" A_Index) ? d["updateName" A_Index] : "Var" A_Index) " = " SubStr(d.HasOwnProp("expression" A_Index) ? d["expression" A_Index] : "", 1, 20)
+                    return (d.HasOwnProp("updateName" A_Index) ? d["updateName" A_Index] : "Result" A_Index) " = " SubStr(d.HasOwnProp("expression" A_Index) ? d["expression" A_Index] : "", 1, 20)
             }
             return GetLang("运算")
         }
@@ -2727,7 +2727,7 @@ class MacroGraphFormalHandlersMixin {
                 return d.bgKeyStr
             return GetLang(CmdEnumKeyAct(d.HasOwnProp("bgKeyType") ? d.bgKeyType : "按下"))
         }
-        if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口")))
+        if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("窗口操作")))
             return GetLang(d.HasOwnProp("wmActionType") ? d.wmActionType : "激活窗口")
         if (d.type == GetLang("按键检测") || d.type == GetLang("手柄检测")) {
             if (d.HasOwnProp("kcKeyStr") && d.kcKeyStr != "")

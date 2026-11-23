@@ -47,7 +47,7 @@ jobs:
 
       - name: 编译主程序和 Worker (x64) 及更新程序 (x64 / x86)
         run: |
-          & (Join-Path $env:GITHUB_WORKSPACE 'Build.ps1') x64
+          & (Join-Path $env:GITHUB_WORKSPACE 'Scripts\Build.ps1') x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: 检查 .ahk 编码 (UTF-8 / BOM 策略 / CRLF)

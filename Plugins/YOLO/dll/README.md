@@ -105,7 +105,7 @@ yolo export model=yolo26n.pt format=onnx nms=False
 RMT 整体按 **AGPL-3.0** 发布（根目录 `LICENSE`）。内核依赖的 `ultralytics-inference`
 （0.0.60）同为 AGPL-3.0，与本项目的分发方式一致，不构成冲突。随包分发时满足三条即可：
 
-- 发行包内附许可文本：`PackRMT.ps1` 的 `Copy-LegalDocs` 把根目录 `LICENSE` 与
+- 发行包内附许可文本：`Scripts/PackRMT.ps1` 的 `Copy-LegalDocs` 把根目录 `LICENSE` 与
   `DISCLAIMER.md` 拷到发行版根。
 - 源码可得：本目录的 `src/`、`Cargo.toml`、`Cargo.lock` 已入库；上游 crate 源码在
   crates.io 公开可得。本目录没有修改上游源码，只是依赖。

@@ -38,6 +38,12 @@ class RmtDownloadManager {
 
         job.name := name
         job.urls := urls.Clone()
+        ; 两端使用同名分片；未迁移的旧包仍能从 GitHub 原附件下载。
+        for url in urls {
+            alternative := RmtDownloadDirectUrl(url)
+            if (RmtIsAssetUrl(url) && alternative != "")
+                job.urls.Push(alternative)
+        }
         job.targetPath := targetPath
         job.partPath := targetPath ".part"
         job.headersPath := targetPath ".headers"
@@ -201,6 +207,8 @@ class RmtDownloadManager {
         cmd := this._Quote(curl) " -L --fail -sS --show-error --connect-timeout 30"
             . " --max-time " job.timeoutSec " --retry 2 -C - -D " this._Quote(job.headersPath)
             . " -o " this._Quote(job.partPath) " " this._Quote(job.urls[job.urlIndex])
+        if (RmtIsAssetUrl(job.urls[job.urlIndex]))
+            cmd := RmtAssetDownloadCommand(job.urls[job.urlIndex], job.partPath, job.headersPath, job.timeoutSec)
         try {
             Run(cmd, A_WorkingDir, "Hide", &pid)
             job.pid := pid
@@ -300,4 +308,18 @@ class RmtDownloadManager {
     static _Quote(value) {
         return '"' StrReplace(String(value), '"', '\"') '"'
     }
+}
+
+; 主程序内嵌脚本，发行版不依赖源码目录；独立进程可被下载取消直接终止。
+RmtAssetDownloadCommand(url, path, headers, timeoutSec) {
+    static script := ""
+    if (script == "" || !FileExist(script)) {
+        dir := A_Temp "\RMT-AssetDownload-" DllCall("GetCurrentProcessId")
+        DirCreate(dir)
+        script := dir "\Download.ps1"
+        FileInstall("Main\Util\RmtDownloadFile.ps1", script, true)
+    }
+    powershell := A_WinDir "\System32\WindowsPowerShell\v1.0\powershell.exe"
+    return '"' powershell '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' script
+        . '" -Url "' url '" -Path "' path '" -Headers "' headers '" -TimeoutSec ' timeoutSec
 }

@@ -1,6 +1,11 @@
-# Mirror one published RMTAssets release. A retry fills missing files and verifies existing ones.
-param([Parameter(Mandatory)][ValidatePattern('^(Common|v[0-9.]+(?:F\d+)?_x(?:64|86))$')][string]$Tag)
+﻿# Mirror one published RMTAssets release. A retry fills missing files and verifies existing ones.
+param(
+    [Parameter(Mandatory)][ValidatePattern('^(Common|v[0-9.]+(?:F\d+)?_x(?:64|86))$')][string]$Tag,
+    [string]$AssetName = ''
+)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '../../Scripts/Split-RmtAsset.ps1')
+& (Join-Path $PSScriptRoot 'Publish-RmtAssetVolumes.ps1') -Tag $Tag -AssetName $AssetName
 $repo = 'zclucas/RMTAssets'
 $api = 'https://gitee.com/api/v5/repos/fateman/RMTAssets'
 if (!$env:GITEE_RELEASE_TOKEN) { throw 'Missing GITEE_RELEASE_TOKEN.' }
@@ -31,11 +36,19 @@ if ($status -eq 404 -or ($status -eq 200 -and !$target)) {
 if (!$target.id -or $target.tag_name -cne $Tag) { throw "Cannot read Gitee release $Tag (HTTP $status)." }
 
 $dir = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP ([guid]::NewGuid()))
+$release = gh release view $Tag --repo $repo --json tagName,assets | ConvertFrom-Json
+if ($LASTEXITCODE) { throw 'Cannot refresh GitHub assets.' }
+if ($AssetName) {
+    $release.assets = @($release.assets | Where-Object {
+        $_.name -ceq $AssetName -or $_.name -ceq ($AssetName + '.parts.json') -or
+        $_.name -cmatch ('^' + [regex]::Escape($AssetName) + '\.part\d{4}$')
+    })
+}
 $failed = @()
 foreach ($asset in ($release.assets | Sort-Object size)) {
     $name = $asset.name
-    if ($asset.size -gt 100MB) {
-        Write-Host "Skip $Tag/$name ($($asset.size) bytes exceeds 100 MiB)"
+    if ($asset.size -ge 100000000) {
+        Write-Host "Skip original $Tag/$name ($($asset.size) bytes; mirrored as volumes)"
         continue
     }
     if ($name -notmatch '^[\w.-]+$' -or $name -in '.', '..') { throw "Invalid attachment name: $name" }
@@ -51,10 +64,10 @@ foreach ($asset in ($release.assets | Sort-Object size)) {
             $hash = $actual
         }
         if (!$exists) {
-            $reply = curl --silent --show-error --fail --connect-timeout 20 --max-time 900 --header 'Expect:' `
+            $reply = curl --silent --show-error --fail-with-body --connect-timeout 20 --max-time 180 --header 'Expect:' `
                 --variable '%GITEE_RELEASE_TOKEN' --expand-form 'access_token={{GITEE_RELEASE_TOKEN}}' `
                 --form "file=@$path" "$api/releases/$($target.id)/attach_files"
-            if ($LASTEXITCODE) { throw "Gitee upload failed (curl $LASTEXITCODE)." }
+            if ($LASTEXITCODE) { throw "Gitee upload failed (curl $LASTEXITCODE): $reply" }
             $uploaded = $reply | ConvertFrom-Json
             if ($uploaded.name -cne $name -or $uploaded.size -ne $asset.size) { throw 'Unexpected Gitee attachment.' }
         }

@@ -245,8 +245,8 @@ class MacroGraphDataMixin {
 
     ; 形式化 INI 指令的 cmdKey 列表。普通移动为内联，不在此列。
     _FormalIniCmdKeys() {
-        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "窗口控件", "AI判断", "YOLO检测", "进程管理", "文本处理", "数组",
-            "后台鼠标", "后台按键", "窗口管理", "窗口信息", "调整窗口", "按键检测", "手柄检测", "注释", "抓图", "循环",
+        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "窗口控件", "控件信息", "控件操作", "AI判断", "YOLO检测", "进程管理", "文本处理", "数组",
+            "后台鼠标", "后台按键", "窗口管理", "窗口信息", "窗口操作", "按键检测", "手柄检测", "注释", "抓图", "循环",
             "间隔", "按键", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间", "提示"]
     }
 
@@ -276,7 +276,7 @@ class MacroGraphDataMixin {
                 "运行Pro", RunData,
                 "网络请求", HttpRequestData,
                 "浏览器", BrowserData,
-                "窗口控件", WindowControlData,
+                "窗口控件", WindowControlData, "控件信息", ControlInfoData, "控件操作", WindowControlData,
                 "AI判断", AiDecisionData,
                 "YOLO检测", YoloData,
                 "翻译", TranslateData,
@@ -287,7 +287,7 @@ class MacroGraphDataMixin {
                 "数组", ArrayData,
                 "后台鼠标", BGMouseData,
                 "后台按键", BGKeyData,
-                "窗口信息", WindowInfoData, "调整窗口", WindowManageData, "窗口管理", WindowManageData,
+                "窗口信息", WindowInfoData, "窗口操作", WindowManageData, "窗口管理", WindowManageData,
                 "按键检测", KeyCheckData,
                 "手柄检测", KeyCheckData,
                 "抓图", ScreenShotData,
@@ -490,7 +490,7 @@ class MacroGraphDataMixin {
             loop 4 {
                 i := A_Index
                 d["opToggle" i] := (data.ToggleArr.Length >= i) ? data.ToggleArr[i] : 0
-                d["updateName" i] := (data.UpdateNameArr.Length >= i) ? data.UpdateNameArr[i] : ("Var" i)
+                d["updateName" i] := (data.UpdateNameArr.Length >= i) ? data.UpdateNameArr[i] : ("Result" i)
                 d["expression" i] := (data.ExpressionArr.Length >= i) ? data.ExpressionArr[i] : ""
             }
         } else if (cmdKey == "运行" || cmdKey == "运行Pro") {
@@ -567,7 +567,7 @@ class MacroGraphDataMixin {
             for k in data.KeyArr
                 keyStr .= k "⎖"
             d.bgKeyStr := RTrim(keyStr, "⎖")
-        } else if ((cmdKey == "窗口管理" || cmdKey == "窗口信息" || cmdKey == "调整窗口")) {
+        } else if ((cmdKey == "窗口管理" || cmdKey == "窗口信息" || cmdKey == "窗口操作")) {
             WindowEnsureResults(data)
             Loop 7 {
                 prop := "ResultVar" A_Index

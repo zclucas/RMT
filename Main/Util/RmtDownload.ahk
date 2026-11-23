@@ -1,10 +1,14 @@
 #Requires AutoHotkey v2.0
 
-; Gitee 无法托管的 Common 大文件走 GitHub 下载加速。
+; Common 大文件通过分片同步到 Gitee；旧附件仍可回退 GitHub。
 RmtLargeAssetProxy() => "https://ghfile.geekertao.top/"
 
 RmtLargeAssetUrl(name) {
-    return RmtLargeAssetProxy() "https://github.com/zclucas/RMTAssets/releases/download/Common/" name
+    return "https://gitee.com/fateman/RMTAssets/releases/download/Common/" name
+}
+
+RmtIsAssetUrl(url) {
+    return RegExMatch(url, "^https://(?:gitee\.com/fateman|github\.com/zclucas)/RMTAssets/releases/download/[^/]+/[^/?]+$")
 }
 
 RmtDownloadDirectUrl(url) {

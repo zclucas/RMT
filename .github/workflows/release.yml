@@ -92,11 +92,11 @@ jobs:
           if ($env:AHK64) { $params.Base64Path  = $env:AHK64 }
           if ($env:AHK32) { $params.Base32Path  = $env:AHK32 }
 
-          & (Join-Path $env:GITHUB_WORKSPACE 'PackRMT.ps1') @params
+          & (Join-Path $env:GITHUB_WORKSPACE 'Scripts\PackRMT.ps1') @params
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           exit 0
 
-      - name: 校验两个架构的更新程序已打包
+      - name: 校验两个架构的更新程序与帮助文档已打包
         run: |
           $ErrorActionPreference = 'Stop'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -117,6 +117,8 @@ jobs:
           foreach ($arch in 'x64', 'x86') {
             Assert-ZipEntry (Join-Path $outDir "RMTv$($env:RMT_TAG_VERSION)_$arch.zip") 'Thread/Update.exe'
             Assert-ZipEntry (Join-Path $outDir "RMTAssets_$arch/RMT.zip") 'Update.exe'
+            Assert-ZipEntry (Join-Path $outDir "RMTv$($env:RMT_TAG_VERSION)_$arch.zip") 'index.html'
+            Assert-ZipEntry (Join-Path $outDir "RMTAssets_$arch/RMT.zip") 'index.html'
           }
 
       - name: 写入 release-info.json

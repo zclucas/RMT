@@ -39,6 +39,8 @@ class MacroGraphFormalMixin {
             GetLang("网络请求"), this.HttpRequestGui,
             GetLang("浏览器"), this.BrowserGui,
             GetLang("窗口控件"), this.WindowControlGui,
+            GetLang("控件信息"), this.ControlInfoGui,
+            GetLang("控件操作"), this.ControlOperationGui,
             GetLang("AI判断"), this.AiDecisionGui,
             GetLang("YOLO检测"), this.YoloGui,
             GetLang("翻译"), this.TranslateGui,
@@ -52,7 +54,7 @@ class MacroGraphFormalMixin {
             GetLang("后台按键"), this.BGKeyGui,
             GetLang("窗口管理"), this.WindowManageGui,
             GetLang("窗口信息"), this.WindowInfoGui,
-            GetLang("调整窗口"), this.WindowAdjustGui,
+            GetLang("窗口操作"), this.WindowAdjustGui,
             GetLang("按键检测"), this.KeyCheckGui,
             GetLang("手柄检测"), this.JoyCheckGui,
             GetLang("抓图"), this.ScreenShotGui,
@@ -317,7 +319,7 @@ class MacroGraphFormalMixin {
             this._FillBGMouseBody(id, d, body)
         else if (d.type == GetLang("后台按键"))
             this._FillBGKeyBody(id, d, body)
-        else if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("调整窗口")))
+        else if ((d.type == GetLang("窗口管理") || d.type == GetLang("窗口信息") || d.type == GetLang("窗口操作")))
             this._FillWindowManageBody(id, d, body)
         else if (d.type == GetLang("按键检测") || d.type == GetLang("手柄检测"))
             this._FillKeyCheckBody(id, d, body)
@@ -342,7 +344,7 @@ class MacroGraphFormalMixin {
     }
 
     _IsFullEditorCommand(type) {
-        return type == GetLang("浏览器") || type == GetLang("窗口控件") || type == GetLang("AI判断") || type == GetLang("YOLO检测")
+        return type == GetLang("浏览器") || type == GetLang("窗口控件") || type == GetLang("控件信息") || type == GetLang("控件操作") || type == GetLang("AI判断") || type == GetLang("YOLO检测")
             || type == GetLang("翻译") || type == GetLang("进程管理")
     }
 
@@ -522,7 +524,7 @@ class MacroGraphFormalMixin {
         toggled := d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0)
         on := this._FormalVarSlotOn(toggled)
         ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "数值")
-        vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Var" slot
+        vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Data" slot
         cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : "0"
         minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
         maxv := d.HasOwnProp("maxVar" slot) ? d["maxVar" slot] : "10"
@@ -602,7 +604,7 @@ class MacroGraphFormalMixin {
         toggled := d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0)
         on := this._FormalVarSlotOn(toggled)
         ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "数值")
-        vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Var" slot
+        vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Data" slot
         cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : "0"
         minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
         maxv := d.HasOwnProp("maxVar" slot) ? d["maxVar" slot] : "10"
@@ -684,7 +686,7 @@ class MacroGraphFormalMixin {
         p := "OpS" slot
         toggled := d.HasOwnProp("opToggle" slot) ? d["opToggle" slot] : (slot == 1 ? 1 : 0)
         on := toggled == 1 || toggled == "1"
-        un := d.HasOwnProp("updateName" slot) ? d["updateName" slot] : "Var" slot
+        un := d.HasOwnProp("updateName" slot) ? d["updateName" slot] : "Result" slot
         ex := d.HasOwnProp("expression" slot) ? TranslateOperationExpression(d["expression" slot], true) : ""
         ; 逐级展开：仅勾选上一个运算后才显示下一个（visible 控制整组行显隐，降低展开高度）
         this._AddCheckRow(body, p "TogRow_" id, p "Tog_" id, GetLang("运算") slot, on, visible)
@@ -749,7 +751,7 @@ class MacroGraphFormalMixin {
             while (data.ToggleArr.Length < slot)
                 data.ToggleArr.Push(0)
             while (data.UpdateNameArr.Length < slot)
-                data.UpdateNameArr.Push("Var" (data.UpdateNameArr.Length + 1))
+                data.UpdateNameArr.Push("Result" (data.UpdateNameArr.Length + 1))
             while (data.ExpressionArr.Length < slot)
                 data.ExpressionArr.Push("")
             data.ToggleArr[slot] := 1
@@ -808,7 +810,7 @@ class MacroGraphFormalMixin {
     _OpSummaryRowInfo(d, slot) {
         toggled := d.HasOwnProp("opToggle" slot) ? d["opToggle" slot] : (slot == 1 ? 1 : 0)
         on := toggled == 1 || toggled == "1" || toggled == true || toggled == "True"
-        un := d.HasOwnProp("updateName" slot) ? d["updateName" slot] : "Var" slot
+        un := d.HasOwnProp("updateName" slot) ? d["updateName" slot] : "Result" slot
         ex := d.HasOwnProp("expression" slot) ? d["expression" slot] : ""
         return { on: on, text: un " = " (ex != "" ? ex : "...") }
     }
@@ -1026,7 +1028,7 @@ class MacroGraphFormalMixin {
         mi := d.HasOwnProp("mainIndex") ? d.mainIndex : 0
         ai := d.HasOwnProp("argsIndex") ? d.argsIndex : 1
         agt := d.HasOwnProp("argsType") ? d.argsType : "变量或值"
-        agn := d.HasOwnProp("argsName") ? d.argsName : "Var1"
+        agn := d.HasOwnProp("argsName") ? d.argsName : "Item"
         st := d.HasOwnProp("saveType") ? d.saveType : "变量"
         sn := d.HasOwnProp("saveName") ? d.saveName : "Data"
         f := this._ArrFlags(at)
@@ -1152,15 +1154,15 @@ class MacroGraphFormalMixin {
         this._AddEditableComboRow(body, "WmYRow_" id, GetLang(atKey == "相对移动" ? "偏移Y：" : "坐标Y："), "WmY_" id, atKey == "相对移动" ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("wmPosY") ? d.wmPosY : 0), isMove, lw, cw, "WmYLabel_" id)
         this._AddEditableComboRow(body, "WmWRow_" id, GetLang("宽度："), "WmW_" id, varList, d.HasOwnProp("wmWidth") ? d.wmWidth : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmHRow_" id, GetLang("高度："), "WmH_" id, varList, d.HasOwnProp("wmHeight") ? d.wmHeight : 0, isSize, lw, cw)
-        this._AddEditableComboRow(body, "WmWidthVarRow_" id, GetLang("宽度变量："), "WmWidthVar_" id, varList, d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "Var1", isGetSize, lw, cw)
-        this._AddEditableComboRow(body, "WmHeightVarRow_" id, GetLang("高度变量："), "WmHeightVar_" id, varList, d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "Var2", isGetSize, lw, cw)
+        this._AddEditableComboRow(body, "WmWidthVarRow_" id, GetLang("宽度变量："), "WmWidthVar_" id, varList, d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "WinWidth", isGetSize, lw, cw)
+        this._AddEditableComboRow(body, "WmHeightVarRow_" id, GetLang("高度变量："), "WmHeightVar_" id, varList, d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "WinHeight", isGetSize, lw, cw)
         body.Add("TextBlock").Name("WmHint_" id).Text(GetLang(WindowEditorHint(atKey))).TextWrapping("Wrap").Margin("0,6,0,4").Opacity(0.75).FontSize(this._MGFontSize(11))
         fields := WindowInfoFields(atKey)
         Loop 7 {
             prop := "wmResultVar" A_Index
             label := A_Index <= fields.Length ? GetLang(fields[A_Index]) : ""
             this._AddEditableComboRow(body, "WmResultRow" A_Index "_" id, label, "WmResult" A_Index "_" id, atKey == "匹配窗口列表" ? GetGuiArrNameArr() : varList,
-                d.HasOwnProp(prop) ? d.%prop% : "Var" A_Index, A_Index <= fields.Length, lw, cw, "WmResultLabel" A_Index "_" id, GetLang(WindowInfoFieldTip(atKey, A_Index)))
+                d.HasOwnProp(prop) ? d.%prop% : WindowResultDefaultName(d.HasOwnProp("wmActionType") ? d.wmActionType : "激活窗口", A_Index), A_Index <= fields.Length, lw, cw, "WmResultLabel" A_Index "_" id, GetLang(WindowInfoFieldTip(atKey, A_Index)))
         }
         this._AddEditableComboRow(body, "WmTitleRow_" id, GetLang("新标题："), "WmTitle_" id, GetGuiVarReferences("text"), TranslateBuiltinVarReferences(d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", true), isTitle, lw, cw)
         this._AddEditableComboRow(body, "WmTransRow_" id, GetLang("透明度："), "WmTrans_" id, varList, d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80", isTrans, lw, cw)
@@ -1249,9 +1251,9 @@ class MacroGraphFormalMixin {
         on := (slot == 1) ? true : (d.HasOwnProp("ifTog" slot) && (d["ifTog" slot] == 1 || d["ifTog" slot] == "1"))
         if (slot == 1 && d.HasOwnProp("ifTog1"))
             on := d["ifTog1"] == 1 || d["ifTog1"] == "1"
-        nm := d.HasOwnProp("ifName" slot) ? d["ifName" slot] : "Var" slot
+        nm := d.HasOwnProp("ifName" slot) ? d["ifName" slot] : "Value" slot
         cmp := d.HasOwnProp("ifCmp" slot) ? d["ifCmp" slot] : 1
-        vr := d.HasOwnProp("ifVar" slot) ? d["ifVar" slot] : "Var" slot
+        vr := d.HasOwnProp("ifVar" slot) ? d["ifVar" slot] : "Target" slot
         cmpTypes := this._IfCmpTypes()
         showRow := showCard && on
         showVal := showRow && !IsCompareExistVar(cmp)
@@ -1501,9 +1503,9 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         p := "LoopC" slot
         on := d.HasOwnProp("loopTog" slot) && (d["loopTog" slot] == 1 || d["loopTog" slot] == "1")
-        nm := d.HasOwnProp("loopName" slot) ? d["loopName" slot] : "Var" slot
+        nm := d.HasOwnProp("loopName" slot) ? d["loopName" slot] : "Value" slot
         cmp := d.HasOwnProp("loopCmp" slot) ? d["loopCmp" slot] : 1
-        vr := d.HasOwnProp("loopVar" slot) ? d["loopVar" slot] : "Var" slot
+        vr := d.HasOwnProp("loopVar" slot) ? d["loopVar" slot] : "Target" slot
         cmpTypes := this._LoopCmpTypes()
         showRow := showCard && on
         showVal := showRow && !IsCompareExistVar(cmp)
@@ -1749,7 +1751,7 @@ class MacroGraphFormalMixin {
             this._FormalTrackField(id, "BgkTime", h, runtime)
             this._FormalTrackField(id, "BgkCount", h, runtime)
             this._FormalTrackField(id, "BgkInter", h, runtime)
-        } else if ((t == GetLang("窗口管理") || t == GetLang("窗口信息") || t == GetLang("调整窗口"))) {
+        } else if ((t == GetLang("窗口管理") || t == GetLang("窗口信息") || t == GetLang("窗口操作"))) {
             h := this._OnFormalWindowManage.Bind(this, id)
             this._FormalTrackCombo(id, "WmActCmb", h, runtime)
             this._FormalTrackCombo(id, "WmModeCmb", h, runtime)

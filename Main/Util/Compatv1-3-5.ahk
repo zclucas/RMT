@@ -3,6 +3,8 @@
 Compat13_UpgradeCommands(dir) {
     renames := Map()
     Compat13_UpgradeWindows(dir, renames)
+    Compat13_UpgradeControls(dir, renames)
+    Compat13_ResolveCommandRenames(renames)
     Compat13_CopyCommands(dir, renames, "WaitFile", "等待",
         Map("InputFile", "输入"), Compat13_WaitData)
     Compat13_CopyCommands(dir, renames, "JoyCheckFile", "手柄检测",
@@ -11,7 +13,7 @@ Compat13_UpgradeCommands(dir) {
     Compat_RewriteMacroFiles(dir, migration.Rewrite.Bind(migration), Compat13_RewriteAllBranches,
         migration.Save.Bind(migration))
     migration.Finish()
-    Compat13_ClearRenameJournal(dir, ["WindowManageFile"])
+    Compat13_ClearRenameJournal(dir, ["WindowManageFile", "WindowControlFile"])
     Compat13_ExpandMoveSerials(dir)
 }
 
@@ -27,7 +29,10 @@ Compat13_UpgradeWindows(dir, renames) {
         renames[key] := target
     dirty := false
     for key, raw in values.Clone() {
-        if (!RegExMatch(key, "i)^(?:窗口管理|視窗管理|Window Management|Window)\d+$"))
+        if (!RegExMatch(key, "^(.+?)(\d+)$", &serial))
+            continue
+        source := GetCommandKey(serial[1])
+        if (source != "窗口管理" && source != "窗口操作" || serial[1] == "窗口操作")
             continue
         data := TryParseCommandData(raw)
         if (!IsObject(data))
@@ -40,7 +45,7 @@ Compat13_UpgradeWindows(dir, renames) {
             data.ActionType := "移动窗口"
         CmdEnumNorm("窗口管理", data)
         Compat13_FillDefaults(data, defaults)
-        prefix := WindowInfoFields(data.ActionType).Length ? "窗口信息" : "调整窗口"
+        prefix := source == "窗口管理" && WindowInfoFields(data.ActionType).Length ? "窗口信息" : "窗口操作"
         if (!data.HasOwnProp("MatchMode") || Trim(data.MatchMode) == "")
             data.MatchMode := data.ActionType == "匹配窗口列表" ? "所有" : "首个"
         values[key] := JSON.stringify(data, 0)
@@ -49,6 +54,70 @@ Compat13_UpgradeWindows(dir, renames) {
     }
     if (dirty)
         Cfg_WriteRoot(root, path)
+}
+
+Compat13_UpgradeControls(dir, renames) {
+    path := dir "\WindowControlFile.toml"
+    if (!FileExist(path))
+        return
+    root := Cfg_Load(path, true).Clone()
+    section := IniImport_Section()
+    values := root[section] := Cfg_Seg(root, section).Clone()
+    saved := root["Compat13Renames"] := Cfg_Seg(root, "Compat13Renames").Clone()
+    for key, target in saved
+        renames[key] := target
+    dirty := false
+    for key, raw in values.Clone() {
+        if (!RegExMatch(key, "^(.+?)(\d+)$", &serial) || GetCommandKey(serial[1]) != "窗口控件")
+            continue
+        data := TryParseCommandData(raw)
+        if (!IsObject(data))
+            continue
+        Compat13_FillDefaults(data, WindowControlData())
+        data.ActionType := CmdEnumZh(data.ActionType, WindowControl.Actions)
+        values[key] := JSON.stringify(data, 0)
+        saved[key] := Compat13_Rename(values, key, WindowControl.CommandKey(data.ActionType), renames)
+        dirty := true
+    }
+    if (dirty)
+        Cfg_WriteRoot(root, path)
+}
+
+; 同版本预览配置和导入包也可能使用旧名称；资源先落盘，再重写所有宏引用。
+Compat13_UpgradeWindowCommands(dir) {
+    renames := Map()
+    Compat13_UpgradeWindows(dir, renames)
+    Compat13_UpgradeControls(dir, renames)
+    if (!renames.Count)
+        return false
+    Compat13_ResolveCommandRenames(renames)
+    Compat_RewriteMacroFiles(dir, (macro) => Compat13_RewriteCommandRenames(macro, renames), Compat13_RewriteAllBranches)
+    Compat13_ClearRenameJournal(dir, ["WindowManageFile", "WindowControlFile"])
+    return true
+}
+
+; 失败重试时，旧窗口管理的迁移记录可能仍指向“调整窗口”。
+Compat13_ResolveCommandRenames(renames) {
+    for key, target in renames {
+        seen := Map(key, true)
+        while (renames.Has(target) && !seen.Has(target)) {
+            seen[target] := true
+            target := renames[target]
+        }
+        renames[key] := target
+    }
+}
+
+Compat13_RewriteCommandRenames(macro, renames) {
+    result := "", start := 1
+    while (pos := RegExMatch(macro, "[^,，\r\n⫶]+", &part, start)) {
+        command := part[0]
+        if (RegExMatch(command, "^([ \t]*(?:🚫|▶|⭐)*)([^_|]+?)(?=[ \t]*(?:[_|]|$))", &head) && renames.Has(head[2]))
+            command := head[1] renames[head[2]] SubStr(command, head.Len + 1)
+        result .= SubStr(macro, start, pos - start) command
+        start := pos + part.Len
+    }
+    return result SubStr(macro, start)
 }
 
 Compat13_CopyCommands(dir, renames, targetStem, targetPrefix, sources, convert) {

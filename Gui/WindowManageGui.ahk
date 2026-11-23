@@ -93,7 +93,7 @@ class WindowManageGui {
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         ; === 内容 ===
-        isAdjust := this.CmdKey == "调整窗口"
+        isAdjust := this.CmdKey == "窗口操作"
         isInfo := this.CmdKey == "窗口信息"
         compactLayout := isAdjust || isInfo
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,16")
@@ -202,7 +202,8 @@ class WindowManageGui {
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/" this.CmdKey, ObjBindMethod(this, "TriggerMacro"))
+        helpTopic := this.CmdKey == "窗口操作" ? "34-窗口操作" : this.CmdKey == "窗口信息" ? "33-窗口信息" : this.CmdKey
+        BindCmdEditorChrome(this.ui, "#指令手册/" helpTopic, ObjBindMethod(this, "TriggerMacro"))
         if (isAdjust)
             this.ui.OnEvent("BtnCmdF1", "Click", this.StartPositionPick.Bind(this))
         this.ui.OnEvent("WindowModeCon", "SelectionChanged", ObjBindMethod(this, "OnActionChange"))
@@ -258,9 +259,9 @@ class WindowManageGui {
         this._ComboPush("ActionTypeCon", "SelectedIndex", String(actIdx))
         this._FillModes(WindowActionGroup(this.Data.ActionType), this.Data.ActionType)
         this._ComboPush("SearchValueCon", "Text", this.Data.SearchValue)
-        if (this.CmdKey == "调整窗口" || this.CmdKey == "窗口信息") {
+        if (this.CmdKey == "窗口操作" || this.CmdKey == "窗口信息") {
             matchMode := this.Data.HasProp("MatchMode") ? this.Data.MatchMode
-                : this.CmdKey == "调整窗口" ? WindowDefaultMatchMode(this.Data.ActionType, InStr(this.Data.SearchValue, "❖")) : ""
+                : this.CmdKey == "窗口操作" ? WindowDefaultMatchMode(this.Data.ActionType, InStr(this.Data.SearchValue, "❖")) : ""
             this._FillMatchModes(this.Data.ActionType, matchMode)
         }
         this._ComboPush("PosXCon", "Text", GetLang(this.Data.PosX))
@@ -277,7 +278,7 @@ class WindowManageGui {
     }
 
     _FillMatchModes(action, selected := "") {
-        isAdjust := this.CmdKey == "调整窗口"
+        isAdjust := this.CmdKey == "窗口操作"
         modes := WindowMatchModes(isAdjust || action == "匹配窗口列表")
         matchIndex := isAdjust ? 1 : 0
         this._ComboPush("MatchModeCon", "ClearItems", "")
@@ -335,7 +336,7 @@ class WindowManageGui {
             this._EndPositionPick()
         if (!this._syncing && this.CmdKey == "窗口信息" && ((this._resultAction == "匹配窗口列表") != (actionKey == "匹配窗口列表")))
             this._FillMatchModes(actionKey)
-        if (!this._syncing && this._resultAction != actionKey && (this._resultAction == "窗口状态" || actionKey == "窗口状态")) {
+        if (!this._syncing && this._resultAction != actionKey) {
             Loop 7 {
                 name := "InfoResultCon" A_Index
                 value := this.ui.Query(name)
@@ -365,7 +366,7 @@ class WindowManageGui {
         this._ComboPush("PositionLabel", "Text", GetLang(actionKey == "相对移动" ? "偏移值" : "坐标值") "：")
         if (isShowPos)
             this._ComboPush("PositionLabel", "ToolTip", GetLang(WindowEditorHint(actionKey == "相对移动" ? actionKey : "移动窗口")))
-        if (this.CmdKey == "调整窗口") {
+        if (this.CmdKey == "窗口操作") {
             this._ComboPush("BtnCmdF1", "Visibility", isShowPos ? "Visible" : "Collapsed")
             this._ComboPush("BtnCmdF1", "ToolTip", actionKey == "相对移动" ? "F1: " GetLang("选取偏移值") : GetLang("F1：选取坐标"))
             this._BindPositionHotkey(isShowPos)
@@ -522,7 +523,7 @@ class WindowManageGui {
 
     SaveData() {
         this.Data.ActionType := this._SelectedAction()
-        if (this.CmdKey == "调整窗口" || this.CmdKey == "窗口信息")
+        if (this.CmdKey == "窗口操作" || this.CmdKey == "窗口信息")
             this.Data.MatchMode := GetLangKey(this.ui.Query("MatchModeCon"))
         this.Data.CloseProcess := this.ui.Query("CloseProcessCon") == "True"
         Loop 7 {
@@ -628,7 +629,7 @@ class WindowManageGui {
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
         this._syncing := false
-        if (this.CmdKey == "调整窗口")
+        if (this.CmdKey == "窗口操作")
             this._BindPositionHotkey(this.HasPositionAction(this._SelectedAction()))
     }
 

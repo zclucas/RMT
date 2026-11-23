@@ -26,8 +26,8 @@ class ProcessManageData {
 }
 
 class ProcessManage {
-    static Actions := ["检测进程", "进程信息", "列出进程", "结束进程"]
-    static MatchModes := ["窗口绑定", "进程名", "PID", "正则匹配"]
+    static Actions := ["检测进程", "列出进程", "进程信息", "结束进程"]
+    static MatchModes := ["窗口绑定", "进程名", "完整路径匹配", "PID", "正则匹配"]
     static MatchPicks := ["首个", "最后"]
 
     static ActionKey(action) => action == "获取进程信息" ? "进程信息" : action
@@ -62,6 +62,8 @@ class ProcessManage {
                 return
             if (data.MatchBy == "正则匹配")
                 throw ValueError(GetLang("正则表达式不能为空"))
+            if (data.MatchBy == "完整路径匹配")
+                throw ValueError(GetLang("请输入程序完整路径。"))
             throw ValueError(GetLang("请输入进程名或 PID。"))
         }
         if (data.MatchBy == "正则匹配") {
@@ -75,6 +77,8 @@ class ProcessManage {
         }
         if (editing && RegExMatch(target, "\{[^{}]+\}"))
             return
+        if (data.MatchBy == "完整路径匹配" && !RegExMatch(this.NormalizePath(target), "i)^(?:[a-z]:\\|\\\\[^\\]+\\[^\\]+\\)"))
+            throw ValueError(GetLang("请输入程序完整路径。"))
         if (data.MatchBy == "PID" && (!RegExMatch(target, "^\d+$") || !IsInteger(target)
             || Integer(target) < 1 || Integer(target) > 0xffffffff))
             throw ValueError(GetLang("PID 必须是有效的正整数。"))
@@ -123,10 +127,10 @@ class ProcessManage {
                     }
                 case "列出进程":
                     for process in matches
-                        result.ResultArray.Push([process.Name, process.Pid, this.Path(process.Pid)])
+                        result.ResultArray.Push(process.Pid)
                 case "结束进程":
                     if (matches.Length > 1 && !data.EndAll)
-                        throw Error(GetLang("匹配到多个进程，请指定 PID 或勾选结束全部匹配项。"))
+                        throw Error(GetLang("匹配到多个进程，请指定 PID。"))
                     for process in matches {
                         try {
                             this.End(process.Pid, snapshotTime)
@@ -171,6 +175,10 @@ class ProcessManage {
 
     static Find(matchBy, target) {
         matches := []
+        if (matchBy == "完整路径匹配") {
+            target := this.NormalizePath(target)
+            SplitPath(target, &targetName)
+        }
         snapshot := DllCall("CreateToolhelp32Snapshot", "UInt", 0x2, "UInt", 0, "Ptr")
         if (snapshot == -1)
             throw OSError()
@@ -188,6 +196,7 @@ class ProcessManage {
                 name := StrGet(entry.Ptr + nameOffset, "UTF-16")
                 switch matchBy {
                     case "PID": matched := pid == target
+                    case "完整路径匹配": matched := name = targetName && this.Path(pid) = target
                     case "正则匹配": matched := RegExMatch(name, target)
                     default: matched := target == "" || name = target
                 }
@@ -199,6 +208,8 @@ class ProcessManage {
         } finally DllCall("CloseHandle", "Ptr", snapshot)
         return matches
     }
+
+    static NormalizePath(path) => StrReplace(Trim(path, " `t`r`n" Chr(34)), "/", "\")
 
     static Path(pid) {
         try return ProcessGetPath(pid)

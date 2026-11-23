@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '../../Scripts/Split-RmtAsset.ps1')
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 if (-not $env:GH_TOKEN) {
@@ -58,6 +59,13 @@ foreach ($tag in $releaseDirs.Keys) {
             $zip.Dispose()
         }
     })
+    # 保留原包兼容旧客户端，同时发布两端通用的分片和清单。
+    foreach ($asset in $assets) {
+        if ($asset.Length -ge 100000000) {
+            $volumeDir = Join-Path $assetDir 'volumes'
+            $assetsByTag[$tag] += @(Split-RmtAsset -Path $asset.FullName -OutDir $volumeDir)
+        }
+    }
 }
 
 # 3) 上传（存在则覆盖，不存在则创建）；测试版资源标记 pre-release（仅展示区分，不影响下载）

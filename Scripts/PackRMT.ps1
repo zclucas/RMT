@@ -25,6 +25,8 @@ param(
 
 try { $Host.UI.RawUI.WindowTitle = "RMT 打包工具" } catch { }
 $ErrorActionPreference = "Stop"
+# 脚本位于 Scripts，资源与输出始终相对于项目根目录。
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
 
 # ============================================================
 # 配置路径
@@ -188,7 +190,7 @@ function Copy-IfExist {
 }
 
 function Get-Version {
-    $rmtAhk = Join-Path $PSScriptRoot "RMT.ahk"
+    $rmtAhk = Join-Path $ProjectRoot "RMT.ahk"
     if (-not (Test-Path $rmtAhk)) {
         Write-Log "  [ERROR] 未找到 RMT.ahk，无法获取版本号" "Red"
         return $null
@@ -225,7 +227,7 @@ function Stop-RunningRMT {
         return
     }
 
-    $targets = @(Get-RMTBuildProcesses -Processes $processes -Root $PSScriptRoot)
+    $targets = @(Get-RMTBuildProcesses -Processes $processes -Root $ProjectRoot)
     # 先停止主进程，防止线程池在清理期间重新创建 Worker。
     foreach ($target in @($targets | Sort-Object { $_.Name -eq 'Work.exe' })) {
         $live = Get-Process -Id $target.ProcessId -ErrorAction SilentlyContinue
@@ -241,7 +243,7 @@ function Stop-RunningRMT {
         }
     }
     # 再次枚举，发现残留时中止，不带着占用继续编译。
-    $remaining = @(Get-RMTBuildProcesses -Processes @(Get-CimInstance Win32_Process -Filter $filter) -Root $PSScriptRoot)
+    $remaining = @(Get-RMTBuildProcesses -Processes @(Get-CimInstance Win32_Process -Filter $filter) -Root $ProjectRoot)
     if ($remaining.Count) { throw "RMT 工作进程仍在运行：$($remaining.ProcessId -join ', ')，已取消打包。" }
     Write-Log "[OK] 当前项目的 RMT 和 Worker 已退出，可开始打包" "Green"
 }
@@ -285,7 +287,7 @@ function Compile {
 
     # /silent：禁用所有消息框（编译失败不再弹窗），错误写入 stderr、成功信息写入 stdout。
     # 日志重定向到文件后统一打印/清理。详见官方文档 Scripts.htm#ahk2exe。
-    $logDir = Join-Path $PSScriptRoot "Log"
+    $logDir = Join-Path $ProjectRoot "Log"
     if (-not (Test-Path $logDir)) {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     }
@@ -351,7 +353,7 @@ function Show-CompileOutput {
 }
 
 function Pack-HelpDoc {
-    $WebDir = Join-Path $PSScriptRoot "Web/JS"
+    $WebDir = Join-Path $ProjectRoot "Web/JS"
 
     if (-not (Test-Path (Join-Path $WebDir "SingleHtml.js"))) {
         Write-Log "未找到 SingleHtml.js，跳过" "Yellow"
@@ -373,14 +375,14 @@ function Pack-HelpDoc {
     }
     finally { Pop-Location }
 
-    $indexHtml = Join-Path $PSScriptRoot "index.html"
+    $indexHtml = Join-Path $ProjectRoot "Web\index.html"
     if (-not (Test-Path $indexHtml)) {
-        Write-Log "帮助文档打包失败：未生成 index.html" "Red"
+        Write-Log "帮助文档打包失败：未生成 Web\index.html" "Red"
         return $false
     }
 
     $size = [math]::Round((Get-Item $indexHtml).Length / 1MB, 2)
-    Write-Log "[OK] 帮助文档打包成功 (${size} MB)：index.html" "Green"
+    Write-Log "[OK] 帮助文档打包成功 (${size} MB)：Web\index.html" "Green"
     return $true
 }
 
@@ -412,7 +414,7 @@ function New-Release {
     }
 
     # 先编 RMT.dll，后面拷进 Release 和资源清单的才是这一版
-    $rmtBuild = Join-Path $PSScriptRoot "Plugins\RMT\buildDll.ps1"
+    $rmtBuild = Join-Path $ProjectRoot "Plugins\RMT\buildDll.ps1"
     if (Test-Path -LiteralPath $rmtBuild) {
         Write-Log "编译 Plugins\RMT\RMT.dll ..." "Gray"
         & powershell -NoProfile -ExecutionPolicy Bypass -File $rmtBuild -NoPause
@@ -421,12 +423,12 @@ function New-Release {
         }
     }
 
-    $RmtAhk = Join-Path $PSScriptRoot "RMT.ahk"
-    $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
+    $RmtAhk = Join-Path $ProjectRoot "RMT.ahk"
+    $IconPath = Join-Path $ProjectRoot "Images\Soft\rabit.ico"
 
     if ($Type -eq "x64" -or $Type -eq "both") {
         Write-Step 1 "生成 ReleaseX64"
-        $releaseDir = Join-Path $PSScriptRoot "ReleaseX64"
+        $releaseDir = Join-Path $ProjectRoot "ReleaseX64"
         $releaseThread = Join-Path $releaseDir "Thread"
 
         # 创建目录
@@ -437,14 +439,14 @@ function New-Release {
         if (Test-Path "$releaseDir\Lang") {
             Remove-Item "$releaseDir\Lang" -Recurse -Force
         }
-        Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
+        Copy-Item -Path "$ProjectRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
         # 复制 Images 目录
         Write-Log "复制 Images 目录..." "Gray"
         if (Test-Path "$releaseDir\Images") {
             Remove-Item "$releaseDir\Images" -Recurse -Force
         }
-        Copy-Item -Path "$PSScriptRoot\Images" -Destination "$releaseDir\Images" -Force -Recurse -ErrorAction SilentlyContinue
+        Copy-Item -Path "$ProjectRoot\Images" -Destination "$releaseDir\Images" -Force -Recurse -ErrorAction SilentlyContinue
 
         # 复制帮助文档
         Copy-HelpDocs -ReleaseDir $releaseDir
@@ -461,7 +463,7 @@ function New-Release {
         }
 
         Remove-OldFiles -Dir $releaseDir -Filter "RMTv*.exe"
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Thread\Update.exe") -Destination "$releaseThread\Update.exe" -Force
+        Copy-Item -LiteralPath (Join-Path $ProjectRoot "Thread\Update.exe") -Destination "$releaseThread\Update.exe" -Force
         if (-not (Compile -AhkFile $RmtAhk -BaseExe $script:Base64Exe -OutputExe "$releaseDir\RMT.exe" -IconPath $IconPath -Name "RMT.exe")) {
             return $false
         }
@@ -500,7 +502,7 @@ function New-Release {
 
     if ($Type -eq "x86" -or $Type -eq "both") {
         Write-Step 2 "生成 ReleaseX86"
-        $releaseDir = Join-Path $PSScriptRoot "ReleaseX86"
+        $releaseDir = Join-Path $ProjectRoot "ReleaseX86"
         $releaseThread = Join-Path $releaseDir "Thread"
 
         # 创建目录
@@ -511,14 +513,14 @@ function New-Release {
         if (Test-Path "$releaseDir\Lang") {
             Remove-Item "$releaseDir\Lang" -Recurse -Force
         }
-        Copy-Item -Path "$PSScriptRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
+        Copy-Item -Path "$ProjectRoot\Lang" -Destination "$releaseDir\Lang" -Force -Recurse -ErrorAction SilentlyContinue
 
         # 复制 Images 目录
         Write-Log "复制 Images 目录..." "Gray"
         if (Test-Path "$releaseDir\Images") {
             Remove-Item "$releaseDir\Images" -Recurse -Force
         }
-        Copy-Item -Path "$PSScriptRoot\Images" -Destination "$releaseDir\Images" -Force -Recurse -ErrorAction SilentlyContinue
+        Copy-Item -Path "$ProjectRoot\Images" -Destination "$releaseDir\Images" -Force -Recurse -ErrorAction SilentlyContinue
 
         # 复制帮助文档
         Copy-HelpDocs -ReleaseDir $releaseDir
@@ -592,14 +594,14 @@ function New-Release {
         $destX64 = Join-Path $versionDir "RMTv${version}_x64"
         New-Item -ItemType Directory -Path $destX64 -Force | Out-Null
         Write-Log "复制 ReleaseX64 to $destX64 ..." "Gray"
-        Copy-Item -Path "$PSScriptRoot\ReleaseX64\*" -Destination $destX64 -Recurse -Force
+        Copy-Item -Path "$ProjectRoot\ReleaseX64\*" -Destination $destX64 -Recurse -Force
     }
 
     if ($Type -eq "x86" -or $Type -eq "both") {
         $destX86 = Join-Path $versionDir "RMTv${version}_x86"
         New-Item -ItemType Directory -Path $destX86 -Force | Out-Null
         Write-Log "复制 ReleaseX86 to $destX86 ..." "Gray"
-        Copy-Item -Path "$PSScriptRoot\ReleaseX86\*" -Destination $destX86 -Recurse -Force
+        Copy-Item -Path "$ProjectRoot\ReleaseX86\*" -Destination $destX86 -Recurse -Force
     }
 
     # 生成资源清单目录（对应 Main\SelfCheck.ahk 的文件校验清单）
@@ -625,14 +627,14 @@ function New-Release {
     Write-Section "清理临时文件"
     if ($Type -eq "x64" -or $Type -eq "both") {
         Write-Log "删除 ReleaseX64 下的 RMT*.exe..." "Gray"
-        Get-ChildItem (Join-Path $PSScriptRoot "ReleaseX64") -Filter "RMT*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+        Get-ChildItem (Join-Path $ProjectRoot "ReleaseX64") -Filter "RMT*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
             Remove-Item $_.FullName -Force
             Write-Log "  已删除: $($_.Name)" "Yellow"
         }
     }
     if ($Type -eq "x86" -or $Type -eq "both") {
         Write-Log "删除 ReleaseX86 下的 RMT*.exe..." "Gray"
-        Get-ChildItem (Join-Path $PSScriptRoot "ReleaseX86") -Filter "RMT*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+        Get-ChildItem (Join-Path $ProjectRoot "ReleaseX86") -Filter "RMT*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
             Remove-Item $_.FullName -Force
             Write-Log "  已删除: $($_.Name)" "Yellow"
         }
@@ -657,9 +659,8 @@ function New-Release {
 function Copy-HelpDocs {
     param([string]$ReleaseDir)
 
-    # 帮助文档由 Web\JS\SingleHtml.js 打成程序目录根下的单文件 index.html。
-    # 运行时打开的也是这个路径（见 GetHelpDocPath / OnOpenRmtDoc），不是 Web\index.html。
-    $indexSrc = Join-Path $PSScriptRoot "index.html"
+    # 源码帮助页位于 Web\index.html；发行包复制到程序根目录，兼容更新与资源下载。
+    $indexSrc = Join-Path $ProjectRoot "Web\index.html"
     $indexDst = Join-Path $ReleaseDir "index.html"
     if (Test-Path -LiteralPath $indexSrc) {
         Copy-IntoRelease -Source $indexSrc -Destination $indexDst
@@ -675,7 +676,7 @@ function Copy-LegalDocs {
     param([string]$ReleaseDir)
 
     foreach ($name in @("LICENSE", "DISCLAIMER.md")) {
-        $src = Join-Path $PSScriptRoot $name
+        $src = Join-Path $ProjectRoot $name
         if (Test-Path -LiteralPath $src) {
             Copy-Item -LiteralPath $src -Destination (Join-Path $ReleaseDir $name) -Force
             Write-Log "  已复制: $name" "Gray"
@@ -728,7 +729,7 @@ function Copy-IntoRelease {
 function Copy-OpenCV {
     param([string]$ReleaseDir, [string]$Arch)
 
-    $srcDir = Join-Path $PSScriptRoot "Plugins\OpenCV\$Arch"
+    $srcDir = Join-Path $ProjectRoot "Plugins\OpenCV\$Arch"
     $dstDir = Join-Path $ReleaseDir "Plugins\OpenCV\$Arch"
 
     if (-not (Test-Path $srcDir)) {
@@ -777,7 +778,7 @@ function Build-XamlReleaseEngine {
 function Copy-XamlDlls {
     param([string]$ReleaseDir, [string]$Arch = "x64")
 
-    $srcDepDir = Join-Path $PSScriptRoot "Plugins\AHK-XAML\lib\dep"
+    $srcDepDir = Join-Path $ProjectRoot "Plugins\AHK-XAML\lib\dep"
     $dstDepDir = Join-Path $ReleaseDir "Plugins\AHK-XAML\lib\dep"
     New-Item -ItemType Directory -Path $dstDepDir -Force | Out-Null
     # 不借用开发机上可能已经过时的 AnyCPU 引擎；确保与当前消息协议和原生 Loader 位数一致。
@@ -833,7 +834,7 @@ function Copy-XamlDlls {
 function Copy-AhiDriver {
     param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
 
-    $srcDir = Join-Path $PSScriptRoot "Plugins\AhiDriver"
+    $srcDir = Join-Path $ProjectRoot "Plugins\AhiDriver"
     $dstDir = Join-Path $ReleaseDir "Plugins\AhiDriver"
 
     # 清理旧版 Plugins\AHI 目录（安装包已并入 AhiDriver\installer）
@@ -904,7 +905,7 @@ function Copy-InputDlls {
         "MouseControl.dll"
     )
     foreach ($name in $files) {
-        $src = Join-Path $PSScriptRoot "Plugins\$name"
+        $src = Join-Path $ProjectRoot "Plugins\$name"
         $dst = Join-Path $dstDir $name
         if (Test-Path $src) {
             Copy-Item $src -Destination $dst -Force
@@ -916,7 +917,7 @@ function Copy-InputDlls {
     # VIIPER 客户端已编译进程序；发行包带上驱动与服务准备说明。
     $viiperDocDir = Join-Path $dstDir "VIIPER"
     New-Item -ItemType Directory -Path $viiperDocDir -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Plugins\VIIPER\README.md") -Destination $viiperDocDir -Force
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "Plugins\VIIPER\README.md") -Destination $viiperDocDir -Force
 
 }
 
@@ -925,7 +926,7 @@ function Copy-InputDlls {
 function Copy-Voice {
     param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
 
-    $srcDir = Join-Path $PSScriptRoot "Plugins\Voice\$Arch"
+    $srcDir = Join-Path $ProjectRoot "Plugins\Voice\$Arch"
     $dstDir = Join-Path $ReleaseDir "Plugins\Voice\$Arch"
 
     if (-not (Test-Path $srcDir)) {
@@ -942,7 +943,7 @@ function Copy-Voice {
     }
 
     # 关键词模型。每次覆盖，避免发行目录留着旧模型
-    $modelSrc = Join-Path $PSScriptRoot "Plugins\Voice\models\kws"
+    $modelSrc = Join-Path $ProjectRoot "Plugins\Voice\models\kws"
     $modelDst = Join-Path $ReleaseDir "Plugins\Voice\models\kws"
     if (Test-Path $modelSrc) {
         New-Item -ItemType Directory -Path $modelDst -Force | Out-Null
@@ -969,7 +970,7 @@ function Copy-Voice {
 function Copy-Translate {
     param([string]$ReleaseDir)
 
-    $srcDir = Join-Path $PSScriptRoot "Plugins\Translate\x64"
+    $srcDir = Join-Path $ProjectRoot "Plugins\Translate\x64"
     $dstDir = Join-Path $ReleaseDir "Plugins\Translate\x64"
 
     if (-not (Test-Path $srcDir)) {
@@ -1068,7 +1069,7 @@ function Copy-RuntimePlugins {
         }
     )
     foreach ($item in $bundles) {
-        $src = Join-Path $PSScriptRoot $item.Src
+        $src = Join-Path $ProjectRoot $item.Src
         $dst = Join-Path $ReleaseDir $item.Dst
         if (Test-Path -LiteralPath $src) {
             $parent = Split-Path $dst -Parent
@@ -1091,7 +1092,7 @@ function Copy-RuntimePlugins {
 function Copy-YoloKernel {
     param([string]$ReleaseDir, [string]$Arch)
 
-    $srcDir = Join-Path $PSScriptRoot "Plugins\YOLO\$Arch"
+    $srcDir = Join-Path $ProjectRoot "Plugins\YOLO\$Arch"
     if (-not (Test-Path $srcDir)) {
         Write-Log "  [WARN] YOLO 内核未构建：Plugins\YOLO\$Arch（YOLO检测 指令不可用）" "Yellow"
         return
@@ -1113,7 +1114,7 @@ function Copy-YoloKernel {
 # 文字识别插件（RapidOcr）：按架构复制 DLL + PP-OCRv6 ch_models（v6 统一多语言模型，无 en_models）
 function Copy-TesseractOcr {
     param([string]$ReleaseDir, [string]$Arch)
-    $source = Join-Path $PSScriptRoot "Plugins\TesseractOcr"
+    $source = Join-Path $ProjectRoot "Plugins\TesseractOcr"
     $dest = Join-Path $ReleaseDir "Plugins\TesseractOcr"
     foreach ($relative in @("$Arch\tesseract50.dll", "$Arch\leptonica-1.82.0.dll", "tessdata\chi_sim.traineddata", "tessdata\eng.traineddata", "LICENSE", "Leptonica-LICENSE.txt", "NOTICE.txt")) {
         $file = Join-Path $source $relative
@@ -1129,7 +1130,7 @@ function Copy-RapidOcr {
     param([string]$ReleaseDir, [string]$Arch) # Arch: "x64" / "x86"
 
     $bitArch = if ($Arch -eq "x64") { "64bit" } else { "32bit" }
-    $srcDll = Join-Path $PSScriptRoot "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll"
+    $srcDll = Join-Path $ProjectRoot "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll"
     $dstDll = Join-Path $ReleaseDir "Plugins\RapidOcr\$bitArch\RapidOcrOnnx.dll"
 
     if (Test-Path $srcDll) {
@@ -1141,7 +1142,7 @@ function Copy-RapidOcr {
     }
 
     # PP-OCRv6 ch_models。覆盖同步，并删掉源目录里已经没有的旧模型，避免加载时先扫到 v4
-    $modelSrc = Join-Path $PSScriptRoot "Plugins\RapidOcr\ch_models"
+    $modelSrc = Join-Path $ProjectRoot "Plugins\RapidOcr\ch_models"
     $modelDst = Join-Path $ReleaseDir "Plugins\RapidOcr\ch_models"
     if (Test-Path $modelSrc) {
         New-Item -ItemType Directory -Path $modelDst -Force | Out-Null
@@ -1189,7 +1190,7 @@ function New-RMTAssetZip {
     $archive = [IO.Compression.ZipFile]::Open($ZipPath, [IO.Compression.ZipArchiveMode]::Create)
     try {
         foreach ($file in $Files) {
-            $source = if ([IO.Path]::IsPathRooted($file.Src)) { $file.Src } else { Join-Path $PSScriptRoot $file.Src }
+            $source = if ([IO.Path]::IsPathRooted($file.Src)) { $file.Src } else { Join-Path $ProjectRoot $file.Src }
             [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
                 $archive, $source, $file.Dest, [IO.Compression.CompressionLevel]::Optimal
             ) | Out-Null
@@ -1216,13 +1217,13 @@ function New-RMTAssets {
         "Lang.zip" = @(
 
             # 动态打包 Lang\ 下所有语言包
-            @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang") -Filter "*.txt" -ErrorAction SilentlyContinue |
+            @(Get-ChildItem -Path (Join-Path $ProjectRoot "Lang") -Filter "*.txt" -ErrorAction SilentlyContinue |
                 Where-Object { $_.BaseName -ne "简中" -and $_.BaseName -ne "中文" } |
                 ForEach-Object {
                     $entry = if ($langArchiveNames.ContainsKey($_.Name)) { $langArchiveNames[$_.Name] } else { $_.Name }
                     @{ Dest = $entry; Src = "Lang\$($_.Name)" }
                 })
-            @(Get-ChildItem -Path (Join-Path $PSScriptRoot "Lang\Flags") -Filter "*.png" -File |
+            @(Get-ChildItem -Path (Join-Path $ProjectRoot "Lang\Flags") -Filter "*.png" -File |
                 ForEach-Object { @{ Dest = "Flags/$($_.Name)"; Src = "Lang\Flags\$($_.Name)" } })
         )
         "RMT.zip" = @(
@@ -1233,7 +1234,7 @@ function New-RMTAssets {
             @{ Dest = "Work.exe"; Src = "Release$Arch\Thread\Work.exe" },
             # 使用整包中的成品，确保文件校验下载到的更新程序与发行版一致。
             @{ Dest = "Update.exe"; Src = (Join-Path $PackageDir "Thread\Update.exe") },
-            @{ Dest = "index.html"; Src = "index.html" }
+            @{ Dest = "index.html"; Src = "Web\index.html" }
         )
         "Input.zip" = @(
             @{ Dest = "IbInputSimulator.dll"; Src = "Plugins\IbInputSimulator.dll" },
@@ -1304,7 +1305,7 @@ function New-RMTAssets {
         "LoopBody.png", "LoopCount.png", "Mouse.png", "Move.png", "MovePro.png",
         "Operation.png", "Output.png", "Prompt.png", "Run.png", "Search.png",
         "SearchPro.png", "SearchAll.png", "MacroAction.png", "TextOps.png", "True.png",
-        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ProcessManage.png",
+        "Var.png", "WeiXin.png", "WindowManage.png", "WindowAdjustGear32.png", "ControlInfo.png", "ControlOperation.png", "ProcessManage.png",
         "ZhiFuBao.png", "AiFaDian.png", "Stripe2.png", "Stripe5.png", "rabit.ico", "rabit.png", "Comment.png", "ScreenShot.png"
     )
 
@@ -1317,7 +1318,7 @@ function New-RMTAssets {
     # （与 Copy-YoloKernel 的 WARN 行为一致）。
     $yoloDir = "Plugins\YOLO\$Arch"
     $yoloFiles = @("RMT_YOLO.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll")
-    $yoloMissing = @($yoloFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "$yoloDir\$_")) })
+    $yoloMissing = @($yoloFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $ProjectRoot "$yoloDir\$_")) })
     if ($yoloMissing.Count -eq 0) {
         $bundles["Yolo.zip"] = @($yoloFiles | ForEach-Object {
             @{ Dest = $_; Src = "$yoloDir\$_" }
@@ -1334,7 +1335,7 @@ function New-RMTAssets {
         $transFiles = @("TranslateDll.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "ggml-vulkan.dll") +
             @("x64", "sse42", "sandybridge", "haswell", "skylakex", "cannonlake", "cascadelake", "icelake", "alderlake" |
                 ForEach-Object { "ggml-cpu-$_.dll" })
-        $transMissing = @($transFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "$transDir\$_")) })
+        $transMissing = @($transFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $ProjectRoot "$transDir\$_")) })
         if ($transMissing.Count -eq 0) {
             $bundles["Translate.zip"] = @($transFiles | ForEach-Object {
                 @{ Dest = $_; Src = "$transDir\$_" }
@@ -1357,23 +1358,23 @@ function New-RMTAssets {
 function Main {
     Write-Section "RMT 打包工具"
     Write-Log "PowerShell $($PSVersionTable.PSVersion)" "Gray"
-    Write-Log "工作目录: $PSScriptRoot" "Gray"
+    Write-Log "工作目录: $ProjectRoot" "Gray"
 
-    if (-not $PSScriptRoot) {
-        throw "无法确定脚本目录（PSScriptRoot 为空），请直接运行 PackRMT.cmd"
+    if (-not $ProjectRoot) {
+        throw "无法确定脚本目录（PSScriptRoot 为空），请直接运行 Scripts\PackRMT.ps1"
     }
 
     $persisted = Get-PersistedPolicy
     if ($persisted -eq "Restricted" -or $persisted -eq "AllSigned") {
         Write-Log "提示: 系统执行策略为 $persisted，右键 [使用 PowerShell 运行] 本 ps1 会被拒绝并闪退" "Yellow"
-        Write-Log "      请始终用 PackRMT.cmd 启动，或执行: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned" "Yellow"
+        Write-Log "      请用 powershell -ExecutionPolicy Bypass -File .\Scripts\PackRMT.ps1 启动，或执行: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned" "Yellow"
     }
 
     # 步骤 1: 检查文件
     Write-Step 1 "检查源文件与多语言完整性"
-    $script:WorkAhk = Join-Path $PSScriptRoot "Thread\Work.ahk"
-    $script:UpdateAhk = Join-Path $PSScriptRoot "Thread\Update.ahk"
-    $WorkDir = Join-Path $PSScriptRoot "Thread"
+    $script:WorkAhk = Join-Path $ProjectRoot "Thread\Work.ahk"
+    $script:UpdateAhk = Join-Path $ProjectRoot "Thread\Update.ahk"
+    $WorkDir = Join-Path $ProjectRoot "Thread"
     if (-not (Test-Path $script:WorkAhk)) {
         throw "找不到源文件: $($script:WorkAhk)"
     }
@@ -1385,7 +1386,7 @@ function Main {
             Write-Log "正在校验多语言翻译完整性（检查漏翻与多翻）..." "Gray"
             & $checkScript -Strict
             if ($LASTEXITCODE -ne 0) {
-                throw "多语言翻译检查未通过，打包已被即时中断！请先运行 .\CheckTranslations.ps1 修复漏翻和多翻。"
+                throw "多语言翻译检查未通过，打包已被即时中断！请先运行 .\Scripts\CheckTranslations.ps1 修复漏翻和多翻。"
             }
             Write-Log "[OK] 多语言翻译完整性校验通过" "Green"
         }
@@ -1421,7 +1422,7 @@ function Main {
 
     # 步骤 5: 编译开发环境的 Worker 和更新程序
     Write-Step 5 "编译 Work.exe 和 Update.exe"
-    $IconPath = Join-Path $PSScriptRoot "Images\Soft\rabit.ico"
+    $IconPath = Join-Path $ProjectRoot "Images\Soft\rabit.ico"
     if (-not (Compile-Updater -BaseExe $script:Base64Exe -OutputExe "$WorkDir\Update.exe" -IconPath $IconPath)) {
         throw "编译 Update.exe 失败，详见上方 Ahk2Exe 输出"
     }
@@ -1486,8 +1487,8 @@ $script:ExitCode = 0
 $script:Transcript = $null
 
 try {
-    if ($PSScriptRoot) {
-        $logDir = Join-Path $PSScriptRoot "Log"
+    if ($ProjectRoot) {
+        $logDir = Join-Path $ProjectRoot "Log"
         if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
         $script:Transcript = Join-Path $logDir "PackRMT_$(Get-Date -Format 'yyyyMMdd_HHmmss_fff')_$PID.log"
         Start-Transcript -Path $script:Transcript -Force | Out-Null

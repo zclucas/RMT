@@ -10,6 +10,12 @@
             name := Trim(name)
             if (name == "鼠标移动" || name == "鼠标移动Pro")
                 name := StrReplace(name, "鼠标", "")
+            name := GetCommandKey(name)
+            if (name == "窗口控件") {
+                this._favSet["控件信息"] := true
+                this._favSet["控件操作"] := true
+                continue
+            }
             if (name != "")
                 this._favSet[name] := true
         }

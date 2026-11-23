@@ -18,7 +18,7 @@ def transfer(item):
         if mode == "download":
             path = Path(name)
             url = "https://github.com/zclucas/" + repo + suffix
-            fetch(url, url, path, item["size"])
+            fetch(url, "https://ghfile.geekertao.top/" + url, path, item["size"])
         else:
             path = Path(tmp) / "attachment"
             subprocess.run(["curl", "-q", "-fsSL", "--retry", "2", "--connect-timeout", "20",

@@ -5,7 +5,7 @@ const vm = require('vm');
 const WEB_DIR = path.dirname(__dirname);
 const ROOT_DIR = path.dirname(WEB_DIR);
 const OUTPUTS = [
-  path.join(ROOT_DIR, 'index.html')
+  path.join(WEB_DIR, 'index.html')
 ];
 
 // 这些文档按二级标题拆成独立子页，侧栏可展开收缩
@@ -102,6 +102,8 @@ const COMMAND_ICON_FILES = {
   "网络请求": "Images/Soft/HttpRequest.png",
   "浏览器": "Images/Soft/Browser.png",
   "控件": "Images/Soft/WindowManage.png",
+  "控件信息": "Images/Soft/ControlInfo.png",
+  "控件操作": "Images/Soft/ControlOperation.png",
   "AI判断": "Images/Soft/AiDecision.png",
   "流程控制": "Images/Soft/Control.png",
   "窗口管理": "Images/Soft/WindowManage.png",
