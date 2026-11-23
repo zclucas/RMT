@@ -10,8 +10,12 @@
 
 ## 目錄結構
 - `shm_var.h`: C-Style 導出 API 頭文件
-- `shm_internal.h`: 內部 Header、節點結構、FNV-1a 哈希及相對偏移定義 (C++23)
-- `shm_var.cpp`: 核心邏輯實現與 DLL 導出函式
+- `shm_var.cpp`: `extern "C"` 導出函數薄適配層 (DLL Entrypoint)
+- `shm_core.h`: 內部核心邏輯與輔助函式宣告 (C++23)
+- `shm_core.cpp`: 哈希鏈表操作、二進制/字串安全配置與資源釋放實作
+- `shm_allocator.h`: 跨行程 Buddy Allocator 封裝（基於相對偏移量 Offset）
+- `buddy_alloc.h`: 嵌入式 Buddy Allocator 原生實現 (spaskalev/buddy_alloc)
+- `shm_internal.h`: 內部 Header、節點結構、FNV-1a 哈希及結構體對齊定義
 - `CMakeLists.txt`: CMake 構建配置 (C++23)
 - `test_shm.cpp`: 單元測試與真實多進程讀寫驗證程式
 - `ShmVar.dll`: 原生動態鏈接庫
@@ -19,21 +23,45 @@
 
 ## 編譯方式 (g++ C++23)
 
+在 `Plugins/ShmVar` 目錄下執行：
+
 ```cmd
 :: 編譯 DLL（啟用 Release 優化、去除斷言，靜態鏈接 C/C++ 運行庫）
 g++ -std=c++23 -O3 -DNDEBUG -DSHMVAR_EXPORTS -shared ^
     -static-libgcc -static-libstdc++ ^
-    -o Plugins/ShmVar/ShmVar.dll Plugins/ShmVar/shm_var.cpp
+    -o Plugins/ShmVar/ShmVar.dll Plugins/ShmVar/shm_var.cpp Plugins/ShmVar/shm_core.cpp
+
 
 :: 編譯測試程式
 g++ -std=c++23 -O3 -o Plugins/ShmVar/test_shm.exe Plugins/ShmVar/test_shm.cpp -LPlugins/ShmVar -lShmVar
-
 ```
 
 ## 測試驗證結果
 執行 `test_shm.exe` 全數通過：
-- [PASS] 基本類型存取 (Int64, Double, String, Binary Bytes)
-- [PASS] 覆寫與覆蓋重用機制
-- [PASS] Win32 具名 Event 跨線程/進程即時感知
-- [PASS] 真實跨進程驗證（Subprocess 子進程讀取父進程寫入數據、子進程寫入數據父進程即時讀取）
-- [PASS] 刪除與釋放清理
+```
+========================================
+Starting ShmVar C++23 Single-Copy Shm Test
+========================================
+[PASS] ShmVar_Init
+[PASS] ShmVar_SetInt
+[PASS] ShmVar_GetInt
+[PASS] ShmVar_SetDouble
+[PASS] ShmVar_GetDouble
+[PASS] ShmVar_SetStr
+[PASS] ShmVar_GetStr
+[PASS] ShmVar_SetBytes
+[PASS] ShmVar_GetBytes
+[PASS] ShmVar Overwrite
+[PASS] ShmVar_WaitForChange Event Notification
+Testing Multi-Process Cross-Process read/write...
+[PASS] Cross-Process Reader Verification
+[PASS] Cross-Process Writer Execution
+[PASS] Parent Read Child's Written Data
+[PASS] ShmVar_Delete
+[PASS] ShmVar_GetInt after Delete returns NOT_FOUND
+[PASS] ShmVar_Recycle_50x256KB_MemoryReused
+[PASS] ShmVar_Close
+========================================
+ALL SHMVAR TESTS PASSED SUCCESSFULLY!
+========================================
+```
