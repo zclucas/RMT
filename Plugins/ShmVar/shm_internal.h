@@ -26,7 +26,8 @@ struct ShmHeader {
     uint32_t magic;           // SHM_MAGIC
     uint32_t version;         // SHM_VERSION
     uint64_t totalSize;       // Total size of mapping in bytes
-    uint64_t freeOffset;      // Offset of dynamic bump pointer in heap
+    uint32_t arenaOffset;     // Relative offset where Buddy Allocator arena begins
+    uint32_t arenaSize;       // Size in bytes of Buddy Allocator arena
     uint64_t changeCount;     // Monotonic counter for change notifications
     uint32_t entryCount;      // Total live entries
     uint32_t reserved;

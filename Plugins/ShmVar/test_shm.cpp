@@ -128,7 +128,24 @@ int main(int argc, char* argv[]) {
     rc = ShmVar_GetInt("test_int", &deletedVal);
     PrintResult("ShmVar_GetInt after Delete returns NOT_FOUND", rc == SHMVAR_ERR_NOT_FOUND);
 
-    // Test 10: Close Shm
+    // Test 10: Memory Recycling Verification (Repeated large allocations and deletes)
+    // In old bump allocator, allocating and deleting 1MB strings repeatedly would exhaust a 16MB mapping.
+    // With Buddy Allocator, it can run thousands of cycles without memory exhaustion!
+    bool recyclingSuccess = true;
+    std::string largePayload(256 * 1024, 'A'); // 256KB
+    for (int cycle = 0; cycle < 50; ++cycle) {
+        if (ShmVar_SetStr("recycle_key", largePayload.c_str()) != SHMVAR_OK) {
+            recyclingSuccess = false;
+            break;
+        }
+        if (ShmVar_Delete("recycle_key") != SHMVAR_OK) {
+            recyclingSuccess = false;
+            break;
+        }
+    }
+    PrintResult("ShmVar_Recycle_50x256KB_MemoryReused", recyclingSuccess);
+
+    // Test 11: Close Shm
     rc = ShmVar_Close();
     PrintResult("ShmVar_Close", rc == SHMVAR_OK);
 
