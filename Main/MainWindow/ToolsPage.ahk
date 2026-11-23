@@ -10,7 +10,7 @@
         field(label, glyph, name, value) {
             return '<Grid Margin="0,0,16,10"><Grid.ColumnDefinitions><ColumnDefinition Width="116"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
                 . '<DockPanel Margin="0,0,6,0"><TextBlock DockPanel.Dock="Left" Text="' glyph '" FontFamily="' iconFont '" Foreground="{DynamicResource Accent}" Margin="0,0,6,0" VerticalAlignment="Center"/><Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" VerticalAlignment="Center"><TextBlock Text="' this._XmlEsc(label) '"/></Viewbox></DockPanel>'
-                . '<TextBox Grid.Column="1" Name="' name '" Text="' this._XmlEsc(value) '" Height="26" MinHeight="26" Padding="6,0" VerticalContentAlignment="Center" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/></Grid>'
+                . '<TextBox Grid.Column="1" Name="' name '" Text="' this._XmlEsc(value) '" Style="{StaticResource RmtSingleLineTextBox}" Height="26" MinHeight="26" VerticalContentAlignment="Center" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/></Grid>'
         }
         processField(key, label, glyph) {
             return field(RTrim(GetLang(label), " ：:"), glyph, "TxtTool" key, MouseProcessMonitor.Text(key))
@@ -50,7 +50,6 @@
             . field(GetLang("窗口标题"), "&#xE8A5;", "TxtProcessTile", MainSoftData.ProcessTile)
             . field(GetLang("窗口类"), "&#xE8D7;", "TxtProcessClass", MainSoftData.ProcessClass)
             . field(GetLang("句柄 Id"), "&#xE71B;", "TxtProcessId", MainSoftData.ProcessId)
-            . processField("IntegrityVar", "权限级别：", "&#xEA18;")
             . processField("StartTimeVar", "启动时间：", "&#xE823;")
             . processField("CpuVar", "CPU 占用：", "&#xE950;") '</StackPanel><StackPanel Grid.Column="1">'
             . field(GetLang("窗口客户区坐标"), "&#xE7F4;", "TxtWinPos", MainSoftData.WinPosStr)
@@ -58,7 +57,6 @@
             . field(GetLang("进程名"), "&#xE9D9;", "TxtProcessName", MainSoftData.ProcessName)
             . field(GetLang("进程 PID"), "&#xE950;", "TxtProcessPid", MainSoftData.ProcessPid)
             . field(GetLang("位置颜色"), "&#xE790;", "TxtColor", MainSoftData.Color)
-            . processField("StatusVar", "状态：", "&#xE9D9;")
             . processField("UptimeVar", "运行时长：", "&#xE916;")
             . processField("GpuVar", "GPU 占用：", "&#xE7F4;") '</StackPanel></Grid></Grid>'
 
@@ -109,12 +107,14 @@
         MainSoftData.ToolWinSizeCtrl := CtrlAdapter("TxtWinSize", this.ui, "Text")
         MainSoftData.ToolColorCtrl := CtrlAdapter("TxtColor", this.ui, "Text")
         MainSoftData.ToolProcessMetricsCtrls := Map()
-        for fieldName in ProcessInfo.Metrics
+        for fieldName in ProcessInfo.MouseMetrics
             MainSoftData.ToolProcessMetricsCtrls[fieldName] := CtrlAdapter("TxtTool" fieldName, this.ui, "Text")
 
         this.ui.Update("ChkToolCheck", "IsChecked", MainSoftData.IsToolCheck ? "True" : "False")
         this.ui.Update("ChkToolCheckRecord", "IsChecked", MainSoftData.IsToolRecord ? "True" : "False")
         this.ui.Update("ChkAlwaysOnTop", "IsChecked", "False")
+        ; 配置恢复为开启时也启动采集，不能只恢复开关外观。
+        SetTimer(SetToolCheckInfo, MainSoftData.IsToolCheck ? 100 : 0)
     }
 
     RefreshVoiceExtensionButton() {

@@ -15,6 +15,7 @@ class MainWin {
         this._linkQueue := []
         this._thankReady := false
         this._thankSponsorShown := false
+        this._thankSponsorKey := ""
         ; 每页已渲染的宏条目索引（供 RefreshItemColorUI 判断是否需更新色点）
         this.RenderedItems := Map()
         ; Epic5 虚拟列表：宏/模块显示区全走 _vl 渲染（模板已支持全部表类型：
