@@ -506,6 +506,9 @@ SelfCheckMissingFiles() {
     bitArch := A_PtrSize == 8 ? "64bit" : "32bit"
     tag := RmtAssetsReleaseTag()
     baseUrl := RmtAssetsBaseUrl(tag)
+    ; 源码与开发编译版可使用带 WebView2 后缀的引擎，发行版资源包的条目名固定。
+    xamlDir := !A_IsCompiled && XAML_ENGINE_BUILD_LOCATION != "lib/dep"
+        ? "Cache\AhkWpf\" : "Plugins\AHK-XAML\lib\dep\"
 
     criticalFiles := [
         {path: "Plugins\Browser\RMT_Browser.dll", entry: "RMT_Browser.dll", bundle: "RMT.zip"},
@@ -517,7 +520,7 @@ SelfCheckMissingFiles() {
         {path: "Plugins\ViGEm\ViGEmWrapper.dll", entry: "ViGEmWrapper.dll", bundle: "ViGEm.zip"},
         {path: "Plugins\Joy\ViGEmBus.exe", entry: "ViGEmBus.exe", bundle: "ViGEm.zip"},
         {path: "Plugins\Joy\Xbox按键映射.png", entry: "Xbox.png", bundle: "ViGEm.zip"},
-        {path: "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll", entry: "ahk-xaml.dll", bundle: "Xaml.zip"},
+        {path: xamlDir XAMLHost.GetEngineDllName(), entry: "ahk-xaml.dll", bundle: "Xaml.zip"},
         {path: "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll", entry: "WpfAnimatedGif.dll", bundle: "Xaml.zip"},
         {path: "Plugins\OpenCV\" arch "\RMT_OpenCV.dll", entry: "RMT_OpenCV.dll", bundle: "OpenCV.zip"},
         {path: "Plugins\OpenCV\" arch "\opencv_world481.dll", entry: "opencv_world481.dll", bundle: "OpenCV.zip"},
@@ -546,7 +549,6 @@ SelfCheckMissingFiles() {
     }
     optionalFiles := [
         {path: "Plugins\Browser\LICENSE.txt", entry: "Browser-LICENSE.txt", bundle: "RMT.zip"},
-        {path: "Thread\Update.exe", entry: "Update.exe", bundle: "RMT.zip"},
         {path: "Plugins\MouseControl.dll", entry: "MouseControl.dll", bundle: "Input.zip"},
         {path: "Plugins\AhiDriver\installer\使用说明.txt", entry: "InstallReadme.txt", bundle: "AhiDriver.zip"},
         ; YOLO 是可选指令：缺了只影响这一个指令，不该按关键文件告警，
@@ -555,6 +557,9 @@ SelfCheckMissingFiles() {
         {path: "Plugins\YOLO\" arch "\onnxruntime.dll", entry: "onnxruntime.dll", bundle: "Yolo.zip"},
         {path: "Plugins\YOLO\" arch "\onnxruntime_providers_shared.dll", entry: "onnxruntime_providers_shared.dll", bundle: "Yolo.zip"},
     ]
+    ; 源码运行时，RmtUpdate 可直接用 AutoHotkey 启动 Update.ahk。
+    if (A_IsCompiled || RmtAssetMissing(A_ScriptDir "\Thread\Update.ahk"))
+        optionalFiles.InsertAt(2, {path: "Thread\Update.exe", entry: "Update.exe", bundle: "RMT.zip"})
     ; 翻译同样是可选指令：DLL 缺失只影响这一个指令；模型 1.3 GB 不进包，走按需下载。
     ; 只提供 x64：2B 模型的常驻内存放不进 32 位地址空间，32 位包里没有这个插件。
     ; CPU 变体后端与 llama.cpp 的 MSVC 变体表对应（x64/sse42/sandybridge/haswell/
@@ -627,10 +632,10 @@ SelfCheckMissingFiles() {
         detailStr .= "⚠ 关键文件 (" missingCritical ")`n"
     if (missingOptional > 0)
         detailStr .= "可选文件 (" missingOptional ")"
-    tipMsg := "检测到 " totalMissing " 个资源文件缺失`n" detailStr "`n`n" fileListStr "`n版本：" tag "`n点击【是】从 GitHub 自动下载`n点击【否】跳过（部分功能可能不可用）"
+    tipMsg := "检测到 " totalMissing " 个资源文件缺失`n" detailStr "`n`n" fileListStr "`n版本：" tag "`n点击【取消】跳过下载，部分功能可能不可用。"
 
-    result := RmtDialog.Confirm(tipMsg, "RMT 资源自检")
-    if (!result) {
+    result := RmtDialog.Choose(tipMsg, GetLang("RMT 资源自检"), [GetLang("下载"), GetLang("取消")])
+    if (result != 1) {
         if (missingCritical > 0) {
             criticalNames := ""
             for file in allMissing {

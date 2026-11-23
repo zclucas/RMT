@@ -2,17 +2,23 @@
 #Warn All, Off
 #Include "..\Main\Util\JsonUtil.ahk"
 
+if (A_Args.Length == 3 && A_Args[1] == "--mouse-gpu-info") {
+    try {
+        memory := SharedMemory(ProcessInfo.MouseSampleSize, Integer(A_Args[2]))
+        MouseGpuSampler.Run(memory, Integer(A_Args[3]))
+    }
+    ExitApp()
+}
+
+; 兼容尚未重启的旧主进程；新鼠标监视只使用上方的常驻 GPU 采样入口。
 if (A_Args.Length == 5 && A_Args[1] == "--mouse-process-info") {
     try {
         memory := SharedMemory(ProcessInfo.MouseSampleSize, Integer(A_Args[4]))
         parent := Integer(A_Args[5])
         if (DllCall("WaitForSingleObject", "Ptr", parent, "UInt", 0, "UInt") == 258) {
-            sample := ProcessInfo.MouseSample(Integer(A_Args[2]), Integer(A_Args[3]))
-            payload := JSON.stringify(sample, 0)
-            if (StrLen(payload) < (memory.size - 4) // 2) {
-                StrPut(payload, memory.ptr + 4, (memory.size - 4) // 2, "UTF-16")
-                NumPut("UInt", StrLen(payload), memory.ptr)
-            }
+            publish := (sample) => ProcessInfo.PublishMouseSample(memory, sample)
+            sample := ProcessInfo.MouseSample(Integer(A_Args[2]), Integer(A_Args[3]), publish)
+            publish.Call(sample)
         }
     }
     ExitApp()

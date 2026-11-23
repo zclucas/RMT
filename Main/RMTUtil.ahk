@@ -369,7 +369,7 @@ InitRMTHttpPlugin() {
     global RMT_Ai := ""
     global RMT_ASM := ""
     global RMT_Discourse := ""
-    global RMT_Sponsors := []
+    global RMT_Sponsors := LoadSponsorList()
     global RMT_HasDotNet := HasDotNetFramework()
     global RMT_StatusPollFn := ""
     if (!RMT_HasDotNet)
@@ -534,10 +534,33 @@ ApplyRMTServerRsp(rspStr) {
         return
     try {
         rsp := JSON.parse(rspStr)
-        if (rsp.Has("sponsors"))
+        if (rsp.Has("sponsors") && rsp["sponsors"] is Array) {
             RMT_Sponsors := ParseSponsorList(rsp["sponsors"])
+            SaveSponsorList(rsp["sponsors"])
+        }
         if (IsObject(MyMainWin))
             MyMainWin.ApplyThankSponsors()
+    }
+}
+
+; 名单与启动上报解耦：重载、离线时沿用缓存，首次使用显示服务端的默认占位项。
+LoadSponsorList() {
+    try {
+        cached := JSON.parse(FileRead(RmtCacheDir() "\Sponsors.json", "UTF-8"))
+        if (cached is Array) {
+            list := ParseSponsorList(cached)
+            if (!cached.Length || list.Length)
+                return list
+        }
+    }
+    return ParseSponsorList([])
+}
+
+SaveSponsorList(list) {
+    try {
+        file := FileOpen(RmtCacheDir() "\Sponsors.json", "w", "UTF-8")
+        try file.Write(JSON.stringify(list, 0))
+        finally file.Close()
     }
 }
 
@@ -619,11 +642,13 @@ _RspMapText(m, key) {
     return _RspText(m[key])
 }
 
-; 归一化 getstatus.sponsors：name / logo / url / desc / ext[{key,value}]
+; 归一化 getstatus.sponsors，真实赞助保留顺序，id=-1 的占位项仅保留一个并固定在末尾。
 ParseSponsorList(arr) {
     list := []
     if (!(arr is Array))
         return list
+    placeholder := Map("id", -1, "name", "这个位置，期待您的 Logo！", "logo", "rmt.png", "url", "", "desc", "", "ext", [])
+    hasPlaceholder := false
     for item in arr {
         if (!(item is Map))
             continue
@@ -648,8 +673,16 @@ ParseSponsorList(arr) {
             }
         }
         id := item.Has("id") ? item["id"] : ""
-        list.Push(Map("id", id, "name", name, "logo", logo, "url", url, "desc", desc, "ext", tags))
+        if (_RspText(id) == "-1") {
+            if (!hasPlaceholder) {
+                placeholder := Map("id", -1, "name", name != "" ? name : placeholder["name"],
+                    "logo", logo != "" ? logo : placeholder["logo"], "url", url, "desc", desc, "ext", tags)
+                hasPlaceholder := true
+            }
+        } else
+            list.Push(Map("id", id, "name", name, "logo", logo, "url", url, "desc", desc, "ext", tags))
     }
+    list.Push(placeholder)
     return list
 }
 
