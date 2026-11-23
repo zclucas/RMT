@@ -146,7 +146,7 @@ RuntimeHasSp1() {
 }
 
 ; ---- 下载前放开 TLS 1.2 ----
-; Msxml2.XMLHTTP 走 WinINET，Win7 默认只启用 TLS 1.0；Gitee 与 GitHub 都要求
+; Msxml2.XMLHTTP 走 WinINET，Win7 默认只启用 TLS 1.0；GitCode 与 GitHub 都要求
 ; TLS 1.2。不放开的话 readyState 永远到不了 4，表现为超时而不是明确报错。
 ; INTERNET_OPTION_SECURE_PROTOCOLS = 84；TLS 1.0|1.1|1.2 = 0xA80。仅作用于本进程。
 RuntimeEnableTls12() {
@@ -360,7 +360,7 @@ RuntimeOfflineBundleName() {
 
 RuntimeOfflineBundleUrl() {
     ; 手工下载必须提供完整包，浏览器不会运行分片合并器。
-    return RmtLargeAssetProxy() RmtDownloadDirectUrl(RmtLargeAssetUrl(RuntimeOfflineBundleName()))
+    return RmtLargeAssetUrl(RuntimeOfflineBundleName())
 }
 
 ; Win7 在线版：三项系统组件里任意一项缺、且没有对应离线副本，就说明这个包不能用。

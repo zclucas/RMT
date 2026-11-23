@@ -4407,7 +4407,7 @@ if ($code -ne 0) {
 <p><strong>解决方法：</strong></p>
 <ul>
 <li>设置 → 文件校验，补齐 OpenCV 插件</li>
-<li>从 GitHub / Gitee 发行版重新下载完整包</li>
+<li>从 GitHub / GitCode 发行版重新下载完整包</li>
 <li>抓图看 <code>Setting\&lt;当前方案&gt;\Images\TempShot</code>；安装目录没写权限时看用户临时目录 <code>RMT_TempShot</code></li>
 <li>工具热键截图、RMT指令「截图」报错，才去设置里换微软 / RMT / SC</li>
 </ul>
@@ -5087,7 +5087,7 @@ ExecuteMacroCmdOnce (单条指令执行)
 </li>
 <li><p><strong>控件信息</strong>：默认结果变量，精简检测名称与输出。</p>
 </li>
-<li><p><strong>资源下载</strong>：大文件分片同步，下载后校验合并。</p>
+<li><p><strong>资源下载</strong>：默认使用 GitCode，备用直连 GitHub。</p>
 </li>
 <li><p><strong>目录整理</strong>：构建脚本归入 Scripts，帮助页归入 Web。</p>
 </li>
@@ -5139,6 +5139,8 @@ ExecuteMacroCmdOnce (单条指令执行)
 </li>
 <li><p><strong>企业赞助</strong>：默认占位项固定显示在名单末尾。</p>
 </li>
+<li><p><strong>全局变量</strong>：加入跨进程读写锁</p>
+</li>
 <li><p><strong>下载管理</strong>：完成任务支持删除、清理文件后重新下载。</p>
 </li>
 <li><p><strong>文件校验</strong>：缺失提示使用「下载」和「取消」。</p>
@@ -5179,17 +5181,17 @@ ExecuteMacroCmdOnce (单条指令执行)
 </li>
 <li><p><strong>按键与变量编辑</strong>：按类型隐藏无关输入框，隐藏项原位保留占位符。</p>
 </li>
-<li><p><strong>更新与资源下载</strong>：优先从 Gitee 下载，失败后自动切换到 GitHub。</p>
+<li><p><strong>软件更新</strong>：优先使用 GitCode，备用直连 GitHub。</p>
 </li>
-<li><p><strong>软件更新</strong>：先查 Gitee，遵循在线开关，手动检查可重看已跳过版本。</p>
+<li><p><strong>软件更新</strong>：先查 GitCode，手动检查可重看已跳过版本。</p>
 </li>
 <li><p><strong>测试版更新</strong>：替换前自动备份配置，可从正式版直接更新。</p>
 </li>
-<li><p><strong>大文件下载</strong>：四个大型资源优先使用加速地址，失败后直连。</p>
+<li><p><strong>翻译模型</strong>：使用 LFS 下载并校验完整性。</p>
 </li>
 <li><p><strong>Win7 离线安装</strong>：环境包提示中增加备用下载地址。</p>
 </li>
-<li><p><strong>镜像发布</strong>：安装包和资源附件自动同步到 Gitee，并校验下载结果。</p>
+<li><p><strong>镜像发布</strong>：标签代码、发行包与资源统一同步 GitCode。</p>
 </li>
 <li><p><strong>宏编辑器</strong>：新增进程/窗口和扩展分组，调整指令顺序。</p>
 </li>
@@ -5228,6 +5230,16 @@ ExecuteMacroCmdOnce (单条指令执行)
 </ul>
 <h3>修复</h3>
 <ul>
+<li><p><strong>资源发布</strong>：清除旧分片，保留 GitHub 完整原包。</p>
+</li>
+<li><p><strong>资源下载</strong>：修复备用原包下载与同名资源补传。</p>
+</li>
+<li><p><strong>发布同步</strong>：移除旧镜像与服务器中转流程。</p>
+</li>
+<li><p><strong>离线环境包</strong>：手工下载恢复完整包地址。</p>
+</li>
+<li><p><strong>下载管理</strong>：脚本提取失败不再阻塞队列。</p>
+</li>
 <li><p><strong>语言包</strong>：补齐译文，清理废弃及重复词条。</p>
 </li>
 <li><p><strong>构建检查</strong>：修正源码换行与循环次数键名。</p>

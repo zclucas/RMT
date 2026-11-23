@@ -13,7 +13,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot '../../Scripts/Split-RmtAsset.ps1')
+function Get-RmtObsoleteAssetVolumes {
+    param([string[]]$OriginalNames, [string[]]$PublishedNames, [string[]]$ExistingNames)
+    foreach ($name in $ExistingNames) {
+        if ($name -cin $PublishedNames) { continue }
+        foreach ($original in $OriginalNames) {
+            if ($name -cmatch ('^' + [regex]::Escape($original) + '\.(?:parts\.json|part\d{4})$')) {
+                $name
+                break
+            }
+        }
+    }
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 if (-not $env:GH_TOKEN) {
@@ -59,13 +70,7 @@ foreach ($tag in $releaseDirs.Keys) {
             $zip.Dispose()
         }
     })
-    # 保留原包兼容旧客户端，同时发布两端通用的分片和清单。
-    foreach ($asset in $assets) {
-        if ($asset.Length -ge 100000000) {
-            $volumeDir = Join-Path $assetDir 'volumes'
-            $assetsByTag[$tag] += @(Split-RmtAsset -Path $asset.FullName -OutDir $volumeDir)
-        }
-    }
+    # GitHub 始终保留原包；GitCode 的模型存储策略由同步任务单独处理。
 }
 
 # 3) 上传（存在则覆盖，不存在则创建）；测试版资源标记 pre-release（仅展示区分，不影响下载）

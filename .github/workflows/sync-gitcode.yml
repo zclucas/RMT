@@ -1,0 +1,40 @@
+name: 同步 GitCode 代码与发行版
+on:
+  push:
+    tags: ['**']
+  workflow_run:
+    workflows: [版本发布]
+    types: [completed]
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: gitcode-rmt-mirror
+  cancel-in-progress: false
+jobs:
+  mirror:
+    if: ${{ !github.event.deleted && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: 同步代码、分支与标签
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        run: python3 -u .github/scripts/mirror_rmt_refs.py
+      - name: 同步所有已发布版本与附件并校验公开下载
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        run: python3 -u .github/scripts/sync_gitcode_assets.py sync --repo RMT --workers 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitcode-release-result
+          path: ${{ runner.temp }}/gitcode-sync.json

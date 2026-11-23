@@ -1,0 +1,8 @@
+{
+  "gitcode_repo": "ruomengtu/RMTAssets",
+  "model": {
+    "name": "Index-Translate-2B.Q4_K_M.gguf",
+    "transport": "lfs",
+    "part_bytes": 195000000
+  }
+}

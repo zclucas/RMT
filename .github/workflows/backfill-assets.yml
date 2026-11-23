@@ -1,131 +1,55 @@
-name: 补齐 Gitee 资源
+name: 补齐 GitCode 资源
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 资源标签；留空处理所有发行版
+        description: 资源标签；留空处理全部发行版
         type: string
       asset_name:
-        description: 原附件文件名；留空处理整个标签
+        description: 原附件名；留空处理整个标签
         type: string
-      verify_archive:
-        description: 从 Gitee 下载合并并解压指定 tar.bz2
-        type: boolean
-        default: false
-      split_only:
-        description: 仅补齐 GitHub 分片，保留原附件
-        type: boolean
-        default: false
 permissions:
   contents: read
+concurrency:
+  group: gitcode-resource-mirror
+  cancel-in-progress: false
 jobs:
-  list:
-    runs-on: ubuntu-latest
-    outputs:
-      tags: ${{ steps.list.outputs.tags }}
-    steps:
-      - id: list
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INPUT_TAG: ${{ inputs.tag }}
-          ASSET_NAME: ${{ inputs.asset_name }}
-          VERIFY: ${{ inputs.verify_archive }}
-          SPLIT_ONLY: ${{ inputs.split_only }}
-        run: |
-          set -euo pipefail
-          if [[ -n "$ASSET_NAME" || "$VERIFY" == true ]]; then
-            [[ -n "$INPUT_TAG" ]] || { echo 'A tag is required for a targeted test.'; exit 1; }
-          fi
-          if [[ "$VERIFY" == true ]]; then
-            [[ "$SPLIT_ONLY" != true ]] || { echo 'Archive verification requires Gitee synchronization.'; exit 1; }
-            [[ "$ASSET_NAME" == *.tar.bz2 ]] || { echo 'Select a tar.bz2 attachment to verify.'; exit 1; }
-          fi
-          if [[ -n "$INPUT_TAG" ]]; then
-            tags=$(jq -cn --arg tag "$INPUT_TAG" '[$tag]')
-          else
-            tags=$(gh api --paginate repos/zclucas/RMTAssets/releases | jq -cs '[.[][] | select(.draft == false) | .tag_name]')
-          fi
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
-  prepare:
-    name: 为原附件补发分片
-    needs: list
-    strategy:
-      fail-fast: false
-      matrix:
-        tag: ${{ fromJSON(needs.list.outputs.tags) }}
-    runs-on: windows-latest
-    timeout-minutes: 90
-    concurrency:
-      group: github-asset-volumes-${{ matrix.tag }}
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-      - shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
-          RELEASE_TAG: ${{ matrix.tag }}
-          ASSET_NAME: ${{ inputs.asset_name }}
-        run: ./.github/scripts/Publish-RmtAssetVolumes.ps1 -Tag $env:RELEASE_TAG -AssetName $env:ASSET_NAME
   mirror:
-    if: ${{ !inputs.split_only }}
-    name: 复用 Gitee Go 同步与回读
-    needs: [list, prepare]
-    strategy:
-      fail-fast: false
-      matrix:
-        tag: ${{ fromJSON(needs.list.outputs.tags) }}
+    if: inputs.asset_name != 'Index-Translate-2B.Q4_K_M.gguf'
     runs-on: ubuntu-latest
-    timeout-minutes: 150
-    concurrency:
-      group: gitee-assets-${{ matrix.tag }}
-      cancel-in-progress: false
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
-      RELEASE_TAG: ${{ matrix.tag }}
-      ASSET_NAME: ${{ inputs.asset_name }}
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: python3 -m pip install PyYAML==6.0.2
-      - name: Gitee Go 同步分片并回读 SHA-256
-        id: go
-        continue-on-error: true
-        run: python3 -u .github/scripts/sync_gitee_go.py assets-go
-      - name: API 上传并回读指定附件
-        id: direct
-        if: steps.go.outcome == 'failure'
-        continue-on-error: true
-        timeout-minutes: 12
-        shell: pwsh
-        run: ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $env:RELEASE_TAG -AssetName $env:ASSET_NAME
-      - name: 服务器补传并回读
-        if: steps.go.outcome == 'failure' && steps.direct.outcome == 'failure'
-        env:
-          RELAY_KEY: ${{ secrets.RMT_RELAY_SSH_KEY }}
-          KNOWN_HOST: ${{ vars.RMT_RELAY_KNOWN_HOST }}
-        run: python3 -u .github/scripts/sync_gitee_go.py assets-relay
-  verify:
-    name: Gitee 下载合并解压实测
-    needs: mirror
-    if: inputs.verify_archive && !inputs.split_only
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - shell: pwsh
+      - name: 同步原文件并验证公开下载
         env:
           GH_TOKEN: ${{ github.token }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
           RELEASE_TAG: ${{ inputs.tag }}
           ASSET_NAME: ${{ inputs.asset_name }}
-        run: ./.github/scripts/Verify-RmtAssetRoundtrip.ps1 -Tag $env:RELEASE_TAG -AssetName $env:ASSET_NAME
+        run: python3 -u .github/scripts/sync_gitcode_assets.py sync --tag "$RELEASE_TAG" --asset-name "$ASSET_NAME" --workers 2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: asset-roundtrip-result
-          path: ${{ runner.temp }}/rmt-volume-check/result.json
-          if-no-files-found: warn
+          name: gitcode-sync-result
+          path: ${{ runner.temp }}/gitcode-sync.json
+  model:
+    needs: mirror
+    if: ${{ !cancelled() && (needs.mirror.result == 'success' || needs.mirror.result == 'skipped') && (inputs.tag == '' || inputs.tag == 'Common') && (inputs.asset_name == '' || inputs.asset_name == 'Index-Translate-2B.Q4_K_M.gguf') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 按所选策略同步翻译模型
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        run: python3 -u .github/scripts/sync_gitcode_assets.py model --model-mode configured
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitcode-model-result
+          path: ${{ runner.temp }}/gitcode-model.json

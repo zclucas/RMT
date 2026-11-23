@@ -26,7 +26,6 @@ concurrency:
 jobs:
   upload:
     outputs:
-      release_tag: ${{ steps.github_assets.outputs.tag }}
       asset_tags: ${{ steps.github_assets.outputs.asset_tags }}
     name: 上传到 RMTAssets
     if: >-
@@ -120,7 +119,6 @@ jobs:
             -Repo 'zclucas/RMTAssets'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json
-          "tag=$($info.tag)" >> $env:GITHUB_OUTPUT
 
           $tags = @(foreach ($arch in 'x64', 'x86', 'Common') {
             if (Test-Path (Join-Path $out "RMTAssets_$arch")) {
@@ -129,13 +127,11 @@ jobs:
           })
           "asset_tags=$(ConvertTo-Json -InputObject $tags -Compress)" >> $env:GITHUB_OUTPUT
 
-  mirror:
-    name: 同步 Gitee 正式发行版
+  resource_mirror:
+    name: 同步 GitCode 资源
     needs: upload
-    if: needs.upload.outputs.release_tag != ''
-    uses: ./.github/workflows/sync-gitee-release.yml
+    if: needs.upload.outputs.asset_tags != ''
+    uses: ./.github/workflows/sync-gitcode-assets.yml
     with:
-      tag: ${{ needs.upload.outputs.release_tag }}
       asset_tags: ${{ needs.upload.outputs.asset_tags }}
-      source_sha: ${{ github.event.workflow_run.head_sha || '' }}
     secrets: inherit

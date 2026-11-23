@@ -75,7 +75,7 @@ class RmtReleaseScan {
         errors := []
         sources := 0
         try {
-            assets.Push(this.ParseApi(this.Request("https://gitee.com/api/v5/repos/fateman/RMT/releases?page=1&per_page=100", A_TickCount + 8500))*)
+            assets.Push(this.ParseApi(this.Request("https://api.gitcode.com/api/v5/repos/ruomengtu/RMT/releases?direction=desc&page=1&per_page=100", A_TickCount + 8500))*)
             sources++
         } catch as err
             errors.Push(err.Message)
@@ -97,7 +97,7 @@ class RmtReleaseScan {
                 detail .= (detail == "" ? "" : "`n") message
             throw Error(detail)
         }
-        ; 同一包保留 GitHub 的大小和摘要，优先使用 Gitee 附件。
+        ; 同一包保留 GitHub 的大小和摘要，优先使用 GitCode 附件。
         github := Map()
         for asset in assets {
             if InStr(asset.url, "https://github.com/") == 1

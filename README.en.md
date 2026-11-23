@@ -82,7 +82,7 @@ Understand the core concepts and configuration logic — from beginner to expert
 
 | Source | Link | Description |
 |--------|------|-------------|
-| 🅶 Gitee | [RMT Releases](https://gitee.com/fateman/RMT/releases) | Primary download |
+| 🅶 GitCode | [RMT Releases](https://gitcode.com/ruomengtu/RMT/releases) | Primary download |
 | 🐱 GitHub | [RMT Releases](https://github.com/zclucas/RMT/releases) | Backup download |
 | 📦 Baidu Drive | [Download Here](https://pan.baidu.com/s/1NsS0UTgViDv6Ulo-rE-Q2Q?pwd=RMMT) | Backup link |
 | ☁️ Aliyun Drive | [Download Here](https://www.alipan.com/s/KdQojvKuHyn) | Backup link |

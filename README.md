@@ -81,7 +81,7 @@ RMT（若梦兔）是完全免费的开源项目。
 
 | 来源 | 地址 | 说明 |
 |------|------|------|
-| 🅶 Gitee | [RMT Releases](https://gitee.com/fateman/RMT/releases) | 默认下载 |
+| 🅶 GitCode | [RMT Releases](https://gitcode.com/ruomengtu/RMT/releases) | 默认下载 |
 | 🐱 GitHub | [RMT Releases](https://github.com/zclucas/RMT/releases) | 备用下载 |
 | 📦 百度网盘 | [点击下载](https://pan.baidu.com/s/1NsS0UTgViDv6Ulo-rE-Q2Q?pwd=RMMT)| 备用通道 |
 | ☁️ 阿里云盘 | [点击下载](https://www.alipan.com/s/KdQojvKuHyn) | 备用通道 |

@@ -38,11 +38,20 @@ class RmtDownloadManager {
 
         job.name := name
         job.urls := urls.Clone()
-        ; 两端使用同名分片；未迁移的旧包仍能从 GitHub 原附件下载。
+        ; GitCode 下载原文件或 LFS 模型；备用地址直连 GitHub 原附件。
         for url in urls {
             alternative := RmtDownloadDirectUrl(url)
-            if (RmtIsAssetUrl(url) && alternative != "")
-                job.urls.Push(alternative)
+            if (RmtIsAssetUrl(url) && alternative != "") {
+                exists := false
+                for candidate in job.urls {
+                    if (candidate == alternative) {
+                        exists := true
+                        break
+                    }
+                }
+                if (!exists)
+                    job.urls.Push(alternative)
+            }
         }
         job.targetPath := targetPath
         job.partPath := targetPath ".part"
@@ -103,7 +112,7 @@ class RmtDownloadManager {
     }
 
     static _DeleteJobFiles(job) {
-        paths := [job.headersPath, job.partPath, job.targetPath]
+        paths := [job.headersPath, job.partPath, job.partPath ".unpacked", job.targetPath]
         try {
             ; 先确认全部文件可删除，避免目标正在使用时先丢掉断点文件。
             for path in paths {
@@ -274,6 +283,7 @@ class RmtDownloadManager {
         this._CloseProcessHandle(job)
         job.error := error
         try FileDelete(job.headersPath)
+        try FileDelete(job.partPath ".unpacked")
         if (job.urlIndex < job.urls.Length) {
             job.urlIndex += 1
             try FileDelete(job.partPath)
