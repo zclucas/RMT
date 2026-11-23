@@ -28,13 +28,15 @@ def set_default_branch():
         data=dict(name="RMT", default_branch=branch), method="PATCH")
 
 
-if __name__ == "__main__":
+def mirror():
     source, target = refs(SOURCE), refs(TARGET)
-    if source and all(target.get(ref) == sha for ref, sha in source.items()):
+    if not source:
+        raise ValueError("GitHub source has no branches or tags")
+    if source == target:
         print(f"Verified {len(source)} GitHub refs on GitCode")
         set_default_branch()
-        raise SystemExit(0)
-    with tempfile.TemporaryDirectory() as directory:
+        return
+    with tempfile.TemporaryDirectory(dir=os.environ.get("RUNNER_TEMP")) as directory:
         git("init", "--bare", "--quiet", directory)
         git("fetch", "--quiet", "--no-tags", SOURCE, "+refs/heads/*:refs/heads/*",
             "+refs/tags/*:refs/tags/*", cwd=directory)
@@ -44,9 +46,16 @@ if __name__ == "__main__":
         if changed:
             git("push", *["--force-with-lease=" + ref + ":" + before.get(ref, "")
                 for ref in changed], TARGET, *[ref + ":" + ref for ref in changed], cwd=directory)
+        set_default_branch()
+        stale = [ref for ref in before if ref not in expected]
+        if stale:
+            git("push", *["--force-with-lease=" + ref + ":" + before[ref] for ref in stale],
+                TARGET, *[":" + ref for ref in stale], cwd=directory)
         after = refs(TARGET)
-        if any(after.get(ref) != sha for ref, sha in expected.items()):
+        if after != expected:
             raise RuntimeError("GitCode branches or tags differ from fetched GitHub snapshot")
-        print(f"Verified {len(expected)} GitHub refs on GitCode ({len(changed)} updated)")
+        print(f"Verified {len(expected)} GitHub refs on GitCode ({len(changed)} updated, {len(stale)} removed)")
 
-    set_default_branch()
+
+if __name__ == "__main__":
+    mirror()
