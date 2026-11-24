@@ -1008,11 +1008,6 @@ function Copy-RuntimePlugins {
             Dst  = "Plugins\Joy\ViGEmBus.exe"
         },
         @{
-            Name = "Joy/Xbox按键映射.png"
-            Src  = "Plugins\Joy\Xbox按键映射.png"
-            Dst  = "Plugins\Joy\Xbox按键映射.png"
-        },
-        @{
             Name = "Browser/RMT_Browser.dll"
             Src  = $browserDll
             Dst  = "Plugins\Browser\RMT_Browser.dll"
@@ -1246,8 +1241,7 @@ function New-RMTAssets {
         )
         "ViGEm.zip" = @(
             @{ Dest = "ViGEmWrapper.dll"; Src = "Plugins\ViGEm\ViGEmWrapper.dll" },
-            @{ Dest = "ViGEmBus.exe"; Src = "Plugins\Joy\ViGEmBus.exe" },
-            @{ Dest = "Xbox.png"; Src = "Plugins\Joy\Xbox按键映射.png" }
+            @{ Dest = "ViGEmBus.exe"; Src = "Plugins\Joy\ViGEmBus.exe" }
         )
         "Xaml.zip" = @(
             @{ Dest = "ahk-xaml.dll"; Src = (Join-Path $PackageDir "Plugins\AHK-XAML\lib\dep\ahk-xaml.dll") },

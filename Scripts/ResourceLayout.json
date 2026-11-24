@@ -1,10 +1,20 @@
 {
   "schema": 1,
   "bundles": [
-    "Lang.zip", "ico.zip", "RMT.zip", "Xaml.zip",
-    "Input.zip", "Audio.zip", "ViGEm.zip", "AhiDriver.zip",
-    "OpenCV.zip", "Voice.zip", "RapidOcr.zip", "TesseractOcr.zip",
-    "Yolo.zip", "Translate.zip"
+    "Lang.zip",
+    "ico.zip",
+    "RMT.zip",
+    "Xaml.zip",
+    "Input.zip",
+    "Audio.zip",
+    "ViGEm.zip",
+    "AhiDriver.zip",
+    "OpenCV.zip",
+    "Voice.zip",
+    "RapidOcr.zip",
+    "TesseractOcr.zip",
+    "Yolo.zip",
+    "Translate.zip"
   ],
   "versioned": [
     "Lang.zip",
@@ -73,5 +83,43 @@
     "ico.zip",
     "RMT.zip",
     "Xaml.zip"
-  ]
+  ],
+  "universal": [
+    "Audio.zip",
+    "Input.zip",
+    "ViGEm.zip"
+  ],
+  "required_by_arch": {
+    "x64": [
+      "Lang.zip",
+      "ico.zip",
+      "RMT.zip",
+      "Xaml.zip",
+      "Input.zip",
+      "Audio.zip",
+      "ViGEm.zip",
+      "AhiDriver.zip",
+      "OpenCV.zip",
+      "Voice.zip",
+      "RapidOcr.zip",
+      "TesseractOcr.zip",
+      "Yolo.zip",
+      "Translate.zip"
+    ],
+    "x86": [
+      "Lang.zip",
+      "ico.zip",
+      "RMT.zip",
+      "Xaml.zip",
+      "Input.zip",
+      "Audio.zip",
+      "ViGEm.zip",
+      "AhiDriver.zip",
+      "OpenCV.zip",
+      "Voice.zip",
+      "RapidOcr.zip",
+      "TesseractOcr.zip",
+      "Yolo.zip"
+    ]
+  }
 }

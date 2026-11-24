@@ -5,6 +5,7 @@ Catalogs are immutable; an archived logical filename overrides its shared copy.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -22,8 +23,10 @@ import zipfile
 
 import sync_gitcode_assets as mirror
 
-CATALOG = 'resources.json'
-INDEX = 'resources.md'
+CATALOG = 'A-Assets.json'
+LEGACY_CATALOG = 'resources.json'
+LEGACY_INDEX = 'resources.md'
+METADATA_FILES = (CATALOG, LEGACY_CATALOG, LEGACY_INDEX)
 ROOT = Path(__file__).resolve().parents[2]
 POLICY = json.loads((ROOT / 'Scripts/ResourceLayout.json').read_text(encoding='utf-8-sig'))
 VERSION_TAG = re.compile(r'^v(\d+(?:\.\d+)+)(?:F(\d+))?_(x64|x86)$')
@@ -43,6 +46,8 @@ def managed_tag(tag):
 
 
 def shared_name(name, arch):
+    if name in POLICY.get("universal", []):
+        return name
     stem, extension = os.path.splitext(name)
     return stem + '_' + arch + extension
 
@@ -85,21 +90,6 @@ def archive_files(path):
     return []
 
 
-def readable_index(catalog):
-    kind = {'Common': '共享插件、模型与媒体', 'Patch': '运行环境与系统修补'}.get(catalog['tag'], '当前版本组件与锁定依赖')
-    lines = ['# ' + catalog['tag'] + ' 资源清单', '', kind, '',
-             '版本标签内同名资源优先；共享资源必须匹配本版本清单的 SHA-256。', '']
-    for logical, entry in sorted(catalog['assets'].items()):
-        lines += ['## ' + logical, '', '- 用途：' + entry.get('purpose', purpose(logical)),
-                  '- 位置：`' + entry.get('effective_scope', entry['scope']) + '/' + entry.get('effective_name', entry['name']) + '`',
-                  '- 大小：' + str(entry['size']) + ' 字节', '- SHA-256：`' + entry['sha256'] + '`', '']
-        if entry.get('files'):
-            lines += ['压缩包内容：', '']
-            lines += ['- `' + item['name'] + '` — ' + str(item['size']) + ' 字节' for item in entry['files']]
-            lines += ['']
-    return '\n'.join(lines) + '\n'
-
-
 def fingerprint(path):
     """Ignore ZIP timestamps; preserve the original archive bytes when entries match."""
     if not zipfile.is_zipfile(path):
@@ -139,7 +129,30 @@ class Store:
         return items[0] if items else None
 
     def ensure(self, tag):
-        if not any(r['tag_name'] == tag for r in self.releases()):
+        releases = self.releases()
+        if not any(r['tag_name'] == tag for r in releases):
+            try:
+                ref = mirror.gh('/git/ref/tags/' + tag)['object']
+            except HTTPError as exc:
+                if exc.code != 404:
+                    raise
+                ref = None
+            if not ref or ref['type'] != 'tag':
+                # New version resources must sort by publication time, rather
+                # than inheriting the old commit date of the assets repo's main.
+                commit = ref['sha'] if ref else mirror.gh('/git/ref/heads/main')['object']['sha']
+                date = datetime.now(timezone.utc).replace(microsecond=0)
+                if tag in ('Common', 'Patch'):
+                    dates = [datetime.fromisoformat(r['created_at'].replace('Z', '+00:00'))
+                             for r in releases if VERSION_TAG.fullmatch(r['tag_name'])]
+                    date = min(dates, default=date) - timedelta(days=1 if tag == 'Common' else 2)
+                obj = mirror.gh('/git/tags', data=dict(tag=tag, message='RMT ' + tag + ' resources',
+                    object=commit, type='commit', tagger=dict(name='RMT resources',
+                    email='resources@users.noreply.github.com', date=date.isoformat().replace('+00:00', 'Z'))))
+                if ref:
+                    mirror.gh('/git/refs/tags/' + tag, data=dict(sha=obj['sha'], force=True), method='PATCH')
+                else:
+                    mirror.gh('/git/refs', data=dict(ref='refs/tags/' + tag, sha=obj['sha']))
             subprocess.run(['gh', 'release', 'create', tag, '--repo', 'zclucas/RMTAssets',
                             '--target', 'main', '--title', tag, '--notes', 'RMT ' + tag + ' resources',
                             '--latest=false'] + (['--prerelease'] if VERSION_TAG.fullmatch(tag) and 'F' in tag else []), check=True)
@@ -153,14 +166,21 @@ class Store:
             path, _ = mirror.download(tag, asset, directory)
         return path
 
+    def catalog_asset(self, tag):
+        return self.asset(tag, CATALOG) or self.asset(tag, LEGACY_CATALOG)
+
     def catalog(self, tag):
-        asset = self.asset(tag, CATALOG)
-        if not asset:
-            return None
-        value = json.loads(self.download(tag, asset).read_text(encoding='utf-8'))
-        if value.get('schema') != 1 or value.get('tag') != tag or not isinstance(value.get('assets'), dict):
-            raise ValueError('Invalid catalog: ' + tag)
-        return value
+        values = []
+        for name in (CATALOG, LEGACY_CATALOG):
+            asset = self.asset(tag, name)
+            if asset:
+                value = json.loads(self.download(tag, asset).read_text(encoding='utf-8'))
+                if value.get('schema') != 1 or value.get('tag') != tag or not isinstance(value.get('assets'), dict):
+                    raise ValueError('Invalid catalog: ' + tag)
+                values.append(value)
+        if len(values) == 2 and values[0] != values[1]:
+            raise ValueError('Catalog names contain conflicting pins: ' + tag)
+        return values[0] if values else None
 
     def describe(self, tag, asset, scope=None, name=None):
         entry = record(asset, scope or tag, name)
@@ -286,34 +306,20 @@ class Store:
                 raise ValueError('Refusing to rewrite version catalog: ' + tag)
         path = self.directory / (tag + '-resources.json')
         if previous == catalog:
-            path = self.download(tag, self.asset(tag, CATALOG))
+            path = self.download(tag, self.catalog_asset(tag))
         else:
             path.write_text(json.dumps(catalog, ensure_ascii=True, indent=2) + '\n', encoding='utf-8')
         self.put(tag, CATALOG, path, replace=append_missing)
-        self.put_readable(catalog)
-
-    def put_readable(self, catalog):
-        display = json.loads(json.dumps(catalog))
-        if managed_tag(catalog['tag']):
-            present = {a['name']: a for a in self.assets(catalog['tag'])}
-            for logical, entry in display['assets'].items():
-                if logical in present:
-                    entry['effective_scope'] = catalog['tag']
-                    entry['effective_name'] = logical
-        path = self.directory / (catalog['tag'] + '-resources.md')
-        path.write_text(readable_index(display), encoding='utf-8')
-        self.put(catalog['tag'], INDEX, path, replace=True)
 
     def shared_indexes(self):
         for scope in ('Common', 'Patch'):
             entries = {a['name']: self.describe(scope, a) for a in self.assets(scope)
-                       if a['name'] not in (CATALOG, INDEX)
+                       if a['name'] not in METADATA_FILES
                        and not re.search(r'\.(?:parts\.json|part\d{4})$', a['name'])}
             catalog = dict(schema=1, tag=scope, assets=entries)
             path = self.directory / (scope + '-resources.json')
             path.write_text(json.dumps(catalog, ensure_ascii=True, indent=2) + '\n', encoding='utf-8')
             self.put(scope, CATALOG, path, replace=True)
-            self.put_readable(catalog)
 
 
 def catalogs(store):
@@ -325,6 +331,21 @@ def catalogs(store):
             if value:
                 result[tag] = value
     return result
+
+
+def verify_existing_overrides(store, known, scope, name, replacement=None):
+    for tag, catalog in known.items():
+        for logical, entry in catalog['assets'].items():
+            if entry['scope'] != scope or entry['name'] != name:
+                continue
+            override = store.asset(tag, logical)
+            if override:
+                if override.get('digest') != 'sha256:' + entry['sha256'] or override['size'] != entry['size']:
+                    raise ValueError('Historical override checksum differs: ' + tag + '/' + logical)
+                store.put(tag, logical, store.download(tag, override))
+                store.verify(tag, logical, entry)
+            elif not replacement or (replacement['sha256'], replacement['size']) != (entry['sha256'], entry['size']):
+                raise ValueError('Shared source is absent and historical dependency is not archived: ' + tag + '/' + logical)
 
 
 def preserve_dependents(store, known, scope, name, old):
@@ -347,8 +368,6 @@ def preserve_dependents(store, known, scope, name, old):
             store.verify(tag, logical, entry)
         else:
             raise ValueError('Unarchived historical dependency: ' + tag + '/' + logical)
-    for tag in {tag for tag, _, _ in dependents}:
-        store.put_readable(known[tag])
 
 
 def publish_shared(store, known, scope, name, path):
@@ -363,25 +382,32 @@ def publish_shared(store, known, scope, name, path):
                 entry['files'] = archive_files(previous)
             return entry
         preserve_dependents(store, known, scope, name, old)
+    else:
+        verify_existing_overrides(store, known, scope, name,
+                                  dict(sha256=mirror.sha(path)[7:], size=path.stat().st_size))
     entry = store.put(scope, name, path, replace=bool(old))
     return dict(scope=scope, name=name, **entry)
 
 
-def stage_category_retirements(store, known, logical, alias, destination):
+def stage_retirements(store, known, logical, destination):
+    active_names = ({shared_name(logical, arch) for arch in ('x64', 'x86')}
+                    if logical in bundle_names() else {logical})
     candidates = {(entry['scope'], entry['name']) for catalog in known.values()
                   for key, entry in catalog['assets'].items()
                   if key == logical and entry['scope'] in ('Common', 'Patch')
-                  and entry['scope'] != destination and entry['name'] in (logical, alias)}
+                  and (entry['scope'] != destination or entry['name'] not in active_names)}
     result = []
     for scope, name in sorted(candidates):
         asset = store.asset(scope, name)
         if asset:
             preserve_dependents(store, known, scope, name, asset)
             result.append((scope, name, asset['digest']))
+        else:
+            verify_existing_overrides(store, known, scope, name)
     return result
 
 
-def finish_category_retirements(store, plans):
+def finish_retirements(store, plans):
     seen = {}
     for scope, name, digest in plans:
         if (scope, name) in seen and seen[(scope, name)] != digest:
@@ -400,7 +426,7 @@ def common_entries(store):
     for scope in ('Common', 'Patch'):
         for asset in store.assets(scope):
             name = asset['name']
-            if name in (CATALOG, INDEX) or re.search(r'\.(?:parts\.json|part\d{4})$', name):
+            if name in METADATA_FILES or re.search(r'\.(?:parts\.json|part\d{4})$', name):
                 continue
             # Architecture-specific plugin packages belong to their matching catalog only.
             logical = re.sub(r'_(x64|x86)(\.zip)$', r'\2', name)
@@ -484,7 +510,7 @@ def migrate(store):
         entries = common_entries(store)
         for asset in originals[tag]:
             name = asset['name']
-            if name in (CATALOG, INDEX) or re.search(r'\.(?:parts\.json|part\d{4})$', name):
+            if name in METADATA_FILES or re.search(r'\.(?:parts\.json|part\d{4})$', name):
                 continue
             if name not in POLICY['versioned'] + POLICY['shared'] + POLICY['patch']:
                 raise ValueError('Unclassified version asset: ' + tag + '/' + name)
@@ -497,7 +523,7 @@ def migrate(store):
                 entries[name] = store.describe(tag, asset)
                 store.verify(tag, name, entries[name])
         pending[tag] = dict(schema=1, tag=tag, assets=entries,
-                            build_assets=sorted(a['name'] for a in originals[tag] if a['name'] not in (CATALOG, INDEX)))
+                            build_assets=sorted(a['name'] for a in originals[tag] if a['name'] not in METADATA_FILES))
     # Commit catalogs only after every destination has been verified.
     for catalog in pending.values():
         store.put_catalog(catalog)
@@ -510,16 +536,49 @@ def migrate(store):
         if target and target['digest'] == expected['digest']:
             store.verify(destination, renamed, record(expected, destination, renamed))
             store.delete(source_tag, name)
-    for catalog in pending.values():
-        store.put_readable(catalog)
     store.shared_indexes()
     return dict(status='passed', catalogs=sorted(pending), migrated=plan, patch='Patch')
+
+
+def validate_universal_builds(directory):
+    # Validate both architectures before the first upload or shared replacement.
+    for name in POLICY.get('universal', []):
+        paths = [directory / ('RMTAssets_' + arch) / name for arch in ('x64', 'x86')]
+        if any(p.exists() for p in paths) and (not all(p.exists() for p in paths)
+                or fingerprint(paths[0]) != fingerprint(paths[1])):
+            raise ValueError('Universal bundle differs across architectures: ' + name)
+
+
+def validate_build_coverage(directory, known, tags):
+    existing_family = any(tag in known for tag in tags)
+    for tag, arch in zip(tags, ('x64', 'x86')):
+        names = {p.name for p in (directory / ('RMTAssets_' + arch)).glob('*.zip')}
+        if tag in known:
+            expected = set(known[tag]['build_assets'])
+            exact = True
+        elif existing_family:
+            sibling = next(known[t] for t in tags if t in known)
+            expected = set(sibling['build_assets'])
+            if arch == 'x86':
+                expected.discard('Translate.zip')
+            exact = False
+        else:
+            expected = set(POLICY.get('required_by_arch', {}).get(
+                arch, POLICY.get('required', POLICY['versioned'])))
+            exact = arch in POLICY.get('required_by_arch', {})
+        if not names or not expected <= names or (exact and names != expected):
+            raise ValueError('Incomplete or unexpected build artifacts: ' + arch)
+        if not names <= set(bundle_names()):
+            raise ValueError('Unclassified build artifacts: ' + arch)
 
 
 def publish(store, directory):
     info = json.loads((directory / 'release-info.json').read_text(encoding='utf-8-sig'))
     known = catalogs(store)
     new_tags = ['v' + info['asset_tag'] + '_' + arch for arch in ('x64', 'x86')]
+    if not any(tag in known for tag in new_tags):
+        validate_universal_builds(directory)
+    validate_build_coverage(directory, known, new_tags)
     latest = max((version_key(tag) for tag in known), default=())
     if any(version_key(tag) < latest and tag not in known for tag in new_tags):
         raise ValueError('Stale release replay cannot change shared resources')
@@ -531,8 +590,6 @@ def publish(store, directory):
     for tag, arch in zip(new_tags, ('x64', 'x86')):
         source = directory / ('RMTAssets_' + arch)
         paths = sorted(source.glob('*.zip'))
-        if not paths or not set(POLICY.get('required', POLICY['versioned'])) <= {p.name for p in paths}:
-            raise ValueError('Incomplete build artifacts: ' + arch)
         sibling_tag = next((other for other in new_tags if other != tag and other in known), None)
         resuming_family = tag not in known and sibling_tag is not None
         entries = (frozen_globals(store, tag, sibling_tag, known[sibling_tag])
@@ -543,9 +600,10 @@ def publish(store, directory):
                 raise ValueError('Unclassified build artifact: ' + name)
             destination = (tag if name in POLICY['versioned'] else
                            'Patch' if name in POLICY['patch'] else 'Common')
-            if tag not in known:
-                retirements.extend(stage_category_retirements(store, known, name,
-                                                              shared_name(name, arch), destination))
+            pinned_before = known.get(tag, {}).get('assets', {}).get(name, {})
+            expected_name = name if destination == tag else shared_name(name, arch)
+            if tag not in known or (pinned_before.get('scope') == destination and pinned_before.get('name') == expected_name):
+                retirements.extend(stage_retirements(store, known, name, destination))
             if tag in known:
                 pinned = known[tag]['assets'].get(name)
                 if not pinned:
@@ -590,7 +648,7 @@ def publish(store, directory):
         result.append(tag)
     for catalog in pending.values():
         store.put_catalog(catalog)
-    finish_category_retirements(store, retirements)
+    finish_retirements(store, retirements)
     store.shared_indexes()
     return dict(status='passed', catalogs=result, asset_tags=result + ['Common', 'Patch'])
 
@@ -605,7 +663,7 @@ def update_shared(store, known, scope, directory):
         if not path.is_file():
             continue
         name = mirror.safe_name(path.name)
-        if name in (CATALOG, INDEX) or name.endswith('.parts.json'):
+        if name in METADATA_FILES or name.endswith('.parts.json'):
             raise ValueError('Descriptors and catalogs are not standalone shared resources')
         declared = POLICY['versioned'] + POLICY['shared'] + POLICY['patch'] + POLICY.get('common', [])
         logical = name if name in declared else re.sub(r'_(x64|x86)(\.zip)$', r'\2', name)
@@ -613,13 +671,17 @@ def update_shared(store, known, scope, directory):
             raise ValueError('Unsupported resource filename')
         if logical not in POLICY['shared'] + POLICY['patch'] + POLICY.get('common', []):
             raise ValueError('Unclassified shared resource: ' + name)
+        allowed_names = ({shared_name(logical, arch) for arch in ('x64', 'x86')}
+                         if logical in bundle_names() else {logical})
+        if name not in allowed_names:
+            raise ValueError('Shared resource filename does not match architecture policy: ' + name)
         if (logical in POLICY['patch']) != (scope == 'Patch'):
             raise ValueError('Resource category mismatch: ' + name)
-        retirements.extend(stage_category_retirements(store, known, logical, name, scope))
+        retirements.extend(stage_retirements(store, known, logical, scope))
         result.append(publish_shared(store, known, scope, name, path))
     if not result:
         raise ValueError('No shared updates supplied')
-    finish_category_retirements(store, retirements)
+    finish_retirements(store, retirements)
     store.shared_indexes()
     return dict(status='passed', updated=result)
 
@@ -646,9 +708,85 @@ def complete_catalogs(store):
     return dict(status='passed', amended=amended)
 
 
+def migrate_catalog_names(store):
+    releases = store.releases()
+    for release in releases:
+        tag = release['tag_name']
+        catalog = store.catalog(tag)
+        if not catalog:
+            raise ValueError('Cannot rename an absent catalog: ' + tag)
+        store.put_catalog(catalog)
+    # All providers have verified the new filename before the old names disappear.
+    for release in releases:
+        for name in (LEGACY_CATALOG, LEGACY_INDEX):
+            store.delete(release['tag_name'], name)
+    return dict(status='passed', catalog=CATALOG, tags=[r['tag_name'] for r in releases])
+
+
+def normalize_resources(store):
+    """Consolidate universal bundles without rewriting any historical pin."""
+    migrate_catalog_names(store)
+    known = catalogs(store)
+    changed = []
+    forbidden = {'Audio.zip': {'playaudio.vbs'}, 'ViGEm.zip': {'xbox.png'}}
+    for logical in POLICY.get('universal', []):
+        names = [logical] + [os.path.splitext(logical)[0] + '_' + arch + '.zip'
+                             for arch in ('x64', 'x86')]
+        sources = [(name, store.asset('Common', name)) for name in names]
+        sources = [(name, asset) for name, asset in sources if asset]
+        if not sources:
+            raise ValueError('Universal bundle is absent: ' + logical)
+        # Compare the retained files, allowing an idempotent retry after the clean
+        # universal target was uploaded but old aliases have not yet been removed.
+        contents = []
+        for name, asset in sources:
+            with zipfile.ZipFile(store.download('Common', asset)) as archive:
+                items = {item.filename: archive.read(item) for item in archive.infolist()
+                         if not item.is_dir() and Path(item.filename).name.lower()
+                         not in forbidden.get(logical, set())}
+                if len(archive.namelist()) != len(set(archive.namelist())) or not items:
+                    raise ValueError('Invalid universal bundle: ' + name)
+                contents.append(items)
+        if any(items != contents[0] for items in contents[1:]):
+            raise ValueError('Architecture contents differ: ' + logical)
+        # Every old dependency is secured on both providers before alias retirement.
+        for name, asset in sources:
+            preserve_dependents(store, known, 'Common', name, asset)
+        target = store.directory / 'normalized' / logical
+        target.parent.mkdir(exist_ok=True)
+        with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+            for name, data in sorted(contents[0].items()):
+                info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                archive.writestr(info, data)
+        publish_shared(store, known, 'Common', logical, target)
+        for name, asset in sources:
+            if name != logical:
+                current = store.asset('Common', name)
+                if current and current['digest'] != asset['digest']:
+                    raise ValueError('Universal source changed during normalization')
+                store.delete('Common', name)
+        changed.append(logical)
+    # Legacy tags receive an inventory too, but their runtime assets remain intact.
+    for release in store.releases():
+        tag = release['tag_name']
+        if tag not in ('Common', 'Patch') and tag not in known:
+            entries = {a['name']: store.describe(tag, a) for a in store.assets(tag)
+                       if a['name'] not in METADATA_FILES}
+            store.put_catalog(dict(schema=1, tag=tag, assets=entries))
+    store.shared_indexes()
+    for release in store.releases():
+        tag = release['tag_name']
+        # Store.delete also cleans a surviving GitCode copy after a partial failure.
+        store.delete(tag, LEGACY_INDEX)
+    from release_presentation import organize_releases
+    presentation = organize_releases(store)
+    return dict(status='passed', universal=changed, presentation=presentation)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs'))
+    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'rebuild-presentation', 'plan-presentation', 'catalog-names'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--scope', choices=('Common', 'Patch'))
     parser.add_argument('--url')
@@ -661,6 +799,18 @@ if __name__ == '__main__':
             store = Store(directory)
             if args.mode == 'migrate':
                 result = migrate(store)
+            elif args.mode == 'catalog-names':
+                result = migrate_catalog_names(store)
+            elif args.mode == 'normalize':
+                result = normalize_resources(store)
+            elif args.mode in ('rebuild-presentation', 'plan-presentation'):
+                from resource_release_rebuild import rebuild_gitcode_releases
+                result = rebuild_gitcode_releases(store, preview=args.mode == 'plan-presentation')
+            elif args.mode == 'presentation':
+                from release_presentation import organize_releases
+                presentation = organize_releases(store)
+                result = dict(status='passed' if presentation['order_matches'] else 'blocked',
+                              presentation=presentation)
             elif args.mode == 'complete-catalogs':
                 result = complete_catalogs(store)
             elif args.mode == 'shared-url':
@@ -685,6 +835,9 @@ if __name__ == '__main__':
                 result = publish(store, args.directory)
             else:
                 result = update_shared(store, catalogs(store), args.scope, args.directory)
+            if args.mode not in ('normalize', 'presentation', 'rebuild-presentation', 'plan-presentation'):
+                from release_presentation import refresh_descriptions
+                refresh_descriptions(store)
     except Exception as exc:
         import traceback
         result = dict(status='failed', mode=args.mode, error=type(exc).__name__,
