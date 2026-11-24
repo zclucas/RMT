@@ -24,7 +24,6 @@
                         MySoftData.CMDTip := false
                         SetCMDTipValue(false)
                         this.ToolMenu.Uncheck(GetLang("指令显示"))
-                        MyCMDTipGui.Gui.Hide()
                         return
                     }
                 }

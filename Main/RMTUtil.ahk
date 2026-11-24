@@ -878,14 +878,15 @@ RefreshGlobalDataView() {
 }
 
 SetCMDTipValue(value) {
+    ; 所有关闭入口（指令、设置、编辑器）都先取消本地显示，再通知 Worker。
+    if (!value)
+        MyCMDTipGui.Hide()
     MyWorkPool.Broadcast("CT", value)
 }
 
 CMDReport(CMDStr) {
     ; 主进程以 CMDTip 为准：Worker 上报与关闭存在竞态，关闭后丢弃迟到的 RP
-    if (!MySoftData.CMDTip)
-        return
-    MyCMDTipGui.ShowGui(CMDStr)
+    MyCMDTipGui.ShowGui(CMDStr, false)
 }
 
 ; 「输出→指令窗口」专用：不经过 CMDTip 全局开关门控。
@@ -1168,8 +1169,6 @@ ExcuteRMTCMDAction(Cmd) {
             SetCMDTipValue(false)
             if (UIControls.CMDTip)
                 UIControls.CMDTip.Value := false
-            ; 完整关闭（清内容+隐藏），勿仅 Gui.Hide；多线程下后续 RP 由 CMDReport 按 CMDTip 拦截
-            MyCMDTipGui.Hide()
         case "开启变量监视":
             RefreshListenVarGui(true)
         case "关闭变量监视":
