@@ -1,5 +1,6 @@
 """Keep resource release descriptions and tag chronology aligned on both sites."""
 from datetime import datetime, timedelta
+import os
 import re
 
 import sync_gitcode_assets as mirror
@@ -98,12 +99,62 @@ def organize_releases(store):
                           data=dict(draft=False, make_latest='false'), method='PATCH')
     github_order = [r['tag_name'] for r in store.releases()]
     gitcode_order = [r['tag_name'] for r in mirror.pages(mirror.gc, '/releases?direction=desc')]
+    retained = None
+    if gitcode_order != wanted:
+        retained = probe_tag_retention(store)
+        if retained:
+            for tag in reversed(wanted):
+                before = mirror.release(tag)
+                identity = lambda r: sorted((a['id'], a['name'], a['size'], a.get('digest'))
+                                             for a in mirror.attachments(r))
+                checkout = store.directory / 'presentation-tags'
+                original = mirror.git('rev-parse', 'refs/tags/' + tag, cwd=checkout).strip()
+                try:
+                    mirror.git('push', '--quiet', mirror.REMOTE, ':refs/tags/' + tag, cwd=checkout)
+                finally:
+                    mirror.git('push', '--quiet', mirror.REMOTE, original + ':refs/tags/' + tag, cwd=checkout)
+                    restored = mirror.ensure_release(store.source(tag))
+                if identity(restored) != identity(before):
+                    raise ValueError('Tag recreation did not retain attachments: ' + tag)
+            gitcode_order = [r['tag_name'] for r in mirror.pages(mirror.gc, '/releases?direction=desc')]
     tags = mirror.pages(mirror.gc, '/tags')
     return dict(expected_order=wanted, github_order=github_order, gitcode_order=gitcode_order,
                 gitcode_tag_order=[t['name'] for t in tags],
+                tag_recreation_preserves_attachments=retained,
                 order_matches=github_order == gitcode_order == wanted,
                 limitation=None if gitcode_order == wanted else
                 'GitCode does not support release date edits or release deletion through this API')
+
+
+def probe_tag_retention(store):
+    """Verify metadata-only tag recreation on a disposable release first."""
+    tag = 'rmt-order-probe-' + os.environ['GITHUB_RUN_ID']
+    checkout = store.directory / 'presentation-tags'
+    path = store.directory / 'order-probe.json'
+    path.write_text('{"test":"tag-retention"}\n', encoding='utf-8')
+    expected = dict(name=path.name, size=path.stat().st_size, digest=mirror.sha(path))
+    options = dict(tag_name=tag, target_commitish='main', name=tag,
+                   body='Temporary CI metadata retention probe', release_status='pre')
+    try:
+        mirror.gc('/releases', data=options)
+        mirror.upload(tag, path, expected, max_time=600)
+        before = mirror.attachments(mirror.release(tag))
+        mirror.git('push', '--quiet', mirror.REMOTE, ':refs/tags/' + tag, cwd=checkout)
+        if mirror.release(tag):
+            return False
+        after = mirror.gc('/releases', data=options)
+        if [(a['id'], a['name'], a['size']) for a in mirror.attachments(after)] != [
+                (a['id'], a['name'], a['size']) for a in before]:
+            return False
+        mirror.readback(tag, expected)
+        return True
+    finally:
+        current = mirror.release(tag)
+        for asset in mirror.attachments(current):
+            mirror.gc('/releases/' + tag + '/attach_files/' + str(asset['id']), method='DELETE')
+        refs = mirror.git('ls-remote', '--tags', mirror.REMOTE, 'refs/tags/' + tag, cwd=checkout)
+        if refs.strip():
+            mirror.git('push', '--quiet', mirror.REMOTE, ':refs/tags/' + tag, cwd=checkout)
 
 
 def cleanup_order_probe(store):
