@@ -223,28 +223,45 @@ function Receive-Asset {
 
 function Get-ResourceCatalog {
     if ($ResourceTag -cnotmatch '^v[0-9]+(\.[0-9]+)+(F[0-9]+)?_x(64|86)$') { throw 'Invalid resource version.' }
-    $cache = Join-Path $PSScriptRoot ("resources-$ResourceTag.json")
-    $lastError = $null
-    foreach ($base in @('https://gitcode.com/ruomengtu/RMTAssets/releases/download/', 'https://github.com/zclucas/RMTAssets/releases/download/')) {
+    $cache = Join-Path $PSScriptRoot ("A-Assets-$ResourceTag.json")
+    if ([IO.File]::Exists($cache)) {
         try {
-            if ([IO.File]::Exists($cache)) {
-                $json = [IO.File]::ReadAllText($cache)
-            } else {
-                $response = Open-Response ($base + $ResourceTag + '/resources.json') 20
+            $catalog = [IO.File]::ReadAllText($cache) | ConvertFrom-Json
+            if ($catalog.schema -eq 1 -and $catalog.tag -ceq $ResourceTag -and $catalog.assets) { return $catalog }
+        } catch { }
+        [IO.File]::Delete($cache)
+    }
+    $lastError = $null
+    foreach ($catalogName in @('A-Assets.json', 'resources.json')) {
+        $missing = 0
+        foreach ($base in @('https://gitcode.com/ruomengtu/RMTAssets/releases/download/', 'https://github.com/zclucas/RMTAssets/releases/download/')) {
+            try {
+                $response = Open-Response ($base + $ResourceTag + '/' + $catalogName) 20
                 $reader = New-Object IO.StreamReader($response.GetResponseStream())
-                try { $json = $reader.ReadToEnd() } finally { $reader.Dispose(); $response.Dispose() }
+                try {
+                    $text = New-Object Text.StringBuilder
+                    $buffer = New-Object char[] 4096
+                    while (($count = $reader.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                        if ($text.Length + $count -gt 4MB) { throw 'Resource catalog too large.' }
+                        [void]$text.Append($buffer, 0, $count)
+                    }
+                    $json = $text.ToString()
+                } finally { $reader.Dispose(); $response.Dispose() }
+                $catalog = $json | ConvertFrom-Json
+                if ($catalog.schema -ne 1 -or $catalog.tag -cne $ResourceTag -or !$catalog.assets) { throw 'Invalid resource catalog.' }
+                [IO.File]::WriteAllText($cache, $json)
+                return $catalog
+            } catch {
+                $lastError = $_
+                $webError = Get-WebException $_
+                if ($webError -and $webError.Response) {
+                    if ([int]$webError.Response.StatusCode -eq 404) { $missing++ }
+                    $webError.Response.Dispose()
+                }
             }
-            if ($json.Length -gt 4MB) { throw 'Resource catalog too large.' }
-            $catalog = $json | ConvertFrom-Json
-            if ($catalog.schema -ne 1 -or $catalog.tag -cne $ResourceTag -or !$catalog.assets) { throw 'Invalid resource catalog.' }
-            [IO.File]::WriteAllText($cache, $json)
-            return $catalog
-        } catch {
-            $lastError = $_
-            $webError = Get-WebException $_
-            if ($webError -and $webError.Response) { $webError.Response.Dispose() }
-            if ([IO.File]::Exists($cache)) { [IO.File]::Delete($cache) }
         }
+        # Accept the legacy filename only after both sites confirm the new name is absent.
+        if ($missing -ne 2) { break }
     }
     throw "Version resource catalog unavailable: $lastError"
 }
