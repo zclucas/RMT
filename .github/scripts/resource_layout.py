@@ -371,7 +371,8 @@ def common_entries(store):
             if name in (CATALOG, INDEX) or re.search(r'\.(?:parts\.json|part\d{4})$', name):
                 continue
             # Architecture-specific plugin packages belong to their matching catalog only.
-            if scope == 'Common' and re.search(r'_(x64|x86)\.zip$', name):
+            logical = re.sub(r'_(x64|x86)(\.zip)$', r'\2', name)
+            if logical != name and logical in POLICY['versioned'] + POLICY['shared'] + POLICY['patch']:
                 continue
             entries[name] = store.describe(scope, asset)
     return entries
