@@ -2,8 +2,12 @@ name: 补齐 GitCode 资源
 on:
   workflow_dispatch:
     inputs:
-      cleanup_order_probe:
-        description: 清理一次性排序探测标签
+      preview_rebuild:
+        description: 仅预览重建的标签、文件数量和大小
+        type: boolean
+        default: true
+      rebuild_gitcode_order:
+        description: 从完整校验备份重建 GitCode 发行顺序
         type: boolean
         default: false
       presentation_only:
@@ -43,7 +47,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mirror:
-    if: ${{ !inputs.cleanup_order_probe && !inputs.presentation_only && !inputs.normalize_resources && !inputs.complete_resource_catalogs && !inputs.reorganize_resources && !inputs.cleanup_sponsor }}
+    if: ${{ !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && !inputs.complete_resource_catalogs && !inputs.reorganize_resources && !inputs.cleanup_sponsor }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -69,7 +73,7 @@ jobs:
           path: ${{ runner.temp }}/gitcode-sync.json
   cleanup_sponsor:
     name: 清理单独的赞助 Logo
-    if: ${{ !inputs.cleanup_order_probe && !inputs.presentation_only && !inputs.normalize_resources && inputs.cleanup_sponsor && !inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
+    if: ${{ !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && inputs.cleanup_sponsor && !inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -88,7 +92,7 @@ jobs:
           path: ${{ runner.temp }}/gitcode-sponsor-cleanup.json
   reorganize:
     name: 重组两站资源
-    if: ${{ !inputs.cleanup_order_probe && !inputs.presentation_only && !inputs.normalize_resources && inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
+    if: ${{ !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
     runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
     timeout-minutes: 180
     steps:
@@ -111,7 +115,7 @@ jobs:
           path: ${{ runner.temp }}/resource-layout-result.json
   complete_catalogs:
     name: 补齐初始资源清单
-    if: ${{ inputs.complete_resource_catalogs && !inputs.normalize_resources && !inputs.presentation_only && !inputs.cleanup_order_probe }}
+    if: ${{ inputs.complete_resource_catalogs && !inputs.normalize_resources && !inputs.presentation_only && !inputs.rebuild_gitcode_order }}
     runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
     timeout-minutes: 30
     steps:
@@ -134,7 +138,7 @@ jobs:
           path: ${{ runner.temp }}/resource-layout-result.json
   normalize:
     name: 整理资源与发行说明
-    if: ${{ inputs.normalize_resources || inputs.presentation_only || inputs.cleanup_order_probe }}
+    if: ${{ inputs.normalize_resources || inputs.presentation_only || inputs.rebuild_gitcode_order }}
     runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
     timeout-minutes: 90
     steps:
@@ -143,7 +147,7 @@ jobs:
           persist-credentials: false
       - name: 归档旧版依赖、合并共用包并整理清单与说明
         env:
-          RESOURCE_MODE: ${{ inputs.cleanup_order_probe && 'cleanup-probe' || inputs.presentation_only && 'presentation' || 'normalize' }}
+          RESOURCE_MODE: ${{ inputs.rebuild_gitcode_order && (inputs.preview_rebuild && 'plan-presentation' || 'rebuild-presentation') || inputs.presentation_only && 'presentation' || 'normalize' }}
           GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
         shell: pwsh
@@ -155,4 +159,6 @@ jobs:
         if: always()
         with:
           name: resource-layout-result
-          path: ${{ runner.temp }}/resource-layout-result.json
+          path: |
+            ${{ runner.temp }}/resource-layout-result.json
+            ${{ runner.temp }}/resource-rebuild-backup.json
