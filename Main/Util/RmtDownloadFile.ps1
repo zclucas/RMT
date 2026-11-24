@@ -222,8 +222,10 @@ function Receive-Asset {
 }
 
 function Get-ResourceCatalog {
+    param([switch]$Refresh)
     if ($ResourceTag -cnotmatch '^v[0-9]+(\.[0-9]+)+(F[0-9]+)?_x(64|86)$') { throw 'Invalid resource version.' }
     $cache = Join-Path $PSScriptRoot ("A-Assets-$ResourceTag.json")
+    if ($Refresh -and [IO.File]::Exists($cache)) { [IO.File]::Delete($cache) }
     if ([IO.File]::Exists($cache)) {
         try {
             $catalog = [IO.File]::ReadAllText($cache) | ConvertFrom-Json
@@ -267,8 +269,11 @@ function Get-ResourceCatalog {
 }
 
 function Receive-CatalogResource {
+    param([switch]$RefreshCatalog)
+    $requestedUrl = $Url
+    $integrityFailed = $false
     $name = [Uri]::UnescapeDataString(([Uri]$Url).AbsolutePath.Split('/')[-1])
-    $catalog = Get-ResourceCatalog
+    $catalog = Get-ResourceCatalog -Refresh:$RefreshCatalog
     $property = $catalog.assets.PSObject.Properties | Where-Object { $_.Name -ceq $name }
     if (!$property -and $name -ceq 'Index-Translate-2B.Q4_K_M.gguf.zip') {
         $name = $name.Substring(0, $name.Length - 4)
@@ -296,6 +301,7 @@ function Receive-CatalogResource {
                 } finally { $file.Dispose() }
                 return
             } catch {
+                if ($_.Exception.Message -eq 'Pinned resource checksum mismatch.') { $integrityFailed = $true }
                 $webError = Get-WebException $_
                 $notFound = $webError -and $webError.Response -and [int]$webError.Response.StatusCode -eq 404
                 if (!$notFound) { $failed = $_ }
@@ -305,7 +311,16 @@ function Receive-CatalogResource {
         }
         # Only two confirmed 404s permit moving from the version to its shared scope.
         # Transport and integrity errors may try the other mirror, never newer content.
-        if ($failed) { throw $failed }
+        if ($failed) {
+            if ($integrityFailed -and !$RefreshCatalog) {
+                # Explicit historical cleanup can retire files and repin its ZIP.
+                # Refresh once; unchanged or invalid pins still fail closed.
+                $script:Url = $requestedUrl
+                Receive-CatalogResource -RefreshCatalog
+                return
+            }
+            throw $failed
+        }
     }
     throw 'Pinned resource is missing from both providers.'
 }

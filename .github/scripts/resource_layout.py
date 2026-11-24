@@ -371,6 +371,7 @@ def preserve_dependents(store, known, scope, name, old):
 
 
 def publish_shared(store, known, scope, name, path):
+    validate_retired_files(path)
     old = store.asset(scope, name)
     if old:
         previous = store.download(scope, old)
@@ -549,6 +550,15 @@ def validate_universal_builds(directory):
             raise ValueError('Universal bundle differs across architectures: ' + name)
 
 
+def validate_retired_files(path):
+    from retire_obsolete_resources import retired
+    if retired(path.name):
+        raise ValueError('Retired resource cannot be published: ' + path.name)
+    if path.name.lower().endswith(('.zip', '.tar.bz2', '.tar.gz', '.tgz')):
+        if any(retired(item['name']) for item in archive_files(path)):
+            raise ValueError('Archive contains a retired resource: ' + path.name)
+
+
 def validate_build_coverage(directory, known, tags):
     existing_family = any(tag in known for tag in tags)
     for tag, arch in zip(tags, ('x64', 'x86')):
@@ -570,6 +580,8 @@ def validate_build_coverage(directory, known, tags):
             raise ValueError('Incomplete or unexpected build artifacts: ' + arch)
         if not names <= set(bundle_names()):
             raise ValueError('Unclassified build artifacts: ' + arch)
+        for path in (directory / ('RMTAssets_' + arch)).glob('*.zip'):
+            validate_retired_files(path)
 
 
 def publish(store, directory):
@@ -786,7 +798,7 @@ def normalize_resources(store):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'rebuild-presentation', 'plan-presentation', 'catalog-names'))
+    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'rebuild-presentation', 'plan-presentation', 'catalog-names', 'retire-obsolete'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--scope', choices=('Common', 'Patch'))
     parser.add_argument('--url')
@@ -799,6 +811,9 @@ if __name__ == '__main__':
             store = Store(directory)
             if args.mode == 'migrate':
                 result = migrate(store)
+            elif args.mode == 'retire-obsolete':
+                from retire_obsolete_resources import retire_resources
+                result = retire_resources(store, CATALOG)
             elif args.mode == 'catalog-names':
                 result = migrate_catalog_names(store)
             elif args.mode == 'normalize':
