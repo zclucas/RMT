@@ -69,7 +69,7 @@ jobs:
   reorganize:
     name: 重组两站资源
     if: inputs.reorganize_resources
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
-        run: python3 -u .github/scripts/resource_layout.py migrate
+        run: python -u .github/scripts/resource_layout.py migrate
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -4,6 +4,7 @@ All writers run under the rmt-resource-publication Actions concurrency group.
 Catalogs are immutable; an archived logical filename overrides its shared copy.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -241,7 +242,7 @@ class Store:
                                    digest=mirror.sha(descriptor_path)))
             self.verify_model(tag, entry)
         else:
-            mirror.upload(tag, path, metadata(name, entry))
+            mirror.upload(tag, path, metadata(name, entry), max_time=600)
         source = self.asset(tag, name)
         if not source or source.get('digest') != 'sha256:' + entry['sha256'] or source['size'] != entry['size']:
             raise ValueError('Uploaded GitHub metadata differs')
@@ -378,9 +379,18 @@ def migrate(store):
     patch_sources = [a for a in common if a['name'] in POLICY['patch']]
     store.ensure('Patch')
     plan = []
-    for asset in patch_sources:
+    def stage_patch(asset):
         store.put('Patch', asset['name'], store.download('Common', asset))
-        plan.append(('Common', asset['name'], 'Patch', asset['name']))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(stage_patch, asset) for asset in patch_sources]
+        try:
+            for future in futures:
+                future.result()
+        except Exception:
+            for future in futures:
+                future.cancel()
+            raise
+    plan.extend(('Common', asset['name'], 'Patch', asset['name']) for asset in patch_sources)
     # Oldest first. In case legacy tags contain multiple generations, keep the newest
     # in Common and preserve previous generations under their original version tags.
     pending = {}

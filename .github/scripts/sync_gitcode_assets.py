@@ -247,10 +247,10 @@ def upload(tag, path, expected, max_time=5400):
         config.write_text('\n'.join(lines) + '\n', encoding='utf-8')
         config.chmod(0o600)
         print('uploading {} {} {} bytes'.format(tag, expected['name'], expected['size']), flush=True)
-        result = subprocess.run(['curl', '--config', str(config), '--upload-file', str(path), '--http1.1',
-                                 '--header', 'Expect:', '--silent', '--show-error', '--fail',
+        result = subprocess.run(['curl', '--config', str(config), '--upload-file', str(path), '--http1.1', '--ipv4',
+                                 '--header', 'Expect:', '--show-error', '--fail',
                                  '--connect-timeout', '30', '--max-time', str(max_time),
-                                 '--speed-limit', '1024', '--speed-time', '90',
+                                 '--speed-limit', '32768', '--speed-time', '90',
                                  '--retry', '2', '--retry-all-errors', '--retry-delay', '5',
                                  '--retry-max-time', str(max_time),
                                  '--output', str(Path(directory) / 'response')], timeout=max_time + 30)
