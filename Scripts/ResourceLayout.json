@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "versioned": [
+    "Lang.zip",
+    "ico.zip",
+    "RMT.zip",
+    "Xaml.zip"
+  ],
+  "shared": [
+    "Input.zip",
+    "Audio.zip",
+    "ViGEm.zip",
+    "AhiDriver.zip",
+    "OpenCV.zip",
+    "Voice.zip",
+    "RapidOcr.zip",
+    "TesseractOcr.zip",
+    "Yolo.zip",
+    "Translate.zip"
+  ],
+  "patch": [
+    "directx_Jun2010_redist.exe",
+    "NDP48-x86-x64-AllOS-ENU.exe",
+    "Runtime_x64.zip",
+    "Runtime_x86.zip",
+    "segmdl2.ttf",
+    "VC_redist.x64.exe",
+    "VC_redist.x86.exe",
+    "windows6.1-kb4019990-x64.msu",
+    "windows6.1-kb4019990-x86.msu",
+    "windows6.1-kb4474419-v3-x64_b5614c6cea5cb4e198717789633dca16308ef79c.msu",
+    "windows6.1-kb4474419-v3-x86_0f687d50402790f340087c576886501b3223bec6.msu"
+  ],
+  "purposes": {
+    "Lang.zip": "语言包与国旗",
+    "ico.zip": "界面图标",
+    "RMT.zip": "主程序配套组件、Worker 与帮助文档",
+    "Xaml.zip": "界面引擎与动图支持",
+    "Input.zip": "键鼠输入组件",
+    "Audio.zip": "提示音",
+    "ViGEm.zip": "虚拟 Xbox 手柄",
+    "AhiDriver.zip": "底层键鼠驱动",
+    "OpenCV.zip": "图像处理与屏幕采集",
+    "Voice.zip": "语音识别内核与唤醒词模型",
+    "RapidOcr.zip": "RapidOCR 引擎与模型",
+    "TesseractOcr.zip": "Tesseract 引擎与语言数据",
+    "Yolo.zip": "YOLO 推理内核",
+    "Translate.zip": "本地翻译内核",
+    "Sponsor.zip": "赞助 Logo",
+    "Index-Translate-2B.Q4_K_M.gguf": "本地翻译模型",
+    "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2": "流式语音识别模型",
+    "directx_Jun2010_redist.exe": "DirectX 运行库",
+    "NDP48-x86-x64-AllOS-ENU.exe": ".NET Framework 4.8",
+    "Runtime_x64.zip": "64 位离线运行环境",
+    "Runtime_x86.zip": "32 位离线运行环境",
+    "segmdl2.ttf": "界面图标字体",
+    "VC_redist.x64.exe": "64 位 VC++ 运行库",
+    "VC_redist.x86.exe": "32 位 VC++ 运行库"
+  },
+  "common": [
+    "Sponsor.zip",
+    "Index-Translate-2B.Q4_K_M.gguf",
+    "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2"
+  ],
+  "required": [
+    "Lang.zip",
+    "ico.zip",
+    "RMT.zip",
+    "Xaml.zip"
+  ]
+}

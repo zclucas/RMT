@@ -166,7 +166,7 @@ class JoyCheckGui extends JoyGui {
             checkNames := analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()
             this._FillCheckTypeCombo(analog, CmdEnumIndex(this.Data.CheckType, checkNames))
             this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
-            this._SetCombo("VarNameCon", GetGuiVarArr(), this.Data.VarName != "" ? this.Data.VarName : "Var1")
+            this._SetCombo("VarNameCon", GetGuiVarArr(), this.Data.VarName != "" ? this.Data.VarName : "JoyDown")
         }
         this._RefreshPadHighlight()
         this.Refresh()

@@ -1,6 +1,6 @@
 name: 资源上传
 
-# 消费「版本发布」工作流的 artifact，上传到 zclucas/RMTAssets。
+# 消费「版本发布」产物，按资源清单同时发布 GitHub / GitCode。
 # 自动：版本发布成功后触发；手动：dispatch 可指定来源 run id（补救通道），
 # 手动重放不做「分支已推进则跳过」校验——这正是它存在的意义。
 
@@ -10,6 +10,11 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
+      resource_runner:
+        description: 发布 runner 标签（默认 windows-latest）
+        required: false
+        type: string
+        default: windows-latest
       run_id:
         description: '来源 run id（版本发布；留空 = 最近一次成功的）'
         required: false
@@ -20,19 +25,18 @@ permissions:
   actions: read
 
 concurrency:
-  group: rmt-assets-${{ github.event.workflow_run.head_branch || inputs.run_id || github.run_id }}
+  group: rmt-resource-publication
   cancel-in-progress: false
 
 jobs:
   upload:
     outputs:
-      release_tag: ${{ steps.github_assets.outputs.tag }}
       asset_tags: ${{ steps.github_assets.outputs.asset_tags }}
-    name: 上传到 RMTAssets
+    name: 发布两站分层资源
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: windows-latest
+    runs-on: ${{ inputs.resource_runner || 'windows-latest' }}
     timeout-minutes: 180
     defaults:
       run:
@@ -112,6 +116,7 @@ jobs:
         if: env.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\Upload-RmtAssets.ps1') `
@@ -119,23 +124,12 @@ jobs:
             -OutDir $out `
             -Repo 'zclucas/RMTAssets'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json
-          "tag=$($info.tag)" >> $env:GITHUB_OUTPUT
+          $result = Get-Content (Join-Path $env:RUNNER_TEMP 'resource-layout-result.json') -Raw | ConvertFrom-Json
+          "asset_tags=$(ConvertTo-Json -InputObject @($result.asset_tags) -Compress)" >> $env:GITHUB_OUTPUT
 
-          $tags = @(foreach ($arch in 'x64', 'x86', 'Common') {
-            if (Test-Path (Join-Path $out "RMTAssets_$arch")) {
-              if ($arch -eq 'Common') { 'Common' } else { "v$($info.asset_tag)_$arch" }
-            }
-          })
-          "asset_tags=$(ConvertTo-Json -InputObject $tags -Compress)" >> $env:GITHUB_OUTPUT
-
-  mirror:
-    name: 同步 Gitee 正式发行版
-    needs: upload
-    if: needs.upload.outputs.release_tag != ''
-    uses: ./.github/workflows/sync-gitee-release.yml
-    with:
-      tag: ${{ needs.upload.outputs.release_tag }}
-      asset_tags: ${{ needs.upload.outputs.asset_tags }}
-      source_sha: ${{ github.event.workflow_run.head_sha || '' }}
-    secrets: inherit
+      - name: 保存资源发布结果
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resource-layout-result
+          path: ${{ runner.temp }}/resource-layout-result.json

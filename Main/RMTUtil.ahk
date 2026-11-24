@@ -564,9 +564,9 @@ SaveSponsorList(list) {
     }
 }
 
-; 赞助 logo 文件名对应资源仓库 Common 标签下的图片
-GetSponsorLogoBaseUrl() {
-    return RmtAssetsBaseUrl("Common")
+; 赞助 logo 统一放在 Common/Sponsor.zip 根目录。
+GetSponsorLogoBundleUrl() {
+    return RmtAssetsBaseUrl("Common") "Sponsor.zip"
 }
 
 GetSponsorLogoDir() {
@@ -594,40 +594,39 @@ SponsorLogoFileName(logo) {
     return logo
 }
 
-; 本地 Images\Sponsor 已有则直接用，否则从 Common 发布地址下载
+; 本地已有则直接用；缺图时下载一次 Sponsor.zip，再提取所需图片。
 EnsureSponsorLogo(logo) {
+    static bundleReady := false, busy := false, retryAfter := 0
     name := SponsorLogoFileName(logo)
     if (name == "")
         return ""
     dir := GetSponsorLogoDir()
-    if (!DirExist(dir)) {
-        try DirCreate(dir)
-        catch
-            return ""
-    }
     path := dir "\" name
-    if (FileExist(path)) {
-        try {
-            if (FileGetSize(path) > 0)
-                return path
-        }
-    }
-    if (FileExist(path))
-        try FileDelete(path)
-    url := GetSponsorLogoBaseUrl() . name
-    if (RmtDownloadManager.DownloadBlocking(url, path, 12, RmtSilentDownloadProgress()) != "ok")
+    if (!RmtAssetMissing(path))
+        return path
+    if (busy || (!bundleReady && A_TickCount < retryAfter))
         return ""
-    if (!FileExist(path))
-        return ""
+    busy := true
     try {
-        if (FileGetSize(path) <= 0) {
-            FileDelete(path)
-            return ""
+        bundle := RmtCacheDir() "\Sponsor.zip"
+        pg := RmtSilentDownloadProgress()
+        if (!bundleReady) {
+            retryAfter := A_TickCount + 60000
+            if (FileExist(bundle))
+                FileDelete(bundle)
+            if (RmtDownloadManager.DownloadBlocking(GetSponsorLogoBundleUrl(), bundle, 60, pg) != "ok")
+                return ""
+            bundleReady := true
         }
+        files := [{entry: name, fullPath: path}]
+        if (RmtExtractAssetBundle(bundle, files, pg) != "ok")
+            return ""
+        return RmtAssetMissing(path) ? "" : path
     } catch {
         return ""
+    } finally {
+        busy := false
     }
-    return path
 }
 
 _RspText(v) {

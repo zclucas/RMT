@@ -1,13 +1,13 @@
 #Requires AutoHotkey v2.0
 
 class CommandTimeoutFields {
-    static Add(parent, allowUnlimited := false, labelGroup := "CommandLabel", rightLabelGroup := "CommandRightLabel") {
+    static Add(parent, allowUnlimited := false, labelGroup := "CommandLabel", rightLabelGroup := "CommandRightLabel", labelWidth := 0) {
         panel := parent.Add("Grid").Name("CommandTimeoutRow")
         panel.Rows("Auto", "Auto")
         panel.Cols("*", 16, "*")
-        time := CmdEditorForm.Row(panel, "超时(ms)：", , labelGroup, , , GetLang("本次操作最多等待的毫秒数。"))
-        status := CmdEditorForm.Row(panel, "超时状态：", , rightLabelGroup, , "TimeoutStatusLabel").Grid_Column(2)
-        action := CmdEditorForm.Row(panel, "超时处理：", , labelGroup, , "TimeoutActionLabel").Grid_Row(1)
+        time := this._Row(panel, "超时(ms)：", labelGroup, "", GetLang("本次操作最多等待的毫秒数。"), labelWidth)
+        status := this._Row(panel, "超时状态：", rightLabelGroup, "TimeoutStatusLabel", "", labelWidth).Grid_Column(2)
+        action := this._Row(panel, "超时处理：", labelGroup, "TimeoutActionLabel", "", labelWidth).Grid_Row(1)
         times := ["1000", "3000", "5000", "10000", "30000", "60000"]
         if (allowUnlimited)
             times.Push("不限时")
@@ -15,6 +15,18 @@ class CommandTimeoutFields {
         this.Combo(action, "TimeoutAction", TimeoutPolicy.Actions)
         this.Combo(status, "TimeoutStatusVar", [TimeoutPolicy.DefaultStatusVar], true)
         return panel
+    }
+
+    static _Row(parent, label, group, labelName, tip, labelWidth) {
+        if (!labelWidth)
+            return CmdEditorForm.Row(parent, label, , group, , labelName, tip)
+        row := parent.Add("Grid").Margin("0,4").Cols(labelWidth, "*")
+        caption := CmdEditorForm.Label(row, label).Margin("0")
+        if (labelName != "")
+            caption.Name(labelName)
+        if (tip != "")
+            caption.ToolTip(tip)
+        return row
     }
 
     static Combo(row, name, items, editable := false) {

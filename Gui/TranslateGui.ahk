@@ -475,8 +475,12 @@ class TranslateGui {
         return missing
     }
 
-    ; 模型下载源：ModelScope 主（国内快），HuggingFace 兜底；两个仓库均已实测可达。
+    ; 默认模型使用 GitCode LFS，备用地址直连 GitHub 原文件。
     static _ModelUrls(modelName) {
+        if (modelName == TranslateEngine.DefaultModel) {
+            primary := RmtLargeAssetUrl(modelName)
+            return [primary, RmtDownloadDirectUrl(primary)]
+        }
         repo := InStr(modelName, "-9B") ? "IndexTeam/Index-Translate-9B-GGUF" : "IndexTeam/Index-Translate-2B-GGUF"
         return ["https://modelscope.cn/models/" repo "/resolve/master/" modelName,
                 "https://huggingface.co/" repo "/resolve/main/" modelName]
@@ -535,7 +539,7 @@ class TranslateGui {
         missing := TranslateGui.MissingRuntimeFiles()
         if (!missing.Length)
             return
-        target := RmtCacheDir() "\Downloads\Translate.zip"
+        target := RmtCacheDir() "\Downloads\" RmtAssetsReleaseTag() "\Translate.zip"
         url := RmtAssetsBaseUrl(RmtAssetsReleaseTag()) "Translate.zip"
         try {
             RmtDownloadManager.Enqueue(GetLang("翻译组件"), [url], target, 10 * 1024 * 1024, 120,

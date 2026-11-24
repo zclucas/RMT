@@ -6,6 +6,7 @@
 ; =====================================================================
 
 class FileIOGui {
+    _playHotkeys := []
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -203,10 +204,13 @@ class FileIOGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "TriggerMacro"), this.Hwnd())
         this._syncing := false
     }
 
     OnWindowClosing(state, ctrl, event) {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._CloseContentEditor()
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
@@ -220,6 +224,8 @@ class FileIOGui {
     }
 
     _CloseWindow() {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._CloseContentEditor()
         if (IsObject(this.ui)) {
             try this.ui.Update("Window", "Close", "")

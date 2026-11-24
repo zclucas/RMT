@@ -30,9 +30,9 @@ class CompareProEditItemGui {
 
         this.EditType := 1  ;1正常分支 2兜底分支
         this.ToggleArr := [1, 0]
-        this.NameArr := ["Var1", "Var2"]
+        this.NameArr := ["Value1", "Value2"]
         this.CompareTypeArr := [1, 1]
-        this.VariableArr := ["Var1", "Var2"]
+        this.VariableArr := ["Target1", "Target2"]
         this.LogicalTypeCon := "LogicalTypeCon"
         this.MacroCon := "MacroCon"
         this.SureFocusCon := ""      ; 外部（CompareProGui:224）可能赋值；内部不使用
@@ -193,17 +193,17 @@ class CompareProEditItemGui {
     _EnsureCondiDataLen() {
         if (this.ToggleArr.Length == 0) {
             this.ToggleArr := [1]
-            this.NameArr := ["Var1"]
+            this.NameArr := ["Value1"]
             this.CompareTypeArr := [1]
-            this.VariableArr := ["Var1"]
+            this.VariableArr := ["Target1"]
         }
         n := this.ToggleArr.Length
         while (this.NameArr.Length < n)
-            this.NameArr.Push("Var" (this.NameArr.Length + 1))
+            this.NameArr.Push("Value" (this.NameArr.Length + 1))
         while (this.CompareTypeArr.Length < n)
             this.CompareTypeArr.Push(1)
         while (this.VariableArr.Length < n)
-            this.VariableArr.Push("Var" (this.VariableArr.Length + 1))
+            this.VariableArr.Push("Target" (this.VariableArr.Length + 1))
         while (this.NameArr.Length > n)
             this.NameArr.RemoveAt(this.NameArr.Length)
         while (this.CompareTypeArr.Length > n)
@@ -319,9 +319,9 @@ class CompareProEditItemGui {
         this._SaveCondiFromUi()
         n := this.ToggleArr.Length + 1
         this.ToggleArr.Push(1)
-        this.NameArr.Push("Var" n)
+        this.NameArr.Push("Value" n)
         this.CompareTypeArr.Push(1)
-        this.VariableArr.Push("Var" n)
+        this.VariableArr.Push("Target" n)
         this._RebuildRows()
         try this.ui.Update("CondiScroll", "ScrollToEnd", "")
         this.OnRefresh()
@@ -378,9 +378,9 @@ class CompareProEditItemGui {
         VariableArr := DataArr[3]
         if (VariNameArr.Length == 0) {
             this.ToggleArr := [1, 0]
-            this.NameArr := ["Var1", "Var2"]
+            this.NameArr := ["Value1", "Value2"]
             this.CompareTypeArr := [1, 1]
-            this.VariableArr := ["Var1", "Var2"]
+            this.VariableArr := ["Target1", "Target2"]
         }
         else {
             this.ToggleArr := []
@@ -391,7 +391,7 @@ class CompareProEditItemGui {
                 this.ToggleArr.Push(1)
                 this.NameArr.Push(VariNameArr[A_Index])
                 this.CompareTypeArr.Push(CompareTypeArr.Length >= A_Index ? CompareTypeArr[A_Index] : 1)
-                this.VariableArr.Push(VariableArr.Length >= A_Index ? VariableArr[A_Index] : "Var" A_Index)
+                this.VariableArr.Push(VariableArr.Length >= A_Index ? VariableArr[A_Index] : "Target" A_Index)
             }
         }
         this._RebuildRows()

@@ -6,6 +6,7 @@
 ; =====================================================================
 
 class TextOpsGui {
+    _playHotkeys := []
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -238,9 +239,12 @@ class TextOpsGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "TriggerMacro"), this.Hwnd())
     }
 
     OnWindowClosing(state, ctrl, event) {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._EndTimestampDrag()
         this._CloseConcatEditor()
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
@@ -255,6 +259,8 @@ class TextOpsGui {
     }
 
     _CloseWindow() {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._EndTimestampDrag()
         this._CloseConcatEditor()
         if (IsObject(this.ui)) {

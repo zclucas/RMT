@@ -216,8 +216,9 @@ class MouseMovePreview {
     }
 
     static RefreshEditHandles(*) {
-        if (!this.EditMode || this.EditHandles.Length < 2)
+        if (!this.EditMode || !IsObject(this.Editor) || this.EditHandles.Length < 2)
             return
+        editor := this.Editor, kind := this.Kind, revision := this.Revision
         ; 拖动时提高刷新频率，松开后恢复较低频率，减少 IPC 与重绘开销。
         SetTimer(this.EditTimer, GetKeyState("LButton", "P") ? 15 : 60)
         ; 轮询按键状态并直接移动句柄窗口，避免透明无标题窗口的系统拖动消息不可靠。
@@ -251,63 +252,53 @@ class MouseMovePreview {
         editFrame := p1.x "," p1.y "," p2.x "," p2.y
         if (editFrame == this.LastEditFrame)
             return
-        this.LastEditFrame := editFrame
-        if (this.Kind == "delta") {
-            count := this.Editor.Query("CountCon")
-            count := IsNumber(count) && Number(count) > 0 ? Number(count) : 1
-            ; 编辑框保存本次总偏移，执行时再按次数拆分。
-            this.Editor.Update("DeltaXCon", "Text", String(Round(p2.x - p1.x)))
-            this.Editor.Update("DeltaYCon", "Text", String(Round(p2.y - p1.y)))
-        } else if (this.Kind == "move") {
-            mode := this.Editor.Query("MouseMoveModeCombo>SelectedIndex")
-            if (mode == 1) {
-                this.Editor.Update("PosXCon", "Text", String(Round(p2.x - p1.x)))
-                this.Editor.Update("PosYCon", "Text", String(Round(p2.y - p1.y)))
-            } else {
-                this.Editor.Update("PosXCon", "Text", String(Round(p2.x)))
-                this.Editor.Update("PosYCon", "Text", String(Round(p2.y)))
-            }
-        } else {
-            mode := this.Editor.Query("MouseMoveModeCombo>SelectedIndex")
-            actionIdx := this.Editor.Query("ActionTypeCombo>SelectedIndex")
-            if (mode == 1) {
-                this.Editor.Update("PosVarX", "Text", String(Round(p2.x - p1.x)))
-                this.Editor.Update("PosVarY", "Text", String(Round(p2.y - p1.y)))
-                this.Show({X1: p1.x, Y1: p1.y, X2: p2.x, Y2: p2.y}, this.Palette())
-                return
-            }
-            ; 普通绝对移动/普通拖拽只需要目标点；A 到 B 拖拽写入两点。
-            if (actionIdx == 4) {
-                this.Editor.Update("PosVarX", "Text", String(Round(p1.x)))
-                this.Editor.Update("PosVarY", "Text", String(Round(p1.y)))
-            }
-            ox := 0, oy := 0
-            if (this.Editor.Query("RefCombo>SelectedIndex") == 1) {
-                try {
-                    hwnds := GetHwndList(GetLangKey(this.Editor.Query("WinInfoCon")))
-                    if (IsObject(hwnds) && hwnds.Length)
-                        WinGetPos(&ox, &oy, , , "ahk_id " hwnds[1])
-                }
-            }
-            if (actionIdx != 4) {
-                this.Editor.Update("PosVarX", "Text", String(Round(p2.x - ox)))
-                this.Editor.Update("PosVarY", "Text", String(Round(p2.y - oy)))
-            } else {
-                this.Editor.Update("PosVarX", "Text", String(Round(p1.x - ox)))
-                this.Editor.Update("PosVarY", "Text", String(Round(p1.y - oy)))
-            }
-            this.Editor.Update("EndPosVarX", "Text", String(Round(p2.x - ox)))
-            this.Editor.Update("EndPosVarY", "Text", String(Round(p2.y - oy)))
-        }
+        ; Query 会等待界面进程，期间按钮/关闭事件可能清空或切换预览。
+        ; 保留本轮编辑器引用，返回后核对代次，过期回调不得继续写回或重绘。
+        state := editor.Query("CountCon", "MouseMoveModeCombo>SelectedIndex", "ActionTypeCombo>SelectedIndex", "RefCombo>SelectedIndex", "WinInfoCon")
+        if (!this.IsCurrentEdit(editor, revision))
+            return
+        updates := []
         preview := {X1: p1.x, Y1: p1.y, X2: p2.x, Y2: p2.y}
-        if (this.Kind == "delta") {
-            count := this.Editor.Query("CountCon")
-            count := IsNumber(count) && Number(count) > 0 ? Integer(count) : 1
+        if (kind == "delta") {
+            updates.Push({ControlName: "DeltaXCon", PropertyName: "Text", Value: String(Round(p2.x - p1.x))}, {ControlName: "DeltaYCon", PropertyName: "Text", Value: String(Round(p2.y - p1.y))})
+            count := state.Get("CountCon", 1)
+            count := IsNumber(count) && Number(count) > 0 ? Max(1, Integer(count)) : 1
             preview.Steps := count
             preview.StepX := (p2.x - p1.x) / count
             preview.StepY := (p2.y - p1.y) / count
+        } else {
+            mode := state.Get("MouseMoveModeCombo>SelectedIndex", 0)
+            if (kind == "move") {
+                updates.Push({ControlName: "PosXCon", PropertyName: "Text", Value: String(Round(mode == 1 ? p2.x - p1.x : p2.x))},
+                    {ControlName: "PosYCon", PropertyName: "Text", Value: String(Round(mode == 1 ? p2.y - p1.y : p2.y))})
+            } else if (mode == 1) {
+                updates.Push({ControlName: "PosVarX", PropertyName: "Text", Value: String(Round(p2.x - p1.x))}, {ControlName: "PosVarY", PropertyName: "Text", Value: String(Round(p2.y - p1.y))})
+            } else {
+                ox := 0, oy := 0
+                if (state.Get("RefCombo>SelectedIndex", 0) == 1) {
+                    try {
+                        hwnds := GetHwndList(GetLangKey(state.Get("WinInfoCon", "")))
+                        if (IsObject(hwnds) && hwnds.Length)
+                            WinGetPos(&ox, &oy, , , "ahk_id " hwnds[1])
+                    }
+                }
+                ; 普通绝对移动/拖拽只写目标点；A 到 B 拖拽同时写入起点。
+                start := state.Get("ActionTypeCombo>SelectedIndex", 0) == 4 ? p1 : p2
+                updates.Push({ControlName: "PosVarX", PropertyName: "Text", Value: String(Round(start.x - ox))}, {ControlName: "PosVarY", PropertyName: "Text", Value: String(Round(start.y - oy))},
+                    {ControlName: "EndPosVarX", PropertyName: "Text", Value: String(Round(p2.x - ox))}, {ControlName: "EndPosVarY", PropertyName: "Text", Value: String(Round(p2.y - oy))})
+            }
         }
+        if (!this.IsCurrentEdit(editor, revision))
+            return
+        editor.BatchUpdate(updates)
+        if (!this.IsCurrentEdit(editor, revision))
+            return
+        this.LastEditFrame := editFrame
         this.Show(preview, this.Palette())
+    }
+
+    static IsCurrentEdit(editor, revision) {
+        return this.EditMode && this.Editor == editor && this.Revision == revision
     }
 
     static CommitEdit() {
@@ -323,8 +314,8 @@ class MouseMovePreview {
 
     static SetButton(enabled) {
         try {
-            this.Editor.Update("BtnCmdPreview", "Background", enabled ? "$Theme:ActionBg" : "Transparent")
-            this.Editor.Update("BtnCmdPreview", "Foreground", enabled ? "$Theme:ActionText" : "$Theme:TitleBarForeground")
+            this.Editor.Update("BtnCmdPreview", "Background", enabled ? "{DynamicResource ActionBg}" : "Transparent")
+            this.Editor.Update("BtnCmdPreview", "Foreground", enabled ? "{DynamicResource ActionText}" : "{DynamicResource TitleBarForeground}")
             tipKey := enabled ? (this.EditMode ? "再次点击确定点位" : "关闭指令预览") : "预览移动路径"
             this.Editor.Update("BtnCmdPreview", "ToolTip", GetLang(tipKey))
         }

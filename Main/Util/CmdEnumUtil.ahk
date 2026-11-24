@@ -147,6 +147,7 @@ CmdEnumMoveMode(value) {
 
 CanonicalMoveCommandName(key) {
     switch key, false {
+        case "调整窗口": return "窗口操作"
         case "移动", "鼠标移动", "滑鼠移動", "移動", "Mouse Move", "Move": return "移动"
         case "移动Pro", "鼠标移动Pro", "滑鼠移動Pro", "移動Pro", "Mouse Move Pro", "Move Pro", "Move+": return "移动Pro"
     }
@@ -318,7 +319,7 @@ CmdEnumNorm(cmd, Data) {
             if (Data.HasProp("CallType") && !IsNumber(Data.CallType))
                 callTypes.Push("循环-跳过本轮", "循环-跳出", "分支-跳出")
             CmdEnumSetNum(Data, "CallType", callTypes)
-        case "窗口管理", "窗口信息", "调整窗口":
+        case "窗口管理", "窗口信息", "窗口操作":
             ; 保留旧数字顺序，新类型只在界面插入，避免旧配置操作错位。
             CmdEnumSetNum(Data, "ActionType", ["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口", "调整宽高", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
             static windowActions := Map(
@@ -334,9 +335,9 @@ CmdEnumNorm(cmd, Data) {
                 "匹配窗口列表", "相对移动", "窗口居中", "位置和宽高", "切换置顶", "切换鼠标穿透"]
             Data.ActionType := GetConfigKey(windowActions.Get(Data.ActionType, Data.ActionType), actions)
             if (!Data.HasProp("WidthVarName"))
-                Data.WidthVarName := "Var1"
+                Data.WidthVarName := "WinWidth"
             if (!Data.HasProp("HeightVarName"))
-                Data.HeightVarName := "Var2"
+                Data.HeightVarName := "WinHeight"
             WindowNormalizeInfo(Data)
         case "YOLO检测":
             CmdEnumSet(Data, "Device", ["CPU", "CUDA", "DirectML", "TensorRT", "CoreML"])
@@ -387,7 +388,7 @@ WindowEnsureResults(data) {
     Loop 7 {
         prop := "ResultVar" A_Index
         if (!data.HasProp(prop))
-            data.%prop% := "Var" A_Index
+            data.%prop% := WindowResultDefaultName(data.HasProp("ActionType") ? data.ActionType : "激活窗口", A_Index)
     }
 }
 
@@ -534,14 +535,21 @@ WindowNumericInputError(label, value) {
 }
 
 WindowResultDefaultName(action, index) {
-    names := ["Win_Exist", "Win_Active", "Win_Minimized", "Win_Maximized", "Win_AlwaysOnTop", "Win_Transparency", "Win_ClickThrough"]
-    return action == "窗口状态" && index >= 1 && index <= names.Length ? names[index] : "Var" index
+    switch action {
+        case "标题类名句柄": names := ["WinTitle", "WinClass", "WinHwnd"]
+        case "进程信息": names := ["ProcName", "ProcId", "ProcPath"]
+        case "窗口状态": names := ["WinExists", "WinActive", "WinMin", "WinMax", "WinTop", "WinAlpha", "WinPass"]
+        case "透明度与鼠标穿透状态": names := ["WinAlpha", "WinPass"]
+        case "匹配窗口列表": names := ["WinList"]
+        case "获取窗口宽高": names := ["WinWidth", "WinHeight"]
+        default: names := ["WinX", "WinY", "WinWidth", "WinHeight"]
+    }
+    return index >= 1 && index <= names.Length ? names[index] : "Result" index
 }
 
 ; 仅在用户切换类别时替换未修改的默认名；加载已有宏时不重命名输出。
 WindowNextResultName(value, oldAction, newAction, index) {
-    if (oldAction != newAction && (oldAction == "窗口状态" || newAction == "窗口状态")
-        && value == WindowResultDefaultName(oldAction, index))
+    if (oldAction != newAction && value == WindowResultDefaultName(oldAction, index))
         return WindowResultDefaultName(newAction, index)
     return value
 }
@@ -555,7 +563,7 @@ WindowInfoFieldTip(action, index) {
         }
     }
     if (action == "匹配窗口列表")
-        return WindowEditorHint(action)
+        return "所有匹配窗口句柄"
     if (action != "窗口状态")
         return "填写保存结果的变量名；留空则跳过"
     tips := [

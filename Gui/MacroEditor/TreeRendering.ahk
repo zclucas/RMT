@@ -78,7 +78,7 @@
             this.TreeAddControl(FalseRoot, IsIf ? Data.FalseControlType : "无")
         }
         else if (IsLoop) {
-            iconStr := this.GetCmdIconStr(GetLang("循環次数"))
+            iconStr := this.GetCmdIconStr(GetLang("循环次数"))
             countStr := Data.LoopCount == -1 ? GetLang("无限") : Data.LoopCount
 
             this.MacroTreeViewCon.Add(

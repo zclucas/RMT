@@ -38,7 +38,7 @@
         community := '<Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
             . this._HelpCommunityTile(0, 0, "&#xE902;", GetLang("RMT 交流论坛"), GetLang("经验交流、问题讨论与社区动态"), "https://forum.ruomengtu.com/", "0,0,5,5")
             . this._HelpCommunityTile(0, 1, "&#xE8BD;", GetLang("RMT QQ 交流群"), GetLang("加入群组以参与反馈文档编辑"), "https://qm.qq.com/q/DgpDumEPzq", "5,0,0,5")
-            . this._HelpCommunityTile(1, 0, "&#xE943;", GetLang("Gitee 开源地址"), GetLang("查看发行版与软件最新版本"), "https://gitee.com/fateman/RMT/releases", "0,5,5,0")
+            . this._HelpCommunityTile(1, 0, "&#xE943;", GetLang("GitCode 开源地址"), GetLang("查看发行版与软件最新版本"), "https://gitcode.com/ruomengtu/RMT/releases", "0,5,5,0")
             . this._HelpCommunityTile(1, 1, "&#xE8B7;", GetLang("GitHub 开源地址"), GetLang("镜像项目源代码与版本信息"), "https://github.com/zclucas/RMT/releases", "5,5,0,0")
             . '</Grid>'
 

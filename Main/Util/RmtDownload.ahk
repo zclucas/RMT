@@ -1,18 +1,38 @@
 #Requires AutoHotkey v2.0
 
-; Gitee 无法托管的 Common 大文件走 GitHub 下载加速。
+; GitCode 为资源主站；备用地址始终指向 GitHub 原文件。
 RmtLargeAssetProxy() => "https://ghfile.geekertao.top/"
+RmtModelDownloadMode() => "lfs"
 
 RmtLargeAssetUrl(name) {
-    return RmtLargeAssetProxy() "https://github.com/zclucas/RMTAssets/releases/download/Common/" name
+    if (name == "Index-Translate-2B.Q4_K_M.gguf") {
+        switch RmtModelDownloadMode() {
+            case "github":
+                return RmtLargeAssetProxy() "https://github.com/zclucas/RMTAssets/releases/download/Common/" name
+            case "zip":
+                name .= ".zip"
+        }
+    }
+    return "https://gitcode.com/ruomengtu/RMTAssets/releases/download/Common/" name
+}
+
+RmtIsAssetUrl(url) {
+    return RegExMatch(url, "^https://(?:gitcode\.com/ruomengtu/RMTAssets|github\.com/zclucas/RMTAssets)/releases/download/[^/]+/[^/?]+$")
+        || RegExMatch(url, "^https://(?:raw\.)?gitcode\.com/ruomengtu/RMTAssets/raw/main/Common/[^/?]+$")
 }
 
 RmtDownloadDirectUrl(url) {
     prefix := RmtLargeAssetProxy()
     if (InStr(url, prefix "https://github.com/zclucas/RMTAssets/releases/download/Common/") == 1)
         return SubStr(url, StrLen(prefix) + 1)
-    if RegExMatch(url, "^https://gitee\.com/fateman/(RMT(?:Assets)?/releases/download/.+)$", &match)
-        return "https://github.com/zclucas/" match[1]
+    if RegExMatch(url, "^https://gitcode\.com/ruomengtu/(RMT(?:Assets)?)/(releases/download/.+)$", &match) {
+        path := match[2]
+        if (path == "releases/download/Common/Index-Translate-2B.Q4_K_M.gguf.zip")
+            path := SubStr(path, 1, -4)
+        return "https://github.com/zclucas/" match[1] "/" path
+    }
+    if RegExMatch(url, "^https://(?:raw\.)?gitcode\.com/ruomengtu/RMTAssets/raw/main/Common/([^/?]+)$", &match)
+        return "https://github.com/zclucas/RMTAssets/releases/download/Common/" match[1]
     return ""
 }
 

@@ -1,37 +1,122 @@
-name: 补齐 Gitee 资源
-
+name: 补齐 GitCode 资源
 on:
   workflow_dispatch:
-
+    inputs:
+      complete_resource_catalogs:
+        description: 仅补齐初始版本清单缺失的离线运行包记录
+        type: boolean
+        default: false
+      resource_runner:
+        description: 迁移 runner 标签（默认 macos-latest，可指定一次性自托管 runner）
+        type: string
+        default: macos-latest
+      reorganize_resources:
+        description: 按版本、Common、Patch 重组两站资源（不兼容旧版 Common 地址）
+        type: boolean
+        default: false
+      cleanup_sponsor:
+        description: 校验 Sponsor.zip 后删除两站 Common 中单独的 rmt.png
+        type: boolean
+        default: false
+      tag:
+        description: 资源标签；留空处理全部发行版
+        type: string
+      asset_name:
+        description: 原附件名；留空处理整个标签
+        type: string
 permissions:
   contents: read
-
+concurrency:
+  group: rmt-resource-publication
+  cancel-in-progress: false
 jobs:
-  list:
-    runs-on: ubuntu-latest
-    outputs:
-      tags: ${{ steps.list.outputs.tags }}
-    steps:
-      - id: list
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tags=$(gh api --paginate repos/zclucas/RMTAssets/releases | jq -cs '[.[][] | select(.draft == false) | .tag_name]')
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
-
   mirror:
-    needs: list
-    strategy:
-      fail-fast: false
-      matrix:
-        tag: ${{ fromJSON(needs.list.outputs.tags) }}
-    runs-on: windows-latest
-    concurrency: gitee-assets-${{ matrix.tag }}
+    if: ${{ !inputs.complete_resource_catalogs && !inputs.reorganize_resources && !inputs.cleanup_sponsor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-      - shell: pwsh
+        with:
+          persist-credentials: false
+      - name: 同步原文件并验证公开下载
         env:
           GH_TOKEN: ${{ github.token }}
-          GITEE_RELEASE_TOKEN: ${{ secrets.GITEE_ASSETS_TOKEN || secrets.GITEE_RELEASE_TOKEN }}
-          RELEASE_TAG: ${{ matrix.tag }}
-        run: ./.github/scripts/Sync-GiteeAssets.ps1 -Tag $env:RELEASE_TAG
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          ASSET_NAME: ${{ inputs.asset_name }}
+        run: |
+          if [[ "$ASSET_NAME" == 'Index-Translate-2B.Q4_K_M.gguf' ]]; then
+            echo '::error::模型变更请使用更新共享或修补资源工作流，以归档旧版本依赖。'
+            exit 1
+          fi
+          python3 -u .github/scripts/sync_gitcode_assets.py sync --tag "$RELEASE_TAG" --asset-name "$ASSET_NAME" --workers 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitcode-sync-result
+          path: ${{ runner.temp }}/gitcode-sync.json
+  cleanup_sponsor:
+    name: 清理单独的赞助 Logo
+    if: ${{ inputs.cleanup_sponsor && !inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 校验两站 Sponsor.zip 并删除 Common/rmt.png
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        run: python3 -u .github/scripts/sync_gitcode_assets.py sponsor-cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sponsor-cleanup-result
+          path: ${{ runner.temp }}/gitcode-sponsor-cleanup.json
+  reorganize:
+    name: 重组两站资源
+    if: ${{ inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
+    runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 建立清单、复制校验并清理旧位置
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        shell: pwsh
+        run: |
+          if ($IsWindows) { python -u .github/scripts/resource_layout.py migrate }
+          else { python3 -u .github/scripts/resource_layout.py migrate }
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resource-layout-result
+          path: ${{ runner.temp }}/resource-layout-result.json
+  complete_catalogs:
+    name: 补齐初始资源清单
+    if: inputs.complete_resource_catalogs
+    runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 仅追加缺失记录并保留已有资源锁定
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        shell: pwsh
+        run: |
+          if ($IsWindows) { python -u .github/scripts/resource_layout.py complete-catalogs }
+          else { python3 -u .github/scripts/resource_layout.py complete-catalogs }
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resource-layout-result
+          path: ${{ runner.temp }}/resource-layout-result.json

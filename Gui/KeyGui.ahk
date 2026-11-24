@@ -6,6 +6,7 @@
 ; =====================================================================
 
 class KeyGui {
+    _playHotkeys := []
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -144,7 +145,7 @@ class KeyGui {
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/2-按键", ObjBindMethod(this, "TriggerMacro"), "F1")
+        BindCmdEditorChrome(this.ui, "#指令手册/2-按键", ObjBindMethod(this, "TriggerMacro"), "!l")
         this.ui.OnEvent("KeyTypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("HoldTimeCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
         this.ui.OnEvent("KeyCountCon", "TextChanged", ObjBindMethod(this, "OnChangeEditValue"))
@@ -482,10 +483,13 @@ class KeyGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "TriggerMacro"), this.Hwnd())
         KeyPickerHook.Attach(this, true)
     }
 
     OnWindowClosing(state, ctrl, event) {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         KeyPickerHook.Detach(this)
         try this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
@@ -500,6 +504,8 @@ class KeyGui {
     }
 
     _CloseWindow() {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         KeyPickerHook.Detach(this)
         try this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {

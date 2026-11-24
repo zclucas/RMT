@@ -33,7 +33,7 @@ class RmtRelease {
     static Asset(name, url, digest := "", bytes := 0) {
         if (!RegExMatch(name, "i)^RMTv([0-9.]+(?:F\d+)?)_(x64|x86|x32)\.zip$", &match))
             return ""
-        prefix := "i)^https://(?:github\.com/zclucas/RMT|gitee\.com/fateman/RMT)/releases/download/[a-z0-9._-]+/"
+        prefix := "i)^https://(?:github\.com/zclucas/RMT|gitcode\.com/ruomengtu/RMT)/releases/download/[a-z0-9._-]+/"
         if (!RegExMatch(url, prefix "[a-z0-9._-]+$") || SubStr(url, InStr(url, "/", , -1) + 1) != name)
             return ""
         version := this.Version(match[1])
@@ -75,10 +75,10 @@ class RmtRelease {
             return order > 0
         if (asset.arch != previous.arch)
             return asset.arch == arch
-        isGitee := InStr(asset.url, "https://gitee.com/") == 1
-        previousIsGitee := InStr(previous.url, "https://gitee.com/") == 1
-        if (isGitee != previousIsGitee)
-            return isGitee
+        isGitCode := InStr(asset.url, "https://gitcode.com/") == 1
+        previousIsGitCode := InStr(previous.url, "https://gitcode.com/") == 1
+        if (isGitCode != previousIsGitCode)
+            return isGitCode
         return asset.digest != "" && previous.digest == ""
     }
 }

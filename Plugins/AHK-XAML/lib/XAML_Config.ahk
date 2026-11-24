@@ -16,7 +16,7 @@ global XAML_FORCE_DYNAMIC_COMPILE := true
 ;
 ; 本项目取 "both"：WebView2 打开后引擎产物名带后缀（见 XAMLHost.GetEngineDllName
 ; → ahk-xaml-wv2.dll）。留 "temp" 的话它只落在软件目录 Cache\AhkWpf，lib\dep 里始终是旧的无
-; WebView 版本，PackRMT.ps1 打出来的 Release 会缺引擎、进而要在用户机上重编。
+; WebView 版本，Scripts/PackRMT.ps1 打出来的 Release 会缺引擎、进而要在用户机上重编。
 global XAML_ENGINE_BUILD_LOCATION := "both"
 
 ; --- Developer Diagnostics ---

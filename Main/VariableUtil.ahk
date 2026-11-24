@@ -78,7 +78,7 @@ SetGlobalData(macroStr, visitMap) {
             case "输入":
                 if (Data.Type == "弹窗" || Data.Type == "状态" || Data.Type == "选择" || Data.Type == "多选")
                     VariableMap[Data.SaveName] := true
-            case "窗口控件", "AI判断":
+            case "窗口控件", "控件信息", "控件操作", "AI判断":
                 RegisterCommandResultVars(Data)
                 if (baseCmd == "AI判断" || WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
                     TimeoutPolicy.RegisterStatus(Data)
@@ -88,7 +88,7 @@ SetGlobalData(macroStr, visitMap) {
                 RegisterTranslateVars(Data)
             case "进程管理":
                 ProcessManage.RegisterOutputs(Data)
-            case "窗口信息", "调整窗口", "窗口管理":
+            case "窗口信息", "窗口操作", "窗口管理":
                 WindowEnsureResults(Data)
                 WindowRegisterResults(Data)
             case "浏览器":
