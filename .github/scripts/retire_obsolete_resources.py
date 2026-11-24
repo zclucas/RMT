@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 import zipfile
 
 import sync_gitcode_assets as mirror
+from resource_policy import mutable_tag
 
 RETIRED = {'playaudio.vbs', 'xbox.png', 'countdown.exe'}
 
@@ -34,7 +35,7 @@ def clean_zip(source, destination):
 
 
 def retire_resources(store, catalog_name):
-    releases = store.releases()
+    releases = [r for r in store.releases() if mutable_tag(r['tag_name'])]
     catalogs = {r['tag_name']: store.catalog(r['tag_name']) for r in releases}
     if any(c is None for c in catalogs.values()):
         raise ValueError('Every release needs a resource catalog before cleanup')

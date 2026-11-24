@@ -22,6 +22,7 @@ from urllib.request import Request, urlopen
 import zipfile
 
 import sync_gitcode_assets as mirror
+from resource_policy import mutable_tag, catalog_additions
 
 CATALOG = 'A-Assets.json'
 LEGACY_CATALOG = 'resources.json'
@@ -240,6 +241,9 @@ class Store:
         entry = dict(size=path.stat().st_size, sha256=mirror.sha(path)[7:])
         before = self.asset(tag, name)
         if before and (before['digest'] != 'sha256:' + entry['sha256'] or before['size'] != entry['size']):
+            if not mutable_tag(tag) and not (name == CATALOG and catalog_additions(
+                    self.download(tag, before).read_bytes(), path.read_bytes())):
+                raise ValueError('Stable release assets are append-only: ' + tag + '/' + name)
             if not replace:
                 raise ValueError('Refusing to overwrite immutable asset: ' + tag + '/' + name)
         self.ensure(tag)
@@ -279,6 +283,8 @@ class Store:
         return entry
 
     def delete(self, tag, name):
+        if not mutable_tag(tag):
+            raise ValueError('Stable release assets are append-only: ' + tag + '/' + name)
         print('Retire {}/{}'.format(tag, name), flush=True)
         # Only exact filenames selected in the validated migration plan are removed.
         target = mirror.release(tag)
@@ -534,7 +540,7 @@ def migrate(store):
             continue
         # Keep a version snapshot if the shared destination holds a newer generation.
         target = store.asset(destination, renamed)
-        if target and target['digest'] == expected['digest']:
+        if target and target['digest'] == expected['digest'] and mutable_tag(source_tag):
             store.verify(destination, renamed, record(expected, destination, renamed))
             store.delete(source_tag, name)
     store.shared_indexes()
@@ -731,7 +737,8 @@ def migrate_catalog_names(store):
     # All providers have verified the new filename before the old names disappear.
     for release in releases:
         for name in (LEGACY_CATALOG, LEGACY_INDEX):
-            store.delete(release['tag_name'], name)
+            if mutable_tag(release['tag_name']):
+                store.delete(release['tag_name'], name)
     return dict(status='passed', catalog=CATALOG, tags=[r['tag_name'] for r in releases])
 
 
@@ -790,7 +797,8 @@ def normalize_resources(store):
     for release in store.releases():
         tag = release['tag_name']
         # Store.delete also cleans a surviving GitCode copy after a partial failure.
-        store.delete(tag, LEGACY_INDEX)
+        if mutable_tag(tag):
+            store.delete(tag, LEGACY_INDEX)
     from release_presentation import organize_releases
     presentation = organize_releases(store)
     return dict(status='passed', universal=changed, presentation=presentation)
@@ -798,7 +806,7 @@ def normalize_resources(store):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'rebuild-presentation', 'plan-presentation', 'catalog-names', 'retire-obsolete'))
+    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'rebuild-presentation', 'plan-presentation', 'catalog-names', 'retire-obsolete', 'restore-stable'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--scope', choices=('Common', 'Patch'))
     parser.add_argument('--url')
@@ -814,6 +822,9 @@ if __name__ == '__main__':
             elif args.mode == 'retire-obsolete':
                 from retire_obsolete_resources import retire_resources
                 result = retire_resources(store, CATALOG)
+            elif args.mode == 'restore-stable':
+                from restore_stable_resources import restore_resources
+                result = restore_resources(store, CATALOG)
             elif args.mode == 'catalog-names':
                 result = migrate_catalog_names(store)
             elif args.mode == 'normalize':

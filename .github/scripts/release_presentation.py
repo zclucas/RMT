@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import re
 
 import sync_gitcode_assets as mirror
+from resource_policy import mutable_tag
 
 
 def release_notes(tag, names):
@@ -66,6 +67,8 @@ def align_tag_dates(store, wanted):
     mirror.git('fetch', '--quiet', '--depth=1', mirror.REMOTE,
                '+refs/tags/*:refs/tags/*', cwd=checkout)
     for tag in reversed(wanted):
+        if not mutable_tag(tag):
+            continue
         old = mirror.git('rev-parse', 'refs/tags/' + tag, cwd=checkout).strip()
         commit = mirror.git('rev-parse', 'refs/tags/' + tag + '^{}', cwd=checkout).strip()
         timestamp = str(int(desired[tag].timestamp()))
