@@ -1,6 +1,6 @@
 name: 资源上传
 
-# 消费「版本发布」工作流的 artifact，上传到 zclucas/RMTAssets。
+# 消费「版本发布」产物，按资源清单同时发布 GitHub / GitCode。
 # 自动：版本发布成功后触发；手动：dispatch 可指定来源 run id（补救通道），
 # 手动重放不做「分支已推进则跳过」校验——这正是它存在的意义。
 
@@ -10,6 +10,11 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
+      resource_runner:
+        description: 发布 runner 标签（默认 windows-latest）
+        required: false
+        type: string
+        default: windows-latest
       run_id:
         description: '来源 run id（版本发布；留空 = 最近一次成功的）'
         required: false
@@ -31,7 +36,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: windows-latest
+    runs-on: ${{ inputs.resource_runner || 'windows-latest' }}
     timeout-minutes: 180
     defaults:
       run:

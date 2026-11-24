@@ -2,6 +2,10 @@ name: 更新共享或修补资源
 on:
   workflow_dispatch:
     inputs:
+      resource_runner:
+        description: runner 标签（默认 ubuntu-latest，可选择自托管 runner）
+        type: string
+        default: ubuntu-latest
       scope:
         description: 资源分类
         required: true
@@ -26,7 +30,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.resource_runner || 'ubuntu-latest' }}
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +44,11 @@ jobs:
           ASSET_NAME: ${{ inputs.name }}
           SOURCE_URL: ${{ inputs.url }}
           SOURCE_SHA256: ${{ inputs.sha256 }}
-        run: python3 -u .github/scripts/resource_layout.py shared-url --scope "$SCOPE" --name "$ASSET_NAME" --url "$SOURCE_URL" --sha256 "$SOURCE_SHA256"
+        shell: pwsh
+        run: |
+          $pythonCommand = if ($IsWindows) { 'python' } else { 'python3' }
+          & $pythonCommand -u .github/scripts/resource_layout.py shared-url --scope $env:SCOPE --name $env:ASSET_NAME --url $env:SOURCE_URL --sha256 $env:SOURCE_SHA256
+          exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
