@@ -539,7 +539,7 @@ class TranslateGui {
         missing := TranslateGui.MissingRuntimeFiles()
         if (!missing.Length)
             return
-        target := RmtCacheDir() "\Downloads\Translate.zip"
+        target := RmtCacheDir() "\Downloads\" RmtAssetsReleaseTag() "\Translate.zip"
         url := RmtAssetsBaseUrl(RmtAssetsReleaseTag()) "Translate.zip"
         try {
             RmtDownloadManager.Enqueue(GetLang("翻译组件"), [url], target, 10 * 1024 * 1024, 120,

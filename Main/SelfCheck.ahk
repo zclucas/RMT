@@ -406,7 +406,7 @@ RuntimePrepareAsset(name, hint, expectSize := 0) {
         return ""
     }
 
-    dir := RmtCacheDir() "\RMT-Setup"
+    dir := RmtCacheDir() "\RMT-Setup\" RmtAssetsReleaseTag()
     if (!DirExist(dir))
         try DirCreate(dir)
     path := dir "\" name

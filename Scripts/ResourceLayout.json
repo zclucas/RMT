@@ -56,5 +56,10 @@
     "segmdl2.ttf": "界面图标字体",
     "VC_redist.x64.exe": "64 位 VC++ 运行库",
     "VC_redist.x86.exe": "32 位 VC++ 运行库"
-  }
+  },
+  "common": [
+    "Sponsor.zip",
+    "Index-Translate-2B.Q4_K_M.gguf",
+    "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2"
+  ]
 }

@@ -232,7 +232,8 @@ class Store:
                 mirror.try_lfs(path, metadata(name, entry), model_dir)
             else:
                 # Archive the immutable LFS object ID, never a pointer to "latest".
-                descriptor = self.model_descriptor('Common', entry)
+                descriptor = dict(version=1, format='lfs', name=mirror.MODEL, size=entry['size'],
+                                  sha256=entry['sha256'], lfs_endpoint=mirror.REMOTE + '/info/lfs/objects/batch')
                 descriptor_path = self.directory / (tag + '-model.parts.json')
                 descriptor_path.write_text(json.dumps(descriptor, indent=2), encoding='utf-8')
                 mirror.upload(tag, descriptor_path,
@@ -321,7 +322,10 @@ def preserve_dependents(store, known, scope, name, old):
     for tag, logical, entry in dependents:
         override = store.asset(tag, logical)
         if override:
-            # Older generations already have their own preserved snapshot.
+            # Resume a partially uploaded archive without changing its bytes.
+            if override.get('digest') != 'sha256:' + entry['sha256'] or override['size'] != entry['size']:
+                raise ValueError('Historical override checksum differs: ' + tag + '/' + logical)
+            store.put(tag, logical, store.download(tag, override))
             store.verify(tag, logical, entry)
         elif entry['sha256'] == expected['sha256'] and entry['size'] == expected['size']:
             path = store.download(scope, old)
@@ -491,7 +495,12 @@ def update_shared(store, known, scope, directory):
         name = mirror.safe_name(path.name)
         if name in (CATALOG, INDEX) or name.endswith('.parts.json'):
             raise ValueError('Descriptors and catalogs are not standalone shared resources')
-        if (name in POLICY['patch']) != (scope == 'Patch'):
+        logical = name if name in POLICY['patch'] else re.sub(r'_(x64|x86)(\.zip)$', r'\2', name)
+        if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9._-]*', name):
+            raise ValueError('Unsupported resource filename')
+        if logical not in POLICY['shared'] + POLICY['patch'] + POLICY.get('common', []):
+            raise ValueError('Unclassified shared resource: ' + name)
+        if (logical in POLICY['patch']) != (scope == 'Patch'):
             raise ValueError('Resource category mismatch: ' + name)
         result.append(publish_shared(store, known, scope, name, path))
     if not result:
