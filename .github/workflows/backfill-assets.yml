@@ -2,6 +2,10 @@ name: 补齐 GitCode 资源
 on:
   workflow_dispatch:
     inputs:
+      resource_runner:
+        description: 迁移 runner 标签（默认 macos-latest，可指定一次性自托管 runner）
+        type: string
+        default: macos-latest
       reorganize_resources:
         description: 按版本、Common、Patch 重组两站资源（不兼容旧版 Common 地址）
         type: boolean
@@ -69,7 +73,7 @@ jobs:
   reorganize:
     name: 重组两站资源
     if: inputs.reorganize_resources
-    runs-on: macos-latest
+    runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +83,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
-        run: python3 -u .github/scripts/resource_layout.py migrate
+        shell: pwsh
+        run: |
+          if ($IsWindows) { python -u .github/scripts/resource_layout.py migrate }
+          else { python3 -u .github/scripts/resource_layout.py migrate }
+          exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
