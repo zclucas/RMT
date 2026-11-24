@@ -1,5 +1,11 @@
 {
   "schema": 1,
+  "bundles": [
+    "Lang.zip", "ico.zip", "RMT.zip", "Xaml.zip",
+    "Input.zip", "Audio.zip", "ViGEm.zip", "AhiDriver.zip",
+    "OpenCV.zip", "Voice.zip", "RapidOcr.zip", "TesseractOcr.zip",
+    "Yolo.zip", "Translate.zip"
+  ],
   "versioned": [
     "Lang.zip",
     "ico.zip",

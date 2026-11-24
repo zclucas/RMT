@@ -47,6 +47,10 @@ def shared_name(name, arch):
     return stem + '_' + arch + extension
 
 
+def bundle_names():
+    return POLICY.get('bundles', POLICY['versioned'] + POLICY['shared'])
+
+
 def record(asset, scope, name=None):
     digest = asset.get('digest') or ''
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest) or asset['size'] <= 0:
@@ -363,6 +367,34 @@ def publish_shared(store, known, scope, name, path):
     return dict(scope=scope, name=name, **entry)
 
 
+def stage_category_retirements(store, known, logical, alias, destination):
+    candidates = {(entry['scope'], entry['name']) for catalog in known.values()
+                  for key, entry in catalog['assets'].items()
+                  if key == logical and entry['scope'] in ('Common', 'Patch')
+                  and entry['scope'] != destination and entry['name'] in (logical, alias)}
+    result = []
+    for scope, name in sorted(candidates):
+        asset = store.asset(scope, name)
+        if asset:
+            preserve_dependents(store, known, scope, name, asset)
+            result.append((scope, name, asset['digest']))
+    return result
+
+
+def finish_category_retirements(store, plans):
+    seen = {}
+    for scope, name, digest in plans:
+        if (scope, name) in seen and seen[(scope, name)] != digest:
+            raise ValueError('Resource changed during category relocation')
+        seen[(scope, name)] = digest
+    for (scope, name), digest in seen.items():
+        current = store.asset(scope, name)
+        if current:
+            if current['digest'] != digest:
+                raise ValueError('Refusing to remove a changed shared resource')
+            store.delete(scope, name)
+
+
 def common_entries(store):
     entries = {}
     for scope in ('Common', 'Patch'):
@@ -372,9 +404,17 @@ def common_entries(store):
                 continue
             # Architecture-specific plugin packages belong to their matching catalog only.
             logical = re.sub(r'_(x64|x86)(\.zip)$', r'\2', name)
-            if logical != name and logical in POLICY['versioned'] + POLICY['shared'] + POLICY['patch']:
+            if logical in bundle_names():
+                continue
+            expected_scope = ('Patch' if name in POLICY['patch'] else
+                              'Common' if name in POLICY.get('common', []) else None)
+            if expected_scope and scope != expected_scope:
                 continue
             entries[name] = store.describe(scope, asset)
+    required_globals = set(POLICY.get('common', [])) | (set(POLICY['patch']) - set(bundle_names()))
+    if not required_globals <= set(entries):
+        raise ValueError('Global resources absent from their configured category: ' +
+                         ', '.join(sorted(required_globals - set(entries))))
     return entries
 
 
@@ -487,6 +527,7 @@ def publish(store, directory):
     store.ensure('Patch')
     result = []
     pending = {}
+    retirements = []
     for tag, arch in zip(new_tags, ('x64', 'x86')):
         source = directory / ('RMTAssets_' + arch)
         paths = sorted(source.glob('*.zip'))
@@ -498,8 +539,13 @@ def publish(store, directory):
                    if resuming_family else common_entries(store))
         for path in paths:
             name = path.name
-            if name not in POLICY['versioned'] + POLICY['shared'] + POLICY['patch']:
+            if name not in bundle_names():
                 raise ValueError('Unclassified build artifact: ' + name)
+            destination = (tag if name in POLICY['versioned'] else
+                           'Patch' if name in POLICY['patch'] else 'Common')
+            if tag not in known:
+                retirements.extend(stage_category_retirements(store, known, name,
+                                                              shared_name(name, arch), destination))
             if tag in known:
                 pinned = known[tag]['assets'].get(name)
                 if not pinned:
@@ -544,6 +590,7 @@ def publish(store, directory):
         result.append(tag)
     for catalog in pending.values():
         store.put_catalog(catalog)
+    finish_category_retirements(store, retirements)
     store.shared_indexes()
     return dict(status='passed', catalogs=result, asset_tags=result + ['Common', 'Patch'])
 
@@ -553,22 +600,26 @@ def update_shared(store, known, scope, directory):
     if scope not in ('Common', 'Patch'):
         raise ValueError('Invalid shared scope')
     result = []
+    retirements = []
     for path in sorted(directory.iterdir()):
         if not path.is_file():
             continue
         name = mirror.safe_name(path.name)
         if name in (CATALOG, INDEX) or name.endswith('.parts.json'):
             raise ValueError('Descriptors and catalogs are not standalone shared resources')
-        logical = name if name in POLICY['patch'] else re.sub(r'_(x64|x86)(\.zip)$', r'\2', name)
+        declared = POLICY['versioned'] + POLICY['shared'] + POLICY['patch'] + POLICY.get('common', [])
+        logical = name if name in declared else re.sub(r'_(x64|x86)(\.zip)$', r'\2', name)
         if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9._-]*', name):
             raise ValueError('Unsupported resource filename')
         if logical not in POLICY['shared'] + POLICY['patch'] + POLICY.get('common', []):
             raise ValueError('Unclassified shared resource: ' + name)
         if (logical in POLICY['patch']) != (scope == 'Patch'):
             raise ValueError('Resource category mismatch: ' + name)
+        retirements.extend(stage_category_retirements(store, known, logical, name, scope))
         result.append(publish_shared(store, known, scope, name, path))
     if not result:
         raise ValueError('No shared updates supplied')
+    finish_category_retirements(store, retirements)
     store.shared_indexes()
     return dict(status='passed', updated=result)
 
