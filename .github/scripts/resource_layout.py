@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import tarfile
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
@@ -376,11 +377,18 @@ def migrate(store):
     # Capture all original metadata before the first write.
     originals = {tag: store.assets(tag) for tag in version_releases}
     common = store.assets('Common')
-    patch_sources = [a for a in common if a['name'] in POLICY['patch']]
+    patch_sources = sorted((a for a in common if a['name'] in POLICY['patch']), key=lambda a: a['size'])
     store.ensure('Patch')
     plan = []
+    stopped = threading.Event()
     def stage_patch(asset):
-        store.put('Patch', asset['name'], store.download('Common', asset))
+        if stopped.is_set():
+            return
+        try:
+            store.put('Patch', asset['name'], store.download('Common', asset))
+        except Exception:
+            stopped.set()
+            raise
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(stage_patch, asset) for asset in patch_sources]
         try:
