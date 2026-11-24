@@ -1,5 +1,5 @@
 ﻿# Runs in its own process so cancellation also stops network and merge work.
-param([string]$Url, [string]$Path, [string]$Headers, [int]$TimeoutSec = 7200)
+param([string]$Url, [string]$Path, [string]$Headers, [int]$TimeoutSec = 7200, [string]$ResourceTag = '')
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
@@ -22,6 +22,11 @@ function Open-Response([string]$Address, [int]$Limit = 30, $ExtraHeaders = $null
         }
     }
     return $request.GetResponse()
+}
+function Get-WebException($Record) {
+    $errorObject = $Record.Exception
+    while ($errorObject -and !($errorObject -is [Net.WebException])) { $errorObject = $errorObject.InnerException }
+    return $errorObject
 }
 function Write-Length([long]$Length) {
     [IO.File]::WriteAllText($Headers, "HTTP/1.1 200 OK`r`nContent-Length: $Length`r`n`r`n")
@@ -141,7 +146,7 @@ function Receive-LfsModel($Manifest) {
     } finally { $inputFile.Dispose() }
 }
 
-try {
+function Receive-Asset {
     # GitHub fallback always downloads the original, even when volumes are published there.
     $manifest = $null
     $address = [Uri]$Url
@@ -155,9 +160,10 @@ try {
                 $manifest = $json | ConvertFrom-Json
             } finally { $reader.Dispose(); $response.Dispose() }
             if (!$manifest) { throw 'Empty manifest.' }
-        } catch [Net.WebException] {
-            if (!$_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 404) { throw }
-            $_.Exception.Response.Dispose()
+        } catch {
+            $webError = Get-WebException $_
+            if (!$webError -or !$webError.Response -or [int]$webError.Response.StatusCode -ne 404) { throw }
+            $webError.Response.Dispose()
         }
     }
     if ($manifest -and $manifest.format -ceq 'lfs') {
@@ -212,6 +218,86 @@ try {
                 throw 'Asset checksum mismatch.'
             }
         } finally { $output.Dispose() }
+    }
+}
+
+function Get-ResourceCatalog {
+    if ($ResourceTag -cnotmatch '^v[0-9]+(\.[0-9]+)+(F[0-9]+)?_x(64|86)$') { throw 'Invalid resource version.' }
+    $cache = Join-Path $PSScriptRoot ("resources-$ResourceTag.json")
+    $lastError = $null
+    foreach ($base in @('https://gitcode.com/ruomengtu/RMTAssets/releases/download/', 'https://github.com/zclucas/RMTAssets/releases/download/')) {
+        try {
+            if ([IO.File]::Exists($cache)) {
+                $json = [IO.File]::ReadAllText($cache)
+            } else {
+                $response = Open-Response ($base + $ResourceTag + '/resources.json') 20
+                $reader = New-Object IO.StreamReader($response.GetResponseStream())
+                try { $json = $reader.ReadToEnd() } finally { $reader.Dispose(); $response.Dispose() }
+            }
+            if ($json.Length -gt 4MB) { throw 'Resource catalog too large.' }
+            $catalog = $json | ConvertFrom-Json
+            if ($catalog.schema -ne 1 -or $catalog.tag -cne $ResourceTag -or !$catalog.assets) { throw 'Invalid resource catalog.' }
+            [IO.File]::WriteAllText($cache, $json)
+            return $catalog
+        } catch {
+            $lastError = $_
+            $webError = Get-WebException $_
+            if ($webError -and $webError.Response) { $webError.Response.Dispose() }
+            if ([IO.File]::Exists($cache)) { [IO.File]::Delete($cache) }
+        }
+    }
+    throw "Version resource catalog unavailable: $lastError"
+}
+
+function Receive-CatalogResource {
+    $name = [Uri]::UnescapeDataString(([Uri]$Url).AbsolutePath.Split('/')[-1])
+    $catalog = Get-ResourceCatalog
+    $property = $catalog.assets.PSObject.Properties | Where-Object { $_.Name -ceq $name }
+    if (!$property -and $name -ceq 'Index-Translate-2B.Q4_K_M.gguf.zip') {
+        $name = $name.Substring(0, $name.Length - 4)
+        $property = $catalog.assets.PSObject.Properties | Where-Object { $_.Name -ceq $name }
+    }
+    if (!$property) { throw 'Resource is not pinned by this version.' }
+    $entry = $property.Value
+    if ($entry.scope -cnotin @('Common', 'Patch', $ResourceTag) -or $entry.name -cnotmatch '^[A-Za-z0-9_][A-Za-z0-9._-]*$' -or
+        $entry.size -le 0 -or $entry.sha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Invalid pinned resource.' }
+    $bases = @('https://gitcode.com/ruomengtu/RMTAssets/releases/download/', 'https://github.com/zclucas/RMTAssets/releases/download/')
+    if (([Uri]$Url).Host -ceq 'github.com') { [array]::Reverse($bases) }
+    $scopes = @(@{ Tag = $ResourceTag; Name = $name })
+    if ($entry.scope -cne $ResourceTag) { $scopes += @{ Tag = $entry.scope; Name = $entry.name } }
+    foreach ($scope in $scopes) {
+        $failed = $null
+        foreach ($base in $bases) {
+            $script:Url = $base + $scope.Tag + '/' + $scope.Name
+            try {
+                Receive-Asset
+                $file = [IO.File]::OpenRead($Path)
+                try {
+                    if ($file.Length -ne $entry.size -or (Segment-Hash $file 0 $entry.size) -cne $entry.sha256) {
+                        throw 'Pinned resource checksum mismatch.'
+                    }
+                } finally { $file.Dispose() }
+                return
+            } catch {
+                $webError = Get-WebException $_
+                $notFound = $webError -and $webError.Response -and [int]$webError.Response.StatusCode -eq 404
+                if (!$notFound) { $failed = $_ }
+                if ($webError -and $webError.Response) { $webError.Response.Dispose() }
+                if ([IO.File]::Exists($Path)) { [IO.File]::Delete($Path) }
+            }
+        }
+        # Only two confirmed 404s permit moving from the version to its shared scope.
+        # Transport and integrity errors may try the other mirror, never newer content.
+        if ($failed) { throw $failed }
+    }
+    throw 'Pinned resource is missing from both providers.'
+}
+
+try {
+    if ($ResourceTag -and $Url -match '^https://(?:gitcode\.com/ruomengtu|github\.com/zclucas)/RMTAssets/releases/download/') {
+        Receive-CatalogResource
+    } else {
+        Receive-Asset
     }
     exit 0
 } catch {

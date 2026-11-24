@@ -20,14 +20,14 @@ permissions:
   actions: read
 
 concurrency:
-  group: rmt-assets-${{ github.event.workflow_run.head_branch || inputs.run_id || github.run_id }}
+  group: rmt-resource-publication
   cancel-in-progress: false
 
 jobs:
   upload:
     outputs:
       asset_tags: ${{ steps.github_assets.outputs.asset_tags }}
-    name: 上传到 RMTAssets
+    name: 发布两站分层资源
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -111,6 +111,7 @@ jobs:
         if: env.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\Upload-RmtAssets.ps1') `
@@ -118,20 +119,12 @@ jobs:
             -OutDir $out `
             -Repo 'zclucas/RMTAssets'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $info = Get-Content (Join-Path $out 'release-info.json') -Raw | ConvertFrom-Json
+          $result = Get-Content (Join-Path $env:RUNNER_TEMP 'resource-layout-result.json') -Raw | ConvertFrom-Json
+          "asset_tags=$(ConvertTo-Json -InputObject @($result.asset_tags) -Compress)" >> $env:GITHUB_OUTPUT
 
-          $tags = @(foreach ($arch in 'x64', 'x86', 'Common') {
-            if (Test-Path (Join-Path $out "RMTAssets_$arch")) {
-              if ($arch -eq 'Common') { 'Common' } else { "v$($info.asset_tag)_$arch" }
-            }
-          })
-          "asset_tags=$(ConvertTo-Json -InputObject $tags -Compress)" >> $env:GITHUB_OUTPUT
-
-  resource_mirror:
-    name: 同步 GitCode 资源
-    needs: upload
-    if: needs.upload.outputs.asset_tags != ''
-    uses: ./.github/workflows/sync-gitcode-assets.yml
-    with:
-      asset_tags: ${{ needs.upload.outputs.asset_tags }}
-    secrets: inherit
+      - name: 保存资源发布结果
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resource-layout-result
+          path: ${{ runner.temp }}/resource-layout-result.json

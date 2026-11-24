@@ -614,7 +614,7 @@ EnsureSponsorLogo(logo) {
             retryAfter := A_TickCount + 60000
             if (FileExist(bundle))
                 FileDelete(bundle)
-            if (RmtDownloadManager.DownloadBlocking(GetSponsorLogoBundleUrl(), bundle, 12, pg) != "ok")
+            if (RmtDownloadManager.DownloadBlocking(GetSponsorLogoBundleUrl(), bundle, 60, pg) != "ok")
                 return ""
             bundleReady := true
         }

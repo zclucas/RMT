@@ -322,6 +322,8 @@ class RmtDownloadManager {
 
 ; 主程序内嵌脚本，发行版不依赖源码目录；独立进程可被下载取消直接终止。
 RmtAssetDownloadCommand(url, path, headers, timeoutSec) {
+    global RMT_VERSION
+    resourceTag := "v" RMT_VERSION "_" (A_PtrSize == 8 ? "x64" : "x86")
     static script := ""
     if (script == "" || !FileExist(script)) {
         dir := A_Temp "\RMT-AssetDownload-" DllCall("GetCurrentProcessId")
@@ -332,4 +334,5 @@ RmtAssetDownloadCommand(url, path, headers, timeoutSec) {
     powershell := A_WinDir "\System32\WindowsPowerShell\v1.0\powershell.exe"
     return '"' powershell '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' script
         . '" -Url "' url '" -Path "' path '" -Headers "' headers '" -TimeoutSec ' timeoutSec
+        . ' -ResourceTag "' resourceTag '"'
 }

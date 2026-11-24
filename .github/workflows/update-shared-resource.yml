@@ -1,0 +1,48 @@
+name: 更新共享或修补资源
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 资源分类
+        required: true
+        type: choice
+        options: [Common, Patch]
+      name:
+        description: 目标附件名（架构包使用 _x64 / _x86 后缀）
+        required: true
+        type: string
+      url:
+        description: 新文件的公开 GitHub Release 下载地址
+        required: true
+        type: string
+      sha256:
+        description: 新文件 SHA-256（64 位小写十六进制）
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: rmt-resource-publication
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 归档所有旧版依赖，再发布并校验新文件
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+          SCOPE: ${{ inputs.scope }}
+          ASSET_NAME: ${{ inputs.name }}
+          SOURCE_URL: ${{ inputs.url }}
+          SOURCE_SHA256: ${{ inputs.sha256 }}
+        run: python3 -u .github/scripts/resource_layout.py shared-url --scope "$SCOPE" --name "$ASSET_NAME" --url "$SOURCE_URL" --sha256 "$SOURCE_SHA256"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resource-layout-result
+          path: ${{ runner.temp }}/resource-layout-result.json

@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: gitcode-resource-mirror
+  group: rmt-resource-publication
   cancel-in-progress: false
 jobs:
   mirror:
@@ -24,17 +24,3 @@ jobs:
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
           ASSET_TAGS: ${{ inputs.asset_tags }}
         run: python3 -u .github/scripts/sync_gitcode_assets.py sync --tags "$ASSET_TAGS" --workers 2
-  model:
-    if: contains(fromJSON(inputs.asset_tags), 'Common')
-    needs: mirror
-    runs-on: ubuntu-latest
-    timeout-minutes: 300
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: 按已验证策略同步翻译模型
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
-        run: python3 -u .github/scripts/sync_gitcode_assets.py model --model-mode configured

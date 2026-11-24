@@ -2,6 +2,10 @@ name: 补齐 GitCode 资源
 on:
   workflow_dispatch:
     inputs:
+      reorganize_resources:
+        description: 按版本、Common、Patch 重组两站资源（不兼容旧版 Common 地址）
+        type: boolean
+        default: false
       cleanup_sponsor:
         description: 校验 Sponsor.zip 后删除两站 Common 中单独的 rmt.png
         type: boolean
@@ -15,11 +19,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: gitcode-resource-mirror
+  group: rmt-resource-publication
   cancel-in-progress: false
 jobs:
   mirror:
-    if: ${{ !inputs.cleanup_sponsor && inputs.asset_name != 'Index-Translate-2B.Q4_K_M.gguf' }}
+    if: ${{ !inputs.reorganize_resources && !inputs.cleanup_sponsor }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -32,34 +36,20 @@ jobs:
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
           RELEASE_TAG: ${{ inputs.tag }}
           ASSET_NAME: ${{ inputs.asset_name }}
-        run: python3 -u .github/scripts/sync_gitcode_assets.py sync --tag "$RELEASE_TAG" --asset-name "$ASSET_NAME" --workers 2
+        run: |
+          if [[ "$ASSET_NAME" == 'Index-Translate-2B.Q4_K_M.gguf' ]]; then
+            echo '::error::模型变更请使用更新共享或修补资源工作流，以归档旧版本依赖。'
+            exit 1
+          fi
+          python3 -u .github/scripts/sync_gitcode_assets.py sync --tag "$RELEASE_TAG" --asset-name "$ASSET_NAME" --workers 2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: gitcode-sync-result
           path: ${{ runner.temp }}/gitcode-sync.json
-  model:
-    needs: mirror
-    if: ${{ !inputs.cleanup_sponsor && !cancelled() && (needs.mirror.result == 'success' || needs.mirror.result == 'skipped') && (inputs.tag == '' || inputs.tag == 'Common') && (inputs.asset_name == '' || inputs.asset_name == 'Index-Translate-2B.Q4_K_M.gguf') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 300
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: 按所选策略同步翻译模型
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
-        run: python3 -u .github/scripts/sync_gitcode_assets.py model --model-mode configured
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: gitcode-model-result
-          path: ${{ runner.temp }}/gitcode-model.json
   cleanup_sponsor:
     name: 清理单独的赞助 Logo
-    if: inputs.cleanup_sponsor
+    if: ${{ inputs.cleanup_sponsor && !inputs.reorganize_resources }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -76,3 +66,22 @@ jobs:
         with:
           name: sponsor-cleanup-result
           path: ${{ runner.temp }}/gitcode-sponsor-cleanup.json
+  reorganize:
+    name: 重组两站资源
+    if: inputs.reorganize_resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 建立清单、复制校验并清理旧位置
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        run: python3 -u .github/scripts/resource_layout.py migrate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resource-layout-result
+          path: ${{ runner.temp }}/resource-layout-result.json

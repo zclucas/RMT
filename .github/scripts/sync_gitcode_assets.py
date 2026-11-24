@@ -154,7 +154,7 @@ def public_url(tag, name):
     return PUBLIC + quote(tag, safe='') + '/' + quote(safe_name(name), safe='')
 
 
-def readback(tag, asset, url=None):
+def readback(tag, asset, url=None, headers=None):
     address = url or public_url(tag, asset['name'])
     size = asset['size']
     digest = hashlib.sha256()
@@ -165,7 +165,7 @@ def readback(tag, asset, url=None):
             start, length = item
             for attempt in range(6):
                 try:
-                    request = Request(address, headers={'Range': 'bytes={}-{}'.format(start, start + length - 1),
+                    request = Request(address, headers={**(headers or {}), 'Range': 'bytes={}-{}'.format(start, start + length - 1),
                                                        'User-Agent': 'RMT-AssetDownloader/1'})
                     with urlopen(request, timeout=90) as response:
                         expected = 'bytes {}-{}/{}'.format(start, start + length - 1, size)
@@ -189,7 +189,7 @@ def readback(tag, asset, url=None):
     else:
         for attempt in range(6):
             try:
-                with urlopen(Request(address, headers={'User-Agent': 'RMT-AssetDownloader/1'}), timeout=90) as response:
+                with urlopen(Request(address, headers={**(headers or {}), 'User-Agent': 'RMT-AssetDownloader/1'}), timeout=90) as response:
                     raw = response.read(size + 1)
                 break
             except HTTPError as exc:

@@ -57,8 +57,8 @@ CanCreateStartupFiles(dir) {
 ; Win7 没装 KB4474419 时，.NET 与 vc_redist 这两个微软签名的安装包会被判
 ; 「不是有效的 Win32 应用程序」，或者装到一半静默回滚。
 ;
-; 资源都在 RMTAssets 的 Common 标签，和 directx_Jun2010_redist、segmdl2.ttf 同处。
-; 非 Win7 逐项下载；Win7 连不上网，改用 Common 里的离线运行环境包 Runtime_x64/x86.zip——
+; 资源都在 RMTAssets 的 Patch 标签，和 directx_Jun2010_redist、segmdl2.ttf 同处。
+; 非 Win7 逐项下载；Win7 连不上网，改用 Patch 里的离线运行环境包 Runtime_x64/x86.zip——
 ; 包里是这组安装包 + InstallRuntime.bat，解压后双击脚本一次装齐（脚本自己判状态、判重启）。
 ; =============================================================================
 
@@ -351,7 +351,7 @@ RuntimeOfflineAsset(name) {
     return FileExist(path) ? path : ""
 }
 
-; 离线运行环境压缩包，放在 RMTAssets 的 Common 里，按系统位数分两个：
+; 离线运行环境压缩包，放在 RMTAssets 的 Patch 里，按系统位数分两个：
 ; 包里是 KB4474419 + KB4019990 + .NET 4.8 + VC + segmdl2.ttf，以及一键安装脚本
 ; InstallRuntime.bat（脚本和安装包放在一起，解压即用，和 RMT 本体无关）。
 RuntimeOfflineBundleName() {
@@ -360,7 +360,7 @@ RuntimeOfflineBundleName() {
 
 RuntimeOfflineBundleUrl() {
     ; 手工下载必须提供完整包，浏览器不会运行分片合并器。
-    return RmtLargeAssetUrl(RuntimeOfflineBundleName())
+    return RmtAssetsBaseUrl("Patch") RuntimeOfflineBundleName()
 }
 
 ; Win7 在线版：三项系统组件里任意一项缺、且没有对应离线副本，就说明这个包不能用。
@@ -420,7 +420,7 @@ RuntimePrepareAsset(name, hint, expectSize := 0) {
     pg.Show()
     result := ""
     try {
-        url := name == "NDP48-x86-x64-AllOS-ENU.exe" ? RmtLargeAssetUrl(name) : RmtAssetsBaseUrl("Common") name
+        url := RmtAssetsBaseUrl("Patch") name
         result := RmtDownloadManager.DownloadBlocking(url, path, 3600, pg)
     } finally pg.Close()
 
@@ -923,11 +923,10 @@ VcRuntimeEnsureInstalled(ask := true) {
 }
 
 ; 下载官方 vc_redist 并静默安装。需要管理员：用户拒绝 UAC 会被 catch 掉。
-; 优先从 RMTAssets 的 Common 取（国内直连 aka.ms 常常超时），失败再回落官方短链。
+; 由版本清单锁定 Patch 内容，备用站也必须通过同一哈希校验。
 VcRuntimeRedistUrls() {
     arch := VcRuntimeArchDir()
-    return [RmtAssetsBaseUrl("Common") "VC_redist." arch ".exe"
-        , "https://aka.ms/vs/17/release/vc_redist." arch ".exe"]
+    return [RmtAssetsBaseUrl("Patch") "VC_redist." arch ".exe"]
 }
 
 VcRuntimeInstallRedist() {
@@ -997,9 +996,9 @@ VcRuntimeStartupCheck() {
 ;      先 /Q /T 自解包，再 DXSETUP.exe /silent 静默安装
 ;   3. 装完重新检测，以文件是否就位为准（不依赖安装器退出码）
 ;
-; 资源来源：RMTAssets 的 Common 标签，文件名保持官方原名
+; 资源来源：RMTAssets 的 Patch 标签，文件名保持官方原名
 ;   directx_Jun2010_redist.exe
-; 放 Common 而不是版本标签，是因为这份运行库跨版本通用，传一次全版本可用。
+; 放 Patch 而不是版本标签，是因为这份运行库跨版本通用，传一次全版本可用。
 ;
 ; 为什么用官方自解包而不是自己分发 xinput1_3.dll：
 ;   自解包能力内建，不需要系统有 tar / 解压工具（Win7 没有 tar.exe）；
@@ -1014,7 +1013,7 @@ DirectXAssetName() {
 }
 
 DirectXAssetUrl() {
-    return RmtAssetsBaseUrl("Common") DirectXAssetName()
+    return RmtAssetsBaseUrl("Patch") DirectXAssetName()
 }
 
 ; 用户选过「不再提示」就不再自动询问（仍可通过「文件校验」手动触发）
@@ -1150,7 +1149,7 @@ DirectXStartupCheck() {
 ;   Segoe MDL2 Assets  —— Windows 10
 ; Win7 两者都没有，WPF 回退到默认字体后每个图标都画成方块（tofu）。
 ;
-; 处理方式和 VC 运行库 / DirectX 同构：检测 → 缺了从 RMTAssets 的 Common 取字体 → 注册。
+; 处理方式和 VC 运行库 / DirectX 同构：检测 → 缺了从 RMTAssets 的 Patch 取字体 → 注册。
 ; 不往系统字体目录写文件、不需要管理员：AddFontResourceExW 把字体加进本次会话的
 ; 系统字体表（session 级，Worker 等其它进程同样可见），再广播 WM_FONTCHANGE 让
 ; DirectWrite 重建字体集合。不能用 FR_PRIVATE —— DirectWrite 不枚举进程私有字体。
@@ -1163,7 +1162,7 @@ IconFontFileName() {
 }
 
 IconFontAssetUrl() {
-    return RmtAssetsBaseUrl("Common") IconFontFileName()
+    return RmtAssetsBaseUrl("Patch") IconFontFileName()
 }
 
 ; 系统已装（Win10/11 自带，或用户手工装过）。以字体目录里的文件为准，
