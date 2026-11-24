@@ -2,6 +2,10 @@ name: 补齐 GitCode 资源
 on:
   workflow_dispatch:
     inputs:
+      cleanup_sponsor:
+        description: 校验 Sponsor.zip 后删除两站 Common 中单独的 rmt.png
+        type: boolean
+        default: false
       tag:
         description: 资源标签；留空处理全部发行版
         type: string
@@ -15,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mirror:
-    if: inputs.asset_name != 'Index-Translate-2B.Q4_K_M.gguf'
+    if: ${{ !inputs.cleanup_sponsor && inputs.asset_name != 'Index-Translate-2B.Q4_K_M.gguf' }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -36,7 +40,7 @@ jobs:
           path: ${{ runner.temp }}/gitcode-sync.json
   model:
     needs: mirror
-    if: ${{ !cancelled() && (needs.mirror.result == 'success' || needs.mirror.result == 'skipped') && (inputs.tag == '' || inputs.tag == 'Common') && (inputs.asset_name == '' || inputs.asset_name == 'Index-Translate-2B.Q4_K_M.gguf') }}
+    if: ${{ !inputs.cleanup_sponsor && !cancelled() && (needs.mirror.result == 'success' || needs.mirror.result == 'skipped') && (inputs.tag == '' || inputs.tag == 'Common') && (inputs.asset_name == '' || inputs.asset_name == 'Index-Translate-2B.Q4_K_M.gguf') }}
     runs-on: ubuntu-latest
     timeout-minutes: 300
     steps:
@@ -53,3 +57,22 @@ jobs:
         with:
           name: gitcode-model-result
           path: ${{ runner.temp }}/gitcode-model.json
+  cleanup_sponsor:
+    name: 清理单独的赞助 Logo
+    if: inputs.cleanup_sponsor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 校验两站 Sponsor.zip 并删除 Common/rmt.png
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        run: python3 -u .github/scripts/sync_gitcode_assets.py sponsor-cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sponsor-cleanup-result
+          path: ${{ runner.temp }}/gitcode-sponsor-cleanup.json

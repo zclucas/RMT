@@ -2,6 +2,7 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -317,6 +318,66 @@ def sync(tags=None, asset_name='', workers=4):
     return receipts
 
 
+
+def retire_sponsor_logo():
+    """Retire only Common/rmt.png after both public ZIPs preserve its bytes."""
+    tag, name = 'Common', 'rmt.png'
+    source = gh('/releases/tags/' + tag)
+    target = release(tag)
+    if source.get('draft') or not target:
+        raise ValueError('Both published Common releases are required')
+    github_assets = pages(gh, '/releases/' + str(source['id']) + '/assets')
+    gitcode_assets = attachments(target)
+
+    def public_bytes(url):
+        with urlopen(Request(url, headers={'User-Agent': 'RMT-sponsor-cleanup'}), timeout=90) as response:
+            data = response.read(64 * 1024 * 1024 + 1)
+        if len(data) > 64 * 1024 * 1024:
+            raise ValueError('Sponsor attachment exceeds verification bound')
+        return data
+
+    def one(assets, asset_name, required=False):
+        found = [a for a in assets if a['name'] == asset_name]
+        if len(found) > 1 or (required and not found):
+            raise ValueError('Missing or duplicate sponsor attachment: ' + asset_name)
+        return found[0] if found else None
+
+    github_zip = one(github_assets, 'Sponsor.zip', True)
+    gitcode_zip = one(gitcode_assets, 'Sponsor.zip', True)
+    payload = public_bytes(github_zip['browser_download_url'])
+    expected = 'sha256:' + hashlib.sha256(payload).hexdigest()
+    if github_zip.get('digest') != expected or github_zip['size'] != len(payload):
+        raise ValueError('GitHub Sponsor.zip metadata mismatch')
+    if gitcode_zip['size'] != len(payload) or public_bytes(public_url(tag, 'Sponsor.zip')) != payload:
+        raise ValueError('Public Sponsor.zip differs between providers')
+    with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
+        entries = [entry for entry in bundle.infolist() if entry.filename == name]
+        if len(entries) != 1 or entries[0].file_size > 64 * 1024 * 1024:
+            raise ValueError('Sponsor.zip must contain one root rmt.png')
+        image = bundle.read(entries[0])
+    if not image.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise ValueError('Archived rmt.png is not a PNG')
+    old_github = one(github_assets, name)
+    old_gitcode = one(gitcode_assets, name)
+    # Finish every preservation check before the first deletion.
+    for asset, url in ((old_github, old_github['browser_download_url'] if old_github else ''),
+                       (old_gitcode, public_url(tag, name))):
+        if asset and (asset['size'] != len(image) or public_bytes(url) != image):
+            raise ValueError('Loose rmt.png differs from the archived image')
+    removed = []
+    if old_gitcode:
+        gc('/releases/Common/attach_files/' + str(int(old_gitcode['id'])), method='DELETE')
+        removed.append('GitCode/Common/rmt.png')
+    if old_github:
+        gh('/releases/assets/' + str(int(old_github['id'])), method='DELETE')
+        removed.append('GitHub/Common/rmt.png')
+    if one(pages(gh, '/releases/' + str(source['id']) + '/assets'), name) or one(attachments(release(tag)), name):
+        raise ValueError('Loose sponsor attachment remains after deletion')
+    if public_bytes(github_zip['browser_download_url']) != payload or public_bytes(public_url(tag, 'Sponsor.zip')) != payload:
+        raise ValueError('Sponsor.zip changed during cleanup')
+    return dict(status='passed', removed=removed, sponsor_zip_sha256=expected[7:])
+
+
 def git(*args, cwd=None, timeout=90):
     helper = '!f() { if test "$1" = get; then printf "username=ruomengtu\\npassword=%s\\n" "$GITCODE_TOKEN"; fi; }; f'
     command = ['git', '-c', 'credential.helper=', '-c', 'credential.https://gitcode.com.helper=' + helper]
@@ -500,7 +561,7 @@ def prepare_model(preferred='auto'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('model', 'sync', 'metadata'))
+    parser.add_argument('mode', choices=('model', 'sync', 'metadata', 'sponsor-cleanup'))
     parser.add_argument('--repo', choices=('RMT', 'RMTAssets'), default='RMTAssets')
     parser.add_argument('--tag', default='')
     parser.add_argument('--tags', default='')
@@ -518,7 +579,9 @@ if __name__ == '__main__':
         parser.error('Model operations apply only to RMTAssets')
     result = {}
     try:
-        if args.mode == 'model':
+        if args.mode == 'sponsor-cleanup':
+            result = retire_sponsor_logo()
+        elif args.mode == 'model':
             choice = args.model_mode
             if choice == 'configured':
                 policy = Path(__file__).resolve().parents[2] / 'Scripts/AssetDownloadPolicy.json'
