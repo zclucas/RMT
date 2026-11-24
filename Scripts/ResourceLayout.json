@@ -61,5 +61,11 @@
     "Sponsor.zip",
     "Index-Translate-2B.Q4_K_M.gguf",
     "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2"
+  ],
+  "required": [
+    "Lang.zip",
+    "ico.zip",
+    "RMT.zip",
+    "Xaml.zip"
   ]
 }

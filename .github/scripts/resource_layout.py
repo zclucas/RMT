@@ -459,7 +459,7 @@ def publish(store, directory):
     for tag, arch in zip(new_tags, ('x64', 'x86')):
         source = directory / ('RMTAssets_' + arch)
         paths = sorted(source.glob('*.zip'))
-        if not paths or not set(POLICY['versioned']) <= {p.name for p in paths}:
+        if not paths or not set(POLICY.get('required', POLICY['versioned'])) <= {p.name for p in paths}:
             raise ValueError('Incomplete build artifacts: ' + arch)
         entries = common_entries(store)
         for path in paths:
