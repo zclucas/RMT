@@ -267,17 +267,25 @@ class Store:
         if self.asset(tag, name) or any(a['name'] == name for a in mirror.attachments(mirror.release(tag))):
             raise ValueError('Asset remains after removal: ' + tag + '/' + name)
 
-    def put_catalog(self, catalog):
+    def put_catalog(self, catalog, append_missing=False):
         tag = catalog['tag']
         previous = self.catalog(tag)
         if previous is not None and previous != catalog:
-            raise ValueError('Refusing to rewrite version catalog: ' + tag)
+            additions = set(catalog['assets']) - set(previous['assets'])
+            unchanged = ({k: v for k, v in previous.items() if k != 'assets'} ==
+                         {k: v for k, v in catalog.items() if k != 'assets'} and
+                         all(catalog['assets'].get(k) == v for k, v in previous['assets'].items()))
+            if not (append_missing and unchanged and additions and
+                    additions <= {'Runtime_x64.zip', 'Runtime_x86.zip'} and
+                    all(catalog['assets'][k]['scope'] == 'Patch' and catalog['assets'][k]['name'] == k
+                        for k in additions)):
+                raise ValueError('Refusing to rewrite version catalog: ' + tag)
         path = self.directory / (tag + '-resources.json')
-        if previous is not None:
+        if previous == catalog:
             path = self.download(tag, self.asset(tag, CATALOG))
         else:
             path.write_text(json.dumps(catalog, ensure_ascii=True, indent=2) + '\n', encoding='utf-8')
-        self.put(tag, CATALOG, path)
+        self.put(tag, CATALOG, path, replace=append_missing)
         self.put_readable(catalog)
 
     def put_readable(self, catalog):
@@ -363,7 +371,7 @@ def common_entries(store):
             if name in (CATALOG, INDEX) or re.search(r'\.(?:parts\.json|part\d{4})$', name):
                 continue
             # Architecture-specific plugin packages belong to their matching catalog only.
-            if re.search(r'_(x64|x86)\.zip$', name):
+            if scope == 'Common' and re.search(r'_(x64|x86)\.zip$', name):
                 continue
             entries[name] = store.describe(scope, asset)
     return entries
@@ -564,9 +572,31 @@ def update_shared(store, known, scope, directory):
     return dict(status='passed', updated=result)
 
 
+def complete_catalogs(store):
+    """Append initial offline-runtime omissions; existing pins may never change."""
+    patch = store.catalog('Patch')
+    if not patch:
+        raise ValueError('Patch resource index is required')
+    amended = []
+    for tag, catalog in catalogs(store).items():
+        missing = [name for name in ('Runtime_x64.zip', 'Runtime_x86.zip')
+                   if name not in catalog['assets']]
+        if not missing:
+            continue
+        for name in missing:
+            entry = patch['assets'].get(name)
+            if not entry or entry['scope'] != 'Patch' or entry['name'] != name:
+                raise ValueError('Pinned offline runtime is absent from Patch')
+            store.verify('Patch', name, entry)
+            catalog['assets'][name] = entry
+        store.put_catalog(catalog, append_missing=True)
+        amended.append(dict(tag=tag, added=missing))
+    return dict(status='passed', amended=amended)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url'))
+    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--scope', choices=('Common', 'Patch'))
     parser.add_argument('--url')
@@ -579,6 +609,8 @@ if __name__ == '__main__':
             store = Store(directory)
             if args.mode == 'migrate':
                 result = migrate(store)
+            elif args.mode == 'complete-catalogs':
+                result = complete_catalogs(store)
             elif args.mode == 'shared-url':
                 address = urlsplit(args.url or '')
                 if (address.scheme != 'https' or address.netloc != 'github.com'
