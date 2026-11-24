@@ -192,8 +192,6 @@ InputPopUp(Data, tableItem, index) {
     prompt := InputResolveText(tableItem, index, Data.Prompt)
     Label := prompt != "" ? prompt : GetLang("变量名：") Data.SaveName
     Content := InputResolveText(tableItem, index, Data.DefaultValue)
-    if (Content == "" && MySoftData.VariableMap.Has(Data.SaveName))
-        Content := MySoftData.VariableMap[Data.SaveName]
 
     result := RequestMacroInput(Data, tableItem, index, "IP", Label, Content)
     if (IsObject(result) && result.Length >= 2 && result[1] == "1") {

@@ -1,6 +1,7 @@
 #Requires AutoHotkey v2.0
 
 class PromptGui {
+    _autoRemark := ""
     _playHotkeys := []
     static WindowWidth := 560
     static BodyInset := 16
@@ -44,6 +45,7 @@ class PromptGui {
             this.data.RegionName := ""
         if (!this.data.HasProp("CountDownName"))
             this.data.CountDownName := ""
+        this._autoRemark := ReadCommandAutoRemark(this.data, GenerateCommandAutoRemark)
         this.remark := parts.Length > 1 ? parts[2] : ""
         if (serial != "" && !RegExMatch(serial, "\d+$"))
             this.remark := ""
@@ -697,9 +699,9 @@ class PromptGui {
             data.SerialStr := this.previewSerial
         } else if (data.SerialStr == "")
             data.SerialStr := GetCMDSerialStr("提示")
+        command := FormatCommandAutoRemark(data, this.ui.Query("Remark"), this._autoRemark, GenerateCommandAutoRemark, !preview)
         SaveMacroCMDData(data)
-        SplitSerialTextAndNumbers(data.SerialStr, &key, &number)
-        return CorrectRemark(GetLang("提示") number, this.ui.Query("Remark"))
+        return command
     }
 
     Save(*) {

@@ -9,6 +9,7 @@
 ; =====================================================================
 
 class WindowManageGui {
+    _autoRemark := ""
     __new() {
         this.CmdKey := "窗口管理"
         this.ParentTile := ""
@@ -240,6 +241,7 @@ class WindowManageGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CmdKey)
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
 
         WindowEnsureResults(this.Data)
         this._resultAction := this.Data.ActionType
@@ -546,15 +548,12 @@ class WindowManageGui {
         }
         this.Data.NewTitle := TranslateBuiltinVarReferences(this.ui.Query("NewTitleCon"))
         this.Data.Transparency := StrReplace(this.ui.Query("TransparencyCon"), "%")
+        FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(this.Data)
     }
 
     GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        CommandStr := CorrectRemark(CommandStr, this.ui.Query("RemarkCon"))
-        return CommandStr
+        return FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, false)
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {

@@ -6,6 +6,7 @@
 ; =====================================================================
 
 class KeyCheckGui {
+    _autoRemark := ""
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -66,7 +67,7 @@ class KeyCheckGui {
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("4,2,4,8")
-        body.Rows("Auto", "Auto", "44", "48")
+        body.Rows("Auto", "Auto", "44", "Auto", "48")
         body.Cols("Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "*")
 
         ; 行0：键盘（按键指令同款）
@@ -107,8 +108,15 @@ class KeyCheckGui {
                 .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         }
 
-        ; 行3：清空 / 确定（清空与确定同款，间距 300px）
-        btnRow := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        if (!this.HasProp("SelectionData")) {
+            remarkRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(11).Margin("16,4")
+            remarkRow.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
+            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
+            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1)
+        }
+
+        ; 行4：清空 / 确定（清空与确定同款，间距 300px）
+        btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         clearBtn := btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
             .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
@@ -122,7 +130,8 @@ class KeyCheckGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="1130" Height="460"')
+        editorHeight := 460 + (this.HasProp("SelectionData") ? 0 : Max(26, 1.4 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())) + 8)
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="1130" Height="' editorHeight '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -314,6 +323,9 @@ class KeyCheckGui {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("按键检测")
         this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
+        if (!this.HasProp("SelectionData"))
+            this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 && RegExMatch(cmdArr[1], "\d+$") ? cmdArr[2] : "")
         this.DLVariableArr := GetGuiVarArr()
         this.KeyStr := ""
         if (this.Data.KeyArr.Length > 0) {
@@ -321,7 +333,7 @@ class KeyCheckGui {
                 this.KeyStr .= k "⎖"
             this.KeyStr := RTrim(this.KeyStr, "⎖")
         }
-        if (cmdArr.Length >= 2)
+        if (cmdArr.Length >= 2 && !RegExMatch(cmdArr[1], "\d+$"))
             this.KeyStr := cmdArr[2]
 
         if (!this.HasProp("SelectionData")) {
@@ -352,10 +364,9 @@ class KeyCheckGui {
     }
 
     GetCommandStr() {
-        textOnly := RegExReplace(this.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        return CommandStr
+        if (this.HasProp("SelectionData"))
+            return GetLang(RegExReplace(this.SerialStr, "\d+")) RegExReplace(this.SerialStr, "\D+")
+        return FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, false)
     }
 
     SaveKeyCheckData() {
@@ -368,6 +379,7 @@ class KeyCheckGui {
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
         MySoftData.GlobalVariMap[data.VarName] := true
 
+        FormatCommandAutoRemark(data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(data)
     }
 

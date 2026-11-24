@@ -6,6 +6,7 @@
 ; =====================================================================
 
 class OutputGui {
+    _autoRemark := ""
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -212,6 +213,7 @@ class OutputGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("输出")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         this.DLVariableArr := GetGuiVarArr("all")
         if (this.Data.VariableName == "")
             this.Data.VariableName := "Data"
@@ -295,12 +297,8 @@ class OutputGui {
             OnTriggerSepcialItemMacro(CommandStr)
     }
 
-    GetCommandStr(remark) {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        CommandStr := CorrectRemark(CommandStr, remark)
-        return CommandStr
+    GetCommandStr(remark, commitRemark := false) {
+        return FormatCommandAutoRemark(this.Data, remark, this._autoRemark, GenerateCommandAutoRemark, commitRemark)
     }
 
     SaveOutputData() {
@@ -315,7 +313,7 @@ class OutputGui {
         this.Data.OutputType := GetLangKey(values["OutputTypeCombo"])
         this.Data.VariableName := GetVarName(values["VariableNameCombo"])
         this.Data.HudPos := values["HudPosCombo"]
-        CommandStr := this.GetCommandStr(values["RemarkCon"])
+        CommandStr := this.GetCommandStr(values["RemarkCon"], true)
         SaveMacroCMDData(this.Data)
         ; 配置已变更，需通知 Worker 丢弃缓存的 Data，否则它仍按旧的 OutputType 执行
         ; （例如改为「悬浮显示」后，Worker 仍走「发送内容」分支，不会发出 HO）
