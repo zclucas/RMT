@@ -138,7 +138,7 @@ class Store:
                 if exc.code != 404:
                     raise
                 ref = None
-            if not ref or ref['type'] != 'tag':
+            if not ref or (ref['type'] != 'tag' and mutable_tag(tag)):
                 # New version resources must sort by publication time, rather
                 # than inheriting the old commit date of the assets repo's main.
                 commit = ref['sha'] if ref else mirror.gh('/git/ref/heads/main')['object']['sha']
@@ -254,7 +254,7 @@ class Store:
             if staged.resolve() != path.resolve():
                 shutil.copyfile(path, staged)
             subprocess.run(['gh', 'release', 'upload', tag, str(staged), '--repo',
-                            'zclucas/RMTAssets', '--clobber'], check=True)
+                            'zclucas/RMTAssets'] + (['--clobber'] if before else []), check=True)
         if name == mirror.MODEL:
             if tag == 'Common':
                 model_dir = self.directory / 'lfs-update'
