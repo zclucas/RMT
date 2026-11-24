@@ -369,6 +369,28 @@ def common_entries(store):
     return entries
 
 
+def frozen_globals(store, tag, sibling_tag, sibling):
+    """Resume a half-published architecture pair using its original dependency set."""
+    entries = {}
+    for logical, pinned in sibling['assets'].items():
+        if logical in sibling['build_assets']:
+            continue
+        entry = dict(pinned)
+        shared = store.asset(entry['scope'], entry['name'])
+        if entry['scope'] in ('Common', 'Patch') and shared and shared.get('digest') == 'sha256:' + entry['sha256'] and shared['size'] == entry['size']:
+            store.verify(entry['scope'], entry['name'], entry)
+        else:
+            archived = store.asset(sibling_tag, logical)
+            if not archived or archived.get('digest') != 'sha256:' + entry['sha256'] or archived['size'] != entry['size']:
+                raise ValueError('Original release-family dependency is absent: ' + logical)
+            store.put(tag, logical, store.download(sibling_tag, archived))
+        if entry['scope'] == sibling_tag:
+            entry['scope'] = tag
+            entry['name'] = logical
+        entries[logical] = entry
+    return entries
+
+
 def migrate(store):
     """Initial migration: legacy 1.2 tags are outside the managed namespace."""
     print('Inventory managed releases and capture current hashes', flush=True)
@@ -461,7 +483,10 @@ def publish(store, directory):
         paths = sorted(source.glob('*.zip'))
         if not paths or not set(POLICY.get('required', POLICY['versioned'])) <= {p.name for p in paths}:
             raise ValueError('Incomplete build artifacts: ' + arch)
-        entries = common_entries(store)
+        sibling_tag = next((other for other in new_tags if other != tag and other in known), None)
+        resuming_family = tag not in known and sibling_tag is not None
+        entries = (frozen_globals(store, tag, sibling_tag, known[sibling_tag])
+                   if resuming_family else common_entries(store))
         for path in paths:
             name = path.name
             if name not in POLICY['versioned'] + POLICY['shared'] + POLICY['patch']:
@@ -480,7 +505,19 @@ def publish(store, directory):
                 entries[name] = pinned
             elif name not in POLICY['versioned']:
                 scope = 'Patch' if name in POLICY['patch'] else 'Common'
-                entries[name] = publish_shared(store, known, scope, shared_name(name, arch), path)
+                alias = shared_name(name, arch)
+                if resuming_family:
+                    current = store.asset(scope, alias)
+                    if current and fingerprint(store.download(scope, current)) == fingerprint(path):
+                        # Repair the other provider if needed, without changing generation.
+                        entry = store.put(scope, alias, store.download(scope, current))
+                    else:
+                        # A newer shared generation may have appeared since the failure.
+                        # Preserve this build as a version override instead of rolling it back.
+                        entry = store.put(tag, name, path)
+                    entries[name] = dict(scope=scope, name=alias, **entry)
+                else:
+                    entries[name] = publish_shared(store, known, scope, alias, path)
             else:
                 old = store.asset(tag, name) if any(r['tag_name'] == tag for r in store.releases()) else None
                 if old and fingerprint(store.download(tag, old)) == fingerprint(path):
