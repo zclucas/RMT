@@ -687,7 +687,7 @@ def normalize_resources(store):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation'))
+    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'cleanup-probe'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--scope', choices=('Common', 'Patch'))
     parser.add_argument('--url')
@@ -702,6 +702,9 @@ if __name__ == '__main__':
                 result = migrate(store)
             elif args.mode == 'normalize':
                 result = normalize_resources(store)
+            elif args.mode == 'cleanup-probe':
+                from release_presentation import cleanup_order_probe
+                result = cleanup_order_probe(store)
             elif args.mode == 'presentation':
                 from release_presentation import organize_releases
                 result = dict(status='passed', presentation=organize_releases(store))
@@ -729,7 +732,7 @@ if __name__ == '__main__':
                 result = publish(store, args.directory)
             else:
                 result = update_shared(store, catalogs(store), args.scope, args.directory)
-            if args.mode not in ('normalize', 'presentation'):
+            if args.mode not in ('normalize', 'presentation', 'cleanup-probe'):
                 from release_presentation import refresh_descriptions
                 refresh_descriptions(store)
     except Exception as exc:

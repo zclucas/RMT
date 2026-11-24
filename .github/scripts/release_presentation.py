@@ -1,8 +1,6 @@
 """Keep resource release descriptions and tag chronology aligned on both sites."""
 from datetime import datetime, timedelta
-import os
 import re
-from urllib.error import HTTPError
 
 import sync_gitcode_assets as mirror
 
@@ -101,51 +99,32 @@ def organize_releases(store):
     github_order = [r['tag_name'] for r in store.releases()]
     gitcode_order = [r['tag_name'] for r in mirror.pages(mirror.gc, '/releases?direction=desc')]
     tags = mirror.pages(mirror.gc, '/tags')
-    probe = None
-    if gitcode_order != wanted:
-        probe = probe_metadata_retention(store)
-        if probe:
-            # Recreate metadata only if a disposable release proved that this
-            # deployment retains attachment IDs and contents across the operation.
-            for tag in reversed(wanted):
-                before = mirror.release(tag)
-                identity = lambda r: sorted((a['id'], a['name'], a['size'], a.get('digest'))
-                                             for a in mirror.attachments(r))
-                mirror.gc('/releases/' + tag, method='DELETE')
-                restored = mirror.ensure_release(store.source(tag))
-                if identity(restored) != identity(before):
-                    raise ValueError('Release metadata recreation did not retain attachments: ' + tag)
-            gitcode_order = [r['tag_name'] for r in mirror.pages(mirror.gc, '/releases?direction=desc')]
     return dict(expected_order=wanted, github_order=github_order, gitcode_order=gitcode_order,
                 gitcode_tag_order=[t['name'] for t in tags],
-                metadata_retains_assets=probe,
-                order_matches=github_order == gitcode_order == wanted)
+                order_matches=github_order == gitcode_order == wanted,
+                limitation=None if gitcode_order == wanted else
+                'GitCode does not support release date edits or release deletion through this API')
 
 
-def probe_metadata_retention(store):
-    """Never experiment on a real release or remove its only attachment copy."""
-    tag = 'rmt-order-probe-' + os.environ['GITHUB_RUN_ID']
-    options = dict(tag_name=tag, target_commitish='main', name=tag,
-                   body='Temporary CI metadata retention probe', release_status='pre')
-    path = store.directory / 'order-probe.json'
-    path.write_text('{"test":"metadata-retention"}\n', encoding='utf-8')
-    expected = dict(name=path.name, size=path.stat().st_size, digest=mirror.sha(path))
-    try:
-        mirror.gc('/releases', data=options)
-        mirror.upload(tag, path, expected, max_time=600)
-        before = mirror.attachments(mirror.release(tag))
-        mirror.gc('/releases/' + tag, method='DELETE')
-        after = mirror.gc('/releases', data=options)
-        if [(a['id'], a['name'], a['size']) for a in mirror.attachments(after)] != [
-                (a['id'], a['name'], a['size']) for a in before]:
-            return False
-        mirror.readback(tag, expected)
-        return True
-    finally:
-        if mirror.release(tag):
-            mirror.gc('/releases/' + tag, method='DELETE')
-        mirror.git('push', '--quiet', mirror.REMOTE, ':refs/tags/' + tag,
-                   cwd=store.directory / 'presentation-tags')
+def cleanup_order_probe(store):
+    tag = 'rmt-order-probe-45344836084'
+    current = mirror.release(tag)
+    if current:
+        for asset in mirror.attachments(current):
+            mirror.gc('/releases/' + tag + '/attach_files/' + str(asset['id']), method='DELETE')
+    checkout = store.directory / 'probe-cleanup'
+    mirror.git('init', '--bare', str(checkout))
+    refs = mirror.git('ls-remote', '--tags', mirror.REMOTE, 'refs/tags/' + tag, cwd=checkout)
+    if refs.strip():
+        mirror.git('push', '--quiet', mirror.REMOTE, ':refs/tags/' + tag, cwd=checkout)
+    remaining = mirror.release(tag)
+    if remaining:
+        release_id = remaining.get('id')
+        if release_id:
+            mirror.gc('/releases/' + str(release_id), method='DELETE')
+    return dict(status='passed' if not mirror.release(tag) else 'failed',
+                probe_removed=not bool(mirror.release(tag)),
+                release_keys=sorted(remaining) if remaining else [])
 
 
 def refresh_descriptions(store, tags=None):
