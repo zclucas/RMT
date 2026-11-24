@@ -520,7 +520,6 @@ SelfCheckMissingFiles() {
         {path: "Audio\End.wav", entry: "End.wav", bundle: "Audio.zip"},
         {path: "Plugins\ViGEm\ViGEmWrapper.dll", entry: "ViGEmWrapper.dll", bundle: "ViGEm.zip"},
         {path: "Plugins\Joy\ViGEmBus.exe", entry: "ViGEmBus.exe", bundle: "ViGEm.zip"},
-        {path: "Plugins\Joy\Xbox按键映射.png", entry: "Xbox.png", bundle: "ViGEm.zip"},
         {path: xamlDir XAMLHost.GetEngineDllName(), entry: "ahk-xaml.dll", bundle: "Xaml.zip"},
         {path: "Plugins\AHK-XAML\lib\dep\WpfAnimatedGif\WpfAnimatedGif.dll", entry: "WpfAnimatedGif.dll", bundle: "Xaml.zip"},
         {path: "Plugins\OpenCV\" arch "\RMT_OpenCV.dll", entry: "RMT_OpenCV.dll", bundle: "OpenCV.zip"},
