@@ -40,7 +40,7 @@ InputResponseDeadline(timeoutMs, graceMs, item) {
 WorkerInputRequest(opcode, timeoutMs, item, args*) {
     global workerInputRequestState
     static sequence := 0
-    request := {id: ++sequence, response: opcode == "IB" ? "IBR" : "IPR", result: ""}
+    request := {id: ++sequence, response: "IR", result: ""}
     workerInputRequestState := request
     deadline := InputResponseDeadline(timeoutMs, 2000, item)
     try {
@@ -62,9 +62,9 @@ WorkerInputRequest(opcode, timeoutMs, item, args*) {
     }
 }
 
-WorkerInputReply(opcode, id, args*) {
+WorkerInputReply(id, args*) {
     if (IsSet(workerInputRequestState) && workerInputRequestState
-        && workerInputRequestState.id == Integer(id) && workerInputRequestState.response == opcode
+        && workerInputRequestState.id == Integer(id)
         && !IsObject(workerInputRequestState.result))
         workerInputRequestState.result := args
 }

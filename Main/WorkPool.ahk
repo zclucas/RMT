@@ -791,7 +791,7 @@ class WorkPool {
         for name, value in MySoftData.ArrayMap
             arrays.Push([name, value])
         payload := EncodeBatch(EncodeCommand("CT", MySoftData.CMDTip)
-            , EncodeCommand("SN", JSON.stringify([[], arrays])))
+            , EncodeCommand("SN", JSON.stringify(arrays)))
         this.PushTask(wd, MsgType.EVENT, 0, payload)
     }
 
@@ -1260,9 +1260,6 @@ class WorkPool {
                     case "IC":
                         this._CancelWorkerInput(wd, Integer(args[1]))
                     case "JY":
-                        JoyDebugLog(Format("WorkPool recv JY args=[{}, {}, {}] from worker#{}"
-                            , args.Length >= 1 ? args[1] : "", args.Length >= 2 ? args[2] : ""
-                            , args.Length >= 3 ? args[3] : "", wd.idx), "pool")
                         ViGJoySetState(args[1], args[2], args[3])
                     case "ER":
                         ; Worker 错误上报（统一日志 C 项）：payload = "级别|workerIdx|完整信息"
@@ -1407,14 +1404,14 @@ class WorkPool {
                 ; 输入按钮条
                 gui := InputBtnXamlGui()
                 req.gui := gui
-                gui.TrueAction := (*) => this._SendInputResult(req, "IBR", "true")
-                gui.FalseAction := (*) => this._SendInputResult(req, "IBR", "false")
-                gui.ContinueAction := (*) => this._SendInputResult(req, "IBR", "continue")
-                gui.CancelAction := (*) => this._SendInputResult(req, "IBR", "cancel")
-                gui.PauseAction := (*) => this._SendInputResult(req, "IBR", "pause")
-                gui.TerminateAction := (*) => this._SendInputResult(req, "IBR", "terminate")
-                gui.SelectAction := (val) => this._SendInputResult(req, "IBR", val)
-                gui.HideAction := (*) => this._SendInputResult(req, "IBR", "cancel")
+                gui.TrueAction := (*) => this._SendInputResult(req, "IR", "true")
+                gui.FalseAction := (*) => this._SendInputResult(req, "IR", "false")
+                gui.ContinueAction := (*) => this._SendInputResult(req, "IR", "continue")
+                gui.CancelAction := (*) => this._SendInputResult(req, "IR", "cancel")
+                gui.PauseAction := (*) => this._SendInputResult(req, "IR", "pause")
+                gui.TerminateAction := (*) => this._SendInputResult(req, "IR", "terminate")
+                gui.SelectAction := (val) => this._SendInputResult(req, "IR", val)
+                gui.HideAction := (*) => this._SendInputResult(req, "IR", "cancel")
                 gui.ShowGui(Integer(real.Length >= 1 ? real[1] : 1)
                     , real.Length >= 2 ? real[2] : ""
                     , real.Length >= 3 ? real[3] : ""
@@ -1423,9 +1420,9 @@ class WorkPool {
                 ; XAML 输入框
                 gui := CustomInputGui()
                 req.gui := gui
-                gui.SureAction := (val) => this._SendInputResult(req, "IPR", "1", val)
-                gui.HideAction := (*) => this._SendInputResult(req, "IPR", "0", "")
-                gui.CloseAction := (*) => this._SendInputResult(req, "IPR", "0", "")
+                gui.SureAction := (val) => this._SendInputResult(req, "IR", "1", val)
+                gui.HideAction := (*) => this._SendInputResult(req, "IR", "0", "")
+                gui.CloseAction := (*) => this._SendInputResult(req, "IR", "0", "")
                 gui.ShowGui(real.Length >= 1 ? real[1] : "", real.Length >= 2 ? real[2] : "")
             }
             if (pack.timeoutMs > 0)
@@ -1433,9 +1430,9 @@ class WorkPool {
         } catch as e {
             GraphPoolLog("输入弹窗异常", Format("err={1} wd=#{2}", e.Message, req.wd.idx))
             if (opcode == "IB")
-                this._SendInputResult(req, "IBR", "cancel")
+                this._SendInputResult(req, "IR", "cancel")
             else
-                this._SendInputResult(req, "IPR", "0", "")
+                this._SendInputResult(req, "IR", "0", "")
         }
     }
 
@@ -1469,12 +1466,12 @@ class WorkPool {
                     SetTimer(cancelCheck, 100)
                 path := dialog.Show(request.title)
                 if (req.HasOwnProp("fileTimedOut"))
-                    this._SendInputResult(req, "IPR", "timeout")
+                    this._SendInputResult(req, "IR", "timeout")
                 else
-                    this._SendInputResult(req, "IPR", path != "" ? "1" : "0", path)
+                    this._SendInputResult(req, "IR", path != "" ? "1" : "0", path)
             } catch as e {
                 GraphPoolLog("输入弹窗异常", Format("err={1} wd=#{2}", e.Message, req.wd.idx))
-                this._SendInputResult(req, "IPR", req.HasOwnProp("fileTimedOut") ? "timeout" : "0", "")
+                this._SendInputResult(req, "IR", req.HasOwnProp("fileTimedOut") ? "timeout" : "0", "")
             } finally {
                 SetTimer(timeoutCheck, 0)
                 SetTimer(cancelCheck, 0)
@@ -1496,7 +1493,7 @@ class WorkPool {
             gui._CloseWindow()
             return
         }
-        this._SendInputResult(req, opcode == "IB" ? "IBR" : "IPR", "timeout")
+        this._SendInputResult(req, "IR", "timeout")
         try gui._CloseWindow()
     }
 
@@ -1542,7 +1539,7 @@ class WorkPool {
 
     _CountDownUiClosed(wd, pid, token) {
         if (wd.pid == pid)
-            this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CDR", token)))
+            this.PushTask(wd, MsgType.EVENT, 0, EncodeBatch(EncodeCommand("CC", token)))
     }
 
     PushTask(wd, type, id, payload, flags := 0) {
