@@ -1,8 +1,8 @@
 """Keep resource release descriptions and tag chronology aligned on both sites."""
-from datetime import datetime, timedelta, timezone
-import json
-from pathlib import Path
+from datetime import datetime, timedelta
+import os
 import re
+from urllib.error import HTTPError
 
 import sync_gitcode_assets as mirror
 
@@ -40,7 +40,7 @@ def align_tag_dates(store, wanted):
                    for tag, r in releases.items() if tag not in ('Common', 'Patch'))
     desired = {}
     for tag in wanted:
-        desired[tag] = (earliest - timedelta(seconds=1 if tag == 'Common' else 2)
+        desired[tag] = (earliest - timedelta(days=1 if tag == 'Common' else 2)
                         if tag in ('Common', 'Patch') else
                         datetime.fromisoformat(releases[tag]['created_at'].replace('Z', '+00:00')))
     # Distinguish tags sharing a commit timestamp, preserving the requested order.
@@ -67,13 +67,13 @@ def align_tag_dates(store, wanted):
     mirror.git('init', '--bare', str(checkout))
     mirror.git('fetch', '--quiet', '--depth=1', mirror.REMOTE,
                '+refs/tags/*:refs/tags/*', cwd=checkout)
-    for tag in wanted:
+    for tag in reversed(wanted):
         old = mirror.git('rev-parse', 'refs/tags/' + tag, cwd=checkout).strip()
         commit = mirror.git('rev-parse', 'refs/tags/' + tag + '^{}', cwd=checkout).strip()
         timestamp = str(int(desired[tag].timestamp()))
         raw = ('object ' + commit + '\ntype commit\ntag ' + tag +
                '\ntagger RMT resources <resources@users.noreply.github.com> ' + timestamp +
-               ' +0000\n\nRMT ' + tag + ' resources\n')
+               ' +0000\n\nRMT ' + tag + ' resources; presentation order v2\n')
         path = store.directory / 'presentation-tag.txt'
         path.write_text(raw, encoding='utf-8')
         obj = mirror.git('hash-object', '-t', 'tag', '-w', str(path), cwd=checkout).strip()
@@ -89,19 +89,63 @@ def organize_releases(store):
     wanted += ['Common', 'Patch']
     dates = align_tag_dates(store, wanted)
     refresh_descriptions(store, wanted)
-    for tag in wanted:
-        source = store.source(tag)
-        # Some GitCode deployments accept this timestamp on release metadata. Read
-        # it back and report actual order rather than assuming that it took effect.
-        mirror.gc('/releases/' + tag,
-                  data=dict(**mirror.release_metadata(store.source(tag)), created_at=dates[tag]),
-                  method='PATCH')
+    if [r['tag_name'] for r in store.releases()] != wanted:
+        # Republish metadata with the canonical tag dates. Assets stay attached.
+        for tag in ('Common', 'Patch'):
+            source = store.source(tag)
+            try:
+                mirror.gh('/releases/' + str(source['id']), data=dict(draft=True), method='PATCH')
+            finally:
+                mirror.gh('/releases/' + str(source['id']),
+                          data=dict(draft=False, make_latest='false'), method='PATCH')
     github_order = [r['tag_name'] for r in store.releases()]
     gitcode_order = [r['tag_name'] for r in mirror.pages(mirror.gc, '/releases?direction=desc')]
     tags = mirror.pages(mirror.gc, '/tags')
+    probe = None
+    if gitcode_order != wanted:
+        probe = probe_metadata_retention(store)
+        if probe:
+            # Recreate metadata only if a disposable release proved that this
+            # deployment retains attachment IDs and contents across the operation.
+            for tag in reversed(wanted):
+                before = mirror.release(tag)
+                identity = lambda r: sorted((a['id'], a['name'], a['size'], a.get('digest'))
+                                             for a in mirror.attachments(r))
+                mirror.gc('/releases/' + tag, method='DELETE')
+                restored = mirror.ensure_release(store.source(tag))
+                if identity(restored) != identity(before):
+                    raise ValueError('Release metadata recreation did not retain attachments: ' + tag)
+            gitcode_order = [r['tag_name'] for r in mirror.pages(mirror.gc, '/releases?direction=desc')]
     return dict(expected_order=wanted, github_order=github_order, gitcode_order=gitcode_order,
                 gitcode_tag_order=[t['name'] for t in tags],
+                metadata_retains_assets=probe,
                 order_matches=github_order == gitcode_order == wanted)
+
+
+def probe_metadata_retention(store):
+    """Never experiment on a real release or remove its only attachment copy."""
+    tag = 'rmt-order-probe-' + os.environ['GITHUB_RUN_ID']
+    options = dict(tag_name=tag, target_commitish='main', name=tag,
+                   body='Temporary CI metadata retention probe', release_status='pre')
+    path = store.directory / 'order-probe.json'
+    path.write_text('{"test":"metadata-retention"}\n', encoding='utf-8')
+    expected = dict(name=path.name, size=path.stat().st_size, digest=mirror.sha(path))
+    try:
+        mirror.gc('/releases', data=options)
+        mirror.upload(tag, path, expected, max_time=600)
+        before = mirror.attachments(mirror.release(tag))
+        mirror.gc('/releases/' + tag, method='DELETE')
+        after = mirror.gc('/releases', data=options)
+        if [(a['id'], a['name'], a['size']) for a in mirror.attachments(after)] != [
+                (a['id'], a['name'], a['size']) for a in before]:
+            return False
+        mirror.readback(tag, expected)
+        return True
+    finally:
+        if mirror.release(tag):
+            mirror.gc('/releases/' + tag, method='DELETE')
+        mirror.git('push', '--quiet', mirror.REMOTE, ':refs/tags/' + tag,
+                   cwd=store.directory / 'presentation-tags')
 
 
 def refresh_descriptions(store, tags=None):
