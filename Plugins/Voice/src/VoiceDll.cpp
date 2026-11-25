@@ -77,7 +77,7 @@
 #include "VoiceDll.h"
 
 // ---- 汉字 -> 带声调拼音音素 内置映射表（生成物，勿手改） ----
-#include "g2p_data.h"
+#include "g2p_data.hpp"
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "Avrt.lib")
