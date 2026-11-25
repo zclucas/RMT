@@ -162,7 +162,7 @@
             tabsBody .= togI(GetLang(def[2]), "TabVisible_" def[1], this._TabVisibleVal(def[1]))
         tabsBody .= '</WrapPanel>'
         appearanceBody := cmb(GetLang("软件字体"), "CmbFont", MainSoftData.FontList, MainSoftData.FontType, false, GetLang("软件界面使用的字体，修改后保存设置生效。"), , 160)
-            . sld(GetLang("字体大小"), "ThemeFontSizeCon", "ThemeFontSizeVal", MainSoftData.FontSize, RMT_ThemeFontSizeMin, RMT_ThemeFontSizeMax, 1, GetLang("字号 15~20，默认 15。"))
+            . row(GetLang("界面缩放"), UiScaleSelectorXaml("ThemeUiScaleCon", MainSoftData.UiScale))
 
         ; ---------- 页：系统（按参考稿逐行排列） ----------
         ltRtSwitch := '<CheckBox Name="ChkJoyLtRtAsButton" IsChecked="' (MainSoftData.JoyLtRtAsButton ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>'
@@ -529,9 +529,9 @@
             ["CountDownAlpha", "CountDownAlphaCon", "CountDownAlphaVal", 0, 100]]
             this._Bind(spec[3], "LostFocus", ObjBindMethod(this, "OnSettingNumText", spec[1], spec[2], spec[4], spec[5]))
 
-        ; ---- 设置中心：主题字体大小 / AI 助手 ----
-        this._Bind("ThemeFontSizeCon", "ValueChanged", ObjBindMethod(this, "OnSettingFontSize"))
-        this._Bind("ThemeFontSizeVal", "LostFocus", ObjBindMethod(this, "OnSettingFontSizeText"))
+        ; ---- 设置中心：界面缩放 / AI 助手 ----
+        for percent in RMT_UiScalePresets
+            this._Bind("ThemeUiScaleCon_" percent, "Click", ObjBindMethod(this, "OnSettingUiScale", percent))
         this._Bind("AiProviderCon", "SelectionChanged", ObjBindMethod(this, "OnAiProviderChanged"))
         this._Bind("AiBaseUrlCon", "LostFocus", ObjBindMethod(this, "OnTextEdit", "AiApiBaseUrl"))
         this._Bind("AiApiKeyCon", "LostFocus", ObjBindMethod(this, "OnTextEdit", "AiApiKey"))

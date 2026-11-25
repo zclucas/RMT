@@ -149,7 +149,9 @@ GetLastWinPos() {
     if (WinPosArr.Length >= 2 && IsNumber(WinPosArr[1]) && IsNumber(WinPosArr[2])) {
         VirtualWidth := SysGet(78)
         VirtualHeight := SysGet(79)
-        if (WinPosArr[1] > 0 && WinPosArr[1] < VirtualWidth && WinPosArr[2] > 0 && WinPosArr[2] < VirtualHeight) {
+        virtualLeft := SysGet(76), virtualTop := SysGet(77)
+        if (WinPosArr[1] >= virtualLeft && WinPosArr[1] < virtualLeft + VirtualWidth
+            && WinPosArr[2] >= virtualTop && WinPosArr[2] < virtualTop + VirtualHeight) {
             ; 新格式 xπyπSπ缩放系数：尺寸 = 1400×787 基准 × 当前屏幕 fs × 系数（物理像素）
             ; 跨分辨率（4K→1080p 等）时窗口比例不变，不会因保存的绝对尺寸而巨大化
             if (WinPosArr.Length >= 4 && WinPosArr[3] == "S" && IsNumber(WinPosArr[4])) {
@@ -160,8 +162,9 @@ GetLastWinPos() {
                 scale := Float(WinPosArr[4])
                 if (scale <= 0 || scale > 3)
                     return []
-                w := Min(Round(1400 * fs * scale * dpi), VirtualWidth)
-                h := Min(Round(787 * fs * scale * dpi), VirtualHeight)
+                ; 保存值是不含用户档位的基准；80% 时基准可大于屏幕，最终边界由引擎夹取。
+                w := Round(1400 * fs * scale * dpi)
+                h := Round(787 * fs * scale * dpi)
                 if (w < 400 || h < 300)
                     return []
                 return [WinPosArr[1], WinPosArr[2], w, h]
@@ -180,15 +183,8 @@ GetLastWinPos() {
 RefreshGui() {
     CfgWrite(false, SettingFile, SettingSection, "IsReload")
 
-    pos := GetLastWinPos()
-    if (pos.Length) {
-        MainSoftData.MyGui.Show(Format("x{} y{} w{} h{}", pos[1], pos[2], pos[3], pos[4]))
-        RefreshListenVarGui()
-        return
-    }
-
-    size := GetMainWindowDefaultSize()
-    MainSoftData.MyGui.Show(Format("w{} h{}", size[1], size[2]))
+    ; 建窗已恢复位置/尺寸，并由引擎按档位适配工作区；再次显示不能重放旧几何。
+    MainSoftData.MyGui.Show()
     RefreshListenVarGui()
 }
 

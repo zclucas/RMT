@@ -142,7 +142,7 @@ OnSaveSetting(*) {
     ; 状态设置（这些每次都变化，始终写入）
     CheckAndAddDirty("Lang", MainSoftData.Lang)
     CheckAndAddDirty("FontType", MainSoftData.FontType)
-    CheckAndAddDirty("FontSize", MainSoftData.HasProp("FontSize") ? MainSoftData.FontSize : 15)
+    CheckAndAddDirty("UiScale", MainSoftData.UiScale)
     CheckAndAddDirty("JoyType", MainSoftData.JoyType)
     CheckAndAddDirty("TriggerJoyType", MainSoftData.TriggerJoyType)
     CheckAndAddDirty("JoyLtRtAsButton", MainSoftData.HasProp("JoyLtRtAsButton") ? MainSoftData.JoyLtRtAsButton : true)
@@ -248,10 +248,21 @@ SaveCurWinPos() {
     dipSW := A_ScreenWidth / dpi
     dipSH := A_ScreenHeight / dpi
     fs := Min(dipSW / 1920, dipSH / 1080)
-    scale := (w / dpi) / (1400 * fs)
-    if (scale <= 0)
-        scale := 1
-    CfgWrite(Format("{}π{}πSπ{:.2f}", x, y, scale), SettingFile, SettingSection, "LastWinPos")
+    ; 实际宽度可能已被工作区裁剪；只保存引擎的未裁剪普通态基准（DIP）。
+    baseWidth := ""
+    try baseWidth := MyGui.ui.Query("Window>UiBaseWidth")
+    normalPos := WinGetMinMax("ahk_id " MyGui.Hwnd) == 0
+    if (!normalPos) {
+        ; 最大化/最小化坐标不是普通态位置，沿用上次有效位置。
+        pos := GetLastWinPos()
+        normalPos := pos.Length >= 2
+        if (normalPos)
+            x := pos[1], y := pos[2]
+    }
+    if (normalPos && IsNumber(baseWidth) && baseWidth > 0) {
+        scale := Number(baseWidth) / (1400 * fs)
+        CfgWrite(Format("{}π{}πSπ{:.2f}", x, y, scale), SettingFile, SettingSection, "LastWinPos")
+    }
 
     ListenGui := MyVarListenGui.Gui
     if (MyVarListenGui.Gui != "") {
