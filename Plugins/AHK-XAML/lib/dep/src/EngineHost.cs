@@ -553,7 +553,7 @@ public partial class AhkWpfEngine
         var btnClose = win.FindName("BtnClose") as ButtonBase;
         if (btnClose != null) btnClose.Click += (s, e) => { try { win.Close(); } catch { } };
         var btnMaximize = win.FindName("BtnMaximize") as ButtonBase;
-        if (btnMaximize != null) btnMaximize.Click += (s, e) => { win.WindowState = win.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; };
+        if (btnMaximize != null) btnMaximize.Click += (s, e) => { ToggleMaximized(); };
         var btnMinimize = win.FindName("BtnMinimize") as ButtonBase;
         if (btnMinimize != null) btnMinimize.Click += (s, e) => { win.WindowState = WindowState.Minimized; };
         var btnPin = win.FindName("BtnPin") as ButtonBase;
@@ -566,6 +566,7 @@ public partial class AhkWpfEngine
         {
             SendToAhkAsync("EVENT|" + winId + "|Window|StateChanged|" + win.WindowState.ToString() + "\n");
             UpdateSnapState(win);
+            OnWindowStateChangedForViewbox();
         };
         // 激活/失活必须异步回 AHK：AHK 侧 WinActivate 走 SetForegroundWindow，前台切换会同步等
         // 目标窗口处理 WM_ACTIVATE；此刻再用同步 SendMessage 把事件塞回 AHK，而 AHK 正卡在
@@ -579,7 +580,7 @@ public partial class AhkWpfEngine
             SendToAhkAsync("EVENT|" + winId + "|Window|Deactivated\n");
         };
         win.LocationChanged += (s, e) => UpdateSnapState(win);
-        win.SizeChanged += (s, e) => { UpdateSnapState(win); SyncChromeCaption(); };
+        win.SizeChanged += (s, e) => { UpdateSnapState(win); FillViewboxIfLetterboxed(); SyncChromeCaption(); };
 
         win.Loaded += (s, e) =>
         {
@@ -1128,7 +1129,7 @@ public partial class AhkWpfEngine
         if (btnClose != null) btnClose.Click += (s, e) => { try { win.Close(); } catch { } };
 
         var btnMaximize = win.FindName("BtnMaximize") as ButtonBase;
-        if (btnMaximize != null) btnMaximize.Click += (s, e) => { win.WindowState = win.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; };
+        if (btnMaximize != null) btnMaximize.Click += (s, e) => { ToggleMaximized(); };
 
         var btnMinimize = win.FindName("BtnMinimize") as ButtonBase;
         if (btnMinimize != null) btnMinimize.Click += (s, e) => { win.WindowState = WindowState.Minimized; };
@@ -1142,6 +1143,7 @@ public partial class AhkWpfEngine
         {
             SendToAhkAsync("EVENT|" + winId + "|Window|StateChanged|" + win.WindowState.ToString() + "\n");
             UpdateSnapState(win);
+            OnWindowStateChangedForViewbox();
         };
         // 激活/失活必须异步回 AHK：AHK 侧 WinActivate 走 SetForegroundWindow，前台切换会同步等
         // 目标窗口处理 WM_ACTIVATE；此刻再用同步 SendMessage 把事件塞回 AHK，而 AHK 正卡在
@@ -1155,7 +1157,7 @@ public partial class AhkWpfEngine
             SendToAhkAsync("EVENT|" + winId + "|Window|Deactivated\n");
         };
         win.LocationChanged += (s, e) => UpdateSnapState(win);
-        win.SizeChanged += (s, e) => { UpdateSnapState(win); SyncChromeCaption(); };
+        win.SizeChanged += (s, e) => { UpdateSnapState(win); FillViewboxIfLetterboxed(); SyncChromeCaption(); };
 
         win.Loaded += (s, e) =>
         {
@@ -1319,9 +1321,12 @@ public partial class AhkWpfEngine
     // Keep the unconstrained normal size separate from the last applied (possibly clamped)
     // size. Multiplying the latter on each preset change permanently shrinks large dialogs.
     bool _uiScalePrepared, _uiScaleReady, _uiScaleBusy, _uiScaleFluid;
+    bool _viewboxFilledForMax, _viewboxSavedSizeToContentSet, _viewboxReassertingMax, _viewboxDidReassertMax;
+    SizeToContent _viewboxSavedSizeToContent;
     double _uiScaleFactor = 1, _uiScaleVisual = 1;
     double _uiScaleBaseWidth, _uiScaleBaseHeight, _uiScaleLastWidth, _uiScaleLastHeight;
     double _uiScaleMinWidth, _uiScaleMinHeight, _uiScaleMaxWidth, _uiScaleMaxHeight;
+    double _viewboxDesignW, _viewboxDesignH;
     Transform _uiScaleOriginalTransform;
 
     private static bool IsUiScalePreset(double value)
@@ -1348,6 +1353,8 @@ public partial class AhkWpfEngine
         {
             if (double.IsNaN(root.Width) && win.Width > 0) root.Width = win.Width;
             if (double.IsNaN(root.Height) && win.Height > 0) root.Height = win.Height;
+            if (root.Width > 1) _viewboxDesignW = root.Width;
+            if (root.Height > 1) _viewboxDesignH = root.Height;
             win.Content = null;
             win.Content = new Viewbox { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.Both, Child = root };
         }
@@ -1372,10 +1379,11 @@ public partial class AhkWpfEngine
         {
             WindowState previousState = lastState;
             lastState = win.WindowState;
-            if (_uiScaleBusy || SkipUiScale()) return;
+            if (win.WindowState == WindowState.Minimized) return;
             // A user may resize and immediately maximize without any query or preset command.
             // At StateChanged ActualWidth is already maximized, but RestoreBounds is still normal.
-            if (previousState == WindowState.Normal && win.IsLoaded && win.WindowState != WindowState.Normal)
+            if (!_uiScaleBusy && !SkipUiScale()
+                && previousState == WindowState.Normal && win.IsLoaded && win.WindowState != WindowState.Normal)
             {
                 Rect restore = win.RestoreBounds;
                 if (restore.Width > 1 && Math.Abs(restore.Width - _uiScaleLastWidth) > 2)
@@ -1383,10 +1391,8 @@ public partial class AhkWpfEngine
                 if (restore.Height > 1 && Math.Abs(restore.Height - _uiScaleLastHeight) > 2)
                     _uiScaleBaseHeight = restore.Height / _uiScaleFactor;
             }
-            win.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
-            {
-                if (win.WindowState != WindowState.Minimized) ApplyUiScale(_uiScaleFactor, true);
-            }));
+            // Viewport fill is owned by OnWindowStateChangedForViewbox so it can wait for
+            // the maximized HWND size instead of retargeting against the restore Viewbox.
         };
     }
 
@@ -1436,10 +1442,10 @@ public partial class AhkWpfEngine
         double chromeW, chromeH;
         RmtCommonStyles.GetWindowChromeInset(win, out chromeW, out chromeH);
         // Width/Height are restore bounds while maximized, not the displayed viewport.
-        double width = win.WindowState == WindowState.Maximized && box.ActualWidth > 1
-            ? box.ActualWidth : win.Width - chromeW;
-        double height = win.WindowState == WindowState.Maximized && box.ActualHeight > 1
-            ? box.ActualHeight : win.Height - chromeH;
+        double width = win.WindowState == WindowState.Maximized && win.ActualWidth > 1
+            ? win.ActualWidth : win.Width - chromeW;
+        double height = win.WindowState == WindowState.Maximized && win.ActualHeight > 1
+            ? win.ActualHeight : win.Height - chromeH;
         if (!(width > 1)) width = box.ActualWidth;
         if (!(height > 1)) height = box.ActualHeight;
         Thickness margin = child.Margin;
@@ -1483,14 +1489,30 @@ public partial class AhkWpfEngine
             // the current monitor. Work-area limits must win over the original minimum.
             win.MinWidth = Math.Min(_uiScaleMinWidth * factor, area.Width);
             win.MinHeight = Math.Min(_uiScaleMinHeight * factor, area.Height);
-            win.MaxWidth = Math.Max(win.MinWidth, Math.Min(_uiScaleMaxWidth * factor, area.Width));
-            win.MaxHeight = Math.Max(win.MinHeight, Math.Min(_uiScaleMaxHeight * factor, area.Height));
-            double width = Math.Max(win.MinWidth, Math.Min(win.MaxWidth, _uiScaleBaseWidth * factor));
-            double height = Math.Max(win.MinHeight, Math.Min(win.MaxHeight, _uiScaleBaseHeight * factor));
-            // Setting Width/Height while maximized updates restore bounds without changing state.
-            if (width > 0) win.Width = width;
-            if (height > 0 && win.SizeToContent != SizeToContent.Height && win.SizeToContent != SizeToContent.WidthAndHeight)
-                win.Height = height;
+            double capW = Math.Max(win.MinWidth, Math.Min(_uiScaleMaxWidth * factor, area.Width));
+            double capH = Math.Max(win.MinHeight, Math.Min(_uiScaleMaxHeight * factor, area.Height));
+            if (win.WindowState == WindowState.Maximized)
+            {
+                // MaxWidth/MaxHeight clamp the maximized HWND; WPF then centers that smaller
+                // surface and leaves the leftover work-area as left/right letterbox.
+                win.MaxWidth = double.PositiveInfinity;
+                win.MaxHeight = double.PositiveInfinity;
+            }
+            else
+            {
+                win.MaxWidth = capW;
+                win.MaxHeight = capH;
+            }
+            double width = Math.Max(win.MinWidth, Math.Min(capW, _uiScaleBaseWidth * factor));
+            double height = Math.Max(win.MinHeight, Math.Min(capH, _uiScaleBaseHeight * factor));
+            // Setting Width/Height while maximized can relayout Content at restore size
+            // before the Viewbox has the maximized viewport, which recreates the letterbox.
+            if (win.WindowState != WindowState.Maximized)
+            {
+                if (width > 0) win.Width = width;
+                if (height > 0 && win.SizeToContent != SizeToContent.Height && win.SizeToContent != SizeToContent.WidthAndHeight)
+                    win.Height = height;
+            }
             if (_uiScaleFluid)
             {
                 var root = win.Content as FrameworkElement;
@@ -1502,7 +1524,8 @@ public partial class AhkWpfEngine
                     root.LayoutTransform = transform;
                 }
             }
-            else RetargetUiScaleContent(_uiScaleVisual);
+            else if (win.WindowState != WindowState.Maximized)
+                RetargetUiScaleContent(_uiScaleVisual);
             win.UpdateLayout();
             if (normal)
             {
@@ -1653,17 +1676,213 @@ public partial class AhkWpfEngine
         }
     }
 
-    private void FillViewboxViewport()
+    bool _fillViewboxBusy;
+    private void PrepareMaximizedLayoutConstraints()
     {
         if (win == null) return;
         try
         {
+            win.MaxWidth = double.PositiveInfinity;
+            win.MaxHeight = double.PositiveInfinity;
+        }
+        catch { }
+        if (!_viewboxSavedSizeToContentSet)
+        {
+            _viewboxSavedSizeToContent = win.SizeToContent;
+            _viewboxSavedSizeToContentSet = true;
+        }
+        // Width/Height/Left/Top while maximized rewrite the restore rectangle.
+        // That is what pinned SizeToContent windows at the work-area origin (top-left).
+        if (win.WindowState == WindowState.Maximized)
+        {
+            if (win.SizeToContent != SizeToContent.Manual)
+                win.SizeToContent = SizeToContent.Manual;
+            return;
+        }
+        double left = win.Left, top = win.Top;
+        double liveW = win.ActualWidth > 1 ? win.ActualWidth : win.Width;
+        double liveH = win.ActualHeight > 1 ? win.ActualHeight : win.Height;
+        if (win.SizeToContent != SizeToContent.Manual)
+            win.SizeToContent = SizeToContent.Manual;
+        if (liveW > 1) win.Width = liveW;
+        if (liveH > 1) win.Height = liveH;
+        if (!double.IsNaN(left)) win.Left = left;
+        if (!double.IsNaN(top)) win.Top = top;
+    }
+
+    private void RestoreMaximizedLayoutConstraints()
+    {
+        if (win == null || !_viewboxSavedSizeToContentSet) return;
+        try
+        {
+            SizeToContent saved = _viewboxSavedSizeToContent;
+            win.SizeToContent = saved;
+            if (saved == SizeToContent.Height || saved == SizeToContent.WidthAndHeight)
+                win.Height = double.NaN;
+        }
+        catch { }
+        _viewboxSavedSizeToContentSet = false;
+        _viewboxDidReassertMax = false;
+    }
+
+    private void ToggleMaximized()
+    {
+        if (win == null) return;
+        if (win.WindowState == WindowState.Maximized)
+            win.WindowState = WindowState.Normal;
+        else
+        {
+            PrepareMaximizedLayoutConstraints();
+            win.WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void ApplyRequestedWindowState(string state)
+    {
+        if (win == null || string.IsNullOrEmpty(state)) return;
+        if (state.Equals("Maximized", StringComparison.OrdinalIgnoreCase))
+        {
+            if (win.WindowState != WindowState.Maximized)
+            {
+                PrepareMaximizedLayoutConstraints();
+                win.WindowState = WindowState.Maximized;
+            }
+            return;
+        }
+        if (state.Equals("Minimized", StringComparison.OrdinalIgnoreCase))
+        {
+            win.WindowState = WindowState.Minimized;
+            return;
+        }
+        win.WindowState = WindowState.Normal;
+    }
+
+    private void OnWindowStateChangedForViewbox()
+    {
+        if (win == null || win.WindowState == WindowState.Minimized) return;
+        // Viewbox windows restore SizeToContent after the child is reset to design size.
+        if (win.WindowState != WindowState.Maximized && !(win.Content is Viewbox))
+            RestoreMaximizedLayoutConstraints();
+        win.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, new Action(() =>
+        {
+            if (win == null || win.WindowState == WindowState.Minimized) return;
+            FillViewboxViewport();
+            SyncChromeCaption();
+        }));
+    }
+
+    private void FillViewboxIfLetterboxed()
+    {
+        if (win == null || win.WindowState == WindowState.Minimized) return;
+        if (win.WindowState != WindowState.Maximized && !ViewboxWouldLetterbox()) return;
+        FillViewboxViewport();
+    }
+
+    private bool ViewboxWouldLetterbox()
+    {
+        var box = win.Content as Viewbox;
+        var child = box == null ? null : box.Child as FrameworkElement;
+        if (box == null || child == null) return false;
+        double hostW = box.ActualWidth, hostH = box.ActualHeight;
+        double childW = child.ActualWidth > 1 ? child.ActualWidth : child.Width;
+        double childH = child.ActualHeight > 1 ? child.ActualHeight : child.Height;
+        if (!(hostW > 1) || !(hostH > 1) || !(childW > 1) || !(childH > 1)) return false;
+        double scaleW = hostW / childW, scaleH = hostH / childH;
+        double larger = Math.Max(scaleW, scaleH);
+        if (!(larger > 0)) return false;
+        return Math.Abs(scaleW - scaleH) / larger > 0.02;
+    }
+
+    private void FillViewboxViewport()
+    {
+        if (win == null || _fillViewboxBusy) return;
+        _fillViewboxBusy = true;
+        try
+        {
+            var box = win.Content as Viewbox;
+            var child = box == null ? null : box.Child as FrameworkElement;
+            if (box == null || child == null) return;
+
+            if (win.WindowState == WindowState.Maximized)
+            {
+                Rect area = UiScaleWorkArea();
+                bool tooSmall = area.Width > 1 && win.ActualWidth > 1 && win.ActualWidth < area.Width * 0.85;
+                if (!_viewboxDidReassertMax && (win.SizeToContent != SizeToContent.Manual || tooSmall))
+                {
+                    _viewboxDidReassertMax = true;
+                    _viewboxReassertingMax = true;
+                    try
+                    {
+                        if (tooSmall)
+                        {
+                            win.WindowState = WindowState.Normal;
+                            PrepareMaximizedLayoutConstraints();
+                            win.WindowState = WindowState.Maximized;
+                            return;
+                        }
+                        PrepareMaximizedLayoutConstraints();
+                    }
+                    finally { _viewboxReassertingMax = false; }
+                }
+                if (!(_viewboxDesignW > 1) && child.Width > 1) _viewboxDesignW = child.Width;
+                if (!(_viewboxDesignH > 1) && child.Height > 1) _viewboxDesignH = child.Height;
+                win.UpdateLayout();
+                area = UiScaleWorkArea();
+                // SizeToContent windows keep ActualWidth at the design width until Manual
+                // takes effect; the work area is the maximized HWND size we actually want.
+                double vpW = area.Width > 1 ? area.Width : (win.ActualWidth > 1 ? win.ActualWidth : box.ActualWidth);
+                double vpH = area.Height > 1 ? area.Height : (win.ActualHeight > 1 ? win.ActualHeight : box.ActualHeight);
+                if (win.ActualWidth > vpW + 1) vpW = win.ActualWidth;
+                if (win.ActualHeight > vpH + 1) vpH = win.ActualHeight;
+                if (!(vpW > 1) || !(vpH > 1)) return;
+                double designW = _viewboxDesignW > 1 ? _viewboxDesignW : (child.Width > 1 ? child.Width : child.ActualWidth);
+                double designH = _viewboxDesignH > 1 ? _viewboxDesignH : (child.Height > 1 ? child.Height : child.ActualHeight);
+                double scale;
+                if (designW > 1 && designH > 1)
+                    scale = Math.Min(vpW / designW, vpH / designH);
+                else
+                {
+                    scale = _uiScaleReady ? _uiScaleVisual : RmtCommonStyles.WindowContentVisualScale(win);
+                    if (!(scale > 0)) scale = 1;
+                }
+                if (scale < 0.2) scale = 0.2;
+                if (scale > 4) scale = 4;
+                child.Width = Math.Max(1, vpW / scale);
+                child.Height = Math.Max(1, vpH / scale);
+                child.HorizontalAlignment = HorizontalAlignment.Stretch;
+                child.VerticalAlignment = VerticalAlignment.Stretch;
+                box.HorizontalAlignment = HorizontalAlignment.Stretch;
+                box.VerticalAlignment = VerticalAlignment.Stretch;
+                box.Stretch = Stretch.Fill;
+                box.StretchDirection = StretchDirection.Both;
+                _viewboxFilledForMax = true;
+                box.UpdateLayout();
+                return;
+            }
+
+            if (_viewboxFilledForMax)
+            {
+                if (_viewboxDesignW > 1) child.Width = _viewboxDesignW;
+                bool autoHeight = _viewboxSavedSizeToContentSet
+                    && (_viewboxSavedSizeToContent == SizeToContent.Height
+                        || _viewboxSavedSizeToContent == SizeToContent.WidthAndHeight);
+                if (autoHeight) child.Height = double.NaN;
+                else if (_viewboxDesignH > 1) child.Height = _viewboxDesignH;
+                box.Stretch = Stretch.Uniform;
+                box.StretchDirection = StretchDirection.Both;
+                RestoreMaximizedLayoutConstraints();
+                _viewboxFilledForMax = false;
+                box.UpdateLayout();
+            }
+
             double chromeW, chromeH;
             RmtCommonStyles.GetWindowChromeInset(win, out chromeW, out chromeH);
-            RmtCommonStyles.NormalizeWindowContentForResize(win, RmtCommonStyles.WindowContentVisualScale(win),
+            double scaleN = _uiScaleReady ? _uiScaleVisual : RmtCommonStyles.WindowContentVisualScale(win);
+            RmtCommonStyles.NormalizeWindowContentForResize(win, scaleN,
                 chromeW, chromeH, preserveAutoHeight: win.SizeToContent == SizeToContent.Height);
         }
         catch { }
+        finally { _fillViewboxBusy = false; }
     }
 
     // 标题栏热区是窗口 DIP，不跟着根内容 Viewbox 缩放，且 WPF 判定的范围是

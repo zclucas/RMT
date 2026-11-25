@@ -183,9 +183,19 @@ GetLastWinPos() {
 RefreshGui() {
     CfgWrite(false, SettingFile, SettingSection, "IsReload")
 
+    ; 托盘在建窗前就可用；引擎还没回传句柄时 MyGui 仍是空对象，不能直接 Show。
+    if (!HasMethod(MainSoftData.MyGui, "Show")) {
+        WaitMainWinReady(RefreshGuiWhenReady)
+        return
+    }
     ; 建窗已恢复位置/尺寸，并由引擎按档位适配工作区；再次显示不能重放旧几何。
     MainSoftData.MyGui.Show()
     RefreshListenVarGui()
+}
+
+RefreshGuiWhenReady() {
+    if (HasMethod(MainSoftData.MyGui, "Show"))
+        RefreshGui()
 }
 
 RefreshListenVarGui(isForce := false) {
