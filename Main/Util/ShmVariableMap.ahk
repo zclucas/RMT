@@ -32,29 +32,34 @@ class ShmVariableMap {
         if (ShmVariableMap.H_DLL)
             return true
 
-        ; 多候選路徑依序嘗試，相容開發/生產/Worker 各種啟動目錄
-        ; A_ScriptDir  : 主腳本目錄（RMT.ahk → 專案根；Work.ahk → Thread/；Work.exe → ReleaseX64/Thread/）
-        ; A_WorkingDir : 程式工作目錄（通常與 A_ScriptDir 相同，或是 AHK 安裝目錄）
-        candidates := [
-            A_ScriptDir "\Plugins\ShmVar\ShmVar.dll",           ; 主進程（專案根 / 編譯exe同級）
-            A_ScriptDir "\..\Plugins\ShmVar\ShmVar.dll",        ; Worker 開發（Thread\..\Plugins\）
-            A_ScriptDir "\..\..\Plugins\ShmVar\ShmVar.dll",     ; Worker 生產（ReleaseX64\Thread\..\..\）
-            A_WorkingDir "\Plugins\ShmVar\ShmVar.dll",          ; 工作目錄備援
-            A_WorkingDir "\..\Plugins\ShmVar\ShmVar.dll"        ; 工作目錄向上一層備援
-        ]
-
-        dllPath := ""
-        for p in candidates {
-            if FileExist(p) {
-                dllPath := p
-                break
-            }
+        dllName := "ShmVar.dll"
+        hModule := DllCall("GetModuleHandleW", "Str", dllName, "Ptr")
+        if (hModule) {
+            ShmVariableMap.H_DLL := hModule
+            return true
         }
 
-        if (dllPath == "") {
-            throw Error("未找到 ShmVar.dll，尝试路径: " candidates[1] " / " candidates[2])
+        ; 取得專案根目錄（相容主行程與 Worker）
+        rootDir := (IsSet(AppRootDir) && AppRootDir != "") ? AppRootDir
+            : (IsSet(ProjectRootDir) && ProjectRootDir != "") ? ProjectRootDir
+            : (A_WorkingDir "\..")
+
+        dllPath := rootDir "\Plugins\ShmVar\" dllName
+        if (!FileExist(dllPath)) {
+            ; 備援：若根目錄向上一層未命中，嘗試當前工作目錄
+            dllPath := A_WorkingDir "\Plugins\ShmVar\" dllName
         }
 
+        if (!FileExist(dllPath)) {
+            throw Error("未找到 " dllName "，請確認 Plugins\ShmVar\" dllName " 檔案完整")
+        }
+
+        ; 規整為標準絕對路徑
+        buf := Buffer(65536 * 2, 0)
+        n := DllCall("GetFullPathNameW", "Str", dllPath, "UInt", 65536, "Ptr", buf, "Ptr", 0)
+        dllPath := (n > 0) ? StrGet(buf, n) : dllPath
+
+        ; 按外掛目錄解析相依性（0x8 = LOAD_WITH_ALTERED_SEARCH_PATH）
         hMod := DllCall("LoadLibraryExW", "Str", dllPath, "Ptr", 0, "UInt", 0x8, "Ptr")
         if (!hMod) {
             hMod := DllCall("LoadLibraryW", "Str", dllPath, "Ptr")
