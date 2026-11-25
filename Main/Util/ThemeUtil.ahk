@@ -577,8 +577,8 @@ class AppThemeUtil {
         }
         ; 其他界面设置仍写入原有配置段；主题颜色只写入 14 个 Theme_Color 槽位。
         CfgWrite(MainSoftData.AppTheme, SettingFile, SettingSection, "AppTheme")
-        if (MainSoftData.HasProp("FontSize"))
-            CfgWrite(MainSoftData.FontSize, SettingFile, SettingSection, "FontSize")
+        if (MainSoftData.HasProp("UiScale"))
+            CfgWrite(MainSoftData.UiScale, SettingFile, SettingSection, "UiScale")
     }
 
     ; 轮盘取色：ThemeColors → 默认主题；defaultVal 仅作额外兜底（调用方可省略）

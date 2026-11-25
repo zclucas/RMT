@@ -84,11 +84,10 @@ global XAML_ENABLE_DEVTOOLS := true
 ; 旧逻辑会 ProcessClose 当前进程导致多窗口闪退。默认务必为 false。
 global XAML_IN_PROCESS_PREVIEW := false
 
-; --- 全局字体缩放（主题字体大小驱动所有界面字号）---
-; 统一接口：界面声明只用 XAMLHost.FontSize() / TitleFontSize()；Show 时 ScaleFontSize / ApplyFontSizeDelta / Viewbox
-; 设计基准与软件默认均为主题字体大小（15）。改主题滑条时：XAML_FontSizeDelta := 主题FontSize - 基准。
-; 实际字号 = max(主题字体大小, 声明字号 + (主题字体大小 - 基准))，主题值为下限。
-; 图形节点编辑器通过 XAMLHost.skipFontScale 排除；其余界面均走统一接口。
+; --- 设计字体（固定基准，与用户界面缩放分离）---
+; 保留 FontSize / TitleFontSize 和字体归一化接口，旧主题字号不再驱动增量。
+; UiScale 百分比由窗口根 Viewbox/布局变换统一应用到字号、控件及间距。
+; 图形节点编辑器通过 XAMLHost.skipFontScale 排除；专用透明浮层保留自身配置。
 global XAML_FontSizeBase := 15
 global XAML_FontSizeDefault := 15
 global XAML_FontSizeDelta := 0

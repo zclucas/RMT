@@ -90,12 +90,9 @@ class ThemeSettingGui {
         this._colorUi.comboW := this._colorUi.itemW - this._colorUi.labelW
         this._colorUi.themeComboW := this._colorUi.twoColW - this._colorUi.labelW
         designW := 29 + 29 + 12 + 12 + 4 + this._colorUi.twoColW - 10
-        designH := 390
+        designH := 440
         main.Width(designW).Height(designH)
 
-        defFs := (IsSet(MainSoftData) && MainSoftData.HasProp("FontSize") && IsNumber(MainSoftData.FontSize))
-            ? Integer(MainSoftData.FontSize)
-            : (IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15)
         fontRow := panel.Add("Grid").Margin("0,0,0,0").Width(this._colorUi.twoColW)
         fontRow.Cols(String(this._colorUi.itemW), String(this._colorUi.itemW + this._colorUi.colGapW))
 
@@ -114,18 +111,13 @@ class ThemeSettingGui {
                 fontCombo.Add("ComboBoxItem").Content(font)
         }
 
-        sizeCol := fontRow.Add("Grid").Grid_Column(1).Width(this._colorUi.itemW).HorizontalAlignment("Left").Margin(this._colorUi.colGap)
-        sizeCol.Cols(String(this._colorUi.labelW), "*", "32")
-        sizeCol.Add("TextBlock").Grid_Column(0).Text(GetLang("字体大小") "：")
+        sizeCol := panel.Add("Grid").Width(this._colorUi.twoColW).HorizontalAlignment("Left").Margin("0,6,0,0")
+        sizeCol.Cols(String(this._colorUi.labelW), "*")
+        sizeCol.Add("TextBlock").Grid_Column(0).Text(GetLang("界面缩放") "：")
             .Foreground(this._colorUi.labelFg).FontSize(this._colorUi.labelFs)
             .VerticalAlignment("Center")
-        sizeSlider := sizeCol.Add("Slider").Grid_Column(1).Name("FontSizeCon").Height(this._colorUi.boxH).MinHeight(this._colorUi.boxH).Margin("2,0,4,0")
-            .Minimum(RMT_ThemeFontSizeMin).Maximum(RMT_ThemeFontSizeMax).Value(String(defFs)).IsMoveToPointEnabled("True")
-            .TickFrequency(1).IsSnapToTickEnabled("True")
-            .VerticalAlignment("Center")
-        sizeVal := sizeCol.Add("TextBlock").Grid_Column(2).Name("FontSizeVal").Text(String(defFs))
-            .FontSize(this._colorUi.labelFs).Foreground("{DynamicResource TextMain}")
-            .VerticalAlignment("Center").HorizontalAlignment("Right")
+        sizeCol.Add("Grid", UiScaleSelectorXaml("UiScaleCon", MainSoftData.UiScale, 260, this._instanceKey)).Grid_Column(1)
+            .ToolTip(GetLang("控件、字号与间距整体缩放，默认 100%，窗口自动适配屏幕。"))
 
         themeRow := panel.Add("Grid").Margin("0,10,0,0").Width(this._colorUi.twoColW)
         themeRow.Cols(String(this._colorUi.labelW), "*")
@@ -179,8 +171,8 @@ class ThemeSettingGui {
         this.ui.OnEvent("Window", "LoadedHwnd", ObjBindMethod(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", ObjBindMethod(this, "OnCancelClick"))
         this.ui.Track("ThemeCombo")
-        this.ui.Track("FontSizeCon")
-        this.ui.OnEvent("FontSizeCon", "ValueChanged", ObjBindMethod(this, "OnFontSizeChanged"))
+        for percent in RMT_UiScalePresets
+            this.ui.OnEvent("UiScaleCon_" percent, "Click", ObjBindMethod(this, "OnUiScaleChanged", percent))
         this.ui.OnEvent("ThemeCombo", "SelectionChanged", ObjBindMethod(this, "OnThemeSelectionChanged"))
         this.ui.OnEvent("BtnConfirm", "Click", ObjBindMethod(this, "OnConfirmClick"))
 
@@ -255,11 +247,8 @@ class ThemeSettingGui {
             }
             this.ui.Update("ThemeCombo", "SelectedIndex", String(themeIdx))
             this.RebuildPalette()
-            defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
-            fsz := MainSoftData.HasProp("FontSize") ? Integer(MainSoftData.FontSize) : defFs
-            this._previewFontSize := fsz
-            this.ui.Update("FontSizeCon", "Value", String(fsz))
-            this.ui.Update("FontSizeVal", "Text", String(fsz))
+            this._previewUiScale := MainSoftData.UiScale
+            SyncUiScaleSelector(this.ui, "UiScaleCon", this._previewUiScale)
             fIdx := 0
             if (IsObject(MainSoftData.FontList)) {
                 for i, f in MainSoftData.FontList {
@@ -324,20 +313,29 @@ class ThemeSettingGui {
         AppThemeUtil.ApplyWinThemeToXaml(this.ui, this._colors)
     }
 
-    OnFontSizeChanged(state, ctrl, event) {
-        v := (IsObject(state) && state.Has("FontSizeCon")) ? state["FontSizeCon"] : ""
-        if (v == "")
-            return
-        fs := Integer(v)
-        try this.ui.Update("FontSizeVal", "Text", String(fs))
+    ; 主设置页切档时同步另一入口；随后全窗口广播负责实际缩放。
+    static SyncUiScale(value) {
+        percent := NormalizeUiScale(value)
+        for , inst in ThemeSettingGui.instances {
+            if (inst.closed || !IsObject(inst.ui))
+                continue
+            wasApplying := inst._applyingTheme
+            inst._applyingTheme := true
+            inst._previewUiScale := percent
+            try SyncUiScaleSelector(inst.ui, "UiScaleCon", percent)
+            finally inst._applyingTheme := wasApplying
+        }
+    }
+
+    OnUiScaleChanged(percent, state, ctrl, event) {
         if (this._applyingTheme)
             return
-        old := this.HasProp("_previewFontSize") ? this._previewFontSize : fs
-        change := fs - old
-        if (change == 0)
+        ; 只绑定用户 Click；程序同步 IsChecked 不进入预览，避免旧事件回写。
+        if (this.HasProp("_previewUiScale") && this._previewUiScale == percent)
             return
-        try this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(change, fs))
-        this._previewFontSize := fs
+        this._previewUiScale := percent
+        ; 独立主题窗口仅预览自身；取消/关闭不改变全局设置。
+        this.ui.Update("Window", "ApplyUiScale", String(this._previewUiScale / 100))
     }
 
     OnPickColor(slot, state, ctrl, event) {
@@ -387,31 +385,18 @@ class ThemeSettingGui {
         AppThemeUtil.ApplyToRuntime(MainSoftData.ThemeColors)
         AppThemeUtil.SaveToToml()
         global XAML_TextClarity
-        try {
-            try {
-                sel := this.ui.Query("FontFamilyCon")
-                if (sel != "" && IsObject(MainSoftData.FontList) && MainSoftData.FontList.Has(sel)) {
-                    MainSoftData.FontType := sel
-                    CfgWrite(sel, SettingFile, SettingSection, "FontType")
-                }
-            }
-            oldSize := XAMLHost.GetThemeFontSize()
-            defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
-            previewSize := this.HasProp("_previewFontSize") ? this._previewFontSize : defFs
-            fs := previewSize
-            try {
-                q := this.ui.Query("FontSizeCon")
-                if (q != "" && IsNumber(q))
-                    fs := Integer(q)
-            }
-            fs := ApplyUserFontSize(fs, true)
-            change := fs - oldSize
-            MainSoftData.FontClarity := "1"
-            XAML_TextClarity := 1
-            this._previewFontSize := fs
-            XAMLHost.ApplyFontsToAllWindows(change, fs, this.ui)
-            try this.ui.Update("Window", "ApplyFonts", XAMLHost.BuildApplyFontsPayload(fs - previewSize, fs))
+        idx := this.ui.Query("FontFamilyCon>SelectedIndex")
+        if (IsInteger(idx) && IsObject(MainSoftData.FontList) && idx >= 0 && idx < MainSoftData.FontList.Length) {
+            MainSoftData.FontType := MainSoftData.FontList[Integer(idx) + 1]
+            CfgWrite(MainSoftData.FontType, SettingFile, SettingSection, "FontType")
         }
+        ApplyUserUiScale(this._previewUiScale, true)
+        MainSoftData.FontClarity := "1"
+        XAML_TextClarity := 1
+        XAMLHost.ApplyFontsToAllWindows(0, XAMLHost.GetDesignFontSize())
+        XAMLHost.ApplyUiScaleToAllWindows()
+        if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui))
+            try SyncUiScaleSelector(MyMainWin.ui, "ThemeUiScaleCon", MainSoftData.UiScale)
         ; 已打开的全部界面同步「通用窗口」色与业务浮层色
         AppThemeUtil.RefreshAllOpenWindows()
     }

@@ -637,6 +637,14 @@ public partial class AhkWpfEngine
             return;
         }
 
+        if (parts[0] == "Window" && parts[1] == "ApplyUiScale")
+        {
+            double factor;
+            if (parts.Length == 3 && double.TryParse(parts[2], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out factor)) ApplyUiScale(factor);
+            return;
+        }
+
         if (parts[0] == "Window" && parts[1] == "InitialUpdateComplete")
         {
             if (firstFrame != null) firstFrame.CompleteInitialization();
@@ -696,7 +704,26 @@ public partial class AhkWpfEngine
             else
             {
                 string[] names = query.Split(',');
-                stateData = CollectStateFor(names);
+                var values = new StringBuilder();
+                foreach (string name in names)
+                {
+                    string key = name.Trim();
+                    if (key == "Window>UiVisualScale" || key == "Window>UiBaseVisualScale"
+                        || key == "Window>UiBaseWidth" || key == "Window>UiBaseHeight")
+                    {
+                        double scale;
+                        if (key == "Window>UiBaseWidth" || key == "Window>UiBaseHeight")
+                            scale = GetUiBaseDimension(key == "Window>UiBaseWidth");
+                        else
+                        {
+                            scale = GetUiVisualScale();
+                            if (key == "Window>UiBaseVisualScale") scale /= _uiScaleFactor;
+                        }
+                        values.Append(key + "=" + BridgeUtil.LengthPrefix(scale.ToString(System.Globalization.CultureInfo.InvariantCulture)) + "\n");
+                    }
+                    else values.Append(CollectStateFor(new[] { name }));
+                }
+                stateData = values.ToString();
             }
             int count = stateData.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
             SendToAhk("MRESPONSE|" + winId + "|" + count + "\n" + stateData);
@@ -4305,9 +4332,9 @@ public partial class AhkWpfEngine
                 bool isClose = btn.Name == "BtnClosePanel" || btn.Name == "BtnClose" || btn.Name == "BtnWinClose"
                     || btn.Name == "BtnClosePicker";
                 string styleKey = isClose ? "TitleBarCloseButton" : "TitleBarChromeButton";
-                Style chromeStyle = owner.TryFindResource(styleKey) as Style;
+                System.Windows.Style chromeStyle = owner.TryFindResource(styleKey) as System.Windows.Style;
                 if (chromeStyle == null)
-                    chromeStyle = owner.TryFindResource("TitleBarCloseButton") as Style;
+                    chromeStyle = owner.TryFindResource("TitleBarCloseButton") as System.Windows.Style;
                 if (chromeStyle != null)
                     btn.Style = chromeStyle;
             }
@@ -4316,7 +4343,7 @@ public partial class AhkWpfEngine
         try
         {
             btn.ApplyTemplate();
-            Border bd = BridgeUtil.FindVisualChild<Border>(btn);
+            System.Windows.Controls.Border bd = BridgeUtil.FindVisualChild<System.Windows.Controls.Border>(btn);
             if (bd != null)
             {
                 bd.ClearValue(FrameworkElement.WidthProperty);

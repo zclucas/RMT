@@ -21,7 +21,7 @@
             pageId := (InStr(ctrl, "Val_") = 1) ? "hotkey" : "diagnostic"
         else if (RegExMatch(ctrl, "i)^Ai") || ctrl == "ThemePresetCon")
             pageId := ctrl == "ThemePresetCon" ? "appearance" : "ai"
-        else if (RegExMatch(ctrl, "i)^(CmbFont|ThemeFont|Palette)") )
+        else if (RegExMatch(ctrl, "i)^(CmbFont|ThemeUiScale|Palette)") )
             pageId := "appearance"
         else if (RegExMatch(ctrl, "i)^(ChkBoot|ChkAdmin|ChkData|ChkModal|CmbLang|CmbPreferred|CmbScreen|CmbOCR|CmbExcelBackend|CmbSearchImage|ChkSearchImageAdaptive|CmbRemark|CmbTriggerJoy|CmbJoy|ChkJoy|EditMuti|EditTranslateTimeout|TabVisible)") )
             pageId := "behavior"
@@ -67,7 +67,7 @@
             {id: "countdown", fields: [{key: "CountDownStyle", def: 2, ctrl: "CountDownStyleCon", kind: "cmb"}, {key: "CountDownPadZero", def: true, ctrl: "CountDownPadCon", kind: "chk"}, {key: "CountDownAlpha", def: 70, ctrl: "CountDownAlphaCon", kind: "sld", val: "CountDownAlphaVal"}, {key: "CountDownFontSize", def: 15, ctrl: "CountDownFontCon", kind: "sld", val: "CountDownFontVal"}]},
             {id: "uipanel", fields: [{key: "UIPanelBtnWidth", def: 80, ctrl: "UIPanelBtnWidthCon", kind: "sld", val: "UIPanelBtnWidthVal"}, {key: "UIPanelBtnHeight", def: 34, ctrl: "UIPanelBtnHeightCon", kind: "sld", val: "UIPanelBtnHeightVal"}, {key: "UIPanelFontSize", def: 12, ctrl: "UIPanelFontSizeCon", kind: "sld", val: "UIPanelFontSizeVal"}, {key: "UIPanelCols", def: 3, ctrl: "UIPanelColsCon", kind: "sld", val: "UIPanelColsVal"}, {key: "UIPanelShowOnActive", def: true, ctrl: "UIPanelShowOnActiveCon", kind: "chk"}]},
             {id: "theme", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
-            {id: "font", fields: [{key: "FontType", def: ResolveUiFont(MainSoftData.FontList), ctrl: "CmbFont", kind: "cmbText"}, {key: "FontSize", def: XAML_FontSizeDefault, ctrl: "ThemeFontSizeCon", kind: "themeFontSize"}]},
+            {id: "font", fields: [{key: "FontType", def: ResolveUiFont(MainSoftData.FontList), ctrl: "CmbFont", kind: "cmbText"}, {key: "UiScale", def: 100, ctrl: "ThemeUiScaleCon", kind: "uiScale"}]},
             {id: "palette", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
             {id: "aiModel", fields: [{key: "AiProvider", def: "openai", ctrl: "AiProviderCon", kind: "aiProv"}, {key: "AiApiBaseUrl", def: "https://api.openai.com/v1", ctrl: "AiBaseUrlCon", kind: "txt"}, {key: "AiApiKey", def: "", ctrl: "AiApiKeyCon", kind: "pwd"}, {key: "AiModel", def: "", ctrl: "AiModelCon", kind: "txt"}]},
             {id: "aiPerm", fields: [{key: "AiAccessMode", def: 2, ctrl: "AiAccessCon", kind: "cmb"}, {key: "AiApprovalMode", def: 2, ctrl: "AiApprovalCon", kind: "cmb"}]}
@@ -133,9 +133,9 @@
         if (!IsObject(this._setMods))
             return
         spec := ""
-        for mod in this._setMods {
-            if (mod.id == modId) {
-                spec := mod
+        for moduleDef in this._setMods {
+            if (moduleDef.id == modId) {
+                spec := moduleDef
                 break
             }
         }
@@ -194,8 +194,8 @@
                 MainSoftData.%f.key% := def
                 for level in RMTLogLevelKeys()
                     try this.ui.Update("LogLevel_" level, "IsChecked", RMTLogLevelEnabled(level, def) ? "True" : "False")
-            case "themeFontSize":
-                this._ApplySettingFontSize(def)
+            case "uiScale":
+                this._ApplySettingUiScale(def)
             case "sld":
                 MainSoftData.%f.key% := def
                 try this.ui.Update(f.ctrl, "Value", String(def))
@@ -304,30 +304,19 @@
         try this.ui.Update(ctrl, "Text", String(v))
     }
 
-    ; 主题：字体大小（滑块/数值框），原位预览并与「应用并保存」一致地写回 FontSize
-    OnSettingFontSize(state, ctrl, event) {
-        v := this.ui.Query("ThemeFontSizeCon")
-        if (!IsNumber(v))
-            return
-        this._ApplySettingFontSize(v)
+    ; 缩放档位即时预览，仍由「应用并保存」统一持久化。
+    OnSettingUiScale(percent, state, ctrl, event) {
+        this._ApplySettingUiScale(percent)
     }
-    OnSettingFontSizeText(state, ctrl, event) {
-        t := Trim(this.ui.Query("ThemeFontSizeVal"))
-        if (t == "" || !IsNumber(t)) {
-            try this.ui.Update("ThemeFontSizeVal", "Text", String(MainSoftData.FontSize))
+    _ApplySettingUiScale(value) {
+        oldScale := MainSoftData.UiScale
+        percent := ApplyUserUiScale(value, false)
+        if (percent == oldScale)
             return
-        }
-        this._ApplySettingFontSize(t)
-    }
-    _ApplySettingFontSize(fs) {
-        oldSize := MainSoftData.FontSize
-        fs := ApplyUserFontSize(fs, false)
-        try this.ui.Update("ThemeFontSizeCon", "Value", String(fs))
-        try this.ui.Update("ThemeFontSizeVal", "Text", String(fs))
-        if (fs != oldSize) {
-            this.MarkSettingDirty("ThemeFontSizeCon")
-            this.RefreshWindowFonts(fs - oldSize)
-        }
+        try SyncUiScaleSelector(this.ui, "ThemeUiScaleCon", percent)
+        this.MarkSettingDirty("ThemeUiScaleCon")
+        ThemeSettingGui.SyncUiScale(percent)
+        XAMLHost.ApplyUiScaleToAllWindows()
     }
 
     ; 快捷键录入：复用 HotkeySettingGui 的录入链（MyEditHotkeyGui + 触发键/字串编辑器）
