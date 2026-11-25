@@ -1,10 +1,10 @@
-#ifndef SHM_CORE_H
-#define SHM_CORE_H
+#ifndef SHM_CORE_HPP
+#define SHM_CORE_HPP
 
 #include "shm_var.h"
-#include "shm_internal.h"
-#include "shm_allocator.h"
-#include "shm_rwlock.h"
+#include "shm_internal.hpp"
+#include "shm_allocator.hpp"
+#include "shm_rwlock.hpp"
 
 #include <string>
 #include <string_view>
@@ -93,4 +93,4 @@ void CloseInternal() noexcept;
 
 } // namespace shm
 
-#endif // SHM_CORE_H
+#endif // SHM_CORE_HPP
