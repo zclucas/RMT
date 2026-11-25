@@ -47,9 +47,8 @@ class RunGui {
     static AddTargetCombo(parent) {
         combo := parent.Add("ComboBox").Name("PathTextCon").Height(26).MinHeight(26).VerticalAlignment("Center")
             .VerticalContentAlignment("Center").FontSize("11").IsEditable("True").IsTextSearchEnabled("False")
-        tip := GetLang("倒计时结束时会强制关闭应用")
-        combo.Add("ComboBoxItem").Content(GetLang("30 秒后关机")).TextSearch_Text("shutdown.exe /s /t 30").ToolTip(tip)
-        combo.Add("ComboBoxItem").Content(GetLang("30 秒后重启")).TextSearch_Text("shutdown.exe /r /t 30").ToolTip(tip)
+        combo.Add("ComboBoxItem").Content(GetLang("30 秒后关机")).TextSearch_Text("shutdown.exe /s /t 30")
+        combo.Add("ComboBoxItem").Content(GetLang("30 秒后重启")).TextSearch_Text("shutdown.exe /r /t 30")
         return combo
     }
 
@@ -101,7 +100,7 @@ class RunGui {
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("目标：")).ToolTip(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Name("TargetLabel").Text(GetLang("目标：")).ToolTip(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等") "`n" GetLang("倒计时结束时会强制关闭应用")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         RunGui.AddTargetCombo(body).Grid_Row(1).Grid_Column(1)
         body.Add("Button").Grid_Row(1).Grid_Column(3).Name("BtnSelectFile").Content(GetLang("选择文件")).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Stretch").Cursor("Hand")
 

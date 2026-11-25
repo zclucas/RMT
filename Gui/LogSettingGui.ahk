@@ -59,25 +59,25 @@ class LogSettingGui {
 
         ; 行0：日志级别
         row0 := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
-        row0.Add("TextBlock").Text(GetLang("日志级别：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        row0.Add("TextBlock").Name("LogLevelLabel").Text(GetLang("日志级别：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+            .ToolTip(GetLang("可同时勾选多个级别。系统日志只写入勾选的级别，全部取消则暂停写入。"))
         labels := ["调试", "信息", "警告", "错误"]
         for i, level in RMTLogLevelKeys()
             row0.Add("CheckBox").Name("LogLevel_" level).Content(GetLang(labels[i])).Margin("4,0,6,0").VerticalAlignment("Center")
-                .ToolTip(GetLang("可同时勾选多个级别。系统日志只写入勾选的级别，全部取消则暂停写入。"))
 
         ; 行1：warn 气泡
         row1 := body.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").VerticalAlignment("Center")
-        row1.Add("TextBlock").Text(GetLang("warn 气泡：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        chkBubble := row1.Add("CheckBox").Name("ChkLogWarnBubble").VerticalAlignment("Center").Margin("4,0,0,0")
+        row1.Add("TextBlock").Name("LogWarnBubbleLabel").Text(GetLang("warn 气泡：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
             .ToolTip(GetLang("开启后：warn 级错误在托盘显示气泡通知（2 秒自动消失），不打断操作。")
                 . "`n" GetLang("关闭后：warn 只写入 System.log，不弹气泡。"))
+        chkBubble := row1.Add("CheckBox").Name("ChkLogWarnBubble").VerticalAlignment("Center").Margin("4,0,0,0")
 
         ; 行2：error 错误中心
         row2 := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").VerticalAlignment("Center")
-        row2.Add("TextBlock").Text(GetLang("错误中心：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        chkBadge := row2.Add("CheckBox").Name("ChkLogErrorBadge").VerticalAlignment("Center").Margin("4,0,0,0")
+        row2.Add("TextBlock").Name("LogErrorBadgeLabel").Text(GetLang("错误中心：")).Width(110).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
             .ToolTip(GetLang("开启后：error 级错误在错误中心聚合显示（可复制/清空）。")
                 . "`n" GetLang("关闭后：error 只写入 System.log，不打开错误中心。"))
+        chkBadge := row2.Add("CheckBox").Name("ChkLogErrorBadge").VerticalAlignment("Center").Margin("4,0,0,0")
 
         ; 行3：确定
         btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")

@@ -917,21 +917,25 @@ WaitSelectedKeys(tableItem, index, Data, released := false) {
     return result
 }
 
-WaitGroupNames() => ["时间", "屏幕与鼠标", "文件与剪切板", "窗口", "按键", "变量", "确定", "进程"]
+WaitGroupNames() => ["时间", "屏幕变化", "鼠标", "文件", "剪切板", "窗口", "按键", "变量", "确定", "进程"]
 WaitGroupTypes(group) {
     switch group {
         case "窗口":
             return ["等待窗口存在", "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口移动", "等待窗口关闭", "等待窗口最小化"]
-        case "屏幕与鼠标":
-            return ["等待屏幕变化", "等待鼠标移动", "等待鼠标停止移动"]
+        case "屏幕变化":
+            return ["等待屏幕变化"]
+        case "鼠标":
+            return ["等待鼠标移动", "等待鼠标停止移动"]
         case "按键":
             return ["等待按键按下", "等待按键松开"]
         case "变量":
             return ["等待变量值"]
         case "进程":
             return ["等待进程存在", "等待进程关闭"]
-        case "文件与剪切板":
-            return ["等待文件存在", "等待文件删除", "等待文件变化", "等待剪切板变化"]
+        case "文件":
+            return ["等待文件存在", "等待文件删除", "等待文件变化"]
+        case "剪切板":
+            return ["等待剪切板变化"]
         case "时间":
             return ["等待时间", "等待时间区间"]
         case "确定":

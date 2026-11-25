@@ -66,6 +66,7 @@ class WindowManageGui {
     }
 
     _ComboPush(comboName, propertyName, value) {
+        CmdEditorForm.NormalizeComboItem(&propertyName, &value)
         if (this._batching)
             this._batch.Push({ControlName: comboName, PropertyName: propertyName, Value: value})
         else

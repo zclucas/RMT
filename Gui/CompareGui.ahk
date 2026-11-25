@@ -27,7 +27,6 @@ class CompareGui {
         this._title := ""
 
         this.Data := ""
-        this.ResultConArr := ["ResultSaveLabel", "SaveNameCon", "ResultLabelTrueCon", "TrueValueCon", "ResultLabelFalseCon", "FalseValueCon"]
     }
 
     Hwnd() {
@@ -65,7 +64,7 @@ class CompareGui {
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("16,10,16,14")
-        body.Rows("34", this._CondiBoxRowH(), "88", "34", "48")
+        body.Rows("34", this._CondiBoxRowH(), "108", "34", "48")
         body.Cols("28", "*", "8", "90", "8", "*", "28")
 
         ; === 逻辑关系 + 备注（备注与比较下拉左对齐）===
@@ -108,7 +107,7 @@ class CompareGui {
         ft := foundCol.Add("StackPanel").Orientation("Horizontal")
         ft.Add("TextBlock").Text(GetLang("真-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         ft.Add("Button").Name("BtnTrueEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("8,0,0,0").Cursor("Hand")
-        foundCol.Add("TextBox").Name("TrueMacroCon").Height(46).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
+        foundCol.Add("TextBox").Name("TrueMacroCon").Height(66).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
             .VerticalContentAlignment("Top").Padding("4,2").FontSize(11)
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -117,32 +116,21 @@ class CompareGui {
         ft2 := unfoundCol.Add("StackPanel").Orientation("Horizontal")
         ft2.Add("TextBlock").Text(GetLang("假-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         ft2.Add("Button").Name("BtnFalseEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("8,0,0,0").Cursor("Hand")
-        unfoundCol.Add("TextBox").Name("FalseMacroCon").Height(46).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
+        unfoundCol.Add("TextBox").Name("FalseMacroCon").Height(66).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
             .VerticalContentAlignment("Top").Padding("4,2").FontSize(11)
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        ; === 结果保存 ===
+        ; === 结果变量 ===
         saveRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(7).VerticalAlignment("Center")
         saveRow.Cols("*", "8", "*")
         saveLeft := saveRow.Add("Grid").Grid_Column(0)
-        saveLeft.Cols("Auto", "*")
-        saveHead := saveLeft.Add("StackPanel").Grid_Column(0).Orientation("Horizontal").VerticalAlignment("Center")
-        saveHead.Add("CheckBox").Name("SaveToggleCon").VerticalAlignment("Center")
-        saveHead.Add("TextBlock").Name("ResultSaveLabel").Text(GetLang("结果保存")).VerticalAlignment("Center").Margin("6,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        saveLeft.Add("ComboBox").Grid_Column(1).Name("SaveNameCon").Height(26).MinHeight(26).Margin("8,0,0,0").IsEditable("True")
-            .HorizontalAlignment("Stretch").VerticalContentAlignment("Center").FontSize("11")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        saveRight := saveRow.Add("StackPanel").Grid_Column(2).Orientation("Horizontal").VerticalAlignment("Center").HorizontalAlignment("Right")
-        saveRight.Add("TextBlock").Name("ResultLabelTrueCon").Text(GetLang("真值")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        saveRight.Add("TextBox").Name("TrueValueCon").Width(70).Height(26).MinHeight(26).Margin("6,0,0,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("4,0")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        saveRight.Add("TextBlock").Name("ResultLabelFalseCon").Text(GetLang("假值")).VerticalAlignment("Center").Margin("12,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        saveRight.Add("TextBox").Name("FalseValueCon").Width(70).Height(26).MinHeight(26).Margin("6,0,0,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("4,0")
+        saveLeft.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
+        saveLeft.Add("TextBlock").Name("ResultSaveLabel").Text(GetLang("结果变量："))
+            .ToolTip(GetLang("条件成立时保存 1，不成立时保存 0；留空则不保存。"))
+            .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        saveLeft.Add("ComboBox").Grid_Column(1).Name("SaveNameCon").Height(26).MinHeight(26)
+            .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -166,7 +154,6 @@ class CompareGui {
         this.ui.OnEvent("BtnTrueEdit", "Click", ObjBindMethod(this, "OnTrueBtnClick"))
         this.ui.OnEvent("BtnFalseEdit", "Click", ObjBindMethod(this, "OnFalseBtnClick"))
         this.ui.OnEvent("BtnAddCondi", "Click", ObjBindMethod(this, "OnAddCondi"))
-        this.ui.OnEvent("SaveToggleCon", "Click", ObjBindMethod(this, "OnRefresh"))
     }
 
     _CondiScrollStyles() {
@@ -200,7 +187,7 @@ class CompareGui {
     }
 
     _FitHeight() {
-        return Integer(XAMLHost.CmdTitleBarHeight()) + 10 + 14 + 34 + this._CondiBoxRowH() + 88 + 34 + 48
+        return Integer(XAMLHost.CmdTitleBarHeight()) + 10 + 14 + 34 + this._CondiBoxRowH() + 108 + 34 + 48
     }
 
     _EnsureCondiDataLen() {
@@ -395,10 +382,7 @@ class CompareGui {
         ; 原生 DropDownList.Value 为 1-based，XAML SelectedIndex 为 0-based
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(ObjHasOwnProp(this.Data, "TrueMacro") ? this.Data.TrueMacro : "", 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(ObjHasOwnProp(this.Data, "FalseMacro") ? this.Data.FalseMacro : "", 1))
-        this.ui.Update("SaveToggleCon", "IsChecked", this._ToggleInt(ObjHasOwnProp(this.Data, "SaveToggle") ? this.Data.SaveToggle : 0) ? "True" : "False")
-        this._SetCombo("SaveNameCon", GetGuiVarArr(), GetLang(ObjHasOwnProp(this.Data, "SaveName") ? this.Data.SaveName : ""))
-        this.ui.Update("TrueValueCon", "Text", ObjHasOwnProp(this.Data, "TrueValue") ? this.Data.TrueValue : 1)
-        this.ui.Update("FalseValueCon", "Text", ObjHasOwnProp(this.Data, "FalseValue") ? this.Data.FalseValue : 0)
+        this._SetCombo("SaveNameCon", GetGuiVarArr(), cmd == "" ? "Res" : (this.Data.SaveToggle ? this.Data.SaveName : ""))
         logical := ObjHasOwnProp(this.Data, "LogicalType") ? this.Data.LogicalType : "且"
         this.ui.Update("LogicalTypeCon", "SelectedIndex", String(CmdEnumIndex(logical, CmdEnumLogicNames())))
         this._RebuildRows()
@@ -413,7 +397,7 @@ class CompareGui {
     }
 
     CheckIfValid() {
-        if (this.ui.Query("SaveToggleCon") == "True" && !CheckVarNameIfValid(this.ui.Query("SaveNameCon")))
+        if (Trim(this.ui.Query("SaveNameCon")) != "" && !CheckVarNameIfValid(this.ui.Query("SaveNameCon")))
             return false
 
         return true
@@ -449,10 +433,6 @@ class CompareGui {
             enableVari := !IsCompareExistVar(ComboIndexToCompareType(this._CompareIndex(i))) && isEnable
             this.ui.Update("VariableCon_" i, "IsEnabled", enableVari ? "True" : "False")
         }
-
-        canEditResult := this.ui.Query("SaveToggleCon") == "True"
-        for name in this.ResultConArr
-            this.ui.Update(name, "IsEnabled", canEditResult ? "True" : "False")
     }
 
     OnClickSureBtn(state, ctrl, event) {
@@ -528,10 +508,10 @@ class CompareGui {
     SaveCompareData() {
         this.Data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
         this.Data.FalseMacro := GetLangMacro(this.ui.Query("FalseMacroCon"), 2)
-        this.Data.SaveToggle := this.ui.Query("SaveToggleCon") == "True" ? 1 : 0
+        this.Data.SaveToggle := Trim(this.ui.Query("SaveNameCon")) != "" ? 1 : 0
         this.Data.SaveName := GetVarName(this.ui.Query("SaveNameCon"))
-        this.Data.TrueValue := this.ui.Query("TrueValueCon")
-        this.Data.FalseValue := this.ui.Query("FalseValueCon")
+        this.Data.TrueValue := 1
+        this.Data.FalseValue := 0
         this.Data.LogicalType := CmdEnumFromIndex(this._LogicalIndex(), CmdEnumLogicNames())
         n := this.Data.ToggleArr.Length
         this.Data.ToggleArr := []

@@ -100,13 +100,12 @@ class FeedbackGui {
         this._AddBtn(kindRow, "KindBug", GetLang("Bug 反馈"), 92).Margin("0,0,6,0")
         this._AddBtn(kindRow, "KindIdea", GetLang("功能建议"), 92)
 
-        root.Add("TextBlock").Grid_Row(1).Text(GetLang("标题"))
+        root.Add("TextBlock").Name("TitleInputLabel").Grid_Row(1).Text(GetLang("标题")).ToolTip(GetLang("一句话说清问题，至少 4 个字；不要和已有帖子重名"))
             .Foreground("{DynamicResource TextSub}").FontSize(12).Margin("2,0,0,5")
         root.Add("TextBox").Name("TitleInput").Grid_Row(2).Height(28).Margin("0,0,0,12")
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
             .VerticalContentAlignment("Center")
-            .ToolTip(GetLang("一句话说清问题，至少 4 个字；不要和已有帖子重名"))
 
         descriptionRow := root.Add("Grid").Grid_Row(3).Margin("2,0,0,5")
         descriptionRow.Cols("Auto", "*")

@@ -100,12 +100,11 @@ class ShareUploadGui {
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
             .VerticalContentAlignment("Center")
 
-        this._AddFieldRow(form, "版本（可选）：", 3)
+        this._AddFieldRow(form, "版本（可选）：", 3, GetLang("如 1.0 / 2026-09。填了会在共享详情里显示，便于区分版本"))
         form.Add("TextBox").Name("VerInput").Height(26).Margin("0,0,0,10")
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
             .VerticalContentAlignment("Center")
-            .ToolTip(GetLang("如 1.0 / 2026-09。填了会在共享详情里显示，便于区分版本"))
 
         this._AddFieldRow(form, "说明（可选）：", 2)
         form.Add("TextBox").Name("NoteInput").Height(60).Margin("0,0,0,2")
@@ -154,10 +153,12 @@ class ShareUploadGui {
             XamlWin.NudgeIfOff(this.ui, refWin)
     }
 
-    _AddFieldRow(parent, label, _) {
-        parent.Add("TextBlock").Text(GetLang(label))
+    _AddFieldRow(parent, label, _, tip := "") {
+        caption := parent.Add("TextBlock").Name("FieldLabel" _).Text(GetLang(label))
             .Foreground("{DynamicResource TextMain}").FontSize(13)
             .Margin("0,0,0,4")
+        if (tip != "")
+            caption.ToolTip(tip)
     }
 
     _AddBtn(parent, name, content, width) {

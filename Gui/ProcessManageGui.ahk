@@ -145,8 +145,6 @@ class ProcessManageGui extends CommentGui {
     _Output(body, name, label, right := false, tip := "") {
         row := this._FieldRow(body, label, right, tip)
         combo := CmdEditorForm.Combo(row, name, true).Grid_Column(1)
-        if (tip != "")
-            combo.ToolTip(tip)
         return row
     }
 
@@ -250,13 +248,10 @@ class ProcessManageGui extends CommentGui {
             group := groups[value]
             detail := group.Count == 1 ? "PID " group.Pid : Format(GetLang("匹配进程数：{}"), group.Count)
             label := group.Name == "" ? detail : group.Name
-            tip := group.Name == "" ? detail : label "`n" detail
-            for path in group.Paths
-                tip .= "`n" path
             this._targetIconPaths.Push(group.Paths.Length ? group.Paths[1] : "")
             index := this._targetIconPaths.Length
             xaml := '<ComboBoxItem xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
-                . ' TextSearch.Text="{}' this._EscapeXml(value) '" ToolTip="{}' StrReplace(this._EscapeXml(tip), "`n", "&#10;") '">'
+                . ' TextSearch.Text="{}' this._EscapeXml(value) '">'
                 . '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
                 . '<Image Name="TargetProcessIcon' index '" Width="16" Height="16" HorizontalAlignment="Left"/>'
                 . '<StackPanel Grid.Column="1"><TextBlock Text="{}' this._EscapeXml(label) '" TextTrimming="CharacterEllipsis"/>'

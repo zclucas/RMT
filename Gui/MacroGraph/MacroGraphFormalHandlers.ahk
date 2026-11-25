@@ -1958,10 +1958,8 @@ class MacroGraphFormalHandlersMixin {
             "WmW", d.HasOwnProp("wmWidth") ? d.wmWidth : 0, "WmH", d.HasOwnProp("wmHeight") ? d.wmHeight : 0,
             "WmWidthVar", d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "WinWidth", "WmHeightVar", d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "WinHeight",
             "WmTitle", d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", "WmTrans", d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80") {
-            this.ui.Update(nm "_" id, "ClearItems", "")
-            for item in (nm == "WmTitle" ? GetGuiVarReferences("text") : varList)
-                this.ui.Update(nm "_" id, "AddItem", item)
-            this.ui.Update(nm "_" id, "Text", nm == "WmTitle" ? TranslateBuiltinVarReferences(val, true) : GetLang(val))
+            this._SetVariableComboItems(nm "_" id, nm == "WmTitle" ? GetGuiVarReferences("text") : varList,
+                nm == "WmTitle" ? TranslateBuiltinVarReferences(val, true) : GetLang(val))
         }
         Loop 7 {
             prop := "wmResultVar" A_Index

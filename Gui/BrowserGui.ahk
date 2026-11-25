@@ -47,7 +47,6 @@ class BrowserGui extends CommentGui {
         urlRow := this._Row(body, "网址：", "UrlRow")
         this._TextBox(urlRow, "Url").Grid_Column(1).TextWrapping("NoWrap")
             .ScrollViewer_HorizontalScrollBarVisibility("Hidden")
-            .ToolTip("{Binding Text, RelativeSource={RelativeSource Self}}")
 
         selector := this._Row(body, "网页元素：", "SelectorRow", ,
             GetLang("左侧选择类型，右侧填写选择器。")).Add("Grid").Grid_Column(1)

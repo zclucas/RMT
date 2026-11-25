@@ -674,12 +674,16 @@ class ControlOperationGui extends WindowControlGui {
     _conditionKind := "text"
     _conditionOperatorsKind := ""
     _conditionAllowsHalf := false
+    _waitConditionCount := 1
+    _waitLeftKinds := []
+    _rebuildingWaitConditions := false
     _testRunning := false
 
     _PlayAction() => XamlWin.BindCurrent(this, "TriggerMacro")
 
     OnWindowLoad(state, ctrl, event) {
         super.OnWindowLoad(state, ctrl, event)
+        this._RefreshConditionFields()
         if (!this._playHotkeys.Length && this.Hwnd())
             this._playHotkeys := WinHotkey.Register(["!l"], this._PlayAction(), this.Hwnd())
         if (!this._targetRefreshTimer) {
@@ -748,32 +752,33 @@ class ControlOperationGui extends WindowControlGui {
     _BuildArgumentField(body) {
         this._argumentChoicesKind := ""
         this._conditionKind := "text", this._conditionOperatorsKind := ""
-        this._OperationCombo(body, "点击类型：", "ClickType", WindowControl.ClickTypes)
+        this._Row(body, "控件说明：", "WaitValueHint", "Top").Add("TextBlock").Name("WaitValueHint").Grid_Column(1)
+            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
+        this._Row(body, "控件说明：", "WriteHint", "Top").Add("TextBlock").Name("WriteHint").Grid_Column(1)
+            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
+        clicks := body.Add("Grid").Cols("*", 16, "*")
+        this._OperationCombo(clicks, "点击类型：", "ClickType", WindowControl.ClickTypes)
+        hold := this._Row(clicks, "长按时间：", "ClickHoldMs", , , GetLang("毫秒，支持自定义数值或 {变量}。")).Grid_Column(2)
+        CmdEditorForm.Combo(hold, "ClickHoldMs", true).Grid_Column(1)
         this._OperationCombo(body, "点击位置：", "ClickPoint", WindowControl.ClickPoints)
-        this._OperationCombo(body, "偏移值：", "ScrollOffset", ["0"], true)
-            .ToolTip(GetLang("正数向下、负数向上；像素偏移，Excel 按行折算。"))
-        waitType := CmdEditorForm.Combo(this._Row(body, "等待类型：", "WaitType"), "WaitType").Grid_Column(1)
-            .Width("{Binding ActualWidth, ElementName=ActionType}").HorizontalAlignment("Left")
+        this._OperationCombo(body, "偏移值：", "ScrollOffset", ["0"], true, GetLang("正数向下、负数向上；像素偏移，Excel 按行折算。"))
+        waits := body.Add("Grid").Name("WaitTypeRow").Cols("*", 16, "*")
+        waitType := CmdEditorForm.Combo(this._Row(waits, "等待类型：", "WaitTypeChoice"), "WaitType").Grid_Column(1)
         for choice in WindowControl.WaitTypes
             waitType.Add("ComboBoxItem").Content(GetLang(choice))
-        this._OperationCombo(body, "条件：", "WaitOperator", [])
-        values := this._Row(body, "条件值：", "WaitValue", "Top").Add("Grid").Grid_Column(1)
-        CmdEditorForm.Combo(values, "WaitValue", true)
-            .Width("{Binding ActualWidth, ElementName=ActionType}").HorizontalAlignment("Left").VerticalAlignment("Top")
-        values.Add("TextBox").Name("WaitValueText").Style("{StaticResource RmtMultiLineTextBox}")
-            .Height(60).MinHeight(60).Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-        this._Row(body, "条件说明：", "WaitValueHint", "Top").Add("TextBlock").Name("WaitValueHint").Grid_Column(1)
-            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
-        this._Row(body, "写入说明：", "WriteHint", "Top").Add("TextBlock").Name("WriteHint").Grid_Column(1)
-            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
+        logic := this._Row(waits, "条件关系：", "WaitLogic", , "CommandRightLabel").Grid_Column(2)
+        relation := CmdEditorForm.Combo(logic, "WaitLogic").Grid_Column(1)
+        for choice in ["且", "或"]
+            relation.Add("ComboBoxItem").Content(GetLang(choice))
+        CmdEditorForm.ConditionPanel(body, "WaitConditionPanel", "WaitConditionScroll", "WaitConditions", "BtnAddWaitCondition")
         combo := CmdEditorForm.Combo(this._Row(body, "控件参数：", "Argument"), "Argument", true).Grid_Column(1)
             .Width("{Binding ActualWidth, ElementName=ActionType}").HorizontalAlignment("Left")
         for value in GetGuiVarReferences()
-            combo.Add("ComboBoxItem").Content(value)
+            CmdEditorForm.ComboItem(combo, value)
     }
 
-    _OperationCombo(body, label, name, choices, editable := false) {
-        box := CmdEditorForm.Combo(this._Row(body, label, name), name, editable).Grid_Column(1)
+    _OperationCombo(body, label, name, choices, editable := false, labelTip := "") {
+        box := CmdEditorForm.Combo(this._Row(body, label, name, , , labelTip), name, editable).Grid_Column(1)
             .Width("{Binding ActualWidth, ElementName=ActionType}").HorizontalAlignment("Left")
         for choice in choices
             box.Add("ComboBoxItem").Content(GetLang(choice))
@@ -805,8 +810,8 @@ class ControlOperationGui extends WindowControlGui {
         this.ui.OnEvent("ArgumentText", "TextChanged", XamlWin.BindCurrent(this, "OnArgumentTextChanged"))
         this.ui.OnEvent("BtnArgumentBuilder", "Click", XamlWin.BindCurrent(this, "OnArgumentBuilder"))
         this.ui.OnEvent("WaitType", "SelectionChanged", XamlWin.BindCurrent(this, "_RefreshConditionFields"))
-        this.ui.OnEvent("WaitOperator", "SelectionChanged", XamlWin.BindCurrent(this, "_RefreshConditionFields"))
-        this.ui.OnEvent("WaitValueText", "TextChanged", XamlWin.BindCurrent(this, "OnConditionTextChanged"))
+        this.ui.OnEvent("BtnAddWaitCondition", "Click", XamlWin.BindCurrent(this, "OnAddWaitCondition"))
+        this.ui.OnEvent("ClickType", "SelectionChanged", XamlWin.BindCurrent(this, "_RefreshClickFields"))
     }
 
     Init(cmd) {
@@ -818,8 +823,17 @@ class ControlOperationGui extends WindowControlGui {
         this._ComboPush("WaitType", "SelectedIndex", CmdEnumIndex(InputField(this.Data, "WaitType", "等待出现"), WindowControl.WaitTypes))
         for field in ["ClickType", "ClickPoint"] {
             choices := field == "ClickType" ? WindowControl.ClickTypes : WindowControl.ClickPoints
-            this._ComboPush(field, "SelectedIndex", Max(0, CmdEnumIndex(InputField(this.Data, field, ""), choices)))
+            value := InputField(this.Data, field, "")
+            if (field == "ClickType")
+                value := WindowControl.NormalizeClickType(value)
+            this._ComboPush(field, "SelectedIndex", Max(0, CmdEnumIndex(value, choices)))
         }
+        this._ComboPush("ClickHoldMs", "ClearItems", "")
+        for reference in GetGuiVarReferences()
+            this._ComboPush("ClickHoldMs", "AddItem", reference)
+        this._ComboPush("ClickHoldMs", "Text", String(WindowControl.ClickHoldValue(this.Data)))
+        this._ComboPush("ClickPointLabel", "ToolTip", GetLang("区域随机在控件中心80%区域内取点。"))
+        this._RefreshClickFields()
         for reference in GetGuiVarReferences()
             this._ComboPush("ScrollOffset", "AddItem", reference)
         this._ComboPush("ScrollOffset", "Text", String(InputField(this.Data, "ScrollOffset", 0)))
@@ -832,8 +846,8 @@ class ControlOperationGui extends WindowControlGui {
                 allowHalf := this._conditionKind == "state" && InStr(profile.kind, "0.5")
             }
         }
-        this._FillConditionOptions(this._conditionKind, allowHalf,
-            InputField(this.Data, "WaitValue", ""), InputField(this.Data, "WaitOperator", "等于"))
+        this._ComboPush("WaitLogic", "SelectedIndex", InputField(this.Data, "WaitLogic", "且") == "或" ? 1 : 0)
+        this._RebuildWaitConditions(WindowControl.GetWaitConditions(this.Data), this._conditionKind, allowHalf)
         this._ComboPush("ArgumentText", "Text", this.Data.Argument)
         action := WindowControl.NormalizeAction(this.Data.ActionType)
         available := false
@@ -855,29 +869,132 @@ class ControlOperationGui extends WindowControlGui {
         this._ComboPush("WaitTypeRow", "Visibility", this.HasTimeoutFields ? "Visible" : "Collapsed")
         for field in ["ClickType", "ClickPoint"]
             this._ComboPush(field "Row", "Visibility", action == "点击控件" ? "Visible" : "Collapsed")
+        this._RefreshClickFields()
         this._ComboPush("ScrollOffsetRow", "Visibility", action == "滚动到控件" ? "Visible" : "Collapsed")
         super._UpdateChoice(action)
         this._RefreshWriteFields(action)
         this._RefreshConditionFields()
     }
 
-    OnConditionTextChanged(*) {
-        if (this._conditionKind == "text")
-            this._ComboPush("WaitValue", "Text", this.ui.Query("WaitValueText"))
+    _RefreshClickFields(*) {
+        if (this._batching) {
+            action := WindowControl.NormalizeAction(this.Data.ActionType)
+            kind := WindowControl.NormalizeClickType(InputField(this.Data, "ClickType", ""))
+        } else {
+            action := this._ChoiceValue(this.ui.Query("ActionType"))
+            kind := this._SelectedOperationValue("ClickType", WindowControl.ClickTypes, "左键单击")
+        }
+        this._ComboPush("ClickHoldMsRow", "Visibility", action == "点击控件" && InStr(kind, "长按") ? "Visible" : "Collapsed")
+    }
+
+    _WaitField(name, index) => index == 1 ? name : name "_" index
+
+    _WaitConditionRow(index, canDelete) {
+        row := XAML_Generator("Grid").Margin("0,2")
+        row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
+        row.Cols("*", 8, "*", 8, "*", 6, 28)
+        CmdEditorForm.Combo(row, this._WaitField("WaitLeft", index), true)
+        CmdEditorForm.Combo(row, this._WaitField("WaitOperator", index)).Grid_Column(2)
+        CmdEditorForm.Combo(row, this._WaitField("WaitValue", index), true).Grid_Column(4)
+        CmdEditorForm.IconButton(row, "BtnDeleteWaitCondition_" index, 0xE74D, "删除").Grid_Column(6)
+            .IsEnabled(canDelete ? "True" : "False")
+        return row.ToString()
+    }
+
+    _BindWaitConditionEvent(name, event, method, index) {
+        if (this.ui.events.Has(name) && this.ui.events[name].Has(event))
+            this.ui.events[name][event] := []
+        this.ui.OnEvent(name, event, XamlWin.BindCurrent(this, method, index))
+    }
+
+    _RebuildWaitConditions(conditions, kind, allowHalf) {
+        this._rebuildingWaitConditions := true
+        try {
+            this._waitConditionCount := conditions.Length
+            this._ComboPush("WaitConditions", "ClearItems", "")
+            for index, condition in conditions {
+                this._ComboPush("WaitConditions", "AddXamlItem", this._WaitConditionRow(index, conditions.Length > 1))
+                this._BindWaitConditionEvent(this._WaitField("WaitLeft", index), "SelectionChanged", "OnWaitConditionLeft", index)
+                this._BindWaitConditionEvent(this._WaitField("WaitLeft", index), "LostKeyboardFocus", "OnWaitConditionLeft", index)
+                this._BindWaitConditionEvent(this._WaitField("WaitOperator", index), "SelectionChanged", "OnWaitConditionOperator", index)
+                this._BindWaitConditionEvent("BtnDeleteWaitCondition_" index, "Click", "OnDeleteWaitCondition", index)
+            }
+            this._FillConditionOptions(kind, allowHalf, conditions)
+        } finally {
+            this._rebuildingWaitConditions := false
+        }
+    }
+
+    _ReadWaitConditions() {
+        conditions := []
+        loop this._waitConditionCount {
+            index := A_Index
+            left := this._WaitLeftValue(index)
+            operator := GetLangKey(this.ui.Query(this._WaitField("WaitOperator", index)))
+            value := this.ui.Query(this._WaitField("WaitValue", index))
+            conditions.Push([operator, value, left])
+        }
+        return conditions
+    }
+
+    OnAddWaitCondition(*) {
+        conditions := this._ReadWaitConditions()
+        conditions.Push(["等于", "", "运行时控件值"])
+        this._RebuildWaitConditions(conditions, this._conditionKind, this._conditionAllowsHalf)
+        this.ui.Update("WaitConditionScroll", "ScrollToEnd", "")
+    }
+
+    OnDeleteWaitCondition(index, *) {
+        if (this._waitConditionCount <= 1)
+            return
+        conditions := this._ReadWaitConditions()
+        conditions.RemoveAt(index)
+        this._RebuildWaitConditions(conditions, this._conditionKind, this._conditionAllowsHalf)
+    }
+
+    _WaitLeftValue(index) {
+        left := this.ui.Query(this._WaitField("WaitLeft", index))
+        return left == GetLang("运行时控件值") ? "运行时控件值" : left
+    }
+
+    OnWaitConditionLeft(index, *) {
+        if (this._batching || this._rebuildingWaitConditions || index > this._waitConditionCount || index > this._waitLeftKinds.Length)
+            return
+        left := this._WaitLeftValue(index)
+        signature := WindowControl.IsRuntimeControlValue(left) ? "control" : "variable"
+        if (this._waitLeftKinds[index] == signature)
+            return
+        this._FillConditionOptions(this._conditionKind, this._conditionAllowsHalf, this._ReadWaitConditions())
+    }
+
+    OnWaitConditionOperator(index, *) {
+        if (!this._batching && !this._rebuildingWaitConditions && index <= this._waitConditionCount)
+            this._RefreshWaitConditionValue(index)
+    }
+
+    _RefreshWaitConditionValue(index) {
+        operator := GetLangKey(this.ui.Query(this._WaitField("WaitOperator", index)))
+        this._SetWaitConditionValueVisibility(index, operator)
+    }
+
+    _SetWaitConditionValueVisibility(index, operator) {
+        needsValue := operator != "为空" && operator != "不为空"
+        this._ComboPush(this._WaitField("WaitValue", index), "Visibility", needsValue ? "Visible" : "Collapsed")
     }
 
     _RefreshConditionFields(*) {
-        if (this._batching) {
-            for field in ["WaitOperator", "WaitValue", "WaitValueHint"]
-                this._ComboPush(field "Row", "Visibility", "Collapsed")
+        if (this._batching || this._rebuildingWaitConditions) {
+            this._ComboPush("WaitConditionPanel", "Visibility", "Collapsed")
+            this._ComboPush("WaitLogicRow", "Visibility", "Collapsed")
+            this._ComboPush("WaitValueHintRow", "Visibility", "Collapsed")
             return
         }
         action := this._ChoiceValue(this.ui.Query("ActionType"))
         waitType := this._SelectedOperationValue("WaitType", WindowControl.WaitTypes, "等待出现")
         visible := action == "等待控件出现" && (waitType == "值满足条件" || waitType == "值不满足条件")
-        this._ComboPush("WaitOperatorRow", "Visibility", visible ? "Visible" : "Collapsed")
+        this._ComboPush("WaitConditionPanel", "Visibility", visible ? "Visible" : "Collapsed")
+        this._ComboPush("WaitLogicRow", "Visibility", visible ? "Visible" : "Collapsed")
         if (!visible) {
-            this._ComboPush("WaitValueRow", "Visibility", "Collapsed")
             this._ComboPush("WaitValueHintRow", "Visibility", "Collapsed")
             return
         }
@@ -895,40 +1012,48 @@ class ControlOperationGui extends WindowControlGui {
         }
         signature := kind "|" allowHalf
         this._conditionAllowsHalf := allowHalf
-        if (this._conditionOperatorsKind != signature) {
-            value := this._conditionKind == "text" ? this.ui.Query("WaitValueText") : this.ui.Query("WaitValue")
-            operator := this._SelectedOperationValue("WaitOperator", WindowControl.ConditionOperators(this._conditionKind), "等于")
-            this._FillConditionOptions(kind, allowHalf, value, operator)
-        }
-        operator := this._SelectedOperationValue("WaitOperator", WindowControl.ConditionOperators(this._conditionKind), "等于")
-        needsValue := operator != "为空" && operator != "不为空"
-        this._ComboPush("WaitValueRow", "Visibility", needsValue ? "Visible" : "Collapsed")
-        this._ComboPush("WaitValue", "Visibility", kind == "text" ? "Collapsed" : "Visible")
-        this._ComboPush("WaitValueText", "Visibility", kind == "text" ? "Visible" : "Collapsed")
+        if (this._conditionOperatorsKind != signature)
+            this._FillConditionOptions(kind, allowHalf, this._ReadWaitConditions())
+        loop this._waitConditionCount
+            this._RefreshWaitConditionValue(A_Index)
         this._ComboPush("WaitValueHintRow", "Visibility", hint == "" ? "Collapsed" : "Visible")
         this._ComboPush("WaitValueHint", "Text", hint)
     }
 
-    _FillConditionOptions(kind, allowHalf, value, operator) {
-        operators := WindowControl.ConditionOperators(kind)
+    _FillConditionOptions(kind, allowHalf, conditions) {
         this._conditionKind := kind, this._conditionOperatorsKind := kind "|" allowHalf
         this._conditionAllowsHalf := allowHalf
-        this._ComboPush("WaitOperator", "ClearItems", "")
-        for choice in operators
-            this._ComboPush("WaitOperator", "AddItem", GetLang(choice))
-        this._ComboPush("WaitOperator", "SelectedIndex", Max(0, CmdEnumIndex(operator, operators)))
-        this._ComboPush("WaitValue", "ClearItems", "")
-        if (kind == "state") {
-            for state in ["0", "1"]
-                this._ComboPush("WaitValue", "AddItem", state)
-            if (allowHalf)
-                this._ComboPush("WaitValue", "AddItem", "0.5")
+        this._waitLeftKinds := []
+        for index, condition in conditions {
+            left := condition.Length >= 3 ? condition[3] : "运行时控件值"
+            current := WindowControl.IsRuntimeControlValue(left)
+            this._waitLeftKinds.Push(current ? "control" : "variable")
+            operators := WindowControl.WaitConditionOperators(kind, left)
+            leftField := this._WaitField("WaitLeft", index)
+            this._ComboPush(leftField, "ClearItems", "")
+            this._ComboPush(leftField, "AddItem", GetLang("运行时控件值"))
+            for reference in GetGuiVarReferences()
+                this._ComboPush(leftField, "AddItem", reference)
+            this._ComboPush(leftField, "Text", current ? GetLang("运行时控件值") : left)
+            operatorField := this._WaitField("WaitOperator", index)
+            valueField := this._WaitField("WaitValue", index)
+            this._ComboPush(operatorField, "ClearItems", "")
+            for choice in operators
+                this._ComboPush(operatorField, "AddItem", GetLang(choice))
+            this._ComboPush(operatorField, "SelectedIndex", Max(0, CmdEnumIndex(condition[1], operators)))
+            this._ComboPush(valueField, "ClearItems", "")
+            if (current && kind == "state") {
+                for state in ["0", "1"]
+                    this._ComboPush(valueField, "AddItem", state)
+                if (allowHalf)
+                    this._ComboPush(valueField, "AddItem", "0.5")
+            }
+            for reference in GetGuiVarReferences()
+                this._ComboPush(valueField, "AddItem", reference)
+            this._ComboPush(valueField, "IsReadOnly", current && kind == "state" ? "True" : "False")
+            this._ComboPush(valueField, "Text", condition[2])
+            this._SetWaitConditionValueVisibility(index, CmdEnumIndex(condition[1], operators) >= 0 ? condition[1] : "等于")
         }
-        for reference in GetGuiVarReferences()
-            this._ComboPush("WaitValue", "AddItem", reference)
-        this._ComboPush("WaitValue", "IsReadOnly", kind == "state" ? "True" : "False")
-        this._ComboPush("WaitValue", "Text", value)
-        this._ComboPush("WaitValueText", "Text", value)
     }
 
     _RefreshWriteFields(action := "") {
@@ -1018,11 +1143,15 @@ class ControlOperationGui extends WindowControlGui {
         data := super._ReadData()
         data.WriteKind := this._writeKind
         data.WaitType := WindowControl.UsesTimeout(data.ActionType) ? this._SelectedOperationValue("WaitType", WindowControl.WaitTypes, "等待出现") : "等待出现"
-        data.ClickType := this._SelectedOperationValue("ClickType", WindowControl.ClickTypes, "左键")
+        data.ClickType := this._SelectedOperationValue("ClickType", WindowControl.ClickTypes, "左键单击")
+        hold := Trim(this.ui.Query("ClickHoldMs"))
+        data.ClickHoldMs := IsInteger(hold) ? Integer(hold) : hold
         data.ClickPoint := this._SelectedOperationValue("ClickPoint", WindowControl.ClickPoints, "中心点")
         data.ScrollOffset := Trim(this.ui.Query("ScrollOffset"))
-        data.WaitOperator := this._SelectedOperationValue("WaitOperator", WindowControl.ConditionOperators(this._conditionKind), "等于")
-        data.WaitValue := this._conditionKind == "text" ? this.ui.Query("WaitValueText") : this.ui.Query("WaitValue")
+        data.WaitLogic := this._SelectedOperationValue("WaitLogic", ["且", "或"], "且")
+        data.WaitConditions := this._ReadWaitConditions()
+        data.WaitOperator := data.WaitConditions[1][1]
+        data.WaitValue := data.WaitConditions[1][2]
         data.WaitValueKind := this._conditionKind
         data.ErrorVar := ""
         if (!WindowControl.UsesTimeout(data.ActionType)) {
@@ -1035,21 +1164,33 @@ class ControlOperationGui extends WindowControlGui {
 
     _Validate(data) {
         super._Validate(data)
+        if (data.ActionType == "点击控件" && InStr(data.ClickType, "长按") && !TimeoutPolicy.IsVariable(data.ClickHoldMs))
+            WindowControl.ResolveClickHoldMs(data.ClickHoldMs)
         if (data.ActionType == "写入控件值" && !RegExMatch(data.Argument, "\{[^{}]+\}"))
             WindowControl.ValidateWriteArgument(this._writeKind, data.Argument)
         if (data.ActionType == "滚动到控件" && !TimeoutPolicy.IsVariable(data.ScrollOffset)
             && (!IsInteger(data.ScrollOffset) || Abs(Number(data.ScrollOffset)) > 100000))
             throw Error(GetLang("偏移值应为 -100000～100000 的整数像素。"))
-        if (data.ActionType == "等待控件出现" && (data.WaitType == "值满足条件" || data.WaitType == "值不满足条件")
-            && data.WaitValueKind != "text" && !TimeoutPolicy.IsVariable(data.WaitValue)) {
-            if (!IsNumber(data.WaitValue))
+        if (data.ActionType == "等待控件出现" && (data.WaitType == "值满足条件" || data.WaitType == "值不满足条件")) {
+            for condition in WindowControl.GetWaitConditions(data) {
+                if (WindowControl.IsRuntimeControlValue(condition[3]))
+                    this._ValidateWaitCondition(data.WaitValueKind, condition[2])
+                else if (!TimeoutPolicy.IsVariable(condition[2]) && !TimeoutPolicy.IsVariable(condition[3]))
+                    WindowControl.CompareValue(condition[3], condition[2], condition[1], WindowControl.WaitOperandKind(condition[1], condition[3], condition[2]))
+            }
+        }
+    }
+
+    _ValidateWaitCondition(kind, value) {
+        if (kind != "text" && !TimeoutPolicy.IsVariable(value)) {
+            if (!IsNumber(value))
                 throw Error(GetLang("条件值必须为数字。"))
-            if (data.WaitValueKind == "state" && data.WaitValue != 0 && data.WaitValue != 1
-                && !(this._conditionAllowsHalf && data.WaitValue == 0.5))
+            if (kind == "state" && value != 0 && value != 1
+                && !(this._conditionAllowsHalf && value == 0.5))
                 throw Error(GetLang("状态条件值无效。"))
-            if (data.WaitValueKind == "ratio" && (data.WaitValue < 0 || data.WaitValue > 1))
+            if (kind == "ratio" && (value < 0 || value > 1))
                 throw Error(GetLang("比例条件值应为 0～1。"))
-            if (data.WaitValueKind == "index" && (!IsInteger(data.WaitValue) || data.WaitValue < 0))
+            if (kind == "index" && (!IsInteger(value) || value < 0))
                 throw Error(GetLang("序号条件值应为非负整数。"))
         }
     }
@@ -1353,9 +1494,9 @@ class AiDecisionGui extends ClassifierCommandGui {
             for j, axis in ["X", "Y"] {
                 name := field AiDecisionGui.CoordFields[2 * (i - 1) + j]
                 combo := CmdEditorForm.Combo(range, name, true).Grid_Row(i - 1).Grid_Column(2 * j - 1)
-                    .Height(28).MinHeight(28).ToolTip(GetLang(endpoint axis "："))
+                    .Height(28).MinHeight(28)
                 for value in (field == "Region" ? GetGuiVarReferences(StrLower(axis)) : GetGuiVarReferences())
-                    combo.Add("ComboBoxItem").Content(value)
+                    CmdEditorForm.ComboItem(combo, value)
             }
         }
     }

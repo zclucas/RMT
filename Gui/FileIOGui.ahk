@@ -65,6 +65,7 @@ class FileIOGui {
 
     ; batching 中入队，_flushBatch 一次性 BatchUpdate（合并 Init 的多次 Update 为一次 IPC）
     _ComboPush(comboName, propertyName, value) {
+        CmdEditorForm.NormalizeComboItem(&propertyName, &value)
         if (this._batching)
             this._batch.Push({ControlName: comboName, PropertyName: propertyName, Value: value})
         else

@@ -13,11 +13,14 @@ class WindowControlData {
     WriteKind := "text"
     WaitType := "等待出现"
     ClickType := ""
+    ClickHoldMs := 500
     ClickPoint := "中心点"
     ScrollOffset := 0
     WaitOperator := "等于"
     WaitValue := ""
     WaitValueKind := "text"
+    WaitLogic := "且"
+    WaitConditions := []
     ResultVar := ""
     TypeVar := ""
     ClassVar := ""
@@ -56,8 +59,26 @@ class WindowControl {
     }
     static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件"]
     static WaitTypes := ["等待出现", "等待消失", "可用", "禁用", "值变化", "值满足条件", "值不满足条件"]
-    static ClickTypes := ["左键", "右键", "左键双击", "右键双击", "长按300ms", "长按500ms"]
+    static ClickTypes := ["左键单击", "左键双击", "左键长按", "右键单击", "右键双击", "右键长按"]
     static ClickPoints := ["中心点", "区域随机"]
+
+    static NormalizeClickType(kind) => kind == "左键" ? "左键单击" : kind == "右键" ? "右键单击"
+        : kind == "长按300ms" || kind == "长按500ms" ? "左键长按" : kind
+
+    static ClickHoldValue(data) => data.ClickType == "长按300ms" ? 300 : data.ClickType == "长按500ms" ? 500
+        : data.HasOwnProp("ClickHoldMs") ? data.ClickHoldMs : 500
+
+    static ResolveClickHoldMs(value, resolve := "") {
+        if (TimeoutPolicy.IsVariable(value)) {
+            if (IsObject(resolve))
+                value := resolve(value)
+            else if (!TryGetVarValue(&value, SubStr(value, 2, -1), false, Map(), false))
+                throw Error(GetLang("长按时间变量尚未赋值。"))
+        }
+        if (!IsInteger(value) || value < 1 || value > 3600000)
+            throw Error(GetLang("长按时间应为 1～3600000 的整数毫秒。"))
+        return Integer(value)
+    }
 
     static ConditionOperators(kind) => kind == "text"
         ? ["等于", "不等于", "包含", "不包含", "开头是", "结尾是", "为空", "不为空"]
@@ -286,8 +307,11 @@ class WindowControl {
             case "点击控件":
                 if ((!data.HasOwnProp("ClickType") || data.ClickType == "") && !(element is ExcelControlTarget))
                     ComCall(3, this._RequiredPattern(element, "invoke"))
-                else
-                    return this._ClickElement(element, data.ClickType == "" ? "左键" : data.ClickType, data.ClickPoint, cancelled)
+                else {
+                    kind := data.ClickType == "" ? "左键单击" : this.NormalizeClickType(data.ClickType)
+                    hold := InStr(kind, "长按") ? this.ResolveClickHoldMs(this.ClickHoldValue(data), resolve) : 0
+                    return this._ClickElement(element, kind, data.ClickPoint, cancelled, hold)
+                }
             case "聚焦控件":
                 if (element is ExcelControlTarget)
                     element.Reveal()
@@ -378,11 +402,53 @@ class WindowControl {
             }
             return !(String(result.value) == baseline.value)
         }
-        expected := data.WaitValue
-        if (IsObject(resolve))
-            expected := resolve(expected)
-        matched := this.CompareValue(result.value, expected, data.WaitOperator, this.ValueKind(result))
+        matched := this.MatchWaitConditions(result.value, data, this.ValueKind(result), resolve)
         return waitType == "值不满足条件" ? !matched : matched
+    }
+
+    ; 条件保留旧版 [比较符, 右值]，第三项新增左值；旧配置默认使用本次控件值。
+    static GetWaitConditions(data) {
+        source := data.HasOwnProp("WaitConditions") && data.WaitConditions is Array && data.WaitConditions.Length
+            ? data.WaitConditions : [[data.WaitOperator, data.WaitValue]]
+        conditions := []
+        for condition in source
+            conditions.Push([condition[1], condition[2], condition.Length >= 3 ? condition[3] : "运行时控件值"])
+        return conditions
+    }
+
+    static IsRuntimeControlValue(source) => source == "运行时控件值" || source == "{运行时控件值}"
+
+    static WaitConditionOperators(kind, source) {
+        if (this.IsRuntimeControlValue(source))
+            return this.ConditionOperators(kind)
+        return ["等于", "不等于", "大于", "大于等于", "小于", "小于等于", "包含", "不包含", "开头是", "结尾是", "为空", "不为空"]
+    }
+
+    static MatchWaitConditions(value, data, kind, resolve := "") {
+        useOr := data.HasOwnProp("WaitLogic") && data.WaitLogic == "或"
+        for condition in this.GetWaitConditions(data) {
+            current := this.IsRuntimeControlValue(condition[3])
+            left := current ? value : condition[3]
+            expected := condition[2]
+            if (IsObject(resolve)) {
+                if (!current)
+                    left := resolve(String(left))
+                expected := resolve(String(expected))
+            }
+            compareKind := current ? kind : this.WaitOperandKind(condition[1], left, expected)
+            matched := this.CompareValue(left, expected, condition[1], compareKind)
+            if (useOr && matched)
+                return true
+            if (!useOr && !matched)
+                return false
+        }
+        return !useOr
+    }
+
+    static WaitOperandKind(operator, left, right) {
+        if (operator == "大于" || operator == "大于等于" || operator == "小于" || operator == "小于等于")
+            return "number"
+        return (operator == "等于" || operator == "不等于") && IsNumber(left) && IsNumber(right) ? "number" : "text"
     }
 
     static ValueKind(result) {
@@ -432,7 +498,10 @@ class WindowControl {
         throw Error(GetLang("条件运算符无效。"))
     }
 
-    static _ClickElement(element, kind, pointMode, cancelled) {
+    static _ClickElement(element, kind, pointMode, cancelled, holdMs := 500) {
+        if (kind == "长按300ms" || kind == "长按500ms")
+            holdMs := kind == "长按300ms" ? 300 : 500
+        kind := this.NormalizeClickType(kind)
         valid := false
         for candidate in this.ClickTypes
             if (candidate == kind)
@@ -459,6 +528,8 @@ class WindowControl {
         if (this._Int(element, 38) && (scroll := this._Pattern(element, "scroll")))
             ComCall(3, scroll)
         bounds := this._Bounds(element)
+        if (pointMode == "区域随机")
+            bounds := this._InnerRandomBounds(bounds)
         walker := this._Object(14, this._Automation())
         node := element
         loop 64 {
@@ -494,7 +565,7 @@ class WindowControl {
             throw Error(GetLang("目标控件被遮挡，无法点击。"))
         button := InStr(kind, "右键") ? "Right" : "Left"
         count := InStr(kind, "双击") ? 2 : 1
-        hold := kind == "长按300ms" ? 300 : kind == "长按500ms" ? 500 : 0
+        hold := InStr(kind, "长按") ? this.ResolveClickHoldMs(holdMs) : 0
         DllCall("SetCursorPos", "Int", x, "Int", y)
         loop count {
             if (cancelled())
@@ -511,6 +582,16 @@ class WindowControl {
                 Sleep(50)
         }
         return cancelled() ? "" : 1
+    }
+
+    static _InnerRandomBounds(bounds) {
+        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
+            return bounds
+        width := Max(1, Floor((bounds.right - bounds.left) * 0.8))
+        height := Max(1, Floor((bounds.bottom - bounds.top) * 0.8))
+        left := Floor((bounds.left + bounds.right - width) / 2)
+        top := Floor((bounds.top + bounds.bottom - height) / 2)
+        return {left: left, top: top, right: left + width, bottom: top + height}
     }
 
     static _ElementWindow(element) {
