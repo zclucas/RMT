@@ -253,6 +253,7 @@ class ExVariableGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this._ComboPush(comboName, "ClearItems", "")
@@ -570,12 +571,7 @@ class ExVariableGui {
             ToggleArr.Push(isOn)
             if (isOn) {
                 varText := this.ui.Query("Var" A_Index)
-                if (IsNumber(varText)) {
-                    RmtDialog.Info(Format(GetLang("{}. 变量名不规范：变量名不能是纯数字"), A_Index))
-                    return false
-                }
-                if (InStr(varText, "_")) {
-                    RmtDialog.Info(Format(GetLang("{}. 变量名不规范：变量名不能包含下划线"), A_Index))
+                if (!CheckVarNameIfValid(varText)) {
                     return false
                 }
             }
@@ -736,16 +732,10 @@ class ExVariableGui {
 
     TryGetVariableValue(&Value, variableName, variTip := true) {
         key := GetBuiltinVarName(variableName)
-        if (key == "运行时窗口坐标X" || key == "运行时窗口坐标Y")
+        if (key == "运行时窗口坐标X" || key == "运行时窗口坐标Y" || key == "运行时坐标X" || key == "运行时坐标Y")
             return TryGetVarValue(&Value, key, variTip)
         if (IsNumber(variableName)) {
             Value := variableName
-            return true
-        }
-        if (variableName == GetLang("运行时坐标X") || variableName == GetLang("运行时坐标Y")) {
-            CoordMode("Mouse", "Screen")
-            MouseGetPos &mouseX, &mouseY
-            Value := variableName == GetLang("运行时坐标X") ? mouseX : mouseY
             return true
         }
         GlobalVariableMap := MySoftData.VariableMap

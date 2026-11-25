@@ -417,6 +417,7 @@ class WindowControl {
     }
 
     static IsRuntimeControlValue(source) => source == "运行时控件值" || source == "{运行时控件值}"
+        || source == "❖运行时控件值" || source == "{❖运行时控件值}"
 
     static WaitConditionOperators(kind, source) {
         if (this.IsRuntimeControlValue(source))

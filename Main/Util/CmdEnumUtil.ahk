@@ -82,6 +82,8 @@ CmdEnumCompareNames() => ["大于", "大于等于", "等于", "小于等于", "�
 CmdEnumCompareShowNames() => ["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配"]
 CmdEnumLogicNames() => ["且", "或"]
 CmdEnumOperaNames() => ["数值", "随机数值", "字符", "系统", "时间", "删除"]
+; 界面使用新类别；旧数值枚举顺序仍用于兼容读取。
+CmdEnumVariableNames() => ["赋值", "随机数值", "系统", "时间", "删除"]
 CmdEnumWaitNames() => ["等待变量值", "等待按键按下", "等待按键松开", "等待屏幕变化", "等待鼠标移动",
     "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
     "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
@@ -128,6 +130,8 @@ CmdEnumCompare(value) => CmdEnumZh(value, CmdEnumCompareNames())
 CmdEnumLogic(value) => CmdEnumZh(value, CmdEnumLogicNames())
 
 CmdEnumOpera(value) {
+    if (GetConfigKey(String(value), ["赋值"]) == "赋值")
+        return "赋值"
     if (IsNumber(value) && Integer(value) == 7)
         return "时间"
     key := GetConfigKey(String(value), ["随机"])

@@ -119,7 +119,7 @@ class MacroGraphFormalHandlersMixin {
     _FormalVarSlotState(id, slot, d, state := unset) {
         p := "VarS" slot
         opTypes := this._FormalVarOpTypes()
-        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "数值")
+        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "赋值")
         ; 默认值须与内联构建(_FillVariableSlot)一致：缺省时变量1为开，其余为关，否则会出现勾选了却收起字段
         on := this._FormalVarSlotOn(d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0))
         if (IsSet(state) && IsObject(state)) {
@@ -156,7 +156,6 @@ class MacroGraphFormalHandlersMixin {
             this._PullEditTextIntoState(state, p "Copy_" id)
             this._PullEditTextIntoState(state, p "Min_" id)
             this._PullEditTextIntoState(state, p "Max_" id)
-            this._PullEditTextIntoState(state, p "CopyTxt_" id)
             if (state.Has(p "Name_" id) && state[p "Name_" id] != "")
                 data.VariableArr[slot] := GetVarName(state[p "Name_" id])
             ot := CmdEnumOpera(data.OperaTypeArr[slot])
@@ -170,12 +169,10 @@ class MacroGraphFormalHandlersMixin {
                 this._EnsureComboInState(state, p "TimeCmb_" id, timeItems)
                 if (state.Has(p "TimeCmb_" id) && state[p "TimeCmb_" id] != "")
                     data.CopyVariableArr[slot] := GetLangKey(state[p "TimeCmb_" id])
-            } else if (ot == "字符") {
-                ; 字符：取纯文本输入（按字面量保存，不做语言键转换，允许为空串）
-                if (state.Has(p "CopyTxt_" id))
-                    data.CopyVariableArr[slot] := state[p "CopyTxt_" id]
-            } else if (state.Has(p "Copy_" id) && state[p "Copy_" id] != "")
-                data.CopyVariableArr[slot] := GetLangKey(state[p "Copy_" id])
+            } else if (ot == "赋值") {
+                if (state.Has(p "Copy_" id))
+                    data.CopyVariableArr[slot] := TranslateBuiltinVarReferences(state[p "Copy_" id])
+            }
             if (state.Has(p "Min_" id) && state[p "Min_" id] != "")
                 data.MinVariableArr[slot] := GetLangKey(state[p "Min_" id])
             if (state.Has(p "Max_" id) && state[p "Max_" id] != "")
@@ -1318,16 +1315,17 @@ class MacroGraphFormalHandlersMixin {
             on := st.on
             ot := st.ot
             slotVis := (slot == 1) ? true : prevOn   ; 逐级展开：仅上一个变量勾选后才显示本卡片
-            showNum := on && ot == "数值"
-            showChar := on && ot == "字符"
+            showNum := on && ot == "赋值"
             showSys := on && ot == "系统"
             showMinMax := on && ot == "随机数值"
+            fieldW := ot == "随机数值" ? this._FormalCW() : Max(Number(this._FormalCW()), 180)
+            for name in ["Name_", "Copy_", "SysCmb_", "TimeCmb_"]
+                this.ui.Update(p name id, "Width", fieldW)
             this._FormalSetVis(id, p "Card_" id, slotVis)
             this._FormalSetVis(id, p "TogRow_" id, true)
             this._FormalSetVis(id, p "OpRow_" id, on)
             this._FormalSetVis(id, p "NameRow_" id, on)
             this._FormalSetVis(id, p "CopyRow_" id, showNum)
-            this._FormalSetVis(id, p "CharRow_" id, showChar)
             this._FormalSetVis(id, p "SysRow_" id, showSys)
             this._FormalSetVis(id, p "TimeRow_" id, on && ot == "时间")
             this._FormalSetVis(id, p "MinRow_" id, showMinMax)
@@ -1551,11 +1549,11 @@ class MacroGraphFormalHandlersMixin {
                 on := this._FormalReadToggle(state, ps "Tog_" id, slot <= data.VariNameArr[ci].Length ? 1 : 0)
                 if (!on)
                     continue
-                nm := state.Has(ps "Name_" id) ? GetLangKey(state[ps "Name_" id]) : ("Value" slot)
+                nm := state.Has(ps "Name_" id) ? TranslateBuiltinVarReferences(state[ps "Name_" id]) : ("{Value" slot "}")
                 cmp := 3
                 if (state.Has(ps "Cmp_" id) && state[ps "Cmp_" id] != "")
                     cmp := ComboIndexToCompareType(this._IndexInLangArr(cmpTypes, state[ps "Cmp_" id]))
-                vr := state.Has(ps "Var_" id) ? GetLangKey(state[ps "Var_" id]) : ("Target" slot)
+                vr := state.Has(ps "Var_" id) ? TranslateBuiltinVarReferences(state[ps "Var_" id]) : ("{Target" slot "}")
                 names.Push(nm)
                 cmps.Push(cmp)
                 vals.Push(vr)
@@ -1566,9 +1564,9 @@ class MacroGraphFormalHandlersMixin {
                 }
             }
             if (names.Length == 0) {
-                names.Push("Value1")
+                names.Push("{Value1}")
                 cmps.Push(3)
-                vals.Push("Target1")
+                vals.Push("{Target1}")
             }
             data.VariNameArr[ci] := names
             data.CompareTypeArr[ci] := cmps
@@ -1629,9 +1627,9 @@ class MacroGraphFormalHandlersMixin {
                 slot := A_Index
                 ps := p "S" slot
                 on := slot <= condiN
-                nm := on ? data.VariNameArr[ci][slot] : ("Value" slot)
+                nm := on ? data.VariNameArr[ci][slot] : ("{Value" slot "}")
                 cmp := on ? data.CompareTypeArr[ci][slot] : 3
-                vr := on ? data.VariableArr[ci][slot] : ("Target" slot)
+                vr := on ? data.VariableArr[ci][slot] : ("{Target" slot "}")
                 this.ui.Update(ps "Tog_" id, "IsChecked", on ? "True" : "False")
                 items := GetCompareGuiVarArr(cmp)
                 this._SetVariableComboItems(ps "Name_" id, items, GetLang(nm))
@@ -1668,9 +1666,9 @@ class MacroGraphFormalHandlersMixin {
         while (data.ToggleArr.Length < 4) {
             n := data.ToggleArr.Length + 1
             data.ToggleArr.Push(0)
-            data.NameArr.Push("Value" n)
+            data.NameArr.Push("{Value" n "}")
             data.CompareTypeArr.Push(1)
-            data.VariableArr.Push("Target" n)
+            data.VariableArr.Push("{Target" n "}")
         }
         loop 4 {
             slot := A_Index
@@ -1678,11 +1676,11 @@ class MacroGraphFormalHandlersMixin {
             this._EnsureComboInState(state, p "Cmp_" id, cmpTypes)
             data.ToggleArr[slot] := this._FormalReadToggle(state, p "Tog_" id, data.ToggleArr[slot])
             if (state.Has(p "Name_" id) && state[p "Name_" id] != "")
-                data.NameArr[slot] := GetLangKey(state[p "Name_" id])
+                data.NameArr[slot] := TranslateBuiltinVarReferences(state[p "Name_" id])
             if (state.Has(p "Cmp_" id) && state[p "Cmp_" id] != "")
                 data.CompareTypeArr[slot] := ComboIndexToCompareType(this._IndexInLangArr(cmpTypes, state[p "Cmp_" id]))
             if (state.Has(p "Var_" id) && state[p "Var_" id] != "")
-                data.VariableArr[slot] := GetLangKey(state[p "Var_" id])
+                data.VariableArr[slot] := TranslateBuiltinVarReferences(state[p "Var_" id])
             if (ctrl == p "Cmp_" id) {
                 items := GetCompareGuiVarArr(data.CompareTypeArr[slot])
                 this._SetVariableComboItems(p "Name_" id, items, GetLang(data.NameArr[slot]))
@@ -1753,9 +1751,9 @@ class MacroGraphFormalHandlersMixin {
         while (data.ToggleArr.Length < 4) {
             n := data.ToggleArr.Length + 1
             data.ToggleArr.Push(0)
-            data.NameArr.Push("Value" n)
+            data.NameArr.Push("{Value" n "}")
             data.CompareTypeArr.Push(1)
-            data.VariableArr.Push("Target" n)
+            data.VariableArr.Push("{Target" n "}")
         }
         loop 4 {
             slot := A_Index
@@ -1763,11 +1761,11 @@ class MacroGraphFormalHandlersMixin {
             this._EnsureComboInState(state, p "Cmp_" id, cmpTypes)
             data.ToggleArr[slot] := this._FormalReadToggle(state, p "Tog_" id, data.ToggleArr[slot])
             if (state.Has(p "Name_" id) && state[p "Name_" id] != "")
-                data.NameArr[slot] := GetLangKey(state[p "Name_" id])
+                data.NameArr[slot] := TranslateBuiltinVarReferences(state[p "Name_" id])
             if (state.Has(p "Cmp_" id) && state[p "Cmp_" id] != "")
                 data.CompareTypeArr[slot] := ComboIndexToCompareType(this._IndexInLangArr(cmpTypes, state[p "Cmp_" id]))
             if (state.Has(p "Var_" id) && state[p "Var_" id] != "")
-                data.VariableArr[slot] := GetLangKey(state[p "Var_" id])
+                data.VariableArr[slot] := TranslateBuiltinVarReferences(state[p "Var_" id])
             if (ctrl == p "Cmp_" id) {
                 items := GetCompareGuiVarArr(data.CompareTypeArr[slot])
                 this._SetVariableComboItems(p "Name_" id, items, GetLang(data.NameArr[slot]))
@@ -2642,10 +2640,9 @@ class MacroGraphFormalHandlersMixin {
             minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
             maxv := d.HasOwnProp("maxVar" slot) ? d["maxVar" slot] : "10"
             this.ui.Update(p "Tog_" id, "IsChecked", on ? "True" : "False")
-            this.ui.Update(p "OpCmb_" id, "SelectedIndex", CmdEnumIndex(CmdEnumOpera(ot), CmdEnumOperaNames()))
+            this.ui.Update(p "OpCmb_" id, "SelectedIndex", CmdEnumIndex(CmdEnumOpera(ot), CmdEnumVariableNames()))
             this.ui.Update(p "Name_" id, "Text", GetLang(vn))
-            this.ui.Update(p "Copy_" id, "Text", GetLang(cv))
-            this.ui.Update(p "CopyTxt_" id, "Text", cv)   ; 字符纯文本框（与数值下拉共享 copyVar 数据）
+            this.ui.Update(p "Copy_" id, "Text", TranslateBuiltinVarReferences(cv, true))
             this.ui.Update(p "Min_" id, "Text", GetLang(minv))
             this.ui.Update(p "Max_" id, "Text", GetLang(maxv))
             this.ui.Update(p "SysCmb_" id, "SelectedIndex", this._IndexInLangArr(sysItems, GetLang(cv)))

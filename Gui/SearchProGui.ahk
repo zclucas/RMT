@@ -416,6 +416,7 @@ class SearchProGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this.ui.Update(comboName, "ClearItems", "")

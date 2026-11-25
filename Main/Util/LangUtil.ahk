@@ -216,6 +216,8 @@ GetClientLanguageCode() {
 }
 
 GetLang(Key) {
+    if (SubStr(Key, 1, 1) == "❖")
+        return GetBuiltinVarName(Key, true)
     ; 简中指令显示短名称，配置继续使用原指令键。
     if (MainSoftData.Lang == "简中") {
         switch Key {
@@ -242,6 +244,8 @@ GetLangArr(KeyArr) {
 }
 
 GetLangKey(Value) {
+    if (SubStr(Value, 1, 1) == "❖")
+        return GetBuiltinVarName(Value)
     ; 简中模式或未加载映射时直接返回原 value
     if (MainSoftData.Lang == "简中" || LangValueMap.Count == 0)
         return Value
@@ -253,9 +257,6 @@ GetLangKey(Value) {
 }
 
 GetLangKeyArr(ValueArr) {
-    if (MainSoftData.Lang == "简中" || LangValueMap.Count == 0)
-        return ValueArr.Clone()
-
     ResArr := []
     for Value in ValueArr
         ResArr.Push(GetLangKey(Value))

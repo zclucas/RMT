@@ -323,6 +323,7 @@ class MacroGraphNodeUIMixin {
 
     ; 行内单元格：标签 + 可编辑下拉（变量名/数值）
     _ProCellEdit(rowSP, cellName, label, comboName, items, textVal, visible, lw, cw, rightCell) {
+        textVal := GetVariableComboText(items, textVal)
         cell := rowSP.Add("StackPanel").Name(cellName).Orientation("Horizontal")
         if (rightCell)
             cell.Margin("14,0,0,0")
@@ -1534,6 +1535,7 @@ class MacroGraphNodeUIMixin {
     _SetVariableComboItems(name, items, text := unset) {
         if (!IsSet(text))
             text := this.ui.Query(name)
+        text := GetVariableComboText(items, text)
         batch := [{ControlName: name, PropertyName: "ClearItems", Value: ""}]
         for item in items
             batch.Push(CmdEditorForm.ComboItemUpdate(name, item))
@@ -1542,6 +1544,7 @@ class MacroGraphNodeUIMixin {
     }
 
     _AddEditableComboRow(body, rowName, labelText, comboName, items, textValue, visible, labelW := "80", comboW := "96", labelName := "", labelTip := "") {
+        textValue := GetVariableComboText(items, textValue)
         row := body.Add("StackPanel").Name(rowName).Orientation("Horizontal").Margin("0,5,0,0")
         if (!visible)
             row.Visibility("Collapsed")

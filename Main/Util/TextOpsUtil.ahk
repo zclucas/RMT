@@ -137,7 +137,7 @@ TextOpsSeparatorChoices() {
     items := []
     for option in TextOpsSeparatorOptions()
         items.Push(GetLang(option[1]))
-    items.Push(GetLang("运行时剪切板"))
+    items.Push(GetBuiltinVarName("运行时剪切板", true))
     return items
 }
 
@@ -147,8 +147,8 @@ TextOpsSeparatorText(value, toDisplay := false) {
         if (value == option[2] || value == label)
             return toDisplay ? label : option[2]
     }
-    clipboard := GetLang("运行时剪切板")
-    if (value == "运行时剪切板" || value == clipboard)
+    clipboard := GetBuiltinVarName("运行时剪切板", true)
+    if (GetBuiltinVarName(value) == "运行时剪切板")
         return toDisplay ? clipboard : "运行时剪切板"
     return value
 }

@@ -236,6 +236,7 @@ class RunProGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this._ComboPush(comboName, "ClearItems", "")
@@ -481,10 +482,19 @@ class RunProGui {
             RmtDialog.Info(GetLang("目标不能为空！"))
             return false
         }
+        mode := CmdEnumFromIndex(this._SelIndex("RunModeCombo"), CmdEnumRunModeNames())
+        count := mode == "等待+输入输出" ? 3 : mode == "等待+返回值" ? 1 : 0
+        Loop count {
+            name := Trim(this.ui.Query("SaveName" A_Index))
+            if (name != "" && !CheckVarNameIfValid(name))
+                return false
+        }
         return true
     }
 
     TriggerMacro(state := "", ctrl := "", event := "") {
+        if (!this.CheckIfValid())
+            return
         this.SaveRunData()
         OnTriggerSepcialItemMacro(this.GetCommandStr())
     }

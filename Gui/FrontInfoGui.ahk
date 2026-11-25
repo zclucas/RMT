@@ -251,7 +251,7 @@ class FrontInfoGui {
         this.winInfoCon := winInfoCon
         this._topOn := true
         this._SyncTopBtn()
-        value := winInfoCon.Value
+        value := NormalizeWindowBinding(winInfoCon.Value)
         mode := 2
         if (value == "{所有窗口}")
             mode := 3
@@ -261,8 +261,8 @@ class FrontInfoGui {
             mode := 4
         else if (value == "{宏设置窗口绑定}" || value == "{绑定窗口}" || value == GetLang("{绑定窗口}"))
             mode := 5
-        else if (InStr(value, "❖") == 1) {
-            handle := SubStr(value, 2)
+        else if (IsHandleWindowBinding(value)) {
+            handle := value
             mode := IsMouseWindowBinding(value) ? 0 : 1
         } else if (value != "" && value != "{所有窗口}") {
             mode := 2
@@ -393,8 +393,8 @@ class FrontInfoGui {
 
     GetInfoStr() {
         switch this.SourceMode() {
-            case 0: return "❖{运行时句柄ID}"
-            case 1: return "❖" Trim(this.ui.Query("InfoText2"))
+            case 0: return "{运行时句柄ID}"
+            case 1: return NormalizeWindowBinding(this.ui.Query("InfoText2"))
             case 3: return this.scope == "macro" ? "{所有窗口}" : ""
             case 4: return "{模块窗口绑定}"
             case 5: return "{宏设置窗口绑定}"

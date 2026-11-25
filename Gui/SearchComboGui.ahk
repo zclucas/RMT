@@ -275,6 +275,7 @@ class SearchComboGui {
     ; ---------------- 数据读写辅助 ----------------
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this.ui.Update(comboName, "ClearItems", "")

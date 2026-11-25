@@ -825,15 +825,17 @@ WaitEnsureData(Data) {
 WaitVariableConditions(tableItem, index, Data) {
     any := CmdEnumLogic(Data.ConditionLogic) == "或"
     for condition in Data.Conditions {
-        found := TryGetTabVarValue(&value, tableItem, index, GetVarName(condition.Variable), false)
+        found := TryGetCompareOperand(&value, tableItem, index, condition.Variable, false)
         operator := GetLangKey(condition.Operator)
+        if (operator == "变量存在" || operator == "变量不存在")
+            found := RegExMatch(condition.Variable, "^\{[^{}\r\n]+\}$") && found
         switch operator {
             case "变量存在":
                 matched := found
             case "变量不存在":
                 matched := !found
             default:
-                matched := found && WaitCompareValues(value, WaitExpectedText(tableItem, index, condition.Value), operator)
+                matched := found && TryGetCompareOperand(&expected, tableItem, index, condition.Value, false) && WaitCompareValues(value, expected, operator)
         }
         if (matched == any)
             return any

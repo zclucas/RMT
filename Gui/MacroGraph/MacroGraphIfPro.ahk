@@ -1038,9 +1038,9 @@ class MacroGraphIfProMixin {
     _FillIfProCondiSlot(inner, id, caseIdx, slot, data, showRow, showVal) {
         lw := this._FormalLW(), cw := this._FormalCW()
         p := "IfProC" caseIdx "S" slot
-        nm := (slot <= data.VariNameArr[caseIdx].Length) ? data.VariNameArr[caseIdx][slot] : ("Value" slot)
+        nm := (slot <= data.VariNameArr[caseIdx].Length) ? data.VariNameArr[caseIdx][slot] : ("{Value" slot "}")
         cmp := (slot <= data.CompareTypeArr[caseIdx].Length) ? data.CompareTypeArr[caseIdx][slot] : 3
-        vr := (slot <= data.VariableArr[caseIdx].Length) ? data.VariableArr[caseIdx][slot] : ("Target" slot)
+        vr := (slot <= data.VariableArr[caseIdx].Length) ? data.VariableArr[caseIdx][slot] : ("{Target" slot "}")
         on := slot <= data.VariNameArr[caseIdx].Length
         cmpTypes := this._IfProCmpTypes()
         block := inner.Add("StackPanel").Name(p "Row_" id).Margin("0,2,0,0")
@@ -1048,9 +1048,9 @@ class MacroGraphIfProMixin {
             block.Visibility("Collapsed")
         block.Add("Border").Name(p "Sep_" id).Height("1").Margin("0,6,0,4").BorderThickness("0").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
         this._AddCheckRow(block, p "TogChk_" id, p "Tog_" id, GetLang("条件") slot, on, true)
-        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), GetLang(nm), on && showRow, lw, cw)
+        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), TranslateBuiltinVarReferences(nm, true), on && showRow, lw, cw)
         this._AddComboRow(block, p "CmpRow_" id, GetLang("比较："), p "Cmp_" id, cmpTypes, CompareTypeToComboIndex(cmp), on && showRow, true, lw, cw)
-        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), GetLang(vr), on && showRow && showVal, lw, cw)
+        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), TranslateBuiltinVarReferences(vr, true), on && showRow && showVal, lw, cw)
     }
 
     ; 收起态：某一情况/默认分支的指令列表（嵌在对应组框内、逻辑摘要下方）

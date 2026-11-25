@@ -583,13 +583,13 @@ class CmdEditorForm {
     static WindowBindingOptions {
         get {
             options := [
-                ["运行时窗口", "❖{运行时句柄ID}"],
+                ["运行时窗口", "{运行时句柄ID}"],
                 ["宏窗口绑定", "{宏设置窗口绑定}"],
                 ["模块窗口绑定", "{模块窗口绑定}"]]
             if (MySoftData.HasOwnProp("HandleVarMap")) {
                 for name in MySoftData.HandleVarMap {
                     if (name != "")
-                        options.Push([name, "❖{" name "}"])
+                        options.Push([name, "{" name "}"])
                 }
             }
             return options

@@ -291,6 +291,7 @@ class WaitGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         batch := []
@@ -299,11 +300,12 @@ class WaitGui {
     }
 
     _QueueCombo(batch, comboName, items, text) {
+        text := GetVariableComboText(items, text)
         batch.Push({ControlName: comboName, PropertyName: "ClearItems", Value: ""})
         for it in items {
             if (it == "")
                 continue
-            batch.Push({ControlName: comboName, PropertyName: "AddItem", Value: it})
+            batch.Push(CmdEditorForm.ComboItemUpdate(comboName, it))
         }
         batch.Push({ControlName: comboName, PropertyName: "Text", Value: text})
     }
@@ -730,8 +732,10 @@ class WaitGui {
         switch t {
             case "等待变量值":
                 for condition in this._ReadConditions() {
-                    if (!CheckVarNameIfValid(condition.Variable))
+                    if (Trim(condition.Variable) == "") {
+                        RmtDialog.Info(GetLang("请输入变量名或数值"))
                         return false
+                    }
                 }
             case "等待按键按下", "等待按键松开":
                 if (!this._KeysFor(Trim(this.ui.Query("KeyCon"))).Length) {
@@ -1050,9 +1054,10 @@ class WaitGui {
         row := XAML_Generator("Grid").Margin("0,2")
         row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
         row.Cols("*", 8, "*", 8, "*", 6, 28)
-        CmdEditorForm.Combo(row, "VarName_" i, true)
-        this._Choice(row, "VarCompare_" i, WaitGui.CompareKeys).Grid_Column(2)
-        CmdEditorForm.Combo(row, "VarValue_" i, true).Grid_Column(4)
+        ; 比较符两侧各让出 20px 给变量框，保留整行宽度与控件间距。
+        CmdEditorForm.Combo(row, "VarName_" i, true).Margin("0,0,-20,0")
+        this._Choice(row, "VarCompare_" i, WaitGui.CompareKeys).Grid_Column(2).Margin("20,0,20,0")
+        CmdEditorForm.Combo(row, "VarValue_" i, true).Grid_Column(4).Margin("-20,0,0,0")
         CmdEditorForm.IconButton(row, "BtnDeleteVar_" i, 0xE74D, "删除").Grid_Column(6)
             .IsEnabled(canDelete ? "True" : "False")
         return row.ToString()
@@ -1064,8 +1069,8 @@ class WaitGui {
         for i, condition in conditions {
             batch := [{ControlName: "VarRows", PropertyName: "AddXamlItem", Value: this._ConditionRow(i, conditions.Length > 1)}]
             items := GetCompareGuiVarArr(condition.Operator)
-            this._QueueCombo(batch, "VarName_" i, items, GetLang(condition.Variable))
-            this._QueueCombo(batch, "VarValue_" i, items, GetBuiltinVarName(condition.Value, true))
+            this._QueueCombo(batch, "VarName_" i, items, TranslateBuiltinVarReferences(condition.Variable, true))
+            this._QueueCombo(batch, "VarValue_" i, items, TranslateBuiltinVarReferences(condition.Value, true))
             batch.Push({ControlName: "VarCompare_" i, PropertyName: "SelectedIndex",
                 Value: CmdEnumIndex(condition.Operator, WaitGui.CompareKeys)})
             this.ui.BatchUpdate(batch)
@@ -1086,8 +1091,8 @@ class WaitGui {
         loop this._conditionCount {
             i := A_Index
             operator := GetLangKey(this.ui.Query("VarCompare_" i))
-            conditions.Push({Variable: GetVarName(this.ui.Query("VarName_" i)),
-                Operator: operator, Value: GetBuiltinVarName(this.ui.Query("VarValue_" i))})
+            conditions.Push({Variable: TranslateBuiltinVarReferences(this.ui.Query("VarName_" i)),
+                Operator: operator, Value: TranslateBuiltinVarReferences(this.ui.Query("VarValue_" i))})
         }
         return conditions
     }

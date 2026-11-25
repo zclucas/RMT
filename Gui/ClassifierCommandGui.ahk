@@ -893,9 +893,10 @@ class ControlOperationGui extends WindowControlGui {
         row := XAML_Generator("Grid").Margin("0,2")
         row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
         row.Cols("*", 8, "*", 8, "*", 6, 28)
-        CmdEditorForm.Combo(row, this._WaitField("WaitLeft", index), true)
-        CmdEditorForm.Combo(row, this._WaitField("WaitOperator", index)).Grid_Column(2)
-        CmdEditorForm.Combo(row, this._WaitField("WaitValue", index), true).Grid_Column(4)
+        ; 比较符两侧各让出 20px 给变量框，保留整行宽度与控件间距。
+        CmdEditorForm.Combo(row, this._WaitField("WaitLeft", index), true).Margin("0,0,-20,0")
+        CmdEditorForm.Combo(row, this._WaitField("WaitOperator", index)).Grid_Column(2).Margin("20,0,20,0")
+        CmdEditorForm.Combo(row, this._WaitField("WaitValue", index), true).Grid_Column(4).Margin("-20,0,0,0")
         CmdEditorForm.IconButton(row, "BtnDeleteWaitCondition_" index, 0xE74D, "删除").Grid_Column(6)
             .IsEnabled(canDelete ? "True" : "False")
         return row.ToString()
@@ -954,7 +955,7 @@ class ControlOperationGui extends WindowControlGui {
 
     _WaitLeftValue(index) {
         left := this.ui.Query(this._WaitField("WaitLeft", index))
-        return left == GetLang("运行时控件值") ? "运行时控件值" : left
+        return left == GetLang("运行时控件值") || left == "❖" GetLang("运行时控件值") ? "运行时控件值" : left
     }
 
     OnWaitConditionLeft(index, *) {
@@ -1031,10 +1032,10 @@ class ControlOperationGui extends WindowControlGui {
             operators := WindowControl.WaitConditionOperators(kind, left)
             leftField := this._WaitField("WaitLeft", index)
             this._ComboPush(leftField, "ClearItems", "")
-            this._ComboPush(leftField, "AddItem", GetLang("运行时控件值"))
             for reference in GetGuiVarReferences()
                 this._ComboPush(leftField, "AddItem", reference)
-            this._ComboPush(leftField, "Text", current ? GetLang("运行时控件值") : left)
+            this._ComboPush(leftField, "AddItem", "❖" GetLang("运行时控件值"))
+            this._ComboPush(leftField, "Text", current ? "❖" GetLang("运行时控件值") : left)
             operatorField := this._WaitField("WaitOperator", index)
             valueField := this._WaitField("WaitValue", index)
             this._ComboPush(operatorField, "ClearItems", "")

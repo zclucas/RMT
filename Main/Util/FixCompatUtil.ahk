@@ -4,10 +4,12 @@
 #Include "Compatv1-3-1.ahk"
 #Include "Compatv1-3-2.ahk"
 #Include "Compatv1-3-5.ahk"
+#Include "Compatv1-3-10.ahk"
+#Include "Compatv1-3-11.ahk"
 #Include "UIMacroSchema.ahk"
 
 ; 配置格式版本独立于 RMPK 容器版本和软件构建版本。
-Compat_CurrentVersion() => "1.3.9"
+Compat_CurrentVersion() => "1.3.11"
 Compat_VersionFile(dir) => dir "\RmtVersion.toml"
 
 Compat_ReadVersion(dir) {
@@ -46,7 +48,9 @@ Compat_UpgradeDir(dir, installed := false) {
     upgradePreview := installed && version == "1.3.6"
     upgradeMove := version == "1.3.7"
     upgradeControls := version == "1.3.8"
-    if (version != "" && version != "1.2.2" && version != Compat_CurrentVersion() && !upgradePreview && !upgradeMove && !upgradeControls)
+    upgradeOperands := version == "1.3.9"
+    upgradeAssignments := version == "1.3.10"
+    if (version != "" && version != "1.2.2" && version != Compat_CurrentVersion() && !upgradePreview && !upgradeMove && !upgradeControls && !upgradeOperands && !upgradeAssignments)
         throw Error("不支持直接升级配置版本 " version "。请选择 RMT 1.2.2 的配置，或使用当前版本导出的配置。")
     loop files, dir "\*.toml" {
         CfgInvalidate(A_LoopFileFullPath)
@@ -75,6 +79,10 @@ Compat_UpgradeDir(dir, installed := false) {
     changed := Compat13_UpgradeWindowCommands(dir) || changed
     ; 同版本预览配置也可能保留旧内置名称；替换幂等，不改变普通文字。
     changed := Compat13_UpgradeBuiltinVariables(dir) || changed
+    changed := Compat13_UpgradeWindowBindings(dir) || changed
+    if (version == "1.2.2" || upgradePreview || upgradeMove || upgradeControls || upgradeOperands)
+        changed := Compat13_UpgradeConditionOperands(dir) || changed
+    changed := Compat13_UpgradeVariableAssignments(dir) || changed
     ; 路径搬迁不是版本升级：同版本包导入也需要定位包内图片。
     loop files, dir "\*.toml" {
         path := A_LoopFileFullPath
@@ -88,7 +96,7 @@ Compat_UpgradeDir(dir, installed := false) {
     }
     CfgFlushDir(dir)
     ; 转换与写盘完成后才更新版本，失败时可重新执行。
-    if (version == "1.2.2" || upgradePreview || upgradeMove || upgradeControls) {
+    if (version == "1.2.2" || upgradePreview || upgradeMove || upgradeControls || upgradeOperands || upgradeAssignments) {
         Compat_WriteVersion(dir, Compat_CurrentVersion())
         changed := true
     }

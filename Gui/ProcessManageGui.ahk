@@ -200,7 +200,7 @@ class ProcessManageGui extends CommentGui {
         this._ComboPush("ProcessWindowRow", "Visibility", isBinding ? "Visible" : "Collapsed")
         this._ComboPush("ProcessPickRow", "Visibility", this._matchMode == "PID" ? "Collapsed" : "Visible")
         if (isBinding) {
-            this._ComboPush("ProcessWindowBinding", "Text", this._targets.Get(this._matchMode, "❖{运行时句柄ID}"))
+            this._ComboPush("ProcessWindowBinding", "Text", NormalizeWindowBinding(this._targets.Get(this._matchMode, "{运行时句柄ID}")))
             return
         }
         this._ComboPush("Target", "ClearItems", "")

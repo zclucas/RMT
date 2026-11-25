@@ -186,17 +186,17 @@ class LoopGui {
             this.Data := LoopData()
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1, 0]
-            this.Data.NameArr := ["Value1", "Value2"]
+            this.Data.NameArr := ["{Value1}", "{Value2}"]
             this.Data.CompareTypeArr := [1, 1]
-            this.Data.VariableArr := ["Target1", "Target2"]
+            this.Data.VariableArr := ["{Target1}", "{Target2}"]
         }
         n := this.Data.ToggleArr.Length
         while (this.Data.NameArr.Length < n)
-            this.Data.NameArr.Push("Value" (this.Data.NameArr.Length + 1))
+            this.Data.NameArr.Push("{Value" (this.Data.NameArr.Length + 1) "}")
         while (this.Data.CompareTypeArr.Length < n)
             this.Data.CompareTypeArr.Push(1)
         while (this.Data.VariableArr.Length < n)
-            this.Data.VariableArr.Push("Target" (this.Data.VariableArr.Length + 1))
+            this.Data.VariableArr.Push("{Target" (this.Data.VariableArr.Length + 1) "}")
         while (this.Data.NameArr.Length > n)
             this.Data.NameArr.RemoveAt(this.Data.NameArr.Length)
         while (this.Data.CompareTypeArr.Length > n)
@@ -247,11 +247,12 @@ class LoopGui {
     }
 
     _BatchSetCombo(batch, comboName, items, text) {
+        text := GetVariableComboText(items, text)
         batch.Push({ControlName: comboName, PropertyName: "ClearItems", Value: ""})
         for it in items {
             if (it == "")
                 continue
-            batch.Push({ControlName: comboName, PropertyName: "AddItem", Value: it})
+            batch.Push(CmdEditorForm.ComboItemUpdate(comboName, it))
         }
         batch.Push({ControlName: comboName, PropertyName: "Text", Value: text})
     }
@@ -279,9 +280,9 @@ class LoopGui {
             batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
             ct := this.Data.CompareTypeArr[i]
             items := GetCompareGuiVarArr(ct)
-            this._BatchSetCombo(batch, "NameCon_" i, items, GetLang(this.Data.NameArr[i]))
+            this._BatchSetCombo(batch, "NameCon_" i, items, TranslateBuiltinVarReferences(this.Data.NameArr[i], true))
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
-            this._BatchSetCombo(batch, "VariableCon_" i, items, GetLang(this.Data.VariableArr[i]))
+            this._BatchSetCombo(batch, "VariableCon_" i, items, TranslateBuiltinVarReferences(this.Data.VariableArr[i], true))
             onlyOne := this.Data.ToggleArr.Length <= 1
             batch.Push({ControlName: "DelCondi_" i, PropertyName: "IsEnabled", Value: onlyOne ? "False" : "True"})
         }
@@ -294,9 +295,9 @@ class LoopGui {
         this.SaveLoopData()
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
-        this.Data.NameArr.Push("Value" n)
+        this.Data.NameArr.Push("{Value" n "}")
         this.Data.CompareTypeArr.Push(1)
-        this.Data.VariableArr.Push("Target" n)
+        this.Data.VariableArr.Push("{Target" n "}")
         this._RebuildRows()
         try this.ui.Update("CondiScroll", "ScrollToEnd", "")
         this.OnRefresh()
@@ -321,11 +322,12 @@ class LoopGui {
     ; ---------------- 数据读写辅助 ----------------
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         this.ui.Update(comboName, "ClearItems", "")
         for it in items {
             if (it == "")
                 continue
-            this.ui.Update(comboName, "AddItem", it)
+            this.ui.BatchUpdate([CmdEditorForm.ComboItemUpdate(comboName, it)])
         }
         this.ui.Update(comboName, "Text", text)
     }
@@ -475,9 +477,9 @@ class LoopGui {
         loop n {
             i := A_Index
             this.Data.ToggleArr.Push(this.ui.Query("ToggleCon_" i) == "True" ? 1 : 0)
-            this.Data.NameArr.Push(GetLangKey(this.ui.Query("NameCon_" i)))
+            this.Data.NameArr.Push(TranslateBuiltinVarReferences(this.ui.Query("NameCon_" i)))
             this.Data.CompareTypeArr.Push(ComboIndexToCompareType(this._CompareIndex(i)))
-            this.Data.VariableArr.Push(GetLangKey(this.ui.Query("VariableCon_" i)))
+            this.Data.VariableArr.Push(TranslateBuiltinVarReferences(this.ui.Query("VariableCon_" i)))
         }
         SaveMacroCMDData(this.Data)
     }

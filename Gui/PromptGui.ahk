@@ -185,7 +185,7 @@ class PromptGui {
                 this.ui.Update(name, "Text", name == "Remark" ? this.remark
                     : name == "Text" ? GetLangStr(this.data.Text, 1)
                     : field.kind == "name" ? TranslateBuiltinVarReferences(this.data.%name%, true)
-                    : name == "Param1" ? (this.data.Param2 == "时间戳" ? GetLang(this.data.Param1) : "")
+                    : name == "Param1" ? (this.data.Param2 == "时间戳" ? GetVariableComboText(GetGuiVarArr("timeVars", "timestamp"), this.data.Param1) : "")
                     : String(this.data.%name%))
         }
         for prefix in ["CountDownDuration", "CountDownClock"]
@@ -340,7 +340,7 @@ class PromptGui {
             value := values[i]
             if (IsInteger(value) && !(prefix == "CountDownClock" && i == 1 && this.legacyClock != ""))
                 value := Format("{:02}", Integer(value))
-            this.AddEditableCombo(row, prefix part, items).Grid_Column(col).SetProp("Text", GetLang(value))
+            this.AddEditableCombo(row, prefix part, items).Grid_Column(col).SetProp("Text", GetVariableComboText(items, GetLang(value)))
                 .ToolTip(GetLang(["时", "分", "秒"][i]))
         }
     }

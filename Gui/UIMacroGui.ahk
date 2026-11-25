@@ -3461,10 +3461,9 @@ class UIMacroGui {
         if (frontInfo == "" || !hwnd)
             return false
 
-        ; ❖ 句柄列表模式：检查 hwnd 是否在列表中
-        if (InStr(frontInfo, "❖")) {
-            idStr := StrReplace(frontInfo, "❖")
-            for _, id in StrSplit(idStr, "|") {
+        ; 句柄列表模式：检查 hwnd 是否在列表中
+        if (IsHandleWindowBinding(frontInfo)) {
+            for _, id in GetHwndList(frontInfo, false) {
                 if (id != "" && Integer(id) == hwnd)
                     return true
             }
@@ -3492,9 +3491,8 @@ class UIMacroGui {
         if (frontInfo == "")
             return 0
 
-        if (InStr(frontInfo, "❖")) {
-            idStr := StrReplace(frontInfo, "❖")
-            hwndList := StrSplit(idStr, "|")
+        if (IsHandleWindowBinding(frontInfo)) {
+            hwndList := GetHwndList(frontInfo, false)
             for index, hwnd in hwndList {
                 if (hwnd == "")
                     continue

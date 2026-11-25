@@ -846,8 +846,9 @@ CommitGlobalData(opcode, args) {
                 names := args[1]
                 values := args[2]
                 ignoreExist := args[3]
+                ; 新命名规则在配置保存和外部写入入口校验，执行时保留旧配置的变量名。
                 for i, name in names {
-                    if (!ignoreExist || !variables.Has(name))
+                    if (name != "" && (!ignoreExist || !variables.Has(name)))
                         variables[name] := values[i]
                 }
             case "DV":

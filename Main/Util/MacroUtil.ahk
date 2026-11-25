@@ -399,9 +399,9 @@ CheckFrontWindowActive(frontInfoStr) {
         return hwnd != 0 && WinActive("ahk_id " hwnd)
     }
 
-    ; 句柄ID格式：❖hwnd1|hwnd2|...
-    if (InStr(frontInfoStr, "❖")) {
-        hwndList := StrSplit(StrReplace(frontInfoStr, "❖"), "|")
+    ; 句柄ID格式：hwnd1|hwnd2|...
+    if (IsHandleWindowBinding(frontInfoStr)) {
+        hwndList := GetHwndList(frontInfoStr, false)
         for hwnd in hwndList {
             if (WinActive("ahk_id " hwnd))
                 return true
@@ -1320,6 +1320,10 @@ OnVariable(tableItem, cmd, index) {
         }
 
         Value := 0
+        if (opera == "赋值") {
+            if (!TryGetAssignmentValue(&Value, tableItem, index, Data.CopyVariableArr[A_Index]))
+                return
+        }
         if (opera == "数值") {
             hasValue := TryGetTabVarValue(&Value, tableItem, index, Data.CopyVariableArr[A_Index])
             if (!hasValue)

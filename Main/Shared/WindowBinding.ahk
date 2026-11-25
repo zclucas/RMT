@@ -28,10 +28,26 @@ ResolveEditorBindWindow(context, winInfo) {
     return ResolveBindWindow(macro ? macro.Table : "", macro ? macro.Index : 0, winInfo)
 }
 
+; 旧句柄前缀仅在兼容读取时移除；窗口信息里的普通字符保持原样。
+NormalizeWindowBinding(infoStr) {
+    if (!InStr(infoStr, "⎖"))
+        return LTrim(Trim(infoStr), Chr(0x2756))
+    return infoStr
+}
+
+IsHandleWindowBinding(infoStr) {
+    infoStr := NormalizeWindowBinding(infoStr)
+    return infoStr != "" && !InStr(infoStr, "⎖")
+        && infoStr != "{所有窗口}" && infoStr != "{宏设置窗口绑定}"
+        && infoStr != "{模块窗口绑定}" && infoStr != "{绑定窗口}"
+        && infoStr != GetLang("{绑定窗口}")
+}
+
 IsMouseWindowBinding(infoStr) {
-    if (infoStr == "❖{运行时句柄ID}" || infoStr == "❖{句柄ID}")
+    infoStr := NormalizeWindowBinding(infoStr)
+    if (infoStr == "{运行时句柄ID}" || infoStr == "{句柄ID}")
         return true
-    return RegExMatch(infoStr, "^❖\{([^{}]+)\}$", &name) && GetBuiltinVarName(name[1]) == "运行时句柄ID"
+    return RegExMatch(infoStr, "^\{([^{}]+)\}$", &name) && GetBuiltinVarName(name[1]) == "运行时句柄ID"
 }
 
 WindowBindingMouseActive(*) {
@@ -40,6 +56,7 @@ WindowBindingMouseActive(*) {
 }
 
 GetHwndList(infoStr, variTip := true) {
+    infoStr := NormalizeWindowBinding(infoStr)
     HwndList := []
     if (infoStr == "")
         return HwndList
@@ -51,8 +68,7 @@ GetHwndList(infoStr, variTip := true) {
         return HwndList
     }
 
-    if (InStr(infoStr, "❖")) {
-        infoStr := StrReplace(infoStr, "❖")
+    if (IsHandleWindowBinding(infoStr)) {
         hwndIdStrList := StrSplit(infoStr, "|")
         for hwndIdStr in hwndIdStrList {
             hwndIdStr := Trim(hwndIdStr)
@@ -81,13 +97,11 @@ GetHwndList(infoStr, variTip := true) {
 }
 
 GetParamsWinInfoStr(infoStr) {
+    infoStr := NormalizeWindowBinding(infoStr)
     if (infoStr == "")
         return ""
 
-    if (InStr(infoStr, "❖")) {
-        infoStr := StrReplace(infoStr, "❖")
-        if (infoStr == "")
-            return ""
+    if (IsHandleWindowBinding(infoStr)) {
         static groupCache := Map()
         if (!groupCache.Has(infoStr)) {
             ; 窗口组名称只允许字母、数字和下划线，不能直接包含句柄分隔符 |。

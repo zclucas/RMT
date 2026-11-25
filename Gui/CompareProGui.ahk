@@ -132,7 +132,7 @@ class CompareProGui {
     }
 
     _DefaultBranchRow() {
-        return ["Value1 " GetLang("大于") " Target1", GetLang("且"), "", "无"]
+        return ["{Value1} " GetLang("大于") " {Target1}", GetLang("且"), "", "无"]
     }
 
     _ParseChipCondi(itemStr) {
@@ -420,8 +420,8 @@ class CompareProGui {
             condiStr := ""
             ItemIndex := A_Index
             loop this.Data.VariNameArr[ItemIndex].Length {
-                condiStr .= GetLang(this.Data.VariNameArr[ItemIndex][A_Index]) " " GetCompareTypeName(this.Data.CompareTypeArr[
-                    ItemIndex][A_Index]) " " GetLang(this.Data.VariableArr[ItemIndex][A_Index])
+                condiStr .= TranslateBuiltinVarReferences(this.Data.VariNameArr[ItemIndex][A_Index], true) " " GetCompareTypeName(this.Data.CompareTypeArr[
+                    ItemIndex][A_Index]) " " TranslateBuiltinVarReferences(this.Data.VariableArr[ItemIndex][A_Index], true)
                 condiStr .= "⎖"
             }
             condiStr := Trim(condiStr, "⎖")
@@ -594,12 +594,12 @@ class CompareProGui {
             loop condiStrArr.Length {
                 parsed := this._ParseChipCondi(condiStrArr[A_Index])
                 Variable := parsed[3]
-                VariNameArr.Push(parsed[1])
+                VariNameArr.Push(TranslateBuiltinVarReferences(parsed[1]))
                 if (this.CompareTypeStrMap.Has(parsed[2]))
                     CompareTypeArr.Push(this.CompareTypeStrMap[parsed[2]])
                 else
                     CompareTypeArr.Push(3)
-                VariableArr.Push(Variable)
+                VariableArr.Push(TranslateBuiltinVarReferences(Variable))
             }
         }
 
@@ -621,9 +621,9 @@ class CompareProGui {
             }
             CondiDataArr := this.GetCondiStrDataArr(this.LVRowArr[A_Index][1])
             LogicType := this.LVRowArr[A_Index][2] == GetLang("且") ? 1 : 2
-            this.Data.VariNameArr.Push(GetLangKey(CondiDataArr[1]))
+            this.Data.VariNameArr.Push(CondiDataArr[1])
             this.Data.CompareTypeArr.Push(CondiDataArr[2])
-            this.Data.VariableArr.Push(GetLangKey(CondiDataArr[3]))
+            this.Data.VariableArr.Push(CondiDataArr[3])
             this.Data.LogicTypeArr.Push(LogicType)
             this.Data.MacroArr.Push(GetLangMacro(this.LVRowArr[A_Index][3], 2))
             this.Data.ControlTypeArr.Push(GetLangKey(this._RowControlType(A_Index)))
