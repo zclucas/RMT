@@ -2,6 +2,14 @@ name: 补齐 GitCode 资源
 on:
   workflow_dispatch:
     inputs:
+      restore_stable_resources:
+        description: 恢复 v1.2 两个架构的三个原始附件及原始清单
+        type: boolean
+        default: false
+      retire_obsolete_resources:
+        description: 仅清理 Common、Patch 与 F 测试版中的三个废弃文件，跳过正式版
+        type: boolean
+        default: false
       rename_resource_catalogs:
         description: 将两站资源清单统一改名为 A-Assets.json
         type: boolean
@@ -51,7 +59,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mirror:
-    if: ${{ !inputs.rename_resource_catalogs && !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && !inputs.complete_resource_catalogs && !inputs.reorganize_resources && !inputs.cleanup_sponsor }}
+    if: ${{ !inputs.restore_stable_resources && !inputs.retire_obsolete_resources && !inputs.rename_resource_catalogs && !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && !inputs.complete_resource_catalogs && !inputs.reorganize_resources && !inputs.cleanup_sponsor }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -77,7 +85,7 @@ jobs:
           path: ${{ runner.temp }}/gitcode-sync.json
   cleanup_sponsor:
     name: 清理单独的赞助 Logo
-    if: ${{ !inputs.rename_resource_catalogs && !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && inputs.cleanup_sponsor && !inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
+    if: ${{ !inputs.restore_stable_resources && !inputs.retire_obsolete_resources && !inputs.rename_resource_catalogs && !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && inputs.cleanup_sponsor && !inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,7 +104,7 @@ jobs:
           path: ${{ runner.temp }}/gitcode-sponsor-cleanup.json
   reorganize:
     name: 重组两站资源
-    if: ${{ !inputs.rename_resource_catalogs && !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
+    if: ${{ !inputs.restore_stable_resources && !inputs.retire_obsolete_resources && !inputs.rename_resource_catalogs && !inputs.rebuild_gitcode_order && !inputs.presentation_only && !inputs.normalize_resources && inputs.reorganize_resources && !inputs.complete_resource_catalogs }}
     runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
     timeout-minutes: 180
     steps:
@@ -119,7 +127,7 @@ jobs:
           path: ${{ runner.temp }}/resource-layout-result.json
   complete_catalogs:
     name: 补齐初始资源清单
-    if: ${{ inputs.complete_resource_catalogs && !inputs.normalize_resources && !inputs.presentation_only && !inputs.rebuild_gitcode_order && !inputs.rename_resource_catalogs }}
+    if: ${{ inputs.complete_resource_catalogs && !inputs.normalize_resources && !inputs.presentation_only && !inputs.rebuild_gitcode_order && !inputs.rename_resource_catalogs && !inputs.restore_stable_resources && !inputs.retire_obsolete_resources }}
     runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
     timeout-minutes: 30
     steps:
@@ -142,7 +150,7 @@ jobs:
           path: ${{ runner.temp }}/resource-layout-result.json
   normalize:
     name: 整理资源与发行说明
-    if: ${{ inputs.normalize_resources || inputs.presentation_only || inputs.rebuild_gitcode_order || inputs.rename_resource_catalogs }}
+    if: ${{ inputs.restore_stable_resources || inputs.normalize_resources || inputs.presentation_only || inputs.rebuild_gitcode_order || inputs.rename_resource_catalogs || inputs.retire_obsolete_resources }}
     runs-on: ${{ inputs.resource_runner || 'macos-latest' }}
     timeout-minutes: 90
     steps:
@@ -151,7 +159,7 @@ jobs:
           persist-credentials: false
       - name: 归档旧版依赖、合并共用包并整理清单与说明
         env:
-          RESOURCE_MODE: ${{ inputs.rename_resource_catalogs && 'catalog-names' || inputs.rebuild_gitcode_order && (inputs.preview_rebuild && 'plan-presentation' || 'rebuild-presentation') || inputs.presentation_only && 'presentation' || 'normalize' }}
+          RESOURCE_MODE: ${{ inputs.restore_stable_resources && 'restore-stable' || inputs.retire_obsolete_resources && 'retire-obsolete' || inputs.rename_resource_catalogs && 'catalog-names' || inputs.rebuild_gitcode_order && (inputs.preview_rebuild && 'plan-presentation' || 'rebuild-presentation') || inputs.presentation_only && 'presentation' || 'normalize' }}
           GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
         shell: pwsh

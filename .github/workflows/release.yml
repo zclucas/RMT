@@ -151,8 +151,28 @@ jobs:
           # log is expected on first publish; the exit code below is the real signal.
           gh release view $env:GITHUB_REF_NAME | Out-Null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:GITHUB_REF_NAME @($zips.FullName) --clobber
-            if ($LASTEXITCODE -ne 0) { throw "failed to upload assets for $env:GITHUB_REF_NAME" }
+            if ($env:RMT_TAG_CHANNEL -eq 'test') {
+              gh release upload $env:GITHUB_REF_NAME @($zips.FullName) --clobber
+              if ($LASTEXITCODE -ne 0) { throw "failed to upload assets for $env:GITHUB_REF_NAME" }
+            } else {
+              $releaseJson = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:GITHUB_REF_NAME"
+              if ($LASTEXITCODE -ne 0) { throw 'failed to inspect existing stable assets' }
+              $release = $releaseJson | ConvertFrom-Json
+              $missing = @()
+              # Validate every existing attachment before adding any new file.
+              foreach ($zip in $zips) {
+                $existing = @($release.assets | Where-Object { $_.name -eq $zip.Name })
+                if ($existing.Count -eq 0) { $missing += $zip; continue }
+                $digest = 'sha256:' + (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($existing.Count -ne 1 -or $existing[0].size -ne $zip.Length -or $existing[0].digest -ne $digest) {
+                  throw "stable release is append-only; cannot replace $($zip.Name)"
+                }
+              }
+              foreach ($zip in $missing) {
+                gh release upload $env:GITHUB_REF_NAME $zip.FullName
+                if ($LASTEXITCODE -ne 0) { throw "failed to add $($zip.Name)" }
+              }
+            }
             gh release edit $env:GITHUB_REF_NAME --title "RMT$env:GITHUB_REF_NAME" --notes-file $notesPath
           } else {
             gh release create $env:GITHUB_REF_NAME @($zips.FullName) @($extra) `

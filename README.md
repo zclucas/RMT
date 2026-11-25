@@ -57,21 +57,21 @@ RMT（若梦兔）是完全免费的开源项目。
 
 | 版本 | 功能亮点 | 视频链接 |
 |------|-----------|-----------|
-| ButtonAssist 1.0 | 首个版本，起航！ | [BV1EU411f7dC](https://www.bilibili.com/video/BV1EU411f7dC) |
-| ButtonAssist 2.0 | 支持指定进程触发 | [BV1ojtHeUEjR](https://www.bilibili.com/video/BV1ojtHeUEjR) |
-| ButtonAssist 3.0 | 图片搜索功能上线 | [BV1i5CEYtEok](https://www.bilibili.com/video/BV1i5CEYtEok) |
-| ButtonAssist 4.0 | 图形化编辑 + 手柄宏 | [BV13Lr1YREMr](https://www.bilibili.com/video/BV13Lr1YREMr) |
-| ButtonAssist 5.0 | 宏指令录制登场 | [BV1kr9NYZE36](https://www.bilibili.com/video/BV1kr9NYZE36) |
-| ButtonAssist 6.0 | 文本识别能力加入 | [BV1UCZPYGEN8](https://www.bilibili.com/video/BV1UCZPYGEN8) |
-| RMT 1.0 | 逻辑指令增强，功能跃升 | [BV1oWVRzaEzk](https://www.bilibili.com/video/BV1oWVRzaEzk) |
-| RMT 1.0.5 | 多线程 + 指令串联 | [BV1yATVzVE4E](https://www.bilibili.com/video/BV1yATVzVE4E) |
-| RMT 1.0.6 | 手柄宏录制 + 多点取色 | [BV1jD3eziE4d](https://www.bilibili.com/video/BV1jD3eziE4d) |
-| RMT 1.0.7 | 定时宏、自定义贴图、配置管理 | [BV1T2e8zAEaf](https://www.bilibili.com/video/BV1T2e8zAEaf) |
-| RMT 1.0.8 | 直播交流与答疑 | [BV1CYx1zmEx3](https://www.bilibili.com/video/BV1CYx1zmEx3) |
-| RMT 1.0.8 | 菜单宏登场，配置可共享 | [BV1571XBDEdR](https://www.bilibili.com/video/BV1571XBDEdR) |
-| RMT 1.0.9 | 编辑器全面进化 + 变量监视 | [BV1YYvSB2ExQ](https://www.bilibili.com/video/BV1YYvSB2ExQ) |
-| RMT 1.1 | 后台搜索 + Excel读写 | [BV1BvoxBCEuE](https://www.bilibili.com/video/BV1BvoxBCEuE) |
 | RMT 1.2 | 图形编辑 + 界面宏 | [BV1yR8x6xEBW](https://www.bilibili.com/video/BV1yR8x6xEBW) |
+| RMT 1.1 | 后台搜索 + Excel读写 | [BV1BvoxBCEuE](https://www.bilibili.com/video/BV1BvoxBCEuE) |
+| RMT 1.0.9 | 编辑器全面进化 + 变量监视 | [BV1YYvSB2ExQ](https://www.bilibili.com/video/BV1YYvSB2ExQ) |
+| RMT 1.0.8 | 菜单宏登场，配置可共享 | [BV1571XBDEdR](https://www.bilibili.com/video/BV1571XBDEdR) |
+| RMT 1.0.8 | 直播交流与答疑 | [BV1CYx1zmEx3](https://www.bilibili.com/video/BV1CYx1zmEx3) |
+| RMT 1.0.7 | 定时宏、自定义贴图、配置管理 | [BV1T2e8zAEaf](https://www.bilibili.com/video/BV1T2e8zAEaf) |
+| RMT 1.0.6 | 手柄宏录制 + 多点取色 | [BV1jD3eziE4d](https://www.bilibili.com/video/BV1jD3eziE4d) |
+| RMT 1.0.5 | 多线程 + 指令串联 | [BV1yATVzVE4E](https://www.bilibili.com/video/BV1yATVzVE4E) |
+| RMT 1.0 | 逻辑指令增强，功能跃升 | [BV1oWVRzaEzk](https://www.bilibili.com/video/BV1oWVRzaEzk) |
+| ButtonAssist 6.0 | 文本识别能力加入 | [BV1UCZPYGEN8](https://www.bilibili.com/video/BV1UCZPYGEN8) |
+| ButtonAssist 5.0 | 宏指令录制登场 | [BV1kr9NYZE36](https://www.bilibili.com/video/BV1kr9NYZE36) |
+| ButtonAssist 4.0 | 图形化编辑 + 手柄宏 | [BV13Lr1YREMr](https://www.bilibili.com/video/BV13Lr1YREMr) |
+| ButtonAssist 3.0 | 图片搜索功能上线 | [BV1i5CEYtEok](https://www.bilibili.com/video/BV1i5CEYtEok) |
+| ButtonAssist 2.0 | 支持指定进程触发 | [BV1ojtHeUEjR](https://www.bilibili.com/video/BV1ojtHeUEjR) |
+| ButtonAssist 1.0 | 首个版本，起航！ | [BV1EU411f7dC](https://www.bilibili.com/video/BV1EU411f7dC) |
 
 🎬 更多内容请关注 B 站账号：👉 [浮生若梦的兔子](https://space.bilibili.com/397441876?spm_id_from=333.1007.0.0)
 
@@ -108,10 +108,8 @@ RMT 支持用户自由 **分享 / 下载** 宏配置文件，你可以在以下�
 
 | 类型 | 入口 |
 |:--|:--|
-| 👥 **QQ 交流群** | 🔗 [加入群聊（837661891）](https://qm.qq.com/q/DgpDumEPzq) |
-| 📢 **QQ 频道** | 🔗 [pd63973680](https://pd.qq.com/s/5wyjvj7zw) |
-| 🐙 **GitHub 讨论区** | 🔗 [GitHub Discussions](https://github.com/zclucas/RMT/discussions) |
-| 🎧 **Discord 社区** | 🔗 [Discord](https://discord.gg/m8ewvgtzat) |
+| 💬 **RMT论坛** | 🔗 [访问论坛](https://forum.ruomengtu.com/) |
+| 👥 **QQ交流群** | 🔗 [加入群聊（837661891）](https://qm.qq.com/q/DgpDumEPzq) |
 
 > 💡 无论是新手提问、配置分享，还是功能建议，都欢迎在社区中积极交流！
 

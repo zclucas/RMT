@@ -501,8 +501,10 @@ class XamlWin {
             XamlWin._DeferActivate(ui)
         }
         ; 兜底：若 daemon 事后异步修改属主，在 2s 与 5s 后各反制一次
-        SetTimer(() => XamlWin._EnforceIndependent(ui), -2000)
-        SetTimer(() => XamlWin._EnforceIndependent(ui), -5000)
+        if (!popup) {
+            SetTimer(() => XamlWin._EnforceIndependent(ui), -2000)
+            SetTimer(() => XamlWin._EnforceIndependent(ui), -5000)
+        }
         return true
     }
 
@@ -595,6 +597,9 @@ class XamlWin {
     ; 反制引擎 RmtTaskbarGroup 的 DeleteTab/RegisterTab 折叠。
     static _EnforceIndependent(ui) {
         if (!IsObject(ui) || !ui.HasProp("wpfHwnd") || !ui.wpfHwnd)
+            return
+        ; 无任务栏浮层不参与独立窗口修饰，尤其不能在关闭后被延迟任务 WinShow。
+        if (InStr(ui.xaml, 'ShowInTaskbar="False"'))
             return
         try {
             hwnd := ui.wpfHwnd

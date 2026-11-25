@@ -9,7 +9,10 @@ class WindowControlData {
     ActionType := "点击控件"
     Selector := ""
     Argument := ""
+    WriteKind := "text"
     ResultVar := ""
+    TypeVar := ""
+    ClassVar := ""
     ErrorVar := ""
     TimeoutMs := TimeoutPolicy.DefaultMs
     TimeoutAction := TimeoutPolicy.DefaultAction
@@ -17,8 +20,10 @@ class WindowControlData {
 }
 
 class ControlInfoData extends WindowControlData {
-    ActionType := "读取控件信息"
+    ActionType := "读取控件值"
     ResultVar := "Res"
+    TypeVar := "ControlType"
+    ClassVar := "ControlClass"
     TimeoutAction := ""
     TimeoutStatusVar := ""
 }
@@ -26,13 +31,18 @@ class ControlInfoData extends WindowControlData {
 class WindowControl {
     static Actions := ["点击控件", "聚焦控件", "写入控件值", "读取控件值", "读取控件文本", "读取控件信息",
         "选中控件", "加入选区", "移出选区", "切换勾选", "设置勾选", "展开控件", "折叠控件", "滚动到控件",
-        "设置范围值", "读取范围值", "等待控件出现", "检测控件存在"]
-    static InfoActions := ["检测控件存在", "读取控件文本", "读取控件值", "读取控件信息", "读取范围值"]
-    static OperationActions := ["点击控件", "聚焦控件", "写入控件值", "选中控件", "加入选区", "移出选区",
-        "切换勾选", "设置勾选", "展开控件", "折叠控件", "滚动到控件", "设置范围值", "等待控件出现"]
+        "设置范围值", "读取范围值", "等待控件出现", "检测控件存在", "展开/折叠"]
+    ; Actions 的旧枚举顺序保留，仅在编辑菜单中移除已合并的操作。
+    static InfoActions := ["检测控件存在", "读取控件值", "读取控件信息"]
+
+    static NormalizeAction(action) {
+        action := CmdEnumZh(action, this.Actions)
+        return action == "读取控件文本" || action == "读取范围值" ? "读取控件值" : action
+    }
+    static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件", "展开/折叠"]
 
     static CommandKey(action) {
-        action := CmdEnumZh(action, this.Actions)
+        action := this.NormalizeAction(action)
         for name in this.InfoActions
             if (action == name)
                 return "控件信息"
@@ -96,10 +106,10 @@ class WindowControl {
                 && parent.right >= target.right && parent.bottom >= target.bottom
                 && (parent.left < target.left || parent.top < target.top
                     || parent.right > target.right || parent.bottom > target.bottom))
-                return {target: target, parent: parent, window: window}
+                return {target: target, parent: parent, window: window, element: hit.element}
             node := this._Object(3, hit.walker, "Ptr", node)
         }
-        return node ? {target: target, parent: window, window: window} : 0
+        return node ? {target: target, parent: window, window: window, element: hit.element} : 0
     }
 
     static _Bounds(element, hwnd := 0) {
@@ -164,7 +174,7 @@ class WindowControl {
 
     static Execute(data, arg, cancelled) {
         selector := this.ParseSelector(data.Selector)
-        action := CmdEnumZh(data.ActionType, this.Actions)
+        action := this.NormalizeAction(data.ActionType)
         deadline := this.UsesTimeout(action) ? A_TickCount + Integer(data.TimeoutMs) : 0
         while (!cancelled()) {
             element := this.Find(selector)
@@ -190,22 +200,26 @@ class WindowControl {
             case "聚焦控件":
                 ComCall(3, element)
             case "写入控件值":
-                ComCall(3, this._RequiredPattern(element, "value"), "WStr", arg)
+                return this.WriteValue(element, arg)
+            case "展开/折叠":
+                pattern := this._RequiredPattern(element, "expand")
+                state := this._Int(pattern, 5)
+                if (state == 3)
+                    throw Error(GetLang("此控件没有可展开的内容。"))
+                ComCall(state == 0 ? 3 : 4, pattern)
+                return state == 0 ? 1 : 0
             case "读取控件值":
-                return this._String(this._RequiredPattern(element, "value"), 4)
-            case "读取控件文本":
-                text := this._Pattern(element, "text")
-                if (text) {
-                    range := this._Object(7, text)
-                    return this._String(range, 12, "Int", -1)
-                }
-                value := this._Pattern(element, "value")
-                return value ? this._String(value, 4) : this._String(element, 23)
+                result := this.ProbeValue(element)
+                if (!result.supported)
+                    throw Error(result.reason)
+                return result.value
             case "读取控件信息":
                 info := this.Describe(element)
                 info["enabled"] := this._Int(element, 28)
                 info["offscreen"] := this._Int(element, 38)
                 info["bounds"] := this._Bounds(element)
+                result := this.ProbeValue(element)
+                info["value"] := result.supported ? result.value : ""
                 return JSON.stringify(info, 0)
             case "选中控件", "加入选区", "移出选区":
                 ComCall(Map("选中控件", 3, "加入选区", 4, "移出选区", 5)[action], this._RequiredPattern(element, "selection"))
@@ -233,17 +247,333 @@ class WindowControl {
                 if (!IsNumber(arg))
                     throw Error(GetLang("控件值必须是数字。"))
                 ComCall(3, this._RequiredPattern(element, "range"), "Double", Number(arg))
-            case "读取范围值":
-                value := 0.0
-                ComCall(4, this._RequiredPattern(element, "range"), "Double*", &value)
-                return value
         }
         return 1
     }
 
+    ; 拾取预览、读取值、信息 JSON 共用同一套判断，空文本也是可读取的值。
+    static ProbeValue(element, preview := false) {
+        try {
+            type := this._Int(element, 21)
+            if (pattern := this._Pattern(element, "toggle")) {
+                state := this._Int(pattern, 4)
+                return this._Value(state == 2 ? 0.5 : state, "勾选状态（0/1，半选 0.5）")
+            }
+            if (type == 50003)
+                return this._ComboValue(element)
+            if (pattern := this._Pattern(element, "range")) {
+                current := this._Double(pattern, 4)
+                low := this._Double(pattern, 7), high := this._Double(pattern, 6)
+                if (high <= low)
+                    return {supported: false, value: "", reason: GetLang("控件未提供有效数值范围。")}
+                return this._Value(Max(0, Min(1, (current - low) / (high - low))), "范围比例（0～1）")
+            }
+            if (pattern := this._Pattern(element, "selection"))
+                return this._Value(this._Int(pattern, 6) ? 1 : 0, "选中状态（0/1）")
+            if (pattern := this._Pattern(element, "expand")) {
+                state := this._Int(pattern, 5)
+                if (state != 3) ; LeafNode 没有展开状态。
+                    return this._Value(state == 0 ? 0 : 1, "展开状态（0/1）")
+            }
+            if (type == 50026 || type == 50033 || type == 50032 || type == 50021 || type == 50010)
+                return {supported: false, value: "", reason: GetLang("布局控件无法读取值。")}
+            if (pattern := this._Pattern(element, "text")) {
+                range := this._Object(7, pattern)
+                return this._Value(this._String(range, 12, "Int", preview ? 100 : -1), "文本")
+            }
+            if (pattern := this._Pattern(element, "value"))
+                return this._Value(this._String(pattern, 4), "文本")
+            ; 仅文字语义的控件允许回退到 Name，不能把布局名称误认为值。
+            if (type == 50000 || type == 50004 || type == 50005 || type == 50006
+                || type == 50017 || type == 50020 || type == 50022 || type == 50030)
+                return this._Value(this._String(element, 23), "文本")
+            return {supported: false, value: "", reason: GetLang("此控件不支持读取值。")}
+        } catch as e {
+            return {supported: false, value: "", reason: GetLang("控件值读取失败。") " " e.Message}
+        }
+    }
+
+    static _Value(value, kind) => {supported: true, value: value, kind: GetLang(kind), reason: ""}
+
+    static _Double(target, method) {
+        value := 0.0
+        ComCall(method, target, "Double*", &value)
+        return value
+    }
+
+    static _ComboValue(element) {
+        ; 原生 ComboBox 的折叠项可能不在 UIA 树中，优先读取其选项序号。
+        hwnd := 0
+        ComCall(36, element, "Ptr*", &hwnd)
+        if (hwnd && RegExMatch(WinGetClass(hwnd), "i)^(ComboBox|WindowsForms10\.COMBOBOX(?:\..*)?)$")) {
+            selected := 0
+            if (!DllCall("SendMessageTimeoutW", "Ptr", hwnd, "UInt", 0x147, "Ptr", 0, "Ptr", 0,
+                "UInt", 2, "UInt", 200, "Ptr*", &selected, "Ptr"))
+                throw Error(GetLang("控件值读取失败。"))
+            ; CB_ERR (-1) 表示未选择，统一返回 0。
+            return this._Value((selected == -1 || selected == 0xFFFFFFFF) ? 0 : selected + 1, "选项序号（1～n，未选 0）")
+        }
+        selection := this._Pattern(element, "selectionContainer")
+        if (!selection)
+            return {supported: false, value: "", reason: GetLang("控件未提供可读取的选项序号。")}
+        selected := this._Object(3, selection)
+        count := this._Int(selected, 3)
+        if (!count)
+            return this._Value(0, "选项序号（1～n，未选 0）")
+        if (count != 1)
+            return {supported: false, value: "", reason: GetLang("控件未提供唯一选中项。")}
+        item := this._Object(4, selected, "Int", 0)
+        ; PositionInSet 是提供者声明的完整集合序号，适用于虚拟化列表。
+        position := this._PropertyInt(item, 30152)
+        if (position > 0)
+            return this._Value(position, "选项序号（1～n，未选 0）")
+        if (container := this._Pattern(element, "itemContainer")) {
+            previous := 0
+            deadline := A_TickCount + 500
+            loop 4096 {
+                if (A_TickCount > deadline)
+                    break
+                next := this._ContainerItem(container, previous)
+                if (!next)
+                    break
+                if (this._Equals(next, item))
+                    return this._Value(A_Index, "选项序号（1～n，未选 0）")
+                previous := next
+            }
+        }
+        return this._ComboIndex(element, item)
+    }
+
+    static _ComboIndex(element, selected) {
+        ; 不展开下拉框、不改变选择；按现有树中的 ListItem 顺序定位。
+        walker := this._Object(14, this._Automation())
+        stack := [], node := this._Object(4, walker, "Ptr", element), index := 0, visited := 0, found := 0
+        size := this._PropertyInt(selected, 30153), deadline := A_TickCount + 500
+        while (node && ++visited <= 4096 && A_TickCount <= deadline) {
+            if (this._Int(node, 21) == 50007) {
+                index++
+                if (this._Equals(node, selected))
+                    found := index
+            } else {
+                child := this._Object(4, walker, "Ptr", node)
+                if (child) {
+                    stack.Push(node)
+                    node := child
+                    continue
+                }
+            }
+            loop {
+                sibling := this._Object(6, walker, "Ptr", node)
+                if (sibling || !stack.Length) {
+                    node := sibling
+                    break
+                }
+                node := stack.Pop()
+            }
+        }
+        ; 有 SizeOfSet 时必须验证集合完整，不能把虚拟化后的局部序号当作完整序号。
+        if (!node && found && (!size || size == index))
+            return this._Value(found, "选项序号（1～n，未选 0）")
+        return {supported: false, value: "", reason: GetLang("控件未提供可读取的选项序号。")}
+    }
+
+    static _PropertyInt(element, id) {
+        variant := Buffer(24, 0)
+        try {
+            ComCall(10, element, "Int", id, "Ptr", variant)
+            return NumGet(variant, 0, "UShort") == 3 ? NumGet(variant, 8, "Int") : 0
+        } finally {
+            DllCall("oleaut32\VariantClear", "Ptr", variant)
+        }
+    }
+
+    static ProbeWrite(element) {
+        try {
+            type := this._Int(element, 21)
+            kind := "text", pattern := 0, reason := ""
+            if (pattern := this._Pattern(element, "toggle"))
+                kind := "state"
+            else if (type == 50003) {
+                kind := "index"
+                if (!this._NativeControl(element, "combo") && !this._Pattern(element, "itemContainer")
+                    && !this._Pattern(element, "selectionContainer"))
+                    reason := GetLang("控件不支持按序号选择。")
+            } else if (pattern := this._Pattern(element, "range")) {
+                kind := "ratio"
+                if (this._Double(pattern, 6) <= this._Double(pattern, 7))
+                    reason := GetLang("控件未提供有效数值范围。")
+                else if (this._Int(pattern, 5) && !this._NativeControl(element, "progress"))
+                    reason := GetLang("此控件为只读，无法写入。")
+            } else if (pattern := this._Pattern(element, "selection"))
+                kind := "state"
+            else if ((pattern := this._Pattern(element, "expand")) && this._Int(pattern, 5) != 3)
+                kind := "state"
+            else if (pattern := this._Pattern(element, "value")) {
+                if (this._Int(pattern, 5))
+                    reason := GetLang("此控件为只读，无法写入。")
+            } else
+                reason := GetLang("此控件不支持写入值。")
+            if (!this._Int(element, 28))
+                reason := GetLang("此控件已禁用，无法写入。")
+            return {supported: reason == "", kind: kind, reason: reason}
+        } catch as e {
+            return {supported: false, kind: "text", reason: e.Message}
+        }
+    }
+
+    static ProbeExpand(element) {
+        try {
+            pattern := this._Pattern(element, "expand")
+            if (!pattern || this._Int(pattern, 5) == 3)
+                return {supported: false, reason: GetLang("此控件没有可展开的内容。")}
+            if (!this._Int(element, 28))
+                return {supported: false, reason: GetLang("此控件已禁用。")}
+            return {supported: true, reason: GetLang(this._Int(pattern, 5) == 0 ? "当前折叠，执行后展开。" : "当前展开，执行后折叠。")}
+        } catch as e {
+            return {supported: false, reason: e.Message}
+        }
+    }
+
+    static ValidateWriteArgument(kind, arg) {
+        if (kind == "text")
+            return
+        if (!IsNumber(arg))
+            throw Error(GetLang("控件值必须是数字。"))
+        switch kind {
+            case "state":
+                if (Number(arg) != 0 && Number(arg) != 1)
+                    throw Error(GetLang("状态请输入 0 或 1。"))
+            case "ratio":
+                if (Number(arg) < 0 || Number(arg) > 1)
+                    throw Error(GetLang("比例请输入 0～1。"))
+            case "index":
+                if (!IsInteger(arg) || Integer(arg) < 1)
+                    throw Error(GetLang("选项序号请输入从 1 开始的整数。"))
+        }
+    }
+
+    static WriteValue(element, arg) {
+        profile := this.ProbeWrite(element)
+        if (!profile.supported)
+            throw Error(profile.reason)
+        this.ValidateWriteArgument(profile.kind, arg)
+        switch profile.kind {
+            case "text":
+                ComCall(3, this._RequiredPattern(element, "value"), "WStr", arg)
+                return arg
+            case "index":
+                return this._SelectCombo(element, Integer(arg))
+            case "ratio":
+                pattern := this._RequiredPattern(element, "range")
+                low := this._Double(pattern, 7), high := this._Double(pattern, 6)
+                raw := low + Number(arg) * (high - low)
+                if (hwnd := this._NativeControl(element, "progress"))
+                    this._Send(hwnd, 0x402, Round(raw)) ; PBM_SETPOS
+                else
+                    ComCall(3, pattern, "Double", raw)
+                return Number(arg)
+            case "state":
+                state := Number(arg)
+                if (pattern := this._Pattern(element, "toggle")) {
+                    loop 3 {
+                        if (this._Int(pattern, 4) == state)
+                            return state
+                        ComCall(3, pattern)
+                    }
+                    if (this._Int(pattern, 4) != state)
+                        throw Error(GetLang("控件未达到指定状态。"))
+                } else if (pattern := this._Pattern(element, "selection")) {
+                    if (!!this._Int(pattern, 6) != state)
+                        ComCall(state ? 3 : 5, pattern)
+                } else
+                    ComCall(state ? 3 : 4, this._RequiredPattern(element, "expand"))
+                return state
+        }
+    }
+
+    static _NativeControl(element, kind) {
+        hwnd := 0
+        ComCall(36, element, "Ptr*", &hwnd)
+        if (!hwnd)
+            return 0
+        name := WinGetClass(hwnd)
+        return kind == "combo" ? (RegExMatch(name, "i)^(ComboBox|WindowsForms10\.COMBOBOX(?:\..*)?)$") ? hwnd : 0)
+            : (name == "msctls_progress32" ? hwnd : 0)
+    }
+
+    static _Send(hwnd, message, wParam := 0, lParam := 0) {
+        result := 0
+        if (!DllCall("SendMessageTimeoutW", "Ptr", hwnd, "UInt", message, "Ptr", wParam, "Ptr", lParam,
+            "UInt", 2, "UInt", 300, "Ptr*", &result, "Ptr"))
+            throw Error(GetLang("控件操作失败。"))
+        return result
+    }
+
+    static _ContainerItem(container, previous := 0) {
+        empty := Buffer(16, 0)
+        return A_PtrSize == 8
+            ? this._Object(3, container, "Ptr", previous, "Int", 0, "Ptr", empty)
+            : this._Object(3, container, "Ptr", previous, "Int", 0, "Int64", 0, "Int64", 0)
+    }
+
+    static _SelectCombo(element, index) {
+        if (hwnd := this._NativeControl(element, "combo")) {
+            count := this._Send(hwnd, 0x146) ; CB_GETCOUNT
+            if (index > count)
+                throw Error(GetLang("选项序号超出范围。"))
+            this._Send(hwnd, 0x14E, index - 1) ; CB_SETCURSEL
+            parent := DllCall("GetParent", "Ptr", hwnd, "Ptr")
+            id := DllCall("GetDlgCtrlID", "Ptr", hwnd, "Int") & 0xFFFF
+            if (parent) {
+                this._Send(parent, 0x111, id | (1 << 16), hwnd) ; CBN_SELCHANGE
+                this._Send(parent, 0x111, id | (9 << 16), hwnd) ; CBN_SELENDOK
+            }
+            return index
+        }
+        if (container := this._Pattern(element, "itemContainer")) {
+            item := 0, deadline := A_TickCount + 1500
+            loop index {
+                if (A_Index > 4096 || A_TickCount > deadline)
+                    throw Error(GetLang("无法定位指定选项。"))
+                item := this._ContainerItem(container, item)
+                if (!item)
+                    throw Error(GetLang("选项序号超出范围。"))
+            }
+            ComCall(3, this._RequiredPattern(item, "selection"))
+            return index
+        }
+        ; 已公开完整集合的普通控件树可以按 ListItem 顺序选择。
+        walker := this._Object(14, this._Automation())
+        pending := [], node := this._Object(4, walker, "Ptr", element), items := [], visited := 0
+        while (node && ++visited <= 4096) {
+            if (this._Int(node, 21) == 50007)
+                items.Push(node)
+            else if (child := this._Object(4, walker, "Ptr", node)) {
+                pending.Push(node)
+                node := child
+                continue
+            }
+            loop {
+                next := this._Object(6, walker, "Ptr", node)
+                if (next || !pending.Length) {
+                    node := next
+                    break
+                }
+                node := pending.Pop()
+            }
+        }
+        if (node || index > items.Length)
+            throw Error(GetLang("无法定位指定选项。"))
+        item := items[index], size := this._PropertyInt(item, 30153), position := this._PropertyInt(item, 30152)
+        if ((size && size != items.Length) || (position && position != index))
+            throw Error(GetLang("控件未公开完整选项列表。"))
+        ComCall(3, this._RequiredPattern(item, "selection"))
+        return index
+    }
+
     static UsesArgument(action) => action == "写入控件值" || action == "设置勾选" || action == "设置范围值"
 
-    static UsesTimeout(action) => this.CommandKey(action) != "控件信息"
+    static UsesTimeout(action) => this.NormalizeAction(action) == "等待控件出现"
 
     static _Automation() {
         static automation := ComObject("{FF48DBA4-60EF-4201-AA87-54103EEF594E}", "{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")
@@ -311,6 +641,8 @@ class WindowControl {
             "value", [10002, "{A94CD8B1-0844-4CD6-9D2D-640537AB39E9}"],
             "range", [10003, "{59213F4F-7346-49E5-B120-80555987A148}"],
             "expand", [10005, "{619BE086-1F4E-4EE4-BAFA-210128738730}"],
+            "itemContainer", [10019, "{C690FDB2-27A8-423C-812D-429773C9084E}"],
+            "selectionContainer", [10001, "{5ED5202E-B2AC-47A6-B638-4B0BF140D78E}"],
             "selection", [10010, "{A8EFA66A-0FDA-421A-9194-38021F3578EA}"],
             "text", [10014, "{32EBA289-3583-42C9-9C59-3B6D9A1E9B6A}"],
             "toggle", [10015, "{94CF8058-9B8D-4AB9-8BFD-4CD0A33C8C70}"],
@@ -359,6 +691,17 @@ OnWindowControl(tableItem, cmd, index) {
         return
     if (WindowControl.UsesTimeout(CmdEnumZh(data.ActionType, WindowControl.Actions)))
         TimeoutPolicy.WriteStatus(data, timedOut)
+    names := [], values := []
+    info := failure == "" && WindowControl.NormalizeAction(data.ActionType) == "读取控件信息" ? JSON.parse(value) : Map()
+    for pair in [["TypeVar", "type"], ["ClassVar", "class"]] {
+        name := data.HasOwnProp(pair[1]) ? data.%pair[1]% : ""
+        if (name != "") {
+            names.Push(name)
+            values.Push(info.Get(pair[2], ""))
+        }
+    }
+    if (names.Length)
+        MySetGlobalVariable(names, values, false)
     SaveCommandResult(data, value, failure, !timedOut || action == "")
     if (timedOut && TimeoutPolicy.Stops(action))
         throw Error(failure)

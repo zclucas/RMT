@@ -142,8 +142,16 @@ class CMDTipGui {
         return Format("NoActivate x{} y{} w{} h{}", this.PosX, this.PosY, this.Width, this.Height)
     }
 
-    ShowGui(CMDStr) {
-        this._displayRequested := true
+    ShowGui(CMDStr, force := true) {
+        ; 普通流水的开关检查与显示意图必须一起完成，不能在两者之间被关闭打断。
+        previousCritical := A_IsCritical
+        Critical "On"
+        try {
+            if (!force && !MySoftData.CMDTip)
+                return
+            this._displayRequested := true
+            version := this._buildVersion
+        } finally Critical(previousCritical)
         if (!this.isLoadParams) {
             this.isLoadParams := true
             this.LoadParams()
@@ -156,6 +164,8 @@ class CMDTipGui {
         ; 兜底检查不做深探测：深探测为同步跨进程调用，引擎排版或追加文本时
         ; 会一并阻塞主线程，表现为每 2 秒停顿一次。窗口失效可由
         ; _IsVisible/WinExist 等本地判断发现。
+        if (version != this._buildVersion || !this._displayRequested)
+            return
         now := A_TickCount
         if (!this._windowOK || now - this._winCheckTick >= 2000) {
             this._winCheckTick := now
@@ -168,7 +178,7 @@ class CMDTipGui {
             this._AutoClearCheck()
         }
 
-        if (!this._displayRequested)
+        if (version != this._buildVersion || !this._displayRequested)
             return
         this.AddCMD(CMDStr)
 
@@ -188,6 +198,8 @@ class CMDTipGui {
     ; 确保窗口存在且可见。返回 false 表示内容无法显示（窗口创建失败）。
     ; deep=true 时额外向引擎发起一次响应性探测（同步跨进程，仅在窗口状态未知时使用）。
     _EnsureWindow(deep := true) {
+        if (!this._displayRequested)
+            return false
         ; 句柄尚未回传时复用在建窗口，避免快速开关创建多个浮层。
         if (this._opening)
             return true
@@ -541,6 +553,7 @@ class CMDTipGui {
     }
 
     _DestroyUi(clearWheel) {
+        oldUi := this.ui
         this._displayRequested := false
         this._buildVersion += 1
         this._windowVersion += 1
@@ -561,6 +574,13 @@ class CMDTipGui {
             this._keyTimer := ""
         }
         this._lastKeys := ""
+        ; XAMLHost 持有实例引用；仅清空 this.ui 不会销毁引擎中的窗口。
+        ; 先使旧回调失效，再隐藏并异步关闭；尚无 HWND 时由 Host 补发 Close。
+        if (IsObject(oldUi)) {
+            if (oldUi.HasProp("wpfHwnd") && oldUi.wpfHwnd)
+                try DllCall("user32\ShowWindow", "Ptr", oldUi.wpfHwnd, "Int", 0)
+            try oldUi.Update("Window", "Close", "")
+        }
     }
 
     ; §7 按键轮询：GetAsyncKeyState 检测当前按下键，状态变化才刷新槽位按钮（零 IPC 去抖）

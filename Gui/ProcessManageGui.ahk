@@ -1,7 +1,9 @@
 #Requires AutoHotkey v2.0
 
 class ProcessManageGui extends CommentGui {
+    ; 配置兼容旧键，界面与输出指令通过 GetLang 显示为“进程”。
     static CmdKey := "进程管理"
+    _autoRemark := ""
     static Outputs := ["ResultVar", "NameVar", "PidVar", "PathVar", "ResultArray", "ExistVar", ProcessInfo.Metrics*]
     static OutputDefaults := Map("ResultVar", "Res", "NameVar", "Name", "PidVar", "PID", "PathVar", "Path",
         "ResultArray", "Procs", "ExistVar", "Exists", "StatusVar", "Status", "StartTimeVar", "Start",
@@ -168,6 +170,7 @@ class ProcessManageGui extends CommentGui {
         parts := cmd == "" ? [] : SplitCommand(cmd)
         this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr(ProcessManageGui.CmdKey)
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         this.SerialStr := this.Data.SerialStr
         this._matchMode := this.Data.MatchBy
         this._targets := Map(this._matchMode, parts.Length ? this.Data.Target : "notepad.exe")
@@ -554,10 +557,11 @@ class ProcessManageGui extends CommentGui {
 
     SaveData() {
         ProcessManage.RegisterOutputs(this.Data)
+        FormatCommandAutoRemark(this.Data, this._remark, this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(this.Data)
     }
 
     GetCommandStr() {
-        return CorrectRemark(GetLang(ProcessManageGui.CmdKey) RegExReplace(this.SerialStr, "\D+"), this._remark)
+        return FormatCommandAutoRemark(this.Data, this._remark, this._autoRemark, GenerateCommandAutoRemark, false)
     }
 }

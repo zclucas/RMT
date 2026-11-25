@@ -16,6 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 import zipfile
+from resource_policy import mutable_tag, catalog_additions
 
 REPO = 'RMTAssets'
 SOURCE = 'https://api.github.com/repos/zclucas/' + REPO
@@ -236,6 +237,14 @@ def upload(tag, path, expected, max_time=5400):
         except ValueError:
             pass
         for old in existing:
+            if not mutable_tag(tag):
+                allowed = False
+                if expected['name'] == 'A-Assets.json':
+                    with urlopen(Request(public_url(tag, expected['name']),
+                            headers={'User-Agent': 'RMT-append-only-check'}), timeout=90) as response:
+                        allowed = catalog_additions(response.read(16 * 1024 * 1024), Path(path).read_bytes())
+                if not allowed:
+                    raise ValueError('Stable GitCode assets are append-only: ' + tag + '/' + expected['name'])
             gc('/releases/' + quote(tag, safe='') + '/attach_files/' + str(int(old['id'])), method='DELETE')
     target = gc('/releases/' + quote(tag, safe='') + '/upload_url?' + urlencode({'file_name': expected['name']}))
     if urlsplit(target['url']).scheme != 'https':
@@ -307,6 +316,8 @@ def sync(tags=None, asset_name='', workers=4):
     if REPO == 'RMT' and not asset_name:
         # Prune only after every source file has passed full public readback.
         for tag, (source, originals) in expected_by_tag.items():
+            if not mutable_tag(tag):
+                continue
             latest = [a for a in pages(gh, '/releases/' + str(source['id']) + '/assets') if a.get('state') == 'uploaded']
             fingerprint = lambda assets: sorted((a['id'], a['name'], a['size'], a.get('digest')) for a in assets)
             if fingerprint(latest) != fingerprint(originals):

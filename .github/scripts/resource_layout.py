@@ -22,6 +22,7 @@ from urllib.request import Request, urlopen
 import zipfile
 
 import sync_gitcode_assets as mirror
+from resource_policy import mutable_tag, catalog_additions
 
 CATALOG = 'A-Assets.json'
 LEGACY_CATALOG = 'resources.json'
@@ -137,7 +138,7 @@ class Store:
                 if exc.code != 404:
                     raise
                 ref = None
-            if not ref or ref['type'] != 'tag':
+            if not ref or (ref['type'] != 'tag' and mutable_tag(tag)):
                 # New version resources must sort by publication time, rather
                 # than inheriting the old commit date of the assets repo's main.
                 commit = ref['sha'] if ref else mirror.gh('/git/ref/heads/main')['object']['sha']
@@ -240,6 +241,9 @@ class Store:
         entry = dict(size=path.stat().st_size, sha256=mirror.sha(path)[7:])
         before = self.asset(tag, name)
         if before and (before['digest'] != 'sha256:' + entry['sha256'] or before['size'] != entry['size']):
+            if not mutable_tag(tag) and not (name == CATALOG and catalog_additions(
+                    self.download(tag, before).read_bytes(), path.read_bytes())):
+                raise ValueError('Stable release assets are append-only: ' + tag + '/' + name)
             if not replace:
                 raise ValueError('Refusing to overwrite immutable asset: ' + tag + '/' + name)
         self.ensure(tag)
@@ -250,7 +254,7 @@ class Store:
             if staged.resolve() != path.resolve():
                 shutil.copyfile(path, staged)
             subprocess.run(['gh', 'release', 'upload', tag, str(staged), '--repo',
-                            'zclucas/RMTAssets', '--clobber'], check=True)
+                            'zclucas/RMTAssets'] + (['--clobber'] if before else []), check=True)
         if name == mirror.MODEL:
             if tag == 'Common':
                 model_dir = self.directory / 'lfs-update'
@@ -279,6 +283,8 @@ class Store:
         return entry
 
     def delete(self, tag, name):
+        if not mutable_tag(tag):
+            raise ValueError('Stable release assets are append-only: ' + tag + '/' + name)
         print('Retire {}/{}'.format(tag, name), flush=True)
         # Only exact filenames selected in the validated migration plan are removed.
         target = mirror.release(tag)
@@ -371,6 +377,7 @@ def preserve_dependents(store, known, scope, name, old):
 
 
 def publish_shared(store, known, scope, name, path):
+    validate_retired_files(path)
     old = store.asset(scope, name)
     if old:
         previous = store.download(scope, old)
@@ -533,7 +540,7 @@ def migrate(store):
             continue
         # Keep a version snapshot if the shared destination holds a newer generation.
         target = store.asset(destination, renamed)
-        if target and target['digest'] == expected['digest']:
+        if target and target['digest'] == expected['digest'] and mutable_tag(source_tag):
             store.verify(destination, renamed, record(expected, destination, renamed))
             store.delete(source_tag, name)
     store.shared_indexes()
@@ -547,6 +554,15 @@ def validate_universal_builds(directory):
         if any(p.exists() for p in paths) and (not all(p.exists() for p in paths)
                 or fingerprint(paths[0]) != fingerprint(paths[1])):
             raise ValueError('Universal bundle differs across architectures: ' + name)
+
+
+def validate_retired_files(path):
+    from retire_obsolete_resources import retired
+    if retired(path.name):
+        raise ValueError('Retired resource cannot be published: ' + path.name)
+    if path.name.lower().endswith(('.zip', '.tar.bz2', '.tar.gz', '.tgz')):
+        if any(retired(item['name']) for item in archive_files(path)):
+            raise ValueError('Archive contains a retired resource: ' + path.name)
 
 
 def validate_build_coverage(directory, known, tags):
@@ -570,6 +586,8 @@ def validate_build_coverage(directory, known, tags):
             raise ValueError('Incomplete or unexpected build artifacts: ' + arch)
         if not names <= set(bundle_names()):
             raise ValueError('Unclassified build artifacts: ' + arch)
+        for path in (directory / ('RMTAssets_' + arch)).glob('*.zip'):
+            validate_retired_files(path)
 
 
 def publish(store, directory):
@@ -719,7 +737,8 @@ def migrate_catalog_names(store):
     # All providers have verified the new filename before the old names disappear.
     for release in releases:
         for name in (LEGACY_CATALOG, LEGACY_INDEX):
-            store.delete(release['tag_name'], name)
+            if mutable_tag(release['tag_name']):
+                store.delete(release['tag_name'], name)
     return dict(status='passed', catalog=CATALOG, tags=[r['tag_name'] for r in releases])
 
 
@@ -778,7 +797,8 @@ def normalize_resources(store):
     for release in store.releases():
         tag = release['tag_name']
         # Store.delete also cleans a surviving GitCode copy after a partial failure.
-        store.delete(tag, LEGACY_INDEX)
+        if mutable_tag(tag):
+            store.delete(tag, LEGACY_INDEX)
     from release_presentation import organize_releases
     presentation = organize_releases(store)
     return dict(status='passed', universal=changed, presentation=presentation)
@@ -786,7 +806,7 @@ def normalize_resources(store):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'rebuild-presentation', 'plan-presentation', 'catalog-names'))
+    parser.add_argument('mode', choices=('migrate', 'publish', 'shared', 'shared-url', 'complete-catalogs', 'normalize', 'presentation', 'rebuild-presentation', 'plan-presentation', 'catalog-names', 'retire-obsolete', 'restore-stable'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--scope', choices=('Common', 'Patch'))
     parser.add_argument('--url')
@@ -799,6 +819,12 @@ if __name__ == '__main__':
             store = Store(directory)
             if args.mode == 'migrate':
                 result = migrate(store)
+            elif args.mode == 'retire-obsolete':
+                from retire_obsolete_resources import retire_resources
+                result = retire_resources(store, CATALOG)
+            elif args.mode == 'restore-stable':
+                from restore_stable_resources import restore_resources
+                result = restore_resources(store, CATALOG)
             elif args.mode == 'catalog-names':
                 result = migrate_catalog_names(store)
             elif args.mode == 'normalize':

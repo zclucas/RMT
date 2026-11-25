@@ -218,7 +218,7 @@ class MainWin {
         leftBottom := left.Add("StackPanel").Grid_Row(1).VerticalAlignment("Bottom")
         sidebarButton := leftBottom.Add("Button").Name("BtnHelp").Height(28).MinHeight(28).Margin("0,2,0,2")
         this._AddSidebarButtonContent(sidebarButton, GetLang("RMT文档"), 0xE8A5)
-        sidebarButton := leftBottom.Add("Button").Name("BtnSave").Uid("gm:Main.Save").Height(36).MinHeight(36).Margin("0,2,0,0").FontWeight("Bold")
+        sidebarButton := leftBottom.Add("Button").Name("BtnSave").Uid("gm:Main.Save").Height(36).MinHeight(36).Margin("0,2,0,0").FontWeight("Bold").ToolTip(GetLang("所有修改 应用保存后才生效"))
         this._AddSidebarButtonContent(sidebarButton, GetLang("应用并保存"), 0xE74E)
 
         ; ---- 右侧 TabControl ----

@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 import sync_gitcode_assets as mirror
+from resource_policy import mutable_tag
 
 
 def presentation_plan(store):
@@ -69,6 +70,8 @@ def rebuild_gitcode_releases(store, preview=False):
                                   bytes=sum(a['size'] for a in r['assets'])) for r in plan])
     if preview:
         return summary
+    if any(not mutable_tag(r['tag']) for r in plan):
+        raise ValueError('Rebuilding would delete a stable release; append-only policy forbids it')
     # No tags or release metadata are removed until EVERY backup has passed SHA-256.
     stage_backups(store, plan)
     backup = Path(os.environ.get('RUNNER_TEMP', 'Test/output')) / 'resource-rebuild-backup.json'

@@ -21,9 +21,9 @@ RmtRegisterCliCommand()
 ; 启动前环境预检：KB4474419 / .NET，用原生界面，必须先于引擎加载
 if (!RuntimePrecheck())
     ExitApp()
+IconFontStartupCheck()      ;缺失时先补齐字体，再启动 WPF，避免首次启动缓存缺字结果
 XAMLHost.Prewarm()
 InitFilePath()              ;初始化文件路径.
-IconFontRegisterCached()    ;图标字体：本地已有缓存时注册（毫秒级，不联网）
 LoadCurMacroSetting()       ;加载当前宏配置
 HandleOpenArg()             ;处理打开软件的参数
 RegisterNativeComboWheelGuard()
@@ -55,6 +55,4 @@ RunStartupCommandsAfterUI() {
     SetTimer(VcRuntimeStartupCheck, -2500)
     ; 手柄组件自检：排在运行库之后，避免两个询问框叠在一起
     SetTimer(DirectXStartupCheck, -6000)
-    ; 图标字体：非必要资源，缺了才后台下载，装完提示重启生效，不拖慢启动
-    SetTimer(IconFontStartupCheck, -8000)
 }

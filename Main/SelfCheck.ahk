@@ -724,7 +724,7 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
 DownloadOnce(url, savePath, timeoutSec, pg) {
     systemDir := A_PtrSize == 4 && A_Is64bitOS ? "\Sysnative" : "\System32"
     curl := A_WinDir systemDir "\curl.exe"
-    if (RmtIsAssetUrl(url) || HasMethod(pg, "SetDownloadAlternative") && FileExist(curl))
+    if (FileExist(curl) && (RmtIsAssetUrl(url) || HasMethod(pg, "SetDownloadAlternative")))
         return DownloadWithProgress(curl, url, savePath, timeoutSec, pg)
 
     try {
@@ -1153,7 +1153,8 @@ DirectXStartupCheck() {
 ; 系统字体表（session 级，Worker 等其它进程同样可见），再广播 WM_FONTCHANGE 让
 ; DirectWrite 重建字体集合。不能用 FR_PRIVATE —— DirectWrite 不枚举进程私有字体。
 ;
-; 图标属非必要资源：缺了只是显示成方块，不阻断启动，也不弹框询问。
+; 必须在 XAMLHost.Prewarm 之前完成：WPF 引擎是独立进程，会缓存首次字体解析结果。
+; 缺失时先用缓存/离线副本，再尝试 Patch 下载；失败明确提示离线修复方法。
 ; =============================================================================
 
 IconFontFileName() {
@@ -1164,16 +1165,50 @@ IconFontAssetUrl() {
     return RmtAssetsBaseUrl("Patch") IconFontFileName()
 }
 
-; 系统已装（Win10/11 自带，或用户手工装过）。以字体目录里的文件为准，
-; 和 XAML_Host 的 _HasMdl2() 同一判据。
+; 实际选中字体并检查常用图标，避免仅按文件名误判、漏掉自定义安装及会话字体。
 IconFontInstalled() {
-    return FileExist(A_WinDir "\Fonts\" IconFontFileName()) ? true : false
+    return IconFontFamilyReady("Segoe Fluent Icons") || IconFontFamilyReady("Segoe MDL2 Assets")
+}
+
+IconFontFamilyReady(family) {
+    dc := DllCall("gdi32\CreateCompatibleDC", "Ptr", 0, "Ptr")
+    if (!dc)
+        return false
+    font := 0, old := 0
+    try {
+        font := DllCall("gdi32\CreateFontW", "Int", -16, "Int", 0, "Int", 0, "Int", 0
+            , "Int", 400, "UInt", 0, "UInt", 0, "UInt", 0, "UInt", 1
+            , "UInt", 0, "UInt", 0, "UInt", 0, "UInt", 0, "Str", family, "Ptr")
+        if (!font)
+            return false
+        old := DllCall("gdi32\SelectObject", "Ptr", dc, "Ptr", font, "Ptr")
+        face := Buffer(128, 0)
+        if (!DllCall("gdi32\GetTextFaceW", "Ptr", dc, "Int", 64, "Ptr", face, "Int")
+            || StrGet(face) != family)
+            return false
+        glyphs := Chr(0xE74E) Chr(0xE8BB) Chr(0xE713)
+        indices := Buffer(StrLen(glyphs) * 2, 0)
+        if (DllCall("gdi32\GetGlyphIndicesW", "Ptr", dc, "Str", glyphs, "Int", StrLen(glyphs)
+            , "Ptr", indices, "UInt", 1, "UInt") == 0xFFFFFFFF)
+            return false
+        loop StrLen(glyphs) {
+            if (NumGet(indices, (A_Index - 1) * 2, "UShort") == 0xFFFF)
+                return false
+        }
+        return true
+    } finally {
+        if (old)
+            DllCall("gdi32\SelectObject", "Ptr", dc, "Ptr", old)
+        if (font)
+            DllCall("gdi32\DeleteObject", "Ptr", font)
+        DllCall("gdi32\DeleteDC", "Ptr", dc)
+    }
 }
 
 ; 下载缓存：和插件资源同层，随软件目录一起清理
 IconFontCacheFile() {
-    global ProjectRootDir
-    return ProjectRootDir "\Plugins\Fonts\" IconFontFileName()
+    ; 此时 InitFilePath 尚未运行，不能依赖 ProjectRootDir。
+    return A_ScriptDir "\Plugins\Fonts\" IconFontFileName()
 }
 
 ; 把字体加入本次会话的系统字体表。返回 true 表示注册成功。
@@ -1187,44 +1222,48 @@ IconFontRegister(path) {
     res := 0
     DllCall("SendMessageTimeoutW", "Ptr", 0xFFFF, "UInt", 0x001D, "Ptr", 0, "Ptr", 0
         , "UInt", 0x0002, "UInt", 1000, "Ptr*", &res)
-    return true
+    return IconFontFamilyReady("Segoe MDL2 Assets")
 }
 
-; 建主窗之前调用：只有本地已有缓存时才注册，一次 DllCall，不联网。
-; 首次运行没有缓存，交给 IconFontStartupCheck 在界面就绪后补齐。
-IconFontRegisterCached() {
+; 在独立 WPF 引擎创建前修复，本次启动直接生效，不需要重启。
+IconFontStartupCheck() {
     if (IconFontInstalled())
         return true
     cache := IconFontCacheFile()
-    if (!FileExist(cache))
-        return false
-    return IconFontRegister(cache)
-}
-
-; 界面就绪后异步检查：系统没有、缓存也没有 → 后台下载并注册，装完提示一次。
-; 主窗此时已经建好，WPF 不会回头重新解析 FontFamily，所以提示「重启后生效」。
-IconFontStartupCheck() {
-    if (IconFontInstalled())
-        return
-    cache := IconFontCacheFile()
-    if (!FileExist(cache)) {
+    try {
+        if (IconFontRegister(cache))
+            return true
         SplitPath(cache, , &cacheDir)
-        if (cacheDir != "")
-            try DirCreate(cacheDir)
-        ; Win7 连不上网：离线运行环境包里顺带带了这份字体（Runtime\segmdl2.ttf），有就用
-        if (RuntimeIsWin7()) {
-            src := RuntimeOfflineAsset(IconFontFileName())
-            if (src = "")
-                return
-            try FileCopy(src, cache, true)
-        } else {
-            ; 约 283 KB，超时给 20 秒；DownloadAsync 自带 3 次重试
-            if (RmtDownloadManager.DownloadBlocking(IconFontAssetUrl(), cache, 20, RmtSilentDownloadProgress()) != "ok")
-                return
+        DirCreate(cacheDir)
+        src := RuntimeOfflineAsset(IconFontFileName())
+        if (src != "") {
+            FileCopy(src, cache, true)
+            if (IconFontRegister(cache))
+                return true
         }
+        ; Win7 也尝试在线修复；原生进度窗不依赖 XAML，允许取消。
+        ; 下载到临时文件，验证注册成功后才替换缓存，避免复用半成品。
+        pg := NativeProgress("RMT 图标字体", "正在补齐图标字体…")
+        pg.Show()
+        try {
+            result := RmtDownloadManager.DownloadBlocking(IconFontAssetUrl(), cache ".download", 20, pg)
+        } finally pg.Close()
+        if (result == "ok") {
+            FileMove(cache ".download", cache, true)
+            if (IconFontRegister(cache))
+                return true
+        }
+    } catch {
+        ; 目录不可写、坏字体或下载异常统一给出可操作的离线修复方式。
+    } finally {
+        try FileDelete(cache ".download")
     }
-    if (IconFontRegister(cache))
-        try Toast.Info("图标字体已安装，重启 RMT 后主界面图标生效", 5000)
+    MsgBox("未能补齐 Segoe MDL2 Assets 图标字体，按钮图标可能显示为方框。`n`n"
+        . "请下载以下字体，放入软件目录 Runtime 文件夹后重新运行 RMT：`n"
+        . IconFontAssetUrl() "`n备用下载地址：`n" RmtDownloadDirectUrl(IconFontAssetUrl())
+        . "`n`n目标位置：`n" A_ScriptDir "\Runtime\" IconFontFileName()
+        , "RMT 图标字体", "Icon!")
+    return false
 }
 
 ; 后台资源下载不创建进度窗口。
