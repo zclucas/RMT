@@ -7,6 +7,7 @@
 
 class BGMouseGui {
     _autoRemark := ""
+    _picking := false   ; 是否正在螢幕十字拾取模式
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -175,8 +176,9 @@ class BGMouseGui {
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
-        BindCmdEditorChrome(this.ui, "#指令手册/21-后台鼠标", ObjBindMethod(this, "TriggerMacro"), "!l", "", ObjBindMethod(this, "OnF1"))
-        try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1:确定信息"))
+        BindCmdEditorChrome(this.ui, "#指令手册/21-后台鼠标", ObjBindMethod(this, "TriggerMacro"), "!l", "", ObjBindMethod(this, "OnF1"), ObjBindMethod(this, "OnF2"))
+        try this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：从屏幕选取坐标"))
+        try this.ui.Update("BtnCmdF2", "ToolTip", GetLang("F2：选取窗口"))
         this.ui.OnEvent("MouseTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
         this.ui.OnEvent("OperateTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnRefresh"))
         this.ui.OnEvent("BtnEdit", "Click", ObjBindMethod(this, "OnClickEditBtn"))
@@ -188,6 +190,7 @@ class BGMouseGui {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        try this._EndPick()
         try this.ToggleFunc(false)
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("-Disabled")
@@ -201,6 +204,7 @@ class BGMouseGui {
     }
 
     _CloseWindow() {
+        this._EndPick()
         if (IsObject(this.ui)) {
             try this.ui.Update("Window", "Close", "")
         }
@@ -272,34 +276,104 @@ class BGMouseGui {
             try SetTimer this.RefreshInfoAction, 100
             try Hotkey("!l", (*) => this.TriggerMacro(), "On")
             try Hotkey("F1", (*) => this.OnF1(), "On")
+            try Hotkey("F2", (*) => this.OnF2(), "On")
         }
         else {
+            try this._EndPick()
             try SetTimer this.RefreshInfoAction, 0
             try Hotkey("!l", (*) => this.TriggerMacro(), "Off")
             try Hotkey("F1", (*) => this.OnF1(), "Off")
+            try Hotkey("F2", (*) => this.OnF2(), "Off")
         }
     }
 
+    ; F1：進入螢幕十字拾取模式（點擊選取目標窗口座標）
     OnF1(state := "", ctrl := "", event := "") {
+        if (!IsObject(this.ui) || this._picking)
+            return
+        this._picking := true
+        try {
+            SetSystemCursor("CROSS")
+            Hotkey("*LButton", ObjBindMethod(this, "_OnPickClick"), "On")
+            Hotkey("*RButton", ObjBindMethod(this, "_EndPick"), "On")
+            Hotkey("Escape", ObjBindMethod(this, "_EndPick"), "On")
+            ToolTip(GetLang("请点击选取坐标，右键或 Esc 取消"), , , 20)
+        } catch {
+            this._EndPick()
+        }
+    }
+
+    ; 拾取模式：左鍵點擊選取
+    _OnPickClick(*) {
+        if (!this._picking)
+            return
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&x, &y, &winId)
+        ; 若點擊到 BGMouseGui 本身則取消
+        selfHwnd := this.Hwnd()
+        if (selfHwnd && winId) {
+            rootOfClick := DllCall("GetAncestor", "ptr", winId, "uint", 2, "ptr")
+            if (rootOfClick == selfHwnd) {
+                this._EndPick()
+                return
+            }
+        }
+        this._EndPick()
         if (!IsObject(this.ui))
             return
-        CoordMode("Mouse", "Window")
+        ; 若窗口綁定為空，自動填入目標窗口信息
+        if (this.ui.Query("TargetTitleCon") == "") {
+            try {
+                title := WinGetTitle("ahk_id " winId)
+                className := WinGetClass("ahk_id " winId)
+                try {
+                    WinPID := WinGetPID("ahk_id " winId)
+                    process := ProcessGetName(WinPID)
+                } catch {
+                    process := ""
+                }
+                this.ui.Update("TargetTitleCon", "Text", title "⎖" className "⎖" process)
+            }
+        }
+        ; 換算頂層窗口客戶區座標
+        PosArr := GetWinPos(x, y, winId)
+        this.ui.BatchUpdate([
+            {ControlName: "PosVarX", PropertyName: "Text", Value: String(PosArr[1])},
+            {ControlName: "PosVarY", PropertyName: "Text", Value: String(PosArr[2])}
+        ])
+    }
+
+    ; 結束拾取模式（取消/完成後均調用）
+    _EndPick(*) {
+        if (!this._picking)
+            return
+        this._picking := false
+        try Hotkey("*LButton", "Off")
+        try Hotkey("*RButton", "Off")
+        try Hotkey("Escape", "Off")
+        try SetSystemCursor()
+        ToolTip(, , , 20)
+    }
+
+    ; F2：單純選擇窗口（抓取當前游標所在窗口信息填入窗口綁定）
+    OnF2(state := "", ctrl := "", event := "") {
+        if (!IsObject(this.ui))
+            return
+        CoordMode("Mouse", "Screen")
         MouseGetPos &mouseX, &mouseY, &winId
+        if (!winId)
+            return
         try {
-            title := WinGetTitle(winId)
-            className := WinGetClass(winId)
+            title := WinGetTitle("ahk_id " winId)
+            className := WinGetClass("ahk_id " winId)
             try {
                 WinPID := WinGetPID("ahk_id " winId)
                 process := ProcessGetName(WinPID)
-            }
-            catch {
+            } catch {
                 process := ""
             }
             this.ui.Update("TargetTitleCon", "Text", title "⎖" className "⎖" process)
         }
-        PosArr := GetCurWinPos()
-        this.ui.Update("PosVarX", "Text", PosArr[1])
-        this.ui.Update("PosVarY", "Text", PosArr[2])
     }
 
     RefreshInfo() {
