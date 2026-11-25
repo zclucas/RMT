@@ -382,6 +382,8 @@ warn 气泡：=Warn Bubble:
 选择主题=Auswählen Thema
 自定义=Benutzerdefiniert
 默认=Ausfall
+小=Klein
+大=Groß
 暗夜=Dunkle Nacht
 海洋=Ozean
 暖阳=Warme Sonne
@@ -2610,7 +2612,8 @@ Bug 和需求文档可直接查看，编辑需加群。=Bug- und Funktionswunsch
 说明=Anmerkungen
 待确认的原有功能=Zur Prüfung
 软件界面使用的字体，修改后保存设置生效。=Die Schriftart, die für die Software-Schnittstelle verwendet wird, wobei die Änderungen die Einstellungen effektiv speichern.
-字号 15~20，默认 15。=Schriftgröße 15–20. Standard 15.
+界面缩放=UI-Skalierung
+控件、字号与间距整体缩放，默认 100%，窗口自动适配屏幕。=Bedienelemente, Schrift und Abstände gemeinsam skalieren. Standard: 100 %. Fenster passen sich automatisch an den Bildschirm an.
 打开指令编辑等子窗口时禁用主窗口=Deaktivieren des Hauptfensters beim Öffnen des Befehls bearbeiten
 通用=Allgemein
 截图工具=Screenshot
@@ -3211,3 +3214,37 @@ AI 返回内容为空=Die KI-Antwort ist leer
 德语=Deutsch
 西班牙语=Spanisch
 检测控件=Steuerelement erkennen
+
+界面引擎编译错误=Kompilierungsfehler der Oberfläche
+界面引擎异常=Fehler der Oberfläche
+界面引擎发生异常，详细信息如下：=In der Oberfläche ist ein Fehler aufgetreten. Details:
+渲染 AHK 第 {1} 行时引擎发生异常。=Fehler beim Rendern der AHK-Zeile {1}.
+界面引擎编译失败。=Die Oberfläche konnte nicht kompiliert werden.
+错误原因：=Fehlerursache:
+代码片段：=Codeausschnitt:
+生成的 XAML 片段：=Generierter XAML-Ausschnitt:
+完整异常堆栈：=Vollständiger Ausnahmestapel:
+详细信息：=Details:
+导出到文件=In Datei exportieren
+跳过属性=Eigenschaft überspringen
+跳过控件=Element überspringen
+复制失败，请重试=Kopieren fehlgeschlagen
+保存错误日志=Fehlerprotokoll speichern
+错误日志已保存。=Das Fehlerprotokoll wurde gespeichert.
+保存错误日志失败：=Fehlerprotokoll konnte nicht gespeichert werden:
+导出失败=Export fehlgeschlagen
+
+修改控件值=Steuerelementwert ändern
+
+文本或 {变量}，可用文本构造。=Text oder {Variable}; Texteditor verfügbar.
+0/1 或 {变量}。=0/1 oder {Variable}.
+1～n 或 {变量}。=1–n oder {Variable}.
+0～1 或 {变量}。=0–1 oder {Variable}.
+未找到目标，执行时检查。=Ziel nicht gefunden; Prüfung bei Ausführung.
+折叠时展开，展开时折叠。=Je nach Zustand auf- oder zuklappen.
+
+无限重试不可能超时，值为0=Unbegrenzte Wiederholungen: kein Zeitlimit erreicht, Wert 0.
+
+等待类型：=Wartetyp:
+等待出现=Auf Erscheinen warten
+等待消失=Auf Verschwinden warten

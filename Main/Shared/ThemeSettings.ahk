@@ -1,5 +1,90 @@
-global RMT_ThemeFontSizeMin := 15
-global RMT_ThemeFontSizeMax := 20
+; 百分比档位仅改变界面整体缩放，设计字号保持不变。
+global RMT_UiScalePresets := [80, 90, 100, 110, 125, 150]
+
+NormalizeUiScale(value) {
+    if (!IsNumber(value))
+        return 100
+    value := Number(value)
+    if (value <= RMT_UiScalePresets[1])
+        return RMT_UiScalePresets[1]
+    if (value >= RMT_UiScalePresets[-1])
+        return RMT_UiScalePresets[-1]
+    nearest := 100
+    for percent in RMT_UiScalePresets {
+        if (Abs(percent - value) < Abs(nearest - value))
+            nearest := percent
+    }
+    return nearest
+}
+
+UiScaleIndex(value) {
+    value := NormalizeUiScale(value)
+    for i, percent in RMT_UiScalePresets {
+        if (percent == value)
+            return i
+    }
+    return 3
+}
+
+UiScaleLabels() {
+    labels := []
+    for percent in RMT_UiScalePresets
+        labels.Push(percent "%")
+    return labels
+}
+
+; 刻度滑块：一条横线 + 六档短线刻度 + 选中档圆形滑块，下方标「小 / 默认 / 大」。
+; 用 RadioButton 承载刻度：点击即切档，且程序同步 IsChecked 不会触发 Click，
+; 避免异步回传把旧档位再写回控件。
+UiScaleSelectorXaml(name, value, width := 300, groupId := "") {
+    percent := NormalizeUiScale(value)
+    ; WPF 的 GroupName 按线程全局注册，同名组会在多个窗口实例间互相取消选中；
+    ; 主题窗口可能有多个实例，因此用唯一组名隔离。
+    group := (groupId == "") ? name : name "_" groupId
+    cell := Round(width / RMT_UiScalePresets.Length, 1)
+    half := Round(cell / 2, 1)
+    labels := Map(1, GetLang("小"), 3, GetLang("默认"), RMT_UiScalePresets.Length, GetLang("大"))
+    xaml := '<StackPanel xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Orientation="Horizontal">'
+        . '<Grid Name="' name '" Width="' width '" VerticalAlignment="Center">'
+        . '<Grid.Resources><Style x:Key="RmtUiScaleTick" TargetType="RadioButton">'
+        . '<Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>'
+        . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">'
+        . '<Border x:Name="Hit" Background="Transparent">'
+        . '<Grid Height="18">'
+        . '<Border x:Name="Tick" Width="1" Height="5" Background="{DynamicResource ControlBorder}" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
+        . '<Border x:Name="Thumb" Width="9" Height="15" CornerRadius="4.5" Background="{DynamicResource TextMain}" BorderBrush="{DynamicResource BgColor}" BorderThickness="1.5" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
+        . '</Grid></Border>'
+        . '<ControlTemplate.Triggers>'
+        . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tick" Property="Background" Value="{DynamicResource Accent}"/></Trigger>'
+        . '<Trigger Property="IsChecked" Value="True"><Setter TargetName="Thumb" Property="Visibility" Value="Visible"/><Setter TargetName="Tick" Property="Background" Value="{DynamicResource Accent}"/><Setter TargetName="Tick" Property="Height" Value="7"/></Trigger>'
+        . '<Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tick" Property="Background" Value="{DynamicResource Accent}"/></Trigger>'
+        . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></Grid.Resources>'
+        . '<Grid.ColumnDefinitions>'
+    loop RMT_UiScalePresets.Length
+        xaml .= '<ColumnDefinition Width="*"/>'
+    xaml .= '</Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="18"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>'
+        . '<Border Grid.Row="0" Grid.ColumnSpan="' RMT_UiScalePresets.Length '" Height="1" Margin="' half ',0,' half ',0" VerticalAlignment="Center" Background="{DynamicResource ControlBorder}"/>'
+    for i, preset in RMT_UiScalePresets {
+        xaml .= '<RadioButton Grid.Row="0" Grid.Column="' (i - 1) '" Name="' name '_' preset '" GroupName="' group
+            . '" Style="{StaticResource RmtUiScaleTick}" IsChecked="' (preset == percent ? "True" : "False")
+            . '" AutomationProperties.Name="' preset '%" ToolTip="' preset '%"/>'
+        if labels.Has(i)
+            xaml .= '<TextBlock Grid.Row="1" Grid.Column="' (i - 1) '" Text="' labels[i] '" FontSize="11" HorizontalAlignment="Center" Margin="0,3,0,0" Foreground="{DynamicResource TextSub}"/>'
+    }
+    xaml .= '</Grid><TextBlock Name="' name 'Val" Text="' percent '%" MinWidth="42" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextMain}"/></StackPanel>'
+    return xaml
+}
+
+SyncUiScaleSelector(ui, name, value) {
+    percent := NormalizeUiScale(value)
+    ui.Update(name '_' percent, "IsChecked", "True")
+    ui.Update(name "Val", "Text", percent "%")
+}
+
+; 旧字号只参与一次迁移；新配置存在时绝不重复换算。
+UiScaleFromLegacyFontSize(value) {
+    return NormalizeUiScale(IsNumber(value) ? Max(15, Min(20, Number(value))) / 15 * 100 : 100)
+}
 
 ; 主题资源文件（XAML Resource_* / Window_DWM / 字体）路径
 GetThemesPath() {
@@ -8,21 +93,16 @@ GetThemesPath() {
     return A_WorkingDir "\Setting\themes.toml"
 }
 
-; persist=true 时写入 MainSettings（权威）并同步 themes.toml
-ApplyUserFontSize(fs, persist := true) {
-    global XAML_FontSizeDelta, XAML_FontSizeBase, XAML_FontSizeDefault
-    baseFs := IsSet(XAML_FontSizeBase) ? XAML_FontSizeBase : 15
-    defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
-    if (!IsNumber(fs))
-        fs := defFs
-    fs := Max(RMT_ThemeFontSizeMin, Min(RMT_ThemeFontSizeMax, Round(Number(fs))))
-    MainSoftData.FontSize := fs
-    XAML_FontSizeDelta := fs - baseFs
-    if (persist) {
-        try CfgWrite(fs, SettingFile, SettingSection, "FontSize")
-        try CfgWrite(fs, GetThemesPath(), MainSoftData.Theme, "FontSize")
-    }
-    return fs
+; 设置页暂存、主题窗口确定后落盘；字体与控件共用一个缩放因子。
+ApplyUserUiScale(value, persist := true) {
+    global XAML_FontSizeDelta, XAML_FontSizeBase
+    percent := NormalizeUiScale(value)
+    MainSoftData.UiScale := percent
+    MainSoftData.FontSize := IsSet(XAML_FontSizeBase) ? XAML_FontSizeBase : 15
+    XAML_FontSizeDelta := 0
+    if (persist)
+        CfgWrite(percent, SettingFile, SettingSection, "UiScale")
+    return percent
 }
 
 EnsureXAMLThemesToml() {

@@ -627,6 +627,9 @@ public partial class AhkWpfEngine
                 else if (content != null) val = content.ToString();
                 else val = "";
             }
+            // SelectionChanged fires before ComboBox.Text catches up for string items.
+            // Read the selected item directly; preserve editable/custom item display semantics.
+            else if (cb.SelectedItem is string) val = (string)cb.SelectedItem;
             else val = cb.Text;
         }
         else if (c is TreeView)

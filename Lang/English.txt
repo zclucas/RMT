@@ -1072,6 +1072,8 @@ Interception 安装失败，可手动运行 Plugins/AhiDriver/installer/安装�
 颜色=Color
 首字母大写=Capitalize First
 默认=Default
+小=Small
+大=Large
 鼠标=Mouse
 鼠标信息：=Mouse Info:
 鼠标动作：=Action:
@@ -2131,7 +2133,8 @@ RMT 警告=RMT Warning
 在屏幕上显示宏运行状态=Show macro status on screen
 在软件内直接提交=Submit from the App
 大模型=Language Model
-字号 15~20，默认 15。=Font size 15–20. Default 15.
+界面缩放=UI Scale
+控件、字号与间距整体缩放，默认 100%，窗口自动适配屏幕。=Scale controls, text and spacing together. Default: 100%. Windows automatically fit the screen.
 守护与共创=Support and Contributions
 完成赞助后，可通过 RMT 论坛或 RMT QQ 交流群私信联系，领取论坛和 QQ 交流群的“守护者”称号。=After donating, message us privately on the RMT forum or QQ group to claim the Supporter title on both platforms.
 宏手柄类型=Macro Gamepad
@@ -3226,3 +3229,37 @@ AI 返回内容为空=The AI response is empty
 德语=German
 西班牙语=Spanish
 检测控件=Detect Control
+
+界面引擎编译错误=UI Engine Compile Error
+界面引擎异常=UI Engine Error
+界面引擎发生异常，详细信息如下：=The UI engine encountered an error. Details below:
+渲染 AHK 第 {1} 行时引擎发生异常。=The engine failed while rendering AHK line {1}.
+界面引擎编译失败。=The UI engine failed to compile.
+错误原因：=Root cause:
+代码片段：=Code snippet:
+生成的 XAML 片段：=Generated XAML snippet:
+完整异常堆栈：=Full exception trace:
+详细信息：=Details:
+导出到文件=Export to File
+跳过属性=Skip Property
+跳过控件=Skip Element
+复制失败，请重试=Copy failed; retry
+保存错误日志=Save Error Log
+错误日志已保存。=The error log has been saved.
+保存错误日志失败：=Failed to save the error log:
+导出失败=Export Failed
+
+修改控件值=Modify control value
+
+文本或 {变量}，可用文本构造。=Text or {variable}; text builder available.
+0/1 或 {变量}。=0/1 or {variable}.
+1～n 或 {变量}。=1–n or {variable}.
+0～1 或 {变量}。=0–1 or {variable}.
+未找到目标，执行时检查。=Target not found; checked at runtime.
+折叠时展开，展开时折叠。=Expand if collapsed; collapse if expanded.
+
+无限重试不可能超时，值为0=Unlimited retries cannot time out; the value is 0.
+
+等待类型：=Wait type:
+等待出现=Wait for appearance
+等待消失=Wait for disappearance

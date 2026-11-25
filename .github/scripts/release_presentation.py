@@ -6,7 +6,7 @@ import sync_gitcode_assets as mirror
 from resource_policy import mutable_tag
 
 
-def release_notes(tag, names):
+def release_notes(tag):
     if tag == 'Common':
         intro = ('通用资源：键鼠输入、虚拟手柄、图像处理、OCR、语音识别等扩展组件，'
                  '以及提示音、语音与翻译模型、赞助 Logo。')
@@ -24,10 +24,7 @@ def release_notes(tag, names):
             intro = 'RMT {} {} 历史版本资源，包含该版本使用的组件、语言、图标与提示音。'.format(version, arch)
         usage = '此标签中的同名文件优先使用；A-Assets.json 列出本版本所需资源及其位置。'
     lines = [intro, '', usage, '',
-             '资源内容调整时，会将旧文件保留到需要它的版本标签，保障旧版本继续下载。', '',
-             '资源清单：A-Assets.json，包含文件用途、大小、SHA-256 和压缩包内文件列表。', '',
-             '附件：']
-    lines.extend('- `' + name + '`' for name in sorted(names, key=str.casefold))
+             '资源内容调整时，会将旧文件保留到需要它的版本标签，保障旧版本继续下载。']
     return '\n'.join(lines) + '\n'
 
 
@@ -112,7 +109,7 @@ def organize_releases(store):
 def refresh_descriptions(store, tags=None):
     for tag in tags or [r['tag_name'] for r in store.releases()]:
         source = store.source(tag)
-        body = release_notes(tag, [a['name'] for a in store.assets(tag)])
+        body = release_notes(tag)
         if source.get('name') != tag or source.get('body') != body:
             mirror.gh('/releases/' + str(source['id']),
                       data=dict(name=tag, body=body, make_latest='false'), method='PATCH')

@@ -382,6 +382,8 @@ warn 气泡：=Warn Bubble:
 选择主题=Seleccionar el tema
 自定义=Personalizado
 默认=Default
+小=Pequeño
+大=Grande
 暗夜=Noche oscura
 海洋=Océano
 暖阳=Warm Sun
@@ -2610,7 +2612,8 @@ Bug 和需求文档可直接查看，编辑需加群。=Cualquiera puede ver amb
 说明=Anotaciones
 待确认的原有功能=Por revisar
 软件界面使用的字体，修改后保存设置生效。=La fuente utilizada para la interfaz de software, con la configuración de ahorro de cambio efectiva.
-字号 15~20，默认 15。=Tamaño de letra 15–20. Predeterminado 15.
+界面缩放=Escala de la interfaz
+控件、字号与间距整体缩放，默认 100%，窗口自动适配屏幕。=Escala los controles, el texto y los espacios en conjunto. Valor predeterminado: 100 %. Las ventanas se ajustan automáticamente a la pantalla.
 打开指令编辑等子窗口时禁用主窗口=Desactivar la ventana principal cuando se abre el comando editar
 通用=General
 截图工具=Captura
@@ -3211,3 +3214,37 @@ AI 返回内容为空=La respuesta de IA está vacía
 德语=Alemán
 西班牙语=Español
 检测控件=Detectar control
+
+界面引擎编译错误=Error de compilación de la interfaz
+界面引擎异常=Error de la interfaz
+界面引擎发生异常，详细信息如下：=Se produjo un error en la interfaz. Detalles:
+渲染 AHK 第 {1} 行时引擎发生异常。=Error al representar la línea AHK {1}.
+界面引擎编译失败。=No se pudo compilar la interfaz.
+错误原因：=Causa del error:
+代码片段：=Fragmento de código:
+生成的 XAML 片段：=Fragmento XAML generado:
+完整异常堆栈：=Traza completa de la excepción:
+详细信息：=Detalles:
+导出到文件=Exportar a archivo
+跳过属性=Omitir propiedad
+跳过控件=Omitir elemento
+复制失败，请重试=Error al copiar; reintentar
+保存错误日志=Guardar registro de errores
+错误日志已保存。=Se ha guardado el registro de errores.
+保存错误日志失败：=No se pudo guardar el registro de errores:
+导出失败=Error de exportación
+
+修改控件值=Modificar valor del control
+
+文本或 {变量}，可用文本构造。=Texto o {variable}; constructor disponible.
+0/1 或 {变量}。=0/1 o {variable}.
+1～n 或 {变量}。=1–n o {variable}.
+0～1 或 {变量}。=0–1 o {variable}.
+未找到目标，执行时检查。=Destino no encontrado; se comprobará al ejecutar.
+折叠时展开，展开时折叠。=Expandir si está contraído; contraer si está expandido.
+
+无限重试不可能超时，值为0=Los reintentos ilimitados no agotan el tiempo; el valor es 0.
+
+等待类型：=Tipo de espera:
+等待出现=Esperar a que aparezca
+等待消失=Esperar a que desaparezca

@@ -231,7 +231,7 @@ public partial class AhkWpfEngine
                         }
                         else if (text.StartsWith("CREATE_WINDOW|"))
                         {
-                            string[] p = text.Split(new[] { '|' }, 7);
+                            string[] p = text.Split(new[] { '|' }, 9);
                             if (p.Length >= 7)
                             {
                                 string wId = p[1];
@@ -240,13 +240,19 @@ public partial class AhkWpfEngine
                                 string oHwnd = p[4];
                                 string xPath = p[5];
                                 string ePath = p[6];
+                                double parsedScale;
+                                bool parsedSkip;
+                                double? initialScale = p.Length > 7 && double.TryParse(p[7], System.Globalization.NumberStyles.Float,
+                                    System.Globalization.CultureInfo.InvariantCulture, out parsedScale) && IsUiScalePreset(parsedScale)
+                                    ? (double?)parsedScale : null;
+                                bool? skipScale = p.Length > 8 && bool.TryParse(p[8], out parsedSkip) ? (bool?)parsedSkip : null;
 
                                 System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
                                 {
                                     try
                                     {
                                         AhkWpfEngine eng = new AhkWpfEngine();
-                                        eng.RunEngine(wId, ahkHwnd.ToString(), tCsv, sName, xPath, ePath, oHwnd, true);
+                                        eng.RunEngine(wId, ahkHwnd.ToString(), tCsv, sName, xPath, ePath, oHwnd, true, initialScale, skipScale);
                                     }
                                     catch (Exception ex)
                                     {
@@ -500,33 +506,8 @@ public partial class AhkWpfEngine
             xamlContent = null;
             xamlBytes = null;
 
-            // 窗口缩放支持（对所有窗口统一生效，无需改各 GUI 的 XAML）：
-            // 把根内容包进 Viewbox（等比缩放）。根内容尺寸固定为窗口设计尺寸（win.Width/Height），
-            // 窗口默认大小时 1:1 无变化；用户拉大/缩小时内容等比缩放。
-            try
-            {
-                var rootContent = win.Content as FrameworkElement;
-                bool fluidDialogLayout = win.Resources["RmtFluidDialogLayout"] is bool && (bool)win.Resources["RmtFluidDialogLayout"];
-                if (!fluidDialogLayout && rootContent != null && !(rootContent is System.Windows.Controls.Viewbox)
-                    && !double.IsNaN(win.Width))
-                {
-                    if (double.IsNaN(rootContent.Width))
-                        rootContent.Width = win.Width;
-                    // SizeToContent=Height 时窗口高度为 NaN，只钉宽度，Viewbox 按宽把字号拉到与其它弹窗一致
-                    if (!double.IsNaN(win.Height) && double.IsNaN(rootContent.Height))
-                        rootContent.Height = win.Height;
-                    var oldContent = win.Content;
-                    win.Content = null;   // 先从窗口摘除，避免逻辑树父冲突
-                    var vb = new System.Windows.Controls.Viewbox
-                    {
-                        Stretch = System.Windows.Media.Stretch.Uniform,
-                        StretchDirection = System.Windows.Controls.StretchDirection.Both,
-                        Child = (UIElement)oldContent
-                    };
-                    win.Content = vb;
-                }
-            }
-            catch { }
+            // Viewbox construction and resource scaling are shared with the file/BAML path
+            // in PrepareWindowUiScale, after owner assignment and before the first Show.
         }
         catch (XamlParseException ex)
         {
@@ -674,7 +655,7 @@ public partial class AhkWpfEngine
         ShowEngineWindow(win, isDaemon, startHidden);
     }
 
-    public void RunEngine(string id, string hwndStr, string trackedCsv, string scriptName, string xamlFilePath, string eventsFilePath, string ownerHwndStr = "0", bool isDaemon = false)
+    public void RunEngine(string id, string hwndStr, string trackedCsv, string scriptName, string xamlFilePath, string eventsFilePath, string ownerHwndStr = "0", bool isDaemon = false, double? initialUiScale = null, bool? skipUiScale = null)
     {
         if (EnableLogging)
         {
@@ -1290,6 +1271,8 @@ public partial class AhkWpfEngine
 #if ENABLE_WEBVIEW
         ConfigureWebView2CreationProperties(win);
 #endif
+        if (initialUiScale.HasValue && IsUiScalePreset(initialUiScale.Value)) win.Resources["RmtUiScale"] = initialUiScale.Value;
+        if (skipUiScale.HasValue) win.Resources["RmtSkipUiScale"] = skipUiScale.Value;
         ShowEngineWindow(win, isDaemon);
     }
 
@@ -1333,6 +1316,343 @@ public partial class AhkWpfEngine
         catch { }
     }
 
+    // Keep the unconstrained normal size separate from the last applied (possibly clamped)
+    // size. Multiplying the latter on each preset change permanently shrinks large dialogs.
+    bool _uiScalePrepared, _uiScaleReady, _uiScaleBusy, _uiScaleFluid;
+    double _uiScaleFactor = 1, _uiScaleVisual = 1;
+    double _uiScaleBaseWidth, _uiScaleBaseHeight, _uiScaleLastWidth, _uiScaleLastHeight;
+    double _uiScaleMinWidth, _uiScaleMinHeight, _uiScaleMaxWidth, _uiScaleMaxHeight;
+    Transform _uiScaleOriginalTransform;
+
+    private static bool IsUiScalePreset(double value)
+    {
+        return value == 0.8 || value == 0.9 || value == 1 || value == 1.1 || value == 1.25 || value == 1.5;
+    }
+
+    private bool SkipUiScale()
+    {
+        return win == null || win.AllowsTransparency
+            || (win.Resources["RmtSkipUiScale"] is bool && (bool)win.Resources["RmtSkipUiScale"]);
+    }
+
+    private void PrepareWindowUiScale()
+    {
+        if (_uiScalePrepared || win == null) return;
+        _uiScalePrepared = true;
+        EnsureUiScalePopupHooks();
+        bool skip = SkipUiScale();
+        var root = win.Content as FrameworkElement;
+        if (root == null) return;
+        _uiScaleFluid = win.Resources["RmtFluidDialogLayout"] is bool && (bool)win.Resources["RmtFluidDialogLayout"];
+        if (!_uiScaleFluid && !(root is Viewbox) && (!skip || !double.IsNaN(win.Width)))
+        {
+            if (double.IsNaN(root.Width) && win.Width > 0) root.Width = win.Width;
+            if (double.IsNaN(root.Height) && win.Height > 0) root.Height = win.Height;
+            win.Content = null;
+            win.Content = new Viewbox { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.Both, Child = root };
+        }
+        // Opting out skips only user presets, not the pre-existing resize Viewbox.
+        if (skip) return;
+        _uiScaleReady = true;
+        _uiScaleOriginalTransform = root.LayoutTransform;
+        _uiScaleMinWidth = win.MinWidth;
+        _uiScaleMinHeight = win.MinHeight;
+        _uiScaleMaxWidth = win.MaxWidth;
+        _uiScaleMaxHeight = win.MaxHeight;
+        _uiScaleBaseWidth = win.Width;
+        _uiScaleBaseHeight = win.Height;
+        double initial = win.Resources["RmtUiScale"] is double ? (double)win.Resources["RmtUiScale"] : 1;
+        if (!IsUiScalePreset(initial)) initial = 1;
+        ApplyUiScale(initial, true);
+        // Loaded runs before the first frame is revealed. It also resolves SizeToContent,
+        // native chrome insets, centered placement and the window's actual monitor/DPI.
+        win.Loaded += (s, e) => { ApplyUiScale(_uiScaleFactor, true); };
+        WindowState lastState = win.WindowState;
+        win.StateChanged += (s, e) =>
+        {
+            WindowState previousState = lastState;
+            lastState = win.WindowState;
+            if (_uiScaleBusy || SkipUiScale()) return;
+            // A user may resize and immediately maximize without any query or preset command.
+            // At StateChanged ActualWidth is already maximized, but RestoreBounds is still normal.
+            if (previousState == WindowState.Normal && win.IsLoaded && win.WindowState != WindowState.Normal)
+            {
+                Rect restore = win.RestoreBounds;
+                if (restore.Width > 1 && Math.Abs(restore.Width - _uiScaleLastWidth) > 2)
+                    _uiScaleBaseWidth = restore.Width / _uiScaleFactor;
+                if (restore.Height > 1 && Math.Abs(restore.Height - _uiScaleLastHeight) > 2)
+                    _uiScaleBaseHeight = restore.Height / _uiScaleFactor;
+            }
+            win.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (win.WindowState != WindowState.Minimized) ApplyUiScale(_uiScaleFactor, true);
+            }));
+        };
+    }
+
+    [DllImport("user32.dll", EntryPoint = "MonitorFromRect")]
+    private static extern IntPtr UiScaleMonitorFromRect(ref RECT rect, int flags);
+    [DllImport("user32.dll", EntryPoint = "GetDpiForWindow")]
+    private static extern uint UiScaleGetDpiForWindow(IntPtr hwnd);
+
+    private Rect UiScaleWorkArea()
+    {
+        var helper = new WindowInteropHelper(win);
+        IntPtr hwnd = helper.Handle;
+        if (hwnd == IntPtr.Zero) hwnd = helper.Owner;
+        IntPtr monitor = MonitorFromWindow(hwnd, 2);
+        double dpiX = 1, dpiY = 1;
+        var source = PresentationSource.FromVisual(win);
+        if (source != null && source.CompositionTarget != null)
+        {
+            dpiX = source.CompositionTarget.TransformToDevice.M11;
+            dpiY = source.CompositionTarget.TransformToDevice.M22;
+        }
+        else if (hwnd != IntPtr.Zero)
+        {
+            try { uint dpi = UiScaleGetDpiForWindow(hwnd); if (dpi > 0) dpiX = dpiY = dpi / 96.0; } catch { }
+        }
+        if (helper.Handle == IntPtr.Zero && helper.Owner == IntPtr.Zero && !double.IsNaN(win.Left) && !double.IsNaN(win.Top))
+        {
+            RECT rect = new RECT();
+            rect.left = (int)(win.Left * dpiX); rect.top = (int)(win.Top * dpiY);
+            rect.right = rect.left + (int)(Math.Max(1, double.IsNaN(win.Width) ? 1 : win.Width) * dpiX);
+            rect.bottom = rect.top + (int)(Math.Max(1, double.IsNaN(win.Height) ? 1 : win.Height) * dpiY);
+            monitor = UiScaleMonitorFromRect(ref rect, 2);
+        }
+        MONITORINFO info = new MONITORINFO();
+        info.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+        if (monitor != IntPtr.Zero && GetMonitorInfo(monitor, ref info))
+            return new Rect(info.rcWork.left / dpiX, info.rcWork.top / dpiY,
+                (info.rcWork.right - info.rcWork.left) / dpiX, (info.rcWork.bottom - info.rcWork.top) / dpiY);
+        return SystemParameters.WorkArea;
+    }
+
+    private void RetargetUiScaleContent(double visualScale)
+    {
+        var box = win.Content as Viewbox;
+        var child = box == null ? null : box.Child as FrameworkElement;
+        if (child == null) return;
+        double chromeW, chromeH;
+        RmtCommonStyles.GetWindowChromeInset(win, out chromeW, out chromeH);
+        // Width/Height are restore bounds while maximized, not the displayed viewport.
+        double width = win.WindowState == WindowState.Maximized && box.ActualWidth > 1
+            ? box.ActualWidth : win.Width - chromeW;
+        double height = win.WindowState == WindowState.Maximized && box.ActualHeight > 1
+            ? box.ActualHeight : win.Height - chromeH;
+        if (!(width > 1)) width = box.ActualWidth;
+        if (!(height > 1)) height = box.ActualHeight;
+        Thickness margin = child.Margin;
+        if (width > 1) child.Width = Math.Max(1, width / visualScale - margin.Left - margin.Right);
+        bool autoHeight = win.SizeToContent == SizeToContent.Height || win.SizeToContent == SizeToContent.WidthAndHeight;
+        if (height > 1 && (!autoHeight || win.WindowState == WindowState.Maximized))
+            child.Height = Math.Max(1, height / visualScale - margin.Top - margin.Bottom);
+        else if (autoHeight) child.Height = double.NaN;
+        box.HorizontalAlignment = HorizontalAlignment.Stretch;
+        box.VerticalAlignment = VerticalAlignment.Stretch;
+        win.UpdateLayout();
+    }
+
+    private void ApplyUiScale(double factor, bool refresh = false)
+    {
+        if (!IsUiScalePreset(factor) || SkipUiScale() || _uiScaleBusy) return;
+        if (!_uiScalePrepared) PrepareWindowUiScale();
+        if (!_uiScaleReady || (!refresh && factor == _uiScaleFactor)) return;
+        if (!refresh) CaptureUiScaleNormalSize();
+        _uiScaleBusy = true;
+        try
+        {
+            if (!refresh) CloseUiScaleNativePopups();
+            win.UpdateLayout();
+            bool normal = win.WindowState == WindowState.Normal;
+            if (!refresh && !_uiScaleFluid && win.IsLoaded)
+            {
+                double actualScale = GetUiVisualScale();
+                if (actualScale > 0) _uiScaleVisual = actualScale;
+            }
+            if (_uiScaleLastWidth == 0 && !_uiScaleFluid)
+            {
+                double initialScale = RmtCommonStyles.WindowContentVisualScale(win);
+                if (initialScale > 0) _uiScaleVisual = initialScale;
+            }
+            _uiScaleVisual *= factor / _uiScaleFactor;
+            _uiScaleFactor = factor;
+            win.Resources["RmtUiScale"] = factor;
+            Rect area = UiScaleWorkArea();
+            // Scale constraints too: otherwise a design MinWidth can defeat 80%, or exceed
+            // the current monitor. Work-area limits must win over the original minimum.
+            win.MinWidth = Math.Min(_uiScaleMinWidth * factor, area.Width);
+            win.MinHeight = Math.Min(_uiScaleMinHeight * factor, area.Height);
+            win.MaxWidth = Math.Max(win.MinWidth, Math.Min(_uiScaleMaxWidth * factor, area.Width));
+            win.MaxHeight = Math.Max(win.MinHeight, Math.Min(_uiScaleMaxHeight * factor, area.Height));
+            double width = Math.Max(win.MinWidth, Math.Min(win.MaxWidth, _uiScaleBaseWidth * factor));
+            double height = Math.Max(win.MinHeight, Math.Min(win.MaxHeight, _uiScaleBaseHeight * factor));
+            // Setting Width/Height while maximized updates restore bounds without changing state.
+            if (width > 0) win.Width = width;
+            if (height > 0 && win.SizeToContent != SizeToContent.Height && win.SizeToContent != SizeToContent.WidthAndHeight)
+                win.Height = height;
+            if (_uiScaleFluid)
+            {
+                var root = win.Content as FrameworkElement;
+                if (root != null)
+                {
+                    var transform = new TransformGroup();
+                    if (_uiScaleOriginalTransform != null) transform.Children.Add(_uiScaleOriginalTransform);
+                    transform.Children.Add(new ScaleTransform(factor, factor));
+                    root.LayoutTransform = transform;
+                }
+            }
+            else RetargetUiScaleContent(_uiScaleVisual);
+            win.UpdateLayout();
+            if (normal)
+            {
+                double shownW = win.IsLoaded ? win.ActualWidth : width;
+                double shownH = win.IsLoaded ? win.ActualHeight : height;
+                if (!double.IsNaN(win.Left) && shownW > 0) win.Left = Math.Max(area.Left, Math.Min(win.Left, area.Right - shownW));
+                if (!double.IsNaN(win.Top) && shownH > 0) win.Top = Math.Max(area.Top, Math.Min(win.Top, area.Bottom - shownH));
+                _uiScaleLastWidth = shownW;
+                _uiScaleLastHeight = shownH;
+                if (!(_uiScaleBaseWidth > 0) && shownW > 0) _uiScaleBaseWidth = shownW / factor;
+                if (!(_uiScaleBaseHeight > 0) && shownH > 0) _uiScaleBaseHeight = shownH / factor;
+            }
+            SyncChromeCaption();
+            RefreshUiScalePopups();
+        }
+        finally { _uiScaleBusy = false; }
+    }
+
+    private void CaptureUiScaleNormalSize()
+    {
+        if (!_uiScaleReady || _uiScaleBusy || win == null || !win.IsLoaded || win.WindowState != WindowState.Normal) return;
+        win.UpdateLayout();
+        // Only a genuine resize since our last application replaces the unclipped baseline.
+        if (win.ActualWidth > 1 && Math.Abs(win.ActualWidth - _uiScaleLastWidth) > 2)
+            _uiScaleBaseWidth = win.ActualWidth / _uiScaleFactor;
+        if (win.ActualHeight > 1 && Math.Abs(win.ActualHeight - _uiScaleLastHeight) > 2)
+            _uiScaleBaseHeight = win.ActualHeight / _uiScaleFactor;
+    }
+
+    private double GetUiBaseDimension(bool width)
+    {
+        CaptureUiScaleNormalSize();
+        double baseline = width ? _uiScaleBaseWidth : _uiScaleBaseHeight;
+        if (_uiScaleReady && baseline > 0) return baseline;
+        if (win == null) return 0;
+        double actual = width ? win.ActualWidth : win.ActualHeight;
+        if (!(actual > 0)) actual = width ? win.Width : win.Height;
+        return actual > 0 ? actual / _uiScaleFactor : 0;
+    }
+
+    private double GetUiVisualScale()
+    {
+        if (win == null) return 1;
+        win.UpdateLayout();
+        var box = win.Content as Viewbox;
+        var root = box == null ? win.Content as FrameworkElement : box.Child as FrameworkElement;
+        double actual = UiScaleElementVisualScale(root);
+        return actual > 0 ? actual : _uiScaleVisual;
+    }
+
+    private static double UiScaleElementVisualScale(FrameworkElement element)
+    {
+        if (element == null) return double.NaN;
+        var source = PresentationSource.FromVisual(element);
+        var root = source == null ? null : source.RootVisual as Visual;
+        if (root == null) return double.NaN;
+        try
+        {
+            var transform = element.TransformToAncestor(root);
+            Point origin = transform.Transform(new Point(0, 0));
+            Point unit = transform.Transform(new Point(1, 0));
+            return (unit - origin).Length;
+        }
+        catch { return double.NaN; }
+    }
+
+    // Popup HWNDs are outside the owner's visual tree. Scale their complete design surface
+    // (padding, icons, borders and fonts), not just the inherited FontSize. Weak keys avoid
+    // retaining closed dialogs, and original transforms prevent accumulation on reopening.
+    private sealed class UiScalePopupState
+    {
+        public UiScalePopupState() { }
+        internal Transform Original;
+        internal WeakReference Owner;
+    }
+    private static bool _uiScalePopupHooks;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FrameworkElement, UiScalePopupState>
+        _uiScalePopups = new System.Runtime.CompilerServices.ConditionalWeakTable<FrameworkElement, UiScalePopupState>();
+    private static readonly System.Collections.Generic.List<WeakReference> _uiScalePopupRoots = new System.Collections.Generic.List<WeakReference>();
+
+    private static void EnsureUiScalePopupHooks()
+    {
+        if (_uiScalePopupHooks) return;
+        _uiScalePopupHooks = true;
+        // Unlike Loaded class handlers, these routed opening events are raised without
+        // per-instance Loaded flags. Only disconnected surfaces need compensation:
+        // Popup/ComboBox inside a Viewbox already receive WPF's native whole-tree scale.
+        EventManager.RegisterClassHandler(typeof(ToolTip), ToolTip.OpenedEvent,
+            new RoutedEventHandler((sender, args) => ScaleUiPopup((ToolTip)sender)), true);
+        EventManager.RegisterClassHandler(typeof(ContextMenu), ContextMenu.OpenedEvent,
+            new RoutedEventHandler((sender, args) => ScaleUiPopup((ContextMenu)sender)), true);
+    }
+
+    private static void ScaleUiPopup(FrameworkElement surface)
+    {
+        var tip = surface as ToolTip;
+        var menu = surface as ContextMenu;
+        FrameworkElement root = surface;
+        FrameworkElement target = tip != null ? tip.PlacementTarget as FrameworkElement
+            : menu != null ? menu.PlacementTarget as FrameworkElement : null;
+        if (target == null) return;
+        Window owner = Window.GetWindow(target);
+        if (owner != null && (owner.AllowsTransparency
+            || (owner.Resources["RmtSkipUiScale"] is bool && (bool)owner.Resources["RmtSkipUiScale"]))) return;
+        double scale = UiScaleElementVisualScale(target);
+        if (!(scale > 0) || double.IsInfinity(scale)) return;
+        var state = _uiScalePopups.GetOrCreateValue(root);
+        if (state.Original == null)
+        {
+            state.Original = root.LayoutTransform;
+            _uiScalePopupRoots.Add(new WeakReference(root));
+        }
+        state.Owner = new WeakReference(surface);
+        var group = new TransformGroup();
+        group.Children.Add(state.Original);
+        group.Children.Add(new ScaleTransform(scale, scale));
+        root.LayoutTransform = group;
+        root.UpdateLayout();
+    }
+
+    private void CloseUiScaleNativePopups()
+    {
+        // Native Popup transforms are captured when opened. Dismiss transient drop-downs
+        // on a preset change; the next opening gets WPF's new scale without double scaling.
+        var popups = new System.Collections.Generic.List<Popup>();
+        var combos = new System.Collections.Generic.List<ComboBox>();
+        WalkVisualTree(win, element =>
+        {
+            var popup = element as Popup;
+            var combo = element as ComboBox;
+            if (popup != null) popups.Add(popup);
+            if (combo != null) combos.Add(combo);
+        });
+        foreach (var combo in combos) if (combo.IsDropDownOpen) combo.SetCurrentValue(ComboBox.IsDropDownOpenProperty, false);
+        foreach (var popup in popups) if (popup.IsOpen) popup.SetCurrentValue(Popup.IsOpenProperty, false);
+    }
+
+    private static void RefreshUiScalePopups()
+    {
+        for (int i = _uiScalePopupRoots.Count - 1; i >= 0; i--)
+        {
+            var root = _uiScalePopupRoots[i].Target as FrameworkElement;
+            if (root == null) { _uiScalePopupRoots.RemoveAt(i); continue; }
+            UiScalePopupState state;
+            if (!root.IsVisible || !_uiScalePopups.TryGetValue(root, out state) || state.Owner == null) continue;
+            var surface = state.Owner.Target as FrameworkElement;
+            if (surface != null) ScaleUiPopup(surface);
+        }
+    }
+
     private void FillViewboxViewport()
     {
         if (win == null) return;
@@ -1360,17 +1680,20 @@ public partial class AhkWpfEngine
             if (_chromeCaptionDesign < 0) _chromeCaptionDesign = chrome.CaptionHeight;
             if (!(_chromeCaptionDesign > 0)) return;
             var hostBox = win.Content as Viewbox;
-            var child = hostBox == null ? null : hostBox.Child as FrameworkElement;
-            if (child == null) return;
-            double designW = child.ActualWidth > 1 ? child.ActualWidth : child.Width;
-            double designH = child.ActualHeight > 1 ? child.ActualHeight : child.Height;
-            if (!(designW > 1) || !(designH > 1)) return;
-            double hostW = hostBox.ActualWidth > 1 ? hostBox.ActualWidth : win.ActualWidth;
-            double hostH = hostBox.ActualHeight > 1 ? hostBox.ActualHeight : win.ActualHeight;
-            if (!(hostW > 1) || !(hostH > 1)) return;
-            double scale = Math.Min(hostW / designW, hostH / designH);
-            if (scale < 0.3) scale = 0.3;
-            if (scale > 3) scale = 3;
+            if (hostBox == null && !_uiScaleFluid) return;
+            double scale;
+            if (_uiScaleFluid)
+            {
+                var root = win.Content as FrameworkElement;
+                if (root == null) return;
+                Matrix matrix = root.LayoutTransform.Value;
+                scale = Math.Sqrt(matrix.M21 * matrix.M21 + matrix.M22 * matrix.M22);
+            }
+            else
+            {
+                scale = RmtCommonStyles.WindowContentVisualScale(win);
+                if (!(scale > 0)) return;
+            }
             double target = Math.Round(_chromeCaptionDesign * scale - chrome.ResizeBorderThickness.Top, 2);
             if (target < 0) target = 0;
             if (Math.Abs(chrome.CaptionHeight - target) > 0.5)
@@ -1381,6 +1704,7 @@ public partial class AhkWpfEngine
 
     private void ShowEngineWindow(Window win, bool isDaemon, bool startHidden = false)
     {
+        PrepareWindowUiScale();
         try
         {
             firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden);
