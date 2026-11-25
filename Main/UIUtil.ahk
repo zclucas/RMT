@@ -82,7 +82,9 @@ InitUI() {
     }
 
     ; 建窗走引擎异步通道，Show() 立即返回、这里不再 Sleep 轮询句柄。
-    ; 适配器/托盘菜单/首屏刷新都依赖句柄，交给 WaitMainWinReady 在句柄回传后执行；
+    ; 托盘必须在建窗前就可用：即使引擎建窗迟滞或句柄回调失败，关闭窗口后仍能恢复。
+    CustomTrayMenu()
+    ; 适配器/首屏刷新依赖句柄，交给 WaitMainWinReady 在句柄回传后执行；
     ; 主线程先回落到启动链，把 PluginInit、热键绑定这类不依赖界面的活并进引擎建窗期间。
     MyMainWin.BuildAndShow(,,, MainSoftData.IsReload && MacroFileSeedDefaults)
     WaitMainWinReady(InitUIFinishUI)
@@ -102,7 +104,6 @@ InitUIFinishUI(startup := true) {
     MyReplaceKeyGui.SureFocusCon := MainSoftData.BtnSave
     MyUIMacroSettingGui.SureFocusCon := MainSoftData.BtnSave
 
-    CustomTrayMenu()
     if (startup)
         OnOpen()
     else
@@ -256,15 +257,9 @@ OnSettingIntEditChange(fieldName, ctrl, *) {
         MainSoftData.%fieldName% := Integer(v)
 }
 
-; 系统托盘优化
+; 托盘初始化不依赖异步 WPF 句柄；启动期间也要有可恢复窗口的入口。
 CustomTrayMenu() {
-    loop 30 {
-        if (WinExist("ahk_class Shell_TrayWnd")) {
-            break
-        }
-        Sleep(1000)
-    }
-    tipStr := MainSoftData.MyGui.Title
+    tipStr := "RMTv" RMT_VERSION_DISPLAY
     if (IsProcessElevated())
         tipStr .= "`n" GetLang("管理员权限")
 
@@ -285,7 +280,6 @@ CustomTrayMenu() {
     A_TrayMenu.ClickCount := 1
     A_TrayMenu.Default := GetLang("显示窗口")
     A_IconTip := tipStr  ; 鼠标悬停时显示此内容
-    A_IconHidden := 0   ;0(可见) 和 1(隐藏)
     UpdateMacroTrayIcon()
 }
 
@@ -293,7 +287,8 @@ CustomTrayMenu() {
 UpdateMacroTrayIcon() {
     icon := MainSoftData.IsSuspend ? "IcoPause.ico"
         : (MySoftData.IsMacroWorking ? "IcoRunning.ico" : "rabit.ico")
-    TraySetIcon("Images\Soft\" icon, , true)
+    TraySetIcon("Images\Soft\" icon)
+    A_IconHidden := false
 }
 
 OnTrayStartRecord(*) {
