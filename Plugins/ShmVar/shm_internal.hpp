@@ -1,5 +1,5 @@
-#ifndef SHM_INTERNAL_H
-#define SHM_INTERNAL_H
+#ifndef SHM_INTERNAL_HPP
+#define SHM_INTERNAL_HPP
 
 #include <cstdint>
 #include <cstddef>
@@ -76,4 +76,4 @@ constexpr size_t Align8(size_t size) noexcept {
 
 } // namespace shm
 
-#endif // SHM_INTERNAL_H
+#endif // SHM_INTERNAL_HPP

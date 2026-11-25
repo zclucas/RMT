@@ -1,7 +1,7 @@
-#ifndef SHM_RWLOCK_H
-#define SHM_RWLOCK_H
+#ifndef SHM_RWLOCK_HPP
+#define SHM_RWLOCK_HPP
 
-#include "shm_internal.h"
+#include "shm_internal.hpp"
 #include <windows.h>
 #include <atomic>
 #include <thread>
@@ -120,4 +120,4 @@ private:
 
 } // namespace shm
 
-#endif // SHM_RWLOCK_H
+#endif // SHM_RWLOCK_HPP

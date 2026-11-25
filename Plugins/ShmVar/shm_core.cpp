@@ -2,8 +2,7 @@
 #define SHMVAR_EXPORTS
 #endif
 
-#define BUDDY_ALLOC_IMPLEMENTATION
-#include "shm_core.h"
+#include "shm_core.hpp"
 
 namespace shm {
 

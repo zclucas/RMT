@@ -24,8 +24,8 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
-#include "WindowCapture.h"
-#include "SearchAll.h"
+#include "WindowCapture.hpp"
+#include "SearchAll.hpp"
 #pragma comment(lib, "Dwmapi.lib")
 
 // Win7 兼容：VS2022 在 C++ 异常抛出路径上会自动引用 RoOriginateLanguageException，
