@@ -7,6 +7,7 @@
 ; =====================================================================
 
 class ExVariableGui {
+    _autoRemark := ""
     static AreaFields := ["StartPosX", "StartPosY", "EndPosX", "EndPosY"]
 
     __new() {
@@ -273,6 +274,7 @@ class ExVariableGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("变量提取")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
 
         this._EnsureExVarDataLen()
         this._FillExVars()
@@ -298,12 +300,12 @@ class ExVariableGui {
         }
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1, 0, 0, 0, 0, 0]
-            this.Data.VariableArr := ["Var1", "Var2", "Var3", "Var4", "Var5", "Var6"]
+            this.Data.VariableArr := ["Text1", "Text2", "Text3", "Text4", "Text5", "Text6"]
         }
         while (this.Data.ToggleArr.Length < 6)
             this.Data.ToggleArr.Push(false)
         while (this.Data.VariableArr.Length < 6)
-            this.Data.VariableArr.Push("Var" (this.Data.VariableArr.Length + 1))
+            this.Data.VariableArr.Push("Text" (this.Data.VariableArr.Length + 1))
         while (this.Data.ToggleArr.Length > 6)
             this.Data.ToggleArr.RemoveAt(this.Data.ToggleArr.Length)
         while (this.Data.VariableArr.Length > 6)
@@ -686,11 +688,7 @@ class ExVariableGui {
     }
 
     GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        CommandStr := CorrectRemark(CommandStr, this.ui.Query("RemarkCon"))
-        return CommandStr
+        return FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, false)
     }
 
     SaveExVariableData() {
@@ -716,6 +714,7 @@ class ExVariableGui {
             if (this.Data.ToggleArr[A_Index])
                 MySoftData.GlobalVariMap[this.Data.VariableArr[A_Index]] := true
         }
+        FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(this.Data)
     }
 

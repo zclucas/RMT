@@ -368,7 +368,7 @@ class MacroGraphNodeUIMixin {
         p := "ExV" slot
         toggled := d.HasOwnProp("exToggle" slot) ? d["exToggle" slot] : (slot == 1 ? 1 : 0)
         on := toggled == 1 || toggled == "1"
-        vn := d.HasOwnProp("exVariable" slot) ? d["exVariable" slot] : "Var" slot
+        vn := d.HasOwnProp("exVariable" slot) ? d["exVariable" slot] : "Text" slot
         cell := rowSP.Add("StackPanel").Name(p "TogRow_" id).Orientation("Horizontal")
         if (rightCell)
             cell.Margin("14,0,0,0")

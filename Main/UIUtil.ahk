@@ -310,12 +310,18 @@ OnTrayEndRecord(*) {
     OnForceEndRecord()
 }
 
-; 帮助文档：程序目录根下的 index.html（SingleHtml 打成的单文件）。旧版 Web\index.html 仅作兜底。
+; 源码使用 Web\index.html；发行版使用根目录，开发编译版可回退到 Web。
+; 相对路径也供文件校验使用，确保下载位置与文档入口一致。
+GetHelpDocRelativePath() {
+    if (!A_IsCompiled)
+        return "Web\index.html"
+    if (FileExist(A_ScriptDir "\index.html") || !FileExist(A_ScriptDir "\Web\index.html"))
+        return "index.html"
+    return "Web\index.html"
+}
+
 GetHelpDocPath() {
-    p := A_WorkingDir "\index.html"
-    if (FileExist(p))
-        return p
-    return A_WorkingDir "\Web\index.html"
+    return A_ScriptDir "\" GetHelpDocRelativePath()
 }
 
 ; 标题栏执行钮提示：Alt + L：执行
@@ -437,8 +443,9 @@ CmdEditorTitleIcon(title) {
             ["窗口管理", "Images\Soft\WindowManage.png"],
             ["进程管理", "Images\Soft\ProcessManage.png"],
             ["窗口信息", "Images\Soft\WindowManage.png"],
-            ["调整窗口", "Images\Soft\WindowAdjustGear32.png"],
-            ["窗口控件", "Images\Soft\WindowManage.png"],
+            ["窗口操作", "Images\Soft\WindowAdjustGear32.png"],
+            ["控件信息", "Images\Soft\ControlInfo.png"],
+            ["控件操作", "Images\Soft\ControlOperation.png"],
             ["AI判断", "Images\Soft\AiDecision.png"],
             ["YOLO检测", "Images\Soft\Yolo.png"],
             ["翻译", "Images\Soft\TextOps.png"],
@@ -807,11 +814,11 @@ AddHotkeyBadge(parent, hotkey, tip := "") {
     return cap
 }
 
-; 侧栏「RMT文档」/指令编辑器「手册」：打开程序目录 index.html 并定位章节
+; 侧栏「RMT文档」/指令编辑器「手册」：按运行模式打开帮助页并定位章节
 ; pageHash 形如 "#指令手册/2-按键"，留空则打开文档首页
 ; 不能直接 Run(file:///...#hash)：Windows ShellExecute 会丢掉 fragment，浏览器只打开首页
 OnOpenRmtDoc(pageHash := "") {
-    p := A_WorkingDir "\index.html"
+    p := GetHelpDocPath()
     if (!FileExist(p)) {
         RmtDialog.Info(GetLang("未找到帮助文档，请检查程序目录下的 index.html 是否完整。"), GetLang("提示"))
         return

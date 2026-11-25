@@ -564,9 +564,9 @@ SaveSponsorList(list) {
     }
 }
 
-; 赞助 logo 文件名对应资源仓库 Common 标签下的图片
-GetSponsorLogoBaseUrl() {
-    return RmtAssetsBaseUrl("Common")
+; 赞助 logo 统一放在 Common/Sponsor.zip 根目录。
+GetSponsorLogoBundleUrl() {
+    return RmtAssetsBaseUrl("Common") "Sponsor.zip"
 }
 
 GetSponsorLogoDir() {
@@ -594,40 +594,39 @@ SponsorLogoFileName(logo) {
     return logo
 }
 
-; 本地 Images\Sponsor 已有则直接用，否则从 Common 发布地址下载
+; 本地已有则直接用；缺图时下载一次 Sponsor.zip，再提取所需图片。
 EnsureSponsorLogo(logo) {
+    static bundleReady := false, busy := false, retryAfter := 0
     name := SponsorLogoFileName(logo)
     if (name == "")
         return ""
     dir := GetSponsorLogoDir()
-    if (!DirExist(dir)) {
-        try DirCreate(dir)
-        catch
-            return ""
-    }
     path := dir "\" name
-    if (FileExist(path)) {
-        try {
-            if (FileGetSize(path) > 0)
-                return path
-        }
-    }
-    if (FileExist(path))
-        try FileDelete(path)
-    url := GetSponsorLogoBaseUrl() . name
-    if (RmtDownloadManager.DownloadBlocking(url, path, 12, RmtSilentDownloadProgress()) != "ok")
+    if (!RmtAssetMissing(path))
+        return path
+    if (busy || (!bundleReady && A_TickCount < retryAfter))
         return ""
-    if (!FileExist(path))
-        return ""
+    busy := true
     try {
-        if (FileGetSize(path) <= 0) {
-            FileDelete(path)
-            return ""
+        bundle := RmtCacheDir() "\Sponsor.zip"
+        pg := RmtSilentDownloadProgress()
+        if (!bundleReady) {
+            retryAfter := A_TickCount + 60000
+            if (FileExist(bundle))
+                FileDelete(bundle)
+            if (RmtDownloadManager.DownloadBlocking(GetSponsorLogoBundleUrl(), bundle, 60, pg) != "ok")
+                return ""
+            bundleReady := true
         }
+        files := [{entry: name, fullPath: path}]
+        if (RmtExtractAssetBundle(bundle, files, pg) != "ok")
+            return ""
+        return RmtAssetMissing(path) ? "" : path
     } catch {
         return ""
+    } finally {
+        busy := false
     }
-    return path
 }
 
 _RspText(v) {
@@ -879,14 +878,15 @@ RefreshGlobalDataView() {
 }
 
 SetCMDTipValue(value) {
+    ; 所有关闭入口（指令、设置、编辑器）都先取消本地显示，再通知 Worker。
+    if (!value)
+        MyCMDTipGui.Hide()
     MyWorkPool.Broadcast("CT", value)
 }
 
 CMDReport(CMDStr) {
     ; 主进程以 CMDTip 为准：Worker 上报与关闭存在竞态，关闭后丢弃迟到的 RP
-    if (!MySoftData.CMDTip)
-        return
-    MyCMDTipGui.ShowGui(CMDStr)
+    MyCMDTipGui.ShowGui(CMDStr, false)
 }
 
 ; 「输出→指令窗口」专用：不经过 CMDTip 全局开关门控。
@@ -1169,8 +1169,6 @@ ExcuteRMTCMDAction(Cmd) {
             SetCMDTipValue(false)
             if (UIControls.CMDTip)
                 UIControls.CMDTip.Value := false
-            ; 完整关闭（清内容+隐藏），勿仅 Gui.Hide；多线程下后续 RP 由 CMDReport 按 CMDTip 拦截
-            MyCMDTipGui.Hide()
         case "开启变量监视":
             RefreshListenVarGui(true)
         case "关闭变量监视":
@@ -2035,6 +2033,124 @@ FormatCommandAutoRemark(data, remark, previousAutoRemark, generate, commitRemark
     if (commitRemark)
         data.AutoRemark := isAuto ? remark : ""
     return CorrectRemark(GetLang(name) number, remark)
+}
+
+; 只读取指令配置生成摘要，不解析变量、不执行目标操作。
+GenerateCommandAutoRemark(data) {
+    SplitSerialTextAndNumbers(data.SerialStr, &name, &number)
+    key := GetCommandKey(name)
+    value := (field, fallback := "") => data.HasProp(field) ? data.%field% : fallback
+    result := "", remark := ""
+    switch key {
+        case "输出":
+            remark := GetLang(value("OutputType"))
+            remark .= "：" CommandRemarkPreview(value("Text"))
+            if (value("OutputType") == "字符变量")
+                result := value("VariableName")
+        case "提示":
+            type := value("Type")
+            remark := GetLang(type)
+            switch type {
+                case "音频":
+                    remark .= "：" GetLang(value("AudioMode"))
+                    text := value("AudioPath") != "" ? value("AudioPath") : value("Beep")
+                case "区域高亮":
+                    remark .= "：" GetLang(value("RegionMode"))
+                    text := value("RegionName")
+                case "屏幕边缘闪光":
+                    text := GetLang(value("FlashMode"))
+                case "自由贴":
+                    remark .= "：" GetLang(value("PasteMode"))
+                    text := value("PasteName") != "" ? value("PasteName") : value("Text")
+                case "倒计时":
+                    remark .= "：" GetLang(value("CountDownMode"))
+                    text := value("CountDownName")
+                    if (value("CountDownMode") == "显示") {
+                        time := value("Param2") == "时长"
+                            ? value("Hour", 0) ":" value("Min", 0) ":" value("Sec", 0) : value("Param1")
+                        text .= (text == "" ? "" : " ") time
+                    }
+                default:
+                    text := value("Text")
+            }
+            if (text != "")
+                remark .= " " CommandRemarkPreview(text)
+        case "变量提取":
+            remark := GetLang(value("ExtractType")) "：" CommandRemarkPreview(value("ExtractStr"))
+            toggles := value("ToggleArr", []), variables := value("VariableArr", [])
+            for i, enabled in toggles
+                if (enabled && i <= variables.Length && variables[i] != "")
+                    result .= (result == "" ? "" : " / ") variables[i]
+        case "文本处理":
+            remark := GetLang(value("Type"))
+            if (value("ArgsType") != "")
+                remark .= "·" GetLang(value("ArgsType"))
+            source := value("Name") != "" ? value("Name") : value("ArgsName")
+            if (source != "")
+                remark .= "：" CommandRemarkPreview(source)
+            result := value("SaveName")
+        case "后台鼠标":
+            remark := GetLang(CmdEnumZh(value("OperateType"), CmdEnumBgOperNames())) " " GetLang(CmdEnumZh(value("MouseType"), CmdEnumMouseBtnNames()))
+            remark .= "（" value("PosVarX") ", " value("PosVarY") "）"
+            if (value("TargetTitle") != "")
+                remark .= " " CommandRemarkPreview(value("TargetTitle"))
+        case "后台按键":
+            remark := GetLang(CmdEnumKeyAct(value("Type"))) " " CommandRemarkKeys(value("KeyArr", []))
+            if (value("FrontStr") != "")
+                remark .= "：" CommandRemarkPreview(value("FrontStr"))
+        case "窗口信息", "窗口操作", "窗口管理":
+            remark := GetLang(value("ActionType"))
+            target := value("SearchValue")
+            remark .= "：" (target != "" ? CommandRemarkPreview(target) : GetLang("当前窗口"))
+            switch value("ActionType") {
+                case "移动窗口", "相对移动": remark .= "（" value("PosX") ", " value("PosY") "）"
+                case "调整宽高": remark .= " " value("Width") " × " value("Height")
+                case "修改标题": remark .= " → " CommandRemarkPreview(value("NewTitle"))
+                case "修改透明度": remark .= " " value("Transparency") "%"
+            }
+            if (key == "窗口信息") {
+                for i, label in WindowInfoFields(value("ActionType")) {
+                    output := value("ResultVar" i)
+                    if (output != "")
+                        result .= (result == "" ? "" : " / ") output
+                }
+            }
+        case "按键检测", "手柄检测":
+            remark := GetLang(value("CheckType")) " " CommandRemarkKeys(value("KeyArr", []))
+            if (value("StateType") != "")
+                remark .= "（" GetLang(value("StateType")) "）"
+            result := value("VarName")
+        case "控件信息", "控件操作", "窗口控件":
+            action := WindowControl.NormalizeAction(value("ActionType"))
+            remark := GetLang(action == "检测控件存在" ? "检测控件" : action)
+            try {
+                selector := WindowControl.ParseSelector(value("Selector"))
+                part := selector["path"][-1]
+                target := part["name"] != "" ? part["name"] : part["id"] != "" ? part["id"] : part["class"]
+                remark .= "：" CommandRemarkPreview(target != "" ? target : selector["exe"])
+            }
+            if (WindowControl.UsesArgument(action))
+                remark .= " = " CommandRemarkPreview(value("Argument"))
+            if (key == "控件信息")
+                result := value("ResultVar")
+        case "进程管理":
+            remark := GetLang(value("Action")) "（" GetLang(value("MatchBy")) "）：" CommandRemarkPreview(value("Target"))
+        default:
+            return ""
+    }
+    return result != "" ? remark " → " result : remark
+}
+
+CommandRemarkPreview(text, limit := 40) {
+    text := Trim(StrReplace(StrReplace(String(text), "`r", " "), "`n", " "))
+    return StrLen(text) > limit ? SubStr(text, 1, limit) "…" : text
+}
+
+CommandRemarkKeys(keys) {
+    text := ""
+    for key in keys
+        text .= (text == "" ? "" : "+") key
+    return CommandRemarkPreview(text, 60)
 }
 
 OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "", windowInfoPreview := "") {

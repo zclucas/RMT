@@ -142,12 +142,15 @@ class FrontInfoGui {
         body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("绑定来源：")).VerticalAlignment("Center").Margin("0,8,0,8")
         source := body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("SourceCombo").Width(240).Height(28).MinHeight(28)
             .HorizontalAlignment("Left").Margin("0,8,0,8")
-        ; 运行时窗口按执行时鼠标位置取窗；只有模块绑定可选择不限制窗口。
-        this.sources := ["窗口信息", "句柄", "运行时窗口"]
-        this.sourceModes := [2, 1, 0]
+        ; 模块只提供固定匹配或所有窗口；其他层级可在运行时取窗。
+        this.sources := ["窗口信息", "句柄"]
+        this.sourceModes := [2, 1]
         if (this.scope == "module") {
             this.sources.Push("所有窗口")
             this.sourceModes.Push(3)
+        } else {
+            this.sources.Push("运行时窗口")
+            this.sourceModes.Push(0)
         }
         if (this.scope == "command") {
             this.sources.Push("宏窗口绑定")

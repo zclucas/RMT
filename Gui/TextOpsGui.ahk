@@ -6,6 +6,8 @@
 ; =====================================================================
 
 class TextOpsGui {
+    _autoRemark := ""
+    _playHotkeys := []
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -238,9 +240,12 @@ class TextOpsGui {
 
     OnWindowLoad(state, ctrl, event) {
         XamlWin.OnLoadTheme(this.ui)
+        this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "TriggerMacro"), this.Hwnd())
     }
 
     OnWindowClosing(state, ctrl, event) {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._EndTimestampDrag()
         this._CloseConcatEditor()
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
@@ -255,6 +260,8 @@ class TextOpsGui {
     }
 
     _CloseWindow() {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._EndTimestampDrag()
         this._CloseConcatEditor()
         if (IsObject(this.ui)) {
@@ -317,6 +324,7 @@ class TextOpsGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("文本处理")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         ; 旧替换指令以 MatchType 为准，ArgsType 可能仍为旧默认值。
         if (this.Data.Type == "文本替换")
             this.Data.ArgsType := this.Data.MatchType
@@ -750,11 +758,7 @@ class TextOpsGui {
     }
 
     GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        CommandStr := CorrectRemark(CommandStr, this.ui.Query("RemarkCon"))
-        return CommandStr
+        return FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, false)
     }
 
     SaveTextOpsData() {
@@ -796,6 +800,7 @@ class TextOpsGui {
             MySoftData.GlobalVariMap[this.Data.SaveName] := true
         if (this.Data.SaveType == "数组")
             MySoftData.GlobalArrMap[this.Data.SaveName] := true
+        FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(this.Data)
     }
 }

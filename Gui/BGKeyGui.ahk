@@ -7,6 +7,7 @@
 ; =====================================================================
 
 class BGKeyGui {
+    _autoRemark := ""
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -304,6 +305,7 @@ class BGKeyGui {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("后台按键")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
 
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.ui.Update("FrontCon", "Text", this.Data.FrontStr)
@@ -361,15 +363,12 @@ class BGKeyGui {
         this.Data.ClickCount := this._KeyTypeIndex() == "点击" ? this.ui.Query("KeyCountCon") : 1
         this.Data.ClickInterval := this.ui.Query("PerIntervalCon")
 
+        FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(this.Data)
     }
 
     GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        CommandStr := CorrectRemark(CommandStr, this.ui.Query("RemarkCon"))
-        return CommandStr
+        return FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, false)
     }
 
     OnSureBtnClick(state, ctrl, event) {

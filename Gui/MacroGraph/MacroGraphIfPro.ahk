@@ -1038,9 +1038,9 @@ class MacroGraphIfProMixin {
     _FillIfProCondiSlot(inner, id, caseIdx, slot, data, showRow, showVal) {
         lw := this._FormalLW(), cw := this._FormalCW()
         p := "IfProC" caseIdx "S" slot
-        nm := (slot <= data.VariNameArr[caseIdx].Length) ? data.VariNameArr[caseIdx][slot] : ("Var" slot)
+        nm := (slot <= data.VariNameArr[caseIdx].Length) ? data.VariNameArr[caseIdx][slot] : ("Value" slot)
         cmp := (slot <= data.CompareTypeArr[caseIdx].Length) ? data.CompareTypeArr[caseIdx][slot] : 3
-        vr := (slot <= data.VariableArr[caseIdx].Length) ? data.VariableArr[caseIdx][slot] : ("Var" slot)
+        vr := (slot <= data.VariableArr[caseIdx].Length) ? data.VariableArr[caseIdx][slot] : ("Target" slot)
         on := slot <= data.VariNameArr[caseIdx].Length
         cmpTypes := this._IfProCmpTypes()
         block := inner.Add("StackPanel").Name(p "Row_" id).Margin("0,2,0,0")

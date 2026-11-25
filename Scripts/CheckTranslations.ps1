@@ -9,13 +9,13 @@
 #   5. 支持安全清理、末尾换行自适应补齐、Fix 后二次复验，并提供打包即时中断
 #
 # 参数说明:
-#   .\CheckTranslations.ps1                    # 默认检查 Lang\ 下所有语言包
-#   .\CheckTranslations.ps1 -Lang English      # 仅检查指定语言包 (Lang\English.txt)
-#   .\CheckTranslations.ps1 -Strict            # 严格模式：发现任何缺陷均退出码 1（供 PackRMT 打包调用）
-#   .\CheckTranslations.ps1 -Clean             # 自动清理废弃冗余词条与内部重复项
-#   .\CheckTranslations.ps1 -AppendMissing     # 自动追加漏翻词条至文件末尾（附默认值）
-#   .\CheckTranslations.ps1 -Fix               # 一键修复：清理废弃项 + 补全缺漏项 + 二次复验
-#   .\CheckTranslations.ps1 -ExportMissing dir # 将各语言包的漏翻词条独立导出到指定目录
+#   .\Scripts\CheckTranslations.ps1                    # 默认检查 Lang\ 下所有语言包
+#   .\Scripts\CheckTranslations.ps1 -Lang English      # 仅检查指定语言包 (Lang\English.txt)
+#   .\Scripts\CheckTranslations.ps1 -Strict            # 严格模式：发现任何缺陷均退出码 1（供 PackRMT 打包调用）
+#   .\Scripts\CheckTranslations.ps1 -Clean             # 自动清理废弃冗余词条与内部重复项
+#   .\Scripts\CheckTranslations.ps1 -AppendMissing     # 自动追加漏翻词条至文件末尾（附默认值）
+#   .\Scripts\CheckTranslations.ps1 -Fix               # 一键修复：清理废弃项 + 补全缺漏项 + 二次复验
+#   .\Scripts\CheckTranslations.ps1 -ExportMissing dir # 将各语言包的漏翻词条独立导出到指定目录
 # ==============================================================================
 
 [CmdletBinding()]
@@ -31,7 +31,7 @@ param (
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 
-$Root = $PSScriptRoot
+$Root = Split-Path -Parent $PSScriptRoot
 $LangDir = Join-Path $Root "Lang"
 
 if (-not (Test-Path $LangDir)) {
@@ -428,13 +428,13 @@ if ($failedCount -gt 0) {
     if ($Strict) {
         Write-Host "--------------------------------------------------------" -ForegroundColor Red
         Write-Host " [打包错误] 有 $failedCount 个语言包未通过完整性检查，打包已被即时中断！" -ForegroundColor Red
-        Write-Host " 提示: 请先运行 .\CheckTranslations.ps1 查看详细未翻译词条，" -ForegroundColor Red
-        Write-Host "       或运行 .\CheckTranslations.ps1 -Fix 自动同步词条。" -ForegroundColor Red
+        Write-Host " 提示: 请先运行 .\Scripts\CheckTranslations.ps1 查看详细未翻译词条，" -ForegroundColor Red
+        Write-Host "       或运行 .\Scripts\CheckTranslations.ps1 -Fix 自动同步词条。" -ForegroundColor Red
         Write-Host "--------------------------------------------------------`n" -ForegroundColor Red
         $global:LASTEXITCODE = 1
         exit 1
     } else {
-        Write-Host "提示: 存在语言包未通过检查。运行 .\CheckTranslations.ps1 -Fix 可一键自动清理废弃词条并补全缺漏项。`n" -ForegroundColor Yellow
+        Write-Host "提示: 存在语言包未通过检查。运行 .\Scripts\CheckTranslations.ps1 -Fix 可一键自动清理废弃词条并补全缺漏项。`n" -ForegroundColor Yellow
         $global:LASTEXITCODE = 1
         exit 1
     }

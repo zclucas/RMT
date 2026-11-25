@@ -234,7 +234,7 @@ class VariableGui {
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1]
             this.Data.OperaTypeArr := [1]
-            this.Data.VariableArr := ["Var1"]
+            this.Data.VariableArr := ["Data1"]
             this.Data.CopyVariableArr := ["0"]
             this.Data.MinVariableArr := ["0"]
             this.Data.MaxVariableArr := ["10"]
@@ -243,7 +243,7 @@ class VariableGui {
         while (this.Data.OperaTypeArr.Length < n)
             this.Data.OperaTypeArr.Push("数值")
         while (this.Data.VariableArr.Length < n)
-            this.Data.VariableArr.Push("Var" (this.Data.VariableArr.Length + 1))
+            this.Data.VariableArr.Push("Data" (this.Data.VariableArr.Length + 1))
         while (this.Data.CopyVariableArr.Length < n)
             this.Data.CopyVariableArr.Push("0")
         while (this.Data.MinVariableArr.Length < n)
@@ -400,7 +400,7 @@ class VariableGui {
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
         this.Data.OperaTypeArr.Push(1)
-        this.Data.VariableArr.Push("Var" n)
+        this.Data.VariableArr.Push("Data" n)
         this.Data.CopyVariableArr.Push("0")
         this.Data.MinVariableArr.Push("0")
         this.Data.MaxVariableArr.Push("10")

@@ -6,6 +6,7 @@
 ; =====================================================================
 
 class JoyCheckGui extends JoyGui {
+    _autoRemark := ""
     __new() {
         super.__new()
         this.SerialStr := ""
@@ -69,6 +70,13 @@ class JoyCheckGui extends JoyGui {
                 .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         }
 
+        if (!this.HasProp("SelectionData")) {
+            remarkRow := param.Add("Grid").Margin("0,8,0,0")
+            remarkRow.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
+            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
+            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1)
+        }
+
         analogRow := param.Add("StackPanel").Name("AnalogRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,8,0,0").MinHeight("26").Height("26").Visibility("Hidden")
         analogRow.Add("TextBlock").Name("AxisTip1").Text("LX").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12").Width("28")
         analogRow.Add("Slider").Name("AxisSlider1").Width("180").Height("26").Minimum("-100").Maximum("100").Value("100").IsMoveToPointEnabled("True").VerticalAlignment("Center")
@@ -93,7 +101,8 @@ class JoyCheckGui extends JoyGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="720" Height="590"')
+        editorHeight := 590 + (this.HasProp("SelectionData") ? 0 : Max(26, 1.4 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())) + 8)
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="720" Height="' editorHeight '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -129,6 +138,9 @@ class JoyCheckGui extends JoyGui {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("手柄检测")
         this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
+        if (!this.HasProp("SelectionData"))
+            this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 && RegExMatch(cmdArr[1], "\d+$") ? cmdArr[2] : "")
         this.Mode := "digital"
         this.CheckedArr := []
         this.AxisMap := Map()
@@ -166,7 +178,7 @@ class JoyCheckGui extends JoyGui {
             checkNames := analog ? CmdEnumJoyAnalogNames() : CmdEnumKeyCheckNames()
             this._FillCheckTypeCombo(analog, CmdEnumIndex(this.Data.CheckType, checkNames))
             this.ui.Update("StateTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.StateType, CmdEnumStateNames())))
-            this._SetCombo("VarNameCon", GetGuiVarArr(), this.Data.VarName != "" ? this.Data.VarName : "Var1")
+            this._SetCombo("VarNameCon", GetGuiVarArr(), this.Data.VarName != "" ? this.Data.VarName : "JoyDown")
         }
         this._RefreshPadHighlight()
         this.Refresh()
@@ -255,9 +267,9 @@ class JoyCheckGui extends JoyGui {
     }
 
     GetCommandStr() {
-        textOnly := RegExReplace(this.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.SerialStr, "\D+")
-        return Format("{}{}", GetLang(textOnly), numbersOnly)
+        if (this.HasProp("SelectionData"))
+            return GetLang(RegExReplace(this.SerialStr, "\d+")) RegExReplace(this.SerialStr, "\D+")
+        return FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, false)
     }
 
     SaveJoyCheckData() {
@@ -280,6 +292,7 @@ class JoyCheckGui extends JoyGui {
         data.StateType := CmdEnumFromIndex(IsObject(this.ui) ? this.ui.Query("StateTypeCon>SelectedIndex") : "", CmdEnumStateNames())
         data.VarName := GetVarName(this.ui.Query("VarNameCon"))
         MySoftData.GlobalVariMap[data.VarName] := true
+        FormatCommandAutoRemark(data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(data)
     }
 

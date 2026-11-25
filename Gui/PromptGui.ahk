@@ -1,6 +1,8 @@
 #Requires AutoHotkey v2.0
 
 class PromptGui {
+    _autoRemark := ""
+    _playHotkeys := []
     static WindowWidth := 560
     static BodyInset := 16
     static PairGap := 14
@@ -43,6 +45,7 @@ class PromptGui {
             this.data.RegionName := ""
         if (!this.data.HasProp("CountDownName"))
             this.data.CountDownName := ""
+        this._autoRemark := ReadCommandAutoRemark(this.data, GenerateCommandAutoRemark)
         this.remark := parts.Length > 1 ? parts[2] : ""
         if (serial != "" && !RegExMatch(serial, "\d+$"))
             this.remark := ""
@@ -154,7 +157,6 @@ class PromptGui {
         this.ui.OnEvent("Window", "Closing", this.OnClosing.Bind(this, this.ui))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "Close"))
         BindCmdEditorChrome(this.ui, "#指令手册/30-提示", this.Preview.Bind(this), "!l", this.PickFlashColor.Bind(this), this.PickScreen.Bind(this))
-        this.ui.Update("BtnCmdPlay", "ToolTip", GetLang("执行"))
         this.ui.Update("BtnCmdTargeter", "Visibility", this.FieldVisible("Color", this.data) ? "Visible" : "Collapsed")
         this.ui.BatchUpdate(CmdEditorF1Updates(this.PickMode(this.data)))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "Save"))
@@ -697,9 +699,9 @@ class PromptGui {
             data.SerialStr := this.previewSerial
         } else if (data.SerialStr == "")
             data.SerialStr := GetCMDSerialStr("提示")
+        command := FormatCommandAutoRemark(data, this.ui.Query("Remark"), this._autoRemark, GenerateCommandAutoRemark, !preview)
         SaveMacroCMDData(data)
-        SplitSerialTextAndNumbers(data.SerialStr, &key, &number)
-        return CorrectRemark(GetLang("提示") number, this.ui.Query("Remark"))
+        return command
     }
 
     Save(*) {
@@ -730,6 +732,7 @@ class PromptGui {
     OnLoaded(ui, *) {
         if (this.ui == ui) {
             XamlWin.OnLoadTheme(ui)
+            this._playHotkeys := WinHotkey.Register(["!l"], (*) => this.Preview(), ui.wpfHwnd)
             this.Refresh()
         }
     }
@@ -737,6 +740,8 @@ class PromptGui {
     OnClosing(ui, *) {
         if (this.ui != ui)
             return
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this.CancelPick()
         this.BindPickHotkey("")
         this._previewShowing := false

@@ -1,7 +1,9 @@
 #Requires AutoHotkey v2.0
 
 class ProcessManageGui extends CommentGui {
+    ; 配置兼容旧键，界面与输出指令通过 GetLang 显示为“进程”。
     static CmdKey := "进程管理"
+    _autoRemark := ""
     static Outputs := ["ResultVar", "NameVar", "PidVar", "PathVar", "ResultArray", "ExistVar", ProcessInfo.Metrics*]
     static OutputDefaults := Map("ResultVar", "Res", "NameVar", "Name", "PidVar", "PID", "PathVar", "Path",
         "ResultArray", "Procs", "ExistVar", "Exists", "StatusVar", "Status", "StartTimeVar", "Start",
@@ -11,8 +13,10 @@ class ProcessManageGui extends CommentGui {
         [["StartTimeVar", "启动时间：", "本地时间，格式为 yyyy-MM-dd HH:mm:ss。"], ["UptimeVar", "运行时长：", "从进程启动到查询时的秒数。"]],
         [["CpuVar", "CPU 占用：", "短时采样，占全部逻辑处理器的百分比。"], ["GpuVar", "GPU 占用：", "进程最忙的 GPU 引擎占用率（%）。"]]]
     WindowBindingContext := ""
+    _playHotkeys := []
     _pickKeys := []
     _picking := false
+    _targetIconPaths := []
 
     _BuildAndShow() {
         this._closed := false
@@ -32,31 +36,28 @@ class ProcessManageGui extends CommentGui {
         this._TargetField(row)
 
         tip := GetLang("成功：1、失败：0")
-        row := this._Pair(body)
+        row := this._Pair(body).Name("ProcessResultVariableRow")
         this._Output(row, "ResultVar", "结果变量：", false, tip)
-        this._ShowFor(row, [0, 3])
-
-        row := body.Add("Grid").Margin("0,4")
-        row.Add("CheckBox").Name("EndAll").Content(GetLang("结束全部匹配项")).VerticalAlignment("Center")
-        this._ShowFor(row, [3], [0, 1, 3])
+        this._ShowFor(row, [0])
 
         row := this._Pair(body)
         pick := this._Choice(row, "选取方式：", "PickMatch", ProcessManage.MatchPicks)
         pick.Name("ProcessPickRow")
         this._Output(row, "ExistVar", "是否存在：", true, GetLang("存在：1，不存在：0。"))
-        this._ShowFor(row, [1])
+        this._ShowFor(row, [CmdEnumIndex("进程信息", ProcessManage.Actions)])
         row := this._Pair(body)
         this._Output(row, "PidVar", "PID：")
         this._Output(row, "PathVar", "程序路径：", true)
-        this._ShowFor(row, [1])
+        this._ShowFor(row, [CmdEnumIndex("进程信息", ProcessManage.Actions)])
         for fields in ProcessManageGui.MetricRows {
             row := this._Pair(body)
             for i, field in fields
                 this._Output(row, field[1], field[2], i == 2, GetLang(field[3]))
-            this._ShowFor(row, [1])
+            this._ShowFor(row, [CmdEnumIndex("进程信息", ProcessManage.Actions)])
         }
-        row := this._Output(body, "ResultArray", "数组名：", false, GetLang("数组每项为 [进程名, PID, 程序路径]。"))
-        this._ShowFor(row, [2])
+        row := this._Pair(body)
+        this._Output(row, "ResultArray", "结果数组：", false, GetLang("所有匹配的PID"))
+        this._ShowFor(row, [CmdEnumIndex("列出进程", ProcessManage.Actions)])
         CmdEditorForm.Footer(body)
 
         template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
@@ -73,7 +74,8 @@ class ProcessManageGui extends CommentGui {
         this.ui.OnEvent("BtnCmdF1", "Click", XamlWin.BindCurrent(this, "_ToggleWindowPick"))
         this.ui.OnEvent("BtnEditProcessWindow", "Click", XamlWin.BindCurrent(this, "_EditWindowBinding"))
         this.ui.OnEvent("MatchBy", "SelectionChanged", XamlWin.BindCurrent(this, "_OnMatchByChanged"))
-        BindCmdEditorChrome(this.ui, "#指令手册/41-进程", XamlWin.BindCurrent(this, "Preview"), "")
+        this.ui.OnEvent("Action", "SelectionChanged", XamlWin.BindCurrent(this, "_OnActionChanged"))
+        BindCmdEditorChrome(this.ui, "#指令手册/41-进程", XamlWin.BindCurrent(this, "Preview"))
     }
 
     _Pair(body) => body.Add("Grid").Cols("*", "16", "*")
@@ -98,25 +100,41 @@ class ProcessManageGui extends CommentGui {
     _Choice(body, label, name, choices, right := false) {
         row := this._FieldRow(body, label, right)
         combo := CmdEditorForm.Combo(row, name).Grid_Column(1)
-        for choice in choices
-            combo.Add("ComboBoxItem").Content(GetLang(choice))
+        for choice in choices {
+            item := combo.Add("ComboBoxItem").Content(GetLang(choice))
+            if (name == "MatchBy" && choice == "PID") {
+                item.Name("ProcessPidMatchOption")
+                style := item.Add("ComboBoxItem.Style").Add("Style").TargetType("ComboBoxItem")
+                trigger := style.Add("Style.Triggers").Add("DataTrigger")
+                    .Binding("{Binding SelectedIndex, ElementName=Action}").Value(CmdEnumIndex("列出进程", ProcessManage.Actions))
+                trigger.Add("Setter").Property("Visibility").Value("Collapsed")
+            }
+        }
         return row
     }
 
     _TargetField(body) {
-        row := this._FieldRow(body, "目标：", true, GetLang("按匹配方式输入进程名、PID 或正则，支持 {变量}。"))
+        row := this._FieldRow(body, "目标：", true, GetLang("输入进程名、程序完整路径、PID 或正则，支持 {变量}。完整路径忽略大小写；正则匹配进程名。"))
             .Name("ProcessTargetRow")
         CmdEditorForm.Combo(row, "Target", true).Grid_Column(1)
-        hint := row.Add("TextBlock").Name("TargetPidHint").Grid_Column(1).Text(GetLang("请输入进程PID"))
+        hint := row.Add("TextBlock").Name("TargetHint").Grid_Column(1)
             .Foreground("{DynamicResource TextSub}").VerticalAlignment("Center").Margin("8,0,24,0")
             .TextTrimming("CharacterEllipsis").IsHitTestVisible("False")
         style := hint.Add("TextBlock.Style").Add("Style").TargetType("TextBlock")
         style.Add("Setter").Property("Visibility").Value("Collapsed")
-        trigger := style.Add("Style.Triggers").Add("MultiDataTrigger")
+        style.Add("Setter").Property("Text").Value(GetLang("请输入进程PID"))
+        triggers := style.Add("Style.Triggers")
+        trigger := triggers.Add("MultiDataTrigger")
         conditions := trigger.Add("MultiDataTrigger.Conditions")
         conditions.Add("Condition").Binding("{Binding SelectedIndex, ElementName=MatchBy}").Value(CmdEnumIndex("PID", ProcessManage.MatchModes))
         conditions.Add("Condition").Binding("{Binding Text, ElementName=Target}").Value("")
         trigger.Add("Setter").Property("Visibility").Value("Visible")
+        trigger := triggers.Add("MultiDataTrigger")
+        conditions := trigger.Add("MultiDataTrigger.Conditions")
+        conditions.Add("Condition").Binding("{Binding SelectedIndex, ElementName=MatchBy}").Value(CmdEnumIndex("完整路径匹配", ProcessManage.MatchModes))
+        conditions.Add("Condition").Binding("{Binding Text, ElementName=Target}").Value("")
+        trigger.Add("Setter").Property("Visibility").Value("Visible")
+        trigger.Add("Setter").Property("Text").Value(GetLang("请输入程序完整路径"))
 
         row := this._FieldRow(body, "窗口绑定：", true, GetLang("指定这条指令要操作的窗口。")).Name("ProcessWindowRow")
         binding := row.Add("Grid").Grid_Column(1).Cols("*", 6, 28)
@@ -152,16 +170,20 @@ class ProcessManageGui extends CommentGui {
         parts := cmd == "" ? [] : SplitCommand(cmd)
         this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr(ProcessManageGui.CmdKey)
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         this.SerialStr := this.Data.SerialStr
         this._matchMode := this.Data.MatchBy
         this._targets := Map(this._matchMode, parts.Length ? this.Data.Target : "notepad.exe")
         action := ProcessManage.ActionKey(this.Data.Action)
+        if (action == "列出进程" && this._matchMode == "PID") {
+            this._matchMode := "进程名"
+            this._targets[this._matchMode] := ""
+        }
         this._ComboPush("Action", "SelectedIndex", CmdEnumIndex(action, ProcessManage.Actions))
         this._ComboPush("MatchBy", "SelectedIndex", CmdEnumIndex(this._matchMode, ProcessManage.MatchModes))
         this._ComboPush("PickMatch", "SelectedIndex", CmdEnumIndex(this.Data.HasProp("PickMatch") ? this.Data.PickMatch : "首个", ProcessManage.MatchPicks))
         this._FillTargets()
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
-        this._ComboPush("EndAll", "IsChecked", this.Data.EndAll ? "True" : "False")
         vars := GetGuiVarArr()
         arrays := GetGuiArrNameArr()
         for field in ProcessManageGui.Outputs {
@@ -184,31 +206,112 @@ class ProcessManageGui extends CommentGui {
             return
         }
         this._ComboPush("Target", "ClearItems", "")
-        if (this._matchMode != "正则匹配") {
-            names := Map()
-            names.CaseSense := false
-            try {
-                for process in ProcessManage.Find("进程名", "") {
-                    value := this._matchMode == "PID" ? String(process.Pid) : process.Name
-                    names[value] := true
-                }
-            }
-            items := ""
-            for value in names
-                items .= value "`n"
-            for value in StrSplit(Sort(RTrim(items, "`n"), this._matchMode == "PID" ? "N" : ""), "`n") {
-                if (value != "")
-                    this._ComboPush("Target", "AddItem", value)
-            }
-        }
+        this._targetIconPaths := []
+        if (this._matchMode == "进程名" || this._matchMode == "PID")
+            this._AddProcessTargets(this._matchMode == "PID")
         for reference in GetGuiVarReferences()
             this._ComboPush("Target", "AddItem", reference)
         this._ComboPush("Target", "Text", this._targets.Get(this._matchMode, ""))
     }
 
+    _AddProcessTargets(byPid) {
+        try processes := ProcessManage.Find("进程名", "")
+        catch
+            return
+        groups := Map()
+        groups.CaseSense := false
+        for process in processes {
+            value := byPid ? String(process.Pid) : process.Name
+            if (value == "")
+                continue
+            if (!groups.Has(value))
+                groups[value] := {Name: process.Name, Pid: process.Pid, Count: 0, Paths: []}
+            group := groups[value]
+            group.Count += 1
+            path := ProcessManage.Path(process.Pid)
+            if (path != "") {
+                found := false
+                for existing in group.Paths {
+                    if (existing = path) {
+                        found := true
+                        break
+                    }
+                }
+                if (!found)
+                    group.Paths.Push(path)
+            }
+        }
+        values := ""
+        for value in groups
+            values .= value "`n"
+        for value in StrSplit(Sort(RTrim(values, "`n"), byPid ? "N" : ""), "`n") {
+            if (value == "")
+                continue
+            group := groups[value]
+            detail := group.Count == 1 ? "PID " group.Pid : Format(GetLang("匹配进程数：{}"), group.Count)
+            label := group.Name == "" ? detail : group.Name
+            tip := group.Name == "" ? detail : label "`n" detail
+            for path in group.Paths
+                tip .= "`n" path
+            this._targetIconPaths.Push(group.Paths.Length ? group.Paths[1] : "")
+            index := this._targetIconPaths.Length
+            xaml := '<ComboBoxItem xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
+                . ' TextSearch.Text="{}' this._EscapeXml(value) '" ToolTip="{}' StrReplace(this._EscapeXml(tip), "`n", "&#10;") '">'
+                . '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+                . '<Image Name="TargetProcessIcon' index '" Width="16" Height="16" HorizontalAlignment="Left"/>'
+                . '<StackPanel Grid.Column="1"><TextBlock Text="{}' this._EscapeXml(label) '" TextTrimming="CharacterEllipsis"/>'
+            if (group.Name != "")
+                xaml .= '<TextBlock Text="{}' this._EscapeXml(detail) '" Opacity="0.75" TextTrimming="CharacterEllipsis"/>'
+            this._ComboPush("Target", "AddXamlItem", xaml '</StackPanel></Grid></ComboBoxItem>')
+        }
+    }
+
+    _SetTargetIcons() {
+        if (!this._targetIconPaths.Length)
+            return
+        icons := Map()
+        icons.CaseSense := false
+        fallback := DllCall("user32\LoadIconW", "Ptr", 0, "Ptr", 32512, "Ptr")
+        updates := []
+        ; 等候窗口建好后同步传入 HICON，WPF 读取完即可释放提取的图标。
+        try {
+            for index, path in this._targetIconPaths {
+                if (path != "" && !icons.Has(path)) {
+                    icon := 0
+                    DllCall("shell32\ExtractIconExW", "Str", path, "Int", 0, "Ptr", 0, "Ptr*", &icon, "UInt", 1, "UInt")
+                    icons[path] := icon
+                }
+                icon := icons.Get(path, 0)
+                if (!icon)
+                    icon := fallback
+                if (icon)
+                    updates.Push({ControlName: "TargetProcessIcon" index, PropertyName: "Source", Value: "HICON:" icon})
+            }
+            this.ui.BatchUpdate(updates)
+        } finally {
+            for path, icon in icons
+                if (icon)
+                    DllCall("user32\DestroyIcon", "Ptr", icon)
+        }
+    }
+
     OnWindowLoad(state, ctrl, event) {
         super.OnWindowLoad(state, ctrl, event)
+        this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "Preview"), this.Hwnd())
+        if (this._matchMode == "进程名" || this._matchMode == "PID")
+            this._SetTargetIcons()
         this._RefreshWindowPick()
+    }
+
+    _OnActionChanged(*) {
+        if (!this.Hwnd())
+            return
+        state := this.ui.Query("Action", "MatchBy")
+        if (CmdEnumZh(state["Action"], ProcessManage.Actions) == "列出进程"
+            && CmdEnumZh(state["MatchBy"], ProcessManage.MatchModes) == "PID") {
+            this.ui.Update("MatchBy", "SelectedIndex", CmdEnumIndex("进程名", ProcessManage.MatchModes))
+            this._OnMatchByChanged()
+        }
     }
 
     _OnMatchByChanged(*) {
@@ -226,6 +329,8 @@ class ProcessManageGui extends CommentGui {
         this._batching := true
         try this._FillTargets()
         finally this._flushBatch()
+        if (mode == "进程名" || mode == "PID")
+            this._SetTargetIcons()
         this._RefreshWindowPick()
     }
 
@@ -311,24 +416,28 @@ class ProcessManageGui extends CommentGui {
     }
 
     _CloseWindow() {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._ReleaseWindowPick()
         super._CloseWindow()
     }
 
     OnWindowClosing(state, ctrl, event) {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
         this._ReleaseWindowPick()
         super.OnWindowClosing(state, ctrl, event)
     }
 
     CheckIfValid() {
         try {
-            controls := ["Action", "MatchBy", "Target", "ProcessWindowBinding", "PickMatch", "Remark", "EndAll"]
+            controls := ["Action", "MatchBy", "Target", "ProcessWindowBinding", "PickMatch", "Remark"]
             controls.Push(ProcessManageGui.Outputs*)
             state := this.ui.Query(controls*)
             data := this._ReadOperation(state)
             ProcessManage.ValidateTarget(data, data.Target, true)
 
-            fields := ProcessManage.OutputFields(data.Action)
+            fields := data.Action == "结束进程" ? [] : ProcessManage.OutputFields(data.Action)
             if (data.Action == "列出进程")
                 fields.Push("ResultArray")
             saved := Map()
@@ -360,8 +469,6 @@ class ProcessManageGui extends CommentGui {
         data.MatchBy := CmdEnumZh(state["MatchBy"], ProcessManage.MatchModes)
         data.Target := Trim(state[data.MatchBy == "窗口绑定" ? "ProcessWindowBinding" : "Target"])
         data.PickMatch := CmdEnumZh(state["PickMatch"], ProcessManage.MatchPicks)
-        checked := state["EndAll"]
-        data.EndAll := data.Action == "结束进程" && data.MatchBy != "PID" && (checked = "True" || checked = "1")
         return data
     }
 
@@ -369,7 +476,7 @@ class ProcessManageGui extends CommentGui {
         owner := this.Hwnd()
         title := GetLang(ProcessManageGui.CmdKey)
         try {
-            data := this._ReadOperation(this.ui.Query("Action", "MatchBy", "Target", "ProcessWindowBinding", "PickMatch", "EndAll"))
+            data := this._ReadOperation(this.ui.Query("Action", "MatchBy", "Target", "ProcessWindowBinding", "PickMatch"))
             title .= " · " GetLang(data.Action)
             resolve := (text) => GetReplaceVarText({Items: [{VariableMap: Map()}]}, 1, text, false)
             target := ProcessManage.ResolveTarget(data, resolve, (binding) => ResolveEditorBindWindow(this.WindowBindingContext, binding))
@@ -377,7 +484,7 @@ class ProcessManageGui extends CommentGui {
                 throw ValueError(GetLang("当前环境不存在变量") " " ref[1])
             ProcessManage.ValidateTarget(data, target)
             if (data.Action == "结束进程") {
-                action := GetLang(data.EndAll ? "结束全部匹配项" : "结束进程")
+                action := GetLang("结束进程")
                 if (RmtDialog.Choose(GetLang("目标：") " " target "`n" action, title,
                     [GetLang("结束进程"), GetLang("取消")], owner) != 1)
                     return
@@ -413,10 +520,10 @@ class ProcessManageGui extends CommentGui {
 
     _PreviewMessage(action, result) {
         switch action {
-            case "检测进程", "结束进程":
+            case "检测进程":
                 message := GetLang("结果变量：") " " result.ResultVar
-                if (action == "结束进程")
-                    message .= "`n" Format(GetLang("已提交 {} 个结束请求。"), result.EndedCount)
+            case "结束进程":
+                message := Format(GetLang("已提交 {} 个结束请求。"), result.EndedCount)
             case "进程信息":
                 message := ""
                 for field in this._PreviewFields(result) {
@@ -426,8 +533,8 @@ class ProcessManageGui extends CommentGui {
                 }
             case "列出进程":
                 message := Format(GetLang("匹配进程数：{}"), result.ResultArray.Length)
-                for process in result.ResultArray
-                    message .= "`n" process[1] " · PID " process[2] (process[3] == "" ? "" : " · " process[3])
+                for pid in result.ResultArray
+                    message .= "`nPID " pid
         }
         if (result.ErrorVar != "" && action != "进程信息")
             message .= "`n" Format(GetLang("错误信息：{}"), result.ErrorVar)
@@ -450,10 +557,11 @@ class ProcessManageGui extends CommentGui {
 
     SaveData() {
         ProcessManage.RegisterOutputs(this.Data)
+        FormatCommandAutoRemark(this.Data, this._remark, this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(this.Data)
     }
 
     GetCommandStr() {
-        return CorrectRemark(GetLang(ProcessManageGui.CmdKey) RegExReplace(this.SerialStr, "\D+"), this._remark)
+        return FormatCommandAutoRemark(this.Data, this._remark, this._autoRemark, GenerateCommandAutoRemark, false)
     }
 }

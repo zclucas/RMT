@@ -38,6 +38,21 @@ class RmtDownloadManager {
 
         job.name := name
         job.urls := urls.Clone()
+        ; GitCode 下载原文件或 LFS 模型；备用地址直连 GitHub 原附件。
+        for url in urls {
+            alternative := RmtDownloadDirectUrl(url)
+            if (RmtIsAssetUrl(url) && alternative != "") {
+                exists := false
+                for candidate in job.urls {
+                    if (candidate == alternative) {
+                        exists := true
+                        break
+                    }
+                }
+                if (!exists)
+                    job.urls.Push(alternative)
+            }
+        }
         job.targetPath := targetPath
         job.partPath := targetPath ".part"
         job.headersPath := targetPath ".headers"
@@ -97,7 +112,7 @@ class RmtDownloadManager {
     }
 
     static _DeleteJobFiles(job) {
-        paths := [job.headersPath, job.partPath, job.targetPath]
+        paths := [job.headersPath, job.partPath, job.partPath ".unpacked", job.targetPath]
         try {
             ; 先确认全部文件可删除，避免目标正在使用时先丢掉断点文件。
             for path in paths {
@@ -202,6 +217,8 @@ class RmtDownloadManager {
             . " --max-time " job.timeoutSec " --retry 2 -C - -D " this._Quote(job.headersPath)
             . " -o " this._Quote(job.partPath) " " this._Quote(job.urls[job.urlIndex])
         try {
+            if (RmtIsAssetUrl(job.urls[job.urlIndex]))
+                cmd := RmtAssetDownloadCommand(job.urls[job.urlIndex], job.partPath, job.headersPath, job.timeoutSec)
             Run(cmd, A_WorkingDir, "Hide", &pid)
             job.pid := pid
             job.processHandle := DllCall("OpenProcess", "UInt", 0x1000, "Int", false, "UInt", pid, "Ptr")
@@ -266,6 +283,7 @@ class RmtDownloadManager {
         this._CloseProcessHandle(job)
         job.error := error
         try FileDelete(job.headersPath)
+        try FileDelete(job.partPath ".unpacked")
         if (job.urlIndex < job.urls.Length) {
             job.urlIndex += 1
             try FileDelete(job.partPath)
@@ -300,4 +318,21 @@ class RmtDownloadManager {
     static _Quote(value) {
         return '"' StrReplace(String(value), '"', '\"') '"'
     }
+}
+
+; 主程序内嵌脚本，发行版不依赖源码目录；独立进程可被下载取消直接终止。
+RmtAssetDownloadCommand(url, path, headers, timeoutSec) {
+    global RMT_VERSION
+    resourceTag := "v" RMT_VERSION "_" (A_PtrSize == 8 ? "x64" : "x86")
+    static script := ""
+    if (script == "" || !FileExist(script)) {
+        dir := A_Temp "\RMT-AssetDownload-" DllCall("GetCurrentProcessId")
+        DirCreate(dir)
+        script := dir "\Download.ps1"
+        FileInstall("Main\Util\RmtDownloadFile.ps1", script, true)
+    }
+    powershell := A_WinDir "\System32\WindowsPowerShell\v1.0\powershell.exe"
+    return '"' powershell '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' script
+        . '" -Url "' url '" -Path "' path '" -Headers "' headers '" -TimeoutSec ' timeoutSec
+        . ' -ResourceTag "' resourceTag '"'
 }

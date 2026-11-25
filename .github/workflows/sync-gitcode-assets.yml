@@ -1,0 +1,26 @@
+name: 同步 GitCode 资源
+on:
+  workflow_call:
+    inputs:
+      asset_tags:
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: rmt-resource-publication
+  cancel-in-progress: false
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 同步原文件并核对公开下载
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+          ASSET_TAGS: ${{ inputs.asset_tags }}
+        run: python3 -u .github/scripts/sync_gitcode_assets.py sync --tags "$ASSET_TAGS" --workers 2

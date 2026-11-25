@@ -1146,9 +1146,9 @@ class ScreenShotData {
 class CompareData {
     __New() {
         this.ToggleArr := [1, 0]
-        this.NameArr := ["Var1", "Var2"]
+        this.NameArr := ["Value1", "Value2"]
         this.CompareTypeArr := ["大于", "大于"]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
-        this.VariableArr := ["Var1", "Var2"]
+        this.VariableArr := ["Target1", "Target2"]
         this.TrueControlType := "无"   ;流程控制：无 循环-跳过本轮 循环-跳出 分支-跳出
         this.FalseControlType := "无"   ;流程控制：1无 2循环-跳过本轮 3循环-跳出 4分支-跳出
         this.TrueMacro := ""
@@ -1163,7 +1163,7 @@ class CompareData {
 
 class CompareProData {
     __New() {
-        this.VariNameArr := [["Var1"], ["Var2"]]
+        this.VariNameArr := [["Value1"], ["Value2"]]
         this.CompareTypeArr := [["等于"], ["等于"]]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
         this.VariableArr := [["1"], ["2"]]
         this.LogicTypeArr := ["且", "或"]
@@ -1298,9 +1298,9 @@ class LoopData {
         this.CondiType := "无"     ;无 继续条件 退出条件
         this.LogicType := "且"     ;且 或
         this.ToggleArr := [1, 0]
-        this.NameArr := ["Var1", "Var2"]
+        this.NameArr := ["Value1", "Value2"]
         this.CompareTypeArr := ["大于", "大于"]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
-        this.VariableArr := ["Var1", "Var2"]
+        this.VariableArr := ["Target1", "Target2"]
         this.LoopBody := ""     ;循环体
     }
 
@@ -1335,7 +1335,7 @@ class VariableData {
         this.IsIgnoreExist := 0
         this.ToggleArr := [1]
         this.OperaTypeArr := ["数值"]   ;数值 随机数值 字符 系统 时间 删除
-        this.VariableArr := ["Var1"]
+        this.VariableArr := ["Data1"]
         this.CopyVariableArr := ["0"]
         this.MinVariableArr := ["0"]
         this.MaxVariableArr := ["10"]
@@ -1347,7 +1347,7 @@ class ExVariableData {
         this.SerialStr := ""
         this.IsIgnoreExist := 0
         this.ToggleArr := [1, 0, 0, 0, 0, 0]
-        this.VariableArr := ["Var1", "Var2", "Var3", "Var4", "Var5", "Var6"]
+        this.VariableArr := ["Text1", "Text2", "Text3", "Text4", "Text5", "Text6"]
         this.ExtractStr := ""
         this.ExtractType := "屏幕"
         this.WinInfo := "{宏设置窗口绑定}"
@@ -1366,7 +1366,7 @@ class OperationData {
     __New() {
         this.SerialStr := ""
         this.ToggleArr := [1]
-        this.UpdateNameArr := ["Var1"]
+        this.UpdateNameArr := ["Result1"]
         this.ExpressionArr := [""]    ;完整表达式字符串（用于支持括号和整体编辑）
     }
 }
@@ -1480,7 +1480,7 @@ class ArrayData {
         this.MainIndex := 0
         this.ArgsIndex := 1
         this.ArgsType := "变量或值"
-        this.ArgsName := "Var1"
+        this.ArgsName := "Item"
         this.SaveType := "变量"
         this.SaveName := "Data"
     }
@@ -1751,8 +1751,8 @@ class WindowManageData {
         this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
         this.Width := 0                     ;窗口宽度（调整宽高时使用）
         this.Height := 0                    ;窗口高度（调整宽高时使用）
-        this.WidthVarName := "Var1"         ;获取窗口宽高的宽度变量
-        this.HeightVarName := "Var2"        ;获取窗口宽高的高度变量
+        this.WidthVarName := "WinWidth"         ;获取窗口宽高的宽度变量
+        this.HeightVarName := "WinHeight"        ;获取窗口宽高的高度变量
         this.NewTitle := ""                 ;新标题（修改标题时使用）
         this.Transparency := "80%"           ;透明度值 0-100（修改透明度时使用，80表示80%不透明度）
     }

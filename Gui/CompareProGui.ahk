@@ -132,7 +132,7 @@ class CompareProGui {
     }
 
     _DefaultBranchRow() {
-        return [GetLang("Var1 大于 Var1"), GetLang("且"), "", "无"]
+        return ["Value1 " GetLang("大于") " Target1", GetLang("且"), "", "无"]
     }
 
     _ParseChipCondi(itemStr) {

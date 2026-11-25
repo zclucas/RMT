@@ -6,17 +6,17 @@
 # 每次编译都会刷新两个发行目录的 Update.exe，并将所选架构同步到 Thread。
 # 带参数时按参数执行，参数之间没有顺序要求：
 #
-#   .\Build.ps1              主程序 + Worker（x64）
-#   .\Build.ps1 x86          主程序 + Worker（32 位）
-#   .\Build.ps1 rmt          编译主程序和更新程序
-#   .\Build.ps1 work         编译 Worker 和更新程序
-#   .\Build.ps1 update       只编译更新程序（Thread 默认使用 x64）
-#   .\Build.ps1 clean        只清理 Log + Setting，不编译
-#   .\Build.ps1 clean log    只清理 Log
-#   .\Build.ps1 clean xaml   只清理 XAML 引擎 dll（下次启动自动重编）
-#   .\Build.ps1 clean xaml log   清理范围可叠加（这里是 XAML dll + Log）
-#   .\Build.ps1 clean work   先清理再编译 Worker
-#   .\Build.ps1 x64 clean    先清理再编译（与上一个等价）
+#   .\Scripts\Build.ps1              主程序 + Worker（x64）
+#   .\Scripts\Build.ps1 x86          主程序 + Worker（32 位）
+#   .\Scripts\Build.ps1 rmt          编译主程序和更新程序
+#   .\Scripts\Build.ps1 work         编译 Worker 和更新程序
+#   .\Scripts\Build.ps1 update       只编译更新程序（Thread 默认使用 x64）
+#   .\Scripts\Build.ps1 clean        只清理 Log + Setting，不编译
+#   .\Scripts\Build.ps1 clean log    只清理 Log
+#   .\Scripts\Build.ps1 clean xaml   只清理 XAML 引擎 dll（下次启动自动重编）
+#   .\Scripts\Build.ps1 clean xaml log   清理范围可叠加（这里是 XAML dll + Log）
+#   .\Scripts\Build.ps1 clean work   先清理再编译 Worker
+#   .\Scripts\Build.ps1 x64 clean    先清理再编译（与上一个等价）
 #
 # 注意：clean xaml 删的是 lib\dep 下 ahk-xaml*.dll 与 Cache\AhkWpf 的同名副本，
 # 会先结束本项目目录内正在运行的引擎进程（XAML 界面会随之关闭）。
@@ -26,7 +26,7 @@
 # 编译/清理前如果文件被本项目目录内正在运行的实例占用，会自动结束该实例。
 
 $ErrorActionPreference = "Stop"
-$Root = $PSScriptRoot
+$Root = Split-Path -Parent $PSScriptRoot
 
 function Write-Step([string]$Text) {
     Write-Host ""
@@ -47,7 +47,7 @@ function Write-Err([string]$Text) {
 
 function Show-Usage {
     Write-Host "  可用参数：x64  x86  rmt  work  update  clean [log|setting|xaml|all]" -ForegroundColor Gray
-    Write-Host "  例：.\Build.ps1    .\Build.ps1 work    .\Build.ps1 clean log    .\Build.ps1 clean xaml    .\Build.ps1 x86 clean" -ForegroundColor Gray
+    Write-Host "  例：.\Scripts\Build.ps1    .\Scripts\Build.ps1 work    .\Scripts\Build.ps1 clean log    .\Scripts\Build.ps1 clean xaml    .\Scripts\Build.ps1 x86 clean" -ForegroundColor Gray
 }
 
 # ---------- 解析参数 ----------

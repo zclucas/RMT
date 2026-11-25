@@ -82,7 +82,7 @@ Understand the core concepts and configuration logic — from beginner to expert
 
 | Source | Link | Description |
 |--------|------|-------------|
-| 🅶 Gitee | [RMT Releases](https://gitee.com/fateman/RMT/releases) | Primary download |
+| 🅶 GitCode | [RMT Releases](https://gitcode.com/ruomengtu/RMT/releases) | Primary download |
 | 🐱 GitHub | [RMT Releases](https://github.com/zclucas/RMT/releases) | Backup download |
 | 📦 Baidu Drive | [Download Here](https://pan.baidu.com/s/1NsS0UTgViDv6Ulo-rE-Q2Q?pwd=RMMT) | Backup link |
 | ☁️ Aliyun Drive | [Download Here](https://www.alipan.com/s/KdQojvKuHyn) | Backup link |
@@ -111,9 +111,7 @@ Join the **official RMT community** to share configurations, discuss usage, repo
 | Type | Link |
 |:--|:--|
 | 👥 **QQ Group** | 🔗 [Join Group (837661891)](https://qm.qq.com/q/DgpDumEPzq) |
-| 📢 **QQ Channel** | 🔗 [pd63973680](https://pd.qq.com/s/5wyjvj7zw) |
-| 🐙 **GitHub Discussions** | 🔗 [GitHub Forum](https://github.com/zclucas/RMT/discussions) |
-| 🎧 **Discord Server** | 🔗 [Discord](https://discord.gg/m8ewvgtzat) |
+| 💬 **RMT Forum** | 🔗 [Visit Forum](https://forum.ruomengtu.com/) |
 
 > 💡 Beginners, advanced users, and contributors are all welcome to participate!
 

@@ -208,17 +208,17 @@ class CompareGui {
             this.Data := CompareData()
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1]
-            this.Data.NameArr := ["Var1"]
+            this.Data.NameArr := ["Value1"]
             this.Data.CompareTypeArr := [1]
-            this.Data.VariableArr := ["Var1"]
+            this.Data.VariableArr := ["Target1"]
         }
         n := this.Data.ToggleArr.Length
         while (this.Data.NameArr.Length < n)
-            this.Data.NameArr.Push("Var" (this.Data.NameArr.Length + 1))
+            this.Data.NameArr.Push("Value" (this.Data.NameArr.Length + 1))
         while (this.Data.CompareTypeArr.Length < n)
             this.Data.CompareTypeArr.Push(1)
         while (this.Data.VariableArr.Length < n)
-            this.Data.VariableArr.Push("Var" (this.Data.VariableArr.Length + 1))
+            this.Data.VariableArr.Push("Target" (this.Data.VariableArr.Length + 1))
         while (this.Data.NameArr.Length > n)
             this.Data.NameArr.RemoveAt(this.Data.NameArr.Length)
         while (this.Data.CompareTypeArr.Length > n)
@@ -316,9 +316,9 @@ class CompareGui {
         this.SaveCompareData()
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
-        this.Data.NameArr.Push("Var" n)
+        this.Data.NameArr.Push("Value" n)
         this.Data.CompareTypeArr.Push(1)
-        this.Data.VariableArr.Push("Var" n)
+        this.Data.VariableArr.Push("Target" n)
         this._RebuildRows()
         try this.ui.Update("CondiScroll", "ScrollToEnd", "")
         this.OnRefresh()

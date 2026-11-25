@@ -16,6 +16,8 @@ build_*
 build-*
 installed
 */build*
+# Scripts/Build.ps1 is a source script, not a build output.
+!/Scripts/Build.ps1
 .codebuddy/
 .idea
 todo

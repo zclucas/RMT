@@ -86,7 +86,7 @@ class SttGui {
                 return
             }
             runtimeUrl := RmtAssetsBaseUrl(RmtAssetsReleaseTag())
-            targetPath := RmtCacheDir() "\Downloads\Voice.zip"
+            targetPath := RmtCacheDir() "\Downloads\" RmtAssetsReleaseTag() "\Voice.zip"
             RmtDownloadManager.Enqueue(GetLang("下载语音扩展"), [runtimeUrl "Voice.zip"], targetPath,
                 10 * 1024 * 1024, 3600,
                 ObjBindMethod(SttGui, "_OnVoiceExtensionDownloaded", language))
@@ -670,7 +670,7 @@ class SttGui {
         this.dlSpec := spec
         try {
             assetName := spec.Has("pkg") ? spec["pkg"] : "stt-" SttEngine.ModelLanguage(this.language)
-            this.dlTar := RmtCacheDir() "\Downloads\Stt\" assetName ".download"
+            this.dlTar := RmtCacheDir() "\Downloads\" RmtAssetsReleaseTag() "\Stt\" assetName ".download"
             urls := [spec["url"]]
             if ((alternative := RmtDownloadDirectUrl(spec["url"])) != "" && alternative != spec["url"])
                 urls.Push(alternative)

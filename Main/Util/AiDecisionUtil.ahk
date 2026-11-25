@@ -233,7 +233,11 @@ OnAiDecision(tableItem, cmd, index) {
 
 RegisterCommandResultVars(data) {
     errorVar := data.HasOwnProp("ErrorVar") ? data.ErrorVar : ""
-    for name in [data.ResultVar, errorVar]
+    names := [data.ResultVar, errorVar]
+    for field in ["TypeVar", "ClassVar"]
+        if (data.HasOwnProp(field))
+            names.Push(data.%field%)
+    for name in names
         if (name != "")
             MySoftData.GlobalVariMap[name] := true
 }

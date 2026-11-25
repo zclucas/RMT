@@ -6,6 +6,7 @@
 ; =====================================================================
 
 class BGMouseGui {
+    _autoRemark := ""
     __new() {
         this.ParentTile := ""
         this.ui := ""
@@ -237,6 +238,7 @@ class BGMouseGui {
         this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("后台鼠标")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
+        this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
 
         this.ui.Update("TargetTitleCon", "Text", this.Data.TargetTitle != "" ? this.Data.TargetTitle : "")
         this.ui.Update("OperateTypeCombo", "SelectedIndex", String(CmdEnumIndex(this.Data.OperateType, CmdEnumBgOperNames())))
@@ -347,11 +349,7 @@ class BGMouseGui {
     }
 
     GetCommandStr() {
-        textOnly := RegExReplace(this.Data.SerialStr, "\d+")
-        numbersOnly := RegExReplace(this.Data.SerialStr, "\D+")
-        CommandStr := Format("{}{}", GetLang(textOnly), numbersOnly)
-        CommandStr := CorrectRemark(CommandStr, this.ui.Query("RemarkCon"))
-        return CommandStr
+        return FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, false)
     }
 
     SaveBGMouseData() {
@@ -363,6 +361,7 @@ class BGMouseGui {
         this.Data.ClickTime := this.ui.Query("ClickTimeCon")
         this.Data.ScrollV := this.ui.Query("ScrollV")
         this.Data.ScrollH := this.ui.Query("ScrollH")
+        FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)
         SaveMacroCMDData(this.Data)
     }
 

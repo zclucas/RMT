@@ -30,7 +30,11 @@ public partial class AhkWpfEngine
         timer.Interval = TimeSpan.FromMilliseconds(16);
         timer.Tick += (s, e) => FollowCursorTick();
         _followCursorTimer = timer;
-        timer.Start();
+        // 首帧就把端点对准真实光标；不要等待用户首次移动或下一次计时器触发。
+        // 建窗初期视觉树可能尚未就绪；此时仍需启动计时器供后续帧重试。
+        FollowCursorTick();
+        if (_followCursorTimer == timer)
+            timer.Start();
     }
 
     private void StopFollowCursor()
@@ -55,9 +59,14 @@ public partial class AhkWpfEngine
         // 控件还没挂进可视树（首帧之前）先不动，等它挂上再开始跟
         if (host == null || !line.IsLoaded)
             return;
-        // Mouse.GetPosition 返回的就是 DIP 相对坐标（光标在窗外也有效），无需再按 dpiScale 换算
+        // 从系统屏幕坐标换算到轮盘 Canvas：Mouse.GetPosition 在其他进程的窗口
+        // （尤其不同 DPI 感知模式）中触发时，首帧可能沿用鼠标事件的旧坐标。
+        // GetCursorPos 总是当前设备像素坐标，PointFromScreen 按 WPF 所在监视器换算为 DIP。
+        POINT cursor;
+        if (!GetCursorPos(out cursor))
+            return;
         Point p;
-        try { p = System.Windows.Input.Mouse.GetPosition(host); }
+        try { p = host.PointFromScreen(new Point(cursor.x, cursor.y)); }
         catch { return; }
         // 没移动就不赋值：每次赋值都会让分层窗整窗重绘一次（软件渲染）
         if (Math.Abs(p.X - line.X2) < 0.5 && Math.Abs(p.Y - line.Y2) < 0.5)
