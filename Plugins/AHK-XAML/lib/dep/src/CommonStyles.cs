@@ -705,6 +705,17 @@ internal static class RmtCommonStyles
     private static double AssignedWindowSize(Window window, bool width)
     {
         if (window == null) return 0;
+        var hostBox = window.Content as Viewbox;
+        // Width/Height stay on restore bounds while maximized, which is what left
+        // the Viewbox at the restored aspect and letterboxed the extra width.
+        if (window.WindowState == WindowState.Maximized)
+        {
+            // Prefer the window's maximized size. Viewbox.ActualWidth can still be restore-sized.
+            double live = width ? window.ActualWidth : window.ActualHeight;
+            if (live > 1) return live;
+            double host = hostBox == null ? 0 : (width ? hostBox.ActualWidth : hostBox.ActualHeight);
+            if (host > 1) return host;
+        }
         double assigned = width ? window.Width : window.Height;
         if (!double.IsNaN(assigned) && assigned > 1)
         {
@@ -716,20 +727,34 @@ internal static class RmtCommonStyles
         }
         double actual = width ? window.ActualWidth : window.ActualHeight;
         if (actual > 1) return actual;
-        var hostBox = window.Content as Viewbox;
         if (hostBox == null) return 0;
-        double host = width ? hostBox.ActualWidth : hostBox.ActualHeight;
-        return host > 1 ? host : 0;
+        double fallback = width ? hostBox.ActualWidth : hostBox.ActualHeight;
+        return fallback > 1 ? fallback : 0;
     }
 
     private static void RetargetViewboxDesignSize(Window window, Viewbox hostBox, FrameworkElement child, double visualScale, double chromeW, double chromeH, bool preserveAutoHeight)
     {
         if (window == null || hostBox == null || child == null) return;
         window.UpdateLayout();
-        double viewportW = AssignedWindowSize(window, true) - Math.Max(0, chromeW);
-        double viewportH = AssignedWindowSize(window, false) - Math.Max(0, chromeH);
-        if (hostBox.ActualWidth > 1 && Math.Abs(hostBox.ActualWidth - viewportW) <= 2) viewportW = hostBox.ActualWidth;
-        if (hostBox.ActualHeight > 1 && Math.Abs(hostBox.ActualHeight - viewportH) <= 2) viewportH = hostBox.ActualHeight;
+        double viewportW;
+        double viewportH;
+        if (window.WindowState == WindowState.Maximized && window.ActualWidth > 1 && window.ActualHeight > 1)
+        {
+            viewportW = window.ActualWidth;
+            viewportH = window.ActualHeight;
+        }
+        else if (window.IsLoaded && hostBox.ActualWidth > 1 && hostBox.ActualHeight > 1)
+        {
+            viewportW = hostBox.ActualWidth;
+            viewportH = hostBox.ActualHeight;
+        }
+        else
+        {
+            viewportW = AssignedWindowSize(window, true) - Math.Max(0, chromeW);
+            viewportH = AssignedWindowSize(window, false) - Math.Max(0, chromeH);
+            if (hostBox.ActualWidth > 1 && Math.Abs(hostBox.ActualWidth - viewportW) <= 2) viewportW = hostBox.ActualWidth;
+            if (hostBox.ActualHeight > 1 && Math.Abs(hostBox.ActualHeight - viewportH) <= 2) viewportH = hostBox.ActualHeight;
+        }
         if (viewportW <= 1 || viewportH <= 1) return;
         double scale = visualScale;
         if (double.IsNaN(scale) || scale <= 0)

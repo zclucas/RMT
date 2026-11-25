@@ -264,7 +264,7 @@ public partial class AhkWpfEngine
                         SetMaxBtnChrome(btn, over, false);
                     }
                     if (doToggle && over)
-                        win.WindowState = win.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+                        ToggleMaximized();
                 }
                 catch { }
                 handled = true;
@@ -282,9 +282,7 @@ public partial class AhkWpfEngine
                 {
                     if (win.ResizeMode == System.Windows.ResizeMode.CanResize || win.ResizeMode == System.Windows.ResizeMode.CanResizeWithGrip)
                     {
-                        win.WindowState = win.WindowState == WindowState.Maximized
-                            ? WindowState.Normal
-                            : WindowState.Maximized;
+                        ToggleMaximized();
                         handled = true;
                         return IntPtr.Zero;
                     }
@@ -330,6 +328,12 @@ public partial class AhkWpfEngine
             }
             catch { }
         }
+        else if (msg == 0x0112)
+        { // WM_SYSCOMMAND: SizeToContent must be Manual before DefWindowProc maximizes.
+            int sysCmd = wParam.ToInt32() & 0xFFF0;
+            if (sysCmd == 0xF030) // SC_MAXIMIZE
+                PrepareMaximizedLayoutConstraints();
+        }
         else if (msg == 0x0024)
         { // WM_GETMINMAXINFO
             try
@@ -347,6 +351,8 @@ public partial class AhkWpfEngine
                     mmi.ptMaxPosition.y = Math.Abs(rcWorkArea.top - rcMonitorArea.top);
                     mmi.ptMaxSize.x = Math.Abs(rcWorkArea.right - rcWorkArea.left);
                     mmi.ptMaxSize.y = Math.Abs(rcWorkArea.bottom - rcWorkArea.top);
+                    mmi.ptMaxTrackSize.x = mmi.ptMaxSize.x;
+                    mmi.ptMaxTrackSize.y = mmi.ptMaxSize.y;
                 }
                 Marshal.StructureToPtr(mmi, lParam, true);
             }
@@ -637,6 +643,11 @@ public partial class AhkWpfEngine
             return;
         }
 
+        if (parts[0] == "Window" && parts[1] == "WindowState" && parts.Length >= 3)
+        {
+            ApplyRequestedWindowState(parts[2]);
+            return;
+        }
         if (parts[0] == "Window" && parts[1] == "ApplyUiScale")
         {
             double factor;
