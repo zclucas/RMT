@@ -3,7 +3,7 @@
     RMT VoiceDll 一键编译部署脚本 (MSVC) — 完全自包含版
 .DESCRIPTION
     Plugins\Voice 自包含构建布局：
-      src\           源码（VoiceDll.cpp + g2p_data.h）
+      src\           源码（VoiceDll.cpp + g2p_data.hpp）
       x64\           运行时产物（VoiceDll.dll + 依赖 DLL，64 位）
       x86\           运行时产物（VoiceDll.dll + 依赖 DLL，32 位）
       models\kws\    KWS 模型（跨架构共享）
@@ -71,7 +71,7 @@ New-Item -ItemType Directory -Force -Path $DlDir, $SherpaDir, $BuildDir, $RunDir
 
 # 源码在 src\ 子目录
 $Src      = Join-Path $VoiceDir "src\VoiceDll.cpp"
-$G2pH     = Join-Path $VoiceDir "src\g2p_data.h"
+$G2pH     = Join-Path $VoiceDir "src\g2p_data.hpp"
 # 部署目标：$Arch\VoiceDll.dll
 $OutDll   = Join-Path $RunDir "VoiceDll.dll"
 

@@ -3,7 +3,7 @@
 #endif
 
 #include "shm_var.h"
-#include "shm_core.h"
+#include "shm_core.hpp"
 
 using namespace shm;
 
