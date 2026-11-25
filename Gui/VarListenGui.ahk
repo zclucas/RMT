@@ -46,6 +46,7 @@ class VarListenGui {
         this._lastClickRow := 0
         this._initX := ""            ; 物理像素；建窗前写入，避免先居中再跳位
         this._initY := ""
+        this._saveSizeTimer := ObjBindMethod(this, "_SaveWindowSize")
     }
 
     ; x/y 为物理像素（与 ListenVarPos / 旧 AHK Gui 一致）；省略则居中
@@ -206,6 +207,7 @@ class VarListenGui {
     }
 
     _OnClosed() {
+        SetTimer(this._saveSizeTimer, 0)
         this.closed := true
         VarListenGui._opening := false
         this.ui := ""
@@ -226,14 +228,33 @@ class VarListenGui {
     }
 
     OnWindowSize(state := unset, ctrl := unset, event := unset) {
-        hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
-        if (!hwnd)
+        if (this.closed || !IsObject(this.ui) || !this.ui.wpfHwnd)
             return
-        WinGetPos(, , &w, &h, "ahk_id " hwnd)
-        if (w > 0 && h > 0) {
+        ; ApplyUiScale 会连续触发 SizeChanged；等引擎本轮布局结束再读稳定基准。
+        SetTimer(this._saveSizeTimer, -150)
+    }
+
+    _SaveWindowSize() {
+        ui := this.ui
+        if (this.closed || !IsObject(ui) || !ui.wpfHwnd)
+            return
+        sizes := Map()
+        try sizes := ui.Query("Window>UiBaseWidth", "Window>UiBaseHeight")
+        if (this.closed || this.ui != ui || !IsObject(sizes)
+            || !sizes.Has("Window>UiBaseWidth") || !sizes.Has("Window>UiBaseHeight"))
+            return
+        w := sizes["Window>UiBaseWidth"], h := sizes["Window>UiBaseHeight"]
+        if (!IsNumber(w) || !IsNumber(h) || w <= 0 || h <= 0)
+            return
+        ; 引擎返回未裁剪普通态 DIP，配置沿用物理像素；不按全局倍率反算。
+        w := Round(Number(w) * A_ScreenDPI / 96)
+        h := Round(Number(h) * A_ScreenDPI / 96)
+        if (w != MainSoftData.VarListenWidth) {
             MainSoftData.VarListenWidth := w
-            MainSoftData.VarListenHeight := h
             CfgWrite(w, SettingFile, SettingSection, "VarListenWidth")
+        }
+        if (h != MainSoftData.VarListenHeight) {
+            MainSoftData.VarListenHeight := h
             CfgWrite(h, SettingFile, SettingSection, "VarListenHeight")
         }
     }

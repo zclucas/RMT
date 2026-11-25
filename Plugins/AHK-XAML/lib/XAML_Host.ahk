@@ -1100,18 +1100,13 @@ class XAMLHost {
         return chrome
     }
 
-    ; Popup/ContextMenu 脱离 Viewbox：字号 = 主题字号 × 主窗 Viewbox，视觉上才和界面正文一致
+    ; 独立弹层由引擎整体匹配放置控件的真实倍率，不再只补偿字号。
     static PopupFontSize() {
-        theme := XAMLHost.GetThemeFontSize()
-        scale := XAMLHost.GetMainViewboxScale()
-        if (!IsNumber(scale) || scale <= 0)
-            scale := 1.0
-        return XAMLHost.FormatFontSize(theme * scale)
+        return XAMLHost.FormatFontSize(XAMLHost.GetDesignFontSize())
     }
 
-    ; 写入 XAML 的声明字号：经 ApplyFontSizeDelta/ScaleFontSize 后等于 PopupFontSize()
     static PopupFontSizeDeclared() {
-        return XAMLHost.VisualFontSizeDeclared()
+        return XAMLHost.PopupFontSize()
     }
 
     ; 流式子窗不使用 Viewbox；把主窗显示倍率折算进声明字号，主题增量仍只应用一次。
@@ -1147,20 +1142,47 @@ class XAMLHost {
     static ApplyTitleBarHeight(&xaml) {
     }
 
-    ; MainSoftData.FontSize 是权威值；防止只写了数值、全局增量仍为 0
+    ; 设计字号固定；缩放统一在窗口根视觉层处理，不再叠加旧字号增量。
     static SyncThemeFontDelta() {
-        global XAML_FontSizeDelta, XAML_FontSizeBase
-        if (!IsSet(MainSoftData) || !IsObject(MainSoftData) || !MainSoftData.HasProp("FontSize"))
-            return
-        if (!IsNumber(MainSoftData.FontSize))
-            return
-        base := IsSet(XAML_FontSizeBase) ? XAML_FontSizeBase : 15
-        XAML_FontSizeDelta := Integer(MainSoftData.FontSize) - base
+        global XAML_FontSizeDelta
+        XAML_FontSizeDelta := 0
+    }
+
+    static GetUiScale() {
+        if (IsSet(MainSoftData) && IsObject(MainSoftData) && MainSoftData.HasProp("UiScale"))
+            return NormalizeUiScale(MainSoftData.UiScale) / 100
+        return 1.0
+    }
+
+    static ApplyUiScaleResources(&xaml, skip := false) {
+        resources := '<Double xmlns="clr-namespace:System;assembly=mscorlib" x:Key="RmtUiScale">'
+            . XAMLHost.GetUiScale() '</Double>'
+            . '<Boolean xmlns="clr-namespace:System;assembly=mscorlib" x:Key="RmtSkipUiScale">'
+            . (skip ? "True" : "False") '</Boolean>'
+        xaml := StrReplace(xaml, "</Window.Resources>", resources "</Window.Resources>")
+    }
+
+    static ApplyUiScaleToAllWindows() {
+        factor := String(XAMLHost.GetUiScale())
+        for , host in XAMLHost._instances {
+            if (!IsObject(host) || host.IsFontScaleSkipped())
+                continue
+            ; 未完成开窗的实例也入队，避免初始化期间切档留下旧倍率。
+            try host.Update("Window", "ApplyUiScale", factor)
+        }
     }
 
     ; 主界面根内容按 1400×787 设计，引擎 Viewbox 按窗口实际尺寸等比缩放。
     ; 其它窗口若要和设置页签「看起来一样大」，窗口尺寸 = 设计尺寸 × 该系数。
     static GetMainViewboxScale() {
+        ; 引擎重排后设计面不再恒为 1400×787，优先查询实际基准倍率。
+        try {
+            if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui) && MyMainWin.ui.wpfHwnd) {
+                value := MyMainWin.ui.Query("Window>UiBaseVisualScale")
+                if (IsNumber(value) && value > 0)
+                    return Number(value)
+            }
+        }
         designW := 1400, designH := 787
         scale := 1.0
         try {
@@ -1178,7 +1200,7 @@ class XAMLHost {
                 dipW := w / (dpi / 96.0)
                 dipH := h / (dpi / 96.0)
                 if (dipW > 0 && dipH > 0)
-                    scale := Min(dipW / designW, dipH / designH)
+                    scale := Min(dipW / designW, dipH / designH) / XAMLHost.GetUiScale()
             }
         }
         if (scale < 0.6)
@@ -2948,6 +2970,7 @@ class XAMLHost {
             ; Build event bindings from runtime registrations (includes events added after ExportBAML)
             eventBindings := this._BuildEventBindings()
             payload := "CREATE_WINDOW|" this.id "|" trackedCsv "|" A_ScriptName "|" String(this.ownerHwnd) "|" assetPath "|" eventBindings
+                . "|" XAMLHost.GetUiScale() "|" (this.IsFontScaleSkipped() ? "True" : "False")
             this.wpfHwnd := 0
             this._SendToEngine(payload)
         } else {
@@ -2996,6 +3019,7 @@ class XAMLHost {
                 }
             }
             XAMLHost.ApplyDialogVisualScale(&cleanXaml, this.IsFontScaleSkipped(), this.ownerHwnd)
+            XAMLHost.ApplyUiScaleResources(&cleanXaml, this.IsFontScaleSkipped())
             inlinePayload := "#INIT#" cleanXaml "`n---AHK-XAML-EVENTS---`n" eventBindings
             ; 后台启动（rmt -min）：让引擎建完窗立刻收起，避免「先显示再被隐藏」的那一下
             if (this.HasOwnProp("_startHidden") && this._startHidden)
@@ -3172,7 +3196,11 @@ class XAMLHost {
             }
             eventBindings := RTrim(eventBindings, ",")
 
-            payload := "XAML_PAYLOAD|" instance.xaml "`n---AHK-XAML-EVENTS---`n" eventBindings
+            cleanXaml := StrReplace(instance.xaml, "%resources%", "")
+            cleanXaml := XAMLHost.ApplyFontSizeDelta(cleanXaml, instance.IsFontScaleSkipped())
+            XAMLHost.ApplyDialogVisualScale(&cleanXaml, instance.IsFontScaleSkipped(), instance.ownerHwnd)
+            XAMLHost.ApplyUiScaleResources(&cleanXaml, instance.IsFontScaleSkipped())
+            payload := "XAML_PAYLOAD|" cleanXaml "`n---AHK-XAML-EVENTS---`n" eventBindings
             buf := Buffer(StrPut(payload, "UTF-8"))
             StrPut(payload, buf, "UTF-8")
 

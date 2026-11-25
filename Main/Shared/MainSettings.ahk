@@ -70,15 +70,16 @@ LoadMainSetting() {
     MainSoftData.MenuWheelShowTooltip := CfgRead(SettingFile, SettingSection, "MenuWheelShowTooltip", false)
     MainSoftData.MenuWheelScale := CfgRead(SettingFile, SettingSection, "MenuWheelScale", 100)
     MainSoftData.Theme := CfgRead(SettingFile, SettingSection, "Theme", "RMT_Light")
-    ; 主题字体：大小与 FontType 一样落在用户设置；用户设置缺失时回退主题文件 themes.toml
+    ; 界面缩放独立于主题颜色；只有新键缺失时才迁移旧字号。
     global XAML_FontSizeDelta, XAML_FontSizeBase, XAML_FontSizeDefault, XAML_FontWeight, XAML_TextClarity
-    defFs := IsSet(XAML_FontSizeDefault) ? XAML_FontSizeDefault : 15
-    fs := CfgRead(SettingFile, SettingSection, "FontSize", "")
-    if (fs == "" || !IsNumber(fs)) {
-        themeFile := GetThemesPath()
-        fs := CfgRead(themeFile, MainSoftData.Theme, "FontSize", defFs)
+    uiScale := CfgRead(SettingFile, SettingSection, "UiScale", "")
+    if (uiScale == "") {
+        fs := CfgRead(SettingFile, SettingSection, "FontSize", "")
+        if (fs == "" || !IsNumber(fs))
+            fs := CfgRead(GetThemesPath(), MainSoftData.Theme, "FontSize", 15)
+        uiScale := UiScaleFromLegacyFontSize(fs)
     }
-    ApplyUserFontSize(fs, false)
+    ApplyUserUiScale(uiScale, false)
     try {
         themeFile := GetThemesPath()
         MainSoftData.FontWeight := FontWeightToNum(CfgRead(themeFile, MainSoftData.Theme, "FontWeight", "400"))
@@ -228,9 +229,9 @@ EnsureMainSettingPersisted() {
     rawLog := CfgRead(SettingFile, SettingSection, "CMDLogFilePath", "")
     if (MainSoftData.CMDLogFilePath != CMDLogNorm(rawLog) && !(MainSoftData.CMDLogFilePath == "" && Trim(rawLog) == ""))
         try CfgWrite(MainSoftData.CMDLogFilePath, SettingFile, SettingSection, "CMDLogFilePath")
-    ; 首次安装：把算出来的兜底字号落定，之后启动直接读到，不必每次走兜底分支
-    if (CfgRead(SettingFile, SettingSection, "FontSize", "") == "")
-        try CfgWrite(MainSoftData.FontSize, SettingFile, SettingSection, "FontSize")
+    ; 仅主进程落定迁移档位，Worker 加载设置始终只读。
+    if (CfgRead(SettingFile, SettingSection, "UiScale", "") != MainSoftData.UiScale)
+        try CfgWrite(MainSoftData.UiScale, SettingFile, SettingSection, "UiScale")
     ; 启动维护：日志按配置自动清理。属于主进程的启动动作，不再塞在 LoadMainSetting 里
     ; 靠「是不是 Worker」去关。
     try CMDLogTryAutoClear(CMDLogResolveFile(MainSoftData.CMDLogFilePath), MainSoftData.CMDLogAutoClear)
