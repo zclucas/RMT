@@ -557,6 +557,8 @@ RmtCmdSetVar(args) {
     key := Trim(args[2])
     if (key == "")
         return RmtCmdFail("变量名不能为空")
+    if ((error := CustomVariableNameError(key)) != "")
+        return RmtCmdFail(GetLang(error))
     SetGlobalVariable([key], [RmtCmdTail(args, 3)], false)
     return RmtCmdOk()
 }

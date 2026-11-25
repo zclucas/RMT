@@ -339,7 +339,7 @@ class MacroEditGui {
         }
         try {
             if (this.Hwnd()) {
-                exStyle := DllCall("GetWindowLongPtr", "Ptr", this.Hwnd(), "Int", -20, "UInt") ; GWL_EXSTYLE = -20
+                exStyle := DllCall("user32\GetWindowLongW", "Ptr", this.Hwnd(), "Int", -20, "UInt") ; GWL_EXSTYLE = -20
                 if (exStyle & 0x00000008) {
                     this._topOn := true
                     this.ToolMenu.Check(GetLang("窗口置顶"))

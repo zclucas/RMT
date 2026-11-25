@@ -150,6 +150,8 @@ ReadCommandConfig(path, serial, cmd) {
 
 NormalizeCommandData(cmd, Data) {
     CmdEnumNorm(cmd, Data)
+    if (cmd == "变量")
+        NormalizeVariableAssignmentRows(Data)
     for field in ["CurCMD", "LoopBody", "TrueMacro", "FalseMacro", "DefaultMacro", "SubMacro"] {
         if (Data.HasOwnProp(field) && Type(Data.%field%) == "String")
             Data.%field% := GetLangMacro(Data.%field%, 2)
@@ -189,6 +191,7 @@ ExpandNumberedMoveCommand(cmd) {
 SaveMacroCMDData(Data) {
     SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &number)
     cmdKey := GetCommandKey(cmd)
+    ValidateCommandVariableNames(cmdKey, Data)
     DataFile := MySoftData.DataFileMap[cmdKey]
     Data.SerialStr := cmdKey number
     NormalizeCommandData(cmdKey, Data)
@@ -198,6 +201,45 @@ SaveMacroCMDData(Data) {
         RegisterHandleVariableRows(Data)
     if (MySoftData.DataCacheMap.Has(Data.SerialStr))
         MySoftData.DataCacheMap.Delete(Data.SerialStr)
+}
+
+; 统一拦截普通编辑器、图形节点与其他直接保存入口，读取参数不按保存名称校验。
+ValidateCommandVariableNames(cmd, data) {
+    fields := ["SaveName", "SaveVar", "VarName", "ResultSaveName", "CoordXName", "CoordYName", "AllSaveName",
+        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "TypeVar", "ClassVar", "HwndVar",
+        "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
+        "PidVar", "PathVar", "ExistVar", "StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar",
+        "ResultArray", "WidthVarName", "HeightVarName", "ResponseVar", "ConfVar", "RatioVar", "DepthVar"]
+    Loop 12
+        fields.Push("ResultVar" A_Index)
+    if (cmd == "时间") {
+        mode := TimeNormSubMode(data)
+        if (mode == "获取时间变量" || mode == "获取时间字符串")
+            fields.Push("Param1")
+        else if (mode == "时间计算")
+            fields.Push("Param4")
+    }
+    for field in fields {
+        if (data.HasOwnProp(field) && data.%field% != "") {
+            error := CustomVariableNameError(data.%field%)
+            if (error != "")
+                throw ValueError(GetLang(error), , data.%field%)
+        }
+    }
+    arrays := ["SaveNameArr", "UpdateNameArr"]
+    if (cmd == "变量" || cmd == "变量提取")
+        arrays.Push("VariableArr")
+    for field in arrays {
+        if (!data.HasOwnProp(field) || !(data.%field% is Array))
+            continue
+        for name in data.%field% {
+            if (name == "")
+                continue
+            error := CustomVariableNameError(name)
+            if (error != "")
+                throw ValueError(GetLang(error), , name)
+        }
+    }
 }
 
 ; 调试起点标记：▶（旧配置兼容 ⭐）；界面用向右键帽 Path，不直接画 ▶

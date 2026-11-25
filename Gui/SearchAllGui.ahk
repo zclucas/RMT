@@ -20,10 +20,10 @@ class SearchAllGui extends SearchProGui {
 
     BuildAllArrayField(saveRow) {
         coord := saveRow.Add("Grid").Grid_Column(2)
-        coord.Cols("Auto", "8", "*")
-        coord.Add("TextBlock").Text(GetLang("坐标数据：")).ToolTip(GetLang("批量返回坐标数组")).VerticalAlignment("Center")
+        coord.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
+        coord.Add("TextBlock").Name("AllSaveLabel").Text(GetLang("坐标数据：")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
-        this._AddEditCombo(coord, "AllSaveNameCon", 0, 2)
+        this._AddEditCombo(coord, "AllSaveNameCon", 0, 1, "{Binding ActualWidth, ElementName=SearchCountCon}")
     }
 
     Init(cmd) {
@@ -41,8 +41,6 @@ class SearchAllGui extends SearchProGui {
             }
         }
         this.ui.Update("AllSortCon", "SelectedIndex", String(sortIndex))
-        if (sortIndex == -1)
-            this.ui.Update("AllSortCon", "ToolTip", GetLang(savedOrder))
     }
 
     CheckIfValid() {

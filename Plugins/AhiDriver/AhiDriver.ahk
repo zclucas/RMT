@@ -60,7 +60,7 @@ GetAHIPluginDir() {
 GetFileProductName(path) {
     if !FileExist(path)
         return ""
-    size := DllCall("version\GetFileVersionInfoSizeW", "wstr", path, "uint*", 0)
+    size := DllCall("version\GetFileVersionInfoSizeW", "wstr", path, "ptr", 0)
     if !size
         return ""
     buf := Buffer(size)

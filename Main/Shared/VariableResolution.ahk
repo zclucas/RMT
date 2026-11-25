@@ -95,6 +95,8 @@ GetSmartReplaceVarText(tableItem, index, &text) {
 }
 
 TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLiteral := true) {
+    if (SubStr(varName, 1, 1) == "❖")
+        varName := GetBuiltinVarName(varName)
     varName := LegacyRuntimeVarNames().Get(varName, varName)
 
     if (allowLiteral && RegExMatch(varName, "^[0-9A-Fa-f]{6}$")) {
@@ -254,9 +256,11 @@ GetBuiltinVarGroups() {
 
 GetBuiltinVarNames(categories*) {
     names := []
-    for category in categories
-        names.Push(GetBuiltinVarGroups()[category]*)
-    return GetLangArr(names)
+    for category in categories {
+        for name in GetBuiltinVarGroups()[category]
+            names.Push("❖" GetLang(name))
+    }
+    return names
 }
 
 GetSystemVarArr() {
@@ -284,15 +288,49 @@ GetBuiltinVarName(value, toDisplay := false) {
     keys := names.Clone()
     for old in LegacyRuntimeVarNames()
         keys.Push(old)
+    original := value
+    marked := SubStr(value, 1, 1) == "❖"
+    if (marked)
+        value := SubStr(value, 2)
     key := GetConfigKey(value, keys)
     key := LegacyRuntimeVarNames().Get(key, key)
-    if (toDisplay) {
-        for name in names {
-            if (name == key)
-                return GetLang(key)
+    for name in names {
+        if (name == key)
+            return toDisplay ? "❖" GetLang(key) : key
+    }
+    return marked ? original : key
+}
+
+; 仅在候选列表确实包含系统变量时转换回显，保存变量名和普通文本不受影响。
+GetVariableComboText(items, value) {
+    display := GetBuiltinVarName(value, true)
+    reference := TranslateBuiltinVarReferences(value, true)
+    for item in items {
+        if (item == display)
+            return display
+        if (item == reference)
+            return reference
+    }
+    return value
+}
+
+; 保存目标允许自定义名称，系统标记与数值字面量不能作为名称。
+CustomVariableNameError(name) {
+    name := Trim(name)
+    if (name == "")
+        return "结果变量名不规范：变量名不能为空"
+    if (IsNumber(name))
+        return "结果变量名不规范：变量名不能是纯数字"
+    if (InStr(name, "❖"))
+        return "结果变量名不规范：变量名不能包含系统变量字符❖"
+    key := GetBuiltinVarName(name)
+    for _, names in GetBuiltinVarGroups() {
+        for builtin in names {
+            if (key == builtin)
+                return "结果变量名不规范：变量名不能与系统变量重名"
         }
     }
-    return key
+    return ""
 }
 
 TranslateBuiltinVarReferences(value, toDisplay := false) {
@@ -321,29 +359,31 @@ IsTimeVar(name) {
 }
 
 
+TryGetCompareOperand(&value, tableItem, index, operand, variTip := true) {
+    if (RegExMatch(operand, "^\{([^{}\r\n]+)\}$", &reference))
+        return TryGetTabVarValue(&value, tableItem, index, GetBuiltinVarName(reference[1]), variTip, false)
+    value := IsNumber(operand) ? Number(operand) : operand
+    return true
+}
+
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {
     CompareType := CmdEnumCompare(CompareType)
     if (CompareType == "变量存在") {
-        hasValue := TryGetTabVarValue(&Value, tableItem, index, Name, false)
-        currentComparison := hasValue
+        currentComparison := RegExMatch(Name, "^\{([^{}\r\n]+)\}$", &reference)
+            && TryGetTabVarValue(&Value, tableItem, index, GetBuiltinVarName(reference[1]), false, false)
         return true
     }
-
-    hasValue := TryGetTabVarValue(&Value, tableItem, index, Name)
-    if (!hasValue)
+    ; 只有完整的 {变量} 引用才取值，裸文本不再随运行时变量表改变含义。
+    if (!TryGetCompareOperand(&Value, tableItem, index, Name)
+        || !TryGetCompareOperand(&OtherVal, tableItem, index, OtherValue))
         return false
-
-    if (CompareType == "等于" || CompareType == "字符包含" || CompareType == "正则匹配" || CompareType == "不等于") {
-        hasOtherValue := TryGetTabVarValue(&OtherVal, tableItem, index, OtherValue, false)
-        OtherVal := hasOtherValue ? OtherVal : OtherValue
-        hasOtherValue := true
+    if (CompareType == "大于" || CompareType == "大于等于" || CompareType == "小于" || CompareType == "小于等于") {
+        if (!IsNumber(Value) || !IsNumber(OtherVal)) {
+            currentComparison := false
+            return true
+        }
+        Value := Number(Value), OtherVal := Number(OtherVal)
     }
-    else {
-        hasOtherValue := TryGetTabVarValue(&OtherVal, tableItem, index, OtherValue)
-    }
-
-    if (!hasOtherValue)
-        return false
 
     switch CompareType {
         case "大于": currentComparison := Value > OtherVal

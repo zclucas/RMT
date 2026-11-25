@@ -325,7 +325,7 @@ class UIMacroDesignerGui {
         this._PropRow(rowText, "文本", "TextCon")
         rowFontSize := rowAppearance.Add("Grid").Name("rowFontSize")
             .Cols("44", "*").Margin("0,0,0,6")
-        rowFontSize.Add("TextBlock").Text("字号").FontSize("11")
+        rowFontSize.Add("TextBlock").Name("FontSizeLabel").Text("字号").ToolTip("自定义字号：8 到 48").FontSize("11")
             .VerticalAlignment("Center").Foreground("{DynamicResource TextSub}")
         fontSizeGrid := rowFontSize.Add("Grid").Grid_Column(1).Cols("27", "3", "*", "3", "27")
         fontMinus := this._IconBtn(fontSizeGrid, "BtnFontSizeDown", Chr(0xE738), "缩小字号", 24)
@@ -335,7 +335,6 @@ class UIMacroDesignerGui {
             .VerticalContentAlignment("Center").HorizontalContentAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .ToolTip("自定义字号：8 到 48")
         fontPlus := this._IconBtn(fontSizeGrid, "BtnFontSizeUp", Chr(0xE710), "放大字号", 24)
         fontPlus.Grid_Column(4)
         rowTextColor := rowAppearance.Add("Grid").Name("rowTextColor")
@@ -509,14 +508,14 @@ class UIMacroDesignerGui {
     }
 
     _PropRow(parent, label, name, toolTip := "") {
-        parent.Add("TextBlock").Text(label).FontSize("11").Margin("0,0,0,2")
+        caption := parent.Add("TextBlock").Name(name "Label").Text(label).FontSize("11").Margin("0,0,0,2")
             .Foreground("{DynamicResource TextSub}")
+        if (toolTip != "")
+            caption.ToolTip(toolTip)
         input := parent.Add("TextBox").Name(name).Height(26).MinHeight(26).Margin("0,0,0,6")
             .FontSize("12").Padding("4,0").VerticalContentAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        if (toolTip != "")
-            input.ToolTip(toolTip)
     }
 
     _PropSection(parent, label, topMargin := 6) {

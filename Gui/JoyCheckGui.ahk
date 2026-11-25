@@ -125,6 +125,7 @@ class JoyCheckGui extends JoyGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         this.ui.Update(comboName, "ClearItems", "")
         for it in items {
             if (it == "")
@@ -263,7 +264,7 @@ class JoyCheckGui extends JoyGui {
             RmtDialog.Info(GetLang("请输入变量名！"))
             return false
         }
-        return true
+        return CheckVarNameIfValid(varName)
     }
 
     GetCommandStr() {

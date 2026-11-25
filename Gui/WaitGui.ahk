@@ -3,7 +3,7 @@
 ; =====================================================================
 ; 等待编辑器（§16）—— XAML 迁移版（独立实现）
 ; 公开接口保持：ShowGui(cmd) / SureBtnAction / OwnerHwnd / ParentTile
-; 七类等待共用条件编辑入口，时间等待与区间判断复用时间执行逻辑。
+; 各类等待共用条件编辑入口，时间等待与区间判断复用时间执行逻辑。
 ; =====================================================================
 
 class WaitGui {
@@ -89,24 +89,7 @@ class WaitGui {
 
         pStack := body.Add("Grid")
 
-        vp := pStack.Add("Border").Name("VarPanel").Visibility("Collapsed")
-            .Margin("0,5,0,4").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1).CornerRadius(4)
-        scroll := vp.Add("ScrollViewer").Name("VarScroll")
-            .Height(4 * 30).VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
-        template := scroll.Add("ScrollViewer.Template").Add("ControlTemplate").TargetType("ScrollViewer")
-        viewport := template.Add("Grid")
-        viewport.Cols("*", "Auto")
-        viewport.Add("ScrollContentPresenter").Name("PART_ScrollContentPresenter")
-        viewport.Add("ScrollBar").Name("PART_VerticalScrollBar").Grid_Column(1).Margin("0,2,2,2")
-            .Style("{DynamicResource VerticalScrollBarStyle}").Visibility("Hidden")
-            .Value("{TemplateBinding VerticalOffset}").Maximum("{TemplateBinding ScrollableHeight}")
-            .ViewportSize("{TemplateBinding ViewportHeight}")
-        ; 隐藏时仍保留滚动条列的宽度，避免条件行在溢出时改变宽度。
-        template.Add("ControlTemplate.Triggers").Add("Trigger").Property("ComputedVerticalScrollBarVisibility").Value("Visible")
-            .Add("Setter").TargetName("PART_VerticalScrollBar").Property("Visibility").Value("Visible")
-        list := scroll.Add("StackPanel").Margin("6,0").VerticalAlignment("Top")
-        list.Add("StackPanel").Name("VarRows")
-        CmdEditorForm.IconButton(list, "BtnAddVar", 0xE710, "添加").HorizontalAlignment("Center").Margin("0,2")
+        CmdEditorForm.ConditionPanel(pStack, "VarPanel", "VarScroll", "VarRows", "BtnAddVar")
 
         ; 按键面板
         kp := pStack.Add("StackPanel").Name("KeyPanel").Visibility("Collapsed")
@@ -143,8 +126,7 @@ class WaitGui {
             for j, axis in ["X", "Y"] {
                 rp.Add("ComboBox").Grid_Row(i - 1).Grid_Column(2 * j - 1).Name(endpoint "Pos" axis)
                     .Height(26).MinHeight(26).VerticalAlignment("Center")
-                    .Width("{Binding ActualWidth, ElementName=WaitTypeCon}").IsEditable("True")
-                    .ToolTip(GetLang((i == 1 ? "起始坐标" : "终止坐标") axis "："))
+                    .Width("{Binding ActualWidth, ElementName=WaitTypeCon}").HorizontalAlignment("Left").Margin("-2,0,2,0").IsEditable("True")
             }
         }
 
@@ -167,7 +149,9 @@ class WaitGui {
         fp := CmdEditorForm.Row(pStack, "文件路径：", "FilePanel").Visibility("Collapsed")
         fileInput := fp.Add("Grid").Grid_Column(1)
         fileInput.Cols("*", 6, "Auto")
-        CmdEditorForm.TextBox(fileInput, "FilePathCon")
+        fileField := fileInput.Add("Grid")
+        CmdEditorForm.TextBox(fileField, "FilePathCon").Style("{StaticResource RmtSingleLineTextBox}")
+        this._Placeholder(fileField, "FilePathCon", "请输入文件路径或选择浏览")
         fileInput.Add("Button").Grid_Column(2).Name("BtnFileBrowse").Content(GetLang("浏览"))
             .Height(26).MinHeight(26).Cursor("Hand")
 
@@ -192,7 +176,9 @@ class WaitGui {
 
         confirm := pStack.Add("StackPanel").Name("ConfirmPanel").Visibility("Collapsed")
         promptRow := CmdEditorForm.Row(confirm, "提示：")
-        CmdEditorForm.TextBox(promptRow, "ConfirmPrompt").Grid_Column(1)
+        promptField := promptRow.Add("Grid").Grid_Column(1)
+        CmdEditorForm.TextBox(promptField, "ConfirmPrompt").Style("{StaticResource RmtSingleLineTextBox}")
+        this._Placeholder(promptField, "ConfirmPrompt", "请输入交互提示")
         option := WaitGui.ConfirmOptions[1]
         row := CmdEditorForm.Row(confirm, option[2])
         this._Choice(row, "Confirm" option[1], option[3]).Grid_Column(1)
@@ -295,7 +281,17 @@ class WaitGui {
         this._closed := true
     }
 
+    _Placeholder(parent, field, text) {
+        label := parent.Add("TextBlock").Name(field "Placeholder").Text(GetLang(text)).IsHitTestVisible("False")
+            .Margin("6,0").VerticalAlignment("Center").Foreground("{DynamicResource TextSub}").Opacity("0.65")
+        style := label.Add("TextBlock.Style").Add("Style").TargetType("TextBlock")
+        style.Add("Setter").Property("Visibility").Value("Collapsed")
+        style.Add("Style.Triggers").Add("DataTrigger").Binding("{Binding Text, ElementName=" field "}").Value("")
+            .Add("Setter").Property("Visibility").Value("Visible")
+    }
+
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         batch := []
@@ -304,11 +300,12 @@ class WaitGui {
     }
 
     _QueueCombo(batch, comboName, items, text) {
+        text := GetVariableComboText(items, text)
         batch.Push({ControlName: comboName, PropertyName: "ClearItems", Value: ""})
         for it in items {
             if (it == "")
                 continue
-            batch.Push({ControlName: comboName, PropertyName: "AddItem", Value: it})
+            batch.Push(CmdEditorForm.ComboItemUpdate(comboName, it))
         }
         batch.Push({ControlName: comboName, PropertyName: "Text", Value: text})
     }
@@ -405,7 +402,7 @@ class WaitGui {
             action := "忽略"
         statusVar := InputField(this.Data, "TimeoutStatusVar",
             this.Data.ResultSaveName != "" ? this.Data.ResultSaveName : TimeoutPolicy.DefaultStatusVar)
-        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action, statusVar)
+        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action, statusVar, true)
         keyWait := this._PanelOf(CmdEnumWait(this.Data.WaitType)) == "KeyPanel"
         this._pickedKeyText := keyWait ? this.Data.Param1 : ""
         this._pickedKeys := keyWait ? this.Data.KeyOptions.KeyArr : []
@@ -442,7 +439,7 @@ class WaitGui {
         }
         if (IsObject(this.ui))
             this.ui.Update("DateUnitCon", "SelectedIndex", String(unitIdx))
-        this._initialConditions := this.Data.Conditions
+        this._initialConditions := cmd == "" ? [{Variable: "10", Operator: "等于", Value: "5"}] : this.Data.Conditions
         if (!this._initialConditions.Length) {
             varWait := CmdEnumWait(this.Data.WaitType) == "等待变量值"
             this._initialConditions := [{Variable: varWait ? this.Data.Param1 : "", Operator: "等于", Value: varWait ? this.Data.Param2 : ""}]
@@ -735,8 +732,10 @@ class WaitGui {
         switch t {
             case "等待变量值":
                 for condition in this._ReadConditions() {
-                    if (!CheckVarNameIfValid(condition.Variable))
+                    if (Trim(condition.Variable) == "") {
+                        RmtDialog.Info(GetLang("请输入变量名或数值"))
                         return false
+                    }
                 }
             case "等待按键按下", "等待按键松开":
                 if (!this._KeysFor(Trim(this.ui.Query("KeyCon"))).Length) {
@@ -780,7 +779,7 @@ class WaitGui {
         }
         data := {}
         CommandTimeoutFields.Read(this.ui, data, true)
-        if (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 0 || data.TimeoutMs > 4294967295) {
+        if (!TimeoutPolicy.ValidMs(data.TimeoutMs, 4294967295, 0)) {
             RmtDialog.Info(GetLang("超时请输入 0 到 4294967295 的整数（毫秒）"))
             return false
         }
@@ -1055,9 +1054,10 @@ class WaitGui {
         row := XAML_Generator("Grid").Margin("0,2")
         row.SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
         row.Cols("*", 8, "*", 8, "*", 6, 28)
-        CmdEditorForm.Combo(row, "VarName_" i, true).ToolTip(GetLang("变量名："))
-        this._Choice(row, "VarCompare_" i, WaitGui.CompareKeys).Grid_Column(2)
-        CmdEditorForm.Combo(row, "VarValue_" i, true).Grid_Column(4)
+        ; 比较符两侧各让出 20px 给变量框，保留整行宽度与控件间距。
+        CmdEditorForm.Combo(row, "VarName_" i, true).Margin("0,0,-20,0")
+        this._Choice(row, "VarCompare_" i, WaitGui.CompareKeys).Grid_Column(2).Margin("20,0,20,0")
+        CmdEditorForm.Combo(row, "VarValue_" i, true).Grid_Column(4).Margin("-20,0,0,0")
         CmdEditorForm.IconButton(row, "BtnDeleteVar_" i, 0xE74D, "删除").Grid_Column(6)
             .IsEnabled(canDelete ? "True" : "False")
         return row.ToString()
@@ -1069,8 +1069,8 @@ class WaitGui {
         for i, condition in conditions {
             batch := [{ControlName: "VarRows", PropertyName: "AddXamlItem", Value: this._ConditionRow(i, conditions.Length > 1)}]
             items := GetCompareGuiVarArr(condition.Operator)
-            this._QueueCombo(batch, "VarName_" i, items, GetLang(condition.Variable))
-            this._QueueCombo(batch, "VarValue_" i, items, GetBuiltinVarName(condition.Value, true))
+            this._QueueCombo(batch, "VarName_" i, items, TranslateBuiltinVarReferences(condition.Variable, true))
+            this._QueueCombo(batch, "VarValue_" i, items, TranslateBuiltinVarReferences(condition.Value, true))
             batch.Push({ControlName: "VarCompare_" i, PropertyName: "SelectedIndex",
                 Value: CmdEnumIndex(condition.Operator, WaitGui.CompareKeys)})
             this.ui.BatchUpdate(batch)
@@ -1091,8 +1091,8 @@ class WaitGui {
         loop this._conditionCount {
             i := A_Index
             operator := GetLangKey(this.ui.Query("VarCompare_" i))
-            conditions.Push({Variable: GetVarName(this.ui.Query("VarName_" i)),
-                Operator: operator, Value: GetBuiltinVarName(this.ui.Query("VarValue_" i))})
+            conditions.Push({Variable: TranslateBuiltinVarReferences(this.ui.Query("VarName_" i)),
+                Operator: operator, Value: TranslateBuiltinVarReferences(this.ui.Query("VarValue_" i))})
         }
         return conditions
     }

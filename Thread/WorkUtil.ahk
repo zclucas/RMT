@@ -462,8 +462,9 @@ WorkModifyGlobalArray(name, row, index, isArrayValue, value) => WorkCommitGlobal
 WorkInsertGlobalArray(name, row, index, isArrayValue, value) => WorkCommitGlobalData("IA", name, row, index, value)
 WorkRemoveAtGlobalArray(name, row, index) => WorkCommitGlobalData("RA", name, row, index)
 WorkSetGlobalVariable(names, values, ignoreExist) {
+    ; 已保存的旧配置仍可执行；新名称由编辑器和外部写入入口校验。
     for i, name in names {
-        if (!ignoreExist || !MySoftData.VariableMap.Has(name))
+        if (name != "" && (!ignoreExist || !MySoftData.VariableMap.Has(name)))
             MySoftData.VariableMap[name] := values[i]
     }
 }

@@ -27,6 +27,7 @@ Compat13_UpgradeWindows(dir, renames) {
     saved := root["Compat13Renames"] := Cfg_Seg(root, "Compat13Renames").Clone()
     for key, target in saved
         renames[key] := target
+    original := values.Clone()
     dirty := false
     for key, raw in values.Clone() {
         if (!RegExMatch(key, "^(.+?)(\d+)$", &serial))
@@ -51,6 +52,24 @@ Compat13_UpgradeWindows(dir, renames) {
         values[key] := JSON.stringify(data, 0)
         saved[key] := Compat13_Rename(values, key, prefix, renames)
         dirty := true
+    }
+    ; 旧版可按界面语言保存资源键，宏引用却已转成中文或另一译名。
+    ; 只补没有独立资源的别名，避免同序号的不同配置互相覆盖。
+    for key in original {
+        if (!saved.Has(key) || !RegExMatch(key, "^(.+?)(\d+)$", &serial))
+            continue
+        source := GetCommandKey(serial[1])
+        canonical := source serial[2]
+        target := saved.Get(canonical, saved[key])
+        aliases := CommandLanguageIndex().Aliases.Get(source, Map()).Clone()
+        aliases[source] := true
+        for alias in aliases {
+            aliasKey := alias serial[2]
+            if (original.Has(aliasKey) || saved.Has(aliasKey))
+                continue
+            saved[aliasKey] := renames[aliasKey] := target
+            dirty := true
+        }
     }
     if (dirty)
         Cfg_WriteRoot(root, path)

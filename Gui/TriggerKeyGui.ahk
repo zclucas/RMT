@@ -510,12 +510,11 @@ class TriggerKeyGui {
             unorderedCon.Visibility("Collapsed")
 
         r1 := opt.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").HorizontalAlignment(isJoy ? "Center" : "Left").Margin(isJoy ? "0" : "100,0,0,0")
-        r1.Add("TextBlock").Name("HoldTimeLabelCon").Text(GetLang("长按时间/双击时间：")).VerticalAlignment("Center")
+        r1.Add("TextBlock").Name("HoldTimeLabelCon").Text(GetLang("长按时间/双击时间：")).ToolTip(GetLang("此设置只在触发模式是【长按】/【双击】时有效")).VerticalAlignment("Center")
         r1.Add("TextBox").Name("HoldTimeCon").Width(100).Height(24).MinHeight(24)
             .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center").FontSize(11).Margin("4,0,0,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-            .ToolTip(GetLang("此设置只在触发模式是【长按】/【双击】时有效"))
 
         r2 := opt.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment(isJoy ? "Center" : "Left").Margin(isJoy ? "0" : "100,0,0,0")
         r2.Add("TextBlock").Name("CheckedInfoCon").Text(GetLang("当前配置的触发键：无")).VerticalAlignment("Center")

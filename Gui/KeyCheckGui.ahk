@@ -310,6 +310,7 @@ class KeyCheckGui {
     ; ---------------- 数据 ----------------
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         this.ui.Update(comboName, "ClearItems", "")
         for it in items {
             if (it == "")
@@ -360,7 +361,7 @@ class KeyCheckGui {
             return false
         }
 
-        return true
+        return CheckVarNameIfValid(varName)
     }
 
     GetCommandStr() {

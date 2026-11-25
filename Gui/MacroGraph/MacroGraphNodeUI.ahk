@@ -323,6 +323,7 @@ class MacroGraphNodeUIMixin {
 
     ; 行内单元格：标签 + 可编辑下拉（变量名/数值）
     _ProCellEdit(rowSP, cellName, label, comboName, items, textVal, visible, lw, cw, rightCell) {
+        textVal := GetVariableComboText(items, textVal)
         cell := rowSP.Add("StackPanel").Name(cellName).Orientation("Horizontal")
         if (rightCell)
             cell.Margin("14,0,0,0")
@@ -331,7 +332,7 @@ class MacroGraphNodeUIMixin {
         cell.Add("TextBlock").Text(label).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(lw).VerticalAlignment("Center")
         cmb := cell.Add("ComboBox").Name(comboName).Width(cw).Height("22").MinHeight("0").FontSize(this._MGFontSize(12)).Padding(this._MGComboPadding()).MaxDropDownHeight("200").Foreground("{DynamicResource InputText}").IsEditable("True").IsTextSearchEnabled("False")
         for it in items
-            cmb.Add("ComboBoxItem").Content(it)
+            CmdEditorForm.ComboItem(cmb, it)
         cmb.SetProp("Text", textVal)
     }
 
@@ -346,7 +347,7 @@ class MacroGraphNodeUIMixin {
         cmb := cell.Add("ComboBox").Name(comboName).Width(cw).Height("22").MinHeight("0").FontSize(this._MGFontSize(12)).Padding(this._MGComboPadding()).MaxDropDownHeight("200").SelectedIndex(selIndex)
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for it in items
-            cmb.Add("ComboBoxItem").Content(it)
+            CmdEditorForm.ComboItem(cmb, it)
     }
 
     ; 行内单元格：复选框
@@ -378,7 +379,7 @@ class MacroGraphNodeUIMixin {
             chk.IsChecked("True")
         cmb := cell.Add("ComboBox").Name(p "Name_" id).Width(CW).Height("22").MinHeight("0").FontSize(this._MGFontSize(12)).Padding(this._MGComboPadding()).MaxDropDownHeight("200").Foreground("{DynamicResource InputText}").IsEditable("True").IsTextSearchEnabled("False")
         for it in varList
-            cmb.Add("ComboBoxItem").Content(it)
+            CmdEditorForm.ComboItem(cmb, it)
         cmb.SetProp("Text", vn)
     }
 
@@ -1488,7 +1489,7 @@ class MacroGraphNodeUIMixin {
         if (!enabled)
             cmb.IsEnabled("False")
         for it in items
-            cmb.Add("ComboBoxItem").Content(it)
+            CmdEditorForm.ComboItem(cmb, it)
         ; SelectedIndex 必须在 items 添加之后设置才能生效
         cmb.SelectedIndex(selIndex)
         return row
@@ -1508,7 +1509,7 @@ class MacroGraphNodeUIMixin {
         if (!enabled)
             cmb.IsEnabled("False")
         for it in items
-            cmb.Add("ComboBoxItem").Content(it)
+            CmdEditorForm.ComboItem(cmb, it)
         cmb.SelectedIndex(selIndex)
         return row
     }
@@ -1534,14 +1535,16 @@ class MacroGraphNodeUIMixin {
     _SetVariableComboItems(name, items, text := unset) {
         if (!IsSet(text))
             text := this.ui.Query(name)
+        text := GetVariableComboText(items, text)
         batch := [{ControlName: name, PropertyName: "ClearItems", Value: ""}]
         for item in items
-            batch.Push({ControlName: name, PropertyName: "AddItem", Value: item})
+            batch.Push(CmdEditorForm.ComboItemUpdate(name, item))
         batch.Push({ControlName: name, PropertyName: "Text", Value: text})
         this.ui.BatchUpdate(batch)
     }
 
     _AddEditableComboRow(body, rowName, labelText, comboName, items, textValue, visible, labelW := "80", comboW := "96", labelName := "", labelTip := "") {
+        textValue := GetVariableComboText(items, textValue)
         row := body.Add("StackPanel").Name(rowName).Orientation("Horizontal").Margin("0,5,0,0")
         if (!visible)
             row.Visibility("Collapsed")
@@ -1553,7 +1556,7 @@ class MacroGraphNodeUIMixin {
         ; MaxDropDownHeight 限制下拉高度（约 10 项），超出时模板内 ScrollViewer 自动出现滚动条
         cmb := row.Add("ComboBox").Name(comboName).Width(comboW).Height("22").MinHeight("0").FontSize(this._MGFontSize(12)).Padding(this._MGComboPadding()).MaxDropDownHeight("200").Foreground("{DynamicResource InputText}").IsEditable("True").IsTextSearchEnabled("False")
         for it in items
-            cmb.Add("ComboBoxItem").Content(it)
+            CmdEditorForm.ComboItem(cmb, it)
         ; ComboBox 上 .Text() 会被别名成 Content，需用 SetProp 直接写 Text 属性（编辑框文本，ToString 会自动转义）
         cmb.SetProp("Text", textValue)
         return row

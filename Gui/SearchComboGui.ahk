@@ -275,6 +275,7 @@ class SearchComboGui {
     ; ---------------- 数据读写辅助 ----------------
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this.ui.Update(comboName, "ClearItems", "")
@@ -452,7 +453,7 @@ class SearchComboGui {
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"/>'
             . '<StackPanel Name="' this._TN(n, "ColorMatchHost") '" Grid.Row="1" Grid.Column="4" Grid.ColumnSpan="3" Orientation="Horizontal" VerticalAlignment="Center">'
             . '<TextBlock Text="' GetLang("颜色匹配") '：" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{DynamicResource TextMain}"/>'
-            . '<CheckBox Name="' this._TN(n, "ColorMatch") '" Style="{StaticResource ColorMatchSwitch}" IsChecked="False" VerticalAlignment="Center" ToolTip="' GetLang("颜色匹配") '"/>'
+            . '<CheckBox Name="' this._TN(n, "ColorMatch") '" Style="{StaticResource ColorMatchSwitch}" IsChecked="False" VerticalAlignment="Center"/>'
             . '</StackPanel>'
             . '</Grid>'
             . '<Border Name="' this._TN(n, "ImagePreviewHost") '" Grid.Row="2" Grid.Column="4" Width="64" Height="64" MinWidth="64" MinHeight="64" MaxWidth="64" MaxHeight="64"'

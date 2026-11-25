@@ -85,4 +85,5 @@ global WM_WORKER_TO_MASTER := 0x50A  ; Worker→主进程：任务完成/事件�
 #Include Shared\MacroTableRuntime.ahk
 #Include Shared\CommandPaths.ahk
 #Include Shared\VariableResolution.ahk
+#Include Shared\VariableAssignment.ahk
 #Include Shared\MacroRuntimeHelpers.ahk

@@ -72,15 +72,18 @@ UpdateLayeredWindow(hwnd, hdc, x:="", y:="", w:="", h:="", Alpha:=255)
 		WinGetRect(hwnd,,, &w, &h)
 	}
 
+	size := w | h << 32
+	sourcePoint := 0
+	blend := Alpha << 16 | 1 << 24
 	return DllCall("UpdateLayeredWindow"
 		, "UPtr", hwnd
 		, "UPtr", 0
 		, "UPtr", ((x = "") && (y = "")) ? 0 : pt.Ptr
-		, "Int64*", w|h<<32
+		, "Int64*", &size
 		, "UPtr", hdc
-		, "Int64*", 0
+		, "Int64*", &sourcePoint
 		, "UInt", 0
-		, "UInt*", Alpha<<16|1<<24
+		, "UInt*", &blend
 		, "UInt", 2)
 }
 
@@ -1829,7 +1832,7 @@ Gdip_CreateBitmapFromFile(sFile, IconNumber:=1, IconSize:="")
 		hIcon := 0
 
 		for eachSize, Size in StrSplit( Sizes, "|" ) {
-			DllCall("PrivateExtractIcons", "str", sFile, "Int", IconNumber-1, "Int", Size, "Int", Size, "UPtr*", &hIcon, "UPtr*", 0, "UInt", 1, "UInt", 0)
+			DllCall("PrivateExtractIcons", "str", sFile, "Int", IconNumber-1, "Int", Size, "Int", Size, "UPtr*", &hIcon, "Ptr", 0, "UInt", 1, "UInt", 0)
 
 			if (!hIcon) {
 				continue
@@ -1840,8 +1843,8 @@ Gdip_CreateBitmapFromFile(sFile, IconNumber:=1, IconSize:="")
 				continue
 			}
 
-			hbmMask  := NumGet(buf, 12 + ((A_PtrSize ? A_PtrSize : 4) - 4))
-			hbmColor := NumGet(buf, 12 + ((A_PtrSize ? A_PtrSize : 4) - 4) + (A_PtrSize ? A_PtrSize : 4))
+			hbmMask  := NumGet(buf, A_PtrSize = 8 ? 16 : 12, "Ptr")
+			hbmColor := NumGet(buf, A_PtrSize = 8 ? 24 : 16, "Ptr")
 			if !(hbmColor && DllCall("GetObject", "UPtr", hbmColor, "Int", BufSize, "UPtr", buf.Ptr))
 			{
 				DestroyIcon(hIcon)
@@ -1863,7 +1866,7 @@ Gdip_CreateBitmapFromFile(sFile, IconNumber:=1, IconSize:="")
 
 		dib := Buffer(104)
 		DllCall("GetObject", "UPtr", hbm, "Int", A_PtrSize = 8 ? 104 : 84, "UPtr", dib.Ptr) ; sizeof(DIBSECTION) = 76+2*(A_PtrSize=8?4:0)+2*A_PtrSize
-		Stride := NumGet(dib, 12, "Int"), Bits := NumGet(dib, 20 + (A_PtrSize = 8 ? 4 : 0)) ; padding
+		Stride := NumGet(dib, 12, "Int"), Bits := NumGet(dib, 20 + (A_PtrSize = 8 ? 4 : 0), "Ptr") ; padding
 		DllCall("gdiplus\GdipCreateBitmapFromScan0", "Int", Width, "Int", Height, "Int", Stride, "Int", 0x26200A, "UPtr", Bits, "UPtr*", &pBitmapOld:=0)
 		pBitmap := Gdip_CreateBitmap(Width, Height)
 		_G := Gdip_GraphicsFromImage(pBitmap)
@@ -2852,7 +2855,12 @@ Gdip_PixelateBitmap(pBitmap, &pBitmapOut, BlockSize)
 		loop nCount {
 			NumPut("UChar", "0x" SubStr(MCode_PixelateBitmap, (2*A_Index)-1, 2), PixelateBitmap, A_Index-1)
 		}
-		DllCall("VirtualProtect", "UPtr", PixelateBitmap.Ptr, "UPtr", PixelateBitmap.Size, "UInt", 0x40, "UPtr*", 0)
+		oldProtect := 0
+		if !DllCall("VirtualProtect", "UPtr", PixelateBitmap.Ptr, "UPtr", PixelateBitmap.Size, "UInt", 0x40, "UInt*", &oldProtect)
+		{
+			PixelateBitmap := ""
+			throw OSError()
+		}
 	}
 
 	Gdip_GetImageDimensions(pBitmap, &Width:="", &Height:="")

@@ -66,6 +66,7 @@ class WindowManageGui {
     }
 
     _ComboPush(comboName, propertyName, value) {
+        CmdEditorForm.NormalizeComboItem(&propertyName, &value)
         if (this._batching)
             this._batch.Push({ControlName: comboName, PropertyName: propertyName, Value: value})
         else
@@ -217,6 +218,7 @@ class WindowManageGui {
     ; ---------------- 数据填充辅助 ----------------
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         this._ComboPush(comboName, "ClearItems", "")
         for it in items {
             if (it == "")
@@ -263,7 +265,7 @@ class WindowManageGui {
         this._ComboPush("SearchValueCon", "Text", this.Data.SearchValue)
         if (this.CmdKey == "窗口操作" || this.CmdKey == "窗口信息") {
             matchMode := this.Data.HasProp("MatchMode") ? this.Data.MatchMode
-                : this.CmdKey == "窗口操作" ? WindowDefaultMatchMode(this.Data.ActionType, InStr(this.Data.SearchValue, "❖")) : ""
+                : this.CmdKey == "窗口操作" ? WindowDefaultMatchMode(this.Data.ActionType, IsHandleWindowBinding(this.Data.SearchValue)) : ""
             this._FillMatchModes(this.Data.ActionType, matchMode)
         }
         this._ComboPush("PosXCon", "Text", GetLang(this.Data.PosX))

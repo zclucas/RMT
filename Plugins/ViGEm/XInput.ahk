@@ -162,7 +162,8 @@ XInput_GetState(UserIndex)
 XInput_SetState(UserIndex, LeftMotorSpeed, RightMotorSpeed)
 {
     global _XInput_SetState
-    if err := DllCall(_XInput_SetState ,"uint",UserIndex ,"uint*",LeftMotorSpeed|RightMotorSpeed<<16)
+    vibration := LeftMotorSpeed | RightMotorSpeed << 16
+    if err := DllCall(_XInput_SetState, "UInt", UserIndex, "UInt*", &vibration)
         throw OSError(err, -1)
 }
 
@@ -224,7 +225,7 @@ XInput_GetCapabilities(UserIndex, Flags)
 XInput_Term() {
     global
     if _XInput_hm
-        DllCall("FreeLibrary","uint",_XInput_hm), _XInput_hm :=_XInput_GetState :=_XInput_SetState :=_XInput_GetCapabilities :=0
+        DllCall("FreeLibrary", "Ptr", _XInput_hm), _XInput_hm :=_XInput_GetState :=_XInput_SetState :=_XInput_GetCapabilities :=0
 }
 
 ; TODO: XInputEnable, 'GetBatteryInformation and 'GetKeystroke.

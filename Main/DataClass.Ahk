@@ -1147,10 +1147,11 @@ class ScreenShotData {
 
 class CompareData {
     __New() {
-        this.ToggleArr := [1, 0]
-        this.NameArr := ["Value1", "Value2"]
-        this.CompareTypeArr := ["大于", "大于"]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
-        this.VariableArr := ["Target1", "Target2"]
+        this.ConditionOperandsVersion := 1
+        this.ToggleArr := [1]
+        this.NameArr := ["{Value1}"]
+        this.CompareTypeArr := ["大于"]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
+        this.VariableArr := ["{Target1}"]
         this.TrueControlType := "无"   ;流程控制：无 循环-跳过本轮 循环-跳出 分支-跳出
         this.FalseControlType := "无"   ;流程控制：1无 2循环-跳过本轮 3循环-跳出 4分支-跳出
         this.TrueMacro := ""
@@ -1165,7 +1166,8 @@ class CompareData {
 
 class CompareProData {
     __New() {
-        this.VariNameArr := [["Value1"], ["Value2"]]
+        this.ConditionOperandsVersion := 1
+        this.VariNameArr := [["{Value1}"], ["{Value2}"]]
         this.CompareTypeArr := [["等于"], ["等于"]]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
         this.VariableArr := [["1"], ["2"]]
         this.LogicTypeArr := ["且", "或"]
@@ -1295,14 +1297,15 @@ class SubMacroData {
 
 class LoopData {
     __New() {
+        this.ConditionOperandsVersion := 1
         this.SerialStr := ""
         this.LoopCount := 10    ;循环次数
         this.CondiType := "无"     ;无 继续条件 退出条件
         this.LogicType := "且"     ;且 或
         this.ToggleArr := [1, 0]
-        this.NameArr := ["Value1", "Value2"]
+        this.NameArr := ["{Value1}", "{Value2}"]
         this.CompareTypeArr := ["大于", "大于"]  ;大于 大于等于 等于 小于等于 小于 字符包含 变量存在 正则匹配 不等于
-        this.VariableArr := ["Target1", "Target2"]
+        this.VariableArr := ["{Target1}", "{Target2}"]
         this.LoopBody := ""     ;循环体
     }
 
@@ -1336,7 +1339,7 @@ class VariableData {
         this.SerialStr := ""
         this.IsIgnoreExist := 0
         this.ToggleArr := [1]
-        this.OperaTypeArr := ["数值"]   ;数值 随机数值 字符 系统 时间 删除
+        this.OperaTypeArr := ["赋值"]   ;赋值 随机数值 系统 时间 删除
         this.VariableArr := ["Data1"]
         this.CopyVariableArr := ["0"]
         this.MinVariableArr := ["0"]
@@ -1441,6 +1444,7 @@ class TimeData {
 
 class WaitData {
     __New(legacy := false) {
+        this.ConditionOperandsVersion := 1
         this.SerialStr := ""
         ; 等待变量值 等待按键按下 等待按键松开 等待屏幕变化 等待鼠标移动 等待鼠标停止移动 等待剪切板变化
         ; 等待进程存在 等待进程关闭 等待窗口存在 等待窗口激活 等待窗口屏幕变化 等待窗口大小变化
@@ -1667,9 +1671,8 @@ class MouseWinData {
             return hwnd != 0 && this.WinId == hwnd
         }
 
-        if (InStr(FrontInfoStr, "❖")) {
-            FrontInfoStr := StrReplace(FrontInfoStr, "❖")
-            hwndList := StrSplit(FrontInfoStr, "|")
+        if (IsHandleWindowBinding(FrontInfoStr)) {
+            hwndList := GetHwndList(FrontInfoStr, false)
             for index, hwnd in hwndList {
                 if (this.WinId == hwnd)
                     return true

@@ -36,7 +36,7 @@ UiScaleLabels() {
 ; 刻度滑块：一条横线 + 六档短线刻度 + 选中档圆形滑块，下方标「小 / 默认 / 大」。
 ; 用 RadioButton 承载刻度：点击即切档，且程序同步 IsChecked 不会触发 Click，
 ; 避免异步回传把旧档位再写回控件。
-UiScaleSelectorXaml(name, value, width := 300, groupId := "") {
+UiScaleSelectorXaml(name, value, width := 300, groupId := "", showToolTips := true) {
     percent := NormalizeUiScale(value)
     ; WPF 的 GroupName 按线程全局注册，同名组会在多个窗口实例间互相取消选中；
     ; 主题窗口可能有多个实例，因此用唯一组名隔离。
@@ -67,7 +67,7 @@ UiScaleSelectorXaml(name, value, width := 300, groupId := "") {
     for i, preset in RMT_UiScalePresets {
         xaml .= '<RadioButton Grid.Row="0" Grid.Column="' (i - 1) '" Name="' name '_' preset '" GroupName="' group
             . '" Style="{StaticResource RmtUiScaleTick}" IsChecked="' (preset == percent ? "True" : "False")
-            . '" AutomationProperties.Name="' preset '%" ToolTip="' preset '%"/>'
+            . '" AutomationProperties.Name="' preset '%"' (showToolTips ? ' ToolTip="' preset '%"' : '') '/>'
         if labels.Has(i)
             xaml .= '<TextBlock Grid.Row="1" Grid.Column="' (i - 1) '" Text="' labels[i] '" FontSize="11" HorizontalAlignment="Center" Margin="0,3,0,0" Foreground="{DynamicResource TextSub}"/>'
     }

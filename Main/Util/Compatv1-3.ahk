@@ -76,6 +76,11 @@ Compat13_Normalize(data, stem) {
         && data.HasOwnProp("MatchType"))
         data.ArgsType := data.MatchType
     defaults := schemas[stem]()
+    ; 旧条件必须完成裸名称到引用的转换后才能标记新版语义。
+    if ((stem == "CompareFile" || stem == "CompareProFile" || stem == "LoopFile") && defaults.HasOwnProp("ConditionOperandsVersion"))
+        defaults.DeleteProp("ConditionOperandsVersion")
+    if (stem == "VariableFile")
+        defaults.OperaTypeArr := ["数值"] ; 缺失的旧来源仍按旧数值语义转换。
     if (stem == "WindowManageFile") {
         if (data.HasOwnProp("ActionType"))
             CmdEnumNorm("窗口管理", data)
@@ -90,6 +95,8 @@ Compat13_Normalize(data, stem) {
         defaults.DeleteProp("CustomInterval")
         defaults.DeleteProp("CustomUnit")
     }
+    if (defaults.HasOwnProp("ConditionOperandsVersion"))
+        defaults.DeleteProp("ConditionOperandsVersion")
     Compat13_FillDefaults(data, defaults)
     if (stem == "FileIOFile") {
         types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")
@@ -126,6 +133,8 @@ Compat13_Normalize(data, stem) {
         "OperationFile", ["ToggleArr", "UpdateNameArr", "ExpressionArr"])
     if (groups.Has(stem)) {
         defaults := schemas[stem]()
+        if (stem == "VariableFile")
+            defaults.OperaTypeArr := ["数值"]
         fields := groups[stem]
         count := data.ToggleArr.Length
         for field in fields {
@@ -477,16 +486,46 @@ Compat13_UpgradeProfile(dir) {
     Compat13_UpgradeDir(dir)
     IniImport_ExpandFlatMacroFile(dir)
     Compat13_UpgradeBuiltinVariables(dir)
+    Compat13_UpgradeWindowBindings(dir)
     Compat13_UpgradePrompts(dir)
     Compat13_UpgradeCommands(dir)
     Compat13_UpgradeCompareBranches(dir)
+    Compat13_UpgradeVariableAssignments(dir)
 }
 
 Compat13_UpgradeBuiltinVariables(dir) {
     return Compat_RewriteMacroFiles(dir, Compat13_RewriteBuiltinCommands, Compat13_RewriteBuiltinData, "", "CommentFile.toml", Compat13_RewriteBuiltinTemplate)
 }
 
+Compat13_UpgradeWindowBindings(dir) {
+    return Compat_RewriteMacroFiles(dir, (text) => text, Compat13_RewriteWindowBindings, "", "", NormalizeWindowBinding)
+}
+
+Compat13_RewriteWindowBindings(data, *) {
+    changed := false
+    for field in ["WinInfo", "WinInfoArr", "BindWindow", "FrontInfo", "Front", "FrontStr", "TargetTitle", "SearchValue",
+        "winInfo", "targetTitle", "frontStr", "ssWinInfo", "wmSearchValue"]
+        changed := Compat13_RewriteBuiltinField(data, field, NormalizeWindowBinding) || changed
+    if (data.HasOwnProp("WaitType") && InStr(CmdEnumWait(data.WaitType), "等待窗口") == 1)
+        changed := Compat13_RewriteBuiltinField(data, "Param1", NormalizeWindowBinding) || changed
+    if (data.HasOwnProp("MatchBy") && data.MatchBy == "窗口绑定")
+        changed := Compat13_RewriteBuiltinField(data, "Target", NormalizeWindowBinding) || changed
+    for _, value in data.OwnProps() {
+        if (value is Array) {
+            for item in value {
+                if (IsObject(item) && !(item is Array))
+                    changed := Compat13_RewriteWindowBindings(item) || changed
+            }
+        } else if (IsObject(value))
+            changed := Compat13_RewriteWindowBindings(value) || changed
+    }
+    return changed
+}
+
 Compat13_BuiltinName(name) {
+    original := name
+    if (SubStr(name, 1, 1) == "❖")
+        name := SubStr(name, 2)
     switch name, false {
         case "当前鼠标坐标X", "Mouse X": return "运行时坐标X"
         case "当前鼠标坐标Y", "Mouse Y": return "运行时坐标Y"
@@ -496,7 +535,7 @@ Compat13_BuiltinName(name) {
         case "当前时间(秒)", "当前时间秒", "Current Time (Seconds)": return "时分秒文本"
         case "Current Second": return "运行时秒"
     }
-    return GetBuiltinVarName(name)
+    return GetBuiltinVarName(original)
 }
 
 Compat13_RewriteBuiltinTemplate(text) {
@@ -552,6 +591,14 @@ Compat13_RewriteBuiltinData(data, rewriteMacro) {
             if (!data.OperaTypeArr.Has(index))
                 continue
             op := CmdEnumOpera(data.OperaTypeArr[index])
+            if (op == "赋值") {
+                next := Compat13_RewriteBuiltinTemplate(value)
+                if (next != value) {
+                    data.CopyVariableArr[index] := next
+                    changed := true
+                }
+                continue
+            }
             if (op != "数值" && op != "系统" && op != "时间")
                 continue
             next := Compat13_BuiltinName(value)

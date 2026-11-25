@@ -74,7 +74,7 @@ class VariableGui {
 
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,12")
-        body.Rows("36", "22", "168", "40")
+        body.Rows("36", "0", "168", "40")
 
         ; 行0：备注 + 存在则不改 + 帮助
         top := body.Add("Grid").Grid_Row(0)
@@ -93,19 +93,7 @@ class VariableGui {
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource ControlBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
-        ; 行1：列标题（边框上方，非粗体）
-        lab := body.Add("Grid").Grid_Row(1).Margin("1,0,9,0").HorizontalAlignment("Center")
-        lab.Cols("100", "8", "90", "8", "110", "8", "80", "8", "80", "8", "22")
-        lab.Add("TextBlock").Grid_Column(0).Text(GetLang("新变量")).HorizontalAlignment("Center").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}")
-        lab.Add("TextBlock").Grid_Column(2).Text(GetLang("类型")).HorizontalAlignment("Center").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}")
-        lab.Add("TextBlock").Grid_Column(4).Text(GetLang("值")).HorizontalAlignment("Center").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}")
-        lab.Add("TextBlock").Grid_Column(6).Name("LabMin").Text(GetLang("最小值")).HorizontalAlignment("Center").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}")
-        lab.Add("TextBlock").Grid_Column(8).Name("LabMax").Text(GetLang("最大值")).HorizontalAlignment("Center").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}")
+        ; 列标题随每行显示，混合类型时不显示无关的最小值、最大值。
 
         ; 行2：变量框（固定 6 行可视高度，可无限增删）
         box := body.Add("Border").Grid_Row(2).Padding("0,4")
@@ -123,7 +111,7 @@ class VariableGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="600" Height="330"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="680" Height="330"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._VarScrollStyles())
 
@@ -170,6 +158,7 @@ class VariableGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this.ui.Update(comboName, "ClearItems", "")
@@ -183,6 +172,7 @@ class VariableGui {
 
     ; 批量设置 ComboBox（把 ClearItems/AddXamlItem/Text 合并进 batch，最后一次性 BatchUpdate）
     _BatchSetCombo(batch, comboName, items, text) {
+        text := GetVariableComboText(items, text)
         batch.Push({ControlName: comboName, PropertyName: "ClearItems", Value: ""})
         for it in items {
             if (it == "")
@@ -194,12 +184,12 @@ class VariableGui {
 
     _OpTypeValue(i) {
         v := IsObject(this.ui) ? this.ui.Query("OpType" i ">SelectedIndex") : ""
-        return CmdEnumFromIndex(v, CmdEnumOperaNames())
+        return CmdEnumFromIndex(v, CmdEnumVariableNames())
     }
 
     _UiOpIndex(i) {
-        ot := (IsObject(this.Data) && this.Data.OperaTypeArr.Length >= i) ? this.Data.OperaTypeArr[i] : "数值"
-        return CmdEnumIndex(CmdEnumOpera(ot), CmdEnumOperaNames())
+        ot := (IsObject(this.Data) && this.Data.OperaTypeArr.Length >= i) ? this.Data.OperaTypeArr[i] : "赋值"
+        return CmdEnumIndex(CmdEnumOpera(ot), CmdEnumVariableNames())
     }
 
     Init(cmd) {
@@ -233,7 +223,7 @@ class VariableGui {
         }
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1]
-            this.Data.OperaTypeArr := [1]
+            this.Data.OperaTypeArr := ["赋值"]
             this.Data.VariableArr := ["Data1"]
             this.Data.CopyVariableArr := ["0"]
             this.Data.MinVariableArr := ["0"]
@@ -241,7 +231,7 @@ class VariableGui {
         }
         n := this.Data.ToggleArr.Length
         while (this.Data.OperaTypeArr.Length < n)
-            this.Data.OperaTypeArr.Push("数值")
+            this.Data.OperaTypeArr.Push("赋值")
         while (this.Data.VariableArr.Length < n)
             this.Data.VariableArr.Push("Data" (this.Data.VariableArr.Length + 1))
         while (this.Data.CopyVariableArr.Length < n)
@@ -294,43 +284,49 @@ class VariableGui {
             . '</Button>'
     }
 
-    ; 每行 XAML（对齐边框上方列标题）
+    ; 每行自带列标题，按所选类型分配输入宽度。
     _VarRowXml(i) {
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         opItems := ""
-        for t in GetLangArr(["数值", "随机数值", "字符", "系统", "时间", "删除"])
-            opItems .= '<ComboBoxItem Content="' t '"/>'
+        for type in GetLangArr(CmdEnumVariableNames())
+            opItems .= '<ComboBoxItem Content="' this._EscapeXml(type) '"/>'
         combo := ' Height="26" MinHeight="26" VerticalContentAlignment="Center"'
             . ' Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputText}"'
             . ' BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"'
-        ot := (IsObject(this.Data) && this.Data.HasOwnProp("OperaTypeArr") && this.Data.OperaTypeArr.Length >= i) ? this.Data.OperaTypeArr[i] : 1
-        if (ot == 7)
-            ot := 5
-        copyOn := ot == 1 || ot == 3 || ot == 4 || ot == 5
-        mmOn := ot == 2
-        copyVis := copyOn ? "Visible" : "Hidden"
-        copyHintVis := copyOn ? "Hidden" : "Visible"
-        mmVis := mmOn ? "Visible" : "Hidden"
-        mmHintVis := mmOn ? "Hidden" : "Visible"
-        hint := ' HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}" FontSize="14" IsHitTestVisible="False"'
-        return '<Grid ' ns ' Height="28" HorizontalAlignment="Center">'
+        type := CmdEnumOpera(this.Data.OperaTypeArr[i])
+        random := type == "随机数值"
+        copyOn := type == "赋值" || type == "系统" || type == "时间"
+        label := ' Height="18" HorizontalAlignment="Center" Foreground="{DynamicResource TextMain}"/>'
+        randomVisibility := random ? "Visible" : "Collapsed"
+        nameWidth := random ? 100 : 180
+        valueWidth := random ? 110 : 206
+        return '<Grid ' ns ' Height="50" HorizontalAlignment="Center">'
             . '<Grid.ColumnDefinitions>'
-            . '<ColumnDefinition Width="100"/><ColumnDefinition Width="8"/><ColumnDefinition Width="90"/>'
-            . '<ColumnDefinition Width="8"/><ColumnDefinition Width="110"/><ColumnDefinition Width="8"/>'
-            . '<ColumnDefinition Width="80"/><ColumnDefinition Width="8"/><ColumnDefinition Width="80"/>'
-            . '<ColumnDefinition Width="8"/><ColumnDefinition Width="22"/>'
-            . '</Grid.ColumnDefinitions>'
-            . '<ComboBox Grid.Column="0" Name="Var' i '" IsEditable="True"' combo '/>'
-            . '<ComboBox Grid.Column="2" Name="OpType' i '"' combo '>' opItems '</ComboBox>'
-            . '<Grid Grid.Column="4">'
-            . '<Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
-            . '<ComboBox Grid.Column="0" Name="Copy' i '" IsEditable="True" Visibility="' copyVis '"' combo '/>'
-            . '<TextBlock Grid.Column="0" Name="HintCopy' i '" Text="—" Visibility="' copyHintVis '"' hint '/>'
-            . this._IconBtnXml("EditChar" i, "&#xE70F;", GetLang("编辑"), "Collapsed", "1", "8,0,0,0")
-            . '</Grid>'
-            . '<Grid Grid.Column="6"><ComboBox Name="Min' i '" IsEditable="True" Visibility="' mmVis '"' combo '/><TextBlock Name="HintMin' i '" Text="—" Visibility="' mmHintVis '"' hint '/></Grid>'
-            . '<Grid Grid.Column="8"><ComboBox Name="Max' i '" IsEditable="True" Visibility="' mmVis '"' combo '/><TextBlock Name="HintMax' i '" Text="—" Visibility="' mmHintVis '"' hint '/></Grid>'
-            . this._IconBtnXml("DelRow" i, "&#xE74D;", GetLang("删除该变量"), "Visible", "10")
+            . '<ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="90"/>'
+            . '<ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>'
+            . '<ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>'
+            . '<ColumnDefinition Width="8"/><ColumnDefinition Width="22"/></Grid.ColumnDefinitions>'
+            . '<StackPanel Grid.Column="0" Name="VarCell' i '" Width="' nameWidth '">'
+            . '<TextBlock Text="' GetLang("新变量") '"' label
+            . '<ComboBox Name="Var' i '" IsEditable="True"' combo '/></StackPanel>'
+            . '<StackPanel Grid.Column="2"><TextBlock Text="' GetLang("类型") '"' label
+            . '<ComboBox Name="OpType' i '"' combo '>' opItems '</ComboBox></StackPanel>'
+            . '<StackPanel Grid.Column="4" Name="CopyCell' i '" Width="' valueWidth '">'
+            . '<TextBlock Text="' GetLang("值") '"' label
+            . '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
+            . '<ComboBox Name="Copy' i '" IsEditable="True" Visibility="' (copyOn ? "Visible" : "Hidden") '"' combo '/>'
+            . '<TextBlock Name="HintCopy' i '" Text="—" Visibility="' (copyOn ? "Hidden" : "Visible") '" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>'
+            . this._IconBtnXml("EditChar" i, "&#xE70F;", GetLang("编辑"), type == "赋值" ? "Visible" : "Collapsed", "1", "8,0,0,0")
+            . '</Grid></StackPanel>'
+            . '<Border Grid.Column="5" Name="MinGap' i '" Width="8" Visibility="' randomVisibility '"/>'
+            . '<StackPanel Grid.Column="6" Name="MinCell' i '" Width="80" Visibility="' randomVisibility '">'
+            . '<TextBlock Text="' GetLang("最小值") '"' label
+            . '<ComboBox Name="Min' i '" IsEditable="True"' combo '/></StackPanel>'
+            . '<Border Grid.Column="7" Name="MaxGap' i '" Width="8" Visibility="' randomVisibility '"/>'
+            . '<StackPanel Grid.Column="8" Name="MaxCell' i '" Width="80" Visibility="' randomVisibility '">'
+            . '<TextBlock Text="' GetLang("最大值") '"' label
+            . '<ComboBox Name="Max' i '" IsEditable="True"' combo '/></StackPanel>'
+            . this._IconBtnXml("DelRow" i, "&#xE74D;", GetLang("删除该变量"), "Visible", "10", "0,18,0,0")
             . '</Grid>'
     }
 
@@ -346,6 +342,7 @@ class VariableGui {
         if (!IsObject(this.ui))
             return
         this._EnsureVarDataLen()
+        NormalizeVariableAssignmentRows(this.Data)
         batch := []
         batch.Push({ControlName: "VarRowsPanel", PropertyName: "ClearItems", Value: ""})
         loop this.Data.ToggleArr.Length
@@ -383,9 +380,7 @@ class VariableGui {
             this._BatchSetCombo(batch, "Var" i, GetGuiVarArr(), GetLang(this.Data.VariableArr[i]))
             batch.Push({ControlName: "OpType" i, PropertyName: "SelectedIndex", Value: String(this._UiOpIndex(i))})
             copyVal := this.Data.CopyVariableArr[i]
-            if (copyVal == "" && this._UiOpIndex(i) == 0)
-                copyVal := "0"
-            this._BatchSetCombo(batch, "Copy" i, this.GetGuiVarArrByType(CmdEnumFromIndex(this._UiOpIndex(i), CmdEnumOperaNames())), GetLang(copyVal))
+            this._BatchSetCombo(batch, "Copy" i, this.GetGuiVarArrByType(CmdEnumFromIndex(this._UiOpIndex(i), CmdEnumVariableNames())), TranslateBuiltinVarReferences(copyVal, true))
             this._BatchSetCombo(batch, "Min" i, GetGuiVarArr("number"), GetLang(this.Data.MinVariableArr[i]))
             this._BatchSetCombo(batch, "Max" i, GetGuiVarArr("number"), GetLang(this.Data.MaxVariableArr[i]))
         }
@@ -399,7 +394,7 @@ class VariableGui {
         this._ReadVariableRows()
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
-        this.Data.OperaTypeArr.Push(1)
+        this.Data.OperaTypeArr.Push("赋值")
         this.Data.VariableArr.Push("Data" n)
         this.Data.CopyVariableArr.Push("0")
         this.Data.MinVariableArr.Push("0")
@@ -432,13 +427,13 @@ class VariableGui {
 
     GetGuiVarArrByType(type) {
         switch CmdEnumOpera(type) {
-            case "数值":
-                return GetGuiVarArr("number")
+            case "赋值":
+                return GetGuiVarReferences("all")
             case "系统":
                 return GetSystemVarArr()
             case "时间":
                 return GetTimeCategoryVarArr()
-            case "随机数值", "字符", "删除":
+            case "随机数值", "删除":
                 return []
         }
         return []
@@ -450,22 +445,18 @@ class VariableGui {
         batch := []
         loop this.Data.ToggleArr.Length {
             i := A_Index
-            OperaTypeValue := this._OpTypeValue(i)
-            EnableCopy := OperaTypeValue == "数值" || OperaTypeValue == "字符" || OperaTypeValue == "系统" || OperaTypeValue == "时间"
-            EnableMinMax := OperaTypeValue == "随机数值"
-            batch.Push({ControlName: "Copy" i, PropertyName: "Visibility", Value: EnableCopy ? "Visible" : "Hidden"})
-            batch.Push({ControlName: "HintCopy" i, PropertyName: "Visibility", Value: EnableCopy ? "Hidden" : "Visible"})
-            batch.Push({ControlName: "Min" i, PropertyName: "Visibility", Value: EnableMinMax ? "Visible" : "Hidden"})
-            batch.Push({ControlName: "HintMin" i, PropertyName: "Visibility", Value: EnableMinMax ? "Hidden" : "Visible"})
-            batch.Push({ControlName: "Max" i, PropertyName: "Visibility", Value: EnableMinMax ? "Visible" : "Hidden"})
-            batch.Push({ControlName: "HintMax" i, PropertyName: "Visibility", Value: EnableMinMax ? "Hidden" : "Visible"})
-            ; 字符类型时显示「编辑」按钮（叠在「值」框右侧，不占列间距）
-            batch.Push({ControlName: "EditChar" i, PropertyName: "Visibility", Value: OperaTypeValue == "字符" ? "Visible" : "Collapsed"})
-            CurValue := GetLang(this.ui.Query("Copy" i))
-            if ((CurValue == "" || CurValue == "True" || CurValue == "False") && OperaTypeValue == "数值")
-                CurValue := "0"
-            DLArr := this.GetGuiVarArrByType(OperaTypeValue)
-            this._BatchSetCombo(batch, "Copy" i, DLArr, CurValue)
+            type := this._OpTypeValue(i)
+            random := type == "随机数值"
+            copyOn := type == "赋值" || type == "系统" || type == "时间"
+            batch.Push({ControlName: "VarCell" i, PropertyName: "Width", Value: random ? 100 : 180})
+            batch.Push({ControlName: "CopyCell" i, PropertyName: "Width", Value: random ? 110 : 206})
+            for cell in ["MinCell", "MaxCell", "MinGap", "MaxGap"]
+                batch.Push({ControlName: cell i, PropertyName: "Visibility", Value: random ? "Visible" : "Collapsed"})
+            batch.Push({ControlName: "Copy" i, PropertyName: "Visibility", Value: copyOn ? "Visible" : "Hidden"})
+            batch.Push({ControlName: "HintCopy" i, PropertyName: "Visibility", Value: copyOn ? "Hidden" : "Visible"})
+            batch.Push({ControlName: "EditChar" i, PropertyName: "Visibility", Value: type == "赋值" ? "Visible" : "Collapsed"})
+            value := this.ui.Query("Copy" i)
+            this._BatchSetCombo(batch, "Copy" i, this.GetGuiVarArrByType(type), value)
         }
         this.ui.BatchUpdate(batch)
     }
@@ -539,7 +530,7 @@ class VariableGui {
             i := A_Index
             part := GetLang(data.VariableArr[i])
             switch CmdEnumOpera(data.OperaTypeArr[i]) {
-                case "数值":
+                case "赋值":
                     value := data.CopyVariableArr[i]
                     if (IsNumber(value))
                         part .= "=" value
@@ -563,9 +554,10 @@ class VariableGui {
         loop this.Data.ToggleArr.Length {
             i := A_Index
             this.Data.ToggleArr[i] := 1
-            this.Data.VariableArr[i] := GetLangKey(this.ui.Query("Var" i))
+            this.Data.VariableArr[i] := GetVarName(this.ui.Query("Var" i))
             this.Data.OperaTypeArr[i] := this._OpTypeValue(i)
-            this.Data.CopyVariableArr[i] := GetLangKey(this.ui.Query("Copy" i))
+            this.Data.CopyVariableArr[i] := this.Data.OperaTypeArr[i] == "赋值"
+                ? TranslateBuiltinVarReferences(this.ui.Query("Copy" i)) : GetLangKey(this.ui.Query("Copy" i))
             this.Data.MinVariableArr[i] := GetLangKey(this.ui.Query("Min" i))
             this.Data.MaxVariableArr[i] := GetLangKey(this.ui.Query("Max" i))
         }

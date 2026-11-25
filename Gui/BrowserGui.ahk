@@ -47,7 +47,6 @@ class BrowserGui extends CommentGui {
         urlRow := this._Row(body, "网址：", "UrlRow")
         this._TextBox(urlRow, "Url").Grid_Column(1).TextWrapping("NoWrap")
             .ScrollViewer_HorizontalScrollBarVisibility("Hidden")
-            .ToolTip("{Binding Text, RelativeSource={RelativeSource Self}}")
 
         selector := this._Row(body, "网页元素：", "SelectorRow", ,
             GetLang("左侧选择类型，右侧填写选择器。")).Add("Grid").Grid_Column(1)
@@ -504,7 +503,7 @@ class BrowserGui extends CommentGui {
             if (data.BrowserType == "自定义" && Trim(data.BrowserPath) == "")
                 message := GetLang("浏览器路径不能为空。")
         } else if (BrowserActions.UsesTimeout(data.ActionType)
-            && (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 1 || data.TimeoutMs > 2147483647))
+            && !TimeoutPolicy.ValidMs(data.TimeoutMs, 2147483647))
             message := GetLang("超时必须是正整数。")
         else if ((data.ActionType == "打开网址" || data.ActionType == "当前页跳转") && Trim(data.Url) == "")
             message := GetLang("网址不能为空。")

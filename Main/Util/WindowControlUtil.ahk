@@ -1,5 +1,6 @@
 #Requires AutoHotkey v2.0
 #Include TimeoutPolicy.ahk
+#Include ControlExcelUtil.ahk
 
 class WindowControlTimeoutError extends Error {
 }
@@ -11,6 +12,15 @@ class WindowControlData {
     Argument := ""
     WriteKind := "text"
     WaitType := "等待出现"
+    ClickType := ""
+    ClickHoldMs := 500
+    ClickPoint := "中心点"
+    ScrollOffset := 0
+    WaitOperator := "等于"
+    WaitValue := ""
+    WaitValueKind := "text"
+    WaitLogic := "且"
+    WaitConditions := []
     ResultVar := ""
     TypeVar := ""
     ClassVar := ""
@@ -21,11 +31,16 @@ class WindowControlData {
 }
 
 class ControlInfoData extends WindowControlData {
-    ActionType := "读取控件值"
+    ActionType := "检测控件存在"
     ResultVar := "Res"
-    TypeVar := "ControlType"
-    ClassVar := "ControlClass"
-    ControlVar := "TargetControl"
+    ControlVar := "TargetCon"
+    HwndVar := "ConHwnd"
+    XVar := "ConX"
+    YVar := "ConY"
+    WindowXVar := "ConWinX"
+    WindowYVar := "ConWinY"
+    WidthVar := "ConWidth"
+    HeightVar := "ConHeight"
     TimeoutAction := ""
     TimeoutStatusVar := ""
 }
@@ -33,19 +48,46 @@ class ControlInfoData extends WindowControlData {
 class WindowControl {
     static Actions := ["点击控件", "聚焦控件", "写入控件值", "读取控件值", "读取控件文本", "读取控件信息",
         "选中控件", "加入选区", "移出选区", "切换勾选", "设置勾选", "展开控件", "折叠控件", "滚动到控件",
-        "设置范围值", "读取范围值", "等待控件出现", "检测控件存在", "展开/折叠"]
+        "设置范围值", "读取范围值", "等待控件出现", "检测控件存在", "展开/折叠", "读取位置/宽高"]
     ; Actions 的旧枚举顺序保留，仅在编辑菜单中移除已合并的操作。
-    static InfoActions := ["检测控件存在", "读取控件值", "读取控件信息"]
+    static InfoActions := ["检测控件存在", "读取控件值", "读取位置/宽高"]
+    static PositionFields := ["XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"]
 
     static NormalizeAction(action) {
         action := CmdEnumZh(action, this.Actions)
         return action == "读取控件文本" || action == "读取范围值" ? "读取控件值" : action
     }
-    static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件", "展开/折叠"]
-    static WaitTypes := ["等待出现", "等待消失"]
+    static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件"]
+    static WaitTypes := ["等待出现", "等待消失", "可用", "禁用", "值变化", "值满足条件", "值不满足条件"]
+    static ClickTypes := ["左键单击", "左键双击", "左键长按", "右键单击", "右键双击", "右键长按"]
+    static ClickPoints := ["中心点", "区域随机"]
+
+    static NormalizeClickType(kind) => kind == "左键" ? "左键单击" : kind == "右键" ? "右键单击"
+        : kind == "长按300ms" || kind == "长按500ms" ? "左键长按" : kind
+
+    static ClickHoldValue(data) => data.ClickType == "长按300ms" ? 300 : data.ClickType == "长按500ms" ? 500
+        : data.HasOwnProp("ClickHoldMs") ? data.ClickHoldMs : 500
+
+    static ResolveClickHoldMs(value, resolve := "") {
+        if (TimeoutPolicy.IsVariable(value)) {
+            if (IsObject(resolve))
+                value := resolve(value)
+            else if (!TryGetVarValue(&value, SubStr(value, 2, -1), false, Map(), false))
+                throw Error(GetLang("长按时间变量尚未赋值。"))
+        }
+        if (!IsInteger(value) || value < 1 || value > 3600000)
+            throw Error(GetLang("长按时间应为 1～3600000 的整数毫秒。"))
+        return Integer(value)
+    }
+
+    static ConditionOperators(kind) => kind == "text"
+        ? ["等于", "不等于", "包含", "不包含", "开头是", "结尾是", "为空", "不为空"]
+        : kind == "state" ? ["等于", "不等于"] : ["等于", "不等于", "大于", "大于等于", "小于", "小于等于"]
 
     static CommandKey(action) {
         action := this.NormalizeAction(action)
+        if (action == "读取控件信息")
+            return "控件信息"
         for name in this.InfoActions
             if (action == name)
                 return "控件信息"
@@ -54,12 +96,20 @@ class WindowControl {
 
     ; Automation ID is scoped to siblings. Fall back to name and class, then the occurrence in that group.
     static Describe(element) {
+        if (element is ExcelControlTarget)
+            return Map("type", 50029, "id", element.range.Address[false, false, 1], "name", element.Name(), "class", "ExcelCell")
         return Map("type", this._Int(element, 21), "id", this._String(element, 29),
             "name", this._String(element, 23), "class", this._String(element, 30))
     }
 
     static FromPoint(x, y) {
         hit := this._HitTest(x, y)
+        if (cell := ControlExcel.FromPoint(hit.hwnd, x, y)) {
+            key := this.Describe(cell)
+            key["index"] := 1
+            return Map("exe", WinGetProcessName(hit.hwnd), "windowClass", WinGetClass(hit.hwnd),
+                "titleContains", "", "path", [key], "excel", cell.Metadata())
+        }
         path := []
         node := hit.element
         while (node && !this._Equals(node, hit.root)) {
@@ -117,6 +167,8 @@ class WindowControl {
     }
 
     static _Bounds(element, hwnd := 0) {
+        if (element is ExcelControlTarget)
+            return element.Bounds()
         rect := Buffer(16)
         ; DWM 的可见边框不含窗口外围用于拖拽缩放的透明区域。
         if (!hwnd || DllCall("dwmapi\DwmGetWindowAttribute", "Ptr", hwnd, "UInt", 9, "Ptr", rect, "UInt", rect.Size, "Int"))
@@ -156,6 +208,13 @@ class WindowControl {
                     || Type(part.Get("name", 0)) != "String" || Type(part.Get("class", 0)) != "String")
                     throw ValueError()
             }
+            if (selector.Has("excel")) {
+                cell := selector["excel"]
+                if (!(cell is Map) || Type(cell.Get("workbook", 0)) != "String" || cell["workbook"] == ""
+                    || Type(cell.Get("sheet", 0)) != "String" || cell["sheet"] == ""
+                    || Type(cell.Get("address", 0)) != "String" || !RegExMatch(cell["address"], "^[A-Z]{1,3}[1-9]\d{0,6}$"))
+                    throw ValueError()
+            }
             return selector
         } catch {
             throw Error(GetLang("控件选择器无效，请重新拾取。"))
@@ -172,9 +231,13 @@ class WindowControl {
                 if (WinGetProcessName(hwnd) != selector["exe"] || WinGetClass(hwnd) != selector["windowClass"]
                     || (title != "" && !InStr(WinGetTitle(hwnd), title)))
                     continue
-                element := this._Object(6, this._Automation(), "Ptr", hwnd)
-                if (element)
-                    element := this._ResolvePath(element, selector["path"], stabilize)
+                if (selector.Has("excel"))
+                    element := ControlExcel.Find(hwnd, selector["excel"])
+                else {
+                    element := this._Object(6, this._Automation(), "Ptr", hwnd)
+                    if (element)
+                        element := this._ResolvePath(element, selector["path"], stabilize)
+                }
             } catch {
                 continue
             }
@@ -192,14 +255,20 @@ class WindowControl {
         return matched
     }
 
-    static Execute(data, arg, cancelled) {
+    static Execute(data, arg, cancelled, resolve := "", outputs := unset, waitBaseline := unset) {
+        if (IsSet(outputs)) {
+            outputs.hwnd := 0
+            outputs.bounds := ""
+        }
         selector := this.ParseSelector(this.ResolveTarget(data.Selector))
         action := this.NormalizeAction(data.ActionType)
-        waitDisappear := this.UsesTimeout(action) && data.HasOwnProp("WaitType") && data.WaitType == "等待消失"
-        deadline := this.UsesTimeout(action) ? A_TickCount + Integer(data.TimeoutMs) : 0
+        waiting := this.UsesTimeout(action)
+        waitType := data.HasOwnProp("WaitType") ? data.WaitType : "等待出现"
+        baseline := IsSet(waitBaseline) ? waitBaseline : {set: false, value: ""}
+        deadline := this.UsesTimeout(action) ? A_TickCount + TimeoutPolicy.ResolveMs(data.TimeoutMs) : 0
         while (!cancelled()) {
             element := this.Find(selector)
-            if (waitDisappear ? !element : !!element)
+            if (waiting ? this._WaitReady(element, waitType, data, baseline, resolve) : !!element)
                 break
             if (!this.UsesTimeout(action)) {
                 if (action == "检测控件存在")
@@ -215,11 +284,39 @@ class WindowControl {
 
         switch action {
             case "等待控件出现", "检测控件存在":
+                if (action == "检测控件存在" && IsSet(outputs))
+                    outputs.hwnd := this._NativeHwnd(element)
                 return 1
+            case "读取位置/宽高":
+                bounds := this._Bounds(element)
+                if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
+                    throw Error(GetLang("控件未提供有效位置。"))
+                bounds.x := Floor((bounds.left + bounds.right) / 2)
+                bounds.y := Floor((bounds.top + bounds.bottom) / 2)
+                point := Buffer(8)
+                NumPut("Int", bounds.x, "Int", bounds.y, point)
+                if (!DllCall("ScreenToClient", "Ptr", this._ElementWindow(element), "Ptr", point))
+                    throw OSError()
+                bounds.windowX := NumGet(point, 0, "Int")
+                bounds.windowY := NumGet(point, 4, "Int")
+                if (IsSet(outputs))
+                    outputs.bounds := bounds
+                return JSON.stringify(Map("x", bounds.x, "y", bounds.y,
+                    "windowX", bounds.windowX, "windowY", bounds.windowY,
+                    "width", bounds.right - bounds.left, "height", bounds.bottom - bounds.top), 0)
             case "点击控件":
-                ComCall(3, this._RequiredPattern(element, "invoke"))
+                if ((!data.HasOwnProp("ClickType") || data.ClickType == "") && !(element is ExcelControlTarget))
+                    ComCall(3, this._RequiredPattern(element, "invoke"))
+                else {
+                    kind := data.ClickType == "" ? "左键单击" : this.NormalizeClickType(data.ClickType)
+                    hold := InStr(kind, "长按") ? this.ResolveClickHoldMs(this.ClickHoldValue(data), resolve) : 0
+                    return this._ClickElement(element, kind, data.ClickPoint, cancelled, hold)
+                }
             case "聚焦控件":
-                ComCall(3, element)
+                if (element is ExcelControlTarget)
+                    element.Reveal()
+                else
+                    ComCall(3, element)
             case "写入控件值":
                 return this.WriteValue(element, arg)
             case "展开/折叠":
@@ -263,7 +360,21 @@ class WindowControl {
             case "展开控件", "折叠控件":
                 ComCall(action == "展开控件" ? 3 : 4, this._RequiredPattern(element, "expand"))
             case "滚动到控件":
-                ComCall(3, this._RequiredPattern(element, "scroll"))
+                if (element is ExcelControlTarget)
+                    element.Reveal()
+                else
+                    ComCall(3, this._RequiredPattern(element, "scroll"))
+                offset := data.HasOwnProp("ScrollOffset") ? data.ScrollOffset : 0
+                if (IsObject(resolve))
+                    offset := resolve(String(offset))
+                if (!IsInteger(offset) || Abs(Number(offset)) > 100000)
+                    throw Error(GetLang("偏移值应为 -100000～100000 的整数像素。"))
+                if (offset != 0) {
+                    if (element is ExcelControlTarget)
+                        element.Offset(Integer(offset))
+                    else
+                        this._OffsetScroll(element, Integer(offset))
+                }
             case "设置范围值":
                 if (!IsNumber(arg))
                     throw Error(GetLang("控件值必须是数字。"))
@@ -272,9 +383,269 @@ class WindowControl {
         return 1
     }
 
+    static _WaitReady(element, waitType, data, baseline, resolve := "") {
+        if (waitType == "等待消失")
+            return !element
+        if (!element)
+            return false
+        if (waitType == "等待出现")
+            return true
+        if (waitType == "可用" || waitType == "禁用")
+            return !!this._Int(element, 28) == (waitType == "可用")
+        result := this.ProbeValue(element)
+        if (!result.supported)
+            throw Error(result.reason)
+        if (waitType == "值变化") {
+            if (!baseline.set) {
+                baseline.set := true, baseline.value := String(result.value)
+                return false
+            }
+            return !(String(result.value) == baseline.value)
+        }
+        matched := this.MatchWaitConditions(result.value, data, this.ValueKind(result), resolve)
+        return waitType == "值不满足条件" ? !matched : matched
+    }
+
+    ; 条件保留旧版 [比较符, 右值]，第三项新增左值；旧配置默认使用本次控件值。
+    static GetWaitConditions(data) {
+        source := data.HasOwnProp("WaitConditions") && data.WaitConditions is Array && data.WaitConditions.Length
+            ? data.WaitConditions : [[data.WaitOperator, data.WaitValue]]
+        conditions := []
+        for condition in source
+            conditions.Push([condition[1], condition[2], condition.Length >= 3 ? condition[3] : "运行时控件值"])
+        return conditions
+    }
+
+    static IsRuntimeControlValue(source) => source == "运行时控件值" || source == "{运行时控件值}"
+        || source == "❖运行时控件值" || source == "{❖运行时控件值}"
+
+    static WaitConditionOperators(kind, source) {
+        if (this.IsRuntimeControlValue(source))
+            return this.ConditionOperators(kind)
+        return ["等于", "不等于", "大于", "大于等于", "小于", "小于等于", "包含", "不包含", "开头是", "结尾是", "为空", "不为空"]
+    }
+
+    static MatchWaitConditions(value, data, kind, resolve := "") {
+        useOr := data.HasOwnProp("WaitLogic") && data.WaitLogic == "或"
+        for condition in this.GetWaitConditions(data) {
+            current := this.IsRuntimeControlValue(condition[3])
+            left := current ? value : condition[3]
+            expected := condition[2]
+            if (IsObject(resolve)) {
+                if (!current)
+                    left := resolve(String(left))
+                expected := resolve(String(expected))
+            }
+            compareKind := current ? kind : this.WaitOperandKind(condition[1], left, expected)
+            matched := this.CompareValue(left, expected, condition[1], compareKind)
+            if (useOr && matched)
+                return true
+            if (!useOr && !matched)
+                return false
+        }
+        return !useOr
+    }
+
+    static WaitOperandKind(operator, left, right) {
+        if (operator == "大于" || operator == "大于等于" || operator == "小于" || operator == "小于等于")
+            return "number"
+        return (operator == "等于" || operator == "不等于") && IsNumber(left) && IsNumber(right) ? "number" : "text"
+    }
+
+    static ValueKind(result) {
+        if (result.HasOwnProp("category"))
+            return result.category
+        if (result.kind == GetLang("文本"))
+            return "text"
+        if (result.kind == GetLang("范围比例（0～1）"))
+            return "ratio"
+        if (result.kind == GetLang("选项序号（1～n，未选 0）"))
+            return "index"
+        return "state"
+    }
+
+    static CompareValue(value, expected, operator, kind) {
+        valid := false
+        for candidate in this.ConditionOperators(kind)
+            if (candidate == operator)
+                valid := true
+        if (!valid)
+            throw Error(GetLang("条件运算符无效。"))
+        if (kind != "text") {
+            if (!IsNumber(value) || !IsNumber(expected))
+                throw Error(GetLang("条件值必须为数字。"))
+            value := Number(value), expected := Number(expected)
+            if (kind == "ratio" && (expected < 0 || expected > 1))
+                throw Error(GetLang("比例条件值应为 0～1。"))
+            if (kind == "index" && (!IsInteger(expected) || expected < 0))
+                throw Error(GetLang("序号条件值应为非负整数。"))
+        } else {
+            value := String(value), expected := String(expected)
+        }
+        switch operator {
+            case "等于": return value == expected
+            case "不等于": return !(value == expected)
+            case "大于": return value > expected
+            case "大于等于": return value >= expected
+            case "小于": return value < expected
+            case "小于等于": return value <= expected
+            case "包含": return InStr(value, expected, true) > 0
+            case "不包含": return !InStr(value, expected, true)
+            case "开头是": return SubStr(value, 1, StrLen(expected)) == expected
+            case "结尾是": return expected == "" || SubStr(value, -StrLen(expected)) == expected
+            case "为空": return value == ""
+            case "不为空": return value != ""
+        }
+        throw Error(GetLang("条件运算符无效。"))
+    }
+
+    static _ClickElement(element, kind, pointMode, cancelled, holdMs := 500) {
+        if (kind == "长按300ms" || kind == "长按500ms")
+            holdMs := kind == "长按300ms" ? 300 : 500
+        kind := this.NormalizeClickType(kind)
+        valid := false
+        for candidate in this.ClickTypes
+            if (candidate == kind)
+                valid := true
+        if (!valid || (pointMode != "中心点" && pointMode != "区域随机"))
+            throw Error(GetLang("点击参数无效。"))
+        if (element is ExcelControlTarget) {
+            element.Reveal()
+            bounds := element.Bounds()
+            element := this._HitTest(Floor((bounds.left + bounds.right) / 2), Floor((bounds.top + bounds.bottom) / 2)).element
+        }
+        if (!this._Int(element, 28))
+            throw Error(GetLang("此控件已禁用。"))
+        hwnd := this._ElementWindow(element)
+        WinActivate("ahk_id " hwnd)
+        deadline := A_TickCount + 2000
+        while (!WinActive("ahk_id " hwnd)) {
+            if (cancelled())
+                return ""
+            if (A_TickCount >= deadline)
+                throw Error(GetLang("无法激活目标窗口。"))
+            Sleep(20)
+        }
+        if (this._Int(element, 38) && (scroll := this._Pattern(element, "scroll")))
+            ComCall(3, scroll)
+        bounds := this._Bounds(element)
+        if (pointMode == "区域随机")
+            bounds := this._InnerRandomBounds(bounds)
+        walker := this._Object(14, this._Automation())
+        node := element
+        loop 64 {
+            node := this._Object(3, walker, "Ptr", node)
+            if (!node)
+                break
+            clip := this._Bounds(node)
+            if (clip.right > clip.left && clip.bottom > clip.top) {
+                bounds.left := Max(bounds.left, clip.left), bounds.top := Max(bounds.top, clip.top)
+                bounds.right := Min(bounds.right, clip.right), bounds.bottom := Min(bounds.bottom, clip.bottom)
+            }
+        }
+        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
+            throw Error(GetLang("目标控件不在可点击区域。"))
+        valid := false
+        loop (pointMode == "区域随机" ? 8 : 1) {
+            x := pointMode == "区域随机" ? Random(bounds.left, bounds.right - 1) : Floor((bounds.left + bounds.right) / 2)
+            y := pointMode == "区域随机" ? Random(bounds.top, bounds.bottom - 1) : Floor((bounds.top + bounds.bottom) / 2)
+            hit := this._HitTest(x, y).element
+            loop 64 {
+                if (this._Equals(hit, element)) {
+                    valid := true
+                    break
+                }
+                hit := this._Object(3, walker, "Ptr", hit)
+                if (!hit)
+                    break
+            }
+            if (valid)
+                break
+        }
+        if (!valid)
+            throw Error(GetLang("目标控件被遮挡，无法点击。"))
+        button := InStr(kind, "右键") ? "Right" : "Left"
+        count := InStr(kind, "双击") ? 2 : 1
+        hold := InStr(kind, "长按") ? this.ResolveClickHoldMs(holdMs) : 0
+        DllCall("SetCursorPos", "Int", x, "Int", y)
+        loop count {
+            if (cancelled())
+                return ""
+            Click(button " Down")
+            try {
+                endTime := A_TickCount + hold
+                while (A_TickCount < endTime && !cancelled())
+                    Sleep(Max(1, Min(20, endTime - A_TickCount)))
+            } finally {
+                Click(button " Up")
+            }
+            if (A_Index < count)
+                Sleep(50)
+        }
+        return cancelled() ? "" : 1
+    }
+
+    static _InnerRandomBounds(bounds) {
+        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
+            return bounds
+        width := Max(1, Floor((bounds.right - bounds.left) * 0.8))
+        height := Max(1, Floor((bounds.bottom - bounds.top) * 0.8))
+        left := Floor((bounds.left + bounds.right - width) / 2)
+        top := Floor((bounds.top + bounds.bottom - height) / 2)
+        return {left: left, top: top, right: left + width, bottom: top + height}
+    }
+
+    static _ElementWindow(element) {
+        if (element is ExcelControlTarget)
+            return element.hwnd
+        walker := this._Object(14, this._Automation())
+        loop 64 {
+            hwnd := 0
+            ComCall(36, element, "Ptr*", &hwnd)
+            if (hwnd)
+                return DllCall("GetAncestor", "Ptr", hwnd, "UInt", 2, "Ptr")
+            element := this._Object(3, walker, "Ptr", element)
+            if (!element)
+                break
+        }
+        throw Error(GetLang("无法确定控件所属窗口。"))
+    }
+
+    ; 返回控件自身的 HWND；UIA 虚拟控件没有独立窗口时返回 0。
+    static _NativeHwnd(element) {
+        if (element is ExcelControlTarget)
+            return 0
+        hwnd := 0
+        ComCall(36, element, "Ptr*", &hwnd)
+        return hwnd
+    }
+
+    static _OffsetScroll(element, offset) {
+        walker := this._Object(14, this._Automation())
+        node := element
+        loop 64 {
+            if ((pattern := this._Pattern(node, "scrollContainer")) && this._Int(pattern, 10)) {
+                view := this._Double(pattern, 8)
+                bounds := this._Bounds(node)
+                travel := (bounds.bottom - bounds.top) * (100 / Max(view, 0.001) - 1)
+                if (travel > 0) {
+                    percent := Max(0, Min(100, this._Double(pattern, 6) + offset * 100 / travel))
+                    ComCall(4, pattern, "Double", -1, "Double", percent)
+                    return
+                }
+            }
+            node := this._Object(3, walker, "Ptr", node)
+            if (!node)
+                break
+        }
+        throw Error(GetLang("目标容器不支持滚动偏移。"))
+    }
+
     ; 拾取预览、读取值、信息 JSON 共用同一套判断，空文本也是可读取的值。
     static ProbeValue(element, preview := false) {
         try {
+            if (cell := ControlExcel.FromElement(element))
+                return cell.Read()
             type := this._Int(element, 21)
             if (pattern := this._Pattern(element, "toggle")) {
                 state := this._Int(pattern, 4)
@@ -291,13 +662,13 @@ class WindowControl {
                     return {supported: false, value: "", reason: GetLang("控件未提供有效数值范围。")}
                 return this._Value(Max(0, Min(1, (current - low) / (high - low))), "范围比例（0～1）")
             }
-            if (pattern := this._Pattern(element, "selection"))
-                return this._Value(this._Int(pattern, 6) ? 1 : 0, "选中状态（0/1）")
             if (pattern := this._Pattern(element, "expand")) {
                 state := this._Int(pattern, 5)
                 if (state != 3) ; LeafNode 没有展开状态。
                     return this._Value(state == 0 ? 0 : 1, "展开状态（0/1）")
             }
+            if (pattern := this._Pattern(element, "selection"))
+                return this._Value(this._Int(pattern, 6) ? 1 : 0, "选中状态（0/1）")
             if (pattern := this._Pattern(element, "text")) {
                 range := this._Object(7, pattern)
                 return this._Value(this._String(range, 12, "Int", preview ? 100 : -1), "文本")
@@ -418,12 +789,15 @@ class WindowControl {
 
     static ProbeWrite(element) {
         try {
+            if (cell := ControlExcel.FromElement(element))
+                return {supported: cell.Writable(), kind: "text", stateType: "", reason: cell.Writable() ? "" : GetLang("Excel 单元格已保护，无法修改。")}
             type := this._Int(element, 21)
-            kind := "text", pattern := 0, reason := ""
-            if (pattern := this._Pattern(element, "toggle"))
-                kind := "state"
+            kind := "text", pattern := 0, reason := "", stateType := ""
+            if (pattern := this._Pattern(element, "toggle")) {
+                kind := "state", stateType := "toggle"
+            }
             else if (webSwitch := this._WebSwitch(element)) {
-                kind := "state"
+                kind := "state", stateType := "switch"
                 if (webSwitch.disabled)
                     reason := GetLang("此开关已禁用，无法写入。")
                 else if (!this._Pattern(element, "invoke"))
@@ -440,10 +814,11 @@ class WindowControl {
                     reason := GetLang("控件未提供有效数值范围。")
                 else if (this._Int(pattern, 5) && !this._NativeControl(element, "progress"))
                     reason := GetLang("此控件为只读，无法写入。")
-            } else if (pattern := this._Pattern(element, "selection"))
-                kind := "state"
-            else if ((pattern := this._Pattern(element, "expand")) && this._Int(pattern, 5) != 3)
-                kind := "state"
+            } else if ((pattern := this._Pattern(element, "expand")) && this._Int(pattern, 5) != 3) {
+                kind := "state", stateType := "expand"
+            } else if (pattern := this._Pattern(element, "selection")) {
+                kind := "state", stateType := "selection"
+            }
             else if (pattern := this._Pattern(element, "value")) {
                 if (this._Int(pattern, 5))
                     reason := GetLang("此控件为只读，无法写入。")
@@ -451,15 +826,21 @@ class WindowControl {
                 reason := GetLang("此控件不支持写入值。")
             if (!this._Int(element, 28))
                 reason := GetLang("此控件已禁用，无法写入。")
-            return {supported: reason == "", kind: kind, reason: reason}
+            return {supported: reason == "", kind: kind, reason: reason, stateType: stateType}
         } catch as e {
             return {supported: false, kind: "text", reason: e.Message}
         }
     }
 
     ; 点击执行使用 Invoke；拾取时只检查能力和启用状态，不触发操作。
-    static ProbeClick(element) {
+    static ProbeClick(element, physical := false) {
         try {
+            if (element is ExcelControlTarget)
+                return {supported: true}
+            if (physical) {
+                bounds := this._Bounds(element)
+                return {supported: !!this._Int(element, 28) && bounds.right > bounds.left && bounds.bottom > bounds.top}
+            }
             return {supported: !!this._Int(element, 28) && !!this._Pattern(element, "invoke")}
         } catch {
             return {supported: false}
@@ -498,6 +879,8 @@ class WindowControl {
     }
 
     static WriteValue(element, arg) {
+        if (cell := ControlExcel.FromElement(element))
+            return cell.Write(arg)
         profile := this.ProbeWrite(element)
         if (!profile.supported)
             throw Error(profile.reason)
@@ -529,6 +912,10 @@ class WindowControl {
                         throw Error(GetLang("控件未达到指定状态。"))
                 } else if (this._WebSwitch(element)) {
                     return this._WriteWebSwitch(element, state)
+                } else if (profile.stateType == "expand") {
+                    pattern := this._RequiredPattern(element, "expand")
+                    if ((this._Int(pattern, 5) != 0 ? 1 : 0) != state)
+                        ComCall(state ? 3 : 4, pattern)
                 } else if (pattern := this._Pattern(element, "selection")) {
                     if (!!this._Int(pattern, 6) != state)
                         ComCall(state ? 3 : 5, pattern)
@@ -668,12 +1055,16 @@ class WindowControl {
     }
 
     static _Int(target, method) {
+        if (target is ExcelControlTarget)
+            return method == 21 ? 50029 : method == 28 ? 1 : method == 38 ? target.Offscreen() : 0
         value := 0
         ComCall(method, target, "Int*", &value)
         return value
     }
 
     static _String(target, method, args*) {
+        if (target is ExcelControlTarget)
+            return method == 23 ? target.Name() : method == 29 ? target.range.Address[false, false, 1] : method == 30 ? "ExcelCell" : ""
         ptr := 0
         args.Push("Ptr*", &ptr)
         ComCall(method, target, args*)
@@ -684,6 +1075,8 @@ class WindowControl {
     }
 
     static _Equals(left, right) {
+        if (left is ExcelControlTarget || right is ExcelControlTarget)
+            return left is ExcelControlTarget && right is ExcelControlTarget && left.hwnd == right.hwnd && left.Name() == right.Name()
         equal := 0
         ComCall(3, this._Automation(), "Ptr", left, "Ptr", right, "Int*", &equal)
         return equal
@@ -731,6 +1124,8 @@ class WindowControl {
 
     ; UIAutomationClient.h: GetCurrentPatternAs returns the requested typed interface.
     static _Pattern(element, name) {
+        if (element is ExcelControlTarget)
+            return 0
         static patterns := Map(
             "invoke", [10000, "{FB377FBE-8EA6-46D5-9C73-6499642D3059}"],
             "value", [10002, "{A94CD8B1-0844-4CD6-9D2D-640537AB39E9}"],
@@ -741,7 +1136,8 @@ class WindowControl {
             "selection", [10010, "{A8EFA66A-0FDA-421A-9194-38021F3578EA}"],
             "text", [10014, "{32EBA289-3583-42C9-9C59-3B6D9A1E9B6A}"],
             "toggle", [10015, "{94CF8058-9B8D-4AB9-8BFD-4CD0A33C8C70}"],
-            "scroll", [10017, "{B488300F-D015-4F19-9C29-BB595E3645EF}"])
+            "scroll", [10017, "{B488300F-D015-4F19-9C29-BB595E3645EF}"],
+            "scrollContainer", [10004, "{88F4D42A-E881-459D-A77C-73BBBB7E02DC}"])
         pattern := patterns[name]
         iid := Buffer(16)
         DllCall("ole32\IIDFromString", "WStr", pattern[2], "Ptr", iid, "HRESULT")
@@ -766,12 +1162,16 @@ OnWindowControl(tableItem, cmd, index) {
     value := ""
     failure := ""
     timedOut := false
+    waitBaseline := {set: false, value: ""}
     action := TimeoutPolicy.Get(data)
     loop {
         try {
             runData := data.Clone()
+            if (WindowControl.UsesTimeout(WindowControl.NormalizeAction(data.ActionType)))
+                runData.TimeoutMs := TimeoutPolicy.ResolveMs(data.TimeoutMs, (text) => GetReplaceVarText(tableItem, index, text))
             runData.Selector := WindowControl.ResolveTarget(data.Selector, ResolveControlVariable.Bind(tableItem, index))
-            value := WindowControl.Execute(runData, GetReplaceVarText(tableItem, index, data.Argument), cancelled)
+            value := WindowControl.Execute(runData, GetReplaceVarText(tableItem, index, data.Argument), cancelled,
+                (text) => GetReplaceVarText(tableItem, index, text), outputs := {}, waitBaseline)
             failure := ""
             timedOut := false
             break
@@ -789,6 +1189,24 @@ OnWindowControl(tableItem, cmd, index) {
     if (WindowControl.UsesTimeout(CmdEnumZh(data.ActionType, WindowControl.Actions)))
         TimeoutPolicy.WriteStatus(data, timedOut)
     names := [], values := []
+    controlAction := WindowControl.NormalizeAction(data.ActionType)
+    if (failure != "" && controlAction == "检测控件存在")
+        value := 0
+    if (controlAction == "检测控件存在" && data.HasOwnProp("HwndVar") && data.HwndVar != "") {
+        names.Push(data.HwndVar)
+        values.Push(failure == "" && value == 1 ? outputs.hwnd : 0)
+    }
+    if (controlAction == "读取位置/宽高") {
+        bounds := failure == "" ? outputs.bounds : ""
+        for pair in [["XVar", "x"], ["YVar", "y"], ["WindowXVar", "windowX"], ["WindowYVar", "windowY"],
+            ["WidthVar", "width"], ["HeightVar", "height"]] {
+            if (!data.HasOwnProp(pair[1]) || data.%pair[1]% == "")
+                continue
+            names.Push(data.%pair[1]%)
+            values.Push(!IsObject(bounds) ? 0 : pair[2] == "width" ? bounds.right - bounds.left
+                : pair[2] == "height" ? bounds.bottom - bounds.top : bounds.%pair[2]%)
+        }
+    }
     if (WindowControl.NormalizeAction(data.ActionType) == "检测控件存在"
         && data.HasOwnProp("ControlVar") && data.ControlVar != "") {
         names.Push(data.ControlVar)
@@ -799,7 +1217,7 @@ OnWindowControl(tableItem, cmd, index) {
         name := data.HasOwnProp(pair[1]) ? data.%pair[1]% : ""
         if (name != "") {
             names.Push(name)
-            values.Push(info.Get(pair[2], ""))
+            values.Push(info.Get(pair[2], pair[2] == "type" ? 0 : ""))
         }
     }
     if (names.Length)
