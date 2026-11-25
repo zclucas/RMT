@@ -7,15 +7,16 @@ class CursorOutputTip {
     static visible := false
     static tick := ""
     static isImage := false
+    static isPickHint := false
     static temporaryPath := ""
 
-    static Show(value, duration := 5000, isImage := false, temporary := false) {
+    static Show(value, duration := 5000, isImage := false, temporary := false, pickHint := false) {
         static flush := ObjBindMethod(CursorOutputTip, "_Flush")
         if (!this.tick)
             this.tick := ObjBindMethod(this, "_Tick")
         if (IsObject(this.pending) && this.pending.temporary)
             PromptReleaseImage(this.pending.value)
-        this.pending := {value: String(value), duration: duration, isImage: isImage, temporary: temporary}
+        this.pending := {value: String(value), duration: duration, isImage: isImage, temporary: temporary, pickHint: pickHint}
         ; Worker 消息和 XAML 事件回调都要先返回，再建窗。
         SetTimer(flush, -1)
     }
@@ -25,13 +26,14 @@ class CursorOutputTip {
         this.pending := ""
         if (!IsObject(request))
             return
-        if (request.value == "") {
+        if (request.value == "" && !request.pickHint) {
             this._Close()
             return
         }
-        if (request.isImage || this.isImage)
+        if (request.isImage || this.isImage || request.pickHint != this.isPickHint)
             this._Close()
         this.isImage := request.isImage
+        this.isPickHint := request.pickHint
         this.temporaryPath := request.temporary ? request.value : ""
         if (!IsObject(this.ui)) {
             colors := MainSoftData.ThemeColors
@@ -48,10 +50,15 @@ class CursorOutputTip {
                 .IsHitTestVisible("False")
             if (request.isImage)
                 border.Add("Image").Name("TipImage").MaxWidth(400).MaxHeight(320).Stretch("Uniform").StretchDirection("DownOnly")
-            else
-                border.Add("TextBlock").Name("TipText").TextWrapping("Wrap")
+            else {
+                content := border.Add("StackPanel").TextElement_FontFamily(MainSoftData.FontType)
+                    .TextElement_FontSize(XAMLHost.FontSize()).TextElement_Foreground(AppThemeUtil.ResolveColor(colors, "Win_InputText"))
+                if (request.pickHint)
+                    this._PickHeader(content, colors)
+                content.Add("TextBlock").Name("TipText").TextWrapping("Wrap")
                     .Foreground(AppThemeUtil.ResolveColor(colors, "Win_InputText"))
                     .FontFamily(MainSoftData.FontType).FontSize(XAMLHost.FontSize())
+            }
             this.ui := XAMLHost(win.ToString(), "", 0)
             this.ui.skipFontScale := true
             ; 通过 Source 更新完整加载位图，释放对剪贴板临时文件的占用。
@@ -67,8 +74,22 @@ class CursorOutputTip {
         } else {
             this.ui.Update("TipText", "Text", request.value)
         }
+        if (request.pickHint)
+            this.ui.Update("TipText", "Visibility", request.value == "" ? "Collapsed" : "Visible")
         this.deadline := A_TickCount + request.duration
         SetTimer(this.tick, 16)
+    }
+
+    static _PickHeader(content, colors) {
+        header := content.Add("WrapPanel").Name("PickHintHeader").VerticalAlignment("Center")
+        header.Add("TextBlock").Text(GetLang("移动鼠标定位控件")).VerticalAlignment("Center").Margin("0,0,8,0")
+        for key, label in Map("Enter", "确定", "Esc", "取消") {
+            header.Add("Border").Name("PickKey" key).CornerRadius(3).BorderThickness("1,1,1,2")
+                .BorderBrush(AppThemeUtil.ResolveColor(colors, "Win_InputStroke"))
+                .Background(AppThemeUtil.ResolveColor(colors, "Win_WindowBg")).Padding("5,0").Margin("0,1,4,1")
+                .Add("TextBlock").Text(key).FontSize(XAMLHost.FontSize(-2)).VerticalAlignment("Center")
+            header.Add("TextBlock").Text(GetLang(label)).VerticalAlignment("Center").Margin("0,0,8,0")
+        }
     }
 
     static _Tick() {
@@ -120,6 +141,7 @@ class CursorOutputTip {
         this.ui := ""
         this.visible := false
         this.isImage := false
+        this.isPickHint := false
         PromptReleaseImage(this.temporaryPath)
         this.temporaryPath := ""
     }

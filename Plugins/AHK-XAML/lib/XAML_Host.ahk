@@ -1005,8 +1005,8 @@ class XAMLHost {
     }
 
     ; 指令编辑器标题栏使用较小的文字和图标。宏指令用 AddMacroTitleBar。
-    static AddCmdTitleBar(main, title, titleHeight := "", closeName := "BtnClosePanel", titleName := "", titleIcon := "", titleIconColor := "") {
-        return XAMLHost._AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, false)
+    static AddCmdTitleBar(main, title, titleHeight := "", closeName := "BtnClosePanel", titleName := "", titleIcon := "", titleIconColor := "", f1Glyph := Chr(0xECAF)) {
+        return XAMLHost._AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, false, f1Glyph)
     }
 
     ; 宏指令编辑器标题栏使用较大的文字和图标。
@@ -1014,7 +1014,7 @@ class XAMLHost {
         return XAMLHost._AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, true)
     }
 
-    static _AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, macroStyle) {
+    static _AddEditorTitleBar(main, title, titleHeight, closeName, titleName, titleIcon, titleIconColor, macroStyle, f1Glyph := Chr(0xECAF)) {
         if (titleHeight == "")
             titleHeight := XAMLHost.GetTitleBarHeight()
         if (titleIcon == "") {
@@ -1048,7 +1048,7 @@ class XAMLHost {
         ; 双点编辑与路径预览分开显示：编辑按钮在定位类按钮最左侧，预览按钮保留原图标。
         chrome.PointEdit := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdPointEdit", titleHeight, Chr(0xE8A7), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
         chrome.Preview := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdPreview", titleHeight, Chr(0xE890), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize)
-        chrome.F1 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF1", titleHeight, Chr(0xECAF), "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize, true)
+        chrome.F1 := XAMLHost.AddTitleChromeBtn(chrome.Btns, "BtnCmdF1", titleHeight, f1Glyph, "Collapsed", "{StaticResource TitleBarChromeButton}", cmdBtnW, glyphSize, true)
         chrome.F1.ToolTip(f1Tip)
         f2Tip := "F2：截图"
         try {
@@ -1953,13 +1953,21 @@ class XAMLHost {
     }
 
     static ShowErrorDialog(title, header, snippet, details, hasRetryOptions := false, reason := "") {
+        isCompileError := InStr(title, "Compile Error")
+        displayTitle := XAMLHost.ErrorText(isCompileError ? "界面引擎编译错误" : "界面引擎异常")
+        if (header == "The Background Engine crashed! Details below:")
+            header := XAMLHost.ErrorText("界面引擎发生异常，详细信息如下：")
+        else if (RegExMatch(header, "^Engine crashed while rendering AHK Line (.*?)!$", &headerMatch))
+            header := Format(XAMLHost.ErrorText("渲染 AHK 第 {1} 行时引擎发生异常。"), headerMatch[1])
+        else if (header == "Failed to compile background engine.")
+            header := XAMLHost.ErrorText("界面引擎编译失败。")
         ; Pre-format the error text for better readability
         details := StrReplace(details, " ---> ", "`r`n`r`n---> ")
         details := StrReplace(details, "`r`n", "`n")
         details := StrReplace(details, "`n", "`r`n")
         details := StrReplace(details, "`r`n   at ", "`r`n`r`n   at ", , &_, 1)
 
-        errGui := Gui("+Resize +MinSize800x600", title)
+        errGui := Gui("+Resize +MinSize800x600", displayTitle)
         errGui.BackColor := "White"
         errGui.MarginX := 20
         errGui.MarginY := 20
@@ -1969,7 +1977,7 @@ class XAMLHost {
 
         if (reason != "") {
             errGui.SetFont("s11 bold c003366", "Segoe UI")
-            reasonLbl := errGui.Add("Text", "y+15", "Root Cause:")
+            reasonLbl := errGui.Add("Text", "y+15", XAMLHost.ErrorText("错误原因："))
             errGui.SetFont("s10 bold cWhite", "Consolas")
             reasonEdit := CodeBox.Add(errGui, "y+5 w860 ReadOnly -Wrap -E0x200 Background1E1E1E", "`r`n  " reason "`r`n", 0xFFFFFF)
         } else {
@@ -1979,7 +1987,7 @@ class XAMLHost {
 
         exceptionMsg := ""
         stackTrace := details
-        if InStr(title, "Compile Error") {
+        if (isCompileError) {
             lines := StrSplit(details, "`n", "`r")
             for line in lines {
                 if InStr(line, "error CS") {
@@ -2018,7 +2026,7 @@ class XAMLHost {
         snipLbl := "", snipEdit := ""
         if (snippet != "") {
             errGui.SetFont("s11 bold c003366", "Segoe UI")
-            snipLbl := errGui.Add("Text", "y+15", InStr(title, "Compile Error") ? "Code Snippet:" : "Generated XAML Snippet:")
+            snipLbl := errGui.Add("Text", "y+15", XAMLHost.ErrorText(isCompileError ? "代码片段：" : "生成的 XAML 片段："))
             errGui.SetFont("s9 norm cE0E0E0", "Consolas")
             snipEdit := CodeBox.Add(errGui, "y+5 w860 h150 ReadOnly +VScroll +HScroll -Wrap Background1E1E1E", "`r`n" snippet, 0xE0E0E0)
 
@@ -2037,35 +2045,40 @@ class XAMLHost {
         }
 
         errGui.SetFont("s11 bold c003366", "Segoe UI")
-        traceLbl := errGui.Add("Text", "y+15", stackTrace != "" ? "Full Exception Trace:" : "Details:")
+        traceLbl := errGui.Add("Text", "y+15", XAMLHost.ErrorText(stackTrace != "" ? "完整异常堆栈：" : "详细信息："))
         errGui.SetFont("s9 norm cE0E0E0", "Consolas")
         traceEdit := CodeBox.Add(errGui, "y+5 w860 h250 ReadOnly +VScroll +HScroll -Wrap Background1E1E1E", "`r`n" (stackTrace != "" ? stackTrace : details), 0xE0E0E0)
 
         userAction := "abort"
 
         errGui.SetFont("s10 norm cBlack", "Segoe UI")
-        btnCopy := errGui.Add("Button", "w150 x20 y+20", "📋 Copy to Clipboard")
-        btnExport := errGui.Add("Button", "w150 x+10", "💾 Export to File")
+        btnCopy := errGui.Add("Button", "w150 x20 y+20", XAMLHost.ErrorText("复制到剪切板"))
+        btnExport := errGui.Add("Button", "w150 x+10", XAMLHost.ErrorText("导出到文件"))
 
         btnSkipProp := ""
         btnSkipElem := ""
         if (hasRetryOptions) {
-            btnSkipProp := errGui.Add("Button", "w150 x+10", "⚡ Skip Property")
-            btnSkipElem := errGui.Add("Button", "w150 x+10", "⚡ Skip Element")
-            btnClose := errGui.Add("Button", "w120 x+10 Default", "Abort")
+            btnSkipProp := errGui.Add("Button", "w150 x+10", XAMLHost.ErrorText("跳过属性"))
+            btnSkipElem := errGui.Add("Button", "w150 x+10", XAMLHost.ErrorText("跳过控件"))
+            btnClose := errGui.Add("Button", "w120 x+10 Default", XAMLHost.ErrorText("终止"))
         } else {
-            btnClose := errGui.Add("Button", "w120 x+340 Default", "Close")
+            btnClose := errGui.Add("Button", "w120 x+340 Default", XAMLHost.ErrorText("关闭"))
         }
 
         btnCopy.OnEvent("Click", (*) => CopyToClipboard())
         CopyToClipboard() {
-            A_Clipboard := header "`r`n`r`n" (snippet ? "XAML SNIPPET:`r`n" snippet "`r`n`r`n" : "") "DETAILS:`r`n" details
-            MsgBox("Error details copied to clipboard.", "Copied", "Iconi 0x40000 T2")
+            content := header "`r`n`r`n"
+            if (reason != "")
+                content .= XAMLHost.ErrorText("错误原因：") "`r`n" reason "`r`n`r`n"
+            if (snippet != "")
+                content .= XAMLHost.ErrorText("生成的 XAML 片段：") "`r`n" snippet "`r`n`r`n"
+            content .= XAMLHost.ErrorText("详细信息：") "`r`n" details
+            btnCopy.Text := XAMLHost.ErrorText(XAMLHost.CopyErrorDetails(content) ? "已复制" : "复制失败，请重试")
         }
 
         btnExport.OnEvent("Click", (*) => ExportLog())
         ExportLog() {
-            fileSavePath := FileSelect("S", "AhkEngineCrash_" A_Now ".log", "Save Error Log", "Log Files (*.log)")
+            fileSavePath := FileSelect("S", "AhkEngineCrash_" A_Now ".log", XAMLHost.ErrorText("保存错误日志"), "*.log")
             if (fileSavePath != "") {
                 try {
                     if FileExist(fileSavePath)
@@ -2076,9 +2089,9 @@ class XAMLHost {
                         content .= "XAML SNIPPET:`r`n" snippet "`r`n`r`n"
                     content .= "EXCEPTION DETAILS:`r`n" details
                     FileAppend(content, fileSavePath)
-                    MsgBox("Error log saved successfully.", "Export Complete", "Iconi")
+                    MsgBox(XAMLHost.ErrorText("错误日志已保存。"), XAMLHost.ErrorText("导出完成"), "Iconi Owner" errGui.Hwnd)
                 } catch as err {
-                    MsgBox("Failed to save error log: " err.Message, "Export Failed", "Iconx")
+                    MsgBox(XAMLHost.ErrorText("保存错误日志失败：") err.Message, XAMLHost.ErrorText("导出失败"), "Iconx Owner" errGui.Hwnd)
                 }
             }
         }
@@ -2159,6 +2172,24 @@ class XAMLHost {
         errGui.Show()
         WinWaitClose(errGui)
         return userAction
+    }
+
+    static ErrorText(key) {
+        try return GetLang(key)
+        catch
+            return key
+    }
+
+    static CopyErrorDetails(content) {
+        loop 3 {
+            try {
+                A_Clipboard := content
+                if (ClipWait(0.3) && A_Clipboard == content)
+                    return true
+            }
+            Sleep(50)
+        }
+        return false
     }
 
     Export(filePath) {

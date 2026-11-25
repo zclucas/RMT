@@ -29,35 +29,47 @@ class ShmVariableMap {
     }
 
     static _EnsureDll() {
+        global AppRootDir, ProjectRootDir
         if (ShmVariableMap.H_DLL)
             return true
 
         dllName := "ShmVar.dll"
         hModule := DllCall("GetModuleHandleW", "Str", dllName, "Ptr")
         if (hModule) {
+            modulePath := Buffer(32768 * 2, 0)
+            length := DllCall("GetModuleFileNameW", "Ptr", hModule, "Ptr", modulePath, "UInt", 32768, "UInt")
+            if (!length || length >= 32768)
+                throw Error("获取 ShmVar.dll 路径失败，LastError: " A_LastError)
+            ShmVariableMap.DLL_PATH := StrGet(modulePath, length)
             ShmVariableMap.H_DLL := hModule
             return true
         }
 
-        ; 取得專案根目錄（相容主行程與 Worker）
-        rootDir := (IsSet(AppRootDir) && AppRootDir != "") ? AppRootDir
-            : (IsSet(ProjectRootDir) && ProjectRootDir != "") ? ProjectRootDir
-            : (A_WorkingDir "\..")
-
-        dllPath := rootDir "\Plugins\ShmVar\" dllName
-        if (!FileExist(dllPath)) {
-            ; 備援：若根目錄向上一層未命中，嘗試當前工作目錄
-            dllPath := A_WorkingDir "\Plugins\ShmVar\" dllName
+        ; 优先使用入口确定的根目录，并保留独立脚本与 Worker 的路径备援。
+        candidates := []
+        if (IsSet(AppRootDir) && AppRootDir != "")
+            candidates.Push(AppRootDir "\Plugins\ShmVar\" dllName)
+        if (IsSet(ProjectRootDir) && ProjectRootDir != "")
+            candidates.Push(ProjectRootDir "\Plugins\ShmVar\" dllName)
+        candidates.Push(A_ScriptDir "\Plugins\ShmVar\" dllName,
+            A_ScriptDir "\..\Plugins\ShmVar\" dllName,
+            A_ScriptDir "\..\..\Plugins\ShmVar\" dllName,
+            A_WorkingDir "\Plugins\ShmVar\" dllName,
+            A_WorkingDir "\..\Plugins\ShmVar\" dllName)
+        dllPath := ""
+        for p in candidates {
+            if FileExist(p) {
+                dllPath := p
+                break
+            }
         }
-
-        if (!FileExist(dllPath)) {
-            throw Error("未找到 " dllName "，請確認 Plugins\ShmVar\" dllName " 檔案完整")
-        }
+        if (dllPath == "")
+            throw Error("未找到 " dllName "，请确认 Plugins\ShmVar\" dllName " 文件完整")
 
         ; 規整為標準絕對路徑
         buf := Buffer(65536 * 2, 0)
-        n := DllCall("GetFullPathNameW", "Str", dllPath, "UInt", 65536, "Ptr", buf, "Ptr", 0)
-        dllPath := (n > 0) ? StrGet(buf, n) : dllPath
+        n := DllCall("GetFullPathNameW", "Str", dllPath, "UInt", 65536, "Ptr", buf, "Ptr", 0, "UInt")
+        dllPath := (n > 0 && n < 65536) ? StrGet(buf, n) : dllPath
 
         ; 按外掛目錄解析相依性（0x8 = LOAD_WITH_ALTERED_SEARCH_PATH）
         hMod := DllCall("LoadLibraryExW", "Str", dllPath, "Ptr", 0, "UInt", 0x8, "Ptr")

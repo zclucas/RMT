@@ -13,8 +13,20 @@ class CommandTimeoutFields {
             times.Push("不限时")
         this.Combo(time, "TimeoutMs", times, true)
         this.Combo(action, "TimeoutAction", TimeoutPolicy.Actions)
-        this.Combo(status, "TimeoutStatusVar", [TimeoutPolicy.DefaultStatusVar], true)
+        statusBox := this.Combo(status, "TimeoutStatusVar", [TimeoutPolicy.DefaultStatusVar], true)
+        this._StatusTip(status.Find("TimeoutStatusLabel"), "TextBlock")
+        this._StatusTip(statusBox, "ComboBox")
         return panel
+    }
+
+    static _StatusTip(control, type) {
+        style := control.Add(type ".Style").Add("Style").TargetType(type)
+        if (type == "ComboBox")
+            style.BasedOn("{StaticResource {x:Type ComboBox}}")
+        style.Add("Setter").Property("ToolTip").Value(GetLang("超时：1，不超时：0"))
+        trigger := style.Add("Style.Triggers").Add("DataTrigger")
+            .Binding("{Binding SelectedIndex, ElementName=TimeoutAction}").Value(CmdEnumIndex("无限重试", TimeoutPolicy.Actions))
+        trigger.Add("Setter").Property("ToolTip").Value(GetLang("无限重试不可能超时，值为0"))
     }
 
     static _Row(parent, label, group, labelName, tip, labelWidth) {
@@ -37,7 +49,7 @@ class CommandTimeoutFields {
     }
 
     static Init(ui, ms, action, statusVar) {
-        batch := [{ControlName: "TimeoutStatusLabel", PropertyName: "ToolTip", Value: GetLang("超时：1，不超时：0")}]
+        batch := []
         for name in GetGuiVarArr()
             if (name != "" && name != TimeoutPolicy.DefaultStatusVar)
                 batch.Push({ControlName: "TimeoutStatusVar", PropertyName: "AddItem", Value: name})
