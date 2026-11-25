@@ -416,6 +416,7 @@ class SoftData {
         this.VariableMap := ShmVariableMap("RMT_Shared_Variables")       ;真正的全局变量（跨进程纯共享内存）
         this.TimeVarMap := Map()        ;记录时间变量（包含获取时间变量指令生成的变量）
         this.HandleVarMap := Map()      ;窗口信息指令生成的句柄变量
+        this.ControlVarMap := Map()     ;检测控件指令生成的控件变量
         this.DataFileMap := Map()       ;配置命令对应的文件路径
         this.DataClassMap := Map()      ;配置对应的数据类型
 

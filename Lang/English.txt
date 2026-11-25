@@ -3226,3 +3226,37 @@ AI 返回内容为空=The AI response is empty
 德语=German
 西班牙语=Spanish
 检测控件=Detect Control
+
+界面引擎编译错误=UI Engine Compile Error
+界面引擎异常=UI Engine Error
+界面引擎发生异常，详细信息如下：=The UI engine encountered an error. Details below:
+渲染 AHK 第 {1} 行时引擎发生异常。=The engine failed while rendering AHK line {1}.
+界面引擎编译失败。=The UI engine failed to compile.
+错误原因：=Root cause:
+代码片段：=Code snippet:
+生成的 XAML 片段：=Generated XAML snippet:
+完整异常堆栈：=Full exception trace:
+详细信息：=Details:
+导出到文件=Export to File
+跳过属性=Skip Property
+跳过控件=Skip Element
+复制失败，请重试=Copy failed; retry
+保存错误日志=Save Error Log
+错误日志已保存。=The error log has been saved.
+保存错误日志失败：=Failed to save the error log:
+导出失败=Export Failed
+
+修改控件值=Modify control value
+
+文本或 {变量}，可用文本构造。=Text or {variable}; text builder available.
+0/1 或 {变量}。=0/1 or {variable}.
+1～n 或 {变量}。=1–n or {variable}.
+0～1 或 {变量}。=0–1 or {variable}.
+未找到目标，执行时检查。=Target not found; checked at runtime.
+折叠时展开，展开时折叠。=Expand if collapsed; collapse if expanded.
+
+无限重试不可能超时，值为0=Unlimited retries cannot time out; the value is 0.
+
+等待类型：=Wait type:
+等待出现=Wait for appearance
+等待消失=Wait for disappearance

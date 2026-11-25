@@ -257,7 +257,7 @@ D3DCompilerInstall() {
 ; ---- .NET Framework 4 ----
 ; XAML 引擎用 CorBindToRuntimeEx("v4.0.30319") 起 CLR，所以至少要 4.0。
 ; Release 是官方版本门槛：4.5 = 378389，4.6 = 393295，4.7.2 = 461808，4.8 = 528040。
-; 这里按 4.6 判定：低于它就提示装 4.8——Win7 上 4.8 是最后一个版本，
+; 这里按 4.8 判定：低于它就提示装 4.8——Win7 上 4.8 是最后一个版本，
 ; 一步装到位，不必逐级升。
 NetFxRelease() {
     try rel := RegRead("HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full", "Release")
@@ -269,7 +269,7 @@ NetFxRelease() {
 }
 
 NetFxReady() {
-    return NetFxRelease() >= 393295
+    return NetFxRelease() >= 528040
 }
 
 ; Release 数值转可读版本，用于提示文案（对照微软官方版本表）
@@ -300,7 +300,7 @@ NetFxVersionName(rel) {
 NetFxEnsureInstalled() {
     rel := NetFxRelease()
     verText := (rel > 0)
-        ? ("当前是 " NetFxVersionName(rel) "（Release " rel "），低于 RMT 要求的 4.6")
+        ? ("当前是 " NetFxVersionName(rel) "（Release " rel "），低于 RMT 要求的 4.8")
         : "当前未安装"
     msg := "检测到本机的 .NET Framework 版本不足（" verText "）。`n`n"
         . "RMT 的主界面和全部提示窗口都由 .NET 承载，缺少它时程序只能待在托盘里，"

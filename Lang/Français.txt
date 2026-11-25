@@ -3211,3 +3211,37 @@ AI 返回内容为空=La réponse de l’IA est vide
 德语=Allemand
 西班牙语=Espagnol
 检测控件=Détecter le contrôle
+
+界面引擎编译错误=Erreur de compilation de l’interface
+界面引擎异常=Erreur de l’interface
+界面引擎发生异常，详细信息如下：=Une erreur est survenue dans l’interface. Détails :
+渲染 AHK 第 {1} 行时引擎发生异常。=Erreur lors du rendu de la ligne AHK {1}.
+界面引擎编译失败。=La compilation de l’interface a échoué.
+错误原因：=Cause de l’erreur :
+代码片段：=Extrait de code :
+生成的 XAML 片段：=Extrait XAML généré :
+完整异常堆栈：=Trace complète de l’exception :
+详细信息：=Détails :
+导出到文件=Exporter vers un fichier
+跳过属性=Ignorer la propriété
+跳过控件=Ignorer l’élément
+复制失败，请重试=Échec de la copie ; réessayer
+保存错误日志=Enregistrer le journal d’erreurs
+错误日志已保存。=Le journal d’erreurs a été enregistré.
+保存错误日志失败：=Impossible d’enregistrer le journal d’erreurs :
+导出失败=Échec de l’exportation
+
+修改控件值=Modifier la valeur du contrôle
+
+文本或 {变量}，可用文本构造。=Texte ou {variable} ; éditeur disponible.
+0/1 或 {变量}。=0/1 ou {variable}.
+1～n 或 {变量}。=1–n ou {variable}.
+0～1 或 {变量}。=0–1 ou {variable}.
+未找到目标，执行时检查。=Cible introuvable ; vérification à l’exécution.
+折叠时展开，展开时折叠。=Déplier si replié ; replier si déplié.
+
+无限重试不可能超时，值为0=Les tentatives illimitées ne peuvent pas expirer ; la valeur est 0.
+
+等待类型：=Type d’attente :
+等待出现=Attendre l’apparition
+等待消失=Attendre la disparition

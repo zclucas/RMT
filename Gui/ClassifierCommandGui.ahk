@@ -2,9 +2,11 @@
 
 class ClassifierCommandGui extends CommentGui {
     _pickAction := ""
+    HasResultField := true
     HasErrorField := true
     HasTimeoutFields := true
     HelpTopic := ""
+    F1Glyph := Chr(0xECAF)
 
     _BuildAndShow() {
         this._closed := false
@@ -12,7 +14,7 @@ class ClassifierCommandGui extends CommentGui {
         height := XAMLHost.CmdTitleBarHeight()
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(height, "Auto")
-        XAMLHost.AddCmdTitleBar(main, title, height)
+        XAMLHost.AddCmdTitleBar(main, title, height, , , , , this.F1Glyph)
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
         this._BuildHeaderFields(body)
         this._BuildFields(body)
@@ -76,7 +78,9 @@ class ClassifierCommandGui extends CommentGui {
         this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr(this.CmdKey)
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
-        resultFields := this.HasErrorField ? ["ResultVar", "ErrorVar"] : ["ResultVar"]
+        resultFields := this.HasResultField ? ["ResultVar"] : []
+        if (this.HasErrorField)
+            resultFields.Push("ErrorVar")
         for varName in GetGuiVarArr() {
             for field in resultFields
                 this._ComboPush(field, "AddItem", varName)
@@ -110,14 +114,16 @@ class ClassifierCommandGui extends CommentGui {
         data := this.Data.Clone()
         choiceField := this.ChoiceField
         fields := this.TextFields.Clone()
-        fields.Push(choiceField, "ResultVar")
+        fields.Push(choiceField)
+        if (this.HasResultField)
+            fields.Push("ResultVar")
         if (this.HasErrorField)
             fields.Push("ErrorVar")
         state := this.ui.Query(fields*)
         for field in this.TextFields
             data.%field% := state[field]
         data.%choiceField% := this._ChoiceValue(state[choiceField])
-        data.ResultVar := GetVarName(Trim(state["ResultVar"]))
+        data.ResultVar := this.HasResultField ? GetVarName(Trim(state["ResultVar"])) : ""
         if (this.HasErrorField)
             data.ErrorVar := GetVarName(Trim(state["ErrorVar"]))
         if (this.HasTimeoutFields)
@@ -220,6 +226,8 @@ class ClassifierCommandGui extends CommentGui {
 
 class WindowControlGui extends ClassifierCommandGui {
     _autoRemark := ""
+    _pickHotkeys := []
+    F1Glyph := Chr(0xE707)
     CmdKey := "窗口控件"
     HelpTopic := "35-控件信息与操作"
     ChoiceField := "ActionType"
@@ -254,7 +262,6 @@ class WindowControlGui extends ClassifierCommandGui {
             keys := WinHotkey.Register(["Enter"], this._ConfirmControlPick.Bind(this, action))
             if (!keys.Length)
                 throw Error(GetLang("无法注册拾取确认热键。"))
-            ToolTipContent(GetLang("移动鼠标定位控件，回车确定，Esc 取消"))
             SetSystemCursor("CROSS")
             SetTimer(update, 40)
             while (!this._pointPickDone)
@@ -264,9 +271,7 @@ class WindowControlGui extends ClassifierCommandGui {
             SetTimer(update, 0)
             overlay.Close()
             MainSoftData.SelectAreaAction := ""
-            MySoftData.ToolTipEndTime := 0
             SetSystemCursor()
-            ToolTip()
         }
     }
 
@@ -285,12 +290,16 @@ class WindowControlGui extends ClassifierCommandGui {
     }
 
     _BuildFields(body) {
-        target := this._Row(body, "目标控件：", "TargetControl", , , GetLang("匹配到多个窗口，请在选择器中填写标题关键词。")).Add("Grid").Grid_Column(1)
+        target := this._Row(body, "目标控件：", "TargetControl").Add("Grid").Grid_Column(1)
         target.Cols("*", 6, "Auto", 6, "Auto")
-        target.Add("Border").Height(26).Padding("4,0")
-            .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness(1)
-            .Add("TextBlock").Name("TargetSummary").VerticalAlignment("Center").TextTrimming("CharacterEllipsis")
-            .Foreground("{DynamicResource TextMain}")
+        CmdEditorForm.Combo(target, "TargetSummary", true).ToolTipService_IsEnabled("False")
+        hint := target.Add("TextBlock").Name("TargetHint").Text(GetLang("请拾取控件或选择控件变量"))
+            .Foreground("{DynamicResource TextSub}").VerticalAlignment("Center").Margin("6,0,24,0")
+            .TextTrimming("CharacterEllipsis").IsHitTestVisible("False")
+        style := hint.Add("TextBlock.Style").Add("Style").TargetType("TextBlock")
+        style.Add("Setter").Property("Visibility").Value("Collapsed")
+        style.Add("Style.Triggers").Add("DataTrigger").Binding("{Binding Text, ElementName=TargetSummary}").Value("")
+            .Add("Setter").Property("Visibility").Value("Visible")
         CmdEditorForm.IconButton(target, "BtnPick", 0xE707, "拾取窗口控件").Grid_Column(2)
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1)
             .InjectResources(FrontInfoGui._ToolBtnHoverStyle())
@@ -298,8 +307,10 @@ class WindowControlGui extends ClassifierCommandGui {
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1)
             .InjectResources(FrontInfoGui._ToolBtnHoverStyle())
         body.Add("TextBox").Name("Selector").Style("{StaticResource RmtMultiLineTextBox}").Visibility("Collapsed")
-        this._Field(body, "控件参数：", "Argument")
+        this._BuildArgumentField(body)
     }
+
+    _BuildArgumentField(body) => this._Field(body, "控件参数：", "Argument")
 
     _BuildResultFields(body) {
         results := body.Add("Grid")
@@ -318,6 +329,11 @@ class WindowControlGui extends ClassifierCommandGui {
             CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs,
                 InputField(this.Data, "TimeoutAction", TimeoutPolicy.DefaultAction),
                 InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
+        this._ComboPush("TargetSummary", "ClearItems", "")
+        if (MySoftData.HasOwnProp("ControlVarMap")) {
+            for name in MySoftData.ControlVarMap
+                this._ComboPush("TargetSummary", "AddItem", "{" name "}")
+        }
         this._UpdateSelectorSummary(this.Data.Selector)
     }
 
@@ -350,20 +366,82 @@ class WindowControlGui extends ClassifierCommandGui {
     }
 
     _BindFields() {
-        this.ui.OnEvent("BtnPick", "Click", (*) => SetTimer(this._Pick.Bind(this, this.ui), -1))
+        ; 通过运行时设置只读，兼容不接受 ComboBox.IsReadOnly 特性的 XAML 加载器。
+        this.ui.Update("TargetSummary", "IsReadOnly", "True")
+        this.ui.OnEvent("TargetSummary", "SelectionChanged", XamlWin.BindCurrent(this, "OnTargetControlChanged"))
+        pick := XamlWin.BindCurrent(this, "OnPickControl")
+        this.ui.OnEvent("BtnPick", "Click", pick)
+        this.ui.OnEvent("BtnCmdF1", "Click", pick)
+        for update in CmdEditorF1Updates("point")
+            this.ui.Update(update.ControlName, update.PropertyName, update.Value)
+        this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：拾取窗口控件"))
+        this.ui.Update("BtnPick", "ToolTip", GetLang("F1：拾取窗口控件"))
         this.ui.OnEvent("BtnSelectorDetails", "Click", XamlWin.BindCurrent(this, "OnSelectorDetails"))
+    }
+
+    OnTargetControlChanged(*) {
+        text := this.ui.Query("TargetSummary")
+        if (!WindowControl.IsControlReference(text))
+            return
+        this._ComboPush("Selector", "Text", text)
+        if (this is ControlOperationGui)
+            this._RefreshWriteFields()
+    }
+
+    OnPickControl(*) {
+        SetTimer(this._Pick.Bind(this, this.ui), -1)
+    }
+
+    OnWindowLoad(state, ctrl, event) {
+        super.OnWindowLoad(state, ctrl, event)
+        if (!this._pickHotkeys.Length && this.Hwnd())
+            this._pickHotkeys := WinHotkey.Register(["F1"], XamlWin.BindCurrent(this, "OnPickControl"), this.Hwnd())
+    }
+
+    _UnregisterPickHotkeys() {
+        WinHotkey.UnregisterAll(this._pickHotkeys)
+        this._pickHotkeys := []
+    }
+
+    OnWindowClosing(state, ctrl, event) {
+        this._UnregisterPickHotkeys()
+        super.OnWindowClosing(state, ctrl, event)
+    }
+
+    _CloseWindow() {
+        this._UnregisterPickHotkeys()
+        super._CloseWindow()
     }
 
     OnSelectorDetails(*) {
         selector := this.ui.Query("Selector")
+        if (WindowControl.IsControlReference(selector)) {
+            try selector := WindowControl.ResolveTarget(selector)
+            catch as e {
+                RmtDialog.Info(e.Message, GetLang("选择器详情"), this.Hwnd())
+                return
+            }
+        }
         RmtDialog.Info(Trim(selector) != "" ? selector : GetLang("未拾取控件"), GetLang("选择器详情"), this.Hwnd())
     }
 
     _UpdateSelectorSummary(text) {
-        summary := GetLang("未拾取控件")
-        if (Trim(text) != "") {
+        summary := ""
+        if (WindowControl.IsControlReference(text))
+            summary := text
+        else if (Trim(text) != "") {
             try {
                 selector := WindowControl.ParseSelector(text)
+                ; 打开旧开关配置时，先按旧路径定位，再换算稳定类名下的序号。
+                for part in selector["path"] {
+                    if (part["class"] != WindowControl._StableClass(part["class"])) {
+                        if (WindowControl.Find(selector, true)) {
+                            text := JSON.stringify(selector, 2)
+                            this._ComboPush("Selector", "Text", text)
+                        }
+                        break
+                    }
+                }
                 part := selector["path"][-1]
                 name := part["name"] != "" ? part["name"] : part["id"]
                 summary := selector["exe"] "  /  " (name != "" ? name : part["class"])
@@ -372,7 +450,6 @@ class WindowControlGui extends ClassifierCommandGui {
             }
         }
         this._ComboPush("TargetSummary", "Text", summary)
-        this._ComboPush("TargetSummary", "ToolTip", summary)
     }
 
     _UpdateChoice(action) {
@@ -386,7 +463,8 @@ class WindowControlGui extends ClassifierCommandGui {
     }
 
     _Validate(data) {
-        WindowControl.ParseSelector(data.Selector)
+        if (!WindowControl.IsControlReference(data.Selector))
+            WindowControl.ParseSelector(data.Selector)
     }
 
     _ApplyPick(ui, coords) {
@@ -410,14 +488,15 @@ class ControlInfoGui extends WindowControlGui {
         metadata := body.Add("Grid").Name("InfoMetadataRow").Cols("*", 16, "*")
         this._Variable(metadata, "类型变量：", "TypeVar")
         this._Variable(metadata, "类名变量：", "ClassVar", 2)
-        row := this._Row(body, "结果变量：", "ResultVar")
-        CmdEditorForm.Combo(row, "ResultVar", true).Grid_Column(1).Width(200).HorizontalAlignment("Left")
+        results := body.Add("Grid").Cols("*", 16, "*")
+        this._Variable(results, "结果变量：", "ResultVar")
+        this._Variable(results, "控件变量：", "ControlVar", 2)
     }
 
     Init(cmd) {
         super.Init(cmd)
         defaults := ControlInfoData()
-        for field in ["TypeVar", "ClassVar"] {
+        for field in ["TypeVar", "ClassVar", "ControlVar"] {
             for name in GetGuiVarArr()
                 this._ComboPush(field, "AddItem", name)
             this._ComboPush(field, "Text", this.Data.HasOwnProp(field) ? this.Data.%field% : defaults.%field%)
@@ -426,6 +505,8 @@ class ControlInfoGui extends WindowControlGui {
 
     _GenerateRemark(data) {
         remark := this._ChoiceLabel(WindowControl.NormalizeAction(data.ActionType))
+        if (WindowControl.IsControlReference(data.Selector))
+            remark .= "：" data.Selector
         try {
             selector := WindowControl.ParseSelector(data.Selector)
             part := selector["path"][-1]
@@ -442,6 +523,8 @@ class ControlInfoGui extends WindowControlGui {
     _ValidateResultFields(data) {
         seen := Map()
         fields := data.ActionType == "读取控件信息" ? ["ResultVar", "TypeVar", "ClassVar"] : ["ResultVar"]
+        if (data.ActionType == "检测控件存在")
+            fields.Push("ControlVar")
         for field in fields {
             name := data.%field%
             if (name == "")
@@ -507,12 +590,14 @@ class ControlInfoGui extends WindowControlGui {
         this._ComboPush("ResultVar", "ToolTip", tip)
         this._ComboPush("ResultVarLabel", "ToolTip", tip)
         this._ComboPush("InfoMetadataRow", "Visibility", action == "读取控件信息" ? "Visible" : "Collapsed")
+        this._ComboPush("ControlVarRow", "Visibility", action == "检测控件存在" ? "Visible" : "Collapsed")
     }
 
     _ReadData() {
         data := super._ReadData()
         for field in ["TypeVar", "ClassVar"]
             data.%field% := data.ActionType == "读取控件信息" ? GetVarName(Trim(this.ui.Query(field))) : ""
+        data.ControlVar := data.ActionType == "检测控件存在" ? GetVarName(Trim(this.ui.Query("ControlVar"))) : ""
         data.ErrorVar := ""
         data.TimeoutAction := ""
         data.TimeoutStatusVar := ""
@@ -524,22 +609,44 @@ class ControlInfoGui extends WindowControlGui {
 class ControlOperationGui extends WindowControlGui {
     CmdKey := "控件操作"
     Choices := WindowControl.OperationActions
+    HasResultField := false
+    HasErrorField := false
     _writeKind := "text"
     _textBuilder := ""
 
-    _ChoiceLabel(choice) => choice == "等待控件出现" ? GetLang("等待") : super._ChoiceLabel(choice)
+    _ChoiceLabel(choice) => choice == "等待控件出现" ? GetLang("等待")
+        : choice == "写入控件值" ? GetLang("修改控件值") : super._ChoiceLabel(choice)
+
+    _BuildResultFields(body) {
+        CommandTimeoutFields.Add(body, false, , , 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()))
+    }
+
+    _BuildArgumentField(body) {
+        waitType := CmdEditorForm.Combo(this._Row(body, "等待类型：", "WaitType"), "WaitType").Grid_Column(1)
+            .Width("{Binding ActualWidth, ElementName=ActionType}").HorizontalAlignment("Left")
+        for choice in WindowControl.WaitTypes
+            waitType.Add("ComboBoxItem").Content(GetLang(choice))
+        this._Row(body, "写入说明：", "WriteHint", "Top").Add("TextBlock").Name("WriteHint").Grid_Column(1)
+            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
+        combo := CmdEditorForm.Combo(this._Row(body, "控件参数：", "Argument"), "Argument", true).Grid_Column(1)
+            .Width("{Binding ActualWidth, ElementName=ActionType}").HorizontalAlignment("Left")
+        for value in GetGuiVarReferences()
+            combo.Add("ComboBoxItem").Content(value)
+    }
 
     _BuildFields(body) {
         super._BuildFields(body)
         textRow := this._Row(body, "写入文本：", "ArgumentText", "Top")
-        host := textRow.Add("Grid").Grid_Column(1)
+        host := textRow.Add("Border").Grid_Column(1)
+            .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness(1).CornerRadius(3)
+            .Add("Grid")
+        host.Cols("*", "Auto")
         host.Add("TextBox").Name("ArgumentText").Style("{StaticResource RmtMultiLineTextBox}")
-            .Height(68).MinHeight(68).AcceptsReturn("True").TextWrapping("Wrap")
-            .ScrollViewer_VerticalScrollBarVisibility("Auto").Padding("4,0,30,3")
+            .Height(66).MinHeight(66).AcceptsReturn("True").TextWrapping("Wrap")
+            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}").BorderThickness(0)
+            .ScrollViewer_VerticalScrollBarVisibility("Auto").Padding("1.5,0,1.5,3")
         CmdEditorForm.IconButton(host, "BtnArgumentBuilder", 0xE70F, "文本构造")
-            .HorizontalAlignment("Right").VerticalAlignment("Top").Margin("0,4,4,0")
-        this._Row(body, "写入说明：", "WriteHint", "Top").Add("TextBlock").Name("WriteHint").Grid_Column(1)
-            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}")
+            .Grid_Column(1).HorizontalAlignment("Right").VerticalAlignment("Top").Margin("0,3,3,0")
     }
 
     _BindFields() {
@@ -554,6 +661,7 @@ class ControlOperationGui extends WindowControlGui {
             InputField(this.Data, "TimeoutAction", TimeoutPolicy.DefaultAction),
             InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
         this._writeKind := InputField(this.Data, "WriteKind", "text")
+        this._ComboPush("WaitType", "SelectedIndex", CmdEnumIndex(InputField(this.Data, "WaitType", "等待出现"), WindowControl.WaitTypes))
         this._ComboPush("ArgumentText", "Text", this.Data.Argument)
         action := WindowControl.NormalizeAction(this.Data.ActionType)
         available := false
@@ -572,6 +680,7 @@ class ControlOperationGui extends WindowControlGui {
         this.HasTimeoutFields := WindowControl.UsesTimeout(action)
         ; 父类用 HasTimeoutFields 判断刷新，非等待时也必须主动收起。
         this._ComboPush("CommandTimeoutRow", "Visibility", this.HasTimeoutFields ? "Visible" : "Collapsed")
+        this._ComboPush("WaitTypeRow", "Visibility", this.HasTimeoutFields ? "Visible" : "Collapsed")
         super._UpdateChoice(action)
         this._RefreshWriteFields(action)
     }
@@ -583,22 +692,22 @@ class ControlOperationGui extends WindowControlGui {
         hint := ""
         if (writing) {
             try {
-                selector := WindowControl.ParseSelector(this.ui.Query("Selector"))
+                selector := WindowControl.ParseSelector(WindowControl.ResolveTarget(this.ui.Query("Selector")))
                 if (element := WindowControl.Find(selector)) {
                     profile := WindowControl.ProbeWrite(element)
                     this._writeKind := profile.kind
                     if (!profile.supported)
                         hint := profile.reason
                 } else
-                    hint := GetLang("目标当前未找到，执行时重新检查写入能力。")
+                    hint := GetLang("未找到目标，执行时检查。")
             }
-            limits := Map("text", "填写文本，支持 {变量}；可打开文本构造。", "state", "填写 0 或 1，支持 {变量}。",
-                "index", "填写 1～n 的选项序号，支持 {变量}。", "ratio", "填写 0～1 的比例，支持 {变量}。")
+            limits := Map("text", "文本或 {变量}，可用文本构造。", "state", "0/1 或 {变量}。",
+                "index", "1～n 或 {变量}。", "ratio", "0～1 或 {变量}。")
             hint := (hint != "" ? hint " " : "") GetLang(limits.Get(this._writeKind, limits["text"]))
         } else if (action == "展开/折叠") {
-            hint := GetLang("拾取时提示是否适用；折叠时展开，展开时折叠。")
+            hint := GetLang("折叠时展开，展开时折叠。")
             try {
-                selector := WindowControl.ParseSelector(this.ui.Query("Selector"))
+                selector := WindowControl.ParseSelector(WindowControl.ResolveTarget(this.ui.Query("Selector")))
                 if (element := WindowControl.Find(selector))
                     hint := WindowControl.ProbeExpand(element).reason
             }
@@ -644,6 +753,8 @@ class ControlOperationGui extends WindowControlGui {
             throw Error(GetLang("请选择控件操作。"))
         data := super._ReadData()
         data.WriteKind := this._writeKind
+        data.WaitType := WindowControl.UsesTimeout(data.ActionType) ? GetLangKey(this.ui.Query("WaitType")) : "等待出现"
+        data.ErrorVar := ""
         if (!WindowControl.UsesTimeout(data.ActionType)) {
             data.TimeoutMs := TimeoutPolicy.DefaultMs
             data.TimeoutAction := ""
@@ -682,9 +793,11 @@ class WindowControlPickOverlay {
         this.panel := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08080020 -DPIScale")
         this.token := Gdip_Startup()
         this.lastRect := ""
+        this._ShowTip()
     }
 
     Close() {
+        CursorOutputTip.Show("")
         this.panel.Destroy()
         if (this.token)
             Gdip_Shutdown(this.token)
@@ -701,8 +814,11 @@ class WindowControlPickOverlay {
                 ; 降低跨进程文本读取频率，鼠标移动至其他控件时立即刷新。
                 changed := !this.HasOwnProp("lastElement") || !WindowControl._Equals(bounds.element, this.lastElement)
                 if (changed || !this.HasOwnProp("lastProbe") || A_TickCount - this.lastProbe >= 400) {
-                    tip := GetLang("移动鼠标定位控件，回车确定，Esc 取消") "`n"
-                    if (this.action == "展开/折叠") {
+                    tip := ""
+                    if (this.action == "点击控件") {
+                        profile := WindowControl.ProbeClick(bounds.element)
+                        tip .= GetLang(profile.supported ? "可以点击此控件。" : "此控件点击大概率无效。")
+                    } else if (this.action == "展开/折叠") {
                         profile := WindowControl.ProbeExpand(bounds.element)
                         tip .= GetLang(profile.supported ? "适合展开/折叠：" : "不适合展开/折叠：") profile.reason
                     } else if (this.action == "写入控件值") {
@@ -710,29 +826,51 @@ class WindowControlPickOverlay {
                         kinds := Map("text", "文本", "state", "0/1 状态", "index", "1～n 选项序号", "ratio", "0～1 比例")
                         tip .= profile.supported ? GetLang("可写入值：") GetLang(kinds[profile.kind])
                             : GetLang("无法写入值：") profile.reason
-                    } else {
+                    } else if (this.action == "读取控件值") {
                         result := WindowControl.ProbeValue(bounds.element, true)
-                        if (result.supported) {
-                            preview := StrReplace(StrReplace(String(result.value), "`r", ""), "`n", " ↵ ")
-                            tip .= GetLang("可读取值：") result.kind "`n" (preview == "" ? GetLang("（空文本）") : SubStr(preview, 1, 100))
-                        } else
+                        if (result.supported)
+                            tip .= this._ValueTip(result)
+                        else
                             tip .= GetLang("无法读取值：") result.reason
                     }
-                    ToolTipContent(tip)
+                    this._ShowTip(tip)
                     this.lastElement := bounds.element
                     this.lastProbe := A_TickCount
                 }
+                this._RaiseTip()
                 return
             }
         }
         if (this.HasOwnProp("lastElement")) {
             this.DeleteProp("lastElement")
-            ToolTipContent(GetLang("移动鼠标定位控件，回车确定，Esc 取消") "`n" GetLang("无法读取值：未找到可拾取控件。"))
+            this._ShowTip(this.action == "检测控件存在" || this.action == "读取控件信息" ? "" : GetLang("未找到可拾取控件。"))
         }
         if (this.lastRect != "") {
             this.panel.Hide()
             this.lastRect := ""
         }
+    }
+
+    _ShowTip(text := "") => CursorOutputTip.Show(text, 0x7FFFFFFF, false, false, true)
+
+    _RaiseTip() {
+        ; 遮罩重新显示后，将不激活、穿透鼠标的 XAML 提示置于其上。
+        if (IsObject(CursorOutputTip.ui) && (hwnd := CursorOutputTip.ui.wpfHwnd))
+            DllCall("user32\SetWindowPos", "Ptr", hwnd, "Ptr", -1, "Int", 0, "Int", 0,
+                "Int", 0, "Int", 0, "UInt", 0x13)
+    }
+
+    _ValueTip(result) {
+        descriptions := Map(
+            GetLang("开关状态（0/1）"), GetLang("开关状态，0关/1开"),
+            GetLang("勾选状态（0/1，半选 0.5）"), GetLang("勾选状态，0未勾/1勾选/0.5半选"),
+            GetLang("选中状态（0/1）"), GetLang("选中状态，0未选/1选中"),
+            GetLang("展开状态（0/1）"), GetLang("展开状态，0折叠/1展开"),
+            GetLang("范围比例（0～1）"), GetLang("比例，0～1"),
+            GetLang("选项序号（1～n，未选 0）"), GetLang("选项序号，0未选/1～n"))
+        preview := StrReplace(StrReplace(String(result.value), "`r", ""), "`n", " ↵ ")
+        preview := preview == "" ? GetLang("空文本") : SubStr(preview, 1, 100)
+        return GetLang("值：") preview "（" descriptions.Get(result.kind, result.kind) "）"
     }
 
     _Draw(bounds) {

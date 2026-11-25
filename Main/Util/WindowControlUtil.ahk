@@ -10,6 +10,7 @@ class WindowControlData {
     Selector := ""
     Argument := ""
     WriteKind := "text"
+    WaitType := "等待出现"
     ResultVar := ""
     TypeVar := ""
     ClassVar := ""
@@ -24,6 +25,7 @@ class ControlInfoData extends WindowControlData {
     ResultVar := "Res"
     TypeVar := "ControlType"
     ClassVar := "ControlClass"
+    ControlVar := "TargetControl"
     TimeoutAction := ""
     TimeoutStatusVar := ""
 }
@@ -40,6 +42,7 @@ class WindowControl {
         return action == "读取控件文本" || action == "读取范围值" ? "读取控件值" : action
     }
     static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件", "展开/折叠"]
+    static WaitTypes := ["等待出现", "等待消失"]
 
     static CommandKey(action) {
         action := this.NormalizeAction(action)
@@ -61,6 +64,7 @@ class WindowControl {
         node := hit.element
         while (node && !this._Equals(node, hit.root)) {
             key := this.Describe(node)
+            key["class"] := this._StableClass(key["class"])
             key["index"] := 1
             sibling := this._Object(7, hit.walker, "Ptr", node)
             while (sibling) {
@@ -121,6 +125,22 @@ class WindowControl {
             right: NumGet(rect, 8, "Int"), bottom: NumGet(rect, 12, "Int")}
     }
 
+    static IsControlReference(text) => RegExMatch(text, "^\{[^{}\r\n]+\}$")
+
+    static ResolveTarget(text, resolver := "") {
+        if (this.IsControlReference(text)) {
+            name := SubStr(text, 2, -1)
+            if (IsObject(resolver))
+                text := resolver(name)
+            else if (!TryGetVarValue(&text, name, false, Map(), false))
+                throw TargetError(GetLang("控件变量尚未赋值：") name)
+            if (Type(text) != "String" || Trim(text) == "")
+                throw TargetError(GetLang("控件变量为空或无效：") name)
+        }
+        this.ParseSelector(text)
+        return text
+    }
+
     static ParseSelector(text) {
         try {
             selector := JSON.parse(text)
@@ -142,7 +162,7 @@ class WindowControl {
         }
     }
 
-    static Find(selector) {
+    static Find(selector, stabilize := false) {
         active := WinExist("A")
         matched := 0
         ambiguous := false
@@ -154,7 +174,7 @@ class WindowControl {
                     continue
                 element := this._Object(6, this._Automation(), "Ptr", hwnd)
                 if (element)
-                    element := this._ResolvePath(element, selector["path"])
+                    element := this._ResolvePath(element, selector["path"], stabilize)
             } catch {
                 continue
             }
@@ -173,12 +193,13 @@ class WindowControl {
     }
 
     static Execute(data, arg, cancelled) {
-        selector := this.ParseSelector(data.Selector)
+        selector := this.ParseSelector(this.ResolveTarget(data.Selector))
         action := this.NormalizeAction(data.ActionType)
+        waitDisappear := this.UsesTimeout(action) && data.HasOwnProp("WaitType") && data.WaitType == "等待消失"
         deadline := this.UsesTimeout(action) ? A_TickCount + Integer(data.TimeoutMs) : 0
         while (!cancelled()) {
             element := this.Find(selector)
-            if (element)
+            if (waitDisappear ? !element : !!element)
                 break
             if (!this.UsesTimeout(action)) {
                 if (action == "检测控件存在")
@@ -259,6 +280,8 @@ class WindowControl {
                 state := this._Int(pattern, 4)
                 return this._Value(state == 2 ? 0.5 : state, "勾选状态（0/1，半选 0.5）")
             }
+            if (webSwitch := this._WebSwitch(element))
+                return this._Value(webSwitch.state, "开关状态（0/1）")
             if (type == 50003)
                 return this._ComboValue(element)
             if (pattern := this._Pattern(element, "range")) {
@@ -275,18 +298,24 @@ class WindowControl {
                 if (state != 3) ; LeafNode 没有展开状态。
                     return this._Value(state == 0 ? 0 : 1, "展开状态（0/1）")
             }
-            if (type == 50026 || type == 50033 || type == 50032 || type == 50021 || type == 50010)
-                return {supported: false, value: "", reason: GetLang("布局控件无法读取值。")}
             if (pattern := this._Pattern(element, "text")) {
                 range := this._Object(7, pattern)
                 return this._Value(this._String(range, 12, "Int", preview ? 100 : -1), "文本")
             }
             if (pattern := this._Pattern(element, "value"))
                 return this._Value(this._String(pattern, 4), "文本")
+            if (type == 50026 || type == 50033 || type == 50032 || type == 50021 || type == 50010)
+                return {supported: false, value: "", reason: GetLang("布局控件无法读取值。")}
             ; 仅文字语义的控件允许回退到 Name，不能把布局名称误认为值。
             if (type == 50000 || type == 50004 || type == 50005 || type == 50006
                 || type == 50017 || type == 50020 || type == 50022 || type == 50030)
                 return this._Value(this._String(element, 23), "文本")
+            ; 网页菜单、自定义项等常只公开可访问名称，将其作为文本值。
+            if (type == 50007 || type == 50011 || type == 50019 || type == 50025 || type == 50029 || type == 50031) {
+                name := this._String(element, 23)
+                if (Trim(name) != "")
+                    return this._Value(name, "文本")
+            }
             return {supported: false, value: "", reason: GetLang("此控件不支持读取值。")}
         } catch as e {
             return {supported: false, value: "", reason: GetLang("控件值读取失败。") " " e.Message}
@@ -393,6 +422,13 @@ class WindowControl {
             kind := "text", pattern := 0, reason := ""
             if (pattern := this._Pattern(element, "toggle"))
                 kind := "state"
+            else if (webSwitch := this._WebSwitch(element)) {
+                kind := "state"
+                if (webSwitch.disabled)
+                    reason := GetLang("此开关已禁用，无法写入。")
+                else if (!this._Pattern(element, "invoke"))
+                    reason := GetLang("此开关未提供可执行的切换操作。")
+            }
             else if (type == 50003) {
                 kind := "index"
                 if (!this._NativeControl(element, "combo") && !this._Pattern(element, "itemContainer")
@@ -418,6 +454,15 @@ class WindowControl {
             return {supported: reason == "", kind: kind, reason: reason}
         } catch as e {
             return {supported: false, kind: "text", reason: e.Message}
+        }
+    }
+
+    ; 点击执行使用 Invoke；拾取时只检查能力和启用状态，不触发操作。
+    static ProbeClick(element) {
+        try {
+            return {supported: !!this._Int(element, 28) && !!this._Pattern(element, "invoke")}
+        } catch {
+            return {supported: false}
         }
     }
 
@@ -482,12 +527,47 @@ class WindowControl {
                     }
                     if (this._Int(pattern, 4) != state)
                         throw Error(GetLang("控件未达到指定状态。"))
+                } else if (this._WebSwitch(element)) {
+                    return this._WriteWebSwitch(element, state)
                 } else if (pattern := this._Pattern(element, "selection")) {
                     if (!!this._Int(pattern, 6) != state)
                         ComCall(state ? 3 : 5, pattern)
                 } else
                     ComCall(state ? 3 : 4, this._RequiredPattern(element, "expand"))
                 return state
+        }
+    }
+
+    static _WebSwitch(element) {
+        cls := this._String(element, 30)
+        if (!RegExMatch(cls, "(^|\s)vui_switch--switch(?=\s|$)"))
+            return 0
+        return {state: RegExMatch(cls, "(^|\s)is-checked(?=\s|$)") ? 1 : 0,
+            disabled: !!RegExMatch(cls, "(^|\s)(is-disabled|is-loading)(?=\s|$)")}
+    }
+
+    static _StableClass(cls) {
+        if (!RegExMatch(cls, "(^|\s)vui_switch--switch(?=\s|$)"))
+            return cls
+        return Trim(RegExReplace(RegExReplace(cls, "(^|\s)(is-checked|is-disabled|is-loading)(?=\s|$)", " "), "\s+", " "))
+    }
+
+    static _WriteWebSwitch(element, state) {
+        current := this._WebSwitch(element)
+        if (!current || current.disabled)
+            throw Error(GetLang("此开关当前无法写入。"))
+        if (current.state == state)
+            return state
+        ; 只切换一次，等待网页更新状态，避免异步响应时重复点击。
+        ComCall(3, this._RequiredPattern(element, "invoke"))
+        deadline := A_TickCount + 1500
+        loop {
+            current := this._WebSwitch(element)
+            if (current && current.state == state)
+                return state
+            if (A_TickCount >= deadline)
+                throw Error(GetLang("开关未达到指定状态。"))
+            Sleep(30)
         }
     }
 
@@ -614,10 +694,14 @@ class WindowControl {
             return false
         if (key["id"] != "")
             return this._String(element, 29) == key["id"]
-        return this._String(element, 23) == key["name"] && this._String(element, 30) == key["class"]
+        cls := this._String(element, 30)
+        ; 新拾取的开关使用稳定类名；旧选择器仍按原有类名、序号匹配。
+        if (key["class"] == this._StableClass(key["class"]))
+            cls := this._StableClass(cls)
+        return this._String(element, 23) == key["name"] && cls == key["class"]
     }
 
-    static _ResolvePath(element, path) {
+    static _ResolvePath(element, path, stabilize := false) {
         walker := this._Object(14, this._Automation())
         for key in path {
             child := this._Object(4, walker, "Ptr", element)
@@ -629,6 +713,17 @@ class WindowControl {
             }
             if (!child)
                 return 0
+            stableClass := this._StableClass(key["class"])
+            if (stabilize && stableClass != key["class"]) {
+                key["class"] := stableClass
+                key["index"] := 1
+                sibling := this._Object(7, walker, "Ptr", child)
+                while (sibling) {
+                    if (this._Matches(sibling, key))
+                        key["index"] += 1
+                    sibling := this._Object(7, walker, "Ptr", sibling)
+                }
+            }
             element := child
         }
         return element
@@ -674,7 +769,9 @@ OnWindowControl(tableItem, cmd, index) {
     action := TimeoutPolicy.Get(data)
     loop {
         try {
-            value := WindowControl.Execute(data, GetReplaceVarText(tableItem, index, data.Argument), cancelled)
+            runData := data.Clone()
+            runData.Selector := WindowControl.ResolveTarget(data.Selector, ResolveControlVariable.Bind(tableItem, index))
+            value := WindowControl.Execute(runData, GetReplaceVarText(tableItem, index, data.Argument), cancelled)
             failure := ""
             timedOut := false
             break
@@ -692,6 +789,11 @@ OnWindowControl(tableItem, cmd, index) {
     if (WindowControl.UsesTimeout(CmdEnumZh(data.ActionType, WindowControl.Actions)))
         TimeoutPolicy.WriteStatus(data, timedOut)
     names := [], values := []
+    if (WindowControl.NormalizeAction(data.ActionType) == "检测控件存在"
+        && data.HasOwnProp("ControlVar") && data.ControlVar != "") {
+        names.Push(data.ControlVar)
+        values.Push(failure == "" && value == 1 ? runData.Selector : "")
+    }
     info := failure == "" && WindowControl.NormalizeAction(data.ActionType) == "读取控件信息" ? JSON.parse(value) : Map()
     for pair in [["TypeVar", "type"], ["ClassVar", "class"]] {
         name := data.HasOwnProp(pair[1]) ? data.%pair[1]% : ""
@@ -705,4 +807,10 @@ OnWindowControl(tableItem, cmd, index) {
     SaveCommandResult(data, value, failure, !timedOut || action == "")
     if (timedOut && TimeoutPolicy.Stops(action))
         throw Error(failure)
+}
+
+ResolveControlVariable(tableItem, index, name) {
+    if (!TryGetTabVarValue(&value, tableItem, index, name, false, false))
+        throw TargetError(GetLang("控件变量尚未赋值：") name)
+    return value
 }

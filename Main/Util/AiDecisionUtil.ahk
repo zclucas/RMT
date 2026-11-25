@@ -232,6 +232,13 @@ OnAiDecision(tableItem, cmd, index) {
 }
 
 RegisterCommandResultVars(data) {
+    if (data.HasOwnProp("ControlVar") && data.ControlVar != ""
+        && WindowControl.NormalizeAction(data.ActionType) == "检测控件存在") {
+        if (!MySoftData.HasOwnProp("ControlVarMap"))
+            MySoftData.ControlVarMap := Map()
+        MySoftData.ControlVarMap[data.ControlVar] := true
+        MySoftData.GlobalVariMap[data.ControlVar] := true
+    }
     errorVar := data.HasOwnProp("ErrorVar") ? data.ErrorVar : ""
     names := [data.ResultVar, errorVar]
     for field in ["TypeVar", "ClassVar"]
