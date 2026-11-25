@@ -8,7 +8,7 @@ class CommandTimeoutFields {
         time := this._Row(panel, "超时(ms)：", labelGroup, "", GetLang("本次操作最多等待的毫秒数。"), labelWidth)
         status := this._Row(panel, "超时状态：", rightLabelGroup, "TimeoutStatusLabel", "", labelWidth).Grid_Column(2)
         action := this._Row(panel, "超时处理：", labelGroup, "TimeoutActionLabel", "", labelWidth).Grid_Row(1)
-        times := ["1000", "3000", "5000", "10000", "30000", "60000"]
+        times := ["5000"]
         if (allowUnlimited)
             times.Push("不限时")
         this.Combo(time, "TimeoutMs", times, true)
@@ -48,11 +48,16 @@ class CommandTimeoutFields {
         return box
     }
 
-    static Init(ui, ms, action, statusVar) {
-        batch := []
-        for name in GetGuiVarArr()
+    static Init(ui, ms, action, statusVar, allowUnlimited := false) {
+        batch := [{ControlName: "TimeoutMs", PropertyName: "ClearItems", Value: ""},
+            {ControlName: "TimeoutMs", PropertyName: "AddItem", Value: "5000"}]
+        if (allowUnlimited)
+            batch.Push({ControlName: "TimeoutMs", PropertyName: "AddItem", Value: GetLang("不限时")})
+        for name in GetGuiVarArr() {
+            batch.Push({ControlName: "TimeoutMs", PropertyName: "AddItem", Value: "{" name "}"})
             if (name != "" && name != TimeoutPolicy.DefaultStatusVar)
                 batch.Push({ControlName: "TimeoutStatusVar", PropertyName: "AddItem", Value: name})
+        }
         batch.Push(
             {ControlName: "TimeoutMs", PropertyName: "Text", Value: ms == 0 ? GetLang("不限时") : String(ms)},
             {ControlName: "TimeoutAction", PropertyName: "SelectedIndex",

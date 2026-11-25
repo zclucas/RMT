@@ -26,6 +26,8 @@ OnWait(tableItem, cmd, index) {
     if (!IsObject(Data))
         return
     WaitEnsureData(Data)
+    Data := Data.Clone()
+    Data.TimeoutMs := TimeoutPolicy.ResolveMs(Data.TimeoutMs, (text) => GetReplaceVarText(tableItem, index, text), 4294967295, 0)
     t := WaitTypeNum(Data)
     if (t == "等待确定")
         return RunWaitConfirmation(tableItem, index, Data.ConfirmConfig, Data)

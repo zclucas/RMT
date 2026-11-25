@@ -405,7 +405,7 @@ class WaitGui {
             action := "忽略"
         statusVar := InputField(this.Data, "TimeoutStatusVar",
             this.Data.ResultSaveName != "" ? this.Data.ResultSaveName : TimeoutPolicy.DefaultStatusVar)
-        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action, statusVar)
+        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action, statusVar, true)
         keyWait := this._PanelOf(CmdEnumWait(this.Data.WaitType)) == "KeyPanel"
         this._pickedKeyText := keyWait ? this.Data.Param1 : ""
         this._pickedKeys := keyWait ? this.Data.KeyOptions.KeyArr : []
@@ -780,7 +780,7 @@ class WaitGui {
         }
         data := {}
         CommandTimeoutFields.Read(this.ui, data, true)
-        if (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 0 || data.TimeoutMs > 4294967295) {
+        if (!TimeoutPolicy.ValidMs(data.TimeoutMs, 4294967295, 0)) {
             RmtDialog.Info(GetLang("超时请输入 0 到 4294967295 的整数（毫秒）"))
             return false
         }
