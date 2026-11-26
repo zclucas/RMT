@@ -1400,6 +1400,17 @@ public partial class AhkWpfEngine
     private static extern IntPtr UiScaleMonitorFromRect(ref RECT rect, int flags);
     [DllImport("user32.dll", EntryPoint = "GetDpiForWindow")]
     private static extern uint UiScaleGetDpiForWindow(IntPtr hwnd);
+    [DllImport("gdi32.dll", EntryPoint = "GetDeviceCaps")]
+    private static extern int UiScaleGetDeviceCaps(IntPtr dc, int index);
+
+    private static double UiScaleSystemDpi()
+    {
+        // GetDpiForWindow/GetDpiForSystem do not exist on Windows 7.
+        IntPtr dc = GetDC(IntPtr.Zero);
+        if (dc == IntPtr.Zero) return 1;
+        try { return Math.Max(96, UiScaleGetDeviceCaps(dc, 88)) / 96.0; } // LOGPIXELSX
+        finally { ReleaseDC(IntPtr.Zero, dc); }
+    }
 
     private Rect UiScaleWorkArea()
     {
@@ -1407,7 +1418,7 @@ public partial class AhkWpfEngine
         IntPtr hwnd = helper.Handle;
         if (hwnd == IntPtr.Zero) hwnd = helper.Owner;
         IntPtr monitor = MonitorFromWindow(hwnd, 2);
-        double dpiX = 1, dpiY = 1;
+        double dpiX = UiScaleSystemDpi(), dpiY = dpiX;
         var source = PresentationSource.FromVisual(win);
         if (source != null && source.CompositionTarget != null)
         {
@@ -1924,9 +1935,13 @@ public partial class AhkWpfEngine
     private void ShowEngineWindow(Window win, bool isDaemon, bool startHidden = false)
     {
         PrepareWindowUiScale();
+        // Capture the opening monitor before Show changes the foreground window.
+        IntPtr openingOwner = new WindowInteropHelper(win).Owner;
+        IntPtr openingMonitor = MonitorFromWindow(openingOwner != IntPtr.Zero ? openingOwner : GetForegroundWindow(), 2);
+        Action placeEditor = () => CenterMacroEditor(openingMonitor);
         try
         {
-            firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden);
+            firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor);
             ApplyTaskbarExStyle(win);
             if (startHidden) win.ShowActivated = false;
             if (isDaemon)
@@ -1944,7 +1959,7 @@ public partial class AhkWpfEngine
             if (win.Resources.Contains("OriginalNativeOwner"))
                 win.Resources.Remove("OriginalNativeOwner");
             if (firstFrame == null)
-                firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden);
+                firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor);
             if (isDaemon)
             {
                 ApplyTaskbarExStyle(win);
@@ -1957,6 +1972,28 @@ public partial class AhkWpfEngine
                 win.ShowDialog();
             }
         }
+    }
+
+    private void CenterMacroEditor(IntPtr monitor)
+    {
+        if (win.WindowState != WindowState.Normal || win.FindName("MacroEditorTitle") == null
+            || win.WindowStartupLocation != WindowStartupLocation.CenterScreen) return;
+        var source = PresentationSource.FromVisual(win);
+        if (source == null || source.CompositionTarget == null) return;
+        MONITORINFO info = new MONITORINFO();
+        info.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+        if (!GetMonitorInfo(monitor, ref info)) return;
+        Matrix dpi = source.CompositionTarget.TransformToDevice;
+        double width = (info.rcWork.right - info.rcWork.left) / dpi.M11;
+        double height = (info.rcWork.bottom - info.rcWork.top) / dpi.M22;
+        // Final UI/font scaling has settled. Keep the entire Viewbox inside the work area.
+        win.MinWidth = Math.Min(win.MinWidth, width);
+        win.MinHeight = Math.Min(win.MinHeight, height);
+        win.Width = Math.Min(win.ActualWidth, width);
+        win.Height = Math.Min(win.ActualHeight, height);
+        win.UpdateLayout();
+        win.Left = info.rcWork.left / dpi.M11 + Math.Max(0, (width - win.ActualWidth) / 2);
+        win.Top = info.rcWork.top / dpi.M22 + Math.Max(0, (height - win.ActualHeight) / 2);
     }
 
     // 有属主的窗口默认不占任务栏位。RMT 要「压在主窗口上方 + 自己有一个任务栏按钮」，

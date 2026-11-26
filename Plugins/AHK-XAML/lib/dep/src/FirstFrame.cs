@@ -12,16 +12,18 @@ internal sealed class RmtFirstFrame
     readonly Window window;
     readonly IntPtr hwnd;
     readonly bool startHidden;
+    readonly Action beforeReveal;
     bool initialized, rendered, queued, finished, cloaked, layered, opacityFallback;
     int originalExStyle;
     double originalOpacity;
 
     public static bool IsPending(Window window) { return Pending.Contains(window); }
 
-    public RmtFirstFrame(Window window, bool waitForInitialization, bool startHidden)
+    public RmtFirstFrame(Window window, bool waitForInitialization, bool startHidden, Action beforeReveal = null)
     {
         this.window = window;
         this.startHidden = startHidden;
+        this.beforeReveal = beforeReveal;
         initialized = !waitForInitialization;
         // EnsureHandle creates HWND without showing it. Taskbar styles must also be set now.
         hwnd = new WindowInteropHelper(window).EnsureHandle();
@@ -107,6 +109,7 @@ internal sealed class RmtFirstFrame
     void Reveal()
     {
         if (finished) return;
+        if (beforeReveal != null) beforeReveal();
         // For -min, hide the HWND before lifting the cover; WPF Visibility stays Visible.
         if (startHidden) AhkWpfEngine.ShowWindow(hwnd, 0);
         if (cloaked)
