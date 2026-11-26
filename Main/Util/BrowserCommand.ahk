@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include BrowserPageInfo.ahk
 
 OnBrowser(tableItem, cmd, index) {
     parts := StrSplit(cmd, "_")
@@ -92,6 +93,8 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
         data := data.Clone()
         data.TimeoutMs := TimeoutPolicy.ResolveMs(data.TimeoutMs, resolve, 2147483647)
     }
+    if (actionType != "打开网址" && actionType != "页签信息")
+        BrowserUtil.EnsureConnection(InputField(data, "BrowserPort", 9222))
     if (BrowserActions.UsesTarget(actionType)) {
         targetRef := BrowserTargetRef(tableItem, index, data, resolve)
         if (targetRef != "")
@@ -99,6 +102,13 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
     }
 
     switch actionType {
+        case "页签信息":
+            source := CmdEnumZh(InputField(data, "PageSource", "当前页签"), BrowserPageInfo.Sources)
+            field := CmdEnumZh(InputField(data, "PageField", "网址"), BrowserPageInfo.Fields)
+            binding := source == "窗口绑定" ? resolve(ResolveBindWindow(tableItem, index, InputField(data, "WinInfo", ""))) : ""
+            return BrowserPageInfo.Read(source, field, source == "目标网址" ? resolve(data.Url) : "", binding,
+                InputField(data, "BrowserPort", 9222), () => tableItem.Items[index].Killed)
+
         case "打开网址":
             url := resolve(data.Url)
             if (url == "")
@@ -110,22 +120,8 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             hLess := data.HasOwnProp("Headless") ? Integer(data.Headless) : 0
             timeoutMs := Integer(data.TimeoutMs)
 
-            BrowserUtil.Launch(bType, bPath, hLess, uDir, hPort)
-            if (data.HasOwnProp("Incognito") && Integer(data.Incognito)) {
-                ctxId := BrowserUtil.CreateContext()
-                if (data.HasOwnProp("TimeoutStatusVar")) {
-                    tabId := BrowserUtil.NewTabInContext("about:blank", ctxId)
-                    try BrowserUtil.Navigate(url, timeoutMs)
-                    catch as err {
-                        if (err is BrowserTimeoutError && TimeoutPolicy.Get(data) != "忽略")
-                            try BrowserUtil.CloseTabByRef(tabId)
-                        throw err
-                    }
-                } else
-                    BrowserUtil.NewTabInContext(url, ctxId)
-            } else {
-                BrowserUtil.Navigate(url, timeoutMs)
-            }
+            mode := BrowserActions.GetOpenMode(data)
+            BrowserUtil.OpenUrl(url, bType, bPath, mode == "无痕模式", hLess, uDir, hPort, timeoutMs, mode == "新窗口", InputField(data, "UseCDP", false))
             return url
 
         case "当前页跳转":

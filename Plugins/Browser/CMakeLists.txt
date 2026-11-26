@@ -14,6 +14,8 @@ else()
     FetchContent_MakeAvailable(cdp)
 endif()
 
+include(cmake/BrowserSessions.cmake)
+
 add_library(RMT_Browser SHARED RMT_Browser.cpp)
 target_compile_definitions(RMT_Browser PRIVATE BROWSER_EXPORTS)
 target_compile_options(RMT_Browser PRIVATE /utf-8 /bigobj)

@@ -17,7 +17,13 @@
 
 // --- Browser & Page Lifecycle ---
 BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath, int headless, const char* userDataDir, int port);
+// openMode: 0 = default tab, 1 = private context, 2 = new normal window.
+BROWSER_API int Browser_OpenUrl(const char* browserType, const char* browserPath, int headless, const char* userDataDir, int port, const char* url, int openMode, int timeoutMs);
 BROWSER_API int Browser_Connect(const char* host, int port);
+BROWSER_API int Browser_ConnectWebSocket(const char* endpoint, int port);
+// Connection inspection and opening in an existing session never launch a browser.
+BROWSER_API int Browser_GetConnectionPort();
+BROWSER_API int Browser_OpenConnectedUrl(const char* url, int openMode, int timeoutMs);
 BROWSER_API int Browser_Navigate(const char* url, int timeoutMs);
 BROWSER_API int Browser_Reload(int ignoreCache);
 BROWSER_API int Browser_GoBack();

@@ -19,6 +19,9 @@ static std::string g_lastError = "";
 static int g_lastErrorCode = 0;
 static std::string g_host = "127.0.0.1";
 static int g_port = 9222;
+static std::string g_browserEndpoint;
+static std::string g_launchKey;
+static std::string g_privateContextId;
 
 static void SetLastError(const std::string& err, int code = -1) {
     g_lastError = err;
@@ -62,12 +65,26 @@ static std::string BuildElementQueryJs(const std::string& selector, const std::s
     }
 }
 
-static bool AttachToFirstPage() {
+static bool AttachToFirstPage(bool allowCreate = false) {
     if (!g_browser) return false;
-    auto pages = g_browser->pages();
-    if (!pages.empty()) {
-        g_activePage = pages[0];
-        return true;
+    const auto pages = g_browser->pages();
+    for (const auto& target : g_browser->listPages()) {
+        for (auto* page : pages) {
+            if (page->targetId() == target.id && page->isConnected() && !page->isClosed()) {
+                g_activePage = page;
+                return true;
+            }
+        }
+        auto attached = g_browser->connectToPage(target);
+        if (attached.ok()) {
+            g_activePage = attached.page;
+            return true;
+        }
+    }
+    if (!allowCreate) {
+        g_activePage = nullptr;
+        SetLastError("No available webpage; open the target URL in a controlled browser", -4);
+        return false;
     }
     auto newP = g_browser->newPage("about:blank");
     if (newP.ok()) {
@@ -78,32 +95,42 @@ static bool AttachToFirstPage() {
     return false;
 }
 
-static bool EnsureActivePage() {
-    if (g_activePage && !g_activePage->isClosed()) return true;
-    if (!g_browser) {
-        auto res = cdp::quick::connect(g_host, g_port);
-        if (res.ok()) {
-            g_browser = std::move(res.browser);
-        } else {
-            auto lres = cdp::quick::launch();
-            if (lres.ok()) {
-                g_browser = std::move(lres.browser);
-            } else {
-                SetLastError("Could not connect or launch browser: " + lres.error, -5);
-                return false;
-            }
-        }
+// Reconnect only. Page operations must never launch a browser or create a blank tab.
+static bool EnsureBrowserConnected() {
+    if (g_browser && g_browser->isConnected() && !g_browser->version().empty()) return true;
+    g_activePage = nullptr;
+    g_browser = nullptr;
+    g_launchKey.clear();
+    g_privateContextId.clear();
+    auto res = g_browserEndpoint.empty() ? cdp::quick::connect(g_host, g_port)
+        : cdp::quick::connectWs(g_browserEndpoint);
+    if (!res.ok()) {
+        SetLastError("Browser connection unavailable; open the target URL in a controlled browser", -5);
+        return false;
     }
+    g_browser = std::move(res.browser);
+    return true;
+}
+
+static bool EnsureActivePage() {
+    if (!EnsureBrowserConnected()) return false;
+    if (g_activePage && !g_activePage->isClosed() && g_activePage->isConnected()) return true;
     return AttachToFirstPage();
+}
+
+BROWSER_API int Browser_GetConnectionPort() {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    return g_browser && g_browser->isConnected() && !g_browser->version().empty() ? g_port : 0;
 }
 
 BROWSER_API int Browser_Connect(const char* host, int port) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
-        g_host = (host && host[0] != '\0') ? host : "127.0.0.1";
-        g_port = (port > 0) ? port : 9222;
-
-        auto res = cdp::quick::connect(g_host, g_port);
+        const std::string requestedHost = (host && host[0] != '\0') ? host : "127.0.0.1";
+        if (g_host == requestedHost && g_port == port && g_browser
+            && g_browser->isConnected() && !g_browser->version().empty()) return 0;
+        const int requestedPort = port > 0 ? port : 9222;
+        auto res = cdp::quick::connect(requestedHost, requestedPort);
         if (!res.ok()) {
             SetLastError("Connect failed: " + res.error, -5);
             return -5;
@@ -111,9 +138,11 @@ BROWSER_API int Browser_Connect(const char* host, int port) {
 
         g_activePage = nullptr;
         g_browser = std::move(res.browser);
-        if (!AttachToFirstPage()) {
-            return -4;
-        }
+        g_host = requestedHost;
+        g_port = requestedPort;
+        g_browserEndpoint.clear();
+        g_launchKey.clear();
+        g_privateContextId.clear();
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
@@ -122,16 +151,57 @@ BROWSER_API int Browser_Connect(const char* host, int port) {
     }
 }
 
-BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath, int headless, const char* userDataDir, int port) {
+BROWSER_API int Browser_ConnectWebSocket(const char* endpoint, int port) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
-        if (g_browser) {
-            g_activePage = nullptr;
-            g_browser = nullptr;
+        if (!endpoint || !*endpoint || port < 1 || port > 65535) {
+            SetLastError("Invalid browser endpoint", -6);
+            return -6;
         }
+        if (g_browserEndpoint == endpoint && g_browser && g_browser->isConnected()) return 0;
+        auto result = cdp::quick::connectWs(endpoint);
+        if (!result.ok()) {
+            SetLastError("Browser connection was not approved", -5);
+            return -5;
+        }
+        g_activePage = nullptr;
+        g_browser = std::move(result.browser);
+        g_browserEndpoint = endpoint;
+        g_host = "127.0.0.1";
+        g_port = port;
+        g_launchKey.clear();
+        g_privateContextId.clear();
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -5);
+        return -5;
+    }
+}
 
-        g_port = (port > 0) ? port : 9222;
+static int LaunchBrowser(const char* browserType, const char* browserPath, int headless, const char* userDataDir, int port, bool noStartupWindow, bool& launched) {
+    try {
+        launched = false;
+        const int requestedPort = port >= 0 ? port : 9222;
+        const std::string key = std::string(browserType ? browserType : "") + "\n"
+            + (browserPath ? browserPath : "") + "\n" + (userDataDir ? userDataDir : "")
+            + "\n" + std::to_string(headless) + "\n" + std::to_string(requestedPort);
+        if (g_browser && g_launchKey == key && g_browser->isConnected()
+            && !g_browser->version().empty()) {
+            SetLastError("", 0);
+            return 0;
+        }
+        g_activePage = nullptr;
+        g_browser = nullptr;
+        g_launchKey.clear();
+        g_port = requestedPort;
+        g_host = "127.0.0.1";
+        g_browserEndpoint.clear();
+        g_privateContextId.clear();
         cdp::ChromeLaunchOptions opts;
+        // Browser windows outlive individual worker connections.
+        opts.killOnDestruct = false;
+        opts.cleanupTempProfile = false;
         opts.headless = (headless != 0);
         opts.debuggingPort = g_port;
         opts.host = "127.0.0.1";
@@ -162,7 +232,10 @@ BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath,
             opts.useTempProfile = false;
         }
 
-        opts.additionalFlags.push_back("--disable-blink-features=AutomationControlled");
+        if (noStartupWindow && !headless) {
+            opts.startUrl.clear();
+            opts.additionalFlags.push_back("--no-startup-window");
+        }
 
         auto res = cdp::quick::launch(opts);
         if (!res.ok()) {
@@ -172,9 +245,90 @@ BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath,
 
         g_activePage = nullptr;
         g_browser = std::move(res.browser);
-        if (!AttachToFirstPage()) {
-            return -4;
+        g_launchKey = key;
+        g_port = g_browser->debuggingPort();
+        launched = true;
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
+BROWSER_API int Browser_Launch(const char* browserType, const char* browserPath, int headless, const char* userDataDir, int port) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    bool launched = false;
+    const int result = LaunchBrowser(browserType, browserPath, headless, userDataDir, port, false, launched);
+    return result ? result : (AttachToFirstPage(true) ? 0 : -4);
+}
+
+static int OpenUrlInBrowser(const char* url, int incognito, int timeoutMs, bool launched) {
+    try {
+        if (!url || !*url) {
+            SetLastError("URL cannot be empty", -6);
+            return -6;
         }
+        cdp::quick::QuickContext* context = nullptr;
+        if (incognito == 1) {
+            for (auto* candidate : g_browser->contexts()) {
+                if (candidate && !g_privateContextId.empty() && candidate->id() == g_privateContextId) {
+                    for (auto* page : candidate->pages()) {
+                        if (!page->isClosed()) {
+                            context = candidate;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            if (!context) {
+                auto created = g_browser->newContext();
+                if (!created.ok()) {
+                    SetLastError(created.error, -1);
+                    return -1;
+                }
+                context = created.context;
+                g_privateContextId = context->id();
+            }
+        }
+        cdp::quick::QuickPage* page = nullptr;
+        if (incognito == 2 && !launched) {
+            auto created = g_browser->browserClient().Target.createTarget("about:blank", 0, 0, "", false, true, false);
+            if (created.hasError) {
+                SetLastError(created.errorMessage, -4);
+                return -4;
+            }
+            const auto id = created.result["targetId"].getString();
+            for (const auto& target : g_browser->listPages()) {
+                if (target.id != id) continue;
+                auto attached = g_browser->connectToPage(target);
+                if (attached.ok()) page = attached.page;
+                break;
+            }
+            if (!page) {
+                g_browser->browserClient().Target.closeTarget(id);
+                SetLastError("Failed to attach new window", -4);
+                return -4;
+            }
+        } else if (context || !launched) {
+            auto created = context ? context->newPage("about:blank") : g_browser->newPage("about:blank");
+            if (!created.ok()) {
+                if (context) context->close();
+                SetLastError(created.error, -4);
+                return -4;
+            }
+            page = created.page;
+        } else {
+            if (!AttachToFirstPage(true)) return -4;
+            page = g_activePage;
+        }
+        g_activePage = page;
+        if (!page->navigate(url, timeoutMs > 0 ? timeoutMs : 30000)) {
+            SetLastError(page->lastError().empty() ? "Navigation failed" : page->lastError(), -2);
+            return -2;
+        }
+        page->bringToFront();
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
@@ -280,8 +434,14 @@ BROWSER_API int Browser_CloseBrowser() {
     try {
         g_activePage = nullptr;
         if (g_browser) {
+            if (!g_browser->close()) {
+                SetLastError(g_browser->lastError(), -1);
+                return -1;
+            }
             g_browser = nullptr;
         }
+        g_launchKey.clear();
+        g_privateContextId.clear();
         SetLastError("", 0);
         return 0;
     } catch (const std::exception& e) {
@@ -290,14 +450,26 @@ BROWSER_API int Browser_CloseBrowser() {
     }
 }
 
+BROWSER_API int Browser_OpenUrl(const char* browserType, const char* browserPath, int headless, const char* userDataDir, int port, const char* url, int openMode, int timeoutMs) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    if (!url || !*url) { SetLastError("URL cannot be empty", -6); return -6; }
+    bool launched = false;
+    int result = LaunchBrowser(browserType, browserPath, headless, userDataDir, port, openMode == 1, launched);
+    return result ? result : OpenUrlInBrowser(url, openMode, timeoutMs, launched);
+}
+
+BROWSER_API int Browser_OpenConnectedUrl(const char* url, int openMode, int timeoutMs) {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    if (!EnsureBrowserConnected()) return -5;
+    return OpenUrlInBrowser(url, openMode, timeoutMs, false);
+}
+
 // --- Tab Management ---
 
 BROWSER_API int Browser_GetTabs(char* outResult, int maxLen) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
-        if (!g_browser) {
-            if (!EnsureActivePage()) return -1;
-        }
+        if (!EnsureBrowserConnected()) return -5;
 
         auto targets = g_browser->listPages();
         cdp::JsonArray tabs;
@@ -364,7 +536,7 @@ BROWSER_API int Browser_SwitchTab(const char* targetRef) {
             SetLastError("Target reference cannot be empty", -6);
             return -6;
         }
-        if (!g_browser && !EnsureActivePage()) return -1;
+        if (!EnsureBrowserConnected()) return -5;
         auto* page = FindTab(targetRef);
         if (!page) return -4;
         page->bringToFront();
@@ -397,9 +569,7 @@ BROWSER_API int Browser_NewTab(const char* url, char* outTargetId, int maxLen) {
 BROWSER_API int Browser_CreateContext(char* outContextId, int maxLen) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
-        if (!g_browser) {
-            if (!EnsureActivePage()) return -1;
-        }
+        if (!EnsureBrowserConnected()) return -5;
 
         auto cRes = g_browser->newContext();
         if (!cRes.ok() || !cRes.context) {
@@ -419,9 +589,7 @@ BROWSER_API int Browser_CreateContext(char* outContextId, int maxLen) {
 BROWSER_API int Browser_NewTabInContext(const char* url, const char* contextId, char* outTargetId, int maxLen) {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
-        if (!g_browser) {
-            if (!EnsureActivePage()) return -1;
-        }
+        if (!EnsureBrowserConnected()) return -5;
 
         std::string targetUrl = (url && url[0] != '\0') ? url : "about:blank";
         std::string ctxId = (contextId && contextId[0] != '\0') ? contextId : "";
@@ -491,9 +659,7 @@ BROWSER_API int Browser_CloseTabByRef(const char* targetRef) {
     }
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {
-        if (!g_browser) {
-            if (!EnsureActivePage()) return -1;
-        }
+        if (!EnsureBrowserConnected()) return -5;
         auto* page = FindTab(targetRef);
         if (!page) return -4;
         if (!page->close()) {

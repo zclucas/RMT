@@ -34,12 +34,24 @@ class BrowserActions {
 
     static CloseBrowserTypes := ["Chrome", "Edge", "所有浏览器", "自定义"]
     static CloseScopes := ["所有页签", "非当前页签", "当前页签"]
+    static OpenModes := ["默认", "新窗口", "无痕模式"]
+
+    static GetOpenMode(data) {
+        if (data.HasOwnProp("OpenMode"))
+            return CmdEnumZh(data.OpenMode, this.OpenModes)
+        return data.HasOwnProp("Incognito") && data.Incognito ? "无痕模式" : "默认"
+    }
 
     static IsCloseAction(action) => action == "关闭" || action == "关闭浏览器"
 
+    static RequiresCDP(action, pageField := "网址") {
+        return action != "打开网址" && action != "关闭"
+            && (action != "页签信息" || pageField == "页签ID")
+    }
+
     static IsTabAction(action) {
         for group in this.Groups {
-            if (group.name != "页签")
+            if (group.name != "网页")
                 continue
             for name in group.actions
                 if (name == action)
@@ -65,8 +77,8 @@ class BrowserActions {
     ; 分组结构定义
     static Groups := [
         {
-            name: "页签",
-            actions: ["打开网址", "当前页跳转", "新建分页", "切换分页", "关闭分页", "获取当前分页ID", "刷新", "后退", "前进", "关闭", "关闭浏览器"]
+            name: "网页",
+            actions: ["打开网址", "页签信息", "当前页跳转", "新建分页", "切换分页", "关闭分页", "获取当前分页ID", "刷新", "后退", "前进", "关闭", "关闭浏览器"]
         },
         {
             name: "等待条件",

@@ -1608,7 +1608,11 @@ class BrowserData {
         this.TimeoutAction := TimeoutPolicy.DefaultAction
         this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
         this.Headless := 0
-        this.Incognito := 0 ; 0=默认会话, 1=独立会话(无痕)
+        this.OpenMode := "默认" ; 默认/新窗口/无痕模式，兼容旧 Incognito 配置
+        this.UseCDP := false
+        this.PageSource := "当前页签"
+        this.PageField := "网址"
+        this.WinInfo := "{宏设置窗口绑定}"
         this.BrowserPort := 9222
         this.BrowserPath := ""
         this.UserDataDir := ""

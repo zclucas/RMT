@@ -2,6 +2,9 @@
 #Include TimeoutPolicy.ahk
 #Include BrowserActions.ahk
 
+class BrowserConnectionError extends Error {
+}
+
 class BrowserTimeoutError extends Error {
 }
 
@@ -59,6 +62,8 @@ class BrowserUtil {
 
     static _ThrowLastError(selectorType := "") {
         message := this.GetLastError()
+        if (this.GetLastErrorCode() == -5 && InStr(message, "Launch browser failed:") != 1)
+            throw BrowserConnectionError(GetLang("该指令需要 CDP 支持，请先在「浏览器 → 网页 → 打开网址」勾选 CDP 打开目标网页。"))
         ; CSS 交互在找元素超时后返回 Element not found，XPath 的即时查找用另一种错误。
         if (InStr(message, "Element not found") == 1) {
             if (selectorType = "CSS" && InStr(message, "Element not found:") == 1)
@@ -174,6 +179,198 @@ class BrowserUtil {
         return true
     }
 
+    static OpenUrl(url, browserType := "Chrome", browserPath := "", incognito := false, headless := 0, userDataDir := "", port := 9222, timeoutMs := 5000, newWindow := false, useCDP := false) {
+        browserPath := this.ResolveBrowserPath(browserType, browserPath)
+        command := this.OpenUrlCommand(url, "自定义路径", browserPath, incognito, newWindow)
+        if (!useCDP) {
+            Run(command)
+            return true
+        }
+        if (!headless && userDataDir == "" && this.TryManagedConnection(browserPath, port)) {
+            this.OpenConnectedUrl(url, incognito ? 1 : (newWindow ? 2 : 0), timeoutMs)
+            return true
+        }
+        if (this.HasPort(BrowserPageInfo.DebugPorts(0), port))
+            port := 0
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        res := DllCall("RMT_Browser\Browser_OpenUrl", "Ptr", this._Utf8("自定义路径"), "Ptr", this._Utf8(browserPath),
+            "Int", headless, "Ptr", this._Utf8(userDataDir), "Int", port, "Ptr", this._Utf8(url),
+            "Int", incognito ? 1 : (newWindow ? 2 : 0), "Int", timeoutMs, "Cdecl Int")
+        if (this.ConnectionPort())
+            this.RegisterCDPSession(browserPath)
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    static ResolveBrowserPath(browserType, browserPath := "") {
+        browserType := GetLangKey(browserType)
+        if (browserType == "系统默认浏览器")
+            browserPath := this.GetDefaultBrowserPath()
+        else if (browserType != "自定义路径" && browserType != "自定义") {
+            browserPath := ""
+            for browser in this.GetInstalledBrowsers() {
+                if (browser.name == browserType) {
+                    browserPath := browser.path
+                    break
+                }
+            }
+        }
+        if (browserPath == "" || !FileExist(browserPath) || InStr(browserPath, '"'))
+            throw Error("找不到所选浏览器，请检查安装或自定义路径")
+        return StrReplace(browserPath, "/", "\")
+    }
+
+    static OpenUrlCommand(url, browserType := "Chrome", browserPath := "", incognito := false, newWindow := false) {
+        browserPath := this.ResolveBrowserPath(browserType, browserPath)
+        if (Trim(url) == "" || InStr(url, "`r") || InStr(url, "`n"))
+            throw Error("请输入有效的网址")
+        SplitPath(browserPath, &exeName)
+        if (incognito)
+            options := StrLower(exeName) == "msedge.exe" ? "--inprivate --new-tab"
+                : StrLower(exeName) == "firefox.exe" ? "-private-window" : "--incognito --new-tab"
+        else
+            options := newWindow ? "--new-window" : "--new-tab"
+        ; URL 置于选项终止符后，避免被解析为浏览器启动参数。
+        return '"' browserPath '" ' options ' -- "' StrReplace(url, '"', "%22") '"'
+    }
+
+    static BrowserWindows(browserPath := "") {
+        windows := []
+        for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1") {
+            try {
+                if (!DllCall("IsWindowVisible", "Ptr", hwnd))
+                    continue
+                if (browserPath != "" ? StrCompare(WinGetProcessPath(hwnd), browserPath, false) != 0
+                    : !RegExMatch(WinGetProcessName(hwnd), "i)^(chrome|msedge|chromium|brave|vivaldi|opera)\.exe$"))
+                    continue
+                windows.Push(hwnd)
+            }
+        }
+        return windows
+    }
+
+    static HasPort(ports, wanted) {
+        for port in ports
+            if (port == wanted)
+                return true
+        return false
+    }
+
+    static ConnectionPort() {
+        if (!this.InitDll())
+            return 0
+        return DllCall("RMT_Browser\Browser_GetConnectionPort", "Cdecl Int")
+    }
+
+    static CDPStateDir() => RmtCacheDir() "\BrowserCDP"
+
+    static ProcessStamp(pid) {
+        handle := DllCall("OpenProcess", "UInt", 0x1000, "Int", false, "UInt", pid, "Ptr")
+        if (!handle)
+            return ""
+        try {
+            times := Buffer(32)
+            if (!DllCall("GetProcessTimes", "Ptr", handle, "Ptr", times, "Ptr", times.Ptr + 8, "Ptr", times.Ptr + 16, "Ptr", times.Ptr + 24))
+                return ""
+            return Format("{:X}", NumGet(times, 0, "Int64"))
+        } finally DllCall("CloseHandle", "Ptr", handle)
+    }
+
+    static DebugPortPID(port) {
+        bytes := 0
+        DllCall("iphlpapi\GetExtendedTcpTable", "Ptr", 0, "UInt*", &bytes, "Int", false, "UInt", 2, "Int", 3, "UInt", 0)
+        if (!bytes)
+            return 0
+        table := Buffer(bytes)
+        if (DllCall("iphlpapi\GetExtendedTcpTable", "Ptr", table, "UInt*", &bytes, "Int", false, "UInt", 2, "Int", 3, "UInt", 0))
+            return 0
+        loop NumGet(table, 0, "UInt") {
+            offset := 4 + (A_Index - 1) * 24
+            localPort := DllCall("Ws2_32\ntohs", "UShort", NumGet(table, offset + 8, "UShort"), "UShort")
+            address := NumGet(table, offset + 4, "UInt")
+            if (localPort == port && NumGet(table, offset, "UInt") == 2 && (address == 0 || address == 0x0100007F))
+                return NumGet(table, offset + 20, "UInt")
+        }
+        return 0
+    }
+
+    static RegisterCDPSession(browserPath) {
+        port := this.ConnectionPort(), pid := this.DebugPortPID(port)
+        stamp := this.ProcessStamp(pid)
+        if (!pid || stamp == "")
+            throw BrowserConnectionError(GetLang("无法记录 CDP 会话，请重新勾选 CDP 打开网址。"))
+        actualPath := ProcessGetPath(pid)
+        if (StrCompare(actualPath, browserPath, false) != 0)
+            throw BrowserConnectionError(GetLang("CDP 会话与所选浏览器不匹配，请重新打开网址。"))
+        dir := this.CDPStateDir()
+        DirCreate(dir)
+        record := Map("port", port, "pid", pid, "stamp", stamp, "path", actualPath)
+        temporary := dir "\" port "-" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount ".tmp"
+        file := FileOpen(temporary, "w", "UTF-8-RAW")
+        file.Write(JSON.stringify(record))
+        file.Close()
+        FileMove(temporary, dir "\" port ".json", 1)
+    }
+
+    static CDPSessions() {
+        sessions := []
+        loop files this.CDPStateDir() "\*.json" {
+            try {
+                session := JSON.parse(FileRead(A_LoopFileFullPath, "UTF-8"))
+                pid := session["pid"]
+                if (this.DebugPortPID(session["port"]) == pid && this.ProcessStamp(pid) == session["stamp"]
+                    && StrCompare(ProcessGetPath(pid), session["path"], false) == 0)
+                    sessions.Push(session)
+            }
+        }
+        return sessions
+    }
+
+    static ManagedSessionForWindow(hwnd) {
+        pid := WinGetPID(hwnd)
+        for session in this.CDPSessions()
+            if (session["pid"] == pid)
+                return session
+        return ""
+    }
+
+    static TryManagedConnection(browserPath := "", preferredPort := 9222) {
+        sessions := this.CDPSessions(), current := this.ConnectionPort()
+        for session in sessions {
+            if (browserPath != "" && StrCompare(session["path"], browserPath, false) != 0)
+                continue
+            if (session["port"] == current)
+                return true
+        }
+        for wanted in [preferredPort, 0] {
+            for session in sessions {
+                if ((wanted && session["port"] != wanted)
+                    || (browserPath != "" && StrCompare(session["path"], browserPath, false) != 0))
+                    continue
+                try {
+                    this.Connect("127.0.0.1", session["port"])
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    static EnsureConnection(port := 9222) {
+        if (this.TryManagedConnection("", port))
+            return true
+        throw BrowserConnectionError(GetLang("该指令需要 CDP 支持，请先在「浏览器 → 网页 → 打开网址」勾选 CDP 打开目标网页。"))
+    }
+
+    static OpenConnectedUrl(url, mode := 0, timeoutMs := 5000) {
+        res := DllCall("RMT_Browser\Browser_OpenConnectedUrl", "Ptr", this._Utf8(url), "Int", mode, "Int", timeoutMs, "Cdecl Int")
+        if (res != 0)
+            this._ThrowLastError()
+        return true
+    }
+
     static Connect(host := "127.0.0.1", port := 9222) {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
@@ -222,6 +419,7 @@ class BrowserUtil {
     ; --- 分页管理 ---
 
     static GetTabs() {
+        this.EnsureConnection()
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         buf := Buffer(65536, 0)
@@ -772,9 +970,13 @@ class BrowserUtil {
     static CloseBrowser() {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
+        port := this.ConnectionPort()
         res := DllCall("RMT_Browser\Browser_CloseBrowser", "Cdecl Int")
         if (res != 0)
             this._ThrowLastError()
+        ; 关闭响应可能早于进程退出，先撤销记录，防止再次连接退出中的实例。
+        if (port > 0)
+            try FileDelete(this.CDPStateDir() "\" port ".json")
         return true
     }
 
