@@ -58,6 +58,7 @@
         subGui := this.ResolveSubGuiInstance(sharedGui := subGui, modeType, itemId)
         subGui._OpenEditType := modeType
         subGui._OpenItemId := itemId
+        subGui.feedbackOrigin := this.WindowBindingContext
 
         if ObjHasOwnProp(subGui, "ParentTile") {
             parentTitle := ""
@@ -89,10 +90,14 @@
             ItemText := MySoftData.ParseCmdJoyDisplay(ItemText)
             ItemText := MySoftData.CmdJoyNToJoyFriendly(ItemText)
             CommandStr := GetCmdStr(ItemText)
-            subGui.ShowGui(CommandStr)
+            this._ShowDiagnosticSubGui(subGui, CommandStr)
             return
         }
-        subGui.ShowGui("")
+        this._ShowDiagnosticSubGui(subGui, "")
+    }
+
+    _ShowDiagnosticSubGui(subGui, cmd) {
+        FeedbackDiagnostics.ShowEditor(subGui, cmd, this.WindowBindingContext)
     }
 
     ;确定子指令编辑器（editType/itemId 为打开时捕获的上下文，多开时互不干扰）

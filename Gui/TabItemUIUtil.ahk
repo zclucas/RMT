@@ -700,8 +700,7 @@ NetworkShowHelpDialog(macroID := "") {
     closeBtn := btnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}")
         .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0")
         .VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-    closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10)
-        .VerticalAlignment("Center").HorizontalAlignment("Center")
+    XAMLHost._AddTitleChromeGlyph(closeBtn, "BtnClosePanelGlyph", Chr(0xE8BB), 10)
 
     body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
     panel := body.Add("StackPanel").Margin("16,12,16,12")
@@ -845,8 +844,7 @@ NetworkShowSettingDialog() {
     closeBtn := btnGroup.Add("Button").Name("BtnClosePanel").Style("{StaticResource TitleBarCloseButton}")
         .WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0")
         .VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-    closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10)
-        .VerticalAlignment("Center").HorizontalAlignment("Center")
+    XAMLHost._AddTitleChromeGlyph(closeBtn, "BtnClosePanelGlyph", Chr(0xE8BB), 10)
 
     body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
     panel := body.Add("StackPanel").Margin("16,12,16,12")

@@ -83,8 +83,9 @@
     ; 错误统一展示（同名两套实现里的 Worker 版）：只经 ER 通道上报主进程，
     ; 不写本地日志、不弹窗。主进程版在 Main\UIUtil.ahk。
     RMTErrorShow(msg, level := RMT_LV_ERROR, source := "") {
+        context := CommandErrorContext.Current()
         if (IsSet(MsgSendHandler))
-            MsgSendHandler("Error", level "|" workIndex "|" msg)
+            MsgSendHandler("Error", level "|" workIndex "|" msg, IsObject(context) ? JSON.stringify(context) : "")
         return true
     }
 

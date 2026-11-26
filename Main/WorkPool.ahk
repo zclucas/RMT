@@ -1270,7 +1270,14 @@ class WorkPool {
                             erSrc := erParts.Length >= 2 ? ("Worker#" erParts[2]) : ("Worker#" wd.idx)
                             erMsg := erParts.Length >= 3 ? erParts[3] : args[1]
                             ; 走 RMTErrorShow 统一按级别通知（warn 气泡 / error 错误中心，均可开关）
-                            RMTErrorShow("宏执行异常: " erMsg, erLevel, erSrc)
+                            erContext := ""
+                            if (args.Length >= 2 && args[2] != "") {
+                                try {
+                                    parsed := JSON.parse(args[2])
+                                    erContext := {mode: parsed["mode"], location: parsed["location"], command: parsed["command"]}
+                                }
+                            }
+                            RMTErrorShow("宏执行异常: " erMsg, erLevel, erSrc, erContext)
                         } catch {
                             RMTLogSys(RMT_LV_ERROR, "Worker#" wd.idx, "ER解析失败: " args[1])
                             MyErrorMsgBoxGui.ShowGui(args[1])

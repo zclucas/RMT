@@ -12,6 +12,8 @@ ErrHandler(exception, mode) {
 }
 
 _HandleError(exception) {
+    commandContext := ""
+    try commandContext := exception.RmtCommandContext
     what := ""
     msg := ""
     extra := ""
@@ -33,11 +35,11 @@ _HandleError(exception) {
     }
 
     ; 其余错误：统一归口日志 + RMT 错误窗，不再弹 AHK 默认错误框
-    _ShowError(fullInfo, stack)
+    _ShowError(fullInfo, stack, commandContext)
     return true
 }
 
-_ShowError(msg, stack := "") {
+_ShowError(msg, stack := "", commandContext := "") {
     global _ErrShowing
     fullMsg := msg
     if (stack != "")
@@ -55,7 +57,7 @@ _ShowError(msg, stack := "") {
         ; 日志只留在缓冲区里，用户看到的就是「托盘一闪就没了」且零痕迹。
         try FlushRMTLogAsync()
         if (IsSet(MyErrorMsgBoxGui) && IsObject(MyErrorMsgBoxGui))
-            MyErrorMsgBoxGui.ShowGui(Format("[Master] {}", fullMsg))
+            MyErrorMsgBoxGui.ShowGui(Format("[Master] {}", fullMsg), commandContext)
     } catch {
     } finally {
         _ErrShowing := false

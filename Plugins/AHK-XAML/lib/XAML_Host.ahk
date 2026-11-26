@@ -94,6 +94,24 @@ class XAMLHost {
     static ComboItemNormalizer := 0
     ; 可选的业务观察器；界面库不依赖应用的反馈系统。
     static ActivityObserver := 0
+    static ErrorContextProvider := 0
+
+    _RunDiagnosticCallback(callback, args*) {
+        previous := ""
+        provider := XAMLHost.ErrorContextProvider
+        try {
+            if (this.HasOwnProp("feedbackEditor") && IsObject(provider))
+                previous := provider.Call(this, "enter")
+            return callback.Call(args*)
+        } catch as err {
+            if (!err.HasOwnProp("RmtCommandContext") && this.HasOwnProp("feedbackEditor") && IsObject(provider))
+                try err.RmtCommandContext := provider.Call(this)
+            throw err
+        } finally {
+            if (this.HasOwnProp("feedbackEditor") && IsObject(provider))
+                provider.Call(this, "leave", previous)
+        }
+    }
     static LastTheme := "Dark Mica (Win 11)"
     static LastThemeIni := ""
     static LastScale := "Balanced"
@@ -918,10 +936,12 @@ class XAMLHost {
         ; 会画出空方框，缺字宽度不稳时还会把右侧标题按钮挤出窗口。Win7 两套图标字体都没有。
         ; 这些情况改画固定尺寸的矢量，Win7~Win11 看到的是同一套按钮。
         spec := ""
-        if (glyph = "RangeSelect" || (!XAMLHost._HasSegoeFluent() && (!XAMLHost._HasMdl2() || glyph = Chr(0xECAF))))
+        ; 关闭图标始终画矢量：字体文件存在不代表 WPF 已注册并能解析对应字形。
+        if (glyph = Chr(0xE8BB) || glyph = "RangeSelect" || (!XAMLHost._HasSegoeFluent() && (!XAMLHost._HasMdl2() || glyph = Chr(0xECAF))))
             spec := XAMLHost._TitleChromeIconSpec(glyph)
         drawSize := XAMLHost._ChromeGlyphDrawSize(glyph, glyphSize)
         if (IsObject(spec)) {
+            brush := glyph = Chr(0xE8BB) ? "{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" : "{DynamicResource TitleBarForeground}"
             icon := parent.Add("Path").Name(name).Data(spec.data)
                 .Width(drawSize).Height(drawSize).Stretch("Uniform")
                 .HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -929,9 +949,9 @@ class XAMLHost {
             ; 再写成 FillRule="EvenOdd" 时，当前 WPF 宿主会报「未知成员 Path.FillRule」，
             ; 宏编辑窗口整页解析失败。默认值已经是 EvenOdd，不要把这个属性写进 XAML。
             if (spec.mode = "even" || spec.mode = "fill")
-                icon.Fill("{DynamicResource TitleBarForeground}")
+                icon.Fill(brush)
             else
-                icon.Fill("Transparent").Stroke("{DynamicResource TitleBarForeground}")
+                icon.Fill("Transparent").Stroke(brush)
                     .StrokeThickness(spec.thick).StrokeStartLineCap("Round").StrokeEndLineCap("Round")
                     .StrokeLineJoin("Round")
             return icon
@@ -3405,7 +3425,7 @@ class XAMLHost {
             for matchName in matchNames {
                 evtList := instance.events[ctrlName][matchName]
                 for evtObj in evtList {
-                    cb := evtObj.Callback
+                    cb := ObjBindMethod(instance, "_RunDiagnosticCallback", evtObj.Callback)
 
                     ; Handle optional event key args without breaking older 3-param callbacks
                     if (ctrlName == "Window" && eventName == "LoadedHwnd")

@@ -1716,15 +1716,18 @@ DiscardRecordTriggerKey(MacroStr, isFront) {
 }
 
 CheckIfDiscardCMD(triggerMap, cmd) {
-    isKey := InStr(cmd, GetLang("按键")) && !InStr(cmd, GetLang("按键检测"))
-    isJoy := InStr(cmd, GetLang("手柄")) && !InStr(cmd, GetLang("手柄检测"))
-    if (!isKey && !isJoy)
-        return false
-
     paramArr := SplitCommand(cmd)
-    if (paramArr.Length < 2)
-        return false
-    key := paramArr[2]
+    cmdKey := GetCommandKey(GetCmdOnlyText(paramArr[1]))
+    if (cmdKey == "后台按键") {
+        data := GetMacroCMDData(paramArr[1])
+        if (data.KeyArr.Length != 1)
+            return false
+        key := data.KeyArr[1]
+    } else {
+        if ((cmdKey != "按键" && cmdKey != "手柄") || paramArr.Length < 2)
+            return false
+        key := paramArr[2]
+    }
     inn := JoyShortToInternal(key)
     short := JoyInternalToShort(key)
     if (triggerMap.Has(key) && triggerMap[key] < 2) {

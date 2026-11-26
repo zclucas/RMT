@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include RecordBackgroundUtil.ahk
 
 global RI_hwnd := 0
 global RI_isActive := false
@@ -43,8 +44,6 @@ global CD_cb := []
 
 global RecordBorder := ""
 global RecordBorder_frame := 0
-global RecordBG_HwndList := []
-global RecordBG_TargetWin := ""
 
 class RecordHighlightOutline {
     gui := []
@@ -84,20 +83,20 @@ class RecordHighlightOutline {
         cl := this.cornerLen
         m := 5
 
-        this.gui[1].Show("NA x" (m) " y" (m) " w" cl " h" b)
-        this.gui[2].Show("NA x" (m) " y" (m) " w" b " h" cl)
-        this.gui[3].Show("NA x" (x2 - m - cl) " y" (m) " w" cl " h" b)
-        this.gui[4].Show("NA x" (x2 - m - b) " y" (m) " w" b " h" cl)
+        this.gui[1].Show("NA x" (x1 + m) " y" (y1 + m) " w" cl " h" b)
+        this.gui[2].Show("NA x" (x1 + m) " y" (y1 + m) " w" b " h" cl)
+        this.gui[3].Show("NA x" (x2 - m - cl) " y" (y1 + m) " w" cl " h" b)
+        this.gui[4].Show("NA x" (x2 - m - b) " y" (y1 + m) " w" b " h" cl)
         this.gui[5].Show("NA x" (x2 - m - cl) " y" (y2 - m - b) " w" cl " h" b)
         this.gui[6].Show("NA x" (x2 - m - b) " y" (y2 - m - cl) " w" b " h" cl)
-        this.gui[7].Show("NA x" (m) " y" (y2 - m - b) " w" cl " h" b)
-        this.gui[8].Show("NA x" (m) " y" (y2 - m - cl) " w" b " h" cl)
+        this.gui[7].Show("NA x" (x1 + m) " y" (y2 - m - b) " w" cl " h" b)
+        this.gui[8].Show("NA x" (x1 + m) " y" (y2 - m - cl) " w" b " h" cl)
 
         dotR := 6
-        this.dotGui[1].Show("NA x" (m - dotR) " y" (m - dotR) " w" (dotR * 2) " h" (dotR * 2))
-        this.dotGui[2].Show("NA x" (x2 - m - dotR) " y" (m - dotR) " w" (dotR * 2) " h" (dotR * 2))
+        this.dotGui[1].Show("NA x" (x1 + m - dotR) " y" (y1 + m - dotR) " w" (dotR * 2) " h" (dotR * 2))
+        this.dotGui[2].Show("NA x" (x2 - m - dotR) " y" (y1 + m - dotR) " w" (dotR * 2) " h" (dotR * 2))
         this.dotGui[3].Show("NA x" (x2 - m - dotR) " y" (y2 - m - dotR) " w" (dotR * 2) " h" (dotR * 2))
-        this.dotGui[4].Show("NA x" (m - dotR) " y" (y2 - m - dotR) " w" (dotR * 2) " h" (dotR * 2))
+        this.dotGui[4].Show("NA x" (x1 + m - dotR) " y" (y2 - m - dotR) " w" (dotR * 2) " h" (dotR * 2))
     }
 
     Hide() {
@@ -375,13 +374,15 @@ DoStartRecord(isHotkey) {
 }
 
 OnStartRecordInner(*) {
-    global MainSoftData, RecordAxisLastVal, RecordBG_HwndList, RecordBG_TargetWin
+    global MainSoftData, RecordAxisLastVal
 
-    RecordBG_HwndList := []
-    RecordBG_TargetWin := ""
-    if (MainSoftData.HasProp("RecordBackground") && MainSoftData.RecordBackground) {
-        RecordBG_TargetWin := (MainSoftData.HasProp("RecordBackgroundWin") && MainSoftData.RecordBackgroundWin != "") ? MainSoftData.RecordBackgroundWin : "{宏设置窗口绑定}"
-        try RecordBG_HwndList := GetHwndList(RecordBG_TargetWin)
+    try BackgroundRecorder.Prepare()
+    catch as err {
+        UIControls.ToolCheckRecord.Value := false
+        if (IsObject(MainSoftData.MacroEditGui))
+            UIControls.RecordToggle.Value := false
+        RMTErrorShow(err.Message, RMT_LV_WARN, "背景录制")
+        return
     }
 
     CoordMode("Mouse", "Screen")
@@ -532,7 +533,7 @@ RI_DiscardStopClick(x, y, tick) {
 }
 
 RecordConsumeRI() {
-    global RI_eventQueue, RecordBG_HwndList, RecordBG_TargetWin, MainSoftData
+    global RI_eventQueue, MainSoftData
 
     events := RI_eventQueue
     RI_eventQueue := []
@@ -549,7 +550,7 @@ RecordConsumeRI() {
         }
     }
 
-    isBG := MainSoftData.HasProp("RecordBackground") && MainSoftData.RecordBackground
+    isBG := BackgroundRecorder.Active
 
     ; 顺序消费队列，避免每条都从数组头删除并移动剩余记录。
     macroStr := MainSoftData.RecordMacroStr
@@ -572,120 +573,13 @@ RecordConsumeRI() {
         } else {
             isDown := item["state"] == GetLang("按下")
             if (isBG) {
-                OnRecordAddMacroStrBG(item, isDown, item["t"], &macroStr)
+                BackgroundRecorder.Add(item, isDown, item["t"], &macroStr)
             } else {
                 OnRecordAddMacroStr(item["name"], isDown, item["t"], &macroStr)
             }
         }
     }
     MainSoftData.RecordMacroStr := macroStr
-}
-
-OnRecordAddMacroStrBG(item, isDown, curTime, &macroStr) {
-    global RecordBG_HwndList, RecordBG_TargetWin, MainSoftData
-
-    keyName := item["name"]
-    IsMouse := (item["type"] == "mouse") || keyName == "LButton" || keyName == "RButton" || keyName == "MButton" || keyName == "XButton1" || keyName == "XButton2" || InStr(keyName, "Wheel")
-    IsKeyboard := (item["type"] == "key") || (!IsMouse && !InStr(keyName, "Joy") && !InStr(keyName, "Btn") && !InStr(keyName, "Axis") && !InStr(keyName, "Dpad"))
-
-    ; 检查坐标与窗口过滤：仅在目标窗口客户区内的操作才予以转换
-    x := item.Has("x") && item["x"] != "" ? item["x"] : ""
-    y := item.Has("y") && item["y"] != "" ? item["y"] : ""
-    if (x == "" || y == "") {
-        CoordMode("Mouse", "Screen")
-        MouseGetPos &curX, &curY
-        x := curX, y := curY
-    }
-
-    ; 获取光标所在顶层窗口
-    targetHwnd := DllCall("User32\WindowFromPoint", "int64", (y << 32) | (x & 0xFFFFFFFF), "ptr")
-    if (targetHwnd)
-        targetHwnd := DllCall("GetAncestor", "ptr", targetHwnd, "uint", 2, "ptr")
-
-    if (RecordBG_HwndList.Length > 0) {
-        matched := false
-        for h in RecordBG_HwndList {
-            if (h == targetHwnd) {
-                matched := true
-                break
-            }
-        }
-        if (!matched)
-            return  ; 严格过滤目标窗口之外的操作
-    }
-
-    ; 检查是否落在客户区内部
-    try {
-        WinGetClientPos(&cx, &cy, &cw, &ch, targetHwnd)
-        relX := x - cx
-        relY := y - cy
-        if (relX < 0 || relY < 0 || relX > cw || relY > ch)
-            return  ; 落在窗口非客户区（如标题栏外边框），过滤
-    } catch {
-        return
-    }
-
-    if (keyName == "WheelUp" || keyName == "WheelDown" || keyName == "WheelLeft" || keyName == "WheelRight") {
-        if (MainSoftData.RecordMouse && isDown) {
-            span := curTime - MainSoftData.RecordLastTime
-            MainSoftData.RecordLastTime := curTime
-            macroStr .= GetLang("间隔") "_" span ","
-            serial := GetCMDSerialStr("后台鼠标")
-            data := GetMacroCMDData(serial)
-            data.TargetTitle := RecordBG_TargetWin != "" ? RecordBG_TargetWin : "{宏设置窗口绑定}"
-            data.MouseType := "滚轮"
-            data.OperateType := "点击"
-            data.PosVarX := relX
-            data.PosVarY := relY
-            data.ScrollV := (keyName == "WheelUp") ? 1 : (keyName == "WheelDown") ? -1 : 0
-            data.ScrollH := (keyName == "WheelRight") ? 1 : (keyName == "WheelLeft") ? -1 : 0
-            SaveMacroCMDData(data)
-            macroStr .= serial ","
-        }
-        return
-    }
-    else if (isDown) {
-        if (MainSoftData.RecordHoldKeyMap.Has(keyName))
-            return
-        MainSoftData.RecordHoldKeyMap[keyName] := true
-    }
-    else if (MainSoftData.RecordHoldKeyMap.Has(keyName)) {
-        MainSoftData.RecordHoldKeyMap.Delete(keyName)
-    }
-
-    span := curTime - MainSoftData.RecordLastTime
-    MainSoftData.RecordLastTime := curTime
-
-    if (IsMouse && MainSoftData.RecordMouse) {
-        mouseMap := Map("LButton", "左键", "RButton", "右键", "MButton", "中键")
-        if (!mouseMap.Has(keyName))
-            return
-        mType := mouseMap[keyName]
-        opType := isDown ? "按下" : "松开"
-        serial := GetCMDSerialStr("后台鼠标")
-        data := GetMacroCMDData(serial)
-        data.TargetTitle := RecordBG_TargetWin != "" ? RecordBG_TargetWin : "{宏设置窗口绑定}"
-        data.MouseType := mType
-        data.OperateType := opType
-        data.PosVarX := relX
-        data.PosVarY := relY
-        data.ClickTime := 50
-        SaveMacroCMDData(data)
-        macroStr .= GetLang("间隔") "_" span ","
-        macroStr .= serial ","
-    }
-    else if (IsKeyboard && MainSoftData.RecordKeyboard) {
-        keyName := keyName == "," ? GetLang("逗号") : keyName
-        opType := isDown ? "按下" : "松开"
-        serial := GetCMDSerialStr("后台按键")
-        data := GetMacroCMDData(serial)
-        data.FrontStr := RecordBG_TargetWin != "" ? RecordBG_TargetWin : "{宏设置窗口绑定}"
-        data.KeyArr := [keyName]
-        data.Type := opType
-        SaveMacroCMDData(data)
-        macroStr .= GetLang("间隔") "_" span ","
-        macroStr .= serial ","
-    }
 }
 
 OnRecordAddMacroStr(keyName, isDown, curTime, &macroStr) {
@@ -743,7 +637,12 @@ OnRecordAddMacroStr(keyName, isDown, curTime, &macroStr) {
 OnFinishRecordMacro() {
     global RI_isActive, MainSoftData
     RI_isActive := false
-    isBG := MainSoftData.HasProp("RecordBackground") && MainSoftData.RecordBackground
+    isBG := BackgroundRecorder.Active
+    if (MainSoftData.RecordAutoLoosen && isBG) {
+        macroStr := MainSoftData.RecordMacroStr
+        BackgroundRecorder.ReleaseAll(&macroStr)
+        MainSoftData.RecordMacroStr := macroStr
+    }
     if (MainSoftData.RecordAutoLoosen && !isBG) {
         for Key, Value in MainSoftData.RecordHoldKeyMap {
             ; 跳过录制开始时就已经持有的按键（如摇杆偏移导致初始即按下）
@@ -1051,18 +950,18 @@ OnForceEndRecord() {
 }
 
 ShowRecordBorder() {
-    global RecordBorder, RecordBorder_frame, RecordBG_HwndList, MainSoftData
+    global RecordBorder, RecordBorder_frame, MainSoftData
 
     if (!MainSoftData.RecordShowBorder)
         return
     if (IsSet(RecordBorder) && RecordBorder != "")
         return
 
-    isBG := MainSoftData.HasProp("RecordBackground") && MainSoftData.RecordBackground
+    isBG := BackgroundRecorder.Active
     borderLeft := 0, borderTop := 0, borderRight := 0, borderBottom := 0
 
-    if (isBG && RecordBG_HwndList.Length > 0) {
-        targetHwnd := RecordBG_HwndList[1]
+    if (isBG && BackgroundRecorder.HwndList.Length > 0) {
+        targetHwnd := BackgroundRecorder.HwndList[1]
         try {
             WinGetClientPos(&cx, &cy, &cw, &ch, targetHwnd)
             borderLeft := cx

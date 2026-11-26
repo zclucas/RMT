@@ -108,7 +108,7 @@ class XDialog {
                 closeBtn.Style("{StaticResource DlgCloseBtn}")
             else
                 closeBtn.Style("{StaticResource TitleBarCloseButton}")
-            closeBtn.Add("TextBlock").Text(Chr(0xE8BB)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+            XAMLHost._AddTitleChromeGlyph(closeBtn, "BtnClosePanelGlyph", Chr(0xE8BB), 10)
         }
 
         ; Content Body

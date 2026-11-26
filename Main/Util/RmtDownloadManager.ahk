@@ -284,7 +284,7 @@ class RmtDownloadManager {
         job.error := error
         try FileDelete(job.headersPath)
         try FileDelete(job.partPath ".unpacked")
-        if (job.urlIndex < job.urls.Length) {
+        while (job.urlIndex < job.urls.Length) {
             job.urlIndex += 1
             try FileDelete(job.partPath)
             if (this._StartUrl(job))

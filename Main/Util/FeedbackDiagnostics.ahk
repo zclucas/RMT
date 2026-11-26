@@ -3,6 +3,7 @@
 ; 反馈上下文：只在内存保留最近十步，不读取控件值、窗口标题或玩家命名。
 class FeedbackDiagnostics {
     static Steps := []
+    static PendingOpen := Map()
     static SettingNames := Map(
         "CmbFont", "软件字体",
         "ChkBootStart", "开机自启",
@@ -117,7 +118,10 @@ class FeedbackDiagnostics {
         "CbType", "类型", "CbMode", "模式", "CbAction", "动作", "CheckDebug", "调试",
         "TabControl", "页签", "EditMode", "编辑模式",
         "BtnSure", "确定", "BtnConfirm", "确定", "Confirm", "确定", "Cancel", "取消", "Reset", "重置",
-        "BtnRevert", "恢复默认", "BtnCmdF1", "指令说明", "BtnTypeHelp", "类型说明",
+        "BtnRevert", "恢复默认", "BtnCmdF1", "F1快捷操作", "BtnTypeHelp", "类型说明",
+        "BtnCmdHelp", "指令说明", "BtnCmdVideo", "视频说明", "BtnCmdPlay", "模拟运行",
+        "BtnCmdTargeter", "窗口拾取", "BtnCmdPreview", "预览", "BtnCmdPointEdit", "编辑坐标",
+        "BtnCmdF2", "F2快捷操作", "BtnCmdF3", "F3快捷操作",
         "BtnTrueEdit", "真分支编辑", "BtnFalseEdit", "假分支编辑", "BtnAddCondi", "添加条件",
         "BtnEditMacro", "编辑宏", "BtnWinEdit", "窗口编辑", "BtnPreviewArea", "区域预览",
         "ImageShotBtn", "截图", "ImageSelectBtn", "选择图片", "BtnEditFoundMacro", "找到分支编辑",
@@ -144,8 +148,83 @@ class FeedbackDiagnostics {
         "Var", "变量名", "Copy", "变量值", "Min", "最小值", "Max", "最大值", "OpType", "赋值类型",
         "IfLeft", "左侧条件", "IfRight", "右侧条件", "TimeoutCon", "超时时间", "LoopCountCon", "循环次数")
 
+    ; 由界面构建代码登记固定名称，不从玩家可编辑的标题/按钮内容猜测用途。
+    static NameControl(ui, control, label, opens := "") {
+        if (!ui.HasOwnProp("feedbackLabels"))
+            ui.feedbackLabels := Map()
+        ui.feedbackLabels[control] := label
+        if (opens != "") {
+            if (!ui.HasOwnProp("feedbackOpenTargets"))
+                ui.feedbackOpenTargets := Map()
+            ui.feedbackOpenTargets[control] := opens
+        }
+    }
+
+    static BindEditor(ui, editor, fields) {
+        ui.feedbackEditor := editor
+        typeName := Type(editor)
+        if (this.WindowNames.Has(typeName))
+            ui.feedbackWindow := this.WindowNames[typeName]
+        for control, label in fields
+            this.NameControl(ui, control, label)
+        ; 只允许把内置枚举值写入步骤；自由文本、变量名、路径等仍只记录字段名。
+        allowed := Map()
+        for choice in editor.Choices
+            allowed[editor._ChoiceLabel(choice)] := choice
+        ui.feedbackChoices := Map(editor.ChoiceField, allowed)
+        for control, label in Map("AddChoice", "添加候选项", "DeleteChoice", "删除候选项",
+            "RegionPreview", "屏幕范围预览", "WindowRegionPreview", "窗口范围预览",
+            "BtnCmdPlay", "模拟运行", "BtnCmdF1", "快捷拾取")
+            this.NameControl(ui, control, label)
+        if (typeName == "AiDecisionGui") {
+            this.NameControl(ui, "BtnCmdF1", "框选范围")
+            for control, label in Map("OptionLabel", "候选项名称", "OptionValue", "候选项结果",
+                "RegionStartX", "屏幕起点X", "RegionStartY", "屏幕起点Y", "RegionEndX", "屏幕终点X", "RegionEndY", "屏幕终点Y",
+                "WindowRegionStartX", "窗口起点X", "WindowRegionStartY", "窗口起点Y", "WindowRegionEndX", "窗口终点X", "WindowRegionEndY", "窗口终点Y")
+                this.NameControl(ui, control, label)
+        }
+    }
+
+    static ExpectOpen(targets) {
+        if (!this.Steps.Length)
+            return
+        if (Type(targets) != "Array")
+            targets := [targets]
+        for label in targets
+            this.PendingOpen[label] := this.Steps[this.Steps.Length]
+    }
+
+    static WindowOpened(ui) {
+        label := ui.feedbackWindow
+        if (this.PendingOpen.Has(label)) {
+            origin := this.PendingOpen.Delete(label)
+            for step in this.Steps {
+                if (step == origin)
+                    return ; 入口还在最近十步内，即使建窗较慢也不重复记录。
+            }
+        }
+        this.Record("打开" label "界面")
+    }
+
+    static Label(ui, control) {
+        if (ui.HasOwnProp("feedbackLabels")) {
+            if (ui.feedbackLabels.Has(control))
+                return ui.feedbackLabels[control]
+            if (RegExMatch(control, "^(OptionLabel|OptionValue|DeleteChoice)_(\d+)$", &row)) {
+                if (row[1] == "DeleteChoice")
+                    return "删除第" row[2] "个候选项"
+                return "第" row[2] "项" (row[1] == "OptionLabel" ? "名称" : "结果")
+            }
+            base := RegExReplace(RegExReplace(control, "_.*$", ""), "\d+$", "")
+            if (ui.feedbackLabels.Has(base))
+                return ui.feedbackLabels[base]
+        }
+        return this.ControlLabel(control)
+    }
+
     static Init() {
         XAMLHost.ActivityObserver := ObjBindMethod(this, "Observe")
+        XAMLHost.ErrorContextProvider := ObjBindMethod(this, "EditorContext")
         if (this.HasOwnProp("_moveHook"))
             return
         this._moveCallback := CallbackCreate(ObjBindMethod(this, "OnMoveEnd"), , 7)
@@ -204,12 +283,102 @@ class FeedbackDiagnostics {
         return text == "" ? "暂无操作记录" : text
     }
 
-    static Capture(hwnd := 0) {
-        return {environment: this.Environment(hwnd), steps: this.StepsText()}
+    static Capture(hwnd := 0, commandContext := "") {
+        context := {environment: this.Environment(hwnd), steps: this.StepsText()}
+        if (IsObject(commandContext)) {
+            context.command := commandContext.command
+            context.location := commandContext.location
+            if (commandContext.mode == "runtime")
+                context.steps := ""
+        }
+        return context
+    }
+
+    static ShowEditor(editor, cmd, origin) {
+        editor.feedbackOrigin := origin
+        try {
+            editor.ShowGui(cmd)
+            if (IsObject(editor.ui))
+                editor.ui.feedbackEditor := editor
+        } catch as err {
+            location := "单条指令测试"
+            try location := CommandErrorContext.Location(GetTableByID(origin.TableID), GetItemIndexInTable(GetTableByID(origin.TableID), origin.ItemID))
+            err.RmtCommandContext := CommandErrorContext.Describe(cmd, location, "editor")
+            if (IsObject(editor.ui)) {
+                editor.ui.feedbackEditor := editor
+                try {
+                    snapshot := this.EditorContext(editor.ui)
+                    err.RmtCommandContext.command .= "`n" snapshot.command
+                }
+            }
+            throw err
+        }
+    }
+
+    static EditorContext(ui, action := "capture", previous := "") {
+        if (action == "enter") {
+            saved := CommandErrorContext.Editor
+            CommandErrorContext.Editor := ObjBindMethod(this, "EditorContext", ui)
+            return saved
+        }
+        if (action == "leave") {
+            CommandErrorContext.Editor := previous
+            return
+        }
+        if (!ui.HasOwnProp("feedbackEditor"))
+            return ""
+        editor := ui.feedbackEditor
+        location := "单条指令测试"
+        try {
+            origin := editor.feedbackOrigin
+            table := GetTableByID(origin.TableID)
+            location := CommandErrorContext.Location(table, GetItemIndexInTable(table, origin.ItemID))
+        }
+        cmd := Type(editor)
+        try cmd := editor.GetCommandStr()
+        data := Map()
+        try data["已保存数据"] := editor.Data
+        ; 当前输入可能尚未保存，读取原始表单值，不依赖会校验并抛错的 _ReadData。
+        if (ui.HasOwnProp("feedbackLabels")) {
+            names := []
+            for control in ui.feedbackLabels
+                names.Push(control)
+            try data["当前表单"] := ui.Query(names*)
+        }
+        try data["当前指令数据"] := editor._ReadData()
+        ; 兼容旧指令窗口及动态候选项，保留尚未通过校验的原始输入。
+        try {
+            names := [], pos := 1
+            while (pos := RegExMatch(ui.xaml, '<(?:TextBox|ComboBox|CheckBox|RadioButton)\b[^>]*\b(?:x:)?Name="([^"]+)"', &m, pos)) {
+                names.Push(m[1])
+                pos += StrLen(m[0])
+            }
+            if (names.Length)
+                data["当前表单输入"] := ui.Query(names*)
+        }
+        return CommandErrorContext.Describe(cmd, location, "editor", data)
     }
 
     static Report(context) {
-        return "最近操作（最多10步）：`n" context.steps "`n`n环境信息：`n" context.environment
+        report := RTrim(this.Details(context), "`r`n")
+        return (report != "" ? report "`n`n" : "") "环境信息：`n" context.environment
+    }
+
+    static Details(context) {
+        report := ""
+        if (context.HasOwnProp("entries")) {
+            for entry in context.entries {
+                detail := RTrim(this.Details(entry), "`r`n")
+                if (detail != "")
+                    report .= (report != "" ? "`n`n=====`n`n" : "") detail
+            }
+            return report
+        }
+        if (context.HasOwnProp("command"))
+            report .= "指令位置：" context.location "`n指令数据：" context.command "`n`n"
+        if (context.steps != "")
+            report .= "最近操作：`n" context.steps "`n`n"
+        return report
     }
 
     static Environment(hwnd := 0) {
@@ -296,6 +465,10 @@ class FeedbackDiagnostics {
 
     static Edit(action, graph := false) {
         this.Record((graph ? "宏流程图" : "宏指令编辑") "界面-" action)
+        if (action == "切换流程图模式")
+            this.ExpectOpen("宏流程图")
+        else if (action == "切换逻辑树模式")
+            this.ExpectOpen("宏指令编辑")
     }
 
     static RecordTreeEdit(stack) {
@@ -331,9 +504,16 @@ class FeedbackDiagnostics {
             return
         if (control == "OperSettingCon")
             return ; 由配置管理的业务校验后记录。
-        name := this.ControlLabel(control)
-        isText := RegExMatch(parts[1], "^(text|paste|cut|undo|redo)$")
-        this.Record((isText ? "修改" : "设置") ui.feedbackWindow "界面-" name (isText ? "值" : "选项"), ui.id "-value-" control)
+        name := this.Label(ui, control)
+        option := ""
+        if (ui.HasOwnProp("feedbackChoices") && ui.feedbackChoices.Has(control)) {
+            allowed := ui.feedbackChoices[control]
+            selected := ""
+            try selected := ui.Query(control)
+            if (allowed.Has(selected))
+                option := "-" allowed[selected]
+        }
+        this.Record("修改" ui.feedbackWindow "界面-参数值：" name option, ui.id "-value-" control)
     }
 
     static ControlLabel(control) {
@@ -363,6 +543,10 @@ class FeedbackDiagnostics {
         page := this.TableLabel(table) "页签"
         this.Record((setting ? "设置" : "点击") page "-" name (setting ? "选项" : "按钮"),
             setting ? page "-" name : "")
+        if (!setting && action == "Edit")
+            this.ExpectOpen(table.Symbol == "Replace" ? "按键替换" : ["宏指令编辑", "宏流程图"])
+        else if (!setting && action == "Setting")
+            this.ExpectOpen("宏设置")
     }
 
     static Observe(ui, control, event, stack := "") {
@@ -392,7 +576,7 @@ class FeedbackDiagnostics {
             return
         window := ui.feedbackWindow "界面"
         if (event == "LoadedHwnd") {
-            this.Record("打开" window)
+            this.WindowOpened(ui)
             return
         }
         ; 选项/文本由引擎只上报实际用户改值，避免初始化及联动刷新污染记录。
@@ -400,11 +584,21 @@ class FeedbackDiagnostics {
             return
         if (!ui.wpfHwnd || !WinActive("ahk_id " ui.wpfHwnd))
             return
+        this.Click(ui, control)
+    }
+
+    static Click(ui, control) {
+        window := ui.feedbackWindow "界面"
         static businessControls := Map("BtnUndo", 1, "BtnRedo", 1, "BtnModeTree", 1, "BtnModeText", 1,
             "SaveBtn", 1, "BtnSave", 1, "BtnPause", 1, "BtnPauseActive", 1, "BtnKill", 1)
         if (businessControls.Has(control))
             return ; 由实际业务入口记录，覆盖按钮和快捷键，避免同一步记两次。
         name := this.ControlNames.Has(control) ? this.ControlNames[control] : ""
+        if (ui.HasOwnProp("feedbackLabels")) {
+            label := this.Label(ui, control)
+            if (label != "参数")
+                name := label
+        }
         if (ui.feedbackWindow == "配置管理") {
             static configActions := Map("BtnUnpack", "导入配置", "BtnPack", "导出配置", "BtnMerge", "合并导入",
                 "BtnLoad", "加载配置", "BtnRename", "重命名配置", "BtnAdd", "新增配置", "BtnDel", "删除配置",
@@ -414,10 +608,11 @@ class FeedbackDiagnostics {
         }
         ; 未登记的控件使用固定用途，不回退到玩家可编辑的 Content/Text。
         if (name == "")
-            name := event == "Click" ? "操作" : "参数"
-        if (event == "Click")
-            this.Record("点击" window "-" name "按钮")
-        else
-            this.Record("设置" window "-" name "选项", ui.id "-" control)
+            name := "操作"
+        this.Record("点击" window "-" name "按钮")
+        if (ui.HasOwnProp("feedbackOpenTargets") && ui.feedbackOpenTargets.Has(control))
+            this.ExpectOpen(ui.feedbackOpenTargets[control])
+        else if (control == "BtnConfig")
+            this.ExpectOpen("配置管理")
     }
 }

@@ -14,11 +14,14 @@ class ErrorMsgBoxGui {
         this._batching := false
         this.Desc := ""
         this.ErrorList := []
+        this.ContextList := []
     }
 
-    ShowGui(Desc) {
-        this._diagnostics := FeedbackDiagnostics.Capture(this.Hwnd())
+    ShowGui(Desc, commandContext := "") {
+        this._diagnostics := FeedbackDiagnostics.Capture(this.Hwnd(), commandContext)
+        ; 每条错误保存自己的上下文，合并展示时不会把上一条指令归给下一条错误。
         this.ErrorList.Push(Desc)
+        this.ContextList.Push(this._diagnostics)
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
         this._BuildAndShow()
@@ -34,8 +37,13 @@ class ErrorMsgBoxGui {
             if (i > 1)
                 text .= "`n" . "=" . "=" . "=" . "=" . "=" . "`n"
             text .= error
+            if (includeContext && i <= this.ContextList.Length) {
+                details := RTrim(FeedbackDiagnostics.Details(this.ContextList[i]), "`r`n")
+                if (details != "")
+                    text .= "`n`n" details
+            }
         }
-        return includeContext ? text "`n`n" FeedbackDiagnostics.Report(this._diagnostics) : text
+        return includeContext ? RTrim(text, "`r`n") "`n`n环境信息：`n" this._diagnostics.environment : text
     }
 
     Hwnd() {
@@ -58,11 +66,12 @@ class ErrorMsgBoxGui {
         ; Cols 会新增定义，先替换标准标题栏原有的两列。
         chrome.Root._Children.RemoveAt(1)
         chrome.Root.Cols("Auto", "*", "Auto")
+        chrome.Drag.Grid_ColumnSpan(2)
         chrome.Btns.Grid_Column(2)
         chrome.Root.Add("TextBlock").Grid_Column(1).Text(this._diagnostics.environment)
             .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("18,0,10,0")
             .Foreground("{DynamicResource TextSub}").FontSize(11).FontWeight("Normal")
-            .TextTrimming("CharacterEllipsis").ToolTip(this._diagnostics.environment)
+            .TextTrimming("CharacterEllipsis").IsHitTestVisible("False")
         closeBtn := chrome.Close
 
         ; === 内容 ===
@@ -134,7 +143,10 @@ class ErrorMsgBoxGui {
     OnFeedbackClick(state, ctrl, event) {
         txt := this.GetErrorText(false)
         this._CloseWindow()
-        try FeedbackGui.ShowGui("bug", txt, this._diagnostics)
+        ; 错误与诊断分区展示，保留每条错误的独立快照。
+        diagnostics := this._diagnostics.Clone()
+        diagnostics.entries := this.ContextList.Clone()
+        try FeedbackGui.ShowGui("bug", txt, diagnostics)
     }
 
 }

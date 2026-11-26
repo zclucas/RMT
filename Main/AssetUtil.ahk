@@ -15,6 +15,7 @@ RmtAssetsBaseUrl(tag) {
 #Include Util\RmtDllUtil.ahk
 #Include Util\SerialUtil.ahk
 #Include Util\JsonUtil.ahk
+#Include Util\CommandErrorContext.ahk
 #Include Util\LangUtil.ahk
 #Include Util\CmdEnumUtil.ahk
 #Include Util\Gdip_All.ahk

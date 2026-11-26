@@ -9,14 +9,17 @@ class FolderPackager {
 
     ; 打包文件夹为二进制文件
     ; password 非空 → 整体加密，输出带 "RMTC" 头的密文包（导入时凭密码解开）
-    static PackFolder(folderPath, outputFile, password := "", report := "") {
+    static PackFolder(folderPath, outputFile, password := "", report := "", prepare := true) {
         if !DirExist(folderPath)
             throw Error(GetLang("文件夹不存在:") folderPath)
 
         ; 导出前先升级真实内容，再写入版本，不能把旧包仅改标签冒充新版。
-        Compat_UpgradeDir(folderPath)
-        Compat_WriteVersion(folderPath, Compat_CurrentVersion())
-        CfgWrite(RMT_VERSION, Compat_VersionFile(folderPath), "RMT", "AppVersion")
+        ; 反馈附件保留原始配置，避免升级操作改变待排查的内容。
+        if (prepare) {
+            Compat_UpgradeDir(folderPath)
+            Compat_WriteVersion(folderPath, Compat_CurrentVersion())
+            CfgWrite(RMT_VERSION, Compat_VersionFile(folderPath), "RMT", "AppVersion")
+        }
         CfgFlushDir(folderPath)
 
         ; 获取所有文件列表

@@ -16,6 +16,8 @@ class FeedbackGui {
         this._uploads := []          ; 正文图片与独立附件共用上传队列
         this._attachmentProgress := ""
         this._attachments := []
+        this._includeCurrentConfig := true
+        this._configAttachmentPath := ""
         this._errorSent := ""
         this._disc := ""
         this._upIdx := 0             ; 正在上传第几张（1 起）
@@ -53,9 +55,8 @@ class FeedbackGui {
                 if (IsSet(diagnostics)) {
                     oldInst._diagnostics := diagnostics
                     try oldInst.ui.Update("FeedbackEnvironmentTitle", "Text", oldInst._EnvPreview())
-                    try oldInst.ui.Update("FeedbackEnvironmentTitle", "ToolTip", oldInst._EnvPreview())
                     try oldInst.ui.Update("Window", "Title", GetLang("提交反馈") "  " oldInst._EnvPreview())
-                    try oldInst.ui.Update("RecentOperations", "Text", diagnostics.steps)
+                    try oldInst.ui.Update("RecentOperations", "Text", FeedbackDiagnostics.Report(diagnostics))
                 }
                 if (prefillError != "")
                     try oldInst.ui.Update("ErrorInput", "Text", prefillError)
@@ -101,11 +102,12 @@ class FeedbackGui {
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
         chrome.Root._Children.RemoveAt(1)
         chrome.Root.Cols("Auto", "*", "Auto")
+        chrome.Drag.Grid_ColumnSpan(2)
         chrome.Btns.Grid_Column(2)
         chrome.Root.Add("TextBlock").Name("FeedbackEnvironmentTitle").Grid_Column(1).Text(this._EnvPreview())
             .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("18,0,10,0")
             .Foreground("{DynamicResource TextSub}").FontSize(11).FontWeight("Normal")
-            .TextTrimming("CharacterEllipsis").ToolTip(this._EnvPreview())
+            .TextTrimming("CharacterEllipsis").IsHitTestVisible("False")
 
         body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
         root := body.Add("Grid").Margin("16, 12, 16, 14")
@@ -151,15 +153,23 @@ class FeedbackGui {
             .Foreground("{DynamicResource TextSub}").FontSize(12).Margin("2,0,0,5")
         attachRow := details.Add("Grid")
         attachRow.Cols("Auto", "*", "Auto")
-        this._AddBtn(attachRow, "AddAttachments", Chr(0xE723), 30)
-            .Grid_Column(0).FontFamily("Segoe MDL2 Assets").FontSize(16)
+        attachment := this._AddBtn(attachRow, "AddAttachments", "", 30)
+            .Grid_Column(0)
             .ToolTip(GetLang("点击选择多个附件，或将文件拖入反馈窗口"))
             .SetProp("AutomationProperties.Name", GetLang("附件"))
+        ; 矢量回形针避免字体 ClearType 在细边缘产生彩色晕边。
+        attachment.Add("Path").Name("AttachmentGlyph").Width(12).Height(17).Stretch("Uniform")
+            .Data("M10,4 V12 A4,4 0 0 1 2,12 V4 A3,3 0 0 1 8,4 V12 A2,2 0 0 1 4,12 V5")
+            .Stroke("{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}")
+            .StrokeThickness(1.2).StrokeStartLineCap("Round").StrokeEndLineCap("Round")
+            .HorizontalAlignment("Center").VerticalAlignment("Center")
         attachRow.Add("ComboBox").Name("AttachmentList").Grid_Column(1).Margin("8,0,8,0")
         this._AddBtn(attachRow, "RemoveAttachment", GetLang("移除"), 66).Grid_Column(2).IsEnabled("False")
-        steps := details.Add("Expander").Header("最近操作（最多10步，随反馈附带）").Margin("2,6,0,0")
+        details.Add("CheckBox").Name("AttachCurrentConfig").Content(GetLang("附上当前配置文件"))
+            .IsChecked("True").Foreground("{DynamicResource TextMain}").Margin("2,8,0,0")
+        steps := details.Add("Expander").Header("指令诊断（随反馈附带）").Margin("2,6,0,0")
         steps.Add("ScrollViewer").MaxHeight(100).VerticalScrollBarVisibility("Auto")
-            .Add("TextBlock").Name("RecentOperations").Text(this._diagnostics.steps)
+            .Add("TextBlock").Name("RecentOperations").Text(FeedbackDiagnostics.Report(this._diagnostics))
             .Foreground("{DynamicResource TextSub}").FontSize(12).TextWrapping("Wrap")
 
         ; 底栏：左边状态、右边动作，一行收住
@@ -191,6 +201,8 @@ class FeedbackGui {
         this.ui.OnEvent("KindIdea", "Click", ObjBindMethod(this, "OnKindClick", "idea"))
         this.ui.OnEvent("AddAttachments", "Click", ObjBindMethod(this, "OnAddAttachments"))
         this.ui.OnEvent("RemoveAttachment", "Click", ObjBindMethod(this, "OnRemoveAttachment"))
+        this.ui.OnEvent("AttachCurrentConfig", "Checked", (*) => this._includeCurrentConfig := true)
+        this.ui.OnEvent("AttachCurrentConfig", "Unchecked", (*) => this._includeCurrentConfig := false)
         this.ui.OnEvent("BodyInput", "PreviewKeyDown:V", ObjBindMethod(this, "OnBodyPasteKey"))
         this.ui.OnEvent("FeedbackDropTarget", "FileDrop", ObjBindMethod(this, "OnAttachmentDrop"))
         this.ui.OnEvent("SubmitBtn", "Click", ObjBindMethod(this, "OnSubmit"))
@@ -208,9 +220,11 @@ class FeedbackGui {
     }
 
     _AddBtn(parent, name, content, width, primary := false) {
-        btn := parent.Add("Button").Name(name).Content(content)
+        btn := parent.Add("Button").Name(name)
             .FontSize(12).Cursor("Hand").Width(width).Height(28)
             .BorderThickness("1")
+        if (content != "")
+            btn.Content(content)
         if (primary) {
             btn.Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
                 .BorderBrush("{DynamicResource ActionStroke}").FontWeight("Bold")
@@ -237,6 +251,7 @@ class FeedbackGui {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        this._ClearConfigAttachment()
         this.closed := true
         this._StopPoll()
         this._CloseAttachmentProgress()
@@ -282,6 +297,7 @@ class FeedbackGui {
     }
 
     Close() {
+        this._ClearConfigAttachment()
         this.closed := true
         this._StopPoll()
         this._CloseAttachmentProgress()
@@ -310,6 +326,7 @@ class FeedbackGui {
         if (!IsObject(this.ui))
             return
         isBug := this._kind = "bug"
+        try this.ui.Update("AttachCurrentConfig", "Visibility", isBug ? "Visible" : "Collapsed")
         this._SyncToggle("KindBug", isBug)
         this._SyncToggle("KindIdea", !isBug)
         this.ui.Update("BugPanel", "Visibility", isBug ? "Visible" : "Collapsed")
@@ -570,7 +587,36 @@ class FeedbackGui {
         }
         for item in this._attachments
             this._uploads.Push({path: item.path, alt: item.name, raw: "", url: "", failed: false})
+        try this._AppendCurrentConfig()
+        catch as e {
+            this._SetBusy(false)
+            this._SetStatus(GetLang("当前配置打包失败：") e.Message, "err")
+            return
+        }
         this._UploadNext()
+    }
+
+    _AppendCurrentConfig() {
+        this._ClearConfigAttachment()
+        if (this._kind != "bug" || !this._includeCurrentConfig)
+            return
+        name := MySoftData.CurSettingName
+        if (!Compat_IsSettingName(name))
+            throw Error(GetLang("当前配置名称无效"))
+        folder := A_WorkingDir "\Setting\" name
+        this._SetStatus(GetLang("正在打包当前配置…"))
+        cache := A_WorkingDir "\Cache\Feedback"
+        DirCreate(cache)
+        this._configAttachmentPath := cache "\RMT-feedback-" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount "-" Random(1000,9999) ".rmt"
+        FolderPackager.PackFolder(folder, this._configAttachmentPath, "", "", false)
+        this._uploads.Push({path: this._configAttachmentPath, alt: name ".rmt", raw: "", url: "", failed: false})
+    }
+
+    _ClearConfigAttachment() {
+        if (this._configAttachmentPath != "") {
+            try FileDelete(this._configAttachmentPath)
+            this._configAttachmentPath := ""
+        }
     }
 
     ; 逐张上传：每张成功后在 _Poll 里写 url 并回来接着传下一张
@@ -672,7 +718,8 @@ class FeedbackGui {
         }
         if (links != "")
             raw .= "**" GetLang("附件") "**`n`n" links "`n"
-        return raw "---`n`n**最近操作（最多10步）**`n`n    " StrReplace(this._diagnostics.steps, "`n", "`n    ")
+        details := FeedbackDiagnostics.Details(this._diagnostics)
+        return raw "---`n`n    " StrReplace(RTrim(details, "`n"), "`n", "`n    ")
             . "`n`n**" GetLang("环境信息") "**`n`n" this._EnvPreview()
     }
 
@@ -911,14 +958,16 @@ class FeedbackGui {
 
     ; 提交中锁住按钮，避免重复点
     _SetBusy(on) {
-        if (!on)
+        if (!on) {
             this._CloseAttachmentProgress()
+            this._ClearConfigAttachment()
+        }
         if (!IsObject(this.ui))
             return
         try this.ui.Update("SubmitBtn", "Content", on ? GetLang("提交中…") : GetLang("提交反馈"))
         try this.ui.Update("SubmitBtn", "IsEnabled", on ? "False" : "True")
         enabled := !on && !this._done
-        for name in ["KindBug", "KindIdea", "AddAttachments", "AttachmentList"]
+        for name in ["KindBug", "KindIdea", "AddAttachments", "AttachmentList", "AttachCurrentConfig"]
             try this.ui.Update(name, "IsEnabled", enabled ? "True" : "False")
         try this.ui.Update("RemoveAttachment", "IsEnabled", enabled && this._attachments.Length ? "True" : "False")
         for name in ["TitleInput", "BodyInput", "ErrorInput"]

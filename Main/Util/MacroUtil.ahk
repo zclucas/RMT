@@ -350,14 +350,17 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         MyCMDReportAciton(cleanCmdStr)
 
     ok := true
+    CommandErrorContext.Frames.Push({table: tableItem, index: index, cmd: cleanCmdStr})
     try {
         result := Actions[cmdKey](tableItem, cleanCmdStr, index)
     } catch as err {
         ok := false
         errMsg := IsObject(err) && err.HasProp("Message") ? err.Message : String(err)
-        RMTErrorShow(Format("[{1}] {2}", cmdKey, errMsg), RMT_LV_ERROR, "宏")
+        RMTErrorShow(Format("[{1}] {2}", cmdKey, errMsg) "`n堆栈信息：`n" err.Stack, RMT_LV_ERROR, "宏")
         KillTableItemMacro(tableItem, index)
         result := ""
+    } finally {
+        CommandErrorContext.Frames.Pop()
     }
     ; 业务日志（C 项阶段3）：每指令执行流水（默认关，设置开启后生效；Worker 执行侧写入）
     ; 执行后记录，成功/失败并入同一条，不额外增加日志条目（复用 cleanCmdStr）

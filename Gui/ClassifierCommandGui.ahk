@@ -10,6 +10,7 @@ class ClassifierCommandGui extends CommentGui {
 
     _BuildAndShow() {
         this._closed := false
+        this._feedbackFields := Map()
         title := this.ParentTile GetLang(this.CmdKey)
         height := XAMLHost.CmdTitleBarHeight()
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
@@ -23,6 +24,7 @@ class ClassifierCommandGui extends CommentGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
+        FeedbackDiagnostics.BindEditor(this.ui, this, this._feedbackFields)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
             'Title="' this._EscapeXml(title) '" Width="620" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
@@ -48,6 +50,9 @@ class ClassifierCommandGui extends CommentGui {
     }
 
     _Row(body, label, name, labelAlignment := "Center", labelGroup := "CommandLabel", labelTip := "") {
+        if (!this.HasOwnProp("_feedbackFields"))
+            this._feedbackFields := Map()
+        this._feedbackFields[name] := Trim(label, " ：:")
         return CmdEditorForm.Row(body, label, name "Row", labelGroup, labelAlignment, name "Label", labelTip)
     }
 

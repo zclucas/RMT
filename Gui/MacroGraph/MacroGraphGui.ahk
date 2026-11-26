@@ -733,9 +733,9 @@ class MacroGraphGui {
             editor.WindowBindingContext := this.WindowBindingContext
         ; RMT 指令参数存于 CurCMD 本身，打开编辑器时用规范化后的 CMD，与节点内联显示一致
         if (d.type == GetLang("RMT指令"))
-            editor.ShowGui(this._SerializeNodeCommand(d))
+            FeedbackDiagnostics.ShowEditor(editor, this._SerializeNodeCommand(d), this.WindowBindingContext)
         else
-            editor.ShowGui(this.cmdNodes[id].CurCMD)
+            FeedbackDiagnostics.ShowEditor(editor, this.cmdNodes[id].CurCMD, this.WindowBindingContext)
     }
 
     ; 完整编辑器确定后：回写数据并刷新节点显示

@@ -478,6 +478,9 @@
         for config in this.SubGuiConfig {
             guiInstance := this.%config.propName%
             btnName := "CmdBtn_" config.propName
+            target := FeedbackDiagnostics.WindowNames.Get(Type(guiInstance), "")
+            FeedbackDiagnostics.NameControl(this.ui, btnName, config.name, target)
+            FeedbackDiagnostics.NameControl(this.ui, "CmdBtnFav_" config.propName, config.name, target)
             this.ui.OnEvent(btnName, "Click", CreateSubGuiClickHandler(this, guiInstance))
             this.ui.OnEvent(btnName, "PreviewMouseLeftButtonDown", this._OnPanelDragStart.Bind(this, guiInstance, GetLang(config.name), StrReplace(A_WorkingDir "\" config.icon, "\", "/")))
             ; §13 收藏区行（同名指令按钮，点击/拖拽同分类区）

@@ -1146,7 +1146,9 @@ FindChromiumBrowser() {
 ; 这是同名两套实现里的「主进程版」：写系统日志 + 按级别通知（warn 托盘气泡 / error 错误中心）。
 ; Worker 版在 Thread\WorkUtil.ahk，只做一条 IPC 上报。两边由包含链决定，函数里没有角色分支。
 ; 返回 true 表示已处理（调用方无需再弹窗）。
-RMTErrorShow(msg, level := RMT_LV_ERROR, source := "") {
+RMTErrorShow(msg, level := RMT_LV_ERROR, source := "", commandContext := "") {
+    if (!IsObject(commandContext))
+        commandContext := CommandErrorContext.Current()
     if (source == "")
         source := "Master"
 
@@ -1163,7 +1165,7 @@ RMTErrorShow(msg, level := RMT_LV_ERROR, source := "") {
         ; error：错误中心聚合
         if (IsSet(MyErrorMsgBoxGui) && IsObject(MyErrorMsgBoxGui)
             && !(IsSet(MainSoftData) && ObjHasOwnProp(MainSoftData, "LogErrorBadge") && !MainSoftData.LogErrorBadge))
-            MyErrorMsgBoxGui.ShowGui(Format("[{1}] {2}", source, msg))
+            MyErrorMsgBoxGui.ShowGui(Format("[{1}] {2}", source, msg), commandContext)
     }
     return true
 }

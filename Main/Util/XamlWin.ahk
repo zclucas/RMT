@@ -73,7 +73,7 @@ class XamlWin {
     static BindCurrent(editor, method, boundArgs*) {
         ui := editor.ui
         callback := ObjBindMethod(editor, method, boundArgs*)
-        return (args*) => editor.ui == ui ? callback(args*) : ""
+        return (args*) => editor.ui == ui ? ui._RunDiagnosticCallback(callback, args*) : ""
     }
 
     ; 弹窗该挂哪个窗口当属主：当前用户正在用的那一层（搜索 Pro / 宏编辑 / 主窗口）。
