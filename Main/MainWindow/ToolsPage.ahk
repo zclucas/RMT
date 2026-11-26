@@ -65,7 +65,7 @@
             . '<Button Name="BtnFileCheckHelp" Content="?" ToolTip="' GetLang("文件校验说明") '" Width="28" Height="28" MinHeight="28" Padding="0" Margin="8,0,0,0"/>'
             . openBtn("BtnVoiceExtension", "&#xE896;", GetLang("语音扩展"), true, "208,0,0,0") '</StackPanel></StackPanel>'
         recordBody := '<StackPanel>'
-            . actionRow(GetLang("指令录制"), GetLang("记录鼠标与键盘操作"), FormatHotkeyDisplay(MainSoftData.ToolRecordMacroHotKey), '<CheckBox Name="ChkToolCheckRecord" Content="&#xE7C8;" ToolTip="' GetLang("开始或停止录制") '" Style="{StaticResource ToolRecordSwitch}"/>')
+            . actionRow(GetLang("指令录制"), GetLang("记录鼠标与键盘操作"), FormatHotkeyDisplay(MainSoftData.ToolRecordMacroHotKey), iconBtn("BtnRecordSetting", "&#xE713;", GetLang("录制选项")) '<CheckBox Name="ChkToolCheckRecord" Content="&#xE7C8;" ToolTip="' GetLang("开始或停止录制") '" Style="{StaticResource ToolRecordSwitch}"/>')
             . actionRow(GetLang("图片提取文本"), GetLang("从截图或本地图片识别文本"), FormatHotkeyDisplay(MainSoftData.ToolTextFilterHotKey), iconBtn("BtnTextShot", "&#xE7A8;", GetLang("截图提取文本")) iconBtn("BtnTextImage", "&#xE8B7;", GetLang("从图片提取文本")))
             . actionRow(GetLang("语音提取文本"), GetLang("打开语音识别窗口并写入输出区"), "", openBtn("BtnStt", "&#xE720;", GetLang("打开"), true)) '</StackPanel>'
         outputBody := '<TextBox Name="TxtToolText" Text="" Height="200" AcceptsReturn="True" VerticalContentAlignment="Top" TextWrapping="Wrap" Padding="8,6" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
@@ -86,6 +86,7 @@
         this._Bind("BtnVoiceExtension", "Click", (*) => SttGui.DownloadVoiceExtension())
         this._Bind("ChkToolCheck", "Click", OnToolCheckHotkey)
         this._Bind("ChkAlwaysOnTop", "Click", OnToolAlwaysOnTop)
+        this._Bind("BtnRecordSetting", "Click", (*) => ToolRecordSettingGui.ShowGui())
         this._Bind("ChkToolCheckRecord", "Click", OnClickToolRecordMacro.Bind(false))
         this._Bind("BtnTextShot", "Click", OnToolTextFilterScreenShot)
         this._Bind("BtnTextImage", "Click", OnToolTextFilterSelectImage)

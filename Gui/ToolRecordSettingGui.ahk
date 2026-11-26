@@ -22,6 +22,8 @@ class ToolRecordSettingGui {
         this._joy := false
         this._joyInterval := 50
         this._showBorder := true
+        this._background := false
+        this._backgroundWin := "{宏设置窗口绑定}"
     }
 
     ; 兼容旧入口 MyToolRecordSettingGui.ShowGui()
@@ -89,6 +91,25 @@ class ToolRecordSettingGui {
         commonInner.Add("CheckBox").Name("AutoLoosenCon").Content(GetLang("录制结束自动添加按键松开指令"))
             .Foreground(labelFg).FontSize(labelFs).Margin("0,10,0,0")
 
+        ; ===== 背景录制 =====
+        gBg := panel.Add("GroupBox").Header(GetLang("背景录制")).Margin("0,8,0,0")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            .Foreground(labelFg)
+        bgInner := gBg.Add("StackPanel").Margin("12, 8")
+        rowBg1 := bgInner.Add("StackPanel").Orientation("Horizontal").Margin("0,2,0,0")
+        rowBg1.Add("CheckBox").Name("BackgroundTogCon").Content(GetLang("开启背景录制"))
+            .Foreground(labelFg).FontSize(labelFs).VerticalAlignment("Center")
+        rowBg1.Add("TextBlock").Text(GetLang("（将录制键鼠转换为后台指令）"))
+            .Foreground("{DynamicResource TextSecondary}").FontSize(11).VerticalAlignment("Center").Margin("8,0,0,0")
+
+        rowBg2 := bgInner.Add("Grid").Margin("0,8,0,0")
+        rowBg2.Cols("Auto", "*", "Auto")
+        rowBg2.Add("TextBlock").Grid_Column(0).Name("BgWinTipCon").Text(GetLang("绑定窗口："))
+            .Foreground(labelFg).FontSize(labelFs).VerticalAlignment("Center")
+        CmdEditorForm.WindowBindingCombo(rowBg2, "BackgroundWinCon").Grid_Column(1).Height(26).MinHeight(26).Margin("4,0,0,0").FontSize(11)
+        rowBg2.Add("Button").Grid_Column(2).Name("BtnEditBgWin").Content(GetLang("编辑")).Height(26).MinHeight(26)
+            .HorizontalAlignment("Left").Margin("6,0,0,0").Cursor("Hand")
+
         ; ===== 键盘选项 =====
         gKey := panel.Add("GroupBox").Header(GetLang("键盘选项")).Margin("0,8,0,0")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
@@ -155,7 +176,7 @@ class ToolRecordSettingGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="False" Width="480" Height="450"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="False" Width="480" Height="500"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
@@ -175,6 +196,14 @@ class ToolRecordSettingGui {
         this.ui.Track("JoyTogCon")
         this.ui.Track("JoyIntervalCon")
         this.ui.Track("ShowBorderCon")
+        this.ui.Track("BackgroundTogCon")
+        this.ui.Track("BackgroundWinCon")
+
+        this.ui.OnEvent("BackgroundTogCon", "Checked", ObjBindMethod(this, "OnBackgroundTogChanged"))
+        this.ui.OnEvent("BackgroundTogCon", "Unchecked", ObjBindMethod(this, "OnBackgroundTogChanged"))
+        this.ui.OnEvent("BackgroundWinCon", "SelectionChanged", ObjBindMethod(this, "OnBackgroundWinChanged"))
+        this.ui.OnEvent("BackgroundWinCon", "LostFocus", ObjBindMethod(this, "OnBackgroundWinChanged"))
+        this.ui.OnEvent("BtnEditBgWin", "Click", ObjBindMethod(this, "OnClickEditBgWinBtn"))
 
         this.ui.OnEvent("MouseTogCon", "Checked", ObjBindMethod(this, "OnMouseTogChanged"))
         this.ui.OnEvent("MouseTogCon", "Unchecked", ObjBindMethod(this, "OnMouseTogChanged"))
@@ -208,6 +237,8 @@ class ToolRecordSettingGui {
         this._joy := !!MainSoftData.RecordJoy
         this._joyInterval := Max(1, Integer(MainSoftData.RecordJoyInterval))
         this._showBorder := !!MainSoftData.RecordShowBorder
+        this._background := !!MainSoftData.RecordBackground
+        this._backgroundWin := (MainSoftData.HasProp("RecordBackgroundWin") && MainSoftData.RecordBackgroundWin != "") ? MainSoftData.RecordBackgroundWin : "{宏设置窗口绑定}"
     }
 
     ApplyValuesToUI() {
@@ -224,6 +255,8 @@ class ToolRecordSettingGui {
             this.ui.Update("JoyTogCon", "IsChecked", this._joy ? "True" : "False")
             this.ui.Update("JoyIntervalCon", "Text", String(this._joyInterval))
             this.ui.Update("ShowBorderCon", "IsChecked", this._showBorder ? "True" : "False")
+            this.ui.Update("BackgroundTogCon", "IsChecked", this._background ? "True" : "False")
+            this.ui.Update("BackgroundWinCon", "Text", this._backgroundWin)
             this._RefreshEnabled()
         } finally {
             this._syncing := false
@@ -240,6 +273,9 @@ class ToolRecordSettingGui {
         this.ui.Update("TrailSpeedTipCon", "IsEnabled", trailSpeedOn ? "True" : "False")
         this.ui.Update("JoyIntervalCon", "IsEnabled", this._joy ? "True" : "False")
         this.ui.Update("JoyIntervalTipCon", "IsEnabled", this._joy ? "True" : "False")
+        this.ui.Update("BackgroundWinCon", "IsEnabled", this._background ? "True" : "False")
+        this.ui.Update("BgWinTipCon", "IsEnabled", this._background ? "True" : "False")
+        this.ui.Update("BtnEditBgWin", "IsEnabled", this._background ? "True" : "False")
     }
 
     OnAutoLoosenChanged(state, ctrl, event) {
@@ -278,6 +314,29 @@ class ToolRecordSettingGui {
         if (this._syncing)
             return
         this._showBorder := (event == "Checked")
+    }
+
+    OnBackgroundTogChanged(state, ctrl, event) {
+        if (this._syncing)
+            return
+        this._background := (event == "Checked")
+        this._RefreshEnabled()
+    }
+
+    OnBackgroundWinChanged(state, ctrl, event) {
+        if (this._syncing)
+            return
+        text := state.Has("BackgroundWinCon") ? state["BackgroundWinCon"] : ""
+        this._backgroundWin := text
+    }
+
+    OnClickEditBgWinBtn(state := "", ctrl := "", event := "") {
+        if (MainSoftData.IsModalSubGui && IsObject(this.ui)) {
+            MyFrontInfoGui.OwnerHwnd := (this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
+        } else {
+            MyFrontInfoGui.OwnerHwnd := ""
+        }
+        MyFrontInfoGui.ShowGui(XamlValueBridge(this.ui, "BackgroundWinCon"))
     }
 
     OnTrailModeChanged(state, ctrl, event) {
@@ -321,6 +380,8 @@ class ToolRecordSettingGui {
         this._joy := false
         this._joyInterval := 50
         this._showBorder := true
+        this._background := false
+        this._backgroundWin := "{宏设置窗口绑定}"
         this.ApplyValuesToUI()
     }
 
@@ -372,6 +433,8 @@ class ToolRecordSettingGui {
         MainSoftData.RecordJoy := this._joy
         MainSoftData.RecordJoyInterval := this._joyInterval
         MainSoftData.RecordShowBorder := this._showBorder
+        MainSoftData.RecordBackground := this._background
+        MainSoftData.RecordBackgroundWin := this._backgroundWin
 
         CfgWrite(MainSoftData.RecordAutoLoosen, SettingFile, SettingSection, "RecordAutoLoosen")
         CfgWrite(MainSoftData.RecordHoldMuti, SettingFile, SettingSection, "RecordHoldMuti")
@@ -382,5 +445,7 @@ class ToolRecordSettingGui {
         CfgWrite(MainSoftData.RecordJoy, SettingFile, SettingSection, "RecordJoy")
         CfgWrite(MainSoftData.RecordJoyInterval, SettingFile, SettingSection, "RecordJoyInterval")
         CfgWrite(MainSoftData.RecordShowBorder, SettingFile, SettingSection, "RecordShowBorder")
+        CfgWrite(MainSoftData.RecordBackground, SettingFile, SettingSection, "RecordBackground")
+        CfgWrite(MainSoftData.RecordBackgroundWin, SettingFile, SettingSection, "RecordBackgroundWin")
     }
 }

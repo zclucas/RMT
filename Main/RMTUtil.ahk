@@ -137,6 +137,8 @@ OnSaveSetting(*) {
     CheckAndAddDirty("RecordAutoLoosen", MainSoftData.RecordAutoLoosen)
     CheckAndAddDirty("RecordJoyInterval", MainSoftData.RecordJoyInterval)
     CheckAndAddDirty("RecordShowBorder", MainSoftData.RecordShowBorder)
+    CheckAndAddDirty("RecordBackground", MainSoftData.RecordBackground)
+    CheckAndAddDirty("RecordBackgroundWin", MainSoftData.RecordBackgroundWin)
     CheckAndAddDirty("OCRType", MainSoftData.OCRTypeValue)
     CheckAndAddDirty("ExcelBackend", MainSoftData.ExcelBackend)
 
