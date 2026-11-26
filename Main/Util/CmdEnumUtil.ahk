@@ -78,8 +78,8 @@ CmdEnumSetKey(Data, field, names) {
         Data.%field% := GetConfigKey(Data.%field%, names)
 }
 
-CmdEnumCompareNames() => ["大于", "大于等于", "等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配", "不等于"]
-CmdEnumCompareShowNames() => ["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配"]
+CmdEnumCompareNames() => ["大于", "大于等于", "等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配", "不等于", "变量不存在"]
+CmdEnumCompareShowNames() => ["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配", "变量不存在"]
 CmdEnumLogicNames() => ["且", "或"]
 CmdEnumOperaNames() => ["数值", "随机数值", "字符", "系统", "时间", "删除"]
 ; 界面使用新类别；旧数值枚举顺序仍用于兼容读取。

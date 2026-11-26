@@ -435,7 +435,7 @@ class VoiceEngineMgr {
         if (item.VoiceKeywords == "")
             return
         ; TriggerMacroHandler 内部用表对象定位（tableItem.Index 仅作 UI 槽位），身份=ID
-        TriggerMacroHandler(GetItemTableGlobal(itemID), item)
+        TriggerMacroHandler(GetItemTableGlobal(itemID), item, "语音")
     }
 }
 

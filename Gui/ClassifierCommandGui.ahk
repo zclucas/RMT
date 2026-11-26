@@ -1051,7 +1051,14 @@ class ControlOperationGui extends WindowControlGui {
             this._ComboPush(operatorField, "ClearItems", "")
             for choice in operators
                 this._ComboPush(operatorField, "AddItem", GetLang(choice))
-            this._ComboPush(operatorField, "SelectedIndex", Max(0, CmdEnumIndex(condition[1], operators)))
+            operatorIndex := CmdEnumIndex("等于", operators)
+            for choiceIndex, choice in operators {
+                if (choice == GetLangKey(condition[1])) {
+                    operatorIndex := choiceIndex - 1
+                    break
+                }
+            }
+            this._ComboPush(operatorField, "SelectedIndex", operatorIndex)
             this._ComboPush(valueField, "ClearItems", "")
             if (current && kind == "state") {
                 for state in ["0", "1"]
@@ -1063,7 +1070,7 @@ class ControlOperationGui extends WindowControlGui {
                 this._ComboPush(valueField, "AddItem", reference)
             this._ComboPush(valueField, "IsReadOnly", current && kind == "state" ? "True" : "False")
             this._ComboPush(valueField, "Text", condition[2])
-            this._SetWaitConditionValueVisibility(index, CmdEnumIndex(condition[1], operators) >= 0 ? condition[1] : "等于")
+            this._SetWaitConditionValueVisibility(index, operators[operatorIndex + 1])
         }
     }
 

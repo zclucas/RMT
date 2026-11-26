@@ -22,6 +22,7 @@ RmtRegisterCliCommand()
 if (!RuntimePrecheck())
     ExitApp()
 IconFontStartupCheck()      ;缺失时先补齐字体，再启动 WPF，避免首次启动缓存缺字结果
+FeedbackDiagnostics.Init()
 XAMLHost.Prewarm()
 InitFilePath()              ;初始化文件路径.
 LoadCurMacroSetting()       ;加载当前宏配置

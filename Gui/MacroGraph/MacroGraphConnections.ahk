@@ -199,6 +199,8 @@ class MacroGraphConnectionsMixin {
 
     ; 用户新建连线后：清理旧「分支→后续」模型残留，再加粗并补绑点击
     _OnConnectionsChanged() {
+        if (IsObject(this.ui) && this.ui.wpfHwnd && WinActive("ahk_id " this.ui.wpfHwnd))
+            FeedbackDiagnostics.Edit("修改指令连线", true)
         this._RedirectBranchSuccessorLinks()
         this._ThickenConnections()
         this._RebindPathClicks()

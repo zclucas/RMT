@@ -203,7 +203,7 @@ class TimingScheduler {
             }
 
             if (shouldTrigger) {
-                TriggerMacroHandler(tableItem, index)
+                TriggerMacroHandler(tableItem, index, "定时")
                 ; 时长只约束这一次运行。周期的下一次触发点照常计算，触发时再重新计时。
                 this._ArmTaskDuration(tableItem, index, Data)
             }
@@ -477,7 +477,7 @@ HandleOnSoftStart(tableItem, scheduler := "") {
 
         Data := GetMacroCMDData(item.TimingSerial)
         if (CmdEnumTimingType(Data.Type) == "软件启动时") {
-            TriggerMacroHandler(tableItem, index)
+            TriggerMacroHandler(tableItem, index, "定时")
             if (scheduler != "")
                 scheduler._ArmTaskDuration(tableItem, index, Data)
         }

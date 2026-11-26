@@ -82,7 +82,7 @@ class WindowControl {
 
     static ConditionOperators(kind) => kind == "text"
         ? ["等于", "不等于", "包含", "不包含", "开头是", "结尾是", "为空", "不为空"]
-        : kind == "state" ? ["等于", "不等于"] : ["等于", "不等于", "大于", "大于等于", "小于", "小于等于"]
+        : ["大于", "大于等于", "等于", "不等于", "小于", "小于等于"]
 
     static CommandKey(action) {
         action := this.NormalizeAction(action)

@@ -65,6 +65,10 @@
 
         Data := GetMacroCMDData(GetCmdStr(cmdText))
 
+        ; 搜索无命中、未命中指令时不创建空分栏；有分支时保留真假对及其编辑入口。
+        if (IsSearch && SplitMacro(Data.TrueMacro).Length == 0 && SplitMacro(Data.FalseMacro).Length == 0)
+            return
+
         if (IsIf || IsSearch) {
             TrueRoot := this.MacroTreeViewCon.Add(
                 GetLang("真"), root, this.GetCmdIconStr(GetLang("真")))

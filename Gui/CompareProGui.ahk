@@ -31,8 +31,7 @@ class CompareProGui {
         this.LVRowArr := []     ; [condiStr, logicStr, macro, controlType]
         this.CurItme := 0       ; 右键目标行（保留原生拼写）
 
-        this.CompareTypeStrArr := GetLangArr(["大于", "大于等于", "等于", "小于等于",
-            "小于", "字符包含", "变量存在", "正则匹配", "不等于"])
+        this.CompareTypeStrArr := GetLangArr(CmdEnumCompareNames())
 
         this.CompareTypeStrMap := GetCompareTypeStrMap()
 
@@ -105,7 +104,7 @@ class CompareProGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="640" Height="540"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="660" Height="540"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -138,6 +137,10 @@ class CompareProGui {
     _ParseChipCondi(itemStr) {
         itemStr := Trim(itemStr)
         for op in this.CompareTypeStrArr {
+            suffix := " " op
+            endPos := StrLen(itemStr) - StrLen(suffix) + 1
+            if (IsCompareExistVar(this.CompareTypeStrMap.Get(op, op)) && endPos > 1 && SubStr(itemStr, endPos) == suffix)
+                return [Trim(SubStr(itemStr, 1, endPos - 1)), op, ""]
             needle := " " op " "
             p := InStr(itemStr, needle)
             if (p) {

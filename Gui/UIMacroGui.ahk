@@ -3044,7 +3044,7 @@ class UIMacroGui {
                 || (WorkPoolEnabled() && MyWorkPool.HasItemWork(tableItem.ID, item.ID))) {
                 MyStopMacro(tableItem, item.ID)
             } else {
-                SetTimer(TriggerMacroHandler.Bind(tableItem.ID, item.ID), -1)
+                SetTimer(TriggerMacroHandler.Bind(tableItem.ID, item.ID, "自定义界面"), -1)
             }
         }
         catch as e {

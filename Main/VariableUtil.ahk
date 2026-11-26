@@ -256,3 +256,140 @@ GetVarName(Name) {
     ; 保存目标不能因系统变量显示名转换而绕过名称校验。
     return InStr(Name, "❖") ? Name : GetLangKey(Name)
 }
+
+; 下拉图标表示指令能确定的用途，不参与运行时类型判断。
+GetBuiltinVariableIcon(value) {
+    name := GetBuiltinVarName(Trim(value, "{}"))
+    for category, names in GetBuiltinVarGroups() {
+        for key in names {
+            if (key != name)
+                continue
+            switch category {
+                case "count": return Chr(0xE8EE)
+                case "handle": return Chr(0xE737)
+                case "color": return Chr(0xE790)
+                case "x", "y": return Chr(0xE962)
+                case "clipboard": return Chr(0xE77F)
+                case "calendar", "dateText": return Chr(0xE787)
+                default: return Chr(0xE823)
+            }
+        }
+    }
+    return ""
+}
+
+VariableValueIcon(value) {
+    if (RegExMatch(value, "^\{([^{}\r\n]+)\}$", &reference))
+        return GetBuiltinVariableIcon(reference[1])
+    if (InStr(value, "{") || InStr(value, "}"))
+        return ""
+    return IsNumber(value) ? Chr(0xE8EF) : Chr(0xE8D2)
+}
+
+VariableIconOutput(outputs, name, glyph := "") {
+    name := Trim(String(name))
+    if (name != "" && CustomVariableNameError(name) == "")
+        outputs[name] := outputs.Has(name) && outputs[name] != glyph ? "" : glyph
+}
+
+RegisterVariableIconTypes(cmd, data) {
+    if (!data.HasOwnProp("SerialStr") || data.SerialStr == "")
+        return
+    if (!MySoftData.HasOwnProp("VariableIconSources"))
+        MySoftData.VariableIconSources := Map()
+    outputs := Map()
+    number := Chr(0xE8EF), text := Chr(0xE8D2), coord := Chr(0xE962), clock := Chr(0xE823)
+    switch cmd {
+        case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
+            if (data.ResultToggle) {
+                yes := VariableValueIcon(data.TrueValue), no := VariableValueIcon(data.FalseValue)
+                VariableIconOutput(outputs, data.ResultSaveName, yes == no ? yes : "")
+            }
+            if (data.CoordToogle) {
+                VariableIconOutput(outputs, data.CoordXName, coord)
+                VariableIconOutput(outputs, data.CoordYName, coord)
+            }
+        case "变量", "变量提取", "运算":
+            for i, enabled in data.ToggleArr {
+                if (!enabled)
+                    continue
+                glyph := ""
+                name := cmd == "运算" ? data.UpdateNameArr[i] : data.VariableArr[i]
+                if (cmd == "运算")
+                    glyph := number
+                else if (cmd == "变量") {
+                    type := CmdEnumOpera(data.OperaTypeArr[i])
+                    if (type == "随机数值" || type == "数值")
+                        glyph := number
+                    else if (type == "赋值")
+                        glyph := VariableValueIcon(data.CopyVariableArr[i])
+                    else if (type == "字符")
+                        glyph := text
+                    else if (type == "系统" || type == "时间")
+                        glyph := GetBuiltinVariableIcon(data.CopyVariableArr[i])
+                }
+                VariableIconOutput(outputs, name, glyph)
+            }
+        case "时间":
+            mode := TimeNormSubMode(data)
+            if (mode == "获取时间变量" || mode == "获取时间字符串")
+                VariableIconOutput(outputs, data.Param1, clock)
+            else if (mode == "时间计算")
+                VariableIconOutput(outputs, data.Param4, clock)
+        case "窗口信息", "窗口操作", "窗口管理":
+            for i, label in WindowInfoFields(data.ActionType) {
+                field := "ResultVar" i
+                if (data.HasOwnProp(field) && data.ActionType != "匹配窗口列表") {
+                    glyph := label == "句柄" ? Chr(0xE737) : InStr(label, "坐标") ? coord
+                        : (label == "标题" || label == "类名" || label == "进程名" || label == "程序路径") ? text : number
+                    VariableIconOutput(outputs, data.%field%, glyph)
+                }
+            }
+        default:
+            ; 其他写入入口先登记为未知，避免同名变量保留另一条指令的类型。
+            for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "ResultVar", "ErrorVar", "ControlVar",
+                "TypeVar", "ClassVar", "HwndVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
+                if (!data.HasOwnProp(field))
+                    continue
+                glyph := ""
+                if (cmd == "控件信息") {
+                    if (field == "HwndVar")
+                        glyph := Chr(0xE737)
+                    else if (field == "XVar" || field == "YVar" || field == "WindowXVar" || field == "WindowYVar")
+                        glyph := coord
+                    else if (field == "WidthVar" || field == "HeightVar")
+                        glyph := number
+                    else if (field == "TypeVar" || field == "ClassVar")
+                        glyph := text
+                } else if (cmd == "按键检测" || cmd == "手柄检测")
+                    glyph := Chr(0xE73E)
+                VariableIconOutput(outputs, data.%field%, glyph)
+            }
+    }
+    MySoftData.VariableIconSources[data.SerialStr] := outputs
+    MySoftData.VariableIconsDirty := true
+}
+
+GetVariableDropdownIcon(value) {
+    name := Trim(value, "{}")
+    if ((builtin := GetBuiltinVariableIcon(name)) != "")
+        return builtin
+    if (MySoftData.HasOwnProp("VariableIconSources")) {
+        if (!MySoftData.HasOwnProp("VariableIconsDirty") || MySoftData.VariableIconsDirty) {
+            icons := Map()
+            for _, outputs in MySoftData.VariableIconSources {
+                for key, glyph in outputs
+                    icons[key] := icons.Has(key) && icons[key] != glyph ? "" : glyph
+            }
+            MySoftData.VariableIcons := icons
+            MySoftData.VariableIconsDirty := false
+        }
+        if (MySoftData.VariableIcons.Has(name))
+            return MySoftData.VariableIcons[name]
+    }
+    if (MySoftData.HasOwnProp("HandleVarMap") && MySoftData.HandleVarMap.Has(name))
+        return Chr(0xE737)
+    if (MySoftData.HasOwnProp("TimeVarMap") && MySoftData.TimeVarMap.Has(name))
+        return Chr(0xE823)
+    return ""
+}

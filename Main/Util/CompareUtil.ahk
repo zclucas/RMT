@@ -96,7 +96,7 @@ GetCompareTypeStrMap() {
 }
 
 IsCompareExistVar(ct) {
-    return CmdEnumCompare(ct) == "变量存在"
+    return CmdEnumCompare(ct) == "变量存在" || CmdEnumCompare(ct) == "变量不存在"
 }
 
 ComboIndexToCompareType(idx) {
@@ -105,4 +105,20 @@ ComboIndexToCompareType(idx) {
 
 CompareTypeToComboIndex(ct) {
     return CmdEnumIndex(CmdEnumCompare(ct), CmdEnumCompareShowNames())
+}
+
+; 公共比较符图标，供静态条件行和动态下拉项使用。
+GetCompareOperatorIcon(value) {
+    switch GetLangKey(value) {
+        case "大于": return Chr(0xE76C)
+        case "大于等于": return Chr(0xE76C) Chr(0xE94E)
+        case "等于", "不等于": return Chr(0xE94E)
+        case "小于等于": return Chr(0xE76B) Chr(0xE94E)
+        case "小于": return Chr(0xE76B)
+        case "字符包含", "包含": return Chr(0xE721)
+        case "正则匹配": return Chr(0xE943)
+        case "变量存在": return Chr(0xE73E)
+        case "变量不存在": return Chr(0xE711)
+    }
+    return ""
 }

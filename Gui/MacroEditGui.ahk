@@ -82,6 +82,7 @@ class MacroEditGui {
         this.isContextEdit := false
         this.RecordToggleCon := ""
         this.EditModeCon := ""
+        this._feedbackEditMode := 1
         this.SubMacroEditGui := ""
         this.SubMacroGraphGui := ""
         this.CompareProEditItemGui := ""
@@ -428,6 +429,11 @@ class MacroEditGui {
             this.EditModeCon._value := Integer(state["EditModeCombo"])
         else
             this.EditModeCon._value := 1
+        mode := this.EditModeCon.Value
+        if (!this.HasOwnProp("_feedbackEditMode") || this._feedbackEditMode != mode) {
+            FeedbackDiagnostics.Edit("切换" (mode == 1 ? "逻辑树" : "文本") "模式")
+            this._feedbackEditMode := mode
+        }
         MacroStr := this.GetMacroStr()
         this.MacroTreeViewCon.Visible := this.EditModeCon.Value == 1
         this.MacroEditTextCon.Visible := this.EditModeCon.Value == 2

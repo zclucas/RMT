@@ -657,12 +657,12 @@ class MenuWheelGui {
                 return
             }
             ; 未运行或主进程内运行 → 走统一的开关逻辑
-            OnToggleTriggerMacro(tableItem, macroIndex)
+            OnToggleTriggerMacro(tableItem, macroIndex, "轮盘")
             return
         }
 
         ; 非开关模式：直接启动
-        TriggerMacroHandler(tableItem, macroIndex)
+        TriggerMacroHandler(tableItem, macroIndex, "轮盘")
     }
 
     ; ====== 内部轮盘实现 ======

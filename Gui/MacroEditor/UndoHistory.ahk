@@ -39,6 +39,7 @@
     _PushUndo(captureData := true) {
         if (this._undoBatch > 0)
             return
+        FeedbackDiagnostics.RecordTreeEdit(Error().Stack)
         snap := this._CaptureUndoSnapshot(captureData)
         this._undoStack.Push(snap)
         if (this._undoStack.Length > 100)
@@ -50,6 +51,7 @@
     Undo() {
         if (this._undoStack.Length == 0)
             return
+        FeedbackDiagnostics.Edit("撤销指令编辑")
         snap := this._undoStack[this._undoStack.Length]
         this._redoStack.Push(this._CaptureUndoSnapshot(snap.captureData))
         this._undoStack.Pop()
@@ -60,6 +62,7 @@
     Redo() {
         if (this._redoStack.Length == 0)
             return
+        FeedbackDiagnostics.Edit("重做指令编辑")
         snap := this._redoStack[this._redoStack.Length]
         this._undoStack.Push(this._CaptureUndoSnapshot(snap.captureData))
         this._redoStack.Pop()

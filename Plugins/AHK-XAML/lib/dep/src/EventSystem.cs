@@ -77,6 +77,11 @@ public partial class AhkWpfEngine
         _boundEvents.Add(eventKey);
         try
         {
+            if (ctrlName == "Window" && eventName == "UserValueChanged")
+            {
+                BindUserValueEvents();
+                return;
+            }
             // 可编辑 ComboBox：TextChanged 是内嵌 TextBox（PART_EditableTextBox）的 CLR 事件，
             // ComboBox 自身没有该事件，下方反射 GetEvent 会失败导致绑定静默丢失
             // （如 SearchProGui 坐标框 TextChanged→预览刷新不生效、TextOpsGui ArgsNameCon 同理）。

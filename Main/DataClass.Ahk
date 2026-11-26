@@ -1121,7 +1121,7 @@ class SearchData {
 class SearchAllData extends SearchData {
     __New() {
         super.__New()
-        this.AllSaveName := GetLang("坐标集")
+        this.AllSaveName := "Coords"
         this.AllSort := "上下左右"
         this.MouseActionType := "无动作"
     }

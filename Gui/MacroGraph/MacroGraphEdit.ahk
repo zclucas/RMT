@@ -109,6 +109,9 @@ class MacroGraphEditMixin {
 
     _DeleteSelectedNodes() {
         g := this.graph
+        if (g.selectedNodes.Count == 0)
+            return
+        FeedbackDiagnostics.Edit("删除指令节点", true)
         ids := []
         for id in g.selectedNodes
             ids.Push(id)
@@ -165,6 +168,7 @@ class MacroGraphEditMixin {
         g := this.graph
         if (g.selectedNodes.Count == 0)
             return
+        FeedbackDiagnostics.Edit("复制指令节点", true)
         ; 收集选中节点数据
         copyData := []
         firstX := "", firstY := ""
@@ -202,6 +206,7 @@ class MacroGraphEditMixin {
             return
         if (!this.HasOwnProp("_clipboard") || !this._clipboard || !this._clipboard.nodes)
             return
+        FeedbackDiagnostics.Edit("粘贴指令节点", true)
         this._CaptureTopLevelSuccessorLinks()
         this._SyncPositionsFromGraph()
         g := this.graph

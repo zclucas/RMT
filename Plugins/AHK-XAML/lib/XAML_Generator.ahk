@@ -1,4 +1,5 @@
 class XAMLElement {
+    static ComboItemDecorator := 0
     __New(tag, textContent := "") {
         this._Tag := tag
         this._Props := Map()
@@ -386,6 +387,8 @@ class XAMLElement {
     ; 再由父节点拼接，同一段文本会随层数被反复复制（大窗口实测几百毫秒）；
     ; 这里只在最后拼一次，复杂度从「层数 × 总长」降到「总长」。
     _CollectXaml(parts, indent) {
+        if (this._Tag == "ComboBoxItem" && IsObject(XAMLElement.ComboItemDecorator))
+            XAMLElement.ComboItemDecorator.Call(this)
         if (this._Tag == "Slider" && !this.HasOwnProp("_CustomStyleApplied") && (this._Props.Has("ThumbShape") || this._Props.Has("ThumbWidth") || this._Props.Has("ThumbHeight") || this._Props.Has("ThumbColor") || this._Props.Has("ThumbBg") || this._Props.Has("ThumbBackground") || this._Props.Has("TrackHeight") || this._Props.Has("TrackColor") || this._Props.Has("TrackBg") || this._Props.Has("TrackBackground"))) {
             this._CustomStyleApplied := true
             this._ApplyCustomSliderStyle()

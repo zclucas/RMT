@@ -285,8 +285,11 @@ class SettingMgrGui {
         if (this._applyingUI)
             return
         name := this._MatchSettingName(this._ComboValue(state))
-        if (name != "")
+        if (name != "") {
+            if (name != this._selectedSetting)
+                FeedbackDiagnostics.Record("设置配置管理界面-配置选项")
             this._selectedSetting := name
+        }
     }
 
     _ComboValue(state := unset) {

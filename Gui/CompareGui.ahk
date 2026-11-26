@@ -134,6 +134,8 @@ class CompareGui {
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
+        CmdEditorForm.OutputVariablePlaceholder(saveLeft, "SaveNameCon", "Res", 1)
+
         ; === 底部按钮 ===
         btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(7).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow, "BtnSure")
@@ -141,7 +143,7 @@ class CompareGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="540" Height="' this._FitHeight() '"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" Height="' this._FitHeight() '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._CondiScrollStyles())
 
@@ -218,12 +220,12 @@ class CompareGui {
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         cmpItems := ""
         for t in GetCompareTypeLangArr()
-            cmpItems .= '<ComboBoxItem Content="' this._EscapeXml(t) '"/>'
+            cmpItems .= CmdEditorForm.ComboItemXml(t)
         tip := this._EscapeXml(GetLang("删除"))
         return '<Grid ' ns ' Margin="0,2">'
             . '<Grid.ColumnDefinitions>'
             . '<ColumnDefinition Width="*"/><ColumnDefinition Width="8"/>'
-            . '<ColumnDefinition Width="90"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
+            . '<ColumnDefinition Width="110"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
             . '</Grid.ColumnDefinitions>'
             . '<ComboBox Grid.Column="0" Name="NameCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
@@ -392,7 +394,7 @@ class CompareGui {
         ; 原生 DropDownList.Value 为 1-based，XAML SelectedIndex 为 0-based
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(ObjHasOwnProp(this.Data, "TrueMacro") ? this.Data.TrueMacro : "", 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(ObjHasOwnProp(this.Data, "FalseMacro") ? this.Data.FalseMacro : "", 1))
-        this._SetCombo("SaveNameCon", GetGuiVarArr(), cmd == "" ? "Res" : (this.Data.SaveToggle ? this.Data.SaveName : ""))
+        this._SetCombo("SaveNameCon", GetGuiVarArr(), cmd != "" && this.Data.SaveToggle ? this.Data.SaveName : "")
         logical := ObjHasOwnProp(this.Data, "LogicalType") ? this.Data.LogicalType : "且"
         this.ui.Update("LogicalTypeCon", "SelectedIndex", String(CmdEnumIndex(logical, CmdEnumLogicNames())))
         this._RebuildRows()
@@ -441,6 +443,7 @@ class CompareGui {
             this.ui.Update("CompareTypeCon_" i, "IsEnabled", "True")
             enableVari := !IsCompareExistVar(ComboIndexToCompareType(this._CompareIndex(i)))
             this.ui.Update("VariableCon_" i, "IsEnabled", enableVari ? "True" : "False")
+            this.ui.Update("VariableCon_" i, "Visibility", enableVari ? "Visible" : "Collapsed")
         }
     }
 

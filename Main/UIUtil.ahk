@@ -72,6 +72,7 @@ MainWinReadyTick() {
 
 ;窗口&UI刷新
 InitUI() {
+    CmdEditorForm.InitVariableComboIcons()
     global MacroFileSeedDefaults
     ; 首次启动：先同意免责声明，再显示主界面
     if (!MainSoftData.AgreeAgreement) {
@@ -540,12 +541,102 @@ class CmdEditorForm {
             .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
     }
 
-    ; 下拉项只显示变量名；TextSearch.Text 保留选中后写入编辑框的引用。
+    ; 普通字符串仍用于选择和回读；只在下拉项模板内显示灰色图标。
+    static SearchMouseActionItemStyle(combo, variableCount := false) {
+        template := '<DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
+            . '<TextBlock Text="{Binding}" VerticalAlignment="Center"/>'
+            . '<StackPanel x:Name="ActionIcon" Grid.Column="1" Orientation="Horizontal" Visibility="Collapsed" Margin="12,0,0,0" VerticalAlignment="Center" Opacity="0.65">'
+            . '<TextBlock x:Name="Glyph" Text="&#xE733;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center"/>'
+            . '<TextBlock x:Name="Badge" FontSize="8" Foreground="{DynamicResource TextSub}" Margin="3,0,0,0" VerticalAlignment="Center"/>'
+            . '</StackPanel></Grid><DataTemplate.Triggers>'
+            . '<DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=ComboBoxItem}}" Value="True"><Setter TargetName="ActionIcon" Property="Visibility" Value="Visible"/></DataTrigger>'
+        icons := variableCount ? [["E733", ""], ["E7C2", ""], ["E962", "L"], ["E962", "R"]]
+            : [["E733", ""], ["E7C2", ""], ["E962", "L1"], ["E962", "L2"], ["E962", "R1"]]
+        for index, label in CmdEnumSearchMouseActItems(variableCount) {
+            template .= '<DataTrigger Binding="{Binding}" Value="' EscapeXamlXml(GetLang(label)) '">'
+                . '<Setter TargetName="Glyph" Property="Text" Value="&#x' icons[index][1] ';"/>'
+                . '<Setter TargetName="Badge" Property="Text" Value="' icons[index][2] '"/></DataTrigger>'
+        }
+        template .= '</DataTemplate.Triggers></DataTemplate>'
+        combo.InjectResources('<Style x:Key="SearchMouseActionItem" TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">'
+            . '<Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="ContentTemplate"><Setter.Value>' template '</Setter.Value></Setter></Style>')
+        combo.SetProp("ItemContainerStyle", "{DynamicResource SearchMouseActionItem}")
+    }
+
+    ; 推荐名称只用于占位提示，不写入 ComboBox.Text 或变量列表。
+    static OutputVariablePlaceholder(parent, field, recommended, column) {
+        hint := parent.Add("TextBlock").Grid_Column(column).Name(field "Placeholder")
+            .Text(recommended).Margin("6,0,24,0")
+            .VerticalAlignment("Center").FontSize(11).TextTrimming("CharacterEllipsis")
+            .Foreground("{DynamicResource TextSub}").Opacity("0.65").IsHitTestVisible("False")
+        style := hint.Add("TextBlock.Style").Add("Style").TargetType("TextBlock")
+        style.Add("Setter").Property("Visibility").Value("Collapsed")
+        style.Add("Style.Triggers").Add("DataTrigger").Binding("{Binding Text, ElementName=" field "}").Value("")
+            .Add("Setter").Property("Visibility").Value("Visible")
+    }
+
+    static InitVariableComboIcons() {
+        XAMLHost.ComboItemNormalizer := ObjBindMethod(this, "NormalizeComboItem")
+        XAMLElement.ComboItemDecorator := ObjBindMethod(this, "DecorateComboItem")
+    }
+
+    ; 显示名与回读值分离，图标不会进入变量名或引用。
     static ComboItem(parent, value) {
-        item := parent.Add("ComboBoxItem")
-        if (RegExMatch(value, "^\{([^{}\r\n]+)\}$", &match))
-            return item.Content(match[1]).Tag("{}" value).TextSearch_Text("{}" value)
-        return item.Content(value)
+        item := parent.Add("ComboBoxItem").Content(value)
+        this.DecorateComboItem(item)
+        return item
+    }
+
+    static DecorateComboItem(item) {
+        if (!item._Props.Has("Content") || item._Props.Has("Tag") || item._Children.Length)
+            return
+        label := item._Props["Content"]
+        value := item._Props.Has("TextSearch.Text") ? item._Props["TextSearch.Text"] : label
+        if (SubStr(value, 1, 2) == "{}")
+            value := SubStr(value, 3)
+        reference := RegExMatch(value, "^\{([^{}\r\n]+)\}$", &match)
+        comparisonIcon := GetCompareOperatorIcon(value)
+        glyph := comparisonIcon != "" ? comparisonIcon : GetVariableDropdownIcon(value)
+        if (!reference && glyph == "")
+            return
+        if (reference && label == value)
+            label := match[1]
+        item.Tag("{}" value).TextSearch_Text("{}" value)
+        if (comparisonIcon != "") {
+            this.DecorateCompareItem(item, label, value, glyph)
+            return
+        }
+        if (glyph == "") {
+            item.Content(label)
+            return
+        }
+        item._Props.Delete("Content")
+        item.HorizontalContentAlignment("Stretch")
+        content := item.Add("DockPanel").LastChildFill("True")
+        icon := content.Add("Grid").DockPanel_Dock("Right").Margin("12,0,0,0").VerticalAlignment("Center").Opacity("0.65")
+        icon.Add("TextBlock").Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+            .Foreground("{DynamicResource TextSub}")
+        content.Add("TextBlock").Text(label).VerticalAlignment("Center")
+    }
+
+    ; 图标属于下拉项模板，收起后的比较框只显示文字，避免挤占比较符宽度。
+    static DecorateCompareItem(item, label, value, glyph) {
+        item.Content(label).HorizontalContentAlignment("Stretch")
+        template := item.Add("ComboBoxItem.Template").Add("ControlTemplate").TargetType("ComboBoxItem")
+        grid := template.Add("Border").Name("CompareItemBg").Padding("6,4").CornerRadius(3)
+            .Background("Transparent").Add("Grid").Cols("*", "Auto")
+        grid.Add("ContentPresenter").VerticalAlignment("Center")
+        icon := grid.Add("Grid").Grid_Column(1).Margin("12,0,0,0").VerticalAlignment("Center").Opacity("0.65")
+        icon.Add("TextBlock").Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+            .Foreground("{DynamicResource TextSub}")
+        if (GetLangKey(value) == "不等于")
+            icon.Add("Line").X1(0).Y1(12).X2(12).Y2(0).Width(12).Height(12)
+                .HorizontalAlignment("Center").VerticalAlignment("Center")
+                .Stroke("{DynamicResource TextSub}").StrokeThickness(1)
+        triggers := template.Add("ControlTemplate.Triggers")
+        for property in ["IsHighlighted", "IsSelected"]
+            triggers.Add("Trigger").Property(property).Value("True")
+                .Add("Setter").TargetName("CompareItemBg").Property("Background").Value("{DynamicResource EditHoverBg}")
     }
 
     static ComboItemUpdate(name, value) {
@@ -555,11 +646,16 @@ class CmdEditorForm {
     }
 
     static NormalizeComboItem(&property, &value) {
-        if (property != "AddItem" || !RegExMatch(value, "^\{([^{}\r\n]+)\}$", &match))
+        if (property != "AddItem" || (!RegExMatch(value, "^\{([^{}\r\n]+)\}$") && GetVariableDropdownIcon(value) == "" && GetCompareOperatorIcon(value) == ""))
             return
         property := "AddXamlItem"
-        value := '<ComboBoxItem xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Content="'
-            . EscapeXamlXml(match[1]) '" Tag="{}' EscapeXamlXml(value) '" TextSearch.Text="{}' EscapeXamlXml(value) '"/>'
+        value := this.ComboItemXml(value)
+    }
+
+    static ComboItemXml(value) {
+        item := XAML_Generator("ComboBoxItem").SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation").Content(value)
+        this.DecorateComboItem(item)
+        return item.ToString()
     }
 
     ; 等待变量与控件值条件共用固定高度、居中添加按钮和稳定的滚动条列。
@@ -610,15 +706,20 @@ class CmdEditorForm {
 
     static WindowBindingCombo(parent, name) {
         combo := this.Combo(parent, name, true).IsTextSearchEnabled("True")
-        for option in this.WindowBindingOptions
-            combo.Add("ComboBoxItem").Content(GetLang(option[1])).TextSearch_Text("{}" option[2])
+        for option in this.WindowBindingOptions {
+            item := combo.Add("ComboBoxItem").Content(GetLang(option[1])).TextSearch_Text("{}" option[2])
+            this.DecorateComboItem(item)
+        }
         return combo
     }
 
     static WindowBindingItemsXaml() {
         items := ""
-        for option in this.WindowBindingOptions
-            items .= '<ComboBoxItem Content="' EscapeXamlXml(GetLang(option[1])) '" TextSearch.Text="{}' option[2] '"/>'
+        for option in this.WindowBindingOptions {
+            item := XAML_Generator("ComboBoxItem").Content(GetLang(option[1])).TextSearch_Text("{}" option[2])
+            this.DecorateComboItem(item)
+            items .= item.ToString()
+        }
         return items
     }
 

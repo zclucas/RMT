@@ -17,6 +17,7 @@ class ErrorMsgBoxGui {
     }
 
     ShowGui(Desc) {
+        this._diagnostics := FeedbackDiagnostics.Capture(this.Hwnd())
         this.ErrorList.Push(Desc)
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
@@ -27,14 +28,14 @@ class ErrorMsgBoxGui {
             this._closed := true
     }
 
-    GetErrorText() {
+    GetErrorText(includeContext := true) {
         text := ""
         for i, error in this.ErrorList {
             if (i > 1)
                 text .= "`n" . "=" . "=" . "=" . "=" . "=" . "`n"
             text .= error
         }
-        return text
+        return includeContext ? text "`n`n" FeedbackDiagnostics.Report(this._diagnostics) : text
     }
 
     Hwnd() {
@@ -54,6 +55,14 @@ class ErrorMsgBoxGui {
         main.Rows(titleHeight, "*")
 
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight, "BtnClose")
+        ; Cols 会新增定义，先替换标准标题栏原有的两列。
+        chrome.Root._Children.RemoveAt(1)
+        chrome.Root.Cols("Auto", "*", "Auto")
+        chrome.Btns.Grid_Column(2)
+        chrome.Root.Add("TextBlock").Grid_Column(1).Text(this._diagnostics.environment)
+            .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("18,0,10,0")
+            .Foreground("{DynamicResource TextSub}").FontSize(11).FontWeight("Normal")
+            .TextTrimming("CharacterEllipsis").ToolTip(this._diagnostics.environment)
         closeBtn := chrome.Close
 
         ; === 内容 ===
@@ -75,7 +84,7 @@ class ErrorMsgBoxGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", 0)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="520" Height="325"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title "  " this._diagnostics.environment) '" Width="720" Height="420" MinWidth="600"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -123,9 +132,9 @@ class ErrorMsgBoxGui {
 
     ; 把这段报错原样带进反馈窗口，用户只需补复现步骤就能发帖
     OnFeedbackClick(state, ctrl, event) {
-        txt := this.GetErrorText()
+        txt := this.GetErrorText(false)
         this._CloseWindow()
-        try FeedbackGui.ShowGui("bug", txt)
+        try FeedbackGui.ShowGui("bug", txt, this._diagnostics)
     }
 
 }

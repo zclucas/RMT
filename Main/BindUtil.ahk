@@ -269,8 +269,10 @@ OnSuspendHotkey(*) {
         MyCMDReportAciton(tipStr)
 }
 
-OnPauseHotKey(*) {
+OnPauseHotKey(args*) {
     MainSoftData.IsPause := !MainSoftData.IsPause
+    source := args.Length && IsObject(args[1]) ? "界面按钮" : FeedbackDiagnostics.Source()
+    FeedbackDiagnostics.Record((MainSoftData.IsPause ? "暂停" : "继续") "所有宏（" source "）")
     UIControls.PauseToggle.Value := MainSoftData.IsPause
 
     for tableItem in MySoftData.TableInfo {
@@ -299,6 +301,8 @@ OnPauseHotKey(*) {
 }
 
 SetPauseState(state) {
+    if (MainSoftData.IsPause != state)
+        FeedbackDiagnostics.Record((state ? "暂停" : "继续") "所有宏（" FeedbackDiagnostics.Source() "）")
     UIControls.PauseToggle.Value := state
     MainSoftData.IsPause := state
 
@@ -312,8 +316,10 @@ SetPauseState(state) {
         MySoftData.SpecialTableItem.Items[1].Pause := state
 }
 
-OnKillAllMacro(*) {
+OnKillAllMacro(args*) {
     global MySoftData, MyWorkPool
+    source := args.Length && IsObject(args[1]) ? "界面按钮" : FeedbackDiagnostics.Source()
+    FeedbackDiagnostics.Record("终止所有宏（" source "）")
     ; 只停正在跑的宏，不要取消 AI 对话；取消走输入框暂停按钮
 
     shouldPlayStopTip := false
@@ -1143,7 +1149,7 @@ OnBindKeyUp(key, *) {
 }
 
 ; 开关触发：表身份=TableItem 对象
-OnToggleTriggerMacro(tableItem, itemIndex) {
+OnToggleTriggerMacro(tableItem, itemIndex, source := "") {
     if (MainSoftData.IsSuspend)
         return
     if (!IsObject(tableItem))
@@ -1160,6 +1166,11 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
     tableID := tableItem.ID
     itemID := item.ID
 
+    isStopping := WorkPoolEnabled() ? (item.ColorState == 1 || item.ColorState == 2) : item.ToggleState
+    if (!isStopping)
+        FeedbackDiagnostics.Macro(tableItem, itemIndex, "触发", source)
+    else
+        FeedbackDiagnostics.Macro(tableItem, itemIndex, "停止", source)
     if (WorkPoolEnabled()) {
         SetTableItemState(tableItem, itemIndex, 1)
         MyWorkPool.PrepareItemRun(tableID, itemID)
@@ -1190,9 +1201,9 @@ OnToggleTriggerMacro(tableItem, itemIndex) {
 }
 
 ; 触发宏入口：表身份=TableItem 对象（位置不代表身份）
-TriggerMacroHandler(tableItem, itemIndex, *) => StartTriggeredMacro(tableItem, itemIndex)
+TriggerMacroHandler(tableItem, itemIndex, source := "", *) => StartTriggeredMacro(tableItem, itemIndex, 0, 0, source)
 
-StartTriggeredMacro(tableItem, itemIndex, press := 0, trigger := 0) {
+StartTriggeredMacro(tableItem, itemIndex, press := 0, trigger := 0, source := "") {
     if (MainSoftData.IsSuspend)
         return
     if (!IsObject(tableItem))
@@ -1227,6 +1238,7 @@ StartTriggeredMacro(tableItem, itemIndex, press := 0, trigger := 0) {
         if ((press && press.released) || (usesWorker && MyWorkPool.HasItemWork(tableID, itemID)))
             return
 
+        FeedbackDiagnostics.Macro(tableItem, itemIndex, "触发", source)
         ; 松开只认这次成功发起的运行。其他来源重新启动同一条宏时会替换这个身份。
         item.LoosenStopRun := press
         if (press)

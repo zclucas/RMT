@@ -368,7 +368,7 @@ class NetworkServer {
     ; 宏执行期间的运行时错误不回传调用方（响应已发出），仅由既有 ErrorHandler/日志链路落日志
     DispatchMacro(tableItem, itemID) {
         try
-            TriggerMacroHandler(tableItem, itemID)
+            TriggerMacroHandler(tableItem, itemID, "网络")
         catch as e {
             RMTLogSysError("网络触发", "宏派发异常: id=" itemID " err=" e.Message)
         }
@@ -394,7 +394,7 @@ class NetworkServer {
             itemIndex := GetItemIndexInTable(tableItem, itemID)
             if (itemIndex < 1)
                 return
-            OnToggleTriggerMacro(tableItem, itemIndex)
+            OnToggleTriggerMacro(tableItem, itemIndex, "网络")
         } catch as e {
             RMTLogSysError("网络触发", "宏开启异常: id=" itemID " err=" e.Message)
         }

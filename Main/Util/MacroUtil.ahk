@@ -2021,6 +2021,8 @@ ReplaceKeySend(tableID, itemID, state) {
 
 ;按钮回调
 MenuReload(*) {
+    if (IsSet(FeedbackDiagnostics))
+        FeedbackDiagnostics.Record("配置操作-重载软件")
     CfgWrite(true, SettingFile, SettingSection, "IsReload")
     SafeReload()
 }

@@ -1296,7 +1296,7 @@ class WorkPool {
                         HandleWorkerGraphBranches(wd, tIdx, iIdx, nodeSerials)
                     case "TR":
                         ; Worker 请求主进程触发（TR_MACRO 分支指令）：args = tableID, itemID
-                        TriggerMacroHandler(args[1], args[2])
+                        TriggerMacroHandler(args[1], args[2], "宏指令")
                 }
             } catch {
             }

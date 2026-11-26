@@ -282,6 +282,7 @@ class VirtualListHost {
         id := p[1], action := p[2]
         try RmtDialog._Trace("VL_CLICK id=" id " action=" action)
         tableItem := MySoftData.TableInfo[t]
+        FeedbackDiagnostics.ListAction(tableItem, action)
         if (SubStr(id, 1, 1) == "A") {
             OnItemAddFoldBtnClick(tableItem, tableItem.Folds.Length, event)
             return
@@ -379,6 +380,7 @@ class VirtualListHost {
         p := StrSplit(payload, US)
         if (p.Length < 3)
             return
+        FeedbackDiagnostics.ListAction(MySoftData.TableInfo[t], p[2], true)
         this._ApplyChange(MySoftData.TableInfo[t], p[1], p[2], p[3])
     }
 

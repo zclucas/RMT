@@ -368,9 +368,10 @@ TryGetCompareOperand(&value, tableItem, index, operand, variTip := true) {
 
 DoCompare(&currentComparison, tableItem, index, CompareType, Name, OtherValue) {
     CompareType := CmdEnumCompare(CompareType)
-    if (CompareType == "变量存在") {
-        currentComparison := RegExMatch(Name, "^\{([^{}\r\n]+)\}$", &reference)
-            && TryGetTabVarValue(&Value, tableItem, index, GetBuiltinVarName(reference[1]), false, false)
+    if (IsCompareExistVar(CompareType)) {
+        isReference := RegExMatch(Name, "^\{([^{}\r\n]+)\}$", &reference)
+        exists := isReference && TryGetTabVarValue(&Value, tableItem, index, GetBuiltinVarName(reference[1]), false, false)
+        currentComparison := isReference && (CompareType == "变量不存在" ? !exists : exists)
         return true
     }
     ; 只有完整的 {变量} 引用才取值，裸文本不再随运行时变量表改变含义。

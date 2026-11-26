@@ -607,7 +607,7 @@ class GestureTriggers {
         if (!this.CanRun(gesture))
             return
         if (gesture.FoldID == "") {
-            TriggerMacroHandler(gesture.TableID, gesture.ItemID)
+            TriggerMacroHandler(gesture.TableID, gesture.ItemID, "手势")
             return
         }
         tableItem := GetTableByID(gesture.TableID)

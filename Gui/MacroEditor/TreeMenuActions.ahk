@@ -44,6 +44,7 @@
                 item := this._SpecialItem()
                 if (item && item.ColorState != 0)
                     return
+                FeedbackDiagnostics.Edit("运行调试")
                 this.ResetDebugState()
                 MacroStr := this.GetMacroStr()
                 MacroStr := GetLangMacro(macroStr, 2)
@@ -57,22 +58,27 @@
             }
             case this._ContinueLabel():
             {
+                FeedbackDiagnostics.Edit("继续调试")
                 this.ContinueRun()
             }
             case this._StepOverLabel():
             {
+                FeedbackDiagnostics.Edit("逐过程调试")
                 this.StepOver()
             }
             case this._StepIntoLabel():
             {
+                FeedbackDiagnostics.Edit("逐语句调试")
                 this.StepInto()
             }
             case this._StepOutLabel():
             {
+                FeedbackDiagnostics.Edit("跳出调试")
                 this.StepOut()
             }
             case this._RunToCursorLabel():
             {
+                FeedbackDiagnostics.Edit("运行到光标")
                 this.RunToCursor()
             }
             case this._ToggleSkipLabel():
@@ -81,6 +87,7 @@
             }
             case GetLang("终止"):
             {
+                FeedbackDiagnostics.Edit("终止调试")
                 KillSingleTableMacro(MySoftData.SpecialTableItem)
                 this.ResetDebugState()
                 if (MyCMDTipGui._IsVisible())
@@ -185,6 +192,7 @@
             }
             case GetLang("复制"):
             {
+                FeedbackDiagnostics.Edit("复制指令")
                 selectedItems := this.GetMultiSelectedItems()
                 if (selectedItems.Length <= 1) {
                     newCmd := FullCopyCmd(cleanItemText)
@@ -220,6 +228,7 @@
                     Toast.Show(GetLang("已粘贴"))
             }
             case "SharedCopy":
+                FeedbackDiagnostics.Edit("共享复制指令")
             {
                 ; 共享复制：原样复制指令文本，不重新分配内部序列号，方便分享到其他宏/其他设备
                 selectedItems := this.GetMultiSelectedItems()
@@ -247,6 +256,7 @@
                 Toast.Show(GetLang("已复制"))
             }
             case "BranchCopy":
+                FeedbackDiagnostics.Edit("复制分支指令")
             {
                 ; 分支／循环体容器不是实际指令，复制时应复制其内部宏内容。
                 if (!this.IsContainerNode(cleanItemText))
@@ -272,6 +282,7 @@
                 Toast.Show(GetLang("已复制"))
             }
             case "BranchSharedCopy":
+                FeedbackDiagnostics.Edit("共享复制分支指令")
             {
                 ; 共享复制保留分支內部的原始宏文字，不重新分配内部序列号。
                 if (!this.IsContainerNode(cleanItemText))

@@ -153,6 +153,7 @@ class MacroGraphGui {
     ; ----------------------------------------------------------------- 入口
 
     ShowGui(macroStr, windowBindingContext := "") {
+        FeedbackDiagnostics.Edit("切换流程图模式")
         this._sessionId += 1
         this._closeHandled := false
         this._CloseUI()
@@ -386,6 +387,7 @@ class MacroGraphGui {
     ; 切换到逻辑树：单链路直接切换；多链路（不含搜索/如果真假分支）需确认强行切换
     ; ConvertGraphToLinearMacroInPlace 会递归把循环/搜索/如果等分支内的嵌套图形开始节点一并转为线性宏
     _OnSwitchToTree() {
+        FeedbackDiagnostics.Edit("切换逻辑树模式", true)
         this._SaveGraph()
         if (GraphHasParallelOrDisconnectedNodes(this.startSerial)) {
             tip := GetLang("多链路指令无法切换到逻辑树编辑器") "`n"
@@ -740,6 +742,7 @@ class MacroGraphGui {
     OnEditorSure(id, cmd) {
         if (!this.cmdNodes.Has(id))
             return
+        FeedbackDiagnostics.Edit("修改指令节点", true)
         oldType := this._ParseNodeCommand(this.cmdNodes[id].CurCMD).type
         this.cmdNodes[id].CurCMD := cmd
         dEdit := this._ParseNodeCommand(cmd)

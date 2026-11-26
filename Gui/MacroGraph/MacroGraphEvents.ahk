@@ -284,6 +284,7 @@ class MacroGraphEventsMixin {
             return
         parts := StrSplit(state["DragCoords"], ",")
         if (parts.Length >= 2) {
+            FeedbackDiagnostics.Record("宏流程图界面-拖动指令节点", "graph-node-drag")
             this.pos[id].x := Number(parts[1]) - this.graph.offsetX
             this.pos[id].y := Number(parts[2]) - this.graph.offsetY
             ; 注：搜索节点拖动时不再联动真/假分支节点（分支可独立摆放），仅引擎自动刷新相关连线

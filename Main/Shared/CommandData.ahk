@@ -114,6 +114,8 @@ GetMacroCMDData(serialStr) {
     Data := saveStr == "" ? DataClass() : JSON.parse(saveStr, , false)
     Data.SerialStr := normalizedSerialStr
     NormalizeCommandData(cmd, Data)
+    if (saveStr != "")
+        RegisterVariableIconTypes(cmd, Data)
     MySoftData.DataCacheMap[normalizedSerialStr] := Data
     return Data
 }
@@ -197,6 +199,7 @@ SaveMacroCMDData(Data) {
     NormalizeCommandData(cmdKey, Data)
     saveStr := JSON.stringify(Data, 0)
     CfgWrite(saveStr, DataFile, SettingSection, Data.SerialStr)
+    RegisterVariableIconTypes(cmdKey, Data)
     if (cmdKey == "变量")
         RegisterHandleVariableRows(Data)
     if (MySoftData.DataCacheMap.Has(Data.SerialStr))

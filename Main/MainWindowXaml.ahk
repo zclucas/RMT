@@ -739,6 +739,7 @@ class MainWin {
         ; ComboBox.SelectionChanged 会冒泡到 TabControl；同页再入不重渲，避免切页/生成行时抖动
         if (idx == MainSoftData.TableIndex && this.HasOwnProp("_renderedTabs") && this._renderedTabs.Has(idx))
             return
+        FeedbackDiagnostics.Record("切换主界面-" FeedbackDiagnostics.TableLabel(MySoftData.TableInfo[idx]) "页签")
         this.HideSideDebugTools()
         MainSoftData.TableIndex := idx
         ; 惰性构建：首次切到某个页签才生成它的内容（启动时只建当前页签）

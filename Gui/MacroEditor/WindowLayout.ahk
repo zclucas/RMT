@@ -509,6 +509,7 @@
         }
         this.ui.Update("EditModeCombo", "SelectedIndex", "0")
         try this.EditModeCon._value := 1
+        this._feedbackEditMode := 1
         this._SyncModeSeg(1)
 
         if (!XamlWin.Open(this.ui, "", XamlWin.Owner(this)))

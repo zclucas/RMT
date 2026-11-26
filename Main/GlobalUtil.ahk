@@ -14,6 +14,7 @@
 #Include ..\Plugins\AHK-XAML\lib\XAML_Dialog.ahk
 #Include ..\Plugins\AHK-XAML\lib\AXML.ahk
 #Include Util\XamlWin.ahk
+#Include Util\FeedbackDiagnostics.ahk
 #Include Util\HelpDocWin.ahk
 #Include Util\ToastUtil.ahk
 #Include Util\NotificationCenter.ahk

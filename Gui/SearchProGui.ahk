@@ -183,6 +183,7 @@ class SearchProGui {
                 .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
                 .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
                 .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            CmdEditorForm.SearchMouseActionItemStyle(mac, true)
             for t in GetLangArr(CmdEnumSearchMouseActItems(true))
                 mac.Add("ComboBoxItem").Content(t)
             coord.Add("TextBlock").Grid_Row(3).Grid_Column(0).Name("SpeedTipCon").Text(GetLang("移动速度：")).ToolTip(GetLang("左侧填写移动速度，右侧填写点击次数。")).VerticalAlignment("Center").HorizontalAlignment("Left")
@@ -342,6 +343,7 @@ class SearchProGui {
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
             .Width(this.IsAll ? "{Binding ActualWidth, ElementName=SearchCountCon}" : "{Binding ActualWidth, ElementName=SpeedCon}").HorizontalAlignment("Left")
+        CmdEditorForm.OutputVariablePlaceholder(resCol, "ResultSaveNameCon", "Res", 1)
         if (this.IsAll) {
             this.BuildAllArrayField(saveRow)
         } else {
@@ -357,6 +359,8 @@ class SearchProGui {
                 .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
                 .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
                 .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            CmdEditorForm.OutputVariablePlaceholder(coordCol, "CoordXNameCon", "Resx", 1)
+            CmdEditorForm.OutputVariablePlaceholder(coordCol, "CoordYNameCon", "ResY", 3)
         }
         btnRow := body.Add("StackPanel").Grid_Row(5).Grid_ColumnSpan(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow, "BtnSure", "4,0")
@@ -627,10 +631,10 @@ class SearchProGui {
         }
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(this.Data.TrueMacro, 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(this.Data.FalseMacro, 1))
-        this._SetCombo("ResultSaveNameCon", this.DLVariableArr, cmd == "" ? "Res" : (this.Data.ResultToggle ? this.Data.ResultSaveName : ""))
+        this._SetCombo("ResultSaveNameCon", this.DLVariableArr, cmd != "" && this.Data.ResultToggle ? this.Data.ResultSaveName : "")
         if (!this.IsAll) {
-            this._SetCombo("CoordXNameCon", this.DLVariableArr, cmd == "" ? "ResX" : (this.Data.CoordToogle ? this.Data.CoordXName : ""))
-            this._SetCombo("CoordYNameCon", this.DLVariableArr, cmd == "" ? "ResY" : (this.Data.CoordToogle ? this.Data.CoordYName : ""))
+            this._SetCombo("CoordXNameCon", this.DLVariableArr, cmd != "" && this.Data.CoordToogle ? this.Data.CoordXName : "")
+            this._SetCombo("CoordYNameCon", this.DLVariableArr, cmd != "" && this.Data.CoordToogle ? this.Data.CoordYName : "")
 
             ; 建窗之前 Query 取不到 SearchTypeCon 的值，搜索模式按数据里的类型判断，
             ; 否则窗口类搜索会被当成屏幕模式，随后模式切换事件再把已保存的鼠标动作清成无动作。

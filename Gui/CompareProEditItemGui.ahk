@@ -143,7 +143,7 @@ class CompareProEditItemGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui._batchEditorRefresh := true
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="540" Height="' this._FitHeight() '"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" Height="' this._FitHeight() '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._CondiScrollStyles())
 
@@ -217,12 +217,12 @@ class CompareProEditItemGui {
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         cmpItems := ""
         for t in GetCompareTypeLangArr()
-            cmpItems .= '<ComboBoxItem Content="' this._EscapeXml(t) '"/>'
+            cmpItems .= CmdEditorForm.ComboItemXml(t)
         tip := this._EscapeXml(GetLang("删除"))
         return '<Grid ' ns ' Margin="0,2">'
             . '<Grid.ColumnDefinitions>'
             . '<ColumnDefinition Width="*"/><ColumnDefinition Width="8"/>'
-            . '<ColumnDefinition Width="90"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
+            . '<ColumnDefinition Width="110"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
             . '</Grid.ColumnDefinitions>'
             . '<ComboBox Grid.Column="0" Name="NameCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
@@ -419,6 +419,7 @@ class CompareProEditItemGui {
             this.ui.Update("CompareTypeCon_" i, "IsEnabled", canEdit ? "True" : "False")
             enableVari := canEdit && !IsCompareExistVar(this._CompareTypeIndex(i))
             this.ui.Update("VariableCon_" i, "IsEnabled", enableVari ? "True" : "False")
+            this.ui.Update("VariableCon_" i, "Visibility", IsCompareExistVar(this._CompareTypeIndex(i)) ? "Collapsed" : "Visible")
         }
     }
 
@@ -459,7 +460,7 @@ class CompareProEditItemGui {
             condiStr := ""
             loop this.ToggleArr.Length {
                 i := A_Index
-                if (this.ui.Query("CompareTypeCon_" i) != GetLang("变量存在")) {
+                if (!IsCompareExistVar(this._CompareTypeIndex(i))) {
                     condiStr .= this.ui.Query("NameCon_" i) " " this.ui.Query("CompareTypeCon_" i) " " this.ui.Query("VariableCon_" i)
                 }
                 else {

@@ -165,6 +165,7 @@ class SearchComboGui {
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+        CmdEditorForm.SearchMouseActionItemStyle(mac, true)
         for t in GetLangArr(CmdEnumSearchMouseActItems(true))
             mac.Add("ComboBoxItem").Content(t)
 
@@ -258,10 +259,13 @@ class SearchComboGui {
     }
 
     _AddSaveCombo(parent, name, column) {
-        return parent.Add("ComboBox").Name(name).Grid_Column(column).Height(28).MinHeight(28)
+        combo := parent.Add("ComboBox").Name(name).Grid_Column(column).Height(28).MinHeight(28)
             .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11").IsEditable("True")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+        recommended := name == "ResultSaveNameCon" ? "Res" : name == "CoordXNameCon" ? "Resx" : "ResY"
+        CmdEditorForm.OutputVariablePlaceholder(parent, name, recommended, column)
+        return combo
     }
 
     ; ---------------- 数据读写辅助 ----------------
@@ -1573,9 +1577,9 @@ class SearchComboGui {
         this.ui.Update("ClickCountCon", "Text", CmdEnumMouseAct(this.Data.MouseActionType) == "移动至目标点击2次" ? 2 : this.Data.ClickCount)
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(this.Data.TrueMacro, 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(this.Data.FalseMacro, 1))
-        this._SetCombo("ResultSaveNameCon", this.DLVariableArr, cmd == "" ? "Res" : (this.Data.ResultToggle ? this.Data.ResultSaveName : ""))
-        this._SetCombo("CoordXNameCon", this.DLVariableArr, cmd == "" ? "ResX" : (this.Data.CoordToogle ? this.Data.CoordXName : ""))
-        this._SetCombo("CoordYNameCon", this.DLVariableArr, cmd == "" ? "ResY" : (this.Data.CoordToogle ? this.Data.CoordYName : ""))
+        this._SetCombo("ResultSaveNameCon", this.DLVariableArr, cmd != "" && this.Data.ResultToggle ? this.Data.ResultSaveName : "")
+        this._SetCombo("CoordXNameCon", this.DLVariableArr, cmd != "" && this.Data.CoordToogle ? this.Data.CoordXName : "")
+        this._SetCombo("CoordYNameCon", this.DLVariableArr, cmd != "" && this.Data.CoordToogle ? this.Data.CoordYName : "")
 
         MouseDLArr := GetLangArr(CmdEnumSearchMouseActItems(true))
         this.ui.Update("MouseActionTypeCon", "ClearItems", "")

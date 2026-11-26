@@ -90,6 +90,10 @@ class CodeBox {
 }
 
 class XAMLHost {
+    ; 可选下拉项转换器，由宿主应用注册；通用库不依赖业务变量。
+    static ComboItemNormalizer := 0
+    ; 可选的业务观察器；界面库不依赖应用的反馈系统。
+    static ActivityObserver := 0
     static LastTheme := "Dark Mica (Win 11)"
     static LastThemeIni := ""
     static LastScale := "Balanced"
@@ -224,6 +228,8 @@ class XAMLHost {
             OnMessage(0x004A, ObjBindMethod(XAMLHost, "OnCopyData"), 255)
             XAMLHost._msgHooked := true
         }
+        if (IsObject(XAMLHost.ActivityObserver))
+            try XAMLHost.ActivityObserver.Call(this, "Window", "Created", Error().Stack)
     }
 
     OnEvent(controlName, eventName, callback, priority := 0) {
@@ -260,6 +266,8 @@ class XAMLHost {
     }
 
     Update(controlName, propertyName, valueStr) {
+        if (propertyName == "AddItem" && IsObject(XAMLHost.ComboItemNormalizer))
+            XAMLHost.ComboItemNormalizer.Call(&propertyName, &valueStr)
         ; 动态注入的 XAML（AddXamlItem/InsertXamlItem/Document）与 Show 一致应用字体缩放，
         ; 否则设置页等运行时内容不随「字体大小」缩放，导致与主题窗口等烘焙内容字号不一致
         if (propertyName = "AddXamlItem" || propertyName = "InsertXamlItem" || propertyName = "Document")
@@ -500,6 +508,8 @@ class XAMLHost {
 
             propertyName := updateObj.PropertyName
             val := String(updateObj.Value)
+            if (propertyName == "AddItem" && IsObject(XAMLHost.ComboItemNormalizer))
+                XAMLHost.ComboItemNormalizer.Call(&propertyName, &val)
             if (propertyName = "AddXamlItem" || propertyName = "InsertXamlItem" || propertyName = "Document")
                 val := XAMLHost.ApplyFontSizeDelta(val, this.IsFontScaleSkipped())
             else if (propertyName = "FontSizeCustom" && IsNumber(val)) {
@@ -3353,6 +3363,9 @@ class XAMLHost {
         }
 
         baseEventName := eventName
+        ; 在业务回调执行前记录，回调报错时仍保留触发错误的那一步。
+        if (IsObject(XAMLHost.ActivityObserver))
+            try XAMLHost.ActivityObserver.Call(instance, ctrlName, eventName)
         extraArg := ""
         if InStr(eventName, ":") {
             parts := StrSplit(eventName, ":", , 2)

@@ -20,6 +20,7 @@ global XAML_IN_PROCESS_PREVIEW := false
 ;资源保存（带脏检查优化：只写入实际发生变化的配置项）
 OnSaveSetting(*) {
     global MySoftData, MyWorkPool, MyHotReloadBus, MyMainWin, RMTLogSysMinLevel
+    FeedbackDiagnostics.Record("配置操作-应用并保存")
     ; 主窗句柄回传前控件还不存在（启动链现在不阻塞等句柄），此时按保存会取到空控件，直接忽略
     if (!IsObject(MainSoftData.MyGui)) {
         XamlUiDiag("OnSaveSetting 忽略：主窗尚未就绪", "MainWin")
@@ -768,7 +769,7 @@ InitFilePath() {
     InitDataFilePaths(A_WorkingDir)
 }
 
-StopMacro(tableItem, itemIndex, playStopTip := false) {
+StopMacro(tableItem, itemIndex, playStopTip := false, source := "") {
     if (!IsObject(tableItem))
         tableItem := GetTableByID(String(tableItem))
     if (!tableItem)
@@ -786,6 +787,7 @@ StopMacro(tableItem, itemIndex, playStopTip := false) {
     if (playStopTip && item.StopTipSound == 2)
         PlayTipSound(3)
     item.GraphBranchCount := 0
+    FeedbackDiagnostics.Macro(tableItem, itemIndex, "停止", source)
 
     ; 多线程：搜图等 DllCall 会卡住 Worker，协作式 Killed/ST 不可靠，直接杀进程
     if (WorkPoolEnabled()) {
@@ -1017,6 +1019,8 @@ SetItemPauseState(tableItem, itemIndex, state) {
     item := tableItem.Items[itemIndex]
     if (!item)
         return
+    if (item.Pause != state && (item.ColorState == 1 || item.ColorState == 2))
+        FeedbackDiagnostics.Macro(tableItem, itemIndex, state ? "暂停" : "继续")
     previousCritical := A_IsCritical
     Critical("On")
     try {

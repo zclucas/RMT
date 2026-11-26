@@ -132,7 +132,7 @@ class LoopGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="540" Height="' this._FitHeight() '"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" Height="' this._FitHeight() '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._CondiScrollStyles())
 
@@ -209,12 +209,12 @@ class LoopGui {
         ns := 'xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
         cmpItems := ""
         for t in GetCompareTypeLangArr()
-            cmpItems .= '<ComboBoxItem Content="' this._EscapeXml(t) '"/>'
+            cmpItems .= CmdEditorForm.ComboItemXml(t)
         tip := this._EscapeXml(GetLang("删除"))
         return '<Grid ' ns ' Margin="0,2">'
             . '<Grid.ColumnDefinitions>'
             . '<ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/>'
-            . '<ColumnDefinition Width="90"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
+            . '<ColumnDefinition Width="110"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
             . '</Grid.ColumnDefinitions>'
             . '<CheckBox Grid.Column="0" Name="ToggleCon_' i '" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
             . '<ComboBox Grid.Column="1" Name="NameCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center" SnapsToDevicePixels="True"'
@@ -400,8 +400,10 @@ class LoopGui {
             isEnable := this.ui.Query("ToggleCon_" i) == "True"
             this.ui.Update("NameCon_" i, "IsEnabled", isEnable ? "True" : "False")
             this.ui.Update("CompareTypeCon_" i, "IsEnabled", isEnable ? "True" : "False")
-            enableVari := !IsCompareExistVar(ComboIndexToCompareType(this._CompareIndex(i))) && isEnable
+            existsTest := IsCompareExistVar(ComboIndexToCompareType(this._CompareIndex(i)))
+            enableVari := !existsTest && isEnable
             this.ui.Update("VariableCon_" i, "IsEnabled", enableVari ? "True" : "False")
+            this.ui.Update("VariableCon_" i, "Visibility", existsTest ? "Collapsed" : "Visible")
             onlyOne := this.Data.ToggleArr.Length <= 1
             this.ui.Update("DelCondi_" i, "IsEnabled", onlyOne ? "False" : "True")
         }

@@ -911,7 +911,7 @@ class WaitGui {
     _Choice(parent, name, keys) {
         combo := CmdEditorForm.Combo(parent, name)
         for key in keys
-            combo.Add("ComboBoxItem").Content(GetLang(key))
+            CmdEditorForm.ComboItem(combo, GetLang(key))
         return combo
     }
 

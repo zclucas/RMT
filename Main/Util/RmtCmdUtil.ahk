@@ -540,7 +540,7 @@ RmtCmdMacroOp(cmd, args) {
         case "-run":
             if (ParseBoolInt(item.Forbid) || GetItemFoldForbidState(tableItem, n))
                 return RmtCmdFail("该宏已禁用")
-            TriggerMacroHandler(tableItem, n)
+            TriggerMacroHandler(tableItem, n, "命令行")
         case "-kill":
             MyStopMacro(tableItem, n)
         case "-pause":

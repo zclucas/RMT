@@ -34,9 +34,10 @@ class FeedbackGui {
         this._prefillError := ""
         this._autoTpl := ""          ; 上一次自动写进描述框的骨架，用于判断用户是否动过
         this._done := false          ; 提交成功后锁定表单，关闭时无需确认
+        this._diagnostics := FeedbackDiagnostics.Capture()
     }
 
-    static ShowGui(kind := "bug", prefillError := "") {
+    static ShowGui(kind := "bug", prefillError := "", diagnostics := unset) {
         key := "global"
         if (FeedbackGui.instances.Has(key)) {
             oldInst := FeedbackGui.instances[key]
@@ -49,6 +50,13 @@ class FeedbackGui {
                     return
                 if (kind != "")
                     oldInst._SetKind(kind)
+                if (IsSet(diagnostics)) {
+                    oldInst._diagnostics := diagnostics
+                    try oldInst.ui.Update("FeedbackEnvironmentTitle", "Text", oldInst._EnvPreview())
+                    try oldInst.ui.Update("FeedbackEnvironmentTitle", "ToolTip", oldInst._EnvPreview())
+                    try oldInst.ui.Update("Window", "Title", GetLang("提交反馈") "  " oldInst._EnvPreview())
+                    try oldInst.ui.Update("RecentOperations", "Text", diagnostics.steps)
+                }
                 if (prefillError != "")
                     try oldInst.ui.Update("ErrorInput", "Text", prefillError)
                 return
@@ -68,6 +76,8 @@ class FeedbackGui {
             inst := FeedbackGui()
             inst._kind := (kind = "idea") ? "idea" : "bug"
             inst._prefillError := prefillError
+            if (IsSet(diagnostics))
+                inst._diagnostics := diagnostics
             inst._BuildAndShow()
             FeedbackGui.instances[key] := inst
         } finally {
@@ -89,6 +99,13 @@ class FeedbackGui {
             .Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
         main.Rows(titleHeight, "*")
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
+        chrome.Root._Children.RemoveAt(1)
+        chrome.Root.Cols("Auto", "*", "Auto")
+        chrome.Btns.Grid_Column(2)
+        chrome.Root.Add("TextBlock").Name("FeedbackEnvironmentTitle").Grid_Column(1).Text(this._EnvPreview())
+            .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("18,0,10,0")
+            .Foreground("{DynamicResource TextSub}").FontSize(11).FontWeight("Normal")
+            .TextTrimming("CharacterEllipsis").ToolTip(this._EnvPreview())
 
         body := main.Add("Border").Grid_Row(1).Background("{DynamicResource BgColor}")
         root := body.Add("Grid").Margin("16, 12, 16, 14")
@@ -140,14 +157,10 @@ class FeedbackGui {
             .SetProp("AutomationProperties.Name", GetLang("附件"))
         attachRow.Add("ComboBox").Name("AttachmentList").Grid_Column(1).Margin("8,0,8,0")
         this._AddBtn(attachRow, "RemoveAttachment", GetLang("移除"), 66).Grid_Column(2).IsEnabled("False")
-        infoRow := details.Add("Grid").Margin("2,8,0,0")
-        infoRow.Cols("Auto", "*")
-        infoRow.Add("TextBlock").Name("VersionRow").Grid_Column(0).Margin("0,0,12,0")
-            .Text(GetLang("版本标签") " · " GetLang(this._VersionTag()))
-            .Foreground("{DynamicResource TextSub}").FontSize(12).VerticalAlignment("Center")
-
-        infoRow.Add("TextBlock").Grid_Column(1).Text(GetLang("环境信息：") " " this._EnvPreview())
-            .Foreground("{DynamicResource TextSub}").FontSize(12).VerticalAlignment("Center").TextWrapping("Wrap")
+        steps := details.Add("Expander").Header("最近操作（最多10步，随反馈附带）").Margin("2,6,0,0")
+        steps.Add("ScrollViewer").MaxHeight(100).VerticalScrollBarVisibility("Auto")
+            .Add("TextBlock").Name("RecentOperations").Text(this._diagnostics.steps)
+            .Foreground("{DynamicResource TextSub}").FontSize(12).TextWrapping("Wrap")
 
         ; 底栏：左边状态、右边动作，一行收住
         bar := root.Add("Grid").Grid_Row(7).Margin("0,12,0,0")
@@ -161,12 +174,12 @@ class FeedbackGui {
         this._AddBtn(btnRow, "SubmitBtn", GetLang("提交反馈"), 92, true)
 
         refWin := XamlWin.ActiveOwner()
-        posAttr := XamlWin.PosAttr(610, 610, refWin)
+        posAttr := XamlWin.PosAttr(610, 700, refWin)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
         ; 固定高度：引擎按 SizeToContent 算高会少一截，底部按钮会被裁掉
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' title '" ShowInTaskbar="True"' posAttr ' Width="610" Height="610"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' EscapeXamlXml(title "  " this._EnvPreview()) '" ShowInTaskbar="True"' posAttr ' Width="610" Height="700"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'CornerRadius="{DynamicResource WindowRadius}"', 'CornerRadius="{DynamicResource PanelRadius}"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '<CornerRadius x:Key="PanelRadius">8</CornerRadius>')
@@ -300,7 +313,6 @@ class FeedbackGui {
         this._SyncToggle("KindBug", isBug)
         this._SyncToggle("KindIdea", !isBug)
         this.ui.Update("BugPanel", "Visibility", isBug ? "Visible" : "Collapsed")
-        this.ui.Update("VersionRow", "Visibility", isBug ? "Visible" : "Collapsed")
     }
 
     ; 描述框骨架跟着类型走（窗口标题固定，避免和类型按钮重复）
@@ -660,7 +672,8 @@ class FeedbackGui {
         }
         if (links != "")
             raw .= "**" GetLang("附件") "**`n`n" links "`n"
-        return raw "---`n`n**" GetLang("环境信息") "**`n`n" this._EnvPreview()
+        return raw "---`n`n**最近操作（最多10步）**`n`n    " StrReplace(this._diagnostics.steps, "`n", "`n    ")
+            . "`n`n**" GetLang("环境信息") "**`n`n" this._EnvPreview()
     }
 
     _VersionTag() {
@@ -669,18 +682,7 @@ class FeedbackGui {
     }
 
     _EnvPreview() {
-        product := ""
-        try product := RegRead("HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName")
-        if (RegExMatch(product, "i)^Windows Server (\d+)", &m))
-            system := "WinServer" m[1]
-        else if (RegExMatch(A_OSVersion, "^10\.0\.(\d+)", &m))
-            system := Integer(m[1]) >= 22000 ? "Win11" : "Win10"
-        else if (RegExMatch(product, "i)^Windows (\d+(?:\.\d+)?)", &m))
-            system := "Win" m[1]
-        else
-            system := "Win" A_OSVersion
-        return "RMTv" RMT_VERSION " · " system "_" (A_Is64bitOS ? "x64" : "x86")
-            . " · " A_ScreenWidth "*" A_ScreenHeight
+        return this._diagnostics.environment
     }
 
     ; ===== 登录（与设置页同一套 UserApiKey 授权） =====

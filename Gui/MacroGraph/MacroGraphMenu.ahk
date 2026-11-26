@@ -260,6 +260,7 @@ class MacroGraphMenuMixin {
     OnAddCmd(cmdName, *) {
         if (this.ui == "" || !this.ui.wpfHwnd || this.graph == "")
             return
+        FeedbackDiagnostics.Edit("新增指令节点", true)
         ; 在右键位置运行时注入完整内联节点（不重建窗口，避免闪烁）；不自动连线
         this._CaptureTopLevelSuccessorLinks()
         this._SyncPositionsFromGraph()

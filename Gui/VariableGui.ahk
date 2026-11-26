@@ -177,9 +177,7 @@ class VariableGui {
         for it in items {
             if (it == "")
                 continue
-            glyph := this._BuiltinVarIcon(it)
-            batch.Push({ControlName: comboName, PropertyName: glyph != "" ? "AddXamlItem" : "AddItem",
-                Value: glyph != "" ? this._VariableItemXml(it, glyph) : it})
+            batch.Push(CmdEditorForm.ComboItemUpdate(comboName, it))
         }
         batch.Push({ControlName: comboName, PropertyName: "Text", Value: text})
     }
@@ -295,34 +293,6 @@ class VariableGui {
             . '<ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Check" Property="Visibility" Value="Visible"/><Setter TargetName="Box" Property="Background" Value="{DynamicResource ActionBg}"/></Trigger>'
             . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
-    }
-
-    _BuiltinVarIcon(value) {
-        name := GetBuiltinVarName(Trim(value, "{}"))
-        for category, names in GetBuiltinVarGroups() {
-            for key in names {
-                if (key != name)
-                    continue
-                switch category {
-                    case "count": return Chr(0xE8EE)
-                    case "handle": return Chr(0xE737)
-                    case "color": return Chr(0xE790)
-                    case "x", "y": return Chr(0xE962)
-                    case "clipboard": return Chr(0xE77F)
-                    case "calendar", "dateText": return Chr(0xE787)
-                    default: return Chr(0xE823)
-                }
-            }
-        }
-        return ""
-    }
-
-    _VariableItemXml(value, glyph) {
-        text := this._EscapeXml(value)
-        label := this._EscapeXml(Trim(value, "{}"))
-        return '<ComboBoxItem xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Tag="{}' text '" TextSearch.Text="{}' text '" HorizontalContentAlignment="Stretch">'
-            . '<DockPanel LastChildFill="True"><TextBlock DockPanel.Dock="Right" Text="' glyph '" Margin="12,0,0,0" VerticalAlignment="Center" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource TextSub}" Opacity="0.65"/>'
-            . '<TextBlock Text="{}' label '" VerticalAlignment="Center"/></DockPanel></ComboBoxItem>'
     }
 
     _VarColumnsXml() {
@@ -616,7 +586,7 @@ class VariableGui {
             detail := table.Add("Border").Grid_Row(index - 1).Grid_Column(1).Padding("8,6")
                 .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("0,0,0," bottom)
                 .Add("Grid").Cols("24", "*")
-            detail.Add("TextBlock").Text(this._BuiltinVarIcon(parts[1]))
+            detail.Add("TextBlock").Text(GetBuiltinVariableIcon(parts[1]))
                 .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").Foreground("{DynamicResource TextSub}")
                 .HorizontalAlignment("Left").Margin("0,2,0,0")
             detail.Add("TextBlock").Grid_Column(1).Text(description).TextWrapping("Wrap")
