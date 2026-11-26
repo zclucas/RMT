@@ -1,7 +1,13 @@
 name: 同步 GitCode 代码与发行版
 on:
   push:
+    branches: ['**']
     tags: ['**']
+  create:
+  delete:
+  # 补偿由 GITHUB_TOKEN 操作或漏发事件造成的镜像遗漏。
+  schedule:
+    - cron: '17 4 * * *'
   workflow_run:
     workflows: [版本发布]
     types: [completed]
@@ -15,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mirror:
-    if: ${{ !github.event.deleted && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)) }}
+    if: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -28,13 +34,15 @@ jobs:
           GIT_TERMINAL_PROMPT: '0'
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
         run: python3 -u .github/scripts/mirror_rmt_refs.py
+      # 分支变化及定时校准只同步 Git 引用，避免重复上传全部附件。
       - name: 同步所有已发布版本与附件并校验公开下载
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'release' || github.event_name == 'workflow_run' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
         env:
           GH_TOKEN: ${{ github.token }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
         run: python3 -u .github/scripts/sync_gitcode_assets.py sync --repo RMT --workers 2
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'release' || github.event_name == 'workflow_run' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
         with:
           name: gitcode-release-result
           path: ${{ runner.temp }}/gitcode-sync.json
